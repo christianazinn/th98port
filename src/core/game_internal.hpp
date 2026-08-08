@@ -326,6 +326,10 @@ struct DeterministicState {
 	BackgroundPhase background_phase = BackgroundPhase::initial;
 	BackgroundInitialKind background_initial_kind = BackgroundInitialKind::type_a;
 	ResultPhase result_phase = ResultPhase::idle;
+	std::uint8_t result_phase_frame = 0;
+	bool result_transition_complete = false;
+	std::uint32_t result_bonus_remaining = 0;
+	std::uint16_t result_bonus_per_frame = 0;
 	std::array<ComboState, player_count> combos{};
 	ChainState chains{};
 	std::uint32_t global_frame = 0;

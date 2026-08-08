@@ -2974,6 +2974,12 @@ std::uint8_t boss_hittest_damage(
 	std::int16_t radius
 ) noexcept
 {
+	if(
+		state.boss.center_y < 0 ||
+		state.defeat_flag == DefeatFlag::banner
+	) {
+		return 0U;
+	}
 	const auto left = exact::wrap_subtract(state.boss.center_x, radius);
 	const auto right = exact::wrap_add(state.boss.center_x, radius);
 	const auto top = exact::wrap_subtract(state.boss.center_y, radius);
@@ -3626,6 +3632,9 @@ void fireballs_update(DeterministicState &state) noexcept
 
 void fireballs_hittest(DeterministicState &state) noexcept
 {
+	if(state.defeat_flag == DefeatFlag::banner) {
+		return;
+	}
 	for(auto target_it = state.fireballs.rbegin();
 		target_it != state.fireballs.rend(); ++target_it) {
 		auto &target = *target_it;
@@ -3920,6 +3929,9 @@ bool enemies_update(
 			);
 			continue;
 		}
+		if(state.defeat_flag == DefeatFlag::banner) {
+			continue;
+		}
 		const auto radius = static_cast<std::int16_t>(
 			(target.size_pixels == 16U) ? (10 << 4) : (target.size_pixels * 7)
 		);
@@ -4174,6 +4186,74 @@ void background_update(DeterministicState &state) noexcept
 	}
 }
 
+void result_bonus_update(DeterministicState &state) noexcept
+{
+	const auto winner = static_cast<std::uint8_t>(state.winner);
+	if(winner >= player_count) {
+		return;
+	}
+	if(state.round_or_result_frame == 1U) {
+		const auto &player = state.players[winner];
+		state.result_bonus_remaining =
+			(static_cast<std::uint32_t>(player.combo_hits_max) * 1000U) +
+			(static_cast<std::uint32_t>(player.gauge_attacks_fired) * 10000U) +
+			(static_cast<std::uint32_t>(player.boss_attacks_fired) * 15000U) +
+			(static_cast<std::uint32_t>(player.boss_attacks_reversed) * 20000U) +
+			(static_cast<std::uint32_t>(player.boss_panics_fired) * 30000U);
+		const auto per_frame = state.result_bonus_remaining / 192U;
+		state.result_bonus_per_frame = static_cast<std::uint16_t>(
+			std::min<std::uint32_t>(per_frame, 0xFFFFU)
+		);
+	}
+	if(state.result_bonus_per_frame < state.result_bonus_remaining) {
+		score_add(state.score[winner], state.result_bonus_per_frame);
+		state.result_bonus_remaining -= state.result_bonus_per_frame;
+	} else if(state.result_bonus_remaining != 0U) {
+		score_add(
+			state.score[winner],
+			static_cast<std::uint16_t>(state.result_bonus_remaining)
+		);
+		state.result_bonus_remaining = 0U;
+	}
+}
+
+bool result_control_update(DeterministicState &state) noexcept
+{
+	if(state.defeat_flag != DefeatFlag::banner) {
+		return false;
+	}
+	if(state.game_mode == 1U && state.winner == 0) {
+		result_bonus_update(state);
+		if(state.round_or_result_frame == 320U) {
+			state.result_phase = ResultPhase::opening;
+			state.result_phase_frame = 0U;
+		}
+		if(state.result_transition_complete) {
+			state.route = 2U;
+			return true;
+		}
+	}
+	return false;
+}
+
+void result_transition_update(DeterministicState &state) noexcept
+{
+	if(state.result_phase == ResultPhase::idle) {
+		return;
+	}
+	state.result_phase_frame++;
+	if(state.result_phase_frame < 16U) {
+		return;
+	}
+	state.result_phase_frame = 0U;
+	if(state.result_phase == ResultPhase::opening) {
+		state.result_transition_complete = true;
+		state.result_phase = ResultPhase::closing;
+	} else {
+		state.result_phase = ResultPhase::idle;
+	}
+}
+
 } // namespace
 
 bool gameplay_frame_prefix(
@@ -4316,8 +4396,12 @@ void gameplay_frame_suffix_after_interstitial(DeterministicState &state) noexcep
 	boss_render_phase_update(state);
 	fireballs_hittest(state);
 	extra_attacks_render_phase_update(state);
-	combos_update(state);
+	if(result_control_update(state)) {
+		return;
+	}
 	warning_portrait_update(state);
+	combos_update(state);
+	result_transition_update(state);
 
 	state.round_frame++;
 	state.round_or_result_frame++;

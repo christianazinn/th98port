@@ -150,8 +150,25 @@ int main(int argc, char **argv)
 					<< std::setw(8) << std::setfill('0') << state.state_hash
 					<< std::dec << '\n';
 			}
+			if(result.status == th03::StepStatus::terminal) {
+				const auto state = simulation.canonical_state();
+				std::cout << "result=terminal\n"
+					<< "consumed_samples=" << consumed << '\n'
+					<< "route=" << static_cast<unsigned int>(state.route) << '\n'
+					<< "winner=" << static_cast<int>(state.winner) << '\n'
+					<< "round_frame=" << state.round_frame << '\n'
+					<< "round_or_result_frame=" << state.round_or_result_frame
+					<< "\np1_score=";
+				print_score(state.p1_score);
+				std::cout << "\np2_score=";
+				print_score(state.p2_score);
+				std::cout << "\nstate_hash=" << std::uppercase << std::hex
+					<< std::setw(8) << std::setfill('0') << state.state_hash
+					<< std::dec << '\n';
+				return 0;
+			}
 		}
 	}
-	std::cout << "result=terminal\nconsumed_samples=" << consumed << '\n';
-	return 0;
+	std::cout << "result=input-exhausted\nconsumed_samples=" << consumed << '\n';
+	return 5;
 }

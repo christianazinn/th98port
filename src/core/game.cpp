@@ -46,6 +46,12 @@ std::expected<Game, Error> Game::create(const GameInit &init, GameContent conten
 
 StepResult Game::step(CoreInput input, InputContext context)
 {
+	if(impl_->state.route != 0U) {
+		return StepResult{
+			StepStatus::terminal,
+			detail::canonical_state(impl_->state),
+		};
+	}
 	if(context == InputContext::interstitial) {
 		if(impl_->warning_interstitial_samples_remaining == 0U) {
 			return StepResult{
@@ -58,6 +64,9 @@ StepResult Game::step(CoreInput input, InputContext context)
 		impl_->warning_interstitial_samples_remaining--;
 		if(impl_->warning_interstitial_samples_remaining == 0U) {
 			detail::gameplay_frame_suffix_after_interstitial(impl_->state);
+			if(impl_->state.route != 0U) {
+				return StepResult{StepStatus::terminal, input_boundary};
+			}
 			return StepResult{StepStatus::phase_transition, input_boundary};
 		}
 		return StepResult{StepStatus::running, input_boundary};
@@ -81,6 +90,9 @@ StepResult Game::step(CoreInput input, InputContext context)
 		return StepResult{StepStatus::phase_transition, input_boundary};
 	}
 	detail::gameplay_frame_suffix_after_interstitial(impl_->state);
+	if(impl_->state.route != 0U) {
+		return StepResult{StepStatus::terminal, input_boundary};
+	}
 	return StepResult{StepStatus::running, input_boundary};
 }
 

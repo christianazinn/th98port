@@ -321,6 +321,50 @@ void test_th3r03_round_start()
 	}
 }
 
+void test_story_result_route()
+{
+	th03::detail::DeterministicState state{};
+	state.game_mode = 1U;
+	state.winner = 0;
+	state.defeat_flag = th03::detail::DefeatFlag::banner;
+	state.background_phase = th03::detail::BackgroundPhase::type_a_steady;
+	state.players[0].combo_hits_max = 5U;
+	state.players[0].gauge_attacks_fired = 1U;
+	state.players[0].boss_attacks_fired = 2U;
+	state.players[0].boss_attacks_reversed = 3U;
+	state.players[0].boss_panics_fired = 4U;
+
+	th03::detail::gameplay_frame_suffix_after_interstitial(state);
+	check(state.round_or_result_frame == 1U,
+		"Story result frame zero advances without initializing the bonus");
+	th03::detail::gameplay_frame_suffix_after_interstitial(state);
+	check(
+		state.result_bonus_remaining == (225000U - 1171U),
+		"Story result frame one snapshots counters and adds one 1/192 bonus slice"
+	);
+	while(state.round_or_result_frame < 320U) {
+		th03::detail::gameplay_frame_suffix_after_interstitial(state);
+	}
+	check(
+		state.score[0] == std::array<std::uint8_t, 8>{0U, 0U, 0U, 5U, 2U, 2U, 0U, 0U},
+		"Story winner bonus drains exactly into the decimal score"
+	);
+	for(std::size_t frame = 0U; frame < 16U; ++frame) {
+		th03::detail::gameplay_frame_suffix_after_interstitial(state);
+	}
+	check(
+		state.round_or_result_frame == 336U &&
+		state.result_phase == th03::detail::ResultPhase::closing &&
+		state.result_transition_complete,
+		"Story result opening completes after exactly sixteen callbacks"
+	);
+	th03::detail::gameplay_frame_suffix_after_interstitial(state);
+	check(
+		state.route == 2U && state.round_or_result_frame == 336U,
+		"Story P1 win returns route 2 before another gameplay-frame increment"
+	);
+}
+
 void test_random()
 {
 	std::uint32_t seed = 0xE9B35FBAU;
@@ -590,6 +634,7 @@ int main()
 {
 	test_numeric();
 	test_th3r03_round_start();
+	test_story_result_route();
 	test_random();
 	test_trig();
 	test_t3case();
