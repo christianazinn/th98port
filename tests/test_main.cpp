@@ -359,6 +359,18 @@ void test_trig()
 	const auto negative = th03::detail::vector2(128U, 1);
 	check(negative.x == -1 && negative.y == 0,
 		"vector2 arithmetic shift preserves negative rounding quirk");
+	check(
+		th03::detail::iatan2(0, 1) == 0U &&
+		th03::detail::iatan2(1, 0) == 64U &&
+		th03::detail::iatan2(0, -1) == 128U &&
+		th03::detail::iatan2(-1, 0) == 192U,
+		"master.lib iatan2 preserves cardinal angles"
+	);
+	check(
+		th03::detail::iatan2(1, 1) == 32U &&
+		th03::detail::iatan2(-1, -1) == 160U,
+		"master.lib iatan2 preserves diagonal quadrants"
+	);
 }
 
 void test_t3case()

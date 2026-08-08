@@ -81,6 +81,17 @@ std::uint8_t initial_round_speed(std::uint8_t rank, std::uint8_t round_id) noexc
 	}
 }
 
+std::uint8_t initial_bullet_base_speed(std::uint8_t rank) noexcept
+{
+	if(rank == rank_hard) {
+		return 8U;
+	}
+	if(rank == rank_lunatic) {
+		return 0x18U;
+	}
+	return 0U;
+}
+
 } // namespace
 
 DeterministicState initialize_first_round(const GameInit &init)
@@ -93,6 +104,7 @@ DeterministicState initialize_first_round(const GameInit &init)
 	state.winner = init.winner;
 	state.random_seed = static_cast<std::uint32_t>(init.resident_rand);
 	state.round_speed = initial_round_speed(init.rank, state.round_id);
+	state.bullet_base_speed = initial_bullet_base_speed(init.rank);
 	state.score = init.last_score;
 	if(init.game_mode != game_mode_story) {
 		state.score = {};

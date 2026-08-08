@@ -15,6 +15,8 @@ inline constexpr std::size_t player_count = 2;
 inline constexpr std::size_t score_digits = 8;
 inline constexpr std::size_t chain_ring_size = 16;
 inline constexpr std::size_t enemy_count = 40;
+inline constexpr std::size_t bullet_count = 320;
+inline constexpr std::size_t fireball_count = 24;
 inline constexpr std::size_t shotpair_count = 32;
 inline constexpr std::size_t collmap_width = 144;
 inline constexpr std::size_t collmap_height = 184;
@@ -153,6 +155,57 @@ struct KanaChargeGroup {
 	std::uint8_t speed = 0;
 };
 
+enum class BulletFlag : std::uint8_t {
+	free = 0,
+	pellet = 1,
+	bullet16 = 2,
+	transfer_pellet = 3,
+	pellet_cloud = 4,
+};
+
+struct BulletState {
+	BulletFlag flag = BulletFlag::free;
+	std::uint8_t age = 0;
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+	std::int16_t target_x_for_target_player = 0;
+	std::int16_t target_x_for_origin_player = 0;
+	std::int16_t velocity_x = 0;
+	std::int16_t velocity_y = 0;
+	std::uint8_t speed_next = 0;
+	std::uint8_t angle_next = 0;
+	std::uint8_t player_id = 0;
+	std::uint8_t group_next = 0;
+	std::uint8_t accel_type = 0;
+	bool is_collidable = true;
+};
+
+enum class FireballFlag : std::uint8_t {
+	free = 0,
+	fall = 1,
+	transfer = 2,
+	explosion_ignoring_enemies = 9,
+	explosion_hitting_enemies = 10,
+};
+
+struct FireballState {
+	FireballFlag flag = FireballFlag::free;
+	std::uint8_t frame = 0;
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+	std::uint8_t variant_as_explosion_target = 2;
+	std::uint8_t hp = 0;
+	std::uint8_t player_id = 0;
+	std::uint8_t size_pixels = 48;
+	std::int16_t velocity_x = 0;
+	std::int16_t velocity_y = 0;
+	std::int16_t target_x_for_target_player = 0;
+	std::int16_t target_x_for_origin_player = 0;
+	std::uint8_t fall_velocity_y = 0;
+	std::uint8_t chain_slot = 0;
+	std::uint8_t generation = 0;
+};
+
 struct DeterministicState {
 	std::uint8_t game_mode = 0;
 	std::uint8_t rank = 0;
@@ -175,7 +228,7 @@ struct DeterministicState {
 	std::array<std::uint8_t, 256> formation_position_ring{};
 	std::array<std::uint8_t, player_count> formation_cursor{};
 	std::array<std::uint8_t, player_count> autofire_shot_gate{};
-	std::int8_t bullet_add_scratch = 0;
+	std::int8_t cpu_target_kind_scratch = 0;
 	std::array<std::uint8_t, player_count> boss_panic_fired_in_combo{};
 	BackgroundPhase background_phase = BackgroundPhase::initial;
 	BackgroundInitialKind background_initial_kind = BackgroundInitialKind::type_a;
@@ -188,6 +241,8 @@ struct DeterministicState {
 	std::uint8_t hud_start_state = 0;
 	std::uint16_t hud_start_frame = 0;
 	std::array<EnemyState, enemy_count> enemies{};
+	std::array<BulletState, bullet_count> bullets{};
+	std::array<FireballState, fireball_count> fireballs{};
 	std::array<ShotPairState, shotpair_count> shotpairs{};
 	std::array<std::array<ReimuChargeGroup, 12>, player_count> reimu_charge{};
 	std::array<std::uint8_t, player_count> reimu_charge_primary{};
@@ -196,6 +251,8 @@ struct DeterministicState {
 	std::array<std::uint8_t, player_count> kana_charge_frames{};
 	std::array<std::uint8_t, player_count> enemies_alive{};
 	std::uint8_t enemy_speed = 0;
+	std::uint8_t bullet_base_speed = 0;
+	std::uint8_t fireball_generation_previous = 0;
 	std::array<
 		std::array<std::array<bool, collmap_height>, collmap_width>,
 		player_count

@@ -98,7 +98,9 @@ std::uint32_t state_hash(const DeterministicState &state) noexcept
 	hash = hash_u8(hash, state.randring_cursor);
 	hash = hash_u8(hash, state.autofire_shot_gate[0]);
 	hash = hash_u8(hash, state.autofire_shot_gate[1]);
-	hash = hash_u8(hash, std::bit_cast<std::uint8_t>(state.bullet_add_scratch));
+	hash = hash_u8(
+		hash, std::bit_cast<std::uint8_t>(state.cpu_target_kind_scratch)
+	);
 	hash = hash_u8(hash, state.boss_panic_fired_in_combo[0]);
 	hash = hash_u8(hash, state.boss_panic_fired_in_combo[1]);
 	hash = hash_u8(hash, static_cast<std::uint8_t>(state.background_phase));

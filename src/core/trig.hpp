@@ -12,7 +12,16 @@ struct Vector2 {
 
 std::int16_t cosine8(std::uint8_t angle) noexcept;
 std::int16_t sine8(std::uint8_t angle) noexcept;
+std::uint8_t iatan2(std::int16_t y, std::int16_t x) noexcept;
 Vector2 vector2(std::uint8_t angle, std::int16_t length) noexcept;
+Vector2 vector2_between_plus(
+	std::int16_t x1,
+	std::int16_t y1,
+	std::int16_t x2,
+	std::int16_t y2,
+	std::uint8_t plus_angle,
+	std::int16_t length
+) noexcept;
 
 } // namespace th03::detail
 
