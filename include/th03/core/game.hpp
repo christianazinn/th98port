@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <expected>
+#include <memory>
 #include <optional>
 #include <span>
 #include <vector>
@@ -68,9 +69,19 @@ struct GameInit {
 };
 
 struct CanonicalState {
+	std::uint8_t route = 0;
+	std::uint8_t game_mode = 0;
+	std::uint8_t story_stage = 0;
+	std::uint8_t round_id = 0;
+	std::int8_t winner = 0;
+	std::uint8_t round_speed = 0;
 	std::uint32_t global_frame = 0;
 	std::uint32_t round_frame = 0;
 	std::uint16_t round_or_result_frame = 0;
+	std::array<std::uint8_t, 8> p1_score{};
+	std::array<std::uint8_t, 8> p2_score{};
+	std::int32_t resident_rand = 0;
+	std::uint32_t state_hash = 0;
 };
 
 struct PresentationEvent {};
@@ -88,6 +99,12 @@ struct StepResult {
 
 class Game {
 public:
+	Game(Game &&) noexcept;
+	Game &operator=(Game &&) noexcept;
+	~Game();
+	Game(const Game &) = delete;
+	Game &operator=(const Game &) = delete;
+
 	static std::expected<Game, Error> create(const GameInit &init);
 
 	StepResult step(CoreInput input);
@@ -95,10 +112,9 @@ public:
 	std::span<const PresentationEvent> presentation_events() const;
 
 private:
+	struct Impl;
 	explicit Game(GameInit init);
-	GameInit init_;
-	CanonicalState canonical_{};
-	std::vector<PresentationEvent> presentation_events_;
+	std::unique_ptr<Impl> impl_;
 };
 
 } // namespace th03

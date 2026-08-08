@@ -1,9 +1,11 @@
 #include <cstddef>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "th03/core/game.hpp"
@@ -79,12 +81,16 @@ int main(int argc, char **argv)
 		<< "source_version=" << session->source_version << '\n'
 		<< "samples=" << session->sample_count << '\n'
 		<< "records=" << session->records.size() << '\n';
-	const auto game = th03::Game::create(session->init);
+	auto game = th03::Game::create(session->init);
 	if(!game) {
 		print_error(game.error());
 		return 2;
 	}
-	auto simulation = *game;
+	auto simulation = std::move(*game);
+	const auto initial_state = simulation.canonical_state();
+	std::cout << "initial_state_hash="
+		<< std::uppercase << std::hex << std::setw(8) << std::setfill('0')
+		<< initial_state.state_hash << std::dec << '\n';
 	th03::CoreInput first_input{};
 	for(const auto &record : session->records) {
 		if(const auto *sample = std::get_if<th03::replay::InputSample>(&record)) {

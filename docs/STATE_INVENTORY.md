@@ -9,7 +9,7 @@ Every ported field must be placed deliberately before implementation.
 | player stage start | `PlayerStart` | positions are signed Q12.4 raw values; other widths remain exact |
 | replay cursor/input | `ReplaySession` records | owned outside `Game`; V11/T3CASE layouts do not enter core |
 | process handoff | semantic `ProcessBoundary` | no DOS executable spawning or resident-memory pointer transfer |
-| canonical gameplay | `CanonicalState` stub | expands field-wise during Phase 2; no padding or pointer hashing |
+| canonical gameplay | `CanonicalState` plus private `Game` state | expands mechanically from the donor; no padding or pointer hashing |
 | presentation | semantic events | excluded from gameplay unless evidence proves feedback or RNG use |
 | platform | clients only | paths, clocks, devices, windows, and networking never enter deterministic state |
 
@@ -23,3 +23,23 @@ Two Phase 0 landmines are fixed requirements for the future core:
 Before Phase 2 code is added, expand this file with the complete state touched by
 the selected TH3R03 round and mark every field as gameplay, replay-adapter,
 presentation, or platform state.
+
+## TH3R03 first-round inventory
+
+| state family | category | Phase 2 rule |
+|---|---|---|
+| scenario, scores, stage/lives/credits, characters, CPU flags, rank/skill | startup/resident | copied field-wise from `GameInit`; no resident-memory image |
+| live seed, 256-byte random ring/cursor, formation rings/cursors, CPU charge rings/cursors | gameplay RNG | exact widths, exact consumption order; V11 snapshot restore occurs after ordinary round initialization |
+| round ID, frame/result counters and modulo counters, round/bullet/enemy difficulty | gameplay | exact increment/reset order from `sub_9778()` and `sub_9EBF()` |
+| both `player_stuff_t` semantic fields | gameplay | fixed-width field model; Q12.4/Q4.4 values remain raw fixed point; callback pointers become stable character behavior IDs |
+| bullets, templates, trails, enemies, formations, shots, charge shots, Extra/Boss Attacks, fireballs, explosions, hit circles, bombs | gameplay | private deterministic entity state; port when it feeds collision, score, gauge, chain, player, RNG, or result behavior |
+| collision bitmap | gameplay | deterministic logical collision state, never PC-98 VRAM addresses |
+| combos, chain rings/arrays, gauge attack flags and counters | gameplay | exact arrays and update order; only the documented display-hit clamp belongs to the oracle view |
+| input latches, Autofire shot gates, warning/pause continuation | gameplay/input boundary | `Game` consumes one logical sample at a time and exposes the next expected input context; no host polling |
+| sample cursor, T3CASE phase/control records | replay adapter | outside gameplay state/hash; validator checks them against the core's requested input context and route |
+| normalized background/result callback phases | gameplay phase identity | stable enum, replacing callback pointer identity |
+| sprites, VRAM pages, palettes, text, sound, VSync | presentation/platform | never stored in deterministic state; preserve ordering only where a donor routine also mutates gameplay |
+| far/near pointers, segments, DOS file handles, executable names | platform | absent from core; typed IDs/indices and client-owned files replace them |
+
+The complete schema-3 hash order and first-round evidence are frozen in
+`TH3R03_ROUND_DOSSIER.md`.

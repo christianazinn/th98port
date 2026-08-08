@@ -24,6 +24,8 @@ endfunction()
 
 add_library(th03_core STATIC
 	src/core/game.cpp
+	src/core/round_start.cpp
+	src/core/state_hash.cpp
 )
 target_include_directories(th03_core PUBLIC include)
 target_compile_features(th03_core PUBLIC cxx_std_23)

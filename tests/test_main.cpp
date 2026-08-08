@@ -256,6 +256,42 @@ void test_numeric()
 	check(DecimalSubpixel::from_raw(-19).to_integer_trunc() == -1, "decimal fixed point truncates toward zero");
 }
 
+void test_th3r03_round_start()
+{
+	th03::GameInit init{};
+	init.resident_rand = 2638;
+	init.random_seed = 0xE9B35FBAU;
+	init.game_mode = 1U;
+	init.rank = 3U;
+	init.story_lives = 2U;
+	init.remaining_credits = 3U;
+	init.skill = 145U;
+	init.is_cpu = {0U, 1U};
+	init.paletted_character = {1, 11};
+	init.autofire_mask = 1U;
+	th03::RuntimeSnapshot snapshot{};
+	snapshot.random_seed = 0xE9B35FBAU;
+	for(auto &player : snapshot.players) {
+		player.center_x = th03::exact::Subpixel::from_raw(2304);
+		player.center_y = th03::exact::Subpixel::from_raw(5376);
+		player.halfhearts = 10U;
+		player.invincibility_time = 50U;
+		player.gauge_charge_speed = 32U;
+		player.gauge_avail = 1024U;
+		player.bombs = 2U;
+		player.shot_active = 1U;
+	}
+	init.runtime_snapshot = snapshot;
+
+	auto game = th03::Game::create(init);
+	check(game.has_value(), "TH3R03 first-round state initializes");
+	if(game) {
+		const auto state = game->canonical_state();
+		check(state.round_speed == 96U, "TH3R03 Lunatic round speed starts at raw Q4.4 96");
+		check(state.state_hash == 0x5BDCE01AU, "TH3R03 native start state matches Anniversary schema-3 hash");
+	}
+}
+
 void test_t3case()
 {
 	const std::array<std::byte, 1> a{std::byte{'a'}};
@@ -434,6 +470,7 @@ void test_v11()
 int main()
 {
 	test_numeric();
+	test_th3r03_round_start();
 	test_t3case();
 	test_t3split();
 	test_v11();
