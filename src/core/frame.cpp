@@ -55,7 +55,14 @@ constexpr std::int16_t shotpair_half_height = shotpair_height / 2;
 constexpr std::int16_t bullet_center_min = -(8 << 4);
 constexpr std::int16_t bullet_center_x_max = (288 + 8) << 4;
 constexpr std::int16_t bullet_center_y_max = (368 + 8) << 4;
+constexpr std::uint8_t bullet_group_one = 0U;
+constexpr std::uint8_t bullet_group_two_spread_horizontally_symmetric = 2U;
+constexpr std::uint8_t bullet_group_three_spread_narrow = 8U;
+constexpr std::uint8_t bullet_group_four_spread_narrow = 14U;
+constexpr std::uint8_t bullet_group_five_spread_medium = 21U;
+constexpr std::uint8_t bullet_group_five_spread_medium_aimed = 24U;
 constexpr std::uint8_t bullet_group_random_constrained_aimed = 29U;
+constexpr std::uint8_t bullet_group_ring = 38U;
 constexpr std::array<std::array<std::uint16_t, 9>, 6> cpu_collision_routes{{
 	{{0x0400U, 0x0008U, 0x0800U, 0x0001U, 0x0008U, 0x0008U, 0x0100U, 0x0400U, 0x0400U}},
 	{{0x0004U, 0x0004U, 0x0100U, 0x0002U, 0x0002U, 0x0002U, 0x0100U, 0x0001U, 0x0400U}},
@@ -234,6 +241,144 @@ BulletState *bullet_free_slot(DeterministicState &state) noexcept
 		[](const BulletState &bullet) { return bullet.flag == BulletFlag::free; }
 	);
 	return (slot == state.bullets.end()) ? nullptr : &*slot;
+}
+
+void bullets_add_group(
+	DeterministicState &state,
+	BulletFlag type,
+	std::int16_t center_x,
+	std::int16_t center_y,
+	std::uint8_t player_id,
+	std::uint8_t speed,
+	std::uint8_t angle,
+	std::uint8_t group,
+	std::uint8_t count = 0U,
+	std::uint8_t accel_type = 0U
+) noexcept
+{
+	if(
+		center_y <= bullet_center_min || center_y >= bullet_center_y_max ||
+		center_x <= bullet_center_min || center_x >= bullet_center_x_max
+	) {
+		return;
+	}
+	const auto adjusted_speed = bullet_speed_adjusted(state, speed);
+	for(std::uint16_t group_index = 0U;; ++group_index) {
+		std::int16_t angle_offset = 0;
+		bool aimed = false;
+		bool done = false;
+		switch(group) {
+		case bullet_group_one:
+			done = true;
+			break;
+
+		case bullet_group_two_spread_horizontally_symmetric:
+			if(group_index == 0U) {
+				angle_offset = 0;
+			} else {
+				angle_offset = static_cast<std::int16_t>(
+					0x80 - (static_cast<std::int16_t>(angle) * 2)
+				);
+				done = true;
+			}
+			break;
+
+		case bullet_group_three_spread_narrow:
+			if(group_index == 0U) {
+				angle_offset = 0;
+			} else if(group_index == 1U) {
+				angle_offset = 8;
+			} else {
+				angle_offset = -8;
+				done = true;
+			}
+			break;
+
+		case bullet_group_four_spread_narrow:
+			switch(group_index) {
+			case 0U: angle_offset = 3; break;
+			case 1U: angle_offset = -3; break;
+			case 2U: angle_offset = 9; break;
+			default:
+				angle_offset = -9;
+				done = true;
+				break;
+			}
+			break;
+
+		case bullet_group_five_spread_medium:
+			switch(group_index) {
+			case 0U: angle_offset = 0; break;
+			case 1U: angle_offset = 12; break;
+			case 2U: angle_offset = -12; break;
+			case 3U: angle_offset = 24; break;
+			default:
+				angle_offset = -24;
+				done = true;
+				break;
+			}
+			break;
+
+		case bullet_group_five_spread_medium_aimed:
+			aimed = true;
+			switch(group_index) {
+			case 0U: angle_offset = 0; break;
+			case 1U: angle_offset = 12; break;
+			case 2U: angle_offset = -12; break;
+			case 3U: angle_offset = 24; break;
+			default:
+				angle_offset = -24;
+				done = true;
+				break;
+			}
+			break;
+
+		case bullet_group_ring:
+			if(count == 0U) {
+				return;
+			}
+			angle_offset = static_cast<std::int16_t>(
+				(group_index * 0x100U) / count
+			);
+			done = (group_index >= static_cast<std::uint16_t>(count - 1U));
+			break;
+
+		default:
+			return;
+		}
+
+		auto *bullet = bullet_free_slot(state);
+		if(bullet == nullptr) {
+			return;
+		}
+		*bullet = BulletState{};
+		bullet->flag = type;
+		bullet->center_x = center_x;
+		bullet->center_y = center_y;
+		bullet->player_id = player_id;
+		bullet->group_next = group;
+		bullet->speed_next = adjusted_speed;
+		bullet->accel_type = accel_type;
+		bullet->angle_next = static_cast<std::uint8_t>(angle_offset + angle);
+		const auto velocity = aimed
+			? vector2_between_plus(
+				center_x,
+				center_y,
+				state.players[player_id].center_x.raw(),
+				state.players[player_id].center_y.raw(),
+				bullet->angle_next,
+				static_cast<std::int16_t>(adjusted_speed)
+			)
+			: vector2(
+				bullet->angle_next,
+				static_cast<std::int16_t>(adjusted_speed)
+			);
+		bullet->velocity_x = velocity.x;
+		bullet->velocity_y = velocity.y;
+		if(done) {
+			return;
+		}
+	}
 }
 
 void bullet_add_kana_extra_attack(
@@ -424,13 +569,19 @@ void extra_attack_add(
 		if(slot == state.extra_attacks[player_id].end()) {
 			return;
 		}
+		const auto target_x = static_cast<std::int16_t>(
+			randring_next16(state) % (288U << 4U)
+		);
+		const auto target_y = static_cast<std::int16_t>(
+			randring_next16(state) & 2047U
+		);
 		extra_attack_transfer_init(
 			state,
 			*slot,
 			center_x,
 			center_y,
-			static_cast<std::int16_t>(randring_next16(state) % (288U << 4U)),
-			static_cast<std::int16_t>(randring_next16(state) & 2047U),
+			target_x,
+			target_y,
 			player_id,
 			0x5A
 		);
@@ -808,13 +959,18 @@ void bullets_update(DeterministicState &state) noexcept
 			bullet.flag == BulletFlag::pellet &&
 			pellet_explosions_hittest(state, bullet)
 		) {
-			(void)bullet_add_transfer_pellet(
-				state,
-				bullet.center_x,
-				bullet.center_y,
-				bullet.player_id,
-				bullet.speed_next
-			);
+			if(
+				state.gba_flag_active[bullet.player_id ^ 1U] ==
+				GaugeBossAttackFlag::none
+			) {
+				(void)bullet_add_transfer_pellet(
+					state,
+					bullet.center_x,
+					bullet.center_y,
+					bullet.player_id,
+					bullet.speed_next
+				);
+			}
 			bullet.flag = BulletFlag::free;
 			continue;
 		}
@@ -1173,19 +1329,54 @@ void release_gauge(DeterministicState &state, std::uint8_t player_id) noexcept
 			add_kana_chargeshot(state, player_id);
 		}
 		if(charged >= gauge_128) {
+			state.warning_flag[player_id] = WarningFlag::portrait;
 			if(charged >= gauge_max) {
-				player.gauge_avail = gauge_64;
-				player.boss_attacks_fired++;
+				if(state.gba_boss_launched_by == static_cast<std::int8_t>(player_id)) {
+					player.gauge_attacks_fired++;
+					state.gba_flag_next[player_id] =
+						GaugeBossAttackFlag::gauge_bullet_init;
+					player.gauge_avail = static_cast<std::uint16_t>(
+						player.gauge_avail - gauge_128
+					);
+					if(state.gba_gauge_level[player_id] < 16U) {
+						state.gba_gauge_level[player_id]++;
+					}
+				} else {
+					state.gba_flag_next[player_id] = GaugeBossAttackFlag::boss;
+					player.gauge_avail = gauge_64;
+					if(state.gba_boss_level < 16U) {
+						state.gba_boss_level++;
+					}
+					state.combo_points_for_boss_attack =
+						static_cast<std::uint16_t>(
+							state.combo_points_for_boss_attack + 10240U
+						);
+					if(state.gba_boss_launched_by < 0) {
+						player.boss_attacks_fired++;
+					} else {
+						player.boss_attacks_reversed++;
+					}
+				}
 			} else if(charged >= gauge_192) {
 				player.gauge_attacks_fired++;
+				state.gba_flag_next[player_id] =
+					GaugeBossAttackFlag::gauge_bullet_init;
 				player.gauge_avail = static_cast<std::uint16_t>(
 					player.gauge_avail - gauge_128
 				);
+				if(state.gba_gauge_level[player_id] < 16U) {
+					state.gba_gauge_level[player_id]++;
+				}
 			} else {
 				player.gauge_attacks_fired++;
+				state.gba_flag_next[player_id] =
+					GaugeBossAttackFlag::gauge_pellet_init;
 				player.gauge_avail = static_cast<std::uint16_t>(
 					player.gauge_avail - gauge_64
 				);
+				if(state.gba_gauge_level[player_id] < 16U) {
+					state.gba_gauge_level[player_id]++;
+				}
 			}
 		}
 		player.invincibility_time = static_cast<std::uint8_t>(
@@ -1193,6 +1384,175 @@ void release_gauge(DeterministicState &state, std::uint8_t player_id) noexcept
 		);
 	}
 	player.gauge_charged = 0U;
+}
+
+void gauge_pattern_reimu(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &flag = state.gba_flag_active[player_id];
+	if(
+		flag == GaugeBossAttackFlag::gauge_pellet_init ||
+		flag == GaugeBossAttackFlag::gauge_bullet_init
+	) {
+		state.reimu_gauge_pattern_frame[player_id] = 0U;
+		flag = (flag == GaugeBossAttackFlag::gauge_pellet_init)
+			? GaugeBossAttackFlag::gauge_pellet_active
+			: GaugeBossAttackFlag::gauge_bullet_active;
+		state.gauge_pattern_param_a[player_id] = static_cast<std::uint8_t>(
+			state.gba_gauge_level[player_id] + 0x20U
+		);
+		state.gauge_pattern_param_b[player_id] = static_cast<std::uint8_t>(
+			0x20U - state.gba_gauge_level[player_id]
+		);
+		return;
+	}
+	if(
+		flag != GaugeBossAttackFlag::gauge_pellet_active &&
+		flag != GaugeBossAttackFlag::gauge_bullet_active
+	) {
+		return;
+	}
+
+	const auto type = (flag == GaugeBossAttackFlag::gauge_pellet_active)
+		? BulletFlag::pellet : BulletFlag::bullet16;
+	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
+	const auto frame = state.reimu_gauge_pattern_frame[player_id];
+	if((frame % state.gauge_pattern_param_b[player_id]) == 0U) {
+		bullets_add_group(
+			state,
+			type,
+			32 << 4,
+			8 << 4,
+			target_player,
+			2 << 4,
+			0U,
+			bullet_group_five_spread_medium_aimed
+		);
+		bullets_add_group(
+			state,
+			type,
+			256 << 4,
+			8 << 4,
+			target_player,
+			2 << 4,
+			0U,
+			bullet_group_five_spread_medium_aimed
+		);
+	}
+	if((frame % 0x20U) == 0x10U) {
+		bullets_add_group(
+			state,
+			type,
+			64 << 4,
+			8 << 4,
+			target_player,
+			(3 << 4) + 2,
+			0U,
+			bullet_group_ring,
+			state.gauge_pattern_param_a[player_id]
+		);
+		bullets_add_group(
+			state,
+			type,
+			(288 - 64) << 4,
+			8 << 4,
+			target_player,
+			(3 << 4) + 2,
+			0U,
+			bullet_group_ring,
+			state.gauge_pattern_param_a[player_id]
+		);
+	}
+	if(frame > 0x40U) {
+		flag = GaugeBossAttackFlag::none;
+	}
+	state.reimu_gauge_pattern_frame[player_id]++;
+}
+
+void gauge_pattern_kana(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &flag = state.gba_flag_active[player_id];
+	if(
+		flag == GaugeBossAttackFlag::gauge_pellet_init ||
+		flag == GaugeBossAttackFlag::gauge_bullet_init
+	) {
+		state.kana_gauge_pattern_frame[player_id] = 0U;
+		flag = (flag == GaugeBossAttackFlag::gauge_pellet_init)
+			? GaugeBossAttackFlag::gauge_pellet_active
+			: GaugeBossAttackFlag::gauge_bullet_active;
+		state.kana_gauge_pattern_x[player_id] = 0;
+		state.gauge_pattern_param_a[player_id] = static_cast<std::uint8_t>(
+			8U - (state.gba_gauge_level[player_id] / 4U)
+		);
+		state.gauge_pattern_param_b[player_id] = static_cast<std::uint8_t>(
+			state.gba_gauge_level[player_id] + 0x30U
+		);
+		return;
+	}
+	if(
+		flag != GaugeBossAttackFlag::gauge_pellet_active &&
+		flag != GaugeBossAttackFlag::gauge_bullet_active
+	) {
+		return;
+	}
+
+	const auto type = (flag == GaugeBossAttackFlag::gauge_pellet_active)
+		? BulletFlag::pellet : BulletFlag::bullet16;
+	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
+	const auto frame = state.kana_gauge_pattern_frame[player_id];
+	auto &center_x = state.kana_gauge_pattern_x[player_id];
+	if((frame % state.gauge_pattern_param_a[player_id]) == 0U) {
+		bullets_add_group(
+			state,
+			type,
+			center_x,
+			0,
+			target_player,
+			state.gauge_pattern_param_b[player_id],
+			0x40U,
+			bullet_group_one
+		);
+		bullets_add_group(
+			state,
+			type,
+			static_cast<std::int16_t>((288 << 4) - center_x),
+			0,
+			target_player,
+			state.gauge_pattern_param_b[player_id],
+			0x40U,
+			bullet_group_one
+		);
+	}
+	if((frame % 0x40U) < 0x20U) {
+		center_x = exact::wrap_add(center_x, static_cast<std::int16_t>(0x80));
+	} else {
+		center_x = exact::wrap_subtract(
+			center_x, static_cast<std::int16_t>(0x80)
+		);
+	}
+	if(frame >= 0x80U) {
+		flag = GaugeBossAttackFlag::none;
+	}
+	state.kana_gauge_pattern_frame[player_id]++;
+}
+
+void gauge_patterns_update(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	const auto character =
+		(static_cast<int>(state.players[player_id].paletted_character) - 1) / 2;
+	if(character == 0) {
+		gauge_pattern_reimu(state, player_id);
+	} else if(character == 5) {
+		gauge_pattern_kana(state, player_id);
+	}
 }
 
 void player_update_human(
@@ -1212,7 +1572,12 @@ void player_update_human(
 			const auto charged = static_cast<std::uint16_t>(
 				player.gauge_charged + player.gauge_charge_speed
 			);
-			player.gauge_charged = std::min(charged, player.gauge_avail);
+			if(charged > player.gauge_avail) {
+				player.gauge_charged = player.gauge_avail;
+				player.spell_ready_frames = 0U;
+			} else {
+				player.gauge_charged = charged;
+			}
 		} else {
 			player.spell_ready_frames++;
 			if(player.spell_ready_frames >= 128U) {
@@ -1371,26 +1736,34 @@ void player_update_cpu(DeterministicState &state, std::uint8_t player_id) noexce
 	std::int16_t target_x = 144 << 4;
 	std::int16_t target_y = 300 << 4;
 	std::uint8_t target_id = 0xFFU;
-	for(const auto &enemy : state.enemies) {
-		if(
-			enemy.flag != EnemyFlag::running_spawned ||
-			enemy.player_id != player_id ||
-			enemy.center_x < 0 || enemy.center_x > (288 << 4) ||
-			enemy.center_y < 0 || enemy.center_y > (384 << 4) ||
-			enemy.formation_index >= target_id
-		) {
-			continue;
-		}
-		target_id = enemy.formation_index;
-		target_x = static_cast<std::int16_t>(enemy.center_x - (16 << 4));
-		target_y = static_cast<std::int16_t>(enemy.center_y + (110 << 4));
-		if(target_id == 0U) {
-			break;
+	if(state.boss_target_active[player_id] != 0U) {
+		target_id = 0xFEU;
+		target_x = state.boss_target_x;
+		target_y = state.boss_target_y;
+	} else {
+		for(const auto &enemy : state.enemies) {
+			if(
+				enemy.flag != EnemyFlag::running_spawned ||
+				enemy.player_id != player_id ||
+				enemy.center_x < 0 || enemy.center_x > (288 << 4) ||
+				enemy.center_y < 0 || enemy.center_y > (384 << 4) ||
+				enemy.formation_index >= target_id
+			) {
+				continue;
+			}
+			target_id = enemy.formation_index;
+			target_x = static_cast<std::int16_t>(enemy.center_x - (16 << 4));
+			target_y = static_cast<std::int16_t>(enemy.center_y + (110 << 4));
+			if(target_id == 0U) {
+				break;
+			}
 		}
 	}
 	state.cpu_target_kind_scratch = (target_id == 0xFFU)
 		? static_cast<std::int8_t>(-1)
-		: static_cast<std::int8_t>(target_id);
+		: ((target_id == 0xFEU)
+			? static_cast<std::int8_t>(-2)
+			: static_cast<std::int8_t>(target_id));
 	if(
 		target_x <= 0 || target_x >= (288 << 4) ||
 		target_y <= 0 || target_y >= (384 << 4)
@@ -1429,7 +1802,9 @@ void player_update_cpu(DeterministicState &state, std::uint8_t player_id) noexce
 		? 6U
 		: ((target_id == 0xFFU)
 		? 32U
-		: ((target_id == 0U) ? 6U : 10U));
+		: ((target_id == 0xFEU)
+			? 7U
+			: ((target_id == 0U) ? 6U : 10U)));
 	auto live_input = std::uint16_t{0};
 	if((state.round_or_result_frame % cadence) == 0U) {
 		state.autofire_shot_gate[player_id] = 4U;
@@ -1457,7 +1832,12 @@ void player_update_cpu(DeterministicState &state, std::uint8_t player_id) noexce
 			const auto charged = static_cast<std::uint16_t>(
 				player.gauge_charged + player.gauge_charge_speed
 			);
-			player.gauge_charged = std::min(charged, player.gauge_avail);
+			if(charged > player.gauge_avail) {
+				player.gauge_charged = player.gauge_avail;
+				player.spell_ready_frames = 0U;
+			} else {
+				player.gauge_charged = charged;
+			}
 		} else {
 			player.spell_ready_frames++;
 			if(player.spell_ready_frames >= 128U) {
@@ -2059,10 +2439,13 @@ void extra_attacks_update_reimu(
 			);
 		} else if(attack.state == 2U) {
 			if(extra_attack_transfer_update(attack)) {
-				attack.angle = static_cast<std::uint8_t>(
-					0x80U + (randring_next16(state) & 0x1FU) +
-					((randring_next16(state) & 1U) * 0x60U)
+				auto angle = static_cast<std::uint8_t>(
+					randring_next16(state) & 0x1FU
 				);
+				angle = static_cast<std::uint8_t>(
+					angle + ((randring_next16(state) & 1U) * 0x60U)
+				);
+				attack.angle = static_cast<std::uint8_t>(angle + 0x80U);
 				const auto velocity = vector2(
 					attack.angle,
 					static_cast<std::int16_t>((state.round_speed / 8U) + 0x32U)
@@ -2148,6 +2531,711 @@ void extra_attacks_render_phase_update(DeterministicState &state) noexcept
 				attack.frame++;
 			}
 		}
+	}
+}
+
+void extra_attack_add_direct(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	std::int16_t center_x,
+	std::int16_t center_y,
+	std::uint8_t angle,
+	std::uint8_t speed
+) noexcept
+{
+	const auto slot = std::find_if(
+		state.extra_attacks[player_id].begin(),
+		state.extra_attacks[player_id].end(),
+		[](const ExtraAttackState &attack) { return attack.state == 0U; }
+	);
+	if(slot == state.extra_attacks[player_id].end()) {
+		return;
+	}
+	*slot = ExtraAttackState{};
+	slot->state = 1U;
+	slot->center_x = center_x;
+	slot->center_y = center_y;
+	slot->player_id = static_cast<std::uint8_t>(1U - player_id);
+	slot->angle = angle;
+	slot->speed = speed;
+	const auto velocity = vector2(angle, speed);
+	slot->velocity_x = velocity.x;
+	slot->velocity_y = velocity.y;
+}
+
+void boss_move(BossState &boss) noexcept
+{
+	boss.center_x = exact::wrap_add(boss.center_x, boss.velocity_x);
+	boss.center_y = exact::wrap_add(boss.center_y, boss.velocity_y);
+	boss.motion_angle++;
+	boss.velocity_y = vector2(boss.motion_angle, 16).y;
+	if(boss.center_x <= (48 << 4)) {
+		boss.velocity_x = 32;
+	} else if(boss.center_x >= (240 << 4)) {
+		boss.velocity_x = -32;
+	}
+}
+
+void boss_exit_move(DeterministicState &state, std::uint8_t player_id) noexcept
+{
+	auto &boss = state.boss;
+	boss.center_x = exact::wrap_add(boss.center_x, boss.velocity_x);
+	boss.center_y = exact::wrap_add(boss.center_y, static_cast<std::int16_t>(32));
+	if(boss.center_x <= (48 << 4)) {
+		boss.velocity_x = 32;
+	} else if(boss.center_x >= (240 << 4)) {
+		boss.velocity_x = -32;
+	}
+	state.boss_target_active[1U - player_id] = 0U;
+	if(boss.center_y >= (416 << 4)) {
+		boss.state = 0U;
+		state.gba_boss_launched_by = -1;
+		state.combo_points_for_boss_attack = 5120U;
+	}
+}
+
+bool boss_launch_or_reverse(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	if(state.gba_flag_active[player_id] != GaugeBossAttackFlag::boss) {
+		return false;
+	}
+	if(state.gba_boss_launched_by < 0) {
+		const auto initial = state.boss_initial[player_id];
+		state.boss = BossState{};
+		static_cast<BossInitialState &>(state.boss) = initial;
+		state.boss.pattern_count = static_cast<std::uint8_t>(
+			(randring_next16(state) & 7U) + 1U
+		);
+		state.boss.pattern_frame = 0U;
+		state.gba_boss_launched_by = static_cast<std::int8_t>(player_id);
+		state.gba_flag_active[player_id] = GaugeBossAttackFlag::none;
+		state.boss_target_active[1U - player_id] = 1U;
+		return true;
+	}
+	if(state.boss.state != 0xFFU) {
+		state.boss.state = 0xFFU;
+		state.boss.pattern_frame = 0U;
+		state.boss_target_active[player_id] = 0U;
+	}
+	return false;
+}
+
+void boss_target_update(DeterministicState &state) noexcept
+{
+	if(state.boss.state != 0x80U) {
+		state.boss_target_x = state.boss.center_x;
+		state.boss_target_y = exact::wrap_add(
+			state.boss.center_y, static_cast<std::int16_t>(128 << 4)
+		);
+	}
+}
+
+void boss_choose_pattern(DeterministicState &state) noexcept
+{
+	auto &boss = state.boss;
+	boss_move(boss);
+	if(boss.pattern_frame < 0x50U) {
+		return;
+	}
+	std::uint8_t next = 0U;
+	for(;;) {
+		next = static_cast<std::uint8_t>(randring_next16(state) & 0x0FU);
+		if((static_cast<int>(boss.pattern_previous) + 2) < next) {
+			break;
+		}
+		if((static_cast<int>(boss.pattern_previous) - 2) <= next) {
+			continue;
+		}
+		break;
+	}
+	boss.pattern_previous = next;
+	boss.pattern_frame = 0U;
+	boss.state = static_cast<std::uint8_t>(next + 2U);
+	boss.pattern_index++;
+	if(boss.pattern_index > boss.pattern_count) {
+		boss.state = 0x80U;
+	}
+}
+
+std::uint8_t boss_hittest_damage(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	std::int16_t radius
+) noexcept
+{
+	const auto left = exact::wrap_subtract(state.boss.center_x, radius);
+	const auto right = exact::wrap_add(state.boss.center_x, radius);
+	const auto top = exact::wrap_subtract(state.boss.center_y, radius);
+	const auto bottom = exact::wrap_add(state.boss.center_y, radius);
+	std::uint8_t damage = 0U;
+	for(auto &shot : state.shotpairs) {
+		if(!shot.alive || shot.player_id != player_id) {
+			continue;
+		}
+		const auto shot_center_x = exact::wrap_add(
+			shot.topleft_x, shotpair_half_width
+		);
+		const auto shot_center_y = exact::wrap_add(
+			shot.topleft_y, shotpair_half_height
+		);
+		if(
+			exact::wrap_subtract(shot_center_x, shotpair_half_width) > right ||
+			exact::wrap_add(shot_center_x, shotpair_half_width) < left ||
+			shot_center_y < top || shot_center_y > bottom
+		) {
+			continue;
+		}
+		shot.alive = false;
+		damage = static_cast<std::uint8_t>(damage + 2U);
+	}
+	if(chargeshot_hittest(state, player_id, left, right, top, bottom)) {
+		damage++;
+	}
+	return damage;
+}
+
+void boss_defeat_if_needed(
+	DeterministicState &state,
+	std::uint8_t target_player
+) noexcept
+{
+	if(
+		static_cast<std::int16_t>(state.boss.hp) > 0 ||
+		state.boss.state == 0xFFU
+	) {
+		return;
+	}
+	state.boss.state = 0xFFU;
+	state.boss.pattern_frame = 0U;
+	if(state.gba_flag_active[target_player] != GaugeBossAttackFlag::boss) {
+		state.combo_points_for_boss_attack = 5120U;
+	}
+	state.boss_target_active[target_player] = 0U;
+	if(state.gba_boss_level < 16U) {
+		state.gba_boss_level++;
+	}
+}
+
+void boss_pattern_reimu_orbit_pellets(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.pattern_frame == 0U) {
+		boss.anchor_x = boss.center_x;
+		boss.anchor_y = exact::wrap_add(
+			boss.center_y, static_cast<std::int16_t>(48 << 4)
+		);
+		boss.direction = static_cast<std::uint8_t>(randring_next16(state) & 1U);
+		boss.pattern_angle = 0x10U;
+	}
+	auto angle = static_cast<std::uint8_t>(boss.pattern_frame * 2U);
+	if(boss.direction != 0U) {
+		angle = static_cast<std::uint8_t>(0U - angle);
+	}
+	if((boss.pattern_frame % boss.params[0]) == 0U) {
+		const auto offset = vector2(angle, 32 << 4);
+		bullets_add_group(
+			state,
+			BulletFlag::pellet_cloud,
+			exact::wrap_add(boss.center_x, offset.x),
+			exact::wrap_add(boss.center_y, offset.y),
+			static_cast<std::uint8_t>(1U - player_id),
+			boss.pattern_angle,
+			static_cast<std::uint8_t>(angle * 2U),
+			bullet_group_one
+		);
+		angle = static_cast<std::uint8_t>(angle + 0x80U);
+		const auto opposite = vector2(angle, 32 << 4);
+		bullets_add_group(
+			state,
+			BulletFlag::pellet_cloud,
+			exact::wrap_add(boss.center_x, opposite.x),
+			exact::wrap_add(boss.center_y, opposite.y),
+			static_cast<std::uint8_t>(1U - player_id),
+			boss.pattern_angle,
+			static_cast<std::uint8_t>((angle - 0x80U) * 2U + 0x80U),
+			bullet_group_one
+		);
+	}
+	if((boss.pattern_frame & 1U) == 0U) {
+		boss.pattern_angle++;
+	}
+	const auto y_angle = static_cast<std::uint8_t>(
+		static_cast<std::uint8_t>(boss.pattern_frame * 2U) - 0x40U
+	);
+	boss.center_y = exact::wrap_add(
+		boss.anchor_y, vector2(y_angle, 48 << 4).y
+	);
+	if(boss.pattern_frame >= 0x80U) {
+		boss.state = 1U;
+		boss.pattern_frame = 0U;
+	}
+}
+
+void boss_pattern_reimu_spreads(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &boss = state.boss;
+	boss_move(boss);
+	if(boss.pattern_frame < 0x40U) {
+		if((state.round_frame & 0x0FU) != 0U) {
+			return;
+		}
+		bullets_add_group(
+			state, BulletFlag::bullet16, boss.center_x, boss.center_y,
+			static_cast<std::uint8_t>(1U - player_id), boss.params[2], 0x20U,
+			bullet_group_three_spread_narrow
+		);
+		bullets_add_group(
+			state, BulletFlag::bullet16, boss.center_x, boss.center_y,
+			static_cast<std::uint8_t>(1U - player_id), boss.params[2], 0x60U,
+			bullet_group_three_spread_narrow
+		);
+		return;
+	}
+	if(boss.pattern_frame < 0x64U) {
+		if((state.round_frame & 0x0FU) != 0U) {
+			return;
+		}
+		bullets_add_group(
+			state, BulletFlag::bullet16, boss.center_x, boss.center_y,
+			static_cast<std::uint8_t>(1U - player_id), boss.params[2], 0x40U,
+			bullet_group_five_spread_medium
+		);
+		return;
+	}
+	boss.state = 1U;
+	boss.pattern_frame = 0U;
+}
+
+void boss_pattern_reimu_orbit_exatt(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &boss = state.boss;
+	boss_move(boss);
+	if(boss.pattern_frame == 0U) {
+		boss.render_state = 1U;
+		boss.pattern_angle = static_cast<std::uint8_t>(randring_next16(state));
+	}
+	const auto count = boss.params[3];
+	if(boss.pattern_frame < 0x18U) {
+		const auto radius = static_cast<std::int16_t>(boss.pattern_frame << 5U);
+		for(std::size_t i = 0U; i < count; ++i) {
+			const auto angle = static_cast<std::uint8_t>(
+				((i << 8U) / count) + boss.pattern_angle
+			);
+			const auto offset = vector2(angle, radius);
+			boss.orbit_x[i] = exact::wrap_add(boss.center_x, offset.x);
+			boss.orbit_y[i] = exact::wrap_add(boss.center_y, offset.y);
+		}
+		boss.pattern_angle = static_cast<std::uint8_t>(boss.pattern_angle + 8U);
+		return;
+	}
+	if(boss.pattern_frame < 0x50U) {
+		for(std::size_t i = 0U; i < count; ++i) {
+			const auto angle = static_cast<std::uint8_t>(
+				((i << 8U) / count) + boss.pattern_angle
+			);
+			const auto offset = vector2(angle, 48 << 4);
+			boss.orbit_x[i] = exact::wrap_add(boss.center_x, offset.x);
+			boss.orbit_y[i] = exact::wrap_add(boss.center_y, offset.y);
+		}
+		boss.pattern_angle = static_cast<std::uint8_t>(boss.pattern_angle + 8U);
+		if((state.round_frame & 0x0FU) == 0U) {
+			bullets_add_group(
+				state, BulletFlag::bullet16, boss.center_x, boss.center_y,
+				static_cast<std::uint8_t>(1U - player_id), boss.params[4],
+				static_cast<std::uint8_t>(randring_next16(state)),
+				bullet_group_ring, boss.params[5]
+			);
+		}
+		return;
+	}
+	if(boss.pattern_frame == 0x50U) {
+		for(std::size_t i = 0U; i < count; ++i) {
+			const auto angle = static_cast<std::uint8_t>(
+				((i << 8U) / count) + boss.pattern_angle
+			);
+			extra_attack_add_direct(
+				state, player_id, boss.orbit_x[i], boss.orbit_y[i], angle, 0x50U
+			);
+		}
+		boss.state = 1U;
+		boss.pattern_frame = 0U;
+		boss.render_state = 0U;
+	}
+}
+
+void boss_pattern_reimu_four_spreads(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &boss = state.boss;
+	boss_move(boss);
+	if(boss.pattern_frame < 0x80U) {
+		if((boss.pattern_frame & 0x0FU) != 0U) {
+			return;
+		}
+		bullets_add_group(
+			state, BulletFlag::bullet16, boss.center_x, boss.center_y,
+			static_cast<std::uint8_t>(1U - player_id), boss.params[2],
+			static_cast<std::uint8_t>(boss.pattern_frame),
+			bullet_group_four_spread_narrow
+		);
+		bullets_add_group(
+			state, BulletFlag::bullet16, boss.center_x, boss.center_y,
+			static_cast<std::uint8_t>(1U - player_id), boss.params[2],
+			static_cast<std::uint8_t>(0x78U - boss.pattern_frame),
+			bullet_group_four_spread_narrow
+		);
+		return;
+	}
+	boss.state = 1U;
+	boss.pattern_frame = 0U;
+}
+
+void boss_update_reimu(DeterministicState &state, std::uint8_t player_id) noexcept
+{
+	if(boss_launch_or_reverse(state, player_id)) {
+		state.boss.params[0] = static_cast<std::uint8_t>(
+			5U - (state.gba_boss_level / 5U)
+		);
+		state.boss.params[1] = static_cast<std::uint8_t>(
+			state.gba_boss_level + 0x18U
+		);
+		state.boss.params[2] = static_cast<std::uint8_t>(
+			(state.gba_boss_level * 2U) + 0x28U
+		);
+		state.boss.params[3] = static_cast<std::uint8_t>(
+			(state.gba_boss_level / 8U) + 4U
+		);
+		state.boss.params[4] = static_cast<std::uint8_t>(
+			state.gba_boss_level + 0x10U
+		);
+		state.boss.params[5] = state.boss.params[4];
+	}
+	if(state.gba_boss_launched_by != static_cast<std::int8_t>(player_id)) {
+		return;
+	}
+	boss_target_update(state);
+	state.boss.pattern_frame++;
+	if(state.boss.state == 0U) {
+		if(state.boss.pattern_frame != 0x64U) {
+			return;
+		}
+		state.boss.pattern_frame = 0U;
+		state.boss.state = 1U;
+	}
+	if(state.boss.state == 1U) {
+		boss_choose_pattern(state);
+	}
+	switch(state.boss.state) {
+	case 2U: case 3U: case 4U: case 5U: case 6U:
+		boss_pattern_reimu_orbit_pellets(state, player_id);
+		break;
+	case 8U: case 9U: case 10U: case 13U:
+		boss_pattern_reimu_spreads(state, player_id);
+		break;
+	case 15U: case 16U: case 17U:
+		boss_pattern_reimu_orbit_exatt(state, player_id);
+		break;
+	case 7U: case 11U: case 12U: case 14U:
+		boss_pattern_reimu_four_spreads(state, player_id);
+		break;
+	case 0x80U:
+		boss_exit_move(state, player_id);
+		break;
+	case 0xFFU:
+		return;
+	default:
+		break;
+	}
+	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
+	collmap_set_rect_striped(
+		state, target_player, state.boss.center_x, state.boss.center_y, 28, 28
+	);
+	const auto damage = boss_hittest_damage(state, target_player, 32 << 4);
+	state.boss.hit = damage;
+	state.boss.hp = exact::wrap_subtract(
+		state.boss.hp, static_cast<std::uint16_t>(damage)
+	);
+	boss_defeat_if_needed(state, target_player);
+}
+
+void boss_pattern_kana_accel_ring(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.pattern_frame == 1U) {
+		boss.render_state = 1U;
+		return;
+	}
+	if(boss.pattern_frame == 0x10U) {
+		boss.render_frame = 0U;
+		boss.render_state = 2U;
+		return;
+	}
+	if(boss.pattern_frame == 0x28U) {
+		extra_attack_add_direct(state, player_id, boss.center_x, boss.center_y, 224U, 8U);
+		extra_attack_add_direct(state, player_id, boss.center_x, boss.center_y, 8U, 8U);
+		extra_attack_add_direct(state, player_id, boss.center_x, boss.center_y, 0x78U, 8U);
+		extra_attack_add_direct(state, player_id, boss.center_x, boss.center_y, 160U, 8U);
+		bullets_add_group(
+			state, BulletFlag::bullet16, boss.center_x, boss.center_y,
+			static_cast<std::uint8_t>(1U - player_id), 3U << 4U, 0U,
+			bullet_group_ring, boss.params[0], 0x80U
+		);
+		return;
+	}
+	if(boss.pattern_frame > 0x50U) {
+		boss.render_state = 0U;
+		boss.pattern_frame = 0U;
+		boss.state = 1U;
+	}
+}
+
+void boss_pattern_kana_rings(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.pattern_frame == 1U) {
+		boss.render_state = 1U;
+		return;
+	}
+	if(boss.pattern_frame == 0x10U) {
+		boss.render_frame = 0U;
+		boss.render_state = 2U;
+		return;
+	}
+	if(boss.pattern_frame >= 0x28U && boss.pattern_frame < 0x50U) {
+		if(boss.pattern_frame == 0x28U) {
+			bullets_add_group(
+				state, BulletFlag::bullet16, boss.center_x, boss.center_y,
+				static_cast<std::uint8_t>(1U - player_id), 1U << 4U, 0U,
+				bullet_group_ring, boss.params[1]
+			);
+			return;
+		}
+		if(boss.pattern_frame == 0x40U) {
+			bullets_add_group(
+				state, BulletFlag::bullet16, boss.center_x, boss.center_y,
+				static_cast<std::uint8_t>(1U - player_id), (2U << 4U) + 8U, 0U,
+				bullet_group_ring, boss.params[2]
+			);
+			auto angle = std::uint8_t{0x20U};
+			auto speed = std::uint8_t{1U << 4U};
+			for(std::size_t i = 0U; i < 0x10U; ++i) {
+				bullets_add_group(
+					state, BulletFlag::pellet, boss.center_x, boss.center_y,
+					static_cast<std::uint8_t>(1U - player_id), speed, angle,
+					bullet_group_two_spread_horizontally_symmetric
+				);
+				angle = static_cast<std::uint8_t>(angle + 6U);
+				speed = static_cast<std::uint8_t>(speed + 3U);
+			}
+			return;
+		}
+		if(boss.pattern_frame == 0x48U) {
+			bullets_add_group(
+				state, BulletFlag::bullet16, boss.center_x, boss.center_y,
+				static_cast<std::uint8_t>(1U - player_id), (3U << 4U) + 8U, 0U,
+				bullet_group_ring, boss.params[3]
+			);
+		}
+		return;
+	}
+	if(boss.pattern_frame > 0x60U) {
+		boss.render_state = 0U;
+		boss.pattern_frame = 0U;
+		boss.state = 1U;
+	}
+}
+
+void boss_pattern_kana_clouds(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &boss = state.boss;
+	boss_move(boss);
+	if((boss.pattern_frame % boss.params[4]) == 0U) {
+		auto angle = static_cast<std::uint8_t>(
+			(randring_next16(state) & 0x1FU) - 0x10U
+		);
+		if((randring_next16(state) & 1U) != 0U) {
+			angle = static_cast<std::uint8_t>(0x80U - angle);
+		}
+		extra_attack_add_direct(
+			state, player_id, boss.center_x, boss.center_y, angle, 8U
+		);
+		bullets_add_group(
+			state, BulletFlag::pellet_cloud, boss.center_x, boss.center_y,
+			static_cast<std::uint8_t>(1U - player_id), 3U << 4U, 0U,
+			bullet_group_ring, boss.params[5]
+		);
+	}
+	if(boss.pattern_frame > 0x64U) {
+		boss.render_state = 0U;
+		boss.pattern_frame = 0U;
+		boss.state = 1U;
+	}
+}
+
+void boss_pattern_kana_spiral(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.pattern_frame == 1U) {
+		boss.render_state = 1U;
+		return;
+	}
+	if(boss.pattern_frame == 0x10U) {
+		boss.render_frame = 0U;
+		boss.render_state = 2U;
+		boss.pattern_angle = static_cast<std::uint8_t>(-0x40);
+		switch(randring_next16(state) & 3U) {
+		case 0U: boss.angle_delta = -3; break;
+		case 1U: boss.angle_delta = -1; break;
+		case 2U: boss.angle_delta = 1; break;
+		default: boss.angle_delta = 3; break;
+		}
+		return;
+	}
+	if(boss.pattern_frame >= 0x20U && boss.pattern_frame < 0x6CU) {
+		if((boss.pattern_frame & 3U) == 0U) {
+			bullets_add_group(
+				state, BulletFlag::bullet16, boss.center_x, boss.center_y,
+				static_cast<std::uint8_t>(1U - player_id), boss.params[6],
+				boss.pattern_angle, bullet_group_ring, 5U
+			);
+		}
+		if(boss.pattern_frame > 0x40U) {
+			boss.pattern_angle = static_cast<std::uint8_t>(
+				boss.pattern_angle + boss.angle_delta
+			);
+		}
+		return;
+	}
+	if(boss.pattern_frame > 0x70U) {
+		boss.render_state = 0U;
+		boss.pattern_frame = 0U;
+		boss.state = 1U;
+	}
+}
+
+void boss_update_kana(DeterministicState &state, std::uint8_t player_id) noexcept
+{
+	if(boss_launch_or_reverse(state, player_id)) {
+		state.boss.params[0] = static_cast<std::uint8_t>(
+			(state.gba_boss_level / 2U) + 0x10U
+		);
+		state.boss.params[1] = static_cast<std::uint8_t>(
+			(state.gba_boss_level / 2U) + 0x18U
+		);
+		state.boss.params[2] = static_cast<std::uint8_t>(
+			(state.gba_boss_level / 2U) + 0x10U
+		);
+		state.boss.params[3] = static_cast<std::uint8_t>(
+			(state.gba_boss_level / 2U) + 0x14U
+		);
+		state.boss.params[4] = static_cast<std::uint8_t>(
+			0x20U - state.gba_boss_level
+		);
+		state.boss.params[5] = static_cast<std::uint8_t>(
+			(state.gba_boss_level / 2U) + 0x18U
+		);
+		state.boss.params[6] = static_cast<std::uint8_t>(
+			state.gba_boss_level + 0x40U
+		);
+	}
+	if(state.gba_boss_launched_by != static_cast<std::int8_t>(player_id)) {
+		return;
+	}
+	boss_target_update(state);
+	state.boss.pattern_frame++;
+	switch(state.boss.state) {
+	case 0U:
+		if(state.boss.pattern_frame != 0x64U) {
+			return;
+		}
+		state.boss.pattern_frame = 0U;
+		state.boss.state = 1U;
+		break;
+	case 1U:
+		boss_choose_pattern(state);
+		break;
+	case 2U: case 3U: case 4U:
+		boss_pattern_kana_accel_ring(state, player_id);
+		break;
+	case 7U: case 8U: case 9U: case 10U: case 11U: case 12U:
+		boss_pattern_kana_rings(state, player_id);
+		break;
+	case 13U: case 14U: case 15U:
+		boss_pattern_kana_clouds(state, player_id);
+		break;
+	case 5U: case 6U: case 16U: case 17U:
+		boss_pattern_kana_spiral(state, player_id);
+		break;
+	case 0x80U:
+		boss_exit_move(state, player_id);
+		break;
+	case 0xFFU:
+		return;
+	default:
+		break;
+	}
+	state.boss.render_frame++;
+	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
+	collmap_set_rect_striped(
+		state, target_player, state.boss.center_x, state.boss.center_y, 32, 24
+	);
+	const auto damage = boss_hittest_damage(state, target_player, 32 << 4);
+	state.boss.hit = damage;
+	state.boss.hp = exact::wrap_subtract(
+		state.boss.hp, static_cast<std::uint16_t>(damage)
+	);
+	boss_defeat_if_needed(state, target_player);
+}
+
+void bosses_update(DeterministicState &state, std::uint8_t player_id) noexcept
+{
+	const auto character =
+		(static_cast<int>(state.players[player_id].paletted_character) - 1) / 2;
+	if(character == 0) {
+		boss_update_reimu(state, player_id);
+	} else if(character == 5) {
+		boss_update_kana(state, player_id);
+	}
+}
+
+void boss_render_phase_update(DeterministicState &state) noexcept
+{
+	if(state.gba_boss_launched_by < 0 || state.boss.state != 0xFFU) {
+		return;
+	}
+	if(static_cast<std::int16_t>(state.boss.pattern_frame * 8U) >= 200) {
+		const auto winner = static_cast<std::uint8_t>(
+			1 - state.gba_boss_launched_by
+		);
+		score_add(state.score[winner], 2560U);
+		state.boss.state = 0U;
+		state.gba_boss_launched_by = -1;
 	}
 }
 
@@ -2755,7 +3843,9 @@ bool gameplay_frame_prefix(
 {
 	state.collision_map = {};
 	extra_attacks_update(state, 0U);
+	bosses_update(state, 0U);
 	extra_attacks_update(state, 1U);
+	bosses_update(state, 1U);
 	shots_update(state);
 	chargeshots_update(state);
 	hud_start_update_prefix(state);
@@ -2774,6 +3864,8 @@ bool gameplay_frame_prefix(
 		return false;
 	}
 	fireballs_update(state);
+	gauge_patterns_update(state, 0U);
+	gauge_patterns_update(state, 1U);
 	return true;
 }
 
@@ -2878,6 +3970,7 @@ void gameplay_frame_suffix_after_interstitial(DeterministicState &state) noexcep
 	warning_frame_update(state, 0U);
 	warning_frame_update(state, 1U);
 	background_update(state);
+	boss_render_phase_update(state);
 	fireballs_hittest(state);
 	extra_attacks_render_phase_update(state);
 	combos_update(state);

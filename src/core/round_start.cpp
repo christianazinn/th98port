@@ -157,6 +157,24 @@ DeterministicState initialize_first_round(const GameInit &init)
 			player.speed_diagonal_y = speed.diagonal_y;
 			player.gauge_charge_speed = speed.gauge_charge;
 		}
+		auto &boss = state.boss_initial[player_id];
+		boss.center_x = 144 << 4;
+		boss.center_y = 80 << 4;
+		boss.velocity_x = -32;
+		boss.velocity_y = 0;
+		boss.state = 0U;
+		boss.motion_angle = 0U;
+		boss.pattern_index = 0U;
+		boss.render_state = 0U;
+		if(character == 0U) {
+			boss.hp = static_cast<std::uint16_t>(
+				0x006EU + ((player_id != 0U) ? 0x28U : 0U)
+			);
+		} else if(character == 5U) {
+			boss.hp = static_cast<std::uint16_t>(
+				0x0064U + ((player_id != 0U) ? 0x28U : 0U)
+			);
+		}
 	}
 	// Each set_callbacks_*() call overwrites the shared background callback;
 	// the second player's character therefore determines the round background.

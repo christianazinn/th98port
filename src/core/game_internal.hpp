@@ -237,6 +237,34 @@ struct ExtraAttackState {
 	std::uint8_t speed = 0;
 };
 
+struct BossInitialState {
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+	std::int16_t velocity_x = 0;
+	std::int16_t velocity_y = 0;
+	std::uint16_t hp = 0;
+	std::uint8_t state = 0;
+	std::uint8_t motion_angle = 0;
+	std::uint8_t pattern_index = 0;
+	std::uint8_t render_state = 0;
+};
+
+struct BossState : BossInitialState {
+	std::uint8_t hit = 0;
+	std::uint8_t pattern_previous = 0;
+	std::uint8_t pattern_count = 0;
+	std::uint16_t pattern_frame = 0;
+	std::int16_t anchor_x = 0;
+	std::int16_t anchor_y = 0;
+	std::array<std::int16_t, 6> orbit_x{};
+	std::array<std::int16_t, 6> orbit_y{};
+	std::array<std::uint8_t, 7> params{};
+	std::uint8_t render_frame = 0;
+	std::uint8_t direction = 0;
+	std::int8_t angle_delta = 0;
+	std::uint8_t pattern_angle = 0;
+};
+
 struct DeterministicState {
 	std::uint8_t game_mode = 0;
 	std::uint8_t rank = 0;
@@ -265,9 +293,19 @@ struct DeterministicState {
 	std::array<GaugeBossAttackFlag, player_count> gba_flag_next{};
 	std::array<GaugeBossAttackFlag, player_count> gba_flag_active{};
 	std::array<std::uint8_t, player_count> gba_gauge_level{};
+	std::array<std::uint8_t, player_count> reimu_gauge_pattern_frame{};
+	std::array<std::uint8_t, player_count> kana_gauge_pattern_frame{};
+	std::array<std::int16_t, player_count> kana_gauge_pattern_x{};
+	std::array<std::uint8_t, player_count> gauge_pattern_param_a{};
+	std::array<std::uint8_t, player_count> gauge_pattern_param_b{};
 	std::uint8_t gba_boss_level = 0;
 	std::int8_t gba_boss_launched_by = -1;
 	std::uint16_t combo_points_for_boss_attack = 5120;
+	std::array<BossInitialState, player_count> boss_initial{};
+	BossState boss{};
+	std::array<std::uint8_t, player_count> boss_target_active{};
+	std::int16_t boss_target_x = 0;
+	std::int16_t boss_target_y = 0;
 	BackgroundPhase background_phase = BackgroundPhase::initial;
 	BackgroundInitialKind background_initial_kind = BackgroundInitialKind::type_a;
 	ResultPhase result_phase = ResultPhase::idle;
