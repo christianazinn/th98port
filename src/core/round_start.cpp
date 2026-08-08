@@ -14,6 +14,57 @@ constexpr std::uint8_t shot_mode_one_pair = 1U;
 constexpr std::uint8_t shot_active_enabled = 1U;
 constexpr std::uint16_t gauge_initial = 64U << 4U;
 
+struct PlaycharSpeed {
+	std::uint8_t aligned_x;
+	std::uint8_t aligned_y;
+	std::uint8_t diagonal_x;
+	std::uint8_t diagonal_y;
+	std::uint8_t gauge_charge;
+};
+
+constexpr std::array<PlaycharSpeed, 9> playchar_speeds{{
+	{64U, 64U, 48U, 48U, 32U},
+	{72U, 72U, 54U, 54U, 20U},
+	{64U, 64U, 48U, 48U, 28U},
+	{52U, 52U, 46U, 46U, 14U},
+	{68U, 68U, 52U, 52U, 28U},
+	{56U, 56U, 44U, 44U, 32U},
+	{72U, 72U, 54U, 54U, 16U},
+	{80U, 80U, 64U, 64U, 28U},
+	{80U, 80U, 64U, 64U, 20U},
+}};
+
+constexpr std::array<std::array<std::uint16_t, 6>, 9>
+	story_cpu_safety_frames{{
+		{{100U, 50U, 20U, 0U, 0U, 0U}},
+		{{200U, 100U, 50U, 20U, 0U, 300U}},
+		{{200U, 100U, 50U, 10U, 0U, 400U}},
+		{{300U, 200U, 100U, 50U, 10U, 500U}},
+		{{400U, 250U, 150U, 70U, 20U, 600U}},
+		{{500U, 300U, 200U, 100U, 50U, 1000U}},
+		{{700U, 500U, 300U, 200U, 100U, 1500U}},
+		{{800U, 600U, 400U, 300U, 200U, 1500U}},
+		{{2000U, 1800U, 1300U, 1000U, 700U, 500U}},
+	}};
+
+std::uint16_t story_safety_frames(const GameInit &init) noexcept
+{
+	const auto signed_index =
+		static_cast<int>(0U) - static_cast<int>(init.remaining_credits) + 3;
+	const auto index = static_cast<std::size_t>(std::clamp(signed_index, 0, 5));
+	auto frames = static_cast<std::uint32_t>(
+		story_cpu_safety_frames[init.story_stage][index]
+	);
+	if(init.rank == rank_easy) {
+		frames /= 3U;
+	} else if(init.rank == rank_hard) {
+		frames *= 2U;
+	} else if(init.rank == rank_lunatic) {
+		frames = (frames * 3U) + 500U;
+	}
+	return static_cast<std::uint16_t>(std::min(frames, 0xFFFFU));
+}
+
 std::uint8_t initial_round_speed(std::uint8_t rank, std::uint8_t round_id) noexcept
 {
 	switch(rank) {
@@ -60,6 +111,29 @@ DeterministicState initialize_first_round(const GameInit &init)
 		player.shot_active = shot_active_enabled;
 		player.is_cpu = init.is_cpu[player_id];
 		player.paletted_character = init.paletted_character[player_id];
+		const auto character = static_cast<std::size_t>(
+			(static_cast<int>(player.paletted_character) - 1) / 2
+		);
+		if(character < playchar_speeds.size()) {
+			const auto &speed = playchar_speeds[character];
+			player.speed_aligned_x = speed.aligned_x;
+			player.speed_aligned_y = speed.aligned_y;
+			player.speed_diagonal_x = speed.diagonal_x;
+			player.speed_diagonal_y = speed.diagonal_y;
+			player.gauge_charge_speed = speed.gauge_charge;
+		}
+	}
+	// Each set_callbacks_*() call overwrites the shared background callback;
+	// the second player's character therefore determines the round background.
+	const auto last_character =
+		(static_cast<int>(state.players[1].paletted_character) - 1) / 2;
+	if(
+		last_character != 0 && last_character != 1 && last_character != 6
+	) {
+		state.background_initial_kind = BackgroundInitialKind::type_b;
+	}
+	if(init.game_mode == game_mode_story && init.story_stage < 9U) {
+		state.players[1].cpu_safety_frames = story_safety_frames(init);
 	}
 
 	if(init.runtime_snapshot) {

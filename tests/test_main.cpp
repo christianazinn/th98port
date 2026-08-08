@@ -13,8 +13,11 @@
 
 #include "th03/core/numeric.hpp"
 #include "th03/formats/t3case.hpp"
+#include "th03/formats/enedat.hpp"
 #include "th03/formats/t3split.hpp"
 #include "th03/formats/v11.hpp"
+#include "game_internal.hpp"
+#include "trig.hpp"
 
 namespace {
 
@@ -281,6 +284,7 @@ void test_th3r03_round_start()
 		player.bombs = 2U;
 		player.shot_active = 1U;
 	}
+	snapshot.cpu_charge_ring[1][0] = 191U;
 	init.runtime_snapshot = snapshot;
 
 	auto game = th03::Game::create(init);
@@ -289,7 +293,72 @@ void test_th3r03_round_start()
 		const auto state = game->canonical_state();
 		check(state.round_speed == 96U, "TH3R03 Lunatic round speed starts at raw Q4.4 96");
 		check(state.state_hash == 0x5BDCE01AU, "TH3R03 native start state matches Anniversary schema-3 hash");
+		th03::StepResult boundary{};
+		for(std::uint32_t frame = 0; frame < 128U; ++frame) {
+			th03::CoreInput input{0x0020U, 0U, 0U, 0U};
+			if(frame <= 34U) {
+				input.charge_mask = 1U;
+			}
+			if((frame >= 10U && frame <= 14U) ||
+				(frame >= 37U && frame <= 85U)) {
+				input.p1 = 0x0021U;
+			} else if(frame >= 86U && frame <= 126U) {
+				input.p1 = 0x0022U;
+			}
+			boundary = game->step(input);
+		}
+		check(boundary.status == th03::StepStatus::running,
+			"TH3R03 native prefix advances through sample 128");
+		check(boundary.input_boundary_state.state_hash == 0xC35124AFU,
+			"TH3R03 sample-128 boundary matches Anniversary schema-3 hash");
 	}
+}
+
+void test_random()
+{
+	std::uint32_t seed = 0xE9B35FBAU;
+	check(th03::detail::irand(seed) == 0x6AB1U && seed == 0x6AB17D83U,
+		"IRAND first known answer matches master.lib");
+	check(th03::detail::irand(seed) == 0x4E0AU && seed == 0xCE0AE620U,
+		"IRAND high bit is masked only from its return value");
+
+	th03::detail::DeterministicState state{};
+	state.random_seed = 0xE9B35FBAU;
+	th03::detail::randring_fill(state);
+	check(state.random_seed == 0x21D09EBAU,
+		"descending 256-byte randring fill consumes the exact RNG sequence");
+	check(
+		state.randring[255] == 0xB1U && state.randring[254] == 0x0AU &&
+		state.randring[1] == 0xC5U && state.randring[0] == 0xD0U,
+		"randring fill stores low return bytes from index 255 down to zero"
+	);
+
+	state.randring[254] = 0x34U;
+	state.randring[255] = 0x12U;
+	state.randring_cursor = 254U;
+	check(th03::detail::randring_next16(state) == 0x1234U &&
+		state.randring_cursor == 255U,
+		"randring 16-bit read is little-endian and advances once");
+	state.randring[255] = 0xABU;
+	check(th03::detail::randring_next16(state) == 0x00ABU &&
+		state.randring_cursor == 0U,
+		"randring index 255 reproduces the adjacent wrapped cursor byte");
+}
+
+void test_trig()
+{
+	check(th03::detail::cosine8(0U) == 256 &&
+		th03::detail::sine8(0U) == 0,
+		"master.lib integer trig begins at (256, 0)");
+	check(th03::detail::cosine8(64U) == 0 &&
+		th03::detail::sine8(64U) == 256,
+		"master.lib integer trig preserves the 90-degree cardinal");
+	check(th03::detail::cosine8(129U) == -256 &&
+		th03::detail::sine8(193U) == -256,
+		"master.lib integer trig preserves repeated negative extrema");
+	const auto negative = th03::detail::vector2(128U, 1);
+	check(negative.x == -1 && negative.y == 0,
+		"vector2 arithmetic shift preserves negative rounding quirk");
 }
 
 void test_t3case()
@@ -365,6 +434,37 @@ void test_t3case()
 	bad = direct;
 	put_u8(bad, 64U, 30U);
 	check(!th03::formats::parse_t3case(bad), "T3CASE rejects header checksum mismatch");
+}
+
+void test_enedat()
+{
+	std::vector<std::byte> bytes(10U, std::byte{0});
+	put_u16(bytes, 0U, 6U);
+	put_u16(bytes, 4U, 1U);
+	put_u8(bytes, 6U, 1U);
+	put_u8(bytes, 7U, 0U);
+	put_u16(bytes, 8U, 0U);
+	const auto parsed = th03::formats::parse_enedat(bytes);
+	check(parsed && parsed->enemy_formations.size() == 1U,
+		"ENEDAT parser exposes semantic formations");
+	if(parsed) {
+		check(parsed->enemy_formations[0].enemy_scripts[0][0] == 0U,
+			"ENEDAT parser preserves script opcodes as owned bytes");
+	}
+
+	auto bad = bytes;
+	put_u16(bad, 0U, 5U);
+	check(!th03::formats::parse_enedat(bad),
+		"ENEDAT rejects a header/payload size mismatch");
+	bad = bytes;
+	put_u16(bad, 4U, 17U);
+	check(!th03::formats::parse_enedat(bad),
+		"ENEDAT rejects the donor's unsafe over-16 formation count");
+	bad = bytes;
+	bad.push_back(std::byte{0});
+	put_u16(bad, 0U, 7U);
+	check(!th03::formats::parse_enedat(bad),
+		"ENEDAT rejects trailing bytes after its terminator");
 }
 
 void test_t3split()
@@ -471,7 +571,10 @@ int main()
 {
 	test_numeric();
 	test_th3r03_round_start();
+	test_random();
+	test_trig();
 	test_t3case();
+	test_enedat();
 	test_t3split();
 	test_v11();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

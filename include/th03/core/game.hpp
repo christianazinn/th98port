@@ -86,6 +86,14 @@ struct CanonicalState {
 
 struct PresentationEvent {};
 
+struct EnemyFormation {
+	std::vector<std::vector<std::uint8_t>> enemy_scripts;
+};
+
+struct GameContent {
+	std::vector<EnemyFormation> enemy_formations;
+};
+
 enum class StepStatus {
 	running,
 	phase_transition,
@@ -95,6 +103,7 @@ enum class StepStatus {
 
 struct StepResult {
 	StepStatus status = StepStatus::simulation_not_implemented;
+	CanonicalState input_boundary_state{};
 };
 
 class Game {
@@ -106,6 +115,10 @@ public:
 	Game &operator=(const Game &) = delete;
 
 	static std::expected<Game, Error> create(const GameInit &init);
+	static std::expected<Game, Error> create(
+		const GameInit &init,
+		GameContent content
+	);
 
 	StepResult step(CoreInput input);
 	CanonicalState canonical_state() const;
@@ -113,7 +126,7 @@ public:
 
 private:
 	struct Impl;
-	explicit Game(GameInit init);
+	Game(GameInit init, GameContent content);
 	std::unique_ptr<Impl> impl_;
 };
 

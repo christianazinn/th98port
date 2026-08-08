@@ -43,3 +43,20 @@ presentation, or platform state.
 
 The complete schema-3 hash order and first-round evidence are frozen in
 `TH3R03_ROUND_DOSSIER.md`.
+
+## Phase 2 implementation status
+
+- Implemented and oracle-exercised: startup/restore, random sources, round
+  counters, human and stage-0 CPU movement, HUD start, initial background RNG,
+  ENEDAT formation scripts and motion, ordinary P1/P2 shot pairs, enemy HP and
+  explosions, early chains/combos, Reimu/Kana charge-shot trails, and the CPU
+  collision map/avoidance route.
+- The public input boundary is deliberately after the donor's input latch and
+  before player update. `StepResult::input_boundary_state` exposes that state
+  for comparison without importing expected split data into the core.
+- Exact canonical hashes are verified at start, sample 128, and sample 256;
+  both scores are exact at sample 384. Transfer pellets, their bullet/cloud
+  lifecycle, and full warning/interstitial control remain open.
+- Presentation state remains excluded unless it consumes gameplay RNG. The
+  type-B initial background's 40 IRAND calls per frame and HUD particle draws
+  are therefore deterministic core effects even though no renderer is present.

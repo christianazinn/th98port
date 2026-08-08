@@ -24,8 +24,11 @@ endfunction()
 
 add_library(th03_core STATIC
 	src/core/game.cpp
+	src/core/frame.cpp
+	src/core/random.cpp
 	src/core/round_start.cpp
 	src/core/state_hash.cpp
+	src/core/trig.cpp
 )
 target_include_directories(th03_core PUBLIC include)
 target_compile_features(th03_core PUBLIC cxx_std_23)
@@ -33,6 +36,7 @@ set_target_properties(th03_core PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_core)
 
 add_library(th03_formats STATIC
+	src/formats/enedat.cpp
 	src/formats/t3case.cpp
 	src/formats/t3split.cpp
 	src/formats/v11.cpp
@@ -56,6 +60,7 @@ if(BUILD_TESTING)
 		tests/test_main.cpp
 	)
 	target_link_libraries(th03-tests PRIVATE th03_formats)
+	target_include_directories(th03-tests PRIVATE src/core)
 	th03_set_warnings(th03-tests)
 	add_test(NAME th03-tests COMMAND th03-tests)
 endif()

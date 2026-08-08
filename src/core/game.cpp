@@ -7,15 +7,27 @@
 
 namespace th03 {
 
-Game::Impl::Impl(const GameInit &init) : state(detail::initialize_first_round(init)) {}
+Game::Impl::Impl(const GameInit &init, GameContent content_) :
+	state(detail::initialize_first_round(init)),
+	autofire_mask(init.autofire_mask),
+	content(std::move(content_))
+{}
 
-Game::Game(GameInit init) : impl_(std::make_unique<Impl>(init)) {}
+Game::Game(GameInit init, GameContent content) :
+	impl_(std::make_unique<Impl>(init, std::move(content)))
+{}
 
 Game::Game(Game &&) noexcept = default;
 Game &Game::operator=(Game &&) noexcept = default;
 Game::~Game() = default;
 
 std::expected<Game, Error> Game::create(const GameInit &init)
+
+{
+	return create(init, GameContent{});
+}
+
+std::expected<Game, Error> Game::create(const GameInit &init, GameContent content)
 {
 	if((init.autofire_mask & 0xFCU) != 0U) {
 		return std::unexpected(Error{
@@ -23,13 +35,27 @@ std::expected<Game, Error> Game::create(const GameInit &init)
 			"autofire mask contains bits outside P1/P2",
 		});
 	}
-	return Game(init);
+	if(content.enemy_formations.size() > 24U) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"game content contains more than 24 enemy formations",
+		});
+	}
+	return Game(init, std::move(content));
 }
 
 StepResult Game::step(CoreInput input)
 {
-	(void)input;
-	return StepResult{StepStatus::simulation_not_implemented};
+	if(!detail::gameplay_frame_prefix(impl_->state, impl_->content)) {
+		return StepResult{
+			StepStatus::simulation_not_implemented,
+			detail::canonical_state(impl_->state),
+		};
+	}
+	detail::gameplay_input_latch(impl_->state, input, impl_->autofire_mask);
+	const auto input_boundary = detail::canonical_state(impl_->state);
+	detail::gameplay_frame_suffix(impl_->state);
+	return StepResult{StepStatus::running, input_boundary};
 }
 
 CanonicalState Game::canonical_state() const

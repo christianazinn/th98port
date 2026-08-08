@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "th03/core/game.hpp"
+#include "th03/formats/enedat.hpp"
 #include "th03/formats/t3case.hpp"
 #include "th03/formats/v11.hpp"
 #include "th03/replay/session.hpp"
@@ -41,12 +42,19 @@ void print_error(const th03::Error &error)
 	std::cerr << "error=" << error.message << "\noffset=" << error.offset << '\n';
 }
 
+void print_score(const std::array<std::uint8_t, 8> &score)
+{
+	for(auto digit = score.rbegin(); digit != score.rend(); ++digit) {
+		std::cout << static_cast<unsigned int>(*digit);
+	}
+}
+
 } // namespace
 
 int main(int argc, char **argv)
 {
-	if(argc != 3) {
-		std::cerr << "usage: th03-headless (--case|--v11) <file>\n";
+	if(argc != 3 && argc != 5) {
+		std::cerr << "usage: th03-headless (--case|--v11) <file> [--enedat <file>]\n";
 		return 2;
 	}
 	const std::string_view mode(argv[1]);
@@ -81,7 +89,26 @@ int main(int argc, char **argv)
 		<< "source_version=" << session->source_version << '\n'
 		<< "samples=" << session->sample_count << '\n'
 		<< "records=" << session->records.size() << '\n';
-	auto game = th03::Game::create(session->init);
+	th03::GameContent content{};
+	if(argc == 5) {
+		if(std::string_view(argv[3]) != "--enedat") {
+			std::cerr << "error=expected --enedat before gameplay-data path\n";
+			return 2;
+		}
+		const auto enedat_bytes = read_file(argv[4]);
+		if(enedat_bytes.empty()) {
+			std::cerr << "error=could not read a non-empty ENEDAT file\n";
+			return 2;
+		}
+		auto parsed_content = th03::formats::parse_enedat(enedat_bytes);
+		if(!parsed_content) {
+			print_error(parsed_content.error());
+			return 2;
+		}
+		content = std::move(*parsed_content);
+		std::cout << "enemy_formations=" << content.enemy_formations.size() << '\n';
+	}
+	auto game = th03::Game::create(session->init, std::move(content));
 	if(!game) {
 		print_error(game.error());
 		return 2;
@@ -91,17 +118,38 @@ int main(int argc, char **argv)
 	std::cout << "initial_state_hash="
 		<< std::uppercase << std::hex << std::setw(8) << std::setfill('0')
 		<< initial_state.state_hash << std::dec << '\n';
-	th03::CoreInput first_input{};
+	std::uint32_t consumed = 0U;
 	for(const auto &record : session->records) {
 		if(const auto *sample = std::get_if<th03::replay::InputSample>(&record)) {
-			first_input = sample->input;
-			break;
+			if(sample->phase != th03::replay::InputPhase::gameplay) {
+				std::cout << "result=simulation-not-implemented\n"
+					<< "consumed_samples=" << consumed << '\n'
+					<< "boundary=interstitial-input\n";
+				return 3;
+			}
+			const auto result = simulation.step(sample->input);
+			if(result.status == th03::StepStatus::simulation_not_implemented) {
+				std::cout << "result=simulation-not-implemented\n"
+					<< "consumed_samples=" << consumed << '\n'
+					<< "boundary=gameplay-subsystem\n";
+				return 3;
+			}
+			consumed++;
+			if((consumed & 127U) == 0U) {
+				const auto &state = result.input_boundary_state;
+				std::cout << "checkpoint=" << consumed
+					<< " round_frame=" << state.round_frame
+					<< " round_or_result_frame=" << state.round_or_result_frame
+					<< " p1_score=";
+				print_score(state.p1_score);
+				std::cout << " p2_score=";
+				print_score(state.p2_score);
+				std::cout << " state_hash=" << std::uppercase << std::hex
+					<< std::setw(8) << std::setfill('0') << state.state_hash
+					<< std::dec << '\n';
+			}
 		}
 	}
-	const auto result = simulation.step(first_input);
-	if(result.status == th03::StepStatus::simulation_not_implemented) {
-		std::cout << "result=simulation-not-implemented\n";
-		return 3;
-	}
+	std::cout << "result=terminal\nconsumed_samples=" << consumed << '\n';
 	return 0;
 }
