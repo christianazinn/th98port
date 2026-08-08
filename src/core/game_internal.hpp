@@ -343,7 +343,9 @@ struct DeterministicState {
 	std::array<std::array<ExtraAttackState, 8>, player_count> extra_attacks{};
 	std::array<ShotPairState, shotpair_count> shotpairs{};
 	std::array<std::array<ReimuChargeGroup, 12>, player_count> reimu_charge{};
-	std::array<std::uint8_t, player_count> reimu_charge_primary{};
+	// ZUN stores this primary-charge collision throttle in one global byte,
+	// shared by both players and also cleared by Reimu's hyper amulets.
+	std::uint8_t reimu_chargeshot_primary = 0;
 	std::array<std::array<KanaChargeGroup, 4>, player_count> kana_charge{};
 	std::array<std::uint8_t, player_count> kana_charge_state{};
 	std::array<std::uint8_t, player_count> kana_charge_frames{};

@@ -994,6 +994,13 @@ void bullets_update(DeterministicState &state) noexcept
 	}
 }
 
+void add_reimu_hyper_amulet(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	std::int16_t center_x,
+	std::int16_t center_y
+) noexcept;
+
 void shots_add(DeterministicState &state, std::uint8_t player_id) noexcept
 {
 	const auto &player = state.players[player_id];
@@ -1001,15 +1008,24 @@ void shots_add(DeterministicState &state, std::uint8_t player_id) noexcept
 		return;
 	}
 	std::int16_t left = player.center_x.raw();
+	std::int16_t top = player.center_y.raw();
 	std::uint8_t pairs_fired = 0U;
 	if(player.shot_mode == 3U) {
 		left = exact::wrap_subtract(left, static_cast<std::int16_t>(64 << 4));
 	} else if(player.shot_mode == 2U) {
 		left = exact::wrap_subtract(left, static_cast<std::int16_t>(32 << 4));
 		pairs_fired = 2U;
+	} else if(player.shot_mode == 4U) {
+		left = exact::wrap_subtract(left, static_cast<std::int16_t>(24 << 4));
+		top = exact::wrap_subtract(top, static_cast<std::int16_t>(1 << 4));
+		add_reimu_hyper_amulet(state, player_id, left, top);
+		left = exact::wrap_add(left, static_cast<std::int16_t>(48 << 4));
+		add_reimu_hyper_amulet(state, player_id, left, top);
+		left = exact::wrap_subtract(
+			player.center_x.raw(), static_cast<std::int16_t>(16 << 4)
+		);
+		pairs_fired = 3U;
 	} else {
-		// SM_1_PAIR and SM_REIMU_HYPER share this ordinary pair. The latter's
-		// separate amulet pair belongs to its character-owned hyper entity path.
 		left = exact::wrap_subtract(left, static_cast<std::int16_t>(16 << 4));
 		pairs_fired = 3U;
 	}
@@ -1023,7 +1039,7 @@ void shots_add(DeterministicState &state, std::uint8_t player_id) noexcept
 		}
 		slot.alive = true;
 		slot.topleft_x = left;
-		slot.topleft_y = player.center_y.raw();
+		slot.topleft_y = top;
 		slot.velocity_y = shot_velocity_y;
 		slot.player_id = player_id;
 		pairs_fired++;
@@ -1102,12 +1118,6 @@ void chargeshot_update_reimu(
 			group.state = 0U;
 		}
 	}
-	bool any_primary = false;
-	for(std::size_t group_id = 0U; group_id < 4U; ++group_id) {
-		any_primary = any_primary ||
-			(state.reimu_charge[player_id][group_id].state != 0U);
-	}
-	state.reimu_charge_primary[player_id] = static_cast<std::uint8_t>(any_primary);
 }
 
 void chargeshot_update_kana(
@@ -1178,7 +1188,7 @@ bool chargeshot_hittest(
 		(static_cast<int>(state.players[player_id].paletted_character) - 1) / 2;
 	if(character == 0) {
 		if(
-			state.reimu_charge_primary[player_id] != 0U &&
+			state.reimu_chargeshot_primary != 0U &&
 			(state.round_or_result_frame & 1U) != 0U
 		) {
 			return false;
@@ -1330,7 +1340,29 @@ void add_reimu_chargeshot(
 		group.speed = 0x60U;
 		angle = static_cast<std::uint8_t>(angle + 0x20U);
 	}
-	state.reimu_charge_primary[player_id] = 1U;
+	state.reimu_chargeshot_primary = 1U;
+}
+
+void add_reimu_hyper_amulet(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	std::int16_t center_x,
+	std::int16_t center_y
+) noexcept
+{
+	for(auto &group : state.reimu_charge[player_id]) {
+		if(group.state != 0U) {
+			continue;
+		}
+		group.state = 2U;
+		group.frame = 0U;
+		group.x.fill(center_x);
+		group.y.fill(center_y);
+		group.angle = 0xC0U;
+		group.speed = 0xC0U;
+		break;
+	}
+	state.reimu_chargeshot_primary = 0U;
 }
 
 void add_kana_chargeshot(
@@ -1829,14 +1861,20 @@ void player_update_finish(
 		live_input = 0U;
 	}
 	if(player.move_lock_time == 0U && player.shot_active != 0U) {
+		bool shot_fired = false;
 		if(
 			(live_input & input_shot) != 0U || player.shot_active == 2U
 		) {
 			if(state.autofire_shot_gate[player_id] > 2U) {
 				shots_add(state, player_id);
 				state.autofire_shot_gate[player_id] = 0U;
+				shot_fired = true;
 			}
-		} else if(state.autofire_shot_gate[player_id] < 8U) {
+		}
+		if(
+			!shot_fired && (live_input & input_shot) == 0U &&
+			state.autofire_shot_gate[player_id] < 8U
+		) {
 			state.autofire_shot_gate[player_id]++;
 		}
 		if((live_input & input_bomb) != 0U) {
@@ -2501,6 +2539,7 @@ bool add_formation(
 	if(state.enemies_alive[player_id] != 0U) {
 		return true;
 	}
+	state.enemy_speed = static_cast<std::uint8_t>(state.round_speed / 32U);
 	const auto cursor = state.formation_cursor[player_id];
 	const auto formation_id = state.formation_type_ring[cursor];
 	if(formation_id >= content.enemy_formations.size()) {
@@ -2516,8 +2555,10 @@ bool add_formation(
 		if(slot == state.enemies.end()) {
 			break;
 		}
-		*slot = EnemyState{};
 		slot->flag = EnemyFlag::running_unspawned;
+		slot->script_ip = 0U;
+		slot->script_op_frame = 0U;
+		slot->loop_index = 0U;
 		slot->player_id = player_id;
 		slot->formation_type = formation_id;
 		slot->formation_index = static_cast<std::uint8_t>(index);
@@ -4277,7 +4318,6 @@ bool gameplay_frame_prefix(
 	if(content.enemy_formations.empty()) {
 		return false;
 	}
-	state.enemy_speed = static_cast<std::uint8_t>(state.round_speed / 32U);
 	if(!add_formation(state, content, 0U) || !add_formation(state, content, 1U)) {
 		return false;
 	}
