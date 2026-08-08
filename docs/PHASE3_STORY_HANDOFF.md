@@ -28,8 +28,9 @@ design.
 ## Current validation boundary
 
 The typed coordinator and the progressively expanded Classic gameplay core
-match the frozen Anniversary TH3R03 oracle through global sample 14,208. This
+match the frozen Anniversary TH3R03 oracle through global sample 14,464. This
 includes the complete first and second gameplay processes, both intervening
-MAINL boundaries, and the first 961 logical frames of Stage 3. The next red
-checkpoint is 14,336; expected oracle values remain comparison-only and never
-initialize or steer simulation.
+MAINL boundaries, and the first 1,136 logical frames of Stage 3. The next first
+failure is the interstitial input boundary at sample 14,573, which the native
+core has not yet scheduled; expected oracle values remain comparison-only and
+never initialize or steer simulation.

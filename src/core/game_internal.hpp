@@ -19,6 +19,7 @@ inline constexpr std::size_t bullet_count = 320;
 inline constexpr std::size_t fireball_count = 24;
 inline constexpr std::size_t extra_attack_count = 16;
 inline constexpr std::size_t extra_attack_regular_count = 8;
+inline constexpr std::size_t extra_attack_ellen_count = 12;
 inline constexpr std::size_t extra_attack_rikako_count = 14;
 inline constexpr std::size_t shotpair_count = 32;
 inline constexpr std::size_t collmap_width = 144;
@@ -284,6 +285,10 @@ struct ExtraAttackState {
 	std::uint8_t angle = 0;
 	std::uint8_t speed = 0;
 	std::uint8_t behavior_variant = 0;
+	std::array<std::int16_t, 7> ellen_trail_x{};
+	std::array<std::int16_t, 7> ellen_trail_y{};
+	std::int16_t ellen_radius = 0;
+	std::int8_t ellen_angle_delta = 0;
 };
 
 struct BossInitialState {

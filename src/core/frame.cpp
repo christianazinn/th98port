@@ -636,6 +636,50 @@ void extra_attack_add(
 		);
 		return;
 	}
+	if(character == 3) {
+		const auto target_x = static_cast<std::int16_t>(
+			(randring_next16(state) % (200U << 4U)) + (44U << 4U)
+		);
+		const auto target_y = static_cast<std::int16_t>(
+			(randring_next16(state) % (200U << 4U)) + (80U << 4U)
+		);
+		const auto angle_delta = ((randring_next16(state) & 1U) == 0U)
+			? std::int8_t{-1}
+			: std::int8_t{1};
+		const auto angle = static_cast<std::uint8_t>(randring_next16(state));
+		bool spawned = false;
+		for(std::size_t slot_id = 0U;
+			slot_id < extra_attack_ellen_count; ++slot_id) {
+			auto &slot = state.extra_attacks[player_id][slot_id];
+			if(slot.state != 0U) {
+				continue;
+			}
+			const auto trail_x = slot.ellen_trail_x;
+			const auto trail_y = slot.ellen_trail_y;
+			extra_attack_transfer_init(
+				state,
+				slot,
+				center_x,
+				center_y,
+				target_x,
+				target_y,
+				player_id,
+				0x46
+			);
+			slot.ellen_trail_x = trail_x;
+			slot.ellen_trail_y = trail_y;
+			slot.ellen_radius = 0U;
+			slot.ellen_angle_delta = angle_delta;
+			slot.angle = spawned
+				? static_cast<std::uint8_t>(angle + 0x80U)
+				: angle;
+			if(spawned) {
+				return;
+			}
+			spawned = true;
+		}
+		return;
+	}
 	if(character == 5) {
 		// Kana chooses this target even if all eight slots are occupied.
 		const auto target_x = static_cast<std::int16_t>(
@@ -3404,6 +3448,96 @@ void extra_attacks_update_kana(
 	}
 }
 
+void extra_attacks_update_ellen(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
+	for(std::size_t slot_id = 0U;
+		slot_id < extra_attack_ellen_count; ++slot_id) {
+		auto &attack = state.extra_attacks[player_id][slot_id];
+		if(attack.state == 0U) {
+			continue;
+		}
+		if(attack.state == 1U) {
+			for(std::size_t trail = attack.ellen_trail_x.size() - 1U;
+				trail > 0U; --trail) {
+				attack.ellen_trail_x[trail] = attack.ellen_trail_x[trail - 1U];
+				attack.ellen_trail_y[trail] = attack.ellen_trail_y[trail - 1U];
+			}
+			if(attack.ellen_radius <= 0x0D00) {
+				const auto offset = vector2(attack.angle, attack.ellen_radius);
+				attack.ellen_trail_x[0] = exact::wrap_add(
+					attack.center_x, offset.x
+				);
+				attack.ellen_trail_y[0] = exact::wrap_add(
+					attack.center_y, offset.y
+				);
+				attack.velocity_x = exact::wrap_subtract(
+					attack.ellen_trail_x[0], attack.ellen_trail_x[1]
+				);
+				attack.velocity_y = exact::wrap_subtract(
+					attack.ellen_trail_y[0], attack.ellen_trail_y[1]
+				);
+				attack.ellen_radius = exact::wrap_add(
+					attack.ellen_radius, static_cast<std::int16_t>(0x18)
+				);
+				attack.angle = static_cast<std::uint8_t>(
+					attack.angle + attack.ellen_angle_delta
+				);
+			} else {
+				if(
+					playfield_clip(
+						attack.ellen_trail_x.front(),
+						attack.ellen_trail_y.front(),
+						-(24 << 4)
+					) &&
+					playfield_clip(
+						attack.ellen_trail_x.back(),
+						attack.ellen_trail_y.back(),
+						-(24 << 4)
+					)
+				) {
+					attack.state = 0U;
+					continue;
+				}
+				attack.ellen_trail_x[0] = exact::wrap_add(
+					attack.ellen_trail_x[0], attack.velocity_x
+				);
+				attack.ellen_trail_y[0] = exact::wrap_add(
+					attack.ellen_trail_y[0], attack.velocity_y
+				);
+			}
+			extra_attack_shot_hittest(
+				state,
+				target_player,
+				attack.ellen_trail_x[0],
+				attack.ellen_trail_y[0]
+			);
+			collmap_set_rect_striped(
+				state,
+				target_player,
+				attack.ellen_trail_x[0],
+				attack.ellen_trail_y[0],
+				6,
+				6
+			);
+		} else if(attack.state == 2U) {
+			if(extra_attack_transfer_update(attack)) {
+				attack.ellen_trail_x.fill(attack.center_x);
+				attack.ellen_trail_y.fill(attack.center_y);
+			}
+		} else if(attack.state <= 0x1CU) {
+			attack.state++;
+		} else {
+			attack.frame = 0U;
+			attack.state = 1U;
+		}
+		attack.frame++;
+	}
+}
+
 void extra_attacks_update_rikako(
 	DeterministicState &state,
 	std::uint8_t player_id
@@ -3494,6 +3628,8 @@ void extra_attacks_update(
 		(static_cast<int>(state.players[player_id].paletted_character) - 1) / 2;
 	if(character == 0) {
 		extra_attacks_update_reimu(state, player_id);
+	} else if(character == 3) {
+		extra_attacks_update_ellen(state, player_id);
 	} else if(character == 5) {
 		extra_attacks_update_kana(state, player_id);
 	} else if(character == 6) {
@@ -4445,6 +4581,10 @@ void bosses_update(DeterministicState &state, std::uint8_t player_id) noexcept
 		boss_update_kana(state, player_id);
 	} else if(character == 6) {
 		boss_update_rikako(state, player_id);
+	} else {
+		// Every character callback enters the shared launch/reversal helper
+		// before its character-specific Boss Attack implementation.
+		(void)boss_launch_or_reverse(state, player_id);
 	}
 }
 
