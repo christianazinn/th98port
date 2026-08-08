@@ -1,0 +1,27 @@
+# Frozen Phase 0 source authority (2026-08-07)
+
+Harness planning commit:
+  b317f6ad2aa51b2e9d32d45eddc7572e9b689e0c
+
+Master oracle:
+  ref: refs/pins/th03-port/oracle-master
+  commit: 54cb12d0f888304b923fa1c78158d1f12fca3d45
+
+Anniversary oracle / Classic implementation donor:
+  ref: refs/pins/th03-port/oracle-anniversary
+  commit: 3e2381d4275be7287f5525de5c95389d492b0a3c
+
+Replay oracle / historical V11-V12 and QoL donor:
+  ref: refs/pins/th03-port/oracle-replays
+  commit: 75387f747b8c146f4d94c559dc4f624bf9082f94
+
+Protected shipping Replay Patch (never modified by oracle or native work):
+  ref: origin/replays
+  commit: f4a080c55554c6f8fd0fe0d33da67f130ccc3125
+
+Behavior precedence:
+  Anniversary defines Classic gameplay.
+  Master is the historical diagnostic tie-breaker.
+  Replay defines historical replay/QoL semantics, never a second gameplay core.
+  Frozen oracle output defines executable native acceptance.
+  The finalized V13 specification will define future user replay documents.
