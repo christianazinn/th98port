@@ -365,6 +365,32 @@ void test_story_result_route()
 	);
 }
 
+void test_story_extends()
+{
+	th03::GameInit init{};
+	init.game_mode = 1U;
+	init.story_lives = 2U;
+	init.last_score[0][6] = 1U;
+	auto state = th03::detail::initialize_first_round(init);
+	check(
+		state.story_lives == 2U && state.extends_gained == 1U,
+		"Story round derives its extend counter from the ten-million score digit"
+	);
+	state.background_phase = th03::detail::BackgroundPhase::type_a_steady;
+	state.score[0][6] = 2U;
+	th03::detail::gameplay_frame_suffix_after_interstitial(state);
+	check(
+		state.story_lives == 3U && state.extends_gained == 255U,
+		"Story score rendering awards the second extend and disables further awards"
+	);
+	state.score[0][6] = 3U;
+	th03::detail::gameplay_frame_suffix_after_interstitial(state);
+	check(
+		state.story_lives == 3U && state.extends_gained == 255U,
+		"Disabled Story extends remain disabled above twenty million points"
+	);
+}
+
 void test_random()
 {
 	std::uint32_t seed = 0xE9B35FBAU;
@@ -635,6 +661,7 @@ int main()
 	test_numeric();
 	test_th3r03_round_start();
 	test_story_result_route();
+	test_story_extends();
 	test_random();
 	test_trig();
 	test_t3case();

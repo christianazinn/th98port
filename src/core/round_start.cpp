@@ -12,6 +12,8 @@ constexpr std::uint8_t rank_hard = 2U;
 constexpr std::uint8_t rank_lunatic = 3U;
 constexpr std::uint8_t shot_mode_one_pair = 1U;
 constexpr std::uint8_t shot_active_enabled = 1U;
+constexpr std::uint8_t extends_max = 2U;
+constexpr std::uint8_t extends_disabled = 255U;
 constexpr std::uint16_t gauge_initial = 64U << 4U;
 
 struct PlaycharSpeed {
@@ -132,6 +134,7 @@ DeterministicState initialize_first_round(const GameInit &init)
 	state.game_mode = init.game_mode;
 	state.rank = init.rank;
 	state.story_stage = init.story_stage;
+	state.story_lives = init.story_lives;
 	state.resident_rand = init.resident_rand;
 	state.winner = init.winner;
 	state.random_seed = static_cast<std::uint32_t>(init.resident_rand);
@@ -149,6 +152,14 @@ DeterministicState initialize_first_round(const GameInit &init)
 	state.score = init.last_score;
 	if(init.game_mode != game_mode_story) {
 		state.score = {};
+	} else {
+		state.extends_gained = state.score[0][6];
+		if(
+			state.extends_gained >= extends_max ||
+			state.score[0][7] != 0U
+		) {
+			state.extends_gained = extends_disabled;
+		}
 	}
 
 	for(std::size_t player_id = 0; player_id < player_count; ++player_id) {

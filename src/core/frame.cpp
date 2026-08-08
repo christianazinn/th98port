@@ -33,6 +33,9 @@ constexpr std::uint16_t gauge_max = 256U << 4U;
 constexpr std::uint8_t bomb_frames = 180U;
 constexpr std::uint8_t miss_invincibility_frames = 110U;
 constexpr std::uint8_t knockback_frames = 64U;
+constexpr std::uint8_t game_mode_story = 1U;
+constexpr std::uint8_t extends_max = 2U;
+constexpr std::uint8_t extends_disabled = 255U;
 constexpr std::uint8_t position_clip_x = 0x01U;
 constexpr std::uint8_t position_clip_bottom = 0x02U;
 constexpr std::uint8_t position_do_not_mirror_x = 0x80U;
@@ -4295,6 +4298,23 @@ void result_transition_update(DeterministicState &state) noexcept
 	}
 }
 
+void story_extend_update(DeterministicState &state) noexcept
+{
+	if(
+		state.game_mode != game_mode_story ||
+		state.extends_gained >= state.score[0][6]
+	) {
+		return;
+	}
+	state.story_lives = static_cast<std::uint8_t>(state.story_lives + 1U);
+	state.extends_gained = static_cast<std::uint8_t>(
+		state.extends_gained + 1U
+	);
+	if(state.extends_gained == extends_max) {
+		state.extends_gained = extends_disabled;
+	}
+}
+
 } // namespace
 
 bool gameplay_frame_prefix(
@@ -4439,6 +4459,7 @@ void gameplay_frame_suffix_after_interstitial(DeterministicState &state) noexcep
 	if(result_control_update(state)) {
 		return;
 	}
+	story_extend_update(state);
 	warning_portrait_update(state);
 	combos_update(state);
 	result_transition_update(state);

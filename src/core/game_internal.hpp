@@ -282,6 +282,8 @@ struct DeterministicState {
 	std::uint8_t game_mode = 0;
 	std::uint8_t rank = 0;
 	std::uint8_t story_stage = 0;
+	std::uint8_t story_lives = 0;
+	std::uint8_t extends_gained = 255;
 	std::int32_t resident_rand = 0;
 	std::int8_t winner = 0;
 	std::uint8_t round_id = 0;
