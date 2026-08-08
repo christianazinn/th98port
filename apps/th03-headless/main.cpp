@@ -121,13 +121,15 @@ int main(int argc, char **argv)
 	std::uint32_t consumed = 0U;
 	for(const auto &record : session->records) {
 		if(const auto *sample = std::get_if<th03::replay::InputSample>(&record)) {
-			if(sample->phase != th03::replay::InputPhase::gameplay) {
-				std::cout << "result=simulation-not-implemented\n"
-					<< "consumed_samples=" << consumed << '\n'
-					<< "boundary=interstitial-input\n";
-				return 3;
+			const auto context =
+				(sample->phase == th03::replay::InputPhase::gameplay) ?
+				th03::InputContext::gameplay : th03::InputContext::interstitial;
+			const auto result = simulation.step(sample->input, context);
+			if(result.status == th03::StepStatus::invalid_input_context) {
+				std::cout << "result=input-context-mismatch\n"
+					<< "consumed_samples=" << consumed << '\n';
+				return 4;
 			}
-			const auto result = simulation.step(sample->input);
 			if(result.status == th03::StepStatus::simulation_not_implemented) {
 				std::cout << "result=simulation-not-implemented\n"
 					<< "consumed_samples=" << consumed << '\n'

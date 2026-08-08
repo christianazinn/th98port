@@ -55,8 +55,11 @@ The complete schema-3 hash order and first-round evidence are frozen in
   before player update. `StepResult::input_boundary_state` exposes that state
   for comparison without importing expected split data into the core.
 - Exact canonical hashes are verified at start, sample 128, and sample 256;
-  both scores are exact at sample 384. Transfer pellets, their bullet/cloud
-  lifecycle, and full warning/interstitial control remain open.
+  both scores are exact through sample 512. Transfer pellets, fireballs,
+  Reimu/Kana Extra Attacks, and the donor's mid-frame 27-sample warning input
+  context are now represented. The first expected interstitial remains a true
+  diagnostic mismatch because the native combat state has not scheduled its
+  warning by sample 1,433; the replay adapter does not manufacture one.
 - Presentation state remains excluded unless it consumes gameplay RNG. The
   type-B initial background's 40 IRAND calls per frame and HUD particle draws
   are therefore deterministic core effects even though no renderer is present.

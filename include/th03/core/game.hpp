@@ -21,6 +21,11 @@ struct CoreInput {
 	std::uint8_t charge_mask = 0;
 };
 
+enum class InputContext : std::uint8_t {
+	gameplay,
+	interstitial,
+};
+
 struct PlayerStart {
 	exact::Subpixel center_x;
 	exact::Subpixel center_y;
@@ -98,6 +103,7 @@ enum class StepStatus {
 	running,
 	phase_transition,
 	terminal,
+	invalid_input_context,
 	simulation_not_implemented,
 };
 
@@ -120,7 +126,10 @@ public:
 		GameContent content
 	);
 
-	StepResult step(CoreInput input);
+	StepResult step(
+		CoreInput input,
+		InputContext context = InputContext::gameplay
+	);
 	CanonicalState canonical_state() const;
 	std::span<const PresentationEvent> presentation_events() const;
 

@@ -44,8 +44,30 @@ std::expected<Game, Error> Game::create(const GameInit &init, GameContent conten
 	return Game(init, std::move(content));
 }
 
-StepResult Game::step(CoreInput input)
+StepResult Game::step(CoreInput input, InputContext context)
 {
+	if(context == InputContext::interstitial) {
+		if(impl_->warning_interstitial_samples_remaining == 0U) {
+			return StepResult{
+				StepStatus::invalid_input_context,
+				detail::canonical_state(impl_->state),
+			};
+		}
+		detail::interstitial_input_latch(impl_->state, input);
+		const auto input_boundary = detail::canonical_state(impl_->state);
+		impl_->warning_interstitial_samples_remaining--;
+		if(impl_->warning_interstitial_samples_remaining == 0U) {
+			detail::gameplay_frame_suffix_after_interstitial(impl_->state);
+			return StepResult{StepStatus::phase_transition, input_boundary};
+		}
+		return StepResult{StepStatus::running, input_boundary};
+	}
+	if(impl_->warning_interstitial_samples_remaining != 0U) {
+		return StepResult{
+			StepStatus::invalid_input_context,
+			detail::canonical_state(impl_->state),
+		};
+	}
 	if(!detail::gameplay_frame_prefix(impl_->state, impl_->content)) {
 		return StepResult{
 			StepStatus::simulation_not_implemented,
@@ -54,7 +76,11 @@ StepResult Game::step(CoreInput input)
 	}
 	detail::gameplay_input_latch(impl_->state, input, impl_->autofire_mask);
 	const auto input_boundary = detail::canonical_state(impl_->state);
-	detail::gameplay_frame_suffix(impl_->state);
+	if(detail::gameplay_frame_suffix_before_interstitial(impl_->state)) {
+		impl_->warning_interstitial_samples_remaining = 27U;
+		return StepResult{StepStatus::phase_transition, input_boundary};
+	}
+	detail::gameplay_frame_suffix_after_interstitial(impl_->state);
 	return StepResult{StepStatus::running, input_boundary};
 }
 

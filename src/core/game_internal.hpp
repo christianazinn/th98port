@@ -44,6 +44,23 @@ enum class ResultPhase : std::uint8_t {
 	closing = 2,
 };
 
+enum class WarningFlag : std::uint8_t {
+	none = 0,
+	portrait = 1,
+	flash_white = 2,
+	flash_red = 3,
+	flash_red_end = 33,
+};
+
+enum class GaugeBossAttackFlag : std::uint8_t {
+	none = 0,
+	gauge_pellet_init = 1,
+	gauge_pellet_active = 2,
+	gauge_bullet_init = 3,
+	gauge_bullet_active = 4,
+	boss = 5,
+};
+
 struct PlayerState {
 	exact::Subpixel center_x{};
 	exact::Subpixel center_y{};
@@ -206,6 +223,20 @@ struct FireballState {
 	std::uint8_t generation = 0;
 };
 
+struct ExtraAttackState {
+	std::uint8_t state = 0;
+	std::uint8_t frame = 0;
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+	std::int16_t velocity_x = 0;
+	std::int16_t velocity_y = 0;
+	std::int16_t target_x_for_target_player = 0;
+	std::int16_t target_x_for_origin_player = 0;
+	std::uint8_t player_id = 0;
+	std::uint8_t angle = 0;
+	std::uint8_t speed = 0;
+};
+
 struct DeterministicState {
 	std::uint8_t game_mode = 0;
 	std::uint8_t rank = 0;
@@ -230,6 +261,13 @@ struct DeterministicState {
 	std::array<std::uint8_t, player_count> autofire_shot_gate{};
 	std::int8_t cpu_target_kind_scratch = 0;
 	std::array<std::uint8_t, player_count> boss_panic_fired_in_combo{};
+	std::array<WarningFlag, player_count> warning_flag{};
+	std::array<GaugeBossAttackFlag, player_count> gba_flag_next{};
+	std::array<GaugeBossAttackFlag, player_count> gba_flag_active{};
+	std::array<std::uint8_t, player_count> gba_gauge_level{};
+	std::uint8_t gba_boss_level = 0;
+	std::int8_t gba_boss_launched_by = -1;
+	std::uint16_t combo_points_for_boss_attack = 5120;
 	BackgroundPhase background_phase = BackgroundPhase::initial;
 	BackgroundInitialKind background_initial_kind = BackgroundInitialKind::type_a;
 	ResultPhase result_phase = ResultPhase::idle;
@@ -243,6 +281,7 @@ struct DeterministicState {
 	std::array<EnemyState, enemy_count> enemies{};
 	std::array<BulletState, bullet_count> bullets{};
 	std::array<FireballState, fireball_count> fireballs{};
+	std::array<std::array<ExtraAttackState, 8>, player_count> extra_attacks{};
 	std::array<ShotPairState, shotpair_count> shotpairs{};
 	std::array<std::array<ReimuChargeGroup, 12>, player_count> reimu_charge{};
 	std::array<std::uint8_t, player_count> reimu_charge_primary{};
@@ -271,7 +310,16 @@ void gameplay_input_latch(
 	CoreInput &input,
 	std::uint8_t autofire_mask
 ) noexcept;
-void gameplay_frame_suffix(DeterministicState &state) noexcept;
+bool gameplay_frame_suffix_before_interstitial(
+	DeterministicState &state
+) noexcept;
+void interstitial_input_latch(
+	DeterministicState &state,
+	const CoreInput &input
+) noexcept;
+void gameplay_frame_suffix_after_interstitial(
+	DeterministicState &state
+) noexcept;
 std::uint16_t irand(std::uint32_t &seed) noexcept;
 void randring_fill(DeterministicState &state) noexcept;
 std::uint8_t randring_next8(DeterministicState &state) noexcept;
@@ -286,6 +334,7 @@ struct Game::Impl {
 	std::uint8_t autofire_mask = 0;
 	GameContent content;
 	std::vector<PresentationEvent> presentation_events;
+	std::uint8_t warning_interstitial_samples_remaining = 0;
 };
 
 } // namespace th03

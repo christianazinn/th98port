@@ -92,6 +92,21 @@ std::uint8_t initial_bullet_base_speed(std::uint8_t rank) noexcept
 	return 0U;
 }
 
+std::uint8_t initial_boss_level(const GameInit &init) noexcept
+{
+	std::uint16_t level = init.skill;
+	if(init.rank == rank_easy) {
+		level /= 2U;
+	} else {
+		if(init.rank == rank_hard) {
+			level = static_cast<std::uint16_t>(level + 2U);
+		} else if(init.rank == rank_lunatic) {
+			level = static_cast<std::uint16_t>(level + 8U);
+		}
+	}
+	return static_cast<std::uint8_t>(std::min<std::uint16_t>(level, 16U));
+}
+
 } // namespace
 
 DeterministicState initialize_first_round(const GameInit &init)
@@ -105,6 +120,14 @@ DeterministicState initialize_first_round(const GameInit &init)
 	state.random_seed = static_cast<std::uint32_t>(init.resident_rand);
 	state.round_speed = initial_round_speed(init.rank, state.round_id);
 	state.bullet_base_speed = initial_bullet_base_speed(init.rank);
+	state.gba_boss_level = initial_boss_level(init);
+	if(init.game_mode == game_mode_story) {
+		state.gba_gauge_level.fill(
+			static_cast<std::uint8_t>(init.story_stage + 1U)
+		);
+	} else {
+		state.gba_gauge_level.fill(1U);
+	}
 	state.score = init.last_score;
 	if(init.game_mode != game_mode_story) {
 		state.score = {};

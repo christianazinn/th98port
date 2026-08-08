@@ -7,7 +7,7 @@
 | `formats/t3split.cpp` | Replay `th03/replay_format.hpp`, `tools/replay/export_splits.ps1`, and `tools/port/compare_th03_oracle_splits.ps1` |
 | `formats/v11.cpp` | Replay `th03/replay_format.hpp`, `tools/replay/rpy_snapshot.psm1`, and `tools/port/normalize_replay.ps1` |
 | `replay/session.hpp` | audited T3CASE/V11 input and process-boundary semantics; deliberately independent of either document layout |
-| `core/game.cpp` and `core/frame.cpp` | Anniversary `th03/main/rndloop.cpp:sub_9778()` update order plus player, CPU, shot, enemy, chain/combo, charge-shot, collision-map, HUD-start, and background routines reached by the calibrated TH3R03 prefix |
+| `core/game.cpp` and `core/frame.cpp` | Anniversary `th03/main/rndloop.cpp:sub_9778()` update order plus player, CPU, shot, enemy, fireball, transfer-pellet, Extra Attack, chain/combo, charge-shot, collision-map, warning/interstitial, HUD-start, and background routines reached by TH3R03 |
 | `core/state_hash.cpp` and private deterministic state | Anniversary `th03/main/t3case.cpp:t3case_state_hash()` schema 3 plus the semantic structures named in `TH3R03_ROUND_DOSSIER.md` |
 | round startup/frame sequencing | Anniversary `th03/main/{rstart.cpp,resscore.cpp,rndloop.cpp,roundcb.cpp}` at `3e2381d4` |
 | `core/random.cpp` | Anniversary random-ring call sites and master.lib IRAND behavior, including the adjacent-byte 16-bit cursor quirk |
@@ -19,8 +19,10 @@ and semantics. It contains no original game assets, executable bytes, replay
 corpus, framebuffer captures, or broad memory dumps.
 
 Phase 2 coverage currently reaches exact hashes at TH3R03 logical samples 128
-and 256 and exact scores at sample 384. Every remaining gameplay subsystem must
-add its donor files/functions and oracle coverage here before its implementation
-claim is considered complete. An
-unexplained native divergence stops the parcel; it is not patched in a parser or
-comparator to make the gate green.
+and 256 and exact scores through sample 512. The native core models the donor's
+27-sample warning wait as an explicit input context without advancing either
+round counter. The first expected wait still exposes an upstream gameplay-state
+divergence at sample 1,433, so the validator rejects that phase rather than
+forcing the warning from replay data. Every remaining gameplay subsystem must
+add its donor functions and oracle coverage here before its implementation claim
+is complete.

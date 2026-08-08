@@ -290,6 +290,13 @@ void test_th3r03_round_start()
 	auto game = th03::Game::create(init);
 	check(game.has_value(), "TH3R03 first-round state initializes");
 	if(game) {
+		const auto wrong_context = game->step(
+			th03::CoreInput{}, th03::InputContext::interstitial
+		);
+		check(
+			wrong_context.status == th03::StepStatus::invalid_input_context,
+			"TH3R03 rejects interstitial input outside a warning wait"
+		);
 		const auto state = game->canonical_state();
 		check(state.round_speed == 96U, "TH3R03 Lunatic round speed starts at raw Q4.4 96");
 		check(state.state_hash == 0x5BDCE01AU, "TH3R03 native start state matches Anniversary schema-3 hash");
