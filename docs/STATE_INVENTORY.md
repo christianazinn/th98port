@@ -46,20 +46,19 @@ The complete schema-3 hash order and first-round evidence are frozen in
 
 ## Phase 2 implementation status
 
-- Implemented and oracle-exercised: startup/restore, random sources, round
-  counters, human and stage-0 CPU movement, HUD start, initial background RNG,
-  ENEDAT formation scripts and motion, ordinary P1/P2 shot pairs, enemy HP and
-  explosions, early chains/combos, Reimu/Kana charge-shot trails, and the CPU
-  collision map/avoidance route.
+- Implemented and oracle-exercised through one complete TH3R03 round:
+  startup/restore, random sources, round/result counters, human and CPU
+  movement, Hyper/bomb/player damage, HUD start, background RNG, ENEDAT
+  formations, shots, bullets, enemies, explosions/fireballs, chains/combos,
+  Reimu/Kana charge/Extra/Boss/Gauge Attacks, warning waits, defeat, winner
+  bonus, and route completion.
 - The public input boundary is deliberately after the donor's input latch and
   before player update. `StepResult::input_boundary_state` exposes that state
   for comparison without importing expected split data into the core.
-- Exact canonical hashes are verified at start, sample 128, and sample 256;
-  both scores are exact through sample 512. Transfer pellets, fireballs,
-  Reimu/Kana Extra Attacks, and the donor's mid-frame 27-sample warning input
-  context are now represented. The first expected interstitial remains a true
-  diagnostic mismatch because the native combat state has not scheduled its
-  warning by sample 1,433; the replay adapter does not manufacture one.
+- Exact canonical hashes, scores, RNG/handoff state, input consumption, winner,
+  and route are verified for all 46 first-round rows through sample 6,773.
+  The replay adapter never schedules a warning or supplies expected state; it
+  only validates the context requested by the simulation.
 - Presentation state remains excluded unless it consumes gameplay RNG. The
   type-B initial background's 40 IRAND calls per frame and HUD particle draws
   are therefore deterministic core effects even though no renderer is present.

@@ -57,3 +57,8 @@ reaches the typed `simulation-not-implemented` result.
 Phase 2 replaces that one deliberate gap with the smallest complete gameplay
 round, using TH3R03 as the first oracle. Phase 3 expands the same core through
 complete Classic gameplay and process phases. Application work remains later.
+
+Phase 2 is complete: the TH3R03 first-round trace matches all 46 canonical
+Anniversary rows through its natural route-2 terminal. Phase 3 must preserve
+that gate while adding cases and the additional subsystems/process transitions
+they actually exercise.

@@ -196,13 +196,9 @@ DeterministicState initialize_first_round(const GameInit &init)
 		boss.pattern_index = 0U;
 		boss.render_state = 0U;
 		if(character == 0U) {
-			boss.hp = static_cast<std::uint16_t>(
-				0x006EU + ((player_id != 0U) ? 0x28U : 0U)
-			);
+			boss.hp = 0x006EU;
 		} else if(character == 5U) {
-			boss.hp = static_cast<std::uint16_t>(
-				0x0064U + ((player_id != 0U) ? 0x28U : 0U)
-			);
+			boss.hp = 0x0064U;
 		}
 	}
 	// Each set_callbacks_*() call overwrites the shared background callback;

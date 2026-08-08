@@ -1,7 +1,9 @@
+#include <algorithm>
 #include <cstddef>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -11,6 +13,7 @@
 #include "th03/core/game.hpp"
 #include "th03/formats/enedat.hpp"
 #include "th03/formats/t3case.hpp"
+#include "th03/formats/t3split.hpp"
 #include "th03/formats/v11.hpp"
 #include "th03/replay/session.hpp"
 
@@ -49,12 +52,61 @@ void print_score(const std::array<std::uint8_t, 8> &score)
 	}
 }
 
+th03::formats::PackedScore pack_score(
+	const std::array<std::uint8_t, 8> &score
+)
+{
+	th03::formats::PackedScore packed{};
+	for(std::size_t index = 0U; index < packed.bytes.size(); ++index) {
+		packed.bytes[index] = static_cast<std::uint8_t>(
+			score[index * 2U] | (score[(index * 2U) + 1U] << 4U)
+		);
+	}
+	return packed;
+}
+
+th03::formats::SplitRow split_row(
+	th03::formats::SplitEvent event,
+	const th03::CanonicalState &state
+)
+{
+	th03::formats::SplitRow row{};
+	row.event = event;
+	row.route = state.route;
+	row.game_mode = state.game_mode;
+	row.story_stage = state.story_stage;
+	row.round_id = state.round_id;
+	row.winner = state.winner;
+	row.round_speed = state.round_speed;
+	row.global_frame = state.global_frame;
+	row.round_frame = state.round_frame;
+	row.round_or_result_frame = state.round_or_result_frame;
+	row.p1_score = pack_score(state.p1_score);
+	row.p2_score = pack_score(state.p2_score);
+	row.resident_rand = state.resident_rand;
+	row.state_hash = state.state_hash;
+	return row;
+}
+
+int report_oracle_mismatch(const th03::formats::SplitComparison &comparison)
+{
+	std::cout << "oracle_status=different\n";
+	if(comparison.first_mismatch) {
+		std::cout << "oracle_row=" << comparison.first_mismatch->canonical_row
+			<< "\noracle_field=" << comparison.first_mismatch->field
+			<< "\nexpected=" << comparison.first_mismatch->expected
+			<< "\nactual=" << comparison.first_mismatch->actual << '\n';
+	}
+	return 6;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
 {
-	if(argc != 3 && argc != 5) {
-		std::cerr << "usage: th03-headless (--case|--v11) <file> [--enedat <file>]\n";
+	if(argc < 3 || ((argc - 3) % 2) != 0) {
+		std::cerr << "usage: th03-headless (--case|--v11) <file> "
+			"[--enedat <file>] [--oracle <T3SPLIT.BIN>]\n";
 		return 2;
 	}
 	const std::string_view mode(argv[1]);
@@ -90,23 +142,40 @@ int main(int argc, char **argv)
 		<< "samples=" << session->sample_count << '\n'
 		<< "records=" << session->records.size() << '\n';
 	th03::GameContent content{};
-	if(argc == 5) {
-		if(std::string_view(argv[3]) != "--enedat") {
-			std::cerr << "error=expected --enedat before gameplay-data path\n";
+	std::optional<th03::formats::SplitStream> oracle;
+	for(int argument = 3; argument < argc; argument += 2) {
+		const std::string_view option(argv[argument]);
+		const std::string value(argv[argument + 1]);
+		if(option == "--enedat") {
+			const auto enedat_bytes = read_file(value);
+			if(enedat_bytes.empty()) {
+				std::cerr << "error=could not read a non-empty ENEDAT file\n";
+				return 2;
+			}
+			auto parsed_content = th03::formats::parse_enedat(enedat_bytes);
+			if(!parsed_content) {
+				print_error(parsed_content.error());
+				return 2;
+			}
+			content = std::move(*parsed_content);
+			std::cout << "enemy_formations=" << content.enemy_formations.size() << '\n';
+			continue;
+		}
+		if(option != "--oracle") {
+			std::cerr << "error=unknown option\n";
 			return 2;
 		}
-		const auto enedat_bytes = read_file(argv[4]);
-		if(enedat_bytes.empty()) {
-			std::cerr << "error=could not read a non-empty ENEDAT file\n";
+		const auto oracle_bytes = read_file(value);
+		if(oracle_bytes.empty()) {
+			std::cerr << "error=could not read a non-empty oracle file\n";
 			return 2;
 		}
-		auto parsed_content = th03::formats::parse_enedat(enedat_bytes);
-		if(!parsed_content) {
-			print_error(parsed_content.error());
+		auto parsed_oracle = th03::formats::parse_t3split(oracle_bytes);
+		if(!parsed_oracle) {
+			print_error(parsed_oracle.error());
 			return 2;
 		}
-		content = std::move(*parsed_content);
-		std::cout << "enemy_formations=" << content.enemy_formations.size() << '\n';
+		oracle = std::move(*parsed_oracle);
 	}
 	auto game = th03::Game::create(session->init, std::move(content));
 	if(!game) {
@@ -115,6 +184,11 @@ int main(int argc, char **argv)
 	}
 	auto simulation = std::move(*game);
 	const auto initial_state = simulation.canonical_state();
+	th03::formats::SplitStream candidate{};
+	candidate.state_hash_schema = 3U;
+	candidate.rows.push_back(split_row(
+		th03::formats::SplitEvent::start, initial_state
+	));
 	std::cout << "initial_state_hash="
 		<< std::uppercase << std::hex << std::setw(8) << std::setfill('0')
 		<< initial_state.state_hash << std::dec << '\n';
@@ -137,8 +211,14 @@ int main(int argc, char **argv)
 				return 3;
 			}
 			consumed++;
-			if((consumed & 127U) == 0U) {
+			if(
+				context == th03::InputContext::gameplay &&
+				(consumed & 127U) == 0U
+			) {
 				const auto &state = result.input_boundary_state;
+				candidate.rows.push_back(split_row(
+					th03::formats::SplitEvent::checkpoint, state
+				));
 				std::cout << "checkpoint=" << consumed
 					<< " round_frame=" << state.round_frame
 					<< " round_or_result_frame=" << state.round_or_result_frame
@@ -152,6 +232,48 @@ int main(int argc, char **argv)
 			}
 			if(result.status == th03::StepStatus::terminal) {
 				const auto state = simulation.canonical_state();
+				auto route_row = split_row(
+					th03::formats::SplitEvent::route, state
+				);
+				candidate.rows.push_back(route_row);
+				// MAIN's outer entry point stores round_frame in resident->rand
+				// after t3case_route() and before t3case_finish().
+				route_row.event = th03::formats::SplitEvent::finish;
+				route_row.resident_rand = static_cast<std::int32_t>(state.round_frame);
+				candidate.rows.push_back(route_row);
+				if(oracle) {
+					const auto comparison = th03::formats::compare_oracle_splits(
+						*oracle, candidate, true
+					);
+					if(
+						comparison.status == th03::formats::ComparisonStatus::different ||
+						!comparison.terminal_hash_differences.empty() ||
+						comparison.checkpoint_global_delta != 0
+					) {
+						return report_oracle_mismatch(comparison);
+					}
+					const auto expected_terminal = std::find_if(
+						oracle->rows.begin(), oracle->rows.end(),
+						[&](const th03::formats::SplitRow &row) {
+							return row.event == th03::formats::SplitEvent::route &&
+								row.story_stage == state.story_stage &&
+								row.round_id == state.round_id;
+						}
+					);
+					if(
+						expected_terminal == oracle->rows.end() ||
+						expected_terminal->global_frame != state.global_frame
+					) {
+						std::cout << "oracle_status=different\n"
+							<< "oracle_field=terminal_global_frame\n";
+						return 6;
+					}
+					std::cout << "oracle_status=" << (
+						comparison.status == th03::formats::ComparisonStatus::same ?
+						"same" : "same-prefix"
+					) << "\noracle_rows=" << comparison.candidate_canonical_rows
+						<< '/' << comparison.base_canonical_rows << '\n';
+				}
 				std::cout << "result=terminal\n"
 					<< "consumed_samples=" << consumed << '\n'
 					<< "route=" << static_cast<unsigned int>(state.route) << '\n'

@@ -84,6 +84,7 @@ struct PlayerState {
 	std::uint8_t bombs = 0;
 	std::uint8_t hyper_active = 0;
 	bool hyper_character_callback = false;
+	bool hyper_effect_active_this_frame = false;
 	std::uint8_t lose_anim_time = 0;
 	std::uint8_t rounds_won = 0;
 	std::uint16_t cpu_frame = 0;
@@ -306,6 +307,7 @@ struct DeterministicState {
 	std::array<std::uint8_t, player_count> boss_panic_fired_in_combo{};
 	std::array<BombFlag, player_count> bomb_flag{};
 	std::array<std::uint8_t, player_count> bomb_frame{};
+	std::array<std::int16_t, player_count> playfield_fg_shift_x{};
 	std::array<std::uint8_t, player_count> damage_all_on{};
 	std::uint8_t cpu_hit_damage_additional = 0;
 	std::array<WarningFlag, player_count> warning_flag{};
@@ -382,6 +384,13 @@ void interstitial_input_latch(
 ) noexcept;
 void gameplay_frame_suffix_after_interstitial(
 	DeterministicState &state
+) noexcept;
+bool player_hittest_legacy(
+	const DeterministicState &state,
+	std::uint8_t player_id,
+	std::uint8_t hitbox_size,
+	std::int16_t &collision_x,
+	std::int16_t &collision_y
 ) noexcept;
 std::uint16_t irand(std::uint32_t &seed) noexcept;
 void randring_fill(DeterministicState &state) noexcept;

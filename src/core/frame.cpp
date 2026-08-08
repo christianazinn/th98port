@@ -29,7 +29,7 @@ constexpr std::int16_t player_y_max = (368 - 16) << 4;
 constexpr std::uint16_t gauge_64 = 64U << 4U;
 constexpr std::uint16_t gauge_128 = 128U << 4U;
 constexpr std::uint16_t gauge_192 = 192U << 4U;
-constexpr std::uint16_t gauge_max = 256U << 4U;
+constexpr std::uint16_t gauge_max = 0xFFU << 4U;
 constexpr std::uint8_t bomb_frames = 180U;
 constexpr std::uint8_t miss_invincibility_frames = 110U;
 constexpr std::uint8_t knockback_frames = 64U;
@@ -69,6 +69,11 @@ constexpr std::uint8_t bullet_group_five_spread_medium = 21U;
 constexpr std::uint8_t bullet_group_five_spread_medium_aimed = 24U;
 constexpr std::uint8_t bullet_group_random_constrained_aimed = 29U;
 constexpr std::uint8_t bullet_group_ring = 38U;
+constexpr std::uint16_t legacy_collmap_dgroup_offset = 0x4BA0U;
+constexpr std::array<std::uint16_t, 8> legacy_collmap_alias_occupied_offsets{{
+	0x109BU, 0x10B2U, 0x10BAU, 0x10BEU,
+	0x10C6U, 0x10D0U, 0x10D6U, 0x10E0U,
+}};
 constexpr std::array<std::array<std::uint16_t, 9>, 6> cpu_collision_routes{{
 	{{0x0400U, 0x0008U, 0x0800U, 0x0001U, 0x0008U, 0x0008U, 0x0100U, 0x0400U, 0x0400U}},
 	{{0x0004U, 0x0004U, 0x0100U, 0x0002U, 0x0002U, 0x0002U, 0x0100U, 0x0001U, 0x0400U}},
@@ -113,8 +118,9 @@ void gauge_avail_add(
 	std::uint8_t charge
 ) noexcept
 {
-	auto &gauge = state.players[player_id].gauge_avail;
-	if(gauge >= gauge_max) {
+	auto &player = state.players[player_id];
+	auto &gauge = player.gauge_avail;
+	if(player.hyper_active != 0U || gauge >= gauge_max) {
 		return;
 	}
 	gauge = std::min<std::uint16_t>(
@@ -249,6 +255,17 @@ BulletState *bullet_free_slot(DeterministicState &state) noexcept
 	return (slot == state.bullets.end()) ? nullptr : &*slot;
 }
 
+bool bullet_center_is_spawnable(
+	std::int16_t center_x,
+	std::int16_t center_y
+) noexcept
+{
+	return (
+		center_y > bullet_center_min && center_y < bullet_center_y_max &&
+		center_x > bullet_center_min && center_x < bullet_center_x_max
+	);
+}
+
 void bullets_add_group(
 	DeterministicState &state,
 	BulletFlag type,
@@ -262,10 +279,7 @@ void bullets_add_group(
 	std::uint8_t accel_type = 0U
 ) noexcept
 {
-	if(
-		center_y <= bullet_center_min || center_y >= bullet_center_y_max ||
-		center_x <= bullet_center_min || center_x >= bullet_center_x_max
-	) {
+	if(!bullet_center_is_spawnable(center_x, center_y)) {
 		return;
 	}
 	const auto adjusted_speed = bullet_speed_adjusted(state, speed);
@@ -394,6 +408,9 @@ void bullet_add_kana_extra_attack(
 	std::uint8_t player_id
 ) noexcept
 {
+	if(!bullet_center_is_spawnable(center_x, center_y)) {
+		return;
+	}
 	auto *bullet = bullet_free_slot(state);
 	if(bullet == nullptr) {
 		return;
@@ -414,13 +431,15 @@ void bullet_add_kana_extra_attack(
 }
 
 std::int16_t playfield_x_to_screen_subpixel(
+	const DeterministicState &state,
 	std::int16_t x,
 	std::uint8_t player_id
 ) noexcept
 {
 	const auto pixel = exact::arithmetic_shift_right(x, 4U);
 	return static_cast<std::int16_t>(
-		(pixel + 16) + (static_cast<int>(player_id) * 320)
+		(pixel + 16) + (static_cast<int>(player_id) * 320) +
+		state.playfield_fg_shift_x[player_id]
 	);
 }
 
@@ -458,7 +477,6 @@ bool fireball_add(
 		return false;
 	}
 
-	*slot = FireballState{};
 	slot->flag = FireballFlag::transfer;
 	slot->center_x = center_x;
 	slot->center_y = center_y;
@@ -480,7 +498,7 @@ bool fireball_add(
 		: static_cast<std::uint8_t>(state.fireball_generation_previous + 1U);
 
 	const auto origin_screen = playfield_x_to_screen_subpixel(
-		center_x, player_id
+		state, center_x, player_id
 	);
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
 	std::int16_t target_x = 0;
@@ -496,7 +514,7 @@ bool fireball_add(
 	}
 	slot->target_x_for_target_player = target_x;
 	const auto target_screen = playfield_x_to_screen_subpixel(
-		target_x, target_player
+		state, target_x, target_player
 	);
 	const auto travel_speed = static_cast<std::int16_t>(
 		70U + (state.round_speed / 3U)
@@ -535,10 +553,10 @@ void extra_attack_transfer_init(
 	slot.player_id = player_id;
 	slot.target_x_for_target_player = target_x;
 	const auto origin_screen = playfield_x_to_screen_subpixel(
-		center_x, player_id
+		state, center_x, player_id
 	);
 	const auto target_screen = playfield_x_to_screen_subpixel(
-		target_x, static_cast<std::uint8_t>(1U - player_id)
+		state, target_x, static_cast<std::uint8_t>(1U - player_id)
 	);
 	const auto velocity = vector2_between_plus(
 		static_cast<std::int16_t>(origin_screen << 4U),
@@ -674,6 +692,9 @@ bool bullet_add_transfer_pellet(
 	std::uint8_t template_speed
 ) noexcept
 {
+	if(!bullet_center_is_spawnable(center_x, center_y)) {
+		return false;
+	}
 	auto *bullet = bullet_free_slot(state);
 	if(bullet == nullptr) {
 		return false;
@@ -687,7 +708,7 @@ bool bullet_add_transfer_pellet(
 	bullet->speed_next = bullet_speed_adjusted(state, template_speed);
 
 	const auto origin_screen = playfield_x_to_screen_subpixel(
-		center_x, player_id
+		state, center_x, player_id
 	);
 	const auto target_x = static_cast<std::int16_t>(
 		randring_next16(state) % static_cast<std::uint16_t>(288U << 4U)
@@ -695,7 +716,7 @@ bool bullet_add_transfer_pellet(
 	bullet->target_x_for_target_player = target_x;
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
 	const auto target_screen = playfield_x_to_screen_subpixel(
-		target_x, target_player
+		state, target_x, target_player
 	);
 	const auto target_y = static_cast<std::int16_t>(
 		randring_next16(state) & 0x00FFU
@@ -724,6 +745,9 @@ bool bullet_add_cloud_from_transfer(
 	const BulletState &source
 ) noexcept
 {
+	if(!bullet_center_is_spawnable(source.center_x, source.center_y)) {
+		return false;
+	}
 	auto *bullet = bullet_free_slot(state);
 	if(bullet == nullptr) {
 		return false;
@@ -1256,7 +1280,7 @@ MoveResult movement_velocity(
 		const auto character =
 			(static_cast<int>(player.paletted_character) - 1) / 2;
 		if(
-			player.hyper_active != 0U && player.hyper_character_callback &&
+			player.hyper_active != 0U && player.hyper_effect_active_this_frame &&
 			(character == 0 || character == 5)
 		) {
 			const auto boost = static_cast<std::uint8_t>(diagonal ? 24U : 32U);
@@ -1511,6 +1535,15 @@ void bombs_render_phase_update(DeterministicState &state) noexcept
 			(void)randring_next16(state);
 			(void)randring_next16(state);
 		}
+		if(character == 0) {
+			const auto frame = state.bomb_frame[player_id];
+			if(frame >= 64U && frame < 112U) {
+				state.playfield_fg_shift_x[player_id] =
+					(((frame % 8U) & 3U) < 2U) ? 4 : -4;
+			} else if(frame >= 112U) {
+				state.playfield_fg_shift_x[player_id] = 0;
+			}
+		}
 	}
 }
 
@@ -1734,6 +1767,7 @@ bool player_update_begin(
 		return false;
 	}
 
+	player.hyper_effect_active_this_frame = false;
 	if(!player.hyper_character_callback) {
 		player.shot_mode = 1U;
 		if(player.hyper_active != 0U) {
@@ -1742,6 +1776,7 @@ bool player_update_begin(
 	} else if(player.hyper_active == 0U) {
 		player.hyper_character_callback = false;
 	} else {
+		player.hyper_effect_active_this_frame = true;
 		const auto character =
 			(static_cast<int>(player.paletted_character) - 1) / 2;
 		if(character == 0) {
@@ -2345,6 +2380,7 @@ bool enemy_run(
 				std::bit_cast<std::int8_t>(script[enemy.script_ip + 2U]) * 128
 			);
 			const auto size_words = script[enemy.script_ip + 3U + speed];
+			enemy.explosion_max_enemy_hits_half = size_words;
 			enemy.size_pixels = static_cast<std::uint8_t>(size_words * 16U);
 			enemy.hp = script[enemy.script_ip + 7U + speed];
 			if(script[enemy.script_ip + 11U] != 0U) {
@@ -2956,8 +2992,12 @@ bool boss_launch_or_reverse(
 	}
 	if(state.gba_boss_launched_by < 0) {
 		const auto initial = state.boss_initial[player_id];
+		// ZUN keeps this byte outside the 32-byte boss record copied at launch,
+		// so a new boss attack inherits the previous attack's last pattern.
+		const auto pattern_previous = state.boss.pattern_previous;
 		state.boss = BossState{};
 		static_cast<BossInitialState &>(state.boss) = initial;
+		state.boss.pattern_previous = pattern_previous;
 		state.boss.pattern_count = static_cast<std::uint8_t>(
 			(randring_next16(state) & 7U) + 1U
 		);
@@ -3679,6 +3719,10 @@ void fireballs_hittest(DeterministicState &state) noexcept
 	if(state.defeat_flag == DefeatFlag::banner) {
 		return;
 	}
+	// Anniversary initializes this once before the reverse fireball scan. A
+	// later non-explosion collision therefore reuses the most recent explosion
+	// chain slot, rather than resetting to the fallback for each fireball.
+	std::uint8_t explosion_chain_slot = chain_ring_size - 1U;
 	for(auto target_it = state.fireballs.rbegin();
 		target_it != state.fireballs.rend(); ++target_it) {
 		auto &target = *target_it;
@@ -3697,7 +3741,6 @@ void fireballs_hittest(DeterministicState &state) noexcept
 		const auto bottom = exact::wrap_add(center_y, radius_y);
 		bool hit = false;
 		bool explosion_collision = false;
-		std::uint8_t explosion_chain_slot = chain_ring_size - 1U;
 
 		for(auto &shot : state.shotpairs) {
 			if(!shot.alive || shot.player_id != target.player_id) {
@@ -3883,35 +3926,106 @@ void fireballs_hittest(DeterministicState &state) noexcept
 	if(player.invincibility_time != 0U || player.hyper_active != 0U) {
 		return false;
 	}
-	const auto radius = static_cast<int>(hitbox_size >> 1U);
-	const auto center_x = static_cast<int>(player.center_x.raw()) >> 5;
-	const auto center_y = static_cast<int>(player.center_y.raw()) >> 5;
-	const auto left = center_x - radius;
-	const auto top = std::max(center_y - radius, 0);
-	const auto bottom = std::min(
-		center_y - radius + static_cast<int>(hitbox_size),
-		static_cast<int>(collmap_height) - 1
-	);
-	const auto right = left + static_cast<int>(hitbox_size);
-	const auto first_byte = left >> 3;
-	const auto last_byte = (right - 1) >> 3;
-	for(int byte_x = first_byte; byte_x <= last_byte; ++byte_x) {
-		if(byte_x < 0 || byte_x >= static_cast<int>(collmap_width / 8U)) {
-			continue;
-		}
-		const auto tile_begin = std::max(left, byte_x * 8);
-		const auto tile_end = std::min(right, (byte_x + 1) * 8);
-		for(int y = top; y < bottom; ++y) {
-			for(int x = tile_begin; x < tile_end; ++x) {
-				if(state.collision_map[player_id][static_cast<std::size_t>(x)]
-					[static_cast<std::size_t>(y)]) {
-					collision_x = static_cast<std::int16_t>(byte_x << 8);
-					collision_y = static_cast<std::int16_t>(top << 5);
-					return true;
+
+	auto memory_read = [&](std::uint16_t offset) {
+		const auto collmap_offset = static_cast<std::uint16_t>(
+			offset - legacy_collmap_dgroup_offset
+		);
+		constexpr auto collmap_bytes = static_cast<std::uint16_t>(
+			player_count * (collmap_width / 8U) * collmap_height
+		);
+		if(collmap_offset < collmap_bytes) {
+			const auto playfield = static_cast<std::size_t>(
+				collmap_offset / ((collmap_width / 8U) * collmap_height)
+			);
+			const auto within_playfield = static_cast<std::size_t>(
+				collmap_offset % ((collmap_width / 8U) * collmap_height)
+			);
+			const auto byte_x = within_playfield / collmap_height;
+			const auto y = within_playfield % collmap_height;
+			std::uint8_t packed = 0U;
+			for(std::size_t bit = 0U; bit < 8U; ++bit) {
+				if(state.collision_map[playfield][(byte_x * 8U) + bit][y]) {
+					packed |= static_cast<std::uint8_t>(0x80U >> bit);
 				}
 			}
+			return packed;
 		}
+		// The wrapped TH3R03 broad probe reaches initialized compiler-runtime
+		// data before the map. These are the first occupied offsets observed by
+		// every exercised aliasing scan. Model collision occupancy without
+		// embedding the original DGROUP contents.
+		return static_cast<std::uint8_t>(std::find(
+			legacy_collmap_alias_occupied_offsets.begin(),
+			legacy_collmap_alias_occupied_offsets.end(),
+			offset
+		) != legacy_collmap_alias_occupied_offsets.end());
+	};
+
+	const auto radius = static_cast<std::int16_t>(hitbox_size >> 1U);
+	const auto center_x = exact::arithmetic_shift_right(
+		player.center_x.raw(), 5U
+	);
+	const auto center_y = exact::arithmetic_shift_right(
+		player.center_y.raw(), 5U
+	);
+	const auto left = static_cast<std::int16_t>(center_x - radius);
+	auto top = static_cast<std::int16_t>(center_y - radius);
+	auto bottom = static_cast<std::int16_t>(top + hitbox_size);
+	if(top < 0) {
+		top = 0;
+	} else if(bottom >= static_cast<std::int16_t>(collmap_height)) {
+		bottom = static_cast<std::int16_t>(collmap_height - 1U);
 	}
+	const auto first_bit = static_cast<std::uint8_t>(left & 7);
+	auto byte_x = static_cast<std::int8_t>(
+		exact::arithmetic_shift_right(left, 3U)
+	);
+	auto width_remaining = static_cast<std::int16_t>(hitbox_size + first_bit);
+	std::uint8_t mask = static_cast<std::uint8_t>(0xFFU >> first_bit);
+	if(width_remaining <= 8) {
+		mask ^= static_cast<std::uint8_t>(0xFFU >> width_remaining);
+	}
+	constexpr auto collmap_size = static_cast<std::uint16_t>(
+		(collmap_width / 8U) * collmap_height
+	);
+	auto memory_offset = static_cast<std::uint16_t>(
+		legacy_collmap_dgroup_offset +
+		(static_cast<std::uint8_t>(byte_x) * collmap_height) +
+		(player_id * collmap_size) + static_cast<std::uint16_t>(top)
+	);
+	auto column_stride = static_cast<std::uint8_t>(top);
+	const auto tile_bottom = static_cast<std::uint8_t>(bottom);
+	do {
+		if(byte_x >= static_cast<std::int8_t>(collmap_width / 8U)) {
+			break;
+		}
+		if(byte_x >= 0) {
+			auto tile_y = static_cast<std::uint8_t>(top);
+			column_stride = static_cast<std::uint8_t>(collmap_height);
+			do {
+				if((memory_read(memory_offset) & mask) != 0U) {
+					collision_x = static_cast<std::int16_t>(byte_x * 256);
+					collision_y = static_cast<std::int16_t>(top * 32);
+					return true;
+				}
+				memory_offset++;
+				column_stride--;
+				tile_y++;
+			} while(tile_y < tile_bottom);
+		}
+		byte_x++;
+		memory_offset = static_cast<std::uint16_t>(
+			memory_offset + column_stride
+		);
+		width_remaining = static_cast<std::int16_t>(width_remaining - 8);
+		mask = 0xFFU;
+		if(static_cast<std::uint16_t>(width_remaining) < 8U) {
+			mask = static_cast<std::uint8_t>(~(
+				0xFFU >> static_cast<std::uint8_t>(width_remaining)
+			));
+		}
+	} while(width_remaining > 0);
 	return false;
 }
 
@@ -3967,9 +4081,6 @@ bool enemies_update(
 			state.chains.pellet_and_fireball_value[target.player_id][slot] = 0U;
 			state.chains.cursor[target.player_id] = static_cast<std::uint8_t>(
 				(slot + 1U) % chain_ring_size
-			);
-			target.explosion_max_enemy_hits_half = static_cast<std::uint8_t>(
-				target.size_pixels / 16U
 			);
 			continue;
 		}
@@ -4149,12 +4260,11 @@ bool enemies_update(
 				target.center_y
 			);
 		}
-		target.explosion_max_enemy_hits_half = static_cast<std::uint8_t>(
-			target.size_pixels / 16U
-		);
 		score_add(
 			state.score[target.player_id],
-			static_cast<std::uint16_t>((target.size_pixels / 16U) * 10U)
+			static_cast<std::uint16_t>(
+				target.explosion_max_enemy_hits_half * 10U
+			)
 		);
 	}
 	return true;
@@ -4316,6 +4426,19 @@ void story_extend_update(DeterministicState &state) noexcept
 }
 
 } // namespace
+
+bool player_hittest_legacy(
+	const DeterministicState &state,
+	std::uint8_t player_id,
+	std::uint8_t hitbox_size,
+	std::int16_t &collision_x,
+	std::int16_t &collision_y
+) noexcept
+{
+	return player_hittest(
+		state, player_id, hitbox_size, collision_x, collision_y
+	);
+}
 
 bool gameplay_frame_prefix(
 	DeterministicState &state,

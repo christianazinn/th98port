@@ -289,6 +289,11 @@ void test_th3r03_round_start()
 
 	auto game = th03::Game::create(init);
 	check(game.has_value(), "TH3R03 first-round state initializes");
+	const auto initialized = th03::detail::initialize_first_round(init);
+	check(
+		initialized.boss_initial[1].hp == 0x0064U,
+		"TH3R03 P2 Kana boss HP excludes the adjacent palette sprite offset"
+	);
 	if(game) {
 		const auto wrong_context = game->step(
 			th03::CoreInput{}, th03::InputContext::interstitial
@@ -319,6 +324,53 @@ void test_th3r03_round_start()
 		check(boundary.input_boundary_state.state_hash == 0xC35124AFU,
 			"TH3R03 sample-128 boundary matches Anniversary schema-3 hash");
 	}
+}
+
+void test_legacy_player_hittest_alias()
+{
+	th03::detail::DeterministicState state{};
+	state.players[1].center_x = th03::exact::Subpixel::from_raw(0x0420);
+	state.players[1].center_y = th03::exact::Subpixel::from_raw(0x1120);
+	std::int16_t collision_x = -1;
+	std::int16_t collision_y = -1;
+	check(
+		th03::detail::player_hittest_legacy(
+			state, 1U, 80U, collision_x, collision_y
+		),
+		"TH03 broad CPU probe preserves the wrapped DGROUP collision"
+	);
+	check(
+		collision_x == 0 && collision_y == 0x0C20,
+		"TH03 wrapped collision reports the first nonnegative map column"
+	);
+}
+
+void test_hyper_callback_transition_delay()
+{
+	th03::detail::DeterministicState state{};
+	auto &player = state.players[1];
+	player.is_cpu = 1U;
+	player.paletted_character = 11;
+	player.center_x = th03::exact::Subpixel::from_integer_wrapping(200);
+	player.center_y = th03::exact::Subpixel::from_integer_wrapping(300);
+	player.speed_aligned_x = 56U;
+	player.speed_aligned_y = 56U;
+	player.speed_diagonal_x = 44U;
+	player.speed_diagonal_y = 44U;
+	player.hyper_active = 11U;
+	player.gauge_avail = 128U << 4U;
+	player.shot_active = 0U;
+
+	(void)th03::detail::gameplay_frame_suffix_before_interstitial(state);
+	check(
+		player.center_x.raw() == ((200 << 4) - 56),
+		"Hyper standby switches callbacks without applying the speed boost"
+	);
+	(void)th03::detail::gameplay_frame_suffix_before_interstitial(state);
+	check(
+		player.center_x.raw() == ((200 << 4) - 56 - 88),
+		"Hyper character callback applies its speed boost on the following update"
+	);
 }
 
 void test_story_result_route()
@@ -660,6 +712,8 @@ int main()
 {
 	test_numeric();
 	test_th3r03_round_start();
+	test_legacy_player_hittest_alias();
+	test_hyper_callback_transition_delay();
 	test_story_result_route();
 	test_story_extends();
 	test_random();

@@ -1,11 +1,10 @@
 # libth03
 
 `libth03` is the architecture-neutral deterministic gameplay core for a
-faithful native TH03 port. The current Phase 1 delivers the executable
-validation runway: exact numeric primitives, strict T3CASE/V11/T3SPLIT readers,
-a canonical split writer/comparator, neutral replay sessions, and headless
-command paths. Gameplay simulation begins in Phase 2; there is intentionally no
-playable application, renderer, audio target, networking, or CI configuration.
+faithful native TH03 port. Phase 2 now implements and oracle-verifies one
+complete TH3R03 round on top of the Phase 1 format/session runway. There is
+intentionally no playable application, renderer, audio target, networking, or
+CI configuration.
 
 ## Build and test
 
@@ -32,10 +31,19 @@ out\build\msvc-x64\Debug\th03-replay-check.exe --case X:\path\TH3R03.T3C
 out\build\msvc-x64\Debug\th03-headless.exe --case X:\path\TH3R03.T3C
 ```
 
-The second command validates the complete case, constructs a neutral replay
-session and `Game`, then exits with code 3 and
-`result=simulation-not-implemented`. That result is the deliberate Phase 1/2
-boundary, not a parser failure.
+Pass the calibrated ENEDAT and frozen Anniversary split to execute the Phase 2
+gate:
+
+```powershell
+out\build\msvc-x64\Debug\th03-headless.exe `
+  --case X:\path\TH3R03.T3C `
+  --enedat X:\path\ENEDAT.DAT `
+  --oracle X:\path\T3SPLIT.BIN
+```
+
+The command must report `oracle_status=same-prefix`, 46/186 rows, a natural
+terminal after 6,773 samples, route 2, and final scores `01090503`/`00434365`.
+The remaining oracle rows belong to later MAIN processes and are Phase 3 work.
 
 Run the complete external Phase 0 lock with:
 
@@ -61,4 +69,4 @@ split comparisons. Original game data and replay captures remain external.
   V12 into V13.
 
 See `docs/ARCHITECTURE.md`, `docs/ORACLE_CONTRACT.md`, and `docs/SOURCES.lock`
-before Phase 2 work.
+before expanding Phase 3 coverage.

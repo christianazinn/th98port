@@ -18,11 +18,9 @@ The native code is a clean mechanical reimplementation of documented formats
 and semantics. It contains no original game assets, executable bytes, replay
 corpus, framebuffer captures, or broad memory dumps.
 
-Phase 2 coverage currently reaches exact hashes at TH3R03 logical samples 128
-and 256 and exact scores through sample 512. The native core models the donor's
-27-sample warning wait as an explicit input context without advancing either
-round counter. The first expected wait still exposes an upstream gameplay-state
-divergence at sample 1,433, so the validator rejects that phase rather than
-forcing the warning from replay data. Every remaining gameplay subsystem must
-add its donor functions and oracle coverage here before its implementation claim
-is complete.
+Phase 2 matches all 46 canonical rows through TH3R03's first natural round
+completion. The core consumes 6,773 logical samples, including 47 exact
+27-sample warning waits that do not advance either round counter, and returns
+route 2 at round frame 5,503/result frame 336. Its final scores and schema-3
+hash match Anniversary. Phase 3 must extend this map as additional complete
+cases exercise gameplay and process transitions beyond that first round.
