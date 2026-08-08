@@ -30,6 +30,9 @@ constexpr std::uint16_t gauge_64 = 64U << 4U;
 constexpr std::uint16_t gauge_128 = 128U << 4U;
 constexpr std::uint16_t gauge_192 = 192U << 4U;
 constexpr std::uint16_t gauge_max = 256U << 4U;
+constexpr std::uint8_t bomb_frames = 180U;
+constexpr std::uint8_t miss_invincibility_frames = 110U;
+constexpr std::uint8_t knockback_frames = 64U;
 constexpr std::uint8_t position_clip_x = 0x01U;
 constexpr std::uint8_t position_clip_bottom = 0x02U;
 constexpr std::uint8_t position_do_not_mirror_x = 0x80U;
@@ -916,6 +919,14 @@ void bullets_update(DeterministicState &state) noexcept
 			}
 			continue;
 		}
+		if(
+			bullet.flag != BulletFlag::transfer_pellet &&
+			(state.bomb_flag[bullet.player_id] != BombFlag::inactive ||
+			 state.damage_all_on[bullet.player_id] != 0U)
+		) {
+			bullet.flag = BulletFlag::free;
+			continue;
+		}
 
 		const auto next_x = exact::wrap_add(
 			bullet.center_x, bullet.velocity_x
@@ -989,26 +1000,41 @@ void shots_add(DeterministicState &state, std::uint8_t player_id) noexcept
 	if(player.shot_mode == 0U) {
 		return;
 	}
-	// TH3R03 begins with SM_1_PAIR. Preserve the original slot-ordering and
-	// coordinates; the remaining modes are added with the systems that enable
-	// them.
-	if(player.shot_mode != 1U) {
-		return;
+	std::int16_t left = player.center_x.raw();
+	std::uint8_t pairs_fired = 0U;
+	if(player.shot_mode == 3U) {
+		left = exact::wrap_subtract(left, static_cast<std::int16_t>(64 << 4));
+	} else if(player.shot_mode == 2U) {
+		left = exact::wrap_subtract(left, static_cast<std::int16_t>(32 << 4));
+		pairs_fired = 2U;
+	} else {
+		// SM_1_PAIR and SM_REIMU_HYPER share this ordinary pair. The latter's
+		// separate amulet pair belongs to its character-owned hyper entity path.
+		left = exact::wrap_subtract(left, static_cast<std::int16_t>(16 << 4));
+		pairs_fired = 3U;
 	}
-	const auto slot = std::find_if(
-		state.shotpairs.begin(), state.shotpairs.end(),
-		[](const ShotPairState &shot) { return !shot.alive; }
-	);
-	if(slot == state.shotpairs.end()) {
-		return;
+	while(left <= -(32 << 4)) {
+		left = exact::wrap_add(left, static_cast<std::int16_t>(32 << 4));
+		pairs_fired++;
 	}
-	slot->alive = true;
-	slot->topleft_x = exact::wrap_subtract(
-		player.center_x.raw(), static_cast<std::int16_t>(16 << 4)
-	);
-	slot->topleft_y = player.center_y.raw();
-	slot->velocity_y = shot_velocity_y;
-	slot->player_id = player_id;
+	for(auto &slot : state.shotpairs) {
+		if(slot.alive) {
+			continue;
+		}
+		slot.alive = true;
+		slot.topleft_x = left;
+		slot.topleft_y = player.center_y.raw();
+		slot.velocity_y = shot_velocity_y;
+		slot.player_id = player_id;
+		pairs_fired++;
+		if(pairs_fired >= 4U) {
+			return;
+		}
+		left = exact::wrap_add(left, static_cast<std::int16_t>(32 << 4));
+		if(left >= (288 << 4)) {
+			return;
+		}
+	}
 }
 
 void shots_update(DeterministicState &state) noexcept
@@ -1208,12 +1234,22 @@ MoveResult movement_velocity(
 {
 	auto set = [&](std::int8_t x, std::int8_t y) {
 		const bool diagonal = x != 0 && y != 0;
-		const auto speed_x = diagonal
+		auto speed_x = diagonal
 			? player.speed_diagonal_x
 			: player.speed_aligned_x;
-		const auto speed_y = diagonal
+		auto speed_y = diagonal
 			? player.speed_diagonal_y
 			: player.speed_aligned_y;
+		const auto character =
+			(static_cast<int>(player.paletted_character) - 1) / 2;
+		if(
+			player.hyper_active != 0U && player.hyper_character_callback &&
+			(character == 0 || character == 5)
+		) {
+			const auto boost = static_cast<std::uint8_t>(diagonal ? 24U : 32U);
+			speed_x = static_cast<std::uint8_t>(speed_x + boost);
+			speed_y = static_cast<std::uint8_t>(speed_y + boost);
+		}
 		velocity.x = static_cast<std::int16_t>(static_cast<int>(speed_x) * x);
 		velocity.y = static_cast<std::int16_t>(static_cast<int>(speed_y) * y);
 	};
@@ -1386,6 +1422,63 @@ void release_gauge(DeterministicState &state, std::uint8_t player_id) noexcept
 	player.gauge_charged = 0U;
 }
 
+void player_bomb(DeterministicState &state, std::uint8_t player_id) noexcept
+{
+	auto &player = state.players[player_id];
+	if(
+		state.bomb_flag[player_id] != BombFlag::inactive ||
+		player.hyper_active != 0U
+	) {
+		return;
+	}
+	if(player.bombs != 0U) {
+		state.bomb_flag[player_id] = BombFlag::preparing;
+		player.bombs--;
+		player.invincibility_time = bomb_frames;
+		return;
+	}
+	if(player.gauge_avail < gauge_max) {
+		return;
+	}
+	state.damage_all_on[player_id] = 1U;
+	player.hyper_active = static_cast<std::uint8_t>(player.paletted_character);
+}
+
+void bomb_character_update(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &flag = state.bomb_flag[player_id];
+	if(flag == BombFlag::inactive) {
+		return;
+	}
+	if(flag == BombFlag::preparing) {
+		flag = BombFlag::active;
+		state.bomb_frame[player_id] = 0U;
+	}
+	state.bomb_frame[player_id]++;
+	if(state.bomb_frame[player_id] >= bomb_frames) {
+		flag = BombFlag::inactive;
+	}
+}
+
+void bombs_render_phase_update(DeterministicState &state) noexcept
+{
+	for(std::uint8_t player_id = 0U; player_id < player_count; ++player_id) {
+		if(state.bomb_flag[player_id] == BombFlag::inactive) {
+			continue;
+		}
+		const auto character =
+			(static_cast<int>(state.players[player_id].paletted_character) - 1) / 2;
+		if(character == 0 && state.bomb_frame[player_id] < 32U) {
+			// reimu_bomb() creates one visual record with two shared-ring draws.
+			(void)randring_next16(state);
+			(void)randring_next16(state);
+		}
+	}
+}
+
 void gauge_pattern_reimu(
 	DeterministicState &state,
 	std::uint8_t player_id
@@ -1555,55 +1648,6 @@ void gauge_patterns_update(
 	}
 }
 
-void player_update_human(
-	DeterministicState &state,
-	std::uint8_t player_id,
-	std::uint16_t live_input
-) noexcept
-{
-	auto &player = state.players[player_id];
-	if(player.invincibility_time != 0U) {
-		player.invincibility_time--;
-	}
-	move_human(player, live_input);
-
-	if(state.autofire_shot_gate[player_id] <= 2U) {
-		if(player.gauge_charged < player.gauge_avail) {
-			const auto charged = static_cast<std::uint16_t>(
-				player.gauge_charged + player.gauge_charge_speed
-			);
-			if(charged > player.gauge_avail) {
-				player.gauge_charged = player.gauge_avail;
-				player.spell_ready_frames = 0U;
-			} else {
-				player.gauge_charged = charged;
-			}
-		} else {
-			player.spell_ready_frames++;
-			if(player.spell_ready_frames >= 128U) {
-				release_gauge(state, player_id);
-			}
-		}
-	} else if(state.autofire_shot_gate[player_id] <= 4U) {
-		release_gauge(state, player_id);
-	}
-
-	if((live_input & input_shot) != 0U) {
-		if(state.autofire_shot_gate[player_id] > 2U) {
-			if(player.move_lock_time == 0U && player.shot_active != 0U) {
-				shots_add(state, player_id);
-			}
-			state.autofire_shot_gate[player_id] = 0U;
-		}
-	} else if(state.autofire_shot_gate[player_id] < 8U) {
-		state.autofire_shot_gate[player_id]++;
-	}
-
-	if((live_input & input_bomb) != 0U && player.bombs != 0U) {
-		player.bombs--;
-	}
-}
-
 bool player_hittest(
 	const DeterministicState &state,
 	std::uint8_t player_id,
@@ -1611,6 +1655,254 @@ bool player_hittest(
 	std::int16_t &collision_x,
 	std::int16_t &collision_y
 ) noexcept;
+
+void player_defeat_update(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &player = state.players[player_id];
+	if(player.lose_anim_time == 0x30U) {
+		state.defeat_flag = DefeatFlag::explode;
+		state.damage_all_on[1U - player_id] = 1U;
+	}
+	player.lose_anim_time--;
+	if(player.lose_anim_time != 0U) {
+		return;
+	}
+	player.lose_anim_time = 0xFFU;
+	state.defeat_flag = DefeatFlag::banner;
+	state.players[1U - player_id].rounds_won++;
+	state.winner = static_cast<std::int8_t>(1U - player_id);
+	state.round_or_result_frame = 0U;
+}
+
+bool player_update_begin(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &player = state.players[player_id];
+	if(player.invincibility_time != 0U) {
+		player.invincibility_time--;
+	}
+	if(state.damage_all_on[player_id] != 0U) {
+		state.damage_all_on[player_id]--;
+	}
+	if(state.defeat_flag == DefeatFlag::banner) {
+		return false;
+	}
+	if(player.lose_anim_time != 0U) {
+		if(player.lose_anim_time != 0xFFU) {
+			player_defeat_update(state, player_id);
+		}
+		return false;
+	}
+
+	if(!player.hyper_character_callback) {
+		player.shot_mode = 1U;
+		if(player.hyper_active != 0U) {
+			player.hyper_character_callback = true;
+		}
+	} else if(player.hyper_active == 0U) {
+		player.hyper_character_callback = false;
+	} else {
+		const auto character =
+			(static_cast<int>(player.paletted_character) - 1) / 2;
+		if(character == 0) {
+			player.shot_mode = 4U;
+		} else if(character == 5) {
+			player.shot_mode = 3U;
+		}
+	}
+	return true;
+}
+
+void player_knockback_update(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &player = state.players[player_id];
+	if(player.knockback_time == knockback_frames) {
+		player.knockback_angle = static_cast<std::uint8_t>(
+			randring_next16(state) & 0x3FU
+		);
+		if(player.center_x.raw() < (144 << 4)) {
+			if(player.center_y.raw() > (184 << 4)) {
+				player.knockback_angle = static_cast<std::uint8_t>(
+					player.knockback_angle + 192U
+				);
+			}
+		} else if(player.center_y.raw() < (184 << 4)) {
+			player.knockback_angle = static_cast<std::uint8_t>(
+				player.knockback_angle + 0x40U
+			);
+		} else {
+			player.knockback_angle = static_cast<std::uint8_t>(
+				player.knockback_angle + 0x80U
+			);
+		}
+		player.knockback_length = 0x40U;
+	}
+	if(player.knockback_time > 0x20U) {
+		player.knockback_length = static_cast<std::uint8_t>(
+			player.knockback_length - 2U
+		);
+		const auto knockback = vector2(
+			player.knockback_angle,
+			static_cast<std::int16_t>(player.knockback_length)
+		);
+		const Velocity velocity{knockback.x, knockback.y};
+		apply_velocity(player, velocity);
+	} else if(player.knockback_time == 0U) {
+		player.knockback_active = false;
+	}
+	player.knockback_time--;
+}
+
+std::uint8_t players_hit_damage_update(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &player = state.players[player_id];
+	auto damage = player.hit_damage_next;
+	if(player.is_cpu != 0U) {
+		damage = static_cast<std::uint8_t>(
+			damage + state.cpu_hit_damage_additional
+		);
+	}
+	player.hit_damage_next = 3U;
+	auto &other = state.players[1U - player_id];
+	if(other.hit_damage_next > 3U) {
+		other.hit_damage_next--;
+	}
+	if(
+		static_cast<int>(player.halfhearts) - static_cast<int>(damage) <= 0 &&
+		player.halfhearts > 1U
+	) {
+		damage = static_cast<std::uint8_t>(player.halfhearts - 1U);
+	}
+	return damage;
+}
+
+void player_update_finish(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	std::uint16_t live_input
+) noexcept
+{
+	auto &player = state.players[player_id];
+	bool acted = false;
+	if(player.knockback_active) {
+		player_knockback_update(state, player_id);
+		player.gauge_charged = 0U;
+		player.cpu_frame = 0U;
+		acted = true;
+	} else if(state.autofire_shot_gate[player_id] <= 2U) {
+		if(player.hyper_active == 0U) {
+			if(player.gauge_charged < player.gauge_avail) {
+				const auto charged = static_cast<std::uint16_t>(
+					player.gauge_charged + player.gauge_charge_speed
+				);
+				if(charged > player.gauge_avail) {
+					player.gauge_charged = player.gauge_avail;
+					player.spell_ready_frames = 0U;
+				} else {
+					player.gauge_charged = charged;
+				}
+			} else {
+				player.spell_ready_frames++;
+				if(player.spell_ready_frames >= 128U) {
+					acted = (player.gauge_charged >= gauge_64);
+					release_gauge(state, player_id);
+				}
+			}
+		}
+	} else if(state.autofire_shot_gate[player_id] <= 4U) {
+		acted = (player.gauge_charged >= gauge_64);
+		release_gauge(state, player_id);
+	}
+
+	if(player.shot_active == 2U) {
+		live_input = 0U;
+	}
+	if(player.move_lock_time == 0U && player.shot_active != 0U) {
+		if(
+			(live_input & input_shot) != 0U || player.shot_active == 2U
+		) {
+			if(state.autofire_shot_gate[player_id] > 2U) {
+				shots_add(state, player_id);
+				state.autofire_shot_gate[player_id] = 0U;
+			}
+		} else if(state.autofire_shot_gate[player_id] < 8U) {
+			state.autofire_shot_gate[player_id]++;
+		}
+		if((live_input & input_bomb) != 0U) {
+			player_bomb(state, player_id);
+		}
+		if(player.shot_active == 2U) {
+			player.shot_active = 1U;
+		}
+	}
+
+	if(player.hyper_active != 0U) {
+		if(player.gauge_avail > gauge_64) {
+			player.gauge_avail = static_cast<std::uint16_t>(
+				player.gauge_avail - 6U
+			);
+		} else {
+			player.hyper_active = 0U;
+			player.gauge_avail = gauge_64;
+		}
+		acted = true;
+	}
+	if(state.defeat_flag != DefeatFlag::none || acted) {
+		return;
+	}
+	std::int16_t collision_x = 0;
+	std::int16_t collision_y = 0;
+	player.is_hit = player_hittest(
+		state, player_id, 4U, collision_x, collision_y
+	);
+	if(!player.is_hit) {
+		return;
+	}
+	if(player.halfhearts != 0U) {
+		const auto damage = players_hit_damage_update(state, player_id);
+		player.halfhearts = (damage > player.halfhearts)
+			? 0U
+			: static_cast<std::uint8_t>(player.halfhearts - damage);
+		if(player.halfhearts == 0U) {
+			player.lose_anim_time = 0x30U;
+		} else {
+			player.knockback_active = true;
+			player.knockback_time = knockback_frames;
+			player.invincibility_time = miss_invincibility_frames;
+			player.move_lock_time = knockback_frames;
+		}
+	}
+	player.is_hit = false;
+}
+
+void player_update_human(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	std::uint16_t live_input
+) noexcept
+{
+	auto &player = state.players[player_id];
+	if(!player_update_begin(state, player_id)) {
+		return;
+	}
+	if(player.move_lock_time != 0U) {
+		player.move_lock_time--;
+	} else {
+		move_human(player, live_input);
+	}
+	player_update_finish(state, player_id, live_input);
+}
 
 std::uint16_t cpu_initial_avoidance_input(
 	const PlayerState &player,
@@ -1721,18 +2013,29 @@ bool cpu_safe_move(
 			fallback_attempt++;
 			continue;
 		}
-		return true;
+		if(player.gauge_charged <= gauge_64) {
+			player_bomb(state, player_id);
+		} else {
+			player.is_hit = true;
+		}
+		return broad_hit;
 	}
 }
 
 void player_update_cpu(DeterministicState &state, std::uint8_t player_id) noexcept
 {
 	auto &player = state.players[player_id];
-	if(player.invincibility_time != 0U) {
-		player.invincibility_time--;
+	auto live_input = std::uint16_t{0};
+	if(!player_update_begin(state, player_id)) {
+		return;
 	}
-	player.cpu_frame++;
+	if(player.move_lock_time != 0U) {
+		player.move_lock_time--;
+		player_update_finish(state, player_id, live_input);
+		return;
+	}
 
+	player.cpu_frame++;
 	std::int16_t target_x = 144 << 4;
 	std::int16_t target_y = 300 << 4;
 	std::uint8_t target_id = 0xFFU;
@@ -1796,68 +2099,73 @@ void player_update_cpu(DeterministicState &state, std::uint8_t player_id) noexce
 	case 10U: movement = input_down | input_right; break;
 	default: break;
 	}
-	const auto broad_collision = cpu_safe_move(state, player_id, movement);
 
-	const auto cadence = broad_collision
-		? 6U
-		: ((target_id == 0xFFU)
-		? 32U
-		: ((target_id == 0xFEU)
-			? 7U
-			: ((target_id == 0U) ? 6U : 10U)));
-	auto live_input = std::uint16_t{0};
+	bool broad_collision = false;
+	if(player.cpu_frame <= player.cpu_safety_frames) {
+		broad_collision = cpu_safe_move(state, player_id, movement);
+		if(broad_collision) {
+			state.cpu_target_kind_scratch = 0;
+		}
+	} else {
+		(void)(randring_next16(state) % 3U);
+		Velocity velocity{};
+		if(movement_velocity(player, movement, velocity) == MoveResult::valid) {
+			apply_velocity(player, velocity);
+		}
+		std::int16_t collision_x = 0;
+		std::int16_t collision_y = 0;
+		if(player_hittest(
+			state, player_id, 4U, collision_x, collision_y
+		)) {
+			if(player.gauge_charged > (80U << 4U)) {
+				player.is_hit = true;
+			} else if((randring_next16(state) & 3U) == 0U) {
+				player_bomb(state, player_id);
+			} else {
+				player.is_hit = true;
+			}
+		}
+	}
+
+	std::uint16_t cadence = 10U;
+	if(state.cpu_target_kind_scratch == 0) {
+		cadence = 6U;
+	} else if(state.cpu_target_kind_scratch == -1) {
+		cadence = 32U;
+	} else if(state.cpu_target_kind_scratch == -2) {
+		cadence = 7U;
+	}
 	if((state.round_or_result_frame % cadence) == 0U) {
 		state.autofire_shot_gate[player_id] = 4U;
 		live_input = input_shot;
 	}
 	state.cpu_target_kind_scratch = 0;
-	if(
-		player.cpu_charge_ring[player.cpu_charge_cursor] <
-			(player.gauge_avail >> 4U) ||
-		player.gauge_avail == gauge_max
-	) {
-		state.autofire_shot_gate[player_id] = 0U;
-		live_input = input_shot;
-		if(player.gauge_charged >= player.gauge_avail) {
-			state.autofire_shot_gate[player_id] = 4U;
-			live_input = 0U;
-			player.cpu_charge_cursor = static_cast<std::uint8_t>(
-				(player.cpu_charge_cursor + 1U) % 64U
-			);
-		}
-	}
-
-	if(state.autofire_shot_gate[player_id] <= 2U) {
-		if(player.gauge_charged < player.gauge_avail) {
-			const auto charged = static_cast<std::uint16_t>(
-				player.gauge_charged + player.gauge_charge_speed
-			);
-			if(charged > player.gauge_avail) {
-				player.gauge_charged = player.gauge_avail;
-				player.spell_ready_frames = 0U;
-			} else {
-				player.gauge_charged = charged;
-			}
-		} else {
-			player.spell_ready_frames++;
-			if(player.spell_ready_frames >= 128U) {
-				release_gauge(state, player_id);
-			}
-		}
-	} else if(state.autofire_shot_gate[player_id] <= 4U) {
-		release_gauge(state, player_id);
-	}
-
-	if((live_input & input_shot) != 0U) {
-		if(state.autofire_shot_gate[player_id] > 2U) {
-			if(player.move_lock_time == 0U && player.shot_active != 0U) {
-				shots_add(state, player_id);
-			}
+	if(player.is_hit) {
+		player.is_hit = false;
+		state.autofire_shot_gate[player_id] = 4U;
+		live_input = 0U;
+	} else if(!(
+		player.bombs == 0U &&
+		static_cast<std::int8_t>(player.halfhearts) <= 3
+	)) {
+		if(
+			player.cpu_charge_ring[player.cpu_charge_cursor] <
+				(player.gauge_avail >> 4U) ||
+			player.gauge_avail == gauge_max
+		) {
 			state.autofire_shot_gate[player_id] = 0U;
+			live_input = input_shot;
+			if(player.gauge_charged >= player.gauge_avail) {
+				state.autofire_shot_gate[player_id] = 4U;
+				live_input = 0U;
+				player.cpu_charge_cursor = static_cast<std::uint8_t>(
+					(player.cpu_charge_cursor + 1U) % 64U
+				);
+			}
 		}
-	} else if(state.autofire_shot_gate[player_id] < 8U) {
-		state.autofire_shot_gate[player_id]++;
 	}
+
+	player_update_finish(state, player_id, live_input);
 }
 
 std::int16_t enemy_speedtune(std::int16_t value, std::uint8_t speed) noexcept
@@ -2694,6 +3002,12 @@ std::uint8_t boss_hittest_damage(
 	if(chargeshot_hittest(state, player_id, left, right, top, bottom)) {
 		damage++;
 	}
+	if(
+		state.bomb_flag[player_id] != BombFlag::inactive &&
+		(state.round_or_result_frame & 1U) == 0U
+	) {
+		damage++;
+	}
 	return damage;
 }
 
@@ -3264,6 +3578,10 @@ void fireballs_update(DeterministicState &state) noexcept
 		}
 
 		if(fireball.flag == FireballFlag::fall) {
+			if(state.bomb_flag[fireball.player_id] != BombFlag::inactive) {
+				fireball.flag = FireballFlag::free;
+				continue;
+			}
 			const auto next_x = exact::wrap_add(
 				fireball.center_x, fireball.velocity_x
 			);
@@ -3509,7 +3827,7 @@ void fireballs_hittest(DeterministicState &state) noexcept
 ) noexcept
 {
 	const auto &player = state.players[player_id];
-	if(player.invincibility_time != 0U) {
+	if(player.invincibility_time != 0U || player.hyper_active != 0U) {
 		return false;
 	}
 	const auto radius = static_cast<int>(hitbox_size >> 1U);
@@ -3586,6 +3904,22 @@ bool enemies_update(
 		if(target.flag != EnemyFlag::running_spawned || target.center_y <= 0) {
 			continue;
 		}
+		if(state.damage_all_on[target.player_id] != 0U) {
+			target.hp = 0U;
+			target.flag = EnemyFlag::explosion_ignoring_enemies;
+			target.frame = 0U;
+			const auto slot = state.chains.cursor[target.player_id];
+			target.chain_slot = slot;
+			state.chains.hits[target.player_id][slot] = 1U;
+			state.chains.pellet_and_fireball_value[target.player_id][slot] = 0U;
+			state.chains.cursor[target.player_id] = static_cast<std::uint8_t>(
+				(slot + 1U) % chain_ring_size
+			);
+			target.explosion_max_enemy_hits_half = static_cast<std::uint8_t>(
+				target.size_pixels / 16U
+			);
+			continue;
+		}
 		const auto radius = static_cast<std::int16_t>(
 			(target.size_pixels == 16U) ? (10 << 4) : (target.size_pixels * 7)
 		);
@@ -3653,6 +3987,12 @@ bool enemies_update(
 		if(chargeshot_hittest(
 			state, target.player_id, left, right, top, bottom
 		)) {
+			hit = true;
+		}
+		if(
+			state.bomb_flag[target.player_id] != BombFlag::inactive &&
+			(state.round_or_result_frame & 1U) == 0U
+		) {
 			hit = true;
 		}
 
@@ -3844,8 +4184,10 @@ bool gameplay_frame_prefix(
 	state.collision_map = {};
 	extra_attacks_update(state, 0U);
 	bosses_update(state, 0U);
+	bomb_character_update(state, 0U);
 	extra_attacks_update(state, 1U);
 	bosses_update(state, 1U);
+	bomb_character_update(state, 1U);
 	shots_update(state);
 	chargeshots_update(state);
 	hud_start_update_prefix(state);
@@ -3970,6 +4312,7 @@ void gameplay_frame_suffix_after_interstitial(DeterministicState &state) noexcep
 	warning_frame_update(state, 0U);
 	warning_frame_update(state, 1U);
 	background_update(state);
+	bombs_render_phase_update(state);
 	boss_render_phase_update(state);
 	fireballs_hittest(state);
 	extra_attacks_render_phase_update(state);

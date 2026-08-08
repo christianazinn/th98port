@@ -107,6 +107,23 @@ std::uint8_t initial_boss_level(const GameInit &init) noexcept
 	return static_cast<std::uint8_t>(std::min<std::uint16_t>(level, 16U));
 }
 
+std::uint8_t initial_cpu_hit_damage_additional(const GameInit &init) noexcept
+{
+	if(init.game_mode != game_mode_story) {
+		return 0U;
+	}
+	if(init.story_stage <= 1U) {
+		return 3U;
+	}
+	if(init.story_stage <= 3U) {
+		return 2U;
+	}
+	if(init.story_stage <= 5U) {
+		return 1U;
+	}
+	return 0U;
+}
+
 } // namespace
 
 DeterministicState initialize_first_round(const GameInit &init)
@@ -121,6 +138,7 @@ DeterministicState initialize_first_round(const GameInit &init)
 	state.round_speed = initial_round_speed(init.rank, state.round_id);
 	state.bullet_base_speed = initial_bullet_base_speed(init.rank);
 	state.gba_boss_level = initial_boss_level(init);
+	state.cpu_hit_damage_additional = initial_cpu_hit_damage_additional(init);
 	if(init.game_mode == game_mode_story) {
 		state.gba_gauge_level.fill(
 			static_cast<std::uint8_t>(init.story_stage + 1U)

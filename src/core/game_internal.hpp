@@ -61,17 +61,30 @@ enum class GaugeBossAttackFlag : std::uint8_t {
 	boss = 5,
 };
 
+enum class BombFlag : std::uint8_t {
+	inactive = 0,
+	preparing = 1,
+	active = 2,
+};
+
 struct PlayerState {
 	exact::Subpixel center_x{};
 	exact::Subpixel center_y{};
+	bool is_hit = false;
 	std::uint8_t halfhearts = 0;
 	std::uint8_t invincibility_time = 0;
 	std::uint8_t shot_mode = 0;
 	std::uint8_t knockback_time = 0;
 	std::uint8_t move_lock_time = 0;
+	std::uint8_t knockback_angle = 0;
+	std::uint8_t knockback_length = 0;
+	bool knockback_active = false;
 	std::uint16_t gauge_charged = 0;
 	std::uint16_t gauge_avail = 0;
 	std::uint8_t bombs = 0;
+	std::uint8_t hyper_active = 0;
+	bool hyper_character_callback = false;
+	std::uint8_t lose_anim_time = 0;
 	std::uint8_t rounds_won = 0;
 	std::uint16_t cpu_frame = 0;
 	std::uint8_t hit_damage_next = 0;
@@ -289,6 +302,10 @@ struct DeterministicState {
 	std::array<std::uint8_t, player_count> autofire_shot_gate{};
 	std::int8_t cpu_target_kind_scratch = 0;
 	std::array<std::uint8_t, player_count> boss_panic_fired_in_combo{};
+	std::array<BombFlag, player_count> bomb_flag{};
+	std::array<std::uint8_t, player_count> bomb_frame{};
+	std::array<std::uint8_t, player_count> damage_all_on{};
+	std::uint8_t cpu_hit_damage_additional = 0;
 	std::array<WarningFlag, player_count> warning_flag{};
 	std::array<GaugeBossAttackFlag, player_count> gba_flag_next{};
 	std::array<GaugeBossAttackFlag, player_count> gba_flag_active{};
