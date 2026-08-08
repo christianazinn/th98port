@@ -359,6 +359,12 @@ struct DeterministicState {
 	std::array<GaugeBossAttackFlag, player_count> gba_flag_active{};
 	std::array<std::uint8_t, player_count> gba_gauge_level{};
 	std::array<std::uint8_t, player_count> reimu_gauge_pattern_frame{};
+	std::array<std::uint8_t, player_count> mima_gauge_pattern_frame{};
+	std::array<std::uint8_t, player_count> mima_gauge_pattern_angle{};
+	std::array<std::int8_t, player_count> mima_gauge_pattern_angle_delta{};
+	std::array<std::uint8_t, player_count> ellen_gauge_pattern_frame{};
+	std::array<std::int16_t, player_count> ellen_gauge_pattern_x{};
+	std::array<std::int16_t, player_count> ellen_gauge_pattern_y{};
 	std::array<std::uint8_t, player_count> kana_gauge_pattern_frame{};
 	std::array<std::int16_t, player_count> kana_gauge_pattern_x{};
 	std::array<std::uint8_t, player_count> rikako_gauge_pattern_frame{};
@@ -369,6 +375,8 @@ struct DeterministicState {
 	std::uint16_t combo_points_for_boss_attack = 5120;
 	std::array<BossInitialState, player_count> boss_initial{};
 	BossState boss{};
+	std::uint8_t ellen_boss_spread_angle = 0;
+	std::uint8_t ellen_boss_pellet_angle = 0;
 	std::array<std::uint8_t, player_count> boss_target_active{};
 	std::int16_t boss_target_x = 0;
 	std::int16_t boss_target_y = 0;

@@ -258,7 +258,7 @@ DeterministicState initialize_first_round(
 		boss.render_state = 0U;
 		if(character == 0U || character == 6U) {
 			boss.hp = 0x006EU;
-		} else if(character == 5U) {
+		} else if(character == 3U || character == 5U) {
 			boss.hp = 0x0064U;
 		}
 	}

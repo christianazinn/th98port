@@ -43,7 +43,10 @@ out\build\msvc-x64\Debug\th03-headless.exe `
 
 The command must report `oracle_status=same-prefix`, 46/186 rows, a natural
 terminal after 6,773 samples, route 2, and final scores `01090503`/`00434365`.
-The remaining oracle rows belong to later MAIN processes and are Phase 3 work.
+This remains the stable Phase 2 contract. On the Phase 3 development branch,
+the same command continues across process boundaries and matches the frozen
+TH3R03 oracle through global sample 16,000; the first unvalidated divergence
+is P1's score at sample 16,128.
 
 Run the complete external Phase 0 lock with:
 

@@ -28,9 +28,12 @@ design.
 ## Current validation boundary
 
 The typed coordinator and the progressively expanded Classic gameplay core
-match the frozen Anniversary TH3R03 oracle through global sample 14,464. This
+match the frozen Anniversary TH3R03 oracle through global sample 16,000. This
 includes the complete first and second gameplay processes, both intervening
-MAINL boundaries, and the first 1,136 logical frames of Stage 3. The next first
-failure is the interstitial input boundary at sample 14,573, which the native
-core has not yet scheduled; expected oracle values remain comparison-only and
-never initialize or steer simulation.
+MAINL boundaries, and Stage 3 through Ellen's active boss and gauge-attack
+patterns. The warning interstitial that begins after sample 14,464 is also
+scheduled and consumed with its source input-boundary semantics.
+
+The next first failure is at sample 16,128, where P1's score differs before
+the rest of the run has been validated. Expected oracle values remain
+comparison-only and never initialize, repair, or steer simulation.

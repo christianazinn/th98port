@@ -22,5 +22,11 @@ Phase 2 matches all 46 canonical rows through TH3R03's first natural round
 completion. The core consumes 6,773 logical samples, including 47 exact
 27-sample warning waits that do not advance either round counter, and returns
 route 2 at round frame 5,503/result frame 336. Its final scores and schema-3
-hash match Anniversary. Phase 3 must extend this map as additional complete
-cases exercise gameplay and process transitions beyond that first round.
+hash match Anniversary.
+
+Phase 3 currently matches the same frozen run through global sample 16,000.
+The exercised additions include typed MAIN/MAINL transitions, subsequent Story
+round initialization, Rikako and Ellen boss behavior, and Reimu, Rikako, Kana,
+and Ellen gauge-attack callbacks. Mima's mechanically translated gauge-attack
+callback is present but has not yet been accepted by an oracle checkpoint.
+The next first divergence is P1's score at sample 16,128.
