@@ -17,6 +17,9 @@ inline constexpr std::size_t chain_ring_size = 16;
 inline constexpr std::size_t enemy_count = 40;
 inline constexpr std::size_t bullet_count = 320;
 inline constexpr std::size_t fireball_count = 24;
+inline constexpr std::size_t extra_attack_count = 16;
+inline constexpr std::size_t extra_attack_regular_count = 8;
+inline constexpr std::size_t extra_attack_rikako_count = 14;
 inline constexpr std::size_t shotpair_count = 32;
 inline constexpr std::size_t collmap_width = 144;
 inline constexpr std::size_t collmap_height = 184;
@@ -186,6 +189,37 @@ struct KanaChargeGroup {
 	std::uint8_t speed = 0;
 };
 
+struct RikakoChargeNode {
+	std::int16_t x = 0;
+	std::int16_t y = 0;
+	std::uint8_t angle = 0;
+};
+
+struct ChiyuriChargeNode {
+	std::uint8_t state = 0;
+	std::uint8_t frame = 0;
+	std::int16_t x = 0;
+	std::int16_t y = 0;
+};
+
+struct EllenChargeNode {
+	std::uint8_t state = 0;
+	std::uint8_t phase = 0;
+	std::uint8_t angle = 0;
+	std::uint8_t speed = 0;
+	std::int16_t x = 0;
+	std::int16_t y = 0;
+	std::int16_t velocity_x = 0;
+	std::int16_t velocity_y = 0;
+};
+
+struct EllenBombVector {
+	std::int16_t x = 0;
+	std::int16_t y = 0;
+	std::int16_t velocity_x = 0;
+	std::int16_t velocity_y = 0;
+};
+
 enum class BulletFlag : std::uint8_t {
 	free = 0,
 	pellet = 1,
@@ -249,6 +283,7 @@ struct ExtraAttackState {
 	std::uint8_t player_id = 0;
 	std::uint8_t angle = 0;
 	std::uint8_t speed = 0;
+	std::uint8_t behavior_variant = 0;
 };
 
 struct BossInitialState {
@@ -284,6 +319,7 @@ struct DeterministicState {
 	std::uint8_t rank = 0;
 	std::uint8_t story_stage = 0;
 	std::uint8_t story_lives = 0;
+	std::uint8_t skill = 0;
 	std::uint8_t extends_gained = 255;
 	std::int32_t resident_rand = 0;
 	std::int8_t winner = 0;
@@ -307,6 +343,9 @@ struct DeterministicState {
 	std::array<std::uint8_t, player_count> boss_panic_fired_in_combo{};
 	std::array<BombFlag, player_count> bomb_flag{};
 	std::array<std::uint8_t, player_count> bomb_frame{};
+	std::array<std::array<EllenBombVector, 8>, player_count>
+		ellen_bomb_vectors{};
+	std::uint16_t ellen_bomb_vector_cursor = 0;
 	std::array<std::int16_t, player_count> playfield_fg_shift_x{};
 	std::array<std::uint8_t, player_count> damage_all_on{};
 	std::uint8_t cpu_hit_damage_additional = 0;
@@ -317,6 +356,7 @@ struct DeterministicState {
 	std::array<std::uint8_t, player_count> reimu_gauge_pattern_frame{};
 	std::array<std::uint8_t, player_count> kana_gauge_pattern_frame{};
 	std::array<std::int16_t, player_count> kana_gauge_pattern_x{};
+	std::array<std::uint8_t, player_count> rikako_gauge_pattern_frame{};
 	std::array<std::uint8_t, player_count> gauge_pattern_param_a{};
 	std::array<std::uint8_t, player_count> gauge_pattern_param_b{};
 	std::uint8_t gba_boss_level = 0;
@@ -344,7 +384,9 @@ struct DeterministicState {
 	std::array<EnemyState, enemy_count> enemies{};
 	std::array<BulletState, bullet_count> bullets{};
 	std::array<FireballState, fireball_count> fireballs{};
-	std::array<std::array<ExtraAttackState, 8>, player_count> extra_attacks{};
+	std::array<
+		std::array<ExtraAttackState, extra_attack_count>, player_count
+	> extra_attacks{};
 	std::array<ShotPairState, shotpair_count> shotpairs{};
 	std::array<std::array<ReimuChargeGroup, 12>, player_count> reimu_charge{};
 	// ZUN stores this primary-charge collision throttle in one global byte,
@@ -353,6 +395,14 @@ struct DeterministicState {
 	std::array<std::array<KanaChargeGroup, 4>, player_count> kana_charge{};
 	std::array<std::uint8_t, player_count> kana_charge_state{};
 	std::array<std::uint8_t, player_count> kana_charge_frames{};
+	std::array<std::array<RikakoChargeNode, 4>, player_count> rikako_charge{};
+	std::array<std::uint8_t, player_count> rikako_charge_state{};
+	std::array<std::uint8_t, player_count> rikako_charge_frames{};
+	std::array<std::uint16_t, player_count> rikako_charge_radius{};
+	std::array<std::int16_t, player_count> rikako_charge_origin_x{};
+	std::array<std::int16_t, player_count> rikako_charge_origin_y{};
+	std::array<std::array<ChiyuriChargeNode, 8>, player_count> chiyuri_charge{};
+	std::array<std::array<EllenChargeNode, 32>, player_count> ellen_charge{};
 	std::array<std::uint8_t, player_count> enemies_alive{};
 	std::uint8_t enemy_speed = 0;
 	std::uint8_t bullet_base_speed = 0;
@@ -365,7 +415,10 @@ struct DeterministicState {
 
 std::uint32_t state_hash(const DeterministicState &state) noexcept;
 CanonicalState canonical_state(const DeterministicState &state) noexcept;
-DeterministicState initialize_first_round(const GameInit &init);
+DeterministicState initialize_first_round(
+	const GameInit &init,
+	std::size_t formation_count = 0U
+);
 bool gameplay_frame_prefix(
 	DeterministicState &state,
 	const GameContent &content
@@ -403,6 +456,7 @@ struct Game::Impl {
 	Impl(const GameInit &init, GameContent content);
 
 	detail::DeterministicState state;
+	GameInit initial_init;
 	std::uint8_t autofire_mask = 0;
 	GameContent content;
 	std::vector<PresentationEvent> presentation_events;

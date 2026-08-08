@@ -52,6 +52,7 @@ struct RuntimeSnapshot {
 };
 
 struct GameInit {
+	std::uint32_t global_frame = 0;
 	std::int32_t resident_rand = 0;
 	std::uint32_t random_seed = 0;
 	std::uint8_t game_mode = 0;
@@ -131,6 +132,7 @@ public:
 		InputContext context = InputContext::gameplay
 	);
 	CanonicalState canonical_state() const;
+	std::expected<GameInit, Error> next_story_stage_init() const;
 	std::span<const PresentationEvent> presentation_events() const;
 
 private:

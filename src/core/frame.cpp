@@ -31,8 +31,11 @@ constexpr std::uint16_t gauge_128 = 128U << 4U;
 constexpr std::uint16_t gauge_192 = 192U << 4U;
 constexpr std::uint16_t gauge_max = 0xFFU << 4U;
 constexpr std::uint8_t bomb_frames = 180U;
+constexpr std::int16_t ellen_bomb_vector_free = 9999;
+constexpr std::int16_t ellen_bomb_vector_inactive = 19999;
 constexpr std::uint8_t miss_invincibility_frames = 110U;
 constexpr std::uint8_t knockback_frames = 64U;
+constexpr std::uint8_t hit_damage_max = 6U;
 constexpr std::uint8_t game_mode_story = 1U;
 constexpr std::uint8_t extends_max = 2U;
 constexpr std::uint8_t extends_disabled = 255U;
@@ -62,17 +65,20 @@ constexpr std::int16_t bullet_center_min = -(8 << 4);
 constexpr std::int16_t bullet_center_x_max = (288 + 8) << 4;
 constexpr std::int16_t bullet_center_y_max = (368 + 8) << 4;
 constexpr std::uint8_t bullet_group_one = 0U;
+constexpr std::uint8_t bullet_group_one_aimed = 1U;
 constexpr std::uint8_t bullet_group_two_spread_horizontally_symmetric = 2U;
 constexpr std::uint8_t bullet_group_three_spread_narrow = 8U;
 constexpr std::uint8_t bullet_group_four_spread_narrow = 14U;
 constexpr std::uint8_t bullet_group_five_spread_medium = 21U;
+constexpr std::uint8_t bullet_group_five_spread_wide = 22U;
 constexpr std::uint8_t bullet_group_five_spread_medium_aimed = 24U;
 constexpr std::uint8_t bullet_group_random_constrained_aimed = 29U;
 constexpr std::uint8_t bullet_group_ring = 38U;
 constexpr std::uint16_t legacy_collmap_dgroup_offset = 0x4BA0U;
-constexpr std::array<std::uint16_t, 8> legacy_collmap_alias_occupied_offsets{{
-	0x109BU, 0x10B2U, 0x10BAU, 0x10BEU,
-	0x10C6U, 0x10D0U, 0x10D6U, 0x10E0U,
+constexpr std::array<std::uint16_t, 9>
+	legacy_collmap_alias_occupied_offsets{{
+	0x109BU, 0x10B2U, 0x10BAU, 0x10BEU, 0x10C6U,
+	0x10D0U, 0x10D6U, 0x10E0U, 0x10E8U,
 }};
 constexpr std::array<std::array<std::uint16_t, 9>, 6> cpu_collision_routes{{
 	{{0x0400U, 0x0008U, 0x0800U, 0x0001U, 0x0008U, 0x0008U, 0x0100U, 0x0400U, 0x0400U}},
@@ -292,6 +298,11 @@ void bullets_add_group(
 			done = true;
 			break;
 
+		case bullet_group_one_aimed:
+			aimed = true;
+			done = true;
+			break;
+
 		case bullet_group_two_spread_horizontally_symmetric:
 			if(group_index == 0U) {
 				angle_offset = 0;
@@ -334,6 +345,19 @@ void bullets_add_group(
 			case 3U: angle_offset = 24; break;
 			default:
 				angle_offset = -24;
+				done = true;
+				break;
+			}
+			break;
+
+		case bullet_group_five_spread_wide:
+			switch(group_index) {
+			case 0U: angle_offset = 0; break;
+			case 1U: angle_offset = 18; break;
+			case 2U: angle_offset = -18; break;
+			case 3U: angle_offset = 36; break;
+			default:
+				angle_offset = -36;
 				done = true;
 				break;
 			}
@@ -476,7 +500,6 @@ bool fireball_add(
 	if(slot == state.fireballs.end()) {
 		return false;
 	}
-
 	slot->flag = FireballFlag::transfer;
 	slot->center_x = center_x;
 	slot->center_y = center_y;
@@ -585,12 +608,14 @@ void extra_attack_add(
 	const auto character =
 		(static_cast<int>(state.players[player_id].paletted_character) - 1) / 2;
 	if(character == 0) {
+		const auto end = state.extra_attacks[player_id].begin() +
+			extra_attack_regular_count;
 		const auto slot = std::find_if(
 			state.extra_attacks[player_id].begin(),
-			state.extra_attacks[player_id].end(),
+			end,
 			[](const ExtraAttackState &attack) { return attack.state == 0U; }
 		);
-		if(slot == state.extra_attacks[player_id].end()) {
+		if(slot == end) {
 			return;
 		}
 		const auto target_x = static_cast<std::int16_t>(
@@ -618,10 +643,10 @@ void extra_attack_add(
 		);
 		const auto slot = std::find_if(
 			state.extra_attacks[player_id].begin(),
-			state.extra_attacks[player_id].end(),
+			state.extra_attacks[player_id].begin() + extra_attack_regular_count,
 			[](const ExtraAttackState &attack) { return attack.state == 0U; }
 		);
-		if(slot == state.extra_attacks[player_id].end()) {
+		if(slot == state.extra_attacks[player_id].begin() + extra_attack_regular_count) {
 			return;
 		}
 		extra_attack_transfer_init(
@@ -640,6 +665,37 @@ void extra_attack_add(
 		if(target_x >= (144 << 4)) {
 			slot->angle = static_cast<std::uint8_t>(slot->angle + 0x80U);
 		}
+		return;
+	}
+	if(character == 6) {
+		const auto end = state.extra_attacks[player_id].begin() +
+			extra_attack_regular_count;
+		const auto slot = std::find_if(
+			state.extra_attacks[player_id].begin(), end,
+			[](const ExtraAttackState &attack) { return attack.state == 0U; }
+		);
+		if(slot == end) {
+			return;
+		}
+		extra_attack_transfer_init(
+			state,
+			*slot,
+			center_x,
+			center_y,
+			static_cast<std::int16_t>(
+				randring_next16(state) % (288U << 4U)
+			),
+			16 << 4,
+			player_id,
+			0x64
+		);
+		slot->behavior_variant = static_cast<std::uint8_t>(
+			randring_next16(state) & 1U
+		);
+		slot->angle = 0x40U;
+		slot->speed = static_cast<std::uint8_t>(
+			(randring_next16(state) & 0x0FU) + 0x20U
+		);
 	}
 }
 
@@ -1111,6 +1167,56 @@ bool playfield_clip(
 	);
 }
 
+struct CpuTargetPoint {
+	std::int16_t x = 144 << 4;
+	std::int16_t y = 300 << 4;
+};
+
+CpuTargetPoint cpu_target_point(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	CpuTargetPoint target{};
+	std::uint8_t target_id = 0xFFU;
+	if(state.boss_target_active[player_id] != 0U) {
+		target_id = 0xFEU;
+		target.x = state.boss_target_x;
+		target.y = state.boss_target_y;
+	} else {
+		for(const auto &enemy : state.enemies) {
+			if(
+				enemy.flag != EnemyFlag::running_spawned ||
+				enemy.player_id != player_id ||
+				enemy.center_x < 0 || enemy.center_x > (288 << 4) ||
+				enemy.center_y < 0 || enemy.center_y > (384 << 4) ||
+				enemy.formation_index >= target_id
+			) {
+				continue;
+			}
+			target_id = enemy.formation_index;
+			target.x = static_cast<std::int16_t>(enemy.center_x - (16 << 4));
+			target.y = static_cast<std::int16_t>(enemy.center_y + (110 << 4));
+			if(target_id == 0U) {
+				break;
+			}
+		}
+	}
+	state.cpu_target_kind_scratch = (target_id == 0xFFU)
+		? static_cast<std::int8_t>(-1)
+		: ((target_id == 0xFEU)
+			? static_cast<std::int8_t>(-2)
+			: static_cast<std::int8_t>(target_id));
+	if(
+		target.x <= 0 || target.x >= (288 << 4) ||
+		target.y <= 0 || target.y >= (384 << 4)
+	) {
+		target.x = 144 << 4;
+		target.y = 300 << 4;
+	}
+	return target;
+}
+
 void chargeshot_update_reimu(
 	DeterministicState &state,
 	std::uint8_t player_id
@@ -1189,6 +1295,151 @@ void chargeshot_update_kana(
 	state.kana_charge_frames[player_id]++;
 }
 
+void chargeshot_update_rikako(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	const auto charge_state = state.rikako_charge_state[player_id];
+	if(charge_state == 0U) {
+		return;
+	}
+	state.players[player_id].gauge_charged = 0U;
+	const auto frame = state.rikako_charge_frames[player_id];
+	auto radius = state.rikako_charge_radius[player_id];
+	if(charge_state == 1U) {
+		state.rikako_charge_origin_y[player_id] = exact::wrap_subtract(
+			state.rikako_charge_origin_y[player_id], std::int16_t{0x20}
+		);
+	} else {
+		state.rikako_charge_origin_x[player_id] =
+			state.players[player_id].center_x.raw();
+		state.rikako_charge_origin_y[player_id] =
+			state.players[player_id].center_y.raw();
+	}
+
+	for(std::size_t node_id = 0U; node_id < 4U; ++node_id) {
+		auto &node = state.rikako_charge[player_id][node_id];
+		const auto offset = vector2(
+			node.angle, static_cast<std::int16_t>(radius)
+		);
+		node.x = exact::wrap_add(
+			state.rikako_charge_origin_x[player_id], offset.x
+		);
+		node.y = exact::wrap_add(
+			state.rikako_charge_origin_y[player_id], offset.y
+		);
+		const auto angle_delta = static_cast<std::uint8_t>(
+			(node_id & 1U) != 0U ? 8U : 0xF8U
+		);
+		node.angle = static_cast<std::uint8_t>(node.angle + angle_delta);
+	}
+	if(frame < 0x20U) {
+		radius = static_cast<std::uint16_t>(radius + 0x20U);
+	} else if(charge_state == 1U && frame > 0x80U) {
+		radius = static_cast<std::uint16_t>(radius + 0x60U);
+		if(frame > 144U) {
+			state.rikako_charge_state[player_id] = 0U;
+		}
+	} else if(charge_state != 1U) {
+		state.rikako_charge_frames[player_id] = 0x20U;
+	}
+	state.rikako_charge_radius[player_id] = radius;
+	state.rikako_charge_frames[player_id]++;
+}
+
+void chargeshot_update_chiyuri(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &nodes = state.chiyuri_charge[player_id];
+	if(nodes.back().state == 0U) {
+		return;
+	}
+	state.players[player_id].gauge_charged = 0U;
+	for(std::size_t reverse_index = 0U; reverse_index < nodes.size(); ++reverse_index) {
+		auto &node = nodes[nodes.size() - 1U - reverse_index];
+		if(node.state == 0U) {
+			return;
+		}
+		if(node.state == 1U) {
+			node.y = exact::wrap_subtract(node.y, std::int16_t{14 << 4});
+			if(node.y < -0x300) {
+				if(reverse_index == 0U) {
+					state.players[player_id].shot_active = 1U;
+				}
+				node.state = 0U;
+				continue;
+			}
+		} else {
+			node.state--;
+			if(node.state == 1U) {
+				node.x = state.players[player_id].center_x.raw();
+				node.y = state.players[player_id].center_y.raw();
+			}
+		}
+		node.frame++;
+	}
+}
+
+void chargeshot_update_ellen(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &nodes = state.ellen_charge[player_id];
+	if(std::none_of(nodes.begin(), nodes.end(), [](const auto &node) {
+		return node.state != 0U;
+	})) {
+		return;
+	}
+	const auto target = cpu_target_point(state, player_id);
+	const auto target_y = exact::wrap_subtract(
+		target.y, static_cast<std::int16_t>(110 << 4)
+	);
+	auto &player = state.players[player_id];
+	player.gauge_charged = 0U;
+	const auto player_x = player.center_x.raw();
+	const auto player_y = player.center_y.raw();
+	for(auto &node : nodes) {
+		if(node.state == 0U) {
+			continue;
+		}
+		if(node.state == 1U) {
+			node.x = exact::wrap_add(node.x, node.velocity_x);
+			node.y = exact::wrap_add(node.y, node.velocity_y);
+			if(node.phase != 0U) {
+				if(playfield_clip(node.x, node.y, -(8 << 4))) {
+					node.state = 0U;
+				}
+				continue;
+			}
+			node.speed = static_cast<std::uint8_t>(node.speed - 2U);
+			const auto velocity = vector2(
+				node.angle, static_cast<std::int16_t>(node.speed)
+			);
+			node.velocity_x = velocity.x;
+			node.velocity_y = velocity.y;
+			if(node.speed != 0U) {
+				continue;
+			}
+			node.phase = 1U;
+			node.angle = iatan2(
+				exact::wrap_subtract(target_y, node.y),
+				exact::wrap_subtract(target.x, node.x)
+			);
+			const auto homing_velocity = vector2(node.angle, 160);
+			node.velocity_x = homing_velocity.x;
+			node.velocity_y = homing_velocity.y;
+			continue;
+		}
+		node.state--;
+		node.x = player_x;
+		node.y = player_y;
+	}
+}
+
 void chargeshots_update(DeterministicState &state) noexcept
 {
 	for(std::uint8_t player_id = 0U; player_id < player_count; ++player_id) {
@@ -1196,13 +1447,19 @@ void chargeshots_update(DeterministicState &state) noexcept
 			(static_cast<int>(state.players[player_id].paletted_character) - 1) / 2;
 		if(character == 0) {
 			chargeshot_update_reimu(state, player_id);
+		} else if(character == 3) {
+			chargeshot_update_ellen(state, player_id);
 		} else if(character == 5) {
 			chargeshot_update_kana(state, player_id);
+		} else if(character == 6) {
+			chargeshot_update_rikako(state, player_id);
+		} else if(character == 7) {
+			chargeshot_update_chiyuri(state, player_id);
 		}
 	}
 }
 
-bool chargeshot_hittest(
+std::uint8_t chargeshot_hittest(
 	DeterministicState &state,
 	std::uint8_t player_id,
 	std::int16_t left,
@@ -1218,7 +1475,7 @@ bool chargeshot_hittest(
 			state.reimu_chargeshot_primary != 0U &&
 			(state.round_or_result_frame & 1U) != 0U
 		) {
-			return false;
+			return 0U;
 		}
 		for(std::size_t group_id = 0U; group_id < 6U; ++group_id) {
 			const auto &group = state.reimu_charge[player_id][group_id];
@@ -1239,10 +1496,26 @@ bool chargeshot_hittest(
 				// ring and therefore remain part of deterministic call order.
 				(void)randring_next16(state);
 				(void)randring_next16(state);
-				return true;
+				return 1U;
 			}
 		}
-		return false;
+		return 0U;
+	}
+	if(character == 3) {
+		std::uint8_t hits = 0U;
+		for(auto &node : state.ellen_charge[player_id]) {
+			if(
+				node.state != 1U || node.x < left || node.x > right ||
+				node.y < top || node.y > bottom
+			) {
+				continue;
+			}
+			(void)randring_next16(state);
+			(void)randring_next16(state);
+			node.state = 0U;
+			hits = static_cast<std::uint8_t>(hits + 2U);
+		}
+		return hits;
 	}
 	if(character == 5 && state.kana_charge_state[player_id] != 0U) {
 		for(const auto &group : state.kana_charge[player_id]) {
@@ -1255,12 +1528,52 @@ bool chargeshot_hittest(
 				) {
 					(void)randring_next16(state);
 					(void)randring_next16(state);
-					return true;
+					return 1U;
 				}
 			}
 		}
 	}
-	return false;
+	if(character == 6 && state.rikako_charge_state[player_id] != 0U) {
+		std::uint8_t hits = 0U;
+		for(const auto &node : state.rikako_charge[player_id]) {
+			if(
+				exact::wrap_subtract(node.x, right) <= (12 << 4) &&
+				exact::wrap_subtract(left, node.x) <= (12 << 4) &&
+				exact::wrap_subtract(node.y, bottom) <= (12 << 4) &&
+				exact::wrap_subtract(top, node.y) <= (12 << 4)
+			) {
+				(void)randring_next16(state);
+				(void)randring_next16(state);
+				hits++;
+			}
+		}
+		return hits;
+	}
+	if(character == 7) {
+		std::uint8_t hits = 0U;
+		const auto &nodes = state.chiyuri_charge[player_id];
+		for(std::size_t reverse_index = 0U; reverse_index < nodes.size(); ++reverse_index) {
+			const auto &node = nodes[nodes.size() - 1U - reverse_index];
+			if(node.state == 0U) {
+				break;
+			}
+			if(node.state != 1U) {
+				continue;
+			}
+			if(
+				exact::wrap_subtract(node.x, right) <= (14 << 4) &&
+				exact::wrap_subtract(left, node.x) <= (14 << 4) &&
+				exact::wrap_subtract(node.y, bottom) <= (32 << 4) &&
+				exact::wrap_subtract(top, node.y) <= -(16 << 4)
+			) {
+				(void)randring_next16(state);
+				(void)randring_next16(state);
+				hits++;
+			}
+		}
+		return hits;
+	}
+	return 0U;
 }
 
 MoveResult movement_velocity(
@@ -1411,6 +1724,61 @@ void add_kana_chargeshot(
 	}
 }
 
+void add_rikako_chargeshot(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	const auto center_x = state.players[player_id].center_x.raw();
+	const auto center_y = state.players[player_id].center_y.raw();
+	state.rikako_charge_state[player_id] = 1U;
+	state.rikako_charge_frames[player_id] = 0U;
+	state.rikako_charge_radius[player_id] = 0x80U;
+	auto angle = std::uint8_t{0x20U};
+	for(auto &node : state.rikako_charge[player_id]) {
+		node.x = center_x;
+		node.y = center_y;
+		node.angle = angle;
+		angle = static_cast<std::uint8_t>(angle + 0x40U);
+	}
+	state.rikako_charge_origin_x[player_id] = center_x;
+	state.rikako_charge_origin_y[player_id] = center_y;
+}
+
+void add_chiyuri_chargeshot(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &nodes = state.chiyuri_charge[player_id];
+	nodes[0].frame = 0U;
+	nodes[0].x = state.players[player_id].center_x.raw();
+	nodes[0].y = state.players[player_id].center_y.raw();
+	state.players[player_id].shot_active = 0U;
+	for(std::size_t node_id = 0U; node_id < nodes.size(); ++node_id) {
+		nodes[node_id].state = static_cast<std::uint8_t>((node_id * 4U) + 2U);
+	}
+}
+
+void add_ellen_chargeshot(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	const auto center_x = state.players[player_id].center_x.raw();
+	const auto center_y = state.players[player_id].center_y.raw();
+	auto &nodes = state.ellen_charge[player_id];
+	for(std::size_t node_id = 0U; node_id < nodes.size(); ++node_id) {
+		auto &node = nodes[node_id];
+		node.state = static_cast<std::uint8_t>(node_id * 2U);
+		node.phase = 0U;
+		node.x = center_x;
+		node.y = center_y;
+		node.angle = static_cast<std::uint8_t>(randring_next16(state));
+		node.speed = 0x50U;
+	}
+}
+
 void release_gauge(DeterministicState &state, std::uint8_t player_id) noexcept
 {
 	auto &player = state.players[player_id];
@@ -1420,8 +1788,14 @@ void release_gauge(DeterministicState &state, std::uint8_t player_id) noexcept
 			(static_cast<int>(player.paletted_character) - 1) / 2;
 		if(character == 0) {
 			add_reimu_chargeshot(state, player_id);
+		} else if(character == 3) {
+			add_ellen_chargeshot(state, player_id);
 		} else if(character == 5) {
 			add_kana_chargeshot(state, player_id);
+		} else if(character == 6) {
+			add_rikako_chargeshot(state, player_id);
+		} else if(character == 7) {
+			add_chiyuri_chargeshot(state, player_id);
 		}
 		if(charged >= gauge_128) {
 			state.warning_flag[player_id] = WarningFlag::portrait;
@@ -1494,6 +1868,9 @@ void player_bomb(DeterministicState &state, std::uint8_t player_id) noexcept
 		state.bomb_flag[player_id] = BombFlag::preparing;
 		player.bombs--;
 		player.invincibility_time = bomb_frames;
+		if(player_id == 0U && state.skill > 0U) {
+			state.skill--;
+		}
 		return;
 	}
 	if(player.gauge_avail < gauge_max) {
@@ -1501,6 +1878,9 @@ void player_bomb(DeterministicState &state, std::uint8_t player_id) noexcept
 	}
 	state.damage_all_on[player_id] = 1U;
 	player.hyper_active = static_cast<std::uint8_t>(player.paletted_character);
+	if(player_id == 0U && state.skill > 0U) {
+		state.skill--;
+	}
 }
 
 void bomb_character_update(
@@ -1512,11 +1892,42 @@ void bomb_character_update(
 	if(flag == BombFlag::inactive) {
 		return;
 	}
+	const auto character =
+		(static_cast<int>(state.players[player_id].paletted_character) - 1) / 2;
 	if(flag == BombFlag::preparing) {
 		flag = BombFlag::active;
 		state.bomb_frame[player_id] = 0U;
+		if(character == 3) {
+			for(auto &vector : state.ellen_bomb_vectors[player_id]) {
+				vector.x = ellen_bomb_vector_inactive;
+			}
+		}
 	}
 	state.bomb_frame[player_id]++;
+	if(character == 3) {
+		for(auto &vector : state.ellen_bomb_vectors[player_id]) {
+			bool respawn = (vector.x == ellen_bomb_vector_free);
+			if(vector.x == ellen_bomb_vector_inactive) {
+				continue;
+			}
+			if(!respawn) {
+				vector.x = exact::wrap_add(vector.x, vector.velocity_x);
+				vector.y = exact::wrap_add(vector.y, vector.velocity_y);
+				respawn = playfield_clip(
+					vector.x, vector.y, static_cast<std::int16_t>(-(32 << 4))
+				);
+			}
+			if(respawn) {
+				vector.x = 144 << 4;
+				vector.y = 184 << 4;
+				const auto velocity = vector2(
+					static_cast<std::uint8_t>(randring_next16(state)), 224
+				);
+				vector.velocity_x = velocity.x;
+				vector.velocity_y = velocity.y;
+			}
+		}
+	}
 	if(state.bomb_frame[player_id] >= bomb_frames) {
 		flag = BombFlag::inactive;
 	}
@@ -1541,6 +1952,38 @@ void bombs_render_phase_update(DeterministicState &state) noexcept
 				state.playfield_fg_shift_x[player_id] =
 					(((frame % 8U) & 3U) < 2U) ? 4 : -4;
 			} else if(frame >= 112U) {
+				state.playfield_fg_shift_x[player_id] = 0;
+			}
+		}
+		if(character == 3) {
+			const auto frame = state.bomb_frame[player_id];
+			if(frame < 64U) {
+				state.ellen_bomb_vector_cursor = 0U;
+			} else if(frame < 128U) {
+				state.playfield_fg_shift_x[player_id] =
+					((frame & 3U) < 2U) ? 4 : -4;
+				if(
+					(frame % 4U) == 0U &&
+					state.ellen_bomb_vector_cursor < 8U
+				) {
+					state.ellen_bomb_vectors[player_id]
+						[state.ellen_bomb_vector_cursor].x =
+							ellen_bomb_vector_free;
+					state.ellen_bomb_vector_cursor++;
+				}
+			} else {
+				state.playfield_fg_shift_x[player_id] = 0;
+			}
+		}
+		if(character == 6) {
+			const auto frame = state.bomb_frame[player_id];
+			if(frame >= 64U && frame < 128U) {
+				state.playfield_fg_shift_x[player_id] =
+					((frame & 3U) < 2U) ? 4 : -4;
+				if((frame % 8U) == 0U) {
+					(void)randring_next16(state);
+				}
+			} else if(frame >= 128U) {
 				state.playfield_fg_shift_x[player_id] = 0;
 			}
 		}
@@ -1702,6 +2145,66 @@ void gauge_pattern_kana(
 	state.kana_gauge_pattern_frame[player_id]++;
 }
 
+void gauge_pattern_rikako(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &flag = state.gba_flag_active[player_id];
+	if(
+		flag == GaugeBossAttackFlag::gauge_pellet_init ||
+		flag == GaugeBossAttackFlag::gauge_bullet_init
+	) {
+		state.rikako_gauge_pattern_frame[player_id] = 0U;
+		flag = (flag == GaugeBossAttackFlag::gauge_pellet_init)
+			? GaugeBossAttackFlag::gauge_pellet_active
+			: GaugeBossAttackFlag::gauge_bullet_active;
+		state.gauge_pattern_param_a[player_id] = static_cast<std::uint8_t>(
+			0x10U - (state.gba_gauge_level[player_id] / 2U)
+		);
+		state.gauge_pattern_param_b[player_id] = static_cast<std::uint8_t>(
+			state.gba_gauge_level[player_id] + 0x30U
+		);
+		return;
+	}
+	if(
+		flag != GaugeBossAttackFlag::gauge_pellet_active &&
+		flag != GaugeBossAttackFlag::gauge_bullet_active
+	) {
+		return;
+	}
+
+	const auto type = (flag == GaugeBossAttackFlag::gauge_pellet_active)
+		? BulletFlag::pellet : BulletFlag::bullet16;
+	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
+	const auto frame = state.rikako_gauge_pattern_frame[player_id];
+	if((frame % state.gauge_pattern_param_a[player_id]) == 0U) {
+		const auto angle = static_cast<std::uint8_t>(0x20U - (frame / 4U));
+		const auto speed = state.gauge_pattern_param_b[player_id];
+		bullets_add_group(
+			state, type, 0, 0, target_player, speed, angle,
+			bullet_group_one_aimed
+		);
+		bullets_add_group(
+			state, type, 288 << 4, 0, target_player, speed, angle,
+			bullet_group_one_aimed
+		);
+		const auto mirrored_angle = static_cast<std::uint8_t>(-angle);
+		bullets_add_group(
+			state, type, 288 << 4, 0, target_player, speed,
+			mirrored_angle, bullet_group_one_aimed
+		);
+		bullets_add_group(
+			state, type, 0, 0, target_player, speed, mirrored_angle,
+			bullet_group_one_aimed
+		);
+	}
+	if(frame >= 0x80U) {
+		flag = GaugeBossAttackFlag::none;
+	}
+	state.rikako_gauge_pattern_frame[player_id]++;
+}
+
 void gauge_patterns_update(
 	DeterministicState &state,
 	std::uint8_t player_id
@@ -1713,6 +2216,8 @@ void gauge_patterns_update(
 		gauge_pattern_reimu(state, player_id);
 	} else if(character == 5) {
 		gauge_pattern_kana(state, player_id);
+	} else if(character == 6) {
+		gauge_pattern_rikako(state, player_id);
 	}
 }
 
@@ -1853,6 +2358,9 @@ std::uint8_t players_hit_damage_update(
 		player.halfhearts > 1U
 	) {
 		damage = static_cast<std::uint8_t>(player.halfhearts - 1U);
+	}
+	if(player_id == 0U && state.skill > 0U) {
+		state.skill--;
 	}
 	return damage;
 }
@@ -2070,9 +2578,10 @@ bool cpu_safe_move(
 		const auto hitbox_size = static_cast<std::uint8_t>(
 			(fallback_attempt == 0U) ? 20U : 4U
 		);
-		if(!player_hittest(
+		const auto route_hit = player_hittest(
 			state, player_id, hitbox_size, collision_x, collision_y
-		)) {
+		);
+		if(!route_hit) {
 			return broad_hit;
 		}
 		player.center_x = center_x;
@@ -2175,7 +2684,6 @@ void player_update_cpu(DeterministicState &state, std::uint8_t player_id) noexce
 	case 10U: movement = input_down | input_right; break;
 	default: break;
 	}
-
 	bool broad_collision = false;
 	if(player.cpu_frame <= player.cpu_safety_frames) {
 		broad_collision = cpu_safe_move(state, player_id, movement);
@@ -2190,9 +2698,10 @@ void player_update_cpu(DeterministicState &state, std::uint8_t player_id) noexce
 		}
 		std::int16_t collision_x = 0;
 		std::int16_t collision_y = 0;
-		if(player_hittest(
+		const auto small_hit = player_hittest(
 			state, player_id, 4U, collision_x, collision_y
-		)) {
+		);
+		if(small_hit) {
 			if(player.gauge_charged > (80U << 4U)) {
 				player.is_hit = true;
 			} else if((randring_next16(state) & 3U) == 0U) {
@@ -2648,6 +3157,9 @@ void collmap_set_fireball(
 	const auto center_y = exact::wrap_add(
 		fireball.center_y, static_cast<std::int16_t>(8 << 4)
 	);
+	if(center_y < 0 || center_y >= (368 << 4)) {
+		return;
+	}
 	int top = static_cast<int>(center_y) >> 5;
 	top -= tile_h / 2;
 	int bottom = top + tile_h;
@@ -2771,7 +3283,8 @@ void extra_attacks_update_reimu(
 ) noexcept
 {
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
-	for(auto &attack : state.extra_attacks[player_id]) {
+	for(std::size_t slot = 0U; slot < extra_attack_regular_count; ++slot) {
+		auto &attack = state.extra_attacks[player_id][slot];
 		if(attack.state == 0U) {
 			continue;
 		}
@@ -2855,7 +3368,8 @@ void extra_attacks_update_kana(
 ) noexcept
 {
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
-	for(auto &attack : state.extra_attacks[player_id]) {
+	for(std::size_t slot = 0U; slot < extra_attack_regular_count; ++slot) {
+		auto &attack = state.extra_attacks[player_id][slot];
 		if(attack.state == 0U) {
 			continue;
 		}
@@ -2890,6 +3404,87 @@ void extra_attacks_update_kana(
 	}
 }
 
+void extra_attacks_update_rikako(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
+	for(std::size_t slot = 0U; slot < extra_attack_rikako_count; ++slot) {
+		auto &attack = state.extra_attacks[player_id][slot];
+		if(attack.state == 0U) {
+			continue;
+		}
+		if(attack.state == 1U) {
+			const auto velocity = vector2(
+				attack.angle, static_cast<std::int16_t>(attack.speed)
+			);
+			attack.center_x = exact::wrap_add(attack.center_x, velocity.x);
+			attack.center_y = exact::wrap_add(attack.center_y, velocity.y);
+			if(
+				attack.behavior_variant == 0U && attack.frame >= 0x40U &&
+				attack.frame <= 0x50U
+			) {
+				const auto target_angle = iatan2(
+					exact::wrap_subtract(
+						state.players[target_player].center_y.raw(), attack.center_y
+					),
+					exact::wrap_subtract(
+						state.players[target_player].center_x.raw(), attack.center_x
+					)
+				);
+				attack.speed++;
+				const auto angle_delta = std::bit_cast<std::int8_t>(
+					static_cast<std::uint8_t>(target_angle - attack.angle)
+				);
+				attack.angle = static_cast<std::uint8_t>(
+					attack.angle + static_cast<std::int8_t>(angle_delta / 8)
+				);
+			}
+			if(playfield_clip(
+				attack.center_x, attack.center_y, -(32 << 4)
+			)) {
+				attack.state = 0U;
+				continue;
+			}
+			extra_attack_shot_hittest(
+				state, target_player, attack.center_x, attack.center_y
+			);
+			collmap_set_rect_striped(
+				state, target_player, attack.center_x, attack.center_y, 8, 16
+			);
+			collmap_set_rect_striped(
+				state,
+				target_player,
+				exact::wrap_subtract(
+					attack.center_x, static_cast<std::int16_t>(12 << 4)
+				),
+				attack.center_y,
+				4,
+				8
+			);
+			collmap_set_rect_striped(
+				state,
+				target_player,
+				exact::wrap_add(
+					attack.center_x, static_cast<std::int16_t>(12 << 4)
+				),
+				attack.center_y,
+				4,
+				8
+			);
+		} else if(attack.state == 2U) {
+			(void)extra_attack_transfer_update(attack);
+		} else if(attack.state <= 0x1CU) {
+			attack.state++;
+		} else {
+			attack.frame = 0U;
+			attack.state = 1U;
+		}
+		attack.frame++;
+	}
+}
+
 void extra_attacks_update(
 	DeterministicState &state,
 	std::uint8_t player_id
@@ -2901,6 +3496,8 @@ void extra_attacks_update(
 		extra_attacks_update_reimu(state, player_id);
 	} else if(character == 5) {
 		extra_attacks_update_kana(state, player_id);
+	} else if(character == 6) {
+		extra_attacks_update_rikako(state, player_id);
 	}
 }
 
@@ -2914,7 +3511,8 @@ void extra_attacks_render_phase_update(DeterministicState &state) noexcept
 		if(character != 0) {
 			continue;
 		}
-		for(auto &attack : state.extra_attacks[player_id]) {
+		for(std::size_t slot = 0U; slot < extra_attack_regular_count; ++slot) {
+			auto &attack = state.extra_attacks[player_id][slot];
 			if(attack.state != 0U) {
 				attack.frame++;
 			}
@@ -2933,10 +3531,10 @@ void extra_attack_add_direct(
 {
 	const auto slot = std::find_if(
 		state.extra_attacks[player_id].begin(),
-		state.extra_attacks[player_id].end(),
+		state.extra_attacks[player_id].begin() + extra_attack_regular_count,
 		[](const ExtraAttackState &attack) { return attack.state == 0U; }
 	);
-	if(slot == state.extra_attacks[player_id].end()) {
+	if(slot == state.extra_attacks[player_id].begin() + extra_attack_regular_count) {
 		return;
 	}
 	*slot = ExtraAttackState{};
@@ -2949,6 +3547,34 @@ void extra_attack_add_direct(
 	const auto velocity = vector2(angle, speed);
 	slot->velocity_x = velocity.x;
 	slot->velocity_y = velocity.y;
+}
+
+void extra_attack_add_direct_rikako(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	std::int16_t center_x,
+	std::int16_t center_y,
+	std::uint8_t angle
+) noexcept
+{
+	const auto end = state.extra_attacks[player_id].begin() +
+		extra_attack_rikako_count;
+	const auto slot = std::find_if(
+		state.extra_attacks[player_id].begin(), end,
+		[](const ExtraAttackState &attack) { return attack.state == 0U; }
+	);
+	if(slot == end) {
+		return;
+	}
+	*slot = ExtraAttackState{};
+	slot->state = 1U;
+	slot->frame = 0x40U;
+	slot->center_x = center_x;
+	slot->center_y = center_y;
+	slot->player_id = static_cast<std::uint8_t>(1U - player_id);
+	slot->angle = angle;
+	slot->speed = 0x20U;
+	slot->behavior_variant = 1U;
 }
 
 void boss_move(BossState &boss) noexcept
@@ -3089,9 +3715,9 @@ std::uint8_t boss_hittest_damage(
 		shot.alive = false;
 		damage = static_cast<std::uint8_t>(damage + 2U);
 	}
-	if(chargeshot_hittest(state, player_id, left, right, top, bottom)) {
-		damage++;
-	}
+	damage = static_cast<std::uint8_t>(damage + chargeshot_hittest(
+		state, player_id, left, right, top, bottom
+	));
 	if(
 		state.bomb_flag[player_id] != BombFlag::inactive &&
 		(state.round_or_result_frame & 1U) == 0U
@@ -3617,6 +4243,198 @@ void boss_update_kana(DeterministicState &state, std::uint8_t player_id) noexcep
 	boss_defeat_if_needed(state, target_player);
 }
 
+void boss_pattern_rikako_spreads(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.pattern_frame == 0x28U) {
+		const auto angle_delta = ((randring_next16(state) & 1U) != 0U)
+			? static_cast<std::uint8_t>(0x30U)
+			: static_cast<std::uint8_t>(-0x30);
+		const auto count = boss.params[0];
+		for(std::size_t i = 0U; i < count; ++i) {
+			const auto angle = static_cast<std::uint8_t>(
+				(i << 8U) / count
+			);
+			const auto offset = vector2(angle, 48 << 4);
+			bullets_add_group(
+				state,
+				BulletFlag::bullet16,
+				exact::wrap_add(boss.center_x, offset.x),
+				exact::wrap_add(boss.center_y, offset.y),
+				static_cast<std::uint8_t>(1U - player_id),
+				(1U << 4U) + 12U,
+				static_cast<std::uint8_t>(angle + angle_delta),
+				bullet_group_five_spread_wide
+			);
+		}
+	}
+	if(boss.pattern_frame > 0x50U) {
+		boss.pattern_frame = 0U;
+		boss.state = 1U;
+	}
+}
+
+void boss_pattern_rikako_exatt_and_rings(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &boss = state.boss;
+	if(boss.pattern_frame == 0x10U) {
+		// SUB_CE5B() is a presentation effect with one shared-ring draw.
+		(void)randring_next16(state);
+	}
+	if(boss.pattern_frame == 0x28U) {
+		// This draw is overwritten before first use in ZUN's loop.
+		(void)randring_next16(state);
+		const auto count = boss.params[1];
+		for(std::size_t i = 0U; i < count; ++i) {
+			const auto angle = static_cast<std::uint8_t>(
+				(i << 8U) / count
+			);
+			extra_attack_add_direct_rikako(
+				state, player_id, boss.center_x, boss.center_y, angle
+			);
+		}
+	}
+	if(boss.pattern_frame == 0x40U) {
+		auto speed = std::uint8_t{2U << 4U};
+		for(std::size_t i = 0U; i < 4U; ++i) {
+			speed = static_cast<std::uint8_t>(speed + 8U);
+			bullets_add_group(
+				state,
+				BulletFlag::pellet,
+				boss.center_x,
+				boss.center_y,
+				static_cast<std::uint8_t>(1U - player_id),
+				speed,
+				static_cast<std::uint8_t>(randring_next16(state)),
+				bullet_group_ring,
+				boss.params[2]
+			);
+		}
+	}
+	if(boss.pattern_frame > 0x50U) {
+		boss.pattern_frame = 0U;
+		boss.state = 1U;
+	}
+}
+
+void boss_pattern_rikako_four_spreads(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	auto &boss = state.boss;
+	boss_move(boss);
+	const auto phase_mod = static_cast<std::uint16_t>(
+		boss.pattern_frame % boss.params[3]
+	);
+	if(phase_mod == 1U) {
+		boss.pattern_angle = static_cast<std::uint8_t>(randring_next16(state));
+		boss.direction = static_cast<std::uint8_t>(
+			(randring_next16(state) & 1U) + 1U
+		);
+	}
+	if(
+		phase_mod == 1U || phase_mod == 5U ||
+		phase_mod == 9U || phase_mod == 0x0DU
+	) {
+		const auto type = (boss.direction == 1U)
+			? BulletFlag::pellet
+			: BulletFlag::bullet16;
+		bullets_add_group(
+			state, type, boss.center_x, boss.center_y,
+			static_cast<std::uint8_t>(1U - player_id), boss.params[4],
+			boss.pattern_angle, bullet_group_four_spread_narrow
+		);
+		bullets_add_group(
+			state, type, boss.center_x, boss.center_y,
+			static_cast<std::uint8_t>(1U - player_id), boss.params[4],
+			static_cast<std::uint8_t>(boss.pattern_angle + 0x80U),
+			bullet_group_four_spread_narrow
+		);
+	}
+	if(boss.pattern_frame >= 0x80U) {
+		boss.state = 1U;
+		boss.pattern_frame = 0U;
+	}
+}
+
+void boss_update_rikako(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
+{
+	if(boss_launch_or_reverse(state, player_id)) {
+		state.boss.params[0] = static_cast<std::uint8_t>(
+			(state.gba_boss_level / 2U) + 0x10U
+		);
+		state.boss.params[1] = static_cast<std::uint8_t>(
+			(state.gba_boss_level / 4U) + 8U
+		);
+		state.boss.params[2] = static_cast<std::uint8_t>(
+			(state.gba_boss_level / 2U) + 0x1CU
+		);
+		state.boss.params[3] = static_cast<std::uint8_t>(
+			0x20U - state.gba_boss_level
+		);
+		state.boss.params[4] = static_cast<std::uint8_t>(
+			state.gba_boss_level + 0x40U
+		);
+	}
+	if(state.gba_boss_launched_by != static_cast<std::int8_t>(player_id)) {
+		return;
+	}
+	boss_target_update(state);
+	state.boss.pattern_frame++;
+	const auto dispatch_state = state.boss.state;
+	switch(dispatch_state) {
+	case 0U:
+		if(state.boss.pattern_frame == 0x64U) {
+			state.boss.pattern_frame = 0U;
+			state.boss.state = 1U;
+		} else {
+			// The original switch branch skips the common collision tail while
+			// Rikako's Boss Attack is still materializing.
+			return;
+		}
+		break;
+	case 1U:
+		boss_choose_pattern(state);
+		break;
+	case 2U: case 3U: case 4U: case 5U: case 6U:
+		boss_pattern_rikako_spreads(state, player_id);
+		break;
+	case 8U: case 9U: case 10U: case 11U: case 12U: case 13U:
+		boss_pattern_rikako_exatt_and_rings(state, player_id);
+		break;
+	case 7U: case 14U: case 15U: case 16U: case 17U:
+		boss_pattern_rikako_four_spreads(state, player_id);
+		break;
+	case 0x80U:
+		boss_exit_move(state, player_id);
+		break;
+	case 0xFFU:
+		return;
+	default:
+		break;
+	}
+	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
+	collmap_set_rect_striped(
+		state, target_player, state.boss.center_x, state.boss.center_y, 32, 24
+	);
+	const auto damage = boss_hittest_damage(state, target_player, 32 << 4);
+	state.boss.hit = damage;
+	state.boss.hp = exact::wrap_subtract(
+		state.boss.hp, static_cast<std::uint16_t>(damage)
+	);
+	boss_defeat_if_needed(state, target_player);
+}
+
 void bosses_update(DeterministicState &state, std::uint8_t player_id) noexcept
 {
 	const auto character =
@@ -3625,6 +4443,8 @@ void bosses_update(DeterministicState &state, std::uint8_t player_id) noexcept
 		boss_update_reimu(state, player_id);
 	} else if(character == 5) {
 		boss_update_kana(state, player_id);
+	} else if(character == 6) {
+		boss_update_rikako(state, player_id);
 	}
 }
 
@@ -3729,7 +4549,6 @@ void fireballs_hittest(DeterministicState &state) noexcept
 		if(target.flag != FireballFlag::fall) {
 			continue;
 		}
-
 		constexpr std::int16_t radius_x = 12 << 4;
 		constexpr std::int16_t radius_y = 10 << 4;
 		const auto center_y = exact::wrap_add(
@@ -3835,9 +4654,16 @@ void fireballs_hittest(DeterministicState &state) noexcept
 			);
 		});
 
-		if(chargeshot_hittest(
+		const auto charge_damage = chargeshot_hittest(
 			state, target.player_id, left, right, top, bottom
-		)) {
+		);
+		if(charge_damage != 0U) {
+			hit = true;
+		}
+		if(
+			state.bomb_flag[target.player_id] != BombFlag::inactive &&
+			(state.round_or_result_frame & 1U) == 0U
+		) {
 			hit = true;
 		}
 		if(!hit) {
@@ -3955,11 +4781,13 @@ void fireballs_hittest(DeterministicState &state) noexcept
 		// data before the map. These are the first occupied offsets observed by
 		// every exercised aliasing scan. Model collision occupancy without
 		// embedding the original DGROUP contents.
-		return static_cast<std::uint8_t>(std::find(
-			legacy_collmap_alias_occupied_offsets.begin(),
-			legacy_collmap_alias_occupied_offsets.end(),
-			offset
-		) != legacy_collmap_alias_occupied_offsets.end());
+		return (
+			std::find(
+				legacy_collmap_alias_occupied_offsets.begin(),
+				legacy_collmap_alias_occupied_offsets.end(),
+				offset
+			) == legacy_collmap_alias_occupied_offsets.end()
+		) ? std::uint8_t{0U} : std::uint8_t{1U};
 	};
 
 	const auto radius = static_cast<std::int16_t>(hitbox_size >> 1U);
@@ -4151,9 +4979,10 @@ bool enemies_update(
 			explosion_chain_slot = explosion.chain_slot;
 			hit = true;
 		});
-		if(chargeshot_hittest(
+		const auto charge_damage = chargeshot_hittest(
 			state, target.player_id, left, right, top, bottom
-		)) {
+		);
+		if(charge_damage != 0U) {
 			hit = true;
 		}
 		if(
@@ -4596,7 +5425,7 @@ void gameplay_frame_suffix_after_interstitial(DeterministicState &state) noexcep
 		if((state.round_or_result_frame & 1023U) == 0U) {
 			randring_fill(state);
 			for(auto &player : state.players) {
-				if(player.hit_damage_next < 4U) {
+				if(player.hit_damage_next < hit_damage_max) {
 					player.hit_damage_next++;
 				}
 			}

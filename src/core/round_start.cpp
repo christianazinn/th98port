@@ -94,19 +94,75 @@ std::uint8_t initial_bullet_base_speed(std::uint8_t rank) noexcept
 	return 0U;
 }
 
-std::uint8_t initial_boss_level(const GameInit &init) noexcept
+std::uint8_t initial_boss_level(
+	const GameInit &init,
+	std::uint8_t round_id
+) noexcept
 {
-	std::uint16_t level = init.skill;
+	auto level = init.story_stage;
 	if(init.rank == rank_easy) {
-		level /= 2U;
+		level = static_cast<std::uint8_t>(level / 2U);
+		level = exact::wrap_add(level, round_id);
 	} else {
+		level = exact::wrap_add(level, round_id);
+		level = exact::wrap_add(level, round_id);
 		if(init.rank == rank_hard) {
-			level = static_cast<std::uint16_t>(level + 2U);
+			level = exact::wrap_add(level, std::uint8_t{2U});
 		} else if(init.rank == rank_lunatic) {
-			level = static_cast<std::uint16_t>(level + 8U);
+			level = exact::wrap_add(level, std::uint8_t{8U});
 		}
 	}
-	return static_cast<std::uint8_t>(std::min<std::uint16_t>(level, 16U));
+	return std::min<std::uint8_t>(level, 16U);
+}
+
+void initialize_runtime_rings(
+	DeterministicState &state,
+	std::size_t formation_count
+) noexcept
+{
+	randring_fill(state);
+	for(auto &player : state.players) {
+		for(auto &charge : player.cpu_charge_ring) {
+			charge = static_cast<std::uint8_t>(
+				((irand(state.random_seed) & 3U) << 6U) + 0x3FU
+			);
+		}
+		player.cpu_charge_cursor = 0U;
+	}
+	if(formation_count == 0U) {
+		return;
+	}
+
+	auto previous = static_cast<std::uint8_t>(formation_count);
+	for(std::size_t index = 0U; index < state.formation_type_ring.size(); ++index) {
+		std::uint8_t next = 0U;
+		do {
+			next = static_cast<std::uint8_t>(
+				irand(state.random_seed) % formation_count
+			);
+		} while(next == previous);
+		state.formation_type_ring[index] = next;
+		previous = next;
+		state.formation_position_ring[index] = static_cast<std::uint8_t>(
+			(irand(state.random_seed) & 1U) << 7U
+		);
+	}
+	state.formation_cursor = {};
+}
+
+void initialize_background_rng(DeterministicState &state) noexcept
+{
+	if(state.background_initial_kind == BackgroundInitialKind::type_a) {
+		// sub_D092(): 48 particles, four IRAND calls apiece.
+		for(std::size_t i = 0U; i < 48U * 4U; ++i) {
+			(void)irand(state.random_seed);
+		}
+	} else {
+		// sub_D2E8(): 50 particles, two IRAND calls apiece.
+		for(std::size_t i = 0U; i < 50U * 2U; ++i) {
+			(void)irand(state.random_seed);
+		}
+	}
 }
 
 std::uint8_t initial_cpu_hit_damage_additional(const GameInit &init) noexcept
@@ -128,19 +184,24 @@ std::uint8_t initial_cpu_hit_damage_additional(const GameInit &init) noexcept
 
 } // namespace
 
-DeterministicState initialize_first_round(const GameInit &init)
+DeterministicState initialize_first_round(
+	const GameInit &init,
+	std::size_t formation_count
+)
 {
 	DeterministicState state{};
+	state.global_frame = init.global_frame;
 	state.game_mode = init.game_mode;
 	state.rank = init.rank;
 	state.story_stage = init.story_stage;
 	state.story_lives = init.story_lives;
+	state.skill = init.skill;
 	state.resident_rand = init.resident_rand;
 	state.winner = init.winner;
 	state.random_seed = static_cast<std::uint32_t>(init.resident_rand);
 	state.round_speed = initial_round_speed(init.rank, state.round_id);
 	state.bullet_base_speed = initial_bullet_base_speed(init.rank);
-	state.gba_boss_level = initial_boss_level(init);
+	state.gba_boss_level = initial_boss_level(init, state.round_id);
 	state.cpu_hit_damage_additional = initial_cpu_hit_damage_additional(init);
 	if(init.game_mode == game_mode_story) {
 		state.gba_gauge_level.fill(
@@ -195,7 +256,7 @@ DeterministicState initialize_first_round(const GameInit &init)
 		boss.motion_angle = 0U;
 		boss.pattern_index = 0U;
 		boss.render_state = 0U;
-		if(character == 0U) {
+		if(character == 0U || character == 6U) {
 			boss.hp = 0x006EU;
 		} else if(character == 5U) {
 			boss.hp = 0x0064U;
@@ -238,6 +299,9 @@ DeterministicState initialize_first_round(const GameInit &init)
 			player.shot_active = restored.shot_active;
 			player.cpu_frame = restored.cpu_frame;
 		}
+	} else {
+		initialize_runtime_rings(state, formation_count);
+		initialize_background_rng(state);
 	}
 	return state;
 }

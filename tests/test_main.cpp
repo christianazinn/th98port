@@ -326,6 +326,133 @@ void test_th3r03_round_start()
 	}
 }
 
+void test_th3r03_second_stage_start()
+{
+	th03::GameInit init{};
+	init.global_frame = 6778U;
+	init.resident_rand = 5503;
+	init.game_mode = 1U;
+	init.rank = 3U;
+	init.story_stage = 1U;
+	init.story_lives = 2U;
+	init.remaining_credits = 3U;
+	init.skill = 145U;
+	init.is_cpu = {0U, 1U};
+	init.paletted_character = {1, 13};
+	init.last_score[0] = {3U, 0U, 5U, 0U, 9U, 0U, 1U, 0U};
+	init.autofire_mask = 1U;
+	const auto state = th03::detail::initialize_first_round(init, 18U);
+	check(
+		th03::detail::canonical_state(state).state_hash == 0x3F0A216BU,
+		"TH3R03 fresh second-MAIN startup matches Anniversary schema-3 hash"
+	);
+	check(
+		state.gba_boss_level == 9U,
+		"TH3R03 Stage 2 Lunatic Boss Attack level uses the Story stage byte"
+	);
+}
+
+void test_rikako_bomb_shift_reset()
+{
+	th03::detail::DeterministicState state{};
+	state.players[1].paletted_character = 13;
+	state.bomb_flag[1] = th03::detail::BombFlag::active;
+	state.bomb_frame[1] = 128U;
+	state.playfield_fg_shift_x[1] = -4;
+	th03::detail::gameplay_frame_suffix_after_interstitial(state);
+	check(
+		state.playfield_fg_shift_x[1] == 0,
+		"Rikako bomb restores the playfield shift after its shake interval"
+	);
+}
+
+void test_ellen_bomb_vector_release()
+{
+	th03::detail::DeterministicState state{};
+	state.players[1].paletted_character = 7;
+	state.bomb_flag[1] = th03::detail::BombFlag::preparing;
+	state.randring_cursor = 5U;
+	const th03::GameContent content{};
+
+	(void)th03::detail::gameplay_frame_prefix(state, content);
+	check(
+		state.bomb_flag[1] == th03::detail::BombFlag::active &&
+		state.bomb_frame[1] == 1U && state.randring_cursor == 5U &&
+		std::all_of(
+			state.ellen_bomb_vectors[1].begin(),
+			state.ellen_bomb_vectors[1].end(),
+			[](const auto &vector) { return vector.x == 19999; }
+		),
+		"Ellen bomb prepares eight inactive vectors without consuming RNG"
+	);
+	th03::detail::gameplay_frame_suffix_after_interstitial(state);
+	check(
+		state.ellen_bomb_vector_cursor == 0U,
+		"Ellen bomb's early render phase resets its shared vector cursor"
+	);
+
+	state.bomb_frame[1] = 63U;
+	(void)th03::detail::gameplay_frame_prefix(state, content);
+	th03::detail::gameplay_frame_suffix_after_interstitial(state);
+	check(
+		state.bomb_frame[1] == 64U &&
+		state.ellen_bomb_vectors[1][0].x == 9999 &&
+		state.ellen_bomb_vector_cursor == 1U &&
+		state.randring_cursor == 5U,
+		"Ellen bomb releases one vector on render frame 64 without RNG"
+	);
+
+	state.randring[5] = 0x40U;
+	state.randring[6] = 0x12U;
+	(void)th03::detail::gameplay_frame_prefix(state, content);
+	const auto expected_velocity = th03::detail::vector2(0x40U, 224);
+	check(
+		state.bomb_frame[1] == 65U && state.randring_cursor == 6U &&
+		state.ellen_bomb_vectors[1][0].x == (144 << 4) &&
+		state.ellen_bomb_vectors[1][0].y == (184 << 4) &&
+		state.ellen_bomb_vectors[1][0].velocity_x == expected_velocity.x &&
+		state.ellen_bomb_vectors[1][0].velocity_y == expected_velocity.y,
+		"Ellen bomb respawns a released vector with one shared-ring draw"
+	);
+}
+
+void test_rikako_boss_materialization_collision()
+{
+	th03::detail::DeterministicState state{};
+	state.players[1].paletted_character = 13;
+	state.gba_boss_launched_by = 1;
+	state.boss.state = 0U;
+	state.boss.pattern_frame = 5U;
+	state.boss.center_x = 144 << 4;
+	state.boss.center_y = 80 << 4;
+	state.boss.hp = 110U;
+	state.shotpairs[0].alive = true;
+	state.shotpairs[0].player_id = 0U;
+	state.shotpairs[0].topleft_x = 2520;
+	state.shotpairs[0].topleft_y = 1600;
+	state.shotpairs[0].velocity_y = -192;
+	const th03::GameContent content{};
+
+	(void)th03::detail::gameplay_frame_prefix(state, content);
+	check(
+		state.shotpairs[0].alive && state.boss.hp == 110U,
+		"Rikako's materializing Boss Attack is not yet shot-collidable"
+	);
+	check(
+		state.boss.pattern_frame == 6U && state.shotpairs[0].topleft_y == 1408,
+		"Rikako's materialization returns before the common boss tail"
+	);
+
+	state.boss.pattern_frame = 99U;
+	state.shotpairs[0].topleft_y = 1600;
+	(void)th03::detail::gameplay_frame_prefix(state, content);
+	check(
+		!state.shotpairs[0].alive && state.boss.hp == 108U &&
+		state.boss.state == 1U,
+		"Rikako's Boss Attack becomes shot-collidable on materialization frame 100"
+	);
+}
+
 void test_legacy_player_hittest_alias()
 {
 	th03::detail::DeterministicState state{};
@@ -342,6 +469,17 @@ void test_legacy_player_hittest_alias()
 	check(
 		collision_x == 0 && collision_y == 0x0C20,
 		"TH03 wrapped collision reports the first nonnegative map column"
+	);
+
+	state.players[1].center_x = th03::exact::Subpixel::from_raw(1204);
+	state.players[1].center_y = th03::exact::Subpixel::from_raw(5632);
+	collision_x = -1;
+	collision_y = -1;
+	check(
+		th03::detail::player_hittest_legacy(
+			state, 1U, 80U, collision_x, collision_y
+		),
+		"TH03 Stage 3 broad CPU probe preserves the wrapped DGROUP collision"
 	);
 }
 
@@ -440,6 +578,27 @@ void test_story_extends()
 	check(
 		state.story_lives == 3U && state.extends_gained == 255U,
 		"Disabled Story extends remain disabled above twenty million points"
+	);
+}
+
+void test_hit_damage_progression()
+{
+	th03::detail::DeterministicState state{};
+	state.round_or_result_frame = 1023U;
+	state.players[0].hit_damage_next = 4U;
+	state.players[1].hit_damage_next = 5U;
+	th03::detail::gameplay_frame_suffix_after_interstitial(state);
+	check(
+		state.players[0].hit_damage_next == 5U &&
+		state.players[1].hit_damage_next == 6U,
+		"Pending player damage rises toward the original six-half-heart cap"
+	);
+	state.round_or_result_frame = 2047U;
+	th03::detail::gameplay_frame_suffix_after_interstitial(state);
+	check(
+		state.players[0].hit_damage_next == 6U &&
+		state.players[1].hit_damage_next == 6U,
+		"Pending player damage saturates at six half-hearts"
 	);
 }
 
@@ -712,10 +871,15 @@ int main()
 {
 	test_numeric();
 	test_th3r03_round_start();
+	test_th3r03_second_stage_start();
+	test_rikako_bomb_shift_reset();
+	test_ellen_bomb_vector_release();
+	test_rikako_boss_materialization_collision();
 	test_legacy_player_hittest_alias();
 	test_hyper_callback_transition_delay();
 	test_story_result_route();
 	test_story_extends();
+	test_hit_damage_progression();
 	test_random();
 	test_trig();
 	test_t3case();
