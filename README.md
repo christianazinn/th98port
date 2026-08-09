@@ -103,3 +103,5 @@ inside the gameplay frame translation unit.
 `docs/POST_CORE_ROADMAP.md` records the proposed V13 branch workflow and the
 asset, presentation, audio, platform, and application layers that follow the
 deterministic gameplay core.
+`docs/research/README.md` indexes the presentation, asset, and audio research
+contracts prepared for those later layers.
