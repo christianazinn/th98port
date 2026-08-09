@@ -449,10 +449,9 @@ DeterministicState initialize_first_round(
 	} else {
 		state.gba_gauge_level.fill(1U);
 	}
-	state.score = init.last_score;
-	if(init.game_mode != game_mode_story) {
-		state.score = {};
-	} else {
+	state.score = {};
+	if(init.game_mode == game_mode_story) {
+		state.score[0] = init.last_score[0];
 		state.extends_gained = state.score[0][6];
 		if(
 			state.extends_gained >= extends_max ||

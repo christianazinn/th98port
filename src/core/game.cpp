@@ -87,6 +87,21 @@ std::expected<Game, Error> Game::create(
 			"game mode is not a source TH03 gameplay mode",
 		});
 	}
+	if(init.rank > 3U) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"rank is outside the source range 0..3",
+		});
+	}
+	if(
+		init.demo_number != 0U &&
+		init.game_mode != detail::game_mode_demo
+	) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"nonzero demo number requires GM_DEMO",
+		});
+	}
 	if(
 		init.game_mode == detail::game_mode_story &&
 		init.remaining_credits > 3U

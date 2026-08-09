@@ -6,6 +6,8 @@
 | `formats/t3case.cpp` | `state/port/T3CASE1_FORMAT.md`, `tools/port/t3case.psm1`, and oracle `th03/t3case.hpp` |
 | `formats/t3split.cpp` | Replay `th03/replay_format.hpp`, `tools/replay/export_splits.ps1`, and `tools/port/compare_th03_oracle_splits.ps1` |
 | `formats/v11.cpp` | Replay `th03/replay_format.hpp`, `tools/replay/rpy_snapshot.psm1`, and `tools/port/normalize_replay.ps1` |
+| `formats/v12.cpp` | Replay `th03/replay_format.hpp` and `tools/replay/FORMAT.md`; V12 compact checkpoints are reconstructed as format-neutral recipes after ENEDAT content is loaded |
+| `replay/run.cpp` | Replay Patch process-control, warning, pause, retry-preroll, and MAIN/MAINL semantics adapted to the version-neutral replay model |
 | `replay/session.hpp` | audited T3CASE/V11 input and process-boundary semantics; deliberately independent of either document layout |
 | `core/game.cpp` and `core/frame.cpp` | Anniversary `th03/main/rndloop.cpp:sub_9778()` update order and the complete stock-used gameplay callback inventory documented by the `PARITY_*` ledgers |
 | `core/state_hash.cpp` and private deterministic state | Anniversary `th03/main/t3case.cpp:t3case_state_hash()` schema 3 plus the semantic structures named in `TH3R03_ROUND_DOSSIER.md` |
@@ -59,4 +61,7 @@ pipeline, RNG consumers, numeric semantics, repeat-round reset, and terminal
 MAIN/MAINL session mutations. Schema 3 does not identify every hidden
 entity/projectile subsystem, so future first divergences must still be
 localized with semantic diagnostics rather than inferred from the aggregate
-hash. See `PHASE3_CORPUS_STATUS.md` for the live evidence ledger.
+hash. The final module-by-module C++/ASM/BSS/data/ENEDAT disposition is in
+`PARITY_SOURCE_COVERAGE.md`. See `PHASE3_CORPUS_STATUS.md` for the frozen
+Anniversary evidence ledger and `REPLAY_VERIFICATION.md` for the direct
+historical replay gate: 19/19 files and 173/173 summaries match.

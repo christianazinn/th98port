@@ -73,8 +73,10 @@ complete Classic gameplay and process phases. Application work remains later.
 
 Phase 2 is complete: the TH3R03 first-round trace matches all 46 canonical
 Anniversary rows through its natural route-2 terminal. Phase 3 preserves that
-gate and has completed the source-backed Classic gameplay backend; broader
-mode/corpus validation now exercises its integration surface.
+gate and has completed the source-backed Classic gameplay backend. The locked
+integration corpus now covers 19 V11/V12 files and 173 embedded round
+summaries across Story, Practice, and ordinary VS; all match. The whole-source
+disposition is recorded in `PARITY_SOURCE_COVERAGE.md`.
 
 ## Completeness contract
 
@@ -95,3 +97,8 @@ Every donor callback reachable during gameplay must be inventoried as one of:
 
 Replay oracles then prove integration, ordering, and deterministic equivalence.
 They must never be used to choose which gameplay paths deserve implementation.
+
+The remaining live-human pause/Q loop is deliberately an application protocol
+boundary. Recorded pauses are fully coordinated by `th03_replay`; the future
+interactive client must expose the same staged frame boundary without placing
+UI or device polling inside `th03_core`.

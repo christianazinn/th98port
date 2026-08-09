@@ -391,6 +391,48 @@ void test_game_init_source_domain()
 		th03::Game::create(init).has_value(),
 		"Story accepts the last gameplay stage and source initial credit count"
 	);
+	for(std::uint8_t rank = 0U; rank <= 3U; ++rank) {
+		init.rank = rank;
+		check(
+			th03::Game::create(init).has_value(),
+			"Game accepts every source difficulty rank"
+		);
+	}
+	for(const auto rank : {std::uint8_t{4U}, std::uint8_t{255U}}) {
+		init.rank = rank;
+		const auto game = th03::Game::create(init);
+		check(
+			!game && game.error().code == th03::ErrorCode::invalid_value,
+			"Game rejects a rank outside the source difficulty domain"
+		);
+	}
+	init.rank = 0U;
+
+	init.demo_number = 1U;
+	for(const auto mode : {
+		th03::game_mode::story,
+		th03::game_mode::vs_1p_cpu,
+		th03::game_mode::vs_1p_2p,
+		th03::game_mode::vs_cpu_cpu,
+	}) {
+		init.game_mode = mode;
+		const auto game = th03::Game::create(init);
+		check(
+			!game && game.error().code == th03::ErrorCode::invalid_value,
+			"nonzero demo number is rejected outside GM_DEMO"
+		);
+	}
+	init.game_mode = th03::game_mode::demo;
+	check(
+		th03::Game::create(init).has_value(),
+		"GM_DEMO accepts a nonzero demo number"
+	);
+	init.demo_number = 0U;
+	check(
+		th03::Game::create(init).has_value(),
+		"GM_DEMO with zero demo number preserves the source no-demo callback path"
+	);
+	init.game_mode = th03::game_mode::story;
 
 	init.remaining_credits = 0U;
 	check(
@@ -589,6 +631,21 @@ void test_anniversary_combo_display_limit()
 		th03::detail::state_hash(state) ==
 			th03::detail::state_hash(replay_three_digit),
 		"Anniversary canonical hashing normalizes the Replay Patch's three-digit combo extension"
+	);
+}
+
+void test_story_score_initialization()
+{
+	th03::GameInit init{};
+	init.game_mode = th03::game_mode::story;
+	init.last_score[0] = {1U, 2U, 3U, 4U, 5U, 6U, 1U, 0U};
+	init.last_score[1] = {9U, 8U, 7U, 6U, 5U, 4U, 3U, 2U};
+	const auto state = th03::detail::initialize_first_round(init, 0U);
+	check(
+		state.score[0] == init.last_score[0] &&
+		state.score[1] == std::array<std::uint8_t, 8>{} &&
+		state.extends_gained == 1U,
+		"Story loads only P1 resident score and derives extends from that score"
 	);
 }
 
@@ -3102,6 +3159,7 @@ int main()
 {
 	test_numeric();
 	test_game_init_source_domain();
+	test_story_score_initialization();
 	test_round_start_snapshot_restoration();
 	test_score_most_significant_digit_is_not_bcd_normalized();
 	test_anniversary_combo_display_limit();

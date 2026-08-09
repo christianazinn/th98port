@@ -1,6 +1,6 @@
 # Phase 3 Classic corpus status
 
-Snapshot: **2026-08-08**. All results below invoke `th03-headless` with the
+Snapshot: **2026-08-09**. All results below invoke `th03-headless` with the
 external canonical T3CASE, calibrated `ENEDAT.DAT`, and the frozen Anniversary
 `T3SPLIT.BIN` passed explicitly as `--oracle`.
 
@@ -29,9 +29,12 @@ Rikako jump table maps states 2-5 to spreads, 7-12 to Extra Attacks/rings, and
 6, 7, and 13 into the neighboring families. A focused dispatch test now locks
 the exact state-6/7/13 behavior and RNG schedule.
 
-This table records validation coverage, not implementation scope. Phase 3 still
-requires every stock-reachable gameplay callback and lifecycle path even if no
-current replay happens to exercise it.
+This table records validation coverage, not implementation scope. The final
+whole-source audit independently covers every stock-reachable gameplay
+callback, lifecycle path, renderer-fed deterministic side effect, and stock
+ENEDAT operator; see `PARITY_SOURCE_COVERAGE.md`. Future corpus additions
+remain valuable integration evidence and must not be used to redefine that
+implementation scope.
 
 ## Fresh Demo Gate A
 
@@ -50,3 +53,11 @@ The active `0x0F` mask therefore reports a collision at `(0, 0x0CA0)` and picks
 the rightward avoidance route. Native now reconstructs the linked sine/cosine
 table bytes from its integer trig functions; focused tests lock the narrower
 misses and the 80-tile hit without embedding a memory snapshot.
+
+## Historical replay integration gate
+
+The direct `th03rv` gate additionally verifies 19 locked V11/V12 replay files
+and all 173 embedded round summaries. It covers the six V11 Story runs above,
+thirteen files from the V12 directory, Replay Patch Practice, and ordinary VS.
+The exact file identities and per-file results are recorded in
+`REPLAY_CORPUS_LOCK.tsv` and `REPLAY_VERIFICATION.md`.

@@ -1,333 +1,285 @@
 # Character parity audit: Reimu, Mima, Marisa, and Ellen
 
-Static-audit status: **2026-08-08, corrective renderer pass complete against
-the current dirty native tree**
+Static-audit status: **2026-08-09, complete against native HEAD `69da429`**
 
-This is a source-backed audit of character indices 0 through 3 against the
-frozen Anniversary ReC98 source. The present revision concentrates on the
-complete callback chains around Charge Shot, Extra Attack, Gauge Attack, Bomb,
-and Boss rendering. In particular, it does not assume that a callback is safe
-to omit merely because it does not draw from the shared random ring. Every
-persistent write, random draw, collision/score/control effect, and value read by
-a later gameplay callback was traced.
+This ledger covers the complete gameplay-bearing character implementation for
+character indices 0 through 3, including ordinary shots, Charge Shots, Extra
+Attacks, Gauge Attacks, Bombs, Boss Attacks, and Hyper behavior. It includes
+update callbacks, render-fed mutations, cross-callback shared bullet-template
+state, first-round initialization, repeat-round reset/reuse, collision and
+damage, source-width arithmetic, and paths not selected by the current replay
+corpus.
 
-This document reports static evidence only. No emulator run is claimed here.
-“Materialized” means that the headless core preserves the deterministic effect
-or state transition. “Drawing-only” means that the omitted work changes only
-VRAM, palettes, sound, sprite/GRCG/EGC configuration, or a scratch cursor that
-every later user reinitializes before reading.
+This is a static audit. No emulator result is claimed here.
 
-Source authority: the detached Anniversary reference pinned in `SOURCES.lock`.
-Native authority: the current `th03-port` working tree.
+## Authorities and result
 
-## Result
+- Source: clean frozen Anniversary worktree
+  `.scratch/port-refs/oracle_anniversary_th3r02` at
+  `3e2381d4275be7287f5525de5c95389d492b0a3c`.
+- Native: `th03-port` at
+  `69da429ccbe696d15a40f89349fc26f2b0a44d77`.
+- Dispatch authority: Anniversary `th03/hitcb.cpp:199-376`.
+- Frame-order authority: Anniversary `th03/main/rndloop.cpp:83-174` and native
+  `src/core/frame.cpp:9167-9198,9276-9355`.
+- Round-lifecycle authority: Anniversary `th03/main/resscore.cpp:55-80` and
+  native `src/core/round_start.cpp:423-564,567-718`.
 
-All stock-used deterministic side effects found in the audited character
-renderer chains are now materialized. The corrective pass found one persistent
-state machine that the native core did not model: Mima's active Boss renderer
-updates `byte_1F353` and `byte_1F354`. This is now represented by
-`BossState::render_state` and `BossState::render_frame` in
-`boss_render_phase_update()`.
+**Result:** no remaining gameplay, collision, score, control, shared-RNG, or
+gameplay-reachable shared-template discrepancy was found for characters 0-3.
+All stock-valid states and every stock Boss pattern state 2 through 17 were
+audited, not merely the states exercised by TH3R00-TH3R03.
 
-No remaining RNG, collision, score, lifecycle, player-control, or later-gameplay
-input discrepancy was found in the scoped render callbacks. This is not a
-whole-game parity sign-off; global systems and characters 4 through 8 have
-separate ledgers.
+The previous revision incorrectly said that native code advanced Ellen's Boss
+animation byte. Anniversary increments shared `byte_1F354` once on every Ellen
+Boss update (`th03/main_03s.cpp:346`) and by another 3 in `ellen_11547()`
+(`main_03s.cpp:260`). Native intentionally does not carry this counter: its only
+Ellen use is sprite animation in `ellen_11885()`
+(`th03/main_03t.cpp:89-100`). No collision, RNG, allocation, score, control, or
+later gameplay callback reads it. This is a presentation-only omission, not a
+gameplay mismatch.
 
-The older missing-system inventory in the first revision of this file is no
-longer current. Mima and Marisa Charge/Extra/Boss implementations, Marisa's
-Gauge implementation, and the Mima/Marisa/Ellen Hyper routes are present in the
-current tree. Their mechanical parity remains covered by source review and the
-other parity ledgers; this corrective pass specifically closes renderer-side
-effects.
+## Complete coverage matrix
 
-## Anniversary callback order
+“Complete” means that all gameplay effects and replay-visible RNG consumption
+are materialized. “Presentation omitted” means that source-owned VRAM, sprite,
+palette, sound, or visual-only records are deliberately outside the headless
+state; any RNG or later gameplay input produced by such code is still retained.
 
-`th03/main/rndloop.cpp:78-163` establishes the relevant order:
+| System | Reimu | Mima | Marisa | Ellen | Native counterpart | Disposition |
+|---|---|---|---|---|---|---|
+| Ordinary shots | `main/player/shot.cpp:272-345` | Same generic path | Same generic path | Same generic path | `frame.cpp:1603-1665` | Complete. Spawn scan order, clipping, signed Q12.4 positions, velocity, and Hyper shot modes match. `shots_render()`'s sprite-animation byte is presentation omitted. |
+| Hyper | `main/player/bomb.cpp:48-67` | `bomb.cpp:48-54,69-81` | `bomb.cpp:48-54,83-95`; `ch_shot.cpp:85-106` | `bomb.cpp:48-54,97-107`; `main_08.cpp:93-131` | `frame.cpp:1596-1653,2317-2333,3613-3675,3750-3827` | Complete. One-frame standby transition, shot modes, movement deltas, character effects, per-frame gauge drain, exit frame, and shot blocking match. |
+| Charge add/update/hittest | `ch_shot.cpp:439-732` | `ch_shot.cpp:1051-1254` | `ch_shot.cpp:58-175` | `main_08.cpp:43-337` | `frame.cpp:1736-1836,1968-2023,2095-2193,2397-2520,2577-2594` | Complete. See character details below. |
+| Charge render | `ch_shot.cpp:733-788` | `ch_shot.cpp:1255-1298` | `ch_shot.cpp:176-254` | `main_08.cpp:338-377` | None required | Presentation omitted. All four renderers only read Charge records and mutate drawing state or a scratch cursor that every later user reinitializes. |
+| Extra add/update/render | `main_06.cpp:114-468` | `main_06.cpp:470-774` | `main/player/exatt.cpp:1051-1273` | `main/player/exatt.cpp:369-813` | `frame.cpp:879-1175,4720-5444` | Complete. Allocator scan limits, pre-allocation RNG, transfer, direct Boss allocation, collision-map writes, state timing, byte/word wrap, and arena-full behavior match. Reimu's render-owned age increment is retained at `frame.cpp:5446-5463`; other renderers are presentation-only. |
+| Gauge | `ch_shot.cpp:790-868` | `ch_shot.cpp:1300-1394` | `ch_shot.cpp:260-340` | `main_08.cpp:379-483` | `frame.cpp:2905-3343,3553-3579` | Complete. Both pellet and bullet routes, init-to-active flags, params, cadence, groups, termination, RNG, and final shared-template angle match. |
+| Bomb | `ch_shot.cpp:889-1049` | `main/bullet/mbomb.cpp:21-107`; `main/bullet/bullet.cpp:795-839` | common updater `ch_shot.cpp:870-887`; renderer `ch_shot.cpp:345-436` | `main/player/chybomb.cpp:143-393` | `frame.cpp:2704-2892` | Complete. Update/render split and P1-before-P2 order match. Visual payloads are omitted, while all visual RNG and renderer-fed gameplay state are retained. |
+| Boss | update `main_03r.cpp:212-503`; render `main_03s.cpp:51-159` | update `main_03p.cpp:159-421`; render `main_03q.cpp:57-192` | update/common `main_03.cpp:49-252,254-544`; render `main_03p.cpp:52-157` | update `main_03s.cpp:161-394`; render `main_03t.cpp:52-178` | common `frame.cpp:5606-5776`; Reimu `5778-6030`; Mima `6031-6322`; Marisa `6324-6559`; Ellen `6561-6756`; render phase `8208-8263` | Complete for gameplay. Initial records, launch/reversal, previous-pattern persistence, all states, direct Extras, collision/damage/defeat, score, and renderer-fed Mima state match. Ellen animation counter is presentation omitted as described above. |
 
-1. For P1, then P2: Extra update, Boss update, Bomb update.
-2. Shot update, then P1 and P2 Charge updates.
-3. Formation, Bullet, Enemy, and Fireball updates.
-4. For P1, then P2: Pellet Gauge callback, then Bullet Gauge callback.
-5. Input and player updates.
-6. For P1, then P2: Bomb render.
-7. For P1, then P2: Boss render.
-8. Shot and Enemy render, then `fireballs_hittest_and_render()`.
-9. For P1, then P2: Extra render, then Charge render.
-
-The native core preserves every gameplay-bearing portion of this sequence. Its
-`gameplay_frame_suffix_after_interstitial()` calls
-`bombs_render_phase_update()`, `boss_render_phase_update()`,
-`fireballs_hittest()`, and `extra_attacks_render_phase_update()` in that order
-(`src/core/frame.cpp:9255-9258`). Charge rendering is absent because all four
-audited Charge renderers are drawing/scratch-only. A single native Boss-render
-call is equivalent to the two source callback calls because every source Boss
-renderer immediately returns unless `pid_current == gba_boss_launched_by`.
-
-Callback installation for both players is explicit in
-`th03/hitcb.cpp:199-369`; the native character dispatch uses
-`(paletted_character - 1) / 2` at the corresponding phase boundaries.
-
-## Charge Shot render callbacks
-
-| Character | Anniversary callback | Persistent non-drawing effects | RNG / collision / control | Native disposition |
-|---|---|---|---|---|
-| Reimu | `chargeshot_render_reimu()`, `th03/main/player/ch_shot.cpp:733-788` | Advances the renderer scratch cursor `word_205CA`; changes sprite clip/size and mono-color state. It does not write any Charge node. | None. | Drawing and scratch cursor omitted. No deterministic materialization required. |
-| Mima | `chargeshot_render_mima()`, `ch_shot.cpp:1255-1298` | Advances scratch cursor `word_20E22`; changes sprite clip/size. It only reads node activity/position and the loop index used for sprite selection. | None. | Drawing and scratch cursor omitted. No deterministic materialization required. |
-| Marisa | `chargeshot_render_marisa()`, `ch_shot.cpp:176-254` | Assigns scratch pointer `word_1FE4E`; changes GRCG/EGC state. It only reads active/position arrays. | None. | Drawing and scratch pointer omitted. No deterministic materialization required. |
-| Ellen | `chargeshot_render_ellen()`, `th03/main_08.cpp:338-377` | Advances scratch cursor `word_1F868`; changes sprite clip/size. It only reads node activity, phase, and position. | None. | Drawing and scratch cursor omitted. No deterministic materialization required. |
-
-The scratch globals are not latent gameplay state. Each update, hit-test, and
-render function that uses one assigns it to the appropriate array base before
-dereferencing it. Therefore its post-render value cannot affect the following
-frame.
-
-## Extra Attack render callbacks
-
-| Character | Anniversary callback | Persistent non-drawing effects | RNG / collision / control | Native disposition |
-|---|---|---|---|---|
-| Reimu | `exatt_render_reimu()`, `th03/main_06.cpp:442-468` | For each active one of the first 8 slots, increments record byte `+1` after drawing. This is the Extra Attack frame/age used by the next update. | No RNG or collision in the renderer, but the age write is later gameplay input. | Materialized by `extra_attacks_render_phase_update()` (`src/core/frame.cpp:5414-5432`), which increments `ExtraAttackState::frame` for every active regular Reimu slot. |
-| Mima | `exatt_render_mima()`, `main_06.cpp:749-774`, via `mima_1A684()` at 509-574 | Scratch-record cursor and sprite globals only; attack records are read-only. | None. | Drawing/scratch-only; omitted. |
-| Marisa | `exatt_render_marisa()`, `th03/main/player/exatt.cpp:1249-1273`, via `marisa_19B4F()` at 1119-1170 | Scratch-record cursor and sprite/GRCG state only; attack records are read-only. | None. | Drawing/scratch-only; omitted. |
-| Ellen | `exatt_render_ellen()`, `exatt.cpp:787-813`, via `ellen_19510()` at 474-562 | Scratch-record/reference cursors and sprite state only. The stored trail/reference arrays are read, not mutated. | None. | Drawing/scratch-only; omitted. |
-
-No Extra renderer calls `SUB_CDBD`, `SUB_CE0C`, `SUB_CE5B`, a hit-test, or a
-random function. Collision-map insertion and Shot/Charge collision occur in the
-update callbacks and are already before this phase in both implementations.
-
-## Gauge callbacks and their visual helpers
-
-Gauge callbacks are update callbacks rather than late render callbacks, but
-they interleave bullet creation with visual-effect helper calls and therefore
-must be audited as a whole. Their gameplay state, bullet allocation, RNG, and
-termination are implemented in `gauge_pattern_reimu()`
-(`src/core/frame.cpp:2890`), `gauge_pattern_marisa()` (2975),
-`gauge_pattern_mima()` (3177), and `gauge_pattern_ellen()` (3244), dispatched by
-`gauge_patterns_update()` (3536).
-
-| Character | Anniversary callback | Non-drawing effects and random order | Status |
-|---|---|---|---|
-| Reimu | `gauge_pattern_reimu()`, `th03/main/player/ch_shot.cpp:790-866` | Initializes frame/count/cadence fields, advances the Gauge flag, emits the aimed spreads and paired rings, increments the frame byte, and terminates the Gauge. `SUB_CE0C()` writes a visual ring only; `sub_A3A8()` is palette cleanup. No RNG. | Materialized; visual ring/palette storage omitted. |
-| Mima | `gauge_pattern_mima()`, `ch_shot.cpp:1300-1392` | Initialization consumes exactly one shared-ring draw to select signed angle delta `-7` or `+7`, then stores angle/frame/count/speed. Active frames emit the narrow spread and alternating ring, advance the byte angle/frame, and terminate. `SUB_CE0C()` and palette cleanup add no RNG. | Materialized, including the initialization draw and byte arithmetic. |
-| Marisa | `gauge_pattern_marisa()`, `ch_shot.cpp:260-338` | Initialization consumes one shared-ring draw for the negative starting Y and stores Y increment/frame. Alternating edge groups create five bullets, advance Y, and eventually terminate. `SUB_CE0C()` and palette cleanup add no RNG. | Materialized. |
-| Ellen | `gauge_pattern_ellen()`, `th03/main_08.cpp:379-483` | Initializes frame/X/Y/count/speed. The lower phase consumes one angle draw before the left ring and an explicit second draw after the right ring. The second result is not fired, but Anniversary stores it in the shared bullet-template angle after the final add. X/Y/frame/flag state advances and terminates normally. | Materialized, including both the second draw and its persistent template write. |
-
-The whole-source shared-template audit also found that Ellen Boss helper
-`th03/main_03s.cpp:ellen_11439()` increments its template angle after the last
-of its eight ring adds. `boss_pattern_ellen_spreads()` now preserves that final
-wrapped angle (`0x60` for the stock `0x20` start), allowing later same-prefix
-callbacks to inherit the source value. Reimu and Mima were explicitly checked:
-their stock Boss and Gauge bullet producers either assign angle before firing
-or correctly leave the last fired angle, and their Extra callbacks add no
-bullets. No further fix was required.
-
-The helper definitions close the presentation-call chain:
-
-- `SUB_CDBD()` (`th03/main/player/d3f9.cpp:239-256`) advances the 12-slot visual
-  allocator and writes effect position/type/age. It consumes no RNG.
-- `SUB_CE0C()` (`d3f9.cpp:258-275`) does the same for a different effect type
-  and consumes no RNG.
-- `SUB_CE5B()` (`d3f9.cpp:277-295`) additionally consumes one shared-ring draw
-  for visual angle. None of the four audited Gauge callbacks calls it.
-- `SUB_CEB2()` (`d3f9.cpp:297-319`) later updates those visual records without
-  feeding collision, score, player control, or shared RNG.
-- `sub_A3A8()` (`th03/main/hitc_pal.cpp:48-66`) only resets palette state.
-
-Consequently the visual allocator records themselves need not be in
-`DeterministicState`; the draws of RNG-bearing visual helpers must be, wherever
-such helpers are called.
-
-## Bomb update and render chains
-
-Bomb callback mapping is in `th03/hitcb.cpp:168-175, 216-369`. The port splits
-their gameplay-bearing behavior between `bomb_character_update()`
-(`src/core/frame.cpp:2717`) and `bombs_render_phase_update()` (2774).
+## Character-specific mechanics
 
 ### Reimu
 
-Sources: updater `reimu_1508C()` and renderer `reimu_bomb()` in
-`th03/main/player/ch_shot.cpp:889-1049`.
-
-- Preparing initializes 32 falling visual records; update moves/recycles them
-  and advances/terminates the bomb. Those record coordinates never feed
-  gameplay.
-- Render frames 0-31 create one record per frame. Velocity selection consumes
-  one shared-ring draw, then X selection consumes a second. The native core
-  preserves exactly these two draws even though it omits the record.
-- Render frames 64-111 write playfield foreground shift `+4/-4`; frame 112 and
-  later reset it to 0. The native core materializes those writes.
-- Remaining palette, EGC/GRCG, sound, image-copy, and sprite work is drawing or
-  audio only.
-
-Status: **complete for deterministic headless behavior**.
-
-### Mima
-
-Sources: updater `mima_17043()` in `th03/main/bullet/mbomb.cpp:21-107` and
-renderer `mima_bomb()` in `th03/main/bullet/bullet.cpp:920-996`.
-
-- During frames 8, 16, ..., 64, the updater consumes one shared-ring draw to
-  choose each visual column. Column positions are not later gameplay inputs.
-  The port preserves the draw cadence.
-- Renderer frames 81-143 call nonrandom `SUB_CDBD()` every eighth frame and
-  write foreground shift `+4/-4`; frame 144 and later reset the shift. These
-  shift writes are materialized.
-- Palette, column drawing, sound, and image-copy state is presentation-only.
-
-Status: **complete for deterministic headless behavior**.
-
-### Marisa
-
-Sources: common updater `sub_1501E()` and renderer `marisa_bomb()` in
-`th03/main/player/ch_shot.cpp:868-887, 345-436`.
-
-- The updater advances and terminates the bomb with no RNG.
-- Renderer frames 64-127 write foreground shift `+4/-4`. Every eighth frame in
-  this interval consumes X first and Y second from the shared ring before
-  calling nonrandom `SUB_CDBD()`. The native core preserves both draws in that
-  order and resets the shift at frame 128.
-- The retained point is only used to draw the flash until the next allocation;
-  no collision or gameplay reads it.
-
-Status: **complete for deterministic headless behavior**.
-
-### Ellen
-
-Sources: updater `ellen_185AB()` and renderer `ellen_bomb()` in
-`th03/main/player/chybomb.cpp:143-214, 269-393`.
-
-- Preparing writes all eight vector X values to `19999` (inactive). Update
-  moves active vectors and respawns a vector whose X is `9999` (free) or which
-  clips. Each respawn consumes one angle draw and writes the resulting Q12.4
-  velocity.
-- Every render before frame 64 resets the shared cursor `word_1FB3C` to 0.
-  Every fourth frame from 64 through 127 marks the next vector X as `9999` and
-  increments that cursor. The following frame's updater sees this sentinel and
-  consumes the respawn draw. This is a direct renderer-to-gameplay/RNG dataflow,
-  not presentation-only behavior.
-- The cursor is global rather than per-player. Because source renders P1 before
-  P2, simultaneous Ellen bombs have the same inter-player coupling in the
-  native loop. `DeterministicState::ellen_bomb_vector_cursor` intentionally is
-  shared, while the vector arrays are per-player.
-- Frames 64-127 write foreground shift, but the renderer temporarily clears it
-  only around vector drawing and restores it afterward. The headless core keeps
-  the persistent post-render shift and does not materialize the temporary draw
-  transform. Frame 128 and later reset the persistent shift.
-
-The required vector/cursor state is present at
-`src/core/game_internal.hpp:399-402`, and both release and respawn behavior are
-materialized. Status: **complete**.
-
-## Boss render callbacks
-
-### Common defeat renderer
-
-All four callbacks reach `sub_F58C()` when Boss state is `0xFF`.
-`sub_F1FA()`/`sub_F58C()` in `th03/main_03.cpp:49-107, 240-252`:
-
-- play sound 16 at defeat length 1;
-- compute the drawing radius as 16-bit `length * 8`;
-- once its signed value is at least 200, award 2560 points to the opposing
-  player, set Boss state to 0, and clear `gba_boss_launched_by`.
-
-Sound and explosion drawing are omitted. Score/lifecycle/control writes are
-materialized by `boss_render_phase_update()` (`src/core/frame.cpp:8168`). This
-phase occurs before fireball hit testing, matching Anniversary.
-
-### Reimu
-
-Source: `gba_boss_render_reimu()` and helpers in
-`th03/main_03s.cpp:51-159`.
-
-Launch and active paths only change sprite clipping, sprite configuration, and
-VRAM. They read Boss position, hit, render state, frame, and orbit arrays but do
-not write them and consume no RNG. Defeat uses the common helper above.
-
-Status: **drawing-only except for the materialized common defeat path**.
+- Charge clear scans all 24 source groups; ordinary Charge initializes groups
+  0-3 while Hyper searches groups 0-11. The shared primary-fire throttle is
+  set by ordinary Charge and cleared by Hyper even when no slot is free.
+  Group state/frame, six-node Q12.4 motion, deceleration, release threshold,
+  clipping, first-six hittest limit, odd-frame throttle, damage, and two
+  hit-circle RNG draws per hit match.
+- Extra Attack uses the first 8 slots. The free-slot scan precedes the two
+  target-coordinate draws, so a full arena consumes no RNG; after a slot is
+  found, the X and Y draws precede generic transfer initialization. Transfer
+  speed is `90 + round/4`; the direct Boss allocator,
+  gravity/bounce states 3-21, collision-map rectangles, hittest bounds, and the
+  post-render frame increment all match.
+- Gauge params are `level + 0x20` and `0x20 - level`; aimed spreads, paired
+  rings at frame 16 modulo 32, and the frame-64 end match.
+- Bomb render frames 0-31 consume velocity RNG then X RNG. Foreground shift at
+  frames 64-111 and reset from 112 are materialized.
+- Boss params are `[5-level/5, level+0x18, level*2+0x28, level/8+4,
+  level+0x10, level+0x10]`. States 2-6 use orbiting pellet clouds, 8/9/10/13
+  use moving spreads, 15-17 use the six-orbit direct Extra pattern, and
+  7/11/12/14 use paired four-spreads. Initial-entry writes, RNG order, orbit
+  arrays, final shared-template angles, and exact end comparisons match.
 
 ### Mima
 
-Source: `mima_10053()` and `gba_boss_render_mima()` in
-`th03/main_03q.cpp:57-192`.
-
-The launch path is drawing-only. The active path returns immediately after its
-hit overlay when `byte_1F34E != 0`. Otherwise it has these exact persistent
-writes:
-
-- Render state 2 checks `byte_1F354 >= 0x20` before the increment; if true it
-  writes render state 3, then increments the frame byte.
-- Render state 5 writes render frame 0 and jumps into the state-2 body. It does
-  **not** change state 5 to state 2. Therefore each later state-5 render resets
-  the byte again and leaves it at 1 after incrementing.
-- States 3 and 4 do not mutate persistent state.
-
-There is no RNG, collision, score, or player-control action in the active
-helper. The update functions assign these animation fields but do not read the
-renderer-produced values for Mima's attack mechanics. Even so, they are genuine
-persistent source state and are now materialized exactly in
-`boss_render_phase_update()`. `BossState::render_state` and `render_frame` are
-the required architecture fields (`src/core/game_internal.hpp:348, 361`).
-
-Focused coverage in `tests/test_main.cpp:552` verifies the pre-increment
-threshold, state-2 transition, state-5 reset-without-state-change, and hit-path
-early return.
-
-Status: **complete after the 2026-08-08 corrective patch**.
+- Charge uses 15 nodes and the source angle table
+  `{192,182,202,192,176,208}`. Node 0 starts immediately, later nodes activate
+  every four frames, and the last node clears the global active flag even if an
+  earlier node remains. Point-Y hittest, byte damage accumulation, and two RNG
+  draws per hit match.
+- Extra Attack uses 6 slots. The free-slot scan precedes its two draws, and its
+  target Y deliberately takes modulo playfield **width**. Initial frame 3,
+  timer, bounce count, speed ramp, state changes,
+  transfer-completion angle draw, hittest, and collision-map behavior match.
+- Gauge consumes one draw to select signed angle delta `-7` or `+7`, fires on
+  the exact eight-frame cadence, alternates the ring, wraps the byte angle, and
+  ends after frame 64.
+- Bomb update consumes one draw on frames 8,16,...,64 for the omitted column
+  positions. Render shift at frames 81-143 and reset from 144 are retained.
+- Boss params are `[level+0x20, level/4+2, level+0x20,
+  0x40-level*2, level+0x28, level*4+0x40, level+0x36]`. States 2-5 are
+  spreads, 6-10 random bullet/pellet bursts, 11-13 aimed trail spreads, and
+  14-17 orbiting pellet clouds. The source switch dispatches the state captured
+  before state-0 transition; native does the same. Renderer states 2 and 5,
+  hit-path early return, pre-increment threshold, and frame reset are retained
+  because they are persistent source state even though Mima mechanics do not
+  read them back.
 
 ### Marisa
 
-Source: `marisa_F9A6()`, `marisa_FA71()`, and
-`gba_boss_render_marisa()` in `th03/main_03p.cpp:52-157`.
-
-Launch and active paths only read Boss state/position/hit and
-`round_or_result_frame` to choose sprites; no persistent game record, RNG,
-collision, score, or control state is changed. Defeat uses the common helper.
-
-Status: **drawing-only except for the materialized common defeat path**.
+- Charge initializes all 12 trail points, blocks ordinary firing, advances the
+  byte age, releases after `0x24`, and hittest samples nodes 0/4/8 with the
+  source's lower-Y-only bound. Hyper only initializes an inactive beam, sets
+  age `0x10`, and still blocks firing. Hit visuals consume two RNG draws.
+- Extra Attack scans 14 slots before consuming the random target X, so a full
+  arena consumes no RNG. Transfer targets Y=368 with speed `0x6E`; the direct
+  Boss allocator selects the opposing buffer from target PID
+  and partially overwrites only state/frame/position/PID. Beam state timing,
+  collmap, collision, and arena-full behavior match.
+- Gauge consumes one draw for the negative initial Y, fires the five-bullet
+  edge groups only in the two firing phases, advances signed Q12.4 Y, and ends
+  at the source frame. The omitted `SUB_CE0C` phases have no RNG or gameplay
+  output.
+- Bomb uses the common updater. Renderer frames 64-127 consume X then Y every
+  eighth frame, retain the alternating foreground shift, and reset from 128.
+- Boss params are `[level*2+0x32, level*2+0x18, level+0x20,
+  level+0x0A, level+0x16]`. States 2-5 use paired-speed spreads; 6/7/17 use
+  three direct Extra pairs; 8-10 use four pairs; 11-16 use rings. Both the
+  level-under-8 and level-at-least-8 ring branches, count/speed selection,
+  angle offset, raw direct coordinates, switch table, and exact terminal frames
+  match.
 
 ### Ellen
 
-Source: `ellen_11814()`, `ellen_11885()`, `ellen_1190A()`, and
-`gba_boss_render_ellen()` in `th03/main_03t.cpp:52-178`.
+- Charge clear scans 64 nodes. Ordinary Charge consumes 32 angle draws and
+  stores even countdown states 0,2,...,62; node 0 therefore begins inactive.
+  Hyper activates the first state-0 node with one angle draw. Update ordering,
+  CPU target selection, target Y offset, countdown, deceleration, homing speed,
+  clipping, gauge zeroing, point hittest, freeing, damage 2, and two hit-circle
+  RNG draws match.
+- Extra Attack always consumes four target/angle/delta RNG draws before the
+  free-slot search, then may allocate at most two of 12 slots. Opposite angles,
+  shared signed delta, seven-point trail/reference shifts, expanding orbit,
+  derived velocity, both-endpoint clipping, transfer, hittest, collision map,
+  and direct Boss allocator match.
+- Gauge's first phase emits inward aimed rings. Its second phase uses one angle
+  draw for both 16-rings and then writes a second RNG result to the shared
+  template after firing. Native retains that otherwise-unused second draw and
+  write.
+- Bomb's eight vector arrays are per-player, but the release cursor is a single
+  shared word. The renderer resets that cursor before frame 64 and releases one
+  vector every fourth frame through 127; the following update respawns it with
+  one angle draw. Native retains this renderer-to-update/RNG dataflow and source
+  P1-before-P2 coupling.
+- Boss params are `[level*2+0x32, level/10+4, level+0x30,
+  10-level/3]`. States 2-5 use the spread sequence, 6-10 allocate Ellen Extras
+  at frames `0x30` and `0x60` with deltas +2 and -2, and 11-17 use moving
+  pellet spreads. Direct-allocation failure still advances the loop angle.
+  The eight-add spread writes the post-loop template angle; native explicitly
+  retains it. `byte_1F354` animation is presentation-only omitted.
 
-All launch/active work is drawing-only. In particular, the animation frame
-`byte_1F354` is only read by `ellen_11885()`; its increment occurs earlier in
-`gba_boss_update_ellen()` (`th03/main_03s.cpp:328-389`), where the native core
-already advances it. The renderer consumes no RNG and changes no collision,
-score, or control state. Defeat uses the common helper.
+## Call order and shared bullet template
 
-Status: **drawing-only except for the materialized common defeat path**.
+Anniversary performs, in order:
 
-## State and dataflow closure
+1. P1 then P2: Extra update, Boss update, Bomb update.
+2. Generic shot update, then P1 and P2 Charge update.
+3. Formation, Bullet, Enemy, and Fireball update.
+4. P1 then P2: pellet Gauge callback, then bullet Gauge callback.
+5. Input/player update.
+6. P1 then P2 Bomb render, then P1/P2 Boss render.
+7. Shot/Enemy render and Fireball hittest/render.
+8. P1 then P2 Extra render and Charge render.
 
-The renderer audit requires these deterministic fields, all present:
+Native preserves every gameplay-bearing phase at
+`frame.cpp:9167-9198,9276-9355`. One native Boss-render invocation is equivalent
+to the source's two calls because the non-owner callback returns immediately.
 
-- `ExtraAttackState::frame` for Reimu's render-owned age increment.
-- Per-player `playfield_fg_shift_x` for Bomb render writes.
-- Per-player Ellen bomb vectors plus the intentionally shared Ellen vector
-  cursor, because render release controls next-update RNG.
-- Boss `render_state` and `render_frame` for Mima's persistent renderer state.
-- Boss state, pattern frame, launcher owner, and score for common defeat.
-- The shared random-ring cursor for Reimu/Mima/Marisa Bomb visual draws and all
-  RNG-bearing update effects.
+`bullet_template_reset_stuff()` (`main/bullet/bullet.cpp:1160-1167`) resets
+angle, count, animation, collision, and trail flags at the frame start. Native
+models the only field that can remain an input to a later abstracted producer,
+`DeterministicState::bullet_template_angle`. Count and the three booleans are
+explicit arguments/defaults on every native add; speed, PID, group, and type are
+overwritten before every character 0-3 add.
 
-Explicitly omitted visual records (Reimu falling Bomb sprites, Mima Bomb
-columns, Marisa Bomb flash point, and `SUB_CDBD`/`SUB_CE0C` effect slots) have no
-outgoing dataflow to collision, damage, score, player/CPU decisions, lifecycle,
-or a later random-call condition. Their RNG consumption is materialized without
-carrying their pixels-only payload.
+The complete producer audit found these important final-angle cases:
 
-## Verification
+- Bullet-transfer update copies `angle_next` into the shared template before
+  the later Gauge callbacks; native does so at `frame.cpp:1287`.
+- Ellen Gauge preserves the second post-fire RNG angle
+  (`frame.cpp:3329-3333`).
+- Ellen Boss's eight-add loop writes the incremented post-loop angle; native
+  preserves it at `frame.cpp:6598`.
+- Reimu, Mima, and Marisa producers either overwrite angle before every add or
+  correctly leave the last fired angle. Their separate private angle counters
+  do not implicitly mutate the source template.
 
-Focused native test added:
+No other source template field has an outgoing gameplay dataflow in the scoped
+call chain.
 
-- `test_mima_boss_renderer_state()` in `tests/test_main.cpp:552`.
+## Initialization, reset, and stale-state semantics
 
-Verification on 2026-08-08:
+- First-round character speeds match `th03/main/chars/speeds[data].asm`:
+  Reimu `64/64/48/48/32`, Mima `72/72/54/54/20`, Marisa
+  `64/64/48/48/28`, Ellen `52/52/46/46/14`.
+- Boss initial HP is `0x006E` for Reimu/Mima/Marisa and `0x0064` for Ellen.
+  Position `(144,80)`, X velocity `-32`, state/motion/pattern/render bytes, and
+  P2 sprite selection's gameplay-neutral disposition match. Native omits sprite
+  offsets.
+- A new Boss launch copies the source 32-byte initial record but must retain
+  the previous-pattern byte outside that record. Native preserves only that
+  byte across `BossState{}` reconstruction (`frame.cpp:5646-5655`). Other
+  zeroed native fields are either source initial-record zeroes or are fully
+  initialized before their first stock read.
+- Repeat reset clears only Extra state bytes and the exact targeted Charge
+  state/active bytes in source order. It does **not** clear character-private
+  angle/timer storage. Native `round_start.cpp:599-634` matches this. In
+  particular, Mima's global Charge-active flag is intentionally not cleared
+  when the node actives are cleared, preserving the source landmine.
+- Ellen's pellet Boss angle and other character-private bytes persist across
+  Boss launches/rounds exactly as in BSS. Patterns that require a fresh value
+  initialize it on their entry frame.
 
-```text
-cmake --build --preset gcc
-ctest --preset gcc
-```
+Two native initializers normalize more memory than Anniversary without changing
+gameplay:
 
-Result: GCC build succeeded; `th03-tests` passed (1/1). No emulator was run.
+- `extra_attack_transfer_init()` and Reimu's generic direct initializer clear
+  modeled auxiliary members that source `sub_1A1ED()` leaves stale. Every
+  character 0-3 field read by the selected state is overwritten first; Ellen's
+  gameplay-bearing trail arrays are explicitly preserved around transfer.
+- `boss_launch_or_reverse()` clears modeled Boss auxiliaries beyond the copied
+  source record. Reimu orbit arrays and anchors are fully written on state entry
+  before update or render reads them; Mima/Marisa/Ellen use separate persistent
+  character-private fields where the source does.
+
+These are deterministic inert-memory normalizations, not semantic fixes. They
+would matter only to raw-memory hashing or an externally injected mid-pattern
+state, neither of which is a stock gameplay route.
+
+## Fixed-width and stock-range closure
+
+- Positions, velocities, radii, and trail coordinates are signed 16-bit Q12.4
+  and use explicit wrapping helpers. Speeds, angles, frames, states, counts,
+  damage accumulators, and character params retain their source byte width;
+  Boss frames/HP and Mima Extra timers retain word width.
+- Boss level is clamped to 16. Therefore Mima's modulo divisor
+  `0x40-level*2` is 32-64, Ellen's divisor `10-level/3` is 5-10, and all ring
+  counts are nonzero. Native unsigned division produces the same result over
+  these source-live positive ranges.
+- Signed angle deltas (`-7`, `+7`, `-2`, `+2`) are stored as `int8_t` and added
+  with byte wrap. All source narrowings after arithmetic are explicit.
+- Ordinary shot `pairs_fired` is a native byte rather than source `int`, but its
+  live range is 0-4. Invalid `shot_mode` values would use an uninitialized
+  source local; all installed callbacks produce only modes 0-4, so this is an
+  unreachable stock landmine rather than a port contract.
+
+## Presentation-only source dependencies
+
+These source modules/data remain deliberately unmaterialized, with no
+unrecorded gameplay outflow:
+
+- Charge and Extra renderer scratch pointers/cursors and sprite state.
+- Generic shot `so_anim` and character/palette sprite offsets.
+- Reimu Bomb falling-sprite records, Mima Bomb column records, and Marisa Bomb
+  flash coordinates. Their shared-ring consumption is retained.
+- `SUB_CDBD()` and `SUB_CE0C()` effect slots in
+  `th03/main/player/d3f9.cpp:239-275`; neither consumes RNG. `SUB_CE5B()` at
+  `d3f9.cpp:277-295` consumes one draw, but no character 0-3 Gauge/Boss/Bomb
+  callback invokes it.
+- Ellen Boss `byte_1F354` animation and all four characters' Boss sprite/VRAM
+  render payloads.
+- Palette, GRCG/EGC, page-copy, sound, and MRS resources.
+
+If a future graphical client needs pixel parity, these are renderer contracts
+that still require implementation. They are not missing deterministic gameplay
+state in the headless core.
+
+## Verification disposition
+
+This final gate was a read-only static comparison of whole definitions, call
+sites, switch tables, BSS layout, and data tables. No emulator or build was run
+for this audit. The existing corpus and focused tests are separate evidence;
+this document does not infer unreviewed-path completeness from them.

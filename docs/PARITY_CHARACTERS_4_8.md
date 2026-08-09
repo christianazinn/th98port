@@ -1,6 +1,7 @@
 # Static gameplay parity audit: characters 4-8
 
-Audit date: 2026-08-08
+Initial audit date: 2026-08-08
+Final source-coverage gate: 2026-08-09
 
 This is a source-complete static audit of Kotohime, Kana, Rikako, Chiyuri,
 and Yumemi against the Anniversary ReC98 source. It covers ordinary shots,
@@ -9,12 +10,12 @@ including non-drawing work hidden in functions named as render callbacks.
 It deliberately covers code paths beyond the currently exercised TH3R03
 route.
 
-The Anniversary source was read from
-`.scratch/port-refs/oracle_anniversary` at commit `3e2381d4`. The port was
-based on `33ad4189695236f72ca9bbe9cc20dc15d56de84e` plus the dirty gameplay
-work in progress on 2026-08-08. Because the port was being edited in
-parallel, function names below are the authoritative locations; line
-numbers record the snapshot examined during the audit and can drift.
+The Anniversary source was read from the immutable
+`refs/pins/th03-port/oracle-anniversary` ref at commit `3e2381d4`. The final
+gate re-read every complete definition, caller, raw switch table, and data
+table against native HEAD `69da429ccbe696d15a40f89349fc26f2b0a44d77`.
+Function names and source paths below are authoritative; historical line
+numbers record the snapshot examined and can drift.
 
 No emulator was run for this audit. Conclusions below come from complete
 source/caller comparison and focused native unit tests. The one production
@@ -36,8 +37,8 @@ correction made during this audit is identified explicitly.
 
 ## Executive inventory
 
-This table reports the post-fix snapshot at the end of the audit. The fixes
-found while auditing are listed separately below.
+This table reports native HEAD `69da429` after the final source-coverage
+gate. The fixes found by the earlier audit are listed separately below.
 
 | Character | Ordinary shots / hyper | Charge | Extra attack | Gauge attack | Boss Attack | Bomb RNG |
 |---|---|---|---|---|---|---|
@@ -47,11 +48,75 @@ found while auditing are listed separately below.
 | Chiyuri (7) | Complete | Complete | Complete | Complete | Complete | Complete, including presentation-RNG |
 | Yumemi (8) | Complete | Complete | Complete | Complete | Complete | Complete, including presentation-RNG |
 
-All five character families are dispatched in the current dirty snapshot.
-The corrective audit found one P0 gameplay discrepancy: Kotohime's state-0
-Boss Attack renderer advances the shared orbit angle and radius that later
-attack patterns consume. That renderer-owned mutation was absent and is now
-implemented and regression-tested.
+All five character families are dispatched. The earlier corrective audit
+found one P0 gameplay discrepancy: Kotohime's state-0 Boss Attack renderer
+advances the shared orbit angle and radius that later attack patterns
+consume. That renderer-owned mutation is implemented and regression-tested.
+The 2026-08-09 gate found no additional gameplay or RNG discrepancy.
+
+## Final source-coverage matrix
+
+This matrix is the durable disposition of every character-owned gameplay
+family and its direct dependencies. “Complete” includes stock-unused random
+Boss choices: the chooser can produce every state from 2 through 17, so no
+pattern family was accepted merely because the replay corpus did not select
+it.
+
+| Family | Anniversary authority | Native counterpart | Final disposition |
+|---|---|---|---|
+| Dispatch and initialization | `th03/hitcb.cpp`, `th03/main/rstart.cpp`, `th03/main_03.cpp`, character record initializers in `main_03q.cpp`, `main_03t.cpp`, `main_03u.cpp`, `main_03v.cpp`, `main_03w.cpp`; speed and group data in `main/chars/speeds[data].asm` and `main/pbpat[data].asm` | `round_start.cpp`, `boss_launch_or_reverse()`, `boss_choose_pattern()`, character dispatch in `frame.cpp` | Complete: palette-to-character mapping, P2-selected background kind, speed bytes, Boss HP/parameters, launch/reversal/defeat/exit, and raw switch mappings agree |
+| Ordinary shots and Hyper | `main/player/shot.cpp`, `main/player/bomb.cpp`, Rikako helpers in `main_11.cpp` | `shots_add()`, `shots_update()`, `player_update_begin()`, `movement_velocity()` | Complete, including byte-width boosts/penalties and one-callback activation/standby timing |
+| Charge | Kotohime `main_10.cpp`; Kana `main_09.cpp`; Rikako `main_11.cpp`; Chiyuri `main_07.cpp`; Yumemi `main/bullet/bullet.cpp` | Character add/update branches and `chargeshot_hittest()` in `frame.cpp` | Complete: all states, fixed-point movement, collision order/damage, shot/gauge writes, and hit-circle RNG |
+| Extra | Kotohime/Kana/Chiyuri `main/player/exatt.cpp`; Rikako/Yumemi `main_06.cpp` | `extra_attack_add*()`, `extra_attacks_update_*()` | Complete for gameplay and RNG across ordinary, direct, full-buffer, delay, transfer, collision, and final-active-frame paths; raw stale bytes used only by rendering remain intentionally unmaterialized |
+| Gauge | Kotohime `main_10.cpp`; Kana `main_09.cpp`; Rikako `main_11.cpp`; Chiyuri `main_07.cpp`; Yumemi `main/bullet/bullet.cpp` | `gauge_pattern_*()` | Complete for both pellet and bullet flags, exact frame boundaries, shared template inputs, and `SUB_CE5B()` RNG |
+| Boss | Kotohime `main_03t.cpp` + renderer `main_03u.cpp`; Kana `main_03v.cpp` + `main_03w.cpp`; Rikako `main_03w.cpp` + `main_03x.cpp`; Chiyuri `main_03u.cpp` + `main_03v.cpp`; Yumemi `main_03q.cpp` + `main_03r.cpp` | `boss_pattern_*()`, `boss_update_*()`, `boss_render_phase_update()` | Complete for states 0, 1, 2–17, `0x80`, `0xFF`, default-state common tails, parameters, fixed widths, RNG order, collision/damage/defeat, and renderer-fed gameplay |
+| Bomb | Kotohime/Kana/Chiyuri `main/player/chybomb.cpp`; Rikako `main_05.cpp`; Yumemi `main/player/yumemi_bomb.cpp`; common update `main/player/ch_shot.cpp::sub_1501E()` | `bomb_character_update()`, `bombs_render_phase_update()` | Complete for active-frame timing, foreground shift, and Rikako/Chiyuri/Yumemi presentation-RNG; palette/effect geometry is presentation-only |
+| Background selected by these characters | `main/player/d3f9.cpp::sub_D092/sub_D135/sub_D1E7` and `sub_D2E8/sub_D340/sub_D3F9`; assignments in `hitcb.cpp` | `initialize_background_rng()`, `background_update()` | Complete: Rikako selects type A; Kotohime/Kana/Chiyuri/Yumemi select type B when installed last; initialization and early-render IRAND counts agree |
+| Prefix, render, and repeat order | `main/rndloop.cpp`, `main/resscore.cpp::sub_9EBF/sub_A21F` | `gameplay_frame_prefix()`, suffix functions, `initialize_repeat_round()` | Complete for character state/RNG: targeted state-byte clears preserve stale storage, bomb/Charge carry matches source, and formation-only HUD suppression does not freeze entities or gauges |
+
+### Common dependency disposition
+
+- `sub_F356()`, `sub_F3A9()`, `sub_F402()`, `sub_F4B4()`, `sub_F512()`,
+  `sub_F52D()`, and `sub_F58C()` have complete C++ definitions in
+  `th03/main_03.cpp`; their native movement, chooser, launch/reversal,
+  collision tail, defeat, exit, score, and render-phase control were compared
+  directly.
+- `SUB_CDBD()`, `SUB_CE0C()`, and `SUB_CE5B()` have complete definitions in
+  `th03/main/player/d3f9.cpp`. Only `SUB_CE5B()` reads the shared random ring;
+  every character-4-through-8 call is represented in native order.
+- `sub_1A1ED()` and `sub_1A1A7()` are still undecompiled common Extra
+  transfer helpers: the pinned tree contains their declarations/callers and
+  procedure descriptors in `th03_main.asm`, but no C++ body. Their native
+  transfer state, coordinate conversion, velocity, arrival, ownership flip,
+  and return-value use are covered by every complete caller and frozen replay
+  integration, but this dependency cannot honestly be called a
+  body-to-body source comparison until ReC98 decompiles the two helpers.
+- Hardware drawing, sprite/palette state, the 12-slot CEE0 effect-record
+  ring, and character-specific image offsets remain outside the headless
+  architecture. They were audited for RNG and later gameplay readers; the
+  omitted portions are presentation-only and are not a pixel-port claim.
+
+### Shared-template closure
+
+The final gate rechecked every character-4-through-8 `bullets_add()` call for
+fields deliberately inherited from an earlier callback and for mutations
+after the last add. Kana's inherited angle and Kotohime's post-final angles
+remain the gameplay-bearing cases and are materialized as
+`bullet_template_angle`.
+
+Anniversary `th03/main_03u.cpp::chiyuri_12498()` also increments or
+decrements `bullet_template.speed.v` after every lattice add, including the
+final add of the second pass. Both frame-`0x20` and frame-`0x40` branches
+therefore leave the source template speed restored to the level-derived base
+value, whereas the native helper's last explicit call argument is base+2.
+This is a real internal-template state difference but not a gameplay
+discrepancy: the complete stock call-site audit found no later inherited
+speed read, and every subsequent stock bullet producer explicitly assigns
+speed before firing. `bullet_template_reset_stuff()` does not reset speed,
+but that does not create a consumer. The architecture-neutral core therefore
+does not add dormant `bullet_template_speed` state solely to mirror an
+unobserved byte. Revisit this classification if a future renderer/client or
+new gameplay mode reads the source template itself.
 
 ## Severity-ranked discrepancies
 
