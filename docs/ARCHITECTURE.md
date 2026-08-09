@@ -66,8 +66,9 @@ round, using TH3R03 as the first oracle. Phase 3 expands the same core through
 complete Classic gameplay and process phases. Application work remains later.
 
 Phase 2 is complete: the TH3R03 first-round trace matches all 46 canonical
-Anniversary rows through its natural route-2 terminal. Phase 3 must preserve
-that gate while completing the entire TH03 gameplay backend.
+Anniversary rows through its natural route-2 terminal. Phase 3 preserves that
+gate and has completed the source-backed Classic gameplay backend; broader
+mode/corpus validation now exercises its integration surface.
 
 ## Completeness contract
 

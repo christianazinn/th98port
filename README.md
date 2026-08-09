@@ -1,8 +1,9 @@
 # libth03
 
 `libth03` is the architecture-neutral deterministic gameplay core for a
-faithful native TH03 port. Phase 2 now implements and oracle-verifies one
-complete TH3R03 round on top of the Phase 1 format/session runway. There is
+faithful native TH03 port. Phase 2's complete TH3R03 round remains a permanent
+gate, and Phase 3 now oracle-verifies the full six-replay Classic Story corpus
+on top of the Phase 1 format/session runway. There is
 intentionally no playable application, renderer, audio target, networking, or
 CI configuration.
 
@@ -43,10 +44,9 @@ out\build\msvc-x64\Debug\th03-headless.exe `
 
 The first MAIN process remains the stable Phase 2 contract: 46 rows, 6,773
 logical samples, route 2, and final scores `01090503`/`00434365`. Phase 3 now
-continues across process and repeat-round boundaries. TH3R03 matches all
-186/186 rows, TH3R04 all 627/627 rows, TH3R05 all 783/783 rows, TH3R02 all
-626/626 rows, and TH3R00 all 715/715 rows through their natural terminal
-boundaries. TH3R01 remains the active corpus-expansion work.
+continues across process and repeat-round boundaries. TH3R00 matches 715/715
+rows, TH3R01 964/964, TH3R02 626/626, TH3R03 186/186, TH3R04 627/627, and
+TH3R05 783/783 through their natural terminal boundaries.
 
 Run the complete external Phase 0 lock with:
 
@@ -72,4 +72,4 @@ split comparisons. Original game data and replay captures remain external.
   V12 into V13.
 
 See `docs/ARCHITECTURE.md`, `docs/ORACLE_CONTRACT.md`, and `docs/SOURCES.lock`
-before expanding Phase 3 coverage.
+before expanding corpus and mode coverage.

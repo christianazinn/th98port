@@ -4,7 +4,7 @@ Snapshot: **2026-08-08**. All results below invoke `th03-headless` with the
 external canonical T3CASE, calibrated `ENEDAT.DAT`, and the frozen Anniversary
 `T3SPLIT.BIN` passed explicitly as `--oracle`.
 
-| Case | Current result | First open boundary |
+| Case | Current result | Validation evidence / resolved first divergence |
 |---|---|---|
 | TH3R00 | Green | 715/715 canonical rows and all 100,642 samples. The first hidden divergence had been frame 8,836: CPU-triggered Hyper must fall through to release an already-pending Ellen Charge Shot in the same player update. |
 | TH3R01 | Green | 964/964 canonical rows and all 135,215 samples. The first hidden divergence had been global frame 19,326: Rikako Boss state 6 must dispatch to the RNG-driven four-spread pattern, consuming angle/type draws and adding eight bullets. |

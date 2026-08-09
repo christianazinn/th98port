@@ -82,7 +82,7 @@ The ENEDAT bounds above were obtained by a read-only semantic walk of the
 original data using the layouts in Anniversary `th03/formats/enedat.hpp`; no
 generated file was retained.
 
-## Actionable discrepancies
+## Audited discrepancy ledger
 
 ### N1 — closed policy: normalize the `iatan2()` signed-CMP landmine
 

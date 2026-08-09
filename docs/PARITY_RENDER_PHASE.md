@@ -39,8 +39,9 @@ discrepancies were corrected:
    the raw phase-0 checkpoint, accounts every auxiliary logical sample, and
    completes input-exhaustion exits after the already-started frame.
 
-Exact character-callback parity remains a separate dependency: this audit
-proves where those callbacks run, not the contents of each implementation.
+The character dossiers now close the exact callback contents. This audit proves
+their shared ordering and late-frame integration rather than repeating those
+per-character definitions.
 
 ## Exact source order and native mapping
 
@@ -57,7 +58,7 @@ the remainder of the row and frame-counter suffix is skipped.
 | 5 | `farfp_20F24()` background callback | Initial A consumes 48 IRAND calls per outer frame through source frame 129; initial B consumes 40 through frame 145. Steady callbacks consume no RNG | `background_update()` | Closed gameplay RNG and callback phase |
 | 6 | `byte_23AFA` alternate-render gate | If nonzero and result frame even, skips orders 7–28 and enters counters | Not represented | Effective stock parity: startup writes zero and no stock writer exists |
 | 7 | P1 then P2 Bomb render callbacks | Character-dependent random-ring reads and foreground shifts; Ellen also mutates its visual-vector pool | `bombs_render_phase_update()` in P1/P2 order | Shared order closed; formulas owned by character/RNG dossiers |
-| 8 | P1 then P2 Boss render callbacks | Character collision/hittest/damage and the shared defeated-boss 2,560-point award/release | Character Boss state plus `boss_render_phase_update()` | Shared award/order closed; character callbacks remain a parity dependency |
+| 8 | P1 then P2 Boss render callbacks | Character collision/hittest/damage and the shared defeated-boss 2,560-point award/release | Character Boss state plus `boss_render_phase_update()` | Shared award/order and character callbacks are closed |
 | 9 | `shots_render()` | Advances each live shot pair's sprite animation offset; no gameplay, collision, score, or RNG | Omitted | Presentation-state only |
 | 10 | `enemies_render()` | Drawing only; enemy hittest already ran in `enemies_update()` | Omitted | Presentation-only |
 | 11 | `fireballs_hittest_and_render()` | Reverse-slot collision pass; shots/Charge/Bomb/explosion hits; chain, combo, gauge and score mutations; Extra/Fireball spawning; hit-circle RNG | `fireballs_hittest()` | Closed shared gameplay path and position in order; drawing omitted |
@@ -364,10 +365,9 @@ final-stage ending handoff.
 
 Outstanding dependencies outside this shared slice:
 
-1. Character/corpus work must close the remaining replay-oracle divergences;
-   the character dossiers remain authoritative for every
+1. The character dossiers remain authoritative for every
    Bomb/Boss/Charge/Extra/Gauge callback and its render-phase collision/RNG
-   behavior.
+   behavior; the complete Classic Story corpus is oracle-green.
 2. Live human pause/release/Q interaction needs an application input contract
    if a playable client is expected to reproduce it; do not reuse the replay
    coordinator's compact four-choice parser as the UI implementation.
