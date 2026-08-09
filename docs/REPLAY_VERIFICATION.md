@@ -94,6 +94,26 @@ The open rows are gameplay/input-context evidence, not parser failures. They
 must be diagnosed at their first source-backed divergence; neither the format
 adapter nor the expected summaries may hide them.
 
+### Repeat-boundary localization
+
+All five open files cross a route-1 repeat before their first visible context
+failure. Their recorded/native random-ring cursors at the relevant round starts
+are R03 `139/143`, R04 `111/125`, R08 `71/114`, R10 `163/167`, and R13
+`132/138`. Earlier repeat starts in the same files agree where present (R04
+`149/149` and `27/27`, R08 `191/191`, R10 `109/109`, and R13 `136/136`). The
+delta therefore accrues during the preceding active round rather than inside
+the repeat reset itself.
+
+The original uninitialized formation-previous landmine is not the cause in
+these recordings. Replaying the exact startup IRAND sequence from every V12
+`round_reset_seed` shows that each recorded `formation_first` equals the entry
+produced by Anniversary's deterministic repeat predecessor of 1. In the only
+relevant case whose first raw candidate is 1, both recording and Anniversary
+reject it and accept the same second candidate. Once the first accepted entry
+matches, the remaining formation ring is generated identically. Replay Patch
+should still receive Anniversary's landmine fix in its next maintenance set,
+but changing libth03's deterministic predecessor cannot fix this corpus.
+
 The Replay Patch's three-digit combo display is not one of those gameplay
 divergences. Anniversary stores at most 99 in the active display field while
 retaining the raw 8-bit chain and defeat-screen maximum; Replay stores the raw
