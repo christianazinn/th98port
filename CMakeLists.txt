@@ -25,6 +25,14 @@ endfunction()
 add_library(th03_core STATIC
 	src/core/game.cpp
 	src/core/frame.cpp
+	src/core/frame/bosses.inl
+	src/core/frame/bullets.inl
+	src/core/frame/enemies_motion.inl
+	src/core/frame/extra_attacks.inl
+	src/core/frame/player.inl
+	src/core/frame/round.inl
+	src/core/frame/shots_charge.inl
+	src/core/frame/world_collision.inl
 	src/core/random.cpp
 	src/core/round_start.cpp
 	src/core/state_hash.cpp

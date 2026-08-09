@@ -102,3 +102,12 @@ The remaining live-human pause/Q loop is deliberately an application protocol
 boundary. Recorded pauses are fully coordinated by `th03_replay`; the future
 interactive client must expose the same staged frame boundary without placing
 UI or device polling inside `th03_core`.
+
+## Gameplay frame implementation partitions
+
+`src/core/frame.cpp` owns the private constants/types and exported staged-frame
+entry points. Its source-complete implementation is mechanically partitioned by
+subsystem under `src/core/frame/`. The partitions remain included, in source
+order, into one anonymous-namespace translation unit. This keeps private helper
+linkage and lookup identical while allowing subsystem ownership without a
+9,000-line file. See `FRAME_PARTITIONS.md` for the exact mapping and gate.

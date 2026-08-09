@@ -2,8 +2,8 @@
 
 `libth03` is the architecture-neutral deterministic gameplay core for a
 faithful native TH03 port. Phase 2's complete TH3R03 round remains a permanent
-gate, and Phase 3 now oracle-verifies the full six-replay Classic Story corpus
-on top of the Phase 1 format/session runway. There is
+gate, and Phase 3 now verifies 19 locked V11/V12 files across Story, Practice,
+ordinary VS, and Demo on top of the Phase 1 format/session runway. There is
 intentionally no playable application, renderer, audio target, networking, or
 CI configuration.
 
@@ -98,6 +98,8 @@ split comparisons. Original game data and replay captures remain external.
 See `docs/ARCHITECTURE.md`, `docs/PARITY_SOURCE_COVERAGE.md`,
 `docs/REPLAY_VERIFICATION.md`, `docs/ORACLE_CONTRACT.md`, and
 `docs/SOURCES.lock` before expanding corpus and mode coverage.
+`docs/FRAME_PARTITIONS.md` describes the behavior-free implementation split
+inside the gameplay frame translation unit.
 `docs/POST_CORE_ROADMAP.md` records the proposed V13 branch workflow and the
 asset, presentation, audio, platform, and application layers that follow the
 deterministic gameplay core.
