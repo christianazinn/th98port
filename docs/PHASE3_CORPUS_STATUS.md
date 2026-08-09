@@ -32,3 +32,21 @@ the exact state-6/7/13 behavior and RNG schedule.
 This table records validation coverage, not implementation scope. Phase 3 still
 requires every stock-reachable gameplay callback and lifecycle path even if no
 current replay happens to exercise it.
+
+## Fresh Demo Gate A
+
+The fresh current Master/Anniversary no-input Demo case is green for all 59
+schema-3 rows and all 7,827 samples through terminal route 0. The frozen case
+SHA-256 is
+`816A6574035E2A18C86F6EBCF66DF084E2EB0C379417E93A2DE9A9F706A1CB91`; the
+Master split SHA-256 is
+`8FFCC69D33C1B9647F95E7ED4524D68EB5F1A89D17A22D97E871B68576011B1E`.
+
+Before the correction, the canonical states were exact through frame 261 and
+first differed in P1's X coordinate at frame 262. Anniversary's P1 CPU broad
+probe wraps the packed collision-map pointer to DGROUP `0x0351..0x0352`, where
+the public-domain master.lib sine table contains little-endian bytes `00 AC`.
+The active `0x0F` mask therefore reports a collision at `(0, 0x0CA0)` and picks
+the rightward avoidance route. Native now reconstructs the linked sine/cosine
+table bytes from its integer trig functions; focused tests lock the narrower
+misses and the 80-tile hit without embedding a memory snapshot.

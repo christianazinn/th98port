@@ -1108,10 +1108,37 @@ void test_yumemi_boss_patterns_and_rng()
 void test_legacy_player_hittest_alias()
 {
 	th03::detail::DeterministicState state{};
-	state.players[1].center_x = th03::exact::Subpixel::from_raw(0x0420);
-	state.players[1].center_y = th03::exact::Subpixel::from_raw(0x1120);
+	state.players[0].center_x = th03::exact::Subpixel::from_raw(0x0480);
+	state.players[0].center_y = th03::exact::Subpixel::from_raw(0x11A0);
 	std::int16_t collision_x = -1;
 	std::int16_t collision_y = -1;
+	for(const auto size : {32U, 48U, 64U}) {
+		check(
+			!th03::detail::player_hittest_legacy(
+				state,
+				0U,
+				static_cast<std::uint8_t>(size),
+				collision_x,
+				collision_y
+			),
+			"TH03 P1 CPU's narrower probes miss before the broad alias"
+		);
+	}
+	check(
+		th03::detail::player_hittest_legacy(
+			state, 0U, 80U, collision_x, collision_y
+		),
+		"TH03 P1 broad CPU probe preserves the wrapped sine-table collision"
+	);
+	check(
+		collision_x == 0 && collision_y == 0x0CA0,
+		"TH03 P1 wrapped collision reports the first nonnegative map column"
+	);
+
+	state.players[1].center_x = th03::exact::Subpixel::from_raw(0x0420);
+	state.players[1].center_y = th03::exact::Subpixel::from_raw(0x1120);
+	collision_x = -1;
+	collision_y = -1;
 	check(
 		th03::detail::player_hittest_legacy(
 			state, 1U, 80U, collision_x, collision_y

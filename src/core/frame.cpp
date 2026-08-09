@@ -109,6 +109,8 @@ constexpr std::uint8_t bullet_group_sixteen_ring_aimed = 42U;
 constexpr std::uint8_t bullet_group_thirty_two_ring_aimed = 43U;
 constexpr std::uint8_t bullet_group_ring_aimed = 44U;
 constexpr std::uint16_t anniversary_collmap_dgroup_offset = 0x4BA0U;
+constexpr std::uint16_t anniversary_sine_table_dgroup_offset = 0x0316U;
+constexpr std::uint16_t anniversary_cosine_table_dgroup_offset = 0x0396U;
 constexpr std::uint16_t anniversary_runtime_profile_offset = 0x1076U;
 // player_hittest() is a source landmine: a broad CPU probe can wrap before
 // collmap and mask bits from initialized Borland runtime data in DGROUP. This
@@ -8551,6 +8553,34 @@ void fireballs_hittest(DeterministicState &state) noexcept
 				}
 			}
 			return packed;
+		}
+		// A negative first column wraps the packed-map pointer around DGROUP.
+		// P1 wraps into the public-domain master.lib SinTable8/CosTable8 data;
+		// reconstruct those bytes from the already-ported integer functions.
+		// The little-endian byte value matters because the scan masks it before
+		// deciding whether this source landmine reports a collision.
+		auto table_byte = [&](std::uint16_t table_offset, auto value_at) {
+			const auto byte_offset = static_cast<std::uint16_t>(
+				offset - table_offset
+			);
+			const auto value = exact::bits(value_at(
+				static_cast<std::uint8_t>(byte_offset >> 1U)
+			));
+			return static_cast<std::uint8_t>(
+				(byte_offset & 1U) ? (value >> 8U) : value
+			);
+		};
+		const auto sine_offset = static_cast<std::uint16_t>(
+			offset - anniversary_sine_table_dgroup_offset
+		);
+		if(sine_offset < (64U * sizeof(std::int16_t))) {
+			return table_byte(anniversary_sine_table_dgroup_offset, sine8);
+		}
+		const auto cosine_offset = static_cast<std::uint16_t>(
+			offset - anniversary_cosine_table_dgroup_offset
+		);
+		if(cosine_offset < (256U * sizeof(std::int16_t))) {
+			return table_byte(anniversary_cosine_table_dgroup_offset, cosine8);
 		}
 		const auto runtime_offset = static_cast<std::uint16_t>(
 			offset - anniversary_runtime_profile_offset
