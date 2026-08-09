@@ -14,8 +14,7 @@ This is a static audit. No emulator result is claimed here.
 
 ## Authorities and result
 
-- Source: clean frozen Anniversary worktree
-  `.scratch/port-refs/oracle_anniversary_th3r02` at
+- Source: clean frozen Anniversary Git object
   `3e2381d4275be7287f5525de5c95389d492b0a3c`.
 - Native: `th03-port` at
   `69da429ccbe696d15a40f89349fc26f2b0a44d77`.

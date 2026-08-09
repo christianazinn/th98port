@@ -84,7 +84,7 @@ void result_bonus_update(DeterministicState &state) noexcept
 			(static_cast<std::uint32_t>(player.boss_attacks_fired) * 15000U) +
 			(static_cast<std::uint32_t>(player.boss_attacks_reversed) * 20000U) +
 			(static_cast<std::uint32_t>(player.boss_panics_fired) * 30000U);
-		if(state.story_stage == 8U) {
+		if(state.story_stage == story_stage_yumemi) {
 			state.result_bonus_remaining +=
 				static_cast<std::uint32_t>(state.story_lives) * 100000U;
 			state.extends_gained = extends_disabled;
@@ -123,7 +123,7 @@ bool result_control_update(DeterministicState &state) noexcept
 		return true;
 	};
 	const auto result_gate = static_cast<std::uint16_t>(
-		(state.story_stage < 8U) ? 320U : 460U
+		(state.story_stage < story_stage_yumemi) ? 320U : 460U
 	);
 
 	if(state.game_mode != game_mode_story && !state.practice_uses_stock) {

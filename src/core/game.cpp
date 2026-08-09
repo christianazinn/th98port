@@ -113,7 +113,7 @@ std::expected<Game, Error> Game::create(
 	}
 	if(
 		init.game_mode == detail::game_mode_story &&
-		init.story_stage >= 9U
+		init.story_stage >= detail::story_stage_after_clear
 	) {
 		return std::unexpected(Error{
 			ErrorCode::invalid_value,
@@ -151,7 +151,7 @@ std::expected<Game, Error> Game::create(
 		if(
 			init.practice_rules->retry_cpu_timer ==
 				CpuTimerPolicy::story_native &&
-			init.story_stage >= 9U
+			init.story_stage >= detail::story_stage_after_clear
 		) {
 			return std::unexpected(Error{
 				ErrorCode::invalid_value,
@@ -434,19 +434,19 @@ std::expected<SessionTransition, Error> build_session_transition(
 		resident.story_stage, std::uint8_t{1U}
 	);
 
-	if(state.game_mode != 1U) {
+	if(state.game_mode != detail::game_mode_story) {
 		transition.action = SessionAction::exit_to_operator;
 		return transition;
 	}
 
 	if(state.winner == 0) {
-		if(resident.story_stage == 9U) {
+		if(resident.story_stage == detail::story_stage_after_clear) {
 			// sub_9887() first performs a terminal out-of-bounds opponent read.
 			// It cannot affect later gameplay, so the architecture-neutral core
 			// deliberately retains the last valid P2 value rather than modeling an
 			// executable-layout byte. ending_staff_and_regist() then sets stage 99
 			// before invoking high-score registration.
-			resident.story_stage = 99U;
+			resident.story_stage = detail::story_stage_ending;
 			transition.high_score_registration = resident;
 			transition.action = SessionAction::ending;
 			return transition;
@@ -460,10 +460,14 @@ std::expected<SessionTransition, Error> build_session_transition(
 		resident.paletted_character[1] =
 			resident.story_opponents[resident.story_stage];
 		const auto opponent = static_cast<std::uint8_t>(
-			(static_cast<int>(resident.paletted_character[1]) - 1) / 2
+			character_index_from_paletted(resident.paletted_character[1])
 		);
-		if(resident.story_stage < 7U && opponent >= 7U) {
-			resident.paletted_character[1] = 1;
+		if(
+			resident.story_stage < detail::story_stage_chiyuri &&
+			opponent >= detail::character_chiyuri
+		) {
+			resident.paletted_character[1] =
+				detail::paletted_character_reimu_p1;
 		}
 		transition.action = SessionAction::start_gameplay;
 		return transition;

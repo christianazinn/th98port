@@ -4,8 +4,8 @@ Audit date: 2026-08-09
 
 Native snapshot: `69da429ccbe696d15a40f89349fc26f2b0a44d77`
 
-Anniversary authority: `3e2381d4275be7287f5525de5c95389d492b0a3c` in
-`.scratch/port-refs/oracle_anniversary_th3r02`
+Anniversary authority: clean Git object
+`3e2381d4275be7287f5525de5c95389d492b0a3c`
 
 The three public-input contract closures recorded below are the audited working
 tree changes on top of native snapshot `69da429`.

@@ -9,7 +9,7 @@
 | `formats/v12.cpp` | Replay `th03/replay_format.hpp` and `tools/replay/FORMAT.md`; V12 compact checkpoints are reconstructed as format-neutral recipes after ENEDAT content is loaded |
 | `replay/run.cpp` | Replay Patch process-control, warning, pause, retry-preroll, and MAIN/MAINL semantics adapted to the version-neutral replay model |
 | `replay/session.hpp` | audited T3CASE/V11 input and process-boundary semantics; deliberately independent of either document layout |
-| `core/game.cpp`, `core/frame.cpp`, and `core/frame/*.inl` | Anniversary `th03/main/rndloop.cpp:sub_9778()` update order and the complete stock-used gameplay callback inventory documented by the `PARITY_*` ledgers; `FRAME_PARTITIONS.md` records the behavior-free source split |
+| `core/game.cpp`, `core/frame.cpp`, and `core/frame/{,characters/}*.inl` | Anniversary `th03/main/rndloop.cpp:sub_9778()` update order and the complete stock-used gameplay callback inventory documented by the `PARITY_*` ledgers; `FRAME_PARTITIONS.md` records the behavior-free source split |
 | `core/state_hash.cpp` and private deterministic state | Anniversary `th03/main/t3case.cpp:t3case_state_hash()` schema 3 plus the semantic structures named in `TH3R03_ROUND_DOSSIER.md` |
 | round startup/frame sequencing | Anniversary `th03/main/{rstart.cpp,resscore.cpp,rndloop.cpp,roundcb.cpp}` at `3e2381d4` |
 | `core/random.cpp` | Anniversary random-ring call sites and master.lib IRAND behavior, including the adjacent-byte 16-bit cursor quirk |

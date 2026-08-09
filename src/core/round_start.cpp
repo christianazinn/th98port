@@ -9,7 +9,6 @@ constexpr std::uint8_t rank_easy = 0U;
 constexpr std::uint8_t rank_normal = 1U;
 constexpr std::uint8_t rank_hard = 2U;
 constexpr std::uint8_t rank_lunatic = 3U;
-constexpr std::uint8_t shot_mode_one_pair = 1U;
 constexpr std::uint8_t shot_active_enabled = 1U;
 constexpr std::uint8_t extends_max = 2U;
 constexpr std::uint8_t extends_disabled = 255U;
@@ -23,7 +22,7 @@ struct PlaycharSpeed {
 	std::uint8_t gauge_charge;
 };
 
-constexpr std::array<PlaycharSpeed, 9> playchar_speeds{{
+constexpr std::array<PlaycharSpeed, character_count> playchar_speeds{{
 	{64U, 64U, 48U, 48U, 32U},
 	{72U, 72U, 54U, 54U, 20U},
 	{64U, 64U, 48U, 48U, 28U},
@@ -35,7 +34,7 @@ constexpr std::array<PlaycharSpeed, 9> playchar_speeds{{
 	{80U, 80U, 64U, 64U, 20U},
 }};
 
-constexpr std::array<std::array<std::uint16_t, 6>, 9>
+constexpr std::array<std::array<std::uint16_t, 6>, character_count>
 	story_cpu_safety_frames{{
 		{{100U, 50U, 20U, 0U, 0U, 0U}},
 		{{200U, 100U, 50U, 20U, 0U, 0U}},
@@ -481,8 +480,8 @@ DeterministicState initialize_first_round(
 		player.shot_active = shot_active_enabled;
 		player.is_cpu = init.is_cpu[player_id];
 		player.paletted_character = init.paletted_character[player_id];
-		const auto character = static_cast<std::size_t>(
-			(static_cast<int>(player.paletted_character) - 1) / 2
+		const auto character = character_index_from_paletted(
+			player.paletted_character
 		);
 		if(character < playchar_speeds.size()) {
 			const auto &speed = playchar_speeds[character];
@@ -502,28 +501,37 @@ DeterministicState initialize_first_round(
 		boss.pattern_index = 0U;
 		boss.render_state = 0U;
 		if(
-			character == 0U || character == 1U || character == 2U ||
-			character == 4U || character == 6U
+			character == character_reimu ||
+			character == character_mima ||
+			character == character_marisa ||
+			character == character_kotohime ||
+			character == character_rikako
 		) {
 			boss.hp = 0x006EU;
-		} else if(character == 3U || character == 5U) {
+		} else if(character == character_ellen || character == character_kana) {
 			boss.hp = 0x0064U;
-		} else if(character == 7U) {
+		} else if(character == character_chiyuri) {
 			boss.hp = 0x008CU;
-		} else if(character == 8U) {
+		} else if(character == character_yumemi) {
 			boss.hp = 0x0082U;
 		}
 	}
 	// Each set_callbacks_*() call overwrites the shared background callback;
 	// the second player's character therefore determines the round background.
-	const auto last_character =
-		(static_cast<int>(state.players[1].paletted_character) - 1) / 2;
+	const auto last_character = character_index_from_paletted(
+		state.players[1].paletted_character
+	);
 	if(
-		last_character != 0 && last_character != 1 && last_character != 6
+		last_character != character_reimu &&
+		last_character != character_mima &&
+		last_character != character_rikako
 	) {
 		state.background_initial_kind = BackgroundInitialKind::type_b;
 	}
-	if(init.game_mode == game_mode_story && init.story_stage < 9U) {
+	if(
+		init.game_mode == game_mode_story &&
+		init.story_stage < story_stage_after_clear
+	) {
 		state.players[1].cpu_safety_frames = story_safety_frames(
 			init, state.round_id
 		);
@@ -632,7 +640,10 @@ void initialize_repeat_round(
 		}
 	}
 
-	if(state.game_mode == game_mode_story && state.story_stage < 9U) {
+	if(
+		state.game_mode == game_mode_story &&
+		state.story_stage < story_stage_after_clear
+	) {
 		state.players[1].cpu_safety_frames = story_safety_frames(
 			init, state.round_id
 		);

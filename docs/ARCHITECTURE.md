@@ -107,7 +107,9 @@ UI or device polling inside `th03_core`.
 
 `src/core/frame.cpp` owns the private constants/types and exported staged-frame
 entry points. Its source-complete implementation is mechanically partitioned by
-subsystem under `src/core/frame/`. The partitions remain included, in source
-order, into one anonymous-namespace translation unit. This keeps private helper
-linkage and lookup identical while allowing subsystem ownership without a
-9,000-line file. See `FRAME_PARTITIONS.md` for the exact mapping and gate.
+subsystem under `src/core/frame/`; character callbacks are separated under
+`src/core/frame/characters/`. The partitions remain included, in source order,
+into one anonymous-namespace translation unit. This keeps private helper
+linkage and lookup identical while allowing generic and character ownership
+without oversized source files. See `FRAME_PARTITIONS.md` for the exact mapping
+and gate.

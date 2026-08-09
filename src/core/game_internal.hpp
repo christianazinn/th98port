@@ -12,6 +12,26 @@ namespace th03 {
 namespace detail {
 
 inline constexpr std::size_t player_count = 2;
+inline constexpr std::size_t character_count = 9;
+inline constexpr std::size_t character_reimu = 0;
+inline constexpr std::size_t character_mima = 1;
+inline constexpr std::size_t character_marisa = 2;
+inline constexpr std::size_t character_ellen = 3;
+inline constexpr std::size_t character_kotohime = 4;
+inline constexpr std::size_t character_kana = 5;
+inline constexpr std::size_t character_rikako = 6;
+inline constexpr std::size_t character_chiyuri = 7;
+inline constexpr std::size_t character_yumemi = 8;
+inline constexpr std::int8_t paletted_character_reimu_p1 = 1;
+inline constexpr std::uint8_t shot_mode_none = 0U;
+inline constexpr std::uint8_t shot_mode_one_pair = 1U;
+inline constexpr std::uint8_t shot_mode_two_pairs = 2U;
+inline constexpr std::uint8_t shot_mode_three_pairs = 3U;
+inline constexpr std::uint8_t shot_mode_reimu_hyper = 4U;
+inline constexpr std::uint8_t story_stage_chiyuri = 7U;
+inline constexpr std::uint8_t story_stage_yumemi = 8U;
+inline constexpr std::uint8_t story_stage_after_clear = 9U;
+inline constexpr std::uint8_t story_stage_ending = 99U;
 inline constexpr std::size_t score_digits = 8;
 inline constexpr std::size_t chain_ring_size = 16;
 inline constexpr std::size_t enemy_count = 40;
@@ -33,6 +53,15 @@ inline constexpr std::uint8_t game_mode_vs = game_mode::vs_1p_cpu;
 inline constexpr std::uint8_t game_mode_vs_1p_cpu = game_mode::vs_1p_cpu;
 inline constexpr std::uint8_t game_mode_vs_1p_2p = game_mode::vs_1p_2p;
 inline constexpr std::uint8_t game_mode_vs_cpu_cpu = game_mode::vs_cpu_cpu;
+
+constexpr std::size_t character_index_from_paletted(
+	std::int8_t paletted_character
+) noexcept
+{
+	return static_cast<std::size_t>(
+		(static_cast<int>(paletted_character) - 1) / 2
+	);
+}
 
 enum class DefeatFlag : std::uint8_t {
 	none = 0,
@@ -86,7 +115,7 @@ struct PlayerState {
 	bool is_hit = false;
 	std::uint8_t halfhearts = 0;
 	std::uint8_t invincibility_time = 0;
-	std::uint8_t shot_mode = 0;
+	std::uint8_t shot_mode = shot_mode_none;
 	std::uint8_t knockback_time = 0;
 	std::uint8_t move_lock_time = 0;
 	std::uint8_t knockback_angle = 0;

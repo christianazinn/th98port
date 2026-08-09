@@ -25,13 +25,33 @@ endfunction()
 add_library(th03_core STATIC
 	src/core/game.cpp
 	src/core/frame.cpp
-	src/core/frame/bosses.inl
-	src/core/frame/bullets.inl
+	src/core/frame/boss_common.inl
+	src/core/frame/bullets_core.inl
+	src/core/frame/bullets_transfer.inl
+	src/core/frame/bullets_world.inl
+	src/core/frame/characters/bombs.inl
+	src/core/frame/characters/boss_dispatch.inl
+	src/core/frame/characters/bosses_kotohime_kana.inl
+	src/core/frame/characters/bosses_marisa_ellen.inl
+	src/core/frame/characters/bosses_reimu_mima.inl
+	src/core/frame/characters/bosses_rikako_chiyuri.inl
+	src/core/frame/characters/bosses_yumemi.inl
+	src/core/frame/characters/charge_add.inl
+	src/core/frame/characters/charge_collision.inl
+	src/core/frame/characters/charge_update.inl
+	src/core/frame/characters/extra_dispatch.inl
+	src/core/frame/characters/extra_spawn.inl
+	src/core/frame/characters/extra_update.inl
+	src/core/frame/characters/gauge.inl
+	src/core/frame/characters/kana_extra_bullet.inl
 	src/core/frame/enemies_motion.inl
-	src/core/frame/extra_attacks.inl
-	src/core/frame/player.inl
+	src/core/frame/extra_common.inl
+	src/core/frame/player_actions.inl
+	src/core/frame/player_collision.inl
+	src/core/frame/player_cpu.inl
+	src/core/frame/player_movement.inl
 	src/core/frame/round.inl
-	src/core/frame/shots_charge.inl
+	src/core/frame/shots.inl
 	src/core/frame/world_collision.inl
 	src/core/random.cpp
 	src/core/round_start.cpp
