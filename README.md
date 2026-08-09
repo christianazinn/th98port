@@ -44,6 +44,13 @@ For a standalone installation, pass `--enedat <file>` or set `TH03_ENEDAT`.
 It runs the neutral replay session at unbounded speed, prints every computed
 round split, and reports whether all embedded summaries match.
 
+Run the complete externally stored V11/V12 corpus, including its frozen
+size/SHA-256 lock, with:
+
+```powershell
+tools\verify_replay_corpus_external.ps1 -EvidenceRoot X:\path\to\rec98-harness
+```
+
 Pass the calibrated ENEDAT and frozen Anniversary split to execute the Phase 2
 gate:
 
