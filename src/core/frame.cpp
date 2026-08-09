@@ -4659,6 +4659,12 @@ bool extra_attack_bounds_hittest(
 	std::int16_t bottom
 ) noexcept
 {
+	// hitbox_hittest() rejects every target once the result banner is active.
+	// Extra Attacks that use explicit bounds still go through that same source
+	// helper and must not consume Charge-hit RNG during the result sequence.
+	if(state.defeat_flag == DefeatFlag::banner) {
+		return false;
+	}
 	bool hit = false;
 	for(auto &shot : state.shotpairs) {
 		if(!shot.alive || shot.player_id != player_id) {

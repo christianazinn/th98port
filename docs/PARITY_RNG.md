@@ -461,9 +461,15 @@ unmapped consumer: it was a dispatch error that made an existing complete
 consumer unreachable in source-used state 6. Correcting the complete Rikako
 switch makes TH3R01 exact for all 964 rows and 135,215 samples.
 
+The later V12 retry cursor deltas were extra native consumers rather than
+missing source consumers. `extra_attack_bounds_hittest()` omitted the shared
+`hitbox_hittest()` result-banner rejection, allowing Charge collisions to
+consume two hit-circle values after gameplay had ended. The shared guard closes
+all five affected files.
+
 ### Extra consumers
 
-None found in the native active-round or fresh-round paths.
+None remain in the native active-round, result, or fresh-round paths.
 
 The unused native `randring_next8()` primitive is not a consumer until called.
 `GameInit::random_seed` is likewise not an extra draw; source-correct fresh

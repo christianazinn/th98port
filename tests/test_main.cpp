@@ -1755,6 +1755,36 @@ void test_story_result_route()
 	);
 }
 
+void test_result_banner_suppresses_extra_attack_hittest()
+{
+	th03::detail::DeterministicState state{};
+	state.defeat_flag = th03::detail::DefeatFlag::banner;
+	state.hud_start_flag = 1U;
+	state.players[0].paletted_character = 9;
+
+	auto &attack = state.extra_attacks[0][0];
+	attack.state = 1U;
+	attack.center_x = 144 << 4;
+	attack.center_y = 100 << 4;
+	attack.kotohime_target_y = 200 << 4;
+
+	auto &shot = state.shotpairs[0];
+	shot.alive = true;
+	shot.player_id = 1U;
+	shot.topleft_x = static_cast<std::int16_t>(
+		attack.center_x - (16 << 4)
+	);
+	shot.topleft_y = static_cast<std::int16_t>(
+		attack.center_y - (8 << 4)
+	);
+
+	(void)th03::detail::gameplay_frame_prefix(state, th03::GameContent{});
+	check(
+		shot.alive && state.randring_cursor == 0U,
+		"result banner suppresses the shared Extra Attack hitbox path"
+	);
+}
+
 void test_story_loss_and_versus_result_routes()
 {
 	th03::detail::DeterministicState story{};
@@ -3097,6 +3127,7 @@ int main()
 	test_yumemi_chargeshot_lifecycle_and_collision();
 	test_yumemi_extra_attack_rng_argument_order();
 	test_story_result_route();
+	test_result_banner_suppresses_extra_attack_hittest();
 	test_story_loss_and_versus_result_routes();
 	test_simultaneous_defeat_bonus_owner();
 	test_final_yumemi_result_bonus();

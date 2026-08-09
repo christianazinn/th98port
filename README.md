@@ -51,6 +51,10 @@ size/SHA-256 lock, with:
 tools\verify_replay_corpus_external.ps1 -EvidenceRoot X:\path\to\rec98-harness
 ```
 
+The current lock contains 19 files and 173 embedded round summaries across
+Classic Story, Replay Patch Practice, and ordinary VS. All 19 complete at
+unbounded speed and match every summary.
+
 Pass the calibrated ENEDAT and frozen Anniversary split to execute the Phase 2
 gate:
 

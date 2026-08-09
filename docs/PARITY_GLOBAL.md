@@ -274,6 +274,16 @@ The corrected full grouping is spreads 2-5, Extra Attacks/rings 7-12, and
 four-spreads 6 plus 13-17. A focused test locks boundary states 6, 7, and 13,
 and the complete frozen oracle is now green.
 
+### Closed P0: result-banner Extra Attack collisions
+
+Anniversary's generic `hitbox_hittest()` returns before every collision once
+`defeat_flag == DF_BANNER`. Native Boss, Enemy, and Fireball collision paths
+already preserved that rule, but the explicit-bounds Extra Attack helper did
+not. Result-phase Charge hits could therefore consume two hit-circle random
+values and shift every later retry. The shared guard now covers every Extra
+Attack caller; focused coverage locks the boundary, and the complete 19-file
+V11/V12 replay corpus matches all 173 embedded round summaries.
+
 ### P1: harden deterministic validation
 
 1. Keep reusable semantic subsystem hashes/dumps available for first-
@@ -324,6 +334,8 @@ Current gate status:
 - [x] TH3R01 matches all 964 frozen rows and 135,215 samples.
 - [x] Fresh no-input Demo Gate A matches all 59 frozen rows and 7,827 samples
   through route 0, including both players' CPU update paths.
+- [x] All 19 locked V11/V12 Story, Practice, and VS files complete and match
+  all 173 embedded round summaries.
 - [x] N1/N6 are explicit, tested architecture/input contracts rather than
   host-dependent undefined behavior or silent malformed-input normalization.
 - [ ] Broader mode corpus coverage and future playable clients are needed

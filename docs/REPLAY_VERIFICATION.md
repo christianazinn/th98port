@@ -79,30 +79,40 @@ and `corpus/v12s` produced:
 | V12 TH3R00 | V12 Story | 90,061 | Match, 11/11 summaries |
 | V12 TH3R01 | V12 Story | 102,201 | Match, 11/11 summaries |
 | V12 TH3R02 | V12 Story | 30,326 | Match, 5/5 summaries |
-| V12 TH3R03 | V12 Story | 119,156 | Open after 7 exact summaries; first context divergence at sample 59,608 |
-| V12 TH3R04 | V12 Story | 118,762 | Open after 11 exact summaries; first context divergence at sample 96,307 |
+| V12 TH3R03 | V12 Story | 119,156 | Match, 12/12 summaries |
+| V12 TH3R04 | V12 Story | 118,762 | Match, 13/13 summaries |
 | V12 TH3R05 | V12 ordinary VS | 26,213 | Match, 3/3 summaries |
 | V12-dir TH3R06 | V11 Story | 99,290 | Match, 11/11 summaries |
 | V12 TH3R07 | V12 Story | 101,557 | Match, 9/9 summaries |
-| V12 TH3R08 | V12 Story | 103,852 | Open after 5 exact summaries; first context divergence at sample 34,638 |
-| V12 TH3R10 | V12 Practice | 11,256 | Open after 2 exact summaries; first context divergence at sample 8,611 |
+| V12 TH3R08 | V12 Story | 103,852 | Match, 13/13 summaries |
+| V12 TH3R10 | V12 Practice | 11,256 | Match, 3/3 summaries |
 | V12 TH3R11 | V12 Story | 6,254 | Match, 3/3 summaries |
 | V12 TH3R12 | V12 Story | 101,557 | Match, 9/9 summaries |
-| V12 TH3R13 | V12 Practice | 10,146 | Open after 2 exact summaries; first context divergence at sample 6,820 |
+| V12 TH3R13 | V12 Practice | 10,146 | Match, 3/3 summaries |
 
-The open rows are gameplay/input-context evidence, not parser failures. They
-must be diagnosed at their first source-backed divergence; neither the format
-adapter nor the expected summaries may hide them.
+All 19 locked files complete and all 173 embedded summaries match. Expected
+summaries remain comparison-only; neither the format adapter nor the replay
+runner uses them to initialize, repair, or steer gameplay.
 
 ### Repeat-boundary localization
 
-All five open files cross a route-1 repeat before their first visible context
-failure. Their recorded/native random-ring cursors at the relevant round starts
-are R03 `139/143`, R04 `111/125`, R08 `71/114`, R10 `163/167`, and R13
+The five formerly failing files crossed a route-1 repeat before their first
+visible context failure. Their recorded/native random-ring cursors at the
+relevant round starts were R03 `139/143`, R04 `111/125`, R08 `71/114`, R10 `163/167`, and R13
 `132/138`. Earlier repeat starts in the same files agree where present (R04
 `149/149` and `27/27`, R08 `191/191`, R10 `109/109`, and R13 `136/136`). The
 delta therefore accrues during the preceding active round rather than inside
 the repeat reset itself.
+
+The common source-backed cause was the result-banner early return in
+`th03/main/hitbox.cpp:hitbox_hittest()`. Native Boss, Enemy, and Fireball paths
+already modeled that shared guard, but `extra_attack_bounds_hittest()` did not.
+Charge collisions against moving Extra Attacks therefore consumed two visual
+hit-circle ring values after the result banner was active. In TH3R03 the first
+extra reads occurred at global frames 58,952 and 58,954, producing the exact
+four-value retry cursor delta. Applying the guard at the shared Extra Attack
+hitbox boundary removes the equivalent drift in all five files without
+changing object updates, collision maps, expected data, or replay parsing.
 
 The original uninitialized formation-previous landmine is not the cause in
 these recordings. Replaying the exact startup IRAND sequence from every V12
