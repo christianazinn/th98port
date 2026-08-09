@@ -16,15 +16,18 @@
 
 The native code is a clean mechanical reimplementation of documented formats
 and semantics. It contains no original game assets, replay corpus, or
-framebuffer captures. One explicit 268-byte compatibility profile reproduces
-initialized Borland runtime DGROUP bytes at `0x1076..0x1181`. Anniversary
-`player_hittest()` can read and bit-mask that region when a broad CPU collision
-probe wraps before `_collmap` at `0x4BA0`; replacing the profile with zero or a
-boolean occupancy map changes gameplay. The profile is isolated, named, and
-mapped to the `cputype`, `fbrk`, `signal`, `_pathops`, `srchenv`, `srchstr`,
-`setvbuf`, `sysnerr`, `setenvp`, `strings`, and `loadprog` runtime contributions
-shown by the Anniversary-compatible MAIN linker map. It is compiler-runtime
-compatibility data, not a game asset or a general resident-memory image.
+framebuffer captures. Anniversary `player_hittest()` can wrap a broad CPU
+collision probe before `_collmap` at `0x4BA0` and bit-mask unrelated initialized
+DGROUP bytes. Native reconstructs the public-domain master.lib `SinTable8` and
+`CosTable8` bytes at `0x0316..0x0595` from the already-ported integer trig
+functions, and one explicit 268-byte compatibility profile reproduces the
+Borland runtime bytes at `0x1076..0x1181`. Replacing either byte source with
+zero or a boolean occupancy map changes gameplay. The runtime profile is
+isolated, named, and mapped to the `cputype`, `fbrk`, `signal`, `_pathops`,
+`srchenv`, `srchstr`, `setvbuf`, `sysnerr`, `setenvp`, `strings`, and `loadprog`
+contributions shown by the Anniversary-compatible MAIN linker map. These are
+compiler/layout compatibility semantics, not game assets or a general
+resident-memory image.
 
 Phase 2 matches all 46 canonical rows through TH3R03's first natural round
 completion. The core consumes 6,773 logical samples, including 47 exact
@@ -40,6 +43,16 @@ Ellen Charge Shot in the same update after CPU movement activates Hyper.
 TH3R01 was closed by restoring the complete Rikako Boss switch grouping:
 source state 6 enters the four-spread callback and consumes its angle/type
 draws before emitting eight bullets.
+
+A fresh no-input Demo/attract Gate A case also matches all 59 schema-3 rows and
+7,827 samples through route 0. Its first pre-fix divergence was global frame
+262: P1's 80-tile CPU probe wrapped to the little-endian `SinTable8` bytes at
+DGROUP `0x0351..0x0352`. The source masked `0xAC`, reported a collision, and
+selected the rightward avoidance route; native had previously treated that
+region as zero. The frozen case SHA-256 is
+`816A6574035E2A18C86F6EBCF66DF084E2EB0C379417E93A2DE9A9F706A1CB91`; its
+Master schema-3 split SHA-256 is
+`8FFCC69D33C1B9647F95E7ED4524D68EB5F1A89D17A22D97E871B68576011B1E`.
 
 Static parity ledgers cover all nine characters, the complete stock-used frame
 pipeline, RNG consumers, numeric semantics, repeat-round reset, and terminal

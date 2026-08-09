@@ -152,7 +152,7 @@ all 3 split summaries.
 |---|---|---|---|---|
 | `main/collmap.asm`, `collmap_reset.asm`, `colvline.cpp` | map clear and `collmap_set_enemy`, `_fireball`, `_rect_striped`, `_bullet` | Every active round | Complete for translated writers | Tile math, vertical stride four, rectangle/vline clipping, and bottom boundary compare. |
 | `main/collmap_slope.asm` | `collmap_set_slope_striped()` | Chiyuri Extra Attack | Complete | The slope writer and Chiyuri producer are both present. |
-| `main/player/move.cpp:player_hittest` and ASM dependencies | native `player_hittest()` | Every vulnerable player update | Complete Anniversary-compatibility behavior | Packed scan, clipping, first-column mask, and the negative-column register-alias behavior are intentionally reproduced. The isolated `anniversary_borland_runtime_collision_alias_profile` models the exact initialized DGROUP region a wrapped probe can bit-mask; `PROVENANCE.md` records its linker-map ownership and compatibility scope. |
+| `main/player/move.cpp:player_hittest` and ASM dependencies | native `player_hittest()` | Every vulnerable player update | Complete for frozen stock coverage | Packed scan, clipping, first-column mask, and the negative-column register-alias behavior are intentionally reproduced. P1's wrapped access to the public-domain master.lib sine/cosine tables is reconstructed semantically; P2's observed Borland-runtime access uses the isolated `anniversary_borland_runtime_collision_alias_profile`. `PROVENANCE.md` records their linker-map ownership and compatibility scope. |
 | `main/player/move.cpp:player_update`, movement and charge logic | `player_update_begin/finish`, `player_update_human()` | Human-controlled players | Complete shared logic | Input timing, movement fallback, clamps, charge/release, bomb gate, hyper lifetime, knockback, damage, and shot gate are closed. TH3R00 specifically verifies source fallthrough that releases a pending Ellen charge in the same update after CPU movement activates Hyper. |
 | `main/player/c433.cpp`, `c54a.cpp`, `c568.cpp`, CPU parts of `bomb.cpp`; target helper in `main/bullet/bullet.cpp:sub_16983` | `cpu_safe_move()`, `cpu_target_movement()`, `cpu_target_point()`, `player_update_cpu()` | Story P2 and VS CPU | Complete shared logic at snapshot | Both P1 and P2 select CPU update by `is_cpu`. VS safety frames are initialized for both. Target priority, boss/no-target sentinels, bounds fallback, safety phase, discarded `%3` ring draw, dodge, charge, and bomb thresholds compare. |
 | same CPU source, retry/random-strategy fragments | no distinct native retry branch | Not effectively reachable | Effective stock parity, document as quirk | Counter/control flow makes the apparent retry/random dodge-strategy path unreachable. Do not “restore” it without proving reachability. |
@@ -293,8 +293,8 @@ and the complete frozen oracle is now green.
    faulting edge.
 2. Retain N6's narrow Story construction validation and generic-ring invariants
    without rejecting source-valid stale resident bytes in non-Story modes.
-3. Keep the Anniversary DGROUP collision-alias profile isolated, documented,
-   and covered by its compatibility tests.
+3. Keep the Anniversary DGROUP collision aliases isolated, source-derived,
+   documented, and covered by both P1 game-table and P2 runtime-profile tests.
 4. Decide whether final unused resident bytes require byte parity or remain a
    documented terminal-state normalization.
 
@@ -322,6 +322,8 @@ Current gate status:
 - [x] TH3R00 and TH3R02-05 complete their frozen oracles through natural
   terminal boundaries.
 - [x] TH3R01 matches all 964 frozen rows and 135,215 samples.
+- [x] Fresh no-input Demo Gate A matches all 59 frozen rows and 7,827 samples
+  through route 0, including both players' CPU update paths.
 - [x] N1/N6 are explicit, tested architecture/input contracts rather than
   host-dependent undefined behavior or silent malformed-input normalization.
 - [ ] Broader mode corpus coverage and future playable clients are needed
