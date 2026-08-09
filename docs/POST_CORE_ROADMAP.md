@@ -46,30 +46,33 @@ In particular:
 
 ### Branch and worktree layout
 
-Do not develop V13 on the port-oracle branch or directly on the protected
-`replays` branch.
+Continue the established development lines instead of creating another pair of
+short-lived topics:
 
-1. Create a fresh outer harness worktree and topic branch from
-   `emdash/replays-and-validation-17ptz` at its accepted tip. A descriptive
-   branch name such as `emdash/th03-replay-v13` keeps PC-98 replay work
-   independent from the port.
-2. In that worktree's ReC98 submodule, branch from the accepted `replays` tip
-   (`f4a080c5` at the time of this record) onto a topic such as
-   `replays-v13`. Do not add development commits directly to `replays`.
+1. Use outer `emdash/replays-and-validation-17ptz` as the active integration
+   tip. It contains the completed libth03 and oracle-planning histories and is
+   the branch checked out in the corpus-bearing harness worktree.
+2. Develop the PC-98 format and patch directly on ReC98 `replays`, beginning at
+   `f4a080c5`. Land the deterministic formation-previous repair before V13
+   changes expand or perturb the executable layout. Push coherent accepted
+   Replay Patch commits, then advance the outer ReC98 gitlink.
 3. Finalize the V13 PC-98 specification, reader/writer, conversion tool, and
-   emulator evidence there. Merge that topic through the normal Replay Patch
-   acceptance path.
-4. Only after the byte and semantic contract is frozen, create a port topic
-   from the then-current libth03 branch. Add the V13 adapter to
-   `th03_formats` and version dispatch to the replay clients. The core and
-   neutral runner should not change merely because V13 exists.
-5. Merge or rebase later port work onto the accepted replay-format work in the
-   ordinary direction. Do not rebase the protected Replay Patch history under
-   the port.
+   emulator evidence on those active lines. Keep the frozen
+   `harness/TH03-ORACLE-*` branches unchanged.
+4. After the byte and semantic contract is frozen, continue native adapter work
+   at the tip of the existing `emdash/th03-v12-normalizer` branch/worktree; do
+   not create another port topic. Add V13 to `th03_formats` and version dispatch
+   to replay clients. The core and neutral runner should not change merely
+   because V13 exists.
+5. Merge the resulting native-port commits back into
+   `emdash/replays-and-validation-17ptz`, keeping that outer integration branch
+   strictly ahead. Publish a fresh port-only subtree checkpoint to the
+   standalone libth03 remote.
 
-This keeps three histories distinct: PC-98 product work, validation harness
-work, and native-port work. It also lets V13 evolve without blocking further
-Classic-core verification.
+This retains distinct PC-98 product, validation-harness, and native-port commit
+ownership without accumulating dead topic branches. Temporary divergence is
+allowed while a parcel is being developed, but the accepted outer integration
+tip must merge every completed line before the next product layer begins.
 
 ### Format contract
 
