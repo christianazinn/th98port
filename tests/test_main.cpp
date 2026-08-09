@@ -552,7 +552,7 @@ void test_score_most_significant_digit_is_not_bcd_normalized()
 	);
 }
 
-void test_combo_hits_above_display_limit_remain_canonical()
+void test_anniversary_combo_display_limit()
 {
 	th03::detail::DeterministicState state{};
 	state.hud_start_flag = 1U;
@@ -578,17 +578,17 @@ void test_combo_hits_above_display_limit_remain_canonical()
 	check(
 		th03::detail::gameplay_frame_prefix(state, th03::GameContent{}) &&
 		state.chains.hits[0][0] == 113U &&
-		state.combos[0].hits_highest == 113U &&
+		state.combos[0].hits_highest == 99U &&
 		state.players[0].combo_hits_max == 113U,
-		"Combo state preserves source values above the renderer's 99-hit limit"
+		"Anniversary clamps the live combo display while preserving the raw defeat-screen maximum"
 	);
 
-	auto display_capped = state;
-	display_capped.combos[0].hits_highest = 99U;
+	auto replay_three_digit = state;
+	replay_three_digit.combos[0].hits_highest = 113U;
 	check(
-		th03::detail::state_hash(state) !=
-			th03::detail::state_hash(display_capped),
-		"Canonical hashing distinguishes raw combo hits above the display limit"
+		th03::detail::state_hash(state) ==
+			th03::detail::state_hash(replay_three_digit),
+		"Anniversary canonical hashing normalizes the Replay Patch's three-digit combo extension"
 	);
 }
 
@@ -3074,7 +3074,7 @@ int main()
 	test_game_init_source_domain();
 	test_round_start_snapshot_restoration();
 	test_score_most_significant_digit_is_not_bcd_normalized();
-	test_combo_hits_above_display_limit_remain_canonical();
+	test_anniversary_combo_display_limit();
 	test_defeat_playfield_shake();
 	test_th3r03_round_start();
 	test_th3r03_second_stage_start();

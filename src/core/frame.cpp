@@ -235,13 +235,16 @@ std::uint16_t combo_add(
 	auto &player = state.players[player_id];
 	player.combo_hits_max = std::max(player.combo_hits_max, hits);
 	player.combo_bonus_max = std::max(player.combo_bonus_max, combo.bonus_total);
+	// Anniversary caps only the active display field. Replay's three-digit
+	// extension removes this cap, but both branches refresh time below first.
+	const auto display_hits = std::min<std::uint8_t>(hits, 99U);
 	if(hits > 99U && combo.bonus_total != 0xFFFFU) {
 		combo.time = 80U;
 	}
 	if(
-		hits > combo.hits_highest || combo.time < 32U
+		display_hits > combo.hits_highest || combo.time < 32U
 	) {
-		combo.hits_highest = hits;
+		combo.hits_highest = display_hits;
 		if(combo.bonus_total != 0xFFFFU) {
 			combo.time = 80U;
 		}

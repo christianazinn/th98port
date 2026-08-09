@@ -94,6 +94,14 @@ The open rows are gameplay/input-context evidence, not parser failures. They
 must be diagnosed at their first source-backed divergence; neither the format
 adapter nor the expected summaries may hide them.
 
+The Replay Patch's three-digit combo display is not one of those gameplay
+divergences. Anniversary stores at most 99 in the active display field while
+retaining the raw 8-bit chain and defeat-screen maximum; Replay stores the raw
+value in the display field as well. Both execute the same unconditional
+post-99 timer refresh before that assignment. The Classic core therefore keeps
+Anniversary's display state and canonical normalization without changing score,
+combo duration, or V12 summary verification.
+
 V12 TH3R05's source-backed correction was shared bullet-template inheritance.
 At sample 3,626, a Kana Boss ring must inherit angle `0x40` from Kana Extra
 earlier in the same gameplay prefix; native had hardcoded 0. The rotated ring
