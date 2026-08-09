@@ -7,7 +7,7 @@
 | `formats/t3split.cpp` | Replay `th03/replay_format.hpp`, `tools/replay/export_splits.ps1`, and `tools/port/compare_th03_oracle_splits.ps1` |
 | `formats/v11.cpp` | Replay `th03/replay_format.hpp`, `tools/replay/rpy_snapshot.psm1`, and `tools/port/normalize_replay.ps1` |
 | `replay/session.hpp` | audited T3CASE/V11 input and process-boundary semantics; deliberately independent of either document layout |
-| `core/game.cpp` and `core/frame.cpp` | Anniversary `th03/main/rndloop.cpp:sub_9778()` update order plus player, CPU, shot, enemy, fireball, transfer-pellet, Extra Attack, chain/combo, charge-shot, collision-map, warning/interstitial, HUD-start, and background routines reached by TH3R03 |
+| `core/game.cpp` and `core/frame.cpp` | Anniversary `th03/main/rndloop.cpp:sub_9778()` update order and the complete stock-used gameplay callback inventory documented by the `PARITY_*` ledgers |
 | `core/state_hash.cpp` and private deterministic state | Anniversary `th03/main/t3case.cpp:t3case_state_hash()` schema 3 plus the semantic structures named in `TH3R03_ROUND_DOSSIER.md` |
 | round startup/frame sequencing | Anniversary `th03/main/{rstart.cpp,resscore.cpp,rndloop.cpp,roundcb.cpp}` at `3e2381d4` |
 | `core/random.cpp` | Anniversary random-ring call sites and master.lib IRAND behavior, including the adjacent-byte 16-bit cursor quirk |
@@ -15,8 +15,16 @@
 | `formats/enedat.cpp` | Anniversary `th03/formations/*`, `th03/enemy/*`, and calibrated original `ENEDAT.DAT` layout; scripts are parsed as content, never copied executable state |
 
 The native code is a clean mechanical reimplementation of documented formats
-and semantics. It contains no original game assets, executable bytes, replay
-corpus, framebuffer captures, or broad memory dumps.
+and semantics. It contains no original game assets, replay corpus, or
+framebuffer captures. One explicit 268-byte compatibility profile reproduces
+initialized Borland runtime DGROUP bytes at `0x1076..0x1181`. Anniversary
+`player_hittest()` can read and bit-mask that region when a broad CPU collision
+probe wraps before `_collmap` at `0x4BA0`; replacing the profile with zero or a
+boolean occupancy map changes gameplay. The profile is isolated, named, and
+mapped to the `cputype`, `fbrk`, `signal`, `_pathops`, `srchenv`, `srchstr`,
+`setvbuf`, `sysnerr`, `setenvp`, `strings`, and `loadprog` runtime contributions
+shown by the Anniversary-compatible MAIN linker map. It is compiler-runtime
+compatibility data, not a game asset or a general resident-memory image.
 
 Phase 2 matches all 46 canonical rows through TH3R03's first natural round
 completion. The core consumes 6,773 logical samples, including 47 exact
@@ -24,9 +32,18 @@ completion. The core consumes 6,773 logical samples, including 47 exact
 route 2 at round frame 5,503/result frame 336. Its final scores and schema-3
 hash match Anniversary.
 
-Phase 3 currently matches the same frozen run through global sample 16,000.
-The exercised additions include typed MAIN/MAINL transitions, subsequent Story
-round initialization, Rikako and Ellen boss behavior, and Reimu, Rikako, Kana,
-and Ellen gauge-attack callbacks. Mima's mechanically translated gauge-attack
-callback is present but has not yet been accepted by an oracle checkpoint.
-The next first divergence is P1's score at sample 16,128.
+Phase 3 has complete frozen-oracle matches for TH3R00 (715/715 rows, 100,642
+samples), TH3R02 (626/626, 91,939), TH3R03 (186/186, 25,211), TH3R04
+(627/627, 86,437), and TH3R05 (783/783, 111,747). TH3R00 was closed by
+preserving source fallthrough that releases a pending P2 Ellen Charge Shot in
+the same update after CPU movement activates Hyper. TH3R01 remains the sole
+active integration gate: it is exact through sample 19,200 and
+first differs in the schema-3 state hash at row 144/sample 19,328 while both
+scores remain exact (Story stage 3, Mima versus Rikako).
+
+Static parity ledgers cover all nine characters, the complete stock-used frame
+pipeline, RNG consumers, numeric semantics, repeat-round reset, and terminal
+MAIN/MAINL session mutations. Schema 3 does not identify every hidden
+entity/projectile subsystem, so the remaining first divergence stays an
+integration gate rather than a completeness-discovery mechanism. See
+`PHASE3_CORPUS_STATUS.md` for the live evidence ledger.

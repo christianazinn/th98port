@@ -41,12 +41,12 @@ out\build\msvc-x64\Debug\th03-headless.exe `
   --oracle X:\path\T3SPLIT.BIN
 ```
 
-The command must report `oracle_status=same-prefix`, 46/186 rows, a natural
-terminal after 6,773 samples, route 2, and final scores `01090503`/`00434365`.
-This remains the stable Phase 2 contract. On the Phase 3 development branch,
-the same command continues across process boundaries and matches the frozen
-TH3R03 oracle through global sample 16,000; the first unvalidated divergence
-is P1's score at sample 16,128.
+The first MAIN process remains the stable Phase 2 contract: 46 rows, 6,773
+logical samples, route 2, and final scores `01090503`/`00434365`. Phase 3 now
+continues across process and repeat-round boundaries. TH3R03 matches all
+186/186 rows, TH3R04 all 627/627 rows, TH3R05 all 783/783 rows, TH3R02 all
+626/626 rows, and TH3R00 all 715/715 rows through their natural terminal
+boundaries. TH3R01 remains the active corpus-expansion work.
 
 Run the complete external Phase 0 lock with:
 

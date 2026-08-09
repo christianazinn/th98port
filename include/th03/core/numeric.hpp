@@ -50,6 +50,22 @@ constexpr T wrap_negate(T value) noexcept
 	return from_bits<T>(static_cast<unsigned_t<T>>(0U - bits(value)));
 }
 
+template <std::integral T>
+constexpr T wrap_multiply(T left, T right) noexcept
+{
+	return from_bits<T>(static_cast<unsigned_t<T>>(bits(left) * bits(right)));
+}
+
+template <std::integral T>
+constexpr T wrap_shift_left(T value, unsigned count) noexcept
+{
+	constexpr auto width = std::numeric_limits<unsigned_t<T>>::digits;
+	if(count >= width) {
+		return from_bits<T>(0U);
+	}
+	return from_bits<T>(static_cast<unsigned_t<T>>(bits(value) << count));
+}
+
 template <std::signed_integral T>
 constexpr T arithmetic_shift_right(T value, unsigned count) noexcept
 {

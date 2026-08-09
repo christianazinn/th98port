@@ -1,0 +1,28 @@
+# Phase 3 Classic corpus status
+
+Snapshot: **2026-08-08**. All results below invoke `th03-headless` with the
+external canonical T3CASE, calibrated `ENEDAT.DAT`, and the frozen Anniversary
+`T3SPLIT.BIN` passed explicitly as `--oracle`.
+
+| Case | Current result | First open boundary |
+|---|---|---|
+| TH3R00 | Green | 715/715 canonical rows and all 100,642 samples. The first hidden divergence had been frame 8,836: CPU-triggered Hyper must fall through to release an already-pending Ellen Charge Shot in the same player update. |
+| TH3R01 | In progress | Exact through sample 19,200; row 144/sample 19,328 first differs in schema-3 state hash while both scores remain exact. This is Story Stage 3, P1 Mima against P2 Rikako. |
+| TH3R02 | Green | 626/626 canonical rows and all 91,939 samples. The first hidden divergence had been frame 38,336: Kana Extra writes the shared bullet-template angle before Kana Boss intentionally inherits it later in the same prefix. |
+| TH3R03 | Green | 186/186 canonical rows and all 25,211 samples. |
+| TH3R04 | Green | 627/627 canonical rows and all 86,437 samples. |
+| TH3R05 | Green | 783/783 canonical rows and all 111,747 samples. |
+
+TH3R00 and TH3R02 cover their complete Story and process lifecycles; TH3R02
+includes its terminal Continue-request boundary. TH3R04 and TH3R05 cover
+route-1 repeat rounds. Their repeat-round mismatch was
+resolved by restoring the exact `sub_9778()` HUD-start schedule: the HUD makes
+`enemy_formations_update()` return, but bullets, existing enemies, fireballs,
+and both players' gauge-pattern callbacks still update. The old native prefix
+returned early from all of those systems. The headless coordinator now also
+accepts terminal MAINL boundaries that reach the typed ending, exit, or
+Continue-request application seam without inventing another gameplay process.
+
+This table records validation coverage, not implementation scope. Phase 3 still
+requires every stock-reachable gameplay callback and lifecycle path even if no
+current replay happens to exercise it.

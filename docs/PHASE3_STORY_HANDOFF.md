@@ -27,13 +27,22 @@ design.
 
 ## Current validation boundary
 
-The typed coordinator and the progressively expanded Classic gameplay core
-match the frozen Anniversary TH3R03 oracle through global sample 16,000. This
-includes the complete first and second gameplay processes, both intervening
-MAINL boundaries, and Stage 3 through Ellen's active boss and gauge-attack
-patterns. The warning interstitial that begins after sample 14,464 is also
-scheduled and consumed with its source input-boundary semantics.
+The typed coordinator and Classic gameplay core match the frozen Anniversary
+oracles for the complete TH3R00, TH3R02, TH3R03, TH3R04, and TH3R05 documents:
 
-The next first failure is at sample 16,128, where P1's score differs before
-the rest of the run has been validated. Expected oracle values remain
+- TH3R00: 715/715 canonical rows and 100,642 logical samples;
+- TH3R02: 626/626 canonical rows and 91,939 logical samples;
+- TH3R03: 186/186 canonical rows and 25,211 logical samples;
+- TH3R04: 627/627 canonical rows and 86,437 logical samples; and
+- TH3R05: 783/783 canonical rows and 111,747 logical samples.
+
+This includes all MAIN/MAINL transitions, route-1 repeat rounds, recorded
+pause and warning interstitials, final terminal MAINL boundaries, and both
+Story-victory and Continue-request handoffs represented by the typed session
+transition API. A source-backed pipeline correction was required for repeats:
+`sub_9778()` continues bullet, enemy, fireball, and gauge-pattern updates while
+the round-start HUD suppresses only formation spawning. The native prefix had
+previously frozen that entire suffix until the HUD completed.
+
+TH3R01 remains the sole open corpus case. Expected oracle values remain
 comparison-only and never initialize, repair, or steer simulation.

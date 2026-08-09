@@ -7,17 +7,47 @@
 
 namespace th03 {
 
-Game::Impl::Impl(const GameInit &init, GameContent content_) :
+namespace {
+
+constexpr std::uint16_t input_cancel = 0x1000U;
+
+StepResult finish_gameplay_frame(auto &impl)
+{
+	const auto input_boundary = detail::canonical_state(impl.state);
+	if(detail::gameplay_frame_suffix_before_interstitial(impl.state)) {
+		impl.warning_interstitial_samples_remaining = 27U;
+		return StepResult{StepStatus::phase_transition, input_boundary};
+	}
+	detail::gameplay_frame_suffix_after_interstitial(impl.state);
+	if(impl.state.round_complete) {
+		return StepResult{
+			(impl.state.route == 1U)
+				? StepStatus::round_transition
+				: StepStatus::terminal,
+			input_boundary,
+		};
+	}
+	return StepResult{StepStatus::running, input_boundary};
+}
+
+} // namespace
+
+Game::Impl::Impl(
+	const GameInit &init, GameContent content_, GameOptions options
+) :
 	state(detail::initialize_first_round(
 		init, content_.enemy_formations.size()
 	)),
 	initial_init(init),
 	autofire_mask(init.autofire_mask),
-	content(std::move(content_))
+	content(std::move(content_)),
+	replay_pause_adapter(
+		options.input_protocol == InputProtocol::recorded_replay
+	)
 {}
 
-Game::Game(GameInit init, GameContent content) :
-	impl_(std::make_unique<Impl>(init, std::move(content)))
+Game::Game(GameInit init, GameContent content, GameOptions options) :
+	impl_(std::make_unique<Impl>(init, std::move(content), options))
 {}
 
 Game::Game(Game &&) noexcept = default;
@@ -27,10 +57,17 @@ Game::~Game() = default;
 std::expected<Game, Error> Game::create(const GameInit &init)
 
 {
-	return create(init, GameContent{});
+	return create(init, GameContent{}, GameOptions{});
 }
 
 std::expected<Game, Error> Game::create(const GameInit &init, GameContent content)
+{
+	return create(init, std::move(content), GameOptions{});
+}
+
+std::expected<Game, Error> Game::create(
+	const GameInit &init, GameContent content, GameOptions options
+)
 {
 	if((init.autofire_mask & 0xFCU) != 0U) {
 		return std::unexpected(Error{
@@ -44,18 +81,43 @@ std::expected<Game, Error> Game::create(const GameInit &init, GameContent conten
 			"game content contains more than 24 enemy formations",
 		});
 	}
-	return Game(init, std::move(content));
+	if(content.enemy_formations.size() == 1U) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"one enemy formation cannot satisfy the source non-repeat draw",
+		});
+	}
+	for(const auto paletted_character : init.paletted_character) {
+		if(paletted_character < 1 || paletted_character > 18) {
+			return std::unexpected(Error{
+				ErrorCode::invalid_value,
+				"paletted character must be in the source range 1..18",
+			});
+		}
+	}
+	return Game(init, std::move(content), options);
 }
 
 StepResult Game::step(CoreInput input, InputContext context)
 {
-	if(impl_->state.route != 0U) {
+	if(impl_->state.round_complete) {
 		return StepResult{
-			StepStatus::terminal,
+			(impl_->state.route == 1U)
+				? StepStatus::round_transition
+				: StepStatus::terminal,
 			detail::canonical_state(impl_->state),
 		};
 	}
 	if(context == InputContext::interstitial) {
+		if(impl_->replay_pause_deferred) {
+			impl_->state.input_player = {input.p1, input.p2};
+			impl_->state.input_system = input.system;
+			impl_->state.global_frame++;
+			return StepResult{
+				StepStatus::running,
+				detail::canonical_state(impl_->state),
+			};
+		}
 		if(impl_->warning_interstitial_samples_remaining == 0U) {
 			return StepResult{
 				StepStatus::invalid_input_context,
@@ -67,14 +129,22 @@ StepResult Game::step(CoreInput input, InputContext context)
 		impl_->warning_interstitial_samples_remaining--;
 		if(impl_->warning_interstitial_samples_remaining == 0U) {
 			detail::gameplay_frame_suffix_after_interstitial(impl_->state);
-			if(impl_->state.route != 0U) {
-				return StepResult{StepStatus::terminal, input_boundary};
+			if(impl_->state.round_complete) {
+				return StepResult{
+					(impl_->state.route == 1U)
+						? StepStatus::round_transition
+						: StepStatus::terminal,
+					input_boundary,
+				};
 			}
 			return StepResult{StepStatus::phase_transition, input_boundary};
 		}
 		return StepResult{StepStatus::running, input_boundary};
 	}
-	if(impl_->warning_interstitial_samples_remaining != 0U) {
+	if(
+		impl_->warning_interstitial_samples_remaining != 0U ||
+		impl_->replay_pause_deferred
+	) {
 		return StepResult{
 			StepStatus::invalid_input_context,
 			detail::canonical_state(impl_->state),
@@ -88,15 +158,37 @@ StepResult Game::step(CoreInput input, InputContext context)
 	}
 	detail::gameplay_input_latch(impl_->state, input, impl_->autofire_mask);
 	const auto input_boundary = detail::canonical_state(impl_->state);
-	if(detail::gameplay_frame_suffix_before_interstitial(impl_->state)) {
-		impl_->warning_interstitial_samples_remaining = 27U;
+	if(
+		impl_->replay_pause_adapter &&
+		(impl_->state.input_system & input_cancel) != 0U
+	) {
+		impl_->replay_pause_gameplay_input = impl_->state.input_player;
+		impl_->replay_pause_input_boundary = input_boundary;
+		impl_->replay_pause_deferred = true;
 		return StepResult{StepStatus::phase_transition, input_boundary};
 	}
-	detail::gameplay_frame_suffix_after_interstitial(impl_->state);
-	if(impl_->state.route != 0U) {
-		return StepResult{StepStatus::terminal, input_boundary};
+	return finish_gameplay_frame(*impl_);
+}
+
+std::expected<StepResult, Error> Game::finish_deferred_frame(
+	DeferredFrameAction action
+)
+{
+	if(!impl_->replay_pause_deferred || impl_->state.round_complete) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"game has no replay-pause frame awaiting completion",
+		});
 	}
-	return StepResult{StepStatus::running, input_boundary};
+	impl_->state.input_player = impl_->replay_pause_gameplay_input;
+	impl_->state.input_system = 0U;
+	impl_->replay_pause_deferred = false;
+	if(action == DeferredFrameAction::exit_session) {
+		impl_->state.session_exit_requested = true;
+	}
+	auto result = finish_gameplay_frame(*impl_);
+	result.input_boundary_state = impl_->replay_pause_input_boundary;
+	return result;
 }
 
 CanonicalState Game::canonical_state() const
@@ -104,38 +196,184 @@ CanonicalState Game::canonical_state() const
 	return detail::canonical_state(impl_->state);
 }
 
+std::expected<void, Error> Game::start_next_round()
+{
+	if(!impl_->state.round_complete || impl_->state.route != 1U) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"game is not at a route-1 round boundary",
+		});
+	}
+	detail::initialize_repeat_round(
+		impl_->state,
+		impl_->initial_init,
+		impl_->content.enemy_formations.size()
+	);
+	impl_->warning_interstitial_samples_remaining = 0U;
+	impl_->replay_pause_deferred = false;
+	return {};
+}
+
+std::expected<void, Error> Game::finish_main_process()
+{
+	if(
+		!impl_->state.round_complete || impl_->state.route == 1U ||
+		impl_->main_process_finished
+	) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"game is not at an unfinished terminal MAIN boundary",
+		});
+	}
+	// main_entry() performs this write after t3case_route() and before
+	// t3case_finish(), for every route that leaves MAIN.
+	impl_->state.resident_rand = static_cast<std::int32_t>(
+		impl_->state.round_frame
+	);
+	impl_->main_process_finished = true;
+	return {};
+}
+
+namespace detail {
+
+std::expected<SessionTransition, Error> build_session_transition(
+	const DeterministicState &state,
+	const GameInit &initial_init,
+	bool main_process_finished,
+	std::optional<ContinueChoice> continue_choice
+)
+{
+	if(!main_process_finished || state.route == 1U) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"game is not at a finished MAIN boundary",
+		});
+	}
+
+	SessionTransition transition{};
+	transition.resident = initial_init;
+	auto &resident = transition.resident;
+	resident.global_frame = state.global_frame;
+	resident.resident_rand = state.resident_rand;
+	resident.random_seed = state.round_frame;
+	resident.story_lives = state.story_lives;
+	resident.skill = state.skill;
+	resident.winner = state.winner;
+	resident.runtime_snapshot.reset();
+
+	// Route 0 jumps directly back to OP. In particular, MAIN does not perform
+	// its otherwise-unconditional Story-stage increment or score persistence.
+	if(state.route == 0U) {
+		transition.action = SessionAction::exit_to_operator;
+		return transition;
+	}
+
+	// sub_9778() persists the appropriate live score before returning route 2.
+	// Story always registers P1, including a loss; VS registers its independently
+	// selected resident winner. MAIN increments the stage byte after T3CASE's
+	// finish row and before starting MAINL, even outside Story mode.
+	const auto score_owner = static_cast<std::size_t>(
+		(state.game_mode == 1U) ? 0U : static_cast<std::uint8_t>(state.winner)
+	);
+	if(score_owner >= state.score.size()) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"resident winner is outside the source player range",
+		});
+	}
+	resident.last_score = {};
+	resident.last_score[score_owner] = state.score[score_owner];
+	resident.story_stage = exact::wrap_add(
+		resident.story_stage, std::uint8_t{1U}
+	);
+
+	if(state.game_mode != 1U) {
+		transition.action = SessionAction::exit_to_operator;
+		return transition;
+	}
+
+	if(state.winner == 0) {
+		if(resident.story_stage == 9U) {
+			// sub_9887() first performs a terminal out-of-bounds opponent read.
+			// It cannot affect later gameplay, so the architecture-neutral core
+			// deliberately retains the last valid P2 value rather than modeling an
+			// executable-layout byte. ending_staff_and_regist() then sets stage 99
+			// before invoking high-score registration.
+			resident.story_stage = 99U;
+			transition.high_score_registration = resident;
+			transition.action = SessionAction::ending;
+			return transition;
+		}
+		if(resident.story_stage >= resident.story_opponents.size()) {
+			return std::unexpected(Error{
+				ErrorCode::invalid_value,
+				"Story stage cannot start another gameplay process",
+			});
+		}
+		resident.paletted_character[1] =
+			resident.story_opponents[resident.story_stage];
+		const auto opponent = static_cast<std::uint8_t>(
+			(static_cast<int>(resident.paletted_character[1]) - 1) / 2
+		);
+		if(resident.story_stage < 7U && opponent >= 7U) {
+			resident.paletted_character[1] = 1;
+		}
+		transition.action = SessionAction::start_gameplay;
+		return transition;
+	}
+
+	// MAINL registers the P1 score before continue_menu() clears both arrays.
+	transition.high_score_registration = resident;
+	resident.last_score = {};
+	if(resident.remaining_credits == 0U) {
+		// The no-credit early return happens before stage/lives are restored.
+		transition.action = SessionAction::exit_to_operator;
+		return transition;
+	}
+	if(!continue_choice) {
+		transition.action = SessionAction::request_continue;
+		return transition;
+	}
+
+	resident.story_stage = exact::wrap_subtract(
+		resident.story_stage, std::uint8_t{1U}
+	);
+	resident.story_lives = 2U;
+	if(*continue_choice == ContinueChoice::accept) {
+		resident.remaining_credits = exact::wrap_subtract(
+			resident.remaining_credits, std::uint8_t{1U}
+		);
+		transition.action = SessionAction::start_gameplay;
+	} else {
+		transition.action = SessionAction::exit_to_operator;
+	}
+	return transition;
+}
+
+} // namespace detail
+
+std::expected<SessionTransition, Error> Game::session_transition(
+	std::optional<ContinueChoice> continue_choice
+) const
+{
+	return detail::build_session_transition(
+		impl_->state,
+		impl_->initial_init,
+		impl_->main_process_finished,
+		continue_choice
+	);
+}
+
 std::expected<GameInit, Error> Game::next_story_stage_init() const
 {
-	const auto &state = impl_->state;
-	if(
-		state.game_mode != 1U || state.route != 2U || state.winner != 0 ||
-		state.story_stage >= 8U
-	) {
+	auto transition = session_transition();
+	if(!transition || transition->action != SessionAction::start_gameplay) {
 		return std::unexpected(Error{
 			ErrorCode::invalid_value,
 			"game is not at a continuing Story-stage boundary",
 		});
 	}
-
-	auto next = impl_->initial_init;
-	next.global_frame = state.global_frame;
-	next.resident_rand = static_cast<std::int32_t>(state.round_frame);
-	next.random_seed = state.round_frame;
-	next.story_stage = static_cast<std::uint8_t>(state.story_stage + 1U);
-	next.story_lives = state.story_lives;
-	next.skill = state.skill;
-	next.winner = state.winner;
-	next.last_score[0] = state.score[0];
-	next.last_score[1] = {};
-	next.paletted_character[1] = next.story_opponents[next.story_stage];
-	const auto opponent = static_cast<std::uint8_t>(
-		(static_cast<int>(next.paletted_character[1]) - 1) / 2
-	);
-	if(next.story_stage < 7U && opponent >= 7U) {
-		next.paletted_character[1] = 1;
-	}
-	next.runtime_snapshot.reset();
-	return next;
+	return transition->resident;
 }
 
 std::span<const PresentationEvent> Game::presentation_events() const

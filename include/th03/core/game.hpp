@@ -26,6 +26,20 @@ enum class InputContext : std::uint8_t {
 	interstitial,
 };
 
+enum class InputProtocol : std::uint8_t {
+	live,
+	recorded_replay,
+};
+
+struct GameOptions {
+	InputProtocol input_protocol = InputProtocol::live;
+};
+
+enum class DeferredFrameAction : std::uint8_t {
+	resume,
+	exit_session,
+};
+
 struct PlayerStart {
 	exact::Subpixel center_x;
 	exact::Subpixel center_y;
@@ -74,6 +88,26 @@ struct GameInit {
 	std::optional<RuntimeSnapshot> runtime_snapshot;
 };
 
+enum class ContinueChoice : std::uint8_t {
+	decline,
+	accept,
+};
+
+enum class SessionAction : std::uint8_t {
+	exit_to_operator,
+	start_gameplay,
+	request_continue,
+	ending,
+};
+
+struct SessionTransition {
+	SessionAction action = SessionAction::exit_to_operator;
+	GameInit resident{};
+	// MAINL's registration menu observes resident state before Continue clears
+	// both score arrays. The optional snapshot preserves that event ordering.
+	std::optional<GameInit> high_score_registration;
+};
+
 struct CanonicalState {
 	std::uint8_t route = 0;
 	std::uint8_t game_mode = 0;
@@ -103,6 +137,7 @@ struct GameContent {
 enum class StepStatus {
 	running,
 	phase_transition,
+	round_transition,
 	terminal,
 	invalid_input_context,
 	simulation_not_implemented,
@@ -126,18 +161,31 @@ public:
 		const GameInit &init,
 		GameContent content
 	);
+	static std::expected<Game, Error> create(
+		const GameInit &init,
+		GameContent content,
+		GameOptions options
+	);
 
 	StepResult step(
 		CoreInput input,
 		InputContext context = InputContext::gameplay
 	);
+	std::expected<StepResult, Error> finish_deferred_frame(
+		DeferredFrameAction action
+	);
 	CanonicalState canonical_state() const;
+	std::expected<void, Error> start_next_round();
+	std::expected<void, Error> finish_main_process();
+	std::expected<SessionTransition, Error> session_transition(
+		std::optional<ContinueChoice> continue_choice = std::nullopt
+	) const;
 	std::expected<GameInit, Error> next_story_stage_init() const;
 	std::span<const PresentationEvent> presentation_events() const;
 
 private:
 	struct Impl;
-	Game(GameInit init, GameContent content);
+	Game(GameInit init, GameContent content, GameOptions options);
 	std::unique_ptr<Impl> impl_;
 };
 

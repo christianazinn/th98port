@@ -35,8 +35,8 @@ presentation, or platform state.
 | bullets, templates, trails, enemies, formations, shots, charge shots, Extra/Boss Attacks, fireballs, explosions, hit circles, bombs | gameplay | private deterministic entity state; port when it feeds collision, score, gauge, chain, player, RNG, or result behavior |
 | collision bitmap | gameplay | deterministic logical collision state, never PC-98 VRAM addresses |
 | combos, chain rings/arrays, gauge attack flags and counters | gameplay | exact arrays and update order; only the documented display-hit clamp belongs to the oracle view |
-| input latches, Autofire shot gates, warning/pause continuation | gameplay/input boundary | `Game` consumes one logical sample at a time and exposes the next expected input context; no host polling |
-| sample cursor, T3CASE phase/control records | replay adapter | outside gameplay state/hash; validator checks them against the core's requested input context and route |
+| input latches, Autofire shot gates, warning continuation | gameplay/input boundary | `Game` consumes one logical sample at a time and exposes the next expected warning context; no host polling |
+| sample cursor, T3CASE phase/control records, Replay Patch pause selection/release parser | replay adapter | outside gameplay hash; phase 1 is contextually warning or pause, and the coordinator must preserve pause sample count/exit semantics before validating the core's next context |
 | normalized background/result callback phases | gameplay phase identity | stable enum, replacing callback pointer identity |
 | sprites, VRAM pages, palettes, text, sound, VSync | presentation/platform | never stored in deterministic state; preserve ordering only where a donor routine also mutates gameplay |
 | far/near pointers, segments, DOS file handles, executable names | platform | absent from core; typed IDs/indices and client-owned files replace them |

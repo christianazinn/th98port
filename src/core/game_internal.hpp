@@ -19,6 +19,8 @@ inline constexpr std::size_t bullet_count = 320;
 inline constexpr std::size_t fireball_count = 24;
 inline constexpr std::size_t extra_attack_count = 16;
 inline constexpr std::size_t extra_attack_regular_count = 8;
+inline constexpr std::size_t extra_attack_mima_count = 6;
+inline constexpr std::size_t extra_attack_marisa_count = 14;
 inline constexpr std::size_t extra_attack_ellen_count = 12;
 inline constexpr std::size_t extra_attack_rikako_count = 14;
 inline constexpr std::size_t shotpair_count = 32;
@@ -118,6 +120,20 @@ struct PlayerState {
 	std::uint8_t cpu_charge_cursor = 0;
 };
 
+struct KotohimeChargeState {
+	std::uint8_t active = 0;
+	std::int16_t x = 0;
+	std::int16_t y = 0;
+	std::int16_t velocity_y = 0;
+};
+
+struct YumemiChargeState {
+	std::uint8_t state = 0;
+	std::uint8_t frame = 0;
+	std::int16_t x = 0;
+	std::int16_t y = 0;
+};
+
 struct ComboState {
 	std::uint8_t time = 0;
 	std::uint8_t hits_highest = 0;
@@ -183,6 +199,22 @@ struct ReimuChargeGroup {
 	std::uint8_t speed = 0;
 };
 
+struct MimaChargeNode {
+	std::uint8_t active = 0;
+	std::uint8_t visual_frame = 0;
+	std::int16_t x = 0;
+	std::int16_t y = 0;
+	std::int16_t velocity_x = 0;
+	std::int16_t velocity_y = 0;
+};
+
+struct MarisaChargeState {
+	std::uint8_t active = 0;
+	std::uint8_t age = 0;
+	std::array<std::int16_t, 12> x{};
+	std::array<std::int16_t, 12> y{};
+};
+
 struct KanaChargeGroup {
 	std::array<std::int16_t, 13> x{};
 	std::array<std::int16_t, 13> y{};
@@ -244,6 +276,13 @@ struct BulletState {
 	std::uint8_t group_next = 0;
 	std::uint8_t accel_type = 0;
 	bool is_collidable = true;
+	bool has_trail = false;
+	std::uint8_t trail_index = 0;
+};
+
+struct BulletTrailState {
+	std::array<std::int16_t, 6> center_x{};
+	std::array<std::int16_t, 6> center_y{};
 };
 
 enum class FireballFlag : std::uint8_t {
@@ -285,6 +324,12 @@ struct ExtraAttackState {
 	std::uint8_t angle = 0;
 	std::uint8_t speed = 0;
 	std::uint8_t behavior_variant = 0;
+	std::uint16_t mima_timer = 0;
+	std::uint16_t yumemi_extent = 0;
+	std::uint16_t yumemi_duration = 0;
+	std::int16_t kotohime_target_y = 0;
+	std::uint16_t kotohime_velocity_y = 0;
+	std::uint8_t kotohime_milestone = 0;
 	std::array<std::int16_t, 7> ellen_trail_x{};
 	std::array<std::int16_t, 7> ellen_trail_y{};
 	std::int16_t ellen_radius = 0;
@@ -325,9 +370,12 @@ struct DeterministicState {
 	std::uint8_t story_stage = 0;
 	std::uint8_t story_lives = 0;
 	std::uint8_t skill = 0;
+	std::uint8_t demo_number = 0;
+	std::uint16_t demo_frame = 0;
 	std::uint8_t extends_gained = 255;
 	std::int32_t resident_rand = 0;
 	std::int8_t winner = 0;
+	std::uint8_t last_fatal_player = 0;
 	std::uint8_t round_id = 0;
 	std::uint32_t round_frame = 0;
 	std::uint16_t round_or_result_frame = 0;
@@ -362,12 +410,19 @@ struct DeterministicState {
 	std::array<std::uint8_t, player_count> mima_gauge_pattern_frame{};
 	std::array<std::uint8_t, player_count> mima_gauge_pattern_angle{};
 	std::array<std::int8_t, player_count> mima_gauge_pattern_angle_delta{};
+	std::array<std::uint8_t, player_count> marisa_gauge_pattern_frame{};
+	std::array<std::int16_t, player_count> marisa_gauge_pattern_y{};
 	std::array<std::uint8_t, player_count> ellen_gauge_pattern_frame{};
 	std::array<std::int16_t, player_count> ellen_gauge_pattern_x{};
 	std::array<std::int16_t, player_count> ellen_gauge_pattern_y{};
+	std::array<std::uint8_t, player_count> kotohime_gauge_pattern_frame{};
+	std::array<BulletFlag, player_count> kotohime_gauge_pattern_type{};
 	std::array<std::uint8_t, player_count> kana_gauge_pattern_frame{};
 	std::array<std::int16_t, player_count> kana_gauge_pattern_x{};
 	std::array<std::uint8_t, player_count> rikako_gauge_pattern_frame{};
+	std::array<std::uint8_t, player_count> chiyuri_gauge_pattern_frame{};
+	std::array<std::int16_t, player_count> chiyuri_gauge_pattern_x{};
+	std::array<std::uint8_t, player_count> yumemi_gauge_pattern_frame{};
 	std::array<std::uint8_t, player_count> gauge_pattern_param_a{};
 	std::array<std::uint8_t, player_count> gauge_pattern_param_b{};
 	std::uint8_t gba_boss_level = 0;
@@ -375,8 +430,23 @@ struct DeterministicState {
 	std::uint16_t combo_points_for_boss_attack = 5120;
 	std::array<BossInitialState, player_count> boss_initial{};
 	BossState boss{};
+	std::uint8_t mima_boss_spread_angle = 0;
+	std::uint8_t mima_boss_pellet_angle = 0;
+	std::int8_t mima_boss_orbit_angle_delta = 0;
+	std::uint8_t mima_boss_orbit_angle = 0;
+	std::uint8_t marisa_boss_spread_angle = 0;
 	std::uint8_t ellen_boss_spread_angle = 0;
 	std::uint8_t ellen_boss_pellet_angle = 0;
+	std::uint8_t chiyuri_boss_pattern_angle = 0;
+	std::uint8_t chiyuri_boss_pattern_direction = 0;
+	std::uint8_t yumemi_boss_speed_offset = 0;
+	std::int8_t yumemi_boss_angle_delta = 0;
+	std::uint8_t yumemi_boss_angle = 0;
+	std::uint16_t yumemi_boss_radius = 0;
+	std::int16_t yumemi_boss_muzzle_x = 0;
+	std::int16_t yumemi_boss_muzzle_y = 0;
+	std::int16_t yumemi_boss_target_x = 0;
+	std::int16_t yumemi_boss_target_y = 0;
 	std::array<std::uint8_t, player_count> boss_target_active{};
 	std::int16_t boss_target_x = 0;
 	std::int16_t boss_target_y = 0;
@@ -391,11 +461,15 @@ struct DeterministicState {
 	ChainState chains{};
 	std::uint32_t global_frame = 0;
 	std::uint8_t route = 0;
+	bool round_complete = false;
+	bool session_exit_requested = false;
 	std::uint8_t hud_start_flag = 1;
 	std::uint8_t hud_start_state = 0;
 	std::uint16_t hud_start_frame = 0;
 	std::array<EnemyState, enemy_count> enemies{};
 	std::array<BulletState, bullet_count> bullets{};
+	std::array<BulletTrailState, 48> bullet_trails{};
+	std::uint8_t bullet_trail_cursor = 0;
 	std::array<FireballState, fireball_count> fireballs{};
 	std::array<
 		std::array<ExtraAttackState, extra_attack_count>, player_count
@@ -405,6 +479,10 @@ struct DeterministicState {
 	// ZUN stores this primary-charge collision throttle in one global byte,
 	// shared by both players and also cleared by Reimu's hyper amulets.
 	std::uint8_t reimu_chargeshot_primary = 0;
+	std::array<std::array<MimaChargeNode, 15>, player_count> mima_charge{};
+	std::array<std::uint8_t, player_count> mima_charge_active{};
+	std::array<std::uint8_t, player_count> mima_charge_frames{};
+	std::array<MarisaChargeState, player_count> marisa_charge{};
 	std::array<std::array<KanaChargeGroup, 4>, player_count> kana_charge{};
 	std::array<std::uint8_t, player_count> kana_charge_state{};
 	std::array<std::uint8_t, player_count> kana_charge_frames{};
@@ -416,9 +494,15 @@ struct DeterministicState {
 	std::array<std::int16_t, player_count> rikako_charge_origin_y{};
 	std::array<std::array<ChiyuriChargeNode, 8>, player_count> chiyuri_charge{};
 	std::array<std::array<EllenChargeNode, 32>, player_count> ellen_charge{};
+	std::array<KotohimeChargeState, player_count> kotohime_charge{};
+	std::array<YumemiChargeState, player_count> yumemi_charge{};
 	std::array<std::uint8_t, player_count> enemies_alive{};
 	std::uint8_t enemy_speed = 0;
 	std::uint8_t bullet_base_speed = 0;
+	// bullet_template_reset_stuff() clears this at each gameplay prefix. Some
+	// source callbacks intentionally omit an angle write and inherit the most
+	// recent write from an earlier callback in the same prefix.
+	std::uint8_t bullet_template_angle = 0;
 	std::uint8_t fireball_generation_previous = 0;
 	std::array<
 		std::array<std::array<bool, collmap_height>, collmap_width>,
@@ -431,6 +515,17 @@ CanonicalState canonical_state(const DeterministicState &state) noexcept;
 DeterministicState initialize_first_round(
 	const GameInit &init,
 	std::size_t formation_count = 0U
+);
+void initialize_repeat_round(
+	DeterministicState &state,
+	const GameInit &init,
+	std::size_t formation_count
+) noexcept;
+std::expected<SessionTransition, Error> build_session_transition(
+	const DeterministicState &state,
+	const GameInit &initial_init,
+	bool main_process_finished,
+	std::optional<ContinueChoice> continue_choice = std::nullopt
 );
 bool gameplay_frame_prefix(
 	DeterministicState &state,
@@ -466,7 +561,7 @@ std::uint16_t randring_next16(DeterministicState &state) noexcept;
 } // namespace detail
 
 struct Game::Impl {
-	Impl(const GameInit &init, GameContent content);
+	Impl(const GameInit &init, GameContent content, GameOptions options);
 
 	detail::DeterministicState state;
 	GameInit initial_init;
@@ -474,6 +569,11 @@ struct Game::Impl {
 	GameContent content;
 	std::vector<PresentationEvent> presentation_events;
 	std::uint8_t warning_interstitial_samples_remaining = 0;
+	std::array<std::uint16_t, 2> replay_pause_gameplay_input{};
+	CanonicalState replay_pause_input_boundary{};
+	bool replay_pause_adapter = false;
+	bool replay_pause_deferred = false;
+	bool main_process_finished = false;
 };
 
 } // namespace th03

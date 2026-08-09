@@ -20,6 +20,104 @@
 
 namespace {
 
+constexpr std::uint16_t input_up = 0x0001U;
+constexpr std::uint16_t input_down = 0x0002U;
+constexpr std::uint16_t input_shot = 0x0020U;
+constexpr std::uint16_t input_cancel = 0x1000U;
+constexpr std::uint16_t input_ok = 0x2000U;
+constexpr std::uint16_t input_q = 0x4000U;
+
+enum class ReplayPausePhase : std::uint8_t {
+	inactive,
+	wait_initial_release,
+	menu,
+	wait_menu_release,
+	wait_resume_release,
+};
+
+class ReplayPauseCoordinator {
+public:
+	void begin() noexcept
+	{
+		phase_ = ReplayPausePhase::wait_initial_release;
+		selection_ = 0U;
+	}
+
+	bool active() const noexcept
+	{
+		return phase_ != ReplayPausePhase::inactive;
+	}
+
+	void reset() noexcept
+	{
+		phase_ = ReplayPausePhase::inactive;
+		selection_ = 0U;
+	}
+
+	std::optional<th03::DeferredFrameAction> sample(
+		const th03::CoreInput &input
+	) noexcept
+	{
+		const bool held = input.p1 != 0U || input.p2 != 0U ||
+			input.system != 0U;
+		switch(phase_) {
+		case ReplayPausePhase::wait_initial_release:
+			if(!held) {
+				phase_ = ReplayPausePhase::menu;
+			}
+			return std::nullopt;
+		case ReplayPausePhase::wait_menu_release:
+			if(!held) {
+				phase_ = ReplayPausePhase::menu;
+			}
+			return std::nullopt;
+		case ReplayPausePhase::wait_resume_release:
+			if(held) {
+				return std::nullopt;
+			}
+			phase_ = ReplayPausePhase::inactive;
+			return th03::DeferredFrameAction::resume;
+		case ReplayPausePhase::menu:
+			break;
+		case ReplayPausePhase::inactive:
+			return std::nullopt;
+		}
+		if((input.system & input_q) != 0U) {
+			phase_ = ReplayPausePhase::inactive;
+			return th03::DeferredFrameAction::exit_session;
+		}
+		if((input.system & input_cancel) != 0U) {
+			phase_ = ReplayPausePhase::wait_resume_release;
+			return std::nullopt;
+		}
+		if((input.system & input_up) != 0U) {
+			selection_ = (selection_ == 0U) ? 3U :
+				static_cast<std::uint8_t>(selection_ - 1U);
+			phase_ = ReplayPausePhase::wait_menu_release;
+			return std::nullopt;
+		}
+		if((input.system & input_down) != 0U) {
+			selection_ = (selection_ == 3U) ? 0U :
+				static_cast<std::uint8_t>(selection_ + 1U);
+			phase_ = ReplayPausePhase::wait_menu_release;
+			return std::nullopt;
+		}
+		if((input.system & (input_ok | input_shot)) == 0U) {
+			return std::nullopt;
+		}
+		if(selection_ == 0U) {
+			phase_ = ReplayPausePhase::wait_resume_release;
+			return std::nullopt;
+		}
+		phase_ = ReplayPausePhase::inactive;
+		return th03::DeferredFrameAction::exit_session;
+	}
+
+private:
+	ReplayPausePhase phase_ = ReplayPausePhase::inactive;
+	std::uint8_t selection_ = 0U;
+};
+
 std::vector<std::byte> read_file(const std::string &path)
 {
 	std::ifstream input(path, std::ios::binary | std::ios::ate);
@@ -78,12 +176,13 @@ th03::formats::PackedScore pack_score(
 
 th03::formats::SplitRow split_row(
 	th03::formats::SplitEvent event,
-	const th03::CanonicalState &state
+	const th03::CanonicalState &state,
+	std::optional<std::uint8_t> reported_route = std::nullopt
 )
 {
 	th03::formats::SplitRow row{};
 	row.event = event;
-	row.route = state.route;
+	row.route = reported_route.value_or(state.route);
 	row.game_mode = state.game_mode;
 	row.story_stage = state.story_stage;
 	row.round_id = state.round_id;
@@ -133,18 +232,30 @@ bool oracle_prefix_matches(
 	return true;
 }
 
-void append_terminal_rows(
+void append_route_row(
 	th03::formats::SplitStream &candidate,
 	const th03::CanonicalState &state
 )
 {
-	auto route_row = split_row(th03::formats::SplitEvent::route, state);
-	candidate.rows.push_back(route_row);
-	// MAIN stores round_frame in resident->rand after t3case_route() and before
-	// t3case_finish(). This handoff does not alter the schema-3 state hash.
-	route_row.event = th03::formats::SplitEvent::finish;
-	route_row.resident_rand = static_cast<std::int32_t>(state.round_frame);
-	candidate.rows.push_back(route_row);
+	candidate.rows.push_back(split_row(th03::formats::SplitEvent::route, state));
+}
+
+void append_finish_row(
+	th03::formats::SplitStream &candidate,
+	const th03::CanonicalState &state
+)
+{
+	candidate.rows.push_back(split_row(th03::formats::SplitEvent::finish, state));
+}
+
+void append_repeat_route_row(
+	th03::formats::SplitStream &candidate,
+	const th03::CanonicalState &state
+)
+{
+	candidate.rows.push_back(split_row(
+		th03::formats::SplitEvent::route, state
+	));
 }
 
 void print_terminal(
@@ -255,7 +366,10 @@ int main(int argc, char **argv)
 		}
 		oracle = std::move(*parsed_oracle);
 	}
-	auto game = th03::Game::create(session->init, content);
+	const auto game_options = th03::GameOptions{
+		.input_protocol = th03::InputProtocol::recorded_replay,
+	};
+	auto game = th03::Game::create(session->init, content, game_options);
 	if(!game) {
 		print_error(game.error());
 		return 2;
@@ -267,6 +381,10 @@ int main(int argc, char **argv)
 	candidate.rows.push_back(split_row(
 		th03::formats::SplitEvent::start, initial_state
 	));
+	// T3CASE reports its most recently returned source route on every row.
+	// Route 1 therefore remains visible throughout the repeated active round,
+	// independently of the core's active-round route sentinel.
+	std::uint8_t reported_route = initial_state.route;
 	std::cout << "initial_state_hash="
 		<< std::uppercase << std::hex << std::setw(8) << std::setfill('0')
 		<< initial_state.state_hash << std::dec << '\n';
@@ -275,6 +393,7 @@ int main(int argc, char **argv)
 	bool main_terminal = false;
 	std::optional<th03::GameInit> next_story_stage;
 	std::optional<th03::CanonicalState> terminal_state;
+	ReplayPauseCoordinator replay_pause;
 	for(const auto &record : session->records) {
 		if(const auto *sample = std::get_if<th03::replay::InputSample>(&record)) {
 			if(process == th03::replay::ProcessId::mainl) {
@@ -294,7 +413,7 @@ int main(int argc, char **argv)
 			const auto context =
 				(sample->phase == th03::replay::InputPhase::gameplay) ?
 				th03::InputContext::gameplay : th03::InputContext::interstitial;
-			const auto result = simulation->step(sample->input, context);
+			auto result = simulation->step(sample->input, context);
 			if(result.status == th03::StepStatus::invalid_input_context) {
 				std::cout << "result=input-context-mismatch\n"
 					<< "consumed_samples=" << consumed << '\n'
@@ -309,6 +428,24 @@ int main(int argc, char **argv)
 					<< "consumed_samples=" << consumed << '\n'
 					<< "boundary=gameplay-subsystem\n";
 				return 3;
+			}
+			if(
+				context == th03::InputContext::gameplay &&
+				(sample->input.system & input_cancel) != 0U
+			) {
+				replay_pause.begin();
+			} else if(
+				context == th03::InputContext::interstitial &&
+				replay_pause.active()
+			) {
+				if(const auto action = replay_pause.sample(sample->input)) {
+					auto finished = simulation->finish_deferred_frame(*action);
+					if(!finished) {
+						print_error(finished.error());
+						return 3;
+					}
+					result = *finished;
+				}
 			}
 			consumed++;
 			if(
@@ -333,7 +470,7 @@ int main(int argc, char **argv)
 			) {
 				const auto &state = result.input_boundary_state;
 				candidate.rows.push_back(split_row(
-					th03::formats::SplitEvent::checkpoint, state
+					th03::formats::SplitEvent::checkpoint, state, reported_route
 				));
 				if(!oracle_prefix_matches(oracle, candidate)) {
 					return 6;
@@ -350,20 +487,57 @@ int main(int argc, char **argv)
 					<< std::dec << '\n';
 			}
 			if(result.status == th03::StepStatus::terminal) {
+				const auto route_state = simulation->canonical_state();
+				reported_route = route_state.route;
+				append_route_row(candidate, route_state);
+				auto finished = simulation->finish_main_process();
+				if(!finished) {
+					print_error(finished.error());
+					return 3;
+				}
 				terminal_state = simulation->canonical_state();
-				append_terminal_rows(candidate, *terminal_state);
+				append_finish_row(candidate, *terminal_state);
 				if(!oracle_prefix_matches(oracle, candidate)) {
 					return 6;
 				}
-				if(terminal_state->route == 2U && terminal_state->story_stage < 8U) {
-					auto next = simulation->next_story_stage_init();
-					if(!next) {
-						print_error(next.error());
-						return 3;
-					}
-					next_story_stage = std::move(*next);
+				const auto transition = simulation->session_transition();
+				if(!transition) {
+					print_error(transition.error());
+					return 3;
+				}
+				if(transition->action == th03::SessionAction::start_gameplay) {
+					next_story_stage = transition->resident;
 				}
 				main_terminal = true;
+			}
+			if(result.status == th03::StepStatus::round_transition) {
+				const auto completed_round = simulation->canonical_state();
+				reported_route = completed_round.route;
+				append_repeat_route_row(candidate, completed_round);
+				if(!oracle_prefix_matches(oracle, candidate)) {
+					return 6;
+				}
+				auto repeated = simulation->start_next_round();
+				if(!repeated) {
+					print_error(repeated.error());
+					return 3;
+				}
+				const auto repeated_state = simulation->canonical_state();
+				auto round_start_row = split_row(
+					th03::formats::SplitEvent::round_start,
+					repeated_state,
+					reported_route
+				);
+				candidate.rows.push_back(round_start_row);
+				if(!oracle_prefix_matches(oracle, candidate)) {
+					return 6;
+				}
+				std::cout << "round_start="
+					<< static_cast<unsigned int>(repeated_state.round_id)
+					<< " global_frame=" << repeated_state.global_frame
+					<< " state_hash=" << std::uppercase << std::hex
+					<< std::setw(8) << std::setfill('0')
+					<< repeated_state.state_hash << std::dec << '\n';
 			}
 			continue;
 		}
@@ -375,9 +549,27 @@ int main(int argc, char **argv)
 			return 4;
 		}
 		if(process == th03::replay::ProcessId::main) {
+			if(replay_pause.active()) {
+				auto finished = simulation->finish_deferred_frame(
+					th03::DeferredFrameAction::exit_session
+				);
+				if(!finished) {
+					print_error(finished.error());
+					return 3;
+				}
+				replay_pause.reset();
+			}
 			if(!main_terminal) {
+				const auto route_state = simulation->canonical_state();
+				reported_route = route_state.route;
+				append_route_row(candidate, route_state);
+				auto finished = simulation->finish_main_process();
+				if(!finished) {
+					print_error(finished.error());
+					return 3;
+				}
 				terminal_state = simulation->canonical_state();
-				append_terminal_rows(candidate, *terminal_state);
+				append_finish_row(candidate, *terminal_state);
 				if(!oracle_prefix_matches(oracle, candidate)) {
 					return 6;
 				}
@@ -387,21 +579,37 @@ int main(int argc, char **argv)
 			continue;
 		}
 
-		if(!main_terminal || !next_story_stage) {
+		if(!main_terminal) {
 			std::cout << "result=process-boundary-mismatch\n"
 				<< "consumed_samples=" << consumed << '\n';
 			return 4;
 		}
+		if(!next_story_stage) {
+			const auto transition = simulation->session_transition();
+			if(
+				!transition ||
+				transition->action == th03::SessionAction::start_gameplay
+			) {
+				std::cout << "result=process-boundary-mismatch\n"
+					<< "consumed_samples=" << consumed << '\n';
+				return 4;
+			}
+			continue;
+		}
 		next_story_stage->global_frame = consumed;
-		auto next_game = th03::Game::create(*next_story_stage, content);
+		auto next_game = th03::Game::create(
+			*next_story_stage, content, game_options
+		);
 		if(!next_game) {
 			print_error(next_game.error());
 			return 3;
 		}
 		simulation = std::move(*next_game);
 		const auto state = simulation->canonical_state();
+		// A new MAIN process starts a new T3CASE session and clears last_route.
+		reported_route = state.route;
 		candidate.rows.push_back(split_row(
-			th03::formats::SplitEvent::round_start, state
+			th03::formats::SplitEvent::round_start, state, reported_route
 		));
 		if(!oracle_prefix_matches(oracle, candidate)) {
 			return 6;

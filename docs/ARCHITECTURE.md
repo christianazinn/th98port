@@ -29,6 +29,13 @@ play audio, use networking, or serialize pointers. `th03_formats` receives
 `std::span<const std::byte>` and likewise has no filesystem dependency. Clients
 own paths and process exit codes.
 
+V11/T3CASE phase 1 is an auxiliary boundary, not a semantic warning tag. It can
+carry either the fixed 27-sample warning wait or the Replay Patch's variable
+pause-menu stream. The replay coordinator owns pause selection/release parsing;
+the core must expose a staged MAIN input boundary so the coordinator can clear
+post-pause system input and request loop exit without moving gameplay during
+the auxiliary samples. See `PARITY_RENDER_PHASE.md` for the exact contract.
+
 ## Numeric contract
 
 The PC-98 game's apparent decimal coordinates and velocities are overwhelmingly
@@ -60,5 +67,24 @@ complete Classic gameplay and process phases. Application work remains later.
 
 Phase 2 is complete: the TH3R03 first-round trace matches all 46 canonical
 Anniversary rows through its natural route-2 terminal. Phase 3 must preserve
-that gate while adding cases and the additional subsystems/process transitions
-they actually exercise.
+that gate while completing the entire TH03 gameplay backend.
+
+## Completeness contract
+
+Corpus replays are validation coverage, not implementation scope. Phase 3 is
+not complete merely because TH3R03, TH3R04, or even the current corpus happens
+to pass. The Classic core must faithfully implement every gameplay-relevant
+path in the Anniversary donor, including every character's shots, charge shots,
+Extra Attacks, gauge attacks, Boss Attacks, bombs, and hypers, plus all shared
+round, collision, damage, scoring, CPU, enemy, projectile, and result logic.
+
+Every donor callback reachable during gameplay must be inventoried as one of:
+
+- mechanically ported, with its call order and PC-98 numeric semantics retained;
+- deliberately presentation-only, with evidence that it mutates no gameplay
+  state and consumes no gameplay RNG; or
+- still missing, which blocks Phase 3 completion even if all available replays
+  are green.
+
+Replay oracles then prove integration, ordering, and deterministic equivalence.
+They must never be used to choose which gameplay paths deserve implementation.

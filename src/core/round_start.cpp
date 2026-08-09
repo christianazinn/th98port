@@ -39,20 +39,24 @@ constexpr std::array<PlaycharSpeed, 9> playchar_speeds{{
 constexpr std::array<std::array<std::uint16_t, 6>, 9>
 	story_cpu_safety_frames{{
 		{{100U, 50U, 20U, 0U, 0U, 0U}},
-		{{200U, 100U, 50U, 20U, 0U, 300U}},
-		{{200U, 100U, 50U, 10U, 0U, 400U}},
-		{{300U, 200U, 100U, 50U, 10U, 500U}},
-		{{400U, 250U, 150U, 70U, 20U, 600U}},
-		{{500U, 300U, 200U, 100U, 50U, 1000U}},
-		{{700U, 500U, 300U, 200U, 100U, 1500U}},
-		{{800U, 600U, 400U, 300U, 200U, 1500U}},
-		{{2000U, 1800U, 1300U, 1000U, 700U, 500U}},
+		{{200U, 100U, 50U, 20U, 0U, 0U}},
+		{{300U, 200U, 100U, 50U, 10U, 0U}},
+		{{400U, 300U, 200U, 100U, 50U, 10U}},
+		{{500U, 400U, 250U, 150U, 70U, 20U}},
+		{{600U, 500U, 300U, 200U, 100U, 50U}},
+		{{1000U, 700U, 500U, 300U, 200U, 100U}},
+		{{1500U, 800U, 600U, 300U, 200U, 100U}},
+		{{0xFFFAU, 1500U, 1000U, 800U, 700U, 500U}},
 	}};
 
-std::uint16_t story_safety_frames(const GameInit &init) noexcept
+std::uint16_t story_safety_frames(
+	const GameInit &init,
+	std::uint8_t round_id
+) noexcept
 {
 	const auto signed_index =
-		static_cast<int>(0U) - static_cast<int>(init.remaining_credits) + 3;
+		static_cast<int>(round_id) -
+		static_cast<int>(init.remaining_credits) + 3;
 	const auto index = static_cast<std::size_t>(std::clamp(signed_index, 0, 5));
 	auto frames = static_cast<std::uint32_t>(
 		story_cpu_safety_frames[init.story_stage][index]
@@ -65,6 +69,25 @@ std::uint16_t story_safety_frames(const GameInit &init) noexcept
 		frames = (frames * 3U) + 500U;
 	}
 	return static_cast<std::uint16_t>(std::min(frames, 0xFFFFU));
+}
+
+std::uint16_t versus_safety_frames(const GameInit &init) noexcept
+{
+	if(init.is_cpu[0] != 0U && init.is_cpu[1] != 0U) {
+		return 0xFFFFU;
+	}
+	switch(init.rank) {
+	case rank_easy:
+		return 1000U;
+	case rank_normal:
+		return 1900U;
+	case rank_hard:
+		return 4000U;
+	case rank_lunatic:
+		return 0xFFFFU;
+	default:
+		return 0U;
+	}
 }
 
 std::uint8_t initial_round_speed(std::uint8_t rank, std::uint8_t round_id) noexcept
@@ -148,6 +171,44 @@ void initialize_runtime_rings(
 		);
 	}
 	state.formation_cursor = {};
+	state.enemies_alive = {};
+}
+
+void initialize_repeat_rank(
+	DeterministicState &state,
+	const GameInit &init
+) noexcept
+{
+	state.round_speed = initial_round_speed(state.rank, state.round_id);
+	state.bullet_base_speed = initial_bullet_base_speed(state.rank);
+	state.gba_boss_level = initial_boss_level(init, state.round_id);
+	if(state.game_mode != game_mode_story) {
+		std::uint8_t increment = 0U;
+		switch(state.rank) {
+		case rank_easy:
+			increment = 1U;
+			break;
+		case rank_normal:
+		case rank_hard:
+			increment = 2U;
+			break;
+		case rank_lunatic:
+			increment = 4U;
+			break;
+		default:
+			break;
+		}
+		for(auto &level : state.gba_gauge_level) {
+			level = exact::wrap_add(level, increment);
+		}
+	}
+	state.round_speed = std::min<std::uint8_t>(state.round_speed, 0x7FU);
+	state.gba_boss_level = std::min<std::uint8_t>(
+		state.gba_boss_level, 16U
+	);
+	for(auto &level : state.gba_gauge_level) {
+		level = std::min<std::uint8_t>(level, 16U);
+	}
 }
 
 void initialize_background_rng(DeterministicState &state) noexcept
@@ -196,6 +257,7 @@ DeterministicState initialize_first_round(
 	state.story_stage = init.story_stage;
 	state.story_lives = init.story_lives;
 	state.skill = init.skill;
+	state.demo_number = init.demo_number;
 	state.resident_rand = init.resident_rand;
 	state.winner = init.winner;
 	state.random_seed = static_cast<std::uint32_t>(init.resident_rand);
@@ -221,6 +283,13 @@ DeterministicState initialize_first_round(
 		) {
 			state.extends_gained = extends_disabled;
 		}
+	}
+	if(init.demo_number != 0U) {
+		state.demo_frame = 0U;
+		state.round_speed = 4U << 4U;
+		state.bullet_base_speed = 0U;
+		state.gba_boss_level = 8U;
+		state.gba_gauge_level.fill(9U);
 	}
 
 	for(std::size_t player_id = 0; player_id < player_count; ++player_id) {
@@ -256,10 +325,17 @@ DeterministicState initialize_first_round(
 		boss.motion_angle = 0U;
 		boss.pattern_index = 0U;
 		boss.render_state = 0U;
-		if(character == 0U || character == 6U) {
+		if(
+			character == 0U || character == 1U || character == 2U ||
+			character == 4U || character == 6U
+		) {
 			boss.hp = 0x006EU;
 		} else if(character == 3U || character == 5U) {
 			boss.hp = 0x0064U;
+		} else if(character == 7U) {
+			boss.hp = 0x008CU;
+		} else if(character == 8U) {
+			boss.hp = 0x0082U;
 		}
 	}
 	// Each set_callbacks_*() call overwrites the shared background callback;
@@ -272,7 +348,14 @@ DeterministicState initialize_first_round(
 		state.background_initial_kind = BackgroundInitialKind::type_b;
 	}
 	if(init.game_mode == game_mode_story && init.story_stage < 9U) {
-		state.players[1].cpu_safety_frames = story_safety_frames(init);
+		state.players[1].cpu_safety_frames = story_safety_frames(
+			init, state.round_id
+		);
+	} else if(init.game_mode != game_mode_story) {
+		const auto safety_frames = versus_safety_frames(init);
+		for(auto &player : state.players) {
+			player.cpu_safety_frames = safety_frames;
+		}
 	}
 
 	if(init.runtime_snapshot) {
@@ -304,6 +387,149 @@ DeterministicState initialize_first_round(
 		initialize_background_rng(state);
 	}
 	return state;
+}
+
+void initialize_repeat_round(
+	DeterministicState &state,
+	const GameInit &init,
+	std::size_t formation_count
+) noexcept
+{
+	// main_entry() persists the outgoing round-frame count before sub_A21F()
+	// increments round_id and performs this targeted, in-process reset.
+	state.resident_rand = static_cast<std::int32_t>(state.round_frame);
+	state.round_id = static_cast<std::uint8_t>(state.round_id + 1U);
+
+	state.boss_target_active = {};
+	state.result_phase_frame = 0U;
+	state.result_transition_complete = false;
+	state.enemy_speed = 0U;
+	state.round_frame = 0U;
+	state.round_or_result_frame = 0U;
+	state.route = 0U;
+	state.round_complete = false;
+	state.session_exit_requested = false;
+
+	for(auto &shotpair : state.shotpairs) {
+		shotpair.alive = false;
+	}
+	for(auto &enemy : state.enemies) {
+		enemy.flag = EnemyFlag::free;
+	}
+	for(auto &fireball : state.fireballs) {
+		fireball.flag = FireballFlag::free;
+	}
+
+	// TH03's private randring_fill() deliberately carries randring_cursor.
+	randring_fill(state);
+	for(auto &bullet : state.bullets) {
+		bullet.flag = BulletFlag::free;
+	}
+	state.bullet_trail_cursor = 0U;
+
+	for(auto &player_attacks : state.extra_attacks) {
+		for(auto &attack : player_attacks) {
+			attack.state = 0U;
+		}
+	}
+	for(auto &shotpair : state.shotpairs) {
+		shotpair.alive = false;
+	}
+
+	// These are the five exact targeted Charge/Extra reset helpers called by
+	// sub_9EBF(), in source order. Other character-owned storage carries.
+	for(auto &player_groups : state.reimu_charge) {
+		for(auto &group : player_groups) {
+			group.state = 0U;
+		}
+	}
+	for(auto &player_nodes : state.mima_charge) {
+		for(auto &node : player_nodes) {
+			node.active = 0U;
+		}
+	}
+	for(auto &charge : state.marisa_charge) {
+		charge.active = 0U;
+	}
+	for(auto &player_nodes : state.ellen_charge) {
+		for(auto &node : player_nodes) {
+			node.state = 0U;
+		}
+	}
+
+	if(state.game_mode == game_mode_story && state.story_stage < 9U) {
+		state.players[1].cpu_safety_frames = story_safety_frames(
+			init, state.round_id
+		);
+	}
+	initialize_repeat_rank(state, init);
+
+	state.gba_boss_launched_by = -1;
+	state.defeat_flag = DefeatFlag::none;
+	state.hud_start_flag = 1U;
+	state.combo_points_for_boss_attack = 5120U;
+
+	for(std::size_t player_id = 0U; player_id < player_count; ++player_id) {
+		auto &player = state.players[player_id];
+		state.enemies_alive[player_id] = 0U;
+		player.paletted_character = init.paletted_character[player_id];
+		player.is_cpu = init.is_cpu[player_id];
+		player.is_hit = false;
+		player.invincibility_time = 50U;
+		player.shot_mode = shot_mode_one_pair;
+		player.halfhearts = 10U;
+		player.knockback_time = 0U;
+		player.move_lock_time = 0U;
+		player.knockback_active = false;
+		player.center_x = exact::Subpixel::from_integer_wrapping(144);
+		player.center_y = exact::Subpixel::from_integer_wrapping(336);
+		player.gauge_charged = 0U;
+		player.shot_active = shot_active_enabled;
+		player.hit_damage_next = 1U;
+		for(auto &charge : player.cpu_charge_ring) {
+			charge = static_cast<std::uint8_t>(
+				((irand(state.random_seed) & 3U) << 6U) + 0x3FU
+			);
+		}
+		player.cpu_charge_cursor = 0U;
+		player.bombs = 2U;
+		player.lose_anim_time = 0U;
+		player.hyper_active = 0U;
+		player.hyper_character_callback = false;
+		player.hyper_effect_active_this_frame = false;
+		player.cpu_frame = 0U;
+		player.gauge_attacks_fired = 0U;
+		player.boss_attacks_fired = 0U;
+		player.boss_attacks_reversed = 0U;
+		player.boss_panics_fired = 0U;
+		state.gba_flag_active[player_id] = GaugeBossAttackFlag::none;
+		state.playfield_fg_shift_x[player_id] = 0;
+		state.damage_all_on[player_id] = 0U;
+		state.warning_flag[player_id] = WarningFlag::none;
+	}
+
+	if(formation_count != 0U) {
+		auto previous = std::uint8_t{1U};
+		for(std::size_t index = 0U;
+			index < state.formation_type_ring.size(); ++index) {
+			std::uint8_t next = 0U;
+			do {
+				next = static_cast<std::uint8_t>(
+					irand(state.random_seed) % formation_count
+				);
+			} while(next == previous);
+			state.formation_type_ring[index] = next;
+			previous = next;
+			state.formation_position_ring[index] = static_cast<std::uint8_t>(
+				(irand(state.random_seed) & 1U) << 7U
+			);
+		}
+	}
+	state.formation_cursor = {};
+
+	// sub_A21F() carries the opening transition's closing callback into the
+	// repeated round. It has no gameplay side effects but remains explicit.
+	state.result_phase = ResultPhase::closing;
 }
 
 } // namespace th03::detail
