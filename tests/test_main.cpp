@@ -2214,6 +2214,27 @@ void test_t3case()
 	} else {
 		check(false, "normalized T3CASE exposes runtime snapshot");
 	}
+	auto normalized_v12 = normalized;
+	put_u8(
+		normalized_v12,
+		32U,
+		static_cast<std::uint8_t>(
+			th03::formats::T3CaseSourceKind::normalized_v12
+		)
+	);
+	refresh_t3case(normalized_v12);
+	const auto normalized_v12_parsed =
+		th03::formats::parse_t3case(normalized_v12);
+	check(normalized_v12_parsed.has_value(), "normalized V12 T3CASE parses");
+	if(normalized_v12_parsed) {
+		const auto session =
+			th03::formats::make_replay_session(*normalized_v12_parsed);
+		check(
+			session && session->source_version == 12U &&
+			session->init.runtime_snapshot.has_value(),
+			"normalized V12 T3CASE exposes its source version and runtime snapshot"
+		);
+	}
 
 	auto bad = direct;
 	put_u8(bad, 0U, 'X');
@@ -2227,9 +2248,9 @@ void test_t3case()
 	refresh_t3case(bad);
 	check(!th03::formats::parse_t3case(bad), "T3CASE rejects retired flag bit");
 	bad = direct;
-	put_u8(bad, 32U, 3U);
+	put_u8(bad, 32U, 4U);
 	refresh_t3case(bad);
-	check(!th03::formats::parse_t3case(bad), "T3CASE rejects reserved V12 source kind");
+	check(!th03::formats::parse_t3case(bad), "T3CASE rejects unknown source kind");
 	bad = direct;
 	put_u8(bad, 64U + 52U, 1U);
 	refresh_t3case(bad);

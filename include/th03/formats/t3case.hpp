@@ -21,6 +21,7 @@ inline constexpr std::size_t t3case_record_size = 20;
 enum class T3CaseSourceKind : std::uint8_t {
 	master_direct = 1,
 	normalized_v11 = 2,
+	normalized_v12 = 3,
 };
 
 enum class T3CaseProducer : std::uint8_t {

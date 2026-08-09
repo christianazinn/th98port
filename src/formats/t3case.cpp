@@ -193,9 +193,12 @@ std::expected<T3Case, Error> parse_t3case(std::span<const std::byte> bytes)
 		if(has_snapshot) {
 			return std::unexpected(error(ErrorCode::invalid_value, "master-direct T3CASE carries a snapshot"));
 		}
-	} else if(header.source_kind == T3CaseSourceKind::normalized_v11) {
+	} else if(
+		header.source_kind == T3CaseSourceKind::normalized_v11 ||
+		header.source_kind == T3CaseSourceKind::normalized_v12
+	) {
 		if(!has_snapshot) {
-			return std::unexpected(error(ErrorCode::invalid_value, "normalized V11 T3CASE has no snapshot"));
+			return std::unexpected(error(ErrorCode::invalid_value, "normalized replay T3CASE has no snapshot"));
 		}
 	} else {
 		return std::unexpected(error(ErrorCode::unsupported_version, "unsupported T3CASE source kind"));
@@ -324,7 +327,11 @@ std::expected<T3Case, Error> parse_t3case(std::span<const std::byte> bytes)
 std::expected<replay::ReplaySession, Error> make_replay_session(const T3Case &input)
 {
 	replay::ReplaySession session{};
-	session.source_version = (input.header.source_kind == T3CaseSourceKind::normalized_v11) ? 11U : 0U;
+	if(input.header.source_kind == T3CaseSourceKind::normalized_v11) {
+		session.source_version = 11U;
+	} else if(input.header.source_kind == T3CaseSourceKind::normalized_v12) {
+		session.source_version = 12U;
+	}
 	session.init = input.init;
 	session.sample_count = input.header.sample_count;
 	session.records.reserve(input.records.size());
