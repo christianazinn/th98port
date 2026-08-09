@@ -4,6 +4,34 @@ This file preserves the requested overnight completion boundary across context
 compaction. Do not report the V12 parcel complete merely because the currently
 known replay cases are green.
 
+## Completion record
+
+The requested gameplay/replay boundary is complete as of 2026-08-09:
+
+- all 19 locked V11/V12 files complete and all 173 embedded summaries match;
+- the complete Anniversary gameplay source, stock ENEDAT program, relevant
+  assembly/BSS/data, all nine character families, renderer-fed deterministic
+  effects, modes, and lifecycle paths have a durable disposition in
+  `PARITY_SOURCE_COVERAGE.md` and the supporting parity ledgers;
+- no stock-reachable gameplay or shared-RNG discrepancy remains;
+- invalid rank/demo-mode combinations are rejected and Story resident score
+  initialization now follows the source's P1-only behavior;
+- GCC, MSVC Debug, and MSVC Release builds and CTest pass; the host T3CASE,
+  normalizer, comparator, and split-export suites pass; and the final MSVC
+  Release verifier passes the complete external replay lock;
+- the tested MSVC Release `th03rv.exe` is 227,328 bytes with SHA-256
+  `97D3BBAE08F2184B22CA94A68FA110CC89DFE4DCD73A3F0FABB28D36CAE67E4D`;
+  it uses the normal MSVC/UCRT runtime dependencies; and
+- `POST_CORE_ROADMAP.md` records the V13, Replay Patch, resource-manager,
+  asset, presentation, audio, application, leaderboard, and Arrange-mode
+  recommendations.
+
+The remaining direct-core limitation is the live-human pause/Q interaction,
+which is an explicit future application protocol boundary. Recorded pauses are
+already supported. Continue adding replay fixtures as integration evidence;
+new mismatches must still be diagnosed from source rather than repaired from
+expected summaries.
+
 ## Immediate gameplay work
 
 1. Diagnose every open V12 replay at its first source-backed divergence.

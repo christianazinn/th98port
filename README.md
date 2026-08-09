@@ -95,6 +95,9 @@ split comparisons. Original game data and replay captures remain external.
   produce the same neutral document/session types without changing the core or
   runner; a future converter can then retire direct V11/V12 product support.
 
-See `docs/ARCHITECTURE.md`, `docs/REPLAY_VERIFICATION.md`,
-`docs/ORACLE_CONTRACT.md`, and `docs/SOURCES.lock` before expanding corpus and
-mode coverage.
+See `docs/ARCHITECTURE.md`, `docs/PARITY_SOURCE_COVERAGE.md`,
+`docs/REPLAY_VERIFICATION.md`, `docs/ORACLE_CONTRACT.md`, and
+`docs/SOURCES.lock` before expanding corpus and mode coverage.
+`docs/POST_CORE_ROADMAP.md` records the proposed V13 branch workflow and the
+asset, presentation, audio, platform, and application layers that follow the
+deterministic gameplay core.
