@@ -117,12 +117,111 @@ std::expected<Game, Error> Game::create(
 			"one enemy formation cannot satisfy the source non-repeat draw",
 		});
 	}
+	if(init.practice_rules) {
+		if(init.game_mode != detail::game_mode_vs_1p_cpu) {
+			return std::unexpected(Error{
+				ErrorCode::invalid_value,
+				"Practice rules require GM_VS_1P_CPU",
+			});
+		}
+		if(
+			static_cast<std::uint8_t>(init.practice_rules->retry_cpu_timer) > 2U ||
+			init.practice_rules->retry_cpu_damage > 3U
+		) {
+			return std::unexpected(Error{
+				ErrorCode::invalid_value,
+				"Practice retry rules are outside the source configuration range",
+			});
+		}
+		if(
+			init.practice_rules->retry_cpu_timer ==
+				CpuTimerPolicy::story_native &&
+			init.story_stage >= 9U
+		) {
+			return std::unexpected(Error{
+				ErrorCode::invalid_value,
+				"Story-native Practice timing requires a source Story stage 0..8",
+			});
+		}
+		if(!init.round_start_snapshot) {
+			return std::unexpected(Error{
+				ErrorCode::invalid_value,
+				"Practice rules require a round-start snapshot",
+			});
+		}
+	}
+	if(init.runtime_snapshot && init.compact_runtime_snapshot) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"full and compact runtime snapshots are mutually exclusive",
+		});
+	}
+	if(
+		init.compact_runtime_snapshot &&
+		!detail::compact_runtime_snapshot_is_valid(
+			*init.compact_runtime_snapshot, content.enemy_formations.size()
+		)
+	) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"compact runtime snapshot cannot reconstruct the supplied formations",
+		});
+	}
 	for(const auto paletted_character : init.paletted_character) {
 		if(paletted_character < 1 || paletted_character > 18) {
 			return std::unexpected(Error{
 				ErrorCode::invalid_value,
 				"paletted character must be in the source range 1..18",
 			});
+		}
+	}
+	if(init.round_start_snapshot) {
+		if(!init.runtime_snapshot && !init.compact_runtime_snapshot) {
+			return std::unexpected(Error{
+				ErrorCode::invalid_value,
+				"round-start snapshot requires its matching runtime snapshot",
+			});
+		}
+		const auto &snapshot = *init.round_start_snapshot;
+		if(init.practice_rules) {
+			const auto expected = detail::practice_cpu_safety_frames(
+				init, snapshot.state.round_id
+			);
+			if(
+				snapshot.state.cpu_safety_frames !=
+					std::array<std::uint16_t, 2>{expected, expected}
+			) {
+				return std::unexpected(Error{
+					ErrorCode::invalid_value,
+					"Practice CPU safety does not match its timer policy",
+				});
+			}
+		}
+		if(snapshot.carry.background_phase > 2U) {
+			return std::unexpected(Error{
+				ErrorCode::invalid_value,
+				"round-start background phase is outside the source range 0..2",
+			});
+		}
+		if(snapshot.carry.result_phase > 2U) {
+			return std::unexpected(Error{
+				ErrorCode::invalid_value,
+				"round-start result phase is outside the source range 0..2",
+			});
+		}
+		for(std::size_t player = 0U; player < 2U; ++player) {
+			if(snapshot.carry.chain_cursor[player] >= 16U) {
+				return std::unexpected(Error{
+					ErrorCode::invalid_value,
+					"round-start chain cursor is outside the source range 0..15",
+				});
+			}
+			if(snapshot.carry.gauge_attack_next[player] > 5U) {
+				return std::unexpected(Error{
+					ErrorCode::invalid_value,
+					"round-start gauge-attack flag is outside the source range 0..5",
+				});
+			}
 		}
 	}
 	return Game(init, std::move(content), options);
@@ -290,6 +389,8 @@ std::expected<SessionTransition, Error> build_session_transition(
 	resident.skill = state.skill;
 	resident.winner = state.winner;
 	resident.runtime_snapshot.reset();
+	resident.compact_runtime_snapshot.reset();
+	resident.round_start_snapshot.reset();
 
 	// Route 0 jumps directly back to OP. In particular, MAIN does not perform
 	// its otherwise-unconditional Story-stage increment or score persistence.
@@ -303,7 +404,8 @@ std::expected<SessionTransition, Error> build_session_transition(
 	// selected resident winner. MAIN increments the stage byte after T3CASE's
 	// finish row and before starting MAINL, even outside Story mode.
 	const auto score_owner = static_cast<std::size_t>(
-		(state.game_mode == 1U) ? 0U : static_cast<std::uint8_t>(state.winner)
+		(state.game_mode == detail::game_mode_story || state.practice_uses_stock)
+			? 0U : static_cast<std::uint8_t>(state.winner)
 	);
 	if(score_owner >= state.score.size()) {
 		return std::unexpected(Error{

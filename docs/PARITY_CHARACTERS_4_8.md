@@ -283,6 +283,9 @@ Preserved behavior includes:
 - Behavior 1's milestone-4 speeds 16, 18, 20, and 22 and milestone-16 speeds
   16 through 34. The source helper overwrites the misleading speed assigned
   before the milestone-4 helper call.
+- Both helpers mutate the shared bullet-template angle after their final
+  `bullets_add()` call. The native core preserves the final wrapped angle so a
+  later P2 callback in the same gameplay prefix observes the same value.
 
 The `SUB_CDBD()` milestone effects consume no RNG. During this audit the
 port's slot selector was corrected from a non-rebinding C++ reference to a
@@ -432,8 +435,13 @@ consume RNG.
 - HP: `0x64`, initialized in `src/core/round_start.cpp:264-265`.
 
 Pattern parameters, state dispatch, direct Kana extra attacks, accelerating
-rings, collision, and all gameplay RNG agree. Omitted `SUB_CE0C()` and
-`SUB_CDBD()` effects are presentation-only.
+rings, collision, and all gameplay RNG agree. Kana's Extra callback writes
+`0x40` to the shared bullet template before the Boss callback. The accelerating
+ring, all three default rings, and the cloud ring intentionally inherit that
+angle in Anniversary; the native patterns now do likewise. The frame-`0x40`
+spread loop also preserves the source's post-final-add angle of `0x80`. This
+closed the first V12 TH3R05 raw-bullet mismatch at sample 3,626. Omitted
+`SUB_CE0C()` and `SUB_CDBD()` effects are presentation-only.
 
 ### Hyper and bomb: complete for deterministic gameplay
 

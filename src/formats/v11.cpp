@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "bytes.hpp"
+#include "rpy_input.hpp"
 
 namespace th03::formats {
 namespace {
@@ -126,8 +127,8 @@ std::expected<replay::ReplaySession, Error> parse_v11_replay(
 		return std::unexpected(error(ErrorCode::unsupported_layout, "unsupported V11 header or sample layout", 10U));
 	}
 	const auto flags = detail::u16(bytes, 14U);
-	if((flags & 0x0001U) == 0U) {
-		return std::unexpected(error(ErrorCode::unsupported_layout, "V11 replay is not an RLE input stream", 14U));
+	if((flags & 0x0003U) != 0x0003U) {
+		return std::unexpected(error(ErrorCode::unsupported_layout, "V11 replay does not advertise RLE and Charge input", 14U));
 	}
 	if((flags & 0x0004U) != 0U) {
 		return std::unexpected(error(ErrorCode::unsupported_version, "V11 Practice replay is outside the calibrated oracle"));
@@ -209,117 +210,17 @@ std::expected<replay::ReplaySession, Error> parse_v11_replay(
 	session.source_version = replay_v11_version;
 	session.init = std::move(init);
 	session.sample_count = sample_count;
-	session.records.reserve(static_cast<std::size_t>(sample_count) + 32U);
-
-	auto cursor = static_cast<std::size_t>(input_offset);
-	const auto end = cursor + static_cast<std::size_t>(input_size);
-	std::uint16_t p1 = 0;
-	std::uint16_t p2 = 0;
-	std::uint16_t system = 0;
-	std::uint8_t charge = 0;
-	std::uint32_t frame = 0;
-	auto expected_process = replay::ProcessId::main;
-	bool keyframed = false;
-	bool last_was_control = false;
-
-	while(cursor < end) {
-		const auto packet_offset = cursor;
-		const auto tag = detail::u8(bytes, cursor++);
-		const auto phase = static_cast<std::uint8_t>((tag >> 6U) & 0x03U);
-		const auto run = static_cast<std::uint8_t>((tag & 0x3FU) + 1U);
-		if(phase == 2U) {
-			if(cursor >= end) {
-				return std::unexpected(error(ErrorCode::truncated, "truncated V11 control packet", packet_offset));
-			}
-			if(detail::u8(bytes, cursor++) != 0xA5U) {
-				return std::unexpected(error(ErrorCode::malformed_stream, "V11 control packet lacks marker", packet_offset));
-			}
-			replay::ProcessId process{};
-			if(tag == 0x80U) {
-				process = replay::ProcessId::main;
-			} else if(tag == 0x81U) {
-				process = replay::ProcessId::mainl;
-			} else {
-				return std::unexpected(error(ErrorCode::malformed_stream, "unknown V11 control tag", packet_offset));
-			}
-			if(process != expected_process) {
-				return std::unexpected(error(ErrorCode::malformed_stream, "V11 controls do not alternate from MAIN", packet_offset));
-			}
-			session.records.emplace_back(replay::ProcessBoundary{frame, process});
-			expected_process = (process == replay::ProcessId::main) ?
-				replay::ProcessId::mainl : replay::ProcessId::main;
-			keyframed = false;
-			last_was_control = true;
-			p1 = 0;
-			p2 = 0;
-			system = 0;
-			charge = 0;
-			continue;
-		}
-		if(phase > 1U) {
-			return std::unexpected(error(ErrorCode::malformed_stream, "unsupported V11 packet phase", packet_offset));
-		}
-		if(cursor >= end) {
-			return std::unexpected(error(ErrorCode::truncated, "truncated V11 packet header", packet_offset));
-		}
-		const auto change = detail::u8(bytes, cursor++);
-		if((change & 0xF0U) != 0U) {
-			return std::unexpected(error(ErrorCode::malformed_stream, "V11 packet uses an unknown change bit", packet_offset + 1U));
-		}
-		if(!keyframed && (change & 0x0FU) != 0x0FU) {
-			return std::unexpected(error(ErrorCode::malformed_stream, "first V11 packet after a process boundary is not a full keyframe", packet_offset + 1U));
-		}
-		auto read_changed_u16 = [&](std::uint8_t bit, std::uint16_t &target) -> bool {
-			if((change & bit) == 0U) {
-				return true;
-			}
-			if(!range_fits(cursor, 2U, end)) {
-				return false;
-			}
-			target = detail::u16(bytes, cursor);
-			cursor += 2U;
-			return true;
-		};
-		if(
-			!read_changed_u16(0x01U, p1) ||
-			!read_changed_u16(0x02U, p2) ||
-			!read_changed_u16(0x04U, system)
-		) {
-			return std::unexpected(error(ErrorCode::truncated, "V11 packet values extend past the input stream", packet_offset));
-		}
-		if((change & 0x08U) != 0U) {
-			if(cursor >= end) {
-				return std::unexpected(error(ErrorCode::truncated, "V11 Charge value extends past the input stream", packet_offset));
-			}
-			charge = detail::u8(bytes, cursor++);
-		}
-		if(charge > 3U) {
-			return std::unexpected(error(ErrorCode::malformed_stream, "V11 Charge mask uses undefined bits", packet_offset));
-		}
-		if(static_cast<std::uint64_t>(frame) + run > sample_count) {
-			return std::unexpected(error(ErrorCode::count_mismatch, "V11 packet expands past sample_count", packet_offset));
-		}
-		keyframed = true;
-		last_was_control = false;
-		for(std::uint8_t count = 0; count < run; ++count) {
-			replay::InputSample sample{};
-			sample.frame_index = frame++;
-			sample.phase = (phase == 0U) ?
-				replay::InputPhase::gameplay : replay::InputPhase::interstitial;
-			sample.input = CoreInput{p1, p2, system, charge};
-			session.records.emplace_back(std::move(sample));
-		}
+	auto records = detail::decode_rpy_input(
+		bytes,
+		static_cast<std::size_t>(input_offset),
+		static_cast<std::size_t>(input_size),
+		sample_count,
+		"V11"
+	);
+	if(!records) {
+		return std::unexpected(records.error());
 	}
-
-	if(frame != sample_count) {
-		return std::unexpected(error(ErrorCode::count_mismatch, "V11 expanded sample count disagrees with header"));
-	}
-	if(cursor != end) {
-		return std::unexpected(error(ErrorCode::trailing_data, "V11 decoder did not consume the complete input stream", cursor));
-	}
-	if(!last_was_control) {
-		return std::unexpected(error(ErrorCode::malformed_stream, "V11 finalized input stream does not end in a process control", end));
-	}
+	session.records = std::move(*records);
 	return session;
 }
 

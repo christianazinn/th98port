@@ -35,11 +35,23 @@ target_compile_features(th03_core PUBLIC cxx_std_23)
 set_target_properties(th03_core PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_core)
 
+add_library(th03_replay STATIC
+	src/replay/run.cpp
+)
+target_include_directories(th03_replay PUBLIC include)
+target_link_libraries(th03_replay PUBLIC th03_core)
+target_compile_features(th03_replay PUBLIC cxx_std_23)
+set_target_properties(th03_replay PROPERTIES CXX_EXTENSIONS OFF)
+th03_set_warnings(th03_replay)
+
 add_library(th03_formats STATIC
 	src/formats/enedat.cpp
+	src/formats/replay.cpp
+	src/formats/rpy_input.cpp
 	src/formats/t3case.cpp
 	src/formats/t3split.cpp
 	src/formats/v11.cpp
+	src/formats/v12.cpp
 )
 target_include_directories(th03_formats PUBLIC include)
 target_link_libraries(th03_formats PUBLIC th03_core)
@@ -55,11 +67,15 @@ add_executable(th03-replay-check apps/th03-replay-check/main.cpp)
 target_link_libraries(th03-replay-check PRIVATE th03_formats)
 th03_set_warnings(th03-replay-check)
 
+add_executable(th03rv apps/th03rv/main.cpp)
+target_link_libraries(th03rv PRIVATE th03_formats th03_replay)
+th03_set_warnings(th03rv)
+
 if(BUILD_TESTING)
 	add_executable(th03-tests
 		tests/test_main.cpp
 	)
-	target_link_libraries(th03-tests PRIVATE th03_formats)
+	target_link_libraries(th03-tests PRIVATE th03_formats th03_replay)
 	target_include_directories(th03-tests PRIVATE src/core)
 	th03_set_warnings(th03-tests)
 	add_test(NAME th03-tests COMMAND th03-tests)

@@ -110,7 +110,16 @@ termination are implemented in `gauge_pattern_reimu()`
 | Reimu | `gauge_pattern_reimu()`, `th03/main/player/ch_shot.cpp:790-866` | Initializes frame/count/cadence fields, advances the Gauge flag, emits the aimed spreads and paired rings, increments the frame byte, and terminates the Gauge. `SUB_CE0C()` writes a visual ring only; `sub_A3A8()` is palette cleanup. No RNG. | Materialized; visual ring/palette storage omitted. |
 | Mima | `gauge_pattern_mima()`, `ch_shot.cpp:1300-1392` | Initialization consumes exactly one shared-ring draw to select signed angle delta `-7` or `+7`, then stores angle/frame/count/speed. Active frames emit the narrow spread and alternating ring, advance the byte angle/frame, and terminate. `SUB_CE0C()` and palette cleanup add no RNG. | Materialized, including the initialization draw and byte arithmetic. |
 | Marisa | `gauge_pattern_marisa()`, `ch_shot.cpp:260-338` | Initialization consumes one shared-ring draw for the negative starting Y and stores Y increment/frame. Alternating edge groups create five bullets, advance Y, and eventually terminate. `SUB_CE0C()` and palette cleanup add no RNG. | Materialized. |
-| Ellen | `gauge_pattern_ellen()`, `th03/main_08.cpp:379-483` | Initializes frame/X/Y/count/speed. The lower phase consumes one angle draw before the left ring and an explicit second draw after the right ring. That second result is otherwise unused but advances all later RNG. X/Y/frame/flag state advances and terminates normally. | Materialized, including the otherwise-dead second draw. |
+| Ellen | `gauge_pattern_ellen()`, `th03/main_08.cpp:379-483` | Initializes frame/X/Y/count/speed. The lower phase consumes one angle draw before the left ring and an explicit second draw after the right ring. The second result is not fired, but Anniversary stores it in the shared bullet-template angle after the final add. X/Y/frame/flag state advances and terminates normally. | Materialized, including both the second draw and its persistent template write. |
+
+The whole-source shared-template audit also found that Ellen Boss helper
+`th03/main_03s.cpp:ellen_11439()` increments its template angle after the last
+of its eight ring adds. `boss_pattern_ellen_spreads()` now preserves that final
+wrapped angle (`0x60` for the stock `0x20` start), allowing later same-prefix
+callbacks to inherit the source value. Reimu and Mima were explicitly checked:
+their stock Boss and Gauge bullet producers either assign angle before firing
+or correctly leave the last fired angle, and their Extra callbacks add no
+bullets. No further fix was required.
 
 The helper definitions close the presentation-call chain:
 

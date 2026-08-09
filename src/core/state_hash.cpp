@@ -1,6 +1,5 @@
 #include "game_internal.hpp"
 
-#include <algorithm>
 #include <bit>
 #include <cstddef>
 
@@ -72,9 +71,8 @@ std::uint32_t hash_combo(
 	const ComboState &combo
 ) noexcept
 {
-	const auto display_hits = std::min<std::uint8_t>(combo.hits_highest, 99U);
 	hash = hash_u8(hash, combo.time);
-	hash = hash_u8(hash, display_hits);
+	hash = hash_u8(hash, combo.hits_highest);
 	return hash_u16(hash, combo.bonus_total);
 }
 

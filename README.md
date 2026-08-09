@@ -32,6 +32,18 @@ out\build\msvc-x64\Debug\th03-replay-check.exe --case X:\path\TH3R03.T3C
 out\build\msvc-x64\Debug\th03-headless.exe --case X:\path\TH3R03.T3C
 ```
 
+Verify a historical V11 or V12 replay directly against its embedded round
+summaries:
+
+```powershell
+out\build\msvc-x64\Debug\th03rv.exe X:\path\TH3R00.RPY
+```
+
+`th03rv` locates `ENEDAT.DAT` beside the replay or in a development harness.
+For a standalone installation, pass `--enedat <file>` or set `TH03_ENEDAT`.
+It runs the neutral replay session at unbounded speed, prints every computed
+round split, and reports whether all embedded summaries match.
+
 Pass the calibrated ENEDAT and frozen Anniversary split to execute the Phase 2
 gate:
 
@@ -63,13 +75,15 @@ split comparisons. Original game data and replay captures remain external.
 
 - `th03_core` owns deterministic state and stepping. It has no filesystem,
   platform, rendering, audio, or network dependency.
+- `th03_replay` owns recorded pause/process coordination at unbounded speed.
 - `th03_formats` owns byte-level formats and adapts them to a neutral
   `ReplaySession`. It operates on byte spans and performs no file I/O.
-- `th03-headless` and `th03-replay-check` are independent filesystem/CLI
-  clients of those libraries.
-- V11 is validation-only. V12 is not implemented. The finalized V13 reader will
-  produce the same neutral session type, while a separate tool converts V11 and
-  V12 into V13.
+- `th03-headless`, `th03-replay-check`, and `th03rv` are independent
+  filesystem/CLI clients of those libraries.
+- V11 and V12 are historical validation adapters. The finalized V13 reader will
+  produce the same neutral document/session types without changing the core or
+  runner; a future converter can then retire direct V11/V12 product support.
 
-See `docs/ARCHITECTURE.md`, `docs/ORACLE_CONTRACT.md`, and `docs/SOURCES.lock`
-before expanding corpus and mode coverage.
+See `docs/ARCHITECTURE.md`, `docs/REPLAY_VERIFICATION.md`,
+`docs/ORACLE_CONTRACT.md`, and `docs/SOURCES.lock` before expanding corpus and
+mode coverage.

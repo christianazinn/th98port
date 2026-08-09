@@ -424,9 +424,12 @@ Yumemi's Charge, Extra, and Boss renderers consume zero RNG.
 | Story retry after loss | Same route-1 repeat sequence | Closed by the same explicit transition |
 | Story next-stage process | New seed from outgoing `round_frame`, then fresh startup | Closed by `next_story_stage_init()` for supported ordinary wins |
 | Final Yumemi result | No new RNG consumer | RNG-closed; broader result/bonus behavior is a lifecycle concern |
+| Replay Patch Practice | No new active-frame RNG callback. V12 represents Practice as `GM_VS_1P_CPU`; stock retries preserve the two live spell levels around the ordinary non-Story reset, then restore the configured timer and damage policy. | Implemented as the format-neutral `PracticeRules` overlay. V12 startup/retry fields are mapped and checked; expanded-corpus replay validation remains tracked separately. |
 
-There is no Anniversary Practice mode. It must not be treated as a missing RNG
-branch.
+There is no Anniversary Practice mode, so Practice must not be invented as a
+missing Anniversary callback branch. The V12 adapter reproduces the Replay
+Patch's resident rules overlay while reusing the same ordinary VS gameplay and
+RNG consumers.
 
 ## Renderer-named callbacks checked
 

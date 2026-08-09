@@ -5,29 +5,35 @@ and its validation clients. No playable application is designed or scaffolded
 in Phase 1.
 
 ```text
-V11 oracle decoder now                 future V13 decoder
-            \                           /
-             -> version-neutral ReplaySession
-                            |
+V11 / V12 historical readers          future V13 reader
+                \                       /
+                 -> version-neutral ReplayDocument
+                                |
+                         ReplaySession runner
+                                |
 T3CASE validation cursor ----> CoreInput + semantic process boundaries
-                            |
-                         libth03::Game
-                            |
-                 canonical state / semantic events
-                            |
-              headless and verification clients
+                                |
+                             libth03::Game
+                                |
+                     canonical state / semantic events
+                                |
+                  headless and verification clients
 ```
 
 Dependency direction is one way:
 
 ```text
-th03_core <- th03_formats <- command-line clients
+th03_core <- th03_replay <- command-line clients
+     ^             ^
+     +-- th03_formats --+
 ```
 
 `th03_core` cannot open files, inspect a clock, sleep, poll host input, render,
 play audio, use networking, or serialize pointers. `th03_formats` receives
 `std::span<const std::byte>` and likewise has no filesystem dependency. Clients
-own paths and process exit codes.
+own paths and process exit codes. Version-specific V12 compact snapshots become
+format-neutral reconstruction/round-start contracts; V12 layouts never enter
+the core.
 
 V11/T3CASE phase 1 is an auxiliary boundary, not a semantic warning tag. It can
 carry either the fixed 27-sample warning wait or the Replay Patch's variable

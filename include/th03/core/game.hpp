@@ -14,6 +14,17 @@
 
 namespace th03 {
 
+namespace game_mode {
+
+inline constexpr std::uint8_t none = 0x00U;
+inline constexpr std::uint8_t story = 0x01U;
+inline constexpr std::uint8_t demo = 0x7FU;
+inline constexpr std::uint8_t vs_1p_cpu = 0x80U;
+inline constexpr std::uint8_t vs_1p_2p = 0x81U;
+inline constexpr std::uint8_t vs_cpu_cpu = 0x82U;
+
+} // namespace game_mode
+
 struct CoreInput {
 	std::uint16_t p1 = 0;
 	std::uint16_t p2 = 0;
@@ -65,6 +76,77 @@ struct RuntimeSnapshot {
 	std::array<PlayerStart, 2> players{};
 };
 
+// A format-neutral recipe for compact round-start formats. Runtime tables are
+// reconstructed only after GameContent supplies the actual formation count.
+struct CompactRuntimeSnapshot {
+	std::uint32_t round_reset_seed = 0;
+	std::uint32_t random_seed = 0;
+	std::uint8_t first_formation = 0;
+	std::array<PlayerStart, 2> players{};
+};
+
+struct RoundStateSnapshot {
+	std::uint8_t round_id = 0;
+	std::array<std::uint8_t, 2> rounds_won{};
+	std::array<std::array<std::uint8_t, 8>, 2> score{};
+	std::uint8_t round_speed = 0;
+	std::uint8_t bullet_base_speed = 0;
+	std::array<std::uint8_t, 2> gauge_attack_level{};
+	std::uint8_t boss_attack_level = 0;
+	std::uint8_t cpu_hit_damage_additional = 0;
+	std::uint8_t extends_gained = 0;
+	std::array<std::uint16_t, 2> cpu_safety_frames{};
+};
+
+struct ComboCarrySnapshot {
+	std::uint8_t time = 0;
+	std::uint8_t hits_highest = 0;
+	std::uint16_t bonus_total = 0;
+};
+
+struct RoundCarrySnapshot {
+	std::array<std::uint8_t, 2> cpu_dodge_strategy{};
+	std::array<std::uint16_t, 2> human_movement_last{};
+	std::array<std::uint8_t, 2> spell_ready_frames{};
+	std::array<std::uint16_t, 2> combo_bonus_max{};
+	std::array<std::uint8_t, 2> combo_hits_max{};
+	std::array<std::uint8_t, 2> shot_cycle{};
+	std::array<std::uint8_t, 2> boss_panic_fired{};
+	std::array<std::uint8_t, 2> gauge_attack_next{};
+	std::int8_t cpu_shot_decision = 0;
+	std::uint8_t background_phase = 0;
+	std::array<ComboCarrySnapshot, 2> combo{};
+	std::array<std::uint8_t, 2> chain_cursor{};
+	std::array<std::array<std::uint8_t, 16>, 2> chain_hits{};
+	std::array<std::array<std::uint8_t, 16>, 2>
+		chain_pellet_and_fireball_value{};
+	std::array<std::array<std::uint8_t, 16>, 2> chain_charge_fireball{};
+	std::array<std::array<std::uint8_t, 16>, 2> chain_charge_exatt{};
+	std::uint8_t randring_cursor = 0;
+	std::uint8_t result_phase = 0;
+	std::uint8_t fireball_generation_previous = 0;
+};
+
+struct RoundStartSnapshot {
+	RoundStateSnapshot state{};
+	RoundCarrySnapshot carry{};
+};
+
+enum class CpuTimerPolicy : std::uint8_t {
+	versus_default = 0,
+	story_native = 1,
+	infinite = 2,
+};
+
+// Practice is a resident rules overlay on GM_VS_1P_CPU, not a separate source
+// game mode. Initial numeric values come from RoundStartSnapshot; these are the
+// only rules that alter later retry/result behavior.
+struct PracticeRules {
+	bool uses_stock = false;
+	CpuTimerPolicy retry_cpu_timer = CpuTimerPolicy::versus_default;
+	std::uint8_t retry_cpu_damage = 0;
+};
+
 struct GameInit {
 	std::uint32_t global_frame = 0;
 	std::int32_t resident_rand = 0;
@@ -86,6 +168,9 @@ struct GameInit {
 	std::array<std::array<std::uint8_t, 8>, 2> last_score{};
 	std::uint8_t autofire_mask = 0;
 	std::optional<RuntimeSnapshot> runtime_snapshot;
+	std::optional<CompactRuntimeSnapshot> compact_runtime_snapshot;
+	std::optional<RoundStartSnapshot> round_start_snapshot;
+	std::optional<PracticeRules> practice_rules;
 };
 
 enum class ContinueChoice : std::uint8_t {

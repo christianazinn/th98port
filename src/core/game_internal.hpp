@@ -26,13 +26,13 @@ inline constexpr std::size_t extra_attack_rikako_count = 14;
 inline constexpr std::size_t shotpair_count = 32;
 inline constexpr std::size_t collmap_width = 144;
 inline constexpr std::size_t collmap_height = 184;
-inline constexpr std::uint8_t game_mode_none = 0x00U;
-inline constexpr std::uint8_t game_mode_story = 0x01U;
-inline constexpr std::uint8_t game_mode_demo = 0x7FU;
-inline constexpr std::uint8_t game_mode_vs = 0x80U;
-inline constexpr std::uint8_t game_mode_vs_1p_cpu = game_mode_vs + 0U;
-inline constexpr std::uint8_t game_mode_vs_1p_2p = game_mode_vs + 1U;
-inline constexpr std::uint8_t game_mode_vs_cpu_cpu = game_mode_vs + 2U;
+inline constexpr std::uint8_t game_mode_none = game_mode::none;
+inline constexpr std::uint8_t game_mode_story = game_mode::story;
+inline constexpr std::uint8_t game_mode_demo = game_mode::demo;
+inline constexpr std::uint8_t game_mode_vs = game_mode::vs_1p_cpu;
+inline constexpr std::uint8_t game_mode_vs_1p_cpu = game_mode::vs_1p_cpu;
+inline constexpr std::uint8_t game_mode_vs_1p_2p = game_mode::vs_1p_2p;
+inline constexpr std::uint8_t game_mode_vs_cpu_cpu = game_mode::vs_cpu_cpu;
 
 enum class DefeatFlag : std::uint8_t {
 	none = 0,
@@ -380,6 +380,7 @@ struct DeterministicState {
 	std::uint8_t demo_number = 0;
 	std::uint16_t demo_frame = 0;
 	std::uint8_t extends_gained = 255;
+	bool practice_uses_stock = false;
 	std::int32_t resident_rand = 0;
 	std::int8_t winner = 0;
 	std::uint8_t last_fatal_player = 0;
@@ -523,6 +524,14 @@ DeterministicState initialize_first_round(
 	const GameInit &init,
 	std::size_t formation_count = 0U
 );
+bool compact_runtime_snapshot_is_valid(
+	const CompactRuntimeSnapshot &snapshot,
+	std::size_t formation_count
+) noexcept;
+std::uint16_t practice_cpu_safety_frames(
+	const GameInit &init,
+	std::uint8_t round_id
+) noexcept;
 void initialize_repeat_round(
 	DeterministicState &state,
 	const GameInit &init,

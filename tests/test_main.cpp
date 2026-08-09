@@ -16,8 +16,11 @@
 #include "th03/core/numeric.hpp"
 #include "th03/formats/t3case.hpp"
 #include "th03/formats/enedat.hpp"
+#include "th03/formats/replay.hpp"
 #include "th03/formats/t3split.hpp"
 #include "th03/formats/v11.hpp"
+#include "th03/formats/v12.hpp"
+#include "th03/replay/run.hpp"
 #include "game_internal.hpp"
 #include "trig.hpp"
 
@@ -229,6 +232,117 @@ std::vector<std::byte> make_v11()
 	return bytes;
 }
 
+std::vector<std::byte> make_v12(bool practice)
+{
+	const auto reservation = practice ? 5U : 15U;
+	const auto input_offset = 416U + (reservation * 289U);
+	constexpr std::size_t input_size = 11U;
+	std::vector<std::byte> bytes(input_offset + input_size, std::byte{0});
+	put_magic(bytes, 0U, "T3RPLY12");
+	put_u16(bytes, 8U, 12U);
+	put_u16(bytes, 10U, 416U);
+	put_u16(bytes, 12U, 0U);
+	put_u16(bytes, 14U, practice ? 0x0007U : 0x0003U);
+	put_u8(bytes, 18U, practice ? th03::game_mode::vs_1p_cpu : th03::game_mode::story);
+	put_u8(bytes, 19U, practice ? 0U : 2U);
+	put_u8(bytes, 20U, 0U);
+	put_u8(bytes, 21U, 1U);
+	put_u8(bytes, 22U, 4U);
+	put_u8(bytes, 23U, practice ? 6U : 0U);
+	put_u8(bytes, 24U, 0U);
+	put_u8(bytes, 25U, 1U);
+	put_u32(bytes, 26U, 2U);
+	put_u32(bytes, 34U, 29U);
+	put_u32(bytes, 38U, 0x89ABCDEFU);
+	put_u32(bytes, 42U, static_cast<std::uint32_t>(input_offset));
+	put_u32(bytes, 46U, static_cast<std::uint32_t>(input_size));
+	put_u32(bytes, 50U, 416U);
+	put_u32(bytes, 54U, 289U);
+	put_u16(bytes, 58U, 0x000FU);
+	put_u8(bytes, 117U, 0U);
+	put_u8(bytes, 128U, 0x0FU);
+	put_u8(bytes, 129U, 1U);
+	put_u8(bytes, 130U, practice ? 0x06U : 0x00U);
+	put_u8(bytes, 131U, 0x20U);
+	put_u8(bytes, 132U, 0x10U);
+	put_u8(bytes, 133U, 0x32U);
+	put_u8(bytes, 134U, 0x54U);
+	put_u8(bytes, 135U, 0x76U);
+	put_u8(bytes, 136U, 0x98U);
+	put_u8(bytes, 400U, 1U);
+	put_u8(bytes, 401U, practice ? 0x06U : 0x00U);
+
+	if(practice) {
+		put_u8(bytes, 68U, 1U);
+		put_u8(bytes, 69U, 6U);
+		put_u8(bytes, 70U, 0U);
+		put_u8(bytes, 71U, 2U);
+		put_u8(bytes, 72U, 0U);
+		put_u8(bytes, 73U, 1U);
+		put_u8(bytes, 74U, 0U);
+		put_u8(bytes, 75U, 0U);
+		put_u8(bytes, 76U, 7U);
+		put_u8(bytes, 77U, 7U);
+		put_u8(bytes, 78U, 3U);
+		put_u8(bytes, 79U, 0U);
+		put_u16(bytes, 80U, 333U);
+	}
+
+	constexpr std::size_t checkpoint = 416U;
+	constexpr std::size_t compact = checkpoint + 12U;
+	put_u32(bytes, compact + 0U, 29U);
+	put_u32(bytes, compact + 4U, 0x89ABCDEFU);
+	put_u8(bytes, compact + 8U, practice ? 0U : 2U);
+	put_u8(bytes, compact + 9U, 0U);
+	put_u8(bytes, compact + 10U, practice ? th03::game_mode::vs_1p_cpu : th03::game_mode::story);
+	put_u8(bytes, compact + 11U, practice ? 6U : 0U);
+	put_u8(bytes, compact + 12U, practice ? 2U : 0U);
+	put_u8(bytes, compact + 19U, 0U);
+	put_u8(bytes, compact + 20U, 1U);
+	put_u8(bytes, compact + 21U, 1U);
+	put_u8(bytes, compact + 22U, 4U);
+	for(std::size_t stage = 0U; stage < 9U; ++stage) {
+		put_u8(bytes, compact + 23U + stage, 1U);
+	}
+	put_u8(bytes, compact + 48U, 0U);
+	put_u16(bytes, compact + 49U, 0x1234U);
+	put_u16(bytes, compact + 51U, 0x5678U);
+	put_u32(bytes, compact + 79U, 0x10203040U);
+	auto reconstruction_seed = 29U;
+	for(std::size_t draw = 0U; draw < 384U; ++draw) {
+		(void)th03::detail::irand(reconstruction_seed);
+	}
+	put_u8(bytes, compact + 83U, static_cast<std::uint8_t>(
+		th03::detail::irand(reconstruction_seed) % 18U
+	));
+
+	constexpr std::size_t round = compact + 84U;
+	put_u8(bytes, round + 19U, 0U);
+	put_u8(bytes, round + 20U, 0U);
+	put_u8(bytes, round + 21U, practice ? 7U : 1U);
+	put_u8(bytes, round + 22U, practice ? 7U : 1U);
+	put_u8(bytes, round + 23U, practice ? 3U : 0U);
+	put_u8(bytes, round + 25U, practice ? 0U : 0xFFU);
+	put_u16(bytes, round + 26U, practice ? 333U : 0U);
+	put_u16(bytes, round + 28U, practice ? 333U : 0U);
+
+	constexpr std::size_t carry = round + 30U;
+	put_u8(bytes, carry + 21U, 0U);
+	put_u8(bytes, carry + 30U, 0U);
+	put_u8(bytes, carry + 31U, 0U);
+	put_u8(bytes, carry + 161U, 0U);
+
+	put_u8(bytes, input_offset + 0U, 0x01U);
+	put_u8(bytes, input_offset + 1U, 0x0FU);
+	put_u16(bytes, input_offset + 2U, 0x0020U);
+	put_u16(bytes, input_offset + 4U, 0x0040U);
+	put_u16(bytes, input_offset + 6U, 0x1000U);
+	put_u8(bytes, input_offset + 8U, 0U);
+	put_u8(bytes, input_offset + 9U, 0x80U);
+	put_u8(bytes, input_offset + 10U, 0xA5U);
+	return bytes;
+}
+
 th03::formats::SplitRow split_row(
 	th03::formats::SplitEvent event,
 	std::uint32_t global_frame,
@@ -324,6 +438,105 @@ void test_game_init_source_domain()
 	);
 }
 
+void test_round_start_snapshot_restoration()
+{
+	th03::GameInit init{};
+	init.game_mode = th03::game_mode::vs_1p_cpu;
+	init.is_cpu = {0U, 1U};
+	init.paletted_character = {1, 3};
+	init.runtime_snapshot = th03::RuntimeSnapshot{};
+	th03::RoundStartSnapshot snapshot{};
+	snapshot.state.round_id = 5U;
+	snapshot.state.rounds_won = {1U, 2U};
+	snapshot.state.score[0] = {1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U};
+	snapshot.state.score[1] = {9U, 8U, 7U, 6U, 5U, 4U, 3U, 2U};
+	snapshot.state.round_speed = 0x6AU;
+	snapshot.state.bullet_base_speed = 0x1BU;
+	snapshot.state.gauge_attack_level = {12U, 13U};
+	snapshot.state.boss_attack_level = 14U;
+	snapshot.state.cpu_hit_damage_additional = 3U;
+	snapshot.state.extends_gained = 2U;
+	snapshot.state.cpu_safety_frames = {0x1234U, 0xABCDU};
+	snapshot.carry.cpu_dodge_strategy = {2U, 3U};
+	snapshot.carry.human_movement_last = {0x1111U, 0x2222U};
+	snapshot.carry.spell_ready_frames = {4U, 5U};
+	snapshot.carry.combo_bonus_max = {600U, 700U};
+	snapshot.carry.combo_hits_max = {8U, 9U};
+	snapshot.carry.shot_cycle = {3U, 4U};
+	snapshot.carry.boss_panic_fired = {1U, 0U};
+	snapshot.carry.gauge_attack_next = {2U, 5U};
+	snapshot.carry.cpu_shot_decision = -2;
+	snapshot.carry.background_phase = 2U;
+	snapshot.carry.combo[0] = {10U, 11U, 1200U};
+	snapshot.carry.combo[1] = {12U, 13U, 1400U};
+	snapshot.carry.chain_cursor = {14U, 15U};
+	snapshot.carry.chain_hits[1][15] = 16U;
+	snapshot.carry.chain_pellet_and_fireball_value[0][14] = 17U;
+	snapshot.carry.chain_charge_fireball[1][15] = 18U;
+	snapshot.carry.chain_charge_exatt[0][14] = 19U;
+	snapshot.carry.randring_cursor = 201U;
+	snapshot.carry.result_phase = 2U;
+	snapshot.carry.fireball_generation_previous = 3U;
+	init.round_start_snapshot = snapshot;
+
+	const auto state = th03::detail::initialize_first_round(init, 18U);
+	check(
+		state.round_id == 5U && state.players[0].rounds_won == 1U &&
+		state.players[1].rounds_won == 2U && state.score == snapshot.state.score,
+		"round-start state restores round identity, wins, and scores"
+	);
+	check(
+		state.round_speed == 0x6AU && state.bullet_base_speed == 0x1BU &&
+		state.gba_gauge_level == std::array<std::uint8_t, 2>{12U, 13U} &&
+		state.gba_boss_level == 14U && state.cpu_hit_damage_additional == 3U &&
+		state.extends_gained == 2U,
+		"round-start state restores rank-derived gameplay values"
+	);
+	check(
+		state.players[0].cpu_safety_frames == 0x1234U &&
+		state.players[1].cpu_dodge_strategy == 3U &&
+		state.players[0].human_movement_last == 0x1111U &&
+		state.players[1].spell_ready_frames == 5U &&
+		state.players[0].combo_bonus_max == 600U &&
+		state.players[1].combo_hits_max == 9U,
+		"round-start carry restores player retry fields"
+	);
+	check(
+		state.autofire_shot_gate == std::array<std::uint8_t, 2>{3U, 4U} &&
+		state.boss_panic_fired_in_combo == std::array<std::uint8_t, 2>{1U, 0U} &&
+		state.gba_flag_next[1] == th03::detail::GaugeBossAttackFlag::boss &&
+		state.cpu_target_kind_scratch == -2 &&
+		state.background_phase == th03::detail::BackgroundPhase::type_b_steady,
+		"round-start carry restores shared callback and CPU state"
+	);
+	check(
+		state.combos[1].bonus_total == 1400U && state.chains.cursor[1] == 15U &&
+		state.chains.hits[1][15] == 16U &&
+		state.chains.pellet_and_fireball_value[0][14] == 17U &&
+		state.chains.charge_fireball[1][15] == 18U &&
+		state.chains.charge_exatt[0][14] == 19U &&
+		state.randring_cursor == 201U &&
+		state.result_phase == th03::detail::ResultPhase::closing &&
+		state.fireball_generation_previous == 3U,
+		"round-start carry restores combo, chain, RNG, and transition state"
+	);
+	check(
+		th03::Game::create(init).has_value(),
+		"valid round-start snapshot passes public construction validation"
+	);
+	init.runtime_snapshot.reset();
+	check(
+		!th03::Game::create(init),
+		"round-start state cannot be detached from its runtime snapshot"
+	);
+	init.runtime_snapshot = th03::RuntimeSnapshot{};
+	init.round_start_snapshot->carry.chain_cursor[0] = 16U;
+	check(
+		!th03::Game::create(init),
+		"invalid round-start array cursor is rejected before simulation"
+	);
+}
+
 void test_score_most_significant_digit_is_not_bcd_normalized()
 {
 	th03::detail::DeterministicState state{};
@@ -336,6 +549,46 @@ void test_score_most_significant_digit_is_not_bcd_normalized()
 		state.score[0] ==
 			std::array<std::uint8_t, 8>{0U, 0U, 0U, 0U, 0U, 0U, 0U, 10U},
 		"Score carry leaves the most-significant byte raw like score_add.asm"
+	);
+}
+
+void test_combo_hits_above_display_limit_remain_canonical()
+{
+	th03::detail::DeterministicState state{};
+	state.hud_start_flag = 1U;
+	state.combo_points_for_boss_attack = 0xFFFFU;
+	state.chains.hits[0][0] = 112U;
+
+	auto &explosion = state.enemies[0];
+	explosion.flag = th03::detail::EnemyFlag::explosion_hitting_enemies;
+	explosion.frame = 4U;
+	explosion.center_x = 144 << 4;
+	explosion.center_y = 80 << 4;
+	explosion.player_id = 0U;
+	explosion.size_pixels = 16U;
+	explosion.chain_slot = 0U;
+
+	auto &pellet = state.bullets[0];
+	pellet.flag = th03::detail::BulletFlag::pellet;
+	pellet.center_x = explosion.center_x;
+	pellet.center_y = explosion.center_y;
+	pellet.player_id = 0U;
+	pellet.speed_next = 24U;
+
+	check(
+		th03::detail::gameplay_frame_prefix(state, th03::GameContent{}) &&
+		state.chains.hits[0][0] == 113U &&
+		state.combos[0].hits_highest == 113U &&
+		state.players[0].combo_hits_max == 113U,
+		"Combo state preserves source values above the renderer's 99-hit limit"
+	);
+
+	auto display_capped = state;
+	display_capped.combos[0].hits_highest = 99U;
+	check(
+		th03::detail::state_hash(state) !=
+			th03::detail::state_hash(display_capped),
+		"Canonical hashing distinguishes raw combo hits above the display limit"
 	);
 }
 
@@ -712,22 +965,29 @@ void test_marisa_boss_patterns()
 
 void test_kana_bullet_template_angle_inheritance()
 {
-	th03::detail::DeterministicState state{};
-	state.players[1].paletted_character = 11;
-	state.gba_boss_launched_by = 1;
-	state.boss.state = 2U;
-	state.boss.pattern_frame = 0x27U;
-	state.boss.center_x = 144 << 4;
-	state.boss.center_y = 80 << 4;
-	state.boss.hp = 110U;
-	state.boss.params[0] = 24U;
-	auto &extra = state.extra_attacks[1][0];
-	extra.state = 1U;
-	extra.frame = 0U;
-	extra.center_x = 120 << 4;
-	extra.center_y = 80 << 4;
-	extra.angle = 0U;
-	extra.speed = 8U;
+	const auto make_state = [](
+		std::uint8_t boss_state, std::uint16_t pattern_frame
+	) {
+		th03::detail::DeterministicState state{};
+		state.players[1].paletted_character = 11;
+		state.gba_boss_launched_by = 1;
+		state.boss.state = boss_state;
+		state.boss.pattern_frame = pattern_frame;
+		state.boss.center_x = 144 << 4;
+		state.boss.center_y = 80 << 4;
+		state.boss.hp = 110U;
+		state.boss.params = {24U, 24U, 31U, 25U, 8U, 24U, 64U};
+		auto &extra = state.extra_attacks[1][0];
+		extra.state = 1U;
+		extra.frame = 0U;
+		extra.center_x = 120 << 4;
+		extra.center_y = 80 << 4;
+		extra.angle = 0U;
+		extra.speed = 8U;
+		return state;
+	};
+
+	auto state = make_state(2U, 0x27U);
 
 	(void)th03::detail::gameplay_frame_prefix(state, th03::GameContent{});
 	check(
@@ -738,12 +998,137 @@ void test_kana_bullet_template_angle_inheritance()
 		"Kana's Boss accel ring inherits the Extra Attack template-angle write from earlier in the prefix"
 	);
 
+	for(const auto pattern_frame : std::array<std::uint16_t, 3>{
+		0x27U, 0x3FU, 0x47U
+	}) {
+		auto rings = make_state(7U, pattern_frame);
+		(void)th03::detail::gameplay_frame_prefix(
+			rings, th03::GameContent{}
+		);
+		check(
+			rings.bullets[1].angle_next == 0x40U,
+			"Kana's three default Boss rings inherit the Extra Attack template-angle write"
+		);
+		if(pattern_frame == 0x3FU) {
+			check(
+				rings.bullet_template_angle == 0x80U,
+				"Kana's spread loop preserves the template mutation after its final add"
+			);
+		}
+	}
+
+	auto clouds = make_state(13U, 7U);
+	(void)th03::detail::gameplay_frame_prefix(clouds, th03::GameContent{});
+	check(
+		clouds.bullets[1].flag == th03::detail::BulletFlag::pellet_cloud &&
+		clouds.bullets[1].angle_next == 0x40U,
+		"Kana's cloud Boss ring inherits the Extra Attack template-angle write"
+	);
+
 	th03::detail::DeterministicState reset{};
 	reset.bullet_template_angle = 0xFFU;
 	(void)th03::detail::gameplay_frame_prefix(reset, th03::GameContent{});
 	check(
 		reset.bullet_template_angle == 0U,
 		"The shared bullet-template angle resets at the next gameplay prefix"
+	);
+}
+
+void test_bullet_template_post_add_angle_mutations()
+{
+	th03::detail::DeterministicState ellen_boss{};
+	ellen_boss.players[0].paletted_character = 7;
+	ellen_boss.gba_boss_launched_by = 0;
+	ellen_boss.boss.state = 2U;
+	ellen_boss.boss.pattern_frame = 0x23U;
+	ellen_boss.boss.center_x = 144 << 4;
+	ellen_boss.boss.center_y = 80 << 4;
+	ellen_boss.boss.hp = 110U;
+	ellen_boss.boss.params[0] = 48U;
+	ellen_boss.ellen_boss_spread_angle = 0x20U;
+	(void)th03::detail::gameplay_frame_prefix(
+		ellen_boss, th03::GameContent{}
+	);
+	check(
+		ellen_boss.bullets[14].angle_next == 0x58U &&
+		ellen_boss.bullet_template_angle == 0x60U,
+		"Ellen's eight-ring Boss loop preserves the template mutation after its final add"
+	);
+
+	const auto kotohime_extra_state = [](std::uint8_t milestone) {
+		th03::detail::DeterministicState state{};
+		state.players[0].paletted_character = 9;
+		state.kotohime_gauge_pattern_type[0] =
+			th03::detail::BulletFlag::bullet16;
+		state.gauge_pattern_param_a[0] = 4U;
+		state.gauge_pattern_param_b[0] = 0U;
+		state.randring[0] = 0x31U;
+		auto &extra = state.extra_attacks[0][0];
+		extra.state = 1U;
+		extra.center_x = 144 << 4;
+		extra.center_y = 80 << 4;
+		extra.kotohime_target_y = 80 << 4;
+		extra.kotohime_milestone = milestone;
+		extra.behavior_variant = 1U;
+		(void)th03::detail::gameplay_frame_prefix(
+			state, th03::GameContent{}
+		);
+		return state;
+	};
+	const auto kotohime_four = kotohime_extra_state(4U);
+	check(
+		kotohime_four.bullets[12].angle_next == 0x55U &&
+		kotohime_four.bullet_template_angle == 0x61U,
+		"Kotohime's four-ring Extra loop preserves its final angle increment"
+	);
+	const auto kotohime_ten = kotohime_extra_state(0x10U);
+	check(
+		kotohime_ten.bullets[36].angle_next == 0xF2U &&
+		kotohime_ten.bullet_template_angle == 0xEBU,
+		"Kotohime's ten-ring Extra loop preserves its final angle decrement"
+	);
+
+	th03::detail::DeterministicState ellen_gauge{};
+	ellen_gauge.players[0].paletted_character = 7;
+	ellen_gauge.gba_flag_active[0] =
+		th03::detail::GaugeBossAttackFlag::gauge_bullet_active;
+	ellen_gauge.ellen_gauge_pattern_frame[0] = 0U;
+	ellen_gauge.ellen_gauge_pattern_x[0] = 0;
+	ellen_gauge.ellen_gauge_pattern_y[0] = 0;
+	ellen_gauge.gauge_pattern_param_b[0] = 48U;
+	ellen_gauge.randring[0] = 0x11U;
+	ellen_gauge.randring[1] = 0x22U;
+	ellen_gauge.randring[2] = 0x33U;
+	(void)th03::detail::gameplay_frame_prefix(
+		ellen_gauge, th03::GameContent{}
+	);
+	check(
+		ellen_gauge.randring_cursor == 2U &&
+		ellen_gauge.bullets[0].angle_next == 0x11U &&
+		ellen_gauge.bullet_template_angle == 0x22U,
+		"Ellen's Gauge pattern stores its final non-firing template-angle draw"
+	);
+
+	th03::detail::DeterministicState transfer{};
+	auto &source = transfer.bullets[0];
+	source.flag = th03::detail::BulletFlag::transfer_pellet;
+	source.center_x = 1000;
+	source.center_y = 1000;
+	source.velocity_x = 100;
+	source.target_x_for_origin_player = 1050;
+	source.target_x_for_target_player = 2000;
+	source.speed_next = 24U;
+	source.angle_next = 0x5AU;
+	source.player_id = 0U;
+	source.group_next = 29U;
+	(void)th03::detail::gameplay_frame_prefix(
+		transfer, th03::GameContent{}
+	);
+	check(
+		transfer.bullets[1].flag ==
+			th03::detail::BulletFlag::pellet_cloud &&
+		transfer.bullet_template_angle == 0x5AU,
+		"A transferred pellet copies its derived-group angle into the shared template"
 	);
 }
 
@@ -2498,13 +2883,171 @@ void test_v11()
 	check(!th03::formats::parse_v11_replay(bad), "V11 rejects RLE expansion past sample count");
 }
 
+void test_v12_and_version_neutral_replay()
+{
+	auto bytes = make_v12(false);
+	const auto parsed = th03::formats::parse_v12_replay(bytes);
+	check(parsed.has_value(), "synthetic V12 Story replay parses");
+	if(parsed) {
+		check(
+			parsed->sample_count == 2U && parsed->records.size() == 3U,
+			"V12 reuses the version-neutral RLE and process stream"
+		);
+		check(
+			parsed->init.compact_runtime_snapshot.has_value() &&
+			parsed->init.round_start_snapshot.has_value(),
+			"V12 produces compact runtime and round-start contracts"
+		);
+		if(parsed->init.compact_runtime_snapshot) {
+			check(
+				parsed->init.compact_runtime_snapshot->round_reset_seed == 29U,
+				"V12 round-0 compatibility reconstructs from resident_rand"
+			);
+		}
+	}
+	const auto document = th03::formats::parse_replay(bytes);
+	check(
+		document && document->session.source_version == 12U &&
+		document->expected_round_splits.size() == 1U &&
+		document->expected_round_splits[0].route == 2U,
+		"version-neutral replay adapter parses V12 summary splits"
+	);
+
+	bytes = make_v12(true);
+	const auto practice = th03::formats::parse_replay(bytes);
+	check(
+		practice && practice->practice &&
+		practice->session.init.practice_rules.has_value() &&
+		practice->session.init.practice_rules->uses_stock,
+		"V12 Practice metadata becomes a neutral retry/result policy"
+	);
+	if(practice) {
+		th03::GameContent content{};
+		content.enemy_formations.resize(18U);
+		check(
+			th03::Game::create(practice->session.init, content).has_value(),
+			"V12 Practice anchor passes core snapshot and safety validation"
+		);
+	}
+
+	auto bad = bytes;
+	put_u16(bad, 80U, 334U);
+	check(
+		!th03::formats::parse_v12_replay(bad),
+		"V12 Practice rejects a configured safety/checkpoint mismatch"
+	);
+	bad = bytes;
+	put_u8(bad, 416U + 12U + 12U, 1U);
+	check(
+		!th03::formats::parse_v12_replay(bad),
+		"V12 Practice rejects stock that disagrees with checkpoint lives"
+	);
+	bad = bytes;
+	put_u16(bad, 14U, 0x0005U);
+	check(
+		!th03::formats::parse_v12_replay(bad),
+		"V12 requires both RLE and Charge input capabilities"
+	);
+}
+
+void test_practice_retry_policy()
+{
+	th03::GameInit init{};
+	init.game_mode = th03::game_mode::vs_1p_cpu;
+	init.rank = 0U;
+	init.story_stage = 6U;
+	init.story_lives = 2U;
+	init.is_cpu = {0U, 1U};
+	init.paletted_character = {1, 3};
+	init.runtime_snapshot = th03::RuntimeSnapshot{};
+	init.practice_rules = th03::PracticeRules{
+		.uses_stock = true,
+		.retry_cpu_timer = th03::CpuTimerPolicy::story_native,
+		.retry_cpu_damage = 2U,
+	};
+	th03::RoundStartSnapshot round{};
+	round.state.gauge_attack_level = {7U, 8U};
+	round.state.cpu_safety_frames = {333U, 333U};
+	init.round_start_snapshot = round;
+	check(
+		th03::Game::create(init).has_value(),
+		"stock Practice accepts its exact initial Story-native CPU timer"
+	);
+
+	auto state = th03::detail::initialize_first_round(init, 0U);
+	state.gba_gauge_level = {12U, 13U};
+	state.round_frame = 1234U;
+	th03::detail::initialize_repeat_round(state, init, 0U);
+	check(
+		state.round_id == 1U &&
+		state.gba_gauge_level == std::array<std::uint8_t, 2>{12U, 13U} &&
+		state.players[0].cpu_safety_frames == 233U &&
+		state.players[1].cpu_safety_frames == 233U &&
+		state.cpu_hit_damage_additional == 2U,
+		"stock Practice retry preserves live spell ranks and reapplies configured CPU rules"
+	);
+
+	init.round_start_snapshot->state.cpu_safety_frames = {332U, 333U};
+	check(
+		!th03::Game::create(init),
+		"Practice construction rejects CPU safety outside the selected policy"
+	);
+	init.round_start_snapshot.reset();
+	check(
+		!th03::Game::create(init),
+		"Practice rules cannot be detached from their initial round state"
+	);
+}
+
+void test_version_neutral_replay_runner()
+{
+	th03::replay::ReplaySession session{};
+	session.source_version = 13U;
+	session.init.game_mode = th03::game_mode::vs_1p_2p;
+	session.init.paletted_character = {1, 3};
+	session.sample_count = 3U;
+	session.records = {
+		th03::replay::InputSample{
+			.frame_index = 0U,
+			.phase = th03::replay::InputPhase::gameplay,
+			.input = th03::CoreInput{.system = 0x1000U},
+			.round_frame = std::nullopt,
+			.round_or_result_frame = std::nullopt,
+		},
+		th03::replay::InputSample{
+			.frame_index = 1U,
+			.phase = th03::replay::InputPhase::interstitial,
+			.input = {},
+			.round_frame = std::nullopt,
+			.round_or_result_frame = std::nullopt,
+		},
+		th03::replay::InputSample{
+			.frame_index = 2U,
+			.phase = th03::replay::InputPhase::interstitial,
+			.input = th03::CoreInput{.system = 0x4000U},
+			.round_frame = std::nullopt,
+			.round_or_result_frame = std::nullopt,
+		},
+		th03::replay::ProcessBoundary{3U, th03::replay::ProcessId::main},
+	};
+	const auto run = th03::replay::run_session(session, th03::GameContent{});
+	check(
+		run && run->status == th03::replay::RunStatus::complete &&
+		run->consumed_samples == 3U && run->completed_rounds.size() == 1U &&
+		run->completed_rounds[0].state.route == 0U,
+		"version-neutral runner coordinates recorded pause exit and MAIN boundary"
+	);
+}
+
 } // namespace
 
 int main()
 {
 	test_numeric();
 	test_game_init_source_domain();
+	test_round_start_snapshot_restoration();
 	test_score_most_significant_digit_is_not_bcd_normalized();
+	test_combo_hits_above_display_limit_remain_canonical();
 	test_defeat_playfield_shake();
 	test_th3r03_round_start();
 	test_th3r03_second_stage_start();
@@ -2516,6 +3059,7 @@ int main()
 	test_gauge_pattern_updates_during_hud_start();
 	test_marisa_boss_patterns();
 	test_kana_bullet_template_angle_inheritance();
+	test_bullet_template_post_add_angle_mutations();
 	test_mima_boss_renderer_state();
 	test_kotohime_boss_materialization_renderer_state();
 	test_chiyuri_boss_patterns_and_rng();
@@ -2542,6 +3086,9 @@ int main()
 	test_recorded_pause_frame_boundary();
 	test_t3split();
 	test_v11();
+	test_v12_and_version_neutral_replay();
+	test_practice_retry_policy();
+	test_version_neutral_replay_runner();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0 ? 0 : 1;
 }

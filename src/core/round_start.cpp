@@ -173,6 +173,107 @@ void initialize_runtime_rings(
 	state.enemies_alive = {};
 }
 
+std::uint16_t practice_story_safety_frames(
+	std::uint8_t rank,
+	std::uint8_t stage,
+	std::uint8_t round
+) noexcept
+{
+	round = std::min<std::uint8_t>(round, 5U);
+	auto frames = static_cast<std::uint32_t>(
+		story_cpu_safety_frames[stage][round]
+	);
+	if(rank == rank_easy) {
+		frames /= 3U;
+	} else if(rank == rank_hard) {
+		frames *= 2U;
+	} else if(rank == rank_lunatic) {
+		frames = (frames * 3U) + 500U;
+	}
+	return static_cast<std::uint16_t>(std::min(frames, 0xFFFFU));
+}
+
+bool reconstruct_compact_runtime_rings(
+	DeterministicState &state,
+	const CompactRuntimeSnapshot &snapshot,
+	std::size_t formation_count
+) noexcept
+{
+	if(
+		formation_count == 0U || formation_count > 255U ||
+		snapshot.first_formation >= formation_count
+	) {
+		return false;
+	}
+	state.random_seed = snapshot.round_reset_seed;
+	randring_fill(state);
+	for(auto &player : state.players) {
+		for(auto &charge : player.cpu_charge_ring) {
+			charge = static_cast<std::uint8_t>(
+				((irand(state.random_seed) & 3U) << 6U) + 0x3FU
+			);
+		}
+		player.cpu_charge_cursor = 0U;
+	}
+
+	std::uint8_t previous = 0xFFU;
+	for(std::size_t index = 0U; index < state.formation_type_ring.size(); ++index) {
+		std::uint8_t next = 0U;
+		if(index == 0U) {
+			next = static_cast<std::uint8_t>(
+				irand(state.random_seed) % formation_count
+			);
+			if(next != snapshot.first_formation) {
+				previous = next;
+				do {
+					next = static_cast<std::uint8_t>(
+						irand(state.random_seed) % formation_count
+					);
+				} while(next == previous);
+			}
+			if(next != snapshot.first_formation) {
+				return false;
+			}
+		} else {
+			do {
+				next = static_cast<std::uint8_t>(
+					irand(state.random_seed) % formation_count
+				);
+			} while(next == previous);
+		}
+		state.formation_type_ring[index] = next;
+		previous = next;
+		state.formation_position_ring[index] = static_cast<std::uint8_t>(
+			(irand(state.random_seed) & 1U) << 7U
+		);
+	}
+	state.formation_cursor = {};
+	state.enemies_alive = {};
+	state.random_seed = snapshot.random_seed;
+	return true;
+}
+
+void restore_player_starts(
+	DeterministicState &state,
+	const std::array<PlayerStart, player_count> &starts
+) noexcept
+{
+	for(std::size_t player_id = 0U; player_id < player_count; ++player_id) {
+		auto &player = state.players[player_id];
+		const auto &restored = starts[player_id];
+		player.center_x = restored.center_x;
+		player.center_y = restored.center_y;
+		player.halfhearts = restored.halfhearts;
+		player.invincibility_time = restored.invincibility_time;
+		player.gauge_charge_speed = restored.gauge_charge_speed;
+		player.gauge_charged = restored.gauge_charged;
+		player.gauge_avail = restored.gauge_avail;
+		player.bombs = restored.bombs;
+		player.shot_active = restored.shot_active;
+		player.cpu_frame = restored.cpu_frame;
+	}
+}
+
 void initialize_repeat_rank(
 	DeterministicState &state,
 	const GameInit &init
@@ -225,6 +326,55 @@ void initialize_background_rng(DeterministicState &state) noexcept
 	}
 }
 
+void apply_round_start_snapshot(
+	DeterministicState &state,
+	const RoundStartSnapshot &snapshot
+) noexcept
+{
+	const auto &round = snapshot.state;
+	const auto &carry = snapshot.carry;
+	state.round_id = round.round_id;
+	state.score = round.score;
+	state.round_speed = round.round_speed;
+	state.bullet_base_speed = round.bullet_base_speed;
+	state.gba_gauge_level = round.gauge_attack_level;
+	state.gba_boss_level = round.boss_attack_level;
+	state.cpu_hit_damage_additional = round.cpu_hit_damage_additional;
+	state.extends_gained = round.extends_gained;
+	for(std::size_t player_id = 0U; player_id < player_count; ++player_id) {
+		auto &player = state.players[player_id];
+		player.rounds_won = round.rounds_won[player_id];
+		player.cpu_safety_frames = round.cpu_safety_frames[player_id];
+		player.cpu_dodge_strategy = carry.cpu_dodge_strategy[player_id];
+		player.human_movement_last = carry.human_movement_last[player_id];
+		player.spell_ready_frames = carry.spell_ready_frames[player_id];
+		player.combo_bonus_max = carry.combo_bonus_max[player_id];
+		player.combo_hits_max = carry.combo_hits_max[player_id];
+		state.autofire_shot_gate[player_id] = carry.shot_cycle[player_id];
+		state.boss_panic_fired_in_combo[player_id] =
+			carry.boss_panic_fired[player_id];
+		state.gba_flag_next[player_id] = static_cast<GaugeBossAttackFlag>(
+			carry.gauge_attack_next[player_id]
+		);
+		state.combos[player_id] = ComboState{
+			carry.combo[player_id].time,
+			carry.combo[player_id].hits_highest,
+			carry.combo[player_id].bonus_total,
+		};
+	}
+	state.cpu_target_kind_scratch = carry.cpu_shot_decision;
+	state.background_phase = static_cast<BackgroundPhase>(carry.background_phase);
+	state.chains.cursor = carry.chain_cursor;
+	state.chains.hits = carry.chain_hits;
+	state.chains.pellet_and_fireball_value =
+		carry.chain_pellet_and_fireball_value;
+	state.chains.charge_fireball = carry.chain_charge_fireball;
+	state.chains.charge_exatt = carry.chain_charge_exatt;
+	state.randring_cursor = carry.randring_cursor;
+	state.result_phase = static_cast<ResultPhase>(carry.result_phase);
+	state.fireball_generation_previous = carry.fireball_generation_previous;
+}
+
 std::uint8_t initial_cpu_hit_damage_additional(const GameInit &init) noexcept
 {
 	if(init.game_mode != game_mode_story) {
@@ -244,6 +394,32 @@ std::uint8_t initial_cpu_hit_damage_additional(const GameInit &init) noexcept
 
 } // namespace
 
+bool compact_runtime_snapshot_is_valid(
+	const CompactRuntimeSnapshot &snapshot,
+	std::size_t formation_count
+) noexcept
+{
+	DeterministicState state{};
+	return reconstruct_compact_runtime_rings(state, snapshot, formation_count);
+}
+
+std::uint16_t practice_cpu_safety_frames(
+	const GameInit &init,
+	std::uint8_t round_id
+) noexcept
+{
+	const auto policy = init.practice_rules->retry_cpu_timer;
+	if(policy == CpuTimerPolicy::story_native) {
+		return practice_story_safety_frames(
+			init.rank, init.story_stage, round_id
+		);
+	}
+	if(policy == CpuTimerPolicy::infinite) {
+		return 0xFFFFU;
+	}
+	return versus_safety_frames(init);
+}
+
 DeterministicState initialize_first_round(
 	const GameInit &init,
 	std::size_t formation_count
@@ -256,6 +432,8 @@ DeterministicState initialize_first_round(
 	state.story_stage = init.story_stage;
 	state.story_lives = init.story_lives;
 	state.skill = init.skill;
+	state.practice_uses_stock =
+		init.practice_rules && init.practice_rules->uses_stock;
 	state.demo_number = init.demo_number;
 	state.resident_rand = init.resident_rand;
 	state.winner = init.winner;
@@ -367,23 +545,21 @@ DeterministicState initialize_first_round(
 		state.formation_cursor = snapshot.formation_cursor;
 		for(std::size_t player_id = 0; player_id < player_count; ++player_id) {
 			auto &player = state.players[player_id];
-			const auto &restored = snapshot.players[player_id];
 			player.cpu_charge_ring = snapshot.cpu_charge_ring[player_id];
 			player.cpu_charge_cursor = snapshot.cpu_charge_cursor[player_id];
-			player.center_x = restored.center_x;
-			player.center_y = restored.center_y;
-			player.halfhearts = restored.halfhearts;
-			player.invincibility_time = restored.invincibility_time;
-			player.gauge_charge_speed = restored.gauge_charge_speed;
-			player.gauge_charged = restored.gauge_charged;
-			player.gauge_avail = restored.gauge_avail;
-			player.bombs = restored.bombs;
-			player.shot_active = restored.shot_active;
-			player.cpu_frame = restored.cpu_frame;
 		}
+		restore_player_starts(state, snapshot.players);
+	} else if(init.compact_runtime_snapshot) {
+		(void)reconstruct_compact_runtime_rings(
+			state, *init.compact_runtime_snapshot, formation_count
+		);
+		restore_player_starts(state, init.compact_runtime_snapshot->players);
 	} else {
 		initialize_runtime_rings(state, formation_count);
 		initialize_background_rng(state);
+	}
+	if(init.round_start_snapshot) {
+		apply_round_start_snapshot(state, *init.round_start_snapshot);
 	}
 	return state;
 }
@@ -398,6 +574,7 @@ void initialize_repeat_round(
 	// increments round_id and performs this targeted, in-process reset.
 	state.resident_rand = static_cast<std::int32_t>(state.round_frame);
 	state.round_id = static_cast<std::uint8_t>(state.round_id + 1U);
+	const auto practice_spell_levels = state.gba_gauge_level;
 
 	state.boss_target_active = {};
 	state.result_phase_frame = 0U;
@@ -462,6 +639,15 @@ void initialize_repeat_round(
 		);
 	}
 	initialize_repeat_rank(state, init);
+	if(init.practice_rules && init.practice_rules->uses_stock) {
+		const auto safety = practice_cpu_safety_frames(init, state.round_id);
+		for(auto &player : state.players) {
+			player.cpu_safety_frames = safety;
+		}
+		state.gba_gauge_level = practice_spell_levels;
+		state.cpu_hit_damage_additional =
+			init.practice_rules->retry_cpu_damage;
+	}
 
 	state.gba_boss_launched_by = -1;
 	state.defeat_flag = DefeatFlag::none;

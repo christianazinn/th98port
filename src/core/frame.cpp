@@ -40,6 +40,7 @@ constexpr std::uint8_t knockback_frames = 64U;
 constexpr std::uint8_t hit_damage_max = 6U;
 constexpr std::uint8_t extends_max = 2U;
 constexpr std::uint8_t extends_disabled = 255U;
+
 constexpr std::uint8_t position_clip_x = 0x01U;
 constexpr std::uint8_t position_clip_bottom = 0x02U;
 constexpr std::uint8_t position_do_not_mirror_x = 0x80U;
@@ -232,14 +233,13 @@ std::uint16_t combo_add(
 	auto &player = state.players[player_id];
 	player.combo_hits_max = std::max(player.combo_hits_max, hits);
 	player.combo_bonus_max = std::max(player.combo_bonus_max, combo.bonus_total);
-	const auto display_hits = std::min<std::uint8_t>(hits, 99U);
 	if(hits > 99U && combo.bonus_total != 0xFFFFU) {
 		combo.time = 80U;
 	}
 	if(
-		display_hits > combo.hits_highest || combo.time < 32U
+		hits > combo.hits_highest || combo.time < 32U
 	) {
-		combo.hits_highest = display_hits;
+		combo.hits_highest = hits;
 		if(combo.bonus_total != 0xFFFFU) {
 			combo.time = 80U;
 		}
@@ -1218,6 +1218,9 @@ bool bullet_add_transfer_pellet(
 	std::uint8_t template_speed
 ) noexcept
 {
+	// The collision caller initializes the source template angle before the
+	// type-only bullets_add_transfer_pellet() wrapper.
+	state.bullet_template_angle = 0U;
 	if(!bullet_center_is_spawnable(center_x, center_y)) {
 		return false;
 	}
@@ -1275,6 +1278,8 @@ bool bullet_add_cloud_from_transfer(
 	const BulletState &source
 ) noexcept
 {
+	// bullets_add_next_from_p() copies this field before attempting the add.
+	state.bullet_template_angle = source.angle_next;
 	if(!bullet_center_is_spawnable(source.center_x, source.center_y)) {
 		return false;
 	}
@@ -3317,8 +3322,10 @@ void gauge_pattern_ellen(
 			bullet_group_sixteen_ring
 		);
 		// ZUN overwrites the template angle before the next firing, but the
-		// shared-ring read remains part of the deterministic call sequence.
-		(void)randring_next16(state);
+		// shared-ring read and write remain part of the deterministic state.
+		state.bullet_template_angle = static_cast<std::uint8_t>(
+			randring_next16(state)
+		);
 		center_y = exact::wrap_add(
 			center_y, static_cast<std::int16_t>(24 << 4)
 		);
@@ -5006,6 +5013,7 @@ void extra_attacks_update_kotohime(
 							speed = static_cast<std::uint8_t>(speed + 2U);
 							angle = static_cast<std::uint8_t>(angle + angle_delta);
 						}
+						state.bullet_template_angle = angle;
 					}
 				} else if(attack.kotohime_milestone == 0x10U) {
 					auto angle = static_cast<std::uint8_t>(randring_next16(state));
@@ -5042,6 +5050,7 @@ void extra_attacks_update_kotohime(
 							speed = static_cast<std::uint8_t>(speed + 2U);
 							angle = static_cast<std::uint8_t>(angle + angle_delta);
 						}
+						state.bullet_template_angle = angle;
 					}
 					attack.state = 0U;
 				}
@@ -6575,6 +6584,7 @@ void boss_pattern_ellen_spreads(
 				state.ellen_boss_spread_angle + 8U
 			);
 		}
+		state.bullet_template_angle = state.ellen_boss_spread_angle;
 	} else if(boss.pattern_frame <= 0x2CU) {
 		if((boss.pattern_frame & 1U) != 0U) {
 			return;
@@ -7087,7 +7097,8 @@ void boss_pattern_kana_rings(
 		if(boss.pattern_frame == 0x28U) {
 			bullets_add_group(
 				state, BulletFlag::bullet16, boss.center_x, boss.center_y,
-				static_cast<std::uint8_t>(1U - player_id), 1U << 4U, 0U,
+				static_cast<std::uint8_t>(1U - player_id), 1U << 4U,
+				state.bullet_template_angle,
 				bullet_group_ring, boss.params[1]
 			);
 			return;
@@ -7095,7 +7106,8 @@ void boss_pattern_kana_rings(
 		if(boss.pattern_frame == 0x40U) {
 			bullets_add_group(
 				state, BulletFlag::bullet16, boss.center_x, boss.center_y,
-				static_cast<std::uint8_t>(1U - player_id), (2U << 4U) + 8U, 0U,
+				static_cast<std::uint8_t>(1U - player_id), (2U << 4U) + 8U,
+				state.bullet_template_angle,
 				bullet_group_ring, boss.params[2]
 			);
 			auto angle = std::uint8_t{0x20U};
@@ -7109,12 +7121,15 @@ void boss_pattern_kana_rings(
 				angle = static_cast<std::uint8_t>(angle + 6U);
 				speed = static_cast<std::uint8_t>(speed + 3U);
 			}
+			// The source mutates the shared template after the final add too.
+			state.bullet_template_angle = angle;
 			return;
 		}
 		if(boss.pattern_frame == 0x48U) {
 			bullets_add_group(
 				state, BulletFlag::bullet16, boss.center_x, boss.center_y,
-				static_cast<std::uint8_t>(1U - player_id), (3U << 4U) + 8U, 0U,
+				static_cast<std::uint8_t>(1U - player_id), (3U << 4U) + 8U,
+				state.bullet_template_angle,
 				bullet_group_ring, boss.params[3]
 			);
 		}
@@ -7146,7 +7161,8 @@ void boss_pattern_kana_clouds(
 		);
 		bullets_add_group(
 			state, BulletFlag::pellet_cloud, boss.center_x, boss.center_y,
-			static_cast<std::uint8_t>(1U - player_id), 3U << 4U, 0U,
+			static_cast<std::uint8_t>(1U - player_id), 3U << 4U,
+			state.bullet_template_angle,
 			bullet_group_ring, boss.params[5]
 		);
 	}
@@ -9005,7 +9021,7 @@ bool result_control_update(DeterministicState &state) noexcept
 		(state.story_stage < 8U) ? 320U : 460U
 	);
 
-	if(state.game_mode != game_mode_story) {
+	if(state.game_mode != game_mode_story && !state.practice_uses_stock) {
 		const auto match_complete =
 			state.players[0].rounds_won >= 2U ||
 			state.players[1].rounds_won >= 2U;
@@ -9065,10 +9081,7 @@ void result_transition_update(DeterministicState &state) noexcept
 
 void story_extend_update(DeterministicState &state) noexcept
 {
-	if(
-		state.game_mode != game_mode_story ||
-		state.extends_gained >= state.score[0][6]
-	) {
+	if(state.extends_gained >= state.score[0][6]) {
 		return;
 	}
 	state.story_lives = static_cast<std::uint8_t>(state.story_lives + 1U);

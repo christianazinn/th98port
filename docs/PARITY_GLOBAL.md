@@ -109,6 +109,43 @@ the warning interstitial, which is stock-used and deterministic.
 | `main/player/shot.cpp:shots_add`, `shots_update` | `shots_add()`, `shots_update()` | Human and CPU fire | Complete shared engine | 32-slot pair pool, modes, bounds, velocity, and collision processing compare. Sprite animation and sound are presentation-only. |
 | `main/player/ch_shot.cpp` and character callbacks | `chargeshots_update()` plus nine `chargeshot_update_*()` functions | Charge attacks and some hypers | Complete | All nine callbacks and deterministic renderer dispositions are source-audited in the character ledgers. |
 
+#### Shared bullet-template state closure (2026-08-08)
+
+Anniversary uses one mutable `bullet_template_t` for every producer. At the
+start of each gameplay prefix, `bullet_template_reset_stuff()` resets only
+`angle`, `count`, `is_animated`, `is_collidable`, and `has_trail`. The relevant
+order is P1 Extra/Boss/Bomb, P2 Extra/Boss/Bomb, shots, P1/P2 Charge,
+round-start HUD/formation work, bullets, enemies, fireballs, and finally P1/P2
+Gauge callbacks. A producer can therefore intentionally inherit a field from
+an earlier producer in the same prefix, and a mutation after the final
+`bullets_add()` can be an input to a later producer. `gameplay_frame_prefix()`
+preserves this order. The architecture-neutral state materializes the
+stock-gameplay-bearing shared `angle` as `bullet_template_angle`.
+
+Every stock-reachable `bullets_add()` and wrapper call in `main_03.cpp`,
+`main_03p.cpp` through `main_03w.cpp`, `main_07.cpp`, `main_08.cpp`,
+`main_09.cpp`, `main_11.cpp`, `main/player/ch_shot.cpp`,
+`main/player/exatt.cpp`, `main/bullet/bullet.cpp`, and the enemy transfer call
+chain was audited for both inherited inputs and post-call mutations:
+
+| Anniversary source site | Shared-template behavior | Native closure |
+|---|---|---|
+| `main/bullet/bullet.cpp:bullet_template_reset_stuff()` | Resets angle to 0 at the start of every prefix. | `gameplay_frame_prefix()` resets `bullet_template_angle` before either player's callbacks. |
+| `main/player/exatt.cpp:exatt_update_kana()` followed by `main_03v.cpp:kana_12C4F()`, `kana_12D37()`, and `kana_12E78()` | Kana Extra writes angle `0x40`. The accelerating ring, all three default rings, and the cloud ring deliberately leave angle inherited. The frame-`0x40` pellet-spread loop then increments angle after its final add, leaving `0x80`. | All inherited rings use `bullet_template_angle`; the spread loop stores its final post-add value. Kana's spiral remains explicit because the source assigns its angle. |
+| `main_03s.cpp:ellen_11439()` | The eight-ring loop increments the template angle after every add, including the last, leaving `0x60` for a `0x20` start. | `boss_pattern_ellen_spreads()` stores the final wrapped angle. |
+| `main/player/exatt.cpp:kotohime_19F1F()` and `kotohime_19F87()` | The four- and ten-ring helpers mutate the template angle after their final adds. | `extra_attacks_update_kotohime()` stores both final wrapped values. |
+| `main_08.cpp:gauge_pattern_ellen()` lower phase | The source takes a second `randring` value after the right ring and assigns it to the template angle even though no bullet is fired with it. | The second draw is both consumed and stored, preserving RNG and later same-prefix state. |
+| `main/enemy/enemy.cpp` transfer collision and `main/bullet/bullet.cpp:bullets_add_transfer_pellet()` | The collision caller initializes angle 0 before the type-only wrapper. | `bullet_add_transfer_pellet()` writes angle 0 before clipping/allocation, including failed adds. |
+| `main/bullet/bullet.cpp:bullets_add_next_from_p()` | Copies `speed_next`, `angle_next`, PID, and group from the source bullet before calling `bullets_add()`. | `bullet_add_cloud_from_transfer()` stores `angle_next` before clipping/allocation; the other copied values are direct call inputs. |
+| All remaining stock call sites, including Reimu/Mima and the P1 Mima to P2 Reimu, P1 Kotohime to P2 Reimu, and P1 Reimu to P2 Rikako prefix combinations | Every gameplay-bearing input is explicitly assigned before firing, or inheritance remains inside one native helper whose explicit arguments already preserve it. Variable groups assign `count`; accelerated bullets assign `accel_type`. No additional post-final mutation feeds a later stock consumer. | Source-equivalent; no additional state was required. `sprite_offset` and `is_animated` inheritance is presentation-only, `is_collidable` is always reset true, and trail use is explicitly represented per add. |
+
+This audit was prompted by V12 ordinary-VS replay TH3R05. The first raw bullet
+difference was sample 3,626: the source Kana ring inherited angle `0x40`, while
+native used 0. That rotated every ring bullet, changed the collision map and CPU
+avoidance, and eventually produced the input-context stop at sample 3,941.
+After the source-backed closure above, the complete 26,213-sample replay matches
+all 3 split summaries.
+
 ### Collision and player control
 
 | Anniversary source and functions | Native counterpart | Stock use | Status | Precise discrepancy or evidence |
@@ -140,7 +177,7 @@ the warning interstitial, which is stock-used and deterministic.
 | `main/player/exatt.cpp` and per-character callbacks | nine `extra_attacks_update_*()` implementations | Explosion chains and gauge behavior | Complete | All nine attack families, including Chiyuri slope collision and Yumemi transfer/RNG order, are present. |
 | character bomb prefix/render callbacks, including `main/bullet/mbomb.cpp:mima_17043` and `main/bullet/bullet.cpp:mima_bomb` | `bomb_character_update()`, `bombs_render_phase_update()` | Bombs | Complete deterministic side effects | Mima consumes one shared-ring value at frames 8..64 and shakes frames 81..143. Reimu/Marisa/Rikako/Chiyuri/Yumemi presentation RNG and all known playfield shifts are retained. Drawing is omitted. |
 | `main/player/bomb.cpp` fatal PID write; `main/player/defeat.cpp:sub_C0D8` | `player_defeat_update()`, `last_fatal_player`, and `winner` | Every round loss | Complete | The 48-frame countdown, +/-6 losing-playfield shift and reset, damage-all, winner, rounds-won, and simultaneous-fatal split between bonus owner and persisted winner are explicit and tested. |
-| `main/rndloop.cpp` defeat/result branch; `main/player/shot.cpp:sub_E3F2`; `main/resscore.cpp` | result bonus/control/transition plus session handoff | Every round end | Complete for valid stock lifecycle | Story retry/life decrement/game-over/Continue handoff, VS first-to-two continuation and completed-match bonus, Demo/CPU-vs-CPU route 0, and route 1/2 precedence are represented. Anniversary has no separate Practice mode. |
+| `main/rndloop.cpp` defeat/result branch; `main/player/shot.cpp:sub_E3F2`; `main/resscore.cpp` | result bonus/control/transition plus session handoff | Every round end | Complete for valid stock lifecycle | Story retry/life decrement/game-over/Continue handoff, VS first-to-two continuation and completed-match bonus, Demo/CPU-vs-CPU route 0, and route 1/2 precedence are represented. Replay Patch Practice is an explicit V12 rules overlay on the same VS lifecycle, not an Anniversary mode. |
 | `main/rstart.cpp:round_startup`, `main/resscore.cpp:sub_9EBF`, `sub_A21F`, `main/entry.cpp` | `initialize_repeat_round()`, `Game::start_next_round()` | Every retry or later VS round | Complete | Targeted resets/carries, unchanged randring cursor across refill, round/rank/safety/gauge/Boss updates, formation predecessor/order, and closing-transition carry are explicit and tested. |
 | final Yumemi result path | final result/session path | Story stage 9 | Complete | Adds `story_lives * 100000`, disables further extends first, uses gate 460/route frame 476, and emits the ending/stage-99 handoff. Optional unused resident-byte overwrite remains a documented normalization choice. |
 
@@ -203,7 +240,8 @@ renderer-named callback.
 | CPU retry/random-strategy-looking branch | Effectively unreachable under source counters/control flow | Preserve effective behavior, not an imagined repair. |
 | Bullet group zero-count rings and invalid IDs | Malformed input, not valid stock data | Native defensive behavior may differ, but the supported-input contract must say so. |
 | Demo/attract callback and round-start overrides | **Stock-used mode**, not source-unused | Core timing, startup overrides, and route-0 exit are implemented; pixels/client presentation remain outside headless scope. |
-| VS later-round lifecycle | **Stock-used mode** | In-place route-1 repeat and first-to-two completion are implemented and covered by TH3R04/TH3R05. Anniversary has no separate Practice mode. |
+| VS later-round lifecycle | **Stock-used mode** | In-place route-1 repeat and first-to-two completion are implemented. The frozen Classic retry corpus and V12 TH3R05 ordinary VS exercise the two forms directly. |
+| Replay Patch Practice | **Extension over stock VS** | V12 maps its startup fields to explicit `PracticeRules`; active gameplay remains ordinary `GM_VS_1P_CPU`, while stock/retry policy is kept separate from Anniversary logic. |
 
 ## PC-98 width and wrap audit
 
@@ -266,9 +304,10 @@ and the complete frozen oracle is now green.
    outside the deterministic gameplay core.
 2. Implement live human pause/release/Q behavior in the client; do not conflate
    it with the already-complete recorded replay-pause adapter.
-3. Validate Demo/attract, Story, VS CPU, VS human, and CPU-vs-CPU with source
-   recordings as corpus coverage expands. Any future Practice mode is a native
-   extension, not Anniversary behavior.
+3. Continue validating Demo/attract, Story, VS CPU, VS human, and CPU-vs-CPU
+   with source recordings as corpus coverage expands. Keep the implemented V12
+   Practice rules adapter identified as Replay Patch behavior rather than an
+   Anniversary gameplay mode.
 
 ## Completion gates
 
@@ -279,15 +318,15 @@ Current gate status:
 - [x] Story win/loss/retry/game-over/final and VS repeat/match transitions are
   represented, including separate simultaneous-fatal bonus/winner ownership.
 - [x] Route-1 targeted reset/carry, RNG, formation, and callback ordering have
-  focused tests and full TH3R04/TH3R05 replay coverage.
+  focused tests and full frozen-Classic TH3R04/TH3R05 replay coverage.
 - [x] TH3R00 and TH3R02-05 complete their frozen oracles through natural
   terminal boundaries.
 - [x] TH3R01 matches all 964 frozen rows and 135,215 samples.
 - [x] N1/N6 are explicit, tested architecture/input contracts rather than
   host-dependent undefined behavior or silent malformed-input normalization.
-- [ ] Broader mode corpus coverage and a future client are needed before a
-  playable-application claim; they are not prerequisites for the headless
-  gameplay architecture.
+- [ ] Broader mode corpus coverage and future playable clients are needed
+  before a playable-application claim. The `th03rv` verification client exists,
+  but deliberately does not design the later application.
 
 Replay equality after static closure is strong evidence that the source-backed
 implementation is correct for the exercised path. It remains path-scoped and
