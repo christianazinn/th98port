@@ -35,13 +35,14 @@ below, most importantly `round_speed <= 0x7F`, Boss/Gauge level `<= 16`, valid
 characters, ordinary playfield coordinates, and the operands in the original
 `ENEDAT.DAT`.
 
-Two of the six originally identified latent semantic discrepancies remain:
-N1 and N6. N2 through N5 are closed in the current tree with explicit
-signed-word multiplication, division, wrapping threshold arithmetic, and
-signed-bit-pattern operations. The remaining cases matter to the stated goal
-of a mechanically faithful core, but neither is stock-reachable under the
-validated input/content ranges. They must not be used to explain a stock replay
-divergence without first demonstrating that their triggering range was reached.
+All six originally identified numeric differences are closed. N2 through N5
+use explicit signed-word arithmetic. N1 is closed by an explicit
+supported-domain policy: native `iatan2()` matches
+master.lib over every source-defined live input and deliberately uses unsigned
+magnitude order when exactly one input is `INT16_MIN`. That unreachable source
+edge otherwise feeds a numerically larger word to unsigned `DIV`, producing a
+low-byte-wrapped XLAT index or a divide fault. The normalization keeps the
+native core deterministic without changing any validated gameplay path.
 
 ## PC-98 arithmetic model used by this audit
 
@@ -83,26 +84,33 @@ generated file was retained.
 
 ## Actionable discrepancies
 
-### N1 — `iatan2()` does not reproduce the signed `CMP` at magnitude `0x8000`
+### N1 — closed policy: normalize the `iatan2()` signed-CMP landmine
 
-Severity: **medium latent exactness debt; stock coordinates proven safe**.
+Severity: **unreachable stock landmine; deterministic native normalization**.
 
 - Source: `libs/master.lib/iatan2.asm`. It forms each magnitude in a 16-bit
   register, then executes `CMP DX,BX`, `JE`, `JL`. `JL` is a **signed** branch.
   Thus a magnitude of `0x8000` sorts as negative.
-- Port: `src/core/trig.cpp:iatan2()`. `magnitude()` returns `uint16_t`, and the
-  branch uses ordinary unsigned `abs_x > abs_y`.
-- Difference: if exactly one wrapped delta is `INT16_MIN`, the selected ratio
-  and quadrant path can differ before the angle is narrowed to a byte.
+- Source consequence: if exactly one wrapped delta is `INT16_MIN`, the signed
+  comparison selects magnitude `0x8000` as the unsigned `DIV` numerator. A
+  denominator magnitude of `0..128` raises divide-by-zero or quotient-overflow;
+  with `129..32767`, `DIV` succeeds and `XLATB` uses the quotient's low byte as
+  its table index. This is deterministic for the latter range but is not the
+  intended geometric magnitude ordering.
+- Port: `src/core/trig.cpp:iatan2()` explicitly documents and normalizes this
+  edge by ordering the magnitude bit patterns as `uint16_t`. It therefore
+  retains the source result for every input not involving exactly one
+  `INT16_MIN`, gives the exceptional inputs stable full-domain results, and
+  never performs a host divide fault or out-of-bounds access.
 - Stock proof: every current gameplay call passes a playfield/entity delta
   whose live endpoints are separated by much less than 32768. Transfer paths
   first convert bounded screen/playfield coordinates with explicit word wrap.
-- Required fix: model the assembly's 16-bit bit patterns but perform the
-  magnitude ordering with `int16_t` interpretation, including the equality
-  case, then retain the existing unsigned 32-bit numerator construction for
-  `DIV`.
-- Required test: all quadrant combinations involving `0`, `1`, `0x7FFF`, and
-  `0x8000`, checked against a literal model of the assembly.
+- Closure evidence: `tests/test_main.cpp:test_iatan2_numeric_policy()` compares
+  all non-`INT16_MIN` word values in both operand positions against a literal
+  16-bit assembly model at sign/zero/magnitude anchors, exercises all 256
+  table indices in both axis orders and quadrants, proves the source fault
+  boundary, and exhausts the chosen normalization across every exactly-one-
+  `INT16_MIN` pair. Equal `INT16_MIN` magnitudes retain the source diagonal.
 
 ### N2 — closed: enemy tuning and angle products wrap before division
 
@@ -140,7 +148,7 @@ Severity: **low-to-medium for custom attack parameters; stock-safe**.
   not a 16-bit unsigned overflow.
 - Closure: counts allowing `i >= 128` now reproduce the wrapped negative
   numerator before signed truncating division. The separate zero-count policy
-  remains N6.
+  is now an internal invariant under N6's validated construction domain.
 
 ### N4 — closed: CPU target thresholds use source word wrapping
 
@@ -173,23 +181,29 @@ Severity: **low latent exactness debt; neither edge is stock-reachable**.
 Closure: both operations now preserve the Anniversary signed-word bit pattern
 and operation order for arbitrary stored values, not only the stock range.
 
-### N6 — native validation changes two out-of-domain source arithmetic cases
+### N6 — closed policy: reject invalid Story startup state
 
-Severity: **low, deliberate-safety-policy decision required**.
+Severity: **out-of-domain source landmines; rejected at the public boundary**.
 
-- `src/core/round_start.cpp:story_safety_frames()` clamps the calculated
-  table index to `0..5`. Anniversary `th03/main/resscore.cpp:sub_9EBF()` only
+- Anniversary `th03/main/resscore.cpp:sub_9EBF()` only
   clamps values above 5; a negative `(round_id - rem_credits) + 3` indexes
   before the table. Stock credits (`<=3`) and initial/repeat round IDs keep the
   index nonnegative.
-- `src/core/frame.cpp:bullets_add_group()` explicitly returns for a zero
-  generic-ring count. The source macro divides by zero. No stock caller passes
-  zero for a generic ring.
+- A zero generic-ring count makes the source macro divide by zero. No stock
+  caller passes zero. Through `GameInit`, the only constructible zero counts
+  came from byte-wrapped Gauge levels at already-invalid high Story stages;
+  `GameContent` and `RuntimeSnapshot` expose no bullet-template or attack-level
+  injection path.
 
-These are not accidental host-promotion errors, but they are observable
-numeric differences. Decide and document whether public native APIs reject
-invalid state/content before simulation (preferred) or whether the core must
-preserve these landmines. Silent in-core normalization is neither behavior.
+Closure: `Game::create()` accepts only the source gameplay modes and accepts
+Story gameplay only for stages `0..8` and remaining credits `0..3`, regardless
+of snapshot/demo fields. It deliberately does not validate stale Story resident
+bytes in real VS/Demo modes. With that public contract,
+`story_safety_frames()` retains only the source upper clamp,
+and generic-ring creation asserts its nonzero internal invariant rather than
+silently normalizing a source divide fault. Focused tests cover both accepted
+Story boundaries, malformed stage/credit bytes, the non-Story exception, and
+snapshot non-bypass.
 
 ## State-width and signedness ledger
 
@@ -221,7 +235,7 @@ preserve these landmines. Silent in-core normalization is neither behavior.
 | `random.cpp:irand()` | master.lib IRAND sequence used by Anniversary | dword multiply/add, high-word extraction | **Exact modulo 2^32.** The native unsigned arithmetic is the correct defined spelling. |
 | `random.cpp:randring_fill/next8/next16` | `th03/main/randfill.cpp`, `main_04_randring.asm` | reverse loop, byte cursor wrap, word assembly | **Exact.** Cursor byte overflow and index-255 high-byte wrap are explicit. |
 | `trig.cpp:cosine8/sine8/vector2()` | public-domain tables; `th03/math/vector.cpp:vector2_raw` | byte angle wrap; signed 32-bit multiply; arithmetic `>>8`; word narrowing | **Exact.** Native `int32_t` products match `MOVSX` plus 32-bit multiply in the source macro. |
-| `trig.cpp:iatan2/vector2_between_plus()` | `libs/master.lib/iatan2.asm`, `th03/math/vector.cpp` | wrapped coordinate subtraction, magnitude, `<<8`, unsigned division, quadrant byte wrap | Exact except N1. Coordinate differences in `vector2_between_plus()` correctly use `wrap_subtract`. |
+| `trig.cpp:iatan2/vector2_between_plus()` | `libs/master.lib/iatan2.asm`, `th03/math/vector.cpp` | wrapped coordinate subtraction, magnitude, `<<8`, unsigned division, quadrant byte wrap | **Exact over the complete source-defined live domain.** N1's unreachable exactly-one-`INT16_MIN` landmine has an explicit deterministic normalization; coordinate differences in `vector2_between_plus()` correctly use `wrap_subtract`. |
 
 ### Round setup, lifecycle, scoring, gauge, and result
 
@@ -229,7 +243,7 @@ preserve these landmines. Silent in-core normalization is neither behavior.
 |---|---|---|
 | `round_start.cpp:initial_round_speed()` | byte `round_id <<4/5`, add, narrowing | **Exact.** Native casts to byte at the source assignment point. Stock result is later capped at `0x7F`. |
 | `initial_boss_level()` and repeat level increments | byte add, `/2`, `*2`, clamp | **Exact.** `wrap_add()` preserves every source byte assignment; level cap 16 proves all later character products safe. |
-| `story_safety_frames()` | signed index subtraction; long `/3`, `*2`, `*3+500`; word clamp | 32-bit arithmetic matches source `long`; lower-index policy differs only as N6. The `0xFFFA * 3 + 500` Lunatic case is correctly computed wide then capped. |
+| `story_safety_frames()` | signed index subtraction; long `/3`, `*2`, `*3+500`; word clamp | **Exact for validated Story startup.** `Game::create()` proves the index nonnegative; native retains the source's upper clamp only. The `0xFFFA * 3 + 500` Lunatic case is correctly computed wide then capped. |
 | runtime ring setup | IRAND `% formation_count`, `&3 <<6`, `&1 <<7`, byte indices | **Exact for validated content** (`1..24` formations). Host `size_t` modulo has the same quotient/remainder in this range. |
 | `frame.cpp:score_add()` | decimal `%10` and `/10`; raw MSD byte add | **Exact.** Carry is a word; per-digit values stay tiny. Most-significant byte uses `wrap_add()` to preserve the assembly's omitted AAA. |
 | `gauge_avail_add()`; charge/drain in `player_update_finish()` | word additions/subtractions and min/max comparisons | **Safe/exact.** Gauge is bounded by `0xFF0`; adding a byte cannot approach word overflow. Hyper drain stays above 64 before subtracting 6. |
@@ -242,7 +256,7 @@ preserve these landmines. Silent in-core normalization is neither behavior.
 | Port location | Sensitive operations | Range proof / verdict |
 |---|---|---|
 | `bullet_speed_adjusted()` | byte addition before `1.0..8.0` clamp | **Exact.** The cast to `uint8_t` occurs before comparisons, matching `bullet_template.speed.v += bullet_base_speed.v`. |
-| `bullets_add_group()` spread/fixed/generic-ring cases | small `variant * 3/6/8`, angle byte additions, signed offsets, index shifts, wrapped signed-word ring division | **Exact.** Variants `0..2` and fixed indices `0..31` fit signed word; generic rings explicitly wrap the signed-word numerator before division. Zero generic-ring count remains the N6 policy difference. |
+| `bullets_add_group()` spread/fixed/generic-ring cases | small `variant * 3/6/8`, angle byte additions, signed offsets, index shifts, wrapped signed-word ring division | **Exact in the validated domain.** Variants `0..2` and fixed indices `0..31` fit signed word; generic rings explicitly wrap the signed-word numerator before division and assert the source-required nonzero count. |
 | random bullet groups | `%`, masks, random speed addition, count comparison | **Exact.** RNG results and speed/angle narrowing occur in source order. `count` semantics intentionally produce `count+1` bullets for the random groups. |
 | transfer bullet/fireball/Extra helpers | `% (288<<4)`, screen/playfield `*320`, Q12.4 `<<4`, speed `/3` or `/4` | **Safe/exact.** Coordinates remain within about 10240 before explicit word shift/wrap; transfer velocity bases plus difficulty terms remain below 142. |
 | `bullets_update()` / trail update | word position adds, byte age/speed, acceleration thresholds, Q coordinate `>>5` | **Exact.** Entity motion uses wrap helpers; bullet collmap indexing is preceded by nonnegative/in-bounds tests. C++20 signed right shift is arithmetic, and exact helper use covers semantic sites. |
@@ -344,16 +358,10 @@ The following recurring native idioms do not require per-site fixes:
 
 ## Recommended closure work
 
-1. Make `iatan2()` instruction-exact at `0x8000` and add a 16-bit exhaustive
-   differential test for the magnitude-order/quadrant scaffold (the table
-   lookup need only be sampled once the ordering model is proven).
-2. Decide the invalid-input contract for N6. Prefer rejecting malformed
-   `GameInit`/content at construction, then keep the deterministic core free of
-   silent behavior-changing clamps.
-3. Normalize architecture field signedness (`halfhearts`, Kotohime velocity)
+1. Normalize architecture field signedness (`halfhearts`, Kotohime velocity)
    or add named signed/bit views so future arithmetic cannot accidentally use
    the host interpretation.
-4. Keep the stock range assertions close to the parser/initializers: ENEDAT
+2. Keep the stock range assertions close to the parser/initializers: ENEDAT
    formation/count limits, round-speed cap, Boss/Gauge level cap, and nonzero
    dynamic pattern denominators.
 

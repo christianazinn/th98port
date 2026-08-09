@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 
@@ -37,8 +38,6 @@ constexpr std::int16_t ellen_bomb_vector_inactive = 19999;
 constexpr std::uint8_t miss_invincibility_frames = 110U;
 constexpr std::uint8_t knockback_frames = 64U;
 constexpr std::uint8_t hit_damage_max = 6U;
-constexpr std::uint8_t game_mode_story = 1U;
-constexpr std::uint8_t game_mode_demo = 0x7FU;
 constexpr std::uint8_t extends_max = 2U;
 constexpr std::uint8_t extends_disabled = 255U;
 constexpr std::uint8_t position_clip_x = 0x01U;
@@ -574,9 +573,7 @@ void bullets_add_group(
 			break;
 
 		case bullet_group_ring:
-			if(count == 0U) {
-				return;
-			}
+			assert(count != 0U);
 			angle_offset = static_cast<std::int16_t>(
 				exact::wrap_multiply(
 					static_cast<std::int16_t>(group_index),
@@ -617,9 +614,7 @@ void bullets_add_group(
 			break;
 
 		case bullet_group_ring_aimed:
-			if(count == 0U) {
-				return;
-			}
+			assert(count != 0U);
 			aimed = true;
 			angle_offset = static_cast<std::int16_t>(
 				exact::wrap_multiply(
@@ -7444,13 +7439,13 @@ void boss_update_rikako(
 	case 1U:
 		boss_choose_pattern(state);
 		break;
-	case 2U: case 3U: case 4U: case 5U: case 6U:
+	case 2U: case 3U: case 4U: case 5U:
 		boss_pattern_rikako_spreads(state, player_id);
 		break;
-	case 8U: case 9U: case 10U: case 11U: case 12U: case 13U:
+	case 7U: case 8U: case 9U: case 10U: case 11U: case 12U:
 		boss_pattern_rikako_exatt_and_rings(state, player_id);
 		break;
-	case 7U: case 14U: case 15U: case 16U: case 17U:
+	case 6U: case 13U: case 14U: case 15U: case 16U: case 17U:
 		boss_pattern_rikako_four_spreads(state, player_id);
 		break;
 	case 0x80U:

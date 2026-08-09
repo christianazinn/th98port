@@ -81,10 +81,17 @@ std::uint8_t iatan2(std::int16_t y, std::int16_t x) noexcept
 	}
 	const auto abs_y = magnitude(y);
 	const auto abs_x = magnitude(x);
+	// iatan2.asm compares these words with signed JL. If exactly one input is
+	// INT16_MIN, that selects the larger unsigned magnitude as the DIV numerator:
+	// the quotient's low byte becomes the XLAT index, or DIV faults when the
+	// other magnitude is at most 128. Stock gameplay cannot reach this landmine,
+	// so the native core deliberately uses unsigned magnitude order to provide a
+	// deterministic result over its complete input domain.
+	const auto x_magnitude_is_larger = (abs_x > abs_y);
 	std::uint8_t angle = 0U;
 	if(abs_x == abs_y) {
 		angle = 32U;
-	} else if(abs_x > abs_y) {
+	} else if(x_magnitude_is_larger) {
 		const auto ratio = static_cast<std::uint16_t>(
 			(static_cast<std::uint32_t>(abs_y) << 8U) / abs_x
 		);

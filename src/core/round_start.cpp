@@ -5,7 +5,6 @@
 namespace th03::detail {
 namespace {
 
-constexpr std::uint8_t game_mode_story = 1U;
 constexpr std::uint8_t rank_easy = 0U;
 constexpr std::uint8_t rank_normal = 1U;
 constexpr std::uint8_t rank_hard = 2U;
@@ -57,7 +56,7 @@ std::uint16_t story_safety_frames(
 	const auto signed_index =
 		static_cast<int>(round_id) -
 		static_cast<int>(init.remaining_credits) + 3;
-	const auto index = static_cast<std::size_t>(std::clamp(signed_index, 0, 5));
+	const auto index = static_cast<std::size_t>(std::min(signed_index, 5));
 	auto frames = static_cast<std::uint32_t>(
 		story_cpu_safety_frames[init.story_stage][index]
 	);

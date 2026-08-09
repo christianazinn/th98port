@@ -33,17 +33,17 @@ route 2 at round frame 5,503/result frame 336. Its final scores and schema-3
 hash match Anniversary.
 
 Phase 3 has complete frozen-oracle matches for TH3R00 (715/715 rows, 100,642
-samples), TH3R02 (626/626, 91,939), TH3R03 (186/186, 25,211), TH3R04
-(627/627, 86,437), and TH3R05 (783/783, 111,747). TH3R00 was closed by
-preserving source fallthrough that releases a pending P2 Ellen Charge Shot in
-the same update after CPU movement activates Hyper. TH3R01 remains the sole
-active integration gate: it is exact through sample 19,200 and
-first differs in the schema-3 state hash at row 144/sample 19,328 while both
-scores remain exact (Story stage 3, Mima versus Rikako).
+samples), TH3R01 (964/964, 135,215), TH3R02 (626/626, 91,939), TH3R03
+(186/186, 25,211), TH3R04 (627/627, 86,437), and TH3R05 (783/783, 111,747).
+TH3R00 was closed by preserving source fallthrough that releases a pending P2
+Ellen Charge Shot in the same update after CPU movement activates Hyper.
+TH3R01 was closed by restoring the complete Rikako Boss switch grouping:
+source state 6 enters the four-spread callback and consumes its angle/type
+draws before emitting eight bullets.
 
 Static parity ledgers cover all nine characters, the complete stock-used frame
 pipeline, RNG consumers, numeric semantics, repeat-round reset, and terminal
 MAIN/MAINL session mutations. Schema 3 does not identify every hidden
-entity/projectile subsystem, so the remaining first divergence stays an
-integration gate rather than a completeness-discovery mechanism. See
-`PHASE3_CORPUS_STATUS.md` for the live evidence ledger.
+entity/projectile subsystem, so future first divergences must still be
+localized with semantic diagnostics rather than inferred from the aggregate
+hash. See `PHASE3_CORPUS_STATUS.md` for the live evidence ledger.

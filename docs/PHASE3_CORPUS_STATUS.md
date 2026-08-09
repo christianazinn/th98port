@@ -7,7 +7,7 @@ external canonical T3CASE, calibrated `ENEDAT.DAT`, and the frozen Anniversary
 | Case | Current result | First open boundary |
 |---|---|---|
 | TH3R00 | Green | 715/715 canonical rows and all 100,642 samples. The first hidden divergence had been frame 8,836: CPU-triggered Hyper must fall through to release an already-pending Ellen Charge Shot in the same player update. |
-| TH3R01 | In progress | Exact through sample 19,200; row 144/sample 19,328 first differs in schema-3 state hash while both scores remain exact. This is Story Stage 3, P1 Mima against P2 Rikako. |
+| TH3R01 | Green | 964/964 canonical rows and all 135,215 samples. The first hidden divergence had been global frame 19,326: Rikako Boss state 6 must dispatch to the RNG-driven four-spread pattern, consuming angle/type draws and adding eight bullets. |
 | TH3R02 | Green | 626/626 canonical rows and all 91,939 samples. The first hidden divergence had been frame 38,336: Kana Extra writes the shared bullet-template angle before Kana Boss intentionally inherits it later in the same prefix. |
 | TH3R03 | Green | 186/186 canonical rows and all 25,211 samples. |
 | TH3R04 | Green | 627/627 canonical rows and all 86,437 samples. |
@@ -22,6 +22,12 @@ and both players' gauge-pattern callbacks still update. The old native prefix
 returned early from all of those systems. The headless coordinator now also
 accepts terminal MAINL boundaries that reach the typed ending, exit, or
 Continue-request application seam without inventing another gameplay process.
+
+TH3R01 closes the remaining character-dispatch integration gap. Anniversary's
+Rikako jump table maps states 2-5 to spreads, 7-12 to Extra Attacks/rings, and
+6 plus 13-17 to four-spreads. The native switch had shifted boundary states
+6, 7, and 13 into the neighboring families. A focused dispatch test now locks
+the exact state-6/7/13 behavior and RNG schedule.
 
 This table records validation coverage, not implementation scope. Phase 3 still
 requires every stock-reachable gameplay callback and lifecycle path even if no

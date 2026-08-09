@@ -28,9 +28,10 @@ design.
 ## Current validation boundary
 
 The typed coordinator and Classic gameplay core match the frozen Anniversary
-oracles for the complete TH3R00, TH3R02, TH3R03, TH3R04, and TH3R05 documents:
+oracles for all six complete TH3R00-TH3R05 documents:
 
 - TH3R00: 715/715 canonical rows and 100,642 logical samples;
+- TH3R01: 964/964 canonical rows and 135,215 logical samples;
 - TH3R02: 626/626 canonical rows and 91,939 logical samples;
 - TH3R03: 186/186 canonical rows and 25,211 logical samples;
 - TH3R04: 627/627 canonical rows and 86,437 logical samples; and
@@ -44,5 +45,7 @@ transition API. A source-backed pipeline correction was required for repeats:
 the round-start HUD suppresses only formation spawning. The native prefix had
 previously frozen that entire suffix until the HUD completed.
 
-TH3R01 remains the sole open corpus case. Expected oracle values remain
-comparison-only and never initialize, repair, or steer simulation.
+TH3R01's final gap was an incorrect Rikako Boss state grouping, not lifecycle
+state: source state 6 runs the RNG-driven four-spread callback. Expected oracle
+values remain comparison-only and never initialize, repair, or steer
+simulation.

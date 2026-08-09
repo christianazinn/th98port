@@ -29,18 +29,17 @@ RNG consumers, and the valid-stock round/match/session lifecycle. Replays are
 now serving as integration validation rather than discovery of absent callback
 families.
 
-Frozen Anniversary oracles are fully green for TH3R00 and TH3R02 through
-TH3R05. TH3R01 is the sole open corpus case: it is exact through sample 19,200,
-then at sample 19,328 the canonical scores and all other schema-3 fields remain
-exact while Anniversary's shared-ring cursor is two bytes ahead. The static RNG
-ledger found no missing call site, so this remains a bounded dynamic-order or
-guard investigation rather than evidence of a known unported subsystem.
+Frozen Anniversary oracles are fully green for TH3R00 through TH3R05. TH3R01's
+former two-byte shared-ring delta was caused by an incorrect Rikako Boss switch:
+source state 6 enters the four-spread pattern, but native had grouped it with
+states 2-5. Restoring the complete state grouping makes all 964 TH3R01 rows and
+all 135,215 samples exact.
 
-Remaining fidelity limitations are narrower and explicit: numeric cases N1
-and N6 outside validated stock input ranges, the intentionally compact
-schema-3 checkpoint hash, live human pause/UI ownership, and optional terminal
-resident-byte normalization. A green replay remains path-scoped evidence, not
-a proof of every malformed-input or presentation path.
+Remaining fidelity limitations are narrower and explicit: the intentionally
+compact schema-3 checkpoint hash, live human pause/UI ownership, and optional
+terminal resident-byte normalization. Numeric cases N1 and N6 now have explicit,
+tested policies at the architecture boundary. A green replay remains path-scoped
+evidence, not a proof of every presentation path.
 
 Status terms used below:
 
@@ -151,8 +150,8 @@ the warning interstitial, which is stock-used and deterministic.
 |---|---|---|---|---|
 | master.lib IRAND and random ring implementations | `random.cpp:irand`, `randring_fill`, `randring_next16` | Global | Complete primitive | LCG, descending fill 255..0, one shared cursor, adjacent-byte 16-bit read, and index-255 high-byte-after-wrap landmine are preserved. ReC98 `randring1`/`randring2` code instances share one ring/cursor; the single native cursor is correct. |
 | `rndloop.cpp` 1024-frame refill | end-of-frame counter block | Long rounds | Complete | Refill occurs after simulation and result callbacks on the same cadence as source. |
-| all source call sites | distributed native consumers | Global | Source-complete static closure | The source-derived `PARITY_RNG.md` ledger maps every stock-reachable active-round, startup, route-1, HUD/background, bomb/Boss, hit-circle, bullet-group, and transfer consumer. TH3R01's +2 cursor delta remains the sole dynamic non-closure. |
-| `th03/math/vector.cpp`, integer trig tables, Turbo 16-bit types | `numeric.hpp`, `trig.cpp`, `vector2()` and call sites | Global | Complete for validated stock ranges; N1/N6 open outside them | Explicit wrapping helpers and source-range proofs close N2-N5. See `PARITY_NUMERIC.md` for the `iatan2(0x8000)` and malformed-input policy cases. |
+| all source call sites | distributed native consumers | Global | Source-complete static and corpus closure | The source-derived `PARITY_RNG.md` ledger maps every stock-reachable active-round, startup, route-1, HUD/background, bomb/Boss, hit-circle, bullet-group, and transfer consumer. All frozen TH3R00-05 oracles are green. |
+| `th03/math/vector.cpp`, integer trig tables, Turbo 16-bit types | `numeric.hpp`, `trig.cpp`, `vector2()` and call sites | Global | Complete with explicit N1/N6 boundary policies | Explicit wrapping helpers and source-range proofs close N2-N5. N1 preserves deterministic unsigned-magnitude normalization for the source's unreachable faulting edge; N6 rejects invalid Story construction while retaining source-valid non-Story resident bytes. See `PARITY_NUMERIC.md`. |
 | signed subpixel conversion | `screen_x_to_playfield_subpixel()` | Cross-playfield fireballs/bullets | Complete | Uses `exact::wrap_shift_left()` and never left-shifts a negative signed host value. |
 | `main/t3case.cpp:t3case_state_hash()` schema 3 | `state_hash.cpp` canonical hash | Replay checkpoints | Deliberately compact oracle | The frozen schema includes scores, players, counters, selected globals, combo/chain state, and RNG seed/cursor but not every transient pool. Green full-run replay results gain strength from butterfly effects and terminal equality; semantic subsystem diagnostics remain the first-divergence tool, not part of the stable schema. |
 
@@ -183,16 +182,11 @@ classification is required at each application/core boundary.
 No stock-reachable Anniversary character callback, active-round RNG consumer,
 or valid-stock lifecycle route remains statically missing. The open items are:
 
-1. TH3R01 first differs at sample 19,328 by exactly two shared-ring bytes.
-   Scores and the remaining schema-3 fields are exact, and the complete static
-   RNG ledger has not identified the responsible guard/order difference.
-2. Numeric N1 (`iatan2()` at the signed-magnitude `0x8000` boundary) and N6
-   (malformed/invalid content policy) differ outside validated stock ranges.
-3. Schema 3 intentionally omits full transient pools; it is a stable sparse
+1. Schema 3 intentionally omits full transient pools; it is a stable sparse
    oracle rather than a complete serialization of deterministic state.
-4. Live human pause/release/Q input belongs to the future application client.
+2. Live human pause/release/Q input belongs to the future application client.
    Recorded T3CASE pause semantics and boundary exhaustion are implemented.
-5. The final source write to unused terminal resident bytes is normalized away
+3. The final source write to unused terminal resident bytes is normalized away
    unless resident-byte parity is later selected as a product requirement.
 
 Mima's prefix RNG at frames 8, 16, ..., 64 and frame-81..143 foreground shake
@@ -224,23 +218,23 @@ stock operand ranges. Named wrap/multiply/divide/shift helpers and focused
 tests close the stock-used N2-N5 cases, including negative cross-playfield
 conversion and the raw most-significant score byte.
 
-Required numeric follow-up is now limited to making `iatan2()` instruction-
-exact at magnitude `0x8000` (N1), deciding and enforcing the malformed-input
-contract for N6, and keeping range assertions at parsers/initializers so later
+N1 is closed by an explicit deterministic normalization for the source's
+unreachable/faulting `iatan2()` magnitude edge, with a literal instruction-model
+test documenting the source behavior. N6 is closed by narrow construction-time
+validation of Story stage and credit ranges plus internal assertions for generic
+ring counts. Keep these range assertions at parsers and initializers so later
 content cannot silently invalidate the valid-stock proofs.
 
 ## Prioritized implementation plan and dependencies
 
-### P0: close the only open corpus divergence
+### Closed P0: Classic corpus divergence
 
-1. Diagnose TH3R01's first divergent frame between samples 19,200 and 19,328.
-   The discriminant is a +2 Anniversary shared-ring cursor delta with exact
-   scores and otherwise exact schema-3 state.
-2. Start from the source-complete RNG ledger and identify which already-mapped
-   consumer has a differing guard/count/order. Do not add a new consumer or
-   patch the cursor without source evidence.
-3. Preserve TH3R00 and TH3R02-05 as full-run non-regression gates while
-   narrowing TH3R01.
+TH3R01's first differing frame was global frame 19,326. Anniversary entered
+Rikako Boss state 6's four-spread callback, consumed angle then type, and added
+eight bullets; native incorrectly dispatched state 6 to the spreads callback.
+The corrected full grouping is spreads 2-5, Extra Attacks/rings 7-12, and
+four-spreads 6 plus 13-17. A focused test locks boundary states 6, 7, and 13,
+and the complete frozen oracle is now green.
 
 ### P1: harden deterministic validation
 
@@ -254,11 +248,13 @@ content cannot silently invalidate the valid-stock proofs.
 4. Continue treating score as an excellent end-to-end butterfly oracle while
    using semantic state only to localize a mismatch.
 
-### P1: close architecture edges
+### P1: retain architecture contracts
 
-1. Make `iatan2()` instruction-exact at N1's `0x8000` magnitude boundary.
-2. Decide and enforce N6's malformed-input policy at construction/content
-   parsing boundaries.
+1. Retain the documented N1 unsigned-magnitude normalization and its literal
+   source-model tests; do not invent host-dependent behavior for the source's
+   faulting edge.
+2. Retain N6's narrow Story construction validation and generic-ring invariants
+   without rejecting source-valid stale resident bytes in non-Story modes.
 3. Keep the Anniversary DGROUP collision-alias profile isolated, documented,
    and covered by its compatibility tests.
 4. Decide whether final unused resident bytes require byte parity or remain a
@@ -286,9 +282,9 @@ Current gate status:
   focused tests and full TH3R04/TH3R05 replay coverage.
 - [x] TH3R00 and TH3R02-05 complete their frozen oracles through natural
   terminal boundaries.
-- [ ] TH3R01 must match all 964 frozen rows and 135,215 samples.
-- [ ] N1/N6 must be closed or made explicit supported-input contracts before a
-  mechanically complete PC-98 arithmetic claim.
+- [x] TH3R01 matches all 964 frozen rows and 135,215 samples.
+- [x] N1/N6 are explicit, tested architecture/input contracts rather than
+  host-dependent undefined behavior or silent malformed-input normalization.
 - [ ] Broader mode corpus coverage and a future client are needed before a
   playable-application claim; they are not prerequisites for the headless
   gameplay architecture.

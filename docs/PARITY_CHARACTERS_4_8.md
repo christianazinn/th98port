@@ -494,7 +494,13 @@ edges, frame-`0x80` termination, and non-RNG `SUB_CE0C()` effects agree.
 The port preserves the shared-RNG draw hidden in the presentation call at
 pattern frame `0x10`, the apparently overwritten random draw at frame
 `0x28`, four random angles at frame `0x40`, and the later phase angle/type
-draws. Omitted animation-ramp state does not feed gameplay or shared RNG.
+draws. The complete source jump table dispatches states 2-5 to spreads,
+states 7-12 to Extra Attacks/rings, and state 6 plus states 13-17 to the
+four-spread pattern. A former native off-by-one grouping at states 6, 7, and
+13 was corrected after a bounded TH3R01 trace showed that source state 6
+consumed two draws and added eight bullets at global frame 19,326. The full
+TH3R01 oracle is now exact for 964/964 rows and 135,215 samples. Omitted
+animation-ramp state does not feed gameplay or shared RNG.
 
 ### Bomb RNG: complete
 

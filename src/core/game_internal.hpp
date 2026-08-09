@@ -26,6 +26,13 @@ inline constexpr std::size_t extra_attack_rikako_count = 14;
 inline constexpr std::size_t shotpair_count = 32;
 inline constexpr std::size_t collmap_width = 144;
 inline constexpr std::size_t collmap_height = 184;
+inline constexpr std::uint8_t game_mode_none = 0x00U;
+inline constexpr std::uint8_t game_mode_story = 0x01U;
+inline constexpr std::uint8_t game_mode_demo = 0x7FU;
+inline constexpr std::uint8_t game_mode_vs = 0x80U;
+inline constexpr std::uint8_t game_mode_vs_1p_cpu = game_mode_vs + 0U;
+inline constexpr std::uint8_t game_mode_vs_1p_2p = game_mode_vs + 1U;
+inline constexpr std::uint8_t game_mode_vs_cpu_cpu = game_mode_vs + 2U;
 
 enum class DefeatFlag : std::uint8_t {
 	none = 0,

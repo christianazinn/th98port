@@ -96,11 +96,11 @@ reset or typed MAIN/MAINL session path after that integration:
   fatal ordering, route-1 targeted reset/RNG order, Demo and CPU-vs-CPU route
   0, and MAIN/MAINL session transitions.
 
-Frozen-oracle integration is complete for TH3R00 and TH3R02 through TH3R05.
-TH3R01 retains the sole active first-divergence investigation documented in
-`PHASE3_CORPUS_STATUS.md`; it currently points to a two-byte shared-ring cursor
-delta rather than lifecycle/session behavior. This static closure does not
-replace that replay-oracle gate.
+Frozen-oracle integration is complete for TH3R00 through TH3R05. TH3R01's
+former two-byte shared-ring delta was traced to Rikako Boss dispatch rather
+than lifecycle/session behavior; correcting the source state grouping makes
+all 964 rows and 135,215 samples exact. Static closure does not replace these
+replay-oracle gates.
 
 The V11/T3CASE pause-menu gap from the original audit is now closed. The
 headless replay coordinator and core deferred-frame API implement the semantic
@@ -859,6 +859,4 @@ the implementation; it should not be needed to discover which state survives
 route 1.
 
 The current definitions and focused tests satisfy this static contract.
-Frozen-oracle validation is green for TH3R00 and TH3R02 through TH3R05;
-overall Phase 3 remains open only at the independently tracked TH3R01 first
-divergence.
+Frozen-oracle validation is green for every TH3R00-TH3R05 corpus case.

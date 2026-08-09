@@ -6,6 +6,7 @@
 #include <expected>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -265,6 +266,64 @@ void test_numeric()
 	check(DecimalSubpixel::from_raw(-19).to_integer_trunc() == -1, "decimal fixed point truncates toward zero");
 }
 
+void test_game_init_source_domain()
+{
+	th03::GameInit init{};
+	init.game_mode = 1U;
+	init.story_stage = 8U;
+	init.remaining_credits = 3U;
+	init.paletted_character = {1, 3};
+	check(
+		th03::Game::create(init).has_value(),
+		"Story accepts the last gameplay stage and source initial credit count"
+	);
+
+	init.remaining_credits = 0U;
+	check(
+		th03::Game::create(init).has_value(),
+		"Story accepts zero remaining credits"
+	);
+	for(const auto credits : {std::uint8_t{4U}, std::uint8_t{255U}}) {
+		init.remaining_credits = credits;
+		const auto game = th03::Game::create(init);
+		check(
+			!game && game.error().code == th03::ErrorCode::invalid_value,
+			"Story rejects a remaining-credit byte outside the source domain"
+		);
+	}
+
+	init.remaining_credits = 3U;
+	for(const auto stage : {
+		std::uint8_t{9U}, std::uint8_t{223U}, std::uint8_t{255U}
+	}) {
+		init.story_stage = stage;
+		const auto game = th03::Game::create(init);
+		check(
+			!game && game.error().code == th03::ErrorCode::invalid_value,
+			"Story rejects a stage byte outside the gameplay range"
+		);
+	}
+
+	init.game_mode = th03::detail::game_mode_none;
+	check(
+		!th03::Game::create(init),
+		"GM_NONE is not accepted as a gameplay scenario"
+	);
+	init.game_mode = th03::detail::game_mode_vs_1p_cpu;
+	init.story_stage = 255U;
+	init.remaining_credits = 255U;
+	check(
+		th03::Game::create(init).has_value(),
+		"non-Story modes preserve resident Story bytes without validating them"
+	);
+	init.game_mode = 1U;
+	init.runtime_snapshot = th03::RuntimeSnapshot{};
+	check(
+		!th03::Game::create(init),
+		"a runtime snapshot cannot bypass Story construction validation"
+	);
+}
+
 void test_score_most_significant_digit_is_not_bcd_normalized()
 {
 	th03::detail::DeterministicState state{};
@@ -490,6 +549,63 @@ void test_rikako_boss_materialization_collision()
 		!state.shotpairs[0].alive && state.boss.hp == 108U &&
 		state.boss.state == 1U,
 		"Rikako's Boss Attack becomes shot-collidable on materialization frame 100"
+	);
+}
+
+void test_rikako_boss_dispatch_boundaries()
+{
+	const auto four_spread_state = [](std::uint8_t pattern) {
+		th03::detail::DeterministicState state{};
+		state.players[1].paletted_character = 13;
+		state.gba_boss_launched_by = 1;
+		state.boss.state = pattern;
+		state.boss.center_x = 144 << 4;
+		state.boss.center_y = 80 << 4;
+		state.boss.hp = 110U;
+		state.boss.params[3] = 32U;
+		state.boss.params[4] = 64U;
+		state.randring[0] = 0x34U;
+		state.randring[1] = 1U;
+		(void)th03::detail::gameplay_frame_prefix(
+			state, th03::GameContent{}
+		);
+		return state;
+	};
+	for(const auto pattern : {std::uint8_t{6U}, std::uint8_t{13U}}) {
+		const auto state = four_spread_state(pattern);
+		const auto active_bullets = std::count_if(
+			state.bullets.begin(), state.bullets.end(),
+			[](const auto &bullet) {
+				return bullet.flag != th03::detail::BulletFlag::free;
+			}
+		);
+		check(
+			state.randring_cursor == 2U && active_bullets == 8 &&
+			state.bullets[0].flag == th03::detail::BulletFlag::bullet16 &&
+			state.boss.pattern_angle == 0x34U && state.boss.direction == 2U,
+			"Rikako Boss states 6 and 13 dispatch to the RNG-driven four-spread pattern"
+		);
+	}
+
+	th03::detail::DeterministicState rings{};
+	rings.players[1].paletted_character = 13;
+	rings.gba_boss_launched_by = 1;
+	rings.boss.state = 7U;
+	rings.boss.center_x = 144 << 4;
+	rings.boss.center_y = 80 << 4;
+	rings.boss.hp = 110U;
+	rings.boss.params[1] = 8U;
+	rings.boss.params[2] = 28U;
+	(void)th03::detail::gameplay_frame_prefix(rings, th03::GameContent{});
+	const auto active_bullets = std::count_if(
+		rings.bullets.begin(), rings.bullets.end(),
+		[](const auto &bullet) {
+			return bullet.flag != th03::detail::BulletFlag::free;
+		}
+	);
+	check(
+		rings.randring_cursor == 0U && active_bullets == 0,
+		"Rikako Boss state 7 dispatches to the Extra Attack and ring pattern"
 	);
 }
 
@@ -1278,7 +1394,7 @@ void test_story_loss_and_versus_result_routes()
 	);
 
 	th03::detail::DeterministicState versus{};
-	versus.game_mode = 0U;
+	versus.game_mode = th03::detail::game_mode_vs_1p_2p;
 	versus.winner = 0;
 	versus.players[0].rounds_won = 1U;
 	versus.defeat_flag = th03::detail::DefeatFlag::banner;
@@ -1304,7 +1420,7 @@ void test_story_loss_and_versus_result_routes()
 void test_simultaneous_defeat_bonus_owner()
 {
 	th03::detail::DeterministicState state{};
-	state.game_mode = 0x80U;
+	state.game_mode = th03::detail::game_mode_vs_1p_cpu;
 	state.winner = 1;
 	state.last_fatal_player = 1U;
 	state.players[1].rounds_won = 2U;
@@ -1353,7 +1469,7 @@ void test_final_yumemi_result_bonus()
 void test_repeat_round_targeted_reset_and_rng_order()
 {
 	th03::GameInit init{};
-	init.game_mode = 0U;
+	init.game_mode = th03::detail::game_mode_vs_1p_cpu;
 	init.rank = 2U;
 	init.is_cpu = {1U, 0U};
 	init.paletted_character = {3, 16};
@@ -1503,7 +1619,7 @@ void test_repeat_round_targeted_reset_and_rng_order()
 void test_demo_and_cpu_vs_cpu_route_zero()
 {
 	th03::GameInit init{};
-	init.game_mode = 0x7FU;
+	init.game_mode = th03::detail::game_mode_demo;
 	init.demo_number = 1U;
 	auto demo = th03::detail::initialize_first_round(init, 0U);
 	check(
@@ -1536,7 +1652,7 @@ void test_demo_and_cpu_vs_cpu_route_zero()
 	);
 
 	th03::detail::DeterministicState cpu_vs_cpu{};
-	cpu_vs_cpu.game_mode = 0x82U;
+	cpu_vs_cpu.game_mode = th03::detail::game_mode_vs_cpu_cpu;
 	cpu_vs_cpu.players[0].is_cpu = 1U;
 	cpu_vs_cpu.players[1].is_cpu = 1U;
 	cpu_vs_cpu.input_system = 0x1000U;
@@ -1742,9 +1858,9 @@ void test_main_and_mainl_session_transitions()
 		"final Story handoff normalizes the terminal OOB opponent read and registers after stage 99"
 	);
 
-	init.game_mode = 0U;
+	init.game_mode = th03::detail::game_mode_vs_1p_2p;
 	init.story_stage = 3U;
-	state.game_mode = 0U;
+	state.game_mode = th03::detail::game_mode_vs_1p_2p;
 	state.story_stage = 3U;
 	state.winner = 1;
 	state.score[1] = {7U, 6U, 5U, 4U, 3U, 2U, 1U, 0U};
@@ -1854,6 +1970,197 @@ void test_random()
 		"randring index 255 reproduces the adjacent wrapped cursor byte");
 }
 
+constexpr std::array<std::uint8_t, 256> iatan2_reference_table{{
+	0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,
+	3,3,3,3,3,3,3,4,4,4,4,4,4,5,5,5,
+	5,5,5,6,6,6,6,6,6,6,7,7,7,7,7,7,
+	8,8,8,8,8,8,8,9,9,9,9,9,9,10,10,10,
+	10,10,10,10,11,11,11,11,11,11,11,12,12,12,12,12,
+	12,12,13,13,13,13,13,13,13,14,14,14,14,14,14,14,
+	15,15,15,15,15,15,15,16,16,16,16,16,16,16,17,17,
+	17,17,17,17,17,17,18,18,18,18,18,18,18,19,19,19,
+	19,19,19,19,19,20,20,20,20,20,20,20,20,21,21,21,
+	21,21,21,21,21,21,22,22,22,22,22,22,22,22,23,23,
+	23,23,23,23,23,23,23,24,24,24,24,24,24,24,24,24,
+	25,25,25,25,25,25,25,25,25,25,26,26,26,26,26,26,
+	26,26,26,27,27,27,27,27,27,27,27,27,27,28,28,28,
+	28,28,28,28,28,28,28,28,29,29,29,29,29,29,29,29,
+	29,29,29,30,30,30,30,30,30,30,30,30,30,30,31,31,
+	31,31,31,31,31,31,31,31,31,31,32,32,32,32,32,32,
+}};
+
+enum class Iatan2MagnitudeOrder {
+	master_signed,
+	native_normalized,
+};
+
+std::uint16_t iatan2_reference_magnitude(std::int16_t value)
+{
+	const auto bits = std::bit_cast<std::uint16_t>(value);
+	return (value < 0)
+		? static_cast<std::uint16_t>(0U - bits)
+		: bits;
+}
+
+std::optional<std::uint8_t> iatan2_reference(
+	std::int16_t y,
+	std::int16_t x,
+	Iatan2MagnitudeOrder order
+)
+{
+	if((std::bit_cast<std::uint16_t>(y) |
+		std::bit_cast<std::uint16_t>(x)) == 0U) {
+		return std::uint8_t{0U};
+	}
+	const auto abs_y = iatan2_reference_magnitude(y);
+	const auto abs_x = iatan2_reference_magnitude(x);
+	std::uint8_t angle = 0U;
+	if(abs_x == abs_y) {
+		angle = 32U;
+	} else {
+		const auto x_is_larger = (order == Iatan2MagnitudeOrder::master_signed)
+			? (std::bit_cast<std::int16_t>(abs_x) >
+				std::bit_cast<std::int16_t>(abs_y))
+			: (abs_x > abs_y);
+		const auto numerator = x_is_larger ? abs_y : abs_x;
+		const auto denominator = x_is_larger ? abs_x : abs_y;
+		if(denominator == 0U) {
+			return std::nullopt;
+		}
+		const auto dividend = static_cast<std::uint32_t>(numerator) << 8U;
+		const auto quotient = dividend / denominator;
+		if(quotient > std::numeric_limits<std::uint16_t>::max()) {
+			return std::nullopt;
+		}
+		// DIV returns the quotient in AX; XLATB indexes with AL only.
+		const auto table_index = static_cast<std::uint8_t>(quotient);
+		angle = x_is_larger
+			? iatan2_reference_table[table_index]
+			: static_cast<std::uint8_t>(
+				64U - iatan2_reference_table[table_index]
+			);
+	}
+	if(x < 0) {
+		angle = static_cast<std::uint8_t>(128U - angle);
+	}
+	if(y < 0) {
+		angle = static_cast<std::uint8_t>(0U - angle);
+	}
+	return angle;
+}
+
+void test_iatan2_numeric_policy()
+{
+	constexpr std::array<std::int16_t, 7> anchors{
+		-32767, -256, -1, 0, 1, 256, 32767,
+	};
+	bool defined_domain_matches = true;
+	for(std::int32_t raw = -32767; raw <= 32767; ++raw) {
+		const auto value = static_cast<std::int16_t>(raw);
+		for(const auto anchor : anchors) {
+			const auto yx = iatan2_reference(
+				value, anchor, Iatan2MagnitudeOrder::master_signed
+			);
+			const auto xy = iatan2_reference(
+				anchor, value, Iatan2MagnitudeOrder::master_signed
+			);
+			if(
+				!yx || !xy ||
+				th03::detail::iatan2(value, anchor) != *yx ||
+				th03::detail::iatan2(anchor, value) != *xy
+			) {
+				defined_domain_matches = false;
+				break;
+			}
+		}
+		if(!defined_domain_matches) {
+			break;
+		}
+	}
+	check(
+		defined_domain_matches,
+		"iatan2 matches the literal 16-bit assembly model for every defined word against sign, zero, and magnitude boundaries"
+	);
+
+	bool every_table_index_matches = true;
+	for(std::uint16_t index = 0U; index < 256U; ++index) {
+		const auto smaller = static_cast<std::int16_t>(index);
+		for(const auto sign_y : std::array<std::int16_t, 2>{1, -1}) {
+			for(const auto sign_x : std::array<std::int16_t, 2>{1, -1}) {
+				const auto y = static_cast<std::int16_t>(smaller * sign_y);
+				const auto x = static_cast<std::int16_t>(256 * sign_x);
+				const auto expected = iatan2_reference(
+					y, x, Iatan2MagnitudeOrder::master_signed
+				);
+				const auto swapped = iatan2_reference(
+					x, y, Iatan2MagnitudeOrder::master_signed
+				);
+				if(
+					!expected || !swapped ||
+					th03::detail::iatan2(y, x) != *expected ||
+					th03::detail::iatan2(x, y) != *swapped
+				) {
+					every_table_index_matches = false;
+					break;
+				}
+			}
+		}
+	}
+	check(
+		every_table_index_matches,
+		"iatan2 exercises every master.lib atan-table index in both axis orders and all quadrants"
+	);
+
+	constexpr auto int16_min = std::numeric_limits<std::int16_t>::min();
+	bool landmine_range_matches = true;
+	bool normalization_matches = true;
+	for(std::int32_t raw = -32767; raw <= 32767; ++raw) {
+		const auto other = static_cast<std::int16_t>(raw);
+		const auto other_magnitude = iatan2_reference_magnitude(other);
+		const auto source_y = iatan2_reference(
+			int16_min, other, Iatan2MagnitudeOrder::master_signed
+		);
+		const auto source_x = iatan2_reference(
+			other, int16_min, Iatan2MagnitudeOrder::master_signed
+		);
+		const auto source_should_fault = (other_magnitude <= 128U);
+		if(
+			source_y.has_value() == source_should_fault ||
+			source_x.has_value() == source_should_fault
+		) {
+			landmine_range_matches = false;
+		}
+		const auto normalized_y = iatan2_reference(
+			int16_min, other, Iatan2MagnitudeOrder::native_normalized
+		);
+		const auto normalized_x = iatan2_reference(
+			other, int16_min, Iatan2MagnitudeOrder::native_normalized
+		);
+		if(
+			!normalized_y || !normalized_x ||
+			th03::detail::iatan2(int16_min, other) != *normalized_y ||
+			th03::detail::iatan2(other, int16_min) != *normalized_x
+		) {
+			normalization_matches = false;
+		}
+	}
+	check(
+		landmine_range_matches,
+		"literal iatan2.asm faults only when its signed-CMP landmine gives DIV a denominator magnitude at most 128"
+	);
+	check(
+		normalization_matches,
+		"native iatan2 gives every single-INT16_MIN input the stable unsigned-magnitude normalization"
+	);
+	const auto both_min = iatan2_reference(
+		int16_min, int16_min, Iatan2MagnitudeOrder::master_signed
+	);
+	check(
+		both_min && th03::detail::iatan2(int16_min, int16_min) == *both_min,
+		"equal INT16_MIN magnitudes retain master.lib's defined diagonal result"
+	);
+}
+
 void test_trig()
 {
 	check(th03::detail::cosine8(0U) == 256 &&
@@ -1880,6 +2187,7 @@ void test_trig()
 		th03::detail::iatan2(-1, -1) == 160U,
 		"master.lib iatan2 preserves diagonal quadrants"
 	);
+	test_iatan2_numeric_policy();
 }
 
 void test_t3case()
@@ -1991,7 +2299,7 @@ void test_enedat()
 void test_recorded_pause_frame_boundary()
 {
 	th03::GameInit init{};
-	init.game_mode = 0x82U;
+	init.game_mode = th03::detail::game_mode_vs_cpu_cpu;
 	init.is_cpu = {1U, 1U};
 	init.paletted_character = {1, 3};
 	th03::GameContent content{};
@@ -2174,6 +2482,7 @@ void test_v11()
 int main()
 {
 	test_numeric();
+	test_game_init_source_domain();
 	test_score_most_significant_digit_is_not_bcd_normalized();
 	test_defeat_playfield_shake();
 	test_th3r03_round_start();
@@ -2181,6 +2490,7 @@ int main()
 	test_rikako_bomb_shift_reset();
 	test_ellen_bomb_vector_release();
 	test_rikako_boss_materialization_collision();
+	test_rikako_boss_dispatch_boundaries();
 	test_chiyuri_extra_pair_materialization_transition();
 	test_gauge_pattern_updates_during_hud_start();
 	test_marisa_boss_patterns();

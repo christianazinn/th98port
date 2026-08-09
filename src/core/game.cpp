@@ -75,6 +75,36 @@ std::expected<Game, Error> Game::create(
 			"autofire mask contains bits outside P1/P2",
 		});
 	}
+	if(
+		init.game_mode != detail::game_mode_story &&
+		init.game_mode != detail::game_mode_demo &&
+		init.game_mode != detail::game_mode_vs_1p_cpu &&
+		init.game_mode != detail::game_mode_vs_1p_2p &&
+		init.game_mode != detail::game_mode_vs_cpu_cpu
+	) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"game mode is not a source TH03 gameplay mode",
+		});
+	}
+	if(
+		init.game_mode == detail::game_mode_story &&
+		init.remaining_credits > 3U
+	) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"Story remaining credits exceed the source resident range 0..3",
+		});
+	}
+	if(
+		init.game_mode == detail::game_mode_story &&
+		init.story_stage >= 9U
+	) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"Story gameplay stage must be in the source range 0..8",
+		});
+	}
 	if(content.enemy_formations.size() > 24U) {
 		return std::unexpected(Error{
 			ErrorCode::invalid_value,

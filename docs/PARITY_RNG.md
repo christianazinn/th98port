@@ -26,10 +26,10 @@ move as the port is completed.
 The source-complete static inventory maps every known Anniversary consumer
 reachable after entry to `sub_9778()` to a native counterpart, including
 otherwise-presentational background, HUD, bomb, Boss Attack, and hit-circle
-calls. Dynamic closure is still provisional for one corpus segment: TH3R01 is
-exact through sample 19200, but its sample-19328 checkpoint has every canonical
-field exact except that Anniversary's shared-ring cursor is two bytes ahead.
-No missing static call site has yet been identified for that delta.
+calls. Dynamic closure is complete for the frozen Classic corpus. TH3R01's
+former sample-19328 two-byte cursor delta was localized to global frame 19326:
+the native Rikako Boss switch dispatched state 6 to the neighboring pattern
+family, skipping the source four-spread pattern's angle and type draws.
 
 The implemented `MAIN.EXE` lifecycle also has static RNG closure: route-1 Story
 retries and repeated VS rounds expose an explicit native transition whose draw
@@ -371,9 +371,9 @@ Kana's direct Extra helper, Hyper, and bomb consume zero RNG.
 | Charge hittest, `main_11.cpp` | Two per overlapping one of four nodes | `chargeshot_hittest()` character 6 | Closed |
 | Extra add, `main_06.cpp:exatt_add_rikako()` | After a free slot: target X, behavior bit, speed = three | `extra_attack_add()` character 6 | Closed |
 | Gauge, `main_11.cpp:gauge_pattern_rikako()` | Zero | `gauge_pattern_rikako()` | Closed |
-| Boss spreads, `main_03w.cpp:rikako_133A5()` | One direction bit at frame 40 | `boss_pattern_rikako_spreads()` | Closed |
-| Boss exatt/rings, `rikako_134AA()` | Frame 16 `SUB_CE5B`: one; frame 40 overwritten raw draw: one; frame 64 four raw ring angles | `boss_pattern_rikako_exatt_and_rings()` | Closed, including overwritten draw |
-| Boss four spreads, `rikako_135A4()` | Whenever `phase_mod == 1`: angle first, then type bit | `boss_pattern_rikako_four_spreads()` | Closed |
+| Boss spreads, `main_03w.cpp:rikako_133A5()` | States 2-5; one direction bit at frame 40 | `boss_pattern_rikako_spreads()` | Closed |
+| Boss exatt/rings, `rikako_134AA()` | States 7-12; frame 16 `SUB_CE5B`: one; frame 40 overwritten raw draw: one; frame 64 four raw ring angles | `boss_pattern_rikako_exatt_and_rings()` | Closed, including overwritten draw |
+| Boss four spreads, `rikako_135A4()` | States 6 and 13-17; whenever `phase_mod == 1`: angle first, then type bit | `boss_pattern_rikako_four_spreads()` | Closed; focused boundary-state test and TH3R01 full-oracle coverage |
 | Bomb renderer, `main_05.cpp:rikako_bomb()` | One draw at frames 64,72,...,120 = eight total | `bombs_render_phase_update()` character 6 | Closed |
 
 Rikako's Hyper and Boss renderer consume zero RNG.
@@ -453,9 +453,10 @@ of their drawing alone is not evidence that their RNG may be omitted:
 ### Missing consumers
 
 No source-level missing consumer has been found in Anniversary gameplay paths
-represented by the native core. The unresolved TH3R01 sample-19328 cursor delta
-is nevertheless dynamic evidence that this statement is not yet corpus-closed;
-its first differing frame and consumer remain to be identified.
+represented by the native core. The former TH3R01 cursor delta was not an
+unmapped consumer: it was a dispatch error that made an existing complete
+consumer unreachable in source-used state 6. Correcting the complete Rikako
+switch makes TH3R01 exact for all 964 rows and 135,215 samples.
 
 ### Extra consumers
 
