@@ -97,7 +97,7 @@ void gauge_pattern_reimu(
 		);
 	}
 	if(frame > 0x40U) {
-		flag = GaugeBossAttackFlag::none;
+		gauge_attack_finish(state, player_id, observer);
 	}
 	state.reimu_gauge_pattern_frame[player_id]++;
 }
@@ -176,14 +176,15 @@ void gauge_pattern_marisa(
 		);
 	}
 	if(center_y >= (368 << 4)) {
-		flag = GaugeBossAttackFlag::none;
+		gauge_attack_finish(state, player_id, observer);
 	}
 	frame++;
 }
 
 void gauge_pattern_kotohime(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &flag = state.gba_flag_active[player_id];
@@ -237,7 +238,7 @@ void gauge_pattern_kotohime(
 		slot->kotohime_milestone = 0U;
 		slot->behavior_variant = 1U;
 	} else if(frame >= 0x80U) {
-		flag = GaugeBossAttackFlag::none;
+		gauge_attack_finish(state, player_id, observer);
 	}
 	frame++;
 }
@@ -317,7 +318,7 @@ void gauge_pattern_kana(
 		);
 	}
 	if(frame >= 0x80U) {
-		flag = GaugeBossAttackFlag::none;
+		gauge_attack_finish(state, player_id, observer);
 	}
 	state.kana_gauge_pattern_frame[player_id]++;
 }
@@ -393,7 +394,7 @@ void gauge_pattern_mima(
 			);
 	}
 	if(frame > 0x40U) {
-		flag = GaugeBossAttackFlag::none;
+		gauge_attack_finish(state, player_id, observer);
 	}
 	frame++;
 }
@@ -498,7 +499,7 @@ void gauge_pattern_ellen(
 		return;
 	}
 
-	flag = GaugeBossAttackFlag::none;
+	gauge_attack_finish(state, player_id, observer);
 	frame++;
 }
 
@@ -566,7 +567,7 @@ void gauge_pattern_rikako(
 		);
 	}
 	if(frame >= 0x80U) {
-		flag = GaugeBossAttackFlag::none;
+		gauge_attack_finish(state, player_id, observer);
 	}
 	state.rikako_gauge_pattern_frame[player_id]++;
 }
@@ -634,7 +635,7 @@ void gauge_pattern_chiyuri(
 	}
 	frame++;
 	if(frame >= state.gauge_pattern_param_a[player_id]) {
-		flag = GaugeBossAttackFlag::none;
+		gauge_attack_finish(state, player_id, observer);
 	}
 }
 
@@ -708,7 +709,7 @@ void gauge_pattern_yumemi(
 			fire_x = 144 << 4;
 			fire_y = 104 << 4;
 			fire = true;
-			flag = GaugeBossAttackFlag::none;
+			gauge_attack_finish(state, player_id, observer);
 			break;
 		default:
 			break;
@@ -759,7 +760,7 @@ void gauge_patterns_update(
 	} else if(character == character_ellen) {
 		gauge_pattern_ellen(state, player_id, observer);
 	} else if(character == character_kotohime) {
-		gauge_pattern_kotohime(state, player_id);
+		gauge_pattern_kotohime(state, player_id, observer);
 	} else if(character == character_kana) {
 		gauge_pattern_kana(state, player_id, observer);
 	} else if(character == character_rikako) {

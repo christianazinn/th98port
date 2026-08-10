@@ -58,6 +58,7 @@ add_library(th03_present STATIC
 	src/present/main_players.cpp
 	src/present/main_round.cpp
 	src/present/main_static.cpp
+	src/present/main_warning_gauge.cpp
 	src/present/mono.cpp
 	src/present/pi.cpp
 	src/present/planar.cpp
@@ -377,6 +378,19 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-present-main-background-tests
 		COMMAND th03-present-main-background-tests
+	)
+
+	add_executable(th03-present-main-warning-gauge-tests
+		tests/test_present_main_warning_gauge.cpp
+	)
+	target_link_libraries(
+		th03-present-main-warning-gauge-tests
+		PRIVATE th03_present
+	)
+	th03_set_warnings(th03-present-main-warning-gauge-tests)
+	add_test(
+		NAME th03-present-main-warning-gauge-tests
+		COMMAND th03-present-main-warning-gauge-tests
 	)
 
 	add_executable(th03-present-main-round-tests

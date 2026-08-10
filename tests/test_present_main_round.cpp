@@ -31,10 +31,15 @@ using th03::HitCircleKind;
 using th03::HitCircleSpawned;
 using th03::CommonEffectKind;
 using th03::CommonEffectSpawned;
+using th03::GaugeAttackFinished;
+using th03::GaugeBossAttackKind;
+using th03::MainGaugeState;
 using th03::PlayerDefeatStep;
 using th03::PlayerId;
+using th03::WarningFrameLifecycle;
 using th03::WarningInterstitialSample;
 using th03::WarningInterstitialStarted;
+using th03::WarningPortraitTransition;
 using th03::assets::BfntConsumerPolicy;
 using th03::assets::BfntGlyph;
 using th03::assets::BfntSheet;
@@ -62,6 +67,8 @@ using th03::present::MainRoundMissingPhase;
 using th03::present::MainRoundPresenter;
 using th03::present::MainRoundStatus;
 using th03::present::MainStaticPresenter;
+using th03::present::MainWarningGaugePresenter;
+using th03::present::MainWarningMrsAssets;
 using th03::present::PackedRowOrder;
 using th03::present::Page;
 using th03::present::PelletMasks;
@@ -193,6 +200,11 @@ struct SyntheticAssets {
 	{
 		return {{&p1_mrs, &p2_mrs}};
 	}
+
+	[[nodiscard]] MainWarningMrsAssets warning_mrs() const noexcept
+	{
+		return {{&p1_mrs, &p2_mrs}};
+	}
 };
 
 struct BlankAnk final : AnkGlyphProvider {
@@ -215,9 +227,14 @@ struct Fixture {
 	std::optional<MainEffectsPresenter> effects;
 	std::optional<MainPlayersBulletsPresenter> players_bullets;
 	std::optional<MainBombsPresenter> bombs;
+	std::optional<MainWarningGaugePresenter> warning_gauge;
 	std::optional<MainRoundPresenter> round;
 
-	Fixture()
+	explicit Fixture(
+		std::uint16_t background_x_q12_4 = 0U,
+		std::uint16_t background_y_q12_4 = 0U,
+		MainBackgroundKind background_kind = MainBackgroundKind::type_a
+	)
 	{
 		const auto hud = hud_state();
 		expect(raster.set_access_page(Page::one), "access the MAINL atlas page");
@@ -315,6 +332,13 @@ struct Fixture {
 			assets.trig(),
 			palette
 		);
+		warning_gauge.emplace(
+			raster,
+			tram,
+			staging,
+			palette,
+			assets.warning_mrs()
+		);
 		round.emplace(
 			raster,
 			tram,
@@ -324,9 +348,22 @@ struct Fixture {
 			*entities,
 			*effects,
 			*players_bullets,
-			*bombs
+			*bombs,
+			*warning_gauge
 		);
 		expect(round->ready(), "construct a ready MAIN round composer");
+		round->main_background_initialize({.kind = background_kind});
+		const auto background_slots = (background_kind ==
+			MainBackgroundKind::type_a) ? 48U : 50U;
+		for(std::size_t slot = 0U; slot < background_slots; ++slot) {
+			round->main_background_random_read({background_x_q12_4});
+			round->main_background_random_read({background_y_q12_4});
+			if(background_kind == MainBackgroundKind::type_a) {
+				round->main_background_random_read({0U});
+				round->main_background_random_read({0U});
+			}
+		}
+		expect(round->ready(), "initialize the synthetic MAIN background pool");
 	}
 
 	[[nodiscard]] static MainHudState hud_state() noexcept
@@ -358,11 +395,84 @@ struct Fixture {
 		return state;
 	}
 
-	void ordinary_phases(const th03::detail::DeterministicState &state)
+	[[nodiscard]] static WarningFrameLifecycle idle_warning() noexcept
+	{
+		return {
+			.players = {{
+				{0U, 0U, GaugeBossAttackKind::none, GaugeBossAttackKind::none},
+				{0U, 0U, GaugeBossAttackKind::none, GaugeBossAttackKind::none},
+			}},
+			.gauge_levels = {1U, 1U},
+			.boss_level = 0U,
+		};
+	}
+
+	[[nodiscard]] static WarningInterstitialStarted warning_start(
+		bool p1 = true,
+		bool p2 = false
+	) noexcept
+	{
+		return {
+			.flashing_players = {p1, p2},
+			.next_attacks = {
+				p1 ? GaugeBossAttackKind::gauge_pellet :
+					GaugeBossAttackKind::none,
+				p2 ? GaugeBossAttackKind::boss : GaugeBossAttackKind::none,
+			},
+			.gauge_levels = {3U, 7U},
+			.boss_level = 9U,
+		};
+	}
+
+	[[nodiscard]] static MainGaugeState gauge_state(
+		const th03::detail::DeterministicState &state
+	) noexcept
+	{
+		return {
+			.context = {
+				.round_id = state.round_id,
+				.round_or_result_frame = state.round_or_result_frame,
+				.playfield_fg_shift_x = state.playfield_fg_shift_x,
+			},
+		};
+	}
+
+	void render_phases(const th03::detail::DeterministicState &state)
 	{
 		round->observe(th03::detail::ObserverAccess::shots_enemies(state));
 		round->observe(th03::detail::ObserverAccess::fireballs(state));
 		round->observe(th03::detail::ObserverAccess::players_bullets(state));
+	}
+
+	void background_frame(const th03::detail::DeterministicState &state)
+	{
+		round->main_background_frame({
+			.round_id = state.round_id,
+			.round_or_result_frame = state.round_or_result_frame,
+			.kind = MainBackgroundKind::type_a,
+			.phase = MainBackgroundPhase::initial,
+		});
+		for(std::size_t slot = 0U; slot < 48U; ++slot) {
+			round->main_background_random_read({0U});
+		}
+	}
+
+	void begin_frame(const th03::detail::DeterministicState &state)
+	{
+		round->warning_frame_lifecycle(idle_warning());
+		background_frame(state);
+	}
+
+	void terminal_phases(const th03::detail::DeterministicState &state)
+	{
+		begin_frame(state);
+		render_phases(state);
+	}
+
+	void ordinary_phases(const th03::detail::DeterministicState &state)
+	{
+		terminal_phases(state);
+		round->main_gauge_state(gauge_state(state));
 	}
 };
 
@@ -383,7 +493,6 @@ void test_contract_and_setup_failure()
 		MainRoundMissingPhase::boss,
 		MainRoundMissingPhase::extra_attack,
 		MainRoundMissingPhase::charge_shot,
-		MainRoundMissingPhase::warning_and_gauge,
 		MainRoundMissingPhase::hud,
 		MainRoundMissingPhase::result,
 	};
@@ -410,7 +519,8 @@ void test_contract_and_setup_failure()
 		*fixture.entities,
 		*fixture.effects,
 		*fixture.players_bullets,
-		*fixture.bombs
+		*fixture.bombs,
+		*fixture.warning_gauge
 	);
 	expect(
 		stopped.status() == MainRoundStatus::invalid_setup &&
@@ -433,7 +543,8 @@ void test_contract_and_setup_failure()
 		*fixture.entities,
 		*fixture.effects,
 		*fixture.players_bullets,
-		*fixture.bombs
+		*fixture.bombs,
+		*fixture.warning_gauge
 	);
 	expect(
 		stopped_background.status() == MainRoundStatus::background_failed &&
@@ -449,7 +560,8 @@ void test_contract_and_setup_failure()
 		*fixture.entities,
 		*fixture.effects,
 		*fixture.players_bullets,
-		*fixture.bombs
+		*fixture.bombs,
+		*fixture.warning_gauge
 	);
 	expect(
 		valid.ready() && fixture.raster.palette_tone() == 100,
@@ -587,6 +699,7 @@ void test_phase_context_includes_foreground_shifts()
 {
 	Fixture fixture;
 	auto state = fixture.state();
+	fixture.begin_frame(state);
 	fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
 	state.playfield_fg_shift_x[0U] = 4;
 	fixture.round->observe(th03::detail::ObserverAccess::fireballs(state));
@@ -600,6 +713,7 @@ void test_fireballs_precede_hit_circles()
 {
 	Fixture fixture;
 	auto state = fixture.state();
+	fixture.begin_frame(state);
 	fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
 	state.fireballs[0U].flag = th03::detail::FireballFlag::fall;
 	state.fireballs[0U].player_id = 2U;
@@ -630,6 +744,7 @@ void test_hit_circles_overwrite_fireballs()
 	state.fireballs[0U].center_y = static_cast<std::int16_t>(336 * 16);
 	state.fireballs[0U].player_id = 0U;
 	state.fireballs[0U].variant_as_explosion_target = 2U;
+	fixture.begin_frame(state);
 	fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
 	fixture.round->observe(th03::detail::ObserverAccess::fireballs(state));
 	expect(
@@ -639,29 +754,13 @@ void test_hit_circles_overwrite_fireballs()
 	);
 }
 
-void initialize_type_a_background(
-	MainRoundPresenter &round,
-	std::uint16_t x_q12_4,
-	std::uint16_t y_q12_4
-)
-{
-	round.main_background_initialize({.kind = MainBackgroundKind::type_a});
-	for(std::size_t slot = 0U; slot < 48U; ++slot) {
-		round.main_background_random_read({x_q12_4});
-		round.main_background_random_read({y_q12_4});
-		round.main_background_random_read({0U});
-		round.main_background_random_read({0U});
-	}
-}
-
 void test_background_is_synchronous_before_late_bombs()
 {
-	Fixture fixture;
-	initialize_type_a_background(
-		*fixture.round,
+	Fixture fixture(
 		static_cast<std::uint16_t>(100U * 16U),
 		static_cast<std::uint16_t>(100U * 16U)
 	);
+	fixture.round->warning_frame_lifecycle(Fixture::idle_warning());
 	fixture.round->main_background_frame({
 		.round_id = 3U,
 		.round_or_result_frame = 0U,
@@ -724,6 +823,105 @@ void test_background_failure_is_sticky()
 	);
 }
 
+void test_warning_lifecycle_precedes_background()
+{
+	Fixture fixture;
+	fixture.round->main_background_frame({
+		.round_id = 3U,
+		.round_or_result_frame = 17U,
+		.kind = MainBackgroundKind::type_a,
+		.phase = MainBackgroundPhase::initial,
+	});
+	expect(
+		fixture.round->status() == MainRoundStatus::invalid_observation &&
+		fixture.background->ready(),
+		"reject a background frame before the frame's warning lifecycle"
+	);
+}
+
+void test_background_precedes_entity_phase()
+{
+	Fixture fixture;
+	auto state = fixture.state();
+	fixture.round->warning_frame_lifecycle(Fixture::idle_warning());
+	fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
+	expect(
+		fixture.round->status() == MainRoundStatus::invalid_observation &&
+		fixture.background->ready() && fixture.entities->ready(),
+		"reject the entity phase when the source background callback is missing"
+	);
+}
+
+void test_background_reads_complete_before_entity_phase()
+{
+	Fixture fixture;
+	auto state = fixture.state();
+	fixture.round->warning_frame_lifecycle(Fixture::idle_warning());
+	fixture.round->main_background_frame({
+		.round_id = state.round_id,
+		.round_or_result_frame = state.round_or_result_frame,
+		.kind = MainBackgroundKind::type_a,
+		.phase = MainBackgroundPhase::initial,
+	});
+	fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
+	expect(
+		fixture.round->status() == MainRoundStatus::invalid_observation &&
+		fixture.background->ready() && fixture.entities->ready(),
+		"reject entities before all source background reads have completed"
+	);
+}
+
+void test_type_b_background_read_count_and_overread()
+{
+	{
+		auto fixture = std::make_unique<Fixture>(
+			std::uint16_t{0U}, std::uint16_t{0U},
+			MainBackgroundKind::type_b
+		);
+		auto state = fixture->state();
+		fixture->round->warning_frame_lifecycle(Fixture::idle_warning());
+		fixture->round->main_background_frame({
+			.round_id = state.round_id,
+			.round_or_result_frame = state.round_or_result_frame,
+			.kind = MainBackgroundKind::type_b,
+			.phase = MainBackgroundPhase::initial,
+		});
+		for(std::size_t read = 0U; read < 40U; ++read) {
+			fixture->round->main_background_random_read({0U});
+		}
+		fixture->round->observe(
+			th03::detail::ObserverAccess::shots_enemies(state)
+		);
+		expect(
+			fixture->round->ready(),
+			"accept exactly 40 Type-B initial-frame background reads"
+		);
+	}
+	{
+		auto fixture = std::make_unique<Fixture>(
+			std::uint16_t{0U}, std::uint16_t{0U},
+			MainBackgroundKind::type_b
+		);
+		auto state = fixture->state();
+		fixture->round->warning_frame_lifecycle(Fixture::idle_warning());
+		fixture->round->main_background_frame({
+			.round_id = state.round_id,
+			.round_or_result_frame = state.round_or_result_frame,
+			.kind = MainBackgroundKind::type_b,
+			.phase = MainBackgroundPhase::initial,
+		});
+		for(std::size_t read = 0U; read < 40U; ++read) {
+			fixture->round->main_background_random_read({0U});
+		}
+		fixture->round->main_background_random_read({0U});
+		expect(
+			fixture->round->status() == MainRoundStatus::invalid_observation &&
+			fixture->background->ready(),
+			"reject a 41st Type-B frame read before it reaches the child"
+		);
+	}
+}
+
 void test_terminal_no_footer_does_not_publish()
 {
 	Fixture fixture;
@@ -735,12 +933,183 @@ void test_terminal_no_footer_does_not_publish()
 		"stage a palette change for a terminal frame"
 	);
 	const auto shown_hash = fixture.raster.display_state_hash();
-	fixture.ordinary_phases(state);
+	fixture.terminal_phases(state);
 	expect(
 		fixture.round->ready() && fixture.palette.dirty() &&
 		fixture.raster.shown_page() == Page::one &&
 		fixture.raster.display_state_hash() == shown_hash,
 		"terminal return without footer keeps the prior shown surface"
+	);
+}
+
+void test_late_gauge_portrait_and_footer_order()
+{
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		fixture.terminal_phases(state);
+		fixture.round->main_frame_footer_reached({});
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation,
+			"reject a nonterminal footer before its late gauge callback"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		fixture.terminal_phases(state);
+		auto gauge = Fixture::gauge_state(state);
+		gauge.context.playfield_fg_shift_x[1U] = 4;
+		fixture.round->main_gauge_state(gauge);
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation,
+			"reject a late gauge whose full MAIN phase context differs"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		fixture.terminal_phases(state);
+		fixture.round->warning_portrait_transition(
+			WarningPortraitTransition{PlayerId::p1}
+		);
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation,
+			"reject a warning portrait before the late gauge"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		auto lifecycle = Fixture::idle_warning();
+		lifecycle.players[0U].warning_step_before = 1U;
+		lifecycle.players[0U].warning_step_after = 1U;
+		lifecycle.players[0U].next_attack = GaugeBossAttackKind::gauge_pellet;
+		lifecycle.players[1U].warning_step_before = 1U;
+		lifecycle.players[1U].warning_step_after = 1U;
+		lifecycle.players[1U].next_attack = GaugeBossAttackKind::boss;
+		fixture.round->warning_frame_lifecycle(lifecycle);
+		fixture.background_frame(state);
+		fixture.render_phases(state);
+		fixture.round->main_gauge_state(Fixture::gauge_state(state));
+		fixture.round->warning_portrait_transition(
+			WarningPortraitTransition{PlayerId::p2}
+		);
+		fixture.round->warning_portrait_transition(
+			WarningPortraitTransition{PlayerId::p1}
+		);
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation,
+			"reject P1 after a P2 warning portrait"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		auto lifecycle = Fixture::idle_warning();
+		lifecycle.players[0U].warning_step_before = 1U;
+		lifecycle.players[0U].warning_step_after = 1U;
+		lifecycle.players[0U].next_attack = GaugeBossAttackKind::gauge_pellet;
+		lifecycle.players[1U].warning_step_before = 1U;
+		lifecycle.players[1U].warning_step_after = 1U;
+		lifecycle.players[1U].next_attack = GaugeBossAttackKind::boss;
+		fixture.round->warning_frame_lifecycle(lifecycle);
+		fixture.background_frame(state);
+		fixture.render_phases(state);
+		fixture.round->main_gauge_state(Fixture::gauge_state(state));
+		fixture.round->warning_portrait_transition(
+			WarningPortraitTransition{PlayerId::p1}
+		);
+		fixture.round->warning_portrait_transition(
+			WarningPortraitTransition{PlayerId::p2}
+		);
+		expect(
+			fixture.round->ready() &&
+			fixture.raster.pixel(Page::zero, {16, 16}) == 2U &&
+			fixture.raster.pixel(Page::zero, {336, 16}) == 3U,
+			"draw optional warning portraits in source P1-then-P2 order"
+		);
+		fixture.round->main_frame_footer_reached({});
+		expect(
+			fixture.round->ready() && fixture.raster.shown_page() == Page::zero,
+			"accept the footer only after the nonterminal late-gauge suffix"
+		);
+	}
+}
+
+void test_portrait_expectation_is_strict()
+{
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		fixture.ordinary_phases(state);
+		fixture.round->warning_portrait_transition(
+			WarningPortraitTransition{PlayerId::p1}
+		);
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation,
+			"reject a portrait absent from this frame's warning lifecycle"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		auto lifecycle = Fixture::idle_warning();
+		lifecycle.players[0U].warning_step_before = 1U;
+		lifecycle.players[0U].warning_step_after = 1U;
+		lifecycle.players[0U].next_attack = GaugeBossAttackKind::gauge_pellet;
+		fixture.round->warning_frame_lifecycle(lifecycle);
+		fixture.background_frame(state);
+		fixture.render_phases(state);
+		fixture.round->main_gauge_state(Fixture::gauge_state(state));
+		fixture.round->main_frame_footer_reached({});
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation,
+			"reject a footer before its required warning portrait"
+		);
+	}
+}
+
+void test_gauge_completion_prefix_order()
+{
+	{
+		Fixture fixture;
+		fixture.round->gauge_attack_finished({PlayerId::p2, PlayerId::p1});
+		fixture.round->gauge_attack_finished({PlayerId::p1, PlayerId::p2});
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation,
+			"reject a P1 Gauge completion after a P2 completion"
+		);
+	}
+	{
+		Fixture fixture;
+		fixture.round->warning_frame_lifecycle(Fixture::idle_warning());
+		fixture.round->gauge_attack_finished({PlayerId::p1, PlayerId::p2});
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation &&
+			fixture.warning_gauge->ready(),
+			"reject Gauge completion after the warning/background suffix begins"
+		);
+	}
+}
+
+void test_warning_gauge_child_failure_is_sticky()
+{
+	Fixture fixture;
+	const auto shown = fixture.raster.shown_page();
+	fixture.round->gauge_attack_finished(GaugeAttackFinished{
+		.attacker = PlayerId::p1,
+		.target = PlayerId::p1,
+	});
+	expect(
+		fixture.round->status() == MainRoundStatus::warning_gauge_failed &&
+		!fixture.warning_gauge->ready(),
+		"surface a malformed forwarded gauge completion as a child failure"
+	);
+	fixture.round->main_frame_footer_reached({});
+	expect(
+		fixture.raster.shown_page() == shown,
+		"a sticky warning/gauge child failure suppresses later publication"
 	);
 }
 
@@ -756,9 +1125,7 @@ void test_warning_interstitial_tones_without_footer()
 		),
 		"stage a dirty palette entry before the blocking warning"
 	);
-	observer.warning_interstitial_started(WarningInterstitialStarted{
-		.flashing_players = {true, false},
-	});
+	observer.warning_interstitial_started(Fixture::warning_start());
 	for(std::uint8_t ordinal = 0U; ordinal < 27U; ++ordinal) {
 		observer.warning_interstitial_sample(WarningInterstitialSample{ordinal});
 		expect(
@@ -779,7 +1146,16 @@ void test_warning_interstitial_tones_without_footer()
 	}
 
 	auto state = fixture.state();
-	fixture.ordinary_phases(state);
+	auto lifecycle = Fixture::idle_warning();
+	lifecycle.players[0U] = {
+		3U, 4U, GaugeBossAttackKind::gauge_pellet, GaugeBossAttackKind::none,
+	};
+	lifecycle.gauge_levels = {3U, 7U};
+	lifecycle.boss_level = 9U;
+	fixture.round->warning_frame_lifecycle(lifecycle);
+	fixture.background_frame(state);
+	fixture.render_phases(state);
+	fixture.round->main_gauge_state(Fixture::gauge_state(state));
 	fixture.round->main_frame_footer_reached({});
 	expect(
 		fixture.round->ready() && !fixture.palette.dirty() &&
@@ -800,7 +1176,7 @@ void test_warning_interstitial_order_is_strict()
 	}
 	{
 		Fixture fixture;
-		fixture.round->warning_interstitial_started({{{true, false}}});
+		fixture.round->warning_interstitial_started(Fixture::warning_start());
 		fixture.round->warning_interstitial_sample({1U});
 		expect(
 			fixture.round->status() == MainRoundStatus::invalid_observation,
@@ -809,11 +1185,13 @@ void test_warning_interstitial_order_is_strict()
 	}
 	{
 		Fixture fixture;
-		fixture.round->warning_interstitial_started({{{true, false}}});
+		fixture.round->warning_interstitial_started(Fixture::warning_start());
 		for(std::uint8_t ordinal = 0U; ordinal < 27U; ++ordinal) {
 			fixture.round->warning_interstitial_sample({ordinal});
 		}
-		fixture.round->warning_interstitial_started({{{false, true}}});
+		fixture.round->warning_interstitial_started(
+			Fixture::warning_start(false, true)
+		);
 		expect(
 			fixture.round->status() == MainRoundStatus::invalid_observation,
 			"reject another warning start before sample 26's resumed suffix"
@@ -822,7 +1200,7 @@ void test_warning_interstitial_order_is_strict()
 	{
 		Fixture fixture;
 		auto state = fixture.state();
-		fixture.round->warning_interstitial_started({{{true, false}}});
+		fixture.round->warning_interstitial_started(Fixture::warning_start());
 		fixture.round->observe(
 			th03::detail::ObserverAccess::shots_enemies(state)
 		);
@@ -837,6 +1215,7 @@ void test_malformed_late_bullet_is_whole_phase_atomic()
 {
 	Fixture fixture;
 	auto state = fixture.state();
+	fixture.begin_frame(state);
 	fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
 	fixture.round->observe(th03::detail::ObserverAccess::fireballs(state));
 	const auto before = page_copy(fixture.raster, Page::zero);
@@ -884,7 +1263,7 @@ void test_players_common_bullets_insertion_order()
 	state.bullets[0U].center_x = static_cast<std::int16_t>(144 * 16);
 	state.bullets[0U].center_y = static_cast<std::int16_t>(314 * 16);
 	state.bullets[0U].player_id = 0U;
-	fixture.ordinary_phases(state);
+	fixture.terminal_phases(state);
 	expect(
 		fixture.round->ready() &&
 		fixture.raster.pixel(Page::zero, {168, 176}) == 13U,
@@ -945,10 +1324,16 @@ void test_repeat_round_startup_preserves_process_children()
 		),
 		"carry a dirty palette latch out of the terminal frame"
 	);
-	fixture.ordinary_phases(state);
+	auto terminal_warning = Fixture::idle_warning();
+	terminal_warning.players[0U].warning_step_before = 1U;
+	terminal_warning.players[0U].warning_step_after = 1U;
+	terminal_warning.players[0U].next_attack = GaugeBossAttackKind::boss;
+	fixture.round->warning_frame_lifecycle(terminal_warning);
+	fixture.background_frame(state);
+	fixture.render_phases(state);
 	expect(
 		fixture.round->repeat_round_startup(Fixture::hud_state()),
-		"perform the explicit route-1 repeat startup"
+		"terminal route-1 repeat skips a pending source warning portrait"
 	);
 	expect(
 		fixture.round->ready() && fixture.raster.access_page() == Page::zero &&
@@ -1006,7 +1391,15 @@ int main()
 	test_hit_circles_overwrite_fireballs();
 	test_background_is_synchronous_before_late_bombs();
 	test_background_failure_is_sticky();
+	test_warning_lifecycle_precedes_background();
+	test_background_precedes_entity_phase();
+	test_background_reads_complete_before_entity_phase();
+	test_type_b_background_read_count_and_overread();
 	test_terminal_no_footer_does_not_publish();
+	test_late_gauge_portrait_and_footer_order();
+	test_portrait_expectation_is_strict();
+	test_gauge_completion_prefix_order();
+	test_warning_gauge_child_failure_is_sticky();
 	test_warning_interstitial_tones_without_footer();
 	test_warning_interstitial_order_is_strict();
 	test_malformed_late_bullet_is_whole_phase_atomic();

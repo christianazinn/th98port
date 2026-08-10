@@ -62,6 +62,19 @@ enum class BackgroundObservedCall : std::uint8_t {
 	bomb_frame_step,
 };
 
+enum class WarningGaugeObservedCall : std::uint8_t {
+	gauge_attack_finished,
+	warning_interstitial_sample,
+	warning_frame_lifecycle,
+	background_frame,
+	shots_enemies,
+	fireballs,
+	players_bullets,
+	main_gauge_state,
+	warning_portrait_transition,
+	main_frame_footer_reached,
+};
+
 class BackgroundRecordingObserver final : public th03::GameplayObserver {
 public:
 	BackgroundRecordingObserver()
@@ -124,6 +137,11 @@ public:
 		bomb_common_steps.reserve(8U);
 		warning_interstitial_starts.reserve(2U);
 		warning_interstitial_samples.reserve(27U);
+		warning_lifecycles.reserve(2U);
+		gauge_attack_finishes.reserve(2U);
+		warning_portrait_transitions.reserve(2U);
+		main_gauge_states.reserve(2U);
+		warning_gauge_calls.reserve(16U);
 		main_frame_footers.reserve(2U);
 		background_bomb_calls.reserve(64U);
 		calls.reserve(80U);
@@ -222,6 +240,46 @@ public:
 		calls.push_back(ObservedCall::warning_interstitial_started);
 	}
 
+	void warning_frame_lifecycle(
+		const th03::WarningFrameLifecycle &lifecycle
+	) noexcept override
+	{
+		warning_lifecycles.push_back(lifecycle);
+		warning_gauge_calls.push_back(
+			WarningGaugeObservedCall::warning_frame_lifecycle
+		);
+	}
+
+	void gauge_attack_finished(
+		const th03::GaugeAttackFinished &finished
+	) noexcept override
+	{
+		gauge_attack_finishes.push_back(finished);
+		warning_gauge_calls.push_back(
+			WarningGaugeObservedCall::gauge_attack_finished
+		);
+	}
+
+	void warning_portrait_transition(
+		const th03::WarningPortraitTransition &transition
+	) noexcept override
+	{
+		warning_portrait_transitions.push_back(transition);
+		warning_gauge_calls.push_back(
+			WarningGaugeObservedCall::warning_portrait_transition
+		);
+	}
+
+	void main_gauge_state(
+		const th03::MainGaugeState &state
+	) noexcept override
+	{
+		main_gauge_states.push_back(state);
+		warning_gauge_calls.push_back(
+			WarningGaugeObservedCall::main_gauge_state
+		);
+	}
+
 	void warning_interstitial_sample(
 		const th03::WarningInterstitialSample &sample
 	) noexcept override
@@ -231,6 +289,9 @@ public:
 			BackgroundObservedCall::warning_sample
 		);
 		calls.push_back(ObservedCall::warning_interstitial_sample);
+		warning_gauge_calls.push_back(
+			WarningGaugeObservedCall::warning_interstitial_sample
+		);
 	}
 
 	void main_background_frame(
@@ -238,6 +299,9 @@ public:
 	) noexcept override
 	{
 		background_bomb_calls.push_back(BackgroundObservedCall::frame);
+		warning_gauge_calls.push_back(
+			WarningGaugeObservedCall::background_frame
+		);
 	}
 
 	void main_background_random_read(
@@ -253,12 +317,18 @@ public:
 	{
 		main_frame_footers.push_back(footer);
 		calls.push_back(ObservedCall::main_frame_footer_reached);
+		warning_gauge_calls.push_back(
+			WarningGaugeObservedCall::main_frame_footer_reached
+		);
 	}
 
 	void observe(const th03::ShotsEnemiesView &view) noexcept override
 	{
 		phases.push_back(ObservedPhase::shots_enemies);
 		calls.push_back(ObservedCall::shots_enemies);
+		warning_gauge_calls.push_back(
+			WarningGaugeObservedCall::shots_enemies
+		);
 		shots_enemies_context = view.context();
 		for(std::size_t slot = 0U; slot < view.shot_count; ++slot) {
 			const auto fact = view.shot(
@@ -280,6 +350,9 @@ public:
 	{
 		phases.push_back(ObservedPhase::fireballs);
 		calls.push_back(ObservedCall::fireballs);
+		warning_gauge_calls.push_back(
+			WarningGaugeObservedCall::fireballs
+		);
 		fireballs_context = view.context();
 		for(std::size_t slot = 0U; slot < view.fireball_count; ++slot) {
 			const auto fact = view.fireball(
@@ -295,6 +368,9 @@ public:
 	{
 		phases.push_back(ObservedPhase::players_bullets);
 		calls.push_back(ObservedCall::players_bullets);
+		warning_gauge_calls.push_back(
+			WarningGaugeObservedCall::players_bullets
+		);
 		players_bullets_context = view.context();
 		for(std::size_t player = 0U; player < view.player_count; ++player) {
 			const auto fact = view.player(static_cast<th03::PlayerId>(player));
@@ -336,6 +412,12 @@ public:
 	std::vector<th03::BombCommonEffectStep> bomb_common_steps;
 	std::vector<th03::WarningInterstitialStarted> warning_interstitial_starts;
 	std::vector<th03::WarningInterstitialSample> warning_interstitial_samples;
+	std::vector<th03::WarningFrameLifecycle> warning_lifecycles;
+	std::vector<th03::GaugeAttackFinished> gauge_attack_finishes;
+	std::vector<th03::WarningPortraitTransition>
+		warning_portrait_transitions;
+	std::vector<th03::MainGaugeState> main_gauge_states;
+	std::vector<WarningGaugeObservedCall> warning_gauge_calls;
 	std::vector<th03::MainFrameFooterReached> main_frame_footers;
 	std::vector<BackgroundObservedCall> background_bomb_calls;
 	th03::MainPhaseContext shots_enemies_context{};
@@ -2060,6 +2142,11 @@ void test_recorded_pause_completion()
 			invalid_recording.bomb_common_steps.empty() &&
 			invalid_recording.warning_interstitial_starts.empty() &&
 			invalid_recording.warning_interstitial_samples.empty() &&
+			invalid_recording.warning_lifecycles.empty() &&
+			invalid_recording.gauge_attack_finishes.empty() &&
+			invalid_recording.warning_portrait_transitions.empty() &&
+			invalid_recording.main_gauge_states.empty() &&
+			invalid_recording.warning_gauge_calls.empty() &&
 			invalid_recording.main_frame_footers.empty() &&
 			invalid_recording.calls.empty(),
 			"an invalid input context emits no observer callback"
@@ -2152,13 +2239,27 @@ void test_warning_completion()
 			"a rejected warning interstitial emits no start fact"
 		);
 		state.warning_flag[0U] = th03::detail::WarningFlag::flash_white;
+		state.gba_flag_next = {
+			th03::detail::GaugeBossAttackFlag::gauge_pellet_init,
+			th03::detail::GaugeBossAttackFlag::boss,
+		};
+		state.gba_gauge_level = {7U, 13U};
+		state.gba_boss_level = 11U;
 		check(
 			th03::detail::gameplay_frame_suffix_before_interstitial(
 				state, &recording
 			) &&
 				recording.warning_interstitial_starts ==
 					std::vector<th03::WarningInterstitialStarted>{
-						{.flashing_players = {true, false}},
+						{
+							.flashing_players = {true, false},
+							.next_attacks = {
+								th03::GaugeBossAttackKind::gauge_pellet,
+								th03::GaugeBossAttackKind::boss,
+							},
+							.gauge_levels = {7U, 13U},
+							.boss_level = 11U,
+						},
 					} &&
 				state.warning_flag[0U] ==
 					th03::detail::WarningFlag::flash_red,
@@ -2210,10 +2311,9 @@ void test_warning_completion()
 		warning.status == th03::StepStatus::phase_transition &&
 		recording.phases.empty() && recording.spawns.size() == 1U &&
 		recording.poses.size() == 4U &&
-		recording.warning_interstitial_starts ==
-			std::vector<th03::WarningInterstitialStarted>{
-				{.flashing_players = {true, false}},
-			} &&
+		recording.warning_interstitial_starts.size() == 1U &&
+		recording.warning_interstitial_starts[0U].flashing_players ==
+			std::array<bool, 2>{true, false} &&
 		recording.main_frame_footers.empty() &&
 		std::vector<ObservedCall>(
 			recording.calls.begin() +
@@ -2243,6 +2343,7 @@ void test_warning_completion()
 		);
 	}
 	recording.background_bomb_calls.clear();
+	recording.warning_gauge_calls.clear();
 	const auto calls_before_final_sample = recording.calls.size();
 	const auto completed = game->step(
 		{}, th03::InputContext::interstitial, &recording
@@ -2280,6 +2381,283 @@ void test_warning_completion()
 		} && recording.background_bomb_calls == expected_resumed_order,
 		"warning sample 26 resumes into BackgroundFrame and all initial reads before later suffix phases"
 	);
+	check(
+		recording.warning_gauge_calls ==
+			std::vector<WarningGaugeObservedCall>{
+				WarningGaugeObservedCall::warning_interstitial_sample,
+				WarningGaugeObservedCall::warning_frame_lifecycle,
+				WarningGaugeObservedCall::background_frame,
+				WarningGaugeObservedCall::shots_enemies,
+				WarningGaugeObservedCall::fireballs,
+				WarningGaugeObservedCall::players_bullets,
+				WarningGaugeObservedCall::main_gauge_state,
+				WarningGaugeObservedCall::main_frame_footer_reached,
+			},
+		"warning sample 26 precedes the lifecycle and resumed suffix"
+	);
+}
+
+void test_warning_gauge_semantic_observation()
+{
+	with_live_state([](auto &base) {
+		base.hud_start_flag = 1U;
+		base.warning_flag = {
+			th03::detail::WarningFlag::flash_red,
+			th03::detail::WarningFlag::flash_red_end,
+		};
+		base.gba_flag_next = {
+			th03::detail::GaugeBossAttackFlag::gauge_bullet_init,
+			th03::detail::GaugeBossAttackFlag::boss,
+		};
+		base.gba_flag_active = {
+			th03::detail::GaugeBossAttackFlag::gauge_pellet_active,
+			th03::detail::GaugeBossAttackFlag::none,
+		};
+		base.gba_gauge_level = {4U, 13U};
+		base.gba_boss_level = 11U;
+		base.round_id = 2U;
+		base.round_or_result_frame = 0x1234U;
+		base.playfield_fg_shift_x = {-7, 9};
+		base.players[0U].gauge_charged = 0x123U;
+		base.players[0U].gauge_avail = 0x456U;
+		base.players[0U].hyper_active = 7U;
+		base.players[1U].gauge_charged = 0x789U;
+		base.players[1U].gauge_avail = 0xABCU;
+		base.players[1U].hyper_active = 8U;
+
+		auto null_state = base;
+		auto discard_state = base;
+		auto record_state = base;
+		DiscardObserver discard;
+		RecordingObserver recording;
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			null_state, nullptr
+		);
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			discard_state, &discard
+		);
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			record_state, &recording
+		);
+		check(
+			observed_gameplay_equal(null_state, discard_state) &&
+			observed_gameplay_equal(null_state, record_state),
+			"warning/Gauge facts preserve gameplay state and shared RNG"
+		);
+		check(
+			recording.warning_lifecycles ==
+				std::vector<th03::WarningFrameLifecycle>{{
+					.players = {
+						th03::WarningPlayerLifecycle{
+							.warning_step_before = 3U,
+							.warning_step_after = 4U,
+							.next_attack =
+								th03::GaugeBossAttackKind::gauge_bullet,
+							.active_attack =
+								th03::GaugeBossAttackKind::gauge_pellet,
+						},
+						th03::WarningPlayerLifecycle{
+							.warning_step_before = 33U,
+							.warning_step_after = 0U,
+							.next_attack = th03::GaugeBossAttackKind::boss,
+							.active_attack = th03::GaugeBossAttackKind::boss,
+						},
+					},
+					.gauge_levels = {4U, 13U},
+					.boss_level = 11U,
+				}} &&
+			recording.main_gauge_states ==
+				std::vector<th03::MainGaugeState>{{
+					.context = {
+						.round_id = 2U,
+						.round_or_result_frame = 0x1234U,
+						.playfield_fg_shift_x = {-7, 9},
+					},
+					.players = {
+						th03::MainGaugePlayerState{0x123U, 0x456U, 7U},
+						th03::MainGaugePlayerState{0x789U, 0xABCU, 8U},
+					},
+				}} &&
+			recording.warning_gauge_calls ==
+				std::vector<WarningGaugeObservedCall>{
+					WarningGaugeObservedCall::warning_frame_lifecycle,
+					WarningGaugeObservedCall::background_frame,
+					WarningGaugeObservedCall::shots_enemies,
+					WarningGaugeObservedCall::fireballs,
+					WarningGaugeObservedCall::players_bullets,
+					WarningGaugeObservedCall::main_gauge_state,
+					WarningGaugeObservedCall::main_frame_footer_reached,
+				},
+			"warning lifecycle precedes background and late Gauge state follows the result gate"
+		);
+	});
+
+	with_live_state([](auto &portraits) {
+		portraits.hud_start_flag = 1U;
+		portraits.warning_flag = {
+			th03::detail::WarningFlag::portrait,
+			th03::detail::WarningFlag::portrait,
+		};
+		RecordingObserver recording;
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			portraits, &recording
+		);
+		check(
+			recording.warning_portrait_transitions ==
+				std::vector<th03::WarningPortraitTransition>{
+					{th03::PlayerId::p1},
+					{th03::PlayerId::p2},
+				} &&
+			portraits.warning_flag ==
+				std::array<th03::detail::WarningFlag, 2>{
+					th03::detail::WarningFlag::flash_white,
+					th03::detail::WarningFlag::flash_white,
+				} &&
+			recording.warning_gauge_calls ==
+				std::vector<WarningGaugeObservedCall>{
+					WarningGaugeObservedCall::warning_frame_lifecycle,
+					WarningGaugeObservedCall::background_frame,
+					WarningGaugeObservedCall::shots_enemies,
+					WarningGaugeObservedCall::fireballs,
+					WarningGaugeObservedCall::players_bullets,
+					WarningGaugeObservedCall::main_gauge_state,
+					WarningGaugeObservedCall::warning_portrait_transition,
+					WarningGaugeObservedCall::warning_portrait_transition,
+					WarningGaugeObservedCall::main_frame_footer_reached,
+				},
+			"late warning portraits retain P1-then-P2 order after the Gauge state"
+		);
+	});
+
+	with_live_state([](auto &terminal) {
+		terminal.hud_start_flag = 1U;
+		terminal.warning_flag[0U] = th03::detail::WarningFlag::portrait;
+		terminal.defeat_flag = th03::detail::DefeatFlag::banner;
+		terminal.players[0U].rounds_won = 2U;
+		terminal.result_transition_complete = true;
+		RecordingObserver recording;
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			terminal, &recording
+		);
+		check(
+			recording.main_gauge_states.empty() &&
+			recording.warning_portrait_transitions.empty() &&
+			recording.warning_gauge_calls ==
+				std::vector<WarningGaugeObservedCall>{
+					WarningGaugeObservedCall::warning_frame_lifecycle,
+					WarningGaugeObservedCall::background_frame,
+					WarningGaugeObservedCall::shots_enemies,
+					WarningGaugeObservedCall::fireballs,
+					WarningGaugeObservedCall::players_bullets,
+				},
+			"the result-control early return suppresses Gauge and portrait facts"
+		);
+	});
+
+	constexpr std::array<std::int8_t, 9> paletted_characters{
+		1, 3, 5, 7, 9, 11, 13, 15, 17,
+	};
+	for(std::size_t character = 0U;
+		character < paletted_characters.size();
+		++character) {
+		auto base = make_live_state();
+		base.hud_start_flag = 1U;
+		base.players[0U].paletted_character = paletted_characters[character];
+		base.gba_flag_active[0U] =
+			th03::detail::GaugeBossAttackFlag::gauge_bullet_active;
+		base.gauge_pattern_param_a[0U] = 7U;
+		base.gauge_pattern_param_b[0U] = 0xFFU;
+		switch(character) {
+		case 0U:
+			base.reimu_gauge_pattern_frame[0U] = 0x41U;
+			break;
+		case 1U:
+			base.mima_gauge_pattern_frame[0U] = 0x41U;
+			break;
+		case 2U:
+			base.marisa_gauge_pattern_frame[0U] = 1U;
+			base.marisa_gauge_pattern_y[0U] = 368 << 4;
+			break;
+		case 3U:
+			base.ellen_gauge_pattern_frame[0U] = 8U;
+			base.ellen_gauge_pattern_x[0U] = 0;
+			base.ellen_gauge_pattern_y[0U] = 144 << 4;
+			break;
+		case 4U:
+			base.kotohime_gauge_pattern_frame[0U] = 0x80U;
+			break;
+		case 5U:
+			base.kana_gauge_pattern_frame[0U] = 0x80U;
+			break;
+		case 6U:
+			base.rikako_gauge_pattern_frame[0U] = 0x80U;
+			break;
+		case 7U:
+			base.chiyuri_gauge_pattern_frame[0U] = 1U;
+			base.gauge_pattern_param_a[0U] = 2U;
+			break;
+		case 8U:
+			base.yumemi_gauge_pattern_frame[0U] = 0x38U;
+			break;
+		default:
+			break;
+		}
+
+		auto null_state = base;
+		auto discard_state = base;
+		auto record_state = base;
+		DiscardObserver discard;
+		RecordingObserver recording;
+		check(
+			th03::detail::gameplay_frame_prefix(
+				null_state, th03::GameContent{}, nullptr
+			) &&
+			th03::detail::gameplay_frame_prefix(
+				discard_state, th03::GameContent{}, &discard
+			) &&
+			th03::detail::gameplay_frame_prefix(
+				record_state, th03::GameContent{}, &recording
+			),
+			"each character Gauge completion fixture reaches its prefix boundary"
+		);
+		check(
+			observed_gameplay_equal(null_state, discard_state) &&
+			observed_gameplay_equal(null_state, record_state) &&
+			record_state.gba_flag_active[0U] ==
+				th03::detail::GaugeBossAttackFlag::none &&
+			recording.gauge_attack_finishes ==
+				std::vector<th03::GaugeAttackFinished>{{
+					.attacker = th03::PlayerId::p1,
+					.target = th03::PlayerId::p2,
+				}},
+			"all nine character callbacks emit one observer-invariant Gauge completion"
+		);
+	}
+
+	with_live_state([](auto &simultaneous) {
+		simultaneous.hud_start_flag = 1U;
+		simultaneous.players[0U].paletted_character = 1;
+		simultaneous.players[1U].paletted_character = 2;
+		simultaneous.gba_flag_active = {
+			th03::detail::GaugeBossAttackFlag::gauge_pellet_active,
+			th03::detail::GaugeBossAttackFlag::gauge_bullet_active,
+		};
+		simultaneous.reimu_gauge_pattern_frame = {0x41U, 0x41U};
+		simultaneous.gauge_pattern_param_a = {7U, 7U};
+		simultaneous.gauge_pattern_param_b = {0xFFU, 0xFFU};
+		RecordingObserver recording;
+		(void)th03::detail::gameplay_frame_prefix(
+			simultaneous, th03::GameContent{}, &recording
+		);
+		check(
+			recording.gauge_attack_finishes ==
+				std::vector<th03::GaugeAttackFinished>{
+					{th03::PlayerId::p1, th03::PlayerId::p2},
+					{th03::PlayerId::p2, th03::PlayerId::p1},
+				},
+			"simultaneous Gauge completions retain source P1-then-P2 order"
+		);
+	});
 }
 
 void test_main_effect_observer_contract()
@@ -2879,6 +3257,7 @@ int main()
 	test_recorded_pause_completion();
 	test_recorded_pause_prefix_bullet_once();
 	test_warning_completion();
+	test_warning_gauge_semantic_observation();
 	test_main_effect_observer_contract();
 
 	if(failures != 0) {

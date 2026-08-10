@@ -356,6 +356,13 @@ enum class BombCommonEffectKind : std::uint8_t {
 	kotohime,
 };
 
+enum class GaugeBossAttackKind : std::uint8_t {
+	none,
+	gauge_pellet,
+	gauge_bullet,
+	boss,
+};
+
 // Kana and Kotohime derive their common-effect positions from source-shared
 // visual globals. One ordered step for every active callback lets a presenter
 // reproduce even non-spawning writes without putting presentation state in core.
@@ -375,11 +382,86 @@ struct WarningInterstitialStarted {
 	// Captured while warning flags are still flash_white, before the source
 	// converts them to flash_red.
 	std::array<bool, 2> flashing_players{};
+	std::array<GaugeBossAttackKind, 2> next_attacks{};
+	std::array<std::uint8_t, 2> gauge_levels{};
+	std::uint8_t boss_level = 0;
 
 	friend bool operator==(
 		const WarningInterstitialStarted &,
 		const WarningInterstitialStarted &
 	) = default;
+};
+
+struct WarningPlayerLifecycle {
+	// Exact semantic progress through none/portrait/white/red warning states.
+	// Values 3 through 33 are the source's individual red-flash steps.
+	std::uint8_t warning_step_before = 0;
+	std::uint8_t warning_step_after = 0;
+	GaugeBossAttackKind next_attack = GaugeBossAttackKind::none;
+	GaugeBossAttackKind active_attack = GaugeBossAttackKind::none;
+
+	friend bool operator==(
+		const WarningPlayerLifecycle &,
+		const WarningPlayerLifecycle &
+	) = default;
+};
+
+// One fact after both source warning callbacks. Array order retains P1 then P2.
+struct WarningFrameLifecycle {
+	std::array<WarningPlayerLifecycle, 2> players{};
+	// SUB_CACB rereads these live values on every red-warning redraw. They can
+	// change after the blocking white flash while another player's attack work
+	// continues.
+	std::array<std::uint8_t, 2> gauge_levels{};
+	std::uint8_t boss_level = 0;
+
+	friend bool operator==(
+		const WarningFrameLifecycle &,
+		const WarningFrameLifecycle &
+	) = default;
+};
+
+// Emitted exactly when one character Gauge callback disables its completed
+// attack. The source restores the target player's saved palette entry here.
+struct GaugeAttackFinished {
+	PlayerId attacker = PlayerId::p1;
+	PlayerId target = PlayerId::p2;
+
+	friend bool operator==(
+		const GaugeAttackFinished &,
+		const GaugeAttackFinished &
+	) = default;
+};
+
+// The late source callback draws this player's selected Extra portrait before
+// advancing the warning to its blocking white-flash state.
+struct WarningPortraitTransition {
+	PlayerId player = PlayerId::p1;
+
+	friend bool operator==(
+		const WarningPortraitTransition &,
+		const WarningPortraitTransition &
+	) = default;
+};
+
+struct MainGaugePlayerState {
+	std::uint16_t gauge_charged = 0;
+	std::uint16_t gauge_avail = 0;
+	std::uint8_t hyper_active = 0;
+
+	friend bool operator==(
+		const MainGaugePlayerState &,
+		const MainGaugePlayerState &
+	) = default;
+};
+
+// Late nonterminal Gauge rendering inputs, after the source's result gate.
+struct MainGaugeState {
+	MainPhaseContext context{};
+	std::array<MainGaugePlayerState, 2> players{};
+
+	friend bool operator==(const MainGaugeState &, const MainGaugeState &) =
+		default;
 };
 
 struct WarningInterstitialSample {
@@ -570,6 +652,18 @@ public:
 	virtual void warning_interstitial_started(
 		const WarningInterstitialStarted &
 	) noexcept
+	{}
+	virtual void warning_frame_lifecycle(
+		const WarningFrameLifecycle &
+	) noexcept
+	{}
+	virtual void gauge_attack_finished(const GaugeAttackFinished &) noexcept
+	{}
+	virtual void warning_portrait_transition(
+		const WarningPortraitTransition &
+	) noexcept
+	{}
+	virtual void main_gauge_state(const MainGaugeState &) noexcept
 	{}
 	virtual void warning_interstitial_sample(
 		const WarningInterstitialSample &

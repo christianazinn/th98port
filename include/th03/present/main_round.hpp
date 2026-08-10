@@ -14,6 +14,7 @@
 #include "th03/present/main_palette.hpp"
 #include "th03/present/main_players_bullets.hpp"
 #include "th03/present/main_static.hpp"
+#include "th03/present/main_warning_gauge.hpp"
 #include "th03/present/source_surface.hpp"
 
 namespace th03::present {
@@ -25,17 +26,15 @@ enum class MainRoundMissingPhase : std::uint8_t {
 	boss,
 	extra_attack,
 	charge_shot,
-	warning_and_gauge,
 	hud,
 	result,
 };
 
-inline constexpr std::array<MainRoundMissingPhase, 6U>
+inline constexpr std::array<MainRoundMissingPhase, 5U>
 	main_round_missing_phases{{
 		MainRoundMissingPhase::boss,
 		MainRoundMissingPhase::extra_attack,
 		MainRoundMissingPhase::charge_shot,
-		MainRoundMissingPhase::warning_and_gauge,
 		MainRoundMissingPhase::hud,
 		MainRoundMissingPhase::result,
 	}};
@@ -49,6 +48,7 @@ enum class MainRoundStatus : std::uint8_t {
 	effects_failed,
 	players_bullets_failed,
 	bombs_failed,
+	warning_gauge_failed,
 	page_state_mismatch,
 	page_transaction_failed,
 	repeat_startup_failed,
@@ -80,7 +80,8 @@ public:
 		MainEntitiesPresenter &entities,
 		MainEffectsPresenter &effects,
 		MainPlayersBulletsPresenter &players_bullets,
-		MainBombsPresenter &bombs
+		MainBombsPresenter &bombs,
+		MainWarningGaugePresenter &warning_gauge
 	) noexcept;
 	MainRoundPresenter(const MainRoundPresenter &) = delete;
 	MainRoundPresenter &operator=(const MainRoundPresenter &) = delete;
@@ -113,6 +114,16 @@ public:
 	void warning_interstitial_sample(
 		const WarningInterstitialSample &sample
 	) noexcept override;
+	void warning_frame_lifecycle(
+		const WarningFrameLifecycle &lifecycle
+	) noexcept override;
+	void gauge_attack_finished(
+		const GaugeAttackFinished &finished
+	) noexcept override;
+	void warning_portrait_transition(
+		const WarningPortraitTransition &transition
+	) noexcept override;
+	void main_gauge_state(const MainGaugeState &state) noexcept override;
 	void main_frame_footer_reached(
 		const MainFrameFooterReached &footer
 	) noexcept override;
@@ -153,7 +164,8 @@ private:
 		shots_enemies,
 		fireballs,
 		players_bullets,
-		footer,
+		result_gate,
+		late_gauge,
 	};
 
 	void fail(MainRoundStatus status) noexcept;
@@ -173,14 +185,22 @@ private:
 	MainEffectsPresenter *effects_;
 	MainPlayersBulletsPresenter *players_bullets_;
 	MainBombsPresenter *bombs_;
+	MainWarningGaugePresenter *warning_gauge_;
 	MainPlayerFacts player_facts_{};
 	MainBulletFacts bullet_facts_{};
 	MainBulletTrails bullet_trails_{};
 	MainPhaseContext frame_context_{};
 	Phase phase_ = Phase::shots_enemies;
 	std::uint8_t next_warning_sample_ = 0;
+	std::uint8_t next_gauge_finish_player_ = 0;
+	std::uint8_t expected_portrait_mask_ = 0;
 	bool warning_interstitial_active_ = false;
 	bool warning_suffix_pending_ = false;
+	bool warning_lifecycle_seen_ = false;
+	bool background_frame_seen_ = false;
+	std::uint8_t background_round_id_ = 0;
+	std::uint16_t background_round_or_result_frame_ = 0;
+	std::uint8_t background_frame_reads_remaining_ = 0;
 	MainRoundStatus status_ = MainRoundStatus::ready;
 };
 

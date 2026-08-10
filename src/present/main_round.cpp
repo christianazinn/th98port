@@ -6,6 +6,11 @@
 #include <span>
 
 namespace th03::present {
+namespace {
+
+constexpr std::uint8_t warning_portrait_step = 1U;
+
+} // namespace
 
 MainRoundPresenter::MainRoundPresenter(
 	Raster &raster,
@@ -16,7 +21,8 @@ MainRoundPresenter::MainRoundPresenter(
 	MainEntitiesPresenter &entities,
 	MainEffectsPresenter &effects,
 	MainPlayersBulletsPresenter &players_bullets,
-	MainBombsPresenter &bombs
+	MainBombsPresenter &bombs,
+	MainWarningGaugePresenter &warning_gauge
 ) noexcept :
 	raster_(&raster),
 	tram_(&tram),
@@ -26,7 +32,8 @@ MainRoundPresenter::MainRoundPresenter(
 	entities_(&entities),
 	effects_(&effects),
 	players_bullets_(&players_bullets),
-	bombs_(&bombs)
+	bombs_(&bombs),
+	warning_gauge_(&warning_gauge)
 {
 	if(!static_->started() || !palette_->baseline_ready()) {
 		status_ = MainRoundStatus::invalid_setup;
@@ -50,6 +57,10 @@ MainRoundPresenter::MainRoundPresenter(
 	}
 	if(!bombs_->ready()) {
 		status_ = MainRoundStatus::bombs_failed;
+		return;
+	}
+	if(!warning_gauge_->ready()) {
+		status_ = MainRoundStatus::warning_gauge_failed;
 		return;
 	}
 	if(!source_page_ready()) {
@@ -274,10 +285,15 @@ void MainRoundPresenter::warning_interstitial_started(
 	}
 	if(
 		phase_ != Phase::shots_enemies || warning_interstitial_active_ ||
-		warning_suffix_pending_ ||
+		warning_suffix_pending_ || warning_lifecycle_seen_ ||
 		(!started.flashing_players[0U] && !started.flashing_players[1U])
 	) {
 		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	warning_gauge_->warning_interstitial_started(started);
+	if(!warning_gauge_->ready()) {
+		fail(MainRoundStatus::warning_gauge_failed);
 		return;
 	}
 	warning_interstitial_active_ = true;
@@ -299,12 +315,11 @@ void MainRoundPresenter::warning_interstitial_sample(
 		return;
 	}
 
-	// SUB_CA3C() shows 100, 150, ... immediately after each accepted input
-	// latch. These direct shows preserve any deferred palette_changed latch.
-	palette_->set_tone_and_show_now(
-		*raster_,
-		static_cast<std::int16_t>(100 + (50 * (sample.ordinal & 1U)))
-	);
+	warning_gauge_->warning_interstitial_sample(sample);
+	if(!warning_gauge_->ready()) {
+		fail(MainRoundStatus::warning_gauge_failed);
+		return;
+	}
 	if(sample.ordinal == 26U) {
 		warning_interstitial_active_ = false;
 		warning_suffix_pending_ = true;
@@ -312,6 +327,108 @@ void MainRoundPresenter::warning_interstitial_sample(
 		return;
 	}
 	next_warning_sample_++;
+}
+
+void MainRoundPresenter::warning_frame_lifecycle(
+	const WarningFrameLifecycle &lifecycle
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	if(
+		phase_ != Phase::shots_enemies || warning_interstitial_active_ ||
+		warning_lifecycle_seen_
+	) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	warning_gauge_->warning_frame_lifecycle(lifecycle);
+	if(!warning_gauge_->ready()) {
+		fail(MainRoundStatus::warning_gauge_failed);
+		return;
+	}
+	warning_lifecycle_seen_ = true;
+	warning_suffix_pending_ = false;
+	expected_portrait_mask_ = 0U;
+	for(std::size_t player = 0U; player < lifecycle.players.size(); ++player) {
+		if(lifecycle.players[player].warning_step_before ==
+			warning_portrait_step) {
+			expected_portrait_mask_ = static_cast<std::uint8_t>(
+				expected_portrait_mask_ | (1U << player)
+			);
+		}
+	}
+}
+
+void MainRoundPresenter::gauge_attack_finished(
+	const GaugeAttackFinished &finished
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	const auto attacker = static_cast<std::size_t>(finished.attacker);
+	if(
+		phase_ != Phase::shots_enemies || warning_interstitial_active_ ||
+		warning_suffix_pending_ || warning_lifecycle_seen_ ||
+		background_frame_seen_ || attacker >= 2U ||
+		attacker < next_gauge_finish_player_
+	) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	warning_gauge_->gauge_attack_finished(finished);
+	if(!warning_gauge_->ready()) {
+		fail(MainRoundStatus::warning_gauge_failed);
+		return;
+	}
+	next_gauge_finish_player_ = static_cast<std::uint8_t>(attacker + 1U);
+}
+
+void MainRoundPresenter::warning_portrait_transition(
+	const WarningPortraitTransition &transition
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	const auto player = static_cast<std::size_t>(transition.player);
+	const auto player_bit = (player < 2U)
+		? static_cast<std::uint8_t>(1U << player)
+		: std::uint8_t{0U};
+	const auto lower_mask = static_cast<std::uint8_t>(player_bit - 1U);
+	if(phase_ != Phase::late_gauge || player >= 2U ||
+		(expected_portrait_mask_ & player_bit) == 0U ||
+		(expected_portrait_mask_ & lower_mask) != 0U) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	warning_gauge_->warning_portrait_transition(transition);
+	if(!warning_gauge_->ready()) {
+		fail(MainRoundStatus::warning_gauge_failed);
+		return;
+	}
+	expected_portrait_mask_ = static_cast<std::uint8_t>(
+		expected_portrait_mask_ & static_cast<std::uint8_t>(~player_bit)
+	);
+}
+
+void MainRoundPresenter::main_gauge_state(const MainGaugeState &state) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	if(phase_ != Phase::result_gate || !same_frame(state.context)) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	warning_gauge_->main_gauge_state(state);
+	if(!warning_gauge_->ready()) {
+		fail(MainRoundStatus::warning_gauge_failed);
+		return;
+	}
+	phase_ = Phase::late_gauge;
 }
 
 void MainRoundPresenter::main_background_initialize(
@@ -336,6 +453,7 @@ void MainRoundPresenter::main_background_frame(
 	}
 	if(
 		phase_ != Phase::shots_enemies || warning_interstitial_active_ ||
+		!warning_lifecycle_seen_ || background_frame_seen_ ||
 		!source_page_ready()
 	) {
 		fail(
@@ -347,7 +465,17 @@ void MainRoundPresenter::main_background_frame(
 	background_->main_background_frame(frame);
 	if(!background_->ready()) {
 		fail(MainRoundStatus::background_failed);
+		return;
 	}
+	background_frame_seen_ = true;
+	background_round_id_ = frame.round_id;
+	background_round_or_result_frame_ = frame.round_or_result_frame;
+	background_frame_reads_remaining_ =
+		(frame.phase == MainBackgroundPhase::initial)
+			? static_cast<std::uint8_t>(
+				(frame.kind == MainBackgroundKind::type_a) ? 48U : 40U
+			)
+			: 0U;
 }
 
 void MainRoundPresenter::main_background_random_read(
@@ -357,9 +485,17 @@ void MainRoundPresenter::main_background_random_read(
 	if(!ready()) {
 		return;
 	}
+	if(background_frame_seen_ && background_frame_reads_remaining_ == 0U) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
 	background_->main_background_random_read(read);
 	if(!background_->ready()) {
 		fail(MainRoundStatus::background_failed);
+		return;
+	}
+	if(background_frame_seen_) {
+		background_frame_reads_remaining_--;
 	}
 }
 
@@ -370,6 +506,8 @@ void MainRoundPresenter::observe(const ShotsEnemiesView &view) noexcept
 	}
 	if(
 		phase_ != Phase::shots_enemies || warning_interstitial_active_ ||
+		!warning_lifecycle_seen_ || !background_frame_seen_ ||
+		background_frame_reads_remaining_ != 0U ||
 		!source_page_ready()
 	) {
 		fail(
@@ -378,13 +516,19 @@ void MainRoundPresenter::observe(const ShotsEnemiesView &view) noexcept
 		);
 		return;
 	}
-	frame_context_ = view.context();
+	const auto context = view.context();
+	if(background_frame_seen_ &&
+		(background_round_id_ != context.round_id ||
+			background_round_or_result_frame_ != context.round_or_result_frame)) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	frame_context_ = context;
 	entities_->observe(view);
 	if(!entities_->ready()) {
 		fail(MainRoundStatus::entities_failed);
 		return;
 	}
-	warning_suffix_pending_ = false;
 	phase_ = Phase::fireballs;
 }
 
@@ -483,7 +627,7 @@ void MainRoundPresenter::observe(const PlayersBulletsView &view) noexcept
 		}
 		return;
 	}
-	phase_ = Phase::footer;
+	phase_ = Phase::result_gate;
 }
 
 void MainRoundPresenter::main_frame_footer_reached(
@@ -493,7 +637,7 @@ void MainRoundPresenter::main_frame_footer_reached(
 	if(!ready()) {
 		return;
 	}
-	if(phase_ != Phase::footer) {
+	if(phase_ != Phase::late_gauge || expected_portrait_mask_ != 0U) {
 		fail(MainRoundStatus::invalid_observation);
 		return;
 	}
@@ -509,6 +653,11 @@ void MainRoundPresenter::main_frame_footer_reached(
 		return;
 	}
 	phase_ = Phase::shots_enemies;
+	warning_lifecycle_seen_ = false;
+	background_frame_seen_ = false;
+	background_frame_reads_remaining_ = 0U;
+	next_gauge_finish_player_ = 0U;
+	expected_portrait_mask_ = 0U;
 }
 
 bool MainRoundPresenter::repeat_round_startup(
@@ -518,7 +667,7 @@ bool MainRoundPresenter::repeat_round_startup(
 	if(!ready()) {
 		return false;
 	}
-	if(phase_ != Phase::footer) {
+	if(phase_ != Phase::result_gate) {
 		fail(MainRoundStatus::invalid_observation);
 		return false;
 	}
@@ -534,7 +683,12 @@ bool MainRoundPresenter::repeat_round_startup(
 	phase_ = Phase::shots_enemies;
 	warning_interstitial_active_ = false;
 	warning_suffix_pending_ = false;
+	warning_lifecycle_seen_ = false;
+	background_frame_seen_ = false;
+	background_frame_reads_remaining_ = 0U;
 	next_warning_sample_ = 0U;
+	next_gauge_finish_player_ = 0U;
+	expected_portrait_mask_ = 0U;
 	return true;
 }
 

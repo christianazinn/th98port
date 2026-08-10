@@ -76,6 +76,15 @@ void main_hud_wipe(Tram &tram) noexcept;
 	const MainHudState &state
 ) noexcept;
 
+// Exact reusable gauge-level pair written by hud_static_gauge_levels_put().
+// Warning startup redraws both players through this same source helper.
+[[nodiscard]] bool main_hud_gauge_levels_put(
+	Tram &tram,
+	std::size_t player_id,
+	std::uint8_t gauge_level,
+	std::uint8_t boss_level
+) noexcept;
+
 // Draws the exact six patterns selected by sub_E266() to page 1 and then page
 // 0. The decoded sheets must have the exact 32x32, 9-glyph character layout.
 [[nodiscard]] bool main_prepare_shot_source_sheet(

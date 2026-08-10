@@ -1245,8 +1245,13 @@ using fixed presenter-owned pools and source-exact GRCG vectors.
 `MainPaletteState` owns the one process RGB8 snapshot and explicit dirty latch;
 the coordinator applies exact immediate defeat tones and the 27-sample warning
 100/150 alternation, and consumes the footer fact for deferred palette apply
-before page publication. Remaining Warning/Gauge palette and portrait routes
-stay named gaps rather than approximations.
+before page publication. The process-scoped Warning/Gauge presenter now owns
+the exact gaiji text, live level redraws, shared +13/-13 and active +/-4 palette
+accumulator, selected EX.MRS portraits, complete two-playfield hidden-atlas
+copy, and late charged/available/hyper bars. The coordinator requires the
+source lifecycle-before-background order and the result-gated Gauge/portrait
+suffix before accepting a footer; terminal result routes still publish no
+invented page.
 
 The same coordinator now forwards the source background callback before late
 Bomb drawing. Fresh construction reports the exact D092/D2E8 RNG streams,
@@ -1290,8 +1295,12 @@ Exit tests:
 
 ### Slice 5: mixed late-frame UI and warnings
 
-Add gauges, score/extend, combos, warning TRAM/palette/MRS, result banners, and
-the result trapezoid.
+Implementation status: warning TRAM/palette/MRS and the complete late Gauge
+backdrop/bar pass are implemented. Semantic observer facts retain the nine
+character-specific Gauge completion restores, P1/P2 warning lifecycle, live
+levels, result-gated Gauge state, and portrait transition order without
+exposing glyphs, colors, assets, or draw commands to core. Score/extend,
+combos, result banners, and the result trapezoid remain.
 
 Exit tests:
 

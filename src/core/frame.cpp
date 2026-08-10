@@ -41,6 +41,40 @@ constexpr std::uint8_t hit_damage_max = 6U;
 constexpr std::uint8_t extends_max = 2U;
 constexpr std::uint8_t extends_disabled = 255U;
 
+constexpr GaugeBossAttackKind gauge_boss_attack_kind(
+	GaugeBossAttackFlag flag
+) noexcept
+{
+	switch(flag) {
+	case GaugeBossAttackFlag::gauge_pellet_init:
+	case GaugeBossAttackFlag::gauge_pellet_active:
+		return GaugeBossAttackKind::gauge_pellet;
+	case GaugeBossAttackFlag::gauge_bullet_init:
+	case GaugeBossAttackFlag::gauge_bullet_active:
+		return GaugeBossAttackKind::gauge_bullet;
+	case GaugeBossAttackFlag::boss:
+		return GaugeBossAttackKind::boss;
+	case GaugeBossAttackFlag::none:
+	default:
+		return GaugeBossAttackKind::none;
+	}
+}
+
+void gauge_attack_finish(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	GameplayObserver *observer
+) noexcept
+{
+	state.gba_flag_active[player_id] = GaugeBossAttackFlag::none;
+	if(observer != nullptr) {
+		observer->gauge_attack_finished(GaugeAttackFinished{
+			.attacker = static_cast<PlayerId>(player_id),
+			.target = static_cast<PlayerId>(1U - player_id),
+		});
+	}
+}
+
 constexpr std::uint8_t position_clip_x = 0x01U;
 constexpr std::uint8_t position_clip_bottom = 0x02U;
 constexpr std::uint8_t position_do_not_mirror_x = 0x80U;
@@ -527,6 +561,12 @@ bool warning_interstitial_begin(
 				state.warning_flag[0] == WarningFlag::flash_white,
 				state.warning_flag[1] == WarningFlag::flash_white,
 			},
+			.next_attacks = {
+				gauge_boss_attack_kind(state.gba_flag_next[0]),
+				gauge_boss_attack_kind(state.gba_flag_next[1]),
+			},
+			.gauge_levels = state.gba_gauge_level,
+			.boss_level = state.gba_boss_level,
 		});
 	}
 	for(auto &flag : state.warning_flag) {
@@ -556,10 +596,21 @@ void warning_frame_update(
 	flag = static_cast<WarningFlag>(static_cast<std::uint8_t>(flag) + 1U);
 }
 
-void warning_portrait_update(DeterministicState &state) noexcept
+void warning_portrait_update(
+	DeterministicState &state,
+	GameplayObserver *observer
+) noexcept
 {
-	for(auto &flag : state.warning_flag) {
+	for(std::uint8_t player_id = 0U; player_id < player_count; ++player_id) {
+		auto &flag = state.warning_flag[player_id];
 		if(flag == WarningFlag::portrait) {
+			if(observer != nullptr) {
+				observer->warning_portrait_transition(
+					WarningPortraitTransition{
+						.player = static_cast<PlayerId>(player_id),
+					}
+				);
+			}
 			flag = WarningFlag::flash_white;
 		}
 	}
@@ -612,8 +663,45 @@ void gameplay_frame_suffix_after_interstitial(
 	GameplayObserver *observer
 ) noexcept
 {
+	const auto warning_before = state.warning_flag;
 	warning_frame_update(state, 0U);
 	warning_frame_update(state, 1U);
+	if(observer != nullptr) {
+		observer->warning_frame_lifecycle(WarningFrameLifecycle{
+			.players = {
+				WarningPlayerLifecycle{
+					.warning_step_before = static_cast<std::uint8_t>(
+						warning_before[0]
+					),
+					.warning_step_after = static_cast<std::uint8_t>(
+						state.warning_flag[0]
+					),
+					.next_attack = gauge_boss_attack_kind(
+						state.gba_flag_next[0]
+					),
+					.active_attack = gauge_boss_attack_kind(
+						state.gba_flag_active[0]
+					),
+				},
+				WarningPlayerLifecycle{
+					.warning_step_before = static_cast<std::uint8_t>(
+						warning_before[1]
+					),
+					.warning_step_after = static_cast<std::uint8_t>(
+						state.warning_flag[1]
+					),
+					.next_attack = gauge_boss_attack_kind(
+						state.gba_flag_next[1]
+					),
+					.active_attack = gauge_boss_attack_kind(
+						state.gba_flag_active[1]
+					),
+				},
+			},
+			.gauge_levels = state.gba_gauge_level,
+			.boss_level = state.gba_boss_level,
+		});
+	}
 	background_update(state, observer);
 	bombs_render_phase_update(state, observer);
 	boss_render_phase_update(state);
@@ -634,8 +722,29 @@ void gameplay_frame_suffix_after_interstitial(
 	if(result_control_update(state)) {
 		return;
 	}
+	if(observer != nullptr) {
+		observer->main_gauge_state(MainGaugeState{
+			.context = MainPhaseContext{
+				.round_id = state.round_id,
+				.round_or_result_frame = state.round_or_result_frame,
+				.playfield_fg_shift_x = state.playfield_fg_shift_x,
+			},
+			.players = {
+				MainGaugePlayerState{
+					.gauge_charged = state.players[0].gauge_charged,
+					.gauge_avail = state.players[0].gauge_avail,
+					.hyper_active = state.players[0].hyper_active,
+				},
+				MainGaugePlayerState{
+					.gauge_charged = state.players[1].gauge_charged,
+					.gauge_avail = state.players[1].gauge_avail,
+					.hyper_active = state.players[1].hyper_active,
+				},
+			},
+		});
+	}
 	story_extend_update(state);
-	warning_portrait_update(state);
+	warning_portrait_update(state, observer);
 	combos_update(state);
 	result_transition_update(state);
 	round_mode_update(state);

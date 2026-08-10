@@ -39,9 +39,14 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   particles to core, while one fixed presenter owns the 48/50 live records,
   exact integer vectors, wrap rules, initial-to-steady transition, and
   repeat-round velocity reset.
+- Warning/Gauge presentation is integrated. It preserves the source's blocking
+  27-tone interstitial, live warning-level gaiji redraws, shared palette
+  oscillator, both selected EX.MRS portraits, all nine Gauge-completion
+  restores, the full two-playfield hidden-atlas backdrop, and late
+  charged/available/hyper bars without retaining gameplay views.
 
 The shortest remaining chain to a visible interactive build is: fill Boss,
-Extra/Charge, warning/gauge, and HUD/result gaps in the existing
+Extra/Charge, and HUD/result gaps in the existing
 composition owner; add the fixed 56.423 Hz input scheduler; then add the thin
 SDL upload and input shell. PC-98 visual traces remain the release authority
 after the synthetic cross-compiler gates.

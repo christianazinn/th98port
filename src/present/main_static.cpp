@@ -278,6 +278,22 @@ PreparedShotPattern prepare_pattern(
 
 } // namespace
 
+bool main_hud_gauge_levels_put(
+	Tram &tram,
+	std::size_t player_id,
+	std::uint8_t gauge_level,
+	std::uint8_t boss_level
+) noexcept
+{
+	if(player_id >= main_player_count ||
+		gauge_level < main_gauge_level_min ||
+		gauge_level > main_gauge_level_max ||
+		boss_level > main_boss_level_max) {
+		return false;
+	}
+	return put_gauge_levels(tram, player_id, gauge_level, boss_level);
+}
+
 void main_hud_wipe(Tram &tram) noexcept
 {
 	tram.fill({
@@ -310,7 +326,7 @@ bool main_hud_static_put(Tram &tram, const MainHudState &state) noexcept
 		if(!put_halfhearts(tram, player, player_state.halfhearts) ||
 			!put_bombs(tram, player, player_state.bombs) ||
 			!put_rounds_won(tram, player, player_state.rounds_won) ||
-			!put_gauge_levels(
+			!main_hud_gauge_levels_put(
 				tram,
 				player,
 				player_state.gauge_level,
