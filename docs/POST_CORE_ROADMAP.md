@@ -167,6 +167,23 @@ core, but only as gameplay mutations and deterministic compatibility reads.
 Purely visual state and interpretation belong in `th03_present`; the core owns
 no presentation event queue.
 
+### Faithful-first implementation and localization
+
+Port observable Classic behavior directly before generalizing it: source draw
+order, coordinates, plane/mask operations, palette timing, TRAM cells, CP932
+code-unit boundaries, and fixed text metrics define the Authentic profile.
+This does not require preserving segmented heaps, unchecked reads, hardware
+ports, three process binaries, or other DOS memory-management constraints that
+have no observable output.
+
+Localization and other Replay-style quality-of-life work belong in an enhanced
+client/presentation profile. The faithful parser retains source byte spans and
+semantic labels outside `th03_core`; a later adapter may map those labels to
+Unicode/localized resources without changing gameplay, replay verification, or
+the Authentic renderer. Do not preemptively introduce a scene graph, ECS,
+generic plugin system, or per-frame heap-owned event bus merely to anticipate
+future languages. Add abstractions only at a proven content/presentation seam.
+
 ### Graphics and platform layer
 
 SDL3 is the leading recommendation over SFML for the faithful client because

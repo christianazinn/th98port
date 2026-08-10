@@ -18,7 +18,10 @@ audio, screenshots, or generated derivatives.
 - Read-only source inspection: user-owned `originals/th03_full` and its existing `dat_dumps/` extraction. No original bytes were copied, changed, committed, or recorded as content.
 - `dat_dumps/YUME1.DAT` and `dat_dumps/YUME2.DAT` are directories of extracted entries, not DAT files. The matching original archive names are non-ASCII Shift-JIS DOS names; the directory aliases are used below to avoid name-encoding changes.
 - ReC98 findings were read as static Git objects from pinned Anniversary commit `3e2381d4275be7287f5525de5c95389d492b0a3c`. No emulator or visual validation was run.
-- The native port already owns `th03_formats::parse_enedat()` but has no `th03_assets`/presentation decoder. “Missing” below means missing from the native port, not missing from ReC98.
+- The native port owns `th03_formats::parse_enedat()`, the implemented
+  `th03_assets` decoders listed below, and a separate `th03_present`
+  compositor. “Missing” below means missing from the native port, not missing
+  from ReC98.
 
 “Observed” means read-only metadata/header evidence, “source-backed” means pinned ReC98 code, and “proposed” means a native design. None means visual-parity verification.
 
@@ -51,14 +54,14 @@ Source-backed archive semantics: `th03/formats/pfopen.asm` recognizes stored typ
 
 | Format | Observed / source-backed facts | Faithful representation |
 |---|---|---|
-| PI | All 78 have `Pi` framing, mode `0x00`, four planes and inline 48-byte palette. Dimensions: 64x16 (18), 64x128 (12), 64x144 (6), 128x48 (1), 128x96 (5), 128x144 (31), 128x192 (5). `libs/master.lib/graph_pi_load_pack.asm` implements an adaptive color/history plus position/run bitstream decoder. | Exact 4-bit indices, dimensions, mode, and inline RGB4 palette. Do not use PNG/RGBA as authoritative storage; retain the palette-suppression bit even though observed files include palettes. |
+| PI | All 78 have `Pi` framing, mode `0x00`, four planes and inline 48-byte palette. Correct big-endian dimensions: 320x16 (18), 320x128 (12), 320x144 (6), 640x48 (1), 640x96 (5), 640x192 (5), and 640x400 (31), totaling 9,748,480 decoded indices. Every semantic stream reaches its declared output before at least three trailing zero padding bytes. `libs/master.lib/graph_pi_load_pack.asm` implements an adaptive color/history plus position/run bitstream decoder and stops at the declared output size without reading a terminator, so the native decoder intentionally tolerates that trailer. | Exact 4-bit indices, dimensions, mode, and inline RGB4 palette. Do not use PNG/RGBA as authoritative storage; retain the palette-suppression bit even though observed files include palettes. |
 | CDG / CD2 | Both use the same uncompressed 16-byte little-endian TH03 CDG header followed by alpha then B/R/G/E planes per cel. CDG single-image files use `image_count == 0`; CD2 contains 2, 4, 5, 9, or 10 cels. Stock widths range from 32 to 512 pixels and heights from 24 to 230 pixels. `cdg_load_all()` is shared; neither loader nor header examines a filename extension. | Keep plane size, width/height, bottom-left VRAM offset, dword width, all four color planes, optional alpha, bottom-to-top row order, MSB-left bit order, 32-pixel source width alignment, and the renderer's 8-pixel X-position alignment. Preserve distinct source alpha-aware, no-alpha, hflip, dissolve, and upward-unput operations; do not collapse the GRCG mask into conventional RGBA alpha before compositor tests. |
 | MRS | Every one of 36 is 33,120 bytes: five 6,624-byte planes, source-defined as headerless/uncompressed/upside-down 288x184, plane order alpha+B/R/G/E. There is no palette or other header metadata. | Keep the fixed 36-byte row width, 184 bottom-to-top rows, MSB-left bits, 14,640-byte bottom-left VRAM offset, nine-dword row width, alpha, and explicit horizontal orientation. `mrs_put_8()` uses alpha. Regular `mrs_put_noalpha_8()` ignores it, while the altered-color mode reads alpha for `~alpha | B`. The persistent source hflip reverses bits in every byte and then byte order in every row of all five planes. |
 | BFT / BF2 | All 28 begin `BFNT\x1A` and use the 32-byte little-endian `bfnt_header`; all stock files have version `0x16` and no extended header. BF2 is not another codec: ReC98 calls `super_entry_bfnt()` on it. The 26 `col=0x83` sheets contain an inline B/R/G high-nibble palette followed by high-nibble-first packed 4-bit pixels, which `bfnt_entry_pat()` transposes to B/R/G/E planes. The two `col=0` BFT sheets contain raw 1bpp 16x16 gaiji for codes 0 through 255. | One BFNT decoder retaining the complete portable header, glyph code range/cell geometry, raw extended header, optional effective transparent-color record, RGB4 palette, and top-to-bottom/MSB-left decoded pixels. Consumer explicitly selects gaiji monochrome vs superimpose planar semantics; never branch on extension. The superimpose mask is derived later from the effective transparent color, which defaults to 0. |
 | RGB | Four files are exactly 48 bytes. `palette_entry_rgb.asm` loads 16 RGB4 entries and expands each `v` to `v << 4 | v`. | Retain source order and RGB4 values until the palette/hardware boundary. |
 | ENEDAT.DAT | 5,072 bytes; payload size is 5,068 and reserved word zero. | Gameplay data: retain existing `parse_enedat(std::span<const std::byte>)` in `th03_formats`, not `th03_assets`. |
 | M / EFC | 21 PMD songs and one PMD effect bank; ReC98 `snd_load()` sends them to PMD work buffers. | Preserve content identity; implement PMD sequence/effect interpretation plus YM2608 synthesis, not WAV conversion. |
-| @*.TXT / MUSIC.TXT | 43 text/script files; contents were deliberately not dumped. | Preserve Shift-JIS encoding, text metrics, page/scroll timing, and control semantics. Generic native schema remains unresearched. |
+| @*.TXT / MUSIC.TXT | The 43 files are 28 variable-length cutscene scripts, nine fixed 11 x 3 x 60-byte win-message tables, one fixed 19 x 20 x 42-byte Music Room table, and five root documents. The stock corpus is CP932-valid; the cutscene VM itself treats non-control text as unchecked two-byte glyphs. | Preserve original byte spans and command order. Cutscene parsing/timing belongs to `th03_present`; win/Music Room fixed-record readers belong to their clients. See [`ASSET_TEXT_SCRIPTS.md`](ASSET_TEXT_SCRIPTS.md). |
 
 ## Decoder mapping and gaps
 
@@ -72,9 +75,9 @@ Source-backed archive semantics: `th03/formats/pfopen.asm` recognizes stored typ
 | RGB | `libs/master.lib/palette_entry_rgb.asm`, `platform/x86real/pc98/palette.cpp` | Implemented as exact-length `decode_rgb48()` retaining RGB4 source components. |
 | ENEDAT | ReC98 `formats/enedat.hpp`/enemy loader; native `src/formats/enedat.cpp` | Already `th03_formats`, not assets. |
 | M/EFC/PMD | `th02/snd/snd.h` and TH03 sound shims; external PMD driver | Missing PMD/YM2608 stack; separate audio parcel. |
-| TXT scripts | `th03/formats/script.hpp`, cutscene/MAINL callers | Missing format research/parser. |
-| YUME.CFG / TOUHOU.DAT | `th03/formats/cfg.hpp`, score data | Application persistence, outside core/assets; native parsers absent. |
-| YUME.NEM, PMD/DOS executables | no relevant decoder/call site found in this source pass | Unclassified/support only; do not import/emulate/redistribute. |
+| TXT scripts | `th03/formats/script.hpp`, `th03/cutscene/cutscene.cpp`, MAINL callers | Format and ownership are fully inventoried in [`ASSET_TEXT_SCRIPTS.md`](ASSET_TEXT_SCRIPTS.md). A bounded cutscene VM is deferred until a MAINL client consumes it; the two fixed-record tables are client-local data. |
+| YUME.CFG / YUME.NEM | `th03/formats/cfg.hpp`, `th03/formats/scoredat.hpp`, score load/save code | Mutable configuration and high-score/unlock persistence, outside core/assets. Native migration policy and parsers are deferred to the application layer. |
+| TOUHOU.DAT, PMD/DOS executables | no TH03 loader or layout authority found for `TOUHOU.DAT`; PMD binaries are external support programs | Unclassified/support only; do not import, parse, emulate, or redistribute without separate authority. |
 
 ## Proposed `th03_assets` boundary
 
@@ -145,17 +148,21 @@ Reference frames start synthetic. User-local original frame captures remain igno
 ## Decoder implementation parcels
 
 1. **ASSET-001 — indexed foundation, RGB, PI (complete).** Span-only `th03_assets`, palette/index models, `decode_rgb48()`, mechanically translated PI decompression and RGB/PI fixtures pass on both compilers; all 78 external PI files pass the read-only sweep.
-2. **ASSET-002 — CDG/CD2 cels (complete).** One shared header/multi-image parser handles stored count zero as one cel, retains alpha+B/R/G/E and exact source/VRAM geometry, supports bounded single-cel selection, and makes alpha discard explicit. Synthetic tests cover single/multi-cel, alpha policy, plane order, geometry and malformed inputs. The DOS loaders assume trusted installation data and perform unchecked reads/seeks; the native span boundary rejects inconsistent geometry, reserved segment values, truncation and trailing payload rather than reproducing unsafe reads. A read-only sweep decoded all 33 external files and 66 effective cels with no extension fork or failures. Presentation still owns alpha-aware, no-alpha, hflip, dissolve, and upward-unput behavior.
+2. **ASSET-002 — CDG/CD2 cels (complete).** One shared header/multi-image parser handles stored count zero as one cel, retains alpha+B/R/G/E and exact source/VRAM geometry, supports bounded single-cel selection, and makes alpha discard explicit. Synthetic tests cover single/multi-cel, alpha policy, plane order, geometry and malformed inputs. The DOS loaders assume trusted installation data and perform unchecked reads/seeks; the native span boundary rejects inconsistent geometry, reserved segment values, truncation and trailing payload rather than reproducing unsafe reads. A read-only sweep decoded all 33 external files and 66 effective cels with no extension fork or failures. `th03_present` now owns the source-backed alpha-aware, no-alpha, horizontal-flip, E-plane dissolve, and upward-unput operations.
 3. **ASSET-003 — BFNT sheets (complete).** One span decoder handles BFT and BF2 without seeing an extension. The explicit gaiji policy enforces the exact source domain (monochrome 16x16 codes 0–255) and returns raw 1bpp glyphs; the superimpose policy enforces four-bit indexed color, retains palette/transparent-color semantics, and returns B/R/G/E planes. Synthetic strict tests pass on both compilers, and a read-only sweep decoded all 28 external files and 845 glyphs (2 gaiji sheets and 26 superimpose sheets).
 4. **ASSET-004 — MRS images (complete).** One fixed-size span decoder owns the decoded alpha+B/R/G/E planes, rejects both truncation and trailing data, and preserves the source's bottom-first/MSB-left geometry. A separate in-memory operation performs the exact persistent hflip without consulting a filename; applying it twice restores every plane. Synthetic full-plane comparisons pass on GCC/MSVC; read-only sweeps decoded and flipped all 36 external files. Alpha-aware, regular no-alpha, and altered-color blits remain presentation operations.
 
-Then a text/script research parcel, and PMD/YM2608 after licensing/rhythm-data decisions. ENEDAT stays in `th03_formats`.
+The text/script research parcel is complete in
+[`ASSET_TEXT_SCRIPTS.md`](ASSET_TEXT_SCRIPTS.md). PMD/YM2608 remains separate
+after licensing/rhythm-data decisions. ENEDAT stays in `th03_formats`.
 
 ## Unknown, proprietary, and legally sensitive resources
 
 - Original entries and decoded cache are copyrighted user-owned data. Hashes are identity metadata, not redistribution authorization; import requires a user installation and remains untracked.
 - PMD music/effects, PMD binaries, and YM2608 rhythm ROM/sample material require focused licensing/provenance review. An engine license does not authorize distributing game music, effects, drivers, ROMs or captured audio.
-- YUME.NEM is 824 bytes and has no identified decoder/call site in this pass.
+- `YUME.NEM` is four encrypted/checksummed 206-byte high-score sections and is
+  application persistence, not an imported asset. `TOUHOU.DAT` remains
+  unclassified because no pinned TH03 loader or layout authority was found.
 - DAT extraction is an external-tool boundary: pin/test importer-tool versions before claiming reproducible import.
 
 ## Per-file metadata manifest
@@ -167,12 +174,12 @@ Metadata only. `root/SHIFTJIS-NONASCII-*` aliases non-ASCII DOS names determinis
 | installation root | root/AUTOEXEC.BAT | .BAT | 6 | `3cc29a7afa1d4edc37a1d828216eee1a6ba9d9d556f2a7838e79b83152deaabe` | launch/system script |
 | installation root | root/YUME.CFG | .CFG | 8 | `7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8` | configuration/persistence |
 | installation root | root/GAME.BAT | .BAT | 696 | `10a0cabdd6f99ce8b2f49e78cb942dca4a2e120f691d5aa489e84e43e100daf1` | launch/system script |
-| installation root | root/YUME.NEM | .NEM | 824 | `ccdd4593fe650c7bceb7dc725bc823cb3b9853af33b8e521e89c34ca30691506` | unknown support resource |
+| installation root | root/YUME.NEM | .NEM | 824 | `ccdd4593fe650c7bceb7dc725bc823cb3b9853af33b8e521e89c34ca30691506` | high-score/unlock persistence |
 | installation root | root/SHIFTJIS-NONASCII-1.TXT | .TXT | 4346 | `642efccc80a46f05aeb07dc1076298f2dea3b07dc4ed3c3d039c7b91429bcd2c` | documentation: Shift-JIS text |
 | installation root | root/SHIFTJIS-NONASCII-2.TXT | .TXT | 4918 | `7fe20c6341d0181204cf07f4fcd73ca94070b8b590ccb69b79ab46ded1665809` | documentation: Shift-JIS text |
 | installation root | root/SHIFTJIS-NONASCII-3.TXT | .TXT | 7075 | `8a1f04c0eda4d3720352d8a09cd08fc3708a9ba6b2bdcdfcdd125f3092b86244` | documentation: Shift-JIS text |
 | installation root | root/README.TXT | .TXT | 7410 | `6ac45f51e33442ccba2cf21746e8243d603d02c9d5a65062a77fdaa48ab5e4cd` | documentation: Shift-JIS text |
-| installation root | root/TOUHOU.DAT | .DAT | 8272 | `a9c31cf058b528479fe9c5b8fb7a4ac538000c8c2f3b9fb276cbc3dd7aa20532` | score/persistence |
+| installation root | root/TOUHOU.DAT | .DAT | 8272 | `a9c31cf058b528479fe9c5b8fb7a4ac538000c8c2f3b9fb276cbc3dd7aa20532` | unclassified support resource |
 | installation root | root/ZUN.COM | .COM | 16242 | `5896bbd673aeb10f0df9c1e34716c64fda83655a788ae1ac0fcf58e3616add27` | PMD/DOS support executable |
 | installation root | root/CANBE.EXE | .EXE | 17972 | `c1449649dc90376e6bac997e4e967a978b00a9668ba8ed85a1efea510d82f888` | support executable |
 | installation root | root/PMD.COM | .COM | 20379 | `cbbe9bd610aedda586d8bd7f6dd13d21f037a089458a21ddda0b11a53b4b29e4` | PMD/DOS support executable |

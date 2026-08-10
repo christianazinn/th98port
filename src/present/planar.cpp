@@ -281,6 +281,42 @@ bool Raster::blit_planar_masked(
 	return true;
 }
 
+bool Raster::clear_planar_masked(
+	BitSource mask,
+	Point destination
+) noexcept {
+	if(!valid_source(mask)) {
+		return false;
+	}
+	std::size_t access = 0U;
+	if(!page_index(access_page_, access)) {
+		return false;
+	}
+
+	const auto region = clipped_mapping(mask.width, mask.height, destination);
+	for(auto y = region.y_begin; y < region.y_end; ++y) {
+		const auto source_y = static_cast<std::size_t>(y);
+		const auto destination_y = static_cast<std::int64_t>(destination.y) + y;
+		for(auto x = region.x_begin; x < region.x_end; ++x) {
+			const auto source_x = static_cast<std::size_t>(x);
+			if(!source_bit(
+				mask.bits,
+				mask.stride,
+				source_x,
+				source_y,
+				mask.height,
+				mask.row_order
+			)) {
+				continue;
+			}
+			const auto destination_x =
+				static_cast<std::int64_t>(destination.x) + x;
+			pages_[access][page_offset(destination_x, destination_y)] = 0U;
+		}
+	}
+	return true;
+}
+
 bool Raster::grcg_write(
 	BitSource cpu_source,
 	Point destination,

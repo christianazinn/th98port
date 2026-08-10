@@ -96,6 +96,12 @@ public:
 		BitSource alpha,
 		Point destination
 	) noexcept;
+	// Clears all four destination plane bits selected by a positive 1bpp mask.
+	// This is the logical result of the source GRCG RMW color-0 alpha pass.
+	[[nodiscard]] bool clear_planar_masked(
+		BitSource mask,
+		Point destination
+	) noexcept;
 	// Emulates byte-aligned GRCG writes. Width and destination X must be
 	// multiples of 8; the CPU source controls RMW masks and only defines the
 	// write extent in TDW mode.

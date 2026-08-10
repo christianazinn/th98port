@@ -35,9 +35,13 @@ set_target_properties(th03_assets PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_assets)
 
 add_library(th03_present STATIC
+	src/present/cels.cpp
 	src/present/main_static.cpp
+	src/present/mono.cpp
+	src/present/pi.cpp
 	src/present/planar.cpp
 	src/present/raster.cpp
+	src/present/text.cpp
 	src/present/tram.cpp
 )
 target_include_directories(th03_present PUBLIC include)
@@ -152,4 +156,32 @@ if(BUILD_TESTING)
 	target_link_libraries(th03-present-tests PRIVATE th03_present)
 	th03_set_warnings(th03-present-tests)
 	add_test(NAME th03-present-tests COMMAND th03-present-tests)
+
+	add_executable(th03-present-cels-tests
+		tests/test_present_cels.cpp
+	)
+	target_link_libraries(th03-present-cels-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-cels-tests)
+	add_test(NAME th03-present-cels-tests COMMAND th03-present-cels-tests)
+
+	add_executable(th03-present-text-tests
+		tests/test_present_text.cpp
+	)
+	target_link_libraries(th03-present-text-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-text-tests)
+	add_test(NAME th03-present-text-tests COMMAND th03-present-text-tests)
+
+	add_executable(th03-present-pi-tests
+		tests/test_present_pi.cpp
+	)
+	target_link_libraries(th03-present-pi-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-pi-tests)
+	add_test(NAME th03-present-pi-tests COMMAND th03-present-pi-tests)
+
+	add_executable(th03-present-mono-tests
+		tests/test_present_mono.cpp
+	)
+	target_link_libraries(th03-present-mono-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-mono-tests)
+	add_test(NAME th03-present-mono-tests COMMAND th03-present-mono-tests)
 endif()

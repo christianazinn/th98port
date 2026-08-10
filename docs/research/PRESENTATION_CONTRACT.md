@@ -369,17 +369,48 @@ build the first static MAIN frame without pretending to emulate the whole EGC:
   low byte `0x56 + (id >> 7)`, high byte `(id & 0x7F)` for the left cell and
   that high byte OR `0x80` for the right cell; and
 - the TRAM diagnostic hash includes raw cells, visibility, and only gaiji
-  slots referenced by current cells. It remains independent of the graphics
-  hash. The composition boundary exposes the raw cell, decoded gaiji ID/half,
-  and glyph row bytes; it does not yet guess host glyph rendering.
+  slots referenced by complete two-cell gaiji pairs. Raw `0x0056`/`0x0057`
+  remain ANK V/W unless followed by the matching right half. The hash remains
+  independent of the graphics hash; and
+- the host composer overlays visible TRAM after a caller-resolved graphics
+  frame, using an injected ANK provider and source-format gaiji rows. It keeps
+  fixed three-bit text colors distinct from the programmable graphics palette
+  and implements display, color, reverse, and text-over-graphics priority.
 
 TRAM source calls require valid coordinates and do not define clipping, so the
-portable API rejects an out-of-range cell or rectangle atomically. ANK/JIS
-font rasterization, blink cadence, underline/reverse pixel composition, text-
-versus-graphics priority, unaligned SPRITE16 shifting, and general EGC
-register/ROP emulation remain deferred until their complete source paths and
-visual oracle are in hand. None is required to store the static HUD's raw
-TRAM/gaiji state or to prepare its byte-aligned planar sprite sheet.
+portable API rejects an out-of-range cell or rectangle atomically. JIS font-ROM
+rasterization, blink cadence, underline rasterization, unaligned SPRITE16
+shifting, and general EGC register/ROP emulation remain explicit errors or
+deferred operations until their complete source paths and visual oracle are in
+hand. Original font-ROM bytes are injected by the application rather than
+embedded in the library.
+
+The cel compositor now also ports the stock byte-aligned CDG alpha/no-alpha,
+horizontal-flip, E-plane dissolve, and upward-unput paths plus MRS alpha,
+no-alpha, altered-color, and persistent-flip semantics. In particular,
+`mrs_put_8()` clears through individual alpha bits but tests alpha once per
+32-pixel dword before ORing that complete B/R/G/E group. Synthetic coverage
+distinguishes this from conventional per-pixel alpha composition.
+
+Caller-supplied monochrome tables now have source-specific operations rather
+than a generic sprite abstraction: the score digit blitter consumes stored
+rows 0 through 6 bottom-up and leaves the eighth stored byte unread; pellets
+select one of 16 pre-shifted variants and preserve the source's signed wrapped
+VRAM-offset choice between 16- and 32-pixel writes; and staff flakes rotate a
+little-endian 16-bit row by `left & 7` before ORing only the B plane. The
+library defines the required layouts and validates synthetic masks, but embeds
+none of the original or reconstructed bitmap content.
+
+Decoded PI presentation covers `pi_put_8()`'s 8-pixel X/width floor,
+horizontal clip, and 400-line row wrap, plus the fully defined TH03 cutscene
+surface path: select one clockwise 320x200 quarter from a 640x400 PI, put it at
+(160,64), or reveal it through the four cumulative `PI_MASKS` steps before the
+final copy. This is grounded in `th02/formats/pi_put.cpp`,
+`libs/master.lib/graph_pack_put_8.asm`, `game/cutscene.cpp`,
+`th03/sprites/pi_mask.cpp`, and `GrpSurface_M4::or_masked()` in
+`platform/x86real/pc98/grp_surf.cpp`. Legacy `pi_put_quarter_8()` remains
+deferred because the pinned tree retains its declaration/comment but not its
+implementation body; the native code does not guess it.
 
 ### Implemented static MAIN transaction
 
@@ -432,8 +463,9 @@ These tests deliberately do not claim captured pixel parity. The remaining
 static-frame prerequisites are explicit: the application must inject/load the
 decoded GAMEFT gaiji glyphs before startup; sprite resource commit and clip
 metadata are not modeled; and both pre-first-frame pages still require
-comparison against a raw Anniversary capture. No ANK/JIS host composition has
-been guessed.
+comparison against a raw Anniversary capture. Injected ANK and gaiji host
+composition is implemented; JIS, blink, and underline remain explicit deferred
+paths rather than guessed behavior.
 
 ### Ordered operations
 
@@ -1082,11 +1114,11 @@ Implementation status: the platform-neutral foundation is complete for two raw
 operations, exact B/R/G/E packed-plane import/projection, direct/masked/OR
 planar writes, GRCG TDW/RMW tile writes, exact signed `PaletteTone` application,
 400-line/upper/lower zoomed-200-line state, raw 80x25 TRAM cells, all 256
-source-format gaiji slots, scroll state, and separate provisional graphics/TRAM
-hashes. This is sufficient for the raw static-MAIN state and its byte-aligned
-source sheet. General EGC ROP/shifter behavior, unaligned SPRITE16, and final
-text composition remain open; this slice is not a complete PC-98 graphics-
-hardware emulator.
+source-format gaiji slots, scroll state, separate provisional graphics/TRAM
+hashes, and injected ANK/gaiji final text composition. This is sufficient for
+the raw static-MAIN state and its byte-aligned source sheet. General EGC
+ROP/shifter behavior, unaligned SPRITE16, JIS, blink, and underline remain
+open; this slice is not a complete PC-98 graphics-hardware emulator.
 
 Implement two indexed pages, access/show/copy/clear, palette/tone/deferred
 apply, TRAM storage, scroll, clipping, and the minimum source-backed planar/
@@ -1224,11 +1256,11 @@ Exit tests:
 These require an explicit decision before their affected implementation slice;
 none should block the neutral observation seam.
 
-1. **TRAM host composition.** Raw 80x25 code/attribute cells and 32-byte gaiji
-   slots are now fixed from the exact source/master.lib writes. Before drawing
-   the layer into a host frame, audit the ANK/JIS glyph provider plus blink,
-   reverse, underline, visibility, and graphics-priority behavior. Keep raw
-   capture bytes as the oracle regardless.
+1. **Remaining TRAM attributes.** Raw cells, paired gaiji, injected ANK,
+   reverse, visibility, fixed text colors, and graphics priority are now
+   implemented. JIS font-ROM glyphs, blink cadence, and underline still need
+   a complete source/hardware audit before the faithful host compositor accepts
+   them. Keep raw capture bytes as the oracle regardless.
 2. **Palette representation.** Decide whether the public `Palette16` stores raw
    PC-98 4-bit channels or widened bytes. Authentic comparison must retain raw
    values and exact tone arithmetic either way.

@@ -58,6 +58,41 @@ std::optional<GaijiCellReference> decode_gaiji_cell(TramCode code) noexcept {
 	};
 }
 
+std::optional<GaijiCellReference> decode_paired_gaiji_cell(
+	std::span<const TramCell> cells,
+	std::size_t offset
+) noexcept {
+	if(offset >= cells.size()) {
+		return std::nullopt;
+	}
+	const auto decoded = decode_gaiji_cell(cells[offset].code);
+	if(!decoded.has_value()) {
+		return std::nullopt;
+	}
+	const auto cell_x = offset % tram_width;
+	switch(decoded->half) {
+	case GaijiHalf::left:
+		if((cell_x + 1U < tram_width) && (offset + 1U < cells.size()) &&
+			(cells[offset + 1U].code == gaiji_cell_code(
+				decoded->glyph_id,
+				GaijiHalf::right
+			))) {
+			return decoded;
+		}
+		break;
+	case GaijiHalf::right:
+		if((cell_x != 0U) && (offset != 0U) &&
+			(cells[offset - 1U].code == gaiji_cell_code(
+				decoded->glyph_id,
+				GaijiHalf::left
+			))) {
+			return decoded;
+		}
+		break;
+	}
+	return std::nullopt;
+}
+
 void Tram::fill(TramCell cell_value) noexcept {
 	cells_.fill(cell_value);
 }
@@ -175,10 +210,11 @@ std::uint64_t Tram::visible_state_hash() const noexcept {
 	hash_byte(hash, tram_hash_schema);
 	hash_byte(hash, visible_ ? 1U : 0U);
 	std::array<bool, gaiji_count> referenced{};
-	for(const auto &cell_value : cells_) {
+	for(std::size_t cell_offset = 0U; cell_offset < cells_.size(); ++cell_offset) {
+		const auto &cell_value = cells_[cell_offset];
 		hash_u16_le(hash, cell_value.code);
 		hash_u16_le(hash, cell_value.attribute);
-		const auto gaiji_ref = decode_gaiji_cell(cell_value.code);
+		const auto gaiji_ref = decode_paired_gaiji_cell(cells_, cell_offset);
 		if(gaiji_ref.has_value()) {
 			referenced[gaiji_ref->glyph_id] = true;
 		}

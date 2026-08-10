@@ -102,6 +102,13 @@ struct GaijiCellReference {
 	TramCode code
 ) noexcept;
 
+// Gaiji IDs 0 and 128 have left-cell codes identical to ANK V and W. A raw
+// code is a gaiji only when its adjacent cell forms the matching ordered pair.
+[[nodiscard]] std::optional<GaijiCellReference> decode_paired_gaiji_cell(
+	std::span<const TramCell> cells,
+	std::size_t offset
+) noexcept;
+
 class Tram {
 public:
 	Tram() = default;

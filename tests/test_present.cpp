@@ -452,6 +452,15 @@ void test_planar_write_modes() {
 	expect_pixel(raster, Page::zero, {1, 30}, 2U, "mask replaces all planes at x1");
 	expect_pixel(raster, Page::zero, {2, 30}, 15U, "zero mask preserves destination");
 
+	expect(raster.clear({0, 32, 8U, 1U}, 15U), "seed planar masked clear row");
+	expect(
+		raster.clear_planar_masked(alpha, {0, 32}),
+		"planar masked clear succeeds"
+	);
+	expect_pixel(raster, Page::zero, {0, 32}, 0U, "mask clears all planes at x0");
+	expect_pixel(raster, Page::zero, {1, 32}, 0U, "mask clears all planes at x1");
+	expect_pixel(raster, Page::zero, {2, 32}, 15U, "zero mask preserves clear destination");
+
 	expect(raster.clear({0, 31, 8U, 1U}, 1U), "seed planar OR row");
 	expect(
 		raster.blit_planar(source, {0, 31}, PlanarWriteMode::or_planes),
@@ -466,6 +475,10 @@ void test_planar_write_modes() {
 	expect(
 		!raster.blit_planar_masked(source, short_alpha, {0, 31}),
 		"short alpha plane rejected"
+	);
+	expect(
+		!raster.clear_planar_masked(short_alpha, {0, 32}),
+		"short clear mask rejected"
 	);
 	expect(
 		raster.display_state_hash() == before_bad_alpha,
@@ -580,6 +593,34 @@ void test_tram_and_gaiji_boundary() {
 	expect(
 		!th03::present::decode_gaiji_cell(' ').has_value(),
 		"ANK cell is not classified as gaiji"
+	);
+	Tram gaiji_alias;
+	expect(
+		gaiji_alias.put_cell({0, 0}, {'V', th03::present::tram_white}),
+		"seed unpaired ANK V alias"
+	);
+	const auto before_unpaired_alias = gaiji_alias.visible_state_hash();
+	expect(gaiji_alias.load_gaiji(0U, glyph), "load unreferenced gaiji zero");
+	expect(
+		gaiji_alias.visible_state_hash() == before_unpaired_alias,
+		"unpaired ANK V does not reference gaiji zero in the TRAM hash"
+	);
+	expect(
+		!th03::present::decode_paired_gaiji_cell(gaiji_alias.cells(), 0U),
+		"unpaired ANK V is not a contextual gaiji"
+	);
+	expect(
+		gaiji_alias.put_gaiji({0, 0}, 0U, th03::present::tram_white),
+		"replace ANK alias with paired gaiji zero"
+	);
+	expect(
+		th03::present::decode_paired_gaiji_cell(gaiji_alias.cells(), 0U) ==
+			th03::present::GaijiCellReference{0U, GaijiHalf::left},
+		"paired ANK alias resolves as gaiji zero"
+	);
+	expect(
+		gaiji_alias.visible_state_hash() != before_unpaired_alias,
+		"paired gaiji zero contents join the TRAM hash"
 	);
 	expect(tram.gaiji_row_half(0x80U, 0U, GaijiHalf::left) == 0x80U, "gaiji left row");
 	expect(tram.gaiji_row_half(0x80U, 0U, GaijiHalf::right) == 0x01U, "gaiji right row");

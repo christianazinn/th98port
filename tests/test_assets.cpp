@@ -286,6 +286,16 @@ std::vector<std::byte> same_color_left_stream()
 	return bits.bytes();
 }
 
+std::vector<std::byte> single_run_stream(std::size_t pixel_count)
+{
+	BitWriter bits;
+	ColorEncoder colors;
+	colors.color(bits, 0U, 10U);
+	colors.color(bits, 10U, 10U);
+	write_run(bits, 1U, (pixel_count / 2U) - 1U);
+	return bits.bytes();
+}
+
 std::uint8_t cdg_fixture_byte(
 	std::size_t cel,
 	std::size_t plane,
@@ -569,6 +579,24 @@ void test_pi_position_paths()
 	check(
 		same && same->image.indices == std::vector<std::uint8_t>(8U, 10U),
 		"PI position 0 uses a one-byte run when the prior pair has one color"
+	);
+
+	constexpr std::uint16_t large_width = 640U;
+	constexpr std::uint16_t large_height = 400U;
+	constexpr auto large_pixel_count =
+		static_cast<std::size_t>(large_width) * large_height;
+	auto large_bytes = make_pi(
+		large_width,
+		large_height,
+		single_run_stream(large_pixel_count)
+	);
+	large_bytes.insert(large_bytes.end(), 3U, std::byte{0U});
+	const auto large = th03::assets::decode_pi(large_bytes);
+	check(
+		large && large->image.width == large_width &&
+		large->image.height == large_height &&
+		large->image.indices == std::vector<std::uint8_t>(large_pixel_count, 10U),
+		"PI decodes nonzero dimension high bytes and ignores source-compatible trailer padding"
 	);
 }
 
