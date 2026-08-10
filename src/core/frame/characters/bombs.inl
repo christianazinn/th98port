@@ -58,7 +58,10 @@ void bomb_character_update(
 	}
 }
 
-void bombs_render_phase_update(DeterministicState &state) noexcept
+void bombs_render_phase_update(
+	DeterministicState &state,
+	GameplayObserver *observer
+) noexcept
 {
 	for(std::uint8_t player_id = 0U; player_id < player_count; ++player_id) {
 		if(state.bomb_flag[player_id] == BombFlag::inactive) {
@@ -84,6 +87,12 @@ void bombs_render_phase_update(DeterministicState &state) noexcept
 		if(character == character_mima) {
 			const auto frame = state.bomb_frame[player_id];
 			if(frame > 80U && frame < 144U) {
+				if((frame % 8U) == 0U) {
+					observe_common_effect(
+						state, observer, CommonEffectKind::expanding_circle,
+						144 << 4, 184 << 4, player_id
+					);
+				}
 				state.playfield_fg_shift_x[player_id] =
 					(((frame % 8U) & 3U) < 2U) ? 4 : -4;
 			} else if(frame >= 144U) {
@@ -96,8 +105,16 @@ void bombs_render_phase_update(DeterministicState &state) noexcept
 				state.playfield_fg_shift_x[player_id] =
 					((frame & 3U) < 2U) ? 4 : -4;
 				if((frame % 8U) == 0U) {
-					(void)randring_next16(state);
-					(void)randring_next16(state);
+					const auto random_x = randring_next16(state);
+					const auto random_y = randring_next16(state);
+					if(observer != nullptr) {
+						observe_common_effect(
+							state, observer, CommonEffectKind::expanding_circle,
+							static_cast<std::int16_t>(random_x % (288U << 4U)),
+							static_cast<std::int16_t>(random_y % (368U << 4U)),
+							player_id
+						);
+					}
 				}
 			} else if(frame >= 128U) {
 				state.playfield_fg_shift_x[player_id] = 0;
@@ -119,6 +136,12 @@ void bombs_render_phase_update(DeterministicState &state) noexcept
 							ellen_bomb_vector_free;
 					state.ellen_bomb_vector_cursor++;
 				}
+				if((frame % 4U) == 0U) {
+					observe_common_effect(
+						state, observer, CommonEffectKind::expanding_circle,
+						144 << 4, 184 << 4, player_id
+					);
+				}
 			} else {
 				state.playfield_fg_shift_x[player_id] = 0;
 			}
@@ -129,7 +152,22 @@ void bombs_render_phase_update(DeterministicState &state) noexcept
 				state.playfield_fg_shift_x[player_id] =
 					((frame & 3U) < 2U) ? 4 : -4;
 				if((frame % 8U) == 0U) {
-					(void)randring_next16(state);
+					const auto random_x = randring_next16(state);
+					if(observer != nullptr) {
+						auto center_x = static_cast<std::int16_t>(
+							random_x & 1023U
+						);
+						do {
+							observe_common_effect(
+								state, observer,
+								CommonEffectKind::expanding_circle,
+								center_x, 368 << 4, player_id
+							);
+							center_x = exact::wrap_add(
+								center_x, std::int16_t{96 << 4}
+							);
+						} while(center_x <= (288 << 4));
+					}
 				}
 			} else if(frame >= 128U) {
 				state.playfield_fg_shift_x[player_id] = 0;
@@ -137,14 +175,46 @@ void bombs_render_phase_update(DeterministicState &state) noexcept
 		}
 		if(character == character_chiyuri) {
 			const auto frame = state.bomb_frame[player_id];
-			if(frame >= 64U && frame < 144U) {
+			if(frame < 64U) {
+				if((frame % 8U) == 0U) {
+					observe_common_effect(
+						state, observer, CommonEffectKind::contracting_circle,
+						144 << 4, 184 << 4, player_id
+					);
+				}
+			} else if(frame < 144U) {
 				state.playfield_fg_shift_x[player_id] =
 					((frame & 3U) < 2U) ? 4 : -4;
 				if((frame % 16U) == 0U) {
-					// Four SUB_CE5B() visuals share the gameplay random ring.
-					for(std::size_t effect = 0U; effect < 4U; ++effect) {
-						(void)randring_next16(state);
+					if(observer == nullptr) {
+						for(std::size_t effect = 0U; effect < 4U; ++effect) {
+							(void)randring_next16(state);
+						}
+						continue;
 					}
+					const auto radius = static_cast<std::int16_t>(
+						(frame - 64U) * (2U << 4U)
+					);
+					observe_common_square(
+						state, observer,
+						exact::wrap_subtract(std::int16_t{144 << 4}, radius),
+						184 << 4, player_id
+					);
+					observe_common_square(
+						state, observer,
+						exact::wrap_add(std::int16_t{144 << 4}, radius),
+						184 << 4, player_id
+					);
+					observe_common_square(
+						state, observer, 144 << 4,
+						exact::wrap_subtract(std::int16_t{184 << 4}, radius),
+						player_id
+					);
+					observe_common_square(
+						state, observer, 144 << 4,
+						exact::wrap_add(std::int16_t{184 << 4}, radius),
+						player_id
+					);
 				}
 			} else if(frame >= 144U) {
 				state.playfield_fg_shift_x[player_id] = 0;
@@ -153,12 +223,13 @@ void bombs_render_phase_update(DeterministicState &state) noexcept
 		if(character == character_yumemi) {
 			const auto frame = state.bomb_frame[player_id];
 			if(frame > 64U && frame < 144U) {
+				if((frame & 7U) == 0U) {
+					observe_common_square(
+						state, observer, 144 << 4, 184 << 4, player_id
+					);
+				}
 				state.playfield_fg_shift_x[player_id] =
 					((frame & 3U) < 2U) ? 4 : -4;
-				if((frame & 7U) == 0U) {
-					// Yumemi's periodic SUB_CE5B() visual consumes one ring value.
-					(void)randring_next16(state);
-				}
 			} else if(frame >= 144U) {
 				state.playfield_fg_shift_x[player_id] = 0;
 			}
@@ -170,6 +241,17 @@ void bombs_render_phase_update(DeterministicState &state) noexcept
 					((frame & 3U) < 2U) ? 4 : -4;
 			} else if(frame >= 128U) {
 				state.playfield_fg_shift_x[player_id] = 0;
+			}
+			if(observer != nullptr) {
+				observer->bomb_common_effect_step(BombCommonEffectStep{
+					.kind = (character == character_kana)
+						? BombCommonEffectKind::kana
+						: BombCommonEffectKind::kotohime,
+					.player = static_cast<PlayerId>(player_id),
+					.bomb_frame = frame,
+					.fg_shift_x_at_effects =
+						state.playfield_fg_shift_x[player_id],
+				});
 			}
 		}
 	}

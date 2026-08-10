@@ -38,6 +38,7 @@ add_library(th03_present STATIC
 	src/present/cels.cpp
 	src/present/main_bullets.cpp
 	src/present/main_entities.cpp
+	src/present/main_effects.cpp
 	src/present/main_players.cpp
 	src/present/main_static.cpp
 	src/present/mono.cpp
@@ -50,6 +51,7 @@ add_library(th03_present STATIC
 	src/present/superimpose.cpp
 	src/present/text.cpp
 	src/present/tram.cpp
+	src/present/vectors.cpp
 )
 target_include_directories(th03_present PUBLIC include)
 target_link_libraries(th03_present PUBLIC th03_assets)
@@ -266,5 +268,25 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-present-superimpose-tests
 		COMMAND th03-present-superimpose-tests
+	)
+
+	add_executable(th03-present-vectors-tests
+		tests/test_present_vectors.cpp
+	)
+	target_link_libraries(th03-present-vectors-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-vectors-tests)
+	add_test(
+		NAME th03-present-vectors-tests
+		COMMAND th03-present-vectors-tests
+	)
+
+	add_executable(th03-present-main-effects-tests
+		tests/test_present_main_effects.cpp
+	)
+	target_link_libraries(th03-present-main-effects-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-main-effects-tests)
+	add_test(
+		NAME th03-present-main-effects-tests
+		COMMAND th03-present-main-effects-tests
 	)
 endif()

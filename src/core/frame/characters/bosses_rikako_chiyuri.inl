@@ -2,11 +2,23 @@
 
 void boss_pattern_rikako_spreads(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
+	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
+	if(boss.pattern_frame == 0x10U) {
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			boss.center_x, boss.center_y, target_player
+		);
+	}
 	if(boss.pattern_frame == 0x28U) {
+		observe_common_effect(
+			state, observer, CommonEffectKind::expanding_circle,
+			boss.center_x, boss.center_y, target_player
+		);
 		const auto angle_delta = ((randring_next16(state) & 1U) != 0U)
 			? static_cast<std::uint8_t>(0x30U)
 			: static_cast<std::uint8_t>(-0x30);
@@ -21,7 +33,7 @@ void boss_pattern_rikako_spreads(
 				BulletFlag::bullet16,
 				exact::wrap_add(boss.center_x, offset.x),
 				exact::wrap_add(boss.center_y, offset.y),
-				static_cast<std::uint8_t>(1U - player_id),
+				target_player,
 				(1U << 4U) + 12U,
 				static_cast<std::uint8_t>(angle + angle_delta),
 				bullet_group_five_spread_wide
@@ -36,15 +48,22 @@ void boss_pattern_rikako_spreads(
 
 void boss_pattern_rikako_exatt_and_rings(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
+	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
 	if(boss.pattern_frame == 0x10U) {
-		// SUB_CE5B() is a presentation effect with one shared-ring draw.
-		(void)randring_next16(state);
+		observe_common_square(
+			state, observer, boss.center_x, boss.center_y, target_player
+		);
 	}
 	if(boss.pattern_frame == 0x28U) {
+		observe_common_effect(
+			state, observer, CommonEffectKind::expanding_circle,
+			boss.center_x, boss.center_y, target_player
+		);
 		// This draw is overwritten before first use in ZUN's loop.
 		(void)randring_next16(state);
 		const auto count = boss.params[1];
@@ -123,7 +142,8 @@ void boss_pattern_rikako_four_spreads(
 
 void boss_update_rikako(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	if(boss_launch_or_reverse(state, player_id)) {
@@ -164,10 +184,10 @@ void boss_update_rikako(
 		boss_choose_pattern(state);
 		break;
 	case 2U: case 3U: case 4U: case 5U:
-		boss_pattern_rikako_spreads(state, player_id);
+		boss_pattern_rikako_spreads(state, player_id, observer);
 		break;
 	case 7U: case 8U: case 9U: case 10U: case 11U: case 12U:
-		boss_pattern_rikako_exatt_and_rings(state, player_id);
+		boss_pattern_rikako_exatt_and_rings(state, player_id, observer);
 		break;
 	case 6U: case 13U: case 14U: case 15U: case 16U: case 17U:
 		boss_pattern_rikako_four_spreads(state, player_id);
@@ -184,7 +204,9 @@ void boss_update_rikako(
 	collmap_set_rect_striped(
 		state, target_player, state.boss.center_x, state.boss.center_y, 32, 24
 	);
-	const auto damage = boss_hittest_damage(state, target_player, 32 << 4);
+	const auto damage = boss_hittest_damage(
+		state, target_player, 32 << 4, observer
+	);
 	state.boss.hit = damage;
 	state.boss.hp = exact::wrap_subtract(
 		state.boss.hp, static_cast<std::uint16_t>(damage)
@@ -192,10 +214,17 @@ void boss_update_rikako(
 	boss_defeat_if_needed(state, target_player);
 }
 
-void boss_chiyuri_random_effect(DeterministicState &state) noexcept
+void boss_chiyuri_random_effect(
+	DeterministicState &state,
+	GameplayObserver *observer,
+	std::int16_t center_x,
+	std::int16_t center_y,
+	std::uint8_t player_id
+) noexcept
 {
-	// SUB_CE5B() is a presentation effect with one shared-ring draw.
-	(void)randring_next16(state);
+	observe_common_square(
+		state, observer, center_x, center_y, player_id
+	);
 }
 
 void boss_chiyuri_finish_pattern(BossState &boss) noexcept
@@ -207,7 +236,8 @@ void boss_chiyuri_finish_pattern(BossState &boss) noexcept
 
 void boss_pattern_chiyuri_cardinals(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
@@ -217,10 +247,27 @@ void boss_pattern_chiyuri_cardinals(
 	if(boss.pattern_frame == 1U) {
 		state.chiyuri_boss_pattern_angle = 224U;
 		state.chiyuri_boss_pattern_direction = 0U;
-		boss_chiyuri_random_effect(state);
-		boss_chiyuri_random_effect(state);
-		boss_chiyuri_random_effect(state);
-		boss_chiyuri_random_effect(state);
+		const auto target_player = static_cast<std::uint8_t>(1U - player_id);
+		boss_chiyuri_random_effect(
+			state, observer,
+			exact::wrap_subtract(boss.center_x, std::int16_t{56 << 4}),
+			boss.center_y, target_player
+		);
+		boss_chiyuri_random_effect(
+			state, observer,
+			exact::wrap_add(boss.center_x, std::int16_t{56 << 4}),
+			boss.center_y, target_player
+		);
+		boss_chiyuri_random_effect(
+			state, observer, boss.center_x,
+			exact::wrap_subtract(boss.center_y, std::int16_t{56 << 4}),
+			target_player
+		);
+		boss_chiyuri_random_effect(
+			state, observer, boss.center_x,
+			exact::wrap_add(boss.center_y, std::int16_t{56 << 4}),
+			target_player
+		);
 	} else if(boss.pattern_frame >= 0x80U) {
 		// ZUN resets the pattern before emitting this invocation's four pellets.
 		boss_chiyuri_finish_pattern(boss);
@@ -273,14 +320,18 @@ void boss_pattern_chiyuri_cardinals(
 
 void boss_pattern_chiyuri_rings(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
 	if((boss.pattern_frame % boss.params[3]) != 1U) {
 		return;
 	}
-	boss_chiyuri_random_effect(state);
+	boss_chiyuri_random_effect(
+		state, observer, boss.center_x, boss.center_y,
+		static_cast<std::uint8_t>(1U - player_id)
+	);
 	if(boss.pattern_frame >= 0x80U) {
 		// As above, the final scheduled ring is emitted after the reset.
 		boss_chiyuri_finish_pattern(boss);
@@ -319,12 +370,16 @@ void boss_pattern_chiyuri_rings(
 
 void boss_pattern_chiyuri_trail_ring(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
 	if((boss.pattern_frame & 7U) == 0U) {
-		boss_chiyuri_random_effect(state);
+		boss_chiyuri_random_effect(
+			state, observer, boss.center_x, boss.center_y,
+			static_cast<std::uint8_t>(1U - player_id)
+		);
 	}
 	if(boss.pattern_frame != 0x30U) {
 		return;
@@ -340,15 +395,24 @@ void boss_pattern_chiyuri_trail_ring(
 
 void boss_pattern_chiyuri_lattices(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
 	const auto count = boss.params[6];
 	if(boss.pattern_frame == 0x20U) {
-		boss_chiyuri_random_effect(state);
-		boss_chiyuri_random_effect(state);
+		boss_chiyuri_random_effect(
+			state, observer,
+			exact::wrap_subtract(boss.center_x, std::int16_t{56 << 4}),
+			boss.center_y, target_player
+		);
+		boss_chiyuri_random_effect(
+			state, observer,
+			exact::wrap_add(boss.center_x, std::int16_t{56 << 4}),
+			boss.center_y, target_player
+		);
 		auto speed = boss.params[5];
 		for(std::uint8_t pass = 0U; pass < 2U; ++pass) {
 			for(std::uint8_t i = 0U; i < count; ++i) {
@@ -383,8 +447,16 @@ void boss_pattern_chiyuri_lattices(
 	if(boss.pattern_frame != 0x40U) {
 		return;
 	}
-	boss_chiyuri_random_effect(state);
-	boss_chiyuri_random_effect(state);
+	boss_chiyuri_random_effect(
+		state, observer, boss.center_x,
+		exact::wrap_subtract(boss.center_y, std::int16_t{56 << 4}),
+		target_player
+	);
+	boss_chiyuri_random_effect(
+		state, observer, boss.center_x,
+		exact::wrap_add(boss.center_y, std::int16_t{56 << 4}),
+		target_player
+	);
 	auto speed = boss.params[5];
 	for(std::uint8_t pass = 0U; pass < 2U; ++pass) {
 		for(std::uint8_t i = 0U; i < count; ++i) {
@@ -416,7 +488,8 @@ void boss_pattern_chiyuri_lattices(
 
 void boss_update_chiyuri(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	if(boss_launch_or_reverse(state, player_id)) {
@@ -461,6 +534,31 @@ void boss_update_chiyuri(
 			// State 0 skips the common tail except for both effect frames.
 			return;
 		}
+		if(boss.pattern_frame == 0x50U) {
+			const auto target_player = static_cast<std::uint8_t>(1U - player_id);
+			observe_common_effect(
+				state, observer, CommonEffectKind::contracting_circle,
+				exact::wrap_subtract(boss.center_x, std::int16_t{56 << 4}),
+				boss.center_y, target_player
+			);
+			observe_common_effect(
+				state, observer, CommonEffectKind::contracting_circle,
+				exact::wrap_add(boss.center_x, std::int16_t{56 << 4}),
+				boss.center_y, target_player
+			);
+			observe_common_effect(
+				state, observer, CommonEffectKind::contracting_circle,
+				boss.center_x,
+				exact::wrap_subtract(boss.center_y, std::int16_t{56 << 4}),
+				target_player
+			);
+			observe_common_effect(
+				state, observer, CommonEffectKind::contracting_circle,
+				boss.center_x,
+				exact::wrap_add(boss.center_y, std::int16_t{56 << 4}),
+				target_player
+			);
+		}
 		break;
 
 	case 1U:
@@ -491,16 +589,16 @@ void boss_update_chiyuri(
 		break;
 
 	case 2U: case 3U: case 4U: case 5U:
-		boss_pattern_chiyuri_cardinals(state, player_id);
+		boss_pattern_chiyuri_cardinals(state, player_id, observer);
 		break;
 	case 6U: case 7U: case 8U: case 9U:
-		boss_pattern_chiyuri_rings(state, player_id);
+		boss_pattern_chiyuri_rings(state, player_id, observer);
 		break;
 	case 10U: case 11U: case 12U: case 13U:
-		boss_pattern_chiyuri_trail_ring(state, player_id);
+		boss_pattern_chiyuri_trail_ring(state, player_id, observer);
 		break;
 	case 14U: case 15U: case 16U: case 17U:
-		boss_pattern_chiyuri_lattices(state, player_id);
+		boss_pattern_chiyuri_lattices(state, player_id, observer);
 		break;
 	case 0x80U:
 		boss_exit_move(state, player_id);
@@ -526,7 +624,9 @@ void boss_update_chiyuri(
 	collmap_set_rect_striped(
 		state, target_player, boss.center_x, boss.center_y, 32, 24
 	);
-	const auto damage = boss_hittest_damage(state, target_player, 32 << 4);
+	const auto damage = boss_hittest_damage(
+		state, target_player, 32 << 4, observer
+	);
 	boss.hit = damage;
 	boss.hp = exact::wrap_subtract(
 		boss.hp, static_cast<std::uint16_t>(damage)
@@ -534,10 +634,17 @@ void boss_update_chiyuri(
 	boss_defeat_if_needed(state, target_player);
 }
 
-void boss_yumemi_random_effect(DeterministicState &state) noexcept
+void boss_yumemi_random_effect(
+	DeterministicState &state,
+	GameplayObserver *observer,
+	std::int16_t center_x,
+	std::int16_t center_y,
+	std::uint8_t player_id
+) noexcept
 {
-	// SUB_CE5B() is a presentation effect with one shared-ring draw.
-	(void)randring_next16(state);
+	observe_common_square(
+		state, observer, center_x, center_y, player_id
+	);
 }
 
 BulletFlag boss_yumemi_random_bullet_type(DeterministicState &state) noexcept

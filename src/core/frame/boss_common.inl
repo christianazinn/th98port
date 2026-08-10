@@ -104,7 +104,8 @@ void boss_choose_pattern(DeterministicState &state) noexcept
 std::uint8_t boss_hittest_damage(
 	DeterministicState &state,
 	std::uint8_t player_id,
-	std::int16_t radius
+	std::int16_t radius,
+	GameplayObserver *observer
 ) noexcept
 {
 	if(
@@ -136,10 +137,14 @@ std::uint8_t boss_hittest_damage(
 			continue;
 		}
 		shot.alive = false;
+		observe_hit_circle_exact(
+			state, observer, HitCircleKind::enemy,
+			shot_center_x, shot_center_y, player_id
+		);
 		damage = static_cast<std::uint8_t>(damage + 2U);
 	}
 	damage = static_cast<std::uint8_t>(damage + chargeshot_hittest(
-		state, player_id, left, right, top, bottom
+		state, player_id, left, right, top, bottom, observer
 	));
 	if(
 		state.bomb_flag[player_id] != BombFlag::inactive &&

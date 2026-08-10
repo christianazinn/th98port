@@ -1,18 +1,19 @@
 # TH03 MAIN ordinary-entity gameplay observer schema
 
-Status: source-grounded and implemented. All three phase views and the four
-lifecycle fact families are present; the first `th03_present` consumer draws
-the shot/enemy and fireball phases while player/bullet presentation remains the
-next presenter parcel.
+Status: source-grounded and implemented. All three phase views, the original
+four ordinary-entity lifecycle families, and the hit-circle/common-effect
+lifecycle facts are present. `th03_present` has source-ordered consumers for
+all three views and for both effect pools.
 
 ## Scope and authority
 
 This parcel closes the observation contract for the ordinary live entities in
 `MAIN.EXE`: the two players, ordinary shot pairs, enemies and their explosions,
 fireballs and their explosions, and bullets. Bosses, Extra Attacks, Charge
-Attacks, hit circles, common effects, HUD, results, backgrounds, warnings, and
-audio remain separate parcels. They appear below only where their source
-positions constrain an ordinary entity's observation time or draw order.
+Attacks, HUD, results, backgrounds, warnings, and audio remain separate
+parcels. Hit circles and common effects began outside this ordinary-entity
+schema but are now implemented as a narrow lifecycle extension because their
+exact source positions constrain the fireball and final-view draw order.
 
 The behavioral authority is the clean Anniversary source tree at commit
 `3e2381d4275be7287f5525de5c95389d492b0a3c`. All `th03/...`, `th01/...`, and
@@ -658,9 +659,16 @@ The first coding parcel stopped after the first two phase boundaries:
    producer callbacks allocate first-free slots and neither free nor retag a
    new bullet before returning.
 
-Together the two parcels yield the complete ordinary-entity fact stream while
-keeping the risk and review surface small. They add no generic entity
-abstraction, queue, renderer dependency, localization policy, or state/hash
-field solely for presentation. `MainEntitiesPresenter` already consumes the
-first two views and owns shot cel state; the final player/bullet presenter is
-the next presentation-only slice.
+4. The effect-lifecycle parcel added exact hit-circle and common-effect spawn
+   facts plus one advance boundary for each source pool. Shared RNG stays in
+   core and is consumed before observation. Kana/Kotohime Bomb callbacks use a
+   closed semantic step so their shared presentation-only variables remain in
+   `th03_present`; all other calls report resolved centers and consumed square
+   angles. The presenter owns the 13-slot and 12-slot pools across repeat-round
+   boundaries and exposes the exact post-fireball and pre-bullet draw passes.
+
+Together these parcels yield the complete ordinary-entity fact stream and the
+two adjacent effect lifecycles while keeping the risk and review surface small.
+They add no generic entity abstraction, queue, renderer dependency,
+localization policy, or state/hash field solely for presentation. The
+no-observer path remains the verifier path.

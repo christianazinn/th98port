@@ -97,7 +97,8 @@ std::uint16_t cpu_target_movement(
 bool cpu_safe_move(
 	DeterministicState &state,
 	std::uint8_t player_id,
-	std::int8_t &final_velocity_x_write
+	std::int8_t &final_velocity_x_write,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &player = state.players[player_id];
@@ -154,7 +155,7 @@ bool cpu_safe_move(
 			continue;
 		}
 		if(player.gauge_charged <= gauge_64) {
-			player_bomb(state, player_id);
+			player_bomb(state, player_id, observer);
 		} else {
 			player.is_hit = true;
 		}
@@ -200,7 +201,7 @@ void player_update_cpu(
 		// target scratch therefore retains the value written by an earlier
 		// callback in this frame.
 		std::int8_t velocity_x_write = 0;
-		(void)cpu_safe_move(state, player_id, velocity_x_write);
+		(void)cpu_safe_move(state, player_id, velocity_x_write, observer);
 		final_velocity_x_write = velocity_x_write;
 	} else {
 		const auto movement = cpu_target_movement(state, player_id);
@@ -220,7 +221,7 @@ void player_update_cpu(
 			if(player.gauge_charged > (80U << 4U)) {
 				player.is_hit = true;
 			} else if((randring_next16(state) & 3U) == 0U) {
-				player_bomb(state, player_id);
+				player_bomb(state, player_id, observer);
 			} else {
 				player.is_hit = true;
 			}

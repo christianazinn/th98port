@@ -2,7 +2,8 @@
 
 void boss_pattern_yumemi_accel_rings(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
@@ -17,13 +18,22 @@ void boss_pattern_yumemi_accel_rings(
 			((randring_next16(state) & 1U) == 0U) ? 3 : -3;
 	}
 	if(boss.pattern_frame < 4U) {
-		boss_yumemi_random_effect(state);
+		boss_yumemi_random_effect(
+			state, observer,
+			state.yumemi_boss_muzzle_x, state.yumemi_boss_muzzle_y,
+			static_cast<std::uint8_t>(1U - player_id)
+		);
 		return;
 	}
 	if(boss.pattern_frame < 0x20U) {
 		return;
 	}
 	if(boss.pattern_frame == 0x20U) {
+		observe_common_effect(
+			state, observer, CommonEffectKind::expanding_circle,
+			state.yumemi_boss_muzzle_x, state.yumemi_boss_muzzle_y,
+			static_cast<std::uint8_t>(1U - player_id)
+		);
 		boss.render_state = 2U;
 	}
 	if((static_cast<std::uint8_t>(boss.pattern_frame) & 3U) == 0U) {
@@ -52,7 +62,8 @@ void boss_pattern_yumemi_accel_rings(
 
 void boss_pattern_yumemi_random_groups(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
@@ -76,7 +87,11 @@ void boss_pattern_yumemi_random_groups(
 	}
 	if(boss.pattern_frame < 0x10U) {
 		if((boss.pattern_frame & 3U) == 1U) {
-			boss_yumemi_random_effect(state);
+			boss_yumemi_random_effect(
+				state, observer,
+				state.yumemi_boss_target_x, state.yumemi_boss_target_y,
+				static_cast<std::uint8_t>(1U - player_id)
+			);
 		}
 		return;
 	}
@@ -84,6 +99,11 @@ void boss_pattern_yumemi_random_groups(
 		return;
 	}
 	if(boss.pattern_frame == 0x20U) {
+		observe_common_effect(
+			state, observer, CommonEffectKind::expanding_circle,
+			state.yumemi_boss_muzzle_x, state.yumemi_boss_muzzle_y,
+			static_cast<std::uint8_t>(1U - player_id)
+		);
 		boss.render_state = 2U;
 	}
 	if((static_cast<std::uint8_t>(boss.pattern_frame) & 1U) == 0U) {
@@ -150,7 +170,8 @@ void boss_pattern_yumemi_four_rings(
 
 void boss_pattern_yumemi_crosses(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
@@ -175,7 +196,11 @@ void boss_pattern_yumemi_crosses(
 	boss_move(boss);
 	if((boss.pattern_frame & 0x0FU) == 0x0FU) {
 		boss.render_state = 1U;
-		boss_yumemi_random_effect(state);
+		boss_yumemi_random_effect(
+			state, observer,
+			state.yumemi_boss_target_x, state.yumemi_boss_target_y,
+			target_player
+		);
 		extra_attack_add_direct_yumemi(
 			state, player_id,
 			state.yumemi_boss_target_x, state.yumemi_boss_target_y
@@ -237,7 +262,8 @@ void boss_pattern_yumemi_rain(
 
 void boss_update_yumemi(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	if(boss_launch_or_reverse(state, player_id)) {
@@ -286,16 +312,16 @@ void boss_update_yumemi(
 		boss_choose_pattern(state);
 		break;
 	case 2U: case 3U: case 4U:
-		boss_pattern_yumemi_accel_rings(state, player_id);
+		boss_pattern_yumemi_accel_rings(state, player_id, observer);
 		break;
 	case 7U: case 8U: case 9U:
-		boss_pattern_yumemi_random_groups(state, player_id);
+		boss_pattern_yumemi_random_groups(state, player_id, observer);
 		break;
 	case 11U: case 12U: case 13U: case 14U:
 		boss_pattern_yumemi_four_rings(state, player_id);
 		break;
 	case 15U: case 16U: case 17U:
-		boss_pattern_yumemi_crosses(state, player_id);
+		boss_pattern_yumemi_crosses(state, player_id, observer);
 		break;
 	case 5U: case 6U: case 10U:
 		boss_pattern_yumemi_rain(state, player_id);
@@ -322,7 +348,9 @@ void boss_update_yumemi(
 	collmap_set_rect_striped(
 		state, target_player, boss.center_x, boss.center_y, 28, 28
 	);
-	const auto damage = boss_hittest_damage(state, target_player, 32 << 4);
+	const auto damage = boss_hittest_damage(
+		state, target_player, 32 << 4, observer
+	);
 	boss.hit = damage;
 	boss.hp = exact::wrap_subtract(
 		boss.hp, static_cast<std::uint16_t>(damage)
@@ -330,5 +358,9 @@ void boss_update_yumemi(
 	boss_defeat_if_needed(state, target_player);
 }
 
-void bosses_update(DeterministicState &state, std::uint8_t player_id) noexcept
+void bosses_update(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	GameplayObserver *observer
+) noexcept
 {

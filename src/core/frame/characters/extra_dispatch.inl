@@ -2,30 +2,31 @@
 
 void extra_attacks_update(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	const auto character = character_index_from_paletted(
 		state.players[player_id].paletted_character
 	);
 	if(character == character_reimu) {
-		extra_attacks_update_reimu(state, player_id);
+		extra_attacks_update_reimu(state, player_id, observer);
 	} else if(character == character_mima) {
-		extra_attacks_update_mima(state, player_id);
+		extra_attacks_update_mima(state, player_id, observer);
 	} else if(character == character_marisa) {
-		extra_attacks_update_marisa(state, player_id);
+		extra_attacks_update_marisa(state, player_id, observer);
 	} else if(character == character_ellen) {
-		extra_attacks_update_ellen(state, player_id);
+		extra_attacks_update_ellen(state, player_id, observer);
 	} else if(character == character_kotohime) {
-		extra_attacks_update_kotohime(state, player_id);
+		extra_attacks_update_kotohime(state, player_id, observer);
 	} else if(character == character_kana) {
 		extra_attacks_update_kana(state, player_id);
 	} else if(character == character_rikako) {
-		extra_attacks_update_rikako(state, player_id);
+		extra_attacks_update_rikako(state, player_id, observer);
 	} else if(character == character_chiyuri) {
-		extra_attacks_update_chiyuri(state, player_id);
+		extra_attacks_update_chiyuri(state, player_id, observer);
 	} else if(character == character_yumemi) {
-		extra_attacks_update_yumemi(state, player_id);
+		extra_attacks_update_yumemi(state, player_id, observer);
 	}
 }
 

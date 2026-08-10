@@ -101,16 +101,18 @@ split comparisons. Original game data and replay captures remain external.
   remain outside the library.
 - `th03_present` owns the PC-98 page, planar, palette, TRAM, cel, Sprite16
   staging/drawing, prepared BFNT superimpose resources, text composition,
-  staff flakes, and the source-ordered shot/enemy/fireball/player/bullet
-  presenter foundations. It depends inward on `th03_assets` and the neutral
-  observation API in `th03_core`; the core has no reciprocal dependency, and
-  `th03rv` links neither presentation nor assets.
+  staff flakes, exact GRCG line/circle primitives, and the source-ordered
+  shot/enemy/fireball/hit-circle/player/common-effect/bullet presenter
+  foundations. It depends inward on `th03_assets` and the neutral observation
+  API in `th03_core`; the core has no reciprocal dependency, and `th03rv`
+  links neither presentation nor assets.
 - `th03_core` exposes an optional synchronous observer for immutable gameplay
   facts. The three implemented phase views cover shots/enemies, post-collision
   fireballs, and final players/bullets. Transient lifecycle facts preserve shot
-  cel reset, player pose/defeat ordering, and Bullet16 construction without
-  adding visual state to gameplay. The pointer is borrowed per call and never
-  enters deterministic state; `th03rv` uses the null path.
+  cel reset, player pose/defeat ordering, Bullet16 construction, hit-circle
+  allocation, and common-effect allocation/advance timing without adding
+  visual state to gameplay. The pointer is borrowed per call and never enters
+  deterministic state; `th03rv` uses the null path.
 - `th03-headless`, `th03-replay-check`, and `th03rv` are independent
   filesystem/CLI clients of those libraries.
 - V13 produces the same neutral document/session types without changing the

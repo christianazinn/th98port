@@ -169,7 +169,11 @@ void boss_pattern_marisa_three_direct_pairs(
 	}
 }
 
-void boss_update_marisa(DeterministicState &state, std::uint8_t player_id) noexcept
+void boss_update_marisa(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	GameplayObserver *observer
+) noexcept
 {
 	if(boss_launch_or_reverse(state, player_id)) {
 		state.boss.params[0] = static_cast<std::uint8_t>(
@@ -229,7 +233,9 @@ void boss_update_marisa(DeterministicState &state, std::uint8_t player_id) noexc
 	collmap_set_rect_striped(
 		state, target_player, state.boss.center_x, state.boss.center_y, 28, 28
 	);
-	const auto damage = boss_hittest_damage(state, target_player, 32 << 4);
+	const auto damage = boss_hittest_damage(
+		state, target_player, 32 << 4, observer
+	);
 	state.boss.hit = damage;
 	state.boss.hp = exact::wrap_subtract(
 		state.boss.hp, static_cast<std::uint16_t>(damage)
@@ -239,10 +245,21 @@ void boss_update_marisa(DeterministicState &state, std::uint8_t player_id) noexc
 
 void boss_pattern_ellen_spreads(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
+	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
+	if(
+		boss.pattern_frame == 0x10U || boss.pattern_frame == 0x14U ||
+		boss.pattern_frame == 0x18U
+	) {
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			boss.center_x, boss.center_y, target_player
+		);
+	}
 	if(boss.pattern_frame == 0x18U) {
 		state.ellen_boss_spread_angle = 0x40U;
 		return;
@@ -250,7 +267,6 @@ void boss_pattern_ellen_spreads(
 	if(boss.pattern_frame < 0x1CU) {
 		return;
 	}
-	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
 	if(boss.pattern_frame < 0x24U) {
 		if((boss.pattern_frame & 1U) != 0U) {
 			return;
@@ -297,7 +313,8 @@ void boss_pattern_ellen_spreads(
 
 void boss_pattern_ellen_orbits(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
@@ -308,6 +325,11 @@ void boss_pattern_ellen_orbits(
 		boss.pattern_frame == 0x20U || boss.pattern_frame == 0x24U ||
 		boss.pattern_frame == 0x28U
 	) {
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			boss.center_x, boss.center_y,
+			static_cast<std::uint8_t>(1U - player_id)
+		);
 		return;
 	}
 	if(boss.pattern_frame == 0x30U || boss.pattern_frame == 0x60U) {
@@ -372,7 +394,11 @@ void boss_pattern_ellen_pellet_spreads(
 	}
 }
 
-void boss_update_ellen(DeterministicState &state, std::uint8_t player_id) noexcept
+void boss_update_ellen(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	GameplayObserver *observer
+) noexcept
 {
 	if(boss_launch_or_reverse(state, player_id)) {
 		state.boss.params[0] = static_cast<std::uint8_t>(
@@ -405,10 +431,10 @@ void boss_update_ellen(DeterministicState &state, std::uint8_t player_id) noexce
 	}
 	switch(dispatch_state) {
 	case 2U: case 3U: case 4U: case 5U:
-		boss_pattern_ellen_spreads(state, player_id);
+		boss_pattern_ellen_spreads(state, player_id, observer);
 		break;
 	case 6U: case 7U: case 8U: case 9U: case 10U:
-		boss_pattern_ellen_orbits(state, player_id);
+		boss_pattern_ellen_orbits(state, player_id, observer);
 		break;
 	case 11U: case 12U: case 13U: case 14U:
 	case 15U: case 16U: case 17U:
@@ -426,7 +452,9 @@ void boss_update_ellen(DeterministicState &state, std::uint8_t player_id) noexce
 	collmap_set_rect_striped(
 		state, target_player, state.boss.center_x, state.boss.center_y, 20, 24
 	);
-	const auto damage = boss_hittest_damage(state, target_player, 24 << 4);
+	const auto damage = boss_hittest_damage(
+		state, target_player, 24 << 4, observer
+	);
 	state.boss.hit = damage;
 	state.boss.hp = exact::wrap_subtract(
 		state.boss.hp, static_cast<std::uint16_t>(damage)

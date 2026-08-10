@@ -35,6 +35,11 @@ enum class ObservedCall : std::uint8_t {
 	bullet16_spawned,
 	player_defeat_step,
 	player_pose_committed,
+	hit_circles_advanced,
+	hit_circle_spawned,
+	common_effects_advanced,
+	common_effect_spawned,
+	bomb_common_effect_step,
 	shots_enemies,
 	fireballs,
 	players_bullets,
@@ -52,6 +57,9 @@ public:
 		bullet_spawns.reserve(64U);
 		poses.reserve(8U);
 		defeat_steps.reserve(8U);
+		hit_circles.reserve(32U);
+		common_effects.reserve(64U);
+		bomb_common_steps.reserve(8U);
 		calls.reserve(80U);
 	}
 
@@ -81,6 +89,40 @@ public:
 	{
 		defeat_steps.push_back(step);
 		calls.push_back(ObservedCall::player_defeat_step);
+	}
+
+	void hit_circles_advanced() noexcept override
+	{
+		calls.push_back(ObservedCall::hit_circles_advanced);
+	}
+
+	void hit_circle_spawned(
+		const th03::HitCircleSpawned &spawn
+	) noexcept override
+	{
+		hit_circles.push_back(spawn);
+		calls.push_back(ObservedCall::hit_circle_spawned);
+	}
+
+	void common_effects_advanced() noexcept override
+	{
+		calls.push_back(ObservedCall::common_effects_advanced);
+	}
+
+	void common_effect_spawned(
+		const th03::CommonEffectSpawned &spawn
+	) noexcept override
+	{
+		common_effects.push_back(spawn);
+		calls.push_back(ObservedCall::common_effect_spawned);
+	}
+
+	void bomb_common_effect_step(
+		const th03::BombCommonEffectStep &step
+	) noexcept override
+	{
+		bomb_common_steps.push_back(step);
+		calls.push_back(ObservedCall::bomb_common_effect_step);
 	}
 
 	void observe(const th03::ShotsEnemiesView &view) noexcept override
@@ -156,6 +198,9 @@ public:
 	std::vector<th03::Bullet16Spawned> bullet_spawns;
 	std::vector<th03::PlayerPoseCommitted> poses;
 	std::vector<th03::PlayerDefeatStep> defeat_steps;
+	std::vector<th03::HitCircleSpawned> hit_circles;
+	std::vector<th03::CommonEffectSpawned> common_effects;
+	std::vector<th03::BombCommonEffectStep> bomb_common_steps;
 	th03::MainPhaseContext shots_enemies_context{};
 	th03::MainPhaseContext fireballs_context{};
 	th03::MainPhaseContext players_bullets_context{};
@@ -1015,9 +1060,19 @@ void test_player_pose_and_defeat_lifecycle()
 		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
 			fatal, &fatal_hit);
 		check(fatal.players[0U].lose_anim_time == 0x30U &&
-				  fatal_hit.defeat_steps.empty(),
+				  fatal_hit.defeat_steps.empty() &&
+				  fatal_hit.hit_circles ==
+					  std::vector<th03::HitCircleSpawned>{
+						  {
+							  .kind = th03::HitCircleKind::player,
+							  .player = th03::PlayerId::p1,
+							  .center_x = 144 << 4,
+							  .center_y = 336 << 4,
+							  .fg_shift_x_at_spawn = 0,
+						  },
+					  },
 			  "fatal collision arms defeat without emitting a same-update "
-			  "defeat step");
+			  "defeat step and emits the exact player hit circle");
 		RecordingObserver fatal_next;
 		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
 			fatal, &fatal_next);
@@ -1079,23 +1134,29 @@ void test_bullet16_lifecycle_styles_order_and_full_arena()
 			"one multi-add Mima Gauge callback emits strictly ordered, "
 			"uniformly static default facts");
 		check(mima.phases.empty() && mima.poses.empty() &&
-				  std::all_of(mima.calls.begin(),
-							  mima.calls.end(),
-							  [](ObservedCall call) {
-								  return call == ObservedCall::bullet16_spawned;
-							  }),
+				  mima.calls.size() == 13U &&
+				  mima.calls.front() == ObservedCall::hit_circles_advanced &&
+				  mima.calls[1U] == ObservedCall::common_effect_spawned &&
+				  mima.calls[2U] == ObservedCall::common_effect_spawned &&
+				  std::all_of(
+					  mima.calls.begin() + 3, mima.calls.begin() + 12,
+					  [](ObservedCall call) {
+						  return call == ObservedCall::bullet16_spawned;
+					  }
+				  ) &&
+				  mima.calls.back() == ObservedCall::common_effects_advanced,
 			  "prefix Bullet16 facts are observable before a "
 			  "replay-pause-style deferred suffix");
 		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
 			mima_record, &mima);
 		th03::detail::gameplay_frame_suffix_after_interstitial(mima_record,
 															   &mima);
-		check(mima.calls.size() == 14U &&
-				  mima.calls[9U] == ObservedCall::player_pose_committed &&
-				  mima.calls[10U] == ObservedCall::player_pose_committed &&
-				  mima.calls[11U] == ObservedCall::shots_enemies &&
-				  mima.calls[12U] == ObservedCall::fireballs &&
-				  mima.calls[13U] == ObservedCall::players_bullets,
+		check(mima.calls.size() == 18U &&
+				  mima.calls[13U] == ObservedCall::player_pose_committed &&
+				  mima.calls[14U] == ObservedCall::player_pose_committed &&
+				  mima.calls[15U] == ObservedCall::shots_enemies &&
+				  mima.calls[16U] == ObservedCall::fireballs &&
+				  mima.calls[17U] == ObservedCall::players_bullets,
 			  "lifecycle prefix, P1/P2 pose commits, and three phase views "
 			  "retain source order");
 	});
@@ -1441,7 +1502,11 @@ void test_recorded_pause_completion()
 			invalid_recording.spawns.empty() &&
 			invalid_recording.bullet_spawns.empty() &&
 			invalid_recording.poses.empty() &&
-			invalid_recording.defeat_steps.empty(),
+			invalid_recording.defeat_steps.empty() &&
+			invalid_recording.hit_circles.empty() &&
+			invalid_recording.common_effects.empty() &&
+			invalid_recording.bomb_common_steps.empty() &&
+			invalid_recording.calls.empty(),
 			"an invalid input context emits no observer callback"
 		);
 	}
@@ -1563,20 +1628,24 @@ void test_warning_completion()
 				static_cast<std::ptrdiff_t>(calls_before_warning),
 			recording.calls.end()
 		) == std::vector<ObservedCall>{
+			ObservedCall::hit_circles_advanced,
+			ObservedCall::common_effects_advanced,
 			ObservedCall::shot_pair_spawned,
 			ObservedCall::player_pose_committed,
 			ObservedCall::player_pose_committed,
 		},
 		"warning-start call reports shot and P1/P2 pose facts before deferring phase views"
 	);
+	const auto calls_during_warning = recording.calls.size();
 	for(std::size_t sample = 0U; sample < 26U; ++sample) {
 		const auto interstitial = game->step(
 			{}, th03::InputContext::interstitial, &recording
 		);
 		check(
 			interstitial.status == th03::StepStatus::running &&
-			recording.phases.empty(),
-			"warning interstitial samples 1 through 26 emit no phase view"
+			recording.phases.empty() &&
+			recording.calls.size() == calls_during_warning,
+			"warning interstitial samples 1 through 26 emit no observer callback"
 		);
 	}
 	const auto completed = game->step(
@@ -1593,6 +1662,324 @@ void test_warning_completion()
 	);
 }
 
+void test_main_effect_observer_contract()
+{
+	with_live_state([](auto &boss_effect) {
+		boss_effect.hud_start_flag = 1U;
+		boss_effect.players[0U].paletted_character = 3;
+		boss_effect.gba_boss_launched_by = 0;
+		boss_effect.boss.state = 6U;
+		boss_effect.boss.pattern_frame = 0x1FU;
+		boss_effect.boss.center_x = 120 << 4;
+		boss_effect.boss.center_y = 100 << 4;
+		boss_effect.boss.hp = 100U;
+		boss_effect.playfield_fg_shift_x[1U] = 5;
+		RecordingObserver recording;
+		(void)th03::detail::gameplay_frame_prefix(
+			boss_effect, th03::GameContent{}, &recording
+		);
+		check(
+			recording.common_effects ==
+				std::vector<th03::CommonEffectSpawned>{
+					{
+						.kind = th03::CommonEffectKind::contracting_circle,
+						.player = th03::PlayerId::p2,
+						.center_x = (120 + 24) << 4,
+						.center_y = (100 - 32) << 4,
+						.fg_shift_x_at_spawn = 5,
+					},
+				} &&
+			recording.calls == std::vector<ObservedCall>{
+				ObservedCall::common_effect_spawned,
+				ObservedCall::hit_circles_advanced,
+				ObservedCall::common_effects_advanced,
+			},
+			"Boss common effects precede the hit-circle and common-effect prefix advances"
+		);
+	});
+
+	with_live_state([](auto &base) {
+		base.hud_start_flag = 1U;
+		base.players[0U].paletted_character = 17;
+		base.gba_flag_active[0U] =
+			th03::detail::GaugeBossAttackFlag::gauge_bullet_active;
+		base.yumemi_gauge_pattern_frame[0U] = 0U;
+		base.gauge_pattern_param_a[0U] = 24U;
+		base.gauge_pattern_param_b[0U] = 32U;
+		base.playfield_fg_shift_x[1U] = -7;
+		base.randring[0U] = 0xA5U;
+		base.randring[1U] = 0x5AU;
+
+		auto null_state = base;
+		auto discard_state = base;
+		auto record_state = base;
+		DiscardObserver discard;
+		RecordingObserver recording;
+		check(
+			th03::detail::gameplay_frame_prefix(
+				null_state, th03::GameContent{}, nullptr
+			) &&
+			th03::detail::gameplay_frame_prefix(
+				discard_state, th03::GameContent{}, &discard
+			) &&
+			th03::detail::gameplay_frame_prefix(
+				record_state, th03::GameContent{}, &recording
+			),
+			"effect lifecycle prefix fixtures complete"
+		);
+		check(
+			observed_gameplay_equal(null_state, discard_state) &&
+			observed_gameplay_equal(null_state, record_state),
+			"null, discard, and recording effect paths preserve gameplay and RNG"
+		);
+		check(
+			recording.calls == std::vector<ObservedCall>{
+				ObservedCall::hit_circles_advanced,
+				ObservedCall::common_effect_spawned,
+				ObservedCall::common_effects_advanced,
+			},
+			"hit-circle advance, late Gauge spawn, and common-effect advance retain prefix order"
+		);
+		check(
+			recording.common_effects ==
+				std::vector<th03::CommonEffectSpawned>{
+					{
+						.kind = th03::CommonEffectKind::contracting_square,
+						.player = th03::PlayerId::p2,
+						.center_x = 144 << 4,
+						.center_y = 32 << 4,
+						.fg_shift_x_at_spawn = -7,
+						.initial_angle = 0xA5U,
+					},
+				},
+			"Yumemi Gauge exposes the source effect center and consumed low RNG byte"
+		);
+	});
+
+	with_live_state([](auto &bombs) {
+		bombs.players[0U].paletted_character = 11;
+		bombs.players[1U].paletted_character = 9;
+		bombs.bomb_flag = {
+			th03::detail::BombFlag::active,
+			th03::detail::BombFlag::active,
+		};
+		bombs.bomb_frame = {63U, 64U};
+		bombs.playfield_fg_shift_x = {7, -7};
+		RecordingObserver recording;
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			bombs, &recording
+		);
+		check(
+			recording.bomb_common_steps ==
+				std::vector<th03::BombCommonEffectStep>{
+					{
+						.kind = th03::BombCommonEffectKind::kana,
+						.player = th03::PlayerId::p1,
+						.bomb_frame = 63U,
+						.fg_shift_x_at_effects = 7,
+					},
+					{
+						.kind = th03::BombCommonEffectKind::kotohime,
+						.player = th03::PlayerId::p2,
+						.bomb_frame = 64U,
+						.fg_shift_x_at_effects = 4,
+					},
+				},
+			"simultaneous exceptional Bomb callbacks preserve shared P1-then-P2 frame-63/frame-64 order"
+		);
+		check(
+			recording.common_effects.empty(),
+			"Kana and Kotohime callbacks do not fabricate core-owned concrete effects"
+		);
+	});
+
+	with_live_state([](auto &chiyuri) {
+		chiyuri.players[0U].paletted_character = 15;
+		chiyuri.bomb_flag[0U] = th03::detail::BombFlag::active;
+		chiyuri.bomb_frame[0U] = 79U;
+		chiyuri.playfield_fg_shift_x[0U] = -4;
+		chiyuri.randring[0U] = 0x11U;
+		chiyuri.randring[1U] = 0x22U;
+		chiyuri.randring[2U] = 0x33U;
+		chiyuri.randring[3U] = 0x44U;
+		chiyuri.randring[4U] = 0x55U;
+		RecordingObserver recording;
+		chiyuri.hud_start_flag = 1U;
+		(void)th03::detail::gameplay_frame_prefix(
+			chiyuri, th03::GameContent{}, &recording
+		);
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			chiyuri, &recording
+		);
+		check(
+			recording.common_effects ==
+				std::vector<th03::CommonEffectSpawned>{
+					{th03::CommonEffectKind::contracting_square, th03::PlayerId::p1,
+						std::int16_t{(144 - 32) << 4}, std::int16_t{184 << 4}, 4, 0x11U},
+					{th03::CommonEffectKind::contracting_square, th03::PlayerId::p1,
+						std::int16_t{(144 + 32) << 4}, std::int16_t{184 << 4}, 4, 0x22U},
+					{th03::CommonEffectKind::contracting_square, th03::PlayerId::p1,
+						std::int16_t{144 << 4}, std::int16_t{(184 - 32) << 4}, 4, 0x33U},
+					{th03::CommonEffectKind::contracting_square, th03::PlayerId::p1,
+						std::int16_t{144 << 4}, std::int16_t{(184 + 32) << 4}, 4, 0x44U},
+				},
+			"Chiyuri Bomb preserves four-spawn geometry, order, shift, and shared-ring angles"
+		);
+		const auto common_advance = std::find(
+			recording.calls.begin(), recording.calls.end(),
+			ObservedCall::common_effects_advanced
+		);
+		const auto first_bomb_effect = std::find(
+			recording.calls.begin(), recording.calls.end(),
+			ObservedCall::common_effect_spawned
+		);
+		check(
+			common_advance < first_bomb_effect,
+			"prefix common-effect advance precedes late Bomb spawns"
+		);
+	});
+
+	with_live_state([](auto &yumemi) {
+		yumemi.players[0U].paletted_character = 17;
+		yumemi.bomb_flag[0U] = th03::detail::BombFlag::active;
+		yumemi.bomb_frame[0U] = 72U;
+		yumemi.playfield_fg_shift_x[0U] = -4;
+		yumemi.randring[0U] = 0x9CU;
+		RecordingObserver recording;
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			yumemi, &recording
+		);
+		check(
+			recording.common_effects.size() == 1U &&
+			recording.common_effects[0U].fg_shift_x_at_spawn == -4 &&
+			recording.common_effects[0U].initial_angle == 0x9CU &&
+			yumemi.playfield_fg_shift_x[0U] == 4,
+			"Yumemi Bomb captures the prior shift before applying this frame's shake"
+		);
+	});
+
+	with_live_state([](auto &ellen) {
+		ellen.players[0U].paletted_character = 7;
+		ellen.bomb_flag[0U] = th03::detail::BombFlag::active;
+		ellen.bomb_frame[0U] = 56U;
+		RecordingObserver recording;
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			ellen, &recording
+		);
+		check(
+			recording.common_effects.empty(),
+			"Ellen Bomb has no spurious frame-below-64 common effect"
+		);
+	});
+
+	with_live_state([](auto &fireball_hit) {
+		auto &fireball = fireball_hit.fireballs[0U];
+		fireball.flag = th03::detail::FireballFlag::fall;
+		fireball.player_id = 0U;
+		fireball.center_x = 100 << 4;
+		fireball.center_y = 120 << 4;
+		fireball.hp = 1U;
+		auto &shot = fireball_hit.shotpairs[0U];
+		shot.alive = true;
+		shot.player_id = 0U;
+		shot.topleft_x = 90 << 4;
+		shot.topleft_y = 115 << 4;
+		fireball_hit.playfield_fg_shift_x[0U] = 6;
+		RecordingObserver recording;
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			fireball_hit, &recording
+		);
+		check(
+			recording.hit_circles ==
+				std::vector<th03::HitCircleSpawned>{
+					{
+						.kind = th03::HitCircleKind::enemy,
+						.player = th03::PlayerId::p1,
+						.center_x = 106 << 4,
+						.center_y = 123 << 4,
+						.fg_shift_x_at_spawn = 6,
+					},
+				},
+			"ordinary shot collision exposes its exact center and spawn-time shift"
+		);
+		const auto hit_call = std::find(
+			recording.calls.begin(), recording.calls.end(),
+			ObservedCall::hit_circle_spawned
+		);
+		const auto shots_view = std::find(
+			recording.calls.begin(), recording.calls.end(),
+			ObservedCall::shots_enemies
+		);
+		const auto fireballs_view = std::find(
+			recording.calls.begin(), recording.calls.end(),
+			ObservedCall::fireballs
+		);
+		check(
+			shots_view < hit_call && hit_call < fireballs_view,
+			"late fireball hit-circle spawn remains between its prefix and post-hittest views"
+		);
+	});
+
+	with_live_state([](auto &charge_hit) {
+		auto &fireball = charge_hit.fireballs[0U];
+		fireball.flag = th03::detail::FireballFlag::fall;
+		fireball.player_id = 0U;
+		fireball.center_x = 100 << 4;
+		fireball.center_y = 120 << 4;
+		fireball.hp = 1U;
+		charge_hit.players[0U].paletted_character = 17;
+		charge_hit.yumemi_charge[0U].state = 2U;
+		charge_hit.yumemi_charge[0U].x = 100 << 4;
+		charge_hit.yumemi_charge[0U].y = 120 << 4;
+		charge_hit.playfield_fg_shift_x[0U] = -3;
+		charge_hit.randring[0U] = 0x10U;
+		charge_hit.randring[1U] = 0x01U;
+		charge_hit.randring[2U] = 0x02U;
+		auto no_observer = charge_hit;
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			no_observer, nullptr
+		);
+		RecordingObserver recording;
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			charge_hit, &recording
+		);
+		check(
+			no_observer.randring_cursor == charge_hit.randring_cursor &&
+			no_observer.randring == charge_hit.randring &&
+			no_observer.random_seed == charge_hit.random_seed,
+			"randomized hit-circle RNG consumption is observer-independent"
+		);
+		check(
+			recording.hit_circles ==
+				std::vector<th03::HitCircleSpawned>{
+					{
+						.kind = th03::HitCircleKind::enemy,
+						.player = th03::PlayerId::p1,
+						.center_x = 1680,
+						.center_y = 2001,
+						.fg_shift_x_at_spawn = -3,
+					},
+				} &&
+			charge_hit.randring_cursor == 2U,
+			"Charge collision exposes the two-ring-word randomized hit-circle center"
+		);
+
+		auto banner = charge_hit;
+		banner.defeat_flag = th03::detail::DefeatFlag::banner;
+		banner.randring_cursor = 0U;
+		banner.fireballs[0U].flag = th03::detail::FireballFlag::fall;
+		RecordingObserver banner_recording;
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			banner, &banner_recording
+		);
+		check(
+			banner_recording.hit_circles.empty() &&
+			banner.randring_cursor == 0U,
+			"result banner suppresses Charge hit-circle events and their shared RNG reads"
+		);
+	});
+}
+
 } // namespace
 
 int main()
@@ -1607,6 +1994,7 @@ int main()
 	test_recorded_pause_completion();
 	test_recorded_pause_prefix_bullet_once();
 	test_warning_completion();
+	test_main_effect_observer_contract();
 
 	if(failures != 0) {
 		std::cerr << failures << " of " << checks << " checks failed\n";

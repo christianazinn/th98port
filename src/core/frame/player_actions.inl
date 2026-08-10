@@ -85,7 +85,11 @@ void release_gauge(DeterministicState &state, std::uint8_t player_id) noexcept
 	player.gauge_charged = 0U;
 }
 
-void player_bomb(DeterministicState &state, std::uint8_t player_id) noexcept
+void player_bomb(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	GameplayObserver *observer
+) noexcept
 {
 	auto &player = state.players[player_id];
 	if(
@@ -108,6 +112,10 @@ void player_bomb(DeterministicState &state, std::uint8_t player_id) noexcept
 	}
 	state.damage_all_on[player_id] = 1U;
 	player.hyper_active = static_cast<std::uint8_t>(player.paletted_character);
+	observe_common_effect(
+		state, observer, CommonEffectKind::expanding_circle,
+		player.center_x.raw(), player.center_y.raw(), player_id
+	);
 	if(player_id == 0U && state.skill > 0U) {
 		state.skill--;
 	}

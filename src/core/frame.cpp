@@ -182,6 +182,99 @@ struct Velocity {
 	std::int16_t y = 0;
 };
 
+void observe_common_effect(
+	const DeterministicState &state,
+	GameplayObserver *observer,
+	CommonEffectKind kind,
+	std::int16_t center_x,
+	std::int16_t center_y,
+	std::uint8_t player_id,
+	std::uint8_t initial_angle = 0U
+) noexcept
+{
+	if(observer == nullptr) {
+		return;
+	}
+	observer->common_effect_spawned(CommonEffectSpawned{
+		.kind = kind,
+		.player = static_cast<PlayerId>(player_id),
+		.center_x = center_x,
+		.center_y = center_y,
+		.fg_shift_x_at_spawn = state.playfield_fg_shift_x[player_id],
+		.initial_angle = initial_angle,
+	});
+}
+
+void observe_common_square(
+	DeterministicState &state,
+	GameplayObserver *observer,
+	std::int16_t center_x,
+	std::int16_t center_y,
+	std::uint8_t player_id
+) noexcept
+{
+	const auto random_word = randring_next16(state);
+	observe_common_effect(
+		state, observer, CommonEffectKind::contracting_square,
+		center_x, center_y, player_id,
+		static_cast<std::uint8_t>(random_word)
+	);
+}
+
+void observe_hit_circle_exact(
+	const DeterministicState &state,
+	GameplayObserver *observer,
+	HitCircleKind kind,
+	std::int16_t center_x,
+	std::int16_t center_y,
+	std::uint8_t player_id
+) noexcept
+{
+	if(observer == nullptr) {
+		return;
+	}
+	observer->hit_circle_spawned(HitCircleSpawned{
+		.kind = kind,
+		.player = static_cast<PlayerId>(player_id),
+		.center_x = center_x,
+		.center_y = center_y,
+		.fg_shift_x_at_spawn = state.playfield_fg_shift_x[player_id],
+	});
+}
+
+void observe_hit_circle_random(
+	DeterministicState &state,
+	GameplayObserver *observer,
+	std::int16_t left,
+	std::int16_t right,
+	std::int16_t top,
+	std::int16_t bottom,
+	std::uint8_t player_id
+) noexcept
+{
+	const auto random_x = randring_next16(state);
+	const auto random_y = randring_next16(state);
+	if(observer == nullptr) {
+		return;
+	}
+	const auto width = static_cast<std::uint16_t>(
+		static_cast<std::uint16_t>(right) - static_cast<std::uint16_t>(left)
+	);
+	const auto height = static_cast<std::uint16_t>(
+		static_cast<std::uint16_t>(bottom) - static_cast<std::uint16_t>(top)
+	);
+	const auto center_x = exact::wrap_add(
+		left, static_cast<std::int16_t>(random_x % width)
+	);
+	const auto center_y = exact::wrap_add(
+		top, static_cast<std::int16_t>(random_y % height)
+	);
+	observe_hit_circle_exact(
+		state, observer, HitCircleKind::enemy,
+		center_x, center_y, player_id
+	);
+}
+
 // These implementation partitions deliberately remain in one translation
 // unit. The source-complete Classic core has many order-sensitive private
 // helpers; a separately compiled module boundary would be an architectural
@@ -260,7 +353,7 @@ void extra_attacks_update_observed(
 ) noexcept
 {
 	if(observer == nullptr) {
-		extra_attacks_update(state, player_id);
+		extra_attacks_update(state, player_id, nullptr);
 		return;
 	}
 	const auto character = character_index_from_paletted(
@@ -274,7 +367,7 @@ void extra_attacks_update_observed(
 			? Bullet16ConstructionKind::kana_extra_attack
 			: Bullet16ConstructionKind::default_attack,
 		true,
-		[&]() noexcept { extra_attacks_update(state, player_id); }
+		[&]() noexcept { extra_attacks_update(state, player_id, observer); }
 	);
 }
 
@@ -285,7 +378,7 @@ void bosses_update_observed(
 ) noexcept
 {
 	if(observer == nullptr) {
-		bosses_update(state, player_id);
+		bosses_update(state, player_id, nullptr);
 		return;
 	}
 	const auto character = character_index_from_paletted(
@@ -300,7 +393,7 @@ void bosses_update_observed(
 		player_id,
 		Bullet16ConstructionKind::default_attack,
 		!is_static,
-		[&]() noexcept { bosses_update(state, player_id); }
+		[&]() noexcept { bosses_update(state, player_id, observer); }
 	);
 }
 
@@ -311,7 +404,7 @@ void gauge_patterns_update_observed(
 ) noexcept
 {
 	if(observer == nullptr) {
-		gauge_patterns_update(state, player_id);
+		gauge_patterns_update(state, player_id, nullptr);
 		return;
 	}
 	const auto character = character_index_from_paletted(
@@ -326,7 +419,7 @@ void gauge_patterns_update_observed(
 		player_id,
 		Bullet16ConstructionKind::default_attack,
 		!is_static,
-		[&]() noexcept { gauge_patterns_update(state, player_id); }
+		[&]() noexcept { gauge_patterns_update(state, player_id, observer); }
 	);
 }
 
@@ -359,6 +452,9 @@ bool gameplay_frame_prefix(
 	extra_attacks_update_observed(state, 1U, observer);
 	bosses_update_observed(state, 1U, observer);
 	bomb_character_update(state, 1U);
+	if(observer != nullptr) {
+		observer->hit_circles_advanced();
+	}
 	shots_update(state);
 	chargeshots_update(state);
 	hud_start_update_prefix(state);
@@ -371,12 +467,15 @@ bool gameplay_frame_prefix(
 		}
 	}
 	bullets_update(state);
-	if(!enemies_update(state, content)) {
+	if(!enemies_update(state, content, observer)) {
 		return false;
 	}
 	fireballs_update(state);
 	gauge_patterns_update_observed(state, 0U, observer);
 	gauge_patterns_update_observed(state, 1U, observer);
+	if(observer != nullptr) {
+		observer->common_effects_advanced();
+	}
 	return true;
 }
 
@@ -505,13 +604,13 @@ void gameplay_frame_suffix_after_interstitial(
 	warning_frame_update(state, 0U);
 	warning_frame_update(state, 1U);
 	background_update(state);
-	bombs_render_phase_update(state);
+	bombs_render_phase_update(state, observer);
 	boss_render_phase_update(state);
 	if(observer != nullptr) {
 		const auto view = ObserverAccess::shots_enemies(state);
 		observer->observe(view);
 	}
-	fireballs_hittest(state);
+	fireballs_hittest(state, observer);
 	if(observer != nullptr) {
 		const auto view = ObserverAccess::fireballs(state);
 		observer->observe(view);

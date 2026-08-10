@@ -2,7 +2,8 @@
 
 void gauge_pattern_reimu(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &flag = state.gba_flag_active[player_id];
@@ -34,6 +35,10 @@ void gauge_pattern_reimu(
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
 	const auto frame = state.reimu_gauge_pattern_frame[player_id];
 	if((frame % state.gauge_pattern_param_b[player_id]) == 0U) {
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			32 << 4, 8 << 4, target_player
+		);
 		bullets_add_group(
 			state,
 			type,
@@ -43,6 +48,10 @@ void gauge_pattern_reimu(
 			2 << 4,
 			0U,
 			bullet_group_five_spread_medium_aimed
+		);
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			256 << 4, 8 << 4, target_player
 		);
 		bullets_add_group(
 			state,
@@ -56,6 +65,10 @@ void gauge_pattern_reimu(
 		);
 	}
 	if((frame % 0x20U) == 0x10U) {
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			64 << 4, 8 << 4, target_player
+		);
 		bullets_add_group(
 			state,
 			type,
@@ -66,6 +79,10 @@ void gauge_pattern_reimu(
 			0U,
 			bullet_group_ring,
 			state.gauge_pattern_param_a[player_id]
+		);
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			(288 - 64) << 4, 8 << 4, target_player
 		);
 		bullets_add_group(
 			state,
@@ -87,7 +104,8 @@ void gauge_pattern_reimu(
 
 void gauge_pattern_marisa(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &flag = state.gba_flag_active[player_id];
@@ -120,6 +138,13 @@ void gauge_pattern_marisa(
 	auto &frame = state.marisa_gauge_pattern_frame[player_id];
 	auto &center_y = state.marisa_gauge_pattern_y[player_id];
 	const auto phase = static_cast<std::uint8_t>(frame % 0x18U);
+	if(phase == 8U || phase == 0x14U) {
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			(phase == 8U) ? 0 : (288 << 4), center_y,
+			static_cast<std::uint8_t>(1U - player_id)
+		);
+	}
 	if(phase == 0U || phase == 0x0CU) {
 		auto speed = std::uint8_t{(3U << 4U) + 8U};
 		const auto center_x = static_cast<std::int16_t>(
@@ -219,7 +244,8 @@ void gauge_pattern_kotohime(
 
 void gauge_pattern_kana(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &flag = state.gba_flag_active[player_id];
@@ -263,6 +289,10 @@ void gauge_pattern_kana(
 			0x40U,
 			bullet_group_one
 		);
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			center_x, 0, target_player
+		);
 		bullets_add_group(
 			state,
 			type,
@@ -272,6 +302,11 @@ void gauge_pattern_kana(
 			state.gauge_pattern_param_b[player_id],
 			0x40U,
 			bullet_group_one
+		);
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			static_cast<std::int16_t>((288 << 4) - center_x), 0,
+			target_player
 		);
 	}
 	if((frame % 0x40U) < 0x20U) {
@@ -289,7 +324,8 @@ void gauge_pattern_kana(
 
 void gauge_pattern_mima(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &flag = state.gba_flag_active[player_id];
@@ -331,12 +367,20 @@ void gauge_pattern_mima(
 			? static_cast<std::int16_t>(32 << 4)
 			: static_cast<std::int16_t>(256 << 4);
 		const auto angle = state.mima_gauge_pattern_angle[player_id];
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			center_x, 16 << 4, target_player
+		);
 		bullets_add_group(
 			state, type, center_x, 16 << 4, target_player,
 			state.gauge_pattern_param_b[player_id], angle,
 			bullet_group_five_spread_narrow
 		);
 		if((frame % 0x10U) != 0U) {
+			observe_common_effect(
+				state, observer, CommonEffectKind::contracting_circle,
+				center_x, 16 << 4, target_player
+			);
 			bullets_add_group(
 				state, type, center_x, 16 << 4, target_player,
 				(3 << 4) + 6, angle, bullet_group_ring,
@@ -356,7 +400,8 @@ void gauge_pattern_mima(
 
 void gauge_pattern_ellen(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &flag = state.gba_flag_active[player_id];
@@ -395,9 +440,18 @@ void gauge_pattern_ellen(
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
 	auto &center_x = state.ellen_gauge_pattern_x[player_id];
 	if(center_x > 0) {
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			center_x, 0, target_player
+		);
 		bullets_add_group(
 			state, type, center_x, 0, target_player, (3 << 4) + 8, 0U,
 			bullet_group_ring_aimed, state.gauge_pattern_param_a[player_id]
+		);
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			static_cast<std::int16_t>((288 << 4) - center_x), 0,
+			target_player
 		);
 		bullets_add_group(
 			state, type, static_cast<std::int16_t>((288 << 4) - center_x),
@@ -414,10 +468,18 @@ void gauge_pattern_ellen(
 	auto &center_y = state.ellen_gauge_pattern_y[player_id];
 	if(center_y < (144 << 4)) {
 		const auto angle = static_cast<std::uint8_t>(randring_next16(state));
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			0, center_y, target_player
+		);
 		bullets_add_group(
 			state, type, 0, center_y, target_player,
 			state.gauge_pattern_param_b[player_id], angle,
 			bullet_group_sixteen_ring
+		);
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			288 << 4, center_y, target_player
 		);
 		bullets_add_group(
 			state, type, 288 << 4, center_y, target_player,
@@ -442,7 +504,8 @@ void gauge_pattern_ellen(
 
 void gauge_pattern_rikako(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &flag = state.gba_flag_active[player_id];
@@ -493,6 +556,14 @@ void gauge_pattern_rikako(
 			state, type, 0, 0, target_player, speed, mirrored_angle,
 			bullet_group_one_aimed
 		);
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			0, 0, target_player
+		);
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			288 << 4, 0, target_player
+		);
 	}
 	if(frame >= 0x80U) {
 		flag = GaugeBossAttackFlag::none;
@@ -502,7 +573,8 @@ void gauge_pattern_rikako(
 
 void gauge_pattern_chiyuri(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &flag = state.gba_flag_active[player_id];
@@ -536,6 +608,15 @@ void gauge_pattern_chiyuri(
 		center_x = exact::wrap_add(
 			center_x, static_cast<std::int16_t>(24 << 4)
 		);
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			center_x, 0, target_player
+		);
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			static_cast<std::int16_t>((288 << 4) - center_x), 0,
+			target_player
+		);
 	}
 	if((frame & 1U) != 0U) {
 		const auto speed = static_cast<std::uint8_t>(
@@ -559,7 +640,8 @@ void gauge_pattern_chiyuri(
 
 void gauge_pattern_yumemi(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &flag = state.gba_flag_active[player_id];
@@ -632,8 +714,19 @@ void gauge_pattern_yumemi(
 			break;
 		}
 		if(frame <= 0x28U) {
-			// SUB_CE5B() is visual, but consumes the shared random ring.
-			(void)randring_next16(state);
+			constexpr std::array<std::int16_t, 6> effect_x{
+				144 << 4, 96 << 4, 192 << 4,
+				96 << 4, 192 << 4, 144 << 4,
+			};
+			constexpr std::array<std::int16_t, 6> effect_y{
+				32 << 4, 80 << 4, 80 << 4,
+				56 << 4, 56 << 4, 104 << 4,
+			};
+			const auto effect = static_cast<std::size_t>(frame / 8U);
+			observe_common_square(
+				state, observer, effect_x[effect], effect_y[effect],
+				static_cast<std::uint8_t>(1U - player_id)
+			);
 		}
 		if(fire) {
 			bullets_add_group(
@@ -650,29 +743,30 @@ void gauge_pattern_yumemi(
 
 void gauge_patterns_update(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	const auto character = character_index_from_paletted(
 		state.players[player_id].paletted_character
 	);
 	if(character == character_reimu) {
-		gauge_pattern_reimu(state, player_id);
+		gauge_pattern_reimu(state, player_id, observer);
 	} else if(character == character_mima) {
-		gauge_pattern_mima(state, player_id);
+		gauge_pattern_mima(state, player_id, observer);
 	} else if(character == character_marisa) {
-		gauge_pattern_marisa(state, player_id);
+		gauge_pattern_marisa(state, player_id, observer);
 	} else if(character == character_ellen) {
-		gauge_pattern_ellen(state, player_id);
+		gauge_pattern_ellen(state, player_id, observer);
 	} else if(character == character_kotohime) {
 		gauge_pattern_kotohime(state, player_id);
 	} else if(character == character_kana) {
-		gauge_pattern_kana(state, player_id);
+		gauge_pattern_kana(state, player_id, observer);
 	} else if(character == character_rikako) {
-		gauge_pattern_rikako(state, player_id);
+		gauge_pattern_rikako(state, player_id, observer);
 	} else if(character == character_chiyuri) {
-		gauge_pattern_chiyuri(state, player_id);
+		gauge_pattern_chiyuri(state, player_id, observer);
 	} else if(character == character_yumemi) {
-		gauge_pattern_yumemi(state, player_id);
+		gauge_pattern_yumemi(state, player_id, observer);
 	}
 }

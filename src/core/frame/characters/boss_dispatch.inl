@@ -4,23 +4,23 @@
 		state.players[player_id].paletted_character
 	);
 	if(character == character_reimu) {
-		boss_update_reimu(state, player_id);
+		boss_update_reimu(state, player_id, observer);
 	} else if(character == character_mima) {
-		boss_update_mima(state, player_id);
+		boss_update_mima(state, player_id, observer);
 	} else if(character == character_marisa) {
-		boss_update_marisa(state, player_id);
+		boss_update_marisa(state, player_id, observer);
 	} else if(character == character_ellen) {
-		boss_update_ellen(state, player_id);
+		boss_update_ellen(state, player_id, observer);
 	} else if(character == character_kotohime) {
-		boss_update_kotohime(state, player_id);
+		boss_update_kotohime(state, player_id, observer);
 	} else if(character == character_kana) {
-		boss_update_kana(state, player_id);
+		boss_update_kana(state, player_id, observer);
 	} else if(character == character_rikako) {
-		boss_update_rikako(state, player_id);
+		boss_update_rikako(state, player_id, observer);
 	} else if(character == character_chiyuri) {
-		boss_update_chiyuri(state, player_id);
+		boss_update_chiyuri(state, player_id, observer);
 	} else if(character == character_yumemi) {
-		boss_update_yumemi(state, player_id);
+		boss_update_yumemi(state, player_id, observer);
 	}
 }
 

@@ -256,7 +256,7 @@ void player_update_finish(
 			state.autofire_shot_gate[player_id]++;
 		}
 		if((live_input & input_bomb) != 0U) {
-			player_bomb(state, player_id);
+			player_bomb(state, player_id, observer);
 		}
 		if(player.shot_active == 2U) {
 			player.shot_active = 1U;
@@ -286,6 +286,10 @@ void player_update_finish(
 		return;
 	}
 	if(player.halfhearts != 0U) {
+		observe_hit_circle_exact(
+			state, observer, HitCircleKind::player,
+			player.center_x.raw(), player.center_y.raw(), player_id
+		);
 		const auto damage = players_hit_damage_update(state, player_id);
 		player.halfhearts = (damage > player.halfhearts)
 			? 0U

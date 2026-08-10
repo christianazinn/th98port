@@ -56,10 +56,11 @@ before result routing. Successful shot and Bullet16 construction plus player
 pose/defeat facts close source presentation lifetimes that cannot be inferred
 from late gameplay state. These are typed gameplay facts rather than renderer
 commands. `th03_present` consumers privately own shot animation, the shared
-player-pose and defeat records, and Bullet16 construction style while drawing
-all three views without storing anything in core. The final consumer exposes
-separate player/overlay and bullet passes so the source's intervening common
-effect pass can land later without changing this boundary.
+player-pose and defeat records, Bullet16 construction style, both original
+hit-circle/common-effect pools, and their presentation-only Kana/Kotohime Bomb
+state while drawing all three views without storing anything in core. Explicit
+hit-circle and common-effect passes occupy the source slots after fireballs and
+between player overlays and bullets, respectively.
 
 Some original callbacks named as rendering perform gameplay mutations or
 consume the RNG stream later used by gameplay. Those mutations and that exact
@@ -84,8 +85,9 @@ separate repositories. After agreeing on a small decoded-model interface,
 asset decoding and synthetic raster/palette/page primitives proceed in
 parallel. The asset library now supplies RGB/PI, CDG/CD2, BFNT, and MRS models;
 presentation supplies indexed pages, clipping, palette, planar/TRAM, cel,
-Sprite16, text, and staff-flake primitives. The static MAIN transaction and the
-first observer-backed shot/enemy/fireball consumer establish their initial join.
+Sprite16, text, staff-flake, and source-exact GRCG line/circle primitives. The
+static MAIN transaction and observer-backed ordinary-entity/effect consumers
+establish their initial join.
 `th03_present` owns all presentation records,
 sprite/cel lifetimes, asset identities, page/palette/TRAM state, and private
 draw ordering.

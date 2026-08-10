@@ -2,7 +2,8 @@
 
 void extra_attacks_update_reimu(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
@@ -36,7 +37,7 @@ void extra_attacks_update_reimu(
 				attack.velocity_y, static_cast<std::int16_t>(1)
 			);
 			extra_attack_shot_hittest(
-				state, target_player, attack.center_x, attack.center_y
+				state, target_player, attack.center_x, attack.center_y, observer
 			);
 			collmap_set_rect_striped(
 				state, target_player, attack.center_x, attack.center_y, 8, 16
@@ -87,7 +88,8 @@ void extra_attacks_update_reimu(
 
 void extra_attacks_update_mima(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
@@ -141,7 +143,7 @@ void extra_attacks_update_mima(
 			if(
 				state.defeat_flag != DefeatFlag::banner &&
 				extra_attack_shot_hittest(
-					state, target_player, center_x, center_y
+					state, target_player, center_x, center_y, observer
 				)
 			) {
 				attack.velocity_y = exact::wrap_subtract(
@@ -173,7 +175,8 @@ void extra_attacks_update_mima(
 
 void extra_attacks_update_marisa(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
@@ -219,8 +222,12 @@ void extra_attacks_update_marisa(
 			}
 		} else if(attack.state <= 0x1CU) {
 			attack.state++;
-			// State 0x0C only spawns a SUB_CE0C visual, which has no RNG or
-			// gameplay-owned state in the headless core.
+			if(attack.state == 0x0CU) {
+				observe_common_effect(
+					state, observer, CommonEffectKind::contracting_circle,
+					attack.center_x, 386 << 4, attack.player_id
+				);
+			}
 		} else {
 			attack.frame = 0U;
 			attack.state = 1U;
@@ -273,7 +280,8 @@ void extra_attacks_update_kana(
 
 void extra_attacks_update_kotohime(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
@@ -284,6 +292,17 @@ void extra_attacks_update_kotohime(
 		}
 		if(attack.state == 1U) {
 			if(attack.center_y >= attack.kotohime_target_y) {
+				if(
+					attack.kotohime_milestone == 4U ||
+					attack.kotohime_milestone == 8U ||
+					attack.kotohime_milestone == 12U ||
+					attack.kotohime_milestone == 16U
+				) {
+					observe_common_effect(
+						state, observer, CommonEffectKind::expanding_circle,
+						attack.center_x, attack.center_y, target_player
+					);
+				}
 				if(attack.kotohime_milestone == 4U) {
 					if(attack.behavior_variant != 0U) {
 						auto speed = static_cast<std::uint8_t>(1U << 4U);
@@ -355,7 +374,7 @@ void extra_attacks_update_kotohime(
 					static_cast<std::int16_t>(attack.kotohime_velocity_y)
 				);
 				extra_attack_shot_hittest(
-					state, target_player, attack.center_x, attack.center_y
+					state, target_player, attack.center_x, attack.center_y, observer
 				);
 				collmap_set_rect_striped(
 					state, target_player, attack.center_x, attack.center_y, 6, 6
@@ -375,7 +394,8 @@ void extra_attacks_update_kotohime(
 
 void extra_attacks_update_ellen(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
@@ -438,7 +458,8 @@ void extra_attacks_update_ellen(
 				state,
 				target_player,
 				attack.ellen_trail_x[0],
-				attack.ellen_trail_y[0]
+				attack.ellen_trail_y[0],
+				observer
 			);
 			collmap_set_rect_striped(
 				state,
@@ -465,7 +486,8 @@ void extra_attacks_update_ellen(
 
 void extra_attacks_update_rikako(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
@@ -507,7 +529,7 @@ void extra_attacks_update_rikako(
 				continue;
 			}
 			extra_attack_shot_hittest(
-				state, target_player, attack.center_x, attack.center_y
+				state, target_player, attack.center_x, attack.center_y, observer
 			);
 			collmap_set_rect_striped(
 				state, target_player, attack.center_x, attack.center_y, 8, 16
@@ -546,7 +568,8 @@ void extra_attacks_update_rikako(
 
 void extra_attacks_update_chiyuri(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
@@ -558,6 +581,16 @@ void extra_attacks_update_chiyuri(
 		auto &bottom = state.extra_attacks[player_id][slot_id + 1U];
 		if(top.state == 1U) {
 			top.frame++;
+			if(top.frame == 4U) {
+				observe_common_effect(
+					state, observer, CommonEffectKind::contracting_circle,
+					top.center_x, 0, top.player_id
+				);
+				observe_common_effect(
+					state, observer, CommonEffectKind::contracting_circle,
+					bottom.center_x, 368 << 4, bottom.player_id
+				);
+			}
 			if(top.frame > 0x28U && top.frame < 0x70U) {
 				collmap_set_slope_striped(
 					state, target_player, top.center_x, bottom.center_x
@@ -605,7 +638,8 @@ void extra_attacks_update_chiyuri(
 
 void extra_attacks_update_yumemi(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
@@ -646,7 +680,8 @@ void extra_attacks_update_yumemi(
 				exact::wrap_subtract(attack.center_x, extent_radius),
 				exact::wrap_add(attack.center_x, extent_radius),
 				exact::wrap_subtract(attack.center_y, narrow_radius),
-				exact::wrap_add(attack.center_y, narrow_radius)
+				exact::wrap_add(attack.center_y, narrow_radius),
+				observer
 			);
 			(void)extra_attack_bounds_hittest(
 				state,
@@ -654,7 +689,8 @@ void extra_attacks_update_yumemi(
 				exact::wrap_subtract(attack.center_x, narrow_radius),
 				exact::wrap_add(attack.center_x, narrow_radius),
 				exact::wrap_subtract(attack.center_y, extent_radius),
-				exact::wrap_add(attack.center_y, extent_radius)
+				exact::wrap_add(attack.center_y, extent_radius),
+				observer
 			);
 			collmap_set_rect_striped(
 				state,

@@ -185,7 +185,11 @@ void boss_pattern_reimu_four_spreads(
 	boss.pattern_frame = 0U;
 }
 
-void boss_update_reimu(DeterministicState &state, std::uint8_t player_id) noexcept
+void boss_update_reimu(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	GameplayObserver *observer
+) noexcept
 {
 	if(boss_launch_or_reverse(state, player_id)) {
 		state.boss.params[0] = static_cast<std::uint8_t>(
@@ -245,7 +249,9 @@ void boss_update_reimu(DeterministicState &state, std::uint8_t player_id) noexce
 	collmap_set_rect_striped(
 		state, target_player, state.boss.center_x, state.boss.center_y, 28, 28
 	);
-	const auto damage = boss_hittest_damage(state, target_player, 32 << 4);
+	const auto damage = boss_hittest_damage(
+		state, target_player, 32 << 4, observer
+	);
 	state.boss.hit = damage;
 	state.boss.hp = exact::wrap_subtract(
 		state.boss.hp, static_cast<std::uint16_t>(damage)
@@ -323,7 +329,8 @@ void boss_pattern_mima_spreads(
 
 void boss_pattern_mima_random_bursts(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
@@ -342,6 +349,10 @@ void boss_pattern_mima_random_bursts(
 		boss.pattern_frame == 0x20U || boss.pattern_frame == 0x24U ||
 		boss.pattern_frame == 0x28U
 	) {
+		observe_common_effect(
+			state, observer, CommonEffectKind::contracting_circle,
+			center_x, center_y, static_cast<std::uint8_t>(1U - player_id)
+		);
 		return;
 	}
 	if(boss.pattern_frame <= 0x30U) {
@@ -472,7 +483,11 @@ void boss_pattern_mima_orbit_clouds(
 	}
 }
 
-void boss_update_mima(DeterministicState &state, std::uint8_t player_id) noexcept
+void boss_update_mima(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	GameplayObserver *observer
+) noexcept
 {
 	if(boss_launch_or_reverse(state, player_id)) {
 		state.boss.params[0] = static_cast<std::uint8_t>(
@@ -518,7 +533,7 @@ void boss_update_mima(DeterministicState &state, std::uint8_t player_id) noexcep
 		boss_pattern_mima_spreads(state, player_id);
 		break;
 	case 6U: case 7U: case 8U: case 9U: case 10U:
-		boss_pattern_mima_random_bursts(state, player_id);
+		boss_pattern_mima_random_bursts(state, player_id, observer);
 		break;
 	case 11U: case 12U: case 13U:
 		boss_pattern_mima_aimed_trails(state, player_id);
@@ -538,7 +553,9 @@ void boss_update_mima(DeterministicState &state, std::uint8_t player_id) noexcep
 	collmap_set_rect_striped(
 		state, target_player, state.boss.center_x, state.boss.center_y, 28, 28
 	);
-	const auto damage = boss_hittest_damage(state, target_player, 32 << 4);
+	const auto damage = boss_hittest_damage(
+		state, target_player, 32 << 4, observer
+	);
 	state.boss.hit = damage;
 	state.boss.hp = exact::wrap_subtract(
 		state.boss.hp, static_cast<std::uint16_t>(damage)

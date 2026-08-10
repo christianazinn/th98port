@@ -71,7 +71,10 @@ void fireballs_update(DeterministicState &state) noexcept
 	}
 }
 
-void fireballs_hittest(DeterministicState &state) noexcept
+void fireballs_hittest(
+	DeterministicState &state,
+	GameplayObserver *observer
+) noexcept
 {
 	if(state.defeat_flag == DefeatFlag::banner) {
 		return;
@@ -116,6 +119,10 @@ void fireballs_hittest(DeterministicState &state) noexcept
 				continue;
 			}
 			shot.alive = false;
+			observe_hit_circle_exact(
+				state, observer, HitCircleKind::enemy,
+				shot_center_x, shot_center_y, target.player_id
+			);
 			hit = true;
 		}
 
@@ -193,7 +200,7 @@ void fireballs_hittest(DeterministicState &state) noexcept
 
 		bool charge_one_hit = false;
 		const auto charge_damage = chargeshot_hittest(
-			state, target.player_id, left, right, top, bottom,
+			state, target.player_id, left, right, top, bottom, observer,
 			&charge_one_hit
 		);
 		if(charge_damage != 0U) {
@@ -429,7 +436,8 @@ void fireballs_hittest(DeterministicState &state) noexcept
 
 bool enemies_update(
 	DeterministicState &state,
-	const GameContent &content
+	const GameContent &content,
+	GameplayObserver *observer
 ) noexcept
 {
 	state.enemies_alive = {};
@@ -514,6 +522,10 @@ bool enemies_update(
 				continue;
 			}
 			shot.alive = false;
+			observe_hit_circle_exact(
+				state, observer, HitCircleKind::enemy,
+				shot_center_x, shot_center_y, target.player_id
+			);
 			hit = true;
 		}
 
@@ -551,7 +563,7 @@ bool enemies_update(
 		});
 		bool charge_one_hit = false;
 		const auto charge_damage = chargeshot_hittest(
-			state, target.player_id, left, right, top, bottom,
+			state, target.player_id, left, right, top, bottom, observer,
 			&charge_one_hit
 		);
 		if(charge_damage != 0U) {

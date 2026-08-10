@@ -7,6 +7,7 @@ std::uint8_t chargeshot_hittest(
 	std::int16_t right,
 	std::int16_t top,
 	std::int16_t bottom,
+	GameplayObserver *observer,
 	bool *one_hit = nullptr
 ) noexcept
 {
@@ -40,8 +41,9 @@ std::uint8_t chargeshot_hittest(
 				// hitcircles_enemy_add() randomly centers the visual inside this
 				// hitbox. Those two presentation-owned draws share the gameplay
 				// ring and therefore remain part of deterministic call order.
-				(void)randring_next16(state);
-				(void)randring_next16(state);
+				observe_hit_circle_random(
+					state, observer, left, right, top, bottom, player_id
+				);
 				return 1U;
 			}
 		}
@@ -61,8 +63,9 @@ std::uint8_t chargeshot_hittest(
 			) {
 				continue;
 			}
-			(void)randring_next16(state);
-			(void)randring_next16(state);
+			observe_hit_circle_random(
+				state, observer, left, right, top, bottom, player_id
+			);
 			hits++;
 		}
 		return hits;
@@ -77,8 +80,9 @@ std::uint8_t chargeshot_hittest(
 				shot.x[node] >= left && shot.x[node] <= right &&
 				shot.y[node] >= top
 			) {
-				(void)randring_next16(state);
-				(void)randring_next16(state);
+				observe_hit_circle_random(
+					state, observer, left, right, top, bottom, player_id
+				);
 				return 1U;
 			}
 		}
@@ -93,8 +97,9 @@ std::uint8_t chargeshot_hittest(
 			) {
 				continue;
 			}
-			(void)randring_next16(state);
-			(void)randring_next16(state);
+			observe_hit_circle_random(
+				state, observer, left, right, top, bottom, player_id
+			);
 			node.state = 0U;
 			hits = static_cast<std::uint8_t>(hits + 2U);
 		}
@@ -108,8 +113,9 @@ std::uint8_t chargeshot_hittest(
 			exact::wrap_subtract(left, shot.x) <= (40 << 4) &&
 			shot.y >= top && shot.y <= bottom
 		) {
-			(void)randring_next16(state);
-			(void)randring_next16(state);
+			observe_hit_circle_random(
+				state, observer, left, right, top, bottom, player_id
+			);
 			if(one_hit != nullptr) {
 				*one_hit = true;
 			}
@@ -126,8 +132,9 @@ std::uint8_t chargeshot_hittest(
 					exact::wrap_subtract(group.y[point], bottom) <= (12 << 4) &&
 					exact::wrap_subtract(top, group.y[point]) <= (12 << 4)
 				) {
-					(void)randring_next16(state);
-					(void)randring_next16(state);
+					observe_hit_circle_random(
+						state, observer, left, right, top, bottom, player_id
+					);
 					return 1U;
 				}
 			}
@@ -142,8 +149,9 @@ std::uint8_t chargeshot_hittest(
 				exact::wrap_subtract(node.y, bottom) <= (12 << 4) &&
 				exact::wrap_subtract(top, node.y) <= (12 << 4)
 			) {
-				(void)randring_next16(state);
-				(void)randring_next16(state);
+				observe_hit_circle_random(
+					state, observer, left, right, top, bottom, player_id
+				);
 				hits++;
 			}
 		}
@@ -166,8 +174,9 @@ std::uint8_t chargeshot_hittest(
 				exact::wrap_subtract(node.y, bottom) <= (32 << 4) &&
 				exact::wrap_subtract(top, node.y) <= -(16 << 4)
 			) {
-				(void)randring_next16(state);
-				(void)randring_next16(state);
+				observe_hit_circle_random(
+					state, observer, left, right, top, bottom, player_id
+				);
 				hits++;
 			}
 		}
@@ -200,8 +209,9 @@ std::uint8_t chargeshot_hittest(
 		}
 		// hitcircles_enemy_add() consumes two shared-ring values to choose
 		// the visual center. They remain replay-visible in the headless core.
-		(void)randring_next16(state);
-		(void)randring_next16(state);
+	observe_hit_circle_random(
+		state, observer, left, right, top, bottom, player_id
+	);
 		return 1U;
 	}
 	return 0U;

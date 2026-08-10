@@ -851,9 +851,9 @@ This table is not permission to guess.
 | Vertical display scroll | `graph_scrollup()` uses in `th03/formats/script.hpp` and cutscene code | Authentic display state; exact value, not camera motion in core |
 | Main playfield foreground offsets as visual transform | `playfield_fg_x[]` / helpers in `th03/main/playfld.cpp` and `playfield_fg_x[bss].asm` | Core retains values that feed gameplay coordinates; a semantic phase view exposes those gameplay values; presenter applies visual transform and shake |
 | Shot animation | `shotpair->so_anim` advanced by `shots_render()` in `th03/main/player/shot.cpp` | Presenter-owned per-shot-pair cel phase; gameplay spawn/reset identity is observed without adding cel state to core |
-| Hit circles | 13 `hitcircle_t` records and rotating enemy cursor in `th03/main/hitcircle_bss.asm`; add/update/render in `hitcirc.cpp`; MRS/palette in `hitc_mrs.cpp` and `hitc_pal.cpp` | Presenter owns age/cel/color/page-parity state and interprets the collision fact plus raw site-tagged results; core only preserves RNG order |
+| Hit circles | 13 `hitcircle_t` records and rotating enemy cursor in `th03/main/hitcircle_bss.asm`; add/update/render in `hitcirc.cpp`; MRS/palette in `hitc_mrs.cpp` and `hitc_pal.cpp` | Presenter owns the 12 rotating enemy slots, fixed player slot, age/cel/color, and process lifetime; core reports exact resolved Q12.4 centers after consuming any randomized pair |
 | Background particles | 80-record backing and type-A/type-B callbacks `sub_D092/sub_D135/sub_D1E7` and `sub_D2E8/sub_D340/sub_D3F9` in `th03/main/player/d3f9.cpp` | Presenter owns particles, visual angles, and motion; core retains only the deterministic compatibility schedule and reports each raw source result in order |
-| Common visual-effect pool | 12 `cee0_rec_t` records plus cursor; `SUB_CDBD`, `SUB_CE0C`, `SUB_CE5B`, `SUB_CEB2`, `SUB_CEE0` in `d3f9.cpp` and associated BSS | Presenter owns allocation/overwrite/render/angle progression and derives fixed spawns from gameplay facts; core consumes and can report the raw `SUB_CE5B` result |
+| Common visual-effect pool | 12 `cee0_rec_t` records plus cursor; `SUB_CDBD`, `SUB_CE0C`, `SUB_CE5B`, `SUB_CEB2`, `SUB_CEE0` in `d3f9.cpp` and associated BSS | Presenter owns allocation/overwrite/render/angle progression and Kana/Kotohime shared Bomb values; core reports resolved centers, advance timing, and each already-consumed `SUB_CE5B` low byte |
 | HUD-start animation | 16 banner records followed by 128 particle records in `th03/main/player/bb12.cpp` and `hudstart.cpp` | Presenter owns records/cels and interprets raw site-tagged results; core retains only the minimal cadence needed to schedule shared RNG |
 | Warning presentation | `SUB_CA3C/SUB_C9FE` in `th03/main/player/warning.cpp`; `SUB_CB81` in `d3f9.cpp`; `hitc_mrs.cpp`, `hitc_pal.cpp`, `byte_20E98/byte_20E9A` | Presenter owns tones, portrait/cel/text state, and oscillators; app owns 27 interstitial waits; core timing remains unchanged |
 | Static HUD/playfields | `th03/main/hud/static.cpp`, `th03/main/playfld.cpp`, `th03/main/sprite16.cpp`, `th03/main/player/scoreblt.cpp` | Authentic assets/layout/raster code; score/gauge values come from the applicable semantic phase view |
@@ -1229,10 +1229,11 @@ implemented. Presenter sub-slices cover shot pairs, enemies and their
 explosions, post-hittest fireballs and their explosions, player bases and
 BFNT overlays, shared defeat-ring geometry, Bullet16s and trails, pellet
 clouds, and odd-flag pellets. The player and bullet passes remain separate at
-the exact `SUB_CEE0()` insertion slot. That common-effect pool, hit circles,
-and ordered PaletteTone events remain explicit later parcels; defeat palette
-application is not approximated at the final view because later source
-callbacks can overwrite it.
+the exact `SUB_CEE0()` insertion slot. Hit circles and the common-effect pool
+now occupy their exact post-fireball and pre-bullet slots using presenter-owned
+fixed pools and source-exact GRCG vectors. Ordered PaletteTone events remain a
+later parcel; defeat palette application is not approximated at the final view
+because later source callbacks can overwrite it.
 
 Observe raw gameplay facts at the documented semantic phases and add Authentic
 drawing for players, overlays, ordinary shots, enemies, bullets, and fireballs
@@ -1248,8 +1249,10 @@ Exit tests:
 
 ### Slice 4: RNG-fed effects
 
-Add hit circles, both backgrounds, the common effect pool, and HUD-start
-animation.
+Implementation status: hit circles and the common-effect pool are implemented,
+including process-scoped overwrite cursors, exceptional cross-player Bomb
+state, and exact vector primitives. Both backgrounds and HUD-start animation
+remain.
 
 Exit tests:
 

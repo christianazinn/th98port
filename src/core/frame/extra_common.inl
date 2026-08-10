@@ -23,7 +23,8 @@ bool extra_attack_bounds_hittest(
 	std::int16_t left,
 	std::int16_t right,
 	std::int16_t top,
-	std::int16_t bottom
+	std::int16_t bottom,
+	GameplayObserver *observer
 ) noexcept
 {
 	// hitbox_hittest() rejects every target once the result banner is active.
@@ -51,10 +52,16 @@ bool extra_attack_bounds_hittest(
 			continue;
 		}
 		shot.alive = false;
+		observe_hit_circle_exact(
+			state, observer, HitCircleKind::enemy,
+			shot_center_x, shot_center_y, player_id
+		);
 		hit = true;
 	}
 	const auto charge_hit = (
-		chargeshot_hittest(state, player_id, left, right, top, bottom) != 0U
+		chargeshot_hittest(
+			state, player_id, left, right, top, bottom, observer
+		) != 0U
 	);
 	const auto bomb_hit = (
 		state.bomb_flag[player_id] != BombFlag::inactive &&
@@ -67,7 +74,8 @@ bool extra_attack_shot_hittest(
 	DeterministicState &state,
 	std::uint8_t player_id,
 	std::int16_t center_x,
-	std::int16_t center_y
+	std::int16_t center_y,
+	GameplayObserver *observer
 ) noexcept
 {
 	if(center_y < 0) {
@@ -80,6 +88,7 @@ bool extra_attack_shot_hittest(
 		exact::wrap_subtract(center_x, radius),
 		exact::wrap_add(center_x, radius),
 		exact::wrap_subtract(center_y, radius),
-		exact::wrap_add(center_y, radius)
+		exact::wrap_add(center_y, radius),
+		observer
 	);
 }

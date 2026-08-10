@@ -258,6 +258,68 @@ struct PlayerDefeatStep {
 	) = default;
 };
 
+enum class HitCircleKind : std::uint8_t {
+	enemy,
+	player,
+};
+
+struct HitCircleSpawned {
+	HitCircleKind kind = HitCircleKind::enemy;
+	PlayerId player = PlayerId::p1;
+	// Exact Q12.4 playfield center selected by the source allocation call.
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+	// The source pool captures screen X at allocation time. This shift can
+	// change again before the same frame's presentation phase.
+	std::int16_t fg_shift_x_at_spawn = 0;
+
+	friend bool operator==(const HitCircleSpawned &, const HitCircleSpawned &) =
+		default;
+};
+
+enum class CommonEffectKind : std::uint8_t {
+	expanding_circle,
+	contracting_circle,
+	contracting_square,
+};
+
+struct CommonEffectSpawned {
+	CommonEffectKind kind = CommonEffectKind::expanding_circle;
+	PlayerId player = PlayerId::p1;
+	// Exact Q12.4 playfield center passed to the source allocation call.
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+	std::int16_t fg_shift_x_at_spawn = 0;
+	// The low byte of the shared-ring word already consumed by SUB_CE5B().
+	// Circle kinds leave this at zero.
+	std::uint8_t initial_angle = 0;
+
+	friend bool operator==(
+		const CommonEffectSpawned &,
+		const CommonEffectSpawned &
+	) = default;
+};
+
+enum class BombCommonEffectKind : std::uint8_t {
+	kana,
+	kotohime,
+};
+
+// Kana and Kotohime derive their common-effect positions from source-shared
+// visual globals. One ordered step for every active callback lets a presenter
+// reproduce even non-spawning writes without putting presentation state in core.
+struct BombCommonEffectStep {
+	BombCommonEffectKind kind = BombCommonEffectKind::kana;
+	PlayerId player = PlayerId::p1;
+	std::uint8_t bomb_frame = 0;
+	std::int16_t fg_shift_x_at_effects = 0;
+
+	friend bool operator==(
+		const BombCommonEffectStep &,
+		const BombCommonEffectStep &
+	) = default;
+};
+
 // Borrowed views over one exact MAIN phase boundary. They are valid only for
 // the duration of the observer callback; every accessor returns a fact by value.
 class ShotsEnemiesView {
@@ -346,6 +408,26 @@ public:
 	virtual void player_pose_committed(const PlayerPoseCommitted &) noexcept
 	{}
 	virtual void player_defeat_step(const PlayerDefeatStep &) noexcept
+	{}
+	// One call after both players' Extra/Boss/Bomb prefix updates and before
+	// shots. A presenter advances all live hit circles at this boundary.
+	virtual void hit_circles_advanced() noexcept
+	{}
+	// Delivered synchronously at each source allocation call, in call order.
+	virtual void hit_circle_spawned(const HitCircleSpawned &) noexcept
+	{}
+	// One call after both Gauge callbacks. A presenter advances all live common
+	// effects here; later Bomb callbacks can then allocate age-zero effects.
+	virtual void common_effects_advanced() noexcept
+	{}
+	// Delivered synchronously at each non-exceptional source allocation call.
+	virtual void common_effect_spawned(const CommonEffectSpawned &) noexcept
+	{}
+	// Every active Kana/Kotohime Bomb callback, including non-spawning frames,
+	// in the source's P1-then-P2 order.
+	virtual void bomb_common_effect_step(
+		const BombCommonEffectStep &
+	) noexcept
 	{}
 	virtual void observe(const ShotsEnemiesView &) noexcept
 	{}
