@@ -3,12 +3,13 @@
 | native area | behavior/layout authority |
 |---|---|
 | `core/numeric.hpp` | Anniversary `th01/math/subpixel.hpp`, PC-98 16-bit integer behavior, and the approved fixed-point constraint |
+| `assets/rgb.cpp` and `assets/pi.cpp` | Anniversary master.lib `palette_entry_rgb.asm`, `palette_show.asm`, and `graph_pi_load_pack.asm`, with the exact decoder disposition recorded in `research/ASSET_INVENTORY.md` |
+| `present/raster.cpp` | bounded neutral indexed-page foundation from `research/PRESENTATION_CONTRACT.md`; not yet a claim of complete PC-98 planar/GRCG/EGC/TRAM or scene parity |
 | `formats/t3case.cpp` | `state/port/T3CASE1_FORMAT.md`, `tools/port/t3case.psm1`, and oracle `th03/t3case.hpp` |
 | `formats/t3split.cpp` | Replay `th03/replay_format.hpp`, `tools/replay/export_splits.ps1`, and `tools/port/compare_th03_oracle_splits.ps1` |
-| `formats/v11.cpp` | Replay `th03/replay_format.hpp`, `tools/replay/rpy_snapshot.psm1`, and `tools/port/normalize_replay.ps1` |
-| `formats/v12.cpp` | Replay `th03/replay_format.hpp` and `tools/replay/FORMAT.md`; V12 compact checkpoints are reconstructed as format-neutral recipes after ENEDAT content is loaded |
+| `formats/v13.cpp`, `rpy_checkpoint.cpp`, and `rpy_input.cpp` | frozen Replay Patch 0.4.8 `th03/replay_format.hpp`, its MAIN/MAINL/OP readers, and canonical harness `tools/replay/FORMAT.md`; compact checkpoints are reconstructed as format-neutral recipes after ENEDAT content is loaded |
 | `replay/run.cpp` | Replay Patch process-control, warning, pause, retry-preroll, and MAIN/MAINL semantics adapted to the version-neutral replay model |
-| `replay/session.hpp` | audited T3CASE/V11 input and process-boundary semantics; deliberately independent of either document layout |
+| `replay/session.hpp` | audited T3CASE/V13 input and process-boundary semantics; deliberately independent of either document layout |
 | `core/game.cpp`, `core/frame.cpp`, and `core/frame/{,characters/}*.inl` | Anniversary `th03/main/rndloop.cpp:sub_9778()` update order and the complete stock-used gameplay callback inventory documented by the `PARITY_*` ledgers; `FRAME_PARTITIONS.md` records the behavior-free source split |
 | `core/state_hash.cpp` and private deterministic state | Anniversary `th03/main/t3case.cpp:t3case_state_hash()` schema 3 plus the semantic structures named in `TH3R03_ROUND_DOSSIER.md` |
 | round startup/frame sequencing | Anniversary `th03/main/{rstart.cpp,resscore.cpp,rndloop.cpp,roundcb.cpp}` at `3e2381d4` |

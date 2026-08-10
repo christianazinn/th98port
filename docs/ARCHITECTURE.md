@@ -5,9 +5,9 @@ and its validation clients. No playable application is designed or scaffolded
 in Phase 1.
 
 ```text
-V11 / V12 historical readers          future V13 reader
-                \                       /
-                 -> version-neutral ReplayDocument
+                         V13 reader
+                         |
+                 version-neutral ReplayDocument
                                 |
                          ReplaySession runner
                                 |
@@ -15,7 +15,8 @@ T3CASE validation cursor ----> CoreInput + semantic process boundaries
                                 |
                              libth03::Game
                                 |
-                     canonical state / semantic events
+                 canonical state / optional neutral
+                       gameplay observations
                                 |
                   headless and verification clients
 ```
@@ -29,11 +30,53 @@ th03_core <- th03_replay <- command-line clients
 ```
 
 `th03_core` cannot open files, inspect a clock, sleep, poll host input, render,
-play audio, use networking, or serialize pointers. `th03_formats` receives
+play audio, use networking, serialize pointers, or own renderer-shaped state.
+In particular it stores no framebuffer/page/palette/TRAM state, asset IDs,
+sprite/cel state, draw commands, or persistent presentation event queue.
+`th03_formats` receives
 `std::span<const std::byte>` and likewise has no filesystem dependency. Clients
-own paths and process exit codes. Version-specific V12 compact snapshots become
-format-neutral reconstruction/round-start contracts; V12 layouts never enter
-the core.
+own paths and process exit codes. V13 compact snapshots
+become format-neutral reconstruction/round-start contracts; replay layouts
+never enter the core.
+
+## Optional observation boundary
+
+The future playable client may attach a synchronous, non-owning gameplay
+observer while stepping the same core. Observations report only immutable raw
+gameplay facts at semantic phase boundaries and primitive results from
+shared-RNG reads the core has already consumed, carrying only a minimal
+source-site/phase tag and ordinal. The core does not group or decode those
+results into visual payloads. Observations are not draw instructions, asset or
+sound IDs, visual entity state, or replay data. The core retains no observation
+after the callback returns, and an observer cannot alter control flow.
+
+Some original callbacks named as rendering perform gameplay mutations or
+consume the RNG stream later used by gameplay. Those mutations and that exact
+compatibility-read schedule stay in `th03_core`, regardless of whether an
+observer exists. The retained counters are deterministic schedule state, not
+particle, cel, palette, or other renderer state. Omitting those reads in a
+headless run would change later gameplay, so `th03rv` executes them but supplies
+no observer and links neither presentation nor assets.
+
+The post-core targets remain in this repository and depend inward:
+
+```text
+th03rv ------------------------------> th03_replay / th03_formats / th03_core
+
+th03-app --> th03_present -----------> th03_core (neutral observations only)
+               |
+               +---------------------> th03_assets (immutable decoded models)
+```
+
+`th03_assets` and `th03_present` are separate sibling library targets, not
+separate repositories. After agreeing on a small decoded-model interface,
+asset decoding and synthetic raster/palette/page primitives proceed in
+parallel. ASSET-001 now supplies RGB/PI models, and the first presentation
+foundation supplies raw indexed pages, clipping, deferred RGB4 palette state,
+and scroll without observing gameplay. Their first mandatory integration point
+is one real static MAIN frame. `th03_present` owns all presentation records,
+sprite/cel lifetimes, asset identities, page/palette/TRAM state, and private
+draw ordering.
 
 V11/T3CASE phase 1 is an auxiliary boundary, not a semantic warning tag. It can
 carry either the fixed 27-sample warning wait or the Replay Patch's variable
@@ -74,8 +117,10 @@ complete Classic gameplay and process phases. Application work remains later.
 Phase 2 is complete: the TH3R03 first-round trace matches all 46 canonical
 Anniversary rows through its natural route-2 terminal. Phase 3 preserves that
 gate and has completed the source-backed Classic gameplay backend. The locked
-integration corpus now covers 19 V11/V12 files and 173 embedded round
-summaries across Story, Practice, and ordinary VS; all match. The whole-source
+integration corpus now covers 19 frozen V13 conversions and 173 embedded round
+summaries across Story, Practice, and ordinary VS; all match. Historical
+V11/V12 inputs are converted externally and are no longer native parser
+formats. The whole-source
 disposition is recorded in `PARITY_SOURCE_COVERAGE.md`.
 
 ## Completeness contract

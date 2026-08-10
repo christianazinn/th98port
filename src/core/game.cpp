@@ -527,9 +527,4 @@ std::expected<GameInit, Error> Game::next_story_stage_init() const
 	return transition->resident;
 }
 
-std::span<const PresentationEvent> Game::presentation_events() const
-{
-	return impl_->presentation_events;
-}
-
 } // namespace th03

@@ -6,7 +6,6 @@
 #include <expected>
 #include <memory>
 #include <optional>
-#include <span>
 #include <vector>
 
 #include "th03/core/numeric.hpp"
@@ -209,8 +208,6 @@ struct CanonicalState {
 	std::uint32_t state_hash = 0;
 };
 
-struct PresentationEvent {};
-
 struct EnemyFormation {
 	std::vector<std::vector<std::uint8_t>> enemy_scripts;
 };
@@ -266,7 +263,6 @@ public:
 		std::optional<ContinueChoice> continue_choice = std::nullopt
 	) const;
 	std::expected<GameInit, Error> next_story_stage_init() const;
-	std::span<const PresentationEvent> presentation_events() const;
 
 private:
 	struct Impl;

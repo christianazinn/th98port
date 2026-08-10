@@ -2,10 +2,12 @@
 
 `libth03` is the architecture-neutral deterministic gameplay core for a
 faithful native TH03 port. Phase 2's complete TH3R03 round remains a permanent
-gate, and Phase 3 now verifies 19 locked V11/V12 files across Story, Practice,
-ordinary VS, and Demo on top of the Phase 1 format/session runway. There is
-intentionally no playable application, renderer, audio target, networking, or
-CI configuration.
+gate, and Phase 3 now verifies 19 locked V13 conversions across Story,
+Practice, and ordinary VS, plus a separate title-Demo gate, on top of the Phase
+1 format/session runway. A
+strict V13 span adapter and the first stdlib-only asset/indexed-raster
+foundations now sit beside that core. There is intentionally no playable
+application, scene renderer, audio target, networking, or CI configuration.
 
 ## Build and test
 
@@ -32,8 +34,7 @@ out\build\msvc-x64\Debug\th03-replay-check.exe --case X:\path\TH3R03.T3C
 out\build\msvc-x64\Debug\th03-headless.exe --case X:\path\TH3R03.T3C
 ```
 
-Verify a historical V11 or V12 replay directly against its embedded round
-summaries:
+Verify a V13 replay directly against its embedded round summaries:
 
 ```powershell
 out\build\msvc-x64\Debug\th03rv.exe X:\path\TH3R00.RPY
@@ -44,16 +45,21 @@ For a standalone installation, pass `--enedat <file>` or set `TH03_ENEDAT`.
 It runs the neutral replay session at unbounded speed, prints every computed
 round split, and reports whether all embedded summaries match.
 
-Run the complete externally stored V11/V12 corpus, including its frozen
+Run the complete externally stored converted V13 corpus, including its frozen
 size/SHA-256 lock, with:
 
 ```powershell
-tools\verify_replay_corpus_external.ps1 -EvidenceRoot X:\path\to\rec98-harness
+tools\verify_replay_corpus_external.ps1 `
+  -EvidenceRoot X:\path\to\rec98-harness `
+  -V13CorpusRoot X:\path\to\converted-v13
 ```
 
-The current lock contains 19 files and 173 embedded round summaries across
-Classic Story, Replay Patch Practice, and ordinary VS. All 19 complete at
-unbounded speed and match every summary.
+The current V13 lock contains 19 files converted by TH03 Data Manager 0.4.0
+from the frozen six-file V11 and thirteen-file V12 inputs. It contains 173
+embedded round summaries across Classic Story, Replay Patch Practice, and
+ordinary VS. All 19 complete at unbounded speed and match every summary on GCC
+and MSVC. Historical replay files are converted outside this repository; the
+native V11/V12 parsers are retired.
 
 Pass the calibrated ENEDAT and frozen Anniversary split to execute the Phase 2
 gate:
@@ -89,19 +95,28 @@ split comparisons. Original game data and replay captures remain external.
 - `th03_replay` owns recorded pause/process coordination at unbounded speed.
 - `th03_formats` owns byte-level formats and adapts them to a neutral
   `ReplaySession`. It operates on byte spans and performs no file I/O.
+- `th03_assets` decodes caller-owned RGB/PI byte spans into immutable RGB4 and
+  indexed models. Original files, paths, caches, and platform resources remain
+  outside the library.
+- `th03_present` currently owns only a low-level two-page indexed-raster and
+  palette foundation. It depends on `th03_assets`, not on `th03_core`; gameplay
+  and `th03rv` link neither presentation library.
 - `th03-headless`, `th03-replay-check`, and `th03rv` are independent
   filesystem/CLI clients of those libraries.
-- V11 and V12 are historical validation adapters. The finalized V13 reader will
-  produce the same neutral document/session types without changing the core or
-  runner; a future converter can then retire direct V11/V12 product support.
+- V13 produces the same neutral document/session types without changing the
+  core or runner. Its structural tests and converted 19-file corpus gate are
+  green on both compilers. Later compact checkpoints and their raw V13 reset
+  recipes are preserved in the neutral document, but complete-state comparison
+  and application-side selection remain a separate preroll acceptance gate.
 
 See `docs/ARCHITECTURE.md`, `docs/PARITY_SOURCE_COVERAGE.md`,
 `docs/REPLAY_VERIFICATION.md`, `docs/ORACLE_CONTRACT.md`, and
 `docs/SOURCES.lock` before expanding corpus and mode coverage.
 `docs/FRAME_PARTITIONS.md` describes the behavior-free implementation split
 inside the gameplay frame translation unit.
-`docs/POST_CORE_ROADMAP.md` records the proposed V13 branch workflow and the
-asset, presentation, audio, platform, and application layers that follow the
-deterministic gameplay core.
+`docs/V13_INTEGRATION.md` records V13 authority and the historical-format
+retirement gate. `docs/POST_CORE_ROADMAP.md` records the active-tip branch
+workflow and the asset, presentation, audio, platform, and application layers
+that follow the deterministic gameplay core.
 `docs/research/README.md` indexes the presentation, asset, and audio research
 contracts prepared for those later layers.

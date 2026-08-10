@@ -1,6 +1,7 @@
 # TH03 presentation contract research
 
-- Status: source-backed design proposal; no renderer implementation exists yet
+- Status: source-backed boundary contract; indexed raster foundation exists,
+  but no gameplay scene renderer exists yet
 - Date: 2026-08-09
 - Primary authority: Anniversary `3e2381d4275be7287f5525de5c95389d492b0a3c`
 
@@ -12,27 +13,31 @@ and assets intentionally absent from `libth03`, records the observable ordering
 that an Authentic implementation must reproduce, and turns every known
 gameplay/RNG-to-presentation seam into an explicit contract.
 
-The recommended design is a minimal hybrid:
+The recommended design is a minimal hybrid with a strict semantic boundary:
 
-1. `th03_core` emits typed, value-semantic visual events and immutable,
-   source-slot-specific render slices. Events carry the actual values of presentation-motivated
-   RNG draws that the core already consumes in source order.
-2. `th03_present` owns scene-local visual state and translates each ordered slice/event
-   batch into an ordered Authentic draw stream.
-3. A software Authentic rasterizer executes that stream against two PC-98-like
-   640x400 indexed VRAM pages, the active 400-line/zoomed-200-line display mode,
-   palette state, TRAM state, and the scroll register.
+1. `th03_core` owns gameplay semantics only. During a step, it can optionally
+   report immutable gameplay facts, semantic phase observations, and primitive
+   results of deterministic compatibility RNG reads it has already consumed.
+   These observations are synchronous and transient: the core owns no pending
+   presentation queue and does not know how an observer will interpret them.
+2. `th03_present` observes those facts and owns all scene-local visual state,
+   presentation records, asset identities, and ordered Authentic draw commands.
+3. A software Authentic rasterizer executes that private stream against two
+   PC-98-like 640x400 indexed VRAM pages, the active
+   400-line/zoomed-200-line display mode, palette state, TRAM state, and the
+   scroll register.
 4. The stable rendered artifact is the indexed display state, not the command
    stream: visible indexed pixels, 16-color palette, TRAM layer, and display
    metadata. A host compositor expands this to RGBA only after canonical
    rendering and hashing.
 
 This resolves the framebuffer-versus-command-stream question without putting a
-framebuffer in the simulation or making low-level PC-98 operations the future
-Arrange API. A framebuffer alone cannot express page-copy, masked-write,
-palette, TRAM, or scroll ordering. A command stream alone would make every host
-renderer reimplement obscure PC-98 composition semantics and would be a poor
-visual oracle. The hybrid keeps the ordered stream private to the Authentic
+framebuffer, draw vocabulary, or renderer-shaped event queue in the simulation,
+and without making low-level PC-98 operations the future Arrange API. A
+framebuffer alone cannot express page-copy, masked-write, palette, TRAM, or
+scroll ordering. A command stream alone would make every host renderer
+reimplement obscure PC-98 composition semantics and would be a poor visual
+oracle. The hybrid keeps the ordered stream private to the Authentic
 implementation and exposes a canonical completed indexed frame.
 
 This is a presentation contract, not a claim of pixel parity. All behavior
@@ -54,8 +59,13 @@ In this document:
   control flow, score, collision, replay-visible RNG, or canonical hashes.
 - **presentation state** means persistent data whose only observable result is
   pixels, palette, TRAM, scroll, audio intent, or scene pacing.
-- **render-phase core work** means gameplay/RNG work performed by a source
-  function named or scheduled as rendering. It remains in `th03_core`.
+- **late-phase core work** means gameplay mutations or shared-RNG work performed
+  by a source function named or scheduled as rendering. It remains in
+  `th03_core` because its effect is gameplay-deterministic, not because the core
+  models rendering.
+- **gameplay observation** means a borrowed, immutable report of a gameplay fact
+  at a semantic phase boundary. It is neither a draw command nor persistent
+  core state.
 - **Authentic** means intended complete logical frames from the Anniversary
   authority. It does not mean hardware-dependent tearing, CPU slowdown, disk
   latency, or a particular emulator's timing.
@@ -75,45 +85,52 @@ The required dependency direction is:
 replay / platform input
           |
           v
-      th03_core  ---- render slices + typed events ---->
-          ^                                           th03_present
-          |                                                |
- application phase machine -------------------------------+
-          |                                                v
-          +---- asset service                    canonical indexed frame
-          +---- audio service                              |
-          +---- clock / host pacing                        v
-                                                     host compositor
+      th03_core ---- optional neutral observations ----> th03_present
+          ^                  (synchronous only)              |
+          |                                                  +--> th03_assets
+ application phase machine                                  |
+          |                                                  v
+          +---- audio service                     canonical indexed frame
+          +---- clock / host pacing                         |
+                                                             v
+                                                       host compositor
 ```
 
 The boundaries are normative:
 
 - `th03_core` owns all Classic gameplay updates, fixed-width arithmetic,
   collision, scoring, CPU decisions, result control, shared RNG state and call
-  order, and the non-drawing writes hidden in render callbacks.
-- `th03_core` must not import `th03_present`, store a render buffer, resolve an
-  asset path, read a clock, wait for VSync, or make graphics/audio API calls.
-- Core presentation output is optional. A null sink and a real sink must
-  produce byte-identical canonical core state, RNG state, input consumption,
-  and `StepResult`.
+  order, and gameplay-affecting writes hidden in source render callbacks.
+- `th03_core` must not import `th03_present`, store a render buffer, page,
+  palette, TRAM cell, sprite/cel state, asset ID, draw command, or persistent
+  presentation event queue. It also cannot resolve paths, read a clock, wait
+  for VSync, or make graphics/audio API calls.
+- Observation is optional. A null observer and a real observer must produce
+  byte-identical canonical core state, RNG state, input consumption, and
+  `StepResult`. `th03rv` supplies no observer and links neither `th03_present`
+  nor `th03_assets`.
 - `th03_present` owns all persistent visual entities, VRAM/page state, palette
   and tone, TRAM and gaiji state, scroll, scene animation cursors, decoded
-  visual assets, and Authentic drawing rules.
+  visual assets, presentation records, and Authentic drawing rules. It turns
+  neutral observations into its own visual intents and commands.
 - The application owns OP/MAIN/MAINL-equivalent scene progression, input
   policy, frame pacing, file/configuration services, and the explicit resident
   handoff between scenes and core sessions.
-- Audio is a sibling consumer, not part of the rasterizer. A semantic audio
-  event may share a frame stamp with a visual event, but sound playback must
-  not control core advancement.
-- Asset loading is injected into presentation/application code through stable
-  asset IDs. Original files and filenames do not enter core state, hashes, or
-  replay documents.
-- Authentic and future Arrange presenters may consume the same semantic event
-  vocabulary where meanings agree. Arrange-specific mechanics require a
+- Audio is a sibling consumer, not part of the rasterizer. It may map neutral
+  gameplay observations or application scene actions to sound cues, but sound
+  IDs and playback state do not enter the core and playback must not control
+  core advancement.
+- `th03_assets` and `th03_present` are sibling libraries in this repository.
+  The asset library decodes caller-owned byte spans into immutable models;
+  presentation refers to those models through presenter-owned logical IDs.
+  Original files and filenames do not enter core state, hashes, observations,
+  or replay documents.
+- Authentic and future Arrange presenters may consume the same neutral
+  gameplay facts where meanings agree. Arrange-specific mechanics require a
   separate rules contract; they must not appear as conditionals inside Classic
   simulation.
 
-## Proposed public contract
+## Proposed optional observation seam
 
 The exact C++ spelling can change, but these concepts and ownership rules
 should not.
@@ -123,22 +140,29 @@ namespace th03 {
 
 using CoreFrame = std::uint32_t;
 
-struct PresentationBatch {
+struct PhaseObservation {
     CoreFrame core_frame;
-    ProcessPhase phase;
-    std::span<const PresentationRecord> records; // Strict source order.
-    ClassicEndOfStepView end_view;               // Optional diagnostics/UI.
+    GameplayPhase phase;
+    GameplayView facts; // Borrowed, immutable, valid only during observe().
 };
 
-struct PresentationRecord {
-    SourceSlot slot;
+struct CompatibilityReadObservation {
+    CoreFrame core_frame;
+    GameplayPhase phase;
+    CompatibilityReadSite site;
     std::uint16_t ordinal;
-    std::variant<RenderSlice, CoreVisualEvent, AudioEvent> payload;
+    std::uint16_t raw_value;
 };
 
-class PresentationSink {
+using GameplayObservation = std::variant<
+    PhaseObservation,
+    GameplayFact,
+    CompatibilityReadObservation
+>;
+
+class GameplayObserver {
 public:
-    virtual void accept(const PresentationBatch&) = 0;
+    virtual void observe(const GameplayObservation&) = 0;
 };
 
 enum class PresentationProfile : std::uint8_t {
@@ -159,7 +183,7 @@ struct IndexedDisplayState {
 class Presenter {
 public:
     void begin_scene(const SceneInit&, const AssetProvider&);
-    void consume(const PresentationBatch&);
+    GameplayObserver& gameplay_observer();
     void tick(const SceneInput&); // OP/MAINL presentation-only scenes.
     IndexedDisplayState display_state() const;
 };
@@ -167,79 +191,85 @@ public:
 } // namespace th03
 ```
 
-`RenderSlice` is a tagged, source-slot-specific immutable view. It captures the
-values required by one draw slot at the moment that slot occurs: active entity
-records, raw fixed-point positions, state/cel/frame fields, player IDs and
-palettes, scores, gauges, combos, result state, display flags, and current
-foreground offsets. A final post-step snapshot is insufficient: a source
-render callback can mutate state before a later draw, and an early result return
-can omit the rest of the frame. Ordered slices preserve the values actually
-seen at each source call while allowing the presenter to consume the batch only
-after `Game::step()` returns. Neither a slice nor `ClassicEndOfStepView` is
-`GameInternal` or a serialized memory dump. They contain no native pointers,
-callbacks, padding, allocator internals, or asset paths.
+`GameplayPhase` names semantic sequence points in the deterministic simulation,
+not source draw calls. Examples include after player updates, after a
+late-collision pass, after a gameplay-affecting callback mutation, and after
+result routing. `GameplayView` exposes only the raw fixed-width gameplay facts
+valid at that point. It has no sprite cel chosen solely for display, palette,
+asset handle, page selector, clip, or draw opcode. An end-of-step view alone is
+insufficient because source callbacks can mutate gameplay at later positions
+and an early result return can omit the rest of the frame. The presenter uses
+the semantic observations to advance its own source-backed private schedule.
 
-`CoreVisualEvent` is a tagged value type. Every record carries a monotonically
-increasing per-step ordinal, so visual, audio, and render-slice records retain
-their exact cross-category order. Records are cleared after each logical core
-step. The pending batch is not part of canonical gameplay state and is not
-replay data. Snapshot/restore either clears it or restores a documented pending
-batch; it must never duplicate a visual RNG event after rollback.
+Observation is synchronous. `Game::step()` accepts an optional observer (or an
+equivalent non-owning callback), invokes it in deterministic order, and retains
+nothing after each invocation. The observer must not mutate `Game`, influence
+control flow, or retain borrowed spans. Snapshot/restore therefore has no
+pending presentation data to copy, clear, or deduplicate. If an asynchronous
+client wants a record, that client copies observations into storage it owns.
 
 Creation, first-round initialization, and repeat-round initialization can also
-consume presentation-motivated RNG (`sub_D092()` / `sub_D2E8()`) and prepare
-visible state. They therefore produce an initialization batch with its own
-sequence ID. The application must drain that batch before the first gameplay
-step. The concrete API may return batches from `create()` / phase transitions or
-offer `take_presentation_batch()`, but it must not hide startup events in the
-first later frame.
+consume RNG whose source use was visual (`sub_D092()` / `sub_D2E8()`) but whose
+shared-stream outflow affects later gameplay. The core consumes those values
+whether an observer exists or not. An attached observer sees the primitive
+results immediately with only a source-site/phase tag and ordinal; with no
+observer they are discarded. The core never delays them into the first gameplay
+frame and never stores the corresponding particles.
 
-## Event vocabulary and the RNG firewall
+## Observation vocabulary and the RNG firewall
 
 The core must remain the only consumer of gameplay/shared RNG. Presentation
 must never call `IRAND`, `randring`, `randring2`, or a native substitute using
 the gameplay seed or ring cursors. If source presentation code consumes shared
-RNG, core consumes it at the exact source position and emits the resulting
-visual values.
+RNG, core consumes it at the exact source position. If an observer is attached,
+the core reports the already-consumed primitive result under a minimal
+source-site/phase tag; observation never causes or suppresses a draw.
 
-This requires a small amount of **RNG-cadence shadow state** in core even when
-the corresponding particles are presenter-owned. The current port already has
-the correct shape: `background_initial_kind` / `background_phase` and
+This requires a small amount of **deterministic compatibility-schedule state**
+in core even when the corresponding particles are presenter-owned. This is an
+irreducible property of the original shared RNG stream: omitting a value that
+was drawn only for pixels changes later gameplay RNG results. The current port
+already has the correct shape: `background_initial_kind` / `background_phase` and
 `hud_start_flag` / `hud_start_state` / `hud_start_frame` in
 `th03-port/src/core/game_internal.hpp`, with the source-timed consumption in
 `src/core/frame/round.inl`. `background_phase` is canonical because the
 initial-to-steady callback switch changes future shared-RNG consumption. These
-fields schedule source calls; they do not store particle positions, cels, or
-pixels. Keep them in core, and drive the presenter's richer visual lifecycle
-with the corresponding ordered records. The same rule applies to any future
-minimal warning or character-effect cadence field proven necessary to schedule
-shared RNG.
+fields schedule deterministic reads; they do not store particle positions,
+cels, asset IDs, pixels, or any other render state. Keep only that minimal
+schedule in core, and let the presenter derive its richer visual lifecycle from
+observations. The same rule applies to any future minimal cadence field proven
+necessary to schedule shared RNG.
 
-The initial event set should be small and source-shaped:
+The gameplay vocabulary should stay small and semantic: for example,
+`CollisionResolved`, `AttackStateChanged`, and `GameplayPhaseChanged`. Their
+payloads describe mechanics (participants, PID, raw gameplay coordinates,
+damage, attack state, route, winner, and stage), never a visual object to create
+or a command to execute.
 
-| Event | Required payload | Source seam |
+Compatibility observations are deliberately less interpreted. Each contains
+only `core_frame`, `GameplayPhase`, a stable `CompatibilityReadSite`, the
+source-order ordinal, and the primitive result already returned by the shared
+RNG function. `th03_present` combines that sequence with semantic gameplay
+views and owns all grouping into particles, offsets, angles, cels, or effects.
+The initial site/count ledger is:
+
+| Compatibility read site | Primitive sequence per source invocation | Exact source seam |
 |---|---|---|
-| `HitCircleSpawn` | target kind, PID, final center/top-left, both random offsets when used | `hitcircles_enemy_add()` / `hitcircles_player_add()` in `th03/main/hitcirc.cpp` |
-| `HitCircleTick` | source slot/frame identity | `hitcircles_update()` in `th03/main/hitcirc.cpp` |
-| `BackgroundSeedA` | 48 records, each with the actual X, Y, sprite-choice, and remainder draws (192 IRAND results) | `sub_D092()` in `th03/main/player/d3f9.cpp` |
-| `BackgroundTickA` | phase and round/result frame; the actual one-bit increment draw for each of 48 records on every early callback frame | `sub_D135()` in `th03/main/player/d3f9.cpp`, switching to non-RNG `sub_D1E7()` after `round_frame > 128` |
-| `BackgroundSeedB` | 50 records with actual X/Y draws (100 IRAND results) | `sub_D2E8()` in `th03/main/player/d3f9.cpp` |
-| `BackgroundTickB` | phase and round/result frame; actual one-bit increment draws for records 0..39 on every early callback frame (40 IRAND results; records 40..49 add zero) | `sub_D340()` in `th03/main/player/d3f9.cpp`, switching to non-RNG `sub_D3F9()` after `round_frame > 144` |
-| `EffectSpawnFixed` | PID, type, source coordinate, fixed angle/cel data | `SUB_CDBD()` and `SUB_CE0C()` in `th03/main/player/d3f9.cpp` |
-| `EffectSpawnRandomAngle` | PID, type/source coordinate, actual consumed angle | `SUB_CE5B()` in `th03/main/player/d3f9.cpp` |
-| `EffectPoolTick` | source slot/frame identity | `SUB_CEB2()` in `th03/main/player/d3f9.cpp` |
-| `HudStartTick` | source phase/frame and transition flags | `sub_BB12()` in `th03/main/player/bb12.cpp` |
-| `HudStartBurst` | the 128 particles' actual Y/angle/type-derived random values, in call order | `sub_BB12()` in `th03/main/player/bb12.cpp` |
-| `BombVisualSample` | character, PID, bomb frame, typed visual sample(s), actual random results | render callbacks in `ch_shot.cpp`, `mbomb.cpp`, `chybomb.cpp`, `main_05.cpp`, and `yumemi_bomb.cpp` |
-| `CharacterVisualEffect` | character, attack kind, PID, exact type/position/angle/cel values | mixed Gauge/Boss/Extra/Charge callbacks listed below |
-| `PaletteIntent` | semantic owner plus exact entry/tone request when produced by core-timed gameplay | warning, hit-circle, Bomb, Gauge, Boss, and result source sites |
-| `SoundCue` | source-order cue ID and optional stop/fade/load intent | each deterministic `snd_*` call site; consumed by the sibling audio service |
-| `PhaseTransition` | source phase, destination phase, route/winner/stage facts | MAIN result exits and explicit application phase transitions |
+| `hitcircles_enemy_add` / `hitcircles_player_add` | two raw results when random offsets are enabled | `hitcircles_enemy_add()` / `hitcircles_player_add()` in `th03/main/hitcirc.cpp` |
+| `d092_initialize` | 192 raw IRAND results in source order | `sub_D092()` in `th03/main/player/d3f9.cpp` |
+| `d135_step` | 48 raw IRAND results on every early callback frame through the `round_frame > 128` switch | `sub_D135()` in `th03/main/player/d3f9.cpp`, then non-RNG `sub_D1E7()` |
+| `d2e8_initialize` | 100 raw IRAND results in source order | `sub_D2E8()` in `th03/main/player/d3f9.cpp` |
+| `d340_step` | 40 raw IRAND results on every early callback frame through the `round_frame > 144` switch | `sub_D340()` in `th03/main/player/d3f9.cpp`, then non-RNG `sub_D3F9()` |
+| `ce5b` | one raw ring result per call | `SUB_CE5B()` in `th03/main/player/d3f9.cpp` |
+| `bb12_randring` / `bb12_irand` | 256 raw ring and 256 raw IRAND results, respectively, in source order | `sub_BB12()` in `th03/main/player/bb12.cpp` |
+| one stable tag per audited character callback call site | the exact raw results and order detailed in the complete seam ledger below | callbacks in `ch_shot.cpp`, `mbomb.cpp`, `chybomb.cpp`, `main_05.cpp`, and `yumemi_bomb.cpp` |
 
-Do not add an untyped `RandomByte` event. It would preserve the count while
-hiding which effect owns the value and would allow an Arrange presenter to
-reinterpret Classic RNG accidentally. Emit fully typed values after the source
-operation has established their meaning.
+Do not add a core-side particle/offset/angle union or decode these values into a
+visual payload. The site tag exists only to preserve the unavoidable source
+read schedule. Palette edits, sound cue IDs, fixed effect spawns, sprite choices
+derived without shared RNG, and all other presentation policy are generated
+inside `th03_present` or its sibling audio adapter from semantic facts; they are
+not core observations.
 
 Presentation-owned scenes may have a separate `PresentRng`. Its seed must be
 explicit in `SceneInit`; it must not alias core RNG. Two source cases need
@@ -373,17 +403,20 @@ also contains presenter ticks and mixed callbacks. Its exact order is:
 1. Reset the collision map and shared bullet-template scratch state.
 2. Select P1 and run P1 Extra update, Boss update, and Bomb update callback.
 3. Select P2 and run P2 Extra update, Boss update, and Bomb update callback.
-4. Run `hitcircles_update()`; native core emits the slot while the presenter
-   advances its 13 visual records.
+4. Run `hitcircles_update()`; the presenter advances its 13 visual records from
+   the frame/phase observation and any preceding collision/random facts.
 5. Run `shots_update()`.
 6. Select P1 and run its Charge update, then select P2 and run its Charge
    update.
-7. Run `sub_BB12()`: core advances the minimal HUD-start RNG cadence and emits
-   any seed payload, while the presenter advances banner/particle state.
+7. Run `sub_BB12()`: core advances that source site's minimal compatibility
+   RNG cadence and reports raw already-consumed results, while the presenter
+   advances its own banner/particle state.
 8. Update enemy formations, bullets, enemies, then fireballs.
 9. Select P1 and run its pellet Gauge callback then bullet Gauge callback;
-   repeat for P2. Mixed visual effects are emitted at these positions.
-10. Run common effect-pool update `SUB_CEB2()` in the presenter slot.
+   repeat for P2. Gameplay facts and already-consumed random values are
+   observed at these positions; visual effects are created by the presenter.
+10. Run common effect-pool update `SUB_CEB2()` in presenter-owned state at this
+    source position.
 11. Poll/map gameplay input and perform T3CASE frame I/O at the existing adapter
     boundary.
 12. Update P1, then P2.
@@ -435,9 +468,10 @@ After player update, the observable late phase is exactly:
     ring-refill, damage, and CPU-frame cadence in core.
 
 This ordering has two consequences for the API. First, one `Game::step()` must
-produce ordered render slices rather than a single end-of-step “draw
-everything” snapshot: records preserve source positions around render-phase
-core work and stop at the exact point of an early return. Second, the renderer must draw
+offer synchronous semantic phase observations rather than only a single
+end-of-step snapshot. The presenter advances its private schedule around
+late-phase core work and stops when an early return omits later observations;
+the core still owns neither a draw slot nor an output batch. Second, the renderer must draw
 the completed frame into the current back page, apply a deferred palette
 change, swap show/access roles, and only then clear the next drawing page's
 playfield bottoms. Clearing a generic framebuffer before drawing is not
@@ -602,8 +636,9 @@ is an explicit resident handoff as described above.
 
 This table lists persistent state intentionally absent from canonical
 `libth03` gameplay state. If a field in one of these source families is later
-found to feed gameplay, it must move to core or be emitted after the core has
-performed the exact mutation; this table is not permission to guess.
+found to feed gameplay, the gameplay-affecting state and mutation must move to
+core; an optional observer may report the resulting gameplay fact afterward.
+This table is not permission to guess.
 
 | State family | Exact source | Native owner and disposition |
 |---|---|---|
@@ -611,18 +646,18 @@ performed the exact mutation; this table is not permission to guess.
 | Palette/tone/deferred apply | `Palettes`, `PaletteTone`, `palette_changed`; `th03/hardware/palette.hpp`, `palette_changed[bss].asm` | Authentic palette state; edits ordered, application deferred at source slot |
 | TRAM and gaiji | `hud_static_put()`, warning text, OP menu gaiji, cutscene/high-score text; source font tables | Authentic TRAM/gaiji state; compositor retains it as a separate layer |
 | Vertical display scroll | `graph_scrollup()` uses in `th03/formats/script.hpp` and cutscene code | Authentic display state; exact value, not camera motion in core |
-| Main playfield foreground offsets as visual transform | `playfield_fg_x[]` / helpers in `th03/main/playfld.cpp` and `playfield_fg_x[bss].asm` | Core retains values that feed gameplay coordinates; the applicable render slice exports them; presenter applies visual transform and shake |
-| Shot animation | `shotpair->so_anim` advanced by `shots_render()` in `th03/main/player/shot.cpp` | Presenter-owned per-shot-pair cel phase; events/slices must preserve spawn/reset identity |
-| Hit circles | 13 `hitcircle_t` records and rotating enemy cursor in `th03/main/hitcircle_bss.asm`; add/update/render in `hitcirc.cpp`; MRS/palette in `hitc_mrs.cpp` and `hitc_pal.cpp` | Presenter owns age/cel/color/page-parity state; core emits final randomized spawn position and keeps RNG order |
-| Background particles | 80-record backing and type-A/type-B callbacks `sub_D092/sub_D135/sub_D1E7` and `sub_D2E8/sub_D340/sub_D3F9` in `th03/main/player/d3f9.cpp` | Presenter owns particles, visual angles, and motion; core retains only the callback/RNG cadence shadow and emits the one-time seed values plus every early-frame gameplay-RNG-derived increment |
-| Common visual-effect pool | 12 `cee0_rec_t` records plus cursor; `SUB_CDBD`, `SUB_CE0C`, `SUB_CE5B`, `SUB_CEB2`, `SUB_CEE0` in `d3f9.cpp` and associated BSS | Presenter owns allocation/overwrite/render/angle progression; core emits typed spawns and consumes `SUB_CE5B` RNG |
-| HUD-start animation | 16 banner records followed by 128 particle records in `th03/main/player/bb12.cpp` and `hudstart.cpp` | Presenter owns records/cels; core retains only the phase/frame cadence needed to schedule RNG and emits all actual randomized particle values in source call order |
+| Main playfield foreground offsets as visual transform | `playfield_fg_x[]` / helpers in `th03/main/playfld.cpp` and `playfield_fg_x[bss].asm` | Core retains values that feed gameplay coordinates; a semantic phase view exposes those gameplay values; presenter applies visual transform and shake |
+| Shot animation | `shotpair->so_anim` advanced by `shots_render()` in `th03/main/player/shot.cpp` | Presenter-owned per-shot-pair cel phase; gameplay spawn/reset identity is observed without adding cel state to core |
+| Hit circles | 13 `hitcircle_t` records and rotating enemy cursor in `th03/main/hitcircle_bss.asm`; add/update/render in `hitcirc.cpp`; MRS/palette in `hitc_mrs.cpp` and `hitc_pal.cpp` | Presenter owns age/cel/color/page-parity state and interprets the collision fact plus raw site-tagged results; core only preserves RNG order |
+| Background particles | 80-record backing and type-A/type-B callbacks `sub_D092/sub_D135/sub_D1E7` and `sub_D2E8/sub_D340/sub_D3F9` in `th03/main/player/d3f9.cpp` | Presenter owns particles, visual angles, and motion; core retains only the deterministic compatibility schedule and reports each raw source result in order |
+| Common visual-effect pool | 12 `cee0_rec_t` records plus cursor; `SUB_CDBD`, `SUB_CE0C`, `SUB_CE5B`, `SUB_CEB2`, `SUB_CEE0` in `d3f9.cpp` and associated BSS | Presenter owns allocation/overwrite/render/angle progression and derives fixed spawns from gameplay facts; core consumes and can report the raw `SUB_CE5B` result |
+| HUD-start animation | 16 banner records followed by 128 particle records in `th03/main/player/bb12.cpp` and `hudstart.cpp` | Presenter owns records/cels and interprets raw site-tagged results; core retains only the minimal cadence needed to schedule shared RNG |
 | Warning presentation | `SUB_CA3C/SUB_C9FE` in `th03/main/player/warning.cpp`; `SUB_CB81` in `d3f9.cpp`; `hitc_mrs.cpp`, `hitc_pal.cpp`, `byte_20E98/byte_20E9A` | Presenter owns tones, portrait/cel/text state, and oscillators; app owns 27 interstitial waits; core timing remains unchanged |
-| Static HUD/playfields | `th03/main/hud/static.cpp`, `th03/main/playfld.cpp`, `th03/main/sprite16.cpp`, `th03/main/player/scoreblt.cpp` | Authentic assets/layout/raster code; score/gauge values come from the source-timed slice |
-| Player sprite/glow/overlay | `player_render()` and `player_overlay_render()` in `th03/main/player/bomb.cpp`, plus player render BSS/data | Presenter owns visual cel/page alternation and glow state unless a field is proven to feed core; render slices supply raw player state |
+| Static HUD/playfields | `th03/main/hud/static.cpp`, `th03/main/playfld.cpp`, `th03/main/sprite16.cpp`, `th03/main/player/scoreblt.cpp` | Authentic assets/layout/raster code; score/gauge values come from the applicable semantic phase view |
+| Player sprite/glow/overlay | `player_render()` and `player_overlay_render()` in `th03/main/player/bomb.cpp`, plus player render BSS/data | Presenter owns visual cel/page alternation and glow state unless a field is proven to feed core; semantic phase views supply raw gameplay state |
 | Gauge/result/combo visuals | `gaugeovl.cpp`, `score_rn.asm`, `combo.cpp`, `shot.cpp::sub_E3F2()`, `hitcirc.cpp::sub_B4A8/sub_B60A` | Split: core owns score/result/combo mutation and callback selection; presenter owns raster/palette/animation payload at the same schedule position |
 | Character Charge/Extra draw state | render callbacks enumerated in the source disposition matrix below | Presenter owns scratch cursors, clips, sprite cels and stale render-only bytes; core retains Reimu's render-owned Extra age increment |
-| Character Bomb visual state | Reimu/Mima/Marisa records, Ellen vectors/release cursor, later-character palette/effect geometry | Split: persistent visual records in presenter; all RNG and renderer-to-update mutations remain core and are emitted |
+| Character Bomb visual state | Reimu/Mima/Marisa records, Ellen vectors/release cursor, later-character palette/effect geometry | Split: persistent visual records in presenter; all shared RNG and gameplay-affecting late mutations remain core, with gameplay facts and raw site-tagged results optionally observed |
 | Character Boss visual state | `gba_boss_render_*()` and per-character render bytes | Presenter owns sprite/geometry/clip state; core retains Mima/Kotohime and any other proven later-gameplay writes |
 | OP scene state | `th03/op/m_main.cpp`, `th03/op_01.cpp`, `th03/op/m_select.cpp`, shared music room | Application/presenter; explicit resident seed handoff to core |
 | MAINL scenes | `screens.cpp`, cutscene/continue, high-score registration, staff roll | Application/presenter; persistence and route choices outside presenter |
@@ -634,21 +669,21 @@ native file name because no presentation tree exists yet.
 
 | Anniversary source symbols/files | Source responsibility | Native disposition |
 |---|---|---|
-| `th03/main/rndloop.cpp::sub_9778()` | Governing update/render/present schedule | Core owns deterministic calls and control; application coordinates one ordered batch; presenter executes draw slots exactly |
+| `th03/main/rndloop.cpp::sub_9778()` | Governing update/render/present schedule | Core owns deterministic calls/control and reports semantic boundaries synchronously; presenter owns and executes the private draw schedule |
 | `th03/main/rstart.cpp::round_startup()`; `th03/main/player/shot.cpp::sub_E266()` | Page/resource/HUD setup plus gameplay initialization | Split startup transaction; core creates round state, presenter prepares pages/resources before first frame |
 | `th03/main/hud/static.cpp::hud_wipe/hud_static_put`; `playfld.cpp`; `sprite16.cpp`; `scoreblt.cpp` | Static frame, playfield transforms, sprite and numeric glyph drawing | Port mechanically into Authentic translator/rasterizer; expose only semantic layout to Arrange |
-| `th03/main/player/shot.cpp::shots_render()` | Draw shots and advance `so_anim` | Draw/cel state in presenter; the shots slice identifies live shot records |
-| `th03/main/enemy/enemy.cpp::enemies_render()` | Enemy draw payload | Presenter from the immutable enemy render slice |
-| `th03/main/enemy/fireball.cpp::fireballs_hittest_and_render()` | Gameplay hittest interleaved with drawing | Core performs hittest at the exact late slot; presenter receives post-hittest state/events and draws there |
-| `th03/main/hitcirc.cpp::hitcircles_*`; `hitc_mrs.cpp`; `hitc_pal.cpp` | Randomized hit effect, 13-slot lifecycle, MRS and palette work | RNG/spawn value from core event; lifecycle/raster/palette in presenter |
-| `th03/main/player/d3f9.cpp::sub_D092..sub_D3F9` | Backgrounds and common 12-record effect pool | Presenter owns visual records; core retains minimal RNG cadence, emits every source shared-RNG result, and preserves call position |
-| `th03/main/player/bb12.cpp::sub_BB12`; `hudstart.cpp::sub_BE5D` | HUD-start records and rendering | Presenter records driven by exact core-emitted random payload; core retains minimal RNG cadence; draw at late HUD slot |
+| `th03/main/player/shot.cpp::shots_render()` | Draw shots and advance `so_anim` | Draw/cel state in presenter; semantic phase views identify live gameplay shot records |
+| `th03/main/enemy/enemy.cpp::enemies_render()` | Enemy draw payload | Presenter reads immutable enemy gameplay facts at the applicable semantic phase |
+| `th03/main/enemy/fireball.cpp::fireballs_hittest_and_render()` | Gameplay hittest interleaved with drawing | Core performs hittest at the exact late phase; presenter continues after the post-hittest observation |
+| `th03/main/hitcirc.cpp::hitcircles_*`; `hitc_mrs.cpp`; `hitc_pal.cpp` | Randomized hit effect, 13-slot lifecycle, MRS and palette work | Core reports the collision fact and raw site-tagged results; interpretation/lifecycle/raster/palette live in presenter |
+| `th03/main/player/d3f9.cpp::sub_D092..sub_D3F9` | Backgrounds and common 12-record effect pool | Presenter owns visual records; core retains minimal compatibility cadence, reports already-consumed shared-RNG results, and preserves call position |
+| `th03/main/player/bb12.cpp::sub_BB12`; `hudstart.cpp::sub_BE5D` | HUD-start records and rendering | Presenter records use observed consumed random values; core retains only the minimal compatibility cadence; draw at the corresponding private presenter position |
 | `th03/main/player/warning.cpp::SUB_CA3C/SUB_C9FE`; `th03/main/player/d3f9.cpp::SUB_CB81` | Warning waits, TRAM, palette, MRS portrait | App owns interstitial waits/input; presenter owns visual state; audio cue is separate; do not advance core during prelude |
-| `th03/main/player/gaugeovl.cpp::sub_C830/sub_C8C4`; `score_rn.asm::sub_D52E`; `combo.cpp::combos_update_and_render()` | Gauge/score/combo state plus drawing | Split functions: core mutations already remain in suffix; presenter gets a slice/event at each original slot |
+| `th03/main/player/gaugeovl.cpp::sub_C830/sub_C8C4`; `score_rn.asm::sub_D52E`; `combo.cpp::combos_update_and_render()` | Gauge/score/combo state plus drawing | Split functions: core mutations already remain in suffix; presenter observes the resulting gameplay facts and schedules the source-position draw privately |
 | `th03/main/player/shot.cpp::sub_C2F9/sub_E3F2`; `hitcirc.cpp::sub_B4A8/sub_B60A` | Defeat/result text, timing, and trapezoid transitions | Core owns result gates/routes/scores/callback state; presenter owns banner/trapezoid drawing |
 | `chargeshot_render_reimu/mima/marisa/ellen` in `ch_shot.cpp` and `main_08.cpp`; character 4-8 renderers in `main_10.cpp`, `main_09.cpp`, `main_11.cpp`, `main_07.cpp`, `main/bullet/bullet.cpp` | Charge draw callbacks and scratch cursors | Presenter-only draw state; no presenter RNG. Core remains source of charge records |
-| `exatt_render_*` in `main_06.cpp` and `main/player/exatt.cpp` | Extra draw callbacks | Presenter-only except Reimu's source render-owned age increment, which remains core at the render slot |
-| `bomb_func[]` targets in `ch_shot.cpp`, `main/bullet/mbomb.cpp`, `main/player/chybomb.cpp`, `main_05.cpp`, `main/player/yumemi_bomb.cpp` | Bomb palette/effect geometry plus visual RNG and foreground feedback | Core retains foreground writes, shared RNG, and Ellen release coupling; emits typed payload; presenter owns all draw records/palette effects |
+| `exatt_render_*` in `main_06.cpp` and `main/player/exatt.cpp` | Extra draw callbacks | Presenter-only except Reimu's source render-owned age increment, which remains core at the exact late gameplay phase |
+| `bomb_func[]` targets in `ch_shot.cpp`, `main/bullet/mbomb.cpp`, `main/player/chybomb.cpp`, `main_05.cpp`, `main/player/yumemi_bomb.cpp` | Bomb palette/effect geometry plus visual RNG and foreground feedback | Core retains foreground writes, shared RNG, and Ellen release coupling; it reports gameplay facts and already-consumed values only; presenter owns all draw records/palette effects |
 | `gba_boss_render_*` in `main_03p.cpp` through `main_03x.cpp` | Per-character Boss sprites/effects and some hidden mutation | Core retains proven Mima/Kotohime renderer-fed gameplay state; presenter owns the remaining sprite/geometry/clip/animation state |
 | `th03/op/m_main.cpp::op_animate/op_fadein_animate/box_animate`; `th03/op_01.cpp` | Title/menu graphics, TRAM, fades, resident RNG cadence | Native application scene + Authentic presenter; explicit logical wait count feeds resident seed |
 | `th03/op/m_select.cpp::select_*` | Character selection assets, curves, pages, fades | Native application scene + presenter; preserve Anniversary flip order |
@@ -688,12 +723,12 @@ already-resolved seams rather than moving callbacks wholesale:
 
 - Reimu Extra Attack increments age in its source render phase. Core retains
   the increment at `extra_attacks_render_phase_update()`; presenter draws from
-  the state for the same slot.
+  the observed gameplay state after that mutation.
 - Mima Boss rendering mutates state later used by gameplay. Core retains that
   source-position mutation.
 - Ellen Bomb rendering owns the shared release cursor/reset and consumes the
   angle used by subsequent bomb update behavior. Core retains the coupling and
-  emits the visual vector/sample.
+  can report the resulting gameplay fact and raw site-tagged RNG result.
 - Kotohime state-0 Boss rendering (`gba_boss_render_kotohime()`,
   `kotohime_120A0()`, `kotohime_12103()` in `th03/main_03u.cpp`) seeds later
   gameplay orbit angle/radius. Core's `boss_render_phase_update()` retains it;
@@ -710,31 +745,32 @@ already-resolved seams rather than moving callbacks wholesale:
 ## Complete gameplay/RNG-to-presentation seam ledger
 
 The following is the minimum exhaustive seam set established by the current
-coverage ledgers and pinned source. Each row needs an event or render-slice field
-before Authentic can claim coverage.
+coverage ledgers and pinned source. Each row needs either a neutral observation
+or an explicitly presenter-owned derivation before Authentic can claim
+coverage. A row never authorizes renderer state in core.
 
 | Seam | Core obligation | Presentation obligation |
 |---|---|---|
-| Entity positions/state (players, shots, bullets, enemies, fireballs, bosses, Charge, Extra) | Export exact raw fixed-width values in a typed slice at each entity's source draw slot, after any preceding render-phase mutation | Apply source coordinate conversion, PID/playfield transform, clipping, cel and draw order |
-| Foreground shake/offset | Retain values because source feeds them back into gameplay coordinate paths; export per player | Use the exported value for every affected visual coordinate; do not independently animate it |
-| Hit-circle creation | Consume the two source random offsets exactly when enabled; emit final values and target kind | Allocate the 12-enemy rotating slot or shared player slot, then own age/cel/color/page behavior |
-| Background type selection | Export selected callback/type from character setup; for A emit 192 seed results then 48 increment bits per early frame through the `round_frame > 128` switch, and for B emit 100 seed results then 40 increment bits per early frame through the `round_frame > 144` switch | Own all particle records and later non-RNG vector motion; never consume core RNG |
-| Common `CEE0` effects | Retain any source call that consumes RNG (`SUB_CE5B`) and emit the actual angle; emit non-RNG spawn intents too | Reproduce 12-slot overwrite/allocation, type behavior, draw order, and type-2 per-slot angle progression |
-| HUD-start burst | Consume all 256 ring and 256 IRAND results in source order and emit their interpreted values | Build the 16-banner/128-particle presentation state and draw at `sub_BE5D()` slot |
+| Entity positions/state (players, shots, bullets, enemies, fireballs, bosses, Charge, Extra) | Make exact raw fixed-width gameplay facts observable at the semantic phases that bracket late gameplay mutations | Copy required values synchronously; apply source coordinate conversion, PID/playfield transform, clipping, cel, and draw order |
+| Foreground shake/offset | Retain values because source feeds them back into gameplay coordinate paths; expose them as gameplay facts | Use the observed value for every affected visual coordinate; do not independently animate it |
+| Hit-circle creation | Consume the two source random values exactly when enabled; report the collision fact plus the raw results/site/ordinals | Interpret the results, allocate the 12-enemy rotating slot or shared player slot, then own age/cel/color/page behavior |
+| `sub_D092/sub_D2E8` compatibility schedule | Retain only the schedule discriminator because it controls later shared-RNG consumption; for one path report 192 then 48 raw results per early frame through the `round_frame > 128` switch, and for the other report 100 then 40 raw results per early frame through the `round_frame > 144` switch | Interpret the read-site sequence as the Authentic background algorithm; own all particle records and later non-RNG vector motion; never consume core RNG |
+| Common `CEE0` effects | Retain any source call that consumes RNG (`SUB_CE5B`) and report its raw result/site/ordinal | Derive non-RNG spawn intents from semantic gameplay facts; interpret the RNG result and reproduce 12-slot overwrite/allocation, type behavior, draw order, and type-2 per-slot angle progression |
+| HUD-start burst | Consume all 256 ring and 256 IRAND results in source order and report only raw results/site/ordinals | Interpret the sequence, build the 16-banner/128-particle presentation state, and draw at the private `sub_BE5D()` schedule position |
 | Warning | Expose warning gates/result facts; do not advance gameplay during 27 waits | Own TRAM/palette/portrait state and exact 27/30-frame visual timing |
-| Reimu Bomb | Retain frame 0..31 velocity-then-X RNG order, foreground shift on frames 64..111, and reset from 112; emit actual samples | Own falling-sprite records and palette/effect drawing |
-| Mima Bomb | Retain one shared-RNG draw on frames 8,16,...,64, foreground shift on frames 81..143, and reset from 144; emit the value | Own omitted column records and drawing |
-| Marisa Bomb | Retain X-then-Y draws every eighth frame from 64 through 127, alternating foreground shift in that interval, and reset from 128; emit coordinates | Own flash records and drawing |
-| Ellen Bomb | Retain shared release cursor, reset/release order, and one angle draw; emit vector/angle | Own eight per-player vector arrays' visual representation and draw payload |
+| Reimu Bomb | Retain frame 0..31 velocity-then-X RNG order, foreground shift on frames 64..111, and reset from 112; report raw results/site/ordinals | Interpret results and own falling-sprite records and palette/effect drawing |
+| Mima Bomb | Retain one shared-RNG draw on frames 8,16,...,64, foreground shift on frames 81..143, and reset from 144; report its raw result/site/ordinal | Interpret the result and own omitted column records and drawing |
+| Marisa Bomb | Retain X-then-Y draw order every eighth frame from 64 through 127, alternating foreground shift in that interval, and reset from 128; report raw results/site/ordinals | Interpret coordinates and own flash records and drawing |
+| Ellen Bomb | Retain shared release cursor, reset/release order, and one RNG draw; report the gameplay coupling plus raw result/site/ordinal | Interpret the angle and own eight per-player vector arrays' visual representation and draw payload |
 | Kotohime/Kana Bomb | Retain foreground shift on frames 64..127 and reset from 128; no shared RNG is consumed | Own palette/tone and `SUB_CDBD` geometry state |
-| Rikako Bomb | Retain foreground shift on frames 64..127, consume one ring value on frames 64,72,...,120, and reset from 128; emit each value | Own palette and `word_220EC` line-radius visualization |
-| Chiyuri Bomb | Retain foreground shift on frames 64..143, consume four `SUB_CE5B()` values at each of frames 64,80,96,112,128 (20 total), and reset from 144; emit typed effect data | Own the 20 effect spawns plus palette/tone geometry |
-| Yumemi Bomb | Retain foreground shift on frames 65..143, consume one `SUB_CE5B()` value at frames 72,80,...,136 (nine total), reset from 144, and preserve order before later Boss/Extra callbacks | Own the nine spawned effects and palette/tone geometry |
-| Gauge callbacks | Core retains all bullet/pellet mechanics and any `SUB_CE5B` draw; emits `SUB_CDBD/SUB_CE0C` spawn intent and palette-restore intent | Draw non-gameplay milestones at the original prefix position |
-| Boss render callbacks | Perform the proven Mima/Kotohime non-drawing mutations in the exact slot; export the post-mutation render view | Own sprite, orbit, materialization, defeat-palette and clipping payload |
-| Extra render callbacks | Perform Reimu age increment in exact slot | Own all character draw payload and render scratch state |
-| Charge render callbacks | Export records only; callbacks consume no shared RNG in the audited paths | Own character draw payload, cursor and clip state |
-| Score/gauge/combo/result | Perform mutations and control decisions before producing the corresponding view/event | Render exact displayed values and transitions without feeding them back |
+| Rikako Bomb | Retain foreground shift on frames 64..127, consume one ring value on frames 64,72,...,120, and reset from 128; report each raw result/site/ordinal | Interpret results and own palette plus `word_220EC` line-radius visualization |
+| Chiyuri Bomb | Retain foreground shift on frames 64..143, consume four `SUB_CE5B()` values at each of frames 64,80,96,112,128 (20 total), and reset from 144; report raw results/site/ordinals | Interpret results and own the 20 effect spawns plus palette/tone geometry |
+| Yumemi Bomb | Retain foreground shift on frames 65..143, consume one `SUB_CE5B()` value at frames 72,80,...,136 (nine total), report raw results/site/ordinals, reset from 144, and preserve order before later Boss/Extra callbacks | Interpret results and own the nine spawned effects plus palette/tone geometry |
+| Gauge callbacks | Retain all bullet/pellet mechanics and any `SUB_CE5B` draw; report semantic attack milestones and raw results/site/ordinals only | Derive `SUB_CDBD/SUB_CE0C` geometry, interpret RNG results, and own palette actions at the original private schedule position |
+| Boss render callbacks | Perform the proven Mima/Kotohime gameplay mutations at the exact late phase; expose the post-mutation gameplay facts | Own sprite, orbit, materialization, defeat-palette, and clipping payload |
+| Extra render callbacks | Perform Reimu age increment at the exact late phase | Observe the updated gameplay age; own all character draw payload and render scratch state |
+| Charge render callbacks | No extra core output beyond ordinary gameplay phase facts; callbacks consume no shared RNG in the audited paths | Own character draw payload, cursor, and clip state |
+| Score/gauge/combo/result | Perform mutations and control decisions before reporting the corresponding gameplay facts | Render exact displayed values and transitions without feeding them back |
 | OP `resident->rand` cadence | Application computes exact logical-wait-derived resident value and supplies it through `GameInit` | Scene rendering must not add or omit logical waits based on host speed |
 
 For any new seam discovered during pixel work, the resolution rule is simple:
@@ -744,10 +780,28 @@ duplicate a source RNG call in both layers.
 
 ## Asset inventory and loading boundary
 
-Original assets stay external and untracked. `th03_present` requests them by a
-stable logical ID; an injected `AssetProvider` resolves the original pack/file
-for Authentic or a replacement bundle for a future profile. Filename mutation
-in the source is a loader implementation detail, not a public API.
+`th03_assets` and `th03_present` are separate sibling CMake libraries inside
+this port repository; no new repository is required. They can be implemented
+in parallel after freezing a small immutable decoded-model vocabulary:
+
+```text
+external bytes --> th03_assets --> decoded models --+
+                                                  +--> th03_present --> indexed frame
+th03_core ------ optional neutral observations ----+
+```
+
+The first join point is a real static MAIN frame. Before then, `th03_assets`
+can prove RGB/palette and PI decoding with synthetic byte fixtures while
+`th03_present` proves two-page indexed state, palette, TRAM, clipping, and
+primitive semantics with hand-authored decoded models. Neither library waits
+for the other's full format or scene coverage.
+
+Original assets stay external and untracked. `th03_present` requests decoded
+models by a presenter-owned stable logical ID; an injected `AssetProvider`
+resolves the original pack/file for Authentic or a replacement bundle for a
+future profile. Filename mutation in the source is a loader implementation
+detail, not a public API. `th03_core` links neither library and never sees an
+asset ID or model.
 
 The Anniversary build inventory is in `Tupfile.lua`; filename constants are in
 `th03/shiftjis/fns.hpp`, `music.hpp`, `bgm.hpp`, and the listed data ASM files.
@@ -764,7 +818,7 @@ The Anniversary build inventory is in `Tupfile.lua`; filename constants are in
 | Staff roll | `edbk1.rgb`, `stf1.cdg`, `stf11.cdg`, `stf2.cdg`..`stf12.cdg`; tables in `mainl/vstf[data].asm` and `rsedat[data].asm` | Staff scene/presenter |
 | Built-in bitmap tables | score digits, pellets, flakes and other compiled bitmaps listed in `Tupfile.lua`; data ASM such as `peldat.asm`, `pbpat_data.asm`, `sfntdat.asm`, `rtextdat.asm`, `5_powers_of_10*.asm` | Re-express as verified native asset tables or generated build inputs; do not invent cels |
 | Presentation BSS/data | `soch_data.asm`, `gba_hitc_enemy_data.asm`, `playfield_fg_x[bss].asm`, `warn*.asm`, `hitcircle_bss.asm`, `ccorddat.asm`, `cmb_data.asm` and character render BSS/data | Translate field-by-field into typed presenter state; never copy raw DGROUP layouts |
-| Music/effects | `op.m`, `select.m`, character/stage `.M` files, `dec.m`, `demo1.m`..`demo5.m`, `ed.m`, `score.m`, `win.m`, `over.m`, and `YUME.EFC` | Separate audio asset/service; frame-stamped semantic cues originate from app/core |
+| Music/effects | `op.m`, `select.m`, character/stage `.M` files, `dec.m`, `demo1.m`..`demo5.m`, `ed.m`, `score.m`, `win.m`, `over.m`, and `YUME.EFC` | Separate audio asset/service; cue IDs are derived outside core from application actions or neutral gameplay observations |
 
 PI, CDG/CD2, MRS, BFNT/BFT, BF2, RGB, and compiled bitmap decoding need
 format-level tests with tiny copyright-safe fixtures. Visual tests may load the
@@ -871,24 +925,55 @@ gate.
 Each slice is deliberately small enough to prove one boundary before importing
 more source behavior.
 
-### Slice 0: freeze types and no-render invariance
+### Slice 0: freeze the neutral seam and no-observer invariance
 
-Implement `PresentationBatch`, ordered source slots/ordinals, typed render
-slices, a null sink, and typed event storage without a renderer.
+Implement the minimal borrowed `GameplayObservation` vocabulary and an optional
+non-owning `GameplayObserver` argument. Add no queue, collector, visual type, or
+presentation state to `th03_core`; a test-owned observer may copy observations
+for diagnostics.
 
 Exit tests:
 
-- every existing Phase 3 oracle case remains identical with events disabled,
-  discarded, and collected;
-- snapshot/restore cannot duplicate pending events;
-- event types contain no pointer, host padding, path, clock, or graphics type;
+- every existing Phase 3 oracle case remains identical with the observer
+  absent, a discard observer attached, and a test-owned recording observer
+  attached;
+- core snapshots contain no observations or pending delivery state;
+- observation types contain no asset, sprite/cel, palette, page, TRAM, draw,
+  path, clock, platform, or graphics type;
+- `th03rv` links only replay/format/core targets and uses the no-observer path;
 - a dependency test rejects any `th03_present`/platform include from core.
 
-### Slice 1: raster state and primitive semantics
+### Slice 1A: asset decoding runway (parallel)
+
+Implementation status: ASSET-001 is complete. The stdlib-only span decoders
+cover RGB48 and PI with synthetic fixtures; all 78 external TH03 PI files also
+pass a read-only compatibility sweep without entering the repository.
+
+Create `th03_assets` as a separate library target in this repository. Begin
+with caller-span RGB/palette and PI decoders and small immutable decoded models.
+Use only synthetic copyright-safe byte fixtures in tracked tests.
+
+Exit tests:
+
+- malformed/truncated spans fail explicitly and never trigger filesystem I/O;
+- known synthetic RGB/PI inputs produce exact indexed pixels and raw palette
+  values on GCC and MSVC;
+- decoded models contain no path, file handle, mutable global cache, or renderer
+  dependency; and
+- `th03_core` and `th03rv` do not link `th03_assets`.
+
+### Slice 1B: raster state and primitive semantics (parallel)
+
+Implementation status: the first platform-neutral foundation is complete for
+two raw 640x400 indexed pages, access/show selection, clipped indexed and
+masked operations, deferred RGB4 palette apply, scroll state, and a provisional
+display-state hash. TRAM representation and exact planar/GRCG/EGC primitives
+remain open and this slice is not yet complete.
 
 Implement two indexed pages, access/show/copy/clear, palette/tone/deferred
 apply, TRAM storage, scroll, clipping, and the minimum planar/GRCG/EGC raster
-operations using synthetic fixtures only.
+operations in `th03_present`, using hand-authored decoded models rather than
+waiting for real asset decoders.
 
 Exit tests:
 
@@ -899,6 +984,9 @@ Exit tests:
 - TRAM and graphics remain separate through hashing/composition;
 - scroll changes presentation output without modifying either page;
 - identical command streams produce identical hashes on GCC and MSVC.
+
+Slices 1A and 1B start after their small decoded-model interface is agreed and
+run independently. Their first required join is Slice 2.
 
 ### Slice 2: one static MAIN frame and page swap
 
@@ -911,20 +999,22 @@ Exit tests:
 - both pre-first-frame pages match captured oracle pages;
 - two consecutive page swaps prove access/show identity and the two differently
   colored, 288-pixel-wide playfield clears through Y=183;
-- rendered and null-sink core traces are identical.
+- gameplay traces with no observer and with the presenter observer are
+  identical.
 
 ### Slice 3: ordinary live gameplay
 
-Add render slices and Authentic drawing for players, overlays, ordinary shots,
-enemies, bullets, and fireballs in exact order. Keep all hit testing in core.
+Observe raw gameplay facts at the documented semantic phases and add Authentic
+drawing for players, overlays, ordinary shots, enemies, bullets, and fireballs
+in exact order. Keep all hit testing in core.
 
 Exit tests:
 
 - selected TH3R03 frames match raw page/palette/TRAM oracle captures;
 - a deliberate one-slot ordering perturbation fails at the expected first
   overlapping pixel;
-- shot animation advances once per rendered source slot and does not enter the
-  core hash.
+- shot animation advances once per private presenter schedule position and does
+  not enter the core hash.
 
 ### Slice 4: RNG-fed effects
 
@@ -933,9 +1023,10 @@ animation.
 
 Exit tests:
 
-- event collection records the exact source counts and values while core RNG
-  hashes remain unchanged;
-- presenter reruns from a saved batch/state without access to core RNG;
+- a test-owned recording observer records the exact compatibility-site counts,
+  ordinals, and raw results while core RNG hashes remain unchanged;
+- presenter reruns from a copied, client-owned observation trace without access
+  to core RNG;
 - arena/slot overwrite and terminal-age frames match the raw visual oracle;
 - type-A/type-B initialization and HUD-start burst match dense captures.
 
@@ -960,7 +1051,7 @@ capture.
 
 Exit tests for each character:
 
-- core RNG/event count/value sequence at every listed seam;
+- core RNG/compatibility-observation count/value sequence at every listed seam;
 - source render-side core mutation still occurs with the presenter disabled;
 - materialization, active, defeat, and Bomb frames match indexed oracle state;
 - presenter-owned stale bytes have an explicit source-backed initialization
@@ -987,23 +1078,23 @@ Exit tests:
 | Risk | Consequence | Safeguard |
 |---|---|---|
 | Treating a render callback as pure | Lost gameplay mutation or RNG divergence | Keep `PARITY_RENDER_PHASE.md` and character ledgers as gates; test core with presenter absent |
-| Letting presenter consume shared RNG | Core behavior depends on rendering/preroll/profile | Typed actual-value events; no RNG handle in presenter API |
-| Reconstructing visual RNG from seed later | Wrong order when effects overlap or rendering is skipped | Emit interpreted values at the original call site |
+| Letting presenter consume shared RNG | Core behavior depends on rendering/preroll/profile | Report raw already-consumed results with minimal site/phase tags; no RNG handle in presenter API |
+| Reconstructing visual RNG from seed later | Wrong order when effects overlap or rendering is skipped | Observe raw consumed results at the original core call site and interpret only in presenter |
 | Flattening to one framebuffer | Breaks hidden-page sources, page alternation, unblit, and partial clears | Two-page raster state and explicit access/show/copy operations |
-| Exposing low-level commands as the Arrange contract | Couples future art/rules to PC-98 implementation detail | Keep `AuthenticDrawOp` private; share semantic events/render slices only |
+| Exposing low-level commands as the Arrange contract | Couples future art/rules to PC-98 implementation detail | Keep `AuthenticDrawOp` private; share only neutral gameplay observations |
 | Hashing RGBA/window output | Host GPU/color/filter differences masquerade as fidelity failures | Hash indexed pages/palette/TRAM/scroll before host composition |
 | Applying palette edits immediately | Warning/Bomb/Gauge timing differs | Model pending edits and source `palette_show()` slots |
 | Rasterizing TRAM into VRAM too early | Menu/warning text clears and gaiji behavior differ | Preserve TRAM as a separate canonical layer |
 | Driving OP seed by wall time | Same selection input can start different gameplay RNG | Count explicit logical scene waits and pass resident seed |
 | Assuming presentation BSS starts clean | Pixel differences in stale source fields | Source audit plus clean capture; model observed stale state intentionally, never host garbage |
-| Depending on original asset paths | Core/replay portability and legal distribution problems | Typed asset IDs and injected external asset provider |
+| Depending on original asset paths | Core/replay portability and legal distribution problems | Presenter-owned typed asset IDs and injected external asset provider |
 | Visual instrumentation changing timing/state | False oracle | Hash patched executable and patch, keep audio calls/order, cross-check core/RNG against frozen oracle |
 | Overfitting the current gameplay corpus | Green stills but missing effects/scenes | Behavior-class coverage matrix and targeted deterministic scene scripts |
 
 ## Open product and architecture decisions
 
 These require an explicit decision before their affected implementation slice;
-none should block the core/event seam.
+none should block the neutral observation seam.
 
 1. **Canonical TRAM encoding.** Decide the normalized cell/attribute/gaiji
    representation after auditing the exact source/master.lib writes. Keep raw
@@ -1019,7 +1110,9 @@ none should block the core/event seam.
    state; never add visual entities to canonical gameplay snapshots.
 5. **Fast-forward policy.** Decide which completed logical frames may be
    dropped by the host. Core and presenter state must still advance through
-   every frame whose callbacks mutate state or consume emitted events.
+   every frame whose callbacks mutate gameplay or consume shared RNG. When a
+   presenter observer is attached it must receive each required observation;
+   the primary `th03rv` path remains observer-free.
 6. **Authentic aspect/output policy.** Integer scale, 4:3 correction, filtering,
    CRT treatment, and fullscreen are host options applied after canonical
    indexed output; choose defaults during the Windows application milestone.
@@ -1035,9 +1128,9 @@ none should block the core/event seam.
 10. **Visual oracle publication.** Raw frame dumps may be derived from original
     assets. Decide retention/distribution policy; hashes and source/capture
     manifests can be tracked even when dumps remain ignored.
-11. **Arrange consumption level.** The recommendation is semantic core events
-    plus render slices, not Authentic low-level commands. Confirm once Arrange's
-    actual mechanics/content specification exists.
+11. **Arrange consumption level.** The recommendation is neutral gameplay
+    observations, not Authentic low-level commands or Classic visual state.
+    Confirm once Arrange's actual mechanics/content specification exists.
 12. **Hardware quirks outside complete frames.** Authentic currently targets
     complete logical frames and intentionally excludes tearing and CPU timing.
     Any later “Original hardware” profile would be a distinct product decision,
@@ -1048,14 +1141,15 @@ none should block the core/event seam.
 The contract is successfully implemented when all of the following are true:
 
 - the full existing headless corpus is identical with presentation disabled,
-  collected, rendered, fast-forwarded, and preroll-discarded;
-- every seam in the ledger has a typed event or explicit render-slice field and no
-  presenter code can reach gameplay RNG;
+  observed, rendered, fast-forwarded, and preroll-discarded;
+- every seam in the ledger has a neutral observation or documented
+  presenter-owned derivation, and no presenter code can reach gameplay RNG;
 - the Authentic software rasterizer reproduces selected raw Anniversary page,
   palette, TRAM, and scroll captures at byte granularity;
 - OP/MAINL scene pacing and resident handoffs are deterministic with silent,
   scripted, no-live-input runs;
-- assets and persistence are injected services outside core;
+- assets and persistence are injected services outside core, and `th03rv`
+  links neither `th03_assets` nor `th03_present`;
 - command ordering is diagnosable but the private command vocabulary is not a
   public Arrange dependency; and
 - the Windows host only scales/composites completed indexed display states and

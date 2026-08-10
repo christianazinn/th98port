@@ -22,6 +22,24 @@ function(th03_set_warnings target)
 	endif()
 endfunction()
 
+add_library(th03_assets STATIC
+	src/assets/pi.cpp
+	src/assets/rgb.cpp
+)
+target_include_directories(th03_assets PUBLIC include)
+target_compile_features(th03_assets PUBLIC cxx_std_23)
+set_target_properties(th03_assets PROPERTIES CXX_EXTENSIONS OFF)
+th03_set_warnings(th03_assets)
+
+add_library(th03_present STATIC
+	src/present/raster.cpp
+)
+target_include_directories(th03_present PUBLIC include)
+target_link_libraries(th03_present PUBLIC th03_assets)
+target_compile_features(th03_present PUBLIC cxx_std_23)
+set_target_properties(th03_present PROPERTIES CXX_EXTENSIONS OFF)
+th03_set_warnings(th03_present)
+
 add_library(th03_core STATIC
 	src/core/game.cpp
 	src/core/frame.cpp
@@ -75,11 +93,11 @@ th03_set_warnings(th03_replay)
 add_library(th03_formats STATIC
 	src/formats/enedat.cpp
 	src/formats/replay.cpp
+	src/formats/rpy_checkpoint.cpp
 	src/formats/rpy_input.cpp
 	src/formats/t3case.cpp
 	src/formats/t3split.cpp
-	src/formats/v11.cpp
-	src/formats/v12.cpp
+	src/formats/v13.cpp
 )
 target_include_directories(th03_formats PUBLIC include)
 target_link_libraries(th03_formats PUBLIC th03_core)
@@ -107,4 +125,25 @@ if(BUILD_TESTING)
 	target_include_directories(th03-tests PRIVATE src/core)
 	th03_set_warnings(th03-tests)
 	add_test(NAME th03-tests COMMAND th03-tests)
+
+	add_executable(th03-v13-tests
+		tests/test_v13.cpp
+	)
+	target_link_libraries(th03-v13-tests PRIVATE th03_formats)
+	th03_set_warnings(th03-v13-tests)
+	add_test(NAME th03-v13-tests COMMAND th03-v13-tests)
+
+	add_executable(th03-assets-tests
+		tests/test_assets.cpp
+	)
+	target_link_libraries(th03-assets-tests PRIVATE th03_assets)
+	th03_set_warnings(th03-assets-tests)
+	add_test(NAME th03-assets-tests COMMAND th03-assets-tests)
+
+	add_executable(th03-present-tests
+		tests/test_present.cpp
+	)
+	target_link_libraries(th03-present-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-tests)
+	add_test(NAME th03-present-tests COMMAND th03-present-tests)
 endif()

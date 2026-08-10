@@ -1,12 +1,15 @@
 # Historical replay verification
 
-Snapshot: **2026-08-08**.
+Snapshot: **2026-08-09**.
 
 `th03rv` is the unbounded-speed replay-verification client for `libth03`. It
-accepts a historical V11 or definitive V12 `.RPY`, reconstructs a neutral
-`ReplaySession`, executes the same Classic gameplay core used by the headless
-oracle, prints the round states computed by the port, and compares them with
-the replay's embedded compact round summaries.
+accepts a V13 `.RPY`, reconstructs a neutral `ReplaySession`, executes the same Classic
+gameplay core used by the headless oracle, prints the round states computed by
+the port, and compares them with the replay's embedded compact round summaries.
+Only finalized files can produce a complete verification result. Non-finalized
+`RECORDING`/`PARTIAL` artifacts remain structurally readable for diagnostics,
+but never claim a complete match; an active `RECORDING` stream may naturally
+end as input-exhausted without a process control.
 
 ```powershell
 th03rv.exe path\to\replay.RPY
@@ -20,33 +23,55 @@ does not contain or redistribute original game data.
 ## Dependency boundary
 
 ```text
-V11 reader ----\
-                -> ReplayDocument -> ReplaySession -> replay runner -> libth03
-V12 reader ----/          |
-                          +-> expected compact round splits
-
-future V13 reader --------^  (same document/session boundary)
+V13 reader -> ReplayDocument -> ReplaySession -> runner -> libth03
+                         |
+                         +-> expected round splits + report metadata
 ```
 
 - `th03_formats` parses bytes from a caller-owned span. It performs no file I/O.
 - `th03_replay` coordinates recorded pause input and MAIN/MAINL boundaries. It
-  knows no V11/V12 layout and no expected scores.
+  knows no V11/V12/V13 layout and no expected scores.
 - `th03_core` receives only explicit fixed-width startup/runtime/round state and
   logical input. It contains no replay parser, filesystem, or platform code.
 - `th03rv` owns paths, `ENEDAT.DAT` loading, reporting, and exit status.
 
-V12 compact checkpoints are recipes, not native struct images. Random,
+V13 compact checkpoints, inherited from V12, are recipes rather than native
+struct images. Random,
 formation, and CPU-charge tables are reconstructed after `GameContent` supplies
 the actual formation count. The portable round-state/carry fields are restored
 field by field. Practice is represented as the source `GM_VS_1P_CPU` scenario
-plus a small retry/result policy; its byte layout remains in the V12 adapter.
+  plus a small retry/result policy; its byte layout remains in the format
+  adapter.
 
-Later V12 round checkpoints are not independent process images. The Replay
+Later V13 round checkpoints are not independent process images. The Replay
 Patch resolves a selection to the same process anchor and sequentially
 prerolls input unless an optional validated broad-state cache is available.
 `th03rv` therefore starts at checkpoint 0 and simulates the complete stream.
 Optional accelerators are performance caches and are deliberately unnecessary
 for correctness.
+
+V13 also preserves 14-byte round rows with real VSync counts, nine clear-bonus
+records, and run-wide Slowdown counters as report-only metadata. None of these
+fields initializes, repairs, or steers gameplay. Exact authority, layout, and
+retirement gates are recorded in `V13_INTEGRATION.md`.
+
+## V13 structural status
+
+The strict span parser is covered synthetically for all source-backed input
+offsets (Story 4,957, ordinary VS 1,489, Practice 2,067), compact checkpoints,
+RLE/process controls, Practice consistency, summaries, telemetry, optional
+tails, pending sealed streams, and malformed boundaries on GCC and MSVC.
+TH03 Data Manager 0.4.0 converted all 19 frozen historical inputs; their V13
+sizes and SHA-256 identities are locked in `REPLAY_V13_CORPUS_LOCK.tsv`, and
+both compilers reproduce all 173 summaries and terminal results. The native
+V11/V12 parsers are therefore retired. T3CASE and T3SPLIT remain separate
+oracle formats.
+
+All reached V13 checkpoints are structurally parsed and preserved, including
+their raw pre-reset seed. Full sequential playback does not yet prove their
+complete reconstructed state or application-side selection. That UI remains
+gated on comparing a complete, format-neutral round-start observation with
+each checkpoint at its process-anchor preroll boundary.
 
 ## What a match proves
 
@@ -63,34 +88,36 @@ coverage but do not replace the frozen Anniversary oracle.
 
 ## Current external corpus
 
-Original replay files remain ignored outside this repository. Their byte sizes
-and SHA-256 identities are frozen in `REPLAY_CORPUS_LOCK.tsv`; notably, V12
-TH3R07 and TH3R12 are byte-identical. The first direct run over `corpus/v11s`
-and `corpus/v12s` produced:
+Original replay files remain ignored outside this repository. Their historical
+byte sizes and SHA-256 identities are frozen in `REPLAY_CORPUS_LOCK.tsv`; the
+converted V13 identities are frozen in `REPLAY_V13_CORPUS_LOCK.tsv`. Notably,
+source V12 TH3R07 and TH3R12—and their V13 conversions—are byte-identical. The
+conversion and direct V13 run produced:
 
-| Corpus file | Format/mode | Samples | Current direct result |
+| Corpus origin | V13 mode | Samples | Current direct result |
 |---|---|---:|---|
-| V11 TH3R00 | V11 Story | 100,642 | Match, 12/12 summaries |
-| V11 TH3R01 | V11 Story | 135,215 | Match, 13/13 summaries |
-| V11 TH3R02 | V11 Story | 91,939 | Match, 12/12 summaries |
-| V11 TH3R03 | V11 Story | 25,211 | Match, 4/4 summaries |
-| V11 TH3R04 | V11 Story | 86,437 | Match, 13/13 summaries |
-| V11 TH3R05 | V11 Story | 111,747 | Match, 13/13 summaries |
-| V12 TH3R00 | V12 Story | 90,061 | Match, 11/11 summaries |
-| V12 TH3R01 | V12 Story | 102,201 | Match, 11/11 summaries |
-| V12 TH3R02 | V12 Story | 30,326 | Match, 5/5 summaries |
-| V12 TH3R03 | V12 Story | 119,156 | Match, 12/12 summaries |
-| V12 TH3R04 | V12 Story | 118,762 | Match, 13/13 summaries |
-| V12 TH3R05 | V12 ordinary VS | 26,213 | Match, 3/3 summaries |
-| V12-dir TH3R06 | V11 Story | 99,290 | Match, 11/11 summaries |
-| V12 TH3R07 | V12 Story | 101,557 | Match, 9/9 summaries |
-| V12 TH3R08 | V12 Story | 103,852 | Match, 13/13 summaries |
-| V12 TH3R10 | V12 Practice | 11,256 | Match, 3/3 summaries |
-| V12 TH3R11 | V12 Story | 6,254 | Match, 3/3 summaries |
-| V12 TH3R12 | V12 Story | 101,557 | Match, 9/9 summaries |
-| V12 TH3R13 | V12 Practice | 10,146 | Match, 3/3 summaries |
+| V11 TH3R00 | Story | 100,642 | Match, 12/12 summaries |
+| V11 TH3R01 | Story | 135,215 | Match, 13/13 summaries |
+| V11 TH3R02 | Story | 91,939 | Match, 12/12 summaries |
+| V11 TH3R03 | Story | 25,211 | Match, 4/4 summaries |
+| V11 TH3R04 | Story | 86,437 | Match, 13/13 summaries |
+| V11 TH3R05 | Story | 111,747 | Match, 13/13 summaries |
+| V12 TH3R00 | Story | 90,061 | Match, 11/11 summaries |
+| V12 TH3R01 | Story | 102,201 | Match, 11/11 summaries |
+| V12 TH3R02 | Story | 30,326 | Match, 5/5 summaries |
+| V12 TH3R03 | Story | 119,156 | Match, 12/12 summaries |
+| V12 TH3R04 | Story | 118,762 | Match, 13/13 summaries |
+| V12 TH3R05 | ordinary VS | 26,213 | Match, 3/3 summaries |
+| V12-dir TH3R06 | Story | 99,290 | Match, 11/11 summaries |
+| V12 TH3R07 | Story | 101,557 | Match, 9/9 summaries |
+| V12 TH3R08 | Story | 103,852 | Match, 13/13 summaries |
+| V12 TH3R10 | Practice | 11,256 | Match, 3/3 summaries |
+| V12 TH3R11 | Story | 6,254 | Match, 3/3 summaries |
+| V12 TH3R12 | Story | 101,557 | Match, 9/9 summaries |
+| V12 TH3R13 | Practice | 10,146 | Match, 3/3 summaries |
 
-All 19 locked files complete and all 173 embedded summaries match. Expected
+All 19 converted V13 files complete and all 173 embedded summaries match on
+GCC and MSVC. Expected
 summaries remain comparison-only; neither the format adapter nor the replay
 runner uses them to initialize, repair, or steer gameplay.
 

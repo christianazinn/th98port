@@ -15,8 +15,6 @@
 #include "th03/formats/enedat.hpp"
 #include "th03/formats/t3case.hpp"
 #include "th03/formats/t3split.hpp"
-#include "th03/formats/v11.hpp"
-#include "th03/formats/v12.hpp"
 #include "th03/replay/session.hpp"
 
 namespace {
@@ -284,7 +282,7 @@ void print_terminal(
 int main(int argc, char **argv)
 {
 	if(argc < 3 || ((argc - 3) % 2) != 0) {
-		std::cerr << "usage: th03-headless (--case|--v11|--v12) <file> "
+		std::cerr << "usage: th03-headless --case <file> "
 			"[--enedat <file>] [--oracle <T3SPLIT.BIN>] "
 			"[--trace-every <samples>]\n";
 		return 2;
@@ -306,10 +304,6 @@ int main(int argc, char **argv)
 			return 2;
 		}
 		session = th03::formats::make_replay_session(*parsed);
-	} else if(mode == "--v11") {
-		session = th03::formats::parse_v11_replay(bytes);
-	} else if(mode == "--v12") {
-		session = th03::formats::parse_v12_replay(bytes);
 	} else {
 		std::cerr << "error=unknown input mode\n";
 		return 2;

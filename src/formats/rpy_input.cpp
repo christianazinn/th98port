@@ -36,7 +36,8 @@ std::expected<std::vector<replay::SessionRecord>, Error> decode_rpy_input(
 	std::size_t input_offset,
 	std::size_t input_size,
 	std::uint32_t sample_count,
-	std::string_view format_name
+	std::string_view format_name,
+	RpyInputTermination termination
 )
 {
 	if(!range_fits(input_offset, input_size, bytes.size())) {
@@ -208,13 +209,117 @@ std::expected<std::vector<replay::SessionRecord>, Error> decode_rpy_input(
 			"decoder did not consume the complete input stream", cursor
 		));
 	}
-	if(!last_was_control) {
+	if(
+		!last_was_control &&
+		termination == RpyInputTermination::require_process_control
+	) {
 		return std::unexpected(error(
 			ErrorCode::malformed_stream, format_name,
 			"finalized input stream does not end in a process control", end
 		));
 	}
 	return records;
+}
+
+std::expected<void, Error> validate_rpy_checkpoint_cursors(
+	std::span<const std::byte> bytes,
+	std::size_t input_offset,
+	std::size_t input_size,
+	std::span<const RpyCheckpointCursor> checkpoints,
+	std::string_view format_name
+)
+{
+	if(!range_fits(input_offset, input_size, bytes.size())) {
+		return std::unexpected(error(
+			ErrorCode::truncated,
+			format_name,
+			"input stream extends past end of file",
+			input_offset
+		));
+	}
+	std::vector<bool> found(checkpoints.size(), false);
+	auto cursor = input_offset;
+	const auto end = input_offset + input_size;
+	std::uint64_t sample = 0U;
+	while(true) {
+		const auto relative = cursor - input_offset;
+		for(std::size_t index = 0U; index < checkpoints.size(); ++index) {
+			if(checkpoints[index].input_size != relative) {
+				continue;
+			}
+			if(static_cast<std::uint64_t>(checkpoints[index].sample_count) != sample) {
+				return std::unexpected(error(
+					ErrorCode::count_mismatch,
+					format_name,
+					"checkpoint sample and byte cursors disagree",
+					cursor
+				));
+			}
+			if(cursor < end) {
+				if(!range_fits(cursor, 2U, end)) {
+					return std::unexpected(error(
+						ErrorCode::truncated,
+						format_name,
+						"packet header after checkpoint is truncated",
+						cursor
+					));
+				}
+				const auto phase = static_cast<std::uint8_t>(u8(bytes, cursor) >> 6U);
+				if(phase > 1U || (u8(bytes, cursor + 1U) & 0x0FU) != 0x0FU) {
+					return std::unexpected(error(
+						ErrorCode::malformed_stream,
+						format_name,
+						"checkpoint is not followed by a full input keyframe",
+						cursor
+					));
+				}
+			}
+			found[index] = true;
+		}
+		if(cursor == end) {
+			break;
+		}
+		if(!range_fits(cursor, 2U, end)) {
+			return std::unexpected(error(
+				ErrorCode::truncated,
+				format_name,
+				"packet header is truncated while validating checkpoints",
+				cursor
+			));
+		}
+		const auto tag = u8(bytes, cursor++);
+		const auto change = u8(bytes, cursor++);
+		const auto phase = static_cast<std::uint8_t>(tag >> 6U);
+		if(phase == 2U) {
+			continue;
+		}
+		std::size_t field_size = 0U;
+		field_size += ((change & 0x01U) != 0U) ? 2U : 0U;
+		field_size += ((change & 0x02U) != 0U) ? 2U : 0U;
+		field_size += ((change & 0x04U) != 0U) ? 2U : 0U;
+		field_size += ((change & 0x08U) != 0U) ? 1U : 0U;
+		if(!range_fits(cursor, field_size, end)) {
+			return std::unexpected(error(
+				ErrorCode::truncated,
+				format_name,
+				"packet values are truncated while validating checkpoints",
+				cursor
+			));
+		}
+		cursor += field_size;
+		sample += static_cast<std::uint64_t>((tag & 0x3FU) + 1U);
+	}
+	for(std::size_t index = 0U; index < found.size(); ++index) {
+		if(!found[index]) {
+			return std::unexpected(error(
+				ErrorCode::invalid_value,
+				format_name,
+				"checkpoint byte cursor is not a packet boundary",
+				checkpoints[index].input_size
+			));
+		}
+	}
+	return {};
 }
 
 } // namespace th03::formats::detail

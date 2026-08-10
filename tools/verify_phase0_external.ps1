@@ -36,7 +36,8 @@ function Invoke-Checked([string[]]$Arguments) {
 	return $output
 }
 
-$validatedDocuments = 0
+$validatedCases = 0
+$sourceReplaysHashed = 0
 $comparisons = 0
 foreach($case in $cases) {
 	$name = [string]$case[0]
@@ -52,14 +53,11 @@ foreach($case in $cases) {
 		throw "$name T3CASE SHA-256 disagrees with the Phase 0 freeze."
 	}
 	$caseOutput = Invoke-Checked @("--case", $t3case)
-	$v11Output = Invoke-Checked @("--v11", $v11)
 	if($caseOutput -cnotcontains "samples=$($case[3])") {
 		throw "$name T3CASE sample count is not $($case[3])."
 	}
-	if($v11Output -cnotcontains "samples=$($case[3])") {
-		throw "$name V11 sample count is not $($case[3])."
-	}
-	$validatedDocuments += 2
+	$validatedCases++
+	$sourceReplaysHashed++
 
 	$master = Join-Path $EvidenceRoot ".scratch\emu\t3case\phase0-$lower-master-$RunTag\game\T3SPLIT.BIN"
 	$anniversary = Join-Path $EvidenceRoot ".scratch\emu\t3case\phase0-$lower-anniversary-$RunTag\game\T3SPLIT.BIN"
@@ -70,5 +68,6 @@ foreach($case in $cases) {
 	Write-Host "PASS $name"
 }
 
-Write-Host "external_documents=$validatedDocuments"
+Write-Host "external_t3cases=$validatedCases"
+Write-Host "source_replays_hashed=$sourceReplaysHashed"
 Write-Host "split_comparisons=$comparisons"

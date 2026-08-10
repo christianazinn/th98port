@@ -612,7 +612,6 @@ struct Game::Impl {
 	GameInit initial_init;
 	std::uint8_t autofire_mask = 0;
 	GameContent content;
-	std::vector<PresentationEvent> presentation_events;
 	std::uint8_t warning_interstitial_samples_remaining = 0;
 	std::array<std::uint16_t, 2> replay_pause_gameplay_input{};
 	CanonicalState replay_pause_input_boundary{};

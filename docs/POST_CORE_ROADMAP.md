@@ -16,7 +16,7 @@ therefore offered as an explicit ruleset.
 The current dependency boundary remains:
 
 ```text
-V11 / V12 / future V13 readers
+              V13 reader
                  |
         version-neutral replay model
                  |
@@ -24,79 +24,79 @@ V11 / V12 / future V13 readers
                  |
               th03_core
                  |
-       semantic output/event boundary
+      optional neutral observation seam
                  |
-      renderer, audio, UI, and tools
+        presentation/audio adapters
 ```
 
 In particular:
 
 - `th03_core` owns fixed-width, fixed-point gameplay and deterministic process
   transitions. It does not open files, render, play audio, inspect clocks, or
-  know a replay version.
+  know a replay version. It owns no framebuffer/page/palette/TRAM state, asset
+  ID, sprite/cel state, draw/audio command, or persistent presentation queue.
+- An optional synchronous observer can inspect immutable gameplay facts at
+  semantic phase boundaries and raw primitive results from shared-RNG reads the
+  core has already consumed. Compatibility reads carry only a minimal
+  source-site/phase tag and ordinal; visual grouping and interpretation happen
+  outside core. Observation never changes stepping and is retained by the
+  client, not the core. `th03rv` supplies no observer and links no presentation
+  or asset library.
 - `th03_formats` owns byte layouts and adapts them to neutral replay/session
   state. Parsers consume byte spans rather than paths.
 - `th03_replay` owns replay-driven process, warning, and pause coordination.
-- filesystem, platform, presentation, audio, and network code remain clients.
+- gameplay-affecting late-phase mutations and the exact shared-RNG
+  compatibility schedule remain in core even when their source callback was
+  named as rendering. This is deterministic gameplay machinery, not renderer
+  state.
+- filesystem, platform, presentation, assets, audio, and network code remain
+  clients.
 - Anniversary and Replay presentation modes can share the same core. An
   eventual Arrange mode is a separate rules/content selection, not a gradual
   contamination of Classic behavior.
 
-## Next Replay Patch and V13 change set
+## Replay Patch and V13 integration
 
 ### Branch and worktree layout
 
-Do not develop V13 on the port-oracle branch or directly on the protected
-`replays` branch.
+Active development continues from the existing tips instead of accumulating
+single-use branches:
 
-1. Create a fresh outer harness worktree and topic branch from
-   `emdash/replays-and-validation-17ptz` at its accepted tip. A descriptive
-   branch name such as `emdash/th03-replay-v13` keeps PC-98 replay work
-   independent from the port.
-2. In that worktree's ReC98 submodule, branch from the accepted `replays` tip
-   (`f4a080c5` at the time of this record) onto a topic such as
-   `replays-v13`. Do not add development commits directly to `replays`.
-3. Finalize the V13 PC-98 specification, reader/writer, conversion tool, and
-   emulator evidence there. Merge that topic through the normal Replay Patch
-   acceptance path.
-4. Only after the byte and semantic contract is frozen, create a port topic
-   from the then-current libth03 branch. Add the V13 adapter to
-   `th03_formats` and version dispatch to the replay clients. The core and
-   neutral runner should not change merely because V13 exists.
-5. Merge or rebase later port work onto the accepted replay-format work in the
-   ordinary direction. Do not rebase the protected Replay Patch history under
-   the port.
+1. Replay/harness work continues on `emdash/replays-and-validation-17ptz`,
+   with the ReC98 submodule advancing its `replays` branch. Short-lived agent
+   work may use an isolated worktree, but accepted work is folded promptly into
+   those tips so there is one branch strictly ahead of obsolete development
+   heads.
+2. Native work continues from the current libth03 branch. V13 belongs in
+   `th03_formats` and the replay clients; neither `th03_core` nor the neutral
+   runner changes merely because the container version changed.
+3. The Replay/harness and native histories remain separate repositories and
+   are advanced independently. Never rebase either accepted history underneath
+   the other or publish the enclosing harness as the standalone port.
 
-This keeps three histories distinct: PC-98 product work, validation harness
-work, and native-port work. It also lets V13 evolve without blocking further
-Classic-core verification.
+The canonical V13 schema is `tools/replay/FORMAT.md`. Exact packed
+structures, constants, and accepted game-side combinations come from ReC98's
+`th03/replay_format.hpp` and its MAIN/MAINL/OP readers. The authority snapshot,
+native ownership, arithmetic correction, and retirement gates are frozen in
+`V13_INTEGRATION.md`.
 
 ### Format contract
 
-V13 should be the one finalized player-facing replay format. V11 and V12
-remain historical import formats and regression fixtures; conversion is one
-way, `V11/V12 -> V13`. The old unreleased V13/V14 experiments in repository
-history are not a compatibility promise and should not be revived by magic
-number alone.
+V13 is the finalized player-facing replay format. Its 622-byte header retains
+the portable V12 compact checkpoint and RLE-input contract while adding
+14-byte round rows, stage-clear bonus records, real-time/Slowdown telemetry,
+and the complete validated summary capability set. Optional data after the
+logical input end remains an ignorable accelerator cache.
 
-The V13 contract should prefer semantic, architecture-neutral fields:
-
-- explicit ruleset/content/schema identifiers;
-- logical input samples and typed process boundaries;
-- explicit warning-wait and pause-menu semantics rather than an ambiguous
-  auxiliary phase where practical;
-- complete deterministic round/process anchor state;
-- embedded round summaries and integrity metadata;
-- optional retry accelerators that are validated caches, never authoritative
-  state and never required for sequential playback;
-- no far pointers, DGROUP images, executable addresses, host pointers, or
-  opaque process-memory snapshots.
-
-The converter should preserve old files as input fixtures. It should reject
-malformed or unsupported combinations explicitly instead of guessing. V13
-tests should include conversion equivalence, sequential versus accelerated
-playback equivalence, pause and process transitions, Story, Practice, ordinary
-VS, CPU-vs-CPU where recordable, and boundary corruption.
+TH03 Data Manager 0.4.0 now owns the one-way V11/V12-to-V13 converter in the
+Replay/harness work. It converted all 19 locked historical inputs, whose V13
+identities are frozen in `REPLAY_V13_CORPUS_LOCK.tsv`; all 173 summaries and
+terminal results reproduce through V13 on GCC and MSVC. Native V11/V12 parsers
+are therefore retired. Historical inputs remain external regression sources
+for the converter rather than formats accepted by libth03. V13 tests cover
+pause/process transitions, Story, Practice, ordinary VS, checkpoint
+boundaries, pending streams, and corruption. T3CASE/T3SPLIT remain independent
+oracle formats.
 
 ### Replay Patch maintenance reminder
 
@@ -107,17 +107,18 @@ as a gameplay input is a replay landmine.
 
 ### Host tools and Data Manager
 
-Once the PC-98 V13 package is accepted:
+For the accepted V13 package:
 
-- add V13 to the version-neutral parser and `th03rv` dispatch;
-- add the V11/V12-to-V13 converter as a separate format tool, not core logic;
+- keep V13 in the version-neutral parser and `th03rv` dispatch;
+- keep the V11/V12-to-V13 converter in the Replay/harness Data Manager, never
+  core logic;
 - update `tools/replay/FORMAT.md`, exporters, validators, frozen fixtures, and
   SHA/size locks together;
 - update `tools/th03-data-manager/update-patch.ps1` and regenerate
   `src/th03_data_manager/patch_manifest.json` through the repository's normal
   packaging script;
-- update `src/th03_data_manager/formats.py`, which currently documents V11 and
-  V12, only after V13 is actually final;
+- update `src/th03_data_manager/formats.py` and the Data Manager replay labels
+  for V13 when the converter/package lands;
 - refresh patch README/package hashes and verify both fresh installation and
   upgrade from the last accepted replay package.
 
@@ -128,36 +129,43 @@ gameplay core, not a monolithic Windows executable. A practical target graph
 is:
 
 ```text
-th03_core
-   |-- th03_present ------ canonical indexed frame + presentation events
-   |-- th03_replay ------- recording/playback/session coordination
-   |-- th03_assets ------- original-format decode/import and cached models
-   |-- th03_audio_pmd ---- PMD sequence + YM2608 synthesis
-   `-- th03_platform_sdl - window, input, clocks, texture upload, audio device
-                             |
-                           th03-app
+th03rv ------------------------------> th03_replay / th03_formats / th03_core
+
+th03-app --> th03_present -----------> th03_core (neutral observations only)
+    |          |
+    |          +---------------------> th03_assets (decoded models)
+    +--------------------------------> th03_audio_pmd
+    `--------------------------------> th03_platform_sdl
 ```
 
 The boundaries should permit a headless verifier, the faithful playable game,
 debugging/inspection clients, replay tools, and a later Arrange client to use
-the same core independently.
+the same core independently. These are sibling library targets in the existing
+port repository; they do not require separate repositories.
 
 ### Presentation contract before renderer selection
 
-Define and test a presentation/event contract before building the playable
+Define and test a presentation contract before building the playable
 application:
 
-- canonical 640x400 indexed frame or equivalent ordered draw-command stream;
+- optional immutable gameplay observations at semantic phase boundaries;
+- raw, minimally tagged observation of shared-RNG results already consumed by
+  core, interpreted only by presentation;
+- presenter-private ordered draw commands terminating in a canonical 640x400
+  indexed display state;
 - palette writes and frame-boundary timing;
 - text/TRAM composition needed for exact Classic output;
-- semantic music and sound-effect requests;
+- presenter/audio-owned semantic music and sound-effect requests derived from
+  gameplay observations or application actions;
 - UI/process events that do not belong to gameplay state;
 - explicit Classic versus future Arrange content/presentation selection.
 
 Gameplay hashes must not depend on rendered pixels, host timing, audio device
-state, or renderer-owned interpolation. Renderer-named original callbacks that
-mutate gameplay or consume shared RNG remain in the core; purely visual work
-belongs in `th03_present`.
+state, observer presence, or renderer-owned interpolation. Renderer-named
+original callbacks that mutate gameplay or consume shared RNG remain in the
+core, but only as gameplay mutations and deterministic compatibility reads.
+Purely visual state and interpretation belong in `th03_present`; the core owns
+no presentation event queue.
 
 ### Graphics and platform layer
 
@@ -205,7 +213,9 @@ References:
 ### Assets
 
 Original assets remain user-owned external inputs and must not be committed to
-the port repository. Use `thdat` or the existing Data Manager to obtain the
+the port repository. `th03_assets` is a separate library target inside this
+same repository, not a new repository or a dependency of `th03_core`. Use
+`thdat` or the existing Data Manager to obtain the
 contents of the original DAT archives, then decode original PI/BFT/CDG/font and
 related formats into neutral models:
 
@@ -220,6 +230,13 @@ Do not flatten every asset to PNG/WAV during development: doing so can discard
 palette, indexing, timing, and format metadata needed for exact reproduction.
 The asset library should accept byte spans, while a Data Manager/import client
 owns discovery, extraction, legal ownership checks, and cache paths.
+
+Asset and presentation foundations can proceed in parallel once they agree on
+a small immutable decoded-model interface. `th03_assets` can implement and test
+RGB/palette and PI decoders against synthetic spans while `th03_present`
+implements indexed pages, palette/TRAM state, clipping, and raster primitives
+against hand-authored models. Their first mandatory join is a real static MAIN
+frame; neither library should wait for the other's full format/scene coverage.
 
 References:
 
@@ -243,9 +260,11 @@ MIT-licensed project contains a heavily modified PMDWin-derived engine and
 uses ymfm without requiring PMDWin.dll; importing or adapting it still needs a
 focused licensing, provenance, and architecture review.
 
-Keep audio outside `th03_core`. The core/presentation boundary should emit
-semantic music/SFX events. Validate the audio layer first through PMD event or
-YM2608 register traces, then through deterministic rendered-PCM comparisons.
+Keep audio outside `th03_core`. An audio adapter should derive semantic
+music/SFX cues from neutral gameplay observations and application scene
+actions; sound IDs and playback state never enter core. Validate the audio
+layer first through PMD event or YM2608 register traces, then through
+deterministic rendered-PCM comparisons.
 Authentic YM2608 rhythm data may require a legally obtained ROM/sample source;
 do not silently bundle copyrighted ROM or WAV data.
 
@@ -297,23 +316,29 @@ only when an actual Arrange requirement needs them.
 
 ## Recommended execution order
 
-1. Seal the source-wide gameplay parity audit and keep expanding replay corpus
-   coverage. Split the large `frame.cpp` only as a mechanical, no-behavior
-   refactor after this gate, rerunning both compilers and the full corpus before
-   and after each subsystem move.
-2. Complete the Replay Patch topic work and freeze V13. Add V13 import and
-   conversion to the native format layer afterward.
-3. Specify `th03_present` events and the canonical indexed framebuffer. Build
-   original-format asset decoders and reference-frame tests.
-4. Implement the faithful SDL client renderer and host input mapping.
-5. Select and integrate the PMD/YM2608 audio stack after the licensing and
+1. Preserve the sealed source-wide gameplay parity audit while expanding replay
+   coverage. The mechanical `frame.cpp` partition is complete; every later
+   core change still reruns both compilers and the full corpus.
+2. Keep the structurally green V13 adapter while the external converter lands.
+   Convert and lock the complete historical corpus, then retire V11/V12 native
+   parsers only after the V13-only dual-compiler gate passes.
+3. Continue `th03_assets` decoders and `th03_present` PC-98 raster primitives
+   in parallel from their RGB/PI and indexed-page foundations. Complete the
+   exact planar/TRAM decisions, then join them at the first static MAIN frame.
+4. Implement the minimal optional gameplay observer only when that static-frame
+   integration names the facts it actually needs. Prove null/discard/recording
+   observer invariance and keep `th03rv` independent of both sibling libraries.
+5. Select a minimal Windows/platform backend from an explicit support-floor
+   matrix, then implement the host compositor and input mapping.
+6. Select and integrate the PMD/YM2608 audio stack after the licensing and
    rhythm-data questions are resolved.
-6. Add configuration, persistence, replay browser/recording, and packaging.
-7. Add enhanced presentation or Arrange features as separate profiles.
-8. Design and deploy leaderboard verification only after V13 and reproducible
+7. Add configuration, persistence, replay browser/recording, and packaging.
+8. Add enhanced presentation or Arrange features as separate profiles.
+9. Design and deploy leaderboard verification only after V13 and reproducible
    native builds are stable.
 
-The first three unresolved product choices are therefore the Windows support
-floor/toolchain matrix, the PMD engine and rhythm-data provenance, and whether
-the first presentation contract is a canonical framebuffer or an ordered
-draw-command stream. None requires changing the deterministic gameplay core.
+The first two unresolved product choices are therefore the Windows support
+floor/toolchain matrix and the PMD engine/rhythm-data provenance. Presentation
+uses both a private ordered draw stream and a canonical indexed display state;
+that is no longer an either/or product choice. None requires adding
+presentation state to the deterministic gameplay core.

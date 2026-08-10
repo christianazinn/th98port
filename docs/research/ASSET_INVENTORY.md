@@ -1,5 +1,10 @@
 # TH03 asset inventory
 
+Status: inventory complete; ASSET-001 (RGB48 and PI) is implemented and
+warning-clean on GCC/MSVC with synthetic tracked fixtures. All 78 external TH03
+PI files pass a read-only decoder sweep; no original bytes or derivatives are
+tracked.
+
 Status: metadata-only research for the post-core assets/presentation milestone. It intentionally contains no original asset bytes, text, images, audio, screenshots, or generated derivatives.
 
 ## Scope and evidence
@@ -94,7 +99,7 @@ Versioned cache is above the library: key by source SHA-256, decoder schema/vers
 All fixtures are generated in test code or tiny non-game literals—never original bytes, names, screenshots, audio or extracted files.
 
 1. RGB: 48 bytes, source order, deferred nibble expansion, length/truncation.
-2. PI: generated valid header/bitstream with known indices; color/history and position/run paths; magic/plane/mode errors, malformed runs and output overflow; compare indices, not RGBA.
+2. PI: generated valid header/bitstream with known indices; color/history and position/run paths; magic/plane/aspect errors, lower mode-bit preservation, malformed runs and output overflow; compare indices, not RGBA.
 3. CDG/CD2: 16-byte header + five synthetic planes; zero single-count, multi-cel CD2, alpha/no-alpha, geometry, malformed payload and selection bounds; test both compositor policies separately.
 4. BFNT: 32-byte header + glyph planes; range/geometry/palette, gaiji policy, bad magic/color, truncated extension/body.
 5. MRS: generated 33,120-byte five-plane image; fixed geometry, upside-down mapping, alpha/no-alpha, byte+bit hflip.

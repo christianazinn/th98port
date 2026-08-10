@@ -74,8 +74,8 @@ Keeping one translation unit preserves:
 The first coarse split reconstructed every function body from the committed
 pre-split source. The refined ownership split retains those function bodies and
 replaces only roster, shot-mode, and terminal Story literals with named
-constants. V11, V12, future V13, replay coordination, and every client remain
-outside this source split.
+constants. V11, V12, V13, replay coordination, and every client remain outside
+this source split.
 
 ## Verification gate
 

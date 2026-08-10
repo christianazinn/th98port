@@ -114,6 +114,44 @@ const char *run_status_name(th03::replay::RunStatus status) noexcept
 	return "unknown";
 }
 
+const char *replay_status_name(th03::formats::ReplayStatus status) noexcept
+{
+	switch(status) {
+	case th03::formats::ReplayStatus::empty:
+		return "empty";
+	case th03::formats::ReplayStatus::recording:
+		return "recording";
+	case th03::formats::ReplayStatus::finalized:
+		return "finalized";
+	case th03::formats::ReplayStatus::partial:
+		return "partial";
+	case th03::formats::ReplayStatus::error:
+		return "error";
+	}
+	return "unknown";
+}
+
+const char *end_reason_name(th03::formats::ReplayEndReason reason) noexcept
+{
+	switch(reason) {
+	case th03::formats::ReplayEndReason::none:
+		return "none";
+	case th03::formats::ReplayEndReason::complete:
+		return "complete";
+	case th03::formats::ReplayEndReason::menu_return:
+		return "menu-return";
+	case th03::formats::ReplayEndReason::input_end:
+		return "input-end";
+	case th03::formats::ReplayEndReason::partial:
+		return "partial";
+	case th03::formats::ReplayEndReason::error:
+		return "error";
+	case th03::formats::ReplayEndReason::game_over:
+		return "game-over";
+	}
+	return "unknown";
+}
+
 void print_packed_score(const std::array<std::uint8_t, 4> &score)
 {
 	for(auto byte = score.rbegin(); byte != score.rend(); ++byte) {
@@ -139,6 +177,9 @@ void print_split(
 	print_packed_score(actual.p1_score);
 	std::cout << " p2=";
 	print_packed_score(actual.p2_score);
+	if(expected != nullptr && expected->real_frames) {
+		std::cout << " real_frames=" << *expected->real_frames;
+	}
 	std::cout << " match=" << (matches ? "yes" : "no");
 	if(expected != nullptr && !matches) {
 		std::cout << " expected_stage="
@@ -154,6 +195,77 @@ void print_split(
 		print_packed_score(expected->p2_score);
 	}
 	std::cout << '\n';
+}
+
+void print_v13_metadata(const th03::formats::ReplayDocument &document)
+{
+	if(!document.metadata) {
+		return;
+	}
+	const auto &metadata = *document.metadata;
+	std::cout << "replay_status=" << replay_status_name(metadata.status) << '\n'
+		<< "end_reason=" << end_reason_name(metadata.end_reason) << '\n'
+		<< "replay_name=";
+	auto name_length = metadata.name.size();
+	while(
+		name_length != 0U &&
+		(metadata.name[name_length - 1U] == ' ' ||
+		 metadata.name[name_length - 1U] == '\0')
+	) {
+		--name_length;
+	}
+	if(name_length == 0U) {
+		std::cout << "(unnamed)";
+	} else {
+		for(std::size_t index = 0U; index < name_length; ++index) {
+			std::cout << metadata.name[index];
+		}
+	}
+	std::cout << '\n'
+		<< "dos_date=" << metadata.dos_date << '\n'
+		<< "final_score=";
+	print_packed_score(metadata.final_score);
+	std::cout << '\n';
+	if(document.stage_clear_bonuses) {
+		for(
+			std::size_t stage = 0U;
+			stage < document.stage_clear_bonuses->size();
+			++stage
+		) {
+			const auto &bonus = (*document.stage_clear_bonuses)[stage];
+			const bool empty = bonus.total == std::array<std::uint8_t, 4>{} &&
+				bonus.max_combo == 0U && bonus.gauge_attacks == 0U &&
+				bonus.boss_attacks == 0U && bonus.boss_reversals == 0U &&
+				bonus.boss_panics == 0U && bonus.remaining_lives == 0U;
+			if(empty) {
+				continue;
+			}
+			std::cout << "clear_bonus_stage=" << (stage + 1U) << " total=";
+			print_packed_score(bonus.total);
+			std::cout << " max_combo=" << static_cast<unsigned int>(bonus.max_combo)
+				<< " gauge_attacks="
+				<< static_cast<unsigned int>(bonus.gauge_attacks)
+				<< " boss_attacks="
+				<< static_cast<unsigned int>(bonus.boss_attacks)
+				<< " boss_reversals="
+				<< static_cast<unsigned int>(bonus.boss_reversals)
+				<< " boss_panics="
+				<< static_cast<unsigned int>(bonus.boss_panics)
+				<< " remaining_lives="
+				<< static_cast<unsigned int>(bonus.remaining_lives) << '\n';
+		}
+	}
+	if(document.slowdown) {
+		const auto timed = document.slowdown->timed_frames;
+		const auto slow = document.slowdown->slow_frames;
+		std::cout << "timed_frames=" << timed << '\n'
+			<< "slow_frames=" << slow << '\n';
+		if(timed != 0U) {
+			const auto basis_points =
+				(static_cast<std::uint64_t>(slow) * 10'000U) / timed;
+			std::cout << "slowdown_basis_points=" << basis_points << '\n';
+		}
+	}
 }
 
 } // namespace
@@ -211,8 +323,10 @@ int main(int argc, char **argv)
 			(document->session.init.game_mode == th03::game_mode::story
 				? "story" : "versus")) << '\n'
 		<< "samples=" << document->session.sample_count << '\n'
+		<< "checkpoints=" << document->checkpoints.size() << '\n'
 		<< "expected_splits=" << document->expected_round_splits.size() << '\n'
 		<< "enedat=" << enedat_path->string() << '\n';
+	print_v13_metadata(*document);
 
 	auto run = th03::replay::run_session(document->session, *content);
 	if(!run) {
@@ -244,6 +358,7 @@ int main(int argc, char **argv)
 	std::cout << "run_status=" << run_status_name(run->status) << '\n'
 		<< "consumed_samples=" << run->consumed_samples << '\n';
 	const bool verified =
+		th03::formats::replay_can_be_verified(*document) &&
 		run->status == th03::replay::RunStatus::complete && all_splits_match;
 	std::cout << "verification=" << (verified ? "match" : "mismatch") << '\n';
 	return verified ? 0 : 1;

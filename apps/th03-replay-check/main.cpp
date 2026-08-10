@@ -7,7 +7,6 @@
 
 #include "th03/formats/t3case.hpp"
 #include "th03/formats/t3split.hpp"
-#include "th03/formats/v11.hpp"
 
 namespace {
 
@@ -54,7 +53,7 @@ const char *status_text(th03::formats::ComparisonStatus status)
 int main(int argc, char **argv)
 {
 	if(argc < 3) {
-		std::cerr << "usage: th03-replay-check (--case|--v11|--split) <file>\n"
+		std::cerr << "usage: th03-replay-check (--case|--split) <file>\n"
 			<< "       th03-replay-check --compare-splits <base> <candidate> [--allow-candidate-prefix]\n";
 		return 2;
 	}
@@ -117,16 +116,6 @@ int main(int argc, char **argv)
 			<< "source_kind=" << static_cast<int>(parsed->header.source_kind) << '\n'
 			<< "samples=" << parsed->header.sample_count << '\n'
 			<< "records=" << parsed->header.record_count << '\n';
-		return 0;
-	}
-	if(mode == "--v11") {
-		const auto parsed = th03::formats::parse_v11_replay(bytes);
-		if(!parsed) {
-			return fail(parsed.error());
-		}
-		std::cout << "status=valid\nformat=T3RPLY11\n"
-			<< "samples=" << parsed->sample_count << '\n'
-			<< "records=" << parsed->records.size() << '\n';
 		return 0;
 	}
 	if(mode == "--split") {
