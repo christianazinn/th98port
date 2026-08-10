@@ -12,6 +12,7 @@ MainRoundPresenter::MainRoundPresenter(
 	Tram &tram,
 	MainStaticPresenter &static_presenter,
 	MainPaletteState &palette,
+	MainBackgroundPresenter &background,
 	MainEntitiesPresenter &entities,
 	MainEffectsPresenter &effects,
 	MainPlayersBulletsPresenter &players_bullets,
@@ -21,6 +22,7 @@ MainRoundPresenter::MainRoundPresenter(
 	tram_(&tram),
 	static_(&static_presenter),
 	palette_(&palette),
+	background_(&background),
 	entities_(&entities),
 	effects_(&effects),
 	players_bullets_(&players_bullets),
@@ -28,6 +30,10 @@ MainRoundPresenter::MainRoundPresenter(
 {
 	if(!static_->started() || !palette_->baseline_ready()) {
 		status_ = MainRoundStatus::invalid_setup;
+		return;
+	}
+	if(!background_->ready()) {
+		status_ = MainRoundStatus::background_failed;
 		return;
 	}
 	if(!entities_->ready()) {
@@ -306,6 +312,55 @@ void MainRoundPresenter::warning_interstitial_sample(
 		return;
 	}
 	next_warning_sample_++;
+}
+
+void MainRoundPresenter::main_background_initialize(
+	const MainBackgroundInitialize &initialize
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	background_->main_background_initialize(initialize);
+	if(!background_->ready()) {
+		fail(MainRoundStatus::background_failed);
+	}
+}
+
+void MainRoundPresenter::main_background_frame(
+	const MainBackgroundFrame &frame
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	if(
+		phase_ != Phase::shots_enemies || warning_interstitial_active_ ||
+		!source_page_ready()
+	) {
+		fail(
+			!source_page_ready() ? MainRoundStatus::page_state_mismatch :
+				MainRoundStatus::invalid_observation
+		);
+		return;
+	}
+	background_->main_background_frame(frame);
+	if(!background_->ready()) {
+		fail(MainRoundStatus::background_failed);
+	}
+}
+
+void MainRoundPresenter::main_background_random_read(
+	const MainBackgroundRandomRead &read
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	background_->main_background_random_read(read);
+	if(!background_->ready()) {
+		fail(MainRoundStatus::background_failed);
+	}
 }
 
 void MainRoundPresenter::observe(const ShotsEnemiesView &view) noexcept

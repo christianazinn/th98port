@@ -7,6 +7,7 @@
 #include <span>
 
 #include "th03/core/observer.hpp"
+#include "th03/present/main_background.hpp"
 #include "th03/present/main_bombs.hpp"
 #include "th03/present/main_effects.hpp"
 #include "th03/present/main_entities.hpp"
@@ -24,18 +25,16 @@ enum class MainRoundMissingPhase : std::uint8_t {
 	boss,
 	extra_attack,
 	charge_shot,
-	background,
 	warning_and_gauge,
 	hud,
 	result,
 };
 
-inline constexpr std::array<MainRoundMissingPhase, 7U>
+inline constexpr std::array<MainRoundMissingPhase, 6U>
 	main_round_missing_phases{{
 		MainRoundMissingPhase::boss,
 		MainRoundMissingPhase::extra_attack,
 		MainRoundMissingPhase::charge_shot,
-		MainRoundMissingPhase::background,
 		MainRoundMissingPhase::warning_and_gauge,
 		MainRoundMissingPhase::hud,
 		MainRoundMissingPhase::result,
@@ -45,6 +44,7 @@ enum class MainRoundStatus : std::uint8_t {
 	ready,
 	invalid_setup,
 	invalid_observation,
+	background_failed,
 	entities_failed,
 	effects_failed,
 	players_bullets_failed,
@@ -76,6 +76,7 @@ public:
 		Tram &tram,
 		MainStaticPresenter &static_presenter,
 		MainPaletteState &palette,
+		MainBackgroundPresenter &background,
 		MainEntitiesPresenter &entities,
 		MainEffectsPresenter &effects,
 		MainPlayersBulletsPresenter &players_bullets,
@@ -114,6 +115,15 @@ public:
 	) noexcept override;
 	void main_frame_footer_reached(
 		const MainFrameFooterReached &footer
+	) noexcept override;
+	void main_background_initialize(
+		const MainBackgroundInitialize &initialize
+	) noexcept override;
+	void main_background_frame(
+		const MainBackgroundFrame &frame
+	) noexcept override;
+	void main_background_random_read(
+		const MainBackgroundRandomRead &read
 	) noexcept override;
 	void observe(const ShotsEnemiesView &view) noexcept override;
 	void observe(const FireballsView &view) noexcept override;
@@ -158,6 +168,7 @@ private:
 	Tram *tram_;
 	MainStaticPresenter *static_;
 	MainPaletteState *palette_;
+	MainBackgroundPresenter *background_;
 	MainEntitiesPresenter *entities_;
 	MainEffectsPresenter *effects_;
 	MainPlayersBulletsPresenter *players_bullets_;

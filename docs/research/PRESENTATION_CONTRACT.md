@@ -1248,6 +1248,16 @@ the coordinator applies exact immediate defeat tones and the 27-sample warning
 before page publication. Remaining Warning/Gauge palette and portrait routes
 stay named gaps rather than approximations.
 
+The same coordinator now forwards the source background callback before late
+Bomb drawing. Fresh construction reports the exact D092/D2E8 RNG streams,
+initial callbacks report the D135/D340 streams, and snapshot-backed creation
+does not fabricate bypassed initialization. A fixed presentation owner retains
+the 48/50 reachable records, exact master.lib integer vectors, D0FA wrapping,
+initial/steady drawing order, and D05D repeat reset. The source-uninitialized
+`should_vector` stack dependency is represented by an explicit deterministic
+compatibility latch; this policy is source-derived and has not been assigned an
+emulator-verified ReC98 taxonomy label.
+
 Observe raw gameplay facts at the documented semantic phases and add Authentic
 drawing for players, overlays, ordinary shots, enemies, bullets, and fireballs
 in exact order. Keep all hit testing in core.
@@ -1262,10 +1272,11 @@ Exit tests:
 
 ### Slice 4: RNG-fed effects
 
-Implementation status: hit circles and the common-effect pool are implemented,
-including process-scoped overwrite cursors, exceptional cross-player Bomb
-state, and exact vector primitives. Both backgrounds and HUD-start animation
-remain.
+Implementation status: hit circles, the common-effect pool, and both MAIN
+background families are implemented, including process-scoped overwrite
+cursors, exceptional cross-player Bomb state, exact vector primitives, and
+background RNG grouping/initial-to-steady/repeat behavior. HUD-start animation
+remains.
 
 Exit tests:
 

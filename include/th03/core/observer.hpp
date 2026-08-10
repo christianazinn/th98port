@@ -402,6 +402,54 @@ struct MainFrameFooterReached {
 	) = default;
 };
 
+enum class MainBackgroundKind : std::uint8_t {
+	type_a,
+	type_b,
+};
+
+enum class MainBackgroundPhase : std::uint8_t {
+	initial,
+	steady,
+};
+
+// Begins the source D092/D2E8 initialization stream. Snapshot-backed startup
+// does not execute either initializer and therefore emits no such fact.
+struct MainBackgroundInitialize {
+	MainBackgroundKind kind = MainBackgroundKind::type_a;
+
+	friend bool operator==(
+		const MainBackgroundInitialize &,
+		const MainBackgroundInitialize &
+	) = default;
+};
+
+// One ordered fact at the existing MAIN background callback boundary. The
+// round ID lets clients detect the in-process D05D repeat-round reset without
+// exposing any presentation-private particle or renderer state.
+struct MainBackgroundFrame {
+	std::uint8_t round_id = 0;
+	std::uint16_t round_or_result_frame = 0;
+	MainBackgroundKind kind = MainBackgroundKind::type_a;
+	MainBackgroundPhase phase = MainBackgroundPhase::initial;
+
+	friend bool operator==(
+		const MainBackgroundFrame &,
+		const MainBackgroundFrame &
+	) = default;
+};
+
+// Raw result of one source IRAND call already consumed by the D092, D2E8,
+// D135, or D340 background callback. Repeated facts preserve source order;
+// their presentation-private record identities remain outside the core.
+struct MainBackgroundRandomRead {
+	std::uint16_t raw_value = 0;
+
+	friend bool operator==(
+		const MainBackgroundRandomRead &,
+		const MainBackgroundRandomRead &
+	) = default;
+};
+
 // Borrowed views over one exact MAIN phase boundary. They are valid only for
 // the duration of the observer callback; every accessor returns a fact by value.
 class ShotsEnemiesView {
@@ -529,6 +577,16 @@ public:
 	{}
 	virtual void main_frame_footer_reached(
 		const MainFrameFooterReached &
+	) noexcept
+	{}
+	virtual void main_background_initialize(
+		const MainBackgroundInitialize &
+	) noexcept
+	{}
+	virtual void main_background_frame(const MainBackgroundFrame &) noexcept
+	{}
+	virtual void main_background_random_read(
+		const MainBackgroundRandomRead &
 	) noexcept
 	{}
 	virtual void observe(const ShotsEnemiesView &) noexcept

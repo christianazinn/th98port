@@ -574,7 +574,8 @@ std::uint32_t state_hash(const DeterministicState &state) noexcept;
 CanonicalState canonical_state(const DeterministicState &state) noexcept;
 DeterministicState initialize_first_round(
 	const GameInit &init,
-	std::size_t formation_count = 0U
+	std::size_t formation_count = 0U,
+	GameplayObserver *observer = nullptr
 );
 bool compact_runtime_snapshot_is_valid(
 	const CompactRuntimeSnapshot &snapshot,
@@ -637,7 +638,12 @@ std::uint16_t randring_next16(DeterministicState &state) noexcept;
 } // namespace detail
 
 struct Game::Impl {
-	Impl(const GameInit &init, GameContent content, GameOptions options);
+	Impl(
+		const GameInit &init,
+		GameContent content,
+		GameOptions options,
+		GameplayObserver *observer
+	);
 
 	detail::DeterministicState state;
 	GameInit initial_init;

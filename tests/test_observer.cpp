@@ -54,6 +54,59 @@ enum class ObservedCall : std::uint8_t {
 class DiscardObserver final : public th03::GameplayObserver {
 };
 
+enum class BackgroundObservedCall : std::uint8_t {
+	warning_sample,
+	initialize,
+	frame,
+	random_read,
+	bomb_frame_step,
+};
+
+class BackgroundRecordingObserver final : public th03::GameplayObserver {
+public:
+	BackgroundRecordingObserver()
+	{
+		initializations.reserve(1U);
+		frames.reserve(2U);
+		random_reads.reserve(256U);
+		calls.reserve(258U);
+	}
+
+	void main_background_initialize(
+		const th03::MainBackgroundInitialize &initialize
+	) noexcept override
+	{
+		initializations.push_back(initialize);
+		calls.push_back(BackgroundObservedCall::initialize);
+	}
+
+	void main_background_frame(
+		const th03::MainBackgroundFrame &frame
+	) noexcept override
+	{
+		frames.push_back(frame);
+		calls.push_back(BackgroundObservedCall::frame);
+	}
+
+	void main_background_random_read(
+		const th03::MainBackgroundRandomRead &read
+	) noexcept override
+	{
+		random_reads.push_back(read);
+		calls.push_back(BackgroundObservedCall::random_read);
+	}
+
+	void bomb_frame_step(const th03::BombFrameStep &) noexcept override
+	{
+		calls.push_back(BackgroundObservedCall::bomb_frame_step);
+	}
+
+	std::vector<th03::MainBackgroundInitialize> initializations;
+	std::vector<th03::MainBackgroundFrame> frames;
+	std::vector<th03::MainBackgroundRandomRead> random_reads;
+	std::vector<BackgroundObservedCall> calls;
+};
+
 class RecordingObserver final : public th03::GameplayObserver {
 public:
 	RecordingObserver()
@@ -72,6 +125,7 @@ public:
 		warning_interstitial_starts.reserve(2U);
 		warning_interstitial_samples.reserve(27U);
 		main_frame_footers.reserve(2U);
+		background_bomb_calls.reserve(64U);
 		calls.reserve(80U);
 	}
 
@@ -132,6 +186,9 @@ public:
 	void bomb_frame_step(const th03::BombFrameStep &step) noexcept override
 	{
 		bomb_frame_steps.push_back(step);
+		background_bomb_calls.push_back(
+			BackgroundObservedCall::bomb_frame_step
+		);
 		calls.push_back(ObservedCall::bomb_frame_step);
 	}
 
@@ -170,7 +227,24 @@ public:
 	) noexcept override
 	{
 		warning_interstitial_samples.push_back(sample);
+		background_bomb_calls.push_back(
+			BackgroundObservedCall::warning_sample
+		);
 		calls.push_back(ObservedCall::warning_interstitial_sample);
+	}
+
+	void main_background_frame(
+		const th03::MainBackgroundFrame &
+	) noexcept override
+	{
+		background_bomb_calls.push_back(BackgroundObservedCall::frame);
+	}
+
+	void main_background_random_read(
+		const th03::MainBackgroundRandomRead &
+	) noexcept override
+	{
+		background_bomb_calls.push_back(BackgroundObservedCall::random_read);
 	}
 
 	void main_frame_footer_reached(
@@ -263,6 +337,7 @@ public:
 	std::vector<th03::WarningInterstitialStarted> warning_interstitial_starts;
 	std::vector<th03::WarningInterstitialSample> warning_interstitial_samples;
 	std::vector<th03::MainFrameFooterReached> main_frame_footers;
+	std::vector<BackgroundObservedCall> background_bomb_calls;
 	th03::MainPhaseContext shots_enemies_context{};
 	th03::MainPhaseContext fireballs_context{};
 	th03::MainPhaseContext players_bullets_context{};
@@ -1490,6 +1565,374 @@ th03::GameInit base_game_init()
 	return init;
 }
 
+std::uint16_t reference_irand(std::uint32_t &seed) noexcept
+{
+	seed = (seed * 0x015A4E35U) + 1U;
+	return static_cast<std::uint16_t>((seed >> 16U) & 0x7FFFU);
+}
+
+std::vector<th03::MainBackgroundRandomRead> expected_fresh_background_reads(
+	std::uint32_t seed,
+	std::size_t count
+)
+{
+	// Fresh round startup fills the 256-byte shared ring and both 64-entry CPU
+	// charge rings before invoking D092/D2E8. This fixture deliberately uses no
+	// enemy formations, so no formation RNG lies between those consumers.
+	for(std::size_t i = 0U; i < 256U + (2U * 64U); ++i) {
+		(void)reference_irand(seed);
+	}
+	std::vector<th03::MainBackgroundRandomRead> reads;
+	reads.reserve(count);
+	for(std::size_t i = 0U; i < count; ++i) {
+		reads.push_back(th03::MainBackgroundRandomRead{
+			.raw_value = reference_irand(seed),
+		});
+	}
+	return reads;
+}
+
+std::vector<th03::MainBackgroundRandomRead> expected_background_reads(
+	std::uint32_t seed,
+	std::size_t count
+)
+{
+	std::vector<th03::MainBackgroundRandomRead> reads;
+	reads.reserve(count);
+	for(std::size_t i = 0U; i < count; ++i) {
+		reads.push_back(th03::MainBackgroundRandomRead{
+			.raw_value = reference_irand(seed),
+		});
+	}
+	return reads;
+}
+
+void test_main_background_creation_observation()
+{
+	auto type_a_init = base_game_init();
+	type_a_init.resident_rand = 0x12345678;
+	BackgroundRecordingObserver type_a_recording;
+	DiscardObserver discard;
+	auto type_a_null = th03::Game::create(type_a_init);
+	auto type_a_discard = th03::Game::create(
+		type_a_init, {}, {}, &discard
+	);
+	auto type_a_record = th03::Game::create(
+		type_a_init, {}, {}, &type_a_recording
+	);
+	check(
+		type_a_null && type_a_discard && type_a_record,
+		"fresh Type A background observer fixtures create"
+	);
+	if(type_a_null && type_a_discard && type_a_record) {
+		check(
+			canonical_equal(
+				type_a_null->canonical_state(),
+				type_a_discard->canonical_state()
+			) && canonical_equal(
+				type_a_null->canonical_state(),
+				type_a_record->canonical_state()
+			),
+			"fresh background observation does not change state or RNG"
+		);
+	}
+	check(
+		type_a_recording.initializations ==
+			std::vector<th03::MainBackgroundInitialize>{
+				{.kind = th03::MainBackgroundKind::type_a},
+			} &&
+		type_a_recording.frames.empty() &&
+		type_a_recording.random_reads == expected_fresh_background_reads(
+			static_cast<std::uint32_t>(type_a_init.resident_rand), 48U * 4U
+		),
+		"fresh Type A creation reports the exact D092 read stream"
+	);
+	check(
+		type_a_recording.calls.size() == 1U + (48U * 4U) &&
+		type_a_recording.calls.front() ==
+			BackgroundObservedCall::initialize &&
+		std::all_of(
+			type_a_recording.calls.begin() + 1,
+			type_a_recording.calls.end(),
+			[](BackgroundObservedCall call) {
+				return call == BackgroundObservedCall::random_read;
+			}
+		),
+		"fresh Type A Initialize precedes all 192 source-ordered reads"
+	);
+
+	auto type_b_init = type_a_init;
+	// Paletted Marisa selects the D2E8/D340/D3F9 family.
+	type_b_init.paletted_character[1] = 5;
+	BackgroundRecordingObserver type_b_recording;
+	auto type_b_game = th03::Game::create(
+		type_b_init, {}, {}, &type_b_recording
+	);
+	check(type_b_game.has_value(), "fresh Type B background fixture creates");
+	check(
+		type_b_recording.initializations ==
+			std::vector<th03::MainBackgroundInitialize>{
+				{.kind = th03::MainBackgroundKind::type_b},
+			} &&
+		type_b_recording.random_reads == expected_fresh_background_reads(
+			static_cast<std::uint32_t>(type_b_init.resident_rand), 50U * 2U
+		) &&
+		type_b_recording.calls.size() == 1U + (50U * 2U) &&
+		type_b_recording.calls.front() ==
+			BackgroundObservedCall::initialize,
+		"fresh Type B creation reports Initialize then the exact 100 D2E8 reads"
+	);
+}
+
+void test_main_background_snapshot_observation()
+{
+	auto full_init = base_game_init();
+	full_init.runtime_snapshot = th03::RuntimeSnapshot{};
+	full_init.round_start_snapshot = th03::RoundStartSnapshot{};
+	full_init.round_start_snapshot->state.round_id = 4U;
+	full_init.round_start_snapshot->carry.background_phase = 1U;
+	BackgroundRecordingObserver full_recording;
+	auto full_game = th03::Game::create(
+		full_init, {}, {}, &full_recording
+	);
+	check(full_game.has_value(), "full-snapshot background fixture creates");
+	check(
+		full_recording.calls.empty() &&
+		full_recording.initializations.empty() &&
+		full_recording.random_reads.empty(),
+		"full snapshot does not fabricate bypassed background initialization facts"
+	);
+	if(full_game) {
+		(void)full_game->step(
+			{}, th03::InputContext::gameplay, &full_recording
+		);
+		check(
+			full_recording.frames == std::vector<th03::MainBackgroundFrame>{
+				{
+					.round_id = 4U,
+					.round_or_result_frame = 0U,
+					.kind = th03::MainBackgroundKind::type_a,
+					.phase = th03::MainBackgroundPhase::steady,
+				},
+			} && full_recording.random_reads.empty(),
+			"full snapshot still reports its first honest steady background frame"
+		);
+	}
+
+	auto compact_init = base_game_init();
+	compact_init.paletted_character[1] = 5;
+	compact_init.compact_runtime_snapshot = th03::CompactRuntimeSnapshot{};
+	compact_init.compact_runtime_snapshot->round_reset_seed = 0x10203040U;
+	compact_init.compact_runtime_snapshot->random_seed = 0x50607080U;
+	auto reconstruction_seed =
+		compact_init.compact_runtime_snapshot->round_reset_seed;
+	for(std::size_t i = 0U; i < 256U + (2U * 64U); ++i) {
+		(void)reference_irand(reconstruction_seed);
+	}
+	compact_init.compact_runtime_snapshot->first_formation =
+		static_cast<std::uint8_t>(reference_irand(reconstruction_seed) % 2U);
+	compact_init.round_start_snapshot = th03::RoundStartSnapshot{};
+	compact_init.round_start_snapshot->state.round_id = 7U;
+	compact_init.round_start_snapshot->carry.background_phase = 2U;
+	th03::GameContent content{};
+	content.enemy_formations.resize(2U);
+	BackgroundRecordingObserver compact_recording;
+	auto compact_game = th03::Game::create(
+		compact_init, std::move(content), {}, &compact_recording
+	);
+	check(compact_game.has_value(), "compact-snapshot background fixture creates");
+	check(
+		compact_recording.calls.empty() &&
+		compact_recording.initializations.empty() &&
+		compact_recording.random_reads.empty(),
+		"compact reconstruction does not relabel its RNG work as D2E8 reads"
+	);
+	if(compact_game) {
+		(void)compact_game->step(
+			{}, th03::InputContext::gameplay, &compact_recording
+		);
+		check(
+			compact_recording.frames == std::vector<th03::MainBackgroundFrame>{
+				{
+					.round_id = 7U,
+					.round_or_result_frame = 0U,
+					.kind = th03::MainBackgroundKind::type_b,
+					.phase = th03::MainBackgroundPhase::steady,
+				},
+			} && compact_recording.random_reads.empty(),
+			"compact snapshot still reports its first honest steady background frame"
+		);
+	}
+}
+
+void test_main_background_frame_schedule_and_repeat()
+{
+	auto type_a_before_transition = make_live_state();
+	type_a_before_transition.round_frame = 128U;
+	type_a_before_transition.round_or_result_frame = 128U;
+	BackgroundRecordingObserver type_a_before_recording;
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		type_a_before_transition, &type_a_before_recording
+	);
+	check(
+		type_a_before_recording.frames ==
+			std::vector<th03::MainBackgroundFrame>{
+				{
+					.round_id = 0U,
+					.round_or_result_frame = 128U,
+					.kind = th03::MainBackgroundKind::type_a,
+					.phase = th03::MainBackgroundPhase::initial,
+				},
+			} &&
+		type_a_before_recording.random_reads.size() == 48U &&
+		type_a_before_transition.background_phase ==
+			th03::detail::BackgroundPhase::initial,
+		"D135 frame 128 consumes 48 reads and keeps the initial callback"
+	);
+
+	auto type_a = make_live_state();
+	type_a.round_id = 2U;
+	type_a.round_frame = 129U;
+	type_a.round_or_result_frame = 129U;
+	type_a.random_seed = 0x89ABCDEFU;
+	type_a.bomb_flag[0U] = th03::detail::BombFlag::active;
+	type_a.bomb_frame[0U] = 32U;
+	auto type_a_null = type_a;
+	BackgroundRecordingObserver type_a_recording;
+	th03::detail::gameplay_frame_suffix_after_interstitial(type_a_null);
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		type_a, &type_a_recording
+	);
+	check(
+		observed_gameplay_equal(type_a_null, type_a),
+		"initial background observation preserves gameplay and shared RNG"
+	);
+	check(
+		type_a_recording.frames == std::vector<th03::MainBackgroundFrame>{
+			{
+				.round_id = 2U,
+				.round_or_result_frame = 129U,
+				.kind = th03::MainBackgroundKind::type_a,
+				.phase = th03::MainBackgroundPhase::initial,
+			},
+		} && type_a_recording.random_reads == expected_background_reads(
+			0x89ABCDEFU, 48U
+		) &&
+		type_a_recording.calls.size() == 50U &&
+		type_a_recording.calls.front() == BackgroundObservedCall::frame &&
+		type_a_recording.calls.back() ==
+			BackgroundObservedCall::bomb_frame_step &&
+		std::all_of(
+			type_a_recording.calls.begin() + 1,
+			type_a_recording.calls.end() - 1,
+			[](BackgroundObservedCall call) {
+				return call == BackgroundObservedCall::random_read;
+			}
+		),
+		"D135 frame 129 reports Frame and all 48 reads before the first late BombFrameStep"
+	);
+
+	type_a.bomb_flag[0U] = th03::detail::BombFlag::inactive;
+	BackgroundRecordingObserver steady_recording;
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		type_a, &steady_recording
+	);
+	check(
+		steady_recording.frames == std::vector<th03::MainBackgroundFrame>{
+			{
+				.round_id = 2U,
+				.round_or_result_frame = 130U,
+				.kind = th03::MainBackgroundKind::type_a,
+				.phase = th03::MainBackgroundPhase::steady,
+			},
+		} && steady_recording.random_reads.empty() &&
+		steady_recording.calls == std::vector<BackgroundObservedCall>{
+			BackgroundObservedCall::frame,
+		},
+		"D1E7 steady frames report one Frame and no compatibility reads"
+	);
+
+	auto type_b_before_transition = make_live_state();
+	type_b_before_transition.background_initial_kind =
+		th03::detail::BackgroundInitialKind::type_b;
+	type_b_before_transition.round_frame = 144U;
+	type_b_before_transition.round_or_result_frame = 144U;
+	BackgroundRecordingObserver type_b_before_recording;
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		type_b_before_transition, &type_b_before_recording
+	);
+	check(
+		type_b_before_recording.frames ==
+			std::vector<th03::MainBackgroundFrame>{
+				{
+					.round_id = 0U,
+					.round_or_result_frame = 144U,
+					.kind = th03::MainBackgroundKind::type_b,
+					.phase = th03::MainBackgroundPhase::initial,
+				},
+			} &&
+		type_b_before_recording.random_reads.size() == 40U &&
+		type_b_before_transition.background_phase ==
+			th03::detail::BackgroundPhase::initial,
+		"D340 frame 144 consumes 40 reads and keeps the initial callback"
+	);
+
+	auto type_b = make_live_state();
+	type_b.background_initial_kind =
+		th03::detail::BackgroundInitialKind::type_b;
+	type_b.round_id = 5U;
+	type_b.round_frame = 145U;
+	type_b.round_or_result_frame = 145U;
+	type_b.random_seed = 0x76543210U;
+	BackgroundRecordingObserver type_b_recording;
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		type_b, &type_b_recording
+	);
+	check(
+		type_b_recording.frames == std::vector<th03::MainBackgroundFrame>{
+			{
+				.round_id = 5U,
+				.round_or_result_frame = 145U,
+				.kind = th03::MainBackgroundKind::type_b,
+				.phase = th03::MainBackgroundPhase::initial,
+			},
+		} && type_b_recording.random_reads == expected_background_reads(
+			0x76543210U, 40U
+		) &&
+		type_b.background_phase ==
+			th03::detail::BackgroundPhase::type_b_steady,
+		"D340 frame 145 reports Frame before the exact 40-read stream and then becomes steady"
+	);
+
+	auto repeat = make_live_state();
+	repeat.background_initial_kind =
+		th03::detail::BackgroundInitialKind::type_b;
+	repeat.background_phase = th03::detail::BackgroundPhase::type_b_steady;
+	repeat.round_id = 8U;
+	repeat.round_or_result_frame = 777U;
+	repeat.round_complete = true;
+	repeat.route = 1U;
+	auto repeat_init = base_game_init();
+	repeat_init.paletted_character[1] = 5;
+	th03::detail::initialize_repeat_round(repeat, repeat_init, 0U);
+	BackgroundRecordingObserver repeat_recording;
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		repeat, &repeat_recording
+	);
+	check(
+		repeat_recording.frames == std::vector<th03::MainBackgroundFrame>{
+			{
+				.round_id = 9U,
+				.round_or_result_frame = 0U,
+				.kind = th03::MainBackgroundKind::type_b,
+				.phase = th03::MainBackgroundPhase::steady,
+			},
+		} && repeat_recording.initializations.empty() &&
+		repeat_recording.random_reads.empty(),
+		"the first post-repeat frame carries the new round ID and retained steady callback without a reset event"
+	);
+}
+
 void test_recorded_pause_completion()
 {
 	auto init = base_game_init();
@@ -1799,9 +2242,19 @@ void test_warning_completion()
 			"each nonfinal warning input latch emits its source ordinal"
 		);
 	}
+	recording.background_bomb_calls.clear();
 	const auto calls_before_final_sample = recording.calls.size();
 	const auto completed = game->step(
 		{}, th03::InputContext::interstitial, &recording
+	);
+	std::vector<BackgroundObservedCall> expected_resumed_order{
+		BackgroundObservedCall::warning_sample,
+		BackgroundObservedCall::frame,
+	};
+	expected_resumed_order.insert(
+		expected_resumed_order.end(),
+		48U,
+		BackgroundObservedCall::random_read
 	);
 	check(
 		completed.status == th03::StepStatus::phase_transition &&
@@ -1824,8 +2277,8 @@ void test_warning_completion()
 			ObservedCall::fireballs,
 			ObservedCall::players_bullets,
 			ObservedCall::main_frame_footer_reached,
-		},
-		"warning sample 26 precedes its deferred suffix and normal footer"
+		} && recording.background_bomb_calls == expected_resumed_order,
+		"warning sample 26 resumes into BackgroundFrame and all initial reads before later suffix phases"
 	);
 }
 
@@ -2416,6 +2869,9 @@ int main()
 	test_indexed_views_and_classifications();
 	test_observer_invariance_and_phase_order();
 	test_public_step_result_invariance();
+	test_main_background_creation_observation();
+	test_main_background_snapshot_observation();
+	test_main_background_frame_schedule_and_repeat();
 	test_shot_spawn_and_reuse();
 	test_player_pose_and_defeat_lifecycle();
 	test_bullet16_lifecycle_styles_order_and_full_arena();

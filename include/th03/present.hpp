@@ -2,6 +2,7 @@
 #define TH03_PRESENT_HPP
 
 #include "th03/present/cels.hpp"
+#include "th03/present/main_background.hpp"
 #include "th03/present/main_entities.hpp"
 #include "th03/present/main_bomb_palette.hpp"
 #include "th03/present/main_bombs.hpp"

@@ -614,7 +614,7 @@ void gameplay_frame_suffix_after_interstitial(
 {
 	warning_frame_update(state, 0U);
 	warning_frame_update(state, 1U);
-	background_update(state);
+	background_update(state, observer);
 	bombs_render_phase_update(state, observer);
 	boss_render_phase_update(state);
 	if(observer != nullptr) {

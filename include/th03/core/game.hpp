@@ -259,12 +259,14 @@ public:
 	static std::expected<Game, Error> create(
 		const GameInit &init,
 		GameContent content,
-		GameOptions options
+		GameOptions options,
+		GameplayObserver *observer = nullptr
 	);
 
-	// `observer` must remain alive for this entire call, is borrowed only for
-	// its dynamic extent, and is never retained. Pass it again when completing
-	// a deferred frame. Observer callbacks must not reenter or mutate this Game.
+	// An observer passed to create() or either stepping call is borrowed only
+	// for that call's dynamic extent and is never retained. Snapshot-backed
+	// creation emits no facts for source initialization work it bypasses.
+	// Observer callbacks must not reenter or mutate this Game.
 	StepResult step(
 		CoreInput input,
 		InputContext context = InputContext::gameplay,
@@ -285,7 +287,12 @@ public:
 
 private:
 	struct Impl;
-	Game(GameInit init, GameContent content, GameOptions options);
+	Game(
+		GameInit init,
+		GameContent content,
+		GameOptions options,
+		GameplayObserver *observer
+	);
 	std::unique_ptr<Impl> impl_;
 };
 

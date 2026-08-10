@@ -43,16 +43,43 @@ void hud_start_update_prefix(DeterministicState &state) noexcept
 	}
 }
 
-void background_update(DeterministicState &state) noexcept
+void background_update(
+	DeterministicState &state,
+	GameplayObserver *observer
+) noexcept
 {
+	const auto initial = state.background_phase == BackgroundPhase::initial;
+	const auto type_b = initial
+		? state.background_initial_kind == BackgroundInitialKind::type_b
+		: state.background_phase == BackgroundPhase::type_b_steady;
+	if(observer != nullptr) {
+		observer->main_background_frame(MainBackgroundFrame{
+			.round_id = state.round_id,
+			.round_or_result_frame = state.round_or_result_frame,
+			.kind = type_b
+				? MainBackgroundKind::type_b
+				: MainBackgroundKind::type_a,
+			.phase = initial
+				? MainBackgroundPhase::initial
+				: MainBackgroundPhase::steady,
+		});
+	}
 	if(state.background_phase != BackgroundPhase::initial) {
 		return;
 	}
+	const auto consume = [&state, observer]() noexcept {
+		const auto raw_value = irand(state.random_seed);
+		if(observer != nullptr) {
+			observer->main_background_random_read(MainBackgroundRandomRead{
+				.raw_value = raw_value,
+			});
+		}
+	};
 
 	if(state.background_initial_kind == BackgroundInitialKind::type_a) {
 		// sub_D135(): 24 GRCG particles followed by 24 sprite particles.
 		for(std::size_t i = 0; i < 48U; ++i) {
-			(void)irand(state.random_seed);
+			consume();
 		}
 		if(state.round_frame > 128U) {
 			state.background_phase = BackgroundPhase::type_a_steady;
@@ -62,7 +89,7 @@ void background_update(DeterministicState &state) noexcept
 		// 26 sprite particles call irand(). These presentation calls share the
 		// gameplay RNG and are therefore part of deterministic call order.
 		for(std::size_t i = 0; i < 40U; ++i) {
-			(void)irand(state.random_seed);
+			consume();
 		}
 		if(state.round_frame > 144U) {
 			state.background_phase = BackgroundPhase::type_b_steady;

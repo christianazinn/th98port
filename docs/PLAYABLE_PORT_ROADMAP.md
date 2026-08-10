@@ -34,9 +34,14 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   preserves terminal no-footer behavior, reproduces the 27-sample warning tone
   loop, resets static repeat-round pages/HUD without rebuilding process state,
   and exposes the shown Raster/TRAM source surface in caller storage.
+- Both process-selected MAIN background families are integrated. A neutral
+  creation/frame/read seam preserves the source RNG schedule without exposing
+  particles to core, while one fixed presenter owns the 48/50 live records,
+  exact integer vectors, wrap rules, initial-to-steady transition, and
+  repeat-round velocity reset.
 
 The shortest remaining chain to a visible interactive build is: fill Boss,
-Extra/Charge, background, warning/gauge, and HUD/result gaps in the existing
+Extra/Charge, warning/gauge, and HUD/result gaps in the existing
 composition owner; add the fixed 56.423 Hz input scheduler; then add the thin
 SDL upload and input shell. PC-98 visual traces remain the release authority
 after the synthetic cross-compiler gates.
@@ -77,12 +82,13 @@ th03_assets remains a collection of pure decoders for supplied byte spans (RGB, 
 
 The current libraries contain a tested process coordinator over static setup,
 all nine Bomb paths, entities, players/bullets, effects, palette/raster,
-sprites, text, and the final Raster-plus-TRAM source surface. It deliberately
-names every unimplemented pass, so it is not yet proof that every real MAIN
+sprites, text, both MAIN backgrounds, and the final Raster-plus-TRAM source
+surface. It deliberately names every unimplemented pass, so it is not yet
+proof that every real MAIN
 frame is complete. Source-order coverage is still required for Boss and
-Extra/Charge paths, background particles, and dynamic HUD/result/warning
-overlays. The neutral observer lifecycle events are a seam for that work; they
-are not render state in the core.
+Extra/Charge paths and dynamic HUD/result/warning overlays. The neutral
+observer lifecycle events are a seam for that work; they are not render state
+in the core.
 
 ## Source/application scene boundary
 

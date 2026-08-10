@@ -48,10 +48,13 @@ StepResult finish_gameplay_frame(auto &impl, GameplayObserver *observer)
 } // namespace
 
 Game::Impl::Impl(
-	const GameInit &init, GameContent content_, GameOptions options
+	const GameInit &init,
+	GameContent content_,
+	GameOptions options,
+	GameplayObserver *observer
 ) :
 	state(detail::initialize_first_round(
-		init, content_.enemy_formations.size()
+		init, content_.enemy_formations.size(), observer
 	)),
 	initial_init(init),
 	autofire_mask(init.autofire_mask),
@@ -66,8 +69,13 @@ Game::Impl::Impl(
 	);
 }
 
-Game::Game(GameInit init, GameContent content, GameOptions options) :
-	impl_(std::make_unique<Impl>(init, std::move(content), options))
+Game::Game(
+	GameInit init,
+	GameContent content,
+	GameOptions options,
+	GameplayObserver *observer
+) :
+	impl_(std::make_unique<Impl>(init, std::move(content), options, observer))
 {}
 
 Game::Game(Game &&) noexcept = default;
@@ -86,7 +94,10 @@ std::expected<Game, Error> Game::create(const GameInit &init, GameContent conten
 }
 
 std::expected<Game, Error> Game::create(
-	const GameInit &init, GameContent content, GameOptions options
+	const GameInit &init,
+	GameContent content,
+	GameOptions options,
+	GameplayObserver *observer
 )
 {
 	if((init.autofire_mask & 0xFCU) != 0U) {
@@ -259,7 +270,7 @@ std::expected<Game, Error> Game::create(
 			}
 		}
 	}
-	return Game(init, std::move(content), options);
+	return Game(init, std::move(content), options, observer);
 }
 
 StepResult Game::step(

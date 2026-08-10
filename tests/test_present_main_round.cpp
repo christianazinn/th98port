@@ -19,6 +19,10 @@
 namespace {
 
 using th03::MainFrameFooterReached;
+using th03::MainBackgroundKind;
+using th03::MainBackgroundPhase;
+using th03::BombCompatibilityReadSite;
+using th03::BombFrameStep;
 using th03::BombCommonEffectStep;
 using th03::Bullet16ConstructionKind;
 using th03::Bullet16Spawned;
@@ -45,6 +49,7 @@ using th03::present::ComposedPixel;
 using th03::present::Index4;
 using th03::present::MainBombMrsAssets;
 using th03::present::MainBombsPresenter;
+using th03::present::MainBackgroundPresenter;
 using th03::present::MainEffectsPresenter;
 using th03::present::MainEntitiesPresenter;
 using th03::present::MainGameMode;
@@ -65,6 +70,7 @@ using th03::present::Rgb8;
 using th03::present::StaffFlakeTrigTables;
 using th03::present::Tram;
 using th03::present::authentic_main_bomb_atlas_layout;
+using th03::present::authentic_main_background_atlas_layout;
 using th03::present::authentic_main_effects_atlas_layout;
 using th03::present::authentic_main_entity_atlas_layout;
 using th03::present::authentic_main_players_bullets_atlas_layout;
@@ -205,6 +211,7 @@ struct Fixture {
 	MainStaticPresenter static_presenter;
 	SyntheticAssets assets;
 	std::optional<MainEntitiesPresenter> entities;
+	std::optional<MainBackgroundPresenter> background;
 	std::optional<MainEffectsPresenter> effects;
 	std::optional<MainPlayersBulletsPresenter> players_bullets;
 	std::optional<MainBombsPresenter> bombs;
@@ -214,6 +221,54 @@ struct Fixture {
 	{
 		const auto hud = hud_state();
 		expect(raster.set_access_page(Page::one), "access the MAINL atlas page");
+		const auto background_layout = authentic_main_background_atlas_layout();
+		for(const auto rect : background_layout.type_a_variants) {
+			expect(
+				raster.clear(
+					{
+						static_cast<std::int32_t>(rect.left),
+						static_cast<std::int32_t>(
+							sprite16_source_top + rect.raw_top
+						),
+						rect.width,
+						rect.raw_height,
+					},
+					8U
+				),
+				"seed a Type-A background source cel"
+			);
+		}
+		expect(
+			raster.clear(
+				{
+					static_cast<std::int32_t>(background_layout.type_b_static.left),
+					static_cast<std::int32_t>(
+						sprite16_source_top +
+						background_layout.type_b_static.raw_top
+					),
+					background_layout.type_b_static.width,
+					background_layout.type_b_static.raw_height,
+				},
+				8U
+			),
+			"seed the Type-B static background source cel"
+		);
+		for(const auto rect : background_layout.type_b_animation) {
+			expect(
+				raster.clear(
+					{
+						static_cast<std::int32_t>(rect.left),
+						static_cast<std::int32_t>(
+							sprite16_source_top + rect.raw_top
+						),
+						rect.width,
+						rect.raw_height,
+					},
+					8U
+				),
+				"seed a Type-B animated background source cel"
+			);
+		}
 		expect(
 			raster.clear({64, sprite16_source_top, 16U, 8U}, 9U) &&
 			raster.clear(
@@ -234,6 +289,7 @@ struct Fixture {
 			"prepare the synthetic MAIN process"
 		);
 		const auto &staging = static_presenter.sprite_staging();
+		background.emplace(raster, staging, background_layout);
 		entities.emplace(
 			raster, staging, authentic_main_entity_atlas_layout()
 		);
@@ -264,6 +320,7 @@ struct Fixture {
 			tram,
 			static_presenter,
 			palette,
+			*background,
 			*entities,
 			*effects,
 			*players_bullets,
@@ -326,7 +383,6 @@ void test_contract_and_setup_failure()
 		MainRoundMissingPhase::boss,
 		MainRoundMissingPhase::extra_attack,
 		MainRoundMissingPhase::charge_shot,
-		MainRoundMissingPhase::background,
 		MainRoundMissingPhase::warning_and_gauge,
 		MainRoundMissingPhase::hud,
 		MainRoundMissingPhase::result,
@@ -350,6 +406,7 @@ void test_contract_and_setup_failure()
 		fixture.tram,
 		stopped_static,
 		fixture.palette,
+		*fixture.background,
 		*fixture.entities,
 		*fixture.effects,
 		*fixture.players_bullets,
@@ -360,11 +417,35 @@ void test_contract_and_setup_failure()
 		fixture.raster.palette_tone() == 50,
 		"reject an unstarted process without applying construction tone"
 	);
+	auto invalid_background_layout = authentic_main_background_atlas_layout();
+	invalid_background_layout.type_a_variants[0U].width = 32U;
+	MainBackgroundPresenter invalid_background(
+		fixture.raster,
+		fixture.static_presenter.sprite_staging(),
+		invalid_background_layout
+	);
+	MainRoundPresenter stopped_background(
+		fixture.raster,
+		fixture.tram,
+		fixture.static_presenter,
+		fixture.palette,
+		invalid_background,
+		*fixture.entities,
+		*fixture.effects,
+		*fixture.players_bullets,
+		*fixture.bombs
+	);
+	expect(
+		stopped_background.status() == MainRoundStatus::background_failed &&
+		fixture.raster.palette_tone() == 50,
+		"reject an invalid background child before applying construction tone"
+	);
 	MainRoundPresenter valid(
 		fixture.raster,
 		fixture.tram,
 		fixture.static_presenter,
 		fixture.palette,
+		*fixture.background,
 		*fixture.entities,
 		*fixture.effects,
 		*fixture.players_bullets,
@@ -555,6 +636,91 @@ void test_hit_circles_overwrite_fireballs()
 		fixture.round->ready() &&
 		fixture.raster.pixel(Page::zero, {160, 176}) == 12U,
 		"odd-frame hit-circle color overwrites the overlapping Fireball cel"
+	);
+}
+
+void initialize_type_a_background(
+	MainRoundPresenter &round,
+	std::uint16_t x_q12_4,
+	std::uint16_t y_q12_4
+)
+{
+	round.main_background_initialize({.kind = MainBackgroundKind::type_a});
+	for(std::size_t slot = 0U; slot < 48U; ++slot) {
+		round.main_background_random_read({x_q12_4});
+		round.main_background_random_read({y_q12_4});
+		round.main_background_random_read({0U});
+		round.main_background_random_read({0U});
+	}
+}
+
+void test_background_is_synchronous_before_late_bombs()
+{
+	Fixture fixture;
+	initialize_type_a_background(
+		*fixture.round,
+		static_cast<std::uint16_t>(100U * 16U),
+		static_cast<std::uint16_t>(100U * 16U)
+	);
+	fixture.round->main_background_frame({
+		.round_id = 3U,
+		.round_or_result_frame = 0U,
+		.kind = MainBackgroundKind::type_a,
+		.phase = MainBackgroundPhase::initial,
+	});
+	for(std::size_t slot = 0U; slot < 48U; ++slot) {
+		fixture.round->main_background_random_read({0U});
+	}
+	expect(
+		fixture.round->ready() &&
+		fixture.raster.pixel(Page::zero, {100, 50}) == 8U,
+		"background frame facts draw synchronously in their source slot"
+	);
+
+	fixture.round->bomb_frame_step(BombFrameStep{
+		.player = PlayerId::p1,
+		.paletted_character = static_cast<std::int8_t>(
+			MainPalettedCharacter::reimu_primary
+		),
+		.bomb_frame = 1U,
+	});
+	expect(
+		fixture.round->ready() &&
+		fixture.raster.pixel(Page::zero, {100, 50}) == 0U,
+		"later Reimu Bomb fill overwrites the earlier background pixel"
+	);
+	fixture.round->bomb_compatibility_read({
+		.player = PlayerId::p1,
+		.site = BombCompatibilityReadSite::reimu_falling_velocity,
+		.bomb_frame = 1U,
+		.raw_value = 0U,
+	});
+	fixture.round->bomb_compatibility_read({
+		.player = PlayerId::p1,
+		.site = BombCompatibilityReadSite::reimu_falling_x,
+		.bomb_frame = 1U,
+		.raw_value = 0U,
+	});
+	expect(
+		fixture.round->ready(),
+		"complete the late Bomb compatibility-read suffix after the order probe"
+	);
+}
+
+void test_background_failure_is_sticky()
+{
+	Fixture fixture;
+	const auto shown = fixture.raster.shown_page();
+	fixture.round->main_background_random_read({0U});
+	expect(
+		fixture.round->status() == MainRoundStatus::background_failed &&
+		!fixture.background->ready(),
+		"surface an invalid background fact as its named child failure"
+	);
+	fixture.round->main_frame_footer_reached({});
+	expect(
+		fixture.raster.shown_page() == shown,
+		"a sticky background failure suppresses later page publication"
 	);
 }
 
@@ -838,6 +1004,8 @@ int main()
 	test_phase_context_includes_foreground_shifts();
 	test_fireballs_precede_hit_circles();
 	test_hit_circles_overwrite_fireballs();
+	test_background_is_synchronous_before_late_bombs();
+	test_background_failure_is_sticky();
 	test_terminal_no_footer_does_not_publish();
 	test_warning_interstitial_tones_without_footer();
 	test_warning_interstitial_order_is_strict();

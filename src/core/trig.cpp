@@ -5,7 +5,7 @@
 
 #include "th03/core/numeric.hpp"
 
-namespace th03::detail {
+namespace th03 {
 namespace {
 
 // master.lib sin8[data].asm is public domain. Keeping its integer quarter
@@ -54,6 +54,8 @@ std::uint16_t magnitude(std::int16_t value) noexcept
 
 } // namespace
 
+namespace exact {
+
 std::int16_t cosine8(std::uint8_t angle) noexcept
 {
 	const auto index = static_cast<std::size_t>(angle);
@@ -73,6 +75,10 @@ std::int16_t sine8(std::uint8_t angle) noexcept
 {
 	return cosine8(static_cast<std::uint8_t>(angle + 192U));
 }
+
+} // namespace exact
+
+namespace detail {
 
 std::uint8_t iatan2(std::int16_t y, std::int16_t x) noexcept
 {
@@ -111,6 +117,10 @@ std::uint8_t iatan2(std::int16_t y, std::int16_t x) noexcept
 	return angle;
 }
 
+} // namespace detail
+
+namespace exact {
+
 Vector2 vector2(std::uint8_t angle, std::int16_t length) noexcept
 {
 	const auto x_wide = static_cast<std::int32_t>(length) * cosine8(angle);
@@ -120,6 +130,10 @@ Vector2 vector2(std::uint8_t angle, std::int16_t length) noexcept
 		static_cast<std::int16_t>(exact::arithmetic_shift_right(y_wide, 8U)),
 	};
 }
+
+} // namespace exact
+
+namespace detail {
 
 Vector2 vector2_between_plus(
 	std::int16_t x1,
@@ -134,7 +148,8 @@ Vector2 vector2_between_plus(
 		iatan2(exact::wrap_subtract(y2, y1), exact::wrap_subtract(x2, x1)) +
 		plus_angle
 	);
-	return vector2(angle, length);
+	return exact::vector2(angle, length);
 }
 
-} // namespace th03::detail
+} // namespace detail
+} // namespace th03

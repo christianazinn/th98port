@@ -310,17 +310,37 @@ void initialize_repeat_rank(
 	}
 }
 
-void initialize_background_rng(DeterministicState &state) noexcept
+void initialize_background_rng(
+	DeterministicState &state,
+	GameplayObserver *observer
+) noexcept
 {
+	const auto kind =
+		(state.background_initial_kind == BackgroundInitialKind::type_a)
+			? MainBackgroundKind::type_a
+			: MainBackgroundKind::type_b;
+	if(observer != nullptr) {
+		observer->main_background_initialize(MainBackgroundInitialize{
+			.kind = kind,
+		});
+	}
+	const auto consume = [&state, observer]() noexcept {
+		const auto raw_value = irand(state.random_seed);
+		if(observer != nullptr) {
+			observer->main_background_random_read(MainBackgroundRandomRead{
+				.raw_value = raw_value,
+			});
+		}
+	};
 	if(state.background_initial_kind == BackgroundInitialKind::type_a) {
 		// sub_D092(): 48 particles, four IRAND calls apiece.
 		for(std::size_t i = 0U; i < 48U * 4U; ++i) {
-			(void)irand(state.random_seed);
+			consume();
 		}
 	} else {
 		// sub_D2E8(): 50 particles, two IRAND calls apiece.
 		for(std::size_t i = 0U; i < 50U * 2U; ++i) {
-			(void)irand(state.random_seed);
+			consume();
 		}
 	}
 }
@@ -421,7 +441,8 @@ std::uint16_t practice_cpu_safety_frames(
 
 DeterministicState initialize_first_round(
 	const GameInit &init,
-	std::size_t formation_count
+	std::size_t formation_count,
+	GameplayObserver *observer
 )
 {
 	DeterministicState state{};
@@ -563,7 +584,7 @@ DeterministicState initialize_first_round(
 		restore_player_starts(state, init.compact_runtime_snapshot->players);
 	} else {
 		initialize_runtime_rings(state, formation_count);
-		initialize_background_rng(state);
+		initialize_background_rng(state, observer);
 	}
 	if(init.round_start_snapshot) {
 		apply_round_start_snapshot(state, *init.round_start_snapshot);
