@@ -312,6 +312,13 @@ void test_palette_scroll_and_hash() {
 		"graph_200line lower-half mode resets the access page"
 	);
 	expect(
+		identical_pages.set_access_page(Page::one) &&
+		identical_pages.set_raster_mode(RasterMode::lines_400) &&
+		identical_pages.access_page() == Page::zero &&
+		identical_pages.raster_mode() == RasterMode::lines_400,
+		"graph_400line mode resets the access page"
+	);
+	expect(
 		!identical_pages.set_raster_mode(static_cast<RasterMode>(0xFFU)),
 		"invalid raster mode is rejected"
 	);

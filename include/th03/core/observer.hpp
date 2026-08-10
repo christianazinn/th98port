@@ -309,9 +309,46 @@ struct BombFrameStep {
 	PlayerId player = PlayerId::p1;
 	std::int8_t paletted_character = 0;
 	std::uint8_t bomb_frame = 0;
+	// Sampled before the late character callback mutates the current shake.
+	std::int16_t fg_shift_x_at_entry = 0;
 
 	friend bool operator==(const BombFrameStep &, const BombFrameStep &) =
 		default;
+};
+
+enum class BombCompatibilityReadSite : std::uint8_t {
+	reimu_falling_velocity,
+	reimu_falling_x,
+	mima_column_x,
+	ellen_vector_angle,
+};
+
+// Raw value from a shared-ring read that the source already consumed in a
+// Bomb callback solely to construct presentation-private state. Observation
+// never adds or delays a read. Repeated reads are delivered synchronously in
+// their source call order; no renderer slot or presentation record identity is
+// exposed by the core.
+struct BombCompatibilityRead {
+	PlayerId player = PlayerId::p1;
+	BombCompatibilityReadSite site =
+		BombCompatibilityReadSite::reimu_falling_velocity;
+	std::uint8_t bomb_frame = 0;
+	std::uint16_t raw_value = 0;
+
+	friend bool operator==(
+		const BombCompatibilityRead &,
+		const BombCompatibilityRead &
+	) = default;
+};
+
+// Emitted at the prefix transition that disables an expired Bomb. In the
+// source this is immediately followed by restoring that player's saved
+// palette entry; a late BombFrameStep does not occur for this frame.
+struct BombFinished {
+	PlayerId player = PlayerId::p1;
+	std::int8_t paletted_character = 0;
+
+	friend bool operator==(const BombFinished &, const BombFinished &) = default;
 };
 
 enum class BombCommonEffectKind : std::uint8_t {
@@ -467,6 +504,12 @@ public:
 	{}
 	// Delivered synchronously at each non-exceptional source allocation call.
 	virtual void common_effect_spawned(const CommonEffectSpawned &) noexcept
+	{}
+	virtual void bomb_compatibility_read(
+		const BombCompatibilityRead &
+	) noexcept
+	{}
+	virtual void bomb_finished(const BombFinished &) noexcept
 	{}
 	virtual void bomb_frame_step(const BombFrameStep &) noexcept
 	{}

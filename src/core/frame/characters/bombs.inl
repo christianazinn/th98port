@@ -2,7 +2,8 @@
 
 void bomb_character_update(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &flag = state.bomb_flag[player_id];
@@ -27,10 +28,21 @@ void bomb_character_update(
 		(state.bomb_frame[player_id] % 8U) == 0U
 	) {
 		// mima_17043() chooses each visual column from the shared random ring.
-		(void)randring_next16(state);
+		const auto raw = randring_next16(state);
+		if(observer != nullptr) {
+			observer->bomb_compatibility_read(BombCompatibilityRead{
+				.player = static_cast<PlayerId>(player_id),
+				.site = BombCompatibilityReadSite::mima_column_x,
+				.bomb_frame = state.bomb_frame[player_id],
+				.raw_value = raw,
+			});
+		}
 	}
 	if(character == character_ellen) {
-		for(auto &vector : state.ellen_bomb_vectors[player_id]) {
+		for(std::size_t index = 0U;
+			index < state.ellen_bomb_vectors[player_id].size();
+			++index) {
+			auto &vector = state.ellen_bomb_vectors[player_id][index];
 			bool respawn = (vector.x == ellen_bomb_vector_free);
 			if(vector.x == ellen_bomb_vector_inactive) {
 				continue;
@@ -45,8 +57,17 @@ void bomb_character_update(
 			if(respawn) {
 				vector.x = 144 << 4;
 				vector.y = 184 << 4;
+				const auto raw = randring_next16(state);
+				if(observer != nullptr) {
+					observer->bomb_compatibility_read(BombCompatibilityRead{
+						.player = static_cast<PlayerId>(player_id),
+						.site = BombCompatibilityReadSite::ellen_vector_angle,
+						.bomb_frame = state.bomb_frame[player_id],
+						.raw_value = raw,
+					});
+				}
 				const auto velocity = vector2(
-					static_cast<std::uint8_t>(randring_next16(state)), 224
+					static_cast<std::uint8_t>(raw), 224
 				);
 				vector.velocity_x = velocity.x;
 				vector.velocity_y = velocity.y;
@@ -55,6 +76,13 @@ void bomb_character_update(
 	}
 	if(state.bomb_frame[player_id] >= bomb_frames) {
 		flag = BombFlag::inactive;
+		if(observer != nullptr) {
+			observer->bomb_finished(BombFinished{
+				.player = static_cast<PlayerId>(player_id),
+				.paletted_character =
+					state.players[player_id].paletted_character,
+			});
+		}
 	}
 }
 
@@ -75,12 +103,31 @@ void bombs_render_phase_update(
 				.player = static_cast<PlayerId>(player_id),
 				.paletted_character = state.players[player_id].paletted_character,
 				.bomb_frame = state.bomb_frame[player_id],
+				.fg_shift_x_at_entry =
+					state.playfield_fg_shift_x[player_id],
 			});
 		}
 		if(character == character_reimu && state.bomb_frame[player_id] < 32U) {
 			// reimu_bomb() creates one visual record with two shared-ring draws.
-			(void)randring_next16(state);
-			(void)randring_next16(state);
+			const auto velocity_raw = randring_next16(state);
+			if(observer != nullptr) {
+				observer->bomb_compatibility_read(BombCompatibilityRead{
+					.player = static_cast<PlayerId>(player_id),
+					.site =
+						BombCompatibilityReadSite::reimu_falling_velocity,
+					.bomb_frame = state.bomb_frame[player_id],
+					.raw_value = velocity_raw,
+				});
+			}
+			const auto x_raw = randring_next16(state);
+			if(observer != nullptr) {
+				observer->bomb_compatibility_read(BombCompatibilityRead{
+					.player = static_cast<PlayerId>(player_id),
+					.site = BombCompatibilityReadSite::reimu_falling_x,
+					.bomb_frame = state.bomb_frame[player_id],
+					.raw_value = x_raw,
+				});
+			}
 		}
 		if(character == character_reimu) {
 			const auto frame = state.bomb_frame[player_id];

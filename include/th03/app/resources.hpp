@@ -1,0 +1,198 @@
+#ifndef TH03_APP_RESOURCES_HPP
+#define TH03_APP_RESOURCES_HPP
+
+#include <compare>
+#include <cstddef>
+#include <cstdint>
+#include <expected>
+#include <filesystem>
+#include <map>
+#include <memory>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace th03::app {
+
+// This is the application/import boundary.  th03_assets receives only spans
+// borrowed from ResourceBytes and never sees these paths or this cache.
+enum class MainResourceArchive : std::uint8_t {
+	yume1,
+	yume2,
+};
+
+enum class MainResourceScene : std::uint8_t {
+	direct_vs,
+	selection_handoff,
+	mainl_stage_transition,
+};
+
+enum class MainResourceDecoder : std::uint8_t {
+	enedat,
+	rgb48,
+	bfnt_gaiji,
+	bfnt_superimpose,
+	mrs,
+	pi,
+};
+
+enum class MainCharacter : std::uint8_t {
+	none,
+	reimu,
+	mima,
+	marisa,
+	ellen,
+	kotohime,
+	kana,
+	rikako,
+	chiyuri,
+	yumemi,
+};
+
+enum class MainPaletteVariant : std::uint8_t {
+	none,
+	first,
+	second,
+};
+
+// Static roles use character == none and palette == none. Character roles
+// use both fields, making the original 00..17 file family explicit without
+// allowing callers to select arbitrary filenames.
+enum class MainResourceRole : std::uint8_t {
+	enemy_scripts,
+	game_font,
+	hud_lose_sheet,
+	hud_round_sheet,
+	hud_result_sheet,
+	selection_palette,
+	character_sheet,
+	character_extra_portrait,
+	character_bomb_portrait,
+	character_stage_shot,
+	character_stage_extra_shot,
+};
+
+struct MainResourceKey {
+	MainResourceRole role = MainResourceRole::enemy_scripts;
+	MainCharacter character = MainCharacter::none;
+	MainPaletteVariant palette = MainPaletteVariant::none;
+
+	friend constexpr auto operator<=>(
+		const MainResourceKey &,
+		const MainResourceKey &
+	) = default;
+};
+
+struct MainResourceSpec {
+	MainResourceKey key{};
+	MainResourceScene scene = MainResourceScene::direct_vs;
+	MainResourceArchive archive = MainResourceArchive::yume2;
+	MainResourceDecoder decoder = MainResourceDecoder::enedat;
+	std::string logical_role{};
+	std::string filename{};
+	std::size_t expected_bytes = 0U;
+	// FNV-1a-64 is a compact corruption fingerprint, not a security signature.
+	std::uint64_t expected_fnv1a64 = 0U;
+};
+
+enum class ResourceLoadErrorCode : std::uint8_t {
+	invalid_resource_key,
+	duplicate_logical_role,
+	invalid_content_root,
+	path_escape,
+	case_mismatch,
+	missing,
+	not_directory,
+	not_regular_file,
+	size_mismatch,
+	checksum_mismatch,
+	read_failed,
+};
+
+struct ResourceLoadError {
+	ResourceLoadErrorCode code = ResourceLoadErrorCode::invalid_resource_key;
+	MainResourceKey key{};
+};
+
+// Immutable ownership keeps a loaded span valid after a scene batch returns
+// while the scene-scoped loader retains its cache.
+using ResourceBytes = std::shared_ptr<const std::vector<std::byte>>;
+
+struct LoadedMainResource {
+	MainResourceSpec spec{};
+	ResourceBytes bytes{};
+};
+
+struct MainPlayerSelection {
+	MainCharacter character = MainCharacter::reimu;
+	MainPaletteVariant palette = MainPaletteVariant::first;
+};
+
+enum class MainResourceIntegrity : std::uint8_t {
+	// Normal application policy: exact size plus the checked-in FNV-1a-64
+	// fingerprint from the accepted extraction.
+	size_and_fnv1a64,
+	// Kept for hermetic synthetic tests and tools that deliberately inspect
+	// alternate-but-size-compatible data. Native app startup uses the default.
+	size_only,
+};
+
+// The manifest is generated from the exact static names and the source's
+// 00..17 character filename family. It contains metadata only, never bytes.
+[[nodiscard]] std::vector<MainResourceSpec> main_resource_manifest();
+
+// Manifest construction is fixed in this translation unit, but keeping this
+// validation public makes an import/tooling audit report duplicate logical
+// roles deterministically instead of relying on an accidental last-wins map.
+[[nodiscard]] std::expected<void, ResourceLoadErrorCode>
+validate_main_resource_manifest(std::span<const MainResourceSpec> manifest);
+
+[[nodiscard]] std::expected<MainResourceSpec, ResourceLoadError>
+main_resource_spec(MainResourceKey key);
+
+[[nodiscard]] std::expected<std::vector<MainResourceKey>, ResourceLoadError>
+direct_vs_resource_keys(
+	MainPlayerSelection player_one,
+	MainPlayerSelection player_two
+);
+
+// Importer-facing validation for the extracted-entry component. The loader
+// calls this before joining a manifest name to the explicit content root.
+[[nodiscard]] bool is_safe_extracted_entry_name(std::string_view name) noexcept;
+
+// Public because import diagnostics need to report the same compact
+// fingerprint the normal loader enforces. This is not a security primitive.
+[[nodiscard]] std::uint64_t main_resource_fnv1a64(
+	std::span<const std::byte> bytes
+) noexcept;
+
+class MainResourceLoader {
+public:
+	// content_root is the extracted root containing YUME1.DAT/ and YUME2.DAT/.
+	explicit MainResourceLoader(
+		std::filesystem::path content_root,
+		MainResourceIntegrity integrity = MainResourceIntegrity::size_and_fnv1a64
+	);
+
+	[[nodiscard]] std::expected<ResourceBytes, ResourceLoadError> load(
+		MainResourceKey key
+	);
+
+	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+	load_direct_vs(
+		MainPlayerSelection player_one,
+		MainPlayerSelection player_two
+	);
+
+	[[nodiscard]] std::size_t cached_resource_count() const noexcept;
+
+private:
+	std::filesystem::path content_root_{};
+	MainResourceIntegrity integrity_ = MainResourceIntegrity::size_and_fnv1a64;
+	std::map<MainResourceKey, ResourceBytes> cache_{};
+};
+
+} // namespace th03::app
+
+#endif

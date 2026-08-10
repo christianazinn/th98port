@@ -229,7 +229,6 @@ Page Raster::shown_page() const noexcept {
 bool Raster::set_raster_mode(RasterMode mode) noexcept {
 	switch(mode) {
 	case RasterMode::lines_400:
-		break;
 	case RasterMode::zoomed_200_upper:
 	case RasterMode::zoomed_200_lower:
 		access_page_ = Page::zero;

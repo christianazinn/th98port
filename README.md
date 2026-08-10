@@ -134,6 +134,8 @@ inside the gameplay frame translation unit.
 `docs/V13_INTEGRATION.md` records V13 authority and the historical-format
 retirement gate. `docs/POST_CORE_ROADMAP.md` records the active-tip branch
 workflow and the asset, presentation, audio, platform, and application layers
-that follow the deterministic gameplay core.
+that follow the deterministic gameplay core. `docs/PLAYABLE_PORT_ROADMAP.md`
+turns those boundaries into the acceptance-gated path to the first direct-launch
+local VS build and then the remaining source scenes.
 `docs/research/README.md` indexes the presentation, asset, and audio research
 contracts prepared for those later layers.

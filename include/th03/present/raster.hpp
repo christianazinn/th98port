@@ -76,8 +76,8 @@ public:
 	[[nodiscard]] bool set_shown_page(Page page) noexcept;
 	[[nodiscard]] Page access_page() const noexcept;
 	[[nodiscard]] Page shown_page() const noexcept;
-	// Mirrors graph_200line(): selecting either zoomed half also resets the
-	// access page to page 0. The 400-line value records the normal host mode.
+	// Mirrors graph_200line() and graph_400line(): selecting any hardware
+	// raster mode also resets the access page to page 0.
 	[[nodiscard]] bool set_raster_mode(RasterMode mode) noexcept;
 	[[nodiscard]] RasterMode raster_mode() const noexcept;
 

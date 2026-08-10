@@ -1,0 +1,108 @@
+# MAIN external resource manifest
+
+This is the app-owned external-data contract for the first native MAIN
+resource scope. It contains names, sizes, roles, and decoder ownership only.
+It contains no original bytes, decoded images, audio, or archive data.
+
+## Extracted-root contract
+
+`th03-app --data <root>` receives an already extracted root, not an original
+DAT archive and not an installation directory. The one accepted layout is:
+
+```text
+<root>/
+  YUME1.DAT/
+    TLSL.RGB
+    0016.PI ... 1716.PI
+    00EX.PI ... 17EX.PI
+  YUME2.DAT/
+    ENEDAT.DAT
+    GAMEFT.BFT
+    LOSE.BF2 ROUND.BF2 ZIKICW.BF2
+    00CH.BF2 ... 17CH.BF2
+    00EX.MRS ... 17EX.MRS
+    00BM.MRS ... 17BM.MRS
+```
+
+For the supplied read-only extraction, `<root>` is
+`th03_full/dat_dumps`. `YUME1.DAT` and `YUME2.DAT` in that directory are
+directory aliases for extracted entries; they are not the non-ASCII original
+archive filenames. Import/extraction remains a Data Manager or `thdat`
+operation. This loader intentionally has no DAT parser.
+
+The loader accepts only manifest keys, joins only checked simple components,
+canonicalizes the archive and selected file, and rejects a resolved path
+outside the canonical root (including a link/junction escape where the host
+exposes the resolved target). Manifest filenames and archive directories use
+the supplied extraction's ASCII-uppercase spelling (the original DOS call
+sites may spell their extensions differently) and must match the extracted
+directory entry with that exact case even on a case-insensitive host; a
+case-only mismatch is a named load error. It reads exact expected byte counts and a checked-in
+FNV-1a-64 corruption fingerprint into immutable
+`shared_ptr<const vector<byte>>` values. The fingerprint is an integrity
+check, not a security signature; provenance/authenticity remains the SHA-256
+extraction identity recorded in `research/ASSET_INVENTORY.md`. One
+`MainResourceLoader` is one scene scope:
+repeated requests return its cached bytes, so no per-frame file I/O occurs.
+`th03_assets` receives a caller-borrowed byte span only.
+
+## MAIN direct-VS batch
+
+`direct_vs_resource_keys()` deterministically loads these five static entries,
+then the selected P1 trio and P2 trio. A duplicate selected asset is loaded
+once.
+
+| Logical role | Extracted path | Bytes | Decoder | Donor authority |
+| --- | --- | ---: | --- | --- |
+| `main.enemy_scripts` | `YUME2.DAT/ENEDAT.DAT` | 5,072 | `th03_formats::parse_enedat` | `th03/main/enemy/enemy.cpp:287-300` |
+| `main.game_font` | `YUME2.DAT/GAMEFT.BFT` | 8,224 | BFNT gaiji | `th03/main/entry.cpp:42-45`; `th03/shiftjis/fnshared.hpp:3` |
+| `main.hud.lose_sheet` | `YUME2.DAT/LOSE.BF2` | 4,176 | BFNT superimpose | `th03/main/rstart.cpp:230`; `story_startup[data].asm:135-136` |
+| `main.hud.round_sheet` | `YUME2.DAT/ROUND.BF2` | 5,712 | BFNT superimpose | `th03/main/rstart.cpp:231`; `story_startup[data].asm:137-138` |
+| `main.hud.result_sheet` | `YUME2.DAT/ZIKICW.BF2` | 4,176 | BFNT superimpose | `th03/main/rstart.cpp:232`; `story_startup[data].asm:139-140` |
+
+For each of the nine characters and both source palette variants, the source
+uses the paletted index `NN` from 00 through 17. `hitc_mrs.cpp:29-43` begins
+from `00CH.BF2`, patches its two digits from the selected paletted character,
+then changes the suffix in place for the two MRS loads.
+
+| Logical role pattern | Extracted path pattern | Bytes each | Decoder |
+| --- | --- | ---: | --- |
+| `main.character.<character>.paletted_<0|1>.sheet` | `YUME2.DAT/NNCH.BF2` | 4,688 | BFNT superimpose |
+| `main.character.<character>.paletted_<0|1>.extra_portrait` | `YUME2.DAT/NNEX.MRS` | 33,120 | MRS |
+| `main.character.<character>.paletted_<0|1>.bomb_portrait` | `YUME2.DAT/NNBM.MRS` | 33,120 | MRS |
+
+The direct batch returns each immutable blob together with its manifest spec,
+so decoder selection never depends on an undocumented vector position. The
+app decodes these supplied byte blobs through `th03_assets`; it does not
+put filenames, paths, or a cache into that library. Presentation receives the
+decoded models, never this loader.
+
+## Adjacent scene dependencies, intentionally not in the VS batch
+
+These entries are included in the same metadata manifest because the native
+application owns scene handoffs, but a direct VS launch must not invent a
+MAIN load for them.
+
+| Logical role pattern | Scene | Extracted path | Decoder | Source authority |
+| --- | --- | --- | --- | --- |
+| `select.palette_handoff` | Select → MAINL handoff | `YUME1.DAT/TLSL.RGB`, 48 bytes | RGB48 | `th03/op/m_select.cpp:177-182` |
+| `main.character.<character>.paletted_<0|1>.stage_shot` | MAINL stage transition | `YUME1.DAT/NN16.PI`, exact size locked per NN | PI | `th03/mainl/screens[data].asm:54`; `th03/mainl/screens.cpp:355-389` |
+| `main.character.<character>.paletted_<0|1>.stage_extra_shot` | MAINL stage transition | `YUME1.DAT/NNEX.PI`, exact size locked per NN | PI | `th03/mainl/screens.cpp:355-389` |
+
+There is no PI or RGB load in the pinned MAIN startup/round-loop path itself:
+MAIN receives a resident palette/page handoff, then `rstart.cpp` loads its
+three BF2 sheets and `hitc_mrs.cpp` loads selected character data.
+`NUM8.BF2` exists in the extraction inventory but has no pinned MAIN
+loader/site, so it is deliberately not a direct-VS dependency. The app must
+construct the direct-launch raster/palette seed explicitly rather than
+silently substituting a MAINL/OP screen. The transition entries above make
+that future scene work visible without claiming they are direct-VS assets.
+
+`MainResourceLoader` is deliberately standalone until the application target
+is introduced. Its focused test compiles it directly with the requested test
+source; no existing CMake target or library boundary is changed by this
+parcel. The normal constructor enforces both size and fingerprint; its
+explicit size-only policy exists solely for hermetic synthetic tests and
+inspection tools, not native app startup. The tests exercise named missing,
+wrong-size, wrong-fingerprint, duplicate-logical-role, case, malformed-key,
+and resolved-link-escape outcomes using temporary synthetic roots only.

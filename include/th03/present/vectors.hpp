@@ -32,6 +32,17 @@ struct GrcgPoint {
 	Index4 color
 ) noexcept;
 
+// Exact master.lib vertical-line primitive used by Rikako's Bomb and Boss
+// presentation. Endpoints are inclusive and may be supplied in either order.
+[[nodiscard]] bool grcg_vline(
+	Raster &raster,
+	std::int16_t x,
+	std::int16_t y1,
+	std::int16_t y2,
+	GrcgClipRect clip,
+	Index4 color
+) noexcept;
+
 [[nodiscard]] bool grcg_circle(
 	Raster &raster,
 	GrcgPoint center,

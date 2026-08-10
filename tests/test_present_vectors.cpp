@@ -115,6 +115,64 @@ void test_axis_and_diagonal_lines()
 	}
 }
 
+void test_vertical_line_primitive()
+{
+	{
+		Raster raster;
+		constexpr GrcgClipRect clip{2, 2, 7, 7};
+		expect(
+			th03::present::grcg_vline(
+				raster, 4, 9, 0, clip, vector_color
+			),
+			"reversed vertical primitive clips and draws"
+		);
+		constexpr std::array<GrcgPoint, 6U> expected{{
+			{4, 2}, {4, 3}, {4, 4}, {4, 5}, {4, 6}, {4, 7},
+		}};
+		expect_exact_pixels(
+			raster, Page::zero, expected,
+			"vertical primitive keeps both clipped endpoints"
+		);
+	}
+	{
+		Raster raster;
+		constexpr GrcgClipRect clip{2, 2, 7, 7};
+		const auto before = raster.display_state_hash();
+		expect(
+			th03::present::grcg_vline(
+				raster, 1, 3, 6, clip, vector_color
+			) && raster.display_state_hash() == before,
+			"horizontally clipped vertical primitive is a no-op"
+		);
+		expect(
+			th03::present::grcg_vline(
+				raster, 4, -8, -1, clip, vector_color
+			) && raster.display_state_hash() == before,
+			"vertically clipped primitive is a no-op"
+		);
+	}
+	{
+		Raster raster;
+		expect(
+			raster.set_raster_mode(RasterMode::zoomed_200_upper),
+			"select zoomed mode for vertical primitive"
+		);
+		constexpr GrcgClipRect clip{16, 8, 303, 191};
+		expect(
+			th03::present::grcg_vline(
+				raster, 144, 8, 192, clip, vector_color
+			),
+			"Rikako-domain vertical primitive draws"
+		);
+		expect(
+			raster.pixel(Page::zero, {144, 8}) == vector_color &&
+			raster.pixel(Page::zero, {144, 191}) == vector_color &&
+			raster.pixel(Page::zero, {144, 192}) == 0U,
+			"Rikako-domain line clips to the inclusive playfield bottom"
+		);
+	}
+}
+
 void test_fixed_fraction_slopes()
 {
 	{
@@ -408,6 +466,7 @@ void test_zero_and_invalid_requests_are_atomic()
 int main()
 {
 	test_axis_and_diagonal_lines();
+	test_vertical_line_primitive();
 	test_fixed_fraction_slopes();
 	test_line_clipping_and_access_page();
 	test_horizontal_then_vertical_cutline();

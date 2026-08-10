@@ -448,10 +448,10 @@ bool gameplay_frame_prefix(
 	state.bullet_template_angle = 0U;
 	extra_attacks_update_observed(state, 0U, observer);
 	bosses_update_observed(state, 0U, observer);
-	bomb_character_update(state, 0U);
+	bomb_character_update(state, 0U, observer);
 	extra_attacks_update_observed(state, 1U, observer);
 	bosses_update_observed(state, 1U, observer);
-	bomb_character_update(state, 1U);
+	bomb_character_update(state, 1U, observer);
 	if(observer != nullptr) {
 		observer->hit_circles_advanced();
 	}

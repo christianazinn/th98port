@@ -34,11 +34,25 @@ target_compile_features(th03_assets PUBLIC cxx_std_23)
 set_target_properties(th03_assets PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_assets)
 
+# Application-owned external-data import boundary. This library performs
+# scene-scoped filesystem validation/caching and has no gameplay or renderer
+# dependency; decoded byte spans flow inward to th03_assets at the app layer.
+add_library(th03_app_resources STATIC
+	src/app/resources.cpp
+)
+target_include_directories(th03_app_resources PUBLIC include)
+target_compile_features(th03_app_resources PUBLIC cxx_std_23)
+set_target_properties(th03_app_resources PROPERTIES CXX_EXTENSIONS OFF)
+th03_set_warnings(th03_app_resources)
+
 add_library(th03_present STATIC
 	src/present/cels.cpp
 	src/present/main_bullets.cpp
 	src/present/main_entities.cpp
 	src/present/main_effects.cpp
+	src/present/main_bomb_palette.cpp
+	src/present/main_bombs.cpp
+	src/present/main_bombs_characters.cpp
 	src/present/main_palette.cpp
 	src/present/main_players.cpp
 	src/present/main_static.cpp
@@ -49,8 +63,10 @@ add_library(th03_present STATIC
 	src/present/sprite16.cpp
 	src/present/sprite_staging.cpp
 	src/present/staff_flakes.cpp
+	src/present/source_surface.cpp
 	src/present/superimpose.cpp
 	src/present/text.cpp
+	src/present/triangles.cpp
 	src/present/tram.cpp
 	src/present/vectors.cpp
 )
@@ -173,6 +189,13 @@ if(BUILD_TESTING)
 	th03_set_warnings(th03-assets-tests)
 	add_test(NAME th03-assets-tests COMMAND th03-assets-tests)
 
+	add_executable(th03-app-resources-tests
+		tests/test_app_resources.cpp
+	)
+	target_link_libraries(th03-app-resources-tests PRIVATE th03_app_resources)
+	th03_set_warnings(th03-app-resources-tests)
+	add_test(NAME th03-app-resources-tests COMMAND th03-app-resources-tests)
+
 	add_executable(th03-present-tests
 		tests/test_present.cpp
 	)
@@ -281,6 +304,16 @@ if(BUILD_TESTING)
 		COMMAND th03-present-vectors-tests
 	)
 
+	add_executable(th03-present-triangles-tests
+		tests/test_present_triangles.cpp
+	)
+	target_link_libraries(th03-present-triangles-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-triangles-tests)
+	add_test(
+		NAME th03-present-triangles-tests
+		COMMAND th03-present-triangles-tests
+	)
+
 	add_executable(th03-present-main-effects-tests
 		tests/test_present_main_effects.cpp
 	)
@@ -299,5 +332,41 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-present-main-palette-tests
 		COMMAND th03-present-main-palette-tests
+	)
+
+	add_executable(th03-present-main-bomb-palette-tests
+		tests/test_present_main_bomb_palette.cpp
+	)
+	target_link_libraries(
+		th03-present-main-bomb-palette-tests
+		PRIVATE th03_present
+	)
+	th03_set_warnings(th03-present-main-bomb-palette-tests)
+	add_test(
+		NAME th03-present-main-bomb-palette-tests
+		COMMAND th03-present-main-bomb-palette-tests
+	)
+
+	add_executable(th03-present-main-bombs-tests
+		tests/test_present_main_bombs.cpp
+	)
+	target_link_libraries(th03-present-main-bombs-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-main-bombs-tests)
+	add_test(
+		NAME th03-present-main-bombs-tests
+		COMMAND th03-present-main-bombs-tests
+	)
+
+	add_executable(th03-present-source-surface-tests
+		tests/test_present_source_surface.cpp
+	)
+	target_link_libraries(
+		th03-present-source-surface-tests
+		PRIVATE th03_present
+	)
+	th03_set_warnings(th03-present-source-surface-tests)
+	add_test(
+		NAME th03-present-source-surface-tests
+		COMMAND th03-present-source-surface-tests
 	)
 endif()

@@ -38,8 +38,10 @@ In particular:
 - An optional synchronous observer can inspect immutable gameplay facts at
   semantic phase boundaries and raw primitive results from shared-RNG reads the
   core has already consumed. Compatibility reads carry only a minimal
-  source-site/phase tag and ordinal; visual grouping and interpretation happen
-  outside core. Observation never changes stepping and is retained by the
+  source-site/phase tag and a semantic ordinal only when the source contract
+  requires one. Repeated synchronous facts otherwise preserve source order
+  without exposing presentation slots; visual grouping and interpretation
+  happen outside core. Observation never changes stepping and is retained by the
   client, not the core. `th03rv` supplies no observer and links no presentation
   or asset library.
 - `th03_formats` owns byte layouts and adapts them to neutral replay/session
@@ -332,6 +334,11 @@ Classic can be expressed cleanly through these boundaries; add abstractions
 only when an actual Arrange requirement needs them.
 
 ## Recommended execution order
+
+`PLAYABLE_PORT_ROADMAP.md` is the operational companion to this architecture
+record. It defines the direct-launch local VS milestone, the external-data and
+PC-98 visual-trace gates, and the exact ownership of the minimal app/platform
+shell.
 
 1. Preserve the sealed source-wide gameplay parity audit while expanding replay
    coverage. The mechanical `frame.cpp` partition is complete; every later

@@ -39,6 +39,8 @@ enum class ObservedCall : std::uint8_t {
 	hit_circle_spawned,
 	common_effects_advanced,
 	common_effect_spawned,
+	bomb_compatibility_read,
+	bomb_finished,
 	bomb_frame_step,
 	bomb_common_effect_step,
 	warning_interstitial_started,
@@ -63,6 +65,8 @@ public:
 		defeat_steps.reserve(8U);
 		hit_circles.reserve(32U);
 		common_effects.reserve(64U);
+		bomb_compatibility_reads.reserve(32U);
+		bomb_finishes.reserve(4U);
 		bomb_frame_steps.reserve(8U);
 		bomb_common_steps.reserve(8U);
 		warning_interstitial_starts.reserve(2U);
@@ -129,6 +133,20 @@ public:
 	{
 		bomb_frame_steps.push_back(step);
 		calls.push_back(ObservedCall::bomb_frame_step);
+	}
+
+	void bomb_compatibility_read(
+		const th03::BombCompatibilityRead &read
+	) noexcept override
+	{
+		bomb_compatibility_reads.push_back(read);
+		calls.push_back(ObservedCall::bomb_compatibility_read);
+	}
+
+	void bomb_finished(const th03::BombFinished &finished) noexcept override
+	{
+		bomb_finishes.push_back(finished);
+		calls.push_back(ObservedCall::bomb_finished);
 	}
 
 	void bomb_common_effect_step(
@@ -238,6 +256,8 @@ public:
 	std::vector<th03::PlayerDefeatStep> defeat_steps;
 	std::vector<th03::HitCircleSpawned> hit_circles;
 	std::vector<th03::CommonEffectSpawned> common_effects;
+	std::vector<th03::BombCompatibilityRead> bomb_compatibility_reads;
+	std::vector<th03::BombFinished> bomb_finishes;
 	std::vector<th03::BombFrameStep> bomb_frame_steps;
 	std::vector<th03::BombCommonEffectStep> bomb_common_steps;
 	std::vector<th03::WarningInterstitialStarted> warning_interstitial_starts;
@@ -1591,6 +1611,8 @@ void test_recorded_pause_completion()
 			invalid_recording.defeat_steps.empty() &&
 			invalid_recording.hit_circles.empty() &&
 			invalid_recording.common_effects.empty() &&
+			invalid_recording.bomb_compatibility_reads.empty() &&
+			invalid_recording.bomb_finishes.empty() &&
 			invalid_recording.bomb_frame_steps.empty() &&
 			invalid_recording.bomb_common_steps.empty() &&
 			invalid_recording.warning_interstitial_starts.empty() &&
@@ -1921,11 +1943,13 @@ void test_main_effect_observer_contract()
 						.player = th03::PlayerId::p1,
 						.paletted_character = 11,
 						.bomb_frame = 63U,
+						.fg_shift_x_at_entry = 7,
 					},
 					{
 						.player = th03::PlayerId::p2,
 						.paletted_character = 9,
 						.bomb_frame = 64U,
+						.fg_shift_x_at_entry = -7,
 					},
 				},
 			"every active late Bomb callback exposes its P1-then-P2 inputs"
@@ -2007,10 +2031,12 @@ void test_main_effect_observer_contract()
 						.bomb_frame = 31U,
 					},
 				} &&
-			recording.calls == std::vector<ObservedCall>{
+				recording.calls == std::vector<ObservedCall>{
 				ObservedCall::bomb_frame_step,
 				ObservedCall::common_effect_spawned,
 				ObservedCall::bomb_frame_step,
+				ObservedCall::bomb_compatibility_read,
+				ObservedCall::bomb_compatibility_read,
 				ObservedCall::shots_enemies,
 				ObservedCall::fireballs,
 				ObservedCall::players_bullets,
@@ -2096,6 +2122,182 @@ void test_main_effect_observer_contract()
 		check(
 			recording.common_effects.empty(),
 			"Ellen Bomb has no spurious frame-below-64 common effect"
+		);
+	});
+
+	with_live_state([](auto &reimu) {
+		reimu.players[0U].paletted_character = 1;
+		reimu.bomb_flag[0U] = th03::detail::BombFlag::active;
+		reimu.bomb_frame[0U] = 5U;
+		reimu.playfield_fg_shift_x[0U] = -9;
+		reimu.randring[0U] = 0x34U;
+		reimu.randring[1U] = 0x12U;
+		reimu.randring[2U] = 0x56U;
+		auto null_state = reimu;
+		RecordingObserver recording;
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			null_state, nullptr
+		);
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			reimu, &recording
+		);
+		check(
+			observed_gameplay_equal(null_state, reimu),
+			"Bomb compatibility-read observation preserves late shared RNG state"
+		);
+		check(
+			recording.bomb_frame_steps ==
+				std::vector<th03::BombFrameStep>{{
+					.player = th03::PlayerId::p1,
+					.paletted_character = 1,
+					.bomb_frame = 5U,
+					.fg_shift_x_at_entry = -9,
+				}} &&
+			recording.bomb_compatibility_reads ==
+				std::vector<th03::BombCompatibilityRead>{
+					{
+						.player = th03::PlayerId::p1,
+						.site = th03::BombCompatibilityReadSite::
+							reimu_falling_velocity,
+						.bomb_frame = 5U,
+						.raw_value = 0x1234U,
+					},
+					{
+						.player = th03::PlayerId::p1,
+						.site = th03::BombCompatibilityReadSite::
+							reimu_falling_x,
+						.bomb_frame = 5U,
+						.raw_value = 0x5612U,
+					},
+				},
+			"Reimu Bomb exposes entry shift and both already-consumed visual reads"
+		);
+		check(
+			recording.calls[0U] == ObservedCall::bomb_frame_step &&
+			recording.calls[1U] == ObservedCall::bomb_compatibility_read &&
+			recording.calls[2U] == ObservedCall::bomb_compatibility_read,
+			"Reimu Bomb compatibility reads follow its late callback step in source order"
+		);
+	});
+
+	with_live_state([](auto &prefix_bombs) {
+		prefix_bombs.hud_start_flag = 1U;
+		prefix_bombs.players[0U].paletted_character = 3;
+		prefix_bombs.players[1U].paletted_character = 7;
+		prefix_bombs.bomb_flag = {
+			th03::detail::BombFlag::active,
+			th03::detail::BombFlag::active,
+		};
+		prefix_bombs.bomb_frame = {7U, 1U};
+		prefix_bombs.ellen_bomb_vectors[1U][0U].x = 9999;
+		for(std::size_t index = 1U;
+			index < prefix_bombs.ellen_bomb_vectors[1U].size();
+			++index) {
+			prefix_bombs.ellen_bomb_vectors[1U][index].x = 19999;
+		}
+		prefix_bombs.randring[0U] = 0x78U;
+		prefix_bombs.randring[1U] = 0x56U;
+		prefix_bombs.randring[2U] = 0x34U;
+
+		auto null_state = prefix_bombs;
+		auto discard_state = prefix_bombs;
+		auto record_state = prefix_bombs;
+		DiscardObserver discard;
+		RecordingObserver recording;
+		check(
+			th03::detail::gameplay_frame_prefix(
+				null_state, th03::GameContent{}, nullptr
+			) &&
+			th03::detail::gameplay_frame_prefix(
+				discard_state, th03::GameContent{}, &discard
+			) &&
+			th03::detail::gameplay_frame_prefix(
+				record_state, th03::GameContent{}, &recording
+			),
+			"prefix Bomb compatibility-read fixtures complete"
+		);
+		check(
+			observed_gameplay_equal(null_state, discard_state) &&
+			observed_gameplay_equal(null_state, record_state),
+			"prefix Bomb compatibility reads preserve state and RNG across observers"
+		);
+		check(
+			recording.bomb_compatibility_reads ==
+				std::vector<th03::BombCompatibilityRead>{
+					{
+						.player = th03::PlayerId::p1,
+						.site = th03::BombCompatibilityReadSite::mima_column_x,
+						.bomb_frame = 8U,
+						.raw_value = 0x5678U,
+					},
+					{
+						.player = th03::PlayerId::p2,
+						.site = th03::BombCompatibilityReadSite::
+							ellen_vector_angle,
+						.bomb_frame = 2U,
+						.raw_value = 0x3456U,
+					},
+				},
+			"Mima and Ellen expose prefix visual reads in source order"
+		);
+	});
+
+	with_live_state([](auto &finishing) {
+		finishing.hud_start_flag = 1U;
+		finishing.players[0U].paletted_character = 1;
+		finishing.players[1U].paletted_character = 3;
+		finishing.bomb_flag[0U] = th03::detail::BombFlag::active;
+		finishing.bomb_flag[1U] = th03::detail::BombFlag::active;
+		finishing.bomb_frame[0U] = 179U;
+		finishing.bomb_frame[1U] = 7U;
+		finishing.randring[0U] = 0xCDU;
+		finishing.randring[1U] = 0xABU;
+		auto null_state = finishing;
+		auto discard_state = finishing;
+		auto record_state = finishing;
+		DiscardObserver discard;
+		RecordingObserver recording;
+		check(
+			th03::detail::gameplay_frame_prefix(
+				null_state, th03::GameContent{}, nullptr
+			) &&
+			th03::detail::gameplay_frame_prefix(
+				discard_state, th03::GameContent{}, &discard
+			) &&
+			th03::detail::gameplay_frame_prefix(
+				record_state, th03::GameContent{}, &recording
+			),
+			"finishing Bomb prefix fixture completes"
+		);
+		check(
+			observed_gameplay_equal(null_state, discard_state) &&
+			observed_gameplay_equal(null_state, record_state),
+			"Bomb completion plus the following P2 visual read is observer-invariant"
+		);
+		check(
+			record_state.bomb_flag[0U] == th03::detail::BombFlag::inactive &&
+			recording.bomb_finishes ==
+				std::vector<th03::BombFinished>{{
+					.player = th03::PlayerId::p1,
+					.paletted_character = 1,
+				}},
+			"Bomb completion emits the source palette-restore lifecycle fact"
+		);
+		check(
+			recording.calls[0U] == ObservedCall::bomb_finished &&
+			recording.calls[1U] == ObservedCall::bomb_compatibility_read &&
+			recording.bomb_compatibility_reads ==
+				std::vector<th03::BombCompatibilityRead>{{
+					.player = th03::PlayerId::p2,
+					.site = th03::BombCompatibilityReadSite::mima_column_x,
+					.bomb_frame = 8U,
+					.raw_value = 0xABCDU,
+				}} &&
+			std::find(
+				recording.calls.begin(), recording.calls.end(),
+				ObservedCall::bomb_frame_step
+			) == recording.calls.end(),
+			"P1 completion precedes P2 Bomb work and suppresses a final late step"
 		);
 	});
 

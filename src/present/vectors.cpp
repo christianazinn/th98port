@@ -412,6 +412,57 @@ bool grcg_line(
 	return true;
 }
 
+bool grcg_vline(
+	Raster &raster,
+	std::int16_t x,
+	std::int16_t y1,
+	std::int16_t y2,
+	GrcgClipRect clip,
+	Index4 color
+) noexcept
+{
+	const auto tile = GrcgTile::solid(color);
+	if(!tile.has_value() || !valid_clip(clip, raster.raster_mode())) {
+		return false;
+	}
+	if(y1 >= y2) {
+		const auto swap = y1;
+		y1 = y2;
+		y2 = swap;
+	}
+
+	// grcg_vline.asm performs both Y subtractions as signed 16-bit words.
+	// The lower endpoint is rejected before the upper endpoint is clamped.
+	auto lower = subtract_word(y2, clip.top);
+	if(lower < 0) {
+		return true;
+	}
+	auto upper = subtract_word(y1, clip.top);
+	if(upper < 0) {
+		upper = 0;
+	}
+	const auto clip_height = subtract_word(clip.bottom, clip.top);
+	if(upper > clip_height) {
+		return true;
+	}
+	if(lower > clip_height) {
+		lower = clip_height;
+	}
+	if(x < clip.left || x > clip.right) {
+		return true;
+	}
+
+	for(auto y = upper;; y = add_word(y, 1)) {
+		if(!grcg_plot(raster, {x, add_word(y, clip.top)}, *tile)) {
+			return false;
+		}
+		if(y == lower) {
+			break;
+		}
+	}
+	return true;
+}
+
 bool grcg_circle(
 	Raster &raster,
 	GrcgPoint center,

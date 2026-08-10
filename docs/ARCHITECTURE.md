@@ -45,7 +45,10 @@ The playable client may attach a synchronous, non-owning gameplay
 observer while stepping the same core. Observations report only immutable raw
 gameplay facts at semantic phase boundaries and primitive results from
 shared-RNG reads the core has already consumed, carrying only a minimal
-source-site/phase tag and ordinal. The core does not group or decode those
+source-site/phase tag and, only where the source contract itself requires it,
+a semantic sequence ordinal. Repeated synchronous facts otherwise preserve
+their order without exposing renderer-private slot identities. The core does
+not group or decode those
 results into visual payloads. Observations are not draw instructions, asset or
 sound IDs, visual entity state, or replay data. The core retains no observation
 after the callback returns, and an observer cannot alter control flow.

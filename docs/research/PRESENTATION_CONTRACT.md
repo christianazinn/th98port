@@ -151,7 +151,7 @@ struct CompatibilityReadObservation {
     CoreFrame core_frame;
     GameplayPhase phase;
     CompatibilityReadSite site;
-    std::uint16_t ordinal;
+    std::optional<std::uint16_t> semantic_ordinal;
     std::uint16_t raw_value;
 };
 
@@ -213,7 +213,9 @@ Creation, first-round initialization, and repeat-round initialization can also
 consume RNG whose source use was visual (`sub_D092()` / `sub_D2E8()`) but whose
 shared-stream outflow affects later gameplay. The core consumes those values
 whether an observer exists or not. An attached observer sees the primitive
-results immediately with only a source-site/phase tag and ordinal; with no
+results immediately with only a source-site/phase tag and a semantic ordinal
+where the source contract requires one; repeated synchronous facts otherwise
+preserve source order without exposing presentation-private slots, with no
 observer they are discarded. The core never delays them into the first gameplay
 frame and never stores the corresponding particles.
 
@@ -249,7 +251,8 @@ or a command to execute.
 
 Compatibility observations are deliberately less interpreted. Each contains
 only `core_frame`, `GameplayPhase`, a stable `CompatibilityReadSite`, the
-source-order ordinal, and the primitive result already returned by the shared
+source-order ordinal only where semantically required, and the primitive result
+already returned by the shared
 RNG function. `th03_present` combines that sequence with semantic gameplay
 views and owns all grouping into particles, offsets, angles, cels, or effects.
 The initial site/count ledger is:
@@ -966,10 +969,10 @@ coverage. A row never authorizes renderer state in core.
 | Common `CEE0` effects | Retain any source call that consumes RNG (`SUB_CE5B`) and report its raw result/site/ordinal | Derive non-RNG spawn intents from semantic gameplay facts; interpret the RNG result and reproduce 12-slot overwrite/allocation, type behavior, draw order, and type-2 per-slot angle progression |
 | HUD-start burst | Consume all 256 ring and 256 IRAND results in source order and report only raw results/site/ordinals | Interpret the sequence, build the 16-banner/128-particle presentation state, and draw at the private `sub_BE5D()` schedule position |
 | Warning | Expose warning gates/result facts; do not advance gameplay during 27 waits | Own TRAM/palette/portrait state and exact 27/30-frame visual timing |
-| Reimu Bomb | Retain frame 0..31 velocity-then-X RNG order, foreground shift on frames 64..111, and reset from 112; report raw results/site/ordinals | Interpret results and own falling-sprite records and palette/effect drawing |
-| Mima Bomb | Retain one shared-RNG draw on frames 8,16,...,64, foreground shift on frames 81..143, and reset from 144; report its raw result/site/ordinal | Interpret the result and own omitted column records and drawing |
+| Reimu Bomb | Retain frame 0..31 velocity-then-X RNG order, foreground shift on frames 64..111, and reset from 112; report raw results/site in synchronous source order | Interpret results and own falling-sprite records and palette/effect drawing |
+| Mima Bomb | Retain one shared-RNG draw on frames 8,16,...,64, foreground shift on frames 81..143, and reset from 144; report its raw result/site synchronously | Interpret the result and own omitted column records and drawing |
 | Marisa Bomb | Retain X-then-Y draw order every eighth frame from 64 through 127, alternating foreground shift in that interval, and reset from 128; report raw results/site/ordinals | Interpret coordinates and own flash records and drawing |
-| Ellen Bomb | Retain shared release cursor, reset/release order, and one RNG draw; report the gameplay coupling plus raw result/site/ordinal | Interpret the angle and own eight per-player vector arrays' visual representation and draw payload |
+| Ellen Bomb | Retain shared release cursor, reset/release order, and one RNG draw; report the gameplay coupling plus raw result/site in synchronous source order, without exposing the vector slot | Interpret the angle and own eight per-player vector arrays' visual representation and draw payload |
 | Kotohime/Kana Bomb | Retain foreground shift on frames 64..127 and reset from 128; no shared RNG is consumed | Own palette/tone and `SUB_CDBD` geometry state |
 | Rikako Bomb | Retain foreground shift on frames 64..127, consume one ring value on frames 64,72,...,120, and reset from 128; report each raw result/site/ordinal | Interpret results and own palette plus `word_220EC` line-radius visualization |
 | Chiyuri Bomb | Retain foreground shift on frames 64..143, consume four `SUB_CE5B()` values at each of frames 64,80,96,112,128 (20 total), and reset from 144; report raw results/site/ordinals | Interpret results and own the 20 effect spawns plus palette/tone geometry |
@@ -1267,7 +1270,8 @@ remain.
 Exit tests:
 
 - a test-owned recording observer records the exact compatibility-site counts,
-  ordinals, and raw results while core RNG hashes remain unchanged;
+  semantic ordinals where defined, synchronous fact order, and raw results
+  while core RNG hashes remain unchanged;
 - presenter reruns from a copied, client-owned observation trace without access
   to core RNG;
 - arena/slot overwrite and terminal-age frames match the raw visual oracle;
