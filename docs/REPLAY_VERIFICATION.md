@@ -47,8 +47,12 @@ Later V13 round checkpoints are not independent process images. The Replay
 Patch resolves a selection to the same process anchor and sequentially
 prerolls input unless an optional validated broad-state cache is available.
 `th03rv` therefore starts at checkpoint 0 and simulates the complete stream.
-Optional accelerators are performance caches and are deliberately unnecessary
-for correctness.
+At every sequential round boundary it captures a complete format-neutral
+round-start observation and compares each preserved checkpoint by logical
+sample. Additional retry starts are accepted when a legacy V11 conversion has
+no corresponding stored checkpoint; every checkpoint that does exist must be
+present in the run and match exactly. Optional accelerators are performance
+caches and are deliberately unnecessary for correctness.
 
 V13 also preserves 14-byte round rows with real VSync counts, nine clear-bonus
 records, and run-wide Slowdown counters as report-only metadata. None of these
@@ -61,17 +65,18 @@ The strict span parser is covered synthetically for all source-backed input
 offsets (Story 4,957, ordinary VS 1,489, Practice 2,067), compact checkpoints,
 RLE/process controls, Practice consistency, summaries, telemetry, optional
 tails, pending sealed streams, and malformed boundaries on GCC and MSVC.
-TH03 Data Manager 0.4.0 converted all 19 frozen historical inputs; their V13
+TH03 Data Manager 0.4.2 converted all 19 frozen historical inputs; their V13
 sizes and SHA-256 identities are locked in `REPLAY_V13_CORPUS_LOCK.tsv`, and
-both compilers reproduce all 173 summaries and terminal results. The native
-V11/V12 parsers are therefore retired. T3CASE and T3SPLIT remain separate
-oracle formats.
+both compilers reproduce all 173 summaries, all 152 stored checkpoints, and
+terminal results. The native V11/V12 parsers are therefore retired. T3CASE and
+T3SPLIT remain separate oracle formats.
 
 All reached V13 checkpoints are structurally parsed and preserved, including
-their raw pre-reset seed. Full sequential playback does not yet prove their
-complete reconstructed state or application-side selection. That UI remains
-gated on comparing a complete, format-neutral round-start observation with
-each checkpoint at its process-anchor preroll boundary.
+their raw pre-reset seed. `th03rv` now compares their complete reconstructed
+runtime and round carry against the state reached by process-anchor preroll,
+reporting the first checkpoint and field mismatch. A finalized replay can only
+report `verification=match` if process execution, round summaries, and every
+preserved checkpoint all agree.
 
 ## What a match proves
 
@@ -116,10 +121,29 @@ conversion and direct V13 run produced:
 | V12 TH3R12 | Story | 101,557 | Match, 9/9 summaries |
 | V12 TH3R13 | Practice | 10,146 | Match, 3/3 summaries |
 
-All 19 converted V13 files complete and all 173 embedded summaries match on
-GCC and MSVC. Expected
-summaries remain comparison-only; neither the format adapter nor the replay
-runner uses them to initialize, repair, or steer gameplay.
+All 19 Data Manager 0.4.2 V13 files complete on GCC and MSVC. All 173 embedded
+summaries and all 152 preserved checkpoints match. Expected summaries and
+checkpoints remain comparison-only; neither the format adapter nor replay
+runner uses them to repair or steer gameplay.
+
+The semantic gate caught these defects before the 0.4.2 regeneration:
+
+- a V11 conversion clamp of boss rank to 15 instead of TH03's actual maximum
+  16 in TH3R00, TH3R01, TH3R04, TH3R05, and the V11-format `v12s/TH3R06`;
+- sparse V11 checkpoint directories, which faithfully preserve the stage
+  starts available in V11 but cannot contain retry state that V11 never
+  recorded;
+- missing early-V12 round-0 reset-seed normalization in TH3R07, TH3R11, and
+  TH3R12; and
+- a native PracticeRules propagation omission, now fixed and covered for every
+  checkpoint (TH3R10 and TH3R13 pass).
+
+The required V12 conversion rule is `round_id == 0 ? resident_rand : stored
+round_reset_seed`; Data Manager 0.4.2 implements it along with the corrected
+Story boss-rank clamp. V11 retry checkpoint synthesis is deliberately omitted:
+the verifier instead validates every stored checkpoint and tolerates extra
+sequential retry starts. The regenerated identities are frozen in
+`REPLAY_V13_CORPUS_LOCK.tsv`.
 
 ### Repeat-boundary localization
 

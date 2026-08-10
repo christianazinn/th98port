@@ -172,6 +172,18 @@ struct GameInit {
 	std::optional<PracticeRules> practice_rules;
 };
 
+// Complete gameplay-semantic state at a round's first input boundary. `start`
+// contains the resident/start fields with all snapshot recipe optionals cleared;
+// `runtime` and `round` contain the effective reconstructed state instead. The
+// pre-reset seed is retained separately because runtime initialization consumes
+// it before the first input can be observed.
+struct RoundStartObservation {
+	GameInit start{};
+	std::uint32_t effective_reset_seed = 0;
+	RuntimeSnapshot runtime{};
+	RoundStartSnapshot round{};
+};
+
 enum class ContinueChoice : std::uint8_t {
 	decline,
 	accept,
@@ -257,6 +269,7 @@ public:
 		DeferredFrameAction action
 	);
 	CanonicalState canonical_state() const;
+	RoundStartObservation round_start_observation() const;
 	std::expected<void, Error> start_next_round();
 	std::expected<void, Error> finish_main_process();
 	std::expected<SessionTransition, Error> session_transition(

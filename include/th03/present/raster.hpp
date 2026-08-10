@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "th03/assets/types.hpp"
+#include "th03/present/planar.hpp"
 
 namespace th03::present {
 
@@ -70,6 +71,31 @@ public:
 		Point destination
 	) noexcept;
 
+	// PC-98 planar input uses B, R, G, E planes and MSB-first horizontal bits.
+	// All writes are clipped to the 640x400 page. Invalid sources are rejected
+	// before any pixel is changed.
+	[[nodiscard]] bool blit_planar(
+		PlanarSource source,
+		Point destination,
+		PlanarWriteMode mode = PlanarWriteMode::replace
+	) noexcept;
+	// A 1 alpha bit replaces all four destination plane bits; a 0 preserves
+	// the destination. This is the source SPRITE16 OVERLAP_CLEAR behavior.
+	[[nodiscard]] bool blit_planar_masked(
+		PlanarSource source,
+		BitSource alpha,
+		Point destination
+	) noexcept;
+	// Emulates byte-aligned GRCG writes. Width and destination X must be
+	// multiples of 8; the CPU source controls RMW masks and only defines the
+	// write extent in TDW mode.
+	[[nodiscard]] bool grcg_write(
+		BitSource cpu_source,
+		Point destination,
+		GrcgWriteMode mode,
+		GrcgTile tile
+	) noexcept;
+
 	// Source and destination are explicit. A same-page overlap behaves as though
 	// all source pixels were read before the first destination write.
 	[[nodiscard]] bool copy_page(
@@ -91,6 +117,12 @@ public:
 	[[nodiscard]] std::uint16_t scroll_y() const noexcept;
 
 	[[nodiscard]] std::optional<Index4> pixel(Page page, Point point) const noexcept;
+	[[nodiscard]] std::optional<std::uint8_t> planar_byte(
+		Page page,
+		PlanarPlane plane,
+		std::uint16_t byte_x,
+		std::uint16_t y
+	) const noexcept;
 	[[nodiscard]] std::span<const Index4> graphics(Page page) const noexcept;
 	// The raw shown page. Scroll composition is intentionally deferred.
 	[[nodiscard]] std::span<const Index4> shown_graphics() const noexcept;

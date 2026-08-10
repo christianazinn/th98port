@@ -88,15 +88,15 @@ the portable V12 compact checkpoint and RLE-input contract while adding
 and the complete validated summary capability set. Optional data after the
 logical input end remains an ignorable accelerator cache.
 
-TH03 Data Manager 0.4.0 now owns the one-way V11/V12-to-V13 converter in the
+TH03 Data Manager 0.4.2 now owns the one-way V11/V12-to-V13 converter in the
 Replay/harness work. It converted all 19 locked historical inputs, whose V13
-identities are frozen in `REPLAY_V13_CORPUS_LOCK.tsv`; all 173 summaries and
-terminal results reproduce through V13 on GCC and MSVC. Native V11/V12 parsers
-are therefore retired. Historical inputs remain external regression sources
-for the converter rather than formats accepted by libth03. V13 tests cover
-pause/process transitions, Story, Practice, ordinary VS, checkpoint
-boundaries, pending streams, and corruption. T3CASE/T3SPLIT remain independent
-oracle formats.
+identities are frozen in `REPLAY_V13_CORPUS_LOCK.tsv`; all 173 summaries, all
+152 stored checkpoints, and terminal results reproduce through V13 on GCC and
+MSVC. Native V11/V12 parsers are therefore retired. Historical inputs remain
+external regression sources for the converter rather than formats accepted by
+libth03. V13 tests cover pause/process transitions, Story, Practice, ordinary
+VS, checkpoint boundaries, pending streams, and corruption. T3CASE/T3SPLIT
+remain independent oracle formats.
 
 ### Replay Patch maintenance reminder
 

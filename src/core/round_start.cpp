@@ -727,4 +727,104 @@ void initialize_repeat_round(
 	state.result_phase = ResultPhase::closing;
 }
 
+RoundStartObservation round_start_observation(
+	const DeterministicState &state,
+	const GameInit &initial_init,
+	std::uint32_t effective_reset_seed
+) noexcept
+{
+	RoundStartObservation result{};
+	result.start = initial_init;
+	result.start.global_frame = state.global_frame;
+	result.start.resident_rand = state.resident_rand;
+	result.start.random_seed = state.random_seed;
+	result.start.game_mode = state.game_mode;
+	result.start.rank = state.rank;
+	result.start.story_stage = state.story_stage;
+	result.start.story_lives = state.story_lives;
+	result.start.skill = state.skill;
+	result.start.demo_number = state.demo_number;
+	result.start.winner = state.winner;
+	result.start.runtime_snapshot.reset();
+	result.start.compact_runtime_snapshot.reset();
+	result.start.round_start_snapshot.reset();
+	result.effective_reset_seed = effective_reset_seed;
+
+	result.runtime.random_seed = state.random_seed;
+	result.runtime.randring = state.randring;
+	result.runtime.randring_cursor = state.randring_cursor;
+	result.runtime.formation_type_ring = state.formation_type_ring;
+	result.runtime.formation_position_ring = state.formation_position_ring;
+	result.runtime.formation_cursor = state.formation_cursor;
+
+	result.round.state.round_id = state.round_id;
+	result.round.state.score = state.score;
+	result.round.state.round_speed = state.round_speed;
+	result.round.state.bullet_base_speed = state.bullet_base_speed;
+	result.round.state.gauge_attack_level = state.gba_gauge_level;
+	result.round.state.boss_attack_level = state.gba_boss_level;
+	result.round.state.cpu_hit_damage_additional =
+		state.cpu_hit_damage_additional;
+	result.round.state.extends_gained = state.extends_gained;
+
+	for(std::size_t player_id = 0U; player_id < player_count; ++player_id) {
+		const auto &player = state.players[player_id];
+		result.start.is_cpu[player_id] = player.is_cpu;
+		result.start.paletted_character[player_id] = player.paletted_character;
+
+		auto &runtime_player = result.runtime.players[player_id];
+		runtime_player.center_x = player.center_x;
+		runtime_player.center_y = player.center_y;
+		runtime_player.halfhearts = player.halfhearts;
+		runtime_player.invincibility_time = player.invincibility_time;
+		runtime_player.gauge_charge_speed = player.gauge_charge_speed;
+		runtime_player.gauge_charged = player.gauge_charged;
+		runtime_player.gauge_avail = player.gauge_avail;
+		runtime_player.bombs = player.bombs;
+		runtime_player.shot_active = player.shot_active;
+		runtime_player.cpu_frame = player.cpu_frame;
+		result.runtime.cpu_charge_ring[player_id] = player.cpu_charge_ring;
+		result.runtime.cpu_charge_cursor[player_id] = player.cpu_charge_cursor;
+
+		result.round.state.rounds_won[player_id] = player.rounds_won;
+		result.round.state.cpu_safety_frames[player_id] =
+			player.cpu_safety_frames;
+		result.round.carry.cpu_dodge_strategy[player_id] =
+			player.cpu_dodge_strategy;
+		result.round.carry.human_movement_last[player_id] =
+			player.human_movement_last;
+		result.round.carry.spell_ready_frames[player_id] =
+			player.spell_ready_frames;
+		result.round.carry.combo_bonus_max[player_id] = player.combo_bonus_max;
+		result.round.carry.combo_hits_max[player_id] = player.combo_hits_max;
+		result.round.carry.shot_cycle[player_id] =
+			state.autofire_shot_gate[player_id];
+		result.round.carry.boss_panic_fired[player_id] =
+			state.boss_panic_fired_in_combo[player_id];
+		result.round.carry.gauge_attack_next[player_id] =
+			static_cast<std::uint8_t>(state.gba_flag_next[player_id]);
+		result.round.carry.combo[player_id] = ComboCarrySnapshot{
+			.time = state.combos[player_id].time,
+			.hits_highest = state.combos[player_id].hits_highest,
+			.bonus_total = state.combos[player_id].bonus_total,
+		};
+	}
+
+	result.round.carry.cpu_shot_decision = state.cpu_target_kind_scratch;
+	result.round.carry.background_phase =
+		static_cast<std::uint8_t>(state.background_phase);
+	result.round.carry.chain_cursor = state.chains.cursor;
+	result.round.carry.chain_hits = state.chains.hits;
+	result.round.carry.chain_pellet_and_fireball_value =
+		state.chains.pellet_and_fireball_value;
+	result.round.carry.chain_charge_fireball = state.chains.charge_fireball;
+	result.round.carry.chain_charge_exatt = state.chains.charge_exatt;
+	result.round.carry.randring_cursor = state.randring_cursor;
+	result.round.carry.result_phase =
+		static_cast<std::uint8_t>(state.result_phase);
+	result.round.carry.fireball_generation_previous =
+		state.fireball_generation_previous;
+	return result;
+}
+
 } // namespace th03::detail

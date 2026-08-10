@@ -1,7 +1,8 @@
 # TH03 presentation contract research
 
-- Status: source-backed boundary contract; indexed raster foundation exists,
-  but no gameplay scene renderer exists yet
+- Status: source-backed boundary contract; indexed, planar/GRCG, TRAM/gaiji,
+  and synthetic static-MAIN startup/page-transaction foundations exist, but no
+  live gameplay scene renderer or captured visual-oracle acceptance exists yet
 - Date: 2026-08-09
 - Primary authority: Anniversary `3e2381d4275be7287f5525de5c95389d492b0a3c`
 
@@ -326,6 +327,107 @@ The Authentic presenter needs the following explicit state:
 The host-visible RGBA texture, scale, aspect correction, filters, window size,
 and monitor refresh rate are not Authentic state and are never hashed.
 
+### Implemented planar and TRAM foundation
+
+The portable foundation now fixes the source-backed byte semantics needed to
+build the first static MAIN frame without pretending to emulate the whole EGC:
+
+- packed graphics planes are ordered B, R, G, E, corresponding to color-index
+  bits 0, 1, 2, and 3; bit 7 is the leftmost pixel in every packed byte. This
+  comes directly from `planar.h`, the plane segments in `pc98.h`, the B/R/G/I
+  tile-register write order in `libs/master.lib/grcg_setcolor.asm` and
+  `grcg_settile_1line.asm`, and the `0x80 >> (x & 7)` point mask in
+  `grcg_pset.asm`;
+- `Raster` accepts caller-owned B/R/G/E spans with explicit top-to-bottom or
+  bottom-to-top row order and implements direct plane replacement, per-plane
+  OR, and positive-alpha masked replacement. These are the portable logical
+  results of the direct planar macros in `planar.h` and SPRITE16's source-
+  documented `OVERLAP_OR` / default clear behavior. The explicit reverse-row
+  option is the direct join for source-format CDG/CD2 cels;
+- the byte-aligned GRCG primitive implements both Tile Direct Write, where CPU
+  data is ignored, and Read-Modify-Write, where set CPU bits replace all four
+  destination plane bits with the corresponding tile bits. Arbitrary tile
+  bytes and source `grcg_setcolor()` solid tiles use the same B/R/G/E order;
+- all planar writes clip to the 640x400 backing after validating every span,
+  and invalid inputs perform no partial writes. A plane-projection accessor
+  reconstructs exact packed bytes from the indexed backing for byte-level
+  diagnostics;
+- TRAM is stored separately as 80x25 raw 16-bit code/attribute cells. The raw
+  attribute constants retain the exact `TX_*` values from
+  `libs/master.lib/pc98_gfx.hpp`; `text_fillca.asm` and `text_boxfilla.asm`
+  establish the row-major cell and attribute layout;
+- all 256 gaiji slots retain the exact 32-byte format used by
+  `gaiji_write.asm`: left byte then right byte for each of 16 rows, with bit 7
+  leftmost. `gaiji_putca.asm` establishes the two raw TRAM codes for an ID:
+  low byte `0x56 + (id >> 7)`, high byte `(id & 0x7F)` for the left cell and
+  that high byte OR `0x80` for the right cell; and
+- the TRAM diagnostic hash includes raw cells, visibility, and only gaiji
+  slots referenced by current cells. It remains independent of the graphics
+  hash. The composition boundary exposes the raw cell, decoded gaiji ID/half,
+  and glyph row bytes; it does not yet guess host glyph rendering.
+
+TRAM source calls require valid coordinates and do not define clipping, so the
+portable API rejects an out-of-range cell or rectangle atomically. ANK/JIS
+font rasterization, blink cadence, underline/reverse pixel composition, text-
+versus-graphics priority, unaligned SPRITE16 shifting, and general EGC
+register/ROP emulation remain deferred until their complete source paths and
+visual oracle are in hand. None is required to store the static HUD's raw
+TRAM/gaiji state or to prepare its byte-aligned planar sprite sheet.
+
+### Implemented static MAIN transaction
+
+`present/main_static.hpp` now expresses the smallest source-backed part of
+MAIN that needs no core observer. `MainHudState` is presenter-owned copied
+input: mode and story lives, both players' halfhearts/bombs/rounds won/gauge
+levels, and the shared Boss Attack level. It imports no core type and stores no
+canonical gameplay state. The implementation mechanically reproduces these
+Anniversary operations:
+
+- `graph_copy_page(0)` copies the complete opposite page, page 1, to page 0
+  and leaves page 0 accessed. This is established by both the function's
+  documented destination parameter and the alternating access writes in
+  `libs/master.lib/graph_copy_page.asm`; it is not a page-0-to-page-1 copy.
+- `hud_wipe()` fills all 80x25 raw TRAM cells with ANK space and
+  `TX_BLACK | TX_REVERSE`, then changes only the attributes in each 36x24
+  playfield rectangle (P1 X 2..37, P2 X 42..77, Y 1..24) to `TX_WHITE`.
+- `hud_static_put()` retains the exact source loop directions, trailing blank
+  gaiji after each bomb run, story-only life row, gauge-edge positions and
+  green/red attributes. Named constants retain the source gaiji IDs for
+  yin-yang, empty/full/half heart, bomb, Thalia, proportional digit 1, and
+  gaiji space. Portable validation rejects only state whose intended gameplay
+  ranges or resulting source TRAM coordinates are unsupported, before writing
+  any cell.
+- The decoded resource seam takes the two character BF2 sheets in the same
+  P1-then-P2 load order as `set_callbacks_*()` / `sub_A4C3()`. Each must be the
+  exact 32x32, codes-0-through-8 superimpose layout. `sub_E266()` does not draw
+  the later LOSE/ROUND/ZIKICW resources: its global pattern IDs
+  0,3,6,9,12,15 select cels 0/3/6 from those first two character sheets. The
+  six cels are transparently put at X 544/576/608 and Y 328/360 to page 1 and
+  then page 0. The mask is derived exactly as “decoded color differs from the
+  BFNT transparent color”; filenames and filesystem policy remain outside the
+  presenter.
+- At the stable startup boundary, the applied RGB4 palette handed in from the
+  preceding scene is copied back to pending state and applied. This is the
+  final logical effect of `SUB_A38E()` after the intervening BF2 loads; there
+  is no wait/present point at which their temporary logical palette is
+  observable. Tone arithmetic remains outside the current RGB4 primitive.
+- Startup establishes source roles `page_back = 0`, `page_front = 1`, access
+  page 0, shown page 1. The late-frame transaction accesses the old front,
+  shows the old back, assigns that old back to `page_front`, toggles
+  `page_back`, and clears only the newly accessed page: P1 X 16..303 to color
+  0 and P2 X 336..623 to color 1, both for every row Y 0..183 inclusive.
+
+Synthetic warning-clean tests cover raw HUD cells, the selected BFNT pattern
+IDs and transparency, the full page-1-to-page-0 startup copy, final palette and
+selectors, and two consecutive end-frame swaps/clears with exact edge pixels.
+These tests deliberately do not claim captured pixel parity. The remaining
+static-frame prerequisites are explicit: the application must inject/load the
+decoded GAMEFT gaiji glyphs before startup; `Raster` still needs an exact
+upper-half zoomed-200-line mode field for `graph_200line(0)`; PaletteTone is not
+yet represented; sprite resource commit and clip metadata are not modeled; and
+both pre-first-frame pages still require comparison against a raw Anniversary
+capture. No ANK/JIS host composition has been guessed.
+
 ### Ordered operations
 
 The private `AuthenticDrawOp` stream should contain only operations needed by
@@ -376,11 +478,15 @@ color space, and shader behavior are host policy.
 state. The Authentic application/presenter must preserve this source order:
 
 1. Establish the round RNG seed and gameplay/round state.
-2. Fill TRAM and copy graphics page 0.
+2. Fill TRAM, then copy the complete graphics page 1 to destination page 0;
+   `graph_copy_page(0)` leaves page 0 accessed.
 3. Load formations and initialize the gameplay subsystems.
-4. Load the three BF2 resources used for player shots/results.
+4. Character callback setup has already loaded two 9-cel character BF2 sheets
+   as global superimpose patterns 0..17. Load the three additional
+   LOSE/ROUND/ZIKICW BF2 resources used later by shots/results.
 5. Draw the shot sprite source sheet to both VRAM pages through `sub_E266()`
-   (`th03/main/player/shot.cpp:87-103`).
+   (`th03/main/player/shot.cpp:87-103`). Its IDs 0,3,6,9,12,15 select cels
+   0/3/6 from the two character sheets, not the three resources in step 4.
 6. Restore the gameplay palette through `SUB_A38E()`, select the upper
    zoomed-200-line mode through `graph_200line(0)`, and commit the sprite
    resources. `graph_200line()` also establishes access page 0 in master.lib.
@@ -964,16 +1070,21 @@ Exit tests:
 
 ### Slice 1B: raster state and primitive semantics (parallel)
 
-Implementation status: the first platform-neutral foundation is complete for
-two raw 640x400 indexed pages, access/show selection, clipped indexed and
-masked operations, deferred RGB4 palette apply, scroll state, and a provisional
-display-state hash. TRAM representation and exact planar/GRCG/EGC primitives
-remain open and this slice is not yet complete.
+Implementation status: the platform-neutral foundation is complete for two raw
+640x400 indexed pages, access/show selection, clipped indexed and masked
+operations, exact B/R/G/E packed-plane import/projection, direct/masked/OR
+planar writes, GRCG TDW/RMW tile writes, deferred RGB4 palette apply, raw
+80x25 TRAM cells, all 256 source-format gaiji slots, scroll state, and separate
+provisional graphics/TRAM hashes. This is sufficient for the raw static-MAIN
+state and its byte-aligned source sheet. General EGC ROP/shifter behavior,
+unaligned SPRITE16, and final text composition remain open; this slice is not a
+complete PC-98 graphics-hardware emulator.
 
 Implement two indexed pages, access/show/copy/clear, palette/tone/deferred
-apply, TRAM storage, scroll, clipping, and the minimum planar/GRCG/EGC raster
-operations in `th03_present`, using hand-authored decoded models rather than
-waiting for real asset decoders.
+apply, TRAM storage, scroll, clipping, and the minimum source-backed planar/
+GRCG raster operations in `th03_present`, using hand-authored decoded models
+rather than waiting for real asset decoders. Add EGC operations only when a
+ported draw path actually needs their distinct logical result.
 
 Exit tests:
 
@@ -989,6 +1100,15 @@ Slices 1A and 1B start after their small decoded-model interface is agreed and
 run independently. Their first required join is Slice 2.
 
 ### Slice 2: one static MAIN frame and page swap
+
+Implementation status: the core-independent synthetic parcel is complete.
+It ports raw `hud_wipe()` / `hud_static_put()`, the full page-1-to-page-0
+handoff copy, injected decoded character-BF2 preparation for `sub_E266()`,
+final palette restoration at the stable startup boundary, source page-role
+selection, and the exact two-color 288x184 next-page clear after every swap.
+Captured Anniversary page comparison, GAMEFT gaiji loading by the application,
+the zoomed-200-line raster-mode field, and observer/no-observer integration
+remain deferred and are therefore still required before Slice 2 is accepted.
 
 Port `hud_wipe()`, `hud_static_put()`, playfield layout, `sub_E266()` resource
 sheet preparation, and the exact end-of-frame swap/clear transaction. Use
@@ -1096,15 +1216,19 @@ Exit tests:
 These require an explicit decision before their affected implementation slice;
 none should block the neutral observation seam.
 
-1. **Canonical TRAM encoding.** Decide the normalized cell/attribute/gaiji
-   representation after auditing the exact source/master.lib writes. Keep raw
-   capture bytes in the oracle regardless.
+1. **TRAM host composition.** Raw 80x25 code/attribute cells and 32-byte gaiji
+   slots are now fixed from the exact source/master.lib writes. Before drawing
+   the layer into a host frame, audit the ANK/JIS glyph provider plus blink,
+   reverse, underline, visibility, and graphics-priority behavior. Keep raw
+   capture bytes as the oracle regardless.
 2. **Palette representation.** Decide whether the public `Palette16` stores raw
    PC-98 4-bit channels or widened bytes. Authentic comparison must retain raw
    values and exact tone arithmetic either way.
-3. **Planar internal storage.** Indexed byte-per-pixel pages are simplest for
-   clients; planar backing may be safer for exact masked operations. Benchmark
-   only after primitive conformance tests exist.
+3. **Planar internal storage.** The foundation keeps indexed byte-per-pixel
+   pages and losslessly imports/projects B/R/G/E packed bytes. Revisit a native
+   packed backing only if a later EGC/unaligned operation has a source-visible
+   intermediate result that cannot be represented by the tested logical write;
+   do not change storage merely for assumed performance.
 4. **Presentation rewind.** Decide whether product replay scrubbing requires
    presenter snapshots. If yes, version presenter state separately from core
    state; never add visual entities to canonical gameplay snapshots.

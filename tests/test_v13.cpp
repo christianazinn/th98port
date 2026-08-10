@@ -283,6 +283,40 @@ std::vector<std::byte> make_v13_two_checkpoints()
 	return bytes;
 }
 
+std::vector<std::byte> make_v13_practice_two_checkpoints()
+{
+	auto bytes = make_v13(Scenario::practice);
+	const auto input = expected_input_offset(Scenario::practice);
+	bytes.resize(input + 20U, std::byte{0});
+	put_u32(bytes, 0x2EU, 20U);
+	for(const auto packet : {input, input + 9U}) {
+		put_u8(bytes, packet + 0U, 0x00U);
+		put_u8(bytes, packet + 1U, 0x0FU);
+		put_u16(bytes, packet + 2U, 0x0020U);
+		put_u16(bytes, packet + 4U, 0x0040U);
+		put_u16(bytes, packet + 6U, 0x1000U);
+		put_u8(bytes, packet + 8U, 0U);
+	}
+	put_u8(bytes, input + 18U, 0x80U);
+	put_u8(bytes, input + 19U, 0xA5U);
+
+	constexpr std::size_t first_checkpoint = 622U;
+	constexpr std::size_t second_checkpoint =
+		first_checkpoint + th03::formats::replay_v13_checkpoint_size;
+	std::copy_n(
+		bytes.begin() + static_cast<std::ptrdiff_t>(first_checkpoint),
+		th03::formats::replay_v13_checkpoint_size,
+		bytes.begin() + static_cast<std::ptrdiff_t>(second_checkpoint)
+	);
+	put_u32(bytes, second_checkpoint + 0U, 1U);
+	put_u32(bytes, second_checkpoint + 4U, 1U);
+	put_u32(bytes, second_checkpoint + 8U, 9U);
+	put_u8(bytes, second_checkpoint + 12U + 84U, 1U);
+	put_u8(bytes, 0x25EU, 2U);
+	put_u8(bytes, 0x260U, 0x16U);
+	return bytes;
+}
+
 void put_full_input_packet(
 	std::vector<std::byte> &bytes,
 	std::size_t offset,
@@ -491,6 +525,18 @@ void test_valid_scenarios()
 			"V13 Practice gauges agree with checkpoint 0"
 		);
 	}
+	const auto practice_two = th03::formats::parse_v13_replay(
+		make_v13_practice_two_checkpoints()
+	);
+	check(
+		practice_two && practice_two->checkpoints.size() == 2U &&
+		practice_two->checkpoints[0].init.practice_rules &&
+		practice_two->checkpoints[1].init.practice_rules &&
+		practice_two->checkpoints[1].init.practice_rules->uses_stock &&
+		practice_two->checkpoints[1].init.practice_rules->retry_cpu_timer ==
+			th03::CpuTimerPolicy::story_native,
+		"V13 attaches the validated Practice retry policy to every checkpoint"
+	);
 
 	const auto process_sequence = th03::formats::parse_replay(
 		make_v13_process_sequence()

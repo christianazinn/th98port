@@ -11,6 +11,19 @@ namespace {
 
 constexpr std::uint16_t input_cancel = 0x1000U;
 
+std::uint32_t initial_effective_reset_seed(const GameInit &init) noexcept
+{
+	if(init.compact_runtime_snapshot) {
+		return init.compact_runtime_snapshot->round_reset_seed;
+	}
+	if(init.runtime_snapshot) {
+		// A full runtime image bypasses reconstruction. `random_seed` is the only
+		// format-neutral pre-reset provenance carried alongside that image.
+		return init.random_seed;
+	}
+	return static_cast<std::uint32_t>(init.resident_rand);
+}
+
 StepResult finish_gameplay_frame(auto &impl)
 {
 	const auto input_boundary = detail::canonical_state(impl.state);
@@ -43,8 +56,13 @@ Game::Impl::Impl(
 	content(std::move(content_)),
 	replay_pause_adapter(
 		options.input_protocol == InputProtocol::recorded_replay
-	)
-{}
+	),
+	effective_reset_seed(initial_effective_reset_seed(init))
+{
+	round_start = detail::round_start_observation(
+		state, initial_init, effective_reset_seed
+	);
+}
 
 Game::Game(GameInit init, GameContent content, GameOptions options) :
 	impl_(std::make_unique<Impl>(init, std::move(content), options))
@@ -340,6 +358,11 @@ CanonicalState Game::canonical_state() const
 	return detail::canonical_state(impl_->state);
 }
 
+RoundStartObservation Game::round_start_observation() const
+{
+	return impl_->round_start;
+}
+
 std::expected<void, Error> Game::start_next_round()
 {
 	if(!impl_->state.round_complete || impl_->state.route != 1U) {
@@ -348,10 +371,14 @@ std::expected<void, Error> Game::start_next_round()
 			"game is not at a route-1 round boundary",
 		});
 	}
+	impl_->effective_reset_seed = impl_->state.random_seed;
 	detail::initialize_repeat_round(
 		impl_->state,
 		impl_->initial_init,
 		impl_->content.enemy_formations.size()
+	);
+	impl_->round_start = detail::round_start_observation(
+		impl_->state, impl_->initial_init, impl_->effective_reset_seed
 	);
 	impl_->warning_interstitial_samples_remaining = 0U;
 	impl_->replay_pause_deferred = false;

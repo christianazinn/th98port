@@ -1,11 +1,17 @@
 # TH03 asset inventory
 
-Status: inventory complete; ASSET-001 (RGB48 and PI) is implemented and
-warning-clean on GCC/MSVC with synthetic tracked fixtures. All 78 external TH03
-PI files pass a read-only decoder sweep; no original bytes or derivatives are
-tracked.
+Status: inventory complete. ASSET-001 (RGB48 and PI), ASSET-002 (the shared
+CDG/CD2 cel format), ASSET-003 (the shared BFT/BF2 BFNT format), and ASSET-004
+(the fixed MRS planar format) are implemented with synthetic tracked fixtures
+and are warning-clean on GCC/MSVC.
+Read-only sweeps pass all 78 external TH03 PI files, all 33 CDG/CD2 files (66
+effective cels), all 28 BFT/BF2 files (845 glyphs), and all 36 MRS files under
+both stored and horizontally flipped orientations; no original bytes or
+derivatives are tracked.
 
-Status: metadata-only research for the post-core assets/presentation milestone. It intentionally contains no original asset bytes, text, images, audio, screenshots, or generated derivatives.
+This remains metadata-only research for the post-core assets/presentation
+milestone. It intentionally contains no original asset bytes, text, images,
+audio, screenshots, or generated derivatives.
 
 ## Scope and evidence
 
@@ -46,9 +52,9 @@ Source-backed archive semantics: `th03/formats/pfopen.asm` recognizes stored typ
 | Format | Observed / source-backed facts | Faithful representation |
 |---|---|---|
 | PI | All 78 have `Pi` framing, mode `0x00`, four planes and inline 48-byte palette. Dimensions: 64x16 (18), 64x128 (12), 64x144 (6), 128x48 (1), 128x96 (5), 128x144 (31), 128x192 (5). `libs/master.lib/graph_pi_load_pack.asm` implements an adaptive color/history plus position/run bitstream decoder. | Exact 4-bit indices, dimensions, mode, and inline RGB4 palette. Do not use PNG/RGBA as authoritative storage; retain the palette-suppression bit even though observed files include palettes. |
-| CDG / CD2 | Both use the same uncompressed 16-byte TH03 CDG header followed by alpha then B/R/G/E planes per cel. CDG single-image files use `image_count == 0`; CD2 contains 2, 4, 5, 9, or 10 cels. Geometry ranges 64x64 to 512x32. `cdg_load_all()` is shared. | Keep plane size, width/height, bottom-left VRAM offset, dword width, all four color planes, optional alpha, and 8-pixel X alignment. Preserve distinct source alpha-aware, no-alpha, hflip, dissolve, and upward-unput operations; do not collapse the GRCG mask into conventional RGBA alpha before compositor tests. |
-| MRS | Every one of 36 is 33,120 bytes: five 6,624-byte planes, source-defined as headerless/uncompressed/upside-down 288x184, plane order alpha+B/R/G/E. | Keep source row/bit orientation and alpha. `mrs_put_8()` tests it; `mrs_put_noalpha_8()` ignores it. Hflip reverses bits in every byte and byte order in every row. |
-| BFT / BF2 | All 28 begin `BFNT` and use the 32-byte `bfnt_header`. BF2 is not another codec: ReC98 calls `super_entry_bfnt()` on it. BF2 has `col=0x83`; BFT includes `col=0` 16x16 gaiji and `col=0x83` pattern sheets. | One BFNT decoder retaining glyph code range/cell geometry, palette-present bit, extended header and four planes. Consumer explicitly selects gaiji vs superimposed semantics; never branch on extension. |
+| CDG / CD2 | Both use the same uncompressed 16-byte little-endian TH03 CDG header followed by alpha then B/R/G/E planes per cel. CDG single-image files use `image_count == 0`; CD2 contains 2, 4, 5, 9, or 10 cels. Stock widths range from 32 to 512 pixels and heights from 24 to 230 pixels. `cdg_load_all()` is shared; neither loader nor header examines a filename extension. | Keep plane size, width/height, bottom-left VRAM offset, dword width, all four color planes, optional alpha, bottom-to-top row order, MSB-left bit order, 32-pixel source width alignment, and the renderer's 8-pixel X-position alignment. Preserve distinct source alpha-aware, no-alpha, hflip, dissolve, and upward-unput operations; do not collapse the GRCG mask into conventional RGBA alpha before compositor tests. |
+| MRS | Every one of 36 is 33,120 bytes: five 6,624-byte planes, source-defined as headerless/uncompressed/upside-down 288x184, plane order alpha+B/R/G/E. There is no palette or other header metadata. | Keep the fixed 36-byte row width, 184 bottom-to-top rows, MSB-left bits, 14,640-byte bottom-left VRAM offset, nine-dword row width, alpha, and explicit horizontal orientation. `mrs_put_8()` uses alpha. Regular `mrs_put_noalpha_8()` ignores it, while the altered-color mode reads alpha for `~alpha | B`. The persistent source hflip reverses bits in every byte and then byte order in every row of all five planes. |
+| BFT / BF2 | All 28 begin `BFNT\x1A` and use the 32-byte little-endian `bfnt_header`; all stock files have version `0x16` and no extended header. BF2 is not another codec: ReC98 calls `super_entry_bfnt()` on it. The 26 `col=0x83` sheets contain an inline B/R/G high-nibble palette followed by high-nibble-first packed 4-bit pixels, which `bfnt_entry_pat()` transposes to B/R/G/E planes. The two `col=0` BFT sheets contain raw 1bpp 16x16 gaiji for codes 0 through 255. | One BFNT decoder retaining the complete portable header, glyph code range/cell geometry, raw extended header, optional effective transparent-color record, RGB4 palette, and top-to-bottom/MSB-left decoded pixels. Consumer explicitly selects gaiji monochrome vs superimpose planar semantics; never branch on extension. The superimpose mask is derived later from the effective transparent color, which defaults to 0. |
 | RGB | Four files are exactly 48 bytes. `palette_entry_rgb.asm` loads 16 RGB4 entries and expands each `v` to `v << 4 | v`. | Retain source order and RGB4 values until the palette/hardware boundary. |
 | ENEDAT.DAT | 5,072 bytes; payload size is 5,068 and reserved word zero. | Gameplay data: retain existing `parse_enedat(std::span<const std::byte>)` in `th03_formats`, not `th03_assets`. |
 | M / EFC | 21 PMD songs and one PMD effect bank; ReC98 `snd_load()` sends them to PMD work buffers. | Preserve content identity; implement PMD sequence/effect interpretation plus YM2608 synthesis, not WAV conversion. |
@@ -59,11 +65,11 @@ Source-backed archive semantics: `th03/formats/pfopen.asm` recognizes stored typ
 | Input | ReC98/THTK authority | Native disposition |
 |---|---|---|
 | top-level DAT | `th03/formats/pfopen.asm`, `libs/master.lib/pfint21.asm`; `thdat` | Importer-only extraction/provenance boundary; no assets-library archive decoder. |
-| PI | `graph_pi_load_pack.asm`; `th02/formats/pi_load.cpp`, `pi_put.cpp`; TH03 shim | Missing span decoder. |
-| CDG/CD2 | `th03/formats/cdg.h`, `th03/formats/cdg_load.cpp`, `th03/formats/cdg_put.asm`, `th03/cdg_p_na.asm` | Missing shared cel decoder/compositor contract. |
-| MRS | `th03/formats/mrs.hpp`, `mrs.cpp`, `main/hitc_mrs.cpp` | Missing fixed raw planar decoder. |
-| BFT/BF2 | `libs/master.lib/super.inc`, `super_entry_bfnt.asm`, `bfnt_header_read.asm`, `bfnt_entry_pat.asm`, `gaiji_entry_bfnt.asm` | Missing one BFNT decoder. |
-| RGB | `libs/master.lib/palette_entry_rgb.asm`, `platform/x86real/pc98/palette.cpp` | Missing palette decoder. |
+| PI | `graph_pi_load_pack.asm`; `th02/formats/pi_load.cpp`, `pi_put.cpp`; TH03 shim | Implemented as strict `decode_pi()` over a caller-owned span. |
+| CDG/CD2 | `th03/formats/cdg.h`, `th03/formats/cdg.inc`, `th03/formats/cdg_load.cpp`, `th03/formats/cdg_put.asm`, `th03/cdg_p_na.asm` | Implemented as one strict extension-agnostic `decode_cdg()`/`decode_cdg_cel()` path. The model retains raw alpha+B/R/G/E planes and source geometry; alpha discard is an explicit policy matching the no-alpha loaders. Compositor effects remain presentation work. |
+| MRS | `th03/formats/mrs.hpp`, `mrs.cpp`, `main/hitc_mrs.cpp`, plus every `mrs_put_*()` caller | Implemented as strict `decode_mrs()` over exactly 33,120 caller-owned bytes. It returns a fixed `MrsImage`/`PlanarCel4` with alpha+B/R/G/E planes. `horizontal_flip()` applies the source's persistent, involutive transformation and records the resulting orientation. No filename or extension reaches the decoder. |
+| BFT/BF2 | `libs/master.lib/super.inc`, `bfnt_header_read.asm`, `bfnt_header_analysis.asm`, `bfnt_extend_header_skip.asm`, `bfnt_palette_set.asm`, `bfnt_entry_pat.asm`, `gaiji_entry_bfnt.asm`, `super_entry_bfnt.asm` | Implemented as one strict extension-agnostic `decode_bfnt()` path with an explicit gaiji/superimpose policy. Gaiji retains raw skipped extension bytes and monochrome glyphs; superimpose follows bounded linked records for tag `0x10`, converts B/R/G palette order, and exactly transposes packed indices to B/R/G/E planes. |
+| RGB | `libs/master.lib/palette_entry_rgb.asm`, `platform/x86real/pc98/palette.cpp` | Implemented as exact-length `decode_rgb48()` retaining RGB4 source components. |
 | ENEDAT | ReC98 `formats/enedat.hpp`/enemy loader; native `src/formats/enedat.cpp` | Already `th03_formats`, not assets. |
 | M/EFC/PMD | `th02/snd/snd.h` and TH03 sound shims; external PMD driver | Missing PMD/YM2608 stack; separate audio parcel. |
 | TXT scripts | `th03/formats/script.hpp`, cutscene/MAINL callers | Missing format research/parser. |
@@ -92,6 +98,34 @@ PMD sequence/effect adapter -> semantic audio events -> audio backend
 
 Neutral models: `Palette16Rgb4` (source-order RGB4); `PlanarCel4` (B/R/G/E, optional alpha, source row/bit orientation, 8-pixel alignment and geometry); `PiImage` (4-bit indices, palette/mode); `CdgFile` (header+cels, retaining zero single-image count); `BfntSheet` (header/palette/glyph range/cells); and `MrsImage` (fixed planar cel). Decoders reject truncation, invalid dimensions/counts, overflow, payload mismatch and unsupported combinations before allocation. Models own decoded memory; no stored view outlives the caller span.
 
+MRS has no format-specific master.lib codec. The original loader composes the
+generic `file_ropen()` / `file_read()` / `file_close()` calls with
+`hmem_allocbyte()` and reads one `mrs_t` verbatim. Its renderers then use
+`grcg_setcolor()` and direct B/R/G/E VRAM writes. `mrs_put_noalpha_8()`'s
+optional altered-color expression (`~alpha | B`, with R/G/E unchanged) is a
+presentation operation rather than decoded asset state.
+
+### MRS source audit
+
+- `mrs_load()` allocates and reads exactly one fixed `mrs_t`; it parses no
+  header and never examines the filename. `mrs_free()` only releases that huge
+  allocation. The DOS code assumes trusted complete files, while the native
+  span boundary rejects both short and trailing data.
+- `mrs_put_8()` traverses rows from the stored bottom row upward. It consumes
+  alpha first through the GRCG mask path, then conditionally ORs the matching
+  B/R/G/E dword. `mrs_put_noalpha_8()` directly writes B/R/G/E; only its
+  altered-color branch also reads alpha for the B expression above.
+- `mrs_hflip()` transforms all 33,120 bytes, then swaps bytes independently in
+  each of the 920 stored rows (five planes times 184 rows). Therefore the
+  portable operation flips alpha and all four colors and is exactly
+  involutive.
+- `main/hitc_mrs.cpp` loads each player's EX portrait into slots 0/1 and BM
+  image into slots 2/3, then flips the right-playfield slots 1 and 3.
+  `main/player/warning.cpp` is the alpha-aware portrait consumer. `main_05.cpp`,
+  `main/player/ch_shot.cpp`, `chybomb.cpp`, `yumemi_bomb.cpp`, and
+  `main/bullet/bullet.cpp` use the no-alpha renderer. No other MRS loaders,
+  transforms, or renderers occur in the pinned TH03 source.
+
 Versioned cache is above the library: key by source SHA-256, decoder schema/version, importer version and content/profile identity; store source logical name/validation status in user-local `cache/vN/<sha256>/`. Schema/decoder changes invalidate entries. Never commit originals, decoded cache blobs or flattened PNG/WAV. The importer owns legal-install discovery, pinned `thdat` provenance, logical lookup, purge/rebuild and hard mismatch errors.
 
 ## Synthetic fixtures
@@ -101,20 +135,21 @@ All fixtures are generated in test code or tiny non-game literals—never origin
 1. RGB: 48 bytes, source order, deferred nibble expansion, length/truncation.
 2. PI: generated valid header/bitstream with known indices; color/history and position/run paths; magic/plane/aspect errors, lower mode-bit preservation, malformed runs and output overflow; compare indices, not RGBA.
 3. CDG/CD2: 16-byte header + five synthetic planes; zero single-count, multi-cel CD2, alpha/no-alpha, geometry, malformed payload and selection bounds; test both compositor policies separately.
-4. BFNT: 32-byte header + glyph planes; range/geometry/palette, gaiji policy, bad magic/color, truncated extension/body.
-5. MRS: generated 33,120-byte five-plane image; fixed geometry, upside-down mapping, alpha/no-alpha, byte+bit hflip.
+4. BFNT: 32-byte header + generated monochrome or packed-index glyph data; range/geometry/palette, linked and transparent-color extension records, gaiji/superimpose policy, exact B/R/G/E transposition, bad magic/color and truncated/overlapping/trailing data.
+5. MRS: generated 33,120-byte five-plane image; fixed geometry, upside-down mapping, complete alpha+B/R/G/E order, byte+bit hflip and double-flip restoration. Alpha/no-alpha compositing remains a presentation test.
 6. Integration: fake importer and temporary cache; hash/schema invalidation, case-insensitive lookup, extraction provenance, and a link test proving no filesystem dependency in `th03_assets`.
 7. Keep ENEDAT fixtures in `th03_formats`; add only importer-to-GameContent handoff coverage.
 
 Reference frames start synthetic. User-local original frame captures remain ignored, with only hashes/provenance tracked.
 
-## First three decoder implementation parcels
+## Decoder implementation parcels
 
-1. **ASSET-001 — indexed foundation, RGB, PI.** Add span-only `th03_assets`, palette/index models, `decode_rgb48()`, mechanically translated PI decompression and RGB/PI fixtures. Exit: both compilers pass and synthetic PI yields deterministic indices.
-2. **ASSET-002 — CDG/CD2 cels.** Add shared header/multi-image parsing, alpha/no-alpha retention and geometry/effect metadata on the planar model. Exit: no extension fork and no discarded alpha information.
-3. **ASSET-003 — BFNT sheets.** Add common BFT/BF2 decoder with explicit gaiji/superimpose consumer mode and generated glyph/text-metric fixtures. Exit: title/menu consumers request source glyph models without filesystem calls.
+1. **ASSET-001 — indexed foundation, RGB, PI (complete).** Span-only `th03_assets`, palette/index models, `decode_rgb48()`, mechanically translated PI decompression and RGB/PI fixtures pass on both compilers; all 78 external PI files pass the read-only sweep.
+2. **ASSET-002 — CDG/CD2 cels (complete).** One shared header/multi-image parser handles stored count zero as one cel, retains alpha+B/R/G/E and exact source/VRAM geometry, supports bounded single-cel selection, and makes alpha discard explicit. Synthetic tests cover single/multi-cel, alpha policy, plane order, geometry and malformed inputs. The DOS loaders assume trusted installation data and perform unchecked reads/seeks; the native span boundary rejects inconsistent geometry, reserved segment values, truncation and trailing payload rather than reproducing unsafe reads. A read-only sweep decoded all 33 external files and 66 effective cels with no extension fork or failures. Presentation still owns alpha-aware, no-alpha, hflip, dissolve, and upward-unput behavior.
+3. **ASSET-003 — BFNT sheets (complete).** One span decoder handles BFT and BF2 without seeing an extension. The explicit gaiji policy enforces the exact source domain (monochrome 16x16 codes 0–255) and returns raw 1bpp glyphs; the superimpose policy enforces four-bit indexed color, retains palette/transparent-color semantics, and returns B/R/G/E planes. Synthetic strict tests pass on both compilers, and a read-only sweep decoded all 28 external files and 845 glyphs (2 gaiji sheets and 26 superimpose sheets).
+4. **ASSET-004 — MRS images (complete).** One fixed-size span decoder owns the decoded alpha+B/R/G/E planes, rejects both truncation and trailing data, and preserves the source's bottom-first/MSB-left geometry. A separate in-memory operation performs the exact persistent hflip without consulting a filename; applying it twice restores every plane. Synthetic full-plane comparisons pass on GCC/MSVC; read-only sweeps decoded and flipped all 36 external files. Alpha-aware, regular no-alpha, and altered-color blits remain presentation operations.
 
-Then MRS, a text/script research parcel, and PMD/YM2608 after licensing/rhythm-data decisions. ENEDAT stays in `th03_formats`.
+Then a text/script research parcel, and PMD/YM2608 after licensing/rhythm-data decisions. ENEDAT stays in `th03_formats`.
 
 ## Unknown, proprietary, and legally sensitive resources
 

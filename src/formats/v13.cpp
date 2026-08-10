@@ -863,7 +863,9 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 		if(!rules) {
 			return std::unexpected(rules.error());
 		}
-		checkpoints.front().init.practice_rules = *rules;
+		for(auto &checkpoint : checkpoints) {
+			checkpoint.init.practice_rules = *rules;
+		}
 	} else if(anchor.round_start_snapshot->state.round_id != 0U) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,

@@ -23,6 +23,9 @@ function(th03_set_warnings target)
 endfunction()
 
 add_library(th03_assets STATIC
+	src/assets/bfnt.cpp
+	src/assets/cdg.cpp
+	src/assets/mrs.cpp
 	src/assets/pi.cpp
 	src/assets/rgb.cpp
 )
@@ -32,7 +35,10 @@ set_target_properties(th03_assets PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_assets)
 
 add_library(th03_present STATIC
+	src/present/main_static.cpp
+	src/present/planar.cpp
 	src/present/raster.cpp
+	src/present/tram.cpp
 )
 target_include_directories(th03_present PUBLIC include)
 target_link_libraries(th03_present PUBLIC th03_assets)

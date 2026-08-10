@@ -90,18 +90,54 @@ Synthetic tests cover:
 - truncated, overlapping, overflowed, unsupported, and inconsistent layouts;
 - ignoring an optional tail only after the declared logical input range.
 
-These tests establish that the adapter implements the written format. The
-Data Manager 0.4.0 converter at harness commit
-`b20651e22c2a1f10adf5d8e41947bc60a4b0b1c6` then converted the complete locked
-six-file V11 and thirteen-file V12 corpus. The converted sizes and SHA-256
-identities are frozen in `REPLAY_V13_CORPUS_LOCK.tsv`; both GCC and MSVC
-`th03rv` reproduced all 173 embedded summaries and terminal results.
+These tests establish that the adapter implements the written format. Data
+Manager 0.4.2 converted the complete locked six-file V11 and thirteen-file V12
+corpus. The converted sizes and SHA-256 identities are frozen in
+`REPLAY_V13_CORPUS_LOCK.tsv`; the semantic gate reproduces all 173 embedded
+summaries, all 152 stored checkpoints, and terminal results.
 
-This is full sequential playback from each replay's process anchor. All later
-round checkpoints are parsed and preserved, but the run does not yet compare
-their complete reconstructed state at the corresponding sequential preroll
-boundaries. That semantic comparison is required before the selectable-start
-UI is accepted.
+`th03_core` now exposes a format-neutral `RoundStartObservation` immediately
+after initial construction and every repeat reset. It contains all resident
+start fields, the effective pre-reset seed, the complete reconstructed random,
+formation, CPU-charge, cursor, and player-start runtime, and the complete
+round-state/carry record. It contains no compressed input cursor, decoder
+latch, presentation state, or format identifier. The replay runner records
+these observations after initial `Game::create()`, `start_next_round()`, and
+the next Story-stage `Game::create()`. `th03rv` independently constructs the
+expected observation from every neutral checkpoint recipe and compares it to
+the sequential observation keyed by logical sample. It reports the first
+checkpoint and exact semantic field mismatch and never uses `CanonicalState`'s
+sparse hash.
+
+This stronger gate exposed conversion defects that the lossy round summaries
+could not, plus one deliberate legacy-compatibility boundary:
+
+- Data Manager 0.4.0 synthesizes V11 Story boss rank with a maximum of 15,
+  while TH03's `GBA_BOSS_LEVEL_MAX` and Anniversary behavior use 16. The first
+  mismatch appears at stage-9 Lunatic checkpoint 9 in converted V11 TH3R00,
+  TH3R01, TH3R04, TH3R05, and the V11-format file named `v12s/TH3R06.RPY`.
+- V11 only stored one selectable checkpoint per reached Story stage, so a
+  lossless structural conversion cannot invent retry-round checkpoint state.
+  The verifier therefore validates every preserved checkpoint exactly while
+  accepting additional sequential retry starts that have no directory entry.
+  This is a narrow legacy-conversion policy: native V13 writers still record
+  every reached round, and no stored checkpoint may be missing from the run or
+  differ semantically.
+- Early V12 recorders could overwrite a round-0 checkpoint's reset-seed field.
+  The established compatibility rule is `round_id == 0 ? resident_rand :
+  stored round_reset_seed`. Data Manager 0.4.0 copied these fields unchanged,
+  making later checkpoints in converted V12 TH3R07, TH3R11, and TH3R12
+  unreconstructable.
+- The native V13 adapter initially attached the validated Practice retry policy
+  only to checkpoint 0. It now attaches that same neutral policy to every
+  Practice checkpoint; focused tests and TH3R10/TH3R13 pass this part of the
+  semantic gate.
+
+These were conversion/adapter defects, not gameplay mismatches. Data Manager
+0.4.2 fixes the Story boss-rank clamp and early-V12 reset-seed conversion. V11
+retry synthesis is explicitly out of scope: the source format did not contain
+that state, its UI never offered those checkpoints, and no future V11
+recordings are expected.
 
 ## Historical-format retirement gate
 
@@ -116,16 +152,17 @@ was:
    result.
 5. Add malformed/corruption coverage at the V13 boundary.
 
-That gate is green. Native V11/V12 headers, parsers, dispatch, and direct
+The summary/terminal portion of that gate is green. Native V11/V12 headers,
+parsers, dispatch, and direct
 format tests are removed; old files must pass through the external Data Manager
 converter. T3CASE and T3SPLIT remain independent PC-98 oracle formats and are
 not retired by this migration.
 
-## Remaining V13 gate
+## V13 gate result
 
-The format, converter, converted-corpus identities, full checkpoint collection,
-and full-run verifier are now frozen. Before a playable replay browser claims
-arbitrary checkpoint selection, expose a format-neutral complete round-start
-observation and compare every preserved record with state reached by sequential
-anchor preroll. Optional broad accelerators remain caches and cannot replace
-that portable proof.
+The observation and stored-checkpoint comparison implementation are complete.
+The Data Manager 0.4.2 corpus passes 19/19 finalized runs, 173/173 summaries,
+and all 152 preserved checkpoints on GCC and MSVC. A replay browser may offer
+every preserved checkpoint; converted V11 files naturally expose stage starts
+only. Optional broad accelerators remain caches and cannot replace this
+portable proof.

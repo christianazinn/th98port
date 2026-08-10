@@ -1,11 +1,123 @@
 #include "th03/replay/run.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <utility>
 
 namespace th03::replay {
 namespace {
+
+std::optional<std::string> observation_mismatch(
+	const RoundStartObservation &expected,
+	const RoundStartObservation &actual
+)
+{
+#define TH03_CHECK(path) \
+	if(expected.path != actual.path) { \
+		return #path; \
+	}
+	TH03_CHECK(start.global_frame)
+	TH03_CHECK(start.resident_rand)
+	TH03_CHECK(start.random_seed)
+	TH03_CHECK(start.game_mode)
+	TH03_CHECK(start.rank)
+	TH03_CHECK(start.key_mode)
+	TH03_CHECK(start.story_stage)
+	TH03_CHECK(start.story_lives)
+	TH03_CHECK(start.remaining_credits)
+	TH03_CHECK(start.skill)
+	TH03_CHECK(start.demo_number)
+	TH03_CHECK(start.is_cpu)
+	TH03_CHECK(start.paletted_character)
+	TH03_CHECK(start.story_opponents)
+	TH03_CHECK(start.winner)
+	TH03_CHECK(start.show_score_menu)
+	TH03_CHECK(start.fast_op_animation)
+	TH03_CHECK(start.last_score)
+	TH03_CHECK(start.autofire_mask)
+	if(expected.start.practice_rules.has_value() !=
+		actual.start.practice_rules.has_value()) {
+		return "start.practice_rules";
+	}
+	if(expected.start.practice_rules) {
+		TH03_CHECK(start.practice_rules->uses_stock)
+		TH03_CHECK(start.practice_rules->retry_cpu_timer)
+		TH03_CHECK(start.practice_rules->retry_cpu_damage)
+	}
+	TH03_CHECK(effective_reset_seed)
+	TH03_CHECK(runtime.random_seed)
+	TH03_CHECK(runtime.randring)
+	TH03_CHECK(runtime.randring_cursor)
+	TH03_CHECK(runtime.formation_type_ring)
+	TH03_CHECK(runtime.formation_position_ring)
+	TH03_CHECK(runtime.formation_cursor)
+	TH03_CHECK(runtime.cpu_charge_ring)
+	TH03_CHECK(runtime.cpu_charge_cursor)
+	for(std::size_t player = 0U; player < expected.runtime.players.size(); ++player) {
+		const auto &expected_player = expected.runtime.players[player];
+		const auto &actual_player = actual.runtime.players[player];
+#define TH03_CHECK_PLAYER(path) \
+		if(expected_player.path != actual_player.path) { \
+			return "runtime.players[" + std::to_string(player) + "]." #path; \
+		}
+		TH03_CHECK_PLAYER(center_x)
+		TH03_CHECK_PLAYER(center_y)
+		TH03_CHECK_PLAYER(halfhearts)
+		TH03_CHECK_PLAYER(invincibility_time)
+		TH03_CHECK_PLAYER(gauge_charge_speed)
+		TH03_CHECK_PLAYER(gauge_charged)
+		TH03_CHECK_PLAYER(gauge_avail)
+		TH03_CHECK_PLAYER(bombs)
+		TH03_CHECK_PLAYER(shot_active)
+		TH03_CHECK_PLAYER(cpu_frame)
+#undef TH03_CHECK_PLAYER
+	}
+	TH03_CHECK(round.state.round_id)
+	TH03_CHECK(round.state.rounds_won)
+	TH03_CHECK(round.state.score)
+	TH03_CHECK(round.state.round_speed)
+	TH03_CHECK(round.state.bullet_base_speed)
+	TH03_CHECK(round.state.gauge_attack_level)
+	TH03_CHECK(round.state.boss_attack_level)
+	TH03_CHECK(round.state.cpu_hit_damage_additional)
+	TH03_CHECK(round.state.extends_gained)
+	TH03_CHECK(round.state.cpu_safety_frames)
+	TH03_CHECK(round.carry.cpu_dodge_strategy)
+	TH03_CHECK(round.carry.human_movement_last)
+	TH03_CHECK(round.carry.spell_ready_frames)
+	TH03_CHECK(round.carry.combo_bonus_max)
+	TH03_CHECK(round.carry.combo_hits_max)
+	TH03_CHECK(round.carry.shot_cycle)
+	TH03_CHECK(round.carry.boss_panic_fired)
+	TH03_CHECK(round.carry.gauge_attack_next)
+	TH03_CHECK(round.carry.cpu_shot_decision)
+	TH03_CHECK(round.carry.background_phase)
+	for(std::size_t player = 0U; player < expected.round.carry.combo.size(); ++player) {
+		const auto &expected_combo = expected.round.carry.combo[player];
+		const auto &actual_combo = actual.round.carry.combo[player];
+		if(expected_combo.time != actual_combo.time) {
+			return "round.carry.combo[" + std::to_string(player) + "].time";
+		}
+		if(expected_combo.hits_highest != actual_combo.hits_highest) {
+			return "round.carry.combo[" + std::to_string(player) + "].hits_highest";
+		}
+		if(expected_combo.bonus_total != actual_combo.bonus_total) {
+			return "round.carry.combo[" + std::to_string(player) + "].bonus_total";
+		}
+	}
+	TH03_CHECK(round.carry.chain_cursor)
+	TH03_CHECK(round.carry.chain_hits)
+	TH03_CHECK(round.carry.chain_pellet_and_fireball_value)
+	TH03_CHECK(round.carry.chain_charge_fireball)
+	TH03_CHECK(round.carry.chain_charge_exatt)
+	TH03_CHECK(round.carry.randring_cursor)
+	TH03_CHECK(round.carry.result_phase)
+	TH03_CHECK(round.carry.fireball_generation_previous)
+#undef TH03_CHECK
+	return std::nullopt;
+}
 
 constexpr std::uint16_t input_up = 0x0001U;
 constexpr std::uint16_t input_down = 0x0002U;
@@ -122,6 +234,10 @@ struct Runner {
 			if(!next_round) {
 				return std::unexpected(next_round.error());
 			}
+			result.round_starts.push_back(RoundStartRecord{
+				.sample_index = result.consumed_samples,
+				.observation = simulation->round_start_observation(),
+			});
 			return {};
 		}
 		if(step.status != StepStatus::terminal) {
@@ -195,6 +311,10 @@ std::expected<RunResult, Error> run_session(
 		.pause = {},
 		.content = content,
 	};
+	runner.result.round_starts.push_back(RoundStartRecord{
+		.sample_index = 0U,
+		.observation = runner.simulation->round_start_observation(),
+	});
 
 	for(const auto &record : session.records) {
 		if(const auto *sample = std::get_if<InputSample>(&record)) {
@@ -302,6 +422,10 @@ std::expected<RunResult, Error> run_session(
 			return std::unexpected(next.error());
 		}
 		runner.simulation = std::move(*next);
+		runner.result.round_starts.push_back(RoundStartRecord{
+			.sample_index = runner.result.consumed_samples,
+			.observation = runner.simulation->round_start_observation(),
+		});
 		runner.process = ProcessId::main;
 		runner.main_terminal = false;
 		runner.next_story_stage.reset();
@@ -317,6 +441,39 @@ std::expected<RunResult, Error> run_session(
 	}
 	runner.result.status = RunStatus::complete;
 	return runner.result;
+}
+
+std::optional<RoundStartMismatch> first_round_start_mismatch(
+	std::span<const RoundStartRecord> expected,
+	std::span<const RoundStartRecord> actual
+)
+{
+	for(std::size_t index = 0U; index < expected.size(); ++index) {
+		const auto found = std::find_if(
+			actual.begin(), actual.end(), [&](const auto &candidate) {
+				return candidate.sample_index == expected[index].sample_index;
+			}
+		);
+		if(found == actual.end()) {
+			return RoundStartMismatch{
+				.checkpoint_index = index,
+				.sample_index = expected[index].sample_index,
+				.actual_sample_index = std::nullopt,
+				.field = "checkpoint.missing",
+			};
+		}
+		if(const auto field = observation_mismatch(
+			expected[index].observation, found->observation
+		)) {
+			return RoundStartMismatch{
+				.checkpoint_index = index,
+				.sample_index = expected[index].sample_index,
+				.actual_sample_index = found->sample_index,
+				.field = *field,
+			};
+		}
+	}
+	return std::nullopt;
 }
 
 } // namespace th03::replay

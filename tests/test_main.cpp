@@ -457,6 +457,48 @@ void test_anniversary_combo_display_limit()
 	);
 }
 
+void test_round_start_observation()
+{
+	th03::GameInit init{};
+	init.global_frame = 17U;
+	init.resident_rand = 29;
+	init.random_seed = 0x89ABCDEFU;
+	init.game_mode = th03::game_mode::vs_1p_cpu;
+	init.rank = 2U;
+	init.key_mode = 1U;
+	init.is_cpu = {0U, 1U};
+	init.paletted_character = {1, 3};
+	init.runtime_snapshot = th03::RuntimeSnapshot{};
+	init.runtime_snapshot->random_seed = 0x89ABCDEFU;
+	init.runtime_snapshot->formation_type_ring[0] = 1U;
+	auto game = th03::Game::create(init);
+	check(game.has_value(), "round-start observation fixture creates");
+	if(!game) {
+		return;
+	}
+	const auto observation = game->round_start_observation();
+	check(
+		observation.start.global_frame == 17U &&
+		observation.start.random_seed == 0x89ABCDEFU &&
+		!observation.start.runtime_snapshot &&
+		!observation.start.compact_runtime_snapshot &&
+		!observation.start.round_start_snapshot,
+		"round-start observation exposes resident fields without format recipes"
+	);
+	check(
+		observation.effective_reset_seed == 0x89ABCDEFU &&
+		observation.runtime.random_seed == 0x89ABCDEFU &&
+		observation.runtime.formation_type_ring[0] == 1U &&
+		observation.runtime.randring_cursor == observation.round.carry.randring_cursor,
+		"round-start observation retains the raw reset seed and reconstructed runtime"
+	);
+	(void)game->step({});
+	check(
+		game->round_start_observation().start.global_frame == 17U,
+		"round-start observation remains the captured boundary after gameplay advances"
+	);
+}
+
 void test_story_score_initialization()
 {
 	th03::GameInit init{};
@@ -2865,9 +2907,36 @@ void test_version_neutral_replay_runner()
 	check(
 		run && run->status == th03::replay::RunStatus::complete &&
 		run->consumed_samples == 3U && run->completed_rounds.size() == 1U &&
-		run->completed_rounds[0].state.route == 0U,
+		run->completed_rounds[0].state.route == 0U &&
+		run->round_starts.size() == 1U &&
+		run->round_starts[0].sample_index == 0U,
 		"version-neutral runner coordinates recorded pause exit and MAIN boundary"
 	);
+	if(run) {
+		auto expected = run->round_starts;
+		auto with_extra = run->round_starts;
+		with_extra.push_back(th03::replay::RoundStartRecord{
+			.sample_index = 99U,
+			.observation = run->round_starts[0].observation,
+		});
+		check(
+			!th03::replay::first_round_start_mismatch(expected, with_extra),
+			"checkpoint comparison accepts a legacy-unrepresented retry start"
+		);
+		with_extra[0].observation.round.state.boss_attack_level++;
+		const auto field_mismatch = th03::replay::first_round_start_mismatch(
+			expected, with_extra
+		);
+		check(
+			field_mismatch && field_mismatch->checkpoint_index == 0U &&
+			field_mismatch->field == "round.state.boss_attack_level",
+			"checkpoint comparison reports the first exact semantic field"
+		);
+		check(
+			th03::replay::first_round_start_mismatch(expected, {}).has_value(),
+			"checkpoint comparison rejects a missing reached boundary"
+		);
+	}
 }
 
 } // namespace
@@ -2878,6 +2947,7 @@ int main()
 	test_game_init_source_domain();
 	test_story_score_initialization();
 	test_round_start_snapshot_restoration();
+	test_round_start_observation();
 	test_score_most_significant_digit_is_not_bcd_normalized();
 	test_anniversary_combo_display_limit();
 	test_defeat_playfield_shake();

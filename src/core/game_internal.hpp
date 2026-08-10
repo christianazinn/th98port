@@ -566,6 +566,11 @@ void initialize_repeat_round(
 	const GameInit &init,
 	std::size_t formation_count
 ) noexcept;
+RoundStartObservation round_start_observation(
+	const DeterministicState &state,
+	const GameInit &initial_init,
+	std::uint32_t effective_reset_seed
+) noexcept;
 std::expected<SessionTransition, Error> build_session_transition(
 	const DeterministicState &state,
 	const GameInit &initial_init,
@@ -618,6 +623,8 @@ struct Game::Impl {
 	bool replay_pause_adapter = false;
 	bool replay_pause_deferred = false;
 	bool main_process_finished = false;
+	std::uint32_t effective_reset_seed = 0;
+	RoundStartObservation round_start{};
 };
 
 } // namespace th03

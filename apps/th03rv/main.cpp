@@ -317,6 +317,27 @@ int main(int argc, char **argv)
 			<< "\noffset=" << content.error().offset << '\n';
 		return 2;
 	}
+	std::vector<th03::replay::RoundStartRecord> expected_round_starts;
+	expected_round_starts.reserve(document->checkpoints.size());
+	std::optional<th03::Error> checkpoint_construction_error;
+	std::size_t checkpoint_construction_index = 0U;
+	const auto replay_options = th03::GameOptions{
+		.input_protocol = th03::InputProtocol::recorded_replay,
+	};
+	for(const auto &checkpoint : document->checkpoints) {
+		auto checkpoint_game = th03::Game::create(
+			checkpoint.init, *content, replay_options
+		);
+		if(!checkpoint_game) {
+			checkpoint_construction_error = checkpoint_game.error();
+			break;
+		}
+		expected_round_starts.push_back(th03::replay::RoundStartRecord{
+			.sample_index = checkpoint.sample_index,
+			.observation = checkpoint_game->round_start_observation(),
+		});
+		checkpoint_construction_index++;
+	}
 
 	std::cout << "replay_version=" << document->session.source_version << '\n'
 		<< "mode=" << (document->practice ? "practice" :
@@ -333,6 +354,32 @@ int main(int argc, char **argv)
 		std::cerr << "error=" << run.error().message
 			<< "\noffset=" << run.error().offset << '\n';
 		return 3;
+	}
+	const auto checkpoint_mismatch = checkpoint_construction_error
+		? std::optional<th03::replay::RoundStartMismatch>{}
+		: th03::replay::first_round_start_mismatch(
+			expected_round_starts, run->round_starts
+		);
+	if(checkpoint_construction_error) {
+		const auto &checkpoint =
+			document->checkpoints[checkpoint_construction_index];
+		std::cout << "checkpoint_verification=mismatch"
+			<< " checkpoint=" << (checkpoint_construction_index + 1U)
+			<< " sample=" << checkpoint.sample_index
+			<< " field=runtime.reconstruction"
+			<< " detail=" << checkpoint_construction_error->message << '\n';
+	} else if(checkpoint_mismatch) {
+		std::cout << "checkpoint_verification=mismatch"
+			<< " checkpoint=" << (checkpoint_mismatch->checkpoint_index + 1U)
+			<< " sample=" << checkpoint_mismatch->sample_index
+			<< " field=" << checkpoint_mismatch->field;
+		if(checkpoint_mismatch->actual_sample_index) {
+			std::cout << " actual_sample="
+				<< *checkpoint_mismatch->actual_sample_index;
+		}
+		std::cout << '\n';
+	} else {
+		std::cout << "checkpoint_verification=match\n";
 	}
 	bool all_splits_match =
 		run->completed_rounds.size() == document->expected_round_splits.size();
@@ -359,7 +406,8 @@ int main(int argc, char **argv)
 		<< "consumed_samples=" << run->consumed_samples << '\n';
 	const bool verified =
 		th03::formats::replay_can_be_verified(*document) &&
-		run->status == th03::replay::RunStatus::complete && all_splits_match;
+		run->status == th03::replay::RunStatus::complete && all_splits_match &&
+		!checkpoint_construction_error && !checkpoint_mismatch;
 	std::cout << "verification=" << (verified ? "match" : "mismatch") << '\n';
 	return verified ? 0 : 1;
 }
