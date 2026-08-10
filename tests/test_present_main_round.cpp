@@ -33,7 +33,14 @@ using th03::CommonEffectKind;
 using th03::CommonEffectSpawned;
 using th03::GaugeAttackFinished;
 using th03::GaugeBossAttackKind;
+using th03::HudStartFrameStep;
+using th03::MainComboState;
 using th03::MainGaugeState;
+using th03::MainHudStartState;
+using th03::MainResultState;
+using th03::MainResultTransitionPhase;
+using th03::MainResultTransitionState;
+using th03::MainScoreState;
 using th03::PlayerDefeatStep;
 using th03::PlayerId;
 using th03::WarningFrameLifecycle;
@@ -60,12 +67,14 @@ using th03::present::MainEffectsPresenter;
 using th03::present::MainEntitiesPresenter;
 using th03::present::MainExtraChargePresenter;
 using th03::present::MainGameMode;
+using th03::present::MainHudResultPresenter;
+using th03::present::MainHudResultSheets;
+using th03::present::MainHudResultTramAssets;
 using th03::present::MainHudState;
 using th03::present::MainPaletteState;
 using th03::present::MainPalettedCharacter;
 using th03::present::MainPlayerOverlayAssets;
 using th03::present::MainPlayersBulletsPresenter;
-using th03::present::MainRoundMissingPhase;
 using th03::present::MainRoundPresenter;
 using th03::present::MainRoundStatus;
 using th03::present::MainStaticPresenter;
@@ -74,19 +83,24 @@ using th03::present::MainWarningMrsAssets;
 using th03::present::PackedRowOrder;
 using th03::present::Page;
 using th03::present::PelletMasks;
+using th03::present::PreparedSuperimposeSheet;
 using th03::present::Raster;
 using th03::present::Rgb8;
+using th03::present::ScoreFontMasks;
 using th03::present::StaffFlakeTrigTables;
 using th03::present::Tram;
+using th03::present::TramCell;
 using th03::present::authentic_main_bomb_atlas_layout;
 using th03::present::authentic_main_background_atlas_layout;
 using th03::present::authentic_main_effects_atlas_layout;
 using th03::present::authentic_main_entity_atlas_layout;
 using th03::present::authentic_main_players_bullets_atlas_layout;
 using th03::present::graphics_page_pixels;
-using th03::present::main_round_missing_phases;
 using th03::present::pellet_mask_bytes;
+using th03::present::prepare_superimpose_sheet;
+using th03::present::score_font_mask_bytes;
 using th03::present::sprite16_source_top;
+using th03::present::tram_white;
 
 std::size_t checks = 0U;
 std::size_t failures = 0U;
@@ -165,7 +179,15 @@ struct SyntheticAssets {
 	BfntSheet player_one = make_sheet(32U, 32U, 9U, 0U);
 	BfntSheet player_two = make_sheet(32U, 32U, 9U, 5U);
 	BfntSheet gauge = make_sheet(32U, 16U, 16U, 9U);
+	BfntSheet lose = make_sheet(32U, 32U, 8U, 2U);
+	BfntSheet round = make_sheet(32U, 32U, 11U, 4U);
+	BfntSheet zikicw = make_sheet(32U, 32U, 8U, 6U);
 	std::array<std::uint8_t, pellet_mask_bytes> pellets{};
+	std::array<std::uint8_t, score_font_mask_bytes> score_font{};
+	std::array<std::array<TramCell, 32U>, 9U> result_labels{};
+	std::array<TramCell, 4U> combo_hit{};
+	std::array<TramCell, 8U> combo_bonus{};
+	std::array<TramCell, 8U> combo_erase{};
 	std::array<std::int16_t, 256U> sine{};
 	std::array<std::int16_t, 256U> cosine{};
 	MrsImage p1_mrs = make_mrs(2U, MrsOrientation::as_stored);
@@ -174,6 +196,17 @@ struct SyntheticAssets {
 	SyntheticAssets()
 	{
 		cosine.fill(256);
+		score_font.fill(0xFFU);
+		for(std::size_t label = 0U; label < result_labels.size(); ++label) {
+			for(auto &cell : result_labels[label]) {
+				cell = TramCell{
+					static_cast<std::uint16_t>('A' + label), tram_white
+				};
+			}
+		}
+		combo_hit.fill(TramCell{'H', tram_white});
+		combo_bonus.fill(TramCell{'B', tram_white});
+		combo_erase.fill(TramCell{' ', tram_white});
 	}
 
 	[[nodiscard]] MainPlayerOverlayAssets overlays() const noexcept
@@ -207,6 +240,21 @@ struct SyntheticAssets {
 	{
 		return {{&p1_mrs, &p2_mrs}};
 	}
+
+	[[nodiscard]] MainHudResultTramAssets hud_result_tram() const noexcept
+	{
+		MainHudResultTramAssets result{};
+		for(std::size_t label = 0U; label < result.result_labels.size(); ++label) {
+			const auto size = (label < 2U) ? 32U : 26U;
+			result.result_labels[label] = std::span<const TramCell>(
+				result_labels[label].data(), size
+			);
+		}
+		result.combo_hit = combo_hit;
+		result.combo_bonus = combo_bonus;
+		result.combo_erase = combo_erase;
+		return result;
+	}
 };
 
 struct BlankAnk final : AnkGlyphProvider {
@@ -224,6 +272,9 @@ struct Fixture {
 	MainPaletteState palette;
 	MainStaticPresenter static_presenter;
 	SyntheticAssets assets;
+	std::optional<PreparedSuperimposeSheet> lose;
+	std::optional<PreparedSuperimposeSheet> round_sheet;
+	std::optional<PreparedSuperimposeSheet> zikicw;
 	std::optional<MainEntitiesPresenter> entities;
 	std::optional<MainBackgroundPresenter> background;
 	std::optional<MainBossPresenter> bosses;
@@ -232,7 +283,9 @@ struct Fixture {
 	std::optional<MainPlayersBulletsPresenter> players_bullets;
 	std::optional<MainBombsPresenter> bombs;
 	std::optional<MainWarningGaugePresenter> warning_gauge;
+	std::optional<MainHudResultPresenter> hud_result;
 	std::optional<MainRoundPresenter> round;
+	MainHudStartState hud_start_late_{};
 
 	explicit Fixture(
 		std::uint16_t background_x_q12_4 = 0U,
@@ -350,6 +403,32 @@ struct Fixture {
 			palette,
 			assets.warning_mrs()
 		);
+		auto prepared_lose = prepare_superimpose_sheet(assets.lose);
+		auto prepared_round = prepare_superimpose_sheet(assets.round);
+		auto prepared_zikicw = prepare_superimpose_sheet(assets.zikicw);
+		expect(
+			prepared_lose.has_value() && prepared_round.has_value() &&
+			prepared_zikicw.has_value(),
+			"prepare the synthetic HUD/result sheets"
+		);
+		if(prepared_lose && prepared_round && prepared_zikicw) {
+			lose.emplace(std::move(*prepared_lose));
+			round_sheet.emplace(std::move(*prepared_round));
+			zikicw.emplace(std::move(*prepared_zikicw));
+		} else {
+			std::abort();
+		}
+		hud_result.emplace(
+			raster,
+			tram,
+			ScoreFontMasks{
+				assets.score_font, PackedRowOrder::bottom_to_top
+			},
+			assets.trig(),
+			MainHudResultSheets{&*lose, &*round_sheet, &*zikicw},
+			assets.hud_result_tram(),
+			std::uint8_t{0U}
+		);
 		round.emplace(
 			raster,
 			tram,
@@ -362,7 +441,8 @@ struct Fixture {
 			*extra_charge,
 			*players_bullets,
 			*bombs,
-			*warning_gauge
+			*warning_gauge,
+			*hud_result
 		);
 		expect(round->ready(), "construct a ready MAIN round composer");
 		round->main_background_initialize({.kind = background_kind});
@@ -393,6 +473,9 @@ struct Fixture {
 		th03::detail::DeterministicState state{};
 		state.round_id = 3U;
 		state.round_or_result_frame = 17U;
+		state.game_mode = th03::detail::game_mode_vs_1p_2p;
+		state.hud_start_flag = 0U;
+		state.hud_start_state = 4U;
 		for(std::size_t player = 0U; player < state.players.size(); ++player) {
 			state.players[player].center_x =
 				th03::exact::Subpixel::from_integer_wrapping(144);
@@ -450,6 +533,102 @@ struct Fixture {
 		};
 	}
 
+	[[nodiscard]] static th03::MainPhaseContext phase_context(
+		const th03::detail::DeterministicState &state
+	) noexcept
+	{
+		return {
+			.round_id = state.round_id,
+			.round_or_result_frame = state.round_or_result_frame,
+			.playfield_fg_shift_x = state.playfield_fg_shift_x,
+		};
+	}
+
+	[[nodiscard]] static MainResultState result_state(
+		const th03::detail::DeterministicState &state
+	) noexcept
+	{
+		return {
+			.context = phase_context(state),
+			.story_stage = state.story_stage,
+			.story_lives = state.story_lives,
+			.rounds_won = {
+				state.players[0U].rounds_won,
+				state.players[1U].rounds_won,
+			},
+		};
+	}
+
+	[[nodiscard]] static MainScoreState score_state(
+		const th03::detail::DeterministicState &state
+	) noexcept
+	{
+		return {.context = phase_context(state), .digits = state.score};
+	}
+
+	[[nodiscard]] static MainComboState combo_state(
+		const th03::detail::DeterministicState &state
+	) noexcept
+	{
+		return {.context = phase_context(state)};
+	}
+
+	[[nodiscard]] static MainResultTransitionState transition_state(
+		const th03::detail::DeterministicState &state
+	) noexcept
+	{
+		return {
+			.context = phase_context(state),
+			.phase = MainResultTransitionPhase::idle,
+			.frame_before = 0U,
+		};
+	}
+
+	void hud_start_prefix(const th03::detail::DeterministicState &state)
+	{
+		const auto initialize = state.hud_start_flag == 1U;
+		auto state_before = initialize ? std::uint8_t{0U} : state.hud_start_state;
+		auto frame_before = initialize ? std::uint16_t{0U} : state.hud_start_frame;
+		round->hud_start_frame_step(HudStartFrameStep{
+			.initialize = initialize,
+			.story_mode = state.game_mode == th03::detail::game_mode_story,
+			.story_stage = state.story_stage,
+			.round_id = state.round_id,
+			.state_before = state_before,
+			.frame_before = frame_before,
+		});
+		auto state_after = state_before;
+		auto frame_after = frame_before;
+		if(state_before == 0U) {
+			frame_after++;
+			if(frame_after >= 69U) {
+				state_after = 1U;
+				frame_after = 0U;
+			}
+		} else if(state_before == 1U) {
+			frame_after++;
+			if(frame_after > 0x56U) {
+				state_after = 2U;
+				frame_after = 0U;
+			}
+		} else if(state_before == 2U) {
+			state_after = 3U;
+			frame_after = 0U;
+		} else if(state_before == 3U) {
+			frame_after++;
+			if(frame_after >= 0x40U) {
+				state_after = 4U;
+			}
+		}
+		hud_start_late_ = MainHudStartState{
+			.round_id = state.round_id,
+			.story_mode = state.game_mode == th03::detail::game_mode_story,
+			.story_stage = state.story_stage,
+			.state_after_prefix = state_after,
+			.frame_after_prefix = frame_after,
+		};
+	}
+
 	void render_phases(const th03::detail::DeterministicState &state)
 	{
 		round->observe(th03::detail::ObserverAccess::main_boss(state));
@@ -457,6 +636,7 @@ struct Fixture {
 		round->observe(th03::detail::ObserverAccess::fireballs(state));
 		extra_charge_phases(state);
 		round->observe(th03::detail::ObserverAccess::players_bullets(state));
+		round->main_result_state(result_state(state));
 	}
 
 	void extra_charge_phases(const th03::detail::DeterministicState &state)
@@ -490,6 +670,7 @@ struct Fixture {
 
 	void begin_frame(const th03::detail::DeterministicState &state)
 	{
+		hud_start_prefix(state);
 		round->warning_frame_lifecycle(idle_warning());
 		background_frame(state);
 	}
@@ -504,6 +685,20 @@ struct Fixture {
 	{
 		terminal_phases(state);
 		round->main_gauge_state(gauge_state(state));
+		finish_after_gauge(state);
+	}
+
+	void finish_after_gauge(const th03::detail::DeterministicState &state)
+	{
+		round->main_score_state(score_state(state));
+		finish_after_score(state);
+	}
+
+	void finish_after_score(const th03::detail::DeterministicState &state)
+	{
+		round->main_hud_start_state(hud_start_late_);
+		round->main_combo_state(combo_state(state));
+		round->main_result_transition_state(transition_state(state));
 	}
 };
 
@@ -531,14 +726,6 @@ void test_contract_and_setup_failure()
 {
 	static_assert(!std::is_copy_constructible_v<MainRoundPresenter>);
 	static_assert(!std::is_move_constructible_v<MainRoundPresenter>);
-	constexpr std::array expected{
-		MainRoundMissingPhase::hud,
-		MainRoundMissingPhase::result,
-	};
-	expect(
-		main_round_missing_phases == expected,
-		"name every unimplemented MAIN phase instead of guessing it"
-	);
 
 	Fixture fixture;
 	MainStaticPresenter stopped_static;
@@ -561,7 +748,8 @@ void test_contract_and_setup_failure()
 		*fixture.extra_charge,
 		*fixture.players_bullets,
 		*fixture.bombs,
-		*fixture.warning_gauge
+		*fixture.warning_gauge,
+		*fixture.hud_result
 	);
 	expect(
 		stopped.status() == MainRoundStatus::invalid_setup &&
@@ -587,7 +775,8 @@ void test_contract_and_setup_failure()
 		*fixture.extra_charge,
 		*fixture.players_bullets,
 		*fixture.bombs,
-		*fixture.warning_gauge
+		*fixture.warning_gauge,
+		*fixture.hud_result
 	);
 	expect(
 		stopped_background.status() == MainRoundStatus::background_failed &&
@@ -611,7 +800,8 @@ void test_contract_and_setup_failure()
 		invalid_extra_charge,
 		*fixture.players_bullets,
 		*fixture.bombs,
-		*fixture.warning_gauge
+		*fixture.warning_gauge,
+		*fixture.hud_result
 	);
 	expect(
 		stopped_extra_charge.status() == MainRoundStatus::extra_charge_failed &&
@@ -630,7 +820,8 @@ void test_contract_and_setup_failure()
 		*fixture.extra_charge,
 		*fixture.players_bullets,
 		*fixture.bombs,
-		*fixture.warning_gauge
+		*fixture.warning_gauge,
+		*fixture.hud_result
 	);
 	expect(
 		valid.ready() && fixture.raster.palette_tone() == 100,
@@ -1133,6 +1324,8 @@ void test_background_is_synchronous_before_late_bombs()
 		static_cast<std::uint16_t>(100U * 16U),
 		static_cast<std::uint16_t>(100U * 16U)
 	);
+	auto state = fixture.state();
+	fixture.hud_start_prefix(state);
 	fixture.round->warning_frame_lifecycle(Fixture::idle_warning());
 	fixture.round->main_background_frame({
 		.round_id = 3U,
@@ -1199,6 +1392,8 @@ void test_background_failure_is_sticky()
 void test_warning_lifecycle_precedes_background()
 {
 	Fixture fixture;
+	auto state = fixture.state();
+	fixture.hud_start_prefix(state);
 	fixture.round->main_background_frame({
 		.round_id = 3U,
 		.round_or_result_frame = 17U,
@@ -1216,6 +1411,7 @@ void test_background_precedes_entity_phase()
 {
 	Fixture fixture;
 	auto state = fixture.state();
+	fixture.hud_start_prefix(state);
 	fixture.round->warning_frame_lifecycle(Fixture::idle_warning());
 	fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
 	expect(
@@ -1229,6 +1425,7 @@ void test_background_reads_complete_before_entity_phase()
 {
 	Fixture fixture;
 	auto state = fixture.state();
+	fixture.hud_start_prefix(state);
 	fixture.round->warning_frame_lifecycle(Fixture::idle_warning());
 	fixture.round->main_background_frame({
 		.round_id = state.round_id,
@@ -1252,6 +1449,7 @@ void test_type_b_background_read_count_and_overread()
 			MainBackgroundKind::type_b
 		);
 		auto state = fixture->state();
+		fixture->hud_start_prefix(state);
 		fixture->round->warning_frame_lifecycle(Fixture::idle_warning());
 		fixture->round->main_background_frame({
 			.round_id = state.round_id,
@@ -1279,6 +1477,7 @@ void test_type_b_background_read_count_and_overread()
 			MainBackgroundKind::type_b
 		);
 		auto state = fixture->state();
+		fixture->hud_start_prefix(state);
 		fixture->round->warning_frame_lifecycle(Fixture::idle_warning());
 		fixture->round->main_background_frame({
 			.round_id = state.round_id,
@@ -1364,10 +1563,12 @@ void test_late_gauge_portrait_and_footer_order()
 		lifecycle.players[1U].warning_step_before = 1U;
 		lifecycle.players[1U].warning_step_after = 1U;
 		lifecycle.players[1U].next_attack = GaugeBossAttackKind::boss;
+		fixture.hud_start_prefix(state);
 		fixture.round->warning_frame_lifecycle(lifecycle);
 		fixture.background_frame(state);
 		fixture.render_phases(state);
 		fixture.round->main_gauge_state(Fixture::gauge_state(state));
+		fixture.round->main_score_state(Fixture::score_state(state));
 		fixture.round->warning_portrait_transition(
 			WarningPortraitTransition{PlayerId::p2}
 		);
@@ -1389,16 +1590,19 @@ void test_late_gauge_portrait_and_footer_order()
 		lifecycle.players[1U].warning_step_before = 1U;
 		lifecycle.players[1U].warning_step_after = 1U;
 		lifecycle.players[1U].next_attack = GaugeBossAttackKind::boss;
+		fixture.hud_start_prefix(state);
 		fixture.round->warning_frame_lifecycle(lifecycle);
 		fixture.background_frame(state);
 		fixture.render_phases(state);
 		fixture.round->main_gauge_state(Fixture::gauge_state(state));
+		fixture.round->main_score_state(Fixture::score_state(state));
 		fixture.round->warning_portrait_transition(
 			WarningPortraitTransition{PlayerId::p1}
 		);
 		fixture.round->warning_portrait_transition(
 			WarningPortraitTransition{PlayerId::p2}
 		);
+		fixture.finish_after_score(state);
 		expect(
 			fixture.round->ready() &&
 			fixture.raster.pixel(Page::zero, {16, 16}) == 2U &&
@@ -1434,10 +1638,12 @@ void test_portrait_expectation_is_strict()
 		lifecycle.players[0U].warning_step_before = 1U;
 		lifecycle.players[0U].warning_step_after = 1U;
 		lifecycle.players[0U].next_attack = GaugeBossAttackKind::gauge_pellet;
+		fixture.hud_start_prefix(state);
 		fixture.round->warning_frame_lifecycle(lifecycle);
 		fixture.background_frame(state);
 		fixture.render_phases(state);
 		fixture.round->main_gauge_state(Fixture::gauge_state(state));
+		fixture.round->main_score_state(Fixture::score_state(state));
 		fixture.round->main_frame_footer_reached({});
 		expect(
 			fixture.round->status() == MainRoundStatus::invalid_observation,
@@ -1450,6 +1656,8 @@ void test_gauge_completion_prefix_order()
 {
 	{
 		Fixture fixture;
+		auto state = fixture.state();
+		fixture.hud_start_prefix(state);
 		fixture.round->gauge_attack_finished({PlayerId::p2, PlayerId::p1});
 		fixture.round->gauge_attack_finished({PlayerId::p1, PlayerId::p2});
 		expect(
@@ -1459,6 +1667,8 @@ void test_gauge_completion_prefix_order()
 	}
 	{
 		Fixture fixture;
+		auto state = fixture.state();
+		fixture.hud_start_prefix(state);
 		fixture.round->warning_frame_lifecycle(Fixture::idle_warning());
 		fixture.round->gauge_attack_finished({PlayerId::p1, PlayerId::p2});
 		expect(
@@ -1472,6 +1682,8 @@ void test_gauge_completion_prefix_order()
 void test_warning_gauge_child_failure_is_sticky()
 {
 	Fixture fixture;
+	auto state = fixture.state();
+	fixture.hud_start_prefix(state);
 	const auto shown = fixture.raster.shown_page();
 	fixture.round->gauge_attack_finished(GaugeAttackFinished{
 		.attacker = PlayerId::p1,
@@ -1493,6 +1705,7 @@ void test_warning_interstitial_tones_without_footer()
 {
 	Fixture fixture;
 	th03::GameplayObserver &observer = *fixture.round;
+	auto state = fixture.state();
 	const auto shown = fixture.raster.shown_page();
 	const auto access = fixture.raster.access_page();
 	expect(
@@ -1501,6 +1714,7 @@ void test_warning_interstitial_tones_without_footer()
 		),
 		"stage a dirty palette entry before the blocking warning"
 	);
+	fixture.hud_start_prefix(state);
 	observer.warning_interstitial_started(Fixture::warning_start());
 	for(std::uint8_t ordinal = 0U; ordinal < 27U; ++ordinal) {
 		observer.warning_interstitial_sample(WarningInterstitialSample{ordinal});
@@ -1521,7 +1735,6 @@ void test_warning_interstitial_tones_without_footer()
 		}
 	}
 
-	auto state = fixture.state();
 	auto lifecycle = Fixture::idle_warning();
 	lifecycle.players[0U] = {
 		3U, 4U, GaugeBossAttackKind::gauge_pellet, GaugeBossAttackKind::none,
@@ -1532,6 +1745,7 @@ void test_warning_interstitial_tones_without_footer()
 	fixture.background_frame(state);
 	fixture.render_phases(state);
 	fixture.round->main_gauge_state(Fixture::gauge_state(state));
+	fixture.finish_after_gauge(state);
 	fixture.round->main_frame_footer_reached({});
 	expect(
 		fixture.round->ready() && !fixture.palette.dirty() &&
@@ -1552,6 +1766,8 @@ void test_warning_interstitial_order_is_strict()
 	}
 	{
 		Fixture fixture;
+		auto state = fixture.state();
+		fixture.hud_start_prefix(state);
 		fixture.round->warning_interstitial_started(Fixture::warning_start());
 		fixture.round->warning_interstitial_sample({1U});
 		expect(
@@ -1561,6 +1777,8 @@ void test_warning_interstitial_order_is_strict()
 	}
 	{
 		Fixture fixture;
+		auto state = fixture.state();
+		fixture.hud_start_prefix(state);
 		fixture.round->warning_interstitial_started(Fixture::warning_start());
 		for(std::uint8_t ordinal = 0U; ordinal < 27U; ++ordinal) {
 			fixture.round->warning_interstitial_sample({ordinal});
@@ -1576,6 +1794,7 @@ void test_warning_interstitial_order_is_strict()
 	{
 		Fixture fixture;
 		auto state = fixture.state();
+		fixture.hud_start_prefix(state);
 		fixture.round->warning_interstitial_started(Fixture::warning_start());
 		fixture.round->observe(
 			th03::detail::ObserverAccess::shots_enemies(state)
@@ -1714,6 +1933,7 @@ void test_repeat_round_startup_preserves_process_children()
 	kana.center_x = 100 << 4;
 	kana.center_y = 80 << 4;
 	kana.player_id = 1U;
+	fixture.hud_start_prefix(state);
 	fixture.round->warning_frame_lifecycle(terminal_warning);
 	fixture.background_frame(state);
 	fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
@@ -1724,6 +1944,10 @@ void test_repeat_round_startup_preserves_process_children()
 	fixture.round->observe(
 		th03::detail::ObserverAccess::players_bullets(state)
 	);
+	auto terminal_result = Fixture::result_state(state);
+	terminal_result.defeated_player = PlayerId::p1;
+	terminal_result.winner = PlayerId::p2;
+	fixture.round->main_result_state(terminal_result);
 	expect(
 		fixture.round->repeat_round_startup(Fixture::hud_state()),
 		"terminal route-1 repeat skips a pending source warning portrait"
@@ -1759,6 +1983,9 @@ void test_repeat_round_startup_preserves_process_children()
 
 	state.round_id++;
 	state.round_or_result_frame = 0U;
+	state.hud_start_flag = 1U;
+	state.hud_start_state = 0U;
+	state.hud_start_frame = 0U;
 	state.players[0U].paletted_character = 11;
 	kana.state = 1U;
 	kana.frame = 0U;
@@ -1792,15 +2019,42 @@ void test_repeat_round_startup_preserves_process_children()
 	fixture.round->observe(
 		th03::detail::ObserverAccess::players_bullets(state)
 	);
-	fixture.round->main_gauge_state(Fixture::gauge_state(state));
 	expect(
 		fixture.raster.pixel(Page::zero, {176, 176}) == 13U,
 		"repeat startup preserves the process-scoped common-effect pool"
 	);
+	fixture.round->main_result_state(Fixture::result_state(state));
+	fixture.round->main_gauge_state(Fixture::gauge_state(state));
+	fixture.round->main_score_state(Fixture::score_state(state));
+	fixture.round->main_hud_start_state(fixture.hud_start_late_);
+	fixture.round->main_combo_state(Fixture::combo_state(state));
+	auto closing = Fixture::transition_state(state);
+	closing.phase = MainResultTransitionPhase::closing;
+	fixture.round->main_result_transition_state(closing);
+	expect(
+		fixture.round->ready(),
+		"first repeated round forwards closing frame zero through the coordinator"
+	);
 	fixture.round->main_frame_footer_reached({});
 	expect(
-		fixture.round->ready() && !fixture.palette.dirty(),
+		fixture.round->ready(),
+		"first repeated-round closing reaches its source footer"
+	);
+	expect(
+		!fixture.palette.dirty(),
 		"first repeated-round footer consumes the carried palette latch"
+	);
+}
+
+void test_repeat_round_startup_requires_result_banner()
+{
+	Fixture fixture;
+	const auto state = fixture.state();
+	fixture.terminal_phases(state);
+	expect(
+		!fixture.round->repeat_round_startup(Fixture::hud_state()) &&
+		fixture.round->status() == MainRoundStatus::invalid_observation,
+		"route-1 repeat rejects a result gate without the source defeat banner"
 	);
 }
 
@@ -1837,6 +2091,7 @@ int main()
 	test_players_common_bullets_insertion_order();
 	test_defeat_palette_is_immediate();
 	test_repeat_round_startup_preserves_process_children();
+	test_repeat_round_startup_requires_result_banner();
 	if(failures != 0U) {
 		std::fprintf(stderr, "%zu of %zu checks failed\n", failures, checks);
 		return EXIT_FAILURE;

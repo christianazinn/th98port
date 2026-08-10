@@ -586,6 +586,197 @@ private:
 	const th03::detail::DeterministicState *inspected_state_;
 };
 
+enum class MainHudObservedCall : std::uint8_t {
+	hud_start_step,
+	hud_start_read,
+	player_defeat_step,
+	hit_circle,
+	player_value,
+	story_lives,
+	players_bullets,
+	result,
+	gauge,
+	score,
+	warning_portrait,
+	hud_start,
+	combo,
+	result_transition,
+	footer,
+};
+
+struct MainHudMutationSnapshot {
+	th03::MainHudPlayerValueChanged fact{};
+	std::uint8_t invincibility_time = 0;
+	std::uint8_t skill = 0;
+	std::uint8_t defeat_flag = 0;
+	std::int8_t winner = 0;
+	std::uint16_t round_or_result_frame = 0;
+	bool knockback_active = false;
+	std::uint8_t lose_anim_time = 0;
+};
+
+class MainHudRecordingObserver final : public th03::GameplayObserver {
+public:
+	explicit MainHudRecordingObserver(
+		const th03::detail::DeterministicState *inspected_state = nullptr
+	) : inspected_state_(inspected_state)
+	{}
+
+	void hud_start_frame_step(
+		const th03::HudStartFrameStep &step
+	) noexcept override
+	{
+		hud_start_steps.push_back(step);
+		calls.push_back(MainHudObservedCall::hud_start_step);
+	}
+
+	void hud_start_compatibility_read(
+		const th03::HudStartCompatibilityRead &read
+	) noexcept override
+	{
+		hud_start_reads.push_back(read);
+		calls.push_back(MainHudObservedCall::hud_start_read);
+	}
+
+	void player_defeat_step(
+		const th03::PlayerDefeatStep &
+	) noexcept override
+	{
+		calls.push_back(MainHudObservedCall::player_defeat_step);
+	}
+
+	void hit_circle_spawned(
+		const th03::HitCircleSpawned &
+	) noexcept override
+	{
+		calls.push_back(MainHudObservedCall::hit_circle);
+	}
+
+	void main_hud_player_value_changed(
+		const th03::MainHudPlayerValueChanged &fact
+	) noexcept override
+	{
+		player_values.push_back(fact);
+		MainHudMutationSnapshot snapshot{.fact = fact};
+		if(inspected_state_ != nullptr) {
+			const auto player = static_cast<std::size_t>(fact.player);
+			snapshot.invincibility_time =
+				inspected_state_->players[player].invincibility_time;
+			snapshot.skill = inspected_state_->skill;
+			snapshot.defeat_flag = static_cast<std::uint8_t>(
+				inspected_state_->defeat_flag
+			);
+			snapshot.winner = inspected_state_->winner;
+			snapshot.round_or_result_frame =
+				inspected_state_->round_or_result_frame;
+			snapshot.knockback_active =
+				inspected_state_->players[player].knockback_active;
+			snapshot.lose_anim_time =
+				inspected_state_->players[player].lose_anim_time;
+		}
+		player_value_snapshots.push_back(snapshot);
+		calls.push_back(MainHudObservedCall::player_value);
+	}
+
+	void main_hud_story_lives_changed(
+		const th03::MainHudStoryLivesChanged &fact
+	) noexcept override
+	{
+		story_lives.push_back(fact);
+		if(inspected_state_ != nullptr) {
+			extends_at_lives.push_back(inspected_state_->extends_gained);
+		}
+		calls.push_back(MainHudObservedCall::story_lives);
+	}
+
+	void observe(const th03::PlayersBulletsView &) noexcept override
+	{
+		calls.push_back(MainHudObservedCall::players_bullets);
+	}
+
+	void main_result_state(const th03::MainResultState &state) noexcept override
+	{
+		results.push_back(state);
+		if(inspected_state_ != nullptr) {
+			result_bonus_remaining_at_view.push_back(
+				inspected_state_->result_bonus_remaining
+			);
+			score_at_result_view.push_back(inspected_state_->score);
+		}
+		calls.push_back(MainHudObservedCall::result);
+	}
+
+	void main_gauge_state(const th03::MainGaugeState &) noexcept override
+	{
+		calls.push_back(MainHudObservedCall::gauge);
+	}
+
+	void main_score_state(const th03::MainScoreState &state) noexcept override
+	{
+		scores.push_back(state);
+		if(inspected_state_ != nullptr) {
+			story_lives_at_score.push_back(inspected_state_->story_lives);
+		}
+		calls.push_back(MainHudObservedCall::score);
+	}
+
+	void warning_portrait_transition(
+		const th03::WarningPortraitTransition &
+	) noexcept override
+	{
+		calls.push_back(MainHudObservedCall::warning_portrait);
+	}
+
+	void main_hud_start_state(
+		const th03::MainHudStartState &state
+	) noexcept override
+	{
+		hud_start_states.push_back(state);
+		calls.push_back(MainHudObservedCall::hud_start);
+	}
+
+	void main_combo_state(const th03::MainComboState &state) noexcept override
+	{
+		combos.push_back(state);
+		calls.push_back(MainHudObservedCall::combo);
+	}
+
+	void main_result_transition_state(
+		const th03::MainResultTransitionState &state
+	) noexcept override
+	{
+		result_transitions.push_back(state);
+		calls.push_back(MainHudObservedCall::result_transition);
+	}
+
+	void main_frame_footer_reached(
+		const th03::MainFrameFooterReached &
+	) noexcept override
+	{
+		calls.push_back(MainHudObservedCall::footer);
+	}
+
+	std::vector<MainHudObservedCall> calls;
+	std::vector<th03::HudStartFrameStep> hud_start_steps;
+	std::vector<th03::HudStartCompatibilityRead> hud_start_reads;
+	std::vector<th03::MainHudPlayerValueChanged> player_values;
+	std::vector<MainHudMutationSnapshot> player_value_snapshots;
+	std::vector<th03::MainHudStoryLivesChanged> story_lives;
+	std::vector<std::uint8_t> extends_at_lives;
+	std::vector<th03::MainResultState> results;
+	std::vector<std::uint32_t> result_bonus_remaining_at_view;
+	std::vector<decltype(th03::detail::DeterministicState::score)>
+		score_at_result_view;
+	std::vector<th03::MainScoreState> scores;
+	std::vector<std::uint8_t> story_lives_at_score;
+	std::vector<th03::MainHudStartState> hud_start_states;
+	std::vector<th03::MainComboState> combos;
+	std::vector<th03::MainResultTransitionState> result_transitions;
+
+private:
+	const th03::detail::DeterministicState *inspected_state_;
+};
+
 th03::detail::DeterministicState make_live_state()
 {
 	th03::detail::DeterministicState state{};
@@ -2673,6 +2864,597 @@ std::uint16_t reference_irand(std::uint32_t &seed) noexcept
 	return static_cast<std::uint16_t>((seed >> 16U) & 0x7FFFU);
 }
 
+void test_main_hud_start_observation()
+{
+	auto base = make_live_state();
+	base.game_mode = th03::game_mode::story;
+	base.story_stage = 7U;
+	base.round_id = 9U;
+	base.hud_start_flag = 2U;
+	base.hud_start_state = 2U;
+	base.hud_start_frame = 87U;
+	base.random_seed = 0x12345678U;
+	base.randring[0U] = 0x34U;
+	base.randring[1U] = 0x12U;
+	base.randring[2U] = 0x78U;
+	base.randring[3U] = 0x56U;
+
+	auto null_state = base;
+	auto discard_state = base;
+	auto record_state = base;
+	DiscardObserver discard;
+	MainHudRecordingObserver recording(&record_state);
+	check(
+		th03::detail::gameplay_frame_prefix(
+			null_state, th03::GameContent{}, nullptr
+		) &&
+		th03::detail::gameplay_frame_prefix(
+			discard_state, th03::GameContent{}, &discard
+		) &&
+		th03::detail::gameplay_frame_prefix(
+			record_state, th03::GameContent{}, &recording
+		),
+		"HUD-start particle prefix fixtures complete"
+	);
+	check(
+		observed_gameplay_equal(null_state, discard_state) &&
+		observed_gameplay_equal(null_state, record_state),
+		"HUD-start observation preserves gameplay, shared-ring, and IRAND state"
+	);
+	check(
+		recording.hud_start_steps ==
+			std::vector<th03::HudStartFrameStep>{{
+				.initialize = false,
+				.story_mode = true,
+				.story_stage = 7U,
+				.round_id = 9U,
+				.state_before = 2U,
+				.frame_before = 87U,
+			}} &&
+		record_state.hud_start_state == 3U &&
+		record_state.hud_start_frame == 0U,
+		"HUD-start step exposes the pre-update state and state 2 advances after reads"
+	);
+	check(
+		recording.hud_start_reads.size() == 512U &&
+		std::count_if(
+			recording.hud_start_reads.begin(), recording.hud_start_reads.end(),
+			[](const auto &read) {
+				return read.site ==
+					th03::HudStartCompatibilityReadSite::particle_y;
+			}
+		) == 128 &&
+		std::count_if(
+			recording.hud_start_reads.begin(), recording.hud_start_reads.end(),
+			[](const auto &read) {
+				return read.site ==
+					th03::HudStartCompatibilityReadSite::particle_angle;
+			}
+		) == 128 &&
+		std::count_if(
+			recording.hud_start_reads.begin(), recording.hud_start_reads.end(),
+			[](const auto &read) {
+				return read.site ==
+					th03::HudStartCompatibilityReadSite::angle_delta_first;
+			}
+		) == 128 &&
+		std::count_if(
+			recording.hud_start_reads.begin(), recording.hud_start_reads.end(),
+			[](const auto &read) {
+				return read.site ==
+					th03::HudStartCompatibilityReadSite::angle_delta_second;
+			}
+		) == 128,
+		"HUD-start state 2 exposes 128 reads at each of the four compatibility sites"
+	);
+	auto expected_seed = base.random_seed;
+	const auto first_delta = reference_irand(expected_seed);
+	const auto second_delta = reference_irand(expected_seed);
+	check(
+		recording.hud_start_reads[0U] == th03::HudStartCompatibilityRead{
+			.site = th03::HudStartCompatibilityReadSite::particle_y,
+			.particle_ordinal = 0U,
+			.raw_value = 0x1234U,
+		} &&
+		recording.hud_start_reads[1U] == th03::HudStartCompatibilityRead{
+			.site = th03::HudStartCompatibilityReadSite::particle_angle,
+			.particle_ordinal = 0U,
+			.raw_value = 0x7812U,
+		} &&
+		recording.hud_start_reads[2U] == th03::HudStartCompatibilityRead{
+			.site = th03::HudStartCompatibilityReadSite::angle_delta_first,
+			.particle_ordinal = 0U,
+			.raw_value = first_delta,
+		} &&
+		recording.hud_start_reads[3U] == th03::HudStartCompatibilityRead{
+			.site = th03::HudStartCompatibilityReadSite::angle_delta_second,
+			.particle_ordinal = 0U,
+			.raw_value = second_delta,
+		} &&
+		recording.hud_start_reads[4U].particle_ordinal == 1U &&
+		recording.hud_start_reads[508U].particle_ordinal == 127U &&
+		recording.hud_start_reads[511U].site ==
+			th03::HudStartCompatibilityReadSite::angle_delta_second,
+		"HUD-start raw reads retain ring-Y, ring-angle, first-delta, second-delta order"
+	);
+	check(
+		recording.calls.front() == MainHudObservedCall::hud_start_step &&
+		std::all_of(
+			recording.calls.begin() + 1, recording.calls.end(),
+			[](MainHudObservedCall call) {
+				return call == MainHudObservedCall::hud_start_read;
+			}
+		),
+		"HUD-start step precedes all 512 synchronous raw-read facts"
+	);
+
+	auto initializing = make_live_state();
+	initializing.hud_start_flag = 1U;
+	initializing.hud_start_state = 4U;
+	initializing.hud_start_frame = 55U;
+	MainHudRecordingObserver initialized;
+	(void)th03::detail::gameplay_frame_prefix(
+		initializing, th03::GameContent{}, &initialized
+	);
+	check(
+		initialized.hud_start_steps ==
+			std::vector<th03::HudStartFrameStep>{{
+				.initialize = true,
+				.story_mode = false,
+				.story_stage = 0U,
+				.round_id = 0U,
+				.state_before = 0U,
+				.frame_before = 0U,
+			}} &&
+		initializing.hud_start_state == 0U &&
+		initializing.hud_start_frame == 1U,
+		"HUD-start INIT reset is observed before the selected state-0 update"
+	);
+
+	MainHudRecordingObserver raw_passthrough;
+	raw_passthrough.hud_start_compatibility_read(
+		th03::HudStartCompatibilityRead{
+			.site = th03::HudStartCompatibilityReadSite::angle_delta_first,
+			.particle_ordinal = 127U,
+			.raw_value = 0x8001U,
+		}
+	);
+	check(
+		raw_passthrough.hud_start_reads ==
+			std::vector<th03::HudStartCompatibilityRead>{{
+				.site = th03::HudStartCompatibilityReadSite::angle_delta_first,
+				.particle_ordinal = 127U,
+				.raw_value = 0x8001U,
+			}},
+		"HUD-start raw facts preserve high-bit values for presenter-owned signed IDIV semantics"
+	);
+}
+
+void test_main_hud_result_late_order_and_terminal_split()
+{
+	auto base = make_live_state();
+	base.game_mode = th03::game_mode::story;
+	base.story_stage = 5U;
+	base.story_lives = 2U;
+	base.extends_gained = 0U;
+	base.round_id = 6U;
+	base.round_or_result_frame = 77U;
+	base.playfield_fg_shift_x = {-5, 7};
+	base.score[0U] = {1U, 2U, 3U, 4U, 5U, 6U, 1U, 8U};
+	base.score[1U] = {8U, 7U, 6U, 5U, 4U, 3U, 2U, 1U};
+	base.warning_flag[0U] = th03::detail::WarningFlag::portrait;
+	base.hud_start_state = 3U;
+	base.hud_start_frame = 31U;
+	base.combos[0U] = {.time = 1U, .hits_highest = 9U, .bonus_total = 12U};
+	base.combos[1U] = {.time = 2U, .hits_highest = 8U, .bonus_total = 34U};
+	base.result_phase = th03::detail::ResultPhase::opening;
+	base.result_phase_frame = 15U;
+
+	auto null_state = base;
+	auto discard_state = base;
+	auto record_state = base;
+	DiscardObserver discard;
+	MainHudRecordingObserver recording(&record_state);
+	th03::detail::gameplay_frame_suffix_after_interstitial(null_state, nullptr);
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		discard_state, &discard
+	);
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		record_state, &recording
+	);
+	check(
+		observed_gameplay_equal(null_state, discard_state) &&
+		observed_gameplay_equal(null_state, record_state),
+		"late HUD/result observations preserve state and RNG for null, discard, and recording paths"
+	);
+	check(
+		recording.calls == std::vector<MainHudObservedCall>{
+			MainHudObservedCall::players_bullets,
+			MainHudObservedCall::result,
+			MainHudObservedCall::gauge,
+			MainHudObservedCall::score,
+			MainHudObservedCall::story_lives,
+			MainHudObservedCall::warning_portrait,
+			MainHudObservedCall::hud_start,
+			MainHudObservedCall::combo,
+			MainHudObservedCall::result_transition,
+			MainHudObservedCall::footer,
+		},
+		"late HUD/result facts retain source draw and mutation order"
+	);
+	const auto context = th03::MainPhaseContext{
+		.round_id = 6U,
+		.round_or_result_frame = 77U,
+		.playfield_fg_shift_x = {-5, 7},
+	};
+	check(
+		recording.results == std::vector<th03::MainResultState>{{
+			.context = context,
+			.defeated_player = std::nullopt,
+			.winner = std::nullopt,
+			.summary_active = false,
+			.story_stage = 5U,
+			.story_lives = 2U,
+			.rounds_won = {0U, 0U},
+		}} &&
+		recording.scores == std::vector<th03::MainScoreState>{{
+			.context = context,
+			.digits = base.score,
+		}} &&
+		recording.story_lives_at_score == std::vector<std::uint8_t>{2U} &&
+		recording.story_lives ==
+			std::vector<th03::MainHudStoryLivesChanged>{{.value_after = 3U}} &&
+		recording.extends_at_lives == std::vector<std::uint8_t>{0U} &&
+		record_state.story_lives == 3U && record_state.extends_gained == 1U,
+		"score is observed before the Story life increment and life TRAM fact precedes extend accounting"
+	);
+	check(
+		recording.hud_start_states ==
+			std::vector<th03::MainHudStartState>{{
+				.round_id = 6U,
+				.story_mode = true,
+				.story_stage = 5U,
+				.state_after_prefix = 3U,
+				.frame_after_prefix = 31U,
+			}} &&
+		recording.combos == std::vector<th03::MainComboState>{{
+			.context = context,
+			.players = {
+				th03::MainComboPlayerState{1U, 9U, 12U},
+				th03::MainComboPlayerState{2U, 8U, 34U},
+			},
+		}} &&
+		record_state.combos[0U].time == 0U &&
+		record_state.combos[0U].hits_highest == 0U &&
+		record_state.combos[0U].bonus_total == 0U &&
+		record_state.combos[1U].time == 1U,
+		"combo fact exposes both players before P1-then-P2 decrement and settlement"
+	);
+	check(
+		recording.result_transitions ==
+			std::vector<th03::MainResultTransitionState>{{
+				.context = context,
+				.phase = th03::MainResultTransitionPhase::opening,
+				.frame_before = 15U,
+			}} &&
+		record_state.result_transition_complete &&
+		record_state.result_phase == th03::detail::ResultPhase::closing &&
+		record_state.result_phase_frame == 0U,
+		"result-transition fact precedes the opening frame-15 completion mutation"
+	);
+
+	auto terminal = make_live_state();
+	terminal.defeat_flag = th03::detail::DefeatFlag::banner;
+	terminal.last_fatal_player = 1U;
+	terminal.winner = 0;
+	terminal.players[0U].rounds_won = 2U;
+	terminal.players[0U].combo_hits_max = 1U;
+	terminal.round_or_result_frame = 1U;
+	terminal.result_transition_complete = true;
+	MainHudRecordingObserver terminal_recording(&terminal);
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		terminal, &terminal_recording
+	);
+	check(
+		terminal_recording.calls == std::vector<MainHudObservedCall>{
+			MainHudObservedCall::players_bullets,
+			MainHudObservedCall::result,
+		} &&
+		terminal.round_complete && terminal.route == 2U,
+		"terminal result frame emits its pre-control result view and cuts every later phase"
+	);
+	check(
+		terminal_recording.results == std::vector<th03::MainResultState>{{
+			.context = th03::MainPhaseContext{
+				.round_id = 0U,
+				.round_or_result_frame = 1U,
+				.playfield_fg_shift_x = {0, 0},
+			},
+			.defeated_player = th03::PlayerId::p2,
+			.winner = th03::PlayerId::p1,
+			.summary_active = true,
+			.story_stage = 0U,
+			.story_lives = 0U,
+			.rounds_won = {2U, 0U},
+			.winner_stats = th03::MainResultWinnerStats{
+				.combo_hits_max = 1U,
+			},
+		}} &&
+		terminal_recording.result_bonus_remaining_at_view ==
+			std::vector<std::uint32_t>{0U} &&
+		terminal_recording.score_at_result_view[0U][0U][0U] == 0U &&
+		terminal.result_bonus_per_frame == 5U &&
+		terminal.result_bonus_remaining == 995U &&
+		terminal.score[0U][0U] == 5U,
+		"result view captures winner statistics before frame-1 bonus initialization and mutation"
+	);
+
+	auto exact_final_stage = make_live_state();
+	exact_final_stage.game_mode = th03::game_mode::story;
+	exact_final_stage.story_stage = 8U;
+	exact_final_stage.defeat_flag = th03::detail::DefeatFlag::banner;
+	exact_final_stage.last_fatal_player = 1U;
+	exact_final_stage.winner = 0;
+	MainHudRecordingObserver exact_final_recording;
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		exact_final_stage, &exact_final_recording
+	);
+	auto synthetic_stage = make_live_state();
+	synthetic_stage.game_mode = th03::game_mode::story;
+	synthetic_stage.story_stage = 9U;
+	synthetic_stage.defeat_flag = th03::detail::DefeatFlag::banner;
+	synthetic_stage.last_fatal_player = 1U;
+	synthetic_stage.winner = 0;
+	MainHudRecordingObserver synthetic_recording;
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		synthetic_stage, &synthetic_recording
+	);
+	check(
+		exact_final_recording.results.size() == 1U &&
+		exact_final_recording.results[0U].summary_active &&
+		exact_final_recording.results[0U].story_stage == 8U &&
+		synthetic_recording.results.size() == 1U &&
+		synthetic_recording.results[0U].summary_active &&
+		synthetic_recording.results[0U].story_stage == 9U,
+		"result fact distinguishes the exact final stage from synthetic post-clear stages"
+	);
+
+	auto corrupt_player = make_live_state();
+	corrupt_player.defeat_flag = th03::detail::DefeatFlag::banner;
+	corrupt_player.last_fatal_player = 3U;
+	MainHudRecordingObserver corrupt_recording;
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		corrupt_player, &corrupt_recording
+	);
+	check(
+		corrupt_recording.results.size() == 1U &&
+		!corrupt_recording.results[0U].defeated_player &&
+		!corrupt_recording.results[0U].winner,
+		"result fact closes invalid defeated-player and winner domains"
+	);
+}
+
+void test_main_hud_mutation_sites()
+{
+	auto bomb = make_live_state();
+	bomb.players[0U].bombs = 2U;
+	bomb.skill = 3U;
+	bomb.input_player[0U] = 0x0010U;
+	MainHudRecordingObserver bomb_recording(&bomb);
+	(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+		bomb, &bomb_recording
+	);
+	check(
+		bomb_recording.player_values ==
+			std::vector<th03::MainHudPlayerValueChanged>{{
+				.player = th03::PlayerId::p1,
+				.kind = th03::MainHudPlayerValueKind::bombs,
+				.value_after = 1U,
+			}} &&
+		bomb_recording.player_value_snapshots[0U].invincibility_time == 180U &&
+		bomb_recording.player_value_snapshots[0U].skill == 3U &&
+		bomb.skill == 2U,
+		"Bomb HUD fact follows invincibility assignment and precedes P1 skill decrement"
+	);
+
+	auto hit = make_live_state();
+	hit.players[0U].hit_damage_next = 3U;
+	for(auto &column : hit.collision_map[0U]) {
+		column.fill(true);
+	}
+	MainHudRecordingObserver hit_recording(&hit);
+	(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+		hit, &hit_recording
+	);
+	check(
+		hit_recording.player_values ==
+			std::vector<th03::MainHudPlayerValueChanged>{{
+				.player = th03::PlayerId::p1,
+				.kind = th03::MainHudPlayerValueKind::halfhearts,
+				.value_after = 7U,
+			}} &&
+		hit_recording.calls[0U] == MainHudObservedCall::hit_circle &&
+		hit_recording.calls[1U] == MainHudObservedCall::player_value &&
+		hit_recording.player_value_snapshots[0U].knockback_active,
+		"halfheart HUD fact follows hit-circle allocation and knockback setup"
+	);
+
+	auto fatal = make_live_state();
+	fatal.players[0U].halfhearts = 1U;
+	fatal.players[0U].hit_damage_next = 3U;
+	for(auto &column : fatal.collision_map[0U]) {
+		column.fill(true);
+	}
+	MainHudRecordingObserver fatal_recording(&fatal);
+	(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+		fatal, &fatal_recording
+	);
+	check(
+		fatal_recording.player_values[0U].value_after == 0U &&
+		fatal_recording.player_value_snapshots[0U].lose_anim_time == 0x30U &&
+		!fatal_recording.player_value_snapshots[0U].knockback_active,
+		"fatal halfheart HUD fact follows defeat-timer setup rather than fabricating knockback"
+	);
+
+	auto round = make_live_state();
+	round.round_or_result_frame = 0x1234U;
+	round.players[0U].lose_anim_time = 1U;
+	MainHudRecordingObserver round_recording(&round);
+	(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+		round, &round_recording
+	);
+	check(
+		round_recording.player_values ==
+			std::vector<th03::MainHudPlayerValueChanged>{{
+				.player = th03::PlayerId::p2,
+				.kind = th03::MainHudPlayerValueKind::rounds_won,
+				.value_after = 1U,
+			}} &&
+		round_recording.calls[0U] == MainHudObservedCall::player_defeat_step &&
+		round_recording.calls[1U] == MainHudObservedCall::player_value &&
+		round_recording.player_value_snapshots[0U].defeat_flag == 2U &&
+		round_recording.player_value_snapshots[0U].winner == 1 &&
+		round_recording.player_value_snapshots[0U].round_or_result_frame == 0U,
+		"round-win HUD fact follows banner, winner, and result-frame reset mutations"
+	);
+}
+
+void test_main_hud_deferred_and_repeat_lifecycle()
+{
+	auto init = base_game_init();
+	auto game = th03::Game::create(
+		init,
+		{},
+		th03::GameOptions{
+			.input_protocol = th03::InputProtocol::recorded_replay,
+		}
+	);
+	check(game.has_value(), "HUD/result deferred fixture creates");
+	if(game) {
+		MainHudRecordingObserver recording;
+		const auto deferred = game->step(
+			th03::CoreInput{.system = 0x1000U},
+			th03::InputContext::gameplay,
+			&recording
+		);
+		check(
+			deferred.status == th03::StepStatus::phase_transition &&
+			recording.calls == std::vector<MainHudObservedCall>{
+				MainHudObservedCall::hud_start_step,
+			} &&
+			recording.hud_start_steps[0U].initialize,
+			"recorded pause emits the HUD-start prefix step but defers every late HUD/result fact"
+		);
+		const auto completed = game->finish_deferred_frame(
+			th03::DeferredFrameAction::resume, &recording
+		);
+		check(
+			completed && completed->status == th03::StepStatus::running &&
+			recording.calls == std::vector<MainHudObservedCall>{
+				MainHudObservedCall::hud_start_step,
+				MainHudObservedCall::players_bullets,
+				MainHudObservedCall::result,
+				MainHudObservedCall::gauge,
+				MainHudObservedCall::score,
+				MainHudObservedCall::hud_start,
+				MainHudObservedCall::combo,
+				MainHudObservedCall::result_transition,
+				MainHudObservedCall::footer,
+			},
+			"deferred completion emits the late HUD/result suffix exactly once without repeating prefix"
+		);
+		const auto call_count = recording.calls.size();
+		check(
+			!game->finish_deferred_frame(
+				th03::DeferredFrameAction::resume, &recording
+			) && recording.calls.size() == call_count,
+			"invalid repeated deferred completion emits no HUD/result facts"
+		);
+	}
+
+	auto repeat = make_live_state();
+	repeat.round_id = 4U;
+	repeat.round_complete = true;
+	repeat.route = 1U;
+	th03::detail::initialize_repeat_round(repeat, init, 0U);
+	MainHudRecordingObserver repeat_recording;
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		repeat, &repeat_recording
+	);
+	check(
+		repeat_recording.result_transitions ==
+			std::vector<th03::MainResultTransitionState>{{
+				.context = th03::MainPhaseContext{
+					.round_id = 5U,
+					.round_or_result_frame = 0U,
+					.playfield_fg_shift_x = {0, 0},
+				},
+				.phase = th03::MainResultTransitionPhase::closing,
+				.frame_before = 0U,
+			}} &&
+		repeat.result_phase == th03::detail::ResultPhase::closing &&
+		repeat.result_phase_frame == 1U,
+		"first repeated-round frame exposes the retained closing transition before advancing it"
+	);
+
+	auto result_selected = make_live_state();
+	result_selected.defeat_flag = th03::detail::DefeatFlag::banner;
+	result_selected.last_fatal_player = 0U;
+	result_selected.winner = 1;
+	result_selected.round_or_result_frame = 160U;
+	result_selected.result_phase = th03::detail::ResultPhase::idle;
+	result_selected.result_phase_frame = 7U;
+	MainHudRecordingObserver result_selected_recording;
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		result_selected, &result_selected_recording
+	);
+	check(
+		result_selected_recording.result_transitions ==
+			std::vector<th03::MainResultTransitionState>{{
+				.context = th03::MainPhaseContext{
+					.round_id = 0U,
+					.round_or_result_frame = 160U,
+					.playfield_fg_shift_x = {0, 0},
+				},
+				.phase = th03::MainResultTransitionPhase::opening,
+				.frame_before = 7U,
+			}} &&
+		result_selected.result_phase == th03::detail::ResultPhase::opening &&
+		result_selected.result_phase_frame == 8U,
+		"result control selects opening before the same frame's transition fact without resetting its phase byte"
+	);
+
+	auto demo_selected = make_live_state();
+	demo_selected.game_mode = th03::game_mode::demo;
+	demo_selected.demo_number = 1U;
+	demo_selected.demo_frame = 7000U;
+	demo_selected.result_phase = th03::detail::ResultPhase::idle;
+	demo_selected.result_phase_frame = 9U;
+	MainHudRecordingObserver demo_first;
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		demo_selected, &demo_first
+	);
+	check(
+		demo_first.result_transitions[0U].phase ==
+			th03::MainResultTransitionPhase::idle &&
+		demo_first.result_transitions[0U].frame_before == 9U &&
+		demo_selected.result_phase == th03::detail::ResultPhase::opening &&
+		demo_selected.result_phase_frame == 9U,
+		"demo control selects opening after the current frame's transition fact and preserves its phase byte"
+	);
+	MainHudRecordingObserver demo_second;
+	th03::detail::gameplay_frame_suffix_after_interstitial(
+		demo_selected, &demo_second
+	);
+	check(
+		demo_second.result_transitions[0U].phase ==
+			th03::MainResultTransitionPhase::opening &&
+		demo_second.result_transitions[0U].frame_before == 9U &&
+		demo_selected.result_phase_frame == 10U,
+		"demo-selected opening is first exposed on the following frame"
+	);
+}
+
 std::vector<th03::MainBackgroundRandomRead> expected_fresh_background_reads(
 	std::uint32_t seed,
 	std::size_t count
@@ -4543,6 +5325,10 @@ int main()
 	test_player_pose_and_defeat_lifecycle();
 	test_bullet16_lifecycle_styles_order_and_full_arena();
 	test_post_hittest_fireball_view_and_terminal_order();
+	test_main_hud_start_observation();
+	test_main_hud_result_late_order_and_terminal_split();
+	test_main_hud_mutation_sites();
+	test_main_hud_deferred_and_repeat_lifecycle();
 	test_recorded_pause_completion();
 	test_recorded_pause_prefix_bullet_once();
 	test_warning_completion();

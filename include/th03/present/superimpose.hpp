@@ -30,6 +30,8 @@ public:
 
 	[[nodiscard]] std::uint16_t first_code() const noexcept;
 	[[nodiscard]] std::uint16_t last_code() const noexcept;
+	[[nodiscard]] std::uint16_t pixel_width() const noexcept;
+	[[nodiscard]] std::uint16_t pixel_height() const noexcept;
 
 private:
 	friend std::optional<PreparedSuperimposeSheet>
@@ -39,6 +41,13 @@ private:
 		const PreparedSuperimposeSheet &,
 		Point,
 		std::uint16_t
+	) noexcept;
+	friend bool superimpose_put_blue_plane_row_white(
+		Raster &,
+		const PreparedSuperimposeSheet &,
+		Point,
+		std::uint16_t,
+		std::uint8_t
 	) noexcept;
 
 	PreparedSuperimposeSheet(
@@ -79,6 +88,17 @@ prepare_superimpose_sheet(const assets::BfntSheet &sheet);
 	const PreparedSuperimposeSheet &sheet,
 	Point position,
 	std::uint16_t glyph_code
+) noexcept;
+
+// Exact SUB_BDC2() subset used by MAIN's flying HUD banner. The sheet must be
+// 32x32. Four bytes from one stored B-plane row are rotated into overlapping
+// 16-pixel GRCG-white writes, with the source's byte-start X clipping.
+[[nodiscard]] bool superimpose_put_blue_plane_row_white(
+	Raster &raster,
+	const PreparedSuperimposeSheet &sheet,
+	Point position,
+	std::uint16_t glyph_code,
+	std::uint8_t source_row
 ) noexcept;
 
 } // namespace th03::present

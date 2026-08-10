@@ -102,6 +102,15 @@ void player_bomb(
 		state.bomb_flag[player_id] = BombFlag::preparing;
 		player.bombs--;
 		player.invincibility_time = bomb_frames;
+		if(observer != nullptr) {
+			observer->main_hud_player_value_changed(
+				MainHudPlayerValueChanged{
+					.player = static_cast<PlayerId>(player_id),
+					.kind = MainHudPlayerValueKind::bombs,
+					.value_after = player.bombs,
+				}
+			);
+		}
 		if(player_id == 0U && state.skill > 0U) {
 			state.skill--;
 		}

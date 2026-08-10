@@ -1,9 +1,10 @@
 # TH03 MAIN ordinary-entity gameplay observer schema
 
-Status: source-grounded and implemented. All three ordinary-entity phase views,
-the four literal player-scoped Extra/Charge callbacks, the original four
-ordinary-entity lifecycle families, and the hit-circle/common-effect lifecycle
-facts are present. `th03_present` has source-ordered consumers for each.
+Status: source-grounded and implemented. The original ordinary-entity views
+and lifecycles now sit inside the complete direct-VS MAIN schedule, including
+background, Boss, Extra/Charge, Warning/Gauge, HUD-start, score, combo, result,
+transition, and footer facts. `th03_present` has source-ordered consumers for
+each.
 
 ## Scope and authority
 
@@ -12,8 +13,8 @@ This parcel closes the observation contract for the ordinary live entities in
 fireballs and their explosions, and bullets. Extra Attacks and Charge Attacks
 are now implemented as a narrow player-scoped extension because Reimu's
 render-owned mutation requires a literal callback boundary. Bosses, HUD,
-results, backgrounds, warnings, and audio retain their separately documented
-contracts. Hit circles and common effects likewise extend this schema because
+results, backgrounds, and warnings now extend this same optional observer;
+audio retains its separately documented contract. Hit circles and common effects likewise extend this schema because
 their exact source positions constrain the fireball and final-view draw order.
 
 The behavioral authority is the clean Anniversary source tree at commit
@@ -81,8 +82,11 @@ Expanded with the out-of-scope slots left visible, one ordinary drawn frame is:
 6. `PlayersBulletsPhaseView`: player base pass P1 then P2; disable EGC; overlay
    pass P1 then P2; common-effect draw; bullet16 pass, cloud pass, then pellet
    pass.
-7. Core performs result control. A route-1/2 return omits later HUD/counter
-   work, but it does not omit any of the three ordinary-entity phase views.
+7. The presenter consumes the pre-control result fact. Core then performs
+   result control. A route-1/2 return omits later Gauge/HUD/footer work, but it
+   does not omit any earlier ordinary-entity phase view or the result fact.
+8. A nonterminal suffix continues with Gauge, score, Story extend, warning
+   portraits, HUD-start, combo, result transition, and the frame footer.
 
 This is deliberately not a generic render event stream. Each callback denotes
 a gameplay-coherent instant. The per-slot ordering and the multiple bullet and
@@ -99,19 +103,19 @@ The native split frame must retain source-equivalent observation timing:
   the player and late halves (`src/core/game.cpp:315-353`). The same observer
   instance must consume both calls if it is maintaining Authentic state.
 - A warning starts after both player updates. Shot-spawn and player-lifecycle
-  facts from those updates have already occurred, but the three phase views are
+  facts from those updates have already occurred, but the late phase sequence is
   deferred. They occur exactly once after the 27th interstitial sample invokes
   the late suffix (`src/core/game.cpp:273-304`; `src/core/frame.cpp:341-358`).
-- A result route that becomes terminal still reports all three phase views,
-  because source result control follows `bullets_render()`
+- A result route that becomes terminal still reports every earlier phase view
+  and the pre-control result fact, because source result control follows `bullets_render()`
   (`th03/main/rndloop.cpp:174-185`).
 - A call made after `round_complete` reports nothing. A
   `simulation_not_implemented` result reports no phase view; it may already
   have produced lifecycle facts for successful work before the native content
   gate failed, just as the current prefix may already have mutated state.
 - The stock-unused `byte_23AFA` alternate draw cadence is not a reason to add a
-  phase today. If it is ever modeled, its skipped draw frames must suppress all
-  three phase views and must not advance presenter-owned shot animation
+  phase today. If it is ever modeled, its skipped draw frames must suppress the
+  entire late draw sequence and must not advance presenter-owned shot animation
   (`th03/main/rndloop.cpp:129-139`).
 
 ## Coordinate contract
@@ -615,20 +619,23 @@ uses it, the following tests must pass.
 
 ### Schedule and control flow
 
-1. Ordinary frame: exactly `ShotsEnemies`, `Fireballs`, `PlayersBullets`, once
-   each and in that order.
+1. Ordinary late frame: Boss, `ShotsEnemies`, `Fireballs`, Extra P1, Charge P1,
+   Extra P2, Charge P2, `PlayersBullets`, result, Gauge, score, HUD-start,
+   combo, result transition, and footer occur once in that order. Prefix
+   lifecycle/background facts retain their earlier documented slots.
 2. Warning-start gameplay call: player/shot lifecycle facts may precede
    `WarningInterstitialStarted`, but no phase view or footer occurs. Every
    accepted sample emits `WarningInterstitialSample` with ordinal 0..26 after
    its input latch. Ordinals 0..25 emit no phase view or footer; ordinal 26 is
-   followed by the ordinary suffix, all three views, and the footer when result
-   control does not end the round.
+   followed by the complete ordinary suffix and footer when result control does
+   not end the round.
 3. Recorded pause: the initial call may emit prefix allocation facts but no
    phase view or footer. `finish_deferred_frame()` emits the delayed player
-   facts and all three phase views once, then the footer only if the source
+   facts and the complete late phase sequence once, then the footer only if the source
    reaches it. Exiting the session does not duplicate them.
-4. Route-1/2 terminal frame: all three phase views precede the terminal result;
-   no footer or later HUD/counter observation is fabricated. A normal
+4. Route-1/2 terminal frame: every phase through the pre-control result fact
+   precedes the terminal result; no Gauge, score, late HUD, footer, or counter
+   observation is fabricated. A normal
    session-exit completion that reaches the source footer emits it before the
    final counter maintenance.
 5. Already-complete and invalid-context calls emit nothing. A focused native
@@ -703,8 +710,21 @@ The first coding parcel stopped after the first two phase boundaries:
    Character-specific Bomb, Warning/Gauge, Defeat, and Boss presenters remain
    responsible for interpreting these semantic facts.
 
-Together these parcels yield the complete ordinary-entity fact stream and the
-two adjacent effect lifecycles while keeping the risk and review surface small.
+6. Background, Boss, Extra Attack, and Charge Shot parcels added their exact
+   borrowed views and compatibility/lifecycle facts. The late order is Boss,
+   Shots/Enemies, Fireballs, Extra P1, Charge P1, Extra P2, Charge P2, then
+   Players/Bullets; Reimu's render-owned Extra frame increment remains in core
+   between its two views.
+
+7. The HUD/result parcel adds the HUD-start prefix step and 512 ordered raw
+   reads, dynamic static-HUD value changes, the pre-result-control state, and
+   the nonterminal score/extend, HUD-start, combo, and result-transition tail.
+   Terminal result control therefore retains its banner/summary callback but
+   emits no later Gauge/HUD/footer facts. Route-1 repeat remains an explicit
+   application/presenter lifecycle operation.
+
+Together these parcels yield the source-ordered direct-VS MAIN observation
+stream while keeping the risk and review surface small.
 They add no generic entity abstraction, queue, renderer dependency,
 localization policy, or state/hash field solely for presentation. The
 no-observer path remains the verifier path.

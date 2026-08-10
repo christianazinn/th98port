@@ -42,6 +42,14 @@ void player_defeat_update(
 	state.players[1U - player_id].rounds_won++;
 	state.winner = static_cast<std::int8_t>(1U - player_id);
 	state.round_or_result_frame = 0U;
+	if(observer != nullptr) {
+		const auto winner_id = static_cast<std::uint8_t>(1U - player_id);
+		observer->main_hud_player_value_changed(MainHudPlayerValueChanged{
+			.player = static_cast<PlayerId>(winner_id),
+			.kind = MainHudPlayerValueKind::rounds_won,
+			.value_after = state.players[winner_id].rounds_won,
+		});
+	}
 }
 
 bool player_update_begin(
@@ -303,6 +311,15 @@ void player_update_finish(
 			player.knockback_time = knockback_frames;
 			player.invincibility_time = miss_invincibility_frames;
 			player.move_lock_time = knockback_frames;
+		}
+		if(observer != nullptr) {
+			observer->main_hud_player_value_changed(
+				MainHudPlayerValueChanged{
+					.player = static_cast<PlayerId>(player_id),
+					.kind = MainHudPlayerValueKind::halfhearts,
+					.value_after = player.halfhearts,
+				}
+			);
 		}
 	}
 	player.is_hit = false;

@@ -53,17 +53,23 @@ results into visual payloads. Observations are not draw instructions, asset or
 sound IDs, visual entity state, or replay data. The core retains no observation
 after the callback returns, and an observer cannot alter control flow.
 
-The implemented ordinary-entity seam has three source-ordered phase views:
-shots/enemies, fireballs after their collision pass, and final players/bullets
-before result routing. Successful shot and Bullet16 construction plus player
+The implemented MAIN seam retains those three source-ordered ordinary-entity
+views—shots/enemies, fireballs after their collision pass, and final
+players/bullets—inside a complete direct-VS callback schedule. Successful shot and Bullet16 construction plus player
 pose/defeat facts close source presentation lifetimes that cannot be inferred
 from late gameplay state. These are typed gameplay facts rather than renderer
 commands. `th03_present` consumers privately own shot animation, the shared
 player-pose and defeat records, Bullet16 construction style, both original
 hit-circle/common-effect pools, and their presentation-only Kana/Kotohime Bomb
-state while drawing all three views without storing anything in core. Explicit
+state while drawing those views without storing anything in core. Explicit
 hit-circle and common-effect passes occupy the source slots after fireballs and
 between player overlays and bullets, respectively.
+
+Additional borrowed views and semantic facts preserve background, Boss,
+Extra/Charge, Warning/Gauge, HUD-start, score/extend, combo, result,
+transition, and footer boundaries. Result is observed before its control/bonus
+mutation; terminal routes emit no later Gauge/HUD/footer facts. No callback
+contains a color, glyph, asset, page operation, or draw command.
 
 Some original callbacks named as rendering perform gameplay mutations or
 consume the RNG stream later used by gameplay. Those mutations and that exact

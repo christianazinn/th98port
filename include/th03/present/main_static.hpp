@@ -85,6 +85,26 @@ void main_hud_wipe(Tram &tram) noexcept;
 	std::uint8_t boss_level
 ) noexcept;
 
+[[nodiscard]] bool main_hud_halfhearts_put(
+	Tram &tram,
+	std::size_t player_id,
+	std::uint8_t halfhearts
+) noexcept;
+[[nodiscard]] bool main_hud_bombs_put(
+	Tram &tram,
+	std::size_t player_id,
+	std::uint8_t bombs
+) noexcept;
+[[nodiscard]] bool main_hud_rounds_won_put(
+	Tram &tram,
+	std::size_t player_id,
+	std::uint8_t rounds_won
+) noexcept;
+[[nodiscard]] bool main_hud_story_lives_put(
+	Tram &tram,
+	std::uint8_t lives
+) noexcept;
+
 // Draws the exact six patterns selected by sub_E266() to page 1 and then page
 // 0. The decoded sheets must have the exact 32x32, 9-glyph character layout.
 [[nodiscard]] bool main_prepare_shot_source_sheet(

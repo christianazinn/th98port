@@ -1,7 +1,6 @@
 #ifndef TH03_PRESENT_MAIN_ROUND_HPP
 #define TH03_PRESENT_MAIN_ROUND_HPP
 
-#include <array>
 #include <cstdint>
 #include <expected>
 #include <span>
@@ -13,6 +12,7 @@
 #include "th03/present/main_effects.hpp"
 #include "th03/present/main_entities.hpp"
 #include "th03/present/main_extra_charge.hpp"
+#include "th03/present/main_hud_result.hpp"
 #include "th03/present/main_palette.hpp"
 #include "th03/present/main_players_bullets.hpp"
 #include "th03/present/main_static.hpp"
@@ -20,20 +20,6 @@
 #include "th03/present/source_surface.hpp"
 
 namespace th03::present {
-
-// Named gaps in this first source-ordered MAIN composition owner. These are
-// deliberately explicit rather than approximated from the ordered phase
-// views.
-enum class MainRoundMissingPhase : std::uint8_t {
-	hud,
-	result,
-};
-
-inline constexpr std::array<MainRoundMissingPhase, 2U>
-	main_round_missing_phases{{
-		MainRoundMissingPhase::hud,
-		MainRoundMissingPhase::result,
-	}};
 
 enum class MainRoundStatus : std::uint8_t {
 	ready,
@@ -47,6 +33,7 @@ enum class MainRoundStatus : std::uint8_t {
 	players_bullets_failed,
 	bombs_failed,
 	warning_gauge_failed,
+	hud_result_failed,
 	page_state_mismatch,
 	page_transaction_failed,
 	repeat_startup_failed,
@@ -81,7 +68,8 @@ public:
 		MainExtraChargePresenter &extra_charge,
 		MainPlayersBulletsPresenter &players_bullets,
 		MainBombsPresenter &bombs,
-		MainWarningGaugePresenter &warning_gauge
+		MainWarningGaugePresenter &warning_gauge,
+		MainHudResultPresenter &hud_result
 	) noexcept;
 	MainRoundPresenter(const MainRoundPresenter &) = delete;
 	MainRoundPresenter &operator=(const MainRoundPresenter &) = delete;
@@ -124,6 +112,23 @@ public:
 		const WarningPortraitTransition &transition
 	) noexcept override;
 	void main_gauge_state(const MainGaugeState &state) noexcept override;
+	void hud_start_frame_step(const HudStartFrameStep &step) noexcept override;
+	void hud_start_compatibility_read(
+		const HudStartCompatibilityRead &read
+	) noexcept override;
+	void main_hud_start_state(const MainHudStartState &state) noexcept override;
+	void main_hud_player_value_changed(
+		const MainHudPlayerValueChanged &changed
+	) noexcept override;
+	void main_hud_story_lives_changed(
+		const MainHudStoryLivesChanged &changed
+	) noexcept override;
+	void main_result_state(const MainResultState &state) noexcept override;
+	void main_score_state(const MainScoreState &state) noexcept override;
+	void main_combo_state(const MainComboState &state) noexcept override;
+	void main_result_transition_state(
+		const MainResultTransitionState &state
+	) noexcept override;
 	void main_frame_footer_reached(
 		const MainFrameFooterReached &footer
 	) noexcept override;
@@ -177,8 +182,13 @@ private:
 		extra_p2,
 		charge_p2,
 		players_bullets,
+		result,
 		result_gate,
-		late_gauge,
+		score,
+		hud_start,
+		combo,
+		result_transition,
+		footer,
 	};
 
 	void fail(MainRoundStatus status) noexcept;
@@ -203,6 +213,7 @@ private:
 	MainPlayersBulletsPresenter *players_bullets_;
 	MainBombsPresenter *bombs_;
 	MainWarningGaugePresenter *warning_gauge_;
+	MainHudResultPresenter *hud_result_;
 	MainPlayerFacts player_facts_{};
 	MainBulletFacts bullet_facts_{};
 	MainBulletTrails bullet_trails_{};
@@ -219,6 +230,10 @@ private:
 	std::uint8_t background_round_id_ = 0;
 	std::uint16_t background_round_or_result_frame_ = 0;
 	std::uint8_t background_frame_reads_remaining_ = 0;
+	std::uint16_t hud_start_reads_remaining_ = 0;
+	bool hud_start_step_seen_ = false;
+	bool story_lives_changed_ = false;
+	bool repeat_result_ready_ = false;
 	MainRoundStatus status_ = MainRoundStatus::ready;
 };
 

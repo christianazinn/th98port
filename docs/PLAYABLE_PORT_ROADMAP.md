@@ -54,11 +54,17 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   presenter uses only the committed Sprite16 atlas, exact GRCG primitives, and
   borrowed semantic facts; Kana's one source-stale destination byte remains
   process-scoped presentation state across repeat rounds.
+- Dynamic HUD and result presentation is integrated. The process-scoped
+  presenter covers HUD-start banners and all 512 compatibility reads, static
+  HUD mutations, scores and Story extends, combos, defeat/winner banners,
+  winner summaries, and opening/closing transitions. `MainRoundPresenter`
+  distinguishes terminal no-footer frames from source-valid route-1 repeats
+  and preserves the first repeated-round closing frame.
 
-The shortest remaining chain to a visible interactive build is: fill
-HUD/result gaps in the existing composition owner; bind decoded external
-resources into one process bundle; add the fixed 56.423 Hz input scheduler;
-then add the thin
+The shortest remaining chain to a visible interactive build is: import the
+external compiled masks/result text and an authenticated PC-98 ANK font; bind
+decoded external resources into one process bundle; add the fixed-tick input
+scheduler; then add the thin
 SDL upload and input shell. PC-98 visual traces remain the release authority
 after the synthetic cross-compiler gates.
 
@@ -99,11 +105,10 @@ th03_assets remains a collection of pure decoders for supplied byte spans (RGB, 
 The current libraries contain a tested process coordinator over static setup,
 all nine Bomb, Boss, Extra, and Charge paths, entities, players/bullets,
 effects, palette/raster, sprites, text, both MAIN backgrounds, and the final Raster-plus-TRAM source
-surface. It deliberately names every unimplemented pass, so it is not yet
-proof that every real MAIN
-frame is complete. Source-order coverage is still required for dynamic
-HUD/result overlays. The neutral
-observer lifecycle events are a seam for that work; they are not render state
+surface. Dynamic HUD/result passes are now source-ordered as well. This closes
+the synthetic source-derived MAIN composition inventory for direct VS; it does
+not replace the external real-asset startup gate or captured PC-98 frame
+comparison. Neutral observer lifecycle events remain facts, never render state
 in the core.
 
 ## Source/application scene boundary
@@ -171,7 +176,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 
 | Item | Blocks visual VS? | Why / completion condition |
 | --- | --- | --- |
-| Remaining MAIN source-order coverage | Yes | The coordinator, footer, repeat reset, and existing passes are integrated; finish every named missing family before calling the image complete. |
+| MAIN source-order coverage | Integrated | Every audited direct-VS MAIN family now has a synchronous consumer; real-asset startup and captured PC-98 visual traces remain the fidelity gates. |
 | MainRoundAssets construction over the checked external manifest | Yes | The 106-entry manifest/cache metadata is frozen, but the app still must decode and bind the selected process bundle without substitute data. |
 | Fixed tick plus input-latch boundary | Yes | A window whose simulation follows host refresh is not a source-faithful match. Finish fake-clock scheduler tests and establish source cadence. |
 | Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
@@ -181,7 +186,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | Audio | No for the explicitly marked silent visual vertical slice; yes for a fully faithful release | Start source/data investigation now, but do not block visible MAIN on an invented WAV backend. |
 | Persistent score/configuration UI and localization/QoL | No | Keep it outside the first faithful path and behind an app-owned profile/catalog seam. |
 
-The following parcels are safe to begin before complete presentation, provided they do not claim readiness for VS or change core semantics:
+The following parcels can proceed now, provided they do not claim readiness for VS or change core semantics:
 
 | Parallel parcel | Target / boundary | Initial acceptance gate |
 | --- | --- | --- |

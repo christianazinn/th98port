@@ -54,6 +54,8 @@ add_library(th03_present STATIC
 	src/present/main_effects.cpp
 	src/present/main_extra.cpp
 	src/present/main_charge.cpp
+	src/present/main_hud.cpp
+	src/present/main_result.cpp
 	src/present/main_bomb_palette.cpp
 	src/present/main_bombs.cpp
 	src/present/main_bombs_characters.cpp
@@ -421,6 +423,19 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-present-main-warning-gauge-tests
 		COMMAND th03-present-main-warning-gauge-tests
+	)
+
+	add_executable(th03-present-main-hud-result-tests
+		tests/test_present_main_hud_result.cpp
+	)
+	target_link_libraries(
+		th03-present-main-hud-result-tests
+		PRIVATE th03_present
+	)
+	th03_set_warnings(th03-present-main-hud-result-tests)
+	add_test(
+		NAME th03-present-main-hud-result-tests
+		COMMAND th03-present-main-hud-result-tests
 	)
 
 	add_executable(th03-present-main-round-tests

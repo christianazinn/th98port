@@ -350,15 +350,16 @@ shell.
    primitives from the now-integrated static MAIN and ordinary-entity
    foundations. Keep original bytes external and add captured-pixel gates only
    after the required application asset-loading seam exists.
-4. Extend the completed three-phase ordinary-entity observer into Authentic
-   presentation. Shots, enemies, post-hittest fireballs, player bases/overlays,
+4. Drive the completed source-ordered MAIN observer/presenter from the
+   application process bundle. Shots, enemies, post-hittest fireballs,
+   player bases/overlays,
    defeat geometry, hit circles, the intervening common-effect pool,
    Bullet16s, clouds, pellets, both background families, and all-nine
-   Boss/Bomb/Extra/Charge/Warning/Gauge paths now have source-ordered
-   consumers. Next close the dynamic HUD/result passes, assemble the external
-   process resource bundle, and drive that completed coordinator from the
-   fixed-rate application shell. Keep `th03rv` independent of both
-   presentation and asset libraries.
+   Boss/Bomb/Extra/Charge/Warning/Gauge paths, HUD-start, score/extend, combos,
+   result banners, and result transitions now have source-ordered consumers.
+   Next assemble the external process resource bundle and drive that completed
+   coordinator from the fixed-rate application shell. Keep `th03rv`
+   independent of both presentation and asset libraries.
 5. Select a minimal Windows/platform backend from an explicit support-floor
    matrix, then implement the host compositor and input mapping.
 6. Select and integrate the PMD/YM2608 audio stack after the licensing and

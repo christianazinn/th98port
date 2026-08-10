@@ -96,6 +96,16 @@ std::uint16_t PreparedSuperimposeSheet::last_code() const noexcept
 	return last_code_;
 }
 
+std::uint16_t PreparedSuperimposeSheet::pixel_width() const noexcept
+{
+	return width_;
+}
+
+std::uint16_t PreparedSuperimposeSheet::pixel_height() const noexcept
+{
+	return height_;
+}
+
 std::optional<PreparedSuperimposeSheet> prepare_superimpose_sheet(
 	const assets::BfntSheet &sheet
 )
@@ -204,6 +214,73 @@ bool superimpose_put(
 		opacity,
 		position
 	);
+}
+
+bool superimpose_put_blue_plane_row_white(
+	Raster &raster,
+	const PreparedSuperimposeSheet &sheet,
+	Point position,
+	std::uint16_t glyph_code,
+	std::uint8_t source_row
+) noexcept
+{
+	constexpr std::uint16_t required_width = 32U;
+	constexpr std::uint16_t required_height = 32U;
+	constexpr std::size_t source_stride = required_width / 8U;
+	const auto glyph_count = static_cast<std::size_t>(
+		static_cast<std::uint32_t>(sheet.last_code_) - sheet.first_code_ + 1U
+	);
+	const auto total_plane_size = sheet.plane_size_ * glyph_count;
+	const auto white = GrcgTile::solid(15U);
+	if(sheet.width_ != required_width || sheet.height_ != required_height ||
+		sheet.plane_size_ != (source_stride * required_height) ||
+		glyph_code < sheet.first_code_ || glyph_code > sheet.last_code_ ||
+		source_row >= required_height ||
+		sheet.color_planes_[0].size() != total_plane_size || !white) {
+		return false;
+	}
+
+	const auto glyph_index = static_cast<std::size_t>(
+		static_cast<std::uint32_t>(glyph_code) - sheet.first_code_
+	);
+	const auto row_offset = (glyph_index * sheet.plane_size_) +
+		(static_cast<std::size_t>(source_row) * source_stride);
+	auto x = position.x;
+	for(std::size_t byte = 0U; byte < source_stride; ++byte, x += 8) {
+		if(x < 0) {
+			continue;
+		}
+		if(x >= 624) {
+			break;
+		}
+		const auto shift = static_cast<unsigned>(x & 7);
+		const auto source = static_cast<std::uint16_t>(
+			sheet.color_planes_[0][row_offset + byte]
+		);
+		const auto rotated = static_cast<std::uint16_t>(
+			(source >> shift) | (source << ((16U - shift) & 15U))
+		);
+		const std::array<std::uint8_t, 2U> bytes{
+			static_cast<std::uint8_t>(rotated & 0xFFU),
+			static_cast<std::uint8_t>(rotated >> 8U),
+		};
+		const BitSource mask{
+			bytes,
+			16U,
+			1U,
+			2U,
+			PackedRowOrder::top_to_bottom,
+		};
+		if(!raster.grcg_write(
+			mask,
+			{(x >> 3) * 8, position.y},
+			GrcgWriteMode::read_modify_write,
+			*white
+		)) {
+			return false;
+		}
+	}
+	return true;
 }
 
 } // namespace th03::present

@@ -1,11 +1,26 @@
 // Included by ../frame.cpp inside its private implementation namespace.
 
-void hud_start_update_prefix(DeterministicState &state) noexcept
+void hud_start_update_prefix(
+	DeterministicState &state,
+	GameplayObserver *observer
+) noexcept
 {
+	bool initialize = false;
 	if(state.hud_start_flag == 1U) {
 		state.hud_start_state = 0U;
 		state.hud_start_frame = 0U;
 		state.hud_start_flag = 2U;
+		initialize = true;
+	}
+	if(observer != nullptr) {
+		observer->hud_start_frame_step(HudStartFrameStep{
+			.initialize = initialize,
+			.story_mode = state.game_mode == game_mode_story,
+			.story_stage = state.story_stage,
+			.round_id = state.round_id,
+			.state_before = state.hud_start_state,
+			.frame_before = state.hud_start_frame,
+		});
 	}
 	if(state.hud_start_state == 0U) {
 		// The first banner chunk is also the last to settle. Its velocity passes
@@ -26,10 +41,40 @@ void hud_start_update_prefix(DeterministicState &state) noexcept
 		// visual: each of 128 particles consumes two 16-bit ring values and two
 		// master.lib IRAND values, in that order.
 		for(std::size_t i = 0; i < 128U; ++i) {
-			(void)(randring_next16(state) & 511U);
-			(void)randring_next16(state);
-			(void)(irand(state.random_seed) % 3U);
-			(void)(irand(state.random_seed) % 3U);
+			const auto observe_read = [observer, i](
+				HudStartCompatibilityReadSite site,
+				std::uint16_t raw_value
+			) noexcept {
+				if(observer != nullptr) {
+					observer->hud_start_compatibility_read(
+						HudStartCompatibilityRead{
+							.site = site,
+							.particle_ordinal =
+								static_cast<std::uint8_t>(i),
+							.raw_value = raw_value,
+						}
+					);
+				}
+			};
+			const auto particle_y = randring_next16(state);
+			observe_read(
+				HudStartCompatibilityReadSite::particle_y, particle_y
+			);
+			const auto particle_angle = randring_next16(state);
+			observe_read(
+				HudStartCompatibilityReadSite::particle_angle,
+				particle_angle
+			);
+			const auto angle_delta_first = irand(state.random_seed);
+			observe_read(
+				HudStartCompatibilityReadSite::angle_delta_first,
+				angle_delta_first
+			);
+			const auto angle_delta_second = irand(state.random_seed);
+			observe_read(
+				HudStartCompatibilityReadSite::angle_delta_second,
+				angle_delta_second
+			);
 		}
 		state.hud_start_state = 3U;
 		state.hud_start_frame = 0U;
@@ -211,12 +256,20 @@ void result_transition_update(DeterministicState &state) noexcept
 	}
 }
 
-void story_extend_update(DeterministicState &state) noexcept
+void story_extend_update(
+	DeterministicState &state,
+	GameplayObserver *observer
+) noexcept
 {
 	if(state.extends_gained >= state.score[0][6]) {
 		return;
 	}
 	state.story_lives = static_cast<std::uint8_t>(state.story_lives + 1U);
+	if(observer != nullptr) {
+		observer->main_hud_story_lives_changed(MainHudStoryLivesChanged{
+			.value_after = state.story_lives,
+		});
+	}
 	state.extends_gained = static_cast<std::uint8_t>(
 		state.extends_gained + 1U
 	);

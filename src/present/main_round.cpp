@@ -24,7 +24,8 @@ MainRoundPresenter::MainRoundPresenter(
 	MainExtraChargePresenter &extra_charge,
 	MainPlayersBulletsPresenter &players_bullets,
 	MainBombsPresenter &bombs,
-	MainWarningGaugePresenter &warning_gauge
+	MainWarningGaugePresenter &warning_gauge,
+	MainHudResultPresenter &hud_result
 ) noexcept :
 	raster_(&raster),
 	tram_(&tram),
@@ -37,7 +38,8 @@ MainRoundPresenter::MainRoundPresenter(
 	extra_charge_(&extra_charge),
 	players_bullets_(&players_bullets),
 	bombs_(&bombs),
-	warning_gauge_(&warning_gauge)
+	warning_gauge_(&warning_gauge),
+	hud_result_(&hud_result)
 {
 	if(!static_->started() || !palette_->baseline_ready()) {
 		status_ = MainRoundStatus::invalid_setup;
@@ -73,6 +75,10 @@ MainRoundPresenter::MainRoundPresenter(
 	}
 	if(!warning_gauge_->ready()) {
 		status_ = MainRoundStatus::warning_gauge_failed;
+		return;
+	}
+	if(!hud_result_->ready()) {
+		status_ = MainRoundStatus::hud_result_failed;
 		return;
 	}
 	if(!source_page_ready()) {
@@ -341,6 +347,7 @@ void MainRoundPresenter::warning_interstitial_started(
 	if(
 		phase_ != Phase::boss || warning_interstitial_active_ ||
 		warning_suffix_pending_ || warning_lifecycle_seen_ ||
+		!hud_start_step_seen_ || hud_start_reads_remaining_ != 0U ||
 		(!started.flashing_players[0U] && !started.flashing_players[1U])
 	) {
 		fail(MainRoundStatus::invalid_observation);
@@ -393,7 +400,8 @@ void MainRoundPresenter::warning_frame_lifecycle(
 	}
 	if(
 		phase_ != Phase::boss || warning_interstitial_active_ ||
-		warning_lifecycle_seen_
+		warning_lifecycle_seen_ || !hud_start_step_seen_ ||
+		hud_start_reads_remaining_ != 0U
 	) {
 		fail(MainRoundStatus::invalid_observation);
 		return;
@@ -428,7 +436,8 @@ void MainRoundPresenter::gauge_attack_finished(
 		phase_ != Phase::boss || warning_interstitial_active_ ||
 		warning_suffix_pending_ || warning_lifecycle_seen_ ||
 		background_frame_seen_ || attacker >= 2U ||
-		attacker < next_gauge_finish_player_
+		attacker < next_gauge_finish_player_ || !hud_start_step_seen_ ||
+		hud_start_reads_remaining_ != 0U
 	) {
 		fail(MainRoundStatus::invalid_observation);
 		return;
@@ -453,7 +462,7 @@ void MainRoundPresenter::warning_portrait_transition(
 		? static_cast<std::uint8_t>(1U << player)
 		: std::uint8_t{0U};
 	const auto lower_mask = static_cast<std::uint8_t>(player_bit - 1U);
-	if(phase_ != Phase::late_gauge || player >= 2U ||
+	if(phase_ != Phase::hud_start || player >= 2U ||
 		(expected_portrait_mask_ & player_bit) == 0U ||
 		(expected_portrait_mask_ & lower_mask) != 0U) {
 		fail(MainRoundStatus::invalid_observation);
@@ -483,7 +492,182 @@ void MainRoundPresenter::main_gauge_state(const MainGaugeState &state) noexcept
 		fail(MainRoundStatus::warning_gauge_failed);
 		return;
 	}
-	phase_ = Phase::late_gauge;
+	phase_ = Phase::score;
+}
+
+void MainRoundPresenter::hud_start_frame_step(
+	const HudStartFrameStep &step
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	if(!source_prefix_open() || hud_start_step_seen_ ||
+		step.state_before > 4U ||
+		(step.initialize &&
+			(step.state_before != 0U || step.frame_before != 0U))) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	hud_result_->hud_start_frame_step(step);
+	if(!hud_result_->ready()) {
+		fail(MainRoundStatus::hud_result_failed);
+		return;
+	}
+	hud_start_step_seen_ = true;
+	hud_start_reads_remaining_ = (step.state_before == 2U) ? 512U : 0U;
+}
+
+void MainRoundPresenter::hud_start_compatibility_read(
+	const HudStartCompatibilityRead &read
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	if(!source_prefix_open() || !hud_start_step_seen_ ||
+		hud_start_reads_remaining_ == 0U) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	hud_result_->hud_start_compatibility_read(read);
+	if(!hud_result_->ready()) {
+		fail(MainRoundStatus::hud_result_failed);
+		return;
+	}
+	hud_start_reads_remaining_--;
+}
+
+void MainRoundPresenter::main_hud_player_value_changed(
+	const MainHudPlayerValueChanged &changed
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	if(!source_prefix_open() || !hud_start_step_seen_ ||
+		hud_start_reads_remaining_ != 0U) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	hud_result_->main_hud_player_value_changed(changed);
+	if(!hud_result_->ready()) {
+		fail(MainRoundStatus::hud_result_failed);
+	}
+}
+
+void MainRoundPresenter::main_hud_story_lives_changed(
+	const MainHudStoryLivesChanged &changed
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	if(phase_ != Phase::hud_start || story_lives_changed_) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	hud_result_->main_hud_story_lives_changed(changed);
+	if(!hud_result_->ready()) {
+		fail(MainRoundStatus::hud_result_failed);
+		return;
+	}
+	story_lives_changed_ = true;
+}
+
+void MainRoundPresenter::main_result_state(
+	const MainResultState &state
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	if(phase_ != Phase::result || !same_frame(state.context)) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	hud_result_->main_result_state(state);
+	if(!hud_result_->ready()) {
+		fail(MainRoundStatus::hud_result_failed);
+		return;
+	}
+	repeat_result_ready_ = state.defeated_player.has_value() &&
+		state.winner.has_value();
+	phase_ = Phase::result_gate;
+}
+
+void MainRoundPresenter::main_score_state(const MainScoreState &state) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	if(phase_ != Phase::score || !same_frame(state.context)) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	hud_result_->main_score_state(state);
+	if(!hud_result_->ready()) {
+		fail(MainRoundStatus::hud_result_failed);
+		return;
+	}
+	phase_ = Phase::hud_start;
+}
+
+void MainRoundPresenter::main_hud_start_state(
+	const MainHudStartState &state
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	if(phase_ != Phase::hud_start || expected_portrait_mask_ != 0U ||
+		!hud_start_step_seen_ || hud_start_reads_remaining_ != 0U ||
+		state.round_id != frame_context_.round_id) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	hud_result_->main_hud_start_state(state);
+	if(!hud_result_->ready()) {
+		fail(MainRoundStatus::hud_result_failed);
+		return;
+	}
+	phase_ = Phase::combo;
+}
+
+void MainRoundPresenter::main_combo_state(const MainComboState &state) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	if(phase_ != Phase::combo || !same_frame(state.context)) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	hud_result_->main_combo_state(state);
+	if(!hud_result_->ready()) {
+		fail(MainRoundStatus::hud_result_failed);
+		return;
+	}
+	phase_ = Phase::result_transition;
+}
+
+void MainRoundPresenter::main_result_transition_state(
+	const MainResultTransitionState &state
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	if(phase_ != Phase::result_transition || !same_frame(state.context)) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	hud_result_->main_result_transition_state(state);
+	if(!hud_result_->ready()) {
+		fail(MainRoundStatus::hud_result_failed);
+		return;
+	}
+	phase_ = Phase::footer;
 }
 
 void MainRoundPresenter::main_background_initialize(
@@ -509,6 +693,7 @@ void MainRoundPresenter::main_background_frame(
 	if(
 		phase_ != Phase::boss || warning_interstitial_active_ ||
 		!warning_lifecycle_seen_ || background_frame_seen_ ||
+		!hud_start_step_seen_ || hud_start_reads_remaining_ != 0U ||
 		!source_page_ready()
 	) {
 		fail(
@@ -811,7 +996,7 @@ void MainRoundPresenter::observe(const PlayersBulletsView &view) noexcept
 		}
 		return;
 	}
-	phase_ = Phase::result_gate;
+	phase_ = Phase::result;
 }
 
 void MainRoundPresenter::main_frame_footer_reached(
@@ -821,7 +1006,7 @@ void MainRoundPresenter::main_frame_footer_reached(
 	if(!ready()) {
 		return;
 	}
-	if(phase_ != Phase::late_gauge || expected_portrait_mask_ != 0U) {
+	if(phase_ != Phase::footer || expected_portrait_mask_ != 0U) {
 		fail(MainRoundStatus::invalid_observation);
 		return;
 	}
@@ -843,6 +1028,10 @@ void MainRoundPresenter::main_frame_footer_reached(
 	next_gauge_finish_player_ = 0U;
 	next_late_bomb_player_ = 0U;
 	expected_portrait_mask_ = 0U;
+	hud_start_reads_remaining_ = 0U;
+	hud_start_step_seen_ = false;
+	story_lives_changed_ = false;
+	repeat_result_ready_ = false;
 }
 
 bool MainRoundPresenter::repeat_round_startup(
@@ -852,7 +1041,7 @@ bool MainRoundPresenter::repeat_round_startup(
 	if(!ready()) {
 		return false;
 	}
-	if(phase_ != Phase::result_gate) {
+	if(phase_ != Phase::result_gate || !repeat_result_ready_) {
 		fail(MainRoundStatus::invalid_observation);
 		return false;
 	}
@@ -875,6 +1064,10 @@ bool MainRoundPresenter::repeat_round_startup(
 	next_gauge_finish_player_ = 0U;
 	next_late_bomb_player_ = 0U;
 	expected_portrait_mask_ = 0U;
+	hud_start_reads_remaining_ = 0U;
+	hud_start_step_seen_ = false;
+	story_lives_changed_ = false;
+	repeat_result_ready_ = false;
 	return true;
 }
 

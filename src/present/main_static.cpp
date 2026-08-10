@@ -294,6 +294,44 @@ bool main_hud_gauge_levels_put(
 	return put_gauge_levels(tram, player_id, gauge_level, boss_level);
 }
 
+bool main_hud_halfhearts_put(
+	Tram &tram,
+	std::size_t player_id,
+	std::uint8_t halfhearts
+) noexcept
+{
+	return player_id < main_player_count && halfhearts <= main_halfhearts_max &&
+		put_halfhearts(tram, player_id, halfhearts);
+}
+
+bool main_hud_bombs_put(
+	Tram &tram,
+	std::size_t player_id,
+	std::uint8_t bombs
+) noexcept
+{
+	return player_id < main_player_count &&
+		bombs <= main_bombs_coordinate_limit &&
+		put_bombs(tram, player_id, bombs);
+}
+
+bool main_hud_rounds_won_put(
+	Tram &tram,
+	std::size_t player_id,
+	std::uint8_t rounds_won
+) noexcept
+{
+	return player_id < main_player_count &&
+		rounds_won <= main_rounds_coordinate_limit &&
+		put_rounds_won(tram, player_id, rounds_won);
+}
+
+bool main_hud_story_lives_put(Tram &tram, std::uint8_t lives) noexcept
+{
+	return lives <= main_story_lives_coordinate_limit &&
+		put_story_lives(tram, lives);
+}
+
 void main_hud_wipe(Tram &tram) noexcept
 {
 	tram.fill({
@@ -323,9 +361,9 @@ bool main_hud_static_put(Tram &tram, const MainHudState &state) noexcept
 	}
 	for(std::size_t player = 0U; player < main_player_count; ++player) {
 		const auto &player_state = state.players[player];
-		if(!put_halfhearts(tram, player, player_state.halfhearts) ||
-			!put_bombs(tram, player, player_state.bombs) ||
-			!put_rounds_won(tram, player, player_state.rounds_won) ||
+		if(!main_hud_halfhearts_put(tram, player, player_state.halfhearts) ||
+			!main_hud_bombs_put(tram, player, player_state.bombs) ||
+			!main_hud_rounds_won_put(tram, player, player_state.rounds_won) ||
 			!main_hud_gauge_levels_put(
 				tram,
 				player,
@@ -336,7 +374,7 @@ bool main_hud_static_put(Tram &tram, const MainHudState &state) noexcept
 		}
 	}
 	return (state.game_mode != MainGameMode::story) ||
-		put_story_lives(tram, state.story_lives);
+		main_hud_story_lives_put(tram, state.story_lives);
 }
 
 bool main_prepare_shot_source_sheet(

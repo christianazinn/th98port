@@ -57,6 +57,25 @@ static_assert(
 static_assert(PlayersBulletsView::player_count == detail::player_count);
 static_assert(PlayersBulletsView::bullet_count == detail::bullet_count);
 static_assert(
+	std::tuple_size_v<decltype(MainScoreState::digits)> == detail::player_count
+);
+static_assert(
+	std::tuple_size_v<decltype(MainScoreState::digits)::value_type> ==
+	detail::score_digits
+);
+static_assert(
+	static_cast<std::uint8_t>(MainResultTransitionPhase::idle) ==
+	static_cast<std::uint8_t>(detail::ResultPhase::idle)
+);
+static_assert(
+	static_cast<std::uint8_t>(MainResultTransitionPhase::opening) ==
+	static_cast<std::uint8_t>(detail::ResultPhase::opening)
+);
+static_assert(
+	static_cast<std::uint8_t>(MainResultTransitionPhase::closing) ==
+	static_cast<std::uint8_t>(detail::ResultPhase::closing)
+);
+static_assert(
 	MainBossView::reimu_orbit_point_count ==
 	std::tuple_size_v<decltype(detail::BossState::orbit_x)>
 );

@@ -634,6 +634,161 @@ struct MainGaugeState {
 		default;
 };
 
+enum class HudStartCompatibilityReadSite : std::uint8_t {
+	particle_y,
+	particle_angle,
+	angle_delta_first,
+	angle_delta_second,
+};
+
+// One source SUB_BB12() dispatch. INIT has already reset the source state and
+// frame when [initialize] is true, but the selected state's update has not yet
+// run. Presentation-private banner and particle records stay outside core.
+struct HudStartFrameStep {
+	bool initialize = false;
+	bool story_mode = false;
+	std::uint8_t story_stage = 0;
+	std::uint8_t round_id = 0;
+	std::uint8_t state_before = 0;
+	std::uint16_t frame_before = 0;
+
+	friend bool operator==(const HudStartFrameStep &, const HudStartFrameStep &) =
+		default;
+};
+
+// Raw value from one compatibility read already consumed by the HUD-start
+// particle initializer. The four facts for each particle are synchronous and
+// retain source order; no presentation-private particle record is exposed.
+struct HudStartCompatibilityRead {
+	HudStartCompatibilityReadSite site =
+		HudStartCompatibilityReadSite::particle_y;
+	std::uint8_t particle_ordinal = 0;
+	std::uint16_t raw_value = 0;
+
+	friend bool operator==(
+		const HudStartCompatibilityRead &,
+		const HudStartCompatibilityRead &
+	) = default;
+};
+
+// Late nonterminal SUB_BE5D() boundary, after both warning portrait callbacks.
+struct MainHudStartState {
+	std::uint8_t round_id = 0;
+	bool story_mode = false;
+	std::uint8_t story_stage = 0;
+	std::uint8_t state_after_prefix = 0;
+	std::uint16_t frame_after_prefix = 0;
+
+	friend bool operator==(
+		const MainHudStartState &,
+		const MainHudStartState &
+	) = default;
+};
+
+enum class MainHudPlayerValueKind : std::uint8_t {
+	halfhearts,
+	bombs,
+	rounds_won,
+};
+
+// One dynamic static-HUD redraw call at its exact source mutation site.
+struct MainHudPlayerValueChanged {
+	PlayerId player = PlayerId::p1;
+	MainHudPlayerValueKind kind = MainHudPlayerValueKind::halfhearts;
+	std::uint8_t value_after = 0;
+
+	friend bool operator==(
+		const MainHudPlayerValueChanged &,
+		const MainHudPlayerValueChanged &
+	) = default;
+};
+
+struct MainHudStoryLivesChanged {
+	std::uint8_t value_after = 0;
+
+	friend bool operator==(
+		const MainHudStoryLivesChanged &,
+		const MainHudStoryLivesChanged &
+	) = default;
+};
+
+struct MainResultWinnerStats {
+	std::uint8_t combo_hits_max = 0;
+	std::uint8_t gauge_attacks_fired = 0;
+	std::uint8_t boss_attacks_fired = 0;
+	std::uint8_t boss_attacks_reversed = 0;
+	std::uint8_t boss_panics_fired = 0;
+
+	friend bool operator==(
+		const MainResultWinnerStats &,
+		const MainResultWinnerStats &
+	) = default;
+};
+
+// Exact pre-result-control view. Both player IDs are engaged only when their
+// underlying source bytes are in range. [summary_active] is the core-owned
+// routing predicate for SUB_E3F2(), before that callback mutates score bonus.
+struct MainResultState {
+	MainPhaseContext context{};
+	std::optional<PlayerId> defeated_player{};
+	std::optional<PlayerId> winner{};
+	bool summary_active = false;
+	std::uint8_t story_stage = 0;
+	std::uint8_t story_lives = 0;
+	std::array<std::uint8_t, 2> rounds_won{};
+	MainResultWinnerStats winner_stats{};
+
+	friend bool operator==(const MainResultState &, const MainResultState &) =
+		default;
+};
+
+// Late source score draw, before the Story extend test can mutate TRAM lives.
+struct MainScoreState {
+	MainPhaseContext context{};
+	std::array<std::array<std::uint8_t, 8>, 2> digits{};
+
+	friend bool operator==(const MainScoreState &, const MainScoreState &) =
+		default;
+};
+
+struct MainComboPlayerState {
+	std::uint8_t time = 0;
+	std::uint8_t hits_highest = 0;
+	std::uint16_t bonus_total = 0;
+
+	friend bool operator==(
+		const MainComboPlayerState &,
+		const MainComboPlayerState &
+	) = default;
+};
+
+// Pre-mutation inputs to combos_update_and_render(), in P1-then-P2 order.
+struct MainComboState {
+	MainPhaseContext context{};
+	std::array<MainComboPlayerState, 2> players{};
+
+	friend bool operator==(const MainComboState &, const MainComboState &) =
+		default;
+};
+
+enum class MainResultTransitionPhase : std::uint8_t {
+	idle = 0,
+	opening = 1,
+	closing = 2,
+};
+
+// Pre-mutation boundary for the source's retained trapezoid callback.
+struct MainResultTransitionState {
+	MainPhaseContext context{};
+	MainResultTransitionPhase phase = MainResultTransitionPhase::idle;
+	std::uint8_t frame_before = 0;
+
+	friend bool operator==(
+		const MainResultTransitionState &,
+		const MainResultTransitionState &
+	) = default;
+};
+
 // A successful Boss launch is visible only after the source restores the
 // target playfield's palette baseline.
 struct BossActivated {
@@ -998,6 +1153,32 @@ public:
 	) noexcept
 	{}
 	virtual void main_gauge_state(const MainGaugeState &) noexcept
+	{}
+	virtual void hud_start_frame_step(const HudStartFrameStep &) noexcept
+	{}
+	virtual void hud_start_compatibility_read(
+		const HudStartCompatibilityRead &
+	) noexcept
+	{}
+	virtual void main_hud_start_state(const MainHudStartState &) noexcept
+	{}
+	virtual void main_hud_player_value_changed(
+		const MainHudPlayerValueChanged &
+	) noexcept
+	{}
+	virtual void main_hud_story_lives_changed(
+		const MainHudStoryLivesChanged &
+	) noexcept
+	{}
+	virtual void main_result_state(const MainResultState &) noexcept
+	{}
+	virtual void main_score_state(const MainScoreState &) noexcept
+	{}
+	virtual void main_combo_state(const MainComboState &) noexcept
+	{}
+	virtual void main_result_transition_state(
+		const MainResultTransitionState &
+	) noexcept
 	{}
 	virtual void warning_interstitial_sample(
 		const WarningInterstitialSample &

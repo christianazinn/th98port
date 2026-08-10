@@ -984,7 +984,7 @@ coverage. A row never authorizes renderer state in core.
 | Boss render callbacks | Expose one borrowed pre-mutation Boss view after Bombs, then perform the proven Mima/Kotohime gameplay mutations before Shots; report only semantic activation/animation/palette lifecycle facts | Own all-nine sprite, orbit, materialization, terminal, palette, and clipping payload plus the three proven private animation bytes |
 | Extra render callbacks | Emit one borrowed player-scoped view before each source callback, then perform Reimu's age increment at the exact per-player late phase | Draw the pre-increment facts synchronously; own all character payload, Kana's stale destination cache, and render scratch state |
 | Charge render callbacks | Emit one borrowed player-scoped view after the same player's Extra callback/mutation; callbacks consume no shared RNG in the audited paths | Own all-nine draw payload, cursor, clip, overlap, and patterned-GRCG state |
-| Score/gauge/combo/result | Perform mutations and control decisions before reporting the corresponding gameplay facts | Render exact displayed values and transitions without feeding them back |
+| Score/gauge/combo/result | Report each value at its source boundary: result before control/bonus, score before Story extend, combo before settlement, and transition before mutation | Render exact displayed values and transitions without feeding them back |
 | OP `resident->rand` cadence | Application computes exact logical-wait-derived resident value and supplies it through `GameInit` | Scene rendering must not add or omit logical waits based on host speed |
 
 For any new seam discovered during pixel work, the resolution rule is simple:
@@ -1271,6 +1271,15 @@ initial/steady drawing order, and D05D repeat reset. The source-uninitialized
 compatibility latch; this policy is source-derived and has not been assigned an
 emulator-verified ReC98 taxonomy label.
 
+The final mixed late-frame slice is also integrated. HUD-start preserves the
+16 source banner records, the 128-particle pool, and the interleaved 256 ring
+plus 256 IRAND observations. Result facts are consumed before result control,
+so terminal frames still draw their banner/summary while omitting Gauge and
+the footer. Nonterminal frames retain the literal Gauge, score, Story extend,
+warning portrait, HUD-start, combo, result-transition, and palette/page footer
+order. Process-private summary and transition state survives route-1 startup,
+whose first repeated frame is the source closing frame 0.
+
 Observe raw gameplay facts at the documented semantic phases and add Authentic
 drawing for players, overlays, ordinary shots, enemies, bullets, and fireballs
 in exact order. Keep all hit testing in core.
@@ -1288,8 +1297,8 @@ Exit tests:
 Implementation status: hit circles, the common-effect pool, and both MAIN
 background families are implemented, including process-scoped overwrite
 cursors, exceptional cross-player Bomb state, exact vector primitives, and
-background RNG grouping/initial-to-steady/repeat behavior. HUD-start animation
-remains.
+background RNG grouping/initial-to-steady/repeat behavior. HUD-start banners,
+particles, and all 512 ordered raw reads are implemented as well.
 
 Exit tests:
 
@@ -1303,12 +1312,14 @@ Exit tests:
 
 ### Slice 5: mixed late-frame UI and warnings
 
-Implementation status: warning TRAM/palette/MRS and the complete late Gauge
-backdrop/bar pass are implemented. Semantic observer facts retain the nine
+Implementation status: warning TRAM/palette/MRS, the complete late Gauge
+backdrop/bar pass, score/extend, combos, result banners/summaries, and the
+opening/closing transition are implemented. Semantic observer facts retain the nine
 character-specific Gauge completion restores, P1/P2 warning lifecycle, live
 levels, result-gated Gauge state, and portrait transition order without
-exposing glyphs, colors, assets, or draw commands to core. Score/extend,
-combos, result banners, and the result trapezoid remain.
+exposing glyphs, colors, assets, or draw commands to core. The HUD/result
+presenter owns fixed process-scoped animation/snapshot state and external
+authenticated glyph/cell inputs.
 
 Exit tests:
 

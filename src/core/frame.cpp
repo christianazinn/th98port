@@ -41,6 +41,17 @@ constexpr std::uint8_t hit_damage_max = 6U;
 constexpr std::uint8_t extends_max = 2U;
 constexpr std::uint8_t extends_disabled = 255U;
 
+MainPhaseContext main_phase_context(
+	const DeterministicState &state
+) noexcept
+{
+	return MainPhaseContext{
+		.round_id = state.round_id,
+		.round_or_result_frame = state.round_or_result_frame,
+		.playfield_fg_shift_x = state.playfield_fg_shift_x,
+	};
+}
+
 constexpr GaugeBossAttackKind gauge_boss_attack_kind(
 	GaugeBossAttackFlag flag
 ) noexcept
@@ -491,7 +502,7 @@ bool gameplay_frame_prefix(
 	}
 	shots_update(state);
 	chargeshots_update(state);
-	hud_start_update_prefix(state);
+	hud_start_update_prefix(state, observer);
 	if(state.hud_start_flag == 0U) {
 		if(content.enemy_formations.empty()) {
 			return false;
@@ -734,16 +745,56 @@ void gameplay_frame_suffix_after_interstitial(
 		const auto view = ObserverAccess::players_bullets(state);
 		observer->observe(view);
 	}
+	if(observer != nullptr) {
+		std::optional<PlayerId> defeated_player;
+		std::optional<PlayerId> winner;
+		MainResultWinnerStats winner_stats{};
+		if(
+			state.defeat_flag == DefeatFlag::banner &&
+			state.last_fatal_player < player_count
+		) {
+			defeated_player = static_cast<PlayerId>(state.last_fatal_player);
+			const auto winner_id = static_cast<std::uint8_t>(
+				1U - state.last_fatal_player
+			);
+			winner = static_cast<PlayerId>(winner_id);
+			const auto &player = state.players[winner_id];
+			winner_stats = MainResultWinnerStats{
+				.combo_hits_max = player.combo_hits_max,
+				.gauge_attacks_fired = player.gauge_attacks_fired,
+				.boss_attacks_fired = player.boss_attacks_fired,
+				.boss_attacks_reversed = player.boss_attacks_reversed,
+				.boss_panics_fired = player.boss_panics_fired,
+			};
+		}
+		const auto stock_mode =
+			state.game_mode == game_mode_story || state.practice_uses_stock;
+		const auto match_complete =
+			state.players[0].rounds_won >= 2U ||
+			state.players[1].rounds_won >= 2U;
+		const auto summary_active =
+			state.defeat_flag == DefeatFlag::banner &&
+			(stock_mode ? (state.winner == 0) : match_complete);
+		observer->main_result_state(MainResultState{
+			.context = main_phase_context(state),
+			.defeated_player = defeated_player,
+			.winner = winner,
+			.summary_active = summary_active,
+			.story_stage = state.story_stage,
+			.story_lives = state.story_lives,
+			.rounds_won = {
+				state.players[0].rounds_won,
+				state.players[1].rounds_won,
+			},
+			.winner_stats = winner_stats,
+		});
+	}
 	if(result_control_update(state)) {
 		return;
 	}
 	if(observer != nullptr) {
 		observer->main_gauge_state(MainGaugeState{
-			.context = MainPhaseContext{
-				.round_id = state.round_id,
-				.round_or_result_frame = state.round_or_result_frame,
-				.playfield_fg_shift_x = state.playfield_fg_shift_x,
-			},
+			.context = main_phase_context(state),
 			.players = {
 				MainGaugePlayerState{
 					.gauge_charged = state.players[0].gauge_charged,
@@ -758,9 +809,46 @@ void gameplay_frame_suffix_after_interstitial(
 			},
 		});
 	}
-	story_extend_update(state);
+	if(observer != nullptr) {
+		observer->main_score_state(MainScoreState{
+			.context = main_phase_context(state),
+			.digits = state.score,
+		});
+	}
+	story_extend_update(state, observer);
 	warning_portrait_update(state, observer);
+	if(observer != nullptr) {
+		observer->main_hud_start_state(MainHudStartState{
+			.round_id = state.round_id,
+			.story_mode = state.game_mode == game_mode_story,
+			.story_stage = state.story_stage,
+			.state_after_prefix = state.hud_start_state,
+			.frame_after_prefix = state.hud_start_frame,
+		});
+		observer->main_combo_state(MainComboState{
+			.context = main_phase_context(state),
+			.players = {
+				MainComboPlayerState{
+					.time = state.combos[0].time,
+					.hits_highest = state.combos[0].hits_highest,
+					.bonus_total = state.combos[0].bonus_total,
+				},
+				MainComboPlayerState{
+					.time = state.combos[1].time,
+					.hits_highest = state.combos[1].hits_highest,
+					.bonus_total = state.combos[1].bonus_total,
+				},
+			},
+		});
+	}
 	combos_update(state);
+	if(observer != nullptr) {
+		observer->main_result_transition_state(MainResultTransitionState{
+			.context = main_phase_context(state),
+			.phase = static_cast<MainResultTransitionPhase>(state.result_phase),
+			.frame_before = state.result_phase_frame,
+		});
+	}
 	result_transition_update(state);
 	round_mode_update(state);
 	if(observer != nullptr) {
