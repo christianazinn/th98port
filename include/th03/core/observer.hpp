@@ -251,6 +251,8 @@ struct PlayerDefeatStep {
 	std::int16_t center_x = 0;
 	std::int16_t center_y = 0;
 	std::int16_t fg_shift_x_before_defeat_shake = 0;
+	// Appended so existing aggregate fixtures retain their field mapping.
+	std::uint16_t round_or_result_frame_before = 0;
 
 	friend bool operator==(
 		const PlayerDefeatStep &,
@@ -300,6 +302,18 @@ struct CommonEffectSpawned {
 	) = default;
 };
 
+// One ordered fact for every active late Bomb callback, before its
+// character-specific work begins. This carries only the source callback inputs;
+// clients decide whether and how to use them.
+struct BombFrameStep {
+	PlayerId player = PlayerId::p1;
+	std::int8_t paletted_character = 0;
+	std::uint8_t bomb_frame = 0;
+
+	friend bool operator==(const BombFrameStep &, const BombFrameStep &) =
+		default;
+};
+
 enum class BombCommonEffectKind : std::uint8_t {
 	kana,
 	kotohime,
@@ -317,6 +331,37 @@ struct BombCommonEffectStep {
 	friend bool operator==(
 		const BombCommonEffectStep &,
 		const BombCommonEffectStep &
+	) = default;
+};
+
+struct WarningInterstitialStarted {
+	// Captured while warning flags are still flash_white, before the source
+	// converts them to flash_red.
+	std::array<bool, 2> flashing_players{};
+
+	friend bool operator==(
+		const WarningInterstitialStarted &,
+		const WarningInterstitialStarted &
+	) = default;
+};
+
+struct WarningInterstitialSample {
+	// Zero-based source mini-loop iteration, always in the inclusive 0..26
+	// range. Ordinal 26 precedes the resumed late-frame suffix.
+	std::uint8_t ordinal = 0;
+
+	friend bool operator==(
+		const WarningInterstitialSample &,
+		const WarningInterstitialSample &
+	) = default;
+};
+
+// The normal late-frame footer boundary after round-mode control and before
+// frame-counter maintenance.
+struct MainFrameFooterReached {
+	friend bool operator==(
+		const MainFrameFooterReached &,
+		const MainFrameFooterReached &
 	) = default;
 };
 
@@ -423,10 +468,24 @@ public:
 	// Delivered synchronously at each non-exceptional source allocation call.
 	virtual void common_effect_spawned(const CommonEffectSpawned &) noexcept
 	{}
+	virtual void bomb_frame_step(const BombFrameStep &) noexcept
+	{}
 	// Every active Kana/Kotohime Bomb callback, including non-spawning frames,
 	// in the source's P1-then-P2 order.
 	virtual void bomb_common_effect_step(
 		const BombCommonEffectStep &
+	) noexcept
+	{}
+	virtual void warning_interstitial_started(
+		const WarningInterstitialStarted &
+	) noexcept
+	{}
+	virtual void warning_interstitial_sample(
+		const WarningInterstitialSample &
+	) noexcept
+	{}
+	virtual void main_frame_footer_reached(
+		const MainFrameFooterReached &
 	) noexcept
 	{}
 	virtual void observe(const ShotsEnemiesView &) noexcept

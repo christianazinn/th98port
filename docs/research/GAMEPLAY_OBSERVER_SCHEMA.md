@@ -243,19 +243,22 @@ struct PlayerDefeatStep {
     RawQ12_4 center_x;
     RawQ12_4 center_y;
     std::int16_t fg_shift_x_before_defeat_shake;
+    std::uint16_t round_or_result_frame_before;
 };
 ```
 
 The presenter applies those operations in P1/P2 event order to one shared
 private record and draws three 16-sprite rings in the source angle order
-(`th03/main/player/defeat.cpp:70-151`). On the fatal-hit frame, before this
-first defeat step, source renders from the prior private values; the Authentic
-presenter must preserve the Anniversary BSS/previous-completion initialization
-rather than inventing an anchor from the new `lose_anim_time`. A lone defeated
-player happens to imply radius `9 * (47 - L)` for post-update timer `L` in
-1..47, but the presenter must apply events: simultaneous defeat updates share,
-overwrite, and increment the same source record. Value 0xFF draws no rings.
-The captured anchors are
+(`th03/main/player/defeat.cpp:70-151`). The captured counter also lets that
+presenter apply the source's immediate 100/130 defeat tone at this exact
+boundary; the tone and palette remain presentation-owned. On the fatal-hit
+frame, before this first defeat step, source renders from the prior private
+values; the Authentic presenter must preserve the Anniversary
+BSS/previous-completion initialization rather than inventing an anchor from
+the new `lose_anim_time`. A lone defeated player happens to imply radius
+`9 * (47 - L)` for post-update timer `L` in 1..47, but the presenter must apply
+events: simultaneous defeat updates share, overwrite, and increment the same
+source record. Value 0xFF draws no rings. The captured anchors are
 `pixel_q12_4(center_x) + 16 + player*320 + pre_shake_shift - 24` and
 `pixel_q12_4(center_y) - 8`. Each ring point then adds the *current* foreground
 shift to the already-shifted captured X, exactly preserving source's second
@@ -449,7 +452,7 @@ renderer state into `DeterministicState`.
 | Blocker | Why current gameplay state is insufficient | Minimal neutral closure |
 |---|---|---|
 | Player horizontal pose | Source commits `patnum_movement` from one shared signed Q4.4 `player_velocity.x`. The global can be stale on banner, defeat, or move-lock paths; clamping can make a nonzero velocity produce zero displacement; CPU route probes can restore position after several velocity writes. Center deltas are therefore not equivalent. Native uses local velocities and stores neither the shared value nor the pose. | Emit one `PlayerPoseCommitted` fact per source `update_patnums`: player ID plus an optional final source-equivalent velocity-X write from that player update. The presenter owns the last shared X (Anniversary BSS initial value) and applies zero/negative/positive to neutral/left/right. No optional value means source reused the prior shared X. |
-| Shared defeat record | Source samples foreground X before overwriting the shift with defeat shake, then advances one shared radius on every losing player's update. A post-update phase view contains only the new +/-6 shift and cannot reproduce simultaneous-player overwrite/increment order. Native intentionally omits the presentation globals. | Emit `PlayerDefeatStep` on every source defeat-update tick with player, pre-update timer, raw center, and pre-shake shift; presenter applies capture/increment/clear to one shared private record. |
+| Shared defeat record | Source samples foreground X before overwriting the shift with defeat shake, advances one shared radius on every losing player's update, and immediately shows tone 100/130 from the then-current round/result-frame parity. A post-update phase view contains only the new +/-6 shift and cannot reproduce simultaneous-player overwrite/increment or palette-show order. Native intentionally omits the presentation globals. | Emit `PlayerDefeatStep` on every source defeat-update tick with player, pre-update timer, round/result-frame counter, raw center, and pre-shake shift; presenter applies capture/increment/clear and the immediate tone at the source boundary while owning all palette state privately. |
 | Shot cel reset across slot reuse | Native correctly omits source `so_anim`, but two consecutive live views do not prove the slot was not freed and reused between them. | Emit `ShotPairSpawned`; presenter resets its four-cel cursor and advances it once per live `ShotsEnemiesPhaseView`. |
 | Persistent bullet16 construction | Target player, flag, age, and trajectory do not identify the source attack sheet, Kana custom construction, or a call site's temporary `is_animated=false`. Native intentionally discarded both source fields. | Emit `Bullet16Spawned` with slot, source player, named construction kind, and the source template animation bit; presenter maps that fact to a private per-slot visual key. |
 
@@ -516,6 +519,16 @@ public:
     virtual void bullet16_spawned(const Bullet16Spawned&) noexcept {}
     virtual void player_pose_committed(const PlayerPoseCommitted&) noexcept {}
     virtual void player_defeat_step(const PlayerDefeatStep&) noexcept {}
+    virtual void bomb_frame_step(const BombFrameStep&) noexcept {}
+    virtual void warning_interstitial_started(
+        const WarningInterstitialStarted&
+    ) noexcept {}
+    virtual void warning_interstitial_sample(
+        const WarningInterstitialSample&
+    ) noexcept {}
+    virtual void main_frame_footer_reached(
+        const MainFrameFooterReached&
+    ) noexcept {}
 
     virtual void observe(const ShotsEnemiesView&) noexcept {}
     virtual void observe(const FireballsView&) noexcept {}
@@ -597,14 +610,20 @@ uses it, the following tests must pass.
 
 1. Ordinary frame: exactly `ShotsEnemies`, `Fireballs`, `PlayersBullets`, once
    each and in that order.
-2. Warning-start gameplay call: player/shot lifecycle facts may precede the
-   phase transition, but no phase view occurs. Interstitial samples 1..26 emit
-   no phase view; sample 27 emits all three once in order.
+2. Warning-start gameplay call: player/shot lifecycle facts may precede
+   `WarningInterstitialStarted`, but no phase view or footer occurs. Every
+   accepted sample emits `WarningInterstitialSample` with ordinal 0..26 after
+   its input latch. Ordinals 0..25 emit no phase view or footer; ordinal 26 is
+   followed by the ordinary suffix, all three views, and the footer when result
+   control does not end the round.
 3. Recorded pause: the initial call may emit prefix allocation facts but no
-   phase view. `finish_deferred_frame()` emits the delayed player facts and all
-   three phase views once. Exiting the session does not duplicate them.
+   phase view or footer. `finish_deferred_frame()` emits the delayed player
+   facts and all three phase views once, then the footer only if the source
+   reaches it. Exiting the session does not duplicate them.
 4. Route-1/2 terminal frame: all three phase views precede the terminal result;
-   no later HUD/counter observation is fabricated.
+   no footer or later HUD/counter observation is fabricated. A normal
+   session-exit completion that reaches the source footer emits it before the
+   final counter maintenance.
 5. Already-complete and invalid-context calls emit nothing. A focused native
    content-gate case records any already-completed lifecycle facts but no phase
    view.
@@ -666,6 +685,16 @@ The first coding parcel stopped after the first two phase boundaries:
    `th03_present`; all other calls report resolved centers and consumed square
    angles. The presenter owns the 13-slot and 12-slot pools across repeat-round
    boundaries and exposes the exact post-fireball and pre-bullet draw passes.
+
+5. The palette-order foundation added presentation-neutral `BombFrameStep`,
+   `WarningInterstitialStarted`, `WarningInterstitialSample`, the defeat
+   counter capture, and `MainFrameFooterReached`. They preserve every ordering
+   boundary required by the source's immediate and deferred MAIN palette
+   writes without exposing an RGB value, tone, dirty latch, page operation, or
+   renderer command from core. `th03_present` owns the process-persistent RGB8
+   palette baseline, raw tone, applied RGB4 DAC state, and deferred dirty latch.
+   Character-specific Bomb, Warning/Gauge, Defeat, and Boss presenters remain
+   responsible for interpreting these semantic facts.
 
 Together these parcels yield the complete ordinary-entity fact stream and the
 two adjacent effect lifecycles while keeping the risk and review surface small.

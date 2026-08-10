@@ -13,6 +13,23 @@
 
 namespace th03::present {
 
+struct Rgb8 {
+	std::uint8_t r = 0U;
+	std::uint8_t g = 0U;
+	std::uint8_t b = 0U;
+
+	friend bool operator==(const Rgb8 &, const Rgb8 &) = default;
+};
+
+struct Palette16Rgb8 {
+	std::array<Rgb8, 16U> colors{};
+
+	friend bool operator==(
+		const Palette16Rgb8 &,
+		const Palette16Rgb8 &
+	) = default;
+};
+
 inline constexpr std::uint16_t graphics_width = 640U;
 inline constexpr std::uint16_t graphics_height = 400U;
 inline constexpr std::size_t graphics_page_pixels =
@@ -128,10 +145,18 @@ public:
 		std::uint8_t index,
 		assets::Rgb4 color
 	) noexcept;
-	[[nodiscard]] const assets::Palette16Rgb4 &pending_palette() const noexcept;
+	// master.lib stores its logical Palettes array as RGB8. Asset RGB4 entries
+	// use the overload above, which expands each nibble to v * 0x11 exactly as
+	// palette_entry_rgb(); runtime palette effects use this full-width setter.
+	[[nodiscard]] bool set_pending_palette_entry_rgb8(
+		std::uint8_t index,
+		Rgb8 color
+	) noexcept;
+	[[nodiscard]] const Palette16Rgb8 &pending_palette() const noexcept;
 	[[nodiscard]] const assets::Palette16Rgb4 &applied_palette() const noexcept;
-	// PaletteTone is a signed source word. Applying clamps a local copy to
-	// 0..200, preserving the raw value exactly as palette_show() does.
+	// PaletteTone is a signed source word. Applying extracts each logical RGB8
+	// component's high nibble, then clamps a local tone copy to 0..200 while
+	// preserving the raw value exactly as palette_show() does.
 	void set_palette_tone(std::int16_t tone) noexcept;
 	[[nodiscard]] std::int16_t palette_tone() const noexcept;
 	void apply_pending_palette() noexcept;
@@ -161,7 +186,7 @@ private:
 	Page access_page_ = Page::zero;
 	Page shown_page_ = Page::zero;
 	RasterMode raster_mode_ = RasterMode::lines_400;
-	assets::Palette16Rgb4 pending_palette_{};
+	Palette16Rgb8 pending_palette_{};
 	assets::Palette16Rgb4 applied_palette_{};
 	std::int16_t palette_tone_ = 100;
 	std::uint16_t scroll_y_ = 0U;

@@ -16,6 +16,7 @@ using th03::present::GrcgTile;
 using th03::present::GrcgWriteMode;
 using th03::present::MainGameMode;
 using th03::present::MainHudState;
+using th03::present::MainPaletteState;
 using th03::present::MainPlayerShotSheets;
 using th03::present::MainStaticPresenter;
 using th03::present::PackedRowOrder;
@@ -27,6 +28,7 @@ using th03::present::Point;
 using th03::present::Raster;
 using th03::present::RasterMode;
 using th03::present::Rect;
+using th03::present::Rgb8;
 using th03::present::Tram;
 using th03::present::TramCell;
 using th03::assets::Rgb4;
@@ -203,12 +205,12 @@ void test_palette_scroll_and_hash() {
 	const auto initial_hash = raster.display_state_hash();
 	expect(raster.palette_tone() == 100, "palette tone defaults to source 100");
 	expect(
-		raster.set_pending_palette_entry(1U, {10U, 11U, 12U}),
+		raster.set_pending_palette_entry_rgb8(1U, {0xA5U, 0xB7U, 0xC9U}),
 		"set valid pending palette entry"
 	);
 	expect(
-		raster.pending_palette().colors[1U] == Rgb4{10U, 11U, 12U},
-		"pending palette retains raw RGB4"
+		raster.pending_palette().colors[1U] == Rgb8{0xA5U, 0xB7U, 0xC9U},
+		"pending palette retains full source RGB8"
 	);
 	expect(
 		raster.applied_palette().colors[1U] == Rgb4{},
@@ -259,12 +261,21 @@ void test_palette_scroll_and_hash() {
 	raster.set_palette_tone(100);
 	raster.apply_pending_palette();
 	expect(
-		!raster.set_pending_palette_entry(1U, {16U, 0U, 0U}),
-		"invalid raw RGB4 rejected"
+		!raster.set_pending_palette_entry_rgb8(16U, {0xFFU, 0U, 0U}),
+		"invalid palette index rejected"
 	);
 	expect(
-		raster.pending_palette().colors[1U] == Rgb4{10U, 11U, 12U},
+		raster.pending_palette().colors[1U] == Rgb8{0xA5U, 0xB7U, 0xC9U},
 		"invalid palette write leaves pending state intact"
+	);
+	expect(
+		raster.set_pending_palette_entry(2U, {1U, 2U, 3U}) &&
+		raster.pending_palette().colors[2U] == Rgb8{0x11U, 0x22U, 0x33U},
+		"RGB4 palette adapter expands each source nibble to RGB8"
+	);
+	expect(
+		!raster.set_pending_palette_entry(2U, {16U, 0U, 0U}),
+		"RGB4 palette adapter rejects an invalid source nibble"
 	);
 
 	const auto before_scroll_pixel = raster.pixel(Page::zero, {0, 0});
@@ -311,7 +322,10 @@ void configure_identically(Raster &raster) {
 	const IndexedSource source{pixels, 2U, 2U, 2U};
 	expect(raster.set_access_page(Page::one), "determinism access page");
 	expect(raster.blit(source, {12, 34}), "determinism blit");
-	expect(raster.set_pending_palette_entry(3U, {4U, 5U, 6U}), "determinism palette");
+	expect(
+		raster.set_pending_palette_entry(3U, {4U, 5U, 6U}),
+		"determinism palette"
+	);
 	raster.apply_pending_palette();
 	raster.set_scroll_y(8U);
 	expect(raster.set_shown_page(Page::one), "determinism shown page");
@@ -939,26 +953,24 @@ void test_main_shot_sheet_and_startup() {
 	expect(raster.plot({100, 100}, 7U), "seed MAINL handoff page one");
 	expect(raster.plot({17, 201}, 5U), "seed MAINL Sprite16 atlas content");
 	expect(
-		raster.set_pending_palette_entry(3U, {1U, 2U, 3U}),
+		raster.set_pending_palette_entry_rgb8(3U, {0x15U, 0x2AU, 0x3FU}),
 		"seed applied handoff palette"
 	);
 	raster.apply_pending_palette();
-	expect(
-		raster.set_pending_palette_entry(3U, {9U, 8U, 7U}),
-		"seed unrelated pending palette"
-	);
 	Tram tram;
 	MainHudState hud{};
 	hud.game_mode = MainGameMode::versus;
 	hud.players[0] = {10U, 2U, 0U, 1U};
 	hud.players[1] = {10U, 2U, 0U, 1U};
 	MainStaticPresenter presenter;
+	MainPaletteState palette;
 	expect(!presenter.started(), "MAIN presenter begins stopped");
 	expect(
-		presenter.round_startup(raster, tram, hud, sheets),
+		presenter.round_startup(raster, tram, hud, sheets, palette),
 		"static MAIN startup succeeds"
 	);
 	expect(presenter.started(), "MAIN presenter records startup");
+	expect(palette.baseline_ready(), "MAIN startup captures RGB8 palette baseline");
 	expect(
 		presenter.page_roles() == th03::present::MainPageRoles{Page::zero, Page::one},
 		"startup establishes source page roles"
@@ -984,8 +996,19 @@ void test_main_shot_sheet_and_startup() {
 	);
 	expect(
 		raster.applied_palette().colors[3U] == Rgb4{1U, 2U, 3U} &&
-		raster.pending_palette().colors[3U] == Rgb4{1U, 2U, 3U},
-		"startup restores and applies handed-off palette"
+		raster.pending_palette().colors[3U] == Rgb8{0x15U, 0x2AU, 0x3FU},
+		"startup restores the full RGB8 handoff palette before applying it"
+	);
+	expect(
+		palette.set_entry_deferred(raster, 3U, {0U, 0U, 0U}) &&
+		palette.apply_if_changed(raster),
+		"simulate an end-of-round palette mutation"
+	);
+	expect(
+		palette.restore_baseline_and_show(raster) &&
+		raster.pending_palette().colors[3U] == Rgb8{0x15U, 0x2AU, 0x3FU} &&
+		raster.applied_palette().colors[3U] == Rgb4{1U, 2U, 3U},
+		"repeat-round restore uses the process baseline without recapturing"
 	);
 	expect_gaiji(
 		tram,

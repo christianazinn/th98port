@@ -276,23 +276,6 @@ PreparedShotPattern prepare_pattern(
 	return prepared;
 }
 
-bool restore_applied_palette(
-	Raster &raster,
-	const assets::Palette16Rgb4 &palette
-) noexcept
-{
-	for(std::size_t index = 0U; index < palette.colors.size(); ++index) {
-		if(!raster.set_pending_palette_entry(
-			static_cast<std::uint8_t>(index),
-			palette.colors[index]
-		)) {
-			return false;
-		}
-	}
-	raster.apply_pending_palette();
-	return true;
-}
-
 } // namespace
 
 void main_hud_wipe(Tram &tram) noexcept
@@ -400,7 +383,8 @@ bool MainStaticPresenter::round_startup(
 	Raster &raster,
 	Tram &tram,
 	const MainHudState &hud,
-	MainPlayerShotSheets sheets
+	MainPlayerShotSheets sheets,
+	MainPaletteState &palette
 )
 {
 	if(!valid_hud_state(hud) || sheets.player_one == nullptr ||
@@ -409,7 +393,9 @@ bool MainStaticPresenter::round_startup(
 		!valid_character_sheet(*sheets.player_two)) {
 		return false;
 	}
-	const auto restored_palette = raster.applied_palette();
+	if(!palette.capture_baseline(raster)) {
+		return false;
+	}
 
 	// The first text_fillca() precedes graph_copy_page(0). Later source startup
 	// repeats the fill as part of hud_wipe(). Keeping both calls also preserves
@@ -431,9 +417,9 @@ bool MainStaticPresenter::round_startup(
 	}
 
 	// BF2 loads temporarily replace the logical palette. SUB_A38E() restores
-	// the palette captured from the resident stage handoff and applies it. At
-	// this stable boundary that is exactly the palette already applied on entry.
-	if(!restore_applied_palette(raster, restored_palette)) {
+	// the full RGB8 palette captured from the resident stage handoff and applies
+	// it. Keeping the logical low nibbles matters to later runtime palette math.
+	if(!palette.restore_baseline_and_show(raster)) {
 		return false;
 	}
 

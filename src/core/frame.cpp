@@ -510,13 +510,24 @@ void gameplay_input_latch(
 	state.global_frame++;
 }
 
-bool warning_interstitial_begin(DeterministicState &state) noexcept
+bool warning_interstitial_begin(
+	DeterministicState &state,
+	GameplayObserver *observer
+) noexcept
 {
 	if(
 		state.warning_flag[0] != WarningFlag::flash_white &&
 		state.warning_flag[1] != WarningFlag::flash_white
 	) {
 		return false;
+	}
+	if(observer != nullptr) {
+		observer->warning_interstitial_started(WarningInterstitialStarted{
+			.flashing_players = {
+				state.warning_flag[0] == WarningFlag::flash_white,
+				state.warning_flag[1] == WarningFlag::flash_white,
+			},
+		});
 	}
 	for(auto &flag : state.warning_flag) {
 		if(flag == WarningFlag::flash_white) {
@@ -574,7 +585,7 @@ bool gameplay_frame_suffix_before_interstitial(
 	) {
 		state.session_exit_requested = true;
 	}
-	return warning_interstitial_begin(state);
+	return warning_interstitial_begin(state, observer);
 }
 
 void interstitial_input_latch(
@@ -628,6 +639,9 @@ void gameplay_frame_suffix_after_interstitial(
 	combos_update(state);
 	result_transition_update(state);
 	round_mode_update(state);
+	if(observer != nullptr) {
+		observer->main_frame_footer_reached(MainFrameFooterReached{});
+	}
 
 	state.round_frame++;
 	state.round_or_result_frame++;

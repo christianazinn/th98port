@@ -39,6 +39,7 @@ add_library(th03_present STATIC
 	src/present/main_bullets.cpp
 	src/present/main_entities.cpp
 	src/present/main_effects.cpp
+	src/present/main_palette.cpp
 	src/present/main_players.cpp
 	src/present/main_static.cpp
 	src/present/mono.cpp
@@ -288,5 +289,15 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-present-main-effects-tests
 		COMMAND th03-present-main-effects-tests
+	)
+
+	add_executable(th03-present-main-palette-tests
+		tests/test_present_main_palette.cpp
+	)
+	target_link_libraries(th03-present-main-palette-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-main-palette-tests)
+	add_test(
+		NAME th03-present-main-palette-tests
+		COMMAND th03-present-main-palette-tests
 	)
 endif()

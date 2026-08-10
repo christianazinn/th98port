@@ -106,12 +106,17 @@ split comparisons. Original game data and replay captures remain external.
   foundations. It depends inward on `th03_assets` and the neutral observation
   API in `th03_core`; the core has no reciprocal dependency, and `th03rv`
   links neither presentation nor assets.
+- MAIN palette primitives preserve the source's logical RGB8 values separately
+  from applied RGB4 DAC output, including its process baseline, raw tone, and
+  explicit deferred-apply latch. Neutral Bomb/Warning/defeat/footer lifecycle
+  facts keep this ordering out of deterministic gameplay state.
 - `th03_core` exposes an optional synchronous observer for immutable gameplay
   facts. The three implemented phase views cover shots/enemies, post-collision
   fireballs, and final players/bullets. Transient lifecycle facts preserve shot
   cel reset, player pose/defeat ordering, Bullet16 construction, hit-circle
-  allocation, and common-effect allocation/advance timing without adding
-  visual state to gameplay. The pointer is borrowed per call and never enters
+  allocation, common-effect allocation/advance timing, and Bomb/Warning/footer
+  scheduling without adding visual state to gameplay. The pointer is borrowed
+  per call and never enters
   deterministic state; `th03rv` uses the null path.
 - `th03-headless`, `th03-replay-check`, and `th03rv` are independent
   filesystem/CLI clients of those libraries.

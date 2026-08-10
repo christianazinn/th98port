@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "th03/present/main_palette.hpp"
 #include "th03/present/raster.hpp"
 #include "th03/present/sprite_staging.hpp"
 #include "th03/present/tram.hpp"
@@ -87,16 +88,19 @@ void main_hud_wipe(Tram &tram) noexcept;
 // scene policy.
 class MainStaticPresenter {
 public:
-	// Begins with the MAINL-to-MAIN handoff already present in raster: source
+	// Begins with the MAINL-to-MAIN handoff already present in raster and an
+	// uncaptured process-scoped palette state: source
 	// graph_copy_page(0) copies page 1 to page 0. The method then prepares the
-	// shot sheet, restores the handed-off palette, selects the upper 200-line
+	// shot sheet, restores the full logical RGB8 handoff palette, selects the
+	// upper 200-line
 	// mode, commits the lower-half Sprite16 source and masks, selects shown page
 	// 1, and writes the static HUD.
 	[[nodiscard]] bool round_startup(
 		Raster &raster,
 		Tram &tram,
 		const MainHudState &hud,
-		MainPlayerShotSheets sheets
+		MainPlayerShotSheets sheets,
+		MainPaletteState &palette
 	);
 
 	// Exact late-frame page transaction from sub_9778(): access the old front,

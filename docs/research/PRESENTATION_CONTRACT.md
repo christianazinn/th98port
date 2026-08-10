@@ -305,8 +305,9 @@ The Authentic presenter needs the following explicit state:
 - Separate access-page and shown-page selectors. Source code routinely draws
   to one page while showing the other, copies pages, and uses a hidden page as
   a sprite or unblit source.
-- The current 16-entry palette, pending logical palette edits, `PaletteTone`,
-  and a dirty/deferred-apply flag corresponding to `palette_changed` from
+- The current 16-entry applied RGB4 DAC palette, the full pending logical
+  RGB8 `Palette8`, `PaletteTone`, and a dirty/deferred-apply flag corresponding
+  to `palette_changed` from
   `th03/hardware/palette_changed[bss].asm` and
   `th03/hardware/palette.hpp`.
 - The 80x25 TRAM character and attribute cells, the gaiji/font state used by
@@ -355,10 +356,12 @@ build the first static MAIN frame without pretending to emulate the whole EGC:
 - raster mode explicitly distinguishes the normal 400-line surface from the
   upper and lower zoomed 200-line windows. Selecting either 200-line value
   also selects access page 0, exactly as `graph_200line()` does;
-- `PaletteTone` remains a signed raw source word. Applying pending logical
-  RGB4 entries clamps only a local tone copy to 0..200, scales toward black
-  for 0..100 and toward white for 101..200 with `palette_show()`'s exact
-  integer division, and leaves the raw tone unchanged;
+- `PaletteTone` remains a signed raw source word. Applying a pending logical
+  RGB8 entry first extracts each component's high nibble, then clamps only a
+  local tone copy to 0..200, scales toward black for 0..100 and toward white
+  for 101..200 with `palette_show()`'s exact integer division, and leaves the
+  raw tone and logical low nibbles unchanged. RGB4 asset palettes expand to
+  `v * 0x11` at this boundary, matching `palette_entry_rgb()`;
 - TRAM is stored separately as 80x25 raw 16-bit code/attribute cells. The raw
   attribute constants retain the exact `TX_*` values from
   `libs/master.lib/pc98_gfx.hpp`; `text_fillca.asm` and `text_boxfilla.asm`
@@ -445,11 +448,13 @@ Anniversary operations:
   then page 0. The mask is derived exactly as “decoded color differs from the
   BFNT transparent color”; filenames and filesystem policy remain outside the
   presenter.
-- At the stable startup boundary, the applied RGB4 palette handed in from the
-  preceding scene is copied back to pending state and applied. This is the
-  final logical effect of `SUB_A38E()` after the intervening BF2 loads; there
-  is no wait/present point at which their temporary logical palette is
-  observable. Palette application uses the exact current `PaletteTone`.
+- At the stable startup boundary, the full logical RGB8 palette handed in from
+  the preceding scene is captured once as the process baseline, restored after
+  the intervening BF2 loads, and applied. This is the final logical effect of
+  `SUB_A378()` / `SUB_A38E()`; there is no wait/present point at which the
+  temporary BF2 palette is observable. Repeat rounds restore the same baseline
+  without recapturing an end-of-round effect palette. Palette application uses
+  the exact current `PaletteTone`.
 - `Sprite16Staging` then mirrors `sprite16_sprites_commit()`: after
   `graph_200line(0)` it copies page 0's complete lower 640x200 source atlas
   (raw rows 200..399) to page 1, restores access page 0, and derives the packed
@@ -1178,8 +1183,9 @@ clear/OR/mono/mask, clipping, no-clip, and downwards-column operations. General
 EGC register/ROP behavior, JIS, blink, and underline remain open; this slice is
 not a complete PC-98 graphics-hardware emulator.
 
-Implement two indexed pages, access/show/copy/clear, palette/tone/deferred
-apply, TRAM storage, scroll, clipping, and the minimum source-backed planar/
+Implement two indexed pages, access/show/copy/clear, RGB8 logical palette and
+RGB4 applied DAC state, tone/deferred apply, TRAM storage, scroll, clipping,
+and the minimum source-backed planar/
 GRCG raster operations in `th03_present`, using hand-authored decoded models
 rather than waiting for real asset decoders. Add EGC operations only when a
 ported draw path actually needs their distinct logical result.
@@ -1232,8 +1238,12 @@ clouds, and odd-flag pellets. The player and bullet passes remain separate at
 the exact `SUB_CEE0()` insertion slot. Hit circles and the common-effect pool
 now occupy their exact post-fireball and pre-bullet slots using presenter-owned
 fixed pools and source-exact GRCG vectors. Ordered PaletteTone events remain a
-later parcel; defeat palette application is not approximated at the final view
-because later source callbacks can overwrite it.
+later owning-presenter parcel, but their source-wide ordering foundation is now
+implemented: `MainPaletteState` owns the one process RGB8 snapshot and explicit
+dirty latch, while neutral Bomb-frame, defeat-counter, Warning-interstitial,
+and exact footer facts preserve the schedule without palette concepts in core.
+Defeat palette application is not approximated at the final view because later
+source callbacks can overwrite it.
 
 Observe raw gameplay facts at the documented semantic phases and add Authentic
 drawing for players, overlays, ordinary shots, enemies, bullets, and fireballs

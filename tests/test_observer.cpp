@@ -39,7 +39,11 @@ enum class ObservedCall : std::uint8_t {
 	hit_circle_spawned,
 	common_effects_advanced,
 	common_effect_spawned,
+	bomb_frame_step,
 	bomb_common_effect_step,
+	warning_interstitial_started,
+	warning_interstitial_sample,
+	main_frame_footer_reached,
 	shots_enemies,
 	fireballs,
 	players_bullets,
@@ -59,7 +63,11 @@ public:
 		defeat_steps.reserve(8U);
 		hit_circles.reserve(32U);
 		common_effects.reserve(64U);
+		bomb_frame_steps.reserve(8U);
 		bomb_common_steps.reserve(8U);
+		warning_interstitial_starts.reserve(2U);
+		warning_interstitial_samples.reserve(27U);
+		main_frame_footers.reserve(2U);
 		calls.reserve(80U);
 	}
 
@@ -117,12 +125,42 @@ public:
 		calls.push_back(ObservedCall::common_effect_spawned);
 	}
 
+	void bomb_frame_step(const th03::BombFrameStep &step) noexcept override
+	{
+		bomb_frame_steps.push_back(step);
+		calls.push_back(ObservedCall::bomb_frame_step);
+	}
+
 	void bomb_common_effect_step(
 		const th03::BombCommonEffectStep &step
 	) noexcept override
 	{
 		bomb_common_steps.push_back(step);
 		calls.push_back(ObservedCall::bomb_common_effect_step);
+	}
+
+	void warning_interstitial_started(
+		const th03::WarningInterstitialStarted &started
+	) noexcept override
+	{
+		warning_interstitial_starts.push_back(started);
+		calls.push_back(ObservedCall::warning_interstitial_started);
+	}
+
+	void warning_interstitial_sample(
+		const th03::WarningInterstitialSample &sample
+	) noexcept override
+	{
+		warning_interstitial_samples.push_back(sample);
+		calls.push_back(ObservedCall::warning_interstitial_sample);
+	}
+
+	void main_frame_footer_reached(
+		const th03::MainFrameFooterReached &footer
+	) noexcept override
+	{
+		main_frame_footers.push_back(footer);
+		calls.push_back(ObservedCall::main_frame_footer_reached);
 	}
 
 	void observe(const th03::ShotsEnemiesView &view) noexcept override
@@ -200,7 +238,11 @@ public:
 	std::vector<th03::PlayerDefeatStep> defeat_steps;
 	std::vector<th03::HitCircleSpawned> hit_circles;
 	std::vector<th03::CommonEffectSpawned> common_effects;
+	std::vector<th03::BombFrameStep> bomb_frame_steps;
 	std::vector<th03::BombCommonEffectStep> bomb_common_steps;
+	std::vector<th03::WarningInterstitialStarted> warning_interstitial_starts;
+	std::vector<th03::WarningInterstitialSample> warning_interstitial_samples;
+	std::vector<th03::MainFrameFooterReached> main_frame_footers;
 	th03::MainPhaseContext shots_enemies_context{};
 	th03::MainPhaseContext fireballs_context{};
 	th03::MainPhaseContext players_bullets_context{};
@@ -775,6 +817,17 @@ void test_observer_invariance_and_phase_order()
 		"ordinary late suffix reports all three source draw phases exactly once"
 	);
 	check(
+		recording.main_frame_footers ==
+			std::vector<th03::MainFrameFooterReached>{{}} &&
+		recording.calls == std::vector<ObservedCall>{
+			ObservedCall::shots_enemies,
+			ObservedCall::fireballs,
+			ObservedCall::players_bullets,
+			ObservedCall::main_frame_footer_reached,
+		},
+		"the normal late suffix reaches its footer after all three phase views"
+	);
+	check(
 		recording.shots_enemies_context == th03::MainPhaseContext{
 			.round_id = 1U,
 			.round_or_result_frame = 99U,
@@ -971,6 +1024,7 @@ void test_player_pose_and_defeat_lifecycle()
 	});
 
 	with_live_state([](auto &defeat) {
+		defeat.round_or_result_frame = 0x1235U;
 		defeat.players[0U].lose_anim_time = 0x30U;
 		defeat.players[0U].center_x = th03::exact::Subpixel::from_raw(111);
 		defeat.players[0U].center_y = th03::exact::Subpixel::from_raw(222);
@@ -984,18 +1038,20 @@ void test_player_pose_and_defeat_lifecycle()
 		check(defeated.defeat_steps ==
 				  std::vector<th03::PlayerDefeatStep>{
 					  {
-						  .player = th03::PlayerId::p1,
-						  .lose_anim_time_before = 0x30U,
-						  .center_x = 111,
-						  .center_y = 222,
-						  .fg_shift_x_before_defeat_shake = 12,
+						.player = th03::PlayerId::p1,
+						.lose_anim_time_before = 0x30U,
+						.center_x = 111,
+						.center_y = 222,
+						.fg_shift_x_before_defeat_shake = 12,
+						.round_or_result_frame_before = 0x1235U,
 					  },
 					  {
-						  .player = th03::PlayerId::p2,
-						  .lose_anim_time_before = 0x30U,
-						  .center_x = 333,
-						  .center_y = 444,
-						  .fg_shift_x_before_defeat_shake = -14,
+						.player = th03::PlayerId::p2,
+						.lose_anim_time_before = 0x30U,
+						.center_x = 333,
+						.center_y = 444,
+						.fg_shift_x_before_defeat_shake = -14,
+						.round_or_result_frame_before = 0x1235U,
 					  },
 				  },
 			  "simultaneous defeat steps expose pre-shake facts in P1-then-P2 "
@@ -1151,13 +1207,14 @@ void test_bullet16_lifecycle_styles_order_and_full_arena()
 			mima_record, &mima);
 		th03::detail::gameplay_frame_suffix_after_interstitial(mima_record,
 															   &mima);
-		check(mima.calls.size() == 18U &&
+		check(mima.calls.size() == 19U &&
 				  mima.calls[13U] == ObservedCall::player_pose_committed &&
 				  mima.calls[14U] == ObservedCall::player_pose_committed &&
 				  mima.calls[15U] == ObservedCall::shots_enemies &&
 				  mima.calls[16U] == ObservedCall::fireballs &&
-				  mima.calls[17U] == ObservedCall::players_bullets,
-			  "lifecycle prefix, P1/P2 pose commits, and three phase views "
+				  mima.calls[17U] == ObservedCall::players_bullets &&
+				  mima.calls[18U] == ObservedCall::main_frame_footer_reached,
+			  "lifecycle prefix, P1/P2 pose commits, phase views, and footer "
 			  "retain source order");
 	});
 
@@ -1379,6 +1436,30 @@ void test_post_hittest_fireball_view_and_terminal_order()
 		},
 		"all phase callbacks precede terminal session-exit completion"
 	);
+	check(
+		recording.main_frame_footers ==
+			std::vector<th03::MainFrameFooterReached>{{}},
+		"a terminal session exit requested after normal updates still reaches the footer"
+	);
+
+	with_live_state([](auto &terminal) {
+		terminal.defeat_flag = th03::detail::DefeatFlag::banner;
+		terminal.players[0U].rounds_won = 2U;
+		terminal.result_transition_complete = true;
+		RecordingObserver recording;
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			terminal, &recording
+		);
+		check(
+			terminal.round_complete && recording.main_frame_footers.empty() &&
+			recording.phases == std::vector<ObservedPhase>{
+				ObservedPhase::shots_enemies,
+				ObservedPhase::fireballs,
+				ObservedPhase::players_bullets,
+			},
+			"a result-control terminal early return skips the normal frame footer"
+		);
+	});
 }
 
 th03::GameInit base_game_init()
@@ -1411,8 +1492,9 @@ void test_recorded_pause_completion()
 	);
 	check(
 		deferred.status == th03::StepStatus::phase_transition &&
-		recording.phases.empty() && recording.poses.empty(),
-		"recorded Cancel defers player updates and all observer phase views"
+		recording.phases.empty() && recording.poses.empty() &&
+		recording.main_frame_footers.empty(),
+		"recorded Cancel defers player updates, phase views, and the footer"
 	);
 	const auto completed = game->finish_deferred_frame(
 		th03::DeferredFrameAction::resume,
@@ -1421,6 +1503,8 @@ void test_recorded_pause_completion()
 	check(
 		completed && completed->status == th03::StepStatus::running &&
 		recording.poses.size() == 2U &&
+		recording.main_frame_footers ==
+			std::vector<th03::MainFrameFooterReached>{{}} &&
 		recording.phases == std::vector<ObservedPhase>{
 			ObservedPhase::shots_enemies,
 			ObservedPhase::fireballs,
@@ -1462,6 +1546,8 @@ void test_recorded_pause_completion()
 	);
 	check(
 		exited && exited->status == th03::StepStatus::terminal &&
+		exit_recording.main_frame_footers ==
+			std::vector<th03::MainFrameFooterReached>{{}} &&
 		exit_recording.phases == std::vector<ObservedPhase>{
 			ObservedPhase::shots_enemies,
 			ObservedPhase::fireballs,
@@ -1505,7 +1591,11 @@ void test_recorded_pause_completion()
 			invalid_recording.defeat_steps.empty() &&
 			invalid_recording.hit_circles.empty() &&
 			invalid_recording.common_effects.empty() &&
+			invalid_recording.bomb_frame_steps.empty() &&
 			invalid_recording.bomb_common_steps.empty() &&
+			invalid_recording.warning_interstitial_starts.empty() &&
+			invalid_recording.warning_interstitial_samples.empty() &&
+			invalid_recording.main_frame_footers.empty() &&
 			invalid_recording.calls.empty(),
 			"an invalid input context emits no observer callback"
 		);
@@ -1587,6 +1677,37 @@ void test_recorded_pause_prefix_bullet_once()
 
 void test_warning_completion()
 {
+	with_live_state([](auto &state) {
+		RecordingObserver recording;
+		check(
+			!th03::detail::gameplay_frame_suffix_before_interstitial(
+				state, &recording
+			) &&
+				recording.warning_interstitial_starts.empty(),
+			"a rejected warning interstitial emits no start fact"
+		);
+		state.warning_flag[0U] = th03::detail::WarningFlag::flash_white;
+		check(
+			th03::detail::gameplay_frame_suffix_before_interstitial(
+				state, &recording
+			) &&
+				recording.warning_interstitial_starts ==
+					std::vector<th03::WarningInterstitialStarted>{
+						{.flashing_players = {true, false}},
+					} &&
+				state.warning_flag[0U] ==
+					th03::detail::WarningFlag::flash_red,
+			"an accepted warning captures flash_white players before conversion"
+		);
+		check(
+			!th03::detail::gameplay_frame_suffix_before_interstitial(
+				state, &recording
+			) &&
+				recording.warning_interstitial_starts.size() == 1U,
+			"converted warning flags cannot emit a duplicate start fact"
+		);
+	});
+
 	auto init = base_game_init();
 	init.runtime_snapshot = th03::RuntimeSnapshot{};
 	for(auto &player : init.runtime_snapshot->players) {
@@ -1613,6 +1734,7 @@ void test_warning_completion()
 		"gauge release frame reports its ordinary phase views before arming warning"
 	);
 	recording.phases.clear();
+	recording.main_frame_footers.clear();
 	const auto calls_before_warning = recording.calls.size();
 	const auto warning = game->step(
 		th03::CoreInput{.p1 = 0x0020U},
@@ -1623,6 +1745,11 @@ void test_warning_completion()
 		warning.status == th03::StepStatus::phase_transition &&
 		recording.phases.empty() && recording.spawns.size() == 1U &&
 		recording.poses.size() == 4U &&
+		recording.warning_interstitial_starts ==
+			std::vector<th03::WarningInterstitialStarted>{
+				{.flashing_players = {true, false}},
+			} &&
+		recording.main_frame_footers.empty() &&
 		std::vector<ObservedCall>(
 			recording.calls.begin() +
 				static_cast<std::ptrdiff_t>(calls_before_warning),
@@ -1633,21 +1760,24 @@ void test_warning_completion()
 			ObservedCall::shot_pair_spawned,
 			ObservedCall::player_pose_committed,
 			ObservedCall::player_pose_committed,
+			ObservedCall::warning_interstitial_started,
 		},
-		"warning-start call reports shot and P1/P2 pose facts before deferring phase views"
+		"warning-start captures flash-white players after P1/P2 poses and before deferral"
 	);
-	const auto calls_during_warning = recording.calls.size();
-	for(std::size_t sample = 0U; sample < 26U; ++sample) {
+	for(std::uint8_t sample = 0U; sample < 26U; ++sample) {
 		const auto interstitial = game->step(
 			{}, th03::InputContext::interstitial, &recording
 		);
 		check(
 			interstitial.status == th03::StepStatus::running &&
 			recording.phases.empty() &&
-			recording.calls.size() == calls_during_warning,
-			"warning interstitial samples 1 through 26 emit no observer callback"
+			recording.warning_interstitial_samples.size() ==
+				static_cast<std::size_t>(sample) + 1U &&
+			recording.warning_interstitial_samples.back().ordinal == sample,
+			"each nonfinal warning input latch emits its source ordinal"
 		);
 	}
+	const auto calls_before_final_sample = recording.calls.size();
 	const auto completed = game->step(
 		{}, th03::InputContext::interstitial, &recording
 	);
@@ -1657,8 +1787,23 @@ void test_warning_completion()
 			ObservedPhase::shots_enemies,
 			ObservedPhase::fireballs,
 			ObservedPhase::players_bullets,
+		} &&
+		recording.warning_interstitial_samples.size() == 27U &&
+		recording.warning_interstitial_samples.back().ordinal == 26U &&
+		recording.main_frame_footers ==
+			std::vector<th03::MainFrameFooterReached>{{}} &&
+		std::vector<ObservedCall>(
+			recording.calls.begin() +
+				static_cast<std::ptrdiff_t>(calls_before_final_sample),
+			recording.calls.end()
+		) == std::vector<ObservedCall>{
+			ObservedCall::warning_interstitial_sample,
+			ObservedCall::shots_enemies,
+			ObservedCall::fireballs,
+			ObservedCall::players_bullets,
+			ObservedCall::main_frame_footer_reached,
 		},
-		"warning sample 27 reports all deferred phase views once"
+		"warning sample 26 precedes its deferred suffix and normal footer"
 	);
 }
 
@@ -1770,6 +1915,22 @@ void test_main_effect_observer_contract()
 			bombs, &recording
 		);
 		check(
+			recording.bomb_frame_steps ==
+				std::vector<th03::BombFrameStep>{
+					{
+						.player = th03::PlayerId::p1,
+						.paletted_character = 11,
+						.bomb_frame = 63U,
+					},
+					{
+						.player = th03::PlayerId::p2,
+						.paletted_character = 9,
+						.bomb_frame = 64U,
+					},
+				},
+			"every active late Bomb callback exposes its P1-then-P2 inputs"
+		);
+		check(
 			recording.bomb_common_steps ==
 				std::vector<th03::BombCommonEffectStep>{
 					{
@@ -1790,6 +1951,72 @@ void test_main_effect_observer_contract()
 		check(
 			recording.common_effects.empty(),
 			"Kana and Kotohime callbacks do not fabricate core-owned concrete effects"
+		);
+		check(
+			recording.calls == std::vector<ObservedCall>{
+				ObservedCall::bomb_frame_step,
+				ObservedCall::bomb_common_effect_step,
+				ObservedCall::bomb_frame_step,
+				ObservedCall::bomb_common_effect_step,
+				ObservedCall::shots_enemies,
+				ObservedCall::fireballs,
+				ObservedCall::players_bullets,
+				ObservedCall::main_frame_footer_reached,
+			},
+			"Bomb frame facts precede the retained character-specific common-effect steps"
+		);
+	});
+
+	with_live_state([](auto &bombs) {
+		bombs.players[0U].paletted_character = 3;
+		bombs.players[1U].paletted_character = 1;
+		bombs.bomb_flag = {
+			th03::detail::BombFlag::active,
+			th03::detail::BombFlag::active,
+		};
+		bombs.bomb_frame = {88U, 31U};
+
+		auto null_state = bombs;
+		auto discard_state = bombs;
+		auto record_state = bombs;
+		DiscardObserver discard;
+		RecordingObserver recording;
+		th03::detail::gameplay_frame_suffix_after_interstitial(null_state);
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			discard_state, &discard
+		);
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			record_state, &recording
+		);
+		check(
+			observed_gameplay_equal(null_state, discard_state) &&
+				observed_gameplay_equal(null_state, record_state),
+			"Bomb frame observation preserves state and shared RNG for null, discard, and recording paths"
+		);
+		check(
+			recording.bomb_frame_steps ==
+				std::vector<th03::BombFrameStep>{
+					{
+						.player = th03::PlayerId::p1,
+						.paletted_character = 3,
+						.bomb_frame = 88U,
+					},
+					{
+						.player = th03::PlayerId::p2,
+						.paletted_character = 1,
+						.bomb_frame = 31U,
+					},
+				} &&
+			recording.calls == std::vector<ObservedCall>{
+				ObservedCall::bomb_frame_step,
+				ObservedCall::common_effect_spawned,
+				ObservedCall::bomb_frame_step,
+				ObservedCall::shots_enemies,
+				ObservedCall::fireballs,
+				ObservedCall::players_bullets,
+				ObservedCall::main_frame_footer_reached,
+			},
+			"Bomb frame inputs precede Mima's character-specific effect work and cover ordinary callbacks"
 		);
 	});
 

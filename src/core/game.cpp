@@ -293,6 +293,13 @@ StepResult Game::step(
 			};
 		}
 		detail::interstitial_input_latch(impl_->state, input);
+		if(observer != nullptr) {
+			observer->warning_interstitial_sample(WarningInterstitialSample{
+				.ordinal = static_cast<std::uint8_t>(
+					27U - impl_->warning_interstitial_samples_remaining
+				),
+			});
+		}
 		const auto input_boundary = detail::canonical_state(impl_->state);
 		impl_->warning_interstitial_samples_remaining--;
 		if(impl_->warning_interstitial_samples_remaining == 0U) {

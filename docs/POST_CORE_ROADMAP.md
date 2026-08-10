@@ -347,7 +347,9 @@ only when an actual Arrange requirement needs them.
    presentation. Shots, enemies, post-hittest fireballs, player bases/overlays,
    defeat geometry, hit circles, the intervening common-effect pool,
    Bullet16s, clouds, and pellets now have source-ordered consumers. Next add
-   Boss/Extra/Charge presenters and ordered palette events. Keep `th03rv`
+   Boss/Extra/Charge presenters and attach the frozen palette lifecycle
+   facts/primitive to their owning character and Warning/Gauge presenters.
+   Keep `th03rv`
    independent of both presentation and asset libraries.
 5. Select a minimal Windows/platform backend from an explicit support-floor
    matrix, then implement the host compositor and input mapping.

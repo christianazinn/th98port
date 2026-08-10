@@ -92,6 +92,13 @@ establish their initial join.
 sprite/cel lifetimes, asset identities, page/palette/TRAM state, and private
 draw ordering.
 
+MAIN's palette boundary retains master.lib's full 16-entry RGB8 logical
+`Palette8`, a separate applied RGB4 DAC result, raw `PaletteTone`, one
+process-scoped baseline snapshot, and an explicit dirty latch. Core reports
+only neutral Bomb/Warning/defeat/footer lifecycle facts; character presenters
+own the corresponding RGB/tone formulas. Immediate shows do not clear the
+dirty latch, and the normal footer flushes it before the page transaction.
+
 V11/T3CASE phase 1 is an auxiliary boundary, not a semantic warning tag. It can
 carry either the fixed 27-sample warning wait or the Replay Patch's variable
 pause-menu stream. The replay coordinator owns pause selection/release parsing;

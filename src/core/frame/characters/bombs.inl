@@ -70,6 +70,13 @@ void bombs_render_phase_update(
 		const auto character = character_index_from_paletted(
 			state.players[player_id].paletted_character
 		);
+		if(observer != nullptr) {
+			observer->bomb_frame_step(BombFrameStep{
+				.player = static_cast<PlayerId>(player_id),
+				.paletted_character = state.players[player_id].paletted_character,
+				.bomb_frame = state.bomb_frame[player_id],
+			});
+		}
 		if(character == character_reimu && state.bomb_frame[player_id] < 32U) {
 			// reimu_bomb() creates one visual record with two shared-ring draws.
 			(void)randring_next16(state);

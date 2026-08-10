@@ -23,6 +23,7 @@ void player_defeat_update(
 			.center_y = player.center_y.raw(),
 			.fg_shift_x_before_defeat_shake =
 				state.playfield_fg_shift_x[player_id],
+			.round_or_result_frame_before = state.round_or_result_frame,
 		});
 	}
 	if(player.lose_anim_time == 0x30U) {

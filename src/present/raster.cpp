@@ -40,6 +40,7 @@ struct ClippedRegion {
 	std::uint8_t component,
 	std::int16_t raw_tone
 ) noexcept {
+	component >>= 4U;
 	const auto tone = std::clamp(static_cast<std::int32_t>(raw_tone), 0, 200);
 	if(tone <= 100) {
 		return static_cast<std::uint8_t>(
@@ -470,14 +471,31 @@ bool Raster::set_pending_palette_entry(
 	std::uint8_t index,
 	assets::Rgb4 color
 ) noexcept {
-	if((index >= pending_palette_.colors.size()) || !valid_rgb4(color)) {
+	if(!valid_rgb4(color)) {
+		return false;
+	}
+	const auto expand = [](std::uint8_t component) noexcept {
+		return static_cast<std::uint8_t>((component << 4U) | component);
+	};
+	return set_pending_palette_entry_rgb8(index, {
+		expand(color.r),
+		expand(color.g),
+		expand(color.b),
+	});
+}
+
+bool Raster::set_pending_palette_entry_rgb8(
+	std::uint8_t index,
+	Rgb8 color
+) noexcept {
+	if(index >= pending_palette_.colors.size()) {
 		return false;
 	}
 	pending_palette_.colors[index] = color;
 	return true;
 }
 
-const assets::Palette16Rgb4 &Raster::pending_palette() const noexcept {
+const Palette16Rgb8 &Raster::pending_palette() const noexcept {
 	return pending_palette_;
 }
 

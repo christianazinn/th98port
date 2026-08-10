@@ -4,6 +4,7 @@
 #include "th03/present/cels.hpp"
 #include "th03/present/main_entities.hpp"
 #include "th03/present/main_effects.hpp"
+#include "th03/present/main_palette.hpp"
 #include "th03/present/main_players_bullets.hpp"
 #include "th03/present/main_static.hpp"
 #include "th03/present/mono.hpp"
