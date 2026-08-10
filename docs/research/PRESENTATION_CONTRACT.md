@@ -373,9 +373,11 @@ build the first static MAIN frame without pretending to emulate the whole EGC:
   remain ANK V/W unless followed by the matching right half. The hash remains
   independent of the graphics hash; and
 - the host composer overlays visible TRAM after a caller-resolved graphics
-  frame, using an injected ANK provider and source-format gaiji rows. It keeps
-  fixed three-bit text colors distinct from the programmable graphics palette
-  and implements display, color, reverse, and text-over-graphics priority.
+  frame into a caller-owned reusable output span, using an injected ANK
+  provider and source-format gaiji rows. It allocates no per-frame buffer,
+  keeps fixed three-bit text colors distinct from the programmable graphics
+  palette, and implements display, color, reverse, and text-over-graphics
+  priority.
 
 TRAM source calls require valid coordinates and do not define clipping, so the
 portable API rejects an out-of-range cell or rectangle atomically. JIS font-ROM
@@ -449,6 +451,13 @@ Anniversary operations:
   final logical effect of `SUB_A38E()` after the intervening BF2 loads; there
   is no wait/present point at which their temporary logical palette is
   observable. Palette application uses the exact current `PaletteTone`.
+- `Sprite16Staging` then mirrors `sprite16_sprites_commit()`: after
+  `graph_200line(0)` it copies page 0's complete lower 640x200 source atlas
+  (raw rows 200..399) to page 1, restores access page 0, and derives the packed
+  positive alpha mask by ORing B/R/G/E occupancy. The negative mask is its
+  exact complement. MRS resources remain separately allocated and never enter
+  this atlas. The presenter owns and reuses both fixed 16,000-byte masks; no
+  per-frame allocation or original asset byte is introduced.
 - Startup establishes source roles `page_back = 0`, `page_front = 1`, the
   upper zoomed 200-line window, access page 0, and shown page 1. The late-frame
   transaction accesses the old front,
@@ -461,9 +470,9 @@ IDs and transparency, the full page-1-to-page-0 startup copy, final palette and
 selectors, and two consecutive end-frame swaps/clears with exact edge pixels.
 These tests deliberately do not claim captured pixel parity. The remaining
 static-frame prerequisites are explicit: the application must inject/load the
-decoded GAMEFT gaiji glyphs before startup; sprite resource commit and clip
-metadata are not modeled; and both pre-first-frame pages still require
-comparison against a raw Anniversary capture. Injected ANK and gaiji host
+decoded GAMEFT gaiji glyphs before startup; the remaining PI-staged atlas
+content and clip metadata are not modeled; and both pre-first-frame pages
+still require comparison against a raw Anniversary capture. Injected ANK and gaiji host
 composition is implemented; JIS, blink, and underline remain explicit deferred
 paths rather than guessed behavior.
 
@@ -767,15 +776,29 @@ application/presentation screen:
 
 - initialize palette and both pages, seed/reset/spawn flakes, and start with
   explicit page/tone state;
-- for each logical frame, clear the appropriate B plane, update and render the
-  flakes, execute the current CDG dissolve/slide/overlay operation, wait, show
-  `page_back`, toggle it, and access the other page;
+- for each logical frame, clear the appropriate B plane, execute any current
+  CDG dissolve/slide/overlay operation, then tick the flakes through spawn,
+  update, render, wait, show `page_back`, toggle it, and access the other page;
+  phases without a CDG operation go directly from the clear to the flake tick;
 - retain the per-page `stf_center_y_on_page[]` coordinates because the source
   deliberately offsets the two page states by a frame; and
 - perform palette changes at their exact scripted slots.
 
 The staff-roll flake state and RNG are presentation-owned, but the initial seed
 is an explicit resident handoff as described above.
+
+The implemented `present/staff_flakes.hpp` foundation keeps that ownership
+boundary literal. It stores all 80 records, seeds a private 32-bit
+`0x015A4E35` LCG from the caller-supplied resident value, and consumes exactly
+four `IRAND` results for each eligible spawn. Motion uses caller-injected
+signed Q8 sine/cosine tables, source-width Q12.4 wrapping, and the original
+one-shot edge corrections. Each tick performs spawn, update, B-plane render,
+the post-render 80-to-50 lag reset, show-old-page, toggle, and access-new-page
+in that order. The complete B-plane clear is a separate raster primitive so
+the caller can retain the source CDG interleave. Host waiting, the VSync
+counter reset, CDG scene scheduling, palette changes, and audio remain in the
+future MAINL scene driver; the tick receives only the already-sampled
+`vsync_Count1 > 1` result.
 
 ## Presentation-only state inventory
 
@@ -1144,7 +1167,8 @@ run independently. Their first required join is Slice 2.
 Implementation status: the core-independent synthetic parcel is complete.
 It ports raw `hud_wipe()` / `hud_static_put()`, the full page-1-to-page-0
 handoff copy, injected decoded character-BF2 preparation for `sub_E266()`,
-final palette restoration at the stable startup boundary, source page-role
+final palette restoration at the stable startup boundary, the lower-half
+Sprite16 atlas copy and positive/negative mask commit, source page-role
 selection, and the exact two-color 288x184 next-page clear after every swap.
 Captured Anniversary page comparison, GAMEFT gaiji loading by the application,
 and observer/no-observer integration remain deferred and are therefore still

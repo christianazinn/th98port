@@ -62,7 +62,7 @@ importer or asset identity.
 | Table / source symbol | Exact format and consumer | Disposition after decoded-file assets |
 |---|---|---|
 | **Sprite-area map** `SO_ENEMIES` and `SO_EXPLOSIONS` | `soch_data.asm:13-39` contains four enemy starts and four cels for each of the 32/48/64/80-pixel explosion groups. Values are byte offsets into the 640x200 Sprite16 source region, not pixels. `enemy_put()` and `enemy_explosion_put()` select them by enemy size/frame (`enemy.cpp:175-235`); `fireball.cpp:267-281` uses the 64-pixel group. | **Source-derived program constants, no bitmap import.** Name them as atlas slots, not raw PC-98 offsets in a public API. Their pixels come from the decoded, source-staged sheet. |
-| **Other Sprite16 slots** `SO_ATTACK_P1/P2`, `SO_BULLET16`, `SO_FIREBALL_*`, `SO_HITCIRCLE`, `SO_PELLET_CLOUD` | `th03/sprites/main_s16.hpp:14-32` names their locations in the same staging region. Call sites include hit circles (`hitcirc.cpp:320-465`), ordinary shots/bullets, and fireballs. `sprite16_sprites_commit()` first copies the entire source area to the other page and then asks SPRITE16 to derive alpha (`main/sprite16.cpp:13-19`; `hardware/sprite16_copy.asm:20-57`). | **No separate built-in image table.** The asset/staging transaction must fill both pages from decoded BF2/MRS source content before the alpha-generation point. Model the slots as presenter-private identifiers. |
+| **Other Sprite16 slots** `SO_ATTACK_P1/P2`, `SO_BULLET16`, `SO_FIREBALL_*`, `SO_HITCIRCLE`, `SO_PELLET_CLOUD` | `th03/sprites/main_s16.hpp:14-32` names their locations in the same staging region. Call sites include hit circles (`hitcirc.cpp:320-465`), ordinary shots/bullets, and fireballs. `sprite16_sprites_commit()` first copies the entire source area to the other page and then asks SPRITE16 to derive alpha (`main/sprite16.cpp:13-19`; `hardware/sprite16_copy.asm:20-57`). | **No separate built-in image table.** MAINL stages the atlas from decoded PI resources, and `sub_E266()` adds six decoded BF2 shot patterns before the alpha-generation point. MRS remains separately allocated and never enters the atlas. Model the slots as presenter-private identifiers. |
 | **BF2-backed HUD/result patterns** | `round_startup()` registers `lose.bf2`, `round.bf2`, and `zikicw.bf2`, runs `sub_E266()`, then commits Sprite16 (`rstart.cpp:229-236`; source filenames at `story_startup[data].asm:125-140`). `sub_E266()` places the numbered source patterns on both pages (`player/shot.cpp:87-103`). HUD-start and defeat/result paths call `super_put()` with those loaded pattern numbers (`hudstart.cpp:67-94`, `c2f9.cpp:10-28`). | **Already file-backed.** Use the BFNT/BF2 decoder plus a source-order staging operation; do not manufacture a second image table. The existing asset decoder is a prerequisite, while general `super_put()` behaviour is a presentation parcel. |
 | **Ellen coordinate/size tables** `word_1DE12`, `word_1DE24`, `word_1DE36`, `word_1DE38` | `ccorddat.asm:10-20` provides two 9-element signed-word rows for the 96-pixel Ellen effect and a one-plus-nine Q12.4 coordinate sequence. `ellen_11814()` directly uses the first pair as Sprite16 offset, height, and Y placement (`main_03t.cpp:54-67`); `main_03u.cpp` consumes the latter names in later Ellen drawing. | **Source-derived program constants.** Keep semantic table names and fixed widths in the Ellen presenter, never a shared raw DGROUP layout. No imported pixels. |
 | **Gauge terminal masks** `wordmask_1DB0C` | A 16-entry `uint16_t` right-edge mask row in `gba_hitc_enemy[data].asm:12-46`. Raw emitted `SUB_B3F6()` selects entry `remainder * 2` while drawing a 3-row gauge segment (`hitcirc.cpp:92-140`); `sub_C8C4()` schedules charged/available bar layers and colours (`gaugeovl.cpp:67-136`). | **Source-derived program constant.** Port only with the gauge primitive, preserving the partial-word case. It is not an asset file. |
@@ -117,9 +117,11 @@ profile only after it preserves timing, cell span, and layout.
    the B plane. Hand-authored 1bpp fixtures must test every edge/shift and
    prove that operations affect only the access page.
 3. **PRESENT-SPRITE-STAGING.** Add a private atlas/staging transaction that
-   consumes decoded BF2/MRS data, applies `sub_E266()`/source slot placement,
+   retains MAINL's decoded PI page content, applies decoded BF2
+   `sub_E266()`/source slot placement,
    duplicates the 640x200 sprite area to the opposite page, and records the
-   alpha-generation boundary. Translate `SO_*` and `ccorddat` into typed local
+   alpha-generation boundary. Keep separately allocated MRS out of the atlas.
+   Translate `SO_*` and `ccorddat` into typed local
    slot/layout constants. Do not expose PC-98 offsets as the Arrange API.
 4. **PRESENT-SPRITE16-SEMANTICS.** Implement only the used Sprite16 behaviours:
    source-atlas alpha preparation, normal clear overlap, OR overlap, mono
@@ -157,7 +159,8 @@ profile only after it preserves timing, cell span, and layout.
    foundation intentionally lacks general unaligned Sprite16/EGC semantics.
    `libs/sprite16/sprite16.h:12-50`, `main/sprite16.cpp:13-156`, and the visual
    capture gate—not an inferred alpha rule—are the authority for that parcel.
-4. No source or decoder gap was found for the BF2/MRS content itself: it is
-   file-backed and already belongs to the decoded-asset/staging path. The open
-   work is ordering and raster operation fidelity, not reverse-engineering a
-   second compiled graphic table.
+4. No source or decoder gap was found for the PI, BF2, or MRS content itself:
+   it is file-backed and already belongs to decoded-asset paths. Only PI and
+   BF2 feed the Sprite16 atlas; MRS stays separately allocated. The open work
+   is ordering and raster operation fidelity, not reverse-engineering a second
+   compiled graphic table.

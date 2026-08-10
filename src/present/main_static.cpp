@@ -426,7 +426,7 @@ bool MainStaticPresenter::round_startup(
 	) || !raster.set_access_page(Page::zero)) {
 		return false;
 	}
-	if(!main_prepare_shot_source_sheet(raster, sheets)) {
+	if(!sprite_staging_.stage_main_shots(raster, sheets)) {
 		return false;
 	}
 
@@ -440,6 +440,7 @@ bool MainStaticPresenter::round_startup(
 	// graph_200line(0) selects the upper zoomed half and access page 0.
 	pages_ = {Page::zero, Page::one};
 	if(!raster.set_raster_mode(RasterMode::zoomed_200_upper) ||
+		!sprite_staging_.commit(raster) ||
 		!raster.set_shown_page(Page::one)) {
 		return false;
 	}
@@ -479,6 +480,11 @@ bool MainStaticPresenter::end_frame_swap_and_clear(Raster &raster) noexcept
 MainPageRoles MainStaticPresenter::page_roles() const noexcept
 {
 	return pages_;
+}
+
+const Sprite16Staging &MainStaticPresenter::sprite_staging() const noexcept
+{
+	return sprite_staging_;
 }
 
 bool MainStaticPresenter::started() const noexcept

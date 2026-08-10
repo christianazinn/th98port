@@ -45,7 +45,7 @@ constexpr TramAttribute supported_attribute_bits =
 }
 
 void compose_glyph_row(
-	ComposedTextFrame &frame,
+	std::span<ComposedPixel> frame,
 	std::size_t cell_x,
 	std::size_t cell_y,
 	std::size_t glyph_y,
@@ -71,7 +71,8 @@ void compose_glyph_row(
 
 } // namespace
 
-std::expected<ComposedTextFrame, TextComposeError> compose_text_layer(
+std::expected<void, TextComposeError> compose_text_layer(
+	std::span<ComposedPixel> output,
 	std::span<const Index4> graphics,
 	const Tram &tram,
 	const AnkGlyphProvider &ank
@@ -79,6 +80,11 @@ std::expected<ComposedTextFrame, TextComposeError> compose_text_layer(
 	if(graphics.size() != graphics_page_pixels) {
 		return std::unexpected(TextComposeError{
 			TextComposeErrorCode::graphics_size_mismatch,
+		});
+	}
+	if(output.size() != graphics_page_pixels) {
+		return std::unexpected(TextComposeError{
+			TextComposeErrorCode::output_size_mismatch,
 		});
 	}
 	if(std::ranges::any_of(graphics, [](Index4 value) {
@@ -89,13 +95,11 @@ std::expected<ComposedTextFrame, TextComposeError> compose_text_layer(
 		});
 	}
 
-	ComposedTextFrame frame;
-	frame.reserve(graphics.size());
-	for(const auto pixel : graphics) {
-		frame.push_back({ComposedPixelLayer::graphics, pixel});
+	for(std::size_t offset = 0U; offset < graphics.size(); ++offset) {
+		output[offset] = {ComposedPixelLayer::graphics, graphics[offset]};
 	}
 	if(!tram.visible()) {
-		return frame;
+		return {};
 	}
 
 	std::array<std::optional<AnkGlyph>, 256U> ank_cache{};
@@ -143,7 +147,7 @@ std::expected<ComposedTextFrame, TextComposeError> compose_text_layer(
 				(gaiji->half == GaijiHalf::left) ? 0U : 1U;
 			for(std::size_t glyph_y = 0U; glyph_y < gaiji_height; ++glyph_y) {
 				compose_glyph_row(
-					frame,
+					output,
 					cell_x,
 					cell_y,
 					glyph_y,
@@ -176,7 +180,7 @@ std::expected<ComposedTextFrame, TextComposeError> compose_text_layer(
 		}
 		for(std::size_t glyph_y = 0U; glyph_y < ank_height; ++glyph_y) {
 			compose_glyph_row(
-				frame,
+				output,
 				cell_x,
 				cell_y,
 				glyph_y,
@@ -186,7 +190,7 @@ std::expected<ComposedTextFrame, TextComposeError> compose_text_layer(
 			);
 		}
 	}
-	return frame;
+	return {};
 }
 
 } // namespace th03::present

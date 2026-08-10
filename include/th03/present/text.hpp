@@ -7,7 +7,6 @@
 #include <expected>
 #include <optional>
 #include <span>
-#include <vector>
 
 #include "th03/present/raster.hpp"
 #include "th03/present/tram.hpp"
@@ -71,10 +70,9 @@ struct ComposedPixel {
 	) = default;
 };
 
-using ComposedTextFrame = std::vector<ComposedPixel>;
-
 enum class TextComposeErrorCode : std::uint8_t {
 	graphics_size_mismatch,
+	output_size_mismatch,
 	graphics_index_out_of_range,
 	missing_ank_glyph,
 	jis_glyph_not_supported,
@@ -90,15 +88,17 @@ struct TextComposeError {
 	TramAttribute attribute = 0U;
 };
 
-// Composes the visible 80x25 TRAM over a caller-resolved 640x400 graphics
-// image. The graphics span must already reflect page selection, raster mode,
-// and scrolling; this function owns only the source-proven final text overlay.
+// Composes the visible 80x25 TRAM into a caller-owned 640x400 output span over
+// a caller-resolved graphics image of the same size. The graphics span must
+// already reflect page selection, raster mode, and scrolling; this function
+// owns only the source-proven final text overlay and performs no allocation.
 //
 // Anniversary TH03 uses ANK and gaiji TRAM cells and the reverse attribute.
 // JIS glyph lookup, hardware blink cadence, and underline rasterization remain
 // explicit errors until their external font/timing behavior is authoritative.
-[[nodiscard]] std::expected<ComposedTextFrame, TextComposeError>
+[[nodiscard]] std::expected<void, TextComposeError>
 compose_text_layer(
+	std::span<ComposedPixel> output,
 	std::span<const Index4> graphics,
 	const Tram &tram,
 	const AnkGlyphProvider &ank

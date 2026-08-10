@@ -66,6 +66,9 @@ public:
 
 	// These operations write the selected access page only.
 	[[nodiscard]] bool clear(Rect rect, Index4 color) noexcept;
+	// Clears one complete hardware plane on the selected access page while
+	// preserving the other three planes.
+	[[nodiscard]] bool clear_plane(PlanarPlane plane) noexcept;
 	[[nodiscard]] bool plot(Point point, Index4 color) noexcept;
 	[[nodiscard]] bool blit(IndexedSource source, Point destination) noexcept;
 	[[nodiscard]] bool blit_transparent(

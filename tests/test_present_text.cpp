@@ -15,13 +15,14 @@ using th03::present::AnkGlyph;
 using th03::present::AnkGlyphProvider;
 using th03::present::ComposedPixel;
 using th03::present::ComposedPixelLayer;
-using th03::present::ComposedTextFrame;
 using th03::present::Index4;
 using th03::present::TextColor;
 using th03::present::TextComposeErrorCode;
 using th03::present::Tram;
 using th03::present::TramCell;
 using th03::present::TramPoint;
+
+using ComposedTextFrame = std::vector<ComposedPixel>;
 
 void expect(bool condition, std::string_view message) {
 	if(!condition) {
@@ -75,6 +76,27 @@ private:
 	return std::vector<Index4>(th03::present::graphics_page_pixels, color);
 }
 
+[[nodiscard]] std::expected<
+	ComposedTextFrame,
+	th03::present::TextComposeError
+> compose_fixture(
+	std::span<const Index4> source,
+	const Tram &tram,
+	const AnkGlyphProvider &ank
+) {
+	ComposedTextFrame output(th03::present::graphics_page_pixels);
+	const auto result = th03::present::compose_text_layer(
+		output,
+		source,
+		tram,
+		ank
+	);
+	if(!result) {
+		return std::unexpected(result.error());
+	}
+	return output;
+}
+
 void test_ank_text_over_graphics() {
 	SyntheticAnk ank;
 	AnkGlyph a{};
@@ -100,7 +122,7 @@ void test_ank_text_over_graphics() {
 		}),
 		"seed ANK code that aliases a gaiji left code"
 	);
-	const auto result = th03::present::compose_text_layer(
+	const auto result = compose_fixture(
 		graphics(9U),
 		tram,
 		ank
@@ -149,7 +171,7 @@ void test_reverse_black_mask() {
 		}),
 		"seed reverse-black cell"
 	);
-	const auto result = th03::present::compose_text_layer(
+	const auto result = compose_fixture(
 		graphics(12U),
 		tram,
 		ank
@@ -182,7 +204,7 @@ void test_gaiji_halves_and_color() {
 		tram.put_gaiji({10, 4}, 0xA5U, th03::present::tram_yellow),
 		"seed two-cell gaiji"
 	);
-	const auto result = th03::present::compose_text_layer(
+	const auto result = compose_fixture(
 		graphics(3U),
 		tram,
 		ank
@@ -217,7 +239,7 @@ void test_gaiji_halves_and_color() {
 		ambiguous.put_gaiji({0, 0}, 0U, th03::present::tram_green),
 		"seed gaiji zero pair"
 	);
-	const auto ambiguous_result = th03::present::compose_text_layer(
+	const auto ambiguous_result = compose_fixture(
 		graphics(2U),
 		ambiguous,
 		ank
@@ -237,7 +259,7 @@ void test_visibility_and_disabled_cells() {
 		tram.put_cell({0, 0}, {0x1234U, 0U}),
 		"seed disabled unsupported code"
 	);
-	const auto disabled = th03::present::compose_text_layer(
+	const auto disabled = compose_fixture(
 		graphics(6U),
 		tram,
 		ank
@@ -252,7 +274,7 @@ void test_visibility_and_disabled_cells() {
 		"enable unsupported code"
 	);
 	tram.set_visible(false);
-	const auto hidden = th03::present::compose_text_layer(
+	const auto hidden = compose_fixture(
 		graphics(7U),
 		tram,
 		ank
@@ -285,7 +307,7 @@ void test_explicit_deferred_paths() {
 		"seed missing ANK code"
 	);
 	expect_cell_error(
-		th03::present::compose_text_layer(graphics(0U), tram, ank),
+		compose_fixture(graphics(0U), tram, ank),
 		TextComposeErrorCode::missing_ank_glyph,
 		{4, 5},
 		"missing injected ANK bitmap is explicit"
@@ -297,7 +319,7 @@ void test_explicit_deferred_paths() {
 		"seed JIS cell"
 	);
 	expect_cell_error(
-		th03::present::compose_text_layer(graphics(0U), tram, ank),
+		compose_fixture(graphics(0U), tram, ank),
 		TextComposeErrorCode::jis_glyph_not_supported,
 		{6, 7},
 		"JIS font-ROM path is explicitly deferred"
@@ -314,7 +336,7 @@ void test_explicit_deferred_paths() {
 		"seed blink cell"
 	);
 	expect_cell_error(
-		th03::present::compose_text_layer(graphics(0U), tram, ank),
+		compose_fixture(graphics(0U), tram, ank),
 		TextComposeErrorCode::blink_not_supported,
 		{8, 9},
 		"hardware blink cadence is explicitly deferred"
@@ -331,7 +353,7 @@ void test_explicit_deferred_paths() {
 		"seed underline cell"
 	);
 	expect_cell_error(
-		th03::present::compose_text_layer(graphics(0U), tram, ank),
+		compose_fixture(graphics(0U), tram, ank),
 		TextComposeErrorCode::underline_not_supported,
 		{10, 11},
 		"hardware underline rasterization is explicitly deferred"
@@ -346,7 +368,7 @@ void test_explicit_deferred_paths() {
 		"seed unsupported attribute cell"
 	);
 	expect_cell_error(
-		th03::present::compose_text_layer(graphics(0U), tram, ank),
+		compose_fixture(graphics(0U), tram, ank),
 		TextComposeErrorCode::attribute_not_supported,
 		{12, 13},
 		"source-unused attribute bit is not guessed"
@@ -356,9 +378,23 @@ void test_explicit_deferred_paths() {
 void test_graphics_validation() {
 	SyntheticAnk ank;
 	Tram tram;
+	auto valid_graphics = graphics(0U);
+	ComposedTextFrame short_output(th03::present::graphics_page_pixels - 1U);
+	const auto short_output_result = th03::present::compose_text_layer(
+		short_output,
+		valid_graphics,
+		tram,
+		ank
+	);
+	expect(
+		!short_output_result && short_output_result.error().code ==
+			TextComposeErrorCode::output_size_mismatch,
+		"composition rejects a non-640x400 caller output"
+	);
+
 	auto short_graphics = graphics(0U);
 	short_graphics.pop_back();
-	const auto short_result = th03::present::compose_text_layer(
+	const auto short_result = compose_fixture(
 		short_graphics,
 		tram,
 		ank
@@ -371,7 +407,7 @@ void test_graphics_validation() {
 
 	auto invalid_graphics = graphics(0U);
 	invalid_graphics[123U] = 16U;
-	const auto invalid_result = th03::present::compose_text_layer(
+	const auto invalid_result = compose_fixture(
 		invalid_graphics,
 		tram,
 		ank

@@ -470,6 +470,30 @@ void test_planar_write_modes() {
 	expect_pixel(raster, Page::zero, {1, 31}, 3U, "red OR blue produces magenta");
 	expect_pixel(raster, Page::zero, {2, 31}, 1U, "zero source leaves OR destination");
 
+	expect(raster.clear({0, 33, 4U, 1U}, 15U), "seed complete-plane clear");
+	expect(
+		raster.clear_plane(PlanarPlane::blue),
+		"complete blue-plane clear succeeds"
+	);
+	for(std::int32_t x = 0; x < 4; ++x) {
+		expect_pixel(
+			raster,
+			Page::zero,
+			{x, 33},
+			14U,
+			"complete plane clear preserves R/G/E"
+		);
+	}
+	const auto before_invalid_plane = raster.display_state_hash();
+	expect(
+		!raster.clear_plane(static_cast<PlanarPlane>(99U)),
+		"invalid complete-plane clear is rejected"
+	);
+	expect(
+		raster.display_state_hash() == before_invalid_plane,
+		"invalid complete-plane clear is atomic"
+	);
+
 	const auto before_bad_alpha = raster.display_state_hash();
 	const BitSource short_alpha{{}, 8U, 1U, 1U};
 	expect(
@@ -910,8 +934,10 @@ void test_main_shot_sheet_and_startup() {
 	Raster raster;
 	expect(raster.set_access_page(Page::zero), "select startup page zero seed");
 	expect(raster.plot({100, 100}, 2U), "seed startup page zero");
+	expect(raster.plot({17, 201}, 2U), "seed stale page-zero Sprite16 atlas");
 	expect(raster.set_access_page(Page::one), "select startup page one seed");
 	expect(raster.plot({100, 100}, 7U), "seed MAINL handoff page one");
+	expect(raster.plot({17, 201}, 5U), "seed MAINL Sprite16 atlas content");
 	expect(
 		raster.set_pending_palette_entry(3U, {1U, 2U, 3U}),
 		"seed applied handoff palette"
@@ -943,8 +969,19 @@ void test_main_shot_sheet_and_startup() {
 		raster.raster_mode() == RasterMode::zoomed_200_upper,
 		"startup selects graph_200line upper-half mode"
 	);
+	expect(
+		presenter.sprite_staging().committed(),
+		"startup commits the lower-half Sprite16 source atlas"
+	);
 	expect_pixel(raster, Page::zero, {100, 100}, 7U, "page 1 copied to page 0");
 	expect_pixel(raster, Page::one, {100, 100}, 7U, "handoff page 1 preserved");
+	expect_pixel(raster, Page::zero, {17, 201}, 5U, "MAINL atlas reaches page zero");
+	expect_pixel(raster, Page::one, {17, 201}, 5U, "Sprite16 commit returns atlas to page one");
+	const auto startup_alpha = presenter.sprite_staging().positive_alpha();
+	expect(
+		startup_alpha.has_value() && startup_alpha->bits[82U] == 0x40U,
+		"startup derives packed alpha after the page transactions"
+	);
 	expect(
 		raster.applied_palette().colors[3U] == Rgb4{1U, 2U, 3U} &&
 		raster.pending_palette().colors[3U] == Rgb4{1U, 2U, 3U},

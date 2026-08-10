@@ -32,6 +32,10 @@ struct ClippedRegion {
 	return valid_index(color.r) && valid_index(color.g) && valid_index(color.b);
 }
 
+[[nodiscard]] constexpr bool valid_plane(PlanarPlane plane) noexcept {
+	return static_cast<std::size_t>(plane) < planar_plane_count;
+}
+
 [[nodiscard]] constexpr std::uint8_t apply_tone_component(
 	std::uint8_t component,
 	std::int16_t raw_tone
@@ -262,6 +266,23 @@ bool Raster::clear(Rect rect, Index4 color) noexcept {
 			pages_[access].begin() + static_cast<std::ptrdiff_t>(last),
 			color
 		);
+	}
+	return true;
+}
+
+bool Raster::clear_plane(PlanarPlane plane) noexcept {
+	if(!valid_plane(plane)) {
+		return false;
+	}
+	std::size_t access = 0U;
+	if(!page_index(access_page_, access)) {
+		return false;
+	}
+	const auto keep_mask = static_cast<Index4>(
+		0x0FU ^ (1U << static_cast<std::uint8_t>(plane))
+	);
+	for(auto &pixel_value : pages_[access]) {
+		pixel_value = static_cast<Index4>(pixel_value & keep_mask);
 	}
 	return true;
 }

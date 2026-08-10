@@ -5,8 +5,8 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "th03/assets/types.hpp"
 #include "th03/present/raster.hpp"
+#include "th03/present/sprite_staging.hpp"
 #include "th03/present/tram.hpp"
 
 namespace th03::present {
@@ -57,14 +57,6 @@ struct MainHudState {
 	std::uint8_t boss_level = 0U;
 };
 
-// The two decoded character BF2 sheets are injected in the same P1-then-P2
-// order as set_callbacks_*() / sub_A4C3(). No filename or filesystem policy
-// crosses this boundary.
-struct MainPlayerShotSheets {
-	const assets::BfntSheet *player_one = nullptr;
-	const assets::BfntSheet *player_two = nullptr;
-};
-
 struct MainPageRoles {
 	Page back = Page::zero;
 	Page front = Page::one;
@@ -97,8 +89,9 @@ class MainStaticPresenter {
 public:
 	// Begins with the MAINL-to-MAIN handoff already present in raster: source
 	// graph_copy_page(0) copies page 1 to page 0. The method then prepares the
-	// shot sheet, restores the handed-off palette, selects access page 0 / shown
-	// page 1, and writes the static HUD.
+	// shot sheet, restores the handed-off palette, selects the upper 200-line
+	// mode, commits the lower-half Sprite16 source and masks, selects shown page
+	// 1, and writes the static HUD.
 	[[nodiscard]] bool round_startup(
 		Raster &raster,
 		Tram &tram,
@@ -112,10 +105,12 @@ public:
 	[[nodiscard]] bool end_frame_swap_and_clear(Raster &raster) noexcept;
 
 	[[nodiscard]] MainPageRoles page_roles() const noexcept;
+	[[nodiscard]] const Sprite16Staging &sprite_staging() const noexcept;
 	[[nodiscard]] bool started() const noexcept;
 
 private:
 	MainPageRoles pages_{};
+	Sprite16Staging sprite_staging_{};
 	bool started_ = false;
 };
 

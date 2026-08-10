@@ -41,6 +41,8 @@ add_library(th03_present STATIC
 	src/present/pi.cpp
 	src/present/planar.cpp
 	src/present/raster.cpp
+	src/present/sprite_staging.cpp
+	src/present/staff_flakes.cpp
 	src/present/text.cpp
 	src/present/tram.cpp
 )
@@ -184,4 +186,24 @@ if(BUILD_TESTING)
 	target_link_libraries(th03-present-mono-tests PRIVATE th03_present)
 	th03_set_warnings(th03-present-mono-tests)
 	add_test(NAME th03-present-mono-tests COMMAND th03-present-mono-tests)
+
+	add_executable(th03-present-sprite-staging-tests
+		tests/test_present_sprite_staging.cpp
+	)
+	target_link_libraries(th03-present-sprite-staging-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-sprite-staging-tests)
+	add_test(
+		NAME th03-present-sprite-staging-tests
+		COMMAND th03-present-sprite-staging-tests
+	)
+
+	add_executable(th03-present-staff-flakes-tests
+		tests/test_present_staff_flakes.cpp
+	)
+	target_link_libraries(th03-present-staff-flakes-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-staff-flakes-tests)
+	add_test(
+		NAME th03-present-staff-flakes-tests
+		COMMAND th03-present-staff-flakes-tests
+	)
 endif()
