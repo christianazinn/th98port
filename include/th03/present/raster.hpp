@@ -25,6 +25,12 @@ enum class Page : std::uint8_t {
 	one = 1U,
 };
 
+enum class RasterMode : std::uint8_t {
+	lines_400,
+	zoomed_200_upper,
+	zoomed_200_lower,
+};
+
 struct Point {
 	std::int32_t x = 0;
 	std::int32_t y = 0;
@@ -53,6 +59,10 @@ public:
 	[[nodiscard]] bool set_shown_page(Page page) noexcept;
 	[[nodiscard]] Page access_page() const noexcept;
 	[[nodiscard]] Page shown_page() const noexcept;
+	// Mirrors graph_200line(): selecting either zoomed half also resets the
+	// access page to page 0. The 400-line value records the normal host mode.
+	[[nodiscard]] bool set_raster_mode(RasterMode mode) noexcept;
+	[[nodiscard]] RasterMode raster_mode() const noexcept;
 
 	// These operations write the selected access page only.
 	[[nodiscard]] bool clear(Rect rect, Index4 color) noexcept;
@@ -111,6 +121,10 @@ public:
 	) noexcept;
 	[[nodiscard]] const assets::Palette16Rgb4 &pending_palette() const noexcept;
 	[[nodiscard]] const assets::Palette16Rgb4 &applied_palette() const noexcept;
+	// PaletteTone is a signed source word. Applying clamps a local copy to
+	// 0..200, preserving the raw value exactly as palette_show() does.
+	void set_palette_tone(std::int16_t tone) noexcept;
+	[[nodiscard]] std::int16_t palette_tone() const noexcept;
 	void apply_pending_palette() noexcept;
 
 	void set_scroll_y(std::uint16_t scroll_y) noexcept;
@@ -128,16 +142,19 @@ public:
 	[[nodiscard]] std::span<const Index4> shown_graphics() const noexcept;
 
 	// Provisional FNV-1a diagnostic over the raw shown page, applied palette,
-	// shown-page identity, and logical vertical scroll. It is not a complete
-	// visual-oracle or presenter-snapshot hash; pending palette edits are absent.
+	// raw PaletteTone, raster mode, shown-page identity, and logical vertical
+	// scroll. It is not a complete visual-oracle or presenter-snapshot hash;
+	// pending palette edits are absent.
 	[[nodiscard]] std::uint64_t display_state_hash() const noexcept;
 
 private:
 	std::array<std::vector<Index4>, 2U> pages_{};
 	Page access_page_ = Page::zero;
 	Page shown_page_ = Page::zero;
+	RasterMode raster_mode_ = RasterMode::lines_400;
 	assets::Palette16Rgb4 pending_palette_{};
 	assets::Palette16Rgb4 applied_palette_{};
+	std::int16_t palette_tone_ = 100;
 	std::uint16_t scroll_y_ = 0U;
 };
 

@@ -94,7 +94,10 @@ These tests establish that the adapter implements the written format. Data
 Manager 0.4.2 converted the complete locked six-file V11 and thirteen-file V12
 corpus. The converted sizes and SHA-256 identities are frozen in
 `REPLAY_V13_CORPUS_LOCK.tsv`; the semantic gate reproduces all 173 embedded
-summaries, all 152 stored checkpoints, and terminal results.
+summaries, all 152 stored checkpoints, and terminal results. The externally
+preserved 0.4.2 Windows converter used for regeneration is 13,214,558 bytes,
+SHA-256 `2924fbfbbf792ac18ff548bf2f287ad10377d87e3273ab3132076e2727043ae8`;
+neither that executable nor the converted replay bytes are stored here.
 
 `th03_core` now exposes a format-neutral `RoundStartObservation` immediately
 after initial construction and every repeat reset. It contains all resident

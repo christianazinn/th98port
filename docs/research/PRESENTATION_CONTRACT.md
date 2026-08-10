@@ -352,6 +352,13 @@ build the first static MAIN frame without pretending to emulate the whole EGC:
   and invalid inputs perform no partial writes. A plane-projection accessor
   reconstructs exact packed bytes from the indexed backing for byte-level
   diagnostics;
+- raster mode explicitly distinguishes the normal 400-line surface from the
+  upper and lower zoomed 200-line windows. Selecting either 200-line value
+  also selects access page 0, exactly as `graph_200line()` does;
+- `PaletteTone` remains a signed raw source word. Applying pending logical
+  RGB4 entries clamps only a local tone copy to 0..200, scales toward black
+  for 0..100 and toward white for 101..200 with `palette_show()`'s exact
+  integer division, and leaves the raw tone unchanged;
 - TRAM is stored separately as 80x25 raw 16-bit code/attribute cells. The raw
   attribute constants retain the exact `TX_*` values from
   `libs/master.lib/pc98_gfx.hpp`; `text_fillca.asm` and `text_boxfilla.asm`
@@ -410,9 +417,10 @@ Anniversary operations:
   preceding scene is copied back to pending state and applied. This is the
   final logical effect of `SUB_A38E()` after the intervening BF2 loads; there
   is no wait/present point at which their temporary logical palette is
-  observable. Tone arithmetic remains outside the current RGB4 primitive.
-- Startup establishes source roles `page_back = 0`, `page_front = 1`, access
-  page 0, shown page 1. The late-frame transaction accesses the old front,
+  observable. Palette application uses the exact current `PaletteTone`.
+- Startup establishes source roles `page_back = 0`, `page_front = 1`, the
+  upper zoomed 200-line window, access page 0, and shown page 1. The late-frame
+  transaction accesses the old front,
   shows the old back, assigns that old back to `page_front`, toggles
   `page_back`, and clears only the newly accessed page: P1 X 16..303 to color
   0 and P2 X 336..623 to color 1, both for every row Y 0..183 inclusive.
@@ -422,11 +430,10 @@ IDs and transparency, the full page-1-to-page-0 startup copy, final palette and
 selectors, and two consecutive end-frame swaps/clears with exact edge pixels.
 These tests deliberately do not claim captured pixel parity. The remaining
 static-frame prerequisites are explicit: the application must inject/load the
-decoded GAMEFT gaiji glyphs before startup; `Raster` still needs an exact
-upper-half zoomed-200-line mode field for `graph_200line(0)`; PaletteTone is not
-yet represented; sprite resource commit and clip metadata are not modeled; and
-both pre-first-frame pages still require comparison against a raw Anniversary
-capture. No ANK/JIS host composition has been guessed.
+decoded GAMEFT gaiji glyphs before startup; sprite resource commit and clip
+metadata are not modeled; and both pre-first-frame pages still require
+comparison against a raw Anniversary capture. No ANK/JIS host composition has
+been guessed.
 
 ### Ordered operations
 
@@ -1073,12 +1080,13 @@ Exit tests:
 Implementation status: the platform-neutral foundation is complete for two raw
 640x400 indexed pages, access/show selection, clipped indexed and masked
 operations, exact B/R/G/E packed-plane import/projection, direct/masked/OR
-planar writes, GRCG TDW/RMW tile writes, deferred RGB4 palette apply, raw
-80x25 TRAM cells, all 256 source-format gaiji slots, scroll state, and separate
-provisional graphics/TRAM hashes. This is sufficient for the raw static-MAIN
-state and its byte-aligned source sheet. General EGC ROP/shifter behavior,
-unaligned SPRITE16, and final text composition remain open; this slice is not a
-complete PC-98 graphics-hardware emulator.
+planar writes, GRCG TDW/RMW tile writes, exact signed `PaletteTone` application,
+400-line/upper/lower zoomed-200-line state, raw 80x25 TRAM cells, all 256
+source-format gaiji slots, scroll state, and separate provisional graphics/TRAM
+hashes. This is sufficient for the raw static-MAIN state and its byte-aligned
+source sheet. General EGC ROP/shifter behavior, unaligned SPRITE16, and final
+text composition remain open; this slice is not a complete PC-98 graphics-
+hardware emulator.
 
 Implement two indexed pages, access/show/copy/clear, palette/tone/deferred
 apply, TRAM storage, scroll, clipping, and the minimum source-backed planar/
@@ -1107,8 +1115,8 @@ handoff copy, injected decoded character-BF2 preparation for `sub_E266()`,
 final palette restoration at the stable startup boundary, source page-role
 selection, and the exact two-color 288x184 next-page clear after every swap.
 Captured Anniversary page comparison, GAMEFT gaiji loading by the application,
-the zoomed-200-line raster-mode field, and observer/no-observer integration
-remain deferred and are therefore still required before Slice 2 is accepted.
+and observer/no-observer integration remain deferred and are therefore still
+required before Slice 2 is accepted.
 
 Port `hud_wipe()`, `hud_static_put()`, playfield layout, `sub_E266()` resource
 sheet preparation, and the exact end-of-frame swap/clear transaction. Use

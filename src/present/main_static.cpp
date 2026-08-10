@@ -437,10 +437,9 @@ bool MainStaticPresenter::round_startup(
 		return false;
 	}
 
-	// graph_200line(0) also selects access page 0. Raster-mode/zoom metadata is
-	// intentionally deferred until Raster gains a source-exact mode field.
+	// graph_200line(0) selects the upper zoomed half and access page 0.
 	pages_ = {Page::zero, Page::one};
-	if(!raster.set_access_page(Page::zero) ||
+	if(!raster.set_raster_mode(RasterMode::zoomed_200_upper) ||
 		!raster.set_shown_page(Page::one)) {
 		return false;
 	}

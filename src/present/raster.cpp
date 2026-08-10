@@ -11,7 +11,7 @@ namespace {
 
 constexpr std::uint64_t fnv_offset_basis = 14695981039346656037ULL;
 constexpr std::uint64_t fnv_prime = 1099511628211ULL;
-constexpr std::uint8_t display_state_hash_schema = 1U;
+constexpr std::uint8_t display_state_hash_schema = 2U;
 
 struct ClippedRegion {
 	std::int64_t x_begin = 0;
@@ -30,6 +30,21 @@ struct ClippedRegion {
 
 [[nodiscard]] constexpr bool valid_rgb4(assets::Rgb4 color) noexcept {
 	return valid_index(color.r) && valid_index(color.g) && valid_index(color.b);
+}
+
+[[nodiscard]] constexpr std::uint8_t apply_tone_component(
+	std::uint8_t component,
+	std::int16_t raw_tone
+) noexcept {
+	const auto tone = std::clamp(static_cast<std::int32_t>(raw_tone), 0, 200);
+	if(tone <= 100) {
+		return static_cast<std::uint8_t>(
+			(static_cast<std::int32_t>(component) * tone) / 100
+		);
+	}
+	return static_cast<std::uint8_t>(15 - (
+		(static_cast<std::int32_t>(15U - component) * (200 - tone)) / 100
+	));
 }
 
 [[nodiscard]] bool page_index(Page page, std::size_t &index) noexcept {
@@ -204,6 +219,25 @@ Page Raster::access_page() const noexcept {
 
 Page Raster::shown_page() const noexcept {
 	return shown_page_;
+}
+
+bool Raster::set_raster_mode(RasterMode mode) noexcept {
+	switch(mode) {
+	case RasterMode::lines_400:
+		break;
+	case RasterMode::zoomed_200_upper:
+	case RasterMode::zoomed_200_lower:
+		access_page_ = Page::zero;
+		break;
+	default:
+		return false;
+	}
+	raster_mode_ = mode;
+	return true;
+}
+
+RasterMode Raster::raster_mode() const noexcept {
+	return raster_mode_;
 }
 
 bool Raster::clear(Rect rect, Index4 color) noexcept {
@@ -430,8 +464,23 @@ const assets::Palette16Rgb4 &Raster::applied_palette() const noexcept {
 	return applied_palette_;
 }
 
+void Raster::set_palette_tone(std::int16_t tone) noexcept {
+	palette_tone_ = tone;
+}
+
+std::int16_t Raster::palette_tone() const noexcept {
+	return palette_tone_;
+}
+
 void Raster::apply_pending_palette() noexcept {
-	applied_palette_ = pending_palette_;
+	for(std::size_t index = 0U; index < pending_palette_.colors.size(); ++index) {
+		const auto source = pending_palette_.colors[index];
+		applied_palette_.colors[index] = assets::Rgb4{
+			apply_tone_component(source.r, palette_tone_),
+			apply_tone_component(source.g, palette_tone_),
+			apply_tone_component(source.b, palette_tone_),
+		};
+	}
 }
 
 void Raster::set_scroll_y(std::uint16_t scroll_y) noexcept {
@@ -467,6 +516,8 @@ std::uint64_t Raster::display_state_hash() const noexcept {
 	std::uint64_t hash = fnv_offset_basis;
 	hash_byte(hash, display_state_hash_schema);
 	hash_byte(hash, static_cast<std::uint8_t>(shown_page_));
+	hash_byte(hash, static_cast<std::uint8_t>(raster_mode_));
+	hash_u16_le(hash, static_cast<std::uint16_t>(palette_tone_));
 	hash_u16_le(hash, scroll_y_);
 	for(const auto &color : applied_palette_.colors) {
 		hash_byte(hash, color.r);

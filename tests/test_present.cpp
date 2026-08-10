@@ -25,6 +25,7 @@ using th03::present::PlanarSource;
 using th03::present::PlanarWriteMode;
 using th03::present::Point;
 using th03::present::Raster;
+using th03::present::RasterMode;
 using th03::present::Rect;
 using th03::present::Tram;
 using th03::present::TramCell;
@@ -200,6 +201,7 @@ void test_transparent_masked_and_malformed_blits() {
 void test_palette_scroll_and_hash() {
 	Raster raster;
 	const auto initial_hash = raster.display_state_hash();
+	expect(raster.palette_tone() == 100, "palette tone defaults to source 100");
 	expect(
 		raster.set_pending_palette_entry(1U, {10U, 11U, 12U}),
 		"set valid pending palette entry"
@@ -219,6 +221,43 @@ void test_palette_scroll_and_hash() {
 	raster.apply_pending_palette();
 	const auto applied_hash = raster.display_state_hash();
 	expect(applied_hash != initial_hash, "applied palette changes visible hash");
+	expect(
+		raster.applied_palette().colors[1U] == Rgb4{10U, 11U, 12U},
+		"tone 100 applies the unmodified logical palette"
+	);
+	raster.set_palette_tone(50);
+	expect(
+		raster.display_state_hash() != applied_hash &&
+		raster.applied_palette().colors[1U] == Rgb4{10U, 11U, 12U},
+		"raw tone changes state but remains deferred until palette application"
+	);
+	raster.apply_pending_palette();
+	expect(
+		raster.applied_palette().colors[1U] == Rgb4{5U, 5U, 6U},
+		"tone 50 uses palette_show integer black scaling"
+	);
+	raster.set_palette_tone(150);
+	raster.apply_pending_palette();
+	expect(
+		raster.applied_palette().colors[1U] == Rgb4{13U, 13U, 14U},
+		"tone 150 uses palette_show integer white scaling"
+	);
+	raster.set_palette_tone(-1);
+	raster.apply_pending_palette();
+	expect(
+		raster.palette_tone() == -1 &&
+		raster.applied_palette().colors[1U] == Rgb4{},
+		"palette_show clamps locally without replacing a negative raw tone"
+	);
+	raster.set_palette_tone(201);
+	raster.apply_pending_palette();
+	expect(
+		raster.palette_tone() == 201 &&
+		raster.applied_palette().colors[1U] == Rgb4{15U, 15U, 15U},
+		"palette_show clamps locally without replacing a high raw tone"
+	);
+	raster.set_palette_tone(100);
+	raster.apply_pending_palette();
 	expect(
 		!raster.set_pending_palette_entry(1U, {16U, 0U, 0U}),
 		"invalid raw RGB4 rejected"
@@ -243,9 +282,27 @@ void test_palette_scroll_and_hash() {
 	Raster identical_pages;
 	const auto page_zero_hash = identical_pages.display_state_hash();
 	expect(identical_pages.set_shown_page(Page::one), "select identical shown page");
-	expect(
+		expect(
 		identical_pages.display_state_hash() != page_zero_hash,
 		"shown page identity participates in hash"
+	);
+	Raster raster_mode_only;
+	const auto lines_400_hash = raster_mode_only.display_state_hash();
+	expect(
+		raster_mode_only.set_raster_mode(RasterMode::zoomed_200_upper) &&
+		raster_mode_only.display_state_hash() != lines_400_hash,
+		"raster mode participates in the display-state hash"
+	);
+	expect(
+		identical_pages.set_access_page(Page::one) &&
+		identical_pages.set_raster_mode(RasterMode::zoomed_200_lower) &&
+		identical_pages.access_page() == Page::zero &&
+		identical_pages.raster_mode() == RasterMode::zoomed_200_lower,
+		"graph_200line lower-half mode resets the access page"
+	);
+	expect(
+		!identical_pages.set_raster_mode(static_cast<RasterMode>(0xFFU)),
+		"invalid raster mode is rejected"
 	);
 }
 
@@ -841,6 +898,10 @@ void test_main_shot_sheet_and_startup() {
 	);
 	expect(raster.access_page() == Page::zero, "startup accesses page zero");
 	expect(raster.shown_page() == Page::one, "startup shows page one");
+	expect(
+		raster.raster_mode() == RasterMode::zoomed_200_upper,
+		"startup selects graph_200line upper-half mode"
+	);
 	expect_pixel(raster, Page::zero, {100, 100}, 7U, "page 1 copied to page 0");
 	expect_pixel(raster, Page::one, {100, 100}, 7U, "handoff page 1 preserved");
 	expect(
