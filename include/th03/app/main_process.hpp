@@ -36,6 +36,28 @@ struct MainDirectVsConfig {
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
 };
 
+// Checked conversion shared by process policy, resource selection, and Story
+// scenario validation. Paletted source IDs are exactly 1..18.
+[[nodiscard]] std::optional<MainPlayerSelection>
+main_player_selection_from_paletted(std::int8_t paletted) noexcept;
+[[nodiscard]] std::optional<std::int8_t> main_paletted_character(
+	MainPlayerSelection selection
+) noexcept;
+
+// One source-fresh Story MAIN entry. Snapshot-backed replay/debug entry stays
+// on the replay runner because it cannot reconstruct presentation-private
+// process state. This value is the validated foundation for the future typed
+// MAINL Raster handoff and Story MainProcess factory.
+struct MainStoryConfig {
+	GameInit resident{};
+	GameOptions game_options{};
+	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
+};
+
+[[nodiscard]] bool valid_main_story_config(
+	const MainStoryConfig &config
+) noexcept;
+
 // Pure preflight shared by the external loader and the process factory. This
 // prevents malformed application requests from touching supplied files before
 // the same config would be rejected by MainProcess::create().

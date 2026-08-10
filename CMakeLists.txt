@@ -352,10 +352,11 @@ target_compile_features(th03_formats PUBLIC cxx_std_23)
 set_target_properties(th03_formats PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_formats)
 
-# Stable-address owner/coordinator for one complete direct-VS MAIN process.
-# It consumes authenticated resource/content inputs and exposes only guarded
-# lifecycle, diagnostics, and composed output operations.
+# Stable MAIN-process/application policy. Direct VS is complete; the
+# source-private Classic Story router and validated fresh-process config form
+# the next MAINL-to-MAIN integration boundary.
 add_library(th03_app_main STATIC
+	src/app/classic_mainl_story.cpp
 	src/app/direct_vs_cli.cpp
 	src/app/direct_vs_launch.cpp
 	src/app/main_direct_vs_runner.cpp
@@ -575,6 +576,21 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-main-direct-vs-runner-tests
 		COMMAND th03-app-main-direct-vs-runner-tests
+	)
+
+	add_executable(th03-app-classic-mainl-story-tests
+		tests/test_app_classic_mainl_story.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-mainl-story-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-classic-mainl-story-tests PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-classic-mainl-story-tests)
+	add_test(
+		NAME th03-app-classic-mainl-story-tests
+		COMMAND th03-app-classic-mainl-story-tests
 	)
 
 	add_executable(th03-app-direct-vs-launch-tests

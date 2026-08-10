@@ -86,15 +86,16 @@ using ResourceResult = std::expected<
 		selection.palette <= MainPaletteVariant::second;
 }
 
-[[nodiscard]] std::int8_t paletted_character(
-	MainPlayerSelection selection
+[[nodiscard]] bool valid_packed_decimal_score(
+	const std::array<std::uint8_t, 8U> &score
 ) noexcept
 {
-	const auto character = static_cast<std::uint8_t>(selection.character);
-	const auto palette = static_cast<std::uint8_t>(selection.palette);
-	return static_cast<std::int8_t>(
-		((character - 1U) * 2U) + palette
-	);
+	for(const auto digit : score) {
+		if(digit > 9U) {
+			return false;
+		}
+	}
+	return true;
 }
 
 [[nodiscard]] bool selects_kotohime(MainPlayerSelection selection) noexcept
@@ -276,8 +277,8 @@ template <typename Value, typename Decoder>
 	init.key_mode = config.key_mode;
 	init.remaining_credits = 3U;
 	init.paletted_character = {
-		paletted_character(config.player_one),
-		paletted_character(config.player_two),
+		*main_paletted_character(config.player_one),
+		*main_paletted_character(config.player_two),
 	};
 	return init;
 }
@@ -365,6 +366,141 @@ bool valid_main_direct_vs_config(const MainDirectVsConfig &config) noexcept
 		(!(selects_kotohime(config.player_one) ||
 		   selects_kotohime(config.player_two)) ||
 		 config.kotohime_compatibility.red_provider != nullptr);
+}
+
+std::optional<MainPlayerSelection> main_player_selection_from_paletted(
+	std::int8_t paletted
+) noexcept
+{
+	if(paletted < 1 || paletted > 18) {
+		return std::nullopt;
+	}
+	const auto zero_based = static_cast<std::uint8_t>(paletted - 1);
+	return MainPlayerSelection{
+		.character = static_cast<MainCharacter>(
+			(zero_based / 2U) + 1U
+		),
+		.palette = static_cast<MainPaletteVariant>(
+			(zero_based % 2U) + 1U
+		),
+	};
+}
+
+std::optional<std::int8_t> main_paletted_character(
+	MainPlayerSelection selection
+) noexcept
+{
+	if(!valid_selection(selection)) {
+		return std::nullopt;
+	}
+	const auto character = static_cast<std::uint8_t>(selection.character);
+	const auto palette = static_cast<std::uint8_t>(selection.palette);
+	return static_cast<std::int8_t>(
+		((character - 1U) * 2U) + palette
+	);
+}
+
+bool valid_main_story_config(const MainStoryConfig &config) noexcept
+{
+	const auto &resident = config.resident;
+	if(resident.game_mode != game_mode::story || resident.rank > 3U ||
+		resident.key_mode > 2U || resident.story_stage > 8U ||
+		resident.remaining_credits > 3U || resident.demo_number != 0U ||
+		resident.is_cpu != std::array<std::uint8_t, 2U>{0U, 1U} ||
+		(resident.winner != 0 && resident.winner != 1) ||
+		resident.show_score_menu > 1U || resident.fast_op_animation > 1U ||
+		(resident.autofire_mask & 0xFCU) != 0U ||
+		resident.runtime_snapshot || resident.compact_runtime_snapshot ||
+		resident.round_start_snapshot || resident.practice_rules ||
+		config.game_options.input_protocol != InputProtocol::live) {
+		return false;
+	}
+	const auto player_one = main_player_selection_from_paletted(
+		resident.paletted_character[0U]
+	);
+	const auto player_two = main_player_selection_from_paletted(
+		resident.paletted_character[1U]
+	);
+	if(!player_one || !player_two ||
+		resident.paletted_character[1U] !=
+			resident.story_opponents[resident.story_stage]) {
+		return false;
+	}
+	std::array<bool, 7U> early_characters{};
+	for(std::size_t stage = 0U; stage < resident.story_opponents.size(); ++stage) {
+		const auto selection = main_player_selection_from_paletted(
+			resident.story_opponents[stage]
+		);
+		if(!selection || resident.story_opponents[stage] ==
+			resident.paletted_character[0U]) {
+			return false;
+		}
+		const auto character = static_cast<std::uint8_t>(
+			selection->character
+		);
+		const auto first_palette = static_cast<std::int8_t>(
+			((character - 1U) * 2U) + 1U
+		);
+		const auto expected_palette =
+			(first_palette == resident.paletted_character[0U]) ?
+				MainPaletteVariant::second : MainPaletteVariant::first;
+		if(selection->palette != expected_palette) {
+			return false;
+		}
+		if(stage < early_characters.size()) {
+			if(character < static_cast<std::uint8_t>(MainCharacter::reimu) ||
+				character > static_cast<std::uint8_t>(MainCharacter::rikako)) {
+				return false;
+			}
+			const auto index = static_cast<std::size_t>(character - 1U);
+			if(early_characters[index]) {
+				return false;
+			}
+			early_characters[index] = true;
+		} else {
+			const auto expected = (stage == 7U) ?
+				MainCharacter::chiyuri : MainCharacter::yumemi;
+			if(selection->character != expected) {
+				return false;
+			}
+		}
+	}
+	constexpr std::array<MainCharacter, 9U> fixed_stage_six{
+		MainCharacter::mima,
+		MainCharacter::reimu,
+		MainCharacter::reimu,
+		MainCharacter::marisa,
+		MainCharacter::reimu,
+		MainCharacter::ellen,
+		MainCharacter::kana,
+		MainCharacter::kotohime,
+		MainCharacter::rikako,
+	};
+	const auto player_one_index = static_cast<std::size_t>(
+		static_cast<std::uint8_t>(player_one->character) - 1U
+	);
+	const auto stage_six = main_player_selection_from_paletted(
+		resident.story_opponents[6U]
+	);
+	if(!stage_six || stage_six->character != fixed_stage_six[player_one_index]) {
+		return false;
+	}
+	for(const auto &score : resident.last_score) {
+		if(!valid_packed_decimal_score(score)) {
+			return false;
+		}
+	}
+	for(const auto digit : resident.last_score[1U]) {
+		if(digit != 0U) {
+			return false;
+		}
+	}
+	if((player_one->character == MainCharacter::kotohime ||
+		player_two->character == MainCharacter::kotohime) &&
+		config.kotohime_compatibility.red_provider == nullptr) {
+		return false;
+	}
+	return true;
 }
 
 std::expected<std::unique_ptr<MainProcess>, MainProcessError>
@@ -710,10 +846,10 @@ MainProcess::create_impl(
 			}},
 			.loaded_characters = {{
 				static_cast<present::MainPalettedCharacter>(
-					paletted_character(config.player_one)
+					*main_paletted_character(config.player_one)
 				),
 				static_cast<present::MainPalettedCharacter>(
-					paletted_character(config.player_two)
+					*main_paletted_character(config.player_two)
 				),
 			}},
 			.gauge_sheet = &impl->zikicw_sheet,
