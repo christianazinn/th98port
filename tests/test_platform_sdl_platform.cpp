@@ -347,11 +347,124 @@ void test_native_mapper_runtime_lease()
 	}
 	{
 		auto mapper = std::move(*mapper_created);
-		platform.reset();
-		expect(
-			SDL_WasInit(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD) != 0U,
-			"native mapper lease keeps SDL alive after its window owner is destroyed"
+		bool lease_checked = false;
+		const auto timestamp = th03::platform::sdl_ticks_now_ns();
+		auto scheduler = th03::app::TickInputScheduler::create(
+			{1U, 1U}, timestamp
 		);
+		expect(static_cast<bool>(scheduler),
+			"native event-pump scheduler is created");
+		if(scheduler) {
+			SDL_Event escape{};
+			escape.type = SDL_EVENT_KEY_DOWN;
+			escape.key.timestamp = timestamp;
+			escape.key.windowID = static_cast<SDL_WindowID>(
+				platform->window_id()
+			);
+			escape.key.scancode = SDL_SCANCODE_ESCAPE;
+			escape.key.down = true;
+			expect(SDL_PushEvent(&escape),
+				"Escape event is injected into the real SDL queue");
+			const auto pumped = mapper.pump_events(*scheduler, true);
+			const auto due = scheduler->pop_due(timestamp);
+			expect(pumped && pumped->events_consumed >= 1U &&
+				pumped->physical_events_queued == 1U &&
+				!pumped->queue_blocked && due && *due &&
+				(**due).app_quit_requested &&
+				(**due).input.system == 0U,
+				"native pump maps Escape to timestamped app quit without gameplay Cancel");
+
+			const auto burst_timestamp = timestamp + 1U;
+			auto burst_scheduler = th03::app::TickInputScheduler::create(
+				{1U, 1U}, burst_timestamp
+			);
+			expect(static_cast<bool>(burst_scheduler),
+				"same-boundary burst scheduler is created");
+			if(burst_scheduler) {
+				for(std::size_t index = 0U;
+					index < th03::app::pending_physical_event_capacity + 1U;
+					++index) {
+					SDL_Event repeated_escape = escape;
+					repeated_escape.key.timestamp = burst_timestamp;
+					expect(SDL_PushEvent(&repeated_escape),
+						"same-boundary Escape burst enters the real SDL queue");
+				}
+				const auto burst = mapper.pump_events(*burst_scheduler, true);
+				const auto burst_due = burst_scheduler->pop_due(burst_timestamp);
+				expect(
+					burst && burst->physical_events_queued ==
+						th03::app::pending_physical_event_capacity + 1U &&
+						!burst->queue_blocked && burst_due && *burst_due &&
+						(**burst_due).app_quit_requested,
+					"capacity-plus-one SDL burst is folded into its one exact logical boundary"
+				);
+			}
+
+			const auto blocked_timestamp = burst_timestamp + 1U;
+			auto blocked_scheduler = th03::app::TickInputScheduler::create(
+				{1U, 1U}, blocked_timestamp
+			);
+			expect(static_cast<bool>(blocked_scheduler),
+				"future-history retained-event scheduler is created");
+			if(blocked_scheduler) {
+				for(std::size_t index = 0U;
+					index < th03::app::pending_physical_event_capacity;
+					++index) {
+					const auto queued = blocked_scheduler->push_event({
+						.timestamp_ns = blocked_timestamp + 1U + index,
+						.kind = th03::app::PhysicalInputEventKind::source_state_changed,
+						.source = 0U,
+						.state = {
+							.p1 = static_cast<std::uint16_t>(
+								(index % 2U) == 0U ? 0x0020U : 0U
+							),
+						},
+					});
+					expect(static_cast<bool>(queued),
+						"future scheduler history fills every fixed slot");
+				}
+				SDL_Event retained_escape = escape;
+				retained_escape.key.timestamp = blocked_timestamp +
+					th03::app::pending_physical_event_capacity + 1U;
+				expect(SDL_PushEvent(&retained_escape),
+					"one later Escape edge enters the SDL queue");
+				const auto blocked = mapper.pump_events(*blocked_scheduler, true);
+				expect(blocked && blocked->queue_blocked &&
+					blocked->physical_events_queued == 0U,
+					"full future history retains the exact polled SDL edge");
+
+				auto moved_mapper = std::move(mapper);
+				const auto earlier = blocked_scheduler->pop_due(blocked_timestamp);
+				expect(earlier && *earlier && !(**earlier).app_quit_requested,
+					"earlier deadline is emitted before retained future input");
+				const auto retried = moved_mapper.pump_events(
+					*blocked_scheduler, true
+				);
+				expect(retried && !retried->queue_blocked &&
+					retried->events_consumed == 1U &&
+					retried->physical_events_queued == 1U,
+					"move-constructed mapper retries the retained edge exactly once");
+				const auto retained_due = blocked_scheduler->pop_due(
+					blocked_timestamp + 1'000'000'000ULL
+				);
+				expect(retained_due && *retained_due &&
+					(**retained_due).app_quit_requested,
+					"retained edge reaches its later logical boundary after retry");
+				platform.reset();
+				expect(
+					SDL_WasInit(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD) != 0U,
+					"move-constructed native mapper lease keeps SDL alive after its window owner is destroyed"
+				);
+				lease_checked = true;
+			}
+		}
+		if(!lease_checked) {
+			platform.reset();
+			expect(
+				SDL_WasInit(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD) != 0U,
+				"native mapper lease keeps SDL alive after its window owner is destroyed"
+			);
+		}
 	}
 	expect(SDL_WasInit(0U) == 0U,
 		"last native mapper lease performs final SDL teardown safely");

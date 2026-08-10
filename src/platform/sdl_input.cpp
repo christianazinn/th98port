@@ -277,7 +277,9 @@ SdlInputMapper::SdlInputMapper(SdlInputMapper &&other) noexcept :
 	keyboard_(std::move(other.keyboard_)),
 	gamepads_(std::move(other.gamepads_)),
 	connected_gamepad_count_(other.connected_gamepad_count_),
-	native_runtime_lease_(other.native_runtime_lease_)
+	native_runtime_lease_(other.native_runtime_lease_),
+	pending_event_(other.pending_event_),
+	has_pending_event_(other.has_pending_event_)
 {
 	for(auto &gamepad : other.gamepads_) {
 		gamepad.handle = nullptr;
@@ -286,6 +288,7 @@ SdlInputMapper::SdlInputMapper(SdlInputMapper &&other) noexcept :
 	other.connected_gamepad_count_ = 0U;
 	other.gamepad_backend_ = {};
 	other.native_runtime_lease_ = false;
+	other.has_pending_event_ = false;
 }
 
 app::PhysicalInputSourceState SdlInputMapper::keyboard_contribution(
@@ -687,6 +690,60 @@ SdlInputMapper::handle_event(
 	}
 	default:
 		return SdlInputEventResult{};
+	}
+}
+
+std::expected<SdlInputPumpResult, SdlInputMapperError>
+SdlInputMapper::pump_events(
+	app::TickInputScheduler &scheduler,
+	bool escape_requests_quit
+) noexcept
+{
+	SdlInputPumpResult result{};
+	for(;;) {
+		SDL_Event event{};
+		if(has_pending_event_) {
+			event = pending_event_;
+		} else if(!SDL_PollEvent(&event)) {
+			return result;
+		}
+
+		std::expected<SdlInputEventResult, SdlInputMapperError> handled{};
+		if(escape_requests_quit && event.type == SDL_EVENT_KEY_DOWN &&
+			event.key.down && event.key.windowID == main_window_ &&
+			!event.key.repeat &&
+			event.key.scancode == SDL_SCANCODE_ESCAPE) {
+			const auto pushed = push_event(scheduler, {
+				.timestamp_ns = sdl_event_timestamp_ns(event),
+				.kind = app::PhysicalInputEventKind::app_quit,
+			});
+			if(pushed) {
+				handled = SdlInputEventResult{
+					.handled = true,
+					.physical_event_queued = true,
+				};
+			} else {
+				handled = std::unexpected(pushed.error());
+			}
+		} else {
+			handled = handle_event(event, scheduler);
+		}
+		if(!handled) {
+			if(handled.error().code == SdlInputMapperErrorCode::tick_input &&
+				handled.error().tick_input ==
+					app::TickInputError::event_queue_full) {
+				pending_event_ = event;
+				has_pending_event_ = true;
+				result.queue_blocked = true;
+				return result;
+			}
+			return std::unexpected(handled.error());
+		}
+		has_pending_event_ = false;
+		result.events_consumed++;
+		if(handled->physical_event_queued) {
+			result.physical_events_queued++;
+		}
 	}
 }
 

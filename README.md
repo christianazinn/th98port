@@ -6,13 +6,15 @@ gate, and Phase 3 now verifies 19 locked V13 conversions across Story,
 Practice, and ordinary VS, plus a separate title-Demo gate, on top of the Phase
 1 format/session runway. A
 strict V13 span adapter and the first stdlib-only asset/indexed-raster
-foundations now sit beside that core. There is intentionally no playable
-application, scene renderer, audio target, networking, or CI configuration.
+foundations now sit beside that core. An optional SDL 3 direct-VS application
+now exercises the complete authenticated MAIN process and presentation stack;
+the original title/selection/Story shell, audio, networking, and CI remain
+separate later work.
 
 ## Build and test
 
-Requirements are CMake 3.25 or newer and a C++23 compiler. There are no
-third-party dependencies.
+Requirements are CMake 3.25 or newer and a C++23 compiler. The default library
+and validation presets have no third-party dependencies.
 
 ```powershell
 cmake --preset msvc-x64
@@ -26,6 +28,37 @@ ctest --preset gcc
 
 The MSVC preset uses Visual Studio 2022 x64. The GCC preset uses the standard
 `MinGW Makefiles` generator.
+
+### Optional direct-VS application
+
+The SDL target is off by default. Authenticate and extract the pinned SDL
+3.4.10 release archive once, then use either SDL preset:
+
+```powershell
+tools\bootstrap_sdl3.ps1 -Archive X:\downloads\SDL3-3.4.10.tar.gz
+cmake --preset msvc-x64-sdl
+cmake --build --preset msvc-x64-sdl
+ctest --preset msvc-x64-sdl
+```
+
+`th03-app` reads an external structured extraction containing `YUME1.DAT/`
+and `YUME2.DAT/`, the supported `MAIN.EXE`, and a caller-supplied 288,768-byte
+PC-98 `FONT.ROM`. No original bytes are embedded or copied into the build.
+Cadence is required explicitly because an exact PC-98 wall-clock rate and first
+VSync phase have not yet been established:
+
+```powershell
+out\build\msvc-x64-sdl\Debug\th03-app.exe `
+  --vs --data X:\th03-extracted --main X:\th03\MAIN.EXE `
+  --font X:\pc98\FONT.ROM --tick-rate 56423/1000 `
+  --p1 reimu:first --p2 mima:second
+```
+
+The shown rate is a provisional host policy, not an authenticity claim.
+Kotohime additionally requires the explicit developer flag
+`--kotohime-zero-red` until her source-uninitialized Bomb fade byte has an
+evidence-backed release policy. `--help` lists keyboard controls and all launch
+options.
 
 Validate an external frozen case without copying it into this repository:
 
@@ -126,8 +159,11 @@ split comparisons. Original game data and replay captures remain external.
 - `th03_app_main` owns one stable-address direct-VS MAIN process. It
   reauthenticates and decodes the selected external batch, performs source-
   ordered background/static/palette/atlas startup, retains every presenter and
-  backing span, and guards all Game lifecycle calls through MainRound. It is a
-  platform-neutral process boundary, not yet a windowed application.
+  backing span, and guards all Game lifecycle calls through MainRound. Its
+  platform-neutral runner is used by the optional `th03-app` executable.
+- `th03_platform_sdl` is the optional pinned SDL 3 lifetime, input-event,
+  timestamp, and indexed-source-surface upload boundary. It owns no gameplay,
+  resource decoding, cadence constant, or scene policy.
 - MAIN palette primitives preserve the source's logical RGB8 values separately
   from applied RGB4 DAC output, including its process baseline, raw tone, and
   explicit deferred-apply latch. Neutral Bomb/Warning/defeat/footer lifecycle

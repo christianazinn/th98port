@@ -355,6 +355,18 @@ MainProcess::create(
 	);
 }
 
+bool valid_main_direct_vs_config(const MainDirectVsConfig &config) noexcept
+{
+	return valid_selection(config.player_one) &&
+		valid_selection(config.player_two) && config.rank <= 3U &&
+		config.key_mode <= 2U &&
+		(config.game_options.input_protocol == InputProtocol::live ||
+		 config.game_options.input_protocol == InputProtocol::recorded_replay) &&
+		(!(selects_kotohime(config.player_one) ||
+		   selects_kotohime(config.player_two)) ||
+		 config.kotohime_compatibility.red_provider != nullptr);
+}
+
 std::expected<std::unique_ptr<MainProcess>, MainProcessError>
 MainProcess::create_impl(
 	const MainDirectVsConfig &config,
@@ -364,18 +376,7 @@ MainProcess::create_impl(
 	bool authenticate_resource_bytes
 )
 {
-	if(!valid_selection(config.player_one) ||
-		!valid_selection(config.player_two) || config.rank > 3U ||
-		config.key_mode > 2U ||
-		(config.game_options.input_protocol != InputProtocol::live &&
-		 config.game_options.input_protocol != InputProtocol::recorded_replay)) {
-		return std::unexpected(process_error(
-			MainProcessErrorCode::invalid_config
-		));
-	}
-	if((selects_kotohime(config.player_one) ||
-		selects_kotohime(config.player_two)) &&
-		config.kotohime_compatibility.red_provider == nullptr) {
+	if(!valid_main_direct_vs_config(config)) {
 		return std::unexpected(process_error(
 			MainProcessErrorCode::invalid_config
 		));
@@ -929,6 +930,11 @@ CanonicalState MainProcess::canonical_state() const
 RoundStartObservation MainProcess::round_start_observation() const
 {
 	return impl_->game->round_start_observation();
+}
+
+InputProtocol MainProcess::input_protocol() const noexcept
+{
+	return impl_->config.game_options.input_protocol;
 }
 
 std::expected<present::SourceSurface, present::SourceSurfaceError>

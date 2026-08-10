@@ -93,6 +93,20 @@ std::expected<void, TickInputError> TickInputScheduler::push_event(
 	) {
 		return std::unexpected(TickInputError::event_already_due);
 	}
+	// A host event queue can contain more edges for the upcoming logical
+	// boundary than fit in this fixed history. Events at or before that next
+	// boundary can be folded into the latched state without changing any
+	// observable sample: no earlier logical tick remains to be emitted.
+	if(pending_count_ >= pending_events_.size()) {
+		while(
+			pending_count_ != 0U &&
+			pending_events_[pending_head_].timestamp_ns <= next_deadline_ns_
+		) {
+			apply_event(pending_events_[pending_head_]);
+			pending_head_ = (pending_head_ + 1U) % pending_events_.size();
+			pending_count_--;
+		}
+	}
 	if(pending_count_ >= pending_events_.size()) {
 		return std::unexpected(TickInputError::event_queue_full);
 	}

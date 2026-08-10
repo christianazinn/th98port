@@ -36,6 +36,13 @@ struct MainDirectVsConfig {
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
 };
 
+// Pure preflight shared by the external loader and the process factory. This
+// prevents malformed application requests from touching supplied files before
+// the same config would be rejected by MainProcess::create().
+[[nodiscard]] bool valid_main_direct_vs_config(
+	const MainDirectVsConfig &config
+) noexcept;
+
 enum class MainProcessErrorCode : std::uint8_t {
 	invalid_config,
 	invalid_runtime_argument,
@@ -112,6 +119,7 @@ public:
 
 	[[nodiscard]] CanonicalState canonical_state() const;
 	[[nodiscard]] RoundStartObservation round_start_observation() const;
+	[[nodiscard]] InputProtocol input_protocol() const noexcept;
 	[[nodiscard]] std::expected<
 		present::SourceSurface,
 		present::SourceSurfaceError

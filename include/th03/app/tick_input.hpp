@@ -87,8 +87,12 @@ public:
 		TickTimestampNs first_deadline_ns
 	) noexcept;
 
-	// Timestamps may be equal and then retain injection order. Rejected events
-	// leave the queue, source states, and monotonic timestamp guard unchanged.
+	// Timestamps may be equal and then retain injection order. If the fixed
+	// history fills entirely with events due at the next logical boundary,
+	// those events are folded into that boundary's pending source state before
+	// accepting more; no intermediate sample exists to observe them. Rejected
+	// events leave the queue, source states, and monotonic timestamp guard
+	// unchanged.
 	[[nodiscard]] std::expected<void, TickInputError> push_event(
 		PhysicalInputEvent event
 	) noexcept;

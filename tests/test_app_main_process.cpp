@@ -1,4 +1,5 @@
 #include "th03/app/main_process.hpp"
+#include "th03/app/main_direct_vs_runner.hpp"
 
 #include <algorithm>
 #include <array>
@@ -925,6 +926,46 @@ void test_recorded_pause_deferred_frame()
 	);
 }
 
+void test_live_runner_owns_the_actual_process()
+{
+	MainDirectVsConfig config{};
+	auto resources = make_resources(config.player_one, config.player_two);
+	auto created = create_synthetic(config, resources);
+	expect(static_cast<bool>(created),
+		"live process constructs for the concrete runner adapter");
+	if(!created) {
+		return;
+	}
+	auto runner = th03::app::MainDirectVsRunner::create(std::move(*created));
+	expect(static_cast<bool>(runner),
+		"live runner accepts and owns the concrete MainProcess");
+	if(runner) {
+		const auto consumed = (*runner)->consume({
+			.tick_index = 0U,
+			.deadline_ns = 10U,
+		});
+		expect(consumed && consumed->process_advanced &&
+			consumed->step_result && consumed->step_result->status ==
+				th03::StepStatus::running &&
+			(*runner)->process().canonical_state().round_frame == 1U,
+			"runner's production operation table advances the retained process once");
+	}
+
+	config.game_options.input_protocol = th03::InputProtocol::recorded_replay;
+	resources = make_resources(config.player_one, config.player_two);
+	auto recorded = create_synthetic(config, resources);
+	expect(static_cast<bool>(recorded),
+		"recorded process remains available to replay validation");
+	if(recorded) {
+		auto rejected = th03::app::MainDirectVsRunner::create(
+			std::move(*recorded)
+		);
+		expect(!rejected && rejected.error().code ==
+			th03::app::MainDirectVsRunnerErrorCode::unsupported_input_protocol,
+			"live direct-play runner rejects the deferred recorded-pause protocol");
+	}
+}
+
 void test_invalid_runtime_arguments_are_atomic()
 {
 	MainDirectVsConfig config{};
@@ -1425,6 +1466,7 @@ int main(int argc, char **argv)
 	test_distinct_selection_first_frame();
 	test_same_selection_shared_raw_construction();
 	test_recorded_pause_deferred_frame();
+	test_live_runner_owns_the_actual_process();
 	test_invalid_runtime_arguments_are_atomic();
 	test_resource_failures_are_atomic();
 	test_normalized_sheet_bundle_rejections();

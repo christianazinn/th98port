@@ -761,13 +761,13 @@ void test_queue_full_atomicity()
 			index < th03::app::pending_physical_event_capacity;
 			++index) {
 			const auto pushed = input.push_event(PhysicalInputEvent{
-				.timestamp_ns = 2'000U + index,
+				.timestamp_ns = 2'001U + index,
 				.kind = PhysicalInputEventKind::app_quit,
 			});
 			expect(static_cast<bool>(pushed), "scheduler queue slot is filled");
 		}
 		const auto rejected = mapper.handle_event(
-			key_event(2'255U, SDL_SCANCODE_A, true), input
+			key_event(2'256U, SDL_SCANCODE_A, true), input
 		);
 		expect(
 			!rejected && rejected.error().code == SdlInputMapperErrorCode::tick_input &&
@@ -776,7 +776,7 @@ void test_queue_full_atomicity()
 		);
 		(void)expect_tick(input, 2'000U, "one due tick frees one queue slot");
 		(void)expect_event(mapper, input,
-			key_event(2'255U, SDL_SCANCODE_A, true),
+			key_event(2'256U, SDL_SCANCODE_A, true),
 			"same key edge can be retried after draining one slot");
 		LogicalTickInput last{};
 		while(input.next_deadline_ns() &&
@@ -807,13 +807,13 @@ void test_queue_full_atomicity()
 			index < th03::app::pending_physical_event_capacity;
 			++index) {
 			const auto pushed = input.push_event(PhysicalInputEvent{
-				.timestamp_ns = 2'000U + index,
+				.timestamp_ns = 2'001U + index,
 				.kind = PhysicalInputEventKind::app_quit,
 			});
 			expect(static_cast<bool>(pushed), "removal test queue slot is filled");
 		}
 		const auto removal = gamepad_device_event(
-			SDL_EVENT_GAMEPAD_REMOVED, 2'255U, 11U
+			SDL_EVENT_GAMEPAD_REMOVED, 2'256U, 11U
 		);
 		const auto rejected = mapper.handle_event(removal, input);
 		expect(

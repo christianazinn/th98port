@@ -472,12 +472,12 @@ void test_public_event_validation_is_atomic()
 	for(std::size_t index = 0U;
 		index < th03::app::pending_physical_event_capacity;
 		++index) {
-		expect_push(full, event(static_cast<std::uint64_t>(index),
+		expect_push(full, event(1'001U + static_cast<std::uint64_t>(index),
 			PhysicalInputEventKind::source_state_changed, 0U, state(0x0001U)),
 			"fixed event queue accepts every documented slot");
 	}
 	const auto queue_full = full.push_event(event(
-		999U, PhysicalInputEventKind::source_state_changed, 0U, state()
+		1'257U, PhysicalInputEventKind::source_state_changed, 0U, state()
 	));
 	expect(
 		!queue_full && queue_full.error() == TickInputError::event_queue_full &&
@@ -485,21 +485,54 @@ void test_public_event_validation_is_atomic()
 		"a full fixed queue reports an error instead of dropping an event"
 	);
 	const auto full_tick = expect_tick(
-		full, 1'000U, "a capacity-sized history is applied at its deadline"
+		full, 1'000U, "a full future history leaves the earlier deadline visible"
 	);
 	expect(
-		full_tick.input.p1 == 0x0001U && full.pending_event_count() == 0U,
+		full_tick.input.p1 == 0U &&
+			full.pending_event_count() == th03::app::pending_physical_event_capacity,
+		"a rejected future event cannot make later history arrive early"
+	);
+	const auto future_tick = expect_tick(
+		full, 1'000'001'000ULL, "the full future history reaches its own deadline"
+	);
+	expect(
+		future_tick.input.p1 == 0x0001U && full.pending_event_count() == 0U,
 		"consuming a full ring preserves its final snapshot and frees every slot"
 	);
-	expect_push(full, event(1'001U,
+	expect_push(full, event(1'000'001'001ULL,
 		PhysicalInputEventKind::source_state_changed, 0U, state()),
 		"the fixed event ring accepts events after wrapping its head");
 	const auto wrapped_tick = expect_tick(
-		full, 1'000'001'000ULL, "the reused ring event reaches the next deadline"
+		full, 2'000'001'000ULL, "the reused ring event reaches the next deadline"
 	);
 	expect(
 		wrapped_tick.input.p1 == 0U && full.pending_event_count() == 0U,
 		"wrapped event storage retains the exact source snapshot"
+	);
+
+	auto folded_created = TickInputScheduler::create({1U, 1U}, 2'000U);
+	expect(static_cast<bool>(folded_created),
+		"same-boundary capacity scheduler is created");
+	if(!folded_created) {
+		return;
+	}
+	auto folded = std::move(*folded_created);
+	for(std::size_t index = 0U;
+		index < th03::app::pending_physical_event_capacity + 1U;
+		++index) {
+		expect_push(folded, event(
+			2'000U,
+			PhysicalInputEventKind::source_state_changed,
+			0U,
+			state((index % 2U) == 0U ? 0x0020U : 0U)
+		), "same-boundary input burst is accepted without losing an edge");
+	}
+	const auto folded_tick = expect_tick(
+		folded, 2'000U, "capacity-plus-one burst reaches one logical boundary"
+	);
+	expect(
+		folded_tick.input.p1 == 0x0020U && folded.pending_event_count() == 0U,
+		"same-boundary compaction preserves injection order and the final snapshot"
 	);
 }
 

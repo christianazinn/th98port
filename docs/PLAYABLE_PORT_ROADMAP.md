@@ -103,13 +103,20 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   hermetic transaction suite passes both compilers, and an opt-in local gate
   has constructed, stepped, and composed all 18x18 paletted P1/P2 selections
   from authenticated supplied data on GCC and MSVC.
+- `th03_platform_sdl` now owns the pinned SDL 3.4.10 lifetime, resizable
+  integer-scaled upload, monotonic timestamps, and duplicate-safe keyboard and
+  gamepad event mapping. Default non-SDL builds remain dependency-free.
+- `th03-app` now loads the supported external MAIN/FONT/resource inputs,
+  constructs the live-only direct-VS runner, simulates every due logical
+  deadline without collapsing catch-up, and presents only the newest completed
+  surface. GCC and MSVC dummy/software gates and byte-silent public local-data
+  startup have reached the first displayed gameplay tick.
 
-The shortest remaining chain to a visible interactive build is now the thin
-SDL event, clock, upload, and input shell over this completed process bundle.
-The exact source tick rate/phase still requires evidence; until then the host
-must take an explicit rational cadence as policy rather than label an inferred
-number authentic. PC-98 visual traces remain the release authority after the
-cross-compiler and real-resource construction gates.
+The direct developer slice is now visible and interactive. It is not yet VS-2
+or VS-3 complete: exact source cadence/phase, fixed-script full-match routing,
+captured PC-98 page/palette/pixel traces, and a human two-player run remain
+acceptance gates. The host therefore requires an explicit rational cadence as
+policy rather than labeling an inferred number authentic.
 
 | Native concern | Donor authority |
 | --- | --- |
@@ -131,7 +138,7 @@ The existing dependency direction is already appropriate:
 - th03_app_main, th03_app_runtime, th03_app_content, and th03_app_resources own
   the current application process, platform-neutral tick/input/host-pixel
   policy, authenticated compiled/font content, and external resource cache.
-- th03_platform_sdl (proposed) owns the host window/device event adapter,
+- th03_platform_sdl owns the host window/device event adapter,
   monotonic clock source, and final upload.
 - th03_present owns PC-98 raster/TRAM/compositing and observer consumers, and depends on th03_assets and th03_core.
 - th03_formats and th03_replay provide V13 bytes and replay sessions when the app needs them.
@@ -141,10 +148,11 @@ th03_core is the deterministic runner. It owns game state, fixed-point rules, RN
 
 th03_assets remains a collection of pure decoders for supplied byte spans (RGB, PI, CDG/CD2, BFNT, and MRS). It does not know an install directory, DAT filename, cache, or scene. th03_present owns PC-98-flavoured data and drawing state: Raster, palette state, TRAM, planar/GRCG operations, cel/BFNT staging, and presentation-side observer state. It is the right home for a MainRoundPresenter composition object; it is not a host windowing library.
 
-| Proposed target | Owns | Must not own |
+| Target | Owns | Must not own |
 | --- | --- | --- |
 | th03_platform_sdl | SDL lifetime, event translation, monotonic timestamp acquisition, a 640x400 final-surface upload, and device PCM output later | Gameplay, scene policy, decoded game assets, tick/input semantics, palette/raster rules, or source text |
-| th03-app | Command line, external content root, resource manifest/cache, scene routing, selection/profile settings, construction of GameInit, platform-neutral tick/input/RGBA/letterbox policy, and app-level quit/pause policy | Decoder internals, PC-98 raster primitives, deterministic state, SDL types, or audio synthesis |
+| th03_app_main / neutral app policy | Command line parsing, external content transaction, resource manifest/cache, selection/profile settings, process construction, and platform-neutral tick/input/runner policy | Decoder internals, PC-98 raster primitives, deterministic state, SDL types, or audio synthesis |
+| th03-app executable | Thin composition of th03_app_main with th03_platform_sdl, source-style default bindings, and app-level quit policy | A second gameplay/render model, asset decoding, cadence constants, or audio synthesis |
 | th03_present | MainRoundPresenter, source-ordered observer consumers, visible MAIN composition from Raster plus TRAM, and scene-local present state | OS input, elapsed wall-clock policy, filesystem reads, or gameplay mutation |
 | th03_audio_pmd (later) | Supplied music/SE bytes, PMD/OPNA scheduling and synthesis, mix gain, offline PCM | SDL devices, UI settings storage, gameplay state, or file paths |
 
@@ -208,7 +216,7 @@ Acceptance gate VS-1: focused present tests cover startup, every MAIN footer/def
 
 ### 3. Add the thin host adapter and direct launcher
 
-Use a new th03_platform_sdl boundary with one pinned SDL version, initially [SDL 3.4.10](https://github.com/libsdl-org/SDL/releases/tag/release-3.4.10) (release-3.4.10, source archive SHA-256 12b34280415ec8418c864408b93d008a20a6530687ee613d60bfbd20411f2785). It is a narrowly scoped convenience and compatibility layer, not a new game engine. SDL documents creation of a window and default renderer via [SDL_CreateWindowAndRenderer](https://wiki.libsdl.org/SDL3/SDL_CreateWindowAndRenderer).
+The integrated th03_platform_sdl boundary pins [SDL 3.4.10](https://github.com/libsdl-org/SDL/releases/tag/release-3.4.10) (release-3.4.10, source archive SHA-256 12b34280415ec8418c864408b93d008a20a6530687ee613d60bfbd20411f2785). It is a narrowly scoped convenience and compatibility layer, not a new game engine. SDL documents creation of a window and default renderer via [SDL_CreateWindowAndRenderer](https://wiki.libsdl.org/SDL3/SDL_CreateWindowAndRenderer).
 
 The initial host policy is deliberately plain:
 
@@ -217,14 +225,18 @@ The initial host policy is deliberately plain:
 - Pump host events, map physical controls into a small app-owned input value, and latch exactly one CoreInput sample at each scheduled logical tick. SDL events and scancodes never cross into core/present. P1 and P2 keyboard defaults plus controller mapping are app configuration; UI navigation and Escape are separate app-scene commands, not magic gameplay mutation.
 - Run gameplay from a fixed source-tick scheduler, never delta_seconds. Establish the exact cadence from source/instrumented PC-98 evidence before declaring VS timing complete. Host VSync only paces presentation; it never creates, skips, or combines game frames. If a host is late, process each overdue logical boundary with a separately latched input sample, present the newest completed surface, and report persistent overload in developer mode. Do not silently drop core ticks or tie simulation count to monitor refresh.
 
-The first launcher shape is `th03-app --data <root> --main <MAIN.EXE> --font
-<FONT.ROM> --vs --p1 <character> --p2 <character>`. It loads the authenticated
+The first launcher is `th03-app --data <root> --main <MAIN.EXE> --font
+<FONT.ROM> --vs --tick-rate <ticks>/<seconds> --p1 <character> --p2
+<character>`. It loads the authenticated
 inputs, creates `MainProcess` from `MainDirectVsConfig`, and drives only that
 object's guarded step/repeat/terminal/surface API; it has no TitleScene
 requirement. The first launch allows selecting each of the nine character
 identities and supported VS mode parameters explicitly. Replay
 playback/recording may be wired at this input boundary later through
 `th03_formats` and `th03_replay`; it must not delay direct VS.
+Kotohime is not silently labeled authentic: selecting her requires the
+developer-only `--kotohime-zero-red` compatibility policy until the donor's
+uninitialized Bomb-fade byte is resolved by evidence.
 
 Acceptance gate VS-2: with external data, all legal direct-launch character pairs enter a match, render a stable 640x400 source surface, accept both players' controls, reach normal round/result routing, and return cleanly to the launcher. For a fixed scripted input, the direct-launch match's final core state/canonical outcome equals headless execution. The same check is performed with a null observer, discard observer, and the full presenter.
 
@@ -236,9 +248,9 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | --- | --- | --- |
 | MAIN source-order coverage | Integrated | Every audited direct-VS MAIN family now has a synchronous consumer; real-asset startup and captured PC-98 visual traces remain the fidelity gates. |
 | MAIN process construction over the checked external manifest | Integrated | The stable owner reauthenticates and binds the selected 12–17 physical resources plus MAIN/FONT content; hermetic failures and all 324 local paletted selection pairs pass on GCC/MSVC. |
-| Fixed tick plus input-latch boundary | Partially integrated | Rational fake-clock scheduling, overdue input latching, device/focus release, RGBA expansion, and letterboxing are complete. Establish the exact source cadence/phase and bind host timestamps without changing this API. |
+| Fixed tick plus input-latch boundary | Integrated, cadence/telemetry open | SDL nanosecond events feed the rational scheduler; every overdue boundary is sampled separately and newest-only presentation is enforced. Establish the exact source cadence/phase and add persistent-overload developer reporting without changing this API. |
 | Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
-| SDL window/upload/input adapter | Yes | Required to make the completed composition playable, but its first test can use a synthetic surface. |
+| SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
 | OP menus, Story, MAINL, cutscenes, staff | No | They are scene work after direct VS; do not make them a prerequisite for validating MAIN. |
 | Audio | No for the explicitly marked silent visual vertical slice; yes for a fully faithful release | Start source/data investigation now, but do not block visible MAIN on an invented WAV backend. |
@@ -250,7 +262,6 @@ The following parcels can proceed now, provided they do not claim readiness for 
 | --- | --- | --- |
 | External-data manifest and scene-scoped resource manager | th03-app support code only | Unit tests with a temporary synthetic content root; no I/O added to th03_assets. |
 | Asset inventory and exact source role table for MAIN/OP/MAINL | th03-port/docs plus app manifest data | Every role names its donor loader/caller and decoder; unresolved names remain explicit. |
-| SDL host shell | th03_platform_sdl | A fake 640x400 surface is letterboxed/scaled without changing its pixels; fake-clock and input-latch tests do not include core. |
 | Final PC-98 source-surface compositor | th03_present | Synthetic Raster/TRAM/palette fixtures prove page selection, palette resolution, gaiji placement, and 640x400 output. |
 | Selection/title asset mapping and presenter primitives | th03_present plus app-owned scene code | Source table and synthetic/unit render tests; no dependency on the MAIN compositor being finished. |
 | Cutscene script format inventory | An app-facing th03_cutscene library only if the parser becomes independently testable | Supplied-byte parser has no filesystem and captures source input/fast-forward cases. |

@@ -356,12 +356,15 @@ th03_set_warnings(th03_formats)
 # It consumes authenticated resource/content inputs and exposes only guarded
 # lifecycle, diagnostics, and composed output operations.
 add_library(th03_app_main STATIC
+	src/app/direct_vs_cli.cpp
+	src/app/direct_vs_launch.cpp
+	src/app/main_direct_vs_runner.cpp
 	src/app/main_process.cpp
 )
 target_include_directories(th03_app_main PUBLIC include)
 target_link_libraries(
 	th03_app_main
-	PUBLIC th03_app_resources th03_app_content th03_formats
+	PUBLIC th03_app_resources th03_app_content th03_app_runtime th03_formats
 )
 target_compile_features(th03_app_main PUBLIC cxx_std_23)
 set_target_properties(th03_app_main PROPERTIES CXX_EXTENSIONS OFF)
@@ -378,6 +381,17 @@ th03_set_warnings(th03-replay-check)
 add_executable(th03rv apps/th03rv/main.cpp)
 target_link_libraries(th03rv PRIVATE th03_formats th03_replay)
 th03_set_warnings(th03rv)
+
+if(TH03_ENABLE_SDL)
+	add_executable(th03-app
+		apps/th03-app/default_bindings.cpp
+		apps/th03-app/main.cpp
+	)
+	target_link_libraries(th03-app PRIVATE th03_app_main th03_platform_sdl)
+	target_include_directories(th03-app PRIVATE apps/th03-app)
+	th03_set_warnings(th03-app)
+	th03_stage_sdl3_runtime(th03-app)
+endif()
 
 if(BUILD_TESTING)
 	add_executable(th03-tests
@@ -445,6 +459,29 @@ if(BUILD_TESTING)
 	)
 
 	if(TH03_ENABLE_SDL)
+		add_test(NAME th03-app-help COMMAND th03-app --help)
+		add_test(
+			NAME th03-app-missing-main
+			COMMAND ${CMAKE_COMMAND}
+				-DTH03_APP=$<TARGET_FILE:th03-app>
+				-P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_app_missing_main.cmake
+		)
+		add_executable(th03-app-sdl-defaults-tests
+			apps/th03-app/default_bindings.cpp
+			tests/test_app_sdl_defaults.cpp
+		)
+		target_link_libraries(
+			th03-app-sdl-defaults-tests PRIVATE th03_platform_sdl
+		)
+		target_include_directories(
+			th03-app-sdl-defaults-tests PRIVATE apps/th03-app
+		)
+		th03_set_warnings(th03-app-sdl-defaults-tests)
+		th03_stage_sdl3_runtime(th03-app-sdl-defaults-tests)
+		add_test(
+			NAME th03-app-sdl-defaults-tests
+			COMMAND th03-app-sdl-defaults-tests
+		)
 		add_executable(th03-platform-sdl-input-tests
 			tests/test_platform_sdl_input.cpp
 		)
@@ -523,6 +560,36 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-main-process-tests
 		COMMAND th03-app-main-process-tests
+	)
+
+	add_executable(th03-app-main-direct-vs-runner-tests
+		tests/test_app_main_direct_vs_runner.cpp
+	)
+	target_link_libraries(
+		th03-app-main-direct-vs-runner-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-main-direct-vs-runner-tests PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-main-direct-vs-runner-tests)
+	add_test(
+		NAME th03-app-main-direct-vs-runner-tests
+		COMMAND th03-app-main-direct-vs-runner-tests
+	)
+
+	add_executable(th03-app-direct-vs-launch-tests
+		tests/test_app_direct_vs_launch.cpp
+	)
+	target_link_libraries(
+		th03-app-direct-vs-launch-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-direct-vs-launch-tests PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-direct-vs-launch-tests)
+	add_test(
+		NAME th03-app-direct-vs-launch-tests
+		COMMAND th03-app-direct-vs-launch-tests
 	)
 
 	add_executable(th03-present-tests

@@ -128,6 +128,15 @@ struct SdlInputEventResult {
 	bool physical_event_queued = false;
 };
 
+struct SdlInputPumpResult {
+	std::size_t events_consumed = 0U;
+	std::size_t physical_events_queued = 0U;
+	// The exact polled event is retained inside the mapper when the app input
+	// queue is full. Drain due scheduler history, then call pump_events() again
+	// before polling or presenting another host event.
+	bool queue_blocked = false;
+};
+
 // Fixed-storage SDL edge mapper. If TickInputScheduler rejects an emitted
 // snapshot, the mapper commits no corresponding held/device mutation; callers
 // can drain the scheduler and retry that same SDL_Event before polling another.
@@ -154,6 +163,13 @@ public:
 	> handle_event(
 		const SDL_Event &event,
 		app::TickInputScheduler &scheduler
+	) noexcept;
+	[[nodiscard]] std::expected<
+		SdlInputPumpResult,
+		SdlInputMapperError
+	> pump_events(
+		app::TickInputScheduler &scheduler,
+		bool escape_requests_quit
 	) noexcept;
 
 	[[nodiscard]] std::size_t connected_gamepad_count() const noexcept;
@@ -204,6 +220,8 @@ private:
 	std::array<GamepadState, sdl_gamepad_capacity> gamepads_{};
 	std::size_t connected_gamepad_count_ = 0U;
 	bool native_runtime_lease_ = false;
+	SDL_Event pending_event_{};
+	bool has_pending_event_ = false;
 };
 
 } // namespace th03::platform
