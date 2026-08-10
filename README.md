@@ -117,6 +117,12 @@ split comparisons. Original game data and replay captures remain external.
 - `th03_app_resources` owns the checked external-content root and immutable
   byte cache. Original/extracted files remain local inputs and never enter the
   repository.
+- `th03_app_content` owns authenticated process-lifetime content that is not a
+  standalone archive resource: compiled MAIN score/pellet/text tables, the
+  prepared GAMEFT gaiji bank, and the external PC-98 ANK/JIS font provider.
+  Production MAIN import accepts only the complete supported executable
+  profile; default tests use synthetic bytes and optional local gates remain
+  byte-silent.
 - MAIN palette primitives preserve the source's logical RGB8 values separately
   from applied RGB4 DAC output, including its process baseline, raw tone, and
   explicit deferred-apply latch. Neutral Bomb/Warning/defeat/footer lifecycle

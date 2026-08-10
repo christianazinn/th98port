@@ -143,6 +143,19 @@ target_compile_features(th03_app_runtime PUBLIC cxx_std_23)
 set_target_properties(th03_app_runtime PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_app_runtime)
 
+# Authenticated, process-lifetime content that is compiled into the original
+# MAIN executable or supplied by the PC-98 text/font boundary. Original bytes
+# remain caller-owned external inputs and are never embedded by this target.
+add_library(th03_app_content STATIC
+	src/app/authentic_text.cpp
+	src/app/main_compiled_content.cpp
+)
+target_include_directories(th03_app_content PUBLIC include)
+target_link_libraries(th03_app_content PUBLIC th03_present)
+target_compile_features(th03_app_content PUBLIC cxx_std_23)
+set_target_properties(th03_app_content PROPERTIES CXX_EXTENSIONS OFF)
+th03_set_warnings(th03_app_content)
+
 add_library(th03_replay STATIC
 	src/replay/run.cpp
 )
@@ -242,6 +255,36 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-tick-input-tests
 		COMMAND th03-app-tick-input-tests
+	)
+
+	add_executable(th03-app-authentic-text-tests
+		tests/test_app_authentic_text.cpp
+	)
+	target_link_libraries(
+		th03-app-authentic-text-tests
+		PRIVATE th03_app_content th03_app_resources
+	)
+	th03_set_warnings(th03-app-authentic-text-tests)
+	add_test(
+		NAME th03-app-authentic-text-tests
+		COMMAND th03-app-authentic-text-tests
+	)
+
+	add_executable(th03-app-main-compiled-content-tests
+		tests/test_app_main_compiled_content.cpp
+	)
+	target_link_libraries(
+		th03-app-main-compiled-content-tests
+		PRIVATE th03_app_content
+	)
+	target_include_directories(
+		th03-app-main-compiled-content-tests
+		PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-main-compiled-content-tests)
+	add_test(
+		NAME th03-app-main-compiled-content-tests
+		COMMAND th03-app-main-compiled-content-tests
 	)
 
 	add_executable(th03-present-tests

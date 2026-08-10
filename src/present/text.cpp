@@ -15,6 +15,23 @@ constexpr TramAttribute supported_attribute_bits =
 	attribute_display | attribute_color_mask | tram_reverse | tram_blink |
 	tram_underline;
 
+enum class JisHalf : std::uint8_t {
+	left,
+	right,
+};
+
+struct JisCellReference {
+	std::uint16_t canonical_jis = 0U;
+	std::size_t left_cell_offset = 0U;
+	JisHalf half = JisHalf::left;
+};
+
+struct TextPreparation {
+	std::array<std::optional<AnkGlyph>, 256U> ank_cache{};
+	std::array<bool, 256U> ank_queried{};
+	std::array<std::optional<JisGlyph>, tram_cell_count> jis_cache{};
+};
+
 [[nodiscard]] TextComposeError cell_error(
 	TextComposeErrorCode code,
 	std::size_t cell_offset,
@@ -44,6 +61,130 @@ constexpr TramAttribute supported_attribute_bits =
 	return (y * graphics_width) + x;
 }
 
+[[nodiscard]] std::optional<JisCellReference> decode_paired_jis_cell(
+	std::span<const TramCell> cells,
+	std::size_t offset
+) noexcept {
+	if(offset >= cells.size()) {
+		return std::nullopt;
+	}
+	const auto code = cells[offset].code;
+	if((code & 0xFF00U) == 0U) {
+		return std::nullopt;
+	}
+
+	const bool is_right = (code & 0x0080U) != 0U;
+	const auto cell_x = offset % tram_width;
+	if((is_right && cell_x == 0U) ||
+		(!is_right && (cell_x + 1U >= tram_width))) {
+		return std::nullopt;
+	}
+	const auto left_offset = is_right ?
+		((offset == 0U) ? cells.size() : offset - 1U) : offset;
+	if(left_offset >= cells.size() || left_offset + 1U >= cells.size()) {
+		return std::nullopt;
+	}
+	const auto left = cells[left_offset];
+	const auto right = cells[left_offset + 1U];
+	if((left.code & 0xFF00U) == 0U || (left.code & 0x0080U) != 0U ||
+		right.code != static_cast<TramCode>(left.code | 0x0080U)) {
+		return std::nullopt;
+	}
+
+	const auto first = static_cast<std::uint16_t>(
+		(left.code & 0x007FU) + 0x0020U
+	);
+	const auto second = static_cast<std::uint16_t>(left.code >> 8U);
+	return JisCellReference{
+		static_cast<std::uint16_t>((first << 8U) | second),
+		left_offset,
+		is_right ? JisHalf::right : JisHalf::left,
+	};
+}
+
+[[nodiscard]] std::optional<TextComposeError> prepare_text(
+	const Tram &tram,
+	const AnkGlyphProvider &ank,
+	TextPreparation &prepared
+) {
+	if(!tram.visible()) {
+		return std::nullopt;
+	}
+
+	const auto cells = tram.cells();
+	for(std::size_t cell_offset = 0U; cell_offset < cells.size(); ++cell_offset) {
+		const auto cell = cells[cell_offset];
+		if((cell.attribute & attribute_display) == 0U) {
+			continue;
+		}
+
+		const auto unsupported_bits = static_cast<TramAttribute>(
+			cell.attribute & static_cast<TramAttribute>(~supported_attribute_bits)
+		);
+		if(unsupported_bits != 0U) {
+			return cell_error(
+				TextComposeErrorCode::attribute_not_supported,
+				cell_offset,
+				cell
+			);
+		}
+		if((cell.attribute & tram_blink) != 0U) {
+			return cell_error(
+				TextComposeErrorCode::blink_not_supported,
+				cell_offset,
+				cell
+			);
+		}
+		if((cell.attribute & tram_underline) != 0U) {
+			return cell_error(
+				TextComposeErrorCode::underline_not_supported,
+				cell_offset,
+				cell
+			);
+		}
+
+		if(decode_paired_gaiji_cell(cells, cell_offset).has_value()) {
+			continue;
+		}
+		if((cell.code & 0xFF00U) == 0U) {
+			const auto ank_code = static_cast<std::uint8_t>(cell.code);
+			if(!prepared.ank_queried[ank_code]) {
+				prepared.ank_cache[ank_code] = ank.glyph(ank_code);
+				prepared.ank_queried[ank_code] = true;
+			}
+			if(!prepared.ank_cache[ank_code].has_value()) {
+				return cell_error(
+					TextComposeErrorCode::missing_ank_glyph,
+					cell_offset,
+					cell
+				);
+			}
+			continue;
+		}
+
+		const auto jis = decode_paired_jis_cell(cells, cell_offset);
+		if(!jis.has_value()) {
+			return cell_error(
+				TextComposeErrorCode::malformed_jis_pair,
+				cell_offset,
+				cell
+			);
+		}
+		if(!prepared.jis_cache[jis->left_cell_offset].has_value()) {
+			prepared.jis_cache[jis->left_cell_offset] =
+				ank.jis_glyph(jis->canonical_jis);
+		}
+		if(!prepared.jis_cache[jis->left_cell_offset].has_value()) {
+			return cell_error(
+				TextComposeErrorCode::missing_jis_glyph,
+				cell_offset,
+				cell
+			);
+		}
+	}
+	return std::nullopt;
+}
+
 void compose_glyph_row(
 	std::span<ComposedPixel> frame,
 	std::size_t cell_x,
@@ -71,6 +212,12 @@ void compose_glyph_row(
 
 } // namespace
 
+std::optional<JisGlyph> AnkGlyphProvider::jis_glyph(
+	std::uint16_t
+) const {
+	return std::nullopt;
+}
+
 std::expected<void, TextComposeError> compose_text_layer(
 	std::span<ComposedPixel> output,
 	std::span<const Index4> graphics,
@@ -95,6 +242,12 @@ std::expected<void, TextComposeError> compose_text_layer(
 		});
 	}
 
+	TextPreparation prepared{};
+	if(const auto error = prepare_text(tram, ank, prepared);
+		error.has_value()) {
+		return std::unexpected(*error);
+	}
+
 	for(std::size_t offset = 0U; offset < graphics.size(); ++offset) {
 		output[offset] = {ComposedPixelLayer::graphics, graphics[offset]};
 	}
@@ -102,38 +255,11 @@ std::expected<void, TextComposeError> compose_text_layer(
 		return {};
 	}
 
-	std::array<std::optional<AnkGlyph>, 256U> ank_cache{};
-	std::array<bool, 256U> ank_queried{};
 	const auto cells = tram.cells();
 	for(std::size_t cell_offset = 0U; cell_offset < cells.size(); ++cell_offset) {
 		const auto cell = cells[cell_offset];
 		if((cell.attribute & attribute_display) == 0U) {
 			continue;
-		}
-
-		const auto unsupported_bits = static_cast<TramAttribute>(
-			cell.attribute & static_cast<TramAttribute>(~supported_attribute_bits)
-		);
-		if(unsupported_bits != 0U) {
-			return std::unexpected(cell_error(
-				TextComposeErrorCode::attribute_not_supported,
-				cell_offset,
-				cell
-			));
-		}
-		if((cell.attribute & tram_blink) != 0U) {
-			return std::unexpected(cell_error(
-				TextComposeErrorCode::blink_not_supported,
-				cell_offset,
-				cell
-			));
-		}
-		if((cell.attribute & tram_underline) != 0U) {
-			return std::unexpected(cell_error(
-				TextComposeErrorCode::underline_not_supported,
-				cell_offset,
-				cell
-			));
 		}
 
 		const auto gaiji = decode_paired_gaiji_cell(cells, cell_offset);
@@ -159,32 +285,34 @@ std::expected<void, TextComposeError> compose_text_layer(
 			continue;
 		}
 
-		if((cell.code & 0xFF00U) != 0U) {
-			return std::unexpected(cell_error(
-				TextComposeErrorCode::jis_glyph_not_supported,
-				cell_offset,
-				cell
-			));
+		if((cell.code & 0xFF00U) == 0U) {
+			const auto ank_code = static_cast<std::uint8_t>(cell.code);
+			for(std::size_t glyph_y = 0U; glyph_y < ank_height; ++glyph_y) {
+				compose_glyph_row(
+					output,
+					cell_x,
+					cell_y,
+					glyph_y,
+					prepared.ank_cache[ank_code]->rows[glyph_y],
+					color,
+					reverse
+				);
+			}
+			continue;
 		}
-		const auto ank_code = static_cast<std::uint8_t>(cell.code);
-		if(!ank_queried[ank_code]) {
-			ank_cache[ank_code] = ank.glyph(ank_code);
-			ank_queried[ank_code] = true;
-		}
-		if(!ank_cache[ank_code].has_value()) {
-			return std::unexpected(cell_error(
-				TextComposeErrorCode::missing_ank_glyph,
-				cell_offset,
-				cell
-			));
-		}
-		for(std::size_t glyph_y = 0U; glyph_y < ank_height; ++glyph_y) {
+
+		const auto jis = *decode_paired_jis_cell(cells, cell_offset);
+		const auto half_offset = (jis.half == JisHalf::left) ? 0U : 1U;
+		const auto &glyph = *prepared.jis_cache[jis.left_cell_offset];
+		for(std::size_t glyph_y = 0U; glyph_y < jis_height; ++glyph_y) {
 			compose_glyph_row(
 				output,
 				cell_x,
 				cell_y,
 				glyph_y,
-				ank_cache[ank_code]->rows[glyph_y],
+				glyph.row_halves[
+					(glyph_y * jis_bytes_per_row) + half_offset
+				],
 				color,
 				reverse
 			);

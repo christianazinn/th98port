@@ -16,6 +16,7 @@ using th03::present::AnkGlyphProvider;
 using th03::present::ComposedPixel;
 using th03::present::ComposedPixelLayer;
 using th03::present::Index4;
+using th03::present::JisGlyph;
 using th03::present::Page;
 using th03::present::Raster;
 using th03::present::RasterMode;
@@ -74,9 +75,37 @@ public:
 		return glyphs_[code];
 	}
 
+	void set_jis(std::uint16_t code, JisGlyph glyph)
+	{
+		jis_code_ = code;
+		jis_glyph_ = glyph;
+	}
+
+	[[nodiscard]] std::optional<JisGlyph> jis_glyph(
+		std::uint16_t code
+	) const override
+	{
+		return (jis_code_.has_value() && *jis_code_ == code) ?
+			jis_glyph_ : std::nullopt;
+	}
+
 private:
 	std::array<std::optional<AnkGlyph>, 256U> glyphs_{};
+	std::optional<std::uint16_t> jis_code_{};
+	std::optional<JisGlyph> jis_glyph_{};
 };
+
+[[nodiscard]] constexpr std::array<th03::present::TramCode, 2U> jis_cells(
+	std::uint16_t canonical_jis
+)
+{
+	const auto first = static_cast<std::uint16_t>(canonical_jis >> 8U);
+	const auto second = static_cast<std::uint16_t>(canonical_jis & 0x00FFU);
+	const auto left = static_cast<th03::present::TramCode>(
+		(second << 8U) | (first - 0x0020U)
+	);
+	return {left, static_cast<th03::present::TramCode>(left | 0x0080U)};
+}
 
 [[nodiscard]] std::optional<SourceSurface> compose(
 	SurfaceBuffer &output,
@@ -341,6 +370,32 @@ void test_text_coordinates_ignore_graphics_mapping()
 	);
 }
 
+void test_jis_source_surface()
+{
+	Raster raster;
+	Tram tram;
+	SyntheticAnk font;
+	static SurfaceBuffer output{};
+	constexpr std::uint16_t canonical = 0x2441U;
+	JisGlyph glyph{};
+	glyph.row_halves[0U] = 0x80U;
+	glyph.row_halves[1U] = 0x01U;
+	font.set_jis(canonical, glyph);
+	const auto codes = jis_cells(canonical);
+	expect(
+		tram.put_cell({10, 2}, {codes[0U], th03::present::tram_red}) &&
+		tram.put_cell({11, 2}, {codes[1U], th03::present::tram_green}),
+		"seed paired JIS source-surface cells"
+	);
+	const auto result = compose(output, raster, tram, font);
+	expect(result.has_value(), "source surface accepts injected JIS glyph");
+	expect(
+		output[offset(80U, 32U)] == text_pixel(TextColor::red) &&
+		output[offset(95U, 32U)] == text_pixel(TextColor::green),
+		"source surface composes both JIS halves with per-cell attributes"
+	);
+}
+
 void test_malformed_text_is_atomic()
 {
 	Raster raster;
@@ -394,6 +449,59 @@ void test_malformed_text_is_atomic()
 			static_cast<std::uint16_t>('A'),
 			th03::present::tram_white,
 		}),
+		"seed early ANK before late missing JIS"
+	);
+	const auto late_jis = jis_cells(0x2441U);
+	expect(
+		tram.put_cell({78, 24}, {late_jis[0U], th03::present::tram_white}) &&
+		tram.put_cell({79, 24}, {late_jis[1U], th03::present::tram_red}),
+		"seed late JIS pair with independently valid attributes"
+	);
+	const auto jis_result = th03::present::compose_source_surface(
+		output,
+		raster,
+		tram,
+		missing
+	);
+	expect(
+		!jis_result && jis_result.error().text.code ==
+			TextComposeErrorCode::missing_jis_glyph,
+		"late missing JIS provider data is explicit"
+	);
+	expect(output == preimage, "late missing JIS preserves the complete preimage");
+
+	tram.fill({});
+	expect(
+		tram.put_cell({0, 0}, {
+			static_cast<std::uint16_t>('A'),
+			th03::present::tram_white,
+		}),
+		"seed early ANK before row-wrapped JIS"
+	);
+	expect(
+		tram.put_cell({79, 23}, {late_jis[0U], th03::present::tram_white}) &&
+		tram.put_cell({0, 24}, {late_jis[1U], th03::present::tram_red}),
+		"seed adjacent-memory JIS codes across a TRAM row boundary"
+	);
+	const auto wrapped_jis_result = th03::present::compose_source_surface(
+		output,
+		raster,
+		tram,
+		missing
+	);
+	expect(
+		!wrapped_jis_result && wrapped_jis_result.error().text.code ==
+			TextComposeErrorCode::malformed_jis_pair,
+		"source surface rejects a JIS pair that wraps to the next TRAM row"
+	);
+	expect(output == preimage, "row-wrapped JIS preserves the complete preimage");
+
+	tram.fill({});
+	expect(
+		tram.put_cell({0, 0}, {
+			static_cast<std::uint16_t>('A'),
+			th03::present::tram_white,
+		}),
 		"seed an early valid glyph before a late unsupported attribute"
 	);
 	expect(
@@ -430,6 +538,7 @@ int main()
 	test_zoom_windows_and_scroll_wrap();
 	test_text_last_gaiji_and_visibility();
 	test_text_coordinates_ignore_graphics_mapping();
+	test_jis_source_surface();
 	test_malformed_text_is_atomic();
 	std::fputs("th03-present-source-surface tests passed\n", stdout);
 	return 0;

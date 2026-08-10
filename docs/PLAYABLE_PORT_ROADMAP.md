@@ -20,6 +20,12 @@ original asset, font, music, capture, or extracted archive byte is committed or
 printed into build logs. Public redistribution policy is independent of this
 local fidelity path and does not block implementation.
 
+Repository history predating this roadmap accidentally committed local
+originals in `8c32d98`. The current tree now ignores them and retains only the
+policy README, but a coordinated history rewrite and remote-ref cleanup is
+still required before any public release. That process task does not block the
+local original-data validation path requested here.
+
 The donor for scene behaviour is the clean, pinned Anniversary tree at oracle_anniversary_th3r02, commit 3e2381d4275be7287f5525de5c95389d492b0a3c.
 
 ## Live implementation status
@@ -83,13 +89,18 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   converts all graphics/text color domains to caller-owned RGBA with arbitrary
   pitch and computes overflow-safe integer 640x400 letterboxing. SDL bindings,
   a source-rate constant, and first-deadline policy are intentionally absent.
+- `th03_app_content` authenticates the complete supported `MAIN.EXE` before
+  importing its score/pellet masks and result/combo TRAM cells. It also
+  validates and owns a complete prepared GAMEFT gaiji bank and resolves both
+  ANK and paired full-width JIS cells through an external PC-98 `FONT.ROM`.
+  Original bytes remain external and the hermetic default tests use only
+  synthetic content.
 
-The shortest remaining chain to a visible interactive build is: import the
-external compiled masks/result text and an authenticated PC-98 ANK font; bind
-decoded external resources into one process bundle; establish the source tick
-rate/phase from evidence; then add the thin SDL event, clock, upload, and input
-shell. PC-98 visual traces remain the release authority after the synthetic
-cross-compiler gates.
+The shortest remaining chain to a visible interactive build is: bind decoded
+external resources and the authenticated content above into one stable process
+bundle; establish the source tick rate/phase from evidence; then add the thin
+SDL event, clock, upload, and input shell. PC-98 visual traces remain the
+release authority after the synthetic cross-compiler gates.
 
 | Native concern | Donor authority |
 | --- | --- |

@@ -16,6 +16,7 @@ using th03::present::AnkGlyphProvider;
 using th03::present::ComposedPixel;
 using th03::present::ComposedPixelLayer;
 using th03::present::Index4;
+using th03::present::JisGlyph;
 using th03::present::TextColor;
 using th03::present::TextComposeErrorCode;
 using th03::present::Tram;
@@ -45,9 +46,46 @@ public:
 		return glyphs_[code];
 	}
 
+	void set_jis(std::uint16_t code, JisGlyph glyph) {
+		jis_code_ = code;
+		jis_glyph_ = glyph;
+	}
+
+	[[nodiscard]] std::optional<JisGlyph> jis_glyph(
+		std::uint16_t code
+	) const override {
+		++jis_queries_;
+		last_jis_query_ = code;
+		return (jis_code_.has_value() && *jis_code_ == code) ?
+			jis_glyph_ : std::nullopt;
+	}
+
+	[[nodiscard]] std::size_t jis_queries() const {
+		return jis_queries_;
+	}
+
+	[[nodiscard]] std::uint16_t last_jis_query() const {
+		return last_jis_query_;
+	}
+
 private:
 	std::array<std::optional<AnkGlyph>, 256U> glyphs_{};
+	std::optional<std::uint16_t> jis_code_{};
+	std::optional<JisGlyph> jis_glyph_{};
+	mutable std::size_t jis_queries_ = 0U;
+	mutable std::uint16_t last_jis_query_ = 0U;
 };
+
+[[nodiscard]] constexpr std::array<th03::present::TramCode, 2U> jis_cells(
+	std::uint16_t canonical_jis
+) {
+	const auto first = static_cast<std::uint16_t>(canonical_jis >> 8U);
+	const auto second = static_cast<std::uint16_t>(canonical_jis & 0x00FFU);
+	const auto left = static_cast<th03::present::TramCode>(
+		(second << 8U) | (first - 0x0020U)
+	);
+	return {left, static_cast<th03::present::TramCode>(left | 0x0080U)};
+}
 
 [[nodiscard]] std::size_t pixel_offset(std::size_t x, std::size_t y) {
 	return (y * th03::present::graphics_width) + x;
@@ -250,6 +288,72 @@ void test_gaiji_halves_and_color() {
 		pixel(*ambiguous_result, 9U, 0U) == text_pixel(TextColor::green),
 		"ordered 0056/8056 pair resolves as gaiji zero"
 	);
+	expect(
+		ank.jis_queries() == 0U,
+		"paired gaiji takes priority over every JIS interpretation"
+	);
+}
+
+void test_jis_pair_and_independent_attributes() {
+	SyntheticAnk ank;
+	AnkGlyph ank_a{};
+	ank_a.rows[0U] = 0x80U;
+	ank.set(static_cast<std::uint8_t>('A'), ank_a);
+	constexpr std::uint16_t canonical = 0x2441U;
+	JisGlyph glyph{};
+	glyph.row_halves[0U] = 0x80U;
+	glyph.row_halves[1U] = 0x01U;
+	glyph.row_halves[2U] = 0x40U;
+	glyph.row_halves[3U] = 0x80U;
+	ank.set_jis(canonical, glyph);
+	const auto codes = jis_cells(canonical);
+
+	Tram tram;
+	std::array<std::uint8_t, th03::present::gaiji_glyph_bytes> gaiji{};
+	gaiji[0U] = 0x80U;
+	gaiji[1U] = 0x01U;
+	expect(
+		tram.load_gaiji(4U, gaiji) &&
+		tram.put_cell({0, 0}, {
+			static_cast<th03::present::TramCode>('A'),
+			th03::present::tram_white,
+		}) && tram.put_gaiji({2, 0}, 4U, th03::present::tram_cyan) &&
+		tram.put_cell({6, 7}, {codes[0U], th03::present::tram_red}) &&
+		tram.put_cell({7, 7}, {
+			codes[1U],
+			static_cast<th03::present::TramAttribute>(
+				th03::present::tram_green | th03::present::tram_reverse
+			),
+		}),
+		"seed JIS pair with independent half attributes"
+	);
+	const auto result = compose_fixture(graphics(9U), tram, ank);
+	expect(result.has_value(), "paired JIS composition succeeds");
+	expect(
+		pixel(*result, 0U, 0U) == text_pixel(TextColor::white) &&
+		pixel(*result, 16U, 0U) == text_pixel(TextColor::cyan) &&
+		pixel(*result, 31U, 0U) == text_pixel(TextColor::cyan),
+		"ANK, gaiji, and JIS compose in one visible text layer"
+	);
+	expect(
+		ank.jis_queries() == 1U && ank.last_jis_query() == canonical,
+		"paired TRAM cells query one canonical JIS word"
+	);
+	expect(
+		pixel(*result, 48U, 112U) == text_pixel(TextColor::red) &&
+		pixel(*result, 49U, 112U) == graphics_pixel(9U),
+		"JIS left cell selects the glyph's left row byte"
+	);
+	expect(
+		pixel(*result, 56U, 112U) == text_pixel(TextColor::green) &&
+		pixel(*result, 63U, 112U) == graphics_pixel(9U),
+		"JIS right cell independently applies its color and reverse attribute"
+	);
+	expect(
+		pixel(*result, 49U, 113U) == text_pixel(TextColor::red) &&
+		pixel(*result, 63U, 113U) == text_pixel(TextColor::green),
+		"JIS rows preserve both stored half-byte boundaries"
+	);
 }
 
 void test_visibility_and_disabled_cells() {
@@ -314,15 +418,44 @@ void test_explicit_deferred_paths() {
 	);
 
 	tram.fill({});
+	expect(tram.put_cell({6, 7}, {0x4104U, th03::present::tram_white}),
+		"seed unpaired JIS cell");
+	expect_cell_error(
+		compose_fixture(graphics(0U), tram, ank),
+		TextComposeErrorCode::malformed_jis_pair,
+		{6, 7},
+		"unpaired JIS cell is explicit"
+	);
+
+	tram.fill({});
+	const auto wrapped_jis = jis_cells(0x2441U);
 	expect(
-		tram.put_cell({6, 7}, {0x2204U, th03::present::tram_white}),
-		"seed JIS cell"
+		tram.put_cell({79, 6}, {
+			wrapped_jis[0U], th03::present::tram_white,
+		}) && tram.put_cell({0, 7}, {
+			wrapped_jis[1U], th03::present::tram_white,
+		}),
+		"seed adjacent-memory JIS codes across a TRAM row boundary"
 	);
 	expect_cell_error(
 		compose_fixture(graphics(0U), tram, ank),
-		TextComposeErrorCode::jis_glyph_not_supported,
+		TextComposeErrorCode::malformed_jis_pair,
+		{79, 6},
+		"JIS halves cannot pair across TRAM rows"
+	);
+
+	tram.fill({});
+	const auto missing_jis = jis_cells(0x2441U);
+	expect(
+		tram.put_cell({6, 7}, {missing_jis[0U], th03::present::tram_white}) &&
+		tram.put_cell({7, 7}, {missing_jis[1U], th03::present::tram_white}),
+		"seed unavailable JIS pair"
+	);
+	expect_cell_error(
+		compose_fixture(graphics(0U), tram, ank),
+		TextComposeErrorCode::missing_jis_glyph,
 		{6, 7},
-		"JIS font-ROM path is explicitly deferred"
+		"missing injected JIS bitmap is explicit"
 	);
 
 	tram.fill({});
@@ -375,6 +508,39 @@ void test_explicit_deferred_paths() {
 	);
 }
 
+void test_late_text_error_is_atomic() {
+	SyntheticAnk ank;
+	AnkGlyph early{};
+	early.rows[0U] = 0x80U;
+	ank.set(static_cast<std::uint8_t>('A'), early);
+	Tram tram;
+	expect(
+		tram.put_cell({0, 0}, {
+			static_cast<th03::present::TramCode>('A'),
+			th03::present::tram_white,
+		}) && tram.put_cell({79, 24}, {0x4104U, th03::present::tram_white}),
+		"seed valid early ANK and malformed late JIS"
+	);
+	auto source = graphics(3U);
+	ComposedTextFrame output(
+		th03::present::graphics_page_pixels,
+		{ComposedPixelLayer::text, 6U}
+	);
+	const auto before = output;
+	const auto result = th03::present::compose_text_layer(
+		output,
+		source,
+		tram,
+		ank
+	);
+	expect(
+		!result && result.error().code ==
+			TextComposeErrorCode::malformed_jis_pair,
+		"late malformed JIS rejects the complete visible layer"
+	);
+	expect(output == before, "late text failure leaves caller output untouched");
+}
+
 void test_graphics_validation() {
 	SyntheticAnk ank;
 	Tram tram;
@@ -425,9 +591,11 @@ int main() {
 	test_ank_text_over_graphics();
 	test_reverse_black_mask();
 	test_gaiji_halves_and_color();
+	test_jis_pair_and_independent_attributes();
 	test_visibility_and_disabled_cells();
 	test_explicit_deferred_paths();
 	test_graphics_validation();
+	test_late_text_error_is_atomic();
 	std::fputs("th03-present-text tests passed\n", stdout);
 	return 0;
 }

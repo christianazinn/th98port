@@ -112,11 +112,10 @@ loader/site, so it is deliberately not a direct-VS dependency. The app must
 construct the direct-launch raster/palette seed explicitly; the checked PI
 inputs reproduce only MAINL's source-owned hidden atlas handoff.
 
-`MainResourceLoader` is deliberately standalone until the application target
-is introduced. Its focused test compiles it directly with the requested test
-source; no existing CMake target or library boundary is changed by this
-parcel. The normal constructor enforces both size and fingerprint; its
-explicit size-only policy exists solely for hermetic synthetic tests and
-inspection tools, not native app startup. The tests exercise named missing,
-wrong-size, wrong-fingerprint, duplicate-logical-role, case, malformed-key,
-and resolved-link-escape outcomes using temporary synthetic roots only.
+`MainResourceLoader` is built as the application-owned `th03_app_resources`
+library. It remains separate from filesystem-free decoders and presentation:
+the normal constructor enforces both size and fingerprint, while its explicit
+size-only policy exists solely for hermetic synthetic tests and inspection
+tools, never native app startup. Its tests exercise named missing, wrong-size,
+wrong-fingerprint, duplicate-logical-role, case, malformed-key, and
+resolved-link-escape outcomes using temporary synthetic roots only.
