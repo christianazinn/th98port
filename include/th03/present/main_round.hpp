@@ -8,6 +8,7 @@
 
 #include "th03/core/observer.hpp"
 #include "th03/present/main_background.hpp"
+#include "th03/present/main_boss.hpp"
 #include "th03/present/main_bombs.hpp"
 #include "th03/present/main_effects.hpp"
 #include "th03/present/main_entities.hpp"
@@ -23,16 +24,14 @@ namespace th03::present {
 // deliberately explicit rather than approximated from the three ordinary
 // phase views.
 enum class MainRoundMissingPhase : std::uint8_t {
-	boss,
 	extra_attack,
 	charge_shot,
 	hud,
 	result,
 };
 
-inline constexpr std::array<MainRoundMissingPhase, 5U>
+inline constexpr std::array<MainRoundMissingPhase, 4U>
 	main_round_missing_phases{{
-		MainRoundMissingPhase::boss,
 		MainRoundMissingPhase::extra_attack,
 		MainRoundMissingPhase::charge_shot,
 		MainRoundMissingPhase::hud,
@@ -44,6 +43,7 @@ enum class MainRoundStatus : std::uint8_t {
 	invalid_setup,
 	invalid_observation,
 	background_failed,
+	bosses_failed,
 	entities_failed,
 	effects_failed,
 	players_bullets_failed,
@@ -77,6 +77,7 @@ public:
 		MainStaticPresenter &static_presenter,
 		MainPaletteState &palette,
 		MainBackgroundPresenter &background,
+		MainBossPresenter &bosses,
 		MainEntitiesPresenter &entities,
 		MainEffectsPresenter &effects,
 		MainPlayersBulletsPresenter &players_bullets,
@@ -136,6 +137,12 @@ public:
 	void main_background_random_read(
 		const MainBackgroundRandomRead &read
 	) noexcept override;
+	void boss_activated(const BossActivated &activated) noexcept override;
+	void boss_animation_step(const BossAnimationStep &step) noexcept override;
+	void boss_palette_baseline_restored(
+		const BossPaletteBaselineRestored &restored
+	) noexcept override;
+	void observe(const MainBossView &view) noexcept override;
 	void observe(const ShotsEnemiesView &view) noexcept override;
 	void observe(const FireballsView &view) noexcept override;
 	void observe(const PlayersBulletsView &view) noexcept override;
@@ -161,6 +168,7 @@ public:
 
 private:
 	enum class Phase : std::uint8_t {
+		boss,
 		shots_enemies,
 		fireballs,
 		players_bullets,
@@ -170,6 +178,8 @@ private:
 
 	void fail(MainRoundStatus status) noexcept;
 	[[nodiscard]] bool source_page_ready() const noexcept;
+	[[nodiscard]] bool source_prefix_open() const noexcept;
+	[[nodiscard]] bool late_bombs_open() const noexcept;
 	[[nodiscard]] bool same_frame(const MainPhaseContext &context) const noexcept;
 	[[nodiscard]] static bool present_common_effects(
 		void *context,
@@ -181,6 +191,7 @@ private:
 	MainStaticPresenter *static_;
 	MainPaletteState *palette_;
 	MainBackgroundPresenter *background_;
+	MainBossPresenter *bosses_;
 	MainEntitiesPresenter *entities_;
 	MainEffectsPresenter *effects_;
 	MainPlayersBulletsPresenter *players_bullets_;
@@ -190,9 +201,10 @@ private:
 	MainBulletFacts bullet_facts_{};
 	MainBulletTrails bullet_trails_{};
 	MainPhaseContext frame_context_{};
-	Phase phase_ = Phase::shots_enemies;
+	Phase phase_ = Phase::boss;
 	std::uint8_t next_warning_sample_ = 0;
 	std::uint8_t next_gauge_finish_player_ = 0;
+	std::uint8_t next_late_bomb_player_ = 0;
 	std::uint8_t expected_portrait_mask_ = 0;
 	bool warning_interstitial_active_ = false;
 	bool warning_suffix_pending_ = false;

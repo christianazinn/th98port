@@ -56,21 +56,24 @@ enum class MainPaletteVariant : std::uint8_t {
 	second,
 };
 
-// Static roles use character == none and palette == none. Character roles
-// use both fields, making the original 00..17 file family explicit without
-// allowing callers to select arbitrary filenames.
+// Static roles use character == none and palette == none. Paletted character
+// roles use both fields, making the original 00..17 family explicit. The
+// stage enemy-group role uses character only because MAINL selects one of five
+// ENEMY files from P2's base character, independent of its palette variant.
 enum class MainResourceRole : std::uint8_t {
 	enemy_scripts,
 	game_font,
 	hud_lose_sheet,
 	hud_round_sheet,
 	hud_result_sheet,
+	stage_enemy_center,
 	selection_palette,
 	character_sheet,
 	character_extra_portrait,
 	character_bomb_portrait,
 	character_stage_shot,
 	character_stage_extra_shot,
+	character_stage_enemy_group,
 };
 
 struct MainResourceKey {

@@ -704,7 +704,11 @@ void gameplay_frame_suffix_after_interstitial(
 	}
 	background_update(state, observer);
 	bombs_render_phase_update(state, observer);
-	boss_render_phase_update(state);
+	if(observer != nullptr) {
+		const auto view = ObserverAccess::main_boss(state);
+		observer->observe(view);
+	}
+	boss_render_phase_update(state, observer);
 	if(observer != nullptr) {
 		const auto view = ObserverAccess::shots_enemies(state);
 		observer->observe(view);

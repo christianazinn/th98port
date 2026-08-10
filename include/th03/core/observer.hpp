@@ -25,6 +25,7 @@ enum class EnemySlot : std::uint8_t {};
 enum class FireballSlot : std::uint8_t {};
 enum class BulletSlot : std::uint16_t {};
 enum class TrailPoint : std::uint8_t {};
+enum class ReimuBossOrbitPoint : std::uint8_t {};
 
 // Exact source enemy/fireball/explosion flag byte. Explosion hits can raise
 // this above the two named explosion values, so it must not be a closed enum.
@@ -464,6 +465,63 @@ struct MainGaugeState {
 		default;
 };
 
+// A successful Boss launch is visible only after the source restores the
+// target playfield's palette baseline.
+struct BossActivated {
+	PlayerId owner = PlayerId::p1;
+	std::int8_t paletted_character = 0;
+
+	friend bool operator==(const BossActivated &, const BossActivated &) =
+		default;
+};
+
+// Ellen, Rikako, and Chiyuri advance presenter-private animation state from
+// their prefix callbacks. These are the exact retained inputs at that source
+// dispatch, not a draw command or a copy of the private animation bytes.
+struct BossAnimationStep {
+	PlayerId owner = PlayerId::p1;
+	std::uint8_t state_at_dispatch = 0;
+	std::uint16_t pattern_frame_at_dispatch = 0;
+	std::uint8_t render_state_at_dispatch = 0;
+
+	friend bool operator==(
+		const BossAnimationStep &,
+		const BossAnimationStep &
+	) = default;
+};
+
+// One exact call of the source palette-baseline restore helper. The presenter
+// owns the palette itself; core only identifies the affected playfield.
+struct BossPaletteBaselineRestored {
+	PlayerId player = PlayerId::p1;
+
+	friend bool operator==(
+		const BossPaletteBaselineRestored &,
+		const BossPaletteBaselineRestored &
+	) = default;
+};
+
+struct MainBossFact {
+	PlayerId owner = PlayerId::p1;
+	std::int8_t paletted_character = 0;
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+	std::uint8_t hit = 0;
+	std::uint8_t state = 0;
+	std::uint16_t pattern_frame = 0;
+	std::uint8_t render_state = 0;
+	std::uint8_t render_frame = 0;
+	std::uint8_t pattern_angle = 0;
+	std::int16_t kotohime_radius = 0;
+	std::uint8_t kotohime_orbit_count = 0;
+	std::uint8_t reimu_orbit_count = 0;
+	std::uint16_t yumemi_radius = 0;
+	RawPoint yumemi_muzzle{};
+	RawPoint yumemi_target{};
+
+	friend bool operator==(const MainBossFact &, const MainBossFact &) = default;
+};
+
 struct WarningInterstitialSample {
 	// Zero-based source mini-loop iteration, always in the inclusive 0..26
 	// range. Ordinal 26 precedes the resumed late-frame suffix.
@@ -607,6 +665,28 @@ private:
 	const detail::DeterministicState *state_;
 };
 
+class MainBossView {
+public:
+	static constexpr std::size_t reimu_orbit_point_count = 6U;
+
+	[[nodiscard]] MainPhaseContext context() const noexcept;
+	[[nodiscard]] bool round_frame_is_odd() const noexcept;
+	[[nodiscard]] std::optional<MainBossFact> boss() const noexcept;
+	[[nodiscard]] std::optional<RawPoint> reimu_orbit_point(
+		ReimuBossOrbitPoint point
+	) const noexcept;
+
+private:
+	friend struct detail::ObserverAccess;
+
+	explicit MainBossView(
+		const detail::DeterministicState *state
+	) noexcept : state_(state)
+	{}
+
+	const detail::DeterministicState *state_;
+};
+
 class GameplayObserver {
 public:
 	virtual ~GameplayObserver() = default;
@@ -682,6 +762,16 @@ public:
 	virtual void main_background_random_read(
 		const MainBackgroundRandomRead &
 	) noexcept
+	{}
+	virtual void boss_activated(const BossActivated &) noexcept
+	{}
+	virtual void boss_animation_step(const BossAnimationStep &) noexcept
+	{}
+	virtual void boss_palette_baseline_restored(
+		const BossPaletteBaselineRestored &
+	) noexcept
+	{}
+	virtual void observe(const MainBossView &) noexcept
 	{}
 	virtual void observe(const ShotsEnemiesView &) noexcept
 	{}

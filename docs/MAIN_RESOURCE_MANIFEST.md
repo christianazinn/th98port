@@ -15,6 +15,8 @@ DAT archive and not an installation directory. The one accepted layout is:
     TLSL.RGB
     0016.PI ... 1716.PI
     00EX.PI ... 17EX.PI
+    EN2.PI
+    ENEMY00.PI ... ENEMY04.PI
   YUME2.DAT/
     ENEDAT.DAT
     GAMEFT.BFT
@@ -48,9 +50,10 @@ repeated requests return its cached bytes, so no per-frame file I/O occurs.
 
 ## MAIN direct-VS batch
 
-`direct_vs_resource_keys()` deterministically loads these five static entries,
-then the selected P1 trio and P2 trio. A duplicate selected asset is loaded
-once.
+`direct_vs_resource_keys()` deterministically loads these five static MAIN
+entries, then the complete MAINL page handoff required by a direct launch:
+`EN2.PI`, both selected character quintuples, and the P2-selected opponent
+group. A duplicate selected asset is loaded once.
 
 | Logical role | Extracted path | Bytes | Decoder | Donor authority |
 | --- | --- | ---: | --- | --- |
@@ -77,26 +80,37 @@ app decodes these supplied byte blobs through `th03_assets`; it does not
 put filenames, paths, or a cache into that library. Presentation receives the
 decoded models, never this loader.
 
-## Adjacent scene dependencies, intentionally not in the VS batch
+## MAINL handoff resources included in the direct-VS batch
 
-These entries are included in the same metadata manifest because the native
-application owns scene handoffs, but a direct VS launch must not invent a
-MAIN load for them.
+MAIN receives its hidden Sprite16 source sheet from MAINL's stage transition.
+A direct VS launch therefore loads these resources explicitly and reproduces
+that page handoff before MAIN startup; it does not invent boss pixels or read
+paths inside the presentation library.
 
 | Logical role pattern | Scene | Extracted path | Decoder | Source authority |
 | --- | --- | --- | --- | --- |
-| `select.palette_handoff` | Select → MAINL handoff | `YUME1.DAT/TLSL.RGB`, 48 bytes | RGB48 | `th03/op/m_select.cpp:177-182` |
 | `main.character.<character>.paletted_<0|1>.stage_shot` | MAINL stage transition | `YUME1.DAT/NN16.PI`, exact size locked per NN | PI | `th03/mainl/screens[data].asm:54`; `th03/mainl/screens.cpp:355-389` |
 | `main.character.<character>.paletted_<0|1>.stage_extra_shot` | MAINL stage transition | `YUME1.DAT/NNEX.PI`, exact size locked per NN | PI | `th03/mainl/screens.cpp:355-389` |
+| `main.stage.enemy_center` | MAINL stage transition | `YUME1.DAT/EN2.PI`, 1,841 bytes | PI | `th03/mainl/screens.cpp:293-298` |
+| `main.character.<character>.stage_enemy_group` | MAINL stage transition | `YUME1.DAT/ENEMY00.PI` through `ENEMY04.PI`, exact size locked per group | PI | `th03/mainl/screens.cpp:300-324` |
+
+`select.palette_handoff` (`YUME1.DAT/TLSL.RGB`, 48 bytes) remains a checked
+manifest entry for the Select-to-MAINL scene boundary, but it is intentionally
+excluded from `direct_vs_resource_keys()`. The final opponent PI load supplies
+MAINL's palette handoff for direct VS, so loading TLSL there would be redundant.
+Specifically, MAINL leaves the selected `ENEMY0n.PI` in PI slot 0, applies that
+image's palette, and stores it in the resident handoff. A direct launcher must
+therefore apply the P2 opponent-group PI palette and make it the process
+baseline before `MainStaticPresenter::round_startup()`; the six-PI staging
+helper reproduces pixels only and deliberately does not guess palette policy.
 
 There is no PI or RGB load in the pinned MAIN startup/round-loop path itself:
-MAIN receives a resident palette/page handoff, then `rstart.cpp` loads its
+MAIN receives this resident palette/page handoff, then `rstart.cpp` loads its
 three BF2 sheets and `hitc_mrs.cpp` loads selected character data.
 `NUM8.BF2` exists in the extraction inventory but has no pinned MAIN
 loader/site, so it is deliberately not a direct-VS dependency. The app must
-construct the direct-launch raster/palette seed explicitly rather than
-silently substituting a MAINL/OP screen. The transition entries above make
-that future scene work visible without claiming they are direct-VS assets.
+construct the direct-launch raster/palette seed explicitly; the checked PI
+inputs reproduce only MAINL's source-owned hidden atlas handoff.
 
 `MainResourceLoader` is deliberately standalone until the application target
 is introduced. Its focused test compiles it directly with the requested test

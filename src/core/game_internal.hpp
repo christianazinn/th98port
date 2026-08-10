@@ -548,6 +548,13 @@ struct DeterministicState {
 };
 
 struct ObserverAccess {
+	[[nodiscard]] static MainBossView main_boss(
+		const DeterministicState &state
+	) noexcept
+	{
+		return MainBossView(&state);
+	}
+
 	[[nodiscard]] static ShotsEnemiesView shots_enemies(
 		const DeterministicState &state
 	) noexcept

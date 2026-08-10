@@ -1,5 +1,37 @@
 // Included by frame.cpp inside its private implementation namespace.
 
+void observe_boss_palette_baseline_restored(
+	GameplayObserver *observer,
+	std::uint8_t player_id
+) noexcept
+{
+	if(observer != nullptr) {
+		observer->boss_palette_baseline_restored(
+			BossPaletteBaselineRestored{
+				.player = static_cast<PlayerId>(player_id),
+			}
+		);
+	}
+}
+
+void observe_boss_animation_step(
+	GameplayObserver *observer,
+	std::uint8_t owner,
+	std::uint8_t state_at_dispatch,
+	std::uint16_t pattern_frame_at_dispatch,
+	std::uint8_t render_state_at_dispatch
+) noexcept
+{
+	if(observer != nullptr) {
+		observer->boss_animation_step(BossAnimationStep{
+			.owner = static_cast<PlayerId>(owner),
+			.state_at_dispatch = state_at_dispatch,
+			.pattern_frame_at_dispatch = pattern_frame_at_dispatch,
+			.render_state_at_dispatch = render_state_at_dispatch,
+		});
+	}
+}
+
 void boss_move(BossState &boss) noexcept
 {
 	boss.center_x = exact::wrap_add(boss.center_x, boss.velocity_x);
@@ -33,7 +65,8 @@ void boss_exit_move(DeterministicState &state, std::uint8_t player_id) noexcept
 
 bool boss_launch_or_reverse(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	if(state.gba_flag_active[player_id] != GaugeBossAttackFlag::boss) {
@@ -53,12 +86,21 @@ bool boss_launch_or_reverse(
 		state.boss.pattern_frame = 0U;
 		state.gba_boss_launched_by = static_cast<std::int8_t>(player_id);
 		state.gba_flag_active[player_id] = GaugeBossAttackFlag::none;
+		observe_boss_palette_baseline_restored(observer, 1U - player_id);
+		if(observer != nullptr) {
+			observer->boss_activated(BossActivated{
+				.owner = static_cast<PlayerId>(player_id),
+				.paletted_character =
+					state.players[player_id].paletted_character,
+			});
+		}
 		state.boss_target_active[1U - player_id] = 1U;
 		return true;
 	}
 	if(state.boss.state != 0xFFU) {
 		state.boss.state = 0xFFU;
 		state.boss.pattern_frame = 0U;
+		observe_boss_palette_baseline_restored(observer, 1U - player_id);
 		state.boss_target_active[player_id] = 0U;
 	}
 	return false;
@@ -157,7 +199,8 @@ std::uint8_t boss_hittest_damage(
 
 void boss_defeat_if_needed(
 	DeterministicState &state,
-	std::uint8_t target_player
+	std::uint8_t target_player,
+	GameplayObserver *observer
 ) noexcept
 {
 	if(
@@ -168,6 +211,7 @@ void boss_defeat_if_needed(
 	}
 	state.boss.state = 0xFFU;
 	state.boss.pattern_frame = 0U;
+	observe_boss_palette_baseline_restored(observer, target_player);
 	if(state.gba_flag_active[target_player] != GaugeBossAttackFlag::boss) {
 		state.combo_points_for_boss_attack = 5120U;
 	}

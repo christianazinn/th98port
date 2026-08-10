@@ -19,6 +19,36 @@ struct MainPlayerShotSheets {
 	const assets::BfntSheet *player_two = nullptr;
 };
 
+inline constexpr std::size_t main_sprite16_pi_player_count = 2U;
+
+// Decoded MAINL stage-splash inputs that become MAIN's lower-half Sprite16
+// source sheet. Arrays retain P1-then-P2 order. The second player's images are
+// staged as stored; unlike MRS/CDG presentation, this handoff performs no
+// horizontal flip.
+struct MainSprite16PiAssets {
+	std::array<
+		const assets::PiImage *,
+		main_sprite16_pi_player_count
+	> player_shots{};
+	std::array<
+		const assets::PiImage *,
+		main_sprite16_pi_player_count
+	> player_extra_shots{};
+	const assets::PiImage *enemy_center = nullptr;
+	const assets::PiImage *opponent_enemies = nullptr;
+};
+
+// Exact stage_splash_show_and_wait() page-1 handoff. All six decoded images
+// are validated before page selection or pixel mutation. The operation then
+// selects and clears all of page 1, then stages P1 NN16/NNEX, P2
+// NN16/NNEX, EN2, and the selected ENEMY sheet in source call order. It leaves
+// page 1 accessed; MAIN later copies this sheet to page 0, adds BFNT patterns
+// to both pages, and commits page 0 back to page 1 for Sprite16 alpha creation.
+[[nodiscard]] bool main_prepare_sprite16_pi_source_sheet(
+	Raster &raster,
+	MainSprite16PiAssets assets
+);
+
 // SPRITE16 treats the lower 200 rows of each 640x400 graphics page as one
 // packed source plane. Offsets used by MAIN are relative to this rectangle.
 inline constexpr std::uint16_t sprite16_source_top = 200U;

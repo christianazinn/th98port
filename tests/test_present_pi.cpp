@@ -109,6 +109,98 @@ void test_pi_put_alignment_width_and_wrap() {
 	);
 }
 
+void test_pi_put_lineskip_even_rows_and_wrap() {
+	auto image = make_pi(10U, 5U);
+	fill_row(image, 0U, 1U);
+	fill_row(image, 1U, 2U);
+	fill_row(image, 2U, 3U);
+	fill_row(image, 3U, 4U);
+	fill_row(image, 4U, 5U);
+	image.image.indices[8U] = 9U;
+
+	Raster raster;
+	expect(
+		raster.set_access_page(Page::one),
+		"select line-skip destination page"
+	);
+	expect(
+		th03::present::pi_put_lineskip_8(raster, 11, 398, image),
+		"line-skip PI put succeeds"
+	);
+	expect_pixel(raster, Page::one, {8, 398}, 1U, "line-skip copies source row 0");
+	expect_pixel(raster, Page::one, {15, 398}, 1U, "line-skip copies truncated row");
+	expect_pixel(raster, Page::one, {16, 398}, 0U, "line-skip floors PI width");
+	expect_pixel(raster, Page::one, {8, 399}, 3U, "line-skip copies source row 2");
+	expect_pixel(
+		raster,
+		Page::one,
+		{8, 0},
+		0U,
+		"line-skip floors odd source height before copying"
+	);
+	expect_pixel(raster, Page::one, {8, 1}, 0U, "line-skip discards odd rows");
+
+	auto even_image = make_pi(8U, 6U);
+	fill_row(even_image, 0U, 6U);
+	fill_row(even_image, 2U, 7U);
+	fill_row(even_image, 4U, 8U);
+	Raster wrap_raster;
+	expect(
+		th03::present::pi_put_lineskip_8(
+			wrap_raster,
+			0,
+			398,
+			even_image
+		),
+		"line-skip even-height wrap succeeds"
+	);
+	expect_pixel(wrap_raster, Page::zero, {0, 398}, 6U, "wrap row 0");
+	expect_pixel(wrap_raster, Page::zero, {0, 399}, 7U, "wrap row 2");
+	expect_pixel(wrap_raster, Page::zero, {0, 0}, 8U, "wrap row 4 reaches line 0");
+}
+
+void test_pi_put_lineskip_validation_is_atomic() {
+	auto image = make_pi(8U, 4U);
+	fill_row(image, 0U, 1U);
+	fill_row(image, 1U, 2U);
+	fill_row(image, 2U, 3U);
+	fill_row(image, 3U, 4U);
+
+	Raster raster;
+	expect(raster.plot({0, 10}, 7U), "seed line-skip atomic destination");
+	const auto before = raster.display_state_hash();
+	image.image.indices[8U] = 16U;
+	expect(
+		!th03::present::pi_put_lineskip_8(raster, 0, 10, image),
+		"line-skip validates a discarded odd row"
+	);
+	expect(
+		raster.display_state_hash() == before,
+		"invalid discarded row performs no partial write"
+	);
+
+	image.image.indices[8U] = 2U;
+	image.image.indices.pop_back();
+	expect(
+		!th03::present::pi_put_lineskip_8(raster, 0, 10, image),
+		"line-skip rejects malformed decoded size"
+	);
+	expect(
+		raster.display_state_hash() == before,
+		"malformed line-skip image performs no write"
+	);
+
+	image = make_pi(8U, 4U);
+	expect(
+		!th03::present::pi_put_lineskip_8(raster, 0, 400, image),
+		"line-skip rejects an invalid initial VRAM row"
+	);
+	expect(
+		raster.display_state_hash() == before,
+		"invalid line-skip top performs no write"
+	);
+}
+
 void test_cutscene_quarter_put() {
 	auto image = make_pi(640U, 400U);
 	fill_quarter(image, CutscenePiQuarter::top_left, 1U);
@@ -224,6 +316,8 @@ void test_validation_is_atomic() {
 
 int main() {
 	test_pi_put_alignment_width_and_wrap();
+	test_pi_put_lineskip_even_rows_and_wrap();
+	test_pi_put_lineskip_validation_is_atomic();
 	test_cutscene_quarter_put();
 	test_cutscene_masked_steps();
 	test_validation_is_atomic();

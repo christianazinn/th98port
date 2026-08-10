@@ -151,6 +151,53 @@ bool pi_put_8(
 	return true;
 }
 
+bool pi_put_lineskip_8(
+	Raster &raster,
+	std::int32_t left,
+	std::int32_t top,
+	const assets::PiImage &image
+) {
+	if(!valid_image(image) || top < 0 || top >= graphics_height) {
+		return false;
+	}
+	const auto aligned_left = align_left_8(left);
+	if(!aligned_left) {
+		return false;
+	}
+	const auto put_width = static_cast<std::uint16_t>(
+		image.image.width - (image.image.width % pixels_per_byte)
+	);
+	if(put_width == 0U) {
+		return true;
+	}
+
+	std::int64_t destination_y = top;
+	for(
+		std::size_t source_row = 0U;
+		(source_row + 1U) < image.image.height;
+		source_row += 2U
+	) {
+		const auto source_offset = source_row * image.image.width;
+		const IndexedSource source{
+			std::span<const Index4>(image.image.indices).subspan(source_offset),
+			put_width,
+			1U,
+			image.image.width,
+		};
+		if(!raster.blit(
+			source,
+			{*aligned_left, static_cast<std::int32_t>(destination_y)}
+		)) {
+			return false;
+		}
+		++destination_y;
+		if(destination_y >= graphics_height) {
+			destination_y -= graphics_height;
+		}
+	}
+	return true;
+}
+
 bool pi_cutscene_quarter_put_8(
 	Raster &raster,
 	const assets::PiImage &image,

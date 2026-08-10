@@ -55,6 +55,7 @@ using th03::present::Index4;
 using th03::present::MainBombMrsAssets;
 using th03::present::MainBombsPresenter;
 using th03::present::MainBackgroundPresenter;
+using th03::present::MainBossPresenter;
 using th03::present::MainEffectsPresenter;
 using th03::present::MainEntitiesPresenter;
 using th03::present::MainGameMode;
@@ -224,6 +225,7 @@ struct Fixture {
 	SyntheticAssets assets;
 	std::optional<MainEntitiesPresenter> entities;
 	std::optional<MainBackgroundPresenter> background;
+	std::optional<MainBossPresenter> bosses;
 	std::optional<MainEffectsPresenter> effects;
 	std::optional<MainPlayersBulletsPresenter> players_bullets;
 	std::optional<MainBombsPresenter> bombs;
@@ -288,6 +290,7 @@ struct Fixture {
 		}
 		expect(
 			raster.clear({64, sprite16_source_top, 16U, 8U}, 9U) &&
+			raster.clear({96, sprite16_source_top + 8, 96U, 48U}, 10U) &&
 			raster.clear(
 				{32, sprite16_source_top + 80, 32U, 16U}, 7U
 			) && raster.clear(
@@ -307,6 +310,7 @@ struct Fixture {
 		);
 		const auto &staging = static_presenter.sprite_staging();
 		background.emplace(raster, staging, background_layout);
+		bosses.emplace(raster, staging, assets.trig(), palette);
 		entities.emplace(
 			raster, staging, authentic_main_entity_atlas_layout()
 		);
@@ -345,6 +349,7 @@ struct Fixture {
 			static_presenter,
 			palette,
 			*background,
+			*bosses,
 			*entities,
 			*effects,
 			*players_bullets,
@@ -439,6 +444,7 @@ struct Fixture {
 
 	void render_phases(const th03::detail::DeterministicState &state)
 	{
+		round->observe(th03::detail::ObserverAccess::main_boss(state));
 		round->observe(th03::detail::ObserverAccess::shots_enemies(state));
 		round->observe(th03::detail::ObserverAccess::fireballs(state));
 		round->observe(th03::detail::ObserverAccess::players_bullets(state));
@@ -490,7 +496,6 @@ void test_contract_and_setup_failure()
 	static_assert(!std::is_copy_constructible_v<MainRoundPresenter>);
 	static_assert(!std::is_move_constructible_v<MainRoundPresenter>);
 	constexpr std::array expected{
-		MainRoundMissingPhase::boss,
 		MainRoundMissingPhase::extra_attack,
 		MainRoundMissingPhase::charge_shot,
 		MainRoundMissingPhase::hud,
@@ -516,6 +521,7 @@ void test_contract_and_setup_failure()
 		stopped_static,
 		fixture.palette,
 		*fixture.background,
+		*fixture.bosses,
 		*fixture.entities,
 		*fixture.effects,
 		*fixture.players_bullets,
@@ -540,6 +546,7 @@ void test_contract_and_setup_failure()
 		fixture.static_presenter,
 		fixture.palette,
 		invalid_background,
+		*fixture.bosses,
 		*fixture.entities,
 		*fixture.effects,
 		*fixture.players_bullets,
@@ -557,6 +564,7 @@ void test_contract_and_setup_failure()
 		fixture.static_presenter,
 		fixture.palette,
 		*fixture.background,
+		*fixture.bosses,
 		*fixture.entities,
 		*fixture.effects,
 		*fixture.players_bullets,
@@ -660,6 +668,8 @@ void test_common_effect_fanout_stops_before_bombs()
 	}
 	{
 		Fixture fixture;
+		auto state = fixture.state();
+		fixture.begin_frame(state);
 		fixture.round->bomb_common_effect_step(BombCommonEffectStep{
 			.player = static_cast<PlayerId>(2U),
 		});
@@ -700,6 +710,7 @@ void test_phase_context_includes_foreground_shifts()
 	Fixture fixture;
 	auto state = fixture.state();
 	fixture.begin_frame(state);
+	fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
 	fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
 	state.playfield_fg_shift_x[0U] = 4;
 	fixture.round->observe(th03::detail::ObserverAccess::fireballs(state));
@@ -714,6 +725,7 @@ void test_fireballs_precede_hit_circles()
 	Fixture fixture;
 	auto state = fixture.state();
 	fixture.begin_frame(state);
+	fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
 	fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
 	state.fireballs[0U].flag = th03::detail::FireballFlag::fall;
 	state.fireballs[0U].player_id = 2U;
@@ -745,6 +757,7 @@ void test_hit_circles_overwrite_fireballs()
 	state.fireballs[0U].player_id = 0U;
 	state.fireballs[0U].variant_as_explosion_target = 2U;
 	fixture.begin_frame(state);
+	fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
 	fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
 	fixture.round->observe(th03::detail::ObserverAccess::fireballs(state));
 	expect(
@@ -752,6 +765,158 @@ void test_hit_circles_overwrite_fireballs()
 		fixture.raster.pixel(Page::zero, {160, 176}) == 12U,
 		"odd-frame hit-circle color overwrites the overlapping Fireball cel"
 	);
+}
+
+void test_boss_view_precedes_entities_and_draws()
+{
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		fixture.begin_frame(state);
+		fixture.round->observe(
+			th03::detail::ObserverAccess::shots_enemies(state)
+		);
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation &&
+			fixture.bosses->ready() && fixture.entities->ready(),
+			"require the source Boss view before Shots and Enemies"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		state.gba_boss_launched_by = 0;
+		state.boss.center_x = static_cast<std::int16_t>(144 * 16);
+		state.boss.center_y = static_cast<std::int16_t>(80 * 16);
+		state.boss.state = 1U;
+		fixture.round->boss_palette_baseline_restored({PlayerId::p2});
+		fixture.round->boss_activated({
+			.owner = PlayerId::p1,
+			.paletted_character = static_cast<std::int8_t>(
+				MainPalettedCharacter::reimu_primary
+			),
+		});
+		fixture.begin_frame(state);
+		fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
+		expect(
+			fixture.round->ready() &&
+			fixture.raster.pixel(Page::zero, {432, 48}) == 10U,
+			"render the active Boss synchronously after background and Bombs"
+		);
+		fixture.round->observe(
+			th03::detail::ObserverAccess::shots_enemies(state)
+		);
+		expect(
+			fixture.round->ready(),
+			"accept Shots and Enemies only after the matching Boss context"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		fixture.begin_frame(state);
+		state.round_or_result_frame++;
+		fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation &&
+			fixture.bosses->ready(),
+			"reject a Boss view that does not match the background frame"
+		);
+	}
+}
+
+void test_boss_lifecycle_order_and_child_failure()
+{
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		fixture.begin_frame(state);
+		fixture.round->boss_palette_baseline_restored({PlayerId::p1});
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation &&
+			fixture.bosses->ready(),
+			"reject a prefix Boss palette restore after background rendering"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		state.gba_boss_launched_by = 0;
+		state.players[0U].paletted_character = 0;
+		fixture.begin_frame(state);
+		const auto before = page_copy(fixture.raster, Page::zero);
+		fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
+		expect(
+			fixture.round->status() == MainRoundStatus::bosses_failed &&
+			!fixture.bosses->ready() && fixture.entities->ready() &&
+			std::ranges::equal(before, fixture.raster.graphics(Page::zero)),
+			"surface malformed Boss facts as the named child failure"
+		);
+	}
+}
+
+void test_late_bomb_phase_and_player_order()
+{
+	{
+		Fixture fixture;
+		const auto before = page_copy(fixture.raster, Page::zero);
+		fixture.round->bomb_frame_step(BombFrameStep{
+			.player = PlayerId::p1,
+			.paletted_character = static_cast<std::int8_t>(
+				MainPalettedCharacter::reimu_primary
+			),
+			.bomb_frame = 1U,
+		});
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation &&
+			fixture.bombs->ready() &&
+			std::ranges::equal(before, fixture.raster.graphics(Page::zero)),
+			"reject a late Bomb callback before warning and background"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		fixture.begin_frame(state);
+		fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
+		const auto before = page_copy(fixture.raster, Page::zero);
+		fixture.round->bomb_frame_step(BombFrameStep{
+			.player = PlayerId::p1,
+			.paletted_character = static_cast<std::int8_t>(
+				MainPalettedCharacter::reimu_primary
+			),
+			.bomb_frame = 1U,
+		});
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation &&
+			fixture.bombs->ready() &&
+			std::ranges::equal(before, fixture.raster.graphics(Page::zero)),
+			"reject Bomb drawing after the Boss view"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		fixture.begin_frame(state);
+		fixture.round->bomb_frame_step(BombFrameStep{
+			.player = PlayerId::p2,
+			.paletted_character = static_cast<std::int8_t>(
+				MainPalettedCharacter::kana_primary
+			),
+			.bomb_frame = 1U,
+		});
+		fixture.round->bomb_frame_step(BombFrameStep{
+			.player = PlayerId::p1,
+			.paletted_character = static_cast<std::int8_t>(
+				MainPalettedCharacter::reimu_primary
+			),
+			.bomb_frame = 1U,
+		});
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation,
+			"reject a P1 late Bomb callback after P2"
+		);
+	}
 }
 
 void test_background_is_synchronous_before_late_bombs()
@@ -844,11 +1009,11 @@ void test_background_precedes_entity_phase()
 	Fixture fixture;
 	auto state = fixture.state();
 	fixture.round->warning_frame_lifecycle(Fixture::idle_warning());
-	fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
+	fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
 	expect(
 		fixture.round->status() == MainRoundStatus::invalid_observation &&
 		fixture.background->ready() && fixture.entities->ready(),
-		"reject the entity phase when the source background callback is missing"
+		"reject the Boss phase when the source background callback is missing"
 	);
 }
 
@@ -863,11 +1028,11 @@ void test_background_reads_complete_before_entity_phase()
 		.kind = MainBackgroundKind::type_a,
 		.phase = MainBackgroundPhase::initial,
 	});
-	fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
+	fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
 	expect(
 		fixture.round->status() == MainRoundStatus::invalid_observation &&
 		fixture.background->ready() && fixture.entities->ready(),
-		"reject entities before all source background reads have completed"
+		"reject Boss rendering before all source background reads have completed"
 	);
 }
 
@@ -889,6 +1054,9 @@ void test_type_b_background_read_count_and_overread()
 		for(std::size_t read = 0U; read < 40U; ++read) {
 			fixture->round->main_background_random_read({0U});
 		}
+		fixture->round->observe(
+			th03::detail::ObserverAccess::main_boss(state)
+		);
 		fixture->round->observe(
 			th03::detail::ObserverAccess::shots_enemies(state)
 		);
@@ -1216,6 +1384,7 @@ void test_malformed_late_bullet_is_whole_phase_atomic()
 	Fixture fixture;
 	auto state = fixture.state();
 	fixture.begin_frame(state);
+	fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
 	fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
 	fixture.round->observe(th03::detail::ObserverAccess::fireballs(state));
 	const auto before = page_copy(fixture.raster, Page::zero);
@@ -1389,6 +1558,9 @@ int main()
 	test_phase_context_includes_foreground_shifts();
 	test_fireballs_precede_hit_circles();
 	test_hit_circles_overwrite_fireballs();
+	test_boss_view_precedes_entities_and_draws();
+	test_boss_lifecycle_order_and_child_failure();
+	test_late_bomb_phase_and_player_order();
 	test_background_is_synchronous_before_late_bombs();
 	test_background_failure_is_sticky();
 	test_warning_lifecycle_precedes_background();

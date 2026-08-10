@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <optional>
 #include <string_view>
 #include <tuple>
 #include <vector>
@@ -75,6 +76,18 @@ enum class WarningGaugeObservedCall : std::uint8_t {
 	main_frame_footer_reached,
 };
 
+enum class BossObservedCall : std::uint8_t {
+	warning_frame_lifecycle,
+	background_frame,
+	background_random_read,
+	palette_baseline_restored,
+	activated,
+	animation_step,
+	bomb_frame_step,
+	main_boss,
+	shots_enemies,
+};
+
 class BackgroundRecordingObserver final : public th03::GameplayObserver {
 public:
 	BackgroundRecordingObserver()
@@ -143,6 +156,11 @@ public:
 		main_gauge_states.reserve(2U);
 		warning_gauge_calls.reserve(16U);
 		main_frame_footers.reserve(2U);
+		boss_activations.reserve(2U);
+		boss_animation_steps.reserve(8U);
+		boss_palette_restores.reserve(4U);
+		boss_views.reserve(2U);
+		boss_calls.reserve(16U);
 		background_bomb_calls.reserve(64U);
 		calls.reserve(80U);
 	}
@@ -208,6 +226,29 @@ public:
 			BackgroundObservedCall::bomb_frame_step
 		);
 		calls.push_back(ObservedCall::bomb_frame_step);
+		boss_calls.push_back(BossObservedCall::bomb_frame_step);
+	}
+
+	void boss_activated(const th03::BossActivated &activated) noexcept override
+	{
+		boss_activations.push_back(activated);
+		boss_calls.push_back(BossObservedCall::activated);
+	}
+
+	void boss_animation_step(
+		const th03::BossAnimationStep &step
+	) noexcept override
+	{
+		boss_animation_steps.push_back(step);
+		boss_calls.push_back(BossObservedCall::animation_step);
+	}
+
+	void boss_palette_baseline_restored(
+		const th03::BossPaletteBaselineRestored &restored
+	) noexcept override
+	{
+		boss_palette_restores.push_back(restored);
+		boss_calls.push_back(BossObservedCall::palette_baseline_restored);
 	}
 
 	void bomb_compatibility_read(
@@ -248,6 +289,7 @@ public:
 		warning_gauge_calls.push_back(
 			WarningGaugeObservedCall::warning_frame_lifecycle
 		);
+		boss_calls.push_back(BossObservedCall::warning_frame_lifecycle);
 	}
 
 	void gauge_attack_finished(
@@ -302,6 +344,7 @@ public:
 		warning_gauge_calls.push_back(
 			WarningGaugeObservedCall::background_frame
 		);
+		boss_calls.push_back(BossObservedCall::background_frame);
 	}
 
 	void main_background_random_read(
@@ -309,6 +352,7 @@ public:
 	) noexcept override
 	{
 		background_bomb_calls.push_back(BackgroundObservedCall::random_read);
+		boss_calls.push_back(BossObservedCall::background_random_read);
 	}
 
 	void main_frame_footer_reached(
@@ -329,6 +373,7 @@ public:
 		warning_gauge_calls.push_back(
 			WarningGaugeObservedCall::shots_enemies
 		);
+		boss_calls.push_back(BossObservedCall::shots_enemies);
 		shots_enemies_context = view.context();
 		for(std::size_t slot = 0U; slot < view.shot_count; ++slot) {
 			const auto fact = view.shot(
@@ -343,6 +388,21 @@ public:
 			if(fact) {
 				enemies[slot] = *fact;
 			}
+		}
+	}
+
+	void observe(const th03::MainBossView &view) noexcept override
+	{
+		boss_views.push_back(view.boss());
+		boss_context = view.context();
+		boss_round_frame_is_odd = view.round_frame_is_odd();
+		boss_calls.push_back(BossObservedCall::main_boss);
+		for(std::size_t point = 0U;
+			point < view.reimu_orbit_point_count;
+			++point) {
+			reimu_boss_orbit_points[point] = view.reimu_orbit_point(
+				static_cast<th03::ReimuBossOrbitPoint>(point)
+			);
 		}
 	}
 
@@ -419,7 +479,18 @@ public:
 	std::vector<th03::MainGaugeState> main_gauge_states;
 	std::vector<WarningGaugeObservedCall> warning_gauge_calls;
 	std::vector<th03::MainFrameFooterReached> main_frame_footers;
+	std::vector<th03::BossActivated> boss_activations;
+	std::vector<th03::BossAnimationStep> boss_animation_steps;
+	std::vector<th03::BossPaletteBaselineRestored> boss_palette_restores;
+	std::vector<std::optional<th03::MainBossFact>> boss_views;
+	std::vector<BossObservedCall> boss_calls;
 	std::vector<BackgroundObservedCall> background_bomb_calls;
+	th03::MainPhaseContext boss_context{};
+	bool boss_round_frame_is_odd = false;
+	std::array<
+		std::optional<th03::RawPoint>,
+		th03::MainBossView::reimu_orbit_point_count
+	> reimu_boss_orbit_points{};
 	th03::MainPhaseContext shots_enemies_context{};
 	th03::MainPhaseContext fireballs_context{};
 	th03::MainPhaseContext players_bullets_context{};
@@ -637,6 +708,127 @@ bool bullet_pools_equal(
 	return left.bullet_trail_cursor == right.bullet_trail_cursor;
 }
 
+bool boss_initial_state_equal(
+	const th03::detail::BossInitialState &left,
+	const th03::detail::BossInitialState &right
+)
+{
+	return std::tie(
+		left.center_x, left.center_y, left.velocity_x, left.velocity_y,
+		left.hp, left.state, left.motion_angle, left.pattern_index,
+		left.render_state
+	) == std::tie(
+		right.center_x, right.center_y, right.velocity_x, right.velocity_y,
+		right.hp, right.state, right.motion_angle, right.pattern_index,
+		right.render_state
+	);
+}
+
+bool boss_state_equal(
+	const th03::detail::DeterministicState &left,
+	const th03::detail::DeterministicState &right
+)
+{
+	for(std::size_t player = 0U; player < left.boss_initial.size(); ++player) {
+		if(!boss_initial_state_equal(
+			left.boss_initial[player], right.boss_initial[player]
+		)) {
+			return false;
+		}
+	}
+	if(
+		!boss_initial_state_equal(left.boss, right.boss) ||
+		std::tie(
+			left.boss.hit,
+			left.boss.pattern_previous,
+			left.boss.pattern_count,
+			left.boss.pattern_frame,
+			left.boss.anchor_x,
+			left.boss.anchor_y,
+			left.boss.orbit_x,
+			left.boss.orbit_y,
+			left.boss.params,
+			left.boss.render_frame,
+			left.boss.direction,
+			left.boss.angle_delta,
+			left.boss.pattern_angle
+		) != std::tie(
+			right.boss.hit,
+			right.boss.pattern_previous,
+			right.boss.pattern_count,
+			right.boss.pattern_frame,
+			right.boss.anchor_x,
+			right.boss.anchor_y,
+			right.boss.orbit_x,
+			right.boss.orbit_y,
+			right.boss.params,
+			right.boss.render_frame,
+			right.boss.direction,
+			right.boss.angle_delta,
+			right.boss.pattern_angle
+		)
+	) {
+		return false;
+	}
+	return std::tie(
+		left.boss_panic_fired_in_combo,
+		left.gba_flag_next,
+		left.gba_flag_active,
+		left.gba_gauge_level,
+		left.gba_boss_level,
+		left.gba_boss_launched_by,
+		left.combo_points_for_boss_attack,
+		left.mima_boss_spread_angle,
+		left.mima_boss_pellet_angle,
+		left.mima_boss_orbit_angle_delta,
+		left.mima_boss_orbit_angle,
+		left.marisa_boss_spread_angle,
+		left.ellen_boss_spread_angle,
+		left.ellen_boss_pellet_angle,
+		left.chiyuri_boss_pattern_angle,
+		left.chiyuri_boss_pattern_direction,
+		left.yumemi_boss_speed_offset,
+		left.yumemi_boss_angle_delta,
+		left.yumemi_boss_angle,
+		left.yumemi_boss_radius,
+		left.yumemi_boss_muzzle_x,
+		left.yumemi_boss_muzzle_y,
+		left.yumemi_boss_target_x,
+		left.yumemi_boss_target_y,
+		left.boss_target_active,
+		left.boss_target_x,
+		left.boss_target_y
+	) == std::tie(
+		right.boss_panic_fired_in_combo,
+		right.gba_flag_next,
+		right.gba_flag_active,
+		right.gba_gauge_level,
+		right.gba_boss_level,
+		right.gba_boss_launched_by,
+		right.combo_points_for_boss_attack,
+		right.mima_boss_spread_angle,
+		right.mima_boss_pellet_angle,
+		right.mima_boss_orbit_angle_delta,
+		right.mima_boss_orbit_angle,
+		right.marisa_boss_spread_angle,
+		right.ellen_boss_spread_angle,
+		right.ellen_boss_pellet_angle,
+		right.chiyuri_boss_pattern_angle,
+		right.chiyuri_boss_pattern_direction,
+		right.yumemi_boss_speed_offset,
+		right.yumemi_boss_angle_delta,
+		right.yumemi_boss_angle,
+		right.yumemi_boss_radius,
+		right.yumemi_boss_muzzle_x,
+		right.yumemi_boss_muzzle_y,
+		right.yumemi_boss_target_x,
+		right.yumemi_boss_target_y,
+		right.boss_target_active,
+		right.boss_target_x,
+		right.boss_target_y
+	);
+}
+
 bool rng_state_equal(
 	const th03::detail::DeterministicState &left,
 	const th03::detail::DeterministicState &right
@@ -672,6 +864,7 @@ bool observed_gameplay_equal(
 		fireball_pools_equal(left, right) &&
 		player_pools_equal(left, right) &&
 		bullet_pools_equal(left, right) &&
+		boss_state_equal(left, right) &&
 		rng_state_equal(left, right)
 	);
 }
@@ -958,6 +1151,110 @@ void test_indexed_views_and_classifications()
 			static_cast<th03::TrailPoint>(0U)
 		),
 		"invalid indices and stale free-slot trail bits return no semantic fact"
+	);
+}
+
+void test_main_boss_view_contract()
+{
+	auto state = make_live_state();
+	state.round_id = 4U;
+	state.round_frame = 7U;
+	state.round_or_result_frame = 0x4321U;
+	state.playfield_fg_shift_x = {-9, 11};
+	auto view = th03::detail::ObserverAccess::main_boss(state);
+	check(
+		view.context() == th03::MainPhaseContext{
+			.round_id = 4U,
+			.round_or_result_frame = 0x4321U,
+			.playfield_fg_shift_x = {-9, 11},
+		} && view.round_frame_is_odd() && !view.boss(),
+		"an inactive Boss view retains MAIN timing without fabricating a Boss"
+	);
+
+	state.gba_boss_launched_by = 2;
+	view = th03::detail::ObserverAccess::main_boss(state);
+	check(
+		!view.boss() && !view.reimu_orbit_point(
+			static_cast<th03::ReimuBossOrbitPoint>(0U)
+		),
+		"an invalid Boss owner returns no semantic fact"
+	);
+
+	state.gba_boss_launched_by = 1;
+	state.players[1U].paletted_character = 2;
+	state.boss.center_x = -1234;
+	state.boss.center_y = 2345;
+	state.boss.hit = 7U;
+	state.boss.state = 16U;
+	state.boss.pattern_frame = 0x3456U;
+	state.boss.render_state = 5U;
+	state.boss.render_frame = 6U;
+	state.boss.pattern_angle = 0x78U;
+	state.boss.anchor_x = 999;
+	state.boss.params[3U] = 9U;
+	state.yumemi_boss_radius = 888U;
+	for(std::size_t point = 0U;
+		point < th03::MainBossView::reimu_orbit_point_count;
+		++point) {
+		state.boss.orbit_x[point] = static_cast<std::int16_t>(100 + point);
+		state.boss.orbit_y[point] = static_cast<std::int16_t>(
+			-200 - static_cast<int>(point)
+		);
+	}
+	view = th03::detail::ObserverAccess::main_boss(state);
+	check(
+		view.boss() == std::optional<th03::MainBossFact>{th03::MainBossFact{
+			.owner = th03::PlayerId::p2,
+			.paletted_character = 2,
+			.center_x = -1234,
+			.center_y = 2345,
+			.hit = 7U,
+			.state = 16U,
+			.pattern_frame = 0x3456U,
+			.render_state = 5U,
+			.render_frame = 6U,
+			.pattern_angle = 0x78U,
+			.reimu_orbit_count = 6U,
+		}} &&
+		view.reimu_orbit_point(
+			static_cast<th03::ReimuBossOrbitPoint>(5U)
+		) == std::optional<th03::RawPoint>{th03::RawPoint{105, -205}} &&
+		!view.reimu_orbit_point(
+			static_cast<th03::ReimuBossOrbitPoint>(6U)
+		) &&
+		!view.reimu_orbit_point(
+			static_cast<th03::ReimuBossOrbitPoint>(255U)
+		),
+		"Reimu Boss facts normalize the active orbit count and check all orbit-point indices"
+	);
+
+	state.players[1U].paletted_character = 10;
+	state.boss.params[1U] = 11U;
+	view = th03::detail::ObserverAccess::main_boss(state);
+	check(
+		view.boss()->kotohime_radius == 999 &&
+		view.boss()->kotohime_orbit_count == 11U &&
+		view.boss()->reimu_orbit_count == 0U &&
+		!view.reimu_orbit_point(
+			static_cast<th03::ReimuBossOrbitPoint>(0U)
+		),
+		"Kotohime exposes semantic radius and orbit count without leaking Reimu points"
+	);
+
+	state.players[1U].paletted_character = 18;
+	state.yumemi_boss_radius = 0x6789U;
+	state.yumemi_boss_muzzle_x = -321;
+	state.yumemi_boss_muzzle_y = 654;
+	state.yumemi_boss_target_x = 777;
+	state.yumemi_boss_target_y = -888;
+	view = th03::detail::ObserverAccess::main_boss(state);
+	check(
+		view.boss()->kotohime_radius == 0 &&
+		view.boss()->kotohime_orbit_count == 0U &&
+		view.boss()->yumemi_radius == 0x6789U &&
+		view.boss()->yumemi_muzzle == th03::RawPoint{-321, 654} &&
+		view.boss()->yumemi_target == th03::RawPoint{777, -888},
+		"Yumemi Boss facts expose only the retained radius, muzzle, and target semantics"
 	);
 }
 
@@ -1606,6 +1903,7 @@ void test_post_hittest_fireball_view_and_terminal_order()
 	);
 	check(
 		state.round_complete &&
+		recording.boss_views.size() == 1U &&
 		recording.phases == std::vector<ObservedPhase>{
 			ObservedPhase::shots_enemies,
 			ObservedPhase::fireballs,
@@ -1629,6 +1927,7 @@ void test_post_hittest_fireball_view_and_terminal_order()
 		);
 		check(
 			terminal.round_complete && recording.main_frame_footers.empty() &&
+			recording.boss_views.size() == 1U &&
 			recording.phases == std::vector<ObservedPhase>{
 				ObservedPhase::shots_enemies,
 				ObservedPhase::fireballs,
@@ -2038,7 +2337,8 @@ void test_recorded_pause_completion()
 	check(
 		deferred.status == th03::StepStatus::phase_transition &&
 		recording.phases.empty() && recording.poses.empty() &&
-		recording.main_frame_footers.empty(),
+		recording.main_frame_footers.empty() &&
+		recording.boss_views.empty(),
 		"recorded Cancel defers player updates, phase views, and the footer"
 	);
 	const auto completed = game->finish_deferred_frame(
@@ -2048,6 +2348,7 @@ void test_recorded_pause_completion()
 	check(
 		completed && completed->status == th03::StepStatus::running &&
 		recording.poses.size() == 2U &&
+		recording.boss_views.size() == 1U &&
 		recording.main_frame_footers ==
 			std::vector<th03::MainFrameFooterReached>{{}} &&
 		recording.phases == std::vector<ObservedPhase>{
@@ -2059,12 +2360,14 @@ void test_recorded_pause_completion()
 	);
 	const auto phase_count = recording.phases.size();
 	const auto call_count = recording.calls.size();
+	const auto boss_view_count = recording.boss_views.size();
 	check(
 		!game->finish_deferred_frame(
 			th03::DeferredFrameAction::resume,
 			&recording
 		) && recording.phases.size() == phase_count &&
-		recording.calls.size() == call_count,
+		recording.calls.size() == call_count &&
+		recording.boss_views.size() == boss_view_count,
 		"an invalid repeated deferred completion emits no observer callback"
 	);
 
@@ -2091,6 +2394,7 @@ void test_recorded_pause_completion()
 	);
 	check(
 		exited && exited->status == th03::StepStatus::terminal &&
+		exit_recording.boss_views.size() == 1U &&
 		exit_recording.main_frame_footers ==
 			std::vector<th03::MainFrameFooterReached>{{}} &&
 		exit_recording.phases == std::vector<ObservedPhase>{
@@ -2102,12 +2406,14 @@ void test_recorded_pause_completion()
 	);
 	const auto exit_phase_count = exit_recording.phases.size();
 	const auto exit_call_count = exit_recording.calls.size();
+	const auto exit_boss_view_count = exit_recording.boss_views.size();
 	check(
 		!exit_game->finish_deferred_frame(
 			th03::DeferredFrameAction::exit_session,
 			&exit_recording
 		) && exit_recording.phases.size() == exit_phase_count &&
-		exit_recording.calls.size() == exit_call_count,
+		exit_recording.calls.size() == exit_call_count &&
+		exit_recording.boss_views.size() == exit_boss_view_count,
 		"deferred exit_session cannot duplicate observer callbacks"
 	);
 	const auto already_complete = exit_game->step(
@@ -2116,7 +2422,8 @@ void test_recorded_pause_completion()
 	check(
 		already_complete.status == th03::StepStatus::terminal &&
 		exit_recording.phases.size() == exit_phase_count &&
-		exit_recording.calls.size() == exit_call_count,
+		exit_recording.calls.size() == exit_call_count &&
+		exit_recording.boss_views.size() == exit_boss_view_count,
 		"an already-complete Game emits no observer callback"
 	);
 
@@ -2148,6 +2455,11 @@ void test_recorded_pause_completion()
 			invalid_recording.main_gauge_states.empty() &&
 			invalid_recording.warning_gauge_calls.empty() &&
 			invalid_recording.main_frame_footers.empty() &&
+			invalid_recording.boss_activations.empty() &&
+			invalid_recording.boss_animation_steps.empty() &&
+			invalid_recording.boss_palette_restores.empty() &&
+			invalid_recording.boss_views.empty() &&
+			invalid_recording.boss_calls.empty() &&
 			invalid_recording.calls.empty(),
 			"an invalid input context emits no observer callback"
 		);
@@ -2296,10 +2608,12 @@ void test_warning_completion()
 	const auto release = game->step({}, th03::InputContext::gameplay, &recording);
 	check(
 		release.status == th03::StepStatus::running &&
-		recording.phases.size() == 3U && recording.poses.size() == 2U,
+		recording.phases.size() == 3U && recording.poses.size() == 2U &&
+		recording.boss_views.size() == 1U,
 		"gauge release frame reports its ordinary phase views before arming warning"
 	);
 	recording.phases.clear();
+	recording.boss_views.clear();
 	recording.main_frame_footers.clear();
 	const auto calls_before_warning = recording.calls.size();
 	const auto warning = game->step(
@@ -2310,6 +2624,7 @@ void test_warning_completion()
 	check(
 		warning.status == th03::StepStatus::phase_transition &&
 		recording.phases.empty() && recording.spawns.size() == 1U &&
+		recording.boss_views.empty() &&
 		recording.poses.size() == 4U &&
 		recording.warning_interstitial_starts.size() == 1U &&
 		recording.warning_interstitial_starts[0U].flashing_players ==
@@ -2336,6 +2651,7 @@ void test_warning_completion()
 		check(
 			interstitial.status == th03::StepStatus::running &&
 			recording.phases.empty() &&
+			recording.boss_views.empty() &&
 			recording.warning_interstitial_samples.size() ==
 				static_cast<std::size_t>(sample) + 1U &&
 			recording.warning_interstitial_samples.back().ordinal == sample,
@@ -2359,6 +2675,7 @@ void test_warning_completion()
 	);
 	check(
 		completed.status == th03::StepStatus::phase_transition &&
+		recording.boss_views.size() == 1U &&
 		recording.phases == std::vector<ObservedPhase>{
 			ObservedPhase::shots_enemies,
 			ObservedPhase::fireballs,
@@ -2656,6 +2973,231 @@ void test_warning_gauge_semantic_observation()
 					{th03::PlayerId::p2, th03::PlayerId::p1},
 				},
 			"simultaneous Gauge completions retain source P1-then-P2 order"
+		);
+	});
+}
+
+void test_boss_observer_contract()
+{
+	with_live_state([](auto &base) {
+		base.hud_start_flag = 1U;
+		base.players[0U].paletted_character = 1;
+		base.players[1U].paletted_character = 4;
+		base.gba_flag_active = {
+			th03::detail::GaugeBossAttackFlag::boss,
+			th03::detail::GaugeBossAttackFlag::boss,
+		};
+		base.boss_initial[0U].center_x = 144 << 4;
+		base.boss_initial[0U].center_y = 80 << 4;
+		base.boss_initial[0U].hp = 100U;
+
+		auto null_state = base;
+		auto discard_state = base;
+		auto record_state = base;
+		DiscardObserver discard;
+		RecordingObserver recording;
+		check(
+			th03::detail::gameplay_frame_prefix(
+				null_state, th03::GameContent{}, nullptr
+			) &&
+			th03::detail::gameplay_frame_prefix(
+				discard_state, th03::GameContent{}, &discard
+			) &&
+			th03::detail::gameplay_frame_prefix(
+				record_state, th03::GameContent{}, &recording
+			),
+			"simultaneous Boss launch/reversal fixtures complete"
+		);
+		check(
+			observed_gameplay_equal(null_state, discard_state) &&
+			observed_gameplay_equal(null_state, record_state),
+			"Boss lifecycle observation preserves gameplay and shared RNG for null, discard, and recording paths"
+		);
+		check(
+			recording.boss_palette_restores ==
+				std::vector<th03::BossPaletteBaselineRestored>{
+					{th03::PlayerId::p2},
+					{th03::PlayerId::p1},
+				} &&
+			recording.boss_activations ==
+				std::vector<th03::BossActivated>{
+					{th03::PlayerId::p1, 1},
+				} &&
+			recording.boss_calls == std::vector<BossObservedCall>{
+				BossObservedCall::palette_baseline_restored,
+				BossObservedCall::activated,
+				BossObservedCall::palette_baseline_restored,
+			},
+			"a successful P1 launch restores P2 before activation, then a P2 reversal restores its actual P1 entry"
+		);
+	});
+
+	with_live_state([](auto &p2_launch) {
+		p2_launch.hud_start_flag = 1U;
+		p2_launch.players[1U].paletted_character = 18;
+		p2_launch.gba_flag_active[1U] =
+			th03::detail::GaugeBossAttackFlag::boss;
+		p2_launch.boss_initial[1U].hp = 100U;
+		RecordingObserver recording;
+		(void)th03::detail::gameplay_frame_prefix(
+			p2_launch, th03::GameContent{}, &recording
+		);
+		check(
+			recording.boss_palette_restores ==
+				std::vector<th03::BossPaletteBaselineRestored>{
+					{th03::PlayerId::p1},
+				} &&
+			recording.boss_activations ==
+				std::vector<th03::BossActivated>{
+					{th03::PlayerId::p2, 18},
+				},
+			"a successful P2 launch reports its own character after restoring P1"
+		);
+	});
+
+	with_live_state([](auto &defeat) {
+		defeat.hud_start_flag = 1U;
+		defeat.players[0U].paletted_character = 1;
+		defeat.gba_boss_launched_by = 0;
+		defeat.boss.state = 1U;
+		defeat.boss.hp = 0U;
+		RecordingObserver recording;
+		(void)th03::detail::gameplay_frame_prefix(
+			defeat, th03::GameContent{}, &recording
+		);
+		check(
+			defeat.boss.state == 0xFFU &&
+			recording.boss_palette_restores ==
+				std::vector<th03::BossPaletteBaselineRestored>{
+					{th03::PlayerId::p2},
+				},
+			"Boss defeat restores the target playfield palette at the state transition"
+		);
+	});
+
+	with_live_state([](auto &ellen) {
+		ellen.hud_start_flag = 1U;
+		ellen.players[0U].paletted_character = 7;
+		ellen.gba_boss_launched_by = 0;
+		ellen.boss.state = 0U;
+		ellen.boss.pattern_frame = 0U;
+		ellen.boss.render_state = 9U;
+		ellen.boss.hp = 100U;
+		RecordingObserver recording;
+		(void)th03::detail::gameplay_frame_prefix(
+			ellen, th03::GameContent{}, &recording
+		);
+		check(
+			recording.boss_animation_steps ==
+				std::vector<th03::BossAnimationStep>{
+					{th03::PlayerId::p1, 0U, 1U, 9U},
+				},
+			"Ellen advances presenter animation after pattern-frame increment and before an early state-0 return"
+		);
+	});
+
+	with_live_state([](auto &rikako) {
+		rikako.hud_start_flag = 1U;
+		rikako.players[0U].paletted_character = 13;
+		rikako.gba_boss_launched_by = 0;
+		rikako.boss.state = 0U;
+		rikako.boss.hp = 100U;
+		RecordingObserver early;
+		(void)th03::detail::gameplay_frame_prefix(
+			rikako, th03::GameContent{}, &early
+		);
+		check(
+			early.boss_animation_steps.empty(),
+			"Rikako materialization frames that skip the common tail do not advance presenter animation"
+		);
+
+		rikako.boss.pattern_frame = 99U;
+		rikako.boss.render_state = 6U;
+		RecordingObserver common_tail;
+		(void)th03::detail::gameplay_frame_prefix(
+			rikako, th03::GameContent{}, &common_tail
+		);
+		check(
+			common_tail.boss_animation_steps ==
+				std::vector<th03::BossAnimationStep>{
+					{th03::PlayerId::p1, 0U, 100U, 6U},
+				},
+			"Rikako reports one animation step only when dispatch reaches its common tail"
+		);
+	});
+
+	with_live_state([](auto &chiyuri) {
+		chiyuri.hud_start_flag = 1U;
+		chiyuri.players[0U].paletted_character = 15;
+		chiyuri.gba_boss_launched_by = 0;
+		chiyuri.boss.state = 0x80U;
+		chiyuri.boss.center_y = 0;
+		chiyuri.boss.hp = 100U;
+		chiyuri.boss.render_state = 4U;
+		RecordingObserver recording;
+		(void)th03::detail::gameplay_frame_prefix(
+			chiyuri, th03::GameContent{}, &recording
+		);
+		check(
+			recording.boss_palette_restores ==
+				std::vector<th03::BossPaletteBaselineRestored>{
+					{th03::PlayerId::p2},
+				} &&
+			recording.boss_animation_steps ==
+				std::vector<th03::BossAnimationStep>{
+					{th03::PlayerId::p1, 0x80U, 1U, 4U},
+				} &&
+			recording.boss_calls == std::vector<BossObservedCall>{
+				BossObservedCall::palette_baseline_restored,
+				BossObservedCall::animation_step,
+			},
+			"Chiyuri state 0x80 restores the target palette before its common-tail animation step"
+		);
+	});
+
+	with_live_state([](auto &late) {
+		late.players[0U].paletted_character = 15;
+		late.gba_boss_launched_by = 0;
+		late.boss.state = 0xFFU;
+		late.boss.pattern_frame = 25U;
+		late.bomb_flag = {
+			th03::detail::BombFlag::active,
+			th03::detail::BombFlag::active,
+		};
+		RecordingObserver recording;
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			late, &recording
+		);
+		std::vector<BossObservedCall> expected_order{
+			BossObservedCall::warning_frame_lifecycle,
+			BossObservedCall::background_frame,
+		};
+		expected_order.insert(
+			expected_order.end(),
+			48U,
+			BossObservedCall::background_random_read
+		);
+		expected_order.insert(
+			expected_order.end(),
+			{
+				BossObservedCall::bomb_frame_step,
+				BossObservedCall::bomb_frame_step,
+				BossObservedCall::main_boss,
+				BossObservedCall::palette_baseline_restored,
+				BossObservedCall::shots_enemies,
+			}
+		);
+		check(
+			recording.boss_views.size() == 1U &&
+			recording.boss_views[0U] &&
+			recording.boss_views[0U]->state == 0xFFU &&
+			late.gba_boss_launched_by == -1 &&
+			recording.boss_palette_restores ==
+				std::vector<th03::BossPaletteBaselineRestored>{
+					{th03::PlayerId::p2},
+				} &&
+			recording.boss_calls == expected_order,
+			"late order spans warning, BackgroundFrame and reads, P1/P2 Bombs, pre-mutation Boss view, Chiyuri terminal restore after clear, then Shots"
 		);
 	});
 }
@@ -3245,6 +3787,7 @@ void test_main_effect_observer_contract()
 int main()
 {
 	test_indexed_views_and_classifications();
+	test_main_boss_view_contract();
 	test_observer_invariance_and_phase_order();
 	test_public_step_result_invariance();
 	test_main_background_creation_observation();
@@ -3258,6 +3801,7 @@ int main()
 	test_recorded_pause_prefix_bullet_once();
 	test_warning_completion();
 	test_warning_gauge_semantic_observation();
+	test_boss_observer_contract();
 	test_main_effect_observer_contract();
 
 	if(failures != 0) {

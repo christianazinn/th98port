@@ -20,7 +20,7 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   source-surface compositor. Entering either 200-line mode or 400-line mode
   now preserves the source access-page-0 side effect.
 - The app-owned resource library has the exact direct-VS batch and the full
-  96-entry selected-character metadata scope required by the adjacent MAINL
+  106-entry selected-character and enemy-atlas metadata scope required by the adjacent MAINL
   transition (`NN16.PI` and `NNEX.PI` included). It performs exact-case,
   containment, size, fingerprint, immutable ownership, and scene-cache checks
   without adding filesystem behavior to assets or presentation.
@@ -44,9 +44,14 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   oscillator, both selected EX.MRS portraits, all nine Gauge-completion
   restores, the full two-playfield hidden-atlas backdrop, and late
   charged/available/hyper bars without retaining gameplay views.
+- The complete MAINL-to-MAIN Sprite16 atlas handoff and all-nine Boss
+  presentation are integrated. Direct VS now names all six required PI inputs,
+  applies exact even-row line-skip staging, and orders the borrowed pre-mutation
+  Boss view between late Bombs and Shots. Renderer-private Ellen/Rikako/Chiyuri
+  state remains fixed and process-scoped outside core.
 
-The shortest remaining chain to a visible interactive build is: fill Boss,
-Extra/Charge, and HUD/result gaps in the existing
+The shortest remaining chain to a visible interactive build is: fill
+Extra/Charge and HUD/result gaps in the existing
 composition owner; add the fixed 56.423 Hz input scheduler; then add the thin
 SDL upload and input shell. PC-98 visual traces remain the release authority
 after the synthetic cross-compiler gates.
@@ -86,12 +91,12 @@ th03_assets remains a collection of pure decoders for supplied byte spans (RGB, 
 | th03_audio_pmd (later) | Supplied music/SE bytes, PMD/OPNA scheduling and synthesis, mix gain, offline PCM | SDL devices, UI settings storage, gameplay state, or file paths |
 
 The current libraries contain a tested process coordinator over static setup,
-all nine Bomb paths, entities, players/bullets, effects, palette/raster,
+all nine Bomb and Boss paths, entities, players/bullets, effects, palette/raster,
 sprites, text, both MAIN backgrounds, and the final Raster-plus-TRAM source
 surface. It deliberately names every unimplemented pass, so it is not yet
 proof that every real MAIN
-frame is complete. Source-order coverage is still required for Boss and
-Extra/Charge paths and dynamic HUD/result/warning overlays. The neutral
+frame is complete. Source-order coverage is still required for Extra/Charge
+paths and dynamic HUD/result overlays. The neutral
 observer lifecycle events are a seam for that work; they are not render state
 in the core.
 
@@ -161,7 +166,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | Item | Blocks visual VS? | Why / completion condition |
 | --- | --- | --- |
 | Remaining MAIN source-order coverage | Yes | The coordinator, footer, repeat reset, and existing passes are integrated; finish every named missing family before calling the image complete. |
-| MainRoundAssets construction over the checked external manifest | Yes | The 96-role manifest/cache is frozen, but the app still must decode and bind the selected process bundle without substitute data. |
+| MainRoundAssets construction over the checked external manifest | Yes | The 106-entry manifest/cache metadata is frozen, but the app still must decode and bind the selected process bundle without substitute data. |
 | Fixed tick plus input-latch boundary | Yes | A window whose simulation follows host refresh is not a source-faithful match. Finish fake-clock scheduler tests and establish source cadence. |
 | Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
 | SDL window/upload/input adapter | Yes | Required to make the completed composition playable, but its first test can use a synthetic surface. |

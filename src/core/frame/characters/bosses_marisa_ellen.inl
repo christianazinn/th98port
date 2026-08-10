@@ -175,7 +175,7 @@ void boss_update_marisa(
 	GameplayObserver *observer
 ) noexcept
 {
-	if(boss_launch_or_reverse(state, player_id)) {
+	if(boss_launch_or_reverse(state, player_id, observer)) {
 		state.boss.params[0] = static_cast<std::uint8_t>(
 			(state.gba_boss_level * 2U) + 0x32U
 		);
@@ -240,7 +240,7 @@ void boss_update_marisa(
 	state.boss.hp = exact::wrap_subtract(
 		state.boss.hp, static_cast<std::uint16_t>(damage)
 	);
-	boss_defeat_if_needed(state, target_player);
+	boss_defeat_if_needed(state, target_player, observer);
 }
 
 void boss_pattern_ellen_spreads(
@@ -400,7 +400,7 @@ void boss_update_ellen(
 	GameplayObserver *observer
 ) noexcept
 {
-	if(boss_launch_or_reverse(state, player_id)) {
+	if(boss_launch_or_reverse(state, player_id, observer)) {
 		state.boss.params[0] = static_cast<std::uint8_t>(
 			(state.gba_boss_level * 2U) + 0x32U
 		);
@@ -419,6 +419,13 @@ void boss_update_ellen(
 	}
 	boss_target_update(state);
 	state.boss.pattern_frame++;
+	observe_boss_animation_step(
+		observer,
+		player_id,
+		state.boss.state,
+		state.boss.pattern_frame,
+		state.boss.render_state
+	);
 	const auto dispatch_state = state.boss.state;
 	if(dispatch_state == 0U) {
 		if(state.boss.pattern_frame != 0x64U) {
@@ -459,5 +466,5 @@ void boss_update_ellen(
 	state.boss.hp = exact::wrap_subtract(
 		state.boss.hp, static_cast<std::uint16_t>(damage)
 	);
-	boss_defeat_if_needed(state, target_player);
+	boss_defeat_if_needed(state, target_player, observer);
 }

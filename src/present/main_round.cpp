@@ -18,6 +18,7 @@ MainRoundPresenter::MainRoundPresenter(
 	MainStaticPresenter &static_presenter,
 	MainPaletteState &palette,
 	MainBackgroundPresenter &background,
+	MainBossPresenter &bosses,
 	MainEntitiesPresenter &entities,
 	MainEffectsPresenter &effects,
 	MainPlayersBulletsPresenter &players_bullets,
@@ -29,6 +30,7 @@ MainRoundPresenter::MainRoundPresenter(
 	static_(&static_presenter),
 	palette_(&palette),
 	background_(&background),
+	bosses_(&bosses),
 	entities_(&entities),
 	effects_(&effects),
 	players_bullets_(&players_bullets),
@@ -41,6 +43,10 @@ MainRoundPresenter::MainRoundPresenter(
 	}
 	if(!background_->ready()) {
 		status_ = MainRoundStatus::background_failed;
+		return;
+	}
+	if(!bosses_->ready()) {
+		status_ = MainRoundStatus::bosses_failed;
 		return;
 	}
 	if(!entities_->ready()) {
@@ -86,6 +92,20 @@ bool MainRoundPresenter::source_page_ready() const noexcept
 	const auto pages = static_->page_roles();
 	return raster_->access_page() == pages.back &&
 		raster_->shown_page() == pages.front;
+}
+
+bool MainRoundPresenter::source_prefix_open() const noexcept
+{
+	return phase_ == Phase::boss && !warning_interstitial_active_ &&
+		!warning_suffix_pending_ && !warning_lifecycle_seen_ &&
+		!background_frame_seen_;
+}
+
+bool MainRoundPresenter::late_bombs_open() const noexcept
+{
+	return phase_ == Phase::boss && !warning_interstitial_active_ &&
+		!warning_suffix_pending_ && warning_lifecycle_seen_ &&
+		background_frame_seen_ && background_frame_reads_remaining_ == 0U;
 }
 
 bool MainRoundPresenter::same_frame(
@@ -206,6 +226,11 @@ void MainRoundPresenter::common_effect_spawned(
 	if(!ready()) {
 		return;
 	}
+	if(phase_ != Phase::boss || warning_interstitial_active_ ||
+		warning_suffix_pending_) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
 	// The source allocation completes in SUB_CE5B/SUB_CDBD/SUB_CE0C before
 	// the active Bomb callback continues its dependent private drawing.
 	effects_->common_effect_spawned(spawn);
@@ -226,6 +251,14 @@ void MainRoundPresenter::bomb_compatibility_read(
 	if(!ready()) {
 		return;
 	}
+	const bool prefix_site =
+		read.site == BombCompatibilityReadSite::mima_column_x ||
+		read.site == BombCompatibilityReadSite::ellen_vector_angle;
+	if((prefix_site && !source_prefix_open()) ||
+		(!prefix_site && !late_bombs_open())) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
 	bombs_->bomb_compatibility_read(read);
 	if(!bombs_->ready()) {
 		fail(MainRoundStatus::bombs_failed);
@@ -239,6 +272,10 @@ void MainRoundPresenter::bomb_finished(
 	if(!ready()) {
 		return;
 	}
+	if(!source_prefix_open()) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
 	bombs_->bomb_finished(finished);
 	if(!bombs_->ready()) {
 		fail(MainRoundStatus::bombs_failed);
@@ -250,10 +287,18 @@ void MainRoundPresenter::bomb_frame_step(const BombFrameStep &step) noexcept
 	if(!ready()) {
 		return;
 	}
+	const auto player = static_cast<std::size_t>(step.player);
+	if(!late_bombs_open() || player >= 2U ||
+		player < next_late_bomb_player_) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
 	bombs_->bomb_frame_step(step);
 	if(!bombs_->ready()) {
 		fail(MainRoundStatus::bombs_failed);
+		return;
 	}
+	next_late_bomb_player_ = static_cast<std::uint8_t>(player + 1U);
 }
 
 void MainRoundPresenter::bomb_common_effect_step(
@@ -261,6 +306,10 @@ void MainRoundPresenter::bomb_common_effect_step(
 ) noexcept
 {
 	if(!ready()) {
+		return;
+	}
+	if(!late_bombs_open()) {
+		fail(MainRoundStatus::invalid_observation);
 		return;
 	}
 	// MainEffects consumes the source-shared position first; MainBombs then
@@ -284,7 +333,7 @@ void MainRoundPresenter::warning_interstitial_started(
 		return;
 	}
 	if(
-		phase_ != Phase::shots_enemies || warning_interstitial_active_ ||
+		phase_ != Phase::boss || warning_interstitial_active_ ||
 		warning_suffix_pending_ || warning_lifecycle_seen_ ||
 		(!started.flashing_players[0U] && !started.flashing_players[1U])
 	) {
@@ -337,7 +386,7 @@ void MainRoundPresenter::warning_frame_lifecycle(
 		return;
 	}
 	if(
-		phase_ != Phase::shots_enemies || warning_interstitial_active_ ||
+		phase_ != Phase::boss || warning_interstitial_active_ ||
 		warning_lifecycle_seen_
 	) {
 		fail(MainRoundStatus::invalid_observation);
@@ -370,7 +419,7 @@ void MainRoundPresenter::gauge_attack_finished(
 	}
 	const auto attacker = static_cast<std::size_t>(finished.attacker);
 	if(
-		phase_ != Phase::shots_enemies || warning_interstitial_active_ ||
+		phase_ != Phase::boss || warning_interstitial_active_ ||
 		warning_suffix_pending_ || warning_lifecycle_seen_ ||
 		background_frame_seen_ || attacker >= 2U ||
 		attacker < next_gauge_finish_player_
@@ -452,7 +501,7 @@ void MainRoundPresenter::main_background_frame(
 		return;
 	}
 	if(
-		phase_ != Phase::shots_enemies || warning_interstitial_active_ ||
+		phase_ != Phase::boss || warning_interstitial_active_ ||
 		!warning_lifecycle_seen_ || background_frame_seen_ ||
 		!source_page_ready()
 	) {
@@ -499,6 +548,90 @@ void MainRoundPresenter::main_background_random_read(
 	}
 }
 
+void MainRoundPresenter::boss_activated(
+	const BossActivated &activated
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	if(!source_prefix_open()) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	bosses_->boss_activated(activated);
+	if(!bosses_->ready()) {
+		fail(MainRoundStatus::bosses_failed);
+	}
+}
+
+void MainRoundPresenter::boss_animation_step(
+	const BossAnimationStep &step
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	if(!source_prefix_open()) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	bosses_->boss_animation_step(step);
+	if(!bosses_->ready()) {
+		fail(MainRoundStatus::bosses_failed);
+	}
+}
+
+void MainRoundPresenter::boss_palette_baseline_restored(
+	const BossPaletteBaselineRestored &restored
+) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	const bool prefix_restore = source_prefix_open();
+	const bool terminal_restore = phase_ == Phase::shots_enemies;
+	if(!prefix_restore && !terminal_restore) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	bosses_->boss_palette_baseline_restored(restored);
+	if(!bosses_->ready()) {
+		fail(MainRoundStatus::bosses_failed);
+	}
+}
+
+void MainRoundPresenter::observe(const MainBossView &view) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	if(
+		phase_ != Phase::boss || warning_interstitial_active_ ||
+		!warning_lifecycle_seen_ || !background_frame_seen_ ||
+		background_frame_reads_remaining_ != 0U || !source_page_ready()
+	) {
+		fail(
+			!source_page_ready() ? MainRoundStatus::page_state_mismatch :
+				MainRoundStatus::invalid_observation
+		);
+		return;
+	}
+	const auto context = view.context();
+	if(background_round_id_ != context.round_id ||
+		background_round_or_result_frame_ != context.round_or_result_frame) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	frame_context_ = context;
+	bosses_->observe(view);
+	if(!bosses_->ready()) {
+		fail(MainRoundStatus::bosses_failed);
+		return;
+	}
+	phase_ = Phase::shots_enemies;
+}
+
 void MainRoundPresenter::observe(const ShotsEnemiesView &view) noexcept
 {
 	if(!ready()) {
@@ -506,8 +639,6 @@ void MainRoundPresenter::observe(const ShotsEnemiesView &view) noexcept
 	}
 	if(
 		phase_ != Phase::shots_enemies || warning_interstitial_active_ ||
-		!warning_lifecycle_seen_ || !background_frame_seen_ ||
-		background_frame_reads_remaining_ != 0U ||
 		!source_page_ready()
 	) {
 		fail(
@@ -517,13 +648,10 @@ void MainRoundPresenter::observe(const ShotsEnemiesView &view) noexcept
 		return;
 	}
 	const auto context = view.context();
-	if(background_frame_seen_ &&
-		(background_round_id_ != context.round_id ||
-			background_round_or_result_frame_ != context.round_or_result_frame)) {
+	if(!same_frame(context)) {
 		fail(MainRoundStatus::invalid_observation);
 		return;
 	}
-	frame_context_ = context;
 	entities_->observe(view);
 	if(!entities_->ready()) {
 		fail(MainRoundStatus::entities_failed);
@@ -652,11 +780,12 @@ void MainRoundPresenter::main_frame_footer_reached(
 		fail(MainRoundStatus::page_transaction_failed);
 		return;
 	}
-	phase_ = Phase::shots_enemies;
+	phase_ = Phase::boss;
 	warning_lifecycle_seen_ = false;
 	background_frame_seen_ = false;
 	background_frame_reads_remaining_ = 0U;
 	next_gauge_finish_player_ = 0U;
+	next_late_bomb_player_ = 0U;
 	expected_portrait_mask_ = 0U;
 }
 
@@ -680,7 +809,7 @@ bool MainRoundPresenter::repeat_round_startup(
 		return false;
 	}
 	palette_->set_tone_and_show_now(*raster_, 100);
-	phase_ = Phase::shots_enemies;
+	phase_ = Phase::boss;
 	warning_interstitial_active_ = false;
 	warning_suffix_pending_ = false;
 	warning_lifecycle_seen_ = false;
@@ -688,6 +817,7 @@ bool MainRoundPresenter::repeat_round_startup(
 	background_frame_reads_remaining_ = 0U;
 	next_warning_sample_ = 0U;
 	next_gauge_finish_player_ = 0U;
+	next_late_bomb_player_ = 0U;
 	expected_portrait_mask_ = 0U;
 	return true;
 }

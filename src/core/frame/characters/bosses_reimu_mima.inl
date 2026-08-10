@@ -191,7 +191,7 @@ void boss_update_reimu(
 	GameplayObserver *observer
 ) noexcept
 {
-	if(boss_launch_or_reverse(state, player_id)) {
+	if(boss_launch_or_reverse(state, player_id, observer)) {
 		state.boss.params[0] = static_cast<std::uint8_t>(
 			5U - (state.gba_boss_level / 5U)
 		);
@@ -256,7 +256,7 @@ void boss_update_reimu(
 	state.boss.hp = exact::wrap_subtract(
 		state.boss.hp, static_cast<std::uint16_t>(damage)
 	);
-	boss_defeat_if_needed(state, target_player);
+	boss_defeat_if_needed(state, target_player, observer);
 }
 
 void boss_pattern_mima_spreads(
@@ -489,7 +489,7 @@ void boss_update_mima(
 	GameplayObserver *observer
 ) noexcept
 {
-	if(boss_launch_or_reverse(state, player_id)) {
+	if(boss_launch_or_reverse(state, player_id, observer)) {
 		state.boss.params[0] = static_cast<std::uint8_t>(
 			state.gba_boss_level + 0x20U
 		);
@@ -560,5 +560,5 @@ void boss_update_mima(
 	state.boss.hp = exact::wrap_subtract(
 		state.boss.hp, static_cast<std::uint16_t>(damage)
 	);
-	boss_defeat_if_needed(state, target_player);
+	boss_defeat_if_needed(state, target_player, observer);
 }

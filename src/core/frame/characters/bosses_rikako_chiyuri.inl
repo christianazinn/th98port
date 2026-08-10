@@ -146,7 +146,7 @@ void boss_update_rikako(
 	GameplayObserver *observer
 ) noexcept
 {
-	if(boss_launch_or_reverse(state, player_id)) {
+	if(boss_launch_or_reverse(state, player_id, observer)) {
 		state.boss.params[0] = static_cast<std::uint8_t>(
 			(state.gba_boss_level / 2U) + 0x10U
 		);
@@ -169,6 +169,8 @@ void boss_update_rikako(
 	boss_target_update(state);
 	state.boss.pattern_frame++;
 	const auto dispatch_state = state.boss.state;
+	const auto pattern_frame_at_dispatch = state.boss.pattern_frame;
+	const auto render_state_at_dispatch = state.boss.render_state;
 	switch(dispatch_state) {
 	case 0U:
 		if(state.boss.pattern_frame == 0x64U) {
@@ -200,6 +202,13 @@ void boss_update_rikako(
 	default:
 		break;
 	}
+	observe_boss_animation_step(
+		observer,
+		player_id,
+		dispatch_state,
+		pattern_frame_at_dispatch,
+		render_state_at_dispatch
+	);
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
 	collmap_set_rect_striped(
 		state, target_player, state.boss.center_x, state.boss.center_y, 32, 24
@@ -211,7 +220,7 @@ void boss_update_rikako(
 	state.boss.hp = exact::wrap_subtract(
 		state.boss.hp, static_cast<std::uint16_t>(damage)
 	);
-	boss_defeat_if_needed(state, target_player);
+	boss_defeat_if_needed(state, target_player, observer);
 }
 
 void boss_chiyuri_random_effect(
@@ -492,7 +501,7 @@ void boss_update_chiyuri(
 	GameplayObserver *observer
 ) noexcept
 {
-	if(boss_launch_or_reverse(state, player_id)) {
+	if(boss_launch_or_reverse(state, player_id, observer)) {
 		state.boss.params[0] = static_cast<std::uint8_t>(
 			state.gba_boss_level + 0x30U
 		);
@@ -523,6 +532,8 @@ void boss_update_chiyuri(
 	auto &boss = state.boss;
 	boss.pattern_frame++;
 	const auto dispatch_state = boss.state;
+	const auto pattern_frame_at_dispatch = boss.pattern_frame;
+	const auto render_state_at_dispatch = boss.render_state;
 	switch(dispatch_state) {
 	case 0U:
 		if(boss.pattern_frame == 0x60U) {
@@ -602,12 +613,20 @@ void boss_update_chiyuri(
 		break;
 	case 0x80U:
 		boss_exit_move(state, player_id);
+		observe_boss_palette_baseline_restored(observer, 1U - player_id);
 		break;
 	case 0xFFU:
 		return;
 	default:
 		break;
 	}
+	observe_boss_animation_step(
+		observer,
+		player_id,
+		dispatch_state,
+		pattern_frame_at_dispatch,
+		render_state_at_dispatch
+	);
 
 	boss.render_frame = static_cast<std::uint8_t>(
 		boss.render_frame + ((state.round_or_result_frame & 3U) == 0U)
@@ -631,7 +650,7 @@ void boss_update_chiyuri(
 	boss.hp = exact::wrap_subtract(
 		boss.hp, static_cast<std::uint16_t>(damage)
 	);
-	boss_defeat_if_needed(state, target_player);
+	boss_defeat_if_needed(state, target_player, observer);
 }
 
 void boss_yumemi_random_effect(

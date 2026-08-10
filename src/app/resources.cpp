@@ -76,6 +76,14 @@ constexpr std::array<std::uint64_t, 18U> character_stage_extra_shot_fnv1a64{
 	0xAA08ABC1CB2F85C5ULL, 0xAB155F35293C2544ULL,
 	0x60A0C0478B825DA7ULL, 0x48942A4E63523010ULL,
 };
+constexpr std::array<std::uint64_t, 5U> stage_enemy_group_fnv1a64{
+	0x9E080DAAA809D13BULL, 0x720E44C9C7EFB435ULL,
+	0x57829DA41AE90F86ULL, 0x0041BE7AD009BC24ULL,
+	0x13FA6F425CCC8E13ULL,
+};
+constexpr std::array<std::size_t, 5U> stage_enemy_group_sizes{
+	7378U, 7295U, 7064U, 7046U, 7035U,
+};
 
 [[nodiscard]] constexpr bool is_character(MainCharacter character) noexcept
 {
@@ -91,7 +99,7 @@ constexpr std::array<std::uint64_t, 18U> character_stage_extra_shot_fnv1a64{
 	return value >= first_palette_value && value <= last_palette_value;
 }
 
-[[nodiscard]] constexpr bool is_character_role(
+[[nodiscard]] constexpr bool is_paletted_character_role(
 	MainResourceRole role
 ) noexcept
 {
@@ -100,6 +108,38 @@ constexpr std::array<std::uint64_t, 18U> character_stage_extra_shot_fnv1a64{
 		role == MainResourceRole::character_bomb_portrait ||
 		role == MainResourceRole::character_stage_shot ||
 		role == MainResourceRole::character_stage_extra_shot;
+}
+
+[[nodiscard]] constexpr bool is_character_only_role(
+	MainResourceRole role
+) noexcept
+{
+	return role == MainResourceRole::character_stage_enemy_group;
+}
+
+[[nodiscard]] constexpr std::uint8_t stage_enemy_group_index(
+	MainCharacter character
+) noexcept
+{
+	switch(character) {
+	case MainCharacter::reimu:
+	case MainCharacter::mima:
+	case MainCharacter::rikako:
+		return 0U;
+	case MainCharacter::marisa:
+	case MainCharacter::kotohime:
+		return 1U;
+	case MainCharacter::ellen:
+	case MainCharacter::kana:
+		return 2U;
+	case MainCharacter::chiyuri:
+		return 3U;
+	case MainCharacter::yumemi:
+		return 4U;
+	case MainCharacter::none:
+		break;
+	}
+	return 0U;
 }
 
 [[nodiscard]] constexpr std::uint8_t character_file_index(
@@ -134,7 +174,9 @@ constexpr std::array<std::uint64_t, 18U> character_stage_extra_shot_fnv1a64{
 	case MainResourceRole::hud_lose_sheet:
 	case MainResourceRole::hud_round_sheet:
 	case MainResourceRole::hud_result_sheet:
+	case MainResourceRole::stage_enemy_center:
 	case MainResourceRole::selection_palette:
+	case MainResourceRole::character_stage_enemy_group:
 		return 0U;
 	}
 	return 0U;
@@ -157,6 +199,26 @@ constexpr std::array<std::uint64_t, 18U> character_stage_extra_shot_fnv1a64{
 	case MainCharacter::none: return "none";
 	}
 	return "invalid";
+}
+
+[[nodiscard]] std::string character_only_logical_role(
+	MainResourceKey key,
+	std::string_view role
+)
+{
+	std::string result{"main.character."};
+	result.append(character_name(key.character));
+	result.push_back('.');
+	result.append(role);
+	return result;
+}
+
+[[nodiscard]] std::string stage_enemy_group_filename(std::uint8_t group)
+{
+	std::string result{"ENEMY0"};
+	result.push_back(static_cast<char>('0' + group));
+	result.append(".PI");
+	return result;
 }
 
 [[nodiscard]] std::string filename_with_index(
@@ -259,6 +321,17 @@ static_resource_spec(MainResourceKey key)
 			.expected_bytes = 4176U,
 			.expected_fnv1a64 = 0x6A86F6592DDD7BC4ULL,
 		};
+	case MainResourceRole::stage_enemy_center:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_stage_transition,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pi,
+			.logical_role = "main.stage.enemy_center",
+			.filename = "EN2.PI",
+			.expected_bytes = 1841U,
+			.expected_fnv1a64 = 0x227E9A80259725B3ULL,
+		};
 	case MainResourceRole::selection_palette:
 		return MainResourceSpec{
 			.key = key,
@@ -275,6 +348,7 @@ static_resource_spec(MainResourceKey key)
 	case MainResourceRole::character_bomb_portrait:
 	case MainResourceRole::character_stage_shot:
 	case MainResourceRole::character_stage_extra_shot:
+	case MainResourceRole::character_stage_enemy_group:
 		return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
 	}
 	return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
@@ -416,7 +490,28 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 	MainResourceKey key
 )
 {
-	if(!is_character_role(key.role)) {
+	if(is_character_only_role(key.role)) {
+		if(!is_character(key.character) ||
+			key.palette != MainPaletteVariant::none) {
+			return std::unexpected(error(
+				ResourceLoadErrorCode::invalid_resource_key, key
+			));
+		}
+		const auto group = stage_enemy_group_index(key.character);
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_stage_transition,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pi,
+			.logical_role = character_only_logical_role(
+				key, "stage_enemy_group"
+			),
+			.filename = stage_enemy_group_filename(group),
+			.expected_bytes = stage_enemy_group_sizes[group],
+			.expected_fnv1a64 = stage_enemy_group_fnv1a64[group],
+		};
+	}
+	if(!is_paletted_character_role(key.role)) {
 		return static_resource_spec(key);
 	}
 	if(!is_character(key.character) || !is_palette(key.palette)) {
@@ -485,7 +580,9 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 	case MainResourceRole::hud_lose_sheet:
 	case MainResourceRole::hud_round_sheet:
 	case MainResourceRole::hud_result_sheet:
+	case MainResourceRole::stage_enemy_center:
 	case MainResourceRole::selection_palette:
+	case MainResourceRole::character_stage_enemy_group:
 		break;
 	}
 	return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
@@ -499,6 +596,7 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		MainResourceRole::hud_lose_sheet,
 		MainResourceRole::hud_round_sheet,
 		MainResourceRole::hud_result_sheet,
+		MainResourceRole::stage_enemy_center,
 		MainResourceRole::selection_palette,
 	};
 	constexpr std::array character_roles{
@@ -509,11 +607,17 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		MainResourceRole::character_stage_extra_shot,
 	};
 
+	constexpr std::array character_only_roles{
+		MainResourceRole::character_stage_enemy_group,
+	};
+
 	std::vector<MainResourceSpec> result;
 	result.reserve(static_roles.size() +
 		((last_character_value - first_character_value + 1U) *
 		(last_palette_value - first_palette_value + 1U) *
-		character_roles.size()));
+		character_roles.size()) +
+		((last_character_value - first_character_value + 1U) *
+		character_only_roles.size()));
 	for(const auto role : static_roles) {
 		result.push_back(*main_resource_spec({.role = role}));
 	}
@@ -530,6 +634,12 @@ std::vector<MainResourceSpec> main_resource_manifest()
 					.palette = static_cast<MainPaletteVariant>(palette),
 				}));
 			}
+		}
+		for(const auto role : character_only_roles) {
+			result.push_back(*main_resource_spec({
+				.role = role,
+				.character = static_cast<MainCharacter>(character),
+			}));
 		}
 	}
 	return result;
@@ -561,11 +671,14 @@ direct_vs_resource_keys(
 		MainResourceRole::hud_lose_sheet,
 		MainResourceRole::hud_round_sheet,
 		MainResourceRole::hud_result_sheet,
+		MainResourceRole::stage_enemy_center,
 	};
 	constexpr std::array character_roles{
 		MainResourceRole::character_sheet,
 		MainResourceRole::character_extra_portrait,
 		MainResourceRole::character_bomb_portrait,
+		MainResourceRole::character_stage_shot,
+		MainResourceRole::character_stage_extra_shot,
 	};
 	if(!is_character(player_one.character) || !is_palette(player_one.palette)) {
 		return std::unexpected(error(
@@ -581,7 +694,7 @@ direct_vs_resource_keys(
 	}
 
 	std::vector<MainResourceKey> result;
-	result.reserve(static_roles.size() + (2U * character_roles.size()));
+	result.reserve(static_roles.size() + (2U * character_roles.size()) + 1U);
 	for(const auto role : static_roles) {
 		result.push_back({.role = role});
 	}
@@ -597,6 +710,10 @@ direct_vs_resource_keys(
 			}
 		}
 	}
+	result.push_back({
+		.role = MainResourceRole::character_stage_enemy_group,
+		.character = player_two.character,
+	});
 	return result;
 }
 

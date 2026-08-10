@@ -24,7 +24,10 @@
 	}
 }
 
-void boss_render_phase_update(DeterministicState &state) noexcept
+void boss_render_phase_update(
+	DeterministicState &state,
+	GameplayObserver *observer
+) noexcept
 {
 	if(state.gba_boss_launched_by < 0) {
 		return;
@@ -80,5 +83,8 @@ void boss_render_phase_update(DeterministicState &state) noexcept
 		score_add(state.score[winner], 2560U);
 		state.boss.state = 0U;
 		state.gba_boss_launched_by = -1;
+		if(character == character_chiyuri) {
+			observe_boss_palette_baseline_restored(observer, winner);
+		}
 	}
 }

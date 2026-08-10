@@ -109,7 +109,10 @@ void test_manifest()
 		"resource fingerprint matches standard FNV-1a-64 vectors"
 	);
 	const auto manifest = th03::app::main_resource_manifest();
-	expect(manifest.size() == 96U, "manifest enumerates static and all 18 character variants");
+	expect(
+		manifest.size() == 106U,
+		"manifest enumerates static, paletted, and opponent-group assets"
+	);
 	expect(
 		static_cast<bool>(th03::app::validate_main_resource_manifest(manifest)),
 		"checked-in manifest has unique logical roles"
@@ -119,6 +122,8 @@ void test_manifest()
 	bool contains_reimu_sheet = false;
 	bool contains_yumemi_stage_shot = false;
 	bool contains_yumemi_stage_extra_shot = false;
+	bool contains_enemy_center = false;
+	bool contains_yumemi_enemy_group = false;
 	for(const auto &spec : manifest) {
 		contains_enedat = contains_enedat ||
 			(spec.key.role == MainResourceRole::enemy_scripts &&
@@ -135,6 +140,14 @@ void test_manifest()
 		contains_yumemi_stage_extra_shot = contains_yumemi_stage_extra_shot ||
 			(spec.key.role == MainResourceRole::character_stage_extra_shot &&
 				spec.filename == "17EX.PI" && spec.expected_bytes == 2929U);
+		contains_enemy_center = contains_enemy_center ||
+			(spec.key.role == MainResourceRole::stage_enemy_center &&
+				spec.filename == "EN2.PI" && spec.expected_bytes == 1841U);
+		contains_yumemi_enemy_group = contains_yumemi_enemy_group ||
+			(spec.key.role == MainResourceRole::character_stage_enemy_group &&
+				spec.key.character == MainCharacter::yumemi &&
+				spec.key.palette == MainPaletteVariant::none &&
+				spec.filename == "ENEMY04.PI" && spec.expected_bytes == 7035U);
 		expect(
 			th03::app::is_safe_extracted_entry_name(spec.filename),
 			"every checked-in manifest filename is one safe extracted component"
@@ -146,9 +159,48 @@ void test_manifest()
 	}
 	expect(
 		contains_enedat && contains_game_font && contains_reimu_sheet &&
-			contains_yumemi_stage_shot && contains_yumemi_stage_extra_shot,
+			contains_yumemi_stage_shot && contains_yumemi_stage_extra_shot &&
+			contains_enemy_center && contains_yumemi_enemy_group,
 		"manifest retains the representative source-named resource families"
 	);
+	struct ExpectedEnemyGroup {
+		MainCharacter character;
+		const char *filename;
+		std::size_t bytes;
+		std::uint64_t fnv1a64;
+	};
+	constexpr std::array expected_enemy_groups{
+		ExpectedEnemyGroup{MainCharacter::reimu, "ENEMY00.PI", 7378U,
+			0x9E080DAAA809D13BULL},
+		ExpectedEnemyGroup{MainCharacter::mima, "ENEMY00.PI", 7378U,
+			0x9E080DAAA809D13BULL},
+		ExpectedEnemyGroup{MainCharacter::marisa, "ENEMY01.PI", 7295U,
+			0x720E44C9C7EFB435ULL},
+		ExpectedEnemyGroup{MainCharacter::ellen, "ENEMY02.PI", 7064U,
+			0x57829DA41AE90F86ULL},
+		ExpectedEnemyGroup{MainCharacter::kotohime, "ENEMY01.PI", 7295U,
+			0x720E44C9C7EFB435ULL},
+		ExpectedEnemyGroup{MainCharacter::kana, "ENEMY02.PI", 7064U,
+			0x57829DA41AE90F86ULL},
+		ExpectedEnemyGroup{MainCharacter::rikako, "ENEMY00.PI", 7378U,
+			0x9E080DAAA809D13BULL},
+		ExpectedEnemyGroup{MainCharacter::chiyuri, "ENEMY03.PI", 7046U,
+			0x0041BE7AD009BC24ULL},
+		ExpectedEnemyGroup{MainCharacter::yumemi, "ENEMY04.PI", 7035U,
+			0x13FA6F425CCC8E13ULL},
+	};
+	for(const auto &expected : expected_enemy_groups) {
+		const auto spec = th03::app::main_resource_spec({
+			.role = MainResourceRole::character_stage_enemy_group,
+			.character = expected.character,
+		});
+		expect(
+			spec && spec->filename == expected.filename &&
+				spec->expected_bytes == expected.bytes &&
+				spec->expected_fnv1a64 == expected.fnv1a64,
+			"every character maps to its exact opponent-group PI metadata"
+		);
+	}
 	expect(
 		!th03::app::is_safe_extracted_entry_name("../ENEDAT.DAT") &&
 			!th03::app::is_safe_extracted_entry_name("YUME2.DAT/ENEDAT.DAT") &&
@@ -221,7 +273,10 @@ void test_direct_vs_batch_and_cache()
 		.palette = MainPaletteVariant::second,
 	};
 	const auto keys = th03::app::direct_vs_resource_keys(player_one, player_two);
-	expect(keys && keys->size() == 11U, "direct VS has five static and six player resources");
+	expect(
+		keys && keys->size() == 17U,
+		"direct VS includes five static MAIN resources and the full MAINL atlas handoff"
+	);
 	if(!keys) {
 		return;
 	}
@@ -231,6 +286,7 @@ void test_direct_vs_batch_and_cache()
 		MainResourceKey{.role = MainResourceRole::hud_lose_sheet},
 		MainResourceKey{.role = MainResourceRole::hud_round_sheet},
 		MainResourceKey{.role = MainResourceRole::hud_result_sheet},
+		MainResourceKey{.role = MainResourceRole::stage_enemy_center},
 		MainResourceKey{.role = MainResourceRole::character_sheet,
 			.character = MainCharacter::reimu,
 			.palette = MainPaletteVariant::first},
@@ -240,6 +296,12 @@ void test_direct_vs_batch_and_cache()
 		MainResourceKey{.role = MainResourceRole::character_bomb_portrait,
 			.character = MainCharacter::reimu,
 			.palette = MainPaletteVariant::first},
+		MainResourceKey{.role = MainResourceRole::character_stage_shot,
+			.character = MainCharacter::reimu,
+			.palette = MainPaletteVariant::first},
+		MainResourceKey{.role = MainResourceRole::character_stage_extra_shot,
+			.character = MainCharacter::reimu,
+			.palette = MainPaletteVariant::first},
 		MainResourceKey{.role = MainResourceRole::character_sheet,
 			.character = MainCharacter::yumemi,
 			.palette = MainPaletteVariant::second},
@@ -249,6 +311,14 @@ void test_direct_vs_batch_and_cache()
 		MainResourceKey{.role = MainResourceRole::character_bomb_portrait,
 			.character = MainCharacter::yumemi,
 			.palette = MainPaletteVariant::second},
+		MainResourceKey{.role = MainResourceRole::character_stage_shot,
+			.character = MainCharacter::yumemi,
+			.palette = MainPaletteVariant::second},
+		MainResourceKey{.role = MainResourceRole::character_stage_extra_shot,
+			.character = MainCharacter::yumemi,
+			.palette = MainPaletteVariant::second},
+		MainResourceKey{.role = MainResourceRole::character_stage_enemy_group,
+			.character = MainCharacter::yumemi},
 	};
 	expect(
 		keys->size() == expected_keys.size() &&
@@ -290,6 +360,44 @@ void test_direct_vs_batch_and_cache()
 	expect(
 		first && second && *first == *second && (*second)->at(0U) == std::byte{1U},
 		"a scene cache prevents later filesystem reads from changing loaded bytes"
+	);
+
+	const auto duplicate_selection = th03::app::direct_vs_resource_keys(
+		player_one, player_one
+	);
+	const std::array expected_duplicate_keys{
+		MainResourceKey{.role = MainResourceRole::enemy_scripts},
+		MainResourceKey{.role = MainResourceRole::game_font},
+		MainResourceKey{.role = MainResourceRole::hud_lose_sheet},
+		MainResourceKey{.role = MainResourceRole::hud_round_sheet},
+		MainResourceKey{.role = MainResourceRole::hud_result_sheet},
+		MainResourceKey{.role = MainResourceRole::stage_enemy_center},
+		MainResourceKey{.role = MainResourceRole::character_sheet,
+			.character = MainCharacter::reimu,
+			.palette = MainPaletteVariant::first},
+		MainResourceKey{.role = MainResourceRole::character_extra_portrait,
+			.character = MainCharacter::reimu,
+			.palette = MainPaletteVariant::first},
+		MainResourceKey{.role = MainResourceRole::character_bomb_portrait,
+			.character = MainCharacter::reimu,
+			.palette = MainPaletteVariant::first},
+		MainResourceKey{.role = MainResourceRole::character_stage_shot,
+			.character = MainCharacter::reimu,
+			.palette = MainPaletteVariant::first},
+		MainResourceKey{.role = MainResourceRole::character_stage_extra_shot,
+			.character = MainCharacter::reimu,
+			.palette = MainPaletteVariant::first},
+		MainResourceKey{.role = MainResourceRole::character_stage_enemy_group,
+			.character = MainCharacter::reimu},
+	};
+	expect(
+		duplicate_selection &&
+			duplicate_selection->size() == expected_duplicate_keys.size() &&
+			std::equal(
+				duplicate_selection->begin(), duplicate_selection->end(),
+				expected_duplicate_keys.begin()
+			),
+		"identical selections preserve exact deduplicated order and opponent group"
 	);
 }
 
@@ -372,6 +480,16 @@ void test_rejections()
 		!malformed_key &&
 			malformed_key.error().code == ResourceLoadErrorCode::invalid_resource_key,
 		"callers cannot turn a logical role into an arbitrary traversal pathname"
+	);
+	const auto malformed_group = loader.load({
+		.role = MainResourceRole::character_stage_enemy_group,
+		.character = MainCharacter::reimu,
+		.palette = MainPaletteVariant::first,
+	});
+	expect(
+		!malformed_group && malformed_group.error().code ==
+			ResourceLoadErrorCode::invalid_resource_key,
+		"opponent-group selection rejects a palette variant absent from the source"
 	);
 }
 

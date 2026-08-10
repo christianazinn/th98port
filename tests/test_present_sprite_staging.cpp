@@ -8,14 +8,17 @@
 #include <cstdlib>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace {
 
 using th03::assets::BfntConsumerPolicy;
 using th03::assets::BfntSheet;
 using th03::assets::PlanarBitmap4;
+using th03::assets::PiImage;
 using th03::present::BitSource;
 using th03::present::MainPlayerShotSheets;
+using th03::present::MainSprite16PiAssets;
 using th03::present::Page;
 using th03::present::Point;
 using th03::present::Raster;
@@ -87,6 +90,230 @@ BfntSheet make_character_sheet(std::uint8_t color_base)
 		sheet.glyphs.push_back({code, std::move(pixels)});
 	}
 	return sheet;
+}
+
+PiImage make_pi(
+	std::uint16_t width,
+	std::uint16_t height,
+	std::uint8_t even_color,
+	std::uint8_t odd_color
+)
+{
+	PiImage image{};
+	image.image.width = width;
+	image.image.height = height;
+	image.image.indices.resize(static_cast<std::size_t>(width) * height);
+	for(std::size_t y = 0U; y < height; ++y) {
+		const auto color = ((y & 1U) == 0U) ? even_color : odd_color;
+		const auto begin = y * width;
+		for(std::size_t x = 0U; x < width; ++x) {
+			image.image.indices[begin + x] = color;
+		}
+	}
+	return image;
+}
+
+MainSprite16PiAssets pi_assets(
+	PiImage &p1_shot,
+	PiImage &p2_shot,
+	PiImage &p1_extra,
+	PiImage &p2_extra,
+	PiImage &enemy_center,
+	PiImage &opponent_enemies
+)
+{
+	return {
+		.player_shots = {&p1_shot, &p2_shot},
+		.player_extra_shots = {&p1_extra, &p2_extra},
+		.enemy_center = &enemy_center,
+		.opponent_enemies = &opponent_enemies,
+	};
+}
+
+void test_main_pi_source_sheet_placement()
+{
+	auto p1_shot = make_pi(320U, 16U, 1U, 11U);
+	auto p2_shot = make_pi(320U, 16U, 2U, 12U);
+	auto p1_extra = make_pi(320U, 128U, 3U, 13U);
+	auto p2_extra = make_pi(320U, 144U, 4U, 14U);
+	auto enemy_center = make_pi(640U, 48U, 5U, 15U);
+	auto opponent_enemies = make_pi(640U, 192U, 6U, 10U);
+
+	// Distinct P2 endpoints make an accidental horizontal flip observable.
+	p2_shot.image.indices[0U] = 7U;
+	p2_shot.image.indices[319U] = 8U;
+
+	Raster raster;
+	expect(raster.set_access_page(Page::zero), "select untouched PI page zero");
+	expect(raster.plot({0, 200}, 9U), "seed untouched PI page zero");
+	expect(raster.set_access_page(Page::one), "select stale PI source page");
+	expect(
+		raster.clear({0, 0, 640U, 400U}, 9U),
+		"seed stale complete PI staging page"
+	);
+	expect(raster.set_access_page(Page::zero), "restore pre-handoff access page");
+
+	expect(
+		th03::present::main_prepare_sprite16_pi_source_sheet(
+			raster,
+			pi_assets(
+				p1_shot,
+				p2_shot,
+				p1_extra,
+				p2_extra,
+				enemy_center,
+				opponent_enemies
+			)
+		),
+		"prepare exact MAINL Sprite16 PI handoff"
+	);
+	expect(raster.access_page() == Page::one, "PI handoff leaves page one accessed");
+	expect_pixel(raster, Page::zero, {0, 200}, 9U, "PI handoff preserves page zero");
+	expect_pixel(raster, Page::one, {0, 0}, 0U, "PI handoff clears page-one upper half");
+	expect_pixel(raster, Page::one, {639, 199}, 0U, "PI handoff clears through upper row 199");
+	expect_pixel(raster, Page::one, {0, 200}, 1U, "P1 NN16 begins at 0,200");
+	expect_pixel(raster, Page::one, {319, 207}, 1U, "P1 NN16 reaches row 207");
+	expect_pixel(raster, Page::one, {320, 200}, 7U, "P2 NN16 keeps its left edge");
+	expect_pixel(raster, Page::one, {639, 200}, 8U, "P2 NN16 keeps its right edge");
+	expect_pixel(raster, Page::one, {0, 208}, 3U, "P1 NNEX begins at row 208");
+	expect_pixel(raster, Page::one, {319, 271}, 3U, "128-row NNEX ends at row 271");
+	expect_pixel(raster, Page::one, {0, 272}, 0U, "short NNEX leaves cleared gap");
+	expect_pixel(raster, Page::one, {0, 279}, 0U, "short NNEX gap reaches row 279");
+	expect_pixel(raster, Page::one, {320, 279}, 4U, "144-row NNEX reaches row 279");
+	expect_pixel(raster, Page::one, {0, 280}, 5U, "EN2 begins at row 280");
+	expect_pixel(raster, Page::one, {639, 303}, 5U, "EN2 terminal row is source row 46");
+	expect_pixel(raster, Page::one, {0, 304}, 6U, "opponent ENEMY begins at row 304");
+	expect_pixel(raster, Page::one, {639, 399}, 6U, "opponent ENEMY fills final VRAM row");
+}
+
+void test_main_pi_source_sheet_validation_is_atomic()
+{
+	auto p1_shot = make_pi(320U, 16U, 1U, 2U);
+	auto p2_shot = make_pi(320U, 16U, 2U, 3U);
+	auto p1_extra = make_pi(320U, 128U, 3U, 4U);
+	auto p2_extra = make_pi(320U, 144U, 4U, 5U);
+	auto enemy_center = make_pi(640U, 48U, 5U, 6U);
+	auto opponent_enemies = make_pi(640U, 192U, 6U, 7U);
+	auto assets = pi_assets(
+		p1_shot,
+		p2_shot,
+		p1_extra,
+		p2_extra,
+		enemy_center,
+		opponent_enemies
+	);
+
+	Raster raster;
+	expect(raster.set_access_page(Page::one), "select atomic PI destination");
+	expect(raster.plot({0, 200}, 9U), "seed atomic PI destination");
+	expect(raster.set_access_page(Page::zero), "select atomic PI caller page");
+
+	// The bad value sits on source row 191, which line-skip would discard.
+	opponent_enemies.image.indices.back() = 16U;
+	expect(
+		!th03::present::main_prepare_sprite16_pi_source_sheet(raster, assets),
+		"PI handoff validates every pixel before clearing"
+	);
+	expect(raster.access_page() == Page::zero, "invalid PI handoff preserves access page");
+	expect_pixel(raster, Page::one, {0, 200}, 9U, "invalid PI handoff preserves pixels");
+
+	opponent_enemies.image.indices.back() = 7U;
+	p1_shot.image.width = 319U;
+	expect(
+		!th03::present::main_prepare_sprite16_pi_source_sheet(raster, assets),
+		"PI handoff rejects a non-320x16 NN16 image"
+	);
+	expect_pixel(raster, Page::one, {0, 200}, 9U, "bad NN16 geometry is atomic");
+
+	p1_shot.image.width = 320U;
+	p1_extra.image.height = 130U;
+	expect(
+		!th03::present::main_prepare_sprite16_pi_source_sheet(raster, assets),
+		"PI handoff rejects an unsupported NNEX height"
+	);
+	expect_pixel(raster, Page::one, {0, 200}, 9U, "bad NNEX geometry is atomic");
+
+	p1_extra.image.height = 128U;
+	enemy_center.image.height = 46U;
+	expect(
+		!th03::present::main_prepare_sprite16_pi_source_sheet(raster, assets),
+		"PI handoff rejects a non-640x48 EN2 image"
+	);
+	expect_pixel(raster, Page::one, {0, 200}, 9U, "bad EN2 geometry is atomic");
+
+	enemy_center.image.height = 48U;
+	opponent_enemies.image.width = 639U;
+	expect(
+		!th03::present::main_prepare_sprite16_pi_source_sheet(raster, assets),
+		"PI handoff rejects a non-640x192 ENEMY image"
+	);
+	expect_pixel(raster, Page::one, {0, 200}, 9U, "bad ENEMY geometry is atomic");
+
+	opponent_enemies.image.width = 640U;
+	assets.enemy_center = nullptr;
+	expect(
+		!th03::present::main_prepare_sprite16_pi_source_sheet(raster, assets),
+		"PI handoff rejects a missing EN2 image"
+	);
+	expect_pixel(raster, Page::one, {0, 200}, 9U, "missing PI image is atomic");
+}
+
+void test_main_pi_bfnt_commit_compatibility()
+{
+	auto p1_shot = make_pi(320U, 16U, 1U, 2U);
+	auto p2_shot = make_pi(320U, 16U, 2U, 3U);
+	auto p1_extra = make_pi(320U, 128U, 3U, 4U);
+	auto p2_extra = make_pi(320U, 128U, 4U, 5U);
+	auto enemy_center = make_pi(640U, 48U, 5U, 6U);
+	auto opponent_enemies = make_pi(640U, 192U, 9U, 10U);
+	auto player_one = make_character_sheet(1U);
+	auto player_two = make_character_sheet(4U);
+
+	Raster raster;
+	expect(
+		th03::present::main_prepare_sprite16_pi_source_sheet(
+			raster,
+			pi_assets(
+				p1_shot,
+				p2_shot,
+				p1_extra,
+				p2_extra,
+				enemy_center,
+				opponent_enemies
+			)
+		),
+		"prepare PI sheet before MAIN startup"
+	);
+	expect(
+		raster.copy_page(
+			Page::one,
+			{0, 0, 640U, 400U},
+			Page::zero,
+			{0, 0}
+		),
+		"carry MAINL page one into MAIN page zero"
+	);
+
+	Sprite16Staging staging;
+	expect(
+		staging.stage_main_shots(raster, {&player_one, &player_two}),
+		"BFNT shots overlay both carried PI sheets"
+	);
+	for(const auto page : {Page::zero, Page::one}) {
+		expect_pixel(raster, page, {544, 328}, 1U, "BFNT opaque pixel overwrites PI");
+		expect_pixel(raster, page, {545, 328}, 9U, "BFNT transparent pixel preserves PI");
+		expect_pixel(raster, page, {543, 328}, 9U, "BFNT overlay preserves neighbor");
+	}
+	expect(staging.commit(raster), "commit combined PI and BFNT source sheet");
+	expect(staging.committed(), "combined source sheet produces alpha masks");
+	expect_pixel(raster, Page::one, {544, 328}, 1U, "commit retains BFNT overwrite");
+	expect_pixel(raster, Page::one, {545, 328}, 9U, "commit retains PI transparency");
+	const auto positive = staging.positive_alpha();
+	expect(
+		positive.has_value() && mask_bit(*positive, 544U, 128U) &&
+		mask_bit(*positive, 545U, 128U),
+		"alpha commit covers both BFNT and retained PI pixels"
+	);
 }
 
 void test_constants_and_initial_state()
@@ -267,6 +494,9 @@ void test_recommit_and_invalid_sheet()
 int main()
 {
 	test_constants_and_initial_state();
+	test_main_pi_source_sheet_placement();
+	test_main_pi_source_sheet_validation_is_atomic();
+	test_main_pi_bfnt_commit_compatibility();
 	test_main_shot_placement_and_commit();
 	test_recommit_and_invalid_sheet();
 	if(failures != 0) {

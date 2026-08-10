@@ -228,7 +228,7 @@ void boss_update_kotohime(
 	GameplayObserver *observer
 ) noexcept
 {
-	if(boss_launch_or_reverse(state, player_id)) {
+	if(boss_launch_or_reverse(state, player_id, observer)) {
 		state.boss.params[0] = static_cast<std::uint8_t>(
 			(state.gba_boss_level / 2U) + 0x10U
 		);
@@ -299,7 +299,7 @@ void boss_update_kotohime(
 	state.boss.hp = exact::wrap_subtract(
 		state.boss.hp, static_cast<std::uint16_t>(damage)
 	);
-	boss_defeat_if_needed(state, target_player);
+	boss_defeat_if_needed(state, target_player, observer);
 }
 
 void boss_pattern_kana_accel_ring(
@@ -520,7 +520,7 @@ void boss_update_kana(
 	GameplayObserver *observer
 ) noexcept
 {
-	if(boss_launch_or_reverse(state, player_id)) {
+	if(boss_launch_or_reverse(state, player_id, observer)) {
 		state.boss.params[0] = static_cast<std::uint8_t>(
 			(state.gba_boss_level / 2U) + 0x10U
 		);
@@ -592,5 +592,5 @@ void boss_update_kana(
 	state.boss.hp = exact::wrap_subtract(
 		state.boss.hp, static_cast<std::uint16_t>(damage)
 	);
-	boss_defeat_if_needed(state, target_player);
+	boss_defeat_if_needed(state, target_player, observer);
 }

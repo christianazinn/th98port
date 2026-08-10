@@ -38,6 +38,19 @@ inline constexpr std::uint16_t cutscene_pi_height = 200U;
 	const assets::PiImage &image
 );
 
+// Portable equivalent of loading a PI with PIF_LINESKIP and then putting it.
+// The output height is floor(source height / 2): decoded source row 2*j is
+// written to destination row j, every odd row and any final unpaired even row
+// are discarded. X alignment, width truncation, clipping, and 400-line
+// wrapping otherwise match pi_put_8(). The complete decoded image is validated
+// before the first destination pixel is changed.
+[[nodiscard]] bool pi_put_lineskip_8(
+	Raster &raster,
+	std::int32_t left,
+	std::int32_t top,
+	const assets::PiImage &image
+);
+
 // TH03 cutscene pictures are the four 320x200 quarters of a 640x400 PI. These
 // operations write the selected quarter at the source's fixed (160, 64)
 // destination. A masked step copies only pixels selected by the corresponding

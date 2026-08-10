@@ -629,7 +629,7 @@ After player update, the observable late phase is exactly:
    draw pass and jump directly to counters.
 7. Enable EGC.
 8. P1 Bomb callback, then P2 Bomb callback.
-9. P1 Boss renderer, then P2 Boss renderer.
+9. Run the single installed renderer for the currently launched global Boss.
 10. `shots_render()`.
 11. `enemies_render()`.
 12. `fireballs_hittest_and_render()`; its hit testing remains core work at this
@@ -869,7 +869,7 @@ This table is not permission to guess.
 | Gauge/result/combo visuals | `gaugeovl.cpp`, `score_rn.asm`, `combo.cpp`, `shot.cpp::sub_E3F2()`, `hitcirc.cpp::sub_B4A8/sub_B60A` | Split: core owns score/result/combo mutation and callback selection; presenter owns raster/palette/animation payload at the same schedule position |
 | Character Charge/Extra draw state | render callbacks enumerated in the source disposition matrix below | Presenter owns scratch cursors, clips, sprite cels and stale render-only bytes; core retains Reimu's render-owned Extra age increment |
 | Character Bomb visual state | Reimu/Mima/Marisa records, Ellen vectors/release cursor, later-character palette/effect geometry | Split: persistent visual records in presenter; all shared RNG and gameplay-affecting late mutations remain core, with gameplay facts and raw site-tagged results optionally observed |
-| Character Boss visual state | `gba_boss_render_*()` and per-character render bytes | Presenter owns sprite/geometry/clip state; core retains Mima/Kotohime and any other proven later-gameplay writes |
+| Character Boss visual state | `gba_boss_render_*()` and per-character render bytes | `MainBossPresenter` owns exact all-nine sprite/geometry/clip payload plus Ellen, Rikako, and Chiyuri private bytes; core retains only proven later-gameplay writes and exposes a borrowed pre-mutation view |
 | OP scene state | `th03/op/m_main.cpp`, `th03/op_01.cpp`, `th03/op/m_select.cpp`, shared music room | Application/presenter; explicit resident seed handoff to core |
 | MAINL scenes | `screens.cpp`, cutscene/continue, high-score registration, staff roll | Application/presenter; persistence and route choices outside presenter |
 
@@ -895,7 +895,7 @@ native file name because no presentation tree exists yet.
 | `chargeshot_render_reimu/mima/marisa/ellen` in `ch_shot.cpp` and `main_08.cpp`; character 4-8 renderers in `main_10.cpp`, `main_09.cpp`, `main_11.cpp`, `main_07.cpp`, `main/bullet/bullet.cpp` | Charge draw callbacks and scratch cursors | Presenter-only draw state; no presenter RNG. Core remains source of charge records |
 | `exatt_render_*` in `main_06.cpp` and `main/player/exatt.cpp` | Extra draw callbacks | Presenter-only except Reimu's source render-owned age increment, which remains core at the exact late gameplay phase |
 | `bomb_func[]` targets in `ch_shot.cpp`, `main/bullet/mbomb.cpp`, `main/player/chybomb.cpp`, `main_05.cpp`, `main/player/yumemi_bomb.cpp` | Bomb palette/effect geometry plus visual RNG and foreground feedback | Core retains foreground writes, shared RNG, and Ellen release coupling; it reports gameplay facts and already-consumed values only; presenter owns all draw records/palette effects |
-| `gba_boss_render_*` in `main_03p.cpp` through `main_03x.cpp` | Per-character Boss sprites/effects and some hidden mutation | Core retains proven Mima/Kotohime renderer-fed gameplay state; presenter owns the remaining sprite/geometry/clip/animation state |
+| `gba_boss_render_*` in `main_03p.cpp` through `main_03x.cpp` | Per-character Boss sprites/effects and some hidden mutation | Integrated split: a borrowed pre-mutation Boss view drives the all-nine presenter; core then performs proven Mima/Kotohime gameplay mutation, with semantic lifecycle facts for palette and private animation timing |
 | `th03/op/m_main.cpp::op_animate/op_fadein_animate/box_animate`; `th03/op_01.cpp` | Title/menu graphics, TRAM, fades, resident RNG cadence | Native application scene + Authentic presenter; explicit logical wait count feeds resident seed |
 | `th03/op/m_select.cpp::select_*` | Character selection assets, curves, pages, fades | Native application scene + presenter; preserve Anniversary flip order |
 | `th03/op_music.cpp` / `th02/op/m_music.cpp` | Music-room UI, B-plane polygons, double buffering | Native application/presenter; presentation-local RNG and separate audio service |
@@ -935,15 +935,17 @@ already-resolved seams rather than moving callbacks wholesale:
 - Reimu Extra Attack increments age in its source render phase. Core retains
   the increment at `extra_attacks_render_phase_update()`; presenter draws from
   the observed gameplay state after that mutation.
-- Mima Boss rendering mutates state later used by gameplay. Core retains that
+- Mima Boss rendering mutates state later used by gameplay. The presenter
+  consumes the borrowed pre-mutation view first; core then retains that exact
   source-position mutation.
 - Ellen Bomb rendering owns the shared release cursor/reset and consumes the
   angle used by subsequent bomb update behavior. Core retains the coupling and
   can report the resulting gameplay fact and raw site-tagged RNG result.
 - Kotohime state-0 Boss rendering (`gba_boss_render_kotohime()`,
   `kotohime_120A0()`, `kotohime_12103()` in `th03/main_03u.cpp`) seeds later
-  gameplay orbit angle/radius. Core's `boss_render_phase_update()` retains it;
-  only the transient draw mode is presenter-owned.
+  gameplay orbit angle/radius. The borrowed Boss view precedes
+  `boss_render_phase_update()`, which retains the mutation; only the transient
+  draw mode is presenter-owned.
 - Chiyuri state-0 Boss renderer writes materialization-only angle/radius values,
   but source evidence shows they are consumed only inside that renderer and
   overwritten before gameplay use. They remain presenter-owned.
@@ -978,7 +980,7 @@ coverage. A row never authorizes renderer state in core.
 | Chiyuri Bomb | Retain foreground shift on frames 64..143, consume four `SUB_CE5B()` values at each of frames 64,80,96,112,128 (20 total), and reset from 144; report raw results/site/ordinals | Interpret results and own the 20 effect spawns plus palette/tone geometry |
 | Yumemi Bomb | Retain foreground shift on frames 65..143, consume one `SUB_CE5B()` value at frames 72,80,...,136 (nine total), report raw results/site/ordinals, reset from 144, and preserve order before later Boss/Extra callbacks | Interpret results and own the nine spawned effects plus palette/tone geometry |
 | Gauge callbacks | Retain all bullet/pellet mechanics and any `SUB_CE5B` draw; report semantic attack milestones and raw results/site/ordinals only | Derive `SUB_CDBD/SUB_CE0C` geometry, interpret RNG results, and own palette actions at the original private schedule position |
-| Boss render callbacks | Perform the proven Mima/Kotohime gameplay mutations at the exact late phase; expose the post-mutation gameplay facts | Own sprite, orbit, materialization, defeat-palette, and clipping payload |
+| Boss render callbacks | Expose one borrowed pre-mutation Boss view after Bombs, then perform the proven Mima/Kotohime gameplay mutations before Shots; report only semantic activation/animation/palette lifecycle facts | Own all-nine sprite, orbit, materialization, terminal, palette, and clipping payload plus the three proven private animation bytes |
 | Extra render callbacks | Perform Reimu age increment at the exact late phase | Observe the updated gameplay age; own all character draw payload and render scratch state |
 | Charge render callbacks | No extra core output beyond ordinary gameplay phase facts; callbacks consume no shared RNG in the audited paths | Own character draw payload, cursor, and clip state |
 | Score/gauge/combo/result | Perform mutations and control decisions before reporting the corresponding gameplay facts | Render exact displayed values and transitions without feeding them back |
@@ -1315,6 +1317,13 @@ Exit tests:
 Port Charge, Extra, Gauge, Bomb, and Boss draw payloads character by character,
 starting with the character pair already exercised by the smallest useful
 capture.
+
+Implementation status: Gauge, Bomb, and Boss are complete for all nine
+characters under strict GCC/MSVC source-derived contract tests. Boss includes
+the exact six-PI MAINL atlas handoff, borrowed pre-mutation phase, terminal
+frame, palette lifecycle, and process-private animation state. Extra and Charge
+remain the unfinished character families; captured PC-98 pixel parity remains
+the later visual-oracle gate for every family.
 
 Exit tests for each character:
 
