@@ -72,6 +72,10 @@ public:
 
 	[[nodiscard]] MainBackgroundStatus status() const noexcept;
 	[[nodiscard]] bool ready() const noexcept;
+	// True only after the complete fresh D092/D2E8 initialization fact stream
+	// has been consumed. `ready()` alone also describes the valid pre-stream
+	// state used while an application assembles a MAIN process.
+	[[nodiscard]] bool initialization_complete() const noexcept;
 
 private:
 	struct Record {

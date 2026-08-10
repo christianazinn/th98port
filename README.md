@@ -123,6 +123,11 @@ split comparisons. Original game data and replay captures remain external.
   Production MAIN import accepts only the complete supported executable
   profile; default tests use synthetic bytes and optional local gates remain
   byte-silent.
+- `th03_app_main` owns one stable-address direct-VS MAIN process. It
+  reauthenticates and decodes the selected external batch, performs source-
+  ordered background/static/palette/atlas startup, retains every presenter and
+  backing span, and guards all Game lifecycle calls through MainRound. It is a
+  platform-neutral process boundary, not yet a windowed application.
 - MAIN palette primitives preserve the source's logical RGB8 values separately
   from applied RGB4 DAC output, including its process baseline, raw tone, and
   explicit deferred-apply latch. Neutral Bomb/Warning/defeat/footer lifecycle

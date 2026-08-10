@@ -43,12 +43,14 @@ constexpr GrcgClipRect full_zoomed_clip{0, 0, 639, 199};
 
 [[nodiscard]] constexpr bool valid_sheet_range(
 	const PreparedSuperimposeSheet *sheet,
+	std::uint16_t width,
+	std::uint16_t height,
 	std::uint16_t last_code
 ) noexcept
 {
 	return sheet != nullptr && sheet->first_code() == 0U &&
-		sheet->last_code() == last_code && sheet->pixel_width() == 32U &&
-		sheet->pixel_height() == 32U;
+		sheet->last_code() == last_code && sheet->pixel_width() == width &&
+		sheet->pixel_height() == height;
 }
 
 [[nodiscard]] bool valid_cells(
@@ -101,14 +103,14 @@ struct ResolvedPattern {
 	std::uint8_t global_pattern
 ) noexcept
 {
-	if(global_pattern >= 18U && global_pattern <= 25U) {
+	if(global_pattern >= 18U && global_pattern <= 21U) {
 		return {sheets.lose, static_cast<std::uint16_t>(global_pattern - 18U)};
 	}
-	if(global_pattern >= 26U && global_pattern <= 36U) {
-		return {sheets.round, static_cast<std::uint16_t>(global_pattern - 26U)};
+	if(global_pattern >= 22U && global_pattern <= 43U) {
+		return {sheets.round, static_cast<std::uint16_t>(global_pattern - 22U)};
 	}
-	if(global_pattern >= 37U && global_pattern <= 44U) {
-		return {sheets.zikicw, static_cast<std::uint16_t>(global_pattern - 37U)};
+	if(global_pattern >= 44U && global_pattern <= 59U) {
+		return {sheets.zikicw, static_cast<std::uint16_t>(global_pattern - 44U)};
 	}
 	return {};
 }
@@ -172,9 +174,9 @@ MainHudResultPresenter::MainHudResultPresenter(
 	if(score_font_.rows.size() != score_font_mask_bytes ||
 		score_font_.row_order != PackedRowOrder::bottom_to_top ||
 		trig_.sine_q8.size() != 256U || trig_.cosine_q8.size() != 256U ||
-		!valid_sheet_range(sheets_.lose, 7U) ||
-		!valid_sheet_range(sheets_.round, 10U) ||
-		!valid_sheet_range(sheets_.zikicw, 7U) ||
+		!valid_sheet_range(sheets_.lose, 64U, 32U, 3U) ||
+		!valid_sheet_range(sheets_.round, 32U, 16U, 21U) ||
+		!valid_sheet_range(sheets_.zikicw, 32U, 16U, 15U) ||
 		!valid_tram_assets(tram_assets_) || continues_used_digit_ > 3U) {
 		status_ = MainHudResultStatus::invalid_assets;
 	}
@@ -472,7 +474,7 @@ void MainHudResultPresenter::main_hud_start_state(
 				state.story_mode ? state.story_stage : state.round_id
 			)
 		);
-		if((show_digit && (digit_pattern > 44U ||
+		if((show_digit && (digit_pattern > 43U ||
 			!pattern_exists(sheets_, static_cast<std::uint8_t>(digit_pattern)))) ||
 			(!pattern_exists(sheets_, hud_pattern_base_) ||
 			 !pattern_exists(sheets_, static_cast<std::uint8_t>(hud_pattern_base_ + 1U)) ||

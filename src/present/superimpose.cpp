@@ -225,17 +225,16 @@ bool superimpose_put_blue_plane_row_white(
 ) noexcept
 {
 	constexpr std::uint16_t required_width = 32U;
-	constexpr std::uint16_t required_height = 32U;
 	constexpr std::size_t source_stride = required_width / 8U;
 	const auto glyph_count = static_cast<std::size_t>(
 		static_cast<std::uint32_t>(sheet.last_code_) - sheet.first_code_ + 1U
 	);
 	const auto total_plane_size = sheet.plane_size_ * glyph_count;
 	const auto white = GrcgTile::solid(15U);
-	if(sheet.width_ != required_width || sheet.height_ != required_height ||
-		sheet.plane_size_ != (source_stride * required_height) ||
+	if(sheet.width_ != required_width ||
+		sheet.plane_size_ != (source_stride * sheet.height_) ||
 		glyph_code < sheet.first_code_ || glyph_code > sheet.last_code_ ||
-		source_row >= required_height ||
+		source_row >= sheet.height_ ||
 		sheet.color_planes_[0].size() != total_plane_size || !white) {
 		return false;
 	}

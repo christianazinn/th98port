@@ -22,6 +22,9 @@ enum class MainHudResultStatus : std::uint8_t {
 };
 
 struct MainHudResultSheets {
+	// Native BF2 registry spans after the two 9-glyph character sheets:
+	// LOSE = global 18..21 at 64x32, ROUND = 22..43 at 32x16, and
+	// ZIKICW = 44..59 at 32x16.
 	const PreparedSuperimposeSheet *lose = nullptr;
 	const PreparedSuperimposeSheet *round = nullptr;
 	const PreparedSuperimposeSheet *zikicw = nullptr;

@@ -180,6 +180,21 @@ target_compile_features(th03_formats PUBLIC cxx_std_23)
 set_target_properties(th03_formats PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_formats)
 
+# Stable-address owner/coordinator for one complete direct-VS MAIN process.
+# It consumes authenticated resource/content inputs and exposes only guarded
+# lifecycle, diagnostics, and composed output operations.
+add_library(th03_app_main STATIC
+	src/app/main_process.cpp
+)
+target_include_directories(th03_app_main PUBLIC include)
+target_link_libraries(
+	th03_app_main
+	PUBLIC th03_app_resources th03_app_content th03_formats
+)
+target_compile_features(th03_app_main PUBLIC cxx_std_23)
+set_target_properties(th03_app_main PROPERTIES CXX_EXTENSIONS OFF)
+th03_set_warnings(th03_app_main)
+
 add_executable(th03-headless apps/th03-headless/main.cpp)
 target_link_libraries(th03-headless PRIVATE th03_formats)
 th03_set_warnings(th03-headless)
@@ -285,6 +300,19 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-main-compiled-content-tests
 		COMMAND th03-app-main-compiled-content-tests
+	)
+
+	add_executable(th03-app-main-process-tests
+		tests/test_app_main_process.cpp
+	)
+	target_link_libraries(
+		th03-app-main-process-tests
+		PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-main-process-tests)
+	add_test(
+		NAME th03-app-main-process-tests
+		COMMAND th03-app-main-process-tests
 	)
 
 	add_executable(th03-present-tests

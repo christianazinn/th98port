@@ -179,9 +179,9 @@ struct SyntheticAssets {
 	BfntSheet player_one = make_sheet(32U, 32U, 9U, 0U);
 	BfntSheet player_two = make_sheet(32U, 32U, 9U, 5U);
 	BfntSheet gauge = make_sheet(32U, 16U, 16U, 9U);
-	BfntSheet lose = make_sheet(32U, 32U, 8U, 2U);
-	BfntSheet round = make_sheet(32U, 32U, 11U, 4U);
-	BfntSheet zikicw = make_sheet(32U, 32U, 8U, 6U);
+	BfntSheet lose = make_sheet(64U, 32U, 4U, 2U);
+	BfntSheet round = make_sheet(32U, 16U, 22U, 4U);
+	BfntSheet zikicw = make_sheet(32U, 16U, 16U, 6U);
 	std::array<std::uint8_t, pellet_mask_bytes> pellets{};
 	std::array<std::uint8_t, score_font_mask_bytes> score_font{};
 	std::array<std::array<TramCell, 32U>, 9U> result_labels{};

@@ -44,14 +44,14 @@ struct ResolvedPattern {
 	std::uint8_t global_pattern
 ) noexcept
 {
-	if(global_pattern >= 18U && global_pattern <= 25U) {
+	if(global_pattern >= 18U && global_pattern <= 21U) {
 		return {sheets.lose, static_cast<std::uint16_t>(global_pattern - 18U)};
 	}
-	if(global_pattern >= 26U && global_pattern <= 36U) {
-		return {sheets.round, static_cast<std::uint16_t>(global_pattern - 26U)};
+	if(global_pattern >= 22U && global_pattern <= 43U) {
+		return {sheets.round, static_cast<std::uint16_t>(global_pattern - 22U)};
 	}
-	if(global_pattern >= 37U && global_pattern <= 44U) {
-		return {sheets.zikicw, static_cast<std::uint16_t>(global_pattern - 37U)};
+	if(global_pattern >= 44U && global_pattern <= 59U) {
+		return {sheets.zikicw, static_cast<std::uint16_t>(global_pattern - 44U)};
 	}
 	return {};
 }

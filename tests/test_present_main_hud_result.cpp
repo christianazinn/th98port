@@ -162,9 +162,9 @@ struct Fixture {
 
 	void prepare(std::uint8_t continues = 0U)
 	{
-		lose = th03::present::prepare_superimpose_sheet(make_sheet(8U));
-		round = th03::present::prepare_superimpose_sheet(make_sheet(11U));
-		zikicw = th03::present::prepare_superimpose_sheet(make_sheet(8U));
+		lose = th03::present::prepare_superimpose_sheet(make_sheet(4U, 64U, 32U));
+		round = th03::present::prepare_superimpose_sheet(make_sheet(22U, 32U, 16U));
+		zikicw = th03::present::prepare_superimpose_sheet(make_sheet(16U, 32U, 16U));
 		expect(lose.has_value() && round.has_value() && zikicw.has_value(),
 			"prepare synthetic HUD/result sheets");
 		expect(
@@ -226,16 +226,16 @@ void test_constructor_and_support_helpers()
 	Fixture fixture;
 	fixture.prepare();
 	expect(
-		fixture.lose->pixel_width() == 32U &&
+		fixture.lose->pixel_width() == 64U &&
 		fixture.lose->pixel_height() == 32U,
 		"prepared superimpose dimensions are observable"
 	);
 	expect(fixture.clear(), "clear row primitive output");
 	expect(
 		th03::present::superimpose_put_blue_plane_row_white(
-			fixture.raster, *fixture.lose, {0, 12}, 0U, 7U
+			fixture.raster, *fixture.round, {0, 12}, 0U, 7U
 		),
-		"flying row primitive accepts exact 32x32 sheet"
+		"flying row primitive accepts exact 32x16 sheet"
 	);
 	for(std::int32_t x = 0; x < 32; ++x) {
 		expect_pixel(fixture.raster, {x, 12}, 15U, "flying row writes B mask white");
@@ -243,7 +243,7 @@ void test_constructor_and_support_helpers()
 	expect(fixture.clear(), "clear clipped row output");
 	expect(
 		th03::present::superimpose_put_blue_plane_row_white(
-			fixture.raster, *fixture.lose, {-8, 12}, 0U, 7U
+			fixture.raster, *fixture.round, {-8, 12}, 0U, 7U
 		),
 		"flying row accepts negative byte start"
 	);
@@ -270,7 +270,7 @@ void test_constructor_and_support_helpers()
 	expect_pixel(fixture.raster, {2, 12}, 0U, "byte rotation preserves left neighbor");
 	expect_pixel(fixture.raster, {4, 12}, 0U, "byte rotation preserves right neighbor");
 
-	auto wrong = th03::present::prepare_superimpose_sheet(make_sheet(8U, 8U, 1U));
+	auto wrong = th03::present::prepare_superimpose_sheet(make_sheet(4U, 32U, 32U));
 	expect(wrong.has_value(), "prepare range-correct wrong-size sheet");
 	MainHudResultPresenter invalid(
 		fixture.raster,
@@ -325,7 +325,7 @@ void test_hud_banner_and_particles()
 	banner.presenter->hud_start_frame_step({false, false, 0U, 1U, 0U, 68U});
 	banner.presenter->main_hud_start_state({1U, false, 0U, 1U, 0U});
 	expect_pixel(
-		banner.raster, {64, 84}, 1U,
+		banner.raster, {64, 84}, 9U,
 		"state-one handoff uses record fifteen X"
 	);
 	expect_pixel(
@@ -372,6 +372,20 @@ void test_hud_banner_and_particles()
 	expect(
 		state_one_boundary.presenter->ready(),
 		"state-one transition to state two resets semantic frame to zero"
+	);
+
+	Fixture digit_overflow;
+	digit_overflow.prepare();
+	digit_overflow.presenter->hud_start_frame_step({
+		false, true, 10U, 0U, 1U, 23U,
+	});
+	digit_overflow.presenter->main_hud_start_state({
+		0U, true, 10U, 1U, 24U,
+	});
+	expect(
+		digit_overflow.presenter->status() ==
+			MainHudResultStatus::invalid_event_sequence,
+		"story digit cannot spill from ROUND into ZIKICW"
 	);
 
 	Fixture malformed;

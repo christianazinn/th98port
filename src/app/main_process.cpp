@@ -1,0 +1,957 @@
+#include "th03/app/main_process.hpp"
+
+#include "main_process_internal.hpp"
+
+#include <array>
+#include <bit>
+#include <cstddef>
+#include <cstdint>
+#include <expected>
+#include <memory>
+#include <optional>
+#include <span>
+#include <utility>
+#include <vector>
+
+#include "th03/app/authentic_text.hpp"
+#include "th03/assets/decode.hpp"
+#include "th03/exact/trig.hpp"
+#include "th03/formats/enedat.hpp"
+#include "th03/present/main_background.hpp"
+#include "th03/present/main_bombs.hpp"
+#include "th03/present/main_boss.hpp"
+#include "th03/present/main_effects.hpp"
+#include "th03/present/main_entities.hpp"
+#include "th03/present/main_extra_charge.hpp"
+#include "th03/present/main_hud_result.hpp"
+#include "th03/present/main_players_bullets.hpp"
+#include "th03/present/main_static.hpp"
+#include "th03/present/main_warning_gauge.hpp"
+#include "th03/present/sprite_staging.hpp"
+#include "th03/present/superimpose.hpp"
+
+namespace th03::app {
+namespace {
+
+using ResourceResult = std::expected<
+	const LoadedMainResource *,
+	MainProcessError
+>;
+
+[[nodiscard]] MainProcessError process_error(
+	MainProcessErrorCode code,
+	std::optional<MainResourceKey> resource = std::nullopt
+)
+{
+	return MainProcessError{.code = code, .resource = resource};
+}
+
+[[nodiscard]] MainProcessError asset_error(
+	MainResourceKey resource,
+	assets::AssetError error
+)
+{
+	auto result = process_error(
+		MainProcessErrorCode::asset_decode_failed,
+		resource
+	);
+	result.asset_error.emplace(std::move(error));
+	return result;
+}
+
+[[nodiscard]] MainProcessError core_error(
+	MainProcessErrorCode code,
+	Error error
+)
+{
+	auto result = process_error(code);
+	result.core_error.emplace(std::move(error));
+	return result;
+}
+
+[[nodiscard]] MainProcessError presentation_error(
+	present::MainRoundStatus status
+)
+{
+	auto result = process_error(MainProcessErrorCode::presentation_failed);
+	result.presentation_status = status;
+	return result;
+}
+
+[[nodiscard]] bool valid_selection(MainPlayerSelection selection) noexcept
+{
+	return selection.character >= MainCharacter::reimu &&
+		selection.character <= MainCharacter::yumemi &&
+		selection.palette >= MainPaletteVariant::first &&
+		selection.palette <= MainPaletteVariant::second;
+}
+
+[[nodiscard]] std::int8_t paletted_character(
+	MainPlayerSelection selection
+) noexcept
+{
+	const auto character = static_cast<std::uint8_t>(selection.character);
+	const auto palette = static_cast<std::uint8_t>(selection.palette);
+	return static_cast<std::int8_t>(
+		((character - 1U) * 2U) + palette
+	);
+}
+
+[[nodiscard]] bool selects_kotohime(MainPlayerSelection selection) noexcept
+{
+	return selection.character == MainCharacter::kotohime;
+}
+
+[[nodiscard]] MainResourceKey player_key(
+	MainResourceRole role,
+	MainPlayerSelection selection
+) noexcept
+{
+	return {
+		.role = role,
+		.character = selection.character,
+		.palette = selection.palette,
+	};
+}
+
+[[nodiscard]] std::span<const std::byte> resource_bytes(
+	const LoadedMainResource &resource
+) noexcept
+{
+	return *resource.bytes;
+}
+
+[[nodiscard]] bool same_resource_spec(
+	const MainResourceSpec &actual,
+	const MainResourceSpec &canonical
+) noexcept
+{
+	return actual.key == canonical.key && actual.scene == canonical.scene &&
+		actual.archive == canonical.archive &&
+		actual.decoder == canonical.decoder &&
+		actual.logical_role == canonical.logical_role &&
+		actual.filename == canonical.filename &&
+		actual.expected_bytes == canonical.expected_bytes &&
+		actual.expected_fnv1a64 == canonical.expected_fnv1a64;
+}
+
+[[nodiscard]] std::expected<void, MainProcessError> validate_resource_set(
+	std::span<const LoadedMainResource> resources,
+	const std::vector<MainResourceKey> &expected,
+	bool authenticate_resource_bytes
+)
+{
+	if(resources.size() != expected.size()) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::resource_set_mismatch
+		));
+	}
+	for(const auto key : expected) {
+		std::size_t matches = 0U;
+		for(const auto &resource : resources) {
+			if(resource.spec.key == key) {
+				++matches;
+			}
+		}
+		if(matches != 1U) {
+			return std::unexpected(process_error(
+				MainProcessErrorCode::resource_set_mismatch,
+				key
+			));
+		}
+	}
+	for(const auto &resource : resources) {
+		if(!resource.bytes) {
+			return std::unexpected(process_error(
+				MainProcessErrorCode::resource_bytes_missing,
+				resource.spec.key
+			));
+		}
+		const auto canonical = main_resource_spec(resource.spec.key);
+		if(!canonical || !same_resource_spec(resource.spec, *canonical)) {
+			return std::unexpected(process_error(
+				MainProcessErrorCode::resource_set_mismatch,
+				resource.spec.key
+			));
+		}
+		if(resource.bytes->size() != canonical->expected_bytes ||
+			(authenticate_resource_bytes &&
+			 main_resource_fnv1a64(*resource.bytes) !=
+				 canonical->expected_fnv1a64)) {
+			return std::unexpected(process_error(
+				MainProcessErrorCode::resource_integrity_failed,
+				resource.spec.key
+			));
+		}
+	}
+	return {};
+}
+
+[[nodiscard]] ResourceResult find_resource(
+	std::span<const LoadedMainResource> resources,
+	MainResourceKey key
+)
+{
+	const LoadedMainResource *found = nullptr;
+	for(const auto &resource : resources) {
+		if(resource.spec.key == key) {
+			if(found != nullptr) {
+				return std::unexpected(process_error(
+					MainProcessErrorCode::resource_set_mismatch,
+					key
+				));
+			}
+			found = &resource;
+		}
+	}
+	if(found == nullptr) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::resource_set_mismatch,
+			key
+		));
+	}
+	return found;
+}
+
+template <typename Value, typename Decoder>
+[[nodiscard]] std::expected<Value, MainProcessError> decode_asset(
+	std::span<const LoadedMainResource> resources,
+	MainResourceKey key,
+	Decoder decode
+)
+{
+	const auto resource = find_resource(resources, key);
+	if(!resource) {
+		return std::unexpected(resource.error());
+	}
+	auto decoded = decode(resource_bytes(**resource));
+	if(!decoded) {
+		return std::unexpected(asset_error(key, std::move(decoded.error())));
+	}
+	return std::move(*decoded);
+}
+
+[[nodiscard]] std::optional<present::MainHudState> hud_state_from_round(
+	const RoundStartObservation &round
+) noexcept
+{
+	present::MainHudState hud{};
+	switch(round.start.game_mode) {
+	case game_mode::story:
+		hud.game_mode = present::MainGameMode::story;
+		break;
+	case game_mode::demo:
+		hud.game_mode = present::MainGameMode::demo;
+		break;
+	case game_mode::vs_1p_cpu:
+	case game_mode::vs_1p_2p:
+	case game_mode::vs_cpu_cpu:
+		hud.game_mode = present::MainGameMode::versus;
+		break;
+	default:
+		return std::nullopt;
+	}
+	hud.story_lives = round.start.story_lives;
+	hud.boss_level = round.round.state.boss_attack_level;
+	for(std::size_t player = 0U; player < hud.players.size(); ++player) {
+		hud.players[player] = {
+			.halfhearts = round.runtime.players[player].halfhearts,
+			.bombs = round.runtime.players[player].bombs,
+			.rounds_won = round.round.state.rounds_won[player],
+			.gauge_level = round.round.state.gauge_attack_level[player],
+		};
+	}
+	return hud;
+}
+
+[[nodiscard]] GameInit direct_game_init(
+	const MainDirectVsConfig &config
+) noexcept
+{
+	GameInit init{};
+	init.resident_rand = std::bit_cast<std::int32_t>(config.seed);
+	init.random_seed = config.seed;
+	init.game_mode = game_mode::vs_1p_2p;
+	init.rank = config.rank;
+	init.key_mode = config.key_mode;
+	init.remaining_credits = 3U;
+	init.paletted_character = {
+		paletted_character(config.player_one),
+		paletted_character(config.player_two),
+	};
+	return init;
+}
+
+} // namespace
+
+struct MainProcess::Impl {
+	MainDirectVsConfig config{};
+	std::optional<MainCompiledContent> compiled_content{};
+	std::vector<std::byte> font_rom{};
+	std::optional<Pc98FontRomProvider> font_provider{};
+	std::optional<PreparedGameftGaiji> gameft_gaiji{};
+	std::array<std::int16_t, 256U> sine_q8{};
+	std::array<std::int16_t, 256U> cosine_q8{};
+
+	assets::BfntSheet gameft{};
+	assets::BfntSheet lose_sheet{};
+	assets::BfntSheet round_sheet{};
+	assets::BfntSheet zikicw_sheet{};
+	std::array<assets::BfntSheet, 2U> character_sheets{};
+	std::array<assets::MrsImage, 2U> extra_portraits{};
+	std::array<assets::MrsImage, 2U> bomb_portraits{};
+	std::array<assets::PiImage, 2U> player_shots{};
+	std::array<assets::PiImage, 2U> player_extra_shots{};
+	assets::PiImage enemy_center{};
+	assets::PiImage opponent_enemies{};
+	std::optional<present::PreparedSuperimposeSheet> prepared_lose{};
+	std::optional<present::PreparedSuperimposeSheet> prepared_round{};
+	std::optional<present::PreparedSuperimposeSheet> prepared_zikicw{};
+
+	present::Raster raster{};
+	present::Tram tram{};
+	present::MainPaletteState palette{};
+	present::MainStaticPresenter static_presenter{};
+	std::optional<present::MainBackgroundPresenter> background{};
+	std::optional<present::MainBossPresenter> bosses{};
+	std::optional<present::MainEntitiesPresenter> entities{};
+	std::optional<present::MainEffectsPresenter> effects{};
+	std::optional<present::MainExtraChargePresenter> extra_charge{};
+	std::optional<present::MainPlayersBulletsPresenter> players_bullets{};
+	std::optional<present::MainBombsPresenter> bombs{};
+	std::optional<present::MainWarningGaugePresenter> warning_gauge{};
+	std::optional<present::MainHudResultPresenter> hud_result{};
+	std::optional<present::MainRoundPresenter> round{};
+	std::optional<Game> game{};
+};
+
+const assets::MrsImage *MainProcessTestAccess::portrait(
+	const MainProcess &process,
+	bool bomb,
+	std::size_t player
+) noexcept
+{
+	if(player >= process.impl_->extra_portraits.size()) {
+		return nullptr;
+	}
+	return bomb ? &process.impl_->bomb_portraits[player] :
+		&process.impl_->extra_portraits[player];
+}
+
+std::expected<std::unique_ptr<MainProcess>, MainProcessError>
+MainProcess::create(
+	const MainDirectVsConfig &config,
+	std::span<const LoadedMainResource> resources,
+	MainCompiledContent compiled_content,
+	std::span<const std::byte> font_rom
+)
+{
+	return create_impl(
+		config,
+		resources,
+		std::move(compiled_content),
+		font_rom,
+		true
+	);
+}
+
+std::expected<std::unique_ptr<MainProcess>, MainProcessError>
+MainProcess::create_impl(
+	const MainDirectVsConfig &config,
+	std::span<const LoadedMainResource> resources,
+	MainCompiledContent compiled_content,
+	std::span<const std::byte> font_rom,
+	bool authenticate_resource_bytes
+)
+{
+	if(!valid_selection(config.player_one) ||
+		!valid_selection(config.player_two) || config.rank > 3U ||
+		config.key_mode > 2U ||
+		(config.game_options.input_protocol != InputProtocol::live &&
+		 config.game_options.input_protocol != InputProtocol::recorded_replay)) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	if((selects_kotohime(config.player_one) ||
+		selects_kotohime(config.player_two)) &&
+		config.kotohime_compatibility.red_provider == nullptr) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	const auto expected_keys = direct_vs_resource_keys(
+		config.player_one,
+		config.player_two
+	);
+	if(!expected_keys) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	if(const auto valid = validate_resource_set(
+		resources,
+		*expected_keys,
+		authenticate_resource_bytes
+	);
+		!valid) {
+		return std::unexpected(valid.error());
+	}
+
+	auto impl = std::make_unique<Impl>();
+	impl->config = config;
+	impl->compiled_content.emplace(std::move(compiled_content));
+	impl->font_rom.assign(font_rom.begin(), font_rom.end());
+	const auto font = Pc98FontRomProvider::from_exact_font_rom(impl->font_rom);
+	if(!font) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::font_rom_failed
+		));
+	}
+	impl->font_provider.emplace(*font);
+
+	for(std::size_t index = 0U; index < impl->sine_q8.size(); ++index) {
+		const auto angle = static_cast<std::uint8_t>(index);
+		impl->sine_q8[index] = exact::sine8(angle);
+		impl->cosine_q8[index] = exact::cosine8(angle);
+	}
+	const present::StaffFlakeTrigTables trig{
+		impl->sine_q8,
+		impl->cosine_q8,
+	};
+
+	const MainResourceKey enedat_key{.role = MainResourceRole::enemy_scripts};
+	const auto enedat_resource = find_resource(resources, enedat_key);
+	if(!enedat_resource) {
+		return std::unexpected(enedat_resource.error());
+	}
+	auto game_content = formats::parse_enedat(
+		resource_bytes(**enedat_resource)
+	);
+	if(!game_content) {
+		return std::unexpected(core_error(
+			MainProcessErrorCode::enedat_decode_failed,
+			std::move(game_content.error())
+		));
+	}
+
+	const auto superimpose_decoder = [](std::span<const std::byte> bytes) {
+		return assets::decode_bfnt(
+			bytes,
+			assets::BfntConsumerPolicy::superimpose
+		);
+	};
+	const auto gaiji_decoder = [](std::span<const std::byte> bytes) {
+		return assets::decode_bfnt(bytes, assets::BfntConsumerPolicy::gaiji);
+	};
+	const MainResourceKey gameft_key{.role = MainResourceRole::game_font};
+	auto gameft = decode_asset<assets::BfntSheet>(
+		resources,
+		gameft_key,
+		gaiji_decoder
+	);
+	if(!gameft) {
+		return std::unexpected(gameft.error());
+	}
+	impl->gameft = std::move(*gameft);
+	const auto prepared_gaiji = PreparedGameftGaiji::prepare(impl->gameft);
+	if(!prepared_gaiji) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::gameft_prepare_failed,
+			gameft_key
+		));
+	}
+	impl->gameft_gaiji.emplace(*prepared_gaiji);
+
+	const std::array hud_keys{
+		MainResourceKey{.role = MainResourceRole::hud_lose_sheet},
+		MainResourceKey{.role = MainResourceRole::hud_round_sheet},
+		MainResourceKey{.role = MainResourceRole::hud_result_sheet},
+	};
+	std::array<assets::BfntSheet *, 3U> hud_targets{
+		&impl->lose_sheet,
+		&impl->round_sheet,
+		&impl->zikicw_sheet,
+	};
+	for(std::size_t index = 0U; index < hud_keys.size(); ++index) {
+		auto decoded = decode_asset<assets::BfntSheet>(
+			resources,
+			hud_keys[index],
+			superimpose_decoder
+		);
+		if(!decoded) {
+			return std::unexpected(decoded.error());
+		}
+		*hud_targets[index] = std::move(*decoded);
+	}
+	impl->prepared_lose = present::prepare_superimpose_sheet(impl->lose_sheet);
+	impl->prepared_round = present::prepare_superimpose_sheet(impl->round_sheet);
+	impl->prepared_zikicw = present::prepare_superimpose_sheet(
+		impl->zikicw_sheet
+	);
+	if(!impl->prepared_lose || !impl->prepared_round ||
+		!impl->prepared_zikicw) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::presenter_setup_failed
+		));
+	}
+
+	const std::array selections{config.player_one, config.player_two};
+	for(std::size_t player = 0U; player < selections.size(); ++player) {
+		auto character = decode_asset<assets::BfntSheet>(
+			resources,
+			player_key(MainResourceRole::character_sheet, selections[player]),
+			superimpose_decoder
+		);
+		if(!character) {
+			return std::unexpected(character.error());
+		}
+		impl->character_sheets[player] = std::move(*character);
+
+		auto extra = decode_asset<assets::MrsImage>(
+			resources,
+			player_key(
+				MainResourceRole::character_extra_portrait,
+				selections[player]
+			),
+			assets::decode_mrs
+		);
+		if(!extra) {
+			return std::unexpected(extra.error());
+		}
+		impl->extra_portraits[player] = std::move(*extra);
+
+		auto bomb = decode_asset<assets::MrsImage>(
+			resources,
+			player_key(
+				MainResourceRole::character_bomb_portrait,
+				selections[player]
+			),
+			assets::decode_mrs
+		);
+		if(!bomb) {
+			return std::unexpected(bomb.error());
+		}
+		impl->bomb_portraits[player] = std::move(*bomb);
+
+		auto shot = decode_asset<assets::PiImage>(
+			resources,
+			player_key(
+				MainResourceRole::character_stage_shot,
+				selections[player]
+			),
+			assets::decode_pi
+		);
+		if(!shot) {
+			return std::unexpected(shot.error());
+		}
+		impl->player_shots[player] = std::move(*shot);
+
+		auto extra_shot = decode_asset<assets::PiImage>(
+			resources,
+			player_key(
+				MainResourceRole::character_stage_extra_shot,
+				selections[player]
+			),
+			assets::decode_pi
+		);
+		if(!extra_shot) {
+			return std::unexpected(extra_shot.error());
+		}
+		impl->player_extra_shots[player] = std::move(*extra_shot);
+	}
+	assets::horizontal_flip(impl->extra_portraits[1U]);
+	assets::horizontal_flip(impl->bomb_portraits[1U]);
+
+	const MainResourceKey center_key{
+		.role = MainResourceRole::stage_enemy_center,
+	};
+	auto center = decode_asset<assets::PiImage>(
+		resources,
+		center_key,
+		assets::decode_pi
+	);
+	if(!center) {
+		return std::unexpected(center.error());
+	}
+	impl->enemy_center = std::move(*center);
+	const MainResourceKey opponent_key{
+		.role = MainResourceRole::character_stage_enemy_group,
+		.character = config.player_two.character,
+	};
+	auto opponent = decode_asset<assets::PiImage>(
+		resources,
+		opponent_key,
+		assets::decode_pi
+	);
+	if(!opponent) {
+		return std::unexpected(opponent.error());
+	}
+	impl->opponent_enemies = std::move(*opponent);
+	if(!impl->opponent_enemies.palette) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::pi_palette_missing,
+			opponent_key
+		));
+	}
+
+	if(!present::main_prepare_sprite16_pi_source_sheet(
+		impl->raster,
+		{
+			.player_shots = {{
+				&impl->player_shots[0U],
+				&impl->player_shots[1U],
+			}},
+			.player_extra_shots = {{
+				&impl->player_extra_shots[0U],
+				&impl->player_extra_shots[1U],
+			}},
+			.enemy_center = &impl->enemy_center,
+			.opponent_enemies = &impl->opponent_enemies,
+		}
+	)) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::pi_staging_failed
+		));
+	}
+	for(std::size_t index = 0U;
+		index < impl->opponent_enemies.palette->colors.size(); ++index) {
+		if(!impl->raster.set_pending_palette_entry(
+			static_cast<std::uint8_t>(index),
+			impl->opponent_enemies.palette->colors[index]
+		)) {
+			return std::unexpected(process_error(
+				MainProcessErrorCode::pi_palette_missing,
+				opponent_key
+			));
+		}
+	}
+	impl->raster.set_palette_tone(100);
+	impl->raster.apply_pending_palette();
+	impl->gameft_gaiji->install(impl->tram);
+
+	// D092/D2E8 is initialized before the MAIN BF2/static setup. Background is
+	// the only presentation-private consumer of Game::create's fresh-start
+	// observer stream, and it deliberately accepts uncommitted staging here.
+	const auto &staging = impl->static_presenter.sprite_staging();
+	impl->background.emplace(
+		impl->raster,
+		staging,
+		present::authentic_main_background_atlas_layout()
+	);
+	if(!impl->background->ready()) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::presenter_setup_failed
+		));
+	}
+	const auto init = direct_game_init(config);
+	auto game = Game::create(
+		init,
+		std::move(*game_content),
+		config.game_options,
+		&*impl->background
+	);
+	if(!game) {
+		return std::unexpected(core_error(
+			MainProcessErrorCode::game_create_failed,
+			std::move(game.error())
+		));
+	}
+	impl->game.emplace(std::move(*game));
+	if(!impl->background->initialization_complete()) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::background_initialization_failed
+		));
+	}
+	const auto initial_hud = hud_state_from_round(
+		impl->game->round_start_observation()
+	);
+	if(!initial_hud) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::game_create_failed
+		));
+	}
+	if(!impl->static_presenter.round_startup(
+		impl->raster,
+		impl->tram,
+		*initial_hud,
+		{
+			.player_one = &impl->character_sheets[0U],
+			.player_two = &impl->character_sheets[1U],
+		},
+		impl->palette
+	)) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::static_startup_failed
+		));
+	}
+	impl->bosses.emplace(impl->raster, staging, trig, impl->palette);
+	impl->entities.emplace(
+		impl->raster,
+		staging,
+		present::authentic_main_entity_atlas_layout()
+	);
+	impl->effects.emplace(
+		impl->raster,
+		staging,
+		present::authentic_main_effects_atlas_layout(),
+		trig
+	);
+	impl->extra_charge.emplace(impl->raster, staging, trig);
+	impl->players_bullets.emplace(
+		impl->raster,
+		staging,
+		present::authentic_main_players_bullets_atlas_layout(),
+		present::MainPlayerOverlayAssets{
+			.character_sheets = {{
+				&impl->character_sheets[0U],
+				&impl->character_sheets[1U],
+			}},
+			.loaded_characters = {{
+				static_cast<present::MainPalettedCharacter>(
+					paletted_character(config.player_one)
+				),
+				static_cast<present::MainPalettedCharacter>(
+					paletted_character(config.player_two)
+				),
+			}},
+			.gauge_sheet = &impl->zikicw_sheet,
+		},
+		impl->compiled_content->pellet_masks(),
+		trig
+	);
+	impl->bombs.emplace(
+		impl->raster,
+		staging,
+		present::authentic_main_bomb_atlas_layout(),
+		present::MainBombMrsAssets{{
+			&impl->bomb_portraits[0U],
+			&impl->bomb_portraits[1U],
+		}},
+		trig,
+		impl->palette,
+		config.kotohime_compatibility
+	);
+	impl->warning_gauge.emplace(
+		impl->raster,
+		impl->tram,
+		staging,
+		impl->palette,
+		present::MainWarningMrsAssets{{
+			&impl->extra_portraits[0U],
+			&impl->extra_portraits[1U],
+		}}
+	);
+	impl->hud_result.emplace(
+		impl->raster,
+		impl->tram,
+		impl->compiled_content->score_font_masks(),
+		trig,
+		present::MainHudResultSheets{
+			.lose = &*impl->prepared_lose,
+			.round = &*impl->prepared_round,
+			.zikicw = &*impl->prepared_zikicw,
+		},
+		impl->compiled_content->hud_result_tram_assets(),
+		std::uint8_t{0U}
+	);
+	if(!impl->background->ready() || !impl->bosses->ready() ||
+		!impl->entities->ready() || !impl->effects->ready() ||
+		!impl->extra_charge->ready() || !impl->players_bullets->ready() ||
+		!impl->bombs->ready() || !impl->warning_gauge->ready() ||
+		!impl->hud_result->ready()) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::presenter_setup_failed
+		));
+	}
+	impl->round.emplace(
+		impl->raster,
+		impl->tram,
+		impl->static_presenter,
+		impl->palette,
+		*impl->background,
+		*impl->bosses,
+		*impl->entities,
+		*impl->effects,
+		*impl->extra_charge,
+		*impl->players_bullets,
+		*impl->bombs,
+		*impl->warning_gauge,
+		*impl->hud_result
+	);
+	if(!impl->round->ready()) {
+		return std::unexpected(presentation_error(impl->round->status()));
+	}
+
+	auto process = std::unique_ptr<MainProcess>(
+		new MainProcess(std::move(impl))
+	);
+	return process;
+}
+
+MainProcess::MainProcess(std::unique_ptr<Impl> impl) noexcept :
+	impl_(std::move(impl))
+{}
+
+MainProcess::~MainProcess() = default;
+
+void MainProcess::fail_presentation_for_test() noexcept
+{
+	// A footer is impossible at the freshly armed source-prefix phase. This
+	// deliberately latches the coordinator's existing invalid-order status
+	// without drawing or exposing an implementation child to the test.
+	impl_->round->main_frame_footer_reached({});
+}
+
+std::optional<MainProcessError>
+MainProcess::presentation_precheck() const noexcept
+{
+	if(!impl_->round->ready()) {
+		return presentation_error(impl_->round->status());
+	}
+	return std::nullopt;
+}
+
+std::expected<StepResult, MainProcessError> MainProcess::step(
+	CoreInput input,
+	InputContext context
+) noexcept
+{
+	if(const auto error = presentation_precheck()) {
+		return std::unexpected(*error);
+	}
+	if(context != InputContext::gameplay &&
+		context != InputContext::interstitial) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_runtime_argument
+		));
+	}
+	const auto result = impl_->game->step(input, context, &*impl_->round);
+	if(!impl_->round->ready()) {
+		return std::unexpected(presentation_error(impl_->round->status()));
+	}
+	return result;
+}
+
+std::expected<StepResult, MainProcessError>
+MainProcess::finish_deferred_frame(DeferredFrameAction action) noexcept
+{
+	if(const auto error = presentation_precheck()) {
+		return std::unexpected(*error);
+	}
+	if(action != DeferredFrameAction::resume &&
+		action != DeferredFrameAction::exit_session) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_runtime_argument
+		));
+	}
+	auto result = impl_->game->finish_deferred_frame(action, &*impl_->round);
+	if(!result) {
+		return std::unexpected(core_error(
+			MainProcessErrorCode::core_operation_failed,
+			std::move(result.error())
+		));
+	}
+	if(!impl_->round->ready()) {
+		return std::unexpected(presentation_error(impl_->round->status()));
+	}
+	return *result;
+}
+
+std::expected<void, MainProcessError> MainProcess::start_next_round() noexcept
+{
+	if(const auto error = presentation_precheck()) {
+		return std::unexpected(*error);
+	}
+	const auto started = impl_->game->start_next_round();
+	if(!started) {
+		return std::unexpected(core_error(
+			MainProcessErrorCode::core_operation_failed,
+			started.error()
+		));
+	}
+	const auto hud = hud_state_from_round(impl_->game->round_start_observation());
+	if(!hud) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::repeat_startup_failed
+		));
+	}
+	if(!impl_->round->repeat_round_startup(*hud)) {
+		if(!impl_->round->ready()) {
+			return std::unexpected(presentation_error(impl_->round->status()));
+		}
+		return std::unexpected(process_error(
+			MainProcessErrorCode::repeat_startup_failed
+		));
+	}
+	return {};
+}
+
+std::expected<void, MainProcessError>
+MainProcess::finish_main_process() noexcept
+{
+	if(const auto error = presentation_precheck()) {
+		return std::unexpected(*error);
+	}
+	const auto finished = impl_->game->finish_main_process();
+	if(!finished) {
+		return std::unexpected(core_error(
+			MainProcessErrorCode::core_operation_failed,
+			finished.error()
+		));
+	}
+	return {};
+}
+
+std::expected<SessionTransition, MainProcessError>
+MainProcess::session_transition(
+	std::optional<ContinueChoice> continue_choice
+) const
+{
+	if(const auto error = presentation_precheck()) {
+		return std::unexpected(*error);
+	}
+	auto transition = impl_->game->session_transition(continue_choice);
+	if(!transition) {
+		return std::unexpected(core_error(
+			MainProcessErrorCode::core_operation_failed,
+			std::move(transition.error())
+		));
+	}
+	return std::move(*transition);
+}
+
+CanonicalState MainProcess::canonical_state() const
+{
+	return impl_->game->canonical_state();
+}
+
+RoundStartObservation MainProcess::round_start_observation() const
+{
+	return impl_->game->round_start_observation();
+}
+
+std::expected<present::SourceSurface, present::SourceSurfaceError>
+MainProcess::compose_shown_surface(
+	std::span<present::ComposedPixel, present::graphics_page_pixels> output
+) const
+{
+	return impl_->round->compose_shown_surface(output, *impl_->font_provider);
+}
+
+const present::Raster &MainProcess::raster() const noexcept
+{
+	return impl_->raster;
+}
+
+const present::Tram &MainProcess::tram() const noexcept
+{
+	return impl_->tram;
+}
+
+present::MainRoundStatus MainProcess::presentation_status() const noexcept
+{
+	return impl_->round->status();
+}
+
+} // namespace th03::app

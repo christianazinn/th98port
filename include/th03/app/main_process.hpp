@@ -1,0 +1,152 @@
+#ifndef TH03_APP_MAIN_PROCESS_HPP
+#define TH03_APP_MAIN_PROCESS_HPP
+
+#include <cstddef>
+#include <cstdint>
+#include <expected>
+#include <memory>
+#include <optional>
+#include <span>
+
+#include "th03/app/main_compiled_content.hpp"
+#include "th03/app/resources.hpp"
+#include "th03/assets/types.hpp"
+#include "th03/core/game.hpp"
+#include "th03/present/main_bomb_palette.hpp"
+#include "th03/present/main_round.hpp"
+
+namespace th03::app {
+
+// One fresh, human P1-vs-P2 MAIN process. Story/demo/CPU and snapshot-backed
+// entry remain separate future process policies; accepting them here would
+// permit late attachment to presentation-private source state.
+struct MainDirectVsConfig {
+	MainPlayerSelection player_one{};
+	MainPlayerSelection player_two{
+		.character = MainCharacter::reimu,
+		.palette = MainPaletteVariant::second,
+	};
+	std::uint32_t seed = 0U;
+	// Source rank values are Easy=0, Normal=1, Hard=2, Lunatic=3.
+	std::uint8_t rank = 1U;
+	std::uint8_t key_mode = 0U;
+	GameOptions game_options{};
+	// Required only if either selected character is Kotohime. The callback and
+	// its context must remain valid for this process's complete lifetime.
+	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
+};
+
+enum class MainProcessErrorCode : std::uint8_t {
+	invalid_config,
+	invalid_runtime_argument,
+	resource_set_mismatch,
+	resource_bytes_missing,
+	resource_integrity_failed,
+	asset_decode_failed,
+	enedat_decode_failed,
+	font_rom_failed,
+	gameft_prepare_failed,
+	pi_palette_missing,
+	pi_staging_failed,
+	static_startup_failed,
+	background_initialization_failed,
+	presenter_setup_failed,
+	game_create_failed,
+	presentation_failed,
+	repeat_startup_failed,
+	core_operation_failed,
+};
+
+struct MainProcessError {
+	MainProcessErrorCode code = MainProcessErrorCode::invalid_config;
+	std::optional<MainResourceKey> resource{};
+	std::optional<assets::AssetError> asset_error{};
+	std::optional<Error> core_error{};
+	present::MainRoundStatus presentation_status =
+		present::MainRoundStatus::ready;
+};
+
+// Stable-address owner/coordinator for one complete direct-VS MAIN process.
+// The factory reauthenticates canonical resource metadata, byte counts, and
+// fingerprints, consumes owning compiled content, copies the external
+// FONT.ROM, and publishes no partially initialized Raster/TRAM/presenter state
+// on failure. The object intentionally exposes no mutable Game, Raster, Tram,
+// palette, or child presenter.
+class MainProcess final {
+public:
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<MainProcess>,
+		MainProcessError
+	> create(
+		const MainDirectVsConfig &config,
+		std::span<const LoadedMainResource> resources,
+		MainCompiledContent compiled_content,
+		std::span<const std::byte> font_rom
+	);
+
+	~MainProcess();
+	MainProcess(const MainProcess &) = delete;
+	MainProcess &operator=(const MainProcess &) = delete;
+	MainProcess(MainProcess &&) = delete;
+	MainProcess &operator=(MainProcess &&) = delete;
+
+	// Every gameplay and interstitial sample is synchronously observed by the
+	// retained MainRound presenter. A presentation failure is sticky/fatal.
+	[[nodiscard]] std::expected<StepResult, MainProcessError> step(
+		CoreInput input,
+		InputContext context = InputContext::gameplay
+	) noexcept;
+	[[nodiscard]] std::expected<StepResult, MainProcessError>
+	finish_deferred_frame(DeferredFrameAction action) noexcept;
+
+	// Exact route-1 pair: core reset first, then the process-scoped static/HUD
+	// repeat transaction. All child private pools remain alive.
+	[[nodiscard]] std::expected<void, MainProcessError>
+	start_next_round() noexcept;
+	[[nodiscard]] std::expected<void, MainProcessError>
+	finish_main_process() noexcept;
+	[[nodiscard]] std::expected<SessionTransition, MainProcessError>
+	session_transition(
+		std::optional<ContinueChoice> continue_choice = std::nullopt
+	) const;
+
+	[[nodiscard]] CanonicalState canonical_state() const;
+	[[nodiscard]] RoundStartObservation round_start_observation() const;
+	[[nodiscard]] std::expected<
+		present::SourceSurface,
+		present::SourceSurfaceError
+	> compose_shown_surface(
+		std::span<
+			present::ComposedPixel,
+			present::graphics_page_pixels
+		> output
+	) const;
+
+	[[nodiscard]] const present::Raster &raster() const noexcept;
+	[[nodiscard]] const present::Tram &tram() const noexcept;
+	[[nodiscard]] present::MainRoundStatus presentation_status() const noexcept;
+
+private:
+	friend struct MainProcessTestAccess;
+	struct Impl;
+	explicit MainProcess(std::unique_ptr<Impl> impl) noexcept;
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<MainProcess>,
+		MainProcessError
+	> create_impl(
+		const MainDirectVsConfig &config,
+		std::span<const LoadedMainResource> resources,
+		MainCompiledContent compiled_content,
+		std::span<const std::byte> font_rom,
+		bool authenticate_resource_bytes
+	);
+	void fail_presentation_for_test() noexcept;
+	[[nodiscard]] std::optional<MainProcessError>
+	presentation_precheck() const noexcept;
+
+	std::unique_ptr<Impl> impl_;
+};
+
+} // namespace th03::app
+
+#endif

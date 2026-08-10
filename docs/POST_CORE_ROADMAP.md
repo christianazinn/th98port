@@ -358,9 +358,10 @@ shell.
    Bullet16s, clouds, pellets, both background families, and all-nine
    Boss/Bomb/Extra/Charge/Warning/Gauge paths, HUD-start, score/extend, combos,
    result banners, and result transitions now have source-ordered consumers.
-   Next assemble the external process resource bundle and drive that completed
-   coordinator from the fixed-rate application shell. Keep `th03rv`
-   independent of both presentation and asset libraries.
+   The external direct-VS process resource bundle is now assembled and passes
+   the complete 18x18 paletted startup/first-frame surface gate with supplied
+   data. Next drive that completed coordinator from the fixed-rate application
+   shell. Keep `th03rv` independent of presentation and asset libraries.
 5. Select a minimal Windows/platform backend from an explicit support-floor
    matrix, then implement the host compositor and input mapping.
 6. Select and integrate the PMD/YM2608 audio stack after the licensing and

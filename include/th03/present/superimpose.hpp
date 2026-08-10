@@ -91,8 +91,9 @@ prepare_superimpose_sheet(const assets::BfntSheet &sheet);
 ) noexcept;
 
 // Exact SUB_BDC2() subset used by MAIN's flying HUD banner. The sheet must be
-// 32x32. Four bytes from one stored B-plane row are rotated into overlapping
-// 16-pixel GRCG-white writes, with the source's byte-start X clipping.
+// 32 pixels wide and contain source_row. Four bytes from one stored B-plane
+// row are rotated into overlapping 16-pixel GRCG-white writes, with the
+// source's byte-start X clipping.
 [[nodiscard]] bool superimpose_put_blue_plane_row_white(
 	Raster &raster,
 	const PreparedSuperimposeSheet &sheet,

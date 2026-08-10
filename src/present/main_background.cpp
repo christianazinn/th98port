@@ -597,4 +597,9 @@ bool MainBackgroundPresenter::ready() const noexcept
 	return status_ == MainBackgroundStatus::ready;
 }
 
+bool MainBackgroundPresenter::initialization_complete() const noexcept
+{
+	return ready() && initialized_ && read_stream_ == ReadStream::none;
+}
+
 } // namespace th03::present
