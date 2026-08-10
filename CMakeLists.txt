@@ -130,6 +130,19 @@ th03_set_warnings(th03_core)
 # The deterministic core has no reciprocal presentation dependency.
 target_link_libraries(th03_present PUBLIC th03_core)
 
+# Platform-neutral application policy. SDL and other host APIs translate their
+# events, clocks, and texture storage at this boundary; none enter core or
+# presentation state.
+add_library(th03_app_runtime STATIC
+	src/app/host_surface.cpp
+	src/app/tick_input.cpp
+)
+target_include_directories(th03_app_runtime PUBLIC include)
+target_link_libraries(th03_app_runtime PUBLIC th03_present)
+target_compile_features(th03_app_runtime PUBLIC cxx_std_23)
+set_target_properties(th03_app_runtime PROPERTIES CXX_EXTENSIONS OFF)
+th03_set_warnings(th03_app_runtime)
+
 add_library(th03_replay STATIC
 	src/replay/run.cpp
 )
@@ -210,6 +223,26 @@ if(BUILD_TESTING)
 	target_link_libraries(th03-app-resources-tests PRIVATE th03_app_resources)
 	th03_set_warnings(th03-app-resources-tests)
 	add_test(NAME th03-app-resources-tests COMMAND th03-app-resources-tests)
+
+	add_executable(th03-app-host-surface-tests
+		tests/test_app_host_surface.cpp
+	)
+	target_link_libraries(th03-app-host-surface-tests PRIVATE th03_app_runtime)
+	th03_set_warnings(th03-app-host-surface-tests)
+	add_test(
+		NAME th03-app-host-surface-tests
+		COMMAND th03-app-host-surface-tests
+	)
+
+	add_executable(th03-app-tick-input-tests
+		tests/test_app_tick_input.cpp
+	)
+	target_link_libraries(th03-app-tick-input-tests PRIVATE th03_app_runtime)
+	th03_set_warnings(th03-app-tick-input-tests)
+	add_test(
+		NAME th03-app-tick-input-tests
+		COMMAND th03-app-tick-input-tests
+	)
 
 	add_executable(th03-present-tests
 		tests/test_present.cpp

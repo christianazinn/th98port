@@ -84,9 +84,10 @@ The post-core targets remain in this repository and depend inward:
 ```text
 th03rv ------------------------------> th03_replay / th03_formats / th03_core
 
-th03-app --> th03_present -----------> th03_core (neutral observations only)
-               |
-               +---------------------> th03_assets (immutable decoded models)
+th03-app --> th03_app_runtime -------> th03_present
+    |                                  |     |
+    +--> th03_app_resources            |     +--> th03_assets
+                                       +--------> th03_core
 ```
 
 `th03_assets` and `th03_present` are separate sibling library targets, not
@@ -100,6 +101,13 @@ establish their initial join.
 `th03_present` owns all presentation records,
 sprite/cel lifetimes, asset identities, page/palette/TRAM state, and private
 draw ordering.
+
+`th03_app_runtime` is a third, platform-neutral client boundary. It owns only
+the rational tick/input accumulator and final RGBA/letterbox policy. The caller
+provides the clock rate, timestamps, physical-event mapping, and output memory;
+the runtime neither sleeps nor creates a window. Filesystem validation/caching
+stays in the orthogonal `th03_app_resources` target so neither dependency is
+forced into core, assets, or presentation.
 
 MAIN's palette boundary retains master.lib's full 16-entry RGB8 logical
 `Palette8`, a separate applied RGB4 DAC result, raw `PaletteTone`, one

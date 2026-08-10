@@ -109,6 +109,14 @@ split comparisons. Original game data and replay captures remain external.
   API in `th03_core`; the core has no reciprocal dependency, and `th03rv`
   links neither presentation nor assets. Captured PC-98 pixel parity remains a
   separate external-data acceptance gate.
+- `th03_app_runtime` owns dependency-free host policy: explicit rational
+  logical deadlines, timestamped two-player input accumulation, exact
+  SourceSurface-to-RGBA expansion into caller storage, and centered integer
+  640x400 letterboxing. It assumes no source cadence, SDL type, key binding,
+  window, or replay UI; those remain application/platform decisions.
+- `th03_app_resources` owns the checked external-content root and immutable
+  byte cache. Original/extracted files remain local inputs and never enter the
+  repository.
 - MAIN palette primitives preserve the source's logical RGB8 values separately
   from applied RGB4 DAC output, including its process baseline, raw tone, and
   explicit deferred-apply latch. Neutral Bomb/Warning/defeat/footer lifecycle

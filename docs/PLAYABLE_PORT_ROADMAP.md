@@ -2,7 +2,23 @@
 
 ## Purpose and authority
 
-This is the implementation order for the smallest source-faithful native application, not a proposal to generalize the game. The first milestone is a local, direct-launch P1-versus-P2 VS match using the user's original game data: character selection is explicit at launch, both players can play, the match reaches its normal result/next-round paths, and every displayed frame is formed by the native PC-98-style presentation layer. Menus, Story, cutscenes, staff roll, persistent scores, replay UI, and audio are later milestones. A silent visual VS vertical slice is useful; a fully faithful playable release is not complete until audio is added.
+This is the implementation order for a source-faithful native Classic
+application, not a proposal to generalize the game. The first validation
+milestone is a local, direct-launch P1-versus-P2 VS match using the user's
+original game data: character selection is explicit at launch, both players
+can play, the match reaches its normal result/next-round paths, and every
+displayed frame is formed by the native PC-98-style presentation layer. That
+vertical slice is a gate, not the final product target. Work continues through
+the original title/selection, Story/MAINL/cutscene/staff flow, persistence, and
+audio. Replay files remain an internal validation input; a replay menu,
+recording UI, and migration UX are deliberately deferred until the Classic
+game is otherwise functional.
+
+Original game content may be used from the developer's explicit local content
+root for authentic builds and tests. It remains ignored and external: no
+original asset, font, music, capture, or extracted archive byte is committed or
+printed into build logs. Public redistribution policy is independent of this
+local fidelity path and does not block implementation.
 
 The donor for scene behaviour is the clean, pinned Anniversary tree at oracle_anniversary_th3r02, commit 3e2381d4275be7287f5525de5c95389d492b0a3c.
 
@@ -60,13 +76,20 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   winner summaries, and opening/closing transitions. `MainRoundPresenter`
   distinguishes terminal no-footer frames from source-valid route-1 repeats
   and preserves the first repeated-round closing frame.
+- `th03_app_runtime` now provides the host-independent outer frame boundary.
+  Its explicit rational scheduler returns every overdue deadline separately;
+  timestamped aggregate source snapshots preserve P1/P2 holds across device
+  removal and focus loss; app quit cannot leak into `CoreInput`. The same target
+  converts all graphics/text color domains to caller-owned RGBA with arbitrary
+  pitch and computes overflow-safe integer 640x400 letterboxing. SDL bindings,
+  a source-rate constant, and first-deadline policy are intentionally absent.
 
 The shortest remaining chain to a visible interactive build is: import the
 external compiled masks/result text and an authenticated PC-98 ANK font; bind
-decoded external resources into one process bundle; add the fixed-tick input
-scheduler; then add the thin
-SDL upload and input shell. PC-98 visual traces remain the release authority
-after the synthetic cross-compiler gates.
+decoded external resources into one process bundle; establish the source tick
+rate/phase from evidence; then add the thin SDL event, clock, upload, and input
+shell. PC-98 visual traces remain the release authority after the synthetic
+cross-compiler gates.
 
 | Native concern | Donor authority |
 | --- | --- |
@@ -85,8 +108,10 @@ The DOS executables are process and memory partitions, not game-design boundarie
 
 The existing dependency direction is already appropriate:
 
-- th03-app (proposed) owns the application.
-- th03_platform_sdl (proposed) owns the host window, input, clock, and final upload.
+- th03-app (proposed) owns the application plus platform-neutral tick, input,
+  host-pixel, and letterbox policy.
+- th03_platform_sdl (proposed) owns the host window/device event adapter,
+  monotonic clock source, and final upload.
 - th03_present owns PC-98 raster/TRAM/compositing and observer consumers, and depends on th03_assets and th03_core.
 - th03_formats and th03_replay provide V13 bytes and replay sessions when the app needs them.
 - th03_audio_pmd (proposed, later) owns supplied-data synthesis and sends only PCM to the platform adapter.
@@ -97,8 +122,8 @@ th03_assets remains a collection of pure decoders for supplied byte spans (RGB, 
 
 | Proposed target | Owns | Must not own |
 | --- | --- | --- |
-| th03_platform_sdl | SDL lifetime, event pump, physical input state, logical-tick scheduler, a 640x400 final-surface upload, and device PCM output later | Gameplay, scene policy, decoded game assets, palette/raster rules, or source text |
-| th03-app | Command line, external content root, resource manifest/cache, scene routing, selection/profile settings, construction of GameInit, and app-level quit/pause policy | Decoder internals, PC-98 raster primitives, deterministic state, or audio synthesis |
+| th03_platform_sdl | SDL lifetime, event translation, monotonic timestamp acquisition, a 640x400 final-surface upload, and device PCM output later | Gameplay, scene policy, decoded game assets, tick/input semantics, palette/raster rules, or source text |
+| th03-app | Command line, external content root, resource manifest/cache, scene routing, selection/profile settings, construction of GameInit, platform-neutral tick/input/RGBA/letterbox policy, and app-level quit/pause policy | Decoder internals, PC-98 raster primitives, deterministic state, SDL types, or audio synthesis |
 | th03_present | MainRoundPresenter, source-ordered observer consumers, visible MAIN composition from Raster plus TRAM, and scene-local present state | OS input, elapsed wall-clock policy, filesystem reads, or gameplay mutation |
 | th03_audio_pmd (later) | Supplied music/SE bytes, PMD/OPNA scheduling and synthesis, mix gain, offline PCM | SDL devices, UI settings storage, gameplay state, or file paths |
 
@@ -178,7 +203,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | --- | --- | --- |
 | MAIN source-order coverage | Integrated | Every audited direct-VS MAIN family now has a synchronous consumer; real-asset startup and captured PC-98 visual traces remain the fidelity gates. |
 | MainRoundAssets construction over the checked external manifest | Yes | The 106-entry manifest/cache metadata is frozen, but the app still must decode and bind the selected process bundle without substitute data. |
-| Fixed tick plus input-latch boundary | Yes | A window whose simulation follows host refresh is not a source-faithful match. Finish fake-clock scheduler tests and establish source cadence. |
+| Fixed tick plus input-latch boundary | Partially integrated | Rational fake-clock scheduling, overdue input latching, device/focus release, RGBA expansion, and letterboxing are complete. Establish the exact source cadence/phase and bind host timestamps without changing this API. |
 | Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
 | SDL window/upload/input adapter | Yes | Required to make the completed composition playable, but its first test can use a synthetic surface. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
@@ -207,7 +232,12 @@ Once VS-3 holds, add scenes in donor order rather than building a broad launcher
 1. MAINL routing and Story progression. Implement stage splash, round win, continuation, game-over, and the fresh/repeat handoffs in StageTransitionScene, following mlentry.cpp, screens.cpp, and ending.cpp. It constructs the next MAIN session and loads/unloads assets at the same semantic boundary. Acceptance: a source-traced Story route reaches each next-stage, continue, game-over, and ending branch with the corresponding screen/palette/timing sequence.
 2. OP title and selection. Implement only the source's actual choices (Story, VS, Music Room, registration view, option, quit) and its character selection/configuration steps. Reuse BFNT/CDG/PI primitives; do not import a desktop UI toolkit. Game text remains source bytes/BFNT/gaiji first. If a later launcher needs translated labels, keep a separate app-owned catalog rather than rewriting gameplay or source asset strings. Acceptance: source-traced title-to-MAINL handoff, all selected modes/characters, and source palette/page transitions match.
 3. Cutscenes and staff. Keep sequence policy in CutsceneScene and StaffScene, with image/flakes/text operations in presentation. Preserve the donor's script/input details before adding conveniences such as rewind, text log, or language selection. Acceptance: first/last pages, skip and fast-forward boundaries, staff CDG/palette/flake sequence, and return route match source traces.
-4. Profile and replay UX. Only after source scenes work, add a versioned app profile for controls/window/audio volume and an optional replay browser. It is a user-interface layer, not an extension of a historical save block. Record and play only V13 at the app input boundary; format migration remains a tool concern.
+4. Profile and optional replay UX. After the Classic source scenes, persistence,
+   and audio work, add a versioned app profile for controls/window/audio volume.
+   A replay browser is explicitly optional and must not delay the Classic port.
+   If later added, it remains a user-interface layer rather than an extension
+   of a historical save block. Record and play only V13 at the app input
+   boundary; format migration remains a tool concern.
 
 ## Audio plan
 

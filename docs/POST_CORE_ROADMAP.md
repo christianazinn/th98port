@@ -133,11 +133,12 @@ is:
 ```text
 th03rv ------------------------------> th03_replay / th03_formats / th03_core
 
-th03-app --> th03_present -----------> th03_core (neutral observations only)
-    |          |
-    |          +---------------------> th03_assets (decoded models)
-    +--------------------------------> th03_audio_pmd
-    `--------------------------------> th03_platform_sdl
+th03-app --> th03_platform_sdl --> th03_app_runtime --> th03_present
+    |                                                     |     |
+    |                                                     |     +--> th03_assets
+    |                                                     +--------> th03_core
+    +------------------------------------------------------> th03_app_resources
+    `------------------------------------------------------> th03_audio_pmd
 ```
 
 The boundaries should permit a headless verifier, the faithful playable game,
