@@ -100,10 +100,11 @@ split comparisons. Original game data and replay captures remain external.
   into immutable models. Original files, paths, caches, and platform resources
   remain outside the library.
 - `th03_present` owns the PC-98 page, planar, palette, TRAM, cel, Sprite16
-  staging/drawing, text-composition, staff-flake, and first live-entity
-  foundations. It depends inward on `th03_assets` and the neutral observation
-  API in `th03_core`; the core has no reciprocal dependency, and `th03rv` links
-  neither presentation nor assets.
+  staging/drawing, prepared BFNT superimpose resources, text composition,
+  staff flakes, and the source-ordered shot/enemy/fireball/player/bullet
+  presenter foundations. It depends inward on `th03_assets` and the neutral
+  observation API in `th03_core`; the core has no reciprocal dependency, and
+  `th03rv` links neither presentation nor assets.
 - `th03_core` exposes an optional synchronous observer for immutable gameplay
   facts. The three implemented phase views cover shots/enemies, post-collision
   fireballs, and final players/bullets. Transient lifecycle facts preserve shot

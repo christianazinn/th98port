@@ -344,10 +344,11 @@ only when an actual Arrange requirement needs them.
    foundations. Keep original bytes external and add captured-pixel gates only
    after the required application asset-loading seam exists.
 4. Extend the completed three-phase ordinary-entity observer into Authentic
-   presentation. Shots, enemies, and post-hittest fireballs now have a first
-   consumer; next add the player/bullet pass and then the intervening
-   Boss/Extra/Charge/common-effect presenters. Keep `th03rv` independent of
-   both presentation and asset libraries.
+   presentation. Shots, enemies, post-hittest fireballs, player bases/overlays,
+   defeat geometry, Bullet16s, clouds, and pellets now have source-ordered
+   consumers. Next add the intervening common-effect pool and its exact GRCG
+   vector primitives, then Boss/Extra/Charge presenters and ordered palette
+   events. Keep `th03rv` independent of both presentation and asset libraries.
 5. Select a minimal Windows/platform backend from an explicit support-floor
    matrix, then implement the host compositor and input mapping.
 6. Select and integrate the PMD/YM2608 audio stack after the licensing and

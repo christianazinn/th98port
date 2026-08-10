@@ -457,6 +457,12 @@ Anniversary operations:
   exact complement. MRS resources remain separately allocated and never enter
   this atlas. The presenter owns and reuses both fixed 16,000-byte masks; no
   per-frame allocation or original asset byte is introduced.
+- Prepared superimpose sheets mirror `super_entry_bfnt()` ownership rather
+  than borrowing decoded asset storage. Preparation validates the source's
+  byte-sized row stride and height plus the 512-pattern limit, then owns packed
+  copies of B/R/G/E and the derived positive opacity plane. `superimpose_put()`
+  is allocation-free, replaces every nontransparent pixel on the current
+  access page, and preserves transparent destination pixels.
 - The native Sprite16 operations accept semantic atlas rectangles rather than
   source byte offsets. They implement TH03's stock clear and per-plane OR
   overlap, monochrome color, the source-persistent 16-bit EGC write mask's
@@ -1219,9 +1225,14 @@ Exit tests:
 ### Slice 3: ordinary live gameplay
 
 Implementation status: the complete three-phase core observation seam is
-implemented. The first presenter sub-slice covers shot pairs, enemies and their
-explosions, and post-hittest fireballs and their explosions. Player, overlay,
-common-effect, and bullet drawing remain next.
+implemented. Presenter sub-slices cover shot pairs, enemies and their
+explosions, post-hittest fireballs and their explosions, player bases and
+BFNT overlays, shared defeat-ring geometry, Bullet16s and trails, pellet
+clouds, and odd-flag pellets. The player and bullet passes remain separate at
+the exact `SUB_CEE0()` insertion slot. That common-effect pool, hit circles,
+and ordered PaletteTone events remain explicit later parcels; defeat palette
+application is not approximated at the final view because later source
+callbacks can overwrite it.
 
 Observe raw gameplay facts at the documented semantic phases and add Authentic
 drawing for players, overlays, ordinary shots, enemies, bullets, and fireballs

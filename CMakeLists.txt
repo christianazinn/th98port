@@ -36,7 +36,9 @@ th03_set_warnings(th03_assets)
 
 add_library(th03_present STATIC
 	src/present/cels.cpp
+	src/present/main_bullets.cpp
 	src/present/main_entities.cpp
+	src/present/main_players.cpp
 	src/present/main_static.cpp
 	src/present/mono.cpp
 	src/present/pi.cpp
@@ -45,6 +47,7 @@ add_library(th03_present STATIC
 	src/present/sprite16.cpp
 	src/present/sprite_staging.cpp
 	src/present/staff_flakes.cpp
+	src/present/superimpose.cpp
 	src/present/text.cpp
 	src/present/tram.cpp
 )
@@ -184,6 +187,19 @@ if(BUILD_TESTING)
 		COMMAND th03-present-main-entities-tests
 	)
 
+	add_executable(th03-present-main-players-bullets-tests
+		tests/test_present_main_players_bullets.cpp
+	)
+	target_link_libraries(
+		th03-present-main-players-bullets-tests
+		PRIVATE th03_present
+	)
+	th03_set_warnings(th03-present-main-players-bullets-tests)
+	add_test(
+		NAME th03-present-main-players-bullets-tests
+		COMMAND th03-present-main-players-bullets-tests
+	)
+
 	add_executable(th03-present-cels-tests
 		tests/test_present_cels.cpp
 	)
@@ -240,5 +256,15 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-present-staff-flakes-tests
 		COMMAND th03-present-staff-flakes-tests
+	)
+
+	add_executable(th03-present-superimpose-tests
+		tests/test_present_superimpose.cpp
+	)
+	target_link_libraries(th03-present-superimpose-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-superimpose-tests)
+	add_test(
+		NAME th03-present-superimpose-tests
+		COMMAND th03-present-superimpose-tests
 	)
 endif()

@@ -55,8 +55,11 @@ shots/enemies, fireballs after their collision pass, and final players/bullets
 before result routing. Successful shot and Bullet16 construction plus player
 pose/defeat facts close source presentation lifetimes that cannot be inferred
 from late gameplay state. These are typed gameplay facts rather than renderer
-commands; the first `th03_present` consumer owns shot animation and draws the
-first two views without storing anything in core.
+commands. `th03_present` consumers privately own shot animation, the shared
+player-pose and defeat records, and Bullet16 construction style while drawing
+all three views without storing anything in core. The final consumer exposes
+separate player/overlay and bullet passes so the source's intervening common
+effect pass can land later without changing this boundary.
 
 Some original callbacks named as rendering perform gameplay mutations or
 consume the RNG stream later used by gameplay. Those mutations and that exact
