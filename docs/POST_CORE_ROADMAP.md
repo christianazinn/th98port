@@ -353,11 +353,12 @@ shell.
 4. Extend the completed three-phase ordinary-entity observer into Authentic
    presentation. Shots, enemies, post-hittest fireballs, player bases/overlays,
    defeat geometry, hit circles, the intervening common-effect pool,
-   Bullet16s, clouds, and pellets now have source-ordered consumers. Next add
-   Boss/Extra/Charge presenters and attach the frozen palette lifecycle
-   facts/primitive to their owning character and Warning/Gauge presenters.
-   Keep `th03rv`
-   independent of both presentation and asset libraries.
+   Bullet16s, clouds, pellets, both background families, and all-nine
+   Boss/Bomb/Extra/Charge/Warning/Gauge paths now have source-ordered
+   consumers. Next close the dynamic HUD/result passes, assemble the external
+   process resource bundle, and drive that completed coordinator from the
+   fixed-rate application shell. Keep `th03rv` independent of both
+   presentation and asset libraries.
 5. Select a minimal Windows/platform backend from an explicit support-floor
    matrix, then implement the host compositor and input mapping.
 6. Select and integrate the PMD/YM2608 audio stack after the licensing and

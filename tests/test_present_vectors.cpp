@@ -11,6 +11,7 @@ namespace {
 
 using th03::present::GrcgClipRect;
 using th03::present::GrcgPoint;
+using th03::present::GrcgTile;
 using th03::present::Index4;
 using th03::present::Page;
 using th03::present::Raster;
@@ -169,6 +170,200 @@ void test_vertical_line_primitive()
 			raster.pixel(Page::zero, {144, 191}) == vector_color &&
 			raster.pixel(Page::zero, {144, 192}) == 0U,
 			"Rikako-domain line clips to the inclusive playfield bottom"
+		);
+	}
+}
+
+void test_horizontal_line_primitive()
+{
+	{
+		Raster raster;
+		constexpr GrcgClipRect clip{2, 2, 7, 7};
+		expect(
+			th03::present::grcg_hline(
+				raster, 9, 0, 4, clip, vector_color
+			),
+			"reversed horizontal primitive clips and draws"
+		);
+		constexpr std::array<GrcgPoint, 6U> expected{{
+			{2, 4}, {3, 4}, {4, 4}, {5, 4}, {6, 4}, {7, 4},
+		}};
+		expect_exact_pixels(
+			raster, Page::zero, expected,
+			"horizontal primitive keeps both clipped endpoints"
+		);
+	}
+	{
+		Raster raster;
+		constexpr GrcgClipRect clip{2, 2, 7, 7};
+		const auto before = raster.display_state_hash();
+		expect(
+			th03::present::grcg_hline(
+				raster, -8, -1, 4, clip, vector_color
+			) && raster.display_state_hash() == before,
+			"fully left-clipped horizontal primitive is a no-op"
+		);
+		expect(
+			th03::present::grcg_hline(
+				raster, 8, 12, 4, clip, vector_color
+			) && raster.display_state_hash() == before,
+			"fully right-clipped horizontal primitive is a no-op"
+		);
+		expect(
+			th03::present::grcg_hline(
+				raster, 3, 6, 1, clip, vector_color
+			) && raster.display_state_hash() == before,
+			"vertically clipped horizontal primitive is a no-op"
+		);
+	}
+	{
+		Raster raster;
+		expect(raster.set_access_page(Page::one), "select hline access page");
+		expect(
+			th03::present::grcg_hline(
+				raster, 5, 5, 6, full_400_line_clip, vector_color
+			),
+			"degenerate horizontal primitive draws"
+		);
+		expect(
+			raster.pixel(Page::one, {5, 6}) == vector_color &&
+				raster.pixel(Page::zero, {5, 6}) == 0U,
+			"horizontal primitive writes one inclusive point on the access page"
+		);
+	}
+	{
+		Raster raster;
+		expect(
+			raster.set_raster_mode(RasterMode::zoomed_200_upper),
+			"select zoomed mode for horizontal primitive"
+		);
+		constexpr GrcgClipRect clip{16, 8, 303, 191};
+		expect(
+			th03::present::grcg_hline(
+				raster, 0, 400, 191, clip, vector_color
+			),
+			"zoomed horizontal primitive clips and draws"
+		);
+		for(std::int32_t x = 16; x <= 303; ++x) {
+			expect(
+				raster.pixel(Page::zero, {x, 191}) == vector_color,
+				"zoomed horizontal primitive includes the playfield bottom"
+			);
+		}
+		expect(
+			raster.pixel(Page::zero, {15, 191}) == 0U &&
+				raster.pixel(Page::zero, {304, 191}) == 0U,
+			"zoomed horizontal clipping changes no horizontal neighbor"
+		);
+	}
+}
+
+void test_patterned_boxfill_primitive()
+{
+	constexpr GrcgTile alternating{{0xAAU, 0x55U, 0x00U, 0xFFU}};
+	constexpr GrcgTile one_hot_planes{{0x80U, 0x40U, 0x20U, 0x10U}};
+	constexpr GrcgTile solid_white{{0xFFU, 0xFFU, 0xFFU, 0xFFU}};
+	{
+		Raster raster;
+		constexpr GrcgClipRect clip{4, 3, 10, 6};
+		expect(
+			th03::present::grcg_boxfill(
+				raster, {12, 8}, {2, 1}, clip, alternating
+			),
+			"reversed patterned box clips and draws"
+		);
+		for(std::int32_t y = 3; y <= 6; ++y) {
+			for(std::int32_t x = 4; x <= 10; ++x) {
+				const auto expected = ((x & 1) == 0) ? 9U : 10U;
+				expect(
+					raster.pixel(Page::zero, {x, y}) == expected,
+					"box tile is MSB-first and phased to absolute VRAM X"
+				);
+			}
+		}
+		expect(
+			raster.pixel(Page::zero, {3, 3}) == 0U &&
+			raster.pixel(Page::zero, {11, 6}) == 0U &&
+			raster.pixel(Page::zero, {4, 2}) == 0U &&
+			raster.pixel(Page::zero, {10, 7}) == 0U,
+			"box clipping changes no neighboring pixels"
+		);
+	}
+	{
+		Raster raster;
+		expect(raster.set_access_page(Page::one), "select box access page");
+		expect(
+			th03::present::grcg_boxfill(
+				raster, {5, 6}, {5, 6}, full_400_line_clip, alternating
+			),
+			"degenerate patterned box draws"
+		);
+		expect(
+			raster.pixel(Page::one, {5, 6}) == 10U &&
+				raster.pixel(Page::zero, {5, 6}) == 0U,
+			"degenerate box is inclusive and access-page-only"
+		);
+	}
+	{
+		Raster raster;
+		expect(
+			raster.clear({0, 0, 4U, 1U}, 15U),
+			"seed all color planes beneath a patterned box"
+		);
+		expect(
+			th03::present::grcg_boxfill(
+				raster, {0, 0}, {3, 0}, full_400_line_clip, one_hot_planes
+			),
+			"all-plane patterned box draws"
+		);
+		constexpr std::array<Index4, 4U> expected{{1U, 2U, 4U, 8U}};
+		for(std::size_t x = 0U; x < expected.size(); ++x) {
+			expect(
+				raster.pixel(
+					Page::zero,
+					{static_cast<std::int32_t>(x), 0}
+				) == expected[x],
+				"patterned box writes and clears every GRCG tile plane"
+			);
+		}
+	}
+	{
+		Raster raster;
+		constexpr GrcgClipRect clip{2, 2, 7, 7};
+		const auto before = raster.display_state_hash();
+		expect(
+			th03::present::grcg_boxfill(
+				raster, {8, 3}, {12, 6}, clip, alternating
+			) && raster.display_state_hash() == before,
+			"fully right-clipped patterned box is a no-op"
+		);
+	}
+	{
+		Raster raster;
+		expect(
+			raster.set_raster_mode(RasterMode::zoomed_200_upper),
+			"select zoomed mode for patterned box"
+		);
+		constexpr GrcgClipRect clip{16, 8, 303, 191};
+		expect(
+			th03::present::grcg_boxfill(
+				raster, {12, 189}, {307, 193}, clip, solid_white
+			),
+			"zoomed patterned box clips and draws"
+		);
+		for(std::int32_t y = 189; y <= 191; ++y) {
+			for(std::int32_t x = 16; x <= 303; ++x) {
+				expect(
+					raster.pixel(Page::zero, {x, y}) == 15U,
+					"zoomed patterned box includes both clipped axes"
+				);
+			}
+		}
+		expect(
+			raster.pixel(Page::zero, {15, 189}) == 0U &&
+				raster.pixel(Page::zero, {304, 191}) == 0U &&
+				raster.pixel(Page::zero, {16, 188}) == 0U,
+			"zoomed patterned box changes no clipped neighbor"
 		);
 	}
 }
@@ -456,6 +651,18 @@ void test_zero_and_invalid_requests_are_atomic()
 		"invalid solid GRCG color is rejected"
 	);
 	expect(
+		!th03::present::grcg_hline(
+			raster, 1, 2, 1, full_400_line_clip, 16U
+		),
+		"invalid horizontal-line color is rejected"
+	);
+	expect(
+		!th03::present::grcg_boxfill(
+			raster, {1, 1}, {2, 2}, {5, 0, 4, 10}, GrcgTile{}
+		),
+		"invalid box clip is rejected"
+	);
+	expect(
 		raster.display_state_hash() == before,
 		"invalid vector requests leave the page unchanged"
 	);
@@ -467,6 +674,8 @@ int main()
 {
 	test_axis_and_diagonal_lines();
 	test_vertical_line_primitive();
+	test_horizontal_line_primitive();
+	test_patterned_boxfill_primitive();
 	test_fixed_fraction_slopes();
 	test_line_clipping_and_access_page();
 	test_horizontal_then_vertical_cutline();

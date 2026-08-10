@@ -58,6 +58,7 @@ using th03::present::MainBackgroundPresenter;
 using th03::present::MainBossPresenter;
 using th03::present::MainEffectsPresenter;
 using th03::present::MainEntitiesPresenter;
+using th03::present::MainExtraChargePresenter;
 using th03::present::MainGameMode;
 using th03::present::MainHudState;
 using th03::present::MainPaletteState;
@@ -227,6 +228,7 @@ struct Fixture {
 	std::optional<MainBackgroundPresenter> background;
 	std::optional<MainBossPresenter> bosses;
 	std::optional<MainEffectsPresenter> effects;
+	std::optional<MainExtraChargePresenter> extra_charge;
 	std::optional<MainPlayersBulletsPresenter> players_bullets;
 	std::optional<MainBombsPresenter> bombs;
 	std::optional<MainWarningGaugePresenter> warning_gauge;
@@ -291,12 +293,16 @@ struct Fixture {
 		expect(
 			raster.clear({64, sprite16_source_top, 16U, 8U}, 9U) &&
 			raster.clear({96, sprite16_source_top + 8, 96U, 48U}, 10U) &&
+			raster.clear({0, sprite16_source_top + 8, 48U, 24U}, 4U) &&
+			raster.clear({320, sprite16_source_top + 56, 192U, 24U}, 5U) &&
+			raster.clear({32, sprite16_source_top + 8, 32U, 16U}, 11U) &&
+			raster.clear({352, sprite16_source_top + 8, 32U, 16U}, 11U) &&
 			raster.clear(
 				{32, sprite16_source_top + 80, 32U, 16U}, 7U
 			) && raster.clear(
 				{128, sprite16_source_top + 80, 48U, 24U}, 6U
 			),
-			"seed Bullet16, Fireball, and hit-circle cels in the handoff"
+			"seed entity, Extra, Charge, and effect cels in the handoff"
 		);
 		expect(
 			static_presenter.round_startup(
@@ -320,6 +326,7 @@ struct Fixture {
 			authentic_main_effects_atlas_layout(),
 			assets.trig()
 		);
+		extra_charge.emplace(raster, staging, assets.trig());
 		players_bullets.emplace(
 			raster,
 			staging,
@@ -352,6 +359,7 @@ struct Fixture {
 			*bosses,
 			*entities,
 			*effects,
+			*extra_charge,
 			*players_bullets,
 			*bombs,
 			*warning_gauge
@@ -447,7 +455,24 @@ struct Fixture {
 		round->observe(th03::detail::ObserverAccess::main_boss(state));
 		round->observe(th03::detail::ObserverAccess::shots_enemies(state));
 		round->observe(th03::detail::ObserverAccess::fireballs(state));
+		extra_charge_phases(state);
 		round->observe(th03::detail::ObserverAccess::players_bullets(state));
+	}
+
+	void extra_charge_phases(const th03::detail::DeterministicState &state)
+	{
+		round->observe(th03::detail::ObserverAccess::main_extra_attack(
+			state, PlayerId::p1
+		));
+		round->observe(th03::detail::ObserverAccess::main_charge_shot(
+			state, PlayerId::p1
+		));
+		round->observe(th03::detail::ObserverAccess::main_extra_attack(
+			state, PlayerId::p2
+		));
+		round->observe(th03::detail::ObserverAccess::main_charge_shot(
+			state, PlayerId::p2
+		));
 	}
 
 	void background_frame(const th03::detail::DeterministicState &state)
@@ -491,13 +516,22 @@ struct Fixture {
 	return {pixels.begin(), pixels.end()};
 }
 
+void open_extra_p1(
+	Fixture &fixture,
+	const th03::detail::DeterministicState &state
+)
+{
+	fixture.begin_frame(state);
+	fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
+	fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
+	fixture.round->observe(th03::detail::ObserverAccess::fireballs(state));
+}
+
 void test_contract_and_setup_failure()
 {
 	static_assert(!std::is_copy_constructible_v<MainRoundPresenter>);
 	static_assert(!std::is_move_constructible_v<MainRoundPresenter>);
 	constexpr std::array expected{
-		MainRoundMissingPhase::extra_attack,
-		MainRoundMissingPhase::charge_shot,
 		MainRoundMissingPhase::hud,
 		MainRoundMissingPhase::result,
 	};
@@ -524,6 +558,7 @@ void test_contract_and_setup_failure()
 		*fixture.bosses,
 		*fixture.entities,
 		*fixture.effects,
+		*fixture.extra_charge,
 		*fixture.players_bullets,
 		*fixture.bombs,
 		*fixture.warning_gauge
@@ -549,6 +584,7 @@ void test_contract_and_setup_failure()
 		*fixture.bosses,
 		*fixture.entities,
 		*fixture.effects,
+		*fixture.extra_charge,
 		*fixture.players_bullets,
 		*fixture.bombs,
 		*fixture.warning_gauge
@@ -557,6 +593,30 @@ void test_contract_and_setup_failure()
 		stopped_background.status() == MainRoundStatus::background_failed &&
 		fixture.raster.palette_tone() == 50,
 		"reject an invalid background child before applying construction tone"
+	);
+	MainExtraChargePresenter invalid_extra_charge(
+		fixture.raster,
+		fixture.static_presenter.sprite_staging(),
+		StaffFlakeTrigTables{}
+	);
+	MainRoundPresenter stopped_extra_charge(
+		fixture.raster,
+		fixture.tram,
+		fixture.static_presenter,
+		fixture.palette,
+		*fixture.background,
+		*fixture.bosses,
+		*fixture.entities,
+		*fixture.effects,
+		invalid_extra_charge,
+		*fixture.players_bullets,
+		*fixture.bombs,
+		*fixture.warning_gauge
+	);
+	expect(
+		stopped_extra_charge.status() == MainRoundStatus::extra_charge_failed &&
+		fixture.raster.palette_tone() == 50,
+		"reject an invalid Extra/Charge child before applying construction tone"
 	);
 	MainRoundPresenter valid(
 		fixture.raster,
@@ -567,6 +627,7 @@ void test_contract_and_setup_failure()
 		*fixture.bosses,
 		*fixture.entities,
 		*fixture.effects,
+		*fixture.extra_charge,
 		*fixture.players_bullets,
 		*fixture.bombs,
 		*fixture.warning_gauge
@@ -702,6 +763,153 @@ void test_wrong_order_is_sticky_and_atomic()
 		fixture.raster.shown_page() == Page::one &&
 		std::ranges::equal(before, fixture.raster.graphics(Page::zero)),
 		"first order failure is sticky and suppresses all later work"
+	);
+}
+
+void test_extra_charge_order_is_strict()
+{
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		open_extra_p1(fixture, state);
+		const auto before = page_copy(fixture.raster, Page::zero);
+		fixture.round->observe(
+			th03::detail::ObserverAccess::players_bullets(state)
+		);
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation &&
+			std::ranges::equal(before, fixture.raster.graphics(Page::zero)),
+			"reject skipping all four Extra/Charge callbacks before Players"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		open_extra_p1(fixture, state);
+		fixture.round->observe(
+			th03::detail::ObserverAccess::main_charge_shot(state, PlayerId::p1)
+		);
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation,
+			"reject Charge P1 before Extra P1"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		open_extra_p1(fixture, state);
+		fixture.round->observe(
+			th03::detail::ObserverAccess::main_extra_attack(state, PlayerId::p1)
+		);
+		fixture.round->observe(
+			th03::detail::ObserverAccess::main_charge_shot(state, PlayerId::p1)
+		);
+		fixture.round->observe(
+			th03::detail::ObserverAccess::main_charge_shot(state, PlayerId::p1)
+		);
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation,
+			"reject a duplicated Charge P1 after its phase advances"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		open_extra_p1(fixture, state);
+		fixture.round->observe(
+			th03::detail::ObserverAccess::main_extra_attack(state, PlayerId::p2)
+		);
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation,
+			"reject P2 Extra at the P1 phase"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		open_extra_p1(fixture, state);
+		state.playfield_fg_shift_x[1U] = 3;
+		fixture.round->observe(
+			th03::detail::ObserverAccess::main_extra_attack(state, PlayerId::p1)
+		);
+		expect(
+			fixture.round->status() == MainRoundStatus::invalid_observation,
+			"reject Extra when any field of its MAIN phase context is stale"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		open_extra_p1(fixture, state);
+		state.players[0U].paletted_character = 0;
+		const auto shown = fixture.raster.shown_page();
+		fixture.round->observe(
+			th03::detail::ObserverAccess::main_extra_attack(state, PlayerId::p1)
+		);
+		expect(
+			fixture.round->status() == MainRoundStatus::extra_charge_failed &&
+			!fixture.extra_charge->ready(),
+			"surface a malformed forwarded Extra view as the named child failure"
+		);
+		fixture.round->main_frame_footer_reached({});
+		expect(
+			fixture.round->status() == MainRoundStatus::extra_charge_failed &&
+			fixture.raster.shown_page() == shown,
+			"keep an Extra/Charge child failure sticky and suppress publication"
+		);
+	}
+}
+
+void test_extra_then_charge_overlap_order()
+{
+	Fixture fixture;
+	auto state = fixture.state();
+	constexpr std::int16_t center_x = 144 * 16;
+	constexpr std::int16_t center_y = 336 * 16;
+	auto &extra = state.extra_attacks[0U][0U];
+	extra.state = 1U;
+	extra.frame = 0U;
+	extra.center_x = center_x;
+	extra.center_y = center_y;
+	extra.player_id = 1U;
+	state.players[1U].paletted_character = 2;
+	auto &charge = state.reimu_charge[1U][0U];
+	charge.state = 1U;
+	charge.x.fill(center_x);
+	charge.y.fill(center_y);
+
+	open_extra_p1(fixture, state);
+	fixture.round->observe(
+		th03::detail::ObserverAccess::main_extra_attack(state, PlayerId::p1)
+	);
+	expect(
+		fixture.round->ready() &&
+		fixture.raster.pixel(Page::zero, {480, 170}) == 4U,
+		"draw P1 Extra on P2's playfield before either player's Charge"
+	);
+	fixture.round->observe(
+		th03::detail::ObserverAccess::main_charge_shot(state, PlayerId::p1)
+	);
+	expect(
+		fixture.round->ready() &&
+		fixture.raster.pixel(Page::zero, {480, 170}) == 4U,
+		"inactive P1 Charge leaves the earlier P1 Extra pixel unchanged"
+	);
+	fixture.round->observe(
+		th03::detail::ObserverAccess::main_extra_attack(state, PlayerId::p2)
+	);
+	expect(
+		fixture.round->ready() &&
+		fixture.raster.pixel(Page::zero, {480, 170}) == 4U,
+		"inactive P2 Extra leaves the earlier P1 Extra pixel unchanged"
+	);
+	fixture.round->observe(
+		th03::detail::ObserverAccess::main_charge_shot(state, PlayerId::p2)
+	);
+	expect(
+		fixture.round->ready() &&
+		fixture.raster.pixel(Page::zero, {480, 170}) == 5U,
+		"later P2 Charge overwrites an overlapping P1 Extra pixel"
 	);
 }
 
@@ -1387,6 +1595,7 @@ void test_malformed_late_bullet_is_whole_phase_atomic()
 	fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
 	fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
 	fixture.round->observe(th03::detail::ObserverAccess::fireballs(state));
+	fixture.extra_charge_phases(state);
 	const auto before = page_copy(fixture.raster, Page::zero);
 
 	// The final slot claims a live Bullet16 without its required synchronous
@@ -1481,6 +1690,7 @@ void test_repeat_round_startup_preserves_process_children()
 	auto state = fixture.state();
 	const auto *effects = std::addressof(*fixture.effects);
 	const auto *bombs = std::addressof(*fixture.bombs);
+	const auto *extra_charge = std::addressof(*fixture.extra_charge);
 	fixture.round->common_effect_spawned(CommonEffectSpawned{
 		.kind = CommonEffectKind::expanding_circle,
 		.player = PlayerId::p1,
@@ -1497,9 +1707,23 @@ void test_repeat_round_startup_preserves_process_children()
 	terminal_warning.players[0U].warning_step_before = 1U;
 	terminal_warning.players[0U].warning_step_after = 1U;
 	terminal_warning.players[0U].next_attack = GaugeBossAttackKind::boss;
+	state.players[0U].paletted_character = 11;
+	auto &kana = state.extra_attacks[0U][0U];
+	kana.state = 3U;
+	kana.frame = 0U;
+	kana.center_x = 100 << 4;
+	kana.center_y = 80 << 4;
+	kana.player_id = 1U;
 	fixture.round->warning_frame_lifecycle(terminal_warning);
 	fixture.background_frame(state);
-	fixture.render_phases(state);
+	fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
+	fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
+	fixture.round->observe(th03::detail::ObserverAccess::fireballs(state));
+	fixture.extra_charge_phases(state);
+	state.players[0U].paletted_character = 1;
+	fixture.round->observe(
+		th03::detail::ObserverAccess::players_bullets(state)
+	);
 	expect(
 		fixture.round->repeat_round_startup(Fixture::hud_state()),
 		"terminal route-1 repeat skips a pending source warning portrait"
@@ -1528,14 +1752,47 @@ void test_repeat_round_startup_preserves_process_children()
 	);
 	expect(
 		std::addressof(*fixture.effects) == effects &&
-		std::addressof(*fixture.bombs) == bombs,
+		std::addressof(*fixture.bombs) == bombs &&
+		std::addressof(*fixture.extra_charge) == extra_charge,
 		"repeat startup preserves process-scoped child presenters and pools"
 	);
 
 	state.round_id++;
 	state.round_or_result_frame = 0U;
+	state.players[0U].paletted_character = 11;
+	kana.state = 1U;
+	kana.frame = 0U;
+	kana.player_id = 0U;
 	fixture.round->common_effects_advanced();
-	fixture.ordinary_phases(state);
+	open_extra_p1(fixture, state);
+	const auto normalized_destination_pixel = fixture.raster.pixel(
+		Page::zero, {100, 40}
+	);
+	fixture.round->observe(
+		th03::detail::ObserverAccess::main_extra_attack(state, PlayerId::p1)
+	);
+	expect(
+		fixture.round->ready() && fixture.raster.pixel(
+			Page::zero, {100, 40}
+		) == normalized_destination_pixel && fixture.raster.pixel(
+			Page::zero, {420, 40}
+		) == 11U,
+		"repeat retains Kana's stale destination cache and draws at the retained rather than normalized coordinate"
+	);
+	fixture.round->observe(
+		th03::detail::ObserverAccess::main_charge_shot(state, PlayerId::p1)
+	);
+	fixture.round->observe(
+		th03::detail::ObserverAccess::main_extra_attack(state, PlayerId::p2)
+	);
+	fixture.round->observe(
+		th03::detail::ObserverAccess::main_charge_shot(state, PlayerId::p2)
+	);
+	state.players[0U].paletted_character = 1;
+	fixture.round->observe(
+		th03::detail::ObserverAccess::players_bullets(state)
+	);
+	fixture.round->main_gauge_state(Fixture::gauge_state(state));
 	expect(
 		fixture.raster.pixel(Page::zero, {176, 176}) == 13U,
 		"repeat startup preserves the process-scoped common-effect pool"
@@ -1555,6 +1812,8 @@ int main()
 	test_source_order_footer_and_surface();
 	test_common_effect_fanout_stops_before_bombs();
 	test_wrong_order_is_sticky_and_atomic();
+	test_extra_charge_order_is_strict();
+	test_extra_then_charge_overlap_order();
 	test_phase_context_includes_foreground_shifts();
 	test_fireballs_precede_hit_circles();
 	test_hit_circles_overwrite_fireballs();

@@ -49,10 +49,16 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   applies exact even-row line-skip staging, and orders the borrowed pre-mutation
   Boss view between late Bombs and Shots. Renderer-private Ellen/Rikako/Chiyuri
   state remains fixed and process-scoped outside core.
+- All-nine Extra Attack and Charge Shot presentation is integrated in the
+  literal Extra P1, Charge P1, Extra P2, Charge P2 source order. The fixed
+  presenter uses only the committed Sprite16 atlas, exact GRCG primitives, and
+  borrowed semantic facts; Kana's one source-stale destination byte remains
+  process-scoped presentation state across repeat rounds.
 
 The shortest remaining chain to a visible interactive build is: fill
-Extra/Charge and HUD/result gaps in the existing
-composition owner; add the fixed 56.423 Hz input scheduler; then add the thin
+HUD/result gaps in the existing composition owner; bind decoded external
+resources into one process bundle; add the fixed 56.423 Hz input scheduler;
+then add the thin
 SDL upload and input shell. PC-98 visual traces remain the release authority
 after the synthetic cross-compiler gates.
 
@@ -91,12 +97,12 @@ th03_assets remains a collection of pure decoders for supplied byte spans (RGB, 
 | th03_audio_pmd (later) | Supplied music/SE bytes, PMD/OPNA scheduling and synthesis, mix gain, offline PCM | SDL devices, UI settings storage, gameplay state, or file paths |
 
 The current libraries contain a tested process coordinator over static setup,
-all nine Bomb and Boss paths, entities, players/bullets, effects, palette/raster,
-sprites, text, both MAIN backgrounds, and the final Raster-plus-TRAM source
+all nine Bomb, Boss, Extra, and Charge paths, entities, players/bullets,
+effects, palette/raster, sprites, text, both MAIN backgrounds, and the final Raster-plus-TRAM source
 surface. It deliberately names every unimplemented pass, so it is not yet
 proof that every real MAIN
-frame is complete. Source-order coverage is still required for Extra/Charge
-paths and dynamic HUD/result overlays. The neutral
+frame is complete. Source-order coverage is still required for dynamic
+HUD/result overlays. The neutral
 observer lifecycle events are a seam for that work; they are not render state
 in the core.
 

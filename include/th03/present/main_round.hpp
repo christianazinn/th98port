@@ -12,6 +12,7 @@
 #include "th03/present/main_bombs.hpp"
 #include "th03/present/main_effects.hpp"
 #include "th03/present/main_entities.hpp"
+#include "th03/present/main_extra_charge.hpp"
 #include "th03/present/main_palette.hpp"
 #include "th03/present/main_players_bullets.hpp"
 #include "th03/present/main_static.hpp"
@@ -21,19 +22,15 @@
 namespace th03::present {
 
 // Named gaps in this first source-ordered MAIN composition owner. These are
-// deliberately explicit rather than approximated from the three ordinary
-// phase views.
+// deliberately explicit rather than approximated from the ordered phase
+// views.
 enum class MainRoundMissingPhase : std::uint8_t {
-	extra_attack,
-	charge_shot,
 	hud,
 	result,
 };
 
-inline constexpr std::array<MainRoundMissingPhase, 4U>
+inline constexpr std::array<MainRoundMissingPhase, 2U>
 	main_round_missing_phases{{
-		MainRoundMissingPhase::extra_attack,
-		MainRoundMissingPhase::charge_shot,
 		MainRoundMissingPhase::hud,
 		MainRoundMissingPhase::result,
 	}};
@@ -46,6 +43,7 @@ enum class MainRoundStatus : std::uint8_t {
 	bosses_failed,
 	entities_failed,
 	effects_failed,
+	extra_charge_failed,
 	players_bullets_failed,
 	bombs_failed,
 	warning_gauge_failed,
@@ -80,6 +78,7 @@ public:
 		MainBossPresenter &bosses,
 		MainEntitiesPresenter &entities,
 		MainEffectsPresenter &effects,
+		MainExtraChargePresenter &extra_charge,
 		MainPlayersBulletsPresenter &players_bullets,
 		MainBombsPresenter &bombs,
 		MainWarningGaugePresenter &warning_gauge
@@ -145,6 +144,8 @@ public:
 	void observe(const MainBossView &view) noexcept override;
 	void observe(const ShotsEnemiesView &view) noexcept override;
 	void observe(const FireballsView &view) noexcept override;
+	void observe(const MainExtraAttackView &view) noexcept override;
+	void observe(const MainChargeShotView &view) noexcept override;
 	void observe(const PlayersBulletsView &view) noexcept override;
 
 	// Called after Game::start_next_round() on the source route-1 path. This
@@ -171,6 +172,10 @@ private:
 		boss,
 		shots_enemies,
 		fireballs,
+		extra_p1,
+		charge_p1,
+		extra_p2,
+		charge_p2,
 		players_bullets,
 		result_gate,
 		late_gauge,
@@ -194,6 +199,7 @@ private:
 	MainBossPresenter *bosses_;
 	MainEntitiesPresenter *entities_;
 	MainEffectsPresenter *effects_;
+	MainExtraChargePresenter *extra_charge_;
 	MainPlayersBulletsPresenter *players_bullets_;
 	MainBombsPresenter *bombs_;
 	MainWarningGaugePresenter *warning_gauge_;

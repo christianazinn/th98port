@@ -718,7 +718,18 @@ void gameplay_frame_suffix_after_interstitial(
 		const auto view = ObserverAccess::fireballs(state);
 		observer->observe(view);
 	}
-	extra_attacks_render_phase_update(state);
+	for(std::uint8_t player_id = 0U; player_id < player_count; ++player_id) {
+		const auto player = static_cast<PlayerId>(player_id);
+		if(observer != nullptr) {
+			const auto view = ObserverAccess::main_extra_attack(state, player);
+			observer->observe(view);
+		}
+		extra_attacks_render_phase_update_player(state, player_id);
+		if(observer != nullptr) {
+			const auto view = ObserverAccess::main_charge_shot(state, player);
+			observer->observe(view);
+		}
+	}
 	if(observer != nullptr) {
 		const auto view = ObserverAccess::players_bullets(state);
 		observer->observe(view);

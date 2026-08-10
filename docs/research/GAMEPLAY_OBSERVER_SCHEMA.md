@@ -1,19 +1,20 @@
 # TH03 MAIN ordinary-entity gameplay observer schema
 
-Status: source-grounded and implemented. All three phase views, the original
-four ordinary-entity lifecycle families, and the hit-circle/common-effect
-lifecycle facts are present. `th03_present` has source-ordered consumers for
-all three views and for both effect pools.
+Status: source-grounded and implemented. All three ordinary-entity phase views,
+the four literal player-scoped Extra/Charge callbacks, the original four
+ordinary-entity lifecycle families, and the hit-circle/common-effect lifecycle
+facts are present. `th03_present` has source-ordered consumers for each.
 
 ## Scope and authority
 
 This parcel closes the observation contract for the ordinary live entities in
 `MAIN.EXE`: the two players, ordinary shot pairs, enemies and their explosions,
-fireballs and their explosions, and bullets. Bosses, Extra Attacks, Charge
-Attacks, HUD, results, backgrounds, warnings, and audio remain separate
-parcels. Hit circles and common effects began outside this ordinary-entity
-schema but are now implemented as a narrow lifecycle extension because their
-exact source positions constrain the fireball and final-view draw order.
+fireballs and their explosions, and bullets. Extra Attacks and Charge Attacks
+are now implemented as a narrow player-scoped extension because Reimu's
+render-owned mutation requires a literal callback boundary. Bosses, HUD,
+results, backgrounds, warnings, and audio retain their separately documented
+contracts. Hit circles and common effects likewise extend this schema because
+their exact source positions constrain the fireball and final-view draw order.
 
 The behavioral authority is the clean Anniversary source tree at commit
 `3e2381d4275be7287f5525de5c95389d492b0a3c`. All `th03/...`, `th01/...`, and
@@ -43,18 +44,23 @@ The governing rules are:
 
 ## The minimum phase partition
 
-Three synchronous phase views are sufficient. A fourth bullet-only core phase
+Three synchronous phase views are sufficient for the ordinary entities. A
+fourth bullet-only core phase
 would merely name a source draw slot: no gameplay mutation occurs between the
 player/overlay/effect slots and `bullets_render()`. The presenter can preserve
 that private order inside one final callback. Conversely, fewer than three
 views lose a real before/after distinction around fireball hittest or the late
-Extra/Charge mutations.
+Extra/Charge mutations. Four additional player-scoped callbacks preserve those
+literal render slots without retaining a borrowed view: Extra P1 before its
+render-owned mutation, Charge P1 after it, then the corresponding P2 pair.
 
 | Phase view | Exact source boundary | Facts available | Work the Authentic presenter completes before returning |
 |---|---|---|---|
 | `ShotsEnemiesPhaseView` | After both Bomb and Boss render-phase callbacks, before `shots_render()` and before `fireballs_hittest()` | Shot pairs and enemies | Finish preceding Bomb/Boss presentation; draw shot pairs in ascending slot order, then enemies in ascending slot order |
 | `FireballsPhaseView` | Immediately after `fireballs_hittest()`, at the render half of `fireballs_hittest_and_render()` | Post-hittest fireballs | Draw fireballs/explosions in ascending slot order, then finish the out-of-scope hit-circle draw before returning |
-| `PlayersBulletsPhaseView` | After P1 Extra/Charge and P2 Extra/Charge render-phase gameplay mutations, before player rendering and before result routing | Players and final late-frame bullets | Finish Extra/Charge presentation; draw P1/P2 player bases, P1/P2 overlays, the private common-effect pool, and then all bullet passes |
+| `MainExtraAttackView` | Once per player immediately before that player's Extra renderer and Reimu frame increment | Selected owner plus exact fixed Extra slots | Draw that player's Extra slots synchronously, including the presenter-owned Kana stale-destination interpretation |
+| `MainChargeShotView` | Once per player after that player's Extra renderer/mutation | Selected player plus character-specific Charge facts | Draw that player's Charge payload synchronously; no gameplay/RNG mutation follows from the draw |
+| `PlayersBulletsPhaseView` | After P1 Extra/Charge and P2 Extra/Charge, before player rendering and result routing | Players and final late-frame bullets | Draw P1/P2 player bases, P1/P2 overlays, the private common-effect pool, and then all bullet passes |
 
 The source order proving those boundaries is
 `th03/main/rndloop.cpp:139-185`. The current native late suffix has the same
@@ -69,8 +75,9 @@ Expanded with the out-of-scope slots left visible, one ordinary drawn frame is:
 3. Core performs the reverse-slot fireball collision pass.
 4. `FireballsPhaseView`: fireball slots 0..23, then the presenter-owned hit
    circles before the callback returns.
-5. Core/presenter jointly pass through P1 Extra, P1 Charge, P2 Extra, and P2
-   Charge at their already-audited seams.
+5. `MainExtraAttackView(P1)` draws P1 Extra; core advances Reimu P1 if
+   selected; `MainChargeShotView(P1)` draws P1 Charge. Repeat the same literal
+   pair for P2.
 6. `PlayersBulletsPhaseView`: player base pass P1 then P2; disable EGC; overlay
    pass P1 then P2; common-effect draw; bullet16 pass, cloud pass, then pellet
    pass.

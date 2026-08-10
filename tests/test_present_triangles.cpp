@@ -177,6 +177,207 @@ void test_source_horizontal_mask()
 	}
 }
 
+void test_direct_trapezoid_reversal_and_degeneracy()
+{
+	{
+		Raster raster;
+		expect(
+			th03::present::grcg_trapezoid(
+				raster,
+				5, 5, 7,
+				2, 2, 4,
+				full_400_line_clip,
+				{triangle_color, 0xFFFFU}
+			),
+			"reversed-Y trapezoid draws"
+		);
+		constexpr std::array<GrcgPoint, 12U> expected{{
+			{2, 2}, {3, 2}, {4, 2},
+			{3, 3}, {4, 3}, {5, 3},
+			{4, 4}, {5, 4}, {6, 4},
+			{5, 5}, {6, 5}, {7, 5},
+		}};
+		expect_exact_pixels(
+			raster, Page::zero, expected,
+			"reversed-Y endpoint pairs and inclusive DDA rows are exact"
+		);
+	}
+	{
+		Raster raster;
+		expect(
+			th03::present::grcg_trapezoid(
+				raster,
+				2, 6, 2,
+				2, 20, 24,
+				full_400_line_clip,
+				{triangle_color, 0xFFFFU}
+			),
+			"zero-height twisted trapezoid draws"
+		);
+		constexpr std::array<GrcgPoint, 5U> expected{{
+			{2, 2}, {3, 2}, {4, 2}, {5, 2}, {6, 2},
+		}};
+		expect_exact_pixels(
+			raster, Page::zero, expected,
+			"zero-height trapezoid uses only its first horizontal edge"
+		);
+	}
+	{
+		Raster raster;
+		expect(
+			th03::present::grcg_trapezoid(
+				raster,
+				1, 2, 8,
+				5, 8, 2,
+				full_400_line_clip,
+				{triangle_color, 0xFFFFU}
+			),
+			"crossed-side trapezoid draws"
+		);
+		constexpr std::array<GrcgPoint, 23U> expected{{
+			{2, 1}, {3, 1}, {4, 1}, {5, 1}, {6, 1}, {7, 1}, {8, 1},
+			{4, 2}, {5, 2}, {6, 2}, {7, 2},
+			{5, 3},
+			{4, 4}, {5, 4}, {6, 4}, {7, 4},
+			{2, 5}, {3, 5}, {4, 5}, {5, 5}, {6, 5}, {7, 5}, {8, 5},
+		}};
+		expect_exact_pixels(
+			raster, Page::zero, expected,
+			"crossed-side DDA endpoints are reordered independently on each row"
+		);
+	}
+}
+
+void test_direct_trapezoid_vertical_clip_contract()
+{
+	{
+		Raster raster;
+		constexpr GrcgClipRect clip{0, 2, 20, 8};
+		const auto before = raster.display_state_hash();
+		expect(
+			th03::present::grcg_trapezoid(
+				raster,
+				1, 2, 4,
+				5, 6, 8,
+				clip,
+				{triangle_color, 0xFFFFU}
+			) && raster.display_state_hash() == before,
+			"direct trapezoid rejects a first edge above ClipYT"
+		);
+		expect(
+			th03::present::grcg_trapezoid(
+				raster,
+				5, 6, 8,
+				1, 2, 4,
+				clip,
+				{triangle_color, 0xFFFFU}
+			) && raster.display_state_hash() == before,
+			"direct trapezoid rejects a second edge above ClipYT before reversal"
+		);
+	}
+	{
+		Raster raster;
+		constexpr GrcgClipRect clip{2, 2, 7, 7};
+		const auto before = raster.display_state_hash();
+		expect(
+			th03::present::grcg_trapezoid(
+				raster,
+				3, 8, 10,
+				6, 10, 12,
+				clip,
+				{triangle_color, 0xFFFFU}
+			) && raster.display_state_hash() == before,
+			"fully right-clipped direct trapezoid is a no-op"
+		);
+	}
+	{
+		Raster raster;
+		constexpr GrcgClipRect clip{0, 0, 12, 4};
+		expect(
+			th03::present::grcg_trapezoid(
+				raster,
+				2, 2, 2,
+				8, 8, 8,
+				clip,
+				{triangle_color, 0xFFFFU}
+			),
+			"bottom-clipped direct trapezoid draws"
+		);
+		constexpr std::array<GrcgPoint, 3U> expected{{
+			{2, 2}, {5, 3}, {8, 4},
+		}};
+		expect_exact_pixels(
+			raster, Page::zero, expected,
+			"bottom clamp precedes linework construction"
+		);
+	}
+	{
+		Raster raster;
+		expect(
+			raster.set_raster_mode(RasterMode::zoomed_200_upper),
+			"select zoomed mode for direct trapezoid"
+		);
+		constexpr GrcgClipRect clip{16, 8, 303, 191};
+		expect(
+			th03::present::grcg_trapezoid(
+				raster,
+				191, 12, 307,
+				191, 12, 307,
+				clip,
+				{triangle_color, 0xFFFFU}
+			),
+			"zoomed direct trapezoid clips and draws"
+		);
+		for(std::int32_t x = 16; x <= 303; ++x) {
+			expect(
+				raster.pixel(Page::zero, {x, 191}) == triangle_color,
+				"zoomed direct trapezoid includes the playfield bottom"
+			);
+		}
+		std::size_t actual_count = 0U;
+		for(const auto pixel : raster.graphics(Page::zero)) {
+			actual_count += (pixel == triangle_color) ? 1U : 0U;
+		}
+		expect(
+			actual_count == 288U &&
+				raster.pixel(Page::zero, {15, 191}) == 0U &&
+				raster.pixel(Page::zero, {304, 191}) == 0U,
+			"zoomed direct trapezoid changes no clipped neighbor"
+		);
+	}
+}
+
+void test_direct_trapezoid_absolute_mask_and_page()
+{
+	Raster raster;
+	expect(raster.set_access_page(Page::one), "select trapezoid access page");
+	expect(
+		raster.clear({13, 3, 7U, 1U}, 5U),
+		"seed direct trapezoid mask span"
+	);
+	expect(
+		th03::present::grcg_trapezoid(
+			raster,
+			3, 13, 19,
+			3, 13, 19,
+			full_400_line_clip,
+			{triangle_color, 0x8001U}
+		),
+		"masked direct trapezoid draws"
+	);
+	for(std::int32_t x = 13; x <= 19; ++x) {
+		const auto expected = (x == 15 || x == 16) ? triangle_color : 5U;
+		expect(
+			raster.pixel(Page::one, {x, 3}) == expected,
+			"direct trapezoid mask crosses an absolute 16-pixel boundary"
+		);
+		expect(
+			raster.pixel(Page::zero, {x, 3}) == 0U,
+			"direct trapezoid changes only the access page"
+		);
+	}
+}
+
 void test_clip_bounds_and_endpoint_inclusivity()
 {
 	Raster raster;
@@ -276,6 +477,26 @@ void test_access_page_zoom_and_invalid_requests()
 			"invalid solid color is rejected"
 		);
 		expect(
+			!th03::present::grcg_trapezoid(
+				raster,
+				1, 1, 3,
+				2, 1, 3,
+				{5, 0, 4, 10},
+				{triangle_color, 0xFFFFU}
+			),
+			"invalid direct trapezoid clip is rejected"
+		);
+		expect(
+			!th03::present::grcg_trapezoid(
+				raster,
+				1, 1, 3,
+				2, 1, 3,
+				full_400_line_clip,
+				{16U, 0xFFFFU}
+			),
+			"invalid direct trapezoid color is rejected"
+		);
+		expect(
 			raster.display_state_hash() == before,
 			"invalid triangle calls are atomic"
 		);
@@ -289,6 +510,9 @@ int main()
 	test_flat_top_sort_and_inclusive_scanlines();
 	test_split_triangle_and_top_clip_progression();
 	test_source_horizontal_mask();
+	test_direct_trapezoid_reversal_and_degeneracy();
+	test_direct_trapezoid_vertical_clip_contract();
+	test_direct_trapezoid_absolute_mask_and_page();
 	test_clip_bounds_and_endpoint_inclusivity();
 	test_access_page_zoom_and_invalid_requests();
 	if(failures != 0U) {

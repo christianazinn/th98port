@@ -30,22 +30,23 @@ void extra_attacks_update(
 	}
 }
 
-void extra_attacks_render_phase_update(DeterministicState &state) noexcept
+void extra_attacks_render_phase_update_player(
+	DeterministicState &state,
+	std::uint8_t player_id
+) noexcept
 {
 	// Reimu advances this byte in her renderer; Kana already advances it in
 	// the update callback.
-	for(std::uint8_t player_id = 0U; player_id < player_count; ++player_id) {
-		const auto character = character_index_from_paletted(
-			state.players[player_id].paletted_character
-		);
-		if(character != character_reimu) {
-			continue;
-		}
-		for(std::size_t slot = 0U; slot < extra_attack_regular_count; ++slot) {
-			auto &attack = state.extra_attacks[player_id][slot];
-			if(attack.state != 0U) {
-				attack.frame++;
-			}
+	const auto character = character_index_from_paletted(
+		state.players[player_id].paletted_character
+	);
+	if(character != character_reimu) {
+		return;
+	}
+	for(std::size_t slot = 0U; slot < extra_attack_regular_count; ++slot) {
+		auto &attack = state.extra_attacks[player_id][slot];
+		if(attack.state != 0U) {
+			attack.frame++;
 		}
 	}
 }

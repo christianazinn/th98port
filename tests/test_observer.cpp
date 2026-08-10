@@ -28,6 +28,10 @@ void check(bool condition, std::string_view message)
 enum class ObservedPhase : std::uint8_t {
 	shots_enemies,
 	fireballs,
+	extra_p1,
+	charge_p1,
+	extra_p2,
+	charge_p2,
 	players_bullets,
 };
 
@@ -49,6 +53,10 @@ enum class ObservedCall : std::uint8_t {
 	main_frame_footer_reached,
 	shots_enemies,
 	fireballs,
+	extra_p1,
+	charge_p1,
+	extra_p2,
+	charge_p2,
 	players_bullets,
 };
 
@@ -135,7 +143,9 @@ public:
 
 class RecordingObserver final : public th03::GameplayObserver {
 public:
-	RecordingObserver()
+	explicit RecordingObserver(
+		const th03::detail::DeterministicState *inspected_state = nullptr
+	) : inspected_state_(inspected_state)
 	{
 		phases.reserve(8U);
 		spawns.reserve(8U);
@@ -424,6 +434,39 @@ public:
 		}
 	}
 
+	void observe(const th03::MainExtraAttackView &view) noexcept override
+	{
+		const auto player = static_cast<std::size_t>(view.player());
+		const auto phase = (view.player() == th03::PlayerId::p1)
+			? ObservedPhase::extra_p1
+			: ObservedPhase::extra_p2;
+		const auto call = (view.player() == th03::PlayerId::p1)
+			? ObservedCall::extra_p1
+			: ObservedCall::extra_p2;
+		phases.push_back(phase);
+		calls.push_back(call);
+		extra_contexts[player] = view.context();
+		extra_first_attacks[player] = view.attack(
+			static_cast<th03::ExtraAttackSlot>(0U)
+		);
+		capture_extra_frames();
+	}
+
+	void observe(const th03::MainChargeShotView &view) noexcept override
+	{
+		const auto player = static_cast<std::size_t>(view.player());
+		const auto phase = (view.player() == th03::PlayerId::p1)
+			? ObservedPhase::charge_p1
+			: ObservedPhase::charge_p2;
+		const auto call = (view.player() == th03::PlayerId::p1)
+			? ObservedCall::charge_p1
+			: ObservedCall::charge_p2;
+		phases.push_back(phase);
+		calls.push_back(call);
+		charge_contexts[player] = view.context();
+		capture_extra_frames();
+	}
+
 	void observe(const th03::PlayersBulletsView &view) noexcept override
 	{
 		phases.push_back(ObservedPhase::players_bullets);
@@ -493,6 +536,10 @@ public:
 	> reimu_boss_orbit_points{};
 	th03::MainPhaseContext shots_enemies_context{};
 	th03::MainPhaseContext fireballs_context{};
+	std::array<th03::MainPhaseContext, 2> extra_contexts{};
+	std::array<th03::MainPhaseContext, 2> charge_contexts{};
+	std::array<std::optional<th03::MainExtraAttackFact>, 2>
+		extra_first_attacks{};
 	th03::MainPhaseContext players_bullets_context{};
 	std::array<
 		th03::ShotPairFact,
@@ -522,6 +569,21 @@ public:
 		std::array<bool, th03::PlayersBulletsView::trail_point_count>,
 		th03::PlayersBulletsView::bullet_count
 	> trail_points_present{};
+	std::vector<std::array<std::uint8_t, 2>> extra_frames_at_late_phases;
+
+private:
+	void capture_extra_frames()
+	{
+		if(inspected_state_ == nullptr) {
+			return;
+		}
+		extra_frames_at_late_phases.push_back({
+			inspected_state_->extra_attacks[0U][0U].frame,
+			inspected_state_->extra_attacks[1U][0U].frame,
+		});
+	}
+
+	const th03::detail::DeterministicState *inspected_state_;
 };
 
 th03::detail::DeterministicState make_live_state()
@@ -540,6 +602,176 @@ th03::detail::DeterministicState make_live_state()
 		);
 	}
 	return state;
+}
+
+void seed_extra_charge_state(th03::detail::DeterministicState &state)
+{
+	state.reimu_chargeshot_primary = 9U;
+	for(std::size_t player = 0U; player < th03::detail::player_count; ++player) {
+		state.players[player].reimu_chargeshot_active = true;
+		state.players[player].reimu_chargeshot_age = static_cast<std::uint8_t>(
+			20U + player
+		);
+		for(std::size_t slot = 0U;
+			slot < state.extra_attacks[player].size(); ++slot) {
+			auto &attack = state.extra_attacks[player][slot];
+			attack.state = static_cast<std::uint8_t>(1U + (slot % 3U));
+			attack.frame = static_cast<std::uint8_t>(30U + slot);
+			attack.center_x = static_cast<std::int16_t>(100 + slot + player);
+			attack.center_y = static_cast<std::int16_t>(
+				-200 - static_cast<int>(slot) - static_cast<int>(player)
+			);
+			attack.velocity_x = static_cast<std::int16_t>(300 + slot);
+			attack.velocity_y = static_cast<std::int16_t>(
+				-400 - static_cast<int>(slot)
+			);
+			attack.target_x_for_target_player = static_cast<std::int16_t>(
+				500 + slot
+			);
+			attack.target_x_for_origin_player = static_cast<std::int16_t>(
+				-600 - static_cast<int>(slot)
+			);
+			attack.player_id = static_cast<std::uint8_t>(0xA0U + player);
+			attack.angle = static_cast<std::uint8_t>(40U + slot);
+			attack.speed = static_cast<std::uint8_t>(50U + slot);
+			attack.behavior_variant = static_cast<std::uint8_t>(60U + slot);
+			attack.mima_timer = static_cast<std::uint16_t>(0x1200U + slot);
+			attack.yumemi_extent = static_cast<std::uint16_t>(70U + slot);
+			attack.yumemi_duration = static_cast<std::uint16_t>(80U + slot);
+			attack.kotohime_target_y = static_cast<std::int16_t>(
+				-900 - static_cast<int>(slot)
+			);
+			attack.kotohime_velocity_y = static_cast<std::uint16_t>(90U + slot);
+			attack.kotohime_milestone = static_cast<std::uint8_t>(100U + slot);
+			for(std::size_t point = 0U;
+				point < attack.ellen_trail_x.size(); ++point) {
+				attack.ellen_trail_x[point] = static_cast<std::int16_t>(
+					1000 + slot + point
+				);
+				attack.ellen_trail_y[point] = static_cast<std::int16_t>(
+					-1100 - static_cast<int>(slot) - static_cast<int>(point)
+				);
+			}
+			attack.ellen_radius = static_cast<std::int16_t>(1200 + slot);
+			attack.ellen_angle_delta = static_cast<std::int8_t>(
+				-10 - static_cast<int>(player)
+			);
+		}
+		for(std::size_t group = 0U;
+			group < state.reimu_charge[player].size(); ++group) {
+			auto &charge = state.reimu_charge[player][group];
+			charge.state = static_cast<std::uint8_t>(1U + (group % 3U));
+			charge.frame = static_cast<std::uint8_t>(10U + group);
+			for(std::size_t point = 0U; point < charge.x.size(); ++point) {
+				charge.x[point] = static_cast<std::int16_t>(1300 + group + point);
+				charge.y[point] = static_cast<std::int16_t>(
+					-1400 - static_cast<int>(group) - static_cast<int>(point)
+				);
+			}
+			charge.angle = static_cast<std::uint8_t>(20U + group);
+			charge.speed = static_cast<std::uint8_t>(30U + group);
+		}
+		state.mima_charge_active[player] = static_cast<std::uint8_t>(2U + player);
+		state.mima_charge_frames[player] = static_cast<std::uint8_t>(3U + player);
+		for(std::size_t node = 0U;
+			node < state.mima_charge[player].size(); ++node) {
+			auto &charge = state.mima_charge[player][node];
+			charge.active = static_cast<std::uint8_t>(1U + (node % 2U));
+			charge.visual_frame = static_cast<std::uint8_t>(4U + node);
+			charge.x = static_cast<std::int16_t>(1500 + node);
+			charge.y = static_cast<std::int16_t>(
+				-1600 - static_cast<int>(node)
+			);
+			charge.velocity_x = static_cast<std::int16_t>(1700 + node);
+			charge.velocity_y = static_cast<std::int16_t>(
+				-1800 - static_cast<int>(node)
+			);
+		}
+		auto &marisa = state.marisa_charge[player];
+		marisa.active = static_cast<std::uint8_t>(5U + player);
+		marisa.age = static_cast<std::uint8_t>(6U + player);
+		for(std::size_t node = 0U; node < marisa.x.size(); ++node) {
+			marisa.x[node] = static_cast<std::int16_t>(1900 + node);
+			marisa.y[node] = static_cast<std::int16_t>(
+				-2000 - static_cast<int>(node)
+			);
+		}
+		state.kana_charge_state[player] = static_cast<std::uint8_t>(7U + player);
+		state.kana_charge_frames[player] = static_cast<std::uint8_t>(8U + player);
+		for(std::size_t group = 0U;
+			group < state.kana_charge[player].size(); ++group) {
+			auto &charge = state.kana_charge[player][group];
+			for(std::size_t point = 0U; point < charge.x.size(); ++point) {
+				charge.x[point] = static_cast<std::int16_t>(2100 + group + point);
+				charge.y[point] = static_cast<std::int16_t>(
+					-2200 - static_cast<int>(group) - static_cast<int>(point)
+				);
+			}
+			charge.angle = static_cast<std::uint8_t>(9U + group);
+			charge.speed = static_cast<std::uint8_t>(10U + group);
+		}
+		state.rikako_charge_state[player] = static_cast<std::uint8_t>(11U + player);
+		state.rikako_charge_frames[player] = static_cast<std::uint8_t>(12U + player);
+		state.rikako_charge_radius[player] = static_cast<std::uint16_t>(
+			2300U + player
+		);
+		state.rikako_charge_origin_x[player] = static_cast<std::int16_t>(
+			2400 + player
+		);
+		state.rikako_charge_origin_y[player] = static_cast<std::int16_t>(
+			-2500 - static_cast<int>(player)
+		);
+		for(std::size_t node = 0U;
+			node < state.rikako_charge[player].size(); ++node) {
+			auto &charge = state.rikako_charge[player][node];
+			charge.x = static_cast<std::int16_t>(2600 + node);
+			charge.y = static_cast<std::int16_t>(
+				-2700 - static_cast<int>(node)
+			);
+			charge.angle = static_cast<std::uint8_t>(13U + node);
+		}
+		for(std::size_t node = 0U;
+			node < state.chiyuri_charge[player].size(); ++node) {
+			auto &charge = state.chiyuri_charge[player][node];
+			charge.state = static_cast<std::uint8_t>(1U + (node % 2U));
+			charge.frame = static_cast<std::uint8_t>(14U + node);
+			charge.x = static_cast<std::int16_t>(2800 + node);
+			charge.y = static_cast<std::int16_t>(
+				-2900 - static_cast<int>(node)
+			);
+		}
+		for(std::size_t node = 0U;
+			node < state.ellen_charge[player].size(); ++node) {
+			auto &charge = state.ellen_charge[player][node];
+			charge.state = static_cast<std::uint8_t>(1U + (node % 2U));
+			charge.phase = static_cast<std::uint8_t>(15U + node);
+			charge.angle = static_cast<std::uint8_t>(16U + node);
+			charge.speed = static_cast<std::uint8_t>(17U + node);
+			charge.x = static_cast<std::int16_t>(3000 + node);
+			charge.y = static_cast<std::int16_t>(
+				-3100 - static_cast<int>(node)
+			);
+			charge.velocity_x = static_cast<std::int16_t>(3200 + node);
+			charge.velocity_y = static_cast<std::int16_t>(
+				-3300 - static_cast<int>(node)
+			);
+		}
+		auto &kotohime = state.kotohime_charge[player];
+		kotohime.active = static_cast<std::uint8_t>(18U + player);
+		kotohime.x = static_cast<std::int16_t>(3400 + player);
+		kotohime.y = static_cast<std::int16_t>(
+			-3500 - static_cast<int>(player)
+		);
+		kotohime.velocity_y = static_cast<std::int16_t>(3600 + player);
+		auto &yumemi = state.yumemi_charge[player];
+		yumemi.state = static_cast<std::uint8_t>(19U + player);
+		yumemi.frame = static_cast<std::uint8_t>(20U + player);
+		yumemi.x = static_cast<std::int16_t>(3700 + player);
+		yumemi.y = static_cast<std::int16_t>(
+			-3800 - static_cast<int>(player)
+		);
+	}
+	state.extra_attacks[0U][0U].frame = 0xFFU;
 }
 
 template <typename Callback>
@@ -622,6 +854,154 @@ bool fireball_pools_equal(
 		}
 	}
 	return true;
+}
+
+bool extra_attack_pools_equal(
+	const th03::detail::DeterministicState &left,
+	const th03::detail::DeterministicState &right
+)
+{
+	for(std::size_t player = 0U; player < left.extra_attacks.size(); ++player) {
+		for(std::size_t slot = 0U;
+			slot < left.extra_attacks[player].size(); ++slot) {
+			const auto &a = left.extra_attacks[player][slot];
+			const auto &b = right.extra_attacks[player][slot];
+			if(std::tie(
+				a.state, a.frame, a.center_x, a.center_y, a.velocity_x,
+				a.velocity_y, a.target_x_for_target_player,
+				a.target_x_for_origin_player, a.player_id, a.angle, a.speed,
+				a.behavior_variant, a.mima_timer, a.yumemi_extent,
+				a.yumemi_duration, a.kotohime_target_y,
+				a.kotohime_velocity_y, a.kotohime_milestone,
+				a.ellen_trail_x, a.ellen_trail_y, a.ellen_radius,
+				a.ellen_angle_delta
+			) != std::tie(
+				b.state, b.frame, b.center_x, b.center_y, b.velocity_x,
+				b.velocity_y, b.target_x_for_target_player,
+				b.target_x_for_origin_player, b.player_id, b.angle, b.speed,
+				b.behavior_variant, b.mima_timer, b.yumemi_extent,
+				b.yumemi_duration, b.kotohime_target_y,
+				b.kotohime_velocity_y, b.kotohime_milestone,
+				b.ellen_trail_x, b.ellen_trail_y, b.ellen_radius,
+				b.ellen_angle_delta
+			)) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+bool charge_shot_pools_equal(
+	const th03::detail::DeterministicState &left,
+	const th03::detail::DeterministicState &right
+)
+{
+	for(std::size_t player = 0U; player < th03::detail::player_count; ++player) {
+		if(std::tie(
+			left.players[player].reimu_chargeshot_active,
+			left.players[player].reimu_chargeshot_age
+		) != std::tie(
+			right.players[player].reimu_chargeshot_active,
+			right.players[player].reimu_chargeshot_age
+		)) {
+			return false;
+		}
+		for(std::size_t group = 0U;
+			group < left.reimu_charge[player].size(); ++group) {
+			const auto &a = left.reimu_charge[player][group];
+			const auto &b = right.reimu_charge[player][group];
+			if(std::tie(a.state, a.frame, a.x, a.y, a.angle, a.speed) !=
+				std::tie(b.state, b.frame, b.x, b.y, b.angle, b.speed)) {
+				return false;
+			}
+		}
+		for(std::size_t node = 0U;
+			node < left.mima_charge[player].size(); ++node) {
+			const auto &a = left.mima_charge[player][node];
+			const auto &b = right.mima_charge[player][node];
+			if(std::tie(
+				a.active, a.visual_frame, a.x, a.y, a.velocity_x, a.velocity_y
+			) != std::tie(
+				b.active, b.visual_frame, b.x, b.y, b.velocity_x, b.velocity_y
+			)) {
+				return false;
+			}
+		}
+		const auto &marisa_a = left.marisa_charge[player];
+		const auto &marisa_b = right.marisa_charge[player];
+		if(std::tie(
+			marisa_a.active, marisa_a.age, marisa_a.x, marisa_a.y
+		) != std::tie(
+			marisa_b.active, marisa_b.age, marisa_b.x, marisa_b.y
+		)) {
+			return false;
+		}
+		for(std::size_t group = 0U;
+			group < left.kana_charge[player].size(); ++group) {
+			const auto &a = left.kana_charge[player][group];
+			const auto &b = right.kana_charge[player][group];
+			if(std::tie(a.x, a.y, a.angle, a.speed) !=
+				std::tie(b.x, b.y, b.angle, b.speed)) {
+				return false;
+			}
+		}
+		for(std::size_t node = 0U;
+			node < left.rikako_charge[player].size(); ++node) {
+			const auto &a = left.rikako_charge[player][node];
+			const auto &b = right.rikako_charge[player][node];
+			if(std::tie(a.x, a.y, a.angle) != std::tie(b.x, b.y, b.angle)) {
+				return false;
+			}
+		}
+		for(std::size_t node = 0U;
+			node < left.chiyuri_charge[player].size(); ++node) {
+			const auto &a = left.chiyuri_charge[player][node];
+			const auto &b = right.chiyuri_charge[player][node];
+			if(std::tie(a.state, a.frame, a.x, a.y) !=
+				std::tie(b.state, b.frame, b.x, b.y)) {
+				return false;
+			}
+		}
+		for(std::size_t node = 0U;
+			node < left.ellen_charge[player].size(); ++node) {
+			const auto &a = left.ellen_charge[player][node];
+			const auto &b = right.ellen_charge[player][node];
+			if(std::tie(
+				a.state, a.phase, a.angle, a.speed, a.x, a.y,
+				a.velocity_x, a.velocity_y
+			) != std::tie(
+				b.state, b.phase, b.angle, b.speed, b.x, b.y,
+				b.velocity_x, b.velocity_y
+			)) {
+				return false;
+			}
+		}
+		const auto &kotohime_a = left.kotohime_charge[player];
+		const auto &kotohime_b = right.kotohime_charge[player];
+		const auto &yumemi_a = left.yumemi_charge[player];
+		const auto &yumemi_b = right.yumemi_charge[player];
+		if(std::tie(
+			left.mima_charge_active[player], left.mima_charge_frames[player],
+			left.kana_charge_state[player], left.kana_charge_frames[player],
+			left.rikako_charge_state[player], left.rikako_charge_frames[player],
+			left.rikako_charge_radius[player], left.rikako_charge_origin_x[player],
+			left.rikako_charge_origin_y[player], kotohime_a.active,
+			kotohime_a.x, kotohime_a.y, kotohime_a.velocity_y, yumemi_a.state,
+			yumemi_a.frame, yumemi_a.x, yumemi_a.y
+		) != std::tie(
+			right.mima_charge_active[player], right.mima_charge_frames[player],
+			right.kana_charge_state[player], right.kana_charge_frames[player],
+			right.rikako_charge_state[player], right.rikako_charge_frames[player],
+			right.rikako_charge_radius[player], right.rikako_charge_origin_x[player],
+			right.rikako_charge_origin_y[player], kotohime_b.active,
+			kotohime_b.x, kotohime_b.y, kotohime_b.velocity_y, yumemi_b.state,
+			yumemi_b.frame, yumemi_b.x, yumemi_b.y
+		)) {
+			return false;
+		}
+	}
+	return left.reimu_chargeshot_primary == right.reimu_chargeshot_primary;
 }
 
 bool player_pools_equal(
@@ -862,6 +1242,8 @@ bool observed_gameplay_equal(
 		shotpools_equal(left, right) &&
 		enemy_pools_equal(left, right) &&
 		fireball_pools_equal(left, right) &&
+		extra_attack_pools_equal(left, right) &&
+		charge_shot_pools_equal(left, right) &&
 		player_pools_equal(left, right) &&
 		bullet_pools_equal(left, right) &&
 		boss_state_equal(left, right) &&
@@ -1154,6 +1536,305 @@ void test_indexed_views_and_classifications()
 	);
 }
 
+void test_extra_charge_view_contract()
+{
+	auto state = make_live_state();
+	state.round_id = 6U;
+	state.round_or_result_frame = 0x3456U;
+	state.playfield_fg_shift_x = {-7, 9};
+	const auto expected_context = th03::MainPhaseContext{
+		.round_id = 6U,
+		.round_or_result_frame = 0x3456U,
+		.playfield_fg_shift_x = {-7, 9},
+	};
+	const std::array<std::size_t, 9> extra_counts{
+		8U, 6U, 14U, 12U, 10U, 8U, 14U, 16U, 16U,
+	};
+	for(std::size_t character = 0U; character < extra_counts.size(); ++character) {
+		state.players[0U].paletted_character = static_cast<std::int8_t>(
+			1U + (character * 2U)
+		);
+		const auto view = th03::detail::ObserverAccess::main_extra_attack(
+			state, th03::PlayerId::p1
+		);
+		check(
+			view.context() == expected_context &&
+			view.player() == th03::PlayerId::p1 &&
+			view.paletted_character() == state.players[0U].paletted_character &&
+			view.slot_count() == extra_counts[character] &&
+			!view.attack(static_cast<th03::ExtraAttackSlot>(
+				extra_counts[character]
+			)),
+			"Extra views expose each selected character's exact source slot range"
+		);
+	}
+	auto &extra = state.extra_attacks[0U][15U];
+	extra.state = 29U;
+	extra.frame = 0xFEU;
+	extra.center_x = -1234;
+	extra.center_y = 2345;
+	extra.player_id = 0xFEU;
+	extra.mima_timer = 0xABCDU;
+	extra.yumemi_extent = 0x3456U;
+	extra.yumemi_duration = 0x4567U;
+	extra.kotohime_target_y = -3210;
+	extra.behavior_variant = 0x89U;
+	for(std::size_t point = 0U; point < extra.ellen_trail_x.size(); ++point) {
+		extra.ellen_trail_x[point] = static_cast<std::int16_t>(100 + point);
+		extra.ellen_trail_y[point] = static_cast<std::int16_t>(-200 -
+			static_cast<int>(point));
+	}
+	state.players[0U].paletted_character = 17;
+	const auto extra_view = th03::detail::ObserverAccess::main_extra_attack(
+		state, th03::PlayerId::p1
+	);
+	check(
+		extra_view.attack(static_cast<th03::ExtraAttackSlot>(15U)) ==
+			std::optional<th03::MainExtraAttackFact>{th03::MainExtraAttackFact{
+				.slot = static_cast<th03::ExtraAttackSlot>(15U),
+				.state = 29U,
+				.frame = 0xFEU,
+				.center_x = -1234,
+				.center_y = 2345,
+				.destination_raw = 0xFEU,
+				.mima_timer_low = 0xCDU,
+				.yumemi_extent = 0x3456U,
+				.yumemi_duration = 0x4567U,
+				.kotohime_target_y = -3210,
+				.kotohime_variant = 0x89U,
+				.ellen_trail_x = {100, 101, 102, 103, 104, 105, 106},
+				.ellen_trail_y = {-200, -201, -202, -203, -204, -205, -206},
+			}},
+		"Extra facts preserve raw destination, render-specific unions, and Ellen's full trail"
+	);
+	const auto invalid_extra = th03::detail::ObserverAccess::main_extra_attack(
+		state, static_cast<th03::PlayerId>(255U)
+	);
+	check(
+		invalid_extra.slot_count() == 0U &&
+		invalid_extra.paletted_character() == 0 &&
+		!invalid_extra.attack(static_cast<th03::ExtraAttackSlot>(0U)),
+		"invalid Extra player identities cannot index deterministic storage"
+	);
+
+	state.players[0U].paletted_character = 1;
+	state.reimu_charge[0U][11U].state = 7U;
+	state.reimu_charge[0U][11U].x = {10, 11, 12, 13, 14, 15, 16};
+	state.reimu_charge[0U][11U].y = {-10, -11, -12, -13, -14, -15, -16};
+	auto charge_view = th03::detail::ObserverAccess::main_charge_shot(
+		state, th03::PlayerId::p1
+	);
+	check(
+		charge_view.context() == expected_context &&
+		charge_view.player() == th03::PlayerId::p1 &&
+		charge_view.paletted_character() == 1 &&
+		charge_view.reimu_group(
+			static_cast<th03::ReimuChargeGroupSlot>(11U)
+		) == std::optional<th03::ReimuChargeGroupFact>{{.state = 7U}} &&
+		charge_view.reimu_point(
+			static_cast<th03::ReimuChargeGroupSlot>(11U),
+			th03::ReimuChargePoint::node_6
+		) == std::optional<th03::RawPoint>{{16, -16}} &&
+		!charge_view.reimu_point(
+			static_cast<th03::ReimuChargeGroupSlot>(11U),
+			static_cast<th03::ReimuChargePoint>(1U)
+		) &&
+		!charge_view.reimu_group(
+			static_cast<th03::ReimuChargeGroupSlot>(12U)
+		) && !charge_view.mima_state(),
+		"Reimu Charge exposes only rendered sparse trail points and rejects other characters"
+	);
+
+	state.players[0U].paletted_character = 3;
+	state.mima_charge_active[0U] = 4U;
+	state.mima_charge[0U][14U].active = 5U;
+	state.mima_charge[0U][14U].x = -111;
+	state.mima_charge[0U][14U].y = 222;
+	charge_view = th03::detail::ObserverAccess::main_charge_shot(
+		state, th03::PlayerId::p1
+	);
+	check(
+		charge_view.mima_state() ==
+			std::optional<th03::MimaChargeStateFact>{{.active = 4U}} &&
+		charge_view.mima_node(static_cast<th03::MimaChargeNodeSlot>(14U)) ==
+			std::optional<th03::MimaChargeNodeFact>{{5U, -111, 222}} &&
+		!charge_view.mima_node(static_cast<th03::MimaChargeNodeSlot>(15U)),
+		"Mima Charge separates callback activity from per-node activity"
+	);
+
+	state.players[0U].paletted_character = 5;
+	state.marisa_charge[0U].active = 6U;
+	state.marisa_charge[0U].x[11U] = -333;
+	state.marisa_charge[0U].y[11U] = 444;
+	charge_view = th03::detail::ObserverAccess::main_charge_shot(
+		state, th03::PlayerId::p1
+	);
+	check(
+		charge_view.marisa_state() ==
+			std::optional<th03::MarisaChargeStateFact>{{.active = 6U}} &&
+		charge_view.marisa_node(static_cast<th03::MarisaChargeNodeSlot>(11U)) ==
+			std::optional<th03::MarisaChargeNodeFact>{{-333, 444}} &&
+		!charge_view.marisa_node(static_cast<th03::MarisaChargeNodeSlot>(12U)),
+		"Marisa Charge exposes its active flag and all twelve draw positions"
+	);
+
+	state.players[0U].paletted_character = 7;
+	state.ellen_charge[0U][31U].state = 8U;
+	state.ellen_charge[0U][31U].angle = 9U;
+	state.ellen_charge[0U][31U].x = -555;
+	state.ellen_charge[0U][31U].y = 666;
+	charge_view = th03::detail::ObserverAccess::main_charge_shot(
+		state, th03::PlayerId::p1
+	);
+	check(
+		charge_view.ellen_node(static_cast<th03::EllenChargeNodeSlot>(31U)) ==
+			std::optional<th03::EllenChargeNodeFact>{{8U, 9U, -555, 666}} &&
+		!charge_view.ellen_node(static_cast<th03::EllenChargeNodeSlot>(32U)),
+		"Ellen Charge exposes state, angle, and position for all 32 nodes"
+	);
+
+	state.players[0U].paletted_character = 9;
+	state.kotohime_charge[0U] = th03::detail::KotohimeChargeState{
+		.active = 10U, .x = -777, .y = 888, .velocity_y = 999,
+	};
+	charge_view = th03::detail::ObserverAccess::main_charge_shot(
+		state, th03::PlayerId::p1
+	);
+	check(
+		charge_view.kotohime() ==
+			std::optional<th03::KotohimeChargeFact>{{10U, -777, 888}},
+		"Kotohime Charge omits its update-only velocity"
+	);
+
+	state.players[0U].paletted_character = 11;
+	state.kana_charge_state[0U] = 11U;
+	state.kana_charge[0U][3U].x[12U] = -999;
+	state.kana_charge[0U][3U].y[12U] = 1111;
+	charge_view = th03::detail::ObserverAccess::main_charge_shot(
+		state, th03::PlayerId::p1
+	);
+	check(
+		charge_view.kana_state() ==
+			std::optional<th03::KanaChargeStateFact>{{.state = 11U}} &&
+		charge_view.kana_point(
+			static_cast<th03::KanaChargeGroupSlot>(3U),
+			th03::KanaChargePoint::node_12
+		) == std::optional<th03::RawPoint>{{-999, 1111}} &&
+		!charge_view.kana_point(
+			static_cast<th03::KanaChargeGroupSlot>(4U),
+			th03::KanaChargePoint::node_0
+		) && !charge_view.kana_point(
+			static_cast<th03::KanaChargeGroupSlot>(3U),
+			static_cast<th03::KanaChargePoint>(1U)
+		),
+		"Kana Charge exposes only four sparse draw points per group"
+	);
+
+	state.players[0U].paletted_character = 13;
+	state.rikako_charge_state[0U] = 12U;
+	state.rikako_charge[0U][3U].x = -1212;
+	state.rikako_charge[0U][3U].y = 1313;
+	charge_view = th03::detail::ObserverAccess::main_charge_shot(
+		state, th03::PlayerId::p1
+	);
+	check(
+		charge_view.rikako_state() ==
+			std::optional<th03::RikakoChargeStateFact>{{.state = 12U}} &&
+		charge_view.rikako_node(static_cast<th03::RikakoChargeNodeSlot>(3U)) ==
+			std::optional<th03::RikakoChargeNodeFact>{{-1212, 1313}} &&
+		!charge_view.rikako_node(static_cast<th03::RikakoChargeNodeSlot>(4U)),
+		"Rikako Charge omits update-only angles and geometry history"
+	);
+
+	state.players[0U].paletted_character = 15;
+	state.chiyuri_charge[0U][7U] = th03::detail::ChiyuriChargeNode{
+		.state = 13U, .frame = 14U, .x = -1414, .y = 1515,
+	};
+	charge_view = th03::detail::ObserverAccess::main_charge_shot(
+		state, th03::PlayerId::p1
+	);
+	check(
+		charge_view.chiyuri_node(
+			static_cast<th03::ChiyuriChargeNodeSlot>(7U)
+		) == std::optional<th03::ChiyuriChargeNodeFact>{{13U, 14U, -1414, 1515}} &&
+		!charge_view.chiyuri_node(
+			static_cast<th03::ChiyuriChargeNodeSlot>(8U)
+		),
+		"Chiyuri Charge preserves the reverse-rendered node state and frame"
+	);
+
+	state.players[0U].paletted_character = 17;
+	state.yumemi_charge[0U] = th03::detail::YumemiChargeState{
+		.state = 15U, .frame = 16U, .x = -1616, .y = 1717,
+	};
+	charge_view = th03::detail::ObserverAccess::main_charge_shot(
+		state, th03::PlayerId::p1
+	);
+	check(
+		charge_view.yumemi() ==
+			std::optional<th03::YumemiChargeFact>{{15U, 16U, -1616, 1717}} &&
+		!charge_view.reimu_group(static_cast<th03::ReimuChargeGroupSlot>(0U)) &&
+		!charge_view.mima_state() && !charge_view.marisa_state() &&
+		!charge_view.ellen_node(static_cast<th03::EllenChargeNodeSlot>(0U)) &&
+		!charge_view.kotohime() && !charge_view.kana_state() &&
+		!charge_view.rikako_state() &&
+		!charge_view.chiyuri_node(
+			static_cast<th03::ChiyuriChargeNodeSlot>(0U)
+		),
+		"Charge accessors reject every non-selected character without leaking union storage"
+	);
+	const auto invalid_charge = th03::detail::ObserverAccess::main_charge_shot(
+		state, static_cast<th03::PlayerId>(255U)
+	);
+	const auto all_charge_accessors_reject = [](const auto &view) noexcept {
+		return !view.reimu_group(
+			static_cast<th03::ReimuChargeGroupSlot>(0U)
+		) && !view.reimu_point(
+			static_cast<th03::ReimuChargeGroupSlot>(0U),
+			th03::ReimuChargePoint::node_0
+		) && !view.mima_state() && !view.mima_node(
+			static_cast<th03::MimaChargeNodeSlot>(0U)
+		) && !view.marisa_state() && !view.marisa_node(
+			static_cast<th03::MarisaChargeNodeSlot>(0U)
+		) && !view.ellen_node(
+			static_cast<th03::EllenChargeNodeSlot>(0U)
+		) && !view.kotohime() && !view.kana_state() && !view.kana_point(
+			static_cast<th03::KanaChargeGroupSlot>(0U),
+			th03::KanaChargePoint::node_0
+		) && !view.rikako_state() && !view.rikako_node(
+			static_cast<th03::RikakoChargeNodeSlot>(0U)
+		) && !view.chiyuri_node(
+			static_cast<th03::ChiyuriChargeNodeSlot>(0U)
+		) && !view.yumemi();
+	};
+	check(
+		invalid_charge.paletted_character() == 0 &&
+		all_charge_accessors_reject(invalid_charge),
+		"every Charge accessor rejects invalid player identities before indexing storage"
+	);
+	constexpr std::array<std::int8_t, 4U> invalid_paletted_characters{
+		-1, 0, 19, 127,
+	};
+	for(const auto invalid_paletted_character : invalid_paletted_characters) {
+		state.players[0U].paletted_character = invalid_paletted_character;
+		const auto invalid_character_extra =
+			th03::detail::ObserverAccess::main_extra_attack(
+				state, th03::PlayerId::p1
+			);
+		const auto invalid_character_charge =
+			th03::detail::ObserverAccess::main_charge_shot(
+				state, th03::PlayerId::p1
+			);
+		check(
+			invalid_character_extra.slot_count() == 0U &&
+			!invalid_character_extra.attack(
+				static_cast<th03::ExtraAttackSlot>(0U)
+			) && all_charge_accessors_reject(invalid_character_charge),
+			"every Extra/Charge accessor rejects an out-of-domain paletted character"
+		);
+	}
+}
+
 void test_main_boss_view_contract()
 {
 	auto state = make_live_state();
@@ -1264,11 +1945,13 @@ void test_observer_invariance_and_phase_order()
 	base.round_id = 1U;
 	base.round_or_result_frame = 99U;
 	base.playfield_fg_shift_x = {6, -6};
+	base.players[1U].paletted_character = 2;
+	seed_extra_charge_state(base);
 	auto null_state = base;
 	auto discard_state = base;
 	auto record_state = base;
 	DiscardObserver discard;
-	RecordingObserver recording;
+	RecordingObserver recording(&record_state);
 
 	th03::detail::gameplay_frame_suffix_after_interstitial(null_state);
 	th03::detail::gameplay_frame_suffix_after_interstitial(
@@ -1286,20 +1969,28 @@ void test_observer_invariance_and_phase_order()
 		recording.phases == std::vector<ObservedPhase>{
 			ObservedPhase::shots_enemies,
 			ObservedPhase::fireballs,
+			ObservedPhase::extra_p1,
+			ObservedPhase::charge_p1,
+			ObservedPhase::extra_p2,
+			ObservedPhase::charge_p2,
 			ObservedPhase::players_bullets,
 		},
-		"ordinary late suffix reports all three source draw phases exactly once"
+		"ordinary late suffix reports all seven source draw phases exactly once"
 	);
 	check(
 		recording.main_frame_footers ==
 			std::vector<th03::MainFrameFooterReached>{{}} &&
-		recording.calls == std::vector<ObservedCall>{
+			recording.calls == std::vector<ObservedCall>{
 			ObservedCall::shots_enemies,
 			ObservedCall::fireballs,
+			ObservedCall::extra_p1,
+			ObservedCall::charge_p1,
+			ObservedCall::extra_p2,
+			ObservedCall::charge_p2,
 			ObservedCall::players_bullets,
 			ObservedCall::main_frame_footer_reached,
 		},
-		"the normal late suffix reaches its footer after all three phase views"
+		"the normal late suffix reaches its footer after all seven phase views"
 	);
 	check(
 		recording.shots_enemies_context == th03::MainPhaseContext{
@@ -1308,8 +1999,26 @@ void test_observer_invariance_and_phase_order()
 			.playfield_fg_shift_x = {6, -6},
 		} &&
 		recording.fireballs_context == recording.shots_enemies_context &&
+		recording.extra_contexts[0U] == recording.shots_enemies_context &&
+		recording.charge_contexts[0U] == recording.shots_enemies_context &&
+		recording.extra_contexts[1U] == recording.shots_enemies_context &&
+		recording.charge_contexts[1U] == recording.shots_enemies_context &&
 		recording.players_bullets_context == recording.shots_enemies_context,
 		"all observations precede result control and the late frame-counter increment"
+	);
+	check(
+		recording.extra_first_attacks[0U]->frame == 0xFFU &&
+		recording.extra_first_attacks[1U]->frame == 30U &&
+		recording.extra_frames_at_late_phases ==
+			std::vector<std::array<std::uint8_t, 2>>{
+				{0xFFU, 30U},
+				{0U, 30U},
+				{0U, 30U},
+				{0U, 31U},
+			} &&
+		record_state.extra_attacks[0U][0U].frame == 0U &&
+		record_state.extra_attacks[1U][0U].frame == 31U,
+		"each Reimu Extra view precedes its wrapping frame increment and each Charge view follows it"
 	);
 }
 
@@ -1681,13 +2390,17 @@ void test_bullet16_lifecycle_styles_order_and_full_arena()
 			mima_record, &mima);
 		th03::detail::gameplay_frame_suffix_after_interstitial(mima_record,
 															   &mima);
-		check(mima.calls.size() == 19U &&
+		check(mima.calls.size() == 23U &&
 				  mima.calls[13U] == ObservedCall::player_pose_committed &&
 				  mima.calls[14U] == ObservedCall::player_pose_committed &&
 				  mima.calls[15U] == ObservedCall::shots_enemies &&
 				  mima.calls[16U] == ObservedCall::fireballs &&
-				  mima.calls[17U] == ObservedCall::players_bullets &&
-				  mima.calls[18U] == ObservedCall::main_frame_footer_reached,
+				  mima.calls[17U] == ObservedCall::extra_p1 &&
+				  mima.calls[18U] == ObservedCall::charge_p1 &&
+				  mima.calls[19U] == ObservedCall::extra_p2 &&
+				  mima.calls[20U] == ObservedCall::charge_p2 &&
+				  mima.calls[21U] == ObservedCall::players_bullets &&
+				  mima.calls[22U] == ObservedCall::main_frame_footer_reached,
 			  "lifecycle prefix, P1/P2 pose commits, phase views, and footer "
 			  "retain source order");
 	});
@@ -1907,6 +2620,10 @@ void test_post_hittest_fireball_view_and_terminal_order()
 		recording.phases == std::vector<ObservedPhase>{
 			ObservedPhase::shots_enemies,
 			ObservedPhase::fireballs,
+			ObservedPhase::extra_p1,
+			ObservedPhase::charge_p1,
+			ObservedPhase::extra_p2,
+			ObservedPhase::charge_p2,
 			ObservedPhase::players_bullets,
 		},
 		"all phase callbacks precede terminal session-exit completion"
@@ -1931,6 +2648,10 @@ void test_post_hittest_fireball_view_and_terminal_order()
 			recording.phases == std::vector<ObservedPhase>{
 				ObservedPhase::shots_enemies,
 				ObservedPhase::fireballs,
+				ObservedPhase::extra_p1,
+				ObservedPhase::charge_p1,
+				ObservedPhase::extra_p2,
+				ObservedPhase::charge_p2,
 				ObservedPhase::players_bullets,
 			},
 			"a result-control terminal early return skips the normal frame footer"
@@ -2354,6 +3075,10 @@ void test_recorded_pause_completion()
 		recording.phases == std::vector<ObservedPhase>{
 			ObservedPhase::shots_enemies,
 			ObservedPhase::fireballs,
+			ObservedPhase::extra_p1,
+			ObservedPhase::charge_p1,
+			ObservedPhase::extra_p2,
+			ObservedPhase::charge_p2,
 			ObservedPhase::players_bullets,
 		},
 		"finish_deferred_frame reports all delayed phase views once"
@@ -2400,6 +3125,10 @@ void test_recorded_pause_completion()
 		exit_recording.phases == std::vector<ObservedPhase>{
 			ObservedPhase::shots_enemies,
 			ObservedPhase::fireballs,
+			ObservedPhase::extra_p1,
+			ObservedPhase::charge_p1,
+			ObservedPhase::extra_p2,
+			ObservedPhase::charge_p2,
 			ObservedPhase::players_bullets,
 		},
 		"deferred exit_session reports all phase views once before terminal"
@@ -2608,7 +3337,7 @@ void test_warning_completion()
 	const auto release = game->step({}, th03::InputContext::gameplay, &recording);
 	check(
 		release.status == th03::StepStatus::running &&
-		recording.phases.size() == 3U && recording.poses.size() == 2U &&
+		recording.phases.size() == 7U && recording.poses.size() == 2U &&
 		recording.boss_views.size() == 1U,
 		"gauge release frame reports its ordinary phase views before arming warning"
 	);
@@ -2679,6 +3408,10 @@ void test_warning_completion()
 		recording.phases == std::vector<ObservedPhase>{
 			ObservedPhase::shots_enemies,
 			ObservedPhase::fireballs,
+			ObservedPhase::extra_p1,
+			ObservedPhase::charge_p1,
+			ObservedPhase::extra_p2,
+			ObservedPhase::charge_p2,
 			ObservedPhase::players_bullets,
 		} &&
 		recording.warning_interstitial_samples.size() == 27U &&
@@ -2693,6 +3426,10 @@ void test_warning_completion()
 			ObservedCall::warning_interstitial_sample,
 			ObservedCall::shots_enemies,
 			ObservedCall::fireballs,
+			ObservedCall::extra_p1,
+			ObservedCall::charge_p1,
+			ObservedCall::extra_p2,
+			ObservedCall::charge_p2,
 			ObservedCall::players_bullets,
 			ObservedCall::main_frame_footer_reached,
 		} && recording.background_bomb_calls == expected_resumed_order,
@@ -3357,6 +4094,10 @@ void test_main_effect_observer_contract()
 				ObservedCall::bomb_common_effect_step,
 				ObservedCall::shots_enemies,
 				ObservedCall::fireballs,
+				ObservedCall::extra_p1,
+				ObservedCall::charge_p1,
+				ObservedCall::extra_p2,
+				ObservedCall::charge_p2,
 				ObservedCall::players_bullets,
 				ObservedCall::main_frame_footer_reached,
 			},
@@ -3412,6 +4153,10 @@ void test_main_effect_observer_contract()
 				ObservedCall::bomb_compatibility_read,
 				ObservedCall::shots_enemies,
 				ObservedCall::fireballs,
+				ObservedCall::extra_p1,
+				ObservedCall::charge_p1,
+				ObservedCall::extra_p2,
+				ObservedCall::charge_p2,
 				ObservedCall::players_bullets,
 				ObservedCall::main_frame_footer_reached,
 			},
@@ -3787,6 +4532,7 @@ void test_main_effect_observer_contract()
 int main()
 {
 	test_indexed_views_and_classifications();
+	test_extra_charge_view_contract();
 	test_main_boss_view_contract();
 	test_observer_invariance_and_phase_order();
 	test_public_step_result_invariance();

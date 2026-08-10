@@ -18,6 +18,22 @@ struct GrcgTriangleFill {
 	std::uint16_t horizontal_mask = 0xFFFFU;
 };
 
+// Exact direct grcg_trapezoid() geometry. The two horizontal endpoints and
+// every generated scanline are inclusive. The source rejects either input Y
+// above ClipYT before ordering them, clamps only the lower endpoint, and tiles
+// horizontal_mask against absolute 16-pixel VRAM words.
+[[nodiscard]] bool grcg_trapezoid(
+	Raster &raster,
+	std::int16_t y1,
+	std::int16_t x11,
+	std::int16_t x12,
+	std::int16_t y2,
+	std::int16_t x21,
+	std::int16_t x22,
+	GrcgClipRect clip,
+	GrcgTriangleFill fill
+) noexcept;
+
 // Exact filled grcg_triangle() geometry for the source-used solid GRCG mode.
 // Coordinates and intermediate DDA state use signed 16-bit wrapping; all
 // clip edges are inclusive. The primitive writes Raster's current access page

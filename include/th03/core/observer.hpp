@@ -23,9 +23,31 @@ enum class PlayerId : std::uint8_t {
 enum class ShotPairSlot : std::uint8_t {};
 enum class EnemySlot : std::uint8_t {};
 enum class FireballSlot : std::uint8_t {};
+enum class ExtraAttackSlot : std::uint8_t {};
+enum class ReimuChargeGroupSlot : std::uint8_t {};
+enum class MimaChargeNodeSlot : std::uint8_t {};
+enum class MarisaChargeNodeSlot : std::uint8_t {};
+enum class EllenChargeNodeSlot : std::uint8_t {};
+enum class KanaChargeGroupSlot : std::uint8_t {};
+enum class RikakoChargeNodeSlot : std::uint8_t {};
+enum class ChiyuriChargeNodeSlot : std::uint8_t {};
 enum class BulletSlot : std::uint16_t {};
 enum class TrailPoint : std::uint8_t {};
 enum class ReimuBossOrbitPoint : std::uint8_t {};
+
+enum class ReimuChargePoint : std::uint8_t {
+	node_0 = 0,
+	node_2 = 2,
+	node_4 = 4,
+	node_6 = 6,
+};
+
+enum class KanaChargePoint : std::uint8_t {
+	node_0 = 0,
+	node_4 = 4,
+	node_8 = 8,
+	node_12 = 12,
+};
 
 // Exact source enemy/fireball/explosion flag byte. Explosion hits can raise
 // this above the two named explosion values, so it must not be a closed enum.
@@ -204,6 +226,153 @@ struct RawPoint {
 	std::int16_t y = 0;
 
 	friend bool operator==(const RawPoint &, const RawPoint &) = default;
+};
+
+struct MainExtraAttackFact {
+	ExtraAttackSlot slot{};
+	std::uint8_t state = 0;
+	std::uint8_t frame = 0;
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+	// Raw deterministic-model destination byte. This is not a closed PlayerId
+	// domain, and Kana presentation retains its last state-2/state-3 value
+	// across the source's partial direct allocations.
+	std::uint8_t destination_raw = 0;
+	std::uint8_t mima_timer_low = 0;
+	std::uint16_t yumemi_extent = 0;
+	std::uint16_t yumemi_duration = 0;
+	std::int16_t kotohime_target_y = 0;
+	std::uint8_t kotohime_variant = 0;
+	std::array<std::int16_t, 7> ellen_trail_x{};
+	std::array<std::int16_t, 7> ellen_trail_y{};
+
+	friend bool operator==(
+		const MainExtraAttackFact &,
+		const MainExtraAttackFact &
+	) = default;
+};
+
+struct ReimuChargeGroupFact {
+	std::uint8_t state = 0;
+
+	friend bool operator==(
+		const ReimuChargeGroupFact &,
+		const ReimuChargeGroupFact &
+	) = default;
+};
+
+struct MimaChargeStateFact {
+	std::uint8_t active = 0;
+
+	friend bool operator==(
+		const MimaChargeStateFact &,
+		const MimaChargeStateFact &
+	) = default;
+};
+
+struct MimaChargeNodeFact {
+	std::uint8_t active = 0;
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+
+	friend bool operator==(
+		const MimaChargeNodeFact &,
+		const MimaChargeNodeFact &
+	) = default;
+};
+
+struct MarisaChargeStateFact {
+	std::uint8_t active = 0;
+
+	friend bool operator==(
+		const MarisaChargeStateFact &,
+		const MarisaChargeStateFact &
+	) = default;
+};
+
+struct MarisaChargeNodeFact {
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+
+	friend bool operator==(
+		const MarisaChargeNodeFact &,
+		const MarisaChargeNodeFact &
+	) = default;
+};
+
+struct EllenChargeNodeFact {
+	std::uint8_t state = 0;
+	std::uint8_t angle = 0;
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+
+	friend bool operator==(
+		const EllenChargeNodeFact &,
+		const EllenChargeNodeFact &
+	) = default;
+};
+
+struct KotohimeChargeFact {
+	std::uint8_t active = 0;
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+
+	friend bool operator==(
+		const KotohimeChargeFact &,
+		const KotohimeChargeFact &
+	) = default;
+};
+
+struct KanaChargeStateFact {
+	std::uint8_t state = 0;
+
+	friend bool operator==(
+		const KanaChargeStateFact &,
+		const KanaChargeStateFact &
+	) = default;
+};
+
+struct RikakoChargeStateFact {
+	std::uint8_t state = 0;
+
+	friend bool operator==(
+		const RikakoChargeStateFact &,
+		const RikakoChargeStateFact &
+	) = default;
+};
+
+struct RikakoChargeNodeFact {
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+
+	friend bool operator==(
+		const RikakoChargeNodeFact &,
+		const RikakoChargeNodeFact &
+	) = default;
+};
+
+struct ChiyuriChargeNodeFact {
+	std::uint8_t state = 0;
+	std::uint8_t frame = 0;
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+
+	friend bool operator==(
+		const ChiyuriChargeNodeFact &,
+		const ChiyuriChargeNodeFact &
+	) = default;
+};
+
+struct YumemiChargeFact {
+	std::uint8_t state = 0;
+	std::uint8_t frame = 0;
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+
+	friend bool operator==(
+		const YumemiChargeFact &,
+		const YumemiChargeFact &
+	) = default;
 };
 
 struct ShotPairSpawned {
@@ -636,6 +805,91 @@ private:
 	const detail::DeterministicState *state_;
 };
 
+class MainExtraAttackView {
+public:
+	static constexpr std::size_t max_count = 16U;
+	static constexpr std::size_t ellen_trail_count = 7U;
+
+	[[nodiscard]] MainPhaseContext context() const noexcept;
+	[[nodiscard]] PlayerId player() const noexcept;
+	[[nodiscard]] std::int8_t paletted_character() const noexcept;
+	[[nodiscard]] std::size_t slot_count() const noexcept;
+	[[nodiscard]] std::optional<MainExtraAttackFact> attack(
+		ExtraAttackSlot slot
+	) const noexcept;
+
+private:
+	friend struct detail::ObserverAccess;
+
+	explicit MainExtraAttackView(
+		const detail::DeterministicState *state,
+		PlayerId player
+	) noexcept : state_(state), player_(player)
+	{}
+
+	const detail::DeterministicState *state_;
+	PlayerId player_;
+};
+
+class MainChargeShotView {
+public:
+	static constexpr std::size_t reimu_group_count = 12U;
+	static constexpr std::size_t mima_node_count = 15U;
+	static constexpr std::size_t marisa_node_count = 12U;
+	static constexpr std::size_t ellen_node_count = 32U;
+	static constexpr std::size_t kana_group_count = 4U;
+	static constexpr std::size_t rikako_node_count = 4U;
+	static constexpr std::size_t chiyuri_node_count = 8U;
+
+	[[nodiscard]] MainPhaseContext context() const noexcept;
+	[[nodiscard]] PlayerId player() const noexcept;
+	[[nodiscard]] std::int8_t paletted_character() const noexcept;
+	[[nodiscard]] std::optional<ReimuChargeGroupFact> reimu_group(
+		ReimuChargeGroupSlot group
+	) const noexcept;
+	[[nodiscard]] std::optional<RawPoint> reimu_point(
+		ReimuChargeGroupSlot group,
+		ReimuChargePoint point
+	) const noexcept;
+	[[nodiscard]] std::optional<MimaChargeStateFact> mima_state() const noexcept;
+	[[nodiscard]] std::optional<MimaChargeNodeFact> mima_node(
+		MimaChargeNodeSlot node
+	) const noexcept;
+	[[nodiscard]] std::optional<MarisaChargeStateFact> marisa_state() const noexcept;
+	[[nodiscard]] std::optional<MarisaChargeNodeFact> marisa_node(
+		MarisaChargeNodeSlot node
+	) const noexcept;
+	[[nodiscard]] std::optional<EllenChargeNodeFact> ellen_node(
+		EllenChargeNodeSlot node
+	) const noexcept;
+	[[nodiscard]] std::optional<KotohimeChargeFact> kotohime() const noexcept;
+	[[nodiscard]] std::optional<KanaChargeStateFact> kana_state() const noexcept;
+	[[nodiscard]] std::optional<RawPoint> kana_point(
+		KanaChargeGroupSlot group,
+		KanaChargePoint point
+	) const noexcept;
+	[[nodiscard]] std::optional<RikakoChargeStateFact> rikako_state() const noexcept;
+	[[nodiscard]] std::optional<RikakoChargeNodeFact> rikako_node(
+		RikakoChargeNodeSlot node
+	) const noexcept;
+	[[nodiscard]] std::optional<ChiyuriChargeNodeFact> chiyuri_node(
+		ChiyuriChargeNodeSlot node
+	) const noexcept;
+	[[nodiscard]] std::optional<YumemiChargeFact> yumemi() const noexcept;
+
+private:
+	friend struct detail::ObserverAccess;
+
+	explicit MainChargeShotView(
+		const detail::DeterministicState *state,
+		PlayerId player
+	) noexcept : state_(state), player_(player)
+	{}
+
+	const detail::DeterministicState *state_;
+	PlayerId player_;
+};
+
 class PlayersBulletsView {
 public:
 	static constexpr std::size_t player_count = 2U;
@@ -776,6 +1030,10 @@ public:
 	virtual void observe(const ShotsEnemiesView &) noexcept
 	{}
 	virtual void observe(const FireballsView &) noexcept
+	{}
+	virtual void observe(const MainExtraAttackView &) noexcept
+	{}
+	virtual void observe(const MainChargeShotView &) noexcept
 	{}
 	virtual void observe(const PlayersBulletsView &) noexcept
 	{}

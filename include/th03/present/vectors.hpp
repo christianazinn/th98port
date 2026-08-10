@@ -32,6 +32,17 @@ struct GrcgPoint {
 	Index4 color
 ) noexcept;
 
+// Exact master.lib horizontal-line primitive. Endpoints and clip edges are
+// inclusive, and endpoints may be supplied in either order.
+[[nodiscard]] bool grcg_hline(
+	Raster &raster,
+	std::int16_t x1,
+	std::int16_t x2,
+	std::int16_t y,
+	GrcgClipRect clip,
+	Index4 color
+) noexcept;
+
 // Exact master.lib vertical-line primitive used by Rikako's Bomb and Boss
 // presentation. Endpoints are inclusive and may be supplied in either order.
 [[nodiscard]] bool grcg_vline(
@@ -41,6 +52,17 @@ struct GrcgPoint {
 	std::int16_t y2,
 	GrcgClipRect clip,
 	Index4 color
+) noexcept;
+
+// Exact inclusive master.lib grcg_boxfill() geometry in source RMW mode.
+// GrcgTile's B/R/G/E bytes retain grcg_settile_1line()'s absolute-VRAM,
+// MSB-first 8-pixel phase.
+[[nodiscard]] bool grcg_boxfill(
+	Raster &raster,
+	GrcgPoint first,
+	GrcgPoint second,
+	GrcgClipRect clip,
+	GrcgTile tile
 ) noexcept;
 
 [[nodiscard]] bool grcg_circle(

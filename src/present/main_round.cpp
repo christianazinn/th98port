@@ -21,6 +21,7 @@ MainRoundPresenter::MainRoundPresenter(
 	MainBossPresenter &bosses,
 	MainEntitiesPresenter &entities,
 	MainEffectsPresenter &effects,
+	MainExtraChargePresenter &extra_charge,
 	MainPlayersBulletsPresenter &players_bullets,
 	MainBombsPresenter &bombs,
 	MainWarningGaugePresenter &warning_gauge
@@ -33,6 +34,7 @@ MainRoundPresenter::MainRoundPresenter(
 	bosses_(&bosses),
 	entities_(&entities),
 	effects_(&effects),
+	extra_charge_(&extra_charge),
 	players_bullets_(&players_bullets),
 	bombs_(&bombs),
 	warning_gauge_(&warning_gauge)
@@ -55,6 +57,10 @@ MainRoundPresenter::MainRoundPresenter(
 	}
 	if(!effects_->ready()) {
 		status_ = MainRoundStatus::effects_failed;
+		return;
+	}
+	if(!extra_charge_->ready()) {
+		status_ = MainRoundStatus::extra_charge_failed;
 		return;
 	}
 	if(!players_bullets_->ready()) {
@@ -679,7 +685,57 @@ void MainRoundPresenter::observe(const FireballsView &view) noexcept
 		fail(MainRoundStatus::effects_failed);
 		return;
 	}
-	phase_ = Phase::players_bullets;
+	phase_ = Phase::extra_p1;
+}
+
+void MainRoundPresenter::observe(const MainExtraAttackView &view) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	const auto context = view.context();
+	const auto expected_player = (phase_ == Phase::extra_p1)
+		? PlayerId::p1
+		: PlayerId::p2;
+	if(
+		(phase_ != Phase::extra_p1 && phase_ != Phase::extra_p2) ||
+		view.player() != expected_player || !same_frame(context)
+	) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	extra_charge_->observe(view);
+	if(!extra_charge_->ready()) {
+		fail(MainRoundStatus::extra_charge_failed);
+		return;
+	}
+	phase_ = (phase_ == Phase::extra_p1) ? Phase::charge_p1 : Phase::charge_p2;
+}
+
+void MainRoundPresenter::observe(const MainChargeShotView &view) noexcept
+{
+	if(!ready()) {
+		return;
+	}
+	const auto context = view.context();
+	const auto expected_player = (phase_ == Phase::charge_p1)
+		? PlayerId::p1
+		: PlayerId::p2;
+	if(
+		(phase_ != Phase::charge_p1 && phase_ != Phase::charge_p2) ||
+		view.player() != expected_player || !same_frame(context)
+	) {
+		fail(MainRoundStatus::invalid_observation);
+		return;
+	}
+	extra_charge_->observe(view);
+	if(!extra_charge_->ready()) {
+		fail(MainRoundStatus::extra_charge_failed);
+		return;
+	}
+	phase_ = (phase_ == Phase::charge_p1)
+		? Phase::extra_p2
+		: Phase::players_bullets;
 }
 
 bool MainRoundPresenter::present_common_effects(

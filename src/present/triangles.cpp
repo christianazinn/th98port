@@ -228,6 +228,61 @@ void advance_linework(Linework &line) noexcept
 
 } // namespace
 
+bool grcg_trapezoid(
+	Raster &raster,
+	std::int16_t y1,
+	std::int16_t x11,
+	std::int16_t x12,
+	std::int16_t y2,
+	std::int16_t x21,
+	std::int16_t x22,
+	GrcgClipRect clip,
+	GrcgTriangleFill fill
+) noexcept
+{
+	if(!valid_color(fill.color) || !valid_clip(clip, raster.raster_mode())) {
+		return false;
+	}
+
+	y1 = subtract_word(y1, clip.top);
+	if(y1 < 0) {
+		return true;
+	}
+	y2 = subtract_word(y2, clip.top);
+	if(y2 < 0) {
+		return true;
+	}
+	if(y1 > y2) {
+		const auto y_swap = y1;
+		y1 = y2;
+		y2 = y_swap;
+		const auto left_swap = x11;
+		x11 = x21;
+		x21 = left_swap;
+		const auto right_swap = x12;
+		x12 = x22;
+		x22 = right_swap;
+	}
+
+	const auto clip_height = subtract_word(clip.bottom, clip.top);
+	if(y1 > clip_height) {
+		return true;
+	}
+	if(y2 > clip_height) {
+		y2 = clip_height;
+	}
+	const auto height = subtract_word(y2, y1);
+	if(height < 0) {
+		return true;
+	}
+
+	auto side_a = make_linework(x11, x21, height);
+	auto side_b = make_linework(x12, x22, height);
+	return draw_trapezoid(
+		raster, y1, height, side_a, side_b, clip, clip_height, fill
+	);
+}
+
 bool grcg_triangle(
 	Raster &raster,
 	GrcgPoint first,

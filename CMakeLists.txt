@@ -52,6 +52,8 @@ add_library(th03_present STATIC
 	src/present/main_bullets.cpp
 	src/present/main_entities.cpp
 	src/present/main_effects.cpp
+	src/present/main_extra.cpp
+	src/present/main_charge.cpp
 	src/present/main_bomb_palette.cpp
 	src/present/main_bombs.cpp
 	src/present/main_bombs_characters.cpp
@@ -333,6 +335,23 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-present-main-effects-tests
 		COMMAND th03-present-main-effects-tests
+	)
+
+	add_executable(th03-present-main-extra-charge-tests
+		tests/test_present_main_extra_charge.cpp
+	)
+	target_link_libraries(
+		th03-present-main-extra-charge-tests
+		PRIVATE th03_present
+	)
+	target_include_directories(
+		th03-present-main-extra-charge-tests
+		PRIVATE src/core
+	)
+	th03_set_warnings(th03-present-main-extra-charge-tests)
+	add_test(
+		NAME th03-present-main-extra-charge-tests
+		COMMAND th03-present-main-extra-charge-tests
 	)
 
 	add_executable(th03-present-main-palette-tests

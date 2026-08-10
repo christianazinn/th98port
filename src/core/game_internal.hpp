@@ -569,6 +569,22 @@ struct ObserverAccess {
 		return FireballsView(&state);
 	}
 
+	[[nodiscard]] static MainExtraAttackView main_extra_attack(
+		const DeterministicState &state,
+		PlayerId player
+	) noexcept
+	{
+		return MainExtraAttackView(&state, player);
+	}
+
+	[[nodiscard]] static MainChargeShotView main_charge_shot(
+		const DeterministicState &state,
+		PlayerId player
+	) noexcept
+	{
+		return MainChargeShotView(&state, player);
+	}
+
 	[[nodiscard]] static PlayersBulletsView players_bullets(
 		const DeterministicState &state
 	) noexcept

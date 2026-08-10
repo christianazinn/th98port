@@ -463,6 +463,141 @@ bool grcg_vline(
 	return true;
 }
 
+bool grcg_hline(
+	Raster &raster,
+	std::int16_t x1,
+	std::int16_t x2,
+	std::int16_t y,
+	GrcgClipRect clip,
+	Index4 color
+) noexcept
+{
+	const auto tile = GrcgTile::solid(color);
+	if(!tile.has_value() || !valid_clip(clip, raster.raster_mode())) {
+		return false;
+	}
+
+	const auto relative_y = subtract_word(y, clip.top);
+	const auto clip_height = static_cast<std::uint16_t>(
+		subtract_word(clip.bottom, clip.top)
+	);
+	if(static_cast<std::uint16_t>(relative_y) > clip_height) {
+		return true;
+	}
+
+	auto first = subtract_word(x1, clip.left);
+	auto second = subtract_word(x2, clip.left);
+	if((static_cast<std::uint16_t>(first) &
+		static_cast<std::uint16_t>(second) & 0x8000U) != 0U) {
+		return true;
+	}
+	if(first > second) {
+		const auto swap = first;
+		first = second;
+		second = swap;
+	}
+	if(first < 0) {
+		first = 0;
+	}
+	const auto clip_width = subtract_word(clip.right, clip.left);
+	if(static_cast<std::uint16_t>(second) >=
+		static_cast<std::uint16_t>(clip_width)) {
+		second = clip_width;
+	}
+	if(second < first) {
+		return true;
+	}
+
+	for(auto x = first;; x = add_word(x, 1)) {
+		if(!grcg_plot(
+			raster,
+			{add_word(clip.left, x), add_word(clip.top, relative_y)},
+			*tile
+		)) {
+			return false;
+		}
+		if(x == second) {
+			break;
+		}
+	}
+	return true;
+}
+
+bool grcg_boxfill(
+	Raster &raster,
+	GrcgPoint first,
+	GrcgPoint second,
+	GrcgClipRect clip,
+	GrcgTile tile
+) noexcept
+{
+	if(!valid_clip(clip, raster.raster_mode())) {
+		return false;
+	}
+	if(first.x > second.x) {
+		const auto swap = first.x;
+		first.x = second.x;
+		second.x = swap;
+	}
+
+	auto right = subtract_word(second.x, clip.left);
+	if(right < 0) {
+		return true;
+	}
+	auto left = subtract_word(first.x, clip.left);
+	if(left < 0) {
+		left = 0;
+	}
+	const auto clip_width = subtract_word(clip.right, clip.left);
+	if(static_cast<std::uint16_t>(right) >=
+		static_cast<std::uint16_t>(clip_width)) {
+		right = clip_width;
+	}
+	if(right < left) {
+		return true;
+	}
+	left = add_word(left, clip.left);
+	right = add_word(right, clip.left);
+
+	if(first.y > second.y) {
+		const auto swap = first.y;
+		first.y = second.y;
+		second.y = swap;
+	}
+	auto lower = subtract_word(second.y, clip.top);
+	if(lower < 0) {
+		return true;
+	}
+	auto upper = subtract_word(first.y, clip.top);
+	if(upper < 0) {
+		upper = 0;
+	}
+	const auto clip_height = subtract_word(clip.bottom, clip.top);
+	if(static_cast<std::uint16_t>(lower) >=
+		static_cast<std::uint16_t>(clip_height)) {
+		lower = clip_height;
+	}
+	if(lower < upper) {
+		return true;
+	}
+
+	// grcg_boxfill.asm starts at the bottom row and walks upward through VRAM.
+	for(auto y = lower;; y = add_word(y, -1)) {
+		for(auto x = left;; x = add_word(x, 1)) {
+			if(!grcg_plot(raster, {x, add_word(clip.top, y)}, tile)) {
+				return false;
+			}
+			if(x == right) {
+				break;
+			}
+		}
+		if(y == upper) {
+			break;
+		}
+	}
+	return true;
+}
+
 bool grcg_circle(
 	Raster &raster,
 	GrcgPoint center,

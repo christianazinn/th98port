@@ -933,8 +933,9 @@ The detailed evidence is in `PARITY_CHARACTERS_0_3.md` and
 already-resolved seams rather than moving callbacks wholesale:
 
 - Reimu Extra Attack increments age in its source render phase. Core retains
-  the increment at `extra_attacks_render_phase_update()`; presenter draws from
-  the observed gameplay state after that mutation.
+  the increment at `extra_attacks_render_phase_update_player()`. The presenter
+  draws from that player's borrowed pre-increment Extra view; core increments
+  immediately afterward, before emitting the same player's Charge view.
 - Mima Boss rendering mutates state later used by gameplay. The presenter
   consumes the borrowed pre-mutation view first; core then retains that exact
   source-position mutation.
@@ -981,8 +982,8 @@ coverage. A row never authorizes renderer state in core.
 | Yumemi Bomb | Retain foreground shift on frames 65..143, consume one `SUB_CE5B()` value at frames 72,80,...,136 (nine total), report raw results/site/ordinals, reset from 144, and preserve order before later Boss/Extra callbacks | Interpret results and own the nine spawned effects plus palette/tone geometry |
 | Gauge callbacks | Retain all bullet/pellet mechanics and any `SUB_CE5B` draw; report semantic attack milestones and raw results/site/ordinals only | Derive `SUB_CDBD/SUB_CE0C` geometry, interpret RNG results, and own palette actions at the original private schedule position |
 | Boss render callbacks | Expose one borrowed pre-mutation Boss view after Bombs, then perform the proven Mima/Kotohime gameplay mutations before Shots; report only semantic activation/animation/palette lifecycle facts | Own all-nine sprite, orbit, materialization, terminal, palette, and clipping payload plus the three proven private animation bytes |
-| Extra render callbacks | Perform Reimu age increment at the exact late phase | Observe the updated gameplay age; own all character draw payload and render scratch state |
-| Charge render callbacks | No extra core output beyond ordinary gameplay phase facts; callbacks consume no shared RNG in the audited paths | Own character draw payload, cursor, and clip state |
+| Extra render callbacks | Emit one borrowed player-scoped view before each source callback, then perform Reimu's age increment at the exact per-player late phase | Draw the pre-increment facts synchronously; own all character payload, Kana's stale destination cache, and render scratch state |
+| Charge render callbacks | Emit one borrowed player-scoped view after the same player's Extra callback/mutation; callbacks consume no shared RNG in the audited paths | Own all-nine draw payload, cursor, clip, overlap, and patterned-GRCG state |
 | Score/gauge/combo/result | Perform mutations and control decisions before reporting the corresponding gameplay facts | Render exact displayed values and transitions without feeding them back |
 | OP `resident->rand` cadence | Application computes exact logical-wait-derived resident value and supplies it through `GameInit` | Scene rendering must not add or omit logical waits based on host speed |
 
@@ -1244,6 +1245,11 @@ pellets. The whole final phase validates before drawing, then inserts
 `SUB_CEE0()` exactly between player overlays and bullet passes. Hit circles and
 the common-effect pool occupy their exact post-fireball and pre-bullet slots
 using fixed presenter-owned pools and source-exact GRCG vectors.
+The same coordinator now requires and synchronously renders the literal
+player-scoped Extra P1, Charge P1, Extra P2, Charge P2 sequence between the
+fireball/hit-circle and player phases. Reimu's Extra frame byte advances between
+that player's two callbacks, while the fixed presenter retains only Kana's
+source-stale destination cache across repeat rounds.
 `MainPaletteState` owns the one process RGB8 snapshot and explicit dirty latch;
 the coordinator applies exact immediate defeat tones and the 27-sample warning
 100/150 alternation, and consumes the footer fact for deferred palette apply
@@ -1318,12 +1324,13 @@ Port Charge, Extra, Gauge, Bomb, and Boss draw payloads character by character,
 starting with the character pair already exercised by the smallest useful
 capture.
 
-Implementation status: Gauge, Bomb, and Boss are complete for all nine
+Implementation status: Extra, Charge, Gauge, Bomb, and Boss are complete for all nine
 characters under strict GCC/MSVC source-derived contract tests. Boss includes
 the exact six-PI MAINL atlas handoff, borrowed pre-mutation phase, terminal
-frame, palette lifecycle, and process-private animation state. Extra and Charge
-remain the unfinished character families; captured PC-98 pixel parity remains
-the later visual-oracle gate for every family.
+frame, palette lifecycle, and process-private animation state. Extra/Charge use
+four literal borrowed callbacks, fixed presentation storage, source-exact
+Sprite16/GRCG primitives, and no renderer RNG. Captured PC-98 pixel parity
+remains the later visual-oracle gate for every family.
 
 Exit tests for each character:
 
