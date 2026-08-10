@@ -5,6 +5,163 @@ project(th03_port VERSION 0.1.0 LANGUAGES CXX)
 include(CTest)
 
 option(TH03_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
+option(TH03_ENABLE_SDL "Build the optional SDL 3 platform adapter" OFF)
+
+set(
+	TH03_SDL3_PROVIDER "source" CACHE STRING
+	"SDL 3 provider for the optional platform adapter (source or package)"
+)
+set_property(CACHE TH03_SDL3_PROVIDER PROPERTY STRINGS source package)
+set(
+	TH03_SDL3_SOURCE_DIR
+	"${CMAKE_CURRENT_SOURCE_DIR}/out/deps/SDL3-3.4.10" CACHE PATH
+	"Authenticated SDL 3.4.10 source directory"
+)
+set(
+	TH03_SDL3_LICENSE_FILE "" CACHE FILEPATH
+	"SDL LICENSE.txt supplied by the package provider"
+)
+
+if(TH03_ENABLE_SDL)
+	set(TH03_SDL3_VERSION "3.4.10")
+	set(
+		TH03_SDL3_SOURCE_SHA256
+		"12b34280415ec8418c864408b93d008a20a6530687ee613d60bfbd20411f2785"
+	)
+
+	if(TH03_SDL3_PROVIDER STREQUAL "source")
+		get_filename_component(
+			_th03_sdl3_source "${TH03_SDL3_SOURCE_DIR}" ABSOLUTE
+			BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
+		)
+		set(_th03_sdl3_marker "${_th03_sdl3_source}/.th03-source-sha256")
+		set(_th03_sdl3_version_header
+			"${_th03_sdl3_source}/include/SDL3/SDL_version.h"
+		)
+		set(_th03_sdl3_license_file "${_th03_sdl3_source}/LICENSE.txt")
+
+		foreach(_required_file IN ITEMS
+			"${_th03_sdl3_source}/CMakeLists.txt"
+			"${_th03_sdl3_marker}"
+			"${_th03_sdl3_version_header}"
+			"${_th03_sdl3_license_file}"
+		)
+			if(NOT EXISTS "${_required_file}" OR IS_DIRECTORY "${_required_file}")
+				message(FATAL_ERROR
+					"Authenticated SDL ${TH03_SDL3_VERSION} source is incomplete: "
+					"${_required_file}"
+				)
+			endif()
+		endforeach()
+
+		file(READ "${_th03_sdl3_marker}" _th03_sdl3_marker_value)
+		string(STRIP "${_th03_sdl3_marker_value}" _th03_sdl3_marker_value)
+		if(NOT _th03_sdl3_marker_value STREQUAL TH03_SDL3_SOURCE_SHA256)
+			message(FATAL_ERROR
+				"SDL source marker does not match the authenticated "
+				"SDL ${TH03_SDL3_VERSION} release archive"
+			)
+		endif()
+
+		file(READ "${_th03_sdl3_version_header}" _th03_sdl3_version_text)
+		foreach(_version_part IN ITEMS
+			"SDL_MAJOR_VERSION[ \t]+3"
+			"SDL_MINOR_VERSION[ \t]+4"
+			"SDL_MICRO_VERSION[ \t]+10"
+		)
+			if(NOT _th03_sdl3_version_text MATCHES
+				"#[ \t]*define[ \t]+${_version_part}([^0-9]|$)"
+			)
+				message(FATAL_ERROR
+					"SDL source version header is not exactly "
+					"${TH03_SDL3_VERSION}"
+				)
+			endif()
+		endforeach()
+
+		file(SIZE "${_th03_sdl3_license_file}" _th03_sdl3_license_size)
+		if(_th03_sdl3_license_size EQUAL 0)
+			message(FATAL_ERROR "SDL LICENSE.txt is empty")
+		endif()
+
+		enable_language(C)
+		set(SDL_SHARED ON CACHE BOOL "" FORCE)
+		set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+		set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+		set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+		set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+		set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
+		add_subdirectory(
+			"${_th03_sdl3_source}"
+			"${CMAKE_BINARY_DIR}/_deps/sdl3-build"
+			EXCLUDE_FROM_ALL
+		)
+	elseif(TH03_SDL3_PROVIDER STREQUAL "package")
+		find_package(
+			SDL3 ${TH03_SDL3_VERSION} EXACT CONFIG REQUIRED
+			COMPONENTS SDL3-shared
+		)
+		if(TH03_SDL3_LICENSE_FILE STREQUAL "")
+			message(FATAL_ERROR
+				"The SDL package provider requires TH03_SDL3_LICENSE_FILE"
+			)
+		endif()
+		get_filename_component(
+			_th03_sdl3_license_file "${TH03_SDL3_LICENSE_FILE}" ABSOLUTE
+			BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
+		)
+		if(NOT EXISTS "${_th03_sdl3_license_file}" OR
+			IS_DIRECTORY "${_th03_sdl3_license_file}"
+		)
+			message(FATAL_ERROR
+				"TH03_SDL3_LICENSE_FILE must name the package's SDL license file"
+			)
+		endif()
+		file(SIZE "${_th03_sdl3_license_file}" _th03_sdl3_license_size)
+		if(_th03_sdl3_license_size EQUAL 0)
+			message(FATAL_ERROR "The package's SDL license file is empty")
+		endif()
+	else()
+		message(FATAL_ERROR
+			"TH03_SDL3_PROVIDER must be either 'source' or 'package'"
+		)
+	endif()
+
+	if(NOT TARGET SDL3::SDL3-shared)
+		message(FATAL_ERROR
+			"The selected SDL provider did not define SDL3::SDL3-shared"
+		)
+	endif()
+
+	function(th03_stage_sdl3_runtime target)
+		if(NOT TARGET ${target})
+			message(FATAL_ERROR
+				"th03_stage_sdl3_runtime received an unknown target: ${target}"
+			)
+		endif()
+		set(_license_destination
+			"$<TARGET_FILE_DIR:${target}>/licenses/SDL3"
+		)
+		add_custom_command(
+			TARGET ${target} POST_BUILD
+			COMMAND "${CMAKE_COMMAND}" -E make_directory
+				"${_license_destination}"
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+				"${_th03_sdl3_license_file}"
+				"${_license_destination}/LICENSE.txt"
+			VERBATIM
+		)
+		if(WIN32)
+			add_custom_command(
+				TARGET ${target} POST_BUILD
+				COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+					"$<TARGET_FILE:SDL3::SDL3-shared>"
+					"$<TARGET_FILE_DIR:${target}>"
+				VERBATIM
+			)
+		endif()
+	endfunction()
+endif()
 
 function(th03_set_warnings target)
 	if(MSVC)
@@ -143,6 +300,21 @@ target_compile_features(th03_app_runtime PUBLIC cxx_std_23)
 set_target_properties(th03_app_runtime PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_app_runtime)
 
+if(TH03_ENABLE_SDL)
+	add_library(th03_platform_sdl STATIC
+		src/platform/sdl_input.cpp
+		src/platform/sdl_platform.cpp
+	)
+	target_include_directories(th03_platform_sdl PUBLIC include)
+	target_link_libraries(
+		th03_platform_sdl
+		PUBLIC th03_app_runtime SDL3::SDL3-shared
+	)
+	target_compile_features(th03_platform_sdl PUBLIC cxx_std_23)
+	set_target_properties(th03_platform_sdl PROPERTIES CXX_EXTENSIONS OFF)
+	th03_set_warnings(th03_platform_sdl)
+endif()
+
 # Authenticated, process-lifetime content that is compiled into the original
 # MAIN executable or supplied by the PC-98 text/font boundary. Original bytes
 # remain caller-owned external inputs and are never embedded by this target.
@@ -271,6 +443,44 @@ if(BUILD_TESTING)
 		NAME th03-app-tick-input-tests
 		COMMAND th03-app-tick-input-tests
 	)
+
+	if(TH03_ENABLE_SDL)
+		add_executable(th03-platform-sdl-input-tests
+			tests/test_platform_sdl_input.cpp
+		)
+		target_link_libraries(
+			th03-platform-sdl-input-tests PRIVATE th03_platform_sdl
+		)
+		th03_set_warnings(th03-platform-sdl-input-tests)
+		th03_stage_sdl3_runtime(th03-platform-sdl-input-tests)
+		add_test(
+			NAME th03-platform-sdl-input-tests
+			COMMAND th03-platform-sdl-input-tests
+		)
+
+		add_executable(th03-platform-sdl-platform-tests
+			tests/test_platform_sdl_platform.cpp
+		)
+		target_link_libraries(
+			th03-platform-sdl-platform-tests PRIVATE th03_platform_sdl
+		)
+		target_include_directories(
+			th03-platform-sdl-platform-tests PRIVATE src/platform
+		)
+		th03_set_warnings(th03-platform-sdl-platform-tests)
+		th03_stage_sdl3_runtime(th03-platform-sdl-platform-tests)
+		add_test(
+			NAME th03-platform-sdl-platform-tests
+			COMMAND th03-platform-sdl-platform-tests
+		)
+
+		set_tests_properties(
+			th03-platform-sdl-input-tests
+			th03-platform-sdl-platform-tests
+			PROPERTIES ENVIRONMENT
+				"SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software"
+		)
+	endif()
 
 	add_executable(th03-app-authentic-text-tests
 		tests/test_app_authentic_text.cpp
