@@ -36,6 +36,7 @@ th03_set_warnings(th03_assets)
 
 add_library(th03_present STATIC
 	src/present/cels.cpp
+	src/present/main_entities.cpp
 	src/present/main_static.cpp
 	src/present/mono.cpp
 	src/present/pi.cpp
@@ -94,6 +95,10 @@ target_include_directories(th03_core PUBLIC include)
 target_compile_features(th03_core PUBLIC cxx_std_23)
 set_target_properties(th03_core PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_core)
+
+# Presentation consumes only the public, read-only gameplay observation API.
+# The deterministic core has no reciprocal presentation dependency.
+target_link_libraries(th03_present PUBLIC th03_core)
 
 add_library(th03_replay STATIC
 	src/replay/run.cpp
@@ -168,6 +173,16 @@ if(BUILD_TESTING)
 	target_link_libraries(th03-present-tests PRIVATE th03_present)
 	th03_set_warnings(th03-present-tests)
 	add_test(NAME th03-present-tests COMMAND th03-present-tests)
+
+	add_executable(th03-present-main-entities-tests
+		tests/test_present_main_entities.cpp
+	)
+	target_link_libraries(th03-present-main-entities-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-main-entities-tests)
+	add_test(
+		NAME th03-present-main-entities-tests
+		COMMAND th03-present-main-entities-tests
+	)
 
 	add_executable(th03-present-cels-tests
 		tests/test_present_cels.cpp

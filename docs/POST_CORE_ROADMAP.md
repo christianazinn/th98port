@@ -336,18 +336,18 @@ only when an actual Arrange requirement needs them.
 1. Preserve the sealed source-wide gameplay parity audit while expanding replay
    coverage. The mechanical `frame.cpp` partition is complete; every later
    core change still reruns both compilers and the full corpus.
-2. Keep the structurally green V13 adapter while the external converter lands.
-   Convert and lock the complete historical corpus, then retire V11/V12 native
-   parsers only after the V13-only dual-compiler gate passes.
-3. Continue `th03_assets` decoders and `th03_present` PC-98 raster primitives
-   in parallel from their RGB/PI and indexed-page foundations. Complete the
-   exact planar/TRAM decisions, then join them at the first static MAIN frame.
-4. Continue the minimal optional gameplay observer now that static-frame
-   integration has named the facts it needs. The shot/enemy and post-hittest
-   fireball views plus shot-slot construction are implemented and prove
-   null/discard/recording invariance; next add player pose/defeat and Bullet16
-   construction facts before the final player/bullet phase. Keep `th03rv`
-   independent of both sibling libraries.
+2. Keep the V13-only adapter and locked converted historical corpus green on
+   both compilers. Later-checkpoint application selection remains a separate
+   anchor/preroll product gate; do not reintroduce historical-format parsers.
+3. Continue `th03_assets` decoders and `th03_present` source-grounded
+   primitives from the now-integrated static MAIN and ordinary-entity
+   foundations. Keep original bytes external and add captured-pixel gates only
+   after the required application asset-loading seam exists.
+4. Extend the completed three-phase ordinary-entity observer into Authentic
+   presentation. Shots, enemies, and post-hittest fireballs now have a first
+   consumer; next add the player/bullet pass and then the intervening
+   Boss/Extra/Charge/common-effect presenters. Keep `th03rv` independent of
+   both presentation and asset libraries.
 5. Select a minimal Windows/platform backend from an explicit support-floor
    matrix, then implement the host compositor and input mapping.
 6. Select and integrate the PMD/YM2608 audio stack after the licensing and

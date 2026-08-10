@@ -74,7 +74,14 @@ void apply_velocity(PlayerState &player, const Velocity &velocity) noexcept
 	);
 }
 
-void move_human(PlayerState &player, std::uint16_t live_input) noexcept
+std::int8_t source_velocity_x(const Velocity &velocity) noexcept
+{
+	return std::bit_cast<std::int8_t>(
+		static_cast<std::uint8_t>(velocity.x)
+	);
+}
+
+std::int8_t move_human(PlayerState &player, std::uint16_t live_input) noexcept
 {
 	auto movement = static_cast<std::uint16_t>(live_input & input_movement);
 	bool use_previous = true;
@@ -89,7 +96,7 @@ void move_human(PlayerState &player, std::uint16_t live_input) noexcept
 				use_previous = false;
 				continue;
 			}
-			return;
+			return source_velocity_x(velocity);
 		}
 		if(result == MoveResult::valid) {
 			apply_velocity(player, velocity);
@@ -97,6 +104,6 @@ void move_human(PlayerState &player, std::uint16_t live_input) noexcept
 		if(use_previous) {
 			player.human_movement_last = movement;
 		}
-		return;
+		return source_velocity_x(velocity);
 	}
 }

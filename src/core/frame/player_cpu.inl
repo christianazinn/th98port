@@ -96,7 +96,8 @@ std::uint16_t cpu_target_movement(
 
 bool cpu_safe_move(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	std::int8_t &final_velocity_x_write
 ) noexcept
 {
 	auto &player = state.players[player_id];
@@ -124,7 +125,9 @@ bool cpu_safe_move(
 	std::size_t route_group = 0U;
 	for(;;) {
 		Velocity velocity{};
-		if(movement_velocity(player, input, velocity) == MoveResult::valid) {
+		const auto move_result = movement_velocity(player, input, velocity);
+		final_velocity_x_write = source_velocity_x(velocity);
+		if(move_result == MoveResult::valid) {
 			apply_velocity(player, velocity);
 		}
 		const auto hitbox_size = static_cast<std::uint8_t>(
@@ -167,12 +170,27 @@ void player_update_cpu(
 {
 	auto &player = state.players[player_id];
 	auto live_input = std::uint16_t{0};
-	if(!player_update_begin(state, player_id)) {
+	std::optional<std::int8_t> final_velocity_x_write;
+	if(!player_update_begin(state, player_id, observer)) {
+		if(observer != nullptr) {
+			observer->player_pose_committed(PlayerPoseCommitted{
+				.player = static_cast<PlayerId>(player_id),
+				.final_velocity_x_write_q4_4 = std::nullopt,
+			});
+		}
 		return;
 	}
 	if(player.move_lock_time != 0U) {
 		player.move_lock_time--;
-		player_update_finish(state, player_id, live_input, observer);
+		player_update_finish(
+			state, player_id, live_input, final_velocity_x_write, observer
+		);
+		if(observer != nullptr) {
+			observer->player_pose_committed(PlayerPoseCommitted{
+				.player = static_cast<PlayerId>(player_id),
+				.final_velocity_x_write_q4_4 = final_velocity_x_write,
+			});
+		}
 		return;
 	}
 
@@ -181,12 +199,16 @@ void player_update_cpu(
 		// A broad collision makes sub_C568() skip target selection. The shared
 		// target scratch therefore retains the value written by an earlier
 		// callback in this frame.
-		(void)cpu_safe_move(state, player_id);
+		std::int8_t velocity_x_write = 0;
+		(void)cpu_safe_move(state, player_id, velocity_x_write);
+		final_velocity_x_write = velocity_x_write;
 	} else {
 		const auto movement = cpu_target_movement(state, player_id);
 		(void)(randring_next16(state) % 3U);
 		Velocity velocity{};
-		if(movement_velocity(player, movement, velocity) == MoveResult::valid) {
+		const auto move_result = movement_velocity(player, movement, velocity);
+		final_velocity_x_write = source_velocity_x(velocity);
+		if(move_result == MoveResult::valid) {
 			apply_velocity(player, velocity);
 		}
 		std::int16_t collision_x = 0;
@@ -243,5 +265,13 @@ void player_update_cpu(
 		}
 	}
 
-	player_update_finish(state, player_id, live_input, observer);
+	player_update_finish(
+		state, player_id, live_input, final_velocity_x_write, observer
+	);
+	if(observer != nullptr) {
+		observer->player_pose_committed(PlayerPoseCommitted{
+			.player = static_cast<PlayerId>(player_id),
+			.final_velocity_x_write_q4_4 = final_velocity_x_write,
+		});
+	}
 }

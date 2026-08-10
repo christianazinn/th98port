@@ -561,6 +561,13 @@ struct ObserverAccess {
 	{
 		return FireballsView(&state);
 	}
+
+	[[nodiscard]] static PlayersBulletsView players_bullets(
+		const DeterministicState &state
+	) noexcept
+	{
+		return PlayersBulletsView(&state);
+	}
 };
 
 std::uint32_t state_hash(const DeterministicState &state) noexcept;
@@ -595,7 +602,8 @@ std::expected<SessionTransition, Error> build_session_transition(
 );
 bool gameplay_frame_prefix(
 	DeterministicState &state,
-	const GameContent &content
+	const GameContent &content,
+	GameplayObserver *observer = nullptr
 ) noexcept;
 void gameplay_input_latch(
 	DeterministicState &state,

@@ -216,6 +216,122 @@ struct Velocity {
 #include "frame/round.inl"
 } // namespace
 
+namespace {
+
+template <typename Callback>
+void observe_bullet16_spawns(
+	DeterministicState &state,
+	GameplayObserver &observer,
+	std::uint8_t source_player,
+	Bullet16ConstructionKind construction,
+	bool source_template_animation_enabled,
+	Callback &&callback
+) noexcept
+{
+	std::array<bool, bullet_count> was_free{};
+	for(std::size_t slot = 0U; slot < state.bullets.size(); ++slot) {
+		was_free[slot] = (state.bullets[slot].flag == BulletFlag::free);
+	}
+	callback();
+
+	// Each currently wrapped source producer callback allocates the first free
+	// slot and never frees or retags a newly allocated bullet before returning.
+	// Ascending newly-live slots are therefore the exact allocation order.
+	for(std::size_t slot = 0U; slot < state.bullets.size(); ++slot) {
+		if(
+			was_free[slot] &&
+			state.bullets[slot].flag == BulletFlag::bullet16
+		) {
+			observer.bullet16_spawned(Bullet16Spawned{
+				.slot = static_cast<BulletSlot>(slot),
+				.source_player = static_cast<PlayerId>(source_player),
+				.construction = construction,
+				.source_template_animation_enabled =
+					source_template_animation_enabled,
+			});
+		}
+	}
+}
+
+void extra_attacks_update_observed(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	GameplayObserver *observer
+) noexcept
+{
+	if(observer == nullptr) {
+		extra_attacks_update(state, player_id);
+		return;
+	}
+	const auto character = character_index_from_paletted(
+		state.players[player_id].paletted_character
+	);
+	observe_bullet16_spawns(
+		state,
+		*observer,
+		player_id,
+		(character == character_kana)
+			? Bullet16ConstructionKind::kana_extra_attack
+			: Bullet16ConstructionKind::default_attack,
+		true,
+		[&]() noexcept { extra_attacks_update(state, player_id); }
+	);
+}
+
+void bosses_update_observed(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	GameplayObserver *observer
+) noexcept
+{
+	if(observer == nullptr) {
+		bosses_update(state, player_id);
+		return;
+	}
+	const auto character = character_index_from_paletted(
+		state.players[player_id].paletted_character
+	);
+	const auto is_static = (
+		character == character_mima || character == character_chiyuri
+	);
+	observe_bullet16_spawns(
+		state,
+		*observer,
+		player_id,
+		Bullet16ConstructionKind::default_attack,
+		!is_static,
+		[&]() noexcept { bosses_update(state, player_id); }
+	);
+}
+
+void gauge_patterns_update_observed(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	GameplayObserver *observer
+) noexcept
+{
+	if(observer == nullptr) {
+		gauge_patterns_update(state, player_id);
+		return;
+	}
+	const auto character = character_index_from_paletted(
+		state.players[player_id].paletted_character
+	);
+	const auto is_static = (
+		character == character_mima || character == character_chiyuri
+	);
+	observe_bullet16_spawns(
+		state,
+		*observer,
+		player_id,
+		Bullet16ConstructionKind::default_attack,
+		!is_static,
+		[&]() noexcept { gauge_patterns_update(state, player_id); }
+	);
+}
+
+} // namespace
+
 bool player_hittest_legacy(
 	const DeterministicState &state,
 	std::uint8_t player_id,
@@ -231,16 +347,17 @@ bool player_hittest_legacy(
 
 bool gameplay_frame_prefix(
 	DeterministicState &state,
-	const GameContent &content
+	const GameContent &content,
+	GameplayObserver *observer
 ) noexcept
 {
 	state.collision_map = {};
 	state.bullet_template_angle = 0U;
-	extra_attacks_update(state, 0U);
-	bosses_update(state, 0U);
+	extra_attacks_update_observed(state, 0U, observer);
+	bosses_update_observed(state, 0U, observer);
 	bomb_character_update(state, 0U);
-	extra_attacks_update(state, 1U);
-	bosses_update(state, 1U);
+	extra_attacks_update_observed(state, 1U, observer);
+	bosses_update_observed(state, 1U, observer);
 	bomb_character_update(state, 1U);
 	shots_update(state);
 	chargeshots_update(state);
@@ -258,8 +375,8 @@ bool gameplay_frame_prefix(
 		return false;
 	}
 	fireballs_update(state);
-	gauge_patterns_update(state, 0U);
-	gauge_patterns_update(state, 1U);
+	gauge_patterns_update_observed(state, 0U, observer);
+	gauge_patterns_update_observed(state, 1U, observer);
 	return true;
 }
 
@@ -400,6 +517,10 @@ void gameplay_frame_suffix_after_interstitial(
 		observer->observe(view);
 	}
 	extra_attacks_render_phase_update(state);
+	if(observer != nullptr) {
+		const auto view = ObserverAccess::players_bullets(state);
+		observer->observe(view);
+	}
 	if(result_control_update(state)) {
 		return;
 	}

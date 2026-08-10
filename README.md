@@ -96,18 +96,20 @@ split comparisons. Original game data and replay captures remain external.
 - `th03_replay` owns recorded pause/process coordination at unbounded speed.
 - `th03_formats` owns byte-level formats and adapts them to a neutral
   `ReplaySession`. It operates on byte spans and performs no file I/O.
-- `th03_assets` decodes caller-owned RGB/PI byte spans into immutable RGB4 and
-  indexed models. Original files, paths, caches, and platform resources remain
-  outside the library.
+- `th03_assets` decodes caller-owned RGB, PI, CDG/CD2, BFNT, and MRS byte spans
+  into immutable models. Original files, paths, caches, and platform resources
+  remain outside the library.
 - `th03_present` owns the PC-98 page, planar, palette, TRAM, cel, Sprite16
-  staging/drawing, text-composition, and staff-flake foundations. It depends on
-  `th03_assets`, not on `th03_core`; gameplay and `th03rv` link neither
-  presentation library.
+  staging/drawing, text-composition, staff-flake, and first live-entity
+  foundations. It depends inward on `th03_assets` and the neutral observation
+  API in `th03_core`; the core has no reciprocal dependency, and `th03rv` links
+  neither presentation nor assets.
 - `th03_core` exposes an optional synchronous observer for immutable gameplay
-  facts. The implemented first slice reports shot/enemy and post-collision
-  fireball phases plus successful shot-slot construction; the pointer is
-  borrowed per call and never enters gameplay state. `th03rv` uses the null
-  path.
+  facts. The three implemented phase views cover shots/enemies, post-collision
+  fireballs, and final players/bullets. Transient lifecycle facts preserve shot
+  cel reset, player pose/defeat ordering, and Bullet16 construction without
+  adding visual state to gameplay. The pointer is borrowed per call and never
+  enters deterministic state; `th03rv` uses the null path.
 - `th03-headless`, `th03-replay-check`, and `th03rv` are independent
   filesystem/CLI clients of those libraries.
 - V13 produces the same neutral document/session types without changing the

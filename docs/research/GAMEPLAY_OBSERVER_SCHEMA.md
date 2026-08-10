@@ -1,8 +1,9 @@
 # TH03 MAIN ordinary-entity gameplay observer schema
 
-Status: source-grounded design. The first two phase views and
-`ShotPairSpawned` lifecycle fact are implemented; the final player/bullet view
-and its three remaining lifecycle facts are the next observer parcel.
+Status: source-grounded and implemented. All three phase views and the four
+lifecycle fact families are present; the first `th03_present` consumer draws
+the shot/enemy and fireball phases while player/bullet presentation remains the
+next presenter parcel.
 
 ## Scope and authority
 
@@ -440,9 +441,9 @@ RNG mutation.
 
 ## Facts currently discarded by core
 
-Four omissions block a completely authentic ordinary-entity presenter today.
-They should be closed with transient typed facts, not by moving renderer state
-into `DeterministicState`.
+Four omissions originally blocked a completely authentic ordinary-entity
+presenter. Native closes them with transient typed facts rather than moving
+renderer state into `DeterministicState`.
 
 | Blocker | Why current gameplay state is insufficient | Minimal neutral closure |
 |---|---|---|
@@ -494,9 +495,11 @@ public:
     static constexpr std::size_t player_count = 2;
     static constexpr std::size_t bullet_count = 320;
     MainPhaseContext context() const noexcept;
-    PlayerFact player(PlayerId player) const noexcept;
-    BulletFact bullet(BulletSlot slot) const noexcept;
-    RawPoint trail_point(BulletSlot slot, TrailPoint index) const noexcept;
+    std::optional<PlayerFact> player(PlayerId player) const noexcept;
+    std::optional<BulletFact> bullet(BulletSlot slot) const noexcept;
+    std::optional<RawPoint> trail_point(
+        BulletSlot slot, TrailPoint index
+    ) const noexcept;
 };
 
 struct PlayerPoseCommitted {
@@ -636,9 +639,9 @@ Later emulator visual capture should follow the manifest and raw-page procedure
 already frozen in `docs/research/PRESENTATION_CONTRACT.md:964-1013`; it validates
 the presenter, not gameplay determinism.
 
-## Minimal first implementation slice (complete)
+## Implementation status
 
-The first coding parcel stops after the first two phase boundaries:
+The first coding parcel stopped after the first two phase boundaries:
 
 1. Added the optional, non-owning observer plumbing; `MainPhaseContext`;
    `ShotPairFact`, `EnemyFact`, and `FireballFact`; the indexed
@@ -648,13 +651,16 @@ The first coding parcel stops after the first two phase boundaries:
    and `FireballsView` immediately after `fireballs_hittest()`. Added
    null/discard/recording invariance, phase-order, slot-order, shot-reuse,
    enemy-keyframe, and post-hittest fireball tests.
-3. No incomplete player or bullet view is exposed. The next
-   parcel first instruments the three remaining lifecycle blockers—pose commit,
-   defeat steps, and bullet16 construction style—then adds the single final
-   `PlayersBulletsView` before `result_control_update()`.
+3. The second parcel added checked player/bullet/trail accessors, pose commit,
+   defeat steps, and Bullet16 construction style, followed by the single final
+   `PlayersBulletsView` before `result_control_update()`. Callback-boundary
+   Bullet16 detection is source-safe because the current Extra/Boss/Gauge
+   producer callbacks allocate first-free slots and neither free nor retag a
+   new bullet before returning.
 
-This slice yields a fully authentic fact stream for shots, enemies, enemy
-explosions, fireballs, and fireball explosions while keeping the risk and
-review surface small. It adds no generic entity abstraction, no queue, no
-renderer dependency, no localization policy, and no state/hash field solely
-for presentation.
+Together the two parcels yield the complete ordinary-entity fact stream while
+keeping the risk and review surface small. They add no generic entity
+abstraction, queue, renderer dependency, localization policy, or state/hash
+field solely for presentation. `MainEntitiesPresenter` already consumes the
+first two views and owns shot cel state; the final player/bullet presenter is
+the next presentation-only slice.

@@ -23,6 +23,8 @@ enum class PlayerId : std::uint8_t {
 enum class ShotPairSlot : std::uint8_t {};
 enum class EnemySlot : std::uint8_t {};
 enum class FireballSlot : std::uint8_t {};
+enum class BulletSlot : std::uint16_t {};
+enum class TrailPoint : std::uint8_t {};
 
 // Exact source enemy/fireball/explosion flag byte. Explosion hits can raise
 // this above the two named explosion values, so it must not be a closed enum.
@@ -59,6 +61,38 @@ enum class FireballClassification : std::uint8_t {
 enum class FireballVariant : std::uint8_t {
 	blue = 2,
 	red = 3,
+};
+
+// Exact source bullet flag byte. The stock values stop at 4, but the renderer
+// deliberately treats every odd byte as a pellet and therefore does not have
+// a closed flag domain.
+struct BulletFlagFact {
+	std::uint8_t raw = 0;
+
+	[[nodiscard]] constexpr bool is_free() const noexcept
+	{
+		return raw == 0U;
+	}
+
+	[[nodiscard]] constexpr bool is_bullet16() const noexcept
+	{
+		return raw == 2U;
+	}
+
+	[[nodiscard]] constexpr bool is_pellet_cloud() const noexcept
+	{
+		return raw == 4U;
+	}
+
+	[[nodiscard]] constexpr bool is_rendered_as_pellet() const noexcept
+	{
+		return (raw & 1U) != 0U;
+	}
+
+	friend bool operator==(
+		const BulletFlagFact &,
+		const BulletFlagFact &
+	) = default;
 };
 
 struct MainPhaseContext {
@@ -139,6 +173,38 @@ struct FireballFact {
 	friend bool operator==(const FireballFact &, const FireballFact &) = default;
 };
 
+struct PlayerFact {
+	PlayerId player_id = PlayerId::p1;
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+	std::int8_t paletted_character = 0;
+	std::uint8_t lose_anim_time = 0;
+	std::uint8_t invincibility_time = 0;
+	std::uint8_t hyper_active = 0;
+	std::uint16_t gauge_charged = 0;
+
+	friend bool operator==(const PlayerFact &, const PlayerFact &) = default;
+};
+
+struct BulletFact {
+	BulletSlot slot{};
+	BulletFlagFact flag{};
+	std::uint8_t age = 0;
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+	PlayerId player_id = PlayerId::p1;
+	bool has_trail = false;
+
+	friend bool operator==(const BulletFact &, const BulletFact &) = default;
+};
+
+struct RawPoint {
+	std::int16_t x = 0;
+	std::int16_t y = 0;
+
+	friend bool operator==(const RawPoint &, const RawPoint &) = default;
+};
+
 struct ShotPairSpawned {
 	ShotPairSlot slot{};
 	PlayerId player_id = PlayerId::p1;
@@ -146,6 +212,49 @@ struct ShotPairSpawned {
 	friend bool operator==(
 		const ShotPairSpawned &,
 		const ShotPairSpawned &
+	) = default;
+};
+
+enum class Bullet16ConstructionKind : std::uint8_t {
+	default_attack,
+	kana_extra_attack,
+};
+
+struct Bullet16Spawned {
+	BulletSlot slot{};
+	PlayerId source_player = PlayerId::p1;
+	Bullet16ConstructionKind construction =
+		Bullet16ConstructionKind::default_attack;
+	bool source_template_animation_enabled = true;
+
+	friend bool operator==(
+		const Bullet16Spawned &,
+		const Bullet16Spawned &
+	) = default;
+};
+
+struct PlayerPoseCommitted {
+	PlayerId player = PlayerId::p1;
+	// nullopt reuses the presenter's prior source-shared X. An engaged zero is
+	// an explicit neutral write and must replace that prior value.
+	std::optional<std::int8_t> final_velocity_x_write_q4_4{};
+
+	friend bool operator==(
+		const PlayerPoseCommitted &,
+		const PlayerPoseCommitted &
+	) = default;
+};
+
+struct PlayerDefeatStep {
+	PlayerId player = PlayerId::p1;
+	std::uint8_t lose_anim_time_before = 0;
+	std::int16_t center_x = 0;
+	std::int16_t center_y = 0;
+	std::int16_t fg_shift_x_before_defeat_shake = 0;
+
+	friend bool operator==(
+		const PlayerDefeatStep &,
+		const PlayerDefeatStep &
 	) = default;
 };
 
@@ -195,6 +304,35 @@ private:
 	const detail::DeterministicState *state_;
 };
 
+class PlayersBulletsView {
+public:
+	static constexpr std::size_t player_count = 2U;
+	static constexpr std::size_t bullet_count = 320U;
+	static constexpr std::size_t trail_point_count = 6U;
+
+	[[nodiscard]] MainPhaseContext context() const noexcept;
+	[[nodiscard]] std::optional<PlayerFact> player(
+		PlayerId player
+	) const noexcept;
+	[[nodiscard]] std::optional<BulletFact> bullet(
+		BulletSlot slot
+	) const noexcept;
+	[[nodiscard]] std::optional<RawPoint> trail_point(
+		BulletSlot slot,
+		TrailPoint point
+	) const noexcept;
+
+private:
+	friend struct detail::ObserverAccess;
+
+	explicit PlayersBulletsView(
+		const detail::DeterministicState *state
+	) noexcept : state_(state)
+	{}
+
+	const detail::DeterministicState *state_;
+};
+
 class GameplayObserver {
 public:
 	virtual ~GameplayObserver() = default;
@@ -203,9 +341,17 @@ public:
 	// issued them; borrowed phase views expire when their callback returns.
 	virtual void shot_pair_spawned(const ShotPairSpawned &) noexcept
 	{}
+	virtual void bullet16_spawned(const Bullet16Spawned &) noexcept
+	{}
+	virtual void player_pose_committed(const PlayerPoseCommitted &) noexcept
+	{}
+	virtual void player_defeat_step(const PlayerDefeatStep &) noexcept
+	{}
 	virtual void observe(const ShotsEnemiesView &) noexcept
 	{}
 	virtual void observe(const FireballsView &) noexcept
+	{}
+	virtual void observe(const PlayersBulletsView &) noexcept
 	{}
 };
 

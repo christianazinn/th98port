@@ -320,7 +320,9 @@ StepResult Game::step(
 			detail::canonical_state(impl_->state),
 		};
 	}
-	if(!detail::gameplay_frame_prefix(impl_->state, impl_->content)) {
+	if(!detail::gameplay_frame_prefix(
+		impl_->state, impl_->content, observer
+	)) {
 		return StepResult{
 			StepStatus::simulation_not_implemented,
 			detail::canonical_state(impl_->state),

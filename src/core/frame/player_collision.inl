@@ -10,10 +10,21 @@ bool player_hittest(
 
 void player_defeat_update(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &player = state.players[player_id];
+	if(observer != nullptr) {
+		observer->player_defeat_step(PlayerDefeatStep{
+			.player = static_cast<PlayerId>(player_id),
+			.lose_anim_time_before = player.lose_anim_time,
+			.center_x = player.center_x.raw(),
+			.center_y = player.center_y.raw(),
+			.fg_shift_x_before_defeat_shake =
+				state.playfield_fg_shift_x[player_id],
+		});
+	}
 	if(player.lose_anim_time == 0x30U) {
 		state.defeat_flag = DefeatFlag::explode;
 		state.damage_all_on[1U - player_id] = 1U;
@@ -34,7 +45,8 @@ void player_defeat_update(
 
 bool player_update_begin(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &player = state.players[player_id];
@@ -49,7 +61,7 @@ bool player_update_begin(
 	}
 	if(player.lose_anim_time != 0U) {
 		if(player.lose_anim_time != 0xFFU) {
-			player_defeat_update(state, player_id);
+			player_defeat_update(state, player_id, observer);
 		}
 		return false;
 	}
@@ -104,7 +116,7 @@ bool player_update_begin(
 	return true;
 }
 
-void player_knockback_update(
+std::optional<std::int8_t> player_knockback_update(
 	DeterministicState &state,
 	std::uint8_t player_id
 ) noexcept
@@ -141,10 +153,13 @@ void player_knockback_update(
 		);
 		const Velocity velocity{knockback.x, knockback.y};
 		apply_velocity(player, velocity);
+		player.knockback_time--;
+		return source_velocity_x(velocity);
 	} else if(player.knockback_time == 0U) {
 		player.knockback_active = false;
 	}
 	player.knockback_time--;
+	return std::nullopt;
 }
 
 std::uint8_t players_hit_damage_update(
@@ -180,13 +195,17 @@ void player_update_finish(
 	DeterministicState &state,
 	std::uint8_t player_id,
 	std::uint16_t live_input,
+	std::optional<std::int8_t> &final_velocity_x_write,
 	GameplayObserver *observer
 ) noexcept
 {
 	auto &player = state.players[player_id];
 	bool acted = false;
 	if(player.knockback_active) {
-		player_knockback_update(state, player_id);
+		const auto knockback_write = player_knockback_update(state, player_id);
+		if(knockback_write) {
+			final_velocity_x_write = knockback_write;
+		}
 		player.gauge_charged = 0U;
 		player.cpu_frame = 0U;
 		acted = true;
@@ -292,13 +311,28 @@ void player_update_human(
 ) noexcept
 {
 	auto &player = state.players[player_id];
-	if(!player_update_begin(state, player_id)) {
+	std::optional<std::int8_t> final_velocity_x_write;
+	if(!player_update_begin(state, player_id, observer)) {
+		if(observer != nullptr) {
+			observer->player_pose_committed(PlayerPoseCommitted{
+				.player = static_cast<PlayerId>(player_id),
+				.final_velocity_x_write_q4_4 = std::nullopt,
+			});
+		}
 		return;
 	}
 	if(player.move_lock_time != 0U) {
 		player.move_lock_time--;
 	} else {
-		move_human(player, live_input);
+		final_velocity_x_write = move_human(player, live_input);
 	}
-	player_update_finish(state, player_id, live_input, observer);
+	player_update_finish(
+		state, player_id, live_input, final_velocity_x_write, observer
+	);
+	if(observer != nullptr) {
+		observer->player_pose_committed(PlayerPoseCommitted{
+			.player = static_cast<PlayerId>(player_id),
+			.final_velocity_x_write_q4_4 = final_velocity_x_write,
+		});
+	}
 }

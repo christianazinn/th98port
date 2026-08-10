@@ -41,7 +41,7 @@ never enter the core.
 
 ## Optional observation boundary
 
-The future playable client may attach a synchronous, non-owning gameplay
+The playable client may attach a synchronous, non-owning gameplay
 observer while stepping the same core. Observations report only immutable raw
 gameplay facts at semantic phase boundaries and primitive results from
 shared-RNG reads the core has already consumed, carrying only a minimal
@@ -49,6 +49,14 @@ source-site/phase tag and ordinal. The core does not group or decode those
 results into visual payloads. Observations are not draw instructions, asset or
 sound IDs, visual entity state, or replay data. The core retains no observation
 after the callback returns, and an observer cannot alter control flow.
+
+The implemented ordinary-entity seam has three source-ordered phase views:
+shots/enemies, fireballs after their collision pass, and final players/bullets
+before result routing. Successful shot and Bullet16 construction plus player
+pose/defeat facts close source presentation lifetimes that cannot be inferred
+from late gameplay state. These are typed gameplay facts rather than renderer
+commands; the first `th03_present` consumer owns shot animation and draws the
+first two views without storing anything in core.
 
 Some original callbacks named as rendering perform gameplay mutations or
 consume the RNG stream later used by gameplay. Those mutations and that exact
@@ -71,10 +79,11 @@ th03-app --> th03_present -----------> th03_core (neutral observations only)
 `th03_assets` and `th03_present` are separate sibling library targets, not
 separate repositories. After agreeing on a small decoded-model interface,
 asset decoding and synthetic raster/palette/page primitives proceed in
-parallel. ASSET-001 now supplies RGB/PI models, and the first presentation
-foundation supplies raw indexed pages, clipping, deferred RGB4 palette state,
-and scroll without observing gameplay. Their first mandatory integration point
-is one real static MAIN frame. `th03_present` owns all presentation records,
+parallel. The asset library now supplies RGB/PI, CDG/CD2, BFNT, and MRS models;
+presentation supplies indexed pages, clipping, palette, planar/TRAM, cel,
+Sprite16, text, and staff-flake primitives. The static MAIN transaction and the
+first observer-backed shot/enemy/fireball consumer establish their initial join.
+`th03_present` owns all presentation records,
 sprite/cel lifetimes, asset identities, page/palette/TRAM state, and private
 draw ordering.
 

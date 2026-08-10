@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -26,6 +27,17 @@ void check(bool condition, std::string_view message)
 enum class ObservedPhase : std::uint8_t {
 	shots_enemies,
 	fireballs,
+	players_bullets,
+};
+
+enum class ObservedCall : std::uint8_t {
+	shot_pair_spawned,
+	bullet16_spawned,
+	player_defeat_step,
+	player_pose_committed,
+	shots_enemies,
+	fireballs,
+	players_bullets,
 };
 
 class DiscardObserver final : public th03::GameplayObserver {
@@ -37,16 +49,44 @@ public:
 	{
 		phases.reserve(8U);
 		spawns.reserve(8U);
+		bullet_spawns.reserve(64U);
+		poses.reserve(8U);
+		defeat_steps.reserve(8U);
+		calls.reserve(80U);
 	}
 
 	void shot_pair_spawned(const th03::ShotPairSpawned &spawn) noexcept override
 	{
 		spawns.push_back(spawn);
+		calls.push_back(ObservedCall::shot_pair_spawned);
+	}
+
+	void bullet16_spawned(const th03::Bullet16Spawned &spawn) noexcept override
+	{
+		bullet_spawns.push_back(spawn);
+		calls.push_back(ObservedCall::bullet16_spawned);
+	}
+
+	void player_pose_committed(
+		const th03::PlayerPoseCommitted &pose
+	) noexcept override
+	{
+		poses.push_back(pose);
+		calls.push_back(ObservedCall::player_pose_committed);
+	}
+
+	void player_defeat_step(
+		const th03::PlayerDefeatStep &step
+	) noexcept override
+	{
+		defeat_steps.push_back(step);
+		calls.push_back(ObservedCall::player_defeat_step);
 	}
 
 	void observe(const th03::ShotsEnemiesView &view) noexcept override
 	{
 		phases.push_back(ObservedPhase::shots_enemies);
+		calls.push_back(ObservedCall::shots_enemies);
 		shots_enemies_context = view.context();
 		for(std::size_t slot = 0U; slot < view.shot_count; ++slot) {
 			const auto fact = view.shot(
@@ -67,6 +107,7 @@ public:
 	void observe(const th03::FireballsView &view) noexcept override
 	{
 		phases.push_back(ObservedPhase::fireballs);
+		calls.push_back(ObservedCall::fireballs);
 		fireballs_context = view.context();
 		for(std::size_t slot = 0U; slot < view.fireball_count; ++slot) {
 			const auto fact = view.fireball(
@@ -78,10 +119,46 @@ public:
 		}
 	}
 
+	void observe(const th03::PlayersBulletsView &view) noexcept override
+	{
+		phases.push_back(ObservedPhase::players_bullets);
+		calls.push_back(ObservedCall::players_bullets);
+		players_bullets_context = view.context();
+		for(std::size_t player = 0U; player < view.player_count; ++player) {
+			const auto fact = view.player(static_cast<th03::PlayerId>(player));
+			if(fact) {
+				players[player] = *fact;
+			}
+		}
+		for(std::size_t slot = 0U; slot < view.bullet_count; ++slot) {
+			const auto fact = view.bullet(static_cast<th03::BulletSlot>(slot));
+			if(fact) {
+				bullets[slot] = *fact;
+			}
+			for(std::size_t point = 0U;
+				point < view.trail_point_count;
+				++point) {
+				const auto trail = view.trail_point(
+					static_cast<th03::BulletSlot>(slot),
+					static_cast<th03::TrailPoint>(point)
+				);
+				if(trail) {
+					trail_points[slot][point] = *trail;
+					trail_points_present[slot][point] = true;
+				}
+			}
+		}
+	}
+
 	std::vector<ObservedPhase> phases;
+	std::vector<ObservedCall> calls;
 	std::vector<th03::ShotPairSpawned> spawns;
+	std::vector<th03::Bullet16Spawned> bullet_spawns;
+	std::vector<th03::PlayerPoseCommitted> poses;
+	std::vector<th03::PlayerDefeatStep> defeat_steps;
 	th03::MainPhaseContext shots_enemies_context{};
 	th03::MainPhaseContext fireballs_context{};
+	th03::MainPhaseContext players_bullets_context{};
 	std::array<
 		th03::ShotPairFact,
 		th03::ShotsEnemiesView::shot_count
@@ -94,6 +171,22 @@ public:
 		th03::FireballFact,
 		th03::FireballsView::fireball_count
 	> fireballs{};
+	std::array<
+		th03::PlayerFact,
+		th03::PlayersBulletsView::player_count
+	> players{};
+	std::array<
+		th03::BulletFact,
+		th03::PlayersBulletsView::bullet_count
+	> bullets{};
+	std::array<
+		std::array<th03::RawPoint, th03::PlayersBulletsView::trail_point_count>,
+		th03::PlayersBulletsView::bullet_count
+	> trail_points{};
+	std::array<
+		std::array<bool, th03::PlayersBulletsView::trail_point_count>,
+		th03::PlayersBulletsView::bullet_count
+	> trail_points_present{};
 };
 
 th03::detail::DeterministicState make_live_state()
@@ -112,6 +205,13 @@ th03::detail::DeterministicState make_live_state()
 		);
 	}
 	return state;
+}
+
+template <typename Callback>
+void with_live_state(Callback &&callback)
+{
+	auto state = make_live_state();
+	callback(state);
 }
 
 th03::GameInit base_game_init();
@@ -189,6 +289,90 @@ bool fireball_pools_equal(
 	return true;
 }
 
+bool player_pools_equal(
+	const th03::detail::DeterministicState &left,
+	const th03::detail::DeterministicState &right
+)
+{
+	for(std::size_t player = 0U; player < left.players.size(); ++player) {
+		const auto &a = left.players[player];
+		const auto &b = right.players[player];
+		if(std::tie(
+			a.center_x, a.center_y, a.is_hit, a.halfhearts,
+			a.invincibility_time, a.shot_mode, a.knockback_time,
+			a.move_lock_time, a.knockback_angle, a.knockback_length,
+			a.knockback_active, a.gauge_charged, a.gauge_avail, a.bombs,
+			a.hyper_active, a.hyper_character_callback,
+			a.hyper_effect_active_this_frame, a.lose_anim_time,
+			a.rounds_won, a.cpu_frame, a.hit_damage_next, a.shot_active,
+			a.cpu_dodge_strategy, a.human_movement_last,
+			a.spell_ready_frames, a.combo_bonus_max, a.combo_hits_max,
+			a.gauge_attacks_fired, a.boss_attacks_fired,
+			a.boss_attacks_reversed, a.boss_panics_fired, a.is_cpu,
+			a.paletted_character, a.gauge_charge_speed, a.cpu_safety_frames,
+			a.speed_aligned_x, a.speed_aligned_y, a.speed_diagonal_x,
+			a.speed_diagonal_y, a.reimu_chargeshot_active,
+			a.reimu_chargeshot_age, a.cpu_charge_ring, a.cpu_charge_cursor
+		) != std::tie(
+			b.center_x, b.center_y, b.is_hit, b.halfhearts,
+			b.invincibility_time, b.shot_mode, b.knockback_time,
+			b.move_lock_time, b.knockback_angle, b.knockback_length,
+			b.knockback_active, b.gauge_charged, b.gauge_avail, b.bombs,
+			b.hyper_active, b.hyper_character_callback,
+			b.hyper_effect_active_this_frame, b.lose_anim_time,
+			b.rounds_won, b.cpu_frame, b.hit_damage_next, b.shot_active,
+			b.cpu_dodge_strategy, b.human_movement_last,
+			b.spell_ready_frames, b.combo_bonus_max, b.combo_hits_max,
+			b.gauge_attacks_fired, b.boss_attacks_fired,
+			b.boss_attacks_reversed, b.boss_panics_fired, b.is_cpu,
+			b.paletted_character, b.gauge_charge_speed, b.cpu_safety_frames,
+			b.speed_aligned_x, b.speed_aligned_y, b.speed_diagonal_x,
+			b.speed_diagonal_y, b.reimu_chargeshot_active,
+			b.reimu_chargeshot_age, b.cpu_charge_ring, b.cpu_charge_cursor
+		)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool bullet_pools_equal(
+	const th03::detail::DeterministicState &left,
+	const th03::detail::DeterministicState &right
+)
+{
+	for(std::size_t slot = 0U; slot < left.bullets.size(); ++slot) {
+		const auto &a = left.bullets[slot];
+		const auto &b = right.bullets[slot];
+		if(std::tie(
+			a.flag, a.age, a.center_x, a.center_y,
+			a.target_x_for_target_player, a.target_x_for_origin_player,
+			a.velocity_x, a.velocity_y, a.speed_next, a.angle_next,
+			a.player_id, a.group_next, a.accel_type, a.is_collidable,
+			a.has_trail, a.trail_index
+		) != std::tie(
+			b.flag, b.age, b.center_x, b.center_y,
+			b.target_x_for_target_player, b.target_x_for_origin_player,
+			b.velocity_x, b.velocity_y, b.speed_next, b.angle_next,
+			b.player_id, b.group_next, b.accel_type, b.is_collidable,
+			b.has_trail, b.trail_index
+		)) {
+			return false;
+		}
+	}
+	for(std::size_t slot = 0U; slot < left.bullet_trails.size(); ++slot) {
+		if(
+			left.bullet_trails[slot].center_x !=
+				right.bullet_trails[slot].center_x ||
+			left.bullet_trails[slot].center_y !=
+				right.bullet_trails[slot].center_y
+		) {
+			return false;
+		}
+	}
+	return left.bullet_trail_cursor == right.bullet_trail_cursor;
+}
+
 bool rng_state_equal(
 	const th03::detail::DeterministicState &left,
 	const th03::detail::DeterministicState &right
@@ -222,6 +406,8 @@ bool observed_gameplay_equal(
 		shotpools_equal(left, right) &&
 		enemy_pools_equal(left, right) &&
 		fireball_pools_equal(left, right) &&
+		player_pools_equal(left, right) &&
+		bullet_pools_equal(left, right) &&
 		rng_state_equal(left, right)
 	);
 }
@@ -291,6 +477,32 @@ void test_indexed_views_and_classifications()
 	state.fireballs[3U].frame = 12U;
 	state.fireballs[4U].flag = static_cast<th03::detail::FireballFlag>(14U);
 	state.fireballs[4U].frame = 35U;
+
+	auto &player = state.players[1U];
+	player.center_x = th03::exact::Subpixel::from_raw(-444);
+	player.center_y = th03::exact::Subpixel::from_raw(555);
+	player.paletted_character = 16;
+	player.lose_anim_time = 0x2FU;
+	player.invincibility_time = 73U;
+	player.hyper_active = 4U;
+	player.gauge_charged = 0xABCU;
+	auto &trail_bullet = state.bullets[319U];
+	trail_bullet.flag = th03::detail::BulletFlag::bullet16;
+	trail_bullet.age = 17U;
+	trail_bullet.center_x = -888;
+	trail_bullet.center_y = 999;
+	trail_bullet.player_id = 1U;
+	trail_bullet.has_trail = true;
+	trail_bullet.trail_index = 47U;
+	for(std::size_t point = 0U; point < 6U; ++point) {
+		state.bullet_trails[47U].center_x[point] =
+			static_cast<std::int16_t>(100 + point);
+		state.bullet_trails[47U].center_y[point] =
+			static_cast<std::int16_t>(-200 - static_cast<int>(point));
+	}
+	state.bullets[318U].flag = static_cast<th03::detail::BulletFlag>(5U);
+	state.bullets[317U].has_trail = true;
+	state.bullets[317U].trail_index = 47U;
 
 	const auto shots_enemies =
 		th03::detail::ObserverAccess::shots_enemies(state);
@@ -414,11 +626,74 @@ void test_indexed_views_and_classifications()
 		)->flag.raw == 14U,
 		"fireball explosions preserve their exact raw flags and frames"
 	);
+
+	const auto players_bullets =
+		th03::detail::ObserverAccess::players_bullets(state);
+	check(
+		players_bullets.context() == shots_enemies.context(),
+		"PlayersBullets exposes the same pre-result MAIN phase context"
+	);
+	check(
+		players_bullets.player(th03::PlayerId::p2).value() ==
+			th03::PlayerFact{
+				.player_id = th03::PlayerId::p2,
+				.center_x = -444,
+				.center_y = 555,
+				.paletted_character = 16,
+				.lose_anim_time = 0x2FU,
+				.invincibility_time = 73U,
+				.hyper_active = 4U,
+				.gauge_charged = 0xABCU,
+			},
+		"player fact preserves the complete gameplay-semantic draw input"
+	);
+	check(
+		players_bullets.bullet(static_cast<th03::BulletSlot>(319U)).value() ==
+			th03::BulletFact{
+				.slot = static_cast<th03::BulletSlot>(319U),
+				.flag = th03::BulletFlagFact{2U},
+				.age = 17U,
+				.center_x = -888,
+				.center_y = 999,
+				.player_id = th03::PlayerId::p2,
+				.has_trail = true,
+			},
+		"bullet fact preserves exact flags, age, raw center, target, and trail presence"
+	);
+	check(
+		players_bullets.trail_point(
+			static_cast<th03::BulletSlot>(319U),
+			static_cast<th03::TrailPoint>(5U)
+		).value() == th03::RawPoint{.x = 105, .y = -205},
+		"trail accessor resolves one of exactly six aliased-ring points by value"
+	);
+	const auto invalid_odd = players_bullets.bullet(
+		static_cast<th03::BulletSlot>(318U)
+	).value().flag;
+	check(
+		invalid_odd.raw == 5U && invalid_odd.is_rendered_as_pellet() &&
+		!invalid_odd.is_bullet16() && !invalid_odd.is_pellet_cloud(),
+		"bullet flag facts preserve invalid odd values and source pellet-pass semantics"
+	);
 	check(
 		!shots_enemies.shot(static_cast<th03::ShotPairSlot>(255U)) &&
 		!shots_enemies.enemy(static_cast<th03::EnemySlot>(255U)) &&
-		!fireballs.fireball(static_cast<th03::FireballSlot>(255U)),
-		"out-of-range typed slots return no fact instead of indexing the pool"
+		!fireballs.fireball(static_cast<th03::FireballSlot>(255U)) &&
+		!players_bullets.player(static_cast<th03::PlayerId>(255U)) &&
+		!players_bullets.bullet(static_cast<th03::BulletSlot>(65535U)) &&
+		!players_bullets.trail_point(
+			static_cast<th03::BulletSlot>(65535U),
+			static_cast<th03::TrailPoint>(0U)
+		) &&
+		!players_bullets.trail_point(
+			static_cast<th03::BulletSlot>(319U),
+			static_cast<th03::TrailPoint>(255U)
+		) &&
+		!players_bullets.trail_point(
+			static_cast<th03::BulletSlot>(317U),
+			static_cast<th03::TrailPoint>(0U)
+		),
+		"invalid indices and stale free-slot trail bits return no semantic fact"
 	);
 }
 
@@ -450,8 +725,9 @@ void test_observer_invariance_and_phase_order()
 		recording.phases == std::vector<ObservedPhase>{
 			ObservedPhase::shots_enemies,
 			ObservedPhase::fireballs,
+			ObservedPhase::players_bullets,
 		},
-		"ordinary late suffix reports ShotsEnemies then Fireballs exactly once"
+		"ordinary late suffix reports all three source draw phases exactly once"
 	);
 	check(
 		recording.shots_enemies_context == th03::MainPhaseContext{
@@ -459,8 +735,9 @@ void test_observer_invariance_and_phase_order()
 			.round_or_result_frame = 99U,
 			.playfield_fg_shift_x = {6, -6},
 		} &&
-		recording.fireballs_context == recording.shots_enemies_context,
-		"both observations precede the late frame-counter increment"
+		recording.fireballs_context == recording.shots_enemies_context &&
+		recording.players_bullets_context == recording.shots_enemies_context,
+		"all observations precede result control and the late frame-counter increment"
 	);
 }
 
@@ -562,6 +839,439 @@ void test_shot_spawn_and_reuse()
 	);
 }
 
+void test_player_pose_and_defeat_lifecycle()
+{
+	with_live_state([](auto &state) {
+		state.players[0U].speed_aligned_x = 32U;
+		state.players[0U].speed_aligned_y = 32U;
+		state.players[0U].center_x = th03::exact::Subpixel::from_raw(8 << 4);
+		state.input_player[0U] = 0x0004U;
+		RecordingObserver clamped;
+		(void)th03::detail::gameplay_frame_suffix_before_interstitial(state,
+																	  &clamped);
+		check(clamped.poses.size() == 2U &&
+				  clamped.poses[0U] ==
+					  th03::PlayerPoseCommitted{
+						  .player = th03::PlayerId::p1,
+						  .final_velocity_x_write_q4_4 = std::int8_t{-32},
+					  } &&
+				  state.players[0U].center_x.raw() == (8 << 4),
+			  "pose lifecycle preserves a nonzero source velocity write even "
+			  "when position clamps");
+		check(clamped.poses[1U].final_velocity_x_write_q4_4 == std::int8_t{0},
+			  "no-input player_move reports an explicit zero write, not stale "
+			  "reuse");
+	});
+	with_live_state([](auto &invalid_input) {
+		invalid_input.input_player[0U] = 0x000CU;
+		RecordingObserver invalid_movement;
+		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+			invalid_input, &invalid_movement);
+		check(invalid_movement.poses[0U].final_velocity_x_write_q4_4 ==
+				  std::int8_t{0},
+			  "invalid human movement still performs source player_move's "
+			  "explicit zero write");
+	});
+
+	with_live_state([](auto &move_locked) {
+		move_locked.players[0U].move_lock_time = 1U;
+		RecordingObserver locked;
+		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+			move_locked, &locked);
+		check(locked.poses.size() == 2U &&
+				  !locked.poses[0U].final_velocity_x_write_q4_4,
+			  "move-lock path commits the pose while preserving the shared "
+			  "stale velocity");
+	});
+
+	with_live_state([](auto &knockback) {
+		knockback.players[0U].knockback_active = true;
+		knockback.players[0U].knockback_time = 33U;
+		knockback.players[0U].knockback_angle = 0U;
+		knockback.players[0U].knockback_length = 64U;
+		RecordingObserver knocked;
+		(void)th03::detail::gameplay_frame_suffix_before_interstitial(knockback,
+																	  &knocked);
+		check(knocked.poses[0U].final_velocity_x_write_q4_4 == std::int8_t{62},
+			  "later knockback vector write wins over the player's earlier "
+			  "movement write");
+	});
+	with_live_state([](auto &knockback_no_write) {
+		knockback_no_write.players[0U].move_lock_time = 1U;
+		knockback_no_write.players[0U].knockback_active = true;
+		knockback_no_write.players[0U].knockback_time = 32U;
+		RecordingObserver knockback_stale;
+		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+			knockback_no_write, &knockback_stale);
+		check(!knockback_stale.poses[0U].final_velocity_x_write_q4_4,
+			  "late knockback half plus move-lock performs no source velocity "
+			  "write");
+	});
+
+	with_live_state([](auto &cpu_retry) {
+		cpu_retry.players[0U].is_cpu = 1U;
+		cpu_retry.players[0U].cpu_safety_frames = 100U;
+		cpu_retry.players[0U].speed_aligned_x = 32U;
+		cpu_retry.players[0U].speed_aligned_y = 32U;
+		for (auto &column : cpu_retry.collision_map[0U]) {
+			column.fill(true);
+		}
+		RecordingObserver cpu;
+		(void)th03::detail::gameplay_frame_suffix_before_interstitial(cpu_retry,
+																	  &cpu);
+		check(cpu.poses.size() == 2U &&
+				  cpu.poses[0U].final_velocity_x_write_q4_4 == std::int8_t{0},
+			  "CPU retry exhaustion commits the final retry's explicit "
+			  "vertical X write");
+	});
+
+	with_live_state([](auto &defeat) {
+		defeat.players[0U].lose_anim_time = 0x30U;
+		defeat.players[0U].center_x = th03::exact::Subpixel::from_raw(111);
+		defeat.players[0U].center_y = th03::exact::Subpixel::from_raw(222);
+		defeat.players[1U].lose_anim_time = 0x30U;
+		defeat.players[1U].center_x = th03::exact::Subpixel::from_raw(333);
+		defeat.players[1U].center_y = th03::exact::Subpixel::from_raw(444);
+		defeat.playfield_fg_shift_x = {12, -14};
+		RecordingObserver defeated;
+		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+			defeat, &defeated);
+		check(defeated.defeat_steps ==
+				  std::vector<th03::PlayerDefeatStep>{
+					  {
+						  .player = th03::PlayerId::p1,
+						  .lose_anim_time_before = 0x30U,
+						  .center_x = 111,
+						  .center_y = 222,
+						  .fg_shift_x_before_defeat_shake = 12,
+					  },
+					  {
+						  .player = th03::PlayerId::p2,
+						  .lose_anim_time_before = 0x30U,
+						  .center_x = 333,
+						  .center_y = 444,
+						  .fg_shift_x_before_defeat_shake = -14,
+					  },
+				  },
+			  "simultaneous defeat steps expose pre-shake facts in P1-then-P2 "
+			  "source order");
+		check(defeated.calls ==
+				  std::vector<ObservedCall>{
+					  ObservedCall::player_defeat_step,
+					  ObservedCall::player_pose_committed,
+					  ObservedCall::player_defeat_step,
+					  ObservedCall::player_pose_committed,
+				  },
+			  "each defeat mutation precedes its corresponding source pose "
+			  "commit");
+		check(!defeated.poses[0U].final_velocity_x_write_q4_4 &&
+				  !defeated.poses[1U].final_velocity_x_write_q4_4,
+			  "defeat update_patnums calls preserve the prior shared pose "
+			  "velocity");
+	});
+
+	with_live_state([](auto &banner) {
+		banner.defeat_flag = th03::detail::DefeatFlag::banner;
+		RecordingObserver banner_recording;
+		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+			banner, &banner_recording);
+		check(banner_recording.defeat_steps.empty() &&
+				  banner_recording.poses.size() == 2U &&
+				  !banner_recording.poses[0U].final_velocity_x_write_q4_4 &&
+				  !banner_recording.poses[1U].final_velocity_x_write_q4_4,
+			  "banner paths still commit two poses but perform no "
+			  "defeat-update step");
+	});
+	with_live_state([](auto &lost) {
+		lost.players[0U].lose_anim_time = 0xFFU;
+		RecordingObserver lost_recording;
+		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+			lost, &lost_recording);
+		check(lost_recording.defeat_steps.empty() &&
+				  !lost_recording.poses[0U].final_velocity_x_write_q4_4,
+			  "lose-animation sentinel commits a stale pose without a defeat "
+			  "step");
+	});
+	with_live_state([](auto &banner_mid_pair) {
+		banner_mid_pair.players[0U].lose_anim_time = 1U;
+		banner_mid_pair.players[1U].lose_anim_time = 2U;
+		RecordingObserver banner_order;
+		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+			banner_mid_pair, &banner_order);
+		check(banner_order.defeat_steps.size() == 1U &&
+				  banner_order.defeat_steps[0U].player == th03::PlayerId::p1 &&
+				  banner_order.poses.size() == 2U,
+			  "P1 timer 1 enters banner before P2 and suppresses P2's pending "
+			  "defeat step");
+	});
+
+	with_live_state([](auto &fatal) {
+		fatal.players[0U].halfhearts = 1U;
+		fatal.players[0U].hit_damage_next = 3U;
+		for (auto &column : fatal.collision_map[0U]) {
+			column.fill(true);
+		}
+		RecordingObserver fatal_hit;
+		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+			fatal, &fatal_hit);
+		check(fatal.players[0U].lose_anim_time == 0x30U &&
+				  fatal_hit.defeat_steps.empty(),
+			  "fatal collision arms defeat without emitting a same-update "
+			  "defeat step");
+		RecordingObserver fatal_next;
+		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+			fatal, &fatal_next);
+		check(
+			fatal_next.defeat_steps.size() == 1U &&
+				fatal_next.defeat_steps[0U].lose_anim_time_before == 0x30U,
+			"the first defeat step is emitted on the following player update");
+	});
+}
+
+void test_bullet16_lifecycle_styles_order_and_full_arena()
+{
+	const auto configure_mima_gauge = [](auto &state) {
+		state.hud_start_flag = 1U;
+		state.players[0U].paletted_character = 3;
+		state.gba_flag_active[0U] =
+			th03::detail::GaugeBossAttackFlag::gauge_bullet_active;
+		state.mima_gauge_pattern_frame[0U] = 8U;
+		state.mima_gauge_pattern_angle[0U] = 0x40U;
+		state.mima_gauge_pattern_angle_delta[0U] = 7;
+		state.gauge_pattern_param_a[0U] = 4U;
+		state.gauge_pattern_param_b[0U] = 48U;
+	};
+	with_live_state([&](auto &mima_base) {
+		configure_mima_gauge(mima_base);
+		auto mima_null = mima_base;
+		auto mima_discard = mima_base;
+		auto mima_record = mima_base;
+		DiscardObserver discard;
+		RecordingObserver mima;
+		(void)th03::detail::gameplay_frame_prefix(mima_null,
+												  th03::GameContent{});
+		(void)th03::detail::gameplay_frame_prefix(
+			mima_discard, th03::GameContent{}, &discard);
+		(void)th03::detail::gameplay_frame_prefix(
+			mima_record, th03::GameContent{}, &mima);
+		check(observed_gameplay_equal(mima_null, mima_discard) &&
+				  observed_gameplay_equal(mima_null, mima_record),
+			  "null, discard, and recording bullet lifecycle paths leave pools "
+			  "and RNG identical");
+		check(
+			mima.bullet_spawns.size() == 9U &&
+				std::all_of(mima.bullet_spawns.begin(),
+							mima.bullet_spawns.end(),
+							[](const th03::Bullet16Spawned &spawn) {
+								return spawn.source_player ==
+										   th03::PlayerId::p1 &&
+									   spawn.construction ==
+										   th03::Bullet16ConstructionKind::
+											   default_attack &&
+									   !spawn.source_template_animation_enabled;
+							}) &&
+				std::is_sorted(mima.bullet_spawns.begin(),
+							   mima.bullet_spawns.end(),
+							   [](const auto &left, const auto &right) {
+								   return static_cast<std::size_t>(left.slot) <
+										  static_cast<std::size_t>(right.slot);
+							   }),
+			"one multi-add Mima Gauge callback emits strictly ordered, "
+			"uniformly static default facts");
+		check(mima.phases.empty() && mima.poses.empty() &&
+				  std::all_of(mima.calls.begin(),
+							  mima.calls.end(),
+							  [](ObservedCall call) {
+								  return call == ObservedCall::bullet16_spawned;
+							  }),
+			  "prefix Bullet16 facts are observable before a "
+			  "replay-pause-style deferred suffix");
+		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+			mima_record, &mima);
+		th03::detail::gameplay_frame_suffix_after_interstitial(mima_record,
+															   &mima);
+		check(mima.calls.size() == 14U &&
+				  mima.calls[9U] == ObservedCall::player_pose_committed &&
+				  mima.calls[10U] == ObservedCall::player_pose_committed &&
+				  mima.calls[11U] == ObservedCall::shots_enemies &&
+				  mima.calls[12U] == ObservedCall::fireballs &&
+				  mima.calls[13U] == ObservedCall::players_bullets,
+			  "lifecycle prefix, P1/P2 pose commits, and three phase views "
+			  "retain source order");
+	});
+
+	with_live_state([](auto &chiyuri_state) {
+		chiyuri_state.hud_start_flag = 1U;
+		chiyuri_state.players[0U].paletted_character = 15;
+		chiyuri_state.gba_flag_active[0U] =
+			th03::detail::GaugeBossAttackFlag::gauge_bullet_active;
+		chiyuri_state.chiyuri_gauge_pattern_frame[0U] = 1U;
+		chiyuri_state.gauge_pattern_param_a[0U] = 64U;
+		RecordingObserver chiyuri;
+		(void)th03::detail::gameplay_frame_prefix(
+			chiyuri_state, th03::GameContent{}, &chiyuri);
+		check(chiyuri.bullet_spawns.size() == 2U &&
+				  std::all_of(
+					  chiyuri.bullet_spawns.begin(),
+					  chiyuri.bullet_spawns.end(),
+					  [](const th03::Bullet16Spawned &spawn) {
+						  return !spawn.source_template_animation_enabled &&
+								 spawn.construction ==
+									 th03::Bullet16ConstructionKind::
+										 default_attack;
+					  }),
+			  "one Chiyuri Gauge callback cannot mix animation or construction "
+			  "styles");
+	});
+
+	with_live_state([](auto &mima_boss_state) {
+		mima_boss_state.hud_start_flag = 1U;
+		mima_boss_state.players[0U].paletted_character = 3;
+		mima_boss_state.gba_boss_launched_by = 0;
+		mima_boss_state.boss.state = 6U;
+		mima_boss_state.boss.pattern_frame = 0x3FU;
+		mima_boss_state.boss.center_x = 144 << 4;
+		mima_boss_state.boss.center_y = 80 << 4;
+		mima_boss_state.boss.hp = 110U;
+		mima_boss_state.boss.params[1U] = 1U;
+		mima_boss_state.boss.params[2U] = 40U;
+		RecordingObserver mima_boss;
+		(void)th03::detail::gameplay_frame_prefix(
+			mima_boss_state, th03::GameContent{}, &mima_boss);
+		check(mima_boss.bullet_spawns.size() > 32U &&
+				  std::all_of(
+					  mima_boss.bullet_spawns.begin(),
+					  mima_boss.bullet_spawns.end(),
+					  [](const th03::Bullet16Spawned &spawn) {
+						  return !spawn.source_template_animation_enabled &&
+								 spawn.construction ==
+									 th03::Bullet16ConstructionKind::
+										 default_attack;
+					  }),
+			  "same-tick Mima Boss random burst and ring remain uniformly "
+			  "static");
+	});
+
+	with_live_state([](auto &marisa_boss_state) {
+		marisa_boss_state.hud_start_flag = 1U;
+		marisa_boss_state.players[0U].paletted_character = 5;
+		marisa_boss_state.gba_boss_launched_by = 0;
+		marisa_boss_state.gba_boss_level = 8U;
+		marisa_boss_state.boss.state = 11U;
+		marisa_boss_state.boss.pattern_frame = 0x1FU;
+		marisa_boss_state.boss.center_x = 144 << 4;
+		marisa_boss_state.boss.center_y = 80 << 4;
+		marisa_boss_state.boss.hp = 110U;
+		marisa_boss_state.boss.params[2U] = 40U;
+		marisa_boss_state.boss.params[3U] = 18U;
+		marisa_boss_state.boss.params[4U] = 30U;
+		RecordingObserver marisa_boss;
+		(void)th03::detail::gameplay_frame_prefix(
+			marisa_boss_state, th03::GameContent{}, &marisa_boss);
+		check(!marisa_boss.bullet_spawns.empty() &&
+				  std::all_of(
+					  marisa_boss.bullet_spawns.begin(),
+					  marisa_boss.bullet_spawns.end(),
+					  [](const th03::Bullet16Spawned &spawn) {
+						  return spawn.source_template_animation_enabled &&
+								 spawn.construction ==
+									 th03::Bullet16ConstructionKind::
+										 default_attack;
+					  }),
+			  "ordinary Boss bullet16 producers report default animated "
+			  "construction");
+	});
+
+	with_live_state([](auto &kana_state) {
+		kana_state.hud_start_flag = 1U;
+		kana_state.players[0U].paletted_character = 11;
+		auto &kana_attack = kana_state.extra_attacks[0U][0U];
+		kana_attack.state = 1U;
+		kana_attack.frame = 0U;
+		kana_attack.center_x = 100 << 4;
+		kana_attack.center_y = 100 << 4;
+		kana_attack.angle = 0U;
+		kana_attack.speed = 0U;
+		RecordingObserver kana;
+		(void)th03::detail::gameplay_frame_prefix(
+			kana_state, th03::GameContent{}, &kana);
+		check(kana.bullet_spawns ==
+				  std::vector<th03::Bullet16Spawned>{
+					  {
+						  .slot = static_cast<th03::BulletSlot>(0U),
+						  .source_player = th03::PlayerId::p1,
+						  .construction =
+							  th03::Bullet16ConstructionKind::kana_extra_attack,
+						  .source_template_animation_enabled = true,
+					  },
+				  },
+			  "Kana Extra successful allocation reports its custom animated "
+			  "construction");
+		kana_state.bullets[0U].flag = th03::detail::BulletFlag::free;
+		kana_attack.state = 1U;
+		kana_attack.frame = 0U;
+		kana_attack.center_x = 100 << 4;
+		kana_attack.center_y = 100 << 4;
+		kana_attack.speed = 0U;
+		(void)th03::detail::gameplay_frame_prefix(
+			kana_state, th03::GameContent{}, &kana);
+		check(kana.bullet_spawns.size() == 2U &&
+				  kana.bullet_spawns[1U].slot ==
+					  static_cast<th03::BulletSlot>(0U),
+			  "reusing a freed bullet16 slot emits a second presenter-style "
+			  "reset fact");
+	});
+	with_live_state([](auto &clipped) {
+		clipped.hud_start_flag = 1U;
+		clipped.players[0U].paletted_character = 11;
+		auto &clipped_attack = clipped.extra_attacks[0U][0U];
+		clipped_attack.state = 1U;
+		clipped_attack.frame = 0U;
+		clipped_attack.center_x = 100 << 4;
+		clipped_attack.center_y = 500 << 4;
+		RecordingObserver clipped_recording;
+		(void)th03::detail::gameplay_frame_prefix(
+			clipped, th03::GameContent{}, &clipped_recording);
+		check(clipped_recording.bullet_spawns.empty(),
+			  "a clipped Kana custom attempt emits no unsuccessful allocation "
+			  "fact");
+	});
+
+	with_live_state([&](auto &partial) {
+		configure_mima_gauge(partial);
+		for (std::size_t slot = 0U; slot < 317U; ++slot) {
+			partial.bullets[slot].flag = th03::detail::BulletFlag::pellet;
+			partial.bullets[slot].center_x = 144 << 4;
+			partial.bullets[slot].center_y = 100 << 4;
+		}
+		RecordingObserver partial_recording;
+		(void)th03::detail::gameplay_frame_prefix(
+			partial, th03::GameContent{}, &partial_recording);
+		check(partial_recording.bullet_spawns.size() == 3U &&
+				  partial_recording.bullet_spawns[0U].slot ==
+					  static_cast<th03::BulletSlot>(317U) &&
+				  partial_recording.bullet_spawns[2U].slot ==
+					  static_cast<th03::BulletSlot>(319U),
+			  "a partially full arena reports only successful first-free "
+			  "allocations before exhaustion");
+	});
+
+	with_live_state([&](auto &full) {
+		configure_mima_gauge(full);
+		for (auto &bullet : full.bullets) {
+			bullet.flag = th03::detail::BulletFlag::pellet;
+			bullet.center_x = 144 << 4;
+			bullet.center_y = 100 << 4;
+		}
+		RecordingObserver full_recording;
+		(void)th03::detail::gameplay_frame_prefix(
+			full, th03::GameContent{}, &full_recording);
+		check(full_recording.bullet_spawns.empty(),
+			  "a full bullet arena emits no unsuccessful Bullet16 allocation "
+			  "fact");
+	});
+}
+
 void test_post_hittest_fireball_view_and_terminal_order()
 {
 	auto state = make_live_state();
@@ -604,8 +1314,9 @@ void test_post_hittest_fireball_view_and_terminal_order()
 		recording.phases == std::vector<ObservedPhase>{
 			ObservedPhase::shots_enemies,
 			ObservedPhase::fireballs,
+			ObservedPhase::players_bullets,
 		},
-		"both phase callbacks precede terminal session-exit completion"
+		"all phase callbacks precede terminal session-exit completion"
 	);
 }
 
@@ -639,8 +1350,8 @@ void test_recorded_pause_completion()
 	);
 	check(
 		deferred.status == th03::StepStatus::phase_transition &&
-		recording.phases.empty(),
-		"recorded Cancel defers both observer phase views"
+		recording.phases.empty() && recording.poses.empty(),
+		"recorded Cancel defers player updates and all observer phase views"
 	);
 	const auto completed = game->finish_deferred_frame(
 		th03::DeferredFrameAction::resume,
@@ -648,18 +1359,22 @@ void test_recorded_pause_completion()
 	);
 	check(
 		completed && completed->status == th03::StepStatus::running &&
+		recording.poses.size() == 2U &&
 		recording.phases == std::vector<ObservedPhase>{
 			ObservedPhase::shots_enemies,
 			ObservedPhase::fireballs,
+			ObservedPhase::players_bullets,
 		},
-		"finish_deferred_frame reports both delayed phase views once"
+		"finish_deferred_frame reports all delayed phase views once"
 	);
 	const auto phase_count = recording.phases.size();
+	const auto call_count = recording.calls.size();
 	check(
 		!game->finish_deferred_frame(
 			th03::DeferredFrameAction::resume,
 			&recording
-		) && recording.phases.size() == phase_count,
+		) && recording.phases.size() == phase_count &&
+		recording.calls.size() == call_count,
 		"an invalid repeated deferred completion emits no observer callback"
 	);
 
@@ -689,15 +1404,18 @@ void test_recorded_pause_completion()
 		exit_recording.phases == std::vector<ObservedPhase>{
 			ObservedPhase::shots_enemies,
 			ObservedPhase::fireballs,
+			ObservedPhase::players_bullets,
 		},
-		"deferred exit_session reports both phase views once before terminal"
+		"deferred exit_session reports all phase views once before terminal"
 	);
 	const auto exit_phase_count = exit_recording.phases.size();
+	const auto exit_call_count = exit_recording.calls.size();
 	check(
 		!exit_game->finish_deferred_frame(
 			th03::DeferredFrameAction::exit_session,
 			&exit_recording
-		) && exit_recording.phases.size() == exit_phase_count,
+		) && exit_recording.phases.size() == exit_phase_count &&
+		exit_recording.calls.size() == exit_call_count,
 		"deferred exit_session cannot duplicate observer callbacks"
 	);
 	const auto already_complete = exit_game->step(
@@ -705,7 +1423,8 @@ void test_recorded_pause_completion()
 	);
 	check(
 		already_complete.status == th03::StepStatus::terminal &&
-		exit_recording.phases.size() == exit_phase_count,
+		exit_recording.phases.size() == exit_phase_count &&
+		exit_recording.calls.size() == exit_call_count,
 		"an already-complete Game emits no observer callback"
 	);
 
@@ -717,12 +1436,88 @@ void test_recorded_pause_completion()
 			{}, th03::InputContext::interstitial, &invalid_recording
 		);
 		check(
-			invalid.status == th03::StepStatus::invalid_input_context &&
+		invalid.status == th03::StepStatus::invalid_input_context &&
 			invalid_recording.phases.empty() &&
-			invalid_recording.spawns.empty(),
+			invalid_recording.spawns.empty() &&
+			invalid_recording.bullet_spawns.empty() &&
+			invalid_recording.poses.empty() &&
+			invalid_recording.defeat_steps.empty(),
 			"an invalid input context emits no observer callback"
 		);
 	}
+}
+
+void test_recorded_pause_prefix_bullet_once()
+{
+	auto init = base_game_init();
+	init.paletted_character = {3, 1};
+	init.runtime_snapshot = th03::RuntimeSnapshot{};
+	for(auto &player : init.runtime_snapshot->players) {
+		player.center_x = th03::exact::Subpixel::from_integer_wrapping(144);
+		player.center_y = th03::exact::Subpixel::from_integer_wrapping(336);
+		player.halfhearts = 10U;
+		player.gauge_charge_speed = 32U;
+		player.gauge_avail = 128U << 4U;
+		player.shot_active = 1U;
+	}
+	init.runtime_snapshot->players[0U].gauge_charged = 192U << 4U;
+	init.runtime_snapshot->players[0U].gauge_avail = 192U << 4U;
+	init.round_start_snapshot = th03::RoundStartSnapshot{};
+	init.round_start_snapshot->carry.shot_cycle[0U] = 4U;
+	auto game = th03::Game::create(
+		init,
+		{},
+		th03::GameOptions{
+			.input_protocol = th03::InputProtocol::recorded_replay,
+		}
+	);
+	check(game.has_value(), "recorded prefix-Bullet16 pause fixture creates");
+	if(!game) {
+		return;
+	}
+	RecordingObserver recording;
+	(void)game->step({}, th03::InputContext::gameplay, &recording);
+	const auto warning = game->step(
+		{}, th03::InputContext::gameplay, &recording
+	);
+	check(
+		warning.status == th03::StepStatus::phase_transition,
+		"Mima gauge release enters its warning interstitial"
+	);
+	for(std::size_t sample = 0U; sample < 27U; ++sample) {
+		(void)game->step({}, th03::InputContext::interstitial, &recording);
+	}
+
+	bool saw_prefix_spawn = false;
+	for(std::size_t frame = 0U; frame < 40U && !saw_prefix_spawn; ++frame) {
+		const auto before = recording.bullet_spawns.size();
+		const auto paused = game->step(
+			th03::CoreInput{.system = 0x1000U},
+			th03::InputContext::gameplay,
+			&recording
+		);
+		check(
+			paused.status == th03::StepStatus::phase_transition,
+			"recorded Cancel defers each probe frame before its gameplay suffix"
+		);
+		const auto after_initial_call = recording.bullet_spawns.size();
+		const auto completed = game->finish_deferred_frame(
+			th03::DeferredFrameAction::resume,
+			&recording
+		);
+		check(completed.has_value(), "recorded probe frame resumes");
+		if(after_initial_call > before) {
+			saw_prefix_spawn = true;
+			check(
+				recording.bullet_spawns.size() == after_initial_call,
+				"finishing a deferred frame does not repeat its prefix Bullet16 facts"
+			);
+		}
+	}
+	check(
+		saw_prefix_spawn,
+		"a Bullet16 fact is delivered on the initial replay-pause call before suffix deferral"
+	);
 }
 
 void test_warning_completion()
@@ -749,10 +1544,11 @@ void test_warning_completion()
 	const auto release = game->step({}, th03::InputContext::gameplay, &recording);
 	check(
 		release.status == th03::StepStatus::running &&
-		recording.phases.size() == 2U,
+		recording.phases.size() == 3U && recording.poses.size() == 2U,
 		"gauge release frame reports its ordinary phase views before arming warning"
 	);
 	recording.phases.clear();
+	const auto calls_before_warning = recording.calls.size();
 	const auto warning = game->step(
 		th03::CoreInput{.p1 = 0x0020U},
 		th03::InputContext::gameplay,
@@ -760,8 +1556,18 @@ void test_warning_completion()
 	);
 	check(
 		warning.status == th03::StepStatus::phase_transition &&
-		recording.phases.empty() && recording.spawns.size() == 1U,
-		"warning-start gameplay call reports its shot spawn before deferring both phase views"
+		recording.phases.empty() && recording.spawns.size() == 1U &&
+		recording.poses.size() == 4U &&
+		std::vector<ObservedCall>(
+			recording.calls.begin() +
+				static_cast<std::ptrdiff_t>(calls_before_warning),
+			recording.calls.end()
+		) == std::vector<ObservedCall>{
+			ObservedCall::shot_pair_spawned,
+			ObservedCall::player_pose_committed,
+			ObservedCall::player_pose_committed,
+		},
+		"warning-start call reports shot and P1/P2 pose facts before deferring phase views"
 	);
 	for(std::size_t sample = 0U; sample < 26U; ++sample) {
 		const auto interstitial = game->step(
@@ -781,8 +1587,9 @@ void test_warning_completion()
 		recording.phases == std::vector<ObservedPhase>{
 			ObservedPhase::shots_enemies,
 			ObservedPhase::fireballs,
+			ObservedPhase::players_bullets,
 		},
-		"warning sample 27 reports both deferred phase views once"
+		"warning sample 27 reports all deferred phase views once"
 	);
 }
 
@@ -794,8 +1601,11 @@ int main()
 	test_observer_invariance_and_phase_order();
 	test_public_step_result_invariance();
 	test_shot_spawn_and_reuse();
+	test_player_pose_and_defeat_lifecycle();
+	test_bullet16_lifecycle_styles_order_and_full_arena();
 	test_post_hittest_fireball_view_and_terminal_order();
 	test_recorded_pause_completion();
+	test_recorded_pause_prefix_bullet_once();
 	test_warning_completion();
 
 	if(failures != 0) {

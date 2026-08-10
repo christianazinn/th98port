@@ -486,6 +486,17 @@ selectors, and two consecutive end-frame swaps/clears with exact edge pixels.
 Focused Sprite16 tests additionally cover clear/OR/mono and write-mask output,
 unaligned placement, whole-column and raw-row clipping, access-page isolation,
 no-clip address wrapping, and the downwards-column endpoint.
+
+`present/main_entities.hpp` is the first synchronous observer-backed MAIN
+consumer. It reads only the neutral `ShotsEnemiesView`, `FireballsView`, and
+`ShotPairSpawned` fact, owns all 32 private shot animation cursors, and draws
+shots before enemies and post-hittest fireballs in exact ascending source slot
+order. Its injected semantic atlas layout names shot cels, living-enemy family
+anchors, explosion cels, and both fireball families; no asset path, source byte
+offset, or original pixel enters core. Focused tests cover slot reuse, damage
+strides across atlas rows, family mismatch rejection, source keyframes,
+playfield clips, and both compilers.
+
 These tests deliberately do not claim captured pixel parity. The remaining
 static-frame prerequisites are explicit: the application must inject/load the
 decoded GAMEFT gaiji glyphs before startup; the remaining PI-staged atlas
@@ -1182,15 +1193,16 @@ run independently. Their first required join is Slice 2.
 
 ### Slice 2: one static MAIN frame and page swap
 
-Implementation status: the core-independent synthetic parcel is complete.
+Implementation status: the core-independent synthetic parcel is complete, and
+the first Slice 3 observer consumer now draws shots, enemies, and fireballs.
 It ports raw `hud_wipe()` / `hud_static_put()`, the full page-1-to-page-0
 handoff copy, injected decoded character-BF2 preparation for `sub_E266()`,
 final palette restoration at the stable startup boundary, the lower-half
 Sprite16 atlas copy and positive/negative mask commit, source page-role
 selection, and the exact two-color 288x184 next-page clear after every swap.
-Captured Anniversary page comparison, GAMEFT gaiji loading by the application,
-and observer/no-observer integration remain deferred and are therefore still
-required before Slice 2 is accepted.
+Captured Anniversary page comparison and GAMEFT gaiji loading by the
+application remain deferred and are therefore still required before Slice 2 is
+accepted.
 
 Port `hud_wipe()`, `hud_static_put()`, playfield layout, `sub_E266()` resource
 sheet preparation, and the exact end-of-frame swap/clear transaction. Use
@@ -1205,6 +1217,11 @@ Exit tests:
   identical.
 
 ### Slice 3: ordinary live gameplay
+
+Implementation status: the complete three-phase core observation seam is
+implemented. The first presenter sub-slice covers shot pairs, enemies and their
+explosions, and post-hittest fireballs and their explosions. Player, overlay,
+common-effect, and bullet drawing remain next.
 
 Observe raw gameplay facts at the documented semantic phases and add Authentic
 drawing for players, overlays, ordinary shots, enemies, bullets, and fireballs
