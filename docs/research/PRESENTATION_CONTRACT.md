@@ -381,11 +381,10 @@ build the first static MAIN frame without pretending to emulate the whole EGC:
 
 TRAM source calls require valid coordinates and do not define clipping, so the
 portable API rejects an out-of-range cell or rectangle atomically. JIS font-ROM
-rasterization, blink cadence, underline rasterization, unaligned SPRITE16
-shifting, and general EGC register/ROP emulation remain explicit errors or
-deferred operations until their complete source paths and visual oracle are in
-hand. Original font-ROM bytes are injected by the application rather than
-embedded in the library.
+rasterization, blink cadence, underline rasterization, and general EGC
+register/ROP emulation remain explicit errors or deferred operations until
+their complete source paths and visual oracle are in hand. Original font-ROM
+bytes are injected by the application rather than embedded in the library.
 
 The cel compositor now also ports the stock byte-aligned CDG alpha/no-alpha,
 horizontal-flip, E-plane dissolve, and upward-unput paths plus MRS alpha,
@@ -458,6 +457,22 @@ Anniversary operations:
   exact complement. MRS resources remain separately allocated and never enter
   this atlas. The presenter owns and reuses both fixed 16,000-byte masks; no
   per-frame allocation or original asset byte is introduced.
+- The native Sprite16 operations accept semantic atlas rectangles rather than
+  source byte offsets. They implement TH03's stock clear and per-plane OR
+  overlap, monochrome color, the source-persistent 16-bit EGC write mask's
+  effective value, unaligned EGC shift, signed 400-line-to-raw-row conversion,
+  driver-level vertical clipping, and the wrapper's complete-16-pixel-column
+  horizontal clipping. The source driver keeps overlap, mono color, and write
+  mask as persistent state; the native API instead supplies their effective
+  snapshot explicitly per operation, avoiding hidden mutable renderer state.
+  The no-clip path retains 16-bit VRAM address wrapping when it lands in the
+  modeled 640x400 plane; writes into the remainder of the hardware plane are
+  discarded as a safety normalization for stock-invalid coordinates.
+- The only ported extended put operation is the source-used downwards column:
+  it horizontally clips once, repeats the same atlas rectangle by its raw
+  height, and lets each copy clip against raw rows 0..199. Driver active-plane
+  selection, custom ROPs, and other advertised SPRITE16 operations remain out
+  of scope because TH03 has no call sites for them.
 - Startup establishes source roles `page_back = 0`, `page_front = 1`, the
   upper zoomed 200-line window, access page 0, and shown page 1. The late-frame
   transaction accesses the old front,
@@ -468,6 +483,9 @@ Anniversary operations:
 Synthetic warning-clean tests cover raw HUD cells, the selected BFNT pattern
 IDs and transparency, the full page-1-to-page-0 startup copy, final palette and
 selectors, and two consecutive end-frame swaps/clears with exact edge pixels.
+Focused Sprite16 tests additionally cover clear/OR/mono and write-mask output,
+unaligned placement, whole-column and raw-row clipping, access-page isolation,
+no-clip address wrapping, and the downwards-column endpoint.
 These tests deliberately do not claim captured pixel parity. The remaining
 static-frame prerequisites are explicit: the application must inject/load the
 decoded GAMEFT gaiji glyphs before startup; the remaining PI-staged atlas
@@ -1138,10 +1156,10 @@ operations, exact B/R/G/E packed-plane import/projection, direct/masked/OR
 planar writes, GRCG TDW/RMW tile writes, exact signed `PaletteTone` application,
 400-line/upper/lower zoomed-200-line state, raw 80x25 TRAM cells, all 256
 source-format gaiji slots, scroll state, separate provisional graphics/TRAM
-hashes, and injected ANK/gaiji final text composition. This is sufficient for
-the raw static-MAIN state and its byte-aligned source sheet. General EGC
-ROP/shifter behavior, unaligned SPRITE16, JIS, blink, and underline remain
-open; this slice is not a complete PC-98 graphics-hardware emulator.
+hashes, injected ANK/gaiji final text composition, and TH03's used Sprite16
+clear/OR/mono/mask, clipping, no-clip, and downwards-column operations. General
+EGC register/ROP behavior, JIS, blink, and underline remain open; this slice is
+not a complete PC-98 graphics-hardware emulator.
 
 Implement two indexed pages, access/show/copy/clear, palette/tone/deferred
 apply, TRAM storage, scroll, clipping, and the minimum source-backed planar/

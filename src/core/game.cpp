@@ -24,14 +24,16 @@ std::uint32_t initial_effective_reset_seed(const GameInit &init) noexcept
 	return static_cast<std::uint32_t>(init.resident_rand);
 }
 
-StepResult finish_gameplay_frame(auto &impl)
+StepResult finish_gameplay_frame(auto &impl, GameplayObserver *observer)
 {
 	const auto input_boundary = detail::canonical_state(impl.state);
-	if(detail::gameplay_frame_suffix_before_interstitial(impl.state)) {
+	if(detail::gameplay_frame_suffix_before_interstitial(
+		impl.state, observer
+	)) {
 		impl.warning_interstitial_samples_remaining = 27U;
 		return StepResult{StepStatus::phase_transition, input_boundary};
 	}
-	detail::gameplay_frame_suffix_after_interstitial(impl.state);
+	detail::gameplay_frame_suffix_after_interstitial(impl.state, observer);
 	if(impl.state.round_complete) {
 		return StepResult{
 			(impl.state.route == 1U)
@@ -260,7 +262,11 @@ std::expected<Game, Error> Game::create(
 	return Game(init, std::move(content), options);
 }
 
-StepResult Game::step(CoreInput input, InputContext context)
+StepResult Game::step(
+	CoreInput input,
+	InputContext context,
+	GameplayObserver *observer
+)
 {
 	if(impl_->state.round_complete) {
 		return StepResult{
@@ -290,7 +296,9 @@ StepResult Game::step(CoreInput input, InputContext context)
 		const auto input_boundary = detail::canonical_state(impl_->state);
 		impl_->warning_interstitial_samples_remaining--;
 		if(impl_->warning_interstitial_samples_remaining == 0U) {
-			detail::gameplay_frame_suffix_after_interstitial(impl_->state);
+			detail::gameplay_frame_suffix_after_interstitial(
+				impl_->state, observer
+			);
 			if(impl_->state.round_complete) {
 				return StepResult{
 					(impl_->state.route == 1U)
@@ -329,11 +337,12 @@ StepResult Game::step(CoreInput input, InputContext context)
 		impl_->replay_pause_deferred = true;
 		return StepResult{StepStatus::phase_transition, input_boundary};
 	}
-	return finish_gameplay_frame(*impl_);
+	return finish_gameplay_frame(*impl_, observer);
 }
 
 std::expected<StepResult, Error> Game::finish_deferred_frame(
-	DeferredFrameAction action
+	DeferredFrameAction action,
+	GameplayObserver *observer
 )
 {
 	if(!impl_->replay_pause_deferred || impl_->state.round_complete) {
@@ -348,7 +357,7 @@ std::expected<StepResult, Error> Game::finish_deferred_frame(
 	if(action == DeferredFrameAction::exit_session) {
 		impl_->state.session_exit_requested = true;
 	}
-	auto result = finish_gameplay_frame(*impl_);
+	auto result = finish_gameplay_frame(*impl_, observer);
 	result.input_boundary_state = impl_->replay_pause_input_boundary;
 	return result;
 }

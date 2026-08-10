@@ -1,6 +1,8 @@
 # TH03 MAIN ordinary-entity gameplay observer schema
 
-Status: source-grounded design; no core API is implemented by this document.
+Status: source-grounded design. The first two phase views and
+`ShotPairSpawned` lifecycle fact are implemented; the final player/bullet view
+and its three remaining lifecycle facts are the next observer parcel.
 
 ## Scope and authority
 
@@ -175,9 +177,10 @@ Those are raster semantics, not additional core facts.
 
 An indexed view exposes fixed capacities rather than allocating a live-entity
 vector: 2 players, 32 shot pairs, 40 enemies, 24 fireballs, and 320 bullets.
-Every accessor returns a compact fact value. It must not expose a reference to
-`DeterministicState` or any internal enum whose layout would make the public ABI
-depend on `game_internal.hpp`.
+Every accessor returns a checked `std::optional` containing a compact fact
+value; an out-of-range typed slot returns `std::nullopt` rather than indexing a
+pool. It must not expose a reference to `DeterministicState` or any internal
+enum whose layout would make the public ABI depend on `game_internal.hpp`.
 
 The shared phase context is only:
 
@@ -475,15 +478,15 @@ public:
     static constexpr std::size_t shot_count = 32;
     static constexpr std::size_t enemy_count = 40;
     MainPhaseContext context() const noexcept;
-    ShotPairFact shot(ShotPairSlot slot) const noexcept;
-    EnemyFact enemy(EnemySlot slot) const noexcept;
+    std::optional<ShotPairFact> shot(ShotPairSlot slot) const noexcept;
+    std::optional<EnemyFact> enemy(EnemySlot slot) const noexcept;
 };
 
 class FireballsView {
 public:
     static constexpr std::size_t fireball_count = 24;
     MainPhaseContext context() const noexcept;
-    FireballFact fireball(FireballSlot slot) const noexcept;
+    std::optional<FireballFact> fireball(FireballSlot slot) const noexcept;
 };
 
 class PlayersBulletsView {
@@ -633,19 +636,19 @@ Later emulator visual capture should follow the manifest and raw-page procedure
 already frozen in `docs/research/PRESENTATION_CONTRACT.md:964-1013`; it validates
 the presenter, not gameplay determinism.
 
-## Minimal first implementation slice
+## Minimal first implementation slice (complete)
 
-The first coding parcel should stop after the first two phase boundaries:
+The first coding parcel stops after the first two phase boundaries:
 
-1. Add the optional, non-owning observer plumbing; `MainPhaseContext`;
+1. Added the optional, non-owning observer plumbing; `MainPhaseContext`;
    `ShotPairFact`, `EnemyFact`, and `FireballFact`; the indexed
    `ShotsEnemiesView` and `FireballsView`; and `ShotPairSpawned` at successful
    `shots_add()` allocations.
-2. Invoke `ShotsEnemiesView` immediately after `boss_render_phase_update()` and
-   `FireballsView` immediately after `fireballs_hittest()`. Add null/discard/
-   recording invariance, phase-order, slot-order, shot-reuse, enemy-keyframe,
-   and post-hittest fireball tests.
-3. Do not expose an incomplete player or bullet view in that parcel. The next
+2. Invoked `ShotsEnemiesView` immediately after `boss_render_phase_update()`
+   and `FireballsView` immediately after `fireballs_hittest()`. Added
+   null/discard/recording invariance, phase-order, slot-order, shot-reuse,
+   enemy-keyframe, and post-hittest fireball tests.
+3. No incomplete player or bullet view is exposed. The next
    parcel first instruments the three remaining lifecycle blockers—pose commit,
    defeat steps, and bullet16 construction style—then adds the single final
    `PlayersBulletsView` before `result_control_update()`.

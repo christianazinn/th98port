@@ -7,7 +7,11 @@ void add_reimu_hyper_amulet(
 	std::int16_t center_y
 ) noexcept;
 
-void shots_add(DeterministicState &state, std::uint8_t player_id) noexcept
+void shots_add(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	GameplayObserver *observer
+) noexcept
 {
 	const auto &player = state.players[player_id];
 	if(player.shot_mode == shot_mode_none) {
@@ -39,7 +43,8 @@ void shots_add(DeterministicState &state, std::uint8_t player_id) noexcept
 		left = exact::wrap_add(left, static_cast<std::int16_t>(32 << 4));
 		pairs_fired++;
 	}
-	for(auto &slot : state.shotpairs) {
+	for(std::size_t slot_id = 0U; slot_id < state.shotpairs.size(); ++slot_id) {
+		auto &slot = state.shotpairs[slot_id];
 		if(slot.alive) {
 			continue;
 		}
@@ -48,6 +53,12 @@ void shots_add(DeterministicState &state, std::uint8_t player_id) noexcept
 		slot.topleft_y = top;
 		slot.velocity_y = shot_velocity_y;
 		slot.player_id = player_id;
+		if(observer != nullptr) {
+			observer->shot_pair_spawned(ShotPairSpawned{
+				.slot = static_cast<ShotPairSlot>(slot_id),
+				.player_id = static_cast<PlayerId>(player_id),
+			});
+		}
 		pairs_fired++;
 		if(pairs_fired >= 4U) {
 			return;

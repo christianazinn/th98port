@@ -547,6 +547,22 @@ struct DeterministicState {
 	> collision_map{};
 };
 
+struct ObserverAccess {
+	[[nodiscard]] static ShotsEnemiesView shots_enemies(
+		const DeterministicState &state
+	) noexcept
+	{
+		return ShotsEnemiesView(&state);
+	}
+
+	[[nodiscard]] static FireballsView fireballs(
+		const DeterministicState &state
+	) noexcept
+	{
+		return FireballsView(&state);
+	}
+};
+
 std::uint32_t state_hash(const DeterministicState &state) noexcept;
 CanonicalState canonical_state(const DeterministicState &state) noexcept;
 DeterministicState initialize_first_round(
@@ -587,14 +603,16 @@ void gameplay_input_latch(
 	std::uint8_t autofire_mask
 ) noexcept;
 bool gameplay_frame_suffix_before_interstitial(
-	DeterministicState &state
+	DeterministicState &state,
+	GameplayObserver *observer = nullptr
 ) noexcept;
 void interstitial_input_latch(
 	DeterministicState &state,
 	const CoreInput &input
 ) noexcept;
 void gameplay_frame_suffix_after_interstitial(
-	DeterministicState &state
+	DeterministicState &state,
+	GameplayObserver *observer = nullptr
 ) noexcept;
 bool player_hittest_legacy(
 	const DeterministicState &state,

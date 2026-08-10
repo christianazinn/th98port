@@ -159,7 +159,11 @@ bool cpu_safe_move(
 	}
 }
 
-void player_update_cpu(DeterministicState &state, std::uint8_t player_id) noexcept
+void player_update_cpu(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	GameplayObserver *observer
+) noexcept
 {
 	auto &player = state.players[player_id];
 	auto live_input = std::uint16_t{0};
@@ -168,7 +172,7 @@ void player_update_cpu(DeterministicState &state, std::uint8_t player_id) noexce
 	}
 	if(player.move_lock_time != 0U) {
 		player.move_lock_time--;
-		player_update_finish(state, player_id, live_input);
+		player_update_finish(state, player_id, live_input, observer);
 		return;
 	}
 
@@ -239,5 +243,5 @@ void player_update_cpu(DeterministicState &state, std::uint8_t player_id) noexce
 		}
 	}
 
-	player_update_finish(state, player_id, live_input);
+	player_update_finish(state, player_id, live_input, observer);
 }

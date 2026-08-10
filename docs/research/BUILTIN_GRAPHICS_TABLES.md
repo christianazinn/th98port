@@ -123,11 +123,15 @@ profile only after it preserves timing, cell span, and layout.
    alpha-generation boundary. Keep separately allocated MRS out of the atlas.
    Translate `SO_*` and `ccorddat` into typed local
    slot/layout constants. Do not expose PC-98 offsets as the Arrange API.
-4. **PRESENT-SPRITE16-SEMANTICS.** Implement only the used Sprite16 behaviours:
-   source-atlas alpha preparation, normal clear overlap, OR overlap, mono
-   colour, clipping in 16-pixel columns, and the downward-column variant.
-   Cover enemies, explosions, hit circles, shots, and loaded BF2 result cels
-   with synthetic atlases before wiring live observations.
+4. **PRESENT-SPRITE16-SEMANTICS.** The portable primitive now implements only
+   the used Sprite16 behaviours: source-atlas alpha preparation, normal clear
+   overlap, OR overlap, mono colour, the source-used 16-bit EGC write mask,
+   unaligned placement, clipping in 16-pixel columns, no-clip address wrapping
+   within the modeled raster, and the downwards-column variant. Synthetic
+   atlases cover every path before live enemy, explosion, hit-circle, shot,
+   and loaded-BF2 presenters are wired. Per-operation style explicitly carries
+   the effective values that the source driver stores persistently; the native
+   presenter does not introduce equivalent hidden mutable state.
 5. **PRESENT-UI-GEOMETRY.** Port the gauge terminal-mask draw, result masked
    triangles, static/dynamic score, combo, warning, and result-label layout as
    presenter-only code. Re-express non-content masks/coordinates with named
@@ -155,10 +159,11 @@ profile only after it preserves timing, cell span, and layout.
    result is partly evident, but a host translation must not claim pixel parity
    until a raw-page capture checks the EGC copy and partial gauge word.
 3. The full `SPRITE16.COM` implementation is present as third-party assembly,
-   and the TH03 adapter documents the used calls, but the current native raster
-   foundation intentionally lacks general unaligned Sprite16/EGC semantics.
+   and the native primitive now follows its TH03-used shifts, alpha passes,
+   masks, and wrapper clipping. `libs/sprite16/sprite16.asm:440-600,661-714`,
    `libs/sprite16/sprite16.h:12-50`, `main/sprite16.cpp:13-156`, and the visual
-   capture gate—not an inferred alpha rule—are the authority for that parcel.
+   capture gate—not a generalized EGC model—are the authority. Driver functions
+   with no TH03 call site remain deliberately unported.
 4. No source or decoder gap was found for the PI, BF2, or MRS content itself:
    it is file-backed and already belongs to decoded-asset paths. Only PI and
    BF2 feed the Sprite16 atlas; MRS stays separately allocated. The open work

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "th03/core/numeric.hpp"
+#include "th03/core/observer.hpp"
 #include "th03/error.hpp"
 
 namespace th03 {
@@ -261,12 +262,17 @@ public:
 		GameOptions options
 	);
 
+	// `observer` must remain alive for this entire call, is borrowed only for
+	// its dynamic extent, and is never retained. Pass it again when completing
+	// a deferred frame. Observer callbacks must not reenter or mutate this Game.
 	StepResult step(
 		CoreInput input,
-		InputContext context = InputContext::gameplay
+		InputContext context = InputContext::gameplay,
+		GameplayObserver *observer = nullptr
 	);
 	std::expected<StepResult, Error> finish_deferred_frame(
-		DeferredFrameAction action
+		DeferredFrameAction action,
+		GameplayObserver *observer = nullptr
 	);
 	CanonicalState canonical_state() const;
 	RoundStartObservation round_start_observation() const;

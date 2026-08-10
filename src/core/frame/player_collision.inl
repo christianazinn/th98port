@@ -179,7 +179,8 @@ std::uint8_t players_hit_damage_update(
 void player_update_finish(
 	DeterministicState &state,
 	std::uint8_t player_id,
-	std::uint16_t live_input
+	std::uint16_t live_input,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &player = state.players[player_id];
@@ -224,7 +225,7 @@ void player_update_finish(
 			(live_input & input_shot) != 0U || player.shot_active == 2U
 		) {
 			if(state.autofire_shot_gate[player_id] > 2U) {
-				shots_add(state, player_id);
+				shots_add(state, player_id, observer);
 				state.autofire_shot_gate[player_id] = 0U;
 				shot_fired = true;
 			}
@@ -286,7 +287,8 @@ void player_update_finish(
 void player_update_human(
 	DeterministicState &state,
 	std::uint8_t player_id,
-	std::uint16_t live_input
+	std::uint16_t live_input,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &player = state.players[player_id];
@@ -298,5 +300,5 @@ void player_update_human(
 	} else {
 		move_human(player, live_input);
 	}
-	player_update_finish(state, player_id, live_input);
+	player_update_finish(state, player_id, live_input, observer);
 }

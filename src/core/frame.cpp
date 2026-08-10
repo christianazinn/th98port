@@ -338,14 +338,17 @@ void warning_portrait_update(DeterministicState &state) noexcept
 	}
 }
 
-bool gameplay_frame_suffix_before_interstitial(DeterministicState &state) noexcept
+bool gameplay_frame_suffix_before_interstitial(
+	DeterministicState &state,
+	GameplayObserver *observer
+) noexcept
 {
 	for(std::uint8_t player_id = 0U; player_id < player_count; ++player_id) {
 		if(state.players[player_id].is_cpu != 0U) {
-			player_update_cpu(state, player_id);
+			player_update_cpu(state, player_id, observer);
 		} else {
 			player_update_human(
-				state, player_id, state.input_player[player_id]
+				state, player_id, state.input_player[player_id], observer
 			);
 		}
 	}
@@ -377,14 +380,25 @@ void interstitial_input_latch(
 	}
 }
 
-void gameplay_frame_suffix_after_interstitial(DeterministicState &state) noexcept
+void gameplay_frame_suffix_after_interstitial(
+	DeterministicState &state,
+	GameplayObserver *observer
+) noexcept
 {
 	warning_frame_update(state, 0U);
 	warning_frame_update(state, 1U);
 	background_update(state);
 	bombs_render_phase_update(state);
 	boss_render_phase_update(state);
+	if(observer != nullptr) {
+		const auto view = ObserverAccess::shots_enemies(state);
+		observer->observe(view);
+	}
 	fireballs_hittest(state);
+	if(observer != nullptr) {
+		const auto view = ObserverAccess::fireballs(state);
+		observer->observe(view);
+	}
 	extra_attacks_render_phase_update(state);
 	if(result_control_update(state)) {
 		return;

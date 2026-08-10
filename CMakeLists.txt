@@ -41,6 +41,7 @@ add_library(th03_present STATIC
 	src/present/pi.cpp
 	src/present/planar.cpp
 	src/present/raster.cpp
+	src/present/sprite16.cpp
 	src/present/sprite_staging.cpp
 	src/present/staff_flakes.cpp
 	src/present/text.cpp
@@ -83,6 +84,7 @@ add_library(th03_core STATIC
 	src/core/frame/round.inl
 	src/core/frame/shots.inl
 	src/core/frame/world_collision.inl
+	src/core/observer.cpp
 	src/core/random.cpp
 	src/core/round_start.cpp
 	src/core/state_hash.cpp
@@ -138,6 +140,14 @@ if(BUILD_TESTING)
 	th03_set_warnings(th03-tests)
 	add_test(NAME th03-tests COMMAND th03-tests)
 
+	add_executable(th03-observer-tests
+		tests/test_observer.cpp
+	)
+	target_link_libraries(th03-observer-tests PRIVATE th03_core)
+	target_include_directories(th03-observer-tests PRIVATE src/core)
+	th03_set_warnings(th03-observer-tests)
+	add_test(NAME th03-observer-tests COMMAND th03-observer-tests)
+
 	add_executable(th03-v13-tests
 		tests/test_v13.cpp
 	)
@@ -186,6 +196,16 @@ if(BUILD_TESTING)
 	target_link_libraries(th03-present-mono-tests PRIVATE th03_present)
 	th03_set_warnings(th03-present-mono-tests)
 	add_test(NAME th03-present-mono-tests COMMAND th03-present-mono-tests)
+
+	add_executable(th03-present-sprite16-tests
+		tests/test_present_sprite16.cpp
+	)
+	target_link_libraries(th03-present-sprite16-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-sprite16-tests)
+	add_test(
+		NAME th03-present-sprite16-tests
+		COMMAND th03-present-sprite16-tests
+	)
 
 	add_executable(th03-present-sprite-staging-tests
 		tests/test_present_sprite_staging.cpp
