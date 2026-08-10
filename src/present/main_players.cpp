@@ -10,6 +10,14 @@
 namespace th03::present {
 namespace {
 
+[[nodiscard]] bool no_middle_pass(
+	void *,
+	const MainPhaseContext &
+) noexcept
+{
+	return true;
+}
+
 constexpr std::uint16_t player_sprite_width = 32U;
 // player_render() assigns sprite16_put_size.h directly rather than calling
 // set(), so this value is already in raw 200-line rows.
@@ -637,9 +645,33 @@ bool MainPlayersBulletsPresenter::present_phase(
 	const MainBulletTrails &trails
 ) noexcept
 {
-	if(!ready() || !validate_players(players) || !validate_bullets(
-		bullets, trails
-	)) {
+	return present_phase_with_middle(
+		context,
+		players,
+		bullets,
+		trails,
+		no_middle_pass,
+		nullptr
+	);
+}
+
+bool MainPlayersBulletsPresenter::present_phase_with_middle(
+	const MainPhaseContext &context,
+	const MainPlayerFacts &players,
+	const MainBulletFacts &bullets,
+	const MainBulletTrails &trails,
+	MainPlayersBulletsMiddlePass middle,
+	void *middle_context
+) noexcept
+{
+	if(!ready()) {
+		return false;
+	}
+	if(middle == nullptr) {
+		status_ = MainPlayersBulletsStatus::invalid_observation;
+		return false;
+	}
+	if(!validate_players(players) || !validate_bullets(bullets, trails)) {
 		return false;
 	}
 	if(!staging_->committed()) {
@@ -650,8 +682,11 @@ bool MainPlayersBulletsPresenter::present_phase(
 		status_ = MainPlayersBulletsStatus::draw_failed;
 		return false;
 	}
-	// SUB_CEE0's common-effect pass belongs here once its lifecycle observer
-	// and GRCG primitives are available.
+	// A failed inserted owner reports its own status; do not misdiagnose this
+	// child as a raster failure.
+	if(!middle(middle_context, context)) {
+		return false;
+	}
 	if(!draw_bullets(context, bullets, trails)) {
 		status_ = MainPlayersBulletsStatus::draw_failed;
 		return false;

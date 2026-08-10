@@ -55,6 +55,7 @@ add_library(th03_present STATIC
 	src/present/main_bombs_characters.cpp
 	src/present/main_palette.cpp
 	src/present/main_players.cpp
+	src/present/main_round.cpp
 	src/present/main_static.cpp
 	src/present/mono.cpp
 	src/present/pi.cpp
@@ -355,6 +356,17 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-present-main-bombs-tests
 		COMMAND th03-present-main-bombs-tests
+	)
+
+	add_executable(th03-present-main-round-tests
+		tests/test_present_main_round.cpp
+	)
+	target_link_libraries(th03-present-main-round-tests PRIVATE th03_present)
+	target_include_directories(th03-present-main-round-tests PRIVATE src/core)
+	th03_set_warnings(th03-present-main-round-tests)
+	add_test(
+		NAME th03-present-main-round-tests
+		COMMAND th03-present-main-round-tests
 	)
 
 	add_executable(th03-present-source-surface-tests

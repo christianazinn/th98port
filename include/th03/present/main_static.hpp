@@ -103,6 +103,19 @@ public:
 		MainPaletteState &palette
 	);
 
+	// Source sub_A21F() visual reset for a route-1 repeat inside the same MAIN
+	// process. It clears both upper 200-line pages to color 2 (page 1, then page
+	// 0), shows page 1 while accessing page 0, wipes/rewrites the static HUD,
+	// and restores the process baseline palette. Sprite16 staging and all other
+	// process-scoped presentation state remain intact. The caller performs
+	// entry.cpp's following Tone=100 immediate show.
+	[[nodiscard]] bool repeat_round_startup(
+		Raster &raster,
+		Tram &tram,
+		const MainHudState &hud,
+		MainPaletteState &palette
+	) noexcept;
+
 	// Exact late-frame page transaction from sub_9778(): access the old front,
 	// show the old back, exchange roles, then clear P1/P2 x 288 through y=183
 	// on the newly accessed page with colors 0 and 1.

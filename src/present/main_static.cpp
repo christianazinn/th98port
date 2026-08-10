@@ -438,6 +438,39 @@ bool MainStaticPresenter::round_startup(
 	return true;
 }
 
+bool MainStaticPresenter::repeat_round_startup(
+	Raster &raster,
+	Tram &tram,
+	const MainHudState &hud,
+	MainPaletteState &palette
+) noexcept
+{
+	if(!started_ || !valid_hud_state(hud) || !palette.baseline_ready()) {
+		return false;
+	}
+	constexpr Rect upper_page{
+		0,
+		0,
+		graphics_width,
+		sprite16_source_top,
+	};
+	// sub_A21F(): GRCG fill page 1, then page 0, and show page 1 while
+	// leaving page 0 accessed. The source reaches repeat on the matching role
+	// parity; spelling the roles out here makes the native invariant explicit.
+	if(!raster.set_access_page(Page::one) || !raster.clear(upper_page, 2U) ||
+		!raster.set_access_page(Page::zero) || !raster.clear(upper_page, 2U) ||
+		!raster.set_shown_page(Page::one)) {
+		return false;
+	}
+	main_hud_wipe(tram);
+	if(!palette.restore_baseline_and_show(raster) ||
+		!main_hud_static_put(tram, hud)) {
+		return false;
+	}
+	pages_ = {Page::zero, Page::one};
+	return true;
+}
+
 bool MainStaticPresenter::end_frame_swap_and_clear(Raster &raster) noexcept
 {
 	if(!started_) {

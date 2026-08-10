@@ -98,6 +98,10 @@ using MainBulletTrails = std::array<
 	MainBulletTrail,
 	PlayersBulletsView::bullet_count
 >;
+using MainPlayersBulletsMiddlePass = bool (*)(
+	void *context,
+	const MainPhaseContext &phase
+) noexcept;
 
 enum class MainPlayersBulletsStatus : std::uint8_t {
 	ready,
@@ -111,8 +115,8 @@ enum class MainPlayersBulletsStatus : std::uint8_t {
 // Authentic consumer for MAIN's final ordinary-entity phase. It owns the
 // source-shared player pose byte, each committed player pose, the shared defeat
 // anchor/radius, and the construction style of all 320 Bullet16 slots.
-// Common effects are intentionally absent until their own lifecycle facts and
-// GRCG line/circle primitives exist.
+// Its complete-phase entry retains the exact common-effect insertion point
+// between player overlays and the three bullet passes.
 class MainPlayersBulletsPresenter final : public GameplayObserver {
 public:
 	MainPlayersBulletsPresenter(
@@ -141,6 +145,20 @@ public:
 		const MainPhaseContext &context,
 		const MainBulletFacts &bullets,
 		const MainBulletTrails &trails
+	) noexcept;
+
+	// Complete final-phase transaction with the exact SUB_CEE0 insertion seam.
+	// Both player and bullet facts validate before the first pixel changes;
+	// [middle] then runs after player overlays and before Bullet16/cloud/pellet
+	// passes. This synchronous function pointer is deliberately narrower than a
+	// generic render callback or event bus.
+	[[nodiscard]] bool present_phase_with_middle(
+		const MainPhaseContext &context,
+		const MainPlayerFacts &players,
+		const MainBulletFacts &bullets,
+		const MainBulletTrails &trails,
+		MainPlayersBulletsMiddlePass middle,
+		void *middle_context
 	) noexcept;
 
 	[[nodiscard]] MainPlayersBulletsStatus status() const noexcept;

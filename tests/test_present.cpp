@@ -1061,6 +1061,62 @@ void test_main_shot_sheet_and_startup() {
 	expect_pixel(raster, Page::zero, {336, 100}, 1U, "second swap clears P2 page zero");
 	expect_pixel(raster, Page::one, {16, 100}, 12U, "second shown P1 remains drawn");
 	expect_pixel(raster, Page::one, {336, 100}, 13U, "second shown P2 remains drawn");
+
+	// Reach the opposite role parity, then reproduce sub_A21F()'s repeat-round
+	// visual reset without rebuilding the process-scoped Sprite16 source.
+	expect(presenter.end_frame_swap_and_clear(raster), "third MAIN page swap");
+	expect(
+		presenter.page_roles() ==
+			th03::present::MainPageRoles{Page::one, Page::zero},
+		"third swap reaches non-startup page roles"
+	);
+	expect(raster.set_access_page(Page::zero), "select repeat page zero seed");
+	expect(raster.clear({0, 0, 640U, 200U}, 4U), "seed repeat page zero");
+	expect(raster.set_access_page(Page::one), "select repeat page one seed");
+	expect(raster.clear({0, 0, 640U, 200U}, 5U), "seed repeat page one");
+	expect(
+		palette.set_entry_deferred(raster, 3U, {0U, 0U, 0U}) &&
+		palette.apply_if_changed(raster),
+		"mutate palette before repeat-round restoration"
+	);
+	tram.fill({'X', th03::present::tram_red});
+	expect(
+		presenter.repeat_round_startup(raster, tram, hud, palette),
+		"repeat-round static reset succeeds"
+	);
+	expect(
+		presenter.page_roles() ==
+			th03::present::MainPageRoles{Page::zero, Page::one} &&
+		raster.access_page() == Page::zero &&
+		raster.shown_page() == Page::one,
+		"repeat-round reset restores source page roles and selectors"
+	);
+	for(const auto page : {Page::zero, Page::one}) {
+		expect_pixel(
+			raster, page, {0, 0}, 2U,
+			"repeat-round reset clears the upper page from its first pixel"
+		);
+		expect_pixel(
+			raster, page, {639, 199}, 2U,
+			"repeat-round reset clears the upper page through its last pixel"
+		);
+		expect_pixel(
+			raster, page, {17, 201}, 5U,
+			"repeat-round reset preserves committed lower-half Sprite16 data"
+		);
+	}
+	expect(
+		raster.pending_palette().colors[3U] == Rgb8{0x15U, 0x2AU, 0x3FU} &&
+		raster.applied_palette().colors[3U] == Rgb4{1U, 2U, 3U},
+		"repeat-round reset restores and immediately applies the process palette"
+	);
+	expect_gaiji(
+		tram,
+		{15, 1},
+		th03::present::gaiji_heart_full,
+		th03::present::tram_white,
+		"repeat-round reset wipes and rewrites the static HUD"
+	);
 }
 
 } // namespace

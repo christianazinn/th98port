@@ -8,6 +8,7 @@
 #include "th03/present/main_effects.hpp"
 #include "th03/present/main_palette.hpp"
 #include "th03/present/main_players_bullets.hpp"
+#include "th03/present/main_round.hpp"
 #include "th03/present/main_static.hpp"
 #include "th03/present/mono.hpp"
 #include "th03/present/pi.hpp"

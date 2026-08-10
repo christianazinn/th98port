@@ -28,13 +28,18 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   Its split fixed-storage implementation covers all nine visual/palette paths,
   source-private and process-shared state, interrupted-round rearming, and the
   exact common-effect fanout order under strict GCC/MSVC tests.
+- The `MainRoundPresenter` composition foundation is integrated. It validates
+  and orders the implemented phase views, inserts common effects between player
+  overlays and bullets, applies deferred palettes before page publication,
+  preserves terminal no-footer behavior, reproduces the 27-sample warning tone
+  loop, resets static repeat-round pages/HUD without rebuilding process state,
+  and exposes the shown Raster/TRAM source surface in caller storage.
 
-The shortest remaining chain to a visible interactive build is: add the
-ordinary-frame composition object over the current specialised presenters;
-fill Boss, Extra/Charge, background, warning/gauge, HUD/result, and footer
-gaps; add the fixed 56.423 Hz input scheduler; then add the thin SDL upload
-and input shell. PC-98 visual traces remain the release authority after the
-synthetic cross-compiler gates.
+The shortest remaining chain to a visible interactive build is: fill Boss,
+Extra/Charge, background, warning/gauge, and HUD/result gaps in the existing
+composition owner; add the fixed 56.423 Hz input scheduler; then add the thin
+SDL upload and input shell. PC-98 visual traces remain the release authority
+after the synthetic cross-compiler gates.
 
 | Native concern | Donor authority |
 | --- | --- |
@@ -70,14 +75,14 @@ th03_assets remains a collection of pure decoders for supplied byte spans (RGB, 
 | th03_present | MainRoundPresenter, source-ordered observer consumers, visible MAIN composition from Raster plus TRAM, and scene-local present state | OS input, elapsed wall-clock policy, filesystem reads, or gameplay mutation |
 | th03_audio_pmd (later) | Supplied music/SE bytes, PMD/OPNA scheduling and synthesis, mix gain, offline PCM | SDL devices, UI settings storage, gameplay state, or file paths |
 
-The current libraries contain useful MAIN pieces (static setup, all nine Bomb
-paths, entities, players/bullets, effects, palette/raster, sprites, text, and
-staff flakes), but do not yet establish that one object produces every real
-MAIN frame from the game's observer stream and real assets. Complete
-source-order coverage is still required for Boss and Extra/Charge paths,
-background particles, dynamic HUD/result/warning/defeat overlays, and the
-final Raster-plus-TRAM composite. The neutral observer lifecycle events are a
-seam for that work; they are not render state in the core.
+The current libraries contain a tested process coordinator over static setup,
+all nine Bomb paths, entities, players/bullets, effects, palette/raster,
+sprites, text, and the final Raster-plus-TRAM source surface. It deliberately
+names every unimplemented pass, so it is not yet proof that every real MAIN
+frame is complete. Source-order coverage is still required for Boss and
+Extra/Charge paths, background particles, and dynamic HUD/result/warning
+overlays. The neutral observer lifecycle events are a seam for that work; they
+are not render state in the core.
 
 ## Source/application scene boundary
 
@@ -105,7 +110,12 @@ Acceptance gate VS-0: a documented external content root with a manifest can loa
 
 ### 2. Complete one source-ordered MAIN composition object
 
-Add MainRoundPresenter to th03_present, not to core or the host. It owns the MAIN Raster, Tram, staged assets, and the existing specialised presenters. The app creates it for a match, passes it as the transient observer for each game call, and asks it for the current visible PC-98 surface. No observer pointer is retained in core state.
+`MainRoundPresenter` now lives in th03_present, not core or the host. The current
+foundation coordinates caller-owned MAIN Raster, Tram, palette/static state,
+and specialised presenters at stable process addresses. The future app creates
+that process bundle for a match, passes the coordinator as the transient
+observer for each game call, and asks it for the current visible PC-98 surface.
+No observer pointer is retained in core state.
 
 Its implementation must be driven by the donor's actual order, rather than a convenient render pass:
 
@@ -139,10 +149,10 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 
 | Item | Blocks visual VS? | Why / completion condition |
 | --- | --- | --- |
-| MAIN source-order compositor and remaining observer coverage | Yes | Individual presenters are not proof of a complete match image. Finish every listed MAIN family and prove footer/page/palette ordering. |
-| Real external asset manifest and MainRoundAssets map | Yes | A synthetic unit test cannot show a selected original character. Finish the source filename/role inventory and strict decoder/load errors. |
+| Remaining MAIN source-order coverage | Yes | The coordinator, footer, repeat reset, and existing passes are integrated; finish every named missing family before calling the image complete. |
+| MainRoundAssets construction over the checked external manifest | Yes | The 96-role manifest/cache is frozen, but the app still must decode and bind the selected process bundle without substitute data. |
 | Fixed tick plus input-latch boundary | Yes | A window whose simulation follows host refresh is not a source-faithful match. Finish fake-clock scheduler tests and establish source cadence. |
-| Final Raster/TRAM-to-source-surface compositor | Yes | Host upload must consume the same visible PC-98 state, not redraw approximate HUD/text. |
+| Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
 | SDL window/upload/input adapter | Yes | Required to make the completed composition playable, but its first test can use a synthetic surface. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
 | OP menus, Story, MAINL, cutscenes, staff | No | They are scene work after direct VS; do not make them a prerequisite for validating MAIN. |

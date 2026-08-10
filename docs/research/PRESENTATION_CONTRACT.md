@@ -1233,20 +1233,20 @@ Exit tests:
 
 ### Slice 3: ordinary live gameplay
 
-Implementation status: the complete three-phase core observation seam is
-implemented. Presenter sub-slices cover shot pairs, enemies and their
-explosions, post-hittest fireballs and their explosions, player bases and
-BFNT overlays, shared defeat-ring geometry, Bullet16s and trails, pellet
-clouds, and odd-flag pellets. The player and bullet passes remain separate at
-the exact `SUB_CEE0()` insertion slot. Hit circles and the common-effect pool
-now occupy their exact post-fireball and pre-bullet slots using presenter-owned
-fixed pools and source-exact GRCG vectors. Ordered PaletteTone events remain a
-later owning-presenter parcel, but their source-wide ordering foundation is now
-implemented: `MainPaletteState` owns the one process RGB8 snapshot and explicit
-dirty latch, while neutral Bomb-frame, defeat-counter, Warning-interstitial,
-and exact footer facts preserve the schedule without palette concepts in core.
-Defeat palette application is not approximated at the final view because later
-source callbacks can overwrite it.
+Implementation status: the complete three-phase core observation seam and the
+first source-ordered `MainRoundPresenter` coordinator are implemented.
+Presenter sub-slices cover shot pairs, enemies and their explosions,
+post-hittest fireballs and their explosions, player bases and BFNT overlays,
+shared defeat-ring geometry, Bullet16s and trails, pellet clouds, and odd-flag
+pellets. The whole final phase validates before drawing, then inserts
+`SUB_CEE0()` exactly between player overlays and bullet passes. Hit circles and
+the common-effect pool occupy their exact post-fireball and pre-bullet slots
+using fixed presenter-owned pools and source-exact GRCG vectors.
+`MainPaletteState` owns the one process RGB8 snapshot and explicit dirty latch;
+the coordinator applies exact immediate defeat tones and the 27-sample warning
+100/150 alternation, and consumes the footer fact for deferred palette apply
+before page publication. Remaining Warning/Gauge palette and portrait routes
+stay named gaps rather than approximations.
 
 Observe raw gameplay facts at the documented semantic phases and add Authentic
 drawing for players, overlays, ordinary shots, enemies, bullets, and fireballs
