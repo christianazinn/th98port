@@ -608,6 +608,73 @@ void local_original_gate(const std::filesystem::path &content_root)
 			(*created)->raster().pixel(Page::zero, {400, 256}),
 		"local OPWIN expanded edge remains distinct from TL02"
 	);
+
+	GameInit title_resident{};
+	title_resident.rank = static_cast<std::uint8_t>(config.rank);
+	title_resident.key_mode = static_cast<std::uint8_t>(config.key_mode);
+	title_resident.fast_op_animation = 1U;
+	auto title = th03::app::ClassicOpTitleMenuScene::create(
+		title_resident, th03::app::ClassicOpTitleMode::fast_fade, *closure
+	);
+	expect(title.has_value(), "local fast title creates for typed adoption");
+	if(!title) {
+		return;
+	}
+	expect((*title)->advance().has_value(), "typed title black frame advances");
+	const auto title_stop = (*title)->take_audio_command();
+	const auto title_load = (*title)->take_audio_command();
+	expect(
+		title_stop && title_stop->type == ClassicAudioCommandType::stop_song &&
+			title_load && title_load->type == ClassicAudioCommandType::load_song,
+		"typed title startup audio drains"
+	);
+	expect((*title)->advance().has_value(), "typed title initial frame advances");
+	expect(
+		(*title)->take_audio_command().has_value(),
+		"typed title play command drains"
+	);
+	for(std::uint16_t frame = 0U; frame < 25U; ++frame) {
+		expect((*title)->advance().has_value(), "typed title fade advances");
+	}
+	expect(
+		(*title)->advance({.ok = true}).has_value(),
+		"typed title accepts the pre-menu input"
+	);
+	for(std::uint16_t frame = 0U; frame < 14U; ++frame) {
+		expect((*title)->advance().has_value(), "typed title box step advances");
+	}
+	expect((*title)->advance().has_value(), "typed title main menu draws");
+	for(std::uint8_t row = 0U; row < 4U; ++row) {
+		expect(
+			(*title)->advance({.down = true}).has_value(),
+			"typed title selection advances toward Option"
+		);
+		expect(
+			(*title)->advance().has_value(),
+			"typed title selection release advances"
+		);
+	}
+	expect(
+		(*title)->advance({.ok = true}).has_value(),
+		"typed title confirms Option"
+	);
+	auto title_completion = (*title)->take_completion();
+	expect(
+		title_completion &&
+			title_completion->route() == th03::app::ClassicOpRoute::options,
+		"typed title completion authorizes only the Options route"
+	);
+	if(!title_completion) {
+		return;
+	}
+	auto adopted = ClassicOpOptionsScene::create_from_op(
+		*title_completion, config, true, *closure
+	);
+	expect(
+		adopted.has_value() &&
+			(*adopted)->phase() == ClassicOpOptionsPhase::grow_window,
+		"authenticated title completion adopts into Options retryably"
+	);
 }
 
 } // namespace

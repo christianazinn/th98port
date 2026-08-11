@@ -7,6 +7,7 @@
 #include <expected>
 #include <memory>
 #include <optional>
+#include <span>
 
 #include "classic_op_scene_internal.hpp"
 #include "th03/app/classic_config.hpp"
@@ -85,6 +86,16 @@ private:
 // this scene performs no file I/O and returns to the retained main menu.
 class ClassicOpOptionsScene final {
 public:
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicOpOptionsScene>,
+		ClassicOpError
+	> create_from_op(
+		const ClassicOpCompletion &completion,
+		ClassicConfigOptions config,
+		bool fm_available,
+		std::span<const LoadedMainResource> resources
+	);
+
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpOptionsScene>,
 		ClassicOpError

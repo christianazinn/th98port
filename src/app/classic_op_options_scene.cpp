@@ -9,6 +9,8 @@
 #include <span>
 #include <utility>
 
+#include "th03/assets/decode.hpp"
+
 namespace th03::app {
 namespace {
 
@@ -82,10 +84,73 @@ constexpr std::array<std::uint8_t, 6U> value_key_joy{{
 }};
 
 [[nodiscard]] ClassicOpError options_error(
-	ClassicOpErrorCode code
+	ClassicOpErrorCode code,
+	std::optional<MainResourceKey> resource = std::nullopt
 ) noexcept
 {
-	return {.code = code};
+	return {.code = code, .resource = resource};
+}
+
+[[nodiscard]] ClassicOpError decode_error(
+	MainResourceKey resource,
+	assets::AssetError error
+)
+{
+	auto result = options_error(
+		ClassicOpErrorCode::asset_decode_failed, resource
+	);
+	result.asset_error.emplace(std::move(error));
+	return result;
+}
+
+[[nodiscard]] std::expected<void, ClassicOpError> validate_title_resources(
+	std::span<const LoadedMainResource> resources
+)
+{
+	const auto expected = op_title_menu_resource_keys();
+	if(resources.size() != expected.size()) {
+		return std::unexpected(options_error(
+			ClassicOpErrorCode::resource_set_mismatch
+		));
+	}
+	for(std::size_t index = 0U; index < expected.size(); ++index) {
+		const auto key = expected[index];
+		const auto &resource = resources[index];
+		if(resource.spec.key != key || !resource.bytes) {
+			return std::unexpected(options_error(
+				resource.bytes ? ClassicOpErrorCode::resource_set_mismatch :
+					ClassicOpErrorCode::resource_bytes_missing,
+				key
+			));
+		}
+		const auto canonical = main_resource_spec(key);
+		if(!canonical || resource.spec != *canonical) {
+			return std::unexpected(options_error(
+				ClassicOpErrorCode::resource_set_mismatch, key
+			));
+		}
+		if(resource.bytes->size() != canonical->expected_bytes ||
+			main_resource_fnv1a64(*resource.bytes) !=
+				canonical->expected_fnv1a64) {
+			return std::unexpected(options_error(
+				ClassicOpErrorCode::resource_integrity_failed, key
+			));
+		}
+	}
+	return {};
+}
+
+[[nodiscard]] const LoadedMainResource *find_resource(
+	std::span<const LoadedMainResource> resources,
+	MainResourceRole role
+) noexcept
+{
+	for(const auto &resource : resources) {
+		if(resource.spec.key.role == role) {
+			return &resource;
+		}
+	}
+	return nullptr;
 }
 
 [[nodiscard]] bool valid_menu_background(
@@ -204,6 +269,55 @@ ClassicOpOptionsScene::ClassicOpOptionsScene(
 	box_right_left_(box_left + box_main_width - opwin_step_width),
 	fm_available_(fm_available)
 {}
+
+std::expected<std::unique_ptr<ClassicOpOptionsScene>, ClassicOpError>
+ClassicOpOptionsScene::create_from_op(
+	const ClassicOpCompletion &completion,
+	ClassicConfigOptions config,
+	bool fm_available,
+	std::span<const LoadedMainResource> resources
+)
+{
+	if(completion.route() != ClassicOpRoute::options) {
+		return std::unexpected(options_error(
+			ClassicOpErrorCode::invalid_state
+		));
+	}
+	if(const auto validated = validate_title_resources(resources); !validated) {
+		return std::unexpected(validated.error());
+	}
+	const auto *background_resource = find_resource(
+		resources, MainResourceRole::op_menu_background
+	);
+	const auto *window_resource = find_resource(
+		resources, MainResourceRole::op_window_sheet
+	);
+	if(!background_resource || !background_resource->bytes ||
+		!window_resource || !window_resource->bytes) {
+		return std::unexpected(options_error(
+			ClassicOpErrorCode::resource_set_mismatch
+		));
+	}
+	auto background = assets::decode_pi(*background_resource->bytes);
+	if(!background) {
+		return std::unexpected(decode_error(
+			background_resource->spec.key, std::move(background.error())
+		));
+	}
+	auto window = assets::decode_bfnt(
+		*window_resource->bytes,
+		assets::BfntConsumerPolicy::superimpose
+	);
+	if(!window) {
+		return std::unexpected(decode_error(
+			window_resource->spec.key, std::move(window.error())
+		));
+	}
+	return create(
+		completion.resident(), config, fm_available, completion.raster(),
+		completion.tram(), std::move(*background), std::move(*window)
+	);
+}
 
 std::expected<std::unique_ptr<ClassicOpOptionsScene>, ClassicOpError>
 ClassicOpOptionsScene::create(
