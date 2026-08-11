@@ -70,6 +70,19 @@ constexpr std::array<TextSpec, 18U> specs = {{
 	{MainlCompiledTextItem::name, 8U, 0xE73CU, 13U},
 }};
 
+constexpr std::array<TextSpec, 10U> registration_specs = {{
+	{MainlCompiledTextItem::registration_playchar, 0U, 0xED72U, 12U},
+	{MainlCompiledTextItem::registration_playchar, 1U, 0xED7FU, 12U},
+	{MainlCompiledTextItem::registration_playchar, 2U, 0xED8CU, 12U},
+	{MainlCompiledTextItem::registration_playchar, 3U, 0xED99U, 12U},
+	{MainlCompiledTextItem::registration_playchar, 4U, 0xEDA6U, 12U},
+	{MainlCompiledTextItem::registration_playchar, 5U, 0xEDB3U, 12U},
+	{MainlCompiledTextItem::registration_playchar, 6U, 0xEDC0U, 12U},
+	{MainlCompiledTextItem::registration_playchar, 7U, 0xEDCDU, 12U},
+	{MainlCompiledTextItem::registration_playchar, 8U, 0xEDDAU, 12U},
+	{MainlCompiledTextItem::registration_playchar, 9U, 0xEDE7U, 12U},
+}};
+
 constexpr std::array<TextSpec, 15U> staff_specs = {{
 	{MainlCompiledTextItem::staff_rank, 0U, 0xEFC2U, 11U},
 	{MainlCompiledTextItem::staff_rank, 1U, 0xEFCEU, 13U},
@@ -93,6 +106,7 @@ constexpr std::size_t flake_masks_load_offset = 0xEE52U;
 struct Fixture final {
 	std::vector<std::byte> executable{};
 	std::array<std::vector<std::uint8_t>, 18U> expected{};
+	std::array<std::vector<std::uint8_t>, 10U> expected_registration{};
 	std::array<std::vector<std::uint8_t>, 15U> expected_staff{};
 	std::array<std::uint8_t, 64U> expected_flake_masks{};
 };
@@ -152,6 +166,20 @@ Fixture fixture()
 		}
 		result.executable[file_offset + expected.size()] = std::byte{0U};
 	}
+	for(std::size_t index = 0U; index < registration_specs.size(); ++index) {
+		const auto &spec = registration_specs[index];
+		auto &expected = result.expected_registration[index];
+		for(std::size_t pair = 0U; pair < 6U; ++pair) {
+			expected.push_back(static_cast<std::uint8_t>(0x81U + index));
+			expected.push_back(static_cast<std::uint8_t>(0x40U + pair));
+		}
+		const auto file_offset = 4096U + spec.load_offset;
+		for(std::size_t byte = 0U; byte < expected.size(); ++byte) {
+			result.executable[file_offset + byte] =
+				static_cast<std::byte>(expected[byte]);
+		}
+		result.executable[file_offset + expected.size()] = std::byte{0U};
+	}
 	for(std::size_t index = 0U; index < result.expected_flake_masks.size();
 		++index) {
 		result.expected_flake_masks[index] = static_cast<std::uint8_t>(
@@ -203,6 +231,13 @@ void test_success_and_ownership()
 			"exact owning verdict payload"
 		);
 	}
+	for(std::size_t index = 0U; index < registration_specs.size(); ++index) {
+		expect(
+			imported->assets.registration_playchars[index] ==
+				source.expected_registration[index],
+			"exact owning registration playchar payload"
+		);
+	}
 	expect(
 		imported->staff.flake_masks == source.expected_flake_masks,
 		"exact owning flake mask payload"
@@ -228,6 +263,22 @@ void test_container_and_profile_rejection()
 			!imported && imported.error().code ==
 				MainlCompiledTextErrorCode::invalid_mz_signature,
 			"MZ signature is checked before profile"
+		);
+	}
+	{
+		auto source = fixture();
+		const auto &spec = registration_specs.back();
+		const auto terminator = 4096U + spec.load_offset + spec.payload_bytes;
+		source.executable[terminator] = std::byte{'X'};
+		auto imported = import_fixture(source.executable);
+		expect(
+			!imported && imported.error().code ==
+				MainlCompiledTextErrorCode::malformed_source_text &&
+				imported.error().item ==
+					MainlCompiledTextItem::registration_playchar &&
+				imported.error().character_index == 9U &&
+				imported.error().offset == terminator,
+			"late registration label terminator is precisely named"
 		);
 	}
 	{
@@ -354,6 +405,12 @@ void optional_local_gate(const char *path)
 	}
 	for(const auto &rank : imported->staff.ranks) {
 		expect(!rank.empty(), "local verdict rank is nonempty");
+	}
+	for(const auto &playchar : imported->assets.registration_playchars) {
+		expect(
+			playchar.size() == 12U,
+			"local registration playchar is exactly six fullwidth cells"
+		);
 	}
 	for(const auto &number : imported->staff.numbers) {
 		expect(number.size() == 2U, "local verdict number is one fullwidth glyph");

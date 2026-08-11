@@ -59,10 +59,6 @@ default_names{{
 		Glyph::space, Glyph::space}},
 }};
 
-constexpr std::array<std::uint8_t, 12U> no_entry_text{{
-	' ', ' ', 'N', 'o', ' ', 'E', 'n', 't', 'r', 'y', '!', ' ',
-}};
-
 [[nodiscard]] ClassicRegistrationError registration_error(
 	ClassicRegistrationErrorCode code,
 	std::optional<MainResourceKey> resource = std::nullopt
@@ -254,7 +250,7 @@ template <typename Value, typename Decoder>
 		cel.vram_dword_width != 10U ||
 		cel.row_order != assets::PlanarRowOrder::bottom_to_top ||
 		cel.bit_order != assets::PlanarBitOrder::most_significant_bit_left ||
-		cel.alpha) {
+		!cel.alpha || cel.alpha->size() != plane_size) {
 		return false;
 	}
 	return std::all_of(
@@ -540,7 +536,7 @@ ClassicRegistrationScene::create_impl(
 		rank_key,
 		[](std::span<const std::byte> bytes) {
 			return assets::decode_cdg_cel(
-				bytes, 0U, assets::CdgAlphaPolicy::discard
+				bytes, 0U, assets::CdgAlphaPolicy::preserve
 			);
 		}
 	);
@@ -665,24 +661,21 @@ ClassicRegistrationScene::create_predecoded(
 	prepared->normal.emplace(std::move(*normal_prepared));
 	prepared->highlight.emplace(std::move(*highlight_prepared));
 
-	auto no_entry = present::prepare_graphics_text_8x16(no_entry_text, font);
-	if(!no_entry) {
-		return std::unexpected(text_error(no_entry.error()));
-	}
-	prepared->playchars[0U].emplace(std::move(*no_entry));
-	for(std::size_t index = 0U; index < stage_text.characters.size(); ++index) {
-		if(stage_text.characters[index].name.empty()) {
+	for(std::size_t index = 0U;
+		index < stage_text.registration_playchars.size();
+		++index) {
+		if(stage_text.registration_playchars[index].size() != 12U) {
 			return std::unexpected(registration_error(
 				ClassicRegistrationErrorCode::font_prepare_failed
 			));
 		}
 		auto name = present::prepare_graphics_text_8x16(
-			stage_text.characters[index].name, font
+			stage_text.registration_playchars[index], font
 		);
 		if(!name) {
 			return std::unexpected(text_error(name.error()));
 		}
-		prepared->playchars[index + 1U].emplace(std::move(*name));
+		prepared->playchars[index].emplace(std::move(*name));
 	}
 
 	SourceRandom first_random(std::bit_cast<std::uint32_t>(
@@ -768,7 +761,7 @@ bool ClassicRegistrationScene::initialize_visuals() noexcept
 	raster_.set_palette_tone(0);
 	raster_.apply_pending_palette();
 	if(!present::pi_put_8(raster_, 0, 0, prepared_->background) ||
-		!present::cdg_put_noalpha_8(raster_, 320, 312, prepared_->rank) ||
+		!present::cdg_put_8(raster_, 320, 312, prepared_->rank) ||
 		!draw_rows(false) || !raster_.copy_page(
 			present::Page::zero,
 			{0, 0, present::graphics_width, present::graphics_height},

@@ -21,6 +21,7 @@ enum class MainlCompiledTextItem : std::uint8_t {
 	none,
 	title,
 	name,
+	registration_playchar,
 	staff_rank,
 	staff_number,
 	staff_point,

@@ -413,6 +413,27 @@ struct ClassicRegistrationSceneTestAccess final {
 		return scene.selected_;
 	}
 
+	[[nodiscard]] static std::optional<std::uint32_t> playchar_pixel_width(
+		const ClassicRegistrationScene &scene,
+		std::size_t index
+	) noexcept
+	{
+		if(index >= scene.prepared_->playchars.size() ||
+			!scene.prepared_->playchars[index]) {
+			return std::nullopt;
+		}
+		return scene.prepared_->playchars[index]->pixel_width();
+	}
+
+	[[nodiscard]] static bool draw_alphabet_glyph(
+		ClassicRegistrationScene &scene,
+		ClassicRegistrationGlyph glyph,
+		bool highlight
+	) noexcept
+	{
+		return scene.draw_alphabet_glyph(glyph, highlight);
+	}
+
 	[[nodiscard]] static std::uint8_t name_cursor_backwards(
 		const ClassicRegistrationScene &scene
 	) noexcept

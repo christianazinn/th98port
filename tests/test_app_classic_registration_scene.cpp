@@ -136,6 +136,11 @@ MainlStageTextAssets stage_text()
 			static_cast<std::uint8_t>('A' + index),
 		};
 	}
+	for(std::size_t index = 0U;
+		index < result.registration_playchars.size();
+		++index) {
+		result.registration_playchars[index].assign(12U, ' ');
+	}
 	return result;
 }
 
@@ -193,9 +198,10 @@ th03::assets::PlanarCel4 rank_cel()
 	result.vram_dword_width = 10U;
 	for(std::size_t plane = 0U; plane < result.color_planes.size(); ++plane) {
 		result.color_planes[plane].assign(
-			plane_size, plane == 1U ? 0xFFU : 0U
+			plane_size, plane == 1U ? 0x80U : 0U
 		);
 	}
+	result.alpha.emplace(plane_size, static_cast<std::uint8_t>(0x80U));
 	return result;
 }
 
@@ -386,6 +392,21 @@ void test_qualified_name_schedule_and_commit()
 		(*scene)->entered_place() == 0U,
 		"candidate higher than stock first place enters at place zero"
 	);
+	for(const auto page : {Page::zero, Page::one}) {
+		expect(
+			(*scene)->raster().pixel(page, {320, 316}) == 2U &&
+				(*scene)->raster().pixel(page, {321, 316}) == 1U,
+			"rank plate alpha preserves REGIB pixels on both retained pages"
+		);
+	}
+	for(std::size_t index = 0U; index < 10U; ++index) {
+		expect(
+			ClassicRegistrationSceneTestAccess::playchar_pixel_width(
+				**scene, index
+			) == 96U,
+			"registration character labels retain the six-cell source width"
+		);
+	}
 	const auto blocked = (*scene)->advance({});
 	expect(
 		!blocked && blocked.error().code ==
@@ -1022,6 +1043,70 @@ void local_original_gate(
 		created.has_value(),
 		"local REGIB, RFT2, REGI2, and REGI1 assets decode at source geometry"
 	);
+	if(created) {
+		auto capture = [&](
+			std::uint8_t raw,
+			std::uint16_t width,
+			std::uint16_t height
+		) {
+			std::vector<std::uint8_t> pixels{};
+			pixels.reserve(static_cast<std::size_t>(width) * height);
+			const auto left = 64 + (static_cast<std::int32_t>(raw % 16U) * 32);
+			const auto top = 320 + (static_cast<std::int32_t>(raw / 16U) * 24);
+			for(std::int32_t y = 0; y < height; ++y) {
+				for(std::int32_t x = 0; x < width; ++x) {
+					pixels.push_back(*(*created)->raster().pixel(
+						Page::zero, {left + x, top + y}
+					));
+				}
+			}
+			return pixels;
+		};
+		for(std::uint8_t raw = 0U; raw <= 45U; ++raw) {
+			if(raw == 13U || raw == 14U || raw == 15U || raw == 29U ||
+				raw == 30U || raw == 31U) {
+				continue;
+			}
+			const auto glyph = static_cast<ClassicRegistrationGlyph>(raw);
+			const auto height = static_cast<std::uint16_t>(
+				raw < 32U ? 24U : 32U
+			);
+			const auto normal = capture(raw, 32U, height);
+			expect(
+				ClassicRegistrationSceneTestAccess::draw_alphabet_glyph(
+					**created, glyph, true
+				) && capture(raw, 32U, height) != normal,
+				"authentic ordinary keyboard glyph swaps to REGI1 highlight pixels"
+			);
+			expect(
+				ClassicRegistrationSceneTestAccess::draw_alphabet_glyph(
+					**created, glyph, false
+				),
+				"authentic ordinary keyboard glyph accepts its REGI2 normal redraw"
+			);
+		}
+		for(const auto raw : {
+			std::uint8_t{14U}, std::uint8_t{30U}, std::uint8_t{46U},
+		}) {
+			const auto glyph = static_cast<ClassicRegistrationGlyph>(raw);
+			const auto height = static_cast<std::uint16_t>(
+				raw < 32U ? 24U : 32U
+			);
+			const auto normal = capture(raw, 64U, height);
+			expect(
+				ClassicRegistrationSceneTestAccess::draw_alphabet_glyph(
+					**created, glyph, true
+				) && capture(raw, 64U, height) != normal,
+				"authentic doublewide keyboard glyph swaps both highlight cells"
+			);
+			expect(
+				ClassicRegistrationSceneTestAccess::draw_alphabet_glyph(
+					**created, glyph, false
+				),
+				"authentic doublewide keyboard glyph accepts both normal cells"
+			);
+		}
+	}
 
 	const auto viewer_closure = loader.load_mainl_registration({
 		.rank = th03::app::MainRegistrationRank::hard,

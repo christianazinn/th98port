@@ -50,6 +50,19 @@ constexpr std::array<TextSpec, 18U> text_specs = {{
 	{MainlCompiledTextItem::name, 8U, 0xE73CU, 13U},
 }};
 
+constexpr std::array<TextSpec, 10U> registration_text_specs = {{
+	{MainlCompiledTextItem::registration_playchar, 0U, 0xED72U, 12U},
+	{MainlCompiledTextItem::registration_playchar, 1U, 0xED7FU, 12U},
+	{MainlCompiledTextItem::registration_playchar, 2U, 0xED8CU, 12U},
+	{MainlCompiledTextItem::registration_playchar, 3U, 0xED99U, 12U},
+	{MainlCompiledTextItem::registration_playchar, 4U, 0xEDA6U, 12U},
+	{MainlCompiledTextItem::registration_playchar, 5U, 0xEDB3U, 12U},
+	{MainlCompiledTextItem::registration_playchar, 6U, 0xEDC0U, 12U},
+	{MainlCompiledTextItem::registration_playchar, 7U, 0xEDCDU, 12U},
+	{MainlCompiledTextItem::registration_playchar, 8U, 0xEDDAU, 12U},
+	{MainlCompiledTextItem::registration_playchar, 9U, 0xEDE7U, 12U},
+}};
+
 struct StaffTextSpec final {
 	MainlCompiledTextItem item;
 	std::uint8_t index;
@@ -233,6 +246,42 @@ import_profile(
 		auto &character = result.assets.characters[spec.character_index];
 		auto &destination = (spec.item == MainlCompiledTextItem::title) ?
 			character.title : character.name;
+		destination.reserve(payload.size());
+		for(const auto value : payload) {
+			destination.push_back(std::to_integer<std::uint8_t>(value));
+		}
+	}
+	for(const auto &spec : registration_text_specs) {
+		const auto file_offset = mz->header_bytes + spec.load_offset;
+		if(file_offset > bytes.size() ||
+			spec.payload_bytes >= (bytes.size() - file_offset)) {
+			return std::unexpected(error(
+				MainlCompiledTextErrorCode::compiled_range_out_of_bounds,
+				spec.item,
+				spec.character_index,
+				file_offset
+			));
+		}
+		const auto payload = bytes.subspan(file_offset, spec.payload_bytes);
+		if(bytes[file_offset + spec.payload_bytes] != std::byte{0U}) {
+			return std::unexpected(error(
+				MainlCompiledTextErrorCode::malformed_source_text,
+				spec.item,
+				spec.character_index,
+				file_offset + spec.payload_bytes
+			));
+		}
+		std::size_t invalid_offset = 0U;
+		if(!shift_jis_valid(payload, invalid_offset)) {
+			return std::unexpected(error(
+				MainlCompiledTextErrorCode::malformed_source_text,
+				spec.item,
+				spec.character_index,
+				file_offset + invalid_offset
+			));
+		}
+		auto &destination =
+			result.assets.registration_playchars[spec.character_index];
 		destination.reserve(payload.size());
 		for(const auto value : payload) {
 			destination.push_back(std::to_integer<std::uint8_t>(value));

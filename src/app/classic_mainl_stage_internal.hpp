@@ -37,10 +37,12 @@ struct MainlStageCharacterText final {
 };
 
 // Owning typed seam produced by the authenticated MAINL profile importer or
-// supplied directly by source-private hermetic tests. No original text bytes
-// are compiled into the port.
+// supplied directly by source-private hermetic tests. It includes text shared
+// with MAINL registration because both consumers receive the same immutable
+// executable-profile asset. No original text bytes are compiled into the port.
 struct MainlStageTextAssets final {
 	std::array<MainlStageCharacterText, 9U> characters{};
+	std::array<std::vector<std::uint8_t>, 10U> registration_playchars{};
 };
 
 enum class ClassicMainlStagePhase : std::uint8_t {
