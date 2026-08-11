@@ -9,6 +9,9 @@
 
 #include "th03/app/main_process.hpp"
 
+#include "classic_mainl_stage_internal.hpp"
+#include "main_process_static_content_internal.hpp"
+
 namespace th03::app {
 
 // Hermetic tests need structurally valid synthetic asset bytes that cannot
@@ -44,6 +47,36 @@ struct MainProcessTestAccess final {
 		bool bomb,
 		std::size_t player
 	) noexcept;
+
+	[[nodiscard]] static std::expected<
+		std::shared_ptr<const MainProcessStaticContent>,
+		MainProcessError
+	> prepare_static_with_synthetic_resources(
+		std::span<const LoadedMainResource> resources,
+		MainCompiledContent compiled_content,
+		std::span<const std::byte> font_rom
+	)
+	{
+		return MainProcessStaticContentAccess::create(
+			resources,
+			std::move(compiled_content),
+			font_rom,
+			false
+		);
+	}
+};
+
+struct MainProcessStoryAccess final {
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<MainProcess>,
+		MainProcessError
+	> create_story(
+		const MainStoryConfig &config,
+		ClassicMainlStageTransition &transition,
+		std::span<const LoadedMainResource> resources,
+		std::shared_ptr<const MainProcessStaticContent> static_content,
+		bool authenticate_resource_bytes = true
+	);
 };
 
 } // namespace th03::app

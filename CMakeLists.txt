@@ -204,6 +204,7 @@ th03_set_warnings(th03_app_resources)
 
 add_library(th03_present STATIC
 	src/present/cels.cpp
+	src/present/graphics_text.cpp
 	src/present/main_background.cpp
 	src/present/main_boss.cpp
 	src/present/main_bullets.cpp
@@ -353,14 +354,17 @@ set_target_properties(th03_formats PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_formats)
 
 # Stable MAIN-process/application policy. Direct VS is complete; the
-# source-private Classic Story router and validated fresh-process config form
-# the next MAINL-to-MAIN integration boundary.
+# Source-private Classic Story policy, MAINL stage presentation, and the typed
+# Raster handoff into a fresh MAIN process remain outside the public direct-VS
+# launcher boundary.
 add_library(th03_app_main STATIC
+	src/app/classic_mainl_stage.cpp
 	src/app/classic_mainl_story.cpp
 	src/app/direct_vs_cli.cpp
 	src/app/direct_vs_launch.cpp
 	src/app/main_direct_vs_runner.cpp
 	src/app/main_process.cpp
+	src/app/main_process_static_content.cpp
 )
 target_include_directories(th03_app_main PUBLIC include)
 target_link_libraries(
@@ -593,6 +597,21 @@ if(BUILD_TESTING)
 		COMMAND th03-app-classic-mainl-story-tests
 	)
 
+	add_executable(th03-app-classic-mainl-stage-tests
+		tests/test_app_classic_mainl_stage.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-mainl-stage-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-classic-mainl-stage-tests PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-classic-mainl-stage-tests)
+	add_test(
+		NAME th03-app-classic-mainl-stage-tests
+		COMMAND th03-app-classic-mainl-stage-tests
+	)
+
 	add_executable(th03-app-direct-vs-launch-tests
 		tests/test_app_direct_vs_launch.cpp
 	)
@@ -651,6 +670,16 @@ if(BUILD_TESTING)
 	target_link_libraries(th03-present-text-tests PRIVATE th03_present)
 	th03_set_warnings(th03-present-text-tests)
 	add_test(NAME th03-present-text-tests COMMAND th03-present-text-tests)
+
+	add_executable(th03-present-graphics-text-tests
+		tests/test_present_graphics_text.cpp
+	)
+	target_link_libraries(th03-present-graphics-text-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-graphics-text-tests)
+	add_test(
+		NAME th03-present-graphics-text-tests
+		COMMAND th03-present-graphics-text-tests
+	)
 
 	add_executable(th03-present-pi-tests
 		tests/test_present_pi.cpp

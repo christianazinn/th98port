@@ -13,6 +13,8 @@ DAT archive and not an installation directory. The one accepted layout is:
 <root>/
   YUME1.DAT/
     TLSL.RGB
+    00SL.CD2 02SL.CD2 ... 16SL.CD2
+    ST.CD2 STNX0.PI ... STNX5.PI
     0016.PI ... 1716.PI
     00EX.PI ... 17EX.PI
     EN2.PI
@@ -20,6 +22,7 @@ DAT archive and not an installation directory. The one accepted layout is:
   YUME2.DAT/
     ENEDAT.DAT
     GAMEFT.BFT
+    MIKOFT.BFT
     LOSE.BF2 ROUND.BF2 ZIKICW.BF2
     00CH.BF2 ... 17CH.BF2
     00EX.MRS ... 17EX.MRS
@@ -112,10 +115,40 @@ loader/site, so it is deliberately not a direct-VS dependency. The app must
 construct the direct-launch raster/palette seed explicitly; the checked PI
 inputs reproduce only MAINL's source-owned hidden atlas handoff.
 
+## MAINL Story stage-splash batch
+
+`mainl_stage_resource_keys()` closes the visible Story splash and the hidden
+MAIN handoff as one source-ordered resource transaction. It selects one
+base-character portrait for each player, the optional numbered-stage sheet,
+the full-page base, exactly one top background, and the existing six hidden
+atlas inputs. Duplicate player selections are loaded once.
+
+| Logical role pattern | Extracted path | Decoder | Selection rule |
+| --- | --- | --- | --- |
+| `mainl.gaiji_font` | `YUME2.DAT/MIKOFT.BFT` | BFNT gaiji | Always |
+| `mainl.character.<character>.stage_portrait` | `YUME1.DAT/00SL.CD2` through `16SL.CD2` | CDG/CD2 | Base character; palette selects one of two cels |
+| `mainl.stage.number_sheet` | `YUME1.DAT/ST.CD2` | CDG/CD2 | Numbered Story backgrounds only; cel is `story_stage + 1` |
+| `mainl.stage.base` | `YUME1.DAT/STNX0.PI` | PI | Always |
+| `mainl.stage.background.<1..5>` | `YUME1.DAT/STNX1.PI` through `STNX5.PI` | PI | Story numbered, Yumemi, Chiyuri, decisive stage 6, or non-Story |
+
+The background precedence is literal donor policy: non-Story uses `STNX5`,
+then Story P2 Chiyuri uses `STNX3`, P2 Yumemi uses `STNX2`, stage 6 uses
+`STNX4`, and every other Story stage uses `STNX1` plus `ST.CD2`. The final P2
+enemy-group palette and both complete graphics pages become the private Raster
+capability consumed by a fresh Story MAIN process. MAIN creates a new TRAM and
+installs `GAMEFT.BFT`; MAINL's `MIKOFT.BFT` cells do not cross that boundary.
+
+`main_static_resource_keys()`, `main_private_resource_keys()`, and
+`mainl_stage_resource_keys()` expose the campaign-static, per-MAIN, and
+per-stage lifetimes separately. Batch loading builds both the result and a
+candidate cache before committing either, so a missing or invalid late member
+leaves the loader cache unchanged.
+
 `MainResourceLoader` is built as the application-owned `th03_app_resources`
 library. It remains separate from filesystem-free decoders and presentation:
 the normal constructor enforces both size and fingerprint, while its explicit
 size-only policy exists solely for hermetic synthetic tests and inspection
 tools, never native app startup. Its tests exercise named missing, wrong-size,
-wrong-fingerprint, duplicate-logical-role, case, malformed-key, and
-resolved-link-escape outcomes using temporary synthetic roots only.
+wrong-fingerprint, duplicate-logical-role, case, malformed-key, transactional
+late-batch, and resolved-link-escape outcomes using temporary synthetic roots
+only.

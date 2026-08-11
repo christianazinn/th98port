@@ -33,6 +33,7 @@ enum class MainResourceDecoder : std::uint8_t {
 	rgb48,
 	bfnt_gaiji,
 	bfnt_superimpose,
+	cdg,
 	mrs,
 	pi,
 };
@@ -56,6 +57,15 @@ enum class MainPaletteVariant : std::uint8_t {
 	second,
 };
 
+enum class MainlStageBackground : std::uint8_t {
+	none,
+	numbered,
+	yumemi,
+	chiyuri,
+	decisive,
+	non_story,
+};
+
 // Static roles use character == none and palette == none. Paletted character
 // roles use both fields, making the original 00..17 family explicit. The
 // stage enemy-group role uses character only because MAINL selects one of five
@@ -74,12 +84,18 @@ enum class MainResourceRole : std::uint8_t {
 	character_stage_shot,
 	character_stage_extra_shot,
 	character_stage_enemy_group,
+	mainl_gaiji_font,
+	character_stage_portrait,
+	stage_number_sheet,
+	stage_splash_base,
+	stage_splash_background,
 };
 
 struct MainResourceKey {
 	MainResourceRole role = MainResourceRole::enemy_scripts;
 	MainCharacter character = MainCharacter::none;
 	MainPaletteVariant palette = MainPaletteVariant::none;
+	MainlStageBackground stage_background = MainlStageBackground::none;
 
 	friend constexpr auto operator<=>(
 		const MainResourceKey &,
@@ -132,6 +148,13 @@ struct MainPlayerSelection {
 	MainPaletteVariant palette = MainPaletteVariant::first;
 };
 
+struct MainlStageResourceRequest {
+	MainPlayerSelection player_one{};
+	MainPlayerSelection player_two{};
+	std::uint8_t game_mode = 0U;
+	std::uint8_t story_stage = 0U;
+};
+
 enum class MainResourceIntegrity : std::uint8_t {
 	// Normal application policy: exact size plus the checked-in FNV-1a-64
 	// fingerprint from the accepted extraction.
@@ -160,6 +183,17 @@ direct_vs_resource_keys(
 	MainPlayerSelection player_two
 );
 
+[[nodiscard]] std::vector<MainResourceKey> main_static_resource_keys();
+
+[[nodiscard]] std::expected<std::vector<MainResourceKey>, ResourceLoadError>
+main_private_resource_keys(
+	MainPlayerSelection player_one,
+	MainPlayerSelection player_two
+);
+
+[[nodiscard]] std::expected<std::vector<MainResourceKey>, ResourceLoadError>
+mainl_stage_resource_keys(MainlStageResourceRequest request);
+
 // Importer-facing validation for the extracted-entry component. The loader
 // calls this before joining a manifest name to the explicit content root.
 [[nodiscard]] bool is_safe_extracted_entry_name(std::string_view name) noexcept;
@@ -187,6 +221,15 @@ public:
 		MainPlayerSelection player_one,
 		MainPlayerSelection player_two
 	);
+	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+	load_main_static();
+	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+	load_main_private(
+		MainPlayerSelection player_one,
+		MainPlayerSelection player_two
+	);
+	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+	load_mainl_stage(MainlStageResourceRequest request);
 
 	[[nodiscard]] std::size_t cached_resource_count() const noexcept;
 
@@ -194,6 +237,8 @@ private:
 	std::filesystem::path content_root_{};
 	MainResourceIntegrity integrity_ = MainResourceIntegrity::size_and_fnv1a64;
 	std::map<MainResourceKey, ResourceBytes> cache_{};
+	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+	load_batch(std::span<const MainResourceKey> keys);
 };
 
 } // namespace th03::app

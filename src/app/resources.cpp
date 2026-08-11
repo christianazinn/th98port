@@ -84,6 +84,21 @@ constexpr std::array<std::uint64_t, 5U> stage_enemy_group_fnv1a64{
 constexpr std::array<std::size_t, 5U> stage_enemy_group_sizes{
 	7378U, 7295U, 7064U, 7046U, 7035U,
 };
+constexpr std::array<std::uint64_t, 9U> stage_portrait_fnv1a64{
+	0x2FBFB6DD25A59078ULL, 0x6582FF1CC9AF3A67ULL,
+	0x938479CE49117012ULL, 0x4D7F54E3CA57D012ULL,
+	0x18BAE1588F40D36AULL, 0xF98FB21F1FA2770CULL,
+	0x4D25CE4120D055A6ULL, 0x8E821C13740C9AAEULL,
+	0x4CAE741B35FC7549ULL,
+};
+constexpr std::array<std::uint64_t, 5U> stage_background_fnv1a64{
+	0xD1EB015A5715A5B2ULL, 0x1A69A90D9A5FD12CULL,
+	0x78B58FCF1C113EE9ULL, 0x58BDC78F7B0A8C75ULL,
+	0x2A0E4DB97D2FF437ULL,
+};
+constexpr std::array<std::size_t, 5U> stage_background_sizes{
+	1231U, 2057U, 2831U, 2901U, 2058U,
+};
 
 [[nodiscard]] constexpr bool is_character(MainCharacter character) noexcept
 {
@@ -114,7 +129,16 @@ constexpr std::array<std::size_t, 5U> stage_enemy_group_sizes{
 	MainResourceRole role
 ) noexcept
 {
-	return role == MainResourceRole::character_stage_enemy_group;
+	return role == MainResourceRole::character_stage_enemy_group ||
+		role == MainResourceRole::character_stage_portrait;
+}
+
+[[nodiscard]] constexpr bool is_stage_background(
+	MainlStageBackground background
+) noexcept
+{
+	return background >= MainlStageBackground::numbered &&
+		background <= MainlStageBackground::non_story;
 }
 
 [[nodiscard]] constexpr std::uint8_t stage_enemy_group_index(
@@ -177,6 +201,11 @@ constexpr std::array<std::size_t, 5U> stage_enemy_group_sizes{
 	case MainResourceRole::stage_enemy_center:
 	case MainResourceRole::selection_palette:
 	case MainResourceRole::character_stage_enemy_group:
+	case MainResourceRole::mainl_gaiji_font:
+	case MainResourceRole::character_stage_portrait:
+	case MainResourceRole::stage_number_sheet:
+	case MainResourceRole::stage_splash_base:
+	case MainResourceRole::stage_splash_background:
 		return 0U;
 	}
 	return 0U;
@@ -221,6 +250,18 @@ constexpr std::array<std::size_t, 5U> stage_enemy_group_sizes{
 	return result;
 }
 
+[[nodiscard]] std::string stage_background_filename(
+	MainlStageBackground background
+)
+{
+	std::string result{"STNX"};
+	result.push_back(static_cast<char>(
+		'0' + static_cast<std::uint8_t>(background)
+	));
+	result.append(".PI");
+	return result;
+}
+
 [[nodiscard]] std::string filename_with_index(
 	std::uint8_t index,
 	std::string_view suffix
@@ -260,8 +301,32 @@ constexpr std::array<std::size_t, 5U> stage_enemy_group_sizes{
 [[nodiscard]] std::expected<MainResourceSpec, ResourceLoadError>
 static_resource_spec(MainResourceKey key)
 {
+	if(key.role == MainResourceRole::stage_splash_background) {
+		if(key.character != MainCharacter::none ||
+			key.palette != MainPaletteVariant::none ||
+			!is_stage_background(key.stage_background)) {
+			return std::unexpected(error(
+				ResourceLoadErrorCode::invalid_resource_key, key
+			));
+		}
+		const auto index = static_cast<std::size_t>(
+			static_cast<std::uint8_t>(key.stage_background) - 1U
+		);
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_stage_transition,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pi,
+			.logical_role = "mainl.stage.background." +
+				std::to_string(index + 1U),
+			.filename = stage_background_filename(key.stage_background),
+			.expected_bytes = stage_background_sizes[index],
+			.expected_fnv1a64 = stage_background_fnv1a64[index],
+		};
+	}
 	if(key.character != MainCharacter::none ||
-		key.palette != MainPaletteVariant::none) {
+		key.palette != MainPaletteVariant::none ||
+		key.stage_background != MainlStageBackground::none) {
 		return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
 	}
 
@@ -343,12 +408,47 @@ static_resource_spec(MainResourceKey key)
 			.expected_bytes = 48U,
 			.expected_fnv1a64 = 0x9BE11DA2C74091A9ULL,
 		};
+	case MainResourceRole::mainl_gaiji_font:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_stage_transition,
+			.archive = MainResourceArchive::yume2,
+			.decoder = MainResourceDecoder::bfnt_gaiji,
+			.logical_role = "mainl.gaiji_font",
+			.filename = "MIKOFT.BFT",
+			.expected_bytes = 8224U,
+			.expected_fnv1a64 = 0xBD42C433C6DDFB3CULL,
+		};
+	case MainResourceRole::stage_number_sheet:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_stage_transition,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::cdg,
+			.logical_role = "mainl.stage.number_sheet",
+			.filename = "ST.CD2",
+			.expected_bytes = 6816U,
+			.expected_fnv1a64 = 0x60740A0AF72128B7ULL,
+		};
+	case MainResourceRole::stage_splash_base:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_stage_transition,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pi,
+			.logical_role = "mainl.stage.base",
+			.filename = "STNX0.PI",
+			.expected_bytes = 2732U,
+			.expected_fnv1a64 = 0x0805E1FF5167740BULL,
+		};
 	case MainResourceRole::character_sheet:
 	case MainResourceRole::character_extra_portrait:
 	case MainResourceRole::character_bomb_portrait:
 	case MainResourceRole::character_stage_shot:
 	case MainResourceRole::character_stage_extra_shot:
 	case MainResourceRole::character_stage_enemy_group:
+	case MainResourceRole::character_stage_portrait:
+	case MainResourceRole::stage_splash_background:
 		return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
 	}
 	return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
@@ -492,29 +592,50 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 {
 	if(is_character_only_role(key.role)) {
 		if(!is_character(key.character) ||
-			key.palette != MainPaletteVariant::none) {
+			key.palette != MainPaletteVariant::none ||
+			key.stage_background != MainlStageBackground::none) {
 			return std::unexpected(error(
 				ResourceLoadErrorCode::invalid_resource_key, key
 			));
 		}
-		const auto group = stage_enemy_group_index(key.character);
+		if(key.role == MainResourceRole::character_stage_enemy_group) {
+			const auto group = stage_enemy_group_index(key.character);
+			return MainResourceSpec{
+				.key = key,
+				.scene = MainResourceScene::mainl_stage_transition,
+				.archive = MainResourceArchive::yume1,
+				.decoder = MainResourceDecoder::pi,
+				.logical_role = character_only_logical_role(
+					key, "stage_enemy_group"
+				),
+				.filename = stage_enemy_group_filename(group),
+				.expected_bytes = stage_enemy_group_sizes[group],
+				.expected_fnv1a64 = stage_enemy_group_fnv1a64[group],
+			};
+		}
+		const auto index = static_cast<std::size_t>(
+			static_cast<std::uint8_t>(key.character) - first_character_value
+		);
 		return MainResourceSpec{
 			.key = key,
 			.scene = MainResourceScene::mainl_stage_transition,
 			.archive = MainResourceArchive::yume1,
-			.decoder = MainResourceDecoder::pi,
+			.decoder = MainResourceDecoder::cdg,
 			.logical_role = character_only_logical_role(
-				key, "stage_enemy_group"
+				key, "stage_portrait"
 			),
-			.filename = stage_enemy_group_filename(group),
-			.expected_bytes = stage_enemy_group_sizes[group],
-			.expected_fnv1a64 = stage_enemy_group_fnv1a64[group],
+			.filename = filename_with_index(
+				static_cast<std::uint8_t>(index * 2U), "SL.CD2"
+			),
+			.expected_bytes = 46096U,
+			.expected_fnv1a64 = stage_portrait_fnv1a64[index],
 		};
 	}
 	if(!is_paletted_character_role(key.role)) {
 		return static_resource_spec(key);
 	}
-	if(!is_character(key.character) || !is_palette(key.palette)) {
+	if(!is_character(key.character) || !is_palette(key.palette) ||
+		key.stage_background != MainlStageBackground::none) {
 		return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
 	}
 
@@ -583,6 +704,11 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 	case MainResourceRole::stage_enemy_center:
 	case MainResourceRole::selection_palette:
 	case MainResourceRole::character_stage_enemy_group:
+	case MainResourceRole::mainl_gaiji_font:
+	case MainResourceRole::character_stage_portrait:
+	case MainResourceRole::stage_number_sheet:
+	case MainResourceRole::stage_splash_base:
+	case MainResourceRole::stage_splash_background:
 		break;
 	}
 	return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
@@ -598,6 +724,9 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		MainResourceRole::hud_result_sheet,
 		MainResourceRole::stage_enemy_center,
 		MainResourceRole::selection_palette,
+		MainResourceRole::mainl_gaiji_font,
+		MainResourceRole::stage_number_sheet,
+		MainResourceRole::stage_splash_base,
 	};
 	constexpr std::array character_roles{
 		MainResourceRole::character_sheet,
@@ -609,6 +738,7 @@ std::vector<MainResourceSpec> main_resource_manifest()
 
 	constexpr std::array character_only_roles{
 		MainResourceRole::character_stage_enemy_group,
+		MainResourceRole::character_stage_portrait,
 	};
 
 	std::vector<MainResourceSpec> result;
@@ -617,9 +747,18 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		(last_palette_value - first_palette_value + 1U) *
 		character_roles.size()) +
 		((last_character_value - first_character_value + 1U) *
-		character_only_roles.size()));
+		character_only_roles.size()) + 5U);
 	for(const auto role : static_roles) {
 		result.push_back(*main_resource_spec({.role = role}));
+	}
+	for(std::uint8_t background =
+		static_cast<std::uint8_t>(MainlStageBackground::numbered);
+		background <= static_cast<std::uint8_t>(MainlStageBackground::non_story);
+		++background) {
+		result.push_back(*main_resource_spec({
+			.role = MainResourceRole::stage_splash_background,
+			.stage_background = static_cast<MainlStageBackground>(background),
+		}));
 	}
 	for(std::uint8_t character = first_character_value;
 		character <= last_character_value;
@@ -713,6 +852,139 @@ direct_vs_resource_keys(
 	result.push_back({
 		.role = MainResourceRole::character_stage_enemy_group,
 		.character = player_two.character,
+	});
+	return result;
+}
+
+std::expected<std::vector<MainResourceKey>, ResourceLoadError>
+main_private_resource_keys(
+	MainPlayerSelection player_one,
+	MainPlayerSelection player_two
+)
+{
+	constexpr std::array character_roles{
+		MainResourceRole::character_sheet,
+		MainResourceRole::character_extra_portrait,
+		MainResourceRole::character_bomb_portrait,
+	};
+	if(!is_character(player_one.character) || !is_palette(player_one.palette)) {
+		return std::unexpected(error(
+			ResourceLoadErrorCode::invalid_resource_key,
+			{.character = player_one.character, .palette = player_one.palette}
+		));
+	}
+	if(!is_character(player_two.character) || !is_palette(player_two.palette)) {
+		return std::unexpected(error(
+			ResourceLoadErrorCode::invalid_resource_key,
+			{.character = player_two.character, .palette = player_two.palette}
+		));
+	}
+
+	std::vector<MainResourceKey> result;
+	result.reserve(2U * character_roles.size());
+	for(const auto player : {player_one, player_two}) {
+		for(const auto role : character_roles) {
+			const MainResourceKey key{
+				.role = role,
+				.character = player.character,
+				.palette = player.palette,
+			};
+			if(std::find(result.begin(), result.end(), key) == result.end()) {
+				result.push_back(key);
+			}
+		}
+	}
+	return result;
+}
+
+std::vector<MainResourceKey> main_static_resource_keys()
+{
+	return {
+		{.role = MainResourceRole::enemy_scripts},
+		{.role = MainResourceRole::game_font},
+		{.role = MainResourceRole::hud_lose_sheet},
+		{.role = MainResourceRole::hud_round_sheet},
+		{.role = MainResourceRole::hud_result_sheet},
+	};
+}
+
+std::expected<std::vector<MainResourceKey>, ResourceLoadError>
+mainl_stage_resource_keys(MainlStageResourceRequest request)
+{
+	if(!is_character(request.player_one.character) ||
+		!is_palette(request.player_one.palette)) {
+		return std::unexpected(error(
+			ResourceLoadErrorCode::invalid_resource_key,
+			{
+				.character = request.player_one.character,
+				.palette = request.player_one.palette,
+			}
+		));
+	}
+	if(!is_character(request.player_two.character) ||
+		!is_palette(request.player_two.palette) ||
+		(request.game_mode == 0x01U && request.story_stage > 8U)) {
+		return std::unexpected(error(
+			ResourceLoadErrorCode::invalid_resource_key,
+			{
+				.character = request.player_two.character,
+				.palette = request.player_two.palette,
+			}
+		));
+	}
+
+	MainlStageBackground background = MainlStageBackground::non_story;
+	if(request.game_mode == 0x01U) {
+		if(request.player_two.character == MainCharacter::chiyuri) {
+			background = MainlStageBackground::chiyuri;
+		} else if(request.player_two.character == MainCharacter::yumemi) {
+			background = MainlStageBackground::yumemi;
+		} else if(request.story_stage == 6U) {
+			background = MainlStageBackground::decisive;
+		} else {
+			background = MainlStageBackground::numbered;
+		}
+	}
+
+	std::vector<MainResourceKey> result;
+	result.reserve(13U);
+	result.push_back({.role = MainResourceRole::mainl_gaiji_font});
+	for(const auto player : {request.player_one, request.player_two}) {
+		const MainResourceKey key{
+			.role = MainResourceRole::character_stage_portrait,
+			.character = player.character,
+		};
+		if(std::find(result.begin(), result.end(), key) == result.end()) {
+			result.push_back(key);
+		}
+	}
+	if(background == MainlStageBackground::numbered) {
+		result.push_back({.role = MainResourceRole::stage_number_sheet});
+	}
+	result.push_back({.role = MainResourceRole::stage_splash_base});
+	result.push_back({
+		.role = MainResourceRole::stage_splash_background,
+		.stage_background = background,
+	});
+	for(const auto player : {request.player_one, request.player_two}) {
+		for(const auto role : {
+			MainResourceRole::character_stage_shot,
+			MainResourceRole::character_stage_extra_shot,
+		}) {
+			const MainResourceKey key{
+				.role = role,
+				.character = player.character,
+				.palette = player.palette,
+			};
+			if(std::find(result.begin(), result.end(), key) == result.end()) {
+				result.push_back(key);
+			}
+		}
+	}
+	result.push_back({.role = MainResourceRole::stage_enemy_center});
+	result.push_back({
+		.role = MainResourceRole::character_stage_enemy_group,
+		.character = request.player_two.character,
 	});
 	return result;
 }
@@ -835,19 +1107,56 @@ MainResourceLoader::load_direct_vs(
 	if(!keys) {
 		return std::unexpected(keys.error());
 	}
+	return load_batch(*keys);
+}
+
+std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+MainResourceLoader::load_main_static()
+{
+	return load_batch(main_static_resource_keys());
+}
+
+std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+MainResourceLoader::load_main_private(
+	MainPlayerSelection player_one,
+	MainPlayerSelection player_two
+)
+{
+	const auto keys = main_private_resource_keys(player_one, player_two);
+	if(!keys) {
+		return std::unexpected(keys.error());
+	}
+	return load_batch(*keys);
+}
+
+std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+MainResourceLoader::load_mainl_stage(MainlStageResourceRequest request)
+{
+	const auto keys = mainl_stage_resource_keys(request);
+	if(!keys) {
+		return std::unexpected(keys.error());
+	}
+	return load_batch(*keys);
+}
+
+std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+MainResourceLoader::load_batch(std::span<const MainResourceKey> keys)
+{
+	MainResourceLoader candidate(*this);
 	std::vector<LoadedMainResource> result;
-	result.reserve(keys->size());
-	for(const auto key : *keys) {
+	result.reserve(keys.size());
+	for(const auto key : keys) {
 		const auto spec = main_resource_spec(key);
 		if(!spec) {
 			return std::unexpected(spec.error());
 		}
-		const auto resource = load(key);
+		const auto resource = candidate.load(key);
 		if(!resource) {
 			return std::unexpected(resource.error());
 		}
 		result.push_back({.spec = *spec, .bytes = *resource});
 	}
+	cache_ = std::move(candidate.cache_);
 	return result;
 }
 

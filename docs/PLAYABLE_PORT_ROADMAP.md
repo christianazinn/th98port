@@ -42,8 +42,8 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   source-surface compositor. Entering either 200-line mode or 400-line mode
   now preserves the source access-page-0 side effect.
 - The app-owned resource library has the exact direct-VS batch and the full
-  106-entry selected-character and enemy-atlas metadata scope required by the adjacent MAINL
-  transition (`NN16.PI` and `NNEX.PI` included). It performs exact-case,
+  123-entry MAIN/MAINL metadata scope, including visible Story splash CD2/PI
+  assets and the hidden transition atlas (`NN16.PI` and `NNEX.PI`). It performs exact-case,
   containment, size, fingerprint, immutable ownership, and scene-cache checks
   without adding filesystem behavior to assets or presentation.
 - The all-character Bomb presenter is integrated and independently reviewed.
@@ -252,7 +252,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
 | SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
-| OP menus, Story, MAINL, cutscenes, staff | No | They are scene work after direct VS; do not make them a prerequisite for validating MAIN. |
+| OP menus, Story, MAINL, cutscenes, staff | Partial | The validated fresh-Story config, source-private route policy, exact stage splash, campaign-static MAIN content, and transactional Raster handoff into MAIN are integrated. Win/Continue/game-over, OP, cutscenes, endings, and staff remain. |
 | Audio | No for the explicitly marked silent visual vertical slice; yes for a fully faithful release | Start source/data investigation now, but do not block visible MAIN on an invented WAV backend. |
 | Persistent score/configuration UI and localization/QoL | No | Keep it outside the first faithful path and behind an app-owned profile/catalog seam. |
 
@@ -273,7 +273,13 @@ Avoid creating a placeholder th03-app which owns a second renderer or game state
 
 Once VS-3 holds, add scenes in donor order rather than building a broad launcher framework.
 
-1. MAINL routing and Story progression. Implement stage splash, round win, continuation, game-over, and the fresh/repeat handoffs in StageTransitionScene, following mlentry.cpp, screens.cpp, and ending.cpp. It constructs the next MAIN session and loads/unloads assets at the same semantic boundary. Acceptance: a source-traced Story route reaches each next-stage, continue, game-over, and ending branch with the corresponding screen/palette/timing sequence.
+1. Complete MAINL routing and Story progression. The stage splash and fresh
+   MAIN handoff are integrated; next add round win, continuation, game-over,
+   ending routing, and the owning `ClassicSession` boundary, following
+   mlentry.cpp, screens.cpp, and ending.cpp. It constructs the next MAIN session
+   and loads/unloads assets at the same semantic boundary. Acceptance: a
+   source-traced Story route reaches each next-stage, continue, game-over, and
+   ending branch with the corresponding screen/palette/timing sequence.
 2. OP title and selection. Implement only the source's actual choices (Story, VS, Music Room, registration view, option, quit) and its character selection/configuration steps. Reuse BFNT/CDG/PI primitives; do not import a desktop UI toolkit. Game text remains source bytes/BFNT/gaiji first. If a later launcher needs translated labels, keep a separate app-owned catalog rather than rewriting gameplay or source asset strings. Acceptance: source-traced title-to-MAINL handoff, all selected modes/characters, and source palette/page transitions match.
 3. Cutscenes and staff. Keep sequence policy in CutsceneScene and StaffScene, with image/flakes/text operations in presentation. Preserve the donor's script/input details before adding conveniences such as rewind, text log, or language selection. Acceptance: first/last pages, skip and fast-forward boundaries, staff CDG/palette/flake sequence, and return route match source traces.
 4. Profile and optional replay UX. After the Classic source scenes, persistence,

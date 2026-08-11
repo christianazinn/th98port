@@ -26,15 +26,19 @@
 namespace {
 
 using th03::app::LoadedMainResource;
+using th03::app::ClassicMainlStagePhase;
+using th03::app::ClassicMainlStageTestAccess;
 using th03::app::MainCharacter;
 using th03::app::MainDirectVsConfig;
 using th03::app::MainPaletteVariant;
 using th03::app::MainPlayerSelection;
 using th03::app::MainProcess;
 using th03::app::MainProcessErrorCode;
+using th03::app::MainProcessStoryAccess;
 using th03::app::MainProcessTestAccess;
 using th03::app::MainResourceKey;
 using th03::app::MainResourceRole;
+using th03::app::MainStoryConfig;
 using th03::app::ResourceBytes;
 
 constexpr std::size_t stock_file_bytes = 130882U;
@@ -513,6 +517,11 @@ std::vector<std::byte> bytes_for(const th03::app::MainResourceSpec &spec)
 		return make_pi(
 			640U, 192U, spec.expected_bytes, true, pi_sentinel(spec.key)
 		);
+	case MainResourceRole::mainl_gaiji_font:
+	case MainResourceRole::character_stage_portrait:
+	case MainResourceRole::stage_number_sheet:
+	case MainResourceRole::stage_splash_base:
+	case MainResourceRole::stage_splash_background:
 	case MainResourceRole::selection_palette:
 		break;
 	}
@@ -548,6 +557,139 @@ std::vector<LoadedMainResource> make_resources(
 		});
 	}
 	return resources;
+}
+
+std::vector<LoadedMainResource> select_resources(
+	std::span<const LoadedMainResource> resources,
+	std::span<const MainResourceKey> keys
+)
+{
+	std::vector<LoadedMainResource> selected;
+	selected.reserve(keys.size());
+	for(const auto key : keys) {
+		const auto found = std::find_if(
+			resources.begin(), resources.end(), [key](const auto &resource) {
+				return resource.spec.key == key;
+			}
+		);
+		expect(found != resources.end(),
+			"selected synthetic resource exists in the direct batch");
+		if(found != resources.end()) {
+			selected.push_back(*found);
+		}
+	}
+	return selected;
+}
+
+MainStoryConfig story_config(
+	std::uint8_t stage,
+	std::int8_t player_one,
+	std::uint8_t remaining_credits
+) noexcept;
+
+std::unique_ptr<th03::app::ClassicMainlStageTransition>
+make_ready_story_transition(
+	const MainStoryConfig &config,
+	std::span<const LoadedMainResource> resources
+)
+{
+	const auto player_one = th03::app::main_player_selection_from_paletted(
+		config.resident.paletted_character[0U]
+	);
+	const auto player_two = th03::app::main_player_selection_from_paletted(
+		config.resident.paletted_character[1U]
+	);
+	expect(player_one && player_two, "Story handoff selections are valid");
+	if(!player_one || !player_two) {
+		return {};
+	}
+	const auto find = [resources](MainResourceKey key) {
+		const auto found = std::find_if(
+			resources.begin(), resources.end(), [key](const auto &resource) {
+				return resource.spec.key == key;
+			}
+		);
+		return (found == resources.end()) ? nullptr : &*found;
+	};
+	const std::array selections{*player_one, *player_two};
+	std::array<th03::assets::PiImage, 2U> shots{};
+	std::array<th03::assets::PiImage, 2U> extra_shots{};
+	for(std::size_t player = 0U; player < selections.size(); ++player) {
+		const auto *shot = find({
+			.role = MainResourceRole::character_stage_shot,
+			.character = selections[player].character,
+			.palette = selections[player].palette,
+		});
+		const auto *extra = find({
+			.role = MainResourceRole::character_stage_extra_shot,
+			.character = selections[player].character,
+			.palette = selections[player].palette,
+		});
+		expect(shot != nullptr && extra != nullptr,
+			"Story handoff player PI resources exist");
+		if(shot == nullptr || extra == nullptr) {
+			return {};
+		}
+		auto decoded_shot = th03::assets::decode_pi(*shot->bytes);
+		auto decoded_extra = th03::assets::decode_pi(*extra->bytes);
+		expect(decoded_shot && decoded_extra,
+			"Story handoff player PIs decode");
+		if(!decoded_shot || !decoded_extra) {
+			return {};
+		}
+		shots[player] = std::move(*decoded_shot);
+		extra_shots[player] = std::move(*decoded_extra);
+	}
+	const auto *center_resource = find({
+		.role = MainResourceRole::stage_enemy_center,
+	});
+	const auto *opponent_resource = find({
+		.role = MainResourceRole::character_stage_enemy_group,
+		.character = player_two->character,
+	});
+	expect(center_resource != nullptr && opponent_resource != nullptr,
+		"Story handoff enemy PI resources exist");
+	if(center_resource == nullptr || opponent_resource == nullptr) {
+		return {};
+	}
+	auto center = th03::assets::decode_pi(*center_resource->bytes);
+	auto opponent = th03::assets::decode_pi(*opponent_resource->bytes);
+	expect(center && opponent && opponent->palette,
+		"Story handoff enemy PIs and palette decode");
+	if(!center || !opponent || !opponent->palette) {
+		return {};
+	}
+	th03::present::Raster raster{};
+	if(!th03::present::main_prepare_sprite16_pi_source_sheet(
+		raster,
+		{
+			.player_shots = {{&shots[0U], &shots[1U]}},
+			.player_extra_shots = {{&extra_shots[0U], &extra_shots[1U]}},
+			.enemy_center = &*center,
+			.opponent_enemies = &*opponent,
+		}
+	)) {
+		expect(false, "Story handoff six-PI sheet stages");
+		return {};
+	}
+	for(std::size_t index = 0U; index < opponent->palette->colors.size(); ++index) {
+		if(!raster.set_pending_palette_entry(
+			static_cast<std::uint8_t>(index),
+			opponent->palette->colors[index]
+		)) {
+			expect(false, "Story handoff enemy palette installs");
+			return {};
+		}
+	}
+	raster.set_palette_tone(100);
+	raster.apply_pending_palette();
+	expect(raster.set_access_page(th03::present::Page::zero) &&
+		raster.set_shown_page(th03::present::Page::zero),
+		"Story handoff publishes source page roles");
+	return ClassicMainlStageTestAccess::create_ready_with_handoff(
+		config,
+		std::move(raster)
+	);
 }
 
 LoadedMainResource *find_role(
@@ -1270,6 +1412,134 @@ void test_sticky_presentation_preflight()
 		"failed lifecycle calls preserve core, Raster, TRAM, and sticky status");
 }
 
+void test_story_factory_transaction_and_lifetime()
+{
+	const auto config = story_config(0U, 2, 3U);
+	expect(th03::app::valid_main_story_config(config),
+		"Story process fixture is source-valid");
+	const auto player_one = *th03::app::main_player_selection_from_paletted(
+		config.resident.paletted_character[0U]
+	);
+	const auto player_two = *th03::app::main_player_selection_from_paletted(
+		config.resident.paletted_character[1U]
+	);
+	auto resources = make_resources(player_one, player_two);
+	auto transition = make_ready_story_transition(config, resources);
+	expect(transition != nullptr &&
+		transition->phase() == ClassicMainlStagePhase::ready &&
+		ClassicMainlStageTestAccess::handoff(*transition) != nullptr,
+		"Story process fixture owns one ready stage capability");
+	if(!transition) {
+		return;
+	}
+	const auto dynamic_keys = th03::app::main_private_resource_keys(
+		player_one, player_two
+	);
+	expect(dynamic_keys && dynamic_keys->size() == 6U,
+		"Story process requests only per-MAIN dynamic resources");
+	if(!dynamic_keys) {
+		return;
+	}
+	auto dynamic_resources = select_resources(resources, *dynamic_keys);
+	auto compiled = make_compiled_content();
+	expect(static_cast<bool>(compiled),
+		"Story process static content has synthetic MAIN data");
+	if(!compiled) {
+		return;
+	}
+	auto font_rom = make_font_rom();
+	auto static_content =
+		MainProcessTestAccess::prepare_static_with_synthetic_resources(
+			resources,
+			std::move(*compiled),
+			font_rom
+		);
+	expect(static_cast<bool>(static_content),
+		"Story process campaign-static content prepares once");
+	if(!static_content) {
+		return;
+	}
+
+	const auto handoff_hash = transition->raster().display_state_hash();
+	auto missing = dynamic_resources;
+	missing.pop_back();
+	auto rejected = MainProcessStoryAccess::create_story(
+		config,
+		*transition,
+		missing,
+		*static_content,
+		false
+	);
+	expect(!rejected && rejected.error().code ==
+		MainProcessErrorCode::resource_set_mismatch,
+		"Story process rejects a missing late dynamic owner");
+	expect(transition->phase() == ClassicMainlStagePhase::ready &&
+		ClassicMainlStageTestAccess::handoff(*transition) != nullptr &&
+		transition->raster().display_state_hash() == handoff_hash,
+		"failed Story construction preserves the exact retryable handoff");
+
+	auto created = MainProcessStoryAccess::create_story(
+		config,
+		*transition,
+		dynamic_resources,
+		*static_content,
+		false
+	);
+	expect(static_cast<bool>(created),
+		"Story process constructs from the retained handoff");
+	if(!created) {
+		return;
+	}
+	expect(transition->phase() == ClassicMainlStagePhase::consumed &&
+		ClassicMainlStageTestAccess::handoff(*transition) == nullptr,
+		"successful Story construction consumes the capability exactly once");
+
+	resources.clear();
+	resources.shrink_to_fit();
+	dynamic_resources.clear();
+	dynamic_resources.shrink_to_fit();
+	font_rom.clear();
+	font_rom.shrink_to_fit();
+	static_content->reset();
+	transition.reset();
+	auto &process = **created;
+	const auto observation = process.round_start_observation();
+	expect(process.input_protocol() == th03::InputProtocol::live &&
+		observation.start.game_mode == th03::game_mode::story &&
+		observation.start.story_stage == 0U &&
+		observation.start.paletted_character ==
+			std::array<std::int8_t, 2U>{2, 1},
+		"Story resident and live protocol reach the fresh core process");
+	const auto pixel_is = [&](th03::present::Point point, std::uint8_t color) {
+		return process.raster().pixel(th03::present::Page::zero, point) == color;
+	};
+	expect(
+		pixel_is({0, 200}, pi_sentinel(MainResourceKey{
+			.role = MainResourceRole::character_stage_shot,
+			.character = player_one.character,
+			.palette = player_one.palette,
+		})) && pixel_is({320, 200}, pi_sentinel(MainResourceKey{
+			.role = MainResourceRole::character_stage_shot,
+			.character = player_two.character,
+			.palette = player_two.palette,
+		})) && pixel_is({0, 304}, pi_sentinel(MainResourceKey{
+			.role = MainResourceRole::character_stage_enemy_group,
+			.character = player_two.character,
+		})),
+		"Story MAIN preserves the staged hidden atlas into committed page zero");
+	std::vector<th03::present::ComposedPixel> pixels(
+		th03::present::graphics_page_pixels
+	);
+	const auto surface = process.compose_shown_surface(std::span<
+		th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	>(pixels.data(), pixels.size()));
+	const auto stepped = process.step({});
+	expect(surface && stepped && stepped->status == th03::StepStatus::running &&
+		process.presentation_status() == th03::present::MainRoundStatus::ready,
+		"Story process remains usable after every caller-owned input is destroyed");
+}
+
 bool kotohime_red(
 	void *,
 	const th03::BombFrameStep &,
@@ -1331,6 +1601,321 @@ void test_invalid_config_and_kotohime_policy()
 	result = create_synthetic(kotohime, resources);
 	expect(static_cast<bool>(result),
 		"Kotohime constructs when the explicit compatibility policy is present");
+}
+
+MainStoryConfig story_config(
+	std::uint8_t stage,
+	std::int8_t player_one,
+	std::uint8_t remaining_credits
+) noexcept
+{
+	MainStoryConfig config{};
+	auto &resident = config.resident;
+	resident.global_frame = 1000U + stage;
+	resident.resident_rand = 12345;
+	resident.random_seed = 12345U;
+	resident.game_mode = th03::game_mode::story;
+	resident.rank = 1U;
+	resident.key_mode = 0U;
+	resident.story_stage = stage;
+	resident.story_lives = 2U;
+	resident.remaining_credits = remaining_credits;
+	resident.skill = 3U;
+	resident.is_cpu = {0U, 1U};
+	resident.paletted_character[0U] = player_one;
+	constexpr std::array<std::uint8_t, 9U> fixed_base{
+		1U, 0U, 0U, 2U, 0U, 3U, 5U, 4U, 6U,
+	};
+	const auto player_base = static_cast<std::size_t>(
+		(static_cast<std::uint8_t>(player_one) - 1U) / 2U
+	);
+	const auto fixed = fixed_base[player_base];
+	std::size_t early = 0U;
+	for(std::uint8_t base = 0U; base < 7U; ++base) {
+		if(base == fixed) {
+			continue;
+		}
+		auto paletted = static_cast<std::int8_t>((base * 2U) + 1U);
+		if(paletted == player_one) {
+			++paletted;
+		}
+		resident.story_opponents[early++] = paletted;
+	}
+	for(std::size_t current = 6U; current < 9U; ++current) {
+		const auto base = (current == 6U) ? fixed :
+			static_cast<std::uint8_t>(current);
+		auto paletted = static_cast<std::int8_t>((base * 2U) + 1U);
+		if(paletted == player_one) {
+			++paletted;
+		}
+		resident.story_opponents[current] = paletted;
+	}
+	resident.paletted_character[1U] = resident.story_opponents[stage];
+	config.kotohime_compatibility.red_provider = kotohime_red;
+	return config;
+}
+
+std::vector<LoadedMainResource> story_dynamic_resources(
+	const MainStoryConfig &config,
+	std::span<const LoadedMainResource> complete
+)
+{
+	const auto player_one = th03::app::main_player_selection_from_paletted(
+		config.resident.paletted_character[0U]
+	);
+	const auto player_two = th03::app::main_player_selection_from_paletted(
+		config.resident.paletted_character[1U]
+	);
+	expect(player_one.has_value() && player_two.has_value(),
+		"Story fixture selections are valid");
+	if(!player_one || !player_two) {
+		return {};
+	}
+	const auto keys = th03::app::main_private_resource_keys(
+		*player_one, *player_two
+	);
+	expect(keys.has_value(), "Story fixture MAIN-private keys resolve");
+	if(!keys) {
+		return {};
+	}
+	return select_resources(complete, *keys);
+}
+
+void test_story_handoff_transaction_and_shared_lifetime()
+{
+	const auto first_config = story_config(0U, 2, 3U);
+	expect(th03::app::valid_main_story_config(first_config),
+		"first Story process fixture satisfies the public source-fresh contract");
+	const auto first_p1 = *th03::app::main_player_selection_from_paletted(
+		first_config.resident.paletted_character[0U]
+	);
+	const auto first_p2 = *th03::app::main_player_selection_from_paletted(
+		first_config.resident.paletted_character[1U]
+	);
+	auto first_complete = make_resources(first_p1, first_p2);
+	auto compiled = make_compiled_content();
+	expect(compiled.has_value(), "Story fixture imports synthetic compiled content");
+	if(!compiled) {
+		return;
+	}
+	auto font_rom = make_font_rom();
+	auto static_content = MainProcessTestAccess::prepare_static_with_synthetic_resources(
+		first_complete,
+		std::move(*compiled),
+		font_rom
+	);
+	expect(static_content.has_value(),
+		"Story session prepares one stable shared MAIN content owner");
+	if(!static_content) {
+		return;
+	}
+	font_rom.clear();
+	font_rom.shrink_to_fit();
+
+	auto first_transition = make_ready_story_transition(
+		first_config, first_complete
+	);
+	auto first_dynamic = story_dynamic_resources(
+		first_config, first_complete
+	);
+	first_complete.clear();
+	first_complete.shrink_to_fit();
+	expect(first_transition != nullptr,
+		"first Story fixture stages a complete six-PI handoff");
+	if(!first_transition) {
+		return;
+	}
+	const auto handoff_before = first_transition->raster().display_state_hash();
+	const auto mismatched_config = story_config(1U, 2, 3U);
+	auto rejected = MainProcessStoryAccess::create_story(
+		mismatched_config,
+		*first_transition,
+		first_dynamic,
+		*static_content,
+		false
+	);
+	expect(!rejected && rejected.error().code ==
+		MainProcessErrorCode::invalid_config &&
+		first_transition->phase() == ClassicMainlStagePhase::ready &&
+		ClassicMainlStageTestAccess::handoff(*first_transition) != nullptr &&
+		first_transition->raster().display_state_hash() == handoff_before,
+		"Story MAIN rejects a handoff from a different stage without mutation");
+	auto malformed = first_dynamic;
+	const auto first_sheet = std::find_if(
+		malformed.begin(), malformed.end(), [](const auto &resource) {
+			return resource.spec.key.role == MainResourceRole::character_sheet;
+		}
+	);
+	expect(first_sheet != malformed.end(),
+		"Story failure fixture finds its first character sheet");
+	if(first_sheet != malformed.end()) {
+		replace_bytes(*first_sheet, std::vector<std::byte>(
+			first_sheet->spec.expected_bytes, std::byte{0U}
+		));
+	}
+	rejected = MainProcessStoryAccess::create_story(
+		first_config,
+		*first_transition,
+		malformed,
+		*static_content,
+		false
+	);
+	expect(!rejected && rejected.error().code ==
+		MainProcessErrorCode::asset_decode_failed &&
+		first_transition->phase() == ClassicMainlStagePhase::ready &&
+		ClassicMainlStageTestAccess::handoff(*first_transition) != nullptr &&
+		first_transition->raster().display_state_hash() == handoff_before,
+		"a late Story MAIN failure leaves the ready handoff reusable and exact");
+
+	auto first_process = MainProcessStoryAccess::create_story(
+		first_config,
+		*first_transition,
+		first_dynamic,
+		*static_content,
+		false
+	);
+	expect(first_process.has_value() &&
+		first_transition->phase() == ClassicMainlStagePhase::consumed &&
+		ClassicMainlStageTestAccess::handoff(*first_transition) == nullptr,
+		"successful Story MAIN publication consumes exactly one private handoff");
+	if(!first_process) {
+		return;
+	}
+
+	const auto final_config = story_config(8U, 18, 0U);
+	expect(th03::app::valid_main_story_config(final_config),
+		"final Story process fixture satisfies the public source-fresh contract");
+	const auto final_p1 = *th03::app::main_player_selection_from_paletted(
+		final_config.resident.paletted_character[0U]
+	);
+	const auto final_p2 = *th03::app::main_player_selection_from_paletted(
+		final_config.resident.paletted_character[1U]
+	);
+	auto final_complete = make_resources(final_p1, final_p2);
+	auto final_transition = make_ready_story_transition(
+		final_config, final_complete
+	);
+	auto final_dynamic = story_dynamic_resources(
+		final_config, final_complete
+	);
+	final_complete.clear();
+	final_complete.shrink_to_fit();
+	expect(final_transition != nullptr,
+		"final Story fixture stages a complete six-PI handoff");
+	if(!final_transition) {
+		return;
+	}
+	auto final_process = MainProcessStoryAccess::create_story(
+		final_config,
+		*final_transition,
+		final_dynamic,
+		*static_content,
+		false
+	);
+	expect(final_process.has_value() &&
+		final_transition->phase() == ClassicMainlStagePhase::consumed,
+		"the same shared static content starts a later Story MAIN process");
+	if(!final_process) {
+		return;
+	}
+
+	first_dynamic.clear();
+	first_dynamic.shrink_to_fit();
+	final_dynamic.clear();
+	final_dynamic.shrink_to_fit();
+	first_transition.reset();
+	final_transition.reset();
+	static_content->reset();
+
+	const auto &first = **first_process;
+	const auto &final = **final_process;
+	expect(first.input_protocol() == th03::InputProtocol::live &&
+		final.input_protocol() == th03::InputProtocol::live &&
+		first.round_start_observation().start.story_stage == 0U &&
+		final.round_start_observation().start.story_stage == 8U &&
+		first.round_start_observation().start.remaining_credits == 3U &&
+		final.round_start_observation().start.remaining_credits == 0U,
+		"both Story processes retain their own exact resident values");
+	const auto atlas_matches = [](const MainProcess &process,
+		const MainStoryConfig &config) {
+		constexpr std::array points{
+			th03::present::Point{0, 200},
+			th03::present::Point{320, 200},
+			th03::present::Point{0, 208},
+			th03::present::Point{320, 208},
+			th03::present::Point{0, 280},
+			th03::present::Point{0, 304},
+		};
+		const auto player_one = *th03::app::main_player_selection_from_paletted(
+			config.resident.paletted_character[0U]
+		);
+		const auto player_two = *th03::app::main_player_selection_from_paletted(
+			config.resident.paletted_character[1U]
+		);
+		const std::array expected{
+			pi_sentinel({
+				.role = MainResourceRole::character_stage_shot,
+				.character = player_one.character,
+				.palette = player_one.palette,
+			}),
+			pi_sentinel({
+				.role = MainResourceRole::character_stage_shot,
+				.character = player_two.character,
+				.palette = player_two.palette,
+			}),
+			pi_sentinel({
+				.role = MainResourceRole::character_stage_extra_shot,
+				.character = player_one.character,
+				.palette = player_one.palette,
+			}),
+			pi_sentinel({
+				.role = MainResourceRole::character_stage_extra_shot,
+				.character = player_two.character,
+				.palette = player_two.palette,
+			}),
+			pi_sentinel({.role = MainResourceRole::stage_enemy_center}),
+			pi_sentinel({
+				.role = MainResourceRole::character_stage_enemy_group,
+				.character = player_two.character,
+			}),
+		};
+		for(std::size_t index = 0U; index < points.size(); ++index) {
+			if(process.raster().pixel(
+				th03::present::Page::zero, points[index]
+			) != expected[index]) {
+				return false;
+			}
+		}
+		return true;
+	};
+	expect(atlas_matches(first, first_config) &&
+		atlas_matches(final, final_config),
+		"each Story process clones its own semantic MAINL six-PI handoff");
+	expect(first.raster().applied_palette().colors[3U] ==
+		th03::assets::Rgb4{3U, 12U, 6U} &&
+		final.raster().applied_palette().colors[3U] ==
+			th03::assets::Rgb4{3U, 12U, 6U},
+		"both Story processes retain the final MAINL enemy palette");
+
+	const auto first_step = (*first_process)->step({});
+	const auto final_step = (*final_process)->step({});
+	expect(first_step && final_step &&
+		first_step->status == th03::StepStatus::running &&
+		final_step->status == th03::StepStatus::running,
+		"both Story processes remain live after every loader and handoff owner dies");
+	std::vector<th03::present::ComposedPixel> pixels(
+		th03::present::graphics_page_pixels
+	);
+	const auto surface = (*final_process)->compose_shown_surface(
+		std::span<
+			th03::present::ComposedPixel,
+			th03::present::graphics_page_pixels
+		>(pixels.data(), pixels.size())
+	);
+	expect(surface.has_value() &&
+		(*first_process)->tram().gaiji(255U).row_halves[31U] != 0U &&
+		(*final_process)->tram().gaiji(255U).row_halves[31U] != 0U,
+		"shared GAMEFT/FONT ownership survives into both Story presenters");
 }
 
 std::optional<std::vector<std::byte>> read_file(
@@ -1472,7 +2057,9 @@ int main(int argc, char **argv)
 	test_normalized_sheet_bundle_rejections();
 	test_decode_and_staging_rejections();
 	test_sticky_presentation_preflight();
+	test_story_factory_transaction_and_lifetime();
 	test_invalid_config_and_kotohime_policy();
+	test_story_handoff_transaction_and_shared_lifetime();
 	if(argc == 4) {
 		expect(run_local_authentic_gate(argv[1], argv[2], argv[3]),
 			"optional authenticated 18x18 direct-VS process gate");

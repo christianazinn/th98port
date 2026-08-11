@@ -21,6 +21,8 @@ using th03::app::MainResourceIntegrity;
 using th03::app::MainResourceKey;
 using th03::app::MainResourceLoader;
 using th03::app::MainResourceRole;
+using th03::app::MainlStageBackground;
+using th03::app::MainlStageResourceRequest;
 using th03::app::ResourceLoadErrorCode;
 
 std::size_t checks = 0U;
@@ -110,8 +112,8 @@ void test_manifest()
 	);
 	const auto manifest = th03::app::main_resource_manifest();
 	expect(
-		manifest.size() == 106U,
-		"manifest enumerates static, paletted, and opponent-group assets"
+		manifest.size() == 123U,
+		"manifest enumerates MAIN, MAINL, paletted, and character-only assets"
 	);
 	expect(
 		static_cast<bool>(th03::app::validate_main_resource_manifest(manifest)),
@@ -124,6 +126,11 @@ void test_manifest()
 	bool contains_yumemi_stage_extra_shot = false;
 	bool contains_enemy_center = false;
 	bool contains_yumemi_enemy_group = false;
+	bool contains_mainl_font = false;
+	bool contains_stage_portrait = false;
+	bool contains_stage_number = false;
+	bool contains_stage_base = false;
+	bool contains_stage_decisive = false;
 	for(const auto &spec : manifest) {
 		contains_enedat = contains_enedat ||
 			(spec.key.role == MainResourceRole::enemy_scripts &&
@@ -148,6 +155,23 @@ void test_manifest()
 				spec.key.character == MainCharacter::yumemi &&
 				spec.key.palette == MainPaletteVariant::none &&
 				spec.filename == "ENEMY04.PI" && spec.expected_bytes == 7035U);
+		contains_mainl_font = contains_mainl_font ||
+			(spec.key.role == MainResourceRole::mainl_gaiji_font &&
+				spec.filename == "MIKOFT.BFT" && spec.expected_bytes == 8224U);
+		contains_stage_portrait = contains_stage_portrait ||
+			(spec.key.role == MainResourceRole::character_stage_portrait &&
+				spec.key.character == MainCharacter::yumemi &&
+				spec.filename == "16SL.CD2" && spec.expected_bytes == 46096U);
+		contains_stage_number = contains_stage_number ||
+			(spec.key.role == MainResourceRole::stage_number_sheet &&
+				spec.filename == "ST.CD2" && spec.expected_bytes == 6816U);
+		contains_stage_base = contains_stage_base ||
+			(spec.key.role == MainResourceRole::stage_splash_base &&
+				spec.filename == "STNX0.PI" && spec.expected_bytes == 2732U);
+		contains_stage_decisive = contains_stage_decisive ||
+			(spec.key.role == MainResourceRole::stage_splash_background &&
+				spec.key.stage_background == MainlStageBackground::decisive &&
+				spec.filename == "STNX4.PI" && spec.expected_bytes == 2901U);
 		expect(
 			th03::app::is_safe_extracted_entry_name(spec.filename),
 			"every checked-in manifest filename is one safe extracted component"
@@ -160,7 +184,10 @@ void test_manifest()
 	expect(
 		contains_enedat && contains_game_font && contains_reimu_sheet &&
 			contains_yumemi_stage_shot && contains_yumemi_stage_extra_shot &&
-			contains_enemy_center && contains_yumemi_enemy_group,
+			contains_enemy_center && contains_yumemi_enemy_group &&
+			contains_mainl_font && contains_stage_portrait &&
+			contains_stage_number && contains_stage_base &&
+			contains_stage_decisive,
 		"manifest retains the representative source-named resource families"
 	);
 	struct ExpectedEnemyGroup {
@@ -401,6 +428,146 @@ void test_direct_vs_batch_and_cache()
 	);
 }
 
+void test_main_private_and_mainl_stage_batches()
+{
+	const MainPlayerSelection reimu_first{
+		.character = MainCharacter::reimu,
+		.palette = MainPaletteVariant::first,
+	};
+	const MainPlayerSelection mima_second{
+		.character = MainCharacter::mima,
+		.palette = MainPaletteVariant::second,
+	};
+	const MainPlayerSelection chiyuri_first{
+		.character = MainCharacter::chiyuri,
+		.palette = MainPaletteVariant::first,
+	};
+
+	const auto private_keys = th03::app::main_private_resource_keys(
+		reimu_first, mima_second
+	);
+	expect(
+		private_keys && private_keys->size() == 6U &&
+			private_keys->front() == MainResourceKey{
+				.role = MainResourceRole::character_sheet,
+				.character = MainCharacter::reimu,
+				.palette = MainPaletteVariant::first,
+			} &&
+			private_keys->back() == MainResourceKey{
+				.role = MainResourceRole::character_bomb_portrait,
+				.character = MainCharacter::mima,
+				.palette = MainPaletteVariant::second,
+			},
+		"MAIN-private batch contains only exact P1/P2 process owners"
+	);
+	const auto duplicate_private = th03::app::main_private_resource_keys(
+		reimu_first, reimu_first
+	);
+	expect(
+		duplicate_private && duplicate_private->size() == 3U,
+		"MAIN-private batch deduplicates an identical paletted selection"
+	);
+	const auto static_keys = th03::app::main_static_resource_keys();
+	expect(
+		static_keys.size() == 5U && static_keys.front() == MainResourceKey{
+			.role = MainResourceRole::enemy_scripts,
+		} && static_keys.back() == MainResourceKey{
+			.role = MainResourceRole::hud_result_sheet,
+		},
+		"MAIN-static batch is the exact five campaign-owned resources"
+	);
+
+	const auto numbered = th03::app::mainl_stage_resource_keys({
+		.player_one = reimu_first,
+		.player_two = mima_second,
+		.game_mode = 0x01U,
+		.story_stage = 2U,
+	});
+	expect(
+		numbered && numbered->size() == 12U &&
+			std::find(numbered->begin(), numbered->end(), MainResourceKey{
+				.role = MainResourceRole::stage_number_sheet,
+			}) != numbered->end() &&
+			std::find(numbered->begin(), numbered->end(), MainResourceKey{
+				.role = MainResourceRole::stage_splash_background,
+				.stage_background = MainlStageBackground::numbered,
+			}) != numbered->end(),
+		"ordinary Story resolves ST.CD2 and the numbered STNX background"
+	);
+	const auto chiyuri = th03::app::mainl_stage_resource_keys({
+		.player_one = reimu_first,
+		.player_two = chiyuri_first,
+		.game_mode = 0x01U,
+		.story_stage = 6U,
+	});
+	expect(
+		chiyuri &&
+			std::find(chiyuri->begin(), chiyuri->end(), MainResourceKey{
+				.role = MainResourceRole::stage_number_sheet,
+			}) == chiyuri->end() &&
+			std::find(chiyuri->begin(), chiyuri->end(), MainResourceKey{
+				.role = MainResourceRole::stage_splash_background,
+				.stage_background = MainlStageBackground::chiyuri,
+			}) != chiyuri->end(),
+		"P2 Chiyuri background takes precedence over decisive-stage selection"
+	);
+	const auto non_story = th03::app::mainl_stage_resource_keys({
+		.player_one = reimu_first,
+		.player_two = mima_second,
+		.game_mode = 0x81U,
+		.story_stage = 0xFFU,
+	});
+	expect(
+		non_story &&
+			std::find(non_story->begin(), non_story->end(), MainResourceKey{
+				.role = MainResourceRole::stage_splash_background,
+				.stage_background = MainlStageBackground::non_story,
+			}) != non_story->end(),
+		"non-Story stage resolution ignores the Story-stage domain and selects STNX5"
+	);
+	expect(
+		!th03::app::mainl_stage_resource_keys({
+			.player_one = reimu_first,
+			.player_two = mima_second,
+			.game_mode = 0x01U,
+			.story_stage = 9U,
+		}),
+		"Story stage resources reject a stage beyond the stock domain"
+	);
+
+	TemporaryRoot root;
+	expect(root.valid(), "temporary MAINL transaction root was created");
+	if(!root.valid() || !numbered) {
+		return;
+	}
+	for(std::size_t index = 0U; index + 1U < numbered->size(); ++index) {
+		write_spec(root.path(), (*numbered)[index], std::byte{0x41U});
+	}
+	MainResourceLoader loader(root.path(), MainResourceIntegrity::size_only);
+	const auto failed = loader.load_mainl_stage({
+		.player_one = reimu_first,
+		.player_two = mima_second,
+		.game_mode = 0x01U,
+		.story_stage = 2U,
+	});
+	expect(
+		!failed && loader.cached_resource_count() == 0U,
+		"a late MAINL batch failure publishes no partial cache entries"
+	);
+	write_spec(root.path(), numbered->back(), std::byte{0x42U});
+	const auto loaded = loader.load_mainl_stage({
+		.player_one = reimu_first,
+		.player_two = mima_second,
+		.game_mode = 0x01U,
+		.story_stage = 2U,
+	});
+	expect(
+		loaded && loaded->size() == numbered->size() &&
+			loader.cached_resource_count() == numbered->size(),
+		"a complete MAINL batch commits all immutable resources atomically"
+	);
+}
+
 void test_rejections()
 {
 	const auto enemy_key = MainResourceKey{.role = MainResourceRole::enemy_scripts};
@@ -499,6 +666,7 @@ int main()
 {
 	test_manifest();
 	test_direct_vs_batch_and_cache();
+	test_main_private_and_mainl_stage_batches();
 	test_rejections();
 	test_resolved_path_escape_if_supported();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

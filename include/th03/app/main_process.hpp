@@ -1,6 +1,7 @@
 #ifndef TH03_APP_MAIN_PROCESS_HPP
 #define TH03_APP_MAIN_PROCESS_HPP
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -17,9 +18,14 @@
 
 namespace th03::app {
 
-// One fresh, human P1-vs-P2 MAIN process. Story/demo/CPU and snapshot-backed
-// entry remain separate future process policies; accepting them here would
-// permit late attachment to presentation-private source state.
+class MainProcessStaticContent;
+class MainStageHandoff;
+struct MainProcessStoryAccess;
+
+// One fresh, human P1-vs-P2 MAIN process. Story entry is source-private and
+// requires a completed MAINL handoff; demo/CPU and snapshot-backed entry remain
+// separate process policies because accepting them here would permit late
+// attachment to presentation-private source state.
 struct MainDirectVsConfig {
 	MainPlayerSelection player_one{};
 	MainPlayerSelection player_two{
@@ -46,8 +52,8 @@ main_player_selection_from_paletted(std::int8_t paletted) noexcept;
 
 // One source-fresh Story MAIN entry. Snapshot-backed replay/debug entry stays
 // on the replay runner because it cannot reconstruct presentation-private
-// process state. This value is the validated foundation for the future typed
-// MAINL Raster handoff and Story MainProcess factory.
+// process state. The source-private Classic session path pairs this value with
+// one completed MAINL Raster handoff and campaign-owned static content.
 struct MainStoryConfig {
 	GameInit resident{};
 	GameOptions game_options{};
@@ -95,12 +101,12 @@ struct MainProcessError {
 		present::MainRoundStatus::ready;
 };
 
-// Stable-address owner/coordinator for one complete direct-VS MAIN process.
-// The factory reauthenticates canonical resource metadata, byte counts, and
-// fingerprints, consumes owning compiled content, copies the external
-// FONT.ROM, and publishes no partially initialized Raster/TRAM/presenter state
-// on failure. The object intentionally exposes no mutable Game, Raster, Tram,
-// palette, or child presenter.
+// Stable-address owner/coordinator for one complete MAIN process. The public
+// factory is the authenticated direct-VS entry; the source-private Classic
+// session factory supplies an already completed MAINL Raster handoff. Both
+// paths publish no partially initialized Raster/TRAM/presenter state. The
+// object intentionally exposes no mutable Game, Raster, Tram, palette, or
+// child presenter.
 class MainProcess final {
 public:
 	[[nodiscard]] static std::expected<
@@ -158,6 +164,7 @@ public:
 
 private:
 	friend struct MainProcessTestAccess;
+	friend struct MainProcessStoryAccess;
 	struct Impl;
 	explicit MainProcess(std::unique_ptr<Impl> impl) noexcept;
 	[[nodiscard]] static std::expected<
@@ -169,6 +176,19 @@ private:
 		MainCompiledContent compiled_content,
 		std::span<const std::byte> font_rom,
 		bool authenticate_resource_bytes
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<MainProcess>,
+		MainProcessError
+	> create_common(
+		const GameInit &init,
+		GameOptions game_options,
+		present::KotohimeBombFadeCompatibility kotohime_compatibility,
+		std::array<MainPlayerSelection, 2U> selections,
+		const MainStageHandoff &handoff,
+		std::span<const LoadedMainResource> resources,
+		std::shared_ptr<const MainProcessStaticContent> static_content,
+		std::uint8_t continues_used_digit
 	);
 	void fail_presentation_for_test() noexcept;
 	[[nodiscard]] std::optional<MainProcessError>

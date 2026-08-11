@@ -2,6 +2,9 @@
 
 #include "main_process_internal.hpp"
 
+#include "main_process_static_content_internal.hpp"
+#include "main_stage_handoff_internal.hpp"
+
 #include <array>
 #include <bit>
 #include <cstddef>
@@ -286,28 +289,11 @@ template <typename Value, typename Decoder>
 } // namespace
 
 struct MainProcess::Impl {
-	MainDirectVsConfig config{};
-	std::optional<MainCompiledContent> compiled_content{};
-	std::vector<std::byte> font_rom{};
-	std::optional<Pc98FontRomProvider> font_provider{};
-	std::optional<PreparedGameftGaiji> gameft_gaiji{};
-	std::array<std::int16_t, 256U> sine_q8{};
-	std::array<std::int16_t, 256U> cosine_q8{};
-
-	assets::BfntSheet gameft{};
-	assets::BfntSheet lose_sheet{};
-	assets::BfntSheet round_sheet{};
-	assets::BfntSheet zikicw_sheet{};
+	InputProtocol input_protocol = InputProtocol::live;
+	std::shared_ptr<const MainProcessStaticContent> static_content{};
 	std::array<assets::BfntSheet, 2U> character_sheets{};
 	std::array<assets::MrsImage, 2U> extra_portraits{};
 	std::array<assets::MrsImage, 2U> bomb_portraits{};
-	std::array<assets::PiImage, 2U> player_shots{};
-	std::array<assets::PiImage, 2U> player_extra_shots{};
-	assets::PiImage enemy_center{};
-	assets::PiImage opponent_enemies{};
-	std::optional<present::PreparedSuperimposeSheet> prepared_lose{};
-	std::optional<present::PreparedSuperimposeSheet> prepared_round{};
-	std::optional<present::PreparedSuperimposeSheet> prepared_zikicw{};
 
 	present::Raster raster{};
 	present::Tram tram{};
@@ -534,143 +520,20 @@ MainProcess::create_impl(
 		!valid) {
 		return std::unexpected(valid.error());
 	}
-
-	auto impl = std::make_unique<Impl>();
-	impl->config = config;
-	impl->compiled_content.emplace(std::move(compiled_content));
-	impl->font_rom.assign(font_rom.begin(), font_rom.end());
-	const auto font = Pc98FontRomProvider::from_exact_font_rom(impl->font_rom);
-	if(!font) {
-		return std::unexpected(process_error(
-			MainProcessErrorCode::font_rom_failed
-		));
-	}
-	impl->font_provider.emplace(*font);
-
-	for(std::size_t index = 0U; index < impl->sine_q8.size(); ++index) {
-		const auto angle = static_cast<std::uint8_t>(index);
-		impl->sine_q8[index] = exact::sine8(angle);
-		impl->cosine_q8[index] = exact::cosine8(angle);
-	}
-	const present::StaffFlakeTrigTables trig{
-		impl->sine_q8,
-		impl->cosine_q8,
-	};
-
-	const MainResourceKey enedat_key{.role = MainResourceRole::enemy_scripts};
-	const auto enedat_resource = find_resource(resources, enedat_key);
-	if(!enedat_resource) {
-		return std::unexpected(enedat_resource.error());
-	}
-	auto game_content = formats::parse_enedat(
-		resource_bytes(**enedat_resource)
-	);
-	if(!game_content) {
-		return std::unexpected(core_error(
-			MainProcessErrorCode::enedat_decode_failed,
-			std::move(game_content.error())
-		));
-	}
-
-	const auto superimpose_decoder = [](std::span<const std::byte> bytes) {
-		return assets::decode_bfnt(
-			bytes,
-			assets::BfntConsumerPolicy::superimpose
-		);
-	};
-	const auto gaiji_decoder = [](std::span<const std::byte> bytes) {
-		return assets::decode_bfnt(bytes, assets::BfntConsumerPolicy::gaiji);
-	};
-	const MainResourceKey gameft_key{.role = MainResourceRole::game_font};
-	auto gameft = decode_asset<assets::BfntSheet>(
+	const auto static_content = MainProcessStaticContentAccess::create(
 		resources,
-		gameft_key,
-		gaiji_decoder
+		std::move(compiled_content),
+		font_rom,
+		authenticate_resource_bytes
 	);
-	if(!gameft) {
-		return std::unexpected(gameft.error());
-	}
-	impl->gameft = std::move(*gameft);
-	const auto prepared_gaiji = PreparedGameftGaiji::prepare(impl->gameft);
-	if(!prepared_gaiji) {
-		return std::unexpected(process_error(
-			MainProcessErrorCode::gameft_prepare_failed,
-			gameft_key
-		));
-	}
-	impl->gameft_gaiji.emplace(*prepared_gaiji);
-
-	const std::array hud_keys{
-		MainResourceKey{.role = MainResourceRole::hud_lose_sheet},
-		MainResourceKey{.role = MainResourceRole::hud_round_sheet},
-		MainResourceKey{.role = MainResourceRole::hud_result_sheet},
-	};
-	std::array<assets::BfntSheet *, 3U> hud_targets{
-		&impl->lose_sheet,
-		&impl->round_sheet,
-		&impl->zikicw_sheet,
-	};
-	for(std::size_t index = 0U; index < hud_keys.size(); ++index) {
-		auto decoded = decode_asset<assets::BfntSheet>(
-			resources,
-			hud_keys[index],
-			superimpose_decoder
-		);
-		if(!decoded) {
-			return std::unexpected(decoded.error());
-		}
-		*hud_targets[index] = std::move(*decoded);
-	}
-	impl->prepared_lose = present::prepare_superimpose_sheet(impl->lose_sheet);
-	impl->prepared_round = present::prepare_superimpose_sheet(impl->round_sheet);
-	impl->prepared_zikicw = present::prepare_superimpose_sheet(
-		impl->zikicw_sheet
-	);
-	if(!impl->prepared_lose || !impl->prepared_round ||
-		!impl->prepared_zikicw) {
-		return std::unexpected(process_error(
-			MainProcessErrorCode::presenter_setup_failed
-		));
+	if(!static_content) {
+		return std::unexpected(static_content.error());
 	}
 
 	const std::array selections{config.player_one, config.player_two};
+	std::array<assets::PiImage, 2U> player_shots{};
+	std::array<assets::PiImage, 2U> player_extra_shots{};
 	for(std::size_t player = 0U; player < selections.size(); ++player) {
-		auto character = decode_asset<assets::BfntSheet>(
-			resources,
-			player_key(MainResourceRole::character_sheet, selections[player]),
-			superimpose_decoder
-		);
-		if(!character) {
-			return std::unexpected(character.error());
-		}
-		impl->character_sheets[player] = std::move(*character);
-
-		auto extra = decode_asset<assets::MrsImage>(
-			resources,
-			player_key(
-				MainResourceRole::character_extra_portrait,
-				selections[player]
-			),
-			assets::decode_mrs
-		);
-		if(!extra) {
-			return std::unexpected(extra.error());
-		}
-		impl->extra_portraits[player] = std::move(*extra);
-
-		auto bomb = decode_asset<assets::MrsImage>(
-			resources,
-			player_key(
-				MainResourceRole::character_bomb_portrait,
-				selections[player]
-			),
-			assets::decode_mrs
-		);
-		if(!bomb) {
-			return std::unexpected(bomb.error());
-		}
-		impl->bomb_portraits[player] = std::move(*bomb);
-
 		auto shot = decode_asset<assets::PiImage>(
 			resources,
 			player_key(
@@ -682,9 +545,8 @@ MainProcess::create_impl(
 		if(!shot) {
 			return std::unexpected(shot.error());
 		}
-		impl->player_shots[player] = std::move(*shot);
-
-		auto extra_shot = decode_asset<assets::PiImage>(
+		player_shots[player] = std::move(*shot);
+		auto extra = decode_asset<assets::PiImage>(
 			resources,
 			player_key(
 				MainResourceRole::character_stage_extra_shot,
@@ -692,26 +554,19 @@ MainProcess::create_impl(
 			),
 			assets::decode_pi
 		);
-		if(!extra_shot) {
-			return std::unexpected(extra_shot.error());
+		if(!extra) {
+			return std::unexpected(extra.error());
 		}
-		impl->player_extra_shots[player] = std::move(*extra_shot);
+		player_extra_shots[player] = std::move(*extra);
 	}
-	assets::horizontal_flip(impl->extra_portraits[1U]);
-	assets::horizontal_flip(impl->bomb_portraits[1U]);
-
-	const MainResourceKey center_key{
-		.role = MainResourceRole::stage_enemy_center,
-	};
 	auto center = decode_asset<assets::PiImage>(
 		resources,
-		center_key,
+		{.role = MainResourceRole::stage_enemy_center},
 		assets::decode_pi
 	);
 	if(!center) {
 		return std::unexpected(center.error());
 	}
-	impl->enemy_center = std::move(*center);
 	const MainResourceKey opponent_key{
 		.role = MainResourceRole::character_stage_enemy_group,
 		.character = config.player_two.character,
@@ -724,27 +579,26 @@ MainProcess::create_impl(
 	if(!opponent) {
 		return std::unexpected(opponent.error());
 	}
-	impl->opponent_enemies = std::move(*opponent);
-	if(!impl->opponent_enemies.palette) {
+	if(!opponent->palette) {
 		return std::unexpected(process_error(
 			MainProcessErrorCode::pi_palette_missing,
 			opponent_key
 		));
 	}
-
+	present::Raster handoff_raster{};
 	if(!present::main_prepare_sprite16_pi_source_sheet(
-		impl->raster,
+		handoff_raster,
 		{
 			.player_shots = {{
-				&impl->player_shots[0U],
-				&impl->player_shots[1U],
+				&player_shots[0U],
+				&player_shots[1U],
 			}},
 			.player_extra_shots = {{
-				&impl->player_extra_shots[0U],
-				&impl->player_extra_shots[1U],
+				&player_extra_shots[0U],
+				&player_extra_shots[1U],
 			}},
-			.enemy_center = &impl->enemy_center,
-			.opponent_enemies = &impl->opponent_enemies,
+			.enemy_center = &*center,
+			.opponent_enemies = &*opponent,
 		}
 	)) {
 		return std::unexpected(process_error(
@@ -752,10 +606,10 @@ MainProcess::create_impl(
 		));
 	}
 	for(std::size_t index = 0U;
-		index < impl->opponent_enemies.palette->colors.size(); ++index) {
-		if(!impl->raster.set_pending_palette_entry(
+		index < opponent->palette->colors.size(); ++index) {
+		if(!handoff_raster.set_pending_palette_entry(
 			static_cast<std::uint8_t>(index),
-			impl->opponent_enemies.palette->colors[index]
+			opponent->palette->colors[index]
 		)) {
 			return std::unexpected(process_error(
 				MainProcessErrorCode::pi_palette_missing,
@@ -763,13 +617,148 @@ MainProcess::create_impl(
 			));
 		}
 	}
-	impl->raster.set_palette_tone(100);
-	impl->raster.apply_pending_palette();
-	impl->gameft_gaiji->install(impl->tram);
+	handoff_raster.set_palette_tone(100);
+	handoff_raster.apply_pending_palette();
+	const MainStageHandoff handoff(std::move(handoff_raster));
+	return create_common(
+		direct_game_init(config),
+		config.game_options,
+		config.kotohime_compatibility,
+		selections,
+		handoff,
+		resources,
+		*static_content,
+		0U
+	);
+}
 
-	// D092/D2E8 is initialized before the MAIN BF2/static setup. Background is
-	// the only presentation-private consumer of Game::create's fresh-start
-	// observer stream, and it deliberately accepts uncommitted staging here.
+std::expected<std::unique_ptr<MainProcess>, MainProcessError>
+MainProcessStoryAccess::create_story(
+	const MainStoryConfig &config,
+	ClassicMainlStageTransition &transition,
+	std::span<const LoadedMainResource> resources,
+	std::shared_ptr<const MainProcessStaticContent> static_content,
+	bool authenticate_resource_bytes
+)
+{
+	if(!valid_main_story_config(config) || !static_content ||
+		transition.phase() != ClassicMainlStagePhase::ready ||
+		transition.handoff() == nullptr ||
+		!transition.matches_process_config(config)) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	const auto player_one = main_player_selection_from_paletted(
+		config.resident.paletted_character[0U]
+	);
+	const auto player_two = main_player_selection_from_paletted(
+		config.resident.paletted_character[1U]
+	);
+	if(!player_one || !player_two) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	const auto expected = main_private_resource_keys(*player_one, *player_two);
+	if(!expected) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	if(const auto valid = validate_resource_set(
+		resources,
+		*expected,
+		authenticate_resource_bytes
+	); !valid) {
+		return std::unexpected(valid.error());
+	}
+	const auto continues_used_digit = static_cast<std::uint8_t>(
+		3U - config.resident.remaining_credits
+	);
+	auto process = MainProcess::create_common(
+		config.resident,
+		config.game_options,
+		config.kotohime_compatibility,
+		{*player_one, *player_two},
+		*transition.handoff(),
+		resources,
+		std::move(static_content),
+		continues_used_digit
+	);
+	if(process) {
+		transition.consume_handoff();
+	}
+	return process;
+}
+
+std::expected<std::unique_ptr<MainProcess>, MainProcessError>
+MainProcess::create_common(
+	const GameInit &init,
+	GameOptions game_options,
+	present::KotohimeBombFadeCompatibility kotohime_compatibility,
+	std::array<MainPlayerSelection, 2U> selections,
+	const MainStageHandoff &handoff,
+	std::span<const LoadedMainResource> resources,
+	std::shared_ptr<const MainProcessStaticContent> static_content,
+	std::uint8_t continues_used_digit
+)
+{
+	if(!static_content || continues_used_digit > 3U) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	auto impl = std::make_unique<Impl>();
+	impl->input_protocol = game_options.input_protocol;
+	impl->static_content = std::move(static_content);
+	const auto superimpose_decoder = [](std::span<const std::byte> bytes) {
+		return assets::decode_bfnt(
+			bytes,
+			assets::BfntConsumerPolicy::superimpose
+		);
+	};
+	for(std::size_t player = 0U; player < selections.size(); ++player) {
+		auto character = decode_asset<assets::BfntSheet>(
+			resources,
+			player_key(MainResourceRole::character_sheet, selections[player]),
+			superimpose_decoder
+		);
+		if(!character) {
+			return std::unexpected(character.error());
+		}
+		impl->character_sheets[player] = std::move(*character);
+		auto extra = decode_asset<assets::MrsImage>(
+			resources,
+			player_key(
+				MainResourceRole::character_extra_portrait,
+				selections[player]
+			),
+			assets::decode_mrs
+		);
+		if(!extra) {
+			return std::unexpected(extra.error());
+		}
+		impl->extra_portraits[player] = std::move(*extra);
+		auto bomb = decode_asset<assets::MrsImage>(
+			resources,
+			player_key(
+				MainResourceRole::character_bomb_portrait,
+				selections[player]
+			),
+			assets::decode_mrs
+		);
+		if(!bomb) {
+			return std::unexpected(bomb.error());
+		}
+		impl->bomb_portraits[player] = std::move(*bomb);
+	}
+	assets::horizontal_flip(impl->extra_portraits[1U]);
+	assets::horizontal_flip(impl->bomb_portraits[1U]);
+	impl->raster = handoff.raster_;
+	impl->static_content->gameft_gaiji().install(impl->tram);
+
+	const auto trig = impl->static_content->trig();
 	const auto &staging = impl->static_presenter.sprite_staging();
 	impl->background.emplace(
 		impl->raster,
@@ -781,11 +770,10 @@ MainProcess::create_impl(
 			MainProcessErrorCode::presenter_setup_failed
 		));
 	}
-	const auto init = direct_game_init(config);
 	auto game = Game::create(
 		init,
-		std::move(*game_content),
-		config.game_options,
+		impl->static_content->game_content(),
+		game_options,
 		&*impl->background
 	);
 	if(!game) {
@@ -846,15 +834,15 @@ MainProcess::create_impl(
 			}},
 			.loaded_characters = {{
 				static_cast<present::MainPalettedCharacter>(
-					*main_paletted_character(config.player_one)
+					*main_paletted_character(selections[0U])
 				),
 				static_cast<present::MainPalettedCharacter>(
-					*main_paletted_character(config.player_two)
+					*main_paletted_character(selections[1U])
 				),
 			}},
-			.gauge_sheet = &impl->zikicw_sheet,
+			.gauge_sheet = &impl->static_content->zikicw_sheet(),
 		},
-		impl->compiled_content->pellet_masks(),
+		impl->static_content->compiled().pellet_masks(),
 		trig
 	);
 	impl->bombs.emplace(
@@ -867,7 +855,7 @@ MainProcess::create_impl(
 		}},
 		trig,
 		impl->palette,
-		config.kotohime_compatibility
+		kotohime_compatibility
 	);
 	impl->warning_gauge.emplace(
 		impl->raster,
@@ -882,15 +870,15 @@ MainProcess::create_impl(
 	impl->hud_result.emplace(
 		impl->raster,
 		impl->tram,
-		impl->compiled_content->score_font_masks(),
+		impl->static_content->compiled().score_font_masks(),
 		trig,
 		present::MainHudResultSheets{
-			.lose = &*impl->prepared_lose,
-			.round = &*impl->prepared_round,
-			.zikicw = &*impl->prepared_zikicw,
+			.lose = &impl->static_content->lose(),
+			.round = &impl->static_content->round(),
+			.zikicw = &impl->static_content->zikicw(),
 		},
-		impl->compiled_content->hud_result_tram_assets(),
-		std::uint8_t{0U}
+		impl->static_content->compiled().hud_result_tram_assets(),
+		continues_used_digit
 	);
 	if(!impl->background->ready() || !impl->bosses->ready() ||
 		!impl->entities->ready() || !impl->effects->ready() ||
@@ -919,11 +907,9 @@ MainProcess::create_impl(
 	if(!impl->round->ready()) {
 		return std::unexpected(presentation_error(impl->round->status()));
 	}
-
-	auto process = std::unique_ptr<MainProcess>(
+	return std::unique_ptr<MainProcess>(
 		new MainProcess(std::move(impl))
 	);
-	return process;
 }
 
 MainProcess::MainProcess(std::unique_ptr<Impl> impl) noexcept :
@@ -1070,7 +1056,7 @@ RoundStartObservation MainProcess::round_start_observation() const
 
 InputProtocol MainProcess::input_protocol() const noexcept
 {
-	return impl_->config.game_options.input_protocol;
+	return impl_->input_protocol;
 }
 
 std::expected<present::SourceSurface, present::SourceSurfaceError>
@@ -1078,7 +1064,7 @@ MainProcess::compose_shown_surface(
 	std::span<present::ComposedPixel, present::graphics_page_pixels> output
 ) const
 {
-	return impl_->round->compose_shown_surface(output, *impl_->font_provider);
+	return impl_->round->compose_shown_surface(output, impl_->static_content->font());
 }
 
 const present::Raster &MainProcess::raster() const noexcept
