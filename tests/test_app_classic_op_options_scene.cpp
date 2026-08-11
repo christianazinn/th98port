@@ -689,6 +689,37 @@ void local_original_gate(const std::filesystem::path &content_root)
 			(*adopted)->phase() == ClassicOpOptionsPhase::grow_window,
 		"authenticated title completion adopts into Options retryably"
 	);
+	if(!adopted) {
+		return;
+	}
+	grow_and_enter(**adopted, {.ok = true});
+	expect((*adopted)->advance().has_value(),
+		"authenticated Options releases the transition input");
+	expect((*adopted)->advance({.cancel = true}).has_value(),
+		"authenticated Options begins its return");
+	for(std::uint16_t frame = 0U; frame < 14U; ++frame) {
+		expect((*adopted)->advance(
+			frame == 0U ? ClassicOpInput{.cancel = true} : ClassicOpInput{}
+		).has_value(), "authenticated Options shrink advances");
+	}
+	expect((*adopted)->advance().has_value(),
+		"authenticated Options redraws the retained main menu");
+	auto options_completion = (*adopted)->take_completion();
+	expect(options_completion.has_value(),
+		"authenticated Options publishes its typed return");
+	if(!options_completion) {
+		return;
+	}
+	auto resumed = th03::app::ClassicOpTitleMenuScene::resume_from_options(
+		*options_completion, *closure
+	);
+	expect(
+		resumed && (*resumed)->phase() == th03::app::ClassicOpPhase::main_menu &&
+			(*resumed)->selected_choice() ==
+				th03::app::ClassicOpMenuChoice::options &&
+			!(*resumed)->take_audio_command(),
+		"Options return resumes the retained title without fade or audio"
+	);
 }
 
 } // namespace

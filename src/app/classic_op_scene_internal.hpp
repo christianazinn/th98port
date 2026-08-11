@@ -22,6 +22,12 @@
 
 namespace th03::app {
 
+class ClassicOpMusicRoomCompletion;
+class ClassicOpOptionsCompletion;
+class ClassicOpSelectionCompletion;
+enum class ClassicOpSelectionMode : std::uint8_t;
+struct ClassicOpSessionBackend;
+
 struct ClassicOpInput final {
 	bool up = false;
 	bool down = false;
@@ -61,6 +67,12 @@ enum class ClassicOpRoute : std::uint8_t {
 	demo,
 };
 
+enum class ClassicOpVsChoice : std::uint8_t {
+	one_player_cpu,
+	one_player_two_player,
+	cpu_cpu,
+};
+
 enum class ClassicOpPhase : std::uint8_t {
 	long_shift,
 	long_background_fade,
@@ -75,6 +87,10 @@ enum class ClassicOpPhase : std::uint8_t {
 	wait_title_input,
 	box_to_main,
 	main_menu,
+	vs_grow_window,
+	vs_menu,
+	vs_shrink_window,
+	vs_return_main,
 	demo_black_out,
 	ready,
 	consumed,
@@ -124,20 +140,28 @@ public:
 	ClassicOpCompletion &operator=(ClassicOpCompletion &&) noexcept = default;
 
 	[[nodiscard]] ClassicOpRoute route() const noexcept;
+	[[nodiscard]] std::optional<ClassicOpSelectionMode>
+	selection_mode() const noexcept;
+	[[nodiscard]] bool resets_vs_selection() const noexcept;
 	[[nodiscard]] const GameInit &resident() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 	[[nodiscard]] const present::Tram &tram() const noexcept;
 
 private:
 	friend class ClassicOpTitleMenuScene;
+	friend struct ClassicOpSessionBackend;
 	ClassicOpCompletion(
 		ClassicOpRoute route,
+		std::optional<ClassicOpSelectionMode> selection_mode,
+		bool reset_vs_selection,
 		GameInit resident,
 		present::Raster raster,
 		present::Tram tram
 	) noexcept;
 
 	ClassicOpRoute route_ = ClassicOpRoute::quit;
+	std::optional<ClassicOpSelectionMode> selection_mode_{};
+	bool reset_vs_selection_ = false;
 	GameInit resident_{};
 	present::Raster raster_{};
 	present::Tram tram_{};
@@ -155,6 +179,27 @@ public:
 	> create(
 		GameInit resident,
 		ClassicOpTitleMode title_mode,
+		std::span<const LoadedMainResource> resources
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicOpTitleMenuScene>,
+		ClassicOpError
+	> resume_from_options(
+		const ClassicOpOptionsCompletion &completion,
+		std::span<const LoadedMainResource> resources
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicOpTitleMenuScene>,
+		ClassicOpError
+	> return_from_music_room(
+		const ClassicOpMusicRoomCompletion &completion,
+		std::span<const LoadedMainResource> resources
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicOpTitleMenuScene>,
+		ClassicOpError
+	> return_from_canceled_selection(
+		const ClassicOpSelectionCompletion &completion,
 		std::span<const LoadedMainResource> resources
 	);
 	~ClassicOpTitleMenuScene() = default;
@@ -175,6 +220,7 @@ public:
 
 	[[nodiscard]] ClassicOpPhase phase() const noexcept;
 	[[nodiscard]] ClassicOpMenuChoice selected_choice() const noexcept;
+	[[nodiscard]] ClassicOpVsChoice selected_vs_choice() const noexcept;
 	[[nodiscard]] const GameInit &resident() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 	[[nodiscard]] const present::Tram &tram() const noexcept;
@@ -189,11 +235,31 @@ private:
 		std::optional<PreparedGameftGaiji> gaiji{};
 	};
 
+	enum class EntryPolicy : std::uint8_t {
+		startup_long,
+		startup_fast,
+		fullscreen_return,
+	};
+
 	ClassicOpTitleMenuScene(
 		std::unique_ptr<Prepared> prepared,
 		GameInit resident,
-		ClassicOpTitleMode title_mode
+		EntryPolicy policy
 	) noexcept;
+	ClassicOpTitleMenuScene(
+		std::unique_ptr<Prepared> prepared,
+		GameInit resident,
+		present::Raster raster,
+		present::Tram tram,
+		bool input_allowed
+	) noexcept;
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<Prepared>,
+		ClassicOpError
+	> prepare_resources(
+		std::span<const LoadedMainResource> resources,
+		bool authenticate_resource_bytes
+	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpTitleMenuScene>,
 		ClassicOpError
@@ -238,11 +304,22 @@ private:
 		present::TramAttribute attribute
 	) noexcept;
 	[[nodiscard]] bool update_selection(int direction) noexcept;
+	[[nodiscard]] bool draw_vs_choice(
+		ClassicOpVsChoice choice,
+		present::TramAttribute attribute
+	) noexcept;
+	[[nodiscard]] bool draw_vs_choices() noexcept;
+	[[nodiscard]] bool update_vs_selection(int direction) noexcept;
+	[[nodiscard]] bool grow_box_step() noexcept;
+	[[nodiscard]] bool shrink_box_step() noexcept;
 	[[nodiscard]] bool begin_menu_swap() noexcept;
 	[[nodiscard]] bool begin_box_animation() noexcept;
 	[[nodiscard]] bool box_step() noexcept;
 	[[nodiscard]] bool push_audio_command(ClassicAudioCommand command) noexcept;
-	void select_route(ClassicOpRoute route) noexcept;
+	void select_route(
+		ClassicOpRoute route,
+		std::optional<ClassicOpSelectionMode> selection_mode = std::nullopt
+	) noexcept;
 	void select_demo_route() noexcept;
 	void fail() noexcept;
 	[[nodiscard]] ClassicOpTick tick(
@@ -263,12 +340,14 @@ private:
 	std::size_t audio_count_ = 0U;
 	ClassicOpPhase phase_ = ClassicOpPhase::failed;
 	ClassicOpMenuChoice selected_ = ClassicOpMenuChoice::story;
+	ClassicOpVsChoice selected_vs_ = ClassicOpVsChoice::one_player_cpu;
 	std::int16_t brightness_ = 0;
 	std::uint16_t phase_frame_ = 0U;
 	std::uint16_t title_wait_frame_ = 0U;
 	std::int32_t box_right_left_ = 0;
 	present::Page title_page_ = present::Page::zero;
 	bool menu_input_allowed_ = false;
+	bool increment_rand_after_box_ = false;
 	bool demo_route_pending_ = false;
 	std::optional<ClassicOpCompletion> completion_{};
 };

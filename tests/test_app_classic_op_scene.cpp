@@ -1,4 +1,5 @@
 #include "../src/app/classic_op_scene_internal.hpp"
+#include "../src/app/classic_op_selection_internal.hpp"
 
 #include <array>
 #include <cstddef>
@@ -23,6 +24,8 @@ using th03::app::ClassicOpRoute;
 using th03::app::ClassicOpSceneTestAccess;
 using th03::app::ClassicOpTitleMenuScene;
 using th03::app::ClassicOpTitleMode;
+using th03::app::ClassicOpSelectionMode;
+using th03::app::ClassicOpVsChoice;
 using th03::assets::BfntConsumerPolicy;
 using th03::assets::BfntGlyph;
 using th03::assets::BfntSheet;
@@ -221,33 +224,121 @@ void test_fast_title_and_held_first_choice()
 	reach_main_menu(*scene);
 	const auto selected = scene->advance({.down = true, .ok = true});
 	expect(
-		selected && selected->ready && selected->selection_changed &&
-			scene->selected_choice() == ClassicOpMenuChoice::versus,
-		"first held menu sample moves and commits immediately"
+		selected && !selected->ready && selected->selection_changed &&
+			scene->selected_choice() == ClassicOpMenuChoice::versus &&
+			scene->phase() == ClassicOpPhase::vs_grow_window,
+		"first held menu sample moves and enters the blocking VS submenu"
+	);
+	for(std::uint16_t frame = 0U; frame < 13U; ++frame) {
+		expect(scene->advance().has_value(), "VS submenu grow frame advances");
+	}
+	expect(
+		scene->phase() == ClassicOpPhase::vs_menu &&
+			scene->selected_vs_choice() == ClassicOpVsChoice::one_player_cpu,
+		"136-to-240-pixel grow publishes the source default VS choice"
+	);
+	const auto confirmed = scene->advance({.ok = true});
+	expect(
+		confirmed && confirmed->ready,
+		"first VS submenu sample can confirm while held"
 	);
 	auto completion = scene->take_completion();
 	expect(
 		completion && completion->route() == ClassicOpRoute::versus &&
-			completion->resident().resident_rand == 42,
-		"VS handoff retains both source menu-loop random increments"
+			completion->selection_mode() ==
+				ClassicOpSelectionMode::vs_1p_cpu &&
+			completion->resident().resident_rand == 41,
+		"VS handoff omits the outer random increment after a non-returning route"
 	);
 	if(completion) {
 		expect(
-			completion->tram().cell({25, 17})->attribute ==
-				th03::present::tram_black &&
-			completion->tram().cell({23, 18})->attribute ==
+			completion->tram().cell({27, 18})->attribute ==
 				th03::present::tram_white,
-			"MIKOFT labels use the source shifted centers and attributes"
+			"MIKOFT VS labels use the source fixed submenu columns"
 		);
 		expect(
 			completion->raster().pixel(Page::zero, {160, 256}) == 1U &&
-			completion->raster().pixel(Page::zero, {280, 256}) == 2U,
+			completion->raster().pixel(Page::zero, {392, 256}) == 2U,
 			"OPWIN left and final right glyphs remain on TL02"
 		);
 	}
 	expect(
 		scene->phase() == ClassicOpPhase::consumed,
 		"typed OP handoff is single-consumer"
+	);
+}
+
+void test_story_seed_and_vs_cancel_return()
+{
+	auto story = make_scene(ClassicOpTitleMode::fast_fade);
+	if(!story) {
+		return;
+	}
+	reach_main_menu(*story);
+	const auto selected = story->advance({.ok = true});
+	auto story_completion = story->take_completion();
+	expect(
+		selected && selected->ready && story_completion &&
+			story_completion->route() == ClassicOpRoute::story &&
+			story_completion->selection_mode() ==
+				ClassicOpSelectionMode::story &&
+			story_completion->resident().resident_rand == 41,
+		"Story selector receives the pre-main-loop seed without a forged increment"
+	);
+
+	auto versus = make_scene(ClassicOpTitleMode::fast_fade);
+	if(!versus) {
+		return;
+	}
+	reach_main_menu(*versus);
+	static_cast<void>(versus->advance({.down = true, .ok = true}));
+	for(std::uint16_t frame = 0U; frame < 13U; ++frame) {
+		static_cast<void>(versus->advance());
+	}
+	expect(
+		versus->tram().cell({27, 18})->attribute ==
+			th03::present::tram_white &&
+		versus->tram().cell({27, 19})->attribute ==
+			th03::present::tram_black &&
+		versus->tram().cell({27, 20})->attribute ==
+			th03::present::tram_black,
+		"VS submenu draws exactly three source rows"
+	);
+	const auto simultaneous = versus->advance({.up = true, .down = true});
+	expect(
+		simultaneous && simultaneous->selection_changed &&
+			versus->selected_vs_choice() ==
+				ClassicOpVsChoice::one_player_cpu,
+		"independent Up and Down operations net to the same VS choice"
+	);
+	expect(
+		versus->advance({.up = true, .down = true}).has_value() &&
+			versus->selected_vs_choice() ==
+				ClassicOpVsChoice::one_player_cpu,
+		"held VS input remains suppressed until release"
+	);
+	static_cast<void>(versus->advance());
+	const auto canceled = versus->advance({.cancel = true});
+	expect(
+		canceled && canceled->phase == ClassicOpPhase::vs_shrink_window &&
+			versus->resident().resident_rand == 42,
+		"VS submenu cancel performs the returning outer-loop random increment"
+	);
+	for(std::uint16_t frame = 0U; frame < 14U; ++frame) {
+		static_cast<void>(versus->advance());
+	}
+	const auto returned = versus->advance();
+	expect(
+		returned && returned->phase == ClassicOpPhase::main_menu,
+		"VS contraction reaches the retained main-menu phase"
+	);
+	expect(
+		versus->selected_choice() == ClassicOpMenuChoice::versus,
+		"retained main menu restores the VS highlight"
+	);
+	expect(
+		versus->resident().resident_rand == 43,
+		"VS cancel and retained-main redraw each complete one outer-loop frame"
 	);
 }
 
@@ -463,6 +554,7 @@ void local_original_gate(const std::filesystem::path &content_root)
 int main(int argc, char **argv)
 {
 	test_fast_title_and_held_first_choice();
+	test_story_seed_and_vs_cancel_return();
 	test_menu_input_lock_and_cancel();
 	test_demo_timeout_and_blackout();
 	test_long_title_cadence();

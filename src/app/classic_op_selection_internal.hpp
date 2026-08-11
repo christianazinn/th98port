@@ -154,7 +154,6 @@ public:
 		ClassicOpSelectionCarry carry,
 		std::span<const LoadedMainResource> resources
 	);
-
 	~ClassicOpCharacterSelection() = default;
 	ClassicOpCharacterSelection(const ClassicOpCharacterSelection &) = delete;
 	ClassicOpCharacterSelection &operator=(

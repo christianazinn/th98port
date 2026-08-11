@@ -691,10 +691,23 @@ void local_original_gate(
 		(*music)->advance({.controls = {.cancel = true}}).has_value(),
 		"local Music Room accepts Cancel"
 	);
+	expect((*music)->advance().has_value(),
+		"local Music Room reaches its typed completion");
+	auto music_completion = (*music)->take_completion();
+	expect(music_completion.has_value(),
+		"local Music Room returns through its typed completion");
+	if(!music_completion) {
+		return;
+	}
+	auto returned = th03::app::ClassicOpTitleMenuScene::return_from_music_room(
+		*music_completion, *title_resources
+	);
 	expect(
-		(*music)->advance().has_value() &&
-			(*music)->take_completion().has_value(),
-		"local Music Room returns through its typed completion"
+		returned && (*returned)->phase() == th03::app::ClassicOpPhase::fast_black &&
+			(*returned)->resident().fast_op_animation ==
+				music_completion->resident().fast_op_animation &&
+			!(*returned)->take_audio_command(),
+		"Music Room return starts the ordinary fast title without toggling state"
 	);
 }
 

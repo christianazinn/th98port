@@ -423,13 +423,15 @@ ClassicOpCharacterSelection::create_from_op(
 {
 	const auto expected_route = (mode == ClassicOpSelectionMode::story) ?
 		ClassicOpRoute::story : ClassicOpRoute::versus;
-	if(completion.route() != expected_route) {
+	if(completion.route() != expected_route ||
+		completion.selection_mode() != mode) {
 		return std::unexpected(selection_error(
 			ClassicOpSelectionErrorCode::invalid_config
 		));
 	}
 	auto resident = completion.resident();
-	if(expected_route == ClassicOpRoute::versus) {
+	if(expected_route == ClassicOpRoute::versus &&
+		completion.resets_vs_selection()) {
 		resident.paletted_character = {1, 1};
 	}
 	return create_impl(

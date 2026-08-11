@@ -928,11 +928,35 @@ void local_original_gate(const std::filesystem::path &content_root)
 		"local OP reaches the main menu");
 	expect((*title)->advance({.down = true, .ok = true}).has_value(),
 		"local OP selects Versus");
+	for(std::uint16_t frame = 0U; frame < 13U; ++frame) {
+		expect((*title)->advance().has_value(),
+			"local OP VS submenu expands");
+	}
+	expect((*title)->advance({.down = true}).has_value(),
+		"local OP selects 1P-vs-2P");
+	expect((*title)->advance().has_value(),
+		"local OP releases the VS input lock");
+	expect((*title)->advance({.ok = true}).has_value(),
+		"local OP confirms 1P-vs-2P");
 	auto title_completion = (*title)->take_completion();
 	expect(title_completion.has_value(),
 		"local OP publishes the typed MIKOFT-bearing completion");
 	if(!title_completion) { return; }
 
+	auto mismatched = ClassicOpCharacterSelection::create_from_op(
+		*title_completion,
+		ClassicOpSelectionMode::vs_1p_cpu,
+		9U,
+		{},
+		*selection_resources
+	);
+	expect(
+		!mismatched && mismatched.error().code ==
+			th03::app::ClassicOpSelectionErrorCode::invalid_config &&
+			title_completion->selection_mode() ==
+				ClassicOpSelectionMode::vs_1p_2p,
+		"selector rejects a mismatched VS mode without consuming the title handoff"
+	);
 	auto selection = ClassicOpCharacterSelection::create_from_op(
 		*title_completion,
 		ClassicOpSelectionMode::vs_1p_2p,
@@ -955,6 +979,28 @@ void local_original_gate(const std::filesystem::path &content_root)
 		rectangle_has_ink((*selection)->raster(), Page::zero, 240, 128, 256, 160) &&
 		rectangle_has_ink((*selection)->raster(), Page::zero, 384, 128, 400, 160),
 		"authenticated MIKOFT renders both source cursor halves"
+	);
+	drain_frame(**selection);
+	expect((*selection)->advance({.single_player = 0x1000U}).has_value(),
+		"authenticated selector accepts Cancel");
+	expect((*selection)->take_audio_command().has_value(),
+		"authenticated selector Cancel publishes Stop");
+	auto selection_completion = (*selection)->take_completion();
+	expect(
+		selection_completion && selection_completion->outcome() ==
+			ClassicOpSelectionOutcome::canceled,
+		"authenticated selector publishes its canceled completion"
+	);
+	if(!selection_completion) { return; }
+	auto returned = ClassicOpTitleMenuScene::return_from_canceled_selection(
+		*selection_completion, *title_resources
+	);
+	expect(
+		returned && (*returned)->phase() == ClassicOpPhase::fast_black &&
+			(*returned)->resident().fast_op_animation ==
+				selection_completion->resident().fast_op_animation &&
+			!(*returned)->take_audio_command(),
+		"canceled selector returns through the fast title without toggling state"
 	);
 }
 

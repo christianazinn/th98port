@@ -10,6 +10,9 @@
 #include <span>
 #include <utility>
 
+#include "classic_op_music_room_internal.hpp"
+#include "classic_op_options_scene_internal.hpp"
+#include "classic_op_selection_internal.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/present/pi.hpp"
 
@@ -21,6 +24,7 @@ constexpr std::int32_t box_top = 256;
 constexpr std::int32_t box_main_center_x = 228;
 constexpr std::int32_t box_height = 128;
 constexpr std::int32_t box_main_width = 136;
+constexpr std::int32_t box_submenu_width = 240;
 constexpr std::int32_t opwin_width = 16;
 constexpr std::int32_t opwin_step_width = 8;
 constexpr std::int32_t initial_box_width =
@@ -30,6 +34,12 @@ constexpr std::uint16_t selection_pause_frames = 16U;
 constexpr std::uint16_t flash_frames = 16U;
 constexpr std::uint16_t fast_fade_frames = 25U;
 constexpr std::uint16_t demo_wait_frames = 520U;
+constexpr std::uint16_t submenu_grow_frames =
+	static_cast<std::uint16_t>(
+		(box_submenu_width - box_main_width) / opwin_step_width
+	);
+constexpr std::uint16_t submenu_shrink_frames =
+	static_cast<std::uint16_t>(submenu_grow_frames + 1U);
 
 struct MenuLabel final {
 	std::uint8_t first = 0U;
@@ -190,11 +200,15 @@ template <typename Value, typename Decoder>
 
 ClassicOpCompletion::ClassicOpCompletion(
 	ClassicOpRoute route,
+	std::optional<ClassicOpSelectionMode> selection_mode,
+	bool reset_vs_selection,
 	GameInit resident,
 	present::Raster raster,
 	present::Tram tram
 ) noexcept :
 	route_(route),
+	selection_mode_(selection_mode),
+	reset_vs_selection_(reset_vs_selection),
 	resident_(std::move(resident)),
 	raster_(std::move(raster)),
 	tram_(std::move(tram))
@@ -203,6 +217,17 @@ ClassicOpCompletion::ClassicOpCompletion(
 ClassicOpRoute ClassicOpCompletion::route() const noexcept
 {
 	return route_;
+}
+
+bool ClassicOpCompletion::resets_vs_selection() const noexcept
+{
+	return reset_vs_selection_;
+}
+
+std::optional<ClassicOpSelectionMode>
+ClassicOpCompletion::selection_mode() const noexcept
+{
+	return selection_mode_;
 }
 
 const GameInit &ClassicOpCompletion::resident() const noexcept
@@ -223,7 +248,7 @@ const present::Tram &ClassicOpCompletion::tram() const noexcept
 ClassicOpTitleMenuScene::ClassicOpTitleMenuScene(
 	std::unique_ptr<Prepared> prepared,
 	GameInit resident,
-	ClassicOpTitleMode title_mode
+	EntryPolicy policy
 ) noexcept :
 	prepared_(std::move(prepared)),
 	resident_(std::move(resident)),
@@ -231,7 +256,8 @@ ClassicOpTitleMenuScene::ClassicOpTitleMenuScene(
 {
 	tram_.fill({});
 	prepared_->gaiji->install(tram_);
-	if(title_mode == ClassicOpTitleMode::long_animation) {
+	increment_rand_after_box_ = policy == EntryPolicy::fullscreen_return;
+	if(policy == EntryPolicy::startup_long) {
 		static_cast<void>(push_audio_command({
 			.type = ClassicAudioCommandType::stop_song,
 		}));
@@ -240,15 +266,34 @@ ClassicOpTitleMenuScene::ClassicOpTitleMenuScene(
 			.cue = ClassicMusicCue::menu_main,
 		}));
 	}
-	resident_.fast_op_animation =
-		(title_mode == ClassicOpTitleMode::long_animation) ? 1U : 0U;
-	const auto initialized =
-		(title_mode == ClassicOpTitleMode::long_animation) ?
-			initialize_long_title() : initialize_fast_title();
+	if(policy == EntryPolicy::startup_long) {
+		resident_.fast_op_animation = 1U;
+	} else if(policy == EntryPolicy::startup_fast) {
+		resident_.fast_op_animation = 0U;
+	}
+	const auto initialized = (policy == EntryPolicy::startup_long) ?
+		initialize_long_title() : initialize_fast_title();
 	if(!initialized) {
 		fail();
 	}
 }
+
+ClassicOpTitleMenuScene::ClassicOpTitleMenuScene(
+	std::unique_ptr<Prepared> prepared,
+	GameInit resident,
+	present::Raster raster,
+	present::Tram tram,
+	bool input_allowed
+) noexcept :
+	prepared_(std::move(prepared)),
+	resident_(std::move(resident)),
+	raster_(std::move(raster)),
+	tram_(std::move(tram)),
+	page_snapshot_(present::graphics_page_pixels, 0U),
+	phase_(ClassicOpPhase::main_menu),
+	selected_(ClassicOpMenuChoice::options),
+	menu_input_allowed_(input_allowed)
+{}
 
 std::expected<std::unique_ptr<ClassicOpTitleMenuScene>, ClassicOpError>
 ClassicOpTitleMenuScene::create(
@@ -277,32 +322,123 @@ ClassicOpTitleMenuScene::create_impl(
 	if(!mode_matches_resident) {
 		return std::unexpected(op_error(ClassicOpErrorCode::invalid_state));
 	}
+	auto prepared = prepare_resources(resources, authenticate_resource_bytes);
+	if(!prepared) {
+		return std::unexpected(std::move(prepared.error()));
+	}
+	const auto policy = (title_mode == ClassicOpTitleMode::long_animation) ?
+		EntryPolicy::startup_long : EntryPolicy::startup_fast;
+	auto result = std::unique_ptr<ClassicOpTitleMenuScene>(
+		new ClassicOpTitleMenuScene(
+			std::move(*prepared), std::move(resident), policy
+		)
+	);
+	if(result->phase_ == ClassicOpPhase::failed) {
+		return std::unexpected(op_error(ClassicOpErrorCode::draw_failed));
+	}
+	return result;
+}
+
+std::expected<std::unique_ptr<ClassicOpTitleMenuScene>, ClassicOpError>
+ClassicOpTitleMenuScene::resume_from_options(
+	const ClassicOpOptionsCompletion &completion,
+	std::span<const LoadedMainResource> resources
+)
+{
+	if(completion.raster().raster_mode() != present::RasterMode::lines_400 ||
+		completion.raster().shown_page() != present::Page::zero ||
+		completion.raster().access_page() != present::Page::zero) {
+		return std::unexpected(op_error(ClassicOpErrorCode::invalid_state));
+	}
+	auto prepared = prepare_resources(resources, true);
+	if(!prepared) {
+		return std::unexpected(std::move(prepared.error()));
+	}
+	return std::unique_ptr<ClassicOpTitleMenuScene>(
+		new ClassicOpTitleMenuScene(
+			std::move(*prepared), completion.resident(), completion.raster(),
+			completion.tram(), completion.main_input_allowed()
+		)
+	);
+}
+
+std::expected<std::unique_ptr<ClassicOpTitleMenuScene>, ClassicOpError>
+ClassicOpTitleMenuScene::return_from_music_room(
+	const ClassicOpMusicRoomCompletion &completion,
+	std::span<const LoadedMainResource> resources
+)
+{
+	auto prepared = prepare_resources(resources, true);
+	if(!prepared) {
+		return std::unexpected(std::move(prepared.error()));
+	}
+	auto result = std::unique_ptr<ClassicOpTitleMenuScene>(
+		new ClassicOpTitleMenuScene(
+			std::move(*prepared), completion.resident(),
+			EntryPolicy::fullscreen_return
+		)
+	);
+	if(result->phase_ == ClassicOpPhase::failed) {
+		return std::unexpected(op_error(ClassicOpErrorCode::draw_failed));
+	}
+	return result;
+}
+
+std::expected<std::unique_ptr<ClassicOpTitleMenuScene>, ClassicOpError>
+ClassicOpTitleMenuScene::return_from_canceled_selection(
+	const ClassicOpSelectionCompletion &completion,
+	std::span<const LoadedMainResource> resources
+)
+{
+	if(completion.outcome() != ClassicOpSelectionOutcome::canceled) {
+		return std::unexpected(op_error(ClassicOpErrorCode::invalid_state));
+	}
+	auto prepared = prepare_resources(resources, true);
+	if(!prepared) {
+		return std::unexpected(std::move(prepared.error()));
+	}
+	auto result = std::unique_ptr<ClassicOpTitleMenuScene>(
+		new ClassicOpTitleMenuScene(
+			std::move(*prepared), completion.resident(),
+			EntryPolicy::fullscreen_return
+		)
+	);
+	if(result->phase_ == ClassicOpPhase::failed) {
+		return std::unexpected(op_error(ClassicOpErrorCode::draw_failed));
+	}
+	return result;
+}
+
+std::expected<
+	std::unique_ptr<ClassicOpTitleMenuScene::Prepared>,
+	ClassicOpError
+> ClassicOpTitleMenuScene::prepare_resources(
+	std::span<const LoadedMainResource> resources,
+	bool authenticate_resource_bytes
+)
+{
 	auto validated = validate_resource_set(
 		resources, authenticate_resource_bytes
 	);
 	if(!validated) {
 		return std::unexpected(std::move(validated.error()));
 	}
-
 	auto long_background = decode_asset<assets::PiImage>(
-		resources,
-		{.role = MainResourceRole::op_title_long_background},
+		resources, {.role = MainResourceRole::op_title_long_background},
 		assets::decode_pi
 	);
 	if(!long_background) {
 		return std::unexpected(std::move(long_background.error()));
 	}
 	auto menu_background = decode_asset<assets::PiImage>(
-		resources,
-		{.role = MainResourceRole::op_menu_background},
+		resources, {.role = MainResourceRole::op_menu_background},
 		assets::decode_pi
 	);
 	if(!menu_background) {
 		return std::unexpected(std::move(menu_background.error()));
 	}
 	auto window_sheet = decode_asset<assets::BfntSheet>(
-		resources,
-		{.role = MainResourceRole::op_window_sheet},
+		resources, {.role = MainResourceRole::op_window_sheet},
 		[](std::span<const std::byte> bytes) {
 			return assets::decode_bfnt(
 				bytes, assets::BfntConsumerPolicy::superimpose
@@ -313,8 +449,7 @@ ClassicOpTitleMenuScene::create_impl(
 		return std::unexpected(std::move(window_sheet.error()));
 	}
 	auto gaiji = decode_asset<assets::BfntSheet>(
-		resources,
-		{.role = MainResourceRole::op_gaiji_font},
+		resources, {.role = MainResourceRole::op_gaiji_font},
 		[](std::span<const std::byte> bytes) {
 			return assets::decode_bfnt(
 				bytes, assets::BfntConsumerPolicy::gaiji
@@ -324,11 +459,34 @@ ClassicOpTitleMenuScene::create_impl(
 	if(!gaiji) {
 		return std::unexpected(std::move(gaiji.error()));
 	}
-	return create_predecoded(
-		std::move(resident), title_mode, std::move(*long_background),
-		std::move(*menu_background), std::move(*window_sheet),
-		std::move(*gaiji)
-	);
+	if(!valid_fullscreen_pi(*long_background) ||
+		!valid_fullscreen_pi(*menu_background) ||
+		window_sheet->header.pixel_width != 16U ||
+		window_sheet->header.pixel_height != 128U ||
+		window_sheet->header.first_code != 0U ||
+		window_sheet->header.last_code != 2U) {
+		return std::unexpected(op_error(
+			ClassicOpErrorCode::invalid_asset_geometry
+		));
+	}
+	auto prepared_window = present::prepare_superimpose_sheet(*window_sheet);
+	if(!prepared_window) {
+		return std::unexpected(op_error(
+			ClassicOpErrorCode::invalid_asset_geometry
+		));
+	}
+	auto prepared_gaiji = PreparedGameftGaiji::prepare(*gaiji);
+	if(!prepared_gaiji) {
+		auto error = op_error(ClassicOpErrorCode::font_prepare_failed);
+		error.text_error.emplace(prepared_gaiji.error());
+		return std::unexpected(std::move(error));
+	}
+	auto prepared = std::make_unique<Prepared>();
+	prepared->long_background = std::move(*long_background);
+	prepared->menu_background = std::move(*menu_background);
+	prepared->window_sheet.emplace(std::move(*prepared_window));
+	prepared->gaiji.emplace(std::move(*prepared_gaiji));
+	return prepared;
 }
 
 std::expected<std::unique_ptr<ClassicOpTitleMenuScene>, ClassicOpError>
@@ -378,7 +536,9 @@ ClassicOpTitleMenuScene::create_predecoded(
 	prepared->gaiji.emplace(std::move(*prepared_gaiji));
 	auto result = std::unique_ptr<ClassicOpTitleMenuScene>(
 		new ClassicOpTitleMenuScene(
-			std::move(prepared), std::move(resident), title_mode
+			std::move(prepared), std::move(resident),
+			(title_mode == ClassicOpTitleMode::long_animation) ?
+				EntryPolicy::startup_long : EntryPolicy::startup_fast
 		)
 	);
 	if(result->phase_ == ClassicOpPhase::failed) {
@@ -566,6 +726,89 @@ bool ClassicOpTitleMenuScene::update_selection(int direction) noexcept
 		draw_choice(selected_, present::tram_white);
 }
 
+bool ClassicOpTitleMenuScene::draw_vs_choice(
+	ClassicOpVsChoice choice,
+	present::TramAttribute attribute
+) noexcept
+{
+	constexpr std::array<std::array<std::uint8_t, 8U>, 3U> labels{{
+		{{0x88U, 0x89U, 0x8AU, 0x8BU, 0x8CU, 0x8DU, 0x8EU, 0x8FU}},
+		{{0x88U, 0x89U, 0x8AU, 0x8BU, 0x96U, 0x97U, 0x98U, 0x99U}},
+		{{0x92U, 0x93U, 0x94U, 0x95U, 0x8CU, 0x8DU, 0x8EU, 0x8FU}},
+	}};
+	const auto raw = static_cast<std::size_t>(choice);
+	const auto tram_y = (box_top / present::gaiji_height) + 1 +
+		static_cast<std::int32_t>(raw + 1U);
+	if(raw >= labels.size()) {
+		return false;
+	}
+	for(std::size_t glyph = 0U; glyph < labels[raw].size(); ++glyph) {
+		if(!tram_.put_gaiji(
+			{27 + (static_cast<std::int32_t>(glyph) * 2), tram_y},
+			labels[raw][glyph], attribute
+		)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool ClassicOpTitleMenuScene::draw_vs_choices() noexcept
+{
+	for(std::uint8_t raw = 0U; raw < 3U; ++raw) {
+		const auto choice = static_cast<ClassicOpVsChoice>(raw);
+		if(!draw_vs_choice(
+			choice,
+			(choice == selected_vs_) ?
+				present::tram_white : present::tram_black
+		)) {
+			return false;
+		}
+	}
+	menu_input_allowed_ = true;
+	return true;
+}
+
+bool ClassicOpTitleMenuScene::update_vs_selection(int direction) noexcept
+{
+	const auto old = selected_vs_;
+	auto next = static_cast<int>(selected_vs_) + direction;
+	if(next < 0) {
+		next = 2;
+	} else if(next > 2) {
+		next = 0;
+	}
+	selected_vs_ = static_cast<ClassicOpVsChoice>(next);
+	return draw_vs_choice(old, present::tram_black) &&
+		draw_vs_choice(selected_vs_, present::tram_white);
+}
+
+bool ClassicOpTitleMenuScene::grow_box_step() noexcept
+{
+	if(!restore_menu_background(
+		box_right_left_, box_top,
+		static_cast<std::uint16_t>(opwin_step_width * 2),
+		static_cast<std::uint16_t>(box_height)
+	) || !draw_window_glyph(box_right_left_, 2U)) {
+		return false;
+	}
+	box_right_left_ += opwin_step_width;
+	return true;
+}
+
+bool ClassicOpTitleMenuScene::shrink_box_step() noexcept
+{
+	if(!restore_menu_background(
+		box_right_left_, box_top,
+		static_cast<std::uint16_t>(opwin_step_width * 2),
+		static_cast<std::uint16_t>(box_height)
+	) || !draw_window_glyph(box_right_left_ - opwin_step_width, 2U)) {
+		return false;
+	}
+	box_right_left_ -= opwin_step_width;
+	return true;
+}
+
 bool ClassicOpTitleMenuScene::begin_menu_swap() noexcept
 {
 	raster_.set_palette_tone(200);
@@ -615,10 +858,25 @@ bool ClassicOpTitleMenuScene::push_audio_command(
 	return true;
 }
 
-void ClassicOpTitleMenuScene::select_route(ClassicOpRoute route) noexcept
+void ClassicOpTitleMenuScene::select_route(
+	ClassicOpRoute route,
+	std::optional<ClassicOpSelectionMode> selection_mode
+) noexcept
 {
+	if(route == ClassicOpRoute::high_scores) {
+		resident_.story_stage = 0xFFU;
+		resident_.show_score_menu = 1U;
+		resident_.game_mode = game_mode::none;
+		resident_.last_score = {};
+		static_cast<void>(push_audio_command({
+			.type = ClassicAudioCommandType::stop_song,
+			.cue = ClassicMusicCue::menu_main,
+		}));
+	}
 	completion_ = ClassicOpCompletion(
-		route, std::move(resident_), std::move(raster_), std::move(tram_)
+		route, selection_mode, route == ClassicOpRoute::versus,
+		std::move(resident_), std::move(raster_),
+		std::move(tram_)
 	);
 	phase_ = ClassicOpPhase::ready;
 }
@@ -636,6 +894,7 @@ void ClassicOpTitleMenuScene::select_demo_route() noexcept
 	const auto index = static_cast<std::size_t>(resident_.demo_number - 1U);
 	resident_.paletted_character = demo_pairings[index];
 	resident_.resident_rand = demo_random[index];
+	resident_.last_score = {};
 	demo_route_pending_ = true;
 	phase_frame_ = 0U;
 	phase_ = ClassicOpPhase::demo_black_out;
@@ -823,6 +1082,10 @@ ClassicOpTitleMenuScene::advance(ClassicOpInput input)
 		++phase_frame_;
 		if(box_right_left_ ==
 			(box_left + box_main_width - opwin_step_width)) {
+			if(increment_rand_after_box_) {
+				++resident_.resident_rand;
+				increment_rand_after_box_ = false;
+			}
 			phase_frame_ = 0U;
 			phase_ = ClassicOpPhase::main_menu;
 		}
@@ -873,8 +1136,24 @@ ClassicOpTitleMenuScene::advance(ClassicOpInput input)
 		if(input.any()) {
 			menu_input_allowed_ = false;
 		}
-		++resident_.resident_rand;
-		if(selected_route) {
+		if(!selected_route || *selected_route == ClassicOpRoute::options ||
+			*selected_route == ClassicOpRoute::quit) {
+			++resident_.resident_rand;
+		}
+		if(selected_route == ClassicOpRoute::versus) {
+			resident_.paletted_character = {1, 1};
+			tram_.fill({});
+			selected_vs_ = ClassicOpVsChoice::one_player_cpu;
+			box_right_left_ =
+				box_left + box_main_width - opwin_step_width;
+			phase_frame_ = 0U;
+			phase_ = ClassicOpPhase::vs_grow_window;
+			tram_changed = true;
+		} else if(selected_route == ClassicOpRoute::story) {
+			select_route(
+				ClassicOpRoute::story, ClassicOpSelectionMode::story
+			);
+		} else if(selected_route) {
 			select_route(*selected_route);
 		}
 		return tick(
@@ -882,6 +1161,96 @@ ClassicOpTitleMenuScene::advance(ClassicOpInput input)
 			selection_changed
 		);
 	}
+	case ClassicOpPhase::vs_grow_window:
+		if(!grow_box_step()) {
+			fail();
+			return std::unexpected(op_error(ClassicOpErrorCode::draw_failed));
+		}
+		++phase_frame_;
+		if(phase_frame_ == submenu_grow_frames) {
+			phase_frame_ = 0U;
+			if(!draw_vs_choices()) {
+				fail();
+				return std::unexpected(op_error(
+					ClassicOpErrorCode::draw_failed
+				));
+			}
+			phase_ = ClassicOpPhase::vs_menu;
+			return tick(ClassicOpBoundary::vsync, true, true);
+		}
+		return tick(ClassicOpBoundary::vsync, true);
+	case ClassicOpPhase::vs_menu: {
+		bool tram_changed = false;
+		bool selection_changed = false;
+		if(!input.any()) {
+			menu_input_allowed_ = true;
+		}
+		if(menu_input_allowed_) {
+			if(input.up) {
+				if(!update_vs_selection(-1)) {
+					fail();
+					return std::unexpected(op_error(
+						ClassicOpErrorCode::draw_failed
+					));
+				}
+				tram_changed = true;
+				selection_changed = true;
+			}
+			if(input.down) {
+				if(!update_vs_selection(1)) {
+					fail();
+					return std::unexpected(op_error(
+						ClassicOpErrorCode::draw_failed
+					));
+				}
+				tram_changed = true;
+				selection_changed = true;
+			}
+			if(input.cancel) {
+				++resident_.resident_rand;
+				tram_.fill({});
+				box_right_left_ =
+					box_left + box_submenu_width - opwin_step_width;
+				phase_frame_ = 0U;
+				phase_ = ClassicOpPhase::vs_shrink_window;
+				tram_changed = true;
+			} else if(input.ok || input.shot) {
+				const auto mode = static_cast<ClassicOpSelectionMode>(
+					static_cast<std::uint8_t>(selected_vs_) + 1U
+				);
+				select_route(ClassicOpRoute::versus, mode);
+			}
+		}
+		if(input.any()) {
+			menu_input_allowed_ = false;
+		}
+		return tick(
+			ClassicOpBoundary::vsync, false, tram_changed, true,
+			selection_changed
+		);
+	}
+	case ClassicOpPhase::vs_shrink_window:
+		if(!shrink_box_step()) {
+			fail();
+			return std::unexpected(op_error(ClassicOpErrorCode::draw_failed));
+		}
+		++phase_frame_;
+		if(phase_frame_ == submenu_shrink_frames) {
+			phase_frame_ = 0U;
+			phase_ = ClassicOpPhase::vs_return_main;
+		}
+		return tick(ClassicOpBoundary::vsync, true);
+	case ClassicOpPhase::vs_return_main:
+		selected_ = ClassicOpMenuChoice::versus;
+		if(!draw_main_choices()) {
+			fail();
+			return std::unexpected(op_error(ClassicOpErrorCode::draw_failed));
+		}
+		menu_input_allowed_ = false;
+		phase_frame_ = 1U;
+		phase_ = ClassicOpPhase::main_menu;
+		++resident_.resident_rand;
+		return tick(ClassicOpBoundary::vsync, false, true);
 	case ClassicOpPhase::demo_black_out:
 		if(!demo_route_pending_) {
 			fail();
@@ -934,7 +1303,7 @@ ClassicOpTitleMenuScene::take_audio_command() noexcept
 std::optional<ClassicOpCompletion>
 ClassicOpTitleMenuScene::take_completion() noexcept
 {
-	if(phase_ != ClassicOpPhase::ready || !completion_) {
+	if(phase_ != ClassicOpPhase::ready || !completion_ || audio_count_ != 0U) {
 		return std::nullopt;
 	}
 	auto result = std::move(completion_);
@@ -951,6 +1320,11 @@ ClassicOpPhase ClassicOpTitleMenuScene::phase() const noexcept
 ClassicOpMenuChoice ClassicOpTitleMenuScene::selected_choice() const noexcept
 {
 	return selected_;
+}
+
+ClassicOpVsChoice ClassicOpTitleMenuScene::selected_vs_choice() const noexcept
+{
+	return selected_vs_;
 }
 
 const GameInit &ClassicOpTitleMenuScene::resident() const noexcept
