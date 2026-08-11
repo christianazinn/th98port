@@ -147,11 +147,12 @@ foundations:
   atomic store are also integrated with the OP score and option views;
   localization and optional QoL remain separate product work.
 
-The complete silent Classic developer slice and the direct-VS slice are now
-visible and interactive. The byte-fed PMD/YM2608 engine and source-shaped TH03
-transport/SFX/EFC service are also implemented, but they are not yet
-fidelity-complete: device/scene-audio integration, exact source
-cadence/phase, captured PC-98 page/palette/pixel
+The complete Classic developer slice and the direct-VS slice are now visible
+and interactive. The byte-fed PMD/YM2608 engine, source-shaped TH03
+transport/SFX/EFC service, deterministic Classic scene-command session, and
+bounded SDL delivery are also integrated. Audio is not yet fidelity-complete:
+gameplay-stage cue/SFX emitters, rhythm-ROM packaging, exact source cadence/phase,
+captured PC-98 page/palette/pixel
 traces, and a human two-player run remain acceptance gates. The host therefore requires an
 explicit rational cadence as policy rather than labeling an inferred number
 authentic.
@@ -184,8 +185,10 @@ The existing dependency direction is already appropriate:
   measure/volume/pause/part-mask state, the exact one-slot TH03 SFX scheduler,
   bounded external EFC parsing and Timer-A/FM6 playback, supplied rhythm-ROM
   access, YM2608 synthesis, register tracing, deterministic native PCM, and the
-  fixed 166,400-to-48,000 Hz integer resampler. Device delivery and scene-command
-  binding remain later layers.
+  fixed 166,400-to-48,000 Hz integer resampler. The Classic app session owns
+  authenticated file-backed cue binding; the thin SDL executable owns final
+  delivery. Gameplay command emission, gain policy, and rhythm-ROM packaging
+  remain later layers.
 - th03_platform_sdl owns the bounded default-device playback stream, canonical
   source-format queue, final-output overrun telemetry, and a subordinate shared
   SDL lifetime lease. It cannot advance or backpressure simulation.
@@ -299,7 +302,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
 | OP menus, Story, MAINL, cutscenes, staff | Integrated | The source-private OP owner binds title, retained Options/Music Room, read-only HiScore, Story/all-VS selection, Story, MAINL/MAIN VS, winner return, both interstages, primary and conditional extra endings, staff/verdict, score persistence, registration, and the exact four-recipe automatic Demo loop. No external OP route or replay UI is required. |
-| Audio | Engine, TH03 transport/SFX/EFC service, fixed resampler, and SDL endpoint integrated; Classic binding still No | The pinned engine advances all 21 songs offline; generated gates lock transport, scheduler/EFC ownership, bit-identical 15/52 resampling, and bounded newest-output SDL queuing. The byte-silent external gate starts and terminates all 22 authored effects. Authenticated scene binding and physical-device QA remain release work. |
+| Audio | Engine, TH03 transport/SFX/EFC service, fixed resampler, Classic session, and SDL endpoint integrated | The launcher applies source-semantic scene commands, advances one deterministic audio interval per logical sample, and treats device loss as delivery-only. Authenticated gates cover all 30 reachable cue identities and 22 effects. Gameplay-stage emitters, rhythm-ROM packaging, shipped-TSR traces, and physical-device QA remain release work. |
 | Persistent score/configuration UI and localization/QoL | Original UI integrated; QoL pending | The exact original score/config codecs, source mutation rules, validated atomic whole-file stores, OP Options, and read-only HiScore/MAINL registration paths are app-owned. Localization and optional QoL remain outside core. |
 
 The following parcels can proceed now, provided they do not claim readiness for VS or change core semantics:
@@ -311,7 +314,7 @@ The following parcels can proceed now, provided they do not claim readiness for 
 | Final PC-98 source-surface compositor | th03_present | Synthetic Raster/TRAM/palette fixtures prove page selection, palette resolution, gaiji placement, and 640x400 output. |
 | Selection/title asset mapping and presenter primitives | th03_present plus app-owned scene code | Source table and synthetic/unit render tests; no dependency on the MAIN compositor being finished. |
 | Cutscene Raster/resource executor | `th03_present` plus app-owned scene content | Execute the completed supplied-byte VM's typed operations against the Master/upstream two-page model; retain script/resource ownership outside presentation and keep audio operations semantic. |
-| PMD/OPNA semantic-command integration | th03_audio_pmd plus app semantic commands | Authenticated external content and normalized shipped-TSR register traces for load/play/fade/measure/effects; no gameplay or device-clock feedback. |
+| Gameplay PMD command emitters | MAIN-facing app/presentation observer seams | Source-ordered stage cue and SFX facts feed the existing deterministic session without gameplay or device-clock feedback. |
 
 Avoid creating a placeholder th03-app which owns a second renderer or game state. The useful early app work is resource, input, clock, and construction seams with tests; the only gameplay frame producer remains th03_core plus its borrowed presentation observer.
 
@@ -361,8 +364,11 @@ audio library converts the explicit 166,400 Hz policy stream to canonical 48 kHz
 with a fixed integer 15/52 polyphase FIR. `ClassicAudioSession` now authenticates
 the external PMD/EFC inventory, maps every existing semantic scene command, and
 advances one bounded rational PCM block per logical tick. `th03_platform_sdl`
-supplies the bounded playback stream that will receive that output; launcher
-binding and the still-missing gameplay-stage music/MAIN SFX emitters remain.
+supplies the bounded playback stream, and the Classic launcher submits each
+completed block after applying that sample's commands. Initial device failure
+selects the source sound-unavailable branch before runner construction; later
+device loss stops only submission while deterministic PMD state continues.
+Gameplay-stage music/MAIN SFX emitters remain.
 SDL's [audio-device stream API](https://wiki.libsdl.org/SDL3/SDL_OpenAudioDeviceStream)
 is an appropriate device adapter because it keeps device management outside
 the synthesizer. The app owns user gain/mute settings, while the audio engine
@@ -375,9 +381,8 @@ license obligations are now locked. The corpus proves that 20/21 songs use the
 8 KiB ADPCM-A rhythm ROM and the engine accepts it only as caller-supplied data.
 The remaining load-bearing unknowns are shipped-TSR register parity for EFC
 start/tick/replacement/restoration and the implemented fade/pause/mask
-operations, the authentic OPNA clock, ROM packaging, and final device fallback policy;
-they are
-service/device gates, not blockers for semantic scene command ordering.
+operations, the authentic OPNA clock, and ROM packaging. These are
+service/fidelity gates, not blockers for semantic scene command ordering.
 Required follow-up gates are offline command/register or PCM traces for known
 assets, deterministic muted/unmuted scheduling tests, then physical-device
 smoke tests on the supported host matrix.

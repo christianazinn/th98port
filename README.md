@@ -12,9 +12,11 @@ direct-VS developer path. A separate byte-fed PMD/YM2608 engine and TH03
 transport/SFX service, bounded `YUME.EFC` playback on FM6, deterministic
 166.4-to-48 kHz resampling, and a bounded SDL playback endpoint are now present,
 and a platform-neutral Classic session now executes the existing semantic scene
-commands over authenticated external content. The launcher still follows the
-source's sound-unavailable fallback until that session reaches the SDL endpoint;
-gameplay-stage music and MAIN SFX emission remain separate work.
+commands over authenticated external content. The Classic launcher binds that
+session to the SDL endpoint at one deterministic audio interval per logical
+sample. Initial device unavailability selects the source's sound-unavailable
+fallback; later device loss drops only final delivery while PMD keeps advancing.
+Gameplay-stage music and MAIN SFX emission remain separate work.
 
 ## Build and test
 
@@ -70,11 +72,12 @@ out\build\msvc-x64-sdl\Debug\th03-app.exe `
 The shown rate is a provisional host policy, not an authenticity claim.
 Kotohime additionally requires the explicit developer flag
 `--kotohime-zero-red` until her source-uninitialized Bomb fade byte has an
-evidence-backed release policy. The Classic path currently drains semantic
-audio commands into a deterministic silent backend. The same commands now pass
-an offline authenticated PMD/OPNA/EFC session and fixed resampler, but the
-launcher has not yet connected that session to the SDL device endpoint; this
-is not an audio-fidelity claim. `--help` lists
+evidence-backed release policy. When SDL audio is available, the Classic path
+executes semantic commands through the authenticated PMD/OPNA/EFC session,
+fixed resampler, and bounded playback endpoint. Music Off still leaves the
+source-independent FM effect path live. Rhythm remains deterministically silent
+until an authenticated caller-supplied ROM is packaged, so this is not yet a
+complete audio-fidelity claim. `--help` lists
 keyboard controls and all launch options.
 
 Validate an external frozen case without copying it into this repository:
