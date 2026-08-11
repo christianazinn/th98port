@@ -21,6 +21,7 @@ enum class ClassicMusicCue : std::uint8_t {
 	none,
 	menu_main,
 	character_select,
+	music_room_track,
 	winner,
 	game_over,
 	staff,

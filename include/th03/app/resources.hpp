@@ -24,6 +24,7 @@ enum class MainResourceArchive : std::uint8_t {
 
 enum class MainResourceScene : std::uint8_t {
 	op_title_menu,
+	op_music_room,
 	direct_vs,
 	selection_handoff,
 	mainl_stage_transition,
@@ -182,6 +183,31 @@ enum class MainlRegistrationNextScreen : std::uint8_t {
 	game_over,
 };
 
+// Source Music Room order. Values after none map to displayed track indices
+// 0..18 by subtracting one.
+enum class MainMusicRoomTrack : std::uint8_t {
+	none,
+	menu_main,
+	character_select,
+	stage_00,
+	stage_01,
+	stage_02,
+	stage_03,
+	stage_04,
+	stage_05,
+	stage_06,
+	decision,
+	stage_07,
+	stage_08,
+	demo_1,
+	demo_2,
+	demo_3,
+	demo_4,
+	demo_5,
+	ending,
+	high_score,
+};
+
 struct MainlRegistrationResourceRequest {
 	MainRegistrationRank rank = MainRegistrationRank::none;
 	MainlRegistrationNextScreen next_screen =
@@ -198,6 +224,9 @@ enum class MainResourceRole : std::uint8_t {
 	op_window_sheet,
 	op_gaiji_font,
 	op_menu_music,
+	op_music_room_background,
+	op_music_room_comments,
+	op_music_room_track,
 	enemy_scripts,
 	game_font,
 	hud_lose_sheet,
@@ -255,6 +284,7 @@ struct MainResourceKey {
 	MainCutsceneMusic cutscene_music = MainCutsceneMusic::none;
 	MainStaffCdg staff_cdg = MainStaffCdg::none;
 	MainRegistrationRank registration_rank = MainRegistrationRank::none;
+	MainMusicRoomTrack music_room_track = MainMusicRoomTrack::none;
 
 	friend constexpr auto operator<=>(
 		const MainResourceKey &,
@@ -349,6 +379,8 @@ main_resource_spec(MainResourceKey key);
 [[nodiscard]] std::vector<MainResourceKey>
 op_character_selection_resource_keys();
 
+[[nodiscard]] std::vector<MainResourceKey> op_music_room_resource_keys();
+
 [[nodiscard]] std::expected<std::vector<MainResourceKey>, ResourceLoadError>
 direct_vs_resource_keys(
 	MainPlayerSelection player_one,
@@ -407,6 +439,8 @@ public:
 	load_op_title_menu();
 	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 	load_op_character_selection();
+	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+	load_op_music_room();
 
 	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 	load_direct_vs(

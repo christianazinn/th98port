@@ -170,6 +170,29 @@ constexpr std::array<std::uint64_t, 5U> cutscene_music_fnv1a64{
 	0xF9A18439B7621C60ULL, 0xB6C760DD37D074CAULL,
 	0x1E13270E55263E7EULL,
 };
+constexpr std::array<std::string_view, 19U> music_room_track_filenames{
+	"OP.M", "SELECT.M", "00MM.M", "01MM.M", "02MM.M", "03MM.M",
+	"04MM.M", "05MM.M", "06MM.M", "DEC.M", "07MM.M", "08MM.M",
+	"DEMO1.M", "DEMO2.M", "DEMO3.M", "DEMO4.M", "DEMO5.M", "ED.M",
+	"SCORE.M",
+};
+constexpr std::array<std::size_t, 19U> music_room_track_sizes{
+	4431U, 2437U, 3989U, 4865U, 4911U, 4913U, 4880U, 4739U, 7436U,
+	3367U, 4055U, 4569U, 2319U, 1145U, 1284U, 821U, 1193U, 3378U,
+	983U,
+};
+constexpr std::array<std::uint64_t, 19U> music_room_track_fnv1a64{
+	0x8D65B16BB1BB433DULL, 0xAE13BCE0100E516EULL,
+	0x790707B96F4DCF23ULL, 0xB57D4D95042AEEEBULL,
+	0x5415D362A151B3E1ULL, 0x2F07B960B5B1F074ULL,
+	0x9AFA658A8175A55FULL, 0x07D11D50F29C5BC0ULL,
+	0x8D133872E9C5986BULL, 0xE02E6494B4BE33AEULL,
+	0x94B23038849B8074ULL, 0xCBD041104DB7C5FCULL,
+	0xA479347AED2FCD59ULL, 0x5B478D191785CCC0ULL,
+	0xF9A18439B7621C60ULL, 0xB6C760DD37D074CAULL,
+	0x1E13270E55263E7EULL, 0x897797694DA73B83ULL,
+	0xC83D906B352A1597ULL,
+};
 constexpr std::array<std::string_view, 12U> staff_cdg_filenames{
 	"STF1.CDG", "STF11.CDG", "STF3.CDG", "STF4.CDG",
 	"STF5.CDG", "STF6.CDG", "STF7.CDG", "STF8.CDG",
@@ -255,6 +278,13 @@ constexpr std::array<std::uint64_t, 12U> staff_cdg_fnv1a64{
 	return key.registration_rank != MainRegistrationRank::none;
 }
 
+[[nodiscard]] constexpr bool has_music_room_selector(
+	const MainResourceKey &key
+) noexcept
+{
+	return key.music_room_track != MainMusicRoomTrack::none;
+}
+
 [[nodiscard]] constexpr std::uint8_t stage_enemy_group_index(
 	MainCharacter character
 ) noexcept
@@ -312,6 +342,9 @@ constexpr std::array<std::uint64_t, 12U> staff_cdg_fnv1a64{
 	case MainResourceRole::op_window_sheet:
 	case MainResourceRole::op_gaiji_font:
 	case MainResourceRole::op_menu_music:
+	case MainResourceRole::op_music_room_background:
+	case MainResourceRole::op_music_room_comments:
+	case MainResourceRole::op_music_room_track:
 	case MainResourceRole::enemy_scripts:
 	case MainResourceRole::game_font:
 	case MainResourceRole::hud_lose_sheet:
@@ -445,12 +478,41 @@ constexpr std::array<std::uint64_t, 12U> staff_cdg_fnv1a64{
 }
 
 [[nodiscard]] std::expected<MainResourceSpec, ResourceLoadError>
+music_room_track_resource_spec(MainResourceKey key)
+{
+	const auto raw = static_cast<std::uint8_t>(key.music_room_track);
+	if(key.role != MainResourceRole::op_music_room_track || raw == 0U ||
+		raw > static_cast<std::uint8_t>(MainMusicRoomTrack::high_score) ||
+		key.character != MainCharacter::none ||
+		key.palette != MainPaletteVariant::none ||
+		key.stage_background != MainlStageBackground::none ||
+		has_cutscene_selector(key) || has_staff_selector(key) ||
+		has_registration_selector(key)) {
+		return std::unexpected(error(
+			ResourceLoadErrorCode::invalid_resource_key, key
+		));
+	}
+	const auto index = static_cast<std::size_t>(raw - 1U);
+	return MainResourceSpec{
+		.key = key,
+		.scene = MainResourceScene::op_music_room,
+		.archive = MainResourceArchive::yume1,
+		.decoder = MainResourceDecoder::pmd_music,
+		.logical_role = "op.music_room.track." + std::to_string(index),
+		.filename = std::string{music_room_track_filenames[index]},
+		.expected_bytes = music_room_track_sizes[index],
+		.expected_fnv1a64 = music_room_track_fnv1a64[index],
+	};
+}
+
+[[nodiscard]] std::expected<MainResourceSpec, ResourceLoadError>
 cutscene_resource_spec(MainResourceKey key)
 {
 	if(key.character != MainCharacter::none ||
 		key.palette != MainPaletteVariant::none ||
 		key.stage_background != MainlStageBackground::none ||
-		has_staff_selector(key) || has_registration_selector(key)) {
+		has_staff_selector(key) || has_registration_selector(key) ||
+		has_music_room_selector(key)) {
 		return std::unexpected(error(
 			ResourceLoadErrorCode::invalid_resource_key, key
 		));
@@ -548,7 +610,8 @@ staff_resource_spec(MainResourceKey key)
 	if(key.character != MainCharacter::none ||
 		key.palette != MainPaletteVariant::none ||
 		key.stage_background != MainlStageBackground::none ||
-		has_cutscene_selector(key) || has_registration_selector(key)) {
+		has_cutscene_selector(key) || has_registration_selector(key) ||
+		has_music_room_selector(key)) {
 		return std::unexpected(error(
 			ResourceLoadErrorCode::invalid_resource_key, key
 		));
@@ -610,7 +673,8 @@ registration_resource_spec(MainResourceKey key)
 	if(key.character != MainCharacter::none ||
 		key.palette != MainPaletteVariant::none ||
 		key.stage_background != MainlStageBackground::none ||
-		has_cutscene_selector(key) || has_staff_selector(key)) {
+		has_cutscene_selector(key) || has_staff_selector(key) ||
+		has_music_room_selector(key)) {
 		return std::unexpected(error(
 			ResourceLoadErrorCode::invalid_resource_key, key
 		));
@@ -706,7 +770,8 @@ static_resource_spec(MainResourceKey key)
 			key.palette != MainPaletteVariant::none ||
 			!is_stage_background(key.stage_background) ||
 			has_cutscene_selector(key) || has_staff_selector(key) ||
-			has_registration_selector(key)) {
+			has_registration_selector(key) ||
+			has_music_room_selector(key)) {
 			return std::unexpected(error(
 				ResourceLoadErrorCode::invalid_resource_key, key
 			));
@@ -730,7 +795,7 @@ static_resource_spec(MainResourceKey key)
 		key.palette != MainPaletteVariant::none ||
 		key.stage_background != MainlStageBackground::none ||
 		has_cutscene_selector(key) || has_staff_selector(key) ||
-		has_registration_selector(key)) {
+		has_registration_selector(key) || has_music_room_selector(key)) {
 		return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
 	}
 
@@ -790,6 +855,30 @@ static_resource_spec(MainResourceKey key)
 			.expected_bytes = 4431U,
 			.expected_fnv1a64 = 0x8D65B16BB1BB433DULL,
 		};
+	case MainResourceRole::op_music_room_background:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::op_music_room,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pi,
+			.logical_role = "op.music_room.background",
+			.filename = "OP3.PI",
+			.expected_bytes = 6732U,
+			.expected_fnv1a64 = 0xC07E32BD08EE93BFULL,
+		};
+	case MainResourceRole::op_music_room_comments:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::op_music_room,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::shift_jis_blocks,
+			.logical_role = "op.music_room.comments",
+			.filename = "MUSIC.TXT",
+			.expected_bytes = 15960U,
+			.expected_fnv1a64 = 0x3DA5A7F75E1B1182ULL,
+		};
+	case MainResourceRole::op_music_room_track:
+		break;
 	case MainResourceRole::enemy_scripts:
 		return MainResourceSpec{
 			.key = key,
@@ -1207,6 +1296,9 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 	MainResourceKey key
 )
 {
+	if(key.role == MainResourceRole::op_music_room_track) {
+		return music_room_track_resource_spec(key);
+	}
 	if(key.role == MainResourceRole::cutscene_script ||
 		key.role == MainResourceRole::cutscene_picture ||
 		key.role == MainResourceRole::cutscene_music) {
@@ -1225,7 +1317,7 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 		return registration_resource_spec(key);
 	}
 	if(has_cutscene_selector(key) || has_staff_selector(key) ||
-		has_registration_selector(key)) {
+		has_registration_selector(key) || has_music_room_selector(key)) {
 		return std::unexpected(error(
 			ResourceLoadErrorCode::invalid_resource_key, key
 		));
@@ -1375,6 +1467,9 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 	case MainResourceRole::op_window_sheet:
 	case MainResourceRole::op_gaiji_font:
 	case MainResourceRole::op_menu_music:
+	case MainResourceRole::op_music_room_background:
+	case MainResourceRole::op_music_room_comments:
+	case MainResourceRole::op_music_room_track:
 	case MainResourceRole::enemy_scripts:
 	case MainResourceRole::game_font:
 	case MainResourceRole::hud_lose_sheet:
@@ -1428,6 +1523,8 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		MainResourceRole::op_window_sheet,
 		MainResourceRole::op_gaiji_font,
 		MainResourceRole::op_menu_music,
+		MainResourceRole::op_music_room_background,
+		MainResourceRole::op_music_room_comments,
 		MainResourceRole::enemy_scripts,
 		MainResourceRole::game_font,
 		MainResourceRole::hud_lose_sheet,
@@ -1480,9 +1577,18 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		(last_palette_value - first_palette_value + 1U) *
 		character_roles.size()) +
 		((last_character_value - first_character_value + 1U) *
-		character_only_roles.size()) + 5U + 28U + 24U + 5U + 12U + 4U);
+		character_only_roles.size()) + 5U + 28U + 24U + 5U + 12U + 4U +
+		music_room_track_filenames.size());
 	for(const auto role : static_roles) {
 		result.push_back(*main_resource_spec({.role = role}));
+	}
+	for(std::uint8_t track = 1U;
+		track <= static_cast<std::uint8_t>(MainMusicRoomTrack::high_score);
+		++track) {
+		result.push_back(*main_resource_spec({
+			.role = MainResourceRole::op_music_room_track,
+			.music_room_track = static_cast<MainMusicRoomTrack>(track),
+		}));
 	}
 	for(std::uint8_t background =
 		static_cast<std::uint8_t>(MainlStageBackground::numbered);
@@ -1601,6 +1707,24 @@ std::vector<MainResourceKey> op_character_selection_resource_keys()
 		result.push_back({
 			.role = MainResourceRole::character_selection_portrait,
 			.character = static_cast<MainCharacter>(character),
+		});
+	}
+	return result;
+}
+
+std::vector<MainResourceKey> op_music_room_resource_keys()
+{
+	std::vector<MainResourceKey> result{
+		{.role = MainResourceRole::op_music_room_background},
+		{.role = MainResourceRole::op_music_room_comments},
+	};
+	result.reserve(2U + music_room_track_filenames.size());
+	for(std::uint8_t track = 1U;
+		track <= static_cast<std::uint8_t>(MainMusicRoomTrack::high_score);
+		++track) {
+		result.push_back({
+			.role = MainResourceRole::op_music_room_track,
+			.music_room_track = static_cast<MainMusicRoomTrack>(track),
 		});
 	}
 	return result;
@@ -2092,6 +2216,12 @@ std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 MainResourceLoader::load_op_character_selection()
 {
 	return load_batch(op_character_selection_resource_keys());
+}
+
+std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+MainResourceLoader::load_op_music_room()
+{
+	return load_batch(op_music_room_resource_keys());
 }
 
 std::expected<std::vector<LoadedMainResource>, ResourceLoadError>

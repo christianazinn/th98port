@@ -11,6 +11,7 @@
 #include <span>
 #include <utility>
 
+#include "th03/assets/decode.hpp"
 #include "th03/exact/trig.hpp"
 #include "th03/present/pi.hpp"
 #include "th03/present/planar.hpp"
@@ -51,6 +52,93 @@ constexpr present::GrcgClipRect full_clip{0, 0, 639, 399};
 	);
 	result.text_error.emplace(error);
 	return result;
+}
+
+[[nodiscard]] ClassicOpMusicRoomError resource_error(
+	ClassicOpMusicRoomErrorCode code,
+	std::optional<MainResourceKey> resource = std::nullopt
+) noexcept
+{
+	auto result = music_error(code);
+	result.resource = resource;
+	return result;
+}
+
+[[nodiscard]] ClassicOpMusicRoomError decode_error(
+	MainResourceKey resource,
+	assets::AssetError error
+)
+{
+	auto result = resource_error(
+		ClassicOpMusicRoomErrorCode::asset_decode_failed, resource
+	);
+	result.asset_error.emplace(std::move(error));
+	return result;
+}
+
+[[nodiscard]] ClassicOpMusicRoomError compiled_text_error(
+	OpCompiledTextError error
+) noexcept
+{
+	auto result = music_error(
+		ClassicOpMusicRoomErrorCode::compiled_text_import_failed
+	);
+	result.compiled_text_error.emplace(error);
+	return result;
+}
+
+[[nodiscard]] std::expected<void, ClassicOpMusicRoomError>
+validate_music_room_resources(
+	std::span<const LoadedMainResource> resources
+)
+{
+	const auto expected = op_music_room_resource_keys();
+	if(resources.size() != expected.size()) {
+		return std::unexpected(resource_error(
+			ClassicOpMusicRoomErrorCode::resource_set_mismatch
+		));
+	}
+	for(std::size_t index = 0U; index < expected.size(); ++index) {
+		const auto key = expected[index];
+		const auto &resource = resources[index];
+		if(resource.spec.key != key) {
+			return std::unexpected(resource_error(
+				ClassicOpMusicRoomErrorCode::resource_set_mismatch, key
+			));
+		}
+		if(!resource.bytes) {
+			return std::unexpected(resource_error(
+				ClassicOpMusicRoomErrorCode::resource_bytes_missing, key
+			));
+		}
+		const auto canonical = main_resource_spec(key);
+		if(!canonical || resource.spec != *canonical) {
+			return std::unexpected(resource_error(
+				ClassicOpMusicRoomErrorCode::resource_set_mismatch, key
+			));
+		}
+		if(resource.bytes->size() != canonical->expected_bytes ||
+			main_resource_fnv1a64(*resource.bytes) !=
+				canonical->expected_fnv1a64) {
+			return std::unexpected(resource_error(
+				ClassicOpMusicRoomErrorCode::resource_integrity_failed, key
+			));
+		}
+	}
+	return {};
+}
+
+[[nodiscard]] const LoadedMainResource *find_resource(
+	std::span<const LoadedMainResource> resources,
+	MainResourceRole role
+) noexcept
+{
+	for(const auto &resource : resources) {
+		if(resource.spec.key.role == role) {
+			return &resource;
+		}
+	}
+	return nullptr;
 }
 
 [[nodiscard]] constexpr present::Page other_page(present::Page page) noexcept
@@ -211,6 +299,55 @@ ClassicOpMusicRoomScene::ClassicOpMusicRoomScene(
 {}
 
 ClassicOpMusicRoomScene::~ClassicOpMusicRoomScene() = default;
+
+std::expected<
+	std::unique_ptr<ClassicOpMusicRoomScene>,
+	ClassicOpMusicRoomError
+> ClassicOpMusicRoomScene::create_from_op(
+	const ClassicOpCompletion &completion,
+	ClassicOpMusicRoomCarry carry,
+	std::span<const LoadedMainResource> resources,
+	std::span<const std::byte> op_executable,
+	const present::AnkGlyphProvider &font
+)
+{
+	if(completion.route() != ClassicOpRoute::music_room) {
+		return std::unexpected(music_error(
+			ClassicOpMusicRoomErrorCode::invalid_route
+		));
+	}
+	if(const auto validated = validate_music_room_resources(resources);
+		!validated) {
+		return std::unexpected(validated.error());
+	}
+	const auto *background_resource = find_resource(
+		resources, MainResourceRole::op_music_room_background
+	);
+	const auto *comments_resource = find_resource(
+		resources, MainResourceRole::op_music_room_comments
+	);
+	if(!background_resource || !background_resource->bytes ||
+		!comments_resource || !comments_resource->bytes) {
+		return std::unexpected(resource_error(
+			ClassicOpMusicRoomErrorCode::resource_set_mismatch
+		));
+	}
+	auto background = assets::decode_pi(*background_resource->bytes);
+	if(!background) {
+		return std::unexpected(decode_error(
+			background_resource->spec.key, std::move(background.error())
+		));
+	}
+	auto labels = import_op_music_room_text(op_executable);
+	if(!labels) {
+		return std::unexpected(compiled_text_error(labels.error()));
+	}
+	return create_predecoded(
+		completion.resident(), std::move(carry), std::move(*background),
+		*labels, *comments_resource->bytes, font, completion.raster(),
+		completion.tram()
+	);
+}
 
 std::expected<
 	std::unique_ptr<ClassicOpMusicRoomScene>,
@@ -763,9 +900,11 @@ ClassicOpMusicRoomScene::advance(const ClassicOpMusicRoomInput &input)
 					.type = ClassicAudioCommandType::stop_song,
 				}) || !push_audio_command({
 					.type = ClassicAudioCommandType::load_song,
+					.cue = ClassicMusicCue::music_room_track,
 					.parameter = selection_,
 				}) || !push_audio_command({
 					.type = ClassicAudioCommandType::play_song,
+					.cue = ClassicMusicCue::music_room_track,
 					.parameter = selection_,
 				}) || !draw_comment(selection_) ||
 					!snapshot_comment_blue()) {

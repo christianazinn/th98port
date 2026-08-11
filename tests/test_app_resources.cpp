@@ -18,6 +18,7 @@ using th03::app::MainCharacter;
 using th03::app::MainCutsceneMusic;
 using th03::app::MainCutscenePicture;
 using th03::app::MainCutsceneScript;
+using th03::app::MainMusicRoomTrack;
 using th03::app::MainPaletteVariant;
 using th03::app::MainPlayerSelection;
 using th03::app::MainResourceArchive;
@@ -121,7 +122,7 @@ void test_manifest()
 	);
 	const auto manifest = th03::app::main_resource_manifest();
 	expect(
-		manifest.size() == 247U,
+		manifest.size() == 268U,
 		"manifest enumerates OP, MAIN, MAINL, cutscene, staff, registration, paletted, and character-only assets"
 	);
 	expect(
@@ -157,6 +158,8 @@ void test_manifest()
 	bool contains_registration_normal_glyphs = false;
 	bool contains_registration_highlight_glyphs = false;
 	bool contains_registration_music = false;
+	bool contains_music_room_background = false;
+	bool contains_music_room_last_track = false;
 	for(const auto &spec : manifest) {
 		contains_enedat = contains_enedat ||
 			(spec.key.role == MainResourceRole::enemy_scripts &&
@@ -275,6 +278,15 @@ void test_manifest()
 			(spec.key.role == MainResourceRole::registration_music &&
 				spec.filename == "SCORE.M" && spec.expected_bytes == 983U &&
 				spec.expected_fnv1a64 == 0xC83D906B352A1597ULL);
+		contains_music_room_background = contains_music_room_background ||
+			(spec.key.role == MainResourceRole::op_music_room_background &&
+				spec.filename == "OP3.PI" && spec.expected_bytes == 6732U &&
+				spec.expected_fnv1a64 == 0xC07E32BD08EE93BFULL);
+		contains_music_room_last_track = contains_music_room_last_track ||
+			(spec.key.role == MainResourceRole::op_music_room_track &&
+				spec.key.music_room_track == MainMusicRoomTrack::high_score &&
+				spec.filename == "SCORE.M" && spec.expected_bytes == 983U &&
+				spec.expected_fnv1a64 == 0xC83D906B352A1597ULL);
 		expect(
 			th03::app::is_safe_extracted_entry_name(spec.filename),
 			"every checked-in manifest filename is one safe extracted component"
@@ -300,7 +312,8 @@ void test_manifest()
 			contains_registration_lunatic &&
 			contains_registration_normal_glyphs &&
 			contains_registration_highlight_glyphs &&
-			contains_registration_music,
+			contains_registration_music && contains_music_room_background &&
+			contains_music_room_last_track,
 		"manifest retains the representative source-named resource families"
 	);
 	struct ExpectedEnemyGroup {
@@ -539,6 +552,72 @@ void test_op_character_selection_resource_batch()
 		loaded && loaded->size() == keys.size() &&
 			loader.cached_resource_count() == keys.size(),
 		"complete selection closure commits atomically"
+	);
+}
+
+void test_op_music_room_resource_batch()
+{
+	const auto keys = th03::app::op_music_room_resource_keys();
+	expect(
+		keys.size() == 21U &&
+			keys[0U].role == MainResourceRole::op_music_room_background &&
+			keys[1U].role == MainResourceRole::op_music_room_comments,
+		"Music Room closure starts with OP3.PI and MUSIC.TXT"
+	);
+	bool track_order = keys.size() == 21U;
+	for(std::size_t index = 0U; track_order && index < 19U; ++index) {
+		track_order = keys[index + 2U].role ==
+			MainResourceRole::op_music_room_track &&
+			static_cast<std::uint8_t>(keys[index + 2U].music_room_track) ==
+				static_cast<std::uint8_t>(index + 1U);
+	}
+	expect(track_order, "Music Room tracks preserve displayed source order");
+
+	const auto background = th03::app::main_resource_spec(keys[0U]);
+	const auto comments = th03::app::main_resource_spec(keys[1U]);
+	const auto first = th03::app::main_resource_spec(keys[2U]);
+	const auto last = th03::app::main_resource_spec(keys.back());
+	expect(
+		background && background->filename == "OP3.PI" &&
+			background->expected_bytes == 6732U &&
+		comments && comments->filename == "MUSIC.TXT" &&
+			comments->expected_bytes == 15960U &&
+		first && first->filename == "OP.M" &&
+			first->expected_fnv1a64 == 0x8D65B16BB1BB433DULL &&
+		last && last->filename == "SCORE.M" &&
+			last->expected_fnv1a64 == 0xC83D906B352A1597ULL,
+		"Music Room manifest pins visual, comment, and track endpoints"
+	);
+	expect(
+		!th03::app::main_resource_spec({
+			.role = MainResourceRole::op_music_room_track,
+		}) && !th03::app::main_resource_spec({
+			.role = MainResourceRole::op_music_room_background,
+			.music_room_track = MainMusicRoomTrack::menu_main,
+		}),
+		"Music Room selectors cannot be omitted or attached to static roles"
+	);
+
+	TemporaryRoot root;
+	expect(root.valid(), "temporary Music Room transaction root was created");
+	if(!root.valid()) {
+		return;
+	}
+	for(std::size_t index = 0U; index + 1U < keys.size(); ++index) {
+		write_spec(root.path(), keys[index], std::byte{0x71U});
+	}
+	MainResourceLoader loader(root.path(), MainResourceIntegrity::size_only);
+	const auto failed = loader.load_op_music_room();
+	expect(
+		!failed && loader.cached_resource_count() == 0U,
+		"late SCORE.M failure publishes no partial Music Room cache"
+	);
+	write_spec(root.path(), keys.back(), std::byte{0x72U});
+	const auto loaded = loader.load_op_music_room();
+	expect(
+		loaded && loaded->size() == keys.size() &&
+			loader.cached_resource_count() == keys.size(),
+		"complete Music Room closure commits atomically"
 	);
 }
 
@@ -1286,6 +1365,7 @@ int main()
 	test_manifest();
 	test_op_title_menu_resource_batch();
 	test_op_character_selection_resource_batch();
+	test_op_music_room_resource_batch();
 	test_direct_vs_batch_and_cache();
 	test_main_private_and_mainl_stage_batches();
 	test_cutscene_resource_batches();

@@ -80,6 +80,12 @@ enum class ClassicOpMusicRoomBoundary : std::uint8_t {
 };
 
 enum class ClassicOpMusicRoomErrorCode : std::uint8_t {
+	invalid_route,
+	resource_set_mismatch,
+	resource_bytes_missing,
+	resource_integrity_failed,
+	asset_decode_failed,
+	compiled_text_import_failed,
 	invalid_context,
 	invalid_background,
 	invalid_compiled_text,
@@ -95,6 +101,9 @@ struct ClassicOpMusicRoomError final {
 		ClassicOpMusicRoomErrorCode::invalid_state;
 	std::uint8_t track = 0U;
 	std::uint8_t line = 0U;
+	std::optional<MainResourceKey> resource{};
+	std::optional<assets::AssetError> asset_error{};
+	std::optional<OpCompiledTextError> compiled_text_error{};
 	std::optional<present::GraphicsTextError> text_error{};
 };
 
@@ -147,6 +156,17 @@ private:
 // exact input poll or VSync boundary and never allocates.
 class ClassicOpMusicRoomScene final {
 public:
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicOpMusicRoomScene>,
+		ClassicOpMusicRoomError
+	> create_from_op(
+		const ClassicOpCompletion &completion,
+		ClassicOpMusicRoomCarry carry,
+		std::span<const LoadedMainResource> resources,
+		std::span<const std::byte> op_executable,
+		const present::AnkGlyphProvider &font
+	);
+
 	~ClassicOpMusicRoomScene();
 	ClassicOpMusicRoomScene(const ClassicOpMusicRoomScene &) = delete;
 	ClassicOpMusicRoomScene &operator=(

@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -10,10 +12,14 @@
 #include <utility>
 #include <vector>
 
+#include "th03/app/authentic_text.hpp"
+#include "th03/app/resources.hpp"
+
 namespace {
 
 using th03::GameInit;
 using th03::app::ClassicAudioCommandType;
+using th03::app::ClassicMusicCue;
 using th03::app::ClassicOpMusicRoomBoundary;
 using th03::app::ClassicOpMusicRoomCarry;
 using th03::app::ClassicOpMusicRoomErrorCode;
@@ -384,8 +390,10 @@ void test_track_audio_exit_and_completion()
 	expect(
 		stop && stop->type == ClassicAudioCommandType::stop_song &&
 			load && load->type == ClassicAudioCommandType::load_song &&
+			load->cue == ClassicMusicCue::music_room_track &&
 			load->parameter == 1U &&
 			play && play->type == ClassicAudioCommandType::play_song &&
+			play->cue == ClassicMusicCue::music_room_track &&
 			play->parameter == 1U && !scene->take_audio_command(),
 		"track selection emits exact Stop, Load, Play ordering"
 	);
@@ -501,14 +509,211 @@ void test_persistent_carry_and_bottom_reset()
 	);
 }
 
+std::optional<std::vector<std::byte>> read_file(
+	const std::filesystem::path &path
+)
+{
+	std::ifstream file(path, std::ios::binary | std::ios::ate);
+	if(!file) {
+		return std::nullopt;
+	}
+	const auto end = file.tellg();
+	if(end < 0) {
+		return std::nullopt;
+	}
+	std::vector<std::byte> bytes(static_cast<std::size_t>(end));
+	file.seekg(0, std::ios::beg);
+	if(!bytes.empty() && !file.read(
+		reinterpret_cast<char *>(bytes.data()),
+		static_cast<std::streamsize>(bytes.size())
+	)) {
+		return std::nullopt;
+	}
+	return bytes;
+}
+
+void local_original_gate(
+	const std::filesystem::path &content_root,
+	const std::filesystem::path &op_executable_path,
+	const std::filesystem::path &font_rom_path
+)
+{
+	const auto op_executable = read_file(op_executable_path);
+	const auto font_rom = read_file(font_rom_path);
+	expect(
+		op_executable.has_value() && font_rom.has_value(),
+		"local Music Room gate inputs read"
+	);
+	if(!op_executable || !font_rom) {
+		return;
+	}
+	const auto font = th03::app::Pc98FontRomProvider::from_exact_font_rom(
+		*font_rom
+	);
+	expect(font.has_value(), "local exact FONT.ROM creates text provider");
+	if(!font) {
+		return;
+	}
+
+	th03::app::MainResourceLoader loader(content_root);
+	const auto title_resources = loader.load_op_title_menu();
+	const auto music_resources = loader.load_op_music_room();
+	expect(
+		title_resources.has_value() && music_resources.has_value() &&
+			music_resources->size() == 21U,
+		"local title and complete Music Room closures authenticate"
+	);
+	if(!title_resources || !music_resources) {
+		return;
+	}
+
+	GameInit resident{};
+	resident.fast_op_animation = 1U;
+	auto title = th03::app::ClassicOpTitleMenuScene::create(
+		resident, th03::app::ClassicOpTitleMode::fast_fade, *title_resources
+	);
+	expect(title.has_value(), "local fast title creates for Music Room entry");
+	if(!title) {
+		return;
+	}
+	expect((*title)->advance().has_value(), "local title black frame advances");
+	const auto title_stop = (*title)->take_audio_command();
+	const auto title_load = (*title)->take_audio_command();
+	expect(
+		title_stop && title_stop->type == ClassicAudioCommandType::stop_song &&
+			title_load && title_load->type == ClassicAudioCommandType::load_song,
+		"local title startup audio drains"
+	);
+	expect((*title)->advance().has_value(), "local title initial frame advances");
+	expect(
+		(*title)->take_audio_command().has_value(),
+		"local title play command drains"
+	);
+	for(std::uint16_t frame = 0U; frame < 25U; ++frame) {
+		expect((*title)->advance().has_value(), "local title fade advances");
+	}
+	expect(
+		(*title)->advance({.ok = true}).has_value(),
+		"local title accepts the pre-menu input"
+	);
+	for(std::uint16_t frame = 0U; frame < 14U; ++frame) {
+		expect((*title)->advance().has_value(), "local title box step advances");
+	}
+	expect((*title)->advance().has_value(), "local title main menu draws");
+	for(std::uint8_t row = 0U; row < 2U; ++row) {
+		expect(
+			(*title)->advance({.down = true}).has_value(),
+			"local title selection advances toward Music Room"
+		);
+		expect(
+			(*title)->advance().has_value(),
+			"local title selection release advances"
+		);
+	}
+	expect(
+		(*title)->advance({.ok = true}).has_value(),
+		"local title confirms Music Room"
+	);
+	auto title_completion = (*title)->take_completion();
+	expect(
+		title_completion && title_completion->route() ==
+			th03::app::ClassicOpRoute::music_room,
+		"local title publishes typed Music Room route"
+	);
+	if(!title_completion) {
+		return;
+	}
+
+	auto reordered_resources = *music_resources;
+	std::swap(reordered_resources[0U], reordered_resources[1U]);
+	auto rejected = ClassicOpMusicRoomScene::create_from_op(
+		*title_completion, {}, reordered_resources, *op_executable, *font
+	);
+	expect(
+		!rejected && rejected.error().code ==
+			ClassicOpMusicRoomErrorCode::resource_set_mismatch &&
+			title_completion->route() == th03::app::ClassicOpRoute::music_room,
+		"failed resource adoption leaves title completion retryable"
+	);
+	const std::array<std::byte, 2U> malformed_op{
+		std::byte{0x4DU}, std::byte{0x5AU},
+	};
+	rejected = ClassicOpMusicRoomScene::create_from_op(
+		*title_completion, {}, *music_resources, malformed_op, *font
+	);
+	expect(
+		!rejected && rejected.error().code ==
+			ClassicOpMusicRoomErrorCode::compiled_text_import_failed &&
+			title_completion->route() == th03::app::ClassicOpRoute::music_room,
+		"failed compiled-label adoption leaves title completion retryable"
+	);
+	auto music = ClassicOpMusicRoomScene::create_from_op(
+		*title_completion, {}, *music_resources, *op_executable, *font
+	);
+	expect(
+		music.has_value() &&
+			(*music)->phase() == ClassicOpMusicRoomPhase::held_release_poll,
+		"authenticated title completion adopts into Music Room"
+	);
+	if(!music) {
+		return;
+	}
+	release_to_controls(**music);
+	expect(
+		(*music)->advance({.controls = {.down = true}}).has_value() &&
+			(*music)->selection() == 1U,
+		"local Music Room selects the second authenticated track"
+	);
+	release_to_controls(**music);
+	expect(
+		(*music)->advance({.controls = {.shot = true}}).has_value(),
+		"local Music Room confirms the authenticated track"
+	);
+	const auto stop = (*music)->take_audio_command();
+	const auto load = (*music)->take_audio_command();
+	const auto play = (*music)->take_audio_command();
+	expect(
+		stop && stop->type == ClassicAudioCommandType::stop_song &&
+			load && load->type == ClassicAudioCommandType::load_song &&
+			load->cue == ClassicMusicCue::music_room_track &&
+			load->parameter == 1U &&
+			play && play->type == ClassicAudioCommandType::play_song &&
+			play->cue == ClassicMusicCue::music_room_track &&
+			play->parameter == 1U,
+		"local track selection publishes stable indexed audio commands"
+	);
+	expect(
+		(*music)->advance().has_value(),
+		"local selected-track presentation frame advances"
+	);
+	release_to_controls(**music);
+	expect(
+		(*music)->advance({.controls = {.cancel = true}}).has_value(),
+		"local Music Room accepts Cancel"
+	);
+	expect(
+		(*music)->advance().has_value() &&
+			(*music)->take_completion().has_value(),
+		"local Music Room returns through its typed completion"
+	);
+}
+
 } // namespace
 
-int main()
+int main(int argc, char **argv)
 {
 	test_asset_validation_and_initial_presentation();
 	test_input_flip_and_polygon_cadence();
 	test_track_audio_exit_and_completion();
 	test_persistent_carry_and_bottom_reset();
+	if(argc == 4) {
+		local_original_gate(argv[1], argv[2], argv[3]);
+	} else {
+		expect(
+			argc == 1,
+			"optional local gate accepts content root, OP.EXE, and FONT.ROM"
+		);
+	}
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }
