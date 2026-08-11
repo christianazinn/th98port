@@ -662,6 +662,10 @@ void test_gamepad_buttons_axes_and_lifecycle()
 			buttons.input.p1 == input_shot && buttons.input.p2 == input_bomb,
 			"same-device duplicate button release retains Shot and slot two maps P2"
 		);
+		expect(buttons.physical_domains &&
+			buttons.physical_domains->first_joystick_present &&
+			buttons.physical_domains->first_joystick == input_shot,
+			"first connected gamepad alone supplies PC-98 joystick zero");
 
 		(void)expect_event(mapper, input,
 			gamepad_button_event(11U, 11U, SDL_GAMEPAD_BUTTON_DPAD_LEFT, true),
@@ -712,6 +716,13 @@ void test_gamepad_buttons_axes_and_lifecycle()
 			"event from a removed gamepad is ignored");
 		expect(!stale.handled && !stale.physical_event_queued,
 			"stale gamepad event cannot recreate a source");
+		const auto remapped = expect_tick(
+			input, 50U, "remap and removal lifecycle is due"
+		);
+		expect(remapped.physical_domains &&
+			remapped.physical_domains->first_joystick_present &&
+			remapped.physical_domains->first_joystick == 0U,
+			"remap retains neutral presence while removal clears only its source");
 	}
 	expect(fake.close_count == 2U,
 		"mapper destruction closes every still-connected gamepad exactly once");
@@ -742,6 +753,11 @@ void test_focus_keyboard_device_release_and_quit_separation()
 	const auto held = expect_tick(input, 10U, "pre-focus held state is due");
 	expect(held.input.p1 == (input_up | input_bomb),
 		"keyboard and gamepad source contributions combine before focus loss");
+	expect(held.physical_domains &&
+		held.physical_domains->keyboard.p1 == input_up &&
+		held.physical_domains->first_joystick_present &&
+		held.physical_domains->first_joystick == input_bomb,
+		"keyboard and first gamepad remain separately observable");
 	(void)expect_event(mapper, input,
 		window_event(SDL_EVENT_WINDOW_FOCUS_LOST, 11U, main_window),
 		"main-window focus loss releases every source");
@@ -752,6 +768,10 @@ void test_focus_keyboard_device_release_and_quit_separation()
 			fake.close_count == 0U,
 		"focus loss clears held state without disconnecting devices"
 	);
+	expect(released.physical_domains &&
+		released.physical_domains->first_joystick_present &&
+		released.physical_domains->first_joystick == 0U,
+		"focus loss retains neutral first-gamepad presence");
 
 	(void)expect_event(mapper, input, key_event(21U, SDL_SCANCODE_W, true),
 		"keyboard state can be held again after focus loss");

@@ -34,7 +34,8 @@ PhysicalInputSourceState state(
 	std::uint16_t p1 = 0U,
 	std::uint16_t p2 = 0U,
 	std::uint8_t charge_mask = 0U,
-	std::uint16_t system = 0U
+	std::uint16_t system = 0U,
+	bool device_present = false
 )
 {
 	return PhysicalInputSourceState{
@@ -42,6 +43,7 @@ PhysicalInputSourceState state(
 		.p2 = p2,
 		.system = system,
 		.charge_mask = charge_mask,
+		.device_present = device_present,
 	};
 }
 
@@ -428,6 +430,72 @@ void test_source_device_and_focus_release()
 	);
 }
 
+void test_physical_source_domains_and_neutral_presence()
+{
+	auto created = TickInputScheduler::create({100'000'000U, 1U}, 10U);
+	expect(static_cast<bool>(created), "physical-domain scheduler is created");
+	if(!created) {
+		return;
+	}
+	auto scheduler = std::move(*created);
+	expect_push(scheduler, event(1U,
+		PhysicalInputEventKind::source_state_changed, 0U,
+		state(0x0104U, 0x0208U, 0x03U, 0x6032U)),
+		"keyboard source retains all three donor words");
+	expect_push(scheduler, event(2U,
+		PhysicalInputEventKind::source_state_changed, 1U,
+		state(0x0001U, 0U, 0U, 0U, false)),
+		"held non-controller source does not imply joystick presence");
+	expect_push(scheduler, event(3U,
+		PhysicalInputEventKind::source_state_changed, 2U,
+		state(0U, 0x0128U, 0U, 0x1000U, true)),
+		"first connected controller source is published");
+	expect_push(scheduler, event(4U,
+		PhysicalInputEventKind::source_state_changed, 3U,
+		state(0x0010U, 0U, 0U, 0U, true)),
+		"second connected controller source is published");
+
+	const auto held = expect_tick(
+		scheduler, 10U, "physical source domains are due"
+	);
+	expect(held.physical_domains.has_value(),
+		"scheduler-produced ticks identify their physical source domains");
+	if(held.physical_domains) {
+		expect(same_input(held.physical_domains->keyboard, {
+			.p1 = 0x0104U,
+			.p2 = 0x0208U,
+			.system = 0x6032U,
+			.charge_mask = 0x03U,
+		}), "physical keyboard snapshot remains separate from controllers");
+		expect(held.physical_domains->first_joystick_present &&
+			held.physical_domains->first_joystick == 0x0028U,
+			"lowest connected controller becomes masked PC-98 joystick zero");
+	}
+	expect(!LogicalTickInput{}.physical_domains.has_value(),
+		"scripted and replay samples omit host physical domains by default");
+
+	expect_push(scheduler, event(11U,
+		PhysicalInputEventKind::focus_released),
+		"focus release clears held words without disconnecting devices");
+	const auto neutral = expect_tick(scheduler, 20U, "focus release is due");
+	expect(neutral.input.p1 == 0U && neutral.input.p2 == 0U &&
+		neutral.input.system == 0U && neutral.physical_domains &&
+		neutral.physical_domains->first_joystick_present &&
+		neutral.physical_domains->first_joystick == 0U,
+		"neutral joystick presence survives focus release");
+
+	expect_push(scheduler, event(21U,
+		PhysicalInputEventKind::source_released, 2U),
+		"first controller is physically removed");
+	const auto promoted = expect_tick(
+		scheduler, 30U, "controller removal is due"
+	);
+	expect(promoted.physical_domains &&
+		promoted.physical_domains->first_joystick_present &&
+		promoted.physical_domains->first_joystick == 0U,
+		"next connected neutral controller is promoted to joystick zero");
+}
+
 void test_app_quit_is_separate_and_sticky()
 {
 	auto created = TickInputScheduler::create({100'000'000U, 1U}, 10U);
@@ -713,6 +781,7 @@ int main()
 	test_same_source_duplicate_binding_snapshots();
 	test_input_domain_and_equal_timestamp_order();
 	test_source_device_and_focus_release();
+	test_physical_source_domains_and_neutral_presence();
 	test_app_quit_is_separate_and_sticky();
 	test_public_event_validation_is_atomic();
 	test_retroactive_event_clock_regression_and_deadline_overflow();

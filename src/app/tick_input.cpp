@@ -189,6 +189,7 @@ TickInputScheduler::pop_due(TickTimestampNs now_ns) noexcept
 		.tick_index = tick_index_,
 		.deadline_ns = next_deadline_ns_,
 		.input = latched_input(),
+		.physical_domains = latched_physical_domains(),
 		.app_quit_requested = app_quit_requested_,
 	};
 	last_emitted_deadline_ = next_deadline_ns_;
@@ -225,7 +226,9 @@ void TickInputScheduler::apply_event(const PhysicalInputEvent &event) noexcept
 		source_states_[event.source] = {};
 		break;
 	case PhysicalInputEventKind::focus_released:
-		source_states_.fill({});
+		for(auto &source : source_states_) {
+			source = {.device_present = source.device_present};
+		}
 		break;
 	case PhysicalInputEventKind::app_quit:
 		app_quit_requested_ = true;
@@ -247,6 +250,32 @@ CoreInput TickInputScheduler::latched_input() const noexcept
 		);
 	}
 	return input;
+}
+
+LogicalTickInput::PhysicalDomains
+TickInputScheduler::latched_physical_domains() const noexcept
+{
+	const auto &keyboard_source = source_states_[0U];
+	LogicalTickInput::PhysicalDomains domains{
+		.keyboard = {
+			.p1 = keyboard_source.p1,
+			.p2 = keyboard_source.p2,
+			.system = keyboard_source.system,
+			.charge_mask = keyboard_source.charge_mask,
+		},
+	};
+	for(std::size_t source = 1U; source < source_states_.size(); ++source) {
+		const auto &candidate = source_states_[source];
+		if(!candidate.device_present) {
+			continue;
+		}
+		domains.first_joystick = static_cast<std::uint16_t>(
+			(candidate.p1 | candidate.p2 | candidate.system) & 0x003FU
+		);
+		domains.first_joystick_present = true;
+		break;
+	}
+	return domains;
 }
 
 void TickInputScheduler::advance_deadline() noexcept

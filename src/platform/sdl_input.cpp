@@ -211,7 +211,8 @@ void apply_action(
 {
 	return left.p1 == right.p1 && left.p2 == right.p2 &&
 		left.system == right.system &&
-		left.charge_mask == right.charge_mask;
+		left.charge_mask == right.charge_mask &&
+		left.device_present == right.device_present;
 }
 
 [[nodiscard]] constexpr bool axis_active(
@@ -372,7 +373,7 @@ app::PhysicalInputSourceState SdlInputMapper::gamepad_contribution(
 	const std::array<bool, sdl_gamepad_axis_binding_capacity> &axes
 ) const noexcept
 {
-	app::PhysicalInputSourceState state{};
+	app::PhysicalInputSourceState state{.device_present = true};
 	const auto player = bindings_.gamepad_players[slot];
 	for(std::size_t index = 0U;
 		index < bindings_.gamepad_button_count;
@@ -410,7 +411,9 @@ void SdlInputMapper::clear_held_states() noexcept
 	for(auto &gamepad : gamepads_) {
 		gamepad.button_held.fill(false);
 		gamepad.axis_held.fill(false);
-		gamepad.contribution = {};
+		gamepad.contribution = {
+			.device_present = gamepad.handle != nullptr,
+		};
 	}
 }
 
@@ -546,10 +549,25 @@ SdlInputMapper::handle_event(
 				id
 			));
 		}
+		const auto source = static_cast<std::uint8_t>(slot + 1U);
+		const auto pushed = push_event(scheduler, {
+			.timestamp_ns = timestamp,
+			.kind = app::PhysicalInputEventKind::source_state_changed,
+			.source = source,
+			.state = {.device_present = true},
+		});
+		if(!pushed) {
+			gamepad_backend_.close(gamepad_backend_.context, handle);
+			return std::unexpected(pushed.error());
+		}
 		gamepads_[slot].handle = handle;
 		gamepads_[slot].id = id;
+		gamepads_[slot].contribution.device_present = true;
 		++connected_gamepad_count_;
-		return SdlInputEventResult{.handled = true};
+		return SdlInputEventResult{
+			.handled = true,
+			.physical_event_queued = true,
+		};
 	}
 	case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
 	case SDL_EVENT_GAMEPAD_BUTTON_UP: {
@@ -677,16 +695,20 @@ SdlInputMapper::handle_event(
 		if(!source) {
 			return SdlInputEventResult{};
 		}
+		const bool removed = event.type == SDL_EVENT_GAMEPAD_REMOVED;
 		const auto pushed = push_event(scheduler, {
 			.timestamp_ns = timestamp,
-			.kind = app::PhysicalInputEventKind::source_released,
+			.kind = removed
+				? app::PhysicalInputEventKind::source_released
+				: app::PhysicalInputEventKind::source_state_changed,
 			.source = *source,
+			.state = {.device_present = !removed},
 		});
 		if(!pushed) {
 			return std::unexpected(pushed.error());
 		}
 		const auto slot = static_cast<std::size_t>(*source - 1U);
-		if(event.type == SDL_EVENT_GAMEPAD_REMOVED) {
+		if(removed) {
 			gamepad_backend_.close(
 				gamepad_backend_.context,
 				gamepads_[slot].handle
@@ -696,7 +718,7 @@ SdlInputMapper::handle_event(
 		} else {
 			gamepads_[slot].button_held.fill(false);
 			gamepads_[slot].axis_held.fill(false);
-			gamepads_[slot].contribution = {};
+			gamepads_[slot].contribution = {.device_present = true};
 		}
 		return SdlInputEventResult{
 			.handled = true,
