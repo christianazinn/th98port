@@ -1131,7 +1131,9 @@ ClassicRegistrationScene::advance(
 		return fade_tick(false);
 	}
 	if(phase_ == ClassicRegistrationPhase::wait_volume) {
-		if(audio.volume != 255U) {
+		// The donor's snd_delay_until_volume() does not test snd_active,
+		// leaving Music Off with no driver state that can satisfy this wait.
+		if(audio.bgm_active && audio.volume != 255U) {
 			return tick(ClassicRegistrationBoundary::audio_volume);
 		}
 		if(!push_audio_command({

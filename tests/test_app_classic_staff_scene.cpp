@@ -248,6 +248,11 @@ ClassicStaffInput high_measure(bool overrun = false)
 	};
 }
 
+ClassicStaffInput music_on(std::uint8_t volume = 0U)
+{
+	return {.audio = {.bgm_active = true, .volume = volume}};
+}
+
 void enter_presentation(ClassicStaffScene &scene)
 {
 	auto tick = scene.advance({});
@@ -258,15 +263,15 @@ void enter_presentation(ClassicStaffScene &scene)
 		"staff entry requests the source fade speed"
 	);
 
-	tick = scene.advance({});
+	tick = scene.advance(music_on());
 	expect(tick && tick->boundary == ClassicStaffBoundary::vsync,
 		"blackout begins with one alignment VSync");
 	for(std::size_t wait = 0U; wait < 68U; ++wait) {
-		tick = scene.advance({});
+		tick = scene.advance(music_on());
 		expect(tick && tick->boundary == ClassicStaffBoundary::vsync,
 			"blackout preserves all 68 tone waits");
 	}
-	tick = scene.advance({});
+	tick = scene.advance(music_on());
 	expect(
 		tick && tick->phase == ClassicStaffPhase::wait_volume &&
 			tick->boundary == ClassicStaffBoundary::audio_volume &&
@@ -274,21 +279,21 @@ void enter_presentation(ClassicStaffScene &scene)
 		"blackout reaches the source volume-255 wait without a fake frame"
 	);
 
-	tick = scene.advance({.audio = {.volume = 255U}});
+	tick = scene.advance(music_on(255U));
 	expect(tick && tick->boundary == ClassicStaffBoundary::immediate,
 		"volume completion queues stop immediately");
 	expect_command(
 		scene, ClassicAudioCommandType::stop_song, ClassicMusicCue::none, 0U,
 		"staff setup stops the faded prior song"
 	);
-	tick = scene.advance({.audio = {.volume = 255U}});
+	tick = scene.advance(music_on(255U));
 	expect(tick && tick->boundary == ClassicStaffBoundary::immediate,
 		"staff song load is an immediate command boundary");
 	expect_command(
 		scene, ClassicAudioCommandType::load_song, ClassicMusicCue::staff, 0U,
 		"staff setup loads ED.M"
 	);
-	tick = scene.advance({.audio = {.volume = 255U}});
+	tick = scene.advance(music_on(255U));
 	expect(
 		tick && tick->phase == ClassicStaffPhase::presentation &&
 			tick->surface_changed,
@@ -301,6 +306,41 @@ void enter_presentation(ClassicStaffScene &scene)
 	tick = scene.advance(high_measure());
 	expect(tick && tick->boundary == ClassicStaffBoundary::vsync,
 		"staff setup retains the source one-frame post-load delay");
+}
+
+void test_music_off_volume_wait_escape()
+{
+	SyntheticFont font;
+	auto scene = create_scene(font);
+	expect(static_cast<bool>(scene), "Music-Off staff scene constructs");
+	if(!scene) {
+		return;
+	}
+	auto tick = (*scene)->advance({});
+	expect(tick && tick->boundary == ClassicStaffBoundary::immediate,
+		"Music-Off staff entry queues its fade command");
+	expect_command(
+		**scene, ClassicAudioCommandType::fade_song, ClassicMusicCue::none, 16U,
+		"Music-Off staff entry preserves the source fade request"
+	);
+	tick = (*scene)->advance({});
+	expect(tick && tick->boundary == ClassicStaffBoundary::vsync,
+		"Music-Off staff blackout begins normally");
+	for(std::size_t wait = 0U; wait < 68U; ++wait) {
+		tick = (*scene)->advance({});
+		expect(tick && tick->boundary == ClassicStaffBoundary::vsync,
+			"Music-Off staff blackout retains every source VSync");
+	}
+	tick = (*scene)->advance({});
+	expect(
+		tick && tick->phase == ClassicStaffPhase::wait_volume &&
+			tick->boundary == ClassicStaffBoundary::immediate,
+		"Music Off skips only the donor's unsatisfiable volume-driver wait"
+	);
+	expect_command(
+		**scene, ClassicAudioCommandType::stop_song, ClassicMusicCue::none, 0U,
+		"Music-Off staff setup still publishes the source stop command"
+	);
 }
 
 void test_complete_schedule_and_verdict()
@@ -566,6 +606,7 @@ void test_local_original_closure(
 int main(int argc, char **argv)
 {
 	test_complete_schedule_and_verdict();
+	test_music_off_volume_wait_escape();
 	test_current_audio_gate_and_reset_lifetime();
 	test_overlay_forces_alpha_after_performance_downgrade();
 	test_atomic_rejections_and_audio_guard();

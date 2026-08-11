@@ -370,7 +370,12 @@ supplies the bounded playback stream, and the Classic launcher submits each
 completed block after applying that sample's commands. Initial or later device
 failure stops only submission while deterministic PMD state continues; device
 state never changes the source FM-capability decision.
-Gameplay song selection, MAIN process lifecycle, and ordinary live MAIN SFX emitters are integrated. Source-blocking live pause/resume and effect 21 follow separately.
+Gameplay song selection, MAIN process lifecycle, every ordinary live MAIN SFX
+emitter, and source-blocking live pause/resume with effect 21 are integrated.
+Bomb-start effects 17/18 now originate in their exact pre-dispatch callbacks.
+Staff and terminal registration preserve the driver's exact volume-255 wait
+when BGM is active, while Music Off bypasses the donor helper's unsatisfiable
+unguarded driver loop.
 SDL's [audio-device stream API](https://wiki.libsdl.org/SDL3/SDL_OpenAudioDeviceStream)
 is an appropriate device adapter because it keeps device management outside
 the synthesizer. The app owns user gain/mute settings, while the audio engine

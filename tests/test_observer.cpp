@@ -2358,30 +2358,44 @@ void test_main_feedback_source_order()
 		);
 	});
 
-	with_live_state([](auto &bomb) {
-		bomb.players[0U].paletted_character = 1;
-		bomb.bomb_flag[0U] = th03::detail::BombFlag::active;
-		bomb.bomb_frame[0U] = 1U;
-		FeedbackRecordingObserver recording;
-		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
-			bomb, &recording
-		);
-		th03::detail::gameplay_frame_suffix_after_interstitial(
-			bomb, &recording
-		);
-		check(
-			recording.requests ==
-				std::vector<th03::MainFeedbackCueRequested>{{
-					.site = th03::MainFeedbackCueSite::bomb_started,
-					.player = th03::PlayerId::p1,
-				}} &&
-			recording.calls == std::vector<FeedbackObservedCall>{
-				FeedbackObservedCall::dispatch_boundary,
-				FeedbackObservedCall::request,
-			},
-			"a Bomb start request remains pending after the source update boundary"
-		);
-	});
+	struct BombStartCase final {
+		std::int8_t paletted_character;
+		th03::MainFeedbackCueSite site;
+	};
+	constexpr std::array bomb_start_cases{
+		BombStartCase{1, th03::MainFeedbackCueSite::bomb_started},
+		BombStartCase{3, th03::MainFeedbackCueSite::bomb_started},
+		BombStartCase{5, th03::MainFeedbackCueSite::bomb_started},
+		BombStartCase{7, th03::MainFeedbackCueSite::ellen_bomb_started},
+	};
+	for(const auto &test : bomb_start_cases) {
+		with_live_state([&](auto &bomb) {
+			bomb.players[0U].paletted_character = test.paletted_character;
+			bomb.bomb_flag[0U] = th03::detail::BombFlag::preparing;
+			FeedbackRecordingObserver recording;
+			(void)th03::detail::gameplay_frame_prefix(
+				bomb, th03::GameContent{}, &recording
+			);
+			(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+				bomb, &recording
+			);
+			th03::detail::gameplay_frame_suffix_after_interstitial(
+				bomb, &recording
+			);
+			check(
+				recording.requests ==
+					std::vector<th03::MainFeedbackCueRequested>{{
+						.site = test.site,
+						.player = th03::PlayerId::p1,
+					}} &&
+				recording.calls == std::vector<FeedbackObservedCall>{
+					FeedbackObservedCall::request,
+					FeedbackObservedCall::dispatch_boundary,
+				},
+				"every Bomb callback requests its start cue before snd_se_update"
+			);
+		});
+	}
 
 	with_live_state([](auto &yumemi) {
 		yumemi.hud_start_flag = 1U;

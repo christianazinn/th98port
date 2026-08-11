@@ -157,6 +157,10 @@ The source-level sequence is consistent across screens:
 - staff roll: fade the prior song at speed 16, wait until reported volume is
   exactly 255, stop, load `ED.M`, and later play it; ending input fades at speed
   8 while the visual transition runs;
+- terminal score registration uses the same exact-volume wait before its final
+  stop. The donor helper does not check `snd_active`, so Music Off has no driver
+  state that can satisfy either wait. The native functional path bypasses only
+  those unavailable-driver waits and retains exact 255 gating for active BGM;
 - continue and other exits use nonblocking fades, including speed 3; and
 - script commands can stop, start, load/start a named song, and request a PMD
   fade without blocking the script interpreter; stock scripts add speed 12.

@@ -649,13 +649,17 @@ void test_missing_file_clear_and_recreate_rng_schedule()
 	if(!advance_fade(**scene, ClassicRegistrationPhase::wait_volume)) {
 		return;
 	}
-	const auto waiting = (*scene)->advance({}, {.volume = 254U});
+	const auto waiting = (*scene)->advance(
+		{}, {.bgm_active = true, .volume = 254U}
+	);
 	expect(
 		waiting && waiting->phase == ClassicRegistrationPhase::wait_volume &&
 			waiting->boundary == ClassicRegistrationBoundary::audio_volume,
 		"stage 99 waits for PMD's exact faded volume without inventing a frame"
 	);
-	const auto silenced = (*scene)->advance({}, {.volume = 255U});
+	const auto silenced = (*scene)->advance(
+		{}, {.bgm_active = true, .volume = 255U}
+	);
 	expect(
 		silenced && silenced->phase == ClassicRegistrationPhase::ready &&
 			silenced->boundary == ClassicRegistrationBoundary::immediate,
@@ -809,7 +813,9 @@ void test_view_only_schedule_and_unchanged_board()
 		return;
 	}
 	expect(
-		static_cast<bool>((*zero)->advance({}, {.volume = 255U})),
+		static_cast<bool>((*zero)->advance(
+			{}, {.bgm_active = true, .volume = 255U}
+		)),
 		"zero-credit viewer reaches ready at PMD silence"
 	);
 	const auto stop = (*zero)->take_audio_command();
@@ -862,7 +868,9 @@ void test_zero_credit_audio_exit()
 		return;
 	}
 	expect(
-		static_cast<bool>((*scene)->advance({}, {.volume = 255U})) &&
+		static_cast<bool>((*scene)->advance(
+			{}, {.bgm_active = true, .volume = 255U}
+		)) &&
 			(*scene)->phase() == ClassicRegistrationPhase::ready,
 		"zero-credit registration reaches ready only after faded silence"
 	);
@@ -877,6 +885,58 @@ void test_zero_credit_audio_exit()
 			MainlRegistrationNextScreen::game_over &&
 			completion->raster().pixel(Page::zero, Point{0, 0}) == 9U,
 		"zero-credit completion publishes preloaded OVER only after stop"
+	);
+}
+
+void test_music_off_audio_exit()
+{
+	TemporaryRoot root;
+	expect(root.valid(), "Music-Off registration temporary root exists");
+	if(!root.valid()) {
+		return;
+	}
+	const auto score_path = root.path() / "YUME.NEM";
+	expect(write_stock(score_path),
+		"Music-Off registration fixture writes stock score file");
+	auto value = resident();
+	value.remaining_credits = 0U;
+	value.last_score[0U].fill(0U);
+	SyntheticFont font;
+	auto scene = create_scene(value, score_path, font);
+	expect(scene.has_value(), "Music-Off registration scene constructs");
+	if(!scene) {
+		return;
+	}
+	drain_initial_audio(**scene);
+	if(!advance_fade(**scene, ClassicRegistrationPhase::wait_release)) {
+		return;
+	}
+	expect(static_cast<bool>((*scene)->advance({})),
+		"Music-Off registration accepts release");
+	expect(static_cast<bool>((*scene)->advance({.cancel = true})),
+		"Music-Off registration accepts dismissal");
+	const auto fade = (*scene)->take_audio_command();
+	expect(
+		fade && fade->type == ClassicAudioCommandType::fade_song &&
+			fade->parameter == 16U,
+		"Music-Off registration preserves the source fade command"
+	);
+	if(!advance_fade(**scene, ClassicRegistrationPhase::wait_volume)) {
+		return;
+	}
+	const auto escaped = (*scene)->advance(
+		{}, {.bgm_active = false, .volume = 0U}
+	);
+	expect(
+		escaped && escaped->phase == ClassicRegistrationPhase::ready &&
+			escaped->boundary == ClassicRegistrationBoundary::immediate,
+		"Music Off skips only the donor's unsatisfiable registration volume wait"
+	);
+	const auto stop = (*scene)->take_audio_command();
+	expect(
+		stop && stop->type == ClassicAudioCommandType::stop_song &&
+			stop->cue == ClassicMusicCue::high_score,
+		"Music-Off registration still publishes the source stop command"
 	);
 }
 
@@ -1175,6 +1235,7 @@ int main(int argc, char **argv)
 	test_missing_file_clear_and_recreate_rng_schedule();
 	test_view_only_schedule_and_unchanged_board();
 	test_zero_credit_audio_exit();
+	test_music_off_audio_exit();
 	test_rejections_and_commit_failure();
 	if(argc == 4) {
 		local_original_gate(argv[1], argv[2], argv[3]);

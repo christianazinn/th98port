@@ -844,7 +844,9 @@ ClassicStaffScene::advance(const ClassicStaffInput &input)
 			continue;
 
 		case DriverPhase::wait_volume:
-			if(input.audio.volume != 255U) {
+			// The donor's snd_delay_until_volume() does not test snd_active,
+			// leaving Music Off with no driver state that can satisfy this wait.
+			if(input.audio.bgm_active && input.audio.volume != 255U) {
 				return tick(ClassicStaffBoundary::audio_volume);
 			}
 			driver_phase_ = DriverPhase::queue_stop;

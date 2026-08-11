@@ -21,6 +21,13 @@ void bomb_character_update(
 				vector.x = ellen_bomb_vector_inactive;
 			}
 		}
+		observe_main_feedback(
+			observer,
+			(character == character_ellen) ?
+				MainFeedbackCueSite::ellen_bomb_started :
+				MainFeedbackCueSite::bomb_started,
+			player_id
+		);
 	}
 	state.bomb_frame[player_id]++;
 	if(
@@ -99,18 +106,6 @@ void bombs_render_phase_update(
 			state.players[player_id].paletted_character
 		);
 		const auto frame = state.bomb_frame[player_id];
-		if(frame == 1U && character == character_ellen) {
-			observe_main_feedback(
-				observer, MainFeedbackCueSite::ellen_bomb_started, player_id
-			);
-		} else if(
-			frame == 1U &&
-			(character == character_reimu || character == character_mima)
-		) {
-			observe_main_feedback(
-				observer, MainFeedbackCueSite::bomb_started, player_id
-			);
-		}
 		if(observer != nullptr) {
 			observer->bomb_frame_step(BombFrameStep{
 				.player = static_cast<PlayerId>(player_id),
