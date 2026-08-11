@@ -112,10 +112,11 @@ foundations:
   inputs and launches either the complete Classic owner or the live-only
   direct-VS runner. Both paths simulate every due logical deadline without
   collapsing catch-up and present only the newest completed surface. The
-  Classic path preserves the donor's full `input_sp` mask separately from P1/P2,
+  Classic path preserves the donor's full `input_sp` mask separately from P1/P2
+  and applies the stock `input_mode_1p_vs_cpu()` merge before Story MAIN. It
   drains semantic audio commands into one deterministic PMD/EFC interval per
-  logical sample, and has authenticated dummy/software SDL gates on GCC and
-  MSVC, including a 7,000-logical-tick automatic-Demo smoke.
+  logical sample and has authenticated dummy/software SDL gates on GCC and MSVC,
+  including a 7,000-logical-tick automatic-Demo smoke.
 - The source-private Classic Story owner now binds the implemented Stage,
   retained MAIN, Win, Continue, Game Over, both interstage cutscenes, and the
   primary ending, staff/verdict, high-score registration, and conditional
