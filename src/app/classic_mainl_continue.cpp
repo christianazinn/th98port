@@ -181,20 +181,6 @@ template <typename Value, typename Decoder>
 	return true;
 }
 
-[[nodiscard]] bool valid_continue_resident(const GameInit &resident) noexcept
-{
-	const auto valid_character = [](std::int8_t value) {
-		return value >= 1 && value <= 18;
-	};
-	return resident.game_mode == game_mode::story &&
-		resident.story_stage >= 1U && resident.story_stage <= 8U &&
-		resident.remaining_credits <= 3U &&
-		valid_character(resident.paletted_character[0U]) &&
-		valid_character(resident.paletted_character[1U]) &&
-		!resident.runtime_snapshot && !resident.compact_runtime_snapshot &&
-		!resident.round_start_snapshot && !resident.practice_rules;
-}
-
 [[nodiscard]] bool install_palette(
 	present::Raster &raster,
 	const assets::Palette16Rgb4 &palette
@@ -249,22 +235,15 @@ template <typename Value, typename Decoder>
 
 ClassicMainlContinueCompletion::ClassicMainlContinueCompletion(
 	ContinueChoice choice,
-	GameInit resident,
 	present::Raster raster
 ) noexcept :
 	choice_(choice),
-	resident_(std::move(resident)),
 	raster_(std::move(raster))
 {}
 
 ContinueChoice ClassicMainlContinueCompletion::choice() const noexcept
 {
 	return choice_;
-}
-
-const GameInit &ClassicMainlContinueCompletion::resident() const noexcept
-{
-	return resident_;
 }
 
 const present::Raster &ClassicMainlContinueCompletion::raster() const noexcept
@@ -274,43 +253,38 @@ const present::Raster &ClassicMainlContinueCompletion::raster() const noexcept
 
 ClassicMainlContinueScene::ClassicMainlContinueScene(
 	std::unique_ptr<Prepared> prepared,
-	GameInit resident
+	std::uint8_t remaining_credits
 ) noexcept :
 	prepared_(std::move(prepared)),
-	resident_(std::move(resident))
+	remaining_credits_(remaining_credits)
 {}
 
 ClassicMainlContinueScene::~ClassicMainlContinueScene() = default;
 
 std::expected<std::unique_ptr<ClassicMainlContinueScene>, ClassicMainlContinueError>
 ClassicMainlContinueScene::create(
-	GameInit resident,
+	std::uint8_t remaining_credits,
 	std::span<const LoadedMainResource> resources,
 	const present::AnkGlyphProvider &font
 )
 {
-	return create_impl(std::move(resident), resources, font, true);
+	return create_impl(remaining_credits, resources, font, true);
 }
 
 std::expected<std::unique_ptr<ClassicMainlContinueScene>, ClassicMainlContinueError>
 ClassicMainlContinueScene::create_impl(
-	GameInit resident,
+	std::uint8_t remaining_credits,
 	std::span<const LoadedMainResource> resources,
 	const present::AnkGlyphProvider &font,
 	bool authenticate_resource_bytes
 )
 {
-	if(!valid_continue_resident(resident)) {
+	if(remaining_credits > 3U) {
 		return std::unexpected(continue_error(
 			ClassicMainlContinueErrorCode::invalid_context
 		));
 	}
-	for(auto &score : resident.last_score) {
-		score.fill(0U);
-	}
-	const auto expected = mainl_continue_resource_keys(
-		resident.remaining_credits
-	);
+	const auto expected = mainl_continue_resource_keys(remaining_credits);
 	if(const auto valid = validate_resource_set(
 		resources,
 		*expected,
@@ -339,7 +313,7 @@ ClassicMainlContinueScene::create_impl(
 		));
 	}
 
-	if(resident.remaining_credits != 0U) {
+	if(remaining_credits != 0U) {
 		const MainResourceKey background_key{
 			.role = MainResourceRole::continue_background,
 		};
@@ -400,7 +374,7 @@ ClassicMainlContinueScene::create_impl(
 
 	auto scene = std::unique_ptr<ClassicMainlContinueScene>(
 		new ClassicMainlContinueScene(
-			std::move(prepared), std::move(resident)
+			std::move(prepared), remaining_credits
 		)
 	);
 	if(!scene->raster_.set_raster_mode(present::RasterMode::lines_400) ||
@@ -410,7 +384,7 @@ ClassicMainlContinueScene::create_impl(
 			ClassicMainlContinueErrorCode::draw_failed
 		));
 	}
-	if(scene->resident_.remaining_credits == 0U) {
+	if(scene->remaining_credits_ == 0U) {
 		if(!scene->draw_gameover()) {
 			return std::unexpected(continue_error(
 				ClassicMainlContinueErrorCode::draw_failed
@@ -420,7 +394,6 @@ ClassicMainlContinueScene::create_impl(
 		scene->choice_ = ContinueChoice::decline;
 		scene->completion_ = ClassicMainlContinueCompletion(
 			ContinueChoice::decline,
-			std::move(scene->resident_),
 			std::move(scene->raster_)
 		);
 		return scene;
@@ -443,7 +416,7 @@ bool ClassicMainlContinueScene::draw_continue() noexcept
 			raster_, *prepared_->continue_background->palette
 		) && present::pi_put_8(
 			raster_, 0, 0, *prepared_->continue_background
-		) && draw_choices() && draw_credit(resident_.remaining_credits);
+		) && draw_choices() && draw_credit(remaining_credits_);
 }
 
 bool ClassicMainlContinueScene::draw_choices() noexcept
@@ -590,14 +563,13 @@ ClassicMainlContinueScene::advance(ClassicMainlContinueInput input) noexcept
 		if(confirmed && choice_ == ContinueChoice::accept) {
 			if(!raster_.clear({576, 371, 17U, 17U}, 0U) ||
 				!draw_credit(static_cast<std::uint8_t>(
-					resident_.remaining_credits - 1U
+					remaining_credits_ - 1U
 				))) {
 				fail();
 				return std::unexpected(continue_error(
 					ClassicMainlContinueErrorCode::draw_failed
 				));
 			}
-			--resident_.remaining_credits;
 			surface_changed = true;
 		}
 		if(!push_audio_command({
@@ -653,11 +625,9 @@ ClassicMainlContinueScene::advance(ClassicMainlContinueInput input) noexcept
 				ClassicMainlContinueErrorCode::invalid_state
 			));
 		}
-		--resident_.story_stage;
-		resident_.story_lives = 2U;
 		phase_ = ClassicMainlContinuePhase::ready;
 		completion_ = ClassicMainlContinueCompletion(
-			choice_, std::move(resident_), std::move(raster_)
+			choice_, std::move(raster_)
 		);
 		return continue_tick(
 			phase_, ClassicMainlContinueBoundary::vsync, true
@@ -702,17 +672,10 @@ ClassicMainlContinueScene::take_completion() noexcept
 }
 
 ClassicMainlGameOverCompletion::ClassicMainlGameOverCompletion(
-	GameInit resident,
 	present::Raster raster
 ) noexcept :
-	resident_(std::move(resident)),
 	raster_(std::move(raster))
 {}
-
-const GameInit &ClassicMainlGameOverCompletion::resident() const noexcept
-{
-	return resident_;
-}
 
 const present::Raster &ClassicMainlGameOverCompletion::raster() const noexcept
 {
@@ -720,10 +683,8 @@ const present::Raster &ClassicMainlGameOverCompletion::raster() const noexcept
 }
 
 ClassicMainlGameOverScene::ClassicMainlGameOverScene(
-	GameInit resident,
 	present::Raster raster
 ) noexcept :
-	resident_(std::move(resident)),
 	raster_(std::move(raster))
 {}
 
@@ -744,7 +705,6 @@ ClassicMainlGameOverScene::create(
 	}
 	auto scene = std::unique_ptr<ClassicMainlGameOverScene>(
 		new ClassicMainlGameOverScene(
-			std::move(continue_completion.resident_),
 			std::move(continue_completion.raster_)
 		)
 	);
@@ -900,7 +860,7 @@ ClassicMainlGameOverScene::advance(ClassicAudioStatus audio) noexcept
 		}
 		phase_ = ClassicMainlGameOverPhase::ready;
 		completion_ = ClassicMainlGameOverCompletion(
-			std::move(resident_), std::move(raster_)
+			std::move(raster_)
 		);
 		return gameover_tick(
 			phase_, ClassicMainlGameOverBoundary::vsync, true

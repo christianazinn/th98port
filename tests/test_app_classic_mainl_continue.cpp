@@ -18,7 +18,6 @@
 namespace {
 
 using th03::ContinueChoice;
-using th03::GameInit;
 using th03::app::ClassicAudioCommand;
 using th03::app::ClassicAudioCommandType;
 using th03::app::ClassicAudioStatus;
@@ -320,21 +319,6 @@ std::vector<LoadedMainResource> resources_for(std::uint8_t credits)
 	return result;
 }
 
-GameInit resident(std::uint8_t credits)
-{
-	GameInit result{};
-	result.game_mode = th03::game_mode::story;
-	result.story_stage = 5U;
-	result.story_lives = 0U;
-	result.remaining_credits = credits;
-	result.is_cpu = {0U, 1U};
-	result.paletted_character = {1, 2};
-	for(auto &score : result.last_score) {
-		score.fill(7U);
-	}
-	return result;
-}
-
 std::unique_ptr<ClassicMainlContinueScene> create_scene(
 	std::uint8_t credits
 )
@@ -342,7 +326,7 @@ std::unique_ptr<ClassicMainlContinueScene> create_scene(
 	auto resources = resources_for(credits);
 	SyntheticFont font;
 	auto scene = ClassicMainlContinueTestAccess::create_with_synthetic_resources(
-		resident(credits), resources, font
+		credits, resources, font
 	);
 	expect(scene.has_value(), "synthetic Continue scene constructs");
 	return scene ? std::move(*scene) : nullptr;
@@ -461,19 +445,9 @@ void test_continue_input_and_acceptance()
 	});
 	auto completion = scene->take_completion();
 	expect(completion && completion->choice() == ContinueChoice::accept &&
-		completion->resident().remaining_credits == 2U &&
-		completion->resident().story_stage == 4U &&
-		completion->resident().story_lives == 2U &&
 		completion->raster().palette_tone() == 0 &&
 		!scene->take_completion(),
-		"accepted Continue publishes exact resident mutation once");
-	if(completion) {
-		for(const auto &score : completion->resident().last_score) {
-			expect(std::ranges::all_of(score, [](std::uint8_t digit) {
-				return digit == 0U;
-			}), "Continue clears both retained score arrays");
-		}
-	}
+		"accepted Continue publishes only its choice and black raster once");
 	if(completion) {
 		auto invalid_gameover = ClassicMainlGameOverScene::create(
 			std::move(*completion)
@@ -564,21 +538,13 @@ void test_gameover_active_and_silent_waits()
 		.cue = ClassicMusicCue::game_over,
 	}, "Game Over queues one final OVER.M stop");
 	auto completion = (*gameover)->take_completion();
-	expect(completion && completion->resident().story_stage == 4U &&
-		completion->raster().palette_tone() == 0,
-		"Game Over retains the resident and final black raster");
+	expect(completion && completion->raster().palette_tone() == 0,
+		"Game Over publishes the final black raster");
 
 	auto zero = finish_declined_continue(0U);
 	expect(zero.choice() == ContinueChoice::decline &&
-		zero.resident().story_stage == 5U &&
-		zero.resident().story_lives == 0U &&
 		zero.raster().palette_tone() == 0,
-		"zero-credit early return preserves stage and lives");
-	for(const auto &score : zero.resident().last_score) {
-		expect(std::ranges::all_of(score, [](std::uint8_t digit) {
-			return digit == 0U;
-		}), "zero-credit early return still clears retained scores");
-	}
+		"zero-credit early return publishes only decline and black OVER");
 	auto silent = ClassicMainlGameOverScene::create(std::move(zero));
 	expect(silent.has_value(), "zero-credit capability also starts Game Over");
 	if(!silent) {
@@ -614,7 +580,7 @@ void test_transaction_rejections_and_lifetime()
 	auto reordered = resources;
 	std::swap(reordered[0U], reordered[1U]);
 	auto rejected = ClassicMainlContinueTestAccess::create_with_synthetic_resources(
-		resident(2U), reordered, font
+		2U, reordered, font
 	);
 	expect(!rejected && rejected.error().code ==
 		ClassicMainlContinueErrorCode::resource_set_mismatch,
@@ -622,7 +588,7 @@ void test_transaction_rejections_and_lifetime()
 	auto missing = resources;
 	missing.back().bytes.reset();
 	rejected = ClassicMainlContinueTestAccess::create_with_synthetic_resources(
-		resident(2U), missing, font
+		2U, missing, font
 	);
 	expect(!rejected && rejected.error().code ==
 		ClassicMainlContinueErrorCode::resource_bytes_missing,
@@ -633,7 +599,7 @@ void test_transaction_rejections_and_lifetime()
 	);
 	malformed_pi[0U].bytes = wrong_pi;
 	rejected = ClassicMainlContinueTestAccess::create_with_synthetic_resources(
-		resident(2U), malformed_pi, font
+		2U, malformed_pi, font
 	);
 	expect(!rejected && rejected.error().code ==
 		ClassicMainlContinueErrorCode::invalid_asset_geometry,
@@ -644,41 +610,33 @@ void test_transaction_rejections_and_lifetime()
 	);
 	malformed_cdg[1U].bytes = wrong_cdg;
 	rejected = ClassicMainlContinueTestAccess::create_with_synthetic_resources(
-		resident(2U), malformed_cdg, font
+		2U, malformed_cdg, font
 	);
 	expect(!rejected && rejected.error().code ==
 		ClassicMainlContinueErrorCode::invalid_asset_geometry,
 		"wrong Continue CDG geometry is rejected after all four-cel decode");
 	MissingFont missing_font;
 	rejected = ClassicMainlContinueTestAccess::create_with_synthetic_resources(
-		resident(2U), resources, missing_font
+		2U, resources, missing_font
 	);
 	expect(!rejected && rejected.error().code ==
 		ClassicMainlContinueErrorCode::font_prepare_failed,
 		"missing credit glyph fails before a scene is published");
 	auto public_rejected = ClassicMainlContinueScene::create(
-		resident(2U), resources, font
+		2U, resources, font
 	);
 	expect(!public_rejected && public_rejected.error().code ==
 		ClassicMainlContinueErrorCode::resource_integrity_failed,
 		"production Continue scene reauthenticates supplied bytes");
 	rejected = ClassicMainlContinueTestAccess::create_with_synthetic_resources(
-		resident(4U), resources, font
+		4U, resources, font
 	);
 	expect(!rejected && rejected.error().code ==
 		ClassicMainlContinueErrorCode::invalid_context,
 		"credit value four is rejected before resource decode");
-	auto invalid_stage = resident(2U);
-	invalid_stage.story_stage = 0U;
-	rejected = ClassicMainlContinueTestAccess::create_with_synthetic_resources(
-		invalid_stage, resources, font
-	);
-	expect(!rejected && rejected.error().code ==
-		ClassicMainlContinueErrorCode::invalid_context,
-		"stage zero is rejected before source decrement");
 	auto lifetime_resources = resources_for(3U);
 	auto scene = ClassicMainlContinueTestAccess::create_with_synthetic_resources(
-		resident(3U), lifetime_resources, font
+		3U, lifetime_resources, font
 	);
 	lifetime_resources.clear();
 	expect(scene && (*scene)->advance({}).has_value(),
@@ -698,7 +656,7 @@ void local_original_gate(const std::filesystem::path &content_root)
 			continue;
 		}
 		auto scene = ClassicMainlContinueScene::create(
-			resident(credits), *resources, font
+			credits, *resources, font
 		);
 		expect(scene.has_value(),
 			"local original Continue assets decode and prepare");

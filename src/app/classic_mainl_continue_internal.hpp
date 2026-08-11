@@ -89,7 +89,6 @@ public:
 	) noexcept = default;
 
 	[[nodiscard]] ContinueChoice choice() const noexcept;
-	[[nodiscard]] const GameInit &resident() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 
 private:
@@ -97,25 +96,24 @@ private:
 	friend class ClassicMainlGameOverScene;
 	explicit ClassicMainlContinueCompletion(
 		ContinueChoice choice,
-		GameInit resident,
 		present::Raster raster
 	) noexcept;
 
 	ContinueChoice choice_ = ContinueChoice::decline;
-	GameInit resident_{};
 	present::Raster raster_{};
 };
 
 // Source-private equivalent of continue_menu(), beginning at the exact
-// registration next-screen asset boundary. Its completion publishes the exact
-// resident mutation together with the choice and black OVER raster.
+// registration next-screen asset boundary. The retained MainProcess remains the
+// sole authority for score clearing and Continue resident mutation; this scene
+// publishes only the choice and the black OVER raster.
 class ClassicMainlContinueScene final {
 public:
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicMainlContinueScene>,
 		ClassicMainlContinueError
 	> create(
-		GameInit resident,
+		std::uint8_t remaining_credits,
 		std::span<const LoadedMainResource> resources,
 		const present::AnkGlyphProvider &font
 	);
@@ -156,13 +154,13 @@ private:
 
 	explicit ClassicMainlContinueScene(
 		std::unique_ptr<Prepared> prepared,
-		GameInit resident
+		std::uint8_t remaining_credits
 	) noexcept;
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicMainlContinueScene>,
 		ClassicMainlContinueError
 	> create_impl(
-		GameInit resident,
+		std::uint8_t remaining_credits,
 		std::span<const LoadedMainResource> resources,
 		const present::AnkGlyphProvider &font,
 		bool authenticate_resource_bytes
@@ -175,7 +173,7 @@ private:
 	void fail() noexcept;
 
 	std::unique_ptr<Prepared> prepared_{};
-	GameInit resident_{};
+	std::uint8_t remaining_credits_ = 0U;
 	present::Raster raster_{};
 	std::array<ClassicAudioCommand, 1U> audio_commands_{};
 	std::size_t audio_count_ = 0U;
@@ -224,17 +222,14 @@ public:
 		ClassicMainlGameOverCompletion &&
 	) noexcept = default;
 
-	[[nodiscard]] const GameInit &resident() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 
 private:
 	friend class ClassicMainlGameOverScene;
 	explicit ClassicMainlGameOverCompletion(
-		GameInit resident,
 		present::Raster raster
 	) noexcept;
 
-	GameInit resident_{};
 	present::Raster raster_{};
 };
 
@@ -269,7 +264,6 @@ public:
 
 private:
 	explicit ClassicMainlGameOverScene(
-		GameInit resident,
 		present::Raster raster
 	) noexcept;
 	[[nodiscard]] bool push_audio_command(ClassicAudioCommand command) noexcept;
@@ -280,7 +274,6 @@ private:
 	) noexcept;
 	void fail() noexcept;
 
-	GameInit resident_{};
 	present::Raster raster_{};
 	std::array<ClassicAudioCommand, 3U> audio_commands_{};
 	std::size_t audio_head_ = 0U;
@@ -297,13 +290,13 @@ struct ClassicMainlContinueTestAccess final {
 		std::unique_ptr<ClassicMainlContinueScene>,
 		ClassicMainlContinueError
 	> create_with_synthetic_resources(
-		GameInit resident,
+		std::uint8_t remaining_credits,
 		std::span<const LoadedMainResource> resources,
 		const present::AnkGlyphProvider &font
 	)
 	{
 		return ClassicMainlContinueScene::create_impl(
-			std::move(resident), resources, font, false
+			remaining_credits, resources, font, false
 		);
 	}
 };
