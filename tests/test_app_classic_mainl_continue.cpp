@@ -332,6 +332,25 @@ std::unique_ptr<ClassicMainlContinueScene> create_scene(
 	return scene ? std::move(*scene) : nullptr;
 }
 
+std::array<std::uint8_t, 17U * 17U> credit_pixels(
+	const th03::present::Raster &raster
+)
+{
+	std::array<std::uint8_t, 17U * 17U> result{};
+	for(std::size_t y = 0U; y < 17U; ++y) {
+		for(std::size_t x = 0U; x < 17U; ++x) {
+			result[(y * 17U) + x] = raster.pixel(
+				Page::zero,
+				{
+					static_cast<std::int32_t>(576U + x),
+					static_cast<std::int32_t>(371U + y),
+				}
+			).value_or(0U);
+		}
+	}
+	return result;
+}
+
 void advance_continue_fade(
 	ClassicMainlContinueScene &scene,
 	ClassicMainlContinuePhase expected_after
@@ -429,6 +448,9 @@ void test_continue_input_and_acceptance()
 	expect(scene->raster().pixel(Page::zero, {192, 272}) == 1U &&
 		scene->raster().pixel(Page::zero, {352, 272}) == 4U,
 		"initial Continue draws source cels 0 and 3");
+	const auto credit_three = credit_pixels(scene->raster());
+	expect(std::ranges::count(credit_three, std::uint8_t{15U}) != 0,
+		"initial Continue directly draws the three-credit glyph at (576,371)");
 	advance_continue_fade(*scene, ClassicMainlContinuePhase::waiting_for_input);
 
 	const auto toggled = scene->advance({.left = true});
@@ -453,6 +475,10 @@ void test_continue_input_and_acceptance()
 		scene->selected_choice() == ContinueChoice::accept &&
 		scene->raster().display_state_hash() != before_accept,
 		"direction toggles before same-sample OK and accepted credit redraw");
+	const auto credit_two = credit_pixels(scene->raster());
+	expect(credit_two != credit_three &&
+		std::ranges::count(credit_two, std::uint8_t{15U}) != 0,
+		"accept redraws the decremented credit glyph inside its exact source rect");
 	expect(!scene->advance({}) && scene->phase() ==
 		ClassicMainlContinuePhase::black_out,
 		"undrained fade command blocks the first black-out boundary");
@@ -495,6 +521,21 @@ void test_continue_input_and_acceptance()
 		expect(both && both->choice_committed &&
 			priority->selected_choice() == ContinueChoice::accept,
 			"OK wins over simultaneous Cancel in donor branch order");
+	}
+
+	auto declined = create_scene(2U);
+	if(declined) {
+		const auto before = credit_pixels(declined->raster());
+		advance_continue_fade(
+			*declined, ClassicMainlContinuePhase::waiting_for_input
+		);
+		expect(declined->advance({.left = true}).has_value() &&
+			declined->advance({}).has_value(),
+			"decline fixture selects No and releases its direction lock");
+		const auto committed = declined->advance({.ok = true});
+		expect(committed && committed->choice_committed &&
+			credit_pixels(declined->raster()) == before,
+			"declining Continue leaves the displayed credit count unchanged");
 	}
 }
 

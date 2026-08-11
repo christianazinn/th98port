@@ -13,6 +13,7 @@
 
 #include "th03/app/main_process.hpp"
 #include "th03/app/resources.hpp"
+#include "th03/present/source_surface.hpp"
 #include "th03/present/text.hpp"
 
 #include "classic_mainl_stage_internal.hpp"
@@ -692,6 +693,12 @@ void test_visible_stage_and_exact_timing()
 		"Story stage zero draws ST cel one");
 	expect_pixel((*stage)->raster(), Page::zero, {80, 292}, 15U,
 		"P1 title draws white bold graphics text");
+	expect_pixel((*stage)->raster(), Page::zero, {128, 308}, 15U,
+		"P1 name draws in its distinct source slot");
+	expect_pixel((*stage)->raster(), Page::zero, {336, 292}, 15U,
+		"P2 title draws in its distinct source slot");
+	expect_pixel((*stage)->raster(), Page::zero, {384, 308}, 15U,
+		"P2 name draws in its distinct source slot");
 
 	for(std::size_t tick = 0U; tick < 17U; ++tick) {
 		const auto result = (*stage)->advance(false);
@@ -704,6 +711,36 @@ void test_visible_stage_and_exact_timing()
 		(*stage)->phase() == ClassicMainlStagePhase::waiting &&
 		(*stage)->raster().palette_tone() == 100,
 		"black-in final tone stages the hidden sheet");
+	expect_pixel((*stage)->raster(), Page::zero, {128, 308}, 15U,
+		"fully revealed stage retains all prepared character text");
+	std::vector<th03::present::ComposedPixel> composed_pixels(
+		th03::present::graphics_page_pixels
+	);
+	const auto composed = th03::present::compose_source_surface(
+		std::span<
+			th03::present::ComposedPixel,
+			th03::present::graphics_page_pixels
+		>(composed_pixels.data(), composed_pixels.size()),
+		(*stage)->raster(),
+		(*stage)->tram(),
+		font
+	);
+	expect(composed && std::ranges::all_of(
+		std::array{
+			Point{80, 292}, Point{128, 308},
+			Point{336, 292}, Point{384, 308},
+		},
+		[&composed_pixels](Point point) {
+			const auto &pixel = composed_pixels[
+				(static_cast<std::size_t>(point.y) *
+					th03::present::graphics_width) +
+				static_cast<std::size_t>(point.x)
+			];
+			return pixel.layer ==
+				th03::present::ComposedPixelLayer::graphics &&
+				pixel.value == 15U;
+		}
+	), "shown-surface composition publishes all four pre-round strings");
 	const auto stop = (*stage)->take_audio_command();
 	const auto load = (*stage)->take_audio_command();
 	const auto effects = (*stage)->take_audio_command();

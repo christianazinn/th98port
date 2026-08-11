@@ -139,7 +139,10 @@ MainlStageTextAssets stage_text()
 	for(std::size_t index = 0U;
 		index < result.registration_playchars.size();
 		++index) {
-		result.registration_playchars[index].assign(12U, ' ');
+		result.registration_playchars[index].assign(
+			12U,
+			static_cast<std::uint8_t>('A' + index)
+		);
 	}
 	return result;
 }
@@ -726,6 +729,11 @@ void test_view_only_schedule_and_unchanged_board()
 			ClassicRegistrationSceneTestAccess::document(**scene).boards ==
 				before->document.boards,
 		"viewer skips candidate insertion despite a synthetic winning last score"
+	);
+	expect(
+		(*scene)->raster().pixel(Page::zero, {456, 112}) == 15U &&
+			(*scene)->raster().pixel(Page::one, {456, 112}) == 1U,
+		"view-only backup retains background while the shown page owns row text"
 	);
 	drain_initial_audio(**scene);
 	if(!advance_fade(**scene, ClassicRegistrationPhase::wait_release)) {

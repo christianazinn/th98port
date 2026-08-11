@@ -760,14 +760,19 @@ bool ClassicRegistrationScene::initialize_visuals() noexcept
 	}
 	raster_.set_palette_tone(0);
 	raster_.apply_pending_palette();
-	if(!present::pi_put_8(raster_, 0, 0, prepared_->background) ||
-		!present::cdg_put_8(raster_, 320, 312, prepared_->rank) ||
-		!draw_rows(false) || !raster_.copy_page(
+	const auto copy_visible_to_backup = [this]() noexcept {
+		return raster_.copy_page(
 			present::Page::zero,
 			{0, 0, present::graphics_width, present::graphics_height},
 			present::Page::one,
 			{0, 0}
-		) || !raster_.set_access_page(present::Page::zero)) {
+		);
+	};
+	if(!present::pi_put_8(raster_, 0, 0, prepared_->background) ||
+		!present::cdg_put_8(raster_, 320, 312, prepared_->rank) ||
+		(view_only_ && !copy_visible_to_backup()) || !draw_rows(false) ||
+		(!view_only_ && !copy_visible_to_backup()) ||
+		!raster_.set_access_page(present::Page::zero)) {
 		return false;
 	}
 	return !entered_place_ || draw_alphabet();

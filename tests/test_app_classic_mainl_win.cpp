@@ -15,6 +15,7 @@
 
 #include "th03/app/authentic_text.hpp"
 #include "th03/app/main_process.hpp"
+#include "th03/present/source_surface.hpp"
 
 namespace {
 
@@ -351,6 +352,36 @@ void test_active_audio_preload_and_completion()
 		"ordinary Story win requests preload after drawing text");
 	expect_pixel((*scene)->raster(), Page::zero, {80, 272}, 15U,
 		"selected message block draws white bold text");
+	expect_pixel((*scene)->raster(), Page::zero, {80, 288}, 15U,
+		"selected message block draws its second line at +16 pixels");
+	expect_pixel((*scene)->raster(), Page::zero, {80, 304}, 15U,
+		"selected message block draws its third line at +32 pixels");
+	std::vector<th03::present::ComposedPixel> composed_pixels(
+		th03::present::graphics_page_pixels
+	);
+	SyntheticFont composed_font;
+	const auto composed = th03::present::compose_source_surface(
+		std::span<
+			th03::present::ComposedPixel,
+			th03::present::graphics_page_pixels
+		>(composed_pixels.data(), composed_pixels.size()),
+		(*scene)->raster(),
+		th03::present::Tram{},
+		composed_font
+	);
+	expect(composed && std::ranges::all_of(
+		std::array{Point{80, 272}, Point{80, 288}, Point{80, 304}},
+		[&composed_pixels](Point point) {
+			const auto &pixel = composed_pixels[
+				(static_cast<std::size_t>(point.y) *
+					th03::present::graphics_width) +
+				static_cast<std::size_t>(point.x)
+			];
+			return pixel.layer ==
+				th03::present::ComposedPixelLayer::graphics &&
+				pixel.value == 15U;
+		}
+	), "shown-surface composition publishes all three winner quote lines");
 	const auto still_preload = (*scene)->advance({}, true);
 	expect(still_preload && still_preload->boundary ==
 		ClassicMainlWinBoundary::stage_preload &&

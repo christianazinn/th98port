@@ -475,6 +475,28 @@ void test_result_banner_summary_and_story_boundaries()
 		"story stage eight renders 100000 constant"
 	);
 
+	Fixture player_two;
+	player_two.prepare();
+	state = banner_state(PlayerId::p1, 1U);
+	state.summary_active = true;
+	state.story_stage = 8U;
+	state.story_lives = 7U;
+	player_two.presenter->main_result_state(state);
+	expect(
+		player_two.tram.cell({44, 6})->code == player_two.labels[
+			static_cast<std::size_t>(MainResultLabel::all_clear_bonus)
+		][0U].code &&
+		player_two.tram.cell({66, 18})->code ==
+			th03::present::gaiji_cell_code(
+				0xA7U, th03::present::GaijiHalf::left
+			),
+		"P2 winner summary shifts every TRAM row by forty source columns"
+	);
+	expect_pixel(
+		player_two.raster, {608, 145}, 15U,
+		"P2 winner summary shifts point values by 320 pixels"
+	);
+
 	Fixture invalid;
 	invalid.prepare();
 	state = {};

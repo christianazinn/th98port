@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -237,6 +238,18 @@ void test_input_projection()
 		live.main.physical_domains.has_value() &&
 		live.story.main.physical_domains.has_value(),
 		"live MAIN projections retain aggregate replay input beside physical domains");
+}
+
+void test_fresh_resident_state()
+{
+	const auto resident =
+		th03::app::ClassicRunnerTestAccess::initial_resident(0xFEDCBA98U);
+	expect(resident.remaining_credits == 0U && resident.story_stage == 0U &&
+		resident.show_score_menu == 0U && resident.game_mode ==
+			th03::game_mode::none &&
+		std::bit_cast<std::uint32_t>(resident.resident_rand) == 0xFEDCBA98U &&
+		resident.random_seed == 0xFEDCBA98U,
+		"fresh OP resident preserves zero credits until Story selection");
 }
 
 struct FakeRunnerBackend final {
@@ -708,6 +721,7 @@ int main(int argc, char **argv)
 {
 	test_cli();
 	test_input_projection();
+	test_fresh_resident_state();
 	test_runner_sequence_audio_surface_and_failure();
 	test_file_and_request_boundaries();
 	if(argc == 7 && std::string_view(argv[1]) == "--authentic") {

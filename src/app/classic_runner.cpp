@@ -263,6 +263,14 @@ read_external_file(
 	};
 }
 
+[[nodiscard]] GameInit initial_resident(std::uint32_t seed) noexcept
+{
+	GameInit resident{};
+	resident.resident_rand = std::bit_cast<std::int32_t>(seed);
+	resident.random_seed = seed;
+	return resident;
+}
+
 } // namespace
 
 struct ClassicRunner::Impl final {
@@ -330,10 +338,7 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		return std::unexpected(std::move(font.error()));
 	}
 
-	GameInit resident{};
-	resident.resident_rand = std::bit_cast<std::int32_t>(request.seed);
-	resident.random_seed = request.seed;
-	resident.remaining_credits = 3U;
+	auto resident = initial_resident(request.seed);
 	auto session = ClassicOpSession::create(
 		std::move(resident),
 		std::make_unique<MainResourceLoader>(paths.data_root),
@@ -479,6 +484,11 @@ ClassicRunnerTestAccess::create(
 	return std::unique_ptr<ClassicRunner>(
 		new ClassicRunner(std::move(impl))
 	);
+}
+
+GameInit ClassicRunnerTestAccess::initial_resident(std::uint32_t seed) noexcept
+{
+	return th03::app::initial_resident(seed);
 }
 
 ClassicOpSessionInput ClassicRunnerTestAccess::project_input(

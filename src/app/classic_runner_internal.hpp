@@ -28,6 +28,8 @@ struct ClassicRunnerOperations final {
 };
 
 struct ClassicRunnerTestAccess final {
+	[[nodiscard]] static GameInit initial_resident(std::uint32_t seed) noexcept;
+
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicRunner>,
 		ClassicRunnerError
