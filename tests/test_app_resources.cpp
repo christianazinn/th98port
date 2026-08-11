@@ -15,6 +15,9 @@ namespace {
 
 namespace fs = std::filesystem;
 using th03::app::MainCharacter;
+using th03::app::MainCutsceneMusic;
+using th03::app::MainCutscenePicture;
+using th03::app::MainCutsceneScript;
 using th03::app::MainPaletteVariant;
 using th03::app::MainPlayerSelection;
 using th03::app::MainResourceArchive;
@@ -22,6 +25,7 @@ using th03::app::MainResourceIntegrity;
 using th03::app::MainResourceKey;
 using th03::app::MainResourceLoader;
 using th03::app::MainResourceRole;
+using th03::app::MainlCutsceneKind;
 using th03::app::MainlStageBackground;
 using th03::app::MainlStageResourceRequest;
 using th03::app::ResourceLoadErrorCode;
@@ -115,8 +119,8 @@ void test_manifest()
 	);
 	const auto manifest = th03::app::main_resource_manifest();
 	expect(
-		manifest.size() == 148U,
-		"manifest enumerates MAIN, MAINL, paletted, and character-only assets"
+		manifest.size() == 205U,
+		"manifest enumerates MAIN, MAINL, cutscene, paletted, and character-only assets"
 	);
 	expect(
 		static_cast<bool>(th03::app::validate_main_resource_manifest(manifest)),
@@ -137,6 +141,11 @@ void test_manifest()
 	bool contains_continue = false;
 	bool contains_continue_cels = false;
 	bool contains_gameover = false;
+	bool contains_first_cutscene_script = false;
+	bool contains_last_cutscene_script = false;
+	bool contains_first_cutscene_picture = false;
+	bool contains_last_cutscene_picture = false;
+	bool contains_last_cutscene_music = false;
 	for(const auto &spec : manifest) {
 		contains_enedat = contains_enedat ||
 			(spec.key.role == MainResourceRole::enemy_scripts &&
@@ -191,6 +200,29 @@ void test_manifest()
 			(spec.key.role == MainResourceRole::gameover_background &&
 				spec.filename == "OVER.PI" && spec.expected_bytes == 3571U &&
 				spec.expected_fnv1a64 == 0xFF41379103F8C92AULL);
+		contains_first_cutscene_script = contains_first_cutscene_script ||
+			(spec.key.role == MainResourceRole::cutscene_script &&
+				spec.key.cutscene_script == MainCutsceneScript::dm0_reimu &&
+				spec.filename == "@00DM0.TXT" && spec.expected_bytes == 4770U &&
+				spec.expected_fnv1a64 == 0x1C62B85E545EFC43ULL);
+		contains_last_cutscene_script = contains_last_cutscene_script ||
+			(spec.key.role == MainResourceRole::cutscene_script &&
+				spec.key.cutscene_script == MainCutsceneScript::extra_ending &&
+				spec.filename == "@99ED.TXT" && spec.expected_bytes == 615U &&
+				spec.expected_fnv1a64 == 0xDC89B80A10BE849CULL);
+		contains_first_cutscene_picture = contains_first_cutscene_picture ||
+			(spec.key.role == MainResourceRole::cutscene_picture &&
+				spec.key.cutscene_picture == MainCutscenePicture::dm1a &&
+				spec.filename == "DM1A.PI" && spec.expected_bytes == 4652U);
+		contains_last_cutscene_picture = contains_last_cutscene_picture ||
+			(spec.key.role == MainResourceRole::cutscene_picture &&
+				spec.key.cutscene_picture == MainCutscenePicture::dm4a &&
+				spec.filename == "DM4A.PI" && spec.expected_bytes == 22284U);
+		contains_last_cutscene_music = contains_last_cutscene_music ||
+			(spec.key.role == MainResourceRole::cutscene_music &&
+				spec.key.cutscene_music == MainCutsceneMusic::demo5 &&
+				spec.filename == "DEMO5.M" && spec.expected_bytes == 1193U &&
+				spec.expected_fnv1a64 == 0x1E13270E55263E7EULL);
 		expect(
 			th03::app::is_safe_extracted_entry_name(spec.filename),
 			"every checked-in manifest filename is one safe extracted component"
@@ -207,7 +239,10 @@ void test_manifest()
 			contains_mainl_font && contains_stage_portrait &&
 			contains_stage_number && contains_stage_base &&
 			contains_stage_decisive && contains_continue &&
-			contains_continue_cels && contains_gameover,
+			contains_continue_cels && contains_gameover &&
+			contains_first_cutscene_script && contains_last_cutscene_script &&
+			contains_first_cutscene_picture && contains_last_cutscene_picture &&
+			contains_last_cutscene_music,
 		"manifest retains the representative source-named resource families"
 	);
 	struct ExpectedEnemyGroup {
@@ -689,6 +724,90 @@ void test_main_private_and_mainl_stage_batches()
 	);
 }
 
+void test_cutscene_resource_batches()
+{
+	const auto reimu_chiyuri = th03::app::mainl_cutscene_resource_keys({
+		.kind = MainlCutsceneKind::interstage_chiyuri,
+		.character = MainCharacter::reimu,
+	});
+	const auto yumemi_yumemi = th03::app::mainl_cutscene_resource_keys({
+		.kind = MainlCutsceneKind::interstage_yumemi,
+		.character = MainCharacter::yumemi,
+	});
+	const auto kana_ending = th03::app::mainl_cutscene_resource_keys({
+		.kind = MainlCutsceneKind::ending,
+		.character = MainCharacter::kana,
+	});
+	const auto extra = th03::app::mainl_cutscene_resource_keys({
+		.kind = MainlCutsceneKind::extra_ending,
+		.character = MainCharacter::chiyuri,
+	});
+	expect(
+		reimu_chiyuri && reimu_chiyuri->size() == 31U &&
+			reimu_chiyuri->front() == MainResourceKey{
+				.role = MainResourceRole::mainl_gaiji_font,
+			} && (*reimu_chiyuri)[1U] == MainResourceKey{
+				.role = MainResourceRole::cutscene_script,
+				.cutscene_script = MainCutsceneScript::dm0_reimu,
+			} && (*reimu_chiyuri)[2U] == MainResourceKey{
+				.role = MainResourceRole::cutscene_picture,
+				.cutscene_picture = MainCutscenePicture::dm1a,
+			} && reimu_chiyuri->back() == MainResourceKey{
+				.role = MainResourceRole::cutscene_music,
+				.cutscene_music = MainCutsceneMusic::demo5,
+			},
+		"cutscene batch is font, selected script, all pictures, then all music"
+	);
+	expect(
+		yumemi_yumemi && (*yumemi_yumemi)[1U].cutscene_script ==
+			MainCutsceneScript::dm1_yumemi &&
+		kana_ending && (*kana_ending)[1U].cutscene_script ==
+			MainCutsceneScript::ending_kana &&
+		extra && (*extra)[1U].cutscene_script ==
+			MainCutsceneScript::extra_ending,
+		"cutscene request resolves all four source filename mutations"
+	);
+	expect(
+		!th03::app::mainl_cutscene_resource_keys({
+			.kind = MainlCutsceneKind::ending,
+			.character = MainCharacter::none,
+		}) &&
+		!th03::app::mainl_cutscene_resource_keys({
+			.kind = static_cast<MainlCutsceneKind>(0xFFU),
+			.character = MainCharacter::reimu,
+		}),
+		"cutscene request rejects invalid character and scene domains"
+	);
+
+	TemporaryRoot root;
+	expect(root.valid(), "temporary cutscene transaction root was created");
+	if(!root.valid() || !kana_ending) {
+		return;
+	}
+	for(std::size_t index = 0U; index + 1U < kana_ending->size(); ++index) {
+		write_spec(root.path(), (*kana_ending)[index], std::byte{0x71U});
+	}
+	MainResourceLoader loader(root.path(), MainResourceIntegrity::size_only);
+	const auto failed = loader.load_mainl_cutscene({
+		.kind = MainlCutsceneKind::ending,
+		.character = MainCharacter::kana,
+	});
+	expect(
+		!failed && loader.cached_resource_count() == 0U,
+		"a late cutscene closure failure publishes no partial cache entries"
+	);
+	write_spec(root.path(), kana_ending->back(), std::byte{0x72U});
+	const auto loaded = loader.load_mainl_cutscene({
+		.kind = MainlCutsceneKind::ending,
+		.character = MainCharacter::kana,
+	});
+	expect(
+		loaded && loaded->size() == kana_ending->size() &&
+			loader.cached_resource_count() == kana_ending->size(),
+		"the complete cutscene closure commits atomically"
+	);
+}
+
 void test_rejections()
 {
 	const auto enemy_key = MainResourceKey{.role = MainResourceRole::enemy_scripts};
@@ -788,6 +907,7 @@ int main()
 	test_manifest();
 	test_direct_vs_batch_and_cache();
 	test_main_private_and_mainl_stage_batches();
+	test_cutscene_resource_batches();
 	test_rejections();
 	test_resolved_path_escape_if_supported();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

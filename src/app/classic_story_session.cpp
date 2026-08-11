@@ -56,6 +56,17 @@ namespace {
 	return result;
 }
 
+[[nodiscard]] ClassicStorySessionError cutscene_error(
+	ClassicCutsceneError error
+)
+{
+	auto result = session_error(
+		ClassicStorySessionErrorCode::cutscene_failed
+	);
+	result.cutscene_error.emplace(std::move(error));
+	return result;
+}
+
 [[nodiscard]] ClassicStorySessionError continue_error(
 	ClassicMainlContinueError error,
 	ClassicStorySessionErrorCode code =
@@ -123,6 +134,9 @@ namespace {
 		operations.advance_main != nullptr && operations.main_terminal != nullptr &&
 		operations.start_win != nullptr && operations.advance_win != nullptr &&
 		operations.preload_stage != nullptr && operations.finish_win != nullptr &&
+		operations.start_cutscene != nullptr &&
+		operations.advance_cutscene != nullptr &&
+		operations.finish_cutscene != nullptr &&
 		operations.start_continue != nullptr &&
 		operations.advance_continue != nullptr &&
 		operations.finish_continue != nullptr &&
@@ -145,19 +159,56 @@ namespace {
 		return ClassicStorySessionScene::main;
 	case ClassicMainlScene::win:
 		return ClassicStorySessionScene::win;
+	case ClassicMainlScene::interstage_cutscene:
+	case ClassicMainlScene::ending:
+		return ClassicStorySessionScene::cutscene;
 	case ClassicMainlScene::continue_menu:
 		return ClassicStorySessionScene::continue_menu;
 	case ClassicMainlScene::game_over:
 		return ClassicStorySessionScene::game_over;
-	case ClassicMainlScene::interstage_cutscene:
 	case ClassicMainlScene::high_score_registration:
-	case ClassicMainlScene::ending:
 	case ClassicMainlScene::extra_ending:
 		return ClassicStorySessionScene::external_request;
 	case ClassicMainlScene::exit_to_operator:
 		return ClassicStorySessionScene::complete;
 	}
 	return ClassicStorySessionScene::failed;
+}
+
+[[nodiscard]] std::optional<MainlCutsceneResourceRequest> cutscene_request(
+	const ClassicMainlStep &step,
+	const GameInit &resident
+) noexcept
+{
+	const auto player = main_player_selection_from_paletted(
+		resident.paletted_character[0U]
+	);
+	if(!player) {
+		return std::nullopt;
+	}
+	if(step.scene == ClassicMainlScene::interstage_cutscene) {
+		if(step.cutscene == ClassicInterstageCutscene::chiyuri) {
+			return MainlCutsceneResourceRequest{
+				.kind = MainlCutsceneKind::interstage_chiyuri,
+				.character = player->character,
+			};
+		}
+		if(step.cutscene == ClassicInterstageCutscene::yumemi) {
+			return MainlCutsceneResourceRequest{
+				.kind = MainlCutsceneKind::interstage_yumemi,
+				.character = player->character,
+			};
+		}
+		return std::nullopt;
+	}
+	if(step.scene == ClassicMainlScene::ending &&
+		step.cutscene == ClassicInterstageCutscene::none) {
+		return MainlCutsceneResourceRequest{
+			.kind = MainlCutsceneKind::ending,
+			.character = player->character,
+		};
+	}
+	return std::nullopt;
 }
 
 [[nodiscard]] ClassicStoryExternalKind external_kind(
@@ -225,6 +276,8 @@ struct ClassicStoryBackend final {
 	std::unique_ptr<MainProcess> process{};
 	std::unique_ptr<MainProcessDriver> driver{};
 	std::unique_ptr<ClassicMainlWinScene> win{};
+	std::unique_ptr<ClassicCutsceneScene> cutscene{};
+	std::optional<present::Raster> cutscene_handoff{};
 	std::unique_ptr<ClassicMainlContinueScene> continue_scene{};
 	std::optional<ClassicMainlContinueCompletion> continue_completion{};
 	std::unique_ptr<ClassicMainlGameOverScene> game_over{};
@@ -285,12 +338,17 @@ struct ClassicStoryBackend final {
 			driver.reset();
 			process.reset();
 		}
-		if(stage || win || continue_scene || game_over) {
+		if(stage || win || cutscene || continue_scene || game_over) {
 			return std::unexpected(session_error(
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
 		}
 		if(pending_stage) {
+			if(cutscene_handoff) {
+				return std::unexpected(session_error(
+					ClassicStorySessionErrorCode::backend_contract_failed
+				));
+			}
 			if(!pending_stage->matches_process_config(config)) {
 				return std::unexpected(session_error(
 					ClassicStorySessionErrorCode::backend_contract_failed
@@ -302,6 +360,18 @@ struct ClassicStoryBackend final {
 		auto created = create_stage(config);
 		if(!created) {
 			return std::unexpected(std::move(created.error()));
+		}
+		if(cutscene_handoff) {
+			auto candidate = *cutscene_handoff;
+			if(!(*created)->preload_splash_into(candidate) ||
+				!(*created)->adopt_preloaded_raster(
+					std::move(candidate)
+				)) {
+				return std::unexpected(session_error(
+					ClassicStorySessionErrorCode::stage_failed
+				));
+			}
+			cutscene_handoff.reset();
 		}
 		stage = std::move(*created);
 		return {};
@@ -522,7 +592,87 @@ struct ClassicStoryBackend final {
 				ClassicStorySessionErrorCode::stage_failed
 			));
 		}
+		if(!pending_stage) {
+			cutscene_handoff.emplace(std::move(completion->raster_));
+		}
 		win.reset();
+		return {};
+	}
+
+	std::expected<void, ClassicStorySessionError> start_cutscene(
+		MainlCutsceneResourceRequest request
+	)
+	{
+		if(cutscene || stage || win || continue_scene || game_over) {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::backend_contract_failed
+			));
+		}
+		std::optional<present::Raster> initial{};
+		if(cutscene_handoff) {
+			initial.emplace(*cutscene_handoff);
+		} else if(process && driver &&
+			driver->status() == MainProcessDriverStatus::terminal) {
+			initial.emplace(process->raster());
+		} else {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::backend_contract_failed
+			));
+		}
+		auto resources = loader->load_mainl_cutscene(request);
+		if(!resources) {
+			return std::unexpected(resource_error(std::move(resources.error())));
+		}
+		auto created = ClassicCutsceneScene::create(
+			request, *resources, static_content->font(), std::move(*initial)
+		);
+		if(!created) {
+			return std::unexpected(cutscene_error(std::move(created.error())));
+		}
+		cutscene = std::move(*created);
+		cutscene_handoff.reset();
+		return {};
+	}
+
+	std::expected<ClassicStoryBackendTick, ClassicStorySessionError>
+	advance_cutscene(const ClassicCutsceneInput &input)
+	{
+		if(!cutscene) {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::backend_contract_failed
+			));
+		}
+		if(cutscene->phase() == ClassicCutscenePhase::ready) {
+			return ClassicStoryBackendTick{.ready = true};
+		}
+		auto advanced = cutscene->advance(input);
+		if(!advanced) {
+			return std::unexpected(cutscene_error(
+				std::move(advanced.error())
+			));
+		}
+		return ClassicStoryBackendTick{
+			.surface_changed = advanced->surface_changed,
+			.input_sampled = advanced->input_sampled,
+			.ready = advanced->ready,
+		};
+	}
+
+	std::expected<void, ClassicStorySessionError> finish_cutscene()
+	{
+		if(!cutscene) {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::backend_contract_failed
+			));
+		}
+		auto completion = cutscene->take_completion();
+		if(!completion) {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::backend_contract_failed
+			));
+		}
+		cutscene_handoff.emplace(std::move(completion->raster_));
+		cutscene.reset();
 		return {};
 	}
 
@@ -672,6 +822,9 @@ struct ClassicStoryBackend final {
 
 	std::optional<ClassicAudioCommand> take_audio_command()
 	{
+		if(cutscene) {
+			return cutscene->take_audio_command();
+		}
 		if(win) {
 			return win->take_audio_command();
 		}
@@ -695,12 +848,17 @@ struct ClassicStoryBackend final {
 		if(stage) {
 			raster = &stage->raster();
 			tram = &stage->tram();
+		} else if(cutscene) {
+			raster = &cutscene->raster();
+			tram = &cutscene->tram();
 		} else if(win) {
 			raster = &win->raster();
 		} else if(continue_scene) {
 			raster = &continue_scene->raster();
 		} else if(game_over) {
 			raster = &game_over->raster();
+		} else if(cutscene_handoff) {
+			raster = &*cutscene_handoff;
 		}
 		if(!raster && process) {
 			auto composed = process->compose_shown_surface(output);
@@ -787,6 +945,22 @@ ClassicStorySessionBackendOperations backend_operations(
 		.finish_win = [](void *context) {
 			return backend_call<std::expected<void, ClassicStorySessionError>>(
 				context, &ClassicStoryBackend::finish_win
+			);
+		},
+		.start_cutscene = [](void *context, MainlCutsceneResourceRequest request) {
+			return backend_call<std::expected<void, ClassicStorySessionError>>(
+				context, &ClassicStoryBackend::start_cutscene, request
+			);
+		},
+		.advance_cutscene = [](void *context, const ClassicCutsceneInput &input) {
+			return backend_call<std::expected<ClassicStoryBackendTick,
+				ClassicStorySessionError>>(
+				context, &ClassicStoryBackend::advance_cutscene, input
+			);
+		},
+		.finish_cutscene = [](void *context) {
+			return backend_call<std::expected<void, ClassicStorySessionError>>(
+				context, &ClassicStoryBackend::finish_cutscene
 			);
 		},
 		.start_continue = [](void *context, std::uint8_t credits) {
@@ -949,8 +1123,22 @@ struct ClassicStorySession::Impl {
 				return {};
 			}
 			case ClassicMainlScene::interstage_cutscene:
+			case ClassicMainlScene::ending: {
+				const auto request = cutscene_request(step, plan.resident());
+				if(!request) {
+					return std::unexpected(session_error(
+						ClassicStorySessionErrorCode::backend_contract_failed
+					));
+				}
+				auto started = operations.start_cutscene(
+					operations.context, *request
+				);
+				if(!started) {
+					return std::unexpected(std::move(started.error()));
+				}
+				return {};
+			}
 			case ClassicMainlScene::high_score_registration:
-			case ClassicMainlScene::ending:
 			case ClassicMainlScene::extra_ending: {
 				auto request_resident = plan.resident();
 				request_resident.global_frame = source_sample_count;
@@ -1147,6 +1335,11 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 			impl_->operations.context, input.audio, input.dismiss_pressed
 		);
 		break;
+	case ClassicStorySessionScene::cutscene:
+		tick = impl_->operations.advance_cutscene(
+			impl_->operations.context, input.cutscene
+		);
+		break;
 	case ClassicStorySessionScene::continue_menu:
 		tick = impl_->operations.advance_continue(
 			impl_->operations.context, input.continue_menu
@@ -1211,6 +1404,14 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 		}
 		case ClassicStorySessionScene::win:
 			advanced = impl_->operations.finish_win(impl_->operations.context);
+			if(advanced) {
+				advanced = impl_->advance_cursor();
+			}
+			break;
+		case ClassicStorySessionScene::cutscene:
+			advanced = impl_->operations.finish_cutscene(
+				impl_->operations.context
+			);
 			if(advanced) {
 				advanced = impl_->advance_cursor();
 			}

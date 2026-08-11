@@ -28,6 +28,7 @@ enum class MainResourceScene : std::uint8_t {
 	mainl_stage_transition,
 	mainl_win,
 	mainl_continue_gameover,
+	mainl_cutscene,
 };
 
 enum class MainResourceDecoder : std::uint8_t {
@@ -39,6 +40,8 @@ enum class MainResourceDecoder : std::uint8_t {
 	mrs,
 	pi,
 	shift_jis_blocks,
+	cutscene_script,
+	pmd_music,
 };
 
 enum class MainCharacter : std::uint8_t {
@@ -67,6 +70,82 @@ enum class MainlStageBackground : std::uint8_t {
 	chiyuri,
 	decisive,
 	non_story,
+};
+
+enum class MainlCutsceneKind : std::uint8_t {
+	interstage_chiyuri,
+	interstage_yumemi,
+	ending,
+	extra_ending,
+};
+
+enum class MainCutsceneScript : std::uint8_t {
+	none,
+	dm0_reimu,
+	dm0_mima,
+	dm0_marisa,
+	dm0_ellen,
+	dm0_kotohime,
+	dm0_kana,
+	dm0_rikako,
+	dm0_chiyuri,
+	dm0_yumemi,
+	dm1_reimu,
+	dm1_mima,
+	dm1_marisa,
+	dm1_ellen,
+	dm1_kotohime,
+	dm1_kana,
+	dm1_rikako,
+	dm1_chiyuri,
+	dm1_yumemi,
+	ending_reimu,
+	ending_mima,
+	ending_marisa,
+	ending_ellen,
+	ending_kotohime,
+	ending_kana,
+	ending_rikako,
+	ending_chiyuri,
+	ending_yumemi,
+	extra_ending,
+};
+
+enum class MainCutscenePicture : std::uint8_t {
+	none,
+	dm1a,
+	dm1b,
+	dm1c,
+	dm1d,
+	dm1e,
+	dm1f,
+	dm2a,
+	dm3a,
+	dm3b,
+	dm3c,
+	dm3d,
+	dm3e,
+	dm3f,
+	dm3g,
+	dm3h,
+	dm3i,
+	dm3j,
+	dm3k,
+	dm3l,
+	dm3m,
+	dm3n,
+	dm3o,
+	dm3p,
+	dm4a,
+};
+
+enum class MainCutsceneMusic : std::uint8_t {
+	none,
+	demo1,
+	demo2,
+	demo3,
+	demo4,
+	demo5,
 };
 
 // Static roles use character == none and palette == none. Paletted character
@@ -101,6 +180,9 @@ enum class MainResourceRole : std::uint8_t {
 	continue_background,
 	continue_choice_cels,
 	gameover_background,
+	cutscene_script,
+	cutscene_picture,
+	cutscene_music,
 };
 
 struct MainResourceKey {
@@ -108,6 +190,9 @@ struct MainResourceKey {
 	MainCharacter character = MainCharacter::none;
 	MainPaletteVariant palette = MainPaletteVariant::none;
 	MainlStageBackground stage_background = MainlStageBackground::none;
+	MainCutsceneScript cutscene_script = MainCutsceneScript::none;
+	MainCutscenePicture cutscene_picture = MainCutscenePicture::none;
+	MainCutsceneMusic cutscene_music = MainCutsceneMusic::none;
 
 	friend constexpr auto operator<=>(
 		const MainResourceKey &,
@@ -125,6 +210,9 @@ struct MainResourceSpec {
 	std::size_t expected_bytes = 0U;
 	// FNV-1a-64 is a compact corruption fingerprint, not a security signature.
 	std::uint64_t expected_fnv1a64 = 0U;
+
+	friend bool operator==(const MainResourceSpec &, const MainResourceSpec &) =
+		default;
 };
 
 enum class ResourceLoadErrorCode : std::uint8_t {
@@ -165,6 +253,11 @@ struct MainlStageResourceRequest {
 	MainPlayerSelection player_two{};
 	std::uint8_t game_mode = 0U;
 	std::uint8_t story_stage = 0U;
+};
+
+struct MainlCutsceneResourceRequest {
+	MainlCutsceneKind kind = MainlCutsceneKind::interstage_chiyuri;
+	MainCharacter character = MainCharacter::reimu;
 };
 
 enum class MainResourceIntegrity : std::uint8_t {
@@ -212,6 +305,9 @@ mainl_win_resource_keys(MainPlayerSelection winner);
 [[nodiscard]] std::expected<std::vector<MainResourceKey>, ResourceLoadError>
 mainl_continue_resource_keys(std::uint8_t remaining_credits);
 
+[[nodiscard]] std::expected<std::vector<MainResourceKey>, ResourceLoadError>
+mainl_cutscene_resource_keys(MainlCutsceneResourceRequest request);
+
 // Importer-facing validation for the extracted-entry component. The loader
 // calls this before joining a manifest name to the explicit content root.
 [[nodiscard]] bool is_safe_extracted_entry_name(std::string_view name) noexcept;
@@ -252,6 +348,8 @@ public:
 	load_mainl_win(MainPlayerSelection winner);
 	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 	load_mainl_continue(std::uint8_t remaining_credits);
+	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+	load_mainl_cutscene(MainlCutsceneResourceRequest request);
 
 	[[nodiscard]] std::size_t cached_resource_count() const noexcept;
 

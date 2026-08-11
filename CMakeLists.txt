@@ -360,6 +360,7 @@ th03_set_warnings(th03_formats)
 # Raster handoff into a fresh MAIN process remain outside the public direct-VS
 # launcher boundary.
 add_library(th03_app_main STATIC
+	src/app/classic_cutscene_scene.cpp
 	src/app/classic_mainl_continue.cpp
 	src/app/classic_mainl_stage.cpp
 	src/app/classic_mainl_story.cpp
@@ -492,6 +493,21 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-classic-mainl-continue-tests
 		COMMAND th03-app-classic-mainl-continue-tests
+	)
+
+	add_executable(th03-app-classic-cutscene-tests
+		tests/test_app_classic_cutscene.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-cutscene-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-classic-cutscene-tests PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-classic-cutscene-tests)
+	add_test(
+		NAME th03-app-classic-cutscene-tests
+		COMMAND th03-app-classic-cutscene-tests
 	)
 
 	if(TH03_ENABLE_SDL)

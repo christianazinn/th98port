@@ -33,7 +33,10 @@ enum class ClassicMusicCue : std::uint8_t {
 struct ClassicAudioCommand final {
 	ClassicAudioCommandType type = ClassicAudioCommandType::stop_song;
 	ClassicMusicCue cue = ClassicMusicCue::none;
-	std::uint8_t parameter = 0U;
+	// Cutscene script parameters remain 16-bit through the semantic boundary;
+	// stock data stays within the PMD byte domain, while malformed/modified
+	// scripts must not be silently narrowed by the scene driver.
+	std::uint16_t parameter = 0U;
 
 	friend constexpr bool operator==(
 		const ClassicAudioCommand &,

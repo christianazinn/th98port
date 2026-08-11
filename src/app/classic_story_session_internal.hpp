@@ -8,6 +8,7 @@
 #include <optional>
 #include <span>
 
+#include "classic_cutscene_scene_internal.hpp"
 #include "classic_mainl_continue_internal.hpp"
 #include "classic_mainl_stage_internal.hpp"
 #include "classic_mainl_story_internal.hpp"
@@ -23,6 +24,7 @@ enum class ClassicStorySessionScene : std::uint8_t {
 	stage_splash,
 	main,
 	win,
+	cutscene,
 	continue_menu,
 	game_over,
 	external_request,
@@ -63,6 +65,7 @@ enum class ClassicStorySessionErrorCode : std::uint8_t {
 	main_failed,
 	mainl_text_failed,
 	win_failed,
+	cutscene_failed,
 	continue_failed,
 	game_over_failed,
 	plan_failed,
@@ -81,6 +84,7 @@ struct ClassicStorySessionError final {
 	std::optional<MainlCompiledTextError> mainl_text_error{};
 	std::optional<ClassicMainlStageError> stage_error{};
 	std::optional<ClassicMainlWinError> win_error{};
+	std::optional<ClassicCutsceneError> cutscene_error{};
 	std::optional<ClassicMainlContinueError> continue_error{};
 	std::optional<ClassicMainlPlanError> plan_error{};
 	std::optional<present::SourceSurfaceError> surface_error{};
@@ -88,6 +92,7 @@ struct ClassicStorySessionError final {
 
 struct ClassicStorySessionInput final {
 	CoreInput main{};
+	ClassicCutsceneInput cutscene{};
 	ClassicMainlContinueInput continue_menu{};
 	ClassicAudioStatus audio{};
 	bool dismiss_pressed = false;
@@ -147,6 +152,14 @@ struct ClassicStorySessionBackendOperations final {
 		void *, const MainStoryConfig &
 	) = nullptr;
 	std::expected<void, ClassicStorySessionError> (*finish_win)(
+		void *
+	) = nullptr;
+	std::expected<void, ClassicStorySessionError> (*start_cutscene)(
+		void *, MainlCutsceneResourceRequest
+	) = nullptr;
+	std::expected<ClassicStoryBackendTick, ClassicStorySessionError>
+	(*advance_cutscene)(void *, const ClassicCutsceneInput &) = nullptr;
+	std::expected<void, ClassicStorySessionError> (*finish_cutscene)(
 		void *
 	) = nullptr;
 	std::expected<bool, ClassicStorySessionError> (*start_continue)(

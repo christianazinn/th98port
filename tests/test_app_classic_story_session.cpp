@@ -20,6 +20,8 @@ using th03::GameInit;
 using th03::SessionAction;
 using th03::SessionTransition;
 using th03::app::ClassicMainlContinueInput;
+using th03::app::MainlCutsceneKind;
+using th03::app::MainlCutsceneResourceRequest;
 using th03::app::ClassicStoryBackendTick;
 using th03::app::ClassicStoryExternalKind;
 using th03::app::ClassicStorySession;
@@ -156,11 +158,14 @@ struct FakeBackend final {
 	std::size_t stage_advance_count = 0U;
 	std::size_t main_count = 0U;
 	std::size_t win_count = 0U;
+	std::size_t cutscene_count = 0U;
 	std::size_t preload_count = 0U;
 	std::size_t continue_count = 0U;
 	std::size_t resolve_count = 0U;
 	std::size_t game_over_count = 0U;
 	std::size_t main_advance_count = 0U;
+	bool cutscene_active = false;
+	std::vector<MainlCutsceneKind> cutscene_history{};
 	std::vector<ClassicStoryExternalKind> external_history{};
 	std::array<th03::present::ComposedPixel,
 		th03::present::graphics_page_pixels> pixels{};
@@ -280,6 +285,43 @@ ClassicStorySessionBackendOperations operations(FakeBackend &fake)
 			}
 			return std::expected<void, ClassicStorySessionError>{};
 		},
+		.start_cutscene = [](void *context, MainlCutsceneResourceRequest request) {
+			auto &backend = *static_cast<FakeBackend *>(context);
+			if(backend.cutscene_active) {
+				return std::expected<void, ClassicStorySessionError>{
+					std::unexpected(contract_error())
+				};
+			}
+			backend.cutscene_active = true;
+			++backend.cutscene_count;
+			backend.cutscene_history.push_back(request.kind);
+			return std::expected<void, ClassicStorySessionError>{};
+		},
+		.advance_cutscene = [](void *context, const th03::app::ClassicCutsceneInput &) {
+			auto &backend = *static_cast<FakeBackend *>(context);
+			if(!backend.cutscene_active) {
+				return std::expected<ClassicStoryBackendTick,
+					ClassicStorySessionError>{
+						std::unexpected(contract_error())
+					};
+			}
+			return std::expected<ClassicStoryBackendTick,
+				ClassicStorySessionError>{ClassicStoryBackendTick{
+					.surface_changed = true,
+					.input_sampled = true,
+					.ready = true,
+				}};
+		},
+		.finish_cutscene = [](void *context) {
+			auto &backend = *static_cast<FakeBackend *>(context);
+			if(!backend.cutscene_active) {
+				return std::expected<void, ClassicStorySessionError>{
+					std::unexpected(contract_error())
+				};
+			}
+			backend.cutscene_active = false;
+			return std::expected<void, ClassicStorySessionError>{};
+		},
 		.start_continue = [](void *context, std::uint8_t credits) {
 			auto &backend = *static_cast<FakeBackend *>(context);
 			++backend.continue_count;
@@ -394,22 +436,28 @@ void test_complete_nine_stage_route()
 	}
 	expect(session->status() == ClassicStorySessionStatus::complete &&
 		backend->stage_count == 9U && backend->main_count == 9U &&
-		backend->win_count == 7U && backend->preload_count == 6U,
+		backend->win_count == 7U && backend->preload_count == 6U &&
+		backend->cutscene_count == 3U,
 		"nine-stage route preserves win/preload/cutscene boundaries");
 	expect(session->source_sample_count() ==
-		backend->process_start.global_frame + 1U,
+		backend->process_start.global_frame + 2U,
 		"source input coordinate is forwarded into every next MAIN");
-	const std::array expected{
-		ClassicStoryExternalKind::interstage_chiyuri,
-		ClassicStoryExternalKind::interstage_yumemi,
-		ClassicStoryExternalKind::ending,
+	const std::array expected_cutscenes{
+		MainlCutsceneKind::interstage_chiyuri,
+		MainlCutsceneKind::interstage_yumemi,
+		MainlCutsceneKind::ending,
+	};
+	expect(backend->cutscene_history == std::vector<MainlCutsceneKind>{
+		expected_cutscenes.begin(), expected_cutscenes.end()
+	}, "interstage and primary ending scenes run inside the retained session");
+	const std::array expected_external{
 		ClassicStoryExternalKind::high_score_registration,
 		ClassicStoryExternalKind::extra_ending,
 	};
 	expect(backend->external_history ==
 		std::vector<ClassicStoryExternalKind>{
-			expected.begin(), expected.end()
-		}, "final route emits exact external scene order");
+			expected_external.begin(), expected_external.end()
+		}, "only unfinished post-ending processes remain external");
 	expect(!session->consume({}) &&
 		session->status() == ClassicStorySessionStatus::complete,
 		"completed Story rejects further source samples");

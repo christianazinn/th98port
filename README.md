@@ -148,15 +148,14 @@ split comparisons. Original game data and replay captures remain external.
   640x400 letterboxing. It assumes no source cadence, SDL type, key binding,
   window, or replay UI; those remain application/platform decisions.
 - `th03_app_main` also contains the source-private owning Classic Story route
-  over Stage, retained MAIN, Win, Continue, and Game Over. The complete
-  platform-neutral TH03 cutscene script VM now emits typed operations for the
-  remaining cutscene requests. Its presentation boundary executes the exact
-  Master/upstream two-page glyph, gaiji, saved-box, PI, quarter-picture,
-  crossfade, shake, page, tone, and palette behavior while leaving resource,
-  input, timing, and audio commands explicit for the scene driver. The
-  transactional cutscene resource/driver layer, high-score, ending, and
-  extra-ending scenes remain. No second campaign or resident-state model is
-  exposed.
+  over Stage, retained MAIN, Win, Continue, Game Over, both interstage
+  cutscenes, and the primary character endings. The owning cutscene scene binds
+  the complete typed script VM and exact Master/upstream two-page Raster
+  presenter to authenticated script/PI resources, explicit source input and
+  wait boundaries, and semantic audio commands. Its completed Raster is
+  transactionally handed to the next Stage. Staff/verdict, high-score
+  registration/persistence, and the post-registration extra ending remain;
+  no second campaign or resident-state model is exposed.
 - The same boundary authenticates the supported unpacked Japanese `MAINL.EXE`
   and owns its exact Story title/name table. Packed DIET executable support is
   not yet provided; original text bytes remain external and uncommitted.
