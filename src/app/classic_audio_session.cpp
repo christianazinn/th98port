@@ -170,7 +170,7 @@ song_key(ClassicAudioCommand command) noexcept
 struct ClassicAudioSession::Impl final {
 	MainResourceLoader loader;
 	audio::PmdOpnaEngine engine;
-	audio::Th03SoundEffectScheduler effects{true};
+	audio::Th03SoundEffectScheduler effects;
 	audio::PmdFixedResampler resampler{};
 	RationalTickRate tick_rate{};
 	std::uint64_t native_frames_numerator = 0U;
@@ -192,6 +192,7 @@ struct ClassicAudioSession::Impl final {
 	) :
 		loader(std::move(loader_)),
 		engine(std::move(engine_)),
+		effects(bgm_active_),
 		tick_rate(tick_rate_),
 		native_frames_numerator(native_frames_numerator_),
 		bgm_active(bgm_active_)
@@ -295,14 +296,13 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 				ClassicAudioSessionErrorCode::command_order, command
 			));
 		}
+		if(!impl_->bgm_active) {
+			// snd_kaja_interrupt() makes Play a no-op when the fresh MAIN or
+			// MAINL process skipped sound-mode detection for Music Off.
+			return {};
+		}
 		if(auto played = impl_->engine.play(); !played) {
 			return std::unexpected(engine_error(command, played.error()));
-		}
-		if(!impl_->bgm_active) {
-			// The original PMD TSR and its timers remain resident for FM sound
-			// effects when BGM is Off. Prime the fresh native engine into the
-			// equivalent stopped state without exposing music playback.
-			impl_->engine.stop();
 		}
 		return {};
 	case ClassicAudioCommandType::stop_song:
@@ -357,6 +357,11 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 				ClassicAudioSessionErrorCode::invalid_parameter, command
 			));
 		}
+		if(!impl_->bgm_active) {
+			// snd_se_play_force() collapses to no work when the fresh MAIN or
+			// MAINL process did not determine an FM source.
+			return {};
+		}
 		if(!impl_->engine.status().song_loaded ||
 			!impl_->engine.status().effect_bank_loaded) {
 			return std::unexpected(session_error(
@@ -395,6 +400,12 @@ ClassicAudioSession::request_effect(std::uint8_t effect_id) noexcept
 		.type = ClassicAudioCommandType::play_effect,
 		.parameter = effect_id,
 	};
+	if(const auto rule = audio::th03_sound_effect_rule(effect_id); !rule) {
+		return std::unexpected(service_error(command, rule.error()));
+	}
+	if(!impl_->bgm_active) {
+		return false;
+	}
 	const auto engine_status = impl_->engine.status();
 	if(!engine_status.song_loaded || !engine_status.effect_bank_loaded) {
 		return std::unexpected(session_error(
@@ -411,6 +422,11 @@ ClassicAudioSession::request_effect(std::uint8_t effect_id) noexcept
 void ClassicAudioSession::set_bgm_active(bool active) noexcept
 {
 	impl_->bgm_active = active;
+	impl_->effects.set_active(active);
+	if(!active) {
+		impl_->effects.reset();
+		impl_->engine.stop_effect();
+	}
 }
 
 std::expected<ClassicAudioTick, ClassicAudioSessionError>

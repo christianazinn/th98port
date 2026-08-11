@@ -27,8 +27,9 @@ inline constexpr std::size_t classic_audio_maximum_native_frames_per_tick =
 struct ClassicAudioSessionConfig final {
 	std::filesystem::path data_root{};
 	RationalTickRate tick_rate{};
-	// Mirrors TH03's snd_active BGM-driver flag. Sound effects remain available
-	// through the independent FM-capability path when this is false.
+	// Mirrors TH03's snd_active BGM-driver flag. MAIN and MAINL skip
+	// snd_determine_mode() when Music is Off, leaving their fresh-process
+	// snd_fm_possible false and disabling sound effects as well.
 	bool bgm_active = true;
 	// Empty selects the engine's deterministic silent-rhythm mode. A supplied
 	// ROM is copied by the engine and must contain exactly 8 KiB.

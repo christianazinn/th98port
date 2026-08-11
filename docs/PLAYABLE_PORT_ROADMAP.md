@@ -30,7 +30,7 @@ The donor for scene behaviour is the clean, pinned Anniversary tree at oracle_an
 
 ## Live implementation status
 
-As of 2026-08-11, the direct-VS and silent Classic paths have these durable
+As of 2026-08-11, the direct-VS and audio-enabled Classic paths have these durable
 foundations:
 
 - Deterministic gameplay, V13 parsing/playback, and the frozen 19-file corpus
@@ -113,9 +113,9 @@ foundations:
   direct-VS runner. Both paths simulate every due logical deadline without
   collapsing catch-up and present only the newest completed surface. The
   Classic path preserves the donor's full `input_sp` mask separately from P1/P2,
-  drains semantic audio commands through the source sound-unavailable fallback,
-  and has byte-silent authenticated dummy/software SDL gates on GCC and MSVC,
-  including a 7,000-logical-tick automatic-Demo smoke.
+  drains semantic audio commands into one deterministic PMD/EFC interval per
+  logical sample, and has authenticated dummy/software SDL gates on GCC and
+  MSVC, including a 7,000-logical-tick automatic-Demo smoke.
 - The source-private Classic Story owner now binds the implemented Stage,
   retained MAIN, Win, Continue, Game Over, both interstage cutscenes, and the
   primary ending, staff/verdict, high-score registration, and conditional
@@ -365,9 +365,9 @@ with a fixed integer 15/52 polyphase FIR. `ClassicAudioSession` now authenticate
 the external PMD/EFC inventory, maps every existing semantic scene command, and
 advances one bounded rational PCM block per logical tick. `th03_platform_sdl`
 supplies the bounded playback stream, and the Classic launcher submits each
-completed block after applying that sample's commands. Initial device failure
-selects the source sound-unavailable branch before runner construction; later
-device loss stops only submission while deterministic PMD state continues.
+completed block after applying that sample's commands. Initial or later device
+failure stops only submission while deterministic PMD state continues; device
+state never changes the source FM-capability decision.
 Gameplay-stage music/MAIN SFX emitters remain.
 SDL's [audio-device stream API](https://wiki.libsdl.org/SDL3/SDL_OpenAudioDeviceStream)
 is an appropriate device adapter because it keeps device management outside

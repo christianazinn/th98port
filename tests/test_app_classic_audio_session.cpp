@@ -530,7 +530,7 @@ void test_commands_cadence_and_determinism(const fs::path &root)
 		"Stop preserves driver availability and exposes quiet PMD volume");
 }
 
-void test_bgm_active_and_sfx_independence(const fs::path &root)
+void test_music_off_disables_fresh_process_sfx(const fs::path &root)
 {
 	auto disabled_config = config(root);
 	disabled_config.bgm_active = false;
@@ -555,16 +555,21 @@ void test_bgm_active_and_sfx_independence(const fs::path &root)
 		}
 	), "inactive BGM advances a deterministic silent source block");
 
-	expect(session.request_effect(1U).value_or(false),
-		"BGM Off does not disable the independent FM sound-effect path");
+	const auto inactive_request = session.request_effect(1U);
+	expect(inactive_request && !*inactive_request,
+		"Music Off suppresses ordinary MAIN sound-effect requests");
+	expect(session.apply({
+		.type = ClassicAudioCommandType::play_effect,
+		.parameter = 1U,
+	}).has_value(), "Music Off makes a forced MAINL effect a source no-op");
 	auto effect_tick = session.advance_tick();
-	expect(effect_tick && effect_tick->effect_started == 1U && std::any_of(
+	expect(effect_tick && !effect_tick->effect_started && std::all_of(
 		effect_tick->canonical_frames.begin(),
 		effect_tick->canonical_frames.end(),
 		[](const auto &sample) {
-			return sample.left != 0 || sample.right != 0;
+			return sample.left == 0 && sample.right == 0;
 		}
-	), "an effect remains audible while the BGM-driver flag is inactive");
+	), "Music Off keeps both song and effect output silent");
 
 	expect(session.apply({
 		.type = ClassicAudioCommandType::set_bgm_active,
@@ -574,6 +579,11 @@ void test_bgm_active_and_sfx_independence(const fs::path &root)
 		.cue = ClassicMusicCue::menu_main,
 	}).has_value() && session.status().bgm_active,
 		"enabling the BGM driver lets the already-loaded song start");
+	expect(session.request_effect(1U).value_or(false),
+		"enabling the FM driver also enables ordinary sound effects");
+	const auto enabled_effect = session.advance_tick();
+	expect(enabled_effect && enabled_effect->effect_started == 1U,
+		"the enabled sound-effect request starts on the next update");
 	const auto invalid_active = session.apply({
 		.type = ClassicAudioCommandType::set_bgm_active,
 		.parameter = 2U,
@@ -690,7 +700,7 @@ int main(int argc, char **argv)
 		expect(prepare_audio_root(root.path()),
 			"generated audio manifest root is written");
 		test_commands_cadence_and_determinism(root.path());
-		test_bgm_active_and_sfx_independence(root.path());
+		test_music_off_disables_fresh_process_sfx(root.path());
 	}
 	if(argc == 3 && std::string_view(argv[1]) == "--authentic") {
 		test_authentic_session(argv[2]);
