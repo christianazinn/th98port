@@ -156,7 +156,8 @@ split comparisons. Original game data and replay captures remain external.
   Production MAIN import accepts only the complete supported executable
   profile; default tests use synthetic bytes and optional local gates remain
   byte-silent.
-- `th03_app_main` owns one stable-address direct-VS MAIN process. It
+- `th03_app_main` owns one stable-address MAIN process plus source-private
+  Story stage, winner, Continue, and Game Over scene boundaries. It
   reauthenticates and decodes the selected external batch, performs source-
   ordered background/static/palette/atlas startup, retains every presenter and
   backing span, and guards all Game lifecycle calls through MainRound. Its

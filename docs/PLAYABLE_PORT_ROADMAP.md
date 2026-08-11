@@ -42,10 +42,11 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   source-surface compositor. Entering either 200-line mode or 400-line mode
   now preserves the source access-page-0 side effect.
 - The app-owned resource library has the exact direct-VS batch and the full
-  145-entry MAIN/MAINL metadata scope, including visible Story splash CD2/PI
-  assets and the hidden transition atlas (`NN16.PI` and `NNEX.PI`). It performs exact-case,
-  containment, size, fingerprint, immutable ownership, and scene-cache checks
-  without adding filesystem behavior to assets or presentation.
+  148-entry MAIN/MAINL metadata scope, including visible Story splash CD2/PI,
+  Continue, and Game Over assets and the hidden transition atlas (`NN16.PI`
+  and `NNEX.PI`). It performs exact-case, containment, size, fingerprint,
+  immutable ownership, and scene-cache checks without adding filesystem
+  behavior to assets or presentation.
 - The all-character Bomb presenter is integrated and independently reviewed.
   Its split fixed-storage implementation covers all nine visual/palette paths,
   source-private and process-shared state, interrupted-round rearming, and the
@@ -252,7 +253,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
 | SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
-| OP menus, Story, MAINL, cutscenes, staff | Partial | The validated fresh-Story config, source-private route policy, exact stage splash, campaign-static MAIN content, transactional Raster handoff into MAIN, and exact winner-scene timeline are integrated. Continue/game-over, the owning session loop, OP, cutscenes, endings, and staff remain. |
+| OP menus, Story, MAINL, cutscenes, staff | Partial | The validated fresh-Story config, source-private route policy, exact stage splash, campaign-static MAIN content, transactional Raster handoff into MAIN, winner scene, Continue choice, and Game Over timeline are integrated. The owning session loop, OP, cutscenes, endings, and staff remain. |
 | Audio | No for the explicitly marked silent visual vertical slice; yes for a fully faithful release | Start source/data investigation now, but do not block visible MAIN on an invented WAV backend. |
 | Persistent score/configuration UI and localization/QoL | No | Keep it outside the first faithful path and behind an app-owned profile/catalog seam. |
 
@@ -274,8 +275,8 @@ Avoid creating a placeholder th03-app which owns a second renderer or game state
 Once VS-3 holds, add scenes in donor order rather than building a broad launcher framework.
 
 1. Complete MAINL routing and Story progression. The stage splash, fresh MAIN
-   handoff, and winner scene are integrated; next add continuation, game-over,
-   ending routing, and the owning `ClassicSession` boundary, following
+   handoff, winner scene, Continue, and Game Over are integrated; next add the
+   owning `ClassicSession` boundary and ending routing, following
    mlentry.cpp, screens.cpp, and ending.cpp. It constructs the next MAIN session
    and loads/unloads assets at the same semantic boundary. Acceptance: a
    source-traced Story route reaches each next-stage, continue, game-over, and

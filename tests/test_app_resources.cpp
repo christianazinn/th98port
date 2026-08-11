@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -42,9 +43,11 @@ public:
 	TemporaryRoot()
 	{
 		const auto temporary = fs::temp_directory_path();
+		const auto nonce = std::chrono::high_resolution_clock::now()
+			.time_since_epoch().count();
 		for(std::uint32_t suffix = 0U; suffix < 1000U; ++suffix) {
 			path_ = temporary / ("th03-app-resources-test-" +
-				std::to_string(suffix));
+				std::to_string(nonce) + "-" + std::to_string(suffix));
 			std::error_code error;
 			if(fs::create_directory(path_, error)) {
 				return;
