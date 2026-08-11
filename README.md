@@ -167,6 +167,11 @@ split comparisons. Original game data and replay captures remain external.
 - `th03_app_resources` owns the checked external-content root and immutable
   byte cache. Original/extracted files remain local inputs and never enter the
   repository.
+- `th03_app_persistence` owns exact, allocation-free Classic persistent-value
+  codecs and source mutation rules. Its original `YUME.NEM` boundary preserves
+  all four independently encrypted rank sections, the encrypted checksum,
+  explicit codec keys, stock decoy rows, tie-sinking insertion, and backwards
+  name storage without performing file I/O or drawing registration UI.
 - `th03_app_content` owns authenticated process-lifetime content that is not a
   standalone archive resource: compiled MAIN score/pellet/text tables, the
   prepared GAMEFT gaiji bank, and the external PC-98 ANK/JIS font provider.

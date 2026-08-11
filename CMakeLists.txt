@@ -202,6 +202,17 @@ target_compile_features(th03_app_resources PUBLIC cxx_std_23)
 set_target_properties(th03_app_resources PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_app_resources)
 
+# Exact, dependency-free Classic persistent-value codecs and source mutation
+# rules. Filesystem transactions and registration presentation stay in the app
+# scene layer rather than this byte-format boundary.
+add_library(th03_app_persistence STATIC
+	src/app/classic_score.cpp
+)
+target_include_directories(th03_app_persistence PUBLIC include)
+target_compile_features(th03_app_persistence PUBLIC cxx_std_23)
+set_target_properties(th03_app_persistence PROPERTIES CXX_EXTENSIONS OFF)
+th03_set_warnings(th03_app_persistence)
+
 add_library(th03_present STATIC
 	src/present/cels.cpp
 	src/present/cutscene_raster.cpp
@@ -451,6 +462,18 @@ if(BUILD_TESTING)
 	target_link_libraries(th03-app-resources-tests PRIVATE th03_app_resources)
 	th03_set_warnings(th03-app-resources-tests)
 	add_test(NAME th03-app-resources-tests COMMAND th03-app-resources-tests)
+
+	add_executable(th03-app-classic-score-tests
+		tests/test_app_classic_score.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-score-tests PRIVATE th03_app_persistence
+	)
+	th03_set_warnings(th03-app-classic-score-tests)
+	add_test(
+		NAME th03-app-classic-score-tests
+		COMMAND th03-app-classic-score-tests
+	)
 
 	add_executable(th03-app-host-surface-tests
 		tests/test_app_host_surface.cpp
