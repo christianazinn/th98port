@@ -157,7 +157,7 @@ split comparisons. Original game data and replay captures remain external.
   transactionally handed to the next Stage or to the authenticated staff
   driver. Staff preserves the source CDG/flakes/page schedule, exact volume and
   measure waits, adaptive 80-to-50 downgrade, verdict input lock, and final
-  tone ramp before returning its Raster. High-score registration/persistence
+  tone ramp before returning its Raster. High-score registration composition
   and the post-registration extra ending remain;
   no second campaign or resident-state model is exposed.
 - The same boundary authenticates the supported unpacked Japanese `MAINL.EXE`
@@ -168,10 +168,13 @@ split comparisons. Original game data and replay captures remain external.
   byte cache. Original/extracted files remain local inputs and never enter the
   repository.
 - `th03_app_persistence` owns exact, allocation-free Classic persistent-value
-  codecs and source mutation rules. Its original `YUME.NEM` boundary preserves
-  all four independently encrypted rank sections, the encrypted checksum,
-  explicit codec keys, stock decoy rows, tie-sinking insertion, and backwards
-  name storage without performing file I/O or drawing registration UI.
+  codecs, source mutation rules, and the checked `YUME.NEM` filesystem
+  transaction. It preserves all four independently encrypted rank sections,
+  the encrypted checksum, explicit codec keys, stock decoy rows, tie-sinking
+  insertion, and backwards name storage. Missing or malformed files reproduce
+  the source's all-rank stock recovery, while commits use one same-directory,
+  flushed, read-back-validated atomic replacement. It draws no registration UI
+  and receives codec fields rather than owning gameplay RNG.
 - `th03_app_content` owns authenticated process-lifetime content that is not a
   standalone archive resource: compiled MAIN score/pellet/text tables, the
   prepared GAMEFT gaiji bank, and the external PC-98 ANK/JIS font provider.
