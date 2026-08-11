@@ -113,11 +113,12 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   surface. GCC and MSVC dummy/software gates and byte-silent public local-data
   startup have reached the first displayed gameplay tick.
 - The source-private Classic Story owner now binds the implemented Stage,
-  retained MAIN, Win, Continue, and Game Over scenes into one process-lifetime
-  route. It shares the exact MAIN warning/repeat/terminal driver with Direct
-  VS, performs next-stage hidden-page preload at the winner boundary, retains
-  loss state through Continue, and emits single-use typed requests for the
-  remaining cutscene, registration, ending, and extra-ending scenes.
+  retained MAIN, Win, Continue, Game Over, both interstage cutscenes, and the
+  primary ending into one process-lifetime route. It shares the exact MAIN
+  warning/repeat/terminal driver with Direct VS, performs next-stage hidden-
+  page preload at the winner boundary, retains loss state through Continue,
+  and emits single-use typed requests only for the remaining registration and
+  extra-ending scenes.
 - Its Stage title/name content now comes from a full-file-authenticated unpacked
   Japanese `MAINL.EXE` profile. All 18 Shift-JIS fields are copied into owning
   typed storage before scene construction; no donor string is compiled into the
@@ -264,7 +265,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
 | SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
-| OP menus, Story, MAINL, cutscenes, staff | Partial | The validated fresh-Story config, source-private route policy, exact stage splash, campaign-static MAIN content, transactional Raster handoff into MAIN, winner scene, Continue choice, Game Over timeline, owning session loop, complete typed cutscene script VM, and authentic two-page cutscene Raster executor are integrated. OP, the transactional cutscene resource/scene driver, endings, and staff remain. |
+| OP menus, Story, MAINL, cutscenes, staff | Partial | The validated fresh-Story config, source-private route policy, exact stage splash, campaign-static MAIN content, transactional Raster handoffs, winner scene, Continue choice, Game Over timeline, owning session loop, authenticated cutscene resources, complete typed script VM, exact two-page Raster executor, both interstages, and primary endings are integrated. OP, staff/verdict, high-score registration/persistence, and the conditional extra ending remain. |
 | Audio | No for the explicitly marked silent visual vertical slice; yes for a fully faithful release | Start source/data investigation now, but do not block visible MAIN on an invented WAV backend. |
 | Persistent score/configuration UI and localization/QoL | No | Keep it outside the first faithful path and behind an app-owned profile/catalog seam. |
 
