@@ -441,6 +441,10 @@ void test_story_win_matrix()
 			expect(plan->win()->loser_paletted_character ==
 				start.paletted_character[1U],
 				"win screen snapshots the old P2 identity");
+			expect(
+				plan->win()->preload_stage_splash == (stage < 6U),
+				"ordinary winner preloads only an immediately following splash"
+			);
 		}
 	}
 }
@@ -506,6 +510,10 @@ void test_story_loss_and_continue_matrix()
 			}
 			expect(plan->win().has_value(),
 				"Story loss shows the opponent win screen");
+			if(plan->win()) {
+				expect(!plan->win()->preload_stage_splash,
+					"opponent win never preloads a Continue-dependent splash");
+			}
 			expect(plan->high_score_registration().has_value(),
 				"Story loss retains the pre-Continue registration");
 			if(credits == 0U) {

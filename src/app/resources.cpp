@@ -99,6 +99,13 @@ constexpr std::array<std::uint64_t, 5U> stage_background_fnv1a64{
 constexpr std::array<std::size_t, 5U> stage_background_sizes{
 	1231U, 2057U, 2831U, 2901U, 2058U,
 };
+constexpr std::array<std::uint64_t, 9U> win_message_fnv1a64{
+	0x2FC63AB673BBAF54ULL, 0x5B508A83F961E8EAULL,
+	0x7EB1575BD10DF193ULL, 0x09184A8B4FA5CE29ULL,
+	0x44C84E89632B9254ULL, 0xDB9CAAFA845B6A67ULL,
+	0x14B79980B19991E3ULL, 0x854B23F7A2FC337DULL,
+	0x00B4CF7FF4B8B1F6ULL,
+};
 
 [[nodiscard]] constexpr bool is_character(MainCharacter character) noexcept
 {
@@ -130,7 +137,9 @@ constexpr std::array<std::size_t, 5U> stage_background_sizes{
 ) noexcept
 {
 	return role == MainResourceRole::character_stage_enemy_group ||
-		role == MainResourceRole::character_stage_portrait;
+		role == MainResourceRole::character_stage_portrait ||
+		role == MainResourceRole::character_win_portrait ||
+		role == MainResourceRole::character_win_message;
 }
 
 [[nodiscard]] constexpr bool is_stage_background(
@@ -206,6 +215,12 @@ constexpr std::array<std::size_t, 5U> stage_background_sizes{
 	case MainResourceRole::stage_number_sheet:
 	case MainResourceRole::stage_splash_base:
 	case MainResourceRole::stage_splash_background:
+	case MainResourceRole::win_logo_palette_pre:
+	case MainResourceRole::win_logo_fade_cels:
+	case MainResourceRole::win_logo_final:
+	case MainResourceRole::win_logo_palette_post:
+	case MainResourceRole::character_win_portrait:
+	case MainResourceRole::character_win_message:
 		return 0U;
 	}
 	return 0U;
@@ -441,6 +456,50 @@ static_resource_spec(MainResourceKey key)
 			.expected_bytes = 2732U,
 			.expected_fnv1a64 = 0x0805E1FF5167740BULL,
 		};
+	case MainResourceRole::win_logo_palette_pre:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_win,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::rgb48,
+			.logical_role = "mainl.win.logo_palette_pre",
+			.filename = "LOGO0.RGB",
+			.expected_bytes = 48U,
+			.expected_fnv1a64 = 0x41A855E4DBCBA616ULL,
+		};
+	case MainResourceRole::win_logo_fade_cels:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_win,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::cdg,
+			.logical_role = "mainl.win.logo_fade_cels",
+			.filename = "LOGO.CD2",
+			.expected_bytes = 57616U,
+			.expected_fnv1a64 = 0x13D2328E9F88A790ULL,
+		};
+	case MainResourceRole::win_logo_final:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_win,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::cdg,
+			.logical_role = "mainl.win.logo_final",
+			.filename = "LOGO5.CDG",
+			.expected_bytes = 11536U,
+			.expected_fnv1a64 = 0x65F0060D4A61BABBULL,
+		};
+	case MainResourceRole::win_logo_palette_post:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_win,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::rgb48,
+			.logical_role = "mainl.win.logo_palette_post",
+			.filename = "LOGO1.RGB",
+			.expected_bytes = 48U,
+			.expected_fnv1a64 = 0xBC162D7C5FF6182DULL,
+		};
 	case MainResourceRole::character_sheet:
 	case MainResourceRole::character_extra_portrait:
 	case MainResourceRole::character_bomb_portrait:
@@ -449,6 +508,8 @@ static_resource_spec(MainResourceKey key)
 	case MainResourceRole::character_stage_enemy_group:
 	case MainResourceRole::character_stage_portrait:
 	case MainResourceRole::stage_splash_background:
+	case MainResourceRole::character_win_portrait:
+	case MainResourceRole::character_win_message:
 		return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
 	}
 	return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
@@ -616,14 +677,31 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 		const auto index = static_cast<std::size_t>(
 			static_cast<std::uint8_t>(key.character) - first_character_value
 		);
+		if(key.role == MainResourceRole::character_win_message) {
+			return MainResourceSpec{
+				.key = key,
+				.scene = MainResourceScene::mainl_win,
+				.archive = MainResourceArchive::yume1,
+				.decoder = MainResourceDecoder::shift_jis_blocks,
+				.logical_role = "mainl.win.character." +
+					std::string{character_name(key.character)} + ".message",
+				.filename = "@0" + std::to_string(index) + "TX.TXT",
+				.expected_bytes = 1980U,
+				.expected_fnv1a64 = win_message_fnv1a64[index],
+			};
+		}
+		const bool win_portrait =
+			key.role == MainResourceRole::character_win_portrait;
 		return MainResourceSpec{
 			.key = key,
-			.scene = MainResourceScene::mainl_stage_transition,
+			.scene = win_portrait ? MainResourceScene::mainl_win :
+				MainResourceScene::mainl_stage_transition,
 			.archive = MainResourceArchive::yume1,
 			.decoder = MainResourceDecoder::cdg,
-			.logical_role = character_only_logical_role(
-				key, "stage_portrait"
-			),
+			.logical_role = win_portrait ?
+				("mainl.win.character." +
+					std::string{character_name(key.character)} + ".portrait") :
+				character_only_logical_role(key, "stage_portrait"),
 			.filename = filename_with_index(
 				static_cast<std::uint8_t>(index * 2U), "SL.CD2"
 			),
@@ -709,6 +787,12 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 	case MainResourceRole::stage_number_sheet:
 	case MainResourceRole::stage_splash_base:
 	case MainResourceRole::stage_splash_background:
+	case MainResourceRole::win_logo_palette_pre:
+	case MainResourceRole::win_logo_fade_cels:
+	case MainResourceRole::win_logo_final:
+	case MainResourceRole::win_logo_palette_post:
+	case MainResourceRole::character_win_portrait:
+	case MainResourceRole::character_win_message:
 		break;
 	}
 	return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
@@ -727,6 +811,10 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		MainResourceRole::mainl_gaiji_font,
 		MainResourceRole::stage_number_sheet,
 		MainResourceRole::stage_splash_base,
+		MainResourceRole::win_logo_palette_pre,
+		MainResourceRole::win_logo_fade_cels,
+		MainResourceRole::win_logo_final,
+		MainResourceRole::win_logo_palette_post,
 	};
 	constexpr std::array character_roles{
 		MainResourceRole::character_sheet,
@@ -739,6 +827,8 @@ std::vector<MainResourceSpec> main_resource_manifest()
 	constexpr std::array character_only_roles{
 		MainResourceRole::character_stage_enemy_group,
 		MainResourceRole::character_stage_portrait,
+		MainResourceRole::character_win_portrait,
+		MainResourceRole::character_win_message,
 	};
 
 	std::vector<MainResourceSpec> result;
@@ -989,6 +1079,31 @@ mainl_stage_resource_keys(MainlStageResourceRequest request)
 	return result;
 }
 
+std::expected<std::vector<MainResourceKey>, ResourceLoadError>
+mainl_win_resource_keys(MainPlayerSelection winner)
+{
+	if(!is_character(winner.character) || !is_palette(winner.palette)) {
+		return std::unexpected(error(
+			ResourceLoadErrorCode::invalid_resource_key,
+			{.character = winner.character, .palette = winner.palette}
+		));
+	}
+	return std::vector<MainResourceKey>{
+		{.role = MainResourceRole::win_logo_palette_pre},
+		{.role = MainResourceRole::win_logo_fade_cels},
+		{.role = MainResourceRole::win_logo_final},
+		{
+			.role = MainResourceRole::character_win_portrait,
+			.character = winner.character,
+		},
+		{
+			.role = MainResourceRole::character_win_message,
+			.character = winner.character,
+		},
+		{.role = MainResourceRole::win_logo_palette_post},
+	};
+}
+
 MainResourceLoader::MainResourceLoader(
 	std::filesystem::path content_root,
 	MainResourceIntegrity integrity
@@ -1133,6 +1248,16 @@ std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 MainResourceLoader::load_mainl_stage(MainlStageResourceRequest request)
 {
 	const auto keys = mainl_stage_resource_keys(request);
+	if(!keys) {
+		return std::unexpected(keys.error());
+	}
+	return load_batch(*keys);
+}
+
+std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+MainResourceLoader::load_mainl_win(MainPlayerSelection winner)
+{
+	const auto keys = mainl_win_resource_keys(winner);
 	if(!keys) {
 		return std::unexpected(keys.error());
 	}

@@ -14,6 +14,8 @@ DAT archive and not an installation directory. The one accepted layout is:
   YUME1.DAT/
     TLSL.RGB
     00SL.CD2 02SL.CD2 ... 16SL.CD2
+    LOGO0.RGB LOGO.CD2 LOGO5.CDG LOGO1.RGB
+    @00TX.TXT ... @08TX.TXT
     ST.CD2 STNX0.PI ... STNX5.PI
     0016.PI ... 1716.PI
     00EX.PI ... 17EX.PI
@@ -143,6 +145,28 @@ installs `GAMEFT.BFT`; MAINL's `MIKOFT.BFT` cells do not cross that boundary.
 per-stage lifetimes separately. Batch loading builds both the result and a
 candidate cache before committing either, so a missing or invalid late member
 leaves the loader cache unchanged.
+
+## MAINL winner-scene batch
+
+`mainl_win_resource_keys()` returns the exact six-member winner closure in
+source load order. The portrait and message names use the winner's base
+character, independent of palette; the portrait cel itself retains the first
+or second palette selection. The fixed message file is validated as all eleven
+3-line blocks of 60 Shift-JIS bytes before the selected block is retained.
+
+| Logical role pattern | Extracted path | Bytes | Decoder |
+| --- | --- | ---: | --- |
+| `mainl.win.logo_palette_pre` | `YUME1.DAT/LOGO0.RGB` | 48 | RGB4 palette |
+| `mainl.win.logo_fade_cels` | `YUME1.DAT/LOGO.CD2` | 57,616 | CDG/CD2, five no-alpha cels |
+| `mainl.win.logo_final` | `YUME1.DAT/LOGO5.CDG` | 11,536 | CDG, one no-alpha cel |
+| `mainl.win.character.<character>.portrait` | `YUME1.DAT/00SL.CD2` through `16SL.CD2` | 46,096 | CDG/CD2, selected palette cel |
+| `mainl.win.character.<character>.message` | `YUME1.DAT/@00TX.TXT` through `@08TX.TXT` | 1,980 | eleven fixed Shift-JIS blocks |
+| `mainl.win.logo_palette_post` | `YUME1.DAT/LOGO1.RGB` | 48 | RGB4 palette |
+
+The batch is transactional just like the stage closure: a late missing or
+invalid resource publishes no cache entries. Local-original tests authenticate
+every winner variant and construct all 198 winner/message combinations without
+committing any original data or decoded output.
 
 `MainResourceLoader` is built as the application-owned `th03_app_resources`
 library. It remains separate from filesystem-free decoders and presentation:

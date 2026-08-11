@@ -523,6 +523,12 @@ std::vector<std::byte> bytes_for(const th03::app::MainResourceSpec &spec)
 	case MainResourceRole::stage_splash_base:
 	case MainResourceRole::stage_splash_background:
 	case MainResourceRole::selection_palette:
+	case MainResourceRole::win_logo_palette_pre:
+	case MainResourceRole::win_logo_fade_cels:
+	case MainResourceRole::win_logo_final:
+	case MainResourceRole::win_logo_palette_post:
+	case MainResourceRole::character_win_portrait:
+	case MainResourceRole::character_win_message:
 		break;
 	}
 	return {};

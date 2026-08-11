@@ -42,7 +42,7 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   source-surface compositor. Entering either 200-line mode or 400-line mode
   now preserves the source access-page-0 side effect.
 - The app-owned resource library has the exact direct-VS batch and the full
-  123-entry MAIN/MAINL metadata scope, including visible Story splash CD2/PI
+  145-entry MAIN/MAINL metadata scope, including visible Story splash CD2/PI
   assets and the hidden transition atlas (`NN16.PI` and `NNEX.PI`). It performs exact-case,
   containment, size, fingerprint, immutable ownership, and scene-cache checks
   without adding filesystem behavior to assets or presentation.
@@ -252,7 +252,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
 | SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
-| OP menus, Story, MAINL, cutscenes, staff | Partial | The validated fresh-Story config, source-private route policy, exact stage splash, campaign-static MAIN content, and transactional Raster handoff into MAIN are integrated. Win/Continue/game-over, OP, cutscenes, endings, and staff remain. |
+| OP menus, Story, MAINL, cutscenes, staff | Partial | The validated fresh-Story config, source-private route policy, exact stage splash, campaign-static MAIN content, transactional Raster handoff into MAIN, and exact winner-scene timeline are integrated. Continue/game-over, the owning session loop, OP, cutscenes, endings, and staff remain. |
 | Audio | No for the explicitly marked silent visual vertical slice; yes for a fully faithful release | Start source/data investigation now, but do not block visible MAIN on an invented WAV backend. |
 | Persistent score/configuration UI and localization/QoL | No | Keep it outside the first faithful path and behind an app-owned profile/catalog seam. |
 
@@ -273,8 +273,8 @@ Avoid creating a placeholder th03-app which owns a second renderer or game state
 
 Once VS-3 holds, add scenes in donor order rather than building a broad launcher framework.
 
-1. Complete MAINL routing and Story progression. The stage splash and fresh
-   MAIN handoff are integrated; next add round win, continuation, game-over,
+1. Complete MAINL routing and Story progression. The stage splash, fresh MAIN
+   handoff, and winner scene are integrated; next add continuation, game-over,
    ending routing, and the owning `ClassicSession` boundary, following
    mlentry.cpp, screens.cpp, and ending.cpp. It constructs the next MAIN session
    and loads/unloads assets at the same semantic boundary. Acceptance: a
@@ -293,9 +293,25 @@ Once VS-3 holds, add scenes in donor order rather than building a broad launcher
 
 Audio is a separate fidelity project, not a WAV substitution. The first inventory is the donor's song/SE calls and the externally supplied .M, .EFC, and any rhythm data they require. It must identify source command ordering, load/stop/measure waits, and mute/volume behaviour before choosing a native API. Game timing must never wait on a host audio callback or device state.
 
-The recommended later shape is a byte-fed th03_audio_pmd library that produces deterministic PCM and knows no files, windows, or SDL types. A small th03_platform_sdl endpoint feeds it to an SDL audio stream; SDL's [audio-device stream API](https://wiki.libsdl.org/SDL3/SDL_OpenAudioDeviceStream) is an appropriate device adapter because it keeps device management outside the synthesizer. The app owns user gain/mute settings, while the audio engine continues its source command timeline even if final output is muted unless donor evidence establishes different semantics.
+The recommended later shape is a byte-fed th03_audio_pmd library adapted from
+the permissively licensed 98fmplayer PMD sequencer with ymfm providing YM2608
+synthesis. It produces deterministic PCM and knows no files, windows, or SDL
+types. A small th03_platform_sdl endpoint feeds it to an SDL audio stream;
+SDL's [audio-device stream API](https://wiki.libsdl.org/SDL3/SDL_OpenAudioDeviceStream)
+is an appropriate device adapter because it keeps device management outside
+the synthesizer. The app owns user gain/mute settings, while the audio engine
+continues its source command timeline even if final output is muted unless
+donor evidence establishes different semantics.
 
-[ymfm](https://github.com/aaronsgiles/ymfm) is a technically plausible OPNA (YM2608) synthesis candidate, but it has no release tag to treat as a default pin. Do not add it until the exact commit, vendoring strategy, license/credit obligations, required clock/rate conversion, and source trace are recorded. Likewise, [foo_input_pmd](https://github.com/stuerp/foo_input_pmd) is useful for upstream-format study, not an automatic dependency or a license decision. Required audio gates are: offline command/register or PCM traces for known assets, deterministic muted/unmuted scheduling tests, then device smoke tests on the supported host matrix.
+[ymfm](https://github.com/aaronsgiles/ymfm) has no release tag to treat as a
+default pin. Implementation must therefore record exact 98fmplayer and ymfm
+commits, vendoring strategy, license/credit obligations, clock/rate conversion,
+and a source trace. The remaining load-bearing unknowns are exact EFC playback,
+fade/measure behaviour, rhythm-data handling, OPNA clock conversion, and output
+rate policy; they are engine-parcel gates, not blockers for semantic scene
+command ordering. Required audio gates are offline command/register or PCM
+traces for known assets, deterministic muted/unmuted scheduling tests, then
+device smoke tests on the supported host matrix.
 
 ## Compatibility and size constraints
 

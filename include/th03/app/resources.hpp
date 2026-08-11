@@ -26,6 +26,7 @@ enum class MainResourceScene : std::uint8_t {
 	direct_vs,
 	selection_handoff,
 	mainl_stage_transition,
+	mainl_win,
 };
 
 enum class MainResourceDecoder : std::uint8_t {
@@ -36,6 +37,7 @@ enum class MainResourceDecoder : std::uint8_t {
 	cdg,
 	mrs,
 	pi,
+	shift_jis_blocks,
 };
 
 enum class MainCharacter : std::uint8_t {
@@ -89,6 +91,12 @@ enum class MainResourceRole : std::uint8_t {
 	stage_number_sheet,
 	stage_splash_base,
 	stage_splash_background,
+	win_logo_palette_pre,
+	win_logo_fade_cels,
+	win_logo_final,
+	win_logo_palette_post,
+	character_win_portrait,
+	character_win_message,
 };
 
 struct MainResourceKey {
@@ -194,6 +202,9 @@ main_private_resource_keys(
 [[nodiscard]] std::expected<std::vector<MainResourceKey>, ResourceLoadError>
 mainl_stage_resource_keys(MainlStageResourceRequest request);
 
+[[nodiscard]] std::expected<std::vector<MainResourceKey>, ResourceLoadError>
+mainl_win_resource_keys(MainPlayerSelection winner);
+
 // Importer-facing validation for the extracted-entry component. The loader
 // calls this before joining a manifest name to the explicit content root.
 [[nodiscard]] bool is_safe_extracted_entry_name(std::string_view name) noexcept;
@@ -230,6 +241,8 @@ public:
 	);
 	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 	load_mainl_stage(MainlStageResourceRequest request);
+	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+	load_mainl_win(MainPlayerSelection winner);
 
 	[[nodiscard]] std::size_t cached_resource_count() const noexcept;
 

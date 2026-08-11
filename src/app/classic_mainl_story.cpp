@@ -80,6 +80,9 @@ constexpr std::uint8_t paletted_chiyuri_first = 15U;
 		.loser_paletted_character =
 			process_start.paletted_character[loser_index],
 		.message_block = message,
+		.preload_stage_splash = terminal.winner == 0 &&
+			transition.resident.story_stage != story_stage_chiyuri &&
+			transition.resident.story_stage != story_stage_yumemi,
 	};
 }
 

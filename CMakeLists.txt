@@ -360,6 +360,7 @@ th03_set_warnings(th03_formats)
 add_library(th03_app_main STATIC
 	src/app/classic_mainl_stage.cpp
 	src/app/classic_mainl_story.cpp
+	src/app/classic_mainl_win.cpp
 	src/app/direct_vs_cli.cpp
 	src/app/direct_vs_launch.cpp
 	src/app/main_direct_vs_runner.cpp
@@ -461,6 +462,18 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-tick-input-tests
 		COMMAND th03-app-tick-input-tests
+	)
+
+	add_executable(th03-app-classic-mainl-win-tests
+		tests/test_app_classic_mainl_win.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-mainl-win-tests PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-classic-mainl-win-tests)
+	add_test(
+		NAME th03-app-classic-mainl-win-tests
+		COMMAND th03-app-classic-mainl-win-tests
 	)
 
 	if(TH03_ENABLE_SDL)

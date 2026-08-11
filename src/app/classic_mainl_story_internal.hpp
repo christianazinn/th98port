@@ -47,6 +47,9 @@ struct ClassicMainlWinContext {
 	// Exact zero-based block in the winner's fixed @NNTX table. Blocks 9 and
 	// 10 are the source's decisive-stage and Chiyuri-stage messages.
 	std::uint8_t message_block = 0U;
+	// sub_9887() returning zero makes win_animate_and_wait() preload the next
+	// stage splash into the hidden page before it begins polling dismissal.
+	bool preload_stage_splash = false;
 
 	friend constexpr bool operator==(
 		const ClassicMainlWinContext &,

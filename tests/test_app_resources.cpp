@@ -112,7 +112,7 @@ void test_manifest()
 	);
 	const auto manifest = th03::app::main_resource_manifest();
 	expect(
-		manifest.size() == 123U,
+		manifest.size() == 145U,
 		"manifest enumerates MAIN, MAINL, paletted, and character-only assets"
 	);
 	expect(
@@ -442,6 +442,10 @@ void test_main_private_and_mainl_stage_batches()
 		.character = MainCharacter::chiyuri,
 		.palette = MainPaletteVariant::first,
 	};
+	const MainPlayerSelection yumemi_second{
+		.character = MainCharacter::yumemi,
+		.palette = MainPaletteVariant::second,
+	};
 
 	const auto private_keys = th03::app::main_private_resource_keys(
 		reimu_first, mima_second
@@ -565,6 +569,57 @@ void test_main_private_and_mainl_stage_batches()
 		loaded && loaded->size() == numbered->size() &&
 			loader.cached_resource_count() == numbered->size(),
 		"a complete MAINL batch commits all immutable resources atomically"
+	);
+
+	const auto win_keys = th03::app::mainl_win_resource_keys(yumemi_second);
+	expect(
+		win_keys && win_keys->size() == 6U &&
+			win_keys->front() == MainResourceKey{
+				.role = MainResourceRole::win_logo_palette_pre,
+			} &&
+			(*win_keys)[3U] == MainResourceKey{
+				.role = MainResourceRole::character_win_portrait,
+				.character = MainCharacter::yumemi,
+			} &&
+			(*win_keys)[4U] == MainResourceKey{
+				.role = MainResourceRole::character_win_message,
+				.character = MainCharacter::yumemi,
+			} &&
+			win_keys->back() == MainResourceKey{
+				.role = MainResourceRole::win_logo_palette_post,
+			},
+		"winner batch preserves the source load order and base-character names"
+	);
+	expect(
+		!th03::app::mainl_win_resource_keys({
+			.character = MainCharacter::none,
+			.palette = MainPaletteVariant::first,
+		}),
+		"winner batch rejects a non-character selection"
+	);
+
+	TemporaryRoot win_root;
+	expect(win_root.valid(), "temporary winner transaction root was created");
+	if(!win_root.valid() || !win_keys) {
+		return;
+	}
+	for(std::size_t index = 0U; index + 1U < win_keys->size(); ++index) {
+		write_spec(win_root.path(), (*win_keys)[index], std::byte{0x51U});
+	}
+	MainResourceLoader win_loader(
+		win_root.path(), MainResourceIntegrity::size_only
+	);
+	const auto failed_win = win_loader.load_mainl_win(yumemi_second);
+	expect(
+		!failed_win && win_loader.cached_resource_count() == 0U,
+		"a late winner batch failure publishes no partial cache entries"
+	);
+	write_spec(win_root.path(), win_keys->back(), std::byte{0x52U});
+	const auto loaded_win = win_loader.load_mainl_win(yumemi_second);
+	expect(
+		loaded_win && loaded_win->size() == win_keys->size() &&
+			win_loader.cached_resource_count() == win_keys->size(),
+		"a complete winner batch commits all immutable resources atomically"
 	);
 }
 
