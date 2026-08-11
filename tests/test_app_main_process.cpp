@@ -22,6 +22,7 @@
 #include "th03/present/main_static.hpp"
 
 #include "../src/app/main_compiled_content_internal.hpp"
+#include "../src/app/classic_op_scene_internal.hpp"
 #include "../src/app/classic_op_selection_internal.hpp"
 #include "../src/app/main_process_internal.hpp"
 
@@ -33,12 +34,15 @@ using th03::app::ClassicMainlStageTestAccess;
 using th03::app::ClassicOpSelectionMode;
 using th03::app::ClassicOpSelectionOutcome;
 using th03::app::ClassicOpSelectionTestAccess;
+using th03::app::ClassicOpRoute;
+using th03::app::ClassicOpSceneTestAccess;
 using th03::app::MainCharacter;
 using th03::app::MainDirectVsConfig;
 using th03::app::MainPaletteVariant;
 using th03::app::MainPlayerSelection;
 using th03::app::MainProcess;
 using th03::app::MainProcessClassicVsAccess;
+using th03::app::MainProcessDemoAccess;
 using th03::app::MainProcessErrorCode;
 using th03::app::MainProcessStoryAccess;
 using th03::app::MainProcessTestAccess;
@@ -1983,6 +1987,138 @@ th03::GameInit classic_vs_init(
 	return init;
 }
 
+th03::GameInit classic_demo_init() noexcept
+{
+	auto init = classic_vs_init(th03::game_mode::vs_cpu_cpu, 2U);
+	init.game_mode = th03::game_mode::demo;
+	init.demo_number = 1U;
+	init.paletted_character = {3, 1};
+	init.resident_rand = 600;
+	init.random_seed = std::bit_cast<std::uint32_t>(init.resident_rand);
+	init.story_stage = 0U;
+	init.global_frame = 0U;
+	return init;
+}
+
+void test_classic_demo_handoff_and_runtime()
+{
+	const auto init = classic_demo_init();
+	const auto player_one = *th03::app::main_player_selection_from_paletted(
+		init.paletted_character[0U]
+	);
+	const auto player_two = *th03::app::main_player_selection_from_paletted(
+		init.paletted_character[1U]
+	);
+	auto resources = make_resources(player_one, player_two);
+	auto stage_resources = make_mainl_stage_resources(init);
+	auto font_rom = make_font_rom();
+	auto stage_font = th03::app::Pc98FontRomProvider::from_exact_font_rom(
+		font_rom
+	);
+	expect(stage_font.has_value(),
+		"Demo fixture prepares the exact-size MAINL text provider");
+	if(!stage_font) {
+		return;
+	}
+	auto completion = ClassicOpSceneTestAccess::completion(
+		ClassicOpRoute::demo, init
+	);
+	auto stage = ClassicMainlStageTestAccess::
+		create_demo_with_synthetic_resources(
+			completion,
+			{.red_provider = kotohime_red},
+			stage_resources,
+			mainl_stage_text_assets(),
+			*stage_font
+		);
+	expect(stage && advance_mainl_stage_to_ready(**stage),
+		"typed automatic Demo reaches one complete MAINL Raster handoff");
+	if(!stage || (*stage)->phase() != ClassicMainlStagePhase::ready) {
+		return;
+	}
+
+	const auto dynamic_keys = th03::app::main_private_resource_keys(
+		player_one, player_two
+	);
+	expect(dynamic_keys.has_value(),
+		"Demo fixture resolves its exact MAIN-private closure");
+	if(!dynamic_keys) {
+		return;
+	}
+	auto dynamic_resources = select_resources(resources, *dynamic_keys);
+	auto compiled = make_compiled_content();
+	expect(compiled.has_value(),
+		"Demo fixture imports synthetic compiled MAIN content");
+	if(!compiled) {
+		return;
+	}
+	auto static_content =
+		MainProcessTestAccess::prepare_static_with_synthetic_resources(
+			resources, std::move(*compiled), font_rom
+		);
+	expect(static_content.has_value(),
+		"Demo fixture prepares shared MAIN static content");
+	if(!static_content) {
+		return;
+	}
+
+	auto missing = dynamic_resources;
+	missing.pop_back();
+	auto rejected = MainProcessDemoAccess::create_demo(
+		**stage, missing, *static_content, false
+	);
+	expect(!rejected && rejected.error().code ==
+		MainProcessErrorCode::resource_set_mismatch &&
+		(*stage)->phase() == ClassicMainlStagePhase::ready &&
+		ClassicMainlStageTestAccess::handoff(**stage) != nullptr,
+		"failed Demo process construction preserves the retryable MAINL handoff");
+
+	auto created = MainProcessDemoAccess::create_demo(
+		**stage, dynamic_resources, *static_content, false
+	);
+	expect(created.has_value() &&
+		(*stage)->phase() == ClassicMainlStagePhase::consumed &&
+		ClassicMainlStageTestAccess::handoff(**stage) == nullptr,
+		"successful Demo MAIN publication consumes exactly one typed handoff");
+	if(!created) {
+		return;
+	}
+	const auto observation = (*created)->round_start_observation();
+	expect(
+		observation.start.game_mode == th03::game_mode::demo &&
+			observation.start.demo_number == 1U &&
+			observation.start.is_cpu == std::array<std::uint8_t, 2U>{1U, 1U} &&
+			observation.start.paletted_character ==
+				std::array<std::int8_t, 2U>{3, 1} &&
+			observation.effective_reset_seed == 600U &&
+			observation.round.state.cpu_safety_frames ==
+				std::array<std::uint16_t, 2U>{0xFFFFU, 0xFFFFU} &&
+			observation.round.state.round_speed == 64U &&
+			observation.round.state.bullet_base_speed == 0U &&
+			observation.round.state.boss_attack_level == 8U &&
+			observation.round.state.gauge_attack_level ==
+				std::array<std::uint8_t, 2U>{9U, 9U},
+		"Demo MAIN applies the exact autonomous CPU/RNG/difficulty recipe"
+	);
+	expect((*created)->input_protocol() == th03::InputProtocol::live &&
+		MainProcessTestAccess::continues_used_digit(**created) == 0U,
+		"automatic Demo uses live attract input and the non-Story HUD digit");
+
+	const auto exited = (*created)->step({.system = 0x1000U});
+	expect(exited && exited->status == th03::StepStatus::terminal &&
+		exited->input_boundary_state.route == 0U,
+		"normalized physical Demo input requests source terminal route zero");
+	expect((*created)->finish_main_process().has_value(),
+		"terminal Demo persists its final MAIN boundary");
+	const auto transition = (*created)->session_transition();
+	expect(transition &&
+		transition->action == th03::SessionAction::exit_to_operator &&
+		transition->resident.demo_number == 1U &&
+		transition->resident.fast_op_animation == init.fast_op_animation &&
+		!transition->high_score_registration,
+		"Demo route zero returns the exact resident to a fresh OP process");
+}
+
 void test_classic_vs_handoff_transaction_and_lifetime()
 {
 	const auto staging_config = story_config(0U, 2, 3U);
@@ -2599,6 +2735,7 @@ int main(int argc, char **argv)
 	test_sticky_presentation_preflight();
 	test_story_factory_transaction_and_lifetime();
 	test_invalid_config_and_kotohime_policy();
+	test_classic_demo_handoff_and_runtime();
 	test_classic_vs_handoff_transaction_and_lifetime();
 	test_story_handoff_transaction_and_shared_lifetime();
 	if(argc == 4) {

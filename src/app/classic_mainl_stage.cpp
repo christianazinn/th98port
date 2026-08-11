@@ -1,5 +1,6 @@
 #include "classic_mainl_stage_internal.hpp"
 
+#include "classic_op_scene_internal.hpp"
 #include "classic_op_selection_internal.hpp"
 
 #include <algorithm>
@@ -288,6 +289,53 @@ template <typename Value, typename Decoder>
 	});
 }
 
+[[nodiscard]] bool valid_demo_completion(
+	const ClassicOpCompletion &completion,
+	present::KotohimeBombFadeCompatibility kotohime_compatibility
+) noexcept
+{
+	constexpr std::array<std::array<std::int8_t, 2U>, 4U> pairings{{
+		{{3, 1}},
+		{{5, 13}},
+		{{7, 11}},
+		{{9, 5}},
+	}};
+	constexpr std::array<std::int32_t, 4U> random{{
+		600, 1000, 3200, 500,
+	}};
+	if(completion.route() != ClassicOpRoute::demo ||
+		completion.selection_mode()) {
+		return false;
+	}
+	const auto &resident = completion.resident();
+	if(resident.game_mode != game_mode::demo || resident.demo_number == 0U ||
+		resident.demo_number > pairings.size() ||
+		resident.is_cpu != std::array<std::uint8_t, 2U>{1U, 1U} ||
+		resident.story_stage != 0U || resident.winner != 0 ||
+		resident.show_score_menu != 0U || resident.rank > 3U ||
+		resident.key_mode > 2U || resident.remaining_credits > 3U ||
+		resident.fast_op_animation > 1U || resident.global_frame != 0U ||
+		(resident.autofire_mask & 0xFCU) != 0U ||
+		resident.runtime_snapshot || resident.compact_runtime_snapshot ||
+		resident.round_start_snapshot || resident.practice_rules ||
+		!valid_zero_score(resident.last_score[0U]) ||
+		!valid_zero_score(resident.last_score[1U])) {
+		return false;
+	}
+	const auto index = static_cast<std::size_t>(resident.demo_number - 1U);
+	const auto player_one = main_player_selection_from_paletted(
+		resident.paletted_character[0U]
+	);
+	const auto player_two = main_player_selection_from_paletted(
+		resident.paletted_character[1U]
+	);
+	return resident.paletted_character == pairings[index] &&
+		resident.resident_rand == random[index] && player_one && player_two &&
+		((player_one->character != MainCharacter::kotohime &&
+		  player_two->character != MainCharacter::kotohime) ||
+		 kotohime_compatibility.red_provider != nullptr);
+}
+
 [[nodiscard]] bool valid_vs_completion(
 	const ClassicOpSelectionCompletion &completion,
 	present::KotohimeBombFadeCompatibility kotohime_compatibility
@@ -434,6 +482,27 @@ std::expected<
 std::expected<
 	std::unique_ptr<ClassicMainlStageTransition>,
 	ClassicMainlStageError
+> ClassicMainlStageTransition::create_from_demo(
+	const ClassicOpCompletion &completion,
+	present::KotohimeBombFadeCompatibility kotohime_compatibility,
+	std::span<const LoadedMainResource> resources,
+	MainlStageTextAssets text,
+	const present::AnkGlyphProvider &font
+)
+{
+	return create_from_demo_impl(
+		completion,
+		kotohime_compatibility,
+		resources,
+		std::move(text),
+		font,
+		true
+	);
+}
+
+std::expected<
+	std::unique_ptr<ClassicMainlStageTransition>,
+	ClassicMainlStageError
 > ClassicMainlStageTransition::create_from_selection_impl(
 	const ClassicOpSelectionCompletion &completion,
 	present::KotohimeBombFadeCompatibility kotohime_compatibility,
@@ -465,6 +534,41 @@ std::expected<
 std::expected<
 	std::unique_ptr<ClassicMainlStageTransition>,
 	ClassicMainlStageError
+> ClassicMainlStageTransition::create_from_demo_impl(
+	const ClassicOpCompletion &completion,
+	present::KotohimeBombFadeCompatibility kotohime_compatibility,
+	std::span<const LoadedMainResource> resources,
+	MainlStageTextAssets text,
+	const present::AnkGlyphProvider &font,
+	bool authenticate_resource_bytes
+)
+{
+	if(!valid_demo_completion(completion, kotohime_compatibility)) {
+		return std::unexpected(stage_error(
+			ClassicMainlStageErrorCode::invalid_config
+		));
+	}
+	auto resident = completion.resident();
+	// MAIN independently seeds its process RNG from the resident word after
+	// MAINL. GameInit keeps that process-local seed explicit.
+	resident.random_seed = std::bit_cast<std::uint32_t>(resident.resident_rand);
+	return create_impl(
+		{
+			.resident = std::move(resident),
+			.game_options = {.input_protocol = InputProtocol::live},
+			.kotohime_compatibility = kotohime_compatibility,
+			.policy = EntryPolicy::demo,
+		},
+		resources,
+		std::move(text),
+		font,
+		authenticate_resource_bytes
+	);
+}
+
+std::expected<
+	std::unique_ptr<ClassicMainlStageTransition>,
+	ClassicMainlStageError
 > ClassicMainlStageTransition::create_impl(
 	EntryConfig entry,
 	std::span<const LoadedMainResource> resources,
@@ -480,7 +584,11 @@ std::expected<
 	})) || (entry.policy == EntryPolicy::classic_vs &&
 		(entry.resident.game_mode != game_mode::vs_1p_cpu &&
 		 entry.resident.game_mode != game_mode::vs_1p_2p &&
-		 entry.resident.game_mode != game_mode::vs_cpu_cpu))) {
+		 entry.resident.game_mode != game_mode::vs_cpu_cpu)) ||
+		(entry.policy == EntryPolicy::demo &&
+		 (entry.resident.game_mode != game_mode::demo ||
+		  entry.resident.demo_number == 0U ||
+		  entry.game_options.input_protocol != InputProtocol::live))) {
 		return std::unexpected(stage_error(
 			ClassicMainlStageErrorCode::invalid_config
 		));
@@ -1017,6 +1125,12 @@ bool ClassicMainlStageTransition::is_classic_vs_entry() const noexcept
 {
 	return prepared_ &&
 		prepared_->entry.policy == EntryPolicy::classic_vs;
+}
+
+bool ClassicMainlStageTransition::is_demo_entry() const noexcept
+{
+	return prepared_ &&
+		prepared_->entry.policy == EntryPolicy::demo;
 }
 
 void ClassicMainlStageTransition::consume_handoff() noexcept

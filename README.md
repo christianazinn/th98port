@@ -7,9 +7,10 @@ Practice, and ordinary VS, plus a separate title-Demo gate, on top of the Phase
 1 format/session runway. A
 strict V13 span adapter and the first stdlib-only asset/indexed-raster
 foundations now sit beside that core. An optional SDL 3 direct-VS application
-now exercises the complete authenticated MAIN process and presentation stack;
-the original title/selection/Story shell, audio, networking, and CI remain
-separate later work.
+exercises the complete authenticated MAIN process and presentation stack,
+while the platform-neutral Classic owner now integrates every original OP,
+Story, VS, ending, score, and built-in Demo route. Host audio and the final
+Classic SDL composition remain separate work.
 
 ## Build and test
 
@@ -165,8 +166,9 @@ split comparisons. Original game data and replay captures remain external.
   Classic Story route is now internally owned; no second campaign or
   resident-state model is exposed. The same source-private app owner now
   composes the OP title, retained Options and Music Room, read-only HiScore,
-  Story/all-VS character selection, Story, MAINL/MAIN VS, and winner return.
-  Automatic Demo remains its sole external route.
+  Story/all-VS character selection, Story, MAINL/MAIN VS, winner return, and
+  the exact four-recipe automatic Demo loop. Every source OP route is now
+  internally owned without adding replay UI.
 - The same boundary authenticates the supported unpacked Japanese `MAINL.EXE`
   and owns its exact Story title/name table, staff verdict strings, and flake
   masks. Packed DIET executable support is not yet provided; original bytes

@@ -765,6 +765,63 @@ MainProcessClassicVsAccess::create_vs(
 }
 
 std::expected<std::unique_ptr<MainProcess>, MainProcessError>
+MainProcessDemoAccess::create_demo(
+	ClassicMainlStageTransition &transition,
+	std::span<const LoadedMainResource> resources,
+	std::shared_ptr<const MainProcessStaticContent> static_content,
+	bool authenticate_resource_bytes
+)
+{
+	if(!static_content ||
+		transition.phase() != ClassicMainlStagePhase::ready ||
+		transition.handoff() == nullptr || !transition.is_demo_entry() ||
+		!transition.prepared_) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	const auto &entry = transition.prepared_->entry;
+	const auto player_one = main_player_selection_from_paletted(
+		entry.resident.paletted_character[0U]
+	);
+	const auto player_two = main_player_selection_from_paletted(
+		entry.resident.paletted_character[1U]
+	);
+	if(!player_one || !player_two) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	const auto expected = main_private_resource_keys(*player_one, *player_two);
+	if(!expected) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	if(const auto valid = validate_resource_set(
+		resources,
+		*expected,
+		authenticate_resource_bytes
+	); !valid) {
+		return std::unexpected(valid.error());
+	}
+	auto process = MainProcess::create_common(
+		entry.resident,
+		entry.game_options,
+		entry.kotohime_compatibility,
+		{*player_one, *player_two},
+		*transition.handoff(),
+		resources,
+		std::move(static_content),
+		std::uint8_t{0U}
+	);
+	if(process) {
+		transition.consume_handoff();
+	}
+	return process;
+}
+
+std::expected<std::unique_ptr<MainProcess>, MainProcessError>
 MainProcess::create_common(
 	const GameInit &init,
 	GameOptions game_options,

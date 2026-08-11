@@ -473,7 +473,11 @@ void test_demo_timeout_and_blackout()
 				resident.demo_number == 1U && resident.is_cpu[0U] == 1U &&
 				resident.is_cpu[1U] == 1U &&
 				resident.paletted_character == std::array<std::int8_t, 2U>{3, 1} &&
-				resident.resident_rand == 600,
+				resident.resident_rand == 600 &&
+				resident.random_seed == 600U && resident.global_frame == 0U &&
+				resident.last_score == decltype(resident.last_score){} &&
+				!resident.runtime_snapshot && !resident.compact_runtime_snapshot &&
+				!resident.round_start_snapshot && !resident.practice_rules,
 			"first demo publishes the exact Mima/Reimu resident recipe"
 		);
 	}

@@ -283,7 +283,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
 | SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
-| OP menus, Story, MAINL, cutscenes, staff | Integrated except automatic Demo | The source-private OP owner now binds title, retained Options/Music Room, read-only HiScore, Story/all-VS selection, Story, MAINL/MAIN VS, winner return, both interstages, primary and conditional extra endings, staff/verdict, score persistence, and registration. Automatic Demo remains the sole external OP route. |
+| OP menus, Story, MAINL, cutscenes, staff | Integrated | The source-private OP owner binds title, retained Options/Music Room, read-only HiScore, Story/all-VS selection, Story, MAINL/MAIN VS, winner return, both interstages, primary and conditional extra endings, staff/verdict, score persistence, registration, and the exact four-recipe automatic Demo loop. No external OP route or replay UI is required. |
 | Audio | No for the explicitly marked silent visual vertical slice; yes for a fully faithful release | Start source/data investigation now, but do not block visible MAIN on an invented WAV backend. |
 | Persistent score/configuration UI and localization/QoL | Original UI integrated; QoL pending | The exact original score/config codecs, source mutation rules, validated atomic whole-file stores, OP Options, and read-only HiScore/MAINL registration paths are app-owned. Localization and optional QoL remain outside core. |
 
@@ -313,7 +313,11 @@ Once VS-3 holds, add scenes in donor order rather than building a broad launcher
    next-stage, continue, game-over, registration, extra-ending, and exit branch
    with the corresponding retained Raster/palette/timing and
    resident/persistence state.
-2. OP title and selection. Implement only the source's actual choices (Story, VS, Music Room, registration view, option, quit) and its character selection/configuration steps. Reuse BFNT/CDG/PI primitives; do not import a desktop UI toolkit. Game text remains source bytes/BFNT/gaiji first. If a later launcher needs translated labels, keep a separate app-owned catalog rather than rewriting gameplay or source asset strings. Acceptance: source-traced title-to-MAINL handoff, all selected modes/characters, and source palette/page transitions match.
+2. OP title and selection are integrated. The source's Story, VS, Music Room,
+   registration view, Options, Quit, and automatic Demo paths all use the
+   authenticated BFNT/CDG/PI presentation and typed process handoffs. A later
+   launcher must compose this owner rather than add a desktop UI or rewrite
+   source asset strings.
 3. Cutscenes and staff. The owning typed CutsceneScene and complete normal-speed
    staff/verdict Raster transaction are integrated. Replay Patch's optional
    score-file-unlocked held-Z staff pacing remains coupled to persistence. The

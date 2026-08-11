@@ -35,6 +35,8 @@ enum class ClassicOpSessionScene : std::uint8_t {
 	high_scores,
 	character_selection,
 	story,
+	demo_stage_splash,
+	demo_main,
 	vs_stage_splash,
 	vs_main,
 	vs_win,
@@ -178,6 +180,13 @@ struct ClassicOpSessionBackendOperations final {
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
 	(*advance_story)(void *, const ClassicStorySessionInput &) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*finish_story)(void *) = nullptr;
+	std::expected<void, ClassicOpSessionError> (*start_demo_stage)(void *) = nullptr;
+	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
+	(*advance_demo_stage)(void *, bool) = nullptr;
+	std::expected<void, ClassicOpSessionError> (*start_demo_main)(void *) = nullptr;
+	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
+	(*advance_demo_main)(void *, CoreInput) = nullptr;
+	std::expected<void, ClassicOpSessionError> (*finish_demo_main)(void *) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*start_vs_stage)(void *) = nullptr;
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
 	(*advance_vs_stage)(void *, bool) = nullptr;

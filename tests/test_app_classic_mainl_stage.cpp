@@ -16,6 +16,7 @@
 #include "th03/present/text.hpp"
 
 #include "classic_mainl_stage_internal.hpp"
+#include "classic_op_scene_internal.hpp"
 #include "classic_op_selection_internal.hpp"
 
 namespace {
@@ -27,6 +28,9 @@ using th03::app::ClassicOpSelectionCompletion;
 using th03::app::ClassicOpSelectionMode;
 using th03::app::ClassicOpSelectionOutcome;
 using th03::app::ClassicOpSelectionTestAccess;
+using th03::app::ClassicOpCompletion;
+using th03::app::ClassicOpRoute;
+using th03::app::ClassicOpSceneTestAccess;
 using th03::app::LoadedMainResource;
 using th03::app::MainCharacter;
 using th03::app::MainPaletteVariant;
@@ -572,6 +576,70 @@ std::vector<LoadedMainResource> resources_for(
 	return result;
 }
 
+th03::GameInit demo_resident(std::uint8_t number) noexcept
+{
+	constexpr std::array<std::array<std::int8_t, 2U>, 4U> pairings{{
+		{{3, 1}}, {{5, 13}}, {{7, 11}}, {{9, 5}},
+	}};
+	constexpr std::array<std::int32_t, 4U> random{{
+		600, 1000, 3200, 500,
+	}};
+	th03::GameInit resident{};
+	resident.game_mode = th03::game_mode::demo;
+	resident.demo_number = number;
+	resident.is_cpu = {1U, 1U};
+	resident.paletted_character = pairings[number - 1U];
+	resident.resident_rand = random[number - 1U];
+	resident.random_seed = std::bit_cast<std::uint32_t>(
+		resident.resident_rand
+	);
+	resident.rank = 1U;
+	resident.key_mode = 2U;
+	resident.remaining_credits = 2U;
+	resident.story_lives = 77U;
+	resident.skill = 203U;
+	resident.story_opponents.fill(13);
+	return resident;
+}
+
+ClassicOpCompletion demo_completion(th03::GameInit resident) noexcept
+{
+	return ClassicOpSceneTestAccess::completion(
+		ClassicOpRoute::demo, std::move(resident)
+	);
+}
+
+std::vector<LoadedMainResource> resources_for(
+	const ClassicOpCompletion &completion
+)
+{
+	const auto &resident = completion.resident();
+	const auto p1 = *th03::app::main_player_selection_from_paletted(
+		resident.paletted_character[0U]
+	);
+	const auto p2 = *th03::app::main_player_selection_from_paletted(
+		resident.paletted_character[1U]
+	);
+	const auto keys = *th03::app::mainl_stage_resource_keys({
+		.player_one = p1,
+		.player_two = p2,
+		.game_mode = resident.game_mode,
+		.story_stage = resident.story_stage,
+	});
+	std::vector<LoadedMainResource> result;
+	result.reserve(keys.size());
+	for(const auto key : keys) {
+		const auto spec = *th03::app::main_resource_spec(key);
+		result.push_back({
+			.spec = spec,
+			.bytes = std::make_shared<const std::vector<std::byte>>(
+				bytes_for(spec)
+			),
+		});
+	}
+	return result;
+}
+
 void expect_pixel(
 	const th03::present::Raster &raster,
 	Page page,
@@ -1082,6 +1150,101 @@ void test_classic_vs_completion_validation()
 		"Story completion cannot enter the Classic VS factory");
 }
 
+void test_all_automatic_demo_routes()
+{
+	SyntheticFont font;
+	for(std::uint8_t number = 1U; number <= 4U; ++number) {
+		auto completion = demo_completion(demo_resident(number));
+		auto resources = resources_for(completion);
+		auto stage = ClassicMainlStageTestAccess::
+			create_demo_with_synthetic_resources(
+				completion,
+				{.red_provider = &kotohime_fade},
+				resources,
+				text_assets(),
+				font
+			);
+		expect(stage.has_value(),
+			"each stock automatic-Demo recipe constructs its MAINL splash");
+		if(!stage) {
+			continue;
+		}
+		expect_pixel((*stage)->raster(), Page::zero, {10, 10}, 3U,
+			"automatic Demo uses the non-Story STNX5 background");
+		for(std::size_t tick = 0U;
+			tick < 18U + 33U + 18U + 18U;
+			++tick) {
+			const bool dismiss = tick >= 18U;
+			auto advanced = (*stage)->advance(dismiss);
+			expect(advanced.has_value(),
+				"automatic Demo stage reaches its typed MAIN handoff");
+			if(!advanced || advanced->handoff_ready) {
+				break;
+			}
+		}
+		expect((*stage)->phase() == ClassicMainlStagePhase::ready &&
+			ClassicMainlStageTestAccess::handoff(**stage) != nullptr,
+			"automatic Demo stage publishes a ready Raster capability");
+	}
+
+	auto invalid_resident = demo_resident(1U);
+	invalid_resident.paletted_character = {1, 3};
+	auto invalid_completion = demo_completion(std::move(invalid_resident));
+	auto valid_completion = demo_completion(demo_resident(1U));
+	auto resources = resources_for(valid_completion);
+	auto rejected = ClassicMainlStageTestAccess::
+		create_demo_with_synthetic_resources(
+			invalid_completion,
+			{.red_provider = &kotohime_fade},
+			resources,
+			text_assets(),
+			font
+		);
+	expect(!rejected && rejected.error().code ==
+		ClassicMainlStageErrorCode::invalid_config,
+		"a forged automatic-Demo pairing cannot authorize MAINL");
+
+	auto wrong_random_resident = demo_resident(1U);
+	++wrong_random_resident.resident_rand;
+	auto wrong_random = demo_completion(std::move(wrong_random_resident));
+	rejected = ClassicMainlStageTestAccess::
+		create_demo_with_synthetic_resources(
+			wrong_random,
+			{.red_provider = &kotohime_fade},
+			resources,
+			text_assets(),
+			font
+		);
+	expect(!rejected && rejected.error().code ==
+		ClassicMainlStageErrorCode::invalid_config,
+		"a forged automatic-Demo resident seed cannot authorize MAINL");
+
+	auto resumed_resident = demo_resident(1U);
+	resumed_resident.global_frame = 1U;
+	auto resumed = demo_completion(std::move(resumed_resident));
+	rejected = ClassicMainlStageTestAccess::
+		create_demo_with_synthetic_resources(
+			resumed,
+			{.red_provider = &kotohime_fade},
+			resources,
+			text_assets(),
+			font
+		);
+	expect(!rejected && rejected.error().code ==
+		ClassicMainlStageErrorCode::invalid_config,
+		"a resumed automatic-Demo process cannot authorize fresh MAINL");
+
+	auto kotohime = demo_completion(demo_resident(4U));
+	auto kotohime_resources = resources_for(kotohime);
+	auto missing_policy = ClassicMainlStageTestAccess::
+		create_demo_with_synthetic_resources(
+			kotohime, {}, kotohime_resources, text_assets(), font
+		);
+	expect(!missing_policy && missing_policy.error().code ==
+		ClassicMainlStageErrorCode::invalid_config,
+		"Demo 4 requires the process-lifetime Kotohime compatibility provider");
+}
+
 } // namespace
 
 int main()
@@ -1092,6 +1255,7 @@ int main()
 	test_all_story_scenarios_construct();
 	test_all_classic_vs_modes_from_selection();
 	test_classic_vs_completion_validation();
+	test_all_automatic_demo_routes();
 
 	if(failures != 0U) {
 		std::cerr << failures << " of " << checks << " checks failed\n";

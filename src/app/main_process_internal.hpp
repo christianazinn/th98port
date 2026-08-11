@@ -102,6 +102,21 @@ struct MainProcessClassicVsAccess final {
 	);
 };
 
+// Source-private entry for one completed stock OP automatic-Demo route. The
+// MAINL stage retains the exact typed resident and Raster handoff; callers
+// cannot substitute a second Demo recipe or bypass the visible splash.
+struct MainProcessDemoAccess final {
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<MainProcess>,
+		MainProcessError
+	> create_demo(
+		ClassicMainlStageTransition &transition,
+		std::span<const LoadedMainResource> resources,
+		std::shared_ptr<const MainProcessStaticContent> static_content,
+		bool authenticate_resource_bytes = true
+	);
+};
+
 } // namespace th03::app
 
 #endif

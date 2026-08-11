@@ -173,6 +173,9 @@ namespace {
 		operations.return_from_canceled_selection &&
 		operations.commit_config && operations.start_story &&
 		operations.advance_story && operations.finish_story &&
+		operations.start_demo_stage && operations.advance_demo_stage &&
+		operations.start_demo_main && operations.advance_demo_main &&
+		operations.finish_demo_main &&
 		operations.start_vs_stage && operations.advance_vs_stage &&
 		operations.start_vs_main && operations.advance_vs_main &&
 		operations.finish_vs_main && operations.start_vs_win &&
@@ -331,9 +334,11 @@ struct ClassicOpSession::Impl final {
 					!committed) {
 					return std::unexpected(std::move(committed.error()));
 				}
-				external = result->route;
-				status = ClassicOpSessionStatus::external_route;
-				scene = ClassicOpSessionScene::external_route;
+				if(auto started = operations.start_demo_stage(operations.context);
+					!started) {
+					return std::unexpected(std::move(started.error()));
+				}
+				scene = ClassicOpSessionScene::demo_stage_splash;
 				break;
 			case ClassicOpRoute::quit:
 				if(auto committed = operations.commit_config(operations.context);
@@ -402,6 +407,20 @@ struct ClassicOpSession::Impl final {
 		}
 		case ClassicOpSessionScene::story:
 			if(auto finished = operations.finish_story(operations.context);
+				!finished) {
+				return std::unexpected(std::move(finished.error()));
+			}
+			scene = ClassicOpSessionScene::title_menu;
+			break;
+		case ClassicOpSessionScene::demo_stage_splash:
+			if(auto started = operations.start_demo_main(operations.context);
+				!started) {
+				return std::unexpected(std::move(started.error()));
+			}
+			scene = ClassicOpSessionScene::demo_main;
+			break;
+		case ClassicOpSessionScene::demo_main:
+			if(auto finished = operations.finish_demo_main(operations.context);
 				!finished) {
 				return std::unexpected(std::move(finished.error()));
 			}
@@ -498,7 +517,7 @@ struct ClassicOpSessionBackend final {
 	std::optional<ClassicOpSessionVsTerminal> vs_terminal{};
 	std::unique_ptr<ClassicMainlWinScene> vs_win{};
 	std::optional<ClassicMainlWinCompletion> vs_win_completion{};
-	GameInit current_vs_resident{};
+	GameInit current_main_resident{};
 	bool direct_vs_selection = false;
 
 	std::array<ClassicAudioCommand, 64U> audio_commands{};
@@ -1188,6 +1207,132 @@ struct ClassicOpSessionBackend final {
 		return {};
 	}
 
+	[[nodiscard]] std::expected<void, ClassicOpSessionError> start_demo_stage()
+	{
+		if(!title_completion || vs_stage ||
+			title_completion->route() != ClassicOpRoute::demo ||
+			title_completion->selection_mode()) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		if(auto prepared = ensure_static_content(); !prepared) {
+			return std::unexpected(std::move(prepared.error()));
+		}
+		const auto request = stage_request(title_completion->resident());
+		auto resources = loader->load_mainl_stage(request);
+		if(!resources) {
+			return std::unexpected(resource_error(std::move(resources.error())));
+		}
+		auto created = ClassicMainlStageTransition::create_from_demo(
+			*title_completion, kotohime_compatibility, *resources,
+			stage_text, *font
+		);
+		if(!created) {
+			return std::unexpected(stage_error(std::move(created.error())));
+		}
+		current_main_resident = title_completion->resident();
+		vs_stage = std::move(*created);
+		title.reset();
+		title_completion.reset();
+		return {};
+	}
+
+	[[nodiscard]] std::expected<ClassicOpSessionBackendTick,
+		ClassicOpSessionError> advance_demo_stage(bool dismiss_pressed)
+	{
+		return advance_vs_stage(dismiss_pressed);
+	}
+
+	[[nodiscard]] std::expected<void, ClassicOpSessionError> start_demo_main()
+	{
+		if(!vs_stage || vs_stage->phase() != ClassicMainlStagePhase::ready ||
+			vs_process || vs_driver) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		const auto player_one = main_player_selection_from_paletted(
+			current_main_resident.paletted_character[0U]
+		);
+		const auto player_two = main_player_selection_from_paletted(
+			current_main_resident.paletted_character[1U]
+		);
+		if(!player_one || !player_two) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::invalid_config
+			));
+		}
+		auto resources = loader->load_main_private(*player_one, *player_two);
+		if(!resources) {
+			return std::unexpected(resource_error(std::move(resources.error())));
+		}
+		auto created = MainProcessDemoAccess::create_demo(
+			*vs_stage, *resources, static_content
+		);
+		if(!created) {
+			return std::unexpected(main_error(std::move(created.error())));
+		}
+		auto driver = MainProcessDriver::create(process_operations(**created));
+		if(!driver) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		vs_process = std::move(*created);
+		vs_driver = std::move(*driver);
+		vs_stage.reset();
+		vs_terminal.reset();
+		return {};
+	}
+
+	[[nodiscard]] std::expected<ClassicOpSessionBackendTick,
+		ClassicOpSessionError> advance_demo_main(CoreInput input)
+	{
+		const bool physical_input = input.p1 != 0U || input.p2 != 0U ||
+			input.system != 0U || input.charge_mask != 0U;
+		if(physical_input) {
+			// Source attract mode exits for any physical input. The neutral core's
+			// architecture-independent early-exit signal is gameplay Cancel.
+			input = {.system = 0x1000U};
+		} else {
+			input = {};
+		}
+		return advance_vs_main(input);
+	}
+
+	[[nodiscard]] std::expected<void, ClassicOpSessionError> finish_demo_main()
+	{
+		if(!vs_process || !vs_driver || vs_driver->status() !=
+			MainProcessDriverStatus::terminal || !vs_driver->transition()) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		const auto &terminal = vs_process->canonical_state();
+		const auto &transition = *vs_driver->transition();
+		if(terminal.game_mode != game_mode::demo || terminal.route != 0U ||
+			transition.action != SessionAction::exit_to_operator ||
+			transition.high_score_registration) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		auto created = build_title(transition.resident);
+		if(!created) {
+			return std::unexpected(std::move(created.error()));
+		}
+		title = std::move(*created);
+		music_carry = {};
+		selection_carry = {};
+		vs_stage.reset();
+		vs_process.reset();
+		vs_driver.reset();
+		vs_terminal.reset();
+		current_main_resident = {};
+		return {};
+	}
+
 	[[nodiscard]] std::expected<void, ClassicOpSessionError> start_vs_stage()
 	{
 		if(!selection_completion || vs_stage ||
@@ -1213,7 +1358,7 @@ struct ClassicOpSessionBackend final {
 		if(!created) {
 			return std::unexpected(stage_error(std::move(created.error())));
 		}
-		current_vs_resident = selection_completion->resident();
+		current_main_resident = selection_completion->resident();
 		vs_stage = std::move(*created);
 		selection.reset();
 		selection_completion.reset();
@@ -1249,10 +1394,10 @@ struct ClassicOpSessionBackend final {
 			));
 		}
 		const auto player_one = main_player_selection_from_paletted(
-			current_vs_resident.paletted_character[0U]
+			current_main_resident.paletted_character[0U]
 		);
 		const auto player_two = main_player_selection_from_paletted(
-			current_vs_resident.paletted_character[1U]
+			current_main_resident.paletted_character[1U]
 		);
 		if(!player_one || !player_two) {
 			return std::unexpected(session_error(
@@ -1321,7 +1466,7 @@ struct ClassicOpSessionBackend final {
 				));
 			}
 			vs_terminal.emplace(ClassicOpSessionVsTerminal{
-				.process_start = current_vs_resident,
+				.process_start = current_main_resident,
 				.terminal = vs_process->canonical_state(),
 				.transition = *vs_driver->transition(),
 			});
@@ -1725,6 +1870,31 @@ Result backend_call(void *context, Method method, Args &&...args)
 				context, &ClassicOpSessionBackend::finish_story
 			);
 		},
+		.start_demo_stage = [](void *context) {
+			return backend_call<std::expected<void, ClassicOpSessionError>>(
+				context, &ClassicOpSessionBackend::start_demo_stage
+			);
+		},
+		.advance_demo_stage = [](void *context, bool dismiss) {
+			return backend_call<std::expected<
+				ClassicOpSessionBackendTick, ClassicOpSessionError
+			>>(context, &ClassicOpSessionBackend::advance_demo_stage, dismiss);
+		},
+		.start_demo_main = [](void *context) {
+			return backend_call<std::expected<void, ClassicOpSessionError>>(
+				context, &ClassicOpSessionBackend::start_demo_main
+			);
+		},
+		.advance_demo_main = [](void *context, CoreInput input) {
+			return backend_call<std::expected<
+				ClassicOpSessionBackendTick, ClassicOpSessionError
+			>>(context, &ClassicOpSessionBackend::advance_demo_main, input);
+		},
+		.finish_demo_main = [](void *context) {
+			return backend_call<std::expected<void, ClassicOpSessionError>>(
+				context, &ClassicOpSessionBackend::finish_demo_main
+			);
+		},
 		.start_vs_stage = [](void *context) {
 			return backend_call<std::expected<void, ClassicOpSessionError>>(
 				context, &ClassicOpSessionBackend::start_vs_stage
@@ -1963,6 +2133,16 @@ ClassicOpSession::consume(const ClassicOpSessionInput &input)
 		case ClassicOpSessionScene::story:
 			tick = impl_->operations.advance_story(
 				impl_->operations.context, input.story
+			);
+			break;
+		case ClassicOpSessionScene::demo_stage_splash:
+			tick = impl_->operations.advance_demo_stage(
+				impl_->operations.context, input.dismiss_pressed
+			);
+			break;
+		case ClassicOpSessionScene::demo_main:
+			tick = impl_->operations.advance_demo_main(
+				impl_->operations.context, input.main
 			);
 			break;
 		case ClassicOpSessionScene::vs_stage_splash:

@@ -23,6 +23,7 @@
 namespace th03::app {
 
 class ClassicOpSelectionCompletion;
+class ClassicOpCompletion;
 
 struct MainlStageCharacterText final {
 	std::vector<std::uint8_t> title{};
@@ -74,10 +75,10 @@ struct ClassicMainlStageTick final {
 	bool handoff_ready = false;
 };
 
-// Fixed-storage source-ordered Story stage splash. Construction decodes and
-// prepares the complete authenticated closure before publishing any Raster.
-// advance() resumes from one source VSync boundary to the next (or to the
-// final MAIN handoff boundary).
+// Fixed-storage source-ordered MAINL stage splash for Story, selected VS, and
+// automatic Demo. Construction decodes and prepares the complete authenticated
+// closure before publishing any Raster. advance() resumes from one source
+// VSync boundary to the next (or to the final MAIN handoff boundary).
 class ClassicMainlStageTransition final {
 public:
 	[[nodiscard]] static std::expected<
@@ -97,6 +98,18 @@ public:
 		ClassicMainlStageError
 	> create_from_selection(
 		const ClassicOpSelectionCompletion &completion,
+		present::KotohimeBombFadeCompatibility kotohime_compatibility,
+		std::span<const LoadedMainResource> resources,
+		MainlStageTextAssets text,
+		const present::AnkGlyphProvider &font
+	);
+	// Automatic Demo follows OP -> MAINL -> MAIN without a character selector.
+	// The private OP completion proves the exact built-in pairing/RNG recipe.
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicMainlStageTransition>,
+		ClassicMainlStageError
+	> create_from_demo(
+		const ClassicOpCompletion &completion,
 		present::KotohimeBombFadeCompatibility kotohime_compatibility,
 		std::span<const LoadedMainResource> resources,
 		MainlStageTextAssets text,
@@ -129,10 +142,12 @@ private:
 	friend struct ClassicMainlStageTestAccess;
 	friend struct MainProcessStoryAccess;
 	friend struct MainProcessClassicVsAccess;
+	friend struct MainProcessDemoAccess;
 
 	enum class EntryPolicy : std::uint8_t {
 		story,
 		classic_vs,
+		demo,
 	};
 
 	struct EntryConfig final {
@@ -183,6 +198,17 @@ private:
 		const present::AnkGlyphProvider &font,
 		bool authenticate_resource_bytes
 	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicMainlStageTransition>,
+		ClassicMainlStageError
+	> create_from_demo_impl(
+		const ClassicOpCompletion &completion,
+		present::KotohimeBombFadeCompatibility kotohime_compatibility,
+		std::span<const LoadedMainResource> resources,
+		MainlStageTextAssets text,
+		const present::AnkGlyphProvider &font,
+		bool authenticate_resource_bytes
+	);
 	[[nodiscard]] bool stage_hidden_sheet() noexcept;
 	[[nodiscard]] bool begin_splash_show() noexcept;
 	[[nodiscard]] bool preload_splash_into(
@@ -197,6 +223,7 @@ private:
 		const MainStoryConfig &config
 	) const noexcept;
 	[[nodiscard]] bool is_classic_vs_entry() const noexcept;
+	[[nodiscard]] bool is_demo_entry() const noexcept;
 	void consume_handoff() noexcept;
 	void fail() noexcept;
 
@@ -261,6 +288,27 @@ struct ClassicMainlStageTestAccess final {
 	)
 	{
 		return ClassicMainlStageTransition::create_from_selection_impl(
+			completion,
+			kotohime_compatibility,
+			resources,
+			std::move(text),
+			font,
+			false
+		);
+	}
+
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicMainlStageTransition>,
+		ClassicMainlStageError
+	> create_demo_with_synthetic_resources(
+		const ClassicOpCompletion &completion,
+		present::KotohimeBombFadeCompatibility kotohime_compatibility,
+		std::span<const LoadedMainResource> resources,
+		MainlStageTextAssets text,
+		const present::AnkGlyphProvider &font
+	)
+	{
+		return ClassicMainlStageTransition::create_from_demo_impl(
 			completion,
 			kotohime_compatibility,
 			resources,

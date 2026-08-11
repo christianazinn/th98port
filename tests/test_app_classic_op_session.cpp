@@ -134,6 +134,9 @@ struct FakeBackend final {
 	std::size_t config_commits = 0U;
 	std::size_t story_starts = 0U;
 	std::size_t story_finishes = 0U;
+	std::size_t demo_stage_starts = 0U;
+	std::size_t demo_main_starts = 0U;
+	std::size_t demo_main_finishes = 0U;
 	std::size_t stage_starts = 0U;
 	std::size_t main_starts = 0U;
 	std::size_t win_starts = 0U;
@@ -271,6 +274,30 @@ Result fake_call(void *context, Function function)
 		},
 		.finish_story = [](void *context) {
 			++static_cast<FakeBackend *>(context)->story_finishes;
+			return std::expected<void, ClassicOpSessionError>{};
+		},
+		.start_demo_stage = [](void *context) {
+			++static_cast<FakeBackend *>(context)->demo_stage_starts;
+			return std::expected<void, ClassicOpSessionError>{};
+		},
+		.advance_demo_stage = [](void *context, bool) {
+			return std::expected<ClassicOpSessionBackendTick,
+				ClassicOpSessionError>{
+				static_cast<FakeBackend *>(context)->ready_tick()
+			};
+		},
+		.start_demo_main = [](void *context) {
+			++static_cast<FakeBackend *>(context)->demo_main_starts;
+			return std::expected<void, ClassicOpSessionError>{};
+		},
+		.advance_demo_main = [](void *context, auto) {
+			auto tick = static_cast<FakeBackend *>(context)->ready_tick();
+			tick.process_advanced = true;
+			return std::expected<ClassicOpSessionBackendTick,
+				ClassicOpSessionError>{tick};
+		},
+		.finish_demo_main = [](void *context) {
+			++static_cast<FakeBackend *>(context)->demo_main_finishes;
 			return std::expected<void, ClassicOpSessionError>{};
 		},
 		.start_vs_stage = [](void *context) {
@@ -524,12 +551,25 @@ void test_terminal_routes_and_failures()
 	demo_backend->title_result.route = ClassicOpRoute::demo;
 	auto demo = make_session(demo_backend);
 	if(demo) {
-		const auto tick = demo->consume({});
+		auto tick = demo->consume({});
 		expect(
-			tick && tick->status == ClassicOpSessionStatus::external_route &&
-				tick->external_route == ClassicOpRoute::demo &&
-				demo_backend->config_commits == 1U,
-			"automatic Demo remains the sole typed external title route"
+			tick && tick->status == ClassicOpSessionStatus::running &&
+				tick->scene == ClassicOpSessionScene::demo_stage_splash &&
+				demo_backend->config_commits == 1U &&
+				demo_backend->demo_stage_starts == 1U,
+			"automatic Demo commits config and enters the owned MAINL splash"
+		);
+		tick = demo->consume({});
+		expect(
+			tick && tick->scene == ClassicOpSessionScene::demo_main &&
+				demo_backend->demo_main_starts == 1U,
+			"completed Demo splash enters the owned CPU-vs-CPU MAIN process"
+		);
+		tick = demo->consume({});
+		expect(
+			tick && tick->scene == ClassicOpSessionScene::title_menu &&
+				demo_backend->demo_main_finishes == 1U,
+			"terminal Demo route returns to a fresh OP title"
 		);
 	}
 
@@ -801,6 +841,46 @@ void test_surface_forwarding()
 	}
 	if(!viewer_returned || !session.compose_shown_surface(pixels)) {
 		std::cerr << "local HiScore viewer did not publish the fresh title\n";
+		return false;
+	}
+
+	// The fresh title must own the automatic attract route rather than expose
+	// it to the launcher. Let its exact idle counter expire, run the ordinary
+	// non-Story MAINL splash, and use one physical gameplay bit to request the
+	// source Demo exit.
+	bool demo_stage_seen = false;
+	bool demo_main_seen = false;
+	bool demo_returned = false;
+	for(std::size_t guard = 0U; guard < 900U; ++guard) {
+		while(session.take_audio_command()) {
+		}
+		ClassicOpSessionInput input{};
+		if(session.scene() == ClassicOpSessionScene::demo_main) {
+			input.main.p1 = 1U;
+		}
+		auto demo_advanced = session.consume(input);
+		if(!demo_advanced) {
+			std::cerr << "local automatic Demo route failed code="
+				<< static_cast<unsigned>(demo_advanced.error().code) << '\n';
+			return false;
+		}
+		demo_stage_seen = demo_stage_seen || demo_advanced->scene ==
+			ClassicOpSessionScene::demo_stage_splash;
+		demo_main_seen = demo_main_seen || demo_advanced->scene ==
+			ClassicOpSessionScene::demo_main;
+		if(demo_main_seen && demo_advanced->scene ==
+			ClassicOpSessionScene::title_menu) {
+			demo_returned = true;
+			break;
+		}
+	}
+	while(session.take_audio_command()) {
+	}
+	if(!demo_stage_seen || !demo_main_seen || !demo_returned ||
+		!session.compose_shown_surface(pixels)) {
+		std::cerr << "local automatic Demo did not complete owned OP-MAINL-MAIN-OP"
+			<< " stage=" << demo_stage_seen << " main=" << demo_main_seen
+			<< " returned=" << demo_returned << '\n';
 		return false;
 	}
 

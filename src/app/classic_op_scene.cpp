@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -923,6 +924,14 @@ void ClassicOpTitleMenuScene::select_demo_route() noexcept
 	resident_.paletted_character = demo_pairings[index];
 	resident_.resident_rand = demo_random[index];
 	resident_.last_score = {};
+	resident_.global_frame = 0U;
+	resident_.random_seed = std::bit_cast<std::uint32_t>(
+		resident_.resident_rand
+	);
+	resident_.runtime_snapshot.reset();
+	resident_.compact_runtime_snapshot.reset();
+	resident_.round_start_snapshot.reset();
+	resident_.practice_rules.reset();
 	demo_route_pending_ = true;
 	phase_frame_ = 0U;
 	phase_ = ClassicOpPhase::demo_black_out;

@@ -22,11 +22,12 @@ class MainProcessStaticContent;
 class MainStageHandoff;
 struct MainProcessStoryAccess;
 struct MainProcessClassicVsAccess;
+struct MainProcessDemoAccess;
 
-// One fresh, human P1-vs-P2 MAIN process. Story entry is source-private and
-// requires a completed MAINL handoff; demo/CPU and snapshot-backed entry remain
-// separate process policies because accepting them here would permit late
-// attachment to presentation-private source state.
+// One fresh, human P1-vs-P2 MAIN process. Story and automatic-Demo entry are
+// source-private and require completed MAINL handoffs; arbitrary CPU and
+// snapshot-backed entry remain separate process policies because accepting
+// them here would permit late attachment to presentation-private source state.
 struct MainDirectVsConfig {
 	MainPlayerSelection player_one{};
 	MainPlayerSelection player_two{
@@ -103,11 +104,10 @@ struct MainProcessError {
 };
 
 // Stable-address owner/coordinator for one complete MAIN process. The public
-// factory is the authenticated direct-VS entry; the source-private Classic
-// session factory supplies an already completed MAINL Raster handoff. Both
-// paths publish no partially initialized Raster/TRAM/presenter state. The
-// object intentionally exposes no mutable Game, Raster, Tram, palette, or
-// child presenter.
+// factory is the authenticated direct-VS entry; source-private Classic Story,
+// selected VS, and automatic-Demo factories supply an already completed MAINL
+// Raster handoff. All paths publish no partially initialized Raster/TRAM state
+// and expose no mutable Game, Raster, Tram, palette, or child presenter.
 class MainProcess final {
 public:
 	[[nodiscard]] static std::expected<
@@ -167,6 +167,7 @@ private:
 	friend struct MainProcessTestAccess;
 	friend struct MainProcessStoryAccess;
 	friend struct MainProcessClassicVsAccess;
+	friend struct MainProcessDemoAccess;
 	struct Impl;
 	explicit MainProcess(std::unique_ptr<Impl> impl) noexcept;
 	[[nodiscard]] static std::expected<
