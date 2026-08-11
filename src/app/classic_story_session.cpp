@@ -185,6 +185,7 @@ namespace {
 		return ClassicStorySessionScene::win;
 	case ClassicMainlScene::interstage_cutscene:
 	case ClassicMainlScene::ending:
+	case ClassicMainlScene::extra_ending:
 		return ClassicStorySessionScene::cutscene;
 	case ClassicMainlScene::staff_verdict:
 		return ClassicStorySessionScene::staff_verdict;
@@ -194,8 +195,6 @@ namespace {
 		return ClassicStorySessionScene::continue_menu;
 	case ClassicMainlScene::game_over:
 		return ClassicStorySessionScene::game_over;
-	case ClassicMainlScene::extra_ending:
-		return ClassicStorySessionScene::external_request;
 	case ClassicMainlScene::exit_to_operator:
 		return ClassicStorySessionScene::complete;
 	}
@@ -235,34 +234,14 @@ namespace {
 			.character = player->character,
 		};
 	}
-	return std::nullopt;
-}
-
-[[nodiscard]] ClassicStoryExternalKind external_kind(
-	const ClassicMainlStep &step
-) noexcept
-{
-	switch(step.scene) {
-	case ClassicMainlScene::interstage_cutscene:
-		return (step.cutscene == ClassicInterstageCutscene::chiyuri) ?
-			ClassicStoryExternalKind::interstage_chiyuri :
-			ClassicStoryExternalKind::interstage_yumemi;
-	case ClassicMainlScene::high_score_registration:
-		return ClassicStoryExternalKind::high_score_registration;
-	case ClassicMainlScene::ending:
-		return ClassicStoryExternalKind::ending;
-	case ClassicMainlScene::extra_ending:
-		return ClassicStoryExternalKind::extra_ending;
-	case ClassicMainlScene::stage_splash:
-	case ClassicMainlScene::start_main:
-	case ClassicMainlScene::win:
-	case ClassicMainlScene::continue_menu:
-	case ClassicMainlScene::game_over:
-	case ClassicMainlScene::staff_verdict:
-	case ClassicMainlScene::exit_to_operator:
-		break;
+	if(step.scene == ClassicMainlScene::extra_ending &&
+		step.cutscene == ClassicInterstageCutscene::none) {
+		return MainlCutsceneResourceRequest{
+			.kind = MainlCutsceneKind::extra_ending,
+			.character = player->character,
+		};
 	}
-	return ClassicStoryExternalKind::high_score_registration;
+	return std::nullopt;
 }
 
 std::expected<StepResult, MainProcessError> process_step(
@@ -648,7 +627,17 @@ struct ClassicStoryBackend final {
 			));
 		}
 		std::optional<present::Raster> initial{};
-		if(cutscene_handoff) {
+		if(registration_completion) {
+			if(request.kind != MainlCutsceneKind::extra_ending ||
+				registration_completion->next_screen_ !=
+					MainlRegistrationNextScreen::game_over ||
+				cutscene_handoff) {
+				return std::unexpected(session_error(
+					ClassicStorySessionErrorCode::backend_contract_failed
+				));
+			}
+			initial.emplace(registration_completion->raster_);
+		} else if(cutscene_handoff) {
 			initial.emplace(*cutscene_handoff);
 		} else if(process && driver &&
 			driver->status() == MainProcessDriverStatus::terminal) {
@@ -669,6 +658,7 @@ struct ClassicStoryBackend final {
 			return std::unexpected(cutscene_error(std::move(created.error())));
 		}
 		cutscene = std::move(*created);
+		registration_completion.reset();
 		cutscene_handoff.reset();
 		return {};
 	}
@@ -1289,8 +1279,6 @@ struct ClassicStorySession::Impl {
 	ClassicStorySessionScene scene = ClassicStorySessionScene::failed;
 	ClassicStorySessionStatus status = ClassicStorySessionStatus::running;
 	std::uint32_t source_sample_count = 0U;
-	std::uint64_t next_external_token = 1U;
-	std::optional<ClassicStoryExternalRequest> external{};
 	bool continue_pending = false;
 	std::optional<ClassicStorySessionError> failure{};
 
@@ -1389,7 +1377,8 @@ struct ClassicStorySession::Impl {
 				return {};
 			}
 			case ClassicMainlScene::interstage_cutscene:
-			case ClassicMainlScene::ending: {
+			case ClassicMainlScene::ending:
+			case ClassicMainlScene::extra_ending: {
 				const auto request = cutscene_request(step, plan.resident());
 				if(!request) {
 					return std::unexpected(session_error(
@@ -1431,19 +1420,6 @@ struct ClassicStorySession::Impl {
 				}
 				return {};
 			}
-			case ClassicMainlScene::extra_ending: {
-				auto request_resident = plan.resident();
-				request_resident.global_frame = source_sample_count;
-				external = ClassicStoryExternalRequest{
-					.token = next_external_token++,
-					.kind = external_kind(step),
-					.resident = std::move(request_resident),
-					.high_score_registration =
-						plan.high_score_registration(),
-				};
-				status = ClassicStorySessionStatus::waiting_for_external;
-				return {};
-			}
 			case ClassicMainlScene::exit_to_operator:
 				status = ClassicStorySessionStatus::complete;
 				return {};
@@ -1466,7 +1442,6 @@ struct ClassicStorySession::Impl {
 	{
 		plan = std::move(replacement);
 		cursor = 0U;
-		external.reset();
 		status = ClassicStorySessionStatus::running;
 		return activate();
 	}
@@ -1658,7 +1633,6 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 			impl_->operations.context, input.audio
 		);
 		break;
-	case ClassicStorySessionScene::external_request:
 	case ClassicStorySessionScene::complete:
 	case ClassicStorySessionScene::failed:
 		break;
@@ -1784,7 +1758,6 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 				advanced = impl_->advance_cursor();
 			}
 			break;
-		case ClassicStorySessionScene::external_request:
 		case ClassicStorySessionScene::complete:
 		case ClassicStorySessionScene::failed:
 			advanced = std::unexpected(session_error(
@@ -1808,28 +1781,6 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 		.round_started = tick->round_started,
 		.step_result = tick->step_result,
 	};
-}
-
-std::expected<void, ClassicStorySessionError>
-ClassicStorySession::complete_external(std::uint64_t token)
-{
-	if(impl_->failure) {
-		return std::unexpected(*impl_->failure);
-	}
-	if(impl_->status != ClassicStorySessionStatus::waiting_for_external ||
-		!impl_->external || impl_->external->token != token) {
-		return std::unexpected(session_error(
-			ClassicStorySessionErrorCode::invalid_external_token
-		));
-	}
-	impl_->external.reset();
-	impl_->status = ClassicStorySessionStatus::running;
-	auto advanced = impl_->advance_cursor();
-	if(!advanced) {
-		impl_->fail(std::move(advanced.error()));
-		return std::unexpected(*impl_->failure);
-	}
-	return {};
 }
 
 std::optional<ClassicAudioCommand>
@@ -1864,12 +1815,6 @@ ClassicStorySessionStatus ClassicStorySession::status() const noexcept
 std::uint32_t ClassicStorySession::source_sample_count() const noexcept
 {
 	return impl_->source_sample_count;
-}
-
-const std::optional<ClassicStoryExternalRequest> &
-ClassicStorySession::external_request() const noexcept
-{
-	return impl_->external;
 }
 
 } // namespace th03::app

@@ -32,30 +32,12 @@ enum class ClassicStorySessionScene : std::uint8_t {
 	high_score_registration,
 	continue_menu,
 	game_over,
-	external_request,
 	complete,
 	failed,
 };
 
-enum class ClassicStoryExternalKind : std::uint8_t {
-	interstage_chiyuri,
-	interstage_yumemi,
-	high_score_registration,
-	ending,
-	extra_ending,
-};
-
-struct ClassicStoryExternalRequest final {
-	std::uint64_t token = 0U;
-	ClassicStoryExternalKind kind =
-		ClassicStoryExternalKind::high_score_registration;
-	GameInit resident{};
-	std::optional<GameInit> high_score_registration{};
-};
-
 enum class ClassicStorySessionStatus : std::uint8_t {
 	running,
-	waiting_for_external,
 	complete,
 	quit_requested,
 	failed,
@@ -78,7 +60,6 @@ enum class ClassicStorySessionErrorCode : std::uint8_t {
 	plan_failed,
 	backend_contract_failed,
 	session_not_running,
-	invalid_external_token,
 	surface_unavailable,
 	surface_failed,
 };
@@ -256,8 +237,6 @@ public:
 		ClassicStorySessionTick,
 		ClassicStorySessionError
 	> consume(const ClassicStorySessionInput &input);
-	[[nodiscard]] std::expected<void, ClassicStorySessionError>
-	complete_external(std::uint64_t token);
 	[[nodiscard]] std::optional<ClassicAudioCommand>
 	take_audio_command();
 	[[nodiscard]] std::expected<
@@ -273,9 +252,6 @@ public:
 	[[nodiscard]] ClassicStorySessionScene scene() const noexcept;
 	[[nodiscard]] ClassicStorySessionStatus status() const noexcept;
 	[[nodiscard]] std::uint32_t source_sample_count() const noexcept;
-	[[nodiscard]] const std::optional<ClassicStoryExternalRequest> &
-	external_request() const noexcept;
-
 private:
 	friend struct ClassicStorySessionTestAccess;
 	struct Impl;

@@ -23,7 +23,6 @@ using th03::app::ClassicMainlContinueInput;
 using th03::app::MainlCutsceneKind;
 using th03::app::MainlCutsceneResourceRequest;
 using th03::app::ClassicStoryBackendTick;
-using th03::app::ClassicStoryExternalKind;
 using th03::app::ClassicStorySession;
 using th03::app::ClassicStorySessionBackendOperations;
 using th03::app::ClassicStorySessionError;
@@ -168,7 +167,6 @@ struct FakeBackend final {
 	std::size_t main_advance_count = 0U;
 	bool cutscene_active = false;
 	std::vector<MainlCutsceneKind> cutscene_history{};
-	std::vector<ClassicStoryExternalKind> external_history{};
 	std::array<th03::present::ComposedPixel,
 		th03::present::graphics_page_pixels> pixels{};
 
@@ -434,21 +432,6 @@ std::unique_ptr<ClassicStorySession> create_session(
 	return created ? std::move(*created) : nullptr;
 }
 
-void complete_external(ClassicStorySession &session, FakeBackend &backend)
-{
-	const auto request = session.external_request();
-	expect(request.has_value(), "external scene publishes a typed request");
-	if(!request) {
-		return;
-	}
-	backend.external_history.push_back(request->kind);
-	expect(!session.complete_external(request->token + 1U) &&
-		session.status() == ClassicStorySessionStatus::waiting_for_external,
-		"foreign external token cannot consume the pending capability");
-	expect(session.complete_external(request->token).has_value(),
-		"matching external capability resumes Story");
-}
-
 void test_complete_nine_stage_route()
 {
 	auto backend = std::make_shared<FakeBackend>();
@@ -459,11 +442,6 @@ void test_complete_nine_stage_route()
 	std::size_t guard = 0U;
 	while(session->status() != ClassicStorySessionStatus::complete &&
 		guard++ < 100U) {
-		if(session->status() ==
-			ClassicStorySessionStatus::waiting_for_external) {
-			complete_external(*session, *backend);
-			continue;
-		}
 		const auto advanced = session->consume({.dismiss_pressed = true});
 		expect(advanced.has_value(), "complete Story route advances");
 		if(!advanced) {
@@ -473,27 +451,21 @@ void test_complete_nine_stage_route()
 	expect(session->status() == ClassicStorySessionStatus::complete &&
 		backend->stage_count == 9U && backend->main_count == 9U &&
 		backend->win_count == 7U && backend->preload_count == 6U &&
-		backend->cutscene_count == 3U && backend->staff_count == 1U &&
+		backend->cutscene_count == 4U && backend->staff_count == 1U &&
 		backend->registration_count == 1U,
 		"nine-stage route preserves win/preload/cutscene boundaries");
 	expect(session->source_sample_count() ==
-		backend->process_start.global_frame + 4U,
-		"source input coordinate includes every MAINL input sample, including registration dismissal");
+		backend->process_start.global_frame + 5U,
+		"source input coordinate includes every owned MAINL scene sample");
 	const std::array expected_cutscenes{
 		MainlCutsceneKind::interstage_chiyuri,
 		MainlCutsceneKind::interstage_yumemi,
 		MainlCutsceneKind::ending,
+		MainlCutsceneKind::extra_ending,
 	};
 	expect(backend->cutscene_history == std::vector<MainlCutsceneKind>{
 		expected_cutscenes.begin(), expected_cutscenes.end()
-	}, "interstage and primary ending scenes run inside the retained session");
-	const std::array expected_external{
-		ClassicStoryExternalKind::extra_ending,
-	};
-	expect(backend->external_history ==
-		std::vector<ClassicStoryExternalKind>{
-			expected_external.begin(), expected_external.end()
-	}, "only the unfinished extra ending remains external");
+	}, "all interstage and ending scenes run inside the retained session");
 	expect(!session->consume({}) &&
 		session->status() == ClassicStorySessionStatus::complete,
 		"completed Story rejects further source samples");
@@ -564,7 +536,7 @@ void test_continue_accept_decline_and_zero_credit()
 		"zero-credit Continue returns directly to Game Over without second core transition");
 }
 
-void test_external_token_quit_and_backend_failure()
+void test_quit_and_backend_failure()
 {
 	auto backend = std::make_shared<FakeBackend>();
 	auto session = create_session(story_config(), backend);
@@ -723,7 +695,7 @@ int main(int argc, char **argv)
 {
 	test_complete_nine_stage_route();
 	test_continue_accept_decline_and_zero_credit();
-	test_external_token_quit_and_backend_failure();
+	test_quit_and_backend_failure();
 	if(argc == 4) {
 		expect(run_local_original_gate(argv[1], argv[2], argv[3]),
 			"local original assets construct Stage, retained MAIN, and surface");
