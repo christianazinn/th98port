@@ -285,6 +285,10 @@ private:
 };
 
 struct ClassicStorySessionTestAccess final {
+	[[nodiscard]] static CoreInput story_main_input(
+		CoreInput input,
+		InputContext context
+	) noexcept;
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicStorySession>,
 		ClassicStorySessionError

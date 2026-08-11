@@ -626,20 +626,17 @@ bool ClassicOpMusicRoomScene::snapshot_comment_blue() noexcept
 
 bool ClassicOpMusicRoomScene::restore_blue_plane() noexcept
 {
-	present::PlanarSource source{};
-	source.planes = {
-		no_polygon_blue_, zero_plane_, zero_plane_, zero_plane_,
-	};
-	source.width = present::graphics_width;
-	source.height = present::graphics_height;
-	source.stride = plane_stride;
-	source.row_order = present::PackedRowOrder::top_to_bottom;
-	return raster_.clear_plane(present::PlanarPlane::blue) &&
-		raster_.blit_planar(
-			source,
-			{0, 0},
-			present::PlanarWriteMode::or_planes
-		);
+	return raster_.write_plane(
+		present::PlanarPlane::blue,
+		{
+			.bits = no_polygon_blue_,
+			.width = present::graphics_width,
+			.height = present::graphics_height,
+			.stride = plane_stride,
+			.row_order = present::PackedRowOrder::top_to_bottom,
+		},
+		{0, 0}
+	);
 }
 
 void ClassicOpMusicRoomScene::initialize_polygon(
@@ -1042,17 +1039,17 @@ std::uint8_t ClassicOpMusicRoomScene::selection() const noexcept
 
 const ClassicOpMusicRoomCarry &ClassicOpMusicRoomScene::carry() const noexcept
 {
-	return carry_;
+	return completion_ ? completion_->carry() : carry_;
 }
 
 const present::Raster &ClassicOpMusicRoomScene::raster() const noexcept
 {
-	return raster_;
+	return completion_ ? completion_->raster() : raster_;
 }
 
 const present::Tram &ClassicOpMusicRoomScene::tram() const noexcept
 {
-	return tram_;
+	return completion_ ? completion_->tram() : tram_;
 }
 
 std::expected<

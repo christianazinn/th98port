@@ -416,6 +416,13 @@ void test_track_audio_exit_and_completion()
 			!finished->page_flipped,
 		"empty exit sample clears and hands off page zero without another VSync"
 	);
+	expect(
+		scene->raster().graphics(Page::zero).size() ==
+			th03::present::graphics_page_pixels &&
+			scene->raster().shown_page() == Page::zero &&
+			scene->tram().cells().size() == 80U * 25U,
+		"ready scene accessors retain the completion surface until handoff"
+	);
 
 	auto completion = scene->take_completion();
 	expect(

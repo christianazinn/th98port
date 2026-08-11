@@ -200,6 +200,41 @@ namespace {
 	}
 }
 
+[[nodiscard]] CoreInput normalize_vs_cpu_main_input(
+	const GameInit &resident,
+	CoreInput input,
+	InputContext context
+) noexcept
+{
+	if(context != InputContext::gameplay) {
+		return input;
+	}
+	switch(resident.game_mode) {
+	case game_mode::vs_1p_cpu:
+		// input_mode_1p_vs_cpu(): merge input_sp into the human side and
+		// clear the CPU side immediately before both player updates.
+		input.p1 = static_cast<std::uint16_t>(input.p1 | input.system);
+		input.p2 = 0U;
+		input.charge_mask = static_cast<std::uint8_t>(
+			input.charge_mask & 0x01U
+		);
+		break;
+	case game_mode::vs_cpu_cpu:
+		// input_mode_cpu_vs_cpu(): either keyboard Cancel or OK becomes the
+		// single Cancel exit word; all other input_sp bits remain raw.
+		if((input.system & 0x3000U) != 0U) {
+			input.system = 0x1000U;
+		}
+		input.p1 = 0U;
+		input.p2 = 0U;
+		input.charge_mask = 0U;
+		break;
+	default:
+		break;
+	}
+	return input;
+}
+
 [[nodiscard]] MainlStageResourceRequest stage_request(
 	const GameInit &resident
 ) noexcept
@@ -1460,7 +1495,9 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
-		auto tick = vs_driver->consume(input);
+		auto tick = vs_driver->consume(normalize_vs_cpu_main_input(
+			current_main_resident, input, vs_driver->input_context()
+		));
 		if(!tick) {
 			if(tick.error().process_error) {
 				return std::unexpected(main_error(
@@ -2264,6 +2301,15 @@ ClassicOpSessionScene ClassicOpSession::scene() const noexcept
 ClassicOpSessionStatus ClassicOpSession::status() const noexcept
 {
 	return impl_->status;
+}
+
+CoreInput ClassicOpSessionTestAccess::vs_cpu_main_input(
+	const GameInit &resident,
+	CoreInput input,
+	InputContext context
+) noexcept
+{
+	return normalize_vs_cpu_main_input(resident, input, context);
 }
 
 std::optional<ClassicOpRoute> ClassicOpSession::external_route() const noexcept

@@ -21,6 +21,14 @@ struct RationalTickRate {
 	std::uint32_t seconds = 0;
 };
 
+enum class TickInputCatchUpPolicy : std::uint8_t {
+	// Deterministic, replay, and headless callers observe every deadline.
+	preserve_all,
+	// Interactive PC-98-style frame waits lose elapsed retraces. Rebase one
+	// late sample to the current host time instead of repaying a backlog.
+	discard_missed_deadlines,
+};
+
 inline constexpr std::size_t physical_input_source_count = 16U;
 inline constexpr std::size_t pending_physical_event_capacity = 256U;
 
@@ -58,6 +66,7 @@ struct PhysicalInputEvent {
 
 enum class TickInputError : std::uint8_t {
 	invalid_rate,
+	invalid_catch_up_policy,
 	// Either an injected event timestamp or a pop_due() clock observation
 	// preceded the last accepted timestamp in its respective sequence.
 	timestamp_regressed,
@@ -87,7 +96,9 @@ public:
 	[[nodiscard]] static std::expected<TickInputScheduler, TickInputError>
 	create(
 		RationalTickRate rate,
-		TickTimestampNs first_deadline_ns
+		TickTimestampNs first_deadline_ns,
+		TickInputCatchUpPolicy catch_up_policy =
+			TickInputCatchUpPolicy::preserve_all
 	) noexcept;
 
 	// Timestamps may be equal and then retain injection order. If the fixed
@@ -127,7 +138,8 @@ private:
 	TickInputScheduler(
 		RationalTickRate rate,
 		TickTimestampNs first_deadline_ns,
-		std::uint64_t period_numerator_ns
+		std::uint64_t period_numerator_ns,
+		TickInputCatchUpPolicy catch_up_policy
 	) noexcept;
 
 	void apply_event(const PhysicalInputEvent &event) noexcept;
@@ -136,6 +148,8 @@ private:
 
 	RationalTickRate rate_{};
 	std::uint64_t period_numerator_ns_ = 0;
+	TickInputCatchUpPolicy catch_up_policy_ =
+		TickInputCatchUpPolicy::preserve_all;
 	// Initialized to ticks-1 so each integer timestamp is the ceiling of the
 	// exact rational boundary rather than an early floor approximation.
 	std::uint64_t fractional_accumulator_ = 0;

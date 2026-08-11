@@ -287,6 +287,34 @@ bool Raster::clear_plane(PlanarPlane plane) noexcept {
 	return true;
 }
 
+bool Raster::set_plane(Rect rect, PlanarPlane plane) noexcept {
+	if(!valid_plane(plane)) {
+		return false;
+	}
+	const auto region = clipped_rect(rect);
+	if(region.empty()) {
+		return true;
+	}
+	std::size_t access = 0U;
+	if(!page_index(access_page_, access)) {
+		return false;
+	}
+	const auto plane_mask = static_cast<Index4>(
+		1U << static_cast<std::uint8_t>(plane)
+	);
+	for(auto y = region.y_begin; y < region.y_end; ++y) {
+		const auto first = page_offset(region.x_begin, y);
+		const auto last = page_offset(region.x_end, y);
+		for(auto pixel = pages_[access].begin() +
+			static_cast<std::ptrdiff_t>(first);
+			pixel != pages_[access].begin() + static_cast<std::ptrdiff_t>(last);
+			++pixel) {
+			*pixel = static_cast<Index4>(*pixel | plane_mask);
+		}
+	}
+	return true;
+}
+
 bool Raster::plot(Point point, Index4 color) noexcept {
 	if(!valid_index(color) || (point.x < 0) || (point.y < 0) ||
 		(point.x >= graphics_width) || (point.y >= graphics_height)) {

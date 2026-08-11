@@ -242,6 +242,50 @@ bool Raster::blit_planar(
 	return true;
 }
 
+bool Raster::write_plane(
+	PlanarPlane plane,
+	BitSource source,
+	Point destination
+) noexcept {
+	std::size_t plane_id = 0U;
+	if(!valid_source(source) || !plane_index(plane, plane_id)) {
+		return false;
+	}
+	std::size_t access = 0U;
+	if(!page_index(access_page_, access)) {
+		return false;
+	}
+
+	const auto region = clipped_mapping(
+		source.width, source.height, destination
+	);
+	const auto plane_mask = static_cast<Index4>(1U << plane_id);
+	const auto keep_mask = static_cast<Index4>(0x0FU ^ plane_mask);
+	for(auto y = region.y_begin; y < region.y_end; ++y) {
+		const auto source_y = static_cast<std::size_t>(y);
+		const auto destination_y = static_cast<std::int64_t>(destination.y) + y;
+		for(auto x = region.x_begin; x < region.x_end; ++x) {
+			const auto source_x = static_cast<std::size_t>(x);
+			const auto destination_x =
+				static_cast<std::int64_t>(destination.x) + x;
+			auto &destination_color =
+				pages_[access][page_offset(destination_x, destination_y)];
+			destination_color = static_cast<Index4>(
+				(destination_color & keep_mask) |
+				(source_bit(
+					source.bits,
+					source.stride,
+					source_x,
+					source_y,
+					source.height,
+					source.row_order
+				) ? plane_mask : 0U)
+			);
+		}
+	}
+	return true;
+}
+
 bool Raster::blit_planar_masked(
 	PlanarSource source,
 	BitSource alpha,

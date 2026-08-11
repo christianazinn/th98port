@@ -15,6 +15,7 @@ using th03::app::PhysicalInputEventKind;
 using th03::app::PhysicalInputSourceState;
 using th03::app::RationalTickRate;
 using th03::app::TickInputError;
+using th03::app::TickInputCatchUpPolicy;
 using th03::app::TickInputScheduler;
 
 std::size_t checks = 0U;
@@ -107,6 +108,16 @@ void test_rate_validation_and_exact_rational_deadlines()
 	expect(
 		static_cast<bool>(TickInputScheduler::create({1'000'000'000U, 1U}, 0U)),
 		"one logical tick per nanosecond remains representable"
+	);
+	const auto invalid_policy = TickInputScheduler::create(
+		{1U, 1U},
+		0U,
+		static_cast<TickInputCatchUpPolicy>(99U)
+	);
+	expect(
+		!invalid_policy && invalid_policy.error() ==
+			TickInputError::invalid_catch_up_policy,
+		"unknown catch-up policies are rejected"
 	);
 
 	auto created = TickInputScheduler::create({3U, 2U}, 100U);
@@ -225,6 +236,49 @@ void test_overdue_ticks_latch_each_boundary_independently()
 	expect(
 		scheduler.pending_event_count() == 0U,
 		"all history through the last returned deadline is consumed"
+	);
+}
+
+void test_live_policy_discards_missed_deadlines()
+{
+	auto created = TickInputScheduler::create(
+		{100'000'000U, 1U},
+		10U,
+		TickInputCatchUpPolicy::discard_missed_deadlines
+	);
+	expect(static_cast<bool>(created), "live catch-up scheduler is created");
+	if(!created) {
+		return;
+	}
+	auto scheduler = std::move(*created);
+	expect_push(scheduler, event(15U,
+		PhysicalInputEventKind::source_state_changed, 0U, state(0x0008U)),
+		"late live history retains its press");
+	expect_push(scheduler, event(35U,
+		PhysicalInputEventKind::source_state_changed, 0U, state(0x0020U)),
+		"late live history retains its newest state");
+	const auto rebased = expect_tick(
+		scheduler, 50U, "late live observation emits one current sample"
+	);
+	expect(
+		rebased.tick_index == 0U && rebased.deadline_ns == 50U &&
+			rebased.input.p1 == 0x0020U &&
+			scheduler.next_deadline_ns() == 60U &&
+			scheduler.pending_event_count() == 0U,
+		"live resync collapses only elapsed deadlines, not input history"
+	);
+	const auto no_backlog = scheduler.pop_due(50U);
+	expect(
+		no_backlog && !no_backlog->has_value(),
+		"live resync leaves no overdue repayment burst"
+	);
+	const auto on_time = expect_tick(
+		scheduler, 60U, "live cadence resumes at the next rational period"
+	);
+	expect(
+		on_time.tick_index == 1U && on_time.deadline_ns == 60U &&
+			on_time.input.p1 == 0x0020U,
+		"live resync preserves logical indices and latched input"
 	);
 }
 
@@ -655,6 +709,7 @@ int main()
 {
 	test_rate_validation_and_exact_rational_deadlines();
 	test_overdue_ticks_latch_each_boundary_independently();
+	test_live_policy_discards_missed_deadlines();
 	test_same_source_duplicate_binding_snapshots();
 	test_input_domain_and_equal_timestamp_order();
 	test_source_device_and_focus_release();

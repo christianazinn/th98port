@@ -86,6 +86,9 @@ public:
 	// Clears one complete hardware plane on the selected access page while
 	// preserving the other three planes.
 	[[nodiscard]] bool clear_plane(PlanarPlane plane) noexcept;
+	// Sets one hardware-plane bit throughout the clipped rectangle while
+	// preserving the other three planes.
+	[[nodiscard]] bool set_plane(Rect rect, PlanarPlane plane) noexcept;
 	[[nodiscard]] bool plot(Point point, Index4 color) noexcept;
 	[[nodiscard]] bool blit(IndexedSource source, Point destination) noexcept;
 	[[nodiscard]] bool blit_transparent(
@@ -108,6 +111,14 @@ public:
 		PlanarSource source,
 		Point destination,
 		PlanarWriteMode mode = PlanarWriteMode::replace
+	) noexcept;
+	// Replaces one destination plane from packed 1bpp input while preserving
+	// the other three planes. This is the chunky native analogue of a PC-98
+	// single-plane VRAM surface write.
+	[[nodiscard]] bool write_plane(
+		PlanarPlane plane,
+		BitSource source,
+		Point destination
 	) noexcept;
 	// A 1 alpha bit replaces all four destination plane bits; a 0 preserves
 	// the destination. This is the source SPRITE16 OVERLAP_CLEAR behavior.

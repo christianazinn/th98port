@@ -122,8 +122,14 @@ namespace {
 	return result;
 }
 
-[[nodiscard]] CoreInput story_main_input(CoreInput input) noexcept
+[[nodiscard]] CoreInput normalize_story_main_input(
+	CoreInput input,
+	InputContext context
+) noexcept
 {
+	if(context != InputContext::gameplay) {
+		return input;
+	}
 	// input_mode_1p_vs_cpu() merges the source-global keyboard word into P1
 	// after sensing the multiplayer P1 word, then clears P2. Keep input_sp
 	// separately available for pause handling at the same gameplay boundary.
@@ -484,7 +490,9 @@ struct ClassicStoryBackend final {
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
 		}
-		auto advanced = driver->consume(input);
+		auto advanced = driver->consume(normalize_story_main_input(
+			input, driver->input_context()
+		));
 		if(!advanced) {
 			if(advanced.error().process_error) {
 				return std::unexpected(main_error(
@@ -1647,7 +1655,7 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 		break;
 	case ClassicStorySessionScene::main:
 		tick = impl_->operations.advance_main(
-			impl_->operations.context, story_main_input(input.main)
+			impl_->operations.context, input.main
 		);
 		break;
 	case ClassicStorySessionScene::win:
@@ -1857,6 +1865,14 @@ ClassicStorySessionScene ClassicStorySession::scene() const noexcept
 ClassicStorySessionStatus ClassicStorySession::status() const noexcept
 {
 	return impl_->status;
+}
+
+CoreInput ClassicStorySessionTestAccess::story_main_input(
+	CoreInput input,
+	InputContext context
+) noexcept
+{
+	return normalize_story_main_input(input, context);
 }
 
 std::uint32_t ClassicStorySession::source_sample_count() const noexcept

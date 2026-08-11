@@ -268,7 +268,6 @@ private:
 	present::Raster raster_{};
 	present::Tram tram_{};
 	std::array<std::uint8_t, 32000U> no_polygon_blue_{};
-	std::array<std::uint8_t, 32000U> zero_plane_{};
 	std::array<ClassicAudioCommand, 3U> audio_commands_{};
 	std::size_t audio_head_ = 0U;
 	std::size_t audio_count_ = 0U;

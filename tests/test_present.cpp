@@ -515,8 +515,59 @@ void test_planar_write_modes() {
 		"invalid complete-plane clear is atomic"
 	);
 
-	const auto before_bad_alpha = raster.display_state_hash();
+	expect(raster.clear({8, 34, 8U, 2U}, 10U), "seed single-plane write");
+	const std::array<std::uint8_t, 2U> replacement_blue{0xA5U, 0x3CU};
+	const BitSource replacement{
+		replacement_blue,
+		8U,
+		2U,
+		1U,
+		PackedRowOrder::top_to_bottom,
+	};
+	expect(
+		raster.write_plane(PlanarPlane::blue, replacement, {8, 34}),
+		"single-plane replacement succeeds"
+	);
+	for(std::int32_t x = 0; x < 8; ++x) {
+		const auto mask = static_cast<std::uint8_t>(0x80U >> x);
+		expect_pixel(
+			raster,
+			Page::zero,
+			{x + 8, 34},
+			static_cast<Index4>((replacement_blue[0] & mask) ? 11U : 10U),
+			"single-plane replacement preserves R/G/E"
+		);
+	}
+	expect(
+		raster.set_plane({9, 35, 3U, 1U}, PlanarPlane::blue),
+		"clipped plane span set succeeds"
+	);
+	for(std::int32_t x = 8; x < 16; ++x) {
+		const bool forced = x >= 9 && x < 12;
+		const auto mask = static_cast<std::uint8_t>(0x80U >> (x - 8));
+		expect_pixel(
+			raster,
+			Page::zero,
+			{x, 35},
+			static_cast<Index4>(
+				(forced || ((replacement_blue[1] & mask) != 0U)) ? 11U : 10U
+			),
+			"plane span sets only the selected bit"
+		);
+	}
+	const auto before_invalid_write = raster.display_state_hash();
 	const BitSource short_alpha{{}, 8U, 1U, 1U};
+	expect(
+		!raster.write_plane(PlanarPlane::blue, short_alpha, {0, 0}) &&
+			!raster.set_plane({0, 0, 1U, 1U}, static_cast<PlanarPlane>(99U)),
+		"invalid single-plane writes are rejected"
+	);
+	expect(
+		raster.display_state_hash() == before_invalid_write,
+		"invalid single-plane writes are atomic"
+	);
+
+	const auto before_bad_alpha = raster.display_state_hash();
 	expect(
 		!raster.blit_planar_masked(source, short_alpha, {0, 31}),
 		"short alpha plane rejected"

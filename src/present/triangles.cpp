@@ -228,20 +228,19 @@ void advance_linework(Linework &line) noexcept
 		return true;
 	}
 
-	for(auto relative_x = left; relative_x <= right; ++relative_x) {
-		const Point point{
-			add_word(clip.left, relative_x),
-			add_word(clip.top, relative_y),
-		};
-		const auto previous = raster.pixel(raster.access_page(), point);
-		if(!previous || !raster.plot(
-			point,
-			static_cast<Index4>(*previous | 0x01U)
-		)) {
-			return false;
-		}
-	}
-	return true;
+	const auto absolute_left = add_word(clip.left, left);
+	const auto absolute_y = add_word(clip.top, relative_y);
+	return raster.set_plane(
+		{
+			absolute_left,
+			absolute_y,
+			static_cast<std::uint16_t>(
+				static_cast<std::uint16_t>(right - left) + 1U
+			),
+			1U,
+		},
+		PlanarPlane::blue
+	);
 }
 
 [[nodiscard]] bool draw_trapezoid(

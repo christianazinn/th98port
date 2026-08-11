@@ -380,6 +380,72 @@ Result fake_call(void *context, Function function)
 	return created ? std::move(*created) : nullptr;
 }
 
+void test_vs_cpu_input_modes()
+{
+	const th03::CoreInput physical{
+		.p1 = 0x0104U,
+		.p2 = 0x0208U,
+		.system = 0x6032U,
+		.charge_mask = 0x03U,
+	};
+	th03::GameInit resident{};
+	resident.game_mode = th03::game_mode::vs_1p_cpu;
+	resident.is_cpu = {0U, 1U};
+	const auto one_player = ClassicOpSessionTestAccess::vs_cpu_main_input(
+		resident, physical, th03::InputContext::gameplay
+	);
+	expect(one_player.p1 == 0x6136U && one_player.p2 == 0U &&
+		one_player.system == physical.system &&
+		one_player.charge_mask == 0x01U,
+		"VS 1P-vs-CPU merges input_sp into P1 and clears the CPU side");
+
+	resident.game_mode = th03::game_mode::vs_cpu_cpu;
+	resident.is_cpu = {1U, 1U};
+	const auto cpu_exit = ClassicOpSessionTestAccess::vs_cpu_main_input(
+		resident, physical, th03::InputContext::gameplay
+	);
+	expect(cpu_exit.p1 == 0U && cpu_exit.p2 == 0U &&
+		cpu_exit.system == 0x1000U && cpu_exit.charge_mask == 0U,
+		"VS CPU-vs-CPU folds OK into Cancel and clears both player words");
+	auto passive = physical;
+	passive.system = 0x4005U;
+	const auto cpu_passive = ClassicOpSessionTestAccess::vs_cpu_main_input(
+		resident, passive, th03::InputContext::gameplay
+	);
+	expect(cpu_passive.system == passive.system && cpu_passive.p1 == 0U &&
+		cpu_passive.p2 == 0U && cpu_passive.charge_mask == 0U,
+		"VS CPU-vs-CPU retains non-exit input_sp bits while clearing players");
+
+	resident.game_mode = th03::game_mode::vs_1p_2p;
+	resident.is_cpu = {0U, 0U};
+	for(const auto context : {
+		th03::InputContext::gameplay,
+		th03::InputContext::interstitial,
+		th03::InputContext::pause,
+	}) {
+		const auto raw = ClassicOpSessionTestAccess::vs_cpu_main_input(
+			resident, physical, context
+		);
+		expect(raw.p1 == physical.p1 && raw.p2 == physical.p2 &&
+			raw.system == physical.system &&
+			raw.charge_mask == physical.charge_mask,
+			"two-human and blocking samples remain outside CPU mode projection");
+	}
+	resident.game_mode = th03::game_mode::vs_1p_cpu;
+	for(const auto context : {
+		th03::InputContext::interstitial,
+		th03::InputContext::pause,
+	}) {
+		const auto raw = ClassicOpSessionTestAccess::vs_cpu_main_input(
+			resident, physical, context
+		);
+		expect(raw.p1 == physical.p1 && raw.p2 == physical.p2 &&
+			raw.system == physical.system &&
+			raw.charge_mask == physical.charge_mask,
+			"VS warning and pause samples retain raw source words");
+	}
+}
+
 void test_retained_children_and_audio_barrier()
 {
 	auto backend = std::make_shared<FakeBackend>();
@@ -1001,6 +1067,7 @@ void test_surface_forwarding()
 
 int main(int argc, char **argv)
 {
+	test_vs_cpu_input_modes();
 	test_retained_children_and_audio_barrier();
 	test_story_and_selection_cancel();
 	test_vs_routes();

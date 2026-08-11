@@ -42,21 +42,28 @@ constexpr bool event_uses_state(PhysicalInputEventKind kind) noexcept
 TickInputScheduler::TickInputScheduler(
 	RationalTickRate rate,
 	TickTimestampNs first_deadline_ns,
-	std::uint64_t period_numerator_ns
+	std::uint64_t period_numerator_ns,
+	TickInputCatchUpPolicy catch_up_policy
 ) noexcept :
 	rate_(rate),
 	period_numerator_ns_(period_numerator_ns),
+	catch_up_policy_(catch_up_policy),
 	fractional_accumulator_(static_cast<std::uint64_t>(rate.ticks) - 1U),
 	next_deadline_ns_(first_deadline_ns)
 {}
 
 std::expected<TickInputScheduler, TickInputError> TickInputScheduler::create(
 	RationalTickRate rate,
-	TickTimestampNs first_deadline_ns
+	TickTimestampNs first_deadline_ns,
+	TickInputCatchUpPolicy catch_up_policy
 ) noexcept
 {
 	if(rate.ticks == 0U || rate.seconds == 0U) {
 		return std::unexpected(TickInputError::invalid_rate);
+	}
+	if(catch_up_policy != TickInputCatchUpPolicy::preserve_all &&
+		catch_up_policy != TickInputCatchUpPolicy::discard_missed_deadlines) {
+		return std::unexpected(TickInputError::invalid_catch_up_policy);
 	}
 	const auto period_numerator_ns =
 		static_cast<std::uint64_t>(rate.seconds) * nanoseconds_per_second;
@@ -64,7 +71,12 @@ std::expected<TickInputScheduler, TickInputError> TickInputScheduler::create(
 	if(period_numerator_ns < static_cast<std::uint64_t>(rate.ticks)) {
 		return std::unexpected(TickInputError::invalid_rate);
 	}
-	return TickInputScheduler(rate, first_deadline_ns, period_numerator_ns);
+	return TickInputScheduler(
+		rate,
+		first_deadline_ns,
+		period_numerator_ns,
+		catch_up_policy
+	);
 }
 
 std::expected<void, TickInputError> TickInputScheduler::push_event(
@@ -148,6 +160,17 @@ TickInputScheduler::pop_due(TickTimestampNs now_ns) noexcept
 	last_observed_now_ = now_ns;
 	if(!deadline_valid_) {
 		return std::unexpected(TickInputError::deadline_overflow);
+	}
+	if(catch_up_policy_ ==
+			TickInputCatchUpPolicy::discard_missed_deadlines &&
+		now_ns > next_deadline_ns_) {
+		// frame_delay(1) cannot repay retraces that elapsed while a PC-98 frame
+		// was being drawn. Keep one current sample and begin the next rational
+		// period from this observation. Logical tick indices count updates that
+		// actually ran, not discarded wall-clock deadline positions.
+		next_deadline_ns_ = now_ns;
+		fractional_accumulator_ =
+			static_cast<std::uint64_t>(rate_.ticks) - 1U;
 	}
 	if(now_ns < next_deadline_ns_) {
 		return std::optional<LogicalTickInput>{};

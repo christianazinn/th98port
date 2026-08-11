@@ -268,6 +268,11 @@ private:
 };
 
 struct ClassicOpSessionTestAccess final {
+	[[nodiscard]] static CoreInput vs_cpu_main_input(
+		const GameInit &resident,
+		CoreInput input,
+		InputContext context
+	) noexcept;
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpSession>,
 		ClassicOpSessionError

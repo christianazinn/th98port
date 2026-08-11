@@ -165,7 +165,6 @@ struct FakeBackend final {
 	std::size_t resolve_count = 0U;
 	std::size_t game_over_count = 0U;
 	std::size_t main_advance_count = 0U;
-	th03::CoreInput last_main_input{};
 	bool cutscene_active = false;
 	std::vector<MainlCutsceneKind> cutscene_history{};
 	std::array<th03::present::ComposedPixel,
@@ -231,10 +230,9 @@ ClassicStorySessionBackendOperations operations(FakeBackend &fake)
 			++backend.main_count;
 			return std::expected<void, ClassicStorySessionError>{};
 		},
-		.advance_main = [](void *context, th03::CoreInput input) {
+		.advance_main = [](void *context, th03::CoreInput) {
 			auto &backend = *static_cast<FakeBackend *>(context);
 			++backend.main_advance_count;
-			backend.last_main_input = input;
 			return std::expected<ClassicStoryBackendTick,
 				ClassicStorySessionError>{ClassicStoryBackendTick{
 				.surface_changed = true,
@@ -436,26 +434,30 @@ std::unique_ptr<ClassicStorySession> create_session(
 
 void test_story_input_mode_normalization()
 {
-	auto backend = std::make_shared<FakeBackend>();
-	auto session = create_session(story_config(), backend);
-	if(!session) {
-		return;
-	}
-	expect(session->consume({.dismiss_pressed = true}).has_value() &&
-		session->scene() == ClassicStorySessionScene::main,
-		"Story input-mode fixture advances the splash into MAIN");
 	const th03::CoreInput physical{
 		.p1 = 0x0104U,
 		.p2 = 0x0208U,
 		.system = 0x7032U,
 		.charge_mask = 0x03U,
 	};
-	expect(session->consume({.main = physical}).has_value() &&
-		backend->last_main_input.p1 == 0x7136U &&
-		backend->last_main_input.p2 == 0U &&
-		backend->last_main_input.system == physical.system &&
-		backend->last_main_input.charge_mask == 0x01U,
+	const auto gameplay = ClassicStorySessionTestAccess::story_main_input(
+		physical, th03::InputContext::gameplay
+	);
+	expect(gameplay.p1 == 0x7136U && gameplay.p2 == 0U &&
+		gameplay.system == physical.system && gameplay.charge_mask == 0x01U,
 		"Story MAIN reproduces input_mode_1p_vs_cpu while retaining input_sp");
+	for(const auto context : {
+		th03::InputContext::interstitial,
+		th03::InputContext::pause,
+	}) {
+		const auto raw = ClassicStorySessionTestAccess::story_main_input(
+			physical, context
+		);
+		expect(raw.p1 == physical.p1 && raw.p2 == physical.p2 &&
+			raw.system == physical.system &&
+			raw.charge_mask == physical.charge_mask,
+			"Story warning and pause samples retain raw source words");
+	}
 }
 
 void test_complete_nine_stage_route()

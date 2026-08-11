@@ -374,6 +374,8 @@ const char *name(th03::app::TickInputError code) noexcept
 {
 	switch(code) {
 	case th03::app::TickInputError::invalid_rate: return "invalid-rate";
+	case th03::app::TickInputError::invalid_catch_up_policy:
+		return "invalid-catch-up-policy";
 	case th03::app::TickInputError::timestamp_regressed: return "timestamp-regressed";
 	case th03::app::TickInputError::event_already_due: return "event-already-due";
 	case th03::app::TickInputError::event_queue_full: return "event-queue-full";
@@ -597,7 +599,10 @@ int run_direct_vs(th03::app::DirectVsCliRequest parsed)
 	}
 	auto scheduler = th03::app::TickInputScheduler::create(
 		parsed.tick_rate,
-		th03::platform::sdl_ticks_now_ns()
+		th03::platform::sdl_ticks_now_ns(),
+		parsed.smoke_ticks ?
+			th03::app::TickInputCatchUpPolicy::preserve_all :
+			th03::app::TickInputCatchUpPolicy::discard_missed_deadlines
 	);
 	if(!scheduler) {
 		return fail_tick(scheduler.error());
@@ -752,7 +757,10 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 	}
 	auto scheduler = th03::app::TickInputScheduler::create(
 		parsed.tick_rate,
-		th03::platform::sdl_ticks_now_ns()
+		th03::platform::sdl_ticks_now_ns(),
+		parsed.smoke_ticks ?
+			th03::app::TickInputCatchUpPolicy::preserve_all :
+			th03::app::TickInputCatchUpPolicy::discard_missed_deadlines
 	);
 	if(!scheduler) {
 		return fail_tick(scheduler.error());
