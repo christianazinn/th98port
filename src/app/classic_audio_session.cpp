@@ -176,6 +176,7 @@ struct ClassicAudioSession::Impl final {
 	std::uint64_t native_frames_numerator = 0U;
 	std::uint64_t native_fraction = 0U;
 	std::uint64_t tick = 0U;
+	bool bgm_active = true;
 	std::optional<ClassicAudioCommand> loaded{};
 	std::vector<audio::PmdCanonicalStereoSample> output{};
 	std::array<audio::PmdOpnaStereoSample, native_chunk_frames> native_scratch{};
@@ -186,12 +187,14 @@ struct ClassicAudioSession::Impl final {
 		MainResourceLoader loader_,
 		audio::PmdOpnaEngine engine_,
 		RationalTickRate tick_rate_,
-		std::uint64_t native_frames_numerator_
+		std::uint64_t native_frames_numerator_,
+		bool bgm_active_
 	) :
 		loader(std::move(loader_)),
 		engine(std::move(engine_)),
 		tick_rate(tick_rate_),
-		native_frames_numerator(native_frames_numerator_)
+		native_frames_numerator(native_frames_numerator_),
+		bgm_active(bgm_active_)
 	{}
 };
 
@@ -239,7 +242,8 @@ ClassicAudioSession::create(ClassicAudioSessionConfig config)
 
 	try {
 		auto impl = std::make_unique<Impl>(
-			std::move(loader), std::move(*engine), config.tick_rate, numerator
+			std::move(loader), std::move(*engine), config.tick_rate, numerator,
+			config.bgm_active
 		);
 		const auto initial_capacity = divide_round_up(
 			(maximum_tick_frames + audio::pmd_resampler_lookahead_samples + 1U) *
@@ -294,6 +298,12 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 		if(auto played = impl_->engine.play(); !played) {
 			return std::unexpected(engine_error(command, played.error()));
 		}
+		if(!impl_->bgm_active) {
+			// The original PMD TSR and its timers remain resident for FM sound
+			// effects when BGM is Off. Prime the fresh native engine into the
+			// equivalent stopped state without exposing music playback.
+			impl_->engine.stop();
+		}
 		return {};
 	case ClassicAudioCommandType::stop_song:
 		if(command.parameter != 0U || !valid_music_cue(command.cue) ||
@@ -302,7 +312,9 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 				ClassicAudioSessionErrorCode::invalid_parameter, command
 			));
 		}
-		impl_->engine.stop();
+		if(impl_->bgm_active) {
+			impl_->engine.stop();
+		}
 		return {};
 	case ClassicAudioCommandType::fade_song:
 		if(command.parameter == 0U || command.parameter > 0x7FU ||
@@ -312,9 +324,11 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 				ClassicAudioSessionErrorCode::invalid_parameter, command
 			));
 		}
-		impl_->engine.fade(std::bit_cast<std::int8_t>(
-			static_cast<std::uint8_t>(command.parameter)
-		));
+		if(impl_->bgm_active) {
+			impl_->engine.fade(std::bit_cast<std::int8_t>(
+				static_cast<std::uint8_t>(command.parameter)
+			));
+		}
 		return {};
 	case ClassicAudioCommandType::load_effects: {
 		if(command.cue != ClassicMusicCue::none || command.parameter != 0U) {
@@ -384,6 +398,11 @@ ClassicAudioSession::request_effect(std::uint8_t effect_id) noexcept
 		return std::unexpected(service_error(command, requested.error()));
 	}
 	return *requested;
+}
+
+void ClassicAudioSession::set_bgm_active(bool active) noexcept
+{
+	impl_->bgm_active = active;
 }
 
 std::expected<ClassicAudioTick, ClassicAudioSessionError>
@@ -479,8 +498,8 @@ ClassicAudioStatus ClassicAudioSession::status() const noexcept
 {
 	const auto status = impl_->engine.status();
 	return {
-		// snd_bgm_active() reports the resident driver, not Play/Stop state.
-		.bgm_active = true,
+		// snd_bgm_active() reports snd_active, not Play/Stop state.
+		.bgm_active = impl_->bgm_active,
 		.measure = status.measure,
 		.volume = status.fade_volume,
 	};

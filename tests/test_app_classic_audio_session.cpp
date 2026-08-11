@@ -530,6 +530,54 @@ void test_commands_cadence_and_determinism(const fs::path &root)
 		"Stop preserves driver availability and exposes quiet PMD volume");
 }
 
+void test_bgm_active_and_sfx_independence(const fs::path &root)
+{
+	auto disabled_config = config(root);
+	disabled_config.bgm_active = false;
+	auto created = ClassicAudioSession::create(disabled_config);
+	expect(created && !(*created)->status().bgm_active,
+		"an Off configuration exposes the inactive BGM-driver flag");
+	if(!created) {
+		return;
+	}
+	auto &session = **created;
+	expect(session.apply(load(ClassicMusicCue::menu_main)).has_value() &&
+		session.apply({
+			.type = ClassicAudioCommandType::play_song,
+			.cue = ClassicMusicCue::menu_main,
+		}).has_value(), "inactive BGM accepts source load/play calls as no-ops");
+	auto silent_tick = session.advance_tick();
+	expect(silent_tick && !silent_tick->status.bgm_active && std::all_of(
+		silent_tick->canonical_frames.begin(),
+		silent_tick->canonical_frames.end(),
+		[](const auto &sample) {
+			return sample.left == 0 && sample.right == 0;
+		}
+	), "inactive BGM advances a deterministic silent source block");
+
+	expect(session.request_effect(1U).value_or(false),
+		"BGM Off does not disable the independent FM sound-effect path");
+	auto effect_tick = session.advance_tick();
+	expect(effect_tick && effect_tick->effect_started == 1U && std::any_of(
+		effect_tick->canonical_frames.begin(),
+		effect_tick->canonical_frames.end(),
+		[](const auto &sample) {
+			return sample.left != 0 || sample.right != 0;
+		}
+	), "an effect remains audible while the BGM-driver flag is inactive");
+
+	session.set_bgm_active(true);
+	expect(session.apply({
+		.type = ClassicAudioCommandType::play_song,
+		.cue = ClassicMusicCue::menu_main,
+	}).has_value() && session.status().bgm_active,
+		"enabling the BGM driver lets the already-loaded song start");
+	expect(session.apply({
+		.type = ClassicAudioCommandType::stop_song,
+	}).has_value() && session.status().bgm_active,
+		"Stop leaves the enabled BGM-driver flag intact");
+}
+
 void test_authentic_session(const fs::path &data_root)
 {
 	auto created = ClassicAudioSession::create({
@@ -632,6 +680,7 @@ int main(int argc, char **argv)
 		expect(prepare_audio_root(root.path()),
 			"generated audio manifest root is written");
 		test_commands_cadence_and_determinism(root.path());
+		test_bgm_active_and_sfx_independence(root.path());
 	}
 	if(argc == 3 && std::string_view(argv[1]) == "--authentic") {
 		test_authentic_session(argv[2]);
