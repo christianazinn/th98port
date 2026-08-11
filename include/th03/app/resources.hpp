@@ -23,6 +23,7 @@ enum class MainResourceArchive : std::uint8_t {
 };
 
 enum class MainResourceScene : std::uint8_t {
+	classic_audio,
 	op_title_menu,
 	op_music_room,
 	direct_vs,
@@ -46,6 +47,7 @@ enum class MainResourceDecoder : std::uint8_t {
 	shift_jis_blocks,
 	cutscene_script,
 	pmd_music,
+	pmd_effect_bank,
 };
 
 enum class MainCharacter : std::uint8_t {
@@ -224,6 +226,7 @@ enum class MainResourceRole : std::uint8_t {
 	op_window_sheet,
 	op_gaiji_font,
 	op_menu_music,
+	audio_effect_bank,
 	op_music_room_background,
 	op_music_room_comments,
 	op_music_room_track,
@@ -256,11 +259,13 @@ enum class MainResourceRole : std::uint8_t {
 	win_logo_fade_cels,
 	win_logo_final,
 	win_logo_palette_post,
+	win_music,
 	character_win_portrait,
 	character_win_message,
 	continue_background,
 	continue_choice_cels,
 	gameover_background,
+	gameover_music,
 	cutscene_script,
 	cutscene_picture,
 	cutscene_music,

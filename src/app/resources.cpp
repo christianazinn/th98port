@@ -342,6 +342,7 @@ constexpr std::array<std::uint64_t, 12U> staff_cdg_fnv1a64{
 	case MainResourceRole::op_window_sheet:
 	case MainResourceRole::op_gaiji_font:
 	case MainResourceRole::op_menu_music:
+	case MainResourceRole::audio_effect_bank:
 	case MainResourceRole::op_music_room_background:
 	case MainResourceRole::op_music_room_comments:
 	case MainResourceRole::op_music_room_track:
@@ -369,11 +370,13 @@ constexpr std::array<std::uint64_t, 12U> staff_cdg_fnv1a64{
 	case MainResourceRole::win_logo_fade_cels:
 	case MainResourceRole::win_logo_final:
 	case MainResourceRole::win_logo_palette_post:
+	case MainResourceRole::win_music:
 	case MainResourceRole::character_win_portrait:
 	case MainResourceRole::character_win_message:
 	case MainResourceRole::continue_background:
 	case MainResourceRole::continue_choice_cels:
 	case MainResourceRole::gameover_background:
+	case MainResourceRole::gameover_music:
 	case MainResourceRole::cutscene_script:
 	case MainResourceRole::cutscene_picture:
 	case MainResourceRole::cutscene_music:
@@ -855,6 +858,17 @@ static_resource_spec(MainResourceKey key)
 			.expected_bytes = 4431U,
 			.expected_fnv1a64 = 0x8D65B16BB1BB433DULL,
 		};
+	case MainResourceRole::audio_effect_bank:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::classic_audio,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pmd_effect_bank,
+			.logical_role = "audio.effect_bank",
+			.filename = "YUME.EFC",
+			.expected_bytes = 1304U,
+			.expected_fnv1a64 = 0x4E1A0891D2CE9AECULL,
+		};
 	case MainResourceRole::op_music_room_background:
 		return MainResourceSpec{
 			.key = key,
@@ -1099,6 +1113,17 @@ static_resource_spec(MainResourceKey key)
 			.expected_bytes = 48U,
 			.expected_fnv1a64 = 0xBC162D7C5FF6182DULL,
 		};
+	case MainResourceRole::win_music:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_win,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pmd_music,
+			.logical_role = "mainl.win.music",
+			.filename = "WIN.M",
+			.expected_bytes = 888U,
+			.expected_fnv1a64 = 0xBC080E7B9356F581ULL,
+		};
 	case MainResourceRole::continue_background:
 		return MainResourceSpec{
 			.key = key,
@@ -1131,6 +1156,17 @@ static_resource_spec(MainResourceKey key)
 			.filename = "OVER.PI",
 			.expected_bytes = 3571U,
 			.expected_fnv1a64 = 0xFF41379103F8C92AULL,
+		};
+	case MainResourceRole::gameover_music:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_continue_gameover,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pmd_music,
+			.logical_role = "mainl.gameover.music",
+			.filename = "OVER.M",
+			.expected_bytes = 508U,
+			.expected_fnv1a64 = 0xC55CD02BC737325AULL,
 		};
 	case MainResourceRole::cutscene_script:
 	case MainResourceRole::cutscene_picture:
@@ -1467,6 +1503,7 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 	case MainResourceRole::op_window_sheet:
 	case MainResourceRole::op_gaiji_font:
 	case MainResourceRole::op_menu_music:
+	case MainResourceRole::audio_effect_bank:
 	case MainResourceRole::op_music_room_background:
 	case MainResourceRole::op_music_room_comments:
 	case MainResourceRole::op_music_room_track:
@@ -1494,11 +1531,13 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 	case MainResourceRole::win_logo_fade_cels:
 	case MainResourceRole::win_logo_final:
 	case MainResourceRole::win_logo_palette_post:
+	case MainResourceRole::win_music:
 	case MainResourceRole::character_win_portrait:
 	case MainResourceRole::character_win_message:
 	case MainResourceRole::continue_background:
 	case MainResourceRole::continue_choice_cels:
 	case MainResourceRole::gameover_background:
+	case MainResourceRole::gameover_music:
 	case MainResourceRole::cutscene_script:
 	case MainResourceRole::cutscene_picture:
 	case MainResourceRole::cutscene_music:
@@ -1523,6 +1562,7 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		MainResourceRole::op_window_sheet,
 		MainResourceRole::op_gaiji_font,
 		MainResourceRole::op_menu_music,
+		MainResourceRole::audio_effect_bank,
 		MainResourceRole::op_music_room_background,
 		MainResourceRole::op_music_room_comments,
 		MainResourceRole::enemy_scripts,
@@ -1545,9 +1585,11 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		MainResourceRole::win_logo_fade_cels,
 		MainResourceRole::win_logo_final,
 		MainResourceRole::win_logo_palette_post,
+		MainResourceRole::win_music,
 		MainResourceRole::continue_background,
 		MainResourceRole::continue_choice_cels,
 		MainResourceRole::gameover_background,
+		MainResourceRole::gameover_music,
 		MainResourceRole::staff_background_palette,
 		MainResourceRole::staff_music,
 		MainResourceRole::registration_background,

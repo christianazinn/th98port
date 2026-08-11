@@ -453,6 +453,7 @@ th03_set_warnings(th03_formats)
 # process and the complete source-private Classic OP/MAINL/MAIN lifecycle;
 # platform code sees only the narrow public runners and composed surface.
 add_library(th03_app_main STATIC
+	src/app/classic_audio_session.cpp
 	src/app/classic_cli.cpp
 	src/app/classic_cutscene_scene.cpp
 	src/app/classic_mainl_continue.cpp
@@ -481,7 +482,7 @@ target_include_directories(th03_app_main PUBLIC include)
 target_link_libraries(
 	th03_app_main
 	PUBLIC th03_app_resources th03_app_content th03_app_persistence
-		th03_app_runtime th03_formats
+		th03_app_runtime th03_audio_pmd th03_formats
 )
 target_compile_features(th03_app_main PUBLIC cxx_std_23)
 set_target_properties(th03_app_main PROPERTIES CXX_EXTENSIONS OFF)
@@ -965,6 +966,19 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-classic-runner-tests
 		COMMAND th03-app-classic-runner-tests
+	)
+
+	add_executable(th03-app-classic-audio-session-tests
+		tests/test_app_classic_audio_session.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-audio-session-tests PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-classic-audio-session-tests)
+	th03_stage_audio_licenses(th03-app-classic-audio-session-tests)
+	add_test(
+		NAME th03-app-classic-audio-session-tests
+		COMMAND th03-app-classic-audio-session-tests
 	)
 
 	add_executable(th03-app-mainl-compiled-text-tests

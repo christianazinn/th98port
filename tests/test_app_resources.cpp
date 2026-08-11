@@ -122,8 +122,8 @@ void test_manifest()
 	);
 	const auto manifest = th03::app::main_resource_manifest();
 	expect(
-		manifest.size() == 268U,
-		"manifest enumerates OP, MAIN, MAINL, cutscene, staff, registration, paletted, and character-only assets"
+		manifest.size() == 271U,
+		"manifest enumerates OP, MAIN, MAINL, audio, cutscene, staff, registration, paletted, and character-only assets"
 	);
 	expect(
 		static_cast<bool>(th03::app::validate_main_resource_manifest(manifest)),
@@ -160,6 +160,9 @@ void test_manifest()
 	bool contains_registration_music = false;
 	bool contains_music_room_background = false;
 	bool contains_music_room_last_track = false;
+	bool contains_effect_bank = false;
+	bool contains_win_music = false;
+	bool contains_gameover_music = false;
 	for(const auto &spec : manifest) {
 		contains_enedat = contains_enedat ||
 			(spec.key.role == MainResourceRole::enemy_scripts &&
@@ -287,6 +290,19 @@ void test_manifest()
 				spec.key.music_room_track == MainMusicRoomTrack::high_score &&
 				spec.filename == "SCORE.M" && spec.expected_bytes == 983U &&
 				spec.expected_fnv1a64 == 0xC83D906B352A1597ULL);
+		contains_effect_bank = contains_effect_bank ||
+			(spec.key.role == MainResourceRole::audio_effect_bank &&
+				spec.decoder == th03::app::MainResourceDecoder::pmd_effect_bank &&
+				spec.filename == "YUME.EFC" && spec.expected_bytes == 1304U &&
+				spec.expected_fnv1a64 == 0x4E1A0891D2CE9AECULL);
+		contains_win_music = contains_win_music ||
+			(spec.key.role == MainResourceRole::win_music &&
+				spec.filename == "WIN.M" && spec.expected_bytes == 888U &&
+				spec.expected_fnv1a64 == 0xBC080E7B9356F581ULL);
+		contains_gameover_music = contains_gameover_music ||
+			(spec.key.role == MainResourceRole::gameover_music &&
+				spec.filename == "OVER.M" && spec.expected_bytes == 508U &&
+				spec.expected_fnv1a64 == 0xC55CD02BC737325AULL);
 		expect(
 			th03::app::is_safe_extracted_entry_name(spec.filename),
 			"every checked-in manifest filename is one safe extracted component"
@@ -313,7 +329,8 @@ void test_manifest()
 			contains_registration_normal_glyphs &&
 			contains_registration_highlight_glyphs &&
 			contains_registration_music && contains_music_room_background &&
-			contains_music_room_last_track,
+			contains_music_room_last_track && contains_effect_bank &&
+			contains_win_music && contains_gameover_music,
 		"manifest retains the representative source-named resource families"
 	);
 	struct ExpectedEnemyGroup {

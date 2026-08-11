@@ -611,6 +611,7 @@ std::vector<std::byte> bytes_for(const th03::app::MainResourceSpec &spec)
 	case MainResourceRole::op_window_sheet:
 	case MainResourceRole::op_gaiji_font:
 	case MainResourceRole::op_menu_music:
+	case MainResourceRole::audio_effect_bank:
 	case MainResourceRole::op_music_room_background:
 	case MainResourceRole::op_music_room_comments:
 	case MainResourceRole::op_music_room_track:
@@ -626,11 +627,13 @@ std::vector<std::byte> bytes_for(const th03::app::MainResourceSpec &spec)
 	case MainResourceRole::win_logo_fade_cels:
 	case MainResourceRole::win_logo_final:
 	case MainResourceRole::win_logo_palette_post:
+	case MainResourceRole::win_music:
 	case MainResourceRole::character_win_portrait:
 	case MainResourceRole::character_win_message:
 	case MainResourceRole::continue_background:
 	case MainResourceRole::continue_choice_cels:
 	case MainResourceRole::gameover_background:
+	case MainResourceRole::gameover_music:
 	case MainResourceRole::cutscene_script:
 	case MainResourceRole::cutscene_picture:
 	case MainResourceRole::cutscene_music:
