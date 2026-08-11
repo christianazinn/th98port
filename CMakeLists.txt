@@ -358,6 +358,7 @@ th03_set_warnings(th03_formats)
 # Raster handoff into a fresh MAIN process remain outside the public direct-VS
 # launcher boundary.
 add_library(th03_app_main STATIC
+	src/app/classic_mainl_continue.cpp
 	src/app/classic_mainl_stage.cpp
 	src/app/classic_mainl_story.cpp
 	src/app/classic_mainl_win.cpp
@@ -474,6 +475,18 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-classic-mainl-win-tests
 		COMMAND th03-app-classic-mainl-win-tests
+	)
+
+	add_executable(th03-app-classic-mainl-continue-tests
+		tests/test_app_classic_mainl_continue.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-mainl-continue-tests PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-classic-mainl-continue-tests)
+	add_test(
+		NAME th03-app-classic-mainl-continue-tests
+		COMMAND th03-app-classic-mainl-continue-tests
 	)
 
 	if(TH03_ENABLE_SDL)

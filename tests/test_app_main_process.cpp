@@ -529,6 +529,9 @@ std::vector<std::byte> bytes_for(const th03::app::MainResourceSpec &spec)
 	case MainResourceRole::win_logo_palette_post:
 	case MainResourceRole::character_win_portrait:
 	case MainResourceRole::character_win_message:
+	case MainResourceRole::continue_background:
+	case MainResourceRole::continue_choice_cels:
+	case MainResourceRole::gameover_background:
 		break;
 	}
 	return {};

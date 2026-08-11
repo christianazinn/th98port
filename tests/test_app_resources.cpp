@@ -112,7 +112,7 @@ void test_manifest()
 	);
 	const auto manifest = th03::app::main_resource_manifest();
 	expect(
-		manifest.size() == 145U,
+		manifest.size() == 148U,
 		"manifest enumerates MAIN, MAINL, paletted, and character-only assets"
 	);
 	expect(
@@ -131,6 +131,9 @@ void test_manifest()
 	bool contains_stage_number = false;
 	bool contains_stage_base = false;
 	bool contains_stage_decisive = false;
+	bool contains_continue = false;
+	bool contains_continue_cels = false;
+	bool contains_gameover = false;
 	for(const auto &spec : manifest) {
 		contains_enedat = contains_enedat ||
 			(spec.key.role == MainResourceRole::enemy_scripts &&
@@ -172,6 +175,18 @@ void test_manifest()
 			(spec.key.role == MainResourceRole::stage_splash_background &&
 				spec.key.stage_background == MainlStageBackground::decisive &&
 				spec.filename == "STNX4.PI" && spec.expected_bytes == 2901U);
+		contains_continue = contains_continue ||
+			(spec.key.role == MainResourceRole::continue_background &&
+				spec.filename == "CONTI.PI" && spec.expected_bytes == 5646U &&
+				spec.expected_fnv1a64 == 0x31741F129B8269D4ULL);
+		contains_continue_cels = contains_continue_cels ||
+			(spec.key.role == MainResourceRole::continue_choice_cels &&
+				spec.filename == "CONTI.CD2" && spec.expected_bytes == 9856U &&
+				spec.expected_fnv1a64 == 0x35AEAFB5AC967094ULL);
+		contains_gameover = contains_gameover ||
+			(spec.key.role == MainResourceRole::gameover_background &&
+				spec.filename == "OVER.PI" && spec.expected_bytes == 3571U &&
+				spec.expected_fnv1a64 == 0xFF41379103F8C92AULL);
 		expect(
 			th03::app::is_safe_extracted_entry_name(spec.filename),
 			"every checked-in manifest filename is one safe extracted component"
@@ -187,7 +202,8 @@ void test_manifest()
 			contains_enemy_center && contains_yumemi_enemy_group &&
 			contains_mainl_font && contains_stage_portrait &&
 			contains_stage_number && contains_stage_base &&
-			contains_stage_decisive,
+			contains_stage_decisive && contains_continue &&
+			contains_continue_cels && contains_gameover,
 		"manifest retains the representative source-named resource families"
 	);
 	struct ExpectedEnemyGroup {
@@ -620,6 +636,52 @@ void test_main_private_and_mainl_stage_batches()
 		loaded_win && loaded_win->size() == win_keys->size() &&
 			win_loader.cached_resource_count() == win_keys->size(),
 		"a complete winner batch commits all immutable resources atomically"
+	);
+
+	const auto no_credit = th03::app::mainl_continue_resource_keys(0U);
+	const auto credited = th03::app::mainl_continue_resource_keys(3U);
+	expect(
+		no_credit && no_credit->size() == 1U && no_credit->front() ==
+			MainResourceKey{.role = MainResourceRole::gameover_background},
+		"zero-credit Continue resolves only the registration-preloaded OVER image"
+	);
+	expect(
+		credited && credited->size() == 3U && credited->front() ==
+			MainResourceKey{.role = MainResourceRole::continue_background} &&
+			(*credited)[1U] == MainResourceKey{
+				.role = MainResourceRole::continue_choice_cels,
+			} && credited->back() == MainResourceKey{
+				.role = MainResourceRole::gameover_background,
+			},
+		"credited Continue preserves CONTI background/cels then OVER closure order"
+	);
+	expect(
+		!th03::app::mainl_continue_resource_keys(4U),
+		"Continue resources reject a credit count outside the resident domain"
+	);
+
+	TemporaryRoot continue_root;
+	expect(continue_root.valid(), "temporary Continue transaction root was created");
+	if(!continue_root.valid() || !credited) {
+		return;
+	}
+	for(std::size_t index = 0U; index + 1U < credited->size(); ++index) {
+		write_spec(continue_root.path(), (*credited)[index], std::byte{0x61U});
+	}
+	MainResourceLoader continue_loader(
+		continue_root.path(), MainResourceIntegrity::size_only
+	);
+	const auto failed_continue = continue_loader.load_mainl_continue(3U);
+	expect(
+		!failed_continue && continue_loader.cached_resource_count() == 0U,
+		"a late Continue batch failure publishes no partial cache entries"
+	);
+	write_spec(continue_root.path(), credited->back(), std::byte{0x62U});
+	const auto loaded_continue = continue_loader.load_mainl_continue(3U);
+	expect(
+		loaded_continue && loaded_continue->size() == credited->size() &&
+			continue_loader.cached_resource_count() == credited->size(),
+		"a complete Continue batch commits all immutable resources atomically"
 	);
 }
 

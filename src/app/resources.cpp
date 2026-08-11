@@ -221,6 +221,9 @@ constexpr std::array<std::uint64_t, 9U> win_message_fnv1a64{
 	case MainResourceRole::win_logo_palette_post:
 	case MainResourceRole::character_win_portrait:
 	case MainResourceRole::character_win_message:
+	case MainResourceRole::continue_background:
+	case MainResourceRole::continue_choice_cels:
+	case MainResourceRole::gameover_background:
 		return 0U;
 	}
 	return 0U;
@@ -499,6 +502,39 @@ static_resource_spec(MainResourceKey key)
 			.filename = "LOGO1.RGB",
 			.expected_bytes = 48U,
 			.expected_fnv1a64 = 0xBC162D7C5FF6182DULL,
+		};
+	case MainResourceRole::continue_background:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_continue_gameover,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pi,
+			.logical_role = "mainl.continue.background",
+			.filename = "CONTI.PI",
+			.expected_bytes = 5646U,
+			.expected_fnv1a64 = 0x31741F129B8269D4ULL,
+		};
+	case MainResourceRole::continue_choice_cels:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_continue_gameover,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::cdg,
+			.logical_role = "mainl.continue.choice_cels",
+			.filename = "CONTI.CD2",
+			.expected_bytes = 9856U,
+			.expected_fnv1a64 = 0x35AEAFB5AC967094ULL,
+		};
+	case MainResourceRole::gameover_background:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_continue_gameover,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pi,
+			.logical_role = "mainl.gameover.background",
+			.filename = "OVER.PI",
+			.expected_bytes = 3571U,
+			.expected_fnv1a64 = 0xFF41379103F8C92AULL,
 		};
 	case MainResourceRole::character_sheet:
 	case MainResourceRole::character_extra_portrait:
@@ -793,6 +829,9 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 	case MainResourceRole::win_logo_palette_post:
 	case MainResourceRole::character_win_portrait:
 	case MainResourceRole::character_win_message:
+	case MainResourceRole::continue_background:
+	case MainResourceRole::continue_choice_cels:
+	case MainResourceRole::gameover_background:
 		break;
 	}
 	return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
@@ -815,6 +854,9 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		MainResourceRole::win_logo_fade_cels,
 		MainResourceRole::win_logo_final,
 		MainResourceRole::win_logo_palette_post,
+		MainResourceRole::continue_background,
+		MainResourceRole::continue_choice_cels,
+		MainResourceRole::gameover_background,
 	};
 	constexpr std::array character_roles{
 		MainResourceRole::character_sheet,
@@ -1104,6 +1146,27 @@ mainl_win_resource_keys(MainPlayerSelection winner)
 	};
 }
 
+std::expected<std::vector<MainResourceKey>, ResourceLoadError>
+mainl_continue_resource_keys(std::uint8_t remaining_credits)
+{
+	if(remaining_credits > 3U) {
+		return std::unexpected(error(
+			ResourceLoadErrorCode::invalid_resource_key,
+			{.role = MainResourceRole::continue_background}
+		));
+	}
+	if(remaining_credits == 0U) {
+		return std::vector<MainResourceKey>{
+			{.role = MainResourceRole::gameover_background},
+		};
+	}
+	return std::vector<MainResourceKey>{
+		{.role = MainResourceRole::continue_background},
+		{.role = MainResourceRole::continue_choice_cels},
+		{.role = MainResourceRole::gameover_background},
+	};
+}
+
 MainResourceLoader::MainResourceLoader(
 	std::filesystem::path content_root,
 	MainResourceIntegrity integrity
@@ -1258,6 +1321,16 @@ std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 MainResourceLoader::load_mainl_win(MainPlayerSelection winner)
 {
 	const auto keys = mainl_win_resource_keys(winner);
+	if(!keys) {
+		return std::unexpected(keys.error());
+	}
+	return load_batch(*keys);
+}
+
+std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+MainResourceLoader::load_mainl_continue(std::uint8_t remaining_credits)
+{
+	const auto keys = mainl_continue_resource_keys(remaining_credits);
 	if(!keys) {
 		return std::unexpected(keys.error());
 	}
