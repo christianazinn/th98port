@@ -10,11 +10,13 @@
 #include <span>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "th03/app/authentic_text.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/present/pi.hpp"
+#include "th03/present/source_surface.hpp"
 #include "th03/present/superimpose.hpp"
 
 namespace {
@@ -39,6 +41,15 @@ using th03::present::Page;
 
 std::size_t checks = 0U;
 std::size_t failures = 0U;
+
+class EmptyAnk final : public th03::present::AnkGlyphProvider {
+public:
+	[[nodiscard]] std::optional<th03::present::AnkGlyph> glyph(
+		std::uint8_t
+	) const override {
+		return std::nullopt;
+	}
+};
 
 void expect(bool condition, std::string_view message)
 {
@@ -262,6 +273,20 @@ void test_config_audio_and_return_cadence()
 			scene->config().rank == ClassicRank::hard &&
 			scene->resident().rank == static_cast<std::uint8_t>(ClassicRank::hard),
 		"Rank changes resident and persisted option together"
+	);
+	std::vector<th03::present::ComposedPixel> composed_pixels(
+		th03::present::graphics_page_pixels
+	);
+	const auto composed = th03::present::compose_source_surface(
+		std::span<
+			th03::present::ComposedPixel,
+			th03::present::graphics_page_pixels
+		>(composed_pixels.data(), composed_pixels.size()),
+		scene->raster(), scene->tram(), EmptyAnk{}
+	);
+	expect(
+		composed.has_value(),
+		"Normal-to-Hard source gaiji overlap composes without malformed JIS"
 	);
 	expect(scene->advance().has_value(), "post-Rank release advances");
 	const auto opposed = scene->advance({.up = true, .down = true});

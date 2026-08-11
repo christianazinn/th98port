@@ -292,6 +292,29 @@ void test_gaiji_halves_and_color() {
 		ank.jis_queries() == 0U,
 		"paired gaiji takes priority over every JIS interpretation"
 	);
+
+	Tram overlap;
+	std::array<std::uint8_t, th03::present::gaiji_glyph_bytes> old_rows{};
+	old_rows[0U] = 0x80U;
+	std::array<std::uint8_t, th03::present::gaiji_glyph_bytes> new_rows{};
+	new_rows[0U] = 0x40U;
+	expect(
+		overlap.load_gaiji(0x71U, old_rows) &&
+		overlap.load_gaiji(0x78U, new_rows) &&
+		overlap.put_gaiji({0, 0}, 0x71U, th03::present::tram_red) &&
+		overlap.put_gaiji({1, 0}, 0x78U, th03::present::tram_green),
+		"seed source-style one-cell overlapping gaiji redraw"
+	);
+	const auto overlap_result = compose_fixture(graphics(4U), overlap, ank);
+	expect(
+		overlap_result.has_value(),
+		"unpaired non-ambiguous gaiji half composes without a JIS error"
+	);
+	expect(
+		pixel(*overlap_result, 0U, 0U) == text_pixel(TextColor::red) &&
+		pixel(*overlap_result, 9U, 0U) == text_pixel(TextColor::green),
+		"overlap renders the retained old half and replacement gaiji independently"
+	);
 }
 
 void test_jis_pair_and_independent_attributes() {

@@ -229,7 +229,7 @@ display_mapping(const Raster &raster) noexcept
 			));
 		}
 
-		if(decode_paired_gaiji_cell(cells, cell_offset).has_value()) {
+		if(decode_visible_gaiji_cell(cells, cell_offset).has_value()) {
 			continue;
 		}
 		if((cell.code & 0xFF00U) == 0U) {
@@ -332,7 +332,7 @@ void compose_text(
 			continue;
 		}
 
-		const auto gaiji = decode_paired_gaiji_cell(cells, cell_offset);
+		const auto gaiji = decode_visible_gaiji_cell(cells, cell_offset);
 		const auto cell_x = cell_offset % tram_width;
 		const auto cell_y = cell_offset / tram_width;
 		const auto color = attribute_color(cell.attribute);

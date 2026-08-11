@@ -93,6 +93,23 @@ std::optional<GaijiCellReference> decode_paired_gaiji_cell(
 	return std::nullopt;
 }
 
+std::optional<GaijiCellReference> decode_visible_gaiji_cell(
+	std::span<const TramCell> cells,
+	std::size_t offset
+) noexcept {
+	if(offset >= cells.size()) {
+		return std::nullopt;
+	}
+	const auto decoded = decode_gaiji_cell(cells[offset].code);
+	if(!decoded.has_value()) {
+		return std::nullopt;
+	}
+	if((cells[offset].code & 0xFF00U) != 0U) {
+		return decoded;
+	}
+	return decode_paired_gaiji_cell(cells, offset);
+}
+
 void Tram::fill(TramCell cell_value) noexcept {
 	cells_.fill(cell_value);
 }
@@ -214,7 +231,7 @@ std::uint64_t Tram::visible_state_hash() const noexcept {
 		const auto &cell_value = cells_[cell_offset];
 		hash_u16_le(hash, cell_value.code);
 		hash_u16_le(hash, cell_value.attribute);
-		const auto gaiji_ref = decode_paired_gaiji_cell(cells_, cell_offset);
+		const auto gaiji_ref = decode_visible_gaiji_cell(cells_, cell_offset);
 		if(gaiji_ref.has_value()) {
 			referenced[gaiji_ref->glyph_id] = true;
 		}

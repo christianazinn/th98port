@@ -667,6 +667,21 @@ void test_tram_and_gaiji_boundary() {
 		gaiji_alias.visible_state_hash() != before_unpaired_alias,
 		"paired gaiji zero contents join the TRAM hash"
 	);
+	Tram overlapped_gaiji;
+	expect(
+		overlapped_gaiji.put_gaiji({0, 0}, 0x71U, th03::present::tram_white) &&
+		overlapped_gaiji.put_gaiji({1, 0}, 0x78U, th03::present::tram_white),
+		"source-style one-cell gaiji redraw overlaps the previous pair"
+	);
+	expect(
+		th03::present::decode_visible_gaiji_cell(
+			overlapped_gaiji.cells(), 0U
+		) == th03::present::GaijiCellReference{0x71U, GaijiHalf::left} &&
+		th03::present::decode_visible_gaiji_cell(
+			overlapped_gaiji.cells(), 1U
+		) == th03::present::GaijiCellReference{0x78U, GaijiHalf::left},
+		"non-ambiguous raw gaiji halves remain visible after overlap"
+	);
 	expect(tram.gaiji_row_half(0x80U, 0U, GaijiHalf::left) == 0x80U, "gaiji left row");
 	expect(tram.gaiji_row_half(0x80U, 0U, GaijiHalf::right) == 0x01U, "gaiji right row");
 	expect(

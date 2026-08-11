@@ -109,6 +109,14 @@ struct GaijiCellReference {
 	std::size_t offset
 ) noexcept;
 
+// Source gaiji redraws can overwrite only one half of an older pair. PC-98
+// renders every non-ambiguous gaiji TRAM code independently; only the two
+// left-half codes that alias ANK V/W require a matching adjacent right half.
+[[nodiscard]] std::optional<GaijiCellReference> decode_visible_gaiji_cell(
+	std::span<const TramCell> cells,
+	std::size_t offset
+) noexcept;
+
 class Tram {
 public:
 	Tram() = default;
