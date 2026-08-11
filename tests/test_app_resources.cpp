@@ -25,6 +25,7 @@ using th03::app::MainResourceIntegrity;
 using th03::app::MainResourceKey;
 using th03::app::MainResourceLoader;
 using th03::app::MainResourceRole;
+using th03::app::MainRegistrationRank;
 using th03::app::MainStaffCdg;
 using th03::app::MainlCutsceneKind;
 using th03::app::MainlStageBackground;
@@ -120,8 +121,8 @@ void test_manifest()
 	);
 	const auto manifest = th03::app::main_resource_manifest();
 	expect(
-		manifest.size() == 219U,
-		"manifest enumerates MAIN, MAINL, cutscene, staff, paletted, and character-only assets"
+		manifest.size() == 227U,
+		"manifest enumerates MAIN, MAINL, cutscene, staff, registration, paletted, and character-only assets"
 	);
 	expect(
 		static_cast<bool>(th03::app::validate_main_resource_manifest(manifest)),
@@ -151,6 +152,11 @@ void test_manifest()
 	bool contains_first_staff_cdg = false;
 	bool contains_last_staff_cdg = false;
 	bool contains_staff_music = false;
+	bool contains_registration_background = false;
+	bool contains_registration_lunatic = false;
+	bool contains_registration_normal_glyphs = false;
+	bool contains_registration_highlight_glyphs = false;
+	bool contains_registration_music = false;
 	for(const auto &spec : manifest) {
 		contains_enedat = contains_enedat ||
 			(spec.key.role == MainResourceRole::enemy_scripts &&
@@ -246,6 +252,29 @@ void test_manifest()
 			(spec.key.role == MainResourceRole::staff_music &&
 				spec.filename == "ED.M" && spec.expected_bytes == 3378U &&
 				spec.expected_fnv1a64 == 0x897797694DA73B83ULL);
+		contains_registration_background = contains_registration_background ||
+			(spec.key.role == MainResourceRole::registration_background &&
+				spec.filename == "REGIB.PI" && spec.expected_bytes == 44603U &&
+				spec.expected_fnv1a64 == 0x24064C266EDFE6B2ULL);
+		contains_registration_lunatic = contains_registration_lunatic ||
+			(spec.key.role == MainResourceRole::registration_rank &&
+				spec.key.registration_rank == MainRegistrationRank::lunatic &&
+				spec.filename == "RFT3.CDG" && spec.expected_bytes == 17616U &&
+				spec.expected_fnv1a64 == 0x558F9EEA22AAA179ULL);
+		contains_registration_normal_glyphs =
+			contains_registration_normal_glyphs ||
+			(spec.key.role == MainResourceRole::registration_normal_glyphs &&
+				spec.filename == "REGI2.BFT" && spec.expected_bytes == 25168U &&
+				spec.expected_fnv1a64 == 0x1B8989FB9D38D1BAULL);
+		contains_registration_highlight_glyphs =
+			contains_registration_highlight_glyphs ||
+			(spec.key.role == MainResourceRole::registration_highlight_glyphs &&
+				spec.filename == "REGI1.BFT" && spec.expected_bytes == 25168U &&
+				spec.expected_fnv1a64 == 0x9DDED02684AA4339ULL);
+		contains_registration_music = contains_registration_music ||
+			(spec.key.role == MainResourceRole::registration_music &&
+				spec.filename == "SCORE.M" && spec.expected_bytes == 983U &&
+				spec.expected_fnv1a64 == 0xC83D906B352A1597ULL);
 		expect(
 			th03::app::is_safe_extracted_entry_name(spec.filename),
 			"every checked-in manifest filename is one safe extracted component"
@@ -267,7 +296,11 @@ void test_manifest()
 			contains_first_cutscene_picture && contains_last_cutscene_picture &&
 			contains_last_cutscene_music && contains_staff_palette &&
 			contains_first_staff_cdg && contains_last_staff_cdg &&
-			contains_staff_music,
+			contains_staff_music && contains_registration_background &&
+			contains_registration_lunatic &&
+			contains_registration_normal_glyphs &&
+			contains_registration_highlight_glyphs &&
+			contains_registration_music,
 		"manifest retains the representative source-named resource families"
 	);
 	struct ExpectedEnemyGroup {
@@ -903,6 +936,56 @@ void test_staff_resource_batch()
 	);
 }
 
+void test_registration_resource_batch()
+{
+	const auto keys = th03::app::mainl_registration_resource_keys(
+		MainRegistrationRank::hard
+	);
+	const std::array expected{
+		MainResourceKey{.role = MainResourceRole::registration_background},
+		MainResourceKey{.role = MainResourceRole::registration_rank,
+			.registration_rank = MainRegistrationRank::hard},
+		MainResourceKey{.role = MainResourceRole::registration_normal_glyphs},
+		MainResourceKey{.role = MainResourceRole::registration_highlight_glyphs},
+		MainResourceKey{.role = MainResourceRole::registration_music},
+	};
+	expect(
+		keys && keys->size() == expected.size() &&
+			std::equal(keys->begin(), keys->end(), expected.begin()),
+		"registration closure preserves source background, rank, normal/highlight BFNT, then SCORE.M order"
+	);
+	expect(
+		!th03::app::mainl_registration_resource_keys(MainRegistrationRank::none) &&
+		!th03::app::main_resource_spec({
+			.role = MainResourceRole::registration_music,
+			.registration_rank = MainRegistrationRank::easy,
+		}),
+		"registration rank selectors are required only for the rank plate"
+	);
+
+	TemporaryRoot root;
+	expect(root.valid(), "temporary registration transaction root was created");
+	if(!root.valid() || !keys) {
+		return;
+	}
+	for(std::size_t index = 0U; index + 1U < keys->size(); ++index) {
+		write_spec(root.path(), (*keys)[index], std::byte{0x91U});
+	}
+	MainResourceLoader loader(root.path(), MainResourceIntegrity::size_only);
+	const auto failed = loader.load_mainl_registration(MainRegistrationRank::hard);
+	expect(
+		!failed && loader.cached_resource_count() == 0U,
+		"a late registration closure failure publishes no partial cache entries"
+	);
+	write_spec(root.path(), keys->back(), std::byte{0x92U});
+	const auto loaded = loader.load_mainl_registration(MainRegistrationRank::hard);
+	expect(
+		loaded && loaded->size() == keys->size() &&
+			loader.cached_resource_count() == keys->size(),
+		"the complete registration closure commits all immutable resources atomically"
+	);
+}
+
 void test_rejections()
 {
 	const auto enemy_key = MainResourceKey{.role = MainResourceRole::enemy_scripts};
@@ -1004,6 +1087,7 @@ int main()
 	test_main_private_and_mainl_stage_batches();
 	test_cutscene_resource_batches();
 	test_staff_resource_batch();
+	test_registration_resource_batch();
 	test_rejections();
 	test_resolved_path_escape_if_supported();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

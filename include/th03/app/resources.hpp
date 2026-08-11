@@ -30,6 +30,7 @@ enum class MainResourceScene : std::uint8_t {
 	mainl_continue_gameover,
 	mainl_cutscene,
 	mainl_staff,
+	mainl_registration,
 };
 
 enum class MainResourceDecoder : std::uint8_t {
@@ -167,6 +168,14 @@ enum class MainStaffCdg : std::uint8_t {
 	staff_12,
 };
 
+enum class MainRegistrationRank : std::uint8_t {
+	none,
+	easy,
+	normal,
+	hard,
+	lunatic,
+};
+
 // Static roles use character == none and palette == none. Paletted character
 // roles use both fields, making the original 00..17 family explicit. The
 // stage enemy-group role uses character only because MAINL selects one of five
@@ -205,6 +214,11 @@ enum class MainResourceRole : std::uint8_t {
 	staff_background_palette,
 	staff_cdg,
 	staff_music,
+	registration_background,
+	registration_rank,
+	registration_normal_glyphs,
+	registration_highlight_glyphs,
+	registration_music,
 };
 
 struct MainResourceKey {
@@ -216,6 +230,7 @@ struct MainResourceKey {
 	MainCutscenePicture cutscene_picture = MainCutscenePicture::none;
 	MainCutsceneMusic cutscene_music = MainCutsceneMusic::none;
 	MainStaffCdg staff_cdg = MainStaffCdg::none;
+	MainRegistrationRank registration_rank = MainRegistrationRank::none;
 
 	friend constexpr auto operator<=>(
 		const MainResourceKey &,
@@ -333,6 +348,9 @@ mainl_cutscene_resource_keys(MainlCutsceneResourceRequest request);
 
 [[nodiscard]] std::vector<MainResourceKey> mainl_staff_resource_keys();
 
+[[nodiscard]] std::expected<std::vector<MainResourceKey>, ResourceLoadError>
+mainl_registration_resource_keys(MainRegistrationRank rank);
+
 // Importer-facing validation for the extracted-entry component. The loader
 // calls this before joining a manifest name to the explicit content root.
 [[nodiscard]] bool is_safe_extracted_entry_name(std::string_view name) noexcept;
@@ -377,6 +395,8 @@ public:
 	load_mainl_cutscene(MainlCutsceneResourceRequest request);
 	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 	load_mainl_staff();
+	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+	load_mainl_registration(MainRegistrationRank rank);
 
 	[[nodiscard]] std::size_t cached_resource_count() const noexcept;
 

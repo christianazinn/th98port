@@ -247,6 +247,13 @@ constexpr std::array<std::uint64_t, 12U> staff_cdg_fnv1a64{
 	return key.staff_cdg != MainStaffCdg::none;
 }
 
+[[nodiscard]] constexpr bool has_registration_selector(
+	const MainResourceKey &key
+) noexcept
+{
+	return key.registration_rank != MainRegistrationRank::none;
+}
+
 [[nodiscard]] constexpr std::uint8_t stage_enemy_group_index(
 	MainCharacter character
 ) noexcept
@@ -327,6 +334,11 @@ constexpr std::array<std::uint64_t, 12U> staff_cdg_fnv1a64{
 	case MainResourceRole::staff_background_palette:
 	case MainResourceRole::staff_cdg:
 	case MainResourceRole::staff_music:
+	case MainResourceRole::registration_background:
+	case MainResourceRole::registration_rank:
+	case MainResourceRole::registration_normal_glyphs:
+	case MainResourceRole::registration_highlight_glyphs:
+	case MainResourceRole::registration_music:
 		return 0U;
 	}
 	return 0U;
@@ -425,7 +437,7 @@ cutscene_resource_spec(MainResourceKey key)
 	if(key.character != MainCharacter::none ||
 		key.palette != MainPaletteVariant::none ||
 		key.stage_background != MainlStageBackground::none ||
-		has_staff_selector(key)) {
+		has_staff_selector(key) || has_registration_selector(key)) {
 		return std::unexpected(error(
 			ResourceLoadErrorCode::invalid_resource_key, key
 		));
@@ -523,7 +535,7 @@ staff_resource_spec(MainResourceKey key)
 	if(key.character != MainCharacter::none ||
 		key.palette != MainPaletteVariant::none ||
 		key.stage_background != MainlStageBackground::none ||
-		has_cutscene_selector(key)) {
+		has_cutscene_selector(key) || has_registration_selector(key)) {
 		return std::unexpected(error(
 			ResourceLoadErrorCode::invalid_resource_key, key
 		));
@@ -580,13 +592,108 @@ staff_resource_spec(MainResourceKey key)
 }
 
 [[nodiscard]] std::expected<MainResourceSpec, ResourceLoadError>
+registration_resource_spec(MainResourceKey key)
+{
+	if(key.character != MainCharacter::none ||
+		key.palette != MainPaletteVariant::none ||
+		key.stage_background != MainlStageBackground::none ||
+		has_cutscene_selector(key) || has_staff_selector(key)) {
+		return std::unexpected(error(
+			ResourceLoadErrorCode::invalid_resource_key, key
+		));
+	}
+	if(key.role == MainResourceRole::registration_rank) {
+		const auto raw = static_cast<std::uint8_t>(key.registration_rank);
+		if(raw == 0U || raw > static_cast<std::uint8_t>(
+			MainRegistrationRank::lunatic
+		)) {
+			return std::unexpected(error(
+				ResourceLoadErrorCode::invalid_resource_key, key
+			));
+		}
+		constexpr std::array fnv1a64{
+			0x307D700DB4D69C05ULL, 0x507886929B535358ULL,
+			0x6995CE65044F0186ULL, 0x558F9EEA22AAA179ULL,
+		};
+		const auto index = static_cast<std::size_t>(raw - 1U);
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_registration,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::cdg,
+			.logical_role = "mainl.registration.rank." + std::to_string(index),
+			.filename = "RFT" + std::to_string(index) + ".CDG",
+			.expected_bytes = 17616U,
+			.expected_fnv1a64 = fnv1a64[index],
+		};
+	}
+	if(has_registration_selector(key)) {
+		return std::unexpected(error(
+			ResourceLoadErrorCode::invalid_resource_key, key
+		));
+	}
+	switch(key.role) {
+	case MainResourceRole::registration_background:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_registration,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pi,
+			.logical_role = "mainl.registration.background",
+			.filename = "REGIB.PI",
+			.expected_bytes = 44603U,
+			.expected_fnv1a64 = 0x24064C266EDFE6B2ULL,
+		};
+	case MainResourceRole::registration_normal_glyphs:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_registration,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::bfnt_superimpose,
+			.logical_role = "mainl.registration.normal_glyphs",
+			.filename = "REGI2.BFT",
+			.expected_bytes = 25168U,
+			.expected_fnv1a64 = 0x1B8989FB9D38D1BAULL,
+		};
+	case MainResourceRole::registration_highlight_glyphs:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_registration,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::bfnt_superimpose,
+			.logical_role = "mainl.registration.highlight_glyphs",
+			.filename = "REGI1.BFT",
+			.expected_bytes = 25168U,
+			.expected_fnv1a64 = 0x9DDED02684AA4339ULL,
+		};
+	case MainResourceRole::registration_music:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_registration,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pmd_music,
+			.logical_role = "mainl.registration.music",
+			.filename = "SCORE.M",
+			.expected_bytes = 983U,
+			.expected_fnv1a64 = 0xC83D906B352A1597ULL,
+		};
+	case MainResourceRole::registration_rank:
+		break;
+	default:
+		break;
+	}
+	return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
+}
+
+[[nodiscard]] std::expected<MainResourceSpec, ResourceLoadError>
 static_resource_spec(MainResourceKey key)
 {
 	if(key.role == MainResourceRole::stage_splash_background) {
 		if(key.character != MainCharacter::none ||
 			key.palette != MainPaletteVariant::none ||
 			!is_stage_background(key.stage_background) ||
-			has_cutscene_selector(key) || has_staff_selector(key)) {
+			has_cutscene_selector(key) || has_staff_selector(key) ||
+			has_registration_selector(key)) {
 			return std::unexpected(error(
 				ResourceLoadErrorCode::invalid_resource_key, key
 			));
@@ -609,7 +716,8 @@ static_resource_spec(MainResourceKey key)
 	if(key.character != MainCharacter::none ||
 		key.palette != MainPaletteVariant::none ||
 		key.stage_background != MainlStageBackground::none ||
-		has_cutscene_selector(key) || has_staff_selector(key)) {
+		has_cutscene_selector(key) || has_staff_selector(key) ||
+		has_registration_selector(key)) {
 		return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
 	}
 
@@ -807,6 +915,11 @@ static_resource_spec(MainResourceKey key)
 	case MainResourceRole::staff_background_palette:
 	case MainResourceRole::staff_cdg:
 	case MainResourceRole::staff_music:
+	case MainResourceRole::registration_background:
+	case MainResourceRole::registration_rank:
+	case MainResourceRole::registration_normal_glyphs:
+	case MainResourceRole::registration_highlight_glyphs:
+	case MainResourceRole::registration_music:
 		return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
 	case MainResourceRole::character_sheet:
 	case MainResourceRole::character_extra_portrait:
@@ -969,7 +1082,15 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 		key.role == MainResourceRole::staff_music) {
 		return staff_resource_spec(key);
 	}
-	if(has_cutscene_selector(key) || has_staff_selector(key)) {
+	if(key.role == MainResourceRole::registration_background ||
+		key.role == MainResourceRole::registration_rank ||
+		key.role == MainResourceRole::registration_normal_glyphs ||
+		key.role == MainResourceRole::registration_highlight_glyphs ||
+		key.role == MainResourceRole::registration_music) {
+		return registration_resource_spec(key);
+	}
+	if(has_cutscene_selector(key) || has_staff_selector(key) ||
+		has_registration_selector(key)) {
 		return std::unexpected(error(
 			ResourceLoadErrorCode::invalid_resource_key, key
 		));
@@ -977,7 +1098,8 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 	if(is_character_only_role(key.role)) {
 		if(!is_character(key.character) ||
 			key.palette != MainPaletteVariant::none ||
-			key.stage_background != MainlStageBackground::none) {
+			key.stage_background != MainlStageBackground::none ||
+			has_registration_selector(key)) {
 			return std::unexpected(error(
 				ResourceLoadErrorCode::invalid_resource_key, key
 			));
@@ -1036,7 +1158,8 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 		return static_resource_spec(key);
 	}
 	if(!is_character(key.character) || !is_palette(key.palette) ||
-		key.stage_background != MainlStageBackground::none) {
+		key.stage_background != MainlStageBackground::none ||
+		has_registration_selector(key)) {
 		return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
 	}
 
@@ -1125,6 +1248,11 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 	case MainResourceRole::staff_background_palette:
 	case MainResourceRole::staff_cdg:
 	case MainResourceRole::staff_music:
+	case MainResourceRole::registration_background:
+	case MainResourceRole::registration_rank:
+	case MainResourceRole::registration_normal_glyphs:
+	case MainResourceRole::registration_highlight_glyphs:
+	case MainResourceRole::registration_music:
 		break;
 	}
 	return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
@@ -1152,6 +1280,10 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		MainResourceRole::gameover_background,
 		MainResourceRole::staff_background_palette,
 		MainResourceRole::staff_music,
+		MainResourceRole::registration_background,
+		MainResourceRole::registration_normal_glyphs,
+		MainResourceRole::registration_highlight_glyphs,
+		MainResourceRole::registration_music,
 	};
 	constexpr std::array character_roles{
 		MainResourceRole::character_sheet,
@@ -1174,7 +1306,7 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		(last_palette_value - first_palette_value + 1U) *
 		character_roles.size()) +
 		((last_character_value - first_character_value + 1U) *
-		character_only_roles.size()) + 5U + 28U + 24U + 5U + 12U);
+		character_only_roles.size()) + 5U + 28U + 24U + 5U + 12U + 4U);
 	for(const auto role : static_roles) {
 		result.push_back(*main_resource_spec({.role = role}));
 	}
@@ -1217,6 +1349,14 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		result.push_back(*main_resource_spec({
 			.role = MainResourceRole::staff_cdg,
 			.staff_cdg = static_cast<MainStaffCdg>(staff_cdg),
+		}));
+	}
+	for(std::uint8_t rank = 1U;
+		rank <= static_cast<std::uint8_t>(MainRegistrationRank::lunatic);
+		++rank) {
+		result.push_back(*main_resource_spec({
+			.role = MainResourceRole::registration_rank,
+			.registration_rank = static_cast<MainRegistrationRank>(rank),
 		}));
 	}
 	for(std::uint8_t character = first_character_value;
@@ -1571,6 +1711,26 @@ std::vector<MainResourceKey> mainl_staff_resource_keys()
 	return result;
 }
 
+std::expected<std::vector<MainResourceKey>, ResourceLoadError>
+mainl_registration_resource_keys(MainRegistrationRank rank)
+{
+	if(rank < MainRegistrationRank::easy || rank > MainRegistrationRank::lunatic) {
+		return std::unexpected(error(
+			ResourceLoadErrorCode::invalid_resource_key,
+			{.role = MainResourceRole::registration_rank,
+				.registration_rank = rank}
+		));
+	}
+	return std::vector<MainResourceKey>{
+		{.role = MainResourceRole::registration_background},
+		{.role = MainResourceRole::registration_rank,
+			.registration_rank = rank},
+		{.role = MainResourceRole::registration_normal_glyphs},
+		{.role = MainResourceRole::registration_highlight_glyphs},
+		{.role = MainResourceRole::registration_music},
+	};
+}
+
 MainResourceLoader::MainResourceLoader(
 	std::filesystem::path content_root,
 	MainResourceIntegrity integrity
@@ -1755,6 +1915,16 @@ std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 MainResourceLoader::load_mainl_staff()
 {
 	return load_batch(mainl_staff_resource_keys());
+}
+
+std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+MainResourceLoader::load_mainl_registration(MainRegistrationRank rank)
+{
+	const auto keys = mainl_registration_resource_keys(rank);
+	if(!keys) {
+		return std::unexpected(keys.error());
+	}
+	return load_batch(*keys);
 }
 
 std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
