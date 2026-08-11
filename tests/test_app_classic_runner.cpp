@@ -71,17 +71,20 @@ void test_cli()
 		parsed->launch.content.config == "YUME.CFG" &&
 		parsed->launch.content.score == "YUME.NEM" &&
 		parsed->launch.seed == 1U && !parsed->launch.fm_available &&
+		!parsed->rhythm_rom &&
 		parsed->tick_rate.ticks == 56423U &&
 		parsed->tick_rate.seconds == 1000U,
 		"valid Classic CLI preserves external paths and deterministic defaults");
 	const auto complete = parse({
 		"--classic", "--data", "d", "--main", "m", "--mainl", "l",
 		"--op", "o", "--font", "f", "--tick-rate", "3/2",
+		"--rhythm-rom", "ym2608.rom",
 		"--config", "c", "--score", "s", "--seed", "4294967295",
 		"--kotohime-zero-red", "--smoke-ticks", "7",
 	});
 	expect(complete && complete->launch.content.config == "c" &&
 		complete->launch.content.score == "s" &&
+		complete->rhythm_rom == std::filesystem::path("ym2608.rom") &&
 		complete->launch.seed == 0xFFFF'FFFFU &&
 		complete->kotohime_zero_red && complete->smoke_ticks == 7U,
 		"optional Classic paths, full seed domain, policy, and smoke bound parse");

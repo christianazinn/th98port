@@ -2,7 +2,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <new>
 #include <optional>
 #include <span>
 #include <string>
@@ -29,6 +32,85 @@ namespace {
 
 constexpr std::uint64_t maximum_idle_delay_ns = 1'000'000U;
 
+enum class RhythmRomLoadErrorCode : std::uint8_t {
+	file_missing,
+	file_status_failed,
+	file_not_regular,
+	file_size_failed,
+	file_size_mismatch,
+	file_open_failed,
+	file_read_failed,
+	allocation_failed,
+};
+
+struct RhythmRomLoadError final {
+	RhythmRomLoadErrorCode code = RhythmRomLoadErrorCode::file_missing;
+	std::uintmax_t observed_size = 0U;
+};
+
+[[nodiscard]] std::expected<std::vector<std::byte>, RhythmRomLoadError>
+load_rhythm_rom(const std::filesystem::path &path)
+{
+	std::error_code error{};
+	const auto status = std::filesystem::status(path, error);
+	if(error) {
+		if(error == std::errc::no_such_file_or_directory) {
+			return std::unexpected(RhythmRomLoadError{
+				.code = RhythmRomLoadErrorCode::file_missing,
+			});
+		}
+		return std::unexpected(RhythmRomLoadError{
+			.code = RhythmRomLoadErrorCode::file_status_failed,
+		});
+	}
+	if(!std::filesystem::exists(status)) {
+		return std::unexpected(RhythmRomLoadError{
+			.code = RhythmRomLoadErrorCode::file_missing,
+		});
+	}
+	if(!std::filesystem::is_regular_file(status)) {
+		return std::unexpected(RhythmRomLoadError{
+			.code = RhythmRomLoadErrorCode::file_not_regular,
+		});
+	}
+	const auto size = std::filesystem::file_size(path, error);
+	if(error) {
+		return std::unexpected(RhythmRomLoadError{
+			.code = RhythmRomLoadErrorCode::file_size_failed,
+		});
+	}
+	if(size != th03::audio::ym2608_rhythm_rom_bytes) {
+		return std::unexpected(RhythmRomLoadError{
+			.code = RhythmRomLoadErrorCode::file_size_mismatch,
+			.observed_size = size,
+		});
+	}
+	try {
+		std::vector<std::byte> bytes(th03::audio::ym2608_rhythm_rom_bytes);
+		std::ifstream input(path, std::ios::binary);
+		if(!input.is_open()) {
+			return std::unexpected(RhythmRomLoadError{
+				.code = RhythmRomLoadErrorCode::file_open_failed,
+			});
+		}
+		input.read(
+			reinterpret_cast<char *>(bytes.data()),
+			static_cast<std::streamsize>(bytes.size())
+		);
+		if(!input ||
+			input.gcount() != static_cast<std::streamsize>(bytes.size())) {
+			return std::unexpected(RhythmRomLoadError{
+				.code = RhythmRomLoadErrorCode::file_read_failed,
+			});
+		}
+		return bytes;
+	} catch(const std::bad_alloc &) {
+		return std::unexpected(RhythmRomLoadError{
+			.code = RhythmRomLoadErrorCode::allocation_failed,
+		});
+	}
+}
+
 bool kotohime_zero_red(
 	void *,
 	const th03::BombFrameStep &,
@@ -50,7 +132,8 @@ void print_usage()
 			"--mainl <MAINL.EXE> --op <OP.EXE> --font <FONT.ROM> "
 			"--tick-rate <ticks>/<seconds>\n"
 		<< "       [--config <YUME.CFG>] [--score <YUME.NEM>] [--seed n] "
-			"[--kotohime-zero-red] [--smoke-ticks n]\n"
+			"[--rhythm-rom <YM2608.ROM>] [--kotohime-zero-red] "
+			"[--smoke-ticks n]\n"
 		<< "   or: th03-app --vs --data <root> --main <MAIN.EXE> "
 			"--font <FONT.ROM> --tick-rate <ticks>/<seconds>\n"
 		<< "       [--p1 <character[:first|second]>] "
@@ -65,8 +148,9 @@ void print_usage()
 			"window close exits. Tick rate is explicit host policy; exact PC-98 "
 			"cadence is not yet claimed.\n"
 		<< "Classic synthesizes external PMD/EFC content and delivers canonical "
-			"PCM when SDL playback is available. OPNA rhythm is deterministically "
-			"silent until a caller-supplied ROM seam is exposed.\n"
+			"PCM when SDL playback is available. Supply an exact 8 KiB YM2608 "
+			"ADPCM-A image with --rhythm-rom; otherwise rhythm is deterministically "
+			"silent.\n"
 		<< "Kotohime requires --kotohime-zero-red, an unresolved developer "
 			"compatibility policy rather than an authenticity claim.\n";
 }
@@ -153,12 +237,28 @@ const char *name(th03::app::ClassicCliOption option) noexcept
 	case th03::app::ClassicCliOption::mainl_executable: return "mainl";
 	case th03::app::ClassicCliOption::op_executable: return "op";
 	case th03::app::ClassicCliOption::font_rom: return "font";
+	case th03::app::ClassicCliOption::rhythm_rom: return "rhythm-rom";
 	case th03::app::ClassicCliOption::config: return "config";
 	case th03::app::ClassicCliOption::score: return "score";
 	case th03::app::ClassicCliOption::tick_rate: return "tick-rate";
 	case th03::app::ClassicCliOption::seed: return "seed";
 	case th03::app::ClassicCliOption::kotohime_zero_red: return "kotohime-zero-red";
 	case th03::app::ClassicCliOption::smoke_ticks: return "smoke-ticks";
+	}
+	return "unknown";
+}
+
+const char *name(RhythmRomLoadErrorCode code) noexcept
+{
+	switch(code) {
+	case RhythmRomLoadErrorCode::file_missing: return "file-missing";
+	case RhythmRomLoadErrorCode::file_status_failed: return "file-status-failed";
+	case RhythmRomLoadErrorCode::file_not_regular: return "file-not-regular";
+	case RhythmRomLoadErrorCode::file_size_failed: return "file-size-failed";
+	case RhythmRomLoadErrorCode::file_size_mismatch: return "file-size-mismatch";
+	case RhythmRomLoadErrorCode::file_open_failed: return "file-open-failed";
+	case RhythmRomLoadErrorCode::file_read_failed: return "file-read-failed";
+	case RhythmRomLoadErrorCode::allocation_failed: return "allocation-failed";
 	}
 	return "unknown";
 }
@@ -401,6 +501,17 @@ int fail(const char *stage, const th03::app::ClassicCliError &error)
 	std::cerr << "status=error\nstage=" << stage << "\ncode="
 		<< name(error.code) << "\noption=" << name(error.option)
 		<< "\nargument-index=" << error.argument_index << '\n';
+	return 1;
+}
+
+int fail(const char *stage, const RhythmRomLoadError &error)
+{
+	std::cerr << "status=error\nstage=" << stage << "\ncode="
+		<< name(error.code) << '\n';
+	if(error.code == RhythmRomLoadErrorCode::file_size_mismatch) {
+		std::cerr << "expected-size=" << th03::audio::ym2608_rhythm_rom_bytes
+			<< "\nobserved-size=" << error.observed_size << '\n';
+	}
 	return 1;
 }
 
@@ -722,6 +833,14 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 		};
 	}
 	const auto data_root = parsed.launch.content.data_root;
+	std::vector<std::byte> rhythm_rom{};
+	if(parsed.rhythm_rom) {
+		auto loaded = load_rhythm_rom(*parsed.rhythm_rom);
+		if(!loaded) {
+			return fail("rhythm-rom", loaded.error());
+		}
+		rhythm_rom = std::move(*loaded);
+	}
 	parsed.launch.fm_available = true;
 	auto runner = th03::app::ClassicRunner::load(std::move(parsed.launch));
 	if(!runner) {
@@ -730,6 +849,7 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 	auto created_session = th03::app::ClassicAudioSession::create({
 		.data_root = data_root,
 		.tick_rate = parsed.tick_rate,
+		.rhythm_rom = std::span<const std::byte>(rhythm_rom),
 	});
 	if(!created_session) {
 		return fail("audio-session-create", created_session.error());

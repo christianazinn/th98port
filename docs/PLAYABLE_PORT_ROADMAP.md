@@ -152,7 +152,7 @@ The complete Classic developer slice and the direct-VS slice are now visible
 and interactive. The byte-fed PMD/YM2608 engine, source-shaped TH03
 transport/SFX/EFC service, deterministic Classic scene-command session, and
 bounded SDL delivery are also integrated. Audio is not yet fidelity-complete:
-source-blocking live pause/resume, rhythm-ROM packaging, exact source cadence/phase,
+redistributable rhythm-data packaging, exact source cadence/phase,
 captured PC-98 page/palette/pixel
 traces, and a human two-player run remain acceptance gates. The host therefore requires an
 explicit rational cadence as policy rather than labeling an inferred number
@@ -188,8 +188,9 @@ The existing dependency direction is already appropriate:
   access, YM2608 synthesis, register tracing, deterministic native PCM, and the
   fixed 166,400-to-48,000 Hz integer resampler. The Classic app session owns
   authenticated file-backed cue binding; the thin SDL executable owns final
-  delivery. Gameplay command emission, gain policy, and rhythm-ROM packaging
-  remain later layers.
+  delivery and the optional exact-size `--rhythm-rom` binding. Gameplay command
+  emission and gain policy are integrated; redistributable replacement-rhythm
+  packaging remains release work.
 - th03_platform_sdl owns the bounded default-device playback stream, canonical
   source-format queue, final-output overrun telemetry, and a subordinate shared
   SDL lifetime lease. It cannot advance or backpressure simulation.
@@ -303,7 +304,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
 | OP menus, Story, MAINL, cutscenes, staff | Integrated | The source-private OP owner binds title, retained Options/Music Room, read-only HiScore, Story/all-VS selection, Story, MAINL/MAIN VS, winner return, both interstages, primary and conditional extra endings, staff/verdict, score persistence, registration, and the exact four-recipe automatic Demo loop. No external OP route or replay UI is required. |
-| Audio | Engine, TH03 transport/SFX/EFC service, fixed resampler, Classic session, and SDL endpoint integrated | The launcher applies source-semantic scene commands, advances one deterministic audio interval per logical sample, and treats device loss as delivery-only. MAINL selects and loads the exact character/decisive song and effect bank; fresh/repeat/terminal MAIN publishes source Reset/Play/Stop lifecycle commands. All 61 ordinary live-MAIN donor SFX rows feed the source `snd_se_update()` boundary, including forced warning effect 19. Authenticated gates cover all 40 semantic cue identities and 22 effects. Source-blocking live pause/resume and effect 21 follow separately; rhythm-ROM packaging, shipped-TSR traces, and physical-device QA remain release work. |
+| Audio | Engine, TH03 transport/SFX/EFC service, fixed resampler, Classic session, and SDL endpoint integrated | The launcher applies source-semantic scene commands, advances one deterministic audio interval per logical sample, and treats device loss as delivery-only. MAINL selects and loads the exact character/decisive song and effect bank; fresh/repeat/terminal MAIN publishes source Reset/Play/Stop lifecycle commands. All 61 ordinary live-MAIN donor SFX rows feed the source `snd_se_update()` boundary, including forced warning effect 19, and live pause/resume emits effect 21. Authenticated gates cover all 40 semantic cue identities and 22 effects. The optional exact-size `--rhythm-rom` path reaches the engine; replacement-data packaging, shipped-TSR traces, and physical-device QA remain release work. |
 | Persistent score/configuration UI and localization/QoL | Original UI integrated; QoL pending | The exact original score/config codecs, source mutation rules, validated atomic whole-file stores, OP Options, and read-only HiScore/MAINL registration paths are app-owned. Localization and optional QoL remain outside core. |
 
 The following parcels can proceed now, provided they do not claim readiness for VS or change core semantics:
@@ -379,7 +380,8 @@ donor evidence establishes different semantics.
 [ymfm](https://github.com/aaronsgiles/ymfm) has no release tag to treat as a
 default pin. The exact 98fmplayer and ymfm commits, vendoring strategy, and
 license obligations are now locked. The corpus proves that 20/21 songs use the
-8 KiB ADPCM-A rhythm ROM and the engine accepts it only as caller-supplied data.
+8 KiB ADPCM-A rhythm ROM. The Classic launcher accepts it only through the
+optional exact-size `--rhythm-rom` input and otherwise selects explicit silence.
 The remaining load-bearing unknowns are shipped-TSR register parity for EFC
 start/tick/replacement/restoration and the implemented fade/pause/mask
 operations, the authentic OPNA clock, and ROM packaging. These are

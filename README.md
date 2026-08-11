@@ -53,7 +53,8 @@ ctest --preset msvc-x64-sdl
 `th03-app` reads an external structured extraction containing `YUME1.DAT/`
 and `YUME2.DAT/`, a supported Japanese `MAIN.EXE` compiled-content profile,
 supported unpacked Japanese `MAINL.EXE` and `OP.EXE` profiles, and a
-caller-supplied 288,768-byte PC-98 `FONT.ROM`. No
+caller-supplied 288,768-byte PC-98 `FONT.ROM`, and optionally a caller-supplied
+8,192-byte YM2608 ADPCM-A rhythm image. No
 original bytes are embedded or copied into the build.
 Cadence is required explicitly because an exact PC-98 wall-clock rate and first
 VSync phase have not yet been established:
@@ -63,6 +64,7 @@ out\build\msvc-x64-sdl\Debug\th03-app.exe `
   --classic --data X:\th03-extracted `
   --main X:\th03\MAIN.EXE --mainl X:\th03\MAINL.EXE `
   --op X:\th03\OP.EXE --font X:\pc98\FONT.ROM `
+  --rhythm-rom X:\pc98\YM2608.ROM `
   --tick-rate 56423/1000
 
 out\build\msvc-x64-sdl\Debug\th03-app.exe `
@@ -77,10 +79,11 @@ Kotohime additionally requires the explicit developer flag
 evidence-backed release policy. The Classic path always executes semantic
 commands through the authenticated PMD/OPNA/EFC session and fixed resampler;
 SDL availability controls only bounded final playback. Music Off follows fresh
-MAIN/MAINL process behavior and disables both music and FM effects. Rhythm
-remains deterministically silent
-until an authenticated caller-supplied ROM is packaged, so this is not yet a
-complete audio-fidelity claim. `--help` lists
+MAIN/MAINL process behavior and disables both music and FM effects. An exact
+8 KiB `--rhythm-rom` input is copied into the deterministic engine; omitting it
+selects explicit silent-rhythm mode. The repository does not supply or download
+that data, so this is not yet a complete redistributable audio-fidelity claim.
+`--help` lists
 keyboard controls and all launch options.
 
 Validate an external frozen case without copying it into this repository:

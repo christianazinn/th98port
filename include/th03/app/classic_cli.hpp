@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <filesystem>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -21,6 +22,7 @@ enum class ClassicCliOption : std::uint8_t {
 	mainl_executable,
 	op_executable,
 	font_rom,
+	rhythm_rom,
 	config,
 	score,
 	tick_rate,
@@ -49,6 +51,9 @@ struct ClassicCliRequest final {
 	bool show_help = false;
 	ClassicRunnerRequest launch{};
 	RationalTickRate tick_rate{};
+	// Optional caller-supplied YM2608 ADPCM-A image. The launcher validates the
+	// exact 8 KiB size and the audio engine takes its own copy.
+	std::optional<std::filesystem::path> rhythm_rom{};
 	// Explicit developer compatibility policy for the donor's uninitialized
 	// Kotohime Bomb fade byte. This is never an authenticity claim.
 	bool kotohime_zero_red = false;

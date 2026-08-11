@@ -821,6 +821,13 @@ if(BUILD_TESTING)
 				-DTH03_APP=$<TARGET_FILE:th03-app>
 				-P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_app_classic_missing_main.cmake
 		)
+		add_test(
+			NAME th03-app-classic-rhythm-rom
+			COMMAND ${CMAKE_COMMAND}
+				-DTH03_APP=$<TARGET_FILE:th03-app>
+				-DTH03_TEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/classic-rhythm-rom-test
+				-P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_app_classic_rhythm_rom.cmake
+		)
 		add_executable(th03-app-sdl-defaults-tests
 			apps/th03-app/default_bindings.cpp
 			tests/test_app_sdl_defaults.cpp

@@ -99,6 +99,9 @@ constexpr std::size_t option_count =
 	if(text == "--font") {
 		return ClassicCliOption::font_rom;
 	}
+	if(text == "--rhythm-rom") {
+		return ClassicCliOption::rhythm_rom;
+	}
 	if(text == "--config") {
 		return ClassicCliOption::config;
 	}
@@ -190,6 +193,9 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 			break;
 		case ClassicCliOption::font_rom:
 			request.launch.content.font_rom = std::filesystem::path(value);
+			break;
+		case ClassicCliOption::rhythm_rom:
+			request.rhythm_rom = std::filesystem::path(value);
 			break;
 		case ClassicCliOption::config:
 			request.launch.content.config = std::filesystem::path(value);

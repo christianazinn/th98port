@@ -159,10 +159,11 @@ The source-level sequence is consistent across screens:
   8 while the visual transition runs;
 - continue and other exits use nonblocking fades, including speed 3; and
 - script commands can stop, start, load/start a named song, and request a PMD
-  fade without blocking the script interpreter.
+  fade without blocking the script interpreter; stock scripts add speed 12.
 
-This yields three fade speeds that must be fixtures: `3`, `8`, and `16`. Do not
-replace them with wall-clock durations. The PMD contract updates fade state from
+This yields four stock fade speeds that must be fixtures: `3`, `8`, `12`, and
+`16`. Do not replace them with wall-clock durations. The PMD contract updates
+fade state from
 Timer-A work. The current PMDWin-derived implementation applies one fade step
 per eight Timer-A services; that is useful implementation evidence, also visible
 in [`foo_input_pmd`'s timer and fade code](https://github.com/stuerp/foo_input_pmd/blob/632622b07ad930d70c430bdbca9e71e96e1e9306/PMD/PMD.cpp),
@@ -399,8 +400,10 @@ Policy:
 
 - Never vendor, download automatically, hash-lock into a public fixture bundle,
   or redistribute a rhythm ROM/sample set without an explicit compatible grant.
-- Accept an external user-supplied 8 KiB ROM dump through the asset resolver.
-  The user is responsible for obtaining it lawfully for their jurisdiction.
+- Accept an external user-supplied 8 KiB ROM dump through the Classic launcher's
+  `--rhythm-rom` option. The launcher validates an ordinary exact-size file and
+  the engine copies it before SDL construction. The user is responsible for
+  obtaining it lawfully for their jurisdiction.
 - Optionally support six explicitly user-selected replacement WAVs, but label
   that a non-reference acoustic mode. Only ship replacements whose license and
   authorship are recorded.
@@ -651,9 +654,10 @@ register divergence before a waveform metric.
 4. **Actual song feature subset:** corpus structure and the native byte-silent
    gate resolve rhythm (20/21) and ordinary ADPCM/PCM (unused). Shipped-TSR
    register comparison remains necessary for exact sequencing fidelity.
-5. **Rhythm provenance:** decide whether reference-mode users provide an owned
-   8 KiB ROM, whether a redistributable replacement exists, and how packaging
-   communicates silent-rhythm mode. Do not use unofficial download links.
+5. **Rhythm provenance:** the optional exact-size caller seam and explicit
+   silent-rhythm mode are implemented. Decide which owned 8 KiB image defines
+   reference mode, whether a redistributable replacement exists, and how public
+   packaging communicates that choice. Do not use unofficial download links.
 6. **Stem implementation:** confirm source/channel ownership from `.EFC` traces,
    then choose the smallest `ymfm` output-mask extension that preserves a single
    shared chip state.
