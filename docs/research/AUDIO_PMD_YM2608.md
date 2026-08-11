@@ -502,14 +502,32 @@ documented non-reference shadow-render policy rather than a guessed split.
 
 ### Resampling and device output
 
-Choose one canonical renderer output, proposed as signed stereo PCM at 48,000
-Hz. Convert from the pinned `ymfm` native rate with an integer-phase,
-fixed-coefficient resampler. Commit the coefficient generator and generated
-table under a compatible license; define rounding, saturation, initial delay,
-and flush behavior. Apply Q1.31 (or another fixed, specified) user gains after
-resampling/stem formation. If the physical device cannot accept 48 kHz, a final
-device-only conversion occurs after canonical PCM and is excluded from golden
-hashes.
+The canonical renderer output is fixed as signed 32-bit stereo PCM at 48,000
+Hz. The current minimum-fidelity engine produces exactly 166,400 Hz
+(`7,987,200 / 48`), reducing the conversion ratio to 15 output samples for
+every 52 input samples. `PmdFixedResampler` implements that one ratio only; it
+is not a general host-device rate converter.
+
+The checked-in port-owned generator produces 15 signed-Q30 phases of a 128-tap
+Blackman-windowed sinc with a 20 kHz cutoff. Every quantized phase is corrected
+to an exact Q30 sum of one. The runtime uses a 128-sample fixed ring and signed
+64-bit accumulation, rounds nearest with half away from zero, and saturates to
+signed 32-bit output. It performs no allocation or floating-point work.
+
+Output sample `m` is centered at `floor(m * 52 / 15)` with phase
+`(m * 52) % 15`. The symmetric support retains 63 earlier samples and requires
+64 samples of lookahead; missing startup and tail samples are zero. A nonempty
+finite stream emits exactly
+`ceil((input_sample_count + 63) * 15 / 52)` samples after bounded flush, while
+an empty stream emits none. Finish is explicit and idempotent, reset returns to
+the all-zero phase, and arbitrary streaming chunk boundaries are sample-exact.
+The frozen impulse hash is `2748126492` on strict GCC and MSVC.
+
+Apply fixed user gains only after this canonical boundary and after any future
+stem formation. If the physical device cannot accept 48 kHz signed stereo, a
+final device-only conversion occurs afterward and is excluded from canonical
+hashes. Neither host device time nor its conversion state may feed back into
+PMD, presentation, gameplay, or replay timing.
 
 This makes three validation levels explicit:
 
@@ -622,17 +640,24 @@ register divergence before a waveform metric.
 6. **Stem implementation:** confirm source/channel ownership from `.EFC` traces,
    then choose the smallest `ymfm` output-mask extension that preserves a single
    shared chip state.
-7. **Canonical rate/resampler:** approve 48 kHz, the fidelity mode, filter,
-   coefficients, latency, rounding, and saturation before creating PCM goldens.
+7. **Canonical rate/resampler:** resolved as explicit host policy for the current
+   minimum-fidelity 166,400 Hz stream: fixed 48 kHz, 15 phases, 128 taps, signed
+   Q30, 64-sample lookahead, round-half-away, and signed-32 saturation. The
+   authentic clock/profile question remains separate.
 8. **Portability floor:** x64 Windows is mandatory; decide whether 32-bit Windows
    and non-Windows hosts are release targets before freezing ABI/tests.
-9. **Determinism promise:** decide whether cross-compiler PCM hashes are a release
-   contract or whether only register traces and same-toolchain PCM are exact.
+9. **Determinism promise:** generated engine and resampler PCM/register hashes
+   are now an exact GCC/MSVC contract. External shipped-TSR traces remain the
+   authenticity contract rather than a waveform claim.
 10. **Presentation timing coverage:** capture menu, continue, game-over, ending,
     pause, and stage-transition event ordering; the gameplay replay corpus alone
     does not freeze these audiovisual boundaries.
 
-Audio remains outside `libth03`. The no-UI engine and source-shaped
-transport/SFX/EFC service plus their generated and external byte-silent gates
-are implemented; the next safe move is deterministic resampling and SDL device
-delivery, followed by semantic scene-command integration.
+Audio remains outside `libth03`. The no-UI engine, source-shaped
+transport/SFX/EFC service, and fixed 15/52 integer resampler plus their generated
+and external byte-silent gates are implemented. The resampler's checked-in
+15-phase, 128-tap signed-Q30 table has exact per-phase DC gain, a 20 kHz cutoff,
+at most 0.025 dB droop through 17 kHz, and at least 75 dB rejection from 24 kHz;
+its 64-sample lookahead and zero-extended tail are explicit host policy. The
+next safe move is SDL device delivery, followed by semantic scene-command
+integration.

@@ -217,6 +217,7 @@ set_target_properties(th03_vendor_ymfm PROPERTIES CXX_EXTENSIONS OFF)
 th03_silence_vendor_warnings(th03_vendor_ymfm)
 
 add_library(th03_audio_pmd STATIC
+	src/audio/fixed_resampler.cpp
 	src/audio/pmd_opna.cpp
 	src/audio/pmd_shim.c
 	src/audio/th03_pmd_service.cpp
@@ -528,6 +529,19 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-audio-pmd-service-tests
 		COMMAND th03-audio-pmd-service-tests
+	)
+
+	add_executable(th03-audio-fixed-resampler-tests
+		tests/test_audio_fixed_resampler.cpp
+	)
+	target_link_libraries(
+		th03-audio-fixed-resampler-tests PRIVATE th03_audio_pmd
+	)
+	th03_set_warnings(th03-audio-fixed-resampler-tests)
+	th03_stage_audio_licenses(th03-audio-fixed-resampler-tests)
+	add_test(
+		NAME th03-audio-fixed-resampler-tests
+		COMMAND th03-audio-fixed-resampler-tests
 	)
 
 	add_executable(th03-tests
