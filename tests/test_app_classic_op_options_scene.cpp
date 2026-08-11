@@ -3,10 +3,19 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <iostream>
 #include <memory>
+#include <optional>
+#include <span>
 #include <string_view>
 #include <utility>
+
+#include "th03/app/authentic_text.hpp"
+#include "th03/app/resources.hpp"
+#include "th03/assets/decode.hpp"
+#include "th03/present/pi.hpp"
+#include "th03/present/superimpose.hpp"
 
 namespace {
 
@@ -459,14 +468,161 @@ void test_key_ring_and_rejections()
 	);
 }
 
+const th03::app::LoadedMainResource *find_resource(
+	std::span<const th03::app::LoadedMainResource> resources,
+	th03::app::MainResourceRole role
+)
+{
+	for(const auto &resource : resources) {
+		if(resource.spec.key.role == role) {
+			return &resource;
+		}
+	}
+	return nullptr;
+}
+
+void local_original_gate(const std::filesystem::path &content_root)
+{
+	th03::app::MainResourceLoader loader(content_root);
+	const auto closure = loader.load_op_title_menu();
+	expect(
+		closure.has_value(),
+		"local title closure authenticates retained Options resources"
+	);
+	if(!closure) {
+		return;
+	}
+	const auto *background_resource = find_resource(
+		*closure, th03::app::MainResourceRole::op_menu_background
+	);
+	const auto *window_resource = find_resource(
+		*closure, th03::app::MainResourceRole::op_window_sheet
+	);
+	const auto *gaiji_resource = find_resource(
+		*closure, th03::app::MainResourceRole::op_gaiji_font
+	);
+	expect(
+		background_resource && background_resource->bytes &&
+			window_resource && window_resource->bytes &&
+			gaiji_resource && gaiji_resource->bytes,
+		"local retained TL02, OPWIN, and MIKOFT payloads are present"
+	);
+	if(!background_resource || !background_resource->bytes ||
+		!window_resource || !window_resource->bytes ||
+		!gaiji_resource || !gaiji_resource->bytes) {
+		return;
+	}
+	auto background = th03::assets::decode_pi(*background_resource->bytes);
+	auto window = th03::assets::decode_bfnt(
+		*window_resource->bytes, BfntConsumerPolicy::superimpose
+	);
+	auto gaiji = th03::assets::decode_bfnt(
+		*gaiji_resource->bytes, BfntConsumerPolicy::gaiji
+	);
+	expect(
+		background && window && gaiji,
+		"local retained Options assets decode at source geometry"
+	);
+	if(!background || !window || !gaiji || !background->palette) {
+		return;
+	}
+
+	th03::present::Raster raster{};
+	for(std::uint8_t index = 0U; index < background->palette->colors.size();
+		++index) {
+		expect(
+			raster.set_pending_palette_entry(
+				index, background->palette->colors[index]
+			),
+			"local TL02 palette entry prepares"
+		);
+	}
+	raster.apply_pending_palette();
+	expect(
+		th03::present::pi_put_8(raster, 0, 0, *background),
+		"local TL02 draws before retained main-window reconstruction"
+	);
+	auto prepared_window = th03::present::prepare_superimpose_sheet(*window);
+	expect(
+		prepared_window.has_value(),
+		"local OPWIN prepares for retained source window reconstruction"
+	);
+	if(!prepared_window) {
+		return;
+	}
+	expect(
+		th03::present::superimpose_put(
+			raster, *prepared_window, {160, 256}, 0U
+		),
+		"local OPWIN left edge reconstructs"
+	);
+	for(std::int32_t left = 176; left <= 280; left += 8) {
+		const auto offset =
+			(static_cast<std::size_t>(256) * background->image.width) +
+			static_cast<std::size_t>(left);
+		expect(
+			raster.blit({
+				.pixels = std::span<const th03::present::Index4>(
+					background->image.indices
+				).subspan(offset),
+				.width = 16U,
+				.height = 128U,
+				.stride = background->image.width,
+			}, {left, 256}) &&
+			th03::present::superimpose_put(
+				raster, *prepared_window, {left, 256}, 2U
+			),
+			"local OPWIN main-width source step reconstructs"
+		);
+	}
+
+	auto prepared_gaiji = th03::app::PreparedGameftGaiji::prepare(*gaiji);
+	expect(prepared_gaiji.has_value(), "local MIKOFT gaiji prepare");
+	if(!prepared_gaiji) {
+		return;
+	}
+	th03::present::Tram tram{};
+	prepared_gaiji->install(tram);
+	ClassicConfigOptions config{};
+	GameInit resident{};
+	resident.rank = static_cast<std::uint8_t>(config.rank);
+	resident.key_mode = static_cast<std::uint8_t>(config.key_mode);
+	auto created = ClassicOpOptionsScene::create(
+		resident, config, true, std::move(raster), std::move(tram),
+		std::move(*background), std::move(*window)
+	);
+	expect(
+		created.has_value(),
+		"local retained title state adopts into Options"
+	);
+	if(!created) {
+		return;
+	}
+	grow_and_enter(**created, {.ok = true});
+	expect_gaiji(
+		(*created)->tram(), 25, 17, 0x6EU, th03::present::tram_white,
+		"local MIKOFT renders the selected Rank label"
+	);
+	expect(
+		(*created)->raster().pixel(Page::zero, {384, 256}) !=
+			(*created)->raster().pixel(Page::zero, {400, 256}),
+		"local OPWIN expanded edge remains distinct from TL02"
+	);
+}
+
 } // namespace
 
-int main()
+int main(int argc, char **argv)
 {
 	test_exact_rows_and_transition_lock();
 	test_config_audio_and_return_cadence();
 	test_bgm_modes_and_disabled_selection();
 	test_key_ring_and_rejections();
+	if(argc == 2) {
+		local_original_gate(argv[1]);
+	} else {
+		expect(argc == 1, "optional local gate accepts one content root");
+	}
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }
