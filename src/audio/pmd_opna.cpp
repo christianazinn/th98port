@@ -17,6 +17,235 @@ namespace {
 
 constexpr std::uint32_t fnv_offset = 2'166'136'261U;
 constexpr std::uint32_t fnv_prime = 16'777'619U;
+constexpr std::size_t effect_pointer_entries = 128U;
+constexpr std::size_t effect_pointer_bytes = effect_pointer_entries * 2U;
+constexpr std::size_t fm_tone_record_bytes = 0x1AU;
+
+struct PreparedEffectBank {
+	std::vector<std::uint8_t> bytes{};
+	std::size_t tone_offset = 0U;
+	std::vector<std::size_t> relocation_words{};
+};
+
+struct ActiveEffectLayout {
+	std::uint16_t table_offset = 0U;
+	std::uint16_t tone_offset = 0U;
+};
+
+std::uint16_t read_le16(
+	std::span<const std::uint8_t> bytes,
+	std::size_t offset
+) noexcept
+{
+	return static_cast<std::uint16_t>(
+		static_cast<std::uint16_t>(bytes[offset]) |
+		(static_cast<std::uint16_t>(bytes[offset + 1U]) << 8U)
+	);
+}
+
+void write_le16(
+	std::span<std::uint8_t> bytes,
+	std::size_t offset,
+	std::uint16_t value
+) noexcept
+{
+	bytes[offset] = static_cast<std::uint8_t>(value);
+	bytes[offset + 1U] = static_cast<std::uint8_t>(value >> 8U);
+}
+
+std::expected<PreparedEffectBank, PmdOpnaError> validate_effect_bank(
+	std::span<const std::byte> bank
+)
+{
+	if(bank.size() < (effect_pointer_bytes + fm_tone_record_bytes) ||
+		bank.size() > pmd_effect_bank_max_bytes) {
+		return std::unexpected(PmdOpnaError{
+			.code = PmdOpnaErrorCode::invalid_effect_bank_size,
+			.supplied_size = bank.size(),
+		});
+	}
+
+	PreparedEffectBank candidate{};
+	candidate.bytes.resize(bank.size());
+	std::memcpy(candidate.bytes.data(), bank.data(), bank.size());
+	const std::span<const std::uint8_t> bytes(candidate.bytes);
+	std::array<std::uint16_t, effect_pointer_entries> pointers{};
+	for(std::size_t index = 0U; index < pointers.size(); ++index) {
+		pointers[index] = read_le16(bytes, index * 2U);
+	}
+	if(pointers.front() != effect_pointer_bytes) {
+		return std::unexpected(PmdOpnaError{
+			.code = PmdOpnaErrorCode::invalid_effect_bank,
+			.supplied_size = 0U,
+		});
+	}
+	for(std::size_t index = 0U; index + 1U < pointers.size(); ++index) {
+		if(pointers[index] >= pointers[index + 1U] ||
+			pointers[index + 1U] > bank.size()) {
+			return std::unexpected(PmdOpnaError{
+				.code = PmdOpnaErrorCode::invalid_effect_bank,
+				.supplied_size = index,
+			});
+		}
+	}
+	candidate.tone_offset = pointers.back();
+	if(candidate.tone_offset + fm_tone_record_bytes > bank.size()) {
+		return std::unexpected(PmdOpnaError{
+			.code = PmdOpnaErrorCode::invalid_effect_bank,
+			.supplied_size = candidate.tone_offset,
+		});
+	}
+
+	std::array<bool, 256U> referenced_tones{};
+	for(std::size_t effect = 0U; effect < pmd_effect_count; ++effect) {
+		std::size_t cursor = pointers[effect];
+		const std::size_t end = pointers[effect + 1U];
+		bool terminated = false;
+		while(cursor < end) {
+			const auto command = bytes[cursor];
+			if(command == 0x80U) {
+				terminated = true;
+				++cursor;
+				break;
+			}
+			if(command < 0x80U) {
+				if(cursor + 2U > end) {
+					break;
+				}
+				cursor += 2U;
+				continue;
+			}
+
+			std::size_t argument_bytes = 0U;
+			switch(command) {
+			case 0xFFU:
+				argument_bytes = 1U;
+				break;
+			case 0xFDU:
+				argument_bytes = 1U;
+				break;
+			case 0xF3U:
+			case 0xFBU:
+				argument_bytes = 0U;
+				break;
+			case 0xF9U:
+				argument_bytes = 2U;
+				break;
+			case 0xF8U:
+			case 0xF2U:
+				argument_bytes = 4U;
+				break;
+			case 0xF1U:
+			case 0xF5U:
+				argument_bytes = 1U;
+				break;
+			case 0xDAU:
+				argument_bytes = 3U;
+				break;
+			default:
+				return std::unexpected(PmdOpnaError{
+					.code = PmdOpnaErrorCode::invalid_effect_bank,
+					.supplied_size = cursor,
+				});
+			}
+			if(cursor + 1U + argument_bytes > end) {
+				break;
+			}
+			if(command == 0xFFU) {
+				referenced_tones[bytes[cursor + 1U]] = true;
+			} else if(command == 0xF9U) {
+				const auto target = read_le16(bytes, cursor + 1U);
+				if(target < pointers[effect] ||
+					static_cast<std::size_t>(target) + 1U >= end) {
+					return std::unexpected(PmdOpnaError{
+						.code = PmdOpnaErrorCode::invalid_effect_bank,
+						.supplied_size = cursor,
+					});
+				}
+				candidate.relocation_words.push_back(cursor + 1U);
+			} else if(command == 0xF8U) {
+				const auto target = read_le16(bytes, cursor + 3U);
+				if(static_cast<std::size_t>(target) + 2U <
+					pointers[effect] ||
+					static_cast<std::size_t>(target) + 2U >= end) {
+					return std::unexpected(PmdOpnaError{
+						.code = PmdOpnaErrorCode::invalid_effect_bank,
+						.supplied_size = cursor,
+					});
+				}
+				candidate.relocation_words.push_back(cursor + 3U);
+			}
+			cursor += 1U + argument_bytes;
+		}
+		if(!terminated || cursor != end) {
+			return std::unexpected(PmdOpnaError{
+				.code = PmdOpnaErrorCode::invalid_effect_bank,
+				.supplied_size = effect,
+			});
+		}
+	}
+
+	std::array<bool, 256U> available_tones{};
+	for(std::size_t offset = candidate.tone_offset;
+		offset + fm_tone_record_bytes <= bank.size();
+		offset += fm_tone_record_bytes) {
+		const auto tone = bytes[offset];
+		if(available_tones[tone]) {
+			return std::unexpected(PmdOpnaError{
+				.code = PmdOpnaErrorCode::invalid_effect_bank,
+				.supplied_size = tone,
+			});
+		}
+		available_tones[tone] = true;
+	}
+	for(std::size_t tone = 0U; tone < referenced_tones.size(); ++tone) {
+		if(referenced_tones[tone] && !available_tones[tone]) {
+			return std::unexpected(PmdOpnaError{
+				.code = PmdOpnaErrorCode::invalid_effect_bank,
+				.supplied_size = tone,
+			});
+		}
+	}
+	return candidate;
+}
+
+std::optional<ActiveEffectLayout> append_effect_bank(
+	std::vector<std::uint8_t> &song,
+	const PreparedEffectBank &bank
+)
+{
+	if(song.empty() ||
+		song.size() + bank.bytes.size() >
+			std::numeric_limits<std::uint16_t>::max()) {
+		return std::nullopt;
+	}
+	const auto vector_offset = song.size();
+	const auto pmd_offset = vector_offset - 1U;
+	song.insert(song.end(), bank.bytes.begin(), bank.bytes.end());
+	std::span<std::uint8_t> active(song);
+	for(std::size_t index = 0U; index < effect_pointer_entries; ++index) {
+		const auto local = read_le16(bank.bytes, index * 2U);
+		write_le16(
+			active,
+			vector_offset + (index * 2U),
+			static_cast<std::uint16_t>(pmd_offset + local)
+		);
+	}
+	for(const auto word_offset : bank.relocation_words) {
+		const auto local = read_le16(bank.bytes, word_offset);
+		write_le16(
+			active,
+			vector_offset + word_offset,
+			static_cast<std::uint16_t>(pmd_offset + local)
+		);
+	}
+	return ActiveEffectLayout{
+		.table_offset = static_cast<std::uint16_t>(pmd_offset),
+		.tone_offset = static_cast<std::uint16_t>(
+			pmd_offset + bank.tone_offset
+		),
+	};
+}
 
 std::uint32_t clock_divisor(PmdOpnaFidelity fidelity) noexcept
 {
@@ -238,8 +467,10 @@ struct PmdOpnaEngine::Impl final : ymfm::ymfm_interface {
 	std::uint32_t native_sample_rate = 0U;
 	std::vector<std::uint8_t> rhythm_rom{};
 	std::vector<std::uint8_t> prepared_song{};
+	std::optional<PreparedEffectBank> prepared_effect_bank{};
 	std::vector<std::uint8_t> active_song{};
 	PmdPointer active_pmd{};
+	bool active_effect_bank = false;
 	std::array<std::uint8_t, 512U> registers{};
 	std::array<std::int64_t, 2U> timer_deadlines{-1, -1};
 	bool irq_asserted = false;
@@ -327,6 +558,25 @@ std::expected<void, PmdOpnaError> PmdOpnaEngine::load_song(
 	}
 }
 
+std::expected<void, PmdOpnaError> PmdOpnaEngine::load_effect_bank(
+	std::span<const std::byte> bank
+)
+{
+	try {
+		auto candidate = validate_effect_bank(bank);
+		if(!candidate) {
+			return std::unexpected(candidate.error());
+		}
+		impl_->prepared_effect_bank = std::move(*candidate);
+		return {};
+	} catch(const std::bad_alloc &) {
+		return std::unexpected(PmdOpnaError{
+			.code = PmdOpnaErrorCode::allocation_failed,
+			.supplied_size = bank.size(),
+		});
+	}
+}
+
 std::expected<void, PmdOpnaError> PmdOpnaEngine::play()
 {
 	if(impl_->prepared_song.empty()) {
@@ -336,6 +586,20 @@ std::expected<void, PmdOpnaError> PmdOpnaEngine::play()
 	}
 	try {
 		auto candidate_song = impl_->prepared_song;
+		std::optional<ActiveEffectLayout> effect_layout{};
+		if(impl_->prepared_effect_bank) {
+			effect_layout = append_effect_bank(
+				candidate_song,
+				*impl_->prepared_effect_bank
+			);
+			if(!effect_layout) {
+				return std::unexpected(PmdOpnaError{
+					.code = PmdOpnaErrorCode::invalid_song_size,
+					.supplied_size = impl_->prepared_song.size() +
+						impl_->prepared_effect_bank->bytes.size(),
+				});
+			}
+		}
 		auto candidate_pmd = make_pmd();
 		if(!candidate_pmd) {
 			return std::unexpected(PmdOpnaError{
@@ -366,8 +630,19 @@ std::expected<void, PmdOpnaError> PmdOpnaEngine::play()
 				.supplied_size = candidate_song.size(),
 			});
 		}
+		if(effect_layout && !th03_pmd_configure_effect_bank(
+			candidate_pmd.get(),
+			effect_layout->table_offset,
+			effect_layout->tone_offset,
+			pmd_effect_count
+		)) {
+			return std::unexpected(PmdOpnaError{
+				.code = PmdOpnaErrorCode::invalid_effect_bank,
+			});
+		}
 		impl_->active_song = std::move(candidate_song);
 		impl_->active_pmd = std::move(candidate_pmd);
+		impl_->active_effect_bank = effect_layout.has_value();
 		return {};
 	} catch(const std::bad_alloc &) {
 		return std::unexpected(PmdOpnaError{
@@ -399,6 +674,40 @@ void PmdOpnaEngine::fade(std::int8_t speed) noexcept
 void PmdOpnaEngine::set_volume(std::uint8_t volume) noexcept
 {
 	th03_pmd_set_volume(impl_->active_pmd.get(), volume);
+}
+
+std::expected<void, PmdOpnaError> PmdOpnaEngine::play_effect(
+	std::uint8_t effect_id
+) noexcept
+{
+	if(effect_id >= pmd_effect_count) {
+		return std::unexpected(PmdOpnaError{
+			.code = PmdOpnaErrorCode::invalid_effect_id,
+			.supplied_size = effect_id,
+		});
+	}
+	if(!impl_->active_pmd) {
+		return std::unexpected(PmdOpnaError{
+			.code = PmdOpnaErrorCode::no_song_loaded,
+		});
+	}
+	if(!impl_->active_effect_bank) {
+		return std::unexpected(PmdOpnaError{
+			.code = PmdOpnaErrorCode::no_effect_bank_loaded,
+		});
+	}
+	if(!th03_pmd_play_effect(impl_->active_pmd.get(), effect_id)) {
+		return std::unexpected(PmdOpnaError{
+			.code = PmdOpnaErrorCode::invalid_effect_bank,
+			.supplied_size = effect_id,
+		});
+	}
+	return {};
+}
+
+void PmdOpnaEngine::stop_effect() noexcept
+{
+	th03_pmd_stop_effect(impl_->active_pmd.get());
 }
 
 std::expected<void, PmdOpnaError> PmdOpnaEngine::set_part_mask(
@@ -449,7 +758,12 @@ PmdOpnaStatus PmdOpnaEngine::status() const noexcept
 		.song_loaded = !impl_->prepared_song.empty(),
 		.playing = th03_pmd_is_playing(pmd),
 		.paused = th03_pmd_is_paused(pmd),
+		.effect_bank_loaded = impl_->prepared_effect_bank.has_value(),
 		.rhythm_rom_present = !impl_->rhythm_rom.empty(),
+		.active_effect = [pmd]() -> std::optional<std::uint8_t> {
+			const auto effect = th03_pmd_active_effect(pmd);
+			return effect == 0xFFU ? std::nullopt : std::optional{effect};
+		}(),
 		.native_sample_rate = impl_->native_sample_rate,
 		.samples_rendered = impl_->samples_rendered,
 		.chip_clocks = impl_->chip_clocks,

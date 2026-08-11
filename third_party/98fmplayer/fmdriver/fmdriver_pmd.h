@@ -386,6 +386,10 @@ struct driver_pmd {
   uint8_t ssg_noise_freq_wrote;
   // 432a
   bool fmeff_playing;
+  /* TH03 extraction: bounded external .EFC state for the upstream stub. */
+  uint8_t fmeff_num;
+  uint16_t fmeff_data_ptr;
+  uint16_t fmeff_tone_ptr;
   // 432c
   bool adpcmeff_playing;
   // 432d
@@ -465,6 +469,15 @@ struct driver_pmd {
 
 bool pmd_load(struct driver_pmd *pmd, uint8_t *data, uint16_t datalen);
 void pmd_init(struct fmdriver_work *work, struct driver_pmd *pmd);
+bool pmd_fmeff_start(
+  struct fmdriver_work *work,
+  struct driver_pmd *pmd,
+  uint8_t effect_num,
+  uint16_t entry_ptr,
+  uint16_t data_ptr,
+  uint16_t tone_ptr
+);
+void pmd_fmeff_stop(struct fmdriver_work *work, struct driver_pmd *pmd);
 bool pmd_ppc_load(struct fmdriver_work *work, uint8_t *data, size_t datalen);
 #ifdef __cplusplus
 }

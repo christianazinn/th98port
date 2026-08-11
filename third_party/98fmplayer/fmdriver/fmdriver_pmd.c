@@ -998,18 +998,25 @@ static void pmd_ssgeff_tick(
 // 2dda
 static uint8_t *pmd_get_toneptr(
   struct driver_pmd *pmd,
+  struct pmd_part *part,
   uint8_t tonenum
 ) {
-  if (pmd->tone_included) {
-    for (uint16_t toneptr = pmd->tone_ptr; ; toneptr += 0x1a) {
-      if (pmd->datalen < (toneptr+0x1a)) return 0;
-      if (pmd->data[toneptr] == tonenum) {
-        return &pmd->data[toneptr+1];
-      }
+  uint16_t toneptr;
+  uint16_t limit;
+  if (part == &pmd->parts[PMD_PART_FM_EFF]) {
+    toneptr = pmd->fmeff_tone_ptr;
+    limit = pmd->datalen;
+  } else {
+    if (!pmd->tone_included) return 0;
+    toneptr = pmd->tone_ptr;
+    limit = pmd->fmeff_data_ptr ? pmd->fmeff_data_ptr : pmd->datalen;
+  }
+  for (; ; toneptr += 0x1a) {
+    if (limit < (toneptr+0x1a)) return 0;
+    if (pmd->data[toneptr] == tonenum) {
+      return &pmd->data[toneptr+1];
     }
   }
-  // TODO: external tone
-  return 0;
 }
 
 // 2cbc
@@ -1074,7 +1081,7 @@ static void pmd_part_tone_fm(
   struct driver_pmd *pmd,
   struct pmd_part *part
 ) {
-  uint8_t const * const toneptr = pmd_get_toneptr(pmd, part->tonenum);
+  uint8_t const * const toneptr = pmd_get_toneptr(pmd, part, part->tonenum);
   if (!toneptr) return;
   if (!pmd_part_tone_slotmask_stop(work, pmd, part)) {
     // 2d15
@@ -2288,7 +2295,7 @@ static void pmd_cmdff_tonenum(
     return;
   }
   // 2277
-  uint8_t const * const toneptr = pmd_get_toneptr(pmd, tonenum);
+  uint8_t const * const toneptr = pmd_get_toneptr(pmd, part, tonenum);
   if (!toneptr) return;
   part->fb_alg = toneptr[0x18];
   pmd_part_tone_tl_update(part, toneptr);
@@ -3325,7 +3332,7 @@ static void pmd_cmdcf_slotmask(
       alg = pmd->fm3ex_fb_alg;
     } else {
       // 2dda
-      const uint8_t *toneptr = pmd_get_toneptr(pmd, part->tonenum);
+      const uint8_t *toneptr = pmd_get_toneptr(pmd, part, part->tonenum);
       if (toneptr) {
         alg = toneptr[0x18];
       }
@@ -5192,6 +5199,108 @@ static void pmd_part_proc_fm(
   }
 }
 
+/* TH03 extraction: complete the upstream external-FM-effect stub using the
+ * driver's existing FM part interpreter. .EFC programs run on OPNA FM6 from
+ * Timer A, while the ordinary FM6 song part continues masked in Timer B. */
+static void pmd_fmeff_finish(
+  struct fmdriver_work *work,
+  struct driver_pmd *pmd
+) {
+  struct pmd_part *effect = &pmd->parts[PMD_PART_FM_EFF];
+  struct pmd_part *music = &pmd->parts[PMD_PART_FM_6];
+  pmd_part_do_keyoff_fm(work, pmd, effect);
+  effect->ptr = 0;
+  effect->actual_note = 0xff;
+  effect->curr_note = 0xff;
+  pmd->fmeff_playing = false;
+  pmd->fmeff_num = 0xff;
+  music->mask.effect = false;
+  music->proc_masked = pmd_part_masked(music);
+}
+
+static void pmd_fmeff_advance(
+  struct fmdriver_work *work,
+  struct driver_pmd *pmd
+) {
+  bool const saved_a1 = pmd->opna_a1;
+  uint8_t const saved_ch = pmd->proc_ch;
+  struct pmd_part *effect = &pmd->parts[PMD_PART_FM_EFF];
+  pmd_opna_a1_on(pmd);
+  pmd->proc_ch = 3;
+  pmd_part_proc_fm(work, pmd, effect);
+  if (!effect->ptr) {
+    pmd_fmeff_finish(work, pmd);
+  }
+  pmd->proc_ch = saved_ch;
+  pmd->opna_a1 = saved_a1;
+}
+
+void pmd_fmeff_stop(
+  struct fmdriver_work *work,
+  struct driver_pmd *pmd
+) {
+  bool const saved_a1 = pmd->opna_a1;
+  uint8_t const saved_ch = pmd->proc_ch;
+  if (!pmd->fmeff_playing) return;
+  pmd_opna_a1_on(pmd);
+  pmd->proc_ch = 3;
+  pmd_fmeff_finish(work, pmd);
+  pmd->proc_ch = saved_ch;
+  pmd->opna_a1 = saved_a1;
+}
+
+bool pmd_fmeff_start(
+  struct fmdriver_work *work,
+  struct driver_pmd *pmd,
+  uint8_t effect_num,
+  uint16_t entry_ptr,
+  uint16_t data_ptr,
+  uint16_t tone_ptr
+) {
+  bool const saved_a1 = pmd->opna_a1;
+  uint8_t const saved_ch = pmd->proc_ch;
+  bool const external_mask =
+    pmd->parts[PMD_PART_FM_EFF].mask.ext;
+  struct pmd_part *effect = &pmd->parts[PMD_PART_FM_EFF];
+  struct pmd_part *music = &pmd->parts[PMD_PART_FM_6];
+  if (!entry_ptr || pmd->datalen < (entry_ptr+1) ||
+      pmd->datalen < (tone_ptr+0x1a) || data_ptr >= tone_ptr) return false;
+
+  if (pmd->fmeff_playing) pmd_fmeff_stop(work, pmd);
+  memset(effect, 0, sizeof(*effect));
+  effect->mask.ext = external_mask;
+  effect->ptr = entry_ptr;
+  effect->len_cnt = 1;
+  effect->keystatus.off = true;
+  effect->keystatus.off_mask = true;
+  effect->md_cnt = 0xff;
+  effect->md_cnt_set = 0xff;
+  effect->md_cnt_b = 0xff;
+  effect->md_cnt_set_b = 0xff;
+  effect->actual_note = 0xff;
+  effect->curr_note = 0xff;
+  effect->vol = 108;
+  effect->pan = 0xc0;
+  effect->fm_slotmask = 0xf0;
+  effect->fm_tone_slotmask = 0xff;
+  pmd->fmeff_data_ptr = data_ptr;
+  pmd->fmeff_tone_ptr = tone_ptr;
+  pmd->fmeff_num = effect_num;
+  pmd->fmeff_playing = true;
+  pmd->no_keyoff = false;
+  pmd->volume_saved = false;
+  music->mask.effect = true;
+  music->proc_masked = true;
+
+  pmd_opna_a1_on(pmd);
+  pmd->proc_ch = 3;
+  pmd_part_do_keyoff_fm(work, pmd, music);
+  pmd->proc_ch = saved_ch;
+  pmd->opna_a1 = saved_a1;
+  pmd_fmeff_advance(work, pmd);
+  return true;
+}
+
 // 156f / 1689
 static void pmd_part_proc_ssg(
   struct fmdriver_work *work,
@@ -5710,7 +5819,7 @@ static void pmd_timerb(
   struct fmdriver_work *work,
   struct driver_pmd *pmd
 ) {
-  if (pmd->playing) {
+  if (pmd->playing && !pmd->paused) {
     // 3d8f
     FMDRIVER_DEBUG("timerb\n");
     pmd_proc_parts(work, pmd);
@@ -5763,8 +5872,7 @@ static void pmd_timera(
   }
   // 3ddd
   if (pmd->fmeff_playing) {
-    // TODO: FMEFF
-    // call 0x0f03
+    pmd_fmeff_advance(work, pmd);
   }
   // esc/grph key check??
 }
@@ -5781,7 +5889,7 @@ static void pmd_timer(
   }
   if (status & 2) {
     pmd_timerb(work, pmd);
-    if (work->playing) {
+    if (work->playing && !pmd->paused) {
       work->timerb_cnt++;
       work->timerb_cnt_loop++;
     }
@@ -5939,6 +6047,10 @@ bool pmd_load(struct driver_pmd *pmd,
   pmd->datalen = datalen - 1;
   pmd_reset_state(pmd);
   pmd->ssgeff_num = 0xff;
+  pmd->fmeff_num = 0xff;
+  pmd->fmeff_playing = false;
+  pmd->fmeff_data_ptr = 0;
+  pmd->fmeff_tone_ptr = 0;
   if (!pmd_data_init(pmd)) return false;
   pmd->fadeout_vol = 0;
   if (pmd->adpcm_disabled) {

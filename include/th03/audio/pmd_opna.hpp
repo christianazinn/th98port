@@ -5,11 +5,14 @@
 #include <cstdint>
 #include <expected>
 #include <memory>
+#include <optional>
 #include <span>
 
 namespace th03::audio {
 
 inline constexpr std::size_t ym2608_rhythm_rom_bytes = 8192U;
+inline constexpr std::size_t pmd_effect_bank_max_bytes = 2048U;
+inline constexpr std::uint8_t pmd_effect_count = 127U;
 
 enum class PmdOpnaFidelity : std::uint8_t {
 	minimum,
@@ -32,8 +35,12 @@ enum class PmdOpnaErrorCode : std::uint8_t {
 	invalid_rhythm_rom_size,
 	invalid_song_size,
 	invalid_song,
+	invalid_effect_bank_size,
+	invalid_effect_bank,
+	invalid_effect_id,
 	invalid_part,
 	no_song_loaded,
+	no_effect_bank_loaded,
 	allocation_failed,
 };
 
@@ -64,7 +71,9 @@ struct PmdOpnaStatus {
 	bool song_loaded = false;
 	bool playing = false;
 	bool paused = false;
+	bool effect_bank_loaded = false;
 	bool rhythm_rom_present = false;
+	std::optional<std::uint8_t> active_effect{};
 	std::uint32_t native_sample_rate = 0U;
 	std::uint64_t samples_rendered = 0U;
 	std::uint64_t chip_clocks = 0U;
@@ -99,16 +108,27 @@ public:
 	std::expected<void, PmdOpnaError> load_song(
 		std::span<const std::byte> song
 	);
+	// TH03's external FM-effect bank is prepared independently from the song.
+	// A rejected bank leaves the previous prepared bank untouched. The prepared
+	// bank is attached to the next fresh Play, matching the source load order.
+	std::expected<void, PmdOpnaError> load_effect_bank(
+		std::span<const std::byte> bank
+	);
 	// Every play starts from a new mutable copy, including after a completed loop.
 	std::expected<void, PmdOpnaError> play();
-	// Source-style resident-driver controls. Stop and pause silence current chip
-	// output without discarding the prepared song. A subsequent Play is always a
-	// fresh start and therefore resets fade, pause, and part masks.
+	// Source-style resident-driver controls. Stop and pause silence song output
+	// without discarding the prepared song; an active external effect retains
+	// FM6 and continues on Timer A. A subsequent Play is always a fresh start and
+	// therefore resets fade, pause, part masks, and active effect state.
 	void stop() noexcept;
 	void pause() noexcept;
 	void resume() noexcept;
 	void fade(std::int8_t speed) noexcept;
 	void set_volume(std::uint8_t volume) noexcept;
+	std::expected<void, PmdOpnaError> play_effect(
+		std::uint8_t effect_id
+	) noexcept;
+	void stop_effect() noexcept;
 	// PMD part numbers 0..23 follow function 1Eh. Parts 16..23 are accepted for
 	// contract completeness even though TH03 ships no PPZ data.
 	std::expected<void, PmdOpnaError> set_part_mask(

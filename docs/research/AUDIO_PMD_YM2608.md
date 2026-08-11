@@ -28,8 +28,8 @@ FM-effect path is stubbed, so the port owns `.EFC`, stop/start/fade/measure,
 pause/mask, and SFX arbitration behavior against donor documentation and shipped-
 TSR traces. The imported foundation supplies byte-fed `.M` sequencing and chip
 writes only. The port-owned service now supplies stop/play, signed fade,
-measure/volume, pause/resume, PMD part masks, and TH03's exact one-slot SFX
-scheduler; `.EFC` decode/channel ownership remains separate. Do not wrap
+measure/volume, pause/resume, PMD part masks, TH03's exact one-slot SFX
+scheduler, and bounded external `.EFC` playback on Timer-A-driven FM6. Do not wrap
 foobar2000, ship a PMDWin DLL, or import GPL `pmdmini` code merely to avoid that
 boundary work.
 
@@ -244,8 +244,17 @@ The generated hermetic gate locks the first 199,680 maximum-fidelity samples:
 byte-silent external gate loads and advances all 21 shipped songs on both and
 independently confirms that 20 issue ADPCM-A rhythm key-ons.
 
-Limit: the external FM-effect path remains incomplete. `.EFC` is a port-owned
-follow-up, not a claimed feature of this dependency.
+The external FM-effect path is a marked TH03 extraction delta, not an upstream
+capability claim. A port-owned validator accepts the 128-word pointer table,
+127 exact terminated programs, the shipped ten-command subset, program-local
+repeat targets, and 26-byte uniquely keyed FM tone records. It copies the bank,
+relocates all internal words into each fresh mutable song image, advances the
+effect from Timer A on FM6, and masks/releases the ordinary FM6 part. Generated
+tests cover malformed-bank atomicity, replacement, pause/Stop independence,
+repeat relocation, and caller lifetime. The byte-silent external gate starts
+and naturally terminates all 22 authored `YUME.EFC` entries on GCC and MSVC.
+Shipped-TSR register parity remains a fidelity gate for exact start/tick/end
+ordering; it is not needed to make the native player functionally bounded.
 
 ### `ymfm` — recommended synthesis backend
 
@@ -523,16 +532,16 @@ The engine-foundation choice is now accepted. Option 2 remains the bounded
 fallback only if shipped-TSR comparison exposes a material incompatibility that
 cannot be corrected at the narrow service boundary.
 
-## Implemented foundation/service and next no-UI EFC probe
+## Implemented foundation/EFC service and next trace probe
 
 The engine foundation already proves byte-fed transactional loading, fresh-song
 and fresh-chip replay, deterministic register/PCM output, supplied rhythm-ROM
 ownership, and all-21-song bounded advancement without SDL, settings UI, an
 audio device, or gameplay-core integration. The service layer additionally
 locks source stop/restart, signed fade steps, measure/volume queries,
-pause-frozen sequencer state, PMD part-mask/reset state, and all 22 TH03
-priority/hold entries. Extend that same offline boundary for the remaining EFC
-probe:
+pause-frozen sequencer state, PMD part-mask/reset state, all 22 TH03
+priority/hold entries, and bounded EFC/FM6 execution. Extend that offline
+boundary into the shipped-TSR trace probe:
 
 1. Give the probe `--song`, `--efc`, optional `--rhythm-rom`, `--script`,
    `--ticks`/`--samples`, `--pcm-out`, and `--trace-out`. Original assets remain
@@ -540,7 +549,7 @@ probe:
 2. Drive `OP.M` with the implemented stop/load/play, fade, query, pause/resume,
    and mask surface and compare it to normalized shipped-TSR traces. Separately
    drive `OVER.M` until measure 3.
-3. Load `YUME.EFC`, invoke every observed ID `1..21`, and record the complete
+3. Load `YUME.EFC`, invoke every authored ID `1..22`, and record the complete
    channel/register ownership lifecycle. Also script at least one lower-priority
    replacement rejection, equal-priority replacement, forced effect, and an
    effect while music is paused/fading.
@@ -600,9 +609,10 @@ register divergence before a waveform metric.
    supported sound-board mode and trace their material differences.
 2. **PMD dependency provenance:** resolved for the imported BSD-2 98fmplayer
    files; retain the exact pin, source delta, and binary notices.
-3. **`.EFC` format and ownership:** document the bank header/indexing, all used
-   opcodes, channel-steal/restore rules, timing, and effect-ID zero behavior from
-   the shipped driver. This is the largest functional unknown.
+3. **`.EFC` trace parity:** the bounded format, shipped opcode subset, FM6
+   ownership, replacement, and natural termination are implemented. Normalize
+   a shipped-TSR register trace to prove exact start/tick/end/restoration order,
+   including the unused empty effect-ID-zero behavior.
 4. **Actual song feature subset:** corpus structure and the native byte-silent
    gate resolve rhythm (20/21) and ordinary ADPCM/PCM (unused). Shipped-TSR
    register comparison remains necessary for exact sequencing fidelity.
@@ -623,6 +633,6 @@ register divergence before a waveform metric.
     does not freeze these audiovisual boundaries.
 
 Audio remains outside `libth03`. The no-UI engine and source-shaped
-transport/SFX scheduler plus their generated and external byte-silent gates are
-implemented; the next safe move is port-owned `.EFC` decode/playback, followed
-by resampling, SDL delivery, and scene-command integration.
+transport/SFX/EFC service plus their generated and external byte-silent gates
+are implemented; the next safe move is deterministic resampling and SDL device
+delivery, followed by semantic scene-command integration.

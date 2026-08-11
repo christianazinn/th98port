@@ -20,6 +20,8 @@ using th03::audio::PmdOpnaFidelity;
 using th03::audio::PmdOpnaRegisterTraceSink;
 using th03::audio::PmdOpnaRegisterWrite;
 using th03::audio::PmdOpnaStereoSample;
+using th03::audio::pmd_effect_bank_max_bytes;
+using th03::audio::pmd_effect_count;
 using th03::audio::ym2608_rhythm_rom_bytes;
 
 std::size_t checks = 0U;
@@ -47,6 +49,19 @@ void set_le16(
 {
 	bytes[offset] = static_cast<std::byte>(value);
 	bytes[offset + 1U] = static_cast<std::byte>(value >> 8U);
+}
+
+std::uint16_t get_le16(
+	std::span<const std::byte> bytes,
+	std::size_t offset
+)
+{
+	return static_cast<std::uint16_t>(
+		std::to_integer<std::uint8_t>(bytes[offset]) |
+		(static_cast<std::uint16_t>(
+			std::to_integer<std::uint8_t>(bytes[offset + 1U])
+		) << 8U)
+	);
 }
 
 // Newly authored from the public PMD header/command layout. This is not an
@@ -119,6 +134,106 @@ std::vector<std::byte> synthetic_rhythm_song()
 	return bytes;
 }
 
+// Newly authored from the bounded TH03 EFC grammar. The 127 callable streams
+// are followed by the table's final tone pointer and one 26-byte FM tone. No
+// original effect-bank or instrument bytes are present in this fixture.
+std::vector<std::byte> synthetic_effect_bank()
+{
+	constexpr std::size_t pointer_entries = 128U;
+	std::vector<std::byte> bytes(pointer_entries * 2U, std::byte{0U});
+
+	for(std::size_t effect = 0U; effect < pmd_effect_count; ++effect) {
+		set_le16(
+			bytes,
+			effect * 2U,
+			static_cast<std::uint16_t>(bytes.size())
+		);
+		switch(effect) {
+		case 1U:
+			for(const auto value : {
+				0xFFU, 0x00U, 0xFDU, 0x7FU, 0x40U, 0x03U, 0xF3U,
+				0x43U, 0x02U, 0x80U,
+			}) {
+				append(bytes, static_cast<std::uint8_t>(value));
+			}
+			break;
+		case 2U:
+			for(const auto value : {
+				0xFFU, 0x00U, 0xFDU, 0x70U,
+				0xF2U, 0x00U, 0x01U, 0x01U, 0x02U,
+				0xF1U, 0x01U, 0x47U, 0x04U, 0x80U,
+			}) {
+				append(bytes, static_cast<std::uint8_t>(value));
+			}
+			break;
+		case 3U:
+			for(const auto value : {
+				0xFFU, 0x00U, 0xFDU, 0x78U, 0xF5U, 0x01U,
+				0x40U, 0x02U, 0xFBU, 0x42U, 0x02U,
+				0xDAU, 0x42U, 0x47U, 0x03U, 0x80U,
+			}) {
+				append(bytes, static_cast<std::uint8_t>(value));
+			}
+			break;
+		case 4U: {
+			append(bytes, 0xFFU);
+			append(bytes, 0x00U);
+			append(bytes, 0xFDU);
+			append(bytes, 0x78U);
+			const auto repeat_reset = bytes.size();
+			append(bytes, 0xF9U);
+			append(bytes, 0x00U);
+			append(bytes, 0x00U);
+			const auto note = bytes.size();
+			append(bytes, 0x4AU);
+			append(bytes, 0x01U);
+			const auto repeat = bytes.size();
+			append(bytes, 0xF8U);
+			append(bytes, 0x02U);
+			append(bytes, 0x00U);
+			append(bytes, 0x00U);
+			append(bytes, 0x00U);
+			append(bytes, 0x80U);
+			set_le16(
+				bytes,
+				repeat_reset + 1U,
+				static_cast<std::uint16_t>(repeat + 1U)
+			);
+			set_le16(
+				bytes,
+				repeat + 3U,
+				static_cast<std::uint16_t>(note - 2U)
+			);
+			break;
+		}
+		default:
+			append(bytes, 0x80U);
+			break;
+		}
+	}
+
+	set_le16(
+		bytes,
+		static_cast<std::size_t>(pmd_effect_count) * 2U,
+		static_cast<std::uint16_t>(bytes.size())
+	);
+	// Tone ID, four DT/ML values, four TL values, four KS/AR values,
+	// four AM/DR values, four SR values, four SL/RR values, FB/algorithm.
+	for(const auto value : {
+		0x00U,
+		0x01U, 0x01U, 0x01U, 0x01U,
+		0x00U, 0x00U, 0x00U, 0x00U,
+		0x1FU, 0x1FU, 0x1FU, 0x1FU,
+		0x00U, 0x00U, 0x00U, 0x00U,
+		0x00U, 0x00U, 0x00U, 0x00U,
+		0x0FU, 0x0FU, 0x0FU, 0x0FU,
+		0x07U,
+	}) {
+		append(bytes, static_cast<std::uint8_t>(value));
+	}
+	return bytes;
+}
+
 PmdOpnaEngine engine()
 {
 	auto created = PmdOpnaEngine::create(PmdOpnaConfig{
@@ -160,12 +275,21 @@ public:
 			(write.value & 0x3FU) != 0U) {
 			++rhythm_key_ons;
 		}
+		if(write.address == 0x28U && (write.value & 0x07U) == 0x06U) {
+			if((write.value & 0xF0U) == 0U) {
+				++fm6_key_offs;
+			} else {
+				++fm6_key_ons;
+			}
+		}
 	}
 
 	std::size_t count = 0U;
 	PmdOpnaRegisterWrite first{};
 	PmdOpnaRegisterWrite last{};
 	std::size_t rhythm_key_ons = 0U;
+	std::size_t fm6_key_ons = 0U;
+	std::size_t fm6_key_offs = 0U;
 };
 
 void test_config_and_load_validation()
@@ -261,6 +385,236 @@ void test_config_and_load_validation()
 	expect(
 		!no_song && no_song.error().code == PmdOpnaErrorCode::no_song_loaded,
 		"play requires a validated prepared song"
+	);
+}
+
+void test_effect_bank_validation_is_transactional()
+{
+	auto subject = engine();
+	const auto valid = synthetic_effect_bank();
+	const auto caller_bank = valid;
+	expect(
+		static_cast<bool>(subject.load_effect_bank(valid)),
+		"generated EFC bank validates"
+	);
+	expect(
+		subject.status().effect_bank_loaded,
+		"validated EFC bank is reported as prepared"
+	);
+	expect(valid == caller_bank, "EFC validation does not mutate caller bytes");
+
+	const auto empty = subject.load_effect_bank({});
+	expect(
+		!empty && empty.error().code ==
+			PmdOpnaErrorCode::invalid_effect_bank_size,
+		"empty EFC bank is rejected"
+	);
+	std::vector<std::byte> oversized(
+		pmd_effect_bank_max_bytes + 1U,
+		std::byte{0U}
+	);
+	const auto too_large = subject.load_effect_bank(oversized);
+	expect(
+		!too_large && too_large.error().code ==
+			PmdOpnaErrorCode::invalid_effect_bank_size,
+		"resident driver's two-KiB EFC limit is explicit"
+	);
+
+	auto wrong_header = valid;
+	set_le16(wrong_header, 0U, 0x00FFU);
+	expect(
+		!subject.load_effect_bank(wrong_header),
+		"EFC pointer table must occupy exactly 256 bytes"
+	);
+	auto non_increasing = valid;
+	set_le16(non_increasing, 2U, get_le16(non_increasing, 0U));
+	expect(
+		!subject.load_effect_bank(non_increasing),
+		"EFC stream pointers must be strictly increasing"
+	);
+	auto invalid_opcode = valid;
+	invalid_opcode[get_le16(invalid_opcode, 0U)] = std::byte{0x81U};
+	expect(
+		!subject.load_effect_bank(invalid_opcode),
+		"unimplemented EFC commands are rejected before playback"
+	);
+	auto truncated_note = valid;
+	truncated_note[get_le16(truncated_note, 0U)] = std::byte{0x40U};
+	expect(
+		!subject.load_effect_bank(truncated_note),
+		"truncated EFC note is rejected"
+	);
+	auto unresolved_tone = valid;
+	const auto effect_one = get_le16(unresolved_tone, 2U);
+	unresolved_tone[effect_one + 1U] = std::byte{0xFEU};
+	expect(
+		!subject.load_effect_bank(unresolved_tone),
+		"every selected EFC tone must resolve in the bank-local table"
+	);
+	auto cross_stream_repeat = valid;
+	const auto effect_four = get_le16(cross_stream_repeat, 8U);
+	set_le16(cross_stream_repeat, effect_four + 5U, 0U);
+	expect(
+		!subject.load_effect_bank(cross_stream_repeat),
+		"EFC repeat mutation cannot target another stream or the header"
+	);
+	auto duplicate_tone = valid;
+	const auto tone = get_le16(duplicate_tone, 254U);
+	duplicate_tone.insert(
+		duplicate_tone.end(),
+		duplicate_tone.begin() + tone,
+		duplicate_tone.begin() + tone + 26U
+	);
+	expect(
+		!subject.load_effect_bank(duplicate_tone),
+		"duplicate EFC tone identifiers are rejected"
+	);
+
+	expect(
+		subject.status().effect_bank_loaded,
+		"every rejected EFC replacement preserves the prepared bank"
+	);
+	expect(
+		subject.load_song(synthetic_song()) && subject.play() &&
+			subject.play_effect(1U),
+		"preserved EFC bank attaches to the next fresh play"
+	);
+	expect(
+		subject.status().active_effect == 1U,
+		"preserved EFC bank remains executable"
+	);
+}
+
+void test_effect_transport_and_timer_a_ownership()
+{
+	auto subject = engine();
+	const auto song = synthetic_song();
+	const auto bank = synthetic_effect_bank();
+	const auto caller_bank = bank;
+	const auto before_song = subject.play_effect(1U);
+	expect(
+		!before_song && before_song.error().code ==
+			PmdOpnaErrorCode::no_song_loaded,
+		"EFC playback requires an initialized PMD instance"
+	);
+	expect(static_cast<bool>(subject.load_song(song)), "effect transport song loads");
+	expect(static_cast<bool>(subject.play()), "effect transport song starts without a bank");
+	const auto without_bank = subject.play_effect(1U);
+	expect(
+		!without_bank && without_bank.error().code ==
+			PmdOpnaErrorCode::no_effect_bank_loaded,
+		"a bank prepared after Play is not retrofitted into active bytes"
+	);
+	expect(static_cast<bool>(subject.load_effect_bank(bank)), "effect transport bank prepares");
+	expect(static_cast<bool>(subject.play()), "fresh Play attaches the prepared EFC bank");
+
+	const auto invalid = subject.play_effect(pmd_effect_count);
+	expect(
+		!invalid && invalid.error().code == PmdOpnaErrorCode::invalid_effect_id,
+		"tone-table slot 127 is not callable as an effect"
+	);
+	expect(!subject.status().active_effect, "invalid effect start is atomic");
+
+	Trace trace;
+	subject.set_register_trace_sink(&trace);
+	expect(static_cast<bool>(subject.play_effect(1U)), "effect one starts immediately");
+	expect(
+		subject.status().active_effect == 1U && trace.fm6_key_ons == 1U,
+		"effect start owns and keys on OPNA FM6"
+	);
+	const auto timer_b_before_pause = subject.status().timer_b_count;
+	subject.pause();
+	const auto sample_limit = subject.status().samples_rendered + 200'000U;
+	std::array<PmdOpnaStereoSample, 2'048U> scratch{};
+	while(subject.status().active_effect &&
+		subject.status().samples_rendered < sample_limit) {
+		subject.render_native(scratch);
+	}
+	expect(
+		!subject.status().active_effect,
+		"FM effect advances to natural key-off from Timer A while song is paused"
+	);
+	expect(
+		subject.status().timer_b_count == timer_b_before_pause,
+		"paused song sequencing remains frozen while Timer A owns effects"
+	);
+	expect(trace.fm6_key_offs != 0U, "natural EFC end keys off FM6");
+	subject.resume();
+
+	expect(static_cast<bool>(subject.play_effect(4U)), "relocated repeat effect starts");
+	const auto repeat_limit = subject.status().samples_rendered + 200'000U;
+	while(subject.status().active_effect &&
+		subject.status().samples_rendered < repeat_limit) {
+		subject.render_native(scratch);
+	}
+	expect(
+		!subject.status().active_effect && trace.fm6_key_ons >= 3U,
+		"relocated F9/F8 counters replay the generated note then terminate"
+	);
+
+	expect(static_cast<bool>(subject.play_effect(1U)), "replacement source effect starts");
+	expect(static_cast<bool>(subject.play_effect(2U)), "replacement effect starts atomically");
+	expect(
+		subject.status().active_effect == 2U,
+		"new effect replaces the old FM6 program"
+	);
+	subject.stop();
+	expect(
+		!subject.status().playing && subject.status().active_effect == 2U,
+		"song Stop preserves the independently serviced FM effect"
+	);
+	subject.stop_effect();
+	expect(!subject.status().active_effect, "explicit EFC Stop releases FM6");
+	expect(
+		subject.play_effect(3U) && subject.status().active_effect == 3U,
+		"FM effects can start while the song is stopped"
+	);
+	const auto stopped_song_limit = subject.status().samples_rendered + 200'000U;
+	while(subject.status().active_effect &&
+		subject.status().samples_rendered < stopped_song_limit) {
+		subject.render_native(scratch);
+	}
+	expect(
+		!subject.status().active_effect,
+		"tie, transpose, and portamento commands finish after song Stop"
+	);
+	expect(bank == caller_bank, "EFC repeat counters never mutate caller bytes");
+}
+
+void test_effect_pcm_and_registers_are_deterministic()
+{
+	const auto song = synthetic_song();
+	const auto bank = synthetic_effect_bank();
+	auto first = engine();
+	auto second = engine();
+	expect(
+		first.load_song(song) && first.load_effect_bank(bank) && first.play() &&
+			second.load_song(song) && second.load_effect_bank(bank) && second.play(),
+		"isolated effect engines accept equal prepared inputs"
+	);
+	expect(
+		first.play_effect(4U) && second.play_effect(4U),
+		"equal relocated repeat effects start"
+	);
+	std::vector<PmdOpnaStereoSample> first_pcm(120'000U);
+	std::vector<PmdOpnaStereoSample> second_pcm(first_pcm.size());
+	first.render_native(first_pcm);
+	second.render_native(second_pcm);
+	const auto first_status = first.status();
+	const auto second_status = second.status();
+	expect(
+		sample_hash(first_pcm) == sample_hash(second_pcm),
+		"effect PCM is deterministic across isolated engines"
+	);
+	expect(
+		first_status.register_hash == second_status.register_hash &&
+			first_status.register_writes == second_status.register_writes &&
+			first_status.timer_b_count == second_status.timer_b_count,
+		"effect register and timer state is deterministic"
+	);
+	expect(
+		!first_status.active_effect && !second_status.active_effect,
+		"equal repeat effects naturally end at the same Timer-A boundary"
 	);
 }
 
@@ -508,17 +862,70 @@ void test_authentic_corpus(const std::filesystem::path &yume1_root)
 		<< " rhythm_key_ons=" << rhythm_key_ons << '\n';
 }
 
+void test_authentic_effect_bank(const std::filesystem::path &yume1_root)
+{
+	const auto song = read_external_file(yume1_root / "OP.M");
+	const auto bank = read_external_file(yume1_root / "YUME.EFC");
+	const auto caller_bank = bank;
+	expect(!song.empty(), "authentic EFC gate song is readable");
+	expect(!bank.empty(), "authentic EFC bank is readable");
+	if(song.empty() || bank.empty()) {
+		return;
+	}
+	auto created = PmdOpnaEngine::create(PmdOpnaConfig{
+		.input_clock_hz = 7'987'200U,
+		.fidelity = PmdOpnaFidelity::minimum,
+	});
+	expect(static_cast<bool>(created), "authentic EFC gate engine is created");
+	if(!created) {
+		return;
+	}
+	auto subject = std::move(*created);
+	expect(
+		subject.load_song(song) && subject.load_effect_bank(bank) &&
+			subject.play(),
+		"authentic song and EFC bank load and start"
+	);
+	Trace trace;
+	subject.set_register_trace_sink(&trace);
+	std::size_t effects_passed = 0U;
+	std::array<PmdOpnaStereoSample, 4'096U> scratch{};
+	for(std::uint8_t effect = 1U; effect <= 22U; ++effect) {
+		expect(static_cast<bool>(subject.play_effect(effect)), "authentic EFC entry starts");
+		const auto deadline = subject.status().samples_rendered +
+			(static_cast<std::uint64_t>(subject.status().native_sample_rate) * 5U);
+		while(subject.status().active_effect &&
+			subject.status().samples_rendered < deadline) {
+			subject.render_native(scratch);
+		}
+		expect(!subject.status().active_effect, "authentic EFC entry terminates");
+		if(!subject.status().active_effect) {
+			++effects_passed;
+		}
+	}
+	expect(effects_passed == 22U, "all 22 authored TH03 EFC entries pass");
+	expect(trace.fm6_key_ons != 0U, "authentic EFC bank keys on OPNA FM6");
+	expect(trace.fm6_key_offs != 0U, "authentic EFC bank releases OPNA FM6");
+	expect(bank == caller_bank, "authentic EFC playback preserves caller bytes");
+	std::cout << "authentic_effects_passed=" << effects_passed
+		<< " fm6_key_ons=" << trace.fm6_key_ons << '\n';
+}
+
 } // namespace
 
 int main(int argc, char **argv)
 {
 	test_config_and_load_validation();
+	test_effect_bank_validation_is_transactional();
+	test_effect_transport_and_timer_a_ownership();
+	test_effect_pcm_and_registers_are_deterministic();
 	test_load_is_chip_silent_and_play_is_traced();
 	test_pcm_and_fresh_replay_are_deterministic();
 	test_rhythm_rom_is_owned_and_audible();
 	test_instances_and_preplay_silence_are_independent();
 	if(argc == 3 && std::string_view(argv[1]) == "--authentic") {
 		test_authentic_corpus(argv[2]);
+		test_authentic_effect_bank(argv[2]);
 	} else if(argc != 1) {
 		std::cerr << "usage: th03-audio-pmd-tests [--authentic <YUME1.DAT>]\n";
 		return 2;

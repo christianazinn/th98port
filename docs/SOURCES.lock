@@ -36,6 +36,9 @@ Native audio dependencies (2026-08-11):
       fmdriver.h severs the unused PPZ8 dependency with the pinned declaration.
       fmdriver_pmd.c stores its already-computed intermediate fade volume;
       upstream otherwise changed only the two saturated endpoints.
+      fmdriver_pmd.c/.h complete the upstream external-FM-effect stub for TH03's
+      validated EFC subset, advancing it from Timer A on FM6 while masking and
+      releasing the ordinary FM6 part. No reference-player source was copied.
   ymfm YM2608 synthesizer:
     upstream: https://github.com/aaronsgiles/ymfm
     commit: 81aec25ccbb98f4873a255f7551ac4dadac59b4a

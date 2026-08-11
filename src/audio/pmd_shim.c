@@ -11,6 +11,9 @@ struct th03_pmd_handle {
 	struct driver_pmd driver;
 	bool loaded;
 	bool started;
+	uint16_t effect_table_offset;
+	uint16_t effect_tone_offset;
+	uint8_t effect_count;
 };
 
 struct th03_pmd_callbacks {
@@ -86,11 +89,14 @@ static void silence_song(struct th03_pmd_handle *handle)
 
 	/* Reconstruct the public PMD stop/pause mute sequence retained in the
 	 * imported driver as pmd_stop_sound(), including the rhythm dump present in
-	 * the complete PMD service. Effects are not active in this parcel, so all
-	 * six FM channels belong to the song. */
+	 * the complete PMD service. */
 	for(bank = 0U; bank < 2U; ++bank) {
 		for(slot = 0U; slot < 4U; ++slot) {
 			for(channel = 0U; channel < 3U; ++channel) {
+				if(bank == 1U && channel == 2U &&
+					handle->driver.fmeff_playing) {
+					continue;
+				}
 				handle->work.opna_writereg(
 					&handle->work,
 					(bank << 8U) | 0x80U | channel | (slot << 2U),
@@ -101,7 +107,13 @@ static void silence_song(struct th03_pmd_handle *handle)
 	}
 	for(channel = 0U; channel < 3U; ++channel) {
 		handle->work.opna_writereg(&handle->work, 0x28U, channel);
-		handle->work.opna_writereg(&handle->work, 0x28U, 0x04U | channel);
+		if(channel != 2U || !handle->driver.fmeff_playing) {
+			handle->work.opna_writereg(
+				&handle->work,
+				0x28U,
+				0x04U | channel
+			);
+		}
 	}
 	handle->work.opna_writereg(&handle->work, 0x07U, 0xBFU);
 	handle->work.opna_writereg(&handle->work, 0x10U, 0xFFU);
@@ -176,6 +188,9 @@ bool th03_pmd_load(
 	}
 	memset(&handle->work, 0, sizeof(handle->work));
 	memset(&handle->driver, 0, sizeof(handle->driver));
+	handle->effect_table_offset = 0U;
+	handle->effect_tone_offset = 0U;
+	handle->effect_count = 0U;
 	handle->loaded = pmd_load(&handle->driver, song, song_size);
 	handle->started = false;
 	return handle->loaded;
@@ -212,21 +227,64 @@ bool th03_pmd_start(
 	return true;
 }
 
+bool th03_pmd_configure_effect_bank(
+	struct th03_pmd_handle *handle,
+	uint16_t table_offset,
+	uint16_t tone_offset,
+	uint8_t effect_count
+)
+{
+	const uint32_t table_end =
+		(uint32_t)table_offset + ((uint32_t)effect_count * 2U);
+	if(!handle || !handle->started || effect_count == 0U ||
+		table_end > handle->driver.datalen ||
+		tone_offset <= table_offset || tone_offset >= handle->driver.datalen) {
+		return false;
+	}
+	handle->effect_table_offset = table_offset;
+	handle->effect_tone_offset = tone_offset;
+	handle->effect_count = effect_count;
+	return true;
+}
+
+bool th03_pmd_play_effect(
+	struct th03_pmd_handle *handle,
+	uint8_t effect_id
+)
+{
+	uint16_t entry_ptr;
+	uint16_t pointer_offset;
+	if(!handle || !handle->started ||
+		effect_id >= handle->effect_count) {
+		return false;
+	}
+	pointer_offset = (uint16_t)(
+		handle->effect_table_offset + ((uint16_t)effect_id * 2U)
+	);
+	entry_ptr = (uint16_t)(
+		handle->driver.data[pointer_offset] |
+		((uint16_t)handle->driver.data[pointer_offset + 1U] << 8U)
+	);
+	return pmd_fmeff_start(
+		&handle->work,
+		&handle->driver,
+		effect_id,
+		entry_ptr,
+		handle->effect_table_offset,
+		handle->effect_tone_offset
+	);
+}
+
+void th03_pmd_stop_effect(struct th03_pmd_handle *handle)
+{
+	if(handle && handle->started) {
+		pmd_fmeff_stop(&handle->work, &handle->driver);
+	}
+}
+
 void th03_pmd_interrupt(struct th03_pmd_handle *handle)
 {
 	if(!handle || !handle->started || !handle->work.driver_opna_interrupt) {
-		return;
-	}
-	if(handle->driver.paused) {
-		/* A paused PMD still has to acknowledge the OPNA timers. Sequencer,
-		 * measure, and fade state remain frozen until Resume. */
-		while(handle->work.opna_status(&handle->work, false) & 3U) {
-			handle->work.opna_writereg(
-				&handle->work,
-				0x27U,
-				handle->driver.fm3ex_mode
-			);
-		}
 		return;
 	}
 	handle->work.driver_opna_interrupt(&handle->work);
@@ -366,4 +424,10 @@ uint32_t th03_pmd_part_mask(const struct th03_pmd_handle *handle)
 		}
 	}
 	return result;
+}
+
+uint8_t th03_pmd_active_effect(const struct th03_pmd_handle *handle)
+{
+	return handle && handle->started && handle->driver.fmeff_playing ?
+		handle->driver.fmeff_num : 0xFFU;
 }

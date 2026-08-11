@@ -35,6 +35,17 @@ bool th03_pmd_start(
 	th03_pmd_write_register_fn write_register,
 	th03_pmd_status_fn read_status
 );
+bool th03_pmd_configure_effect_bank(
+	struct th03_pmd_handle *handle,
+	uint16_t table_offset,
+	uint16_t tone_offset,
+	uint8_t effect_count
+);
+bool th03_pmd_play_effect(
+	struct th03_pmd_handle *handle,
+	uint8_t effect_id
+);
+void th03_pmd_stop_effect(struct th03_pmd_handle *handle);
 void th03_pmd_interrupt(struct th03_pmd_handle *handle);
 
 void th03_pmd_stop(struct th03_pmd_handle *handle);
@@ -57,6 +68,7 @@ uint16_t th03_pmd_measure(const struct th03_pmd_handle *handle);
 uint8_t th03_pmd_fade_volume(const struct th03_pmd_handle *handle);
 int8_t th03_pmd_fade_speed(const struct th03_pmd_handle *handle);
 uint32_t th03_pmd_part_mask(const struct th03_pmd_handle *handle);
+uint8_t th03_pmd_active_effect(const struct th03_pmd_handle *handle);
 
 #ifdef __cplusplus
 }
