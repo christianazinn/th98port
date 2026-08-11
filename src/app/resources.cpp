@@ -306,6 +306,11 @@ constexpr std::array<std::uint64_t, 12U> staff_cdg_fnv1a64{
 		return character_stage_shot_fnv1a64[index];
 	case MainResourceRole::character_stage_extra_shot:
 		return character_stage_extra_shot_fnv1a64[index];
+	case MainResourceRole::op_title_long_background:
+	case MainResourceRole::op_menu_background:
+	case MainResourceRole::op_window_sheet:
+	case MainResourceRole::op_gaiji_font:
+	case MainResourceRole::op_menu_music:
 	case MainResourceRole::enemy_scripts:
 	case MainResourceRole::game_font:
 	case MainResourceRole::hud_lose_sheet:
@@ -722,6 +727,61 @@ static_resource_spec(MainResourceKey key)
 	}
 
 	switch(key.role) {
+	case MainResourceRole::op_title_long_background:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::op_title_menu,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pi,
+			.logical_role = "op.title.long_background",
+			.filename = "TL01.PI",
+			.expected_bytes = 4192U,
+			.expected_fnv1a64 = 0x23386537C864AD57ULL,
+		};
+	case MainResourceRole::op_menu_background:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::op_title_menu,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pi,
+			.logical_role = "op.title.menu_background",
+			.filename = "TL02.PI",
+			.expected_bytes = 31779U,
+			.expected_fnv1a64 = 0xE5CB3BACFA722E3BULL,
+		};
+	case MainResourceRole::op_window_sheet:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::op_title_menu,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::bfnt_superimpose,
+			.logical_role = "op.title.window_sheet",
+			.filename = "OPWIN.BFT",
+			.expected_bytes = 3152U,
+			.expected_fnv1a64 = 0x734FF8C10A526CFBULL,
+		};
+	case MainResourceRole::op_gaiji_font:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::op_title_menu,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::bfnt_gaiji,
+			.logical_role = "op.title.gaiji_font",
+			.filename = "MIKOFT.BFT",
+			.expected_bytes = 8224U,
+			.expected_fnv1a64 = 0xBD42C433C6DDFB3CULL,
+		};
+	case MainResourceRole::op_menu_music:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::op_title_menu,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pmd_music,
+			.logical_role = "op.title.menu_music",
+			.filename = "OP.M",
+			.expected_bytes = 4431U,
+			.expected_fnv1a64 = 0x8D65B16BB1BB433DULL,
+		};
 	case MainResourceRole::enemy_scripts:
 		return MainResourceSpec{
 			.key = key,
@@ -1220,6 +1280,11 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 			.expected_bytes = stage_extra_shot_size(index),
 			.expected_fnv1a64 = character_fnv1a64(key.role, index),
 		};
+	case MainResourceRole::op_title_long_background:
+	case MainResourceRole::op_menu_background:
+	case MainResourceRole::op_window_sheet:
+	case MainResourceRole::op_gaiji_font:
+	case MainResourceRole::op_menu_music:
 	case MainResourceRole::enemy_scripts:
 	case MainResourceRole::game_font:
 	case MainResourceRole::hud_lose_sheet:
@@ -1261,6 +1326,11 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 std::vector<MainResourceSpec> main_resource_manifest()
 {
 	constexpr std::array static_roles{
+		MainResourceRole::op_title_long_background,
+		MainResourceRole::op_menu_background,
+		MainResourceRole::op_window_sheet,
+		MainResourceRole::op_gaiji_font,
+		MainResourceRole::op_menu_music,
 		MainResourceRole::enemy_scripts,
 		MainResourceRole::game_font,
 		MainResourceRole::hud_lose_sheet,
@@ -1381,6 +1451,17 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		}
 	}
 	return result;
+}
+
+std::vector<MainResourceKey> op_title_menu_resource_keys()
+{
+	return {
+		{.role = MainResourceRole::op_title_long_background},
+		{.role = MainResourceRole::op_menu_background},
+		{.role = MainResourceRole::op_window_sheet},
+		{.role = MainResourceRole::op_gaiji_font},
+		{.role = MainResourceRole::op_menu_music},
+	};
 }
 
 std::expected<void, ResourceLoadErrorCode> validate_main_resource_manifest(
@@ -1857,6 +1938,12 @@ std::expected<ResourceBytes, ResourceLoadError> MainResourceLoader::load(
 	);
 	cache_.emplace(key, resource);
 	return resource;
+}
+
+std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+MainResourceLoader::load_op_title_menu()
+{
+	return load_batch(op_title_menu_resource_keys());
 }
 
 std::expected<std::vector<LoadedMainResource>, ResourceLoadError>

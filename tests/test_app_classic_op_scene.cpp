@@ -1,0 +1,477 @@
+#include "../src/app/classic_op_scene_internal.hpp"
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <iostream>
+#include <string_view>
+#include <utility>
+#include <variant>
+#include <vector>
+
+namespace {
+
+using th03::GameInit;
+using th03::app::ClassicAudioCommandType;
+using th03::app::ClassicMusicCue;
+using th03::app::ClassicOpErrorCode;
+using th03::app::ClassicOpInput;
+using th03::app::ClassicOpMenuChoice;
+using th03::app::ClassicOpPhase;
+using th03::app::ClassicOpRoute;
+using th03::app::ClassicOpSceneTestAccess;
+using th03::app::ClassicOpTitleMenuScene;
+using th03::app::ClassicOpTitleMode;
+using th03::assets::BfntConsumerPolicy;
+using th03::assets::BfntGlyph;
+using th03::assets::BfntSheet;
+using th03::assets::MonochromeBitmap1;
+using th03::assets::PiImage;
+using th03::assets::PlanarBitmap4;
+using th03::present::Page;
+
+std::size_t checks = 0U;
+std::size_t failures = 0U;
+
+void expect(bool condition, std::string_view message)
+{
+	++checks;
+	if(!condition) {
+		++failures;
+		std::cerr << "FAIL: " << message << '\n';
+	}
+}
+
+PiImage fullscreen_pi(bool title)
+{
+	PiImage result{};
+	result.palette.emplace();
+	for(std::size_t index = 0U;
+		index < result.palette->colors.size();
+		++index) {
+		result.palette->colors[index] = {
+			static_cast<std::uint8_t>(index),
+			static_cast<std::uint8_t>(15U - index),
+			static_cast<std::uint8_t>(index / 2U),
+		};
+	}
+	result.image.width = th03::present::graphics_width;
+	result.image.height = th03::present::graphics_height;
+	result.image.indices.resize(th03::present::graphics_page_pixels);
+	for(std::size_t y = 0U; y < result.image.height; ++y) {
+		for(std::size_t x = 0U; x < result.image.width; ++x) {
+			result.image.indices[(y * result.image.width) + x] = title ?
+				static_cast<std::uint8_t>((x / 16U) & 0x0FU) : 4U;
+		}
+	}
+	return result;
+}
+
+BfntSheet gaiji_sheet()
+{
+	BfntSheet sheet{};
+	sheet.consumer = BfntConsumerPolicy::gaiji;
+	sheet.header.pixel_width = th03::present::gaiji_width;
+	sheet.header.pixel_height = th03::present::gaiji_height;
+	sheet.header.first_code = 0U;
+	sheet.header.last_code = 255U;
+	sheet.glyphs.reserve(th03::present::gaiji_count);
+	for(std::size_t index = 0U; index < th03::present::gaiji_count; ++index) {
+		MonochromeBitmap1 bitmap{};
+		bitmap.bits.assign(th03::present::gaiji_glyph_bytes, 0U);
+		bitmap.bits[index % bitmap.bits.size()] = 0x80U;
+		sheet.glyphs.push_back({
+			static_cast<std::uint16_t>(index), std::move(bitmap)
+		});
+	}
+	return sheet;
+}
+
+BfntSheet window_sheet()
+{
+	BfntSheet sheet{};
+	sheet.consumer = BfntConsumerPolicy::superimpose;
+	sheet.header.pixel_width = 16U;
+	sheet.header.pixel_height = 128U;
+	sheet.header.first_code = 0U;
+	sheet.header.last_code = 2U;
+	sheet.transparent_color = 0U;
+	constexpr std::size_t plane_size = (16U / 8U) * 128U;
+	for(std::uint16_t code = 0U; code < 3U; ++code) {
+		PlanarBitmap4 bitmap{};
+		for(auto &plane : bitmap.color_planes) {
+			plane.assign(plane_size, 0U);
+		}
+		bitmap.color_planes[(code == 2U) ? 1U : 0U].assign(
+			plane_size, 0xFFU
+		);
+		sheet.glyphs.push_back({code, std::move(bitmap)});
+	}
+	return sheet;
+}
+
+std::unique_ptr<ClassicOpTitleMenuScene> make_scene(
+	ClassicOpTitleMode mode
+)
+{
+	GameInit resident{};
+	resident.resident_rand = 40;
+	resident.fast_op_animation =
+		(mode == ClassicOpTitleMode::fast_fade) ? 1U : 0U;
+	auto created = ClassicOpSceneTestAccess::create_with_predecoded_assets(
+		resident, mode, fullscreen_pi(true), fullscreen_pi(false),
+		window_sheet(), gaiji_sheet()
+	);
+	expect(created.has_value(), "synthetic OP scene creates");
+	return created ? std::move(*created) : nullptr;
+}
+
+void expect_start_audio(ClassicOpTitleMenuScene &scene)
+{
+	const auto stop = scene.take_audio_command();
+	const auto load = scene.take_audio_command();
+	expect(
+		stop && stop->type == ClassicAudioCommandType::stop_song &&
+			stop->cue == ClassicMusicCue::none,
+		"OP startup first stops the previous song"
+	);
+	expect(
+		load && load->type == ClassicAudioCommandType::load_song &&
+			load->cue == ClassicMusicCue::menu_main,
+		"OP startup then loads OP.M through the semantic audio boundary"
+	);
+	expect(
+		!scene.take_audio_command(),
+		"startup audio queue drains in source order"
+	);
+}
+
+void reach_title_wait(ClassicOpTitleMenuScene &scene)
+{
+	expect(
+		scene.phase() == ClassicOpPhase::fast_black,
+		"fast title starts at the source black VSync"
+	);
+	expect(
+		!scene.take_audio_command(),
+		"fast title does not stop or load audio before the black VSync"
+	);
+	auto tick = scene.advance();
+	expect(
+		tick && tick->phase == ClassicOpPhase::fast_initial_pause,
+		"fast title consumes the initial palette-show VSync"
+	);
+	expect_start_audio(scene);
+	tick = scene.advance();
+	expect(
+		tick && tick->phase == ClassicOpPhase::fast_fade &&
+			tick->surface_changed,
+		"fast title draws TL02 at tone zero before the fade"
+	);
+	const auto play = scene.take_audio_command();
+	expect(
+		play && play->type == ClassicAudioCommandType::play_song &&
+			play->cue == ClassicMusicCue::menu_main,
+		"fast title starts OP.M before the first fade sample"
+	);
+	for(std::uint16_t frame = 0U; frame < 25U; ++frame) {
+		tick = scene.advance();
+		expect(tick.has_value(), "fast fade frame advances");
+	}
+	expect(
+		scene.phase() == ClassicOpPhase::wait_title_input &&
+			scene.raster().palette_tone() == 100,
+		"fast title reaches input after tones 4 through 100"
+	);
+}
+
+void reach_main_menu(ClassicOpTitleMenuScene &scene)
+{
+	reach_title_wait(scene);
+	const auto accepted = scene.advance({.ok = true});
+	expect(
+		accepted && accepted->input_sampled &&
+			scene.phase() == ClassicOpPhase::box_to_main,
+		"title input is sampled before the blocking window animation"
+	);
+	for(std::uint16_t frame = 0U; frame < 14U; ++frame) {
+		const auto box = scene.advance();
+		expect(
+			box && box->surface_changed,
+			"each 8-pixel OP window step consumes one VSync"
+		);
+	}
+	expect(
+		scene.phase() == ClassicOpPhase::main_menu,
+		"24-to-136-pixel main window expansion takes fourteen steps"
+	);
+}
+
+void test_fast_title_and_held_first_choice()
+{
+	auto scene = make_scene(ClassicOpTitleMode::fast_fade);
+	if(!scene) {
+		return;
+	}
+	expect(
+		scene->resident().fast_op_animation == 0U,
+		"fast title toggles the resident flag back to the long path"
+	);
+	reach_main_menu(*scene);
+	const auto selected = scene->advance({.down = true, .ok = true});
+	expect(
+		selected && selected->ready && selected->selection_changed &&
+			scene->selected_choice() == ClassicOpMenuChoice::versus,
+		"first held menu sample moves and commits immediately"
+	);
+	auto completion = scene->take_completion();
+	expect(
+		completion && completion->route() == ClassicOpRoute::versus &&
+			completion->resident().resident_rand == 42,
+		"VS handoff retains both source menu-loop random increments"
+	);
+	if(completion) {
+		expect(
+			completion->tram().cell({25, 17})->attribute ==
+				th03::present::tram_black &&
+			completion->tram().cell({23, 18})->attribute ==
+				th03::present::tram_white,
+			"MIKOFT labels use the source shifted centers and attributes"
+		);
+		expect(
+			completion->raster().pixel(Page::zero, {160, 256}) == 1U &&
+			completion->raster().pixel(Page::zero, {280, 256}) == 2U,
+			"OPWIN left and final right glyphs remain on TL02"
+		);
+	}
+	expect(
+		scene->phase() == ClassicOpPhase::consumed,
+		"typed OP handoff is single-consumer"
+	);
+}
+
+void test_menu_input_lock_and_cancel()
+{
+	auto scene = make_scene(ClassicOpTitleMode::fast_fade);
+	if(!scene) {
+		return;
+	}
+	reach_main_menu(*scene);
+	auto tick = scene->advance({.down = true});
+	expect(
+		tick && scene->selected_choice() == ClassicOpMenuChoice::versus,
+		"first down selects VS"
+	);
+	tick = scene->advance({.down = true});
+	expect(
+		tick && !tick->selection_changed &&
+			scene->selected_choice() == ClassicOpMenuChoice::versus,
+		"held down is locked until a no-input sample"
+	);
+	static_cast<void>(scene->advance());
+	tick = scene->advance({.down = true});
+	expect(
+		tick && scene->selected_choice() == ClassicOpMenuChoice::music_room,
+		"released down can advance to Music Room"
+	);
+	static_cast<void>(scene->advance());
+	tick = scene->advance({.cancel = true});
+	auto completion = scene->take_completion();
+	expect(
+		tick && tick->ready && completion &&
+			completion->route() == ClassicOpRoute::quit,
+		"Cancel exits from every main-menu selection"
+	);
+}
+
+void test_demo_timeout_and_blackout()
+{
+	auto scene = make_scene(ClassicOpTitleMode::fast_fade);
+	if(!scene) {
+		return;
+	}
+	reach_title_wait(*scene);
+	for(std::uint16_t frame = 0U; frame < 520U; ++frame) {
+		const auto tick = scene->advance();
+		expect(
+			tick && tick->phase == ClassicOpPhase::wait_title_input,
+			"first 520 idle polls stay on the title"
+		);
+	}
+	const auto timeout = scene->advance();
+	expect(
+		timeout && timeout->phase == ClassicOpPhase::demo_black_out &&
+			timeout->boundary == th03::app::ClassicOpBoundary::input_poll,
+		"poll 521 starts the demo before another frame delay"
+	);
+	for(std::uint16_t frame = 0U; frame < 18U; ++frame) {
+		const auto fade = scene->advance();
+		expect(fade.has_value(), "demo black-out cadence advances");
+	}
+	expect(
+		scene->phase() == ClassicOpPhase::ready &&
+			scene->raster().palette_tone() == 0,
+		"palette_black_out(1) consumes one alignment plus seventeen fade VSyncs"
+	);
+	const auto stop = scene->take_audio_command();
+	auto completion = scene->take_completion();
+	expect(
+		stop && stop->type == ClassicAudioCommandType::stop_song && completion &&
+			completion->route() == ClassicOpRoute::demo,
+		"demo handoff stops OP.M after the black-out"
+	);
+	if(completion) {
+		const auto &resident = completion->resident();
+		expect(
+			resident.game_mode == th03::game_mode::demo &&
+				resident.demo_number == 1U && resident.is_cpu[0U] == 1U &&
+				resident.is_cpu[1U] == 1U &&
+				resident.paletted_character == std::array<std::int8_t, 2U>{3, 1} &&
+				resident.resident_rand == 600,
+			"first demo publishes the exact Mima/Reimu resident recipe"
+		);
+	}
+}
+
+void test_long_title_cadence()
+{
+	auto scene = make_scene(ClassicOpTitleMode::long_animation);
+	if(!scene) {
+		return;
+	}
+	expect_start_audio(*scene);
+	expect(
+		scene->resident().fast_op_animation == 1U &&
+			scene->raster().shown_page() == Page::one,
+		"long title toggles the next startup to fast and initially shows page 1"
+	);
+	for(std::uint16_t frame = 0U; frame < 72U; ++frame) {
+		expect(scene->advance().has_value(), "long shift frame advances");
+	}
+	expect(
+		scene->phase() == ClassicOpPhase::long_background_fade,
+		"title kanji shift consumes exactly 72 page-flipped frames"
+	);
+	for(std::uint16_t frame = 0U; frame < 56U; ++frame) {
+		expect(scene->advance().has_value(), "long background fade advances");
+	}
+	for(std::uint16_t frame = 0U; frame < 16U; ++frame) {
+		expect(scene->advance().has_value(), "selection preload pause advances");
+	}
+	for(std::uint16_t frame = 0U; frame < 16U; ++frame) {
+		expect(scene->advance().has_value(), "first title flash advances");
+	}
+	expect(
+		scene->phase() == ClassicOpPhase::long_menu_swap_bright,
+		"first eight bright/normal flashes end before the TL02 swap"
+	);
+	const auto swap = scene->advance();
+	expect(
+		swap && swap->surface_changed &&
+			scene->phase() == ClassicOpPhase::long_menu_swap_normal,
+		"TL02 replaces TL01 at tone 200"
+	);
+	const auto play = scene->take_audio_command();
+	expect(
+		play && play->type == ClassicAudioCommandType::play_song,
+		"long title starts OP.M at the TL02 swap"
+	);
+	expect(scene->advance().has_value(), "post-swap tone-100 frame advances");
+	for(std::uint16_t frame = 0U; frame < 16U; ++frame) {
+		expect(scene->advance().has_value(), "second title flash advances");
+	}
+	expect(
+		scene->phase() == ClassicOpPhase::wait_title_input,
+		"long title reaches input after the second eight flashes"
+	);
+}
+
+void test_rejections()
+{
+	GameInit mismatch{};
+	mismatch.fast_op_animation = 1U;
+	auto rejected = ClassicOpSceneTestAccess::create_with_predecoded_assets(
+		mismatch, ClassicOpTitleMode::long_animation, fullscreen_pi(true),
+		fullscreen_pi(false), window_sheet(), gaiji_sheet()
+	);
+	expect(
+		!rejected && rejected.error().code ==
+			ClassicOpErrorCode::invalid_state,
+		"title mode must match the resident alternating-animation flag"
+	);
+
+	GameInit resident{};
+	auto bad_window = window_sheet();
+	bad_window.header.pixel_width = 8U;
+	rejected = ClassicOpSceneTestAccess::create_with_predecoded_assets(
+		resident, ClassicOpTitleMode::long_animation, fullscreen_pi(true),
+		fullscreen_pi(false), std::move(bad_window), gaiji_sheet()
+	);
+	expect(
+		!rejected && rejected.error().code ==
+			ClassicOpErrorCode::invalid_asset_geometry,
+		"OPWIN geometry is rejected before scene publication"
+	);
+}
+
+void local_original_gate(const std::filesystem::path &content_root)
+{
+	th03::app::MainResourceLoader loader(content_root);
+	const auto closure = loader.load_op_title_menu();
+	expect(
+		closure.has_value(),
+		"local TL01, TL02, OPWIN, MIKOFT, and OP.M closure authenticates"
+	);
+	if(!closure) {
+		return;
+	}
+	GameInit resident{};
+	const auto created = ClassicOpTitleMenuScene::create(
+		resident, ClassicOpTitleMode::long_animation, *closure
+	);
+	expect(
+		created.has_value(),
+		"local OP title assets decode and prepare at source geometry"
+	);
+	if(!created) {
+		return;
+	}
+	auto &scene = **created;
+	expect_start_audio(scene);
+	for(std::uint16_t frame = 0U; frame < 72U + 56U + 16U + 16U; ++frame) {
+		expect(scene.advance().has_value(), "local long-title prefix advances");
+	}
+	expect(scene.advance().has_value(), "local TL02 title swap advances");
+	const auto play = scene.take_audio_command();
+	expect(
+		play && play->type == ClassicAudioCommandType::play_song,
+		"local long-title swap publishes OP.M playback"
+	);
+	expect(scene.advance().has_value(), "local normal swap frame advances");
+	for(std::uint16_t frame = 0U; frame < 16U; ++frame) {
+		expect(scene.advance().has_value(), "local second flash advances");
+	}
+	expect(
+		scene.phase() == ClassicOpPhase::wait_title_input,
+		"local original title reaches the first source input boundary"
+	);
+}
+
+} // namespace
+
+int main(int argc, char **argv)
+{
+	test_fast_title_and_held_first_choice();
+	test_menu_input_lock_and_cancel();
+	test_demo_timeout_and_blackout();
+	test_long_title_cadence();
+	test_rejections();
+	if(argc == 2) {
+		local_original_gate(argv[1]);
+	} else {
+		expect(argc == 1, "optional local gate accepts one content root");
+	}
+	std::cout << "checks=" << checks << " failures=" << failures << '\n';
+	return failures == 0U ? 0 : 1;
+}

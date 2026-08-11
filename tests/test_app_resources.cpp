@@ -121,8 +121,8 @@ void test_manifest()
 	);
 	const auto manifest = th03::app::main_resource_manifest();
 	expect(
-		manifest.size() == 227U,
-		"manifest enumerates MAIN, MAINL, cutscene, staff, registration, paletted, and character-only assets"
+		manifest.size() == 232U,
+		"manifest enumerates OP, MAIN, MAINL, cutscene, staff, registration, paletted, and character-only assets"
 	);
 	expect(
 		static_cast<bool>(th03::app::validate_main_resource_manifest(manifest)),
@@ -358,6 +358,67 @@ void test_manifest()
 		!duplicate_check && duplicate_check.error() ==
 			ResourceLoadErrorCode::duplicate_logical_role,
 		"duplicate logical roles fail with a deterministic named manifest error"
+	);
+}
+
+void test_op_title_menu_resource_batch()
+{
+	const auto keys = th03::app::op_title_menu_resource_keys();
+	const std::array expected{
+		MainResourceKey{.role = MainResourceRole::op_title_long_background},
+		MainResourceKey{.role = MainResourceRole::op_menu_background},
+		MainResourceKey{.role = MainResourceRole::op_window_sheet},
+		MainResourceKey{.role = MainResourceRole::op_gaiji_font},
+		MainResourceKey{.role = MainResourceRole::op_menu_music},
+	};
+	expect(
+		keys.size() == expected.size() &&
+			std::equal(keys.begin(), keys.end(), expected.begin()),
+		"OP title closure preserves TL01, TL02, OPWIN, MIKOFT, then OP.M"
+	);
+	const auto tl01 = th03::app::main_resource_spec(keys[0U]);
+	const auto tl02 = th03::app::main_resource_spec(keys[1U]);
+	const auto opwin = th03::app::main_resource_spec(keys[2U]);
+	const auto gaiji = th03::app::main_resource_spec(keys[3U]);
+	const auto music = th03::app::main_resource_spec(keys[4U]);
+	expect(
+		tl01 && tl01->filename == "TL01.PI" && tl01->expected_bytes == 4192U &&
+		tl02 && tl02->filename == "TL02.PI" && tl02->expected_bytes == 31779U &&
+		opwin && opwin->filename == "OPWIN.BFT" &&
+			opwin->expected_bytes == 3152U &&
+		gaiji && gaiji->filename == "MIKOFT.BFT" &&
+			gaiji->expected_bytes == 8224U &&
+		music && music->filename == "OP.M" && music->expected_bytes == 4431U,
+		"OP title manifest records the measured original extraction sizes"
+	);
+	expect(
+		!th03::app::main_resource_spec({
+			.role = MainResourceRole::op_menu_background,
+			.character = MainCharacter::reimu,
+		}),
+		"OP static roles reject unrelated character selectors"
+	);
+
+	TemporaryRoot root;
+	expect(root.valid(), "temporary OP transaction root was created");
+	if(!root.valid()) {
+		return;
+	}
+	for(std::size_t index = 0U; index + 1U < keys.size(); ++index) {
+		write_spec(root.path(), keys[index], std::byte{0x51U});
+	}
+	MainResourceLoader loader(root.path(), MainResourceIntegrity::size_only);
+	const auto failed = loader.load_op_title_menu();
+	expect(
+		!failed && loader.cached_resource_count() == 0U,
+		"late OP.M failure publishes no partial title cache"
+	);
+	write_spec(root.path(), keys.back(), std::byte{0x52U});
+	const auto loaded = loader.load_op_title_menu();
+	expect(
+		loaded && loaded->size() == keys.size() &&
+			loader.cached_resource_count() == keys.size(),
+		"complete OP title closure commits atomically"
 	);
 }
 
@@ -1103,6 +1164,7 @@ void test_rejections()
 int main()
 {
 	test_manifest();
+	test_op_title_menu_resource_batch();
 	test_direct_vs_batch_and_cache();
 	test_main_private_and_mainl_stage_batches();
 	test_cutscene_resource_batches();

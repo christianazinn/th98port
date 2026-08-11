@@ -23,6 +23,7 @@ enum class MainResourceArchive : std::uint8_t {
 };
 
 enum class MainResourceScene : std::uint8_t {
+	op_title_menu,
 	direct_vs,
 	selection_handoff,
 	mainl_stage_transition,
@@ -192,6 +193,11 @@ struct MainlRegistrationResourceRequest {
 // stage enemy-group role uses character only because MAINL selects one of five
 // ENEMY files from P2's base character, independent of its palette variant.
 enum class MainResourceRole : std::uint8_t {
+	op_title_long_background,
+	op_menu_background,
+	op_window_sheet,
+	op_gaiji_font,
+	op_menu_music,
 	enemy_scripts,
 	game_font,
 	hud_lose_sheet,
@@ -331,6 +337,8 @@ validate_main_resource_manifest(std::span<const MainResourceSpec> manifest);
 [[nodiscard]] std::expected<MainResourceSpec, ResourceLoadError>
 main_resource_spec(MainResourceKey key);
 
+[[nodiscard]] std::vector<MainResourceKey> op_title_menu_resource_keys();
+
 [[nodiscard]] std::expected<std::vector<MainResourceKey>, ResourceLoadError>
 direct_vs_resource_keys(
 	MainPlayerSelection player_one,
@@ -385,6 +393,8 @@ public:
 	[[nodiscard]] std::expected<ResourceBytes, ResourceLoadError> load(
 		MainResourceKey key
 	);
+	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+	load_op_title_menu();
 
 	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 	load_direct_vs(

@@ -524,6 +524,11 @@ std::vector<std::byte> bytes_for(const th03::app::MainResourceSpec &spec)
 		return make_pi(
 			640U, 192U, spec.expected_bytes, true, pi_sentinel(spec.key)
 		);
+	case MainResourceRole::op_title_long_background:
+	case MainResourceRole::op_menu_background:
+	case MainResourceRole::op_window_sheet:
+	case MainResourceRole::op_gaiji_font:
+	case MainResourceRole::op_menu_music:
 	case MainResourceRole::mainl_gaiji_font:
 	case MainResourceRole::character_stage_portrait:
 	case MainResourceRole::stage_number_sheet:

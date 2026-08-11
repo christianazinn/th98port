@@ -1,0 +1,299 @@
+#ifndef TH03_APP_CLASSIC_OP_SCENE_INTERNAL_HPP
+#define TH03_APP_CLASSIC_OP_SCENE_INTERNAL_HPP
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <expected>
+#include <memory>
+#include <optional>
+#include <span>
+#include <utility>
+#include <vector>
+
+#include "th03/app/authentic_text.hpp"
+#include "th03/app/classic_audio.hpp"
+#include "th03/app/resources.hpp"
+#include "th03/assets/types.hpp"
+#include "th03/core/game.hpp"
+#include "th03/present/raster.hpp"
+#include "th03/present/superimpose.hpp"
+#include "th03/present/tram.hpp"
+
+namespace th03::app {
+
+struct ClassicOpInput final {
+	bool up = false;
+	bool down = false;
+	bool left = false;
+	bool right = false;
+	bool ok = false;
+	bool shot = false;
+	bool cancel = false;
+
+	[[nodiscard]] bool any() const noexcept
+	{
+		return up || down || left || right || ok || shot || cancel;
+	}
+};
+
+enum class ClassicOpTitleMode : std::uint8_t {
+	long_animation,
+	fast_fade,
+};
+
+enum class ClassicOpMenuChoice : std::uint8_t {
+	story,
+	versus,
+	music_room,
+	high_scores,
+	options,
+	quit,
+};
+
+enum class ClassicOpRoute : std::uint8_t {
+	story,
+	versus,
+	music_room,
+	high_scores,
+	options,
+	quit,
+	demo,
+};
+
+enum class ClassicOpPhase : std::uint8_t {
+	long_shift,
+	long_background_fade,
+	long_selection_pause,
+	long_first_flash,
+	long_menu_swap_bright,
+	long_menu_swap_normal,
+	long_second_flash,
+	fast_black,
+	fast_initial_pause,
+	fast_fade,
+	wait_title_input,
+	box_to_main,
+	main_menu,
+	demo_black_out,
+	ready,
+	consumed,
+	failed,
+};
+
+enum class ClassicOpBoundary : std::uint8_t {
+	immediate,
+	vsync,
+	input_poll,
+};
+
+enum class ClassicOpErrorCode : std::uint8_t {
+	resource_set_mismatch,
+	resource_bytes_missing,
+	resource_integrity_failed,
+	asset_decode_failed,
+	invalid_asset_geometry,
+	font_prepare_failed,
+	draw_failed,
+	audio_command_pending,
+	invalid_state,
+};
+
+struct ClassicOpError final {
+	ClassicOpErrorCode code = ClassicOpErrorCode::invalid_state;
+	std::optional<MainResourceKey> resource{};
+	std::optional<assets::AssetError> asset_error{};
+	std::optional<AuthenticTextError> text_error{};
+};
+
+struct ClassicOpTick final {
+	ClassicOpPhase phase = ClassicOpPhase::failed;
+	ClassicOpBoundary boundary = ClassicOpBoundary::immediate;
+	bool surface_changed = false;
+	bool tram_changed = false;
+	bool input_sampled = false;
+	bool selection_changed = false;
+	bool ready = false;
+};
+
+class ClassicOpCompletion final {
+public:
+	ClassicOpCompletion(const ClassicOpCompletion &) = delete;
+	ClassicOpCompletion &operator=(const ClassicOpCompletion &) = delete;
+	ClassicOpCompletion(ClassicOpCompletion &&) noexcept = default;
+	ClassicOpCompletion &operator=(ClassicOpCompletion &&) noexcept = default;
+
+	[[nodiscard]] ClassicOpRoute route() const noexcept;
+	[[nodiscard]] const GameInit &resident() const noexcept;
+	[[nodiscard]] const present::Raster &raster() const noexcept;
+	[[nodiscard]] const present::Tram &tram() const noexcept;
+
+private:
+	friend class ClassicOpTitleMenuScene;
+	ClassicOpCompletion(
+		ClassicOpRoute route,
+		GameInit resident,
+		present::Raster raster,
+		present::Tram tram
+	) noexcept;
+
+	ClassicOpRoute route_ = ClassicOpRoute::quit;
+	GameInit resident_{};
+	present::Raster raster_{};
+	present::Tram tram_{};
+};
+
+// Source-private owner of OP.EXE's startup title and six-entry main menu. The
+// character-selection loads interleaved by the original title animation are a
+// child-scene preload contract; this owner preserves their 16-VSync timing
+// boundary but retains only the title/menu assets it actually draws.
+class ClassicOpTitleMenuScene final {
+public:
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicOpTitleMenuScene>,
+		ClassicOpError
+	> create(
+		GameInit resident,
+		ClassicOpTitleMode title_mode,
+		std::span<const LoadedMainResource> resources
+	);
+	~ClassicOpTitleMenuScene() = default;
+
+	ClassicOpTitleMenuScene(const ClassicOpTitleMenuScene &) = delete;
+	ClassicOpTitleMenuScene &operator=(
+		const ClassicOpTitleMenuScene &
+	) = delete;
+	ClassicOpTitleMenuScene(ClassicOpTitleMenuScene &&) = delete;
+	ClassicOpTitleMenuScene &operator=(ClassicOpTitleMenuScene &&) = delete;
+
+	[[nodiscard]] std::expected<ClassicOpTick, ClassicOpError>
+	advance(ClassicOpInput input = {});
+	[[nodiscard]] std::optional<ClassicAudioCommand>
+	take_audio_command() noexcept;
+	[[nodiscard]] std::optional<ClassicOpCompletion>
+	take_completion() noexcept;
+
+	[[nodiscard]] ClassicOpPhase phase() const noexcept;
+	[[nodiscard]] ClassicOpMenuChoice selected_choice() const noexcept;
+	[[nodiscard]] const GameInit &resident() const noexcept;
+	[[nodiscard]] const present::Raster &raster() const noexcept;
+	[[nodiscard]] const present::Tram &tram() const noexcept;
+
+private:
+	friend struct ClassicOpSceneTestAccess;
+
+	struct Prepared final {
+		assets::PiImage long_background{};
+		assets::PiImage menu_background{};
+		std::optional<present::PreparedSuperimposeSheet> window_sheet{};
+		std::optional<PreparedGameftGaiji> gaiji{};
+	};
+
+	ClassicOpTitleMenuScene(
+		std::unique_ptr<Prepared> prepared,
+		GameInit resident,
+		ClassicOpTitleMode title_mode
+	) noexcept;
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicOpTitleMenuScene>,
+		ClassicOpError
+	> create_impl(
+		GameInit resident,
+		ClassicOpTitleMode title_mode,
+		std::span<const LoadedMainResource> resources,
+		bool authenticate_resource_bytes
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicOpTitleMenuScene>,
+		ClassicOpError
+	> create_predecoded(
+		GameInit resident,
+		ClassicOpTitleMode title_mode,
+		assets::PiImage long_background,
+		assets::PiImage menu_background,
+		assets::BfntSheet window_sheet,
+		assets::BfntSheet gaiji
+	);
+
+	[[nodiscard]] bool initialize_long_title() noexcept;
+	[[nodiscard]] bool initialize_fast_title() noexcept;
+	[[nodiscard]] bool apply_palette(
+		const assets::Palette16Rgb4 &palette
+	) noexcept;
+	[[nodiscard]] bool shift_access_page_left(std::uint16_t pixels) noexcept;
+	[[nodiscard]] bool draw_menu_background() noexcept;
+	[[nodiscard]] bool restore_menu_background(
+		std::int32_t left,
+		std::int32_t top,
+		std::uint16_t width,
+		std::uint16_t height
+	) noexcept;
+	[[nodiscard]] bool draw_window_glyph(
+		std::int32_t left,
+		std::uint16_t glyph
+	) noexcept;
+	[[nodiscard]] bool draw_main_choices() noexcept;
+	[[nodiscard]] bool draw_choice(
+		ClassicOpMenuChoice choice,
+		present::TramAttribute attribute
+	) noexcept;
+	[[nodiscard]] bool update_selection(int direction) noexcept;
+	[[nodiscard]] bool begin_menu_swap() noexcept;
+	[[nodiscard]] bool begin_box_animation() noexcept;
+	[[nodiscard]] bool box_step() noexcept;
+	[[nodiscard]] bool push_audio_command(ClassicAudioCommand command) noexcept;
+	void select_route(ClassicOpRoute route) noexcept;
+	void select_demo_route() noexcept;
+	void fail() noexcept;
+	[[nodiscard]] ClassicOpTick tick(
+		ClassicOpBoundary boundary,
+		bool surface_changed = false,
+		bool tram_changed = false,
+		bool input_sampled = false,
+		bool selection_changed = false
+	) const noexcept;
+
+	std::unique_ptr<Prepared> prepared_{};
+	GameInit resident_{};
+	present::Raster raster_{};
+	present::Tram tram_{};
+	std::vector<present::Index4> page_snapshot_{};
+	std::array<ClassicAudioCommand, 3U> audio_commands_{};
+	std::size_t audio_head_ = 0U;
+	std::size_t audio_count_ = 0U;
+	ClassicOpPhase phase_ = ClassicOpPhase::failed;
+	ClassicOpMenuChoice selected_ = ClassicOpMenuChoice::story;
+	std::int16_t brightness_ = 0;
+	std::uint16_t phase_frame_ = 0U;
+	std::uint16_t title_wait_frame_ = 0U;
+	std::int32_t box_right_left_ = 0;
+	present::Page title_page_ = present::Page::zero;
+	bool menu_input_allowed_ = false;
+	bool demo_route_pending_ = false;
+	std::optional<ClassicOpCompletion> completion_{};
+};
+
+struct ClassicOpSceneTestAccess final {
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicOpTitleMenuScene>,
+		ClassicOpError
+	> create_with_predecoded_assets(
+		GameInit resident,
+		ClassicOpTitleMode title_mode,
+		assets::PiImage long_background,
+		assets::PiImage menu_background,
+		assets::BfntSheet window_sheet,
+		assets::BfntSheet gaiji
+	)
+	{
+		return ClassicOpTitleMenuScene::create_predecoded(
+			std::move(resident), title_mode, std::move(long_background),
+			std::move(menu_background), std::move(window_sheet),
+			std::move(gaiji)
+		);
+	}
+};
+
+} // namespace th03::app
+
+#endif
