@@ -165,6 +165,7 @@ struct FakeBackend final {
 	std::size_t resolve_count = 0U;
 	std::size_t game_over_count = 0U;
 	std::size_t main_advance_count = 0U;
+	th03::CoreInput last_main_input{};
 	bool cutscene_active = false;
 	std::vector<MainlCutsceneKind> cutscene_history{};
 	std::array<th03::present::ComposedPixel,
@@ -230,9 +231,10 @@ ClassicStorySessionBackendOperations operations(FakeBackend &fake)
 			++backend.main_count;
 			return std::expected<void, ClassicStorySessionError>{};
 		},
-		.advance_main = [](void *context, th03::CoreInput) {
+		.advance_main = [](void *context, th03::CoreInput input) {
 			auto &backend = *static_cast<FakeBackend *>(context);
 			++backend.main_advance_count;
+			backend.last_main_input = input;
 			return std::expected<ClassicStoryBackendTick,
 				ClassicStorySessionError>{ClassicStoryBackendTick{
 				.surface_changed = true,
@@ -430,6 +432,30 @@ std::unique_ptr<ClassicStorySession> create_session(
 	);
 	expect(created.has_value(), "Story session creates with retained backend");
 	return created ? std::move(*created) : nullptr;
+}
+
+void test_story_input_mode_normalization()
+{
+	auto backend = std::make_shared<FakeBackend>();
+	auto session = create_session(story_config(), backend);
+	if(!session) {
+		return;
+	}
+	expect(session->consume({.dismiss_pressed = true}).has_value() &&
+		session->scene() == ClassicStorySessionScene::main,
+		"Story input-mode fixture advances the splash into MAIN");
+	const th03::CoreInput physical{
+		.p1 = 0x0104U,
+		.p2 = 0x0208U,
+		.system = 0x7032U,
+		.charge_mask = 0x03U,
+	};
+	expect(session->consume({.main = physical}).has_value() &&
+		backend->last_main_input.p1 == 0x7136U &&
+		backend->last_main_input.p2 == 0U &&
+		backend->last_main_input.system == physical.system &&
+		backend->last_main_input.charge_mask == 0x01U,
+		"Story MAIN reproduces input_mode_1p_vs_cpu while retaining input_sp");
 }
 
 void test_complete_nine_stage_route()
@@ -693,6 +719,7 @@ bool run_local_original_gate(
 
 int main(int argc, char **argv)
 {
+	test_story_input_mode_normalization();
 	test_complete_nine_stage_route();
 	test_continue_accept_decline_and_zero_credit();
 	test_quit_and_backend_failure();

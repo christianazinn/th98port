@@ -122,6 +122,17 @@ namespace {
 	return result;
 }
 
+[[nodiscard]] CoreInput story_main_input(CoreInput input) noexcept
+{
+	// input_mode_1p_vs_cpu() merges the source-global keyboard word into P1
+	// after sensing the multiplayer P1 word, then clears P2. Keep input_sp
+	// separately available for pause handling at the same gameplay boundary.
+	input.p1 = static_cast<std::uint16_t>(input.p1 | input.system);
+	input.p2 = 0U;
+	input.charge_mask = static_cast<std::uint8_t>(input.charge_mask & 0x01U);
+	return input;
+}
+
 [[nodiscard]] std::optional<MainlStageResourceRequest> stage_request(
 	const MainStoryConfig &config
 ) noexcept
@@ -1636,7 +1647,7 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 		break;
 	case ClassicStorySessionScene::main:
 		tick = impl_->operations.advance_main(
-			impl_->operations.context, input.main
+			impl_->operations.context, story_main_input(input.main)
 		);
 		break;
 	case ClassicStorySessionScene::win:
