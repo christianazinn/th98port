@@ -377,6 +377,36 @@ template <typename Value, typename Decoder>
 
 } // namespace
 
+std::optional<ClassicAudioCommand> classic_main_gameplay_song(
+	const GameInit &resident
+) noexcept
+{
+	const auto player_two = main_player_selection_from_paletted(
+		resident.paletted_character[1U]
+	);
+	if(!player_two) {
+		return std::nullopt;
+	}
+	std::uint8_t parameter = 0U;
+	if(resident.game_mode == game_mode::story && resident.story_stage == 6U) {
+		parameter = static_cast<std::uint8_t>(
+			ClassicGameplayMusic::decision
+		);
+	} else {
+		parameter = static_cast<std::uint8_t>(
+			static_cast<std::uint8_t>(player_two->character) - 1U
+		);
+		if(parameter >= static_cast<std::uint8_t>(MainCharacter::chiyuri) - 1U) {
+			++parameter;
+		}
+	}
+	return ClassicAudioCommand{
+		.type = ClassicAudioCommandType::load_song,
+		.cue = ClassicMusicCue::gameplay,
+		.parameter = parameter,
+	};
+}
+
 ClassicMainlStageTransition::ClassicMainlStageTransition(
 	std::unique_ptr<Prepared> prepared
 ) noexcept :
@@ -989,6 +1019,19 @@ bool ClassicMainlStageTransition::finalize_handoff() noexcept
 	return true;
 }
 
+bool ClassicMainlStageTransition::push_audio_command(
+	ClassicAudioCommand command
+) noexcept
+{
+	if(audio_count_ >= audio_commands_.size()) {
+		return false;
+	}
+	const auto tail = (audio_head_ + audio_count_) % audio_commands_.size();
+	audio_commands_[tail] = command;
+	++audio_count_;
+	return true;
+}
+
 std::expected<ClassicMainlStageTick, ClassicMainlStageError>
 ClassicMainlStageTransition::advance(bool dismiss_pressed) noexcept
 {
@@ -1001,7 +1044,7 @@ ClassicMainlStageTransition::advance(bool dismiss_pressed) noexcept
 	}
 
 	switch(phase_) {
-	case ClassicMainlStagePhase::black_in:
+	case ClassicMainlStagePhase::black_in: {
 		if(fade_index_ < 17U) {
 			++fade_index_;
 			raster_.set_palette_tone(static_cast<std::int16_t>(
@@ -1018,10 +1061,22 @@ ClassicMainlStageTransition::advance(bool dismiss_pressed) noexcept
 				ClassicMainlStageErrorCode::draw_failed
 			));
 		}
+		const auto song = classic_main_gameplay_song(prepared_->entry.resident);
+		if(!song || !push_audio_command({
+			.type = ClassicAudioCommandType::stop_song,
+		}) || !push_audio_command(*song) || !push_audio_command({
+			.type = ClassicAudioCommandType::load_effects,
+		})) {
+			fail();
+			return std::unexpected(stage_error(
+				ClassicMainlStageErrorCode::invalid_state
+			));
+		}
 		phase_ = ClassicMainlStagePhase::waiting;
 		fade_index_ = 0U;
 		wait_count_ = 0U;
 		return tick_result(phase_, wait_count_);
+	}
 
 	case ClassicMainlStagePhase::waiting: {
 		if(wait_count_ < 97U) {
@@ -1105,6 +1160,18 @@ const present::Raster &ClassicMainlStageTransition::raster() const noexcept
 const present::Tram &ClassicMainlStageTransition::tram() const noexcept
 {
 	return tram_;
+}
+
+std::optional<ClassicAudioCommand>
+ClassicMainlStageTransition::take_audio_command() noexcept
+{
+	if(audio_count_ == 0U) {
+		return std::nullopt;
+	}
+	const auto command = audio_commands_[audio_head_];
+	audio_head_ = (audio_head_ + 1U) % audio_commands_.size();
+	--audio_count_;
+	return command;
 }
 
 const MainStageHandoff *ClassicMainlStageTransition::handoff() const noexcept

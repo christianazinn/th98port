@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "th03/app/authentic_text.hpp"
+#include "th03/app/classic_audio.hpp"
 #include "main_stage_handoff_internal.hpp"
 #include "th03/app/main_process.hpp"
 #include "th03/app/resources.hpp"
@@ -24,6 +25,11 @@ namespace th03::app {
 
 class ClassicOpSelectionCompletion;
 class ClassicOpCompletion;
+
+// Source-private identity shared by MAINL's Load and MAIN's Play command.
+// The returned command always has type load_song.
+[[nodiscard]] std::optional<ClassicAudioCommand>
+classic_main_gameplay_song(const GameInit &resident) noexcept;
 
 struct MainlStageCharacterText final {
 	std::vector<std::uint8_t> title{};
@@ -135,6 +141,8 @@ public:
 	[[nodiscard]] std::uint8_t wait_count() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 	[[nodiscard]] const present::Tram &tram() const noexcept;
+	[[nodiscard]] std::optional<ClassicAudioCommand>
+	take_audio_command() noexcept;
 
 private:
 	friend class ClassicStorySession;
@@ -218,6 +226,9 @@ private:
 		present::Raster raster
 	) noexcept;
 	[[nodiscard]] bool finalize_handoff() noexcept;
+	[[nodiscard]] bool push_audio_command(
+		ClassicAudioCommand command
+	) noexcept;
 	[[nodiscard]] const MainStageHandoff *handoff() const noexcept;
 	[[nodiscard]] bool matches_process_config(
 		const MainStoryConfig &config
@@ -234,6 +245,9 @@ private:
 	present::Raster raster_{};
 	present::Tram tram_{};
 	std::optional<MainStageHandoff> handoff_{};
+	std::array<ClassicAudioCommand, 3U> audio_commands_{};
+	std::size_t audio_head_ = 0U;
+	std::size_t audio_count_ = 0U;
 	ClassicMainlStagePhase phase_ = ClassicMainlStagePhase::black_in;
 	std::uint8_t fade_index_ = 0U;
 	std::uint8_t wait_count_ = 0U;

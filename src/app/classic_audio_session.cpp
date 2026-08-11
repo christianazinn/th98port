@@ -67,7 +67,7 @@ song_key(ClassicAudioCommand command) noexcept
 		));
 	}
 	if(command.cue != ClassicMusicCue::music_room_track &&
-		command.parameter != 0U) {
+		command.cue != ClassicMusicCue::gameplay && command.parameter != 0U) {
 		return std::unexpected(session_error(
 			ClassicAudioSessionErrorCode::invalid_parameter, command
 		));
@@ -77,6 +77,21 @@ song_key(ClassicAudioCommand command) noexcept
 		return MainResourceKey{.role = MainResourceRole::op_menu_music};
 	case ClassicMusicCue::character_select:
 		return MainResourceKey{.role = MainResourceRole::selection_music};
+	case ClassicMusicCue::gameplay:
+		if(command.parameter > static_cast<std::uint16_t>(
+			static_cast<std::uint8_t>(ClassicGameplayMusic::stage_08)
+		)) {
+			return std::unexpected(session_error(
+				ClassicAudioSessionErrorCode::invalid_parameter, command
+			));
+		}
+		return MainResourceKey{
+			.role = MainResourceRole::op_music_room_track,
+			.music_room_track = static_cast<MainMusicRoomTrack>(
+				static_cast<std::uint8_t>(MainMusicRoomTrack::stage_00) +
+				static_cast<std::uint8_t>(command.parameter)
+			),
+		};
 	case ClassicMusicCue::music_room_track:
 		if(command.parameter >= static_cast<std::uint16_t>(
 			static_cast<std::uint8_t>(MainMusicRoomTrack::high_score)
@@ -133,6 +148,7 @@ song_key(ClassicAudioCommand command) noexcept
 	case ClassicMusicCue::none:
 	case ClassicMusicCue::menu_main:
 	case ClassicMusicCue::character_select:
+	case ClassicMusicCue::gameplay:
 	case ClassicMusicCue::music_room_track:
 	case ClassicMusicCue::winner:
 	case ClassicMusicCue::game_over:
@@ -349,6 +365,16 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 		impl_->effects.reset();
 		return {};
 	}
+	case ClassicAudioCommandType::reset_effects:
+		if(command.cue != ClassicMusicCue::none || command.parameter != 0U) {
+			return std::unexpected(session_error(
+				ClassicAudioSessionErrorCode::invalid_parameter, command
+			));
+		}
+		// snd_se_reset() only clears TH03's one-slot scheduler. It does not
+		// explicitly stop the PMD effect that has already reached the driver.
+		impl_->effects.reset();
+		return {};
 	case ClassicAudioCommandType::play_effect:
 		if(command.cue != ClassicMusicCue::none ||
 			command.parameter < audio::th03_sound_effect_first ||

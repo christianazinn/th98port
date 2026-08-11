@@ -280,6 +280,7 @@ const char *name(th03::app::MainProcessErrorCode code) noexcept
 	case th03::app::MainProcessErrorCode::presentation_failed: return "presentation-failed";
 	case th03::app::MainProcessErrorCode::repeat_startup_failed: return "repeat-startup-failed";
 	case th03::app::MainProcessErrorCode::core_operation_failed: return "core-operation-failed";
+	case th03::app::MainProcessErrorCode::audio_command_pending: return "audio-command-pending";
 	}
 	return "unknown";
 }

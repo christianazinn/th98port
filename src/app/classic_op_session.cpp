@@ -1263,6 +1263,11 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::invalid_config
 			));
 		}
+		if((audio_commands.size() - audio_count) < 2U) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::audio_command_pending
+			));
+		}
 		auto resources = loader->load_main_private(*player_one, *player_two);
 		if(!resources) {
 			return std::unexpected(resource_error(std::move(resources.error())));
@@ -1272,6 +1277,11 @@ struct ClassicOpSessionBackend final {
 		);
 		if(!created) {
 			return std::unexpected(main_error(std::move(created.error())));
+		}
+		if(!drain_audio(**created)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::audio_command_pending
+			));
 		}
 		auto driver = MainProcessDriver::create(process_operations(**created));
 		if(!driver) {
@@ -1378,6 +1388,11 @@ struct ClassicOpSessionBackend final {
 		if(!tick) {
 			return std::unexpected(stage_error(std::move(tick.error())));
 		}
+		if(!drain_audio(*vs_stage)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::audio_command_pending
+			));
+		}
 		return ClassicOpSessionBackendTick{
 			.surface_changed = true,
 			.input_sampled = tick->input_accepted,
@@ -1404,6 +1419,11 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::invalid_config
 			));
 		}
+		if((audio_commands.size() - audio_count) < 2U) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::audio_command_pending
+			));
+		}
 		auto resources = loader->load_main_private(*player_one, *player_two);
 		if(!resources) {
 			return std::unexpected(resource_error(std::move(resources.error())));
@@ -1413,6 +1433,11 @@ struct ClassicOpSessionBackend final {
 		);
 		if(!created) {
 			return std::unexpected(main_error(std::move(created.error())));
+		}
+		if(!drain_audio(**created)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::audio_command_pending
+			));
 		}
 		auto driver = MainProcessDriver::create(process_operations(**created));
 		if(!driver) {
@@ -1444,6 +1469,11 @@ struct ClassicOpSessionBackend final {
 			}
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		if(!drain_audio(*vs_process)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::audio_command_pending
 			));
 		}
 		return ClassicOpSessionBackendTick{

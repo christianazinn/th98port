@@ -1030,6 +1030,16 @@ struct ClassicStoryBackend final {
 
 	std::optional<ClassicAudioCommand> take_audio_command()
 	{
+		if(stage) {
+			if(auto command = stage->take_audio_command()) {
+				return command;
+			}
+		}
+		if(process) {
+			if(auto command = process->take_audio_command()) {
+				return command;
+			}
+		}
 		if(staff) {
 			return staff->take_audio_command();
 		}

@@ -10,6 +10,7 @@
 #include <span>
 
 #include "th03/app/main_compiled_content.hpp"
+#include "th03/app/classic_audio.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/assets/types.hpp"
 #include "th03/core/game.hpp"
@@ -92,6 +93,7 @@ enum class MainProcessErrorCode : std::uint8_t {
 	presentation_failed,
 	repeat_startup_failed,
 	core_operation_failed,
+	audio_command_pending,
 };
 
 struct MainProcessError {
@@ -162,6 +164,8 @@ public:
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 	[[nodiscard]] const present::Tram &tram() const noexcept;
 	[[nodiscard]] present::MainRoundStatus presentation_status() const noexcept;
+	[[nodiscard]] std::optional<ClassicAudioCommand>
+	take_audio_command() noexcept;
 
 private:
 	friend struct MainProcessTestAccess;
@@ -191,7 +195,8 @@ private:
 		const MainStageHandoff &handoff,
 		std::span<const LoadedMainResource> resources,
 		std::shared_ptr<const MainProcessStaticContent> static_content,
-		std::uint8_t continues_used_digit
+		std::uint8_t continues_used_digit,
+		std::optional<ClassicAudioCommand> gameplay_song
 	);
 	void fail_presentation_for_test() noexcept;
 	[[nodiscard]] std::optional<MainProcessError>

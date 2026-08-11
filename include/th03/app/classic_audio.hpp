@@ -14,6 +14,7 @@ enum class ClassicAudioCommandType : std::uint8_t {
 	stop_song,
 	fade_song,
 	load_effects,
+	reset_effects,
 	play_effect,
 	set_bgm_active,
 };
@@ -22,6 +23,7 @@ enum class ClassicMusicCue : std::uint8_t {
 	none,
 	menu_main,
 	character_select,
+	gameplay,
 	music_room_track,
 	winner,
 	game_over,
@@ -32,6 +34,22 @@ enum class ClassicMusicCue : std::uint8_t {
 	cutscene_three,
 	cutscene_four,
 	cutscene_five,
+};
+
+// Parameter domain for ClassicMusicCue::gameplay. The order follows the
+// contiguous Music Room filenames: 00MM.M through 06MM.M, DEC.M, 07MM.M,
+// and 08MM.M.
+enum class ClassicGameplayMusic : std::uint8_t {
+	stage_00,
+	stage_01,
+	stage_02,
+	stage_03,
+	stage_04,
+	stage_05,
+	stage_06,
+	decision,
+	stage_07,
+	stage_08,
 };
 
 struct ClassicAudioCommand final {

@@ -1061,6 +1061,8 @@ void test_distinct_selection_first_frame()
 		return;
 	}
 	auto &process = **created;
+	expect(!process.take_audio_command(),
+		"developer Direct-VS remains outside the Classic MAINL audio lifecycle");
 	resources.clear();
 	resources.shrink_to_fit();
 	const auto observation = process.round_start_observation();
@@ -1778,6 +1780,19 @@ void test_story_factory_transaction_and_lifetime()
 	static_content->reset();
 	transition.reset();
 	auto &process = **created;
+	const auto expected_song = th03::app::classic_main_gameplay_song(
+		config.resident
+	);
+	auto expected_play = expected_song.value_or(
+		th03::app::ClassicAudioCommand{}
+	);
+	expected_play.type = th03::app::ClassicAudioCommandType::play_song;
+	const auto reset_audio = process.take_audio_command();
+	const auto play_audio = process.take_audio_command();
+	expect(reset_audio == th03::app::ClassicAudioCommand{
+		.type = th03::app::ClassicAudioCommandType::reset_effects,
+	} && play_audio == expected_play && !process.take_audio_command(),
+		"fresh Story MAIN resets effects then publishes Play after startup");
 	const auto observation = process.round_start_observation();
 	expect(process.input_protocol() == th03::InputProtocol::live &&
 		observation.start.game_mode == th03::game_mode::story &&
@@ -2086,6 +2101,18 @@ void test_classic_demo_handoff_and_runtime()
 	if(!created) {
 		return;
 	}
+	const auto reset_audio = (*created)->take_audio_command();
+	const auto play_audio = (*created)->take_audio_command();
+	expect(reset_audio == th03::app::ClassicAudioCommand{
+		.type = th03::app::ClassicAudioCommandType::reset_effects,
+	} && play_audio == th03::app::ClassicAudioCommand{
+		.type = th03::app::ClassicAudioCommandType::play_song,
+		.cue = th03::app::ClassicMusicCue::gameplay,
+		.parameter = static_cast<std::uint16_t>(
+			th03::app::ClassicGameplayMusic::stage_00
+		),
+	} && !(*created)->take_audio_command(),
+		"automatic Demo MAIN publishes Reset then source stage Play");
 	const auto observation = (*created)->round_start_observation();
 	expect(
 		observation.start.game_mode == th03::game_mode::demo &&
@@ -2113,6 +2140,10 @@ void test_classic_demo_handoff_and_runtime()
 		"normalized physical Demo input requests source terminal route zero");
 	expect((*created)->finish_main_process().has_value(),
 		"terminal Demo persists its final MAIN boundary");
+	expect((*created)->take_audio_command() == th03::app::ClassicAudioCommand{
+		.type = th03::app::ClassicAudioCommandType::stop_song,
+	} && !(*created)->take_audio_command(),
+		"terminal Demo MAIN publishes exactly one source Stop command");
 	const auto transition = (*created)->session_transition();
 	expect(transition &&
 		transition->action == th03::SessionAction::exit_to_operator &&
@@ -2317,6 +2348,18 @@ void test_classic_vs_handoff_transaction_and_lifetime()
 			"Classic VS preserves source-stale resident fields and exact reset seed");
 		expect(MainProcessTestAccess::continues_used_digit(**created) == 0U,
 			"Classic VS always uses the donor literal continues digit zero");
+		const auto reset_audio = (*created)->take_audio_command();
+		const auto play_audio = (*created)->take_audio_command();
+		expect(reset_audio == th03::app::ClassicAudioCommand{
+			.type = th03::app::ClassicAudioCommandType::reset_effects,
+		} && play_audio == th03::app::ClassicAudioCommand{
+			.type = th03::app::ClassicAudioCommandType::play_song,
+			.cue = th03::app::ClassicMusicCue::gameplay,
+			.parameter = static_cast<std::uint16_t>(
+				th03::app::ClassicGameplayMusic::stage_00
+			),
+		} && !(*created)->take_audio_command(),
+			"Classic VS MAIN publishes Reset then the retained P2 theme Play");
 		auto consumed_retry = MainProcessClassicVsAccess::create_vs(
 			*transition, dynamic_resources, *static_content, false
 		);

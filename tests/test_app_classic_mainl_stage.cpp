@@ -24,6 +24,10 @@ namespace {
 using th03::app::ClassicMainlStageErrorCode;
 using th03::app::ClassicMainlStagePhase;
 using th03::app::ClassicMainlStageTestAccess;
+using th03::app::ClassicAudioCommand;
+using th03::app::ClassicAudioCommandType;
+using th03::app::ClassicGameplayMusic;
+using th03::app::ClassicMusicCue;
 using th03::app::ClassicOpSelectionCompletion;
 using th03::app::ClassicOpSelectionMode;
 using th03::app::ClassicOpSelectionOutcome;
@@ -700,6 +704,30 @@ void test_visible_stage_and_exact_timing()
 		(*stage)->phase() == ClassicMainlStagePhase::waiting &&
 		(*stage)->raster().palette_tone() == 100,
 		"black-in final tone stages the hidden sheet");
+	const auto stop = (*stage)->take_audio_command();
+	const auto load = (*stage)->take_audio_command();
+	const auto effects = (*stage)->take_audio_command();
+	expect(stop == ClassicAudioCommand{
+		.type = ClassicAudioCommandType::stop_song,
+	} && load == ClassicAudioCommand{
+		.type = ClassicAudioCommandType::load_song,
+		.cue = ClassicMusicCue::gameplay,
+		.parameter = static_cast<std::uint16_t>(ClassicGameplayMusic::stage_00),
+	} && effects == ClassicAudioCommand{
+		.type = ClassicAudioCommandType::load_effects,
+	} && !(*stage)->take_audio_command(),
+		"MAINL stages Stop, opponent song Load, and effect-bank Load exactly");
+	auto decision = story_config(6U, 2);
+	const auto decision_song = th03::app::classic_main_gameplay_song(
+		decision.resident
+	);
+	expect(decision_song == ClassicAudioCommand{
+		.type = ClassicAudioCommandType::load_song,
+		.cue = ClassicMusicCue::gameplay,
+		.parameter = static_cast<std::uint16_t>(
+			ClassicGameplayMusic::decision
+		),
+	}, "Story stage six selects DEC.M instead of the opponent theme");
 	expect((*stage)->raster().access_page() == Page::one,
 		"hidden sheet leaves page one accessed");
 	expect_pixel((*stage)->raster(), Page::one, {0, 200}, 5U,
@@ -754,6 +782,42 @@ void test_visible_stage_and_exact_timing()
 	expect(!(*stage)->advance(false) &&
 		(*stage)->phase() == ClassicMainlStagePhase::ready,
 		"ready stage rejects extra visual ticks without mutation");
+}
+
+void test_exact_gameplay_song_selection()
+{
+	constexpr std::array expected{
+		ClassicGameplayMusic::stage_00,
+		ClassicGameplayMusic::stage_01,
+		ClassicGameplayMusic::stage_02,
+		ClassicGameplayMusic::stage_03,
+		ClassicGameplayMusic::stage_04,
+		ClassicGameplayMusic::stage_05,
+		ClassicGameplayMusic::stage_06,
+		ClassicGameplayMusic::stage_07,
+		ClassicGameplayMusic::stage_08,
+	};
+	for(std::size_t character = 0U; character < expected.size(); ++character) {
+		for(const std::int8_t palette_offset : {std::int8_t{1}, std::int8_t{2}}) {
+			th03::GameInit resident{};
+			resident.game_mode = th03::game_mode::vs_1p_2p;
+			resident.paletted_character[1U] = static_cast<std::int8_t>(
+				(character * 2U) + static_cast<std::size_t>(palette_offset)
+			);
+			const auto song = th03::app::classic_main_gameplay_song(resident);
+			expect(song == ClassicAudioCommand{
+				.type = ClassicAudioCommandType::load_song,
+				.cue = ClassicMusicCue::gameplay,
+				.parameter = static_cast<std::uint16_t>(expected[character]),
+			}, "both palettes map every opponent to its exact gameplay song");
+		}
+	}
+
+	th03::GameInit invalid{};
+	invalid.game_mode = th03::game_mode::vs_1p_2p;
+	invalid.paletted_character[1U] = 0;
+	expect(!th03::app::classic_main_gameplay_song(invalid),
+		"invalid opponent identity cannot publish a gameplay-song command");
 }
 
 void test_timeout_and_resource_atomicity()
@@ -1250,6 +1314,7 @@ void test_all_automatic_demo_routes()
 int main()
 {
 	test_visible_stage_and_exact_timing();
+	test_exact_gameplay_song_selection();
 	test_timeout_and_resource_atomicity();
 	test_winner_preload_and_adoption();
 	test_all_story_scenarios_construct();

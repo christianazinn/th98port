@@ -295,6 +295,21 @@ struct MainProcess::Impl {
 	std::array<assets::BfntSheet, 2U> character_sheets{};
 	std::array<assets::MrsImage, 2U> extra_portraits{};
 	std::array<assets::MrsImage, 2U> bomb_portraits{};
+	std::array<ClassicAudioCommand, 4U> audio_commands{};
+	std::size_t audio_head = 0U;
+	std::size_t audio_count = 0U;
+	bool classic_audio_lifecycle = false;
+
+	[[nodiscard]] bool push_audio(ClassicAudioCommand command) noexcept
+	{
+		if(audio_count >= audio_commands.size()) {
+			return false;
+		}
+		const auto tail = (audio_head + audio_count) % audio_commands.size();
+		audio_commands[tail] = command;
+		++audio_count;
+		return true;
+	}
 
 	present::Raster raster{};
 	present::Tram tram{};
@@ -643,7 +658,8 @@ MainProcess::create_impl(
 		handoff,
 		resources,
 		*static_content,
-		0U
+		0U,
+		std::nullopt
 	);
 }
 
@@ -691,6 +707,12 @@ MainProcessStoryAccess::create_story(
 	const auto continues_used_digit = static_cast<std::uint8_t>(
 		3U - config.resident.remaining_credits
 	);
+	const auto gameplay_song = classic_main_gameplay_song(config.resident);
+	if(!gameplay_song) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
 	auto process = MainProcess::create_common(
 		config.resident,
 		config.game_options,
@@ -699,7 +721,8 @@ MainProcessStoryAccess::create_story(
 		*transition.handoff(),
 		resources,
 		std::move(static_content),
-		continues_used_digit
+		continues_used_digit,
+		gameplay_song
 	);
 	if(process) {
 		transition.consume_handoff();
@@ -748,6 +771,12 @@ MainProcessClassicVsAccess::create_vs(
 	); !valid) {
 		return std::unexpected(valid.error());
 	}
+	const auto gameplay_song = classic_main_gameplay_song(entry.resident);
+	if(!gameplay_song) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
 	auto process = MainProcess::create_common(
 		entry.resident,
 		entry.game_options,
@@ -756,7 +785,8 @@ MainProcessClassicVsAccess::create_vs(
 		*transition.handoff(),
 		resources,
 		std::move(static_content),
-		std::uint8_t{0U}
+		std::uint8_t{0U},
+		gameplay_song
 	);
 	if(process) {
 		transition.consume_handoff();
@@ -805,6 +835,12 @@ MainProcessDemoAccess::create_demo(
 	); !valid) {
 		return std::unexpected(valid.error());
 	}
+	const auto gameplay_song = classic_main_gameplay_song(entry.resident);
+	if(!gameplay_song) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
 	auto process = MainProcess::create_common(
 		entry.resident,
 		entry.game_options,
@@ -813,7 +849,8 @@ MainProcessDemoAccess::create_demo(
 		*transition.handoff(),
 		resources,
 		std::move(static_content),
-		std::uint8_t{0U}
+		std::uint8_t{0U},
+		gameplay_song
 	);
 	if(process) {
 		transition.consume_handoff();
@@ -830,10 +867,14 @@ MainProcess::create_common(
 	const MainStageHandoff &handoff,
 	std::span<const LoadedMainResource> resources,
 	std::shared_ptr<const MainProcessStaticContent> static_content,
-	std::uint8_t continues_used_digit
+	std::uint8_t continues_used_digit,
+	std::optional<ClassicAudioCommand> gameplay_song
 )
 {
-	if(!static_content || continues_used_digit > 3U) {
+	if(!static_content || continues_used_digit > 3U ||
+		(gameplay_song && (gameplay_song->type !=
+			ClassicAudioCommandType::load_song || gameplay_song->cue !=
+			ClassicMusicCue::gameplay))) {
 		return std::unexpected(process_error(
 			MainProcessErrorCode::invalid_config
 		));
@@ -1037,6 +1078,18 @@ MainProcess::create_common(
 	if(!impl->round->ready()) {
 		return std::unexpected(presentation_error(impl->round->status()));
 	}
+	if(gameplay_song) {
+		impl->classic_audio_lifecycle = true;
+		auto play = *gameplay_song;
+		play.type = ClassicAudioCommandType::play_song;
+		if(!impl->push_audio({
+			.type = ClassicAudioCommandType::reset_effects,
+		}) || !impl->push_audio(play)) {
+			return std::unexpected(process_error(
+				MainProcessErrorCode::audio_command_pending
+			));
+		}
+	}
 	return std::unique_ptr<MainProcess>(
 		new MainProcess(std::move(impl))
 	);
@@ -1116,6 +1169,12 @@ std::expected<void, MainProcessError> MainProcess::start_next_round() noexcept
 	if(const auto error = presentation_precheck()) {
 		return std::unexpected(*error);
 	}
+	if(impl_->classic_audio_lifecycle &&
+		impl_->audio_count >= impl_->audio_commands.size()) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::audio_command_pending
+		));
+	}
 	const auto started = impl_->game->start_next_round();
 	if(!started) {
 		return std::unexpected(core_error(
@@ -1137,6 +1196,13 @@ std::expected<void, MainProcessError> MainProcess::start_next_round() noexcept
 			MainProcessErrorCode::repeat_startup_failed
 		));
 	}
+	if(impl_->classic_audio_lifecycle && !impl_->push_audio({
+		.type = ClassicAudioCommandType::reset_effects,
+	})) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::audio_command_pending
+		));
+	}
 	return {};
 }
 
@@ -1146,11 +1212,24 @@ MainProcess::finish_main_process() noexcept
 	if(const auto error = presentation_precheck()) {
 		return std::unexpected(*error);
 	}
+	if(impl_->classic_audio_lifecycle &&
+		impl_->audio_count >= impl_->audio_commands.size()) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::audio_command_pending
+		));
+	}
 	const auto finished = impl_->game->finish_main_process();
 	if(!finished) {
 		return std::unexpected(core_error(
 			MainProcessErrorCode::core_operation_failed,
 			finished.error()
+		));
+	}
+	if(impl_->classic_audio_lifecycle && !impl_->push_audio({
+		.type = ClassicAudioCommandType::stop_song,
+	})) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::audio_command_pending
 		));
 	}
 	return {};
@@ -1210,6 +1289,17 @@ const present::Tram &MainProcess::tram() const noexcept
 present::MainRoundStatus MainProcess::presentation_status() const noexcept
 {
 	return impl_->round->status();
+}
+
+std::optional<ClassicAudioCommand> MainProcess::take_audio_command() noexcept
+{
+	if(impl_->audio_count == 0U) {
+		return std::nullopt;
+	}
+	const auto command = impl_->audio_commands[impl_->audio_head];
+	impl_->audio_head = (impl_->audio_head + 1U) % impl_->audio_commands.size();
+	--impl_->audio_count;
+	return command;
 }
 
 } // namespace th03::app

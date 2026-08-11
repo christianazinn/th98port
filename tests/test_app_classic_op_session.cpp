@@ -21,6 +21,8 @@ namespace {
 
 using th03::app::ClassicAudioCommand;
 using th03::app::ClassicAudioCommandType;
+using th03::app::ClassicGameplayMusic;
+using th03::app::ClassicMusicCue;
 using th03::app::ClassicOpRoute;
 using th03::app::ClassicOpSelectionMode;
 using th03::app::ClassicOpSelectionOutcome;
@@ -851,9 +853,14 @@ void test_surface_forwarding()
 	bool demo_stage_seen = false;
 	bool demo_main_seen = false;
 	bool demo_returned = false;
-	for(std::size_t guard = 0U; guard < 900U; ++guard) {
-		while(session.take_audio_command()) {
+	std::vector<ClassicAudioCommand> demo_audio{};
+	const auto drain_demo_audio = [&]() {
+		while(auto command = session.take_audio_command()) {
+			demo_audio.push_back(*command);
 		}
+	};
+	for(std::size_t guard = 0U; guard < 900U; ++guard) {
+		drain_demo_audio();
 		ClassicOpSessionInput input{};
 		if(session.scene() == ClassicOpSessionScene::demo_main) {
 			input.main.p1 = 1U;
@@ -874,13 +881,45 @@ void test_surface_forwarding()
 			break;
 		}
 	}
-	while(session.take_audio_command()) {
-	}
+	drain_demo_audio();
+	const std::array expected_demo_audio{
+		ClassicAudioCommand{
+			.type = ClassicAudioCommandType::stop_song,
+		},
+		ClassicAudioCommand{
+			.type = ClassicAudioCommandType::load_song,
+			.cue = ClassicMusicCue::gameplay,
+			.parameter = static_cast<std::uint16_t>(
+				ClassicGameplayMusic::stage_00
+			),
+		},
+		ClassicAudioCommand{
+			.type = ClassicAudioCommandType::load_effects,
+		},
+		ClassicAudioCommand{
+			.type = ClassicAudioCommandType::reset_effects,
+		},
+		ClassicAudioCommand{
+			.type = ClassicAudioCommandType::play_song,
+			.cue = ClassicMusicCue::gameplay,
+			.parameter = static_cast<std::uint16_t>(
+				ClassicGameplayMusic::stage_00
+			),
+		},
+		ClassicAudioCommand{
+			.type = ClassicAudioCommandType::stop_song,
+		},
+	};
+	const auto lifecycle = std::search(
+		demo_audio.begin(), demo_audio.end(),
+		expected_demo_audio.begin(), expected_demo_audio.end()
+	);
 	if(!demo_stage_seen || !demo_main_seen || !demo_returned ||
-		!session.compose_shown_surface(pixels)) {
+		lifecycle == demo_audio.end() || !session.compose_shown_surface(pixels)) {
 		std::cerr << "local automatic Demo did not complete owned OP-MAINL-MAIN-OP"
 			<< " stage=" << demo_stage_seen << " main=" << demo_main_seen
-			<< " returned=" << demo_returned << '\n';
+			<< " returned=" << demo_returned
+			<< " audio=" << (lifecycle != demo_audio.end()) << '\n';
 		return false;
 	}
 

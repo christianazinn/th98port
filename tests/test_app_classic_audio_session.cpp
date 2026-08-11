@@ -268,6 +268,19 @@ void test_exact_cue_mapping()
 		{load(ClassicMusicCue::high_score),
 			{.role = MainResourceRole::registration_music}},
 	};
+	for(std::uint16_t track = 0U; track < 10U; ++track) {
+		mappings.push_back({
+			load(ClassicMusicCue::gameplay, track),
+			{
+				.role = MainResourceRole::op_music_room_track,
+				.music_room_track = static_cast<th03::app::MainMusicRoomTrack>(
+					static_cast<std::uint8_t>(
+						th03::app::MainMusicRoomTrack::stage_00
+					) + static_cast<std::uint8_t>(track)
+				),
+			},
+		});
+	}
 	for(std::uint16_t track = 0U; track < 19U; ++track) {
 		mappings.push_back({
 			load(ClassicMusicCue::music_room_track, track),
@@ -371,6 +384,10 @@ void test_commands_cadence_and_determinism(const fs::path &root)
 		ClassicAudioCommand{ClassicAudioCommandType::load_song,
 			ClassicMusicCue::character_select, 0U},
 		ClassicAudioCommand{ClassicAudioCommandType::load_song,
+			ClassicMusicCue::gameplay, 0U},
+		ClassicAudioCommand{ClassicAudioCommandType::load_song,
+			ClassicMusicCue::gameplay, 9U},
+		ClassicAudioCommand{ClassicAudioCommandType::load_song,
 			ClassicMusicCue::music_room_track, 0U},
 		ClassicAudioCommand{ClassicAudioCommandType::load_song,
 			ClassicMusicCue::music_room_track, 18U},
@@ -403,6 +420,9 @@ void test_commands_cadence_and_determinism(const fs::path &root)
 	const auto invalid_track = first.apply(load(
 		ClassicMusicCue::music_room_track, 19U
 	));
+	const auto invalid_gameplay = first.apply(load(
+		ClassicMusicCue::gameplay, 10U
+	));
 	const auto invalid_parameter = first.apply(load(
 		ClassicMusicCue::winner, 1U
 	));
@@ -412,9 +432,29 @@ void test_commands_cadence_and_determinism(const fs::path &root)
 	expect(!invalid_track && invalid_track.error().code ==
 		ClassicAudioSessionErrorCode::invalid_parameter,
 		"Music Room indices outside 0 through 18 are rejected");
+	expect(!invalid_gameplay && invalid_gameplay.error().code ==
+		ClassicAudioSessionErrorCode::invalid_parameter,
+		"gameplay indices outside the ten source songs are rejected");
 	expect(!invalid_parameter && invalid_parameter.error().code ==
 		ClassicAudioSessionErrorCode::invalid_parameter,
 		"non-indexed song cues reject stray parameters");
+	expect(first.apply({
+		.type = ClassicAudioCommandType::reset_effects,
+	}).has_value(), "source scheduler reset command is accepted");
+	const auto invalid_reset = first.apply({
+		.type = ClassicAudioCommandType::reset_effects,
+		.parameter = 1U,
+	});
+	const auto invalid_reset_cue = first.apply({
+		.type = ClassicAudioCommandType::reset_effects,
+		.cue = ClassicMusicCue::gameplay,
+	});
+	expect(!invalid_reset && invalid_reset.error().code ==
+		ClassicAudioSessionErrorCode::invalid_parameter,
+		"scheduler reset rejects stray source parameters");
+	expect(!invalid_reset_cue && invalid_reset_cue.error().code ==
+		ClassicAudioSessionErrorCode::invalid_parameter,
+		"scheduler reset rejects a forged song identity");
 
 	const auto menu = load(ClassicMusicCue::menu_main);
 	const ClassicAudioCommand play{
@@ -492,9 +532,20 @@ void test_commands_cadence_and_determinism(const fs::path &root)
 		.type = ClassicAudioCommandType::load_effects,
 	}).has_value(), "explicit source effect-bank reload is supported");
 
-	const auto requested = first.request_effect(2U);
-	expect(requested && *requested, "ordinary MAIN effect request enters the slot");
+	const auto cleared_request = first.request_effect(2U);
+	expect(cleared_request && *cleared_request,
+		"ordinary MAIN effect request enters the source slot before reset");
+	expect(first.apply({
+		.type = ClassicAudioCommandType::reset_effects,
+	}).has_value(), "repeat-round source reset clears the pending effect slot");
 	auto effect_tick = first.advance_tick();
+	expect(effect_tick && !effect_tick->effect_started,
+		"scheduler reset does not dispatch the cleared pending effect");
+
+	const auto requested = first.request_effect(2U);
+	expect(requested && *requested,
+		"ordinary MAIN effect request re-enters the slot after reset");
+	effect_tick = first.advance_tick();
 	expect(effect_tick && effect_tick->effect_started == 2U,
 		"the one-slot scheduler dispatches once at the tick boundary");
 	const auto lower_priority = first.request_effect(1U);
@@ -624,6 +675,9 @@ void test_authentic_session(const fs::path &data_root)
 		load(ClassicMusicCue::cutscene_four),
 		load(ClassicMusicCue::cutscene_five),
 	};
+	for(std::uint16_t track = 0U; track < 10U; ++track) {
+		songs.push_back(load(ClassicMusicCue::gameplay, track));
+	}
 	for(std::uint16_t track = 0U; track < 19U; ++track) {
 		songs.push_back(load(ClassicMusicCue::music_room_track, track));
 	}
@@ -681,7 +735,7 @@ void test_authentic_session(const fs::path &data_root)
 		}
 	}
 	expect(songs_passed == songs.size(),
-		"all 30 reachable authentic Classic song identities pass");
+		"all 40 reachable authentic Classic song identities pass");
 	expect(effects_passed == 22U,
 		"all 22 authentic Classic effect identities pass");
 	std::cout << "authentic_session_songs=" << songs_passed
