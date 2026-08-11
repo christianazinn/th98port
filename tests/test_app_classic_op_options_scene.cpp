@@ -391,9 +391,9 @@ void test_bgm_modes_and_disabled_selection()
 				from_midi->config().bgm_mode == ClassicBgmMode::off,
 			"MIDI collapses to Off instead of ringing to FM"
 		);
+		const auto midi_stop = from_midi->take_audio_command();
 		expect(
-			from_midi->take_audio_command()->type ==
-				ClassicAudioCommandType::stop_song &&
+			midi_stop && midi_stop->type == ClassicAudioCommandType::stop_song &&
 				!from_midi->take_audio_command(),
 			"MIDI-to-Off emits only Stop"
 		);
