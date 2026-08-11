@@ -440,6 +440,7 @@ std::expected<
 bool ClassicOpMusicRoomScene::initialize_visuals() noexcept
 {
 	tram_.fill({});
+	selection_on_page_.fill(selection_);
 	raster_.set_palette_tone(0);
 	for(std::size_t index = 0U;
 		index < prepared_->background.palette->colors.size();
@@ -466,7 +467,8 @@ bool ClassicOpMusicRoomScene::initialize_visuals() noexcept
 		!raster_.set_access_page(present::Page::zero) ||
 		!draw_comment(carry_.track_playing) ||
 		!snapshot_comment_blue() ||
-		!raster_.set_access_page(music_page_accessed_)) {
+		!raster_.set_access_page(music_page_accessed_) ||
+		!render_and_flip()) {
 		return false;
 	}
 	raster_.set_palette_tone(100);
@@ -744,6 +746,20 @@ bool ClassicOpMusicRoomScene::render_polygons() noexcept
 
 bool ClassicOpMusicRoomScene::flip_page() noexcept
 {
+	const auto page_index = static_cast<std::size_t>(music_page_accessed_);
+	auto &selection_on_page = selection_on_page_[page_index];
+	if(selection_ != selection_on_page) {
+		if(!draw_track(
+			selection_on_page,
+			{.color = 3U, .weight = present::GraphicsTextWeight::bold}
+		) || !draw_track(
+			selection_,
+			{.color = 15U, .weight = present::GraphicsTextWeight::bold}
+		)) {
+			return false;
+		}
+		selection_on_page = selection_;
+	}
 	if(!raster_.set_shown_page(music_page_accessed_)) {
 		return false;
 	}
@@ -758,8 +774,8 @@ bool ClassicOpMusicRoomScene::render_and_flip() noexcept
 
 bool ClassicOpMusicRoomScene::finish() noexcept
 {
-	if(!raster_.set_shown_page(present::Page::zero) ||
-		!raster_.set_access_page(present::Page::zero) ||
+	if(!raster_.set_shown_page(present::Page::one) ||
+		!raster_.set_access_page(present::Page::one) ||
 		!raster_.clear(full_screen, 0U)) {
 		return false;
 	}
@@ -841,54 +857,18 @@ ClassicOpMusicRoomScene::advance(const ClassicOpMusicRoomInput &input)
 	case ClassicOpMusicRoomPhase::controls_poll: {
 		bool selection_changed = false;
 		if(input.controls.up) {
-			if(!draw_track_both(
-				selection_,
-				{.color = 3U, .weight = present::GraphicsTextWeight::bold}
-			)) {
-				fail();
-				return std::unexpected(music_error(
-					ClassicOpMusicRoomErrorCode::draw_failed
-				));
-			}
 			selection_ = (selection_ > 0U) ?
 				static_cast<std::uint8_t>(selection_ - 1U) : choice_quit;
 			if(selection_ == choice_empty) {
 				--selection_;
 			}
-			if(!draw_track_both(
-				selection_,
-				{.color = 15U, .weight = present::GraphicsTextWeight::bold}
-			)) {
-				fail();
-				return std::unexpected(music_error(
-					ClassicOpMusicRoomErrorCode::draw_failed
-				));
-			}
 			selection_changed = true;
 		}
 		if(input.controls.down) {
-			if(!draw_track_both(
-				selection_,
-				{.color = 3U, .weight = present::GraphicsTextWeight::bold}
-			)) {
-				fail();
-				return std::unexpected(music_error(
-					ClassicOpMusicRoomErrorCode::draw_failed
-				));
-			}
 			selection_ = (selection_ < choice_quit) ?
 				static_cast<std::uint8_t>(selection_ + 1U) : 0U;
 			if(selection_ == choice_empty) {
 				++selection_;
-			}
-			if(!draw_track_both(
-				selection_,
-				{.color = 15U, .weight = present::GraphicsTextWeight::bold}
-			)) {
-				fail();
-				return std::unexpected(music_error(
-					ClassicOpMusicRoomErrorCode::draw_failed
-				));
 			}
 			selection_changed = true;
 		}
@@ -922,14 +902,14 @@ ClassicOpMusicRoomScene::advance(const ClassicOpMusicRoomInput &input)
 			phase_ = ClassicOpMusicRoomPhase::exit_release_poll;
 			return tick(
 				ClassicOpMusicRoomBoundary::input_poll,
-				selection_changed, true, false, selection_changed
+				false, true, false, selection_changed
 			);
 		}
 		if(input.controls.cancel) {
 			phase_ = ClassicOpMusicRoomPhase::exit_release_poll;
 			return tick(
 				ClassicOpMusicRoomBoundary::input_poll,
-				selection_changed, true, false, selection_changed
+				false, true, false, selection_changed
 			);
 		}
 		if(!input.controls.any()) {
@@ -947,7 +927,7 @@ ClassicOpMusicRoomScene::advance(const ClassicOpMusicRoomInput &input)
 		phase_ = ClassicOpMusicRoomPhase::held_release_poll;
 		return tick(
 			ClassicOpMusicRoomBoundary::input_poll,
-			selection_changed, true, false, selection_changed
+			false, true, false, selection_changed
 		);
 	}
 

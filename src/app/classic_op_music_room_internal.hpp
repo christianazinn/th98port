@@ -276,6 +276,7 @@ private:
 	bool exit_after_selected_frame_ = false;
 	std::optional<ClassicOpMusicRoomCompletion> completion_{};
 	present::Page music_page_accessed_ = present::Page::one;
+	std::array<std::uint8_t, 2U> selection_on_page_{};
 };
 
 struct ClassicOpMusicRoomSceneTestAccess final {

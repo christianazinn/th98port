@@ -164,14 +164,15 @@ void test_asset_validation_and_initial_presentation()
 	expect(
 		scene->phase() == ClassicOpMusicRoomPhase::held_release_poll &&
 			scene->selection() == 0U &&
-			!scene->carry().polygons_initialized,
-		"entry retains the playing track and waits before first polygon frame"
+			scene->carry().polygons_initialized &&
+			scene->carry().random_seed == 0x59C5FB21U,
+		"entry publishes the donor's initialized first polygon frame"
 	);
 	expect(
-		scene->raster().shown_page() == Page::zero &&
-			scene->raster().access_page() == Page::one &&
+		scene->raster().shown_page() == Page::one &&
+			scene->raster().access_page() == Page::zero &&
 			scene->raster().palette_tone() == 100,
-		"entry preserves page one as the donor's first polygon back page"
+		"entry shows page one and selects page zero after the first polygon frame"
 	);
 	for(const auto page : {Page::zero, Page::one}) {
 		expect(
@@ -268,9 +269,9 @@ void test_input_flip_and_polygon_cadence()
 		"empty controls sample renders and jumps directly back to controls"
 	);
 	expect(
-		scene->raster().shown_page() == Page::one &&
-			scene->raster().access_page() == Page::zero,
-		"first source update draws and publishes page one before selecting page zero"
+		scene->raster().shown_page() == Page::zero &&
+			scene->raster().access_page() == Page::one,
+		"second source update draws and publishes page zero before selecting page one"
 	);
 	expect(!std::equal(
 		scene->raster().graphics(Page::zero).begin(),
@@ -280,15 +281,15 @@ void test_input_flip_and_polygon_cadence()
 	expect(
 		scene->carry().polygons_initialized &&
 			scene->carry().random_seed == 0x59C5FB21U,
-		"fresh polygon setup consumes exactly 96 master.lib IRAND calls"
+		"entry polygon setup consumes exactly 96 master.lib IRAND calls"
 	);
 	expect(
 		scene->carry().polygons[0U] == ClassicOpMusicPolygon{
-			344, 194, -2, 64, 135U, 255U,
+			342, 258, -2, 64, 134U, 255U,
 		} && scene->carry().polygons[15U] == ClassicOpMusicPolygon{
-			291, 3107, 3, 48, 170U, 255U,
+			294, 3155, 3, 48, 169U, 255U,
 		},
-		"first and last polygons preserve source call order and word wrapping"
+		"second frame advances the first and last polygons without more IRAND"
 	);
 	expect(
 		!std::equal(
@@ -301,10 +302,10 @@ void test_input_flip_and_polygon_cadence()
 
 	const auto both = scene->advance({.controls = {.up = true, .down = true}});
 	expect(
-		both && both->selection_changed && both->surface_changed &&
+		both && both->selection_changed && !both->surface_changed &&
 			scene->selection() == 0U &&
 			scene->phase() == ClassicOpMusicRoomPhase::held_release_poll,
-		"simultaneous Up then Down performs both source branches"
+		"simultaneous Up then Down changes state without drawing before VSync"
 	);
 	const auto held = scene->advance({.controls = {.down = true}});
 	expect(
@@ -314,18 +315,30 @@ void test_input_flip_and_polygon_cadence()
 	);
 	release_to_controls(*scene);
 
+	const auto down = scene->advance({.controls = {.down = true}});
 	expect(
-		scene->advance({.controls = {.down = true}}).has_value() &&
+		down && down->selection_changed && !down->surface_changed &&
 			scene->selection() == 1U,
-		"Down advances to the next track"
+		"Down advances state without mutating either page at the input boundary"
 	);
 	for(const auto page : {Page::zero, Page::one}) {
 		expect(
-			scene->raster().pixel(page, {16, 40}) == 3U &&
-				scene->raster().pixel(page, {16, 56}) == 15U,
-			"selection labels are redrawn on both pages before the next VSync"
+			scene->raster().pixel(page, {16, 40}) == 15U &&
+				scene->raster().pixel(page, {16, 56}) == 3U,
+			"selection labels remain unchanged before the next VSync"
 		);
 	}
+	const auto published = scene->advance({.controls = {.down = true}});
+	expect(
+		published && published->page_flipped &&
+			scene->raster().shown_page() == Page::zero &&
+			scene->raster().access_page() == Page::one &&
+			scene->raster().pixel(Page::zero, {16, 40}) == 3U &&
+			scene->raster().pixel(Page::zero, {16, 56}) == 15U &&
+			scene->raster().pixel(Page::one, {16, 40}) == 15U &&
+			scene->raster().pixel(Page::one, {16, 56}) == 3U,
+		"music_flip repaints only the accessed page before publishing it"
+	);
 	release_to_controls(*scene);
 	expect(
 		scene->advance({.controls = {.up = true}}).has_value() &&
@@ -367,10 +380,10 @@ void test_track_audio_exit_and_completion()
 			.controls = {.down = true, .cancel = true},
 		});
 		expect(changed && changed->selection_changed &&
-			changed->surface_changed && changed_exit->selection() == 1U &&
+			!changed->surface_changed && changed_exit->selection() == 1U &&
 			changed_exit->phase() ==
 				ClassicOpMusicRoomPhase::exit_release_poll,
-			"selection repaint remains publishable when Cancel lands in the same poll");
+			"simultaneous selection and Cancel exits without an intervening repaint");
 	}
 
 	GameInit resident{};
@@ -432,12 +445,12 @@ void test_track_audio_exit_and_completion()
 		finished && finished->ready &&
 			finished->boundary == ClassicOpMusicRoomBoundary::input_poll &&
 			!finished->page_flipped,
-		"empty exit sample clears and hands off page zero without another VSync"
+		"empty exit sample clears and hands off page one without another VSync"
 	);
 	expect(
-		scene->raster().graphics(Page::zero).size() ==
+		scene->raster().graphics(Page::one).size() ==
 			th03::present::graphics_page_pixels &&
-			scene->raster().shown_page() == Page::zero &&
+			scene->raster().shown_page() == Page::one &&
 			scene->tram().cells().size() == 80U * 25U,
 		"ready scene accessors retain the completion surface until handoff"
 	);
@@ -451,14 +464,14 @@ void test_track_audio_exit_and_completion()
 	);
 	if(completion) {
 		expect(
-			completion->raster().shown_page() == Page::zero &&
-				completion->raster().access_page() == Page::zero &&
+			completion->raster().shown_page() == Page::one &&
+				completion->raster().access_page() == Page::one &&
 				std::all_of(
-					completion->raster().graphics(Page::zero).begin(),
-					completion->raster().graphics(Page::zero).end(),
+					completion->raster().graphics(Page::one).begin(),
+					completion->raster().graphics(Page::one).end(),
 					[](std::uint8_t pixel) { return pixel == 0U; }
 				) && completion->raster().palette_tone() == 100,
-			"exit completion clears shown page zero to color zero at full tone"
+			"exit completion clears shown page one to color zero at full tone"
 		);
 	}
 	expect(
@@ -499,8 +512,10 @@ void test_persistent_carry_and_bottom_reset()
 		return;
 	}
 	expect(
-		resumed->carry() == carried_after_frame,
-		"re-entry does not reinitialize process-local polygon state"
+		resumed->carry().random_seed == carried_after_frame.random_seed &&
+			resumed->carry().polygons_initialized &&
+			resumed->carry() != carried_after_frame,
+		"re-entry advances persistent polygons once without reinitializing them"
 	);
 	release_to_controls(*resumed);
 	const auto seed_before = resumed->carry().random_seed;
@@ -523,14 +538,19 @@ void test_persistent_carry_and_bottom_reset()
 	if(!reset) {
 		return;
 	}
-	release_to_controls(*reset);
-	expect(reset->advance().has_value(), "bottom-reset frame advances");
 	expect(
 		reset->carry().random_seed == 0xAD889112U &&
 			reset->carry().polygons[0U] == ClassicOpMusicPolygon{
 				346, -1600, 6, 64, 66U, 4U,
 			},
-		"bottom reset consumes five ordered IRAND calls and publishes next state"
+		"entry bottom reset consumes five ordered IRAND calls and publishes next state"
+	);
+	release_to_controls(*reset);
+	const auto reset_seed = reset->carry().random_seed;
+	expect(reset->advance().has_value(), "post-reset polygon frame advances");
+	expect(
+		reset->carry().random_seed == reset_seed,
+		"ordinary post-reset motion consumes no random values"
 	);
 }
 
