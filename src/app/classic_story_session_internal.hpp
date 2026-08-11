@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <span>
@@ -13,6 +14,7 @@
 #include "classic_mainl_stage_internal.hpp"
 #include "classic_mainl_story_internal.hpp"
 #include "classic_mainl_win_internal.hpp"
+#include "classic_registration_scene_internal.hpp"
 #include "classic_staff_scene_internal.hpp"
 #include "mainl_compiled_text_internal.hpp"
 #include "main_process_driver_internal.hpp"
@@ -27,6 +29,7 @@ enum class ClassicStorySessionScene : std::uint8_t {
 	win,
 	cutscene,
 	staff_verdict,
+	high_score_registration,
 	continue_menu,
 	game_over,
 	external_request,
@@ -69,6 +72,7 @@ enum class ClassicStorySessionErrorCode : std::uint8_t {
 	win_failed,
 	cutscene_failed,
 	staff_failed,
+	registration_failed,
 	continue_failed,
 	game_over_failed,
 	plan_failed,
@@ -89,6 +93,7 @@ struct ClassicStorySessionError final {
 	std::optional<ClassicMainlWinError> win_error{};
 	std::optional<ClassicCutsceneError> cutscene_error{};
 	std::optional<ClassicStaffError> staff_error{};
+	std::optional<ClassicRegistrationError> registration_error{};
 	std::optional<ClassicMainlContinueError> continue_error{};
 	std::optional<ClassicMainlPlanError> plan_error{};
 	std::optional<present::SourceSurfaceError> surface_error{};
@@ -98,6 +103,7 @@ struct ClassicStorySessionInput final {
 	CoreInput main{};
 	ClassicCutsceneInput cutscene{};
 	ClassicStaffInput staff{};
+	ClassicRegistrationInput registration{};
 	ClassicMainlContinueInput continue_menu{};
 	ClassicAudioStatus audio{};
 	bool dismiss_pressed = false;
@@ -175,6 +181,14 @@ struct ClassicStorySessionBackendOperations final {
 	std::expected<void, ClassicStorySessionError> (*finish_staff)(
 		void *
 	) = nullptr;
+	std::expected<void, ClassicStorySessionError> (*start_registration)(
+		void *, const GameInit &
+	) = nullptr;
+	std::expected<ClassicStoryBackendTick, ClassicStorySessionError>
+	(*advance_registration)(void *, ClassicRegistrationInput) = nullptr;
+	std::expected<void, ClassicStorySessionError> (*finish_registration)(
+		void *
+	) = nullptr;
 	std::expected<bool, ClassicStorySessionError> (*start_continue)(
 		void *, std::uint8_t
 	) = nullptr;
@@ -215,7 +229,8 @@ public:
 		MainCompiledContent compiled_content,
 		std::span<const std::byte> font_rom,
 		MainlStageTextAssets stage_text,
-		MainlStaffCompiledAssets staff_compiled
+		MainlStaffCompiledAssets staff_compiled,
+		std::filesystem::path score_path = "YUME.NEM"
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicStorySession>,
@@ -225,7 +240,8 @@ public:
 		std::unique_ptr<MainResourceLoader> loader,
 		MainCompiledContent compiled_content,
 		std::span<const std::byte> font_rom,
-		std::span<const std::byte> mainl_executable
+		std::span<const std::byte> mainl_executable,
+		std::filesystem::path score_path = "YUME.NEM"
 	);
 	~ClassicStorySession();
 

@@ -1,0 +1,703 @@
+#include "../src/app/classic_registration_scene_internal.hpp"
+
+#include <algorithm>
+#include <array>
+#include <bit>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include "../src/app/mainl_compiled_text_internal.hpp"
+
+namespace {
+
+namespace fs = std::filesystem;
+using th03::GameInit;
+using th03::app::ClassicAudioCommandType;
+using th03::app::ClassicMusicCue;
+using th03::app::ClassicRegistrationBoundary;
+using th03::app::ClassicRegistrationErrorCode;
+using th03::app::ClassicRegistrationGlyph;
+using th03::app::ClassicRegistrationInput;
+using th03::app::ClassicRegistrationPhase;
+using th03::app::ClassicRegistrationScene;
+using th03::app::ClassicRegistrationSceneTestAccess;
+using th03::app::ClassicScoreCleared;
+using th03::app::ClassicScoreCodecFields;
+using th03::app::ClassicScoreStoreDisposition;
+using th03::app::MainlStageTextAssets;
+using th03::present::AnkGlyph;
+using th03::present::AnkGlyphProvider;
+using th03::present::JisGlyph;
+using th03::present::Page;
+using th03::present::Point;
+using th03::present::Raster;
+
+std::size_t checks = 0U;
+std::size_t failures = 0U;
+
+void expect(bool condition, std::string_view message)
+{
+	++checks;
+	if(!condition) {
+		++failures;
+		std::cerr << "FAIL: " << message << '\n';
+	}
+}
+
+class TemporaryRoot final {
+public:
+	TemporaryRoot()
+	{
+		const auto parent = fs::temp_directory_path();
+		const auto nonce = std::chrono::high_resolution_clock::now()
+			.time_since_epoch().count();
+		for(std::uint32_t suffix = 0U; suffix < 1000U; ++suffix) {
+			path_ = parent / ("th03-registration-scene-test-" +
+				std::to_string(nonce) + "-" + std::to_string(suffix));
+			std::error_code error;
+			if(fs::create_directory(path_, error)) {
+				parent_ = path_.parent_path();
+				return;
+			}
+		}
+		path_.clear();
+	}
+
+	~TemporaryRoot() { erase(); }
+
+	void erase() noexcept
+	{
+		if(path_.empty() || path_.parent_path() != parent_ ||
+			path_.filename().string().rfind(
+				"th03-registration-scene-test-", 0U
+			) != 0U) {
+			return;
+		}
+		std::error_code error;
+		fs::remove_all(path_, error);
+	}
+
+	[[nodiscard]] const fs::path &path() const noexcept { return path_; }
+	[[nodiscard]] bool valid() const noexcept { return !path_.empty(); }
+
+private:
+	fs::path path_{};
+	fs::path parent_{};
+};
+
+class SyntheticFont final : public AnkGlyphProvider {
+public:
+	[[nodiscard]] std::optional<AnkGlyph> glyph(
+		std::uint8_t
+	) const override
+	{
+		return std::nullopt;
+	}
+
+	[[nodiscard]] std::optional<JisGlyph> jis_glyph(
+		std::uint16_t canonical_jis
+	) const override
+	{
+		if(missing_) {
+			return std::nullopt;
+		}
+		JisGlyph result{};
+		result.row_halves[0U] = static_cast<std::uint8_t>(
+			0x80U >> (canonical_jis & 0x07U)
+		);
+		return result;
+	}
+
+	bool missing_ = false;
+};
+
+MainlStageTextAssets stage_text()
+{
+	MainlStageTextAssets result{};
+	for(std::size_t index = 0U; index < result.characters.size(); ++index) {
+		result.characters[index].name = {
+			static_cast<std::uint8_t>('A' + index),
+		};
+	}
+	return result;
+}
+
+th03::assets::PiImage background()
+{
+	th03::assets::PiImage result{};
+	result.palette.emplace();
+	for(std::uint8_t index = 0U; index < 16U; ++index) {
+		result.palette->colors[index] = {
+			.r = index,
+			.g = static_cast<std::uint8_t>(15U - index),
+			.b = static_cast<std::uint8_t>(index ^ 5U),
+		};
+	}
+	result.image.width = th03::present::graphics_width;
+	result.image.height = th03::present::graphics_height;
+	result.image.indices.assign(th03::present::graphics_page_pixels, 1U);
+	return result;
+}
+
+th03::assets::PlanarCel4 rank_cel()
+{
+	constexpr std::size_t plane_size = 3520U;
+	th03::assets::PlanarCel4 result{};
+	result.bitplane_size = static_cast<std::uint16_t>(plane_size);
+	result.pixel_width = 320U;
+	result.pixel_height = 88U;
+	result.offset_at_bottom_left = 6960;
+	result.vram_dword_width = 10U;
+	for(std::size_t plane = 0U; plane < result.color_planes.size(); ++plane) {
+		result.color_planes[plane].assign(
+			plane_size, plane == 1U ? 0xFFU : 0U
+		);
+	}
+	return result;
+}
+
+th03::assets::BfntSheet glyph_sheet(std::uint8_t color)
+{
+	constexpr std::size_t plane_size = 128U;
+	th03::assets::BfntSheet result{};
+	result.consumer = th03::assets::BfntConsumerPolicy::superimpose;
+	result.header.pixel_width = 32U;
+	result.header.pixel_height = 32U;
+	result.header.first_code = 0U;
+	result.header.last_code = 48U;
+	result.transparent_color = 0U;
+	result.glyphs.reserve(49U);
+	for(std::uint16_t code = 0U; code <= 48U; ++code) {
+		th03::assets::PlanarBitmap4 pixels{};
+		for(std::size_t plane = 0U; plane < pixels.color_planes.size(); ++plane) {
+			pixels.color_planes[plane].assign(
+				plane_size,
+				(color & (1U << plane)) != 0U ? 0xFFU : 0U
+			);
+		}
+		result.glyphs.push_back({.code = code, .pixels = std::move(pixels)});
+	}
+	return result;
+}
+
+GameInit resident()
+{
+	GameInit result{};
+	result.game_mode = th03::game_mode::story;
+	result.rank = 2U;
+	result.story_stage = 5U;
+	result.remaining_credits = 1U;
+	result.paletted_character = {1, 18};
+	result.resident_rand = std::bit_cast<std::int32_t>(0x12345678U);
+	result.last_score[0U] = {0U, 0U, 0U, 0U, 0U, 0U, 0U, 1U};
+	return result;
+}
+
+bool write_stock(const fs::path &path)
+{
+	return th03::app::commit_classic_score_store(
+		path, th03::app::classic_score_stock_file()
+	).has_value();
+}
+
+std::expected<
+	std::unique_ptr<ClassicRegistrationScene>,
+	th03::app::ClassicRegistrationError
+> create_scene(
+	const GameInit &value,
+	const fs::path &score_path,
+	SyntheticFont &font
+)
+{
+	return ClassicRegistrationSceneTestAccess::create_with_predecoded_assets(
+		value, score_path, background(), rank_cel(), glyph_sheet(4U),
+		glyph_sheet(15U), stage_text(), font, Raster{}
+	);
+}
+
+void drain_initial_audio(ClassicRegistrationScene &scene)
+{
+	const auto load = scene.take_audio_command();
+	const auto play = scene.take_audio_command();
+	expect(
+		load && load->type == ClassicAudioCommandType::load_song &&
+			load->cue == ClassicMusicCue::high_score,
+		"registration queues SCORE.M load first"
+	);
+	expect(
+		play && play->type == ClassicAudioCommandType::play_song &&
+			play->cue == ClassicMusicCue::high_score &&
+			!scene.take_audio_command(),
+		"registration queues SCORE.M playback second"
+	);
+}
+
+bool advance_fade(
+	ClassicRegistrationScene &scene,
+	ClassicRegistrationPhase final_phase
+)
+{
+	for(std::uint8_t boundary = 0U; boundary < 35U; ++boundary) {
+		const auto tick = scene.advance({});
+		expect(
+			tick && tick->boundary == ClassicRegistrationBoundary::vsync,
+			"each speed-2 palette fade step consumes one source VSync"
+		);
+		if(!tick) {
+			return false;
+		}
+		if(boundary < 34U) {
+			expect(
+				tick->phase != final_phase,
+				"palette fade does not finish before boundary 35"
+			);
+		}
+	}
+	expect(
+		scene.phase() == final_phase,
+		"palette fade finishes on the exact 35th VSync boundary"
+	);
+	return scene.phase() == final_phase;
+}
+
+std::vector<ClassicScoreCodecFields> source_codecs(
+	std::uint32_t seed,
+	std::size_t count
+)
+{
+	auto next = [&seed]() {
+		seed = (seed * 0x015A4E35U) + 1U;
+		return static_cast<std::uint8_t>((seed >> 16U) & 0x7FFFU);
+	};
+	std::vector<ClassicScoreCodecFields> result;
+	result.reserve(count);
+	for(std::size_t index = 0U; index < count; ++index) {
+		const auto key1 = next();
+		const auto key2 = next();
+		const auto unknown = next();
+		result.push_back({.unknown = unknown, .key1 = key1, .key2 = key2});
+	}
+	return result;
+}
+
+void test_qualified_name_schedule_and_commit()
+{
+	TemporaryRoot root;
+	expect(root.valid(), "qualified registration temporary root exists");
+	if(!root.valid()) {
+		return;
+	}
+	const auto score_path = root.path() / "YUME.NEM";
+	expect(write_stock(score_path), "qualified fixture writes stock score file");
+	SyntheticFont font;
+	auto scene = create_scene(resident(), score_path, font);
+	expect(scene.has_value(), "qualified registration scene constructs");
+	if(!scene) {
+		return;
+	}
+	expect(
+		(*scene)->entered_place() == 0U,
+		"candidate higher than stock first place enters at place zero"
+	);
+	const auto blocked = (*scene)->advance({});
+	expect(
+		!blocked && blocked.error().code ==
+			ClassicRegistrationErrorCode::audio_command_pending &&
+			(*scene)->phase() == ClassicRegistrationPhase::black_in,
+		"unconsumed audio commands block all scene mutation"
+	);
+	drain_initial_audio(**scene);
+	if(!advance_fade(**scene, ClassicRegistrationPhase::name_entry)) {
+		return;
+	}
+	expect(
+		(*scene)->raster().palette_tone() == 100,
+		"black-in leaves the source palette tone at 100"
+	);
+
+	for(std::size_t letter = 0U; letter < 8U; ++letter) {
+		const auto entered = (*scene)->advance({.ok = true});
+		expect(
+			entered && entered->boundary == ClassicRegistrationBoundary::vsync &&
+				entered->input_sampled && entered->name_changed,
+			"each accepted letter consumes one polled frame"
+		);
+		if(letter < 7U) {
+			const auto released = (*scene)->advance({});
+			expect(
+				released && released->phase ==
+					ClassicRegistrationPhase::name_entry,
+				"OK edge lock releases between letters"
+			);
+		}
+	}
+	expect(
+		(*scene)->phase() == ClassicRegistrationPhase::wait_release &&
+			ClassicRegistrationSceneTestAccess::name_cursor_backwards(**scene) == 0U,
+		"the eighth glyph safely finishes without the source cursor underflow"
+	);
+	const auto &row = ClassicRegistrationSceneTestAccess::document(**scene)
+		.boards[2U].rows[0U];
+	const std::array expected_backwards{
+		ClassicRegistrationGlyph::space,
+		ClassicRegistrationGlyph::space,
+		ClassicRegistrationGlyph::space,
+		ClassicRegistrationGlyph::u,
+		ClassicRegistrationGlyph::m,
+		ClassicRegistrationGlyph::i,
+		ClassicRegistrationGlyph::e,
+		ClassicRegistrationGlyph::r,
+	};
+	expect(
+		row.name_backwards == expected_backwards,
+		"uniform eight-letter input is replaced by the source character default"
+	);
+
+	const auto held = (*scene)->advance({.ok = true});
+	expect(
+		held && held->phase == ClassicRegistrationPhase::wait_release &&
+			held->boundary == ClassicRegistrationBoundary::vsync,
+		"dismissal waits for the final name-entry key to be released"
+	);
+	const auto released = (*scene)->advance({});
+	expect(
+		released && released->phase == ClassicRegistrationPhase::wait_press &&
+			released->boundary == ClassicRegistrationBoundary::input_poll,
+		"release is accepted without an invented VSync delay"
+	);
+	const auto idle = (*scene)->advance({});
+	expect(
+		idle && idle->phase == ClassicRegistrationPhase::wait_press &&
+			idle->boundary == ClassicRegistrationBoundary::vsync,
+		"dismissal wait consumes VSyncs while no input is pressed"
+	);
+	const auto pressed = (*scene)->advance({.bomb = true});
+	expect(
+		pressed && pressed->phase == ClassicRegistrationPhase::black_out &&
+			pressed->boundary == ClassicRegistrationBoundary::input_poll &&
+			!(*scene)->take_audio_command(),
+		"ordinary loss registration enters black-out without fading SCORE.M"
+	);
+	if(!advance_fade(**scene, ClassicRegistrationPhase::ready)) {
+		return;
+	}
+	expect(
+		(*scene)->raster().pixel(Page::zero, Point{0, 0}).has_value(),
+		"ready scene retains its Raster until the owner consumes completion"
+	);
+	auto completion = (*scene)->take_completion();
+	expect(
+		completion && completion->entered_place() == 0U &&
+			completion->load_disposition() ==
+				ClassicScoreStoreDisposition::loaded &&
+			completion->raster().palette_tone() == 0,
+		"completion owns the black retained Raster and qualification result"
+	);
+	const auto loaded = th03::app::load_classic_score_store(score_path);
+	const auto codecs = source_codecs(0x12345678U, 1U);
+	expect(
+		loaded && loaded->document.boards[2U].rows[0U].name_backwards ==
+			expected_backwards && loaded->document.codec[2U] == codecs[0U],
+		"final boundary atomically commits the mutated board and first source RNG codec"
+	);
+}
+
+void test_direction_repeat_and_doublewide_navigation()
+{
+	TemporaryRoot root;
+	expect(root.valid(), "direction temporary root exists");
+	if(!root.valid()) {
+		return;
+	}
+	const auto score_path = root.path() / "YUME.NEM";
+	expect(write_stock(score_path), "direction fixture writes stock score file");
+	SyntheticFont font;
+	auto scene = create_scene(resident(), score_path, font);
+	expect(scene.has_value(), "direction registration scene constructs");
+	if(!scene) {
+		return;
+	}
+	drain_initial_audio(**scene);
+	if(!advance_fade(**scene, ClassicRegistrationPhase::name_entry)) {
+		return;
+	}
+	for(std::size_t poll = 0U; poll < 33U; ++poll) {
+		expect(
+			static_cast<bool>((*scene)->advance({.right = true})),
+			"held-right name-entry poll advances"
+		);
+	}
+	expect(
+		ClassicRegistrationSceneTestAccess::selected(**scene) ==
+			ClassicRegistrationGlyph::c &&
+			ClassicRegistrationSceneTestAccess::direction_hold(**scene)[3U] == 33U,
+		"held direction triggers at polls 0 and 32, not at poll 30"
+	);
+
+	for(std::size_t step = 0U; step < 10U; ++step) {
+		expect(static_cast<bool>((*scene)->advance({})),
+			"direction edge release advances");
+		expect(static_cast<bool>((*scene)->advance({.right = true})),
+			"direction edge press advances");
+	}
+	expect(
+		ClassicRegistrationSceneTestAccess::selected(**scene) ==
+			ClassicRegistrationGlyph::m,
+		"edge navigation reaches M from C"
+	);
+	expect(static_cast<bool>((*scene)->advance({})),
+		"M navigation releases right");
+	expect(static_cast<bool>((*scene)->advance({.right = true})) &&
+		ClassicRegistrationSceneTestAccess::selected(**scene) ==
+			ClassicRegistrationGlyph::space,
+		"M skips the hidden second half into the doublewide SP glyph"
+	);
+	expect(static_cast<bool>((*scene)->advance({})),
+		"SP navigation releases right");
+	expect(static_cast<bool>((*scene)->advance({.right = true})) &&
+		ClassicRegistrationSceneTestAccess::selected(**scene) ==
+			ClassicRegistrationGlyph::a,
+		"right from doublewide SP wraps to the row start"
+	);
+}
+
+void test_missing_file_clear_and_recreate_rng_schedule()
+{
+	TemporaryRoot root;
+	expect(root.valid(), "missing-file temporary root exists");
+	if(!root.valid()) {
+		return;
+	}
+	auto value = resident();
+	value.story_stage = 99U;
+	value.remaining_credits = 3U;
+	value.last_score[0U].fill(0U);
+	const auto score_path = root.path() / "YUME.NEM";
+	SyntheticFont font;
+	auto scene = create_scene(value, score_path, font);
+	expect(scene.has_value(), "missing score file is recreated before presentation");
+	if(!scene) {
+		return;
+	}
+	expect(
+		!(*scene)->entered_place() && fs::is_regular_file(score_path),
+		"non-qualifying clear route publishes stock persistence and no name entry"
+	);
+	drain_initial_audio(**scene);
+	if(!advance_fade(**scene, ClassicRegistrationPhase::wait_release)) {
+		return;
+	}
+	expect(static_cast<bool>((*scene)->advance({})) &&
+		(*scene)->phase() == ClassicRegistrationPhase::wait_press,
+		"no-qualification route still performs release gating");
+	expect(static_cast<bool>((*scene)->advance({.ok = true})) &&
+		(*scene)->phase() == ClassicRegistrationPhase::black_out,
+		"no-qualification route accepts the next press");
+	const auto fade = (*scene)->take_audio_command();
+	expect(
+		fade && fade->type == ClassicAudioCommandType::fade_song &&
+			fade->cue == ClassicMusicCue::high_score && fade->parameter == 16U,
+		"stage 99 queues the source long SCORE.M fade"
+	);
+	if(!advance_fade(**scene, ClassicRegistrationPhase::ready)) {
+		return;
+	}
+	const auto loaded = th03::app::load_classic_score_store(score_path);
+	const auto codecs = source_codecs(0x12345678U, 5U);
+	bool stock_codecs_match = static_cast<bool>(loaded);
+	if(loaded) {
+		for(std::size_t rank = 0U; rank < 4U; ++rank) {
+			if(rank != value.rank) {
+				stock_codecs_match = stock_codecs_match &&
+					loaded->document.codec[rank] == codecs[rank];
+			}
+		}
+	}
+	expect(
+		loaded && stock_codecs_match &&
+			loaded->document.codec[value.rank] == codecs[4U] &&
+			loaded->document.boards[value.rank].cleared ==
+				ClassicScoreCleared::cleared,
+		"recreation consumes four codec triplets before the selected-rank save and records the 1CC"
+	);
+	auto completion = (*scene)->take_completion();
+	expect(
+		completion && completion->load_disposition() ==
+			ClassicScoreStoreDisposition::created_stock,
+		"completion reports source-compatible missing-file recreation"
+	);
+}
+
+void test_rejections_and_commit_failure()
+{
+	TemporaryRoot root;
+	expect(root.valid(), "rejection temporary root exists");
+	if(!root.valid()) {
+		return;
+	}
+	SyntheticFont font;
+	auto invalid = resident();
+	invalid.story_stage = 0U;
+	const auto untouched = root.path() / "untouched.nem";
+	auto rejected = create_scene(invalid, untouched, font);
+	expect(
+		!rejected && rejected.error().code ==
+			ClassicRegistrationErrorCode::invalid_context &&
+			!fs::exists(untouched),
+		"invalid Story context fails before touching persistence"
+	);
+
+	auto bad_rank = rank_cel();
+	bad_rank.pixel_height = 87U;
+	rejected = ClassicRegistrationSceneTestAccess::create_with_predecoded_assets(
+		resident(), untouched, background(), std::move(bad_rank), glyph_sheet(4U),
+		glyph_sheet(15U), stage_text(), font, Raster{}
+	);
+	expect(
+		!rejected && rejected.error().code ==
+			ClassicRegistrationErrorCode::invalid_asset_geometry &&
+			!fs::exists(untouched),
+		"invalid late asset geometry fails before touching persistence"
+	);
+
+	font.missing_ = true;
+	rejected = create_scene(resident(), untouched, font);
+	expect(
+		!rejected && rejected.error().code ==
+			ClassicRegistrationErrorCode::font_prepare_failed &&
+			!fs::exists(untouched),
+		"missing machine-font glyph fails before touching persistence"
+	);
+	font.missing_ = false;
+
+	auto no_place = resident();
+	no_place.last_score[0U].fill(0U);
+	const auto doomed = root.path() / "doomed.nem";
+	expect(write_stock(doomed), "commit-failure fixture writes stock score file");
+	auto scene = create_scene(no_place, doomed, font);
+	expect(scene.has_value(), "commit-failure scene constructs");
+	if(!scene) {
+		return;
+	}
+	drain_initial_audio(**scene);
+	if(!advance_fade(**scene, ClassicRegistrationPhase::wait_release)) {
+		return;
+	}
+	expect(static_cast<bool>((*scene)->advance({})),
+		"commit-failure route accepts release");
+	expect(static_cast<bool>((*scene)->advance({.ok = true})),
+		"commit-failure route accepts dismissal");
+	root.erase();
+	expect(!fs::exists(root.path()),
+		"commit-failure fixture removes its exact temporary directory");
+	for(std::uint8_t boundary = 0U; boundary < 34U; ++boundary) {
+		expect(
+			static_cast<bool>((*scene)->advance({})),
+			"black-out remains in-memory before final commit boundary"
+		);
+	}
+	const auto failed = (*scene)->advance({});
+	expect(!failed, "final-boundary I/O failure is reported");
+	expect(
+		!failed && failed.error().code ==
+			ClassicRegistrationErrorCode::store_commit_failed,
+		"final-boundary I/O failure has the named commit error"
+	);
+	expect(
+		(*scene)->phase() == ClassicRegistrationPhase::failed,
+		"final-boundary I/O failure moves the scene to failed"
+	);
+	expect(
+		!(*scene)->take_completion(),
+		"final-boundary I/O failure publishes no partial completion"
+	);
+}
+
+std::optional<std::vector<std::byte>> read_file(const fs::path &path)
+{
+	std::ifstream input(path, std::ios::binary | std::ios::ate);
+	if(!input) {
+		return std::nullopt;
+	}
+	const auto end = input.tellg();
+	if(end < 0) {
+		return std::nullopt;
+	}
+	std::vector<std::byte> bytes(static_cast<std::size_t>(end));
+	input.seekg(0, std::ios::beg);
+	if(!bytes.empty() && !input.read(
+		reinterpret_cast<char *>(bytes.data()),
+		static_cast<std::streamsize>(bytes.size())
+	)) {
+		return std::nullopt;
+	}
+	return bytes;
+}
+
+void local_original_gate(
+	const fs::path &content_root,
+	const fs::path &mainl_path
+)
+{
+	const auto executable = read_file(mainl_path);
+	expect(executable.has_value(), "local unpacked MAINL input is readable");
+	if(!executable) {
+		return;
+	}
+	const auto imported = th03::app::import_mainl_stage_text(*executable);
+	expect(imported.has_value(), "local unpacked MAINL profile authenticates");
+	if(!imported) {
+		return;
+	}
+	th03::app::MainResourceLoader loader(content_root);
+	const auto closure = loader.load_mainl_registration(
+		th03::app::MainRegistrationRank::hard
+	);
+	expect(closure.has_value(), "local registration resource closure authenticates");
+	if(!closure) {
+		return;
+	}
+	TemporaryRoot root;
+	expect(root.valid(), "local registration gate temporary root exists");
+	if(!root.valid()) {
+		return;
+	}
+	const auto score_path = root.path() / "YUME.NEM";
+	expect(write_stock(score_path), "local registration gate writes disposable score file");
+	SyntheticFont font;
+	const auto created = ClassicRegistrationScene::create(
+		resident(), score_path, *closure, imported->assets, font, Raster{}
+	);
+	expect(
+		created.has_value(),
+		"local REGIB, RFT2, REGI2, and REGI1 assets decode at source geometry"
+	);
+}
+
+} // namespace
+
+int main(int argc, char **argv)
+{
+	test_qualified_name_schedule_and_commit();
+	test_direction_repeat_and_doublewide_navigation();
+	test_missing_file_clear_and_recreate_rng_schedule();
+	test_rejections_and_commit_failure();
+	if(argc == 3) {
+		local_original_gate(argv[1], argv[2]);
+	} else {
+		expect(argc == 1, "optional local gate accepts content root and MAINL");
+	}
+	std::cout << "checks=" << checks << " failures=" << failures << '\n';
+	return failures == 0U ? 0 : 1;
+}

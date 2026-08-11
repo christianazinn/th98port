@@ -157,9 +157,12 @@ split comparisons. Original game data and replay captures remain external.
   transactionally handed to the next Stage or to the authenticated staff
   driver. Staff preserves the source CDG/flakes/page schedule, exact volume and
   measure waits, adaptive 80-to-50 downgrade, verdict input lock, and final
-  tone ramp before returning its Raster. High-score registration composition
-  and the post-registration extra ending remain;
-  no second campaign or resident-state model is exposed.
+  tone ramp before returning its Raster. The same owner now runs the complete
+  MAINL high-score registration transaction over that retained Raster: exact
+  qualification/name-grid input, page-1 unblits, source RNG codec fields,
+  conditional audio fade, and atomic score commit. Only the conditional
+  post-registration extra ending remains; no second campaign or resident-state
+  model is exposed.
 - The same boundary authenticates the supported unpacked Japanese `MAINL.EXE`
   and owns its exact Story title/name table, staff verdict strings, and flake
   masks. Packed DIET executable support is not yet provided; original bytes
@@ -174,7 +177,8 @@ split comparisons. Original game data and replay captures remain external.
   insertion, and backwards name storage. Missing or malformed files reproduce
   the source's all-rank stock recovery, while commits use one same-directory,
   flushed, read-back-validated atomic replacement. It draws no registration UI
-  and receives codec fields rather than owning gameplay RNG.
+  and receives codec fields rather than owning gameplay RNG; the owning MAINL
+  registration scene supplies both at the source-ordered commit boundary.
 - `th03_app_content` owns authenticated process-lifetime content that is not a
   standalone archive resource: compiled MAIN score/pellet/text tables, the
   prepared GAMEFT gaiji bank, and the external PC-98 ANK/JIS font provider.

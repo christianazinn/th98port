@@ -810,6 +810,24 @@ application/presentation screen:
 - The source's conditional fade and its preloading of Continue/Game Over assets
   are observable transition behavior, not core behavior.
 
+The native MAINL registration owner authenticates and prepares the complete
+`REGIB.PI`, rank-CDG, two-BFNT, `SCORE.M`, font, and MAINL character-name
+closure before it opens or mutates the score store. It reproduces the source
+row/name/alphabet coordinates, page-1 row restoration, normal/highlight glyph
+sheets, double-width `SP`/`BS`/`END` cells, direction repeats at held frames 0,
+32, 36, ..., combined OK/SHOT edge lock, independent BOMB backspace, and the
+35-VSync black-in/black-out palette ramps. Codec fields come from the exact
+Master-library LCG schedule: one triplet for a valid store, or four stock-rank
+triplets followed by the selected-rank triplet after all-rank recovery. The
+score document is committed atomically only at the final black-out boundary;
+the OP score viewer and replay UI are not part of this scene.
+
+After the eighth entered glyph, the source falls through to one more cursor
+rerender with an unsigned index below zero. The native owner completes at that
+boundary without attempting the unsafe post-completion preview. This is a
+memory-safety normalization, not a classified source bug or quirk; an emulator
+trace would be required before assigning the project taxonomy.
+
 ### Staff roll
 
 `staffroll_and_verdict_animate()` in `th03/mainl/stf_drv.cpp`,

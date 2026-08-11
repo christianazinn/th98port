@@ -118,8 +118,9 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   the exact MAIN
   warning/repeat/terminal driver with Direct VS, performs next-stage hidden-
   page preload at the winner boundary, retains loss state through Continue,
-  and emits single-use typed requests only for the remaining registration and
-  extra-ending scenes. The staff transaction authenticates its palette, twelve
+  and directly owns the high-score registration transaction. It emits a
+  single-use typed request only for the remaining conditional extra-ending
+  scene. The staff transaction authenticates its palette, twelve
   source-ordered CDGs, music, compiled verdict strings, and flake masks; its
   exact phase floors, semantic audio waits, overrun downgrade, two-page verdict,
   and tone-1 completion are covered by a complete synthetic schedule test and
@@ -134,8 +135,11 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   populated stock board, and preserves its score comparator and uniform-name
   replacement rules. Its separate filesystem boundary reproduces source all-
   rank stock recovery and normalizes in-place section writes into a flushed,
-  read-back-validated atomic whole-file replacement. Registration presentation
-  remains the next owner rather than leaking Raster or RNG into persistence.
+  read-back-validated atomic whole-file replacement. The integrated MAINL
+  registration scene now owns the exact retained-Raster composition, source
+  input cadence and codec RNG schedule, and final atomic commit without leaking
+  Raster or RNG into persistence. The OP score viewer and configuration format
+  remain separate later application work.
 
 The direct developer slice is now visible and interactive. It is not yet VS-2
 or VS-3 complete: exact source cadence/phase, fixed-script full-match routing,
@@ -277,9 +281,9 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
 | SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
-| OP menus, Story, MAINL, cutscenes, staff | Partial | The validated fresh-Story config, source-private route policy, exact stage splash, campaign-static MAIN content, transactional Raster handoffs, winner scene, Continue choice, Game Over timeline, owning session loop, authenticated cutscene and staff resources, complete typed script VM, exact two-page Raster executors, both interstages, primary endings, staff/verdict, and score persistence are integrated. OP, high-score registration composition, and the conditional extra ending remain. |
+| OP menus, Story, MAINL, cutscenes, staff | Partial | The validated fresh-Story config, source-private route policy, exact stage splash, campaign-static MAIN content, transactional Raster handoffs, winner scene, Continue choice, Game Over timeline, owning session loop, authenticated cutscene and staff resources, complete typed script VM, exact two-page Raster executors, both interstages, primary endings, staff/verdict, score persistence, and MAINL high-score registration are integrated. OP and the conditional extra ending remain. |
 | Audio | No for the explicitly marked silent visual vertical slice; yes for a fully faithful release | Start source/data investigation now, but do not block visible MAIN on an invented WAV backend. |
-| Persistent score/configuration UI and localization/QoL | Score store integrated, scenes pending | The exact original score codec, source mutation rules, and validated atomic whole-file store are app-owned and byte-exact. Add registration/OP views and the separate configuration format without moving persistence into core. |
+| Persistent score/configuration UI and localization/QoL | Registration integrated; OP/config pending | The exact original score codec, source mutation rules, validated atomic whole-file store, and MAINL registration scene are app-owned and byte-exact. Add only the OP score view and separate configuration format without moving persistence into core. |
 
 The following parcels can proceed now, provided they do not claim readiness for VS or change core semantics:
 
@@ -301,9 +305,9 @@ Once VS-3 holds, add scenes in donor order rather than building a broad launcher
 1. Complete MAINL routing and Story progression. Stage splash, fresh MAIN,
    winner, Continue, Game Over, interstage/ending cutscenes, and staff/verdict
    are integrated in the owning Classic session. The exact original score
-   codec, qualification/name mutation rules, and transactional whole-file store
-   are integrated; next implement the registration Raster scene and the
-   conditional extra-ending cutscene at their source order. Acceptance: a
+   codec, qualification/name mutation rules, transactional whole-file store,
+   and authenticated registration Raster transaction are integrated; next
+   implement the conditional extra-ending cutscene at its source order. Acceptance: a
    source-traced Story route reaches each next-stage, continue, game-over,
    registration, extra-ending, and exit branch with the corresponding retained
    Raster/palette/timing and resident/persistence state.

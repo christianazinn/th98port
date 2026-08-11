@@ -160,6 +160,7 @@ struct FakeBackend final {
 	std::size_t win_count = 0U;
 	std::size_t cutscene_count = 0U;
 	std::size_t staff_count = 0U;
+	std::size_t registration_count = 0U;
 	std::size_t preload_count = 0U;
 	std::size_t continue_count = 0U;
 	std::size_t resolve_count = 0U;
@@ -338,6 +339,24 @@ ClassicStorySessionBackendOperations operations(FakeBackend &fake)
 		.finish_staff = [](void *) {
 			return std::expected<void, ClassicStorySessionError>{};
 		},
+		.start_registration = [](void *context, const GameInit &) {
+			++static_cast<FakeBackend *>(context)->registration_count;
+			return std::expected<void, ClassicStorySessionError>{};
+		},
+		.advance_registration = [](
+			void *,
+			th03::app::ClassicRegistrationInput
+		) {
+			return std::expected<ClassicStoryBackendTick,
+				ClassicStorySessionError>{ClassicStoryBackendTick{
+				.surface_changed = true,
+				.input_sampled = true,
+				.ready = true,
+			}};
+		},
+		.finish_registration = [](void *) {
+			return std::expected<void, ClassicStorySessionError>{};
+		},
 		.start_continue = [](void *context, std::uint8_t credits) {
 			auto &backend = *static_cast<FakeBackend *>(context);
 			++backend.continue_count;
@@ -453,11 +472,12 @@ void test_complete_nine_stage_route()
 	expect(session->status() == ClassicStorySessionStatus::complete &&
 		backend->stage_count == 9U && backend->main_count == 9U &&
 		backend->win_count == 7U && backend->preload_count == 6U &&
-		backend->cutscene_count == 3U && backend->staff_count == 1U,
+		backend->cutscene_count == 3U && backend->staff_count == 1U &&
+		backend->registration_count == 1U,
 		"nine-stage route preserves win/preload/cutscene boundaries");
 	expect(session->source_sample_count() ==
-		backend->process_start.global_frame + 3U,
-		"source input coordinate includes every MAINL input sample, including verdict dismissal");
+		backend->process_start.global_frame + 4U,
+		"source input coordinate includes every MAINL input sample, including registration dismissal");
 	const std::array expected_cutscenes{
 		MainlCutsceneKind::interstage_chiyuri,
 		MainlCutsceneKind::interstage_yumemi,
@@ -467,13 +487,12 @@ void test_complete_nine_stage_route()
 		expected_cutscenes.begin(), expected_cutscenes.end()
 	}, "interstage and primary ending scenes run inside the retained session");
 	const std::array expected_external{
-		ClassicStoryExternalKind::high_score_registration,
 		ClassicStoryExternalKind::extra_ending,
 	};
 	expect(backend->external_history ==
 		std::vector<ClassicStoryExternalKind>{
 			expected_external.begin(), expected_external.end()
-		}, "only unfinished post-ending processes remain external");
+	}, "only the unfinished extra ending remains external");
 	expect(!session->consume({}) &&
 		session->status() == ClassicStorySessionStatus::complete,
 		"completed Story rejects further source samples");
@@ -493,9 +512,13 @@ void advance_to_continue(
 		session.scene() == ClassicStorySessionScene::win,
 		"terminal loss enters opponent win");
 	expect(session.consume({.dismiss_pressed = true}).has_value() &&
-		session.status() == ClassicStorySessionStatus::waiting_for_external,
-		"loss win advances to registration");
-	complete_external(session, backend);
+		session.scene() ==
+			ClassicStorySessionScene::high_score_registration &&
+		session.status() == ClassicStorySessionStatus::running,
+		"loss win advances to owned registration");
+	expect(session.consume({}).has_value() &&
+		backend.registration_count == 1U,
+		"owned registration completes before Continue activation");
 }
 
 void test_continue_accept_decline_and_zero_credit()

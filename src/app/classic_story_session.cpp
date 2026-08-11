@@ -74,6 +74,17 @@ namespace {
 	return result;
 }
 
+[[nodiscard]] ClassicStorySessionError registration_error(
+	ClassicRegistrationError error
+)
+{
+	auto result = session_error(
+		ClassicStorySessionErrorCode::registration_failed
+	);
+	result.registration_error.emplace(std::move(error));
+	return result;
+}
+
 [[nodiscard]] ClassicStorySessionError continue_error(
 	ClassicMainlContinueError error,
 	ClassicStorySessionErrorCode code =
@@ -147,6 +158,9 @@ namespace {
 		operations.start_staff != nullptr &&
 		operations.advance_staff != nullptr &&
 		operations.finish_staff != nullptr &&
+		operations.start_registration != nullptr &&
+		operations.advance_registration != nullptr &&
+		operations.finish_registration != nullptr &&
 		operations.start_continue != nullptr &&
 		operations.advance_continue != nullptr &&
 		operations.finish_continue != nullptr &&
@@ -174,11 +188,12 @@ namespace {
 		return ClassicStorySessionScene::cutscene;
 	case ClassicMainlScene::staff_verdict:
 		return ClassicStorySessionScene::staff_verdict;
+	case ClassicMainlScene::high_score_registration:
+		return ClassicStorySessionScene::high_score_registration;
 	case ClassicMainlScene::continue_menu:
 		return ClassicStorySessionScene::continue_menu;
 	case ClassicMainlScene::game_over:
 		return ClassicStorySessionScene::game_over;
-	case ClassicMainlScene::high_score_registration:
 	case ClassicMainlScene::extra_ending:
 		return ClassicStorySessionScene::external_request;
 	case ClassicMainlScene::exit_to_operator:
@@ -292,22 +307,26 @@ struct ClassicStoryBackend final {
 	std::unique_ptr<ClassicMainlWinScene> win{};
 	std::unique_ptr<ClassicCutsceneScene> cutscene{};
 	std::unique_ptr<ClassicStaffScene> staff{};
+	std::unique_ptr<ClassicRegistrationScene> registration{};
 	std::optional<present::Raster> cutscene_handoff{};
 	std::unique_ptr<ClassicMainlContinueScene> continue_scene{};
 	std::optional<ClassicMainlContinueCompletion> continue_completion{};
 	std::unique_ptr<ClassicMainlGameOverScene> game_over{};
+	std::filesystem::path score_path{};
 	GameInit process_start{};
 
 	ClassicStoryBackend(
 		std::unique_ptr<MainResourceLoader> loader_,
 		std::shared_ptr<const MainProcessStaticContent> static_content_,
 		MainlStageTextAssets stage_text_,
-		MainlStaffCompiledAssets staff_compiled_
+		MainlStaffCompiledAssets staff_compiled_,
+		std::filesystem::path score_path_
 	) :
 		loader(std::move(loader_)),
 		static_content(std::move(static_content_)),
 		stage_text(std::move(stage_text_)),
-		staff_compiled(std::move(staff_compiled_))
+		staff_compiled(std::move(staff_compiled_)),
+		score_path(std::move(score_path_))
 	{
 		blank_tram.fill({
 			' ', static_cast<present::TramAttribute>(present::tram_black)
@@ -355,7 +374,8 @@ struct ClassicStoryBackend final {
 			driver.reset();
 			process.reset();
 		}
-		if(stage || win || cutscene || staff || continue_scene || game_over) {
+		if(stage || win || cutscene || staff || registration || continue_scene ||
+			game_over) {
 			return std::unexpected(session_error(
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
@@ -620,7 +640,8 @@ struct ClassicStoryBackend final {
 		MainlCutsceneResourceRequest request
 	)
 	{
-		if(cutscene || staff || stage || win || continue_scene || game_over) {
+		if(cutscene || staff || registration || stage || win || continue_scene ||
+			game_over) {
 			return std::unexpected(session_error(
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
@@ -763,6 +784,85 @@ struct ClassicStoryBackend final {
 		return {};
 	}
 
+	std::expected<void, ClassicStorySessionError> start_registration(
+		const GameInit &resident
+	)
+	{
+		if(registration || stage || pending_stage || win || cutscene || staff ||
+			continue_scene || game_over || !cutscene_handoff ||
+			resident.rank >= 4U) {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::backend_contract_failed
+			));
+		}
+		auto resources = loader->load_mainl_registration(
+			static_cast<MainRegistrationRank>(resident.rank + 1U)
+		);
+		if(!resources) {
+			return std::unexpected(resource_error(std::move(resources.error())));
+		}
+		auto created = ClassicRegistrationScene::create(
+			resident,
+			score_path,
+			*resources,
+			stage_text,
+			static_content->font(),
+			*cutscene_handoff
+		);
+		if(!created) {
+			return std::unexpected(registration_error(
+				std::move(created.error())
+			));
+		}
+		cutscene_handoff.reset();
+		registration = std::move(*created);
+		return {};
+	}
+
+	std::expected<ClassicStoryBackendTick, ClassicStorySessionError>
+	advance_registration(ClassicRegistrationInput input)
+	{
+		if(!registration) {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::backend_contract_failed
+			));
+		}
+		if(registration->phase() == ClassicRegistrationPhase::ready) {
+			return ClassicStoryBackendTick{.ready = true};
+		}
+		auto advanced = registration->advance(input);
+		if(!advanced) {
+			return std::unexpected(registration_error(
+				std::move(advanced.error())
+			));
+		}
+		return ClassicStoryBackendTick{
+			.surface_changed = advanced->surface_changed,
+			.input_sampled = advanced->input_sampled,
+			// The ready-producing tick may coincide with an atomic store commit.
+			// Readiness is published on the next owner tick.
+			.ready = false,
+		};
+	}
+
+	std::expected<void, ClassicStorySessionError> finish_registration()
+	{
+		if(!registration) {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::backend_contract_failed
+			));
+		}
+		auto completion = registration->take_completion();
+		if(!completion) {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::backend_contract_failed
+			));
+		}
+		cutscene_handoff.emplace(std::move(completion->raster_));
+		registration.reset();
+		return {};
+	}
+
 	std::expected<bool, ClassicStorySessionError> start_continue(
 		std::uint8_t remaining_credits
 	)
@@ -778,6 +878,7 @@ struct ClassicStoryBackend final {
 			return std::unexpected(continue_error(std::move(created.error())));
 		}
 		continue_scene = std::move(*created);
+		cutscene_handoff.reset();
 		return continue_scene->phase() == ClassicMainlContinuePhase::ready;
 	}
 
@@ -912,6 +1013,9 @@ struct ClassicStoryBackend final {
 		if(staff) {
 			return staff->take_audio_command();
 		}
+		if(registration) {
+			return registration->take_audio_command();
+		}
 		if(cutscene) {
 			return cutscene->take_audio_command();
 		}
@@ -940,6 +1044,8 @@ struct ClassicStoryBackend final {
 			tram = &stage->tram();
 		} else if(staff) {
 			raster = &staff->raster();
+		} else if(registration) {
+			raster = &registration->raster();
 		} else if(cutscene) {
 			raster = &cutscene->raster();
 			tram = &cutscene->tram();
@@ -1069,6 +1175,25 @@ ClassicStorySessionBackendOperations backend_operations(
 		.finish_staff = [](void *context) {
 			return backend_call<std::expected<void, ClassicStorySessionError>>(
 				context, &ClassicStoryBackend::finish_staff
+			);
+		},
+		.start_registration = [](void *context, const GameInit &resident) {
+			return backend_call<std::expected<void, ClassicStorySessionError>>(
+				context, &ClassicStoryBackend::start_registration, resident
+			);
+		},
+		.advance_registration = [](
+			void *context,
+			ClassicRegistrationInput input
+		) {
+			return backend_call<std::expected<ClassicStoryBackendTick,
+				ClassicStorySessionError>>(
+				context, &ClassicStoryBackend::advance_registration, input
+			);
+		},
+		.finish_registration = [](void *context) {
+			return backend_call<std::expected<void, ClassicStorySessionError>>(
+				context, &ClassicStoryBackend::finish_registration
 			);
 		},
 		.start_continue = [](void *context, std::uint8_t credits) {
@@ -1257,7 +1382,22 @@ struct ClassicStorySession::Impl {
 				}
 				return {};
 			}
-			case ClassicMainlScene::high_score_registration:
+			case ClassicMainlScene::high_score_registration: {
+				if(!plan.high_score_registration()) {
+					return std::unexpected(session_error(
+						ClassicStorySessionErrorCode::backend_contract_failed
+					));
+				}
+				auto resident = *plan.high_score_registration();
+				resident.global_frame = source_sample_count;
+				auto started = operations.start_registration(
+					operations.context, resident
+				);
+				if(!started) {
+					return std::unexpected(std::move(started.error()));
+				}
+				return {};
+			}
 			case ClassicMainlScene::extra_ending: {
 				auto request_resident = plan.resident();
 				request_resident.global_frame = source_sample_count;
@@ -1306,7 +1446,8 @@ ClassicStorySession::create(
 	MainCompiledContent compiled_content,
 	std::span<const std::byte> font_rom,
 	MainlStageTextAssets stage_text,
-	MainlStaffCompiledAssets staff_compiled
+	MainlStaffCompiledAssets staff_compiled,
+	std::filesystem::path score_path
 )
 {
 	if(!loader) {
@@ -1337,7 +1478,7 @@ ClassicStorySession::create(
 	}
 	auto backend = std::make_shared<ClassicStoryBackend>(
 		std::move(loader), std::move(*static_content), std::move(stage_text),
-		std::move(staff_compiled)
+		std::move(staff_compiled), std::move(score_path)
 	);
 	return create_with_backend(
 		config,
@@ -1352,7 +1493,8 @@ ClassicStorySession::create(
 	std::unique_ptr<MainResourceLoader> loader,
 	MainCompiledContent compiled_content,
 	std::span<const std::byte> font_rom,
-	std::span<const std::byte> mainl_executable
+	std::span<const std::byte> mainl_executable,
+	std::filesystem::path score_path
 )
 {
 	if(!valid_main_story_config(config)) {
@@ -1374,7 +1516,8 @@ ClassicStorySession::create(
 		std::move(compiled_content),
 		font_rom,
 		std::move(text->assets),
-		std::move(text->staff)
+		std::move(text->staff),
+		std::move(score_path)
 	);
 }
 
@@ -1467,6 +1610,11 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 			impl_->operations.context, input.staff
 		);
 		break;
+	case ClassicStorySessionScene::high_score_registration:
+		tick = impl_->operations.advance_registration(
+			impl_->operations.context, input.registration
+		);
+		break;
 	case ClassicStorySessionScene::continue_menu:
 		tick = impl_->operations.advance_continue(
 			impl_->operations.context, input.continue_menu
@@ -1545,6 +1693,14 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 			break;
 		case ClassicStorySessionScene::staff_verdict:
 			advanced = impl_->operations.finish_staff(
+				impl_->operations.context
+			);
+			if(advanced) {
+				advanced = impl_->advance_cursor();
+			}
+			break;
+		case ClassicStorySessionScene::high_score_registration:
+			advanced = impl_->operations.finish_registration(
 				impl_->operations.context
 			);
 			if(advanced) {
