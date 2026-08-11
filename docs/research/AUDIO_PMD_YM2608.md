@@ -556,7 +556,14 @@ This makes three validation levels explicit:
 | 3 | Adapt GPL PMDWin/`pmdmini` as a source dependency | Only if the whole distribution deliberately accepts GPL-2.0 and its scope. Otherwise reference behavior only. |
 | 4 | Embed foobar/plugin/DLL, emulate the entire PC-98 audio stack, or pre-render songs/SFX | Reject. Opaque dependencies, weak tracing/control, poor portability, and no faithful dynamic fade/SFX interaction. |
 
-The engine-foundation choice is now accepted. Option 2 remains the bounded
+The engine-foundation choice is now accepted. The platform-neutral Classic
+session also maps all currently emitted scene cues through authenticated song
+and EFC resources into exact rational native blocks and canonical 48 kHz PCM.
+It reports `snd_active`-style driver availability independently of PMD Play/Stop
+state and never observes SDL queue/device state. Launcher binding and missing
+gameplay-stage/SFX emitters remain outside that completed boundary.
+
+Option 2 remains the bounded
 fallback only if shipped-TSR comparison exposes a material incompatibility that
 cannot be corrected at the narrow service boundary.
 

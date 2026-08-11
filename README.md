@@ -11,8 +11,10 @@ both the complete authenticated Classic OP/MAINL/MAIN lifecycle and the earlier
 direct-VS developer path. A separate byte-fed PMD/YM2608 engine and TH03
 transport/SFX service, bounded `YUME.EFC` playback on FM6, deterministic
 166.4-to-48 kHz resampling, and a bounded SDL playback endpoint are now present,
-but Classic still follows the source's sound-unavailable fallback until semantic
-scene-command/content integration is complete.
+and a platform-neutral Classic session now executes the existing semantic scene
+commands over authenticated external content. The launcher still follows the
+source's sound-unavailable fallback until that session reaches the SDL endpoint;
+gameplay-stage music and MAIN SFX emission remain separate work.
 
 ## Build and test
 
@@ -69,9 +71,10 @@ The shown rate is a provisional host policy, not an authenticity claim.
 Kotohime additionally requires the explicit developer flag
 `--kotohime-zero-red` until her source-uninitialized Bomb fade byte has an
 evidence-backed release policy. The Classic path currently drains semantic
-audio commands into a deterministic silent backend; the offline PMD/OPNA/EFC
-service, fixed resampler, and SDL device endpoint are not yet connected to those
-commands and therefore are not an audio-fidelity claim. `--help` lists
+audio commands into a deterministic silent backend. The same commands now pass
+an offline authenticated PMD/OPNA/EFC session and fixed resampler, but the
+launcher has not yet connected that session to the SDL device endpoint; this
+is not an audio-fidelity claim. `--help` lists
 keyboard controls and all launch options.
 
 Validate an external frozen case without copying it into this repository:

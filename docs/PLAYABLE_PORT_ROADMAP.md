@@ -358,8 +358,11 @@ fades, queries, pause/mask state, the exact one-slot SFX arbitration table, and
 validated external EFC playback on the Timer-A-driven FM6 path. It produces
 deterministic native PCM and knows no files, windows, or SDL types. The neutral
 audio library converts the explicit 166,400 Hz policy stream to canonical 48 kHz
-with a fixed integer 15/52 polyphase FIR. `th03_platform_sdl` now supplies the
-bounded playback stream that will receive that output;
+with a fixed integer 15/52 polyphase FIR. `ClassicAudioSession` now authenticates
+the external PMD/EFC inventory, maps every existing semantic scene command, and
+advances one bounded rational PCM block per logical tick. `th03_platform_sdl`
+supplies the bounded playback stream that will receive that output; launcher
+binding and the still-missing gameplay-stage music/MAIN SFX emitters remain.
 SDL's [audio-device stream API](https://wiki.libsdl.org/SDL3/SDL_OpenAudioDeviceStream)
 is an appropriate device adapter because it keeps device management outside
 the synthesizer. The app owns user gain/mute settings, while the audio engine
