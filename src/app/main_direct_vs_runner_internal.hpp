@@ -18,7 +18,7 @@ struct MainDirectVsRunnerOperations {
 	std::expected<void, MainProcessError> (*finish_main_process)(void *) noexcept =
 		nullptr;
 	std::expected<SessionTransition, MainProcessError> (*session_transition)(
-		void *
+		void *, std::optional<ContinueChoice>
 	) noexcept = nullptr;
 };
 

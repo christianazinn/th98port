@@ -97,7 +97,10 @@ std::expected<void, th03::app::MainProcessError> fake_finish(
 }
 
 std::expected<th03::SessionTransition, th03::app::MainProcessError>
-fake_transition(void *context) noexcept
+fake_transition(
+	void *context,
+	std::optional<th03::ContinueChoice>
+) noexcept
 {
 	auto &fake = *static_cast<FakeProcess *>(context);
 	fake.transition_count++;
