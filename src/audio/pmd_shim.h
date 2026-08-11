@@ -37,6 +37,17 @@ bool th03_pmd_start(
 );
 void th03_pmd_interrupt(struct th03_pmd_handle *handle);
 
+void th03_pmd_stop(struct th03_pmd_handle *handle);
+void th03_pmd_pause(struct th03_pmd_handle *handle);
+void th03_pmd_resume(struct th03_pmd_handle *handle);
+void th03_pmd_fade(struct th03_pmd_handle *handle, int8_t speed);
+void th03_pmd_set_volume(struct th03_pmd_handle *handle, uint8_t volume);
+bool th03_pmd_set_part_mask(
+	struct th03_pmd_handle *handle,
+	uint8_t part,
+	bool masked
+);
+
 bool th03_pmd_is_playing(const struct th03_pmd_handle *handle);
 bool th03_pmd_is_paused(const struct th03_pmd_handle *handle);
 uint8_t th03_pmd_timer_b(const struct th03_pmd_handle *handle);
@@ -44,6 +55,8 @@ uint32_t th03_pmd_timer_b_count(const struct th03_pmd_handle *handle);
 uint8_t th03_pmd_loop_count(const struct th03_pmd_handle *handle);
 uint16_t th03_pmd_measure(const struct th03_pmd_handle *handle);
 uint8_t th03_pmd_fade_volume(const struct th03_pmd_handle *handle);
+int8_t th03_pmd_fade_speed(const struct th03_pmd_handle *handle);
+uint32_t th03_pmd_part_mask(const struct th03_pmd_handle *handle);
 
 #ifdef __cplusplus
 }

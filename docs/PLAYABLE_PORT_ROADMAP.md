@@ -148,9 +148,10 @@ foundations:
   localization and optional QoL remain separate product work.
 
 The complete silent Classic developer slice and the direct-VS slice are now
-visible and interactive. The byte-fed PMD/YM2608 engine foundation is also
-implemented, but they are not yet fidelity-complete: TH03 audio-service/device
-integration, exact source cadence/phase, captured PC-98 page/palette/pixel
+visible and interactive. The byte-fed PMD/YM2608 engine and source-shaped TH03
+transport/SFX scheduler are also implemented, but they are not yet
+fidelity-complete: EFC/device/scene-audio integration, exact source
+cadence/phase, captured PC-98 page/palette/pixel
 traces, and a human two-player run remain acceptance gates. The host therefore requires an
 explicit rational cadence as policy rather than labeling an inferred number
 authentic.
@@ -179,9 +180,11 @@ The existing dependency direction is already appropriate:
   monotonic clock source, and final upload.
 - th03_present owns PC-98 raster/TRAM/compositing and observer consumers, and depends on th03_assets and th03_core.
 - th03_formats and th03_replay provide V13 bytes and replay sessions when the app needs them.
-- th03_audio_pmd owns byte-fed PMD sequencing, supplied rhythm-ROM access,
-  YM2608 synthesis, register tracing, and deterministic native PCM. TH03 service
-  policy, resampling, and device delivery remain later layers.
+- th03_audio_pmd owns byte-fed PMD sequencing, source-style stop/play/fade,
+  measure/volume/pause/part-mask state, the exact one-slot TH03 SFX scheduler,
+  supplied rhythm-ROM access, YM2608 synthesis, register tracing, and
+  deterministic native PCM. EFC playback, resampling, device delivery, and
+  scene-command binding remain later layers.
 
 th03_core is the deterministic runner. It owns game state, fixed-point rules, RNG, and neutral borrowed observer calls; it must never gain a window, a renderer, filesystem access, an SDL type, audio-device state, or an asset pathname. th03_replay owns replay input-session semantics; th03_formats owns V13 parsing/serialization and byte spans, not file I/O. The app must use V13 rather than invent a private recording format.
 
@@ -292,7 +295,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
 | OP menus, Story, MAINL, cutscenes, staff | Integrated | The source-private OP owner binds title, retained Options/Music Room, read-only HiScore, Story/all-VS selection, Story, MAINL/MAIN VS, winner return, both interstages, primary and conditional extra endings, staff/verdict, score persistence, registration, and the exact four-recipe automatic Demo loop. No external OP route or replay UI is required. |
-| Audio | Engine foundation integrated; TH03 service/device path still No | The pinned PMD/YM2608 engine advances all 21 songs offline. `.EFC`, source service semantics, resampling, and SDL delivery remain release work. |
+| Audio | Engine and TH03 transport/SFX scheduler integrated; EFC/device path still No | The pinned engine advances all 21 songs offline; generated gates lock stop/play, signed fades 3/8/16, measure/volume, pause, part masks, and all 22 source priority/hold entries. `.EFC`, resampling, SDL delivery, and scene binding remain release work. |
 | Persistent score/configuration UI and localization/QoL | Original UI integrated; QoL pending | The exact original score/config codecs, source mutation rules, validated atomic whole-file stores, OP Options, and read-only HiScore/MAINL registration paths are app-owned. Localization and optional QoL remain outside core. |
 
 The following parcels can proceed now, provided they do not claim readiness for VS or change core semantics:
@@ -346,8 +349,10 @@ Audio is a separate fidelity project, not a WAV substitution. The first inventor
 
 The implemented foundation is a byte-fed th03_audio_pmd library adapted from
 the permissively licensed 98fmplayer PMD sequencer with ymfm providing YM2608
-synthesis. It produces deterministic native PCM and knows no files, windows,
-or SDL types. A later th03_platform_sdl endpoint feeds resampled output to an
+synthesis. Its port-owned façade now also implements source-style transport,
+signed fades, queries, pause/mask state, and the exact one-slot SFX arbitration
+table. It produces deterministic native PCM and knows no files, windows, or
+SDL types. A later th03_platform_sdl endpoint feeds resampled output to an
 SDL audio stream;
 SDL's [audio-device stream API](https://wiki.libsdl.org/SDL3/SDL_OpenAudioDeviceStream)
 is an appropriate device adapter because it keeps device management outside
@@ -359,10 +364,11 @@ donor evidence establishes different semantics.
 default pin. The exact 98fmplayer and ymfm commits, vendoring strategy, and
 license obligations are now locked. The corpus proves that 20/21 songs use the
 8 KiB ADPCM-A rhythm ROM and the engine accepts it only as caller-supplied data.
-The remaining load-bearing unknowns are exact EFC playback, shipped-TSR
-fade/measure behaviour, the authentic OPNA clock, ROM packaging, and output-rate
-policy; they are service/device gates, not blockers for semantic scene command
-ordering. Required follow-up gates are offline command/register or PCM
+The remaining load-bearing unknowns are exact EFC playback/channel restoration,
+shipped-TSR register parity for the implemented fade/pause/mask operations, the
+authentic OPNA clock, ROM packaging, and output-rate policy; they are
+service/device gates, not blockers for semantic scene command ordering.
+Required follow-up gates are offline command/register or PCM
 traces for known assets, deterministic muted/unmuted scheduling tests, then
 device smoke tests on the supported host matrix.
 

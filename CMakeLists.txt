@@ -219,6 +219,7 @@ th03_silence_vendor_warnings(th03_vendor_ymfm)
 add_library(th03_audio_pmd STATIC
 	src/audio/pmd_opna.cpp
 	src/audio/pmd_shim.c
+	src/audio/th03_pmd_service.cpp
 )
 target_include_directories(
 	th03_audio_pmd
@@ -515,6 +516,19 @@ if(BUILD_TESTING)
 	th03_set_warnings(th03-audio-pmd-tests)
 	th03_stage_audio_licenses(th03-audio-pmd-tests)
 	add_test(NAME th03-audio-pmd-tests COMMAND th03-audio-pmd-tests)
+
+	add_executable(th03-audio-pmd-service-tests
+		tests/test_audio_th03_pmd_service.cpp
+	)
+	target_link_libraries(
+		th03-audio-pmd-service-tests PRIVATE th03_audio_pmd
+	)
+	th03_set_warnings(th03-audio-pmd-service-tests)
+	th03_stage_audio_licenses(th03-audio-pmd-service-tests)
+	add_test(
+		NAME th03-audio-pmd-service-tests
+		COMMAND th03-audio-pmd-service-tests
+	)
 
 	add_executable(th03-tests
 		tests/test_main.cpp

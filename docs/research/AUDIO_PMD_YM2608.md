@@ -20,15 +20,18 @@ The accepted implementation is the pinned BSD-2-Clause PMD sequencer from
 `4fa914e4b2b994cb3ccf92d571a20a7cdf1fe36a`, behind an opaque C shim, with
 the pinned BSD-3-Clause `ymfm` YM2608 core at
 `81aec25ccbb98f4873a255f7551ac4dadac59b4a`. Exact locks, retained notices, and
-the one-file extraction delta are tracked in `docs/SOURCES.lock` and
+the two bounded extraction/service deltas are tracked in `docs/SOURCES.lock` and
 `third_party/{98fmplayer,ymfm}/`.
 
 This choice does not outsource TH03's service semantics. 98fmplayer's external
 FM-effect path is stubbed, so the port owns `.EFC`, stop/start/fade/measure,
 pause/mask, and SFX arbitration behavior against donor documentation and shipped-
 TSR traces. The imported foundation supplies byte-fed `.M` sequencing and chip
-writes only. Do not wrap foobar2000, ship a PMDWin DLL, or import GPL `pmdmini`
-code merely to avoid that boundary work.
+writes only. The port-owned service now supplies stop/play, signed fade,
+measure/volume, pause/resume, PMD part masks, and TH03's exact one-slot SFX
+scheduler; `.EFC` decode/channel ownership remains separate. Do not wrap
+foobar2000, ship a PMDWin DLL, or import GPL `pmdmini` code merely to avoid that
+boundary work.
 
 This fits the post-core roadmap: deterministic gameplay remains the already
 validated authority, while audio becomes a presentation consumer rather than a
@@ -221,10 +224,14 @@ Audited and imported commit:
 [`4fa914e4b2b994cb3ccf92d571a20a7cdf1fe36a`](https://github.com/Myon98/98fmplayer/tree/4fa914e4b2b994cb3ccf92d571a20a7cdf1fe36a),
 BSD-2-Clause. The driver has no filesystem or mutable file-scope state; it takes
 a mutable byte image and reaches the chip through three callbacks plus a timer
-interrupt. Five of six retained driver files are byte-identical to the pin. The
-marked `fmdriver.h` extraction patch replaces the unused PPZ8 include with the
-same guarded callback layout, avoiding an otherwise transitive C11-atomic and
-visualizer dependency.
+interrupt. Four of six retained driver files remain byte-identical to the pin.
+The marked `fmdriver.h` extraction patch replaces the unused PPZ8 include with
+the same guarded callback layout, avoiding an otherwise transitive C11-atomic
+and visualizer dependency. The service parcel adds one bounded
+`fmdriver_pmd.c` correction: the upstream fade tick computed intermediate
+volume but stored only the saturated endpoints, making every ordinary fade
+stall. The port stores that already-computed byte; generated gates lock speeds
+3, 8, and 16 plus negative fade-in without changing the no-fade PCM trace.
 
 `pmd_load()` is chip-silent, but playback writes PMD repeat counters into the
 song image. The port therefore validates an immutable input span, retains an
@@ -507,7 +514,7 @@ This makes three validation levels explicit:
 
 | Rank | Option | Decision |
 |---:|---|---|
-| 1 | Adapt the narrow BSD-2 98fmplayer PMD sequencer behind an opaque C shim and drive pinned `ymfm` | **Accepted and implemented for the engine foundation.** Add TH03 service semantics and `.EFC` in port-owned code. |
+| 1 | Adapt the narrow BSD-2 98fmplayer PMD sequencer behind an opaque C shim and drive pinned `ymfm` | **Accepted and implemented for the engine and TH03 transport/SFX scheduler.** Add `.EFC` in port-owned code. |
 | 2 | Clean TH03-scoped PMD sequencer from documented services plus independently captured traces; use stock/pinned `ymfm` | Fallback if shipped-TSR comparison exposes unbounded donor incompatibility. |
 | 3 | Adapt GPL PMDWin/`pmdmini` as a source dependency | Only if the whole distribution deliberately accepts GPL-2.0 and its scope. Otherwise reference behavior only. |
 | 4 | Embed foobar/plugin/DLL, emulate the entire PC-98 audio stack, or pre-render songs/SFX | Reject. Opaque dependencies, weak tracing/control, poor portability, and no faithful dynamic fade/SFX interaction. |
@@ -516,20 +523,23 @@ The engine-foundation choice is now accepted. Option 2 remains the bounded
 fallback only if shipped-TSR comparison exposes a material incompatibility that
 cannot be corrected at the narrow service boundary.
 
-## Implemented foundation and next no-UI service probe
+## Implemented foundation/service and next no-UI EFC probe
 
 The engine foundation already proves byte-fed transactional loading, fresh-song
 and fresh-chip replay, deterministic register/PCM output, supplied rhythm-ROM
 ownership, and all-21-song bounded advancement without SDL, settings UI, an
-audio device, or gameplay-core integration. Extend that same offline boundary
-for the remaining TH03 service probe:
+audio device, or gameplay-core integration. The service layer additionally
+locks source stop/restart, signed fade steps, measure/volume queries,
+pause-frozen sequencer state, PMD part-mask/reset state, and all 22 TH03
+priority/hold entries. Extend that same offline boundary for the remaining EFC
+probe:
 
 1. Give the probe `--song`, `--efc`, optional `--rhythm-rom`, `--script`,
    `--ticks`/`--samples`, `--pcm-out`, and `--trace-out`. Original assets remain
    external ignored inputs.
-2. Drive `OP.M` with stop/load/play, then fade speeds `3`, `8`, and `16`, query
-   volume after every PMD tick, pause/resume mid-note, and stop. Separately drive
-   `OVER.M` until measure 3.
+2. Drive `OP.M` with the implemented stop/load/play, fade, query, pause/resume,
+   and mask surface and compare it to normalized shipped-TSR traces. Separately
+   drive `OVER.M` until measure 3.
 3. Load `YUME.EFC`, invoke every observed ID `1..21`, and record the complete
    channel/register ownership lifecycle. Also script at least one lower-priority
    replacement rejection, equal-priority replacement, forced effect, and an
@@ -612,6 +622,7 @@ register divergence before a waveform metric.
     pause, and stage-transition event ordering; the gameplay replay corpus alone
     does not freeze these audiovisual boundaries.
 
-Audio remains outside `libth03`. The no-UI engine foundation and both generated
-and external byte-silent gates are implemented; the next safe move is the
-port-owned service/EFC layer, followed by resampling and SDL delivery.
+Audio remains outside `libth03`. The no-UI engine and source-shaped
+transport/SFX scheduler plus their generated and external byte-silent gates are
+implemented; the next safe move is port-owned `.EFC` decode/playback, followed
+by resampling, SDL delivery, and scene-command integration.

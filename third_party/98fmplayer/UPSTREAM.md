@@ -13,7 +13,13 @@ The port retains only the PMD sequencer's six source/header files. At import,
 `ppz8.h` include is replaced by its nine-entry callback declaration. This
 severs an unused PPZ8/`stdatomic.h`/visualizer dependency that MSVC cannot parse
 as C. The port always binds the guarded PPZ8 pointers to null because TH03 ships
-no PPZ8 data. No other upstream file is modified.
+no PPZ8 data.
+
+`fmdriver_pmd.c` has one service correction, also marked in that file. Upstream
+computes each intermediate signed fade volume but stores only the two saturated
+endpoints; the port stores the already-computed in-range byte. No sequencer
+command, timing, or no-fade path is changed. The other four retained driver
+files remain byte-identical to the pin.
 
 The driver accepts caller-owned mutable PMD byte images and emits chip access
 through callbacks. It owns no filesystem or audio device. Its external FM

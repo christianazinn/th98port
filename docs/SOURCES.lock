@@ -31,7 +31,11 @@ Native audio dependencies (2026-08-11):
     upstream: https://github.com/Myon98/98fmplayer
     commit: 4fa914e4b2b994cb3ccf92d571a20a7cdf1fe36a
     license: BSD-2-Clause
-    retained notice and extraction delta: third_party/98fmplayer/
+    retained notice and bounded extraction/service deltas:
+      third_party/98fmplayer/
+      fmdriver.h severs the unused PPZ8 dependency with the pinned declaration.
+      fmdriver_pmd.c stores its already-computed intermediate fade volume;
+      upstream otherwise changed only the two saturated endpoints.
   ymfm YM2608 synthesizer:
     upstream: https://github.com/aaronsgiles/ymfm
     commit: 81aec25ccbb98f4873a255f7551ac4dadac59b4a

@@ -1,3 +1,4 @@
-# Preserve pinned third-party source bytes, including upstream trailing spaces.
+# Preserve upstream whitespace in retained third-party sources. Bounded marked
+# deltas are authenticated and documented beside the pins.
 third_party/98fmplayer/fmdriver/fmdriver_pmd.c -whitespace
 third_party/98fmplayer/fmdriver/fmdriver_pmd.h -whitespace

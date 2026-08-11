@@ -32,6 +32,7 @@ enum class PmdOpnaErrorCode : std::uint8_t {
 	invalid_rhythm_rom_size,
 	invalid_song_size,
 	invalid_song,
+	invalid_part,
 	no_song_loaded,
 	allocation_failed,
 };
@@ -74,6 +75,8 @@ struct PmdOpnaStatus {
 	std::uint8_t loop_count = 0U;
 	std::uint16_t measure = 0U;
 	std::uint8_t fade_volume = 0U;
+	std::int8_t fade_speed = 0;
+	std::uint32_t part_mask = 0U;
 };
 
 // Platform-neutral, byte-fed PMD/YM2608 engine. It owns both the immutable
@@ -98,6 +101,20 @@ public:
 	);
 	// Every play starts from a new mutable copy, including after a completed loop.
 	std::expected<void, PmdOpnaError> play();
+	// Source-style resident-driver controls. Stop and pause silence current chip
+	// output without discarding the prepared song. A subsequent Play is always a
+	// fresh start and therefore resets fade, pause, and part masks.
+	void stop() noexcept;
+	void pause() noexcept;
+	void resume() noexcept;
+	void fade(std::int8_t speed) noexcept;
+	void set_volume(std::uint8_t volume) noexcept;
+	// PMD part numbers 0..23 follow function 1Eh. Parts 16..23 are accepted for
+	// contract completeness even though TH03 ships no PPZ data.
+	std::expected<void, PmdOpnaError> set_part_mask(
+		std::uint8_t part,
+		bool masked
+	) noexcept;
 	void render_native(std::span<PmdOpnaStereoSample> output) noexcept;
 
 	void set_register_trace_sink(PmdOpnaRegisterTraceSink *sink) noexcept;

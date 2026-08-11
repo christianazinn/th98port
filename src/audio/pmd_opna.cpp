@@ -376,6 +376,52 @@ std::expected<void, PmdOpnaError> PmdOpnaEngine::play()
 	}
 }
 
+void PmdOpnaEngine::stop() noexcept
+{
+	th03_pmd_stop(impl_->active_pmd.get());
+}
+
+void PmdOpnaEngine::pause() noexcept
+{
+	th03_pmd_pause(impl_->active_pmd.get());
+}
+
+void PmdOpnaEngine::resume() noexcept
+{
+	th03_pmd_resume(impl_->active_pmd.get());
+}
+
+void PmdOpnaEngine::fade(std::int8_t speed) noexcept
+{
+	th03_pmd_fade(impl_->active_pmd.get(), speed);
+}
+
+void PmdOpnaEngine::set_volume(std::uint8_t volume) noexcept
+{
+	th03_pmd_set_volume(impl_->active_pmd.get(), volume);
+}
+
+std::expected<void, PmdOpnaError> PmdOpnaEngine::set_part_mask(
+	std::uint8_t part,
+	bool masked
+) noexcept
+{
+	if(part > 23U) {
+		return std::unexpected(PmdOpnaError{
+			.code = PmdOpnaErrorCode::invalid_part,
+			.supplied_size = part,
+		});
+	}
+	if(impl_->active_pmd) {
+		static_cast<void>(th03_pmd_set_part_mask(
+			impl_->active_pmd.get(),
+			part,
+			masked
+		));
+	}
+	return {};
+}
+
 void PmdOpnaEngine::render_native(
 	std::span<PmdOpnaStereoSample> output
 ) noexcept
@@ -414,6 +460,8 @@ PmdOpnaStatus PmdOpnaEngine::status() const noexcept
 		.loop_count = th03_pmd_loop_count(pmd),
 		.measure = th03_pmd_measure(pmd),
 		.fade_volume = th03_pmd_fade_volume(pmd),
+		.fade_speed = th03_pmd_fade_speed(pmd),
+		.part_mask = th03_pmd_part_mask(pmd),
 	};
 }
 

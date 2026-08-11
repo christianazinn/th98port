@@ -5740,6 +5740,9 @@ static void pmd_fadeout_tick(
     pmd->fadeout_speed = 0;
     //if (pmd_fadeout_mstop) pmd->
   }
+	/* TH03 extraction fix: the upstream driver computed intermediate fade
+	 * values but only stored the two saturated endpoints. */
+	pmd->fadeout_vol = (uint8_t)newvol;
 }
 
 // 3daf
