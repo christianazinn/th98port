@@ -50,6 +50,33 @@ constexpr std::array<TextSpec, 18U> text_specs = {{
 	{MainlCompiledTextItem::name, 8U, 0xE73CU, 13U},
 }};
 
+struct StaffTextSpec final {
+	MainlCompiledTextItem item;
+	std::uint8_t index;
+	std::size_t load_offset;
+	std::size_t payload_bytes;
+};
+
+constexpr std::array<StaffTextSpec, 15U> staff_text_specs = {{
+	{MainlCompiledTextItem::staff_rank, 0U, 0xEFC2U, 11U},
+	{MainlCompiledTextItem::staff_rank, 1U, 0xEFCEU, 13U},
+	{MainlCompiledTextItem::staff_rank, 2U, 0xEFDCU, 11U},
+	{MainlCompiledTextItem::staff_rank, 3U, 0xEFE8U, 14U},
+	{MainlCompiledTextItem::staff_number, 0U, 0xEFF7U, 2U},
+	{MainlCompiledTextItem::staff_number, 1U, 0xEFFAU, 2U},
+	{MainlCompiledTextItem::staff_number, 2U, 0xEFFDU, 2U},
+	{MainlCompiledTextItem::staff_number, 3U, 0xF000U, 2U},
+	{MainlCompiledTextItem::staff_number, 4U, 0xF003U, 2U},
+	{MainlCompiledTextItem::staff_number, 5U, 0xF006U, 2U},
+	{MainlCompiledTextItem::staff_number, 6U, 0xF009U, 2U},
+	{MainlCompiledTextItem::staff_number, 7U, 0xF00CU, 2U},
+	{MainlCompiledTextItem::staff_number, 8U, 0xF00FU, 2U},
+	{MainlCompiledTextItem::staff_number, 9U, 0xF012U, 2U},
+	{MainlCompiledTextItem::staff_point, 0U, 0xF015U, 2U},
+}};
+
+constexpr std::size_t staff_flake_load_offset = 0xEE52U;
+
 struct MzLayout final {
 	std::size_t header_bytes = 0U;
 };
@@ -210,6 +237,64 @@ import_profile(
 		for(const auto value : payload) {
 			destination.push_back(std::to_integer<std::uint8_t>(value));
 		}
+	}
+	for(const auto &spec : staff_text_specs) {
+		const auto file_offset = mz->header_bytes + spec.load_offset;
+		if(file_offset > bytes.size() ||
+			spec.payload_bytes >= (bytes.size() - file_offset)) {
+			return std::unexpected(error(
+				MainlCompiledTextErrorCode::compiled_range_out_of_bounds,
+				spec.item,
+				spec.index,
+				file_offset
+			));
+		}
+		const auto payload = bytes.subspan(file_offset, spec.payload_bytes);
+		if(bytes[file_offset + spec.payload_bytes] != std::byte{0U}) {
+			return std::unexpected(error(
+				MainlCompiledTextErrorCode::malformed_source_text,
+				spec.item,
+				spec.index,
+				file_offset + spec.payload_bytes
+			));
+		}
+		std::size_t invalid_offset = 0U;
+		if(!shift_jis_valid(payload, invalid_offset)) {
+			return std::unexpected(error(
+				MainlCompiledTextErrorCode::malformed_source_text,
+				spec.item,
+				spec.index,
+				file_offset + invalid_offset
+			));
+		}
+		std::vector<std::uint8_t> *destination = nullptr;
+		if(spec.item == MainlCompiledTextItem::staff_rank) {
+			destination = &result.staff.ranks[spec.index];
+		} else if(spec.item == MainlCompiledTextItem::staff_number) {
+			destination = &result.staff.numbers[spec.index];
+		} else {
+			destination = &result.staff.point;
+		}
+		destination->reserve(payload.size());
+		for(const auto value : payload) {
+			destination->push_back(std::to_integer<std::uint8_t>(value));
+		}
+	}
+	const auto flake_file_offset = mz->header_bytes + staff_flake_load_offset;
+	if(flake_file_offset > bytes.size() ||
+		result.staff.flake_masks.size() > (bytes.size() - flake_file_offset)) {
+		return std::unexpected(error(
+			MainlCompiledTextErrorCode::compiled_range_out_of_bounds,
+			MainlCompiledTextItem::staff_flake_masks,
+			0U,
+			flake_file_offset
+		));
+	}
+	for(std::size_t index = 0U; index < result.staff.flake_masks.size();
+		++index) {
+		result.staff.flake_masks[index] = std::to_integer<std::uint8_t>(
+			bytes[flake_file_offset + index]
+		);
 	}
 	return result;
 }

@@ -21,6 +21,7 @@ enum class ClassicMainlScene : std::uint8_t {
 	continue_menu,
 	game_over,
 	ending,
+	staff_verdict,
 	extra_ending,
 	exit_to_operator,
 };

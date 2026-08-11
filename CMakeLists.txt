@@ -365,6 +365,7 @@ add_library(th03_app_main STATIC
 	src/app/classic_mainl_stage.cpp
 	src/app/classic_mainl_story.cpp
 	src/app/classic_mainl_win.cpp
+	src/app/classic_staff_scene.cpp
 	src/app/classic_story_session.cpp
 	src/app/direct_vs_cli.cpp
 	src/app/direct_vs_launch.cpp
@@ -508,6 +509,21 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-classic-cutscene-tests
 		COMMAND th03-app-classic-cutscene-tests
+	)
+
+	add_executable(th03-app-classic-staff-scene-tests
+		tests/test_app_classic_staff_scene.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-staff-scene-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-classic-staff-scene-tests PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-classic-staff-scene-tests)
+	add_test(
+		NAME th03-app-classic-staff-scene-tests
+		COMMAND th03-app-classic-staff-scene-tests
 	)
 
 	if(TH03_ENABLE_SDL)

@@ -70,9 +70,31 @@ constexpr std::array<TextSpec, 18U> specs = {{
 	{MainlCompiledTextItem::name, 8U, 0xE73CU, 13U},
 }};
 
+constexpr std::array<TextSpec, 15U> staff_specs = {{
+	{MainlCompiledTextItem::staff_rank, 0U, 0xEFC2U, 11U},
+	{MainlCompiledTextItem::staff_rank, 1U, 0xEFCEU, 13U},
+	{MainlCompiledTextItem::staff_rank, 2U, 0xEFDCU, 11U},
+	{MainlCompiledTextItem::staff_rank, 3U, 0xEFE8U, 14U},
+	{MainlCompiledTextItem::staff_number, 0U, 0xEFF7U, 2U},
+	{MainlCompiledTextItem::staff_number, 1U, 0xEFFAU, 2U},
+	{MainlCompiledTextItem::staff_number, 2U, 0xEFFDU, 2U},
+	{MainlCompiledTextItem::staff_number, 3U, 0xF000U, 2U},
+	{MainlCompiledTextItem::staff_number, 4U, 0xF003U, 2U},
+	{MainlCompiledTextItem::staff_number, 5U, 0xF006U, 2U},
+	{MainlCompiledTextItem::staff_number, 6U, 0xF009U, 2U},
+	{MainlCompiledTextItem::staff_number, 7U, 0xF00CU, 2U},
+	{MainlCompiledTextItem::staff_number, 8U, 0xF00FU, 2U},
+	{MainlCompiledTextItem::staff_number, 9U, 0xF012U, 2U},
+	{MainlCompiledTextItem::staff_point, 0U, 0xF015U, 2U},
+}};
+
+constexpr std::size_t flake_masks_load_offset = 0xEE52U;
+
 struct Fixture final {
 	std::vector<std::byte> executable{};
 	std::array<std::vector<std::uint8_t>, 18U> expected{};
+	std::array<std::vector<std::uint8_t>, 15U> expected_staff{};
+	std::array<std::uint8_t, 64U> expected_flake_masks{};
 };
 
 Fixture fixture()
@@ -108,6 +130,36 @@ Fixture fixture()
 		}
 		result.executable[file_offset + expected.size()] = std::byte{0U};
 	}
+	for(std::size_t index = 0U; index < staff_specs.size(); ++index) {
+		const auto &spec = staff_specs[index];
+		auto &expected = result.expected_staff[index];
+		expected.reserve(spec.payload_bytes);
+		while(expected.size() + 1U < spec.payload_bytes) {
+			expected.push_back(static_cast<std::uint8_t>(
+				0x81U + (index % 0x1FU)
+			));
+			expected.push_back(static_cast<std::uint8_t>(
+				0x40U + ((index + expected.size()) % 0x3EU)
+			));
+		}
+		if(expected.size() < spec.payload_bytes) {
+			expected.push_back(static_cast<std::uint8_t>('a' + index));
+		}
+		const auto file_offset = 4096U + spec.load_offset;
+		for(std::size_t byte = 0U; byte < expected.size(); ++byte) {
+			result.executable[file_offset + byte] =
+				static_cast<std::byte>(expected[byte]);
+		}
+		result.executable[file_offset + expected.size()] = std::byte{0U};
+	}
+	for(std::size_t index = 0U; index < result.expected_flake_masks.size();
+		++index) {
+		result.expected_flake_masks[index] = static_cast<std::uint8_t>(
+			(index * 37U) & 0xFFU
+		);
+		result.executable[4096U + flake_masks_load_offset + index] =
+			static_cast<std::byte>(result.expected_flake_masks[index]);
+	}
 	return result;
 }
 
@@ -138,6 +190,23 @@ void test_success_and_ownership()
 			character.title : character.name;
 		expect(actual == source.expected[index], "exact owning text payload");
 	}
+	for(std::size_t index = 0U; index < staff_specs.size(); ++index) {
+		const auto &spec = staff_specs[index];
+		const std::vector<std::uint8_t> *actual = &imported->staff.point;
+		if(spec.item == MainlCompiledTextItem::staff_rank) {
+			actual = &imported->staff.ranks[spec.character];
+		} else if(spec.item == MainlCompiledTextItem::staff_number) {
+			actual = &imported->staff.numbers[spec.character];
+		}
+		expect(
+			*actual == source.expected_staff[index],
+			"exact owning verdict payload"
+		);
+	}
+	expect(
+		imported->staff.flake_masks == source.expected_flake_masks,
+		"exact owning flake mask payload"
+	);
 }
 
 void test_container_and_profile_rejection()
@@ -232,6 +301,20 @@ void test_text_validation()
 			"dangling Shift-JIS lead is rejected"
 		);
 	}
+	{
+		auto source = fixture();
+		const auto &spec = staff_specs.back();
+		const auto terminator = 4096U + spec.load_offset + spec.payload_bytes;
+		source.executable[terminator] = std::byte{'X'};
+		auto imported = import_fixture(source.executable);
+		expect(
+			!imported && imported.error().code ==
+				MainlCompiledTextErrorCode::malformed_source_text &&
+				imported.error().item == MainlCompiledTextItem::staff_point &&
+				imported.error().offset == terminator,
+			"late verdict terminator is precisely named"
+		);
+	}
 }
 
 std::vector<std::byte> read_file(const std::filesystem::path &path)
@@ -269,6 +352,24 @@ void optional_local_gate(const char *path)
 			"local name is nonempty"
 		);
 	}
+	for(const auto &rank : imported->staff.ranks) {
+		expect(!rank.empty(), "local verdict rank is nonempty");
+	}
+	for(const auto &number : imported->staff.numbers) {
+		expect(number.size() == 2U, "local verdict number is one fullwidth glyph");
+	}
+	expect(
+		imported->staff.point.size() == 2U,
+		"local verdict point is one fullwidth glyph"
+	);
+	expect(
+		std::any_of(
+			imported->staff.flake_masks.begin(),
+			imported->staff.flake_masks.end(),
+			[](std::uint8_t value) { return value != 0U; }
+		),
+		"local flake mask table is populated"
+	);
 }
 
 } // namespace

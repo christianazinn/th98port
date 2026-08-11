@@ -472,6 +472,7 @@ void test_story_ending_matrix()
 			if(extra) {
 				expect_steps(*plan, {
 					step(ClassicMainlScene::ending),
+					step(ClassicMainlScene::staff_verdict),
 					step(ClassicMainlScene::high_score_registration),
 					step(ClassicMainlScene::extra_ending),
 					step(ClassicMainlScene::exit_to_operator),
@@ -479,6 +480,7 @@ void test_story_ending_matrix()
 			} else {
 				expect_steps(*plan, {
 					step(ClassicMainlScene::ending),
+					step(ClassicMainlScene::staff_verdict),
 					step(ClassicMainlScene::high_score_registration),
 					step(ClassicMainlScene::exit_to_operator),
 				}, "ordinary clear omits the extra ending");

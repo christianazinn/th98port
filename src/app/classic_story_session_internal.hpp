@@ -13,6 +13,7 @@
 #include "classic_mainl_stage_internal.hpp"
 #include "classic_mainl_story_internal.hpp"
 #include "classic_mainl_win_internal.hpp"
+#include "classic_staff_scene_internal.hpp"
 #include "mainl_compiled_text_internal.hpp"
 #include "main_process_driver_internal.hpp"
 #include "th03/app/resources.hpp"
@@ -25,6 +26,7 @@ enum class ClassicStorySessionScene : std::uint8_t {
 	main,
 	win,
 	cutscene,
+	staff_verdict,
 	continue_menu,
 	game_over,
 	external_request,
@@ -66,6 +68,7 @@ enum class ClassicStorySessionErrorCode : std::uint8_t {
 	mainl_text_failed,
 	win_failed,
 	cutscene_failed,
+	staff_failed,
 	continue_failed,
 	game_over_failed,
 	plan_failed,
@@ -85,6 +88,7 @@ struct ClassicStorySessionError final {
 	std::optional<ClassicMainlStageError> stage_error{};
 	std::optional<ClassicMainlWinError> win_error{};
 	std::optional<ClassicCutsceneError> cutscene_error{};
+	std::optional<ClassicStaffError> staff_error{};
 	std::optional<ClassicMainlContinueError> continue_error{};
 	std::optional<ClassicMainlPlanError> plan_error{};
 	std::optional<present::SourceSurfaceError> surface_error{};
@@ -93,6 +97,7 @@ struct ClassicStorySessionError final {
 struct ClassicStorySessionInput final {
 	CoreInput main{};
 	ClassicCutsceneInput cutscene{};
+	ClassicStaffInput staff{};
 	ClassicMainlContinueInput continue_menu{};
 	ClassicAudioStatus audio{};
 	bool dismiss_pressed = false;
@@ -162,6 +167,14 @@ struct ClassicStorySessionBackendOperations final {
 	std::expected<void, ClassicStorySessionError> (*finish_cutscene)(
 		void *
 	) = nullptr;
+	std::expected<void, ClassicStorySessionError> (*start_staff)(
+		void *, const GameInit &
+	) = nullptr;
+	std::expected<ClassicStoryBackendTick, ClassicStorySessionError>
+	(*advance_staff)(void *, const ClassicStaffInput &) = nullptr;
+	std::expected<void, ClassicStorySessionError> (*finish_staff)(
+		void *
+	) = nullptr;
 	std::expected<bool, ClassicStorySessionError> (*start_continue)(
 		void *, std::uint8_t
 	) = nullptr;
@@ -201,7 +214,8 @@ public:
 		std::unique_ptr<MainResourceLoader> loader,
 		MainCompiledContent compiled_content,
 		std::span<const std::byte> font_rom,
-		MainlStageTextAssets stage_text
+		MainlStageTextAssets stage_text,
+		MainlStaffCompiledAssets staff_compiled
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicStorySession>,

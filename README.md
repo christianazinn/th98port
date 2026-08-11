@@ -149,16 +149,21 @@ split comparisons. Original game data and replay captures remain external.
   window, or replay UI; those remain application/platform decisions.
 - `th03_app_main` also contains the source-private owning Classic Story route
   over Stage, retained MAIN, Win, Continue, Game Over, both interstage
-  cutscenes, and the primary character endings. The owning cutscene scene binds
+  cutscenes, the primary character endings, and the staff/verdict scene. The
+  owning cutscene scene binds
   the complete typed script VM and exact Master/upstream two-page Raster
   presenter to authenticated script/PI resources, explicit source input and
   wait boundaries, and semantic audio commands. Its completed Raster is
-  transactionally handed to the next Stage. Staff/verdict, high-score
-  registration/persistence, and the post-registration extra ending remain;
+  transactionally handed to the next Stage or to the authenticated staff
+  driver. Staff preserves the source CDG/flakes/page schedule, exact volume and
+  measure waits, adaptive 80-to-50 downgrade, verdict input lock, and final
+  tone ramp before returning its Raster. High-score registration/persistence
+  and the post-registration extra ending remain;
   no second campaign or resident-state model is exposed.
 - The same boundary authenticates the supported unpacked Japanese `MAINL.EXE`
-  and owns its exact Story title/name table. Packed DIET executable support is
-  not yet provided; original text bytes remain external and uncommitted.
+  and owns its exact Story title/name table, staff verdict strings, and flake
+  masks. Packed DIET executable support is not yet provided; original bytes
+  remain external and uncommitted.
 - `th03_app_resources` owns the checked external-content root and immutable
   byte cache. Original/extracted files remain local inputs and never enter the
   repository.

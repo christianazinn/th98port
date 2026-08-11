@@ -535,6 +535,9 @@ std::vector<std::byte> bytes_for(const th03::app::MainResourceSpec &spec)
 	case MainResourceRole::cutscene_script:
 	case MainResourceRole::cutscene_picture:
 	case MainResourceRole::cutscene_music:
+	case MainResourceRole::staff_background_palette:
+	case MainResourceRole::staff_cdg:
+	case MainResourceRole::staff_music:
 		break;
 	}
 	return {};

@@ -159,6 +159,7 @@ struct FakeBackend final {
 	std::size_t main_count = 0U;
 	std::size_t win_count = 0U;
 	std::size_t cutscene_count = 0U;
+	std::size_t staff_count = 0U;
 	std::size_t preload_count = 0U;
 	std::size_t continue_count = 0U;
 	std::size_t resolve_count = 0U;
@@ -322,6 +323,21 @@ ClassicStorySessionBackendOperations operations(FakeBackend &fake)
 			backend.cutscene_active = false;
 			return std::expected<void, ClassicStorySessionError>{};
 		},
+		.start_staff = [](void *context, const GameInit &) {
+			++static_cast<FakeBackend *>(context)->staff_count;
+			return std::expected<void, ClassicStorySessionError>{};
+		},
+		.advance_staff = [](void *, const th03::app::ClassicStaffInput &) {
+			return std::expected<ClassicStoryBackendTick,
+				ClassicStorySessionError>{ClassicStoryBackendTick{
+				.surface_changed = true,
+				.input_sampled = true,
+				.ready = true,
+			}};
+		},
+		.finish_staff = [](void *) {
+			return std::expected<void, ClassicStorySessionError>{};
+		},
 		.start_continue = [](void *context, std::uint8_t credits) {
 			auto &backend = *static_cast<FakeBackend *>(context);
 			++backend.continue_count;
@@ -437,11 +453,11 @@ void test_complete_nine_stage_route()
 	expect(session->status() == ClassicStorySessionStatus::complete &&
 		backend->stage_count == 9U && backend->main_count == 9U &&
 		backend->win_count == 7U && backend->preload_count == 6U &&
-		backend->cutscene_count == 3U,
+		backend->cutscene_count == 3U && backend->staff_count == 1U,
 		"nine-stage route preserves win/preload/cutscene boundaries");
 	expect(session->source_sample_count() ==
-		backend->process_start.global_frame + 2U,
-		"source input coordinate is forwarded into every next MAIN");
+		backend->process_start.global_frame + 3U,
+		"source input coordinate includes every MAINL input sample, including verdict dismissal");
 	const std::array expected_cutscenes{
 		MainlCutsceneKind::interstage_chiyuri,
 		MainlCutsceneKind::interstage_yumemi,

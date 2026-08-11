@@ -114,11 +114,16 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   startup have reached the first displayed gameplay tick.
 - The source-private Classic Story owner now binds the implemented Stage,
   retained MAIN, Win, Continue, Game Over, both interstage cutscenes, and the
-  primary ending into one process-lifetime route. It shares the exact MAIN
+  primary ending plus staff/verdict into one process-lifetime route. It shares
+  the exact MAIN
   warning/repeat/terminal driver with Direct VS, performs next-stage hidden-
   page preload at the winner boundary, retains loss state through Continue,
   and emits single-use typed requests only for the remaining registration and
-  extra-ending scenes.
+  extra-ending scenes. The staff transaction authenticates its palette, twelve
+  source-ordered CDGs, music, compiled verdict strings, and flake masks; its
+  exact phase floors, semantic audio waits, overrun downgrade, two-page verdict,
+  and tone-1 completion are covered by a complete synthetic schedule test and
+  an opt-in local original-content construction gate.
 - Its Stage title/name content now comes from a full-file-authenticated unpacked
   Japanese `MAINL.EXE` profile. All 18 Shift-JIS fields are copied into owning
   typed storage before scene construction; no donor string is compiled into the
@@ -265,7 +270,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
 | SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
-| OP menus, Story, MAINL, cutscenes, staff | Partial | The validated fresh-Story config, source-private route policy, exact stage splash, campaign-static MAIN content, transactional Raster handoffs, winner scene, Continue choice, Game Over timeline, owning session loop, authenticated cutscene resources, complete typed script VM, exact two-page Raster executor, both interstages, and primary endings are integrated. OP, staff/verdict, high-score registration/persistence, and the conditional extra ending remain. |
+| OP menus, Story, MAINL, cutscenes, staff | Partial | The validated fresh-Story config, source-private route policy, exact stage splash, campaign-static MAIN content, transactional Raster handoffs, winner scene, Continue choice, Game Over timeline, owning session loop, authenticated cutscene and staff resources, complete typed script VM, exact two-page Raster executors, both interstages, primary endings, and staff/verdict are integrated. OP, high-score registration/persistence, and the conditional extra ending remain. |
 | Audio | No for the explicitly marked silent visual vertical slice; yes for a fully faithful release | Start source/data investigation now, but do not block visible MAIN on an invented WAV backend. |
 | Persistent score/configuration UI and localization/QoL | No | Keep it outside the first faithful path and behind an app-owned profile/catalog seam. |
 
@@ -286,21 +291,22 @@ Avoid creating a placeholder th03-app which owns a second renderer or game state
 
 Once VS-3 holds, add scenes in donor order rather than building a broad launcher framework.
 
-1. Complete MAINL routing and Story progression. The stage splash, fresh MAIN
-   handoff, winner scene, Continue, and Game Over are integrated; next add the
-   owning `ClassicSession` boundary and ending routing, following
-   mlentry.cpp, screens.cpp, and ending.cpp. It constructs the next MAIN session
-   and loads/unloads assets at the same semantic boundary. Acceptance: a
-   source-traced Story route reaches each next-stage, continue, game-over, and
-   ending branch with the corresponding screen/palette/timing sequence.
+1. Complete MAINL routing and Story progression. Stage splash, fresh MAIN,
+   winner, Continue, Game Over, interstage/ending cutscenes, and staff/verdict
+   are integrated in the owning Classic session. Next implement score
+   qualification/name registration, persistent score transaction, and the
+   conditional extra-ending cutscene at their source order. Acceptance: a
+   source-traced Story route reaches each next-stage, continue, game-over,
+   registration, extra-ending, and exit branch with the corresponding retained
+   Raster/palette/timing and resident/persistence state.
 2. OP title and selection. Implement only the source's actual choices (Story, VS, Music Room, registration view, option, quit) and its character selection/configuration steps. Reuse BFNT/CDG/PI primitives; do not import a desktop UI toolkit. Game text remains source bytes/BFNT/gaiji first. If a later launcher needs translated labels, keep a separate app-owned catalog rather than rewriting gameplay or source asset strings. Acceptance: source-traced title-to-MAINL handoff, all selected modes/characters, and source palette/page transitions match.
-3. Cutscenes and staff. The complete source-ordered script VM is integrated;
-   next execute its typed image/text/palette operations in CutsceneScene and
-   keep StaffScene's flakes/text sequence in presentation. Preserve the donor's
-   input behaviour before adding conveniences such as rewind, text log, or
-   language selection. Acceptance: first/last pages, skip and fast-forward
-   boundaries, staff CDG/palette/flake sequence, and return route match source
-   traces.
+3. Cutscenes and staff. The owning typed CutsceneScene and complete normal-speed
+   staff/verdict Raster transaction are integrated. Replay Patch's optional
+   score-file-unlocked held-Z staff pacing remains coupled to persistence. The
+   remaining fidelity gate is captured PC-98 first/last-page, skip/fast-forward,
+   staff CDG/palette/flake,
+   and return-route comparison; conveniences such as rewind, text log, and
+   language selection remain later profile work.
 4. Profile and optional replay UX. After the Classic source scenes, persistence,
    and audio work, add a versioned app profile for controls/window/audio volume.
    A replay browser is explicitly optional and must not delay the Classic port.

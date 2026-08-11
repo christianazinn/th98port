@@ -170,6 +170,23 @@ constexpr std::array<std::uint64_t, 5U> cutscene_music_fnv1a64{
 	0xF9A18439B7621C60ULL, 0xB6C760DD37D074CAULL,
 	0x1E13270E55263E7EULL,
 };
+constexpr std::array<std::string_view, 12U> staff_cdg_filenames{
+	"STF1.CDG", "STF11.CDG", "STF3.CDG", "STF4.CDG",
+	"STF5.CDG", "STF6.CDG", "STF7.CDG", "STF8.CDG",
+	"STF9.CDG", "STF10.CDG", "STF2.CDG", "STF12.CDG",
+};
+constexpr std::array<std::size_t, 12U> staff_cdg_sizes{
+	7696U, 6256U, 8336U, 8016U, 5136U, 10256U,
+	8976U, 36816U, 4336U, 11056U, 4336U, 5056U,
+};
+constexpr std::array<std::uint64_t, 12U> staff_cdg_fnv1a64{
+	0xC104BD8D7F6FDC09ULL, 0xE55421CDB1960A92ULL,
+	0x62C8662D33190286ULL, 0x7DEC24541A3FF49EULL,
+	0x16E04971B5051CE6ULL, 0x41AF01068D34C493ULL,
+	0xECA0CBEE7287BF22ULL, 0xE087C778D4A2C46FULL,
+	0x73CE907471A15C66ULL, 0xC764918F00CAD525ULL,
+	0x5D131B0A6A9FCD84ULL, 0xD15C59C7A26437CAULL,
+};
 
 [[nodiscard]] constexpr bool is_character(MainCharacter character) noexcept
 {
@@ -221,6 +238,13 @@ constexpr std::array<std::uint64_t, 5U> cutscene_music_fnv1a64{
 	return key.cutscene_script != MainCutsceneScript::none ||
 		key.cutscene_picture != MainCutscenePicture::none ||
 		key.cutscene_music != MainCutsceneMusic::none;
+}
+
+[[nodiscard]] constexpr bool has_staff_selector(
+	const MainResourceKey &key
+) noexcept
+{
+	return key.staff_cdg != MainStaffCdg::none;
 }
 
 [[nodiscard]] constexpr std::uint8_t stage_enemy_group_index(
@@ -300,6 +324,9 @@ constexpr std::array<std::uint64_t, 5U> cutscene_music_fnv1a64{
 	case MainResourceRole::cutscene_script:
 	case MainResourceRole::cutscene_picture:
 	case MainResourceRole::cutscene_music:
+	case MainResourceRole::staff_background_palette:
+	case MainResourceRole::staff_cdg:
+	case MainResourceRole::staff_music:
 		return 0U;
 	}
 	return 0U;
@@ -397,7 +424,8 @@ cutscene_resource_spec(MainResourceKey key)
 {
 	if(key.character != MainCharacter::none ||
 		key.palette != MainPaletteVariant::none ||
-		key.stage_background != MainlStageBackground::none) {
+		key.stage_background != MainlStageBackground::none ||
+		has_staff_selector(key)) {
 		return std::unexpected(error(
 			ResourceLoadErrorCode::invalid_resource_key, key
 		));
@@ -490,13 +518,75 @@ cutscene_resource_spec(MainResourceKey key)
 }
 
 [[nodiscard]] std::expected<MainResourceSpec, ResourceLoadError>
+staff_resource_spec(MainResourceKey key)
+{
+	if(key.character != MainCharacter::none ||
+		key.palette != MainPaletteVariant::none ||
+		key.stage_background != MainlStageBackground::none ||
+		has_cutscene_selector(key)) {
+		return std::unexpected(error(
+			ResourceLoadErrorCode::invalid_resource_key, key
+		));
+	}
+	if(key.role == MainResourceRole::staff_cdg) {
+		const auto raw = static_cast<std::uint8_t>(key.staff_cdg);
+		if(raw == 0U || raw > static_cast<std::uint8_t>(MainStaffCdg::staff_12)) {
+			return std::unexpected(error(
+				ResourceLoadErrorCode::invalid_resource_key, key
+			));
+		}
+		const auto index = static_cast<std::size_t>(raw - 1U);
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_staff,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::cdg,
+			.logical_role = "mainl.staff.cdg." + std::to_string(index),
+			.filename = std::string{staff_cdg_filenames[index]},
+			.expected_bytes = staff_cdg_sizes[index],
+			.expected_fnv1a64 = staff_cdg_fnv1a64[index],
+		};
+	}
+	if(has_staff_selector(key)) {
+		return std::unexpected(error(
+			ResourceLoadErrorCode::invalid_resource_key, key
+		));
+	}
+	if(key.role == MainResourceRole::staff_background_palette) {
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_staff,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::rgb48,
+			.logical_role = "mainl.staff.background_palette",
+			.filename = "EDBK1.RGB",
+			.expected_bytes = 48U,
+			.expected_fnv1a64 = 0x5305C69FE55F8683ULL,
+		};
+	}
+	if(key.role == MainResourceRole::staff_music) {
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::mainl_staff,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pmd_music,
+			.logical_role = "mainl.staff.music",
+			.filename = "ED.M",
+			.expected_bytes = 3378U,
+			.expected_fnv1a64 = 0x897797694DA73B83ULL,
+		};
+	}
+	return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
+}
+
+[[nodiscard]] std::expected<MainResourceSpec, ResourceLoadError>
 static_resource_spec(MainResourceKey key)
 {
 	if(key.role == MainResourceRole::stage_splash_background) {
 		if(key.character != MainCharacter::none ||
 			key.palette != MainPaletteVariant::none ||
 			!is_stage_background(key.stage_background) ||
-			has_cutscene_selector(key)) {
+			has_cutscene_selector(key) || has_staff_selector(key)) {
 			return std::unexpected(error(
 				ResourceLoadErrorCode::invalid_resource_key, key
 			));
@@ -519,7 +609,7 @@ static_resource_spec(MainResourceKey key)
 	if(key.character != MainCharacter::none ||
 		key.palette != MainPaletteVariant::none ||
 		key.stage_background != MainlStageBackground::none ||
-		has_cutscene_selector(key)) {
+		has_cutscene_selector(key) || has_staff_selector(key)) {
 		return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
 	}
 
@@ -714,6 +804,9 @@ static_resource_spec(MainResourceKey key)
 	case MainResourceRole::cutscene_script:
 	case MainResourceRole::cutscene_picture:
 	case MainResourceRole::cutscene_music:
+	case MainResourceRole::staff_background_palette:
+	case MainResourceRole::staff_cdg:
+	case MainResourceRole::staff_music:
 		return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
 	case MainResourceRole::character_sheet:
 	case MainResourceRole::character_extra_portrait:
@@ -871,7 +964,12 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 		key.role == MainResourceRole::cutscene_music) {
 		return cutscene_resource_spec(key);
 	}
-	if(has_cutscene_selector(key)) {
+	if(key.role == MainResourceRole::staff_background_palette ||
+		key.role == MainResourceRole::staff_cdg ||
+		key.role == MainResourceRole::staff_music) {
+		return staff_resource_spec(key);
+	}
+	if(has_cutscene_selector(key) || has_staff_selector(key)) {
 		return std::unexpected(error(
 			ResourceLoadErrorCode::invalid_resource_key, key
 		));
@@ -1024,6 +1122,9 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 	case MainResourceRole::cutscene_script:
 	case MainResourceRole::cutscene_picture:
 	case MainResourceRole::cutscene_music:
+	case MainResourceRole::staff_background_palette:
+	case MainResourceRole::staff_cdg:
+	case MainResourceRole::staff_music:
 		break;
 	}
 	return std::unexpected(error(ResourceLoadErrorCode::invalid_resource_key, key));
@@ -1049,6 +1150,8 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		MainResourceRole::continue_background,
 		MainResourceRole::continue_choice_cels,
 		MainResourceRole::gameover_background,
+		MainResourceRole::staff_background_palette,
+		MainResourceRole::staff_music,
 	};
 	constexpr std::array character_roles{
 		MainResourceRole::character_sheet,
@@ -1071,7 +1174,7 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		(last_palette_value - first_palette_value + 1U) *
 		character_roles.size()) +
 		((last_character_value - first_character_value + 1U) *
-		character_only_roles.size()) + 5U + 28U + 24U + 5U);
+		character_only_roles.size()) + 5U + 28U + 24U + 5U + 12U);
 	for(const auto role : static_roles) {
 		result.push_back(*main_resource_spec({.role = role}));
 	}
@@ -1106,6 +1209,14 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		result.push_back(*main_resource_spec({
 			.role = MainResourceRole::cutscene_music,
 			.cutscene_music = static_cast<MainCutsceneMusic>(music),
+		}));
+	}
+	for(std::uint8_t staff_cdg = 1U;
+		staff_cdg <= static_cast<std::uint8_t>(MainStaffCdg::staff_12);
+		++staff_cdg) {
+		result.push_back(*main_resource_spec({
+			.role = MainResourceRole::staff_cdg,
+			.staff_cdg = static_cast<MainStaffCdg>(staff_cdg),
 		}));
 	}
 	for(std::uint8_t character = first_character_value;
@@ -1443,6 +1554,23 @@ mainl_cutscene_resource_keys(MainlCutsceneResourceRequest request)
 	return result;
 }
 
+std::vector<MainResourceKey> mainl_staff_resource_keys()
+{
+	std::vector<MainResourceKey> result;
+	result.reserve(14U);
+	result.push_back({.role = MainResourceRole::staff_background_palette});
+	for(std::uint8_t raw = 1U;
+		raw <= static_cast<std::uint8_t>(MainStaffCdg::staff_12);
+		++raw) {
+		result.push_back({
+			.role = MainResourceRole::staff_cdg,
+			.staff_cdg = static_cast<MainStaffCdg>(raw),
+		});
+	}
+	result.push_back({.role = MainResourceRole::staff_music});
+	return result;
+}
+
 MainResourceLoader::MainResourceLoader(
 	std::filesystem::path content_root,
 	MainResourceIntegrity integrity
@@ -1621,6 +1749,12 @@ MainResourceLoader::load_mainl_cutscene(MainlCutsceneResourceRequest request)
 		return std::unexpected(keys.error());
 	}
 	return load_batch(*keys);
+}
+
+std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+MainResourceLoader::load_mainl_staff()
+{
+	return load_batch(mainl_staff_resource_keys());
 }
 
 std::expected<std::vector<LoadedMainResource>, ResourceLoadError>

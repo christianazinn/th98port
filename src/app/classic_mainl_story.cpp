@@ -202,6 +202,7 @@ classic_story_mainl_plan(
 				transition.resident.story_stage != story_stage_ending ||
 				!transition.high_score_registration ||
 				!plan.append(ClassicMainlScene::ending) ||
+				!plan.append(ClassicMainlScene::staff_verdict) ||
 				!plan.append(ClassicMainlScene::high_score_registration) ||
 				(extra && !plan.append(ClassicMainlScene::extra_ending)) ||
 				!plan.append(ClassicMainlScene::exit_to_operator)) {

@@ -25,6 +25,7 @@ using th03::app::MainResourceIntegrity;
 using th03::app::MainResourceKey;
 using th03::app::MainResourceLoader;
 using th03::app::MainResourceRole;
+using th03::app::MainStaffCdg;
 using th03::app::MainlCutsceneKind;
 using th03::app::MainlStageBackground;
 using th03::app::MainlStageResourceRequest;
@@ -119,8 +120,8 @@ void test_manifest()
 	);
 	const auto manifest = th03::app::main_resource_manifest();
 	expect(
-		manifest.size() == 205U,
-		"manifest enumerates MAIN, MAINL, cutscene, paletted, and character-only assets"
+		manifest.size() == 219U,
+		"manifest enumerates MAIN, MAINL, cutscene, staff, paletted, and character-only assets"
 	);
 	expect(
 		static_cast<bool>(th03::app::validate_main_resource_manifest(manifest)),
@@ -146,6 +147,10 @@ void test_manifest()
 	bool contains_first_cutscene_picture = false;
 	bool contains_last_cutscene_picture = false;
 	bool contains_last_cutscene_music = false;
+	bool contains_staff_palette = false;
+	bool contains_first_staff_cdg = false;
+	bool contains_last_staff_cdg = false;
+	bool contains_staff_music = false;
 	for(const auto &spec : manifest) {
 		contains_enedat = contains_enedat ||
 			(spec.key.role == MainResourceRole::enemy_scripts &&
@@ -223,6 +228,24 @@ void test_manifest()
 				spec.key.cutscene_music == MainCutsceneMusic::demo5 &&
 				spec.filename == "DEMO5.M" && spec.expected_bytes == 1193U &&
 				spec.expected_fnv1a64 == 0x1E13270E55263E7EULL);
+		contains_staff_palette = contains_staff_palette ||
+			(spec.key.role == MainResourceRole::staff_background_palette &&
+				spec.filename == "EDBK1.RGB" && spec.expected_bytes == 48U &&
+				spec.expected_fnv1a64 == 0x5305C69FE55F8683ULL);
+		contains_first_staff_cdg = contains_first_staff_cdg ||
+			(spec.key.role == MainResourceRole::staff_cdg &&
+				spec.key.staff_cdg == MainStaffCdg::staff_1 &&
+				spec.filename == "STF1.CDG" && spec.expected_bytes == 7696U &&
+				spec.expected_fnv1a64 == 0xC104BD8D7F6FDC09ULL);
+		contains_last_staff_cdg = contains_last_staff_cdg ||
+			(spec.key.role == MainResourceRole::staff_cdg &&
+				spec.key.staff_cdg == MainStaffCdg::staff_12 &&
+				spec.filename == "STF12.CDG" && spec.expected_bytes == 5056U &&
+				spec.expected_fnv1a64 == 0xD15C59C7A26437CAULL);
+		contains_staff_music = contains_staff_music ||
+			(spec.key.role == MainResourceRole::staff_music &&
+				spec.filename == "ED.M" && spec.expected_bytes == 3378U &&
+				spec.expected_fnv1a64 == 0x897797694DA73B83ULL);
 		expect(
 			th03::app::is_safe_extracted_entry_name(spec.filename),
 			"every checked-in manifest filename is one safe extracted component"
@@ -242,7 +265,9 @@ void test_manifest()
 			contains_continue_cels && contains_gameover &&
 			contains_first_cutscene_script && contains_last_cutscene_script &&
 			contains_first_cutscene_picture && contains_last_cutscene_picture &&
-			contains_last_cutscene_music,
+			contains_last_cutscene_music && contains_staff_palette &&
+			contains_first_staff_cdg && contains_last_staff_cdg &&
+			contains_staff_music,
 		"manifest retains the representative source-named resource families"
 	);
 	struct ExpectedEnemyGroup {
@@ -808,6 +833,76 @@ void test_cutscene_resource_batches()
 	);
 }
 
+void test_staff_resource_batch()
+{
+	const auto keys = th03::app::mainl_staff_resource_keys();
+	const std::array expected{
+		MainResourceKey{.role = MainResourceRole::staff_background_palette},
+		MainResourceKey{.role = MainResourceRole::staff_cdg,
+			.staff_cdg = MainStaffCdg::staff_1},
+		MainResourceKey{.role = MainResourceRole::staff_cdg,
+			.staff_cdg = MainStaffCdg::staff_11},
+		MainResourceKey{.role = MainResourceRole::staff_cdg,
+			.staff_cdg = MainStaffCdg::staff_3},
+		MainResourceKey{.role = MainResourceRole::staff_cdg,
+			.staff_cdg = MainStaffCdg::staff_4},
+		MainResourceKey{.role = MainResourceRole::staff_cdg,
+			.staff_cdg = MainStaffCdg::staff_5},
+		MainResourceKey{.role = MainResourceRole::staff_cdg,
+			.staff_cdg = MainStaffCdg::staff_6},
+		MainResourceKey{.role = MainResourceRole::staff_cdg,
+			.staff_cdg = MainStaffCdg::staff_7},
+		MainResourceKey{.role = MainResourceRole::staff_cdg,
+			.staff_cdg = MainStaffCdg::staff_8},
+		MainResourceKey{.role = MainResourceRole::staff_cdg,
+			.staff_cdg = MainStaffCdg::staff_9},
+		MainResourceKey{.role = MainResourceRole::staff_cdg,
+			.staff_cdg = MainStaffCdg::staff_10},
+		MainResourceKey{.role = MainResourceRole::staff_cdg,
+			.staff_cdg = MainStaffCdg::staff_2},
+		MainResourceKey{.role = MainResourceRole::staff_cdg,
+			.staff_cdg = MainStaffCdg::staff_12},
+		MainResourceKey{.role = MainResourceRole::staff_music},
+	};
+	expect(
+		keys.size() == expected.size() &&
+			std::equal(keys.begin(), keys.end(), expected.begin()),
+		"staff closure preserves palette, source CDG slot order, then ED.M"
+	);
+	expect(
+		!th03::app::main_resource_spec({
+			.role = MainResourceRole::staff_music,
+			.staff_cdg = MainStaffCdg::staff_1,
+		}) && !th03::app::main_resource_spec({
+			.role = MainResourceRole::staff_cdg,
+			.staff_cdg = static_cast<MainStaffCdg>(0xFFU),
+		}),
+		"staff-only selectors cannot be forged onto another role or out of range"
+	);
+
+	TemporaryRoot root;
+	expect(root.valid(), "temporary staff transaction root was created");
+	if(!root.valid()) {
+		return;
+	}
+	for(std::size_t index = 0U; index + 1U < keys.size(); ++index) {
+		write_spec(root.path(), keys[index], std::byte{0x81U});
+	}
+	MainResourceLoader loader(root.path(), MainResourceIntegrity::size_only);
+	const auto failed = loader.load_mainl_staff();
+	expect(
+		!failed && loader.cached_resource_count() == 0U,
+		"a late staff closure failure publishes no partial cache entries"
+	);
+	write_spec(root.path(), keys.back(), std::byte{0x82U});
+	const auto loaded = loader.load_mainl_staff();
+	expect(
+		loaded && loaded->size() == keys.size() &&
+			loader.cached_resource_count() == keys.size(),
+		"the complete staff closure commits all immutable resources atomically"
+	);
+}
+
 void test_rejections()
 {
 	const auto enemy_key = MainResourceKey{.role = MainResourceRole::enemy_scripts};
@@ -908,6 +1003,7 @@ int main()
 	test_direct_vs_batch_and_cache();
 	test_main_private_and_mainl_stage_batches();
 	test_cutscene_resource_batches();
+	test_staff_resource_batch();
 	test_rejections();
 	test_resolved_path_escape_if_supported();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

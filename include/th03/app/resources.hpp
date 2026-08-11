@@ -29,6 +29,7 @@ enum class MainResourceScene : std::uint8_t {
 	mainl_win,
 	mainl_continue_gameover,
 	mainl_cutscene,
+	mainl_staff,
 };
 
 enum class MainResourceDecoder : std::uint8_t {
@@ -148,6 +149,24 @@ enum class MainCutsceneMusic : std::uint8_t {
 	demo5,
 };
 
+// Source CDG slot order from staffroll_and_verdict_animate(). The filenames
+// are intentionally not numerically ordered after slot 0.
+enum class MainStaffCdg : std::uint8_t {
+	none,
+	staff_1,
+	staff_11,
+	staff_3,
+	staff_4,
+	staff_5,
+	staff_6,
+	staff_7,
+	staff_8,
+	staff_9,
+	staff_10,
+	staff_2,
+	staff_12,
+};
+
 // Static roles use character == none and palette == none. Paletted character
 // roles use both fields, making the original 00..17 family explicit. The
 // stage enemy-group role uses character only because MAINL selects one of five
@@ -183,6 +202,9 @@ enum class MainResourceRole : std::uint8_t {
 	cutscene_script,
 	cutscene_picture,
 	cutscene_music,
+	staff_background_palette,
+	staff_cdg,
+	staff_music,
 };
 
 struct MainResourceKey {
@@ -193,6 +215,7 @@ struct MainResourceKey {
 	MainCutsceneScript cutscene_script = MainCutsceneScript::none;
 	MainCutscenePicture cutscene_picture = MainCutscenePicture::none;
 	MainCutsceneMusic cutscene_music = MainCutsceneMusic::none;
+	MainStaffCdg staff_cdg = MainStaffCdg::none;
 
 	friend constexpr auto operator<=>(
 		const MainResourceKey &,
@@ -308,6 +331,8 @@ mainl_continue_resource_keys(std::uint8_t remaining_credits);
 [[nodiscard]] std::expected<std::vector<MainResourceKey>, ResourceLoadError>
 mainl_cutscene_resource_keys(MainlCutsceneResourceRequest request);
 
+[[nodiscard]] std::vector<MainResourceKey> mainl_staff_resource_keys();
+
 // Importer-facing validation for the extracted-entry component. The loader
 // calls this before joining a manifest name to the explicit content root.
 [[nodiscard]] bool is_safe_extracted_entry_name(std::string_view name) noexcept;
@@ -350,6 +375,8 @@ public:
 	load_mainl_continue(std::uint8_t remaining_credits);
 	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 	load_mainl_cutscene(MainlCutsceneResourceRequest request);
+	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+	load_mainl_staff();
 
 	[[nodiscard]] std::size_t cached_resource_count() const noexcept;
 

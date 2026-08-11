@@ -1,10 +1,12 @@
 #ifndef TH03_APP_MAINL_COMPILED_TEXT_INTERNAL_HPP
 #define TH03_APP_MAINL_COMPILED_TEXT_INTERNAL_HPP
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <span>
+#include <vector>
 
 #include "classic_mainl_stage_internal.hpp"
 #include "th03/app/main_compiled_content.hpp"
@@ -19,6 +21,10 @@ enum class MainlCompiledTextItem : std::uint8_t {
 	none,
 	title,
 	name,
+	staff_rank,
+	staff_number,
+	staff_point,
+	staff_flake_masks,
 };
 
 enum class MainlCompiledTextErrorCode : std::uint8_t {
@@ -40,15 +46,24 @@ struct MainlCompiledTextError final {
 	std::size_t offset = 0U;
 };
 
+struct MainlStaffCompiledAssets final {
+	std::array<std::vector<std::uint8_t>, 4U> ranks{};
+	std::array<std::vector<std::uint8_t>, 10U> numbers{};
+	std::vector<std::uint8_t> point{};
+	std::array<std::uint8_t, 64U> flake_masks{};
+};
+
 struct MainlStageTextImport final {
 	MainlExecutableProfile profile =
 		MainlExecutableProfile::unpacked_original_japanese;
 	MainlStageTextAssets assets{};
+	MainlStaffCompiledAssets staff{};
 };
 
 // Authenticates the complete supported unpacked MAINL.EXE profile before
-// consulting any private compiled-data range. The returned text owns all
-// bytes and remains valid after the caller destroys or overwrites the input.
+// consulting any private compiled-data range. The returned text and staff
+// masks own all bytes and remain valid after the caller destroys or overwrites
+// the input.
 [[nodiscard]] std::expected<
 	MainlStageTextImport,
 	MainlCompiledTextError
