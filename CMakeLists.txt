@@ -376,6 +376,8 @@ th03_set_warnings(th03_formats)
 add_library(th03_app_main STATIC
 	src/app/classic_cutscene_scene.cpp
 	src/app/classic_mainl_continue.cpp
+	src/app/classic_op_music_room.cpp
+	src/app/classic_op_options_scene.cpp
 	src/app/classic_op_scene.cpp
 	src/app/classic_op_selection.cpp
 	src/app/classic_registration_scene.cpp
@@ -391,6 +393,7 @@ add_library(th03_app_main STATIC
 	src/app/main_process_driver.cpp
 	src/app/main_process.cpp
 	src/app/main_process_static_content.cpp
+	src/app/op_compiled_text.cpp
 )
 target_include_directories(th03_app_main PUBLIC include)
 target_link_libraries(
@@ -610,6 +613,36 @@ if(BUILD_TESTING)
 		COMMAND th03-app-classic-op-scene-tests
 	)
 
+	add_executable(th03-app-classic-op-music-room-tests
+		tests/test_app_classic_op_music_room.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-op-music-room-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-classic-op-music-room-tests PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-classic-op-music-room-tests)
+	add_test(
+		NAME th03-app-classic-op-music-room-tests
+		COMMAND th03-app-classic-op-music-room-tests
+	)
+
+	add_executable(th03-app-classic-op-options-scene-tests
+		tests/test_app_classic_op_options_scene.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-op-options-scene-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-classic-op-options-scene-tests PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-classic-op-options-scene-tests)
+	add_test(
+		NAME th03-app-classic-op-options-scene-tests
+		COMMAND th03-app-classic-op-options-scene-tests
+	)
+
 	add_executable(th03-app-classic-op-selection-tests
 		tests/test_app_classic_op_selection.cpp
 	)
@@ -623,6 +656,21 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-classic-op-selection-tests
 		COMMAND th03-app-classic-op-selection-tests
+	)
+
+	add_executable(th03-app-op-compiled-text-tests
+		tests/test_app_op_compiled_text.cpp
+	)
+	target_link_libraries(
+		th03-app-op-compiled-text-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-op-compiled-text-tests PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-op-compiled-text-tests)
+	add_test(
+		NAME th03-app-op-compiled-text-tests
+		COMMAND th03-app-op-compiled-text-tests
 	)
 
 	if(TH03_ENABLE_SDL)
