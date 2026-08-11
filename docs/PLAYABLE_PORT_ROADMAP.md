@@ -139,8 +139,9 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   read-back-validated atomic whole-file replacement. The integrated MAINL
   registration scene now owns the exact retained-Raster composition, source
   input cadence and codec RNG schedule, and final atomic commit without leaking
-  Raster or RNG into persistence. The OP score viewer and configuration format
-  remain separate later application work.
+  Raster or RNG into persistence. The exact eight-byte `YUME.CFG` codec and
+  atomic store are also integrated; OP score and option views remain separate
+  presentation work.
 
 The direct developer slice is now visible and interactive. It is not yet VS-2
 or VS-3 complete: exact source cadence/phase, fixed-script full-match routing,
@@ -284,7 +285,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
 | OP menus, Story, MAINL, cutscenes, staff | Story integrated; OP pending | The validated fresh-Story config, source-private route policy, exact stage splash, campaign-static MAIN content, transactional Raster handoffs, winner scene, Continue choice, Game Over timeline, owning session loop, authenticated cutscene and staff resources, complete typed script VM, exact two-page Raster executors, both interstages, primary and conditional extra endings, staff/verdict, score persistence, and MAINL high-score registration are integrated. OP remains. |
 | Audio | No for the explicitly marked silent visual vertical slice; yes for a fully faithful release | Start source/data investigation now, but do not block visible MAIN on an invented WAV backend. |
-| Persistent score/configuration UI and localization/QoL | Registration integrated; OP/config pending | The exact original score codec, source mutation rules, validated atomic whole-file store, and MAINL registration scene are app-owned and byte-exact. Add only the OP score view and separate configuration format without moving persistence into core. |
+| Persistent score/configuration UI and localization/QoL | Persistence integrated; OP UI pending | The exact original score/config codecs, source mutation rules, validated atomic whole-file stores, and MAINL registration scene are app-owned and byte-exact. Add the OP score and Option views without moving persistence into core. |
 
 The following parcels can proceed now, provided they do not claim readiness for VS or change core semantics:
 

@@ -172,14 +172,17 @@ split comparisons. Original game data and replay captures remain external.
   byte cache. Original/extracted files remain local inputs and never enter the
   repository.
 - `th03_app_persistence` owns exact, allocation-free Classic persistent-value
-  codecs, source mutation rules, and the checked `YUME.NEM` filesystem
-  transaction. It preserves all four independently encrypted rank sections,
-  the encrypted checksum, explicit codec keys, stock decoy rows, tie-sinking
-  insertion, and backwards name storage. Missing or malformed files reproduce
-  the source's all-rank stock recovery, while commits use one same-directory,
-  flushed, read-back-validated atomic replacement. It draws no registration UI
-  and receives codec fields rather than owning gameplay RNG; the owning MAINL
-  registration scene supplies both at the source-ordered commit boundary.
+  codecs, source mutation rules, and checked `YUME.NEM` / `YUME.CFG`
+  filesystem transactions. It preserves all four independently encrypted
+  rank sections, the encrypted checksum, explicit codec keys, stock decoy
+  rows, tie-sinking insertion, and backwards name storage. Missing or
+  malformed files reproduce the source's all-rank stock recovery, while
+  commits use one same-directory, flushed, read-back-validated atomic
+  replacement. It draws no registration UI and receives codec fields rather
+  than owning gameplay RNG; the owning MAINL registration scene supplies both
+  at the source-ordered commit boundary. The configuration codec also
+  preserves the exact eight-byte Classic layout while native writes zero
+  DOS-only resident/debug/unused metadata.
 - `th03_app_content` owns authenticated process-lifetime content that is not a
   standalone archive resource: compiled MAIN score/pellet/text tables, the
   prepared GAMEFT gaiji bank, and the external PC-98 ANK/JIS font provider.
