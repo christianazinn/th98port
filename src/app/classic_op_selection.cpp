@@ -1133,8 +1133,8 @@ bool ClassicOpCharacterSelection::finish_selected() noexcept
 		return false;
 	}
 	completion_ = ClassicOpSelectionCompletion(
-		ClassicOpSelectionOutcome::selected, mode_, std::move(resident_),
-		carry_, std::move(raster_), std::move(tram_)
+		ClassicOpSelectionOutcome::selected, mode_, resident_, carry_,
+		raster_, tram_
 	);
 	phase_ = ClassicOpSelectionPhase::ready;
 	return true;
@@ -1158,8 +1158,8 @@ void ClassicOpCharacterSelection::finish_canceled() noexcept
 		return;
 	}
 	completion_ = ClassicOpSelectionCompletion(
-		ClassicOpSelectionOutcome::canceled, mode_, std::move(resident_),
-		carry_, std::move(raster_), std::move(tram_)
+		ClassicOpSelectionOutcome::canceled, mode_, resident_, carry_,
+		raster_, tram_
 	);
 	phase_ = ClassicOpSelectionPhase::ready;
 }

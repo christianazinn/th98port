@@ -495,6 +495,13 @@ int fail(const char *stage, const th03::app::ClassicRunnerError &error)
 			) << '\n';
 		}
 	}
+	if(error.surface_error) {
+		std::cerr << "surface-code=" << static_cast<unsigned int>(
+			error.surface_error->code
+		) << "\ntext-code=" << static_cast<unsigned int>(
+			error.surface_error->text.code
+		) << '\n';
+	}
 	return 1;
 }
 

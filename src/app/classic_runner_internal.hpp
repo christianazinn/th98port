@@ -40,6 +40,9 @@ struct ClassicRunnerTestAccess final {
 		const LogicalTickInput &sample,
 		ClassicAudioStatus audio = {.volume = 255U}
 	) noexcept;
+	[[nodiscard]] static ClassicOpSessionScene scene(
+		const ClassicRunner &runner
+	) noexcept;
 
 	[[nodiscard]] static std::expected<
 		std::vector<std::byte>,

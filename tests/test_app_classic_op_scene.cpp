@@ -456,7 +456,11 @@ void test_demo_timeout_and_blackout()
 	}
 	expect(
 		scene->phase() == ClassicOpPhase::ready &&
-			scene->raster().palette_tone() == 0,
+			scene->raster().palette_tone() == 0 &&
+			scene->raster().graphics(Page::zero).size() ==
+				th03::present::graphics_page_pixels &&
+			scene->raster().graphics(Page::one).size() ==
+				th03::present::graphics_page_pixels,
 		"palette_black_out(1) consumes one alignment plus seventeen fade VSyncs"
 	);
 	const auto stop = scene->take_audio_command();
@@ -492,7 +496,8 @@ void test_long_title_cadence()
 	expect_start_audio(*scene);
 	expect(
 		scene->resident().fast_op_animation == 1U &&
-			scene->raster().shown_page() == Page::one,
+			scene->raster().shown_page() == Page::one &&
+			scene->raster().pixel(Page::zero, {639, 0}) == 7U,
 		"long title toggles the next startup to fast and initially shows page 1"
 	);
 	for(std::uint16_t frame = 0U; frame < 72U; ++frame) {
@@ -501,6 +506,11 @@ void test_long_title_cadence()
 	expect(
 		scene->phase() == ClassicOpPhase::long_background_fade,
 		"title kanji shift consumes exactly 72 page-flipped frames"
+	);
+	expect(
+		scene->raster().pixel(Page::zero, {639, 0}) == 7U &&
+			scene->raster().pixel(Page::one, {639, 0}) == 7U,
+		"whole-page EGC shift retains the old right edge instead of exposing black"
 	);
 	for(std::uint16_t frame = 0U; frame < 56U; ++frame) {
 		expect(scene->advance().has_value(), "long background fade advances");

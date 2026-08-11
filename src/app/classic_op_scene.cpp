@@ -604,11 +604,9 @@ bool ClassicOpTitleMenuScene::shift_access_page_left(
 		return false;
 	}
 	std::copy(source.begin(), source.end(), page_snapshot_.begin());
-	if(!raster_.clear(
-		{0, 0, present::graphics_width, present::graphics_height}, 0U
-	)) {
-		return false;
-	}
+	// egc_shift_left_all() programs a [640 - pixels]-bit transfer. It does
+	// not clear the vacated edge; the rightmost pixels retain their previous
+	// VRAM contents while the copied prefix shifts left.
 	const present::IndexedSource shifted{
 		std::span<const present::Index4>(page_snapshot_).subspan(pixels),
 		static_cast<std::uint16_t>(present::graphics_width - pixels),
@@ -904,8 +902,7 @@ void ClassicOpTitleMenuScene::select_route(
 	}
 	completion_ = ClassicOpCompletion(
 		route, selection_mode, route == ClassicOpRoute::versus,
-		std::move(resident_), std::move(raster_),
-		std::move(tram_)
+		resident_, raster_, tram_
 	);
 	phase_ = ClassicOpPhase::ready;
 }

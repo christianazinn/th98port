@@ -1,5 +1,6 @@
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
 
 #include "default_bindings.hpp"
@@ -43,7 +44,7 @@ void test_classic_defaults()
 	using th03::platform::SdlKeyboardBinding;
 	using th03::platform::SdlLogicalAction;
 	const auto bindings = th03::app::detail::classic_direct_vs_bindings();
-	expect(bindings.keyboard_count == 36U,
+	expect(bindings.keyboard_count == 38U,
 		"Classic preset has exact player and source-global keyboard contributions");
 	expect(key_matches(bindings, SDL_SCANCODE_R,
 		th03::platform::SdlInputPlayer::p1) == 1U &&
@@ -65,6 +66,11 @@ void test_classic_defaults()
 		key_matches(bindings, SDL_SCANCODE_RETURN,
 			th03::platform::SdlInputPlayer::p1) == 1U,
 		"Escape and Return retain source-global Cancel and OK bindings");
+	expect(key_matches(bindings, SDL_SCANCODE_UP,
+		th03::platform::SdlInputPlayer::p1) == 1U &&
+		key_matches(bindings, SDL_SCANCODE_DOWN,
+			th03::platform::SdlInputPlayer::p1) == 1U,
+		"arrow Up and Down navigate source-global Classic UI menus");
 	for(std::size_t index = 0U; index < bindings.keyboard_count; ++index) {
 		expect(bindings.keyboard[index].action !=
 			th03::platform::SdlLogicalAction::charge,
@@ -73,7 +79,7 @@ void test_classic_defaults()
 	expect(bindings.gamepad_button_count == 14U &&
 		bindings.gamepad_axis_count == 8U,
 		"controller preset contributes every gameplay action to the source UI domain");
-	constexpr std::array<SdlKeyboardBinding, 36U> expected_keys{{
+	constexpr std::array<SdlKeyboardBinding, 38U> expected_keys{{
 		{SDL_SCANCODE_T, SdlInputPlayer::p1, SdlLogicalAction::up},
 		{SDL_SCANCODE_B, SdlInputPlayer::p1, SdlLogicalAction::down},
 		{SDL_SCANCODE_F, SdlInputPlayer::p1, SdlLogicalAction::left},
@@ -90,6 +96,8 @@ void test_classic_defaults()
 		{SDL_SCANCODE_RETURN, SdlInputPlayer::p1, SdlLogicalAction::ok},
 		{SDL_SCANCODE_Q, SdlInputPlayer::p1, SdlLogicalAction::q},
 		{SDL_SCANCODE_SPACE, SdlInputPlayer::p1, SdlLogicalAction::single_shot},
+		{SDL_SCANCODE_UP, SdlInputPlayer::p1, SdlLogicalAction::single_up},
+		{SDL_SCANCODE_DOWN, SdlInputPlayer::p1, SdlLogicalAction::single_down},
 		{SDL_SCANCODE_KP_8, SdlInputPlayer::p2, SdlLogicalAction::up},
 		{SDL_SCANCODE_KP_8, SdlInputPlayer::p2, SdlLogicalAction::single_up},
 		{SDL_SCANCODE_KP_2, SdlInputPlayer::p2, SdlLogicalAction::down},
@@ -168,11 +176,90 @@ void test_classic_defaults()
 	}
 }
 
+SDL_Gamepad *fake_open_gamepad(void *context, SDL_JoystickID) noexcept
+{
+	return static_cast<SDL_Gamepad *>(context);
+}
+
+void fake_close_gamepad(void *, SDL_Gamepad *) noexcept
+{}
+
+SDL_Event key_event(
+	std::uint64_t timestamp,
+	SDL_WindowID window,
+	SDL_Scancode scancode,
+	bool down
+) noexcept
+{
+	SDL_Event event{};
+	event.type = down ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
+	event.key.timestamp = timestamp;
+	event.key.windowID = window;
+	event.key.scancode = scancode;
+	event.key.down = down;
+	return event;
+}
+
+void test_arrow_ui_channel_through_mapper()
+{
+	constexpr SDL_WindowID window = 17U;
+	std::uint8_t backend_token = 0U;
+	auto mapper = th03::platform::SdlInputMapper::create(
+		th03::app::detail::classic_direct_vs_bindings(), window,
+		{
+			.context = &backend_token,
+			.open = &fake_open_gamepad,
+			.close = &fake_close_gamepad,
+		}
+	);
+	auto scheduler = th03::app::TickInputScheduler::create(
+		{100'000'000U, 1U}, 10U
+	);
+	expect(mapper.has_value() && scheduler.has_value(),
+		"Classic defaults create a real mapper and logical scheduler");
+	if(!mapper || !scheduler) { return; }
+
+	const auto up_down = mapper->handle_event(
+		key_event(10U, window, SDL_SCANCODE_UP, true), *scheduler
+	);
+	const auto first = scheduler->pop_due(10U);
+	expect(
+		up_down && first && *first && (**first).input.system == 0x0001U &&
+			(**first).input.p1 == 0U && (**first).input.p2 == 0U,
+		"Arrow Up reaches only the source-global Classic UI channel"
+	);
+
+	const auto up_release = mapper->handle_event(
+		key_event(11U, window, SDL_SCANCODE_UP, false), *scheduler
+	);
+	const auto down_press = mapper->handle_event(
+		key_event(12U, window, SDL_SCANCODE_DOWN, true), *scheduler
+	);
+	const auto second = scheduler->pop_due(20U);
+	expect(
+		up_release && down_press && second && *second &&
+			(**second).input.system == 0x0002U &&
+			(**second).input.p1 == 0U && (**second).input.p2 == 0U,
+		"Arrow Down survives the complete mapper/scheduler path without gameplay input"
+	);
+
+	const auto down_release = mapper->handle_event(
+		key_event(21U, window, SDL_SCANCODE_DOWN, false), *scheduler
+	);
+	const auto released = scheduler->pop_due(30U);
+	expect(
+		down_release && released && *released &&
+			(**released).input.system == 0U,
+		"Arrow release clears the Classic UI contribution"
+	);
+}
+
 } // namespace
 
 int main()
 {
 	test_classic_defaults();
+	test_arrow_ui_channel_through_mapper();
 	if(failures != 0U) {
 		std::cerr << failures << " of " << checks
 			<< " SDL default-binding checks failed\n";

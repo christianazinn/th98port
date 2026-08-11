@@ -531,21 +531,141 @@ bool authentic_gate(
 	if(!runner.compose_shown_surface(pixels)) {
 		return false;
 	}
-	while(runner.take_audio_command()) {
-	}
-	for(std::uint64_t tick = 0U; tick < 8U; ++tick) {
-		auto advanced = runner.consume({
-			.tick_index = tick,
-			.deadline_ns = tick * 10U,
-		});
-		if(!advanced || advanced->status !=
-			th03::app::ClassicRunnerStatus::running) {
-			return false;
-		}
+	auto drain_audio = [&runner]() {
 		while(runner.take_audio_command()) {
 		}
+	};
+	drain_audio();
+	std::uint64_t tick_index = 0U;
+	std::optional<th03::app::ClassicRunnerConsumeResult> last{};
+	const auto step = [&](std::uint16_t system = 0U) {
+		th03::CoreInput input{};
+		input.system = system;
+		auto advanced = runner.consume({
+			.tick_index = tick_index,
+			.deadline_ns = tick_index * 10U,
+			.input = input,
+		});
+		++tick_index;
+		if(!advanced || advanced->status !=
+			th03::app::ClassicRunnerStatus::running) {
+			std::cerr << "authentic-script-step=" << tick_index - 1U;
+			if(!advanced) {
+				std::cerr << " code=" << static_cast<unsigned>(
+					advanced.error().code
+				) << " detail=" << static_cast<unsigned>(
+					advanced.error().detail_code
+				);
+			}
+			std::cerr << '\n';
+			return false;
+		}
+		last = *advanced;
+		drain_audio();
+		return !advanced->surface_changed ||
+			runner.compose_shown_surface(pixels).has_value();
+	};
+
+	// Reach the first title input poll, open the menu, and lock the exact
+	// TRAM-only publication that was previously dropped by the session wrapper.
+	bool reached_input = false;
+	for(std::size_t frame = 0U; frame < 300U && !reached_input; ++frame) {
+		if(!step()) { return false; }
+		reached_input = last->input_sampled;
 	}
-	return runner.compose_shown_surface(pixels).has_value();
+	if(!reached_input || !step(0x0020U)) { return false; }
+	bool menu_drawn = false;
+	for(std::size_t frame = 0U; frame < 32U && !menu_drawn; ++frame) {
+		if(!step()) { return false; }
+		menu_drawn = last->input_sampled;
+	}
+	if(!menu_drawn || !last->surface_changed || std::ranges::none_of(
+		pixels, [](const auto &pixel) {
+			return pixel.layer == th03::present::ComposedPixelLayer::text;
+		}
+	)) {
+		std::cerr << "authentic-script-stage=menu tick=" << tick_index << '\n';
+		return false;
+	}
+
+	// Navigate away and back with the source-global arrow channel, then enter
+	// Story. This distinguishes working UI directions from Shot-only control.
+	if(!step(0x0002U) || !last->surface_changed || !step() ||
+		!step(0x0001U) || !last->surface_changed || !step() ||
+		!step(0x0020U) ||
+		th03::app::ClassicRunnerTestAccess::scene(runner) !=
+			th03::app::ClassicOpSessionScene::character_selection) {
+		std::cerr << "authentic-script-stage=title-route tick=" << tick_index
+			<< " scene=" << static_cast<unsigned>(
+				th03::app::ClassicRunnerTestAccess::scene(runner)
+			) << '\n';
+		return false;
+	}
+
+	// Wait for the selector's first poll, move Reimu->Mima->Reimu with arrows,
+	// release each latch, and confirm. Every changed frame is composed so the
+	// ready-with-pending-Stop ownership boundary is exercised, not bypassed.
+	reached_input = false;
+	for(std::size_t frame = 0U; frame < 64U && !reached_input; ++frame) {
+		if(!step()) { return false; }
+		reached_input = last->input_sampled;
+	}
+	const auto hold_until_sampled = [&](std::uint16_t system) {
+		for(std::size_t frame = 0U; frame < 8U; ++frame) {
+			if(!step(system)) { return false; }
+			if(last->input_sampled) { return true; }
+		}
+		return false;
+	};
+	if(!reached_input || !hold_until_sampled(0x0002U) ||
+		!hold_until_sampled(0U) || !hold_until_sampled(0x0001U) ||
+		!hold_until_sampled(0U) || !hold_until_sampled(0x0020U)) {
+		return false;
+	}
+	for(std::size_t frame = 0U; frame < 256U; ++frame) {
+		if(!step()) { return false; }
+		if(th03::app::ClassicRunnerTestAccess::scene(runner) ==
+			th03::app::ClassicOpSessionScene::story) {
+			break;
+		}
+	}
+	if(th03::app::ClassicRunnerTestAccess::scene(runner) !=
+		th03::app::ClassicOpSessionScene::story) {
+		std::cerr << "authentic-script-stage=selection-timeout tick="
+			<< tick_index << " scene=" << static_cast<unsigned>(
+				th03::app::ClassicRunnerTestAccess::scene(runner)
+			) << '\n';
+		return false;
+	}
+
+	// Drive the real MAINL splash into its input window, dismiss it, complete
+	// both palette fades, and require the first MAIN simulation frame. This is
+	// the supplied-content regression for the former moved-from Raster failure
+	// that surfaced only after selecting a character in the windowed build.
+	reached_input = false;
+	for(std::size_t frame = 0U; frame < 64U && !reached_input; ++frame) {
+		if(!step()) { return false; }
+		reached_input = last->input_sampled;
+	}
+	if(!reached_input) {
+		std::cerr << "authentic-script-stage=splash-input-timeout tick="
+			<< tick_index << '\n';
+		return false;
+	}
+	for(std::size_t frame = 0U; frame < 33U; ++frame) {
+		if(!step()) { return false; }
+	}
+	if(!step(0x0020U)) { return false; }
+	for(std::size_t frame = 0U; frame < 96U; ++frame) {
+		if(!step()) { return false; }
+		if(last->process_advanced) {
+			return last->surface_changed &&
+				runner.compose_shown_surface(pixels).has_value();
+		}
+	}
+	std::cerr << "authentic-script-stage=main-start-timeout tick="
+		<< tick_index << '\n';
+	return false;
 }
 
 } // namespace

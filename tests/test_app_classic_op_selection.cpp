@@ -729,6 +729,13 @@ void test_story_success()
 	}
 	expect(scene->phase() == ClassicOpSelectionPhase::ready,
 		"Story selection reaches the source fade terminal");
+	expect(
+		scene->raster().graphics(Page::zero).size() ==
+			th03::present::graphics_page_pixels &&
+		scene->raster().graphics(Page::one).size() ==
+			th03::present::graphics_page_pixels,
+		"selected scene remains composable while its Stop command is pending"
+	);
 	const auto stop = scene->take_audio_command();
 	expect(stop && stop->type == ClassicAudioCommandType::stop_song,
 		"Story handoff stops SELECT.M");

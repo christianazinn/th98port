@@ -668,7 +668,7 @@ struct ClassicOpSessionBackend final {
 			));
 		}
 		return ClassicOpSessionBackendTick{
-			.surface_changed = tick->surface_changed,
+			.surface_changed = tick->surface_changed || tick->tram_changed,
 			.input_sampled = tick->input_sampled,
 			.ready = tick->ready,
 		};
@@ -739,7 +739,7 @@ struct ClassicOpSessionBackend final {
 			));
 		}
 		return ClassicOpSessionBackendTick{
-			.surface_changed = tick->surface_changed,
+			.surface_changed = tick->surface_changed || tick->tram_changed,
 			.input_sampled = tick->input_sampled,
 			.ready = tick->ready,
 		};

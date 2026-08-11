@@ -72,6 +72,10 @@ SdlInputBindings classic_direct_vs_bindings() noexcept
 		SdlLogicalAction::q);
 	add_key(bindings, SDL_SCANCODE_SPACE, SdlInputPlayer::p1,
 		SdlLogicalAction::single_shot);
+	add_key(bindings, SDL_SCANCODE_UP, SdlInputPlayer::p1,
+		SdlLogicalAction::single_up);
+	add_key(bindings, SDL_SCANCODE_DOWN, SdlInputPlayer::p1,
+		SdlLogicalAction::single_down);
 
 	add_dual(bindings, SDL_SCANCODE_KP_8, SdlInputPlayer::p2,
 		SdlLogicalAction::up, SdlLogicalAction::single_up);

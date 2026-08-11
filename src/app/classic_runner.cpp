@@ -456,6 +456,15 @@ ClassicOpSessionInput ClassicRunnerTestAccess::project_input(
 	return project_session_input(sample, audio);
 }
 
+ClassicOpSessionScene ClassicRunnerTestAccess::scene(
+	const ClassicRunner &runner
+) noexcept
+{
+	return static_cast<const ClassicOpSession *>(
+		runner.impl_->operations.context
+	)->scene();
+}
+
 std::expected<std::vector<std::byte>, ClassicRunnerError>
 ClassicRunnerTestAccess::read_file(
 	const std::filesystem::path &path,
