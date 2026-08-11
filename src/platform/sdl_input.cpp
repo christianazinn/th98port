@@ -310,7 +310,7 @@ std::expected<SdlInputMapper, SdlInputMapperError> SdlInputMapper::create(
 	const bool native_backend = gamepad_backend.context == nullptr &&
 		gamepad_backend.open == native_open_gamepad &&
 		gamepad_backend.close == native_close_gamepad;
-	if(native_backend && !detail::acquire_native_mapper_runtime()) {
+	if(native_backend && !detail::acquire_platform_runtime_lease()) {
 		return std::unexpected(mapper_error(
 			SdlInputMapperErrorCode::runtime_unavailable
 		));
@@ -327,7 +327,7 @@ SdlInputMapper::~SdlInputMapper()
 {
 	close_connected_gamepads();
 	if(native_runtime_lease_) {
-		detail::release_native_mapper_runtime();
+		detail::release_platform_runtime_lease();
 	}
 }
 

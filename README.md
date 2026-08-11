@@ -9,10 +9,10 @@ strict V13 span adapter and the first stdlib-only asset/indexed-raster
 foundations now sit beside that core. An optional SDL 3 application now launches
 both the complete authenticated Classic OP/MAINL/MAIN lifecycle and the earlier
 direct-VS developer path. A separate byte-fed PMD/YM2608 engine and TH03
-transport/SFX service, bounded `YUME.EFC` playback on FM6, and a deterministic
-166.4-to-48 kHz resampler are now present, but Classic still follows the source's
-sound-unavailable fallback until SDL-device and scene-command integration are
-complete.
+transport/SFX service, bounded `YUME.EFC` playback on FM6, deterministic
+166.4-to-48 kHz resampling, and a bounded SDL playback endpoint are now present,
+but Classic still follows the source's sound-unavailable fallback until semantic
+scene-command/content integration is complete.
 
 ## Build and test
 
@@ -70,8 +70,8 @@ Kotohime additionally requires the explicit developer flag
 `--kotohime-zero-red` until her source-uninitialized Bomb fade byte has an
 evidence-backed release policy. The Classic path currently drains semantic
 audio commands into a deterministic silent backend; the offline PMD/OPNA/EFC
-service and fixed resampler are not yet connected to scene commands or an audio
-device and therefore are not an audio-fidelity claim. `--help` lists
+service, fixed resampler, and SDL device endpoint are not yet connected to those
+commands and therefore are not an audio-fidelity claim. `--help` lists
 keyboard controls and all launch options.
 
 Validate an external frozen case without copying it into this repository:

@@ -398,13 +398,14 @@ th03_set_warnings(th03_app_runtime)
 
 if(TH03_ENABLE_SDL)
 	add_library(th03_platform_sdl STATIC
+		src/platform/sdl_audio_device.cpp
 		src/platform/sdl_input.cpp
 		src/platform/sdl_platform.cpp
 	)
 	target_include_directories(th03_platform_sdl PUBLIC include)
 	target_link_libraries(
 		th03_platform_sdl
-		PUBLIC th03_app_runtime SDL3::SDL3-shared
+		PUBLIC th03_app_runtime th03_audio_pmd SDL3::SDL3-shared
 	)
 	target_compile_features(th03_platform_sdl PUBLIC cxx_std_23)
 	set_target_properties(th03_platform_sdl PROPERTIES CXX_EXTENSIONS OFF)
@@ -863,11 +864,33 @@ if(BUILD_TESTING)
 			COMMAND th03-platform-sdl-platform-tests
 		)
 
+		add_executable(th03-platform-sdl-audio-tests
+			tests/test_platform_sdl_audio.cpp
+		)
+		target_link_libraries(
+			th03-platform-sdl-audio-tests PRIVATE th03_platform_sdl
+		)
+		target_include_directories(
+			th03-platform-sdl-audio-tests PRIVATE src/platform
+		)
+		th03_set_warnings(th03-platform-sdl-audio-tests)
+		th03_stage_sdl3_runtime(th03-platform-sdl-audio-tests)
+		th03_stage_audio_licenses(th03-platform-sdl-audio-tests)
+		add_test(
+			NAME th03-platform-sdl-audio-tests
+			COMMAND th03-platform-sdl-audio-tests
+		)
+
 		set_tests_properties(
 			th03-platform-sdl-input-tests
 			th03-platform-sdl-platform-tests
 			PROPERTIES ENVIRONMENT
 				"SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software"
+		)
+		set_tests_properties(
+			th03-platform-sdl-audio-tests
+			PROPERTIES ENVIRONMENT
+				"SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_AUDIO_DRIVER=dummy"
 		)
 	endif()
 

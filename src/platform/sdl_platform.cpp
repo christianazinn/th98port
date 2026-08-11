@@ -108,7 +108,7 @@ void release_platform_runtime() noexcept
 	}
 }
 
-bool acquire_native_mapper_runtime() noexcept
+bool acquire_platform_runtime_lease() noexcept
 {
 	if(!platform_runtime_active || platform_runtime_leases == 0U) {
 		return false;
@@ -117,7 +117,7 @@ bool acquire_native_mapper_runtime() noexcept
 	return true;
 }
 
-void release_native_mapper_runtime() noexcept
+void release_platform_runtime_lease() noexcept
 {
 	if(platform_runtime_leases != 0U) {
 		--platform_runtime_leases;

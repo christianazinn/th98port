@@ -529,6 +529,16 @@ final device-only conversion occurs afterward and is excluded from canonical
 hashes. Neither host device time nor its conversion state may feed back into
 PMD, presentation, gameplay, or replay timing.
 
+The SDL 3.4.10 endpoint now opens the default playback device with this exact
+S32/stereo/48 kHz app-side format. Its source queue is capped at 4,800 frames
+(100 ms): an overrun clears stale unconverted input and keeps the newest block,
+while counting discarded frames and the discontinuity. Queue failure, underrun,
+device conversion, pause, and resume remain final-output facts only. The audio
+owner shares the process-exclusive SDL runtime through a subordinate lease and
+balances `SDL_INIT_AUDIO` independently from video/gamepad ownership. Dummy
+driver tests lock format, queue accounting, failure unwind, moves, and both
+destruction orders; physical WASAPI and hotplug remain release QA.
+
 This makes three validation levels explicit:
 
 - PMD service/register traces: exact behavioral oracle;
