@@ -1038,6 +1038,37 @@ ClassicStorySession::create(
 }
 
 std::expected<std::unique_ptr<ClassicStorySession>, ClassicStorySessionError>
+ClassicStorySession::create(
+	const MainStoryConfig &config,
+	std::unique_ptr<MainResourceLoader> loader,
+	MainCompiledContent compiled_content,
+	std::span<const std::byte> font_rom,
+	std::span<const std::byte> mainl_executable
+)
+{
+	if(!valid_main_story_config(config)) {
+		return std::unexpected(session_error(
+			ClassicStorySessionErrorCode::invalid_config
+		));
+	}
+	auto text = import_mainl_stage_text(mainl_executable);
+	if(!text) {
+		auto error = session_error(
+			ClassicStorySessionErrorCode::mainl_text_failed
+		);
+		error.mainl_text_error.emplace(std::move(text.error()));
+		return std::unexpected(std::move(error));
+	}
+	return create(
+		config,
+		std::move(loader),
+		std::move(compiled_content),
+		font_rom,
+		std::move(text->assets)
+	);
+}
+
+std::expected<std::unique_ptr<ClassicStorySession>, ClassicStorySessionError>
 ClassicStorySession::create_with_backend(
 	const MainStoryConfig &config,
 	std::shared_ptr<void> backend_owner,

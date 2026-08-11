@@ -151,6 +151,9 @@ split comparisons. Original game data and replay captures remain external.
   over Stage, retained MAIN, Win, Continue, and Game Over. Remaining cutscene,
   high-score, ending, and extra-ending scenes enter through single-use typed
   requests; no second campaign or resident-state model is exposed.
+- The same boundary authenticates the supported unpacked Japanese `MAINL.EXE`
+  and owns its exact Story title/name table. Packed DIET executable support is
+  not yet provided; original text bytes remain external and uncommitted.
 - `th03_app_resources` owns the checked external-content root and immutable
   byte cache. Original/extracted files remain local inputs and never enter the
   repository.

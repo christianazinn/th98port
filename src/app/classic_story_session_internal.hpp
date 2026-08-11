@@ -12,6 +12,7 @@
 #include "classic_mainl_stage_internal.hpp"
 #include "classic_mainl_story_internal.hpp"
 #include "classic_mainl_win_internal.hpp"
+#include "mainl_compiled_text_internal.hpp"
 #include "main_process_driver_internal.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/present/source_surface.hpp"
@@ -60,6 +61,7 @@ enum class ClassicStorySessionErrorCode : std::uint8_t {
 	static_content_failed,
 	stage_failed,
 	main_failed,
+	mainl_text_failed,
 	win_failed,
 	continue_failed,
 	game_over_failed,
@@ -76,6 +78,7 @@ struct ClassicStorySessionError final {
 		ClassicStorySessionErrorCode::invalid_config;
 	std::optional<ResourceLoadError> resource_error{};
 	std::optional<MainProcessError> main_error{};
+	std::optional<MainlCompiledTextError> mainl_text_error{};
 	std::optional<ClassicMainlStageError> stage_error{};
 	std::optional<ClassicMainlWinError> win_error{};
 	std::optional<ClassicMainlContinueError> continue_error{};
@@ -186,6 +189,16 @@ public:
 		MainCompiledContent compiled_content,
 		std::span<const std::byte> font_rom,
 		MainlStageTextAssets stage_text
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicStorySession>,
+		ClassicStorySessionError
+	> create(
+		const MainStoryConfig &config,
+		std::unique_ptr<MainResourceLoader> loader,
+		MainCompiledContent compiled_content,
+		std::span<const std::byte> font_rom,
+		std::span<const std::byte> mainl_executable
 	);
 	~ClassicStorySession();
 

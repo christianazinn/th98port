@@ -551,23 +551,15 @@ std::optional<std::vector<std::byte>> read_file(
 	return bytes;
 }
 
-th03::app::MainlStageTextAssets local_stage_text()
-{
-	th03::app::MainlStageTextAssets text{};
-	for(auto &character : text.characters) {
-		character.title = {static_cast<std::uint8_t>('A')};
-		character.name = {static_cast<std::uint8_t>('B')};
-	}
-	return text;
-}
-
 bool run_local_original_gate(
 	const std::filesystem::path &content_root,
-	const std::filesystem::path &main_executable_path
+	const std::filesystem::path &main_executable_path,
+	const std::filesystem::path &mainl_executable_path
 )
 {
 	const auto main_executable = read_file(main_executable_path);
-	if(!main_executable) {
+	const auto mainl_executable = read_file(mainl_executable_path);
+	if(!main_executable || !mainl_executable) {
 		return false;
 	}
 	auto compiled = th03::app::import_main_compiled_content(*main_executable);
@@ -583,7 +575,7 @@ bool run_local_original_gate(
 		std::make_unique<th03::app::MainResourceLoader>(content_root),
 		std::move(*compiled),
 		font_rom,
-		local_stage_text()
+		*mainl_executable
 	);
 	if(!created) {
 		std::cerr << "local session create failed code="
@@ -644,11 +636,12 @@ int main(int argc, char **argv)
 	test_complete_nine_stage_route();
 	test_continue_accept_decline_and_zero_credit();
 	test_external_token_quit_and_backend_failure();
-	if(argc == 3) {
-		expect(run_local_original_gate(argv[1], argv[2]),
+	if(argc == 4) {
+		expect(run_local_original_gate(argv[1], argv[2], argv[3]),
 			"local original assets construct Stage, retained MAIN, and surface");
 	} else if(argc != 1) {
-		expect(false, "usage requires content root and MAIN.EXE together");
+		expect(false,
+			"usage requires content root, MAIN.EXE, and unpacked MAINL.EXE");
 	}
 
 	if(failures != 0U) {

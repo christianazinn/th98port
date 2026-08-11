@@ -27,8 +27,9 @@ struct MainlStageCharacterText final {
 	std::vector<std::uint8_t> name{};
 };
 
-// Owning typed seam used until the authenticated stock DIET-packed MAINL.EXE
-// importer lands. No original text bytes are compiled into the port.
+// Owning typed seam produced by the authenticated MAINL profile importer or
+// supplied directly by source-private hermetic tests. No original text bytes
+// are compiled into the port.
 struct MainlStageTextAssets final {
 	std::array<MainlStageCharacterText, 9U> characters{};
 };

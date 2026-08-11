@@ -118,6 +118,11 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   VS, performs next-stage hidden-page preload at the winner boundary, retains
   loss state through Continue, and emits single-use typed requests for the
   remaining cutscene, registration, ending, and extra-ending scenes.
+- Its Stage title/name content now comes from a full-file-authenticated unpacked
+  Japanese `MAINL.EXE` profile. All 18 Shift-JIS fields are copied into owning
+  typed storage before scene construction; no donor string is compiled into the
+  port. The shipped DIET-packed executable remains a later compatibility
+  profile rather than an unauthenticated scan/fallback.
 
 The direct developer slice is now visible and interactive. It is not yet VS-2
 or VS-3 complete: exact source cadence/phase, fixed-script full-match routing,

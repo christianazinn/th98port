@@ -366,6 +366,7 @@ add_library(th03_app_main STATIC
 	src/app/direct_vs_cli.cpp
 	src/app/direct_vs_launch.cpp
 	src/app/main_direct_vs_runner.cpp
+	src/app/mainl_compiled_text.cpp
 	src/app/main_process_driver.cpp
 	src/app/main_process.cpp
 	src/app/main_process_static_content.cpp
@@ -608,6 +609,21 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-main-direct-vs-runner-tests
 		COMMAND th03-app-main-direct-vs-runner-tests
+	)
+
+	add_executable(th03-app-mainl-compiled-text-tests
+		tests/test_app_mainl_compiled_text.cpp
+	)
+	target_link_libraries(
+		th03-app-mainl-compiled-text-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-mainl-compiled-text-tests PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-mainl-compiled-text-tests)
+	add_test(
+		NAME th03-app-mainl-compiled-text-tests
+		COMMAND th03-app-mainl-compiled-text-tests
 	)
 
 	add_executable(th03-app-classic-mainl-story-tests
