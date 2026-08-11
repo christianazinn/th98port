@@ -556,8 +556,13 @@ bool grcg_polygon_c_blue(
 		return (index == last_index) ? 0U : (index + 1U);
 	};
 
-	const auto left_upper_index = left_index;
+	auto left_upper_index = left_index;
 	for(std::size_t skipped = 0U;; ++skipped) {
+		// grcg_polygon_c.asm updates CX before every decrement. If several
+		// vertices are above ClipYT, the intersection therefore starts at the
+		// final skipped vertex adjacent to the first visible one, not at the
+		// polygon's original top anchor.
+		left_upper_index = left_index;
 		left_index = decrement_index(left_index);
 		if(points[left_index].y >= clip.top) {
 			break;
@@ -585,8 +590,10 @@ bool grcg_polygon_c_blue(
 		subtract_word(left_y, top_y)
 	);
 
-	const auto right_upper_index = right_index;
+	auto right_upper_index = right_index;
 	for(std::size_t skipped = 0U;; ++skipped) {
+		// LOOPR likewise updates DI before every increment.
+		right_upper_index = right_index;
 		right_index = increment_index(right_index);
 		if(points[right_index].y >= clip.top) {
 			break;

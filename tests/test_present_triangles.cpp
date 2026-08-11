@@ -1,5 +1,6 @@
 #include "th03/present/triangles.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdio>
@@ -589,6 +590,47 @@ void test_polygon_top_clip_and_blue_plane_only()
 			expected,
 			"polygon computes direct signed top intersections before DDA setup",
 			1U
+		);
+	}
+	{
+		Raster raster;
+		constexpr GrcgClipRect clip{0, 0, 20, 10};
+		// Both rings contain two consecutive vertices above ClipYT. The
+		// master.lib walkers must intersect from the final skipped vertices
+		// (5,-2) and (15,-2), rather than drawing chords from (10,-5).
+		constexpr std::array<GrcgPoint, 6U> hexagon{{
+			{10, -5}, {15, -2}, {16, 3},
+			{10, 6}, {4, 3}, {5, -2},
+		}};
+		expect(
+			th03::present::grcg_polygon_c_blue(raster, hexagon, clip),
+			"multi-edge top-clipped polygon draws"
+		);
+		constexpr std::array<GrcgPoint, 7U> spans{{
+			{5, 0}, {5, 1}, {4, 2}, {4, 3},
+			{6, 4}, {8, 5}, {10, 6},
+		}};
+		constexpr std::array<std::int16_t, 7U> span_right{{
+			15, 15, 16, 16, 14, 12, 10,
+		}};
+		std::size_t expected_count = 0U;
+		for(std::size_t row = 0U; row < spans.size(); ++row) {
+			for(auto x = spans[row].x; x <= span_right[row]; ++x) {
+				expect(
+					raster.pixel(Page::zero, {x, spans[row].y}) == 1U,
+					"multi-edge top intersections preserve every source span"
+				);
+				++expected_count;
+			}
+		}
+		const auto actual_count = static_cast<std::size_t>(std::count(
+			raster.graphics(Page::zero).begin(),
+			raster.graphics(Page::zero).end(),
+			static_cast<Index4>(1U)
+		));
+		expect(
+			actual_count == expected_count,
+			"multi-edge top clipping emits no chord pixels"
 		);
 	}
 	{
