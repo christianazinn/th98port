@@ -820,6 +820,11 @@ sheets, double-width `SP`/`BS`/`END` cells, direction repeats at held frames 0,
 Master-library LCG schedule: one triplet for a valid store, or four stock-rank
 triplets followed by the selected-rank triplet after all-rank recovery. The
 score document is committed atomically only at the final black-out boundary.
+That boundary also installs the source-selected next screen under black:
+credited non-final routes carry authenticated CONTI pixels/palette and the
+four prepared choice cels, while zero-credit and stage-99 routes carry OVER.
+The Continue owner adopts this exact Raster and loads OVER only after its own
+black-out, so the two asset transactions retain the donor's failure order.
 On the zero-credit/all-stage route, the owner then reproduces
 `snd_delay_until_volume(-1)` as an exact-volume-255 semantic wait and queues the
 source song stop; Continue routes inherit the still-playing score song. The OP

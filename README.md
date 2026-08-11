@@ -160,9 +160,10 @@ split comparisons. Original game data and replay captures remain external.
   tone ramp before returning its Raster. The same owner now runs the complete
   MAINL high-score registration transaction over that retained Raster: exact
   qualification/name-grid input, page-1 unblits, source RNG codec fields,
-  conditional audio fade, and atomic score commit. Only the conditional
-  post-registration extra ending remains; no second campaign or resident-state
-  model is exposed.
+  conditional audio fade, atomic score commit, route-selected next-screen
+  preload, and the conditional post-registration extra ending. The complete
+  Classic Story route is now internally owned; no second campaign or
+  resident-state model is exposed. OP remains separate.
 - The same boundary authenticates the supported unpacked Japanese `MAINL.EXE`
   and owns its exact Story title/name table, staff verdict strings, and flake
   masks. Packed DIET executable support is not yet provided; original bytes
