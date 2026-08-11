@@ -103,6 +103,7 @@ void bombs_render_phase_update(
 				.player = static_cast<PlayerId>(player_id),
 				.paletted_character = state.players[player_id].paletted_character,
 				.bomb_frame = state.bomb_frame[player_id],
+				.preparing = state.bomb_flag[player_id] == BombFlag::preparing,
 				.fg_shift_x_at_entry =
 					state.playfield_fg_shift_x[player_id],
 			});

@@ -335,7 +335,7 @@ std::expected<void, SdlInputMapperError> SdlInputMapper::push_event(
 	app::PhysicalInputEvent event
 ) const noexcept
 {
-	const auto pushed = scheduler.push_event(event);
+	const auto pushed = scheduler.push_live_event(event);
 	if(!pushed) {
 		return std::unexpected(tick_error(pushed.error()));
 	}

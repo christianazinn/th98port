@@ -325,6 +325,13 @@ const assets::MrsImage *MainProcessTestAccess::portrait(
 		&process.impl_->extra_portraits[player];
 }
 
+present::MainBombsStatus MainProcessTestAccess::bombs_status(
+	const MainProcess &process
+) noexcept
+{
+	return process.impl_->bombs->status();
+}
+
 std::expected<std::unique_ptr<MainProcess>, MainProcessError>
 MainProcess::create(
 	const MainDirectVsConfig &config,

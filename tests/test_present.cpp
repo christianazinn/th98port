@@ -1026,11 +1026,11 @@ void test_main_shot_sheet_and_startup() {
 	);
 
 	expect(raster.set_access_page(Page::one), "seed first next-page clear target");
-	expect(raster.clear({16, 0, 288U, 185U}, 8U), "seed P1 page one rows");
-	expect(raster.clear({336, 0, 288U, 185U}, 9U), "seed P2 page one rows");
+	expect(raster.clear({16, 0, 288U, 200U}, 8U), "seed P1 page one rows");
+	expect(raster.clear({336, 0, 288U, 200U}, 9U), "seed P2 page one rows");
 	expect(raster.set_access_page(Page::zero), "restore source drawing page zero");
-	expect(raster.clear({16, 0, 288U, 184U}, 6U), "seed visible P1 page zero");
-	expect(raster.clear({336, 0, 288U, 184U}, 7U), "seed visible P2 page zero");
+	expect(raster.clear({16, 0, 288U, 200U}, 6U), "seed visible P1 page zero");
+	expect(raster.clear({336, 0, 288U, 200U}, 7U), "seed visible P2 page zero");
 	expect(presenter.end_frame_swap_and_clear(raster), "first MAIN page swap");
 	expect(raster.access_page() == Page::one, "first swap accesses old front");
 	expect(raster.shown_page() == Page::zero, "first swap shows old back");
@@ -1042,14 +1042,17 @@ void test_main_shot_sheet_and_startup() {
 	expect_pixel(raster, Page::one, {303, 183}, 0U, "P1 clear ends x303 y183");
 	expect_pixel(raster, Page::one, {15, 100}, 0U, "P1 clear excludes x15");
 	expect_pixel(raster, Page::one, {304, 100}, 0U, "P1 clear excludes x304");
-	expect_pixel(raster, Page::one, {16, 184}, 8U, "P1 clear excludes y184");
+	expect_pixel(raster, Page::one, {16, 184}, 0U, "P1 native clear includes source trail row");
+	expect_pixel(raster, Page::one, {303, 199}, 0U, "P1 native clear reaches graphics bottom");
 	expect_pixel(raster, Page::one, {336, 0}, 1U, "P2 clear uses color one");
 	expect_pixel(raster, Page::one, {623, 183}, 1U, "P2 clear exact far edge");
-	expect_pixel(raster, Page::one, {336, 184}, 9U, "P2 clear excludes y184");
+	expect_pixel(raster, Page::one, {336, 184}, 1U, "P2 native clear includes source trail row");
+	expect_pixel(raster, Page::one, {623, 199}, 1U, "P2 native clear reaches graphics bottom");
 	expect_pixel(raster, Page::zero, {16, 100}, 6U, "shown page is not cleared");
+	expect_pixel(raster, Page::zero, {16, 199}, 6U, "shown footer graphics remain published");
 
-	expect(raster.clear({16, 0, 288U, 184U}, 12U), "draw next P1 page");
-	expect(raster.clear({336, 0, 288U, 184U}, 13U), "draw next P2 page");
+	expect(raster.clear({16, 0, 288U, 200U}, 12U), "draw next P1 page");
+	expect(raster.clear({336, 0, 288U, 200U}, 13U), "draw next P2 page");
 	expect(presenter.end_frame_swap_and_clear(raster), "second MAIN page swap");
 	expect(raster.access_page() == Page::zero, "second swap accesses page zero");
 	expect(raster.shown_page() == Page::one, "second swap shows page one");
@@ -1061,6 +1064,7 @@ void test_main_shot_sheet_and_startup() {
 	expect_pixel(raster, Page::zero, {336, 100}, 1U, "second swap clears P2 page zero");
 	expect_pixel(raster, Page::one, {16, 100}, 12U, "second shown P1 remains drawn");
 	expect_pixel(raster, Page::one, {336, 100}, 13U, "second shown P2 remains drawn");
+	expect_pixel(raster, Page::one, {16, 199}, 12U, "second shown footer remains drawn");
 
 	// Reach the opposite role parity, then reproduce sub_A21F()'s repeat-round
 	// visual reset without rebuilding the process-scoped Sprite16 source.

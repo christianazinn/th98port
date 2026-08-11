@@ -48,6 +48,10 @@ struct MainProcessTestAccess final {
 		std::size_t player
 	) noexcept;
 
+	[[nodiscard]] static present::MainBombsStatus bombs_status(
+		const MainProcess &process
+	) noexcept;
+
 	[[nodiscard]] static std::expected<
 		std::shared_ptr<const MainProcessStaticContent>,
 		MainProcessError

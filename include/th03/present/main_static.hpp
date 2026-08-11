@@ -19,7 +19,13 @@ inline constexpr std::uint16_t main_playfield_border = 16U;
 inline constexpr std::uint16_t main_playfield_bordered_width = 320U;
 inline constexpr std::uint16_t main_playfield_top = 16U;
 inline constexpr std::uint16_t main_playfield_bottom = 384U;
-inline constexpr std::uint16_t main_next_page_clear_bottom = 183U;
+inline constexpr std::uint16_t main_source_next_page_clear_bottom = 183U;
+// Native visual bugfix: source sub_9778() stops at raw row 183 even though
+// unclipped background sprites can write through row 193. Clear the complete
+// zoomed-200 graphics page behind the lower TRAM rows to prevent retained
+// sprite trails without changing any text-layer cells.
+inline constexpr std::uint16_t main_next_page_clear_bottom =
+	(graphics_height / 2U) - 1U;
 
 inline constexpr std::uint8_t main_halfhearts_max = 10U;
 inline constexpr std::uint8_t main_gauge_level_min = 1U;
@@ -145,9 +151,10 @@ public:
 		MainPaletteState &palette
 	) noexcept;
 
-	// Exact late-frame page transaction from sub_9778(): access the old front,
-	// show the old back, exchange roles, then clear P1/P2 x 288 through y=183
-	// on the newly accessed page with colors 0 and 1.
+	// Late-frame page transaction from sub_9778(): access the old front, show
+	// the old back, and exchange roles. Source clears P1/P2 x 288 through raw
+	// y=183; the native renderer deliberately extends this through raw y=199
+	// to remove source-observable sprite trails behind the lower TRAM rows.
 	[[nodiscard]] bool end_frame_swap_and_clear(Raster &raster) noexcept;
 
 	[[nodiscard]] MainPageRoles page_roles() const noexcept;

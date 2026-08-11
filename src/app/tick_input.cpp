@@ -118,6 +118,25 @@ std::expected<void, TickInputError> TickInputScheduler::push_event(
 	return {};
 }
 
+std::expected<void, TickInputError> TickInputScheduler::push_live_event(
+	PhysicalInputEvent event
+) noexcept
+{
+	// SDL timestamps describe when the host produced an event, but delivery to
+	// its polled queue can lag behind that event's logical deadline. Once a tick
+	// is emitted, poll order is the only remaining causal order we can preserve.
+	if(last_emitted_deadline_ && event.timestamp_ns <= *last_emitted_deadline_) {
+		if(!deadline_valid_) {
+			return std::unexpected(TickInputError::deadline_overflow);
+		}
+		event.timestamp_ns = next_deadline_ns_;
+	}
+	if(last_event_timestamp_ && event.timestamp_ns < *last_event_timestamp_) {
+		event.timestamp_ns = *last_event_timestamp_;
+	}
+	return push_event(event);
+}
+
 std::expected<std::optional<LogicalTickInput>, TickInputError>
 TickInputScheduler::pop_due(TickTimestampNs now_ns) noexcept
 {

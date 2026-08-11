@@ -4888,6 +4888,22 @@ void test_main_effect_observer_contract()
 	});
 
 	with_live_state([](auto &bombs) {
+		bombs.players[0U].paletted_character = 11;
+		bombs.bomb_flag[0U] = th03::detail::BombFlag::preparing;
+		bombs.bomb_frame[0U] = 180U;
+		RecordingObserver recording;
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			bombs, &recording
+		);
+		check(
+			recording.bomb_frame_steps.size() == 1U &&
+			recording.bomb_frame_steps[0U].preparing &&
+			recording.bomb_frame_steps[0U].bomb_frame == 180U,
+			"a newly preparing Bomb exposes the retained prior frame without normalizing source order"
+		);
+	});
+
+	with_live_state([](auto &bombs) {
 		bombs.players[0U].paletted_character = 3;
 		bombs.players[1U].paletted_character = 1;
 		bombs.bomb_flag = {

@@ -137,7 +137,10 @@ struct Fixture {
 	MainPaletteState palette;
 	std::optional<MainBombsPresenter> presenter;
 
-	void prepare(bool commit = true)
+	void prepare(
+		bool commit = true,
+		th03::present::KotohimeBombFadeCompatibility kotohime = {}
+	)
 	{
 		for(std::size_t player = 0U; player < 2U; ++player) {
 			const auto seed = [this](
@@ -185,7 +188,8 @@ struct Fixture {
 			layout,
 			MainBombMrsAssets{{&p1_mrs, &p2_mrs}},
 			trig.view(),
-			palette
+			palette,
+			kotohime
 		);
 	}
 };
@@ -201,7 +205,7 @@ struct Driver {
 		presenter.common_effect_spawned(spawn);
 	}
 
-	void frame(std::uint8_t frame)
+	void frame(std::uint8_t frame, bool preparing = false)
 	{
 		const auto id = player_id(player);
 		if(character == 1U && frame <= 64U && (frame % 8U) == 0U) {
@@ -217,6 +221,7 @@ struct Driver {
 			.player = id,
 			.paletted_character = paletted(character),
 			.bomb_frame = frame,
+			.preparing = preparing,
 			.fg_shift_x_at_entry = shift,
 		});
 		if(character == 0U && frame < 32U) {
@@ -924,6 +929,31 @@ void test_completion_restores_process_baseline()
 	);
 }
 
+bool fixed_kotohime_red(
+	void *, const BombFrameStep &, std::uint8_t, std::uint8_t &red_out
+) noexcept
+{
+	red_out = 0U;
+	return true;
+}
+
+void test_preparing_step_retains_the_prior_source_frame()
+{
+	for(std::uint8_t character = 0U; character < 9U; ++character) {
+		Fixture fixture;
+		fixture.prepare(true, {
+			.red_provider = fixed_kotohime_red,
+		});
+		Driver driver{*fixture.presenter, character, 0U, 0};
+		driver.frame(180U, true);
+		driver.frame(1U);
+		expect(
+			fixture.presenter->ready(),
+			"a source-valid preparing step accepts the retained prior frame and re-arms at frame 1"
+		);
+	}
+}
+
 void test_round_reset_rearms_an_interrupted_bomb()
 {
 	Fixture fixture;
@@ -975,6 +1005,7 @@ int main()
 	test_chiyuri_four_effects_before_mrs();
 	test_yumemi_triangles_and_effect_before_mrs();
 	test_invalid_facts_are_atomic_and_sticky();
+	test_preparing_step_retains_the_prior_source_frame();
 	test_round_reset_rearms_an_interrupted_bomb();
 	test_p2_mrs_uses_source_altered_blue_plane();
 	test_completion_restores_process_baseline();

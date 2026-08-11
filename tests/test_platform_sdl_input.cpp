@@ -458,18 +458,33 @@ void test_equal_and_regressed_event_order()
 	auto second_input = scheduler(100U);
 	(void)expect_event(second, second_input, key_event(10U, SDL_SCANCODE_A, true),
 		"ordered key press is accepted");
-	const auto rejected = second.handle_event(
+	const auto regressed = second.handle_event(
 		key_event(9U, SDL_SCANCODE_A, false), second_input
 	);
 	expect(
-		!rejected && rejected.error().code == SdlInputMapperErrorCode::tick_input &&
-			rejected.error().tick_input == TickInputError::timestamp_regressed,
-		"regressed SDL input timestamp is reported through the scheduler error"
+		regressed && regressed->physical_event_queued,
+		"regressed live SDL timestamp preserves poll order without terminating"
 	);
-	(void)expect_event(second, second_input, key_event(11U, SDL_SCANCODE_A, false),
-		"rejected regression leaves mapper and scheduler retryable");
-	expect(expect_tick(second_input, 100U, "ordered retry is due").input.p1 == 0U,
-		"regression rejection commits neither held state nor timestamp order");
+	expect(expect_tick(second_input, 100U, "normalized live order is due").input.p1 == 0U,
+		"normalized press/release retains SDL polling order");
+
+	auto late_made = SdlInputMapper::create(bindings(), main_window, fake.backend());
+	expect(static_cast<bool>(late_made), "rapid late-input mapper is created");
+	if(late_made) {
+		auto late = std::move(*late_made);
+		auto late_input = scheduler(100U);
+		(void)expect_tick(late_input, 100U,
+			"rapid-input test first emits the old logical boundary");
+		(void)expect_event(late, late_input,
+			key_event(100U, SDL_SCANCODE_A, true),
+			"rapid key-down delivered at an emitted boundary is accepted");
+		(void)expect_event(late, late_input,
+			key_event(100U, SDL_SCANCODE_A, false),
+			"rapid key-up at the same emitted boundary is accepted");
+		expect(expect_tick(late_input, 110U,
+			"rapid late edges are sampled at the next boundary").input.p1 == 0U,
+			"an entirely between-ticks tap is nonfatal and non-retroactive");
+	}
 }
 
 void test_keyboard_window_scope()

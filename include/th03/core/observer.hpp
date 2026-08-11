@@ -479,6 +479,10 @@ struct BombFrameStep {
 	PlayerId player = PlayerId::p1;
 	std::int8_t paletted_character = 0;
 	std::uint8_t bomb_frame = 0;
+	// The source can enter the late renderer on the same frame that player_bomb()
+	// changes BF_INACTIVE to BF_PREPARING. Its early character callback has
+	// already run, so bomb_frame still contains the prior activation's value.
+	bool preparing = false;
 	// Sampled before the late character callback mutates the current shake.
 	std::int16_t fg_shift_x_at_entry = 0;
 

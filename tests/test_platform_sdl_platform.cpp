@@ -332,6 +332,12 @@ void test_native_mapper_runtime_lease()
 	}
 	auto platform = std::move(*created);
 	th03::platform::SdlInputBindings bindings{};
+	bindings.keyboard[0U] = {
+		.scancode = SDL_SCANCODE_Z,
+		.player = th03::platform::SdlInputPlayer::p1,
+		.action = th03::platform::SdlLogicalAction::shot,
+	};
+	bindings.keyboard_count = 1U;
 	for(auto &player : bindings.gamepad_players) {
 		player = th03::platform::SdlInputPlayer::p1;
 	}
@@ -373,6 +379,40 @@ void test_native_mapper_runtime_lease()
 				(**due).app_quit_requested &&
 				(**due).input.system == 0U,
 				"native pump maps Escape to timestamped app quit without gameplay Cancel");
+
+			const auto rapid_timestamp = timestamp + 10U;
+			auto rapid_scheduler = th03::app::TickInputScheduler::create(
+				{100'000'000U, 1U}, rapid_timestamp
+			);
+			expect(static_cast<bool>(rapid_scheduler),
+				"rapid-tap pump scheduler is created");
+			if(rapid_scheduler) {
+				const auto already_emitted = rapid_scheduler->pop_due(
+					rapid_timestamp
+				);
+				SDL_Event down{};
+				down.type = SDL_EVENT_KEY_DOWN;
+				down.key.timestamp = rapid_timestamp;
+				down.key.windowID = static_cast<SDL_WindowID>(
+					platform->window_id()
+				);
+				down.key.scancode = SDL_SCANCODE_Z;
+				down.key.down = true;
+				SDL_Event up = down;
+				up.type = SDL_EVENT_KEY_UP;
+				up.key.down = false;
+				expect(SDL_PushEvent(&down) && SDL_PushEvent(&up),
+					"rapid down/up edges enter the real SDL queue after their timestamp boundary");
+				const auto rapid = mapper.pump_events(*rapid_scheduler, true);
+				const auto next = rapid_scheduler->pop_due(rapid_timestamp + 10U);
+				expect(
+					already_emitted && *already_emitted &&
+						(**already_emitted).input.p1 == 0U && rapid &&
+						rapid->physical_events_queued == 2U && next && *next &&
+						(**next).input.p1 == 0U,
+					"late rapid down/up is deferred atomically to the next unemitted tick"
+				);
+			}
 
 			const auto burst_timestamp = timestamp + 1U;
 			auto burst_scheduler = th03::app::TickInputScheduler::create(

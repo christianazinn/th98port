@@ -61,6 +61,13 @@ void expect(bool condition, std::string_view message)
 	}
 }
 
+bool kotohime_red(
+	void *,
+	const th03::BombFrameStep &,
+	std::uint8_t,
+	std::uint8_t &red_out
+) noexcept;
+
 void append_u8(std::vector<std::byte> &bytes, std::uint8_t value)
 {
 	bytes.push_back(static_cast<std::byte>(value));
@@ -538,6 +545,11 @@ std::vector<std::byte> bytes_for(const th03::app::MainResourceSpec &spec)
 	case MainResourceRole::staff_background_palette:
 	case MainResourceRole::staff_cdg:
 	case MainResourceRole::staff_music:
+	case MainResourceRole::registration_background:
+	case MainResourceRole::registration_rank:
+	case MainResourceRole::registration_normal_glyphs:
+	case MainResourceRole::registration_highlight_glyphs:
+	case MainResourceRole::registration_music:
 		break;
 	}
 	return {};
@@ -965,6 +977,59 @@ void test_distinct_selection_first_frame()
 	expect(tram.gaiji(7U).row_halves[0U] ==
 		static_cast<std::uint8_t>((7U * 17U) + 1U),
 		"GAMEFT raw glyph bytes are installed into process TRAM");
+}
+
+void test_live_bomb_first_frame()
+{
+	for(std::uint8_t character = 1U; character <= 9U; ++character) {
+		for(std::uint8_t player = 0U; player < 2U; ++player) {
+			MainDirectVsConfig config{};
+			config.player_one = {
+				.character = static_cast<MainCharacter>(character),
+				.palette = MainPaletteVariant::first,
+			};
+			config.player_two = {
+				.character = static_cast<MainCharacter>(character),
+				.palette = MainPaletteVariant::second,
+			};
+			config.kotohime_compatibility.red_provider = kotohime_red;
+			auto resources = make_resources(config.player_one, config.player_two);
+			auto created = create_synthetic(config, resources);
+			expect(static_cast<bool>(created),
+				"live Bomb regression process constructs");
+			if(!created) {
+				continue;
+			}
+			const auto input = (player == 0U) ?
+				th03::CoreInput{.p1 = 0x10U} :
+				th03::CoreInput{.p2 = 0x10U};
+			const auto preparing = (*created)->step(input);
+			const auto active = preparing ? (*created)->step({}) :
+				std::expected<th03::StepResult, th03::app::MainProcessError>{
+					std::unexpected(preparing.error())
+				};
+			if(!active) {
+				std::fprintf(
+					stderr,
+					"Bomb regression character=%u player=%u code=%u "
+					"presentation=%u bombs=%u\n",
+					static_cast<unsigned>(character),
+					static_cast<unsigned>(player),
+					static_cast<unsigned>(active.error().code),
+					static_cast<unsigned>(active.error().presentation_status),
+					static_cast<unsigned>(
+						MainProcessTestAccess::bombs_status(**created)
+					)
+				);
+			}
+			expect(preparing && active &&
+				preparing->status == th03::StepStatus::running &&
+				active->status == th03::StepStatus::running &&
+				(*created)->presentation_status() ==
+					th03::present::MainRoundStatus::ready,
+				"live Bomb frame 0 and active frame 1 preserve the presenter");
+		}
+	}
 }
 
 void test_same_selection_shared_raw_construction()
@@ -2064,6 +2129,7 @@ int main(int argc, char **argv)
 {
 	test_raw_bf2_shapes();
 	test_distinct_selection_first_frame();
+	test_live_bomb_first_frame();
 	test_same_selection_shared_raw_construction();
 	test_recorded_pause_deferred_frame();
 	test_live_runner_owns_the_actual_process();

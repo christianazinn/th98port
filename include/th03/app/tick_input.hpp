@@ -97,6 +97,15 @@ public:
 		PhysicalInputEvent event
 	) noexcept;
 
+	// Live host queues can publish an edge after its original timestamp's
+	// logical boundary was already emitted. Preserve polling order and schedule
+	// such an edge at the earliest still-unemitted boundary instead of rewriting
+	// history or terminating live play. Scripted/replay injection should keep
+	// using strict push_event().
+	[[nodiscard]] std::expected<void, TickInputError> push_live_event(
+		PhysicalInputEvent event
+	) noexcept;
+
 	// Events at or before the returned deadline are applied before sampling.
 	// If advancing after a valid due tick would overflow, that tick is returned
 	// normally; the following call reports deadline_overflow without consuming

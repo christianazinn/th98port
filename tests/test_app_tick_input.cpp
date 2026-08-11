@@ -580,6 +580,32 @@ void test_retroactive_event_clock_regression_and_deadline_overflow()
 		PhysicalInputEventKind::source_state_changed, 0U, state(0x0020U)),
 		"event rejection leaves later valid injection available");
 
+	auto live_created = TickInputScheduler::create(
+		{100'000'000U, 1U}, 100U
+	);
+	expect(static_cast<bool>(live_created), "live-event scheduler is created");
+	if(live_created) {
+		auto live = std::move(*live_created);
+		(void)expect_tick(live, 100U, "live scheduler emits its first boundary");
+		expect(static_cast<bool>(live.push_live_event(event(
+			99U, PhysicalInputEventKind::source_state_changed,
+			0U, state(0x0020U)
+		))), "late live press is deferred instead of rejected");
+		const auto pressed = expect_tick(
+			live, 110U, "deferred live press reaches the first unemitted boundary"
+		);
+		expect(pressed.input.p1 == 0x0020U,
+			"late live press never changes the already emitted tick");
+		expect(static_cast<bool>(live.push_live_event(event(
+			100U, PhysicalInputEventKind::source_state_changed, 0U, state()
+		))), "late live release is also deferred without timestamp failure");
+		const auto released = expect_tick(
+			live, 120U, "deferred live release reaches the following boundary"
+		);
+		expect(released.input.p1 == 0U,
+			"rapid late press/release retains physical polling order");
+	}
+
 	constexpr auto maximum = std::numeric_limits<std::uint64_t>::max();
 	auto overflow_created = TickInputScheduler::create(
 		{1'000'000'000U, 1U}, maximum - 1U

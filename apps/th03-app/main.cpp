@@ -152,6 +152,53 @@ const char *name(th03::app::MainDirectVsRunnerErrorCode code) noexcept
 	return "unknown";
 }
 
+const char *name(th03::app::MainProcessErrorCode code) noexcept
+{
+	switch(code) {
+	case th03::app::MainProcessErrorCode::invalid_config: return "invalid-config";
+	case th03::app::MainProcessErrorCode::invalid_runtime_argument: return "invalid-runtime-argument";
+	case th03::app::MainProcessErrorCode::resource_set_mismatch: return "resource-set-mismatch";
+	case th03::app::MainProcessErrorCode::resource_bytes_missing: return "resource-bytes-missing";
+	case th03::app::MainProcessErrorCode::resource_integrity_failed: return "resource-integrity-failed";
+	case th03::app::MainProcessErrorCode::asset_decode_failed: return "asset-decode-failed";
+	case th03::app::MainProcessErrorCode::enedat_decode_failed: return "enedat-decode-failed";
+	case th03::app::MainProcessErrorCode::font_rom_failed: return "font-rom-failed";
+	case th03::app::MainProcessErrorCode::gameft_prepare_failed: return "gameft-prepare-failed";
+	case th03::app::MainProcessErrorCode::pi_palette_missing: return "pi-palette-missing";
+	case th03::app::MainProcessErrorCode::pi_staging_failed: return "pi-staging-failed";
+	case th03::app::MainProcessErrorCode::static_startup_failed: return "static-startup-failed";
+	case th03::app::MainProcessErrorCode::background_initialization_failed: return "background-initialization-failed";
+	case th03::app::MainProcessErrorCode::presenter_setup_failed: return "presenter-setup-failed";
+	case th03::app::MainProcessErrorCode::game_create_failed: return "game-create-failed";
+	case th03::app::MainProcessErrorCode::presentation_failed: return "presentation-failed";
+	case th03::app::MainProcessErrorCode::repeat_startup_failed: return "repeat-startup-failed";
+	case th03::app::MainProcessErrorCode::core_operation_failed: return "core-operation-failed";
+	}
+	return "unknown";
+}
+
+const char *name(th03::present::MainRoundStatus status) noexcept
+{
+	switch(status) {
+	case th03::present::MainRoundStatus::ready: return "ready";
+	case th03::present::MainRoundStatus::invalid_setup: return "invalid-setup";
+	case th03::present::MainRoundStatus::invalid_observation: return "invalid-observation";
+	case th03::present::MainRoundStatus::background_failed: return "background-failed";
+	case th03::present::MainRoundStatus::bosses_failed: return "bosses-failed";
+	case th03::present::MainRoundStatus::entities_failed: return "entities-failed";
+	case th03::present::MainRoundStatus::effects_failed: return "effects-failed";
+	case th03::present::MainRoundStatus::extra_charge_failed: return "extra-charge-failed";
+	case th03::present::MainRoundStatus::players_bullets_failed: return "players-bullets-failed";
+	case th03::present::MainRoundStatus::bombs_failed: return "bombs-failed";
+	case th03::present::MainRoundStatus::warning_gauge_failed: return "warning-gauge-failed";
+	case th03::present::MainRoundStatus::hud_result_failed: return "hud-result-failed";
+	case th03::present::MainRoundStatus::page_state_mismatch: return "page-state-mismatch";
+	case th03::present::MainRoundStatus::page_transaction_failed: return "page-transaction-failed";
+	case th03::present::MainRoundStatus::repeat_startup_failed: return "repeat-startup-failed";
+	}
+	return "unknown";
+}
+
 const char *name(th03::platform::SdlPlatformErrorCode code) noexcept
 {
 	switch(code) {
@@ -212,6 +259,15 @@ int fail(const char *stage, const th03::app::MainDirectVsRunnerError &error)
 {
 	std::cerr << "status=error\nstage=" << stage << "\ncode="
 		<< name(error.code) << '\n';
+	if(error.main_process_error) {
+		std::cerr << "main-process-code="
+			<< name(error.main_process_error->code) << '\n';
+		if(error.main_process_error->code ==
+			th03::app::MainProcessErrorCode::presentation_failed) {
+			std::cerr << "presentation-status="
+				<< name(error.main_process_error->presentation_status) << '\n';
+		}
+	}
 	return 1;
 }
 

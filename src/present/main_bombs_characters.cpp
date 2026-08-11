@@ -519,8 +519,9 @@ void MainBombsPresenter::bomb_frame_step(const BombFrameStep &step) noexcept
 	}
 	const auto player = player_index(step.player);
 	const auto character_raw = character_index(step.paletted_character);
-	if(!player || !character_raw || step.bomb_frame == 0U ||
-		step.bomb_frame >= 180U || pending_.kind != PendingKind::none) {
+	if(!player || !character_raw ||
+		(!step.preparing && step.bomb_frame >= 180U) ||
+		pending_.kind != PendingKind::none) {
 		(void)fail(MainBombsStatus::invalid_observation);
 		return;
 	}
@@ -532,19 +533,24 @@ void MainBombsPresenter::bomb_frame_step(const BombFrameStep &step) noexcept
 	}
 	const auto character = static_cast<Character>(*character_raw);
 	auto &activation = activations_[*player];
-	// A round can end while a Bomb is still active. Source round preparation
-	// clears the gameplay Bomb flag without running the 179-to-180 completion
-	// callback, so frame 1 is the exact presentation re-arm signal as well as
-	// the ordinary first activation frame.
+	// player_bomb() runs after the source's early per-character callback. The
+	// late renderer therefore observes the newly preparing Bomb once at the
+	// prior frame value (zero on a fresh process, 180 after a completed Bomb,
+	// or any retained value after a round boundary). The next frame's early
+	// callback initializes private records and advances to frame 1. A round can
+	// also end while a Bomb is still active, so frame 1 remains the exact
+	// presentation re-arm signal.
+	const bool preparing = step.preparing;
 	const bool first = step.bomb_frame == 1U;
-	if((!activation.active && !first) || (activation.active && !first && (
+	if((!activation.active && !first && !preparing) ||
+		(activation.active && !first && !preparing && (
 		activation.paletted_character != step.paletted_character ||
 		step.bomb_frame != static_cast<std::uint8_t>(activation.frame + 1U)
 	))) {
 		(void)fail(MainBombsStatus::invalid_observation);
 		return;
 	}
-	if(!first && activation.character == Character::mima) {
+	if(!first && !preparing && activation.character == Character::mima) {
 		const bool expected = step.bomb_frame <= 64U &&
 			(step.bomb_frame % 8U) == 0U;
 		if(expected != (mima_read_frame_[*player] == step.bomb_frame)) {
@@ -552,7 +558,7 @@ void MainBombsPresenter::bomb_frame_step(const BombFrameStep &step) noexcept
 			return;
 		}
 	}
-	if(!first && activation.character == Character::ellen &&
+	if(!first && !preparing && activation.character == Character::ellen &&
 		!finish_ellen_prefix(*player, step.bomb_frame)) {
 		return;
 	}
@@ -634,10 +640,10 @@ void MainBombsPresenter::bomb_compatibility_read(
 		};
 		state = {};
 		const BombFrameStep step{
-			read.player,
-			activation.paletted_character,
-			activation.frame,
-			activation.entry_shift,
+			.player = read.player,
+			.paletted_character = activation.paletted_character,
+			.bomb_frame = activation.frame,
+			.fg_shift_x_at_entry = activation.entry_shift,
 		};
 		(void)(apply_palette(step) && draw_reimu(*player, activation.entry_shift));
 		return;
