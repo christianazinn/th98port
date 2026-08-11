@@ -543,6 +543,10 @@ void test_missing_file_clear_and_recreate_rng_schedule()
 			silenced->boundary == ClassicRegistrationBoundary::immediate,
 		"volume 255 queues the source stop immediately"
 	);
+	expect(
+		!(*scene)->take_completion(),
+		"the owner cannot publish completion before consuming the source stop"
+	);
 	const auto stop = (*scene)->take_audio_command();
 	expect(
 		stop && stop->type == ClassicAudioCommandType::stop_song &&
