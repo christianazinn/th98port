@@ -148,6 +148,7 @@ struct FakeBackend final {
 	bool lose_next_main = false;
 	bool route_zero = false;
 	bool fail_stage_advance = false;
+	bool stage_surface_changed = true;
 	ContinueChoice continue_choice = ContinueChoice::accept;
 	bool win_preload = false;
 	bool win_preload_requested = false;
@@ -219,7 +220,7 @@ ClassicStorySessionBackendOperations operations(FakeBackend &fake)
 			}
 			return std::expected<ClassicStoryBackendTick,
 				ClassicStorySessionError>{ClassicStoryBackendTick{
-				.surface_changed = true,
+				.surface_changed = backend.stage_surface_changed,
 				.input_sampled = true,
 				.ready = true,
 			}};
@@ -491,6 +492,40 @@ void test_story_input_mode_normalization()
 		"live Story pause observes raw keyboard input_sp without joystick merging");
 }
 
+void test_mainl_surface_handoffs()
+{
+	th03::present::Raster main;
+	expect(main.set_access_page(th03::present::Page::zero) &&
+		main.plot({17, 23}, 3U) &&
+		main.set_access_page(th03::present::Page::one) &&
+		main.plot({29, 31}, 12U) &&
+		main.set_shown_page(th03::present::Page::one) &&
+		main.set_raster_mode(th03::present::RasterMode::zoomed_200_upper),
+		"MAIN cutscene seed fixture establishes retained zoomed VRAM");
+	main.set_palette_tone(173);
+	const auto seed = ClassicStorySessionTestAccess::normalize_main_cutscene_seed(
+		main
+	);
+	expect(seed.raster_mode() == th03::present::RasterMode::lines_400 &&
+		seed.access_page() == th03::present::Page::zero &&
+		seed.shown_page() == th03::present::Page::one &&
+		seed.pixel(th03::present::Page::zero, {17, 23}) == 3U &&
+		seed.pixel(th03::present::Page::one, {29, 31}) == 12U &&
+		seed.palette_tone() == 173,
+		"MAIN-to-MAINL seed restores 400 lines while preserving VRAM and display state");
+
+	auto backend = std::make_shared<FakeBackend>();
+	backend->stage_surface_changed = false;
+	auto session = create_session(story_config(), backend);
+	if(!session) {
+		return;
+	}
+	const auto transitioned = session->consume({});
+	expect(transitioned && transitioned->scene ==
+		ClassicStorySessionScene::main && transitioned->surface_changed,
+		"Story publishes a scene transition even when the completed child is unchanged");
+}
+
 void test_complete_nine_stage_route()
 {
 	auto backend = std::make_shared<FakeBackend>();
@@ -689,6 +724,45 @@ bool run_local_original_gate(
 		th03::app::Pc98FontRomProvider::font_rom_size,
 		std::byte{0U}
 	);
+	const auto font = th03::app::Pc98FontRomProvider::from_exact_font_rom(
+		font_rom
+	);
+	if(!font) {
+		return false;
+	}
+	th03::app::MainResourceLoader cutscene_loader(content_root);
+	for(const auto request : {
+		MainlCutsceneResourceRequest{
+			.kind = MainlCutsceneKind::interstage_yumemi,
+			.character = th03::app::MainCharacter::reimu,
+		},
+		MainlCutsceneResourceRequest{
+			.kind = MainlCutsceneKind::ending,
+			.character = th03::app::MainCharacter::reimu,
+		},
+	}) {
+		auto resources = cutscene_loader.load_mainl_cutscene(request);
+		if(!resources) {
+			return false;
+		}
+		th03::present::Raster main_seed;
+		if(!main_seed.set_raster_mode(
+			th03::present::RasterMode::zoomed_200_upper
+		)) {
+			return false;
+		}
+		auto normalized =
+			ClassicStorySessionTestAccess::normalize_main_cutscene_seed(main_seed);
+		auto cutscene = th03::app::ClassicCutsceneScene::create(
+			request, *resources, *font, std::move(normalized)
+		);
+		if(!cutscene) {
+			std::cerr << "local MAIN-seeded cutscene create failed kind="
+				<< static_cast<unsigned>(request.kind) << " code="
+				<< static_cast<unsigned>(cutscene.error().code) << '\n';
+			return false;
+		}
+	}
 	auto created = ClassicStorySession::create(
 		story_config(),
 		std::make_unique<th03::app::MainResourceLoader>(content_root),
@@ -753,6 +827,7 @@ bool run_local_original_gate(
 int main(int argc, char **argv)
 {
 	test_story_input_mode_normalization();
+	test_mainl_surface_handoffs();
 	test_complete_nine_stage_route();
 	test_continue_accept_decline_and_zero_credit();
 	test_quit_and_backend_failure();

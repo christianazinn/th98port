@@ -791,6 +791,22 @@ void test_terminal_routes_and_failures()
 
 void test_surface_forwarding()
 {
+	expect(ClassicOpSessionTestAccess::vs_surface_source(
+		false, false, true
+	) == th03::app::ClassicOpVsSurfaceSource::main_process,
+		"VS MAIN owns composition before a win scene exists");
+	expect(ClassicOpSessionTestAccess::vs_surface_source(
+		true, false, true
+	) == th03::app::ClassicOpVsSurfaceSource::win &&
+		ClassicOpSessionTestAccess::vs_surface_source(
+			true, true, true
+		) == th03::app::ClassicOpVsSurfaceSource::win_completion,
+		"completed VS win surface precedes both its moved-from scene and retained MAIN");
+	expect(ClassicOpSessionTestAccess::vs_surface_source(
+		false, false, false
+	) == th03::app::ClassicOpVsSurfaceSource::none,
+		"VS surface selection reports no owner outside retained VS scenes");
+
 	auto backend = std::make_shared<FakeBackend>();
 	auto session = make_session(backend);
 	if(!session) { return; }

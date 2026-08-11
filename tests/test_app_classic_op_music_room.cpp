@@ -169,9 +169,9 @@ void test_asset_validation_and_initial_presentation()
 	);
 	expect(
 		scene->raster().shown_page() == Page::zero &&
-			scene->raster().access_page() == Page::zero &&
+			scene->raster().access_page() == Page::one &&
 			scene->raster().palette_tone() == 100,
-		"entry ends on source page zero with the OP3 palette fully shown"
+		"entry preserves page one as the donor's first polygon back page"
 	);
 	for(const auto page : {Page::zero, Page::one}) {
 		expect(
@@ -270,8 +270,13 @@ void test_input_flip_and_polygon_cadence()
 	expect(
 		scene->raster().shown_page() == Page::one &&
 			scene->raster().access_page() == Page::zero,
-		"first source update draws access page zero but publishes page one"
+		"first source update draws and publishes page one before selecting page zero"
 	);
+	expect(!std::equal(
+		scene->raster().graphics(Page::zero).begin(),
+		scene->raster().graphics(Page::zero).end(),
+		scene->raster().graphics(Page::one).begin()
+	), "first polygon pass lands on the page that is actually published");
 	expect(
 		scene->carry().polygons_initialized &&
 			scene->carry().random_seed == 0x59C5FB21U,
@@ -355,6 +360,19 @@ void test_input_flip_and_polygon_cadence()
 
 void test_track_audio_exit_and_completion()
 {
+	auto changed_exit = make_scene();
+	if(changed_exit) {
+		release_to_controls(*changed_exit);
+		const auto changed = changed_exit->advance({
+			.controls = {.down = true, .cancel = true},
+		});
+		expect(changed && changed->selection_changed &&
+			changed->surface_changed && changed_exit->selection() == 1U &&
+			changed_exit->phase() ==
+				ClassicOpMusicRoomPhase::exit_release_poll,
+			"selection repaint remains publishable when Cancel lands in the same poll");
+	}
+
 	GameInit resident{};
 	resident.resident_rand = 73;
 	auto scene = make_scene({}, resident);

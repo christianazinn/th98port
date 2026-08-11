@@ -301,6 +301,22 @@ namespace {
 	return interface_word != 0U;
 }
 
+[[nodiscard]] constexpr ClassicOpVsSurfaceSource vs_surface_source(
+	bool win,
+	bool win_completion,
+	bool main_process
+) noexcept
+{
+	if(win_completion) {
+		return ClassicOpVsSurfaceSource::win_completion;
+	}
+	if(win) {
+		return ClassicOpVsSurfaceSource::win;
+	}
+	return main_process ? ClassicOpVsSurfaceSource::main_process :
+		ClassicOpVsSurfaceSource::none;
+}
+
 [[nodiscard]] MainlStageResourceRequest stage_request(
 	const GameInit &resident
 ) noexcept
@@ -1828,35 +1844,62 @@ struct ClassicOpSessionBackend final {
 			}
 			return *composed;
 		}
-		if(vs_process) {
+
+		const present::Raster *raster = nullptr;
+		const present::Tram *tram = &blank_tram;
+		switch(vs_surface_source(
+			static_cast<bool>(vs_win),
+			static_cast<bool>(vs_win_completion),
+			static_cast<bool>(vs_process)
+		)) {
+		case ClassicOpVsSurfaceSource::win_completion:
+			raster = &vs_win_completion->raster();
+			break;
+		case ClassicOpVsSurfaceSource::win:
+			raster = &vs_win->raster();
+			break;
+		case ClassicOpVsSurfaceSource::main_process: {
 			auto composed = vs_process->compose_shown_surface(output);
 			if(!composed) {
 				return std::unexpected(surface_error(composed.error()));
 			}
 			return *composed;
 		}
+		case ClassicOpVsSurfaceSource::none:
+			break;
+		}
 
-		const present::Raster *raster = nullptr;
-		const present::Tram *tram = &blank_tram;
-		if(title) {
+		if(!raster && title_completion) {
+			raster = &title_completion->raster();
+			tram = &title_completion->tram();
+		} else if(!raster && title) {
 			raster = &title->raster();
 			tram = &title->tram();
-		} else if(options) {
+		} else if(!raster && options_completion) {
+			raster = &options_completion->raster();
+			tram = &options_completion->tram();
+		} else if(!raster && options) {
 			raster = &options->raster();
 			tram = &options->tram();
-		} else if(music_room) {
+		} else if(!raster && music_completion) {
+			raster = &music_completion->raster();
+			tram = &music_completion->tram();
+		} else if(!raster && music_room) {
 			raster = &music_room->raster();
 			tram = &music_room->tram();
-		} else if(high_scores) {
+		} else if(!raster && high_score_completion) {
+			raster = &high_score_completion->raster();
+		} else if(!raster && high_scores) {
 			raster = &high_scores->raster();
-		} else if(selection) {
+		} else if(!raster && selection_completion) {
+			raster = &selection_completion->raster();
+			tram = &selection_completion->tram();
+		} else if(!raster && selection) {
 			raster = &selection->raster();
 			tram = &selection->tram();
-		} else if(vs_stage) {
+		} else if(!raster && vs_stage) {
 			raster = &vs_stage->raster();
 			tram = &vs_stage->tram();
-		} else if(vs_win) {
-			raster = &vs_win->raster();
 		}
 		if(!raster || !font) {
 			return std::unexpected(session_error(
@@ -2374,6 +2417,15 @@ ClassicOpSessionScene ClassicOpSession::scene() const noexcept
 ClassicOpSessionStatus ClassicOpSession::status() const noexcept
 {
 	return impl_->status;
+}
+
+ClassicOpVsSurfaceSource ClassicOpSessionTestAccess::vs_surface_source(
+	bool win,
+	bool win_completion,
+	bool main_process
+) noexcept
+{
+	return th03::app::vs_surface_source(win, win_completion, main_process);
 }
 
 CoreInput ClassicOpSessionTestAccess::vs_cpu_main_input(

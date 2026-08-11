@@ -157,6 +157,18 @@ namespace {
 	return input;
 }
 
+[[nodiscard]] present::Raster normalize_main_cutscene_seed(
+	const present::Raster &raster
+)
+{
+	auto result = raster;
+	// MAINL starts as a fresh process. game_init_main() preserves PC-98 VRAM
+	// across execl while restoring graph_400line(), which also selects access
+	// page zero, before any interstage or ending cutscene code runs.
+	static_cast<void>(result.set_raster_mode(present::RasterMode::lines_400));
+	return result;
+}
+
 [[nodiscard]] std::optional<MainlStageResourceRequest> stage_request(
 	const MainStoryConfig &config
 ) noexcept
@@ -327,6 +339,7 @@ struct ClassicStoryBackend final {
 	std::unique_ptr<ClassicMainlContinueScene> continue_scene{};
 	std::optional<ClassicMainlContinueCompletion> continue_completion{};
 	std::unique_ptr<ClassicMainlGameOverScene> game_over{};
+	std::optional<ClassicMainlGameOverCompletion> game_over_completion{};
 	std::filesystem::path score_path{};
 	GameInit process_start{};
 
@@ -678,7 +691,7 @@ struct ClassicStoryBackend final {
 			initial.emplace(*cutscene_handoff);
 		} else if(process && driver &&
 			driver->status() == MainProcessDriverStatus::terminal) {
-			initial.emplace(process->raster());
+			initial.emplace(normalize_main_cutscene_seed(process->raster()));
 		} else {
 			return std::unexpected(session_error(
 				ClassicStorySessionErrorCode::backend_contract_failed
@@ -1010,7 +1023,7 @@ struct ClassicStoryBackend final {
 
 	std::expected<void, ClassicStorySessionError> start_game_over()
 	{
-		if(!continue_completion || game_over) {
+		if(!continue_completion || game_over || game_over_completion) {
 			return std::unexpected(session_error(
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
@@ -1056,11 +1069,18 @@ struct ClassicStoryBackend final {
 
 	std::expected<void, ClassicStorySessionError> finish_game_over()
 	{
-		if(!game_over || !game_over->take_completion()) {
+		if(!game_over) {
 			return std::unexpected(session_error(
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
 		}
+		auto completion = game_over->take_completion();
+		if(!completion) {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::backend_contract_failed
+			));
+		}
+		game_over_completion.emplace(std::move(*completion));
 		game_over.reset();
 		return {};
 	}
@@ -1122,8 +1142,12 @@ struct ClassicStoryBackend final {
 			raster = &win->raster();
 		} else if(continue_scene) {
 			raster = &continue_scene->raster();
+		} else if(continue_completion) {
+			raster = &continue_completion->raster();
 		} else if(game_over) {
 			raster = &game_over->raster();
+		} else if(game_over_completion) {
+			raster = &game_over_completion->raster();
 		} else if(cutscene_handoff) {
 			raster = &*cutscene_handoff;
 		}
@@ -1732,6 +1756,7 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 		}
 	}
 
+	bool transitioned = false;
 	if(tick->ready) {
 		std::expected<void, ClassicStorySessionError> advanced{};
 		switch(impl_->scene) {
@@ -1845,13 +1870,14 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 			impl_->fail(std::move(advanced.error()));
 			return std::unexpected(*impl_->failure);
 		}
+		transitioned = true;
 	}
 
 	return ClassicStorySessionTick{
 		.scene = impl_->scene,
 		.status = impl_->status,
 		.source_sample_count = impl_->source_sample_count,
-		.surface_changed = tick->surface_changed,
+		.surface_changed = tick->surface_changed || transitioned,
 		.input_sampled = tick->input_sampled,
 		.process_advanced = tick->process_advanced,
 		.round_started = tick->round_started,
@@ -1886,6 +1912,13 @@ ClassicStorySessionScene ClassicStorySession::scene() const noexcept
 ClassicStorySessionStatus ClassicStorySession::status() const noexcept
 {
 	return impl_->status;
+}
+
+present::Raster ClassicStorySessionTestAccess::normalize_main_cutscene_seed(
+	const present::Raster &raster
+)
+{
+	return th03::app::normalize_main_cutscene_seed(raster);
 }
 
 CoreInput ClassicStorySessionTestAccess::story_main_input(

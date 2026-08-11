@@ -465,7 +465,8 @@ bool ClassicOpMusicRoomScene::initialize_visuals() noexcept
 		!snapshot_comment_blue() ||
 		!raster_.set_access_page(present::Page::zero) ||
 		!draw_comment(carry_.track_playing) ||
-		!snapshot_comment_blue()) {
+		!snapshot_comment_blue() ||
+		!raster_.set_access_page(music_page_accessed_)) {
 		return false;
 	}
 	raster_.set_palette_tone(100);
@@ -921,14 +922,14 @@ ClassicOpMusicRoomScene::advance(const ClassicOpMusicRoomInput &input)
 			phase_ = ClassicOpMusicRoomPhase::exit_release_poll;
 			return tick(
 				ClassicOpMusicRoomBoundary::input_poll,
-				false, true, false, selection_changed
+				selection_changed, true, false, selection_changed
 			);
 		}
 		if(input.controls.cancel) {
 			phase_ = ClassicOpMusicRoomPhase::exit_release_poll;
 			return tick(
 				ClassicOpMusicRoomBoundary::input_poll,
-				false, true, false, selection_changed
+				selection_changed, true, false, selection_changed
 			);
 		}
 		if(!input.controls.any()) {

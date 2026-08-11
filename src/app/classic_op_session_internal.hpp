@@ -141,6 +141,13 @@ struct ClassicOpSessionVsTerminal final {
 	SessionTransition transition{};
 };
 
+enum class ClassicOpVsSurfaceSource : std::uint8_t {
+	none,
+	win_completion,
+	win,
+	main_process,
+};
+
 // Source-private dependency seam. Production binds this to one concrete owner
 // of the loader, authenticated content, persistence files, scenes, and MAIN
 // process. Tests can substitute deterministic facts without forging any child
@@ -268,6 +275,11 @@ private:
 };
 
 struct ClassicOpSessionTestAccess final {
+	[[nodiscard]] static ClassicOpVsSurfaceSource vs_surface_source(
+		bool win,
+		bool win_completion,
+		bool main_process
+	) noexcept;
 	[[nodiscard]] static bool attract_input_present(
 		const ClassicMainInputSample &input
 	) noexcept;
