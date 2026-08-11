@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <limits>
+#include <optional>
+#include <span>
 
 namespace th03::present {
 namespace {
@@ -191,6 +193,57 @@ void advance_linework(Linework &line) noexcept
 	return true;
 }
 
+[[nodiscard]] bool draw_blue_span(
+	Raster &raster,
+	std::int16_t relative_y,
+	std::int16_t endpoint_a,
+	std::int16_t endpoint_b,
+	GrcgClipRect clip,
+	std::int16_t clip_height
+) noexcept
+{
+	if(relative_y < 0 || relative_y > clip_height) {
+		return true;
+	}
+
+	auto left = subtract_word(endpoint_a, clip.left);
+	auto right = subtract_word(endpoint_b, clip.left);
+	if((static_cast<std::uint16_t>(left) &
+		static_cast<std::uint16_t>(right) & 0x8000U) != 0U) {
+		return true;
+	}
+	if(left > right) {
+		const auto temporary = left;
+		left = right;
+		right = temporary;
+	}
+	if(left < 0) {
+		left = 0;
+	}
+	const auto clip_width = subtract_word(clip.right, clip.left);
+	if(right > clip_width) {
+		right = clip_width;
+	}
+	if(right < left) {
+		return true;
+	}
+
+	for(auto relative_x = left; relative_x <= right; ++relative_x) {
+		const Point point{
+			add_word(clip.left, relative_x),
+			add_word(clip.top, relative_y),
+		};
+		const auto previous = raster.pixel(raster.access_page(), point);
+		if(!previous || !raster.plot(
+			point,
+			static_cast<Index4>(*previous | 0x01U)
+		)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 [[nodiscard]] bool draw_trapezoid(
 	Raster &raster,
 	std::int16_t top_y,
@@ -224,6 +277,60 @@ void advance_linework(Linework &line) noexcept
 			return true;
 		}
 	}
+}
+
+[[nodiscard]] bool draw_blue_trapezoid(
+	Raster &raster,
+	std::int16_t top_y,
+	std::int16_t ylen,
+	Linework &side_a,
+	Linework &side_b,
+	GrcgClipRect clip,
+	std::int16_t clip_height
+) noexcept
+{
+	auto y = top_y;
+	auto remaining = ylen;
+	for(;;) {
+		if(!draw_blue_span(
+			raster,
+			y,
+			side_a.x,
+			side_b.x,
+			clip,
+			clip_height
+		)) {
+			return false;
+		}
+		advance_linework(side_a);
+		advance_linework(side_b);
+		y = add_word(y, 1);
+		remaining = add_word(remaining, -1);
+		if(remaining < 0) {
+			return true;
+		}
+	}
+}
+
+[[nodiscard]] std::optional<std::int16_t> top_intersection_x(
+	GrcgPoint upper,
+	GrcgPoint lower,
+	std::int16_t clip_top
+) noexcept
+{
+	const auto numerator = static_cast<std::int32_t>(
+		subtract_word(upper.x, lower.x)
+	) * static_cast<std::int32_t>(subtract_word(clip_top, upper.y));
+	const auto denominator = subtract_word(upper.y, lower.y);
+	if(denominator == 0) {
+		return std::nullopt;
+	}
+	const auto quotient = numerator / static_cast<std::int32_t>(denominator);
+	if(quotient < std::numeric_limits<std::int16_t>::min() ||
+		quotient > std::numeric_limits<std::int16_t>::max()) {
+		return std::nullopt;
+	}
+	return add_word(upper.x, quotient);
 }
 
 } // namespace
@@ -392,6 +499,169 @@ bool grcg_triangle(
 		clip_height,
 		fill
 	);
+}
+
+bool grcg_polygon_c_blue(
+	Raster &raster,
+	std::span<const GrcgPoint> points,
+	GrcgClipRect clip
+) noexcept
+{
+	constexpr std::size_t source_point_capacity = 10U;
+	if(points.size() < 2U || points.size() > source_point_capacity ||
+		!valid_clip(clip, raster.raster_mode())) {
+		return false;
+	}
+
+	std::size_t left_index = 0U;
+	std::size_t right_index = 0U;
+	auto top_y = points[0U].y;
+	auto bottom_y = points[0U].y;
+	auto minimum_x = points[0U].x;
+	auto maximum_x = points[0U].x;
+	for(std::size_t index = 1U; index < points.size(); ++index) {
+		const auto point = points[index];
+		if(point.y < top_y) {
+			left_index = index;
+			right_index = index;
+			top_y = point.y;
+		} else if(point.y == top_y) {
+			right_index = index;
+		} else if(point.y > bottom_y) {
+			bottom_y = point.y;
+		}
+		if(point.x <= minimum_x) {
+			minimum_x = point.x;
+		} else if(point.x > maximum_x) {
+			maximum_x = point.x;
+		}
+	}
+
+	if(clip.right < minimum_x || clip.left > maximum_x ||
+		clip.bottom < top_y || clip.top > bottom_y) {
+		return true;
+	}
+	if(bottom_y > clip.bottom) {
+		bottom_y = clip.bottom;
+	}
+	const auto last_index = points.size() - 1U;
+	if(left_index == 0U && right_index == last_index) {
+		left_index = last_index;
+		right_index = 0U;
+	}
+
+	const auto decrement_index = [last_index](std::size_t index) noexcept {
+		return (index == 0U) ? last_index : (index - 1U);
+	};
+	const auto increment_index = [last_index](std::size_t index) noexcept {
+		return (index == last_index) ? 0U : (index + 1U);
+	};
+
+	const auto left_upper_index = left_index;
+	for(std::size_t skipped = 0U;; ++skipped) {
+		left_index = decrement_index(left_index);
+		if(points[left_index].y >= clip.top) {
+			break;
+		}
+		if(skipped >= points.size()) {
+			return false;
+		}
+	}
+	auto left_upper = points[left_upper_index];
+	if(left_upper.y < clip.top) {
+		const auto clipped = top_intersection_x(
+			left_upper, points[left_index], clip.top
+		);
+		if(!clipped) {
+			return false;
+		}
+		left_upper.x = *clipped;
+		left_upper.y = clip.top;
+	}
+	top_y = left_upper.y;
+	auto left_y = points[left_index].y;
+	auto side_a = make_linework(
+		left_upper.x,
+		points[left_index].x,
+		subtract_word(left_y, top_y)
+	);
+
+	const auto right_upper_index = right_index;
+	for(std::size_t skipped = 0U;; ++skipped) {
+		right_index = increment_index(right_index);
+		if(points[right_index].y >= clip.top) {
+			break;
+		}
+		if(skipped >= points.size()) {
+			return false;
+		}
+	}
+	auto right_upper = points[right_upper_index];
+	if(right_upper.y < top_y) {
+		const auto clipped = top_intersection_x(
+			right_upper, points[right_index], clip.top
+		);
+		if(!clipped) {
+			return false;
+		}
+		right_upper.x = *clipped;
+	}
+	auto right_y = points[right_index].y;
+	auto side_b = make_linework(
+		right_upper.x,
+		points[right_index].x,
+		subtract_word(right_y, top_y)
+	);
+	const auto clip_height = subtract_word(clip.bottom, clip.top);
+
+	for(std::size_t edge_steps = 0U; edge_steps <= (points.size() * 2U);
+		++edge_steps) {
+		const auto next_y = (left_y <= right_y) ? left_y : right_y;
+		if(bottom_y <= next_y) {
+			return draw_blue_trapezoid(
+				raster,
+				subtract_word(top_y, clip.top),
+				subtract_word(bottom_y, top_y),
+				side_a,
+				side_b,
+				clip,
+				clip_height
+			);
+		}
+		if(!draw_blue_trapezoid(
+			raster,
+			subtract_word(top_y, clip.top),
+			subtract_word(subtract_word(next_y, 1), top_y),
+			side_a,
+			side_b,
+			clip,
+			clip_height
+		)) {
+			return false;
+		}
+		top_y = next_y;
+		if(top_y == left_y) {
+			const auto previous_index = left_index;
+			left_index = decrement_index(left_index);
+			left_y = points[left_index].y;
+			side_a = make_linework(
+				points[previous_index].x,
+				points[left_index].x,
+				subtract_word(left_y, top_y)
+			);
+		}
+		if(top_y == right_y) {
+			const auto previous_index = right_index;
+			right_index = increment_index(right_index);
+			right_y = points[right_index].y;
+			side_b = make_linework(
+				points[previous_index].x,
+				points[right_index].x,
+				subtract_word(right_y, top_y)
+			);
+		}
+	}
+	return false;
 }
 
 } // namespace th03::present

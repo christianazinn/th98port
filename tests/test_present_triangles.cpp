@@ -41,18 +41,19 @@ void expect_exact_pixels(
 	const Raster &raster,
 	Page page,
 	const std::array<GrcgPoint, Count> &expected,
-	std::string_view message
+	std::string_view message,
+	Index4 expected_color = triangle_color
 )
 {
 	for(const auto point : expected) {
 		expect(
-			raster.pixel(page, {point.x, point.y}) == triangle_color,
+			raster.pixel(page, {point.x, point.y}) == expected_color,
 			message
 		);
 	}
 	std::size_t actual_count = 0U;
 	for(const auto pixel : raster.graphics(page)) {
-		actual_count += (pixel == triangle_color) ? 1U : 0U;
+		actual_count += (pixel == expected_color) ? 1U : 0U;
 	}
 	expect(actual_count == Count, message);
 }
@@ -503,6 +504,165 @@ void test_access_page_zoom_and_invalid_requests()
 	}
 }
 
+void test_polygon_top_order_and_edge_progression()
+{
+	{
+		Raster raster;
+		// The first and final vertices share the top edge. grcg_polygon_c()
+		// swaps its left/right ring anchors only for this exact arrangement.
+		constexpr std::array<GrcgPoint, 4U> rectangle{{
+			{2, 1}, {2, 4}, {6, 4}, {6, 1},
+		}};
+		expect(
+			th03::present::grcg_polygon_c_blue(
+				raster, rectangle, full_400_line_clip
+			),
+			"flat-top ring-wrapped polygon draws"
+		);
+		constexpr std::array<GrcgPoint, 20U> expected{{
+			{2, 1}, {3, 1}, {4, 1}, {5, 1}, {6, 1},
+			{2, 2}, {3, 2}, {4, 2}, {5, 2}, {6, 2},
+			{2, 3}, {3, 3}, {4, 3}, {5, 3}, {6, 3},
+			{2, 4}, {3, 4}, {4, 4}, {5, 4}, {6, 4},
+		}};
+		expect_exact_pixels(
+			raster,
+			Page::zero,
+			expected,
+			"polygon top-anchor swap and inclusive bottom are exact",
+			1U
+		);
+	}
+	{
+		Raster raster;
+		constexpr std::array<GrcgPoint, 4U> diamond{{
+			{4, 1}, {7, 4}, {4, 7}, {1, 4},
+		}};
+		expect(
+			th03::present::grcg_polygon_c_blue(
+				raster, diamond, full_400_line_clip
+			),
+			"multi-edge diamond polygon draws"
+		);
+		constexpr std::array<GrcgPoint, 25U> expected{{
+			{4, 1},
+			{3, 2}, {4, 2}, {5, 2},
+			{2, 3}, {3, 3}, {4, 3}, {5, 3}, {6, 3},
+			{1, 4}, {2, 4}, {3, 4}, {4, 4}, {5, 4}, {6, 4}, {7, 4},
+			{2, 5}, {3, 5}, {4, 5}, {5, 5}, {6, 5},
+			{3, 6}, {4, 6}, {5, 6},
+			{4, 7},
+		}};
+		expect_exact_pixels(
+			raster,
+			Page::zero,
+			expected,
+			"polygon changes both source DDAs at the middle vertices",
+			1U
+		);
+	}
+}
+
+void test_polygon_top_clip_and_blue_plane_only()
+{
+	{
+		Raster raster;
+		constexpr GrcgClipRect clip{0, 0, 8, 5};
+		constexpr std::array<GrcgPoint, 4U> diamond{{
+			{4, -2}, {8, 2}, {4, 6}, {0, 2},
+		}};
+		expect(
+			th03::present::grcg_polygon_c_blue(raster, diamond, clip),
+			"top-and-bottom-clipped polygon draws"
+		);
+		constexpr std::array<GrcgPoint, 36U> expected{{
+			{2, 0}, {3, 0}, {4, 0}, {5, 0}, {6, 0},
+			{1, 1}, {2, 1}, {3, 1}, {4, 1}, {5, 1}, {6, 1}, {7, 1},
+			{0, 2}, {1, 2}, {2, 2}, {3, 2}, {4, 2}, {5, 2}, {6, 2}, {7, 2}, {8, 2},
+			{1, 3}, {2, 3}, {3, 3}, {4, 3}, {5, 3}, {6, 3}, {7, 3},
+			{2, 4}, {3, 4}, {4, 4}, {5, 4}, {6, 4},
+			{3, 5}, {4, 5}, {5, 5},
+		}};
+		expect_exact_pixels(
+			raster,
+			Page::zero,
+			expected,
+			"polygon computes direct signed top intersections before DDA setup",
+			1U
+		);
+	}
+	{
+		Raster raster;
+		expect(raster.set_access_page(Page::one), "select polygon access page");
+		expect(
+			raster.clear({0, 0, 10U, 8U}, 14U),
+			"seed R/G/E bits below B-plane polygon"
+		);
+		constexpr std::array<GrcgPoint, 4U> rectangle{{
+			{2, 2}, {7, 2}, {7, 5}, {2, 5},
+		}};
+		expect(
+			th03::present::grcg_polygon_c_blue(
+				raster, rectangle, full_400_line_clip
+			),
+			"B-plane-only polygon draws"
+		);
+		for(std::int32_t y = 0; y < 8; ++y) {
+			for(std::int32_t x = 0; x < 10; ++x) {
+				const auto inside = x >= 2 && x <= 7 && y >= 2 && y <= 5;
+				expect(
+					raster.pixel(Page::one, {x, y}) == (inside ? 15U : 14U),
+					"polygon sets B while preserving every R/G/E bit"
+				);
+				expect(
+					raster.pixel(Page::zero, {x, y}) == 0U,
+					"polygon changes only the selected access page"
+				);
+			}
+		}
+	}
+}
+
+void test_polygon_noop_and_invalid_requests()
+{
+	Raster raster;
+	expect(raster.clear({0, 0, 16U, 16U}, 6U), "seed polygon request page");
+	const auto before = raster.display_state_hash();
+	constexpr std::array<GrcgPoint, 4U> offscreen{{
+		{-20, -20}, {-10, -20}, {-10, -10}, {-20, -10},
+	}};
+	expect(
+		th03::present::grcg_polygon_c_blue(
+			raster, offscreen, full_400_line_clip
+		) && raster.display_state_hash() == before,
+		"fully clipped polygon is a successful no-op"
+	);
+	constexpr std::array<GrcgPoint, 1U> too_few{{{2, 2}}};
+	expect(
+		!th03::present::grcg_polygon_c_blue(
+			raster, too_few, full_400_line_clip
+		),
+		"single-point polygon is rejected"
+	);
+	constexpr std::array<GrcgPoint, 11U> too_many{};
+	expect(
+		!th03::present::grcg_polygon_c_blue(
+			raster, too_many, full_400_line_clip
+		),
+		"polygon beyond source point capacity is rejected"
+	);
+	expect(
+		!th03::present::grcg_polygon_c_blue(
+			raster, offscreen, {5, 0, 4, 10}
+		),
+		"polygon rejects an invalid clip"
+	);
+	expect(
+		raster.display_state_hash() == before,
+		"invalid polygon requests are atomic"
+	);
+}
+
 } // namespace
 
 int main()
@@ -515,6 +675,9 @@ int main()
 	test_direct_trapezoid_absolute_mask_and_page();
 	test_clip_bounds_and_endpoint_inclusivity();
 	test_access_page_zoom_and_invalid_requests();
+	test_polygon_top_order_and_edge_progression();
+	test_polygon_top_clip_and_blue_plane_only();
+	test_polygon_noop_and_invalid_requests();
 	if(failures != 0U) {
 		std::fprintf(stderr, "%zu of %zu checks failed\n", failures, checks);
 		return 1;

@@ -2,6 +2,7 @@
 #define TH03_PRESENT_TRIANGLES_HPP
 
 #include <cstdint>
+#include <span>
 
 #include "th03/present/vectors.hpp"
 
@@ -49,6 +50,17 @@ struct GrcgTriangleFill {
 	GrcgPoint third,
 	GrcgClipRect clip,
 	GrcgTriangleFill fill
+) noexcept;
+
+// Exact master.lib grcg_polygon_c() geometry for the closed TH03 Music Room
+// use. The source enables only the B plane and fills it with 1 bits, so this
+// primitive preserves R/G/E and existing B bits. It accepts the source-used
+// 2..10-point domain, writes Raster's current access page, and treats every
+// clip edge as inclusive.
+[[nodiscard]] bool grcg_polygon_c_blue(
+	Raster &raster,
+	std::span<const GrcgPoint> points,
+	GrcgClipRect clip
 ) noexcept;
 
 } // namespace th03::present
