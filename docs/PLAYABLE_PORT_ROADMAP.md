@@ -264,7 +264,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
 | SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
-| OP menus, Story, MAINL, cutscenes, staff | Partial | The validated fresh-Story config, source-private route policy, exact stage splash, campaign-static MAIN content, transactional Raster handoff into MAIN, winner scene, Continue choice, and Game Over timeline are integrated. The owning session loop, OP, cutscenes, endings, and staff remain. |
+| OP menus, Story, MAINL, cutscenes, staff | Partial | The validated fresh-Story config, source-private route policy, exact stage splash, campaign-static MAIN content, transactional Raster handoff into MAIN, winner scene, Continue choice, Game Over timeline, owning session loop, and complete typed cutscene script VM are integrated. OP, the cutscene Raster/resource executor, endings, and staff remain. |
 | Audio | No for the explicitly marked silent visual vertical slice; yes for a fully faithful release | Start source/data investigation now, but do not block visible MAIN on an invented WAV backend. |
 | Persistent score/configuration UI and localization/QoL | No | Keep it outside the first faithful path and behind an app-owned profile/catalog seam. |
 
@@ -276,7 +276,7 @@ The following parcels can proceed now, provided they do not claim readiness for 
 | Asset inventory and exact source role table for MAIN/OP/MAINL | th03-port/docs plus app manifest data | Every role names its donor loader/caller and decoder; unresolved names remain explicit. |
 | Final PC-98 source-surface compositor | th03_present | Synthetic Raster/TRAM/palette fixtures prove page selection, palette resolution, gaiji placement, and 640x400 output. |
 | Selection/title asset mapping and presenter primitives | th03_present plus app-owned scene code | Source table and synthetic/unit render tests; no dependency on the MAIN compositor being finished. |
-| Cutscene script format inventory | An app-facing th03_cutscene library only if the parser becomes independently testable | Supplied-byte parser has no filesystem and captures source input/fast-forward cases. |
+| Cutscene Raster/resource executor | `th03_present` plus app-owned scene content | Execute the completed supplied-byte VM's typed operations against the Master/upstream two-page model; retain script/resource ownership outside presentation and keep audio operations semantic. |
 | PMD/OPNA feasibility and legal provenance audit | Future th03_audio_pmd | Exact .M/.EFC/rhythm-data requirements and a reproducible upstream selection decision. |
 
 Avoid creating a placeholder th03-app which owns a second renderer or game state. The useful early app work is resource, input, clock, and construction seams with tests; the only gameplay frame producer remains th03_core plus its borrowed presentation observer.
@@ -293,7 +293,13 @@ Once VS-3 holds, add scenes in donor order rather than building a broad launcher
    source-traced Story route reaches each next-stage, continue, game-over, and
    ending branch with the corresponding screen/palette/timing sequence.
 2. OP title and selection. Implement only the source's actual choices (Story, VS, Music Room, registration view, option, quit) and its character selection/configuration steps. Reuse BFNT/CDG/PI primitives; do not import a desktop UI toolkit. Game text remains source bytes/BFNT/gaiji first. If a later launcher needs translated labels, keep a separate app-owned catalog rather than rewriting gameplay or source asset strings. Acceptance: source-traced title-to-MAINL handoff, all selected modes/characters, and source palette/page transitions match.
-3. Cutscenes and staff. Keep sequence policy in CutsceneScene and StaffScene, with image/flakes/text operations in presentation. Preserve the donor's script/input details before adding conveniences such as rewind, text log, or language selection. Acceptance: first/last pages, skip and fast-forward boundaries, staff CDG/palette/flake sequence, and return route match source traces.
+3. Cutscenes and staff. The complete source-ordered script VM is integrated;
+   next execute its typed image/text/palette operations in CutsceneScene and
+   keep StaffScene's flakes/text sequence in presentation. Preserve the donor's
+   input behaviour before adding conveniences such as rewind, text log, or
+   language selection. Acceptance: first/last pages, skip and fast-forward
+   boundaries, staff CDG/palette/flake sequence, and return route match source
+   traces.
 4. Profile and optional replay UX. After the Classic source scenes, persistence,
    and audio work, add a versioned app profile for controls/window/audio volume.
    A replay browser is explicitly optional and must not delay the Classic port.

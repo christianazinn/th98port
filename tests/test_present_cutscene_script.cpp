@@ -164,12 +164,11 @@ void test_lifecycle_ownership_separators_and_glyph()
 
 	batch = advance(vm);
 	expect(
-		batch.operations().size() == 4U &&
+		batch.operations().size() == 3U &&
 			operation<CutsceneRestoreBox>(batch, 0U) &&
 			operation<CutsceneReleaseBox>(batch, 1U) &&
-			operation<CutsceneFreeBackground>(batch, 2U) &&
-			operation<CutsceneFinish>(batch, 3U) && vm.finished(),
-		"end restores/releases the box and frees the background before finishing"
+			operation<CutsceneFinish>(batch, 2U) && vm.finished(),
+		"TH03 end restores and releases the box before finishing"
 	);
 	auto after = vm.step({});
 	expect(
@@ -872,7 +871,7 @@ void test_malformed_atomicity_unknown_and_boundary_default()
 	auto batch = advance(vm);
 	expect(batch.operations().empty(), "unknown opcode is ignored like source dispatcher");
 	batch = advance(vm);
-	expect(operation<CutsceneFinish>(batch, 3U), "unknown opcode does not hide terminator");
+	expect(operation<CutsceneFinish>(batch, 2U), "unknown opcode does not hide terminator");
 
 	script = bytes("\\fm\\e\\$");
 	vm = make_started_vm(script);

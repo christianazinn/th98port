@@ -515,10 +515,6 @@ std::expected<void, CutsceneScriptError> CutsceneScriptVm::execute_opcode(
 		if(!released) {
 			return released;
 		}
-		auto freed = append(batch, CutsceneFreeBackground{});
-		if(!freed) {
-			return freed;
-		}
 		return append(batch, CutsceneFinish{});
 	}
 
