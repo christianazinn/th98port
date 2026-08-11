@@ -202,6 +202,15 @@ public:
 		const ClassicOpSelectionCompletion &completion,
 		std::span<const LoadedMainResource> resources
 	);
+	// A fresh OP process returning from non-demo VS bypasses the title and
+	// enters character selection directly. This source-private factory
+	// authenticates the OP startup closure and carries only its MIKOFT state.
+	[[nodiscard]] static std::expected<ClassicOpCompletion, ClassicOpError>
+	direct_vs_reentry(
+		GameInit resident,
+		ClassicOpSelectionMode mode,
+		std::span<const LoadedMainResource> resources
+	);
 	~ClassicOpTitleMenuScene() = default;
 
 	ClassicOpTitleMenuScene(const ClassicOpTitleMenuScene &) = delete;
@@ -227,6 +236,7 @@ public:
 
 private:
 	friend struct ClassicOpSceneTestAccess;
+	friend struct ClassicOpSessionBackend;
 
 	struct Prepared final {
 		assets::PiImage long_background{};

@@ -379,6 +379,7 @@ add_library(th03_app_main STATIC
 	src/app/classic_op_music_room.cpp
 	src/app/classic_op_options_scene.cpp
 	src/app/classic_op_scene.cpp
+	src/app/classic_op_session.cpp
 	src/app/classic_op_selection.cpp
 	src/app/classic_registration_scene.cpp
 	src/app/classic_mainl_stage.cpp
@@ -656,6 +657,21 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-classic-op-selection-tests
 		COMMAND th03-app-classic-op-selection-tests
+	)
+
+	add_executable(th03-app-classic-op-session-tests
+		tests/test_app_classic_op_session.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-op-session-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-classic-op-session-tests PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-classic-op-session-tests)
+	add_test(
+		NAME th03-app-classic-op-session-tests
+		COMMAND th03-app-classic-op-session-tests
 	)
 
 	add_executable(th03-app-op-compiled-text-tests

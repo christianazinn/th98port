@@ -547,6 +547,34 @@ ClassicOpTitleMenuScene::create_predecoded(
 	return result;
 }
 
+std::expected<ClassicOpCompletion, ClassicOpError>
+ClassicOpTitleMenuScene::direct_vs_reentry(
+	GameInit resident,
+	ClassicOpSelectionMode mode,
+	std::span<const LoadedMainResource> resources
+)
+{
+	if(mode == ClassicOpSelectionMode::story) {
+		return std::unexpected(op_error(ClassicOpErrorCode::invalid_state));
+	}
+	auto prepared = prepare_resources(resources, true);
+	if(!prepared) {
+		return std::unexpected(std::move(prepared.error()));
+	}
+	present::Raster raster{};
+	present::Tram tram{};
+	tram.fill({});
+	prepared.value()->gaiji->install(tram);
+	return ClassicOpCompletion{
+		ClassicOpRoute::versus,
+		mode,
+		false,
+		std::move(resident),
+		std::move(raster),
+		std::move(tram),
+	};
+}
+
 bool ClassicOpTitleMenuScene::apply_palette(
 	const assets::Palette16Rgb4 &palette
 ) noexcept

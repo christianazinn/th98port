@@ -23,6 +23,9 @@
 
 namespace th03::app {
 
+struct ClassicOpSessionBackend;
+class MainProcessStaticContent;
+
 enum class ClassicStorySessionScene : std::uint8_t {
 	stage_splash,
 	main,
@@ -252,8 +255,10 @@ public:
 	[[nodiscard]] ClassicStorySessionScene scene() const noexcept;
 	[[nodiscard]] ClassicStorySessionStatus status() const noexcept;
 	[[nodiscard]] std::uint32_t source_sample_count() const noexcept;
+	[[nodiscard]] const GameInit &resident() const noexcept;
 private:
 	friend struct ClassicStorySessionTestAccess;
+	friend struct ClassicOpSessionBackend;
 	struct Impl;
 	explicit ClassicStorySession(std::unique_ptr<Impl> impl) noexcept;
 	[[nodiscard]] static std::expected<
@@ -263,6 +268,17 @@ private:
 		const MainStoryConfig &config,
 		std::shared_ptr<void> backend_owner,
 		ClassicStorySessionBackendOperations operations
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicStorySession>,
+		ClassicStorySessionError
+	> create_with_prepared_content(
+		const MainStoryConfig &config,
+		std::shared_ptr<MainResourceLoader> loader,
+		std::shared_ptr<const MainProcessStaticContent> static_content,
+		MainlStageTextAssets stage_text,
+		MainlStaffCompiledAssets staff_compiled,
+		std::filesystem::path score_path
 	);
 
 	std::unique_ptr<Impl> impl_;

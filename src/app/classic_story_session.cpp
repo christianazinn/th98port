@@ -274,7 +274,7 @@ std::expected<SessionTransition, MainProcessError> process_transition(
 } // namespace
 
 struct ClassicStoryBackend final {
-	std::unique_ptr<MainResourceLoader> loader{};
+	std::shared_ptr<MainResourceLoader> loader{};
 	std::shared_ptr<const MainProcessStaticContent> static_content{};
 	MainlStageTextAssets stage_text{};
 	MainlStaffCompiledAssets staff_compiled{};
@@ -296,7 +296,7 @@ struct ClassicStoryBackend final {
 	GameInit process_start{};
 
 	ClassicStoryBackend(
-		std::unique_ptr<MainResourceLoader> loader_,
+		std::shared_ptr<MainResourceLoader> loader_,
 		std::shared_ptr<const MainProcessStaticContent> static_content_,
 		MainlStageTextAssets stage_text_,
 		MainlStaffCompiledAssets staff_compiled_,
@@ -1484,13 +1484,39 @@ ClassicStorySession::create(
 		error.main_error.emplace(std::move(static_content.error()));
 		return std::unexpected(std::move(error));
 	}
+	auto shared_loader = std::shared_ptr<MainResourceLoader>(std::move(loader));
 	auto backend = std::make_shared<ClassicStoryBackend>(
-		std::move(loader), std::move(*static_content), std::move(stage_text),
+		std::move(shared_loader), std::move(*static_content), std::move(stage_text),
 		std::move(staff_compiled), std::move(score_path)
 	);
 	return create_with_backend(
 		config,
 		std::static_pointer_cast<void>(backend),
+		backend_operations(*backend)
+	);
+}
+
+std::expected<std::unique_ptr<ClassicStorySession>, ClassicStorySessionError>
+ClassicStorySession::create_with_prepared_content(
+	const MainStoryConfig &config,
+	std::shared_ptr<MainResourceLoader> loader,
+	std::shared_ptr<const MainProcessStaticContent> static_content,
+	MainlStageTextAssets stage_text,
+	MainlStaffCompiledAssets staff_compiled,
+	std::filesystem::path score_path
+)
+{
+	if(!loader || !static_content) {
+		return std::unexpected(session_error(
+			ClassicStorySessionErrorCode::invalid_config
+		));
+	}
+	auto backend = std::make_shared<ClassicStoryBackend>(
+		std::move(loader), std::move(static_content), std::move(stage_text),
+		std::move(staff_compiled), std::move(score_path)
+	);
+	return create_with_backend(
+		config, std::static_pointer_cast<void>(backend),
 		backend_operations(*backend)
 	);
 }
@@ -1815,6 +1841,11 @@ ClassicStorySessionStatus ClassicStorySession::status() const noexcept
 std::uint32_t ClassicStorySession::source_sample_count() const noexcept
 {
 	return impl_->source_sample_count;
+}
+
+const GameInit &ClassicStorySession::resident() const noexcept
+{
+	return impl_->plan.resident();
 }
 
 } // namespace th03::app
