@@ -362,6 +362,7 @@ add_library(th03_app_main STATIC
 	src/app/classic_mainl_stage.cpp
 	src/app/classic_mainl_story.cpp
 	src/app/classic_mainl_win.cpp
+	src/app/classic_story_session.cpp
 	src/app/direct_vs_cli.cpp
 	src/app/direct_vs_launch.cpp
 	src/app/main_direct_vs_runner.cpp
@@ -622,6 +623,21 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-classic-mainl-story-tests
 		COMMAND th03-app-classic-mainl-story-tests
+	)
+
+	add_executable(th03-app-classic-story-session-tests
+		tests/test_app_classic_story_session.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-story-session-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-classic-story-session-tests PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-classic-story-session-tests)
+	add_test(
+		NAME th03-app-classic-story-session-tests
+		COMMAND th03-app-classic-story-session-tests
 	)
 
 	add_executable(th03-app-classic-mainl-stage-tests

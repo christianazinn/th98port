@@ -571,49 +571,105 @@ std::expected<
 		) || !install_palette(
 			transition->raster_,
 			*transition->prepared_->splash_background.palette
-		) || !transition->raster_.copy_page(
-			present::Page::one,
-			{0, 0, present::graphics_width, present::graphics_height},
-			present::Page::zero,
-			{0, 0}
-		) || !transition->raster_.set_access_page(present::Page::zero) ||
-		!present::cdg_put_8(
-			transition->raster_, 96, 96, transition->prepared_->portraits[0U]
-		) || !present::cdg_put_hflip_8(
-			transition->raster_, 352, 96, transition->prepared_->portraits[1U]
-		) || (transition->prepared_->stage_number && !present::cdg_put_8(
-			transition->raster_,
-			384,
-			46,
-			*transition->prepared_->stage_number
-		)) || !present::graphics_text_put_8x16(
-			transition->raster_,
-			{80, 292},
-			*transition->prepared_->text[0U],
-			{15U, present::GraphicsTextWeight::bold, 0U}
-		) || !present::graphics_text_put_8x16(
-			transition->raster_,
-			{128, 308},
-			*transition->prepared_->text[1U],
-			{15U, present::GraphicsTextWeight::bold, 0U}
-		) || !present::graphics_text_put_8x16(
-			transition->raster_,
-			{336, 292},
-			*transition->prepared_->text[2U],
-			{15U, present::GraphicsTextWeight::bold, 0U}
-		) || !present::graphics_text_put_8x16(
-			transition->raster_,
-			{384, 308},
-			*transition->prepared_->text[3U],
-			{15U, present::GraphicsTextWeight::bold, 0U}
-		)) {
+		) || !transition->begin_splash_show()) {
 		return std::unexpected(stage_error(
 			ClassicMainlStageErrorCode::draw_failed
 		));
 	}
-	transition->raster_.set_palette_tone(0);
-	transition->raster_.apply_pending_palette();
 	return transition;
+}
+
+bool ClassicMainlStageTransition::begin_splash_show() noexcept
+{
+	if(!prepared_ || !raster_.copy_page(
+		present::Page::one,
+		{0, 0, present::graphics_width, present::graphics_height},
+		present::Page::zero,
+		{0, 0}
+	) || !raster_.set_access_page(present::Page::zero) ||
+		!present::cdg_put_8(
+			raster_, 96, 96, prepared_->portraits[0U]
+		) || !present::cdg_put_hflip_8(
+			raster_, 352, 96, prepared_->portraits[1U]
+		) || (prepared_->stage_number && !present::cdg_put_8(
+			raster_, 384, 46, *prepared_->stage_number
+		)) || !present::graphics_text_put_8x16(
+			raster_,
+			{80, 292},
+			*prepared_->text[0U],
+			{15U, present::GraphicsTextWeight::bold, 0U}
+		) || !present::graphics_text_put_8x16(
+			raster_,
+			{128, 308},
+			*prepared_->text[1U],
+			{15U, present::GraphicsTextWeight::bold, 0U}
+		) || !present::graphics_text_put_8x16(
+			raster_,
+			{336, 292},
+			*prepared_->text[2U],
+			{15U, present::GraphicsTextWeight::bold, 0U}
+		) || !present::graphics_text_put_8x16(
+			raster_,
+			{384, 308},
+			*prepared_->text[3U],
+			{15U, present::GraphicsTextWeight::bold, 0U}
+		)) {
+		return false;
+	}
+	raster_.set_palette_tone(0);
+	raster_.apply_pending_palette();
+	return true;
+}
+
+bool ClassicMainlStageTransition::preload_splash_into(
+	present::Raster &target
+) const noexcept
+{
+	if(!prepared_ || phase_ != ClassicMainlStagePhase::black_in ||
+		fade_index_ != 0U || wait_count_ != 0U ||
+		raster_.raster_mode() != present::RasterMode::lines_400 ||
+		target.raster_mode() != present::RasterMode::lines_400 ||
+		target.shown_page() != present::Page::zero ||
+		!target.set_access_page(present::Page::one) || !target.blit(
+			{
+				.pixels = raster_.graphics(present::Page::one),
+				.width = present::graphics_width,
+				.height = present::graphics_height,
+				.stride = present::graphics_width,
+			},
+			{0, 0}
+		)) {
+		return false;
+	}
+	const auto &palette = raster_.pending_palette();
+	for(std::size_t index = 0U; index < palette.colors.size(); ++index) {
+		if(!target.set_pending_palette_entry_rgb8(
+			static_cast<std::uint8_t>(index),
+			palette.colors[index]
+		)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool ClassicMainlStageTransition::adopt_preloaded_raster(
+	present::Raster raster
+) noexcept
+{
+	if(!prepared_ || phase_ != ClassicMainlStagePhase::black_in ||
+		fade_index_ != 0U || wait_count_ != 0U ||
+		raster.raster_mode() != present::RasterMode::lines_400 ||
+		raster.shown_page() != present::Page::zero ||
+		raster.access_page() != present::Page::one) {
+		return false;
+	}
+	raster_ = std::move(raster);
+	if(!begin_splash_show()) {
+		fail();
+		return false;
+	}
+	return true;
 }
 
 bool ClassicMainlStageTransition::stage_hidden_sheet() noexcept

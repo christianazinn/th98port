@@ -430,7 +430,7 @@ static_resource_spec(MainResourceKey key)
 		return MainResourceSpec{
 			.key = key,
 			.scene = MainResourceScene::mainl_stage_transition,
-			.archive = MainResourceArchive::yume2,
+			.archive = MainResourceArchive::yume1,
 			.decoder = MainResourceDecoder::bfnt_gaiji,
 			.logical_role = "mainl.gaiji_font",
 			.filename = "MIKOFT.BFT",

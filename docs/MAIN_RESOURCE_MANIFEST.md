@@ -21,10 +21,10 @@ DAT archive and not an installation directory. The one accepted layout is:
     00EX.PI ... 17EX.PI
     EN2.PI
     ENEMY00.PI ... ENEMY04.PI
+    MIKOFT.BFT
   YUME2.DAT/
     ENEDAT.DAT
     GAMEFT.BFT
-    MIKOFT.BFT
     LOSE.BF2 ROUND.BF2 ZIKICW.BF2
     00CH.BF2 ... 17CH.BF2
     00EX.MRS ... 17EX.MRS
@@ -127,7 +127,7 @@ atlas inputs. Duplicate player selections are loaded once.
 
 | Logical role pattern | Extracted path | Decoder | Selection rule |
 | --- | --- | --- | --- |
-| `mainl.gaiji_font` | `YUME2.DAT/MIKOFT.BFT` | BFNT gaiji | Always |
+| `mainl.gaiji_font` | `YUME1.DAT/MIKOFT.BFT` | BFNT gaiji | Always |
 | `mainl.character.<character>.stage_portrait` | `YUME1.DAT/00SL.CD2` through `16SL.CD2` | CDG/CD2 | Base character; palette selects one of two cels |
 | `mainl.stage.number_sheet` | `YUME1.DAT/ST.CD2` | CDG/CD2 | Numbered Story backgrounds only; cel is `story_stage + 1` |
 | `mainl.stage.base` | `YUME1.DAT/STNX0.PI` | PI | Always |

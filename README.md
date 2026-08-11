@@ -147,6 +147,10 @@ split comparisons. Original game data and replay captures remain external.
   SourceSurface-to-RGBA expansion into caller storage, and centered integer
   640x400 letterboxing. It assumes no source cadence, SDL type, key binding,
   window, or replay UI; those remain application/platform decisions.
+- `th03_app_main` also contains the source-private owning Classic Story route
+  over Stage, retained MAIN, Win, Continue, and Game Over. Remaining cutscene,
+  high-score, ending, and extra-ending scenes enter through single-use typed
+  requests; no second campaign or resident-state model is exposed.
 - `th03_app_resources` owns the checked external-content root and immutable
   byte cache. Original/extracted files remain local inputs and never enter the
   repository.

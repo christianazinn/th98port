@@ -112,6 +112,12 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   deadline without collapsing catch-up, and presents only the newest completed
   surface. GCC and MSVC dummy/software gates and byte-silent public local-data
   startup have reached the first displayed gameplay tick.
+- The source-private Classic Story owner now binds the implemented Stage,
+  retained MAIN, Win, Continue, and Game Over scenes into one process-lifetime
+  route. It shares the exact MAIN warning/repeat/terminal driver with Direct
+  VS, performs next-stage hidden-page preload at the winner boundary, retains
+  loss state through Continue, and emits single-use typed requests for the
+  remaining cutscene, registration, ending, and extra-ending scenes.
 
 The direct developer slice is now visible and interactive. It is not yet VS-2
 or VS-3 complete: exact source cadence/phase, fixed-script full-match routing,

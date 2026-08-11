@@ -648,6 +648,84 @@ void test_timeout_and_resource_atomicity()
 		"wait automatically exits after count 96");
 }
 
+void test_winner_preload_and_adoption()
+{
+	const auto config = story_config(3U, 8);
+	auto resources = resources_for(config);
+	SyntheticFont font;
+	auto stage = ClassicMainlStageTestAccess::create_with_synthetic_resources(
+		config, resources, text_assets(), font
+	);
+	expect(stage.has_value(), "winner-preload stage fixture creates");
+	if(!stage) {
+		return;
+	}
+
+	th03::present::Raster winner;
+	expect(winner.set_raster_mode(
+		th03::present::RasterMode::lines_400
+	) && winner.set_shown_page(Page::zero) &&
+		winner.set_access_page(Page::zero) && winner.clear(
+			{0, 0, th03::present::graphics_width,
+			 th03::present::graphics_height},
+			7U
+		) && winner.set_access_page(Page::one) && winner.clear(
+			{0, 0, th03::present::graphics_width,
+			 th03::present::graphics_height},
+			6U
+		), "winner preload target initializes");
+	for(std::uint8_t index = 0U; index < 16U; ++index) {
+		expect(winner.set_pending_palette_entry_rgb8(index, {
+			.r = static_cast<std::uint8_t>(index),
+			.g = 0U,
+			.b = 0U,
+		}), "winner palette seed initializes");
+	}
+	winner.set_palette_tone(50);
+	winner.apply_pending_palette();
+	const auto applied_before = winner.applied_palette();
+
+	expect(ClassicMainlStageTestAccess::preload_splash_into(
+		**stage, winner
+	), "prepared stage loads into the winner hidden page");
+	expect(winner.shown_page() == Page::zero &&
+		winner.access_page() == Page::one &&
+		winner.palette_tone() == 50 &&
+		winner.applied_palette() == applied_before,
+		"preload preserves winner shown page and applied palette");
+	expect_pixel(winner, Page::zero, {10, 10}, 7U,
+		"preload preserves the visible winner page");
+	expect_pixel(winner, Page::one, {10, 10}, 3U,
+		"preload copies the stage background to hidden page one");
+	expect_pixel(winner, Page::one, {10, 200}, 2U,
+		"preload copies the lower stage base to hidden page one");
+	expect(winner.pending_palette() == (*stage)->raster().pending_palette(),
+		"preload copies the unapplied stage palette");
+
+	expect(ClassicMainlStageTestAccess::adopt_preloaded_raster(
+		**stage, std::move(winner)
+	), "stage adopts the completed winner Raster");
+	expect((*stage)->phase() == ClassicMainlStagePhase::black_in &&
+		(*stage)->raster().shown_page() == Page::zero &&
+		(*stage)->raster().access_page() == Page::zero &&
+		(*stage)->raster().palette_tone() == 0,
+		"adoption begins the existing stage black-in without a tick");
+	expect_pixel((*stage)->raster(), Page::zero, {10, 10}, 3U,
+		"adoption publishes the preloaded splash on page zero");
+	expect_pixel((*stage)->raster(), Page::zero, {96, 96}, 9U,
+		"adoption draws the prepared portrait over the splash");
+	expect_pixel((*stage)->raster(), Page::zero, {80, 292}, 15U,
+		"adoption draws the prepared graphics-page text");
+
+	expect((*stage)->advance(false).has_value() &&
+		(*stage)->raster().palette_tone() == 0,
+		"first post-winner stage VSync keeps the source tone-zero step");
+	th03::present::Raster second_target;
+	expect(!ClassicMainlStageTestAccess::preload_splash_into(
+		**stage, second_target
+	), "preload cannot be repeated after stage presentation starts");
+}
+
 void test_all_story_scenarios_construct()
 {
 	SyntheticFont font;
@@ -670,6 +748,7 @@ int main()
 {
 	test_visible_stage_and_exact_timing();
 	test_timeout_and_resource_atomicity();
+	test_winner_preload_and_adoption();
 	test_all_story_scenarios_construct();
 
 	if(failures != 0U) {

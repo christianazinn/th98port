@@ -94,6 +94,7 @@ public:
 
 private:
 	friend class ClassicMainlWinScene;
+	friend struct ClassicStoryBackend;
 	explicit ClassicMainlWinCompletion(
 		present::Raster raster,
 		bool stage_splash_preloaded

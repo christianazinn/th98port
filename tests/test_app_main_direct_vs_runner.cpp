@@ -8,6 +8,7 @@
 #include "th03/app/main_direct_vs_runner.hpp"
 
 #include "main_direct_vs_runner_internal.hpp"
+#include "main_process_driver_internal.hpp"
 
 namespace {
 
@@ -17,6 +18,10 @@ using th03::app::MainDirectVsRunnerErrorCode;
 using th03::app::MainDirectVsRunnerOperations;
 using th03::app::MainDirectVsRunnerStatus;
 using th03::app::MainDirectVsRunnerTestAccess;
+using th03::app::MainProcessDriver;
+using th03::app::MainProcessDriverErrorCode;
+using th03::app::MainProcessDriverOperations;
+using th03::app::MainProcessDriverStatus;
 
 std::size_t checks = 0U;
 std::size_t failures = 0U;
@@ -46,6 +51,7 @@ struct FakeProcess {
 	bool fail_finish = false;
 	bool fail_transition = false;
 	th03::SessionAction transition_action = th03::SessionAction::exit_to_operator;
+	std::optional<th03::ContinueChoice> last_continue_choice{};
 };
 
 th03::app::MainProcessError fake_process_error()
@@ -99,16 +105,19 @@ std::expected<void, th03::app::MainProcessError> fake_finish(
 std::expected<th03::SessionTransition, th03::app::MainProcessError>
 fake_transition(
 	void *context,
-	std::optional<th03::ContinueChoice>
+	std::optional<th03::ContinueChoice> choice
 ) noexcept
 {
 	auto &fake = *static_cast<FakeProcess *>(context);
 	fake.transition_count++;
+	fake.last_continue_choice = choice;
 	if(fake.fail_transition) {
 		return std::unexpected(fake_process_error());
 	}
 	th03::SessionTransition transition{};
-	transition.action = fake.transition_action;
+	transition.action = choice ? ((*choice == th03::ContinueChoice::accept) ?
+		th03::SessionAction::start_gameplay :
+		th03::SessionAction::exit_to_operator) : fake.transition_action;
 	return transition;
 }
 
@@ -120,6 +129,18 @@ MainDirectVsRunnerOperations operations(FakeProcess &fake) noexcept
 		.start_next_round = &fake_repeat,
 		.finish_main_process = &fake_finish,
 		.session_transition = &fake_transition,
+	};
+}
+
+MainProcessDriverOperations driver_operations(FakeProcess &fake) noexcept
+{
+	const auto runner = operations(fake);
+	return {
+		.context = runner.context,
+		.step = runner.step,
+		.start_next_round = runner.start_next_round,
+		.finish_main_process = runner.finish_main_process,
+		.session_transition = runner.session_transition,
 	};
 }
 
@@ -411,6 +432,47 @@ void test_scheduler_catchup_keeps_distinct_samples()
 		"four overdue deadlines remain distinct and quit stops before its process sample");
 }
 
+void test_story_continue_capability()
+{
+	FakeProcess fake{};
+	fake.results[0U] = th03::StepStatus::terminal;
+	fake.result_count = 1U;
+	fake.transition_action = th03::SessionAction::request_continue;
+	auto created = MainProcessDriver::create(driver_operations(fake));
+	expect(created.has_value(), "neutral MAIN driver creates for Story");
+	if(!created) {
+		return;
+	}
+	auto &driver = **created;
+	const auto terminal = driver.consume({});
+	expect(terminal && terminal->terminal &&
+		driver.status() == MainProcessDriverStatus::terminal &&
+		driver.transition() && driver.transition()->action ==
+			th03::SessionAction::request_continue &&
+		fake.finish_count == 1U && fake.transition_count == 1U &&
+		!fake.last_continue_choice,
+		"terminal MAIN retains the initial Continue capability");
+	const auto accepted = driver.resolve_continue(
+		th03::ContinueChoice::accept
+	);
+	expect(accepted && accepted->action ==
+		th03::SessionAction::start_gameplay &&
+		fake.transition_count == 2U && fake.last_continue_choice ==
+			th03::ContinueChoice::accept,
+		"Continue acceptance resolves through the retained process once");
+	const auto repeated = driver.resolve_continue(
+		th03::ContinueChoice::decline
+	);
+	expect(!repeated && repeated.error().code ==
+		MainProcessDriverErrorCode::continue_already_resolved &&
+		fake.transition_count == 2U,
+		"resolved Continue capability rejects a second choice");
+	const auto extra_tick = driver.consume({});
+	expect(!extra_tick && extra_tick.error().code ==
+		MainProcessDriverErrorCode::not_running && fake.step_count == 1U,
+		"terminal driver rejects further MAIN samples");
+}
+
 } // namespace
 
 int main()
@@ -423,6 +485,7 @@ int main()
 	test_app_quit_is_not_gameplay_cancel();
 	test_process_failures_and_transition_domain();
 	test_scheduler_catchup_keeps_distinct_samples();
+	test_story_continue_capability();
 
 	if(failures != 0U) {
 		std::cerr << failures << " of " << checks

@@ -163,6 +163,7 @@ void test_manifest()
 				spec.filename == "ENEMY04.PI" && spec.expected_bytes == 7035U);
 		contains_mainl_font = contains_mainl_font ||
 			(spec.key.role == MainResourceRole::mainl_gaiji_font &&
+				spec.archive == MainResourceArchive::yume1 &&
 				spec.filename == "MIKOFT.BFT" && spec.expected_bytes == 8224U);
 		contains_stage_portrait = contains_stage_portrait ||
 			(spec.key.role == MainResourceRole::character_stage_portrait &&

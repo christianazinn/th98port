@@ -108,6 +108,8 @@ public:
 	[[nodiscard]] const present::Tram &tram() const noexcept;
 
 private:
+	friend class ClassicStorySession;
+	friend struct ClassicStoryBackend;
 	friend struct ClassicMainlStageTestAccess;
 	friend struct MainProcessStoryAccess;
 
@@ -142,6 +144,13 @@ private:
 		bool authenticate_resource_bytes
 	);
 	[[nodiscard]] bool stage_hidden_sheet() noexcept;
+	[[nodiscard]] bool begin_splash_show() noexcept;
+	[[nodiscard]] bool preload_splash_into(
+		present::Raster &target
+	) const noexcept;
+	[[nodiscard]] bool adopt_preloaded_raster(
+		present::Raster raster
+	) noexcept;
 	[[nodiscard]] bool finalize_handoff() noexcept;
 	[[nodiscard]] const MainStageHandoff *handoff() const noexcept;
 	[[nodiscard]] bool matches_process_config(
@@ -193,6 +202,22 @@ struct ClassicMainlStageTestAccess final {
 	) noexcept
 	{
 		return transition.handoff();
+	}
+
+	[[nodiscard]] static bool preload_splash_into(
+		const ClassicMainlStageTransition &transition,
+		present::Raster &target
+	) noexcept
+	{
+		return transition.preload_splash_into(target);
+	}
+
+	[[nodiscard]] static bool adopt_preloaded_raster(
+		ClassicMainlStageTransition &transition,
+		present::Raster raster
+	) noexcept
+	{
+		return transition.adopt_preloaded_raster(std::move(raster));
 	}
 };
 
