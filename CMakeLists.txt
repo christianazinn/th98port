@@ -204,6 +204,7 @@ th03_set_warnings(th03_app_resources)
 
 add_library(th03_present STATIC
 	src/present/cels.cpp
+	src/present/cutscene_script.cpp
 	src/present/graphics_text.cpp
 	src/present/main_background.cpp
 	src/present/main_boss.cpp
@@ -782,6 +783,16 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-present-staff-flakes-tests
 		COMMAND th03-present-staff-flakes-tests
+	)
+
+	add_executable(th03-present-cutscene-script-tests
+		tests/test_present_cutscene_script.cpp
+	)
+	target_link_libraries(th03-present-cutscene-script-tests PRIVATE th03_present)
+	th03_set_warnings(th03-present-cutscene-script-tests)
+	add_test(
+		NAME th03-present-cutscene-script-tests
+		COMMAND th03-present-cutscene-script-tests
 	)
 
 	add_executable(th03-present-superimpose-tests
