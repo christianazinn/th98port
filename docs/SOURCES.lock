@@ -25,3 +25,15 @@ Behavior precedence:
   Replay defines historical replay/QoL semantics, never a second gameplay core.
   Frozen oracle output defines executable native acceptance.
   The finalized V13 specification will define future user replay documents.
+
+Native audio dependencies (2026-08-11):
+  98fmplayer PMD sequencer:
+    upstream: https://github.com/Myon98/98fmplayer
+    commit: 4fa914e4b2b994cb3ccf92d571a20a7cdf1fe36a
+    license: BSD-2-Clause
+    retained notice and extraction delta: third_party/98fmplayer/
+  ymfm YM2608 synthesizer:
+    upstream: https://github.com/aaronsgiles/ymfm
+    commit: 81aec25ccbb98f4873a255f7551ac4dadac59b4a
+    license: BSD-3-Clause
+    retained notice and source lock: third_party/ymfm/

@@ -1,0 +1,3 @@
+# Preserve pinned third-party source bytes, including upstream trailing spaces.
+third_party/98fmplayer/fmdriver/fmdriver_pmd.c -whitespace
+third_party/98fmplayer/fmdriver/fmdriver_pmd.h -whitespace

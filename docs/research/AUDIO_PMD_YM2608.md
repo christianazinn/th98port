@@ -1,8 +1,8 @@
 # TH03 native audio: PMD, YM2608, and validation plan
 
-Status: research decision record, 2026-08-09. No implementation is authorized by
-this document. The original TH03 files were inspected in place; no original game,
-driver, music, effect, rhythm-ROM, or PCM bytes are copied into this repository.
+Status: accepted engine-foundation decision, updated 2026-08-11. The original
+TH03 files were inspected in place; no original game, driver, music, effect,
+rhythm-ROM, or PCM bytes are copied into this repository.
 
 ## Decision
 
@@ -15,20 +15,20 @@ Use a narrow PMD-compatible audio service with four explicit layers:
 4. a host resampler/mixer that applies independent user BGM and SFX gains after
    PMD's own volume/fade processing.
 
-The first implementation choice is **adapt the PMD subtree of
-`foo_input_pmd`, conditionally**. It is the shortest path to `.M` sequencing and
-already uses `ymfm`, but it must pass two gates before source enters this tree:
+The accepted implementation is the pinned BSD-2-Clause PMD sequencer from
+`Myon98/98fmplayer` at
+`4fa914e4b2b994cb3ccf92d571a20a7cdf1fe36a`, behind an opaque C shim, with
+the pinned BSD-3-Clause `ymfm` YM2608 core at
+`81aec25ccbb98f4873a255f7551ac4dadac59b4a`. Exact locks, retained notices, and
+the one-file extraction delta are tracked in `docs/SOURCES.lock` and
+`third_party/{98fmplayer,ymfm}/`.
 
-- establish a documented redistribution/license chain for the PMDWin-derived
-  PMD subtree, not merely the repository-level license; and
-- prove or implement the shipped PMD TSR's external FM-effect interface for
-  `YUME.EFC`. The current public API has no `.EFC` load/play operation, and its
-  `PMDSSGEffect` path is a different, embedded SSG-effect facility.
-
-If either gate is not cleared quickly, build a clean, TH03-scoped sequencer from
-the published PMD service contract and new traces, while retaining `ymfm`. Do
-not wrap foobar2000, ship a PMDWin DLL, or import GPL `pmdmini` code merely to
-avoid this boundary work.
+This choice does not outsource TH03's service semantics. 98fmplayer's external
+FM-effect path is stubbed, so the port owns `.EFC`, stop/start/fade/measure,
+pause/mask, and SFX arbitration behavior against donor documentation and shipped-
+TSR traces. The imported foundation supplies byte-fed `.M` sequencing and chip
+writes only. Do not wrap foobar2000, ship a PMDWin DLL, or import GPL `pmdmini`
+code merely to avoid that boundary work.
 
 This fits the post-core roadmap: deterministic gameplay remains the already
 validated authority, while audio becomes a presentation consumer rather than a
@@ -82,9 +82,11 @@ The music room exposes 19 of these. `WIN.M` and `OVER.M` are transition/game-ove
 tracks rather than music-room selections. `00MM.M` through `08MM.M` are the
 character themes; the selected character changes the digit in the loaded name.
 
-`GAME.BAT` selects `PMD.COM`, `PMDB2.COM`, or `PMD86.COM` after the game's sound
-hardware probe, starts the selected driver with `/M8 /V0 /E2 /K`, runs the game,
-and releases that same driver afterward. Thus the native target is not an
+The pinned donor's `th02/pc98/game_bat.cpp` replica selects `PMD.COM`,
+`PMDB2.COM`, or `PMD86.COM` after the game's sound hardware probe, starts the
+selected driver with `/M8 /V0 /E2 /K`, runs the game, and releases that same
+driver afterward. A byte-silent check of the shipped batch file remains the
+authority gate for that command line. Thus the native target is not an
 abstract “PMD file player”: it is the behavior common to, or deliberately chosen
 from, these shipped resident variants. In particular, the port still has to
 decide which variant is the reference when they differ.
@@ -194,21 +196,49 @@ durations. The exact table in the TH03 source is:
 | 10 | 17 | 24 | 21 | 18 | 68 |
 | 11 | 2 | 17 | 22 | 14 | 0 |
 
-Call sites use IDs `1..21`; ID 22 is not currently observed. The updater runs
+The complete source census finds 63 sites using 18 IDs: IDs 4, 11, 12, and 22
+are unused, and ID 8 is the assembly-only score-registration cue. The updater runs
 after player updates and before the pause branch in the round loop, which fixes
 same-frame ordering. The native presentation layer should preserve this
 scheduler as an event policy in front of PMD, rather than asking the audio
 callback to arbitrate nondeterministically.
 
 `snd_bgm_active()` is based on the BGM-mode flag, while `snd_se_active()` is
-based on FM capability. This separation, plus the accepted replay-patch use of
-PMD pause/resume while SFX continues, is the right user-visible model: pausing
-or muting BGM must not implicitly disable effects.
+based on FM capability. However, OP configuration starts the driver only when
+Music is on, so Classic Music=off also makes effects unavailable. Independent
+user BGM/SFX gain is a later explicit QoL policy, not original behavior. The
+accepted replay-patch pause/resume path is separate: it pauses song sequencing
+while the resident driver and SFX service remain available.
 
 ## Candidate audit
 
 Pins below are the upstream `HEAD` values observed on 2026-08-09. Any import
 must add an exact source lock and retain all required notices.
+
+### `98fmplayer` PMD sequencer — accepted donor
+
+Audited and imported commit:
+[`4fa914e4b2b994cb3ccf92d571a20a7cdf1fe36a`](https://github.com/Myon98/98fmplayer/tree/4fa914e4b2b994cb3ccf92d571a20a7cdf1fe36a),
+BSD-2-Clause. The driver has no filesystem or mutable file-scope state; it takes
+a mutable byte image and reaches the chip through three callbacks plus a timer
+interrupt. Five of six retained driver files are byte-identical to the pin. The
+marked `fmdriver.h` extraction patch replaces the unused PPZ8 include with the
+same guarded callback layout, avoiding an otherwise transitive C11-atomic and
+visualizer dependency.
+
+`pmd_load()` is chip-silent, but playback writes PMD repeat counters into the
+song image. The port therefore validates an immutable input span, retains an
+immutable prepared copy, and creates a new mutable image for every Play. Its C
+header is not valid C++, so public port headers expose no vendor layout.
+
+The generated hermetic gate locks the first 199,680 maximum-fidelity samples:
+61 register writes, register FNV-1a `85023b32`, signed-16 stereo PCM FNV-1a
+`1df60dc5`, and 12 Timer-B ticks, identical on GCC and MSVC. A separate
+byte-silent external gate loads and advances all 21 shipped songs on both and
+independently confirms that 20 issue ADPCM-A rhythm key-ons.
+
+Limit: the external FM-effect path remains incomplete. `.EFC` is a port-owned
+follow-up, not a claimed feature of this dependency.
 
 ### `ymfm` — recommended synthesis backend
 
@@ -239,8 +269,8 @@ Limits and maintenance costs:
   `ACCESS_ADPCM_B`. The YM2608 class fixes the six rhythm address ranges at
   `0x0000..0x1fff`, so silence is expected without an 8 KiB rhythm image;
 - default maximum-fidelity YM2608 output is input clock divided by 8. At the
-  PC-98 OPNA clock of 7,987,200 Hz that is 998,400 samples/s, requiring an
-  explicit host-rate converter. The fidelity/rate behavior is documented in
+  provisional 7,987,200 Hz configuration that is 998,400 samples/s, requiring
+  an explicit host-rate converter. The fidelity/rate behavior is documented in
   [`ymfm_opn.h`](https://github.com/aaronsgiles/ymfm/blob/81aec25ccbb98f4873a255f7551ac4dadac59b4a/src/ymfm_opn.h);
 - its normal YM2608 output is already summed by component/channel. Independent
   post-PMD BGM/SFX stems require a small maintained extension or masked-channel
@@ -252,7 +282,7 @@ Limits and maintenance costs:
 Verdict: use it. Validate register semantics separately from acoustic accuracy,
 and keep the adapter small enough to rebase when upstream changes.
 
-### `foo_input_pmd` and its `PMD/` subtree — conditional sequencer donor
+### `foo_input_pmd` and its `PMD/` subtree — audited alternative, not imported
 
 Audited commit:
 [`632622b07ad930d70c430bdbca9e71e96e1e9306`](https://github.com/stuerp/foo_input_pmd/tree/632622b07ad930d70c430bdbca9e71e96e1e9306).
@@ -321,9 +351,9 @@ the provenance chain and confirm—through an upstream notice or maintainer/righ
 confirmation—that the MIT grant covers the inherited PMDWin-derived code and
 the required attributions. Do this before import, not at release freeze.
 
-Verdict: best technical starting point if the license chain is documented and
-the `.EFC` spike succeeds. Fork only the minimum PMD core, make the fork's
-lineage conspicuous, and upstream generally useful fixes where practical.
+Verdict: not selected. The narrower 98fmplayer extraction proves the same
+byte-fed separation without Win32/filesystem coupling or an unresolved
+PMDWin-subtree license chain. Retain this audit as rejected-alternative context.
 
 ### PMDWin / `pmdmini` — reference only unless GPL is accepted
 
@@ -345,7 +375,7 @@ embed Yamaha's rhythm ROM. The relevant access path is visible in
 [`ymfm_adpcm.cpp`](https://github.com/aaronsgiles/ymfm/blob/81aec25ccbb98f4873a255f7551ac4dadac59b4a/src/ymfm_adpcm.cpp),
 and the fixed ranges in
 [`ymfm_opn.cpp`](https://github.com/aaronsgiles/ymfm/blob/81aec25ccbb98f4873a255f7551ac4dadac59b4a/src/ymfm_opn.cpp#L973-L1007).
-`foo_input_pmd` likewise asks the user for either `ym2608_adpcm_rom.bin` or six
+Other players likewise ask the user for either `ym2608_adpcm_rom.bin` or six
 specifically named 44.1 kHz mono 16-bit WAVs; that loading convention does not
 confer redistribution rights on the data.
 
@@ -364,9 +394,11 @@ Policy:
 - Repository tests use generated impulses/ramps or purpose-created freely
   licensed samples, never original game or Yamaha ROM bytes.
 
-TH03 ships no ADPCM-B/PPC/PVI/P86 bank. The POC should nevertheless trace
-whether each `.M` writes rhythm or ADPCM registers before deciding which
-optional decoders can be compiled out.
+TH03 ships no ADPCM-B/PPC/PVI/P86 bank. The byte-silent corpus gate now proves
+that 20 of 21 songs use ADPCM-A rhythm while the ordinary ADPCM/PCM part is
+musically unused across all 21. Authentic playback therefore requires the
+caller-supplied 8 KiB rhythm image; empty input is an explicit deterministic
+silent-rhythm development mode.
 
 ## Recommended architecture
 
@@ -407,7 +439,9 @@ priority and once-per-frame update are TH03 call semantics, not chip behavior.
 
 The sequencer exposes PMD operations rather than a generic player API. It owns:
 
-- the exact 7,987,200 Hz OPNA clock and integer/rational timebase;
+- an explicit caller-supplied OPNA clock and integer/rational timebase; the
+  conventional 7,987,200 Hz value remains provisional until primary PC-98
+  hardware evidence is tracked;
 - Timer-A and Timer-B ordering, including deferred start;
 - PMD `.M` cursor/loop/part state and the measure counter;
 - the internal `0..255` fade volume and signed fade speed;
@@ -473,37 +507,37 @@ This makes three validation levels explicit:
 
 | Rank | Option | Decision |
 |---:|---|---|
-| 1 | Extract a narrow `foo_input_pmd/PMD` fork, retain/pin its `ymfm`, remove Win32 I/O, add PMD service façade, `.EFC`, traces, stems, and port-owned resampling | Preferred **only after** license-chain confirmation and an `.EFC` compatibility spike. Lowest schedule risk for `.M`. |
-| 2 | Clean TH03-scoped PMD sequencer from documented services plus independently captured traces; use stock/pinned `ymfm` | Release fallback and likely long-term lowest provenance/maintenance surface. More initial reverse-engineering, especially `.EFC`. |
+| 1 | Adapt the narrow BSD-2 98fmplayer PMD sequencer behind an opaque C shim and drive pinned `ymfm` | **Accepted and implemented for the engine foundation.** Add TH03 service semantics and `.EFC` in port-owned code. |
+| 2 | Clean TH03-scoped PMD sequencer from documented services plus independently captured traces; use stock/pinned `ymfm` | Fallback if shipped-TSR comparison exposes unbounded donor incompatibility. |
 | 3 | Adapt GPL PMDWin/`pmdmini` as a source dependency | Only if the whole distribution deliberately accepts GPL-2.0 and its scope. Otherwise reference behavior only. |
 | 4 | Embed foobar/plugin/DLL, emulate the entire PC-98 audio stack, or pre-render songs/SFX | Reject. Opaque dependencies, weak tracing/control, poor portability, and no faithful dynamic fade/SFX interaction. |
 
-The rank is deliberately conditional. If provenance or `.EFC` remains unresolved
-at the end of the small POC, option 2 becomes rank 1; do not let a temporary
-technical shortcut become an indefinite release blocker.
+The engine-foundation choice is now accepted. Option 2 remains the bounded
+fallback only if shipped-TSR comparison exposes a material incompatibility that
+cannot be corrected at the narrow service boundary.
 
-## Small no-UI proof of concept
+## Implemented foundation and next no-UI service probe
 
-Build one standalone command-line probe; no SDL, foobar SDK, settings UI, audio
-device, or gameplay-core integration.
+The engine foundation already proves byte-fed transactional loading, fresh-song
+and fresh-chip replay, deterministic register/PCM output, supplied rhythm-ROM
+ownership, and all-21-song bounded advancement without SDL, settings UI, an
+audio device, or gameplay-core integration. Extend that same offline boundary
+for the remaining TH03 service probe:
 
-1. Before importing code, record exact candidate SHAs, licenses/notices, and the
-   PMDWin provenance answer. A temporary external checkout may be used for the
-   spike, outside distributable source.
-2. Give the probe `--song`, `--efc`, optional `--rhythm-rom`, `--script`,
+1. Give the probe `--song`, `--efc`, optional `--rhythm-rom`, `--script`,
    `--ticks`/`--samples`, `--pcm-out`, and `--trace-out`. Original assets remain
    external ignored inputs.
-3. Drive `OP.M` with stop/load/play, then fade speeds `3`, `8`, and `16`, query
+2. Drive `OP.M` with stop/load/play, then fade speeds `3`, `8`, and `16`, query
    volume after every PMD tick, pause/resume mid-note, and stop. Separately drive
    `OVER.M` until measure 3.
-4. Load `YUME.EFC`, invoke every observed ID `1..21`, and record the complete
+3. Load `YUME.EFC`, invoke every observed ID `1..21`, and record the complete
    channel/register ownership lifecycle. Also script at least one lower-priority
    replacement rejection, equal-priority replacement, forced effect, and an
    effect while music is paused/fading.
-5. Render the same finite scripts with MSVC x64 and GCC/Clang x64. Add x86 only
+4. Render the same finite scripts with MSVC x64 and GCC/Clang x64. Add x86 only
    if it is a supported product target; never make x86 an accidental condition
    of correctness.
-6. The POC passes when semantic and register traces are stable, bounded renders
+5. The service probe passes when semantic and register traces are stable, bounded renders
    of all `.M` files return without decoder-side hangs or out-of-range reads,
    `.EFC` behavior matches the reference trace, and canonical PCM is reproducible
    for the same backend/data. Intentional song loops are not decoder hangs.
@@ -554,14 +588,14 @@ register divergence before a waveform metric.
 
 1. **Reference TSR:** choose `PMD.COM`, `PMDB2.COM`, or `PMD86.COM` for each
    supported sound-board mode and trace their material differences.
-2. **PMD subtree rights:** obtain and archive a clear license/provenance answer
-   for the C60/Kajihara-derived code in `foo_input_pmd/PMD`.
+2. **PMD dependency provenance:** resolved for the imported BSD-2 98fmplayer
+   files; retain the exact pin, source delta, and binary notices.
 3. **`.EFC` format and ownership:** document the bank header/indexing, all used
    opcodes, channel-steal/restore rules, timing, and effect-ID zero behavior from
    the shipped driver. This is the largest functional unknown.
-4. **Actual song feature subset:** trace all 21 `.M` files to decide whether
-   rhythm, ADPCM-B, embedded SSG effects, FM extension, or optional PCM commands
-   occur. Asset absence alone is insufficient.
+4. **Actual song feature subset:** corpus structure and the native byte-silent
+   gate resolve rhythm (20/21) and ordinary ADPCM/PCM (unused). Shipped-TSR
+   register comparison remains necessary for exact sequencing fidelity.
 5. **Rhythm provenance:** decide whether reference-mode users provide an owned
    8 KiB ROM, whether a redistributable replacement exists, and how packaging
    communicates silent-rhythm mode. Do not use unofficial download links.
@@ -578,6 +612,6 @@ register divergence before a waveform metric.
     pause, and stage-transition event ordering; the gameplay replay corpus alone
     does not freeze these audiovisual boundaries.
 
-Audio implementation should not start in `libth03` while these are unresolved.
-The safe first move is the external, no-UI trace probe and the two candidate
-gates above.
+Audio remains outside `libth03`. The no-UI engine foundation and both generated
+and external byte-silent gates are implemented; the next safe move is the
+port-owned service/EFC layer, followed by resampling and SDL delivery.

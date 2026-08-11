@@ -8,8 +8,9 @@ Practice, and ordinary VS, plus a separate title-Demo gate, on top of the Phase
 strict V13 span adapter and the first stdlib-only asset/indexed-raster
 foundations now sit beside that core. An optional SDL 3 application now launches
 both the complete authenticated Classic OP/MAINL/MAIN lifecycle and the earlier
-direct-VS developer path. Classic currently follows the source's sound-unavailable
-fallback while the native PMD/OPNA service remains separate work.
+direct-VS developer path. A separate byte-fed PMD/YM2608 engine foundation is
+now present, but Classic still follows the source's sound-unavailable fallback
+until the TH03 service, resampling, and SDL-device parcels are integrated.
 
 ## Build and test
 
@@ -66,8 +67,10 @@ The shown rate is a provisional host policy, not an authenticity claim.
 Kotohime additionally requires the explicit developer flag
 `--kotohime-zero-red` until her source-uninitialized Bomb fade byte has an
 evidence-backed release policy. The Classic path currently drains semantic
-audio commands into a deterministic silent backend; it does not claim PMD/OPNA
-audio fidelity yet. `--help` lists keyboard controls and all launch options.
+audio commands into a deterministic silent backend; the new offline PMD/OPNA
+engine is not yet connected to scene commands or an audio device and therefore
+is not an audio-fidelity claim. `--help` lists keyboard controls and all launch
+options.
 
 Validate an external frozen case without copying it into this repository:
 

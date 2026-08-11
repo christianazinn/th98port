@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(th03_port VERSION 0.1.0 LANGUAGES CXX)
+project(th03_port VERSION 0.1.0 LANGUAGES C CXX)
 
 include(CTest)
 
@@ -177,6 +177,83 @@ function(th03_set_warnings target)
 			target_compile_options(${target} PRIVATE -Werror)
 		endif()
 	endif()
+endfunction()
+
+# Imported permissive dependencies keep their upstream diagnostics rather than
+# entering the port-owned warning-as-error contract. All adapter/shim code below
+# still uses th03_set_warnings().
+function(th03_silence_vendor_warnings target)
+	if(MSVC)
+		target_compile_options(${target} PRIVATE /W0)
+	else()
+		target_compile_options(${target} PRIVATE -w)
+	endif()
+endfunction()
+
+add_library(th03_vendor_98fmplayer STATIC
+	third_party/98fmplayer/fmdriver/fmdriver_common.c
+	third_party/98fmplayer/fmdriver/fmdriver_pmd.c
+)
+target_include_directories(
+	th03_vendor_98fmplayer PRIVATE third_party/98fmplayer
+)
+target_compile_features(th03_vendor_98fmplayer PRIVATE c_std_11)
+set_target_properties(
+	th03_vendor_98fmplayer PROPERTIES C_EXTENSIONS OFF
+)
+th03_silence_vendor_warnings(th03_vendor_98fmplayer)
+
+add_library(th03_vendor_ymfm STATIC
+	third_party/ymfm/src/ymfm_adpcm.cpp
+	third_party/ymfm/src/ymfm_opn.cpp
+	third_party/ymfm/src/ymfm_pcm.cpp
+	third_party/ymfm/src/ymfm_ssg.cpp
+)
+target_include_directories(
+	th03_vendor_ymfm SYSTEM PUBLIC third_party/ymfm/src
+)
+target_compile_features(th03_vendor_ymfm PRIVATE cxx_std_14)
+set_target_properties(th03_vendor_ymfm PROPERTIES CXX_EXTENSIONS OFF)
+th03_silence_vendor_warnings(th03_vendor_ymfm)
+
+add_library(th03_audio_pmd STATIC
+	src/audio/pmd_opna.cpp
+	src/audio/pmd_shim.c
+)
+target_include_directories(
+	th03_audio_pmd
+	PUBLIC include
+	PRIVATE src/audio
+)
+target_include_directories(
+	th03_audio_pmd SYSTEM PRIVATE third_party/98fmplayer
+)
+target_link_libraries(
+	th03_audio_pmd PRIVATE th03_vendor_98fmplayer th03_vendor_ymfm
+)
+target_compile_features(th03_audio_pmd PUBLIC cxx_std_23 PRIVATE c_std_11)
+set_target_properties(
+	th03_audio_pmd PROPERTIES CXX_EXTENSIONS OFF C_EXTENSIONS OFF
+)
+th03_set_warnings(th03_audio_pmd)
+
+function(th03_stage_audio_licenses target)
+	if(NOT TARGET ${target})
+		message(FATAL_ERROR
+			"th03_stage_audio_licenses received an unknown target: ${target}"
+		)
+	endif()
+	foreach(_dependency IN ITEMS 98fmplayer ymfm)
+		add_custom_command(
+			TARGET ${target} POST_BUILD
+			COMMAND "${CMAKE_COMMAND}" -E make_directory
+				"$<TARGET_FILE_DIR:${target}>/licenses/${_dependency}"
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+				"${CMAKE_CURRENT_SOURCE_DIR}/third_party/${_dependency}/LICENSE"
+				"$<TARGET_FILE_DIR:${target}>/licenses/${_dependency}/LICENSE"
+			VERBATIM
+		)
+	endforeach()
 endfunction()
 
 add_library(th03_assets STATIC
@@ -431,6 +508,14 @@ if(TH03_ENABLE_SDL)
 endif()
 
 if(BUILD_TESTING)
+	add_executable(th03-audio-pmd-tests
+		tests/test_audio_pmd_opna.cpp
+	)
+	target_link_libraries(th03-audio-pmd-tests PRIVATE th03_audio_pmd)
+	th03_set_warnings(th03-audio-pmd-tests)
+	th03_stage_audio_licenses(th03-audio-pmd-tests)
+	add_test(NAME th03-audio-pmd-tests COMMAND th03-audio-pmd-tests)
+
 	add_executable(th03-tests
 		tests/test_main.cpp
 	)
