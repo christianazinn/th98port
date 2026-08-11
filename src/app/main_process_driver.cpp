@@ -83,9 +83,14 @@ MainProcessDriver::consume(CoreInput input) noexcept
 
 	MainProcessDriverTick result{
 		.step_result = *stepped,
-		.surface_changed = true,
+		.surface_changed = stepped->status != StepStatus::paused,
 	};
-	if(context_before == InputContext::interstitial) {
+	const bool completed_paused_warning =
+		context_before == InputContext::pause && pause_return_context_ &&
+		*pause_return_context_ == InputContext::interstitial &&
+		stepped->status != StepStatus::paused;
+	if((context_before == InputContext::interstitial &&
+		stepped->status != StepStatus::paused) || completed_paused_warning) {
 		const bool final_sample = warning_samples_remaining_ == 1U;
 		const bool valid_intermediate = !final_sample &&
 			stepped->status == StepStatus::running;
@@ -106,16 +111,55 @@ MainProcessDriver::consume(CoreInput input) noexcept
 
 	switch(stepped->status) {
 	case StepStatus::running:
+		if(context_before == InputContext::pause) {
+			if(!pause_return_context_) {
+				fail(MainProcessDriverError{
+					.code = MainProcessDriverErrorCode::unexpected_step_status,
+					.step_status = stepped->status,
+				});
+				return std::unexpected(*failure_);
+			}
+			input_context_ = *pause_return_context_;
+			pause_return_context_.reset();
+		}
 		break;
 	case StepStatus::phase_transition:
-		if(context_before == InputContext::gameplay) {
+		if(context_before == InputContext::pause) {
+			if(!pause_return_context_) {
+				fail(MainProcessDriverError{
+					.code = MainProcessDriverErrorCode::unexpected_step_status,
+					.step_status = stepped->status,
+				});
+				return std::unexpected(*failure_);
+			}
+			if(*pause_return_context_ == InputContext::gameplay) {
+				input_context_ = InputContext::interstitial;
+				warning_samples_remaining_ = 27U;
+			} else {
+				input_context_ = InputContext::gameplay;
+			}
+			pause_return_context_.reset();
+		} else if(context_before == InputContext::gameplay) {
 			input_context_ = InputContext::interstitial;
 			warning_samples_remaining_ = 27U;
 		} else {
 			input_context_ = InputContext::gameplay;
 		}
 		break;
+	case StepStatus::paused:
+		if(context_before != InputContext::pause) {
+			pause_return_context_ = context_before;
+		} else if(!pause_return_context_) {
+			fail(MainProcessDriverError{
+				.code = MainProcessDriverErrorCode::unexpected_step_status,
+				.step_status = stepped->status,
+			});
+			return std::unexpected(*failure_);
+		}
+		input_context_ = InputContext::pause;
+		break;
 	case StepStatus::round_transition: {
+		pause_return_context_.reset();
 		auto repeated = operations_.start_next_round(operations_.context);
 		if(!repeated) {
 			fail(process_error(std::move(repeated.error())));
@@ -126,6 +170,7 @@ MainProcessDriver::consume(CoreInput input) noexcept
 		break;
 	}
 	case StepStatus::terminal: {
+		pause_return_context_.reset();
 		auto finished = operations_.finish_main_process(operations_.context);
 		if(!finished) {
 			fail(process_error(std::move(finished.error())));
@@ -205,4 +250,3 @@ const std::optional<SessionTransition> &MainProcessDriver::transition()
 }
 
 } // namespace th03::app
-

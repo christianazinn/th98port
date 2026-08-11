@@ -2939,6 +2939,211 @@ void test_version_neutral_replay_runner()
 	}
 }
 
+void test_live_pause_frame_boundary()
+{
+	th03::GameInit init{};
+	init.game_mode = th03::game_mode::vs_1p_2p;
+	init.is_cpu = {0U, 0U};
+	init.paletted_character = {1, 3};
+	th03::GameContent content{};
+	content.enemy_formations.resize(2U);
+	for(auto &formation : content.enemy_formations) {
+		formation.enemy_scripts.push_back({0U});
+	}
+	auto game = th03::Game::create(init, std::move(content));
+	check(game.has_value(), "live-pause test game creates");
+	if(!game) {
+		return;
+	}
+
+	auto result = game->step(
+		th03::CoreInput{.system = 0x1000U},
+		th03::InputContext::gameplay
+	);
+	const auto paused_boundary_hash = result.input_boundary_state.state_hash;
+	check(
+		result.status == th03::StepStatus::paused &&
+		result.input_boundary_state.global_frame == 1U &&
+		result.input_boundary_state.round_frame == 0U &&
+		game->canonical_state().round_frame == 0U,
+		"live Cancel pauses after player updates and before the late frame suffix"
+	);
+	result = game->step(
+		th03::CoreInput{.p1 = 0x0020U, .system = 0x1000U},
+		th03::InputContext::pause
+	);
+	check(
+		result.status == th03::StepStatus::paused &&
+		result.input_boundary_state.state_hash == paused_boundary_hash &&
+		game->canonical_state().global_frame == 1U &&
+		game->canonical_state().round_frame == 0U,
+		"live pause polling preserves the gameplay boundary and logical frame"
+	);
+	result = game->step({}, th03::InputContext::pause);
+	check(
+		result.status == th03::StepStatus::paused &&
+		result.input_boundary_state.state_hash == paused_boundary_hash &&
+		game->canonical_state().global_frame == 1U,
+		"live pause waits for a choice after the opening input is released"
+	);
+	result = game->step({}, th03::InputContext::pause);
+	check(
+		result.status == th03::StepStatus::paused &&
+		result.input_boundary_state.state_hash == paused_boundary_hash &&
+		game->canonical_state().round_frame == 0U,
+		"idle live pause samples remain side-effect free"
+	);
+	result = game->step(
+		th03::CoreInput{.system = 0x1000U},
+		th03::InputContext::pause
+	);
+	check(
+		result.status == th03::StepStatus::paused &&
+		result.input_boundary_state.state_hash == paused_boundary_hash &&
+		game->canonical_state().round_frame == 0U,
+		"resume Cancel waits for its own release"
+	);
+	result = game->step(
+		th03::CoreInput{.system = 0x0020U},
+		th03::InputContext::pause
+	);
+	check(
+		result.status == th03::StepStatus::paused &&
+		result.input_boundary_state.state_hash == paused_boundary_hash &&
+		game->canonical_state().round_frame == 0U,
+		"resume release waits for every physical key mirrored into input_sp"
+	);
+	result = game->step({}, th03::InputContext::pause);
+	check(
+		result.status == th03::StepStatus::running &&
+		game->canonical_state().global_frame == 1U &&
+		game->canonical_state().round_frame == 1U,
+		"resume release completes the original source frame exactly once"
+	);
+	result = game->step({}, th03::InputContext::pause);
+	check(
+		result.status == th03::StepStatus::invalid_input_context &&
+		game->canonical_state().round_frame == 1U,
+		"pause context is rejected after the live pause closes"
+	);
+
+	result = game->step(
+		th03::CoreInput{.system = 0x1000U},
+		th03::InputContext::gameplay
+	);
+	check(
+		result.status == th03::StepStatus::paused,
+		"a later live Cancel opens a fresh pause"
+	);
+	(void)game->step({}, th03::InputContext::pause);
+	result = game->step(
+		th03::CoreInput{.system = 0x4000U},
+		th03::InputContext::pause
+	);
+	check(
+		result.status == th03::StepStatus::terminal &&
+		game->canonical_state().route == 0U &&
+		game->canonical_state().global_frame == 2U &&
+		game->canonical_state().round_frame == 2U,
+		"live pause Q exits after completing the deferred source frame"
+	);
+
+	init.runtime_snapshot = th03::RuntimeSnapshot{};
+	init.runtime_snapshot->players[0U].gauge_charged = 128U << 4U;
+	init.runtime_snapshot->players[0U].gauge_avail = 128U << 4U;
+	init.round_start_snapshot = th03::RoundStartSnapshot{};
+	init.round_start_snapshot->carry.spell_ready_frames[0U] = 127U;
+	th03::GameContent warning_content{};
+	warning_content.enemy_formations.resize(2U);
+	for(auto &formation : warning_content.enemy_formations) {
+		formation.enemy_scripts.push_back({0U});
+	}
+	auto warning_game = th03::Game::create(
+		init, std::move(warning_content)
+	);
+	check(warning_game.has_value(), "warning-pause test game creates");
+	if(!warning_game) {
+		return;
+	}
+	const auto attack_queued = warning_game->step({});
+	const auto warning_opened = warning_game->step({});
+	result = warning_game->step(
+		th03::CoreInput{.system = 0x1000U},
+		th03::InputContext::interstitial
+	);
+	check(
+		attack_queued.status == th03::StepStatus::running &&
+		warning_opened.status == th03::StepStatus::phase_transition &&
+		result.status == th03::StepStatus::paused &&
+		warning_game->canonical_state().global_frame == 3U &&
+		warning_game->canonical_state().round_frame == 1U,
+		"warning sample Cancel enters the same blocking pause before consuming its tone sample"
+	);
+	(void)warning_game->step(
+		th03::CoreInput{.system = 0x1000U},
+		th03::InputContext::pause
+	);
+	(void)warning_game->step({}, th03::InputContext::pause);
+	(void)warning_game->step(
+		th03::CoreInput{.system = 0x1000U},
+		th03::InputContext::pause
+	);
+	result = warning_game->step({}, th03::InputContext::pause);
+	check(
+		result.status == th03::StepStatus::running &&
+		warning_game->canonical_state().global_frame == 3U &&
+		warning_game->canonical_state().round_frame == 1U,
+		"warning-pause resume consumes the interrupted warning sample without another logical input latch"
+	);
+	for(std::size_t sample = 1U; sample < 26U; ++sample) {
+		result = warning_game->step({}, th03::InputContext::interstitial);
+		check(
+			result.status == th03::StepStatus::running,
+			"warning remains open for every post-pause intermediate sample"
+		);
+	}
+	result = warning_game->step({}, th03::InputContext::interstitial);
+	check(
+		result.status == th03::StepStatus::phase_transition &&
+		warning_game->canonical_state().global_frame == 29U &&
+		warning_game->canonical_state().round_frame == 2U,
+		"warning pause preserves the exact 27-sample warning count and outer frame suffix"
+	);
+
+	init.is_cpu = {1U, 1U};
+	th03::GameContent cpu_warning_content{};
+	cpu_warning_content.enemy_formations.resize(2U);
+	for(auto &formation : cpu_warning_content.enemy_formations) {
+		formation.enemy_scripts.push_back({0U});
+	}
+	auto cpu_warning_game = th03::Game::create(
+		init, std::move(cpu_warning_content)
+	);
+	check(cpu_warning_game.has_value(), "CPU/CPU warning-pause test game creates");
+	if(!cpu_warning_game) {
+		return;
+	}
+	(void)cpu_warning_game->step({});
+	const auto cpu_warning_opened = cpu_warning_game->step({});
+	result = cpu_warning_game->step(
+		th03::CoreInput{.system = 0x1000U},
+		th03::InputContext::interstitial
+	);
+	check(
+		cpu_warning_opened.status == th03::StepStatus::phase_transition &&
+		result.status == th03::StepStatus::running,
+		"CPU/CPU warning Cancel requests exit without opening a live pause"
+	);
+	for(std::size_t sample = 1U; sample < 27U; ++sample) {
+		result = cpu_warning_game->step({}, th03::InputContext::interstitial);
+	}
+	check(
+		result.status == th03::StepStatus::terminal &&
+		cpu_warning_game->canonical_state().route == 0U,
+		"CPU/CPU warning Cancel exits after the interrupted source frame suffix"
+	);
+}
+
 } // namespace
 
 int main()
@@ -2987,6 +3192,7 @@ int main()
 	test_t3case();
 	test_enedat();
 	test_recorded_pause_frame_boundary();
+	test_live_pause_frame_boundary();
 	test_t3split();
 	test_practice_retry_policy();
 	test_version_neutral_replay_runner();

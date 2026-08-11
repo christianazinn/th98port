@@ -10,6 +10,7 @@ namespace th03 {
 namespace {
 
 constexpr std::uint16_t input_cancel = 0x1000U;
+constexpr std::uint16_t input_q = 0x4000U;
 
 std::uint32_t initial_effective_reset_seed(const GameInit &init) noexcept
 {
@@ -24,12 +25,22 @@ std::uint32_t initial_effective_reset_seed(const GameInit &init) noexcept
 	return static_cast<std::uint32_t>(init.resident_rand);
 }
 
-StepResult finish_gameplay_frame(auto &impl, GameplayObserver *observer)
+void observe_live_pause_transition(GameplayObserver *observer) noexcept
 {
-	const auto input_boundary = detail::canonical_state(impl.state);
-	if(detail::gameplay_frame_suffix_before_interstitial(
-		impl.state, observer
-	)) {
+	if(observer != nullptr) {
+		observer->main_feedback_cue_requested(MainFeedbackCueRequested{
+			.site = MainFeedbackCueSite::live_pause_transition,
+		});
+	}
+}
+
+StepResult finish_gameplay_frame_after_control(
+	auto &impl,
+	const CanonicalState &input_boundary,
+	GameplayObserver *observer
+)
+{
+	if(detail::warning_interstitial_begin(impl.state, observer)) {
 		impl.warning_interstitial_samples_remaining = 27U;
 		return StepResult{StepStatus::phase_transition, input_boundary};
 	}
@@ -43,6 +54,137 @@ StepResult finish_gameplay_frame(auto &impl, GameplayObserver *observer)
 		};
 	}
 	return StepResult{StepStatus::running, input_boundary};
+}
+
+StepResult finish_gameplay_frame(auto &impl, GameplayObserver *observer)
+{
+	const auto input_boundary = detail::canonical_state(impl.state);
+	const auto live_pause_requested =
+		detail::gameplay_frame_suffix_through_feedback_boundary(
+			impl.state, observer
+		);
+	if(!impl.replay_pause_adapter && live_pause_requested) {
+		impl.live_pause_phase = LivePausePhase::release_before_choice;
+		impl.live_pause_return_context = InputContext::gameplay;
+		impl.live_pause_input_boundary = input_boundary;
+		observe_live_pause_transition(observer);
+		return StepResult{StepStatus::paused, input_boundary};
+	}
+	return finish_gameplay_frame_after_control(
+		impl, input_boundary, observer
+	);
+}
+
+[[nodiscard]] bool any_pause_input(const CoreInput &input) noexcept
+{
+	// sub_C7A5() waits on input_sp, not on either gameplay-player mask.
+	// The platform mapper mirrors only the physical keys that the donor's
+	// input_reset_sense_key_held() contributes to input_sp into [system].
+	return input.system != 0U;
+}
+
+void live_pause_input_latch(auto &impl, const CoreInput &input) noexcept
+{
+	// The blocking loop repeatedly overwrites all three source input words but
+	// does not pass through t3case_frame_io() or advance a gameplay frame.
+	impl.state.input_player = {input.p1, input.p2};
+	impl.state.input_system = input.system;
+}
+
+StepResult finish_warning_interstitial_sample(
+	auto &impl,
+	GameplayObserver *observer
+)
+{
+	if(observer != nullptr) {
+		observer->warning_interstitial_sample(WarningInterstitialSample{
+			.ordinal = static_cast<std::uint8_t>(
+				27U - impl.warning_interstitial_samples_remaining
+			),
+		});
+	}
+	const auto input_boundary = detail::canonical_state(impl.state);
+	--impl.warning_interstitial_samples_remaining;
+	if(impl.warning_interstitial_samples_remaining != 0U) {
+		return StepResult{StepStatus::running, input_boundary};
+	}
+	detail::gameplay_frame_suffix_after_interstitial(impl.state, observer);
+	if(impl.state.round_complete) {
+		return StepResult{
+			(impl.state.route == 1U)
+				? StepStatus::round_transition
+				: StepStatus::terminal,
+			input_boundary,
+		};
+	}
+	return StepResult{StepStatus::phase_transition, input_boundary};
+}
+
+StepResult finish_live_pause(
+	auto &impl,
+	bool resumed,
+	GameplayObserver *observer
+)
+{
+	const auto return_context = impl.live_pause_return_context;
+	impl.live_pause_phase = LivePausePhase::inactive;
+	if(resumed) {
+		observe_live_pause_transition(observer);
+	}
+	if(return_context == InputContext::interstitial) {
+		return finish_warning_interstitial_sample(impl, observer);
+	}
+	return finish_gameplay_frame_after_control(
+		impl, impl.live_pause_input_boundary, observer
+	);
+}
+
+StepResult step_live_pause(
+	auto &impl,
+	const CoreInput &input,
+	GameplayObserver *observer
+)
+{
+	if(impl.live_pause_phase == LivePausePhase::inactive) {
+		return StepResult{
+			StepStatus::invalid_input_context,
+			detail::canonical_state(impl.state),
+		};
+	}
+	live_pause_input_latch(impl, input);
+	const auto paused = [&]() {
+		return StepResult{
+			StepStatus::paused,
+			impl.live_pause_input_boundary,
+		};
+	};
+	switch(impl.live_pause_phase) {
+	case LivePausePhase::release_before_choice:
+		if(!any_pause_input(input)) {
+			impl.live_pause_phase = LivePausePhase::wait_for_choice;
+		}
+		return paused();
+	case LivePausePhase::wait_for_choice:
+		if((input.system & input_q) != 0U) {
+			impl.state.session_exit_requested = true;
+			return finish_live_pause(impl, false, observer);
+		}
+		if((input.system & input_cancel) != 0U) {
+			impl.live_pause_phase = LivePausePhase::release_after_resume;
+		}
+		return paused();
+	case LivePausePhase::release_after_resume:
+		if(any_pause_input(input)) {
+			return paused();
+		}
+		return finish_live_pause(impl, true, observer);
+	case LivePausePhase::inactive:
+		break;
+	}
+	return StepResult{
+		StepStatus::invalid_input_context,
+		detail::canonical_state(impl.state),
+	};
 }
 
 } // namespace
@@ -287,6 +429,9 @@ StepResult Game::step(
 			detail::canonical_state(impl_->state),
 		};
 	}
+	if(context == InputContext::pause) {
+		return step_live_pause(*impl_, input, observer);
+	}
 	if(context == InputContext::interstitial) {
 		if(impl_->replay_pause_deferred) {
 			impl_->state.input_player = {input.p1, input.p2};
@@ -304,34 +449,30 @@ StepResult Game::step(
 			};
 		}
 		detail::interstitial_input_latch(impl_->state, input);
-		if(observer != nullptr) {
-			observer->warning_interstitial_sample(WarningInterstitialSample{
-				.ordinal = static_cast<std::uint8_t>(
-					27U - impl_->warning_interstitial_samples_remaining
-				),
-			});
-		}
-		const auto input_boundary = detail::canonical_state(impl_->state);
-		impl_->warning_interstitial_samples_remaining--;
-		if(impl_->warning_interstitial_samples_remaining == 0U) {
-			detail::gameplay_frame_suffix_after_interstitial(
-				impl_->state, observer
-			);
-			if(impl_->state.round_complete) {
+		if(!impl_->replay_pause_adapter &&
+			(impl_->state.input_system & input_cancel) != 0U) {
+			const bool both_cpu =
+				impl_->state.players[0U].is_cpu != 0U &&
+				impl_->state.players[1U].is_cpu != 0U;
+			if(both_cpu) {
+				impl_->state.session_exit_requested = true;
+			} else {
+				impl_->live_pause_phase = LivePausePhase::release_before_choice;
+				impl_->live_pause_return_context = InputContext::interstitial;
+				impl_->live_pause_input_boundary =
+					detail::canonical_state(impl_->state);
+				observe_live_pause_transition(observer);
 				return StepResult{
-					(impl_->state.route == 1U)
-						? StepStatus::round_transition
-						: StepStatus::terminal,
-					input_boundary,
+					StepStatus::paused, impl_->live_pause_input_boundary
 				};
 			}
-			return StepResult{StepStatus::phase_transition, input_boundary};
 		}
-		return StepResult{StepStatus::running, input_boundary};
+		return finish_warning_interstitial_sample(*impl_, observer);
 	}
 	if(
 		impl_->warning_interstitial_samples_remaining != 0U ||
-		impl_->replay_pause_deferred
+		impl_->replay_pause_deferred ||
+		impl_->live_pause_phase != LivePausePhase::inactive
 	) {
 		return StepResult{
 			StepStatus::invalid_input_context,
@@ -411,6 +552,7 @@ std::expected<void, Error> Game::start_next_round()
 	);
 	impl_->warning_interstitial_samples_remaining = 0U;
 	impl_->replay_pause_deferred = false;
+	impl_->live_pause_phase = LivePausePhase::inactive;
 	return {};
 }
 

@@ -644,7 +644,7 @@ void warning_portrait_update(
 	}
 }
 
-bool gameplay_frame_suffix_before_interstitial(
+bool gameplay_frame_suffix_through_feedback_boundary(
 	DeterministicState &state,
 	GameplayObserver *observer
 ) noexcept
@@ -666,7 +666,17 @@ bool gameplay_frame_suffix_before_interstitial(
 		state.players[0].is_cpu != 0U && state.players[1].is_cpu != 0U
 	) {
 		state.session_exit_requested = true;
+		return false;
 	}
+	return (state.input_system & input_cancel) != 0U;
+}
+
+bool gameplay_frame_suffix_before_interstitial(
+	DeterministicState &state,
+	GameplayObserver *observer
+) noexcept
+{
+	(void)gameplay_frame_suffix_through_feedback_boundary(state, observer);
 	return warning_interstitial_begin(state, observer);
 }
 

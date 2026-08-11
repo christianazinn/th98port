@@ -26,9 +26,10 @@ The requested gameplay/replay boundary is complete as of 2026-08-09:
   asset, presentation, audio, application, leaderboard, and Arrange-mode
   recommendations.
 
-The remaining direct-core limitation is the live-human pause/Q interaction,
-which is an explicit future application protocol boundary. Recorded pauses are
-already supported. Continue adding replay fixtures as integration evidence;
+The stock live-human pause/Q interaction is implemented as a staged core and
+application protocol: release, choose Q or Resume, then release again without
+advancing gameplay. Recorded Replay Patch pauses remain a separate replay-
+coordinator contract. Continue adding replay fixtures as integration evidence;
 new mismatches must still be diagnosed from source rather than repaired from
 expected summaries.
 

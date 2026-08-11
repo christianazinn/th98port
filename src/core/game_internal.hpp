@@ -638,6 +638,14 @@ bool gameplay_frame_suffix_before_interstitial(
 	DeterministicState &state,
 	GameplayObserver *observer = nullptr
 ) noexcept;
+bool gameplay_frame_suffix_through_feedback_boundary(
+	DeterministicState &state,
+	GameplayObserver *observer = nullptr
+) noexcept;
+bool warning_interstitial_begin(
+	DeterministicState &state,
+	GameplayObserver *observer = nullptr
+) noexcept;
 void interstitial_input_latch(
 	DeterministicState &state,
 	const CoreInput &input
@@ -660,6 +668,13 @@ std::uint16_t randring_next16(DeterministicState &state) noexcept;
 
 } // namespace detail
 
+enum class LivePausePhase : std::uint8_t {
+	inactive,
+	release_before_choice,
+	wait_for_choice,
+	release_after_resume,
+};
+
 struct Game::Impl {
 	Impl(
 		const GameInit &init,
@@ -677,6 +692,9 @@ struct Game::Impl {
 	CanonicalState replay_pause_input_boundary{};
 	bool replay_pause_adapter = false;
 	bool replay_pause_deferred = false;
+	LivePausePhase live_pause_phase = LivePausePhase::inactive;
+	InputContext live_pause_return_context = InputContext::gameplay;
+	CanonicalState live_pause_input_boundary{};
 	bool main_process_finished = false;
 	std::uint32_t effective_reset_seed = 0;
 	RoundStartObservation round_start{};

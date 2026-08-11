@@ -114,9 +114,10 @@ Remaining P1/source-policy edges:
   covers a nonzero carried phase. Ordinary transitions still enter at phase
   zero; the correction matters for callback-overlap states such as a Demo timer
   and result gate coinciding.
-- Live human-mode pause/Q interaction remains application input. Separately,
-  recorded V11/T3CASE pause input is mandatory replay-coordinator behavior and
-  is implemented and covered by focused deferred-frame/route-precedence tests.
+- Live human-mode pause/Q interaction is implemented through the staged Game
+  and interactive-driver protocol. Separately, recorded V11/T3CASE pause input
+  is mandatory replay-coordinator behavior and remains covered by focused
+  deferred-frame/route-precedence tests.
 - Final `story_opponents[9]`/`unused_2` overwrite is not represented, which is
   acceptable only under an explicit terminal-state normalization policy.
 - The lower clamp in native Story safety and the native requirement that Demo

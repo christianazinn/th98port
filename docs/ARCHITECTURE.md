@@ -181,10 +181,11 @@ Every donor callback reachable during gameplay must be inventoried as one of:
 Replay oracles then prove integration, ordering, and deterministic equivalence.
 They must never be used to choose which gameplay paths deserve implementation.
 
-The remaining live-human pause/Q loop is deliberately an application protocol
-boundary. Recorded pauses are fully coordinated by `th03_replay`; the future
-interactive client must expose the same staged frame boundary without placing
-UI or device polling inside `th03_core`.
+The live-human pause/Q loop is a staged core/application protocol boundary.
+`th03_core` exposes the source release/choice/release states and freezes the
+late frame; the interactive driver supplies device samples while retaining its
+last published surface. Recorded pauses remain fully and separately coordinated
+by `th03_replay`.
 
 ## Gameplay frame implementation partitions
 

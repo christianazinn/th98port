@@ -35,6 +35,7 @@ struct CoreInput {
 enum class InputContext : std::uint8_t {
 	gameplay,
 	interstitial,
+	pause,
 };
 
 enum class InputProtocol : std::uint8_t {
@@ -236,6 +237,7 @@ enum class StepStatus {
 	terminal,
 	invalid_input_context,
 	simulation_not_implemented,
+	paused,
 };
 
 struct StepResult {

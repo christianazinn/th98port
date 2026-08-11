@@ -100,6 +100,8 @@ struct MainFeedbackPolicy final {
 		return {5U, MainFeedbackAction::reset_then_request};
 	case MainFeedbackCueSite::warning_interstitial_started:
 		return {19U, MainFeedbackAction::force};
+	case MainFeedbackCueSite::live_pause_transition:
+		return {21U, MainFeedbackAction::force};
 	}
 	return {};
 }
@@ -1276,7 +1278,8 @@ std::expected<StepResult, MainProcessError> MainProcess::step(
 		return std::unexpected(*error);
 	}
 	if(context != InputContext::gameplay &&
-		context != InputContext::interstitial) {
+		context != InputContext::interstitial &&
+		context != InputContext::pause) {
 		return std::unexpected(process_error(
 			MainProcessErrorCode::invalid_runtime_argument
 		));

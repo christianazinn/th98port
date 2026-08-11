@@ -36,8 +36,8 @@ states 2-5. Restoring the complete state grouping makes all 964 TH3R01 rows and
 all 135,215 samples exact.
 
 Remaining fidelity limitations are narrower and explicit: the intentionally
-compact schema-3 checkpoint hash, live human pause/UI ownership, and optional
-terminal resident-byte normalization. Numeric cases N1 and N6 now have explicit,
+compact schema-3 checkpoint hash and optional terminal resident-byte
+normalization. Numeric cases N1 and N6 now have explicit,
 tested policies at the architecture boundary. A green replay remains path-scoped
 evidence, not a proof of every presentation path.
 
@@ -73,7 +73,7 @@ the following order.
 | 8 | `SUB_CEB2` visual-record update | Omitted | Presentation-only: ages a 12-record effect pool, no RNG or gameplay mutation. |
 | 9 | `input_mode()`, replay I/O | `gameplay_input_latch()` | Native input becomes visible after all prefix simulation, matching the source. |
 | 10 | P1 `player_update`, then P2 | `gameplay_frame_suffix_before_interstitial()` iterates P1 then P2 and selects human/CPU per player | Complete shared dispatch at this snapshot. Both CPU players are supported. |
-| 11 | sound update and pause | Sound omitted; live pause is application-owned; recorded T3CASE pause uses the core deferred-frame API and the headless four-choice coordinator | Complete for the replay-validation contract. Live human pause/release/Q remains an application boundary. |
+| 11 | sound update and pause | Semantic SFX update precedes the stock live release/choice/release pause protocol; recorded T3CASE pause uses the distinct core deferred-frame API and headless four-choice coordinator | Complete for stock live control and the replay-validation contract. |
 | 12 | `SUB_CA3C`, P1/P2 `SUB_CB81`, background callback | `warning_interstitial_begin()`, 27 interstitial input latches in `game.cpp`, `warning_frame_update()`, `background_update()` | Required ordering is represented. The interstitial consumes input/global frames without advancing round counters. |
 | 13 | Bomb render P1/P2, Boss render P1/P2, then ordinary entity render callbacks | `bombs_render_phase_update()`, `boss_render_phase_update()`, `fireballs_hittest()`, `extra_attacks_render_phase_update()` | Complete deterministic materialization for all nine characters. Drawing-only work is omitted. |
 | 14 | defeat banner, bonus, route decisions | `result_control_update()`, `story_extend_update()`, `result_transition_update()` | Complete for valid-stock Story, VS, Demo, route 0/1/2, retry/game-over, and final-Yumemi paths. |
@@ -221,8 +221,9 @@ or valid-stock lifecycle route remains statically missing. The open items are:
 
 1. Schema 3 intentionally omits full transient pools; it is a stable sparse
    oracle rather than a complete serialization of deterministic state.
-2. Live human pause/release/Q input belongs to the future application client.
-   Recorded T3CASE pause semantics and boundary exhaustion are implemented.
+2. Live human pause/release/Q input is implemented through the interactive
+   driver. Recorded T3CASE pause semantics and boundary exhaustion remain a
+   separate implemented coordinator contract.
 3. The final source write to unused terminal resident bytes is normalized away
    unless resident-byte parity is later selected as a product requirement.
 
@@ -312,8 +313,8 @@ V11/V12 replay corpus matches all 173 embedded round summaries.
 
 1. Keep rendering, audio, device input, menus, replay UI, and online services
    outside the deterministic gameplay core.
-2. Implement live human pause/release/Q behavior in the client; do not conflate
-   it with the already-complete recorded replay-pause adapter.
+2. Preserve the separation between implemented live human pause/release/Q
+   behavior and the recorded replay-pause adapter.
 3. Continue validating Demo/attract, Story, VS CPU, VS human, and CPU-vs-CPU
    with source recordings as corpus coverage expands. Keep the implemented V12
    Practice rules adapter identified as Replay Patch behavior rather than an

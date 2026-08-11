@@ -95,6 +95,7 @@ private:
 	MainProcessDriverStatus status_ = MainProcessDriverStatus::running;
 	InputContext input_context_ = InputContext::gameplay;
 	std::uint8_t warning_samples_remaining_ = 0U;
+	std::optional<InputContext> pause_return_context_{};
 	std::optional<SessionTransition> transition_{};
 	std::optional<SessionTransition> continue_transition_{};
 	std::optional<MainProcessDriverError> failure_{};

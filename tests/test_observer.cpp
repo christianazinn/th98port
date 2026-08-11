@@ -2404,6 +2404,68 @@ void test_main_feedback_source_order()
 			"Yumemi materialization exposes the source reset-then-request site"
 		);
 	});
+
+	auto game = th03::Game::create(base_game_init());
+	check(game.has_value(), "live-pause feedback fixture creates");
+	if(!game) {
+		return;
+	}
+	FeedbackRecordingObserver pause_recording;
+	const auto opened = game->step(
+		th03::CoreInput{.system = 0x1000U},
+		th03::InputContext::gameplay,
+		&pause_recording
+	);
+	check(
+		opened.status == th03::StepStatus::paused &&
+		pause_recording.requests ==
+			std::vector<th03::MainFeedbackCueRequested>{{
+				.site = th03::MainFeedbackCueSite::live_pause_transition,
+			}} &&
+		pause_recording.calls == std::vector<FeedbackObservedCall>{
+			FeedbackObservedCall::dispatch_boundary,
+			FeedbackObservedCall::request,
+		},
+		"live pause opening forces effect 21 after the source update boundary"
+	);
+	const auto opened_call_count = pause_recording.calls.size();
+	(void)game->step(
+		th03::CoreInput{.system = 0x0020U},
+		th03::InputContext::pause,
+		&pause_recording
+	);
+	(void)game->step({}, th03::InputContext::pause, &pause_recording);
+	(void)game->step({}, th03::InputContext::pause, &pause_recording);
+	(void)game->step(
+		th03::CoreInput{.system = 0x1000U},
+		th03::InputContext::pause,
+		&pause_recording
+	);
+	check(
+		pause_recording.calls.size() == opened_call_count,
+		"live pause polling and resume selection emit no feedback cue"
+	);
+	const auto resumed = game->step(
+		{}, th03::InputContext::pause, &pause_recording
+	);
+	check(
+		resumed.status == th03::StepStatus::running &&
+		pause_recording.requests ==
+			std::vector<th03::MainFeedbackCueRequested>{
+				{
+					.site = th03::MainFeedbackCueSite::live_pause_transition,
+				},
+				{
+					.site = th03::MainFeedbackCueSite::live_pause_transition,
+				},
+			} &&
+		pause_recording.calls == std::vector<FeedbackObservedCall>{
+			FeedbackObservedCall::dispatch_boundary,
+			FeedbackObservedCall::request,
+			FeedbackObservedCall::request,
+		},
+		"resume release forces the second effect 21 without a second update boundary"
+	);
 }
 
 void test_player_pose_and_defeat_lifecycle()

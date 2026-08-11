@@ -335,6 +335,144 @@ void test_app_quit_is_not_gameplay_cancel()
 		"app quit stops before core mutation and never forges a terminal route");
 }
 
+void test_live_pause_context_and_surface_contract()
+{
+	FakeProcess fake{};
+	fake.results[0U] = th03::StepStatus::paused;
+	fake.results[1U] = th03::StepStatus::paused;
+	fake.results[2U] = th03::StepStatus::paused;
+	fake.results[3U] = th03::StepStatus::paused;
+	fake.results[4U] = th03::StepStatus::paused;
+	fake.results[5U] = th03::StepStatus::running;
+	fake.result_count = 6U;
+	auto created = MainProcessDriver::create(driver_operations(fake));
+	expect(created.has_value(), "live-pause MAIN driver creates");
+	if(!created) {
+		return;
+	}
+	auto &driver = **created;
+	const auto opened = driver.consume(
+		th03::CoreInput{.system = 0x1000U}
+	);
+	const auto held = driver.consume(
+		th03::CoreInput{.system = 0x1000U}
+	);
+	const auto released = driver.consume({});
+	const auto resumed = driver.consume(
+		th03::CoreInput{.system = 0x1000U}
+	);
+	const auto resume_held = driver.consume(
+		th03::CoreInput{.system = 0x0020U}
+	);
+	const auto completed = driver.consume({});
+	expect(
+		opened && held && released && resumed && resume_held && completed &&
+		!opened->surface_changed && !held->surface_changed &&
+		!released->surface_changed && !resumed->surface_changed &&
+		!resume_held->surface_changed && completed->surface_changed &&
+		driver.input_context() == th03::InputContext::gameplay,
+		"live pause freezes presentation until resume completes the source frame"
+	);
+	expect(
+		fake.step_count == 6U &&
+		fake.contexts[0U] == th03::InputContext::gameplay &&
+		fake.contexts[1U] == th03::InputContext::pause &&
+		fake.contexts[2U] == th03::InputContext::pause &&
+		fake.contexts[3U] == th03::InputContext::pause &&
+		fake.contexts[4U] == th03::InputContext::pause &&
+		fake.contexts[5U] == th03::InputContext::pause,
+		"MAIN driver routes every blocking sample through the pause context"
+	);
+
+	FakeProcess exit{};
+	exit.results[0U] = th03::StepStatus::paused;
+	exit.results[1U] = th03::StepStatus::paused;
+	exit.results[2U] = th03::StepStatus::terminal;
+	exit.result_count = 3U;
+	auto exit_created = MainProcessDriver::create(driver_operations(exit));
+	expect(exit_created.has_value(), "live-pause exit driver creates");
+	if(!exit_created) {
+		return;
+	}
+	auto &exit_driver = **exit_created;
+	const auto exit_opened = exit_driver.consume(
+		th03::CoreInput{.system = 0x1000U}
+	);
+	const auto exit_released = exit_driver.consume({});
+	const auto exited = exit_driver.consume(
+		th03::CoreInput{.system = 0x4000U}
+	);
+	expect(
+		exit_opened && exit_released && exited && exited->terminal &&
+		exit_driver.status() == MainProcessDriverStatus::terminal &&
+		exit.finish_count == 1U && exit.transition_count == 1U &&
+		exit.contexts[2U] == th03::InputContext::pause,
+		"pause Q follows the ordinary terminal MAIN ownership path"
+	);
+}
+
+void test_warning_pause_returns_to_interstitial()
+{
+	FakeProcess fake{};
+	fake.results[0U] = th03::StepStatus::phase_transition;
+	fake.results[1U] = th03::StepStatus::paused;
+	fake.results[2U] = th03::StepStatus::paused;
+	fake.results[3U] = th03::StepStatus::paused;
+	fake.results[4U] = th03::StepStatus::paused;
+	fake.results[5U] = th03::StepStatus::running;
+	for(std::size_t index = 6U; index < 31U; ++index) {
+		fake.results[index] = th03::StepStatus::running;
+	}
+	fake.results[31U] = th03::StepStatus::phase_transition;
+	fake.result_count = 32U;
+	auto created = MainProcessDriver::create(driver_operations(fake));
+	expect(created.has_value(), "warning-pause MAIN driver creates");
+	if(!created) {
+		return;
+	}
+	auto &driver = **created;
+	const auto warning = driver.consume({});
+	const auto paused = driver.consume(
+		th03::CoreInput{.system = 0x1000U}
+	);
+	const auto held = driver.consume(
+		th03::CoreInput{.system = 0x1000U}
+	);
+	const auto released = driver.consume({});
+	const auto selected = driver.consume(
+		th03::CoreInput{.system = 0x1000U}
+	);
+	const auto resumed = driver.consume({});
+	expect(
+		warning && paused && held && released && selected && resumed &&
+		!paused->surface_changed && !held->surface_changed &&
+		!released->surface_changed && !selected->surface_changed &&
+		resumed->surface_changed &&
+		driver.input_context() == th03::InputContext::interstitial &&
+		driver.warning_samples_remaining() == 26U,
+		"resumed warning pause returns to its interrupted interstitial sample"
+	);
+	for(std::size_t index = 0U; index < 25U; ++index) {
+		const auto intermediate = driver.consume({});
+		expect(
+			intermediate &&
+			driver.input_context() == th03::InputContext::interstitial,
+			"post-pause warning intermediate sample remains interstitial"
+		);
+	}
+	const auto closed = driver.consume({});
+	expect(
+		closed && driver.input_context() == th03::InputContext::gameplay &&
+		driver.warning_samples_remaining() == 0U &&
+		fake.contexts[1U] == th03::InputContext::interstitial &&
+		fake.contexts[2U] == th03::InputContext::pause &&
+		fake.contexts[5U] == th03::InputContext::pause &&
+		fake.contexts[6U] == th03::InputContext::interstitial &&
+		fake.contexts[31U] == th03::InputContext::interstitial,
+		"warning pause preserves all 27 interstitial samples and their return context"
+	);
+}
+
 void test_process_failures_and_transition_domain()
 {
 	FakeProcess fake{};
@@ -483,6 +621,8 @@ int main()
 	test_repeat_and_terminal_routing();
 	test_terminal_from_final_warning_sample();
 	test_app_quit_is_not_gameplay_cancel();
+	test_live_pause_context_and_surface_contract();
+	test_warning_pause_returns_to_interstitial();
 	test_process_failures_and_transition_domain();
 	test_scheduler_catchup_keeps_distinct_samples();
 	test_story_continue_capability();

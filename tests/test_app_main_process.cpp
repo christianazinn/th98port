@@ -111,6 +111,10 @@ void test_main_feedback_policy()
 			MainFeedbackCueSite::warning_interstitial_started,
 			{19U, MainFeedbackScheduling::force},
 		},
+		Case{
+			MainFeedbackCueSite::live_pause_transition,
+			{21U, MainFeedbackScheduling::force},
+		},
 	};
 	for(const auto &test : cases) {
 		expect(
@@ -1882,6 +1886,58 @@ void test_story_factory_transaction_and_lifetime()
 			.parameter = 1U,
 		} && !process.take_audio_command(),
 		"Story process remains usable and dispatches a shot at the source boundary after every caller-owned input is destroyed");
+
+	const auto pause_global_frame_before = process.canonical_state().global_frame;
+	const auto pause_round_frame_before = process.canonical_state().round_frame;
+	const auto pause_opened = process.step(
+		th03::CoreInput{.system = 0x1000U},
+		th03::InputContext::gameplay
+	);
+	const auto pause_open_audio = process.take_audio_command();
+	const auto pause_hash = process.canonical_state().state_hash;
+	const auto pause_held = process.step(
+		th03::CoreInput{.system = 0x1000U},
+		th03::InputContext::pause
+	);
+	const auto pause_released = process.step({}, th03::InputContext::pause);
+	const auto pause_idle = process.step({}, th03::InputContext::pause);
+	const auto resume_selected = process.step(
+		th03::CoreInput{.system = 0x1000U},
+		th03::InputContext::pause
+	);
+	const auto resume_held = process.step(
+		th03::CoreInput{.system = 0x0020U},
+		th03::InputContext::pause
+	);
+	const auto pause_completed = process.step({}, th03::InputContext::pause);
+	const auto pause_resume_audio = process.take_audio_command();
+	expect(
+		pause_opened && pause_opened->status == th03::StepStatus::paused &&
+		pause_held && pause_held->status == th03::StepStatus::paused &&
+		pause_released && pause_released->status == th03::StepStatus::paused &&
+		pause_idle && pause_idle->status == th03::StepStatus::paused &&
+		resume_selected && resume_selected->status == th03::StepStatus::paused &&
+		resume_held && resume_held->status == th03::StepStatus::paused &&
+		pause_completed && pause_completed->status == th03::StepStatus::running,
+		"live Story pause follows the exact release-choice-release state machine"
+	);
+	expect(
+		pause_open_audio == th03::app::ClassicAudioCommand{
+			.type = th03::app::ClassicAudioCommandType::dispatch_effect,
+			.parameter = 21U,
+		} && pause_resume_audio == th03::app::ClassicAudioCommand{
+			.type = th03::app::ClassicAudioCommandType::dispatch_effect,
+			.parameter = 21U,
+		} && !process.take_audio_command(),
+		"live Story pause forces effect 21 at both source transitions"
+	);
+	expect(
+		process.presentation_status() == th03::present::MainRoundStatus::ready &&
+		process.canonical_state().global_frame == pause_global_frame_before + 1U &&
+		process.canonical_state().round_frame == pause_round_frame_before + 1U &&
+		process.canonical_state().state_hash != pause_hash,
+		"live Story pause retains the presenter and completes one source frame"
+	);
 }
 
 bool kotohime_red(

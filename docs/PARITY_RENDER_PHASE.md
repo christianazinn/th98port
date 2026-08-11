@@ -98,8 +98,9 @@ exit request must therefore be sticky across later released samples and must
 only become route 0 after the counter suffix. This audit added that behavior.
 
 For live human-controlled players, `sub_C7A5()` performs an interactive
-release / pause / Q-exit loop. That future application behavior is distinct
-from the V11/T3CASE pause stream described next; the two must not be conflated
+release / pause / Q-exit loop. The native staged Game/driver protocol implements
+this behavior and is distinct from the V11/T3CASE pause stream described next;
+the two must not be conflated
 by treating every phase-1 sample as warning input or every human Cancel as an
 immediate core exit.
 
@@ -368,9 +369,9 @@ Outstanding dependencies outside this shared slice:
 1. The character dossiers remain authoritative for every
    Bomb/Boss/Charge/Extra/Gauge callback and its render-phase collision/RNG
    behavior; the complete Classic Story corpus is oracle-green.
-2. Live human pause/release/Q interaction needs an application input contract
-   if a playable client is expected to reproduce it; do not reuse the replay
-   coordinator's compact four-choice parser as the UI implementation.
+2. Live human pause/release/Q interaction uses the staged interactive driver
+   contract; do not replace it with the replay coordinator's compact four-
+   choice parser.
 3. `byte_23AFA` support is unnecessary for stock gameplay, but a future raw
    runtime-snapshot format must reject nonzero values or model its alternate-
    render branch explicitly.

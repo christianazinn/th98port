@@ -414,6 +414,7 @@ enum class MainFeedbackCueSite : std::uint8_t {
 	extra_attack_beam_activated,
 	yumemi_boss_materialization,
 	warning_interstitial_started,
+	live_pause_transition,
 };
 
 struct MainFeedbackCueRequested {
