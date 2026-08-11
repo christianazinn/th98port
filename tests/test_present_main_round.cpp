@@ -1617,18 +1617,22 @@ void test_late_gauge_portrait_and_footer_order()
 	}
 }
 
-void test_portrait_expectation_is_strict()
+void test_portrait_expectation_tracks_late_source_events()
 {
 	{
 		Fixture fixture;
 		auto state = fixture.state();
-		fixture.ordinary_phases(state);
+		fixture.terminal_phases(state);
+		fixture.round->main_gauge_state(Fixture::gauge_state(state));
+		fixture.round->main_score_state(Fixture::score_state(state));
 		fixture.round->warning_portrait_transition(
 			WarningPortraitTransition{PlayerId::p1}
 		);
+		fixture.finish_after_score(state);
+		fixture.round->main_frame_footer_reached({});
 		expect(
-			fixture.round->status() == MainRoundStatus::invalid_observation,
-			"reject a portrait absent from this frame's warning lifecycle"
+			fixture.round->ready(),
+			"accept a source portrait raised after the frame warning lifecycle"
 		);
 	}
 	{
@@ -2082,7 +2086,7 @@ int main()
 	test_type_b_background_read_count_and_overread();
 	test_terminal_no_footer_does_not_publish();
 	test_late_gauge_portrait_and_footer_order();
-	test_portrait_expectation_is_strict();
+	test_portrait_expectation_tracks_late_source_events();
 	test_gauge_completion_prefix_order();
 	test_warning_gauge_child_failure_is_sticky();
 	test_warning_interstitial_tones_without_footer();

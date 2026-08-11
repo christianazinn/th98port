@@ -29,10 +29,13 @@ inline constexpr std::size_t pending_physical_event_capacity = 256U;
 // edge, so multiple buttons bound to one logical action cannot false-release
 // each other. Player masks accept the donor cardinal/button bits 0x003F and
 // legacy diagonal bits 0x0F00; charge_mask accepts only bits 0 and 1.
-// CoreInput::system is intentionally not a physical contribution.
+// [system] is the donor's complete source-global input_sp mask: cardinal and
+// legacy diagonal directions, Bomb/Shot, Cancel/OK, and Q (0x7F3F). Application
+// quit remains a separate event and never aliases any source input bit.
 struct PhysicalInputSourceState {
 	std::uint16_t p1 = 0;
 	std::uint16_t p2 = 0;
+	std::uint16_t system = 0;
 	std::uint8_t charge_mask = 0;
 };
 

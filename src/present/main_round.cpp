@@ -413,6 +413,7 @@ void MainRoundPresenter::warning_frame_lifecycle(
 	}
 	warning_lifecycle_seen_ = true;
 	warning_suffix_pending_ = false;
+	next_warning_portrait_player_ = 0U;
 	expected_portrait_mask_ = 0U;
 	for(std::size_t player = 0U; player < lifecycle.players.size(); ++player) {
 		if(lifecycle.players[player].warning_step_before ==
@@ -462,8 +463,12 @@ void MainRoundPresenter::warning_portrait_transition(
 		? static_cast<std::uint8_t>(1U << player)
 		: std::uint8_t{0U};
 	const auto lower_mask = static_cast<std::uint8_t>(player_bit - 1U);
+	// The prefix lifecycle only predicts portraits already pending at that
+	// point. Charge and combo work can raise another source portrait later in
+	// this same frame, so the callback itself is authoritative for presence;
+	// player order and any predicted lower-player callback remain strict.
 	if(phase_ != Phase::hud_start || player >= 2U ||
-		(expected_portrait_mask_ & player_bit) == 0U ||
+		player < next_warning_portrait_player_ ||
 		(expected_portrait_mask_ & lower_mask) != 0U) {
 		fail(MainRoundStatus::invalid_observation);
 		return;
@@ -476,6 +481,7 @@ void MainRoundPresenter::warning_portrait_transition(
 	expected_portrait_mask_ = static_cast<std::uint8_t>(
 		expected_portrait_mask_ & static_cast<std::uint8_t>(~player_bit)
 	);
+	next_warning_portrait_player_ = static_cast<std::uint8_t>(player + 1U);
 }
 
 void MainRoundPresenter::main_gauge_state(const MainGaugeState &state) noexcept
@@ -1027,6 +1033,7 @@ void MainRoundPresenter::main_frame_footer_reached(
 	background_frame_reads_remaining_ = 0U;
 	next_gauge_finish_player_ = 0U;
 	next_late_bomb_player_ = 0U;
+	next_warning_portrait_player_ = 0U;
 	expected_portrait_mask_ = 0U;
 	hud_start_reads_remaining_ = 0U;
 	hud_start_step_seen_ = false;
@@ -1063,6 +1070,7 @@ bool MainRoundPresenter::repeat_round_startup(
 	next_warning_sample_ = 0U;
 	next_gauge_finish_player_ = 0U;
 	next_late_bomb_player_ = 0U;
+	next_warning_portrait_player_ = 0U;
 	expected_portrait_mask_ = 0U;
 	hud_start_reads_remaining_ = 0U;
 	hud_start_step_seen_ = false;

@@ -32,12 +32,14 @@ void expect(bool condition, const char *message)
 PhysicalInputSourceState state(
 	std::uint16_t p1 = 0U,
 	std::uint16_t p2 = 0U,
-	std::uint8_t charge_mask = 0U
+	std::uint8_t charge_mask = 0U,
+	std::uint16_t system = 0U
 )
 {
 	return PhysicalInputSourceState{
 		.p1 = p1,
 		.p2 = p2,
+		.system = system,
 		.charge_mask = charge_mask,
 	};
 }
@@ -272,16 +274,25 @@ void test_input_domain_and_equal_timestamp_order()
 	auto scheduler = std::move(*created);
 	expect_push(scheduler, event(100U,
 		PhysicalInputEventKind::source_state_changed, 0U,
-		state(0x0F3FU, 0x0F3FU, 0x03U)),
-		"all donor player and charge bits are accepted at the boundary");
+		state(0x0F3FU, 0x0F3FU, 0x03U, 0x1000U)),
+		"all donor player, system, and charge bits are accepted at the boundary");
 	const auto tick = expect_tick(
 		scheduler, 100U, "events exactly at a deadline are sampled"
 	);
 	expect(
 		tick.input.p1 == 0x0F3FU && tick.input.p2 == 0x0F3FU &&
-			tick.input.system == 0U && tick.input.charge_mask == 0x03U,
-		"cardinals, buttons, legacy diagonals, and charge bits are preserved"
+			tick.input.system == 0x1000U && tick.input.charge_mask == 0x03U,
+		"cardinals, buttons, system controls, legacy diagonals, and charge bits are preserved"
 	);
+	expect_push(scheduler, event(101U,
+		PhysicalInputEventKind::source_state_changed, 1U,
+		state(0U, 0U, 0U, 0x2000U)),
+		"a second source contributes the source-global OK bit");
+	const auto combined_system = expect_tick(
+		scheduler, 1'000'000'100U, "global system bits combine across sources"
+	);
+	expect(combined_system.input.system == 0x3000U,
+		"Cancel and OK source contributions are ORed independently");
 
 	auto ordered_created = TickInputScheduler::create({1U, 1U}, 100U);
 	expect(static_cast<bool>(ordered_created), "ordering scheduler is created");
@@ -335,21 +346,21 @@ void test_source_device_and_focus_release()
 		"source one device removal is queued");
 	expect_push(scheduler, event(22U,
 		PhysicalInputEventKind::source_state_changed, 0U,
-		state(0x0004U, 0U, 0x01U)),
-		"source zero contributes P1 Left and charge before focus loss");
+		state(0x0004U, 0U, 0x01U, 0x0020U)),
+		"source zero contributes P1 Left, source Shot, and charge before focus loss");
 	expect_push(scheduler, event(23U,
 		PhysicalInputEventKind::source_state_changed, 1U,
-		state(0U, 0x0010U, 0x02U)),
-		"source one contributes P2 Bomb and charge before focus loss");
+		state(0U, 0x0010U, 0x02U, 0x4000U)),
+		"source one contributes P2 Bomb, source Q, and charge before focus loss");
 	const auto before_focus = expect_tick(
 		scheduler, 30U, "replacement source states are due"
 	);
 	expect(
 		before_focus.input.p1 == 0x0004U &&
 			before_focus.input.p2 == 0x0010U &&
-			before_focus.input.system == 0U &&
+			before_focus.input.system == 0x4020U &&
 			before_focus.input.charge_mask == 0x03U,
-		"independent source snapshots combine both players and charge bits"
+		"independent source snapshots combine both players, input_sp, and charge bits"
 	);
 	expect_push(scheduler, event(31U,
 		PhysicalInputEventKind::focus_released,
@@ -378,7 +389,7 @@ void test_app_quit_is_separate_and_sticky()
 	expect(
 		gameplay.input.p1 == 0x0001U && gameplay.input.system == 0U &&
 			!gameplay.app_quit_requested && !scheduler.app_quit_requested(),
-		"physical source state cannot synthesize application quit or system input"
+		"ordinary player input cannot synthesize application quit"
 	);
 	expect_push(scheduler, event(11U, PhysicalInputEventKind::app_quit,
 		std::numeric_limits<std::uint8_t>::max(),
@@ -436,6 +447,7 @@ void test_public_event_validation_is_atomic()
 		state(0x0040U),
 		state(0U, 0x0080U),
 		state(0U, 0U, 0x04U),
+		state(0U, 0U, 0U, 0x8000U),
 	}) {
 		const auto invalid_bits = scheduler.push_event(event(
 			100U,
@@ -447,7 +459,7 @@ void test_public_event_validation_is_atomic()
 			!invalid_bits &&
 				invalid_bits.error() == TickInputError::invalid_input_bits &&
 				scheduler.pending_event_count() == 2U,
-			"unsupported player or charge bits are rejected atomically"
+			"unsupported player, system, or charge bits are rejected atomically"
 		);
 	}
 	expect_push(scheduler, event(30U,

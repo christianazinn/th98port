@@ -10,6 +10,7 @@ constexpr std::uint8_t last_event_kind = static_cast<std::uint8_t>(
 	PhysicalInputEventKind::app_quit
 );
 constexpr std::uint16_t valid_player_input_bits = 0x0F3FU;
+constexpr std::uint16_t valid_system_input_bits = 0x7F3FU;
 constexpr std::uint8_t valid_charge_mask_bits = 0x03U;
 
 constexpr bool valid_event_kind(PhysicalInputEventKind kind) noexcept
@@ -21,6 +22,7 @@ constexpr bool valid_source_state(const PhysicalInputSourceState &state) noexcep
 {
 	return (state.p1 & static_cast<std::uint16_t>(~valid_player_input_bits)) == 0U &&
 		(state.p2 & static_cast<std::uint16_t>(~valid_player_input_bits)) == 0U &&
+		(state.system & static_cast<std::uint16_t>(~valid_system_input_bits)) == 0U &&
 		(state.charge_mask & static_cast<std::uint8_t>(~valid_charge_mask_bits)) == 0U;
 }
 
@@ -214,6 +216,9 @@ CoreInput TickInputScheduler::latched_input() const noexcept
 	for(const auto &source : source_states_) {
 		input.p1 = static_cast<std::uint16_t>(input.p1 | source.p1);
 		input.p2 = static_cast<std::uint16_t>(input.p2 | source.p2);
+		input.system = static_cast<std::uint16_t>(
+			input.system | source.system
+		);
 		input.charge_mask = static_cast<std::uint8_t>(
 			input.charge_mask | source.charge_mask
 		);

@@ -222,6 +222,7 @@ private:
 	std::uint8_t next_warning_sample_ = 0;
 	std::uint8_t next_gauge_finish_player_ = 0;
 	std::uint8_t next_late_bomb_player_ = 0;
+	std::uint8_t next_warning_portrait_player_ = 0;
 	std::uint8_t expected_portrait_mask_ = 0;
 	bool warning_interstitial_active_ = false;
 	bool warning_suffix_pending_ = false;

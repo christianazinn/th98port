@@ -17,6 +17,13 @@ constexpr std::uint16_t input_left = 0x0004U;
 constexpr std::uint16_t input_right = 0x0008U;
 constexpr std::uint16_t input_bomb = 0x0010U;
 constexpr std::uint16_t input_shot = 0x0020U;
+constexpr std::uint16_t input_up_left = 0x0100U;
+constexpr std::uint16_t input_down_left = 0x0200U;
+constexpr std::uint16_t input_up_right = 0x0400U;
+constexpr std::uint16_t input_down_right = 0x0800U;
+constexpr std::uint16_t input_cancel = 0x1000U;
+constexpr std::uint16_t input_ok = 0x2000U;
+constexpr std::uint16_t input_q = 0x4000U;
 
 [[nodiscard]] constexpr bool valid_player(SdlInputPlayer player) noexcept
 {
@@ -134,6 +141,59 @@ void apply_action(
 	case SdlLogicalAction::shot:
 		player_bits = static_cast<std::uint16_t>(player_bits | input_shot);
 		break;
+	case SdlLogicalAction::up_left:
+		player_bits = static_cast<std::uint16_t>(player_bits | input_up_left);
+		break;
+	case SdlLogicalAction::down_left:
+		player_bits = static_cast<std::uint16_t>(player_bits | input_down_left);
+		break;
+	case SdlLogicalAction::up_right:
+		player_bits = static_cast<std::uint16_t>(player_bits | input_up_right);
+		break;
+	case SdlLogicalAction::down_right:
+		player_bits = static_cast<std::uint16_t>(player_bits | input_down_right);
+		break;
+	case SdlLogicalAction::single_up:
+		state.system = static_cast<std::uint16_t>(state.system | input_up);
+		break;
+	case SdlLogicalAction::single_down:
+		state.system = static_cast<std::uint16_t>(state.system | input_down);
+		break;
+	case SdlLogicalAction::single_left:
+		state.system = static_cast<std::uint16_t>(state.system | input_left);
+		break;
+	case SdlLogicalAction::single_right:
+		state.system = static_cast<std::uint16_t>(state.system | input_right);
+		break;
+	case SdlLogicalAction::single_bomb:
+		state.system = static_cast<std::uint16_t>(state.system | input_bomb);
+		break;
+	case SdlLogicalAction::single_shot:
+		state.system = static_cast<std::uint16_t>(state.system | input_shot);
+		break;
+	case SdlLogicalAction::single_up_left:
+		state.system = static_cast<std::uint16_t>(state.system | input_up_left);
+		break;
+	case SdlLogicalAction::single_down_left:
+		state.system = static_cast<std::uint16_t>(state.system | input_down_left);
+		break;
+	case SdlLogicalAction::single_up_right:
+		state.system = static_cast<std::uint16_t>(state.system | input_up_right);
+		break;
+	case SdlLogicalAction::single_down_right:
+		state.system = static_cast<std::uint16_t>(state.system | input_down_right);
+		break;
+	case SdlLogicalAction::cancel:
+		state.system = static_cast<std::uint16_t>(
+			state.system | input_cancel
+		);
+		break;
+	case SdlLogicalAction::ok:
+		state.system = static_cast<std::uint16_t>(state.system | input_ok);
+		break;
+	case SdlLogicalAction::q:
+		state.system = static_cast<std::uint16_t>(state.system | input_q);
+		break;
 	case SdlLogicalAction::charge:
 		player_bits = static_cast<std::uint16_t>(player_bits | input_shot);
 		state.charge_mask = static_cast<std::uint8_t>(
@@ -150,6 +210,7 @@ void apply_action(
 ) noexcept
 {
 	return left.p1 == right.p1 && left.p2 == right.p2 &&
+		left.system == right.system &&
 		left.charge_mask == right.charge_mask;
 }
 

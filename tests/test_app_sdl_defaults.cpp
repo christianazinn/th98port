@@ -43,65 +43,73 @@ void test_classic_defaults()
 	using th03::platform::SdlKeyboardBinding;
 	using th03::platform::SdlLogicalAction;
 	const auto bindings = th03::app::detail::classic_direct_vs_bindings();
-	expect(bindings.keyboard_count == 28U,
-		"key-vs-key preset has four cardinals, four diagonals, and two actions per player");
+	expect(bindings.keyboard_count == 36U,
+		"Classic preset has exact player and source-global keyboard contributions");
 	expect(key_matches(bindings, SDL_SCANCODE_R,
-		th03::platform::SdlInputPlayer::p1) == 2U &&
+		th03::platform::SdlInputPlayer::p1) == 1U &&
 		key_matches(bindings, SDL_SCANCODE_KP_7,
 			th03::platform::SdlInputPlayer::p2) == 2U,
-		"diagonal keys are duplicate-safe pairs of source cardinal bits");
+		"P1 and P2 diagonals retain the donor's distinct input domains");
 	expect(key_matches(bindings, SDL_SCANCODE_Z,
-		th03::platform::SdlInputPlayer::p1) == 1U &&
+		th03::platform::SdlInputPlayer::p1) == 2U &&
 		key_matches(bindings, SDL_SCANCODE_LEFT,
-			th03::platform::SdlInputPlayer::p2) == 1U,
-		"each player has one default Shot binding");
+			th03::platform::SdlInputPlayer::p2) == 2U,
+		"Shot keys also retain their distinct source-global contribution");
 	expect(key_matches(bindings, SDL_SCANCODE_X,
-		th03::platform::SdlInputPlayer::p1) == 1U &&
+		th03::platform::SdlInputPlayer::p1) == 2U &&
 		key_matches(bindings, SDL_SCANCODE_RIGHT,
-			th03::platform::SdlInputPlayer::p2) == 1U,
-		"each player has one default Bomb binding");
+			th03::platform::SdlInputPlayer::p2) == 2U,
+		"Bomb and Right Arrow retain player and source-global meanings");
 	expect(key_matches(bindings, SDL_SCANCODE_ESCAPE,
-		th03::platform::SdlInputPlayer::p1) == 0U &&
-		key_matches(bindings, SDL_SCANCODE_ESCAPE,
-			th03::platform::SdlInputPlayer::p2) == 0U,
-		"Escape remains an app command rather than gameplay Cancel");
+		th03::platform::SdlInputPlayer::p1) == 1U &&
+		key_matches(bindings, SDL_SCANCODE_RETURN,
+			th03::platform::SdlInputPlayer::p1) == 1U,
+		"Escape and Return retain source-global Cancel and OK bindings");
 	for(std::size_t index = 0U; index < bindings.keyboard_count; ++index) {
 		expect(bindings.keyboard[index].action !=
 			th03::platform::SdlLogicalAction::charge,
 			"live direct VS has no Replay-Autofire Charge binding");
 	}
-	expect(bindings.gamepad_button_count == 6U &&
-		bindings.gamepad_axis_count == 4U,
-		"controller preset has D-pad, Shot/Bomb, and left-stick axes");
-	constexpr std::array<SdlKeyboardBinding, 28U> expected_keys{{
+	expect(bindings.gamepad_button_count == 14U &&
+		bindings.gamepad_axis_count == 8U,
+		"controller preset contributes every gameplay action to the source UI domain");
+	constexpr std::array<SdlKeyboardBinding, 36U> expected_keys{{
 		{SDL_SCANCODE_T, SdlInputPlayer::p1, SdlLogicalAction::up},
 		{SDL_SCANCODE_B, SdlInputPlayer::p1, SdlLogicalAction::down},
 		{SDL_SCANCODE_F, SdlInputPlayer::p1, SdlLogicalAction::left},
 		{SDL_SCANCODE_H, SdlInputPlayer::p1, SdlLogicalAction::right},
-		{SDL_SCANCODE_R, SdlInputPlayer::p1, SdlLogicalAction::up},
-		{SDL_SCANCODE_R, SdlInputPlayer::p1, SdlLogicalAction::left},
-		{SDL_SCANCODE_Y, SdlInputPlayer::p1, SdlLogicalAction::up},
-		{SDL_SCANCODE_Y, SdlInputPlayer::p1, SdlLogicalAction::right},
-		{SDL_SCANCODE_V, SdlInputPlayer::p1, SdlLogicalAction::down},
-		{SDL_SCANCODE_V, SdlInputPlayer::p1, SdlLogicalAction::left},
-		{SDL_SCANCODE_N, SdlInputPlayer::p1, SdlLogicalAction::down},
-		{SDL_SCANCODE_N, SdlInputPlayer::p1, SdlLogicalAction::right},
+		{SDL_SCANCODE_R, SdlInputPlayer::p1, SdlLogicalAction::up_left},
+		{SDL_SCANCODE_Y, SdlInputPlayer::p1, SdlLogicalAction::up_right},
+		{SDL_SCANCODE_V, SdlInputPlayer::p1, SdlLogicalAction::down_left},
+		{SDL_SCANCODE_N, SdlInputPlayer::p1, SdlLogicalAction::down_right},
 		{SDL_SCANCODE_Z, SdlInputPlayer::p1, SdlLogicalAction::shot},
+		{SDL_SCANCODE_Z, SdlInputPlayer::p1, SdlLogicalAction::single_shot},
 		{SDL_SCANCODE_X, SdlInputPlayer::p1, SdlLogicalAction::bomb},
+		{SDL_SCANCODE_X, SdlInputPlayer::p1, SdlLogicalAction::single_bomb},
+		{SDL_SCANCODE_ESCAPE, SdlInputPlayer::p1, SdlLogicalAction::cancel},
+		{SDL_SCANCODE_RETURN, SdlInputPlayer::p1, SdlLogicalAction::ok},
+		{SDL_SCANCODE_Q, SdlInputPlayer::p1, SdlLogicalAction::q},
+		{SDL_SCANCODE_SPACE, SdlInputPlayer::p1, SdlLogicalAction::single_shot},
 		{SDL_SCANCODE_KP_8, SdlInputPlayer::p2, SdlLogicalAction::up},
+		{SDL_SCANCODE_KP_8, SdlInputPlayer::p2, SdlLogicalAction::single_up},
 		{SDL_SCANCODE_KP_2, SdlInputPlayer::p2, SdlLogicalAction::down},
+		{SDL_SCANCODE_KP_2, SdlInputPlayer::p2, SdlLogicalAction::single_down},
 		{SDL_SCANCODE_KP_4, SdlInputPlayer::p2, SdlLogicalAction::left},
+		{SDL_SCANCODE_KP_4, SdlInputPlayer::p2, SdlLogicalAction::single_left},
 		{SDL_SCANCODE_KP_6, SdlInputPlayer::p2, SdlLogicalAction::right},
-		{SDL_SCANCODE_KP_7, SdlInputPlayer::p2, SdlLogicalAction::up},
-		{SDL_SCANCODE_KP_7, SdlInputPlayer::p2, SdlLogicalAction::left},
-		{SDL_SCANCODE_KP_9, SdlInputPlayer::p2, SdlLogicalAction::up},
-		{SDL_SCANCODE_KP_9, SdlInputPlayer::p2, SdlLogicalAction::right},
-		{SDL_SCANCODE_KP_1, SdlInputPlayer::p2, SdlLogicalAction::down},
-		{SDL_SCANCODE_KP_1, SdlInputPlayer::p2, SdlLogicalAction::left},
-		{SDL_SCANCODE_KP_3, SdlInputPlayer::p2, SdlLogicalAction::down},
-		{SDL_SCANCODE_KP_3, SdlInputPlayer::p2, SdlLogicalAction::right},
+		{SDL_SCANCODE_KP_6, SdlInputPlayer::p2, SdlLogicalAction::single_right},
+		{SDL_SCANCODE_KP_7, SdlInputPlayer::p2, SdlLogicalAction::up_left},
+		{SDL_SCANCODE_KP_7, SdlInputPlayer::p2, SdlLogicalAction::single_up_left},
+		{SDL_SCANCODE_KP_9, SdlInputPlayer::p2, SdlLogicalAction::up_right},
+		{SDL_SCANCODE_KP_9, SdlInputPlayer::p2, SdlLogicalAction::single_up_right},
+		{SDL_SCANCODE_KP_1, SdlInputPlayer::p2, SdlLogicalAction::down_left},
+		{SDL_SCANCODE_KP_1, SdlInputPlayer::p2, SdlLogicalAction::single_down_left},
+		{SDL_SCANCODE_KP_3, SdlInputPlayer::p2, SdlLogicalAction::down_right},
+		{SDL_SCANCODE_KP_3, SdlInputPlayer::p2, SdlLogicalAction::single_down_right},
 		{SDL_SCANCODE_LEFT, SdlInputPlayer::p2, SdlLogicalAction::shot},
+		{SDL_SCANCODE_LEFT, SdlInputPlayer::p2, SdlLogicalAction::single_left},
 		{SDL_SCANCODE_RIGHT, SdlInputPlayer::p2, SdlLogicalAction::bomb},
+		{SDL_SCANCODE_RIGHT, SdlInputPlayer::p2, SdlLogicalAction::single_right},
 	}};
 	for(std::size_t index = 0U; index < expected_keys.size(); ++index) {
 		expect(
@@ -111,13 +119,21 @@ void test_classic_defaults()
 			"every keyboard default retains its exact source key/action mapping"
 		);
 	}
-	constexpr std::array<SdlGamepadButtonBinding, 6U> expected_buttons{{
+	constexpr std::array<SdlGamepadButtonBinding, 14U> expected_buttons{{
 		{SDL_GAMEPAD_BUTTON_DPAD_UP, SdlLogicalAction::up},
+		{SDL_GAMEPAD_BUTTON_DPAD_UP, SdlLogicalAction::single_up},
 		{SDL_GAMEPAD_BUTTON_DPAD_DOWN, SdlLogicalAction::down},
+		{SDL_GAMEPAD_BUTTON_DPAD_DOWN, SdlLogicalAction::single_down},
 		{SDL_GAMEPAD_BUTTON_DPAD_LEFT, SdlLogicalAction::left},
+		{SDL_GAMEPAD_BUTTON_DPAD_LEFT, SdlLogicalAction::single_left},
 		{SDL_GAMEPAD_BUTTON_DPAD_RIGHT, SdlLogicalAction::right},
+		{SDL_GAMEPAD_BUTTON_DPAD_RIGHT, SdlLogicalAction::single_right},
 		{SDL_GAMEPAD_BUTTON_SOUTH, SdlLogicalAction::shot},
+		{SDL_GAMEPAD_BUTTON_SOUTH, SdlLogicalAction::single_shot},
 		{SDL_GAMEPAD_BUTTON_EAST, SdlLogicalAction::bomb},
+		{SDL_GAMEPAD_BUTTON_EAST, SdlLogicalAction::single_bomb},
+		{SDL_GAMEPAD_BUTTON_BACK, SdlLogicalAction::cancel},
+		{SDL_GAMEPAD_BUTTON_START, SdlLogicalAction::ok},
 	}};
 	for(std::size_t index = 0U; index < expected_buttons.size(); ++index) {
 		expect(
@@ -126,11 +142,15 @@ void test_classic_defaults()
 			"every gamepad button retains its exact logical action"
 		);
 	}
-	constexpr std::array<SdlGamepadAxisBinding, 4U> expected_axes{{
+	constexpr std::array<SdlGamepadAxisBinding, 8U> expected_axes{{
 		{SDL_GAMEPAD_AXIS_LEFTX, SdlAxisDirection::negative, SdlLogicalAction::left},
+		{SDL_GAMEPAD_AXIS_LEFTX, SdlAxisDirection::negative, SdlLogicalAction::single_left},
 		{SDL_GAMEPAD_AXIS_LEFTX, SdlAxisDirection::positive, SdlLogicalAction::right},
+		{SDL_GAMEPAD_AXIS_LEFTX, SdlAxisDirection::positive, SdlLogicalAction::single_right},
 		{SDL_GAMEPAD_AXIS_LEFTY, SdlAxisDirection::negative, SdlLogicalAction::up},
+		{SDL_GAMEPAD_AXIS_LEFTY, SdlAxisDirection::negative, SdlLogicalAction::single_up},
 		{SDL_GAMEPAD_AXIS_LEFTY, SdlAxisDirection::positive, SdlLogicalAction::down},
+		{SDL_GAMEPAD_AXIS_LEFTY, SdlAxisDirection::positive, SdlLogicalAction::single_down},
 	}};
 	for(std::size_t index = 0U; index < expected_axes.size(); ++index) {
 		expect(

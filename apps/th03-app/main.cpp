@@ -13,6 +13,8 @@
 
 #include "default_bindings.hpp"
 
+#include "th03/app/classic_cli.hpp"
+#include "th03/app/classic_runner.hpp"
 #include "th03/app/direct_vs_cli.hpp"
 #include "th03/app/direct_vs_launch.hpp"
 #include "th03/app/main_direct_vs_runner.hpp"
@@ -41,7 +43,12 @@ bool kotohime_zero_red(
 void print_usage()
 {
 	std::cout
-		<< "usage: th03-app --vs --data <root> --main <MAIN.EXE> "
+		<< "usage: th03-app --classic --data <root> --main <MAIN.EXE> "
+			"--mainl <MAINL.EXE> --op <OP.EXE> --font <FONT.ROM> "
+			"--tick-rate <ticks>/<seconds>\n"
+		<< "       [--config <YUME.CFG>] [--score <YUME.NEM>] [--seed n] "
+			"[--kotohime-zero-red] [--smoke-ticks n]\n"
+		<< "   or: th03-app --vs --data <root> --main <MAIN.EXE> "
 			"--font <FONT.ROM> --tick-rate <ticks>/<seconds>\n"
 		<< "       [--p1 <character[:first|second]>] "
 			"[--p2 <character[:first|second]>] [--rank 0..3] [--seed n] "
@@ -50,10 +57,81 @@ void print_usage()
 			"chiyuri yumemi\n"
 		<< "P1: T/F/H/B, diagonals R/Y/V/N, Z shot, X bomb\n"
 		<< "P2: keypad 8/4/6/2, diagonals 7/9/1/3, Left shot, Right bomb\n"
-		<< "Escape or window close exits. Tick rate is explicit host policy; "
-			"exact PC-98 cadence is not yet claimed.\n"
+		<< "Classic UI: arrows/keypad, Z/X/Space, Return OK, Escape Cancel\n"
+		<< "In --vs, Escape exits. In --classic, Escape is source Cancel and "
+			"window close exits. Tick rate is explicit host policy; exact PC-98 "
+			"cadence is not yet claimed.\n"
+		<< "Classic currently follows the source sound-unavailable fallback "
+			"while the PMD/OPNA engine is integrated.\n"
 		<< "Kotohime requires --kotohime-zero-red, an unresolved developer "
 			"compatibility policy rather than an authenticity claim.\n";
+}
+
+const char *name(th03::app::ClassicRunnerErrorCode code) noexcept
+{
+	switch(code) {
+	case th03::app::ClassicRunnerErrorCode::invalid_request: return "invalid-request";
+	case th03::app::ClassicRunnerErrorCode::file_missing: return "file-missing";
+	case th03::app::ClassicRunnerErrorCode::file_not_regular: return "file-not-regular";
+	case th03::app::ClassicRunnerErrorCode::file_size_failed: return "file-size-failed";
+	case th03::app::ClassicRunnerErrorCode::file_size_mismatch: return "file-size-mismatch";
+	case th03::app::ClassicRunnerErrorCode::file_open_failed: return "file-open-failed";
+	case th03::app::ClassicRunnerErrorCode::file_read_failed: return "file-read-failed";
+	case th03::app::ClassicRunnerErrorCode::compiled_content_failed: return "compiled-content-failed";
+	case th03::app::ClassicRunnerErrorCode::session_failed: return "session-failed";
+	case th03::app::ClassicRunnerErrorCode::invalid_sample_order: return "invalid-sample-order";
+	case th03::app::ClassicRunnerErrorCode::runner_not_running: return "runner-not-running";
+	case th03::app::ClassicRunnerErrorCode::unexpected_session_status: return "unexpected-session-status";
+	case th03::app::ClassicRunnerErrorCode::surface_failed: return "surface-failed";
+	}
+	return "unknown";
+}
+
+const char *name(th03::app::ClassicContentFile file) noexcept
+{
+	switch(file) {
+	case th03::app::ClassicContentFile::none: return "none";
+	case th03::app::ClassicContentFile::main_executable: return "main-executable";
+	case th03::app::ClassicContentFile::mainl_executable: return "mainl-executable";
+	case th03::app::ClassicContentFile::op_executable: return "op-executable";
+	case th03::app::ClassicContentFile::font_rom: return "font-rom";
+	}
+	return "unknown";
+}
+
+const char *name(th03::app::ClassicCliErrorCode code) noexcept
+{
+	switch(code) {
+	case th03::app::ClassicCliErrorCode::unknown_option: return "unknown-option";
+	case th03::app::ClassicCliErrorCode::missing_value: return "missing-value";
+	case th03::app::ClassicCliErrorCode::duplicate_option: return "duplicate-option";
+	case th03::app::ClassicCliErrorCode::missing_required_option: return "missing-required-option";
+	case th03::app::ClassicCliErrorCode::invalid_tick_rate: return "invalid-tick-rate";
+	case th03::app::ClassicCliErrorCode::invalid_seed: return "invalid-seed";
+	case th03::app::ClassicCliErrorCode::invalid_smoke_ticks: return "invalid-smoke-ticks";
+	}
+	return "unknown";
+}
+
+const char *name(th03::app::ClassicCliOption option) noexcept
+{
+	switch(option) {
+	case th03::app::ClassicCliOption::none: return "none";
+	case th03::app::ClassicCliOption::help: return "help";
+	case th03::app::ClassicCliOption::classic: return "classic";
+	case th03::app::ClassicCliOption::data: return "data";
+	case th03::app::ClassicCliOption::main_executable: return "main";
+	case th03::app::ClassicCliOption::mainl_executable: return "mainl";
+	case th03::app::ClassicCliOption::op_executable: return "op";
+	case th03::app::ClassicCliOption::font_rom: return "font";
+	case th03::app::ClassicCliOption::config: return "config";
+	case th03::app::ClassicCliOption::score: return "score";
+	case th03::app::ClassicCliOption::tick_rate: return "tick-rate";
+	case th03::app::ClassicCliOption::seed: return "seed";
+	case th03::app::ClassicCliOption::kotohime_zero_red: return "kotohime-zero-red";
+	case th03::app::ClassicCliOption::smoke_ticks: return "smoke-ticks";
+	}
+	return "unknown";
 }
 
 const char *name(th03::app::DirectVsLaunchErrorCode code) noexcept
@@ -255,6 +333,14 @@ int fail(const char *stage, const th03::app::DirectVsCliError &error)
 	return 1;
 }
 
+int fail(const char *stage, const th03::app::ClassicCliError &error)
+{
+	std::cerr << "status=error\nstage=" << stage << "\ncode="
+		<< name(error.code) << "\noption=" << name(error.option)
+		<< "\nargument-index=" << error.argument_index << '\n';
+	return 1;
+}
+
 int fail(const char *stage, const th03::app::MainDirectVsRunnerError &error)
 {
 	std::cerr << "status=error\nstage=" << stage << "\ncode="
@@ -317,6 +403,40 @@ int fail_content(const th03::app::DirectVsLaunchError &error)
 	return 1;
 }
 
+int fail(const char *stage, const th03::app::ClassicRunnerError &error)
+{
+	std::cerr << "status=error\nstage=" << stage << "\ncode="
+		<< name(error.code) << "\nfile=" << name(error.file)
+		<< "\ndetail-code=" << static_cast<unsigned int>(error.detail_code)
+		<< '\n';
+	if(error.resource_error) {
+		std::cerr << "resource-code=" << name(error.resource_error->code) << '\n';
+		const auto spec = th03::app::main_resource_spec(error.resource_error->key);
+		std::cerr << "resource-role="
+			<< (spec ? spec->logical_role : std::string{"invalid-key"}) << '\n';
+	}
+	if(error.compiled_content_error) {
+		std::cerr << "compiled-code=" << static_cast<unsigned int>(
+			error.compiled_content_error->code
+		) << "\ncompiled-item=" << static_cast<unsigned int>(
+			error.compiled_content_error->item
+		) << "\ncompiled-offset=" << error.compiled_content_error->offset << '\n';
+	}
+	if(error.process_error) {
+		std::cerr << "process-code=" << static_cast<unsigned int>(
+			error.process_error->code
+		) << "\npresentation-status=" << static_cast<unsigned int>(
+			error.process_error->presentation_status
+		) << '\n';
+		if(error.process_error->core_error) {
+			std::cerr << "core-code=" << static_cast<unsigned int>(
+				error.process_error->core_error->code
+			) << '\n';
+		}
+	}
+	return 1;
+}
+
 template <typename Error>
 int fail(const char *stage, const Error &error)
 {
@@ -334,27 +454,16 @@ int fail_tick(th03::app::TickInputError error)
 
 } // namespace
 
-int main(int argc, char **argv)
+namespace {
+
+int run_direct_vs(th03::app::DirectVsCliRequest parsed)
 {
-	std::vector<std::string_view> arguments;
-	arguments.reserve((argc > 1) ? static_cast<std::size_t>(argc - 1) : 0U);
-	for(int index = 1; index < argc; ++index) {
-		arguments.emplace_back(argv[index]);
-	}
-	auto parsed = th03::app::parse_direct_vs_cli(arguments);
-	if(!parsed) {
-		return fail("command-line", parsed.error());
-	}
-	if(parsed->show_help) {
-		print_usage();
-		return 0;
-	}
-	if(parsed->kotohime_zero_red) {
-		parsed->launch.process.kotohime_compatibility = {
+	if(parsed.kotohime_zero_red) {
+		parsed.launch.process.kotohime_compatibility = {
 			.red_provider = &kotohime_zero_red,
 		};
 	}
-	auto process = th03::app::load_direct_vs_process(std::move(parsed->launch));
+	auto process = th03::app::load_direct_vs_process(std::move(parsed.launch));
 	if(!process) {
 		return fail_content(process.error());
 	}
@@ -376,7 +485,7 @@ int main(int argc, char **argv)
 		return fail("input-create", mapper.error());
 	}
 	auto scheduler = th03::app::TickInputScheduler::create(
-		parsed->tick_rate,
+		parsed.tick_rate,
 		th03::platform::sdl_ticks_now_ns()
 	);
 	if(!scheduler) {
@@ -440,7 +549,7 @@ int main(int argc, char **argv)
 				}
 				retry_blocked_event = retried->queue_blocked;
 			}
-			if(parsed->smoke_ticks && process_ticks >= *parsed->smoke_ticks) {
+			if(parsed.smoke_ticks && process_ticks >= *parsed.smoke_ticks) {
 				smoke_complete = true;
 				break;
 			}
@@ -487,4 +596,180 @@ int main(int argc, char **argv)
 		}
 	}
 	return 0;
+}
+
+int run_classic(th03::app::ClassicCliRequest parsed)
+{
+	if(parsed.kotohime_zero_red) {
+		parsed.launch.kotohime_compatibility = {
+			.red_provider = &kotohime_zero_red,
+		};
+	}
+	auto runner = th03::app::ClassicRunner::load(std::move(parsed.launch));
+	if(!runner) {
+		return fail("classic-load", runner.error());
+	}
+
+	auto platform = th03::platform::SdlPlatform::create({});
+	if(!platform) {
+		return fail("platform-create", platform.error());
+	}
+	auto mapper = th03::platform::SdlInputMapper::create(
+		th03::app::detail::classic_direct_vs_bindings(),
+		static_cast<SDL_WindowID>((*platform)->window_id()),
+		th03::platform::native_sdl_gamepad_backend()
+	);
+	if(!mapper) {
+		return fail("input-create", mapper.error());
+	}
+	auto scheduler = th03::app::TickInputScheduler::create(
+		parsed.tick_rate,
+		th03::platform::sdl_ticks_now_ns()
+	);
+	if(!scheduler) {
+		return fail_tick(scheduler.error());
+	}
+
+	std::vector<th03::present::ComposedPixel> pixels(
+		th03::present::graphics_page_pixels
+	);
+	const auto pixel_span = std::span<
+		th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	>(pixels.data(), pixels.size());
+	auto surface = (*runner)->compose_shown_surface(pixel_span);
+	if(!surface) {
+		return fail("compose", surface.error());
+	}
+	auto presented = (*platform)->present(*surface);
+	if(!presented) {
+		return fail("present", presented.error());
+	}
+	while((*runner)->take_audio_command()) {
+		// The launcher currently selects the source sound-unavailable path.
+	}
+
+	bool retry_blocked_event = false;
+	bool presentation_pending = false;
+	std::uint64_t logical_ticks = 0U;
+	constexpr th03::app::ClassicAudioStatus silent_audio{
+		.bgm_active = false,
+		.measure = 0U,
+		.volume = 255U,
+	};
+	while((*runner)->status() == th03::app::ClassicRunnerStatus::running) {
+		const auto cutoff = th03::platform::sdl_ticks_now_ns();
+		if(!retry_blocked_event) {
+			auto result = mapper->pump_events(*scheduler, false);
+			if(!result) {
+				return fail("input-pump", result.error());
+			}
+			retry_blocked_event = result->queue_blocked;
+		}
+
+		bool smoke_complete = false;
+		for(;;) {
+			auto due = scheduler->pop_due(cutoff);
+			if(!due) {
+				return fail_tick(due.error());
+			}
+			if(!*due) {
+				break;
+			}
+			auto consumed = (*runner)->consume(**due, silent_audio);
+			if(!consumed) {
+				std::cerr << "logical-tick=" << logical_ticks << '\n';
+				return fail("classic-runner", consumed.error());
+			}
+			while((*runner)->take_audio_command()) {
+				// A silent launcher must still acknowledge every command before
+				// the next source boundary.
+			}
+			presentation_pending =
+				presentation_pending || consumed->surface_changed;
+			logical_ticks++;
+			if(retry_blocked_event) {
+				auto retried = mapper->pump_events(*scheduler, false);
+				if(!retried) {
+					return fail("input-pump", retried.error());
+				}
+				retry_blocked_event = retried->queue_blocked;
+			}
+			if(parsed.smoke_ticks && logical_ticks >= *parsed.smoke_ticks) {
+				smoke_complete = true;
+				break;
+			}
+			if(consumed->status != th03::app::ClassicRunnerStatus::running) {
+				break;
+			}
+		}
+
+		if((*runner)->status() ==
+			th03::app::ClassicRunnerStatus::quit_requested) {
+			return 0;
+		}
+		const bool session_complete = (*runner)->status() ==
+			th03::app::ClassicRunnerStatus::session_complete;
+		bool presented_this_iteration = false;
+		if(presentation_pending &&
+			(!retry_blocked_event || session_complete || smoke_complete)) {
+			surface = (*runner)->compose_shown_surface(pixel_span);
+			if(!surface) {
+				return fail("compose", surface.error());
+			}
+			presented = (*platform)->present(*surface);
+			if(!presented) {
+				return fail("present", presented.error());
+			}
+			presentation_pending = false;
+			presented_this_iteration = true;
+		}
+		if(session_complete || smoke_complete) {
+			return 0;
+		}
+		if(presented_this_iteration) {
+			continue;
+		}
+		const auto deadline = scheduler->next_deadline_ns();
+		const auto now = th03::platform::sdl_ticks_now_ns();
+		if(deadline && *deadline > now) {
+			SDL_DelayPrecise(std::min(*deadline - now, maximum_idle_delay_ns));
+		}
+	}
+	return 0;
+}
+
+} // namespace
+
+int main(int argc, char **argv)
+{
+	std::vector<std::string_view> arguments;
+	arguments.reserve(static_cast<std::size_t>(std::max(argc - 1, 0)));
+	for(int index = 1; index < argc; index++) {
+		arguments.emplace_back(argv[index]);
+	}
+
+	const bool classic = std::ranges::find(arguments, "--classic") !=
+		arguments.end();
+	if(classic) {
+		auto parsed = th03::app::parse_classic_cli(arguments);
+		if(!parsed) {
+			return fail("arguments", parsed.error());
+		}
+		if(parsed->show_help) {
+			print_usage();
+			return 0;
+		}
+		return run_classic(std::move(*parsed));
+	}
+
+	auto parsed = th03::app::parse_direct_vs_cli(arguments);
+	if(!parsed) {
+		return fail("arguments", parsed.error());
+	}
+	if(parsed->show_help) {
+		print_usage();
+		return 0;
+	}
+	return run_direct_vs(std::move(*parsed));
 }

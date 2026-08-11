@@ -30,7 +30,8 @@ The donor for scene behaviour is the clean, pinned Anniversary tree at oracle_an
 
 ## Live implementation status
 
-As of 2026-08-10, the direct-VS path has these durable foundations:
+As of 2026-08-11, the direct-VS and silent Classic paths have these durable
+foundations:
 
 - Deterministic gameplay, V13 parsing/playback, and the frozen 19-file corpus
   are green on GCC and MSVC.
@@ -107,11 +108,14 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
 - `th03_platform_sdl` now owns the pinned SDL 3.4.10 lifetime, resizable
   integer-scaled upload, monotonic timestamps, and duplicate-safe keyboard and
   gamepad event mapping. Default non-SDL builds remain dependency-free.
-- `th03-app` now loads the supported external MAIN/FONT/resource inputs,
-  constructs the live-only direct-VS runner, simulates every due logical
-  deadline without collapsing catch-up, and presents only the newest completed
-  surface. GCC and MSVC dummy/software gates and byte-silent public local-data
-  startup have reached the first displayed gameplay tick.
+- `th03-app` now loads the supported external MAIN/MAINL/OP/FONT/resource
+  inputs and launches either the complete Classic owner or the live-only
+  direct-VS runner. Both paths simulate every due logical deadline without
+  collapsing catch-up and present only the newest completed surface. The
+  Classic path preserves the donor's full `input_sp` mask separately from P1/P2,
+  drains semantic audio commands through the source sound-unavailable fallback,
+  and has byte-silent authenticated dummy/software SDL gates on GCC and MSVC,
+  including a 7,000-logical-tick automatic-Demo smoke.
 - The source-private Classic Story owner now binds the implemented Stage,
   retained MAIN, Win, Continue, Game Over, both interstage cutscenes, and the
   primary ending, staff/verdict, high-score registration, and conditional
@@ -140,14 +144,15 @@ As of 2026-08-10, the direct-VS path has these durable foundations:
   registration scene now owns the exact retained-Raster composition, source
   input cadence and codec RNG schedule, and final atomic commit without leaking
   Raster or RNG into persistence. The exact eight-byte `YUME.CFG` codec and
-  atomic store are also integrated; OP score and option views remain separate
-  presentation work.
+  atomic store are also integrated with the OP score and option views;
+  localization and optional QoL remain separate product work.
 
-The direct developer slice is now visible and interactive. It is not yet VS-2
-or VS-3 complete: exact source cadence/phase, fixed-script full-match routing,
-captured PC-98 page/palette/pixel traces, and a human two-player run remain
-acceptance gates. The host therefore requires an explicit rational cadence as
-policy rather than labeling an inferred number authentic.
+The complete silent Classic developer slice and the direct-VS slice are now
+visible and interactive. They are not yet fidelity-complete: PMD/OPNA audio,
+exact source cadence/phase, captured PC-98 page/palette/pixel traces, and a
+human two-player run remain acceptance gates. The host therefore requires an
+explicit rational cadence as policy rather than labeling an inferred number
+authentic.
 
 | Native concern | Donor authority |
 | --- | --- |
@@ -315,9 +320,9 @@ Once VS-3 holds, add scenes in donor order rather than building a broad launcher
    resident/persistence state.
 2. OP title and selection are integrated. The source's Story, VS, Music Room,
    registration view, Options, Quit, and automatic Demo paths all use the
-   authenticated BFNT/CDG/PI presentation and typed process handoffs. A later
-   launcher must compose this owner rather than add a desktop UI or rewrite
-   source asset strings.
+   authenticated BFNT/CDG/PI presentation and typed process handoffs. The SDL
+   launcher now composes this owner directly rather than adding a desktop UI or
+   rewriting source asset strings.
 3. Cutscenes and staff. The owning typed CutsceneScene and complete normal-speed
    staff/verdict Raster transaction are integrated. Replay Patch's optional
    score-file-unlocked held-Z staff pacing remains coupled to persistence. The

@@ -369,11 +369,11 @@ target_compile_features(th03_formats PUBLIC cxx_std_23)
 set_target_properties(th03_formats PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_formats)
 
-# Stable MAIN-process/application policy. Direct VS is complete; the
-# Source-private Classic Story policy, MAINL stage presentation, and the typed
-# Raster handoff into a fresh MAIN process remain outside the public direct-VS
-# launcher boundary.
+# Stable MAIN-process/application policy. It owns both the guarded direct-VS
+# process and the complete source-private Classic OP/MAINL/MAIN lifecycle;
+# platform code sees only the narrow public runners and composed surface.
 add_library(th03_app_main STATIC
+	src/app/classic_cli.cpp
 	src/app/classic_cutscene_scene.cpp
 	src/app/classic_mainl_continue.cpp
 	src/app/classic_op_music_room.cpp
@@ -382,6 +382,7 @@ add_library(th03_app_main STATIC
 	src/app/classic_op_session.cpp
 	src/app/classic_op_selection.cpp
 	src/app/classic_registration_scene.cpp
+	src/app/classic_runner.cpp
 	src/app/classic_mainl_stage.cpp
 	src/app/classic_mainl_story.cpp
 	src/app/classic_mainl_win.cpp
@@ -691,11 +692,18 @@ if(BUILD_TESTING)
 
 	if(TH03_ENABLE_SDL)
 		add_test(NAME th03-app-help COMMAND th03-app --help)
+		add_test(NAME th03-app-classic-help COMMAND th03-app --classic --help)
 		add_test(
 			NAME th03-app-missing-main
 			COMMAND ${CMAKE_COMMAND}
 				-DTH03_APP=$<TARGET_FILE:th03-app>
 				-P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_app_missing_main.cmake
+		)
+		add_test(
+			NAME th03-app-classic-missing-main
+			COMMAND ${CMAKE_COMMAND}
+				-DTH03_APP=$<TARGET_FILE:th03-app>
+				-P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_app_classic_missing_main.cmake
 		)
 		add_executable(th03-app-sdl-defaults-tests
 			apps/th03-app/default_bindings.cpp
@@ -806,6 +814,21 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-main-direct-vs-runner-tests
 		COMMAND th03-app-main-direct-vs-runner-tests
+	)
+
+	add_executable(th03-app-classic-runner-tests
+		tests/test_app_classic_runner.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-runner-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-classic-runner-tests PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-classic-runner-tests)
+	add_test(
+		NAME th03-app-classic-runner-tests
+		COMMAND th03-app-classic-runner-tests
 	)
 
 	add_executable(th03-app-mainl-compiled-text-tests

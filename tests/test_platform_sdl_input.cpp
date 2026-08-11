@@ -29,6 +29,11 @@ constexpr std::uint16_t input_down = 0x0002U;
 constexpr std::uint16_t input_left = 0x0004U;
 constexpr std::uint16_t input_bomb = 0x0010U;
 constexpr std::uint16_t input_shot = 0x0020U;
+constexpr std::uint16_t input_up_left = 0x0100U;
+constexpr std::uint16_t input_down_right = 0x0800U;
+constexpr std::uint16_t input_cancel = 0x1000U;
+constexpr std::uint16_t input_ok = 0x2000U;
+constexpr std::uint16_t input_q = 0x4000U;
 
 std::size_t checks = 0U;
 std::size_t failures = 0U;
@@ -120,7 +125,17 @@ struct FakeGamepads {
 		.player = SdlInputPlayer::p2,
 		.action = SdlLogicalAction::bomb,
 	};
-	result.keyboard_count = 6U;
+	result.keyboard[6] = {
+		.scancode = SDL_SCANCODE_D,
+		.player = SdlInputPlayer::p1,
+		.action = SdlLogicalAction::cancel,
+	};
+	result.keyboard[7] = {
+		.scancode = SDL_SCANCODE_E,
+		.player = SdlInputPlayer::p1,
+		.action = SdlLogicalAction::ok,
+	};
+	result.keyboard_count = 8U;
 
 	result.gamepad_buttons[0] = {
 		.button = SDL_GAMEPAD_BUTTON_SOUTH,
@@ -413,8 +428,15 @@ void test_keyboard_snapshots_charge_and_timestamp_order()
 			mixed.input.charge_mask == 0x01U && mixed.input.system == 0U,
 		"charge adds Shot and charge intent while P2/cardinal bits remain independent"
 	);
+	(void)expect_event(mapper, input, key_event(51U, SDL_SCANCODE_D, true),
+		"source-global Cancel key press is accepted");
+	(void)expect_event(mapper, input, key_event(52U, SDL_SCANCODE_E, true),
+		"source-global OK key press is accepted");
+	const auto system = expect_tick(input, 60U, "global controls are due");
+	expect(system.input.system == (input_cancel | input_ok),
+		"Cancel and OK are sampled in CoreInput.system without changing players");
 	const auto repeated = expect_event(
-		mapper, input, key_event(51U, SDL_SCANCODE_W, true, true),
+		mapper, input, key_event(61U, SDL_SCANCODE_W, true, true),
 		"keyboard repeat is accepted and ignored"
 	);
 	expect(repeated.handled && !repeated.physical_event_queued,
@@ -430,6 +452,70 @@ void test_keyboard_snapshots_charge_and_timestamp_order()
 	const auto ticks_after = th03::platform::sdl_ticks_now_ns();
 	expect(ticks_after >= ticks_before,
 		"native SDL nanosecond clock observations are monotonic");
+}
+
+void test_complete_source_global_and_legacy_diagonal_domain()
+{
+	FakeGamepads fake{};
+	SdlInputBindings complete{};
+	const auto bind = [&complete](
+		SDL_Scancode scancode,
+		SdlInputPlayer player,
+		SdlLogicalAction action
+	) {
+		complete.keyboard[complete.keyboard_count++] = {
+			.scancode = scancode,
+			.player = player,
+			.action = action,
+		};
+	};
+	bind(SDL_SCANCODE_A, SdlInputPlayer::p1, SdlLogicalAction::up_left);
+	bind(SDL_SCANCODE_B, SdlInputPlayer::p2, SdlLogicalAction::down_right);
+	bind(SDL_SCANCODE_C, SdlInputPlayer::p1, SdlLogicalAction::single_up);
+	bind(SDL_SCANCODE_D, SdlInputPlayer::p1, SdlLogicalAction::single_down);
+	bind(SDL_SCANCODE_E, SdlInputPlayer::p1, SdlLogicalAction::single_left);
+	bind(SDL_SCANCODE_F, SdlInputPlayer::p1, SdlLogicalAction::single_right);
+	bind(SDL_SCANCODE_G, SdlInputPlayer::p1, SdlLogicalAction::single_bomb);
+	bind(SDL_SCANCODE_H, SdlInputPlayer::p1, SdlLogicalAction::single_shot);
+	bind(SDL_SCANCODE_I, SdlInputPlayer::p1, SdlLogicalAction::single_up_left);
+	bind(SDL_SCANCODE_J, SdlInputPlayer::p1, SdlLogicalAction::single_down_left);
+	bind(SDL_SCANCODE_K, SdlInputPlayer::p1, SdlLogicalAction::single_up_right);
+	bind(SDL_SCANCODE_L, SdlInputPlayer::p1, SdlLogicalAction::single_down_right);
+	bind(SDL_SCANCODE_M, SdlInputPlayer::p1, SdlLogicalAction::cancel);
+	bind(SDL_SCANCODE_N, SdlInputPlayer::p1, SdlLogicalAction::ok);
+	bind(SDL_SCANCODE_O, SdlInputPlayer::p1, SdlLogicalAction::q);
+
+	auto made = SdlInputMapper::create(complete, main_window, fake.backend());
+	expect(static_cast<bool>(made),
+		"complete input_sp mapper accepts every explicit logical action");
+	if(!made) {
+		return;
+	}
+	auto mapper = std::move(*made);
+	auto input = scheduler(20U);
+	for(std::size_t index = 0U; index < complete.keyboard_count; ++index) {
+		(void)expect_event(
+			mapper,
+			input,
+			key_event(
+				static_cast<std::uint64_t>(index + 1U),
+				complete.keyboard[index].scancode,
+				true
+			),
+			"complete input_sp key edge is accepted"
+		);
+	}
+	const auto sampled = expect_tick(
+		input, 20U, "complete input_sp contribution is due"
+	);
+	expect(
+		sampled.input.p1 == input_up_left &&
+			sampled.input.p2 == input_down_right &&
+			sampled.input.system == 0x7F3FU &&
+			(sampled.input.system & (input_cancel | input_ok | input_q)) ==
+				(input_cancel | input_ok | input_q),
+		"player legacy diagonals and every donor input_sp bit remain distinct"
+	);
 }
 
 void test_equal_and_regressed_event_order()
@@ -851,6 +937,7 @@ int main()
 {
 	test_binding_validation();
 	test_keyboard_snapshots_charge_and_timestamp_order();
+	test_complete_source_global_and_legacy_diagonal_domain();
 	test_equal_and_regressed_event_order();
 	test_keyboard_window_scope();
 	test_gamepad_buttons_axes_and_lifecycle();

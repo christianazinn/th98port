@@ -6,11 +6,10 @@ gate, and Phase 3 now verifies 19 locked V13 conversions across Story,
 Practice, and ordinary VS, plus a separate title-Demo gate, on top of the Phase
 1 format/session runway. A
 strict V13 span adapter and the first stdlib-only asset/indexed-raster
-foundations now sit beside that core. An optional SDL 3 direct-VS application
-exercises the complete authenticated MAIN process and presentation stack,
-while the platform-neutral Classic owner now integrates every original OP,
-Story, VS, ending, score, and built-in Demo route. Host audio and the final
-Classic SDL composition remain separate work.
+foundations now sit beside that core. An optional SDL 3 application now launches
+both the complete authenticated Classic OP/MAINL/MAIN lifecycle and the earlier
+direct-VS developer path. Classic currently follows the source's sound-unavailable
+fallback while the native PMD/OPNA service remains separate work.
 
 ## Build and test
 
@@ -30,7 +29,7 @@ ctest --preset gcc
 The MSVC preset uses Visual Studio 2022 x64. The GCC preset uses the standard
 `MinGW Makefiles` generator.
 
-### Optional direct-VS application
+### Optional Classic and direct-VS application
 
 The SDL target is off by default. Authenticate and extract the pinned SDL
 3.4.10 release archive once, then use either SDL preset:
@@ -43,12 +42,20 @@ ctest --preset msvc-x64-sdl
 ```
 
 `th03-app` reads an external structured extraction containing `YUME1.DAT/`
-and `YUME2.DAT/`, the supported `MAIN.EXE`, and a caller-supplied 288,768-byte
-PC-98 `FONT.ROM`. No original bytes are embedded or copied into the build.
+and `YUME2.DAT/`, a supported Japanese `MAIN.EXE` compiled-content profile,
+supported unpacked Japanese `MAINL.EXE` and `OP.EXE` profiles, and a
+caller-supplied 288,768-byte PC-98 `FONT.ROM`. No
+original bytes are embedded or copied into the build.
 Cadence is required explicitly because an exact PC-98 wall-clock rate and first
 VSync phase have not yet been established:
 
 ```powershell
+out\build\msvc-x64-sdl\Debug\th03-app.exe `
+  --classic --data X:\th03-extracted `
+  --main X:\th03\MAIN.EXE --mainl X:\th03\MAINL.EXE `
+  --op X:\th03\OP.EXE --font X:\pc98\FONT.ROM `
+  --tick-rate 56423/1000
+
 out\build\msvc-x64-sdl\Debug\th03-app.exe `
   --vs --data X:\th03-extracted --main X:\th03\MAIN.EXE `
   --font X:\pc98\FONT.ROM --tick-rate 56423/1000 `
@@ -58,8 +65,9 @@ out\build\msvc-x64-sdl\Debug\th03-app.exe `
 The shown rate is a provisional host policy, not an authenticity claim.
 Kotohime additionally requires the explicit developer flag
 `--kotohime-zero-red` until her source-uninitialized Bomb fade byte has an
-evidence-backed release policy. `--help` lists keyboard controls and all launch
-options.
+evidence-backed release policy. The Classic path currently drains semantic
+audio commands into a deterministic silent backend; it does not claim PMD/OPNA
+audio fidelity yet. `--help` lists keyboard controls and all launch options.
 
 Validate an external frozen case without copying it into this repository:
 

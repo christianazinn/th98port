@@ -33,6 +33,25 @@ enum class SdlLogicalAction : std::uint8_t {
 	right,
 	bomb,
 	shot,
+	up_left,
+	down_left,
+	up_right,
+	down_right,
+	// Complete source-global input_sp actions. These are independent from the
+	// selected P1/P2 contribution even when one physical key binds to both.
+	single_up,
+	single_down,
+	single_left,
+	single_right,
+	single_bomb,
+	single_shot,
+	single_up_left,
+	single_down_left,
+	single_up_right,
+	single_down_right,
+	cancel,
+	ok,
+	q,
 	// Charge is the physical intentional-charge action under Replay Autofire:
 	// it contributes Shot and the selected player's charge bit together.
 	charge,
