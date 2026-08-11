@@ -377,6 +377,7 @@ add_library(th03_app_main STATIC
 	src/app/classic_cutscene_scene.cpp
 	src/app/classic_mainl_continue.cpp
 	src/app/classic_op_scene.cpp
+	src/app/classic_op_selection.cpp
 	src/app/classic_registration_scene.cpp
 	src/app/classic_mainl_stage.cpp
 	src/app/classic_mainl_story.cpp
@@ -607,6 +608,21 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-classic-op-scene-tests
 		COMMAND th03-app-classic-op-scene-tests
+	)
+
+	add_executable(th03-app-classic-op-selection-tests
+		tests/test_app_classic_op_selection.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-op-selection-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-classic-op-selection-tests PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-classic-op-selection-tests)
+	add_test(
+		NAME th03-app-classic-op-selection-tests
+		COMMAND th03-app-classic-op-selection-tests
 	)
 
 	if(TH03_ENABLE_SDL)

@@ -20,6 +20,7 @@ enum class ClassicAudioCommandType : std::uint8_t {
 enum class ClassicMusicCue : std::uint8_t {
 	none,
 	menu_main,
+	character_select,
 	winner,
 	game_over,
 	staff,

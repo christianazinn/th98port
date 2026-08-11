@@ -205,6 +205,13 @@ enum class MainResourceRole : std::uint8_t {
 	hud_result_sheet,
 	stage_enemy_center,
 	selection_palette,
+	character_selection_portrait,
+	selection_extra_icons,
+	selection_story_portrait,
+	selection_stats_sheet,
+	selection_extra_background,
+	selection_name_sheet,
+	selection_music,
 	character_sheet,
 	character_extra_portrait,
 	character_bomb_portrait,
@@ -339,6 +346,9 @@ main_resource_spec(MainResourceKey key);
 
 [[nodiscard]] std::vector<MainResourceKey> op_title_menu_resource_keys();
 
+[[nodiscard]] std::vector<MainResourceKey>
+op_character_selection_resource_keys();
+
 [[nodiscard]] std::expected<std::vector<MainResourceKey>, ResourceLoadError>
 direct_vs_resource_keys(
 	MainPlayerSelection player_one,
@@ -395,6 +405,8 @@ public:
 	);
 	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 	load_op_title_menu();
+	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+	load_op_character_selection();
 
 	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 	load_direct_vs(

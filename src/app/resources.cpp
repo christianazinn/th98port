@@ -218,6 +218,7 @@ constexpr std::array<std::uint64_t, 12U> staff_cdg_fnv1a64{
 ) noexcept
 {
 	return role == MainResourceRole::character_stage_enemy_group ||
+		role == MainResourceRole::character_selection_portrait ||
 		role == MainResourceRole::character_stage_portrait ||
 		role == MainResourceRole::character_win_portrait ||
 		role == MainResourceRole::character_win_message;
@@ -318,6 +319,13 @@ constexpr std::array<std::uint64_t, 12U> staff_cdg_fnv1a64{
 	case MainResourceRole::hud_result_sheet:
 	case MainResourceRole::stage_enemy_center:
 	case MainResourceRole::selection_palette:
+	case MainResourceRole::character_selection_portrait:
+	case MainResourceRole::selection_extra_icons:
+	case MainResourceRole::selection_story_portrait:
+	case MainResourceRole::selection_stats_sheet:
+	case MainResourceRole::selection_extra_background:
+	case MainResourceRole::selection_name_sheet:
+	case MainResourceRole::selection_music:
 	case MainResourceRole::character_stage_enemy_group:
 	case MainResourceRole::mainl_gaiji_font:
 	case MainResourceRole::character_stage_portrait:
@@ -859,6 +867,72 @@ static_resource_spec(MainResourceKey key)
 			.expected_bytes = 48U,
 			.expected_fnv1a64 = 0x9BE11DA2C74091A9ULL,
 		};
+	case MainResourceRole::selection_extra_icons:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::selection_handoff,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::cdg,
+			.logical_role = "select.extra_icons",
+			.filename = "SLEX.CD2",
+			.expected_bytes = 7936U,
+			.expected_fnv1a64 = 0x742863E837B453A5ULL,
+		};
+	case MainResourceRole::selection_story_portrait:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::selection_handoff,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::cdg,
+			.logical_role = "select.story_portrait",
+			.filename = "99SL.CDG",
+			.expected_bytes = 23056U,
+			.expected_fnv1a64 = 0x0D7851FF916C97A0ULL,
+		};
+	case MainResourceRole::selection_stats_sheet:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::selection_handoff,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::cdg,
+			.logical_role = "select.stats_sheet",
+			.filename = "SLWIN.CDG",
+			.expected_bytes = 5136U,
+			.expected_fnv1a64 = 0x68D2CE8711394937ULL,
+		};
+	case MainResourceRole::selection_extra_background:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::selection_handoff,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::cdg,
+			.logical_role = "select.extra_background",
+			.filename = "SLEX.CDG",
+			.expected_bytes = 2576U,
+			.expected_fnv1a64 = 0xA8ED159E4B3E24F9ULL,
+		};
+	case MainResourceRole::selection_name_sheet:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::selection_handoff,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::bfnt_superimpose,
+			.logical_role = "select.name_sheet",
+			.filename = "CHNAME.BFT",
+			.expected_bytes = 9296U,
+			.expected_fnv1a64 = 0x148A191A26278F78ULL,
+		};
+	case MainResourceRole::selection_music:
+		return MainResourceSpec{
+			.key = key,
+			.scene = MainResourceScene::selection_handoff,
+			.archive = MainResourceArchive::yume1,
+			.decoder = MainResourceDecoder::pmd_music,
+			.logical_role = "select.music",
+			.filename = "SELECT.M",
+			.expected_bytes = 2437U,
+			.expected_fnv1a64 = 0xAE13BCE0100E516EULL,
+		};
 	case MainResourceRole::mainl_gaiji_font:
 		return MainResourceSpec{
 			.key = key,
@@ -987,6 +1061,7 @@ static_resource_spec(MainResourceKey key)
 	case MainResourceRole::character_stage_shot:
 	case MainResourceRole::character_stage_extra_shot:
 	case MainResourceRole::character_stage_enemy_group:
+	case MainResourceRole::character_selection_portrait:
 	case MainResourceRole::character_stage_portrait:
 	case MainResourceRole::stage_splash_background:
 	case MainResourceRole::character_win_portrait:
@@ -1195,6 +1270,21 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 				.expected_fnv1a64 = win_message_fnv1a64[index],
 			};
 		}
+		if(key.role == MainResourceRole::character_selection_portrait) {
+			return MainResourceSpec{
+				.key = key,
+				.scene = MainResourceScene::selection_handoff,
+				.archive = MainResourceArchive::yume1,
+				.decoder = MainResourceDecoder::cdg,
+				.logical_role = "select.character." +
+					std::string{character_name(key.character)} + ".portrait",
+				.filename = filename_with_index(
+					static_cast<std::uint8_t>(index * 2U), "SL.CD2"
+				),
+				.expected_bytes = 46096U,
+				.expected_fnv1a64 = stage_portrait_fnv1a64[index],
+			};
+		}
 		const bool win_portrait =
 			key.role == MainResourceRole::character_win_portrait;
 		return MainResourceSpec{
@@ -1292,6 +1382,13 @@ std::expected<MainResourceSpec, ResourceLoadError> main_resource_spec(
 	case MainResourceRole::hud_result_sheet:
 	case MainResourceRole::stage_enemy_center:
 	case MainResourceRole::selection_palette:
+	case MainResourceRole::character_selection_portrait:
+	case MainResourceRole::selection_extra_icons:
+	case MainResourceRole::selection_story_portrait:
+	case MainResourceRole::selection_stats_sheet:
+	case MainResourceRole::selection_extra_background:
+	case MainResourceRole::selection_name_sheet:
+	case MainResourceRole::selection_music:
 	case MainResourceRole::character_stage_enemy_group:
 	case MainResourceRole::mainl_gaiji_font:
 	case MainResourceRole::character_stage_portrait:
@@ -1338,6 +1435,12 @@ std::vector<MainResourceSpec> main_resource_manifest()
 		MainResourceRole::hud_result_sheet,
 		MainResourceRole::stage_enemy_center,
 		MainResourceRole::selection_palette,
+		MainResourceRole::selection_extra_icons,
+		MainResourceRole::selection_story_portrait,
+		MainResourceRole::selection_stats_sheet,
+		MainResourceRole::selection_extra_background,
+		MainResourceRole::selection_name_sheet,
+		MainResourceRole::selection_music,
 		MainResourceRole::mainl_gaiji_font,
 		MainResourceRole::stage_number_sheet,
 		MainResourceRole::stage_splash_base,
@@ -1365,6 +1468,7 @@ std::vector<MainResourceSpec> main_resource_manifest()
 
 	constexpr std::array character_only_roles{
 		MainResourceRole::character_stage_enemy_group,
+		MainResourceRole::character_selection_portrait,
 		MainResourceRole::character_stage_portrait,
 		MainResourceRole::character_win_portrait,
 		MainResourceRole::character_win_message,
@@ -1462,6 +1566,44 @@ std::vector<MainResourceKey> op_title_menu_resource_keys()
 		{.role = MainResourceRole::op_gaiji_font},
 		{.role = MainResourceRole::op_menu_music},
 	};
+}
+
+std::vector<MainResourceKey> op_character_selection_resource_keys()
+{
+	std::vector<MainResourceKey> result;
+	result.reserve(16U);
+	for(std::uint8_t character = first_character_value;
+		character <= static_cast<std::uint8_t>(MainCharacter::marisa);
+		++character) {
+		result.push_back({
+			.role = MainResourceRole::character_selection_portrait,
+			.character = static_cast<MainCharacter>(character),
+		});
+	}
+	result.push_back({.role = MainResourceRole::selection_extra_icons});
+	for(std::uint8_t character = static_cast<std::uint8_t>(MainCharacter::ellen);
+		character <= static_cast<std::uint8_t>(MainCharacter::kana);
+		++character) {
+		result.push_back({
+			.role = MainResourceRole::character_selection_portrait,
+			.character = static_cast<MainCharacter>(character),
+		});
+	}
+	result.push_back({.role = MainResourceRole::selection_story_portrait});
+	result.push_back({.role = MainResourceRole::selection_stats_sheet});
+	result.push_back({.role = MainResourceRole::selection_extra_background});
+	result.push_back({.role = MainResourceRole::selection_music});
+	result.push_back({.role = MainResourceRole::selection_name_sheet});
+	result.push_back({.role = MainResourceRole::selection_palette});
+	for(std::uint8_t character = static_cast<std::uint8_t>(MainCharacter::rikako);
+		character <= last_character_value;
+		++character) {
+		result.push_back({
+			.role = MainResourceRole::character_selection_portrait,
+			.character = static_cast<MainCharacter>(character),
+		});
+	}
+	return result;
 }
 
 std::expected<void, ResourceLoadErrorCode> validate_main_resource_manifest(
@@ -1944,6 +2086,12 @@ std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 MainResourceLoader::load_op_title_menu()
 {
 	return load_batch(op_title_menu_resource_keys());
+}
+
+std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+MainResourceLoader::load_op_character_selection()
+{
+	return load_batch(op_character_selection_resource_keys());
 }
 
 std::expected<std::vector<LoadedMainResource>, ResourceLoadError>

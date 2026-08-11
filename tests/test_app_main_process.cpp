@@ -535,6 +535,13 @@ std::vector<std::byte> bytes_for(const th03::app::MainResourceSpec &spec)
 	case MainResourceRole::stage_splash_base:
 	case MainResourceRole::stage_splash_background:
 	case MainResourceRole::selection_palette:
+	case MainResourceRole::character_selection_portrait:
+	case MainResourceRole::selection_extra_icons:
+	case MainResourceRole::selection_story_portrait:
+	case MainResourceRole::selection_stats_sheet:
+	case MainResourceRole::selection_extra_background:
+	case MainResourceRole::selection_name_sheet:
+	case MainResourceRole::selection_music:
 	case MainResourceRole::win_logo_palette_pre:
 	case MainResourceRole::win_logo_fade_cels:
 	case MainResourceRole::win_logo_final:

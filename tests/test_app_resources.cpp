@@ -121,7 +121,7 @@ void test_manifest()
 	);
 	const auto manifest = th03::app::main_resource_manifest();
 	expect(
-		manifest.size() == 232U,
+		manifest.size() == 247U,
 		"manifest enumerates OP, MAIN, MAINL, cutscene, staff, registration, paletted, and character-only assets"
 	);
 	expect(
@@ -419,6 +419,126 @@ void test_op_title_menu_resource_batch()
 		loaded && loaded->size() == keys.size() &&
 			loader.cached_resource_count() == keys.size(),
 		"complete OP title closure commits atomically"
+	);
+}
+
+void test_op_character_selection_resource_batch()
+{
+	const auto keys = th03::app::op_character_selection_resource_keys();
+	expect(keys.size() == 16U, "OP selection closure has sixteen semantic assets");
+	const std::array<MainResourceRole, 16U> expected_roles{
+		MainResourceRole::character_selection_portrait,
+		MainResourceRole::character_selection_portrait,
+		MainResourceRole::character_selection_portrait,
+		MainResourceRole::selection_extra_icons,
+		MainResourceRole::character_selection_portrait,
+		MainResourceRole::character_selection_portrait,
+		MainResourceRole::character_selection_portrait,
+		MainResourceRole::selection_story_portrait,
+		MainResourceRole::selection_stats_sheet,
+		MainResourceRole::selection_extra_background,
+		MainResourceRole::selection_music,
+		MainResourceRole::selection_name_sheet,
+		MainResourceRole::selection_palette,
+		MainResourceRole::character_selection_portrait,
+		MainResourceRole::character_selection_portrait,
+		MainResourceRole::character_selection_portrait,
+	};
+	bool exact_order = keys.size() == expected_roles.size();
+	for(std::size_t index = 0U; exact_order && index < keys.size(); ++index) {
+		exact_order = keys[index].role == expected_roles[index];
+	}
+	expect(
+		exact_order && keys.front().character == MainCharacter::reimu &&
+			keys[2U].character == MainCharacter::marisa &&
+			keys[4U].character == MainCharacter::ellen &&
+			keys[6U].character == MainCharacter::kana &&
+			keys[13U].character == MainCharacter::rikako &&
+			keys.back().character == MainCharacter::yumemi,
+		"selection batch retains the donor's interleaved part-load chronology"
+	);
+	const auto reimu = th03::app::main_resource_spec(keys.front());
+	const auto yumemi = th03::app::main_resource_spec(keys.back());
+	const auto icons = th03::app::main_resource_spec(keys[3U]);
+	const auto story = th03::app::main_resource_spec(keys[7U]);
+	const auto stats = th03::app::main_resource_spec(keys[8U]);
+	const auto background = th03::app::main_resource_spec(keys[9U]);
+	const auto music = th03::app::main_resource_spec(keys[10U]);
+	const auto names = th03::app::main_resource_spec(keys[11U]);
+	const auto selection_palette = th03::app::main_resource_spec(keys[12U]);
+	constexpr std::array<std::uint64_t, 9U> portrait_hashes{
+		0x2FBFB6DD25A59078ULL, 0x6582FF1CC9AF3A67ULL,
+		0x938479CE49117012ULL, 0x4D7F54E3CA57D012ULL,
+		0x18BAE1588F40D36AULL, 0xF98FB21F1FA2770CULL,
+		0x4D25CE4120D055A6ULL, 0x8E821C13740C9AAEULL,
+		0x4CAE741B35FC7549ULL,
+	};
+	bool all_portraits_exact = true;
+	for(std::size_t character = 0U; character < portrait_hashes.size(); ++character) {
+		const auto portrait = th03::app::main_resource_spec({
+			.role = MainResourceRole::character_selection_portrait,
+			.character = static_cast<MainCharacter>(
+				static_cast<std::uint8_t>(character + 1U)
+			),
+		});
+		all_portraits_exact = all_portraits_exact && portrait &&
+			portrait->expected_bytes == 46096U &&
+			portrait->expected_fnv1a64 == portrait_hashes[character];
+	}
+	expect(
+		all_portraits_exact && reimu && reimu->filename == "00SL.CD2" &&
+			reimu->expected_bytes == 46096U &&
+			reimu->expected_fnv1a64 == 0x2FBFB6DD25A59078ULL &&
+		yumemi && yumemi->filename == "16SL.CD2" &&
+			yumemi->expected_fnv1a64 == 0x4CAE741B35FC7549ULL &&
+		icons && icons->filename == "SLEX.CD2" &&
+			icons->expected_bytes == 7936U &&
+			icons->expected_fnv1a64 == 0x742863E837B453A5ULL &&
+		story && story->filename == "99SL.CDG" &&
+			story->expected_bytes == 23056U &&
+			story->expected_fnv1a64 == 0x0D7851FF916C97A0ULL &&
+		stats && stats->filename == "SLWIN.CDG" &&
+			stats->expected_fnv1a64 == 0x68D2CE8711394937ULL &&
+		background && background->filename == "SLEX.CDG" &&
+			background->expected_fnv1a64 == 0xA8ED159E4B3E24F9ULL &&
+		music && music->filename == "SELECT.M" &&
+			music->expected_fnv1a64 == 0xAE13BCE0100E516EULL &&
+		names && names->filename == "CHNAME.BFT" &&
+			names->expected_bytes == 9296U &&
+			names->expected_fnv1a64 == 0x148A191A26278F78ULL &&
+		selection_palette && selection_palette->filename == "TLSL.RGB" &&
+			selection_palette->expected_bytes == 48U &&
+			selection_palette->expected_fnv1a64 == 0x9BE11DA2C74091A9ULL,
+		"selection manifest pins every distinct geometry and endpoint fingerprint"
+	);
+	expect(
+		!th03::app::main_resource_spec({
+			.role = MainResourceRole::character_selection_portrait,
+			.character = MainCharacter::none,
+		}),
+		"selection portrait requires one exact base character"
+	);
+
+	TemporaryRoot root;
+	expect(root.valid(), "temporary selection transaction root was created");
+	if(!root.valid()) {
+		return;
+	}
+	for(std::size_t index = 0U; index + 1U < keys.size(); ++index) {
+		write_spec(root.path(), keys[index], std::byte{0x61U});
+	}
+	MainResourceLoader loader(root.path(), MainResourceIntegrity::size_only);
+	const auto failed = loader.load_op_character_selection();
+	expect(
+		!failed && loader.cached_resource_count() == 0U,
+		"late Yumemi portrait failure publishes no partial selection cache"
+	);
+	write_spec(root.path(), keys.back(), std::byte{0x62U});
+	const auto loaded = loader.load_op_character_selection();
+	expect(
+		loaded && loaded->size() == keys.size() &&
+			loader.cached_resource_count() == keys.size(),
+		"complete selection closure commits atomically"
 	);
 }
 
@@ -1165,6 +1285,7 @@ int main()
 {
 	test_manifest();
 	test_op_title_menu_resource_batch();
+	test_op_character_selection_resource_batch();
 	test_direct_vs_batch_and_cache();
 	test_main_private_and_mainl_stage_batches();
 	test_cutscene_resource_batches();
