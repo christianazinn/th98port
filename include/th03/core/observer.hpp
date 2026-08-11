@@ -385,6 +385,47 @@ struct ShotPairSpawned {
 	) = default;
 };
 
+// Semantic source sites for MAIN's non-stateful feedback requests. These are
+// deliberately not PMD effect-bank IDs: the owning application maps this
+// ordered stream to Classic audio policy, while the deterministic core neither
+// retains nor consumes it.
+enum class MainFeedbackCueSite : std::uint8_t {
+	shot_fired,
+	player_knockback_started,
+	enemy_explosion_hitting,
+	low_burst,
+	heavy_burst,
+	charge_arc_started,
+	yumemi_charge_detonated,
+	hyper_activated,
+	yumemi_extra_activated,
+	story_extend_gained,
+	gauge_spell_ready,
+	rapid_burst,
+	mima_chargeshot_started,
+	player_defeat_explode,
+	chiyuri_chargeshot_activated,
+	yumemi_charge_active_pulse,
+	boss_terminal_first_frame,
+	bomb_flash,
+	ellen_bomb_started,
+	bomb_started,
+	boss_launched,
+	extra_attack_beam_activated,
+	yumemi_boss_materialization,
+	warning_interstitial_started,
+};
+
+struct MainFeedbackCueRequested {
+	MainFeedbackCueSite site = MainFeedbackCueSite::shot_fired;
+	std::optional<PlayerId> player{};
+
+	friend bool operator==(
+		const MainFeedbackCueRequested &,
+		const MainFeedbackCueRequested &
+	) = default;
+};
+
 enum class Bullet16ConstructionKind : std::uint8_t {
 	default_attack,
 	kana_extra_attack,
@@ -1107,6 +1148,14 @@ public:
 	// Callbacks are synchronous. They must not reenter or mutate the Game that
 	// issued them; borrowed phase views expire when their callback returns.
 	virtual void shot_pair_spawned(const ShotPairSpawned &) noexcept
+	{}
+	virtual void main_feedback_cue_requested(
+		const MainFeedbackCueRequested &
+	) noexcept
+	{}
+	// Exact rndloop.cpp snd_se_update() boundary: after both player updates and
+	// before Cancel handling, warning, and the late Bomb/render callbacks.
+	virtual void main_feedback_dispatch_boundary_reached() noexcept
 	{}
 	virtual void bullet16_spawned(const Bullet16Spawned &) noexcept
 	{}

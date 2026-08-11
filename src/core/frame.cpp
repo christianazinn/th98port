@@ -250,6 +250,23 @@ void observe_common_effect(
 	});
 }
 
+void observe_main_feedback(
+	GameplayObserver *observer,
+	MainFeedbackCueSite site,
+	std::optional<std::uint8_t> player_id = std::nullopt
+) noexcept
+{
+	if(observer == nullptr) {
+		return;
+	}
+	observer->main_feedback_cue_requested(MainFeedbackCueRequested{
+		.site = site,
+		.player = player_id.transform([](std::uint8_t player) {
+			return static_cast<PlayerId>(player);
+		}),
+	});
+}
+
 void observe_common_square(
 	DeterministicState &state,
 	GameplayObserver *observer,
@@ -501,7 +518,7 @@ bool gameplay_frame_prefix(
 		observer->hit_circles_advanced();
 	}
 	shots_update(state);
-	chargeshots_update(state);
+	chargeshots_update(state, observer);
 	hud_start_update_prefix(state, observer);
 	if(state.hud_start_flag == 0U) {
 		if(content.enemy_formations.empty()) {
@@ -640,6 +657,9 @@ bool gameplay_frame_suffix_before_interstitial(
 				state, player_id, state.input_player[player_id], observer
 			);
 		}
+	}
+	if(observer != nullptr) {
+		observer->main_feedback_dispatch_boundary_reached();
 	}
 	if(
 		(state.input_system & input_cancel) != 0U &&

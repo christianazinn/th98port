@@ -86,6 +86,9 @@ bool boss_launch_or_reverse(
 		state.boss.pattern_frame = 0U;
 		state.gba_boss_launched_by = static_cast<std::int8_t>(player_id);
 		state.gba_flag_active[player_id] = GaugeBossAttackFlag::none;
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::boss_launched, player_id
+		);
 		observe_boss_palette_baseline_restored(observer, 1U - player_id);
 		if(observer != nullptr) {
 			observer->boss_activated(BossActivated{

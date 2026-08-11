@@ -25,7 +25,8 @@ MainRoundPresenter::MainRoundPresenter(
 	MainPlayersBulletsPresenter &players_bullets,
 	MainBombsPresenter &bombs,
 	MainWarningGaugePresenter &warning_gauge,
-	MainHudResultPresenter &hud_result
+	MainHudResultPresenter &hud_result,
+	MainFeedbackSink feedback
 ) noexcept :
 	raster_(&raster),
 	tram_(&tram),
@@ -39,7 +40,8 @@ MainRoundPresenter::MainRoundPresenter(
 	players_bullets_(&players_bullets),
 	bombs_(&bombs),
 	warning_gauge_(&warning_gauge),
-	hud_result_(&hud_result)
+	hud_result_(&hud_result),
+	feedback_(feedback)
 {
 	if(!static_->started() || !palette_->baseline_ready()) {
 		status_ = MainRoundStatus::invalid_setup;
@@ -90,6 +92,22 @@ MainRoundPresenter::MainRoundPresenter(
 	// entering sub_9778(). Invalid construction above never mutates the
 	// caller-owned process state.
 	palette_->set_tone_and_show_now(*raster_, 100);
+}
+
+void MainRoundPresenter::main_feedback_cue_requested(
+	const MainFeedbackCueRequested &request
+) noexcept
+{
+	if(feedback_.request != nullptr) {
+		feedback_.request(feedback_.context, request);
+	}
+}
+
+void MainRoundPresenter::main_feedback_dispatch_boundary_reached() noexcept
+{
+	if(feedback_.dispatch != nullptr) {
+		feedback_.dispatch(feedback_.context);
+	}
 }
 
 void MainRoundPresenter::fail(MainRoundStatus status) noexcept
@@ -358,6 +376,9 @@ void MainRoundPresenter::warning_interstitial_started(
 		fail(MainRoundStatus::warning_gauge_failed);
 		return;
 	}
+	main_feedback_cue_requested(MainFeedbackCueRequested{
+		.site = MainFeedbackCueSite::warning_interstitial_started,
+	});
 	warning_interstitial_active_ = true;
 	next_warning_sample_ = 0U;
 }
@@ -825,6 +846,15 @@ void MainRoundPresenter::observe(const MainBossView &view) noexcept
 	if(!bosses_->ready()) {
 		fail(MainRoundStatus::bosses_failed);
 		return;
+	}
+	const auto boss = view.boss();
+	if(
+		boss && boss->state == 0xFFU && boss->pattern_frame == 1U
+	) {
+		main_feedback_cue_requested(MainFeedbackCueRequested{
+			.site = MainFeedbackCueSite::boss_terminal_first_frame,
+			.player = boss->owner,
+		});
 	}
 	phase_ = Phase::shots_enemies;
 }

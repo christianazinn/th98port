@@ -199,6 +199,10 @@ std::uint8_t chargeshot_hittest(
 			if(overlaps(8 << 4)) {
 				// ZUN turns the projectile into its large explosion but reports a
 				// miss to this caller on the triggering collision frame.
+				observe_main_feedback(
+					observer, MainFeedbackCueSite::yumemi_charge_detonated,
+					player_id
+				);
 				shot.state = 2U;
 				shot.frame = 0U;
 			}

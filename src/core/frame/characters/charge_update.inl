@@ -199,7 +199,8 @@ void chargeshot_update_rikako(
 
 void chargeshot_update_chiyuri(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &nodes = state.chiyuri_charge[player_id];
@@ -226,6 +227,11 @@ void chargeshot_update_chiyuri(
 			if(node.state == 1U) {
 				node.x = state.players[player_id].center_x.raw();
 				node.y = state.players[player_id].center_y.raw();
+				observe_main_feedback(
+					observer,
+					MainFeedbackCueSite::chiyuri_chargeshot_activated,
+					player_id
+				);
 			}
 		}
 		node.frame++;
@@ -234,7 +240,8 @@ void chargeshot_update_chiyuri(
 
 void chargeshot_update_ellen(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &nodes = state.ellen_charge[player_id];
@@ -284,6 +291,11 @@ void chargeshot_update_ellen(
 			continue;
 		}
 		node.state--;
+		if(node.state == 1U) {
+			observe_main_feedback(
+				observer, MainFeedbackCueSite::shot_fired, player_id
+			);
+		}
 		node.x = player_x;
 		node.y = player_y;
 	}
@@ -311,7 +323,8 @@ void chargeshot_update_kotohime(
 
 void chargeshot_update_yumemi(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &shot = state.yumemi_charge[player_id];
@@ -323,16 +336,32 @@ void chargeshot_update_yumemi(
 	if(shot.state == 1U) {
 		shot.y = exact::wrap_subtract(shot.y, std::int16_t{0x40});
 		if(frame >= 0x40U || shot.y <= 0) {
+			observe_main_feedback(
+				observer, MainFeedbackCueSite::yumemi_charge_detonated,
+				player_id
+			);
 			shot.state = 2U;
 			shot.frame = 0U;
 		}
-	} else if(frame >= 0x40U) {
-		shot.state = 0U;
+	} else {
+		if(frame >= 0x18U && (frame & 1U) == 0U) {
+			observe_main_feedback(
+				observer,
+				MainFeedbackCueSite::yumemi_charge_active_pulse,
+				player_id
+			);
+		}
+		if(frame >= 0x40U) {
+			shot.state = 0U;
+		}
 	}
 	state.players[player_id].gauge_charged = 0U;
 }
 
-void chargeshots_update(DeterministicState &state) noexcept
+void chargeshots_update(
+	DeterministicState &state,
+	GameplayObserver *observer
+) noexcept
 {
 	for(std::uint8_t player_id = 0U; player_id < player_count; ++player_id) {
 		const auto character = character_index_from_paletted(
@@ -345,7 +374,7 @@ void chargeshots_update(DeterministicState &state) noexcept
 		} else if(character == character_marisa) {
 			chargeshot_update_marisa(state, player_id);
 		} else if(character == character_ellen) {
-			chargeshot_update_ellen(state, player_id);
+			chargeshot_update_ellen(state, player_id, observer);
 		} else if(character == character_kotohime) {
 			chargeshot_update_kotohime(state, player_id);
 		} else if(character == character_kana) {
@@ -353,9 +382,9 @@ void chargeshots_update(DeterministicState &state) noexcept
 		} else if(character == character_rikako) {
 			chargeshot_update_rikako(state, player_id);
 		} else if(character == character_chiyuri) {
-			chargeshot_update_chiyuri(state, player_id);
+			chargeshot_update_chiyuri(state, player_id, observer);
 		} else if(character == character_yumemi) {
-			chargeshot_update_yumemi(state, player_id);
+			chargeshot_update_yumemi(state, player_id, observer);
 		}
 	}
 }

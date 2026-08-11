@@ -271,6 +271,9 @@ void boss_pattern_ellen_spreads(
 		if((boss.pattern_frame & 1U) != 0U) {
 			return;
 		}
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::low_burst, player_id
+		);
 		bullets_add_group(
 			state, BulletFlag::bullet16, boss.center_x, boss.center_y,
 			target_player, boss.params[0], state.ellen_boss_spread_angle,
@@ -280,6 +283,9 @@ void boss_pattern_ellen_spreads(
 			state.ellen_boss_spread_angle + 8U
 		);
 	} else if(boss.pattern_frame == 0x24U) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::low_burst, player_id
+		);
 		for(std::size_t i = 0U; i < 8U; ++i) {
 			bullets_add_group(
 				state, BulletFlag::bullet16, boss.center_x, boss.center_y,
@@ -295,6 +301,9 @@ void boss_pattern_ellen_spreads(
 		if((boss.pattern_frame & 1U) != 0U) {
 			return;
 		}
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::low_burst, player_id
+		);
 		bullets_add_group(
 			state, BulletFlag::bullet16, boss.center_x, boss.center_y,
 			target_player, boss.params[0], state.ellen_boss_spread_angle,
@@ -354,12 +363,16 @@ void boss_pattern_ellen_orbits(
 
 void boss_pattern_ellen_pellet_spreads(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
 	boss_move(boss);
 	if((boss.pattern_frame % boss.params[3]) == 1U) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::rapid_burst, player_id
+		);
 		const auto target_player = static_cast<std::uint8_t>(1U - player_id);
 		bullets_add_group(
 			state, BulletFlag::pellet, boss.center_x, boss.center_y,
@@ -445,7 +458,7 @@ void boss_update_ellen(
 		break;
 	case 11U: case 12U: case 13U: case 14U:
 	case 15U: case 16U: case 17U:
-		boss_pattern_ellen_pellet_spreads(state, player_id);
+		boss_pattern_ellen_pellet_spreads(state, player_id, observer);
 		break;
 	case 0x80U:
 		boss_exit_move(state, player_id);

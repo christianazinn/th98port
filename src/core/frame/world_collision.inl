@@ -452,6 +452,10 @@ bool enemies_update(
 		) {
 			if(enemy.frame == 10U) {
 				enemy.flag = EnemyFlag::explosion_hitting_enemies;
+				observe_main_feedback(
+					observer, MainFeedbackCueSite::enemy_explosion_hitting,
+					enemy.player_id
+				);
 			} else if(enemy.frame == 32U) {
 				enemy.flag = EnemyFlag::explosion_ignoring_enemies;
 			} else if(enemy.frame >= 36U) {

@@ -39,6 +39,9 @@ void shots_add(
 		left = exact::wrap_subtract(left, static_cast<std::int16_t>(16 << 4));
 		pairs_fired = 3U;
 	}
+	observe_main_feedback(
+		observer, MainFeedbackCueSite::shot_fired, player_id
+	);
 	while(left <= -(32 << 4)) {
 		left = exact::wrap_add(left, static_cast<std::int16_t>(32 << 4));
 		pairs_fired++;

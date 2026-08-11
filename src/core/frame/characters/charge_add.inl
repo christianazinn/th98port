@@ -45,7 +45,8 @@ void add_reimu_hyper_amulet(
 
 void add_mima_chargeshot(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	constexpr std::array<std::uint8_t, 6> angles{
@@ -64,8 +65,11 @@ void add_mima_chargeshot(
 		node.y = center_y;
 		const auto velocity = vector2(angles[node_id % angles.size()], 176);
 		node.velocity_x = velocity.x;
-		node.velocity_y = velocity.y;
+		 node.velocity_y = velocity.y;
 	}
+	observe_main_feedback(
+		observer, MainFeedbackCueSite::mima_chargeshot_started, player_id
+	);
 }
 
 void marisa_charge_initialize(
@@ -85,22 +89,30 @@ void marisa_charge_initialize(
 
 void add_marisa_chargeshot(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	marisa_charge_initialize(state, player_id);
 	state.marisa_charge[player_id].age = 0U;
+	observe_main_feedback(
+		observer, MainFeedbackCueSite::charge_arc_started, player_id
+	);
 	state.players[player_id].shot_active = 0U;
 }
 
 void activate_marisa_hyper(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &shot = state.marisa_charge[player_id];
 	if(shot.active == 0U) {
 		marisa_charge_initialize(state, player_id);
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::charge_arc_started, player_id
+		);
 	}
 	shot.age = 0x10U;
 	state.players[player_id].shot_active = 0U;
@@ -201,7 +213,8 @@ void add_ellen_chargeshot(
 
 void add_kotohime_chargeshot(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &shot = state.kotohime_charge[player_id];
@@ -209,6 +222,9 @@ void add_kotohime_chargeshot(
 	shot.x = state.players[player_id].center_x.raw();
 	shot.y = state.players[player_id].center_y.raw();
 	shot.velocity_y = -0x10;
+	observe_main_feedback(
+		observer, MainFeedbackCueSite::charge_arc_started, player_id
+	);
 }
 
 void add_yumemi_chargeshot(

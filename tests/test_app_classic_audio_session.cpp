@@ -649,6 +649,75 @@ void test_music_off_disables_fresh_process_sfx(const fs::path &root)
 		"Stop leaves the enabled BGM-driver flag intact");
 }
 
+void test_source_boundary_effect_dispatch(const fs::path &root)
+{
+	auto dispatched_result = ClassicAudioSession::create(config(root));
+	auto baseline_result = ClassicAudioSession::create(config(root));
+	expect(dispatched_result && baseline_result,
+		"source-boundary effect comparison sessions create");
+	if(!dispatched_result || !baseline_result) {
+		return;
+	}
+	auto &dispatched = **dispatched_result;
+	auto &baseline = **baseline_result;
+	const auto premature = dispatched.apply({
+		.type = ClassicAudioCommandType::dispatch_effect,
+		.parameter = 1U,
+	});
+	expect(!premature && premature.error().code ==
+		ClassicAudioSessionErrorCode::command_order,
+		"a source-boundary effect cannot dispatch before its carrier song loads");
+	for(auto *session : {&dispatched, &baseline}) {
+		expect(
+			session->apply(load(ClassicMusicCue::menu_main)).has_value() &&
+			session->apply({
+				.type = ClassicAudioCommandType::play_song,
+				.cue = ClassicMusicCue::menu_main,
+			}).has_value(),
+			"source-boundary comparison sessions start the same song"
+		);
+	}
+	expect(dispatched.apply({
+		.type = ClassicAudioCommandType::dispatch_effect,
+		.parameter = 1U,
+	}).has_value(),
+		"an already-arbitrated MAIN effect starts without a second scheduler update");
+	const auto dispatched_tick = dispatched.advance_tick();
+	const auto baseline_tick = baseline.advance_tick();
+	expect(
+		dispatched_tick && baseline_tick &&
+		!dispatched_tick->effect_started && !baseline_tick->effect_started &&
+		dispatched_tick->canonical_frames.size() ==
+			baseline_tick->canonical_frames.size() &&
+		!std::equal(
+			dispatched_tick->canonical_frames.begin(),
+			dispatched_tick->canonical_frames.end(),
+			baseline_tick->canonical_frames.begin()
+		),
+		"direct dispatch changes rendered audio while leaving the session scheduler empty"
+	);
+	for(const auto invalid : {
+		ClassicAudioCommand{
+			.type = ClassicAudioCommandType::dispatch_effect,
+			.parameter = 0U,
+		},
+		ClassicAudioCommand{
+			.type = ClassicAudioCommandType::dispatch_effect,
+			.parameter = 23U,
+		},
+		ClassicAudioCommand{
+			.type = ClassicAudioCommandType::dispatch_effect,
+			.cue = ClassicMusicCue::winner,
+			.parameter = 3U,
+		},
+	}) {
+		const auto rejected = dispatched.apply(invalid);
+		expect(!rejected && rejected.error().code ==
+			ClassicAudioSessionErrorCode::invalid_parameter,
+			"direct MAIN effect dispatch rejects a malformed command");
+	}
+}
+
 void test_authentic_session(const fs::path &data_root)
 {
 	auto created = ClassicAudioSession::create({
@@ -755,6 +824,7 @@ int main(int argc, char **argv)
 			"generated audio manifest root is written");
 		test_commands_cadence_and_determinism(root.path());
 		test_music_off_disables_fresh_process_sfx(root.path());
+		test_source_boundary_effect_dispatch(root.path());
 	}
 	if(argc == 3 && std::string_view(argv[1]) == "--authentic") {
 		test_authentic_session(argv[2]);

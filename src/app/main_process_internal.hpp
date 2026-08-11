@@ -14,6 +14,22 @@
 
 namespace th03::app {
 
+enum class MainFeedbackScheduling : std::uint8_t {
+	request,
+	reset_then_request,
+	force,
+};
+
+struct MainFeedbackPolicyFact final {
+	std::uint8_t effect_id = 0U;
+	MainFeedbackScheduling scheduling = MainFeedbackScheduling::request;
+
+	friend constexpr bool operator==(
+		const MainFeedbackPolicyFact &,
+		const MainFeedbackPolicyFact &
+	) = default;
+};
+
 // Hermetic tests need structurally valid synthetic asset bytes that cannot
 // match the authenticated original-resource fingerprints. Production callers
 // have no access to this source-private seam.
@@ -54,6 +70,10 @@ struct MainProcessTestAccess final {
 
 	[[nodiscard]] static std::uint8_t continues_used_digit(
 		const MainProcess &process
+	) noexcept;
+
+	[[nodiscard]] static MainFeedbackPolicyFact feedback_policy(
+		MainFeedbackCueSite site
 	) noexcept;
 
 	[[nodiscard]] static std::expected<

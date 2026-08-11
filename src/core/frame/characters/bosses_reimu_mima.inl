@@ -261,7 +261,8 @@ void boss_update_reimu(
 
 void boss_pattern_mima_spreads(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
@@ -275,6 +276,9 @@ void boss_pattern_mima_spreads(
 		return;
 	}
 	if((boss.pattern_frame & 1U) == 0U) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::low_burst, player_id
+		);
 		const auto target_player = static_cast<std::uint8_t>(1U - player_id);
 		bullets_add_group(
 			state,
@@ -359,6 +363,11 @@ void boss_pattern_mima_random_bursts(
 		return;
 	}
 	const auto target_player = static_cast<std::uint8_t>(1U - player_id);
+	if((boss.pattern_frame & 1U) == 0U) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::low_burst, player_id
+		);
+	}
 	if((boss.pattern_frame & 3U) == 0U) {
 		bullets_add_group(
 			state,
@@ -404,7 +413,8 @@ void boss_pattern_mima_random_bursts(
 
 void boss_pattern_mima_aimed_trails(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
@@ -415,6 +425,9 @@ void boss_pattern_mima_aimed_trails(
 	boss.render_state = 5U;
 	const auto half_phase = static_cast<std::uint8_t>(boss.params[3] / 2U);
 	if(phase_mod == 1U || phase_mod == half_phase) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::rapid_burst, player_id
+		);
 		const auto group = (phase_mod == half_phase)
 			? bullet_group_four_spread_medium_aimed
 			: bullet_group_five_spread_medium_aimed;
@@ -445,7 +458,8 @@ void boss_pattern_mima_aimed_trails(
 
 void boss_pattern_mima_orbit_clouds(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
@@ -460,6 +474,9 @@ void boss_pattern_mima_orbit_clouds(
 		);
 	}
 	if((boss.pattern_frame & 1U) == 0U) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::rapid_burst, player_id
+		);
 		const auto offset = vector2(state.mima_boss_orbit_angle, 48 << 4);
 		bullets_add_group(
 			state,
@@ -530,16 +547,16 @@ void boss_update_mima(
 		boss_choose_pattern(state);
 		break;
 	case 2U: case 3U: case 4U: case 5U:
-		boss_pattern_mima_spreads(state, player_id);
+		boss_pattern_mima_spreads(state, player_id, observer);
 		break;
 	case 6U: case 7U: case 8U: case 9U: case 10U:
 		boss_pattern_mima_random_bursts(state, player_id, observer);
 		break;
 	case 11U: case 12U: case 13U:
-		boss_pattern_mima_aimed_trails(state, player_id);
+		boss_pattern_mima_aimed_trails(state, player_id, observer);
 		break;
 	case 14U: case 15U: case 16U: case 17U:
-		boss_pattern_mima_orbit_clouds(state, player_id);
+		boss_pattern_mima_orbit_clouds(state, player_id, observer);
 		break;
 	case 0x80U:
 		boss_exit_move(state, player_id);

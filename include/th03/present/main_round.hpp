@@ -39,6 +39,12 @@ enum class MainRoundStatus : std::uint8_t {
 	repeat_startup_failed,
 };
 
+struct MainFeedbackSink final {
+	void *context = nullptr;
+	void (*request)(void *, MainFeedbackCueRequested) noexcept = nullptr;
+	void (*dispatch)(void *) noexcept = nullptr;
+};
+
 // Process-scoped synchronous coordinator for the currently implemented portion
 // of sub_9778()'s presentation schedule. Raster, TRAM, heavy assets, and every
 // specialized presenter stay caller-owned at stable addresses for this MAIN
@@ -69,7 +75,8 @@ public:
 		MainPlayersBulletsPresenter &players_bullets,
 		MainBombsPresenter &bombs,
 		MainWarningGaugePresenter &warning_gauge,
-		MainHudResultPresenter &hud_result
+		MainHudResultPresenter &hud_result,
+		MainFeedbackSink feedback = {}
 	) noexcept;
 	MainRoundPresenter(const MainRoundPresenter &) = delete;
 	MainRoundPresenter &operator=(const MainRoundPresenter &) = delete;
@@ -77,6 +84,10 @@ public:
 	MainRoundPresenter &operator=(MainRoundPresenter &&) = delete;
 
 	void shot_pair_spawned(const ShotPairSpawned &spawn) noexcept override;
+	void main_feedback_cue_requested(
+		const MainFeedbackCueRequested &request
+	) noexcept override;
+	void main_feedback_dispatch_boundary_reached() noexcept override;
 	void bullet16_spawned(const Bullet16Spawned &spawn) noexcept override;
 	void player_pose_committed(
 		const PlayerPoseCommitted &pose
@@ -214,6 +225,7 @@ private:
 	MainBombsPresenter *bombs_;
 	MainWarningGaugePresenter *warning_gauge_;
 	MainHudResultPresenter *hud_result_;
+	MainFeedbackSink feedback_{};
 	MainPlayerFacts player_facts_{};
 	MainBulletFacts bullet_facts_{};
 	MainBulletTrails bullet_trails_{};

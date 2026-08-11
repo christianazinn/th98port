@@ -375,6 +375,29 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 		// explicitly stop the PMD effect that has already reached the driver.
 		impl_->effects.reset();
 		return {};
+	case ClassicAudioCommandType::dispatch_effect:
+		if(command.cue != ClassicMusicCue::none ||
+			command.parameter < audio::th03_sound_effect_first ||
+			command.parameter > audio::th03_sound_effect_last) {
+			return std::unexpected(session_error(
+				ClassicAudioSessionErrorCode::invalid_parameter, command
+			));
+		}
+		if(!impl_->bgm_active) {
+			return {};
+		}
+		if(!impl_->engine.status().song_loaded ||
+			!impl_->engine.status().effect_bank_loaded) {
+			return std::unexpected(session_error(
+				ClassicAudioSessionErrorCode::command_order, command
+			));
+		}
+		if(auto played = impl_->engine.play_effect(
+			static_cast<std::uint8_t>(command.parameter)
+		); !played) {
+			return std::unexpected(engine_error(command, played.error()));
+		}
+		return {};
 	case ClassicAudioCommandType::play_effect:
 		if(command.cue != ClassicMusicCue::none ||
 			command.parameter < audio::th03_sound_effect_first ||

@@ -1,6 +1,10 @@
 // Included by frame.cpp inside its private implementation namespace.
 
-void release_gauge(DeterministicState &state, std::uint8_t player_id) noexcept
+void release_gauge(
+	DeterministicState &state,
+	std::uint8_t player_id,
+	GameplayObserver *observer
+) noexcept
 {
 	auto &player = state.players[player_id];
 	const auto charged = player.gauge_charged;
@@ -11,13 +15,13 @@ void release_gauge(DeterministicState &state, std::uint8_t player_id) noexcept
 		if(character == character_reimu) {
 			add_reimu_chargeshot(state, player_id);
 		} else if(character == character_mima) {
-			add_mima_chargeshot(state, player_id);
+			add_mima_chargeshot(state, player_id, observer);
 		} else if(character == character_marisa) {
-			add_marisa_chargeshot(state, player_id);
+			add_marisa_chargeshot(state, player_id, observer);
 		} else if(character == character_ellen) {
 			add_ellen_chargeshot(state, player_id);
 		} else if(character == character_kotohime) {
-			add_kotohime_chargeshot(state, player_id);
+			add_kotohime_chargeshot(state, player_id, observer);
 		} else if(character == character_kana) {
 			add_kana_chargeshot(state, player_id);
 		} else if(character == character_rikako) {
@@ -120,6 +124,9 @@ void player_bomb(
 		return;
 	}
 	state.damage_all_on[player_id] = 1U;
+	observe_main_feedback(
+		observer, MainFeedbackCueSite::hyper_activated, player_id
+	);
 	player.hyper_active = static_cast<std::uint8_t>(player.paletted_character);
 	observe_common_effect(
 		state, observer, CommonEffectKind::expanding_circle,

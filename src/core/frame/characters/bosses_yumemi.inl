@@ -29,6 +29,9 @@ void boss_pattern_yumemi_accel_rings(
 		return;
 	}
 	if(boss.pattern_frame == 0x20U) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::heavy_burst, player_id
+		);
 		observe_common_effect(
 			state, observer, CommonEffectKind::expanding_circle,
 			state.yumemi_boss_muzzle_x, state.yumemi_boss_muzzle_y,
@@ -107,6 +110,9 @@ void boss_pattern_yumemi_random_groups(
 		boss.render_state = 2U;
 	}
 	if((static_cast<std::uint8_t>(boss.pattern_frame) & 1U) == 0U) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::low_burst, player_id
+		);
 		constexpr std::array<std::uint8_t, 5> groups{
 			bullet_group_three_spread_narrow,
 			bullet_group_four_spread_narrow,
@@ -302,6 +308,12 @@ void boss_update_yumemi(
 	const auto dispatch_state = boss.state;
 	switch(dispatch_state) {
 	case 0U:
+		if(boss.pattern_frame == 0x18U || boss.pattern_frame == 0x48U) {
+			observe_main_feedback(
+				observer, MainFeedbackCueSite::yumemi_boss_materialization,
+				player_id
+			);
+		}
 		if(boss.pattern_frame != 0x60U) {
 			return;
 		}

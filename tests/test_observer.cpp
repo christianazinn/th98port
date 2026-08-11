@@ -63,6 +63,30 @@ enum class ObservedCall : std::uint8_t {
 class DiscardObserver final : public th03::GameplayObserver {
 };
 
+enum class FeedbackObservedCall : std::uint8_t {
+	request,
+	dispatch_boundary,
+};
+
+class FeedbackRecordingObserver final : public th03::GameplayObserver {
+public:
+	void main_feedback_cue_requested(
+		const th03::MainFeedbackCueRequested &request
+	) noexcept override
+	{
+		requests.push_back(request);
+		calls.push_back(FeedbackObservedCall::request);
+	}
+
+	void main_feedback_dispatch_boundary_reached() noexcept override
+	{
+		calls.push_back(FeedbackObservedCall::dispatch_boundary);
+	}
+
+	std::vector<th03::MainFeedbackCueRequested> requests;
+	std::vector<FeedbackObservedCall> calls;
+};
+
 enum class BackgroundObservedCall : std::uint8_t {
 	warning_sample,
 	initialize,
@@ -2309,6 +2333,77 @@ void test_shot_spawn_and_reuse()
 		recording.spawns.size() == 2U,
 		"a full shot pool emits no unsuccessful allocation event"
 	);
+}
+
+void test_main_feedback_source_order()
+{
+	with_live_state([](auto &shot) {
+		shot.input_player[0U] = 0x0020U;
+		shot.autofire_shot_gate[0U] = 4U;
+		FeedbackRecordingObserver recording;
+		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+			shot, &recording
+		);
+		check(
+			recording.requests ==
+				std::vector<th03::MainFeedbackCueRequested>{{
+					.site = th03::MainFeedbackCueSite::shot_fired,
+					.player = th03::PlayerId::p1,
+				}} &&
+			recording.calls == std::vector<FeedbackObservedCall>{
+				FeedbackObservedCall::request,
+				FeedbackObservedCall::dispatch_boundary,
+			},
+			"a shot request precedes the one source snd_se_update boundary"
+		);
+	});
+
+	with_live_state([](auto &bomb) {
+		bomb.players[0U].paletted_character = 1;
+		bomb.bomb_flag[0U] = th03::detail::BombFlag::active;
+		bomb.bomb_frame[0U] = 1U;
+		FeedbackRecordingObserver recording;
+		(void)th03::detail::gameplay_frame_suffix_before_interstitial(
+			bomb, &recording
+		);
+		th03::detail::gameplay_frame_suffix_after_interstitial(
+			bomb, &recording
+		);
+		check(
+			recording.requests ==
+				std::vector<th03::MainFeedbackCueRequested>{{
+					.site = th03::MainFeedbackCueSite::bomb_started,
+					.player = th03::PlayerId::p1,
+				}} &&
+			recording.calls == std::vector<FeedbackObservedCall>{
+				FeedbackObservedCall::dispatch_boundary,
+				FeedbackObservedCall::request,
+			},
+			"a Bomb start request remains pending after the source update boundary"
+		);
+	});
+
+	with_live_state([](auto &yumemi) {
+		yumemi.hud_start_flag = 1U;
+		yumemi.players[0U].paletted_character = 17;
+		yumemi.gba_boss_launched_by = 0;
+		yumemi.boss.state = 0U;
+		yumemi.boss.pattern_frame = 0x17U;
+		yumemi.boss.hp = 100U;
+		FeedbackRecordingObserver recording;
+		(void)th03::detail::gameplay_frame_prefix(
+			yumemi, th03::GameContent{}, &recording
+		);
+		check(
+			recording.requests ==
+				std::vector<th03::MainFeedbackCueRequested>{{
+					.site = th03::MainFeedbackCueSite::
+						yumemi_boss_materialization,
+					.player = th03::PlayerId::p1,
+				}},
+			"Yumemi materialization exposes the source reset-then-request site"
+		);
+	});
 }
 
 void test_player_pose_and_defeat_lifecycle()
@@ -5338,6 +5433,7 @@ int main()
 	test_main_background_snapshot_observation();
 	test_main_background_frame_schedule_and_repeat();
 	test_shot_spawn_and_reuse();
+	test_main_feedback_source_order();
 	test_player_pose_and_defeat_lifecycle();
 	test_bullet16_lifecycle_styles_order_and_full_arena();
 	test_post_hittest_fireball_view_and_terminal_order();

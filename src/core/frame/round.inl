@@ -264,6 +264,9 @@ void story_extend_update(
 	if(state.extends_gained >= state.score[0][6]) {
 		return;
 	}
+	observe_main_feedback(
+		observer, MainFeedbackCueSite::story_extend_gained, std::uint8_t{0U}
+	);
 	state.story_lives = static_cast<std::uint8_t>(state.story_lives + 1U);
 	if(observer != nullptr) {
 		observer->main_hud_story_lives_changed(MainHudStoryLivesChanged{

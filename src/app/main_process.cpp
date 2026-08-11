@@ -18,6 +18,7 @@
 
 #include "th03/app/authentic_text.hpp"
 #include "th03/assets/decode.hpp"
+#include "th03/audio/th03_pmd_service.hpp"
 #include "th03/exact/trig.hpp"
 #include "th03/formats/enedat.hpp"
 #include "th03/present/main_background.hpp"
@@ -40,6 +41,68 @@ using ResourceResult = std::expected<
 	const LoadedMainResource *,
 	MainProcessError
 >;
+
+enum class MainFeedbackAction : std::uint8_t {
+	request,
+	reset_then_request,
+	force,
+};
+
+struct MainFeedbackPolicy final {
+	std::uint8_t effect_id = 0U;
+	MainFeedbackAction action = MainFeedbackAction::request;
+};
+
+[[nodiscard]] constexpr MainFeedbackPolicy main_feedback_policy(
+	MainFeedbackCueSite site
+) noexcept
+{
+	switch(site) {
+	case MainFeedbackCueSite::shot_fired:
+		return {1U};
+	case MainFeedbackCueSite::player_knockback_started:
+		return {2U};
+	case MainFeedbackCueSite::enemy_explosion_hitting:
+	case MainFeedbackCueSite::low_burst:
+		return {3U};
+	case MainFeedbackCueSite::heavy_burst:
+		return {5U};
+	case MainFeedbackCueSite::charge_arc_started:
+		return {6U};
+	case MainFeedbackCueSite::yumemi_charge_detonated:
+	case MainFeedbackCueSite::hyper_activated:
+	case MainFeedbackCueSite::yumemi_extra_activated:
+		return {7U};
+	case MainFeedbackCueSite::story_extend_gained:
+		return {8U};
+	case MainFeedbackCueSite::gauge_spell_ready:
+		return {9U};
+	case MainFeedbackCueSite::rapid_burst:
+		return {10U};
+	case MainFeedbackCueSite::mima_chargeshot_started:
+		return {13U};
+	case MainFeedbackCueSite::player_defeat_explode:
+		return {14U};
+	case MainFeedbackCueSite::chiyuri_chargeshot_activated:
+	case MainFeedbackCueSite::yumemi_charge_active_pulse:
+		return {15U};
+	case MainFeedbackCueSite::boss_terminal_first_frame:
+	case MainFeedbackCueSite::bomb_flash:
+		return {16U};
+	case MainFeedbackCueSite::ellen_bomb_started:
+		return {17U};
+	case MainFeedbackCueSite::bomb_started:
+	case MainFeedbackCueSite::boss_launched:
+		return {18U};
+	case MainFeedbackCueSite::extra_attack_beam_activated:
+		return {20U};
+	case MainFeedbackCueSite::yumemi_boss_materialization:
+		return {5U, MainFeedbackAction::reset_then_request};
+	case MainFeedbackCueSite::warning_interstitial_started:
+		return {19U, MainFeedbackAction::force};
+	}
+	return {};
+}
 
 [[nodiscard]] MainProcessError process_error(
 	MainProcessErrorCode code,
@@ -295,10 +358,12 @@ struct MainProcess::Impl {
 	std::array<assets::BfntSheet, 2U> character_sheets{};
 	std::array<assets::MrsImage, 2U> extra_portraits{};
 	std::array<assets::MrsImage, 2U> bomb_portraits{};
-	std::array<ClassicAudioCommand, 4U> audio_commands{};
+	std::array<ClassicAudioCommand, 8U> audio_commands{};
 	std::size_t audio_head = 0U;
 	std::size_t audio_count = 0U;
 	bool classic_audio_lifecycle = false;
+	bool audio_feedback_failed = false;
+	audio::Th03SoundEffectScheduler feedback_scheduler{};
 
 	[[nodiscard]] bool push_audio(ClassicAudioCommand command) noexcept
 	{
@@ -309,6 +374,66 @@ struct MainProcess::Impl {
 		audio_commands[tail] = command;
 		++audio_count;
 		return true;
+	}
+
+	void dispatch_effect(std::uint8_t effect_id) noexcept
+	{
+		if(!push_audio({
+			.type = ClassicAudioCommandType::dispatch_effect,
+			.parameter = effect_id,
+		})) {
+			audio_feedback_failed = true;
+		}
+	}
+
+	void request_feedback(MainFeedbackCueRequested request) noexcept
+	{
+		if(!classic_audio_lifecycle) {
+			return;
+		}
+		const auto policy = main_feedback_policy(request.site);
+		if(policy.effect_id == 0U) {
+			audio_feedback_failed = true;
+			return;
+		}
+		if(policy.action == MainFeedbackAction::reset_then_request) {
+			feedback_scheduler.reset();
+		}
+		if(policy.action == MainFeedbackAction::force) {
+			auto forced = feedback_scheduler.force(policy.effect_id);
+			if(!forced) {
+				audio_feedback_failed = true;
+			} else if(*forced) {
+				dispatch_effect((*forced)->effect_id);
+			}
+			return;
+		}
+		if(!feedback_scheduler.request(policy.effect_id)) {
+			audio_feedback_failed = true;
+		}
+	}
+
+	void feedback_dispatch_boundary() noexcept
+	{
+		if(!classic_audio_lifecycle) {
+			return;
+		}
+		if(const auto effect = feedback_scheduler.update()) {
+			dispatch_effect(effect->effect_id);
+		}
+	}
+
+	static void request_feedback_callback(
+		void *context,
+		MainFeedbackCueRequested request
+	) noexcept
+	{
+		static_cast<Impl *>(context)->request_feedback(request);
+	}
+
+	static void feedback_dispatch_callback(void *context) noexcept
+	{
+		static_cast<Impl *>(context)->feedback_dispatch_boundary();
 	}
 
 	present::Raster raster{};
@@ -353,6 +478,25 @@ std::uint8_t MainProcessTestAccess::continues_used_digit(
 ) noexcept
 {
 	return process.impl_->continues_used_digit;
+}
+
+MainFeedbackPolicyFact MainProcessTestAccess::feedback_policy(
+	MainFeedbackCueSite site
+) noexcept
+{
+	const auto policy = main_feedback_policy(site);
+	MainFeedbackScheduling scheduling = MainFeedbackScheduling::request;
+	switch(policy.action) {
+	case MainFeedbackAction::request:
+		break;
+	case MainFeedbackAction::reset_then_request:
+		scheduling = MainFeedbackScheduling::reset_then_request;
+		break;
+	case MainFeedbackAction::force:
+		scheduling = MainFeedbackScheduling::force;
+		break;
+	}
+	return {.effect_id = policy.effect_id, .scheduling = scheduling};
 }
 
 std::expected<std::unique_ptr<MainProcess>, MainProcessError>
@@ -883,6 +1027,7 @@ MainProcess::create_common(
 	impl->input_protocol = game_options.input_protocol;
 	impl->continues_used_digit = continues_used_digit;
 	impl->static_content = std::move(static_content);
+	impl->classic_audio_lifecycle = gameplay_song.has_value();
 	const auto superimpose_decoder = [](std::span<const std::byte> bytes) {
 		return assets::decode_bfnt(
 			bytes,
@@ -1073,13 +1218,17 @@ MainProcess::create_common(
 		*impl->players_bullets,
 		*impl->bombs,
 		*impl->warning_gauge,
-		*impl->hud_result
+		*impl->hud_result,
+		present::MainFeedbackSink{
+			.context = impl.get(),
+			.request = &Impl::request_feedback_callback,
+			.dispatch = &Impl::feedback_dispatch_callback,
+		}
 	);
 	if(!impl->round->ready()) {
 		return std::unexpected(presentation_error(impl->round->status()));
 	}
 	if(gameplay_song) {
-		impl->classic_audio_lifecycle = true;
 		auto play = *gameplay_song;
 		play.type = ClassicAudioCommandType::play_song;
 		if(!impl->push_audio({
@@ -1133,6 +1282,11 @@ std::expected<StepResult, MainProcessError> MainProcess::step(
 		));
 	}
 	const auto result = impl_->game->step(input, context, &*impl_->round);
+	if(impl_->audio_feedback_failed) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::audio_command_pending
+		));
+	}
 	if(!impl_->round->ready()) {
 		return std::unexpected(presentation_error(impl_->round->status()));
 	}
@@ -1156,6 +1310,11 @@ MainProcess::finish_deferred_frame(DeferredFrameAction action) noexcept
 		return std::unexpected(core_error(
 			MainProcessErrorCode::core_operation_failed,
 			std::move(result.error())
+		));
+	}
+	if(impl_->audio_feedback_failed) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::audio_command_pending
 		));
 	}
 	if(!impl_->round->ready()) {
@@ -1196,6 +1355,7 @@ std::expected<void, MainProcessError> MainProcess::start_next_round() noexcept
 			MainProcessErrorCode::repeat_startup_failed
 		));
 	}
+	impl_->feedback_scheduler.reset();
 	if(impl_->classic_audio_lifecycle && !impl_->push_audio({
 		.type = ClassicAudioCommandType::reset_effects,
 	})) {

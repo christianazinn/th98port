@@ -38,6 +38,8 @@ using th03::app::ClassicOpRoute;
 using th03::app::ClassicOpSceneTestAccess;
 using th03::app::MainCharacter;
 using th03::app::MainDirectVsConfig;
+using th03::app::MainFeedbackPolicyFact;
+using th03::app::MainFeedbackScheduling;
 using th03::app::MainPaletteVariant;
 using th03::app::MainPlayerSelection;
 using th03::app::MainProcess;
@@ -67,6 +69,53 @@ void expect(bool condition, std::string_view message)
 			"FAIL: %.*s\n",
 			static_cast<int>(message.size()),
 			message.data()
+		);
+	}
+}
+
+void test_main_feedback_policy()
+{
+	using th03::MainFeedbackCueSite;
+	struct Case final {
+		MainFeedbackCueSite site;
+		MainFeedbackPolicyFact expected;
+	};
+	constexpr std::array cases{
+		Case{MainFeedbackCueSite::shot_fired, {1U}},
+		Case{MainFeedbackCueSite::player_knockback_started, {2U}},
+		Case{MainFeedbackCueSite::enemy_explosion_hitting, {3U}},
+		Case{MainFeedbackCueSite::low_burst, {3U}},
+		Case{MainFeedbackCueSite::heavy_burst, {5U}},
+		Case{MainFeedbackCueSite::charge_arc_started, {6U}},
+		Case{MainFeedbackCueSite::yumemi_charge_detonated, {7U}},
+		Case{MainFeedbackCueSite::hyper_activated, {7U}},
+		Case{MainFeedbackCueSite::yumemi_extra_activated, {7U}},
+		Case{MainFeedbackCueSite::story_extend_gained, {8U}},
+		Case{MainFeedbackCueSite::gauge_spell_ready, {9U}},
+		Case{MainFeedbackCueSite::rapid_burst, {10U}},
+		Case{MainFeedbackCueSite::mima_chargeshot_started, {13U}},
+		Case{MainFeedbackCueSite::player_defeat_explode, {14U}},
+		Case{MainFeedbackCueSite::chiyuri_chargeshot_activated, {15U}},
+		Case{MainFeedbackCueSite::yumemi_charge_active_pulse, {15U}},
+		Case{MainFeedbackCueSite::boss_terminal_first_frame, {16U}},
+		Case{MainFeedbackCueSite::bomb_flash, {16U}},
+		Case{MainFeedbackCueSite::ellen_bomb_started, {17U}},
+		Case{MainFeedbackCueSite::bomb_started, {18U}},
+		Case{MainFeedbackCueSite::boss_launched, {18U}},
+		Case{MainFeedbackCueSite::extra_attack_beam_activated, {20U}},
+		Case{
+			MainFeedbackCueSite::yumemi_boss_materialization,
+			{5U, MainFeedbackScheduling::reset_then_request},
+		},
+		Case{
+			MainFeedbackCueSite::warning_interstitial_started,
+			{19U, MainFeedbackScheduling::force},
+		},
+	};
+	for(const auto &test : cases) {
+		expect(
+			MainProcessTestAccess::feedback_policy(test.site) == test.expected,
+			"every semantic MAIN feedback site retains its source effect policy"
 		);
 	}
 }
@@ -1824,10 +1873,15 @@ void test_story_factory_transaction_and_lifetime()
 		th03::present::ComposedPixel,
 		th03::present::graphics_page_pixels
 	>(pixels.data(), pixels.size()));
-	const auto stepped = process.step({});
+	const auto stepped = process.step({.p1 = 0x0020U});
+	const auto shot_audio = process.take_audio_command();
 	expect(surface && stepped && stepped->status == th03::StepStatus::running &&
-		process.presentation_status() == th03::present::MainRoundStatus::ready,
-		"Story process remains usable after every caller-owned input is destroyed");
+		process.presentation_status() == th03::present::MainRoundStatus::ready &&
+		shot_audio == th03::app::ClassicAudioCommand{
+			.type = th03::app::ClassicAudioCommandType::dispatch_effect,
+			.parameter = 1U,
+		} && !process.take_audio_command(),
+		"Story process remains usable and dispatches a shot at the source boundary after every caller-owned input is destroyed");
 }
 
 bool kotohime_red(
@@ -2768,6 +2822,7 @@ bool run_local_authentic_gate(
 
 int main(int argc, char **argv)
 {
+	test_main_feedback_policy();
 	test_raw_bf2_shapes();
 	test_distinct_selection_first_frame();
 	test_live_bomb_first_frame();

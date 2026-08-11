@@ -35,7 +35,8 @@ void boss_kotohime_add_from_orbit(
 
 void boss_pattern_kotohime_random_rings(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
@@ -52,6 +53,9 @@ void boss_pattern_kotohime_random_rings(
 		);
 		boss.render_frame++;
 		if(boss.render_frame > 0x40U) {
+			observe_main_feedback(
+				observer, MainFeedbackCueSite::low_burst, player_id
+			);
 			boss_kotohime_add_from_orbit(
 				state,
 				player_id,
@@ -73,7 +77,8 @@ void boss_pattern_kotohime_random_rings(
 
 void boss_pattern_kotohime_aimed_spreads(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
@@ -94,6 +99,9 @@ void boss_pattern_kotohime_aimed_spreads(
 		);
 		boss.render_frame++;
 		if(boss.render_frame > 0x40U) {
+			observe_main_feedback(
+				observer, MainFeedbackCueSite::low_burst, player_id
+			);
 			boss_kotohime_add_from_orbit(
 				state,
 				player_id,
@@ -122,12 +130,16 @@ void boss_pattern_kotohime_aimed_spreads(
 
 void boss_pattern_kotohime_pellet_rings(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
 	boss_move(boss);
 	if((boss.pattern_frame % boss.params[5]) == 1U) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::low_burst, player_id
+		);
 		const auto target_player = static_cast<std::uint8_t>(1U - player_id);
 		const auto angle = static_cast<std::uint8_t>(boss.pattern_frame);
 		constexpr std::array<std::int16_t, 5> offsets_x{
@@ -158,7 +170,8 @@ void boss_pattern_kotohime_pellet_rings(
 
 void boss_pattern_kotohime_bursts(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
@@ -178,6 +191,9 @@ void boss_pattern_kotohime_bursts(
 		);
 		boss.render_frame++;
 		if(boss.render_frame > 0x40U) {
+			observe_main_feedback(
+				observer, MainFeedbackCueSite::low_burst, player_id
+			);
 			const auto target_player = static_cast<std::uint8_t>(1U - player_id);
 			const auto center_count = boss.params[1];
 			const auto burst_bullet_count = boss.params[6];
@@ -269,16 +285,16 @@ void boss_update_kotohime(
 		boss_choose_pattern(state);
 		break;
 	case 2U: case 3U: case 4U: case 5U: case 6U:
-		boss_pattern_kotohime_random_rings(state, player_id);
+		boss_pattern_kotohime_random_rings(state, player_id, observer);
 		break;
 	case 7U: case 8U: case 9U:
-		boss_pattern_kotohime_aimed_spreads(state, player_id);
+		boss_pattern_kotohime_aimed_spreads(state, player_id, observer);
 		break;
 	case 12U: case 13U: case 14U:
-		boss_pattern_kotohime_pellet_rings(state, player_id);
+		boss_pattern_kotohime_pellet_rings(state, player_id, observer);
 		break;
 	case 10U: case 11U: case 15U: case 16U: case 17U:
-		boss_pattern_kotohime_bursts(state, player_id);
+		boss_pattern_kotohime_bursts(state, player_id, observer);
 		break;
 	case 0x80U:
 		boss_exit_move(state, player_id);
@@ -324,6 +340,9 @@ void boss_pattern_kana_accel_ring(
 		return;
 	}
 	if(boss.pattern_frame == 0x28U) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::rapid_burst, player_id
+		);
 		observe_common_effect(
 			state, observer, CommonEffectKind::expanding_circle,
 			boss.center_x, boss.center_y,
@@ -371,6 +390,9 @@ void boss_pattern_kana_rings(
 	}
 	if(boss.pattern_frame >= 0x28U && boss.pattern_frame < 0x50U) {
 		if(boss.pattern_frame == 0x28U) {
+			observe_main_feedback(
+				observer, MainFeedbackCueSite::rapid_burst, player_id
+			);
 			observe_common_effect(
 				state, observer, CommonEffectKind::expanding_circle,
 				boss.center_x, boss.center_y,
@@ -385,6 +407,9 @@ void boss_pattern_kana_rings(
 			return;
 		}
 		if(boss.pattern_frame == 0x40U) {
+			observe_main_feedback(
+				observer, MainFeedbackCueSite::rapid_burst, player_id
+			);
 			observe_common_effect(
 				state, observer, CommonEffectKind::expanding_circle,
 				boss.center_x, boss.center_y,
@@ -412,6 +437,9 @@ void boss_pattern_kana_rings(
 			return;
 		}
 		if(boss.pattern_frame == 0x48U) {
+			observe_main_feedback(
+				observer, MainFeedbackCueSite::rapid_burst, player_id
+			);
 			observe_common_effect(
 				state, observer, CommonEffectKind::expanding_circle,
 				boss.center_x, boss.center_y,
@@ -435,12 +463,16 @@ void boss_pattern_kana_rings(
 
 void boss_pattern_kana_clouds(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
 	boss_move(boss);
 	if((boss.pattern_frame % boss.params[4]) == 0U) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::rapid_burst, player_id
+		);
 		auto angle = static_cast<std::uint8_t>(
 			(randring_next16(state) & 0x1FU) - 0x10U
 		);
@@ -494,6 +526,9 @@ void boss_pattern_kana_spiral(
 	}
 	if(boss.pattern_frame >= 0x20U && boss.pattern_frame < 0x6CU) {
 		if((boss.pattern_frame & 3U) == 0U) {
+			observe_main_feedback(
+				observer, MainFeedbackCueSite::rapid_burst, player_id
+			);
 			bullets_add_group(
 				state, BulletFlag::bullet16, boss.center_x, boss.center_y,
 				static_cast<std::uint8_t>(1U - player_id), boss.params[6],
@@ -567,7 +602,7 @@ void boss_update_kana(
 		boss_pattern_kana_rings(state, player_id, observer);
 		break;
 	case 13U: case 14U: case 15U:
-		boss_pattern_kana_clouds(state, player_id);
+		boss_pattern_kana_clouds(state, player_id, observer);
 		break;
 	case 5U: case 6U: case 16U: case 17U:
 		boss_pattern_kana_spiral(state, player_id, observer);

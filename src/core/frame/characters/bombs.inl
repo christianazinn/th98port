@@ -98,6 +98,19 @@ void bombs_render_phase_update(
 		const auto character = character_index_from_paletted(
 			state.players[player_id].paletted_character
 		);
+		const auto frame = state.bomb_frame[player_id];
+		if(frame == 1U && character == character_ellen) {
+			observe_main_feedback(
+				observer, MainFeedbackCueSite::ellen_bomb_started, player_id
+			);
+		} else if(
+			frame == 1U &&
+			(character == character_reimu || character == character_mima)
+		) {
+			observe_main_feedback(
+				observer, MainFeedbackCueSite::bomb_started, player_id
+			);
+		}
 		if(observer != nullptr) {
 			observer->bomb_frame_step(BombFrameStep{
 				.player = static_cast<PlayerId>(player_id),
@@ -131,8 +144,12 @@ void bombs_render_phase_update(
 			}
 		}
 		if(character == character_reimu) {
-			const auto frame = state.bomb_frame[player_id];
 			if(frame >= 64U && frame < 112U) {
+				if((frame & 1U) != 0U) {
+					observe_main_feedback(
+						observer, MainFeedbackCueSite::bomb_flash, player_id
+					);
+				}
 				state.playfield_fg_shift_x[player_id] =
 					(((frame % 8U) & 3U) < 2U) ? 4 : -4;
 			} else if(frame >= 112U) {
@@ -140,8 +157,12 @@ void bombs_render_phase_update(
 			}
 		}
 		if(character == character_mima) {
-			const auto frame = state.bomb_frame[player_id];
 			if(frame > 80U && frame < 144U) {
+				if((frame & 1U) == 0U) {
+					observe_main_feedback(
+						observer, MainFeedbackCueSite::bomb_flash, player_id
+					);
+				}
 				if((frame % 8U) == 0U) {
 					observe_common_effect(
 						state, observer, CommonEffectKind::expanding_circle,
@@ -155,8 +176,12 @@ void bombs_render_phase_update(
 			}
 		}
 		if(character == character_marisa) {
-			const auto frame = state.bomb_frame[player_id];
 			if(frame >= 64U && frame < 128U) {
+				if((frame & 1U) != 0U) {
+					observe_main_feedback(
+						observer, MainFeedbackCueSite::bomb_flash, player_id
+					);
+				}
 				state.playfield_fg_shift_x[player_id] =
 					((frame & 3U) < 2U) ? 4 : -4;
 				if((frame % 8U) == 0U) {
@@ -176,10 +201,14 @@ void bombs_render_phase_update(
 			}
 		}
 		if(character == character_ellen) {
-			const auto frame = state.bomb_frame[player_id];
 			if(frame < 64U) {
 				state.ellen_bomb_vector_cursor = 0U;
 			} else if(frame < 128U) {
+				if((frame & 1U) != 0U) {
+					observe_main_feedback(
+						observer, MainFeedbackCueSite::rapid_burst, player_id
+					);
+				}
 				state.playfield_fg_shift_x[player_id] =
 					((frame & 3U) < 2U) ? 4 : -4;
 				if(
@@ -202,8 +231,12 @@ void bombs_render_phase_update(
 			}
 		}
 		if(character == character_rikako) {
-			const auto frame = state.bomb_frame[player_id];
 			if(frame >= 64U && frame < 128U) {
+				if((frame % 4U) == 0U) {
+					observe_main_feedback(
+						observer, MainFeedbackCueSite::heavy_burst, player_id
+					);
+				}
 				state.playfield_fg_shift_x[player_id] =
 					((frame & 3U) < 2U) ? 4 : -4;
 				if((frame % 8U) == 0U) {
@@ -229,7 +262,6 @@ void bombs_render_phase_update(
 			}
 		}
 		if(character == character_chiyuri) {
-			const auto frame = state.bomb_frame[player_id];
 			if(frame < 64U) {
 				if((frame % 8U) == 0U) {
 					observe_common_effect(
@@ -241,6 +273,9 @@ void bombs_render_phase_update(
 				state.playfield_fg_shift_x[player_id] =
 					((frame & 3U) < 2U) ? 4 : -4;
 				if((frame % 16U) == 0U) {
+					observe_main_feedback(
+						observer, MainFeedbackCueSite::rapid_burst, player_id
+					);
 					if(observer == nullptr) {
 						for(std::size_t effect = 0U; effect < 4U; ++effect) {
 							(void)randring_next16(state);
@@ -276,9 +311,11 @@ void bombs_render_phase_update(
 			}
 		}
 		if(character == character_yumemi) {
-			const auto frame = state.bomb_frame[player_id];
 			if(frame > 64U && frame < 144U) {
 				if((frame & 7U) == 0U) {
+					observe_main_feedback(
+						observer, MainFeedbackCueSite::heavy_burst, player_id
+					);
 					observe_common_square(
 						state, observer, 144 << 4, 184 << 4, player_id
 					);
@@ -290,8 +327,12 @@ void bombs_render_phase_update(
 			}
 		}
 		if(character == character_kotohime || character == character_kana) {
-			const auto frame = state.bomb_frame[player_id];
 			if(frame >= 64U && frame < 128U) {
+				if((frame & 3U) < 2U) {
+					observe_main_feedback(
+						observer, MainFeedbackCueSite::rapid_burst, player_id
+					);
+				}
 				state.playfield_fg_shift_x[player_id] =
 					((frame & 3U) < 2U) ? 4 : -4;
 			} else if(frame >= 128U) {

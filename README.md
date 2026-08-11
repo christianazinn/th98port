@@ -16,7 +16,8 @@ commands over authenticated external content. The Classic launcher binds that
 session to the SDL endpoint at one deterministic audio interval per logical
 sample. Initial or later device unavailability drops only final delivery while
 the deterministic PMD session keeps advancing.
-Gameplay-stage music and MAIN SFX emission remain separate work.
+Gameplay-stage music and source-ordered ordinary MAIN SFX emission are
+integrated; source-blocking live pause/resume remains separate work.
 
 ## Build and test
 

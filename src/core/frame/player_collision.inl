@@ -27,6 +27,9 @@ void player_defeat_update(
 		});
 	}
 	if(player.lose_anim_time == 0x30U) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::player_defeat_explode, player_id
+		);
 		state.defeat_flag = DefeatFlag::explode;
 		state.damage_all_on[1U - player_id] = 1U;
 	}
@@ -101,7 +104,7 @@ bool player_update_begin(
 			player.shot_active = 2U;
 		} else if(character == character_marisa) {
 			player.shot_mode = shot_mode_none;
-			activate_marisa_hyper(state, player_id);
+			activate_marisa_hyper(state, player_id, observer);
 		} else if(character == character_ellen) {
 			player.shot_mode = shot_mode_one_pair;
 			if((state.round_frame & 3U) == 0U) {
@@ -127,11 +130,15 @@ bool player_update_begin(
 
 std::optional<std::int8_t> player_knockback_update(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &player = state.players[player_id];
 	if(player.knockback_time == knockback_frames) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::player_knockback_started, player_id
+		);
 		player.knockback_angle = static_cast<std::uint8_t>(
 			randring_next16(state) & 0x3FU
 		);
@@ -211,7 +218,9 @@ void player_update_finish(
 	auto &player = state.players[player_id];
 	bool acted = false;
 	if(player.knockback_active) {
-		const auto knockback_write = player_knockback_update(state, player_id);
+		const auto knockback_write = player_knockback_update(
+			state, player_id, observer
+		);
 		if(knockback_write) {
 			final_velocity_x_write = knockback_write;
 		}
@@ -232,16 +241,22 @@ void player_update_finish(
 			} else {
 				player.gauge_charged = charged;
 			}
+			if(player.gauge_charged == 0x180U) {
+				observe_main_feedback(
+					observer, MainFeedbackCueSite::gauge_spell_ready,
+					player_id
+				);
+			}
 		} else {
 			player.spell_ready_frames++;
 			if(player.spell_ready_frames >= 128U) {
 				acted = (player.gauge_charged >= gauge_64);
-				release_gauge(state, player_id);
+				release_gauge(state, player_id, observer);
 			}
 		}
 	} else if(state.autofire_shot_gate[player_id] <= 4U) {
 		acted = (player.gauge_charged >= gauge_64);
-		release_gauge(state, player_id);
+		release_gauge(state, player_id, observer);
 	}
 
 	if(player.shot_active == 2U) {

@@ -15,6 +15,9 @@ void boss_pattern_rikako_spreads(
 		);
 	}
 	if(boss.pattern_frame == 0x28U) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::heavy_burst, player_id
+		);
 		observe_common_effect(
 			state, observer, CommonEffectKind::expanding_circle,
 			boss.center_x, boss.center_y, target_player
@@ -60,6 +63,9 @@ void boss_pattern_rikako_exatt_and_rings(
 		);
 	}
 	if(boss.pattern_frame == 0x28U) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::heavy_burst, player_id
+		);
 		observe_common_effect(
 			state, observer, CommonEffectKind::expanding_circle,
 			boss.center_x, boss.center_y, target_player
@@ -77,6 +83,9 @@ void boss_pattern_rikako_exatt_and_rings(
 		}
 	}
 	if(boss.pattern_frame == 0x40U) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::rapid_burst, player_id
+		);
 		auto speed = std::uint8_t{2U << 4U};
 		for(std::size_t i = 0U; i < 4U; ++i) {
 			speed = static_cast<std::uint8_t>(speed + 8U);
@@ -101,7 +110,8 @@ void boss_pattern_rikako_exatt_and_rings(
 
 void boss_pattern_rikako_four_spreads(
 	DeterministicState &state,
-	std::uint8_t player_id
+	std::uint8_t player_id,
+	GameplayObserver *observer
 ) noexcept
 {
 	auto &boss = state.boss;
@@ -119,6 +129,9 @@ void boss_pattern_rikako_four_spreads(
 		phase_mod == 1U || phase_mod == 5U ||
 		phase_mod == 9U || phase_mod == 0x0DU
 	) {
+		observe_main_feedback(
+			observer, MainFeedbackCueSite::rapid_burst, player_id
+		);
 		const auto type = (boss.direction == 1U)
 			? BulletFlag::pellet
 			: BulletFlag::bullet16;
@@ -192,7 +205,7 @@ void boss_update_rikako(
 		boss_pattern_rikako_exatt_and_rings(state, player_id, observer);
 		break;
 	case 6U: case 13U: case 14U: case 15U: case 16U: case 17U:
-		boss_pattern_rikako_four_spreads(state, player_id);
+		boss_pattern_rikako_four_spreads(state, player_id, observer);
 		break;
 	case 0x80U:
 		boss_exit_move(state, player_id);

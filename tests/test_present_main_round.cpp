@@ -19,6 +19,8 @@
 namespace {
 
 using th03::MainFrameFooterReached;
+using th03::MainFeedbackCueRequested;
+using th03::MainFeedbackCueSite;
 using th03::MainBackgroundKind;
 using th03::MainBackgroundPhase;
 using th03::BombCompatibilityReadSite;
@@ -66,6 +68,7 @@ using th03::present::MainBossPresenter;
 using th03::present::MainEffectsPresenter;
 using th03::present::MainEntitiesPresenter;
 using th03::present::MainExtraChargePresenter;
+using th03::present::MainFeedbackSink;
 using th03::present::MainGameMode;
 using th03::present::MainHudResultPresenter;
 using th03::present::MainHudResultSheets;
@@ -286,6 +289,7 @@ struct Fixture {
 	std::optional<MainHudResultPresenter> hud_result;
 	std::optional<MainRoundPresenter> round;
 	MainHudStartState hud_start_late_{};
+	std::vector<MainFeedbackCueRequested> feedback_requests;
 
 	explicit Fixture(
 		std::uint16_t background_x_q12_4 = 0U,
@@ -442,7 +446,16 @@ struct Fixture {
 			*players_bullets,
 			*bombs,
 			*warning_gauge,
-			*hud_result
+			*hud_result,
+			MainFeedbackSink{
+				.context = this,
+				.request = [](void *context, MainFeedbackCueRequested request)
+					noexcept {
+					static_cast<Fixture *>(context)->feedback_requests.push_back(
+						request
+					);
+				},
+			}
 		);
 		expect(round->ready(), "construct a ready MAIN round composer");
 		round->main_background_initialize({.kind = background_kind});
@@ -935,6 +948,21 @@ void test_common_effect_fanout_stops_before_bombs()
 			"a failed Bomb common step does not reach Bombs out of order"
 		);
 	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		fixture.round->common_effect_spawned(CommonEffectSpawned{
+			.kind = CommonEffectKind::contracting_square,
+			.player = PlayerId::p1,
+			.center_x = static_cast<std::int16_t>(144 * 16),
+			.center_y = static_cast<std::int16_t>(200 * 16),
+		});
+		fixture.terminal_phases(state);
+		expect(
+			fixture.round->ready() && fixture.feedback_requests.empty(),
+			"general common squares do not request the terminal-Boss effect"
+		);
+	}
 }
 
 void test_wrong_order_is_sticky_and_atomic()
@@ -1220,6 +1248,32 @@ void test_boss_view_precedes_entities_and_draws()
 			fixture.round->status() == MainRoundStatus::invalid_observation &&
 			fixture.bosses->ready(),
 			"reject a Boss view that does not match the background frame"
+		);
+	}
+	{
+		Fixture fixture;
+		auto state = fixture.state();
+		state.gba_boss_launched_by = 0;
+		state.boss.center_x = static_cast<std::int16_t>(144 * 16);
+		state.boss.center_y = static_cast<std::int16_t>(80 * 16);
+		state.boss.state = 0xFFU;
+		state.boss.pattern_frame = 1U;
+		fixture.round->boss_palette_baseline_restored({PlayerId::p2});
+		fixture.round->boss_activated({
+			.owner = PlayerId::p1,
+			.paletted_character = static_cast<std::int8_t>(
+				MainPalettedCharacter::reimu_primary
+			),
+		});
+		fixture.begin_frame(state);
+		fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
+		expect(
+			fixture.round->ready() && fixture.feedback_requests ==
+				std::vector<MainFeedbackCueRequested>{{
+					.site = MainFeedbackCueSite::boss_terminal_first_frame,
+					.player = PlayerId::p1,
+				}},
+			"request effect 16 only from terminal Boss render frame 1"
 		);
 	}
 }

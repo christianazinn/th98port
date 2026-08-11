@@ -151,7 +151,7 @@ The complete Classic developer slice and the direct-VS slice are now visible
 and interactive. The byte-fed PMD/YM2608 engine, source-shaped TH03
 transport/SFX/EFC service, deterministic Classic scene-command session, and
 bounded SDL delivery are also integrated. Audio is not yet fidelity-complete:
-MAIN gameplay SFX emitters, rhythm-ROM packaging, exact source cadence/phase,
+source-blocking live pause/resume, rhythm-ROM packaging, exact source cadence/phase,
 captured PC-98 page/palette/pixel
 traces, and a human two-player run remain acceptance gates. The host therefore requires an
 explicit rational cadence as policy rather than labeling an inferred number
@@ -302,7 +302,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
 | OP menus, Story, MAINL, cutscenes, staff | Integrated | The source-private OP owner binds title, retained Options/Music Room, read-only HiScore, Story/all-VS selection, Story, MAINL/MAIN VS, winner return, both interstages, primary and conditional extra endings, staff/verdict, score persistence, registration, and the exact four-recipe automatic Demo loop. No external OP route or replay UI is required. |
-| Audio | Engine, TH03 transport/SFX/EFC service, fixed resampler, Classic session, and SDL endpoint integrated | The launcher applies source-semantic scene commands, advances one deterministic audio interval per logical sample, and treats device loss as delivery-only. MAINL now selects and loads the exact character/decisive song and effect bank; fresh/repeat/terminal MAIN publishes source Reset/Play/Stop lifecycle commands. Authenticated gates cover all 40 semantic cue identities and 22 effects. MAIN SFX emitters, rhythm-ROM packaging, shipped-TSR traces, and physical-device QA remain release work. |
+| Audio | Engine, TH03 transport/SFX/EFC service, fixed resampler, Classic session, and SDL endpoint integrated | The launcher applies source-semantic scene commands, advances one deterministic audio interval per logical sample, and treats device loss as delivery-only. MAINL selects and loads the exact character/decisive song and effect bank; fresh/repeat/terminal MAIN publishes source Reset/Play/Stop lifecycle commands. All 61 ordinary live-MAIN donor SFX rows feed the source `snd_se_update()` boundary, including forced warning effect 19. Authenticated gates cover all 40 semantic cue identities and 22 effects. Source-blocking live pause/resume and effect 21 follow separately; rhythm-ROM packaging, shipped-TSR traces, and physical-device QA remain release work. |
 | Persistent score/configuration UI and localization/QoL | Original UI integrated; QoL pending | The exact original score/config codecs, source mutation rules, validated atomic whole-file stores, OP Options, and read-only HiScore/MAINL registration paths are app-owned. Localization and optional QoL remain outside core. |
 
 The following parcels can proceed now, provided they do not claim readiness for VS or change core semantics:
@@ -314,7 +314,7 @@ The following parcels can proceed now, provided they do not claim readiness for 
 | Final PC-98 source-surface compositor | th03_present | Synthetic Raster/TRAM/palette fixtures prove page selection, palette resolution, gaiji placement, and 640x400 output. |
 | Selection/title asset mapping and presenter primitives | th03_present plus app-owned scene code | Source table and synthetic/unit render tests; no dependency on the MAIN compositor being finished. |
 | Cutscene Raster/resource executor | `th03_present` plus app-owned scene content | Execute the completed supplied-byte VM's typed operations against the Master/upstream two-page model; retain script/resource ownership outside presentation and keep audio operations semantic. |
-| Gameplay SFX emitters | MAIN-facing app/presentation observer seams | Source-ordered neutral SFX facts feed the existing deterministic session without gameplay or device-clock feedback. |
+| Gameplay SFX emitters | Integrated | Source-ordered neutral facts for all 61 ordinary live-MAIN donor rows feed the existing deterministic session without gameplay or device-clock feedback. |
 
 Avoid creating a placeholder th03-app which owns a second renderer or game state. The useful early app work is resource, input, clock, and construction seams with tests; the only gameplay frame producer remains th03_core plus its borrowed presentation observer.
 
@@ -368,7 +368,7 @@ supplies the bounded playback stream, and the Classic launcher submits each
 completed block after applying that sample's commands. Initial or later device
 failure stops only submission while deterministic PMD state continues; device
 state never changes the source FM-capability decision.
-MAIN SFX emitters remain; gameplay song selection and process lifecycle are integrated.
+Gameplay song selection, MAIN process lifecycle, and ordinary live MAIN SFX emitters are integrated. Source-blocking live pause/resume and effect 21 follow separately.
 SDL's [audio-device stream API](https://wiki.libsdl.org/SDL3/SDL_OpenAudioDeviceStream)
 is an appropriate device adapter because it keeps device management outside
 the synthesizer. The app owns user gain/mute settings, while the audio engine

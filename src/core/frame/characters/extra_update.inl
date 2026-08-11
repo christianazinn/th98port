@@ -166,6 +166,9 @@ void extra_attacks_update_mima(
 		} else {
 			attack.mima_timer = 0U;
 			attack.state = 1U;
+			observe_main_feedback(
+				observer, MainFeedbackCueSite::rapid_burst, player_id
+			);
 		}
 		attack.mima_timer = exact::wrap_add(
 			attack.mima_timer, std::uint16_t{1}
@@ -231,6 +234,11 @@ void extra_attacks_update_marisa(
 		} else {
 			attack.frame = 0U;
 			attack.state = 1U;
+			observe_main_feedback(
+				observer,
+				MainFeedbackCueSite::extra_attack_beam_activated,
+				player_id
+			);
 		}
 		attack.frame++;
 	}
@@ -298,6 +306,10 @@ void extra_attacks_update_kotohime(
 					attack.kotohime_milestone == 12U ||
 					attack.kotohime_milestone == 16U
 				) {
+					observe_main_feedback(
+						observer, MainFeedbackCueSite::low_burst,
+						player_id
+					);
 					observe_common_effect(
 						state, observer, CommonEffectKind::expanding_circle,
 						attack.center_x, attack.center_y, target_player
@@ -387,6 +399,9 @@ void extra_attacks_update_kotohime(
 		} else {
 			attack.frame = 0U;
 			attack.state = 1U;
+			observe_main_feedback(
+				observer, MainFeedbackCueSite::rapid_burst, player_id
+			);
 		}
 		attack.frame++;
 	}
@@ -591,6 +606,13 @@ void extra_attacks_update_chiyuri(
 					bottom.center_x, 368 << 4, bottom.player_id
 				);
 			}
+			if(top.frame == 0x10U) {
+				observe_main_feedback(
+					observer,
+					MainFeedbackCueSite::extra_attack_beam_activated,
+					player_id
+				);
+			}
 			if(top.frame > 0x28U && top.frame < 0x70U) {
 				collmap_set_slope_striped(
 					state, target_player, top.center_x, bottom.center_x
@@ -729,6 +751,10 @@ void extra_attacks_update_yumemi(
 			attack.yumemi_extent = 0x10U;
 			attack.frame = 0U;
 			attack.state = 1U;
+			observe_main_feedback(
+				observer, MainFeedbackCueSite::yumemi_extra_activated,
+				player_id
+			);
 		}
 		attack.frame++;
 	}
