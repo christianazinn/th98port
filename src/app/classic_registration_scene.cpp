@@ -253,6 +253,25 @@ template <typename Value, typename Decoder>
 	);
 }
 
+[[nodiscard]] bool valid_choice_cel(const assets::PlanarCel4 &cel) noexcept
+{
+	constexpr std::uint16_t width = 96U;
+	constexpr std::uint16_t height = 41U;
+	constexpr std::size_t plane_size = 492U;
+	if(cel.pixel_width != width || cel.pixel_height != height ||
+		cel.bitplane_size != plane_size || cel.offset_at_bottom_left != 3200 ||
+		cel.vram_dword_width != 3U ||
+		cel.row_order != assets::PlanarRowOrder::bottom_to_top ||
+		cel.bit_order != assets::PlanarBitOrder::most_significant_bit_left ||
+		cel.alpha) {
+		return false;
+	}
+	return std::all_of(
+		cel.color_planes.begin(), cel.color_planes.end(),
+		[](const auto &plane) { return plane.size() == plane_size; }
+	);
+}
+
 [[nodiscard]] bool valid_sheet(
 	const present::PreparedSuperimposeSheet &sheet
 ) noexcept
@@ -354,10 +373,14 @@ private:
 
 ClassicRegistrationCompletion::ClassicRegistrationCompletion(
 	present::Raster raster,
+	MainlRegistrationNextScreen next_screen,
+	std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels,
 	std::optional<std::size_t> entered_place,
 	ClassicScoreStoreDisposition load_disposition
 ) noexcept :
 	raster_(std::move(raster)),
+	next_screen_(next_screen),
+	choice_cels_(std::move(choice_cels)),
 	entered_place_(entered_place),
 	load_disposition_(load_disposition)
 {}
@@ -377,6 +400,12 @@ ClassicScoreStoreDisposition
 ClassicRegistrationCompletion::load_disposition() const noexcept
 {
 	return load_disposition_;
+}
+
+MainlRegistrationNextScreen
+ClassicRegistrationCompletion::next_screen() const noexcept
+{
+	return next_screen_;
 }
 
 ClassicRegistrationScene::ClassicRegistrationScene(
@@ -433,9 +462,14 @@ ClassicRegistrationScene::create_impl(
 			ClassicRegistrationErrorCode::invalid_context
 		));
 	}
-	const auto keys = mainl_registration_resource_keys(
-		registration_rank(resident.rank)
-	);
+	const auto next_screen = (resident.remaining_credits != 0U &&
+		resident.story_stage != 99U) ?
+		MainlRegistrationNextScreen::continue_menu :
+		MainlRegistrationNextScreen::game_over;
+	const auto keys = mainl_registration_resource_keys({
+		.rank = registration_rank(resident.rank),
+		.next_screen = next_screen,
+	});
 	if(!keys) {
 		return std::unexpected(registration_error(
 			ClassicRegistrationErrorCode::invalid_context
@@ -495,9 +529,42 @@ ClassicRegistrationScene::create_impl(
 	if(!highlight) {
 		return std::unexpected(highlight.error());
 	}
+	const MainResourceKey next_background_key{
+		.role = next_screen == MainlRegistrationNextScreen::continue_menu ?
+			MainResourceRole::continue_background :
+			MainResourceRole::gameover_background,
+	};
+	auto next_background = decode_asset<assets::PiImage>(
+		resources, next_background_key, assets::decode_pi
+	);
+	if(!next_background) {
+		return std::unexpected(next_background.error());
+	}
+	std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels{};
+	if(next_screen == MainlRegistrationNextScreen::continue_menu) {
+		const MainResourceKey choice_key{
+			.role = MainResourceRole::continue_choice_cels,
+		};
+		for(std::size_t cel = 0U; cel < choice_cels.size(); ++cel) {
+			auto decoded = decode_asset<assets::PlanarCel4>(
+				resources,
+				choice_key,
+				[cel](std::span<const std::byte> bytes) {
+					return assets::decode_cdg_cel(
+						bytes, cel, assets::CdgAlphaPolicy::discard
+					);
+				}
+			);
+			if(!decoded) {
+				return std::unexpected(decoded.error());
+			}
+			choice_cels[cel].emplace(std::move(*decoded));
+		}
+	}
 	return create_predecoded(
 		resident, score_path, std::move(*background), std::move(*rank),
-		std::move(*normal), std::move(*highlight), stage_text, font,
+		std::move(*normal), std::move(*highlight),
+		std::move(*next_background), std::move(choice_cels), stage_text, font,
 		std::move(initial_raster)
 	);
 }
@@ -510,6 +577,8 @@ ClassicRegistrationScene::create_predecoded(
 	assets::PlanarCel4 rank,
 	assets::BfntSheet normal,
 	assets::BfntSheet highlight,
+	assets::PiImage next_background,
+	std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels,
 	const MainlStageTextAssets &stage_text,
 	const present::AnkGlyphProvider &font,
 	present::Raster initial_raster
@@ -521,7 +590,17 @@ ClassicRegistrationScene::create_predecoded(
 			ClassicRegistrationErrorCode::invalid_context
 		));
 	}
-	if(!valid_background(background) || !valid_rank(rank)) {
+	const auto next_screen = (resident.remaining_credits != 0U &&
+		resident.story_stage != 99U) ?
+		MainlRegistrationNextScreen::continue_menu :
+		MainlRegistrationNextScreen::game_over;
+	if(!valid_background(background) || !valid_rank(rank) ||
+		!valid_background(next_background) ||
+		(next_screen == MainlRegistrationNextScreen::continue_menu &&
+			!std::all_of(
+				choice_cels.begin(), choice_cels.end(),
+				[](const auto &cel) { return cel && valid_choice_cel(*cel); }
+			))) {
 		return std::unexpected(registration_error(
 			ClassicRegistrationErrorCode::invalid_asset_geometry
 		));
@@ -530,6 +609,9 @@ ClassicRegistrationScene::create_predecoded(
 	auto prepared = std::make_unique<Prepared>();
 	prepared->background = std::move(background);
 	prepared->rank = std::move(rank);
+	prepared->next_background = std::move(next_background);
+	prepared->choice_cels = std::move(choice_cels);
+	prepared->next_screen = next_screen;
 	auto normal_prepared = present::prepare_superimpose_sheet(normal);
 	auto highlight_prepared = present::prepare_superimpose_sheet(highlight);
 	if(!normal_prepared || !highlight_prepared ||
@@ -650,6 +732,20 @@ bool ClassicRegistrationScene::initialize_visuals() noexcept
 		return false;
 	}
 	return !entered_place_ || draw_alphabet();
+}
+
+bool ClassicRegistrationScene::preload_next_screen() noexcept
+{
+	if(!prepared_ || !prepared_->next_background.palette ||
+		!raster_.set_access_page(present::Page::zero) ||
+		!raster_.set_shown_page(present::Page::zero) ||
+		!install_palette(raster_, *prepared_->next_background.palette) ||
+		!present::pi_put_8(raster_, 0, 0, prepared_->next_background)) {
+		return false;
+	}
+	raster_.set_palette_tone(0);
+	raster_.apply_pending_palette();
+	return true;
 }
 
 bool ClassicRegistrationScene::draw_glyph(
@@ -912,7 +1008,7 @@ std::expected<ClassicRegistrationTick, ClassicRegistrationError>
 ClassicRegistrationScene::fade_tick(bool black_in)
 {
 	bool changed = false;
-	if(fade_boundary_ != 0U) {
+	if(fade_boundary_ != 0U && (fade_boundary_ % 2U) == 1U) {
 		const auto pair = static_cast<std::uint8_t>(
 			(fade_boundary_ - 1U) / 2U
 		);
@@ -945,6 +1041,12 @@ ClassicRegistrationScene::fade_tick(bool black_in)
 		return std::unexpected(store_error(
 			ClassicRegistrationErrorCode::store_commit_failed,
 			std::move(committed.error())
+		));
+	}
+	if(!preload_next_screen()) {
+		fail();
+		return std::unexpected(registration_error(
+			ClassicRegistrationErrorCode::draw_failed
 		));
 	}
 	phase_ = (resident_.remaining_credits == 0U ||
@@ -1220,7 +1322,8 @@ ClassicRegistrationScene::take_completion() noexcept
 		return std::nullopt;
 	}
 	ClassicRegistrationCompletion result(
-		std::move(raster_), entered_place_, load_disposition_
+		std::move(raster_), prepared_->next_screen,
+		std::move(prepared_->choice_cels), entered_place_, load_disposition_
 	);
 	phase_ = ClassicRegistrationPhase::consumed;
 	return result;

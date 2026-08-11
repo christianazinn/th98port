@@ -176,6 +176,17 @@ enum class MainRegistrationRank : std::uint8_t {
 	lunatic,
 };
 
+enum class MainlRegistrationNextScreen : std::uint8_t {
+	continue_menu,
+	game_over,
+};
+
+struct MainlRegistrationResourceRequest {
+	MainRegistrationRank rank = MainRegistrationRank::none;
+	MainlRegistrationNextScreen next_screen =
+		MainlRegistrationNextScreen::continue_menu;
+};
+
 // Static roles use character == none and palette == none. Paletted character
 // roles use both fields, making the original 00..17 family explicit. The
 // stage enemy-group role uses character only because MAINL selects one of five
@@ -349,7 +360,9 @@ mainl_cutscene_resource_keys(MainlCutsceneResourceRequest request);
 [[nodiscard]] std::vector<MainResourceKey> mainl_staff_resource_keys();
 
 [[nodiscard]] std::expected<std::vector<MainResourceKey>, ResourceLoadError>
-mainl_registration_resource_keys(MainRegistrationRank rank);
+mainl_registration_resource_keys(MainlRegistrationResourceRequest request);
+
+[[nodiscard]] std::vector<MainResourceKey> mainl_gameover_resource_keys();
 
 // Importer-facing validation for the extracted-entry component. The loader
 // calls this before joining a manifest name to the explicit content root.
@@ -396,7 +409,9 @@ public:
 	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 	load_mainl_staff();
 	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
-	load_mainl_registration(MainRegistrationRank rank);
+	load_mainl_registration(MainlRegistrationResourceRequest request);
+	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+	load_mainl_gameover();
 
 	[[nodiscard]] std::size_t cached_resource_count() const noexcept;
 

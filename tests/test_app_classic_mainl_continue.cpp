@@ -337,13 +337,21 @@ void advance_continue_fade(
 	ClassicMainlContinuePhase expected_after
 )
 {
+	bool preload_requested = false;
 	for(std::size_t boundary = 1U; boundary <= 18U; ++boundary) {
 		const auto tick = scene.advance({});
 		expect(tick && tick->boundary == ClassicMainlContinueBoundary::vsync,
 			"Continue palette fade consumes one exact VSync boundary");
+		preload_requested = tick && tick->gameover_preload_requested;
 	}
 	expect(scene.phase() == expected_after,
 		"Continue palette fade reaches the exact next phase");
+	if(expected_after == ClassicMainlContinuePhase::await_gameover_preload) {
+		expect(
+			preload_requested,
+			"the final black boundary requests the source-late OVER preload"
+		);
+	}
 }
 
 void drain_continue_audio(
@@ -354,6 +362,21 @@ void drain_continue_audio(
 	expect(scene.take_audio_command() == expected,
 		"Continue publishes the expected source audio command");
 	expect(!scene.take_audio_command(), "Continue audio queue drains exactly");
+}
+
+void satisfy_gameover_preload(ClassicMainlContinueScene &scene)
+{
+	auto resources = resources_for(0U);
+	const auto preloaded =
+		ClassicMainlContinueTestAccess::preload_gameover_with_synthetic_resources(
+			scene, resources
+		);
+	expect(
+		preloaded && preloaded->phase == ClassicMainlContinuePhase::ready &&
+			preloaded->boundary == ClassicMainlContinueBoundary::immediate &&
+			preloaded->surface_changed,
+		"OVER is loaded synchronously only after Continue reaches black"
+	);
 }
 
 ClassicMainlContinueCompletion finish_declined_continue(
@@ -377,7 +400,10 @@ ClassicMainlContinueCompletion finish_declined_continue(
 		.cue = ClassicMusicCue::high_score,
 		.parameter = 3U,
 	});
-	advance_continue_fade(*scene, ClassicMainlContinuePhase::ready);
+	advance_continue_fade(
+		*scene, ClassicMainlContinuePhase::await_gameover_preload
+	);
+	satisfy_gameover_preload(*scene);
 	expect(!scene->take_completion(),
 		"Continue completion waits for the queued score-song stop");
 	drain_continue_audio(*scene, {
@@ -435,7 +461,10 @@ void test_continue_input_and_acceptance()
 		.cue = ClassicMusicCue::high_score,
 		.parameter = 3U,
 	});
-	advance_continue_fade(*scene, ClassicMainlContinuePhase::ready);
+	advance_continue_fade(
+		*scene, ClassicMainlContinuePhase::await_gameover_preload
+	);
+	satisfy_gameover_preload(*scene);
 	expect(scene->raster().pixel(Page::zero, {10, 10}) == 9U &&
 		scene->raster().palette_tone() == 0,
 		"final Continue boundary installs OVER at tone zero");

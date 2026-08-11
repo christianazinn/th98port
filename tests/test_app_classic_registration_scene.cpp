@@ -1,4 +1,5 @@
 #include "../src/app/classic_registration_scene_internal.hpp"
+#include "../src/app/classic_mainl_continue_internal.hpp"
 
 #include <algorithm>
 #include <array>
@@ -32,10 +33,13 @@ using th03::app::ClassicRegistrationInput;
 using th03::app::ClassicRegistrationPhase;
 using th03::app::ClassicRegistrationScene;
 using th03::app::ClassicRegistrationSceneTestAccess;
+using th03::app::ClassicMainlContinuePhase;
+using th03::app::ClassicMainlContinueScene;
 using th03::app::ClassicScoreCleared;
 using th03::app::ClassicScoreCodecFields;
 using th03::app::ClassicScoreStoreDisposition;
 using th03::app::MainlStageTextAssets;
+using th03::app::MainlRegistrationNextScreen;
 using th03::present::AnkGlyph;
 using th03::present::AnkGlyphProvider;
 using th03::present::JisGlyph;
@@ -133,7 +137,10 @@ MainlStageTextAssets stage_text()
 	return result;
 }
 
-th03::assets::PiImage background()
+th03::assets::PiImage background(
+	std::uint8_t fill = 1U,
+	std::uint8_t palette_seed = 5U
+)
 {
 	th03::assets::PiImage result{};
 	result.palette.emplace();
@@ -141,12 +148,35 @@ th03::assets::PiImage background()
 		result.palette->colors[index] = {
 			.r = index,
 			.g = static_cast<std::uint8_t>(15U - index),
-			.b = static_cast<std::uint8_t>(index ^ 5U),
+			.b = static_cast<std::uint8_t>(index ^ palette_seed),
 		};
 	}
 	result.image.width = th03::present::graphics_width;
 	result.image.height = th03::present::graphics_height;
-	result.image.indices.assign(th03::present::graphics_page_pixels, 1U);
+	result.image.indices.assign(th03::present::graphics_page_pixels, fill);
+	return result;
+}
+
+std::array<std::optional<th03::assets::PlanarCel4>, 4U> choice_cels()
+{
+	std::array<std::optional<th03::assets::PlanarCel4>, 4U> result{};
+	constexpr std::size_t plane_size = 492U;
+	for(std::size_t cel = 0U; cel < result.size(); ++cel) {
+		th03::assets::PlanarCel4 value{};
+		value.bitplane_size = static_cast<std::uint16_t>(plane_size);
+		value.pixel_width = 96U;
+		value.pixel_height = 41U;
+		value.offset_at_bottom_left = 3200;
+		value.vram_dword_width = 3U;
+		const auto color = static_cast<std::uint8_t>(cel + 1U);
+		for(std::size_t plane = 0U; plane < value.color_planes.size(); ++plane) {
+			value.color_planes[plane].assign(
+				plane_size,
+				(color & (1U << plane)) != 0U ? 0xFFU : 0U
+			);
+		}
+		result[cel].emplace(std::move(value));
+	}
 	return result;
 }
 
@@ -220,9 +250,15 @@ std::expected<
 	SyntheticFont &font
 )
 {
+	const bool preload_continue = value.remaining_credits != 0U &&
+		value.story_stage != 99U;
 	return ClassicRegistrationSceneTestAccess::create_with_predecoded_assets(
 		value, score_path, background(), rank_cel(), glyph_sheet(4U),
-		glyph_sheet(15U), stage_text(), font, Raster{}
+		glyph_sheet(15U),
+		preload_continue ? background(5U, 1U) : background(9U, 7U),
+		preload_continue ? choice_cels() :
+			std::array<std::optional<th03::assets::PlanarCel4>, 4U>{},
+		stage_text(), font, Raster{}
 	);
 }
 
@@ -257,6 +293,12 @@ bool advance_fade(
 		if(!tick) {
 			return false;
 		}
+		const bool source_palette_show = boundary != 0U &&
+			((boundary % 2U) == 1U || boundary == 34U);
+		expect(
+			tick->surface_changed == source_palette_show,
+			"speed-2 fade reports only source palette-show boundaries"
+		);
 		if(boundary < 34U) {
 			expect(
 				tick->phase != final_phase,
@@ -411,17 +453,34 @@ void test_qualified_name_schedule_and_commit()
 		return;
 	}
 	expect(
-		(*scene)->raster().pixel(Page::zero, Point{0, 0}).has_value(),
-		"ready scene retains its Raster until the owner consumes completion"
+		(*scene)->raster().pixel(Page::zero, Point{0, 0}) == 5U &&
+			(*scene)->raster().pending_palette().colors[0U] ==
+				th03::present::Rgb8{0U, 255U, 17U},
+		"registration preloads CONTI pixels and palette under black"
 	);
 	auto completion = (*scene)->take_completion();
 	expect(
 		completion && completion->entered_place() == 0U &&
+			completion->next_screen() ==
+				MainlRegistrationNextScreen::continue_menu &&
 			completion->load_disposition() ==
 				ClassicScoreStoreDisposition::loaded &&
 			completion->raster().palette_tone() == 0,
 		"completion owns the black retained Raster and qualification result"
 	);
+	if(completion) {
+		auto continue_scene = ClassicMainlContinueScene::create_from_registration(
+			std::move(*completion), resident().remaining_credits, font
+		);
+		expect(
+			continue_scene && (*continue_scene)->phase() ==
+				ClassicMainlContinuePhase::black_in &&
+				(*continue_scene)->raster().pixel(Page::zero, {0, 0}) == 5U &&
+				(*continue_scene)->raster().pixel(Page::zero, {192, 272}) == 1U &&
+				(*continue_scene)->raster().pixel(Page::zero, {352, 272}) == 4U,
+			"Continue consumes the registration preload without recreating its Raster"
+		);
+	}
 	const auto loaded = th03::app::load_classic_score_store(score_path);
 	const auto codecs = source_codecs(0x12345678U, 1U);
 	expect(
@@ -574,8 +633,13 @@ void test_missing_file_clear_and_recreate_rng_schedule()
 	auto completion = (*scene)->take_completion();
 	expect(
 		completion && completion->load_disposition() ==
-			ClassicScoreStoreDisposition::created_stock,
-		"completion reports source-compatible missing-file recreation"
+			ClassicScoreStoreDisposition::created_stock &&
+			completion->next_screen() ==
+				MainlRegistrationNextScreen::game_over &&
+			completion->raster().pixel(Page::zero, Point{0, 0}) == 9U &&
+			completion->raster().pending_palette().colors[0U] ==
+				th03::present::Rgb8{0U, 255U, 119U},
+		"stage 99 completion reports recreation and carries preloaded OVER"
 	);
 }
 
@@ -603,8 +667,8 @@ void test_zero_credit_audio_exit()
 	}
 	expect(static_cast<bool>((*scene)->advance({})),
 		"zero-credit registration accepts release");
-	expect(static_cast<bool>((*scene)->advance({.ok = true})),
-		"zero-credit registration accepts dismissal");
+	expect(static_cast<bool>((*scene)->advance({.cancel = true})),
+		"source Cancel dismisses zero-credit registration");
 	const auto fade = (*scene)->take_audio_command();
 	expect(
 		fade && fade->type == ClassicAudioCommandType::fade_song &&
@@ -624,9 +688,12 @@ void test_zero_credit_audio_exit()
 		stop && stop->type == ClassicAudioCommandType::stop_song,
 		"zero-credit registration stops SCORE.M before Game Over handoff"
 	);
+	auto completion = (*scene)->take_completion();
 	expect(
-		static_cast<bool>((*scene)->take_completion()),
-		"zero-credit completion publishes only after the stop command is consumed"
+		completion && completion->next_screen() ==
+			MainlRegistrationNextScreen::game_over &&
+			completion->raster().pixel(Page::zero, Point{0, 0}) == 9U,
+		"zero-credit completion publishes preloaded OVER only after stop"
 	);
 }
 
@@ -653,7 +720,8 @@ void test_rejections_and_commit_failure()
 	bad_rank.pixel_height = 87U;
 	rejected = ClassicRegistrationSceneTestAccess::create_with_predecoded_assets(
 		resident(), untouched, background(), std::move(bad_rank), glyph_sheet(4U),
-		glyph_sheet(15U), stage_text(), font, Raster{}
+		glyph_sheet(15U), background(5U, 1U), choice_cels(), stage_text(), font,
+		Raster{}
 	);
 	expect(
 		!rejected && rejected.error().code ==
@@ -752,9 +820,10 @@ void local_original_gate(
 		return;
 	}
 	th03::app::MainResourceLoader loader(content_root);
-	const auto closure = loader.load_mainl_registration(
-		th03::app::MainRegistrationRank::hard
-	);
+	const auto closure = loader.load_mainl_registration({
+		.rank = th03::app::MainRegistrationRank::hard,
+		.next_screen = th03::app::MainlRegistrationNextScreen::continue_menu,
+	});
 	expect(closure.has_value(), "local registration resource closure authenticates");
 	if(!closure) {
 		return;

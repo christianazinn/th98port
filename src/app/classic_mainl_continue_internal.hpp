@@ -19,6 +19,8 @@
 
 namespace th03::app {
 
+class ClassicRegistrationCompletion;
+
 struct ClassicMainlContinueInput final {
 	bool left = false;
 	bool right = false;
@@ -31,6 +33,7 @@ enum class ClassicMainlContinuePhase : std::uint8_t {
 	black_in,
 	waiting_for_input,
 	black_out,
+	await_gameover_preload,
 	ready,
 	consumed,
 	failed,
@@ -71,6 +74,7 @@ struct ClassicMainlContinueTick final {
 	bool choice_changed = false;
 	bool choice_committed = false;
 	bool ready = false;
+	bool gameover_preload_requested = false;
 };
 
 class ClassicMainlContinueCompletion final {
@@ -117,6 +121,14 @@ public:
 		std::span<const LoadedMainResource> resources,
 		const present::AnkGlyphProvider &font
 	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicMainlContinueScene>,
+		ClassicMainlContinueError
+	> create_from_registration(
+		ClassicRegistrationCompletion &&completion,
+		std::uint8_t remaining_credits,
+		const present::AnkGlyphProvider &font
+	);
 	~ClassicMainlContinueScene();
 
 	ClassicMainlContinueScene(const ClassicMainlContinueScene &) = delete;
@@ -132,6 +144,10 @@ public:
 		ClassicMainlContinueTick,
 		ClassicMainlContinueError
 	> advance(ClassicMainlContinueInput input) noexcept;
+	[[nodiscard]] std::expected<
+		ClassicMainlContinueTick,
+		ClassicMainlContinueError
+	> preload_gameover(std::span<const LoadedMainResource> resources);
 
 	[[nodiscard]] ClassicMainlContinuePhase phase() const noexcept;
 	[[nodiscard]] ContinueChoice selected_choice() const noexcept;
@@ -145,7 +161,7 @@ private:
 	struct Prepared final {
 		std::optional<assets::PiImage> continue_background{};
 		std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels{};
-		assets::PiImage gameover_background{};
+		std::optional<assets::PiImage> gameover_background{};
 		std::array<
 			std::optional<present::PreparedGraphicsText8x16>,
 			4U
@@ -163,6 +179,21 @@ private:
 		std::uint8_t remaining_credits,
 		std::span<const LoadedMainResource> resources,
 		const present::AnkGlyphProvider &font,
+		bool authenticate_resource_bytes
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicMainlContinueScene>,
+		ClassicMainlContinueError
+	> create_from_registration_impl(
+		ClassicRegistrationCompletion &&completion,
+		std::uint8_t remaining_credits,
+		const present::AnkGlyphProvider &font
+	);
+	[[nodiscard]] std::expected<
+		ClassicMainlContinueTick,
+		ClassicMainlContinueError
+	> preload_gameover_impl(
+		std::span<const LoadedMainResource> resources,
 		bool authenticate_resource_bytes
 	);
 	[[nodiscard]] bool draw_continue() noexcept;
@@ -298,6 +329,17 @@ struct ClassicMainlContinueTestAccess final {
 		return ClassicMainlContinueScene::create_impl(
 			remaining_credits, resources, font, false
 		);
+	}
+
+	[[nodiscard]] static std::expected<
+		ClassicMainlContinueTick,
+		ClassicMainlContinueError
+	> preload_gameover_with_synthetic_resources(
+		ClassicMainlContinueScene &scene,
+		std::span<const LoadedMainResource> resources
+	)
+	{
+		return scene.preload_gameover_impl(resources, false);
 	}
 };
 

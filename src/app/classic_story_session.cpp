@@ -308,6 +308,7 @@ struct ClassicStoryBackend final {
 	std::unique_ptr<ClassicCutsceneScene> cutscene{};
 	std::unique_ptr<ClassicStaffScene> staff{};
 	std::unique_ptr<ClassicRegistrationScene> registration{};
+	std::optional<ClassicRegistrationCompletion> registration_completion{};
 	std::optional<present::Raster> cutscene_handoff{};
 	std::unique_ptr<ClassicMainlContinueScene> continue_scene{};
 	std::optional<ClassicMainlContinueCompletion> continue_completion{};
@@ -788,16 +789,22 @@ struct ClassicStoryBackend final {
 		const GameInit &resident
 	)
 	{
-		if(registration || stage || pending_stage || win || cutscene || staff ||
+		if(registration || registration_completion || stage || pending_stage ||
+			win || cutscene || staff ||
 			continue_scene || game_over || !cutscene_handoff ||
 			resident.rank >= 4U) {
 			return std::unexpected(session_error(
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
 		}
-		auto resources = loader->load_mainl_registration(
-			static_cast<MainRegistrationRank>(resident.rank + 1U)
-		);
+		const auto next_screen = (resident.remaining_credits != 0U &&
+			resident.story_stage != 99U) ?
+			MainlRegistrationNextScreen::continue_menu :
+			MainlRegistrationNextScreen::game_over;
+		auto resources = loader->load_mainl_registration({
+			.rank = static_cast<MainRegistrationRank>(resident.rank + 1U),
+			.next_screen = next_screen,
+		});
 		if(!resources) {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
@@ -861,7 +868,7 @@ struct ClassicStoryBackend final {
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
 		}
-		cutscene_handoff.emplace(std::move(completion->raster_));
+		registration_completion.emplace(std::move(*completion));
 		registration.reset();
 		return {};
 	}
@@ -870,16 +877,19 @@ struct ClassicStoryBackend final {
 		std::uint8_t remaining_credits
 	)
 	{
-		auto resources = loader->load_mainl_continue(remaining_credits);
-		if(!resources) {
-			return std::unexpected(resource_error(std::move(resources.error())));
+		if(!registration_completion) {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::backend_contract_failed
+			));
 		}
-		auto created = ClassicMainlContinueScene::create(
-			remaining_credits, *resources, static_content->font()
+		auto created = ClassicMainlContinueScene::create_from_registration(
+			std::move(*registration_completion), remaining_credits,
+			static_content->font()
 		);
 		if(!created) {
 			return std::unexpected(continue_error(std::move(created.error())));
 		}
+		registration_completion.reset();
 		continue_scene = std::move(*created);
 		cutscene_handoff.reset();
 		return continue_scene->phase() == ClassicMainlContinuePhase::ready;
@@ -899,6 +909,23 @@ struct ClassicStoryBackend final {
 		auto advanced = continue_scene->advance(input);
 		if(!advanced) {
 			return std::unexpected(continue_error(std::move(advanced.error())));
+		}
+		if(advanced->gameover_preload_requested) {
+			auto resources = loader->load_mainl_gameover();
+			if(!resources) {
+				return std::unexpected(resource_error(std::move(resources.error())));
+			}
+			auto preloaded = continue_scene->preload_gameover(*resources);
+			if(!preloaded) {
+				return std::unexpected(continue_error(
+					std::move(preloaded.error())
+				));
+			}
+			return ClassicStoryBackendTick{
+				.surface_changed = true,
+				.input_sampled = advanced->input_sampled,
+				.ready = false,
+			};
 		}
 		return ClassicStoryBackendTick{
 			.surface_changed = advanced->surface_changed,
@@ -1049,6 +1076,8 @@ struct ClassicStoryBackend final {
 			raster = &staff->raster();
 		} else if(registration) {
 			raster = &registration->raster();
+		} else if(registration_completion) {
+			raster = &registration_completion->raster();
 		} else if(cutscene) {
 			raster = &cutscene->raster();
 			tram = &cutscene->tram();

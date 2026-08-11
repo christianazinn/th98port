@@ -743,14 +743,19 @@ void test_main_private_and_mainl_stage_batches()
 		"zero-credit Continue resolves only the registration-preloaded OVER image"
 	);
 	expect(
-		credited && credited->size() == 3U && credited->front() ==
+		credited && credited->size() == 2U && credited->front() ==
 			MainResourceKey{.role = MainResourceRole::continue_background} &&
-			(*credited)[1U] == MainResourceKey{
+			credited->back() == MainResourceKey{
 				.role = MainResourceRole::continue_choice_cels,
-			} && credited->back() == MainResourceKey{
-				.role = MainResourceRole::gameover_background,
 			},
-		"credited Continue preserves CONTI background/cels then OVER closure order"
+		"credited registration preloads CONTI background and cels without OVER"
+	);
+	expect(
+		th03::app::mainl_gameover_resource_keys() ==
+			std::vector<MainResourceKey>{{
+				.role = MainResourceRole::gameover_background,
+			}},
+		"Continue black-out resolves OVER as a separate late batch"
 	);
 	expect(
 		!th03::app::mainl_continue_resource_keys(4U),
@@ -938,9 +943,11 @@ void test_staff_resource_batch()
 
 void test_registration_resource_batch()
 {
-	const auto keys = th03::app::mainl_registration_resource_keys(
-		MainRegistrationRank::hard
-	);
+	const th03::app::MainlRegistrationResourceRequest request{
+		.rank = MainRegistrationRank::hard,
+		.next_screen = th03::app::MainlRegistrationNextScreen::continue_menu,
+	};
+	const auto keys = th03::app::mainl_registration_resource_keys(request);
 	const std::array expected{
 		MainResourceKey{.role = MainResourceRole::registration_background},
 		MainResourceKey{.role = MainResourceRole::registration_rank,
@@ -948,14 +955,18 @@ void test_registration_resource_batch()
 		MainResourceKey{.role = MainResourceRole::registration_normal_glyphs},
 		MainResourceKey{.role = MainResourceRole::registration_highlight_glyphs},
 		MainResourceKey{.role = MainResourceRole::registration_music},
+		MainResourceKey{.role = MainResourceRole::continue_background},
+		MainResourceKey{.role = MainResourceRole::continue_choice_cels},
 	};
 	expect(
 		keys && keys->size() == expected.size() &&
 			std::equal(keys->begin(), keys->end(), expected.begin()),
-		"registration closure preserves source background, rank, normal/highlight BFNT, then SCORE.M order"
+		"registration closure preserves source assets then the credited Continue preload order"
 	);
 	expect(
-		!th03::app::mainl_registration_resource_keys(MainRegistrationRank::none) &&
+		!th03::app::mainl_registration_resource_keys({
+			.rank = MainRegistrationRank::none,
+		}) &&
 		!th03::app::main_resource_spec({
 			.role = MainResourceRole::registration_music,
 			.registration_rank = MainRegistrationRank::easy,
@@ -972,17 +983,26 @@ void test_registration_resource_batch()
 		write_spec(root.path(), (*keys)[index], std::byte{0x91U});
 	}
 	MainResourceLoader loader(root.path(), MainResourceIntegrity::size_only);
-	const auto failed = loader.load_mainl_registration(MainRegistrationRank::hard);
+	const auto failed = loader.load_mainl_registration(request);
 	expect(
 		!failed && loader.cached_resource_count() == 0U,
 		"a late registration closure failure publishes no partial cache entries"
 	);
 	write_spec(root.path(), keys->back(), std::byte{0x92U});
-	const auto loaded = loader.load_mainl_registration(MainRegistrationRank::hard);
+	const auto loaded = loader.load_mainl_registration(request);
 	expect(
 		loaded && loaded->size() == keys->size() &&
 			loader.cached_resource_count() == keys->size(),
 		"the complete registration closure commits all immutable resources atomically"
+	);
+	const auto gameover = th03::app::mainl_registration_resource_keys({
+		.rank = MainRegistrationRank::hard,
+		.next_screen = th03::app::MainlRegistrationNextScreen::game_over,
+	});
+	expect(
+		gameover && gameover->size() == 6U &&
+			gameover->back().role == MainResourceRole::gameover_background,
+		"terminal registration preloads only OVER after the shared five assets"
 	);
 }
 

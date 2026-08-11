@@ -32,12 +32,15 @@ struct ClassicRegistrationInput final {
 	bool ok = false;
 	bool shot = false;
 	bool bomb = false;
+	bool cancel = false;
 
 	[[nodiscard]] bool any() const noexcept
 	{
-		return up || down || left || right || ok || shot || bomb;
+		return up || down || left || right || ok || shot || bomb || cancel;
 	}
 };
+
+class ClassicMainlContinueScene;
 
 enum class ClassicRegistrationPhase : std::uint8_t {
 	black_in,
@@ -111,17 +114,24 @@ public:
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 	[[nodiscard]] std::optional<std::size_t> entered_place() const noexcept;
 	[[nodiscard]] ClassicScoreStoreDisposition load_disposition() const noexcept;
+	[[nodiscard]] MainlRegistrationNextScreen next_screen() const noexcept;
 
 private:
 	friend class ClassicRegistrationScene;
+	friend class ClassicMainlContinueScene;
 	friend struct ClassicStoryBackend;
 	ClassicRegistrationCompletion(
 		present::Raster raster,
+		MainlRegistrationNextScreen next_screen,
+		std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels,
 		std::optional<std::size_t> entered_place,
 		ClassicScoreStoreDisposition load_disposition
 	) noexcept;
 
 	present::Raster raster_{};
+	MainlRegistrationNextScreen next_screen_ =
+		MainlRegistrationNextScreen::game_over;
+	std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels_{};
 	std::optional<std::size_t> entered_place_{};
 	ClassicScoreStoreDisposition load_disposition_ =
 		ClassicScoreStoreDisposition::loaded;
@@ -177,6 +187,10 @@ private:
 			std::optional<present::PreparedGraphicsText8x16>,
 			10U
 		> playchars{};
+		assets::PiImage next_background{};
+		std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels{};
+		MainlRegistrationNextScreen next_screen =
+			MainlRegistrationNextScreen::game_over;
 	};
 
 	ClassicRegistrationScene(
@@ -211,6 +225,8 @@ private:
 		assets::PlanarCel4 rank,
 		assets::BfntSheet normal,
 		assets::BfntSheet highlight,
+		assets::PiImage next_background,
+		std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels,
 		const MainlStageTextAssets &stage_text,
 		const present::AnkGlyphProvider &font,
 		present::Raster initial_raster
@@ -234,6 +250,7 @@ private:
 	[[nodiscard]] bool rerender_completed_name() noexcept;
 	[[nodiscard]] std::expected<void, ClassicRegistrationError>
 	finish_name();
+	[[nodiscard]] bool preload_next_screen() noexcept;
 	[[nodiscard]] bool direction_trigger(
 		bool pressed,
 		std::uint32_t &hold
@@ -302,6 +319,8 @@ struct ClassicRegistrationSceneTestAccess final {
 		assets::PlanarCel4 rank,
 		assets::BfntSheet normal,
 		assets::BfntSheet highlight,
+		assets::PiImage next_background,
+		std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels,
 		const MainlStageTextAssets &stage_text,
 		const present::AnkGlyphProvider &font,
 		present::Raster initial_raster
@@ -309,7 +328,8 @@ struct ClassicRegistrationSceneTestAccess final {
 	{
 		return ClassicRegistrationScene::create_predecoded(
 			resident, score_path, std::move(background), std::move(rank),
-			std::move(normal), std::move(highlight), stage_text, font,
+			std::move(normal), std::move(highlight),
+			std::move(next_background), std::move(choice_cels), stage_text, font,
 			std::move(initial_raster)
 		);
 	}

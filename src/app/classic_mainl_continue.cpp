@@ -1,5 +1,8 @@
 #include "classic_mainl_continue_internal.hpp"
 
+#include "classic_registration_scene_internal.hpp"
+
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -203,7 +206,8 @@ template <typename Value, typename Decoder>
 	bool surface_changed = false,
 	bool input_sampled = false,
 	bool choice_changed = false,
-	bool choice_committed = false
+	bool choice_committed = false,
+	bool gameover_preload_requested = false
 ) noexcept
 {
 	return {
@@ -214,6 +218,7 @@ template <typename Value, typename Decoder>
 		.choice_changed = choice_changed,
 		.choice_committed = choice_committed,
 		.ready = phase == ClassicMainlContinuePhase::ready,
+		.gameover_preload_requested = gameover_preload_requested,
 	};
 }
 
@@ -272,6 +277,81 @@ ClassicMainlContinueScene::create(
 }
 
 std::expected<std::unique_ptr<ClassicMainlContinueScene>, ClassicMainlContinueError>
+ClassicMainlContinueScene::create_from_registration(
+	ClassicRegistrationCompletion &&completion,
+	std::uint8_t remaining_credits,
+	const present::AnkGlyphProvider &font
+)
+{
+	return create_from_registration_impl(
+		std::move(completion), remaining_credits, font
+	);
+}
+
+std::expected<std::unique_ptr<ClassicMainlContinueScene>, ClassicMainlContinueError>
+ClassicMainlContinueScene::create_from_registration_impl(
+	ClassicRegistrationCompletion &&completion,
+	std::uint8_t remaining_credits,
+	const present::AnkGlyphProvider &font
+)
+{
+	const auto expected_screen = remaining_credits == 0U ?
+		MainlRegistrationNextScreen::game_over :
+		MainlRegistrationNextScreen::continue_menu;
+	if(remaining_credits > 3U || completion.next_screen_ != expected_screen ||
+		completion.raster_.raster_mode() != present::RasterMode::lines_400 ||
+		completion.raster_.access_page() != present::Page::zero ||
+		completion.raster_.shown_page() != present::Page::zero ||
+		completion.raster_.palette_tone() != 0) {
+		return std::unexpected(continue_error(
+			ClassicMainlContinueErrorCode::invalid_context
+		));
+	}
+
+	auto prepared = std::make_unique<Prepared>();
+	prepared->choice_cels = std::move(completion.choice_cels_);
+	if(remaining_credits != 0U) {
+		if(!std::all_of(
+			prepared->choice_cels.begin(), prepared->choice_cels.end(),
+			[](const auto &cel) { return cel && valid_choice_cel(*cel); }
+		)) {
+			return std::unexpected(continue_error(
+				ClassicMainlContinueErrorCode::invalid_asset_geometry
+			));
+		}
+		for(std::size_t digit = 0U; digit < prepared->credit_digits.size(); ++digit) {
+			const std::array source{
+				static_cast<std::uint8_t>('0' + digit),
+			};
+			auto text = present::prepare_graphics_text_8x16(source, font);
+			if(!text) {
+				return std::unexpected(text_error(text.error()));
+			}
+			prepared->credit_digits[digit].emplace(std::move(*text));
+		}
+	}
+
+	auto scene = std::unique_ptr<ClassicMainlContinueScene>(
+		new ClassicMainlContinueScene(std::move(prepared), remaining_credits)
+	);
+	scene->raster_ = std::move(completion.raster_);
+	if(remaining_credits == 0U) {
+		scene->phase_ = ClassicMainlContinuePhase::ready;
+		scene->choice_ = ContinueChoice::decline;
+		scene->completion_ = ClassicMainlContinueCompletion(
+			ContinueChoice::decline, std::move(scene->raster_)
+		);
+		return scene;
+	}
+	if(!scene->draw_choices() || !scene->draw_credit(remaining_credits)) {
+		return std::unexpected(continue_error(
+			ClassicMainlContinueErrorCode::draw_failed
+		));
+	}
+	return scene;
+}
+
+std::expected<std::unique_ptr<ClassicMainlContinueScene>, ClassicMainlContinueError>
 ClassicMainlContinueScene::create_impl(
 	std::uint8_t remaining_credits,
 	std::span<const LoadedMainResource> resources,
@@ -294,26 +374,24 @@ ClassicMainlContinueScene::create_impl(
 	}
 
 	auto prepared = std::make_unique<Prepared>();
-	const MainResourceKey gameover_key{
-		.role = MainResourceRole::gameover_background,
-	};
-	auto gameover = decode_asset<assets::PiImage>(
-		resources,
-		gameover_key,
-		assets::decode_pi
-	);
-	if(!gameover) {
-		return std::unexpected(gameover.error());
-	}
-	prepared->gameover_background = std::move(*gameover);
-	if(!valid_pi(prepared->gameover_background)) {
-		return std::unexpected(continue_error(
-			ClassicMainlContinueErrorCode::invalid_asset_geometry,
-			gameover_key
-		));
-	}
-
-	if(remaining_credits != 0U) {
+	if(remaining_credits == 0U) {
+		const MainResourceKey gameover_key{
+			.role = MainResourceRole::gameover_background,
+		};
+		auto gameover = decode_asset<assets::PiImage>(
+			resources, gameover_key, assets::decode_pi
+		);
+		if(!gameover) {
+			return std::unexpected(gameover.error());
+		}
+		if(!valid_pi(*gameover)) {
+			return std::unexpected(continue_error(
+				ClassicMainlContinueErrorCode::invalid_asset_geometry,
+				gameover_key
+			));
+		}
+		prepared->gameover_background.emplace(std::move(*gameover));
+	} else {
 		const MainResourceKey background_key{
 			.role = MainResourceRole::continue_background,
 		};
@@ -445,12 +523,13 @@ bool ClassicMainlContinueScene::draw_credit(std::uint8_t value) noexcept
 
 bool ClassicMainlContinueScene::draw_gameover() noexcept
 {
-	if(!prepared_->gameover_background.palette ||
+	if(!prepared_->gameover_background ||
+		!prepared_->gameover_background->palette ||
 		!raster_.set_access_page(present::Page::zero) ||
 		!raster_.set_shown_page(present::Page::zero) ||
-		!install_palette(raster_, *prepared_->gameover_background.palette) ||
+		!install_palette(raster_, *prepared_->gameover_background->palette) ||
 		!present::pi_put_8(
-			raster_, 0, 0, prepared_->gameover_background
+			raster_, 0, 0, *prepared_->gameover_background
 		)) {
 		return false;
 	}
@@ -479,6 +558,67 @@ ClassicMainlContinueScene::take_audio_command() noexcept
 	}
 	audio_count_ = 0U;
 	return audio_commands_[0U];
+}
+
+std::expected<ClassicMainlContinueTick, ClassicMainlContinueError>
+ClassicMainlContinueScene::preload_gameover(
+	std::span<const LoadedMainResource> resources
+)
+{
+	return preload_gameover_impl(resources, true);
+}
+
+std::expected<ClassicMainlContinueTick, ClassicMainlContinueError>
+ClassicMainlContinueScene::preload_gameover_impl(
+	std::span<const LoadedMainResource> resources,
+	bool authenticate_resource_bytes
+)
+{
+	if(phase_ != ClassicMainlContinuePhase::await_gameover_preload ||
+		audio_count_ != 0U) {
+		return std::unexpected(continue_error(
+			ClassicMainlContinueErrorCode::invalid_state
+		));
+	}
+	const auto expected = mainl_gameover_resource_keys();
+	if(const auto valid = validate_resource_set(
+		resources, expected, authenticate_resource_bytes
+	); !valid) {
+		return std::unexpected(valid.error());
+	}
+	const MainResourceKey key{.role = MainResourceRole::gameover_background};
+	auto gameover = decode_asset<assets::PiImage>(
+		resources, key, assets::decode_pi
+	);
+	if(!gameover) {
+		return std::unexpected(gameover.error());
+	}
+	if(!valid_pi(*gameover)) {
+		return std::unexpected(continue_error(
+			ClassicMainlContinueErrorCode::invalid_asset_geometry, key
+		));
+	}
+	prepared_->gameover_background.emplace(std::move(*gameover));
+	if(!draw_gameover()) {
+		fail();
+		return std::unexpected(continue_error(
+			ClassicMainlContinueErrorCode::draw_failed
+		));
+	}
+	if(!push_audio_command({
+		.type = ClassicAudioCommandType::stop_song,
+		.cue = ClassicMusicCue::high_score,
+	})) {
+		fail();
+		return std::unexpected(continue_error(
+			ClassicMainlContinueErrorCode::invalid_state
+		));
+	}
+	phase_ = ClassicMainlContinuePhase::ready;
+	completion_ = ClassicMainlContinueCompletion(choice_, std::move(raster_));
+	return continue_tick(
+		phase_, ClassicMainlContinueBoundary::immediate, true
+	);
 }
 
 void ClassicMainlContinueScene::fail() noexcept
@@ -610,29 +750,15 @@ ClassicMainlContinueScene::advance(ClassicMainlContinueInput input) noexcept
 				phase_, ClassicMainlContinueBoundary::vsync, true
 			);
 		}
-		if(!draw_gameover()) {
-			fail();
-			return std::unexpected(continue_error(
-				ClassicMainlContinueErrorCode::draw_failed
-			));
-		}
-		if(!push_audio_command({
-			.type = ClassicAudioCommandType::stop_song,
-			.cue = ClassicMusicCue::high_score,
-		})) {
-			fail();
-			return std::unexpected(continue_error(
-				ClassicMainlContinueErrorCode::invalid_state
-			));
-		}
-		phase_ = ClassicMainlContinuePhase::ready;
-		completion_ = ClassicMainlContinueCompletion(
-			choice_, std::move(raster_)
-		);
+		raster_.set_palette_tone(0);
+		raster_.apply_pending_palette();
+		phase_ = ClassicMainlContinuePhase::await_gameover_preload;
 		return continue_tick(
-			phase_, ClassicMainlContinueBoundary::vsync, true
+			phase_, ClassicMainlContinueBoundary::vsync,
+			true, false, false, false, true
 		);
 
+	case ClassicMainlContinuePhase::await_gameover_preload:
 	case ClassicMainlContinuePhase::ready:
 	case ClassicMainlContinuePhase::consumed:
 	case ClassicMainlContinuePhase::failed:

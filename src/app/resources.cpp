@@ -1630,8 +1630,12 @@ mainl_continue_resource_keys(std::uint8_t remaining_credits)
 	return std::vector<MainResourceKey>{
 		{.role = MainResourceRole::continue_background},
 		{.role = MainResourceRole::continue_choice_cels},
-		{.role = MainResourceRole::gameover_background},
 	};
+}
+
+std::vector<MainResourceKey> mainl_gameover_resource_keys()
+{
+	return {{.role = MainResourceRole::gameover_background}};
 }
 
 std::expected<std::vector<MainResourceKey>, ResourceLoadError>
@@ -1712,8 +1716,9 @@ std::vector<MainResourceKey> mainl_staff_resource_keys()
 }
 
 std::expected<std::vector<MainResourceKey>, ResourceLoadError>
-mainl_registration_resource_keys(MainRegistrationRank rank)
+mainl_registration_resource_keys(MainlRegistrationResourceRequest request)
 {
+	const auto rank = request.rank;
 	if(rank < MainRegistrationRank::easy || rank > MainRegistrationRank::lunatic) {
 		return std::unexpected(error(
 			ResourceLoadErrorCode::invalid_resource_key,
@@ -1721,7 +1726,7 @@ mainl_registration_resource_keys(MainRegistrationRank rank)
 				.registration_rank = rank}
 		));
 	}
-	return std::vector<MainResourceKey>{
+	std::vector<MainResourceKey> keys{
 		{.role = MainResourceRole::registration_background},
 		{.role = MainResourceRole::registration_rank,
 			.registration_rank = rank},
@@ -1729,6 +1734,21 @@ mainl_registration_resource_keys(MainRegistrationRank rank)
 		{.role = MainResourceRole::registration_highlight_glyphs},
 		{.role = MainResourceRole::registration_music},
 	};
+	switch(request.next_screen) {
+	case MainlRegistrationNextScreen::continue_menu:
+		keys.push_back({.role = MainResourceRole::continue_background});
+		keys.push_back({.role = MainResourceRole::continue_choice_cels});
+		break;
+	case MainlRegistrationNextScreen::game_over:
+		keys.push_back({.role = MainResourceRole::gameover_background});
+		break;
+	default:
+		return std::unexpected(error(
+			ResourceLoadErrorCode::invalid_resource_key,
+			{.role = MainResourceRole::registration_background}
+		));
+	}
+	return keys;
 }
 
 MainResourceLoader::MainResourceLoader(
@@ -1918,13 +1938,21 @@ MainResourceLoader::load_mainl_staff()
 }
 
 std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
-MainResourceLoader::load_mainl_registration(MainRegistrationRank rank)
+MainResourceLoader::load_mainl_registration(
+	MainlRegistrationResourceRequest request
+)
 {
-	const auto keys = mainl_registration_resource_keys(rank);
+	const auto keys = mainl_registration_resource_keys(request);
 	if(!keys) {
 		return std::unexpected(keys.error());
 	}
 	return load_batch(*keys);
+}
+
+std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
+MainResourceLoader::load_mainl_gameover()
+{
+	return load_batch(mainl_gameover_resource_keys());
 }
 
 std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
