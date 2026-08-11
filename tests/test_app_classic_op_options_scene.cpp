@@ -283,10 +283,13 @@ void test_config_audio_and_return_cadence()
 		"vertical, horizontal, and Cancel ordering matches option_update"
 	);
 	const auto stop = scene->take_audio_command();
+	const auto disable = scene->take_audio_command();
 	expect(
 		stop && stop->type == ClassicAudioCommandType::stop_song &&
-			stop->cue == ClassicMusicCue::none,
-		"FM-to-Off emits only the source Stop command"
+			stop->cue == ClassicMusicCue::none && disable &&
+			disable->type == ClassicAudioCommandType::set_bgm_active &&
+			disable->parameter == 0U,
+		"FM-to-Off emits Stop before disabling the source driver"
 	);
 	expect(!scene->take_audio_command(), "FM-to-Off audio queue drains");
 
@@ -372,12 +375,16 @@ void test_bgm_modes_and_disabled_selection()
 			"Off toggles to FM in either horizontal direction"
 		);
 		const auto stop = from_off->take_audio_command();
+		const auto enable = from_off->take_audio_command();
 		const auto play = from_off->take_audio_command();
 		expect(
 			stop && stop->type == ClassicAudioCommandType::stop_song &&
+				enable && enable->type ==
+					ClassicAudioCommandType::set_bgm_active &&
+				enable->parameter == 1U &&
 				play && play->type == ClassicAudioCommandType::play_song &&
 				play->cue == ClassicMusicCue::menu_main,
-			"Off-to-FM emits Stop then menu Play"
+			"Off-to-FM emits Stop, enables the driver, then plays"
 		);
 	}
 
@@ -392,10 +399,14 @@ void test_bgm_modes_and_disabled_selection()
 			"MIDI collapses to Off instead of ringing to FM"
 		);
 		const auto midi_stop = from_midi->take_audio_command();
+		const auto midi_disable = from_midi->take_audio_command();
 		expect(
 			midi_stop && midi_stop->type == ClassicAudioCommandType::stop_song &&
+				midi_disable && midi_disable->type ==
+					ClassicAudioCommandType::set_bgm_active &&
+				midi_disable->parameter == 0U &&
 				!from_midi->take_audio_command(),
-			"MIDI-to-Off emits only Stop"
+			"MIDI-to-Off emits Stop before disabling the source driver"
 		);
 	}
 

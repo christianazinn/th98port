@@ -185,7 +185,7 @@ private:
 	ClassicConfigOptions config_{};
 	present::Raster raster_{};
 	present::Tram tram_{};
-	std::array<ClassicAudioCommand, 2U> audio_commands_{};
+	std::array<ClassicAudioCommand, 3U> audio_commands_{};
 	std::size_t audio_head_ = 0U;
 	std::size_t audio_count_ = 0U;
 	ClassicOpOptionsPhase phase_ = ClassicOpOptionsPhase::failed;

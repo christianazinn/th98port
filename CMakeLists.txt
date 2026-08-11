@@ -509,6 +509,7 @@ if(TH03_ENABLE_SDL)
 	target_include_directories(th03-app PRIVATE apps/th03-app)
 	th03_set_warnings(th03-app)
 	th03_stage_sdl3_runtime(th03-app)
+	th03_stage_audio_licenses(th03-app)
 endif()
 
 if(BUILD_TESTING)

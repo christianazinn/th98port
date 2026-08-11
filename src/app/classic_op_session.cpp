@@ -2022,6 +2022,16 @@ ClassicOpSession::create(
 	backend->font.emplace(std::move(*prepared_font));
 	resident.rank = static_cast<std::uint8_t>(config.rank);
 	resident.key_mode = static_cast<std::uint8_t>(config.key_mode);
+	if(!backend->push_audio({
+		.type = ClassicAudioCommandType::set_bgm_active,
+		.parameter = static_cast<std::uint16_t>(
+			config.bgm_mode == ClassicBgmMode::off ? 0U : 1U
+		),
+	})) {
+		return std::unexpected(session_error(
+			ClassicOpSessionErrorCode::audio_command_pending
+		));
+	}
 	std::expected<void, ClassicOpSessionError> started{};
 	if(resident.demo_number == 0U && selection_mode_for_game(resident.game_mode)) {
 		backend->vs_terminal.emplace(ClassicOpSessionVsTerminal{

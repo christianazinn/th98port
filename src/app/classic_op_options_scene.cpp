@@ -563,6 +563,9 @@ bool ClassicOpOptionsScene::update_horizontal(
 				if(!push_audio_command({
 					.type = ClassicAudioCommandType::stop_song,
 				}) || !push_audio_command({
+					.type = ClassicAudioCommandType::set_bgm_active,
+					.parameter = 1U,
+				}) || !push_audio_command({
 					.type = ClassicAudioCommandType::play_song,
 					.cue = ClassicMusicCue::menu_main,
 				})) {
@@ -572,6 +575,9 @@ bool ClassicOpOptionsScene::update_horizontal(
 				config_.bgm_mode = ClassicBgmMode::off;
 				if(!push_audio_command({
 					.type = ClassicAudioCommandType::stop_song,
+				}) || !push_audio_command({
+					.type = ClassicAudioCommandType::set_bgm_active,
+					.parameter = 0U,
 				})) {
 					return false;
 				}

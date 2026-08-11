@@ -566,12 +566,22 @@ void test_bgm_active_and_sfx_independence(const fs::path &root)
 		}
 	), "an effect remains audible while the BGM-driver flag is inactive");
 
-	session.set_bgm_active(true);
 	expect(session.apply({
+		.type = ClassicAudioCommandType::set_bgm_active,
+		.parameter = 1U,
+	}).has_value() && session.apply({
 		.type = ClassicAudioCommandType::play_song,
 		.cue = ClassicMusicCue::menu_main,
 	}).has_value() && session.status().bgm_active,
 		"enabling the BGM driver lets the already-loaded song start");
+	const auto invalid_active = session.apply({
+		.type = ClassicAudioCommandType::set_bgm_active,
+		.parameter = 2U,
+	});
+	expect(!invalid_active && invalid_active.error().code ==
+		ClassicAudioSessionErrorCode::invalid_parameter &&
+		session.status().bgm_active,
+		"invalid BGM-active values reject atomically");
 	expect(session.apply({
 		.type = ClassicAudioCommandType::stop_song,
 	}).has_value() && session.status().bgm_active,

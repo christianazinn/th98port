@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <expected>
 #include <iostream>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -14,12 +15,14 @@
 #include "default_bindings.hpp"
 
 #include "th03/app/classic_cli.hpp"
+#include "th03/app/classic_audio_session.hpp"
 #include "th03/app/classic_runner.hpp"
 #include "th03/app/direct_vs_cli.hpp"
 #include "th03/app/direct_vs_launch.hpp"
 #include "th03/app/main_direct_vs_runner.hpp"
 #include "th03/app/tick_input.hpp"
 #include "th03/platform/sdl_input.hpp"
+#include "th03/platform/sdl_audio_device.hpp"
 #include "th03/platform/sdl_platform.hpp"
 
 namespace {
@@ -61,8 +64,9 @@ void print_usage()
 		<< "In --vs, Escape exits. In --classic, Escape is source Cancel and "
 			"window close exits. Tick rate is explicit host policy; exact PC-98 "
 			"cadence is not yet claimed.\n"
-		<< "Classic currently follows the source sound-unavailable fallback "
-			"while the PMD/OPNA engine is integrated.\n"
+		<< "Classic synthesizes external PMD/EFC content and delivers canonical "
+			"PCM when SDL playback is available. OPNA rhythm is deterministically "
+			"silent until a caller-supplied ROM seam is exposed.\n"
 		<< "Kotohime requires --kotohime-zero-red, an unresolved developer "
 			"compatibility policy rather than an authenticity claim.\n";
 }
@@ -83,6 +87,31 @@ const char *name(th03::app::ClassicRunnerErrorCode code) noexcept
 	case th03::app::ClassicRunnerErrorCode::runner_not_running: return "runner-not-running";
 	case th03::app::ClassicRunnerErrorCode::unexpected_session_status: return "unexpected-session-status";
 	case th03::app::ClassicRunnerErrorCode::surface_failed: return "surface-failed";
+	}
+	return "unknown";
+}
+
+const char *name(th03::app::ClassicAudioSessionErrorCode code) noexcept
+{
+	switch(code) {
+	case th03::app::ClassicAudioSessionErrorCode::invalid_config:
+		return "invalid-config";
+	case th03::app::ClassicAudioSessionErrorCode::invalid_cue:
+		return "invalid-cue";
+	case th03::app::ClassicAudioSessionErrorCode::invalid_parameter:
+		return "invalid-parameter";
+	case th03::app::ClassicAudioSessionErrorCode::command_order:
+		return "command-order";
+	case th03::app::ClassicAudioSessionErrorCode::resource_load_failed:
+		return "resource-load-failed";
+	case th03::app::ClassicAudioSessionErrorCode::engine_failed:
+		return "engine-failed";
+	case th03::app::ClassicAudioSessionErrorCode::service_failed:
+		return "service-failed";
+	case th03::app::ClassicAudioSessionErrorCode::resampler_failed:
+		return "resampler-failed";
+	case th03::app::ClassicAudioSessionErrorCode::allocation_failed:
+		return "allocation-failed";
 	}
 	return "unknown";
 }
@@ -296,6 +325,37 @@ const char *name(th03::platform::SdlPlatformErrorCode code) noexcept
 	return "unknown";
 }
 
+const char *name(th03::platform::SdlAudioDeviceErrorCode code) noexcept
+{
+	switch(code) {
+	case th03::platform::SdlAudioDeviceErrorCode::invalid_config:
+		return "invalid-config";
+	case th03::platform::SdlAudioDeviceErrorCode::runtime_unavailable:
+		return "runtime-unavailable";
+	case th03::platform::SdlAudioDeviceErrorCode::audio_initialization_failed:
+		return "audio-initialization-failed";
+	case th03::platform::SdlAudioDeviceErrorCode::stream_open_failed:
+		return "stream-open-failed";
+	case th03::platform::SdlAudioDeviceErrorCode::queue_query_failed:
+		return "queue-query-failed";
+	case th03::platform::SdlAudioDeviceErrorCode::invalid_queued_bytes:
+		return "invalid-queued-bytes";
+	case th03::platform::SdlAudioDeviceErrorCode::queue_clear_failed:
+		return "queue-clear-failed";
+	case th03::platform::SdlAudioDeviceErrorCode::invalid_frame_count:
+		return "invalid-frame-count";
+	case th03::platform::SdlAudioDeviceErrorCode::submit_failed:
+		return "submit-failed";
+	case th03::platform::SdlAudioDeviceErrorCode::pause_failed:
+		return "pause-failed";
+	case th03::platform::SdlAudioDeviceErrorCode::resume_failed:
+		return "resume-failed";
+	case th03::platform::SdlAudioDeviceErrorCode::allocation_failed:
+		return "allocation-failed";
+	}
+	return "unknown";
+}
+
 const char *name(th03::platform::SdlInputMapperErrorCode code) noexcept
 {
 	switch(code) {
@@ -435,6 +495,49 @@ int fail(const char *stage, const th03::app::ClassicRunnerError &error)
 		}
 	}
 	return 1;
+}
+
+int fail(const char *stage, const th03::app::ClassicAudioSessionError &error)
+{
+	std::cerr << "status=error\nstage=" << stage << "\ncode="
+		<< name(error.code) << "\ncommand="
+		<< static_cast<unsigned int>(error.command.type) << "\ncue="
+		<< static_cast<unsigned int>(error.command.cue) << "\nparameter="
+		<< error.command.parameter << '\n';
+	if(error.resource_error) {
+		std::cerr << "resource-code=" << name(error.resource_error->code) << '\n';
+		const auto spec = th03::app::main_resource_spec(error.resource_error->key);
+		std::cerr << "resource-role="
+			<< (spec ? spec->logical_role : std::string{"invalid-key"}) << '\n';
+	}
+	if(error.engine_error) {
+		std::cerr << "engine-code=" << static_cast<unsigned int>(
+			error.engine_error->code
+		) << '\n';
+	}
+	if(error.service_error) {
+		std::cerr << "service-code=" << static_cast<unsigned int>(
+			error.service_error->code
+		) << '\n';
+	}
+	if(error.resampler_error) {
+		std::cerr << "resampler-code=" << static_cast<unsigned int>(
+			error.resampler_error->code
+		) << '\n';
+	}
+	return 1;
+}
+
+void warn_audio_device(
+	const char *stage,
+	const th03::platform::SdlAudioDeviceError &error
+)
+{
+	std::cerr << "status=warning\nstage=" << stage << "\ncode="
+		<< name(error.code) << '\n';
+	if(error.sdl_detail[0] != '\0') {
+		std::cerr << "sdl-detail=" << error.sdl_detail.data() << '\n';
+	}
 }
 
 template <typename Error>
@@ -605,14 +708,31 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 			.red_provider = &kotohime_zero_red,
 		};
 	}
+	const auto data_root = parsed.launch.content.data_root;
+	parsed.launch.fm_available = true;
 	auto runner = th03::app::ClassicRunner::load(std::move(parsed.launch));
 	if(!runner) {
 		return fail("classic-load", runner.error());
 	}
+	auto created_session = th03::app::ClassicAudioSession::create({
+		.data_root = data_root,
+		.tick_rate = parsed.tick_rate,
+	});
+	if(!created_session) {
+		return fail("audio-session-create", created_session.error());
+	}
+	auto audio_session = std::move(*created_session);
 
 	auto platform = th03::platform::SdlPlatform::create({});
 	if(!platform) {
 		return fail("platform-create", platform.error());
+	}
+	std::optional<th03::platform::SdlAudioDevice> audio_device{};
+	auto created_device = th03::platform::SdlAudioDevice::create();
+	if(created_device) {
+		audio_device.emplace(std::move(*created_device));
+	} else {
+		warn_audio_device("audio-device-create", created_device.error());
 	}
 	auto mapper = th03::platform::SdlInputMapper::create(
 		th03::app::detail::classic_direct_vs_bindings(),
@@ -630,6 +750,21 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 		return fail_tick(scheduler.error());
 	}
 
+	const auto drain_audio = [&]() -> std::expected<
+		void,
+		th03::app::ClassicAudioSessionError
+	> {
+		while(const auto command = (*runner)->take_audio_command()) {
+			if(auto applied = audio_session->apply(*command); !applied) {
+				return std::unexpected(applied.error());
+			}
+		}
+		return {};
+	};
+	if(auto drained = drain_audio(); !drained) {
+		return fail("audio-command", drained.error());
+	}
+
 	std::vector<th03::present::ComposedPixel> pixels(
 		th03::present::graphics_page_pixels
 	);
@@ -645,18 +780,10 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 	if(!presented) {
 		return fail("present", presented.error());
 	}
-	while((*runner)->take_audio_command()) {
-		// The launcher currently selects the source sound-unavailable path.
-	}
 
 	bool retry_blocked_event = false;
 	bool presentation_pending = false;
 	std::uint64_t logical_ticks = 0U;
-	constexpr th03::app::ClassicAudioStatus silent_audio{
-		.bgm_active = false,
-		.measure = 0U,
-		.volume = 255U,
-	};
 	while((*runner)->status() == th03::app::ClassicRunnerStatus::running) {
 		const auto cutoff = th03::platform::sdl_ticks_now_ns();
 		if(!retry_blocked_event) {
@@ -676,14 +803,32 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 			if(!*due) {
 				break;
 			}
-			auto consumed = (*runner)->consume(**due, silent_audio);
+			auto consumed = (*runner)->consume(**due, audio_session->status());
 			if(!consumed) {
 				std::cerr << "logical-tick=" << logical_ticks << '\n';
 				return fail("classic-runner", consumed.error());
 			}
-			while((*runner)->take_audio_command()) {
-				// A silent launcher must still acknowledge every command before
-				// the next source boundary.
+			if(auto drained = drain_audio(); !drained) {
+				std::cerr << "logical-tick=" << logical_ticks << '\n';
+				return fail("audio-command", drained.error());
+			}
+			auto audio_tick = audio_session->advance_tick();
+			if(!audio_tick) {
+				std::cerr << "logical-tick=" << logical_ticks << '\n';
+				return fail("audio-tick", audio_tick.error());
+			}
+			if(audio_device) {
+				const auto submitted = audio_device->submit(
+					audio_tick->canonical_frames
+				);
+				if(!submitted) {
+					// Device loss is final-output state. Keep PMD and scene
+					// timelines advancing, but stop attempting delivery.
+					warn_audio_device(
+						"audio-device-submit", submitted.error()
+					);
+					audio_device.reset();
+				}
 			}
 			presentation_pending =
 				presentation_pending || consumed->surface_changed;

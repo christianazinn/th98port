@@ -374,6 +374,14 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 			}
 		}
 		return {};
+	case ClassicAudioCommandType::set_bgm_active:
+		if(command.cue != ClassicMusicCue::none || command.parameter > 1U) {
+			return std::unexpected(session_error(
+				ClassicAudioSessionErrorCode::invalid_parameter, command
+			));
+		}
+		set_bgm_active(command.parameter != 0U);
+		return {};
 	}
 	return std::unexpected(session_error(
 		ClassicAudioSessionErrorCode::invalid_parameter, command
