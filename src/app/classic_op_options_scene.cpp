@@ -311,6 +311,8 @@ bool ClassicOpOptionsScene::draw_option_choice(
 {
 	switch(choice) {
 	case ClassicOpOptionsChoice::rank: {
+		// ZUN quirk: Labels use the old main-box center rather than the
+		// actual center of the submenu's left column.
 		if(!put_centered(
 			tram_, box_main_center_x, 0, 0, label_rank, attribute
 		) || !put_centered(
@@ -440,6 +442,8 @@ bool ClassicOpOptionsScene::update_horizontal(
 	}
 	case ClassicOpOptionsChoice::bgm:
 		if(fm_available_) {
+			// ZUN quirk: Both directions toggle Off and FM, while a loaded
+			// MIDI setting collapses to Off instead of participating in a ring.
 			if(config_.bgm_mode == ClassicBgmMode::off) {
 				config_.bgm_mode = ClassicBgmMode::fm;
 				if(!push_audio_command({
