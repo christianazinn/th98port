@@ -98,10 +98,26 @@ void test_exact_font_rom_layout()
 	);
 
 	std::vector<std::byte> rom(Pc98FontRomProvider::font_rom_size);
+	auto blank = Pc98FontRomProvider::from_exact_font_rom(rom);
+	expect(
+		!blank && blank.error() == th03::app::AuthenticTextError{
+			AuthenticTextErrorCode::font_rom_content,
+			0x800U,
+		},
+		"exact-size FONT.ROM with a blank ANK domain is rejected"
+	);
 	rom[0x800U] = std::byte{0x80U};
 	rom[0x800U + 15U] = std::byte{0x01U};
 	rom[0x800U + (255U * 16U)] = std::byte{0xA5U};
 	rom[0x800U + (255U * 16U) + 15U] = std::byte{0x5AU};
+	blank = Pc98FontRomProvider::from_exact_font_rom(rom);
+	expect(
+		!blank && blank.error() == th03::app::AuthenticTextError{
+			AuthenticTextErrorCode::font_rom_content,
+			0x1800U,
+		},
+		"exact-size FONT.ROM with a blank JIS domain is rejected"
+	);
 	for(const auto [canonical, left, right] : {
 		std::array<std::uint16_t, 3U>{0x2120U, 0x8010U, 0x0120U},
 		std::array<std::uint16_t, 3U>{0x7C7FU, 0xA530U, 0x5A40U},

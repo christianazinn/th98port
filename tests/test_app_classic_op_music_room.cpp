@@ -683,6 +683,28 @@ void local_original_gate(
 	if(!music) {
 		return;
 	}
+	const auto has_ink = [&music](
+		Page page,
+		th03::present::Rect rect,
+		std::uint8_t color
+	) {
+		for(std::int32_t y = rect.y; y < rect.y + rect.height; ++y) {
+			for(std::int32_t x = rect.x; x < rect.x + rect.width; ++x) {
+				if((*music)->raster().pixel(page, {x, y}) == color) {
+					return true;
+				}
+			}
+		}
+		return false;
+	};
+	for(const auto page : {Page::zero, Page::one}) {
+		expect(
+			has_ink(page, {16, 32, 272U, 16U}, 15U) &&
+				has_ink(page, {304, 64, 320U, 16U}, 15U) &&
+				has_ink(page, {304, 80, 320U, 128U}, 13U),
+			"authenticated Music Room visibly draws labels and comment text"
+		);
+	}
 	release_to_controls(**music);
 	expect(
 		(*music)->advance({.controls = {.down = true}}).has_value() &&

@@ -16,6 +16,7 @@ namespace th03::app {
 
 enum class AuthenticTextErrorCode : std::uint8_t {
 	font_rom_size,
+	font_rom_content,
 	gameft_header,
 	gameft_glyph_count,
 	gameft_glyph_code,
@@ -38,7 +39,9 @@ struct AuthenticTextError {
 // 96 fullwidth glyphs. Canonical JIS (first, second) maps to
 // 0x1800 + (first - 0x21) * 96 * 32 + (second - 0x20) * 32; each glyph stores
 // all 16 left bytes before all 16 right bytes. The caller-owned bytes must
-// remain alive and immutable for the entire provider lifetime.
+// remain alive and immutable for the entire provider lifetime. Both addressable
+// glyph domains must contain ink; this rejects exact-size placeholder files
+// that would otherwise make all machine-font text silently invisible.
 class Pc98FontRomProvider final : public present::AnkGlyphProvider {
 public:
 	static constexpr std::size_t font_rom_size = 288768U;

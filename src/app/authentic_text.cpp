@@ -52,6 +52,24 @@ Pc98FontRomProvider::from_exact_font_rom(
 			font_rom.size(),
 		});
 	}
+	const auto contains_ink = [](std::span<const std::byte> domain) noexcept {
+		return std::any_of(
+			domain.begin(), domain.end(),
+			[](std::byte value) { return value != std::byte{0U}; }
+		);
+	};
+	if(!contains_ink(font_rom.subspan(ank_offset, jis_offset - ank_offset))) {
+		return std::unexpected(AuthenticTextError{
+			AuthenticTextErrorCode::font_rom_content,
+			ank_offset,
+		});
+	}
+	if(!contains_ink(font_rom.subspan(jis_offset))) {
+		return std::unexpected(AuthenticTextError{
+			AuthenticTextErrorCode::font_rom_content,
+			jis_offset,
+		});
+	}
 	return Pc98FontRomProvider(font_rom);
 }
 

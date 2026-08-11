@@ -993,10 +993,13 @@ void replace_bytes(
 
 std::vector<std::byte> make_font_rom()
 {
-	return std::vector<std::byte>(
+	std::vector<std::byte> result(
 		th03::app::Pc98FontRomProvider::font_rom_size,
 		std::byte{0U}
 	);
+	result[0x800U] = std::byte{0x80U};
+	result[0x1800U] = std::byte{0x80U};
+	return result;
 }
 
 auto create_synthetic(

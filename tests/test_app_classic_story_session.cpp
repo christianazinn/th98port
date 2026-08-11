@@ -724,6 +724,8 @@ bool run_local_original_gate(
 		th03::app::Pc98FontRomProvider::font_rom_size,
 		std::byte{0U}
 	);
+	font_rom[0x800U] = std::byte{0x80U};
+	font_rom[0x1800U] = std::byte{0x80U};
 	const auto font = th03::app::Pc98FontRomProvider::from_exact_font_rom(
 		font_rom
 	);

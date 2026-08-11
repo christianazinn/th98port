@@ -582,6 +582,28 @@ bool authentic_gate(
 		while(runner.take_audio_command()) {
 		}
 	};
+	const auto graphics_ink = [&pixels](
+		std::int32_t left,
+		std::int32_t top,
+		std::uint16_t width,
+		std::uint16_t height
+	) {
+		for(std::int32_t y = top; y < top + height; ++y) {
+			for(std::int32_t x = left; x < left + width; ++x) {
+				const auto &pixel = pixels[
+					(static_cast<std::size_t>(y) *
+						th03::present::graphics_width) +
+					static_cast<std::size_t>(x)
+				];
+				if(pixel.layer ==
+						th03::present::ComposedPixelLayer::graphics &&
+					pixel.value == 15U) {
+					return true;
+				}
+			}
+		}
+		return false;
+	};
 	drain_audio();
 	std::uint64_t tick_index = 0U;
 	std::optional<th03::app::ClassicRunnerConsumeResult> last{};
@@ -696,6 +718,14 @@ bool authentic_gate(
 	}
 	if(!reached_input) {
 		std::cerr << "authentic-script-stage=splash-input-timeout tick="
+			<< tick_index << '\n';
+		return false;
+	}
+	if(!graphics_ink(80, 292, 240U, 16U) ||
+		!graphics_ink(128, 308, 176U, 16U) ||
+		!graphics_ink(336, 292, 240U, 16U) ||
+		!graphics_ink(384, 308, 176U, 16U)) {
+		std::cerr << "authentic-script-stage=splash-text-blank tick="
 			<< tick_index << '\n';
 		return false;
 	}

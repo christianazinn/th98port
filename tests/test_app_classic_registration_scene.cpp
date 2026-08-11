@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "../src/app/mainl_compiled_text_internal.hpp"
+#include "th03/app/authentic_text.hpp"
 
 namespace {
 
@@ -1014,12 +1015,24 @@ std::optional<std::vector<std::byte>> read_file(const fs::path &path)
 
 void local_original_gate(
 	const fs::path &content_root,
-	const fs::path &mainl_path
+	const fs::path &mainl_path,
+	const fs::path &font_rom_path
 )
 {
 	const auto executable = read_file(mainl_path);
-	expect(executable.has_value(), "local unpacked MAINL input is readable");
-	if(!executable) {
+	const auto font_rom = read_file(font_rom_path);
+	expect(
+		executable.has_value() && font_rom.has_value(),
+		"local unpacked MAINL and FONT.ROM inputs are readable"
+	);
+	if(!executable || !font_rom) {
+		return;
+	}
+	const auto font = th03::app::Pc98FontRomProvider::from_exact_font_rom(
+		*font_rom
+	);
+	expect(font.has_value(), "local FONT.ROM contains ANK and JIS glyph ink");
+	if(!font) {
 		return;
 	}
 	const auto imported = th03::app::import_mainl_stage_text(*executable);
@@ -1043,9 +1056,8 @@ void local_original_gate(
 	}
 	const auto score_path = root.path() / "YUME.NEM";
 	expect(write_stock(score_path), "local registration gate writes disposable score file");
-	SyntheticFont font;
 	const auto created = ClassicRegistrationScene::create(
-		resident(), score_path, *closure, imported->assets, font, Raster{}
+		resident(), score_path, *closure, imported->assets, *font, Raster{}
 	);
 	expect(
 		created.has_value(),
@@ -1133,12 +1145,25 @@ void local_original_gate(
 		ClassicOpRoute::high_scores, viewer
 	);
 	const auto created_viewer = ClassicRegistrationScene::create_viewer(
-		completion, score_path, *viewer_closure, imported->assets, font
+		completion, score_path, *viewer_closure, imported->assets, *font
 	);
 	expect(
 		created_viewer.has_value() && !(*created_viewer)->entered_place(),
 		"typed OP HiScore capability constructs the authenticated production viewer"
 	);
+	if(created_viewer) {
+		bool playchar_ink = false;
+		for(std::int32_t y = 112; y < 128; ++y) {
+			for(std::int32_t x = 424; x < 520; ++x) {
+				playchar_ink = playchar_ink ||
+					(*created_viewer)->raster().pixel(Page::zero, {x, y}) == 15U;
+			}
+		}
+		expect(
+			playchar_ink,
+			"authenticated HiScore viewer visibly draws its first character label"
+		);
+	}
 }
 
 } // namespace
@@ -1151,10 +1176,13 @@ int main(int argc, char **argv)
 	test_view_only_schedule_and_unchanged_board();
 	test_zero_credit_audio_exit();
 	test_rejections_and_commit_failure();
-	if(argc == 3) {
-		local_original_gate(argv[1], argv[2]);
+	if(argc == 4) {
+		local_original_gate(argv[1], argv[2], argv[3]);
 	} else {
-		expect(argc == 1, "optional local gate accepts content root and MAINL");
+		expect(
+			argc == 1,
+			"optional local gate accepts content root, MAINL, and FONT.ROM"
+		);
 	}
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
