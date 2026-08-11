@@ -1,7 +1,10 @@
 #include "classic_mainl_stage_internal.hpp"
 
+#include "classic_op_selection_internal.hpp"
+
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -249,6 +252,81 @@ template <typename Value, typename Decoder>
 	};
 }
 
+[[nodiscard]] constexpr std::uint8_t vs_game_mode(
+	ClassicOpSelectionMode mode
+) noexcept
+{
+	switch(mode) {
+	case ClassicOpSelectionMode::vs_1p_cpu: return game_mode::vs_1p_cpu;
+	case ClassicOpSelectionMode::vs_1p_2p: return game_mode::vs_1p_2p;
+	case ClassicOpSelectionMode::vs_cpu_cpu: return game_mode::vs_cpu_cpu;
+	case ClassicOpSelectionMode::story: break;
+	}
+	return game_mode::none;
+}
+
+[[nodiscard]] constexpr std::array<std::uint8_t, 2U> vs_cpu_flags(
+	ClassicOpSelectionMode mode
+) noexcept
+{
+	return {
+		static_cast<std::uint8_t>(
+			mode == ClassicOpSelectionMode::vs_cpu_cpu
+		),
+		static_cast<std::uint8_t>(
+			mode != ClassicOpSelectionMode::vs_1p_2p
+		),
+	};
+}
+
+[[nodiscard]] bool valid_zero_score(
+	const std::array<std::uint8_t, 8U> &score
+) noexcept
+{
+	return std::all_of(score.begin(), score.end(), [](std::uint8_t digit) {
+		return digit == 0U;
+	});
+}
+
+[[nodiscard]] bool valid_vs_completion(
+	const ClassicOpSelectionCompletion &completion,
+	present::KotohimeBombFadeCompatibility kotohime_compatibility
+) noexcept
+{
+	if(completion.outcome() != ClassicOpSelectionOutcome::selected ||
+		completion.mode() == ClassicOpSelectionMode::story) {
+		return false;
+	}
+	const auto &resident = completion.resident();
+	const auto player_one = main_player_selection_from_paletted(
+		resident.paletted_character[0U]
+	);
+	const auto player_two = main_player_selection_from_paletted(
+		resident.paletted_character[1U]
+	);
+	if(!player_one || !player_two ||
+		resident.paletted_character[0U] == resident.paletted_character[1U] ||
+		resident.game_mode != vs_game_mode(completion.mode()) ||
+		resident.is_cpu != vs_cpu_flags(completion.mode()) ||
+		resident.rank > 3U || resident.key_mode > 2U ||
+		resident.story_stage != 0U || resident.demo_number != 0U ||
+		resident.winner != 0 || resident.show_score_menu != 0U ||
+		resident.fast_op_animation > 1U || resident.remaining_credits > 3U ||
+		resident.global_frame != 0U ||
+		resident.random_seed != std::bit_cast<std::uint32_t>(
+			resident.resident_rand
+		) || (resident.autofire_mask & 0xFCU) != 0U ||
+		resident.runtime_snapshot || resident.compact_runtime_snapshot ||
+		resident.round_start_snapshot || resident.practice_rules ||
+		!valid_zero_score(resident.last_score[0U]) ||
+		!valid_zero_score(resident.last_score[1U])) {
+		return false;
+	}
+	return ((player_one->character != MainCharacter::kotohime &&
+		player_two->character != MainCharacter::kotohime) ||
+		kotohime_compatibility.red_provider != nullptr);
+}
+
 } // namespace
 
 ClassicMainlStageTransition::ClassicMainlStageTransition(
@@ -257,10 +335,10 @@ ClassicMainlStageTransition::ClassicMainlStageTransition(
 	prepared_(std::move(prepared))
 {
 	if(prepared_) {
-		handoff_game_mode_ = prepared_->config.resident.game_mode;
-		handoff_story_stage_ = prepared_->config.resident.story_stage;
+		handoff_game_mode_ = prepared_->entry.resident.game_mode;
+		handoff_story_stage_ = prepared_->entry.resident.story_stage;
 		handoff_paletted_character_ =
-			prepared_->config.resident.paletted_character;
+			prepared_->entry.resident.paletted_character;
 	}
 }
 
@@ -285,6 +363,29 @@ ClassicMainlStageTestAccess::create_ready_with_handoff(
 	return transition;
 }
 
+std::unique_ptr<ClassicMainlStageTransition>
+ClassicMainlStageTestAccess::create_ready_vs_with_handoff(
+	GameInit resident,
+	present::KotohimeBombFadeCompatibility kotohime_compatibility,
+	present::Raster raster
+)
+{
+	auto prepared = std::make_unique<ClassicMainlStageTransition::Prepared>();
+	prepared->entry = {
+		.resident = std::move(resident),
+		.game_options = {},
+		.kotohime_compatibility = kotohime_compatibility,
+		.policy = ClassicMainlStageTransition::EntryPolicy::classic_vs,
+	};
+	auto transition = std::unique_ptr<ClassicMainlStageTransition>(
+		new ClassicMainlStageTransition(std::move(prepared))
+	);
+	transition->raster_ = std::move(raster);
+	transition->handoff_ = MainStageHandoff(transition->raster_);
+	transition->phase_ = ClassicMainlStagePhase::ready;
+	return transition;
+}
+
 std::expected<
 	std::unique_ptr<ClassicMainlStageTransition>,
 	ClassicMainlStageError
@@ -295,30 +396,100 @@ std::expected<
 	const present::AnkGlyphProvider &font
 )
 {
-	return create_impl(config, resources, std::move(text), font, true);
+	return create_impl(
+		{
+			.resident = config.resident,
+			.game_options = config.game_options,
+			.kotohime_compatibility = config.kotohime_compatibility,
+			.policy = EntryPolicy::story,
+		},
+		resources,
+		std::move(text),
+		font,
+		true
+	);
 }
 
 std::expected<
 	std::unique_ptr<ClassicMainlStageTransition>,
 	ClassicMainlStageError
-> ClassicMainlStageTransition::create_impl(
-	const MainStoryConfig &config,
+> ClassicMainlStageTransition::create_from_selection(
+	const ClassicOpSelectionCompletion &completion,
+	present::KotohimeBombFadeCompatibility kotohime_compatibility,
+	std::span<const LoadedMainResource> resources,
+	MainlStageTextAssets text,
+	const present::AnkGlyphProvider &font
+)
+{
+	return create_from_selection_impl(
+		completion,
+		kotohime_compatibility,
+		resources,
+		std::move(text),
+		font,
+		true
+	);
+}
+
+std::expected<
+	std::unique_ptr<ClassicMainlStageTransition>,
+	ClassicMainlStageError
+> ClassicMainlStageTransition::create_from_selection_impl(
+	const ClassicOpSelectionCompletion &completion,
+	present::KotohimeBombFadeCompatibility kotohime_compatibility,
 	std::span<const LoadedMainResource> resources,
 	MainlStageTextAssets text,
 	const present::AnkGlyphProvider &font,
 	bool authenticate_resource_bytes
 )
 {
-	if(!valid_main_story_config(config)) {
+	if(!valid_vs_completion(completion, kotohime_compatibility)) {
+		return std::unexpected(stage_error(
+			ClassicMainlStageErrorCode::invalid_config
+		));
+	}
+	return create_impl(
+		{
+			.resident = completion.resident(),
+			.game_options = {},
+			.kotohime_compatibility = kotohime_compatibility,
+			.policy = EntryPolicy::classic_vs,
+		},
+		resources,
+		std::move(text),
+		font,
+		authenticate_resource_bytes
+	);
+}
+
+std::expected<
+	std::unique_ptr<ClassicMainlStageTransition>,
+	ClassicMainlStageError
+> ClassicMainlStageTransition::create_impl(
+	EntryConfig entry,
+	std::span<const LoadedMainResource> resources,
+	MainlStageTextAssets text,
+	const present::AnkGlyphProvider &font,
+	bool authenticate_resource_bytes
+)
+{
+	if((entry.policy == EntryPolicy::story && !valid_main_story_config({
+		.resident = entry.resident,
+		.game_options = entry.game_options,
+		.kotohime_compatibility = entry.kotohime_compatibility,
+	})) || (entry.policy == EntryPolicy::classic_vs &&
+		(entry.resident.game_mode != game_mode::vs_1p_cpu &&
+		 entry.resident.game_mode != game_mode::vs_1p_2p &&
+		 entry.resident.game_mode != game_mode::vs_cpu_cpu))) {
 		return std::unexpected(stage_error(
 			ClassicMainlStageErrorCode::invalid_config
 		));
 	}
 	const auto player_one = main_player_selection_from_paletted(
-		config.resident.paletted_character[0U]
+		entry.resident.paletted_character[0U]
 	);
 	const auto player_two = main_player_selection_from_paletted(
-		config.resident.paletted_character[1U]
+		entry.resident.paletted_character[1U]
 	);
 	if(!player_one || !player_two) {
 		return std::unexpected(stage_error(
@@ -328,8 +499,8 @@ std::expected<
 	const MainlStageResourceRequest request{
 		.player_one = *player_one,
 		.player_two = *player_two,
-		.game_mode = config.resident.game_mode,
-		.story_stage = config.resident.story_stage,
+		.game_mode = entry.resident.game_mode,
+		.story_stage = entry.resident.story_stage,
 	};
 	const auto expected = mainl_stage_resource_keys(request);
 	if(!expected) {
@@ -346,7 +517,7 @@ std::expected<
 	}
 
 	auto prepared = std::make_unique<Prepared>();
-	prepared->config = config;
+	prepared->entry = std::move(entry);
 
 	const MainResourceKey gaiji_key{
 		.role = MainResourceRole::mainl_gaiji_font,
@@ -443,7 +614,7 @@ std::expected<
 				return assets::decode_cdg_cel(
 					bytes,
 					static_cast<std::size_t>(
-						config.resident.story_stage + 1U
+						prepared->entry.resident.story_stage + 1U
 					)
 				);
 			}
@@ -840,6 +1011,12 @@ bool ClassicMainlStageTransition::matches_process_config(
 	return handoff_game_mode_ == config.resident.game_mode &&
 		handoff_story_stage_ == config.resident.story_stage &&
 		handoff_paletted_character_ == config.resident.paletted_character;
+}
+
+bool ClassicMainlStageTransition::is_classic_vs_entry() const noexcept
+{
+	return prepared_ &&
+		prepared_->entry.policy == EntryPolicy::classic_vs;
 }
 
 void ClassicMainlStageTransition::consume_handoff() noexcept

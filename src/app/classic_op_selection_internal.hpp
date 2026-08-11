@@ -8,6 +8,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <utility>
 
 #include "classic_op_scene_internal.hpp"
 #include "th03/app/classic_audio.hpp"
@@ -118,6 +119,7 @@ public:
 
 private:
 	friend class ClassicOpCharacterSelection;
+	friend struct ClassicOpSelectionTestAccess;
 	ClassicOpSelectionCompletion(
 		ClassicOpSelectionOutcome outcome,
 		ClassicOpSelectionMode mode,
@@ -309,6 +311,25 @@ private:
 };
 
 struct ClassicOpSelectionTestAccess final {
+	[[nodiscard]] static ClassicOpSelectionCompletion make_completion(
+		ClassicOpSelectionOutcome outcome,
+		ClassicOpSelectionMode mode,
+		GameInit resident,
+		ClassicOpSelectionCarry carry = {},
+		present::Raster raster = {},
+		present::Tram tram = {}
+	) noexcept
+	{
+		return ClassicOpSelectionCompletion(
+			outcome,
+			mode,
+			std::move(resident),
+			carry,
+			std::move(raster),
+			std::move(tram)
+		);
+	}
+
 	[[nodiscard]] static bool draw_curves_only(
 		ClassicOpCharacterSelection &scene
 	) noexcept

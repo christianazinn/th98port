@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -21,6 +22,7 @@
 #include "th03/present/main_static.hpp"
 
 #include "../src/app/main_compiled_content_internal.hpp"
+#include "../src/app/classic_op_selection_internal.hpp"
 #include "../src/app/main_process_internal.hpp"
 
 namespace {
@@ -28,11 +30,15 @@ namespace {
 using th03::app::LoadedMainResource;
 using th03::app::ClassicMainlStagePhase;
 using th03::app::ClassicMainlStageTestAccess;
+using th03::app::ClassicOpSelectionMode;
+using th03::app::ClassicOpSelectionOutcome;
+using th03::app::ClassicOpSelectionTestAccess;
 using th03::app::MainCharacter;
 using th03::app::MainDirectVsConfig;
 using th03::app::MainPaletteVariant;
 using th03::app::MainPlayerSelection;
 using th03::app::MainProcess;
+using th03::app::MainProcessClassicVsAccess;
 using th03::app::MainProcessErrorCode;
 using th03::app::MainProcessStoryAccess;
 using th03::app::MainProcessTestAccess;
@@ -333,6 +339,57 @@ std::vector<std::byte> make_bfnt(
 	return bytes;
 }
 
+std::vector<std::byte> make_cdg(
+	std::uint16_t width,
+	std::uint16_t height,
+	std::uint8_t cel_count,
+	bool portrait
+)
+{
+	const auto stride = static_cast<std::size_t>(width / 8U);
+	const auto plane_size = stride * height;
+	std::vector<std::byte> bytes;
+	append_le16(bytes, static_cast<std::uint16_t>(plane_size));
+	append_le16(bytes, width);
+	append_le16(bytes, height);
+	append_le16(bytes, static_cast<std::uint16_t>(80U * (height - 1U)));
+	append_le16(bytes, static_cast<std::uint16_t>(width / 32U));
+	append_u8(bytes, cel_count);
+	append_u8(bytes, 0U);
+	append_le16(bytes, 0U);
+	append_le16(bytes, 0U);
+	for(std::size_t cel = 0U; cel < cel_count; ++cel) {
+		bytes.insert(bytes.end(), plane_size, std::byte{0xFFU});
+		for(std::size_t plane = 0U; plane < 4U; ++plane) {
+			for(std::size_t row = 0U; row < height; ++row) {
+				for(std::size_t x = 0U; x < stride; ++x) {
+					std::uint8_t value = 0U;
+					if(portrait) {
+						if(plane == 0U && x < (stride / 2U)) {
+							value = 0xFFU;
+						}
+						if(plane == 1U && x >= (stride / 2U)) {
+							value = 0xFFU;
+						}
+						if(plane == 3U && cel == 1U) {
+							value = 0xFFU;
+						}
+					} else {
+						const auto color = static_cast<std::uint8_t>(
+							1U + (cel % 14U)
+						);
+						if((color & (1U << plane)) != 0U) {
+							value = 0xFFU;
+						}
+					}
+					append_u8(bytes, value);
+				}
+			}
+		}
+	}
+	return bytes;
+}
+
 std::uint8_t paletted_ordinal(const MainResourceKey &key)
 {
 	const auto character = static_cast<std::uint8_t>(key.character);
@@ -362,6 +419,13 @@ std::uint8_t pi_sentinel(const MainResourceKey &key)
 	default:
 		return 10U;
 	}
+}
+
+std::uint16_t stage_extra_height(const MainResourceKey &key)
+{
+	return (key.character == MainCharacter::reimu ||
+		key.character == MainCharacter::kana ||
+		key.character == MainCharacter::rikako) ? 144U : 128U;
 }
 
 std::uint8_t mrs_sentinel(const MainResourceKey &key)
@@ -518,22 +582,34 @@ std::vector<std::byte> bytes_for(const th03::app::MainResourceSpec &spec)
 		);
 	case MainResourceRole::character_stage_extra_shot:
 		return make_pi(
-			320U, 128U, spec.expected_bytes, false, pi_sentinel(spec.key)
+			320U,
+			stage_extra_height(spec.key),
+			spec.expected_bytes,
+			false,
+			pi_sentinel(spec.key)
 		);
 	case MainResourceRole::character_stage_enemy_group:
 		return make_pi(
 			640U, 192U, spec.expected_bytes, true, pi_sentinel(spec.key)
 		);
+	case MainResourceRole::mainl_gaiji_font:
+		return make_bfnt(16U, 16U, 256U, true);
+	case MainResourceRole::character_stage_portrait:
+		return make_cdg(192U, 192U, 2U, true);
+	case MainResourceRole::stage_number_sheet:
+		return make_cdg(32U, 34U, 10U, false);
+	case MainResourceRole::stage_splash_base:
+		return make_pi(640U, 400U, spec.expected_bytes, true, 2U);
+	case MainResourceRole::stage_splash_background:
+		return make_pi(640U, 96U, spec.expected_bytes, true, 3U);
 	case MainResourceRole::op_title_long_background:
 	case MainResourceRole::op_menu_background:
 	case MainResourceRole::op_window_sheet:
 	case MainResourceRole::op_gaiji_font:
 	case MainResourceRole::op_menu_music:
-	case MainResourceRole::mainl_gaiji_font:
-	case MainResourceRole::character_stage_portrait:
-	case MainResourceRole::stage_number_sheet:
-	case MainResourceRole::stage_splash_base:
-	case MainResourceRole::stage_splash_background:
+	case MainResourceRole::op_music_room_background:
+	case MainResourceRole::op_music_room_comments:
+	case MainResourceRole::op_music_room_track:
 	case MainResourceRole::selection_palette:
 	case MainResourceRole::character_selection_portrait:
 	case MainResourceRole::selection_extra_icons:
@@ -596,6 +672,107 @@ std::vector<LoadedMainResource> make_resources(
 		});
 	}
 	return resources;
+}
+
+th03::app::MainlStageTextAssets mainl_stage_text_assets()
+{
+	th03::app::MainlStageTextAssets result{};
+	for(std::size_t index = 0U; index < result.characters.size(); ++index) {
+		result.characters[index].title = {
+			static_cast<std::uint8_t>('A' + index),
+		};
+		result.characters[index].name = {
+			static_cast<std::uint8_t>('a' + index),
+		};
+	}
+	return result;
+}
+
+std::vector<LoadedMainResource> make_mainl_stage_resources(
+	const th03::GameInit &init
+)
+{
+	const auto player_one = th03::app::main_player_selection_from_paletted(
+		init.paletted_character[0U]
+	);
+	const auto player_two = th03::app::main_player_selection_from_paletted(
+		init.paletted_character[1U]
+	);
+	expect(player_one && player_two,
+		"Classic VS stage fixture selections are valid");
+	if(!player_one || !player_two) {
+		return {};
+	}
+	const auto keys = th03::app::mainl_stage_resource_keys({
+		.player_one = *player_one,
+		.player_two = *player_two,
+		.game_mode = init.game_mode,
+		.story_stage = init.story_stage,
+	});
+	expect(keys.has_value(), "Classic VS stage resource keys resolve");
+	if(!keys) {
+		return {};
+	}
+	std::vector<LoadedMainResource> resources;
+	resources.reserve(keys->size());
+	for(const auto key : *keys) {
+		const auto spec = th03::app::main_resource_spec(key);
+		expect(spec.has_value(), "Classic VS stage resource spec resolves");
+		if(!spec) {
+			continue;
+		}
+		auto bytes = bytes_for(*spec);
+		if(key.role == MainResourceRole::stage_enemy_center) {
+			bytes = make_pi(
+				640U, 48U, spec->expected_bytes, true, pi_sentinel(key)
+			);
+		} else if(key.role == MainResourceRole::character_stage_shot) {
+			bytes = make_pi(
+				320U, 16U, spec->expected_bytes, true, pi_sentinel(key)
+			);
+		} else if(key.role ==
+			MainResourceRole::character_stage_extra_shot) {
+			bytes = make_pi(
+				320U,
+				stage_extra_height(key),
+				spec->expected_bytes,
+				true,
+				pi_sentinel(key)
+			);
+		}
+		expect(bytes.size() == spec->expected_bytes,
+			"Classic VS stage asset has its canonical byte count");
+		resources.push_back({
+			.spec = *spec,
+			.bytes = std::make_shared<const std::vector<std::byte>>(
+				std::move(bytes)
+			),
+		});
+	}
+	return resources;
+}
+
+bool advance_mainl_stage_to_ready(
+	th03::app::ClassicMainlStageTransition &stage
+)
+{
+	for(std::size_t tick = 0U; tick < 18U; ++tick) {
+		if(!stage.advance(false)) {
+			return false;
+		}
+	}
+	for(std::size_t tick = 0U; tick < 33U; ++tick) {
+		if(!stage.advance(true)) {
+			return false;
+		}
+	}
+	for(std::size_t tick = 0U; tick < 36U; ++tick) {
+		if(!stage.advance(false)) {
+			return false;
+		}
+	}
+	return stage.phase() == ClassicMainlStagePhase::ready &&
+		ClassicMainlStageTestAccess::handoff(stage) != nullptr;
 }
 
 std::vector<LoadedMainResource> select_resources(
@@ -1551,7 +1728,6 @@ void test_story_factory_transaction_and_lifetime()
 	if(!static_content) {
 		return;
 	}
-
 	const auto handoff_hash = transition->raster().display_state_hash();
 	auto missing = dynamic_resources;
 	missing.pop_back();
@@ -1773,6 +1949,274 @@ std::vector<LoadedMainResource> story_dynamic_resources(
 	return select_resources(complete, *keys);
 }
 
+th03::GameInit classic_vs_init(
+	std::uint8_t mode,
+	std::uint8_t remaining_credits
+) noexcept
+{
+	th03::GameInit init{};
+	init.resident_rand = -1234567;
+	init.random_seed = std::bit_cast<std::uint32_t>(init.resident_rand);
+	init.game_mode = mode;
+	init.rank = 1U;
+	init.key_mode = 2U;
+	init.story_lives = 77U;
+	init.remaining_credits = remaining_credits;
+	init.skill = 203U;
+	init.paletted_character = {2, 1};
+	init.story_opponents.fill(13);
+	init.fast_op_animation = 1U;
+	init.autofire_mask = 3U;
+	switch(mode) {
+	case th03::game_mode::vs_1p_cpu:
+		init.is_cpu = {0U, 1U};
+		break;
+	case th03::game_mode::vs_1p_2p:
+		init.is_cpu = {0U, 0U};
+		break;
+	case th03::game_mode::vs_cpu_cpu:
+		init.is_cpu = {1U, 1U};
+		break;
+	default:
+		break;
+	}
+	return init;
+}
+
+void test_classic_vs_handoff_transaction_and_lifetime()
+{
+	const auto staging_config = story_config(0U, 2, 3U);
+	const auto player_one = *th03::app::main_player_selection_from_paletted(2);
+	const auto player_two = *th03::app::main_player_selection_from_paletted(1);
+	auto resources = make_resources(player_one, player_two);
+	auto staging_transition = make_ready_story_transition(
+		staging_config, resources
+	);
+	expect(staging_transition != nullptr,
+		"Classic VS fixture prepares one exact six-PI Raster handoff");
+	if(!staging_transition) {
+		return;
+	}
+	const auto handoff_raster = staging_transition->raster();
+	const auto dynamic_keys = th03::app::main_private_resource_keys(
+		player_one, player_two
+	);
+	expect(dynamic_keys && dynamic_keys->size() == 6U,
+		"Classic VS process requests only the six MAIN-private resources");
+	if(!dynamic_keys) {
+		return;
+	}
+	auto dynamic_resources = select_resources(resources, *dynamic_keys);
+	auto compiled = make_compiled_content();
+	expect(compiled.has_value(),
+		"Classic VS fixture imports synthetic compiled MAIN content");
+	if(!compiled) {
+		return;
+	}
+	auto font_rom = make_font_rom();
+	auto static_content =
+		MainProcessTestAccess::prepare_static_with_synthetic_resources(
+			resources,
+			std::move(*compiled),
+			font_rom
+		);
+	expect(static_content.has_value(),
+		"Classic VS fixture prepares one stable shared MAIN content owner");
+	if(!static_content) {
+		return;
+	}
+	auto stage_font = th03::app::Pc98FontRomProvider::from_exact_font_rom(
+		font_rom
+	);
+	expect(stage_font.has_value(),
+		"Classic VS fixture prepares the exact-size MAINL text provider");
+	if(!stage_font) {
+		return;
+	}
+	const auto story_policy_hash =
+		staging_transition->raster().display_state_hash();
+	auto wrong_policy = MainProcessClassicVsAccess::create_vs(
+		*staging_transition, dynamic_resources, *static_content, false
+	);
+	expect(!wrong_policy && wrong_policy.error().code ==
+		MainProcessErrorCode::invalid_config &&
+		staging_transition->phase() == ClassicMainlStagePhase::ready &&
+		ClassicMainlStageTestAccess::handoff(*staging_transition) != nullptr &&
+		staging_transition->raster().display_state_hash() == story_policy_hash,
+		"Classic VS MAIN rejects a Story-policy stage without mutation");
+
+	struct Case final {
+		std::uint8_t mode;
+		std::array<std::uint8_t, 2U> is_cpu;
+		std::uint8_t remaining_credits;
+	};
+	constexpr std::array cases{
+		Case{th03::game_mode::vs_1p_cpu, {0U, 1U}, 0U},
+		Case{th03::game_mode::vs_1p_2p, {0U, 0U}, 1U},
+		Case{th03::game_mode::vs_cpu_cpu, {1U, 1U}, 2U},
+		Case{th03::game_mode::vs_1p_cpu, {0U, 1U}, 3U},
+	};
+	std::vector<std::unique_ptr<MainProcess>> processes;
+	processes.reserve(cases.size());
+	for(std::size_t index = 0U; index < cases.size(); ++index) {
+		const auto init = classic_vs_init(
+			cases[index].mode, cases[index].remaining_credits
+		);
+		std::unique_ptr<th03::app::ClassicMainlStageTransition> transition;
+		if(index == 0U) {
+			{
+				auto completion = ClassicOpSelectionTestAccess::make_completion(
+					ClassicOpSelectionOutcome::selected,
+					ClassicOpSelectionMode::vs_1p_cpu,
+					init
+				);
+				auto stage_resources = make_mainl_stage_resources(init);
+				auto created_stage = ClassicMainlStageTestAccess::
+					create_vs_with_synthetic_resources(
+						completion,
+						{.red_provider = kotohime_red},
+						stage_resources,
+						mainl_stage_text_assets(),
+						*stage_font
+					);
+				expect(created_stage.has_value(),
+					"typed selector completion constructs the production VS stage");
+				if(created_stage) {
+					transition = std::move(*created_stage);
+				}
+			}
+			expect(transition && advance_mainl_stage_to_ready(*transition),
+				"production VS stage reaches its exact ready MAIN handoff");
+		} else {
+			transition =
+				ClassicMainlStageTestAccess::create_ready_vs_with_handoff(
+					init,
+					{.red_provider = kotohime_red},
+					handoff_raster
+				);
+		}
+		expect(transition != nullptr &&
+			transition->phase() == ClassicMainlStagePhase::ready &&
+			ClassicMainlStageTestAccess::handoff(*transition) != nullptr,
+			"Classic VS fixture owns one ready typed handoff");
+		if(!transition) {
+			continue;
+		}
+		const auto handoff_hash = transition->raster().display_state_hash();
+		if(index == 0U) {
+			auto missing = dynamic_resources;
+			missing.pop_back();
+			auto rejected = MainProcessClassicVsAccess::create_vs(
+				*transition, missing, *static_content, false
+			);
+			expect(!rejected && rejected.error().code ==
+				MainProcessErrorCode::resource_set_mismatch &&
+				transition->phase() == ClassicMainlStagePhase::ready &&
+				ClassicMainlStageTestAccess::handoff(*transition) != nullptr &&
+				transition->raster().display_state_hash() == handoff_hash,
+				"missing Classic VS private content preserves the retryable handoff");
+
+			auto malformed = dynamic_resources;
+			auto character = std::find_if(
+				malformed.begin(), malformed.end(), [](const auto &resource) {
+					return resource.spec.key.role ==
+						MainResourceRole::character_sheet;
+				}
+			);
+			expect(character != malformed.end(),
+				"Classic VS late-failure fixture finds a character sheet");
+			if(character != malformed.end()) {
+				replace_bytes(*character, std::vector<std::byte>(
+					character->spec.expected_bytes, std::byte{0U}
+				));
+			}
+			rejected = MainProcessClassicVsAccess::create_vs(
+				*transition, malformed, *static_content, false
+			);
+			expect(!rejected && rejected.error().code ==
+				MainProcessErrorCode::asset_decode_failed &&
+				transition->phase() == ClassicMainlStagePhase::ready &&
+				ClassicMainlStageTestAccess::handoff(*transition) != nullptr &&
+				transition->raster().display_state_hash() == handoff_hash,
+				"late Classic VS decode failure leaves the exact handoff reusable");
+		}
+
+		auto created = MainProcessClassicVsAccess::create_vs(
+			*transition, dynamic_resources, *static_content, false
+		);
+		expect(created.has_value() &&
+			transition->phase() == ClassicMainlStagePhase::consumed &&
+			ClassicMainlStageTestAccess::handoff(*transition) == nullptr,
+			"successful Classic VS publication consumes exactly one handoff");
+		if(!created) {
+			continue;
+		}
+		const auto observation = (*created)->round_start_observation();
+		expect((*created)->input_protocol() == th03::InputProtocol::live &&
+			observation.start.game_mode == cases[index].mode &&
+			observation.start.is_cpu == cases[index].is_cpu &&
+			observation.start.paletted_character ==
+				std::array<std::int8_t, 2U>{2, 1} &&
+			observation.start.rank == 1U &&
+			observation.start.key_mode == 2U,
+			"Classic VS mode, CPU ownership, and selections reach fresh MAIN");
+		const auto expected_safety = (cases[index].mode ==
+			th03::game_mode::vs_cpu_cpu) ? std::uint16_t{0xFFFFU} :
+			std::uint16_t{1900U};
+		expect(observation.round.state.cpu_safety_frames ==
+			std::array<std::uint16_t, 2U>{expected_safety, expected_safety},
+			"Classic VS distinguishes CPU-CPU infinite safety from the rank table");
+		expect(observation.start.story_lives == 77U &&
+			observation.start.remaining_credits ==
+				cases[index].remaining_credits &&
+			observation.start.skill == 203U &&
+			observation.start.story_opponents == init.story_opponents &&
+			observation.start.fast_op_animation == 1U &&
+			observation.start.autofire_mask == 3U &&
+			observation.start.resident_rand == init.resident_rand &&
+			observation.effective_reset_seed == init.random_seed,
+			"Classic VS preserves source-stale resident fields and exact reset seed");
+		expect(MainProcessTestAccess::continues_used_digit(**created) == 0U,
+			"Classic VS always uses the donor literal continues digit zero");
+		auto consumed_retry = MainProcessClassicVsAccess::create_vs(
+			*transition, dynamic_resources, *static_content, false
+		);
+		expect(!consumed_retry && consumed_retry.error().code ==
+			MainProcessErrorCode::invalid_config &&
+			transition->phase() == ClassicMainlStagePhase::consumed &&
+			ClassicMainlStageTestAccess::handoff(*transition) == nullptr,
+			"a consumed Classic VS handoff cannot publish a second MAIN process");
+		processes.push_back(std::move(*created));
+	}
+
+	resources.clear();
+	resources.shrink_to_fit();
+	dynamic_resources.clear();
+	dynamic_resources.shrink_to_fit();
+	font_rom.clear();
+	font_rom.shrink_to_fit();
+	staging_transition.reset();
+	static_content->reset();
+	expect(processes.size() == cases.size(),
+		"all Classic VS modes publish before caller storage is destroyed");
+	std::vector<th03::present::ComposedPixel> pixels(
+		th03::present::graphics_page_pixels
+	);
+	const auto output = std::span<
+		th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	>(pixels.data(), pixels.size());
+	for(auto &process : processes) {
+		const auto stepped = process->step({});
+		const auto surface = process->compose_shown_surface(output);
+		expect(stepped && stepped->status == th03::StepStatus::running &&
+			surface && process->presentation_status() ==
+				th03::present::MainRoundStatus::ready &&
+			process->tram().gaiji(255U).row_halves[31U] != 0U,
+			"Classic VS remains usable after transition, resource, and static owners die");
+	}
+}
+
 void test_story_handoff_transaction_and_shared_lifetime()
 {
 	const auto first_config = story_config(0U, 2, 3U);
@@ -1928,6 +2372,9 @@ void test_story_handoff_transaction_and_shared_lifetime()
 		first.round_start_observation().start.remaining_credits == 3U &&
 		final.round_start_observation().start.remaining_credits == 0U,
 		"both Story processes retain their own exact resident values");
+	expect(MainProcessTestAccess::continues_used_digit(first) == 0U &&
+		MainProcessTestAccess::continues_used_digit(final) == 3U,
+		"Story derives the displayed continues digit from remaining credits");
 	const auto atlas_matches = [](const MainProcess &process,
 		const MainStoryConfig &config) {
 		constexpr std::array points{
@@ -2152,6 +2599,7 @@ int main(int argc, char **argv)
 	test_sticky_presentation_preflight();
 	test_story_factory_transaction_and_lifetime();
 	test_invalid_config_and_kotohime_policy();
+	test_classic_vs_handoff_transaction_and_lifetime();
 	test_story_handoff_transaction_and_shared_lifetime();
 	if(argc == 4) {
 		expect(run_local_authentic_gate(argv[1], argv[2], argv[3]),

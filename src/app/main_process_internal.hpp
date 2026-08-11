@@ -52,6 +52,10 @@ struct MainProcessTestAccess final {
 		const MainProcess &process
 	) noexcept;
 
+	[[nodiscard]] static std::uint8_t continues_used_digit(
+		const MainProcess &process
+	) noexcept;
+
 	[[nodiscard]] static std::expected<
 		std::shared_ptr<const MainProcessStaticContent>,
 		MainProcessError
@@ -76,6 +80,21 @@ struct MainProcessStoryAccess final {
 		MainProcessError
 	> create_story(
 		const MainStoryConfig &config,
+		ClassicMainlStageTransition &transition,
+		std::span<const LoadedMainResource> resources,
+		std::shared_ptr<const MainProcessStaticContent> static_content,
+		bool authenticate_resource_bytes = true
+	);
+};
+
+// Source-private entry for a completed stock OP VS selection. The stage owns
+// the exact resident/options/callback tuple and its move-only Raster handoff;
+// no independent GameInit is accepted here.
+struct MainProcessClassicVsAccess final {
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<MainProcess>,
+		MainProcessError
+	> create_vs(
 		ClassicMainlStageTransition &transition,
 		std::span<const LoadedMainResource> resources,
 		std::shared_ptr<const MainProcessStaticContent> static_content,

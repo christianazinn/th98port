@@ -290,6 +290,7 @@ template <typename Value, typename Decoder>
 
 struct MainProcess::Impl {
 	InputProtocol input_protocol = InputProtocol::live;
+	std::uint8_t continues_used_digit = 0U;
 	std::shared_ptr<const MainProcessStaticContent> static_content{};
 	std::array<assets::BfntSheet, 2U> character_sheets{};
 	std::array<assets::MrsImage, 2U> extra_portraits{};
@@ -330,6 +331,13 @@ present::MainBombsStatus MainProcessTestAccess::bombs_status(
 ) noexcept
 {
 	return process.impl_->bombs->status();
+}
+
+std::uint8_t MainProcessTestAccess::continues_used_digit(
+	const MainProcess &process
+) noexcept
+{
+	return process.impl_->continues_used_digit;
 }
 
 std::expected<std::unique_ptr<MainProcess>, MainProcessError>
@@ -700,6 +708,63 @@ MainProcessStoryAccess::create_story(
 }
 
 std::expected<std::unique_ptr<MainProcess>, MainProcessError>
+MainProcessClassicVsAccess::create_vs(
+	ClassicMainlStageTransition &transition,
+	std::span<const LoadedMainResource> resources,
+	std::shared_ptr<const MainProcessStaticContent> static_content,
+	bool authenticate_resource_bytes
+)
+{
+	if(!static_content ||
+		transition.phase() != ClassicMainlStagePhase::ready ||
+		transition.handoff() == nullptr || !transition.is_classic_vs_entry() ||
+		!transition.prepared_) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	const auto &entry = transition.prepared_->entry;
+	const auto player_one = main_player_selection_from_paletted(
+		entry.resident.paletted_character[0U]
+	);
+	const auto player_two = main_player_selection_from_paletted(
+		entry.resident.paletted_character[1U]
+	);
+	if(!player_one || !player_two) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	const auto expected = main_private_resource_keys(*player_one, *player_two);
+	if(!expected) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	if(const auto valid = validate_resource_set(
+		resources,
+		*expected,
+		authenticate_resource_bytes
+	); !valid) {
+		return std::unexpected(valid.error());
+	}
+	auto process = MainProcess::create_common(
+		entry.resident,
+		entry.game_options,
+		entry.kotohime_compatibility,
+		{*player_one, *player_two},
+		*transition.handoff(),
+		resources,
+		std::move(static_content),
+		std::uint8_t{0U}
+	);
+	if(process) {
+		transition.consume_handoff();
+	}
+	return process;
+}
+
+std::expected<std::unique_ptr<MainProcess>, MainProcessError>
 MainProcess::create_common(
 	const GameInit &init,
 	GameOptions game_options,
@@ -718,6 +783,7 @@ MainProcess::create_common(
 	}
 	auto impl = std::make_unique<Impl>();
 	impl->input_protocol = game_options.input_protocol;
+	impl->continues_used_digit = continues_used_digit;
 	impl->static_content = std::move(static_content);
 	const auto superimpose_decoder = [](std::span<const std::byte> bytes) {
 		return assets::decode_bfnt(
@@ -885,7 +951,7 @@ MainProcess::create_common(
 			.zikicw = &impl->static_content->zikicw(),
 		},
 		impl->static_content->compiled().hud_result_tram_assets(),
-		continues_used_digit
+		impl->continues_used_digit
 	);
 	if(!impl->background->ready() || !impl->bosses->ready() ||
 		!impl->entities->ready() || !impl->effects->ready() ||

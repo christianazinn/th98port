@@ -22,6 +22,8 @@
 
 namespace th03::app {
 
+class ClassicOpSelectionCompletion;
+
 struct MainlStageCharacterText final {
 	std::vector<std::uint8_t> title{};
 	std::vector<std::uint8_t> name{};
@@ -87,6 +89,19 @@ public:
 		MainlStageTextAssets text,
 		const present::AnkGlyphProvider &font
 	);
+	// Stock OP selection always enters MAINL before MAIN. The private
+	// completion proves the non-Story resident instead of accepting a second,
+	// caller-forgeable GameInit.
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicMainlStageTransition>,
+		ClassicMainlStageError
+	> create_from_selection(
+		const ClassicOpSelectionCompletion &completion,
+		present::KotohimeBombFadeCompatibility kotohime_compatibility,
+		std::span<const LoadedMainResource> resources,
+		MainlStageTextAssets text,
+		const present::AnkGlyphProvider &font
+	);
 	~ClassicMainlStageTransition();
 
 	ClassicMainlStageTransition(const ClassicMainlStageTransition &) = delete;
@@ -113,9 +128,22 @@ private:
 	friend struct ClassicStoryBackend;
 	friend struct ClassicMainlStageTestAccess;
 	friend struct MainProcessStoryAccess;
+	friend struct MainProcessClassicVsAccess;
+
+	enum class EntryPolicy : std::uint8_t {
+		story,
+		classic_vs,
+	};
+
+	struct EntryConfig final {
+		GameInit resident{};
+		GameOptions game_options{};
+		present::KotohimeBombFadeCompatibility kotohime_compatibility{};
+		EntryPolicy policy = EntryPolicy::story;
+	};
 
 	struct Prepared final {
-		MainStoryConfig config{};
+		EntryConfig entry{};
 		std::array<assets::PlanarCel4, 2U> portraits{};
 		std::optional<assets::PlanarCel4> stage_number{};
 		assets::PiImage splash_base{};
@@ -138,7 +166,18 @@ private:
 		std::unique_ptr<ClassicMainlStageTransition>,
 		ClassicMainlStageError
 	> create_impl(
-		const MainStoryConfig &config,
+		EntryConfig entry,
+		std::span<const LoadedMainResource> resources,
+		MainlStageTextAssets text,
+		const present::AnkGlyphProvider &font,
+		bool authenticate_resource_bytes
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicMainlStageTransition>,
+		ClassicMainlStageError
+	> create_from_selection_impl(
+		const ClassicOpSelectionCompletion &completion,
+		present::KotohimeBombFadeCompatibility kotohime_compatibility,
 		std::span<const LoadedMainResource> resources,
 		MainlStageTextAssets text,
 		const present::AnkGlyphProvider &font,
@@ -157,6 +196,7 @@ private:
 	[[nodiscard]] bool matches_process_config(
 		const MainStoryConfig &config
 	) const noexcept;
+	[[nodiscard]] bool is_classic_vs_entry() const noexcept;
 	void consume_handoff() noexcept;
 	void fail() noexcept;
 
@@ -178,6 +218,12 @@ struct ClassicMainlStageTestAccess final {
 		const MainStoryConfig &config,
 		present::Raster raster
 	);
+	[[nodiscard]] static std::unique_ptr<ClassicMainlStageTransition>
+	create_ready_vs_with_handoff(
+		GameInit resident,
+		present::KotohimeBombFadeCompatibility kotohime_compatibility,
+		present::Raster raster
+	);
 
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicMainlStageTransition>,
@@ -190,7 +236,33 @@ struct ClassicMainlStageTestAccess final {
 	)
 	{
 		return ClassicMainlStageTransition::create_impl(
-			config,
+			{
+				.resident = config.resident,
+				.game_options = config.game_options,
+				.kotohime_compatibility = config.kotohime_compatibility,
+				.policy = ClassicMainlStageTransition::EntryPolicy::story,
+			},
+			resources,
+			std::move(text),
+			font,
+			false
+		);
+	}
+
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicMainlStageTransition>,
+		ClassicMainlStageError
+	> create_vs_with_synthetic_resources(
+		const ClassicOpSelectionCompletion &completion,
+		present::KotohimeBombFadeCompatibility kotohime_compatibility,
+		std::span<const LoadedMainResource> resources,
+		MainlStageTextAssets text,
+		const present::AnkGlyphProvider &font
+	)
+	{
+		return ClassicMainlStageTransition::create_from_selection_impl(
+			completion,
+			kotohime_compatibility,
 			resources,
 			std::move(text),
 			font,

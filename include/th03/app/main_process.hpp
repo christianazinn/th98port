@@ -21,6 +21,7 @@ namespace th03::app {
 class MainProcessStaticContent;
 class MainStageHandoff;
 struct MainProcessStoryAccess;
+struct MainProcessClassicVsAccess;
 
 // One fresh, human P1-vs-P2 MAIN process. Story entry is source-private and
 // requires a completed MAINL handoff; demo/CPU and snapshot-backed entry remain
@@ -165,6 +166,7 @@ public:
 private:
 	friend struct MainProcessTestAccess;
 	friend struct MainProcessStoryAccess;
+	friend struct MainProcessClassicVsAccess;
 	struct Impl;
 	explicit MainProcess(std::unique_ptr<Impl> impl) noexcept;
 	[[nodiscard]] static std::expected<

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -15,12 +16,17 @@
 #include "th03/present/text.hpp"
 
 #include "classic_mainl_stage_internal.hpp"
+#include "classic_op_selection_internal.hpp"
 
 namespace {
 
 using th03::app::ClassicMainlStageErrorCode;
 using th03::app::ClassicMainlStagePhase;
 using th03::app::ClassicMainlStageTestAccess;
+using th03::app::ClassicOpSelectionCompletion;
+using th03::app::ClassicOpSelectionMode;
+using th03::app::ClassicOpSelectionOutcome;
+using th03::app::ClassicOpSelectionTestAccess;
 using th03::app::LoadedMainResource;
 using th03::app::MainCharacter;
 using th03::app::MainPaletteVariant;
@@ -483,6 +489,89 @@ std::vector<LoadedMainResource> resources_for(const MainStoryConfig &config)
 	return result;
 }
 
+th03::GameInit vs_resident(
+	ClassicOpSelectionMode mode,
+	std::int8_t player_one = 2,
+	std::int8_t player_two = 17
+) noexcept
+{
+	th03::GameInit resident{};
+	resident.resident_rand = -1234567;
+	resident.random_seed = std::bit_cast<std::uint32_t>(
+		resident.resident_rand
+	);
+	resident.rank = 3U;
+	resident.key_mode = 2U;
+	resident.story_lives = 77U;
+	resident.remaining_credits = 2U;
+	resident.skill = 203U;
+	resident.fast_op_animation = 1U;
+	resident.story_opponents.fill(13);
+	resident.paletted_character = {player_one, player_two};
+	switch(mode) {
+	case ClassicOpSelectionMode::vs_1p_cpu:
+		resident.game_mode = th03::game_mode::vs_1p_cpu;
+		resident.is_cpu = {0U, 1U};
+		break;
+	case ClassicOpSelectionMode::vs_1p_2p:
+		resident.game_mode = th03::game_mode::vs_1p_2p;
+		resident.is_cpu = {0U, 0U};
+		break;
+	case ClassicOpSelectionMode::vs_cpu_cpu:
+		resident.game_mode = th03::game_mode::vs_cpu_cpu;
+		resident.is_cpu = {1U, 1U};
+		break;
+	case ClassicOpSelectionMode::story:
+		resident.game_mode = th03::game_mode::story;
+		resident.is_cpu = {0U, 1U};
+		break;
+	}
+	return resident;
+}
+
+ClassicOpSelectionCompletion vs_completion(
+	ClassicOpSelectionMode mode,
+	th03::GameInit resident
+) noexcept
+{
+	return ClassicOpSelectionTestAccess::make_completion(
+		ClassicOpSelectionOutcome::selected,
+		mode,
+		std::move(resident)
+	);
+}
+
+std::vector<LoadedMainResource> resources_for(
+	const ClassicOpSelectionCompletion &completion
+)
+{
+	const auto &resident = completion.resident();
+	const auto p1 = *th03::app::main_player_selection_from_paletted(
+		resident.paletted_character[0U]
+	);
+	const auto p2 = *th03::app::main_player_selection_from_paletted(
+		resident.paletted_character[1U]
+	);
+	const auto keys = *th03::app::mainl_stage_resource_keys({
+		.player_one = p1,
+		.player_two = p2,
+		.game_mode = resident.game_mode,
+		.story_stage = resident.story_stage,
+	});
+	std::vector<LoadedMainResource> result;
+	result.reserve(keys.size());
+	for(const auto key : keys) {
+		const auto spec = *th03::app::main_resource_spec(key);
+		result.push_back({
+			.spec = spec,
+			.bytes = std::make_shared<const std::vector<std::byte>>(
+				bytes_for(spec)
+			),
+		});
+	}
+	return result;
+}
+
 void expect_pixel(
 	const th03::present::Raster &raster,
 	Page page,
@@ -742,6 +831,257 @@ void test_all_story_scenarios_construct()
 	}
 }
 
+void test_all_classic_vs_modes_from_selection()
+{
+	SyntheticFont font;
+	for(const auto mode : {
+		ClassicOpSelectionMode::vs_1p_cpu,
+		ClassicOpSelectionMode::vs_1p_2p,
+		ClassicOpSelectionMode::vs_cpu_cpu,
+	}) {
+		auto completion = vs_completion(mode, vs_resident(mode));
+		auto resources = resources_for(completion);
+		const auto p1 = *th03::app::main_player_selection_from_paletted(2);
+		const auto p2 = *th03::app::main_player_selection_from_paletted(17);
+		const std::vector<MainResourceKey> exact_non_story_keys{
+			{.role = MainResourceRole::mainl_gaiji_font},
+			{
+				.role = MainResourceRole::character_stage_portrait,
+				.character = p1.character,
+			},
+			{
+				.role = MainResourceRole::character_stage_portrait,
+				.character = p2.character,
+			},
+			{.role = MainResourceRole::stage_splash_base},
+			{
+				.role = MainResourceRole::stage_splash_background,
+				.stage_background = th03::app::MainlStageBackground::non_story,
+			},
+			{
+				.role = MainResourceRole::character_stage_shot,
+				.character = p1.character,
+				.palette = p1.palette,
+			},
+			{
+				.role = MainResourceRole::character_stage_extra_shot,
+				.character = p1.character,
+				.palette = p1.palette,
+			},
+			{
+				.role = MainResourceRole::character_stage_shot,
+				.character = p2.character,
+				.palette = p2.palette,
+			},
+			{
+				.role = MainResourceRole::character_stage_extra_shot,
+				.character = p2.character,
+				.palette = p2.palette,
+			},
+			{.role = MainResourceRole::stage_enemy_center},
+			{
+				.role = MainResourceRole::character_stage_enemy_group,
+				.character = p2.character,
+			},
+		};
+		const auto exact_closure = std::equal(
+			resources.begin(), resources.end(),
+			exact_non_story_keys.begin(), exact_non_story_keys.end(),
+			[](const auto &resource, const auto &key) {
+				return resource.spec.key == key;
+			}
+		);
+		expect(resources.size() == exact_non_story_keys.size() && exact_closure,
+			"Classic VS uses the exact STNX5/no-stage-number MAINL closure");
+		auto stage = ClassicMainlStageTestAccess::
+			create_vs_with_synthetic_resources(
+				completion,
+				{.red_provider = &kotohime_fade},
+				resources,
+				text_assets(),
+				font
+			);
+		expect(stage.has_value(),
+			"every Classic VS mode constructs from typed selection provenance");
+		if(!stage) {
+			continue;
+		}
+		expect((*stage)->phase() == ClassicMainlStagePhase::black_in &&
+			(*stage)->raster().shown_page() == Page::zero &&
+			(*stage)->raster().access_page() == Page::zero,
+			"Classic VS starts the common non-Story splash boundary");
+		expect_pixel((*stage)->raster(), Page::zero, {10, 10}, 3U,
+			"Classic VS uses the non-Story top background");
+		expect_pixel((*stage)->raster(), Page::zero, {384, 46}, 3U,
+			"Classic VS omits the Story stage-number cel");
+		for(std::size_t tick = 0U; tick < 18U; ++tick) {
+			expect((*stage)->advance(false).has_value(),
+				"Classic VS black-in reaches hidden staging");
+		}
+		expect_pixel((*stage)->raster(), Page::one, {0, 200}, 5U,
+			"Classic VS stages the selected P1 paletted NN16");
+		expect_pixel((*stage)->raster(), Page::one, {320, 200}, 4U,
+			"Classic VS stages the selected P2 paletted NN16");
+	}
+}
+
+void test_classic_vs_completion_validation()
+{
+	SyntheticFont font;
+	auto valid_completion = vs_completion(
+		ClassicOpSelectionMode::vs_1p_cpu,
+		vs_resident(ClassicOpSelectionMode::vs_1p_cpu)
+	);
+	auto valid_resources = resources_for(valid_completion);
+	const auto expect_invalid = [&](th03::GameInit resident,
+		ClassicOpSelectionMode mode,
+		std::string_view message) {
+		auto completion = vs_completion(mode, std::move(resident));
+		auto rejected = ClassicMainlStageTestAccess::
+			create_vs_with_synthetic_resources(
+				completion,
+				{.red_provider = &kotohime_fade},
+				valid_resources,
+				text_assets(),
+				font
+			);
+		expect(!rejected && rejected.error().code ==
+			ClassicMainlStageErrorCode::invalid_config, message);
+	};
+
+	auto resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.game_mode = th03::game_mode::vs_1p_2p;
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"VS mode and resident game mode cannot be paired independently");
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.is_cpu = {1U, 0U};
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"impossible CPU ownership is rejected");
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.last_score[1U][7U] = 1U;
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"OP-to-MAINL VS entry requires both cleared score rows");
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.paletted_character[1U] = resident.paletted_character[0U];
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"selection collision cannot cross the typed completion boundary");
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.runtime_snapshot.emplace();
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"snapshot-backed state cannot enter the fresh Classic VS path");
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.compact_runtime_snapshot.emplace();
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"compact snapshot state cannot enter the fresh Classic VS path");
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.round_start_snapshot.emplace();
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"round snapshot state cannot enter the fresh Classic VS path");
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.practice_rules.emplace();
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"Practice state cannot enter the fresh Classic VS path");
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.random_seed ^= 1U;
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"Classic VS seed transfer must match the selector resident RNG");
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.global_frame = 1U;
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"Classic VS begins a fresh MAIN process at global frame zero");
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.paletted_character[0U] = 0;
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"Classic VS rejects an invalid raw paletted character");
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.rank = 4U;
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"Classic VS rejects rank outside the source domain");
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.key_mode = 3U;
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"Classic VS rejects key mode outside the source domain");
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.fast_op_animation = 2U;
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"Classic VS rejects an impossible fast-OP flag");
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.remaining_credits = 4U;
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"Classic VS rejects credits outside the source resident domain");
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	resident.autofire_mask = 4U;
+	expect_invalid(resident, ClassicOpSelectionMode::vs_1p_cpu,
+		"Classic VS rejects unsupported autofire bits");
+
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu);
+	auto canceled = ClassicOpSelectionTestAccess::make_completion(
+		ClassicOpSelectionOutcome::canceled,
+		ClassicOpSelectionMode::vs_1p_cpu,
+		resident
+	);
+	auto canceled_stage = ClassicMainlStageTestAccess::
+		create_vs_with_synthetic_resources(
+			canceled,
+			{.red_provider = &kotohime_fade},
+			valid_resources,
+			text_assets(),
+			font
+		);
+	expect(!canceled_stage && canceled_stage.error().code ==
+		ClassicMainlStageErrorCode::invalid_config,
+		"a canceled selector completion cannot authorize MAINL");
+
+	resident = vs_resident(ClassicOpSelectionMode::vs_1p_cpu, 9, 1);
+	auto kotohime = vs_completion(
+		ClassicOpSelectionMode::vs_1p_cpu, resident
+	);
+	auto missing_kotohime_policy = ClassicMainlStageTestAccess::
+		create_vs_with_synthetic_resources(
+			kotohime,
+			{},
+			valid_resources,
+			text_assets(),
+			font
+		);
+	expect(!missing_kotohime_policy &&
+		missing_kotohime_policy.error().code ==
+			ClassicMainlStageErrorCode::invalid_config,
+		"Kotohime VS entry requires the process-lifetime compatibility provider");
+
+	auto same_base = vs_completion(
+		ClassicOpSelectionMode::vs_1p_2p,
+		vs_resident(ClassicOpSelectionMode::vs_1p_2p, 1, 2)
+	);
+	auto same_base_resources = resources_for(same_base);
+	auto same_base_stage = ClassicMainlStageTestAccess::
+		create_vs_with_synthetic_resources(
+			same_base,
+			{.red_provider = &kotohime_fade},
+			same_base_resources,
+			text_assets(),
+			font
+		);
+	expect(same_base_stage.has_value(),
+		"same-character opposite-palette VS is a legal raw selection pair");
+
+	resident = vs_resident(ClassicOpSelectionMode::story);
+	auto story_completion = vs_completion(
+		ClassicOpSelectionMode::story, std::move(resident)
+	);
+	auto rejected = ClassicMainlStageTestAccess::
+		create_vs_with_synthetic_resources(
+			story_completion,
+			{.red_provider = &kotohime_fade},
+			valid_resources,
+			text_assets(),
+			font
+		);
+	expect(!rejected && rejected.error().code ==
+		ClassicMainlStageErrorCode::invalid_config,
+		"Story completion cannot enter the Classic VS factory");
+}
+
 } // namespace
 
 int main()
@@ -750,6 +1090,8 @@ int main()
 	test_timeout_and_resource_atomicity();
 	test_winner_preload_and_adoption();
 	test_all_story_scenarios_construct();
+	test_all_classic_vs_modes_from_selection();
+	test_classic_vs_completion_validation();
 
 	if(failures != 0U) {
 		std::cerr << failures << " of " << checks << " checks failed\n";
