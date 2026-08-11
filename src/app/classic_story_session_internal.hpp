@@ -19,6 +19,7 @@
 #include "mainl_compiled_text_internal.hpp"
 #include "main_process_driver_internal.hpp"
 #include "th03/app/resources.hpp"
+#include "th03/app/tick_input.hpp"
 #include "th03/present/source_surface.hpp"
 
 namespace th03::app {
@@ -83,8 +84,13 @@ struct ClassicStorySessionError final {
 	std::optional<present::SourceSurfaceError> surface_error{};
 };
 
+struct ClassicMainInputSample final {
+	CoreInput aggregate{};
+	std::optional<PhysicalInputDomains> physical_domains{};
+};
+
 struct ClassicStorySessionInput final {
-	CoreInput main{};
+	ClassicMainInputSample main{};
 	ClassicCutsceneInput cutscene{};
 	ClassicStaffInput staff{};
 	ClassicRegistrationInput registration{};
@@ -135,7 +141,7 @@ struct ClassicStorySessionBackendOperations final {
 		void *, const MainStoryConfig &
 	) = nullptr;
 	std::expected<ClassicStoryBackendTick, ClassicStorySessionError>
-	(*advance_main)(void *, CoreInput) = nullptr;
+	(*advance_main)(void *, const ClassicMainInputSample &) = nullptr;
 	std::expected<ClassicStoryTerminal, ClassicStorySessionError>
 	(*main_terminal)(void *) = nullptr;
 	std::expected<void, ClassicStorySessionError> (*start_win)(
@@ -286,7 +292,7 @@ private:
 
 struct ClassicStorySessionTestAccess final {
 	[[nodiscard]] static CoreInput story_main_input(
-		CoreInput input,
+		const ClassicMainInputSample &input,
 		InputContext context
 	) noexcept;
 	[[nodiscard]] static std::expected<

@@ -202,22 +202,71 @@ namespace {
 
 [[nodiscard]] CoreInput normalize_vs_cpu_main_input(
 	const GameInit &resident,
-	CoreInput input,
+	const ClassicMainInputSample &sample,
 	InputContext context
 ) noexcept
 {
+	auto input = sample.aggregate;
+	if(!sample.physical_domains) {
+		if(context != InputContext::gameplay) {
+			return input;
+		}
+		switch(resident.game_mode) {
+		case game_mode::vs_1p_cpu:
+			input.p1 = static_cast<std::uint16_t>(input.p1 | input.system);
+			input.p2 = 0U;
+			input.charge_mask = static_cast<std::uint8_t>(
+				input.charge_mask & 0x01U
+			);
+			break;
+		case game_mode::vs_cpu_cpu:
+			if((input.system & 0x3000U) != 0U) {
+				input.system = 0x1000U;
+			}
+			input.p1 = 0U;
+			input.p2 = 0U;
+			input.charge_mask = 0U;
+			break;
+		default:
+			break;
+		}
+		return input;
+	}
+	const auto &physical = *sample.physical_domains;
+	input.system = physical.keyboard.system;
 	if(context != InputContext::gameplay) {
 		return input;
 	}
 	switch(resident.game_mode) {
 	case game_mode::vs_1p_cpu:
-		// input_mode_1p_vs_cpu(): merge input_sp into the human side and
-		// clear the CPU side immediately before both player updates.
-		input.p1 = static_cast<std::uint16_t>(input.p1 | input.system);
+		// input_mode_1p_vs_cpu(): merge input_sp and joystick zero into the
+		// human side and clear the CPU side before both player updates.
+		input.p1 = static_cast<std::uint16_t>(
+			physical.keyboard.p1 | physical.keyboard.system |
+			(physical.first_joystick_present ? physical.first_joystick : 0U)
+		);
 		input.p2 = 0U;
 		input.charge_mask = static_cast<std::uint8_t>(
-			input.charge_mask & 0x01U
+			physical.keyboard.charge_mask & 0x01U
 		);
+		break;
+	case game_mode::vs_1p_2p:
+		input.p1 = physical.keyboard.p1;
+		input.p2 = physical.keyboard.p2;
+		input.charge_mask = physical.keyboard.charge_mask;
+		if(physical.first_joystick_present && resident.key_mode == 1U) {
+			input.p1 = physical.first_joystick;
+			input.p2 = physical.keyboard.system;
+			input.charge_mask = static_cast<std::uint8_t>(
+				input.charge_mask & 0x02U
+			);
+		} else if(physical.first_joystick_present && resident.key_mode == 2U) {
+			input.p1 = physical.keyboard.system;
+			input.p2 = physical.first_joystick;
+			input.charge_mask = static_cast<std::uint8_t>(
+				input.charge_mask & 0x01U
+			);
+		}
 		break;
 	case game_mode::vs_cpu_cpu:
 		// input_mode_cpu_vs_cpu(): either keyboard Cancel or OK becomes the
@@ -233,6 +282,23 @@ namespace {
 		break;
 	}
 	return input;
+}
+
+[[nodiscard]] bool attract_input_present(
+	const ClassicMainInputSample &input
+) noexcept
+{
+	if(!input.physical_domains) {
+		const auto &aggregate = input.aggregate;
+		return aggregate.p1 != 0U || aggregate.p2 != 0U ||
+			aggregate.system != 0U || aggregate.charge_mask != 0U;
+	}
+	const auto &physical = *input.physical_domains;
+	const auto interface_word = static_cast<std::uint16_t>(
+		physical.keyboard.system | physical.keyboard.p1 |
+		(physical.first_joystick_present ? physical.first_joystick : 0U)
+	);
+	return interface_word != 0U;
 }
 
 [[nodiscard]] MainlStageResourceRequest stage_request(
@@ -1332,18 +1398,17 @@ struct ClassicOpSessionBackend final {
 	}
 
 	[[nodiscard]] std::expected<ClassicOpSessionBackendTick,
-		ClassicOpSessionError> advance_demo_main(CoreInput input)
+		ClassicOpSessionError> advance_demo_main(
+			const ClassicMainInputSample &input
+		)
 	{
-		const bool physical_input = input.p1 != 0U || input.p2 != 0U ||
-			input.system != 0U || input.charge_mask != 0U;
-		if(physical_input) {
+		ClassicMainInputSample projected{};
+		if(attract_input_present(input)) {
 			// Source attract mode exits for any physical input. The neutral core's
 			// architecture-independent early-exit signal is gameplay Cancel.
-			input = {.system = 0x1000U};
-		} else {
-			input = {};
+			projected.aggregate = {.system = 0x1000U};
 		}
-		return advance_vs_main(input);
+		return advance_vs_main(projected);
 	}
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError> finish_demo_main()
@@ -1488,7 +1553,9 @@ struct ClassicOpSessionBackend final {
 	}
 
 	[[nodiscard]] std::expected<ClassicOpSessionBackendTick,
-		ClassicOpSessionError> advance_vs_main(CoreInput input)
+		ClassicOpSessionError> advance_vs_main(
+			const ClassicMainInputSample &input
+		)
 	{
 		if(!vs_process || !vs_driver) {
 			return std::unexpected(session_error(
@@ -1952,7 +2019,10 @@ Result backend_call(void *context, Method method, Args &&...args)
 				context, &ClassicOpSessionBackend::start_demo_main
 			);
 		},
-		.advance_demo_main = [](void *context, CoreInput input) {
+		.advance_demo_main = [](
+			void *context,
+			const ClassicMainInputSample &input
+		) {
 			return backend_call<std::expected<
 				ClassicOpSessionBackendTick, ClassicOpSessionError
 			>>(context, &ClassicOpSessionBackend::advance_demo_main, input);
@@ -1977,7 +2047,10 @@ Result backend_call(void *context, Method method, Args &&...args)
 				context, &ClassicOpSessionBackend::start_vs_main
 			);
 		},
-		.advance_vs_main = [](void *context, CoreInput input) {
+		.advance_vs_main = [](
+			void *context,
+			const ClassicMainInputSample &input
+		) {
 			return backend_call<std::expected<
 				ClassicOpSessionBackendTick, ClassicOpSessionError
 			>>(context, &ClassicOpSessionBackend::advance_vs_main, input);
@@ -2305,11 +2378,18 @@ ClassicOpSessionStatus ClassicOpSession::status() const noexcept
 
 CoreInput ClassicOpSessionTestAccess::vs_cpu_main_input(
 	const GameInit &resident,
-	CoreInput input,
+	const ClassicMainInputSample &input,
 	InputContext context
 ) noexcept
 {
 	return normalize_vs_cpu_main_input(resident, input, context);
+}
+
+bool ClassicOpSessionTestAccess::attract_input_present(
+	const ClassicMainInputSample &input
+) noexcept
+{
+	return th03::app::attract_input_present(input);
 }
 
 std::optional<ClassicOpRoute> ClassicOpSession::external_route() const noexcept

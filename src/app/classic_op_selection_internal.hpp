@@ -13,6 +13,7 @@
 #include "classic_op_scene_internal.hpp"
 #include "th03/app/classic_audio.hpp"
 #include "th03/app/resources.hpp"
+#include "th03/app/tick_input.hpp"
 #include "th03/assets/types.hpp"
 #include "th03/core/game.hpp"
 #include "th03/present/raster.hpp"
@@ -32,6 +33,7 @@ struct ClassicOpSelectionInput final {
 	std::uint16_t single_player = 0U;
 	std::uint16_t player_one = 0U;
 	std::uint16_t player_two = 0U;
+	std::optional<PhysicalInputDomains> physical_domains{};
 };
 
 struct ClassicOpSelectionCarry final {
@@ -310,6 +312,12 @@ private:
 };
 
 struct ClassicOpSelectionTestAccess final {
+	[[nodiscard]] static ClassicOpSelectionInput normalize_input(
+		ClassicOpSelectionMode mode,
+		std::uint8_t key_mode,
+		ClassicOpSelectionInput input
+	) noexcept;
+
 	[[nodiscard]] static ClassicOpSelectionCompletion make_completion(
 		ClassicOpSelectionOutcome outcome,
 		ClassicOpSelectionMode mode,

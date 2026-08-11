@@ -123,19 +123,37 @@ namespace {
 }
 
 [[nodiscard]] CoreInput normalize_story_main_input(
-	CoreInput input,
+	const ClassicMainInputSample &sample,
 	InputContext context
 ) noexcept
 {
+	auto input = sample.aggregate;
+	if(!sample.physical_domains) {
+		if(context != InputContext::gameplay) {
+			return input;
+		}
+		input.p1 = static_cast<std::uint16_t>(input.p1 | input.system);
+		input.p2 = 0U;
+		input.charge_mask = static_cast<std::uint8_t>(
+			input.charge_mask & 0x01U
+		);
+		return input;
+	}
+	const auto &physical = *sample.physical_domains;
+	input.system = physical.keyboard.system;
 	if(context != InputContext::gameplay) {
 		return input;
 	}
 	// input_mode_1p_vs_cpu() merges the source-global keyboard word into P1
-	// after sensing the multiplayer P1 word, then clears P2. Keep input_sp
-	// separately available for pause handling at the same gameplay boundary.
-	input.p1 = static_cast<std::uint16_t>(input.p1 | input.system);
+	// and joystick zero after sensing the multiplayer P1 word, then clears P2.
+	input.p1 = static_cast<std::uint16_t>(
+		physical.keyboard.p1 | physical.keyboard.system |
+		(physical.first_joystick_present ? physical.first_joystick : 0U)
+	);
 	input.p2 = 0U;
-	input.charge_mask = static_cast<std::uint8_t>(input.charge_mask & 0x01U);
+	input.charge_mask = static_cast<std::uint8_t>(
+		physical.keyboard.charge_mask & 0x01U
+	);
 	return input;
 }
 
@@ -483,7 +501,7 @@ struct ClassicStoryBackend final {
 	}
 
 	std::expected<ClassicStoryBackendTick, ClassicStorySessionError>
-	advance_main(CoreInput input)
+	advance_main(const ClassicMainInputSample &input)
 	{
 		if(!driver || !process) {
 			return std::unexpected(session_error(
@@ -1163,7 +1181,10 @@ ClassicStorySessionBackendOperations backend_operations(
 				context, &ClassicStoryBackend::start_main, config
 			);
 		},
-		.advance_main = [](void *context, CoreInput input) {
+		.advance_main = [](
+			void *context,
+			const ClassicMainInputSample &input
+		) {
 			return backend_call<std::expected<ClassicStoryBackendTick,
 				ClassicStorySessionError>>(
 				context, &ClassicStoryBackend::advance_main, input
@@ -1868,7 +1889,7 @@ ClassicStorySessionStatus ClassicStorySession::status() const noexcept
 }
 
 CoreInput ClassicStorySessionTestAccess::story_main_input(
-	CoreInput input,
+	const ClassicMainInputSample &input,
 	InputContext context
 ) noexcept
 {

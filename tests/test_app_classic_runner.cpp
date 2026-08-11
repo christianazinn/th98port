@@ -160,12 +160,13 @@ void test_input_projection()
 		input.selection.player_one == 0x0F3FU &&
 		input.selection.player_two == 0x000AU,
 		"selection keeps global and two-player source input domains distinct");
-	expect(input.main.p1 == sample.input.p1 &&
-		input.main.p2 == sample.input.p2 &&
-		input.main.system == sample.input.system &&
-		input.main.charge_mask == sample.input.charge_mask,
+	expect(input.main.aggregate.p1 == sample.input.p1 &&
+		input.main.aggregate.p2 == sample.input.p2 &&
+		input.main.aggregate.system == sample.input.system &&
+		input.main.aggregate.charge_mask == sample.input.charge_mask &&
+		!input.main.physical_domains,
 		"MAIN receives the exact latched CoreInput");
-	expect(input.story.main.system == 0x703FU &&
+	expect(input.story.main.aggregate.system == 0x703FU &&
 		input.story.cutscene.script.cancel_held &&
 		input.story.cutscene.script.any_key_held &&
 		input.story.cutscene.shot_or_ok_held &&
@@ -203,6 +204,39 @@ void test_input_projection()
 			!player_only.story.dismiss_pressed,
 		"player-only controls cannot masquerade as the donor input_sp domain"
 	);
+
+	const auto live = th03::app::ClassicRunnerTestAccess::project_input({
+		.tick_index = 11U,
+		.deadline_ns = 125U,
+		.input = {
+			.p1 = 0x0029U,
+			.p2 = 0x0002U,
+			.system = 0x202CU,
+			.charge_mask = 0x03U,
+		},
+		.physical_domains = th03::app::PhysicalInputDomains{
+			.keyboard = {
+				.p1 = 0x0001U,
+				.p2 = 0x0002U,
+				.system = 0x2004U,
+				.charge_mask = 0x03U,
+			},
+			.first_joystick = 0x0028U,
+			.first_joystick_present = true,
+		},
+	});
+	expect(live.op.up && live.op.left && live.op.right && live.op.shot &&
+		live.op.ok && live.dismiss_pressed,
+		"live interface input merges keyboard system, keyboard P1, and joystick zero");
+	expect(live.selection.single_player == 0x202DU &&
+		live.selection.player_one == 0x0001U &&
+		live.selection.player_two == 0x0002U &&
+		live.selection.physical_domains.has_value(),
+		"live selection preserves its raw keyboard and joystick source domains");
+	expect(live.main.aggregate.p1 == 0x0029U &&
+		live.main.physical_domains.has_value() &&
+		live.story.main.physical_domains.has_value(),
+		"live MAIN projections retain aggregate replay input beside physical domains");
 }
 
 struct FakeRunnerBackend final {

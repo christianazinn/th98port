@@ -230,7 +230,10 @@ ClassicStorySessionBackendOperations operations(FakeBackend &fake)
 			++backend.main_count;
 			return std::expected<void, ClassicStorySessionError>{};
 		},
-		.advance_main = [](void *context, th03::CoreInput) {
+		.advance_main = [](
+			void *context,
+			const th03::app::ClassicMainInputSample &
+		) {
 			auto &backend = *static_cast<FakeBackend *>(context);
 			++backend.main_advance_count;
 			return std::expected<ClassicStoryBackendTick,
@@ -441,7 +444,7 @@ void test_story_input_mode_normalization()
 		.charge_mask = 0x03U,
 	};
 	const auto gameplay = ClassicStorySessionTestAccess::story_main_input(
-		physical, th03::InputContext::gameplay
+		{.aggregate = physical}, th03::InputContext::gameplay
 	);
 	expect(gameplay.p1 == 0x7136U && gameplay.p2 == 0U &&
 		gameplay.system == physical.system && gameplay.charge_mask == 0x01U,
@@ -451,13 +454,41 @@ void test_story_input_mode_normalization()
 		th03::InputContext::pause,
 	}) {
 		const auto raw = ClassicStorySessionTestAccess::story_main_input(
-			physical, context
+			{.aggregate = physical}, context
 		);
 		expect(raw.p1 == physical.p1 && raw.p2 == physical.p2 &&
 			raw.system == physical.system &&
 			raw.charge_mask == physical.charge_mask,
 			"Story warning and pause samples retain raw source words");
 	}
+
+	const th03::app::ClassicMainInputSample live{
+		.aggregate = physical,
+		.physical_domains = th03::app::PhysicalInputDomains{
+			.keyboard = {
+				.p1 = 0x0004U,
+				.p2 = 0x0008U,
+				.system = 0x1032U,
+				.charge_mask = 0x03U,
+			},
+			.first_joystick = 0x0009U,
+			.first_joystick_present = true,
+		},
+	};
+	const auto live_gameplay =
+		ClassicStorySessionTestAccess::story_main_input(
+			live, th03::InputContext::gameplay
+		);
+	expect(live_gameplay.p1 == 0x103FU && live_gameplay.p2 == 0U &&
+		live_gameplay.system == 0x1032U &&
+		live_gameplay.charge_mask == 0x01U,
+		"live Story input merges keyboard interface and joystick zero into P1");
+	const auto live_pause = ClassicStorySessionTestAccess::story_main_input(
+		live, th03::InputContext::pause
+	);
+	expect(live_pause.system == 0x1032U &&
+		live_pause.p1 == physical.p1 && live_pause.p2 == physical.p2,
+		"live Story pause observes raw keyboard input_sp without joystick merging");
 }
 
 void test_complete_nine_stage_route()

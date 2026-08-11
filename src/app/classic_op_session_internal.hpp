@@ -101,7 +101,7 @@ struct ClassicOpSessionInput final {
 	ClassicRegistrationInput high_scores{};
 	ClassicOpSelectionInput selection{};
 	ClassicStorySessionInput story{};
-	CoreInput main{};
+	ClassicMainInputSample main{};
 	ClassicAudioStatus audio{};
 	bool dismiss_pressed = false;
 	bool app_quit_requested = false;
@@ -185,14 +185,14 @@ struct ClassicOpSessionBackendOperations final {
 	(*advance_demo_stage)(void *, bool) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*start_demo_main)(void *) = nullptr;
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
-	(*advance_demo_main)(void *, CoreInput) = nullptr;
+	(*advance_demo_main)(void *, const ClassicMainInputSample &) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*finish_demo_main)(void *) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*start_vs_stage)(void *) = nullptr;
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
 	(*advance_vs_stage)(void *, bool) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*start_vs_main)(void *) = nullptr;
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
-	(*advance_vs_main)(void *, CoreInput) = nullptr;
+	(*advance_vs_main)(void *, const ClassicMainInputSample &) = nullptr;
 	std::expected<ClassicOpSessionVsTerminal, ClassicOpSessionError>
 	(*finish_vs_main)(void *) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*start_vs_win)(
@@ -268,9 +268,12 @@ private:
 };
 
 struct ClassicOpSessionTestAccess final {
+	[[nodiscard]] static bool attract_input_present(
+		const ClassicMainInputSample &input
+	) noexcept;
 	[[nodiscard]] static CoreInput vs_cpu_main_input(
 		const GameInit &resident,
-		CoreInput input,
+		const ClassicMainInputSample &input,
 		InputContext context
 	) noexcept;
 	[[nodiscard]] static std::expected<

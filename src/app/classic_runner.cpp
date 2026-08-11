@@ -142,6 +142,25 @@ read_external_file(
 	return (input & bit) != 0U;
 }
 
+[[nodiscard]] std::uint16_t interface_input_word(
+	const LogicalTickInput &sample
+) noexcept
+{
+	if(!sample.physical_domains) {
+		return sample.input.system;
+	}
+	const auto &physical = *sample.physical_domains;
+	auto result = static_cast<std::uint16_t>(
+		physical.keyboard.system | physical.keyboard.p1
+	);
+	if(physical.first_joystick_present) {
+		result = static_cast<std::uint16_t>(
+			result | physical.first_joystick
+		);
+	}
+	return result;
+}
+
 [[nodiscard]] ClassicOpInput project_op_input(
 	const CoreInput &input
 ) noexcept
@@ -181,15 +200,25 @@ read_external_file(
 ) noexcept
 {
 	const auto &input = sample.input;
-	const auto op = project_op_input(input);
-	const auto registration = project_registration_input(input);
-	const bool cancel = pressed(input.system, input_cancel);
-	const bool ok = pressed(input.system, input_ok);
-	const bool shot = pressed(input.system, input_shot);
-	const bool any = input.system != 0U;
+	const auto interface_word = interface_input_word(sample);
+	auto interface_input = input;
+	interface_input.system = interface_word;
+	const auto op = project_op_input(interface_input);
+	const auto registration = project_registration_input(interface_input);
+	const bool cancel = pressed(interface_word, input_cancel);
+	const bool ok = pressed(interface_word, input_ok);
+	const bool shot = pressed(interface_word, input_shot);
+	const bool any = interface_word != 0U;
+	const auto selection_player_one = sample.physical_domains ?
+		sample.physical_domains->keyboard.p1 : input.p1;
+	const auto selection_player_two = sample.physical_domains ?
+		sample.physical_domains->keyboard.p2 : input.p2;
 
 	ClassicStorySessionInput story{};
-	story.main = input;
+	story.main = {
+		.aggregate = input,
+		.physical_domains = sample.physical_domains,
+	};
 	story.cutscene.script = {
 		.cancel_held = cancel,
 		.any_key_held = any,
@@ -203,8 +232,8 @@ read_external_file(
 	};
 	story.registration = registration;
 	story.continue_menu = {
-		.left = pressed(input.system, input_left),
-		.right = pressed(input.system, input_right),
+		.left = pressed(interface_word, input_left),
+		.right = pressed(interface_word, input_right),
 		.ok = ok,
 		.shot = shot,
 		.cancel = cancel,
@@ -218,12 +247,16 @@ read_external_file(
 		.music_room = {.controls = op},
 		.high_scores = registration,
 		.selection = {
-			.single_player = input.system,
-			.player_one = input.p1,
-			.player_two = input.p2,
+			.single_player = interface_word,
+			.player_one = selection_player_one,
+			.player_two = selection_player_two,
+			.physical_domains = sample.physical_domains,
 		},
 		.story = story,
-		.main = input,
+		.main = {
+			.aggregate = input,
+			.physical_domains = sample.physical_domains,
+		},
 		.audio = audio,
 		.dismiss_pressed = any,
 		.app_quit_requested = sample.app_quit_requested,

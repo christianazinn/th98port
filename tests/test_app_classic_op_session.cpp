@@ -392,7 +392,7 @@ void test_vs_cpu_input_modes()
 	resident.game_mode = th03::game_mode::vs_1p_cpu;
 	resident.is_cpu = {0U, 1U};
 	const auto one_player = ClassicOpSessionTestAccess::vs_cpu_main_input(
-		resident, physical, th03::InputContext::gameplay
+		resident, {.aggregate = physical}, th03::InputContext::gameplay
 	);
 	expect(one_player.p1 == 0x6136U && one_player.p2 == 0U &&
 		one_player.system == physical.system &&
@@ -402,7 +402,7 @@ void test_vs_cpu_input_modes()
 	resident.game_mode = th03::game_mode::vs_cpu_cpu;
 	resident.is_cpu = {1U, 1U};
 	const auto cpu_exit = ClassicOpSessionTestAccess::vs_cpu_main_input(
-		resident, physical, th03::InputContext::gameplay
+		resident, {.aggregate = physical}, th03::InputContext::gameplay
 	);
 	expect(cpu_exit.p1 == 0U && cpu_exit.p2 == 0U &&
 		cpu_exit.system == 0x1000U && cpu_exit.charge_mask == 0U,
@@ -410,7 +410,7 @@ void test_vs_cpu_input_modes()
 	auto passive = physical;
 	passive.system = 0x4005U;
 	const auto cpu_passive = ClassicOpSessionTestAccess::vs_cpu_main_input(
-		resident, passive, th03::InputContext::gameplay
+		resident, {.aggregate = passive}, th03::InputContext::gameplay
 	);
 	expect(cpu_passive.system == passive.system && cpu_passive.p1 == 0U &&
 		cpu_passive.p2 == 0U && cpu_passive.charge_mask == 0U,
@@ -424,7 +424,7 @@ void test_vs_cpu_input_modes()
 		th03::InputContext::pause,
 	}) {
 		const auto raw = ClassicOpSessionTestAccess::vs_cpu_main_input(
-			resident, physical, context
+			resident, {.aggregate = physical}, context
 		);
 		expect(raw.p1 == physical.p1 && raw.p2 == physical.p2 &&
 			raw.system == physical.system &&
@@ -437,13 +437,87 @@ void test_vs_cpu_input_modes()
 		th03::InputContext::pause,
 	}) {
 		const auto raw = ClassicOpSessionTestAccess::vs_cpu_main_input(
-			resident, physical, context
+			resident, {.aggregate = physical}, context
 		);
 		expect(raw.p1 == physical.p1 && raw.p2 == physical.p2 &&
 			raw.system == physical.system &&
 			raw.charge_mask == physical.charge_mask,
 			"VS warning and pause samples retain raw source words");
 	}
+
+	th03::app::ClassicMainInputSample live{
+		.aggregate = physical,
+		.physical_domains = th03::app::PhysicalInputDomains{
+			.keyboard = {
+				.p1 = 0x0004U,
+				.p2 = 0x0008U,
+				.system = 0x1032U,
+				.charge_mask = 0x03U,
+			},
+			.first_joystick = 0x0009U,
+			.first_joystick_present = true,
+		},
+	};
+	resident.game_mode = th03::game_mode::vs_1p_cpu;
+	const auto live_one_player = ClassicOpSessionTestAccess::vs_cpu_main_input(
+		resident, live, th03::InputContext::gameplay
+	);
+	expect(live_one_player.p1 == 0x103FU && live_one_player.p2 == 0U &&
+		live_one_player.system == 0x1032U &&
+		live_one_player.charge_mask == 0x01U,
+		"live 1P-vs-CPU merges keyboard interface and joystick zero into P1");
+
+	resident.game_mode = th03::game_mode::vs_1p_2p;
+	resident.key_mode = 0U;
+	const auto key_key = ClassicOpSessionTestAccess::vs_cpu_main_input(
+		resident, live, th03::InputContext::gameplay
+	);
+	expect(key_key.p1 == 0x0004U && key_key.p2 == 0x0008U &&
+		key_key.system == 0x1032U && key_key.charge_mask == 0x03U,
+		"live Key-vs-Key uses the two keyboard multiplayer domains");
+	resident.key_mode = 1U;
+	const auto joy_key = ClassicOpSessionTestAccess::vs_cpu_main_input(
+		resident, live, th03::InputContext::gameplay
+	);
+	expect(joy_key.p1 == 0x0009U && joy_key.p2 == 0x1032U &&
+		joy_key.charge_mask == 0x02U,
+		"live Joy-vs-Key routes joystick zero and keyboard input_sp exactly");
+	resident.key_mode = 2U;
+	const auto key_joy = ClassicOpSessionTestAccess::vs_cpu_main_input(
+		resident, live, th03::InputContext::gameplay
+	);
+	expect(key_joy.p1 == 0x1032U && key_joy.p2 == 0x0009U &&
+		key_joy.charge_mask == 0x01U,
+		"live Key-vs-Joy routes keyboard input_sp and joystick zero exactly");
+	live.physical_domains->first_joystick_present = false;
+	const auto missing_joystick = ClassicOpSessionTestAccess::vs_cpu_main_input(
+		resident, live, th03::InputContext::gameplay
+	);
+	expect(missing_joystick.p1 == 0x0004U &&
+		missing_joystick.p2 == 0x0008U && missing_joystick.charge_mask == 0x03U,
+		"missing joystick preserves the keyboard-sensed fallback words");
+	const auto live_pause = ClassicOpSessionTestAccess::vs_cpu_main_input(
+		resident, live, th03::InputContext::pause
+	);
+	expect(live_pause.system == 0x1032U && live_pause.p1 == physical.p1 &&
+		live_pause.p2 == physical.p2,
+		"live pause observes raw keyboard input_sp outside gameplay projection");
+	th03::app::ClassicMainInputSample attract{
+		.aggregate = physical,
+		.physical_domains = th03::app::PhysicalInputDomains{
+			.keyboard = {.p2 = 0x0008U, .charge_mask = 0x03U},
+			.first_joystick = 0x0009U,
+			.first_joystick_present = false,
+		},
+	};
+	expect(!ClassicOpSessionTestAccess::attract_input_present(attract),
+		"live attract mode ignores keyboard P2 and charge-only input");
+	attract.physical_domains->first_joystick_present = true;
+	expect(ClassicOpSessionTestAccess::attract_input_present(attract),
+		"live attract mode merges joystick zero into its interface word");
+	expect(ClassicOpSessionTestAccess::attract_input_present({
+		.aggregate = {.p2 = 0x0008U},
+	}), "scripted attract samples retain their aggregate exit contract");
 }
 
 void test_retained_children_and_audio_barrier()
@@ -929,7 +1003,7 @@ void test_surface_forwarding()
 		drain_demo_audio();
 		ClassicOpSessionInput input{};
 		if(session.scene() == ClassicOpSessionScene::demo_main) {
-			input.main.p1 = 1U;
+			input.main.aggregate.p1 = 1U;
 		}
 		auto demo_advanced = session.consume(input);
 		if(!demo_advanced) {

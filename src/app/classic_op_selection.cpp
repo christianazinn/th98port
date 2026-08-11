@@ -11,6 +11,7 @@
 #include <span>
 #include <utility>
 
+#include "th03/app/classic_config.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/exact/trig.hpp"
 #include "th03/present/cels.hpp"
@@ -244,6 +245,46 @@ template <typename Value, typename Decoder>
 		return (player == 0U) ? input.player_one : input.player_two;
 	}
 	return input.single_player;
+}
+
+[[nodiscard]] ClassicOpSelectionInput normalize_selection_input(
+	ClassicOpSelectionMode mode,
+	std::uint8_t key_mode,
+	ClassicOpSelectionInput input
+) noexcept
+{
+	if(!input.physical_domains) {
+		return input;
+	}
+	const auto &physical = *input.physical_domains;
+	auto interface_word = static_cast<std::uint16_t>(
+		physical.keyboard.system | physical.keyboard.p1
+	);
+	if(physical.first_joystick_present) {
+		interface_word = static_cast<std::uint16_t>(
+			interface_word | physical.first_joystick
+		);
+	}
+	input.single_player = interface_word;
+	input.player_one = physical.keyboard.p1;
+	input.player_two = physical.keyboard.p2;
+	if(mode != ClassicOpSelectionMode::vs_1p_2p ||
+		!physical.first_joystick_present) {
+		return input;
+	}
+	switch(static_cast<ClassicKeyMode>(key_mode)) {
+	case ClassicKeyMode::joy_key:
+		input.player_one = physical.first_joystick;
+		input.player_two = physical.keyboard.system;
+		break;
+	case ClassicKeyMode::key_joy:
+		input.player_one = physical.keyboard.system;
+		input.player_two = physical.first_joystick;
+		break;
+	case ClassicKeyMode::key_key:
+		break;
+	}
+	return input;
 }
 
 [[nodiscard]] constexpr std::uint8_t ring_selection_up(
@@ -1213,6 +1254,9 @@ ClassicOpCharacterSelection::advance(ClassicOpSelectionInput input)
 			ClassicOpSelectionErrorCode::audio_command_pending
 		));
 	}
+	input = normalize_selection_input(
+		mode_, resident_.key_mode, std::move(input)
+	);
 	if((input.single_player & ~valid_input_bits) != 0U ||
 		(input.player_one & ~valid_input_bits) != 0U ||
 		(input.player_two & ~valid_input_bits) != 0U) {
@@ -1362,6 +1406,15 @@ ClassicOpCharacterSelection::local_selection() const noexcept
 std::array<bool, 2U> ClassicOpCharacterSelection::confirmed() const noexcept
 {
 	return confirmed_;
+}
+
+ClassicOpSelectionInput ClassicOpSelectionTestAccess::normalize_input(
+	ClassicOpSelectionMode mode,
+	std::uint8_t key_mode,
+	ClassicOpSelectionInput input
+) noexcept
+{
+	return normalize_selection_input(mode, key_mode, std::move(input));
 }
 
 std::expected<std::unique_ptr<ClassicOpCharacterSelection>, ClassicOpSelectionError>

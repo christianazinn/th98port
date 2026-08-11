@@ -67,6 +67,14 @@ struct PhysicalInputEvent {
 	PhysicalInputSourceState state{};
 };
 
+// Live-only source domains sampled at one logical boundary. Replay and
+// scripted callers intentionally do not construct this host-facing detail.
+struct PhysicalInputDomains final {
+	CoreInput keyboard{};
+	std::uint16_t first_joystick = 0;
+	bool first_joystick_present = false;
+};
+
 enum class TickInputError : std::uint8_t {
 	invalid_rate,
 	invalid_catch_up_policy,
@@ -87,12 +95,7 @@ struct LogicalTickInput {
 	CoreInput input{};
 	// Present on scheduler-produced physical samples and absent from scripted
 	// or replay samples that already contain their post-mode CoreInput words.
-	struct PhysicalDomains final {
-		CoreInput keyboard{};
-		std::uint16_t first_joystick = 0;
-		bool first_joystick_present = false;
-	};
-	std::optional<PhysicalDomains> physical_domains{};
+	std::optional<PhysicalInputDomains> physical_domains{};
 	// Sticky once a due app_quit event is applied. This never aliases or sets
 	// the gameplay Cancel bit in [input.system].
 	bool app_quit_requested = false;
@@ -155,7 +158,7 @@ private:
 
 	void apply_event(const PhysicalInputEvent &event) noexcept;
 	[[nodiscard]] CoreInput latched_input() const noexcept;
-	[[nodiscard]] LogicalTickInput::PhysicalDomains
+	[[nodiscard]] PhysicalInputDomains
 	latched_physical_domains() const noexcept;
 	void advance_deadline() noexcept;
 

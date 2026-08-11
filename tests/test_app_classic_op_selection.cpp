@@ -408,6 +408,64 @@ void drain_frame(ClassicOpCharacterSelection &scene);
 std::optional<th03::app::ClassicOpSelectionTick>
 drain_confirmation(ClassicOpCharacterSelection &scene);
 
+void test_live_input_mode_normalization()
+{
+	const ClassicOpSelectionInput scripted{
+		.single_player = 0x0001U,
+		.player_one = 0x0002U,
+		.player_two = 0x0004U,
+	};
+	const auto unchanged = ClassicOpSelectionTestAccess::normalize_input(
+		ClassicOpSelectionMode::vs_1p_2p, 2U, scripted
+	);
+	expect(unchanged.single_player == scripted.single_player &&
+		unchanged.player_one == scripted.player_one &&
+		unchanged.player_two == scripted.player_two,
+		"scripted selection input remains post-mode and unchanged");
+
+	ClassicOpSelectionInput live{
+		.single_player = 0x7000U,
+		.player_one = 0x7000U,
+		.player_two = 0x7000U,
+		.physical_domains = th03::app::PhysicalInputDomains{
+			.keyboard = {
+				.p1 = 0x0004U,
+				.p2 = 0x0008U,
+				.system = 0x1032U,
+				.charge_mask = 0x03U,
+			},
+			.first_joystick = 0x0009U,
+			.first_joystick_present = true,
+		},
+	};
+	const auto story = ClassicOpSelectionTestAccess::normalize_input(
+		ClassicOpSelectionMode::story, 0U, live
+	);
+	expect(story.single_player == 0x103FU,
+		"Story selection merges input_sp, keyboard P1, and joystick zero");
+	const auto key_key = ClassicOpSelectionTestAccess::normalize_input(
+		ClassicOpSelectionMode::vs_1p_2p, 0U, live
+	);
+	expect(key_key.player_one == 0x0004U && key_key.player_two == 0x0008U,
+		"selection Key-vs-Key uses both keyboard multiplayer domains");
+	const auto joy_key = ClassicOpSelectionTestAccess::normalize_input(
+		ClassicOpSelectionMode::vs_1p_2p, 1U, live
+	);
+	expect(joy_key.player_one == 0x0009U && joy_key.player_two == 0x1032U,
+		"selection Joy-vs-Key routes joystick zero and input_sp");
+	const auto key_joy = ClassicOpSelectionTestAccess::normalize_input(
+		ClassicOpSelectionMode::vs_1p_2p, 2U, live
+	);
+	expect(key_joy.player_one == 0x1032U && key_joy.player_two == 0x0009U,
+		"selection Key-vs-Joy routes input_sp and joystick zero");
+	live.physical_domains->first_joystick_present = false;
+	const auto missing = ClassicOpSelectionTestAccess::normalize_input(
+		ClassicOpSelectionMode::vs_1p_2p, 2U, live
+	);
+	expect(missing.player_one == 0x0004U && missing.player_two == 0x0008U,
+		"selection keeps keyboard fallback words when joystick zero is absent");
+}
+
 void test_persisted_selection_ring_and_cpu_delay_width()
 {
 	GameInit persisted{};
@@ -1015,6 +1073,7 @@ void local_original_gate(const std::filesystem::path &content_root)
 
 int main(int argc, char **argv)
 {
+	test_live_input_mode_normalization();
 	test_entry_and_raw_locking();
 	test_persisted_selection_ring_and_cpu_delay_width();
 	test_curve_and_player_rendering();

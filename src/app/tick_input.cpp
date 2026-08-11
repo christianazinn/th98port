@@ -252,11 +252,11 @@ CoreInput TickInputScheduler::latched_input() const noexcept
 	return input;
 }
 
-LogicalTickInput::PhysicalDomains
+PhysicalInputDomains
 TickInputScheduler::latched_physical_domains() const noexcept
 {
 	const auto &keyboard_source = source_states_[0U];
-	LogicalTickInput::PhysicalDomains domains{
+	PhysicalInputDomains domains{
 		.keyboard = {
 			.p1 = keyboard_source.p1,
 			.p2 = keyboard_source.p2,
