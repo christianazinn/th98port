@@ -207,6 +207,7 @@ th03_set_warnings(th03_app_resources)
 # scene layer rather than this byte-format boundary.
 add_library(th03_app_persistence STATIC
 	src/app/classic_score.cpp
+	src/app/classic_score_store.cpp
 )
 target_include_directories(th03_app_persistence PUBLIC include)
 target_compile_features(th03_app_persistence PUBLIC cxx_std_23)
@@ -473,6 +474,18 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-classic-score-tests
 		COMMAND th03-app-classic-score-tests
+	)
+
+	add_executable(th03-app-classic-score-store-tests
+		tests/test_app_classic_score_store.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-score-store-tests PRIVATE th03_app_persistence
+	)
+	th03_set_warnings(th03-app-classic-score-store-tests)
+	add_test(
+		NAME th03-app-classic-score-store-tests
+		COMMAND th03-app-classic-score-store-tests
 	)
 
 	add_executable(th03-app-host-surface-tests
