@@ -163,7 +163,10 @@ split comparisons. Original game data and replay captures remain external.
   conditional audio fade, atomic score commit, route-selected next-screen
   preload, and the conditional post-registration extra ending. The complete
   Classic Story route is now internally owned; no second campaign or
-  resident-state model is exposed. OP remains separate.
+  resident-state model is exposed. The same source-private app owner now
+  composes the OP title, retained Options and Music Room, read-only HiScore,
+  Story/all-VS character selection, Story, MAINL/MAIN VS, and winner return.
+  Automatic Demo remains its sole external route.
 - The same boundary authenticates the supported unpacked Japanese `MAINL.EXE`
   and owns its exact Story title/name table, staff verdict strings, and flake
   masks. Packed DIET executable support is not yet provided; original bytes

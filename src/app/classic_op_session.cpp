@@ -102,6 +102,17 @@ namespace {
 	return result;
 }
 
+[[nodiscard]] ClassicOpSessionError high_score_error(
+	ClassicRegistrationError error
+)
+{
+	auto result = session_error(
+		ClassicOpSessionErrorCode::high_scores_failed
+	);
+	result.registration_error.emplace(std::move(error));
+	return result;
+}
+
 [[nodiscard]] ClassicOpSessionError selection_error(
 	ClassicOpSelectionError error
 )
@@ -155,7 +166,9 @@ namespace {
 		operations.finish_title && operations.start_options &&
 		operations.advance_options && operations.finish_options &&
 		operations.start_music_room && operations.advance_music_room &&
-		operations.finish_music_room && operations.start_selection &&
+		operations.finish_music_room && operations.start_high_scores &&
+		operations.advance_high_scores && operations.finish_high_scores &&
+		operations.start_selection &&
 		operations.advance_selection && operations.finish_selection &&
 		operations.return_from_canceled_selection &&
 		operations.commit_config && operations.start_story &&
@@ -303,6 +316,16 @@ struct ClassicOpSession::Impl final {
 				scene = ClassicOpSessionScene::music_room;
 				break;
 			case ClassicOpRoute::high_scores:
+				if(auto committed = operations.commit_config(operations.context);
+					!committed) {
+					return std::unexpected(std::move(committed.error()));
+				}
+				if(auto started = operations.start_high_scores(operations.context);
+					!started) {
+					return std::unexpected(std::move(started.error()));
+				}
+				scene = ClassicOpSessionScene::high_scores;
+				break;
 			case ClassicOpRoute::demo:
 				if(auto committed = operations.commit_config(operations.context);
 					!committed) {
@@ -332,6 +355,13 @@ struct ClassicOpSession::Impl final {
 			break;
 		case ClassicOpSessionScene::music_room:
 			if(auto finished = operations.finish_music_room(operations.context);
+				!finished) {
+				return std::unexpected(std::move(finished.error()));
+			}
+			scene = ClassicOpSessionScene::title_menu;
+			break;
+		case ClassicOpSessionScene::high_scores:
+			if(auto finished = operations.finish_high_scores(operations.context);
 				!finished) {
 				return std::unexpected(std::move(finished.error()));
 			}
@@ -457,6 +487,8 @@ struct ClassicOpSessionBackend final {
 	std::optional<ClassicOpOptionsCompletion> options_completion{};
 	std::unique_ptr<ClassicOpMusicRoomScene> music_room{};
 	std::optional<ClassicOpMusicRoomCompletion> music_completion{};
+	std::unique_ptr<ClassicRegistrationScene> high_scores{};
+	std::optional<ClassicRegistrationCompletion> high_score_completion{};
 	std::unique_ptr<ClassicOpCharacterSelection> selection{};
 	std::optional<ClassicOpSelectionCompletion> selection_completion{};
 	std::unique_ptr<ClassicStorySession> story{};
@@ -580,8 +612,8 @@ struct ClassicOpSessionBackend final {
 		bool reset_process_carry
 	)
 	{
-		if(title || options || music_room || selection || story || vs_stage ||
-			vs_process || vs_driver || vs_win) {
+		if(title || options || music_room || high_scores || selection || story ||
+			vs_stage || vs_process || vs_driver || vs_win) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
@@ -810,6 +842,109 @@ struct ClassicOpSessionBackend final {
 		title = std::move(*returned);
 		music_room.reset();
 		music_completion.reset();
+		return {};
+	}
+
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	start_high_scores()
+	{
+		if(!title_completion || high_scores ||
+			title_completion->route() != ClassicOpRoute::high_scores ||
+			title_completion->selection_mode()) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		const auto &resident = title_completion->resident();
+		if(resident.rank >= 4U) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		const auto next_screen = resident.remaining_credits != 0U ?
+			MainlRegistrationNextScreen::continue_menu :
+			MainlRegistrationNextScreen::game_over;
+		auto resources = loader->load_mainl_registration({
+			.rank = static_cast<MainRegistrationRank>(resident.rank + 1U),
+			.next_screen = next_screen,
+		});
+		if(!resources) {
+			return std::unexpected(resource_error(std::move(resources.error())));
+		}
+		auto created = ClassicRegistrationScene::create_viewer(
+			*title_completion, score_path, *resources, stage_text, *font
+		);
+		if(!created) {
+			return std::unexpected(high_score_error(std::move(created.error())));
+		}
+		if(!drain_audio(**created)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::audio_command_pending
+			));
+		}
+		high_scores = std::move(*created);
+		title.reset();
+		title_completion.reset();
+		return {};
+	}
+
+	[[nodiscard]] std::expected<ClassicOpSessionBackendTick,
+		ClassicOpSessionError> advance_high_scores(
+		ClassicRegistrationInput input,
+		ClassicAudioStatus audio
+	)
+	{
+		if(!high_scores) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		if(high_scores->phase() == ClassicRegistrationPhase::ready) {
+			return ClassicOpSessionBackendTick{.ready = true};
+		}
+		auto advanced = high_scores->advance(input, audio);
+		if(!advanced) {
+			return std::unexpected(high_score_error(
+				std::move(advanced.error())
+			));
+		}
+		if(!drain_audio(*high_scores)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::audio_command_pending
+			));
+		}
+		return ClassicOpSessionBackendTick{
+			.surface_changed = advanced->surface_changed,
+			.input_sampled = advanced->input_sampled,
+			.ready = advanced->ready,
+		};
+	}
+
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	finish_high_scores()
+	{
+		if(!high_score_completion) {
+			if(!high_scores) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			high_score_completion = high_scores->take_completion();
+		}
+		if(!high_score_completion || high_score_completion->entered_place()) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		auto returned = build_title(high_score_completion->resident());
+		if(!returned) {
+			return std::unexpected(std::move(returned.error()));
+		}
+		title = std::move(*returned);
+		high_scores.reset();
+		high_score_completion.reset();
+		music_carry = {};
+		selection_carry = {};
 		return {};
 	}
 
@@ -1433,6 +1568,8 @@ struct ClassicOpSessionBackend final {
 		} else if(music_room) {
 			raster = &music_room->raster();
 			tram = &music_room->tram();
+		} else if(high_scores) {
+			raster = &high_scores->raster();
 		} else if(selection) {
 			raster = &selection->raster();
 			tram = &selection->tram();
@@ -1514,6 +1651,28 @@ Result backend_call(void *context, Method method, Args &&...args)
 		.finish_music_room = [](void *context) {
 			return backend_call<std::expected<void, ClassicOpSessionError>>(
 				context, &ClassicOpSessionBackend::finish_music_room
+			);
+		},
+		.start_high_scores = [](void *context) {
+			return backend_call<std::expected<void, ClassicOpSessionError>>(
+				context, &ClassicOpSessionBackend::start_high_scores
+			);
+		},
+		.advance_high_scores = [](
+			void *context,
+			ClassicRegistrationInput input,
+			ClassicAudioStatus audio
+		) {
+			return backend_call<std::expected<
+				ClassicOpSessionBackendTick, ClassicOpSessionError
+			>>(
+				context, &ClassicOpSessionBackend::advance_high_scores,
+				input, audio
+			);
+		},
+		.finish_high_scores = [](void *context) {
+			return backend_call<std::expected<void, ClassicOpSessionError>>(
+				context, &ClassicOpSessionBackend::finish_high_scores
 			);
 		},
 		.start_selection = [](
@@ -1789,6 +1948,11 @@ ClassicOpSession::consume(const ClassicOpSessionInput &input)
 		case ClassicOpSessionScene::music_room:
 			tick = impl_->operations.advance_music_room(
 				impl_->operations.context, input.music_room
+			);
+			break;
+		case ClassicOpSessionScene::high_scores:
+			tick = impl_->operations.advance_high_scores(
+				impl_->operations.context, input.high_scores, input.audio
 			);
 			break;
 		case ClassicOpSessionScene::character_selection:

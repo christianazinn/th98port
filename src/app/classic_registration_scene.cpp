@@ -205,16 +205,26 @@ template <typename Value, typename Decoder>
 	return std::move(*decoded);
 }
 
-[[nodiscard]] bool valid_context(const GameInit &resident) noexcept
+[[nodiscard]] bool valid_context(
+	const GameInit &resident,
+	bool view_only
+) noexcept
 {
-	if(resident.game_mode != game_mode::story || resident.rank >= 4U ||
-		resident.remaining_credits > 3U || resident.show_score_menu != 0U ||
+	if(resident.rank >= 4U || resident.remaining_credits > 3U ||
+		resident.runtime_snapshot || resident.compact_runtime_snapshot ||
+		resident.round_start_snapshot || resident.practice_rules) {
+		return false;
+	}
+	if(view_only) {
+		return resident.game_mode == game_mode::none &&
+			resident.story_stage == 0xFFU && resident.show_score_menu == 1U;
+	}
+	if(resident.game_mode != game_mode::story ||
+		resident.show_score_menu != 0U ||
 		resident.paletted_character[0U] < 1 ||
 		resident.paletted_character[0U] > 18 ||
 		!((resident.story_stage >= 1U && resident.story_stage <= 9U) ||
-			resident.story_stage == 99U) || resident.runtime_snapshot ||
-		resident.compact_runtime_snapshot || resident.round_start_snapshot ||
-		resident.practice_rules) {
+			resident.story_stage == 99U)) {
 		return false;
 	}
 	return std::all_of(
@@ -372,12 +382,14 @@ private:
 } // namespace
 
 ClassicRegistrationCompletion::ClassicRegistrationCompletion(
+	GameInit resident,
 	present::Raster raster,
 	MainlRegistrationNextScreen next_screen,
 	std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels,
 	std::optional<std::size_t> entered_place,
 	ClassicScoreStoreDisposition load_disposition
 ) noexcept :
+	resident_(std::move(resident)),
 	raster_(std::move(raster)),
 	next_screen_(next_screen),
 	choice_cels_(std::move(choice_cels)),
@@ -408,6 +420,11 @@ ClassicRegistrationCompletion::next_screen() const noexcept
 	return next_screen_;
 }
 
+const GameInit &ClassicRegistrationCompletion::resident() const noexcept
+{
+	return resident_;
+}
+
 ClassicRegistrationScene::ClassicRegistrationScene(
 	std::unique_ptr<Prepared> prepared,
 	GameInit resident,
@@ -416,7 +433,8 @@ ClassicRegistrationScene::ClassicRegistrationScene(
 	ClassicScoreStoreDisposition load_disposition,
 	ClassicScoreCodecFields commit_codec,
 	std::optional<std::size_t> entered_place,
-	present::Raster raster
+	present::Raster raster,
+	bool view_only
 ) noexcept :
 	prepared_(std::move(prepared)),
 	resident_(std::move(resident)),
@@ -425,7 +443,8 @@ ClassicRegistrationScene::ClassicRegistrationScene(
 	load_disposition_(load_disposition),
 	commit_codec_(commit_codec),
 	entered_place_(entered_place),
-	raster_(std::move(raster))
+	raster_(std::move(raster)),
+	view_only_(view_only)
 {}
 
 ClassicRegistrationScene::~ClassicRegistrationScene() = default;
@@ -442,7 +461,28 @@ ClassicRegistrationScene::create(
 {
 	return create_impl(
 		resident, score_path, resources, stage_text, font,
-		std::move(initial_raster), true
+		std::move(initial_raster), true, false
+	);
+}
+
+std::expected<std::unique_ptr<ClassicRegistrationScene>, ClassicRegistrationError>
+ClassicRegistrationScene::create_viewer(
+	const ClassicOpCompletion &completion,
+	const std::filesystem::path &score_path,
+	std::span<const LoadedMainResource> resources,
+	const MainlStageTextAssets &stage_text,
+	const present::AnkGlyphProvider &font
+)
+{
+	if(completion.route() != ClassicOpRoute::high_scores ||
+		completion.selection_mode()) {
+		return std::unexpected(registration_error(
+			ClassicRegistrationErrorCode::invalid_context
+		));
+	}
+	return create_impl(
+		completion.resident(), score_path, resources, stage_text, font,
+		present::Raster{}, true, true
 	);
 }
 
@@ -454,10 +494,11 @@ ClassicRegistrationScene::create_impl(
 	const MainlStageTextAssets &stage_text,
 	const present::AnkGlyphProvider &font,
 	present::Raster initial_raster,
-	bool authenticate_resource_bytes
+	bool authenticate_resource_bytes,
+	bool view_only
 )
 {
-	if(!valid_context(resident)) {
+	if(!valid_context(resident, view_only)) {
 		return std::unexpected(registration_error(
 			ClassicRegistrationErrorCode::invalid_context
 		));
@@ -565,7 +606,7 @@ ClassicRegistrationScene::create_impl(
 		resident, score_path, std::move(*background), std::move(*rank),
 		std::move(*normal), std::move(*highlight),
 		std::move(*next_background), std::move(choice_cels), stage_text, font,
-		std::move(initial_raster)
+		std::move(initial_raster), view_only
 	);
 }
 
@@ -581,10 +622,11 @@ ClassicRegistrationScene::create_predecoded(
 	std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels,
 	const MainlStageTextAssets &stage_text,
 	const present::AnkGlyphProvider &font,
-	present::Raster initial_raster
+	present::Raster initial_raster,
+	bool view_only
 )
 {
-	if(!valid_context(resident) ||
+	if(!valid_context(resident, view_only) ||
 		initial_raster.raster_mode() != present::RasterMode::lines_400) {
 		return std::unexpected(registration_error(
 			ClassicRegistrationErrorCode::invalid_context
@@ -664,21 +706,25 @@ ClassicRegistrationScene::create_predecoded(
 		));
 	}
 	auto document = std::move(loaded->document);
-	auto &board = document.boards[resident.rank];
-	const ClassicScoreCandidate candidate{
-		.digits = resident.last_score[0U],
-		.continues_used = static_cast<std::uint8_t>(
-			3U - resident.remaining_credits
-		),
-		.stage = resident.story_stage,
-		.playchar = base_character(resident.paletted_character[0U]),
-	};
-	auto inserted = classic_score_insert(board, candidate);
-	if(!inserted) {
-		return std::unexpected(score_error(inserted.error()));
-	}
-	if(resident.story_stage == 99U && resident.remaining_credits == 3U) {
-		board.cleared = ClassicScoreCleared::cleared;
+	std::optional<std::size_t> entered_place{};
+	if(!view_only) {
+		auto &board = document.boards[resident.rank];
+		const ClassicScoreCandidate candidate{
+			.digits = resident.last_score[0U],
+			.continues_used = static_cast<std::uint8_t>(
+				3U - resident.remaining_credits
+			),
+			.stage = resident.story_stage,
+			.playchar = base_character(resident.paletted_character[0U]),
+		};
+		auto inserted = classic_score_insert(board, candidate);
+		if(!inserted) {
+			return std::unexpected(score_error(inserted.error()));
+		}
+		entered_place = *inserted;
+		if(resident.story_stage == 99U && resident.remaining_credits == 3U) {
+			board.cleared = ClassicScoreCleared::cleared;
+		}
 	}
 	const auto commit_codec =
 		(loaded->disposition == ClassicScoreStoreDisposition::loaded) ?
@@ -686,8 +732,8 @@ ClassicRegistrationScene::create_predecoded(
 	auto scene = std::unique_ptr<ClassicRegistrationScene>(
 		new ClassicRegistrationScene(
 			std::move(prepared), resident, score_path, std::move(document),
-			loaded->disposition, commit_codec, *inserted,
-			std::move(initial_raster)
+			loaded->disposition, commit_codec, entered_place,
+			std::move(initial_raster), view_only
 		)
 	);
 	if(!scene->initialize_visuals()) {
@@ -1322,7 +1368,7 @@ ClassicRegistrationScene::take_completion() noexcept
 		return std::nullopt;
 	}
 	ClassicRegistrationCompletion result(
-		std::move(raster_), prepared_->next_screen,
+		std::move(resident_), std::move(raster_), prepared_->next_screen,
 		std::move(prepared_->choice_cels), entered_place_, load_disposition_
 	);
 	phase_ = ClassicRegistrationPhase::consumed;

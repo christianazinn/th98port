@@ -126,6 +126,8 @@ struct FakeBackend final {
 	std::size_t options_finishes = 0U;
 	std::size_t music_starts = 0U;
 	std::size_t music_finishes = 0U;
+	std::size_t high_score_starts = 0U;
+	std::size_t high_score_finishes = 0U;
 	std::size_t selection_starts = 0U;
 	std::size_t selection_finishes = 0U;
 	std::size_t selection_returns = 0U;
@@ -215,6 +217,20 @@ Result fake_call(void *context, Function function)
 		},
 		.finish_music_room = [](void *context) {
 			++static_cast<FakeBackend *>(context)->music_finishes;
+			return std::expected<void, ClassicOpSessionError>{};
+		},
+		.start_high_scores = [](void *context) {
+			++static_cast<FakeBackend *>(context)->high_score_starts;
+			return std::expected<void, ClassicOpSessionError>{};
+		},
+		.advance_high_scores = [](void *context, auto, auto) {
+			return std::expected<ClassicOpSessionBackendTick,
+				ClassicOpSessionError>{
+				static_cast<FakeBackend *>(context)->ready_tick()
+			};
+		},
+		.finish_high_scores = [](void *context) {
+			++static_cast<FakeBackend *>(context)->high_score_finishes;
 			return std::expected<void, ClassicOpSessionError>{};
 		},
 		.start_selection = [](void *context, ClassicOpSelectionMode mode) {
@@ -484,16 +500,36 @@ void test_vs_routes()
 
 void test_terminal_routes_and_failures()
 {
-	for(const auto route : {ClassicOpRoute::high_scores, ClassicOpRoute::demo}) {
-		auto backend = std::make_shared<FakeBackend>();
-		backend->title_result.route = route;
-		auto session = make_session(backend);
-		if(!session) { continue; }
-		const auto tick = session->consume({});
+	auto scores_backend = std::make_shared<FakeBackend>();
+	scores_backend->title_result.route = ClassicOpRoute::high_scores;
+	auto scores = make_session(scores_backend);
+	if(scores) {
+		auto tick = scores->consume({});
+		expect(
+			tick && tick->status == ClassicOpSessionStatus::running &&
+				tick->scene == ClassicOpSessionScene::high_scores &&
+				scores_backend->config_commits == 1U &&
+				scores_backend->high_score_starts == 1U,
+			"HiScore commits config and enters the owned MAINL viewer"
+		);
+		tick = scores->consume({});
+		expect(
+			tick && tick->scene == ClassicOpSessionScene::title_menu &&
+				scores_backend->high_score_finishes == 1U,
+			"completed HiScore viewer returns to a fresh OP title"
+		);
+	}
+
+	auto demo_backend = std::make_shared<FakeBackend>();
+	demo_backend->title_result.route = ClassicOpRoute::demo;
+	auto demo = make_session(demo_backend);
+	if(demo) {
+		const auto tick = demo->consume({});
 		expect(
 			tick && tick->status == ClassicOpSessionStatus::external_route &&
-				tick->external_route == route && backend->config_commits == 1U,
-			"external title route commits config and publishes exact capability"
+				tick->external_route == ClassicOpRoute::demo &&
+				demo_backend->config_commits == 1U,
+			"automatic Demo remains the sole typed external title route"
 		);
 	}
 
@@ -614,6 +650,7 @@ void test_surface_forwarding()
 	th03::GameInit resident{};
 	resident.resident_rand = 1;
 	resident.random_seed = 1U;
+	resident.remaining_credits = 2U;
 	auto created = ClassicOpSession::create(
 		resident,
 		std::make_unique<th03::app::MainResourceLoader>(content_root),
@@ -644,6 +681,126 @@ void test_surface_forwarding()
 	if(!tick || tick->scene != ClassicOpSessionScene::title_menu ||
 		tick->status != ClassicOpSessionStatus::running ||
 		!session.compose_shown_surface(pixels)) {
+		return false;
+	}
+	bool title_input = tick->input_sampled;
+	for(std::size_t guard = 0U; !title_input && guard < 512U; ++guard) {
+		auto advanced = session.consume({});
+		if(!advanced) {
+			std::cerr << "local HiScore route failed while reaching title input\n";
+			return false;
+		}
+		title_input = advanced->input_sampled;
+		while(session.take_audio_command()) {
+		}
+	}
+	if(!title_input) {
+		std::cerr << "local HiScore route did not reach title input\n";
+		return false;
+	}
+	auto advanced = session.consume({.op = {.ok = true}});
+	if(!advanced) {
+		std::cerr << "local HiScore route could not open the main menu\n";
+		return false;
+	}
+	bool main_menu_input = false;
+	for(std::size_t guard = 0U; !main_menu_input && guard < 32U; ++guard) {
+		advanced = session.consume({});
+		if(!advanced) {
+			std::cerr << "local HiScore route failed during main-menu growth\n";
+			return false;
+		}
+		main_menu_input = advanced->input_sampled;
+	}
+	if(!main_menu_input) {
+		std::cerr << "local HiScore route did not reach main-menu input\n";
+		return false;
+	}
+	for(std::size_t choice = 0U; choice < 3U; ++choice) {
+		advanced = session.consume({.op = {.down = true}});
+		if(!advanced) {
+			std::cerr << "local HiScore route failed while selecting HiScore\n";
+			return false;
+		}
+		advanced = session.consume({});
+		if(!advanced) {
+			std::cerr << "local HiScore route failed while releasing Down\n";
+			return false;
+		}
+	}
+	while(session.take_audio_command()) {
+	}
+	advanced = session.consume({.op = {.ok = true}});
+	if(!advanced) {
+		std::cerr << "local HiScore route could not confirm its menu choice\n";
+		return false;
+	}
+	bool viewer_started = advanced->scene == ClassicOpSessionScene::high_scores;
+	for(std::size_t guard = 0U; !viewer_started && guard < 64U; ++guard) {
+		while(session.take_audio_command()) {
+		}
+		advanced = session.consume({});
+		if(!advanced) {
+			std::cerr << "local HiScore route failed during title black-out code="
+				<< static_cast<unsigned>(advanced.error().code);
+			if(advanced.error().resource_error) {
+				std::cerr << " resource=" << static_cast<unsigned>(
+					advanced.error().resource_error->code
+				) << " key=" << static_cast<unsigned>(
+					advanced.error().resource_error->key.role
+				);
+			}
+			if(advanced.error().registration_error) {
+				std::cerr << " registration=" << static_cast<unsigned>(
+					advanced.error().registration_error->code
+				);
+			}
+			std::cerr << '\n';
+			return false;
+		}
+		viewer_started = advanced->scene == ClassicOpSessionScene::high_scores;
+		while(session.take_audio_command()) {
+		}
+	}
+	if(!viewer_started) {
+		std::cerr << "local HiScore route did not enter the owned viewer\n";
+		return false;
+	}
+	while(session.take_audio_command()) {
+	}
+	bool viewer_input = false;
+	for(std::size_t guard = 0U; !viewer_input && guard < 64U; ++guard) {
+		advanced = session.consume({});
+		if(!advanced) {
+			std::cerr << "local HiScore viewer failed before input\n";
+			return false;
+		}
+		viewer_input = advanced->input_sampled;
+		while(session.take_audio_command()) {
+		}
+	}
+	if(!viewer_input) {
+		std::cerr << "local HiScore viewer did not reach input\n";
+		return false;
+	}
+	advanced = session.consume({.high_scores = {.ok = true}});
+	if(!advanced) {
+		std::cerr << "local HiScore viewer could not dismiss\n";
+		return false;
+	}
+	bool viewer_returned = false;
+	for(std::size_t guard = 0U; !viewer_returned && guard < 64U; ++guard) {
+		advanced = session.consume({});
+		if(!advanced) {
+			std::cerr << "local HiScore viewer failed while returning to OP\n";
+			return false;
+		}
+		viewer_returned = advanced->scene == ClassicOpSessionScene::title_menu;
+		while(session.take_audio_command()) {
+		}
+	}
+	if(!viewer_returned || !session.compose_shown_surface(pixels)) {
+		std::cerr << "local HiScore viewer did not publish the fresh title\n";
 		return false;
 	}
 
@@ -688,15 +845,15 @@ void test_surface_forwarding()
 	}
 	bool returned_to_title = false;
 	for(std::size_t guard = 0U; guard < 256U; ++guard) {
-		auto advanced = direct.consume({
+		auto direct_advanced = direct.consume({
 			.selection = {.single_player = 0x1000U},
 		});
-		if(!advanced) {
+		if(!direct_advanced) {
 			std::cerr << "local direct VS selection advance failed code="
-				<< static_cast<unsigned>(advanced.error().code) << '\n';
+				<< static_cast<unsigned>(direct_advanced.error().code) << '\n';
 			return false;
 		}
-		if(advanced->scene == ClassicOpSessionScene::title_menu) {
+		if(direct_advanced->scene == ClassicOpSessionScene::title_menu) {
 			returned_to_title = true;
 			break;
 		}

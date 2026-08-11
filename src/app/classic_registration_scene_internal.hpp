@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "classic_mainl_stage_internal.hpp"
+#include "classic_op_scene_internal.hpp"
 #include "th03/app/classic_audio.hpp"
 #include "th03/app/classic_score.hpp"
 #include "th03/app/classic_score_store.hpp"
@@ -115,12 +116,14 @@ public:
 	[[nodiscard]] std::optional<std::size_t> entered_place() const noexcept;
 	[[nodiscard]] ClassicScoreStoreDisposition load_disposition() const noexcept;
 	[[nodiscard]] MainlRegistrationNextScreen next_screen() const noexcept;
+	[[nodiscard]] const GameInit &resident() const noexcept;
 
 private:
 	friend class ClassicRegistrationScene;
 	friend class ClassicMainlContinueScene;
 	friend struct ClassicStoryBackend;
 	ClassicRegistrationCompletion(
+		GameInit resident,
 		present::Raster raster,
 		MainlRegistrationNextScreen next_screen,
 		std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels,
@@ -128,6 +131,7 @@ private:
 		ClassicScoreStoreDisposition load_disposition
 	) noexcept;
 
+	GameInit resident_{};
 	present::Raster raster_{};
 	MainlRegistrationNextScreen next_screen_ =
 		MainlRegistrationNextScreen::game_over;
@@ -137,10 +141,10 @@ private:
 		ClassicScoreStoreDisposition::loaded;
 };
 
-// Source-private owner of MAINL's Story registration route. OP score viewing
-// and replay pages are deliberately excluded. Construction authenticates and
-// prepares the full visual closure before touching the score store; advance()
-// consumes at most one source input poll or VSync boundary.
+// Source-private owner of MAINL's Story registration and OP score-viewing
+// routes. Replay pages are deliberately excluded. Construction authenticates
+// and prepares the full visual closure before touching the score store;
+// advance() consumes at most one source input poll or VSync boundary.
 class ClassicRegistrationScene final {
 public:
 	[[nodiscard]] static std::expected<
@@ -153,6 +157,16 @@ public:
 		const MainlStageTextAssets &stage_text,
 		const present::AnkGlyphProvider &font,
 		present::Raster initial_raster
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicRegistrationScene>,
+		ClassicRegistrationError
+	> create_viewer(
+		const ClassicOpCompletion &completion,
+		const std::filesystem::path &score_path,
+		std::span<const LoadedMainResource> resources,
+		const MainlStageTextAssets &stage_text,
+		const present::AnkGlyphProvider &font
 	);
 	~ClassicRegistrationScene();
 
@@ -201,7 +215,8 @@ private:
 		ClassicScoreStoreDisposition load_disposition,
 		ClassicScoreCodecFields commit_codec,
 		std::optional<std::size_t> entered_place,
-		present::Raster raster
+		present::Raster raster,
+		bool view_only
 	) noexcept;
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicRegistrationScene>,
@@ -213,7 +228,8 @@ private:
 		const MainlStageTextAssets &stage_text,
 		const present::AnkGlyphProvider &font,
 		present::Raster initial_raster,
-		bool authenticate_resource_bytes
+		bool authenticate_resource_bytes,
+		bool view_only
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicRegistrationScene>,
@@ -229,7 +245,8 @@ private:
 		std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels,
 		const MainlStageTextAssets &stage_text,
 		const present::AnkGlyphProvider &font,
-		present::Raster initial_raster
+		present::Raster initial_raster,
+		bool view_only
 	);
 
 	[[nodiscard]] bool initialize_visuals() noexcept;
@@ -288,6 +305,7 @@ private:
 	std::array<ClassicAudioCommand, 3U> audio_commands_{};
 	std::size_t audio_head_ = 0U;
 	std::size_t audio_count_ = 0U;
+	bool view_only_ = false;
 };
 
 struct ClassicRegistrationSceneTestAccess final {
@@ -305,7 +323,30 @@ struct ClassicRegistrationSceneTestAccess final {
 	{
 		return ClassicRegistrationScene::create_impl(
 			resident, score_path, resources, stage_text, font,
-			std::move(initial_raster), false
+			std::move(initial_raster), false, false
+		);
+	}
+
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicRegistrationScene>,
+		ClassicRegistrationError
+	> create_viewer_with_synthetic_resources(
+		const ClassicOpCompletion &completion,
+		const std::filesystem::path &score_path,
+		std::span<const LoadedMainResource> resources,
+		const MainlStageTextAssets &stage_text,
+		const present::AnkGlyphProvider &font
+	)
+	{
+		if(completion.route() != ClassicOpRoute::high_scores ||
+			completion.selection_mode()) {
+			return std::unexpected(ClassicRegistrationError{
+				.code = ClassicRegistrationErrorCode::invalid_context,
+			});
+		}
+		return ClassicRegistrationScene::create_impl(
+			completion.resident(), score_path, resources, stage_text, font,
+			present::Raster{}, false, true
 		);
 	}
 
@@ -330,7 +371,31 @@ struct ClassicRegistrationSceneTestAccess final {
 			resident, score_path, std::move(background), std::move(rank),
 			std::move(normal), std::move(highlight),
 			std::move(next_background), std::move(choice_cels), stage_text, font,
-			std::move(initial_raster)
+			std::move(initial_raster), false
+		);
+	}
+
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicRegistrationScene>,
+		ClassicRegistrationError
+	> create_viewer_with_predecoded_assets(
+		const GameInit &resident,
+		const std::filesystem::path &score_path,
+		assets::PiImage background,
+		assets::PlanarCel4 rank,
+		assets::BfntSheet normal,
+		assets::BfntSheet highlight,
+		assets::PiImage next_background,
+		std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels,
+		const MainlStageTextAssets &stage_text,
+		const present::AnkGlyphProvider &font
+	)
+	{
+		return ClassicRegistrationScene::create_predecoded(
+			resident, score_path, std::move(background), std::move(rank),
+			std::move(normal), std::move(highlight),
+			std::move(next_background), std::move(choice_cels), stage_text, font,
+			present::Raster{}, true
 		);
 	}
 
@@ -360,6 +425,13 @@ struct ClassicRegistrationSceneTestAccess final {
 	) noexcept
 	{
 		return scene.direction_hold_;
+	}
+
+	[[nodiscard]] static bool view_only(
+		const ClassicRegistrationScene &scene
+	) noexcept
+	{
+		return scene.view_only_;
 	}
 };
 

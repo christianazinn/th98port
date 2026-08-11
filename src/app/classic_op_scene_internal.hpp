@@ -150,6 +150,7 @@ public:
 private:
 	friend class ClassicOpTitleMenuScene;
 	friend struct ClassicOpSessionBackend;
+	friend struct ClassicOpSceneTestAccess;
 	ClassicOpCompletion(
 		ClassicOpRoute route,
 		std::optional<ClassicOpSelectionMode> selection_mode,
@@ -363,6 +364,18 @@ private:
 };
 
 struct ClassicOpSceneTestAccess final {
+	[[nodiscard]] static ClassicOpCompletion completion(
+		ClassicOpRoute route,
+		GameInit resident,
+		std::optional<ClassicOpSelectionMode> selection_mode = std::nullopt
+	) noexcept
+	{
+		return ClassicOpCompletion(
+			route, selection_mode, route == ClassicOpRoute::versus,
+			std::move(resident), present::Raster{}, present::Tram{}
+		);
+	}
+
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpTitleMenuScene>,
 		ClassicOpError

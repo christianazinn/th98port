@@ -16,6 +16,7 @@
 #include "classic_op_options_scene_internal.hpp"
 #include "classic_op_scene_internal.hpp"
 #include "classic_op_selection_internal.hpp"
+#include "classic_registration_scene_internal.hpp"
 #include "classic_story_session_internal.hpp"
 #include "mainl_compiled_text_internal.hpp"
 #include "th03/app/authentic_text.hpp"
@@ -31,6 +32,7 @@ enum class ClassicOpSessionScene : std::uint8_t {
 	title_menu,
 	options,
 	music_room,
+	high_scores,
 	character_selection,
 	story,
 	vs_stage_splash,
@@ -61,6 +63,7 @@ enum class ClassicOpSessionErrorCode : std::uint8_t {
 	title_failed,
 	options_failed,
 	music_room_failed,
+	high_scores_failed,
 	selection_failed,
 	stage_failed,
 	main_failed,
@@ -82,6 +85,7 @@ struct ClassicOpSessionError final {
 	std::optional<MainProcessError> main_error{};
 	std::optional<ClassicOpError> title_error{};
 	std::optional<ClassicOpMusicRoomError> music_room_error{};
+	std::optional<ClassicRegistrationError> registration_error{};
 	std::optional<ClassicOpSelectionError> selection_error{};
 	std::optional<ClassicMainlStageError> stage_error{};
 	std::optional<ClassicStorySessionError> story_error{};
@@ -92,6 +96,7 @@ struct ClassicOpSessionError final {
 struct ClassicOpSessionInput final {
 	ClassicOpInput op{};
 	ClassicOpMusicRoomInput music_room{};
+	ClassicRegistrationInput high_scores{};
 	ClassicOpSelectionInput selection{};
 	ClassicStorySessionInput story{};
 	CoreInput main{};
@@ -152,6 +157,13 @@ struct ClassicOpSessionBackendOperations final {
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
 	(*advance_music_room)(void *, const ClassicOpMusicRoomInput &) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*finish_music_room)(void *) = nullptr;
+	std::expected<void, ClassicOpSessionError> (*start_high_scores)(void *) = nullptr;
+	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
+	(*advance_high_scores)(
+		void *, ClassicRegistrationInput, ClassicAudioStatus
+	) = nullptr;
+	std::expected<void, ClassicOpSessionError>
+	(*finish_high_scores)(void *) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*start_selection)(
 		void *, ClassicOpSelectionMode
 	) = nullptr;

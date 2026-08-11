@@ -26,6 +26,8 @@ namespace fs = std::filesystem;
 using th03::GameInit;
 using th03::app::ClassicAudioCommandType;
 using th03::app::ClassicMusicCue;
+using th03::app::ClassicOpRoute;
+using th03::app::ClassicOpSelectionMode;
 using th03::app::ClassicRegistrationBoundary;
 using th03::app::ClassicRegistrationErrorCode;
 using th03::app::ClassicRegistrationGlyph;
@@ -234,6 +236,18 @@ GameInit resident()
 	return result;
 }
 
+GameInit viewer_resident(std::uint8_t remaining_credits = 2U)
+{
+	auto result = resident();
+	result.game_mode = th03::game_mode::none;
+	result.story_stage = 0xFFU;
+	result.show_score_menu = 1U;
+	result.remaining_credits = remaining_credits;
+	result.paletted_character = {-1, -1};
+	result.last_score[0U].fill(9U);
+	return result;
+}
+
 bool write_stock(const fs::path &path)
 {
 	return th03::app::commit_classic_score_store(
@@ -259,6 +273,26 @@ std::expected<
 		preload_continue ? choice_cels() :
 			std::array<std::optional<th03::assets::PlanarCel4>, 4U>{},
 		stage_text(), font, Raster{}
+	);
+}
+
+std::expected<
+	std::unique_ptr<ClassicRegistrationScene>,
+	th03::app::ClassicRegistrationError
+> create_viewer_scene(
+	const GameInit &value,
+	const fs::path &score_path,
+	SyntheticFont &font
+)
+{
+	const bool preload_continue = value.remaining_credits != 0U;
+	return ClassicRegistrationSceneTestAccess::create_viewer_with_predecoded_assets(
+		value, score_path, background(), rank_cel(), glyph_sheet(4U),
+		glyph_sheet(15U),
+		preload_continue ? background(5U, 1U) : background(9U, 7U),
+		preload_continue ? choice_cels() :
+			std::array<std::optional<th03::assets::PlanarCel4>, 4U>{},
+		stage_text(), font
 	);
 }
 
@@ -643,6 +677,125 @@ void test_missing_file_clear_and_recreate_rng_schedule()
 	);
 }
 
+void test_view_only_schedule_and_unchanged_board()
+{
+	TemporaryRoot root;
+	expect(root.valid(), "viewer temporary root exists");
+	if(!root.valid()) {
+		return;
+	}
+	const auto score_path = root.path() / "YUME.NEM";
+	expect(write_stock(score_path), "viewer fixture writes stock score file");
+	const auto before = th03::app::load_classic_score_store(score_path);
+	expect(before.has_value(), "viewer fixture reloads its source document");
+	if(!before) {
+		return;
+	}
+
+	SyntheticFont font;
+	const auto value = viewer_resident();
+	auto scene = create_viewer_scene(value, score_path, font);
+	expect(scene.has_value(), "typed view-only registration scene constructs");
+	if(!scene) {
+		return;
+	}
+	expect(
+		ClassicRegistrationSceneTestAccess::view_only(**scene) &&
+			!(*scene)->entered_place() &&
+			ClassicRegistrationSceneTestAccess::document(**scene).boards ==
+				before->document.boards,
+		"viewer skips candidate insertion despite a synthetic winning last score"
+	);
+	drain_initial_audio(**scene);
+	if(!advance_fade(**scene, ClassicRegistrationPhase::wait_release)) {
+		return;
+	}
+	const auto held = (*scene)->advance({.shot = true});
+	expect(
+		held && held->phase == ClassicRegistrationPhase::wait_release &&
+			held->boundary == ClassicRegistrationBoundary::vsync,
+		"viewer waits for the held title confirmation to release"
+	);
+	const auto released = (*scene)->advance({});
+	expect(
+		released && released->phase == ClassicRegistrationPhase::wait_press &&
+			released->boundary == ClassicRegistrationBoundary::input_poll,
+		"viewer accepts the exact release boundary without a VSync"
+	);
+	const auto dismissed = (*scene)->advance({.cancel = true});
+	expect(
+		dismissed && dismissed->phase == ClassicRegistrationPhase::black_out &&
+			dismissed->boundary == ClassicRegistrationBoundary::input_poll &&
+			!(*scene)->take_audio_command(),
+		"nonzero-credit viewer dismisses on Cancel without fading SCORE.M"
+	);
+	if(!advance_fade(**scene, ClassicRegistrationPhase::ready)) {
+		return;
+	}
+	expect(
+		(*scene)->raster().pixel(Page::zero, Point{0, 0}) == 5U,
+		"nonzero-credit viewer preserves the source's unused CONTI preload"
+	);
+	auto completion = (*scene)->take_completion();
+	expect(
+		completion && !completion->entered_place() &&
+			completion->next_screen() ==
+				MainlRegistrationNextScreen::continue_menu &&
+			completion->resident().story_stage == 0xFFU &&
+			completion->resident().show_score_menu == 1U &&
+			completion->resident().game_mode == th03::game_mode::none,
+		"viewer completion returns the exact non-registering resident capability"
+	);
+	const auto after = th03::app::load_classic_score_store(score_path);
+	const auto codecs = source_codecs(0x12345678U, 1U);
+	expect(
+		after && after->document.boards == before->document.boards &&
+			after->document.codec[2U] == codecs[0U],
+		"viewer rewrites an unchanged board with the source's fresh rank codec"
+	);
+
+	const auto zero_path = root.path() / "YUME0.NEM";
+	expect(write_stock(zero_path), "zero-credit viewer fixture writes score file");
+	auto zero = create_viewer_scene(viewer_resident(0U), zero_path, font);
+	expect(zero.has_value(), "zero-credit viewer constructs");
+	if(!zero) {
+		return;
+	}
+	drain_initial_audio(**zero);
+	if(!advance_fade(**zero, ClassicRegistrationPhase::wait_release)) {
+		return;
+	}
+	expect(static_cast<bool>((*zero)->advance({})),
+		"zero-credit viewer accepts release");
+	expect(static_cast<bool>((*zero)->advance({.ok = true})),
+		"zero-credit viewer accepts dismissal");
+	const auto fade = (*zero)->take_audio_command();
+	expect(
+		fade && fade->type == ClassicAudioCommandType::fade_song &&
+			fade->parameter == 16U,
+		"zero-credit viewer preserves the conditional long SCORE.M fade"
+	);
+	if(!advance_fade(**zero, ClassicRegistrationPhase::wait_volume)) {
+		return;
+	}
+	expect(
+		static_cast<bool>((*zero)->advance({}, {.volume = 255U})),
+		"zero-credit viewer reaches ready at PMD silence"
+	);
+	const auto stop = (*zero)->take_audio_command();
+	expect(
+		stop && stop->type == ClassicAudioCommandType::stop_song,
+		"zero-credit viewer stops SCORE.M after the volume wait"
+	);
+	auto zero_completion = (*zero)->take_completion();
+	expect(
+		zero_completion && zero_completion->next_screen() ==
+			MainlRegistrationNextScreen::game_over &&
+			zero_completion->raster().pixel(Page::zero, Point{0, 0}) == 9U,
+		"zero-credit viewer preserves the source's unused OVER preload"
+	);
+}
+
 void test_zero_credit_audio_exit()
 {
 	TemporaryRoot root;
@@ -714,6 +867,32 @@ void test_rejections_and_commit_failure()
 			ClassicRegistrationErrorCode::invalid_context &&
 			!fs::exists(untouched),
 		"invalid Story context fails before touching persistence"
+	);
+
+	auto invalid_viewer = th03::app::ClassicOpSceneTestAccess::completion(
+		ClassicOpRoute::demo, viewer_resident()
+	);
+	auto rejected_viewer = ClassicRegistrationScene::create_viewer(
+		invalid_viewer, untouched, {}, stage_text(), font
+	);
+	expect(
+		!rejected_viewer && rejected_viewer.error().code ==
+			ClassicRegistrationErrorCode::invalid_context &&
+			!fs::exists(untouched),
+		"viewer rejects a non-HiScore OP capability before resources or persistence"
+	);
+	auto selection_viewer = th03::app::ClassicOpSceneTestAccess::completion(
+		ClassicOpRoute::high_scores, viewer_resident(),
+		static_cast<ClassicOpSelectionMode>(0U)
+	);
+	rejected_viewer = ClassicRegistrationScene::create_viewer(
+		selection_viewer, untouched, {}, stage_text(), font
+	);
+	expect(
+		!rejected_viewer && rejected_viewer.error().code ==
+			ClassicRegistrationErrorCode::invalid_context &&
+			!fs::exists(untouched),
+		"viewer rejects a selection-bearing OP capability before side effects"
 	);
 
 	auto bad_rank = rank_cel();
@@ -843,6 +1022,30 @@ void local_original_gate(
 		created.has_value(),
 		"local REGIB, RFT2, REGI2, and REGI1 assets decode at source geometry"
 	);
+
+	const auto viewer_closure = loader.load_mainl_registration({
+		.rank = th03::app::MainRegistrationRank::hard,
+		.next_screen = th03::app::MainlRegistrationNextScreen::continue_menu,
+	});
+	expect(
+		viewer_closure.has_value(),
+		"local HiScore viewer resource closure authenticates"
+	);
+	if(!viewer_closure) {
+		return;
+	}
+	auto viewer = viewer_resident();
+	viewer.rank = 2U;
+	auto completion = th03::app::ClassicOpSceneTestAccess::completion(
+		ClassicOpRoute::high_scores, viewer
+	);
+	const auto created_viewer = ClassicRegistrationScene::create_viewer(
+		completion, score_path, *viewer_closure, imported->assets, font
+	);
+	expect(
+		created_viewer.has_value() && !(*created_viewer)->entered_place(),
+		"typed OP HiScore capability constructs the authenticated production viewer"
+	);
 }
 
 } // namespace
@@ -852,6 +1055,7 @@ int main(int argc, char **argv)
 	test_qualified_name_schedule_and_commit();
 	test_direction_repeat_and_doublewide_navigation();
 	test_missing_file_clear_and_recreate_rng_schedule();
+	test_view_only_schedule_and_unchanged_board();
 	test_zero_credit_audio_exit();
 	test_rejections_and_commit_failure();
 	if(argc == 3) {

@@ -376,6 +376,60 @@ void test_menu_input_lock_and_cancel()
 	);
 }
 
+void test_high_score_route_contract()
+{
+	GameInit resident{};
+	resident.resident_rand = 40;
+	resident.fast_op_animation = 1U;
+	resident.game_mode = th03::game_mode::story;
+	resident.story_stage = 5U;
+	resident.show_score_menu = 0U;
+	resident.last_score[0U].fill(9U);
+	resident.last_score[1U].fill(8U);
+	auto created = ClassicOpSceneTestAccess::create_with_predecoded_assets(
+		resident, ClassicOpTitleMode::fast_fade, fullscreen_pi(true),
+		fullscreen_pi(false), window_sheet(), gaiji_sheet()
+	);
+	expect(created.has_value(), "HiScore source-capability scene creates");
+	if(!created) {
+		return;
+	}
+	auto &scene = **created;
+	reach_main_menu(scene);
+	for(std::uint8_t step = 0U; step < 3U; ++step) {
+		expect(scene.advance({.down = true}).has_value(),
+			"HiScore menu selection advances downward");
+		expect(scene.advance().has_value(),
+			"HiScore menu selection releases the direction lock");
+	}
+	expect(
+		scene.selected_choice() == ClassicOpMenuChoice::high_scores,
+		"three source rows select HiScore"
+	);
+	const auto selected = scene.advance({.ok = true});
+	const auto stop = scene.take_audio_command();
+	auto completion = scene.take_completion();
+	expect(
+		selected && selected->ready && stop &&
+			stop->type == ClassicAudioCommandType::stop_song &&
+			stop->cue == ClassicMusicCue::menu_main && completion &&
+			completion->route() == ClassicOpRoute::high_scores &&
+			!completion->selection_mode(),
+		"HiScore stops OP.M and publishes the typed MAINL route"
+	);
+	if(!completion) {
+		return;
+	}
+	const auto &carried = completion->resident();
+	expect(
+		carried.story_stage == 0xFFU && carried.show_score_menu == 1U &&
+			carried.game_mode == th03::game_mode::none &&
+			carried.last_score ==
+				std::array<std::array<std::uint8_t, 8U>, 2U>{},
+		"HiScore applies score_menu()'s exact resident reset"
+	);
+}
+
 void test_demo_timeout_and_blackout()
 {
 	auto scene = make_scene(ClassicOpTitleMode::fast_fade);
@@ -556,6 +610,7 @@ int main(int argc, char **argv)
 	test_fast_title_and_held_first_choice();
 	test_story_seed_and_vs_cancel_return();
 	test_menu_input_lock_and_cancel();
+	test_high_score_route_contract();
 	test_demo_timeout_and_blackout();
 	test_long_title_cadence();
 	test_rejections();
