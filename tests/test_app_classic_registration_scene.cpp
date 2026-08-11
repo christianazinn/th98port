@@ -343,9 +343,33 @@ void test_qualified_name_schedule_and_commit()
 		}
 	}
 	expect(
-		(*scene)->phase() == ClassicRegistrationPhase::wait_release &&
+		(*scene)->phase() == ClassicRegistrationPhase::finalize_name &&
 			ClassicRegistrationSceneTestAccess::name_cursor_backwards(**scene) == 0U,
-		"the eighth glyph safely finishes without the source cursor underflow"
+		"the eighth glyph preserves the source final name-entry frame without cursor underflow"
+	);
+	const auto &raw_row = ClassicRegistrationSceneTestAccess::document(**scene)
+		.boards[2U].rows[0U];
+	std::array<ClassicRegistrationGlyph, 8U> raw_name{};
+	raw_name.fill(ClassicRegistrationGlyph::a);
+	expect(
+		raw_row.name_backwards == raw_name,
+		"the final name-entry VSync still shows the source uniform name"
+	);
+	const auto raw_page = (*scene)->raster().graphics(Page::zero);
+	const std::vector raw_pixels(raw_page.begin(), raw_page.end());
+
+	const auto held = (*scene)->advance({.ok = true});
+	expect(
+		held && held->phase == ClassicRegistrationPhase::wait_release &&
+			held->boundary == ClassicRegistrationBoundary::vsync,
+		"post-boundary finalization replaces the name before waiting for release"
+	);
+	expect(
+		!std::equal(
+			raw_pixels.begin(), raw_pixels.end(),
+			(*scene)->raster().graphics(Page::zero).begin()
+		),
+		"uniform-name replacement changes the retained raster only after the final name-entry VSync"
 	);
 	const auto &row = ClassicRegistrationSceneTestAccess::document(**scene)
 		.boards[2U].rows[0U];
@@ -364,12 +388,6 @@ void test_qualified_name_schedule_and_commit()
 		"uniform eight-letter input is replaced by the source character default"
 	);
 
-	const auto held = (*scene)->advance({.ok = true});
-	expect(
-		held && held->phase == ClassicRegistrationPhase::wait_release &&
-			held->boundary == ClassicRegistrationBoundary::vsync,
-		"dismissal waits for the final name-entry key to be released"
-	);
 	const auto released = (*scene)->advance({});
 	expect(
 		released && released->phase == ClassicRegistrationPhase::wait_press &&
@@ -510,9 +528,27 @@ void test_missing_file_clear_and_recreate_rng_schedule()
 			fade->cue == ClassicMusicCue::high_score && fade->parameter == 16U,
 		"stage 99 queues the source long SCORE.M fade"
 	);
-	if(!advance_fade(**scene, ClassicRegistrationPhase::ready)) {
+	if(!advance_fade(**scene, ClassicRegistrationPhase::wait_volume)) {
 		return;
 	}
+	const auto waiting = (*scene)->advance({}, {.volume = 254U});
+	expect(
+		waiting && waiting->phase == ClassicRegistrationPhase::wait_volume &&
+			waiting->boundary == ClassicRegistrationBoundary::audio_volume,
+		"stage 99 waits for PMD's exact faded volume without inventing a frame"
+	);
+	const auto silenced = (*scene)->advance({}, {.volume = 255U});
+	expect(
+		silenced && silenced->phase == ClassicRegistrationPhase::ready &&
+			silenced->boundary == ClassicRegistrationBoundary::immediate,
+		"volume 255 queues the source stop immediately"
+	);
+	const auto stop = (*scene)->take_audio_command();
+	expect(
+		stop && stop->type == ClassicAudioCommandType::stop_song &&
+			stop->cue == ClassicMusicCue::high_score,
+		"stage 99 stops SCORE.M only after the volume wait"
+	);
 	const auto loaded = th03::app::load_classic_score_store(score_path);
 	const auto codecs = source_codecs(0x12345678U, 5U);
 	bool stock_codecs_match = static_cast<bool>(loaded);
@@ -536,6 +572,57 @@ void test_missing_file_clear_and_recreate_rng_schedule()
 		completion && completion->load_disposition() ==
 			ClassicScoreStoreDisposition::created_stock,
 		"completion reports source-compatible missing-file recreation"
+	);
+}
+
+void test_zero_credit_audio_exit()
+{
+	TemporaryRoot root;
+	expect(root.valid(), "zero-credit temporary root exists");
+	if(!root.valid()) {
+		return;
+	}
+	const auto score_path = root.path() / "YUME.NEM";
+	expect(write_stock(score_path), "zero-credit fixture writes stock score file");
+	auto value = resident();
+	value.remaining_credits = 0U;
+	value.last_score[0U].fill(0U);
+	SyntheticFont font;
+	auto scene = create_scene(value, score_path, font);
+	expect(scene.has_value(), "zero-credit registration scene constructs");
+	if(!scene) {
+		return;
+	}
+	drain_initial_audio(**scene);
+	if(!advance_fade(**scene, ClassicRegistrationPhase::wait_release)) {
+		return;
+	}
+	expect(static_cast<bool>((*scene)->advance({})),
+		"zero-credit registration accepts release");
+	expect(static_cast<bool>((*scene)->advance({.ok = true})),
+		"zero-credit registration accepts dismissal");
+	const auto fade = (*scene)->take_audio_command();
+	expect(
+		fade && fade->type == ClassicAudioCommandType::fade_song &&
+			fade->parameter == 16U,
+		"zero credits select the source long SCORE.M fade"
+	);
+	if(!advance_fade(**scene, ClassicRegistrationPhase::wait_volume)) {
+		return;
+	}
+	expect(
+		static_cast<bool>((*scene)->advance({}, {.volume = 255U})) &&
+			(*scene)->phase() == ClassicRegistrationPhase::ready,
+		"zero-credit registration reaches ready only after faded silence"
+	);
+	const auto stop = (*scene)->take_audio_command();
+	expect(
+		stop && stop->type == ClassicAudioCommandType::stop_song,
+		"zero-credit registration stops SCORE.M before Game Over handoff"
+	);
+	expect(
+		static_cast<bool>((*scene)->take_completion()),
+		"zero-credit completion publishes only after the stop command is consumed"
 	);
 }
 
@@ -692,6 +779,7 @@ int main(int argc, char **argv)
 	test_qualified_name_schedule_and_commit();
 	test_direction_repeat_and_doublewide_navigation();
 	test_missing_file_clear_and_recreate_rng_schedule();
+	test_zero_credit_audio_exit();
 	test_rejections_and_commit_failure();
 	if(argc == 3) {
 		local_original_gate(argv[1], argv[2]);

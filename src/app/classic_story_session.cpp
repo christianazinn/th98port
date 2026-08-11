@@ -820,7 +820,10 @@ struct ClassicStoryBackend final {
 	}
 
 	std::expected<ClassicStoryBackendTick, ClassicStorySessionError>
-	advance_registration(ClassicRegistrationInput input)
+	advance_registration(
+		ClassicRegistrationInput input,
+		ClassicAudioStatus audio
+	)
 	{
 		if(!registration) {
 			return std::unexpected(session_error(
@@ -830,7 +833,7 @@ struct ClassicStoryBackend final {
 		if(registration->phase() == ClassicRegistrationPhase::ready) {
 			return ClassicStoryBackendTick{.ready = true};
 		}
-		auto advanced = registration->advance(input);
+		auto advanced = registration->advance(input, audio);
 		if(!advanced) {
 			return std::unexpected(registration_error(
 				std::move(advanced.error())
@@ -1184,11 +1187,12 @@ ClassicStorySessionBackendOperations backend_operations(
 		},
 		.advance_registration = [](
 			void *context,
-			ClassicRegistrationInput input
+			ClassicRegistrationInput input,
+			ClassicAudioStatus audio
 		) {
 			return backend_call<std::expected<ClassicStoryBackendTick,
 				ClassicStorySessionError>>(
-				context, &ClassicStoryBackend::advance_registration, input
+				context, &ClassicStoryBackend::advance_registration, input, audio
 			);
 		},
 		.finish_registration = [](void *context) {
@@ -1612,7 +1616,7 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 		break;
 	case ClassicStorySessionScene::high_score_registration:
 		tick = impl_->operations.advance_registration(
-			impl_->operations.context, input.registration
+			impl_->operations.context, input.registration, input.audio
 		);
 		break;
 	case ClassicStorySessionScene::continue_menu:

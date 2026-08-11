@@ -345,7 +345,8 @@ ClassicStorySessionBackendOperations operations(FakeBackend &fake)
 		},
 		.advance_registration = [](
 			void *,
-			th03::app::ClassicRegistrationInput
+			th03::app::ClassicRegistrationInput,
+			th03::app::ClassicAudioStatus
 		) {
 			return std::expected<ClassicStoryBackendTick,
 				ClassicStorySessionError>{ClassicStoryBackendTick{

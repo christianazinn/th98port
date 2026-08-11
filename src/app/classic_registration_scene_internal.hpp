@@ -42,9 +42,11 @@ struct ClassicRegistrationInput final {
 enum class ClassicRegistrationPhase : std::uint8_t {
 	black_in,
 	name_entry,
+	finalize_name,
 	wait_release,
 	wait_press,
 	black_out,
+	wait_volume,
 	ready,
 	consumed,
 	failed,
@@ -54,6 +56,7 @@ enum class ClassicRegistrationBoundary : std::uint8_t {
 	immediate,
 	vsync,
 	input_poll,
+	audio_volume,
 };
 
 enum class ClassicRegistrationErrorCode : std::uint8_t {
@@ -149,7 +152,10 @@ public:
 	ClassicRegistrationScene &operator=(ClassicRegistrationScene &&) = delete;
 
 	[[nodiscard]] std::expected<ClassicRegistrationTick, ClassicRegistrationError>
-	advance(ClassicRegistrationInput input);
+	advance(
+		ClassicRegistrationInput input,
+		ClassicAudioStatus audio = {}
+	);
 	[[nodiscard]] std::optional<ClassicAudioCommand>
 	take_audio_command() noexcept;
 	[[nodiscard]] std::optional<ClassicRegistrationCompletion>
@@ -225,6 +231,7 @@ private:
 	[[nodiscard]] bool draw_rows(bool restore_background) noexcept;
 	[[nodiscard]] bool blank_cursor() noexcept;
 	[[nodiscard]] bool rerender_name_cursor() noexcept;
+	[[nodiscard]] bool rerender_completed_name() noexcept;
 	[[nodiscard]] std::expected<void, ClassicRegistrationError>
 	finish_name();
 	[[nodiscard]] bool direction_trigger(

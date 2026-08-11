@@ -185,7 +185,9 @@ struct ClassicStorySessionBackendOperations final {
 		void *, const GameInit &
 	) = nullptr;
 	std::expected<ClassicStoryBackendTick, ClassicStorySessionError>
-	(*advance_registration)(void *, ClassicRegistrationInput) = nullptr;
+	(*advance_registration)(
+		void *, ClassicRegistrationInput, ClassicAudioStatus
+	) = nullptr;
 	std::expected<void, ClassicStorySessionError> (*finish_registration)(
 		void *
 	) = nullptr;

@@ -810,6 +810,18 @@ bool ClassicRegistrationScene::rerender_name_cursor() noexcept
 	);
 }
 
+bool ClassicRegistrationScene::rerender_completed_name() noexcept
+{
+	if(!entered_place_) {
+		return false;
+	}
+	// The source decrements its unsigned cursor below zero after the eighth
+	// glyph and then tries to blank and preview that impossible position. Keep
+	// the observable row redraw at this frame boundary without reproducing the
+	// resulting layout-dependent VRAM access.
+	return draw_alphabet_glyph(selected_, true) && draw_row(*entered_place_);
+}
+
 std::expected<void, ClassicRegistrationError>
 ClassicRegistrationScene::finish_name()
 {
@@ -935,7 +947,10 @@ ClassicRegistrationScene::fade_tick(bool black_in)
 			std::move(committed.error())
 		));
 	}
-	phase_ = ClassicRegistrationPhase::ready;
+	phase_ = (resident_.remaining_credits == 0U ||
+		resident_.story_stage == 99U) ?
+		ClassicRegistrationPhase::wait_volume :
+		ClassicRegistrationPhase::ready;
 	return tick(ClassicRegistrationBoundary::vsync, changed);
 }
 
@@ -945,7 +960,10 @@ void ClassicRegistrationScene::fail() noexcept
 }
 
 std::expected<ClassicRegistrationTick, ClassicRegistrationError>
-ClassicRegistrationScene::advance(ClassicRegistrationInput input)
+ClassicRegistrationScene::advance(
+	ClassicRegistrationInput input,
+	ClassicAudioStatus audio
+)
 {
 	if(audio_count_ != 0U) {
 		return std::unexpected(registration_error(
@@ -965,6 +983,28 @@ ClassicRegistrationScene::advance(ClassicRegistrationInput input)
 	}
 	if(phase_ == ClassicRegistrationPhase::black_out) {
 		return fade_tick(false);
+	}
+	if(phase_ == ClassicRegistrationPhase::wait_volume) {
+		if(audio.volume != 255U) {
+			return tick(ClassicRegistrationBoundary::audio_volume);
+		}
+		if(!push_audio_command({
+			.type = ClassicAudioCommandType::stop_song,
+			.cue = ClassicMusicCue::high_score,
+		})) {
+			fail();
+			return std::unexpected(registration_error(
+				ClassicRegistrationErrorCode::invalid_state
+			));
+		}
+		phase_ = ClassicRegistrationPhase::ready;
+		return tick(ClassicRegistrationBoundary::immediate);
+	}
+	if(phase_ == ClassicRegistrationPhase::finalize_name) {
+		if(auto finished = finish_name(); !finished) {
+			fail();
+			return std::unexpected(finished.error());
+		}
 	}
 	if(phase_ == ClassicRegistrationPhase::wait_release) {
 		if(input.any()) {
@@ -1082,6 +1122,7 @@ ClassicRegistrationScene::advance(ClassicRegistrationInput input)
 	}
 
 	bool done = false;
+	bool cursor_exhausted = false;
 	const bool enter = input.ok || input.shot;
 	if(enter) {
 		if(!enter_locked_) {
@@ -1104,6 +1145,7 @@ ClassicRegistrationScene::advance(ClassicRegistrationInput input)
 				name[name_cursor_backwards_] = selected_;
 				if(name_cursor_backwards_ == 0U) {
 					done = true;
+					cursor_exhausted = true;
 				} else {
 					--name_cursor_backwards_;
 				}
@@ -1137,10 +1179,16 @@ ClassicRegistrationScene::advance(ClassicRegistrationInput input)
 	}
 
 	if(done) {
-		if(auto finished = finish_name(); !finished) {
+		const bool rendered = cursor_exhausted ?
+			rerender_completed_name() : rerender_name_cursor();
+		if(!rendered) {
 			fail();
-			return std::unexpected(finished.error());
+			return std::unexpected(registration_error(
+				ClassicRegistrationErrorCode::draw_failed
+			));
 		}
+		phase_ = ClassicRegistrationPhase::finalize_name;
+		name_rerender_ = false;
 		return tick(
 			ClassicRegistrationBoundary::vsync, true, true,
 			selection_changed, name_changed
@@ -1168,7 +1216,7 @@ ClassicRegistrationScene::advance(ClassicRegistrationInput input)
 std::optional<ClassicRegistrationCompletion>
 ClassicRegistrationScene::take_completion() noexcept
 {
-	if(phase_ != ClassicRegistrationPhase::ready) {
+	if(phase_ != ClassicRegistrationPhase::ready || audio_count_ != 0U) {
 		return std::nullopt;
 	}
 	ClassicRegistrationCompletion result(
