@@ -667,6 +667,20 @@ void local_original_gate(const std::filesystem::path &content_root)
 	if(!title_completion) {
 		return;
 	}
+	auto mismatched = config;
+	mismatched.rank = ClassicRank::easy;
+	auto rejected_adoption = ClassicOpOptionsScene::create_from_op(
+		*title_completion, mismatched, true, *closure
+	);
+	expect(
+		!rejected_adoption && rejected_adoption.error().code ==
+			ClassicOpErrorCode::invalid_state,
+		"fallible typed adoption rejects resident/config mismatch"
+	);
+	expect(
+		title_completion->route() == th03::app::ClassicOpRoute::options,
+		"failed typed adoption leaves the title completion retryable"
+	);
 	auto adopted = ClassicOpOptionsScene::create_from_op(
 		*title_completion, config, true, *closure
 	);
