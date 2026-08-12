@@ -226,6 +226,7 @@ read_external_file(
 	story.staff = {
 		.audio = audio,
 		.any_input = any,
+		.fast_forward_held = sample.fast_forward_requested,
 		.vsync_count_above_one = false,
 	};
 	story.registration = registration;

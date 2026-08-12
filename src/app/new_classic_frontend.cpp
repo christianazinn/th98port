@@ -299,6 +299,9 @@ void NewClassicLandingMenu::draw() noexcept
 			index == static_cast<std::size_t>(choice_)
 		);
 	}
+	canvas_.draw_text_centered(
+		"BY CHRISTIAN AZINN", screen_center, 380U, 1U, 14U
+	);
 }
 
 NewClassicLandingResult NewClassicLandingMenu::consume(

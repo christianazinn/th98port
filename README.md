@@ -27,7 +27,8 @@ richer
 pause/restart menu, full Practice setup/recording lifecycle, three-page
 KeyConfig, expanded Options, title Extra unlock, and the complete authenticated
 Replay Patch 0.4.10 English profile are present. The final systematic Replay
-Patch profile/parity audit is the active next native-port gate.
+Patch profile/parity audit is complete, including physical-Z Staff/replay
+acceleration and no-wait playback of recorded Pause control streams.
 
 ## Build and test
 
@@ -87,7 +88,10 @@ there and survive artifact updates. New Classic V13 files live in its
 
 The no-argument script is the maintained convenience path and should be rerun
 after changes intended for human testing. It rebuilds and overwrites the stable
-artifact rather than publishing versioned copies. Alternate ignored inputs can
+artifact rather than publishing versioned copies. The current completed New
+Classic parity build is 43,065,773 bytes with SHA-256
+`1F73ED9D724931AC6C8D04722541F3E34E0C4A3D7BD16A7F9EB4781DA0C6EAF7`.
+Alternate ignored inputs can
 be supplied with `-DataRoot`, `-MainExecutable`, `-MainlExecutable`,
 `-OpExecutable`, `-FontRom`, and optional `-RhythmRom`. The packager also accepts
 `-T98Sound86`; on this development machine the no-argument path automatically
@@ -179,7 +183,9 @@ keyboard controls and all launch options.
 In New Classic gameplay, Escape opens the recorded Pause menu, `R` restarts the
 current Story or VS scenario directly, and `Q` exits without saving. Replay
 playback reconstructs recorded pause input; live Escape aborts playback and
-held Shot enables fourfold host-paced fast-forward. Replay details expose the
+held physical keyboard `Z` enables fourfold host-paced fast-forward. After a
+prior Story clear, holding physical `Z` also accelerates the Staff roll fourfold;
+the first clear cannot accelerate itself. Replay details expose the
 frozen V13 result/date/score, checkpoint splits, stage clear-bonus counters,
 slowdown, and Replay Patch `m:ss.cc` real-frame timers. Clears is read-only;
 Splits and Timers retain checkpoint launch.

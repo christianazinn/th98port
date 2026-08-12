@@ -355,7 +355,8 @@ void print_usage()
 		<< "--shell opens the shared Classic/New Classic product menu. "
 			"Title Exit returns to it. In New Classic gameplay, Escape opens "
 			"Pause, R restarts, and Q exits without saving. During New Classic "
-			"replay playback, Escape aborts and held Shot fast-forwards. In --vs, "
+			"replay playback, Escape aborts and held physical Z fast-forwards; "
+			"after a prior clear, physical Z also accelerates Staff. In --vs, "
 			"Escape exits. In Classic, Escape remains source Cancel and "
 			"window close exits. The default cadence is nominal PC-9801 24 kHz "
 			"(526315/9328 Hz); --tick-rate overrides it.\n"
@@ -1213,6 +1214,9 @@ ExperienceRunResult run_classic_session(
 			(*due)->restart_requested =
 				parsed.mode == th03::app::ClassicLaunchMode::new_classic &&
 				mapper.keyboard_scancode_held(SDL_SCANCODE_R);
+			(*due)->fast_forward_requested =
+				parsed.mode == th03::app::ClassicLaunchMode::new_classic &&
+				mapper.keyboard_scancode_held(SDL_SCANCODE_Z);
 			auto consumed = (*runner)->consume(**due, audio_session->status());
 			if(!consumed) {
 				std::cerr << "logical-tick=" << logical_ticks << '\n';
@@ -1965,7 +1969,6 @@ ExperienceRunResult run_replay_playback(
 	if(!scheduler) {
 		return {.exit_code = fail_tick(scheduler.error())};
 	}
-	constexpr std::uint16_t input_shot = 0x0020U;
 	constexpr std::uint16_t input_cancel = 0x1000U;
 	bool retry_blocked_event = false;
 	bool presentation_pending = false;
@@ -1989,7 +1992,7 @@ ExperienceRunResult run_replay_playback(
 				break;
 			}
 			const auto live_word = (**due).input.system;
-			const bool fast = (live_word & input_shot) != 0U;
+			const bool fast = mapper.keyboard_scancode_held(SDL_SCANCODE_Z);
 			const bool changed_fast = fast != (*playback)->fast_forward();
 			(*playback)->set_fast_forward(fast);
 			presentation_pending = presentation_pending || changed_fast;

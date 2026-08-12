@@ -243,13 +243,15 @@ ClassicStaffScene::ClassicStaffScene(
 	std::unique_ptr<Prepared> &&prepared,
 	GameInit resident,
 	present::StaffFlakeTrigTables trig,
-	present::Raster raster
+	present::Raster raster,
+	bool fast_forward_unlocked
 ) noexcept :
 	prepared_(std::move(prepared)),
 	resident_(std::move(resident)),
 	trig_(trig),
 	raster_(std::move(raster)),
-	driver_phase_(DriverPhase::queue_fade)
+	driver_phase_(DriverPhase::queue_fade),
+	fast_forward_unlocked_(fast_forward_unlocked)
 {}
 
 ClassicStaffScene::~ClassicStaffScene() = default;
@@ -262,12 +264,13 @@ ClassicStaffScene::create(
 	const MainlStaffCompiledAssets &compiled,
 	const present::AnkGlyphProvider &font,
 	present::StaffFlakeTrigTables trig,
-	present::Raster initial_raster
+	present::Raster initial_raster,
+	bool fast_forward_unlocked
 )
 {
 	return create_impl(
 		resident, resources, stage_text, compiled, font, trig,
-		std::move(initial_raster), true
+		std::move(initial_raster), true, fast_forward_unlocked
 	);
 }
 
@@ -280,7 +283,8 @@ ClassicStaffScene::create_impl(
 	const present::AnkGlyphProvider &font,
 	present::StaffFlakeTrigTables trig,
 	present::Raster initial_raster,
-	bool authenticate_resource_bytes
+	bool authenticate_resource_bytes,
+	bool fast_forward_unlocked
 )
 {
 	const auto expected = mainl_staff_resource_keys();
@@ -325,7 +329,7 @@ ClassicStaffScene::create_impl(
 	}
 	return create_predecoded(
 		resident, std::move(cels), *palette, stage_text, compiled, font, trig,
-		std::move(initial_raster)
+		std::move(initial_raster), fast_forward_unlocked
 	);
 }
 
@@ -338,7 +342,8 @@ ClassicStaffScene::create_predecoded(
 	const MainlStaffCompiledAssets &compiled,
 	const present::AnkGlyphProvider &font,
 	present::StaffFlakeTrigTables trig,
-	present::Raster initial_raster
+	present::Raster initial_raster,
+	bool fast_forward_unlocked
 )
 {
 	constexpr std::array<std::array<std::uint16_t, 2U>, 12U> geometries{{
@@ -446,7 +451,8 @@ ClassicStaffScene::create_predecoded(
 	prepared->point.emplace(std::move(*point));
 
 	return std::unique_ptr<ClassicStaffScene>(new ClassicStaffScene(
-		std::move(prepared), resident, trig, std::move(initial_raster)
+		std::move(prepared), resident, trig, std::move(initial_raster),
+		fast_forward_unlocked
 	));
 }
 
@@ -528,13 +534,20 @@ bool ClassicStaffScene::tick_flakes(bool overrun) noexcept
 
 bool ClassicStaffScene::phase_done(
 	ClassicAudioStatus audio,
-	std::uint16_t measure
+	std::uint16_t measure,
+	bool fast_forward_held
 ) const noexcept
 {
 	if(!flakes_) {
 		return false;
 	}
 	const auto frame = static_cast<std::uint16_t>(flakes_->frame);
+	// Replay Patch substitutes the fixed 0x100 frame threshold while physical
+	// Z is held. ED.M continues at normal speed, so measure is deliberately
+	// ignored for accelerated visual phases.
+	if(fast_forward_unlocked_ && fast_forward_held) {
+		return frame > source_phase_frame_threshold;
+	}
 	if(!audio.bgm_active) {
 		return frame > source_phase_frame_threshold;
 	}
@@ -789,6 +802,52 @@ ClassicStaffTick ClassicStaffScene::tick(
 std::expected<ClassicStaffTick, ClassicStaffError>
 ClassicStaffScene::advance(const ClassicStaffInput &input)
 {
+	const auto accelerated = input.fast_forward_held && fast_forward_step();
+	const std::size_t step_count = accelerated ? 4U : 1U;
+	std::optional<ClassicStaffTick> result{};
+	for(std::size_t step = 0U; step < step_count; ++step) {
+		auto advanced = advance_one(input);
+		if(!advanced) {
+			return std::unexpected(std::move(advanced.error()));
+		}
+		if(result) {
+			advanced->surface_changed = advanced->surface_changed ||
+				result->surface_changed;
+			advanced->input_sampled = advanced->input_sampled ||
+				result->input_sampled;
+		}
+		result = *advanced;
+		if(advanced->ready ||
+			advanced->boundary != ClassicStaffBoundary::vsync ||
+			audio_count_ != 0U || !fast_forward_step()) {
+			break;
+		}
+	}
+	return *result;
+}
+
+bool ClassicStaffScene::fast_forward_step() const noexcept
+{
+	if(!fast_forward_unlocked_) {
+		return false;
+	}
+	switch(driver_phase_) {
+	case DriverPhase::initial_flakes:
+	case DriverPhase::sequence_in:
+	case DriverPhase::sequence_out:
+	case DriverPhase::sequence_blank:
+	case DriverPhase::cleanup:
+	case DriverPhase::dissolve:
+	case DriverPhase::verdict_loop:
+		return true;
+	default:
+		return false;
+	}
+}
+
+std::expected<ClassicStaffTick, ClassicStaffError>
+ClassicStaffScene::advance_one(const ClassicStaffInput &input)
+{
 	if(phase_ == ClassicStaffPhase::ready ||
 		phase_ == ClassicStaffPhase::consumed ||
 		phase_ == ClassicStaffPhase::failed) {
@@ -890,7 +949,8 @@ ClassicStaffScene::advance(const ClassicStaffInput &input)
 				break;
 			}
 			present::staff_flakes_advance_frame(*flakes_);
-			if(phase_done(input.audio, 4U) && !initialize_sequence()) {
+			if(phase_done(input.audio, 4U, input.fast_forward_held) &&
+				!initialize_sequence()) {
 				break;
 			}
 			return tick(ClassicStaffBoundary::vsync, true);
@@ -903,7 +963,9 @@ ClassicStaffScene::advance(const ClassicStaffInput &input)
 				break;
 			}
 			present::staff_flakes_advance_frame(*flakes_);
-			if(phase_done(input.audio, sequence.measure_in)) {
+			if(phase_done(
+				input.audio, sequence.measure_in, input.fast_forward_held
+			)) {
 				present::staff_flakes_restart_phase(*flakes_);
 				driver_phase_ = sequence.kind == SequenceKind::setup_y ?
 					DriverPhase::sequence_blank : DriverPhase::sequence_out;
@@ -918,7 +980,9 @@ ClassicStaffScene::advance(const ClassicStaffInput &input)
 				break;
 			}
 			present::staff_flakes_advance_frame(*flakes_);
-			if(phase_done(input.audio, sequence.measure_out)) {
+			if(phase_done(
+				input.audio, sequence.measure_out, input.fast_forward_held
+			)) {
 				overlay_y_ = center_y_[page_index(flakes_->back_page)];
 				++sequence_index_;
 				if(!initialize_sequence()) {
@@ -936,7 +1000,9 @@ ClassicStaffScene::advance(const ClassicStaffInput &input)
 				break;
 			}
 			present::staff_flakes_advance_frame(*flakes_);
-			if(phase_done(input.audio, sequence.measure_out)) {
+			if(phase_done(
+				input.audio, sequence.measure_out, input.fast_forward_held
+			)) {
 				cleanup_ticks_ = 0U;
 				driver_phase_ = DriverPhase::cleanup;
 			}
@@ -966,7 +1032,7 @@ ClassicStaffScene::advance(const ClassicStaffInput &input)
 				break;
 			}
 			present::staff_flakes_advance_frame(*flakes_);
-			if(phase_done(input.audio, 66U)) {
+			if(phase_done(input.audio, 66U, input.fast_forward_held)) {
 				driver_phase_ = DriverPhase::verdict_install;
 			}
 			return tick(ClassicStaffBoundary::vsync, true);

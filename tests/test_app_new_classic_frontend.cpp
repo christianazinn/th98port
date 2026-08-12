@@ -191,6 +191,17 @@ void test_landing()
 		menu.choice() == NewClassicLandingChoice::play,
 		"New Classic hub begins at Play Game"
 	);
+	const auto landing = menu.surface();
+	bool credit_ink = false;
+	for(std::size_t y = 380U; y < 388U; ++y) {
+		for(std::size_t x = 0U; x < th03::present::graphics_width; ++x) {
+			credit_ink = credit_ink || landing.pixels[
+				(y * th03::present::graphics_width) + x
+			].value != 0U;
+		}
+	}
+	expect(credit_ink,
+		"minimal New Classic landing retains the Replay Patch author credit");
 	release(menu);
 	auto moved = menu.consume({.down = true});
 	expect(

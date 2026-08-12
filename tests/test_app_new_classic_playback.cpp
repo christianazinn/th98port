@@ -20,6 +20,13 @@ namespace {
 std::size_t checks = 0U;
 std::size_t failures = 0U;
 
+// Slot 07 from Replay Patch 0.4.6-rc8 exposed 21,200 replay-owned Pause
+// samples.  Waiting one host frame per sample turned this transaction into a
+// six-minute stall, so retain the same order of magnitude as a regression.
+constexpr std::uint32_t recorded_pause_neutral_samples = 21'200U;
+constexpr std::uint32_t recorded_pause_transaction_samples =
+	recorded_pause_neutral_samples + 3U;
+
 void expect(bool condition, const char *message)
 {
 	++checks;
@@ -53,7 +60,9 @@ std::optional<th03::formats::ReplayDocument> insert_recorded_pause(
 )
 {
 	std::vector<th03::replay::SessionRecord> records;
-	records.reserve(document.session.records.size() + 3U);
+	records.reserve(
+		document.session.records.size() + recorded_pause_transaction_samples
+	);
 	std::optional<std::uint32_t> pause_sample{};
 	for(auto record : document.session.records) {
 		if(!pause_sample) {
@@ -70,15 +79,26 @@ std::optional<th03::formats::ReplayDocument> insert_recorded_pause(
 					.round_frame = std::nullopt,
 					.round_or_result_frame = std::nullopt,
 				});
+				for(std::uint32_t index = 0U;
+					index < recorded_pause_neutral_samples; ++index) {
+					records.push_back(th03::replay::InputSample{
+						.frame_index = *pause_sample + 2U + index,
+						.phase = th03::replay::InputPhase::interstitial,
+						.round_frame = std::nullopt,
+						.round_or_result_frame = std::nullopt,
+					});
+				}
 				records.push_back(th03::replay::InputSample{
-					.frame_index = *pause_sample + 2U,
+					.frame_index = *pause_sample + 2U +
+						recorded_pause_neutral_samples,
 					.phase = th03::replay::InputPhase::interstitial,
 					.input = {.system = 0x1000U},
 					.round_frame = std::nullopt,
 					.round_or_result_frame = std::nullopt,
 				});
 				records.push_back(th03::replay::InputSample{
-					.frame_index = *pause_sample + 3U,
+					.frame_index = *pause_sample + 3U +
+						recorded_pause_neutral_samples,
 					.phase = th03::replay::InputPhase::interstitial,
 					.round_frame = std::nullopt,
 					.round_or_result_frame = std::nullopt,
@@ -89,9 +109,10 @@ std::optional<th03::formats::ReplayDocument> insert_recorded_pause(
 			continue;
 		}
 		if(auto *sample = std::get_if<th03::replay::InputSample>(&record)) {
-			sample->frame_index += 3U;
+			sample->frame_index += recorded_pause_transaction_samples;
 		} else {
-			std::get<th03::replay::ProcessBoundary>(record).sample_index += 3U;
+			std::get<th03::replay::ProcessBoundary>(record).sample_index +=
+				recorded_pause_transaction_samples;
 		}
 		records.push_back(std::move(record));
 	}
@@ -101,11 +122,11 @@ std::optional<th03::formats::ReplayDocument> insert_recorded_pause(
 	document.session.records = std::move(records);
 	for(auto &checkpoint : document.checkpoints) {
 		if(checkpoint.sample_index > *pause_sample) {
-			checkpoint.sample_index += 3U;
+			checkpoint.sample_index += recorded_pause_transaction_samples;
 		}
 	}
 	if(document.metadata) {
-		document.metadata->sample_count += 3U;
+		document.metadata->sample_count += recorded_pause_transaction_samples;
 	}
 	return document;
 }
@@ -252,8 +273,7 @@ void test_authentic(
 			"recorded pause fixture constructs from the authentic replay route");
 		if(paused) {
 			bool saw_pause = false;
-			bool saw_resume = false;
-			for(std::size_t guard = 0U; guard < 512U && !saw_resume; ++guard) {
+			for(std::size_t guard = 0U; guard < 512U && !saw_pause; ++guard) {
 				auto tick = (*paused)->advance({}, false, false);
 				expect(tick.has_value(),
 					"recorded pause and release samples preserve playback contract");
@@ -263,12 +283,26 @@ void test_authentic(
 				while(auto command = (*paused)->take_audio_command()) {
 					saw_pause = saw_pause || command->type ==
 						th03::app::ClassicAudioCommandType::pause_song;
-					saw_resume = saw_resume || command->type ==
-						th03::app::ClassicAudioCommandType::resume_song;
 				}
 			}
-			expect(saw_pause && saw_resume,
-				"playback reconstructs pause and resume audio at recorded boundaries");
+			expect(saw_pause,
+				"playback reconstructs Pause audio at the recorded boundary");
+			const auto pause_cursor = (*paused)->sample_index();
+			auto resumed = (*paused)->advance({}, false, false);
+			expect(resumed.has_value(),
+				"recorded long Pause transaction preserves the playback contract");
+			bool saw_resume = false;
+			while(auto command = (*paused)->take_audio_command()) {
+				saw_resume = saw_resume || command->type ==
+					th03::app::ClassicAudioCommandType::resume_song;
+			}
+			expect(saw_resume,
+				"playback reconstructs Resume audio at the recorded boundary");
+			expect(
+				(*paused)->sample_index() == pause_cursor +
+					recorded_pause_transaction_samples,
+				"21,200 replay-owned Pause samples consume at one host boundary"
+			);
 		}
 	}
 

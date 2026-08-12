@@ -358,8 +358,9 @@ Once VS-3 holds, add scenes in donor order rather than building a broad launcher
    launcher now composes this owner directly rather than adding a desktop UI or
    rewriting source asset strings.
 3. Cutscenes and staff. The owning typed CutsceneScene and complete normal-speed
-   staff/verdict Raster transaction are integrated. Replay Patch's optional
-   score-file-unlocked held-Z staff pacing remains coupled to persistence. The
+   staff/verdict Raster transaction are integrated. New Classic snapshots the
+   Replay Patch score-file unlock at Staff entry and applies its physical-Z
+   fourfold pacing without changing Classic; a first clear remains normal. The
    remaining fidelity gate is captured PC-98 first/last-page, skip/fast-forward,
    staff CDG/palette/flake,
    and return-route comparison; conveniences such as rewind and a text log
@@ -372,6 +373,8 @@ Once VS-3 holds, add scenes in donor order rather than building a broad launcher
    recorded cutscenes and Continue plus typed VS winner scenes. Game Over
    playback preserves the donor's live, unrecorded registration menu and then
    stops at MAINL_END; final-clear playback preserves the donor's ending skip.
+   Replay-owned Pause control samples consume in recorded order at one host
+   boundary rather than adding one display wait per sample.
    Neither path writes score persistence.
    Format migration remains a tool concern. Any residual profile presentation
    work stays in New Classic adapters rather than forking deterministic Classic

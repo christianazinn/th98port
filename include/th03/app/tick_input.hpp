@@ -116,6 +116,10 @@ struct LogicalTickInput {
 	// Host-only Replay Patch shortcut sampled at the logical boundary. It is
 	// intentionally outside CoreInput and never enters deterministic gameplay.
 	bool restart_requested = false;
+	// Replay Patch's staff/replay accelerator is bound to physical Z rather
+	// than the configurable Shot action. It is presentation pacing only and is
+	// therefore kept out of CoreInput and replay serialization.
+	bool fast_forward_requested = false;
 };
 
 // Fixed-capacity event history plus a rational fake-clock-friendly scheduler.

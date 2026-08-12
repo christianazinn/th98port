@@ -171,6 +171,7 @@ void draw_overlay_word(
 	input.staff = {
 		.audio = audio,
 		.any_input = any,
+		.fast_forward_held = false,
 		.vsync_count_above_one = false,
 	};
 	input.registration = {
@@ -661,6 +662,79 @@ NewClassicReplayPlayback::advance(
 		impl_->status = NewClassicPlaybackStatus::complete;
 		return NewClassicPlaybackTick{.status = impl_->status};
 	}
+	if(impl_->pause_menu) {
+		// Replay Patch 0.4.6-rc8 removed the VSync wait from replay-owned
+		// Pause samples. Consume the complete recorded menu transaction in
+		// order at this one host boundary; physical Esc/application quit were
+		// already honored above, and PMD remains paused until the final action.
+		NewClassicPlaybackTick result{
+			.surface_changed = false,
+			.process_advanced = false,
+			.status = impl_->status,
+		};
+		for(;;) {
+			if(impl_->record_index >= impl_->document.session.records.size()) {
+				return std::unexpected(playback_error(
+					NewClassicPlaybackErrorCode::replay_contract_failed
+				));
+			}
+			const auto *sample = std::get_if<replay::InputSample>(
+				&impl_->document.session.records[impl_->record_index]
+			);
+			if(!sample || sample->frame_index != impl_->sample_index ||
+				impl_->in_mainl ||
+				sample->phase != replay::InputPhase::interstitial ||
+				impl_->driver->input_context() != InputContext::pause) {
+				return std::unexpected(playback_error(
+					NewClassicPlaybackErrorCode::replay_contract_failed
+				));
+			}
+			const auto pause_status = impl_->pause_menu->consume(
+				project_new_classic_pause_input(sample->input)
+			);
+			result.surface_changed = true;
+			result.process_advanced = true;
+			if(pause_status == NewClassicPauseStatus::running) {
+				++impl_->record_index;
+				++impl_->sample_index;
+				continue;
+			}
+			const bool resume = pause_status == NewClassicPauseStatus::resume;
+			if(!resume && pause_status != NewClassicPauseStatus::save_exit) {
+				return std::unexpected(playback_error(
+					NewClassicPlaybackErrorCode::replay_contract_failed
+				));
+			}
+			auto advanced = impl_->driver->finish_deferred_frame(
+				resume ? DeferredFrameAction::resume :
+					DeferredFrameAction::exit_session
+			);
+			impl_->pause_menu.reset();
+			if(resume) {
+				impl_->ui_audio = ClassicAudioCommand{
+					.type = ClassicAudioCommandType::resume_song,
+				};
+			}
+			if(!advanced) {
+				auto error = playback_error(
+					NewClassicPlaybackErrorCode::driver_failed
+				);
+				if(advanced.error().process_error) {
+					error.process = std::move(*advanced.error().process_error);
+				}
+				return std::unexpected(std::move(error));
+			}
+			if(advanced->process_advanced) {
+				++impl_->record_index;
+				++impl_->sample_index;
+			}
+			result.surface_changed = result.surface_changed ||
+				advanced->surface_changed;
+			result.process_advanced = result.process_advanced ||
+				advanced->process_advanced;
+			return result;
+		}
+	}
 
 	const auto &record = impl_->document.session.records[impl_->record_index];
 	if(const auto *sample = std::get_if<replay::InputSample>(&record)) {
@@ -767,43 +841,12 @@ NewClassicReplayPlayback::advance(
 		}
 		std::expected<MainProcessDriverTick, MainProcessDriverError> advanced =
 			std::unexpected(MainProcessDriverError{});
-		if(impl_->pause_menu) {
-			const auto pause_status = impl_->pause_menu->consume(
-				project_new_classic_pause_input(sample->input)
-			);
-			if(pause_status == NewClassicPauseStatus::running) {
-				++impl_->record_index;
-				++impl_->sample_index;
-				return NewClassicPlaybackTick{
-					.surface_changed = true,
-					.process_advanced = true,
-					.status = impl_->status,
-				};
-			}
-			const bool resume = pause_status == NewClassicPauseStatus::resume;
-			if(!resume && pause_status != NewClassicPauseStatus::save_exit) {
-				return std::unexpected(playback_error(
-					NewClassicPlaybackErrorCode::replay_contract_failed
-				));
-			}
-			advanced = impl_->driver->finish_deferred_frame(
-				resume ? DeferredFrameAction::resume :
-					DeferredFrameAction::exit_session
-			);
-			impl_->pause_menu.reset();
-			if(resume) {
-				impl_->ui_audio = ClassicAudioCommand{
-					.type = ClassicAudioCommandType::resume_song,
-				};
-			}
-		} else {
-			advanced = impl_->driver->consume(sample->input);
-			if(advanced && impl_->driver->deferred_frame_pending()) {
-				impl_->pause_menu.emplace(true);
-				impl_->ui_audio = ClassicAudioCommand{
-					.type = ClassicAudioCommandType::pause_song,
-				};
-			}
+		advanced = impl_->driver->consume(sample->input);
+		if(advanced && impl_->driver->deferred_frame_pending()) {
+			impl_->pause_menu.emplace(true);
+			impl_->ui_audio = ClassicAudioCommand{
+				.type = ClassicAudioCommandType::pause_song,
+			};
 		}
 		if(!advanced) {
 			auto error = playback_error(

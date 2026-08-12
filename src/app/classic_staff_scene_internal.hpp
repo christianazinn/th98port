@@ -62,6 +62,9 @@ struct ClassicStaffError final {
 struct ClassicStaffInput final {
 	ClassicAudioStatus audio{};
 	bool any_input = false;
+	// Physical Z, sampled outside the interface/remapping word. The scene
+	// applies it only when its entry-time score snapshot unlocked acceleration.
+	bool fast_forward_held = false;
 	// Already sampled for the VSync boundary consumed by this tick.
 	bool vsync_count_above_one = false;
 };
@@ -105,7 +108,8 @@ public:
 		const MainlStaffCompiledAssets &compiled,
 		const present::AnkGlyphProvider &font,
 		present::StaffFlakeTrigTables trig,
-		present::Raster initial_raster
+		present::Raster initial_raster,
+		bool fast_forward_unlocked = false
 	);
 	~ClassicStaffScene();
 
@@ -164,7 +168,8 @@ private:
 		std::unique_ptr<Prepared> &&prepared,
 		GameInit resident,
 		present::StaffFlakeTrigTables trig,
-		present::Raster raster
+		present::Raster raster,
+		bool fast_forward_unlocked
 	) noexcept;
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicStaffScene>,
@@ -177,7 +182,8 @@ private:
 		const present::AnkGlyphProvider &font,
 		present::StaffFlakeTrigTables trig,
 		present::Raster initial_raster,
-		bool authenticate_resource_bytes
+		bool authenticate_resource_bytes,
+		bool fast_forward_unlocked
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicStaffScene>,
@@ -190,8 +196,12 @@ private:
 		const MainlStaffCompiledAssets &compiled,
 		const present::AnkGlyphProvider &font,
 		present::StaffFlakeTrigTables trig,
-		present::Raster initial_raster
+		present::Raster initial_raster,
+		bool fast_forward_unlocked
 	);
+	[[nodiscard]] std::expected<ClassicStaffTick, ClassicStaffError>
+	advance_one(const ClassicStaffInput &input);
+	[[nodiscard]] bool fast_forward_step() const noexcept;
 
 	[[nodiscard]] bool push_audio_command(ClassicAudioCommand command) noexcept;
 	[[nodiscard]] bool initialize_visuals() noexcept;
@@ -199,7 +209,8 @@ private:
 	[[nodiscard]] bool tick_flakes(bool overrun) noexcept;
 	[[nodiscard]] bool phase_done(
 		ClassicAudioStatus audio,
-		std::uint16_t measure
+		std::uint16_t measure,
+		bool fast_forward_held
 	) const noexcept;
 	[[nodiscard]] bool slide_up() noexcept;
 	[[nodiscard]] bool slide_out() noexcept;
@@ -230,6 +241,7 @@ private:
 	bool fade_tone_applied_ = false;
 	std::uint8_t cleanup_ticks_ = 0U;
 	std::int16_t verdict_tone_ = 0;
+	bool fast_forward_unlocked_ = false;
 	std::array<ClassicAudioCommand, 2U> audio_commands_{};
 	std::size_t audio_head_ = 0U;
 	std::size_t audio_count_ = 0U;
@@ -247,12 +259,13 @@ struct ClassicStaffSceneTestAccess final {
 		const MainlStaffCompiledAssets &compiled,
 		const present::AnkGlyphProvider &font,
 		present::StaffFlakeTrigTables trig,
-		present::Raster initial_raster
+		present::Raster initial_raster,
+		bool fast_forward_unlocked = false
 	)
 	{
 		return ClassicStaffScene::create_impl(
 			resident, resources, stage_text, compiled, font, trig,
-			std::move(initial_raster), false
+			std::move(initial_raster), false, fast_forward_unlocked
 		);
 	}
 
@@ -267,12 +280,13 @@ struct ClassicStaffSceneTestAccess final {
 		const MainlStaffCompiledAssets &compiled,
 		const present::AnkGlyphProvider &font,
 		present::StaffFlakeTrigTables trig,
-		present::Raster initial_raster
+		present::Raster initial_raster,
+		bool fast_forward_unlocked = false
 	)
 	{
 		return ClassicStaffScene::create_predecoded(
 			resident, std::move(cels), palette, stage_text, compiled, font,
-			trig, std::move(initial_raster)
+			trig, std::move(initial_raster), fast_forward_unlocked
 		);
 	}
 

@@ -1214,6 +1214,20 @@ struct ClassicStoryBackend final {
 		if(!resources) {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
+		bool fast_forward_unlocked = false;
+		if(new_classic) {
+			auto score = load_new_classic_score_store_read_only(
+				score_path, legacy_score_path
+			);
+			if(!score) {
+				return std::unexpected(new_score_store_error(
+					std::move(score.error())
+				));
+			}
+			// Match the donor's entry-time snapshot. The current first clear is
+			// not committed until registration, so it cannot accelerate itself.
+			fast_forward_unlocked = score->document.extra_unlocked;
+		}
 		auto created = ClassicStaffScene::create(
 			resident,
 			*resources,
@@ -1221,7 +1235,8 @@ struct ClassicStoryBackend final {
 			staff_compiled,
 			static_content->font(),
 			static_content->trig(),
-			*cutscene_handoff
+			*cutscene_handoff,
+			fast_forward_unlocked
 		);
 		if(!created) {
 			return std::unexpected(staff_error(std::move(created.error())));

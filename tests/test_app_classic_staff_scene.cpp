@@ -216,11 +216,12 @@ StaffFlakeTrigTables trig()
 }
 
 std::expected<std::unique_ptr<ClassicStaffScene>, th03::app::ClassicStaffError>
-create_scene(SyntheticFont &font)
+create_scene(SyntheticFont &font, bool fast_forward_unlocked = false)
 {
 	auto closure = resources();
 	return ClassicStaffSceneTestAccess::create_with_synthetic_resources(
-		resident(), closure, stage_text(), compiled_assets(), font, trig(), Raster{}
+		resident(), closure, stage_text(), compiled_assets(), font, trig(), Raster{},
+		fast_forward_unlocked
 	);
 }
 
@@ -459,6 +460,40 @@ void test_current_audio_gate_and_reset_lifetime()
 	);
 }
 
+void test_fast_forward_unlock_and_frame_policy()
+{
+	SyntheticFont font;
+	auto locked = create_scene(font, false);
+	auto unlocked = create_scene(font, true);
+	expect(locked && unlocked,
+		"locked and previously-cleared staff profiles both construct");
+	if(!locked || !unlocked) {
+		return;
+	}
+	enter_presentation(**locked);
+	enter_presentation(**unlocked);
+	ClassicStaffInput held{
+		.audio = {.bgm_active = true, .measure = 0U, .volume = 255U},
+		.fast_forward_held = true,
+	};
+	expect((*locked)->advance(held).has_value() &&
+		ClassicStaffSceneTestAccess::frame(**locked) == 1,
+		"physical Z cannot accelerate the first-clear locked staff roll");
+	expect((*unlocked)->advance(held).has_value() &&
+		ClassicStaffSceneTestAccess::frame(**unlocked) == 4,
+		"an unlocked held-Z tick advances exactly four visual iterations");
+	for(std::size_t tick = 1U; tick < 65U; ++tick) {
+		expect((*locked)->advance(held).has_value() &&
+			(*unlocked)->advance(held).has_value(),
+			"locked and accelerated low-measure staff phases remain valid");
+	}
+	expect(
+		ClassicStaffSceneTestAccess::frame(**locked) == 65 &&
+		ClassicStaffSceneTestAccess::frame(**unlocked) < 16,
+		"held-Z substitutes the donor's frame threshold while ED.M remains at normal speed"
+	);
+}
+
 void test_overlay_forces_alpha_after_performance_downgrade()
 {
 	SyntheticFont font;
@@ -608,6 +643,7 @@ int main(int argc, char **argv)
 	test_complete_schedule_and_verdict();
 	test_music_off_volume_wait_escape();
 	test_current_audio_gate_and_reset_lifetime();
+	test_fast_forward_unlock_and_frame_policy();
 	test_overlay_forces_alpha_after_performance_downgrade();
 	test_atomic_rejections_and_audio_guard();
 	if(argc == 3) {

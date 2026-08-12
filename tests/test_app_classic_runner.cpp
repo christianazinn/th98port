@@ -201,6 +201,7 @@ void test_input_projection()
 			.charge_mask = 0x03U,
 		},
 		.app_quit_requested = true,
+		.fast_forward_requested = true,
 	};
 	const th03::app::ClassicAudioStatus audio{
 		.bgm_active = true,
@@ -234,8 +235,9 @@ void test_input_projection()
 		input.story.cutscene.script.any_key_held &&
 		input.story.cutscene.shot_or_ok_held &&
 		input.story.staff.any_input &&
+		input.story.staff.fast_forward_held &&
 		!input.story.staff.vsync_count_above_one,
-		"Story child inputs preserve source semantics without inventing overrun");
+		"Story child inputs preserve physical staff acceleration without inventing overrun");
 	expect(input.story.continue_menu.left &&
 		input.story.continue_menu.right && input.story.continue_menu.ok &&
 		input.story.continue_menu.shot && input.story.continue_menu.cancel,
