@@ -15,6 +15,7 @@ namespace th03::app {
 
 enum class MainlExecutableProfile : std::uint8_t {
 	unpacked_original_japanese,
+	packed_original_japanese,
 };
 
 enum class MainlCompiledTextItem : std::uint8_t {
@@ -33,6 +34,7 @@ enum class MainlCompiledTextErrorCode : std::uint8_t {
 	invalid_mz_signature,
 	invalid_mz_layout,
 	unsupported_profile,
+	packed_decode_failed,
 	compiled_range_out_of_bounds,
 	malformed_source_text,
 };
@@ -42,8 +44,9 @@ struct MainlCompiledTextError final {
 		MainlCompiledTextErrorCode::input_too_short;
 	MainlCompiledTextItem item = MainlCompiledTextItem::none;
 	std::uint8_t character_index = 0U;
-	// Absolute byte offset in the supplied executable. Diagnostics must never
-	// print the source byte stored at this location.
+	// Absolute byte offset in the supplied executable. For packed_decode_failed,
+	// this is the decoder's byte-silent packed/IDATA coordinate. Diagnostics
+	// must never print the source byte stored at this location.
 	std::size_t offset = 0U;
 };
 
@@ -61,10 +64,10 @@ struct MainlStageTextImport final {
 	MainlStaffCompiledAssets staff{};
 };
 
-// Authenticates the complete supported unpacked MAINL.EXE profile before
-// consulting any private compiled-data range. The returned text and staff
-// masks own all bytes and remain valid after the caller destroys or overwrites
-// the input.
+// Authenticates a complete supported packed or unpacked MAINL.EXE profile
+// before consulting any private compiled-data range. Packed input is boundedly
+// reconstructed and authenticated against the unpacked profile first. The
+// returned text and staff masks own all bytes.
 [[nodiscard]] std::expected<
 	MainlStageTextImport,
 	MainlCompiledTextError

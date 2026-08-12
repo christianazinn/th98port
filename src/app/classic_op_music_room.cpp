@@ -201,7 +201,8 @@ validate_music_room_resources(
 
 [[nodiscard]] bool valid_labels(const OpMusicRoomTextImport &labels) noexcept
 {
-	if(labels.profile != OpExecutableProfile::unpacked_original_japanese) {
+	if(labels.profile != OpExecutableProfile::unpacked_original_japanese &&
+		labels.profile != OpExecutableProfile::packed_original_japanese) {
 		return false;
 	}
 	for(std::size_t index = 0U; index < labels.choices.size(); ++index) {

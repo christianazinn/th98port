@@ -52,7 +52,8 @@ ctest --preset msvc-x64-sdl
 
 `th03-app` reads an external structured extraction containing `YUME1.DAT/`
 and `YUME2.DAT/`, a supported Japanese `MAIN.EXE` compiled-content profile,
-supported unpacked Japanese `MAINL.EXE` and `OP.EXE` profiles, and a
+the untouched stock DIET-packed or authenticated unpacked Japanese
+`MAINL.EXE` and `OP.EXE` profiles, and a
 caller-supplied 288,768-byte PC-98 `FONT.ROM`, and optionally a caller-supplied
 8,192-byte YM2608 ADPCM-A rhythm image. No
 original bytes are embedded or copied into the build. Classic and direct VS
@@ -208,10 +209,11 @@ split comparisons. Original game data and replay captures remain external.
   clear, Continue Yes/No, exhausted credits, MAIN route 0, score persistence,
   fresh-title return, and real Quit while composing every changed surface and
   draining every audio command on GCC and MSVC.
-- The same boundary authenticates the supported unpacked Japanese `MAINL.EXE`
-  and owns its exact Story title/name table, staff verdict strings, and flake
-  masks. Packed DIET executable support is not yet provided; original bytes
-  remain external and uncommitted.
+- The same boundary authenticates either untouched stock DIET-packed or exact
+  unpacked Japanese `MAINL.EXE` and `OP.EXE`. Packed input is authenticated,
+  boundedly reconstructed in memory, authenticated again as the known unpacked
+  profile, and passed to the same exact Story/staff/Music Room importers.
+  Original bytes remain external and uncommitted.
 - `th03_app_resources` owns the checked external-content root and immutable
   byte cache. Original/extracted files remain local inputs and never enter the
   repository.

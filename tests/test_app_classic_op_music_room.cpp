@@ -191,6 +191,26 @@ void test_asset_validation_and_initial_presentation()
 	const SyntheticFont font{};
 	const auto valid_labels = labels();
 	const auto valid_comments = comments();
+	auto packed_labels = valid_labels;
+	packed_labels.profile = OpExecutableProfile::packed_original_japanese;
+	auto packed = ClassicOpMusicRoomSceneTestAccess::create_with_predecoded_assets(
+		{}, {}, background(), packed_labels, valid_comments, font
+	);
+	expect(
+		packed.has_value(),
+		"authenticated packed OP profile is valid scene input"
+	);
+	auto invalid_profile = valid_labels;
+	invalid_profile.profile = static_cast<OpExecutableProfile>(0xFFU);
+	auto invalid_profile_scene = ClassicOpMusicRoomSceneTestAccess::
+		create_with_predecoded_assets(
+			{}, {}, background(), invalid_profile, valid_comments, font
+		);
+	expect(
+		!invalid_profile_scene && invalid_profile_scene.error().code ==
+			ClassicOpMusicRoomErrorCode::invalid_compiled_text,
+		"unknown OP executable profile is rejected at the scene boundary"
+	);
 	PiImage bad_background{};
 	auto bad = ClassicOpMusicRoomSceneTestAccess::create_with_predecoded_assets(
 		{}, {}, std::move(bad_background), valid_labels, valid_comments, font

@@ -471,6 +471,7 @@ add_library(th03_app_main STATIC
 	src/app/classic_story_session.cpp
 	src/app/direct_vs_cli.cpp
 	src/app/direct_vs_launch.cpp
+	src/app/diet_executable.cpp
 	src/app/main_direct_vs_runner.cpp
 	src/app/mainl_compiled_text.cpp
 	src/app/main_process_driver.cpp

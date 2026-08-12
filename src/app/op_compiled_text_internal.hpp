@@ -14,6 +14,7 @@ namespace th03::app {
 
 enum class OpExecutableProfile : std::uint8_t {
 	unpacked_original_japanese,
+	packed_original_japanese,
 };
 
 enum class OpCompiledTextItem : std::uint8_t {
@@ -27,6 +28,7 @@ enum class OpCompiledTextErrorCode : std::uint8_t {
 	invalid_mz_signature,
 	invalid_mz_layout,
 	unsupported_profile,
+	packed_decode_failed,
 	compiled_range_out_of_bounds,
 	malformed_source_text,
 };
@@ -35,8 +37,9 @@ struct OpCompiledTextError final {
 	OpCompiledTextErrorCode code = OpCompiledTextErrorCode::input_too_short;
 	OpCompiledTextItem item = OpCompiledTextItem::none;
 	std::uint8_t choice_index = 0U;
-	// Absolute byte offset in the supplied executable. Diagnostics must never
-	// print the original-content byte stored at this location.
+	// Absolute byte offset in the supplied executable. For packed_decode_failed,
+	// this is the decoder's byte-silent packed/IDATA coordinate. Diagnostics
+	// must never print the original-content byte stored at this location.
 	std::size_t offset = 0U;
 };
 
@@ -50,9 +53,9 @@ struct OpMusicRoomTextImport final {
 	std::array<std::vector<std::uint8_t>, choice_count> choices{};
 };
 
-// Authenticates the complete supported unpacked OP.EXE profile before reading
-// its private compiled-data ranges. Returned vectors own their bytes and stay
-// valid after the caller destroys or overwrites the executable input.
+// Authenticates a complete supported packed or unpacked OP.EXE profile before
+// reading its private compiled-data ranges. Packed input is boundedly
+// reconstructed and authenticated against the unpacked profile first.
 [[nodiscard]] std::expected<
 	OpMusicRoomTextImport,
 	OpCompiledTextError

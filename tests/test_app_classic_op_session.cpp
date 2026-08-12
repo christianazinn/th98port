@@ -1170,8 +1170,8 @@ int main(int argc, char **argv)
 		);
 	} else if(argc != 1) {
 		expect(false,
-			"usage requires content root, MAIN.EXE, unpacked MAINL.EXE, "
-			"unpacked OP.EXE, and FONT.ROM");
+			"usage requires content root, MAIN.EXE, supported MAINL.EXE, "
+			"supported OP.EXE, and FONT.ROM");
 	}
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;

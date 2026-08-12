@@ -1083,7 +1083,7 @@ void local_original_gate(
 	const auto font_rom = read_file(font_rom_path);
 	expect(
 		executable.has_value() && font_rom.has_value(),
-		"local unpacked MAINL and FONT.ROM inputs are readable"
+		"local supported MAINL and FONT.ROM inputs are readable"
 	);
 	if(!executable || !font_rom) {
 		return;
@@ -1096,7 +1096,7 @@ void local_original_gate(
 		return;
 	}
 	const auto imported = th03::app::import_mainl_stage_text(*executable);
-	expect(imported.has_value(), "local unpacked MAINL profile authenticates");
+	expect(imported.has_value(), "local supported MAINL profile authenticates");
 	if(!imported) {
 		return;
 	}

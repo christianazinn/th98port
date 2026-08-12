@@ -1,5 +1,7 @@
 #include "mainl_compiled_text_internal.hpp"
 
+#include "diet_executable_internal.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -20,6 +22,18 @@ constexpr MainExecutableSha256 profile_sha256 = {
 	0x16U, 0xCAU, 0xC6U, 0xA9U, 0xD7U, 0x75U, 0x38U, 0xEBU,
 	0xDFU, 0x0CU, 0x33U, 0x52U, 0x2CU, 0x4FU, 0x6BU, 0xD9U,
 	0x19U, 0x4DU, 0x56U, 0x9EU, 0xB9U, 0x27U, 0x13U, 0x4AU,
+};
+
+constexpr detail::DietExecutableProfile packed_profile = {
+	.packed_file_bytes = 37975U,
+	.packed_sha256 = {
+		0x5BU, 0x61U, 0x30U, 0x23U, 0xB4U, 0xAEU, 0x02U, 0x17U,
+		0x94U, 0xFFU, 0x77U, 0x88U, 0x71U, 0xA7U, 0x32U, 0xE7U,
+		0xAFU, 0x0DU, 0x04U, 0x57U, 0xCCU, 0xDBU, 0x36U, 0x13U,
+		0xE3U, 0x45U, 0x8FU, 0x2AU, 0x60U, 0x9EU, 0x46U, 0x6CU,
+	},
+	.unpacked_file_bytes = profile_file_bytes,
+	.unpacked_sha256 = profile_sha256,
 };
 
 struct TextSpec final {
@@ -199,7 +213,9 @@ parse_mz(std::span<const std::byte> bytes) noexcept
 [[nodiscard]] std::expected<MainlStageTextImport, MainlCompiledTextError>
 import_profile(
 	std::span<const std::byte> bytes,
-	const MainExecutableSha256 &accepted_digest
+	const MainExecutableSha256 &accepted_digest,
+	MainlExecutableProfile profile =
+		MainlExecutableProfile::unpacked_original_japanese
 )
 {
 	auto mz = parse_mz(bytes);
@@ -214,6 +230,7 @@ import_profile(
 	}
 
 	MainlStageTextImport result{};
+	result.profile = profile;
 	for(const auto &spec : text_specs) {
 		const auto file_offset = mz->header_bytes + spec.load_offset;
 		if(file_offset > bytes.size() ||
@@ -353,6 +370,25 @@ import_profile(
 std::expected<MainlStageTextImport, MainlCompiledTextError>
 import_mainl_stage_text(std::span<const std::byte> mainl_executable)
 {
+	if(mainl_executable.size() == packed_profile.packed_file_bytes &&
+		main_executable_sha256(mainl_executable) == packed_profile.packed_sha256) {
+		auto unpacked = detail::decode_diet_145f_executable(
+			mainl_executable, packed_profile
+		);
+		if(!unpacked) {
+			return std::unexpected(error(
+				MainlCompiledTextErrorCode::packed_decode_failed,
+				MainlCompiledTextItem::none,
+				0U,
+				unpacked.error().offset
+			));
+		}
+		return import_profile(
+			*unpacked,
+			profile_sha256,
+			MainlExecutableProfile::packed_original_japanese
+		);
+	}
 	return import_profile(mainl_executable, profile_sha256);
 }
 

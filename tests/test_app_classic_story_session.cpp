@@ -838,7 +838,7 @@ int main(int argc, char **argv)
 			"local original assets construct Stage, retained MAIN, and surface");
 	} else if(argc != 1) {
 		expect(false,
-			"usage requires content root, MAIN.EXE, and unpacked MAINL.EXE");
+			"usage requires content root, MAIN.EXE, and supported MAINL.EXE");
 	}
 
 	if(failures != 0U) {

@@ -131,11 +131,12 @@ foundations:
   exact phase floors, semantic audio waits, overrun downgrade, two-page verdict,
   and tone-1 completion are covered by a complete synthetic schedule test and
   an opt-in local original-content construction gate.
-- Its Stage title/name content now comes from a full-file-authenticated unpacked
-  Japanese `MAINL.EXE` profile. All 18 Shift-JIS fields are copied into owning
-  typed storage before scene construction; no donor string is compiled into the
-  port. The shipped DIET-packed executable remains a later compatibility
-  profile rather than an unauthenticated scan/fallback.
+- Its Stage title/name content now comes from either the full-file-authenticated
+  unpacked Japanese `MAINL.EXE` or the untouched stock DIET-packed profile.
+  Packed MAINL/OP inputs are authenticated before bounded in-memory DIET 1.45f
+  reconstruction, authenticated again against the supported unpacked identity,
+  and then passed to the same owning typed importers. No donor string is
+  compiled into the port and no scan/fallback accepts arbitrary executables.
 - The dependency-free Classic persistence foundation now decodes and encodes
   the exact original four-rank 824-byte `YUME.NEM`, reconstructs the source's
   populated stock board, and preserves its score comparator and uniform-name

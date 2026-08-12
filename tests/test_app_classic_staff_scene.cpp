@@ -575,12 +575,12 @@ void test_local_original_closure(
 )
 {
 	const auto mainl = read_file(mainl_path);
-	expect(mainl.has_value(), "local unpacked MAINL input is readable");
+	expect(mainl.has_value(), "local supported MAINL input is readable");
 	if(!mainl) {
 		return;
 	}
 	const auto imported = th03::app::import_mainl_stage_text(*mainl);
-	expect(imported.has_value(), "local unpacked MAINL profile authenticates");
+	expect(imported.has_value(), "local supported MAINL profile authenticates");
 	if(!imported) {
 		return;
 	}

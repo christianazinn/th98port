@@ -1,5 +1,7 @@
 #include "op_compiled_text_internal.hpp"
 
+#include "diet_executable_internal.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -23,6 +25,18 @@ constexpr MainExecutableSha256 profile_sha256 = {
 	0xF3U, 0xA2U, 0x7CU, 0x74U, 0x7AU, 0x5BU, 0xEAU, 0xE1U,
 	0x50U, 0xF5U, 0x5FU, 0x0BU, 0x41U, 0xB8U, 0xAFU, 0xDDU,
 	0x1EU, 0xDAU, 0x17U, 0x60U, 0xA7U, 0x59U, 0xECU, 0xC0U,
+};
+
+constexpr detail::DietExecutableProfile packed_profile = {
+	.packed_file_bytes = 36041U,
+	.packed_sha256 = {
+		0xD7U, 0xBFU, 0xA7U, 0xF1U, 0xF8U, 0xAFU, 0xE0U, 0x94U,
+		0x37U, 0x63U, 0xCEU, 0x76U, 0x43U, 0x7DU, 0x12U, 0xEDU,
+		0x41U, 0x2BU, 0x84U, 0x52U, 0x71U, 0x6DU, 0xD6U, 0x4FU,
+		0x93U, 0x7CU, 0x94U, 0x79U, 0x6EU, 0xBAU, 0x57U, 0xABU,
+	},
+	.unpacked_file_bytes = profile_file_bytes,
+	.unpacked_sha256 = profile_sha256,
 };
 
 struct MzLayout final {
@@ -126,7 +140,8 @@ parse_mz(std::span<const std::byte> bytes) noexcept
 [[nodiscard]] std::expected<OpMusicRoomTextImport, OpCompiledTextError>
 import_profile(
 	std::span<const std::byte> bytes,
-	const MainExecutableSha256 &accepted_digest
+	const MainExecutableSha256 &accepted_digest,
+	OpExecutableProfile profile = OpExecutableProfile::unpacked_original_japanese
 )
 {
 	auto mz = parse_mz(bytes);
@@ -141,6 +156,7 @@ import_profile(
 	}
 
 	OpMusicRoomTextImport result{};
+	result.profile = profile;
 	for(std::size_t index = 0U; index < result.choices.size(); ++index) {
 		if(index == OpMusicRoomTextImport::empty_choice_index) {
 			continue;
@@ -192,6 +208,25 @@ import_profile(
 std::expected<OpMusicRoomTextImport, OpCompiledTextError>
 import_op_music_room_text(std::span<const std::byte> op_executable)
 {
+	if(op_executable.size() == packed_profile.packed_file_bytes &&
+		main_executable_sha256(op_executable) == packed_profile.packed_sha256) {
+		auto unpacked = detail::decode_diet_145f_executable(
+			op_executable, packed_profile
+		);
+		if(!unpacked) {
+			return std::unexpected(error(
+				OpCompiledTextErrorCode::packed_decode_failed,
+				OpCompiledTextItem::none,
+				0U,
+				unpacked.error().offset
+			));
+		}
+		return import_profile(
+			*unpacked,
+			profile_sha256,
+			OpExecutableProfile::packed_original_japanese
+		);
+	}
 	return import_profile(op_executable, profile_sha256);
 }
 

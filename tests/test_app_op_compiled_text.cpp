@@ -280,7 +280,7 @@ read_all(const std::filesystem::path &path)
 {
 	std::ifstream input(path, std::ios::binary);
 	if(!input) {
-		return std::unexpected("local unpacked OP input is readable");
+		return std::unexpected("local supported OP input is readable");
 	}
 	std::vector<char> chars(
 		(std::istreambuf_iterator<char>(input)),
@@ -304,10 +304,15 @@ void test_authentic_profile(const std::filesystem::path &path)
 		return;
 	}
 	auto imported = th03::app::import_op_music_room_text(*executable);
-	expect(imported.has_value(), "local unpacked OP profile authenticates");
+	expect(imported.has_value(), "local OP profile authenticates");
 	if(!imported) {
 		return;
 	}
+	const auto expected_profile = (executable->size() == 36041U) ?
+		OpExecutableProfile::packed_original_japanese :
+		OpExecutableProfile::unpacked_original_japanese;
+	expect(imported->profile == expected_profile,
+		"local OP caller profile identity is retained");
 	for(std::size_t index = 0U; index < imported->choices.size(); ++index) {
 		const auto expected_size =
 			(index == OpMusicRoomTextImport::empty_choice_index) ? 0U :
@@ -316,6 +321,28 @@ void test_authentic_profile(const std::filesystem::path &path)
 			imported->choices[index].size() == expected_size,
 			"authentic OP label has exact semantic size"
 		);
+	}
+}
+
+void test_authentic_equivalence(
+	const std::filesystem::path &first_path,
+	const std::filesystem::path &second_path
+)
+{
+	auto first_bytes = read_all(first_path);
+	auto second_bytes = read_all(second_path);
+	expect(first_bytes.has_value() && second_bytes.has_value(),
+		"packed and unpacked OP inputs are readable");
+	if(!first_bytes || !second_bytes) {
+		return;
+	}
+	auto first = th03::app::import_op_music_room_text(*first_bytes);
+	auto second = th03::app::import_op_music_room_text(*second_bytes);
+	expect(first.has_value() && second.has_value(),
+		"packed and unpacked OP profiles both authenticate");
+	if(first && second) {
+		expect(first->choices == second->choices,
+			"packed and unpacked OP labels are byte-identical");
 	}
 }
 
@@ -328,8 +355,12 @@ int main(int argc, char **argv)
 	test_range_and_text_rejections();
 	if(argc == 2) {
 		test_authentic_profile(argv[1]);
+	} else if(argc == 3) {
+		test_authentic_profile(argv[1]);
+		test_authentic_profile(argv[2]);
+		test_authentic_equivalence(argv[1], argv[2]);
 	} else {
-		expect(argc == 1, "optional local gate accepts one unpacked OP path");
+		expect(argc == 1, "optional local gate accepts up to two OP paths");
 	}
 
 	if(failures != 0U) {
