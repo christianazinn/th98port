@@ -89,6 +89,32 @@ function Resolve-RequiredDirectory([string]$Path, [string]$Label) {
 	return $resolved
 }
 
+function Publish-SmokeFailure(
+	[string]$Label,
+	[int]$ExitCode,
+	[string]$UserRoot,
+	[string]$StandardOutput,
+	[string]$StandardError,
+	[string]$Destination
+) {
+	$parts = [Collections.Generic.List[string]]::new()
+	$parts.Add("smoke=$Label`r`nexit-code=$ExitCode`r`n")
+	foreach($path in @(
+		(Join-Path $UserRoot "last-run.log"),
+		$StandardOutput,
+		$StandardError
+	)) {
+		if([IO.File]::Exists($path)) {
+			$parts.Add([IO.File]::ReadAllText($path))
+		}
+	}
+	[IO.File]::WriteAllText(
+		$Destination,
+		($parts -join "`r`n"),
+		[Text.UTF8Encoding]::new($false)
+	)
+}
+
 $DataRoot = Resolve-RequiredDirectory $DataRoot "Classic data root"
 $MainExecutable = Resolve-RequiredFile $MainExecutable "MAIN.EXE"
 $MainlExecutable = Resolve-RequiredFile $MainlExecutable "MAINL.EXE"
@@ -114,9 +140,17 @@ foreach($archiveDirectory in @("YUME1.DAT", "YUME2.DAT")) {
 
 $buildRoot = Join-Path $sourceRoot "out\build\$BuildPreset"
 if(-not $SkipNativeBuild) {
-	& cmake --build --preset $BuildPreset --config $Configuration --target th03-app
-	if($LASTEXITCODE -ne 0) {
-		throw "Native th03-app build failed with exit code $LASTEXITCODE."
+	$nativeBuildExit = 0
+	Push-Location $sourceRoot
+	try {
+		& cmake --build --preset $BuildPreset --config $Configuration `
+			--target th03-app
+		$nativeBuildExit = $LASTEXITCODE
+	} finally {
+		Pop-Location
+	}
+	if($nativeBuildExit -ne 0) {
+		throw "Native th03-app build failed with exit code $nativeBuildExit."
 	}
 }
 $appCandidates = @(
@@ -135,6 +169,10 @@ $sdlRuntime = Resolve-RequiredFile (
 ) "SDL3 runtime"
 
 [IO.Directory]::CreateDirectory($standaloneRoot) | Out-Null
+$failedSmokeLog = Join-Path $standaloneRoot "last-failed-smoke.log"
+if([IO.File]::Exists($failedSmokeLog)) {
+	Remove-Item -LiteralPath $failedSmokeLog -Force
+}
 $Output = [IO.Path]::GetFullPath($Output)
 [IO.Directory]::CreateDirectory((Split-Path -Parent $Output)) | Out-Null
 $workRoot = Join-Path $standaloneRoot (
@@ -292,6 +330,69 @@ try {
 		}
 	}
 
+	# The resource loader authenticates and opens extracted members directly.
+	# These packed-archive copies and unused BF2 have no manifest/source consumer;
+	# omitting them changes no path reachable by the native application.
+	foreach($archiveName in @("YUME1.DAT", "YUME2.DAT")) {
+		$archiveRoot = Join-Path $contentRoot $archiveName
+		foreach($unusedName in @("yume1.DAT", "yume2.DAT", "NUM8.BF2")) {
+			$unusedPath = Join-Path $archiveRoot $unusedName
+			if([IO.File]::Exists($unusedPath)) {
+				Remove-Item -LiteralPath $unusedPath -Force
+			}
+		}
+	}
+
+	$archiveOne = Join-Path $contentRoot "YUME1.DAT"
+	$archiveTwo = Join-Path $contentRoot "YUME2.DAT"
+	$archiveOneFiles = Get-ChildItem -LiteralPath $archiveOne -Recurse -File
+	$archiveTwoFiles = Get-ChildItem -LiteralPath $archiveTwo -Recurse -File
+	$archiveOneManifest = @{}
+	foreach($file in $archiveOneFiles) {
+		$relative = [IO.Path]::GetRelativePath($archiveOne, $file.FullName)
+		$archiveOneManifest[$relative] = @(
+			$file.Length,
+			(Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName).Hash
+		)
+	}
+	$archivesIdentical = $archiveOneFiles.Count -eq $archiveTwoFiles.Count
+	if($archivesIdentical) {
+		foreach($file in $archiveTwoFiles) {
+			$relative = [IO.Path]::GetRelativePath($archiveTwo, $file.FullName)
+			if(-not $archiveOneManifest.ContainsKey($relative)) {
+				$archivesIdentical = $false
+				break
+			}
+			$expected = $archiveOneManifest[$relative]
+			$observedHash = (
+				Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName
+			).Hash
+			if($file.Length -ne $expected[0] -or $observedHash -ne $expected[1]) {
+				$archivesIdentical = $false
+				break
+			}
+		}
+	}
+	if($archivesIdentical) {
+		# [archiveTwo] is inside the already validated generated work root.
+		# The NativeAOT launcher recreates it as per-file hard links, with a
+		# byte-copy fallback when the destination filesystem lacks hard links.
+		Remove-Item -LiteralPath $archiveTwo -Recurse -Force
+		$dedupMarker = Join-Path $payloadRoot ".deduplicate-YUME2.DAT"
+		[IO.File]::WriteAllText(
+			$dedupMarker,
+			"YUME1.DAT -> YUME2.DAT`r`n",
+			[Text.Encoding]::ASCII
+		)
+		(Get-Item -LiteralPath $dedupMarker).LastWriteTimeUtc =
+			[DateTime]::new(2000, 1, 1, 0, 0, 0, [DateTimeKind]::Utc)
+	}
+	$payloadEpoch = [DateTime]::new(
+		2000, 1, 1, 0, 0, 0, [DateTimeKind]::Utc
+	)
+	Get-ChildItem -LiteralPath $payloadRoot -Recurse -Force |
+		ForEach-Object { $_.LastWriteTimeUtc = $payloadEpoch }
+
 	Add-Type -AssemblyName System.IO.Compression.FileSystem
 	$payloadZip = Join-Path $workRoot "classic-payload.zip"
 	[IO.Compression.ZipFile]::CreateFromDirectory(
@@ -325,22 +426,95 @@ try {
 		$previousAudio = $env:SDL_AUDIODRIVER
 		$previousTicks = $env:TH03_CLASSIC_STANDALONE_SMOKE_TICKS
 		$previousUserRoot = $env:TH03_CLASSIC_STANDALONE_USER_ROOT
+		$previousReplayRoot = $env:TH03_CLASSIC_STANDALONE_REPLAY_ROOT
 		try {
 			$env:SDL_VIDEODRIVER = "dummy"
 			$env:SDL_AUDIODRIVER = "dummy"
 			$env:TH03_CLASSIC_STANDALONE_SMOKE_TICKS = "8"
-			$env:TH03_CLASSIC_STANDALONE_USER_ROOT = Join-Path $workRoot `
-				"standalone-smoke-user"
-			$smoke = Start-Process -FilePath $Output -Wait -PassThru `
-				-WindowStyle Hidden
+			Remove-Item Env:TH03_CLASSIC_STANDALONE_REPLAY_ROOT `
+				-ErrorAction SilentlyContinue
+
+			$portableRoot = Join-Path $workRoot "portable-smoke"
+			$portableUser = Join-Path $workRoot "portable-smoke-user"
+			[IO.Directory]::CreateDirectory($portableRoot) | Out-Null
+			$portableExecutable = Join-Path $portableRoot "TH03-Classic-Test.exe"
+			Copy-Item -LiteralPath $Output -Destination $portableExecutable
+			$portableOut = Join-Path $workRoot "portable-smoke.stdout.log"
+			$portableErr = Join-Path $workRoot "portable-smoke.stderr.log"
+			$env:TH03_CLASSIC_STANDALONE_USER_ROOT = $portableUser
+			$smoke = Start-Process -FilePath $portableExecutable -Wait -PassThru `
+				-WindowStyle Hidden -RedirectStandardOutput $portableOut `
+				-RedirectStandardError $portableErr
+			if($smoke.ExitCode -ne 0) {
+				Publish-SmokeFailure "portable" $smoke.ExitCode $portableUser `
+					$portableOut $portableErr $failedSmokeLog
+				throw "Standalone portable smoke failed with exit code $($smoke.ExitCode). See $failedSmokeLog"
+			}
+			$portableLog = Join-Path $portableUser "last-run.log"
+			$portableReplay = Join-Path $portableRoot "REPLAY"
+			if(-not [IO.Directory]::Exists($portableReplay) -or
+				-not ([IO.File]::ReadAllText($portableLog).Contains(
+					"replay-root=$portableReplay"
+				))) {
+				throw "Standalone portable replay-root smoke failed."
+			}
+
+			$installLine = [IO.File]::ReadAllLines($portableLog) |
+				Where-Object { $_.StartsWith("install-root=") } |
+				Select-Object -First 1
+			if(-not $installLine) {
+				throw "Standalone smoke did not report its extracted install root."
+			}
+			$installRoot = $installLine.Substring("install-root=".Length)
+			$treeOne = Join-Path $installRoot "content\YUME1.DAT"
+			$treeTwo = Join-Path $installRoot "content\YUME2.DAT"
+			$oneFiles = Get-ChildItem -LiteralPath $treeOne -File -Recurse
+			$twoFiles = Get-ChildItem -LiteralPath $treeTwo -File -Recurse
+			if($oneFiles.Count -ne $twoFiles.Count) {
+				throw "Standalone deduplicated archive restore count differs."
+			}
+			foreach($file in $oneFiles) {
+				$relative = [IO.Path]::GetRelativePath($treeOne, $file.FullName)
+				$other = Join-Path $treeTwo $relative
+				if(-not [IO.File]::Exists($other) -or
+					$file.Length -ne (Get-Item -LiteralPath $other).Length -or
+					(Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName).Hash -ne
+						(Get-FileHash -Algorithm SHA256 -LiteralPath $other).Hash) {
+					throw "Standalone deduplicated archive restore differs at $relative."
+				}
+			}
+
+			$fallbackRoot = Join-Path $workRoot "fallback-smoke"
+			$fallbackUser = Join-Path $workRoot "fallback-smoke-user"
+			[IO.Directory]::CreateDirectory($fallbackRoot) | Out-Null
+			$fallbackExecutable = Join-Path $fallbackRoot "TH03-Classic-Test.exe"
+			Copy-Item -LiteralPath $Output -Destination $fallbackExecutable
+			[IO.File]::WriteAllText((Join-Path $fallbackRoot "REPLAY"), "blocked")
+			$fallbackOut = Join-Path $workRoot "fallback-smoke.stdout.log"
+			$fallbackErr = Join-Path $workRoot "fallback-smoke.stderr.log"
+			$env:TH03_CLASSIC_STANDALONE_USER_ROOT = $fallbackUser
+			$smoke = Start-Process -FilePath $fallbackExecutable -Wait -PassThru `
+				-WindowStyle Hidden -RedirectStandardOutput $fallbackOut `
+				-RedirectStandardError $fallbackErr
+			if($smoke.ExitCode -ne 0) {
+				Publish-SmokeFailure "fallback" $smoke.ExitCode $fallbackUser `
+					$fallbackOut $fallbackErr $failedSmokeLog
+				throw "Standalone fallback smoke failed with exit code $($smoke.ExitCode). See $failedSmokeLog"
+			}
+			$fallbackLog = Join-Path $fallbackUser "last-run.log"
+			$fallbackReplay = Join-Path $fallbackUser "REPLAY"
+			if(-not [IO.Directory]::Exists($fallbackReplay) -or
+				-not ([IO.File]::ReadAllText($fallbackLog).Contains(
+					"replay-root=$fallbackReplay"
+				))) {
+				throw "Standalone private replay-root fallback smoke failed."
+			}
 		} finally {
 			$env:SDL_VIDEODRIVER = $previousVideo
 			$env:SDL_AUDIODRIVER = $previousAudio
 			$env:TH03_CLASSIC_STANDALONE_SMOKE_TICKS = $previousTicks
 			$env:TH03_CLASSIC_STANDALONE_USER_ROOT = $previousUserRoot
-		}
-		if($smoke.ExitCode -ne 0) {
-			throw "Standalone executable smoke failed with exit code $($smoke.ExitCode)."
+			$env:TH03_CLASSIC_STANDALONE_REPLAY_ROOT = $previousReplayRoot
 		}
 	}
 

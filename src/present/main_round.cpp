@@ -618,6 +618,9 @@ void MainRoundPresenter::main_result_state(
 		fail(MainRoundStatus::hud_result_failed);
 		return;
 	}
+	if(state.summary_active && state.context.round_or_result_frame == 1U) {
+		last_result_state_ = state;
+	}
 	repeat_result_ready_ = state.defeated_player.has_value() &&
 		state.winner.has_value();
 	phase_ = Phase::result_gate;
@@ -1106,6 +1109,7 @@ bool MainRoundPresenter::repeat_round_startup(
 	hud_start_step_seen_ = false;
 	story_lives_changed_ = false;
 	repeat_result_ready_ = false;
+	last_result_state_.reset();
 	return true;
 }
 
@@ -1126,6 +1130,12 @@ MainRoundStatus MainRoundPresenter::status() const noexcept
 bool MainRoundPresenter::ready() const noexcept
 {
 	return status_ == MainRoundStatus::ready;
+}
+
+const std::optional<MainResultState> &MainRoundPresenter::last_result_state()
+	const noexcept
+{
+	return last_result_state_;
 }
 
 } // namespace th03::present

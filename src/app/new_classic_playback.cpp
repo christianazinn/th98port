@@ -225,7 +225,9 @@ struct NewClassicReplayPlayback::Impl final {
 	bool reduced_flash = false;
 	NewClassicPlaybackStatus status = NewClassicPlaybackStatus::running;
 	std::optional<ClassicAudioCommand> load_song{};
-	std::optional<ClassicAudioCommand> ui_audio{};
+	std::array<ClassicAudioCommand, 2U> ui_audio{};
+	std::size_t ui_audio_index = 0U;
+	std::size_t ui_audio_count = 0U;
 	std::optional<NewClassicPauseMenu> pause_menu{};
 
 	Impl(
@@ -692,6 +694,14 @@ NewClassicReplayPlayback::advance(
 			const auto pause_status = impl_->pause_menu->consume(
 				project_new_classic_pause_input(sample->input)
 			);
+			if(impl_->pause_menu->take_rejected_save_effect()) {
+				impl_->ui_audio = {{
+					{.type = ClassicAudioCommandType::play_effect, .parameter = 21U},
+					{},
+				}};
+				impl_->ui_audio_index = 0U;
+				impl_->ui_audio_count = 1U;
+			}
 			result.surface_changed = true;
 			result.process_advanced = true;
 			if(pause_status == NewClassicPauseStatus::running) {
@@ -711,9 +721,12 @@ NewClassicReplayPlayback::advance(
 			);
 			impl_->pause_menu.reset();
 			if(resume) {
-				impl_->ui_audio = ClassicAudioCommand{
-					.type = ClassicAudioCommandType::resume_song,
-				};
+				impl_->ui_audio = {{
+					{.type = ClassicAudioCommandType::resume_song},
+					{.type = ClassicAudioCommandType::play_effect, .parameter = 21U},
+				}};
+				impl_->ui_audio_index = 0U;
+				impl_->ui_audio_count = impl_->ui_audio.size();
 			}
 			if(!advanced) {
 				auto error = playback_error(
@@ -844,9 +857,12 @@ NewClassicReplayPlayback::advance(
 		advanced = impl_->driver->consume(sample->input);
 		if(advanced && impl_->driver->deferred_frame_pending()) {
 			impl_->pause_menu.emplace(true);
-			impl_->ui_audio = ClassicAudioCommand{
-				.type = ClassicAudioCommandType::pause_song,
-			};
+			impl_->ui_audio = {{
+				{.type = ClassicAudioCommandType::pause_song},
+				{.type = ClassicAudioCommandType::play_effect, .parameter = 21U},
+			}};
+			impl_->ui_audio_index = 0U;
+			impl_->ui_audio_count = impl_->ui_audio.size();
 		}
 		if(!advanced) {
 			auto error = playback_error(
@@ -995,6 +1011,14 @@ NewClassicReplayPlayback::take_audio_command()
 		impl_->load_song.reset();
 		return result;
 	}
+	if(impl_->ui_audio_count != 0U) {
+		const auto result = impl_->ui_audio[impl_->ui_audio_index++];
+		--impl_->ui_audio_count;
+		if(impl_->ui_audio_count == 0U) {
+			impl_->ui_audio_index = 0U;
+		}
+		return result;
+	}
 	if(impl_->story) {
 		if(auto command = impl_->story->take_audio_command()) {
 			return command;
@@ -1009,11 +1033,6 @@ NewClassicReplayPlayback::take_audio_command()
 		if(auto command = impl_->vs_win->take_audio_command()) {
 			return command;
 		}
-	}
-	if(impl_->ui_audio) {
-		auto result = impl_->ui_audio;
-		impl_->ui_audio.reset();
-		return result;
 	}
 	return std::nullopt;
 }
@@ -1077,8 +1096,10 @@ NewClassicReplayPlayback::compose_shown_surface(
 	}
 	auto result = *surface;
 	result.pixels = output;
+	result.host_overlay = true;
 	if(impl_->reduced_flash && result.palette_tone == 150) {
 		result.graphics_palette = result.reduced_flash_palette;
+		result.reduced_flash_applied = true;
 	}
 	return result;
 }

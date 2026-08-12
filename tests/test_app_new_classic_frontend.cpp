@@ -347,6 +347,47 @@ void test_catalog_browser_and_save()
 				"Story detail telemetry renders"
 		);
 		static_cast<void>((*telemetry)->consume({}));
+		if(practice) {
+			auto settings = (*telemetry)->consume({.left = true});
+			expect(
+				settings && settings->surface_changed &&
+				!NewClassicReplayBrowserTestAccess::checkpoint_focus(**telemetry),
+				"Practice Splits Left moves focus to Settings"
+			);
+			static_cast<void>((*telemetry)->consume({}));
+			auto modal = (*telemetry)->consume({.confirm = true});
+			expect(
+				modal && modal->surface_changed &&
+				NewClassicReplayBrowserTestAccess::practice_settings_visible(
+					**telemetry
+				),
+				"Practice Settings opens the complete read-only modal"
+			);
+			static_cast<void>((*telemetry)->consume({}));
+			auto dismissed = (*telemetry)->consume({.bomb = true});
+			expect(
+				dismissed && dismissed->surface_changed &&
+				!NewClassicReplayBrowserTestAccess::practice_settings_visible(
+					**telemetry
+				),
+				"Practice Settings waits for release then closes on any input"
+			);
+			static_cast<void>((*telemetry)->consume({}));
+			expect(
+				(*telemetry)->consume({.right = true})->surface_changed &&
+				NewClassicReplayBrowserTestAccess::checkpoint_focus(**telemetry) &&
+				(*telemetry)->detail_page() ==
+					NewClassicReplayDetailPage::splits,
+				"Practice Settings Right restores checkpoint focus on Splits"
+			);
+			static_cast<void>((*telemetry)->consume({}));
+		} else {
+			expect(
+				NewClassicReplayBrowserTestAccess::physical_row_count(**telemetry) ==
+					9U,
+				"Story detail preserves one physical row for every stage"
+			);
+		}
 		expect(
 			(*telemetry)->consume({.right = true})->surface_changed,
 			practice ? "Practice clear telemetry renders" :
@@ -354,7 +395,65 @@ void test_catalog_browser_and_save()
 		);
 	}
 
-	NewClassicReplaySaveMenu save(make_document());
+	NewClassicReplaySaveMenu direct(make_document());
+	expect(
+		NewClassicReplaySaveTestAccess::in_name(direct),
+		"Pause Save and Exit begins directly at the name editor"
+	);
+	release(direct, *catalog);
+	expect(
+		direct.consume({.cancel = true}, *catalog).surface_changed &&
+		NewClassicReplaySaveTestAccess::in_quit_confirm(direct),
+		"name Cancel opens the default-No quit confirmation"
+	);
+	release(direct, *catalog);
+	expect(
+		direct.consume({.confirm = true}, *catalog).surface_changed &&
+		NewClassicReplaySaveTestAccess::in_name(direct),
+		"quit confirmation No restores the exact name phase"
+	);
+
+	NewClassicReplaySaveMenu full_name(make_document());
+	release(full_name, *catalog);
+	for(std::size_t index = 0U; index < 8U; ++index) {
+		static_cast<void>(full_name.consume({.confirm = true}, *catalog));
+		release(full_name, *catalog);
+	}
+	expect(
+		NewClassicReplaySaveTestAccess::name_position(full_name) == 8U,
+		"the eighth name character is retained and moves focus to End"
+	);
+	expect(
+		full_name.consume({.confirm = true}, *catalog).surface_changed &&
+		NewClassicReplaySaveTestAccess::in_slots(full_name),
+		"automatic End focus accepts all eight name characters"
+	);
+
+	NewClassicReplaySaveMenu backspace(make_document());
+	release(backspace, *catalog);
+	static_cast<void>(backspace.consume({.confirm = true}, *catalog));
+	release(backspace, *catalog);
+	static_cast<void>(backspace.consume({.bomb = true}, *catalog));
+	expect(
+		NewClassicReplaySaveTestAccess::name_position(backspace) == 0U &&
+		backspace.edited_name()[0U] == ' ',
+		"Bomb backspaces the replay name"
+	);
+
+	auto prompt_document = make_document();
+	prompt_document.metadata->end_reason =
+		th03::formats::ReplayEndReason::game_over;
+	NewClassicReplaySaveMenu prompt_no(prompt_document);
+	release(prompt_no, *catalog);
+	static_cast<void>(prompt_no.consume({.down = true}, *catalog));
+	release(prompt_no, *catalog);
+	expect(
+		prompt_no.consume({.confirm = true}, *catalog).status ==
+			NewClassicReplaySaveStatus::discarded,
+		"the post-run Save Replay prompt still discards immediately on No"
+	);
+
+	NewClassicReplaySaveMenu save(prompt_document);
 	release(save, *catalog);
 	expect(
 		save.consume({.confirm = true}, *catalog).surface_changed,
@@ -367,6 +466,16 @@ void test_catalog_browser_and_save()
 		"name End advances to the slot list"
 	);
 	release(save, *catalog);
+	NewClassicReplaySaveTestAccess::set_slot(save, 0U);
+	static_cast<void>(save.consume({.left = true}, *catalog));
+	expect(save.selected_slot() == 0U,
+		"save-page Left clamps at slot zero");
+	release(save, *catalog);
+	NewClassicReplaySaveTestAccess::set_slot(save, 90U);
+	static_cast<void>(save.consume({.right = true}, *catalog));
+	expect(save.selected_slot() == 99U,
+		"save-page Right clamps the last partial page at slot 99");
+	release(save, *catalog);
 	NewClassicReplaySaveTestAccess::set_slot(save, 4U);
 	auto requested = save.consume({.confirm = true}, *catalog);
 	expect(
@@ -374,7 +483,7 @@ void test_catalog_browser_and_save()
 		save.selected_slot() == 4U,
 		"an empty slot requests exactly one atomic commit"
 	);
-	save.report_commit(false);
+	save.report_commit(false, *catalog);
 	expect(save.commit_failed(), "failed commits retain the document for retry");
 	static_cast<void>(save.consume({} , *catalog));
 	expect(
@@ -393,6 +502,20 @@ void test_catalog_browser_and_save()
 	expect(existing.surface_changed,
 		"occupied slot enters explicit overwrite confirmation");
 	release(overwrite, *catalog);
+	expect(
+		overwrite.consume({.cancel = true}, *catalog).surface_changed &&
+		NewClassicReplaySaveTestAccess::in_quit_confirm(overwrite),
+		"overwrite Cancel opens quit confirmation without losing the slot"
+	);
+	release(overwrite, *catalog);
+	expect(
+		overwrite.consume({.confirm = true}, *catalog).surface_changed &&
+		NewClassicReplaySaveTestAccess::in_slots(overwrite),
+		"quit confirmation No dismisses overwrite and returns to the slot list"
+	);
+	release(overwrite, *catalog);
+	static_cast<void>(overwrite.consume({.confirm = true}, *catalog));
+	release(overwrite, *catalog);
 	static_cast<void>(overwrite.consume({.up = true}, *catalog));
 	release(overwrite, *catalog);
 	expect(
@@ -400,11 +523,39 @@ void test_catalog_browser_and_save()
 			NewClassicReplaySaveStatus::save_requested,
 		"overwrite requires selecting and confirming Yes"
 	);
-	overwrite.report_commit(true);
+	overwrite.report_commit(true, *catalog);
+	const auto saved_surface = overwrite.surface();
+	const auto saved_selected_row = saved_surface.pixels[
+		(86U * th03::present::graphics_width) + 72U
+	];
+	expect(
+		saved_selected_row.value == 4U,
+		"successful save keeps the refreshed selected slot row visible behind its acknowledgement"
+	);
 	expect(
 		overwrite.consume({}, *catalog).status ==
+			NewClassicReplaySaveStatus::running,
+		"successful commit enters the source-compatible saved acknowledgement"
+	);
+	release(overwrite, *catalog);
+	expect(
+		overwrite.consume({.confirm = true}, *catalog).status ==
 			NewClassicReplaySaveStatus::saved,
-		"successful commit makes the save transaction terminal"
+		"the saved acknowledgement waits for one released input"
+	);
+
+	NewClassicReplaySaveMenu invalid_slot(make_document());
+	release(invalid_slot, *catalog);
+	static_cast<void>(invalid_slot.consume({.confirm = true}, *catalog));
+	release(invalid_slot, *catalog);
+	NewClassicReplaySaveTestAccess::select_end(invalid_slot);
+	static_cast<void>(invalid_slot.consume({.confirm = true}, *catalog));
+	release(invalid_slot, *catalog);
+	NewClassicReplaySaveTestAccess::set_slot(invalid_slot, 1U);
+	expect(
+		invalid_slot.consume({.confirm = true}, *catalog).surface_changed &&
+		NewClassicReplaySaveTestAccess::in_overwrite(invalid_slot),
+		"an unreadable occupied slot still requires overwrite confirmation"
 	);
 	std::filesystem::remove_all(root, ignored);
 }
@@ -545,6 +696,10 @@ void test_expanded_options_menu()
 		"unavailable English selection is disclosed without faking resources");
 	static_cast<void>(menu.consume({}));
 	static_cast<void>(menu.consume({.down = true}));
+	static_cast<void>(menu.consume({}));
+	static_cast<void>(menu.consume({.right = true}));
+	expect(menu.config().key_mode == ClassicKeyMode::joy_key,
+		"Options KeyConfig row cycles the source Key/Joy assignment mode");
 	static_cast<void>(menu.consume({}));
 	expect(menu.consume({.confirm = true}).status ==
 		NewClassicOptionsStatus::key_config_requested,

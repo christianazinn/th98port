@@ -126,6 +126,11 @@ private:
 
 void test_page_palette_and_400_line_identity()
 {
+	expect(
+		!th03::present::source_surface_oracle_hashes_enabled(),
+		"source-domain oracle hashes default off in ordinary composition"
+	);
+	th03::present::set_source_surface_oracle_hashes_enabled(true);
 	Raster raster;
 	Tram tram;
 	SyntheticAnk ank;
@@ -170,6 +175,14 @@ void test_page_palette_and_400_line_identity()
 		surface->reduced_flash_palette.colors[3U] == Rgb4{10U, 11U, 12U},
 		"surface exports Raster's applied RGB4 palette rather than RGB8 pending values"
 	);
+	expect(
+		surface->oracle_hashes &&
+			surface->oracle_hashes->raster_display ==
+				raster.display_state_hash() &&
+			surface->oracle_hashes->tram_visible == tram.visible_state_hash(),
+		"surface retains independent Raster and TRAM oracle fingerprints"
+	);
+	th03::present::set_source_surface_oracle_hashes_enabled(false);
 }
 
 void test_zoom_windows_and_scroll_wrap()

@@ -229,7 +229,8 @@ std::expected<NewClassicKeyConfigLoadResult, NewClassicKeyConfigStoreError>
 load_new_classic_key_config(
 	const std::filesystem::path &path,
 	const NewClassicKeyConfig &defaults,
-	std::uint16_t maximum_host_key
+	std::uint16_t maximum_host_key,
+	bool legacy_autofire
 )
 {
 	if(path.empty()) {
@@ -251,7 +252,11 @@ load_new_classic_key_config(
 		));
 	}
 	if(!present) {
-		return NewClassicKeyConfigLoadResult{.config = defaults};
+		auto migrated = defaults;
+		if(legacy_autofire) {
+			migrated.autofire = 3U;
+		}
+		return NewClassicKeyConfigLoadResult{.config = std::move(migrated)};
 	}
 	std::ifstream input(path, std::ios::binary);
 	if(!input) {

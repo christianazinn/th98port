@@ -2,6 +2,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <expected>
 #include <filesystem>
 #include <fstream>
@@ -41,6 +42,27 @@
 namespace {
 
 constexpr std::uint64_t maximum_idle_delay_ns = 1'000'000U;
+constexpr const char *pixel_oracle_log_environment = "TH03_PIXEL_ORACLE_LOG";
+
+[[nodiscard]] th03::platform::SdlPlatformConfig platform_config()
+{
+	th03::platform::SdlPlatformConfig config{};
+#if defined(_MSC_VER)
+	char *path = nullptr;
+	std::size_t path_bytes = 0U;
+	if(_dupenv_s(&path, &path_bytes, pixel_oracle_log_environment) == 0 &&
+		path != nullptr) {
+		config.oracle_log_path = path;
+	}
+	std::free(path);
+#else
+	if(const char *const path = std::getenv(pixel_oracle_log_environment);
+		path != nullptr) {
+		config.oracle_log_path = path;
+	}
+#endif
+	return config;
+}
 
 enum class ExperienceRunDisposition : std::uint8_t {
 	return_to_menu,
@@ -90,6 +112,14 @@ struct ReplaySaveRunResult final {
 	bool application_quit = false;
 };
 
+ReplaySaveRunResult run_replay_save(
+	th03::formats::ReplayDocument document,
+	const std::filesystem::path &replay_root,
+	th03::app::RationalTickRate tick_rate,
+	th03::platform::SdlPlatform &platform,
+	th03::platform::SdlInputMapper &mapper
+);
+
 enum class RhythmRomLoadErrorCode : std::uint8_t {
 	file_missing,
 	file_status_failed,
@@ -131,7 +161,12 @@ struct LoadedRhythmPcm final {
 
 	[[nodiscard]] th03::audio::PmdOpnaRhythmPcm view() const noexcept
 	{
-		th03::audio::PmdOpnaRhythmPcm result{.sample_rate_hz = 44'100U};
+		th03::audio::PmdOpnaRhythmPcm result{};
+		if(std::ranges::any_of(voices, [](const auto &voice) {
+			return !voice.empty();
+		})) {
+			result.sample_rate_hz = 44'100U;
+		}
 		for(std::size_t index = 0U; index < voices.size(); ++index) {
 			result.voices[index] = voices[index];
 		}
@@ -663,6 +698,8 @@ const char *name(th03::platform::SdlPlatformErrorCode code) noexcept
 	case th03::platform::SdlPlatformErrorCode::surface_conversion_failed: return "surface-conversion-failed";
 	case th03::platform::SdlPlatformErrorCode::render_failed: return "render-failed";
 	case th03::platform::SdlPlatformErrorCode::present_vsync_failed: return "present-vsync-failed";
+	case th03::platform::SdlPlatformErrorCode::oracle_log_open_failed: return "oracle-log-open-failed";
+	case th03::platform::SdlPlatformErrorCode::oracle_log_write_failed: return "oracle-log-write-failed";
 	}
 	return "unknown";
 }
@@ -943,7 +980,7 @@ int run_direct_vs(th03::app::DirectVsCliRequest parsed)
 		return fail("runner-create", runner.error());
 	}
 
-	auto platform = th03::platform::SdlPlatform::create({});
+	auto platform = th03::platform::SdlPlatform::create(platform_config());
 	if(!platform) {
 		return fail("platform-create", platform.error());
 	}
@@ -1190,6 +1227,8 @@ ExperienceRunResult run_classic_session(
 
 	bool retry_blocked_event = false;
 	bool presentation_pending = false;
+	std::optional<std::uint64_t> pending_publication_tick{};
+	std::uint32_t pending_publication_ticks = 0U;
 	std::uint64_t logical_ticks = 0U;
 	std::optional<th03::formats::ReplayDocument> completed_replay{};
 	while((*runner)->status() == th03::app::ClassicRunnerStatus::running) {
@@ -1224,6 +1263,11 @@ ExperienceRunResult run_classic_session(
 					.exit_code = fail("classic-runner", consumed.error())
 				};
 			}
+			const auto next_source_deadline = scheduler->next_deadline_ns();
+			(*runner)->classify_pending_replay_frame(
+				next_source_deadline &&
+				th03::platform::sdl_ticks_now_ns() >= *next_source_deadline
+			);
 			if(auto drained = drain_audio(); !drained) {
 				std::cerr << "logical-tick=" << logical_ticks << '\n';
 				return {.exit_code = fail("audio-command", drained.error())};
@@ -1275,6 +1319,10 @@ ExperienceRunResult run_classic_session(
 			}
 			presentation_pending =
 				presentation_pending || consumed->surface_changed;
+			if(consumed->surface_changed) {
+				pending_publication_tick = logical_ticks;
+				++pending_publication_ticks;
+			}
 			if(auto replay = (*runner)->take_completed_replay()) {
 				completed_replay = std::move(*replay);
 			}
@@ -1294,6 +1342,11 @@ ExperienceRunResult run_classic_session(
 				th03::app::ClassicRunnerStatus::running) {
 				break;
 			}
+			if(platform.oracle_enabled() && presentation_pending) {
+				// Oracle captures are logical-tick aligned: never let wall-clock
+				// catch-up coalesce two source publications into one row.
+				break;
+			}
 		}
 
 		if((*runner)->status() ==
@@ -1302,6 +1355,39 @@ ExperienceRunResult run_classic_session(
 		}
 		const bool session_complete = (*runner)->status() ==
 			th03::app::ClassicRunnerStatus::session_complete;
+		// Replay Patch finalizes and offers the recording before constructing or
+		// showing Continue. The typed owner may already have prepared that surface,
+		// so retain its pending publication across the host-owned save transaction.
+		if(completed_replay && new_classic) {
+			auto saved = run_replay_save(
+				std::move(*completed_replay), parsed.replay_root,
+				parsed.tick_rate, platform, mapper
+			);
+			completed_replay.reset();
+			if(saved.exit_code != 0) {
+				return {.exit_code = saved.exit_code};
+			}
+			if(saved.application_quit) {
+				return {
+					.disposition = ExperienceRunDisposition::application_quit
+				};
+			}
+			const auto resumed_at = th03::platform::sdl_ticks_now_ns();
+			if(auto rebased = scheduler->rebase_after_modal(
+				resumed_at
+			); !rebased) {
+				return {.exit_code = fail_tick(rebased.error())};
+			}
+			if(auto reset = mapper.reset_after_modal(*scheduler, resumed_at);
+				!reset) {
+				return {.exit_code = fail("input-rebase", reset.error())};
+			}
+			retry_blocked_event = false;
+			if(session_complete) {
+				return {.disposition = ExperienceRunDisposition::return_to_menu};
+			}
+			continue;
+		}
 		bool presented_this_iteration = false;
 		if(presentation_pending &&
 			(!retry_blocked_event || session_complete || smoke_complete ||
@@ -1310,11 +1396,16 @@ ExperienceRunResult run_classic_session(
 			if(!surface) {
 				return {.exit_code = fail("compose", surface.error())};
 			}
-			presented = platform.present(*surface);
+			presented = platform.present(*surface, {
+				.logical_tick = pending_publication_tick,
+				.coalesced_ticks = pending_publication_ticks,
+			});
 			if(!presented) {
 				return {.exit_code = fail("present", presented.error())};
 			}
 			presentation_pending = false;
+			pending_publication_tick.reset();
+			pending_publication_ticks = 0U;
 			presented_this_iteration = true;
 		}
 		if(session_complete) {
@@ -1444,6 +1535,7 @@ MenuRunResult run_experience_menu(
 	constexpr std::uint16_t input_down = 0x0002U;
 	constexpr std::uint16_t input_left = 0x0004U;
 	constexpr std::uint16_t input_right = 0x0008U;
+	constexpr std::uint16_t input_bomb = 0x0010U;
 	constexpr std::uint16_t input_shot = 0x0020U;
 	constexpr std::uint16_t input_cancel = 0x1000U;
 	constexpr std::uint16_t input_ok = 0x2000U;
@@ -1457,6 +1549,7 @@ MenuRunResult run_experience_menu(
 		.left = pressed(input_left),
 		.right = pressed(input_right),
 		.confirm = pressed(input_shot) || pressed(input_ok),
+		.bomb = pressed(input_bomb),
 		.cancel = pressed(input_cancel),
 		.app_quit_requested = sample.app_quit_requested,
 	};
@@ -1756,6 +1849,12 @@ NewClassicKeyConfigRunResult run_new_classic_options(
 			if(configured.exit_code != 0 || configured.application_quit) {
 				return configured;
 			}
+			menu.synchronize_legacy_autofire(key_config.autofire != 0U);
+			if(auto stored = th03::app::commit_classic_config_store(
+				config_path, menu.config()
+			); !stored) {
+				return {.exit_code = fail("config-key-sync", stored.error())};
+			}
 			menu.resume_after_key_config();
 			continue;
 		}
@@ -1837,15 +1936,18 @@ ReplaySaveRunResult run_replay_save(
 				auto committed = th03::app::commit_replay_slot(
 					replay_root, menu.selected_slot(), menu.document()
 				);
-				menu.report_commit(committed.has_value());
 				if(committed) {
-					catalog->slots[menu.selected_slot()].state =
-						th03::app::ReplayCatalogSlotState::ready;
+					auto refreshed = th03::app::scan_new_classic_replays(replay_root);
+					if(!refreshed) {
+						return std::unexpected(fail(
+							"replay-catalog-refresh", refreshed.error()
+						));
+					}
+					catalog = std::move(refreshed);
 				}
+				menu.report_commit(committed.has_value(), *catalog);
 				result.surface_changed = true;
-				result.status = committed ?
-					th03::app::NewClassicReplaySaveStatus::saved :
-					th03::app::NewClassicReplaySaveStatus::running;
+				result.status = th03::app::NewClassicReplaySaveStatus::running;
 			}
 			application_quit = result.status ==
 				th03::app::NewClassicReplaySaveStatus::application_quit;
@@ -2101,7 +2203,7 @@ std::expected<
 	int
 > create_product_platform()
 {
-	auto platform = th03::platform::SdlPlatform::create({});
+	auto platform = th03::platform::SdlPlatform::create(platform_config());
 	if(!platform) {
 		return std::unexpected(fail("platform-create", platform.error()));
 	}
@@ -2155,7 +2257,7 @@ ExperienceRunResult run_new_classic_experience(
 	const auto key_path = parsed.launch.content.config.parent_path() /
 		"TH3KEY.CFG";
 	auto loaded_keys = th03::app::load_new_classic_key_config(
-		key_path, key_defaults, maximum_key
+		key_path, key_defaults, maximum_key, config_options.legacy_autofire
 	);
 	if(!loaded_keys) {
 		return {.exit_code = fail("key-config-load", loaded_keys.error())};
@@ -2278,6 +2380,15 @@ ExperienceRunResult run_new_classic_experience(
 				return {
 					.disposition = ExperienceRunDisposition::application_quit
 				};
+			}
+			const bool legacy_autofire = key_config.autofire != 0U;
+			if(config_options.legacy_autofire != legacy_autofire) {
+				config_options.legacy_autofire = legacy_autofire;
+				if(auto stored = th03::app::commit_classic_config_store(
+					parsed.launch.content.config, config_options
+				); !stored) {
+					return {.exit_code = fail("config-key-sync", stored.error())};
+				}
 			}
 			continue;
 		}

@@ -62,6 +62,7 @@ constexpr std::array<Glyph, 10U> digit_font{{
 	case '/': return {{0x01U,0x02U,0x02U,0x04U,0x08U,0x08U,0x10U}};
 	case '?': return {{0x0EU,0x11U,0x01U,0x02U,0x04U,0U,0x04U}};
 	case '!': return {{0x04U,0x04U,0x04U,0x04U,0x04U,0U,0x04U}};
+	case '+': return {{0U,0x04U,0x04U,0x1FU,0x04U,0x04U,0U}};
 	case '<': return {{0x02U,0x04U,0x08U,0x10U,0x08U,0x04U,0x02U}};
 	case '>': return {{0x08U,0x04U,0x02U,0x01U,0x02U,0x04U,0x08U}};
 	default: return blank;
@@ -123,6 +124,13 @@ void HostMenuCanvas::copy_from(present::SourceSurface source) noexcept
 		std::copy(source.pixels.begin(), source.pixels.end(), pixels_.begin());
 	}
 	palette_ = source.graphics_palette;
+	reduced_flash_palette_ = source.reduced_flash_palette;
+	shown_page_ = source.shown_page;
+	raster_mode_ = source.raster_mode;
+	effective_scroll_y_ = source.effective_scroll_y;
+	palette_tone_ = source.palette_tone;
+	oracle_hashes_ = source.oracle_hashes;
+	reduced_flash_applied_ = source.reduced_flash_applied;
 }
 
 void HostMenuCanvas::fill_rect(
@@ -197,10 +205,18 @@ void HostMenuCanvas::draw_text_centered(
 present::SourceSurface HostMenuCanvas::surface() const noexcept
 {
 	return {
-		std::span<
+		.pixels = std::span<
 			const present::ComposedPixel, present::graphics_page_pixels
 		>(pixels_.data(), pixels_.size()),
-		palette_,
+		.graphics_palette = palette_,
+		.shown_page = shown_page_,
+		.raster_mode = raster_mode_,
+		.effective_scroll_y = effective_scroll_y_,
+		.palette_tone = palette_tone_,
+		.reduced_flash_palette = reduced_flash_palette_,
+		.oracle_hashes = oracle_hashes_,
+		.host_overlay = true,
+		.reduced_flash_applied = reduced_flash_applied_,
 	};
 }
 

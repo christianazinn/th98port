@@ -493,6 +493,37 @@ std::expected<void, SdlInputMapperError> SdlInputMapper::replace_bindings(
 	return {};
 }
 
+std::expected<void, SdlInputMapperError> SdlInputMapper::reset_after_modal(
+	app::TickInputScheduler &scheduler,
+	app::TickTimestampNs timestamp_ns
+) noexcept
+{
+	clear_held_states();
+	has_pending_event_ = false;
+	if(auto pushed = push_event(scheduler, {
+		.timestamp_ns = timestamp_ns,
+		.kind = app::PhysicalInputEventKind::source_state_changed,
+		.source = 0U,
+		.state = keyboard_.contribution,
+	}); !pushed) {
+		return pushed;
+	}
+	for(std::size_t slot = 0U; slot < gamepads_.size(); ++slot) {
+		if(gamepads_[slot].handle == nullptr) {
+			continue;
+		}
+		if(auto pushed = push_event(scheduler, {
+			.timestamp_ns = timestamp_ns,
+			.kind = app::PhysicalInputEventKind::source_state_changed,
+			.source = static_cast<std::uint8_t>(slot + 1U),
+			.state = gamepads_[slot].contribution,
+		}); !pushed) {
+			return pushed;
+		}
+	}
+	return {};
+}
+
 std::expected<SdlInputEventResult, SdlInputMapperError>
 SdlInputMapper::handle_event(
 	const SDL_Event &event,

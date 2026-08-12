@@ -55,6 +55,13 @@ public:
 private:
 	std::vector<present::ComposedPixel> pixels_;
 	assets::Palette16Rgb4 palette_{};
+	assets::Palette16Rgb4 reduced_flash_palette_{};
+	present::Page shown_page_ = present::Page::zero;
+	present::RasterMode raster_mode_ = present::RasterMode::lines_400;
+	std::uint16_t effective_scroll_y_ = 0U;
+	std::int16_t palette_tone_ = 100;
+	std::optional<present::SourceSurfaceOracleHashes> oracle_hashes_{};
+	bool reduced_flash_applied_ = false;
 };
 
 } // namespace th03::app

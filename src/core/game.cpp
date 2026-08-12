@@ -12,20 +12,19 @@ namespace detail {
 StepResult gameplay_step_result(
 	StepStatus status,
 	const CanonicalState &input_boundary,
-	const DeterministicState &state
+	const DeterministicState &state,
+	bool defeat_none_before_frame,
+	bool defeat_wait_before_frame
 ) noexcept
 {
 	StepResult result{status, input_boundary};
-	if(state.defeat_flag == DefeatFlag::banner) {
-		return result;
-	}
-	for(const auto &player : state.players) {
-		if(player.lose_anim_time >= 1U && player.lose_anim_time <= 0x30U) {
-			// defeat.cpp raises the MAIN loop's VSync wait to 2 while the
-			// fatal animation is pending.
-			result.next_step_vsyncs = 2U;
-			break;
-		}
+	result.defeat_none_before_frame = defeat_none_before_frame;
+	result.defeat_none_after_frame = state.defeat_flag == DefeatFlag::none;
+	if(defeat_wait_before_frame) {
+		// defeat.cpp raises the MAIN loop's VSync wait during the update that
+		// begins with lose_anim_time 0x30..1. The fatal collision only arms
+		// 0x30 after that update, and the pre-time-1 update still waits twice.
+		result.next_step_vsyncs = 2U;
 	}
 	return result;
 }
@@ -69,7 +68,8 @@ StepResult finish_gameplay_frame_after_control(
 		impl.warning_interstitial_samples_remaining = 27U;
 		return detail::gameplay_step_result(
 			StepStatus::phase_transition, input_boundary,
-			impl.state
+			impl.state, impl.defeat_none_before_frame,
+			impl.defeat_wait_before_frame
 		);
 	}
 	detail::gameplay_frame_suffix_after_interstitial(impl.state, observer);
@@ -79,11 +79,13 @@ StepResult finish_gameplay_frame_after_control(
 				? StepStatus::round_transition
 				: StepStatus::terminal,
 			input_boundary,
-			impl.state
+			impl.state, impl.defeat_none_before_frame,
+			impl.defeat_wait_before_frame
 		);
 	}
 	return detail::gameplay_step_result(
-		StepStatus::running, input_boundary, impl.state
+		StepStatus::running, input_boundary, impl.state,
+		impl.defeat_none_before_frame, impl.defeat_wait_before_frame
 	);
 }
 
@@ -99,7 +101,11 @@ StepResult finish_gameplay_frame(auto &impl, GameplayObserver *observer)
 		impl.live_pause_return_context = InputContext::gameplay;
 		impl.live_pause_input_boundary = input_boundary;
 		observe_live_pause_transition(observer);
-		return StepResult{StepStatus::paused, input_boundary};
+		auto result = StepResult{StepStatus::paused, input_boundary};
+		result.defeat_none_before_frame = impl.defeat_none_before_frame;
+		result.defeat_none_after_frame =
+			impl.state.defeat_flag == detail::DefeatFlag::none;
+		return result;
 	}
 	return finish_gameplay_frame_after_control(
 		impl, input_boundary, observer
@@ -141,14 +147,18 @@ StepResult finish_warning_interstitial_sample(
 	}
 	detail::gameplay_frame_suffix_after_interstitial(impl.state, observer);
 	if(impl.state.round_complete) {
-		return StepResult{
+		return detail::gameplay_step_result(
 			(impl.state.route == 1U)
 				? StepStatus::round_transition
 				: StepStatus::terminal,
-			input_boundary,
-		};
+			input_boundary, impl.state, impl.defeat_none_before_frame,
+			impl.defeat_wait_before_frame
+		);
 	}
-	return StepResult{StepStatus::phase_transition, input_boundary};
+	return detail::gameplay_step_result(
+		StepStatus::phase_transition, input_boundary, impl.state,
+		impl.defeat_none_before_frame, impl.defeat_wait_before_frame
+	);
 }
 
 StepResult finish_live_pause(
@@ -511,6 +521,18 @@ StepResult Game::step(
 			detail::canonical_state(impl_->state),
 		};
 	}
+	impl_->defeat_none_before_frame =
+		impl_->state.defeat_flag == detail::DefeatFlag::none;
+	impl_->defeat_wait_before_frame = false;
+	if(impl_->state.defeat_flag != detail::DefeatFlag::banner) {
+		for(const auto &player : impl_->state.players) {
+			if(player.lose_anim_time >= 1U &&
+				player.lose_anim_time <= 0x30U) {
+				impl_->defeat_wait_before_frame = true;
+				break;
+			}
+		}
+	}
 	if(!detail::gameplay_frame_prefix(
 		impl_->state, impl_->content, observer
 	)) {
@@ -528,7 +550,11 @@ StepResult Game::step(
 		impl_->replay_pause_gameplay_input = impl_->state.input_player;
 		impl_->replay_pause_input_boundary = input_boundary;
 		impl_->replay_pause_deferred = true;
-		return StepResult{StepStatus::phase_transition, input_boundary};
+		auto result = StepResult{StepStatus::phase_transition, input_boundary};
+		result.defeat_none_before_frame = impl_->defeat_none_before_frame;
+		result.defeat_none_after_frame =
+			impl_->state.defeat_flag == detail::DefeatFlag::none;
+		return result;
 	}
 	return finish_gameplay_frame(*impl_, observer);
 }

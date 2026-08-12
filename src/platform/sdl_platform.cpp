@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <limits>
 #include <memory>
 #include <span>
@@ -20,6 +23,9 @@ namespace {
 constexpr int source_width = static_cast<int>(present::graphics_width);
 constexpr int source_height = static_cast<int>(present::graphics_height);
 constexpr std::size_t rgba_row_bytes = present::graphics_width * 4U;
+constexpr std::uint64_t fnv_offset_basis = 14695981039346656037ULL;
+constexpr std::uint64_t fnv_prime = 1099511628211ULL;
+constexpr std::uint8_t source_surface_hash_schema = 2U;
 
 bool platform_runtime_active = false;
 std::size_t platform_runtime_leases = 0U;
@@ -56,6 +62,30 @@ std::size_t platform_runtime_leases = 0U;
 	return value <= static_cast<std::uint32_t>(std::numeric_limits<int>::max());
 }
 
+void hash_byte(std::uint64_t &hash, std::uint8_t value) noexcept
+{
+	hash ^= value;
+	hash *= fnv_prime;
+}
+
+void hash_u16_le(std::uint64_t &hash, std::uint16_t value) noexcept
+{
+	hash_byte(hash, static_cast<std::uint8_t>(value & 0x00FFU));
+	hash_byte(hash, static_cast<std::uint8_t>(value >> 8U));
+}
+
+void hash_palette(
+	std::uint64_t &hash,
+	const assets::Palette16Rgb4 &palette
+) noexcept
+{
+	for(const auto &color : palette.colors) {
+		hash_byte(hash, color.r);
+		hash_byte(hash, color.g);
+		hash_byte(hash, color.b);
+	}
+}
+
 } // namespace
 
 struct SdlPlatform::Impl {
@@ -63,9 +93,50 @@ struct SdlPlatform::Impl {
 	SDL_Renderer *renderer = nullptr;
 	SDL_Texture *texture = nullptr;
 	bool runtime_lease = false;
+	std::ofstream oracle_log{};
+	std::uint64_t oracle_publication = 0U;
+	bool oracle_hash_lease = false;
+
+	[[nodiscard]] bool record_oracle(
+		const present::SourceSurface &surface,
+		SdlPresentationOracleIdentity identity
+	)
+	{
+		if(!oracle_log.is_open()) {
+			return true;
+		}
+		oracle_log << "T3PXH\t2\t" << std::dec << oracle_publication++ << '\t';
+		if(identity.logical_tick) {
+			oracle_log << *identity.logical_tick;
+		} else {
+			oracle_log << "na";
+		}
+		oracle_log << '\t' << identity.coalesced_ticks << '\t'
+			<< static_cast<unsigned>(surface.host_overlay) << '\t'
+			<< static_cast<unsigned>(surface.reduced_flash_applied) << '\t'
+			<< std::hex << std::setfill('0') << std::setw(16)
+			<< detail::source_surface_state_hash(surface) << '\t';
+		if(surface.oracle_hashes) {
+			oracle_log << std::setw(16)
+				<< surface.oracle_hashes->raster_display << '\t'
+				<< std::setw(16) << surface.oracle_hashes->tram_visible;
+		} else {
+			oracle_log << "na\tna";
+		}
+		oracle_log << std::dec << '\t'
+			<< static_cast<unsigned>(surface.shown_page) << '\t'
+			<< static_cast<unsigned>(surface.raster_mode) << '\t'
+			<< surface.effective_scroll_y << '\t'
+			<< surface.palette_tone << '\n';
+		oracle_log.flush();
+		return static_cast<bool>(oracle_log);
+	}
 
 	~Impl()
 	{
+		if(oracle_hash_lease) {
+			present::set_source_surface_oracle_hashes_enabled(false);
+		}
 		if(texture != nullptr) {
 			SDL_DestroyTexture(texture);
 		}
@@ -82,6 +153,27 @@ struct SdlPlatform::Impl {
 };
 
 namespace detail {
+
+std::uint64_t source_surface_state_hash(
+	const present::SourceSurface &surface
+) noexcept
+{
+	std::uint64_t hash = fnv_offset_basis;
+	hash_byte(hash, source_surface_hash_schema);
+	hash_byte(hash, static_cast<std::uint8_t>(surface.shown_page));
+	hash_byte(hash, static_cast<std::uint8_t>(surface.raster_mode));
+	hash_u16_le(hash, surface.effective_scroll_y);
+	hash_u16_le(hash, static_cast<std::uint16_t>(surface.palette_tone));
+	hash_palette(hash, surface.graphics_palette);
+	hash_palette(hash, surface.reduced_flash_palette);
+	hash_byte(hash, static_cast<std::uint8_t>(surface.host_overlay));
+	hash_byte(hash, static_cast<std::uint8_t>(surface.reduced_flash_applied));
+	for(const auto pixel : surface.pixels) {
+		hash_byte(hash, static_cast<std::uint8_t>(pixel.layer));
+		hash_byte(hash, pixel.value);
+	}
+	return hash;
+}
 
 SdlPlatformRuntimeAcquire acquire_platform_runtime() noexcept
 {
@@ -256,12 +348,41 @@ SdlPlatform::create(const SdlPlatformConfig &config)
 			SdlPlatformErrorCode::window_setup_failed
 		));
 	}
+	if(!config.oracle_log_path.empty()) {
+		const std::filesystem::path log_path{
+			std::string{config.oracle_log_path}
+		};
+		const auto parent = log_path.parent_path();
+		std::error_code error;
+		if(!parent.empty()) {
+			std::filesystem::create_directories(parent, error);
+		}
+		if(error) {
+			return std::unexpected(SdlPlatformError{
+				.code = SdlPlatformErrorCode::oracle_log_open_failed,
+			});
+		}
+		impl->oracle_log.open(log_path, std::ios::out | std::ios::trunc);
+		impl->oracle_log <<
+			"stream\tschema\tpublication\tlogical_tick\tcoalesced_ticks\t"
+			"overlay\treduced_flash\tsource_fnv64\traster_fnv64\t"
+			"tram_fnv64\tshown_page\traster_mode\tscroll_y\ttone\n";
+		impl->oracle_log.flush();
+		if(!impl->oracle_log) {
+			return std::unexpected(SdlPlatformError{
+				.code = SdlPlatformErrorCode::oracle_log_open_failed,
+			});
+		}
+		present::set_source_surface_oracle_hashes_enabled(true);
+		impl->oracle_hash_lease = true;
+	}
 
 	return std::unique_ptr<SdlPlatform>{new SdlPlatform{std::move(impl)}};
 }
 
 std::expected<SdlPresentResult, SdlPlatformError> SdlPlatform::present(
-	const present::SourceSurface &surface
+	const present::SourceSurface &surface,
+	SdlPresentationOracleIdentity identity
 ) noexcept
 {
 	void *pixels = nullptr;
@@ -307,7 +428,17 @@ std::expected<SdlPresentResult, SdlPlatformError> SdlPlatform::present(
 			SdlPlatformErrorCode::render_failed
 		));
 	}
+	if(!impl_->record_oracle(surface, identity)) {
+		return std::unexpected(SdlPlatformError{
+			.code = SdlPlatformErrorCode::oracle_log_write_failed,
+		});
+	}
 	return SdlPresentResult{destination};
+}
+
+bool SdlPlatform::oracle_enabled() const noexcept
+{
+	return impl_->oracle_log.is_open();
 }
 
 std::uint32_t SdlPlatform::window_id() const noexcept

@@ -198,6 +198,24 @@ TickInputScheduler::pop_due(TickTimestampNs now_ns) noexcept
 	return std::optional<LogicalTickInput>{sample};
 }
 
+std::expected<void, TickInputError> TickInputScheduler::rebase_after_modal(
+	TickTimestampNs now_ns
+) noexcept
+{
+	if(last_observed_now_ && now_ns < *last_observed_now_) {
+		return std::unexpected(TickInputError::timestamp_regressed);
+	}
+	next_deadline_ns_ = now_ns;
+	fractional_accumulator_ = static_cast<std::uint64_t>(rate_.ticks) - 1U;
+	deadline_valid_ = true;
+	last_observed_now_ = now_ns;
+	last_event_timestamp_.reset();
+	pending_head_ = 0U;
+	pending_count_ = 0U;
+	source_states_.fill({});
+	return {};
+}
+
 std::optional<TickTimestampNs> TickInputScheduler::next_deadline_ns() const noexcept
 {
 	if(!deadline_valid_) {

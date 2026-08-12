@@ -193,6 +193,8 @@ public:
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 	[[nodiscard]] const present::Tram &tram() const noexcept;
 	[[nodiscard]] present::MainRoundStatus presentation_status() const noexcept;
+	[[nodiscard]] const std::optional<MainResultState> &last_result_state()
+		const noexcept;
 	[[nodiscard]] std::optional<ClassicAudioCommand>
 	take_audio_command() noexcept;
 

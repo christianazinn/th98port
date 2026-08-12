@@ -4,9 +4,11 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
-    <PublishSingleFile>true</PublishSingleFile>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-    <PublishTrimmed>false</PublishTrimmed>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <StackTraceSupport>false</StackTraceSupport>
+    <EventSourceSupport>false</EventSourceSupport>
+    <IlcOptimizationPreference>Size</IlcOptimizationPreference>
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
@@ -20,6 +22,11 @@
   <ItemGroup Condition="'$(PayloadZip)' != ''">
     <EmbeddedResource Include="$(PayloadZip)"
                       LogicalName="TH03.Classic.Payload.zip" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- NativeAOT's Windows linker otherwise stamps wall time into the PE. -->
+    <LinkerArg Include="/Brepro" />
   </ItemGroup>
 
   <Target Name="ValidatePayload" BeforeTargets="BeforeBuild">

@@ -119,7 +119,8 @@ struct NewClassicKeyConfigLoadResult final {
 > load_new_classic_key_config(
 	const std::filesystem::path &path,
 	const NewClassicKeyConfig &defaults,
-	std::uint16_t maximum_host_key
+	std::uint16_t maximum_host_key,
+	bool legacy_autofire = false
 );
 
 [[nodiscard]] std::expected<void, NewClassicKeyConfigStoreError>

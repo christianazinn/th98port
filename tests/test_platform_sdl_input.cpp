@@ -809,6 +809,55 @@ void test_focus_keyboard_device_release_and_quit_separation()
 		"global quit also remains outside CoreInput.system");
 }
 
+void test_modal_reset_releases_input_and_retains_devices()
+{
+	FakeGamepads fake{};
+	auto made = SdlInputMapper::create(bindings(), main_window, fake.backend());
+	expect(static_cast<bool>(made), "modal-reset mapper is created");
+	if(!made) {
+		return;
+	}
+	auto mapper = std::move(*made);
+	auto input = scheduler();
+	(void)expect_event(mapper, input,
+		gamepad_device_event(SDL_EVENT_GAMEPAD_ADDED, 1U, 11U),
+		"modal-reset gamepad is connected");
+	(void)expect_event(mapper, input, key_event(2U, SDL_SCANCODE_A, true),
+		"save-confirm key is held before modal ownership");
+	(void)expect_event(mapper, input,
+		gamepad_button_event(3U, 11U, SDL_GAMEPAD_BUTTON_EAST, true),
+		"gamepad button is held before modal ownership");
+	const auto held = expect_tick(input, 10U, "pre-modal held state is due");
+	expect(held.tick_index == 0U && held.input.p1 == (input_shot | input_bomb),
+		"both held sources are visible before modal ownership");
+
+	expect(input.rebase_after_modal(1'000U).has_value(),
+		"modal return rebases the gameplay scheduler");
+	expect(mapper.reset_after_modal(input, 1'000U).has_value(),
+		"modal return clears mapper state and republishes neutral sources");
+	const auto neutral = expect_tick(input, 1'000U,
+		"modal return immediately produces one neutral contiguous tick");
+	expect(
+		neutral.tick_index == 1U && neutral.deadline_ns == 1'000U &&
+			neutral.input.p1 == 0U && neutral.input.p2 == 0U &&
+			input.pending_event_count() == 0U,
+		"modal return preserves logical order without catch-up or held input"
+	);
+	expect(neutral.physical_domains &&
+		neutral.physical_domains->keyboard.p1 == 0U &&
+		neutral.physical_domains->first_joystick_present &&
+		neutral.physical_domains->first_joystick == 0U &&
+		mapper.connected_gamepad_count() == 1U,
+		"modal reset retains a connected controller as a neutral domain");
+
+	(void)expect_event(mapper, input, key_event(1'001U, SDL_SCANCODE_W, true),
+		"an unrelated post-modal direction is queued");
+	const auto later = expect_tick(input, 100'001'000U,
+		"the first ordinary post-modal deadline is due");
+	expect(later.input.p1 == input_up,
+		"an unrelated edge cannot resurrect pre-modal confirm or bomb input");
+}
+
 void test_malformed_stale_and_capacity_events()
 {
 	FakeGamepads fake{};
@@ -1013,6 +1062,7 @@ int main()
 	test_keyboard_window_scope();
 	test_gamepad_buttons_axes_and_lifecycle();
 	test_focus_keyboard_device_release_and_quit_separation();
+	test_modal_reset_releases_input_and_retains_devices();
 	test_malformed_stale_and_capacity_events();
 	test_raw_key_capture_and_binding_replacement();
 	test_queue_full_atomicity();

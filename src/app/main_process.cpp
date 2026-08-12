@@ -1626,6 +1626,12 @@ RoundStartObservation MainProcess::round_start_observation() const
 	return impl_->game->round_start_observation();
 }
 
+const std::optional<MainResultState> &MainProcess::last_result_state()
+	const noexcept
+{
+	return impl_->round->last_result_state();
+}
+
 InputProtocol MainProcess::input_protocol() const noexcept
 {
 	return impl_->input_protocol;

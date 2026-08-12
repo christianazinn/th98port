@@ -273,6 +273,7 @@ void test_authentic(
 			"recorded pause fixture constructs from the authentic replay route");
 		if(paused) {
 			bool saw_pause = false;
+			bool saw_pause_beep = false;
 			for(std::size_t guard = 0U; guard < 512U && !saw_pause; ++guard) {
 				auto tick = (*paused)->advance({}, false, false);
 				expect(tick.has_value(),
@@ -281,23 +282,40 @@ void test_authentic(
 					break;
 				}
 				while(auto command = (*paused)->take_audio_command()) {
-					saw_pause = saw_pause || command->type ==
-						th03::app::ClassicAudioCommandType::pause_song;
+					if(command->type ==
+						th03::app::ClassicAudioCommandType::pause_song) {
+						saw_pause = true;
+					} else if(saw_pause && command->type ==
+						th03::app::ClassicAudioCommandType::play_effect &&
+						command->parameter == 21U) {
+						saw_pause_beep = true;
+					}
 				}
 			}
 			expect(saw_pause,
 				"playback reconstructs Pause audio at the recorded boundary");
+			expect(saw_pause_beep,
+				"playback queues the source pause beep after pausing BGM");
 			const auto pause_cursor = (*paused)->sample_index();
 			auto resumed = (*paused)->advance({}, false, false);
 			expect(resumed.has_value(),
 				"recorded long Pause transaction preserves the playback contract");
 			bool saw_resume = false;
+			bool saw_resume_beep = false;
 			while(auto command = (*paused)->take_audio_command()) {
-				saw_resume = saw_resume || command->type ==
-					th03::app::ClassicAudioCommandType::resume_song;
+				if(command->type ==
+					th03::app::ClassicAudioCommandType::resume_song) {
+					saw_resume = true;
+				} else if(saw_resume && command->type ==
+					th03::app::ClassicAudioCommandType::play_effect &&
+					command->parameter == 21U) {
+					saw_resume_beep = true;
+				}
 			}
 			expect(saw_resume,
 				"playback reconstructs Resume audio at the recorded boundary");
+			expect(saw_resume_beep,
+				"playback queues the source pause beep after resuming BGM");
 			expect(
 				(*paused)->sample_index() == pause_cursor +
 					recorded_pause_transaction_samples,

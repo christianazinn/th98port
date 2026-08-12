@@ -15,6 +15,10 @@ internal static class Program
         "TH03_CLASSIC_STANDALONE_SMOKE_TICKS";
     private const string UserRootEnvironment =
         "TH03_CLASSIC_STANDALONE_USER_ROOT";
+    private const string ReplayRootEnvironment =
+        "TH03_CLASSIC_STANDALONE_REPLAY_ROOT";
+    private const string DeduplicatedArchiveMarker =
+        ".deduplicate-YUME2.DAT";
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int MessageBoxW(
@@ -22,6 +26,14 @@ internal static class Program
         string text,
         string caption,
         uint type
+    );
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CreateHardLinkW(
+        string fileName,
+        string existingFileName,
+        nint securityAttributes
     );
 
     [STAThread]
@@ -33,10 +45,16 @@ internal static class Program
         }
         catch(Exception exception)
         {
-            ShowError(
-                "The standalone Classic test build could not start.\n\n" +
-                exception.Message
-            );
+            var message = "The standalone Classic test build could not start.\n\n" +
+                exception.Message;
+            if(IsSmokeMode())
+            {
+                Console.Error.WriteLine(message);
+            }
+            else
+            {
+                ShowError(message);
+            }
             return 1;
         }
     }
@@ -63,6 +81,15 @@ internal static class Program
             Path.GetFullPath(userRootOverride);
         Directory.CreateDirectory(cacheRoot);
         Directory.CreateDirectory(userRoot);
+        var executable = Environment.ProcessPath ??
+            throw new InvalidOperationException(
+                "Windows did not provide the standalone executable path."
+            );
+        var executableDirectory = Path.GetDirectoryName(executable) ??
+            throw new InvalidOperationException(
+                "The standalone executable has no parent directory."
+            );
+        var replayRoot = SelectReplayRoot(executableDirectory, userRoot);
 
         using var payload = Assembly.GetExecutingAssembly().
             GetManifestResourceStream(PayloadResource) ??
@@ -80,6 +107,7 @@ internal static class Program
 
         var installRoot = Path.Combine(cacheRoot, payloadHash);
         EnsurePayload(cacheRoot, installRoot, payloadHash, payload);
+        PruneCache(cacheRoot, installRoot);
 
         var application = Path.Combine(installRoot, "app", "th03-app.exe");
         var content = Path.Combine(installRoot, "content");
@@ -93,7 +121,7 @@ internal static class Program
             "--font", Path.Combine(content, "FONT.ROM"),
             "--config", Path.Combine(userRoot, "YUME.CFG"),
             "--score", Path.Combine(userRoot, "YUME.NEM"),
-            "--replay-root", Path.Combine(userRoot, "REPLAY"),
+            "--replay-root", replayRoot,
         };
         var languageOverlay = Path.Combine(content, "TH3EN.DAT");
         if(File.Exists(languageOverlay))
@@ -121,6 +149,12 @@ internal static class Program
             arguments.Add("--smoke-ticks");
             arguments.Add(smokeTicks);
         }
+        EnsurePersistenceOutsideCache(
+            installRoot,
+            Path.Combine(userRoot, "YUME.CFG"),
+            Path.Combine(userRoot, "YUME.NEM"),
+            replayRoot
+        );
 
         var start = new ProcessStartInfo
         {
@@ -147,18 +181,111 @@ internal static class Program
 
         var log = new StringBuilder();
         log.AppendLine($"exit-code={process.ExitCode}");
+        log.AppendLine($"replay-root={replayRoot}");
+        log.AppendLine($"install-root={installRoot}");
         log.Append(standardOutput.Result);
         log.Append(standardError.Result);
         var logPath = Path.Combine(userRoot, "last-run.log");
         File.WriteAllText(logPath, log.ToString(), Encoding.UTF8);
         if(process.ExitCode != 0)
         {
-            ShowError(
-                $"Classic exited with code {process.ExitCode}.\n\n" +
-                $"Diagnostic log:\n{logPath}"
-            );
+            var message = $"Classic exited with code {process.ExitCode}.\n\n" +
+                $"Diagnostic log:\n{logPath}";
+            if(IsSmokeMode())
+            {
+                Console.Error.WriteLine(message);
+            }
+            else
+            {
+                ShowError(message);
+            }
         }
         return process.ExitCode;
+    }
+
+    private static bool IsSmokeMode() => !string.IsNullOrWhiteSpace(
+        Environment.GetEnvironmentVariable(SmokeTicksEnvironment)
+    );
+
+    private static void EnsurePersistenceOutsideCache(
+        string installRoot,
+        params string[] paths
+    )
+    {
+        var prefix = Path.GetFullPath(installRoot).TrimEnd(
+            Path.DirectorySeparatorChar,
+            Path.AltDirectorySeparatorChar
+        ) + Path.DirectorySeparatorChar;
+        foreach(var path in paths)
+        {
+            if(Path.GetFullPath(path).StartsWith(
+                prefix,
+                StringComparison.OrdinalIgnoreCase
+            ))
+            {
+                throw new InvalidOperationException(
+                    "Persistent Classic data must remain outside the payload cache."
+                );
+            }
+        }
+    }
+
+    private static string SelectReplayRoot(
+        string executableDirectory,
+        string userRoot
+    )
+    {
+        var requested = Environment.GetEnvironmentVariable(
+            ReplayRootEnvironment
+        );
+        if(!string.IsNullOrWhiteSpace(requested))
+        {
+            var explicitRoot = Path.GetFullPath(requested);
+            Directory.CreateDirectory(explicitRoot);
+            return explicitRoot;
+        }
+
+        var portable = Path.Combine(executableDirectory, "REPLAY");
+        if(CanWriteDirectory(portable))
+        {
+            return portable;
+        }
+        var fallback = Path.Combine(userRoot, "REPLAY");
+        Directory.CreateDirectory(fallback);
+        return fallback;
+    }
+
+    private static bool CanWriteDirectory(string directory)
+    {
+        try
+        {
+            Directory.CreateDirectory(directory);
+            var probe = Path.Combine(
+                directory,
+                ".write-probe-" + Guid.NewGuid().ToString("N")
+            );
+            using var stream = new FileStream(
+                probe,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                1,
+                FileOptions.DeleteOnClose
+            );
+            return true;
+        }
+        catch(UnauthorizedAccessException)
+        {
+            return false;
+        }
+        catch(IOException)
+        {
+            return false;
+        }
+        catch(NotSupportedException)
+        {
+            return false;
+        }
     }
 
     private static void EnsurePayload(
@@ -193,6 +320,7 @@ internal static class Program
         try
         {
             ExtractPayload(payload, staging);
+            RestoreDeduplicatedArchive(staging);
             File.WriteAllText(
                 Path.Combine(staging, ".payload-sha256"),
                 payloadHash,
@@ -230,6 +358,53 @@ internal static class Program
         throw new IOException("Timed out waiting for the payload cache lock.");
     }
 
+    private static void PruneCache(string cacheRoot, string currentInstallRoot)
+    {
+        var current = Path.GetFullPath(currentInstallRoot);
+        var generations = Directory.EnumerateDirectories(cacheRoot)
+            .Where(path => IsPayloadHash(Path.GetFileName(path)))
+            .Where(path => !string.Equals(
+                Path.GetFullPath(path),
+                current,
+                StringComparison.OrdinalIgnoreCase
+            ))
+            .OrderByDescending(Directory.GetLastWriteTimeUtc)
+            .ToArray();
+        // Retain one prior generation so a recently launched older artifact is
+        // unlikely to lose lazily loaded resources during a developer refresh.
+        foreach(var generation in generations.Skip(1))
+        {
+            try
+            {
+                Directory.Delete(generation, recursive: true);
+            }
+            catch(IOException)
+            {
+            }
+            catch(UnauthorizedAccessException)
+            {
+            }
+        }
+        foreach(var lockPath in Directory.EnumerateFiles(cacheRoot, "*.lock"))
+        {
+            try
+            {
+                File.Delete(lockPath);
+            }
+            catch(IOException)
+            {
+            }
+            catch(UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
+    private static bool IsPayloadHash(string value) =>
+        value.Length == 64 && value.All(character =>
+            character is >= '0' and <= '9' or >= 'A' and <= 'F'
+        );
+
     private static bool IsComplete(string marker, string payloadHash)
     {
         try
@@ -238,12 +413,51 @@ internal static class Program
                 File.ReadAllText(marker, Encoding.ASCII) == payloadHash &&
                 File.Exists(Path.Combine(
                     Path.GetDirectoryName(marker)!, "app", "th03-app.exe"
+                )) &&
+                Directory.Exists(Path.Combine(
+                    Path.GetDirectoryName(marker)!, "content", "YUME2.DAT"
                 ));
         }
         catch(IOException)
         {
             return false;
         }
+    }
+
+    private static void RestoreDeduplicatedArchive(string destinationRoot)
+    {
+        var marker = Path.Combine(destinationRoot, DeduplicatedArchiveMarker);
+        if(!File.Exists(marker))
+        {
+            return;
+        }
+        var sourceRoot = Path.Combine(destinationRoot, "content", "YUME1.DAT");
+        var aliasRoot = Path.Combine(destinationRoot, "content", "YUME2.DAT");
+        if(!Directory.Exists(sourceRoot) || Directory.Exists(aliasRoot))
+        {
+            throw new InvalidDataException(
+                "The deduplicated Classic archive marker is inconsistent."
+            );
+        }
+        Directory.CreateDirectory(aliasRoot);
+        foreach(var source in Directory.EnumerateFiles(
+            sourceRoot,
+            "*",
+            SearchOption.AllDirectories
+        ))
+        {
+            var relative = Path.GetRelativePath(sourceRoot, source);
+            var destination = Path.Combine(aliasRoot, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            // Hard links keep the extracted cache deduplicated on NTFS. A
+            // checked byte copy is the compatibility fallback for other local
+            // filesystems; the packaged executable remains deduplicated.
+            if(!CreateHardLinkW(destination, source, 0))
+            {
+                File.Copy(source, destination, overwrite: false);
+            }
+        }
+        File.Delete(marker);
     }
 
     private static void ExtractPayload(Stream payload, string destinationRoot)

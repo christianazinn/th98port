@@ -26,7 +26,21 @@ namespace {
 [[nodiscard]] bool replay_game_mode(std::uint8_t mode) noexcept
 {
 	return mode == game_mode::story || mode == game_mode::vs_1p_cpu ||
-		mode == game_mode::vs_1p_2p || mode == game_mode::vs_cpu_cpu;
+		mode == game_mode::vs_1p_2p;
+}
+
+[[nodiscard]] std::array<std::uint8_t, 4U> pack_decimal(
+	std::uint32_t value
+) noexcept
+{
+	std::array<std::uint8_t, 4U> packed{};
+	for(auto &byte : packed) {
+		byte = static_cast<std::uint8_t>(
+			(value % 10U) | (((value / 10U) % 10U) << 4U)
+		);
+		value /= 100U;
+	}
+	return packed;
 }
 
 [[nodiscard]] GameInit checkpoint_init(
@@ -215,12 +229,10 @@ NewClassicReplayRecorder::round_started(
 	if(document.checkpoints.size() == 1U) {
 		document.session.init = document.checkpoints.front().init;
 	}
-	if(document.metadata->story) {
-		document.metadata->stage_reached_count = std::max(
-			document.metadata->stage_reached_count,
-			static_cast<std::uint8_t>(stage + 1U)
-		);
-	}
+	round_vsync_last_ = source_vsync_clock_;
+	round_real_frames_ = 0U;
+	round_timed_frames_ = 0U;
+	round_timer_active_ = true;
 	return {};
 }
 
@@ -248,10 +260,51 @@ std::expected<void, NewClassicReplayError> NewClassicReplayRecorder::sample(
 	return {};
 }
 
+void NewClassicReplayRecorder::source_vsync() noexcept
+{
+	++source_vsync_clock_;
+}
+
+void NewClassicReplayRecorder::frame_io(
+	const StepResult &result,
+	bool slowdown_eligible
+) noexcept
+{
+	if(!document_ || completed_ || !round_timer_active_) {
+		return;
+	}
+	if(result.defeat_none_before_frame) {
+		round_real_frames_ += source_vsync_clock_ - round_vsync_last_;
+	}
+	round_vsync_last_ = source_vsync_clock_;
+	if(slowdown_eligible && result.defeat_none_after_frame) {
+		++round_timed_frames_;
+		slow_sample_pending_ = true;
+	}
+	// replay_frame_io() samples real time before the player update. The first
+	// explosion update begins with DF_NONE and is included, then changes the
+	// post-frame state to DF_EXPLODE and closes both future timing domains.
+	if(!result.defeat_none_after_frame) {
+		round_timer_active_ = false;
+	}
+}
+
+void NewClassicReplayRecorder::classify_pending_frame(
+	bool deadline_missed
+) noexcept
+{
+	if(slow_sample_pending_ && deadline_missed && document_ &&
+		document_->slowdown) {
+		++document_->slowdown->slow_frames;
+	}
+	slow_sample_pending_ = false;
+}
+
 std::expected<void, NewClassicReplayError>
 NewClassicReplayRecorder::round_completed(
 	const CanonicalState &state,
-	std::optional<std::uint32_t> real_frames
+	std::optional<std::uint32_t> real_frames_override,
+	std::optional<MainResultState> result_state
 )
 {
 	if(!document_ || completed_ || document_->checkpoints.empty() ||
@@ -267,10 +320,42 @@ NewClassicReplayRecorder::round_completed(
 		return {};
 	}
 	auto split = formats::make_round_split(state, document_->practice);
-	split.real_frames = real_frames;
+	split.real_frames = real_frames_override ? real_frames_override :
+		std::optional{round_real_frames_};
 	document_->expected_round_splits.push_back(split);
 	last_terminal_ = state;
-	if(document_->metadata->story && state.route == 2U && state.story_stage < 9U) {
+	if(document_->slowdown) {
+		document_->slowdown->timed_frames += round_timed_frames_;
+	}
+	if(result_state && document_->stage_clear_bonuses && state.route == 2U &&
+		(state.game_mode == game_mode::story || document_->practice) &&
+		state.story_stage < document_->stage_clear_bonuses->size() &&
+		result_state->summary_active && result_state->winner == PlayerId::p1 &&
+		result_state->story_stage == state.story_stage) {
+		const auto &stats = result_state->winner_stats;
+		auto &bonus = (*document_->stage_clear_bonuses)[state.story_stage];
+		bonus.max_combo = stats.combo_hits_max;
+		bonus.gauge_attacks = stats.gauge_attacks_fired;
+		bonus.boss_attacks = stats.boss_attacks_fired;
+		bonus.boss_reversals = stats.boss_attacks_reversed;
+		bonus.boss_panics = stats.boss_panics_fired;
+		bonus.remaining_lives = state.story_stage == 8U ?
+			result_state->story_lives : 0U;
+		const auto total =
+			(static_cast<std::uint32_t>(bonus.max_combo) * 1'000U) +
+			(static_cast<std::uint32_t>(bonus.gauge_attacks) * 10'000U) +
+			(static_cast<std::uint32_t>(bonus.boss_attacks) * 15'000U) +
+			(static_cast<std::uint32_t>(bonus.boss_reversals) * 20'000U) +
+			(static_cast<std::uint32_t>(bonus.boss_panics) * 30'000U) +
+			(static_cast<std::uint32_t>(bonus.remaining_lives) * 100'000U);
+		bonus.total = pack_decimal(total);
+	}
+	round_timer_active_ = false;
+	if(document_->metadata->story && state.story_stage < 9U) {
+		document_->metadata->stage_reached_count = std::max(
+			document_->metadata->stage_reached_count,
+			static_cast<std::uint8_t>(state.story_stage + 1U)
+		);
 		document_->metadata->story->stage_scores[state.story_stage] = split.p1_score;
 	}
 	return {};
@@ -325,9 +410,10 @@ std::expected<void, NewClassicReplayError> NewClassicReplayRecorder::finish(
 			? std::optional{last_terminal_->story_stage} : std::nullopt;
 		metadata.final_round_id = last_terminal_->round_id;
 		metadata.final_winner = last_terminal_->winner;
-		metadata.final_score = formats::make_round_split(
+		const auto split = formats::make_round_split(
 			*last_terminal_, document_->practice
-		).p1_score;
+		);
+		metadata.final_score = split.p1_score;
 	}
 	auto encoded = formats::write_v13_replay(*document_);
 	if(!encoded) {
@@ -346,6 +432,8 @@ std::expected<void, NewClassicReplayError> NewClassicReplayRecorder::finish(
 	completed_ = std::move(*parsed);
 	document_.reset();
 	last_terminal_.reset();
+	round_timer_active_ = false;
+	slow_sample_pending_ = false;
 	return {};
 }
 
@@ -377,6 +465,8 @@ void NewClassicReplayRecorder::discard() noexcept
 	document_.reset();
 	completed_.reset();
 	last_terminal_.reset();
+	round_timer_active_ = false;
+	slow_sample_pending_ = false;
 }
 
 } // namespace th03::app

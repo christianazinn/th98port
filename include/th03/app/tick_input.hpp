@@ -168,6 +168,12 @@ public:
 	[[nodiscard]] std::optional<TickTimestampNs> next_deadline_ns() const noexcept;
 	[[nodiscard]] std::size_t pending_event_count() const noexcept;
 	[[nodiscard]] bool app_quit_requested() const noexcept;
+	// A modal host UI owns a separate scheduler. Rebase the live source clock
+	// after it returns so the gameplay scheduler neither repays the modal's wall
+	// time nor leaks held input across the ownership boundary.
+	[[nodiscard]] std::expected<void, TickInputError> rebase_after_modal(
+		TickTimestampNs now_ns
+	) noexcept;
 
 private:
 	TickInputScheduler(

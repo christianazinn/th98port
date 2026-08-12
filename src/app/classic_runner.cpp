@@ -509,6 +509,7 @@ ClassicRunner::compose_shown_surface(
 	if(impl_->experience == ExperienceProfile::new_classic &&
 		impl_->reduced_flash && surface->palette_tone == 150) {
 		surface->graphics_palette = surface->reduced_flash_palette;
+		surface->reduced_flash_applied = true;
 	}
 	return *surface;
 }
@@ -522,6 +523,15 @@ std::optional<formats::ReplayDocument> ClassicRunner::take_completed_replay()
 {
 	return impl_->replay_recorder
 		? impl_->replay_recorder->take_completed() : std::nullopt;
+}
+
+void ClassicRunner::classify_pending_replay_frame(
+	bool deadline_missed
+) noexcept
+{
+	if(impl_->replay_recorder) {
+		impl_->replay_recorder->classify_pending_frame(deadline_missed);
+	}
 }
 
 std::expected<std::unique_ptr<ClassicRunner>, ClassicRunnerError>

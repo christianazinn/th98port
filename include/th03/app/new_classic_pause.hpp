@@ -57,8 +57,10 @@ public:
 
 	[[nodiscard]] NewClassicPauseChoice choice() const noexcept;
 	[[nodiscard]] bool save_enabled() const noexcept;
+	[[nodiscard]] bool take_rejected_save_effect() noexcept;
 
 private:
+	friend struct NewClassicPauseTestAccess;
 	enum class Phase : std::uint8_t {
 		release_before_choice,
 		wait_for_choice,
@@ -72,7 +74,18 @@ private:
 	NewClassicPauseChoice choice_ = NewClassicPauseChoice::resume;
 	NewClassicPauseStatus status_ = NewClassicPauseStatus::running;
 	Phase phase_ = Phase::release_before_choice;
+	bool rejected_save_effect_ = false;
 	HostMenuCanvas canvas_{};
+};
+
+struct NewClassicPauseTestAccess final {
+	static void select(
+		NewClassicPauseMenu &menu,
+		NewClassicPauseChoice choice
+	) noexcept
+	{
+		menu.choice_ = choice;
+	}
 };
 
 } // namespace th03::app

@@ -179,6 +179,19 @@ void test_rate_validation_and_exact_rational_deadlines()
 	);
 	const auto caught_up = scheduler.pop_due(2'000'000'100ULL);
 	expect(
+		caught_up && !caught_up->has_value() &&
+			scheduler.rebase_after_modal(3'000'000'000ULL).has_value(),
+		"a modal boundary rebases an idle live timeline"
+	);
+	const auto rebased = expect_tick(
+		scheduler, 3'000'000'000ULL, "the rebased deadline is immediately due"
+	);
+	expect(
+		rebased.tick_index == 4U && rebased.deadline_ns == 3'000'000'000ULL &&
+			same_input(rebased.input, {}),
+		"modal rebasing preserves logical order while releasing held input"
+	);
+	expect(
 		caught_up && !caught_up->has_value(),
 		"overdue polling stops only after every due boundary was returned"
 	);

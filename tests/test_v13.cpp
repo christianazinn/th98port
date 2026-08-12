@@ -428,6 +428,16 @@ void test_valid_scenarios()
 			parsed->expected_round_splits[0].real_frames == 1'234U,
 			"V13 preserves per-round real-frame telemetry"
 		);
+		auto unavailable_timer = story;
+		put_u32(unavailable_timer, 0x8CU, 0U);
+		const auto unavailable = th03::formats::parse_v13_replay(
+			unavailable_timer
+		);
+		check(
+			unavailable && unavailable->expected_round_splits.size() == 1U &&
+			unavailable->expected_round_splits[0].real_frames == 0U,
+			"V13 raw real_frames zero remains the valid zero-duration timer value"
+		);
 		if(!parsed->expected_round_splits.empty()) {
 			auto simulated = parsed->expected_round_splits[0];
 			simulated.real_frames.reset();

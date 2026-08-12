@@ -108,6 +108,12 @@ int main()
 	auto absent = load_new_classic_key_config(path, config, maximum_key);
 	expect(absent && !absent->file_present && absent->config == config,
 		"absent key file returns caller defaults");
+	auto migrated = load_new_classic_key_config(
+		path, config, maximum_key, true
+	);
+	expect(migrated && !migrated->file_present &&
+		migrated->config.autofire == 3U,
+		"absent key file migrates legacy Autofire to both players");
 	expect(store_new_classic_key_config(path, config, maximum_key).has_value(),
 		"key file stores atomically");
 	auto loaded = load_new_classic_key_config(path, config, maximum_key);
@@ -125,6 +131,13 @@ int main()
 		expect(recovered && recovered->file_present &&
 			recovered->recovered_defaults && recovered->config == config,
 			"corrupt key file recovers bounded defaults");
+		auto recovered_legacy = load_new_classic_key_config(
+			path, config, maximum_key, true
+		);
+		expect(recovered_legacy && recovered_legacy->file_present &&
+			recovered_legacy->recovered_defaults &&
+			recovered_legacy->config == config,
+			"corrupt present key file does not apply legacy migration");
 	}
 
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

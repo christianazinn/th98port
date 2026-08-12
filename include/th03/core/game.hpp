@@ -259,6 +259,11 @@ struct StepResult {
 	CanonicalState input_boundary_state{};
 	// Publication interval before the next process step, in host VSync samples.
 	std::uint8_t next_step_vsyncs = 1U;
+	// Replay Patch samples elapsed round time before player updates and samples
+	// slowdown after them. A fatal frame and the first explosion frame therefore
+	// have different eligibility despite belonging to one gameplay step API.
+	bool defeat_none_before_frame = true;
+	bool defeat_none_after_frame = true;
 };
 
 class Game {

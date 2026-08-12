@@ -42,9 +42,20 @@ public:
 		replay::InputPhase phase,
 		CoreInput input
 	);
+	// source_vsync() advances the MAIN-local wall clock. frame_io() is called
+	// only for a real replay_frame_io() boundary, never for pause-menu polling
+	// or a driver's defeat-animation hold. A pause-opening frame contributes to
+	// real time but is excluded from the Replay Patch slowdown denominator.
+	void source_vsync() noexcept;
+	void frame_io(
+		const StepResult &result,
+		bool slowdown_eligible = true
+	) noexcept;
+	void classify_pending_frame(bool deadline_missed) noexcept;
 	[[nodiscard]] std::expected<void, NewClassicReplayError> round_completed(
 		const CanonicalState &state,
-		std::optional<std::uint32_t> real_frames = std::nullopt
+		std::optional<std::uint32_t> real_frames_override = std::nullopt,
+		std::optional<MainResultState> result_state = std::nullopt
 	);
 	[[nodiscard]] std::expected<void, NewClassicReplayError> process_completed(
 		replay::ProcessId process
@@ -66,6 +77,12 @@ private:
 	std::optional<CanonicalState> last_terminal_{};
 	std::optional<formats::ReplayPracticeConfig> practice_config_{};
 	std::uint16_t recording_date_ = 0U;
+	std::uint32_t source_vsync_clock_ = 0U;
+	std::uint32_t round_vsync_last_ = 0U;
+	std::uint32_t round_real_frames_ = 0U;
+	std::uint32_t round_timed_frames_ = 0U;
+	bool round_timer_active_ = false;
+	bool slow_sample_pending_ = false;
 };
 
 } // namespace th03::app

@@ -3,11 +3,26 @@
 
 #include <cstdint>
 #include <expected>
+#include <optional>
 #include <span>
 
 #include "th03/present/text.hpp"
 
 namespace th03::present {
+
+// Source-domain fingerprints retained only when a surface was composed from a
+// PC-98 Raster and TRAM. Host-owned menus have no corresponding guest state and
+// leave this absent. These provisional FNV-1a diagnostics localize a visible
+// mismatch without treating a hash match as byte-level proof.
+struct SourceSurfaceOracleHashes {
+	std::uint64_t raster_display = 0U;
+	std::uint64_t tram_visible = 0U;
+
+	[[nodiscard]] friend constexpr bool operator==(
+		const SourceSurfaceOracleHashes &,
+		const SourceSurfaceOracleHashes &
+	) = default;
+};
 
 // One complete caller-owned physical display surface. Pixels retain their
 // source domain: graphics entries are Index4 values while text entries are
@@ -22,7 +37,16 @@ struct SourceSurface {
 	std::uint16_t effective_scroll_y = 0U;
 	std::int16_t palette_tone = 100;
 	assets::Palette16Rgb4 reduced_flash_palette{};
+	std::optional<SourceSurfaceOracleHashes> oracle_hashes{};
+	bool host_overlay = false;
+	bool reduced_flash_applied = false;
 };
+
+// Process-global developer instrumentation switch. The SDL platform owns the
+// single lifetime lease; ordinary shipping composition pays no full-page hash
+// cost while the oracle is disabled.
+void set_source_surface_oracle_hashes_enabled(bool enabled) noexcept;
+[[nodiscard]] bool source_surface_oracle_hashes_enabled() noexcept;
 
 enum class SourceSurfaceErrorCode : std::uint8_t {
 	invalid_raster_mode,

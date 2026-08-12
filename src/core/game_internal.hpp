@@ -599,7 +599,9 @@ CanonicalState canonical_state(const DeterministicState &state) noexcept;
 StepResult gameplay_step_result(
 	StepStatus status,
 	const CanonicalState &input_boundary,
-	const DeterministicState &state
+	const DeterministicState &state,
+	bool defeat_none_before_frame,
+	bool defeat_wait_before_frame
 ) noexcept;
 DeterministicState initialize_first_round(
 	const GameInit &init,
@@ -696,6 +698,8 @@ struct Game::Impl {
 	std::uint8_t warning_interstitial_samples_remaining = 0;
 	std::array<std::uint16_t, 2> replay_pause_gameplay_input{};
 	CanonicalState replay_pause_input_boundary{};
+	bool defeat_none_before_frame = true;
+	bool defeat_wait_before_frame = false;
 	bool replay_pause_adapter = false;
 	bool replay_pause_deferred = false;
 	LivePausePhase live_pause_phase = LivePausePhase::inactive;

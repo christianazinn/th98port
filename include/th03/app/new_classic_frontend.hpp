@@ -25,6 +25,7 @@ struct NewClassicUiInput final {
 	bool left = false;
 	bool right = false;
 	bool confirm = false;
+	bool bomb = false;
 	bool cancel = false;
 	bool app_quit_requested = false;
 };
@@ -95,6 +96,7 @@ public:
 	) noexcept;
 	void report_commit(bool success) noexcept;
 	void resume_after_key_config() noexcept;
+	void synchronize_legacy_autofire(bool enabled) noexcept;
 	[[nodiscard]] present::SourceSurface surface() const noexcept;
 	[[nodiscard]] const ClassicConfigOptions &config() const noexcept;
 	[[nodiscard]] NewClassicOptionsStatus status() const noexcept;
@@ -124,6 +126,11 @@ struct ReplayCatalogSlot final {
 	std::uint8_t rank = 0U;
 	std::uint8_t stage_reached = 0U;
 	std::uint8_t checkpoint_count = 0U;
+	bool practice = false;
+	std::int8_t p1_paletted_character = 0;
+	formats::ReplayEndReason end_reason = formats::ReplayEndReason::none;
+	std::uint8_t practice_stage = 0U;
+	std::uint8_t practice_round = 0U;
 	std::array<std::uint8_t, 4U> final_score{};
 };
 
@@ -161,6 +168,8 @@ struct NewClassicReplayBrowserResult final {
 		NewClassicReplayBrowserStatus::running;
 };
 
+struct NewClassicReplayBrowserTestAccess;
+
 class NewClassicReplayBrowser final {
 public:
 	[[nodiscard]] static std::expected<
@@ -180,6 +189,7 @@ public:
 	take_selected_document();
 
 private:
+	friend struct NewClassicReplayBrowserTestAccess;
 	explicit NewClassicReplayBrowser(
 		std::filesystem::path replay_root,
 		NewClassicReplayCatalog catalog
@@ -196,9 +206,23 @@ private:
 	NewClassicReplayDetailPage detail_page_ =
 		NewClassicReplayDetailPage::splits;
 	std::optional<formats::ReplayDocument> detail_document_{};
+	bool checkpoint_focus_ = true;
+	bool practice_settings_modal_ = false;
 	NewClassicReplayBrowserStatus status_ =
 		NewClassicReplayBrowserStatus::running;
 	bool input_allowed_ = false;
+};
+
+struct NewClassicReplayBrowserTestAccess final {
+	[[nodiscard]] static bool checkpoint_focus(
+		const NewClassicReplayBrowser &browser
+	) noexcept;
+	[[nodiscard]] static bool practice_settings_visible(
+		const NewClassicReplayBrowser &browser
+	) noexcept;
+	[[nodiscard]] static std::size_t physical_row_count(
+		const NewClassicReplayBrowser &browser
+	) noexcept;
 };
 
 enum class NewClassicReplaySaveStatus : std::uint8_t {
@@ -225,7 +249,10 @@ public:
 		NewClassicUiInput input,
 		const NewClassicReplayCatalog &catalog
 	) noexcept;
-	void report_commit(bool success) noexcept;
+	void report_commit(
+		bool success,
+		const NewClassicReplayCatalog &catalog
+	) noexcept;
 	[[nodiscard]] present::SourceSurface surface() const noexcept;
 	[[nodiscard]] std::uint8_t selected_slot() const noexcept;
 	[[nodiscard]] const formats::ReplayDocument &document() const noexcept;
@@ -240,7 +267,9 @@ private:
 		name,
 		slots,
 		overwrite,
+		quit_confirm,
 		failure,
+		saved_wait,
 	};
 	void draw(const NewClassicReplayCatalog &catalog) noexcept;
 	void apply_name() noexcept;
@@ -249,11 +278,13 @@ private:
 	HostMenuCanvas canvas_{};
 	Phase phase_ = Phase::prompt;
 	NewClassicReplaySaveStatus status_ = NewClassicReplaySaveStatus::running;
-	std::array<char, 8U> name_{{'P','L','A','Y','E','R',' ',' '}};
+	std::array<char, 8U> name_{{' ',' ',' ',' ',' ',' ',' ',' '}};
 	std::size_t name_position_ = 0U;
 	std::size_t keyboard_position_ = 0U;
 	std::uint8_t selected_slot_ = 0U;
 	bool yes_ = true;
+	Phase return_phase_ = Phase::prompt;
+	bool return_yes_ = true;
 	bool input_allowed_ = false;
 };
 
@@ -261,6 +292,21 @@ struct NewClassicReplaySaveTestAccess final {
 	static void select_end(NewClassicReplaySaveMenu &menu) noexcept;
 	static void set_slot(NewClassicReplaySaveMenu &menu, std::uint8_t slot)
 		noexcept;
+	[[nodiscard]] static bool in_name(
+		const NewClassicReplaySaveMenu &menu
+	) noexcept;
+	[[nodiscard]] static bool in_slots(
+		const NewClassicReplaySaveMenu &menu
+	) noexcept;
+	[[nodiscard]] static bool in_overwrite(
+		const NewClassicReplaySaveMenu &menu
+	) noexcept;
+	[[nodiscard]] static bool in_quit_confirm(
+		const NewClassicReplaySaveMenu &menu
+	) noexcept;
+	[[nodiscard]] static std::size_t name_position(
+		const NewClassicReplaySaveMenu &menu
+	) noexcept;
 };
 
 enum class NewClassicKeyConfigStatus : std::uint8_t {

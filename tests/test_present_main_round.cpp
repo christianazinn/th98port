@@ -2116,6 +2116,52 @@ void test_repeat_round_startup_requires_result_banner()
 	);
 }
 
+void test_first_summary_frame_is_latched_for_replay_bonus()
+{
+	Fixture fixture;
+	auto state = fixture.state();
+	state.round_or_result_frame = 1U;
+	const auto present = [&](const MainResultState &result) {
+		fixture.begin_frame(state);
+		fixture.round->observe(th03::detail::ObserverAccess::main_boss(state));
+		fixture.round->observe(th03::detail::ObserverAccess::shots_enemies(state));
+		fixture.round->observe(th03::detail::ObserverAccess::fireballs(state));
+		fixture.extra_charge_phases(state);
+		fixture.round->observe(
+			th03::detail::ObserverAccess::players_bullets(state)
+		);
+		fixture.round->main_result_state(result);
+		fixture.round->main_gauge_state(Fixture::gauge_state(state));
+		fixture.finish_after_gauge(state);
+		fixture.round->main_frame_footer_reached({});
+	};
+	auto first = Fixture::result_state(state);
+	first.summary_active = true;
+	first.defeated_player = PlayerId::p2;
+	first.winner = PlayerId::p1;
+	first.winner_stats.combo_hits_max = 12U;
+	present(first);
+	expect(
+		fixture.round->last_result_state() &&
+			fixture.round->last_result_state()->winner_stats.combo_hits_max == 12U,
+		"result frame 1 is captured at its presentation boundary"
+	);
+
+	state.round_or_result_frame = 2U;
+	auto later = Fixture::result_state(state);
+	later.summary_active = true;
+	later.defeated_player = PlayerId::p2;
+	later.winner = PlayerId::p1;
+	later.winner_stats.combo_hits_max = 99U;
+	present(later);
+	const auto &latched = fixture.round->last_result_state();
+	expect(
+		latched && latched->context.round_or_result_frame == 1U &&
+			latched->winner_stats.combo_hits_max == 12U,
+		"Replay clear-bonus state latches exact result frame 1 and ignores later summary animation frames"
+	);
+}
+
 } // namespace
 
 int main()
@@ -2150,6 +2196,7 @@ int main()
 	test_defeat_palette_is_immediate();
 	test_repeat_round_startup_preserves_process_children();
 	test_repeat_round_startup_requires_result_banner();
+	test_first_summary_frame_is_latched_for_replay_bonus();
 	if(failures != 0U) {
 		std::fprintf(stderr, "%zu of %zu checks failed\n", failures, checks);
 		return EXIT_FAILURE;

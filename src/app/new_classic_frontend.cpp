@@ -12,6 +12,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace th03::app {
 namespace {
@@ -22,15 +23,15 @@ constexpr std::array<std::string_view, 6U> landing_labels{
 	"PLAY GAME", "REPLAY", "PRACTICE", "KEY CONFIG", "OPTIONS", "BACK",
 };
 constexpr std::string_view keyboard_symbols =
-	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 <E";
+	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,!?BE";
 constexpr std::size_t keyboard_columns = 13U;
-constexpr std::size_t keyboard_end = 38U;
-constexpr std::size_t keyboard_back = 37U;
+constexpr std::size_t keyboard_back = 41U;
+constexpr std::size_t keyboard_end = 42U;
 
 [[nodiscard]] constexpr bool any(NewClassicUiInput input) noexcept
 {
 	return input.up || input.down || input.left || input.right ||
-		input.confirm || input.cancel;
+		input.confirm || input.bomb || input.cancel;
 }
 
 void draw_header(HostMenuCanvas &canvas, std::string_view subtitle) noexcept
@@ -79,13 +80,85 @@ void draw_row(
 )
 {
 	std::string result;
-	result.reserve(8U);
+	result.reserve(9U);
+	bool significant = false;
 	for(auto cursor = packed.rbegin(); cursor != packed.rend(); ++cursor) {
 		const auto value = *cursor;
-		result.push_back(static_cast<char>('0' + (value >> 4U)));
-		result.push_back(static_cast<char>('0' + (value & 0x0FU)));
+		const std::array<std::uint8_t, 2U> digits{
+			static_cast<std::uint8_t>(value >> 4U),
+			static_cast<std::uint8_t>(value & 0x0FU),
+		};
+		for(const auto digit : digits) {
+			significant = significant || digit != 0U;
+			result.push_back(significant ? static_cast<char>('0' + digit) : ' ');
+		}
 	}
+	result.push_back('0');
 	return result;
+}
+
+[[nodiscard]] int packed_score_compare(
+	const std::array<std::uint8_t, 4U> &left,
+	const std::array<std::uint8_t, 4U> &right
+) noexcept
+{
+	for(std::size_t index = left.size(); index-- != 0U;) {
+		if(left[index] != right[index]) {
+			return left[index] < right[index] ? -1 : 1;
+		}
+	}
+	return 0;
+}
+
+[[nodiscard]] std::array<std::uint8_t, 4U> replay_list_score(
+	const formats::ReplayDocument &document
+) noexcept
+{
+	if(!document.metadata || document.practice ||
+		document.metadata->game_mode == game_mode::story) {
+		return document.metadata ? document.metadata->final_score :
+			std::array<std::uint8_t, 4U>{};
+	}
+	const auto found = std::find_if(
+		document.expected_round_splits.rbegin(),
+		document.expected_round_splits.rend(),
+		[](const formats::ReplayRoundSplit &split) {
+			return split.story_stage == 0x0FU;
+		}
+	);
+	if(found == document.expected_round_splits.rend()) {
+		return document.metadata->final_score;
+	}
+	if(document.metadata->game_mode == game_mode::vs_1p_cpu) {
+		return found->p1_score;
+	}
+	if(document.metadata->game_mode == game_mode::vs_1p_2p &&
+		document.metadata->final_winner &&
+		*document.metadata->final_winner >= 0 &&
+		*document.metadata->final_winner <= 1) {
+		return *document.metadata->final_winner == 0 ?
+			found->p1_score : found->p2_score;
+	}
+	return packed_score_compare(found->p2_score, found->p1_score) > 0 ?
+		found->p2_score : found->p1_score;
+}
+
+[[nodiscard]] std::string catalog_marker(
+	const ReplayCatalogSlot &slot
+)
+{
+	if(slot.practice) {
+		return "P" + std::to_string(slot.practice_stage + 1U) +
+			std::to_string(slot.practice_round + 1U);
+	}
+	if(slot.game_mode != game_mode::story) {
+		return "VS";
+	}
+	if(slot.end_reason == formats::ReplayEndReason::complete) {
+		return "ALL";
+	}
+	return slot.stage_reached == 0U ? "-" :
+		std::to_string(slot.stage_reached);
 }
 
 [[nodiscard]] std::string mode_label(std::uint8_t mode, bool practice)
@@ -192,6 +265,125 @@ void draw_row(
 	return found == document.expected_round_splits.end() ? nullptr : &*found;
 }
 
+[[nodiscard]] std::string q4_label(std::uint8_t value)
+{
+	const auto fraction = static_cast<std::uint16_t>((value & 0x0FU) * 625U);
+	auto result = std::to_string(value >> 4U) + ".";
+	result += static_cast<char>('0' + ((fraction / 1000U) % 10U));
+	result += static_cast<char>('0' + ((fraction / 100U) % 10U));
+	result += static_cast<char>('0' + ((fraction / 10U) % 10U));
+	result += static_cast<char>('0' + (fraction % 10U));
+	return result;
+}
+
+struct ReplayDetailRow final {
+	std::string label{};
+	std::optional<std::size_t> checkpoint{};
+};
+
+[[nodiscard]] std::vector<ReplayDetailRow> story_detail_rows(
+	const formats::ReplayDocument &document,
+	NewClassicReplayDetailPage page
+)
+{
+	std::vector<ReplayDetailRow> rows;
+	const auto *metadata = document.metadata ? &*document.metadata : nullptr;
+	for(std::size_t stage = 0U; stage < 9U; ++stage) {
+		std::vector<std::size_t> checkpoints;
+		for(std::size_t index = 0U; index < document.checkpoints.size(); ++index) {
+			if(document.checkpoints[index].stage == stage) {
+				checkpoints.push_back(index);
+			}
+		}
+		const bool reached = metadata && metadata->story &&
+			stage < metadata->stage_reached_count;
+		const auto opponent = reached &&
+			metadata->story->stage_opponents[stage] != 0U ?
+			std::string(character_label(static_cast<std::int8_t>(
+				metadata->story->stage_opponents[stage]
+			))) : std::string{"-"};
+		const auto stage_prefix = "S" + std::to_string(stage + 1U) + " " +
+			opponent + " ";
+		if(page == NewClassicReplayDetailPage::timers) {
+			std::uint32_t total = 0U;
+			bool valid = false;
+			for(const auto index : checkpoints) {
+				if(const auto *split = round_split(document, document.checkpoints[index]);
+					split && split->real_frames) {
+					total += *split->real_frames;
+					valid = true;
+				}
+			}
+			if(checkpoints.size() != 1U) {
+				rows.push_back({stage_prefix + (valid ?
+					new_classic_replay_timer_label(total) : "-")});
+			}
+			for(const auto index : checkpoints) {
+				const auto *split = round_split(document, document.checkpoints[index]);
+				const auto value = split && split->real_frames ?
+					new_classic_replay_timer_label(*split->real_frames) : "-";
+				rows.push_back({
+					checkpoints.size() == 1U ? stage_prefix + value :
+						"   ROUND " + std::to_string(
+							document.checkpoints[index].round + 1U
+						) + " " + value,
+					index,
+				});
+			}
+			continue;
+		}
+		if(checkpoints.empty()) {
+			rows.push_back({stage_prefix + "-"});
+			continue;
+		}
+		if(checkpoints.size() > 1U) {
+			rows.push_back({stage_prefix + "-"});
+		}
+		for(const auto index : checkpoints) {
+			const auto *split = round_split(document, document.checkpoints[index]);
+			const auto value = checkpoints.size() == 1U && reached ?
+				decimal_score(metadata->story->stage_scores[stage]) :
+				split ? decimal_score(split->p1_score) : "-";
+			rows.push_back({
+				checkpoints.size() == 1U ? stage_prefix + value :
+					"   ROUND " + std::to_string(
+						document.checkpoints[index].round + 1U
+					) + " " + value,
+				index,
+			});
+		}
+	}
+	return rows;
+}
+
+void draw_practice_settings_modal(
+	HostMenuCanvas &canvas,
+	const formats::ReplayPracticeConfig &config
+) noexcept
+{
+	canvas.fill_rect(72U, 104U, 496U, 192U, 0U);
+	const auto timer = config.cpu_timer == 0U ? "VS Default" :
+		config.cpu_timer == 1U ? "Story Native" : "Infinite";
+	std::array<std::string, 8U> rows{
+		"Life Stock " + (config.stock == 0xFFU ? std::string{"VS Rules"} :
+			std::to_string(config.stock) + " (" +
+			std::to_string(config.extends_gained) + " Extends Gained)"),
+		"CPU Timer: " + std::string(timer),
+		"CPU Safety: " + std::to_string(config.initial_cpu_safety_frames),
+		"Speeds: " + q4_label(config.round_speed) + " / " +
+			q4_label(config.bullet_speed),
+		"Spell Rank: P1 " + std::to_string(config.p1_spell) + " / CPU " +
+			std::to_string(config.cpu_spell),
+		"Start Gauge: P1 " + std::to_string(config.p1_gauge) + " / CPU " +
+			std::to_string(config.cpu_gauge),
+		"Boss Rank: " + std::to_string(config.boss_level + 1U),
+		"CPU Damage: " + std::to_string(config.cpu_damage),
+	};
+	for(std::size_t index = 0U; index < rows.size(); ++index) {
+		canvas.draw_text(rows[index], 96U, 120U + (index * 20U), 1U, 15U);
+	}
+}
+
 [[nodiscard]] std::string winner_label(std::int8_t winner)
 {
 	if(winner == 0) {
@@ -253,12 +445,19 @@ void draw_detail_tabs(
 			document.checkpoints.size(), 0xFFU
 		)),
 	};
+	slot.practice = document.practice;
+	slot.p1_paletted_character = document.session.init.paletted_character[0U];
 	if(document.metadata) {
 		slot.name = document.metadata->name;
 		slot.game_mode = document.metadata->game_mode;
 		slot.rank = document.metadata->rank;
 		slot.stage_reached = document.metadata->stage_reached_count;
-		slot.final_score = document.metadata->final_score;
+		slot.final_score = replay_list_score(document);
+		slot.end_reason = document.metadata->end_reason;
+		if(document.metadata->practice) {
+			slot.practice_stage = document.metadata->practice->stage;
+			slot.practice_round = document.metadata->practice->round;
+		}
 	} else {
 		slot.game_mode = document.session.init.game_mode;
 		slot.rank = document.session.init.rank;
@@ -402,6 +601,13 @@ void NewClassicOptionsMenu::draw() noexcept
 		case 2U: value = config_.sfx_enabled ? "On" : "Off"; break;
 		case 3U: value = config_.language == ClassicLanguage::english ?
 			"English" : "Japanese"; break;
+		case 4U:
+			switch(config_.key_mode) {
+			case ClassicKeyMode::key_key: value = "Key / Key"; break;
+			case ClassicKeyMode::joy_key: value = "Joy / Key"; break;
+			case ClassicKeyMode::key_joy: value = "Key / Joy"; break;
+			}
+			break;
 		case 5U: value = config_.reduced_flash ? "Reduced" : "Full"; break;
 		default: break;
 		}
@@ -508,6 +714,13 @@ NewClassicOptionsResult NewClassicOptionsMenu::consume(
 			ClassicBgmMode::fm : ClassicBgmMode::off;
 		break;
 	case 2U: config_.sfx_enabled = !config_.sfx_enabled; break;
+	case 4U: {
+		constexpr auto count = 3U;
+		const auto mode = static_cast<std::uint8_t>(config_.key_mode);
+		config_.key_mode = static_cast<ClassicKeyMode>(input.left ?
+			(mode + count - 1U) % count : (mode + 1U) % count);
+		break;
+	}
 	case 5U: config_.reduced_flash = !config_.reduced_flash; break;
 	default: return {.status = status_};
 	}
@@ -539,6 +752,11 @@ void NewClassicOptionsMenu::resume_after_key_config() noexcept
 	status_ = NewClassicOptionsStatus::running;
 	input_allowed_ = false;
 	draw();
+}
+
+void NewClassicOptionsMenu::synchronize_legacy_autofire(bool enabled) noexcept
+{
+	config_.legacy_autofire = enabled;
 }
 
 present::SourceSurface NewClassicOptionsMenu::surface() const noexcept
@@ -1011,10 +1229,17 @@ void NewClassicReplayBrowser::draw() noexcept
 			const auto &practice = *metadata->practice;
 			context += "  START S" + std::to_string(practice.stage + 1U) +
 				" R" + std::to_string(practice.round + 1U) +
+				(practice.round == 5U ? "+" : "") +
 				" STOCK " + std::to_string(practice.stock);
 		}
 		canvas_.draw_text(context, 52U, 142U, 1U, 15U);
 		draw_detail_tabs(canvas_, detail_page_);
+		if(document.practice) {
+			canvas_.fill_rect(48U, 164U, 52U, 19U,
+				checkpoint_focus_ ? 1U : 4U);
+			canvas_.draw_text("SET", 60U, 168U, 1U,
+				checkpoint_focus_ ? 6U : 14U);
+		}
 
 		if(detail_page_ == NewClassicReplayDetailPage::clear_bonuses) {
 			if(!document.stage_clear_bonuses) {
@@ -1061,6 +1286,30 @@ void NewClassicReplayBrowser::draw() noexcept
 			return;
 		}
 
+		if(entry.game_mode == game_mode::story && !document.practice) {
+			const auto rows = story_detail_rows(document, detail_page_);
+			auto selected_row = std::size_t{0U};
+			for(std::size_t row = 0U; row < rows.size(); ++row) {
+				if(rows[row].checkpoint == selected_checkpoint_) {
+					selected_row = row;
+					break;
+				}
+			}
+			const auto first = selected_row >= 10U ? selected_row - 9U : 0U;
+			const auto last = std::min(first + 10U, rows.size());
+			for(std::size_t row = first; row < last; ++row) {
+				draw_compact_row(
+					canvas_, rows[row].label, 188U + ((row - first) * 19U),
+					checkpoint_focus_ && rows[row].checkpoint == selected_checkpoint_
+				);
+			}
+			canvas_.draw_text_centered(
+				"UP DOWN CHECKPOINT  Z PLAY  LEFT RIGHT TAB  ESC BACK",
+				screen_center, 378U, 1U, 6U
+			);
+			return;
+		}
+
 		const auto first = selected_checkpoint_ >= 10U ?
 			selected_checkpoint_ - 9U : 0U;
 		const auto last = std::min(first + 10U, document.checkpoints.size());
@@ -1084,16 +1333,22 @@ void NewClassicReplayBrowser::draw() noexcept
 			}
 			draw_compact_row(
 				canvas_, label, 188U + ((index - first) * 19U),
-				index == selected_checkpoint_
+				checkpoint_focus_ && index == selected_checkpoint_
 			);
 		}
 		if(document.checkpoints.empty()) {
 			draw_compact_row(canvas_, "NO PLAYABLE CHECKPOINTS.", 188U, false);
 		}
-		canvas_.draw_text_centered(
-			"UP DOWN CHECKPOINT  Z PLAY  LEFT RIGHT TAB  ESC BACK",
-			screen_center, 378U, 1U, 6U
-		);
+		if(practice_settings_modal_ && metadata && metadata->practice) {
+			draw_practice_settings_modal(canvas_, *metadata->practice);
+		} else {
+			canvas_.draw_text_centered(
+				document.practice && !checkpoint_focus_ ?
+					"Z SETTINGS  RIGHT SPLITS  ESC BACK" :
+					"UP DOWN CHECKPOINT  Z PLAY  LEFT RIGHT TAB  ESC BACK",
+				screen_center, 378U, 1U, 6U
+			);
+		}
 		return;
 	}
 
@@ -1108,9 +1363,11 @@ void NewClassicReplayBrowser::draw() noexcept
 		} else if(entry.state == ReplayCatalogSlotState::invalid) {
 			label += "INVALID";
 		} else {
-			label += fixed_name(entry.name) + "  " +
-				mode_label(entry.game_mode, false) + "  " +
-				decimal_score(entry.final_score);
+			label += fixed_name(entry.name) + " " +
+				decimal_score(entry.final_score) + " " +
+				std::string(character_label(entry.p1_paletted_character)) + " " +
+				std::string(rank_label(entry.rank)) + " " +
+				catalog_marker(entry);
 		}
 		const auto y = 86U + ((slot - first) * 19U);
 		canvas_.fill_rect(
@@ -1145,6 +1402,8 @@ NewClassicReplayBrowser::open_selected()
 	detail_document_ = std::move(*loaded->document);
 	selected_checkpoint_ = 0U;
 	detail_page_ = NewClassicReplayDetailPage::splits;
+	checkpoint_focus_ = true;
+	practice_settings_modal_ = false;
 	draw();
 	return {};
 }
@@ -1169,11 +1428,19 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 		return NewClassicReplayBrowserResult{.status = status_};
 	}
 	input_allowed_ = false;
-	if(input.cancel) {
+	if(practice_settings_modal_) {
+		practice_settings_modal_ = false;
+		draw();
+		return NewClassicReplayBrowserResult{
+			.surface_changed = true, .status = status_
+		};
+	}
+	if(input.cancel || input.bomb) {
 		if(detail_document_) {
 			detail_document_.reset();
 			selected_checkpoint_ = 0U;
 			detail_page_ = NewClassicReplayDetailPage::splits;
+			checkpoint_focus_ = true;
 			draw();
 			return NewClassicReplayBrowserResult{
 				.surface_changed = true, .status = status_
@@ -1185,6 +1452,25 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 	if(detail_document_) {
 		const auto count = detail_document_->checkpoints.size();
 		if(input.left || input.right) {
+			if(detail_document_->practice && !checkpoint_focus_) {
+				if(input.right) {
+					checkpoint_focus_ = true;
+					detail_page_ = NewClassicReplayDetailPage::splits;
+					draw();
+					return NewClassicReplayBrowserResult{
+						.surface_changed = true, .status = status_
+					};
+				}
+				return NewClassicReplayBrowserResult{.status = status_};
+			}
+			if(detail_document_->practice && input.left &&
+				detail_page_ == NewClassicReplayDetailPage::splits) {
+				checkpoint_focus_ = false;
+				draw();
+				return NewClassicReplayBrowserResult{
+					.surface_changed = true, .status = status_
+				};
+			}
 			const auto old = static_cast<std::size_t>(detail_page_);
 			const auto next = input.left ? (old == 0U ? 0U : old - 1U) :
 				std::min(old + 1U, static_cast<std::size_t>(
@@ -1199,7 +1485,7 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 			}
 			return NewClassicReplayBrowserResult{.status = status_};
 		}
-		if((input.up || input.down) && count != 0U &&
+		if((input.up || input.down) && checkpoint_focus_ && count != 0U &&
 			detail_page_ != NewClassicReplayDetailPage::clear_bonuses) {
 			selected_checkpoint_ = input.up ?
 				(selected_checkpoint_ + count - 1U) % count :
@@ -1209,7 +1495,14 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 				.surface_changed = true, .status = status_
 			};
 		}
-		if(input.confirm && count != 0U &&
+		if(input.confirm && detail_document_->practice && !checkpoint_focus_) {
+			practice_settings_modal_ = true;
+			draw();
+			return NewClassicReplayBrowserResult{
+				.surface_changed = true, .status = status_
+			};
+		}
+		if(input.confirm && checkpoint_focus_ && count != 0U &&
 			detail_page_ != NewClassicReplayDetailPage::clear_bonuses) {
 			status_ = NewClassicReplayBrowserStatus::play_selected;
 		}
@@ -1225,11 +1518,12 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 		);
 	} else if(input.left) {
 		selected_slot_ = static_cast<std::uint8_t>(
-			(selected_slot_ + replay_slot_count - browser_rows) % replay_slot_count
+			selected_slot_ < browser_rows ? 0U : selected_slot_ - browser_rows
 		);
 	} else if(input.right) {
 		selected_slot_ = static_cast<std::uint8_t>(
-			(selected_slot_ + browser_rows) % replay_slot_count
+			std::min<std::size_t>(selected_slot_ + browser_rows,
+				replay_slot_count - 1U)
 		);
 	} else if(input.confirm &&
 		catalog_.slots[selected_slot_].state == ReplayCatalogSlotState::ready) {
@@ -1278,10 +1572,43 @@ NewClassicReplayBrowser::take_selected_document()
 	return std::move(detail_document_);
 }
 
+bool NewClassicReplayBrowserTestAccess::checkpoint_focus(
+	const NewClassicReplayBrowser &browser
+) noexcept
+{
+	return browser.checkpoint_focus_;
+}
+
+bool NewClassicReplayBrowserTestAccess::practice_settings_visible(
+	const NewClassicReplayBrowser &browser
+) noexcept
+{
+	return browser.practice_settings_modal_;
+}
+
+std::size_t NewClassicReplayBrowserTestAccess::physical_row_count(
+	const NewClassicReplayBrowser &browser
+) noexcept
+{
+	if(!browser.detail_document_ || browser.detail_document_->practice ||
+		!browser.detail_document_->metadata ||
+		browser.detail_document_->metadata->game_mode != game_mode::story) {
+		return browser.detail_document_ ?
+			browser.detail_document_->checkpoints.size() : 0U;
+	}
+	return story_detail_rows(
+		*browser.detail_document_, browser.detail_page_
+	).size();
+}
+
 NewClassicReplaySaveMenu::NewClassicReplaySaveMenu(
 	formats::ReplayDocument document
-) : document_(std::move(document)), keyboard_position_(keyboard_end)
+) : document_(std::move(document))
 {
+	if(document_.metadata && document_.metadata->end_reason ==
+		formats::ReplayEndReason::menu_return) {
+		phase_ = Phase::name;
+	}
 	NewClassicReplayCatalog empty{};
 	draw(empty);
 }
@@ -1308,7 +1635,11 @@ void NewClassicReplaySaveMenu::draw(
 		draw_header(canvas_, "REPLAY NAME");
 		std::string shown(name_.begin(), name_.end());
 		canvas_.draw_text_centered(shown, screen_center, 100U, 3U, 15U);
-		canvas_.fill_rect(104U + (name_position_ * 54U), 126U, 42U, 4U, 14U);
+		if(name_position_ < name_.size()) {
+			canvas_.fill_rect(
+				104U + (name_position_ * 54U), 126U, 42U, 4U, 14U
+			);
+		}
 		for(std::size_t index = 0U; index < keyboard_symbols.size(); ++index) {
 			const auto x = 48U + ((index % keyboard_columns) * 43U);
 			const auto y = 180U + ((index / keyboard_columns) * 48U);
@@ -1323,6 +1654,12 @@ void NewClassicReplaySaveMenu::draw(
 			);
 		}
 		canvas_.draw_text_centered("ESC BACK", screen_center, 370U, 1U, 6U);
+		return;
+	}
+	if(phase_ == Phase::quit_confirm) {
+		draw_header(canvas_, "QUIT SAVING REPLAY?");
+		draw_row(canvas_, "YES", 230U, yes_);
+		draw_row(canvas_, "NO", 278U, !yes_);
 		return;
 	}
 	if(phase_ == Phase::overwrite) {
@@ -1358,7 +1695,10 @@ void NewClassicReplaySaveMenu::draw(
 			slot == selected_slot_ ? 14U : 15U);
 	}
 	canvas_.draw_text_centered(
-		"Z SAVE  LEFT RIGHT PAGE  ESC BACK", screen_center, 378U, 1U, 6U
+		phase_ == Phase::saved_wait ?
+			"REPLAY SAVED - PRESS ANY KEY" :
+			"Z SAVE  LEFT RIGHT PAGE  ESC BACK",
+		screen_center, 378U, 1U, phase_ == Phase::saved_wait ? 14U : 6U
 	);
 }
 
@@ -1392,16 +1732,42 @@ NewClassicReplaySaveResult NewClassicReplaySaveMenu::consume(
 		}
 		return {.status = status_};
 	}
+	if(phase_ == Phase::saved_wait) {
+		status_ = NewClassicReplaySaveStatus::saved;
+		return {.status = status_};
+	}
+	if(phase_ == Phase::quit_confirm) {
+		if(input.cancel) {
+			phase_ = return_phase_;
+			yes_ = return_yes_;
+			draw(catalog);
+			return {.surface_changed = true, .status = status_};
+		}
+		if(input.up || input.down || input.left || input.right) {
+			yes_ = !yes_;
+			draw(catalog);
+			return {.surface_changed = true, .status = status_};
+		}
+		if(input.confirm) {
+			if(yes_) {
+				status_ = NewClassicReplaySaveStatus::discarded;
+				return {.status = status_};
+			}
+			phase_ = return_phase_;
+			yes_ = return_yes_;
+			draw(catalog);
+			return {.surface_changed = true, .status = status_};
+		}
+		return {.status = status_};
+	}
 	if(phase_ == Phase::prompt || phase_ == Phase::overwrite) {
 		if(input.cancel) {
-			if(phase_ == Phase::prompt) {
-				status_ = NewClassicReplaySaveStatus::discarded;
-			} else {
-				phase_ = Phase::slots;
-				draw(catalog);
-				return {.surface_changed = true, .status = status_};
-			}
-			return {.status = status_};
+			return_phase_ = phase_ == Phase::overwrite ? Phase::slots : phase_;
+			return_yes_ = phase_ == Phase::overwrite ? false : yes_;
+			phase_ = Phase::quit_confirm;
+			yes_ = false;
+			draw(catalog);
+			return {.surface_changed = true, .status = status_};
 		}
 		if(input.up || input.down || input.left || input.right) {
 			yes_ = !yes_;
@@ -1429,11 +1795,17 @@ NewClassicReplaySaveResult NewClassicReplaySaveMenu::consume(
 	}
 	if(phase_ == Phase::name) {
 		if(input.cancel) {
+			return_phase_ = phase_;
+			return_yes_ = yes_;
+			phase_ = Phase::quit_confirm;
+			yes_ = false;
+			draw(catalog);
+			return {.surface_changed = true, .status = status_};
+		}
+		if(input.bomb) {
 			if(name_position_ != 0U) {
 				--name_position_;
 				name_[name_position_] = ' ';
-			} else {
-				phase_ = Phase::prompt;
 			}
 			draw(catalog);
 			return {.surface_changed = true, .status = status_};
@@ -1459,15 +1831,22 @@ NewClassicReplaySaveResult NewClassicReplaySaveMenu::consume(
 					name_[name_position_] = ' ';
 				}
 			} else {
-				name_[name_position_] = keyboard_symbols[keyboard_position_];
-				name_position_ = std::min(name_position_ + 1U, name_.size() - 1U);
+				if(name_position_ < name_.size()) {
+					name_[name_position_++] = keyboard_symbols[keyboard_position_];
+					if(name_position_ == name_.size()) {
+						keyboard_position_ = keyboard_end;
+					}
+				}
 			}
 		}
 		draw(catalog);
 		return {.surface_changed = true, .status = status_};
 	}
 	if(input.cancel) {
-		phase_ = Phase::name;
+		return_phase_ = phase_;
+		return_yes_ = yes_;
+		phase_ = Phase::quit_confirm;
+		yes_ = false;
 		draw(catalog);
 		return {.surface_changed = true, .status = status_};
 	}
@@ -1479,12 +1858,13 @@ NewClassicReplaySaveResult NewClassicReplaySaveMenu::consume(
 			(selected_slot_ + 1U) % replay_slot_count);
 	} else if(input.left) {
 		selected_slot_ = static_cast<std::uint8_t>(
-			(selected_slot_ + replay_slot_count - browser_rows) % replay_slot_count);
+			selected_slot_ < browser_rows ? 0U : selected_slot_ - browser_rows);
 	} else if(input.right) {
 		selected_slot_ = static_cast<std::uint8_t>(
-			(selected_slot_ + browser_rows) % replay_slot_count);
+			std::min<std::size_t>(selected_slot_ + browser_rows,
+				replay_slot_count - 1U));
 	} else if(input.confirm) {
-		if(catalog.slots[selected_slot_].state == ReplayCatalogSlotState::ready) {
+		if(catalog.slots[selected_slot_].state != ReplayCatalogSlotState::empty) {
 			yes_ = false;
 			phase_ = Phase::overwrite;
 			draw(catalog);
@@ -1499,19 +1879,23 @@ NewClassicReplaySaveResult NewClassicReplaySaveMenu::consume(
 	return {.surface_changed = true, .status = status_};
 }
 
-void NewClassicReplaySaveMenu::report_commit(bool success) noexcept
+void NewClassicReplaySaveMenu::report_commit(
+	bool success,
+	const NewClassicReplayCatalog &catalog
+) noexcept
 {
 	if(status_ != NewClassicReplaySaveStatus::save_requested) {
 		return;
 	}
 	if(success) {
-		status_ = NewClassicReplaySaveStatus::saved;
+		status_ = NewClassicReplaySaveStatus::running;
+		phase_ = Phase::saved_wait;
+		draw(catalog);
 		return;
 	}
 	status_ = NewClassicReplaySaveStatus::running;
 	phase_ = Phase::failure;
-	NewClassicReplayCatalog empty{};
-	draw(empty);
+	draw(catalog);
 }
 
 present::SourceSurface NewClassicReplaySaveMenu::surface() const noexcept
@@ -1557,6 +1941,41 @@ void NewClassicReplaySaveTestAccess::set_slot(
 ) noexcept
 {
 	menu.selected_slot_ = slot < replay_slot_count ? slot : 0U;
+}
+
+bool NewClassicReplaySaveTestAccess::in_name(
+	const NewClassicReplaySaveMenu &menu
+) noexcept
+{
+	return menu.phase_ == NewClassicReplaySaveMenu::Phase::name;
+}
+
+bool NewClassicReplaySaveTestAccess::in_slots(
+	const NewClassicReplaySaveMenu &menu
+) noexcept
+{
+	return menu.phase_ == NewClassicReplaySaveMenu::Phase::slots;
+}
+
+bool NewClassicReplaySaveTestAccess::in_overwrite(
+	const NewClassicReplaySaveMenu &menu
+) noexcept
+{
+	return menu.phase_ == NewClassicReplaySaveMenu::Phase::overwrite;
+}
+
+bool NewClassicReplaySaveTestAccess::in_quit_confirm(
+	const NewClassicReplaySaveMenu &menu
+) noexcept
+{
+	return menu.phase_ == NewClassicReplaySaveMenu::Phase::quit_confirm;
+}
+
+std::size_t NewClassicReplaySaveTestAccess::name_position(
+	const NewClassicReplaySaveMenu &menu
+) noexcept
+{
+	return menu.name_position_;
 }
 
 } // namespace th03::app

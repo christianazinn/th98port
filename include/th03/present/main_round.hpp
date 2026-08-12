@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <expected>
+#include <optional>
 #include <span>
 
 #include "th03/core/observer.hpp"
@@ -182,6 +183,8 @@ public:
 
 	[[nodiscard]] MainRoundStatus status() const noexcept;
 	[[nodiscard]] bool ready() const noexcept;
+	[[nodiscard]] const std::optional<MainResultState> &last_result_state()
+		const noexcept;
 
 private:
 	enum class Phase : std::uint8_t {
@@ -230,6 +233,7 @@ private:
 	MainBulletFacts bullet_facts_{};
 	MainBulletTrails bullet_trails_{};
 	MainPhaseContext frame_context_{};
+	std::optional<MainResultState> last_result_state_{};
 	Phase phase_ = Phase::boss;
 	std::uint8_t next_warning_sample_ = 0;
 	std::uint8_t next_gauge_finish_player_ = 0;

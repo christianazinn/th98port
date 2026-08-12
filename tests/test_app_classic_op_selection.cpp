@@ -371,7 +371,8 @@ std::unique_ptr<ClassicOpCharacterSelection> make_scene(
 	ClassicOpSelectionMode mode,
 	GameInit resident = {},
 	ClassicOpSelectionCarry carry = {},
-	std::uint8_t available_character_count = 9U
+	std::uint8_t available_character_count = 9U,
+	bool retain_for_new_classic_practice = false
 )
 {
 	if(resident.resident_rand == 0) {
@@ -397,7 +398,8 @@ std::unique_ptr<ClassicOpCharacterSelection> make_scene(
 		std::move(portraits), file(192U, 192U, 1U, 12U, true),
 		file(128U, 64U, 1U, 4U, false),
 		file(64U, 64U, 1U, 3U, false),
-		file(32U, 44U, 9U, 1U, false), names(), palette()
+		file(32U, 44U, 9U, 1U, false), names(), palette(),
+		retain_for_new_classic_practice
 	);
 	expect(created.has_value(), "synthetic selector creates");
 	return created ? std::move(*created) : nullptr;
@@ -824,6 +826,46 @@ void test_story_success()
 	);
 }
 
+void test_new_classic_practice_retains_selection()
+{
+	auto scene = make_scene(
+		ClassicOpSelectionMode::vs_1p_cpu, {}, {}, 9U, true
+	);
+	if(!scene) { return; }
+	reach_input(*scene, 30U);
+	expect(scene->advance({.single_player = 0x0020U}).has_value(),
+		"Practice-retained selector confirms P1");
+	drain_confirmation(*scene);
+	for(std::size_t frame = 0U; frame < 14U; ++frame) {
+		expect(scene->advance().has_value(),
+			"Practice-retained selector preserves the P1 handoff delay");
+		drain_frame(*scene);
+	}
+	expect(scene->advance({.single_player = 0x0020U}).has_value(),
+		"Practice-retained selector confirms CPU");
+	drain_confirmation(*scene);
+	expect(
+		scene->phase() == ClassicOpSelectionPhase::ready &&
+		!scene->take_audio_command(),
+		"Practice Setup receives the published confirmed frame without stopping SELECT.M"
+	);
+	const auto selected = scene->local_selection();
+	auto completion = scene->take_completion();
+	expect(
+		completion && scene->resume_from_new_classic_practice() &&
+		scene->phase() == ClassicOpSelectionPhase::draw_and_input &&
+		scene->local_selection() == selected &&
+		scene->confirmed() == std::array<bool, 2U>{false, false} &&
+		!scene->take_audio_command(),
+		"Practice Esc resumes the retained selector in place without reloading or restarting music"
+	);
+	const auto held = scene->advance({.single_player = 0x1000U});
+	expect(
+		held && !held->ready,
+		"Practice Esc remains release-locked when the retained selector resumes"
+	);
+}
+
 void test_hidden_terminal_cancel()
 {
 	auto scene = make_scene(ClassicOpSelectionMode::story);
@@ -1142,6 +1184,7 @@ int main(int argc, char **argv)
 	test_two_player_confirmation_order();
 	test_shot_bomb_and_cancel();
 	test_story_success();
+	test_new_classic_practice_retains_selection();
 	test_hidden_terminal_cancel();
 	test_invalid_geometry();
 	test_encoded_resource_boundary_and_lifetime();

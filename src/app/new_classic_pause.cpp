@@ -44,7 +44,7 @@ NewClassicPauseInput project_new_classic_pause_input(
 		.cancel = pressed(input.system, 0x1000U),
 		.quit = pressed(input.system, 0x4000U),
 		.restart = restart_requested,
-		.raw_any = input.system != 0U || restart_requested,
+		.raw_any = input.system != 0U || input.p1 != 0U || input.p2 != 0U,
 		.application_quit = application_quit_requested,
 	};
 }
@@ -83,14 +83,6 @@ NewClassicPauseStatus NewClassicPauseMenu::consume(
 		status_ = NewClassicPauseStatus::application_quit;
 		return status_;
 	}
-	if(input.quit) {
-		status_ = NewClassicPauseStatus::discard_exit;
-		return status_;
-	}
-	if(input.restart) {
-		status_ = NewClassicPauseStatus::restart;
-		return status_;
-	}
 	if(phase_ == Phase::release_before_choice) {
 		if(!input.raw_any) {
 			phase_ = Phase::wait_for_choice;
@@ -101,6 +93,14 @@ NewClassicPauseStatus NewClassicPauseMenu::consume(
 		if(!input.raw_any) {
 			status_ = NewClassicPauseStatus::resume;
 		}
+		return status_;
+	}
+	if(input.quit) {
+		status_ = NewClassicPauseStatus::discard_exit;
+		return status_;
+	}
+	if(input.restart) {
+		status_ = NewClassicPauseStatus::restart;
 		return status_;
 	}
 	if(input.cancel) {
@@ -128,6 +128,7 @@ NewClassicPauseStatus NewClassicPauseMenu::consume(
 		if(!save_enabled_) {
 			choice_ = NewClassicPauseChoice::discard_exit;
 			phase_ = Phase::release_before_choice;
+			rejected_save_effect_ = true;
 		}
 		break;
 	case NewClassicPauseChoice::discard_exit:
@@ -174,6 +175,13 @@ NewClassicPauseChoice NewClassicPauseMenu::choice() const noexcept
 bool NewClassicPauseMenu::save_enabled() const noexcept
 {
 	return save_enabled_;
+}
+
+bool NewClassicPauseMenu::take_rejected_save_effect() noexcept
+{
+	const bool result = rejected_save_effect_;
+	rejected_save_effect_ = false;
+	return result;
 }
 
 } // namespace th03::app

@@ -10,6 +10,8 @@
 namespace th03::present {
 namespace {
 
+bool oracle_hashes_enabled = false;
+
 constexpr TramAttribute attribute_display = 0x0001U;
 constexpr TramAttribute attribute_color_mask = 0x00E0U;
 constexpr TramAttribute supported_attribute_bits =
@@ -393,6 +395,16 @@ void compose_text(
 
 } // namespace
 
+void set_source_surface_oracle_hashes_enabled(bool enabled) noexcept
+{
+	oracle_hashes_enabled = enabled;
+}
+
+bool source_surface_oracle_hashes_enabled() noexcept
+{
+	return oracle_hashes_enabled;
+}
+
 std::expected<SourceSurface, SourceSurfaceError>
 compose_source_surface(
 	std::span<ComposedPixel, graphics_page_pixels> output,
@@ -418,6 +430,13 @@ compose_source_surface(
 
 	resolve_graphics(output, graphics, *mapping);
 	compose_text(output, tram, text);
+	std::optional<SourceSurfaceOracleHashes> oracle_hashes{};
+	if(oracle_hashes_enabled) {
+		oracle_hashes = SourceSurfaceOracleHashes{
+			raster.display_state_hash(),
+			tram.visible_state_hash(),
+		};
+	}
 	return SourceSurface{
 		std::span<const ComposedPixel, graphics_page_pixels>(output),
 		raster.applied_palette(),
@@ -426,6 +445,7 @@ compose_source_surface(
 		mapping->effective_scroll_y,
 		raster.palette_tone(),
 		raster.palette_for_tone(100),
+		oracle_hashes,
 	};
 }
 

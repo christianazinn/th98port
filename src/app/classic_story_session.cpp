@@ -1,5 +1,6 @@
 #include "classic_story_session_internal.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -400,11 +401,14 @@ struct ClassicStoryBackend final {
 	std::optional<ClassicStoryTerminal> forced_terminal{};
 	std::optional<ClassicStoryTerminal> forced_continue_terminal{};
 	std::optional<NewClassicPauseMenu> pause_menu{};
-	std::optional<ClassicAudioCommand> pause_audio{};
+	std::array<ClassicAudioCommand, 2U> pause_audio{};
+	std::size_t pause_audio_index = 0U;
+	std::size_t pause_audio_count = 0U;
 	bool restart_requested = false;
 	NewClassicReplayRecorder *replay_recorder = nullptr;
 	bool new_classic = false;
 	bool replay_playback = false;
+	bool replay_capture_closed = false;
 	bool cutscene_replay_input_due = true;
 	std::optional<NewClassicScoreRun> score_run{};
 	std::uint8_t score_run_rank = 0U;
@@ -460,7 +464,7 @@ struct ClassicStoryBackend final {
 		const GameInit &resident
 	)
 	{
-		if(!replay_recorder || !replay_recorder->recording() || score_run) {
+		if(!new_classic || replay_playback || score_run) {
 			return {};
 		}
 		const auto player = main_player_selection_from_paletted(
@@ -491,7 +495,7 @@ struct ClassicStoryBackend final {
 		const GameInit &resident
 	)
 	{
-		if(!replay_recorder || !replay_recorder->recording()) {
+		if(!new_classic || replay_playback) {
 			return {};
 		}
 		score_run.reset();
@@ -692,7 +696,7 @@ struct ClassicStoryBackend final {
 			));
 		}
 		driver = std::move(*created_driver);
-		if(replay_recorder) {
+		if(replay_recorder && !replay_capture_closed) {
 			if(replay_recorder->recording()) {
 				if(auto boundary = replay_recorder->process_completed(
 					replay::ProcessId::mainl
@@ -715,6 +719,9 @@ struct ClassicStoryBackend final {
 	std::expected<ClassicStoryBackendTick, ClassicStorySessionError>
 	advance_main(const ClassicMainInputSample &input)
 	{
+		if(replay_recorder && replay_recorder->recording()) {
+			replay_recorder->source_vsync();
+		}
 		if(forced_terminal) {
 			return ClassicStoryBackendTick{
 				.surface_changed = true,
@@ -730,6 +737,7 @@ struct ClassicStoryBackend final {
 		const auto normalized = normalize_story_main_input(
 			input, input_context, replay_recorder != nullptr
 		);
+		const bool source_frame_io = !pause_menu;
 		std::expected<MainProcessDriverTick, MainProcessDriverError> advanced =
 			std::unexpected(MainProcessDriverError{});
 		if(pause_menu) {
@@ -739,6 +747,14 @@ struct ClassicStoryBackend final {
 					input.restart_requested
 				)
 			);
+			if(pause_menu->take_rejected_save_effect()) {
+				pause_audio = {{
+					{.type = ClassicAudioCommandType::play_effect, .parameter = 21U},
+					{},
+				}};
+				pause_audio_index = 0U;
+				pause_audio_count = 1U;
+			}
 			if(status == NewClassicPauseStatus::running) {
 				if(replay_recorder && replay_recorder->recording()) {
 					if(auto sampled = replay_recorder->sample(
@@ -774,9 +790,12 @@ struct ClassicStoryBackend final {
 			);
 			pause_menu.reset();
 			if(resume) {
-				pause_audio = ClassicAudioCommand{
-					.type = ClassicAudioCommandType::resume_song,
-				};
+				pause_audio = {{
+					{.type = ClassicAudioCommandType::resume_song},
+					{.type = ClassicAudioCommandType::play_effect, .parameter = 21U},
+				}};
+				pause_audio_index = 0U;
+				pause_audio_count = replay_recorder ? pause_audio.size() : 1U;
 			}
 		} else {
 			advanced = driver->consume(normalized);
@@ -784,9 +803,12 @@ struct ClassicStoryBackend final {
 				pause_menu.emplace(
 					replay_recorder && replay_recorder->recording()
 				);
-				pause_audio = ClassicAudioCommand{
-					.type = ClassicAudioCommandType::pause_song,
-				};
+				pause_audio = {{
+					{.type = ClassicAudioCommandType::pause_song},
+					{.type = ClassicAudioCommandType::play_effect, .parameter = 21U},
+				}};
+				pause_audio_index = 0U;
+				pause_audio_count = replay_recorder ? pause_audio.size() : 1U;
 			}
 		}
 		if(!advanced) {
@@ -798,6 +820,13 @@ struct ClassicStoryBackend final {
 			return std::unexpected(session_error(
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
+		}
+		if(replay_recorder && replay_recorder->recording() &&
+			source_frame_io && input_context == InputContext::gameplay &&
+			advanced->process_advanced) {
+			replay_recorder->frame_io(
+				advanced->step_result, !driver->deferred_frame_pending()
+			);
 		}
 		if(replay_recorder && replay_recorder->recording() &&
 			advanced->process_advanced) {
@@ -814,7 +843,8 @@ struct ClassicStoryBackend final {
 			if(advanced->step_result.status == StepStatus::round_transition ||
 				advanced->step_result.status == StepStatus::terminal) {
 				if(auto split = replay_recorder->round_completed(
-					advanced->step_result.input_boundary_state
+					advanced->step_result.input_boundary_state, std::nullopt,
+					process->last_result_state()
 				); !split) {
 					return std::unexpected(replay_capture_error());
 				}
@@ -1395,6 +1425,26 @@ struct ClassicStoryBackend final {
 		}
 		registration_completion.emplace(std::move(*completion));
 		registration.reset();
+		// The Replay Patch closes a Story recording after registration and
+		// before Continue (or the post-clear epilogue). Saving is a host UI
+		// interruption; the live MAINL owner remains intact and resumes with
+		// capture disabled if the player spends another credit.
+		if(replay_recorder && replay_recorder->recording()) {
+			if(auto boundary = replay_recorder->process_completed(
+				replay::ProcessId::mainl
+			); !boundary) {
+				return std::unexpected(replay_capture_error());
+			}
+			const auto &resident = registration_completion->resident();
+			const auto reason = resident.story_stage == 99U ?
+				formats::ReplayEndReason::complete :
+				formats::ReplayEndReason::game_over;
+			if(auto finished = replay_recorder->finish(reason, resident);
+				!finished) {
+				return std::unexpected(replay_capture_error());
+			}
+			replay_capture_closed = true;
+		}
 		return {};
 	}
 
@@ -1609,15 +1659,18 @@ struct ClassicStoryBackend final {
 				return command;
 			}
 		}
+		if(pause_audio_count != 0U) {
+			const auto command = pause_audio[pause_audio_index++];
+			--pause_audio_count;
+			if(pause_audio_count == 0U) {
+				pause_audio_index = 0U;
+			}
+			return command;
+		}
 		if(process) {
 			if(auto command = process->take_audio_command()) {
 				return command;
 			}
-		}
-		if(pause_audio) {
-			auto command = pause_audio;
-			pause_audio.reset();
-			return command;
 		}
 		if(staff) {
 			return staff->take_audio_command();

@@ -145,8 +145,12 @@ void test_vs_capture()
 		document->expected_round_splits.size() == 2U &&
 		document->expected_round_splits[0U].route == 1U &&
 		document->expected_round_splits[1U].route == 2U &&
-		document->metadata->final_winner == 1,
-		"VS summaries preserve repeat and terminal results"
+		document->metadata->final_winner == 1 &&
+		document->metadata->final_score ==
+			document->expected_round_splits[1U].p1_score &&
+		document->metadata->final_score !=
+			document->expected_round_splits[1U].p2_score,
+		"VS summaries preserve terminal results while final_score remains the documented P1 field"
 	);
 	check(
 		std::holds_alternative<th03::replay::ProcessBoundary>(
@@ -172,22 +176,51 @@ void test_story_capture()
 	constexpr auto mode = th03::game_mode::story;
 	th03::app::NewClassicReplayRecorder recorder;
 	check(
-		recorder.round_started(round_start(mode, 0U, 0U, 41U)).has_value() &&
+		recorder.round_started(round_start(mode, 0U, 0U, 41U)).has_value(),
+		"Story stage 0 starts"
+	);
+	recorder.source_vsync();
+	recorder.source_vsync();
+	recorder.frame_io({.status = th03::StepStatus::running});
+	recorder.classify_pending_frame(true);
+	th03::MainResultState clear{};
+	clear.summary_active = true;
+	clear.winner = th03::PlayerId::p1;
+	clear.story_stage = 0U;
+	clear.story_lives = 2U;
+	clear.winner_stats = {
+		.combo_hits_max = 12U,
+		.gauge_attacks_fired = 3U,
+		.boss_attacks_fired = 2U,
+		.boss_attacks_reversed = 1U,
+		.boss_panics_fired = 4U,
+	};
+	check(
 		recorder.sample(th03::replay::InputPhase::gameplay, {}).has_value() &&
-		recorder.round_completed(terminal(mode, 0U, 0U, 2U, 0)).has_value() &&
+		recorder.round_completed(
+			terminal(mode, 0U, 0U, 2U, 0), std::nullopt, clear
+		).has_value() &&
 		recorder.process_completed(th03::replay::ProcessId::main).has_value() &&
 		recorder.sample(th03::replay::InputPhase::interstitial, {}).has_value() &&
 		recorder.process_completed(th03::replay::ProcessId::mainl).has_value(),
 		"Story stage 0 records MAIN and MAINL as separate source processes"
 	);
 	check(
-		recorder.round_started(round_start(mode, 1U, 0U, 53U)).has_value() &&
+		recorder.round_started(round_start(mode, 1U, 0U, 53U)).has_value(),
+		"Story stage 1 appends its checkpoint"
+	);
+	check(
+		recorder.document() && recorder.document()->metadata &&
+		recorder.document()->metadata->stage_reached_count == 1U,
+		"Story reached-stage metadata advances only after the round route is captured"
+	);
+	check(
 		recorder.sample(th03::replay::InputPhase::gameplay, {}).has_value() &&
 		recorder.round_completed(terminal(mode, 1U, 0U, 0U, 1)).has_value() &&
 		recorder.process_completed(th03::replay::ProcessId::main).has_value() &&
 		recorder.sample(th03::replay::InputPhase::interstitial, {}).has_value() &&
 		recorder.process_completed(th03::replay::ProcessId::mainl).has_value(),
-		"Story stage 1 appends its checkpoint and terminal processes"
+		"Story stage 1 appends its terminal processes"
 	);
 	auto resident = round_start(mode, 1U, 0U, 53U).start;
 	resident.story_lives = 1U;
@@ -210,6 +243,20 @@ void test_story_capture()
 		"Story summary retains opponents, reached stages, and clear scores"
 	);
 	check(
+		document->expected_round_splits[0U].real_frames == 2U &&
+		document->slowdown && document->slowdown->timed_frames == 1U &&
+		document->slowdown->slow_frames == 1U,
+		"live capture records source-VSync time and native missed deadlines"
+	);
+	const auto &bonus = (*document->stage_clear_bonuses)[0U];
+	check(
+		bonus.max_combo == 12U && bonus.gauge_attacks == 3U &&
+		bonus.boss_attacks == 2U && bonus.boss_reversals == 1U &&
+		bonus.boss_panics == 4U && bonus.remaining_lives == 0U &&
+		bonus.total == std::array<std::uint8_t, 4U>{0x00U, 0x20U, 0x21U, 0x00U},
+		"a P1 Story clear captures the Replay Patch bonus components and total"
+	);
+	check(
 		document->metadata->final_story_stage == 1U &&
 		document->metadata->final_story_lives == 1U &&
 		document->metadata->final_route == 0U,
@@ -218,6 +265,69 @@ void test_story_capture()
 	check(
 		th03::formats::write_v13_replay(*document).has_value(),
 		"the completed Story document remains serializable"
+	);
+}
+
+void test_timing_scope()
+{
+	constexpr auto mode = th03::game_mode::story;
+	th03::app::NewClassicReplayRecorder recorder;
+	check(
+		recorder.round_started(round_start(mode, 0U, 0U, 91U)).has_value(),
+		"timing scope starts at the first source round boundary"
+	);
+	for(std::size_t frame = 0U; frame < 27U; ++frame) {
+		recorder.source_vsync();
+	}
+	recorder.frame_io({.status = th03::StepStatus::running});
+	recorder.classify_pending_frame(false);
+	recorder.source_vsync();
+	recorder.frame_io({.status = th03::StepStatus::running});
+	recorder.classify_pending_frame(true);
+
+	// The frame opening Replay Pause contributes to real VSync time, but its
+	// completion and all modal polling are outside the slowdown denominator.
+	recorder.source_vsync();
+	recorder.frame_io({.status = th03::StepStatus::paused}, false);
+	recorder.classify_pending_frame(true);
+	for(std::size_t frame = 0U; frame < 50U; ++frame) {
+		recorder.source_vsync();
+	}
+	recorder.frame_io({.status = th03::StepStatus::running});
+	recorder.classify_pending_frame(false);
+
+	// The fatal input boundary is pre/post DF_NONE: it contributes to both
+	// timing domains and does not begin the two-VSync cadence yet.
+	recorder.source_vsync();
+	recorder.frame_io({
+		.status = th03::StepStatus::running,
+	});
+	recorder.classify_pending_frame(true);
+	// The following update begins with DF_NONE, publishes the first explosion,
+	// and is therefore the final real-time sample but not a slowdown sample.
+	recorder.source_vsync();
+	recorder.frame_io({
+		.status = th03::StepStatus::running,
+		.next_step_vsyncs = 2U,
+		.defeat_none_before_frame = true,
+		.defeat_none_after_frame = false,
+	});
+	recorder.classify_pending_frame(true);
+	for(std::size_t frame = 0U; frame < 94U; ++frame) {
+		recorder.source_vsync();
+	}
+	check(
+		recorder.sample(th03::replay::InputPhase::gameplay, {}).has_value() &&
+		recorder.round_completed(terminal(mode, 0U, 0U, 0U, 1)).has_value(),
+		"timing scope closes after the post-fatal defeat cadence"
+	);
+	const auto *document = recorder.document();
+	check(
+		document && document->expected_round_splits.size() == 1U &&
+		document->expected_round_splits[0U].real_frames == 81U &&
+		document->slowdown && document->slowdown->timed_frames == 4U &&
+		document->slowdown->slow_frames == 2U,
+		"real time includes the first explosion while slowdown ends on the fatal frame"
 	);
 }
 
@@ -236,6 +346,12 @@ void test_invalid_sequences()
 	check(
 		!recorder.round_started(invalid),
 		"automatic Demo never starts a user replay recording"
+	);
+	check(
+		!recorder.round_started(
+			round_start(th03::game_mode::vs_cpu_cpu, 0U, 0U, 2U)
+		),
+		"CPU-vs-CPU never starts a Replay Patch recording"
 	);
 	check(
 		recorder.round_started(
@@ -263,6 +379,7 @@ int main()
 {
 	test_vs_capture();
 	test_story_capture();
+	test_timing_scope();
 	test_invalid_sequences();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0 ? 0 : 1;

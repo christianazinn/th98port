@@ -382,7 +382,7 @@ void test_defeat_cadence_holds_every_second_vsync()
 	for(std::size_t index = 0U; index < 50U; ++index) {
 		fake.results[index] = th03::StepStatus::running;
 	}
-	for(std::size_t index = 0U; index < 48U; ++index) {
+	for(std::size_t index = 1U; index <= 48U; ++index) {
 		fake.result_vsyncs[index] = 2U;
 	}
 	fake.result_count = 50U;
@@ -395,15 +395,15 @@ void test_defeat_cadence_holds_every_second_vsync()
 	std::size_t advances = 0U;
 	std::size_t holds = 0U;
 	for(std::uint64_t index = 0U; index <= 96U; ++index) {
-		const auto transient = (index == 1U) ?
+		const auto transient = (index == 2U) ?
 			th03::CoreInput{.p1 = 0x0020U} : th03::CoreInput{};
 		const auto consumed = runner.consume(sample(index, index, transient));
-		const bool expected_advance = (index & 1U) == 0U;
+		const bool expected_advance = index == 0U || (index & 1U) != 0U;
 		expect(
 			consumed && consumed->process_advanced == expected_advance &&
 				consumed->surface_changed == expected_advance &&
 				consumed->step_result.has_value() == expected_advance,
-			"defeat cadence alternates one published MAIN frame and one hold"
+			"fatal frame advances once, then defeat updates alternate with holds"
 		);
 		if(consumed && consumed->process_advanced) {
 			++advances;
@@ -416,7 +416,7 @@ void test_defeat_cadence_holds_every_second_vsync()
 		"fatal publication through banner consumes 49 MAIN advances in 97 VSyncs"
 	);
 	expect(
-		fake.inputs[1U].p1 == 0U,
+		fake.inputs[2U].p1 == 0U,
 		"input that exists only during a defeat hold is not sampled"
 	);
 	const auto ordinary = runner.consume(sample(97U, 97U));

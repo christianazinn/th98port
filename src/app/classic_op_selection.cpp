@@ -482,7 +482,8 @@ ClassicOpCharacterSelection::ClassicOpCharacterSelection(
 	std::uint8_t available_character_count,
 	ClassicOpSelectionCarry carry,
 	present::Raster raster,
-	present::Tram tram
+	present::Tram tram,
+	bool retain_for_new_classic_practice
 ) noexcept :
 	prepared_(std::move(prepared)),
 	resident_(std::move(resident)),
@@ -490,7 +491,8 @@ ClassicOpCharacterSelection::ClassicOpCharacterSelection(
 	available_character_count_(available_character_count),
 	carry_(carry),
 	raster_(std::move(raster)),
-	tram_(std::move(tram))
+	tram_(std::move(tram)),
+	retain_for_new_classic_practice_(retain_for_new_classic_practice)
 {
 	resident_.demo_number = 0U;
 	resident_.winner = 0;
@@ -546,7 +548,8 @@ ClassicOpCharacterSelection::create_from_op(
 	ClassicOpSelectionMode mode,
 	std::uint8_t available_character_count,
 	ClassicOpSelectionCarry carry,
-	std::span<const LoadedMainResource> resources
+	std::span<const LoadedMainResource> resources,
+	bool retain_for_new_classic_practice
 )
 {
 	const auto expected_route = (mode == ClassicOpSelectionMode::story) ?
@@ -564,7 +567,8 @@ ClassicOpCharacterSelection::create_from_op(
 	}
 	return create_impl(
 		std::move(resident), mode, available_character_count, carry,
-		completion.raster(), completion.tram(), resources, true
+		completion.raster(), completion.tram(), resources, true,
+		retain_for_new_classic_practice
 	);
 }
 
@@ -577,7 +581,8 @@ ClassicOpCharacterSelection::create_impl(
 	present::Raster raster,
 	present::Tram tram,
 	std::span<const LoadedMainResource> resources,
-	bool authenticate_resource_bytes
+	bool authenticate_resource_bytes,
+	bool retain_for_new_classic_practice
 )
 {
 	if((available_character_count != 7U && available_character_count != 9U) ||
@@ -714,7 +719,8 @@ ClassicOpCharacterSelection::create_impl(
 
 	return create_prepared(
 		std::move(prepared), std::move(resident), mode,
-		available_character_count, carry, std::move(raster), std::move(tram)
+		available_character_count, carry, std::move(raster), std::move(tram),
+		retain_for_new_classic_practice
 	);
 }
 
@@ -726,13 +732,15 @@ ClassicOpCharacterSelection::create_prepared(
 	std::uint8_t available_character_count,
 	ClassicOpSelectionCarry carry,
 	present::Raster raster,
-	present::Tram tram
+	present::Tram tram,
+	bool retain_for_new_classic_practice
 )
 {
 	auto result = std::unique_ptr<ClassicOpCharacterSelection>(
 		new ClassicOpCharacterSelection(
 			std::move(prepared), std::move(resident), mode,
-			available_character_count, carry, std::move(raster), std::move(tram)
+			available_character_count, carry, std::move(raster), std::move(tram),
+			retain_for_new_classic_practice
 		)
 	);
 	if(result->phase_ == ClassicOpSelectionPhase::failed) {
@@ -1141,6 +1149,14 @@ bool ClassicOpCharacterSelection::confirmation_vsync() noexcept
 
 bool ClassicOpCharacterSelection::finish_sample() noexcept
 {
+	if(practice_resume_release_lock_) {
+		if(sampled_input_.single_player == 0U) {
+			practice_resume_release_lock_ = false;
+		}
+		frame_wait_remaining_ = 1U;
+		phase_ = ClassicOpSelectionPhase::frame_wait;
+		return true;
+	}
 	if((sampled_input_.single_player & input_cancel) != 0U) {
 		finish_canceled();
 		return true;
@@ -1152,6 +1168,9 @@ bool ClassicOpCharacterSelection::finish_sample() noexcept
 			return true;
 		}
 		++cpu_quirk_frames_;
+	}
+	if(retain_for_new_classic_practice_ && confirmed_[0U] && confirmed_[1U]) {
+		practice_completion_pending_ = true;
 	}
 	if(fade_counter_ > 32U) {
 		return finish_selected();
@@ -1192,6 +1211,9 @@ bool ClassicOpCharacterSelection::publish_frame() noexcept
 	resident_changed_this_advance_ = true;
 	frame_elapsed_ = 0U;
 	delay_elapsed_ = 0U;
+	if(practice_completion_pending_) {
+		return finish_selected();
+	}
 	phase_ = ClassicOpSelectionPhase::draw_and_input;
 	return true;
 }
@@ -1212,11 +1234,13 @@ bool ClassicOpCharacterSelection::finish_selected() noexcept
 			resident_.resident_rand
 		);
 	}
-	if(!push_audio_command({
-		.type = ClassicAudioCommandType::stop_song,
-		.cue = ClassicMusicCue::character_select,
-	})) {
-		return false;
+	if(!retain_for_new_classic_practice_) {
+		if(!push_audio_command({
+			.type = ClassicAudioCommandType::stop_song,
+			.cue = ClassicMusicCue::character_select,
+		})) {
+			return false;
+		}
 	}
 	completion_ = ClassicOpSelectionCompletion(
 		ClassicOpSelectionOutcome::selected, mode_, resident_, carry_,
@@ -1417,6 +1441,41 @@ ClassicOpCharacterSelection::take_completion() noexcept
 	return result;
 }
 
+bool ClassicOpCharacterSelection::resume_from_new_classic_practice() noexcept
+{
+	if(!retain_for_new_classic_practice_ ||
+		mode_ != ClassicOpSelectionMode::vs_1p_cpu ||
+		phase_ != ClassicOpSelectionPhase::consumed) {
+		return false;
+	}
+	for(std::size_t player = 0U; player < selection_.size(); ++player) {
+		const auto raw = static_cast<std::uint8_t>(
+			resident_.paletted_character[player]
+		);
+		selection_[player] = static_cast<std::uint8_t>((raw - 1U) / 2U);
+		palette_[player] = ((raw & 1U) != 0U) ?
+			MainPaletteVariant::first : MainPaletteVariant::second;
+	}
+	confirmed_ = {};
+	active_player_ = 0U;
+	cpu_quirk_frames_ = 0U;
+	trail_count_ = 8U;
+	fade_counter_ = 0U;
+	delay_elapsed_ = 0U;
+	frame_elapsed_ = 0U;
+	frame_wait_remaining_ = 0U;
+	sampled_input_ = {};
+	resume_point_ = ResumePoint::after_players;
+	confirming_player_ = 0U;
+	confirmation_frame_ = 0U;
+	practice_completion_pending_ = false;
+	practice_resume_release_lock_ = true;
+	raster_.set_palette_tone(100);
+	raster_.apply_pending_palette();
+	phase_ = ClassicOpSelectionPhase::draw_and_input;
+	return true;
+}
+
 ClassicOpSelectionPhase ClassicOpCharacterSelection::phase() const noexcept
 {
 	return phase_;
@@ -1476,7 +1535,8 @@ ClassicOpSelectionTestAccess::create_with_predecoded_assets(
 	assets::CdgFile extra_background,
 	assets::CdgFile extra_icons,
 	assets::BfntSheet names,
-	assets::Palette16Rgb4 palette
+	assets::Palette16Rgb4 palette,
+	bool retain_for_new_classic_practice
 )
 {
 	auto prepared = std::make_unique<ClassicOpCharacterSelection::Prepared>();
@@ -1526,7 +1586,8 @@ ClassicOpSelectionTestAccess::create_with_predecoded_assets(
 	prepared->palette = palette;
 	return ClassicOpCharacterSelection::create_prepared(
 		std::move(prepared), std::move(resident), mode,
-		available_character_count, carry, std::move(raster), std::move(tram)
+		available_character_count, carry, std::move(raster), std::move(tram),
+		retain_for_new_classic_practice
 	);
 }
 

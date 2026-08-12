@@ -4,11 +4,15 @@
 #include "sdl_platform_internal.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -60,10 +64,14 @@ struct SurfaceFixture {
 	[[nodiscard]] th03::present::SourceSurface source() const
 	{
 		return {
-			std::span<const ComposedPixel, pixel_count>{
+			.pixels = std::span<const ComposedPixel, pixel_count>{
 				pixels.data(), pixels.size()
 			},
-			palette,
+			.graphics_palette = palette,
+			.oracle_hashes = th03::present::SourceSurfaceOracleHashes{
+				0x1122334455667788ULL,
+				0x8877665544332211ULL,
+			},
 		};
 	}
 };
@@ -87,6 +95,15 @@ struct SurfaceFixture {
 void test_locked_texture_adapter()
 {
 	SurfaceFixture fixture;
+	const auto original_hash =
+		th03::platform::detail::source_surface_state_hash(fixture.source());
+	fixture.pixels[1U] = {ComposedPixelLayer::text, 2U};
+	expect(
+		th03::platform::detail::source_surface_state_hash(fixture.source()) !=
+			original_hash,
+		"oracle host-input hash covers the complete composed pixel domain"
+	);
+	fixture.pixels[1U] = {ComposedPixelLayer::graphics, 0U};
 	for(const std::size_t pitch : {2567U, 2573U}) {
 		const auto extent = ((height - 1U) * pitch) + rgba_row_bytes;
 		std::vector<std::byte> output(extent + 11U, untouched);
@@ -176,6 +193,13 @@ void expect_geometry(
 
 void test_dummy_platform_lifecycle_and_present()
 {
+	const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+	const auto oracle_root = std::filesystem::temp_directory_path() /
+		("th03-platform-pixel-oracle-test-" + std::to_string(nonce));
+	const auto oracle_path = oracle_root / "capture.tsv";
+	std::error_code remove_error;
+	std::filesystem::remove_all(oracle_root, remove_error);
+	const auto oracle_path_text = oracle_path.string();
 	expect(SDL_VERSION == SDL_VERSIONNUM(3, 4, 10),
 		"platform tests compile against exactly SDL 3.4.10");
 	expect(SDL_GetVersion() == SDL_VERSIONNUM(3, 4, 10),
@@ -216,6 +240,7 @@ void test_dummy_platform_lifecycle_and_present()
 			.initial_width = 640U,
 			.initial_height = 400U,
 			.hidden = true,
+			.oracle_log_path = oracle_path_text,
 		});
 		expect(static_cast<bool>(created),
 			"pinned dummy/software SDL platform is created");
@@ -252,7 +277,10 @@ void test_dummy_platform_lifecycle_and_present()
 		);
 
 		SurfaceFixture fixture;
-		const auto first = platform.present(fixture.source());
+		const auto first = platform.present(fixture.source(), {
+			.logical_tick = 17U,
+			.coalesced_ticks = 1U,
+		});
 		expect(
 			first && first->destination == th03::app::IntegerLetterboxRect{
 				0U, 0U, 640U, 400U, 1U
@@ -309,6 +337,24 @@ void test_dummy_platform_lifecycle_and_present()
 	}
 	expect(SDL_WasInit(0U) == 0U,
 		"platform destruction releases all SDL subsystems it owns");
+	{
+		std::ifstream oracle{oracle_path};
+		std::vector<std::string> rows{};
+		for(std::string row; std::getline(oracle, row);) {
+			rows.push_back(std::move(row));
+		}
+		expect(
+			rows.size() == 6U && rows[0U] ==
+				"stream\tschema\tpublication\tlogical_tick\tcoalesced_ticks\t"
+				"overlay\treduced_flash\tsource_fnv64\traster_fnv64\t"
+				"tram_fnv64\tshown_page\traster_mode\tscroll_y\ttone" &&
+				rows[1U].starts_with("T3PXH\t2\t0\t17\t1\t0\t0\t") &&
+				rows[1U].find("\t1122334455667788\t8877665544332211\t") !=
+					std::string::npos && rows[5U].starts_with("T3PXH\t2\t4\tna\t0\t"),
+			"T3PXH2 records five successful publications with aligned schema, logical identity, and source fingerprints"
+		);
+	}
+	std::filesystem::remove_all(oracle_root, remove_error);
 
 	{
 		auto recreated = SdlPlatform::create(SdlPlatformConfig{

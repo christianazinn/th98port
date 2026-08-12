@@ -547,6 +547,17 @@ if(TH03_ENABLE_SDL)
 endif()
 
 if(BUILD_TESTING)
+	find_program(TH03_PWSH_EXECUTABLE NAMES pwsh)
+	if(TH03_PWSH_EXECUTABLE)
+		add_test(
+			NAME th03-pixel-oracle-comparator-tests
+			COMMAND ${TH03_PWSH_EXECUTABLE} -NoProfile -File
+				${CMAKE_CURRENT_SOURCE_DIR}/tests/test_compare_pixel_oracle.ps1
+				-Comparator
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_pixel_oracle.ps1
+		)
+	endif()
+
 	add_executable(th03-audio-pmd-tests
 		tests/test_audio_pmd_opna.cpp
 	)

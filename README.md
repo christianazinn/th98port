@@ -75,7 +75,8 @@ tools\build_classic_standalone.ps1
 With the standard ignored workspace layout, the stable result is
 `out\standalone\TH03-Classic-Test.exe`. It can be copied elsewhere and launched
 by double-clicking; it needs no adjacent DLL/content tree, installed .NET
-runtime, or command-line arguments. It opens the shared Classic/New Classic
+runtime, or command-line arguments. Its NativeAOT launcher avoids carrying the
+ordinary .NET runtime bundle. It opens the shared Classic/New Classic
 menu; both entries run the complete shared Classic lifecycle, while New
 Classic additionally records/browses/plays V13 replays through the shared typed
 MAIN/MAINL scene owners and owns Replay Patch's four-choice gameplay
@@ -83,14 +84,26 @@ pause/restart loop and two-page Practice setup.
 Exiting either title returns to this menu. Its first launch extracts a content-hash
 cache below `%LOCALAPPDATA%\TH03 Classic Native Test`, while configuration,
 scores, and the last-run diagnostic log live in the separate `user` directory
-there and survive artifact updates. New Classic V13 files live in its
-`user\REPLAY` directory and likewise survive artifact updates.
+there and survive artifact updates. New Classic V13 files instead live in a
+visible `REPLAY` directory beside the executable. A read-only installation
+falls back to `user\REPLAY`; `last-run.log` records the selected install and
+replay roots. The launcher retains only the current and one previous payload
+generation, so ordinary artifact refreshes do not accumulate an unbounded
+private cache.
+
+The packaged source trees are compared by relative path, length, and SHA-256.
+When `YUME1.DAT` and `YUME2.DAT` are entirely identical, only one copy is
+embedded. First-launch extraction reconstructs the second tree with per-file
+hard links, or checked byte copies on a filesystem without hard-link support.
+No non-identical archive is deduplicated.
 
 The no-argument script is the maintained convenience path and should be rerun
 after changes intended for human testing. It rebuilds and overwrites the stable
-artifact rather than publishing versioned copies. The current completed New
-Classic parity build is 43,065,773 bytes with SHA-256
-`1F73ED9D724931AC6C8D04722541F3E34E0C4A3D7BD16A7F9EB4781DA0C6EAF7`.
+artifact rather than publishing versioned copies. It normalizes payload entry
+timestamps, runs both portable and fallback replay-root smokes against the exact
+generated executable, verifies reconstructed DAT members, and prints the final
+size and SHA-256. An unchanged second build must reproduce that identity; the
+maintained identity is recorded in `state/PROGRESS.md` after each refresh.
 Alternate ignored inputs can
 be supplied with `-DataRoot`, `-MainExecutable`, `-MainlExecutable`,
 `-OpExecutable`, `-FontRom`, and optional `-RhythmRom`. The packager also accepts
@@ -220,6 +233,24 @@ board by value, but New Classic then writes only `YUME.NEW.NEM`; Classic's
 824-byte `YUME.NEM` remains unchanged. Live Story time is checkpointed on
 registration, Continue, menu return, restart, and application exit, while
 Demo, Practice, and replay playback remain excluded.
+The private `tools\th03-private-editor` utility provides direct migration:
+it accepts an original 824-byte PC-98 scorefile or Replay Patch 0.4.10's exact
+7,812-byte expanded file, validates it, backs up any current native score, and
+atomically installs `YUME.NEW.NEM`. Expanded imports and all exports remain
+byte-for-byte exact. Close the game before importing or exporting so the live
+process cannot later overwrite the migrated profile. The private tool is not
+bundled with the game executable.
+
+For presentation regression work, setting `TH03_PIXEL_ORACLE_LOG` writes one
+`T3PXH2` row per successful complete host publication, with logical source-tick,
+host-overlay, reduced-flash, guest Raster/TRAM, and page/palette selector
+identity. Capture mode publishes every surface-changing logical tick separately
+so host catch-up cannot hide a source publication. The strict
+`tools\compare_pixel_oracle.ps1` comparator reports the first differing field
+and emits a structured JSON verdict. See `docs\PIXEL_ORACLE.md` for commands,
+the proven two-run/cross-compiler gate, and the explicitly still-planned raw
+PC-98 planar producer; the lightweight hash stream is not represented as
+collision-proof pixel evidence.
 Unless overridden with `--config`, `--score`, and `--replay-root`, Classic
 stores `YUME.CFG` and `YUME.NEM`; New Classic derives `YUME.NEW.NEM` beside
 the selected `--score` path and stores `TH3KEY.CFG` plus the `REPLAY`

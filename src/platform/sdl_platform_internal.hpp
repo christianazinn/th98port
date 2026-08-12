@@ -16,6 +16,13 @@ namespace th03::platform::detail {
 	const present::SourceSurface &surface
 ) noexcept;
 
+// FNV-1a schema 1 over every SourceSurface field that can affect host pixel
+// conversion. It is a fast localization fingerprint, not collision-proof
+// evidence; a mismatch is decisive and a match still defers to raw captures.
+[[nodiscard]] std::uint64_t source_surface_state_hash(
+	const present::SourceSurface &surface
+) noexcept;
+
 struct SdlPlatformMetrics {
 	std::uint32_t output_width = 0U;
 	std::uint32_t output_height = 0U;

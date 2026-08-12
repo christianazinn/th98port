@@ -206,6 +206,11 @@ public:
 	[[nodiscard]] std::expected<void, SdlInputMapperError> replace_bindings(
 		SdlInputBindings bindings
 	) noexcept;
+	[[nodiscard]] std::expected<void, SdlInputMapperError>
+	reset_after_modal(
+		app::TickInputScheduler &scheduler,
+		app::TickTimestampNs timestamp_ns
+	) noexcept;
 
 private:
 	struct KeyboardState {

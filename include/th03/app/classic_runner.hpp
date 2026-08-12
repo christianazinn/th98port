@@ -158,6 +158,7 @@ public:
 	// document transfers it to the save/browser owner and enables a later run.
 	[[nodiscard]] std::optional<formats::ReplayDocument>
 	take_completed_replay();
+	void classify_pending_replay_frame(bool deadline_missed) noexcept;
 
 private:
 	friend struct ClassicRunnerTestAccess;

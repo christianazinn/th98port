@@ -6,6 +6,7 @@
 #include <expected>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 
 #include "th03/app/host_surface.hpp"
@@ -26,6 +27,8 @@ enum class SdlPlatformErrorCode : std::uint8_t {
 	surface_conversion_failed,
 	render_failed,
 	present_vsync_failed,
+	oracle_log_open_failed,
+	oracle_log_write_failed,
 };
 
 struct SdlPlatformError {
@@ -42,12 +45,21 @@ struct SdlPlatformConfig {
 	std::uint32_t initial_width = 640U;
 	std::uint32_t initial_height = 400U;
 	bool hidden = false;
+	// Optional developer-only TSV path. Every successful publication records
+	// source-domain and complete host-input hashes for PC-98 visual-oracle
+	// comparison. Consumed synchronously by create().
+	std::string oracle_log_path{};
 };
 
 struct SdlPresentResult {
 	// Destination in physical output pixels. A drawable smaller than 640x400
 	// is a successful black-only presentation rather than a stretched frame.
 	std::optional<app::IntegerLetterboxRect> destination{};
+};
+
+struct SdlPresentationOracleIdentity {
+	std::optional<std::uint64_t> logical_tick{};
+	std::uint32_t coalesced_ticks = 0U;
 };
 
 // Main-thread owner of the SDL video and gamepad subsystems, one resizable
@@ -69,8 +81,10 @@ public:
 	SdlPlatform &operator=(SdlPlatform &&) = delete;
 
 	[[nodiscard]] std::expected<SdlPresentResult, SdlPlatformError> present(
-		const present::SourceSurface &surface
+		const present::SourceSurface &surface,
+		SdlPresentationOracleIdentity identity = {}
 	) noexcept;
+	[[nodiscard]] bool oracle_enabled() const noexcept;
 	// Stable for this platform's lifetime and accepted directly by
 	// SdlInputMapper::create(). Keeping the numeric type here leaves SDL types
 	// out of this opaque host header.

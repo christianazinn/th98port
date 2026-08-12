@@ -38,13 +38,16 @@ void expect(bool condition, const char *message)
 bool valid_completed_replay(
 	std::optional<th03::formats::ReplayDocument> document,
 	th03::formats::ReplayEndReason reason,
-	std::size_t minimum_checkpoints = 1U
+	std::size_t minimum_checkpoints = 1U,
+	bool exact_checkpoint_count = false
 )
 {
 	if(!document || !document->metadata ||
 		document->metadata->status != th03::formats::ReplayStatus::finalized ||
 		document->metadata->end_reason != reason ||
 		document->checkpoints.size() < minimum_checkpoints ||
+		(exact_checkpoint_count &&
+			document->checkpoints.size() != minimum_checkpoints) ||
 		document->expected_round_splits.empty()) {
 		return false;
 	}
@@ -984,8 +987,26 @@ bool authentic_vs_gate(
 			}
 			return fail_stage("drive-stage-timeout");
 		};
+		const auto select_ordinary_vs_if_offered = [&]() {
+			if(mode_index != 0U) {
+				return true;
+			}
+			// Replay Patch inserts Practice setup after the ordinary 1P-vs-CPU
+			// selector. Switch its default Practice preset to VS, move to Start,
+			// and confirm so this matrix still exercises the ordinary VS route.
+			if(!step() || !step(pulse(0x0008U)) || !step()) {
+				return fail_stage("practice-select-vs");
+			}
+			for(std::size_t row = 0U; row < 5U; ++row) {
+				if(!step(pulse(0x0002U)) || !step()) {
+					return fail_stage("practice-select-start");
+				}
+			}
+			return step(pulse(0x0020U));
+		};
 
-		if(!drive_selection() || !drive_stage_to_real_main()) {
+		if(!drive_selection() || !select_ordinary_vs_if_offered() ||
+			!drive_stage_to_real_main()) {
 			return fail_stage("first-main");
 		}
 		const auto winner = (mode_index & 1U) == 0U ?
@@ -1037,16 +1058,32 @@ bool authentic_vs_gate(
 			] != std::array<std::uint8_t, 8U>{}) {
 			return fail_stage("route-two-resident");
 		}
-		if(!valid_completed_replay(
-			runner.take_completed_replay(),
-			th03::formats::ReplayEndReason::game_over
-		)) {
+		auto route_two_replay = runner.take_completed_replay();
+		if((mode_index == 2U && route_two_replay) ||
+			(mode_index != 2U && !valid_completed_replay(
+				std::move(route_two_replay),
+				th03::formats::ReplayEndReason::game_over
+			))) {
 			return fail_stage("route-two-replay");
 		}
-		if(!drive_selection() || !drive_stage_to_real_main()) {
+		if(!drive_selection() || !select_ordinary_vs_if_offered() ||
+			!drive_stage_to_real_main()) {
 			return fail_stage("second-main");
 		}
-		if(!force_terminal(
+		if(mode_index == 2U) {
+			// CPU-vs-CPU is deliberately not recordable. Its source Cancel must
+			// therefore remain the live MAIN route-0 exit, never Replay Pause.
+			if(!step(pulse(0x1000U))) {
+				return fail_stage("cpu-cpu-cancel");
+			}
+			for(std::size_t frame = 0U; frame < 32U && scene() ==
+				th03::app::ClassicOpSessionScene::vs_main; ++frame) {
+				if(!step()) { return fail_stage("cpu-cpu-cancel-step"); }
+			}
+			if(scene() != th03::app::ClassicOpSessionScene::character_selection) {
+				return fail_stage("cpu-cpu-cancel-route");
+			}
+		} else if(!force_terminal(
 			th03::app::ClassicOpVsRouteTestOutcome::exit_to_operator,
 			th03::app::ClassicOpSessionScene::character_selection
 		)) {
@@ -1065,10 +1102,12 @@ bool authentic_vs_gate(
 				decltype(route_zero_resident->last_score){}) {
 			return fail_stage("route-zero-resident");
 		}
-		if(!valid_completed_replay(
-			runner.take_completed_replay(),
-			th03::formats::ReplayEndReason::menu_return
-		)) {
+		auto route_zero_replay = runner.take_completed_replay();
+		if((mode_index == 2U && route_zero_replay) ||
+			(mode_index != 2U && !valid_completed_replay(
+				std::move(route_zero_replay),
+				th03::formats::ReplayEndReason::menu_return
+			))) {
 			return fail_stage("route-zero-replay");
 		}
 
@@ -1969,7 +2008,7 @@ bool authentic_gate(
 	}
 	if(!valid_completed_replay(
 		runner.take_completed_replay(),
-		th03::formats::ReplayEndReason::complete, 10U
+		th03::formats::ReplayEndReason::game_over, 1U, true
 	)) {
 		return false;
 	}
@@ -1990,7 +2029,7 @@ bool authentic_gate(
 	}
 	if(!valid_completed_replay(
 		runner.take_completed_replay(),
-		th03::formats::ReplayEndReason::game_over
+		th03::formats::ReplayEndReason::game_over, 1U, true
 	)) {
 		return false;
 	}
@@ -2011,7 +2050,7 @@ bool authentic_gate(
 	}
 	if(!valid_completed_replay(
 		runner.take_completed_replay(),
-		th03::formats::ReplayEndReason::game_over, 4U
+		th03::formats::ReplayEndReason::game_over, 1U, true
 	)) {
 		return false;
 	}
@@ -2028,7 +2067,7 @@ bool authentic_gate(
 	}
 	if(!valid_completed_replay(
 		runner.take_completed_replay(),
-		th03::formats::ReplayEndReason::menu_return
+		th03::formats::ReplayEndReason::menu_return, 1U, true
 	)) {
 		return false;
 	}

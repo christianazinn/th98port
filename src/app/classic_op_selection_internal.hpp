@@ -154,7 +154,8 @@ public:
 		ClassicOpSelectionMode mode,
 		std::uint8_t available_character_count,
 		ClassicOpSelectionCarry carry,
-		std::span<const LoadedMainResource> resources
+		std::span<const LoadedMainResource> resources,
+		bool retain_for_new_classic_practice = false
 	);
 	~ClassicOpCharacterSelection() = default;
 	ClassicOpCharacterSelection(const ClassicOpCharacterSelection &) = delete;
@@ -174,6 +175,7 @@ public:
 	take_audio_command() noexcept;
 	[[nodiscard]] std::optional<ClassicOpSelectionCompletion>
 	take_completion() noexcept;
+	[[nodiscard]] bool resume_from_new_classic_practice() noexcept;
 
 	[[nodiscard]] ClassicOpSelectionPhase phase() const noexcept;
 	[[nodiscard]] const GameInit &resident() const noexcept;
@@ -210,7 +212,8 @@ private:
 		std::uint8_t available_character_count,
 		ClassicOpSelectionCarry carry,
 		present::Raster raster,
-		present::Tram tram
+		present::Tram tram,
+		bool retain_for_new_classic_practice
 	) noexcept;
 
 	[[nodiscard]] static std::expected<
@@ -224,7 +227,8 @@ private:
 		present::Raster raster,
 		present::Tram tram,
 		std::span<const LoadedMainResource> resources,
-		bool authenticate_resource_bytes
+		bool authenticate_resource_bytes,
+		bool retain_for_new_classic_practice
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpCharacterSelection>,
@@ -236,7 +240,8 @@ private:
 		std::uint8_t available_character_count,
 		ClassicOpSelectionCarry carry,
 		present::Raster raster,
-		present::Tram tram
+		present::Tram tram,
+		bool retain_for_new_classic_practice = false
 	);
 
 	[[nodiscard]] bool initialize_after_blank() noexcept;
@@ -304,6 +309,9 @@ private:
 	std::uint8_t confirmation_frame_ = 0U;
 	bool resident_changed_this_advance_ = false;
 	bool page_flipped_this_advance_ = false;
+	bool retain_for_new_classic_practice_ = false;
+	bool practice_completion_pending_ = false;
+	bool practice_resume_release_lock_ = false;
 	ClassicOpSelectionPhase phase_ = ClassicOpSelectionPhase::initial_blank;
 	std::array<ClassicAudioCommand, 4U> audio_commands_{};
 	std::size_t audio_head_ = 0U;
@@ -391,7 +399,8 @@ struct ClassicOpSelectionTestAccess final {
 		assets::CdgFile extra_background,
 		assets::CdgFile extra_icons,
 		assets::BfntSheet names,
-		assets::Palette16Rgb4 palette
+		assets::Palette16Rgb4 palette,
+		bool retain_for_new_classic_practice = false
 	);
 
 	[[nodiscard]] static std::expected<
@@ -409,7 +418,7 @@ struct ClassicOpSelectionTestAccess final {
 	{
 		return ClassicOpCharacterSelection::create_impl(
 			std::move(resident), mode, available_character_count, carry,
-			std::move(raster), std::move(tram), resources, false
+			std::move(raster), std::move(tram), resources, false, false
 		);
 	}
 };
