@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <AssemblyName>TH03-Classic-Test</AssemblyName>
+    <RootNamespace>Th03ClassicStandalone</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(PayloadZip)' != ''">
+    <EmbeddedResource Include="$(PayloadZip)"
+                      LogicalName="TH03.Classic.Payload.zip" />
+  </ItemGroup>
+
+  <Target Name="ValidatePayload" BeforeTargets="BeforeBuild">
+    <Error Condition="'$(PayloadZip)' == ''"
+           Text="PayloadZip must name the generated Classic payload ZIP." />
+    <Error Condition="!Exists('$(PayloadZip)')"
+           Text="PayloadZip does not exist: $(PayloadZip)" />
+  </Target>
+</Project>

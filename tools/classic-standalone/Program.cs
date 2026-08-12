@@ -1,0 +1,280 @@
+using System.Diagnostics;
+using System.IO.Compression;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace Th03ClassicStandalone;
+
+internal static class Program
+{
+    private const string PayloadResource = "TH03.Classic.Payload.zip";
+    private const string ProductDirectory = "TH03 Classic Native Test";
+    private const string SmokeTicksEnvironment =
+        "TH03_CLASSIC_STANDALONE_SMOKE_TICKS";
+    private const string UserRootEnvironment =
+        "TH03_CLASSIC_STANDALONE_USER_ROOT";
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int MessageBoxW(
+        nint window,
+        string text,
+        string caption,
+        uint type
+    );
+
+    [STAThread]
+    private static int Main()
+    {
+        try
+        {
+            return Run();
+        }
+        catch(Exception exception)
+        {
+            ShowError(
+                "The standalone Classic test build could not start.\n\n" +
+                exception.Message
+            );
+            return 1;
+        }
+    }
+
+    private static int Run()
+    {
+        var localApplicationData = Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData
+        );
+        if(string.IsNullOrWhiteSpace(localApplicationData))
+        {
+            throw new InvalidOperationException(
+                "Windows did not provide a LocalApplicationData directory."
+            );
+        }
+
+        var productRoot = Path.Combine(localApplicationData, ProductDirectory);
+        var cacheRoot = Path.Combine(productRoot, "cache");
+        var userRootOverride = Environment.GetEnvironmentVariable(
+            UserRootEnvironment
+        );
+        var userRoot = string.IsNullOrWhiteSpace(userRootOverride) ?
+            Path.Combine(productRoot, "user") :
+            Path.GetFullPath(userRootOverride);
+        Directory.CreateDirectory(cacheRoot);
+        Directory.CreateDirectory(userRoot);
+
+        using var payload = Assembly.GetExecutingAssembly().
+            GetManifestResourceStream(PayloadResource) ??
+            throw new InvalidOperationException(
+                "The embedded Classic payload is missing."
+            );
+        var payloadHash = Convert.ToHexString(SHA256.HashData(payload));
+        if(!payload.CanSeek)
+        {
+            throw new InvalidOperationException(
+                "The embedded Classic payload cannot be rewound."
+            );
+        }
+        payload.Position = 0;
+
+        var installRoot = Path.Combine(cacheRoot, payloadHash);
+        EnsurePayload(cacheRoot, installRoot, payloadHash, payload);
+
+        var application = Path.Combine(installRoot, "app", "th03-app.exe");
+        var content = Path.Combine(installRoot, "content");
+        var arguments = new List<string>
+        {
+            "--classic",
+            "--data", content,
+            "--main", Path.Combine(content, "MAIN.EXE"),
+            "--mainl", Path.Combine(content, "MAINL.EXE"),
+            "--op", Path.Combine(content, "OP.EXE"),
+            "--font", Path.Combine(content, "FONT.ROM"),
+            "--config", Path.Combine(userRoot, "YUME.CFG"),
+            "--score", Path.Combine(userRoot, "YUME.NEM"),
+        };
+        var rhythmRom = Path.Combine(content, "YM2608.ROM");
+        if(File.Exists(rhythmRom))
+        {
+            arguments.Add("--rhythm-rom");
+            arguments.Add(rhythmRom);
+        }
+        var smokeTicks = Environment.GetEnvironmentVariable(
+            SmokeTicksEnvironment
+        );
+        if(!string.IsNullOrWhiteSpace(smokeTicks))
+        {
+            arguments.Add("--smoke-ticks");
+            arguments.Add(smokeTicks);
+        }
+
+        var start = new ProcessStartInfo
+        {
+            FileName = application,
+            WorkingDirectory = installRoot,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        foreach(var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(start) ??
+            throw new InvalidOperationException(
+                "Windows refused to start the native Classic executable."
+            );
+        var standardOutput = process.StandardOutput.ReadToEndAsync();
+        var standardError = process.StandardError.ReadToEndAsync();
+        process.WaitForExit();
+        Task.WaitAll(standardOutput, standardError);
+
+        var log = new StringBuilder();
+        log.AppendLine($"exit-code={process.ExitCode}");
+        log.Append(standardOutput.Result);
+        log.Append(standardError.Result);
+        var logPath = Path.Combine(userRoot, "last-run.log");
+        File.WriteAllText(logPath, log.ToString(), Encoding.UTF8);
+        if(process.ExitCode != 0)
+        {
+            ShowError(
+                $"Classic exited with code {process.ExitCode}.\n\n" +
+                $"Diagnostic log:\n{logPath}"
+            );
+        }
+        return process.ExitCode;
+    }
+
+    private static void EnsurePayload(
+        string cacheRoot,
+        string installRoot,
+        string payloadHash,
+        Stream payload
+    )
+    {
+        var marker = Path.Combine(installRoot, ".payload-sha256");
+        if(IsComplete(marker, payloadHash))
+        {
+            return;
+        }
+
+        var lockPath = Path.Combine(cacheRoot, payloadHash + ".lock");
+        using var lockFile = AcquireLock(lockPath);
+        if(IsComplete(marker, payloadHash))
+        {
+            return;
+        }
+        if(Directory.Exists(installRoot))
+        {
+            Directory.Delete(installRoot, recursive: true);
+        }
+
+        var staging = Path.Combine(
+            cacheRoot,
+            ".extract-" + Guid.NewGuid().ToString("N")
+        );
+        Directory.CreateDirectory(staging);
+        try
+        {
+            ExtractPayload(payload, staging);
+            File.WriteAllText(
+                Path.Combine(staging, ".payload-sha256"),
+                payloadHash,
+                Encoding.ASCII
+            );
+            Directory.Move(staging, installRoot);
+        }
+        finally
+        {
+            if(Directory.Exists(staging))
+            {
+                Directory.Delete(staging, recursive: true);
+            }
+        }
+    }
+
+    private static FileStream AcquireLock(string path)
+    {
+        for(var attempt = 0; attempt < 300; ++attempt)
+        {
+            try
+            {
+                return new FileStream(
+                    path,
+                    FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,
+                    FileShare.None
+                );
+            }
+            catch(IOException) when(attempt != 299)
+            {
+                Thread.Sleep(100);
+            }
+        }
+        throw new IOException("Timed out waiting for the payload cache lock.");
+    }
+
+    private static bool IsComplete(string marker, string payloadHash)
+    {
+        try
+        {
+            return File.Exists(marker) &&
+                File.ReadAllText(marker, Encoding.ASCII) == payloadHash &&
+                File.Exists(Path.Combine(
+                    Path.GetDirectoryName(marker)!, "app", "th03-app.exe"
+                ));
+        }
+        catch(IOException)
+        {
+            return false;
+        }
+    }
+
+    private static void ExtractPayload(Stream payload, string destinationRoot)
+    {
+        using var archive = new ZipArchive(
+            payload,
+            ZipArchiveMode.Read,
+            leaveOpen: true
+        );
+        var root = Path.GetFullPath(destinationRoot) +
+            Path.DirectorySeparatorChar;
+        foreach(var entry in archive.Entries)
+        {
+            var relative = entry.FullName.Replace(
+                '/', Path.DirectorySeparatorChar
+            );
+            var destination = Path.GetFullPath(Path.Combine(root, relative));
+            if(!destination.StartsWith(
+                root,
+                StringComparison.OrdinalIgnoreCase
+            ))
+            {
+                throw new InvalidDataException(
+                    "The embedded payload contains an invalid path."
+                );
+            }
+            if(string.IsNullOrEmpty(entry.Name))
+            {
+                Directory.CreateDirectory(destination);
+                continue;
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            entry.ExtractToFile(destination, overwrite: false);
+        }
+    }
+
+    private static void ShowError(string message)
+    {
+        const uint errorIcon = 0x10U;
+        _ = MessageBoxW(
+            0,
+            message,
+            "TH03 Classic Test",
+            errorIcon
+        );
+    }
+}

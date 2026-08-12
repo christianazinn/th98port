@@ -50,6 +50,35 @@ cmake --build --preset msvc-x64-sdl
 ctest --preset msvc-x64-sdl
 ```
 
+#### Maintained one-file Classic test build
+
+For ongoing human testing, the repository has a local-only packager that
+rebuilds the current Release application, embeds its SDL runtime and the
+caller's ignored original test content, and smoke-tests one self-contained
+Windows x64 executable. Run it from PowerShell 7 so the pinned ZIP/runtime
+pipeline produces one stable cache identity:
+
+```powershell
+tools\build_classic_standalone.ps1
+```
+
+With the standard ignored workspace layout, the stable result is
+`out\standalone\TH03-Classic-Test.exe`. It can be copied elsewhere and launched
+by double-clicking; it needs no adjacent DLL/content tree, installed .NET
+runtime, or command-line arguments. Its first launch extracts a content-hash
+cache below `%LOCALAPPDATA%\TH03 Classic Native Test`, while configuration,
+scores, and the last-run diagnostic log live in the separate `user` directory
+there and survive artifact updates.
+
+The no-argument script is the maintained convenience path and should be rerun
+after changes intended for human testing. It rebuilds and overwrites the stable
+artifact rather than publishing versioned copies. Alternate ignored inputs can
+be supplied with `-DataRoot`, `-MainExecutable`, `-MainlExecutable`,
+`-OpExecutable`, `-FontRom`, and optional `-RhythmRom`. The tracked launcher and
+packager contain no original bytes; the generated executable does, so it remains
+ignored and is strictly a private testing artifact pending the asset/license
+and public-package work.
+
 `th03-app` reads an external structured extraction containing `YUME1.DAT/`
 and `YUME2.DAT/`, a supported Japanese `MAIN.EXE` compiled-content profile,
 the untouched stock DIET-packed or authenticated unpacked Japanese
