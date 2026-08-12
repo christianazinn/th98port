@@ -344,8 +344,10 @@ void print_usage()
 		<< "P2: keypad 8/4/6/2, diagonals 7/9/1/3, Left shot, Right bomb\n"
 		<< "Classic UI: arrows/keypad, Z/X/Space, Return OK, Escape Cancel\n"
 		<< "--shell opens the shared Classic/New Classic product menu. "
-			"Title Exit returns to it. In --vs, Escape exits. In either "
-			"experience, Escape is source Cancel and "
+			"Title Exit returns to it. In New Classic gameplay, Escape opens "
+			"Pause, R restarts, and Q exits without saving. During New Classic "
+			"replay playback, Escape aborts and held Shot fast-forwards. In --vs, "
+			"Escape exits. In Classic, Escape remains source Cancel and "
 			"window close exits. The default cadence is nominal PC-9801 24 kHz "
 			"(526315/9328 Hz); --tick-rate overrides it.\n"
 		<< "Classic synthesizes external PMD/EFC content and delivers canonical "
@@ -1178,6 +1180,9 @@ ExperienceRunResult run_classic_session(
 			if(!*due) {
 				break;
 			}
+			(*due)->restart_requested =
+				parsed.mode == th03::app::ClassicLaunchMode::new_classic &&
+				mapper.keyboard_scancode_held(SDL_SCANCODE_R);
 			auto consumed = (*runner)->consume(**due, audio_session->status());
 			if(!consumed) {
 				std::cerr << "logical-tick=" << logical_ticks << '\n';

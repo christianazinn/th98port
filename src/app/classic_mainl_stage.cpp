@@ -489,12 +489,46 @@ std::expected<
 	present::KotohimeBombFadeCompatibility kotohime_compatibility,
 	std::span<const LoadedMainResource> resources,
 	MainlStageTextAssets text,
-	const present::AnkGlyphProvider &font
+	const present::AnkGlyphProvider &font,
+	GameOptions game_options
 )
 {
 	return create_from_selection_impl(
 		completion,
 		kotohime_compatibility,
+		resources,
+		std::move(text),
+		font,
+		game_options,
+		true
+	);
+}
+
+std::expected<
+	std::unique_ptr<ClassicMainlStageTransition>,
+	ClassicMainlStageError
+> ClassicMainlStageTransition::create_from_restart(
+	GameInit resident,
+	present::KotohimeBombFadeCompatibility kotohime_compatibility,
+	std::span<const LoadedMainResource> resources,
+	MainlStageTextAssets text,
+	const present::AnkGlyphProvider &font,
+	GameOptions game_options
+)
+{
+	if(resident.game_mode < game_mode::vs_1p_cpu ||
+		resident.game_mode > game_mode::vs_cpu_cpu) {
+		return std::unexpected(stage_error(
+			ClassicMainlStageErrorCode::invalid_config
+		));
+	}
+	return create_impl(
+		{
+			.resident = std::move(resident),
+			.game_options = game_options,
+			.kotohime_compatibility = kotohime_compatibility,
+			.policy = EntryPolicy::classic_vs,
+		},
 		resources,
 		std::move(text),
 		font,
@@ -532,6 +566,7 @@ std::expected<
 	std::span<const LoadedMainResource> resources,
 	MainlStageTextAssets text,
 	const present::AnkGlyphProvider &font,
+	GameOptions game_options,
 	bool authenticate_resource_bytes
 )
 {
@@ -543,7 +578,7 @@ std::expected<
 	return create_impl(
 		{
 			.resident = completion.resident(),
-			.game_options = {},
+			.game_options = game_options,
 			.kotohime_compatibility = kotohime_compatibility,
 			.policy = EntryPolicy::classic_vs,
 		},

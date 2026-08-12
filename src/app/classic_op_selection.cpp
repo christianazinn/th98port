@@ -342,6 +342,92 @@ template <typename Value, typename Decoder>
 
 } // namespace
 
+GameInit prepare_new_classic_story_restart(GameInit resident) noexcept
+{
+	constexpr std::array<MainCharacter, 9U> fixed_stage_six{
+		MainCharacter::mima,
+		MainCharacter::reimu,
+		MainCharacter::reimu,
+		MainCharacter::marisa,
+		MainCharacter::reimu,
+		MainCharacter::ellen,
+		MainCharacter::kana,
+		MainCharacter::kotohime,
+		MainCharacter::rikako,
+	};
+	resident.demo_number = 0U;
+	resident.winner = 0;
+	resident.story_stage = 0U;
+	resident.is_cpu = {0U, 1U};
+	resident.game_mode = game_mode::story;
+	resident.story_lives = 2U;
+	resident.show_score_menu = 0U;
+	resident.paletted_character[1U] = -1;
+
+	const auto player_one = static_cast<std::uint8_t>(
+		resident.paletted_character[0U]
+	);
+	const auto player_base = static_cast<std::uint8_t>((player_one - 1U) / 2U);
+	const auto fixed = character_index(fixed_stage_six[player_base]);
+	std::array<bool, 7U> used{};
+	used[fixed] = true;
+	auto seed = std::bit_cast<std::uint32_t>(resident.resident_rand);
+	for(std::size_t stage = 0U; stage < 6U; ++stage) {
+		std::uint8_t candidate = 0U;
+		do {
+			candidate = static_cast<std::uint8_t>(irand(seed) % 7U);
+		} while(used[candidate]);
+		used[candidate] = true;
+		resident.story_opponents[stage] = static_cast<std::int8_t>(
+			paletted_value(candidate, MainPaletteVariant::first)
+		);
+	}
+	resident.story_opponents[6U] = static_cast<std::int8_t>(
+		paletted_value(fixed, MainPaletteVariant::first)
+	);
+	resident.story_opponents[7U] = 15;
+	resident.story_opponents[8U] = 17;
+	for(auto &opponent : resident.story_opponents) {
+		if(opponent == resident.paletted_character[0U]) {
+			++opponent;
+		}
+	}
+	resident.paletted_character[1U] = resident.story_opponents[0U];
+	resident.remaining_credits = 3U;
+	resident.fast_op_animation = 0U;
+	resident.skill = static_cast<std::uint8_t>(70U + (resident.rank * 25U));
+	resident.last_score = {};
+	resident.global_frame = 0U;
+	resident.runtime_snapshot.reset();
+	resident.compact_runtime_snapshot.reset();
+	resident.round_start_snapshot.reset();
+	resident.practice_rules.reset();
+	resident.random_seed = std::bit_cast<std::uint32_t>(resident.resident_rand);
+	return resident;
+}
+
+GameInit prepare_new_classic_vs_restart(GameInit resident) noexcept
+{
+	switch(resident.game_mode) {
+	case game_mode::vs_1p_cpu: resident.is_cpu = {0U, 1U}; break;
+	case game_mode::vs_1p_2p: resident.is_cpu = {0U, 0U}; break;
+	case game_mode::vs_cpu_cpu: resident.is_cpu = {1U, 1U}; break;
+	default: return {};
+	}
+	resident.demo_number = 0U;
+	resident.winner = 0;
+	resident.story_stage = 0U;
+	resident.story_lives = 0U;
+	resident.show_score_menu = 0U;
+	resident.last_score = {};
+	resident.global_frame = 0U;
+	resident.runtime_snapshot.reset();
+	resident.compact_runtime_snapshot.reset();
+	resident.round_start_snapshot.reset();
+	resident.random_seed = std::bit_cast<std::uint32_t>(resident.resident_rand);
+	return resident;
+}
+
 ClassicOpSelectionCompletion::ClassicOpSelectionCompletion(
 	ClassicOpSelectionOutcome outcome,
 	ClassicOpSelectionMode mode,
@@ -1113,60 +1199,18 @@ bool ClassicOpCharacterSelection::finish_selected() noexcept
 {
 	resident_changed_this_advance_ = true;
 	if(mode_ == ClassicOpSelectionMode::story) {
-		constexpr std::array<MainCharacter, 9U> fixed_stage_six{
-			MainCharacter::mima,
-			MainCharacter::reimu,
-			MainCharacter::reimu,
-			MainCharacter::marisa,
-			MainCharacter::reimu,
-			MainCharacter::ellen,
-			MainCharacter::kana,
-			MainCharacter::kotohime,
-			MainCharacter::rikako,
-		};
-		const auto player_one = static_cast<std::uint8_t>(
-			resident_.paletted_character[0U]
+		resident_ = prepare_new_classic_story_restart(std::move(resident_));
+	} else {
+		resident_.last_score = {};
+		resident_.global_frame = 0U;
+		resident_.runtime_snapshot.reset();
+		resident_.compact_runtime_snapshot.reset();
+		resident_.round_start_snapshot.reset();
+		resident_.practice_rules.reset();
+		resident_.random_seed = std::bit_cast<std::uint32_t>(
+			resident_.resident_rand
 		);
-		const auto player_base = static_cast<std::uint8_t>((player_one - 1U) / 2U);
-		const auto fixed = character_index(fixed_stage_six[player_base]);
-		std::array<bool, 7U> used{};
-		used[fixed] = true;
-		auto seed = std::bit_cast<std::uint32_t>(resident_.resident_rand);
-		for(std::size_t stage = 0U; stage < 6U; ++stage) {
-			std::uint8_t candidate = 0U;
-			do {
-				candidate = static_cast<std::uint8_t>(irand(seed) % 7U);
-			} while(used[candidate]);
-			used[candidate] = true;
-			resident_.story_opponents[stage] = static_cast<std::int8_t>(
-				paletted_value(candidate, MainPaletteVariant::first)
-			);
-		}
-		resident_.story_opponents[6U] = static_cast<std::int8_t>(
-			paletted_value(fixed, MainPaletteVariant::first)
-		);
-		resident_.story_opponents[7U] = 15;
-		resident_.story_opponents[8U] = 17;
-		for(auto &opponent : resident_.story_opponents) {
-			if(opponent == resident_.paletted_character[0U]) {
-				++opponent;
-			}
-		}
-		resident_.paletted_character[1U] = resident_.story_opponents[0U];
-		resident_.remaining_credits = 3U;
-		resident_.fast_op_animation = 0U;
-		resident_.skill = static_cast<std::uint8_t>(70U + (resident_.rank * 25U));
 	}
-	// switch_to_mainl() clears both score rows only after Story has finished
-	// constructing its opponent route. The remaining resets model the fresh
-	// process boundary without adding caller-forgeable snapshot state.
-	resident_.last_score = {};
-	resident_.global_frame = 0U;
-	resident_.runtime_snapshot.reset();
-	resident_.compact_runtime_snapshot.reset();
-	resident_.round_start_snapshot.reset();
-	resident_.practice_rules.reset();
-	resident_.random_seed = std::bit_cast<std::uint32_t>(resident_.resident_rand);
 	if(!push_audio_command({
 		.type = ClassicAudioCommandType::stop_song,
 		.cue = ClassicMusicCue::character_select,

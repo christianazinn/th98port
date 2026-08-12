@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -42,6 +43,68 @@ std::vector<std::byte> read_file(const std::filesystem::path &path)
 	return input ? result : std::vector<std::byte>{};
 }
 
+std::optional<th03::formats::ReplayDocument> insert_recorded_pause(
+	th03::formats::ReplayDocument document
+)
+{
+	std::vector<th03::replay::SessionRecord> records;
+	records.reserve(document.session.records.size() + 3U);
+	std::optional<std::uint32_t> pause_sample{};
+	for(auto record : document.session.records) {
+		if(!pause_sample) {
+			if(auto *sample = std::get_if<th03::replay::InputSample>(&record);
+				sample && sample->phase == th03::replay::InputPhase::gameplay) {
+				pause_sample = sample->frame_index;
+				sample->input.system = static_cast<std::uint16_t>(
+					sample->input.system | 0x1000U
+				);
+				records.push_back(record);
+				records.push_back(th03::replay::InputSample{
+					.frame_index = *pause_sample + 1U,
+					.phase = th03::replay::InputPhase::interstitial,
+					.round_frame = std::nullopt,
+					.round_or_result_frame = std::nullopt,
+				});
+				records.push_back(th03::replay::InputSample{
+					.frame_index = *pause_sample + 2U,
+					.phase = th03::replay::InputPhase::interstitial,
+					.input = {.system = 0x1000U},
+					.round_frame = std::nullopt,
+					.round_or_result_frame = std::nullopt,
+				});
+				records.push_back(th03::replay::InputSample{
+					.frame_index = *pause_sample + 3U,
+					.phase = th03::replay::InputPhase::interstitial,
+					.round_frame = std::nullopt,
+					.round_or_result_frame = std::nullopt,
+				});
+				continue;
+			}
+			records.push_back(std::move(record));
+			continue;
+		}
+		if(auto *sample = std::get_if<th03::replay::InputSample>(&record)) {
+			sample->frame_index += 3U;
+		} else {
+			std::get<th03::replay::ProcessBoundary>(record).sample_index += 3U;
+		}
+		records.push_back(std::move(record));
+	}
+	if(!pause_sample) {
+		return std::nullopt;
+	}
+	document.session.records = std::move(records);
+	for(auto &checkpoint : document.checkpoints) {
+		if(checkpoint.sample_index > *pause_sample) {
+			checkpoint.sample_index += 3U;
+		}
+	}
+	if(document.metadata) {
+		document.metadata->sample_count += 3U;
+	}
+	return document;
+}
+
 void test_invalid_request()
 {
 	auto invalid = th03::app::NewClassicReplayPlayback::load({});
@@ -66,6 +129,7 @@ void test_authentic(
 		return;
 	}
 	const auto later_document = *document;
+	auto paused_document = insert_recorded_pause(*document);
 	const auto later_checkpoint = later_document.checkpoints.size() - 1U;
 	const auto later_sample =
 		later_document.checkpoints[later_checkpoint].sample_index;
@@ -150,6 +214,39 @@ void test_authentic(
 				>(later_pixels.data(), later_pixels.size())).has_value(),
 				"pre-rolled checkpoint retains a composable shared presentation surface"
 			);
+		}
+	}
+	if(paused_document) {
+		auto paused = th03::app::NewClassicReplayPlayback::load({
+			.content = {
+				.data_root = data,
+				.main_executable = main,
+				.font_rom = font,
+			},
+			.document = std::move(*paused_document),
+			.checkpoint_index = 0U,
+		});
+		expect(paused.has_value(),
+			"recorded pause fixture constructs from the authentic replay route");
+		if(paused) {
+			bool saw_pause = false;
+			bool saw_resume = false;
+			for(std::size_t guard = 0U; guard < 512U && !saw_resume; ++guard) {
+				auto tick = (*paused)->advance(false, false);
+				expect(tick.has_value(),
+					"recorded pause and release samples preserve playback contract");
+				if(!tick) {
+					break;
+				}
+				while(auto command = (*paused)->take_audio_command()) {
+					saw_pause = saw_pause || command->type ==
+						th03::app::ClassicAudioCommandType::pause_song;
+					saw_resume = saw_resume || command->type ==
+						th03::app::ClassicAudioCommandType::resume_song;
+				}
+			}
+			expect(saw_pause && saw_resume,
+				"playback reconstructs pause and resume audio at recorded boundaries");
 		}
 	}
 }

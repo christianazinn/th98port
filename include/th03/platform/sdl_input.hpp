@@ -195,6 +195,9 @@ public:
 	[[nodiscard]] std::optional<std::uint8_t> source_for(
 		SDL_JoystickID gamepad_id
 	) const noexcept;
+	[[nodiscard]] bool keyboard_scancode_held(
+		SDL_Scancode scancode
+	) const noexcept;
 
 private:
 	struct KeyboardState {

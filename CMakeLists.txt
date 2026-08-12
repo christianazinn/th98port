@@ -390,6 +390,7 @@ add_library(th03_app_runtime STATIC
 	src/app/experience_menu.cpp
 	src/app/host_menu_canvas.cpp
 	src/app/host_surface.cpp
+	src/app/new_classic_pause.cpp
 	src/app/tick_input.cpp
 )
 target_include_directories(th03_app_runtime PUBLIC include)
@@ -655,6 +656,18 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-experience-menu-tests
 		COMMAND th03-app-experience-menu-tests
+	)
+
+	add_executable(th03-app-new-classic-pause-tests
+		tests/test_app_new_classic_pause.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-pause-tests PRIVATE th03_app_runtime
+	)
+	th03_set_warnings(th03-app-new-classic-pause-tests)
+	add_test(
+		NAME th03-app-new-classic-pause-tests
+		COMMAND th03-app-new-classic-pause-tests
 	)
 
 	add_executable(th03-app-tick-input-tests

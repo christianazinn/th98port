@@ -12,6 +12,8 @@ enum class ClassicAudioCommandType : std::uint8_t {
 	load_song,
 	play_song,
 	stop_song,
+	pause_song,
+	resume_song,
 	fade_song,
 	load_effects,
 	reset_effects,

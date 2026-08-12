@@ -498,6 +498,32 @@ void test_commands_cadence_and_determinism(const fs::path &root)
 		"streaming lookahead emits the bounded first-second canonical prefix");
 	expect(first.tick_index() == 60U && first.status().bgm_active,
 		"audio-clock PMD playback advances independently of a device");
+	const auto paused_measure = first.status().measure;
+	expect(first.apply({
+		.type = ClassicAudioCommandType::pause_song,
+	}).has_value(), "New Classic pause reaches the PMD pause service");
+	for(std::size_t tick = 0U; tick < 10U; ++tick) {
+		expect(first.advance_tick().has_value(),
+			"paused audio still supplies a device interval");
+	}
+	expect(first.status().measure == paused_measure,
+		"pause freezes the PMD sequencer measure while device time advances");
+	expect(first.apply({
+		.type = ClassicAudioCommandType::resume_song,
+	}).has_value(), "New Classic resume reaches the PMD resume service");
+	bool measure_resumed = false;
+	for(std::size_t tick = 0U; tick < 120U && !measure_resumed; ++tick) {
+		auto resumed = first.advance_tick();
+		measure_resumed = resumed && first.status().measure != paused_measure;
+	}
+	expect(measure_resumed, "resume restarts PMD sequencer progress");
+	const auto invalid_pause = first.apply({
+		.type = ClassicAudioCommandType::pause_song,
+		.cue = ClassicMusicCue::menu_main,
+	});
+	expect(!invalid_pause && invalid_pause.error().code ==
+		ClassicAudioSessionErrorCode::invalid_parameter,
+		"pause rejects a forged cue or parameter");
 
 	const ClassicAudioCommand invalid_fade{
 		.type = ClassicAudioCommandType::fade_song,

@@ -554,6 +554,11 @@ std::expected<StepResult, Error> Game::finish_deferred_frame(
 	return result;
 }
 
+bool Game::deferred_frame_pending() const noexcept
+{
+	return impl_->replay_pause_deferred;
+}
+
 CanonicalState Game::canonical_state() const
 {
 	return detail::canonical_state(impl_->state);

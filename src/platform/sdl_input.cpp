@@ -448,6 +448,19 @@ std::optional<std::uint8_t> SdlInputMapper::source_for(
 	return std::nullopt;
 }
 
+bool SdlInputMapper::keyboard_scancode_held(
+	SDL_Scancode scancode
+) const noexcept
+{
+	for(std::size_t index = 0U; index < bindings_.keyboard_count; ++index) {
+		if(bindings_.keyboard[index].scancode == scancode &&
+			keyboard_.held[index]) {
+			return true;
+		}
+	}
+	return false;
+}
+
 std::expected<SdlInputEventResult, SdlInputMapperError>
 SdlInputMapper::handle_event(
 	const SDL_Event &event,

@@ -15,6 +15,10 @@ struct MainProcessDriverOperations final {
 	std::expected<StepResult, MainProcessError> (*step)(
 		void *, CoreInput, InputContext
 	) noexcept = nullptr;
+	bool (*deferred_frame_pending)(void *) noexcept = nullptr;
+	std::expected<StepResult, MainProcessError> (*finish_deferred_frame)(
+		void *, DeferredFrameAction
+	) noexcept = nullptr;
 	std::expected<void, MainProcessError> (*start_next_round)(void *) noexcept =
 		nullptr;
 	std::expected<void, MainProcessError> (*finish_main_process)(void *) noexcept =
@@ -76,12 +80,17 @@ public:
 		MainProcessDriverError
 	> consume(CoreInput input) noexcept;
 	[[nodiscard]] std::expected<
+		MainProcessDriverTick,
+		MainProcessDriverError
+	> finish_deferred_frame(DeferredFrameAction action) noexcept;
+	[[nodiscard]] std::expected<
 		SessionTransition,
 		MainProcessDriverError
 	> resolve_continue(ContinueChoice choice) noexcept;
 
 	[[nodiscard]] MainProcessDriverStatus status() const noexcept;
 	[[nodiscard]] InputContext input_context() const noexcept;
+	[[nodiscard]] bool deferred_frame_pending() const noexcept;
 	[[nodiscard]] std::uint8_t warning_samples_remaining() const noexcept;
 	[[nodiscard]] const std::optional<SessionTransition> &transition()
 		const noexcept;

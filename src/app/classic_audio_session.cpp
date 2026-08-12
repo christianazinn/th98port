@@ -333,6 +333,21 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 			impl_->engine.stop();
 		}
 		return {};
+	case ClassicAudioCommandType::pause_song:
+	case ClassicAudioCommandType::resume_song:
+		if(command.cue != ClassicMusicCue::none || command.parameter != 0U) {
+			return std::unexpected(session_error(
+				ClassicAudioSessionErrorCode::invalid_parameter, command
+			));
+		}
+		if(impl_->bgm_active) {
+			if(command.type == ClassicAudioCommandType::pause_song) {
+				impl_->engine.pause();
+			} else {
+				impl_->engine.resume();
+			}
+		}
+		return {};
 	case ClassicAudioCommandType::fade_song:
 		if(command.parameter == 0U || command.parameter > 0x7FU ||
 			!valid_music_cue(command.cue) ||

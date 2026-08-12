@@ -242,8 +242,8 @@ void test_story_config_and_selection_boundary()
 		"Story config rejects another game mode");
 	invalid = story_config();
 	invalid.game_options.input_protocol = th03::InputProtocol::recorded_replay;
-	expect(!valid_main_story_config(invalid),
-		"Story config rejects replay late attachment");
+	expect(valid_main_story_config(invalid),
+		"Story config accepts New Classic recording from process start");
 	invalid = story_config();
 	invalid.resident.rank = 4U;
 	expect(!valid_main_story_config(invalid),

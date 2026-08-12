@@ -113,6 +113,9 @@ struct LogicalTickInput {
 	// Sticky once a due app_quit event is applied. This never aliases or sets
 	// the gameplay Cancel bit in [input.system].
 	bool app_quit_requested = false;
+	// Host-only Replay Patch shortcut sampled at the logical boundary. It is
+	// intentionally outside CoreInput and never enters deterministic gameplay.
+	bool restart_requested = false;
 };
 
 // Fixed-capacity event history plus a rational fake-clock-friendly scheduler.

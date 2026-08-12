@@ -117,12 +117,21 @@ void HostMenuCanvas::clear(std::uint8_t color) noexcept
 	);
 }
 
+void HostMenuCanvas::copy_from(present::SourceSurface source) noexcept
+{
+	if(source.pixels.size() == pixels_.size()) {
+		std::copy(source.pixels.begin(), source.pixels.end(), pixels_.begin());
+	}
+	palette_ = source.graphics_palette;
+}
+
 void HostMenuCanvas::fill_rect(
 	std::size_t x,
 	std::size_t y,
 	std::size_t rectangle_width,
 	std::size_t rectangle_height,
-	std::uint8_t color
+	std::uint8_t color,
+	present::ComposedPixelLayer layer
 ) noexcept
 {
 	constexpr std::size_t width = present::graphics_width;
@@ -138,7 +147,7 @@ void HostMenuCanvas::fill_rect(
 		std::fill(
 			pixels_.begin() + static_cast<std::ptrdiff_t>(begin),
 			pixels_.begin() + static_cast<std::ptrdiff_t>(end),
-			present::ComposedPixel{present::ComposedPixelLayer::graphics, color}
+			present::ComposedPixel{layer, color}
 		);
 	}
 }
@@ -148,7 +157,8 @@ void HostMenuCanvas::draw_text(
 	std::size_t x,
 	std::size_t y,
 	std::size_t scale,
-	std::uint8_t color
+	std::uint8_t color,
+	present::ComposedPixelLayer layer
 ) noexcept
 {
 	if(scale == 0U) {
@@ -161,7 +171,7 @@ void HostMenuCanvas::draw_text(
 				if((glyph[row] & (0x10U >> column)) != 0U) {
 					fill_rect(
 						x + (column * scale), y + (row * scale),
-						scale, scale, color
+						scale, scale, color, layer
 					);
 				}
 			}
@@ -175,12 +185,13 @@ void HostMenuCanvas::draw_text_centered(
 	std::size_t center_x,
 	std::size_t y,
 	std::size_t scale,
-	std::uint8_t color
+	std::uint8_t color,
+	present::ComposedPixelLayer layer
 ) noexcept
 {
 	const auto width = text_width(text, scale);
 	draw_text(text, center_x >= width / 2U ? center_x - width / 2U : 0U,
-		y, scale, color);
+		y, scale, color, layer);
 }
 
 present::SourceSurface HostMenuCanvas::surface() const noexcept

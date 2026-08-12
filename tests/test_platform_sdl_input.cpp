@@ -397,6 +397,9 @@ void test_keyboard_snapshots_charge_and_timestamp_order()
 		"first duplicate key press is accepted");
 	expect(edge.handled && edge.physical_event_queued,
 		"first duplicate key press emits a source snapshot");
+	expect(mapper.keyboard_scancode_held(SDL_SCANCODE_A) &&
+		!mapper.keyboard_scancode_held(SDL_SCANCODE_B),
+		"host-only shortcuts can query an exact held scancode");
 	expect(expect_tick(input, 10U, "first duplicate key press is due").input.p1 == input_shot,
 		"first duplicate key contributes Shot");
 	edge = expect_event(mapper, input, key_event(15U, SDL_SCANCODE_B, true),
@@ -409,6 +412,9 @@ void test_keyboard_snapshots_charge_and_timestamp_order()
 		"first duplicate key release is accepted");
 	expect(edge.handled && !edge.physical_event_queued,
 		"release retaining the logical action needs no scheduler event");
+	expect(!mapper.keyboard_scancode_held(SDL_SCANCODE_A) &&
+		mapper.keyboard_scancode_held(SDL_SCANCODE_B),
+		"exact held-scancode queries distinguish duplicate logical bindings");
 	expect(expect_tick(input, 30U, "second duplicate key remains held").input.p1 == input_shot,
 		"releasing A cannot false-release B's Shot contribution");
 	(void)expect_event(mapper, input, key_event(35U, SDL_SCANCODE_B, false),

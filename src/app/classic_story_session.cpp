@@ -10,6 +10,7 @@
 
 #include "main_process_internal.hpp"
 #include "main_process_static_content_internal.hpp"
+#include "th03/app/new_classic_pause.hpp"
 #include "th03/app/new_classic_replay.hpp"
 #include "th03/present/text.hpp"
 
@@ -324,6 +325,19 @@ std::expected<StepResult, MainProcessError> process_step(
 	return static_cast<MainProcess *>(context)->step(input, input_context);
 }
 
+bool process_deferred_pending(void *context) noexcept
+{
+	return static_cast<MainProcess *>(context)->deferred_frame_pending();
+}
+
+std::expected<StepResult, MainProcessError> process_finish_deferred(
+	void *context,
+	DeferredFrameAction action
+) noexcept
+{
+	return static_cast<MainProcess *>(context)->finish_deferred_frame(action);
+}
+
 std::expected<void, MainProcessError> process_repeat(void *context) noexcept
 {
 	return static_cast<MainProcess *>(context)->start_next_round();
@@ -368,6 +382,9 @@ struct ClassicStoryBackend final {
 	GameInit process_start{};
 	std::optional<ClassicStoryTerminal> forced_terminal{};
 	std::optional<ClassicStoryTerminal> forced_continue_terminal{};
+	std::optional<NewClassicPauseMenu> pause_menu{};
+	std::optional<ClassicAudioCommand> pause_audio{};
+	bool restart_requested = false;
 	NewClassicReplayRecorder *replay_recorder = nullptr;
 
 	ClassicStoryBackend(
@@ -528,6 +545,8 @@ struct ClassicStoryBackend final {
 		auto created_driver = MainProcessDriver::create({
 			.context = process.get(),
 			.step = &process_step,
+			.deferred_frame_pending = &process_deferred_pending,
+			.finish_deferred_frame = &process_finish_deferred,
 			.start_next_round = &process_repeat,
 			.finish_main_process = &process_finish,
 			.session_transition = &process_transition,
@@ -572,7 +591,65 @@ struct ClassicStoryBackend final {
 		}
 		const auto input_context = driver->input_context();
 		const auto normalized = normalize_story_main_input(input, input_context);
-		auto advanced = driver->consume(normalized);
+		std::expected<MainProcessDriverTick, MainProcessDriverError> advanced =
+			std::unexpected(MainProcessDriverError{});
+		if(pause_menu) {
+			const auto status = pause_menu->consume(
+				project_new_classic_pause_input(
+					normalize_replay_interstitial_input(input),
+					input.restart_requested
+				)
+			);
+			if(status == NewClassicPauseStatus::running) {
+				if(replay_recorder && replay_recorder->recording()) {
+					if(auto sampled = replay_recorder->sample(
+						replay::InputPhase::interstitial,
+						normalize_replay_interstitial_input(input)
+					); !sampled) {
+						return std::unexpected(replay_capture_error());
+					}
+				}
+				return ClassicStoryBackendTick{
+					.surface_changed = true,
+					.input_sampled = true,
+					.process_advanced = true,
+					.step_result = {.status = StepStatus::paused},
+				};
+			}
+			const bool resume = status == NewClassicPauseStatus::resume;
+			const bool restart = status == NewClassicPauseStatus::restart;
+			if(!resume && status != NewClassicPauseStatus::save_exit &&
+				status != NewClassicPauseStatus::discard_exit) {
+				return std::unexpected(session_error(
+					ClassicStorySessionErrorCode::backend_contract_failed
+				));
+			}
+			if((restart || status == NewClassicPauseStatus::discard_exit) &&
+				replay_recorder) {
+				replay_recorder->discard();
+			}
+			restart_requested = restart;
+			advanced = driver->finish_deferred_frame(
+				resume ? DeferredFrameAction::resume :
+					DeferredFrameAction::exit_session
+			);
+			pause_menu.reset();
+			if(resume) {
+				pause_audio = ClassicAudioCommand{
+					.type = ClassicAudioCommandType::resume_song,
+				};
+			}
+		} else {
+			advanced = driver->consume(normalized);
+			if(advanced && driver->deferred_frame_pending()) {
+				pause_menu.emplace(
+					replay_recorder && replay_recorder->recording()
+				);
+				pause_audio = ClassicAudioCommand{
+					.type = ClassicAudioCommandType::pause_song,
+				};
+			}
+		}
 		if(!advanced) {
 			if(advanced.error().process_error) {
 				return std::unexpected(main_error(
@@ -583,12 +660,15 @@ struct ClassicStoryBackend final {
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
 		}
-		if(replay_recorder && advanced->process_advanced) {
+		if(replay_recorder && replay_recorder->recording() &&
+			advanced->process_advanced) {
+			const auto recorded_input = input_context == InputContext::gameplay ?
+				normalized : normalize_replay_interstitial_input(input);
 			if(auto sampled = replay_recorder->sample(
 				input_context == InputContext::gameplay ?
 					replay::InputPhase::gameplay :
 					replay::InputPhase::interstitial,
-				normalized
+				recorded_input
 			); !sampled) {
 				return std::unexpected(replay_capture_error());
 			}
@@ -614,6 +694,7 @@ struct ClassicStoryBackend final {
 			.ready = advanced->terminal,
 			.process_advanced = advanced->process_advanced,
 			.round_started = advanced->round_started,
+			.restart_requested = restart_requested && advanced->terminal,
 			.step_result = advanced->step_result,
 		};
 	}
@@ -1314,6 +1395,11 @@ struct ClassicStoryBackend final {
 				return command;
 			}
 		}
+		if(pause_audio) {
+			auto command = pause_audio;
+			pause_audio.reset();
+			return command;
+		}
 		if(staff) {
 			return staff->take_audio_command();
 		}
@@ -1373,7 +1459,7 @@ struct ClassicStoryBackend final {
 			if(!composed) {
 				return std::unexpected(surface_error(composed.error()));
 			}
-			return *composed;
+			return pause_menu ? pause_menu->compose_over(*composed) : *composed;
 		}
 		if(!raster) {
 			return std::unexpected(session_error(
@@ -1585,6 +1671,7 @@ struct ClassicStorySession::Impl {
 	ClassicStorySessionStatus status = ClassicStorySessionStatus::running;
 	std::uint32_t source_sample_count = 0U;
 	bool continue_pending = false;
+	bool restart_requested = false;
 	NewClassicReplayRecorder *replay_recorder = nullptr;
 	std::optional<ClassicStorySessionError> failure{};
 
@@ -1999,6 +2086,8 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 	if(tick->input_sampled) {
 		++impl_->source_sample_count;
 	}
+	impl_->restart_requested = impl_->restart_requested ||
+		tick->restart_requested;
 
 	if(impl_->scene == ClassicStorySessionScene::win &&
 		tick->stage_preload_requested) {
@@ -2035,7 +2124,7 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 				advanced = std::unexpected(plan_error(plan.error()));
 				break;
 			}
-			if(impl_->replay_recorder) {
+			if(impl_->replay_recorder && impl_->replay_recorder->recording()) {
 				const auto *last = impl_->replay_recorder->last_terminal();
 				if(!last || last->global_frame != terminal->terminal.global_frame ||
 					last->round_id != terminal->terminal.round_id) {
@@ -2273,6 +2362,11 @@ std::uint32_t ClassicStorySession::source_sample_count() const noexcept
 const GameInit &ClassicStorySession::resident() const noexcept
 {
 	return impl_->plan.resident();
+}
+
+bool ClassicStorySession::restart_requested() const noexcept
+{
+	return impl_->restart_requested;
 }
 
 } // namespace th03::app

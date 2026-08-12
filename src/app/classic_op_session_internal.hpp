@@ -143,6 +143,7 @@ struct ClassicOpSessionVsTerminal final {
 	GameInit process_start{};
 	CanonicalState terminal{};
 	SessionTransition transition{};
+	bool restart_requested = false;
 };
 
 enum class ClassicOpVsRouteTestOutcome : std::uint8_t {
@@ -196,7 +197,7 @@ struct ClassicOpSessionBackendOperations final {
 	std::expected<void, ClassicOpSessionError> (*start_story)(void *) = nullptr;
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
 	(*advance_story)(void *, const ClassicStorySessionInput &) = nullptr;
-	std::expected<void, ClassicOpSessionError> (*finish_story)(void *) = nullptr;
+	std::expected<bool, ClassicOpSessionError> (*finish_story)(void *) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*start_demo_stage)(void *) = nullptr;
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
 	(*advance_demo_stage)(void *, bool) = nullptr;
@@ -212,6 +213,9 @@ struct ClassicOpSessionBackendOperations final {
 	(*advance_vs_main)(void *, const ClassicMainInputSample &) = nullptr;
 	std::expected<ClassicOpSessionVsTerminal, ClassicOpSessionError>
 	(*finish_vs_main)(void *) = nullptr;
+	std::expected<void, ClassicOpSessionError> (*restart_vs_stage)(
+		void *, const ClassicOpSessionVsTerminal &
+	) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*start_vs_win)(
 		void *, const ClassicOpSessionVsTerminal &
 	) = nullptr;

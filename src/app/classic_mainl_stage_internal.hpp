@@ -109,7 +109,19 @@ public:
 		present::KotohimeBombFadeCompatibility kotohime_compatibility,
 		std::span<const LoadedMainResource> resources,
 		MainlStageTextAssets text,
-		const present::AnkGlyphProvider &font
+		const present::AnkGlyphProvider &font,
+		GameOptions game_options = {}
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicMainlStageTransition>,
+		ClassicMainlStageError
+	> create_from_restart(
+		GameInit resident,
+		present::KotohimeBombFadeCompatibility kotohime_compatibility,
+		std::span<const LoadedMainResource> resources,
+		MainlStageTextAssets text,
+		const present::AnkGlyphProvider &font,
+		GameOptions game_options
 	);
 	// Automatic Demo follows OP -> MAINL -> MAIN without a character selector.
 	// The private OP completion proves the exact built-in pairing/RNG recipe.
@@ -206,6 +218,7 @@ private:
 		std::span<const LoadedMainResource> resources,
 		MainlStageTextAssets text,
 		const present::AnkGlyphProvider &font,
+		GameOptions game_options,
 		bool authenticate_resource_bytes
 	);
 	[[nodiscard]] static std::expected<
@@ -309,6 +322,7 @@ struct ClassicMainlStageTestAccess final {
 			resources,
 			std::move(text),
 			font,
+			{},
 			false
 		);
 	}

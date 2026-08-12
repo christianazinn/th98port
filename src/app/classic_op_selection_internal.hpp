@@ -311,6 +311,15 @@ private:
 	std::optional<ClassicOpSelectionCompletion> completion_{};
 };
 
+// Replay Patch restart preparation bypasses selection while executing the
+// same resident reset performed by story_start(false)/vs_start(false).
+[[nodiscard]] GameInit prepare_new_classic_story_restart(
+	GameInit resident
+) noexcept;
+[[nodiscard]] GameInit prepare_new_classic_vs_restart(
+	GameInit resident
+) noexcept;
+
 struct ClassicOpSelectionTestAccess final {
 	[[nodiscard]] static ClassicOpSelectionInput normalize_input(
 		ClassicOpSelectionMode mode,

@@ -21,8 +21,10 @@ sample. Initial or later device unavailability drops only final delivery while
 the deterministic PMD session keeps advancing.
 Gameplay-stage music, source-ordered ordinary MAIN SFX emission, and stock
 blocking live pause/resume with effect 21 are integrated. New Classic's host
-identity/lifecycle is present; its V13 browser, recording, richer pause menu,
-Practice, KeyConfig, and remaining Replay Patch QoL are the active next port.
+identity/lifecycle, V13 recording/browser/playback/save flow, and richer
+pause/restart menu are present. Practice, KeyConfig, expanded Options, typed
+playback interstitials, and the remaining Replay Patch QoL are the active next
+port.
 
 ## Build and test
 
@@ -70,8 +72,9 @@ With the standard ignored workspace layout, the stable result is
 `out\standalone\TH03-Classic-Test.exe`. It can be copied elsewhere and launched
 by double-clicking; it needs no adjacent DLL/content tree, installed .NET
 runtime, or command-line arguments. It opens the shared Classic/New Classic
-menu; both entries currently run the complete shared Classic lifecycle while
-New Classic's Replay Patch-owned features are brought online incrementally.
+menu; both entries run the complete shared Classic lifecycle, while New
+Classic additionally records/browses/plays V13 replays and owns Replay Patch's
+four-choice gameplay pause/restart loop.
 Exiting either title returns to this menu. Its first launch extracts a content-hash
 cache below `%LOCALAPPDATA%\TH03 Classic Native Test`, while configuration,
 scores, and the last-run diagnostic log live in the separate `user` directory
@@ -169,6 +172,10 @@ not supply or download
 that data, so this is not yet a complete redistributable audio-fidelity claim.
 `--help` lists
 keyboard controls and all launch options.
+In New Classic gameplay, Escape opens the recorded Pause menu, `R` restarts the
+current Story or VS scenario directly, and `Q` exits without saving. Replay
+playback reconstructs recorded pause input; live Escape aborts playback and
+held Shot enables fourfold host-paced fast-forward.
 Unless overridden with `--config`, `--score`, and `--replay-root`, Classic
 stores `YUME.CFG`, `YUME.NEM`, and New Classic's `REPLAY` directory under the
 selected `--data` root. This avoids dependence on the launcher working

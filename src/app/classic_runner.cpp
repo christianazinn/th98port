@@ -223,6 +223,7 @@ read_external_file(
 	story.main = {
 		.aggregate = input,
 		.physical_domains = sample.physical_domains,
+		.restart_requested = sample.restart_requested,
 	};
 	story.cutscene.script = {
 		.cancel_held = cancel,
@@ -261,6 +262,7 @@ read_external_file(
 		.main = {
 			.aggregate = input,
 			.physical_domains = sample.physical_domains,
+			.restart_requested = sample.restart_requested,
 		},
 		.audio = audio,
 		.dismiss_pressed = any,

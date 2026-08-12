@@ -957,6 +957,68 @@ bool rectangle_has_ink(
 	return false;
 }
 
+void test_new_classic_restart_resident_preparation()
+{
+	GameInit story{
+		.global_frame = 900U,
+		.resident_rand = 1234,
+		.game_mode = th03::game_mode::story,
+		.rank = 2U,
+		.key_mode = 1U,
+		.story_stage = 6U,
+		.story_lives = 0U,
+		.remaining_credits = 1U,
+		.paletted_character = {1, 15},
+		.runtime_snapshot = {},
+		.compact_runtime_snapshot = {},
+		.round_start_snapshot = {},
+		.practice_rules = {},
+	};
+	story.last_score[0U].fill(9U);
+	story.practice_rules = th03::PracticeRules{};
+	const auto first = th03::app::prepare_new_classic_story_restart(story);
+	const auto second = th03::app::prepare_new_classic_story_restart(story);
+	expect(first.game_mode == th03::game_mode::story &&
+		first.story_stage == 0U && first.story_lives == 2U &&
+		first.remaining_credits == 3U && first.skill == 120U &&
+		first.is_cpu == std::array<std::uint8_t, 2U>{0U, 1U} &&
+		first.paletted_character[0U] == 1 &&
+		first.paletted_character[1U] == first.story_opponents[0U] &&
+		first.story_opponents == second.story_opponents,
+		"Story Restart rebuilds deterministic Stage 1 opponents and native stocks");
+	expect(first.global_frame == 0U && first.random_seed == 1234U &&
+		!first.runtime_snapshot && !first.compact_runtime_snapshot &&
+		!first.round_start_snapshot && !first.practice_rules &&
+		first.last_score == decltype(first.last_score){},
+		"Story Restart preserves the outgoing resident seed but clears run-local state");
+
+	GameInit versus{
+		.global_frame = 500U,
+		.resident_rand = 4321,
+		.game_mode = th03::game_mode::vs_1p_2p,
+		.rank = 3U,
+		.key_mode = 2U,
+		.story_stage = 4U,
+		.paletted_character = {3, 12},
+		.autofire_mask = 3U,
+		.runtime_snapshot = {},
+		.compact_runtime_snapshot = {},
+		.round_start_snapshot = {},
+		.practice_rules = {},
+	};
+	versus.last_score[1U].fill(8U);
+	const auto restarted = th03::app::prepare_new_classic_vs_restart(versus);
+	expect(restarted.game_mode == th03::game_mode::vs_1p_2p &&
+		restarted.paletted_character == versus.paletted_character &&
+		restarted.rank == versus.rank && restarted.key_mode == versus.key_mode &&
+		restarted.autofire_mask == versus.autofire_mask &&
+		restarted.is_cpu == std::array<std::uint8_t, 2U>{0U, 0U} &&
+		restarted.story_stage == 0U && restarted.global_frame == 0U &&
+		restarted.random_seed == 4321U &&
+		restarted.last_score == decltype(restarted.last_score){},
+		"VS Restart preserves the matchup/options and resets the same-mode match");
+}
+
 void local_original_gate(const std::filesystem::path &content_root)
 {
 	th03::app::MainResourceLoader loader(content_root);
@@ -1083,6 +1145,7 @@ int main(int argc, char **argv)
 	test_hidden_terminal_cancel();
 	test_invalid_geometry();
 	test_encoded_resource_boundary_and_lifetime();
+	test_new_classic_restart_resident_preparation();
 	if(argc == 2) {
 		local_original_gate(argv[1]);
 	} else {

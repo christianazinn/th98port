@@ -2,6 +2,7 @@
 
 #include "classic_mainl_stage_internal.hpp"
 #include "main_process_driver_internal.hpp"
+#include "th03/app/new_classic_pause.hpp"
 
 #include <algorithm>
 #include <array>
@@ -77,6 +78,19 @@ std::expected<StepResult, MainProcessError> process_step(
 	return static_cast<MainProcess *>(context)->step(input, input_context);
 }
 
+bool process_deferred_pending(void *context) noexcept
+{
+	return static_cast<MainProcess *>(context)->deferred_frame_pending();
+}
+
+std::expected<StepResult, MainProcessError> process_finish_deferred(
+	void *context,
+	DeferredFrameAction action
+) noexcept
+{
+	return static_cast<MainProcess *>(context)->finish_deferred_frame(action);
+}
+
 std::expected<void, MainProcessError> process_repeat(void *context) noexcept
 {
 	return static_cast<MainProcess *>(context)->start_next_round();
@@ -147,6 +161,8 @@ struct NewClassicReplayPlayback::Impl final {
 	bool fast_forward = false;
 	NewClassicPlaybackStatus status = NewClassicPlaybackStatus::running;
 	std::optional<ClassicAudioCommand> load_song{};
+	std::optional<ClassicAudioCommand> ui_audio{};
+	std::optional<NewClassicPauseMenu> pause_menu{};
 
 	Impl(
 		formats::ReplayDocument document_,
@@ -211,6 +227,8 @@ struct NewClassicReplayPlayback::Impl final {
 		auto created_driver = MainProcessDriver::create({
 			.context = process.get(),
 			.step = &process_step,
+			.deferred_frame_pending = &process_deferred_pending,
+			.finish_deferred_frame = &process_finish_deferred,
 			.start_next_round = &process_repeat,
 			.finish_main_process = &process_finish,
 			.session_transition = &process_transition,
@@ -408,7 +426,46 @@ NewClassicReplayPlayback::advance(
 				NewClassicPlaybackErrorCode::replay_contract_failed
 			));
 		}
-		auto advanced = impl_->driver->consume(sample->input);
+		std::expected<MainProcessDriverTick, MainProcessDriverError> advanced =
+			std::unexpected(MainProcessDriverError{});
+		if(impl_->pause_menu) {
+			const auto pause_status = impl_->pause_menu->consume(
+				project_new_classic_pause_input(sample->input)
+			);
+			if(pause_status == NewClassicPauseStatus::running) {
+				++impl_->record_index;
+				++impl_->sample_index;
+				return NewClassicPlaybackTick{
+					.surface_changed = true,
+					.process_advanced = true,
+					.status = impl_->status,
+				};
+			}
+			const bool resume = pause_status == NewClassicPauseStatus::resume;
+			if(!resume && pause_status != NewClassicPauseStatus::save_exit) {
+				return std::unexpected(playback_error(
+					NewClassicPlaybackErrorCode::replay_contract_failed
+				));
+			}
+			advanced = impl_->driver->finish_deferred_frame(
+				resume ? DeferredFrameAction::resume :
+					DeferredFrameAction::exit_session
+			);
+			impl_->pause_menu.reset();
+			if(resume) {
+				impl_->ui_audio = ClassicAudioCommand{
+					.type = ClassicAudioCommandType::resume_song,
+				};
+			}
+		} else {
+			advanced = impl_->driver->consume(sample->input);
+			if(advanced && impl_->driver->deferred_frame_pending()) {
+				impl_->pause_menu.emplace(true);
+				impl_->ui_audio = ClassicAudioCommand{
+					.type = ClassicAudioCommandType::pause_song,
+				};
+			}
+		}
 		if(!advanced) {
 			auto error = playback_error(
 				NewClassicPlaybackErrorCode::driver_failed
@@ -477,7 +534,17 @@ NewClassicReplayPlayback::take_audio_command()
 		impl_->load_song.reset();
 		return result;
 	}
-	return impl_->process ? impl_->process->take_audio_command() : std::nullopt;
+	if(impl_->process) {
+		if(auto command = impl_->process->take_audio_command()) {
+			return command;
+		}
+	}
+	if(impl_->ui_audio) {
+		auto result = impl_->ui_audio;
+		impl_->ui_audio.reset();
+		return result;
+	}
+	return std::nullopt;
 }
 
 std::expected<present::SourceSurface, NewClassicPlaybackError>
@@ -497,6 +564,9 @@ NewClassicReplayPlayback::compose_shown_surface(
 		);
 		error.surface = std::move(surface.error());
 		return std::unexpected(std::move(error));
+	}
+	if(impl_->pause_menu) {
+		return impl_->pause_menu->compose_over(*surface);
 	}
 	constexpr std::array<std::size_t, 6U> replay_word{0U, 1U, 2U, 3U, 4U, 5U};
 	draw_overlay_word(output, replay_word, 302U, 5U);

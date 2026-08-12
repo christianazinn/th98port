@@ -95,6 +95,7 @@ struct ClassicStorySessionError final {
 struct ClassicMainInputSample final {
 	CoreInput aggregate{};
 	std::optional<PhysicalInputDomains> physical_domains{};
+	bool restart_requested = false;
 };
 
 struct ClassicStorySessionInput final {
@@ -126,6 +127,7 @@ struct ClassicStoryBackendTick final {
 	bool stage_preload_requested = false;
 	bool process_advanced = false;
 	bool round_started = false;
+	bool restart_requested = false;
 	StepResult step_result{};
 };
 
@@ -281,6 +283,7 @@ public:
 	[[nodiscard]] ClassicStorySessionStatus status() const noexcept;
 	[[nodiscard]] std::uint32_t source_sample_count() const noexcept;
 	[[nodiscard]] const GameInit &resident() const noexcept;
+	[[nodiscard]] bool restart_requested() const noexcept;
 private:
 	friend struct ClassicStorySessionTestAccess;
 	friend struct ClassicOpSessionBackend;

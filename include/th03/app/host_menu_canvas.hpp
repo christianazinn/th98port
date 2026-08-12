@@ -19,26 +19,33 @@ public:
 	HostMenuCanvas();
 
 	void clear(std::uint8_t color = 0U) noexcept;
+	void copy_from(present::SourceSurface source) noexcept;
 	void fill_rect(
 		std::size_t x,
 		std::size_t y,
 		std::size_t width,
 		std::size_t height,
-		std::uint8_t color
+		std::uint8_t color,
+		present::ComposedPixelLayer layer =
+			present::ComposedPixelLayer::graphics
 	) noexcept;
 	void draw_text(
 		std::string_view text,
 		std::size_t x,
 		std::size_t y,
 		std::size_t scale,
-		std::uint8_t color
+		std::uint8_t color,
+		present::ComposedPixelLayer layer =
+			present::ComposedPixelLayer::graphics
 	) noexcept;
 	void draw_text_centered(
 		std::string_view text,
 		std::size_t center_x,
 		std::size_t y,
 		std::size_t scale,
-		std::uint8_t color
+		std::uint8_t color,
+		present::ComposedPixelLayer layer =
+			present::ComposedPixelLayer::graphics
 	) noexcept;
 
 	[[nodiscard]] present::SourceSurface surface() const noexcept;

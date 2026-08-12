@@ -51,6 +51,10 @@ struct FakeProcess {
 	bool fail_repeat = false;
 	bool fail_finish = false;
 	bool fail_transition = false;
+	bool deferred_pending = false;
+	std::size_t deferred_finish_count = 0U;
+	th03::StepStatus deferred_result = th03::StepStatus::running;
+	std::optional<th03::DeferredFrameAction> deferred_action{};
 	th03::SessionAction transition_action = th03::SessionAction::exit_to_operator;
 	std::optional<th03::ContinueChoice> last_continue_choice{};
 };
@@ -148,6 +152,37 @@ MainProcessDriverOperations driver_operations(FakeProcess &fake) noexcept
 		.finish_main_process = runner.finish_main_process,
 		.session_transition = runner.session_transition,
 	};
+}
+
+bool fake_deferred_pending(void *context) noexcept
+{
+	return static_cast<FakeProcess *>(context)->deferred_pending;
+}
+
+std::expected<th03::StepResult, th03::app::MainProcessError>
+fake_finish_deferred(
+	void *context,
+	th03::DeferredFrameAction action
+) noexcept
+{
+	auto &fake = *static_cast<FakeProcess *>(context);
+	if(!fake.deferred_pending) {
+		return std::unexpected(fake_process_error());
+	}
+	fake.deferred_pending = false;
+	fake.deferred_action = action;
+	++fake.deferred_finish_count;
+	return th03::StepResult{fake.deferred_result};
+}
+
+MainProcessDriverOperations deferred_driver_operations(
+	FakeProcess &fake
+) noexcept
+{
+	auto result = driver_operations(fake);
+	result.deferred_frame_pending = &fake_deferred_pending;
+	result.finish_deferred_frame = &fake_finish_deferred;
+	return result;
 }
 
 LogicalTickInput sample(
@@ -468,6 +503,61 @@ void test_live_pause_context_and_surface_contract()
 	);
 }
 
+void test_recorded_pause_deferred_frame_contract()
+{
+	FakeProcess resumed{};
+	resumed.results[0U] = th03::StepStatus::phase_transition;
+	resumed.result_count = 1U;
+	resumed.deferred_pending = true;
+	auto created = MainProcessDriver::create(
+		deferred_driver_operations(resumed)
+	);
+	expect(created.has_value(), "recorded-pause MAIN driver creates");
+	if(!created) {
+		return;
+	}
+	auto &driver = **created;
+	const auto opened = driver.consume({.system = 0x1000U});
+	expect(opened && opened->process_advanced && !opened->surface_changed &&
+		driver.deferred_frame_pending() &&
+		driver.input_context() == th03::InputContext::pause,
+		"recorded Cancel advances the prefix once and freezes before publication");
+	const auto finished = driver.finish_deferred_frame(
+		th03::DeferredFrameAction::resume
+	);
+	expect(finished && finished->process_advanced && finished->surface_changed &&
+		!driver.deferred_frame_pending() &&
+		driver.input_context() == th03::InputContext::gameplay &&
+		resumed.deferred_finish_count == 1U && resumed.deferred_action ==
+			th03::DeferredFrameAction::resume && resumed.step_count == 1U,
+		"Resume completes only the retained suffix and restores gameplay input");
+	expect(!driver.finish_deferred_frame(th03::DeferredFrameAction::resume),
+		"a deferred suffix cannot be completed twice");
+
+	FakeProcess exited{};
+	exited.results[0U] = th03::StepStatus::phase_transition;
+	exited.result_count = 1U;
+	exited.deferred_pending = true;
+	exited.deferred_result = th03::StepStatus::terminal;
+	auto exit_created = MainProcessDriver::create(
+		deferred_driver_operations(exited)
+	);
+	expect(exit_created.has_value(), "recorded-pause exit driver creates");
+	if(!exit_created) {
+		return;
+	}
+	auto &exit_driver = **exit_created;
+	const auto exit_opened = exit_driver.consume({.system = 0x1000U});
+	const auto exit_finished = exit_driver.finish_deferred_frame(
+		th03::DeferredFrameAction::exit_session
+	);
+	expect(exit_opened && exit_finished && exit_finished->terminal &&
+		exit_driver.status() == MainProcessDriverStatus::terminal &&
+		exited.finish_count == 1U && exited.transition_count == 1U &&
+		exited.deferred_action == th03::DeferredFrameAction::exit_session,
+		"recorded pause exit completes the source frame before normal terminal ownership");
+}
+
 void test_warning_pause_returns_to_interstitial()
 {
 	FakeProcess fake{};
@@ -680,6 +770,7 @@ int main()
 	test_app_quit_is_not_gameplay_cancel();
 	test_defeat_cadence_holds_every_second_vsync();
 	test_live_pause_context_and_surface_contract();
+	test_recorded_pause_deferred_frame_contract();
 	test_warning_pause_returns_to_interstitial();
 	test_process_failures_and_transition_domain();
 	test_scheduler_catchup_keeps_distinct_samples();

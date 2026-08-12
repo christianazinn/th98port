@@ -24,6 +24,19 @@ std::expected<StepResult, MainProcessError> process_step(
 	return static_cast<MainProcess *>(context)->step(input, input_context);
 }
 
+bool process_deferred_pending(void *context) noexcept
+{
+	return static_cast<MainProcess *>(context)->deferred_frame_pending();
+}
+
+std::expected<StepResult, MainProcessError> process_finish_deferred(
+	void *context,
+	DeferredFrameAction action
+) noexcept
+{
+	return static_cast<MainProcess *>(context)->finish_deferred_frame(action);
+}
+
 std::expected<void, MainProcessError> process_start_next_round(
 	void *context
 ) noexcept
@@ -122,6 +135,8 @@ std::expected<
 	auto driver = MainProcessDriver::create({
 		.context = context,
 		.step = &process_step,
+		.deferred_frame_pending = &process_deferred_pending,
+		.finish_deferred_frame = &process_finish_deferred,
 		.start_next_round = &process_start_next_round,
 		.finish_main_process = &process_finish_main,
 		.session_transition = &process_transition,

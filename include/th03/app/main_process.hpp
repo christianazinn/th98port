@@ -161,6 +161,7 @@ public:
 	) noexcept;
 	[[nodiscard]] std::expected<StepResult, MainProcessError>
 	finish_deferred_frame(DeferredFrameAction action) noexcept;
+	[[nodiscard]] bool deferred_frame_pending() const noexcept;
 
 	// Exact route-1 pair: core reset first, then the process-scoped static/HUD
 	// repeat transaction. All child private pools remain alive.

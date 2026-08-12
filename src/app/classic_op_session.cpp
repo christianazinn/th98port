@@ -15,6 +15,7 @@
 #include "main_process_internal.hpp"
 #include "main_process_static_content_internal.hpp"
 #include "th03/app/authentic_text.hpp"
+#include "th03/app/new_classic_pause.hpp"
 #include "th03/app/new_classic_replay.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/present/source_surface.hpp"
@@ -191,7 +192,8 @@ namespace {
 		operations.finish_demo_main &&
 		operations.start_vs_stage && operations.advance_vs_stage &&
 		operations.start_vs_main && operations.advance_vs_main &&
-		operations.finish_vs_main && operations.start_vs_win &&
+		operations.finish_vs_main && operations.restart_vs_stage &&
+		operations.start_vs_win &&
 		operations.advance_vs_win && operations.finish_vs_win &&
 		operations.start_direct_vs_selection && operations.audio_pending &&
 		operations.take_audio_command && operations.compose_shown_surface;
@@ -373,6 +375,14 @@ namespace {
 		.step = [](void *context, CoreInput input,
 			InputContext input_context) noexcept {
 			return static_cast<MainProcess *>(context)->step(input, input_context);
+		},
+		.deferred_frame_pending = [](void *context) noexcept {
+			return static_cast<MainProcess *>(context)->deferred_frame_pending();
+		},
+		.finish_deferred_frame = [](
+			void *context, DeferredFrameAction action
+		) noexcept {
+			return static_cast<MainProcess *>(context)->finish_deferred_frame(action);
 		},
 		.start_next_round = [](void *context) noexcept {
 			return static_cast<MainProcess *>(context)->start_next_round();
@@ -561,6 +571,9 @@ struct ClassicOpSession::Impl final {
 			if(auto finished = operations.finish_story(operations.context);
 				!finished) {
 				return std::unexpected(std::move(finished.error()));
+			} else if(*finished) {
+				scene = ClassicOpSessionScene::story;
+				break;
 			}
 			scene = ClassicOpSessionScene::title_menu;
 			break;
@@ -590,7 +603,14 @@ struct ClassicOpSession::Impl final {
 			if(!terminal) {
 				return std::unexpected(std::move(terminal.error()));
 			}
-			if(terminal->terminal.route == 0U) {
+			if(terminal->restart_requested) {
+				if(auto restarted = operations.restart_vs_stage(
+					operations.context, *terminal
+				); !restarted) {
+					return std::unexpected(std::move(restarted.error()));
+				}
+				scene = ClassicOpSessionScene::vs_stage_splash;
+			} else if(terminal->terminal.route == 0U) {
 				if(auto started = operations.start_direct_vs_selection(
 					operations.context
 				); !started) {
@@ -668,6 +688,8 @@ struct ClassicOpSessionBackend final {
 	std::unique_ptr<MainProcess> vs_process{};
 	std::unique_ptr<MainProcessDriver> vs_driver{};
 	std::optional<ClassicOpSessionVsTerminal> vs_terminal{};
+	std::optional<NewClassicPauseMenu> vs_pause_menu{};
+	bool vs_restart_requested = false;
 	std::unique_ptr<ClassicMainlWinScene> vs_win{};
 	std::optional<ClassicMainlWinCompletion> vs_win_completion{};
 	GameInit current_main_resident{};
@@ -1294,7 +1316,10 @@ struct ClassicOpSessionBackend final {
 		}
 		MainStoryConfig story_config{
 			.resident = selection_completion->resident(),
-			.game_options = {.input_protocol = InputProtocol::live},
+			.game_options = {
+				.input_protocol = replay_recorder ?
+					InputProtocol::recorded_replay : InputProtocol::live,
+			},
 			.kotohime_compatibility = kotohime_compatibility,
 		};
 		auto created = ClassicStorySession::create_with_prepared_content(
@@ -1343,12 +1368,36 @@ struct ClassicOpSessionBackend final {
 		};
 	}
 
-	[[nodiscard]] std::expected<void, ClassicOpSessionError> finish_story()
+	[[nodiscard]] std::expected<bool, ClassicOpSessionError> finish_story()
 	{
 		if(!story || story->status() != ClassicStorySessionStatus::complete) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
+		}
+		if(story->restart_requested()) {
+			auto resident = prepare_new_classic_story_restart(story->resident());
+			MainStoryConfig story_config{
+				.resident = std::move(resident),
+				.game_options = {
+					.input_protocol = InputProtocol::recorded_replay,
+				},
+				.kotohime_compatibility = kotohime_compatibility,
+			};
+			auto created = ClassicStorySession::create_with_prepared_content(
+				story_config, loader, static_content, stage_text, staff_compiled,
+				score_path, replay_recorder
+			);
+			if(!created) {
+				return std::unexpected(story_error(std::move(created.error())));
+			}
+			if(!drain_audio(**created)) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::audio_command_pending
+				));
+			}
+			story = std::move(*created);
+			return true;
 		}
 		if(replay_recorder && replay_recorder->recording()) {
 			const auto *terminal = replay_recorder->last_terminal();
@@ -1373,7 +1422,7 @@ struct ClassicOpSessionBackend final {
 		title = std::move(*created);
 		title_completion.reset();
 		story.reset();
-		return {};
+		return false;
 	}
 
 	[[nodiscard]] std::optional<ClassicStorySessionScene>
@@ -1578,7 +1627,10 @@ struct ClassicOpSessionBackend final {
 		}
 		auto created = ClassicMainlStageTransition::create_from_selection(
 			*selection_completion, kotohime_compatibility, *resources,
-			stage_text, *font
+			stage_text, *font, {
+				.input_protocol = replay_recorder ?
+					InputProtocol::recorded_replay : InputProtocol::live,
+			}
 		);
 		if(!created) {
 			return std::unexpected(stage_error(std::move(created.error())));
@@ -1664,6 +1716,8 @@ struct ClassicOpSessionBackend final {
 		vs_driver = std::move(*driver);
 		vs_stage.reset();
 		vs_terminal.reset();
+		vs_pause_menu.reset();
+		vs_restart_requested = false;
 		if(replay_recorder) {
 			if(auto checkpoint = replay_recorder->round_started(
 				vs_process->round_start_observation()
@@ -1700,7 +1754,65 @@ struct ClassicOpSessionBackend final {
 		const auto normalized = normalize_vs_cpu_main_input(
 			current_main_resident, input, input_context
 		);
-		auto tick = vs_driver->consume(normalized);
+		std::optional<ClassicAudioCommand> ui_audio{};
+		std::expected<MainProcessDriverTick, MainProcessDriverError> tick =
+			std::unexpected(MainProcessDriverError{});
+		if(vs_pause_menu) {
+			const auto status = vs_pause_menu->consume(
+				project_new_classic_pause_input(
+					normalize_replay_interstitial_input(input),
+					input.restart_requested
+				)
+			);
+			if(status == NewClassicPauseStatus::running) {
+				if(replay_recorder && replay_recorder->recording()) {
+					if(auto sampled = replay_recorder->sample(
+						replay::InputPhase::interstitial,
+						normalize_replay_interstitial_input(input)
+					); !sampled) {
+						return std::unexpected(replay_capture_error());
+					}
+				}
+				return ClassicOpSessionBackendTick{
+					.surface_changed = true,
+					.input_sampled = true,
+					.process_advanced = true,
+				};
+			}
+			const bool resume = status == NewClassicPauseStatus::resume;
+			const bool restart = status == NewClassicPauseStatus::restart;
+			if(!resume && status != NewClassicPauseStatus::save_exit &&
+				status != NewClassicPauseStatus::discard_exit) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			if((restart || status == NewClassicPauseStatus::discard_exit) &&
+				replay_recorder) {
+				replay_recorder->discard();
+			}
+			vs_restart_requested = restart;
+			tick = vs_driver->finish_deferred_frame(
+				resume ? DeferredFrameAction::resume :
+					DeferredFrameAction::exit_session
+			);
+			vs_pause_menu.reset();
+			if(resume) {
+				ui_audio = ClassicAudioCommand{
+					.type = ClassicAudioCommandType::resume_song,
+				};
+			}
+		} else {
+			tick = vs_driver->consume(normalized);
+			if(tick && vs_driver->deferred_frame_pending()) {
+				vs_pause_menu.emplace(
+					replay_recorder && replay_recorder->recording()
+				);
+				ui_audio = ClassicAudioCommand{
+					.type = ClassicAudioCommandType::pause_song,
+				};
+			}
+		}
 		if(!tick) {
 			if(tick.error().process_error) {
 				return std::unexpected(main_error(
@@ -1716,12 +1828,20 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::audio_command_pending
 			));
 		}
-		if(replay_recorder && tick->process_advanced) {
+		if(ui_audio && !push_audio(*ui_audio)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::audio_command_pending
+			));
+		}
+		if(replay_recorder && replay_recorder->recording() &&
+			tick->process_advanced) {
+			const auto recorded_input = input_context == InputContext::gameplay ?
+				normalized : normalize_replay_interstitial_input(input);
 			if(auto sampled = replay_recorder->sample(
 				input_context == InputContext::gameplay ?
 					replay::InputPhase::gameplay :
 					replay::InputPhase::interstitial,
-				normalized
+				recorded_input
 			); !sampled) {
 				return std::unexpected(replay_capture_error());
 			}
@@ -1830,6 +1950,7 @@ struct ClassicOpSessionBackend final {
 				.process_start = current_main_resident,
 				.terminal = vs_process->canonical_state(),
 				.transition = *vs_driver->transition(),
+				.restart_requested = vs_restart_requested,
 			});
 		}
 		if(vs_terminal->terminal.game_mode < game_mode::vs_1p_cpu ||
@@ -1867,6 +1988,41 @@ struct ClassicOpSessionBackend final {
 			}
 		}
 		return *vs_terminal;
+	}
+
+	[[nodiscard]] std::expected<void, ClassicOpSessionError> restart_vs_stage(
+		const ClassicOpSessionVsTerminal &terminal
+	)
+	{
+		if(!terminal.restart_requested || !vs_terminal ||
+			!replay_recorder || !font) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		auto resident = prepare_new_classic_vs_restart(
+			terminal.transition.resident
+		);
+		const auto request = stage_request(resident);
+		auto resources = loader->load_mainl_stage(request);
+		if(!resources) {
+			return std::unexpected(resource_error(std::move(resources.error())));
+		}
+		auto created = ClassicMainlStageTransition::create_from_restart(
+			resident, kotohime_compatibility, *resources, stage_text, *font,
+			{.input_protocol = InputProtocol::recorded_replay}
+		);
+		if(!created) {
+			return std::unexpected(stage_error(std::move(created.error())));
+		}
+		current_main_resident = std::move(resident);
+		vs_stage = std::move(*created);
+		vs_process.reset();
+		vs_driver.reset();
+		vs_terminal.reset();
+		vs_pause_menu.reset();
+		vs_restart_requested = false;
+		return {};
 	}
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError> start_vs_win(
@@ -2057,9 +2213,11 @@ struct ClassicOpSessionBackend final {
 		vs_stage.reset();
 		vs_process.reset();
 		vs_driver.reset();
+		vs_pause_menu.reset();
 		vs_win.reset();
 		vs_win_completion.reset();
 		vs_terminal.reset();
+		vs_restart_requested = false;
 		return {};
 	}
 
@@ -2129,7 +2287,8 @@ struct ClassicOpSessionBackend final {
 			if(!composed) {
 				return std::unexpected(surface_error(composed.error()));
 			}
-			return *composed;
+			return vs_pause_menu ?
+				vs_pause_menu->compose_over(*composed) : *composed;
 		}
 		case ClassicOpVsSurfaceSource::none:
 			break;
@@ -2309,7 +2468,7 @@ Result backend_call(void *context, Method method, Args &&...args)
 			>>(context, &ClassicOpSessionBackend::advance_story, input);
 		},
 		.finish_story = [](void *context) {
-			return backend_call<std::expected<void, ClassicOpSessionError>>(
+			return backend_call<std::expected<bool, ClassicOpSessionError>>(
 				context, &ClassicOpSessionBackend::finish_story
 			);
 		},
@@ -2368,6 +2527,11 @@ Result backend_call(void *context, Method method, Args &&...args)
 			return backend_call<std::expected<
 				ClassicOpSessionVsTerminal, ClassicOpSessionError
 			>>(context, &ClassicOpSessionBackend::finish_vs_main);
+		},
+		.restart_vs_stage = [](void *context, const auto &terminal) {
+			return backend_call<std::expected<void, ClassicOpSessionError>>(
+				context, &ClassicOpSessionBackend::restart_vs_stage, terminal
+			);
 		},
 		.start_vs_win = [](
 			void *context,

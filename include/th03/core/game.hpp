@@ -280,6 +280,7 @@ public:
 		DeferredFrameAction action,
 		GameplayObserver *observer = nullptr
 	);
+	[[nodiscard]] bool deferred_frame_pending() const noexcept;
 	CanonicalState canonical_state() const;
 	RoundStartObservation round_start_observation() const;
 	std::expected<void, Error> start_next_round();

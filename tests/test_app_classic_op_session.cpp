@@ -276,7 +276,7 @@ Result fake_call(void *context, Function function)
 		},
 		.finish_story = [](void *context) {
 			++static_cast<FakeBackend *>(context)->story_finishes;
-			return std::expected<void, ClassicOpSessionError>{};
+			return std::expected<bool, ClassicOpSessionError>{false};
 		},
 		.start_demo_stage = [](void *context) {
 			++static_cast<FakeBackend *>(context)->demo_stage_starts;
@@ -328,6 +328,10 @@ Result fake_call(void *context, Function function)
 				ClassicOpSessionError>{
 				static_cast<FakeBackend *>(context)->vs_terminal
 			};
+		},
+		.restart_vs_stage = [](void *context, const auto &) {
+			++static_cast<FakeBackend *>(context)->stage_starts;
+			return std::expected<void, ClassicOpSessionError>{};
 		},
 		.start_vs_win = [](void *context, const auto &) {
 			++static_cast<FakeBackend *>(context)->win_starts;
@@ -663,6 +667,32 @@ void test_vs_routes()
 		expect(
 			backend->direct_selection_starts == 1U,
 			"each terminal VS route starts exactly one direct selector"
+		);
+	}
+
+	auto restart_backend = std::make_shared<FakeBackend>();
+	restart_backend->title_result = {
+		.route = ClassicOpRoute::versus,
+		.selection_mode = ClassicOpSelectionMode::vs_1p_2p,
+	};
+	restart_backend->selection_result = {
+		.outcome = ClassicOpSelectionOutcome::selected,
+		.mode = ClassicOpSelectionMode::vs_1p_2p,
+	};
+	restart_backend->vs_terminal.restart_requested = true;
+	auto restart = make_session(restart_backend);
+	if(restart) {
+		static_cast<void>(restart->consume({}));
+		static_cast<void>(restart->consume({}));
+		static_cast<void>(restart->consume({}));
+		auto tick = restart->consume({});
+		expect(
+			tick && tick->scene == ClassicOpSessionScene::vs_stage_splash &&
+				restart_backend->stage_starts == 2U &&
+				restart_backend->win_starts == 0U &&
+				restart_backend->direct_selection_starts == 0U,
+			"New Classic restart preserves the matchup and begins a fresh stage "
+			"without WIN or character selection"
 		);
 	}
 }

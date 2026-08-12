@@ -566,7 +566,8 @@ bool valid_main_story_config(const MainStoryConfig &config) noexcept
 		(resident.autofire_mask & 0xFCU) != 0U ||
 		resident.runtime_snapshot || resident.compact_runtime_snapshot ||
 		resident.round_start_snapshot || resident.practice_rules ||
-		config.game_options.input_protocol != InputProtocol::live) {
+		(config.game_options.input_protocol != InputProtocol::live &&
+		 config.game_options.input_protocol != InputProtocol::recorded_replay)) {
 		return false;
 	}
 	const auto player_one = main_player_selection_from_paletted(
@@ -1479,6 +1480,11 @@ MainProcess::finish_deferred_frame(DeferredFrameAction action) noexcept
 		return std::unexpected(presentation_error(impl_->round->status()));
 	}
 	return *result;
+}
+
+bool MainProcess::deferred_frame_pending() const noexcept
+{
+	return impl_->game->deferred_frame_pending();
 }
 
 std::expected<void, MainProcessError> MainProcess::start_next_round() noexcept
