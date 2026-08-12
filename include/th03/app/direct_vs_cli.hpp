@@ -51,7 +51,7 @@ struct DirectVsCliError {
 struct DirectVsCliRequest {
 	bool show_help = false;
 	DirectVsLaunchRequest launch{};
-	RationalTickRate tick_rate{};
+	RationalTickRate tick_rate = pc98_24khz_nominal_tick_rate;
 	// Explicit developer compatibility policy for the donor's uninitialized
 	// Kotohime Bomb fade byte. This is never an authenticity claim.
 	bool kotohime_zero_red = false;
@@ -59,9 +59,9 @@ struct DirectVsCliRequest {
 };
 
 // Parses arguments after argv[0]. Character names are the nine lowercase
-// source identities, optionally followed by :first or :second. Cadence is a
-// required explicit host policy in ticks/seconds until the PC-98 timing gate
-// supplies an evidence-backed application default.
+// source identities, optionally followed by :first or :second. The nominal
+// PC-9801 24 kHz cadence is the default; --tick-rate remains an explicit
+// developer/host override.
 [[nodiscard]] std::expected<DirectVsCliRequest, DirectVsCliError>
 parse_direct_vs_cli(std::span<const std::string_view> arguments);
 

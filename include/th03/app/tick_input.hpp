@@ -21,6 +21,20 @@ struct RationalTickRate {
 	std::uint32_t seconds = 0;
 };
 
+// Nominal PC-9801 24 kHz display timing. DOSBox-X 2026.05.02 and NP2kai
+// independently model a 21,052,600 Hz dot clock divided by 8 across 106
+// horizontal character periods and 440 total lines:
+//
+//     21,052,600 / (8 * 106 * 440) = 526315 / 9328 Hz
+//
+// This is exact for that nominal timing model, not a claim of zero tolerance
+// in a physical oscillator. TickInputScheduler remains rate-neutral; the
+// application CLIs select this value unless the caller supplies an override.
+inline constexpr RationalTickRate pc98_24khz_nominal_tick_rate{
+	.ticks = 526'315U,
+	.seconds = 9'328U,
+};
+
 enum class TickInputCatchUpPolicy : std::uint8_t {
 	// Deterministic, replay, and headless callers observe every deadline.
 	preserve_all,

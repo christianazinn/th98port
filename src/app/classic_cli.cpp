@@ -255,7 +255,6 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 		ClassicCliOption::mainl_executable,
 		ClassicCliOption::op_executable,
 		ClassicCliOption::font_rom,
-		ClassicCliOption::tick_rate,
 	};
 	for(const auto option : required) {
 		if(!seen[static_cast<std::size_t>(option)]) {

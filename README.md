@@ -7,7 +7,7 @@ Practice, and ordinary VS, plus a separate title-Demo gate, on top of the Phase
 1 format/session runway. A
 strict V13 span adapter and the first stdlib-only asset/indexed-raster
 foundations now sit beside that core. An optional SDL 3 application now launches
-both the complete authenticated Classic OP/MAINL/MAIN lifecycle and the earlier
+both the integrated authenticated Classic OP/MAINL/MAIN lifecycle and the earlier
 direct-VS developer path. A separate byte-fed PMD/YM2608 engine and TH03
 transport/SFX service, bounded `YUME.EFC` playback on FM6, deterministic
 166.4-to-48 kHz resampling, and a bounded SDL playback endpoint are now present,
@@ -55,25 +55,32 @@ and `YUME2.DAT/`, a supported Japanese `MAIN.EXE` compiled-content profile,
 supported unpacked Japanese `MAINL.EXE` and `OP.EXE` profiles, and a
 caller-supplied 288,768-byte PC-98 `FONT.ROM`, and optionally a caller-supplied
 8,192-byte YM2608 ADPCM-A rhythm image. No
-original bytes are embedded or copied into the build.
-Cadence is required explicitly because an exact PC-98 wall-clock rate and first
-VSync phase have not yet been established:
+original bytes are embedded or copied into the build. Classic and direct VS
+default to the nominal PC-9801 24 kHz timing model, reduced exactly to
+`526315/9328` Hz (56.423134648... Hz). `--tick-rate` remains an optional
+developer/host override:
 
 ```powershell
 out\build\msvc-x64-sdl\Debug\th03-app.exe `
   --classic --data X:\th03-extracted `
   --main X:\th03\MAIN.EXE --mainl X:\th03\MAINL.EXE `
   --op X:\th03\OP.EXE --font X:\pc98\FONT.ROM `
-  --rhythm-rom X:\pc98\YM2608.ROM `
-  --tick-rate 56423/1000
+  --rhythm-rom X:\pc98\YM2608.ROM
 
 out\build\msvc-x64-sdl\Debug\th03-app.exe `
   --vs --data X:\th03-extracted --main X:\th03\MAIN.EXE `
-  --font X:\pc98\FONT.ROM --tick-rate 56423/1000 `
+  --font X:\pc98\FONT.ROM `
   --p1 reimu:first --p2 mima:second
 ```
 
-The shown rate is a provisional host policy, not an authenticity claim.
+The rational comes from the standard 21,052,600 Hz dot clock divided by 8,
+106 horizontal character periods, and 440 total lines, independently modelled
+by DOSBox-X 2026.05.02 and NP2kai and consistent with PC-9801 monitor timing
+tables. It is exact for the nominal model, not a claim of zero physical
+oscillator tolerance. The first logical sample is immediately due, matching
+the source's no-pre-wait process entry; later samples use rational deadlines.
+The pinned source and timing evidence is recorded in
+[`docs/research/PC98_CADENCE.md`](docs/research/PC98_CADENCE.md).
 Kotohime additionally requires the explicit developer flag
 `--kotohime-zero-red` until her source-uninitialized Bomb fade byte has an
 evidence-backed release policy. The Classic path always executes semantic
@@ -168,10 +175,10 @@ split comparisons. Original game data and replay captures remain external.
   API in `th03_core`; the core has no reciprocal dependency, and `th03rv`
   links neither presentation nor assets. Captured PC-98 pixel parity remains a
   separate external-data acceptance gate.
-- `th03_app_runtime` owns dependency-free host policy: explicit rational
+- `th03_app_runtime` owns dependency-free host policy: caller-selected rational
   logical deadlines, timestamped two-player input accumulation, exact
   SourceSurface-to-RGBA expansion into caller storage, and centered integer
-  640x400 letterboxing. It assumes no source cadence, SDL type, key binding,
+  640x400 letterboxing. Its scheduler assumes no source cadence, SDL type, key binding,
   window, or replay UI; those remain application/platform decisions.
 - `th03_app_main` also contains the source-private owning Classic Story route
   over Stage, retained MAIN, Win, Continue, Game Over, both interstage

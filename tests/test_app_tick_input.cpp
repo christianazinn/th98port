@@ -17,6 +17,7 @@ using th03::app::RationalTickRate;
 using th03::app::TickInputError;
 using th03::app::TickInputCatchUpPolicy;
 using th03::app::TickInputScheduler;
+using th03::app::pc98_24khz_nominal_tick_rate;
 
 std::size_t checks = 0U;
 std::size_t failures = 0U;
@@ -96,6 +97,27 @@ bool same_input(const th03::CoreInput &left, const th03::CoreInput &right)
 
 void test_rate_validation_and_exact_rational_deadlines()
 {
+	expect(
+		pc98_24khz_nominal_tick_rate.ticks == 526'315U &&
+			pc98_24khz_nominal_tick_rate.seconds == 9'328U,
+		"nominal PC-9801 24 kHz timing retains its reduced exact rational"
+	);
+	auto nominal_created = TickInputScheduler::create(
+		pc98_24khz_nominal_tick_rate, 777U
+	);
+	expect(static_cast<bool>(nominal_created),
+		"nominal PC-9801 cadence is representable by the scheduler");
+	if(nominal_created) {
+		auto nominal = std::move(*nominal_created);
+		const auto first = expect_tick(
+			nominal, 777U, "nominal PC-9801 first phase is immediately due"
+		);
+		expect(
+			first.tick_index == 0U && first.deadline_ns == 777U &&
+				nominal.next_deadline_ns() == 17'724'004U,
+			"nominal first deadline is immediate and the next uses exact ceiling"
+		);
+	}
 	for(const auto invalid : {
 		RationalTickRate{0U, 1U},
 		RationalTickRate{1U, 0U},

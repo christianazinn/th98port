@@ -312,7 +312,6 @@ std::expected<DirectVsCliRequest, DirectVsCliError> parse_direct_vs_cli(
 		DirectVsCliOption::data,
 		DirectVsCliOption::main_executable,
 		DirectVsCliOption::font_rom,
-		DirectVsCliOption::tick_rate,
 	};
 	for(const auto option : required) {
 		if(!seen[static_cast<std::size_t>(option)]) {

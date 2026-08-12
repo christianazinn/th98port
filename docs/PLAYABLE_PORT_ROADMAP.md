@@ -152,11 +152,12 @@ The complete Classic developer slice and the direct-VS slice are now visible
 and interactive. The byte-fed PMD/YM2608 engine, source-shaped TH03
 transport/SFX/EFC service, deterministic Classic scene-command session, and
 bounded SDL delivery are also integrated. Audio is not yet fidelity-complete:
-redistributable rhythm-data packaging, exact source cadence/phase,
-captured PC-98 page/palette/pixel
-traces, and a human two-player run remain acceptance gates. The host therefore requires an
-explicit rational cadence as policy rather than labeling an inferred number
-authentic.
+redistributable rhythm-data packaging, captured PC-98 page/palette/pixel
+traces, and a human two-player run remain acceptance gates. The application
+now defaults to the source-relevant nominal PC-9801 24 kHz timing rational,
+`526315/9328` Hz, while retaining an explicit host override. This is exact for
+the independently reproduced display model, not a zero-tolerance physical
+oscillator claim.
 
 | Native concern | Donor authority |
 | --- | --- |
@@ -274,11 +275,18 @@ The initial host policy is deliberately plain:
 - Create a resizable 640x400 logical game window. Use SDL's documented [logical-presentation facility](https://wiki.libsdl.org/SDL3/SDL_SetRenderLogicalPresentation) with integer scaling where the selected renderer supports it; retain black borders instead of stretching the 8:5 source raster. Fullscreen is a later host preference, never a new render path.
 - Keep one persistent 640x400 streaming RGBA texture. Lock/write/unlock it once per displayed source frame after the CPU-side PC-98 composite. SDL specifically recommends a streaming texture and locking for frequently updated texture data rather than relying on [SDL_UpdateTexture](https://wiki.libsdl.org/SDL3/SDL_UpdateTexture). There is no texture atlas, per-sprite GPU scene, shader palette effect, or intermediate high-resolution framebuffer.
 - Pump host events, map physical controls into a small app-owned input value, and latch exactly one CoreInput sample at each scheduled logical tick. SDL events and scancodes never cross into core/present. P1 and P2 keyboard defaults plus controller mapping are app configuration; UI navigation and Escape are separate app-scene commands, not magic gameplay mutation.
-- Run gameplay from a fixed source-tick scheduler, never delta_seconds. Establish the exact cadence from source/instrumented PC-98 evidence before declaring VS timing complete. Host VSync only paces presentation; it never creates, skips, or combines game frames. If a host is late, process each overdue logical boundary with a separately latched input sample, present the newest completed surface, and report persistent overload in developer mode. Do not silently drop core ticks or tie simulation count to monitor refresh.
+- Run gameplay from a fixed source-tick scheduler, never delta_seconds. The
+  application default is the nominal PC-9801 24 kHz display rational:
+  21,052,600 / (8 * 106 * 440) = `526315/9328` Hz. The first source sample is
+  immediately due. Host VSync only paces presentation; it never creates game
+  frames. Deterministic smoke/replay callers preserve every overdue deadline;
+  interactive source-style `frame_delay(1)` policy rebases after elapsed
+  retraces rather than repaying a backlog. Present the newest completed surface
+  and add persistent-overload reporting in developer mode.
 
 The first launcher is `th03-app --data <root> --main <MAIN.EXE> --font
-<FONT.ROM> --vs --tick-rate <ticks>/<seconds> --p1 <character> --p2
-<character>`. It loads the authenticated
+<FONT.ROM> --vs --p1 <character> --p2 <character>`, with optional
+`--tick-rate <ticks>/<seconds>`. It loads the authenticated
 inputs, creates `MainProcess` from `MainDirectVsConfig`, and drives only that
 object's guarded step/repeat/terminal/surface API; it has no TitleScene
 requirement. The first launch allows selecting each of the nine character
@@ -299,7 +307,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | --- | --- | --- |
 | MAIN source-order coverage | Integrated | Every audited direct-VS MAIN family now has a synchronous consumer; real-asset startup and captured PC-98 visual traces remain the fidelity gates. |
 | MAIN process construction over the checked external manifest | Integrated | The stable owner reauthenticates and binds the selected 12–17 physical resources plus MAIN/FONT content; hermetic failures and all 324 local paletted selection pairs pass on GCC/MSVC. |
-| Fixed tick plus input-latch boundary | Integrated, cadence/telemetry open | SDL nanosecond events feed the rational scheduler; every overdue boundary is sampled separately and newest-only presentation is enforced. Establish the exact source cadence/phase and add persistent-overload developer reporting without changing this API. |
+| Fixed tick plus input-latch boundary | Integrated, telemetry open | SDL nanosecond events feed the rational scheduler; nominal PC-9801 24 kHz cadence and immediate first phase are the application default, deterministic callers preserve overdue boundaries, and interactive callers use source-style rebasing. Add persistent-overload developer reporting without changing this API. |
 | Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
 | SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
 | V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |

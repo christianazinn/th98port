@@ -49,7 +49,6 @@ std::vector<std::string_view> valid_arguments()
 		"--mainl", "MAINL.EXE",
 		"--op", "OP.EXE",
 		"--font", "FONT.ROM",
-		"--tick-rate", "56423/1000",
 	};
 }
 
@@ -72,9 +71,9 @@ void test_cli()
 		parsed->launch.content.score == "YUME.NEM" &&
 		parsed->launch.seed == 1U && !parsed->launch.fm_available &&
 		!parsed->rhythm_rom &&
-		parsed->tick_rate.ticks == 56423U &&
-		parsed->tick_rate.seconds == 1000U,
-		"valid Classic CLI preserves external paths and deterministic defaults");
+		parsed->tick_rate.ticks == 526'315U &&
+		parsed->tick_rate.seconds == 9'328U,
+		"valid Classic CLI preserves external paths and the nominal PC-98 rate");
 	const auto complete = parse({
 		"--classic", "--data", "d", "--main", "m", "--mainl", "l",
 		"--op", "o", "--font", "f", "--tick-rate", "3/2",
@@ -86,8 +85,9 @@ void test_cli()
 		complete->launch.content.score == "s" &&
 		complete->rhythm_rom == std::filesystem::path("ym2608.rom") &&
 		complete->launch.seed == 0xFFFF'FFFFU &&
+		complete->tick_rate.ticks == 3U && complete->tick_rate.seconds == 2U &&
 		complete->kotohime_zero_red && complete->smoke_ticks == 7U,
-		"optional Classic paths, full seed domain, policy, and smoke bound parse");
+		"optional Classic paths, rate override, seed, policy, and smoke bound parse");
 
 	const auto unknown = parse({"--classic", "--wat"});
 	const auto missing_value = parse({"--classic", "--data"});
@@ -118,7 +118,7 @@ void test_cli()
 		"duplicate Classic CLI options are rejected");
 	expect(!missing_required && missing_required.error().code ==
 		th03::app::ClassicCliErrorCode::missing_required_option,
-		"every Classic content input and cadence remains explicit");
+		"every required Classic content input remains explicit");
 	expect(!bad_rate && bad_rate.error().code ==
 		th03::app::ClassicCliErrorCode::invalid_tick_rate,
 		"malformed Classic cadence is rejected");

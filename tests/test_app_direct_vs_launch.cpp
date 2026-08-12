@@ -45,7 +45,6 @@ std::vector<std::string_view> valid_arguments()
 		"--data", "data-root",
 		"--main", "MAIN.EXE",
 		"--font", "FONT.ROM",
-		"--tick-rate", "56423/1000",
 	};
 }
 
@@ -69,9 +68,17 @@ void test_help_and_valid_defaults()
 		parsed->launch.process.seed == 0U &&
 		parsed->launch.process.game_options.input_protocol ==
 			th03::InputProtocol::live &&
-		parsed->tick_rate.ticks == 56423U &&
-		parsed->tick_rate.seconds == 1000U,
-		"valid request keeps source direct-VS defaults and explicit host rate");
+		parsed->tick_rate.ticks == 526'315U &&
+		parsed->tick_rate.seconds == 9'328U,
+		"valid request keeps source direct-VS defaults and nominal PC-98 rate");
+	auto overridden_arguments = valid_arguments();
+	overridden_arguments.insert(
+		overridden_arguments.end(), {"--tick-rate", "3/2"}
+	);
+	const auto overridden = th03::app::parse_direct_vs_cli(overridden_arguments);
+	expect(overridden && overridden->tick_rate.ticks == 3U &&
+		overridden->tick_rate.seconds == 2U,
+		"direct-VS accepts an explicit cadence override");
 }
 
 void test_all_character_palette_names()
@@ -166,7 +173,7 @@ void test_cli_rejections()
 		"duplicate option is rejected");
 	expect(!missing_required && missing_required.error().code ==
 		th03::app::DirectVsCliErrorCode::missing_required_option,
-		"all external inputs and host rate remain explicit");
+		"all required direct-VS external inputs remain explicit");
 	expect(!bad_player && !bad_palette &&
 		bad_player.error().code ==
 			th03::app::DirectVsCliErrorCode::invalid_player_selection &&

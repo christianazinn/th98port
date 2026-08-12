@@ -50,7 +50,7 @@ struct ClassicCliError final {
 struct ClassicCliRequest final {
 	bool show_help = false;
 	ClassicRunnerRequest launch{};
-	RationalTickRate tick_rate{};
+	RationalTickRate tick_rate = pc98_24khz_nominal_tick_rate;
 	// Optional caller-supplied YM2608 ADPCM-A image. The launcher validates the
 	// exact 8 KiB size and the audio engine takes its own copy.
 	std::optional<std::filesystem::path> rhythm_rom{};
@@ -60,8 +60,8 @@ struct ClassicCliRequest final {
 	std::optional<std::uint64_t> smoke_ticks{};
 };
 
-// Parses arguments after argv[0]. Cadence remains a required host policy until
-// the PC-98 timing capture establishes a wall-clock rational and first phase.
+// Parses arguments after argv[0]. The nominal PC-9801 24 kHz cadence is the
+// default; --tick-rate remains an explicit developer/host override.
 [[nodiscard]] std::expected<ClassicCliRequest, ClassicCliError>
 parse_classic_cli(std::span<const std::string_view> arguments);
 
