@@ -484,6 +484,14 @@ void test_story_input_mode_normalization()
 		live_gameplay.system == 0x1032U &&
 		live_gameplay.charge_mask == 0x01U,
 		"live Story input merges keyboard interface and joystick zero into P1");
+	const auto new_classic_gameplay =
+		ClassicStorySessionTestAccess::story_main_input(
+			live, th03::InputContext::gameplay, true
+		);
+	expect(new_classic_gameplay.p1 == 0x103BU &&
+		new_classic_gameplay.p2 == 0U &&
+		new_classic_gameplay.system == 0x1032U,
+		"New Classic Story replaces multiplayer movement with Story keys");
 	const auto live_pause = ClassicStorySessionTestAccess::story_main_input(
 		live, th03::InputContext::pause
 	);

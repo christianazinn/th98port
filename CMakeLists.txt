@@ -289,11 +289,32 @@ add_library(th03_app_persistence STATIC
 	src/app/classic_config_store.cpp
 	src/app/classic_score.cpp
 	src/app/classic_score_store.cpp
+	src/app/new_classic_key_config_store.cpp
 )
 target_include_directories(th03_app_persistence PUBLIC include)
 target_compile_features(th03_app_persistence PUBLIC cxx_std_23)
 set_target_properties(th03_app_persistence PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_app_persistence)
+
+add_executable(
+	th03-app-new-classic-key-config-store-tests
+	tests/test_app_new_classic_key_config_store.cpp
+)
+target_link_libraries(
+	th03-app-new-classic-key-config-store-tests
+	PRIVATE th03_app_persistence
+)
+target_compile_features(
+	th03-app-new-classic-key-config-store-tests PRIVATE cxx_std_23
+)
+set_target_properties(
+	th03-app-new-classic-key-config-store-tests PROPERTIES CXX_EXTENSIONS OFF
+)
+th03_set_warnings(th03-app-new-classic-key-config-store-tests)
+add_test(
+	NAME th03-app-new-classic-key-config-store-tests
+	COMMAND th03-app-new-classic-key-config-store-tests
+)
 
 add_library(th03_present STATIC
 	src/present/cels.cpp

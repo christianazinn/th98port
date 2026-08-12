@@ -56,6 +56,12 @@ validate(ClassicConfigOptions options) noexcept
 			ClassicConfigErrorCode::invalid_rank, 2U
 		));
 	}
+	if(static_cast<std::uint8_t>(options.language) >
+		static_cast<std::uint8_t>(ClassicLanguage::english)) {
+		return std::unexpected(config_error(
+			ClassicConfigErrorCode::invalid_language, 4U
+		));
+	}
 	return {};
 }
 
@@ -71,16 +77,28 @@ decode_classic_config_file(std::span<const std::byte> bytes) noexcept
 	}
 	ClassicConfigDocument document{
 		.options = {
-			.bgm_mode = static_cast<ClassicBgmMode>(byte_value(bytes[0U])),
+			.bgm_mode = static_cast<ClassicBgmMode>(
+				byte_value(bytes[0U]) & 0x7FU
+			),
 			.key_mode = static_cast<ClassicKeyMode>(byte_value(bytes[1U])),
 			.rank = static_cast<ClassicRank>(byte_value(bytes[2U])),
+			.sfx_enabled = (byte_value(bytes[0U]) & 0x80U) == 0U,
+			.legacy_autofire = byte_value(bytes[3U]) != 0U,
+			.language = static_cast<ClassicLanguage>(
+				byte_value(bytes[4U]) & 0x7FU
+			),
+			.reduced_flash = (byte_value(bytes[4U]) & 0x80U) != 0U,
 		},
 		.metadata = {
-			.unused = little_u16(bytes[3U], bytes[4U]),
 			.resident_segment = little_u16(bytes[5U], bytes[6U]),
 			.debug = byte_value(bytes[7U]),
 		},
 	};
+	if(byte_value(bytes[3U]) > 1U) {
+		return std::unexpected(config_error(
+			ClassicConfigErrorCode::invalid_autofire, 3U
+		));
+	}
 	const auto valid = validate(document.options);
 	if(!valid) {
 		return std::unexpected(valid.error());
@@ -98,11 +116,17 @@ std::expected<
 		return std::unexpected(valid.error());
 	}
 	auto bytes = std::array<std::byte, classic_config_file_bytes>{};
-	bytes[0U] = static_cast<std::byte>(document.options.bgm_mode);
+	bytes[0U] = static_cast<std::byte>(
+		static_cast<std::uint8_t>(document.options.bgm_mode) |
+		(document.options.sfx_enabled ? 0U : 0x80U)
+	);
 	bytes[1U] = static_cast<std::byte>(document.options.key_mode);
 	bytes[2U] = static_cast<std::byte>(document.options.rank);
-	bytes[3U] = static_cast<std::byte>(document.metadata.unused & 0xFFU);
-	bytes[4U] = static_cast<std::byte>(document.metadata.unused >> 8U);
+	bytes[3U] = static_cast<std::byte>(document.options.legacy_autofire ? 1U : 0U);
+	bytes[4U] = static_cast<std::byte>(
+		static_cast<std::uint8_t>(document.options.language) |
+		(document.options.reduced_flash ? 0x80U : 0U)
+	);
 	bytes[5U] = static_cast<std::byte>(
 		document.metadata.resident_segment & 0xFFU
 	);

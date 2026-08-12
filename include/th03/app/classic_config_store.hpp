@@ -60,8 +60,8 @@ struct ClassicConfigStoreLoadResult final {
 	ClassicConfigOptions defaults = classic_config_defaults()
 );
 
-// Writes a deterministic Classic-compatible file with zero unused, resident,
-// and debug metadata through a same-directory flush/read-back/replace
+// Writes a deterministic Classic-compatible file with zero resident and debug
+// metadata through a same-directory flush/read-back/replace
 // transaction. Every failure before replacement preserves the target.
 [[nodiscard]] std::expected<void, ClassicConfigStoreError>
 commit_classic_config_store(

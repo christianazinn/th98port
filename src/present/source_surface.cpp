@@ -424,6 +424,8 @@ compose_source_surface(
 		raster.shown_page(),
 		raster.raster_mode(),
 		mapping->effective_scroll_y,
+		raster.palette_tone(),
+		raster.palette_for_tone(100),
 	};
 }
 

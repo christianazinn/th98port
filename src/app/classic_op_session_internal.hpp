@@ -350,7 +350,8 @@ struct ClassicOpSessionTestAccess final {
 	[[nodiscard]] static CoreInput vs_cpu_main_input(
 		const GameInit &resident,
 		const ClassicMainInputSample &input,
-		InputContext context
+		InputContext context,
+		bool new_classic = false
 	) noexcept;
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpSession>,

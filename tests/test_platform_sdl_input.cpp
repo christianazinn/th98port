@@ -873,6 +873,51 @@ void test_malformed_stale_and_capacity_events()
 	);
 }
 
+void test_raw_key_capture_and_binding_replacement()
+{
+	FakeGamepads fake{};
+	auto made = SdlInputMapper::create(bindings(), main_window, fake.backend());
+	expect(static_cast<bool>(made), "raw-capture mapper is created");
+	if(!made) {
+		return;
+	}
+	auto mapper = std::move(*made);
+	auto input = scheduler(100U);
+	const auto unbound_down = expect_event(
+		mapper, input, key_event(1U, SDL_SCANCODE_Z, true),
+		"unbound key is accepted for KeyConfig capture"
+	);
+	expect(unbound_down.handled && !unbound_down.physical_event_queued &&
+		mapper.any_keyboard_scancode_held() &&
+		mapper.keyboard_scancode_held(SDL_SCANCODE_Z) &&
+		mapper.take_keyboard_scancode_press() == SDL_SCANCODE_Z &&
+		!mapper.take_keyboard_scancode_press(),
+		"raw capture reports one press and held state without logical input");
+	(void)expect_event(
+		mapper, input, key_event(2U, SDL_SCANCODE_Z, false),
+		"unbound key release is accepted"
+	);
+	expect(!mapper.any_keyboard_scancode_held(),
+		"raw release completes KeyConfig's release barrier");
+
+	auto replacement = bindings();
+	replacement.keyboard[replacement.keyboard_count++] = {
+		.scancode = SDL_SCANCODE_Z,
+		.player = SdlInputPlayer::p1,
+		.action = SdlLogicalAction::bomb,
+	};
+	expect(mapper.replace_bindings(replacement).has_value(),
+		"valid keyboard policy replaces bindings between schedulers");
+	const auto mapped_down = expect_event(
+		mapper, input, key_event(3U, SDL_SCANCODE_Z, true),
+		"newly configured key emits logical input"
+	);
+	expect(mapped_down.physical_event_queued &&
+		expect_tick(input, 100U, "replacement key state is due").input.p1 ==
+			input_bomb,
+		"binding replacement takes effect without rebuilding the mapper");
+}
+
 void test_queue_full_atomicity()
 {
 	FakeGamepads fake{};
@@ -969,6 +1014,7 @@ int main()
 	test_gamepad_buttons_axes_and_lifecycle();
 	test_focus_keyboard_device_release_and_quit_separation();
 	test_malformed_stale_and_capacity_events();
+	test_raw_key_capture_and_binding_replacement();
 	test_queue_full_atomicity();
 
 	if(failures != 0U) {

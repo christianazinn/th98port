@@ -159,6 +159,7 @@ struct NewClassicReplayPlayback::Impl final {
 	std::uint32_t sample_index = 0U;
 	bool in_mainl = false;
 	bool fast_forward = false;
+	bool reduced_flash = false;
 	NewClassicPlaybackStatus status = NewClassicPlaybackStatus::running;
 	std::optional<ClassicAudioCommand> load_song{};
 	std::optional<ClassicAudioCommand> ui_audio{};
@@ -169,13 +170,15 @@ struct NewClassicReplayPlayback::Impl final {
 		std::filesystem::path data_root,
 		MainCompiledContent compiled_content_,
 		std::vector<std::byte> font_,
-		present::KotohimeBombFadeCompatibility compatibility
+		present::KotohimeBombFadeCompatibility compatibility,
+		bool reduced_flash_
 	) :
 		document(std::move(document_)),
 		loader(std::move(data_root)),
 		compiled_content(std::move(compiled_content_)),
 		font(std::move(font_)),
-		kotohime_compatibility(compatibility)
+		kotohime_compatibility(compatibility),
+		reduced_flash(reduced_flash_)
 	{}
 
 	[[nodiscard]] std::expected<void, NewClassicPlaybackError>
@@ -317,7 +320,8 @@ NewClassicReplayPlayback::load(NewClassicPlaybackRequest request)
 	}
 	auto impl = std::make_unique<Impl>(
 		std::move(request.document), request.content.data_root,
-		std::move(*compiled), std::move(*font), request.kotohime_compatibility
+		std::move(*compiled), std::move(*font), request.kotohime_compatibility,
+		request.reduced_flash
 	);
 	const auto target_sample =
 		impl->document.checkpoints[request.checkpoint_index].sample_index;
@@ -574,8 +578,12 @@ NewClassicReplayPlayback::compose_shown_surface(
 		constexpr std::array<std::size_t, 2U> ff_word{6U, 7U};
 		draw_overlay_word(output, ff_word, 342U, 5U);
 	}
-	return present::SourceSurface{.pixels = output,
-		.graphics_palette = surface->graphics_palette};
+	auto result = *surface;
+	result.pixels = output;
+	if(impl_->reduced_flash && result.palette_tone == 150) {
+		result.graphics_palette = result.reduced_flash_palette;
+	}
+	return result;
 }
 
 void NewClassicReplayPlayback::set_fast_forward(bool enabled) noexcept

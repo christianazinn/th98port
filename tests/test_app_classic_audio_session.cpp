@@ -675,6 +675,42 @@ void test_music_off_disables_fresh_process_sfx(const fs::path &root)
 		"Stop leaves the enabled BGM-driver flag intact");
 }
 
+void test_new_classic_independent_sfx(const fs::path &root)
+{
+	auto effects_only_config = config(root);
+	effects_only_config.bgm_active = false;
+	effects_only_config.effects_follow_bgm = false;
+	auto effects_only = ClassicAudioSession::create(effects_only_config);
+	expect(effects_only.has_value(),
+		"New Classic effects-only audio session creates");
+	if(!effects_only) {
+		return;
+	}
+	expect((*effects_only)->apply(load(ClassicMusicCue::menu_main)).has_value() &&
+		(*effects_only)->apply({
+			.type = ClassicAudioCommandType::play_song,
+			.cue = ClassicMusicCue::menu_main,
+		}).has_value() && (*effects_only)->request_effect(1U).value_or(false),
+		"Music Off still loads the PMD carrier and accepts SFX in New Classic");
+	const auto effect = (*effects_only)->advance_tick();
+	expect(effect && !effect->status.bgm_active &&
+		effect->effect_started == 1U,
+		"independent New Classic SFX starts while BGM status remains Off");
+
+	auto music_only_config = config(root);
+	music_only_config.effects_active = false;
+	music_only_config.effects_follow_bgm = false;
+	auto music_only = ClassicAudioSession::create(music_only_config);
+	expect(music_only &&
+		(*music_only)->apply(load(ClassicMusicCue::menu_main)).has_value() &&
+		(*music_only)->apply({
+			.type = ClassicAudioCommandType::play_song,
+			.cue = ClassicMusicCue::menu_main,
+		}).has_value() &&
+		!(*music_only)->request_effect(1U).value_or(true),
+		"New Classic SFX Off suppresses effects without disabling music");
+}
+
 void test_source_boundary_effect_dispatch(const fs::path &root)
 {
 	auto dispatched_result = ClassicAudioSession::create(config(root));
@@ -850,6 +886,7 @@ int main(int argc, char **argv)
 			"generated audio manifest root is written");
 		test_commands_cadence_and_determinism(root.path());
 		test_music_off_disables_fresh_process_sfx(root.path());
+		test_new_classic_independent_sfx(root.path());
 		test_source_boundary_effect_dispatch(root.path());
 	}
 	if(argc == 3 && std::string_view(argv[1]) == "--authentic") {

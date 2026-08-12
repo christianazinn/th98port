@@ -141,6 +141,8 @@ void test_page_palette_and_400_line_identity()
 		"seed logical palette"
 	);
 	raster.apply_pending_palette();
+	raster.set_palette_tone(150);
+	raster.apply_pending_palette();
 
 	const auto surface = compose(output, raster, tram, ank);
 	expect(surface.has_value(), "400-line source surface composes");
@@ -163,7 +165,9 @@ void test_page_palette_and_400_line_identity()
 		"surface retains visible raster selectors"
 	);
 	expect(
-		surface->graphics_palette.colors[3U] == Rgb4{10U, 11U, 12U},
+		surface->graphics_palette.colors[3U] == Rgb4{13U, 13U, 14U} &&
+		surface->palette_tone == 150 &&
+		surface->reduced_flash_palette.colors[3U] == Rgb4{10U, 11U, 12U},
 		"surface exports Raster's applied RGB4 palette rather than RGB8 pending values"
 	);
 }

@@ -19,6 +19,7 @@ struct NewClassicPlaybackRequest final {
 	formats::ReplayDocument document{};
 	std::size_t checkpoint_index = 0U;
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
+	bool reduced_flash = false;
 };
 
 enum class NewClassicPlaybackErrorCode : std::uint8_t {

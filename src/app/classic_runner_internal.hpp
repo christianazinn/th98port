@@ -36,7 +36,8 @@ struct ClassicRunnerTestAccess final {
 	> create(
 		std::shared_ptr<void> owner,
 		ClassicRunnerOperations operations,
-		ExperienceProfile experience = ExperienceProfile::classic
+		ExperienceProfile experience = ExperienceProfile::classic,
+		bool reduced_flash = false
 	);
 	[[nodiscard]] static ExperienceProfile experience(
 		const ClassicRunner &runner

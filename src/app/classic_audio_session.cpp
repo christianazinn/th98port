@@ -193,6 +193,8 @@ struct ClassicAudioSession::Impl final {
 	std::uint64_t native_fraction = 0U;
 	std::uint64_t tick = 0U;
 	bool bgm_active = true;
+	bool effects_active = true;
+	bool effects_follow_bgm = true;
 	std::optional<ClassicAudioCommand> loaded{};
 	std::vector<audio::PmdCanonicalStereoSample> output{};
 	std::array<audio::PmdOpnaStereoSample, native_chunk_frames> native_scratch{};
@@ -204,15 +206,25 @@ struct ClassicAudioSession::Impl final {
 		audio::PmdOpnaEngine engine_,
 		RationalTickRate tick_rate_,
 		std::uint64_t native_frames_numerator_,
-		bool bgm_active_
+		bool bgm_active_,
+		bool effects_active_,
+		bool effects_follow_bgm_
 	) :
 		loader(std::move(loader_)),
 		engine(std::move(engine_)),
-		effects(bgm_active_),
+		effects(effects_active_ &&
+			(!effects_follow_bgm_ || bgm_active_)),
 		tick_rate(tick_rate_),
 		native_frames_numerator(native_frames_numerator_),
-		bgm_active(bgm_active_)
+		bgm_active(bgm_active_),
+		effects_active(effects_active_),
+		effects_follow_bgm(effects_follow_bgm_)
 	{}
+
+	[[nodiscard]] bool effects_available() const noexcept
+	{
+		return effects_active && (!effects_follow_bgm || bgm_active);
+	}
 };
 
 std::expected<std::unique_ptr<ClassicAudioSession>, ClassicAudioSessionError>
@@ -261,7 +273,7 @@ ClassicAudioSession::create(ClassicAudioSessionConfig config)
 	try {
 		auto impl = std::make_unique<Impl>(
 			std::move(loader), std::move(*engine), config.tick_rate, numerator,
-			config.bgm_active
+			config.bgm_active, config.effects_active, config.effects_follow_bgm
 		);
 		const auto initial_capacity = divide_round_up(
 			(maximum_tick_frames + audio::pmd_resampler_lookahead_samples + 1U) *
@@ -314,8 +326,16 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 			));
 		}
 		if(!impl_->bgm_active) {
-			// snd_kaja_interrupt() makes Play a no-op when the fresh MAIN or
-			// MAINL process skipped sound-mode detection for Music Off.
+			// Replay Patch can leave the PMD effect service active while Music is
+			// Off. Start the fresh carrier, then Stop only its song; PMD retains
+			// Timer A/FM6 for subsequent external effects. Classic reaches the
+			// original no-op through effects_follow_bgm.
+			if(impl_->effects_available()) {
+				if(auto played = impl_->engine.play(); !played) {
+					return std::unexpected(engine_error(command, played.error()));
+				}
+				impl_->engine.stop();
+			}
 			return {};
 		}
 		if(auto played = impl_->engine.play(); !played) {
@@ -399,7 +419,7 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 				ClassicAudioSessionErrorCode::invalid_parameter, command
 			));
 		}
-		if(!impl_->bgm_active) {
+		if(!impl_->effects_available()) {
 			return {};
 		}
 		if(!impl_->engine.status().song_loaded ||
@@ -422,9 +442,9 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 				ClassicAudioSessionErrorCode::invalid_parameter, command
 			));
 		}
-		if(!impl_->bgm_active) {
-			// snd_se_play_force() collapses to no work when the fresh MAIN or
-			// MAINL process did not determine an FM source.
+		if(!impl_->effects_available()) {
+			// Classic collapses here when the fresh process did not determine an
+			// FM source; New Classic may instead keep effects independent.
 			return {};
 		}
 		if(!impl_->engine.status().song_loaded ||
@@ -468,7 +488,7 @@ ClassicAudioSession::request_effect(std::uint8_t effect_id) noexcept
 	if(const auto rule = audio::th03_sound_effect_rule(effect_id); !rule) {
 		return std::unexpected(service_error(command, rule.error()));
 	}
-	if(!impl_->bgm_active) {
+	if(!impl_->effects_available()) {
 		return false;
 	}
 	const auto engine_status = impl_->engine.status();
@@ -487,8 +507,9 @@ ClassicAudioSession::request_effect(std::uint8_t effect_id) noexcept
 void ClassicAudioSession::set_bgm_active(bool active) noexcept
 {
 	impl_->bgm_active = active;
-	impl_->effects.set_active(active);
-	if(!active) {
+	const auto effects_available = impl_->effects_available();
+	impl_->effects.set_active(effects_available);
+	if(!effects_available) {
 		impl_->effects.reset();
 		impl_->engine.stop_effect();
 	}

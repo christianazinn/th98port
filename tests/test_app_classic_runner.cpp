@@ -453,7 +453,12 @@ th03::app::ClassicRunnerOperations runner_operations(
 			return std::expected<
 				th03::present::SourceSurface,
 				th03::app::ClassicOpSessionError
-			>{th03::present::SourceSurface{.pixels = output}};
+			>{th03::present::SourceSurface{
+				.pixels = output,
+				.graphics_palette = {},
+				.palette_tone = 150,
+				.reduced_flash_palette = {{th03::assets::Rgb4{3U, 4U, 5U}}},
+			}};
 		},
 	};
 }
@@ -489,6 +494,27 @@ void test_runner_sequence_audio_surface_and_failure()
 		) == th03::app::ExperienceProfile::new_classic,
 		"the shared runner retains New Classic as host policy only"
 	);
+	auto reduced = th03::app::ClassicRunnerTestAccess::create(
+		std::static_pointer_cast<void>(profile_backend),
+		runner_operations(*profile_backend),
+		th03::app::ExperienceProfile::new_classic, true
+	);
+	std::vector<th03::present::ComposedPixel> reduced_pixels(
+		th03::present::graphics_page_pixels
+	);
+	const auto reduced_surface = reduced ?
+		(*reduced)->compose_shown_surface(std::span<
+			th03::present::ComposedPixel,
+			th03::present::graphics_page_pixels
+		>(reduced_pixels.data(), reduced_pixels.size())) :
+		std::expected<
+			th03::present::SourceSurface,
+			th03::app::ClassicRunnerError
+		>{std::unexpected(th03::app::ClassicRunnerError{})};
+	expect(reduced_surface &&
+		reduced_surface->graphics_palette.colors[0U] ==
+			th03::assets::Rgb4{3U, 4U, 5U},
+		"New Classic reduced flash maps only an exact tone-150 publication to tone 100");
 
 	auto backend = std::make_shared<FakeRunnerBackend>();
 	backend->audio = th03::app::ClassicAudioCommand{
@@ -687,6 +713,30 @@ void test_file_and_request_boundaries()
 	expect(!invalid && invalid.error().code ==
 		th03::app::ClassicRunnerErrorCode::invalid_request,
 		"invalid Classic request fails before touching external content");
+	const th03::app::ClassicContentPaths placeholder{
+		.data_root = temporary.path(),
+		.main_executable = temporary.path() / "MAIN.EXE",
+		.mainl_executable = temporary.path() / "MAINL.EXE",
+		.op_executable = temporary.path() / "OP.EXE",
+		.font_rom = temporary.path() / "FONT.ROM",
+		.config = temporary.path() / "YUME.CFG",
+		.score = temporary.path() / "YUME.NEM",
+	};
+	const auto classic_autofire = th03::app::ClassicRunner::load({
+		.content = placeholder,
+		.autofire_mask = 1U,
+	});
+	const auto invalid_autofire = th03::app::ClassicRunner::load({
+		.content = placeholder,
+		.experience = th03::app::ExperienceProfile::new_classic,
+		.autofire_mask = 4U,
+	});
+	expect(!classic_autofire && !invalid_autofire &&
+		classic_autofire.error().code ==
+			th03::app::ClassicRunnerErrorCode::invalid_request &&
+		invalid_autofire.error().code ==
+			th03::app::ClassicRunnerErrorCode::invalid_request,
+		"Autofire is bounded to New Classic's two player bits");
 }
 
 [[nodiscard]] std::uint64_t surface_digest(

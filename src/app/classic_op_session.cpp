@@ -218,7 +218,8 @@ namespace {
 [[nodiscard]] CoreInput normalize_vs_cpu_main_input(
 	const GameInit &resident,
 	const ClassicMainInputSample &sample,
-	InputContext context
+	InputContext context,
+	bool new_classic = false
 ) noexcept
 {
 	auto input = sample.aggregate;
@@ -253,11 +254,15 @@ namespace {
 		return input;
 	}
 	switch(resident.game_mode) {
-	case game_mode::vs_1p_cpu:
+	case game_mode::vs_1p_cpu: {
 		// input_mode_1p_vs_cpu(): merge input_sp and joystick zero into the
 		// human side and clear the CPU side before both player updates.
+		constexpr std::uint16_t movement_mask = 0x0F0FU;
+		const auto keyboard_p1 = new_classic ? static_cast<std::uint16_t>(
+			physical.keyboard.p1 & ~movement_mask
+		) : physical.keyboard.p1;
 		input.p1 = static_cast<std::uint16_t>(
-			physical.keyboard.p1 | physical.keyboard.system |
+			keyboard_p1 | physical.keyboard.system |
 			(physical.first_joystick_present ? physical.first_joystick : 0U)
 		);
 		input.p2 = 0U;
@@ -265,6 +270,7 @@ namespace {
 			physical.keyboard.charge_mask & 0x01U
 		);
 		break;
+	}
 	case game_mode::vs_1p_2p:
 		input.p1 = physical.keyboard.p1;
 		input.p2 = physical.keyboard.p2;
@@ -1858,7 +1864,8 @@ struct ClassicOpSessionBackend final {
 		}
 		const auto input_context = vs_driver->input_context();
 		const auto normalized = normalize_vs_cpu_main_input(
-			current_main_resident, input, input_context
+			current_main_resident, input, input_context,
+			replay_recorder != nullptr
 		);
 		std::optional<ClassicAudioCommand> ui_audio{};
 		std::expected<MainProcessDriverTick, MainProcessDriverError> tick =
@@ -3087,10 +3094,11 @@ ClassicOpVsSurfaceSource ClassicOpSessionTestAccess::vs_surface_source(
 CoreInput ClassicOpSessionTestAccess::vs_cpu_main_input(
 	const GameInit &resident,
 	const ClassicMainInputSample &input,
-	InputContext context
+	InputContext context,
+	bool new_classic
 ) noexcept
 {
-	return normalize_vs_cpu_main_input(resident, input, context);
+	return normalize_vs_cpu_main_input(resident, input, context, new_classic);
 }
 
 bool ClassicOpSessionTestAccess::attract_input_present(

@@ -232,12 +232,177 @@ void test_catalog_browser_and_save()
 	std::filesystem::remove_all(root, ignored);
 }
 
+std::string_view key_name(void *, std::uint16_t key) noexcept
+{
+	return key == 25U ? "TWENTY FIVE" : "KEY";
+}
+
+void test_key_config_menu()
+{
+	using namespace th03::app;
+	NewClassicKeyConfig defaults{};
+	for(std::size_t index = 0U; index < defaults.bindings.size(); ++index) {
+		defaults.bindings[index] = static_cast<std::uint16_t>(index + 1U);
+	}
+	auto initial = defaults;
+	initial.autofire = 2U;
+	NewClassicKeyConfigMenu menu(initial, defaults, 512U, 41U, key_name);
+	static_cast<void>(menu.consume({}));
+	// Story Up begins selected. Capture Story's existing fourth binding to
+	// prove source duplicate assignment swaps within the Story range.
+	static_cast<void>(menu.consume({.ui = {.confirm = true}}));
+	static_cast<void>(menu.consume({.any_scancode_held = false}));
+	static_cast<void>(menu.consume({
+		.scancode_pressed = static_cast<std::uint16_t>(25U),
+		.any_scancode_held = true,
+	}));
+	static_cast<void>(menu.consume({.any_scancode_held = false}));
+	expect(
+		menu.config().bindings[22U] == 25U &&
+		menu.config().bindings[24U] == 23U,
+		"KeyConfig swaps duplicate Story assignments"
+	);
+
+	// A released Right changes to P1 and selects Shot, matching the patch's
+	// initial player-page action column.
+	static_cast<void>(menu.consume({}));
+	auto page = menu.consume({.ui = {.right = true}});
+	expect(page.surface_changed, "KeyConfig changes among all three pages");
+	static_cast<void>(menu.consume({}));
+	static_cast<void>(menu.consume({.ui = {.confirm = true}}));
+	static_cast<void>(menu.consume({.any_scancode_held = false}));
+	static_cast<void>(menu.consume({
+		.scancode_pressed = static_cast<std::uint16_t>(41U),
+		.any_scancode_held = true,
+	}));
+	static_cast<void>(menu.consume({.any_scancode_held = false}));
+	expect(
+		menu.config().bindings[static_cast<std::size_t>(
+			NewClassicPlayerAction::shot
+		)] == defaults.bindings[static_cast<std::size_t>(
+			NewClassicPlayerAction::shot
+		)],
+		"Escape cancels raw key capture without changing the binding"
+	);
+
+	// Move from Shot to Apply and exercise the retryable persistence handoff.
+	for(std::size_t row = 0U; row < 4U; ++row) {
+		static_cast<void>(menu.consume({}));
+		static_cast<void>(menu.consume({.ui = {.down = true}}));
+	}
+	static_cast<void>(menu.consume({}));
+	auto apply = menu.consume({.ui = {.confirm = true}});
+	expect(
+		apply.status == NewClassicKeyConfigStatus::apply_requested,
+		"KeyConfig publishes a retryable Apply transaction"
+	);
+	menu.report_commit(false);
+	expect(
+		menu.status() == NewClassicKeyConfigStatus::running,
+		"failed KeyConfig store retains the edited document"
+	);
+	static_cast<void>(menu.consume({}));
+	static_cast<void>(menu.consume({.ui = {.confirm = true}}));
+	menu.report_commit(true);
+	expect(
+		menu.status() == NewClassicKeyConfigStatus::applied,
+		"successful KeyConfig store completes the transaction"
+	);
+
+	NewClassicKeyConfigMenu discard(initial, defaults, 512U, 41U, key_name);
+	static_cast<void>(discard.consume({}));
+	static_cast<void>(discard.consume({.ui = {.down = true}}));
+	static_cast<void>(discard.consume({}));
+	static_cast<void>(discard.consume({.ui = {.confirm = true}}));
+	static_cast<void>(discard.consume({.any_scancode_held = false}));
+	static_cast<void>(discard.consume({
+		.scancode_pressed = static_cast<std::uint16_t>(30U),
+		.any_scancode_held = true,
+	}));
+	static_cast<void>(discard.consume({.any_scancode_held = false}));
+	static_cast<void>(discard.consume({}));
+	expect(
+		discard.consume({.ui = {.cancel = true}}).surface_changed,
+		"Cancel on edited KeyConfig opens discard confirmation"
+	);
+	expect(
+		discard.consume({.ui = {.confirm = true}}).status ==
+			NewClassicKeyConfigStatus::back && discard.config() == initial,
+		"discard confirmation restores the complete original document"
+	);
+}
+
+void test_expanded_options_menu()
+{
+	using namespace th03::app;
+	ClassicConfigOptions initial{};
+	initial.bgm_mode = ClassicBgmMode::midi;
+	initial.sfx_enabled = true;
+	initial.language = ClassicLanguage::english;
+	NewClassicOptionsMenu menu(initial);
+	expect(menu.config().bgm_mode == ClassicBgmMode::off &&
+		menu.config().language == ClassicLanguage::japanese,
+		"New Classic Options normalizes unsupported MIDI and English profiles");
+	static_cast<void>(menu.consume({}));
+	static_cast<void>(menu.consume({.right = true}));
+	expect(menu.config().rank == ClassicRank::hard,
+		"Options cycles Replay Patch rank choices");
+	static_cast<void>(menu.consume({}));
+	static_cast<void>(menu.consume({.down = true}));
+	static_cast<void>(menu.consume({}));
+	static_cast<void>(menu.consume({.confirm = true}));
+	expect(menu.config().bgm_mode == ClassicBgmMode::fm,
+		"Options independently toggles FM music");
+	static_cast<void>(menu.consume({}));
+	static_cast<void>(menu.consume({.down = true}));
+	static_cast<void>(menu.consume({}));
+	static_cast<void>(menu.consume({.confirm = true}));
+	expect(!menu.config().sfx_enabled,
+		"Options independently toggles sound effects");
+	static_cast<void>(menu.consume({}));
+	static_cast<void>(menu.consume({.down = true}));
+	static_cast<void>(menu.consume({}));
+	const auto language = menu.consume({.confirm = true});
+	expect(language.surface_changed &&
+		menu.config().language == ClassicLanguage::japanese,
+		"unavailable English selection is disclosed without faking resources");
+	static_cast<void>(menu.consume({}));
+	static_cast<void>(menu.consume({.down = true}));
+	static_cast<void>(menu.consume({}));
+	expect(menu.consume({.confirm = true}).status ==
+		NewClassicOptionsStatus::key_config_requested,
+		"expanded Options hands KeyConfig to its dedicated transaction");
+	menu.resume_after_key_config();
+	static_cast<void>(menu.consume({}));
+	static_cast<void>(menu.consume({.down = true}));
+	static_cast<void>(menu.consume({}));
+	static_cast<void>(menu.consume({.confirm = true}));
+	expect(menu.config().reduced_flash,
+		"Options toggles Replay Patch reduced-flash policy");
+	static_cast<void>(menu.consume({}));
+	static_cast<void>(menu.consume({.down = true}));
+	static_cast<void>(menu.consume({}));
+	expect(menu.consume({.confirm = true}).status ==
+		NewClassicOptionsStatus::apply_requested,
+		"Options Back publishes an atomic config commit");
+	menu.report_commit(false);
+	expect(menu.status() == NewClassicOptionsStatus::running,
+		"failed Options commit retains edits for retry");
+	static_cast<void>(menu.consume({}));
+	static_cast<void>(menu.consume({.confirm = true}));
+	menu.report_commit(true);
+	expect(menu.status() == NewClassicOptionsStatus::applied,
+		"successful Options retry completes the transaction");
+}
+
 } // namespace
 
 int main()
 {
 	test_landing();
 	test_catalog_browser_and_save();
+	test_key_config_menu();
+	test_expanded_options_menu();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }

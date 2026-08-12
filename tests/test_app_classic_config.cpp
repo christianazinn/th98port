@@ -131,8 +131,8 @@ private:
 void test_codec_layout_and_domains()
 {
 	const std::array raw{
-		std::byte{2U}, std::byte{1U}, std::byte{3U}, std::byte{0x34U},
-		std::byte{0x12U}, std::byte{0x78U}, std::byte{0x56U},
+		std::byte{0x82U}, std::byte{1U}, std::byte{3U}, std::byte{1U},
+		std::byte{0x81U}, std::byte{0x78U}, std::byte{0x56U},
 		std::byte{0x9AU},
 	};
 	const auto decoded = th03::app::decode_classic_config_file(raw);
@@ -140,8 +140,11 @@ void test_codec_layout_and_domains()
 		.bgm_mode = ClassicBgmMode::midi,
 		.key_mode = ClassicKeyMode::joy_key,
 		.rank = ClassicRank::lunatic,
+		.sfx_enabled = false,
+		.legacy_autofire = true,
+		.language = th03::app::ClassicLanguage::english,
+		.reduced_flash = true,
 	} && decoded->metadata == ClassicConfigMetadata{
-		.unused = 0x1234U,
 		.resident_segment = 0x5678U,
 		.debug = 0x9AU,
 	}, "exact eight-byte layout decodes all Classic fields");
@@ -152,7 +155,7 @@ void test_codec_layout_and_domains()
 			th03::app::ClassicConfigError
 		>{std::unexpected(th03::app::ClassicConfigError{})};
 	expect(encoded && *encoded == raw,
-		"Classic metadata round-trips byte-exactly");
+		"Replay Patch option bits and Classic metadata round-trip byte-exactly");
 
 	constexpr std::array expected_defaults{
 		std::byte{1U}, std::byte{0U}, std::byte{1U}, std::byte{0U},
@@ -176,9 +179,6 @@ void test_codec_layout_and_domains()
 						.rank = static_cast<ClassicRank>(rank),
 					},
 					.metadata = {
-						.unused = static_cast<std::uint16_t>(
-							0x1000U + rank
-						),
 						.resident_segment = static_cast<std::uint16_t>(
 							0x2000U + key
 						),
@@ -214,6 +214,8 @@ void test_codec_layout_and_domains()
 		std::pair{0U, ClassicConfigErrorCode::invalid_bgm_mode},
 		std::pair{1U, ClassicConfigErrorCode::invalid_key_mode},
 		std::pair{2U, ClassicConfigErrorCode::invalid_rank},
+		std::pair{3U, ClassicConfigErrorCode::invalid_autofire},
+		std::pair{4U, ClassicConfigErrorCode::invalid_language},
 	}) {
 		auto bytes = expected_defaults;
 		bytes[mutation.first] = std::byte{0xFFU};
@@ -270,11 +272,11 @@ void test_store_create_load_commit_and_recovery()
 		th03::app::decode_classic_config_file(committed_bytes);
 	expect(committed_document && committed_document->metadata ==
 		ClassicConfigMetadata{},
-		"native commit clears unused, resident, and debug metadata");
+		"native commit clears resident and debug metadata");
 
 	const std::array metadata_bytes{
-		std::byte{2U}, std::byte{1U}, std::byte{3U}, std::byte{0xAAU},
-		std::byte{0xBBU}, std::byte{0xCCU}, std::byte{0xDDU},
+		std::byte{0x82U}, std::byte{1U}, std::byte{3U}, std::byte{1U},
+		std::byte{0x81U}, std::byte{0xCCU}, std::byte{0xDDU},
 		std::byte{0xEEU},
 	};
 	expect(write_bytes(path, metadata_bytes),
@@ -286,7 +288,11 @@ void test_store_create_load_commit_and_recovery()
 			.bgm_mode = ClassicBgmMode::midi,
 			.key_mode = ClassicKeyMode::joy_key,
 			.rank = ClassicRank::lunatic,
-		}, "load ignores valid DOS-only metadata after codec validation");
+			.sfx_enabled = false,
+			.legacy_autofire = true,
+			.language = th03::app::ClassicLanguage::english,
+			.reduced_flash = true,
+		}, "load accepts Replay Patch options and ignores DOS-only metadata");
 	expect(read_bytes(path) == std::vector<std::byte>{
 		metadata_bytes.begin(), metadata_bytes.end()
 	}, "valid Classic load does not rewrite metadata bytes");

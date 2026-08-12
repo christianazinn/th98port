@@ -337,6 +337,8 @@ SdlInputMapper::SdlInputMapper(SdlInputMapper &&other) noexcept :
 	main_window_(other.main_window_),
 	gamepad_backend_(other.gamepad_backend_),
 	keyboard_(std::move(other.keyboard_)),
+	raw_keyboard_held_(std::move(other.raw_keyboard_held_)),
+	last_scancode_press_(other.last_scancode_press_),
 	gamepads_(std::move(other.gamepads_)),
 	connected_gamepad_count_(other.connected_gamepad_count_),
 	native_runtime_lease_(other.native_runtime_lease_),
@@ -351,6 +353,8 @@ SdlInputMapper::SdlInputMapper(SdlInputMapper &&other) noexcept :
 	other.gamepad_backend_ = {};
 	other.native_runtime_lease_ = false;
 	other.has_pending_event_ = false;
+	other.raw_keyboard_held_.fill(false);
+	other.last_scancode_press_.reset();
 }
 
 app::PhysicalInputSourceState SdlInputMapper::keyboard_contribution(
@@ -408,6 +412,8 @@ void SdlInputMapper::clear_held_states() noexcept
 {
 	keyboard_.held.fill(false);
 	keyboard_.contribution = {};
+	raw_keyboard_held_.fill(false);
+	last_scancode_press_.reset();
 	for(auto &gamepad : gamepads_) {
 		gamepad.button_held.fill(false);
 		gamepad.axis_held.fill(false);
@@ -452,13 +458,39 @@ bool SdlInputMapper::keyboard_scancode_held(
 	SDL_Scancode scancode
 ) const noexcept
 {
-	for(std::size_t index = 0U; index < bindings_.keyboard_count; ++index) {
-		if(bindings_.keyboard[index].scancode == scancode &&
-			keyboard_.held[index]) {
+	return valid_scancode(scancode) && raw_keyboard_held_[
+		static_cast<std::size_t>(scancode)
+	];
+}
+
+bool SdlInputMapper::any_keyboard_scancode_held() const noexcept
+{
+	for(const auto held : raw_keyboard_held_) {
+		if(held) {
 			return true;
 		}
 	}
 	return false;
+}
+
+std::optional<SDL_Scancode>
+SdlInputMapper::take_keyboard_scancode_press() noexcept
+{
+	return std::exchange(last_scancode_press_, std::nullopt);
+}
+
+std::expected<void, SdlInputMapperError> SdlInputMapper::replace_bindings(
+	SdlInputBindings bindings
+) noexcept
+{
+	if(!valid_bindings(bindings, main_window_, gamepad_backend_)) {
+		return std::unexpected(mapper_error(
+			SdlInputMapperErrorCode::invalid_bindings
+		));
+	}
+	bindings_ = std::move(bindings);
+	clear_held_states();
+	return {};
 }
 
 std::expected<SdlInputEventResult, SdlInputMapperError>
@@ -483,6 +515,13 @@ SdlInputMapper::handle_event(
 		if(event.key.repeat) {
 			return SdlInputEventResult{.handled = true};
 		}
+		const auto raw_index = static_cast<std::size_t>(event.key.scancode);
+		const auto commit_raw = [&]() noexcept {
+			raw_keyboard_held_[raw_index] = down;
+			if(down) {
+				last_scancode_press_ = event.key.scancode;
+			}
+		};
 		auto candidate = keyboard_.held;
 		bool matched = false;
 		for(std::size_t index = 0U;
@@ -494,11 +533,13 @@ SdlInputMapper::handle_event(
 			}
 		}
 		if(!matched) {
-			return SdlInputEventResult{};
+			commit_raw();
+			return SdlInputEventResult{.handled = true};
 		}
 		const auto contribution = keyboard_contribution(candidate);
 		if(same_source_state(contribution, keyboard_.contribution)) {
 			keyboard_.held = candidate;
+			commit_raw();
 			return SdlInputEventResult{.handled = true};
 		}
 		const auto pushed = push_event(scheduler, {
@@ -512,6 +553,7 @@ SdlInputMapper::handle_event(
 		}
 		keyboard_.held = candidate;
 		keyboard_.contribution = contribution;
+		commit_raw();
 		return SdlInputEventResult{
 			.handled = true,
 			.physical_event_queued = true,
@@ -527,6 +569,8 @@ SdlInputMapper::handle_event(
 			return std::unexpected(pushed.error());
 		}
 		keyboard_ = {};
+		raw_keyboard_held_.fill(false);
+		last_scancode_press_.reset();
 		return SdlInputEventResult{
 			.handled = true,
 			.physical_event_queued = true,

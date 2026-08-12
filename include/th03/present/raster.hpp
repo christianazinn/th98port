@@ -170,6 +170,9 @@ public:
 	// preserving the raw value exactly as palette_show() does.
 	void set_palette_tone(std::int16_t tone) noexcept;
 	[[nodiscard]] std::int16_t palette_tone() const noexcept;
+	[[nodiscard]] assets::Palette16Rgb4 palette_for_tone(
+		std::int16_t tone
+	) const noexcept;
 	void apply_pending_palette() noexcept;
 
 	void set_scroll_y(std::uint16_t scroll_y) noexcept;

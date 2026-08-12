@@ -321,7 +321,8 @@ struct ClassicStorySessionTestAccess final {
 	);
 	[[nodiscard]] static CoreInput story_main_input(
 		const ClassicMainInputSample &input,
-		InputContext context
+		InputContext context,
+		bool new_classic = false
 	) noexcept;
 	[[nodiscard]] static std::expected<void, ClassicStorySessionError>
 	force_main_outcome(

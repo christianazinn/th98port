@@ -22,9 +22,9 @@ the deterministic PMD session keeps advancing.
 Gameplay-stage music, source-ordered ordinary MAIN SFX emission, and stock
 blocking live pause/resume with effect 21 are integrated. New Classic's host
 identity/lifecycle, V13 recording/browser/playback/save flow, richer
-pause/restart menu, and full Practice setup/recording lifecycle are present.
-KeyConfig, expanded Options, typed playback interstitials, and the remaining
-Replay Patch QoL are the active next port.
+pause/restart menu, full Practice setup/recording lifecycle, three-page
+KeyConfig, and expanded Options are present. Typed playback interstitials and
+the remaining Replay Patch QoL are the active next port.
 
 ## Build and test
 
@@ -181,11 +181,22 @@ selector, followed by Replay Patch 0.4.10's main and Advanced setup pages.
 Its source defaults, exact-VS fallback, fixed-opponent stages, speed/rank/gauge
 controls, retry policy, pause/restart behavior, and V13 Practice metadata are
 all carried into the shared MAIN runtime.
+New Classic's landing also owns Replay Patch-style KeyConfig and Options.
+KeyConfig remaps 26 SDL scancodes across P1, P2, and Story pages, swaps
+duplicate assignments within a page, restores page-local defaults, and stores
+the result atomically in `TH3KEY.CFG` beside `YUME.CFG`. Story and 1P-vs-CPU
+use the dedicated Story movement bindings while retaining P1 actions; the P1
+and P2 Autofire selections feed the recorded logical input boundary. Options
+persists Rank, FM music, independently switchable SFX, KeyConfig, and the
+Replay Patch's exact MAIN warning-flash reduction. The Language row currently
+states that English is unavailable: the authenticated `TH3EN.DAT` translated
+resource overlay has not yet been ported, so the native application does not
+claim a partial English mode.
 Unless overridden with `--config`, `--score`, and `--replay-root`, Classic
-stores `YUME.CFG`, `YUME.NEM`, and New Classic's `REPLAY` directory under the
-selected `--data` root. This avoids dependence on the launcher working
-directory; use explicit writable paths when the extracted content root is
-read-only.
+stores `YUME.CFG`, `YUME.NEM`, and New Classic's `TH3KEY.CFG` and `REPLAY`
+directory under the selected `--data` root. This avoids dependence on the
+launcher working directory; use explicit writable paths when the extracted
+content root is read-only.
 
 Validate an external frozen case without copying it into this repository:
 
@@ -327,8 +338,8 @@ split comparisons. Original game data and replay captures remain external.
   replacement. It draws no registration UI and receives codec fields rather
   than owning gameplay RNG; the owning MAINL registration scene supplies both
   at the source-ordered commit boundary. The configuration codec also
-  preserves the exact eight-byte Classic layout while native writes zero
-  DOS-only resident/debug/unused metadata.
+  preserves the exact eight-byte Classic/Replay Patch layout while native
+  writes zero DOS-only resident/debug metadata.
 - `th03_app_content` owns authenticated process-lifetime content that is not a
   standalone archive resource: compiled MAIN score/pellet/text tables, the
   prepared GAMEFT gaiji bank, and the external PC-98 ANK/JIS font provider.

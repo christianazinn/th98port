@@ -16,11 +16,13 @@
 #include <vector>
 
 #include <SDL3/SDL_timer.h>
+#include <SDL3/SDL_keyboard.h>
 
 #include "default_bindings.hpp"
 
 #include "th03/app/classic_cli.hpp"
 #include "th03/app/classic_audio_session.hpp"
+#include "th03/app/classic_config_store.hpp"
 #include "th03/app/classic_runner.hpp"
 #include "th03/app/direct_vs_cli.hpp"
 #include "th03/app/direct_vs_launch.hpp"
@@ -67,6 +69,11 @@ struct HostUiStep final {
 struct NewClassicLandingRunResult final {
 	int exit_code = 0;
 	std::optional<th03::app::NewClassicLandingChoice> choice{};
+	bool application_quit = false;
+};
+
+struct NewClassicKeyConfigRunResult final {
+	int exit_code = 0;
 	bool application_quit = false;
 };
 
@@ -1064,6 +1071,9 @@ ExperienceRunResult run_classic_session(
 )
 {
 	const auto data_root = parsed.launch.content.data_root;
+	const auto config_path = parsed.launch.content.config;
+	const bool new_classic =
+		parsed.mode == th03::app::ClassicLaunchMode::new_classic;
 	if(parsed.rhythm_rom && parsed.rhythm_pcm) {
 		std::cerr << "status=error\nstage=audio-profile\n"
 			"code=conflicting-rhythm-profiles\n";
@@ -1087,16 +1097,29 @@ ExperienceRunResult run_classic_session(
 	}
 	parsed.launch.fm_available = true;
 	parsed.launch.experience =
-		(parsed.mode == th03::app::ClassicLaunchMode::new_classic) ?
+		new_classic ?
 			th03::app::ExperienceProfile::new_classic :
 			th03::app::ExperienceProfile::classic;
 	auto runner = th03::app::ClassicRunner::load(std::move(parsed.launch));
 	if(!runner) {
 		return {.exit_code = fail("classic-load", runner.error())};
 	}
+	// Authenticate the selected game corpus before creating or recovering a
+	// persistence file. A misspelled/incomplete content root must remain a
+	// read-only startup failure rather than leaving a stray YUME.CFG behind.
+	auto persisted = th03::app::load_classic_config_store(
+		config_path
+	);
+	if(!persisted) {
+		return {.exit_code = fail("config-load", persisted.error())};
+	}
 	auto created_session = th03::app::ClassicAudioSession::create({
 		.data_root = data_root,
 		.tick_rate = parsed.tick_rate,
+		.bgm_active = persisted->options.bgm_mode ==
+			th03::app::ClassicBgmMode::fm,
+		.effects_active = !new_classic || persisted->options.sfx_enabled,
+		.effects_follow_bgm = !new_classic,
 		.rhythm_rom = std::span<const std::byte>(rhythm_rom),
 		.rhythm_pcm = rhythm_pcm.view(),
 	});
@@ -1540,6 +1563,194 @@ NewClassicLandingRunResult run_new_classic_landing(
 	return {.choice = result.choice};
 }
 
+[[nodiscard]] std::string_view sdl_scancode_name(
+	void *,
+	std::uint16_t key
+) noexcept
+{
+	if(key == 0U || key >= static_cast<std::uint16_t>(SDL_SCANCODE_COUNT)) {
+		return {};
+	}
+	const auto *name = SDL_GetScancodeName(static_cast<SDL_Scancode>(key));
+	return name != nullptr ? std::string_view{name} : std::string_view{};
+}
+
+NewClassicKeyConfigRunResult run_new_classic_key_config(
+	const std::filesystem::path &path,
+	th03::app::NewClassicKeyConfig &config,
+	const th03::app::NewClassicKeyConfig &defaults,
+	th03::app::RationalTickRate tick_rate,
+	th03::platform::SdlPlatform &platform,
+	th03::platform::SdlInputMapper &mapper
+)
+{
+	constexpr auto maximum_key = static_cast<std::uint16_t>(
+		SDL_SCANCODE_COUNT
+	);
+	th03::app::NewClassicKeyConfigMenu menu(
+		config, defaults, maximum_key,
+		static_cast<std::uint16_t>(SDL_SCANCODE_ESCAPE),
+		&sdl_scancode_name
+	);
+	auto presented = platform.present(menu.surface());
+	if(!presented) {
+		return {.exit_code = fail("key-config-present", presented.error())};
+	}
+	auto scheduler = th03::app::TickInputScheduler::create(
+		tick_rate,
+		th03::platform::sdl_ticks_now_ns(),
+		th03::app::TickInputCatchUpPolicy::discard_missed_deadlines
+	);
+	if(!scheduler) {
+		return {.exit_code = fail_tick(scheduler.error())};
+	}
+	bool retry_blocked_event = false;
+	while(menu.status() == th03::app::NewClassicKeyConfigStatus::running) {
+		const auto cutoff = th03::platform::sdl_ticks_now_ns();
+		if(!retry_blocked_event) {
+			auto pumped = mapper.pump_events(*scheduler, false);
+			if(!pumped) {
+				return {
+					.exit_code = fail("key-config-input-pump", pumped.error())
+				};
+			}
+			retry_blocked_event = pumped->queue_blocked;
+		}
+
+		bool presentation_pending = false;
+		for(;;) {
+			auto due = scheduler->pop_due(cutoff);
+			if(!due) {
+				return {.exit_code = fail_tick(due.error())};
+			}
+			if(!*due) {
+				break;
+			}
+			const auto pressed = mapper.take_keyboard_scancode_press();
+			auto consumed = menu.consume({
+				.ui = project_new_classic_ui(**due),
+				.scancode_pressed = pressed ? std::optional<std::uint16_t>{
+					static_cast<std::uint16_t>(*pressed)
+				} : std::nullopt,
+				.any_scancode_held = mapper.any_keyboard_scancode_held(),
+			});
+			presentation_pending = presentation_pending ||
+				consumed.surface_changed;
+			if(consumed.status ==
+				th03::app::NewClassicKeyConfigStatus::apply_requested) {
+				auto stored = th03::app::store_new_classic_key_config(
+					path, menu.config(), maximum_key
+				);
+				if(stored) {
+					auto replaced = mapper.replace_bindings(
+						th03::app::detail::new_classic_bindings(menu.config())
+					);
+					if(!replaced) {
+						return {.exit_code = fail(
+							"key-config-apply", replaced.error()
+						)};
+					}
+					config = menu.config();
+				}
+				menu.report_commit(stored.has_value());
+				presentation_pending = true;
+			}
+			if(retry_blocked_event) {
+				auto retried = mapper.pump_events(*scheduler, false);
+				if(!retried) {
+					return {.exit_code = fail(
+						"key-config-input-pump", retried.error()
+					)};
+				}
+				retry_blocked_event = retried->queue_blocked;
+			}
+			if(menu.status() !=
+				th03::app::NewClassicKeyConfigStatus::running) {
+				break;
+			}
+		}
+		if(presentation_pending && menu.status() ==
+			th03::app::NewClassicKeyConfigStatus::running) {
+			presented = platform.present(menu.surface());
+			if(!presented) {
+				return {.exit_code = fail(
+					"key-config-present", presented.error()
+				)};
+			}
+		}
+		const auto deadline = scheduler->next_deadline_ns();
+		const auto now = th03::platform::sdl_ticks_now_ns();
+		if(deadline && *deadline > now) {
+			SDL_DelayPrecise(std::min(*deadline - now, maximum_idle_delay_ns));
+		}
+	}
+	return {
+		.application_quit = menu.status() ==
+			th03::app::NewClassicKeyConfigStatus::application_quit,
+	};
+}
+
+NewClassicKeyConfigRunResult run_new_classic_options(
+	const std::filesystem::path &config_path,
+	th03::app::ClassicConfigOptions &config,
+	const std::filesystem::path &key_path,
+	th03::app::NewClassicKeyConfig &key_config,
+	const th03::app::NewClassicKeyConfig &key_defaults,
+	th03::app::RationalTickRate tick_rate,
+	th03::platform::SdlPlatform &platform,
+	th03::platform::SdlInputMapper &mapper
+)
+{
+	th03::app::NewClassicOptionsMenu menu(config);
+	for(;;) {
+		auto driven = run_host_ui(
+			tick_rate, platform, mapper,
+			[&]() { return menu.surface(); },
+			[&](th03::app::NewClassicUiInput input) ->
+				std::expected<HostUiStep, int> {
+				auto result = menu.consume(input);
+				if(result.status ==
+					th03::app::NewClassicOptionsStatus::apply_requested) {
+					auto stored = th03::app::commit_classic_config_store(
+						config_path, menu.config()
+					);
+					menu.report_commit(stored.has_value());
+					result.surface_changed = true;
+					result.status = menu.status();
+				}
+				return HostUiStep{
+					.surface_changed = result.surface_changed,
+					.done = result.status !=
+						th03::app::NewClassicOptionsStatus::running,
+				};
+			}
+		);
+		if(!driven) {
+			return {.exit_code = driven.error()};
+		}
+		if(menu.status() ==
+			th03::app::NewClassicOptionsStatus::application_quit) {
+			return {.application_quit = true};
+		}
+		if(menu.status() == th03::app::NewClassicOptionsStatus::applied) {
+			config = menu.config();
+			return {};
+		}
+		if(menu.status() ==
+			th03::app::NewClassicOptionsStatus::key_config_requested) {
+			auto configured = run_new_classic_key_config(
+				key_path, key_config, key_defaults, tick_rate, platform, mapper
+			);
+			if(configured.exit_code != 0 || configured.application_quit) {
+				return configured;
+			}
+			menu.resume_after_key_config();
+			continue;
+		}
+		return {.exit_code = 1};
+	}
+}
+
 ReplayBrowserRunResult run_replay_browser(
 	const std::filesystem::path &replay_root,
 	th03::app::RationalTickRate tick_rate,
@@ -1648,6 +1859,12 @@ ExperienceRunResult run_replay_playback(
 )
 {
 	const auto data_root = parsed.launch.content.data_root;
+	auto persisted = th03::app::load_classic_config_store(
+		parsed.launch.content.config
+	);
+	if(!persisted) {
+		return {.exit_code = fail("config-load", persisted.error())};
+	}
 	std::vector<std::byte> rhythm_rom{};
 	if(parsed.rhythm_rom) {
 		auto loaded = load_rhythm_rom(*parsed.rhythm_rom);
@@ -1669,6 +1886,7 @@ ExperienceRunResult run_replay_playback(
 		.document = std::move(document),
 		.checkpoint_index = checkpoint,
 		.kotohime_compatibility = parsed.launch.kotohime_compatibility,
+		.reduced_flash = persisted->options.reduced_flash,
 	});
 	if(!playback) {
 		return {.exit_code = fail("replay-playback-load", playback.error())};
@@ -1676,6 +1894,10 @@ ExperienceRunResult run_replay_playback(
 	auto created_session = th03::app::ClassicAudioSession::create({
 		.data_root = data_root,
 		.tick_rate = parsed.tick_rate,
+		.bgm_active = persisted->options.bgm_mode ==
+			th03::app::ClassicBgmMode::fm,
+		.effects_active = persisted->options.sfx_enabled,
+		.effects_follow_bgm = false,
 		.rhythm_rom = std::span<const std::byte>(rhythm_rom),
 		.rhythm_pcm = rhythm_pcm.view(),
 	});
@@ -1886,6 +2108,35 @@ ExperienceRunResult run_new_classic_experience(
 	th03::platform::SdlInputMapper &mapper
 )
 {
+	constexpr auto maximum_key = static_cast<std::uint16_t>(
+		SDL_SCANCODE_COUNT
+	);
+	const auto key_defaults = th03::app::detail::new_classic_default_key_config();
+	auto loaded_options = th03::app::load_classic_config_store(
+		parsed.launch.content.config
+	);
+	if(!loaded_options) {
+		return {.exit_code = fail("config-load", loaded_options.error())};
+	}
+	auto config_options = loaded_options->options;
+	const auto key_path = parsed.launch.content.config.parent_path() /
+		"TH3KEY.CFG";
+	auto loaded_keys = th03::app::load_new_classic_key_config(
+		key_path, key_defaults, maximum_key
+	);
+	if(!loaded_keys) {
+		return {.exit_code = fail("key-config-load", loaded_keys.error())};
+	}
+	auto key_config = loaded_keys->config;
+	if(loaded_keys->recovered_defaults) {
+		std::cerr << "status=warning\nstage=key-config-load\n"
+			"code=recovered-defaults\n";
+	}
+	if(auto replaced = mapper.replace_bindings(
+		th03::app::detail::new_classic_bindings(key_config)
+	); !replaced) {
+		return {.exit_code = fail("key-config-apply", replaced.error())};
+	}
 	for(;;) {
 		auto landing = run_new_classic_landing(
 			parsed.tick_rate, platform, mapper
@@ -1902,6 +2153,8 @@ ExperienceRunResult run_new_classic_experience(
 		}
 		if(*landing.choice == th03::app::NewClassicLandingChoice::play) {
 			parsed.mode = th03::app::ClassicLaunchMode::new_classic;
+			parsed.launch.autofire_mask = key_config.autofire;
+			parsed.launch.reduced_flash = config_options.reduced_flash;
 			parsed.launch.initial_route =
 				th03::app::ClassicRunnerInitialRoute::title;
 			auto game = run_classic_session(parsed, platform, mapper);
@@ -1929,6 +2182,8 @@ ExperienceRunResult run_new_classic_experience(
 		}
 		if(*landing.choice == th03::app::NewClassicLandingChoice::practice) {
 			parsed.mode = th03::app::ClassicLaunchMode::new_classic;
+			parsed.launch.autofire_mask = key_config.autofire;
+			parsed.launch.reduced_flash = config_options.reduced_flash;
 			parsed.launch.initial_route =
 				th03::app::ClassicRunnerInitialRoute::new_classic_practice;
 			auto game = run_classic_session(parsed, platform, mapper);
@@ -1977,10 +2232,38 @@ ExperienceRunResult run_new_classic_experience(
 			}
 			continue;
 		}
-		// KeyConfig and expanded Options are separate New Classic
-		// owners added by the following QoL parcels. Until each transaction is
-		// constructed, returning here keeps the hub stable without touching the
-		// shared Classic configuration or starting an unintended live run.
+		if(*landing.choice ==
+			th03::app::NewClassicLandingChoice::key_config) {
+			auto configured = run_new_classic_key_config(
+				key_path, key_config, key_defaults, parsed.tick_rate,
+				platform, mapper
+			);
+			if(configured.exit_code != 0) {
+				return {.exit_code = configured.exit_code};
+			}
+			if(configured.application_quit) {
+				return {
+					.disposition = ExperienceRunDisposition::application_quit
+				};
+			}
+			continue;
+		}
+		if(*landing.choice ==
+			th03::app::NewClassicLandingChoice::options) {
+			auto configured = run_new_classic_options(
+				parsed.launch.content.config, config_options, key_path,
+				key_config, key_defaults, parsed.tick_rate, platform, mapper
+			);
+			if(configured.exit_code != 0) {
+				return {.exit_code = configured.exit_code};
+			}
+			if(configured.application_quit) {
+				return {
+					.disposition = ExperienceRunDisposition::application_quit
+				};
+			}
+			continue;
+		}
 	}
 }
 
@@ -2015,6 +2298,11 @@ int run_product_shell(th03::app::ClassicCliRequest parsed)
 	}
 
 	for(;;) {
+		if(auto restored = product->second.replace_bindings(
+			th03::app::detail::classic_direct_vs_bindings()
+		); !restored) {
+			return fail("menu-input-policy", restored.error());
+		}
 		const auto menu = run_experience_menu(
 			parsed.tick_rate, *product->first, product->second
 		);

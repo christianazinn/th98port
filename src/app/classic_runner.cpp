@@ -306,6 +306,7 @@ struct ClassicRunner::Impl final {
 	ClassicRunnerOperations operations{};
 	ClassicRunnerStatus status = ClassicRunnerStatus::running;
 	ExperienceProfile experience = ExperienceProfile::classic;
+	bool reduced_flash = false;
 	std::unique_ptr<NewClassicReplayRecorder> replay_recorder{};
 	std::optional<ClassicRunnerError> failure{};
 	std::uint64_t expected_tick_index = 0U;
@@ -315,11 +316,13 @@ struct ClassicRunner::Impl final {
 		std::shared_ptr<void> owner_,
 		ClassicRunnerOperations operations_,
 		ExperienceProfile experience_,
+		bool reduced_flash_ = false,
 		std::unique_ptr<NewClassicReplayRecorder> replay_recorder_ = nullptr
 	) noexcept :
 		owner(std::move(owner_)),
 		operations(operations_),
 		experience(experience_),
+		reduced_flash(reduced_flash_),
 		replay_recorder(std::move(replay_recorder_))
 	{}
 };
@@ -331,6 +334,9 @@ ClassicRunner::load(ClassicRunnerRequest request)
 	if(paths.data_root.empty() || paths.main_executable.empty() ||
 		paths.mainl_executable.empty() || paths.op_executable.empty() ||
 		paths.font_rom.empty() || paths.config.empty() || paths.score.empty() ||
+		(request.autofire_mask > 3U) ||
+		(request.experience == ExperienceProfile::classic &&
+		 (request.autofire_mask != 0U || request.reduced_flash)) ||
 		(request.initial_route == ClassicRunnerInitialRoute::new_classic_practice &&
 		 request.experience != ExperienceProfile::new_classic)) {
 		return std::unexpected(runner_error(
@@ -375,6 +381,7 @@ ClassicRunner::load(ClassicRunnerRequest request)
 	}
 
 	auto resident = initial_resident(request.seed);
+	resident.autofire_mask = request.autofire_mask;
 	auto replay_recorder = request.experience == ExperienceProfile::new_classic
 		? std::make_unique<NewClassicReplayRecorder>(current_dos_date()) : nullptr;
 	auto session = ClassicOpSession::create(
@@ -403,7 +410,7 @@ ClassicRunner::load(ClassicRunnerRequest request)
 	};
 	auto impl = std::make_unique<Impl>(
 		std::static_pointer_cast<void>(std::move(owner)), operations,
-		request.experience, std::move(replay_recorder)
+		request.experience, request.reduced_flash, std::move(replay_recorder)
 	);
 	return std::unique_ptr<ClassicRunner>(
 		new ClassicRunner(std::move(impl))
@@ -500,6 +507,10 @@ ClassicRunner::compose_shown_surface(
 		error.code = ClassicRunnerErrorCode::surface_failed;
 		return std::unexpected(std::move(error));
 	}
+	if(impl_->experience == ExperienceProfile::new_classic &&
+		impl_->reduced_flash && surface->palette_tone == 150) {
+		surface->graphics_palette = surface->reduced_flash_palette;
+	}
 	return *surface;
 }
 
@@ -518,7 +529,8 @@ std::expected<std::unique_ptr<ClassicRunner>, ClassicRunnerError>
 ClassicRunnerTestAccess::create(
 	std::shared_ptr<void> owner,
 	ClassicRunnerOperations operations,
-	ExperienceProfile experience
+	ExperienceProfile experience,
+	bool reduced_flash
 )
 {
 	if(!owner || !valid_operations(operations)) {
@@ -527,7 +539,7 @@ ClassicRunnerTestAccess::create(
 		));
 	}
 	auto impl = std::make_unique<ClassicRunner::Impl>(
-		std::move(owner), operations, experience
+		std::move(owner), operations, experience, reduced_flash
 	);
 	return std::unique_ptr<ClassicRunner>(
 		new ClassicRunner(std::move(impl))

@@ -133,7 +133,8 @@ namespace {
 
 [[nodiscard]] CoreInput normalize_story_main_input(
 	const ClassicMainInputSample &sample,
-	InputContext context
+	InputContext context,
+	bool new_classic = false
 ) noexcept
 {
 	auto input = sample.aggregate;
@@ -155,8 +156,12 @@ namespace {
 	}
 	// input_mode_1p_vs_cpu() merges the source-global keyboard word into P1
 	// and joystick zero after sensing the multiplayer P1 word, then clears P2.
+	constexpr std::uint16_t movement_mask = 0x0F0FU;
+	const auto keyboard_p1 = new_classic ? static_cast<std::uint16_t>(
+		physical.keyboard.p1 & ~movement_mask
+	) : physical.keyboard.p1;
 	input.p1 = static_cast<std::uint16_t>(
-		physical.keyboard.p1 | physical.keyboard.system |
+		keyboard_p1 | physical.keyboard.system |
 		(physical.first_joystick_present ? physical.first_joystick : 0U)
 	);
 	input.p2 = 0U;
@@ -590,7 +595,9 @@ struct ClassicStoryBackend final {
 			));
 		}
 		const auto input_context = driver->input_context();
-		const auto normalized = normalize_story_main_input(input, input_context);
+		const auto normalized = normalize_story_main_input(
+			input, input_context, replay_recorder != nullptr
+		);
 		std::expected<MainProcessDriverTick, MainProcessDriverError> advanced =
 			std::unexpected(MainProcessDriverError{});
 		if(pause_menu) {
@@ -2294,10 +2301,11 @@ present::Raster ClassicStorySessionTestAccess::normalize_main_cutscene_seed(
 
 CoreInput ClassicStorySessionTestAccess::story_main_input(
 	const ClassicMainInputSample &input,
-	InputContext context
+	InputContext context,
+	bool new_classic
 ) noexcept
 {
-	return normalize_story_main_input(input, context);
+	return normalize_story_main_input(input, context, new_classic);
 }
 
 std::expected<void, ClassicStorySessionError>

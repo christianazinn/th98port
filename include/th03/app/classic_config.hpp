@@ -30,10 +30,19 @@ enum class ClassicRank : std::uint8_t {
 	lunatic,
 };
 
+enum class ClassicLanguage : std::uint8_t {
+	japanese,
+	english,
+};
+
 struct ClassicConfigOptions final {
 	ClassicBgmMode bgm_mode = ClassicBgmMode::fm;
 	ClassicKeyMode key_mode = ClassicKeyMode::key_key;
 	ClassicRank rank = ClassicRank::normal;
+	bool sfx_enabled = true;
+	bool legacy_autofire = false;
+	ClassicLanguage language = ClassicLanguage::japanese;
+	bool reduced_flash = false;
 
 	friend constexpr bool operator==(
 		const ClassicConfigOptions &,
@@ -42,9 +51,8 @@ struct ClassicConfigOptions final {
 };
 
 // Classic-compatible metadata. Native code never interprets a DOS resident
-// segment and writes all three fields as zero through classic_config_document().
+// segment and writes both fields as zero through classic_config_document().
 struct ClassicConfigMetadata final {
-	std::uint16_t unused = 0U;
 	std::uint16_t resident_segment = 0U;
 	std::uint8_t debug = 0U;
 
@@ -69,6 +77,8 @@ enum class ClassicConfigErrorCode : std::uint8_t {
 	invalid_bgm_mode,
 	invalid_key_mode,
 	invalid_rank,
+	invalid_autofire,
+	invalid_language,
 };
 
 struct ClassicConfigError final {
@@ -82,8 +92,8 @@ struct ClassicConfigError final {
 }
 
 // Produces the deterministic native representation. The original's DOS
-// resident segment, debug flag, and partially initialized unused word are not
-// runtime settings and are deliberately zeroed here.
+// resident segment and debug flag are not runtime settings and are
+// deliberately zeroed here; Replay Patch options own bytes 3 and 4.
 [[nodiscard]] constexpr ClassicConfigDocument classic_config_document(
 	ClassicConfigOptions options
 ) noexcept
@@ -100,7 +110,9 @@ struct ClassicConfigError final {
 		static_cast<std::uint8_t>(options.key_mode) <=
 		static_cast<std::uint8_t>(ClassicKeyMode::key_joy) &&
 		static_cast<std::uint8_t>(options.rank) <=
-		static_cast<std::uint8_t>(ClassicRank::lunatic);
+		static_cast<std::uint8_t>(ClassicRank::lunatic) &&
+		static_cast<std::uint8_t>(options.language) <=
+		static_cast<std::uint8_t>(ClassicLanguage::english);
 }
 
 [[nodiscard]] std::expected<ClassicConfigDocument, ClassicConfigError>

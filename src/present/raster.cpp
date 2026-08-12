@@ -538,15 +538,22 @@ std::int16_t Raster::palette_tone() const noexcept {
 	return palette_tone_;
 }
 
-void Raster::apply_pending_palette() noexcept {
+assets::Palette16Rgb4 Raster::palette_for_tone(std::int16_t tone) const noexcept
+{
+	assets::Palette16Rgb4 result{};
 	for(std::size_t index = 0U; index < pending_palette_.colors.size(); ++index) {
 		const auto source = pending_palette_.colors[index];
-		applied_palette_.colors[index] = assets::Rgb4{
-			apply_tone_component(source.r, palette_tone_),
-			apply_tone_component(source.g, palette_tone_),
-			apply_tone_component(source.b, palette_tone_),
+		result.colors[index] = assets::Rgb4{
+			apply_tone_component(source.r, tone),
+			apply_tone_component(source.g, tone),
+			apply_tone_component(source.b, tone),
 		};
 	}
+	return result;
+}
+
+void Raster::apply_pending_palette() noexcept {
+	applied_palette_ = palette_for_tone(palette_tone_);
 }
 
 void Raster::set_scroll_y(std::uint16_t scroll_y) noexcept {

@@ -8,8 +8,11 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <string_view>
 
 #include "th03/app/host_menu_canvas.hpp"
+#include "th03/app/classic_config.hpp"
+#include "th03/app/new_classic_key_config_store.hpp"
 #include "th03/app/replay_slot_store.hpp"
 #include "th03/formats/replay.hpp"
 
@@ -62,6 +65,45 @@ private:
 	NewClassicLandingChoice choice_ = NewClassicLandingChoice::play;
 	NewClassicLandingStatus status_ = NewClassicLandingStatus::running;
 	bool input_allowed_ = false;
+};
+
+enum class NewClassicOptionsStatus : std::uint8_t {
+	running,
+	key_config_requested,
+	apply_requested,
+	applied,
+	application_quit,
+};
+
+struct NewClassicOptionsResult final {
+	bool surface_changed = false;
+	NewClassicOptionsStatus status = NewClassicOptionsStatus::running;
+};
+
+// Replay Patch's expanded option set. English remains unavailable until an
+// authenticated translated-resource overlay is supplied; the menu discloses
+// that boundary and retains Japanese instead of pretending to switch assets.
+class NewClassicOptionsMenu final {
+public:
+	explicit NewClassicOptionsMenu(ClassicConfigOptions config) noexcept;
+	[[nodiscard]] NewClassicOptionsResult consume(
+		NewClassicUiInput input
+	) noexcept;
+	void report_commit(bool success) noexcept;
+	void resume_after_key_config() noexcept;
+	[[nodiscard]] present::SourceSurface surface() const noexcept;
+	[[nodiscard]] const ClassicConfigOptions &config() const noexcept;
+	[[nodiscard]] NewClassicOptionsStatus status() const noexcept;
+
+private:
+	void draw() noexcept;
+	HostMenuCanvas canvas_{};
+	ClassicConfigOptions config_{};
+	std::size_t selected_ = 0U;
+	NewClassicOptionsStatus status_ = NewClassicOptionsStatus::running;
+	bool input_allowed_ = false;
+	bool commit_failure_ = false;
+	bool english_unavailable_notice_ = false;
 };
 
 enum class ReplayCatalogSlotState : std::uint8_t {
@@ -199,6 +241,84 @@ struct NewClassicReplaySaveTestAccess final {
 	static void select_end(NewClassicReplaySaveMenu &menu) noexcept;
 	static void set_slot(NewClassicReplaySaveMenu &menu, std::uint8_t slot)
 		noexcept;
+};
+
+enum class NewClassicKeyConfigStatus : std::uint8_t {
+	running,
+	apply_requested,
+	applied,
+	back,
+	application_quit,
+};
+
+struct NewClassicKeyConfigInput final {
+	NewClassicUiInput ui{};
+	std::optional<std::uint16_t> scancode_pressed{};
+	bool any_scancode_held = false;
+};
+
+struct NewClassicKeyConfigResult final {
+	bool surface_changed = false;
+	NewClassicKeyConfigStatus status = NewClassicKeyConfigStatus::running;
+};
+
+using NewClassicHostKeyName = std::string_view (*)(
+	void *context,
+	std::uint16_t key
+) noexcept;
+
+// Replay Patch's three-page keyboard transaction, expressed in host scancodes.
+// Persistence and SDL remapping remain caller-owned and retryable.
+class NewClassicKeyConfigMenu final {
+public:
+	NewClassicKeyConfigMenu(
+		NewClassicKeyConfig config,
+		NewClassicKeyConfig defaults,
+		std::uint16_t maximum_key,
+		std::uint16_t capture_cancel_key,
+		NewClassicHostKeyName key_name,
+		void *key_name_context = nullptr
+	) noexcept;
+
+	[[nodiscard]] NewClassicKeyConfigResult consume(
+		NewClassicKeyConfigInput input
+	) noexcept;
+	void report_commit(bool success) noexcept;
+	[[nodiscard]] present::SourceSurface surface() const noexcept;
+	[[nodiscard]] const NewClassicKeyConfig &config() const noexcept;
+	[[nodiscard]] NewClassicKeyConfigStatus status() const noexcept;
+
+private:
+	enum class Page : std::uint8_t { p1, p2, story };
+	enum class Phase : std::uint8_t {
+		menu,
+		capture_wait_release,
+		capture_wait_press,
+		capture_wait_final_release,
+		discard,
+		commit_failure,
+	};
+	void draw() noexcept;
+	void set_page(Page page) noexcept;
+	void restore_defaults() noexcept;
+	void assign(std::uint16_t key) noexcept;
+	[[nodiscard]] std::size_t row_count() const noexcept;
+	[[nodiscard]] std::optional<std::size_t> binding_index() const noexcept;
+
+	NewClassicKeyConfig original_{};
+	NewClassicKeyConfig config_{};
+	NewClassicKeyConfig defaults_{};
+	std::uint16_t maximum_key_ = 0U;
+	std::uint16_t capture_cancel_key_ = 0U;
+	NewClassicHostKeyName key_name_ = nullptr;
+	void *key_name_context_ = nullptr;
+	HostMenuCanvas canvas_{};
+	Page page_ = Page::story;
+	Phase phase_ = Phase::menu;
+	std::size_t selected_ = 0U;
+	std::optional<std::size_t> capture_binding_{};
+	NewClassicKeyConfigStatus status_ = NewClassicKeyConfigStatus::running;
+	bool input_allowed_ = false;
 };
 
 } // namespace th03::app

@@ -470,6 +470,14 @@ void test_vs_cpu_input_modes()
 		live_one_player.system == 0x1032U &&
 		live_one_player.charge_mask == 0x01U,
 		"live 1P-vs-CPU merges keyboard interface and joystick zero into P1");
+	const auto new_classic_one_player =
+		ClassicOpSessionTestAccess::vs_cpu_main_input(
+			resident, live, th03::InputContext::gameplay, true
+		);
+	expect(new_classic_one_player.p1 == 0x103BU &&
+		new_classic_one_player.p2 == 0U &&
+		new_classic_one_player.system == 0x1032U,
+		"New Classic 1P-vs-CPU replaces multiplayer movement with Story keys");
 
 	resident.game_mode = th03::game_mode::vs_1p_2p;
 	resident.key_mode = 0U;

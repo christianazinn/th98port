@@ -51,6 +51,10 @@ struct ClassicRunnerRequest final {
 	// Host/application policy only. Deterministic gameplay never receives this
 	// identity; New Classic adapters apply recorded transforms at the boundary.
 	ExperienceProfile experience = ExperienceProfile::classic;
+	// Replay Patch Autofire selection. Classic must leave this at zero.
+	std::uint8_t autofire_mask = 0U;
+	// Replay Patch's MAIN-only warning-flash reduction (tone 150 -> 100).
+	bool reduced_flash = false;
 	// New Classic may enter one Replay Patch-owned route without first exposing
 	// Classic's title. The shared authenticated session still owns every child.
 	ClassicRunnerInitialRoute initial_route = ClassicRunnerInitialRoute::title;

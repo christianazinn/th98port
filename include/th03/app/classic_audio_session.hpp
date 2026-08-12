@@ -31,6 +31,10 @@ struct ClassicAudioSessionConfig final {
 	// snd_determine_mode() when Music is Off, leaving their fresh-process
 	// snd_fm_possible false and disabling sound effects as well.
 	bool bgm_active = true;
+	// Replay Patch exposes sound effects independently from Music. Classic
+	// retains the original fresh-process dependency through effects_follow_bgm.
+	bool effects_active = true;
+	bool effects_follow_bgm = true;
 	// Empty suppresses ADPCM-A playback unless rhythm_pcm is supplied. A ROM is
 	// copied by the engine and must contain exactly 8 KiB.
 	std::span<const std::byte> rhythm_rom{};

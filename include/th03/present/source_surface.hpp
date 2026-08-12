@@ -20,6 +20,8 @@ struct SourceSurface {
 	Page shown_page = Page::zero;
 	RasterMode raster_mode = RasterMode::lines_400;
 	std::uint16_t effective_scroll_y = 0U;
+	std::int16_t palette_tone = 100;
+	assets::Palette16Rgb4 reduced_flash_palette{};
 };
 
 enum class SourceSurfaceErrorCode : std::uint8_t {

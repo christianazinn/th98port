@@ -11,8 +11,9 @@ displayed frame is formed by the native PC-98-style presentation layer. That
 vertical slice is a gate, not the final product target. Work continues through
 the original title/selection, Story/MAINL/cutscene/staff flow, persistence, and
 audio. Replay files remain an internal validation input; a replay menu,
-recording UI, and migration UX are deliberately deferred until the Classic
-game is otherwise functional.
+recording UI, and migration UX were deliberately deferred until the Classic
+game was otherwise functional. They are now implemented as the separate New
+Classic experience and do not alter Classic's source-facing behavior.
 
 Original game content may be used from the developer's explicit local content
 root for authentic builds and tests. It remains ignored and external: no
@@ -316,10 +317,10 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | Fixed tick plus input-latch boundary | Integrated, telemetry open | SDL nanosecond events feed the rational scheduler; nominal PC-9801 24 kHz cadence and immediate first phase are the application default, deterministic callers preserve overdue boundaries, and interactive callers use source-style rebasing. Add persistent-overload developer reporting without changing this API. |
 | Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
 | SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
-| V13 conversion, replay browser, and recording UI | No | Core and formats already provide the canonical format path. Add application recording only after the host latches input correctly. |
+| V13 conversion, replay browser, and recording UI | Integrated in New Classic | The app records canonical V13, owns bounded slot storage/browser/save/name/checkpoint UI, and plays through the shared MAIN/MAINL owners. Classic remains free of replay UI. |
 | OP menus, Story, MAINL, cutscenes, staff | Integrated | The source-private OP owner binds title, retained Options/Music Room, read-only HiScore, Story/all-VS selection, Story, MAINL/MAIN VS, winner return, both interstages, primary and conditional extra endings, staff/verdict, score persistence, registration, and the exact four-recipe automatic Demo loop. No external OP route or replay UI is required. |
 | Audio | Engine, TH03 transport/SFX/EFC service, fixed resampler, Classic session, and SDL endpoint integrated | The launcher applies source-semantic scene commands, advances one deterministic audio interval per logical sample, and treats device loss as delivery-only. MAINL selects and loads the exact character/decisive song and effect bank; fresh/repeat/terminal MAIN publishes source Reset/Play/Stop lifecycle commands. All 61 ordinary live-MAIN donor SFX rows feed the source `snd_se_update()` boundary, including forced warning effect 19, and live pause/resume emits effect 21. Authenticated gates cover all 40 semantic cue identities, 22 effects, all 21 songs, and independent FM1-6/SSG1-2/rhythm stems. Exact-size `--rhythm-rom` and authenticated decoded `--rhythm-pcm` paths reach the engine; replacement-data packaging, aligned reference capture, shipped-TSR traces, and physical-device QA remain release work. |
-| Persistent score/configuration UI and localization/QoL | Original UI integrated; QoL pending | The exact original score/config codecs, source mutation rules, validated atomic whole-file stores, OP Options, and read-only HiScore/MAINL registration paths are app-owned. Localization and optional QoL remain outside core. |
+| Persistent score/configuration UI and localization/QoL | Original UI plus New Classic KeyConfig/Options integrated; localization pending | The exact original score/config codecs and UI remain app-owned. New Classic adds a bounded 26-scancode store, Story movement override, per-player Autofire, independent SFX, and exact warning-flash reduction. English still requires the authenticated translated overlay. |
 
 The following parcels can proceed now, provided they do not claim readiness for VS or change core semantics:
 
@@ -363,12 +364,12 @@ Once VS-3 holds, add scenes in donor order rather than building a broad launcher
    staff CDG/palette/flake,
    and return-route comparison; conveniences such as rewind, text log, and
    language selection remain later profile work.
-4. Profile and optional replay UX. After the Classic source scenes, persistence,
-   and audio work, add a versioned app profile for controls/window/audio volume.
-   A replay browser is explicitly optional and must not delay the Classic port.
-   If later added, it remains a user-interface layer rather than an extension
-   of a historical save block. Record and play only V13 at the app input
-   boundary; format migration remains a tool concern.
+4. Profile and replay UX. New Classic now records and plays only V13 at the app
+   input boundary, owns its browser/save/pause/Practice routes, and persists a
+   versioned bounded SDL-scancode profile without extending a historical save
+   block. Format migration remains a tool concern. Remaining Replay Patch work
+   stays in the New Classic adapters/presentation policy rather than forking
+   deterministic Classic gameplay.
 
 ## Audio plan
 
