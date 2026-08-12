@@ -859,7 +859,10 @@ bool authentic_gate(
 		return false;
 	}
 	auto first_forced = th03::app::ClassicRunnerTestAccess::
-		force_story_player_win(runner);
+		force_story_main_outcome(
+			runner,
+			th03::app::ClassicStoryRouteTestOutcome::player_win
+		);
 	if(!first_forced) {
 		std::cerr << "authentic-script-stage=force-first-win tick="
 			<< tick_index << '\n';
@@ -942,7 +945,10 @@ bool authentic_gate(
 		if(after == th03::app::ClassicStorySessionScene::main &&
 			last->process_advanced && !main_forced) {
 			auto forced = th03::app::ClassicRunnerTestAccess::
-				force_story_player_win(runner);
+				force_story_main_outcome(
+					runner,
+					th03::app::ClassicStoryRouteTestOutcome::player_win
+				);
 			if(!forced) {
 				std::cerr << "authentic-script-stage=force-win tick="
 					<< tick_index << " code=" << static_cast<unsigned>(
@@ -1046,25 +1052,235 @@ bool authentic_gate(
 		return false;
 	}
 
-	// The returned title is a fresh real scene. Wait for its source input poll,
-	// open the menu, and exit through Cancel instead of ending the harness at an
-	// application-private ownership boundary.
+	// Re-enter Story through the real title and selector for each remaining
+	// terminal branch. The helper stops only after the new MAIN has executed its
+	// first process frame, preserving the same capability boundary as the clear
+	// spine above.
+	const auto enter_story_main = [&]() {
+		reached_input = false;
+		for(std::size_t frame = 0U; frame < 300U && !reached_input; ++frame) {
+			if(!step()) { return false; }
+			reached_input = last->input_sampled;
+		}
+		if(!reached_input || !step(0x0020U)) {
+			return false;
+		}
+		menu_drawn = false;
+		for(std::size_t frame = 0U; frame < 32U && !menu_drawn; ++frame) {
+			if(!step()) { return false; }
+			menu_drawn = last->input_sampled;
+		}
+		if(!menu_drawn || !step(0x0020U) ||
+			th03::app::ClassicRunnerTestAccess::scene(runner) !=
+				th03::app::ClassicOpSessionScene::character_selection) {
+			return false;
+		}
+		reached_input = false;
+		for(std::size_t frame = 0U; frame < 64U && !reached_input; ++frame) {
+			if(!step()) { return false; }
+			reached_input = last->input_sampled;
+		}
+		if(!reached_input || !hold_until_sampled(0x0020U)) {
+			return false;
+		}
+		for(std::size_t frame = 0U; frame < 256U; ++frame) {
+			if(!step()) { return false; }
+			if(th03::app::ClassicRunnerTestAccess::scene(runner) ==
+				th03::app::ClassicOpSessionScene::story) {
+				break;
+			}
+		}
+		if(th03::app::ClassicRunnerTestAccess::scene(runner) !=
+			th03::app::ClassicOpSessionScene::story) {
+			return false;
+		}
+		for(std::size_t frame = 0U; frame < 512U; ++frame) {
+			const auto scene =
+				th03::app::ClassicRunnerTestAccess::story_scene(runner);
+			const std::uint16_t system = scene && *scene !=
+				th03::app::ClassicStorySessionScene::main &&
+				((tick_index & 1U) == 0U) ? 0x0020U : 0U;
+			if(!step(system)) { return false; }
+			if(last->process_advanced &&
+				th03::app::ClassicRunnerTestAccess::story_scene(runner) ==
+					th03::app::ClassicStorySessionScene::main) {
+				return true;
+			}
+		}
+		return false;
+	};
+
+	enum class BranchPolicy : std::uint8_t {
+		loss_then_clear,
+		decline_continue,
+		exhaust_continues,
+		exit_main,
+	};
+	struct BranchTrace final {
+		std::array<std::size_t, 10U> scenes{};
+		std::size_t main_outcomes = 0U;
+	};
+	const auto drive_branch = [&](BranchPolicy policy) ->
+		std::optional<BranchTrace> {
+		BranchTrace result{};
+		++result.scenes[static_cast<std::size_t>(
+			th03::app::ClassicStorySessionScene::stage_splash
+		)];
+		++result.scenes[static_cast<std::size_t>(
+			th03::app::ClassicStorySessionScene::main
+		)];
+		auto previous = std::optional{
+			th03::app::ClassicStorySessionScene::main
+		};
+		bool main_forced_for_entry = false;
+		const auto outcome_for = [&](std::size_t index) {
+			switch(policy) {
+			case BranchPolicy::loss_then_clear:
+				return index == 0U ?
+					th03::app::ClassicStoryRouteTestOutcome::player_loss :
+					th03::app::ClassicStoryRouteTestOutcome::player_win;
+			case BranchPolicy::decline_continue:
+			case BranchPolicy::exhaust_continues:
+				return th03::app::ClassicStoryRouteTestOutcome::player_loss;
+			case BranchPolicy::exit_main:
+				return th03::app::ClassicStoryRouteTestOutcome::exit_to_operator;
+			}
+			return th03::app::ClassicStoryRouteTestOutcome::exit_to_operator;
+		};
+		auto forced = th03::app::ClassicRunnerTestAccess::
+			force_story_main_outcome(runner, outcome_for(0U));
+		if(!forced) {
+			return std::nullopt;
+		}
+		main_forced_for_entry = true;
+		result.main_outcomes = 1U;
+		for(std::size_t frame = 0U; frame < 300'000U; ++frame) {
+			const auto before =
+				th03::app::ClassicRunnerTestAccess::story_scene(runner);
+			std::uint16_t system = 0U;
+			if(before == th03::app::ClassicStorySessionScene::continue_menu &&
+				policy == BranchPolicy::decline_continue) {
+				system = 0x1000U;
+			} else if(before && *before !=
+				th03::app::ClassicStorySessionScene::main &&
+				((tick_index & 1U) == 0U)) {
+				system = 0x0020U;
+			}
+			if(!step(system)) {
+				return std::nullopt;
+			}
+			const auto after =
+				th03::app::ClassicRunnerTestAccess::story_scene(runner);
+			if(after != previous) {
+				if(after) {
+					const auto index = static_cast<std::size_t>(*after);
+					if(index >= result.scenes.size()) {
+						return std::nullopt;
+					}
+					++result.scenes[index];
+				}
+				main_forced_for_entry = false;
+				previous = after;
+			}
+			if(after == th03::app::ClassicStorySessionScene::main &&
+				last->process_advanced && !main_forced_for_entry) {
+				auto next = th03::app::ClassicRunnerTestAccess::
+					force_story_main_outcome(
+						runner, outcome_for(result.main_outcomes)
+					);
+				if(!next) {
+					return std::nullopt;
+				}
+				main_forced_for_entry = true;
+				++result.main_outcomes;
+			}
+			if(th03::app::ClassicRunnerTestAccess::scene(runner) ==
+				th03::app::ClassicOpSessionScene::title_menu) {
+				return result;
+			}
+		}
+		return std::nullopt;
+	};
+	const auto count_branch_scene = [](const BranchTrace &branch, auto scene) {
+		return branch.scenes[static_cast<std::size_t>(scene)];
+	};
+
+	if(!enter_story_main()) { return false; }
+	const auto continued = drive_branch(BranchPolicy::loss_then_clear);
+	if(!continued || continued->main_outcomes != 10U ||
+		count_branch_scene(*continued,
+			th03::app::ClassicStorySessionScene::stage_splash) != 10U ||
+		count_branch_scene(*continued,
+			th03::app::ClassicStorySessionScene::win) != 8U ||
+		count_branch_scene(*continued,
+			th03::app::ClassicStorySessionScene::continue_menu) != 1U ||
+		count_branch_scene(*continued,
+			th03::app::ClassicStorySessionScene::game_over) != 0U ||
+		count_branch_scene(*continued,
+			th03::app::ClassicStorySessionScene::cutscene) != 3U ||
+		count_branch_scene(*continued,
+			th03::app::ClassicStorySessionScene::staff_verdict) != 1U ||
+		count_branch_scene(*continued,
+			th03::app::ClassicStorySessionScene::high_score_registration) != 2U) {
+		std::cerr << "authentic-script-stage=continue-clear-branch\n";
+		return false;
+	}
+
+	if(!enter_story_main()) { return false; }
+	const auto declined = drive_branch(BranchPolicy::decline_continue);
+	if(!declined || declined->main_outcomes != 1U ||
+		count_branch_scene(*declined,
+			th03::app::ClassicStorySessionScene::win) != 1U ||
+		count_branch_scene(*declined,
+			th03::app::ClassicStorySessionScene::continue_menu) != 1U ||
+		count_branch_scene(*declined,
+			th03::app::ClassicStorySessionScene::game_over) != 1U ||
+		count_branch_scene(*declined,
+			th03::app::ClassicStorySessionScene::high_score_registration) != 1U) {
+		std::cerr << "authentic-script-stage=continue-decline-branch\n";
+		return false;
+	}
+
+	if(!enter_story_main()) { return false; }
+	const auto exhausted = drive_branch(BranchPolicy::exhaust_continues);
+	if(!exhausted || exhausted->main_outcomes != 4U ||
+		count_branch_scene(*exhausted,
+			th03::app::ClassicStorySessionScene::win) != 4U ||
+		count_branch_scene(*exhausted,
+			th03::app::ClassicStorySessionScene::continue_menu) != 3U ||
+		count_branch_scene(*exhausted,
+			th03::app::ClassicStorySessionScene::game_over) != 1U ||
+		count_branch_scene(*exhausted,
+			th03::app::ClassicStorySessionScene::high_score_registration) != 4U) {
+		std::cerr << "authentic-script-stage=continue-exhausted-branch\n";
+		return false;
+	}
+
+	if(!enter_story_main()) { return false; }
+	const auto exited = drive_branch(BranchPolicy::exit_main);
+	if(!exited || exited->main_outcomes != 1U ||
+		count_branch_scene(*exited,
+			th03::app::ClassicStorySessionScene::win) != 0U ||
+		count_branch_scene(*exited,
+			th03::app::ClassicStorySessionScene::high_score_registration) != 0U) {
+		std::cerr << "authentic-script-stage=main-exit-branch\n";
+		return false;
+	}
+
+	// The final returned title is also a fresh real scene. Open its real menu and
+	// exit through Cancel rather than ending at an application-private boundary.
 	reached_input = false;
 	for(std::size_t frame = 0U; frame < 300U && !reached_input; ++frame) {
 		if(!step()) { return false; }
 		reached_input = last->input_sampled;
 	}
-	if(!reached_input || !step(0x0020U)) {
-		return false;
-	}
+	if(!reached_input || !step(0x0020U)) { return false; }
 	menu_drawn = false;
 	for(std::size_t frame = 0U; frame < 32U && !menu_drawn; ++frame) {
 		if(!step()) { return false; }
 		menu_drawn = last->input_sampled;
 	}
-	if(!menu_drawn || !step() || !step(0x1000U, true)) {
-		return false;
-	}
+	if(!menu_drawn || !step() || !step(0x1000U, true)) { return false; }
 	for(std::size_t frame = 0U; frame < 8U && runner.status() ==
 		th03::app::ClassicRunnerStatus::running; ++frame) {
 		if(!step(0U, true)) {

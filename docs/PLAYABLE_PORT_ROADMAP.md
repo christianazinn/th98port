@@ -340,7 +340,11 @@ Once VS-3 holds, add scenes in donor order rather than building a broad launcher
    extra-ending cutscene are integrated. The source-traced owner reaches each
    next-stage, continue, game-over, registration, extra-ending, and exit branch
    with the corresponding retained Raster/palette/timing and
-   resident/persistence state.
+   resident/persistence state. The production original-resource gate now
+   proves a fresh 1CC, used-credit clear, Continue Yes/No, exhausted-credit
+   Game Over, MAIN route 0, atomic registration read-back, and fresh-title Quit
+   on both compilers; it substitutes only the terminal after one real MAIN
+   process frame and is not a natural-gameplay or replay parity claim.
 2. OP title and selection are integrated. The source's Story, VS, Music Room,
    registration view, Options, Quit, and automatic Demo paths all use the
    authenticated BFNT/CDG/PI presentation and typed process handoffs. The SDL

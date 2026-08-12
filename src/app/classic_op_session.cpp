@@ -1356,14 +1356,18 @@ struct ClassicOpSessionBackend final {
 	}
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
-	force_story_player_win_for_route_test()
+	force_story_main_outcome_for_route_test(
+		ClassicStoryRouteTestOutcome outcome
+	)
 	{
 		if(!story) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
-		auto forced = ClassicStorySessionTestAccess::force_player_win(*story);
+		auto forced = ClassicStorySessionTestAccess::force_main_outcome(
+			*story, outcome
+		);
 		if(!forced) {
 			return std::unexpected(story_error(std::move(forced.error())));
 		}
@@ -2215,9 +2219,9 @@ Result backend_call(void *context, Method method, Args &&...args)
 			return static_cast<ClassicOpSessionBackend *>(context)->
 				story_failure_detail_code_for_route_test();
 		},
-		.force_story_player_win = [](void *context) {
+		.force_story_main_outcome = [](void *context, auto outcome) {
 			return static_cast<ClassicOpSessionBackend *>(context)->
-				force_story_player_win_for_route_test();
+				force_story_main_outcome_for_route_test(outcome);
 		},
 	};
 }
@@ -2578,19 +2582,20 @@ ClassicOpSessionTestAccess::story_failure_detail_code(
 }
 
 std::expected<void, ClassicOpSessionError>
-ClassicOpSessionTestAccess::force_story_player_win(
-	ClassicOpSession &session
+ClassicOpSessionTestAccess::force_story_main_outcome(
+	ClassicOpSession &session,
+	ClassicStoryRouteTestOutcome outcome
 )
 {
 	if(session.impl_->scene != ClassicOpSessionScene::story ||
 		!session.impl_->test_hooks.context ||
-		!session.impl_->test_hooks.force_story_player_win) {
+		!session.impl_->test_hooks.force_story_main_outcome) {
 		return std::unexpected(session_error(
 			ClassicOpSessionErrorCode::backend_contract_failed
 		));
 	}
-	return session.impl_->test_hooks.force_story_player_win(
-		session.impl_->test_hooks.context
+	return session.impl_->test_hooks.force_story_main_outcome(
+		session.impl_->test_hooks.context, outcome
 	);
 }
 

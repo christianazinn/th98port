@@ -47,6 +47,12 @@ enum class ClassicStorySessionStatus : std::uint8_t {
 	failed,
 };
 
+enum class ClassicStoryRouteTestOutcome : std::uint8_t {
+	player_win,
+	player_loss,
+	exit_to_operator,
+};
+
 enum class ClassicStorySessionErrorCode : std::uint8_t {
 	invalid_config,
 	invalid_backend,
@@ -216,7 +222,7 @@ struct ClassicStorySessionBackendOperations final {
 struct ClassicStorySessionTestHooks final {
 	void *context = nullptr;
 	std::expected<void, ClassicStorySessionError>
-	(*force_player_win)(void *) = nullptr;
+	(*force_main_outcome)(void *, ClassicStoryRouteTestOutcome) = nullptr;
 };
 
 class ClassicStorySession final {
@@ -309,7 +315,10 @@ struct ClassicStorySessionTestAccess final {
 		InputContext context
 	) noexcept;
 	[[nodiscard]] static std::expected<void, ClassicStorySessionError>
-	force_player_win(ClassicStorySession &session);
+	force_main_outcome(
+		ClassicStorySession &session,
+		ClassicStoryRouteTestOutcome outcome
+	);
 	[[nodiscard]] static std::optional<ClassicStorySessionErrorCode>
 	failure_code(const ClassicStorySession &session) noexcept;
 	[[nodiscard]] static std::optional<std::uint8_t>

@@ -200,7 +200,11 @@ split comparisons. Original game data and replay captures remain external.
   composes the OP title, retained Options and Music Room, read-only HiScore,
   Story/all-VS character selection, Story, MAINL/MAIN VS, winner return, and
   the exact four-recipe automatic Demo loop. Every source OP route is now
-  internally owned without adding replay UI.
+  internally owned without adding replay UI. A supplied-original integration
+  matrix drives the production owner through a full Reimu clear, used-credit
+  clear, Continue Yes/No, exhausted credits, MAIN route 0, score persistence,
+  fresh-title return, and real Quit while composing every changed surface and
+  draining every audio command on GCC and MSVC.
 - The same boundary authenticates the supported unpacked Japanese `MAINL.EXE`
   and owns its exact Story title/name table, staff verdict strings, and flake
   masks. Packed DIET executable support is not yet provided; original bytes

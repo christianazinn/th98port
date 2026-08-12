@@ -343,6 +343,7 @@ struct ClassicStoryBackend final {
 	std::filesystem::path score_path{};
 	GameInit process_start{};
 	std::optional<ClassicStoryTerminal> forced_terminal{};
+	std::optional<ClassicStoryTerminal> forced_continue_terminal{};
 
 	ClassicStoryBackend(
 		std::shared_ptr<MainResourceLoader> loader_,
@@ -574,20 +575,23 @@ struct ClassicStoryBackend final {
 	}
 
 	std::expected<void, ClassicStorySessionError>
-	force_player_win_for_route_test()
+	force_main_outcome_for_route_test(ClassicStoryRouteTestOutcome outcome)
 	{
-		if(!process || !driver || forced_terminal || process_start.game_mode !=
-				game_mode::story || process_start.story_stage > 8U) {
+		if(!process || !driver || forced_terminal || forced_continue_terminal ||
+			process_start.game_mode != game_mode::story ||
+			process_start.story_stage > 8U) {
 			return std::unexpected(session_error(
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
 		}
 
 		auto terminal = process->canonical_state();
-		terminal.route = 2U;
+		terminal.route = outcome ==
+			ClassicStoryRouteTestOutcome::exit_to_operator ? 0U : 2U;
 		terminal.game_mode = game_mode::story;
 		terminal.story_stage = process_start.story_stage;
-		terminal.winner = 0;
+		terminal.winner = outcome == ClassicStoryRouteTestOutcome::player_loss ?
+			1 : 0;
 		terminal.p1_score.fill(9U);
 		// finish_main_process() performs this write before the resident
 		// transition is constructed.
@@ -609,12 +613,29 @@ struct ClassicStoryBackend final {
 		transition.resident.runtime_snapshot.reset();
 		transition.resident.compact_runtime_snapshot.reset();
 		transition.resident.round_start_snapshot.reset();
+		if(outcome == ClassicStoryRouteTestOutcome::exit_to_operator) {
+			transition.action = SessionAction::exit_to_operator;
+			forced_terminal.emplace(ClassicStoryTerminal{
+				.process_start = process_start,
+				.terminal = terminal,
+				.transition = std::move(transition),
+			});
+			driver.reset();
+			process.reset();
+			return {};
+		}
 		transition.resident.story_stage = static_cast<std::uint8_t>(
 			process_start.story_stage + 1U
 		);
 		transition.resident.last_score = {};
 		transition.resident.last_score[0U] = terminal.p1_score;
-		if(process_start.story_stage == 8U) {
+		if(outcome == ClassicStoryRouteTestOutcome::player_loss) {
+			transition.high_score_registration = transition.resident;
+			transition.resident.last_score = {};
+			transition.action = transition.resident.remaining_credits == 0U ?
+				SessionAction::exit_to_operator :
+				SessionAction::request_continue;
+		} else if(process_start.story_stage == 8U) {
 			transition.resident.story_stage = 99U;
 			transition.high_score_registration = transition.resident;
 			transition.action = SessionAction::ending;
@@ -640,7 +661,8 @@ struct ClassicStoryBackend final {
 
 		// Stages 7 and 8 route directly into a cutscene without the winner
 		// scene that would otherwise publish a handoff Raster.
-		if(process_start.story_stage >= 7U) {
+		if(outcome == ClassicStoryRouteTestOutcome::player_win &&
+			process_start.story_stage >= 7U) {
 			if(cutscene_handoff) {
 				return std::unexpected(session_error(
 					ClassicStorySessionErrorCode::backend_contract_failed
@@ -650,13 +672,20 @@ struct ClassicStoryBackend final {
 				process->raster()
 			));
 		}
-		forced_terminal.emplace(ClassicStoryTerminal{
+		ClassicStoryTerminal forced{
 			.process_start = process_start,
 			.terminal = terminal,
 			.transition = std::move(transition),
-		});
-		driver.reset();
-		process.reset();
+		};
+		if(outcome == ClassicStoryRouteTestOutcome::player_loss &&
+			forced.transition.action == SessionAction::request_continue) {
+			forced_continue_terminal = forced;
+		}
+		forced_terminal.emplace(std::move(forced));
+		if(outcome == ClassicStoryRouteTestOutcome::player_win) {
+			driver.reset();
+			process.reset();
+		}
 		return {};
 	}
 
@@ -1096,6 +1125,29 @@ struct ClassicStoryBackend final {
 	std::expected<SessionTransition, ClassicStorySessionError>
 	resolve_continue(ContinueChoice choice)
 	{
+		if(forced_continue_terminal) {
+			auto transition = forced_continue_terminal->transition;
+			if(transition.action != SessionAction::request_continue ||
+				transition.resident.story_stage == 0U ||
+				transition.resident.remaining_credits == 0U) {
+				return std::unexpected(session_error(
+					ClassicStorySessionErrorCode::backend_contract_failed
+				));
+			}
+			--transition.resident.story_stage;
+			transition.resident.story_lives = 2U;
+			if(choice == ContinueChoice::accept) {
+				--transition.resident.remaining_credits;
+				transition.action = SessionAction::start_gameplay;
+				continue_completion.reset();
+			} else {
+				transition.action = SessionAction::exit_to_operator;
+			}
+			forced_continue_terminal.reset();
+			driver.reset();
+			process.reset();
+			return transition;
+		}
 		if(!driver) {
 			return std::unexpected(session_error(
 				ClassicStorySessionErrorCode::backend_contract_failed
@@ -1447,9 +1499,9 @@ ClassicStorySessionTestHooks backend_test_hooks(
 {
 	return {
 		.context = &backend,
-		.force_player_win = [](void *context) {
+		.force_main_outcome = [](void *context, auto outcome) {
 			return static_cast<ClassicStoryBackend *>(context)->
-				force_player_win_for_route_test();
+				force_main_outcome_for_route_test(outcome);
 		},
 	};
 }
@@ -2048,19 +2100,20 @@ CoreInput ClassicStorySessionTestAccess::story_main_input(
 }
 
 std::expected<void, ClassicStorySessionError>
-ClassicStorySessionTestAccess::force_player_win(
-	ClassicStorySession &session
+ClassicStorySessionTestAccess::force_main_outcome(
+	ClassicStorySession &session,
+	ClassicStoryRouteTestOutcome outcome
 )
 {
 	if(session.impl_->scene != ClassicStorySessionScene::main ||
 		!session.impl_->test_hooks.context ||
-		!session.impl_->test_hooks.force_player_win) {
+		!session.impl_->test_hooks.force_main_outcome) {
 		return std::unexpected(session_error(
 			ClassicStorySessionErrorCode::backend_contract_failed
 		));
 	}
-	return session.impl_->test_hooks.force_player_win(
-		session.impl_->test_hooks.context
+	return session.impl_->test_hooks.force_main_outcome(
+		session.impl_->test_hooks.context, outcome
 	);
 }
 

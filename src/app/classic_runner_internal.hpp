@@ -55,7 +55,10 @@ struct ClassicRunnerTestAccess final {
 	[[nodiscard]] static std::optional<std::uint8_t>
 	story_failure_detail_code(const ClassicRunner &runner) noexcept;
 	[[nodiscard]] static std::expected<void, ClassicRunnerError>
-	force_story_player_win(ClassicRunner &runner);
+	force_story_main_outcome(
+		ClassicRunner &runner,
+		ClassicStoryRouteTestOutcome outcome
+	);
 
 	[[nodiscard]] static std::expected<
 		std::vector<std::byte>,

@@ -230,7 +230,7 @@ struct ClassicOpSessionTestHooks final {
 		nullptr;
 	std::optional<std::uint8_t> (*story_failure_detail_code)(void *) = nullptr;
 	std::expected<void, ClassicOpSessionError>
-	(*force_story_player_win)(void *) = nullptr;
+	(*force_story_main_outcome)(void *, ClassicStoryRouteTestOutcome) = nullptr;
 };
 
 class ClassicOpSession final {
@@ -308,7 +308,10 @@ struct ClassicOpSessionTestAccess final {
 	[[nodiscard]] static std::optional<std::uint8_t>
 	story_failure_detail_code(const ClassicOpSession &session) noexcept;
 	[[nodiscard]] static std::expected<void, ClassicOpSessionError>
-	force_story_player_win(ClassicOpSession &session);
+	force_story_main_outcome(
+		ClassicOpSession &session,
+		ClassicStoryRouteTestOutcome outcome
+	);
 	[[nodiscard]] static CoreInput vs_cpu_main_input(
 		const GameInit &resident,
 		const ClassicMainInputSample &input,

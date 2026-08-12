@@ -572,8 +572,9 @@ ClassicRunnerTestAccess::story_failure_detail_code(
 }
 
 std::expected<void, ClassicRunnerError>
-ClassicRunnerTestAccess::force_story_player_win(
-	ClassicRunner &runner
+ClassicRunnerTestAccess::force_story_main_outcome(
+	ClassicRunner &runner,
+	ClassicStoryRouteTestOutcome outcome
 )
 {
 	if(runner.impl_->operations.consume != &consume_session) {
@@ -581,8 +582,9 @@ ClassicRunnerTestAccess::force_story_player_win(
 			ClassicRunnerErrorCode::invalid_request
 		));
 	}
-	auto forced = ClassicOpSessionTestAccess::force_story_player_win(
-		*static_cast<ClassicOpSession *>(runner.impl_->operations.context)
+	auto forced = ClassicOpSessionTestAccess::force_story_main_outcome(
+		*static_cast<ClassicOpSession *>(runner.impl_->operations.context),
+		outcome
 	);
 	if(!forced) {
 		return std::unexpected(session_error(forced.error()));
