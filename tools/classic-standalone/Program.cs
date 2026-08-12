@@ -93,6 +93,7 @@ internal static class Program
             "--font", Path.Combine(content, "FONT.ROM"),
             "--config", Path.Combine(userRoot, "YUME.CFG"),
             "--score", Path.Combine(userRoot, "YUME.NEM"),
+            "--replay-root", Path.Combine(userRoot, "REPLAY"),
         };
         var rhythmRom = Path.Combine(content, "YM2608.ROM");
         if(File.Exists(rhythmRom))

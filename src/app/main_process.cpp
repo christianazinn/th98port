@@ -652,6 +652,27 @@ bool valid_main_story_config(const MainStoryConfig &config) noexcept
 	return true;
 }
 
+bool valid_main_replay_config(const MainReplayConfig &config) noexcept
+{
+	const auto &checkpoint = config.checkpoint;
+	const bool valid_mode = checkpoint.game_mode == game_mode::story ||
+		checkpoint.game_mode == game_mode::vs_1p_cpu ||
+		checkpoint.game_mode == game_mode::vs_1p_2p ||
+		checkpoint.game_mode == game_mode::vs_cpu_cpu;
+	return valid_mode && checkpoint.rank <= 3U && checkpoint.key_mode <= 2U &&
+		checkpoint.remaining_credits <= 3U && checkpoint.story_stage <= 8U &&
+		checkpoint.autofire_mask <= 3U &&
+		checkpoint.compact_runtime_snapshot.has_value() &&
+		checkpoint.round_start_snapshot.has_value() &&
+		!checkpoint.runtime_snapshot &&
+		main_player_selection_from_paletted(
+			checkpoint.paletted_character[0U]
+		).has_value() &&
+		main_player_selection_from_paletted(
+			checkpoint.paletted_character[1U]
+		).has_value();
+}
+
 std::expected<std::unique_ptr<MainProcess>, MainProcessError>
 MainProcess::create_impl(
 	const MainDirectVsConfig &config,
@@ -793,6 +814,153 @@ MainProcess::create_impl(
 		*static_content,
 		0U,
 		std::nullopt
+	);
+}
+
+std::expected<std::unique_ptr<MainProcess>, MainProcessError>
+MainProcess::create_replay(
+	const MainReplayConfig &config,
+	std::span<const LoadedMainResource> resources,
+	MainCompiledContent compiled_content,
+	std::span<const std::byte> font_rom
+)
+{
+	if(!valid_main_replay_config(config)) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	auto init = config.checkpoint;
+	if(config.initialize_fresh) {
+		init.compact_runtime_snapshot.reset();
+		init.round_start_snapshot.reset();
+		init.practice_rules.reset();
+	}
+	const auto player_one = main_player_selection_from_paletted(
+		init.paletted_character[0U]
+	);
+	const auto player_two = main_player_selection_from_paletted(
+		init.paletted_character[1U]
+	);
+	if(!player_one || !player_two) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	const auto expected_keys = direct_vs_resource_keys(*player_one, *player_two);
+	if(!expected_keys) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	if(const auto valid = validate_resource_set(resources, *expected_keys, true);
+		!valid) {
+		return std::unexpected(valid.error());
+	}
+	const auto static_content = MainProcessStaticContentAccess::create(
+		resources, std::move(compiled_content), font_rom, true
+	);
+	if(!static_content) {
+		return std::unexpected(static_content.error());
+	}
+
+	const std::array selections{*player_one, *player_two};
+	std::array<assets::PiImage, 2U> player_shots{};
+	std::array<assets::PiImage, 2U> player_extra_shots{};
+	for(std::size_t player = 0U; player < selections.size(); ++player) {
+		auto shot = decode_asset<assets::PiImage>(
+			resources,
+			player_key(
+				MainResourceRole::character_stage_shot, selections[player]
+			),
+			assets::decode_pi
+		);
+		if(!shot) {
+			return std::unexpected(shot.error());
+		}
+		player_shots[player] = std::move(*shot);
+		auto extra = decode_asset<assets::PiImage>(
+			resources,
+			player_key(
+				MainResourceRole::character_stage_extra_shot, selections[player]
+			),
+			assets::decode_pi
+		);
+		if(!extra) {
+			return std::unexpected(extra.error());
+		}
+		player_extra_shots[player] = std::move(*extra);
+	}
+	auto center = decode_asset<assets::PiImage>(
+		resources,
+		{.role = MainResourceRole::stage_enemy_center},
+		assets::decode_pi
+	);
+	if(!center) {
+		return std::unexpected(center.error());
+	}
+	const MainResourceKey opponent_key{
+		.role = MainResourceRole::character_stage_enemy_group,
+		.character = player_two->character,
+	};
+	auto opponent = decode_asset<assets::PiImage>(
+		resources, opponent_key, assets::decode_pi
+	);
+	if(!opponent) {
+		return std::unexpected(opponent.error());
+	}
+	if(!opponent->palette) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::pi_palette_missing, opponent_key
+		));
+	}
+	present::Raster handoff_raster{};
+	if(!present::main_prepare_sprite16_pi_source_sheet(
+		handoff_raster,
+		{
+			.player_shots = {{&player_shots[0U], &player_shots[1U]}},
+			.player_extra_shots = {{
+				&player_extra_shots[0U], &player_extra_shots[1U]
+			}},
+			.enemy_center = &*center,
+			.opponent_enemies = &*opponent,
+		}
+	)) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::pi_staging_failed
+		));
+	}
+	for(std::size_t index = 0U; index < opponent->palette->colors.size(); ++index) {
+		if(!handoff_raster.set_pending_palette_entry(
+			static_cast<std::uint8_t>(index), opponent->palette->colors[index]
+		)) {
+			return std::unexpected(process_error(
+				MainProcessErrorCode::pi_palette_missing, opponent_key
+			));
+		}
+	}
+	handoff_raster.set_palette_tone(100);
+	handoff_raster.apply_pending_palette();
+	const MainStageHandoff handoff(std::move(handoff_raster));
+	const auto song = classic_main_gameplay_song(init);
+	if(!song) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
+	const auto continues_used = init.game_mode == game_mode::story
+		? static_cast<std::uint8_t>(3U - init.remaining_credits)
+		: std::uint8_t{0U};
+	return create_common(
+		init,
+		GameOptions{.input_protocol = InputProtocol::recorded_replay},
+		config.kotohime_compatibility,
+		selections,
+		handoff,
+		resources,
+		*static_content,
+		continues_used,
+		song
 	);
 }
 

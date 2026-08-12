@@ -94,6 +94,8 @@ void test_cli()
 			std::filesystem::path("data-root") / "YUME.CFG" &&
 		parsed->launch.content.score ==
 			std::filesystem::path("data-root") / "YUME.NEM" &&
+		parsed->replay_root ==
+			std::filesystem::path("data-root") / "REPLAY" &&
 		parsed->launch.seed == 1U && !parsed->launch.fm_available &&
 		!parsed->rhythm_rom && !parsed->rhythm_pcm &&
 		parsed->tick_rate.ticks == 526'315U &&
@@ -117,11 +119,13 @@ void test_cli()
 		"--classic", "--data", "d", "--main", "m", "--mainl", "l",
 		"--op", "o", "--font", "f", "--tick-rate", "3/2",
 		"--rhythm-rom", "ym2608.rom",
-		"--config", "c", "--score", "s", "--seed", "4294967295",
+		"--config", "c", "--score", "s", "--replay-root", "r",
+		"--seed", "4294967295",
 		"--smoke-ticks", "7",
 	});
 	expect(complete && complete->launch.content.config == "c" &&
 		complete->launch.content.score == "s" &&
+		complete->replay_root == "r" &&
 		complete->rhythm_rom == std::filesystem::path("ym2608.rom") &&
 		complete->launch.seed == 0xFFFF'FFFFU &&
 		complete->tick_rate.ticks == 3U && complete->tick_rate.seconds == 2U &&

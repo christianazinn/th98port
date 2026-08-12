@@ -75,7 +75,8 @@ New Classic's Replay Patch-owned features are brought online incrementally.
 Exiting either title returns to this menu. Its first launch extracts a content-hash
 cache below `%LOCALAPPDATA%\TH03 Classic Native Test`, while configuration,
 scores, and the last-run diagnostic log live in the separate `user` directory
-there and survive artifact updates.
+there and survive artifact updates. New Classic V13 files live in its
+`user\REPLAY` directory and likewise survive artifact updates.
 
 The no-argument script is the maintained convenience path and should be rerun
 after changes intended for human testing. It rebuilds and overwrites the stable
@@ -168,10 +169,11 @@ not supply or download
 that data, so this is not yet a complete redistributable audio-fidelity claim.
 `--help` lists
 keyboard controls and all launch options.
-Unless overridden with `--config` and `--score`, Classic stores `YUME.CFG`
-and `YUME.NEM` under the selected `--data` root. This avoids dependence on the
-launcher working directory; use explicit writable paths when the extracted
-content root is read-only.
+Unless overridden with `--config`, `--score`, and `--replay-root`, Classic
+stores `YUME.CFG`, `YUME.NEM`, and New Classic's `REPLAY` directory under the
+selected `--data` root. This avoids dependence on the launcher working
+directory; use explicit writable paths when the extracted content root is
+read-only.
 
 Validate an external frozen case without copying it into this repository:
 

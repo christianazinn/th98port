@@ -570,9 +570,8 @@ struct ClassicStoryBackend final {
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
 		}
-		const auto normalized = normalize_story_main_input(
-			input, driver->input_context()
-		);
+		const auto input_context = driver->input_context();
+		const auto normalized = normalize_story_main_input(input, input_context);
 		auto advanced = driver->consume(normalized);
 		if(!advanced) {
 			if(advanced.error().process_error) {
@@ -586,7 +585,10 @@ struct ClassicStoryBackend final {
 		}
 		if(replay_recorder && advanced->process_advanced) {
 			if(auto sampled = replay_recorder->sample(
-				replay::InputPhase::gameplay, normalized
+				input_context == InputContext::gameplay ?
+					replay::InputPhase::gameplay :
+					replay::InputPhase::interstitial,
+				normalized
 			); !sampled) {
 				return std::unexpected(replay_capture_error());
 			}

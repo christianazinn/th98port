@@ -1696,8 +1696,9 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
+		const auto input_context = vs_driver->input_context();
 		const auto normalized = normalize_vs_cpu_main_input(
-			current_main_resident, input, vs_driver->input_context()
+			current_main_resident, input, input_context
 		);
 		auto tick = vs_driver->consume(normalized);
 		if(!tick) {
@@ -1717,7 +1718,10 @@ struct ClassicOpSessionBackend final {
 		}
 		if(replay_recorder && tick->process_advanced) {
 			if(auto sampled = replay_recorder->sample(
-				replay::InputPhase::gameplay, normalized
+				input_context == InputContext::gameplay ?
+					replay::InputPhase::gameplay :
+					replay::InputPhase::interstitial,
+				normalized
 			); !sampled) {
 				return std::unexpected(replay_capture_error());
 			}

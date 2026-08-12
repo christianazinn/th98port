@@ -117,6 +117,9 @@ constexpr std::size_t option_count =
 	if(text == "--score") {
 		return ClassicCliOption::score;
 	}
+	if(text == "--replay-root") {
+		return ClassicCliOption::replay_root;
+	}
 	if(text == "--tick-rate") {
 		return ClassicCliOption::tick_rate;
 	}
@@ -226,6 +229,9 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 		case ClassicCliOption::score:
 			request.launch.content.score = std::filesystem::path(value);
 			break;
+		case ClassicCliOption::replay_root:
+			request.replay_root = std::filesystem::path(value);
+			break;
 		case ClassicCliOption::tick_rate: {
 			const auto rate = parse_tick_rate(value);
 			if(!rate) {
@@ -305,6 +311,9 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 	if(!seen[static_cast<std::size_t>(ClassicCliOption::score)]) {
 		request.launch.content.score =
 			request.launch.content.data_root / "YUME.NEM";
+	}
+	if(!seen[static_cast<std::size_t>(ClassicCliOption::replay_root)]) {
+		request.replay_root = request.launch.content.data_root / "REPLAY";
 	}
 	request.launch.fm_available = false;
 	return request;

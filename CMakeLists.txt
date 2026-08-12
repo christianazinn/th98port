@@ -388,6 +388,7 @@ target_link_libraries(th03_present PUBLIC th03_core)
 # presentation state.
 add_library(th03_app_runtime STATIC
 	src/app/experience_menu.cpp
+	src/app/host_menu_canvas.cpp
 	src/app/host_surface.cpp
 	src/app/tick_input.cpp
 )
@@ -479,6 +480,8 @@ add_library(th03_app_main STATIC
 	src/app/main_process_driver.cpp
 	src/app/main_process.cpp
 	src/app/main_process_static_content.cpp
+	src/app/new_classic_frontend.cpp
+	src/app/new_classic_playback.cpp
 	src/app/new_classic_replay.cpp
 	src/app/op_compiled_text.cpp
 	src/app/replay_slot_store.cpp
@@ -1009,6 +1012,30 @@ if(BUILD_TESTING)
 
 	add_executable(th03-app-new-classic-replay-tests
 		tests/test_app_new_classic_replay.cpp
+	)
+
+	add_executable(th03-app-new-classic-frontend-tests
+		tests/test_app_new_classic_frontend.cpp
+	)
+
+	add_executable(th03-app-new-classic-playback-tests
+		tests/test_app_new_classic_playback.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-playback-tests PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-new-classic-playback-tests)
+	add_test(
+		NAME th03-app-new-classic-playback-tests
+		COMMAND th03-app-new-classic-playback-tests
+	)
+	target_link_libraries(
+		th03-app-new-classic-frontend-tests PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-new-classic-frontend-tests)
+	add_test(
+		NAME th03-app-new-classic-frontend-tests
+		COMMAND th03-app-new-classic-frontend-tests
 	)
 	target_link_libraries(
 		th03-app-new-classic-replay-tests PRIVATE th03_app_main

@@ -63,6 +63,22 @@ struct MainStoryConfig {
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
 };
 
+// One explicitly recorded V13 checkpoint. This is the only public late-entry
+// presentation path: the checkpoint must carry the replay format's complete
+// compact round/runtime snapshots and is always run under recorded input.
+struct MainReplayConfig final {
+	GameInit checkpoint{};
+	// Playback starts each MAIN process from its process-entry checkpoint and
+	// pre-rolls repeat-round checkpoints. Fresh process entry must replay Game
+	// initialization so presentation observers receive their private pool facts.
+	bool initialize_fresh = true;
+	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
+};
+
+[[nodiscard]] bool valid_main_replay_config(
+	const MainReplayConfig &config
+) noexcept;
+
 [[nodiscard]] bool valid_main_story_config(
 	const MainStoryConfig &config
 ) noexcept;
@@ -117,6 +133,15 @@ public:
 		MainProcessError
 	> create(
 		const MainDirectVsConfig &config,
+		std::span<const LoadedMainResource> resources,
+		MainCompiledContent compiled_content,
+		std::span<const std::byte> font_rom
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<MainProcess>,
+		MainProcessError
+	> create_replay(
+		const MainReplayConfig &config,
 		std::span<const LoadedMainResource> resources,
 		MainCompiledContent compiled_content,
 		std::span<const std::byte> font_rom
