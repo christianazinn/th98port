@@ -77,6 +77,13 @@ namespace {
 	return result;
 }
 
+[[nodiscard]] ClassicOpSessionError op_text_error(OpCompiledTextError error)
+{
+	auto result = session_error(ClassicOpSessionErrorCode::op_text_failed);
+	result.op_text_error.emplace(std::move(error));
+	return result;
+}
+
 [[nodiscard]] ClassicOpSessionError main_error(MainProcessError error)
 {
 	auto result = session_error(ClassicOpSessionErrorCode::main_failed);
@@ -610,7 +617,7 @@ struct ClassicOpSessionBackend final {
 	std::optional<Pc98FontRomProvider> font{};
 	MainlStageTextAssets stage_text{};
 	MainlStaffCompiledAssets staff_compiled{};
-	std::vector<std::byte> op_executable{};
+	OpMusicRoomTextImport op_music_labels{};
 	std::shared_ptr<const MainProcessStaticContent> static_content{};
 	std::filesystem::path config_path{};
 	std::filesystem::path score_path{};
@@ -651,7 +658,7 @@ struct ClassicOpSessionBackend final {
 		std::vector<std::byte> font_rom_,
 		MainlStageTextAssets stage_text_,
 		MainlStaffCompiledAssets staff_compiled_,
-		std::vector<std::byte> op_executable_,
+		OpMusicRoomTextImport op_music_labels_,
 		std::filesystem::path config_path_,
 		std::filesystem::path score_path_,
 		ClassicConfigOptions config_,
@@ -663,7 +670,7 @@ struct ClassicOpSessionBackend final {
 		font_rom(std::move(font_rom_)),
 		stage_text(std::move(stage_text_)),
 		staff_compiled(std::move(staff_compiled_)),
-		op_executable(std::move(op_executable_)),
+		op_music_labels(std::move(op_music_labels_)),
 		config_path(std::move(config_path_)),
 		score_path(std::move(score_path_)),
 		config(config_),
@@ -908,8 +915,8 @@ struct ClassicOpSessionBackend final {
 		if(!resources) {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
-		auto created = ClassicOpMusicRoomScene::create_from_op(
-			*title_completion, music_carry, *resources, op_executable, *font
+		auto created = ClassicOpMusicRoomScene::create_from_imported_text(
+			*title_completion, music_carry, *resources, op_music_labels, *font
 		);
 		if(!created) {
 			return std::unexpected(music_error(std::move(created.error())));
@@ -2261,6 +2268,10 @@ ClassicOpSession::create(
 	if(!imported) {
 		return std::unexpected(mainl_text_error(std::move(imported.error())));
 	}
+	auto imported_op = import_op_music_room_text(op_executable);
+	if(!imported_op) {
+		return std::unexpected(op_text_error(std::move(imported_op.error())));
+	}
 	auto shared_loader = std::shared_ptr<MainResourceLoader>(std::move(loader));
 	auto backend = std::make_shared<ClassicOpSessionBackend>(
 		std::move(shared_loader),
@@ -2268,7 +2279,7 @@ ClassicOpSession::create(
 		std::vector<std::byte>{font_rom.begin(), font_rom.end()},
 		std::move(imported->assets),
 		std::move(imported->staff),
-		std::vector<std::byte>{op_executable.begin(), op_executable.end()},
+		std::move(*imported_op),
 		std::move(config_path),
 		std::move(score_path),
 		config,

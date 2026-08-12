@@ -713,8 +713,16 @@ void local_original_gate(
 			title_completion->route() == th03::app::ClassicOpRoute::music_room,
 		"failed compiled-label adoption leaves title completion retryable"
 	);
-	auto music = ClassicOpMusicRoomScene::create_from_op(
-		*title_completion, {}, *music_resources, *op_executable, *font
+	auto imported_labels = th03::app::import_op_music_room_text(*op_executable);
+	expect(
+		imported_labels.has_value(),
+		"local OP profile imports once before Music Room construction"
+	);
+	if(!imported_labels) {
+		return;
+	}
+	auto music = ClassicOpMusicRoomScene::create_from_imported_text(
+		*title_completion, {}, *music_resources, *imported_labels, *font
 	);
 	expect(
 		music.has_value() &&

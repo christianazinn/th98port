@@ -849,6 +849,29 @@ void test_surface_forwarding()
 	resident.resident_rand = 1;
 	resident.random_seed = 1U;
 	resident.remaining_credits = 2U;
+	auto rejected_compiled =
+		th03::app::import_main_compiled_content(*main_executable);
+	if(!rejected_compiled) {
+		return false;
+	}
+	auto malformed_op = *op_executable;
+	malformed_op[0U] ^= std::byte{0x01U};
+	auto rejected_op = ClassicOpSession::create(
+		resident,
+		std::make_unique<th03::app::MainResourceLoader>(content_root),
+		std::move(*rejected_compiled),
+		*font_rom,
+		*mainl_executable,
+		malformed_op,
+		temporary.path() / "YUME.CFG",
+		temporary.path() / "YUME.NEM"
+	);
+	if(rejected_op || rejected_op.error().code !=
+		ClassicOpSessionErrorCode::op_text_failed ||
+		!rejected_op.error().op_text_error) {
+		std::cerr << "local malformed OP did not fail during session creation\n";
+		return false;
+	}
 	auto created = ClassicOpSession::create(
 		resident,
 		std::make_unique<th03::app::MainResourceLoader>(content_root),

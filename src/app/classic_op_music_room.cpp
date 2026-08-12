@@ -141,6 +141,52 @@ validate_music_room_resources(
 	return nullptr;
 }
 
+struct PreparedMusicRoomResources final {
+	assets::PiImage background{};
+	std::span<const std::byte> comments{};
+};
+
+[[nodiscard]] std::expected<
+	PreparedMusicRoomResources,
+	ClassicOpMusicRoomError
+> prepare_music_room_resources(
+	const ClassicOpCompletion &completion,
+	std::span<const LoadedMainResource> resources
+)
+{
+	if(completion.route() != ClassicOpRoute::music_room) {
+		return std::unexpected(music_error(
+			ClassicOpMusicRoomErrorCode::invalid_route
+		));
+	}
+	if(const auto validated = validate_music_room_resources(resources);
+		!validated) {
+		return std::unexpected(validated.error());
+	}
+	const auto *background_resource = find_resource(
+		resources, MainResourceRole::op_music_room_background
+	);
+	const auto *comments_resource = find_resource(
+		resources, MainResourceRole::op_music_room_comments
+	);
+	if(!background_resource || !background_resource->bytes ||
+		!comments_resource || !comments_resource->bytes) {
+		return std::unexpected(resource_error(
+			ClassicOpMusicRoomErrorCode::resource_set_mismatch
+		));
+	}
+	auto background = assets::decode_pi(*background_resource->bytes);
+	if(!background) {
+		return std::unexpected(decode_error(
+			background_resource->spec.key, std::move(background.error())
+		));
+	}
+	return PreparedMusicRoomResources{
+		.background = std::move(*background),
+		.comments = *comments_resource->bytes,
+	};
+}
+
 [[nodiscard]] constexpr present::Page other_page(present::Page page) noexcept
 {
 	return page == present::Page::zero ? present::Page::one : present::Page::zero;
@@ -312,41 +358,39 @@ std::expected<
 	const present::AnkGlyphProvider &font
 )
 {
-	if(completion.route() != ClassicOpRoute::music_room) {
-		return std::unexpected(music_error(
-			ClassicOpMusicRoomErrorCode::invalid_route
-		));
-	}
-	if(const auto validated = validate_music_room_resources(resources);
-		!validated) {
-		return std::unexpected(validated.error());
-	}
-	const auto *background_resource = find_resource(
-		resources, MainResourceRole::op_music_room_background
-	);
-	const auto *comments_resource = find_resource(
-		resources, MainResourceRole::op_music_room_comments
-	);
-	if(!background_resource || !background_resource->bytes ||
-		!comments_resource || !comments_resource->bytes) {
-		return std::unexpected(resource_error(
-			ClassicOpMusicRoomErrorCode::resource_set_mismatch
-		));
-	}
-	auto background = assets::decode_pi(*background_resource->bytes);
-	if(!background) {
-		return std::unexpected(decode_error(
-			background_resource->spec.key, std::move(background.error())
-		));
+	auto prepared = prepare_music_room_resources(completion, resources);
+	if(!prepared) {
+		return std::unexpected(prepared.error());
 	}
 	auto labels = import_op_music_room_text(op_executable);
 	if(!labels) {
 		return std::unexpected(compiled_text_error(labels.error()));
 	}
 	return create_predecoded(
-		completion.resident(), std::move(carry), std::move(*background),
-		*labels, *comments_resource->bytes, font, completion.raster(),
+		completion.resident(), std::move(carry), std::move(prepared->background),
+		*labels, prepared->comments, font, completion.raster(),
 		completion.tram()
+	);
+}
+
+std::expected<
+	std::unique_ptr<ClassicOpMusicRoomScene>,
+	ClassicOpMusicRoomError
+> ClassicOpMusicRoomScene::create_from_imported_text(
+	const ClassicOpCompletion &completion,
+	ClassicOpMusicRoomCarry carry,
+	std::span<const LoadedMainResource> resources,
+	const OpMusicRoomTextImport &labels,
+	const present::AnkGlyphProvider &font
+)
+{
+	auto prepared = prepare_music_room_resources(completion, resources);
+	if(!prepared) {
+		return std::unexpected(prepared.error());
+	}
+	return create_predecoded(
+		completion.resident(), std::move(carry), std::move(prepared->background),
+		labels, prepared->comments, font, completion.raster(), completion.tram()
 	);
 }
 

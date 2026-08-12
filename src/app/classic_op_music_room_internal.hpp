@@ -166,6 +166,16 @@ public:
 		std::span<const std::byte> op_executable,
 		const present::AnkGlyphProvider &font
 	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicOpMusicRoomScene>,
+		ClassicOpMusicRoomError
+	> create_from_imported_text(
+		const ClassicOpCompletion &completion,
+		ClassicOpMusicRoomCarry carry,
+		std::span<const LoadedMainResource> resources,
+		const OpMusicRoomTextImport &labels,
+		const present::AnkGlyphProvider &font
+	);
 
 	~ClassicOpMusicRoomScene();
 	ClassicOpMusicRoomScene(const ClassicOpMusicRoomScene &) = delete;

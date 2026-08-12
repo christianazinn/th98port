@@ -75,6 +75,7 @@ enum class ClassicOpSessionErrorCode : std::uint8_t {
 	audio_command_pending,
 	session_not_running,
 	surface_failed,
+	op_text_failed,
 };
 
 struct ClassicOpSessionError final {
@@ -83,6 +84,7 @@ struct ClassicOpSessionError final {
 	std::optional<ClassicConfigStoreError> config_store_error{};
 	std::optional<ClassicScoreStoreError> score_store_error{};
 	std::optional<MainlCompiledTextError> mainl_text_error{};
+	std::optional<OpCompiledTextError> op_text_error{};
 	std::optional<AuthenticTextError> font_error{};
 	std::optional<MainProcessError> main_error{};
 	std::optional<ClassicOpError> title_error{};
