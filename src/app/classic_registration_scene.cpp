@@ -9,7 +9,10 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 #include "th03/assets/decode.hpp"
 #include "th03/present/cels.hpp"
@@ -34,6 +37,12 @@ constexpr std::int32_t alphabet_row_spacing = 24;
 constexpr std::uint8_t alphabet_columns = 16U;
 constexpr std::uint8_t alphabet_glyphs = 48U;
 constexpr std::uint8_t fade_boundary_count = 35U;
+
+constexpr std::array<std::string_view, new_classic_score_character_count + 1U>
+new_classic_page_names{{
+	"REIMU", "MIMA", "MARISA", "ELLEN", "KOTOHIME", "KANA",
+	"RIKAKO", "CHIYURI", "YUMEMI", "ALL CHARACTERS",
+}};
 
 using Glyph = ClassicRegistrationGlyph;
 
@@ -108,6 +117,27 @@ default_names{{
 		ClassicRegistrationErrorCode::score_mutation_failed
 	);
 	result.score_error.emplace(error);
+	return result;
+}
+
+[[nodiscard]] ClassicRegistrationError new_store_error(
+	ClassicRegistrationErrorCode code,
+	NewClassicScoreStoreError error
+)
+{
+	auto result = registration_error(code);
+	result.new_score_store_error.emplace(std::move(error));
+	return result;
+}
+
+[[nodiscard]] ClassicRegistrationError new_score_error(
+	NewClassicScoreError error
+) noexcept
+{
+	auto result = registration_error(
+		ClassicRegistrationErrorCode::score_mutation_failed
+	);
+	result.new_score_error.emplace(error);
 	return result;
 }
 
@@ -428,6 +458,10 @@ ClassicRegistrationScene::ClassicRegistrationScene(
 	ClassicScoreDocument document,
 	ClassicScoreStoreDisposition load_disposition,
 	ClassicScoreCodecFields commit_codec,
+	std::optional<NewClassicScoreDocument> new_classic_document,
+	std::uint8_t new_classic_character,
+	std::uint8_t new_classic_page,
+	const present::AnkGlyphProvider *font,
 	std::optional<std::size_t> entered_place,
 	present::Raster raster,
 	bool view_only
@@ -438,6 +472,10 @@ ClassicRegistrationScene::ClassicRegistrationScene(
 	document_(std::move(document)),
 	load_disposition_(load_disposition),
 	commit_codec_(commit_codec),
+	new_classic_document_(std::move(new_classic_document)),
+	new_classic_character_(new_classic_character),
+	new_classic_page_(new_classic_page),
+	font_(font),
 	entered_place_(entered_place),
 	raster_(std::move(raster)),
 	view_only_(view_only)
@@ -457,7 +495,25 @@ ClassicRegistrationScene::create(
 {
 	return create_impl(
 		resident, score_path, resources, stage_text, font,
-		std::move(initial_raster), true, false
+		std::move(initial_raster), true, false, false, {}, std::nullopt
+	);
+}
+
+std::expected<std::unique_ptr<ClassicRegistrationScene>, ClassicRegistrationError>
+ClassicRegistrationScene::create_new_classic(
+	const GameInit &resident,
+	const std::filesystem::path &score_path,
+	const std::filesystem::path &legacy_score_path,
+	std::span<const LoadedMainResource> resources,
+	const MainlStageTextAssets &stage_text,
+	const present::AnkGlyphProvider &font,
+	present::Raster initial_raster,
+	NewClassicScoreRun run
+)
+{
+	return create_impl(
+		resident, score_path, resources, stage_text, font,
+		std::move(initial_raster), true, false, true, legacy_score_path, run
 	);
 }
 
@@ -478,7 +534,29 @@ ClassicRegistrationScene::create_viewer(
 	}
 	return create_impl(
 		completion.resident(), score_path, resources, stage_text, font,
-		present::Raster{}, true, true
+		present::Raster{}, true, true, false, {}, std::nullopt
+	);
+}
+
+std::expected<std::unique_ptr<ClassicRegistrationScene>, ClassicRegistrationError>
+ClassicRegistrationScene::create_new_classic_viewer(
+	const ClassicOpCompletion &completion,
+	const std::filesystem::path &score_path,
+	const std::filesystem::path &legacy_score_path,
+	std::span<const LoadedMainResource> resources,
+	const MainlStageTextAssets &stage_text,
+	const present::AnkGlyphProvider &font
+)
+{
+	if(completion.route() != ClassicOpRoute::high_scores ||
+		completion.selection_mode()) {
+		return std::unexpected(registration_error(
+			ClassicRegistrationErrorCode::invalid_context
+		));
+	}
+	return create_impl(
+		completion.resident(), score_path, resources, stage_text, font,
+		present::Raster{}, true, true, true, legacy_score_path, std::nullopt
 	);
 }
 
@@ -491,7 +569,10 @@ ClassicRegistrationScene::create_impl(
 	const present::AnkGlyphProvider &font,
 	present::Raster initial_raster,
 	bool authenticate_resource_bytes,
-	bool view_only
+	bool view_only,
+	bool new_classic,
+	std::filesystem::path legacy_score_path,
+	std::optional<NewClassicScoreRun> run
 )
 {
 	if(!valid_context(resident, view_only)) {
@@ -602,7 +683,8 @@ ClassicRegistrationScene::create_impl(
 		resident, score_path, std::move(*background), std::move(*rank),
 		std::move(*normal), std::move(*highlight),
 		std::move(*next_background), std::move(choice_cels), stage_text, font,
-		std::move(initial_raster), view_only
+		std::move(initial_raster), view_only, new_classic,
+		std::move(legacy_score_path), run
 	);
 }
 
@@ -619,7 +701,10 @@ ClassicRegistrationScene::create_predecoded(
 	const MainlStageTextAssets &stage_text,
 	const present::AnkGlyphProvider &font,
 	present::Raster initial_raster,
-	bool view_only
+	bool view_only,
+	bool new_classic,
+	std::filesystem::path legacy_score_path,
+	std::optional<NewClassicScoreRun> run
 )
 {
 	if(!valid_context(resident, view_only) ||
@@ -691,16 +776,77 @@ ClassicRegistrationScene::create_predecoded(
 	}
 	const auto recreated_commit_codec = recreate_random.next_codec();
 
-	auto loaded = load_classic_score_store(score_path, stock_codec);
-	if(!loaded) {
-		return std::unexpected(store_error(
-			ClassicRegistrationErrorCode::store_load_failed,
-			std::move(loaded.error())
-		));
-	}
-	auto document = std::move(loaded->document);
+	ClassicScoreDocument document{};
+	ClassicScoreStoreDisposition load_disposition =
+		ClassicScoreStoreDisposition::loaded;
+	std::optional<NewClassicScoreDocument> new_document{};
+	const auto character = base_character(resident.paletted_character[0U]);
+	const auto initial_page = view_only ? new_classic_score_all_characters :
+		character;
 	std::optional<std::size_t> entered_place{};
-	if(!view_only) {
+	if(new_classic) {
+		auto loaded = load_new_classic_score_store(score_path, legacy_score_path);
+		if(!loaded) {
+			return std::unexpected(new_store_error(
+				ClassicRegistrationErrorCode::store_load_failed,
+				std::move(loaded.error())
+			));
+		}
+		new_document.emplace(std::move(loaded->document));
+		if(!view_only) {
+			if(!run) {
+				return std::unexpected(registration_error(
+					ClassicRegistrationErrorCode::invalid_context
+				));
+			}
+			if(auto applied = new_classic_score_apply_run(
+				*new_document, resident.rank, character, *run
+			); !applied) {
+				return std::unexpected(new_score_error(applied.error()));
+			}
+			const ClassicScoreCandidate candidate{
+				.digits = resident.last_score[0U],
+				.continues_used = static_cast<std::uint8_t>(
+					3U - resident.remaining_credits
+				),
+				.stage = resident.story_stage,
+				.playchar = character,
+			};
+			auto inserted = new_classic_score_insert(
+				*new_document, resident.rank, character, candidate
+			);
+			if(!inserted) {
+				return std::unexpected(new_score_error(inserted.error()));
+			}
+			entered_place = *inserted;
+			if(resident.story_stage == 99U && resident.remaining_credits == 3U) {
+				new_document->extra_unlocked = true;
+			}
+		}
+		auto view = new_classic_score_view(
+			*new_document, resident.rank, initial_page
+		);
+		if(!view) {
+			return std::unexpected(new_score_error(view.error()));
+		}
+		document = classic_score_stock_file(stock_codec);
+		document.boards[resident.rank] = std::move(view->board);
+		load_disposition =
+			loaded->disposition == NewClassicScoreStoreDisposition::loaded ?
+			ClassicScoreStoreDisposition::loaded :
+			ClassicScoreStoreDisposition::created_stock;
+	} else {
+		auto loaded = load_classic_score_store(score_path, stock_codec);
+		if(!loaded) {
+			return std::unexpected(store_error(
+				ClassicRegistrationErrorCode::store_load_failed,
+				std::move(loaded.error())
+			));
+		}
+		document = std::move(loaded->document);
+		load_disposition = loaded->disposition;
+	}
+	if(!new_classic && !view_only) {
 		auto &board = document.boards[resident.rank];
 		const ClassicScoreCandidate candidate{
 			.digits = resident.last_score[0U],
@@ -720,15 +866,21 @@ ClassicRegistrationScene::create_predecoded(
 		}
 	}
 	const auto commit_codec =
-		(loaded->disposition == ClassicScoreStoreDisposition::loaded) ?
+		(load_disposition == ClassicScoreStoreDisposition::loaded) ?
 		first_commit_codec : recreated_commit_codec;
 	auto scene = std::unique_ptr<ClassicRegistrationScene>(
 		new ClassicRegistrationScene(
 			std::move(prepared), resident, score_path, std::move(document),
-			loaded->disposition, commit_codec, entered_place,
+			load_disposition, commit_codec, std::move(new_document),
+			character, initial_page, &font, entered_place,
 			std::move(initial_raster), view_only
 		)
 	);
+	if(new_classic) {
+		if(auto page = scene->load_new_classic_page(initial_page, false); !page) {
+			return std::unexpected(std::move(page.error()));
+		}
+	}
 	if(!scene->initialize_visuals()) {
 		return std::unexpected(registration_error(
 			ClassicRegistrationErrorCode::draw_failed
@@ -848,8 +1000,9 @@ bool ClassicRegistrationScene::draw_row(std::size_t place) noexcept
 		)) {
 			return false;
 		}
-	} else if(!draw_glyph({left - 8, top}, Glyph::digit_1, highlight) ||
-		!draw_glyph({left + 8, top}, Glyph::digit_0, highlight)) {
+	} else if(!new_classic_row_total_[place] &&
+		(!draw_glyph({left - 8, top}, Glyph::digit_1, highlight) ||
+		 !draw_glyph({left + 8, top}, Glyph::digit_0, highlight))) {
 		return false;
 	}
 	left += place_number_padded_width;
@@ -878,6 +1031,9 @@ bool ClassicRegistrationScene::draw_row(std::size_t place) noexcept
 		left += score_spacing;
 	}
 	left += cell_padding;
+	if(new_classic_document_ && new_classic_row_total_[place]) {
+		return true;
+	}
 
 	if(row.playchar_optional >= prepared_->playchars.size() ||
 		!prepared_->playchars[row.playchar_optional] ||
@@ -914,7 +1070,91 @@ bool ClassicRegistrationScene::draw_rows(bool restore_background) noexcept
 			return false;
 		}
 	}
-	return true;
+	return !view_only_ || !new_classic_document_ ||
+		draw_new_classic_overlay();
+}
+
+bool ClassicRegistrationScene::draw_new_classic_overlay() noexcept
+{
+	if(!new_classic_document_ || !view_only_ ||
+		std::ranges::any_of(new_classic_overlay_, [](const auto &text) {
+			return !text.has_value();
+		})) {
+		return false;
+	}
+	return present::graphics_text_put_8x16(
+		raster_, {24, 320}, *new_classic_overlay_[0U],
+		{15U, present::GraphicsTextWeight::bold, 0U}
+	) && present::graphics_text_put_8x16(
+		raster_, {24, 340}, *new_classic_overlay_[1U],
+		{15U, present::GraphicsTextWeight::bold, 0U}
+	) && present::graphics_text_put_8x16(
+		raster_, {24, 360}, *new_classic_overlay_[2U],
+		{15U, present::GraphicsTextWeight::bold, 0U}
+	);
+}
+
+std::expected<void, ClassicRegistrationError>
+ClassicRegistrationScene::load_new_classic_page(
+	std::uint8_t page,
+	bool redraw
+)
+{
+	if(!new_classic_document_ || !font_) {
+		return std::unexpected(registration_error(
+			ClassicRegistrationErrorCode::invalid_state
+		));
+	}
+	auto view = new_classic_score_view(
+		*new_classic_document_, resident_.rank, page
+	);
+	if(!view) {
+		return std::unexpected(new_score_error(view.error()));
+	}
+	const auto page_index = page == new_classic_score_all_characters ?
+		new_classic_score_character_count : static_cast<std::size_t>(page);
+	const auto seconds = static_cast<std::uint32_t>(
+		(view->stats.play_frames / 282U) * 5U +
+		((view->stats.play_frames % 282U) * 5U) / 282U
+	);
+	const auto hours = std::min<std::uint32_t>(seconds / 3600U, 9999U);
+	auto fixed = [](std::uint32_t value, std::size_t digits) {
+		std::string result(digits, '0');
+		while(digits != 0U) {
+			result[--digits] = static_cast<char>('0' + (value % 10U));
+			value /= 10U;
+		}
+		return result;
+	};
+	const std::array<std::string, 3U> lines{{
+		std::string(new_classic_page_names[page_index]),
+		std::string("PLAY TIME ") + fixed(hours, 4U) + ":" +
+			fixed((seconds / 60U) % 60U, 2U) + ":" +
+			fixed(seconds % 60U, 2U),
+		std::string("1CC ") + std::to_string(view->stats.one_ccs) +
+			"   CONTINUES " + std::to_string(view->stats.continues_used),
+	}};
+	std::array<std::optional<present::PreparedGraphicsText8x16>, 3U> prepared{};
+	for(std::size_t line = 0U; line < lines.size(); ++line) {
+		const auto bytes = std::vector<std::uint8_t>(
+			lines[line].begin(), lines[line].end()
+		);
+		auto text = present::prepare_graphics_text_8x16(bytes, *font_);
+		if(!text) {
+			return std::unexpected(text_error(text.error()));
+		}
+		prepared[line].emplace(std::move(*text));
+	}
+	document_.boards[resident_.rank] = std::move(view->board);
+	new_classic_row_total_ = view->total;
+	new_classic_page_ = page;
+	new_classic_overlay_ = std::move(prepared);
+	if(redraw && !draw_rows(true)) {
+		return std::unexpected(registration_error(
+			ClassicRegistrationErrorCode::draw_failed
+		));
+	}
+	return {};
 }
 
 bool ClassicRegistrationScene::blank_cursor() noexcept
@@ -977,6 +1217,20 @@ ClassicRegistrationScene::finish_name()
 	);
 	if(!replaced) {
 		return std::unexpected(score_error(replaced.error()));
+	}
+	if(new_classic_document_ && !view_only_) {
+		std::array<Glyph, classic_score_name_length> forward{};
+		const auto &stored = document_.boards[resident_.rank]
+			.rows[*entered_place_].name_backwards;
+		for(std::size_t c = 0U; c < forward.size(); ++c) {
+			forward[c] = stored[(forward.size() - 1U) - c];
+		}
+		if(auto updated = new_classic_score_set_name(
+			*new_classic_document_, resident_.rank, new_classic_character_,
+			*entered_place_, forward
+		); !updated) {
+			return std::unexpected(new_score_error(updated.error()));
+		}
 	}
 	if(!draw_rows(true)) {
 		return std::unexpected(registration_error(
@@ -1078,14 +1332,28 @@ ClassicRegistrationScene::fade_tick(bool black_in)
 		return tick(ClassicRegistrationBoundary::vsync, changed);
 	}
 
-	document_.codec[resident_.rank] = commit_codec_;
-	if(auto committed = commit_classic_score_store(score_path_, document_);
-		!committed) {
-		fail();
-		return std::unexpected(store_error(
-			ClassicRegistrationErrorCode::store_commit_failed,
-			std::move(committed.error())
-		));
+	if(new_classic_document_) {
+		if(!view_only_) {
+			if(auto committed = commit_new_classic_score_store(
+				score_path_, *new_classic_document_
+			); !committed) {
+				fail();
+				return std::unexpected(new_store_error(
+					ClassicRegistrationErrorCode::store_commit_failed,
+					std::move(committed.error())
+				));
+			}
+		}
+	} else {
+		document_.codec[resident_.rank] = commit_codec_;
+		if(auto committed = commit_classic_score_store(score_path_, document_);
+			!committed) {
+			fail();
+			return std::unexpected(store_error(
+				ClassicRegistrationErrorCode::store_commit_failed,
+				std::move(committed.error())
+			));
+		}
 	}
 	if(!preload_next_screen()) {
 		fail();
@@ -1169,6 +1437,32 @@ ClassicRegistrationScene::advance(
 		if(!input.any()) {
 			return tick(
 				ClassicRegistrationBoundary::vsync, false, true
+			);
+		}
+		if(view_only_ && new_classic_document_ && (input.right || input.left)) {
+			const auto visible = new_classic_document_->extra_unlocked ?
+				new_classic_score_character_count :
+				new_classic_score_locked_character_count;
+			std::uint8_t page = new_classic_page_;
+			if(input.right) {
+				page = page == new_classic_score_all_characters ? 0U :
+					(static_cast<std::size_t>(page) + 1U >= visible ?
+					 new_classic_score_all_characters :
+					 static_cast<std::uint8_t>(page + 1U));
+			} else {
+				page = page == new_classic_score_all_characters ?
+					static_cast<std::uint8_t>(visible - 1U) :
+					(page == 0U ? new_classic_score_all_characters :
+					 static_cast<std::uint8_t>(page - 1U));
+			}
+			if(auto loaded = load_new_classic_page(page); !loaded) {
+				fail();
+				return std::unexpected(std::move(loaded.error()));
+			}
+			phase_ = ClassicRegistrationPhase::wait_release;
+			return tick(
+				ClassicRegistrationBoundary::input_poll, true, true,
+				true
 			);
 		}
 		if((resident_.remaining_credits == 0U || resident_.story_stage == 99U) &&

@@ -67,6 +67,7 @@ enum class ClassicStorySessionErrorCode : std::uint8_t {
 	cutscene_failed,
 	staff_failed,
 	registration_failed,
+	score_store_failed,
 	continue_failed,
 	game_over_failed,
 	plan_failed,
@@ -87,6 +88,7 @@ struct ClassicStorySessionError final {
 	std::optional<ClassicCutsceneError> cutscene_error{};
 	std::optional<ClassicStaffError> staff_error{};
 	std::optional<ClassicRegistrationError> registration_error{};
+	std::optional<NewClassicScoreStoreError> new_score_store_error{};
 	std::optional<ClassicMainlContinueError> continue_error{};
 	std::optional<ClassicMainlPlanError> plan_error{};
 	std::optional<present::SourceSurfaceError> surface_error{};
@@ -208,6 +210,11 @@ struct ClassicStorySessionBackendOperations final {
 	std::expected<void, ClassicStorySessionError> (*finish_game_over)(
 		void *
 	) = nullptr;
+	// Native single-process equivalent of the Replay Patch score-time journal
+	// checkpoint. Optional for hermetic backends without persistence ownership.
+	std::expected<void, ClassicStorySessionError> (*checkpoint_score_run)(
+		void *
+	) = nullptr;
 	std::optional<ClassicAudioCommand> (*take_audio_command)(void *) =
 		nullptr;
 	std::expected<present::SourceSurface, ClassicStorySessionError>
@@ -309,7 +316,8 @@ private:
 		MainlStageTextAssets stage_text,
 		MainlStaffCompiledAssets staff_compiled,
 		std::filesystem::path score_path,
-		NewClassicReplayRecorder *replay_recorder
+		NewClassicReplayRecorder *replay_recorder,
+		std::filesystem::path legacy_score_path = {}
 	);
 
 	std::unique_ptr<Impl> impl_;

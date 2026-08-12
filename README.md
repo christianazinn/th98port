@@ -196,8 +196,17 @@ Replay Patch's exact MAIN warning-flash reduction. The Language row currently
 states that English is unavailable: the authenticated `TH3EN.DAT` translated
 resource overlay has not yet been ported, so the native application does not
 claim a partial English mode.
+New Classic also owns the Replay Patch's versioned per-character HiScore file.
+Its viewer opens on `ALL CHARACTERS`, cycles through the unlocked character
+pages with Left/Right, appends the derived TOTAL row, and shows play time, 1CC,
+and accepted-continue statistics. A first launch can import a valid Classic
+board by value, but New Classic then writes only `YUME.NEW.NEM`; Classic's
+824-byte `YUME.NEM` remains unchanged. Live Story time is checkpointed on
+registration, Continue, menu return, restart, and application exit, while
+Demo, Practice, and replay playback remain excluded.
 Unless overridden with `--config`, `--score`, and `--replay-root`, Classic
-stores `YUME.CFG`, `YUME.NEM`, and New Classic's `TH3KEY.CFG` and `REPLAY`
+stores `YUME.CFG` and `YUME.NEM`; New Classic derives `YUME.NEW.NEM` beside
+the selected `--score` path and stores `TH3KEY.CFG` plus the `REPLAY`
 directory under the selected `--data` root. This avoids dependence on the
 launcher working directory; use explicit writable paths when the extracted
 content root is read-only.

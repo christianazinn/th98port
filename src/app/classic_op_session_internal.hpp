@@ -86,6 +86,7 @@ struct ClassicOpSessionError final {
 	std::optional<ResourceLoadError> resource_error{};
 	std::optional<ClassicConfigStoreError> config_store_error{};
 	std::optional<ClassicScoreStoreError> score_store_error{};
+	std::optional<NewClassicScoreStoreError> new_score_store_error{};
 	std::optional<MainlCompiledTextError> mainl_text_error{};
 	std::optional<OpCompiledTextError> op_text_error{};
 	std::optional<AuthenticTextError> font_error{};
@@ -270,7 +271,8 @@ public:
 		bool fm_available = true,
 		present::KotohimeBombFadeCompatibility kotohime_compatibility = {},
 		NewClassicReplayRecorder *replay_recorder = nullptr,
-		bool new_classic_practice_route = false
+		bool new_classic_practice_route = false,
+		std::filesystem::path new_classic_score_path = {}
 	);
 	~ClassicOpSession();
 

@@ -43,6 +43,7 @@ using th03::app::ClassicScoreCodecFields;
 using th03::app::ClassicScoreStoreDisposition;
 using th03::app::MainlStageTextAssets;
 using th03::app::MainlRegistrationNextScreen;
+using th03::app::NewClassicScoreRun;
 using th03::present::AnkGlyph;
 using th03::present::AnkGlyphProvider;
 using th03::present::JisGlyph;
@@ -304,6 +305,52 @@ std::expected<
 			std::array<std::optional<th03::assets::PlanarCel4>, 4U>{},
 		stage_text(), font
 	);
+}
+
+std::expected<
+	std::unique_ptr<ClassicRegistrationScene>,
+	th03::app::ClassicRegistrationError
+> create_new_scene(
+	const GameInit &value,
+	const fs::path &score_path,
+	const fs::path &legacy_score_path,
+	SyntheticFont &font,
+	NewClassicScoreRun run
+)
+{
+	const bool preload_continue = value.remaining_credits != 0U &&
+		value.story_stage != 99U;
+	return ClassicRegistrationSceneTestAccess::
+		create_new_classic_with_predecoded_assets(
+			value, score_path, legacy_score_path, background(), rank_cel(),
+			glyph_sheet(4U), glyph_sheet(15U),
+			preload_continue ? background(5U, 1U) : background(9U, 7U),
+			preload_continue ? choice_cels() :
+				std::array<std::optional<th03::assets::PlanarCel4>, 4U>{},
+			stage_text(), font, Raster{}, run
+		);
+}
+
+std::expected<
+	std::unique_ptr<ClassicRegistrationScene>,
+	th03::app::ClassicRegistrationError
+> create_new_viewer_scene(
+	const GameInit &value,
+	const fs::path &score_path,
+	const fs::path &legacy_score_path,
+	SyntheticFont &font
+)
+{
+	const bool preload_continue = value.remaining_credits != 0U;
+	return ClassicRegistrationSceneTestAccess::
+		create_new_classic_viewer_with_predecoded_assets(
+			value, score_path, legacy_score_path, background(), rank_cel(),
+			glyph_sheet(4U), glyph_sheet(15U),
+			preload_continue ? background(5U, 1U) : background(9U, 7U),
+			preload_continue ? choice_cels() :
+				std::array<std::optional<th03::assets::PlanarCel4>, 4U>{},
+			stage_text(), font
+		);
 }
 
 void drain_initial_audio(ClassicRegistrationScene &scene)
@@ -832,6 +879,105 @@ void test_view_only_schedule_and_unchanged_board()
 	);
 }
 
+void test_new_classic_registration_and_paged_viewer()
+{
+	TemporaryRoot root;
+	expect(root.valid(), "New Classic score temporary root exists");
+	if(!root.valid()) {
+		return;
+	}
+	const auto legacy_path = root.path() / "YUME.NEM";
+	const auto score_path = root.path() / "YUME.NEW.NEM";
+	expect(write_stock(legacy_path),
+		"New Classic score fixture preserves a separate legacy source");
+	SyntheticFont font;
+	auto value = resident();
+	auto scene = create_new_scene(
+		value, score_path, legacy_path, font,
+		{.run_id = 1U, .play_frames = 282U}
+	);
+	expect(scene && (*scene)->entered_place() == 0U,
+		"New Classic registration inserts into the selected character board");
+	if(!scene) {
+		return;
+	}
+	drain_initial_audio(**scene);
+	if(!advance_fade(**scene, ClassicRegistrationPhase::name_entry)) {
+		return;
+	}
+	for(std::size_t letter = 0U; letter < 8U; ++letter) {
+		expect(static_cast<bool>((*scene)->advance({.ok = true})),
+			"New Classic name entry accepts a glyph");
+		if(letter < 7U) {
+			expect(static_cast<bool>((*scene)->advance({})),
+				"New Classic name entry releases OK");
+		}
+	}
+	expect(static_cast<bool>((*scene)->advance({.ok = true})) &&
+		(*scene)->phase() == ClassicRegistrationPhase::wait_release,
+		"New Classic finalizes the source default name after eight equal glyphs");
+	expect(static_cast<bool>((*scene)->advance({})) &&
+		static_cast<bool>((*scene)->advance({.bomb = true})) &&
+		(*scene)->phase() == ClassicRegistrationPhase::black_out,
+		"New Classic registration preserves release-then-dismiss gating");
+	if(!advance_fade(**scene, ClassicRegistrationPhase::ready)) {
+		return;
+	}
+	const auto loaded = th03::app::load_new_classic_score_store(
+		score_path, legacy_path
+	);
+	const std::array expected_name{'R', 'E', 'I', 'M', 'U', ' ', ' ', ' '};
+	expect(loaded && loaded->document.last_run_id == 1U &&
+		loaded->document.boards[2U][0U].stats.play_frames == 282U &&
+		loaded->document.boards[2U][0U].entries[0U].name == expected_name &&
+		fs::is_regular_file(legacy_path),
+		"one atomic expanded commit stores the run, score, and final name without touching Classic");
+
+	auto document = loaded ? loaded->document :
+		th03::app::new_classic_score_empty();
+	document.boards[2U][1U].stats = {
+		.play_frames = 564U,
+		.one_ccs = 2U,
+		.continues_used = 3U,
+	};
+	expect(th03::app::commit_new_classic_score_store(
+		score_path, document
+	).has_value(), "New Classic viewer fixture extends per-character stats");
+	const auto generation = document.generation;
+	auto viewer = create_new_viewer_scene(
+		viewer_resident(), score_path, legacy_path, font
+	);
+	expect(viewer && ClassicRegistrationSceneTestAccess::new_classic_page(
+		**viewer
+	) == th03::app::new_classic_score_all_characters,
+		"New Classic HiScore opens on the aggregate page");
+	if(!viewer) {
+		return;
+	}
+	drain_initial_audio(**viewer);
+	if(!advance_fade(**viewer, ClassicRegistrationPhase::wait_release)) {
+		return;
+	}
+	expect(static_cast<bool>((*viewer)->advance({})) &&
+		static_cast<bool>((*viewer)->advance({.right = true})) &&
+		ClassicRegistrationSceneTestAccess::new_classic_page(**viewer) == 0U,
+		"Right wraps ALL CHARACTERS to Reimu and redraws one retained page");
+	expect(static_cast<bool>((*viewer)->advance({})) &&
+		static_cast<bool>((*viewer)->advance({.left = true})) &&
+		ClassicRegistrationSceneTestAccess::new_classic_page(**viewer) ==
+			th03::app::new_classic_score_all_characters,
+		"Left wraps Reimu back to ALL CHARACTERS");
+	expect(static_cast<bool>((*viewer)->advance({})) &&
+		static_cast<bool>((*viewer)->advance({.ok = true})),
+		"New Classic paged viewer dismisses after an exact release");
+	if(!advance_fade(**viewer, ClassicRegistrationPhase::ready)) {
+		return;
+	}
+	const auto after_view = th03::app::load_new_classic_score_store(score_path);
+	expect(after_view && after_view->document.generation == generation,
+		"viewing and paging expanded scores performs no persistence write");
+}
+
 void test_zero_credit_audio_exit()
 {
 	TemporaryRoot root;
@@ -1234,6 +1380,7 @@ int main(int argc, char **argv)
 	test_direction_repeat_and_doublewide_navigation();
 	test_missing_file_clear_and_recreate_rng_schedule();
 	test_view_only_schedule_and_unchanged_board();
+	test_new_classic_registration_and_paged_viewer();
 	test_zero_credit_audio_exit();
 	test_music_off_audio_exit();
 	test_rejections_and_commit_failure();

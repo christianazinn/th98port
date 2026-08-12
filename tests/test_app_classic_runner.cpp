@@ -1703,36 +1703,25 @@ bool authentic_gate(
 		return false;
 	}
 
-	const auto score = th03::app::load_classic_score_store(
+	const auto score = th03::app::load_new_classic_score_store(
+		temporary.path() / "YUME.NEW.NEM",
 		temporary.path() / "YUME.NEM"
 	);
-	const std::array expected_name{
-		th03::app::ClassicRegistrationGlyph::space,
-		th03::app::ClassicRegistrationGlyph::space,
-		th03::app::ClassicRegistrationGlyph::space,
-		th03::app::ClassicRegistrationGlyph::u,
-		th03::app::ClassicRegistrationGlyph::m,
-		th03::app::ClassicRegistrationGlyph::i,
-		th03::app::ClassicRegistrationGlyph::e,
-		th03::app::ClassicRegistrationGlyph::r,
-	};
-	if(!score || score->document.boards[1U].cleared !=
-		th03::app::ClassicScoreCleared::cleared ||
-		score->document.boards[1U].rows[0U].playchar_optional != 1U ||
-		score->document.boards[1U].rows[0U].name_backwards != expected_name) {
+	const std::array expected_name{'R', 'E', 'I', 'M', 'U', ' ', ' ', ' '};
+	if(!score || !score->document.extra_unlocked ||
+		!score->document.boards[1U][0U].entries[0U].valid ||
+		score->document.boards[1U][0U].entries[0U].name != expected_name ||
+		score->document.boards[1U][0U].stats.play_frames == 0U ||
+		score->document.boards[1U][0U].stats.one_ccs != 1U ||
+		std::filesystem::exists(temporary.path() / "YUME.NEM")) {
 		std::cerr << "authentic-script-stage=score-persistence";
 		if(score) {
-			for(std::size_t rank = 0U; rank <
-				score->document.boards.size(); ++rank) {
-				const auto &board = score->document.boards[rank];
-				std::cerr << " rank" << rank << "-cleared="
-					<< static_cast<unsigned>(board.cleared)
-					<< "-char=" << static_cast<unsigned>(
-						board.rows[0U].playchar_optional
-					) << "-name=";
-				for(const auto glyph : board.rows[0U].name_backwards) {
-					std::cerr << static_cast<unsigned>(glyph) << ',';
-				}
+			const auto &board = score->document.boards[1U][0U];
+			std::cerr << " unlock=" << score->document.extra_unlocked
+				<< " frames=" << board.stats.play_frames
+				<< " one-cc=" << board.stats.one_ccs << " name=";
+			for(const auto glyph : board.entries[0U].name) {
+				std::cerr << glyph;
 			}
 		}
 		std::cerr << '\n';
@@ -1975,6 +1964,24 @@ bool authentic_gate(
 		runner.take_completed_replay(),
 		th03::formats::ReplayEndReason::menu_return
 	)) {
+		return false;
+	}
+	const auto final_score = th03::app::load_new_classic_score_store(
+		temporary.path() / "YUME.NEW.NEM"
+	);
+	if(!final_score || final_score->document.last_run_id != 9U ||
+		final_score->document.boards[1U][0U].stats.play_frames != 24U ||
+		final_score->document.boards[1U][0U].stats.one_ccs != 1U ||
+		final_score->document.boards[1U][0U].stats.continues_used != 4U) {
+		std::cerr << "authentic-script-stage=score-statistics";
+		if(final_score) {
+			const auto &stats = final_score->document.boards[1U][0U].stats;
+			std::cerr << " run=" << final_score->document.last_run_id
+				<< " frames=" << stats.play_frames
+				<< " one-cc=" << stats.one_ccs
+				<< " continues=" << stats.continues_used;
+		}
+		std::cerr << '\n';
 		return false;
 	}
 

@@ -34,6 +34,9 @@ struct ClassicContentPaths final {
 	std::filesystem::path font_rom{};
 	std::filesystem::path config{"YUME.CFG"};
 	std::filesystem::path score{"YUME.NEM"};
+	// New Classic's versioned per-character store. An empty value derives
+	// YUME.NEW.NEM beside [score], keeping Classic's 824-byte file untouched.
+	std::filesystem::path new_classic_score{};
 };
 
 enum class ClassicRunnerInitialRoute : std::uint8_t {

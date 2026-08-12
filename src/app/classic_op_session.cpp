@@ -61,6 +61,17 @@ namespace {
 	return result;
 }
 
+[[nodiscard]] ClassicOpSessionError new_score_error(
+	NewClassicScoreStoreError error
+)
+{
+	auto result = session_error(
+		ClassicOpSessionErrorCode::score_store_failed
+	);
+	result.new_score_store_error.emplace(std::move(error));
+	return result;
+}
+
 [[nodiscard]] ClassicOpSessionError font_error(AuthenticTextError error)
 {
 	auto result = session_error(ClassicOpSessionErrorCode::font_failed);
@@ -680,6 +691,7 @@ struct ClassicOpSessionBackend final {
 	std::shared_ptr<const MainProcessStaticContent> static_content{};
 	std::filesystem::path config_path{};
 	std::filesystem::path score_path{};
+	std::filesystem::path new_classic_score_path{};
 	ClassicConfigOptions config{};
 	bool fm_available = true;
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
@@ -730,7 +742,8 @@ struct ClassicOpSessionBackend final {
 		bool fm_available_,
 		present::KotohimeBombFadeCompatibility compatibility,
 		NewClassicReplayRecorder *replay_recorder_,
-		bool new_classic_practice_route_
+		bool new_classic_practice_route_,
+		std::filesystem::path new_classic_score_path_
 	) :
 		loader(std::move(loader_)),
 		compiled(std::move(compiled_)),
@@ -740,12 +753,17 @@ struct ClassicOpSessionBackend final {
 		op_music_labels(std::move(op_music_labels_)),
 		config_path(std::move(config_path_)),
 		score_path(std::move(score_path_)),
+		new_classic_score_path(std::move(new_classic_score_path_)),
 		config(config_),
 		fm_available(fm_available_),
 		kotohime_compatibility(compatibility),
 		replay_recorder(replay_recorder_),
 		new_classic_practice_route(new_classic_practice_route_)
 	{
+		if(replay_recorder && new_classic_score_path.empty()) {
+			new_classic_score_path =
+				score_path.parent_path() / "YUME.NEW.NEM";
+		}
 		blank_tram.fill({
 			' ', static_cast<present::TramAttribute>(present::tram_black)
 		});
@@ -1086,9 +1104,13 @@ struct ClassicOpSessionBackend final {
 		if(!resources) {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
-		auto created = ClassicRegistrationScene::create_viewer(
-			*title_completion, score_path, *resources, stage_text, *font
-		);
+		auto created = replay_recorder ?
+			ClassicRegistrationScene::create_new_classic_viewer(
+				*title_completion, new_classic_score_path, score_path,
+				*resources, stage_text, *font
+			) : ClassicRegistrationScene::create_viewer(
+				*title_completion, score_path, *resources, stage_text, *font
+			);
 		if(!created) {
 			return std::unexpected(high_score_error(std::move(created.error())));
 		}
@@ -1166,6 +1188,17 @@ struct ClassicOpSessionBackend final {
 	[[nodiscard]] std::expected<std::uint8_t, ClassicOpSessionError>
 	available_character_count()
 	{
+		if(replay_recorder) {
+			auto loaded = load_new_classic_score_store(
+				new_classic_score_path, score_path
+			);
+			if(!loaded) {
+				return std::unexpected(new_score_error(std::move(loaded.error())));
+			}
+			return static_cast<std::uint8_t>(
+				loaded->document.extra_unlocked ? 9U : 7U
+			);
+		}
 		auto loaded = load_classic_score_store(score_path);
 		if(!loaded) {
 			return std::unexpected(score_error(std::move(loaded.error())));
@@ -1349,7 +1382,8 @@ struct ClassicOpSessionBackend final {
 		};
 		auto created = ClassicStorySession::create_with_prepared_content(
 			story_config, loader, static_content, stage_text, staff_compiled,
-			score_path, replay_recorder
+			replay_recorder ? new_classic_score_path : score_path,
+			replay_recorder, replay_recorder ? score_path : std::filesystem::path{}
 		);
 		if(!created) {
 			return std::unexpected(story_error(std::move(created.error())));
@@ -1412,7 +1446,9 @@ struct ClassicOpSessionBackend final {
 			};
 			auto created = ClassicStorySession::create_with_prepared_content(
 				story_config, loader, static_content, stage_text, staff_compiled,
-				score_path, replay_recorder
+				replay_recorder ? new_classic_score_path : score_path,
+				replay_recorder,
+				replay_recorder ? score_path : std::filesystem::path{}
 			);
 			if(!created) {
 				return std::unexpected(story_error(std::move(created.error())));
@@ -2780,7 +2816,8 @@ ClassicOpSession::create(
 	bool fm_available,
 	present::KotohimeBombFadeCompatibility kotohime_compatibility,
 	NewClassicReplayRecorder *replay_recorder,
-	bool new_classic_practice_route
+	bool new_classic_practice_route,
+	std::filesystem::path new_classic_score_path
 )
 {
 	if(!loader || config_path.empty() || score_path.empty() ||
@@ -2823,7 +2860,8 @@ ClassicOpSession::create(
 		fm_available,
 		kotohime_compatibility,
 		replay_recorder,
-		new_classic_practice_route
+		new_classic_practice_route,
+		std::move(new_classic_score_path)
 	);
 	auto prepared_font = Pc98FontRomProvider::from_exact_font_rom(
 		backend->font_rom

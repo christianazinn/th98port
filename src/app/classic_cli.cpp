@@ -312,6 +312,8 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 		request.launch.content.score =
 			request.launch.content.data_root / "YUME.NEM";
 	}
+	request.launch.content.new_classic_score =
+		request.launch.content.score.parent_path() / "YUME.NEW.NEM";
 	if(!seen[static_cast<std::size_t>(ClassicCliOption::replay_root)]) {
 		request.replay_root = request.launch.content.data_root / "REPLAY";
 	}

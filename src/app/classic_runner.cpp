@@ -382,6 +382,10 @@ ClassicRunner::load(ClassicRunnerRequest request)
 
 	auto resident = initial_resident(request.seed);
 	resident.autofire_mask = request.autofire_mask;
+	if(request.content.new_classic_score.empty()) {
+		request.content.new_classic_score =
+			request.content.score.parent_path() / "YUME.NEW.NEM";
+	}
 	auto replay_recorder = request.experience == ExperienceProfile::new_classic
 		? std::make_unique<NewClassicReplayRecorder>(current_dos_date()) : nullptr;
 	auto session = ClassicOpSession::create(
@@ -396,7 +400,8 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		request.fm_available,
 		request.kotohime_compatibility,
 		replay_recorder.get(),
-		request.initial_route == ClassicRunnerInitialRoute::new_classic_practice
+		request.initial_route == ClassicRunnerInitialRoute::new_classic_practice,
+		std::move(request.content.new_classic_score)
 	);
 	if(!session) {
 		return std::unexpected(session_error(session.error()));

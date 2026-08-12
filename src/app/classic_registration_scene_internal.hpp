@@ -16,6 +16,8 @@
 #include "th03/app/classic_audio.hpp"
 #include "th03/app/classic_score.hpp"
 #include "th03/app/classic_score_store.hpp"
+#include "th03/app/new_classic_score.hpp"
+#include "th03/app/new_classic_score_store.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/assets/types.hpp"
 #include "th03/core/game.hpp"
@@ -90,6 +92,8 @@ struct ClassicRegistrationError final {
 	std::optional<present::GraphicsTextError> text_error{};
 	std::optional<ClassicScoreStoreError> store_error{};
 	std::optional<ClassicScoreError> score_error{};
+	std::optional<NewClassicScoreStoreError> new_score_store_error{};
+	std::optional<NewClassicScoreError> new_score_error{};
 };
 
 struct ClassicRegistrationTick final {
@@ -145,7 +149,8 @@ private:
 };
 
 // Source-private owner of MAINL's Story registration and OP score-viewing
-// routes. Replay pages are deliberately excluded. Construction authenticates
+// routes. Classic retains the original single board; New Classic presents the
+// Replay Patch per-character and aggregate pages. Construction authenticates
 // and prepares the full visual closure before touching the score store;
 // advance() consumes at most one source input poll or VSync boundary.
 class ClassicRegistrationScene final {
@@ -164,9 +169,33 @@ public:
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicRegistrationScene>,
 		ClassicRegistrationError
+	> create_new_classic(
+		const GameInit &resident,
+		const std::filesystem::path &score_path,
+		const std::filesystem::path &legacy_score_path,
+		std::span<const LoadedMainResource> resources,
+		const MainlStageTextAssets &stage_text,
+		const present::AnkGlyphProvider &font,
+		present::Raster initial_raster,
+		NewClassicScoreRun run
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicRegistrationScene>,
+		ClassicRegistrationError
 	> create_viewer(
 		const ClassicOpCompletion &completion,
 		const std::filesystem::path &score_path,
+		std::span<const LoadedMainResource> resources,
+		const MainlStageTextAssets &stage_text,
+		const present::AnkGlyphProvider &font
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicRegistrationScene>,
+		ClassicRegistrationError
+	> create_new_classic_viewer(
+		const ClassicOpCompletion &completion,
+		const std::filesystem::path &score_path,
+		const std::filesystem::path &legacy_score_path,
 		std::span<const LoadedMainResource> resources,
 		const MainlStageTextAssets &stage_text,
 		const present::AnkGlyphProvider &font
@@ -217,6 +246,10 @@ private:
 		ClassicScoreDocument document,
 		ClassicScoreStoreDisposition load_disposition,
 		ClassicScoreCodecFields commit_codec,
+		std::optional<NewClassicScoreDocument> new_classic_document,
+		std::uint8_t new_classic_character,
+		std::uint8_t new_classic_page,
+		const present::AnkGlyphProvider *font,
 		std::optional<std::size_t> entered_place,
 		present::Raster raster,
 		bool view_only
@@ -232,7 +265,10 @@ private:
 		const present::AnkGlyphProvider &font,
 		present::Raster initial_raster,
 		bool authenticate_resource_bytes,
-		bool view_only
+		bool view_only,
+		bool new_classic,
+		std::filesystem::path legacy_score_path,
+		std::optional<NewClassicScoreRun> run
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicRegistrationScene>,
@@ -249,7 +285,10 @@ private:
 		const MainlStageTextAssets &stage_text,
 		const present::AnkGlyphProvider &font,
 		present::Raster initial_raster,
-		bool view_only
+		bool view_only,
+		bool new_classic,
+		std::filesystem::path legacy_score_path,
+		std::optional<NewClassicScoreRun> run
 	);
 
 	[[nodiscard]] bool initialize_visuals() noexcept;
@@ -265,6 +304,9 @@ private:
 	[[nodiscard]] bool draw_alphabet() noexcept;
 	[[nodiscard]] bool draw_row(std::size_t place) noexcept;
 	[[nodiscard]] bool draw_rows(bool restore_background) noexcept;
+	[[nodiscard]] bool draw_new_classic_overlay() noexcept;
+	[[nodiscard]] std::expected<void, ClassicRegistrationError>
+	load_new_classic_page(std::uint8_t page, bool redraw = true);
 	[[nodiscard]] bool blank_cursor() noexcept;
 	[[nodiscard]] bool rerender_name_cursor() noexcept;
 	[[nodiscard]] bool rerender_completed_name() noexcept;
@@ -294,6 +336,15 @@ private:
 	ClassicScoreStoreDisposition load_disposition_ =
 		ClassicScoreStoreDisposition::loaded;
 	ClassicScoreCodecFields commit_codec_{};
+	std::optional<NewClassicScoreDocument> new_classic_document_{};
+	std::uint8_t new_classic_character_ = 0U;
+	std::uint8_t new_classic_page_ = new_classic_score_all_characters;
+	const present::AnkGlyphProvider *font_ = nullptr;
+	std::array<
+		std::optional<present::PreparedGraphicsText8x16>,
+		3U
+	> new_classic_overlay_{};
+	std::array<bool, new_classic_score_place_count> new_classic_row_total_{};
 	std::optional<std::size_t> entered_place_{};
 	present::Raster raster_{};
 	ClassicRegistrationPhase phase_ = ClassicRegistrationPhase::black_in;
@@ -326,7 +377,7 @@ struct ClassicRegistrationSceneTestAccess final {
 	{
 		return ClassicRegistrationScene::create_impl(
 			resident, score_path, resources, stage_text, font,
-			std::move(initial_raster), false, false
+			std::move(initial_raster), false, false, false, {}, std::nullopt
 		);
 	}
 
@@ -349,7 +400,7 @@ struct ClassicRegistrationSceneTestAccess final {
 		}
 		return ClassicRegistrationScene::create_impl(
 			completion.resident(), score_path, resources, stage_text, font,
-			present::Raster{}, false, true
+			present::Raster{}, false, true, false, {}, std::nullopt
 		);
 	}
 
@@ -374,7 +425,7 @@ struct ClassicRegistrationSceneTestAccess final {
 			resident, score_path, std::move(background), std::move(rank),
 			std::move(normal), std::move(highlight),
 			std::move(next_background), std::move(choice_cels), stage_text, font,
-			std::move(initial_raster), false
+			std::move(initial_raster), false, false, {}, std::nullopt
 		);
 	}
 
@@ -398,7 +449,59 @@ struct ClassicRegistrationSceneTestAccess final {
 			resident, score_path, std::move(background), std::move(rank),
 			std::move(normal), std::move(highlight),
 			std::move(next_background), std::move(choice_cels), stage_text, font,
-			present::Raster{}, true
+			present::Raster{}, true, false, {}, std::nullopt
+		);
+	}
+
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicRegistrationScene>,
+		ClassicRegistrationError
+	> create_new_classic_with_predecoded_assets(
+		const GameInit &resident,
+		const std::filesystem::path &score_path,
+		const std::filesystem::path &legacy_score_path,
+		assets::PiImage background,
+		assets::PlanarCel4 rank,
+		assets::BfntSheet normal,
+		assets::BfntSheet highlight,
+		assets::PiImage next_background,
+		std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels,
+		const MainlStageTextAssets &stage_text,
+		const present::AnkGlyphProvider &font,
+		present::Raster initial_raster,
+		NewClassicScoreRun run
+	)
+	{
+		return ClassicRegistrationScene::create_predecoded(
+			resident, score_path, std::move(background), std::move(rank),
+			std::move(normal), std::move(highlight), std::move(next_background),
+			std::move(choice_cels), stage_text, font, std::move(initial_raster),
+			false, true, legacy_score_path, run
+		);
+	}
+
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicRegistrationScene>,
+		ClassicRegistrationError
+	> create_new_classic_viewer_with_predecoded_assets(
+		const GameInit &resident,
+		const std::filesystem::path &score_path,
+		const std::filesystem::path &legacy_score_path,
+		assets::PiImage background,
+		assets::PlanarCel4 rank,
+		assets::BfntSheet normal,
+		assets::BfntSheet highlight,
+		assets::PiImage next_background,
+		std::array<std::optional<assets::PlanarCel4>, 4U> choice_cels,
+		const MainlStageTextAssets &stage_text,
+		const present::AnkGlyphProvider &font
+	)
+	{
+		return ClassicRegistrationScene::create_predecoded(
+			resident, score_path, std::move(background), std::move(rank),
+			std::move(normal), std::move(highlight), std::move(next_background),
+			std::move(choice_cels), stage_text, font, present::Raster{}, true,
+			true, legacy_score_path, std::nullopt
 		);
 	}
 
@@ -456,6 +559,13 @@ struct ClassicRegistrationSceneTestAccess final {
 	) noexcept
 	{
 		return scene.view_only_;
+	}
+
+	[[nodiscard]] static std::uint8_t new_classic_page(
+		const ClassicRegistrationScene &scene
+	) noexcept
+	{
+		return scene.new_classic_page_;
 	}
 };
 

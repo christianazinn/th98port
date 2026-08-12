@@ -87,6 +87,17 @@ namespace {
 	return result;
 }
 
+[[nodiscard]] ClassicStorySessionError new_score_store_error(
+	NewClassicScoreStoreError error
+)
+{
+	auto result = session_error(
+		ClassicStorySessionErrorCode::score_store_failed
+	);
+	result.new_score_store_error.emplace(std::move(error));
+	return result;
+}
+
 [[nodiscard]] ClassicStorySessionError continue_error(
 	ClassicMainlContinueError error,
 	ClassicStorySessionErrorCode code =
@@ -384,6 +395,7 @@ struct ClassicStoryBackend final {
 	std::unique_ptr<ClassicMainlGameOverScene> game_over{};
 	std::optional<ClassicMainlGameOverCompletion> game_over_completion{};
 	std::filesystem::path score_path{};
+	std::filesystem::path legacy_score_path{};
 	GameInit process_start{};
 	std::optional<ClassicStoryTerminal> forced_terminal{};
 	std::optional<ClassicStoryTerminal> forced_continue_terminal{};
@@ -391,6 +403,9 @@ struct ClassicStoryBackend final {
 	std::optional<ClassicAudioCommand> pause_audio{};
 	bool restart_requested = false;
 	NewClassicReplayRecorder *replay_recorder = nullptr;
+	std::optional<NewClassicScoreRun> score_run{};
+	std::uint8_t score_run_rank = 0U;
+	std::uint8_t score_run_character = 0U;
 
 	ClassicStoryBackend(
 		std::shared_ptr<MainResourceLoader> loader_,
@@ -398,18 +413,104 @@ struct ClassicStoryBackend final {
 		MainlStageTextAssets stage_text_,
 		MainlStaffCompiledAssets staff_compiled_,
 		std::filesystem::path score_path_,
-		NewClassicReplayRecorder *replay_recorder_
+		NewClassicReplayRecorder *replay_recorder_,
+		std::filesystem::path legacy_score_path_
 	) :
 		loader(std::move(loader_)),
 		static_content(std::move(static_content_)),
 		stage_text(std::move(stage_text_)),
 		staff_compiled(std::move(staff_compiled_)),
 		score_path(std::move(score_path_)),
+		legacy_score_path(std::move(legacy_score_path_)),
 		replay_recorder(replay_recorder_)
 	{
 		blank_tram.fill({
 			' ', static_cast<present::TramAttribute>(present::tram_black)
 		});
+	}
+
+	std::expected<void, ClassicStorySessionError> begin_score_run(
+		const GameInit &resident
+	)
+	{
+		if(!replay_recorder || !replay_recorder->recording() || score_run) {
+			return {};
+		}
+		const auto player = main_player_selection_from_paletted(
+			resident.paletted_character[0U]
+		);
+		if(!player || resident.rank >= new_classic_score_rank_count) {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::invalid_config
+			));
+		}
+		auto loaded = load_new_classic_score_store(score_path, legacy_score_path);
+		if(!loaded) {
+			return std::unexpected(new_score_store_error(
+				std::move(loaded.error())
+			));
+		}
+		auto run_id = loaded->document.last_run_id + 1U;
+		if(run_id == 0U) {
+			run_id = 1U;
+		}
+		score_run = NewClassicScoreRun{.run_id = run_id};
+		score_run_rank = resident.rank;
+		score_run_character = static_cast<std::uint8_t>(player->character);
+		return {};
+	}
+
+	std::expected<void, ClassicStorySessionError> continue_score_run(
+		const GameInit &resident
+	)
+	{
+		if(!replay_recorder || !replay_recorder->recording()) {
+			return {};
+		}
+		score_run.reset();
+		if(auto begun = begin_score_run(resident); !begun) {
+			return begun;
+		}
+		if(!score_run) {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::backend_contract_failed
+			));
+		}
+		score_run->continues_used = 1U;
+		return {};
+	}
+
+	std::expected<void, ClassicStorySessionError> checkpoint_score_run()
+	{
+		if(!score_run) {
+			return {};
+		}
+		auto loaded = load_new_classic_score_store(score_path, legacy_score_path);
+		if(!loaded) {
+			return std::unexpected(new_score_store_error(
+				std::move(loaded.error())
+			));
+		}
+		auto applied = new_classic_score_apply_run(
+			loaded->document, score_run_rank, score_run_character, *score_run
+		);
+		if(!applied) {
+			return std::unexpected(registration_error({
+				.code = ClassicRegistrationErrorCode::score_mutation_failed,
+				.new_score_error = applied.error(),
+			}));
+		}
+		if(*applied) {
+			if(auto committed = commit_new_classic_score_store(
+				score_path, loaded->document
+			); !committed) {
+				return std::unexpected(new_score_store_error(
+					std::move(committed.error())
+				));
+			}
+		}
+		score_run.reset();
+		return {};
 	}
 
 	[[nodiscard]] std::expected<
@@ -576,6 +677,9 @@ struct ClassicStoryBackend final {
 			); !checkpoint) {
 				return std::unexpected(replay_capture_error());
 			}
+			if(auto run = begin_score_run(config.resident); !run) {
+				return std::unexpected(std::move(run.error()));
+			}
 		}
 		return {};
 	}
@@ -695,6 +799,11 @@ struct ClassicStoryBackend final {
 				}
 			}
 		}
+		if(score_run && advanced->process_advanced &&
+			advanced->step_result.status != StepStatus::paused &&
+			score_run->play_frames != 0xFFFFFFFFU) {
+			++score_run->play_frames;
+		}
 		return ClassicStoryBackendTick{
 			.surface_changed = advanced->surface_changed,
 			.input_sampled = advanced->process_advanced,
@@ -712,6 +821,11 @@ struct ClassicStoryBackend final {
 		if(forced_terminal) {
 			auto terminal = std::move(*forced_terminal);
 			forced_terminal.reset();
+			if(terminal.terminal.route == 0U) {
+				if(auto checkpoint = checkpoint_score_run(); !checkpoint) {
+					return std::unexpected(std::move(checkpoint.error()));
+				}
+			}
 			return terminal;
 		}
 		if(!driver || !process ||
@@ -721,11 +835,17 @@ struct ClassicStoryBackend final {
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
 		}
-		return ClassicStoryTerminal{
+		auto terminal = ClassicStoryTerminal{
 			.process_start = process_start,
 			.terminal = process->canonical_state(),
 			.transition = *driver->transition(),
 		};
+		if(terminal.terminal.route == 0U) {
+			if(auto checkpoint = checkpoint_score_run(); !checkpoint) {
+				return std::unexpected(std::move(checkpoint.error()));
+			}
+		}
+		return terminal;
 	}
 
 	std::expected<void, ClassicStorySessionError>
@@ -1123,6 +1243,18 @@ struct ClassicStoryBackend final {
 			resident.story_stage != 99U) ?
 			MainlRegistrationNextScreen::continue_menu :
 			MainlRegistrationNextScreen::game_over;
+		const auto score_player = main_player_selection_from_paletted(
+			resident.paletted_character[0U]
+		);
+		if(replay_recorder && (!score_run || !score_player ||
+			score_run_rank != resident.rank ||
+			score_run_character != static_cast<std::uint8_t>(
+				score_player->character
+			))) {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::backend_contract_failed
+			));
+		}
 		auto resources = loader->load_mainl_registration({
 			.rank = static_cast<MainRegistrationRank>(resident.rank + 1U),
 			.next_screen = next_screen,
@@ -1130,18 +1262,27 @@ struct ClassicStoryBackend final {
 		if(!resources) {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
-		auto created = ClassicRegistrationScene::create(
-			resident,
-			score_path,
-			*resources,
-			stage_text,
-			static_content->font(),
-			*cutscene_handoff
-		);
+		auto created = replay_recorder ?
+			ClassicRegistrationScene::create_new_classic(
+				resident, score_path, legacy_score_path, *resources,
+				stage_text, static_content->font(), *cutscene_handoff,
+				[&]() {
+					auto run = score_run.value_or(NewClassicScoreRun{});
+					run.one_cc = resident.story_stage == 99U &&
+						resident.remaining_credits == 3U;
+					return run;
+				}()
+			) : ClassicRegistrationScene::create(
+				resident, score_path, *resources, stage_text,
+				static_content->font(), *cutscene_handoff
+			);
 		if(!created) {
 			return std::unexpected(registration_error(
 				std::move(created.error())
 			));
+		}
+		if(replay_recorder) {
+			score_run.reset();
 		}
 		cutscene_handoff.reset();
 		registration = std::move(*created);
@@ -1294,6 +1435,10 @@ struct ClassicStoryBackend final {
 				--transition.resident.remaining_credits;
 				transition.action = SessionAction::start_gameplay;
 				continue_completion.reset();
+				if(auto continued = continue_score_run(transition.resident);
+					!continued) {
+					return std::unexpected(std::move(continued.error()));
+				}
 			} else {
 				transition.action = SessionAction::exit_to_operator;
 			}
@@ -1320,6 +1465,11 @@ struct ClassicStoryBackend final {
 		}
 		if(choice == ContinueChoice::accept) {
 			continue_completion.reset();
+		}
+		if(choice == ContinueChoice::accept) {
+			if(auto continued = continue_score_run(resolved->resident); !continued) {
+				return std::unexpected(std::move(continued.error()));
+			}
 		}
 		driver.reset();
 		process.reset();
@@ -1642,6 +1792,11 @@ ClassicStorySessionBackendOperations backend_operations(
 				context, &ClassicStoryBackend::finish_game_over
 			);
 		},
+		.checkpoint_score_run = [](void *context) {
+			return backend_call<std::expected<void, ClassicStorySessionError>>(
+				context, &ClassicStoryBackend::checkpoint_score_run
+			);
+		},
 		.take_audio_command = [](void *context) {
 			return static_cast<ClassicStoryBackend *>(context)->
 				take_audio_command();
@@ -1890,9 +2045,15 @@ ClassicStorySession::create(
 		return std::unexpected(std::move(error));
 	}
 	auto shared_loader = std::shared_ptr<MainResourceLoader>(std::move(loader));
+	auto legacy_score_path = std::filesystem::path{};
+	if(replay_recorder) {
+		legacy_score_path = score_path;
+		score_path = score_path.parent_path() / "YUME.NEW.NEM";
+	}
 	auto backend = std::make_shared<ClassicStoryBackend>(
 		std::move(shared_loader), std::move(*static_content), std::move(stage_text),
-		std::move(staff_compiled), std::move(score_path), replay_recorder
+		std::move(staff_compiled), std::move(score_path), replay_recorder,
+		std::move(legacy_score_path)
 	);
 	return create_with_backend(
 		config,
@@ -1910,7 +2071,8 @@ ClassicStorySession::create_with_prepared_content(
 	MainlStageTextAssets stage_text,
 	MainlStaffCompiledAssets staff_compiled,
 	std::filesystem::path score_path,
-	NewClassicReplayRecorder *replay_recorder
+	NewClassicReplayRecorder *replay_recorder,
+	std::filesystem::path legacy_score_path
 )
 {
 	if(!loader || !static_content) {
@@ -1920,7 +2082,8 @@ ClassicStorySession::create_with_prepared_content(
 	}
 	auto backend = std::make_shared<ClassicStoryBackend>(
 		std::move(loader), std::move(static_content), std::move(stage_text),
-		std::move(staff_compiled), std::move(score_path), replay_recorder
+		std::move(staff_compiled), std::move(score_path), replay_recorder,
+		std::move(legacy_score_path)
 	);
 	return create_with_backend(
 		config, std::static_pointer_cast<void>(backend),
@@ -2018,6 +2181,15 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 		));
 	}
 	if(input.app_quit_requested) {
+		if(impl_->operations.checkpoint_score_run) {
+			auto checkpoint = impl_->operations.checkpoint_score_run(
+				impl_->operations.context
+			);
+			if(!checkpoint) {
+				impl_->fail(std::move(checkpoint.error()));
+				return std::unexpected(*impl_->failure);
+			}
+		}
 		impl_->status = ClassicStorySessionStatus::quit_requested;
 		return ClassicStorySessionTick{
 			.scene = impl_->scene,
