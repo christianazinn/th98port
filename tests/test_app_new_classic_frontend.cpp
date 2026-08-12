@@ -67,6 +67,9 @@ th03::formats::ReplayDocument make_document()
 	metadata.final_game_mode = init.game_mode;
 	metadata.final_round_id = std::uint8_t{0U};
 	metadata.final_winner = std::int8_t{0};
+	metadata.dos_date = static_cast<std::uint16_t>(
+		((2026U - 1980U) << 9U) | (8U << 5U) | 12U
+	);
 	metadata.name = {{'A','L','P','H','A',' ',' ',' '}};
 	metadata.final_score = {1U, 2U, 3U, 4U};
 
@@ -96,7 +99,88 @@ th03::formats::ReplayDocument make_document()
 		.input_byte_cursor = 0U,
 		.init = init,
 	});
+	document.expected_round_splits.push_back({
+		.story_stage = 0x0FU,
+		.round_id = 0U,
+		.route = 2U,
+		.winner = 0,
+		.p1_score = {0x34U, 0x12U, 0U, 0U},
+		.p2_score = {0x67U, 0x05U, 0U, 0U},
+		.real_frames = 3'948U,
+	});
+	document.stage_clear_bonuses.emplace();
+	document.slowdown = th03::formats::ReplaySlowdown{
+		.timed_frames = 100U,
+		.slow_frames = 25U,
+	};
 	return document;
+}
+
+th03::formats::ReplayDocument make_story_document()
+{
+	auto document = make_document();
+	auto &metadata = *document.metadata;
+	metadata.game_mode = th03::game_mode::story;
+	metadata.final_game_mode = th03::game_mode::story;
+	metadata.story_stage = 0U;
+	metadata.final_story_stage = std::uint8_t{0U};
+	metadata.stage_reached_count = 1U;
+	metadata.story.emplace();
+	metadata.story->stage_opponents[0U] = 4U;
+	metadata.story->stage_scores[0U] = {0x34U, 0x12U, 0U, 0U};
+	auto &checkpoint = document.checkpoints[0U];
+	checkpoint.stage = 0U;
+	checkpoint.init.game_mode = th03::game_mode::story;
+	checkpoint.init.story_stage = 0U;
+	checkpoint.init.story_opponents[0U] = 4;
+	document.session.init = checkpoint.init;
+	document.expected_round_splits[0U].story_stage = 0U;
+	auto &bonus = (*document.stage_clear_bonuses)[0U];
+	bonus.total = {0U, 0x20U, 0U, 0U};
+	bonus.max_combo = 2U;
+	return document;
+}
+
+th03::formats::ReplayDocument make_practice_document()
+{
+	auto document = make_document();
+	auto &metadata = *document.metadata;
+	metadata.flags = 0x0007U;
+	metadata.practice.emplace();
+	metadata.practice->preset = 0U;
+	metadata.practice->stage = 0U;
+	metadata.practice->round = 0U;
+	metadata.practice->stock = 0xFFU;
+	metadata.practice->p1_spell = 1U;
+	metadata.practice->cpu_spell = 1U;
+	metadata.practice->p1_gauge = 64U;
+	metadata.practice->cpu_gauge = 64U;
+	document.practice = true;
+	auto &checkpoint = document.checkpoints[0U];
+	checkpoint.stage = 0U;
+	checkpoint.init.story_stage = 0U;
+	checkpoint.init.practice_rules = th03::PracticeRules{};
+	checkpoint.init.round_start_snapshot->state.gauge_attack_level = {1U, 1U};
+	checkpoint.init.compact_runtime_snapshot->players[0U].gauge_avail = 1'024U;
+	checkpoint.init.compact_runtime_snapshot->players[1U].gauge_avail = 1'024U;
+	document.session.init = checkpoint.init;
+	document.expected_round_splits[0U].story_stage = 0U;
+	auto &bonus = (*document.stage_clear_bonuses)[0U];
+	bonus.total = {0U, 0x20U, 0U, 0U};
+	bonus.max_combo = 2U;
+	return document;
+}
+
+std::uint64_t surface_hash(th03::present::SourceSurface surface)
+{
+	std::uint64_t hash = 1'469'598'103'934'665'603ULL;
+	for(const auto pixel : surface.pixels) {
+		hash ^= static_cast<std::uint8_t>(pixel.layer);
+		hash *= 1'099'511'628'211ULL;
+		hash ^= pixel.value;
+		hash *= 1'099'511'628'211ULL;
+	}
+	return hash;
 }
 
 void test_landing()
@@ -139,9 +223,20 @@ void test_catalog_browser_and_save()
 	std::error_code ignored;
 	std::filesystem::remove_all(root, ignored);
 	auto document = make_document();
+	auto base_commit = commit_replay_slot(root, 0U, document);
 	expect(
-		commit_replay_slot(root, 0U, document).has_value(),
+		base_commit.has_value(),
 		"fixture commits through the real atomic V13 store"
+	);
+	auto story_commit = commit_replay_slot(root, 2U, make_story_document());
+	expect(
+		story_commit.has_value(),
+		"Story telemetry fixture commits through the real V13 store"
+	);
+	auto practice_commit = commit_replay_slot(root, 3U, make_practice_document());
+	expect(
+		practice_commit.has_value(),
+		"Practice telemetry fixture commits through the real V13 store"
 	);
 	std::filesystem::create_directories(root);
 	{
@@ -157,8 +252,17 @@ void test_catalog_browser_and_save()
 		catalog->slots[0U].state == ReplayCatalogSlotState::ready &&
 		catalog->slots[0U].name[0U] == 'A' &&
 		catalog->slots[1U].state == ReplayCatalogSlotState::invalid &&
-		catalog->slots[2U].state == ReplayCatalogSlotState::empty,
+		catalog->slots[2U].state == ReplayCatalogSlotState::ready &&
+		catalog->slots[3U].state == ReplayCatalogSlotState::ready &&
+		catalog->slots[4U].state == ReplayCatalogSlotState::empty,
 		"catalog distinguishes ready, invalid, and empty slots"
+	);
+	expect(
+		new_classic_replay_timer_label(0U) == "0:00.00" &&
+		new_classic_replay_timer_label(563U) == "0:09.98" &&
+		new_classic_replay_timer_label(564U) == "0:10.00" &&
+		new_classic_replay_timer_label(3'948U) == "1:10.00",
+		"timer labels preserve Replay Patch 0.4.9 integer formatting"
 	);
 	auto browser = NewClassicReplayBrowser::load(root);
 	expect(browser.has_value(), "browser loads the complete 100-slot catalog");
@@ -168,12 +272,74 @@ void test_catalog_browser_and_save()
 		expect(opened && opened->surface_changed,
 			"confirm on an occupied slot opens replay details");
 		static_cast<void>((*browser)->consume({}));
+		const auto split_hash = surface_hash((*browser)->surface());
+		auto clears = (*browser)->consume({.right = true});
+		expect(
+			clears && clears->surface_changed && (*browser)->detail_page() ==
+				NewClassicReplayDetailPage::clear_bonuses &&
+			surface_hash((*browser)->surface()) != split_hash,
+			"detail Right selects and redraws the Clears telemetry tab"
+		);
+		static_cast<void>((*browser)->consume({}));
+		const auto selected_before = (*browser)->selected_checkpoint();
+		auto ignored_up = (*browser)->consume({.up = true});
+		expect(
+			ignored_up && !ignored_up->surface_changed &&
+			(*browser)->selected_checkpoint() == selected_before,
+			"Clears is informative and does not move checkpoint focus"
+		);
+		static_cast<void>((*browser)->consume({}));
+		auto ignored_play = (*browser)->consume({.confirm = true});
+		expect(
+			ignored_play && ignored_play->status ==
+				NewClassicReplayBrowserStatus::running,
+			"Clears cannot launch a checkpoint"
+		);
+		static_cast<void>((*browser)->consume({}));
+		auto timers = (*browser)->consume({.right = true});
+		expect(
+			timers && timers->surface_changed && (*browser)->detail_page() ==
+				NewClassicReplayDetailPage::timers &&
+			surface_hash((*browser)->surface()) != split_hash,
+			"detail Right selects and redraws the Timers telemetry tab"
+		);
+		static_cast<void>((*browser)->consume({}));
 		auto play = (*browser)->consume({.confirm = true});
 		expect(
 			play && play->status == NewClassicReplayBrowserStatus::play_selected &&
 			(*browser)->selected_checkpoint() == 0U &&
 			(*browser)->take_selected_document().has_value(),
 			"detail confirmation publishes the selected checkpoint document"
+		);
+	}
+
+	for(const auto [slot, practice] : std::array{
+		std::pair<std::uint8_t, bool>{std::uint8_t{2U}, false},
+		std::pair<std::uint8_t, bool>{std::uint8_t{3U}, true},
+	}) {
+		auto telemetry = NewClassicReplayBrowser::load(root);
+		expect(telemetry.has_value(), "telemetry browser reload succeeds");
+		if(!telemetry) {
+			continue;
+		}
+		static_cast<void>((*telemetry)->consume({}));
+		for(std::uint8_t index = 0U; index < slot; ++index) {
+			static_cast<void>((*telemetry)->consume({.down = true}));
+			static_cast<void>((*telemetry)->consume({}));
+		}
+		auto opened = (*telemetry)->consume({.confirm = true});
+		expect(
+			opened && opened->surface_changed &&
+			(*telemetry)->selected_slot() == slot &&
+			(*telemetry)->detail_page() == NewClassicReplayDetailPage::splits,
+			practice ? "Practice detail telemetry renders" :
+				"Story detail telemetry renders"
+		);
+		static_cast<void>((*telemetry)->consume({}));
+		expect(
+			(*telemetry)->consume({.right = true})->surface_changed,
+			practice ? "Practice clear telemetry renders" :
+				"Story clear telemetry renders"
 		);
 	}
 
@@ -190,11 +356,11 @@ void test_catalog_browser_and_save()
 		"name End advances to the slot list"
 	);
 	release(save, *catalog);
-	NewClassicReplaySaveTestAccess::set_slot(save, 2U);
+	NewClassicReplaySaveTestAccess::set_slot(save, 4U);
 	auto requested = save.consume({.confirm = true}, *catalog);
 	expect(
 		requested.status == NewClassicReplaySaveStatus::save_requested &&
-		save.selected_slot() == 2U,
+		save.selected_slot() == 4U,
 		"an empty slot requests exactly one atomic commit"
 	);
 	save.report_commit(false);

@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 
 #include "th03/app/host_menu_canvas.hpp"
@@ -138,6 +139,18 @@ enum class NewClassicReplayBrowserStatus : std::uint8_t {
 	application_quit,
 };
 
+enum class NewClassicReplayDetailPage : std::uint8_t {
+	splits,
+	clear_bonuses,
+	timers,
+};
+
+// Replay Patch 0.4.9's frozen display conversion. This is reporting metadata;
+// the exact rational scheduler remains authoritative for runtime cadence.
+[[nodiscard]] std::string new_classic_replay_timer_label(
+	std::uint32_t real_frames
+);
+
 struct NewClassicReplayBrowserResult final {
 	bool surface_changed = false;
 	NewClassicReplayBrowserStatus status =
@@ -158,6 +171,7 @@ public:
 	[[nodiscard]] present::SourceSurface surface() const noexcept;
 	[[nodiscard]] std::uint8_t selected_slot() const noexcept;
 	[[nodiscard]] std::size_t selected_checkpoint() const noexcept;
+	[[nodiscard]] NewClassicReplayDetailPage detail_page() const noexcept;
 	[[nodiscard]] std::optional<formats::ReplayDocument>
 	take_selected_document();
 
@@ -175,6 +189,8 @@ private:
 	HostMenuCanvas canvas_{};
 	std::uint8_t selected_slot_ = 0U;
 	std::size_t selected_checkpoint_ = 0U;
+	NewClassicReplayDetailPage detail_page_ =
+		NewClassicReplayDetailPage::splits;
 	std::optional<formats::ReplayDocument> detail_document_{};
 	NewClassicReplayBrowserStatus status_ =
 		NewClassicReplayBrowserStatus::running;

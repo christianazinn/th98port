@@ -80,9 +80,10 @@ void draw_row(
 {
 	std::string result;
 	result.reserve(8U);
-	for(const auto value : packed) {
-		result.push_back(static_cast<char>('0' + ((value / 10U) % 10U)));
-		result.push_back(static_cast<char>('0' + (value % 10U)));
+	for(auto cursor = packed.rbegin(); cursor != packed.rend(); ++cursor) {
+		const auto value = *cursor;
+		result.push_back(static_cast<char>('0' + (value >> 4U)));
+		result.push_back(static_cast<char>('0' + (value & 0x0FU)));
 	}
 	return result;
 }
@@ -105,6 +106,141 @@ void draw_row(
 		return "CPU CPU";
 	}
 	return "UNKNOWN";
+}
+
+[[nodiscard]] constexpr std::string_view rank_label(std::uint8_t rank) noexcept
+{
+	constexpr std::array<std::string_view, 4U> labels{
+		"EASY", "NORMAL", "HARD", "LUNATIC",
+	};
+	return rank < labels.size() ? labels[rank] : "UNKNOWN";
+}
+
+[[nodiscard]] constexpr std::string_view character_label(
+	std::int8_t paletted_character
+) noexcept
+{
+	constexpr std::array<std::string_view, 9U> labels{
+		"REIMU", "MIMA", "MARISA", "ELLEN", "KOTOHIME",
+		"KANA", "RIKAKO", "CHIYURI", "YUMEMI",
+	};
+	if(paletted_character < 1 || paletted_character > 18) {
+		return "UNKNOWN";
+	}
+	return labels[static_cast<std::size_t>(paletted_character - 1) / 2U];
+}
+
+[[nodiscard]] constexpr std::string_view end_reason_label(
+	formats::ReplayEndReason reason
+) noexcept
+{
+	switch(reason) {
+	case formats::ReplayEndReason::complete: return "COMPLETE";
+	case formats::ReplayEndReason::menu_return: return "MENU RETURN";
+	case formats::ReplayEndReason::input_end: return "INPUT END";
+	case formats::ReplayEndReason::partial: return "PARTIAL";
+	case formats::ReplayEndReason::error: return "ERROR";
+	case formats::ReplayEndReason::game_over: return "GAME OVER";
+	case formats::ReplayEndReason::none: return "IN PROGRESS";
+	}
+	return "UNKNOWN";
+}
+
+[[nodiscard]] std::string dos_date_label(std::uint16_t packed)
+{
+	if(packed == 0U) {
+		return "-";
+	}
+	char buffer[11U]{};
+	static_cast<void>(std::snprintf(
+		buffer, sizeof(buffer), "%04u-%02u-%02u",
+		static_cast<unsigned>(1980U + (packed >> 9U)),
+		static_cast<unsigned>((packed >> 5U) & 0x0FU),
+		static_cast<unsigned>(packed & 0x1FU)
+	));
+	return buffer;
+}
+
+[[nodiscard]] std::string slowdown_label(
+	const formats::ReplayDocument &document
+)
+{
+	if(!document.slowdown || document.slowdown->timed_frames == 0U) {
+		return "-";
+	}
+	const auto percent = std::min<std::uint64_t>(
+		100U,
+		(static_cast<std::uint64_t>(document.slowdown->slow_frames) * 100U) /
+		document.slowdown->timed_frames
+	);
+	return std::to_string(percent) + "%";
+}
+
+[[nodiscard]] const formats::ReplayRoundSplit *round_split(
+	const formats::ReplayDocument &document,
+	const formats::ReplayCheckpoint &checkpoint
+) noexcept
+{
+	const auto found = std::find_if(
+		document.expected_round_splits.begin(),
+		document.expected_round_splits.end(),
+		[&checkpoint](const formats::ReplayRoundSplit &split) {
+			return split.story_stage == checkpoint.stage &&
+				split.round_id == checkpoint.round;
+		}
+	);
+	return found == document.expected_round_splits.end() ? nullptr : &*found;
+}
+
+[[nodiscard]] std::string winner_label(std::int8_t winner)
+{
+	if(winner == 0) {
+		return "P1";
+	}
+	if(winner == 1) {
+		return "P2";
+	}
+	return "-";
+}
+
+[[nodiscard]] bool clear_bonus_valid(
+	const formats::ReplayStageClearBonus &bonus
+) noexcept
+{
+	return std::any_of(bonus.total.begin(), bonus.total.end(),
+		[](std::uint8_t value) { return value != 0U; }) ||
+		bonus.max_combo != 0U || bonus.gauge_attacks != 0U ||
+		bonus.boss_attacks != 0U || bonus.boss_reversals != 0U ||
+		bonus.boss_panics != 0U || bonus.remaining_lives != 0U;
+}
+
+void draw_compact_row(
+	HostMenuCanvas &canvas,
+	std::string_view label,
+	std::size_t y,
+	bool selected
+) noexcept
+{
+	canvas.fill_rect(48U, y, 544U, 17U, selected ? 4U : 1U);
+	canvas.draw_text(label, 58U, y + 3U, 1U, selected ? 14U : 15U);
+}
+
+void draw_detail_tabs(
+	HostMenuCanvas &canvas,
+	NewClassicReplayDetailPage selected
+) noexcept
+{
+	constexpr std::array<std::string_view, 3U> labels{
+		"SPLITS", "CLEARS", "TIMERS",
+	};
+	for(std::size_t index = 0U; index < labels.size(); ++index) {
+		const auto active = index == static_cast<std::size_t>(selected);
+		const auto x = 104U + (index * 144U);
+		canvas.fill_rect(x, 164U, 128U, 19U, active ? 4U : 1U);
+		canvas.draw_text_centered(
+			labels[index], x + 64U, 168U, 1U, active ? 14U : 6U
+		);
+	}
 }
 
 [[nodiscard]] ReplayCatalogSlot catalog_slot(
@@ -131,6 +267,23 @@ void draw_row(
 }
 
 } // namespace
+
+std::string new_classic_replay_timer_label(std::uint32_t real_frames)
+{
+	const auto minutes = real_frames / 3'384U;
+	const auto remainder = static_cast<std::uint16_t>(real_frames % 3'384U);
+	const auto centiseconds = static_cast<std::uint16_t>(
+		(static_cast<std::uint32_t>(remainder) * 1'000U) / 564U
+	);
+	char buffer[24U]{};
+	static_cast<void>(std::snprintf(
+		buffer, sizeof(buffer), "%u:%02u.%02u",
+		static_cast<unsigned>(minutes),
+		static_cast<unsigned>(centiseconds / 100U),
+		static_cast<unsigned>(centiseconds % 100U)
+	));
+	return buffer;
+}
 
 NewClassicLandingMenu::NewClassicLandingMenu()
 {
@@ -817,33 +970,118 @@ void NewClassicReplayBrowser::draw() noexcept
 	if(detail_document_) {
 		const auto &document = *detail_document_;
 		const auto &entry = catalog_.slots[selected_slot_];
+		const auto *metadata = document.metadata ? &*document.metadata : nullptr;
 		canvas_.draw_text(
-			"SLOT " + slot_number(selected_slot_), 72U, 96U, 2U, 14U
-		);
-		canvas_.draw_text(fixed_name(entry.name), 270U, 96U, 2U, 15U);
-		canvas_.draw_text(
-			mode_label(entry.game_mode, document.practice), 72U, 124U, 2U, 15U
+			"SLOT " + slot_number(selected_slot_) + "  " + fixed_name(entry.name) +
+				"  " + mode_label(entry.game_mode, document.practice),
+			52U, 88U, 1U, 14U
 		);
 		canvas_.draw_text(
-			"SCORE " + decimal_score(entry.final_score), 270U, 124U, 2U, 15U
+			"RESULT " + std::string(metadata ? end_reason_label(metadata->end_reason) :
+				std::string_view{"UNKNOWN"}) + "  SCORE " +
+				decimal_score(entry.final_score) + "  DATE " +
+				(metadata ? dos_date_label(metadata->dos_date) : std::string{"-"}),
+			52U, 106U, 1U, 15U
 		);
-		canvas_.draw_text("SELECT CHECKPOINT", 72U, 160U, 1U, 14U);
+		if(metadata) {
+			canvas_.draw_text(
+				"RANK " + std::string(rank_label(metadata->rank)) + "  P1 " +
+					std::string(character_label(metadata->paletted_character[0U])) +
+					"  P2 " +
+					std::string(character_label(metadata->paletted_character[1U])) +
+					"  AF " + ((metadata->autofire & 1U) ? "ON" : "OFF") +
+					"/" + ((metadata->autofire & 2U) ? "ON" : "OFF"),
+				52U, 124U, 1U, 15U
+			);
+		}
+		std::string context = "SLOWDOWN " + slowdown_label(document) +
+			"  CHECKPOINTS " + std::to_string(document.checkpoints.size());
+		if(document.practice && metadata && metadata->practice) {
+			const auto &practice = *metadata->practice;
+			context += "  START S" + std::to_string(practice.stage + 1U) +
+				" R" + std::to_string(practice.round + 1U) +
+				" STOCK " + std::to_string(practice.stock);
+		}
+		canvas_.draw_text(context, 52U, 142U, 1U, 15U);
+		draw_detail_tabs(canvas_, detail_page_);
+
+		if(detail_page_ == NewClassicReplayDetailPage::clear_bonuses) {
+			if(!document.stage_clear_bonuses) {
+				draw_compact_row(
+					canvas_, "NO CLEAR-BONUS TELEMETRY.", 188U, false
+				);
+			} else if(entry.game_mode != game_mode::story && !document.practice) {
+				draw_compact_row(
+					canvas_, "NO STAGE CLEAR BONUSES IN VS MODE.", 188U, false
+				);
+			} else {
+				const auto first_stage = document.practice && metadata &&
+					metadata->practice ? metadata->practice->stage : 0U;
+				const auto last_stage = document.practice ?
+					std::min<std::size_t>(first_stage + 1U, 9U) : 9U;
+				for(std::size_t stage = first_stage; stage < last_stage; ++stage) {
+					const auto &bonus = (*document.stage_clear_bonuses)[stage];
+					std::string label = "S" + std::to_string(stage + 1U) + "  ";
+					if(metadata && metadata->story &&
+						stage < metadata->stage_reached_count) {
+						label += std::string(character_label(static_cast<std::int8_t>(
+							metadata->story->stage_opponents[stage]
+						))) + "  ";
+					}
+					if(!clear_bonus_valid(bonus)) {
+						label += "-";
+					} else {
+						label += decimal_score(bonus.total) +
+							"  MAX " + std::to_string(bonus.max_combo) +
+							"  GA " + std::to_string(bonus.gauge_attacks) +
+							"  BA " + std::to_string(bonus.boss_attacks) +
+							"  RV " + std::to_string(bonus.boss_reversals) +
+							"  PN " + std::to_string(bonus.boss_panics) +
+							"  LIFE " + std::to_string(bonus.remaining_lives);
+					}
+					draw_compact_row(
+						canvas_, label, 188U + ((stage - first_stage) * 19U), false
+					);
+				}
+			}
+			canvas_.draw_text_centered(
+				"LEFT RIGHT TAB  ESC BACK", screen_center, 378U, 1U, 6U
+			);
+			return;
+		}
+
 		const auto first = selected_checkpoint_ >= 10U ?
 			selected_checkpoint_ - 9U : 0U;
 		const auto last = std::min(first + 10U, document.checkpoints.size());
 		for(std::size_t index = first; index < last; ++index) {
 			const auto &checkpoint = document.checkpoints[index];
-			std::string label = "CHECKPOINT " + std::to_string(index + 1U) +
-				"  STAGE " + std::to_string(
-					checkpoint.stage == 0x0FU ? 0U : checkpoint.stage + 1U
-				) + "  ROUND " + std::to_string(checkpoint.round + 1U);
-			draw_row(
-				canvas_, label, 180U + ((index - first) * 20U),
+			const auto *split = round_split(document, checkpoint);
+			const auto stage = checkpoint.stage == 0x0FU ?
+				std::string{"VS"} : "S" + std::to_string(checkpoint.stage + 1U);
+			std::string label = "CP " + std::to_string(index + 1U) + "  " +
+				stage + " R" + std::to_string(checkpoint.round + 1U);
+			if(detail_page_ == NewClassicReplayDetailPage::timers) {
+				label += "  TIME " + (split && split->real_frames ?
+					new_classic_replay_timer_label(*split->real_frames) :
+					std::string{"-"});
+			} else if(split) {
+				label += "  P1 " + decimal_score(split->p1_score) +
+					"  P2 " + decimal_score(split->p2_score) +
+					"  WIN " + winner_label(split->winner);
+			} else {
+				label += "  SPLIT -";
+			}
+			draw_compact_row(
+				canvas_, label, 188U + ((index - first) * 19U),
 				index == selected_checkpoint_
 			);
 		}
+		if(document.checkpoints.empty()) {
+			draw_compact_row(canvas_, "NO PLAYABLE CHECKPOINTS.", 188U, false);
+		}
 		canvas_.draw_text_centered(
-			"Z PLAY  ESC BACK", screen_center, 378U, 1U, 6U
+			"UP DOWN CHECKPOINT  Z PLAY  LEFT RIGHT TAB  ESC BACK",
+			screen_center, 378U, 1U, 6U
 		);
 		return;
 	}
@@ -895,6 +1133,7 @@ NewClassicReplayBrowser::open_selected()
 	}
 	detail_document_ = std::move(*loaded->document);
 	selected_checkpoint_ = 0U;
+	detail_page_ = NewClassicReplayDetailPage::splits;
 	draw();
 	return {};
 }
@@ -923,6 +1162,7 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 		if(detail_document_) {
 			detail_document_.reset();
 			selected_checkpoint_ = 0U;
+			detail_page_ = NewClassicReplayDetailPage::splits;
 			draw();
 			return NewClassicReplayBrowserResult{
 				.surface_changed = true, .status = status_
@@ -933,7 +1173,23 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 	}
 	if(detail_document_) {
 		const auto count = detail_document_->checkpoints.size();
-		if((input.up || input.down) && count != 0U) {
+		if(input.left || input.right) {
+			const auto old = static_cast<std::size_t>(detail_page_);
+			const auto next = input.left ? (old == 0U ? 0U : old - 1U) :
+				std::min(old + 1U, static_cast<std::size_t>(
+					NewClassicReplayDetailPage::timers
+				));
+			if(next != old) {
+				detail_page_ = static_cast<NewClassicReplayDetailPage>(next);
+				draw();
+				return NewClassicReplayBrowserResult{
+					.surface_changed = true, .status = status_
+				};
+			}
+			return NewClassicReplayBrowserResult{.status = status_};
+		}
+		if((input.up || input.down) && count != 0U &&
+			detail_page_ != NewClassicReplayDetailPage::clear_bonuses) {
 			selected_checkpoint_ = input.up ?
 				(selected_checkpoint_ + count - 1U) % count :
 				(selected_checkpoint_ + 1U) % count;
@@ -942,7 +1198,8 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 				.surface_changed = true, .status = status_
 			};
 		}
-		if(input.confirm && count != 0U) {
+		if(input.confirm && count != 0U &&
+			detail_page_ != NewClassicReplayDetailPage::clear_bonuses) {
 			status_ = NewClassicReplayBrowserStatus::play_selected;
 		}
 		return NewClassicReplayBrowserResult{.status = status_};
@@ -993,6 +1250,12 @@ std::uint8_t NewClassicReplayBrowser::selected_slot() const noexcept
 std::size_t NewClassicReplayBrowser::selected_checkpoint() const noexcept
 {
 	return selected_checkpoint_;
+}
+
+NewClassicReplayDetailPage
+NewClassicReplayBrowser::detail_page() const noexcept
+{
+	return detail_page_;
 }
 
 std::optional<formats::ReplayDocument>

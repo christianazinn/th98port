@@ -21,7 +21,8 @@ sample. Initial or later device unavailability drops only final delivery while
 the deterministic PMD session keeps advancing.
 Gameplay-stage music, source-ordered ordinary MAIN SFX emission, and stock
 blocking live pause/resume with effect 21 are integrated. New Classic's host
-identity/lifecycle, V13 recording/browser/playback/save flow, richer
+identity/lifecycle, V13 recording/browser/playback/save flow and final
+Splits/Clears/Timers telemetry, richer
 pause/restart menu, full Practice setup/recording lifecycle, three-page
 KeyConfig, and expanded Options are present. Typed playback interstitials and
 the remaining Replay Patch QoL are the active next port.
@@ -175,7 +176,10 @@ keyboard controls and all launch options.
 In New Classic gameplay, Escape opens the recorded Pause menu, `R` restarts the
 current Story or VS scenario directly, and `Q` exits without saving. Replay
 playback reconstructs recorded pause input; live Escape aborts playback and
-held Shot enables fourfold host-paced fast-forward.
+held Shot enables fourfold host-paced fast-forward. Replay details expose the
+frozen V13 result/date/score, checkpoint splits, stage clear-bonus counters,
+slowdown, and Replay Patch `m:ss.cc` real-frame timers. Clears is read-only;
+Splits and Timers retain checkpoint launch.
 The New Classic landing's Practice entry uses the authenticated 1P-vs-CPU
 selector, followed by Replay Patch 0.4.10's main and Advanced setup pages.
 Its source defaults, exact-VS fallback, fixed-opponent stages, speed/rank/gauge
