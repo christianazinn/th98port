@@ -1,7 +1,10 @@
 #include "rpy_input.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -320,6 +323,206 @@ std::expected<void, Error> validate_rpy_checkpoint_cursors(
 		}
 	}
 	return {};
+}
+
+std::expected<EncodedRpyInput, Error> encode_rpy_input(
+	std::span<const replay::SessionRecord> records,
+	std::uint32_t sample_count,
+	std::span<const std::uint32_t> checkpoint_samples,
+	std::string_view format_name
+)
+{
+	if(checkpoint_samples.empty() || checkpoint_samples.front() != 0U) {
+		return std::unexpected(error(
+			ErrorCode::invalid_value, format_name,
+			"checkpoint sample directory lacks its zero anchor"
+		));
+	}
+	for(std::size_t index = 0U; index < checkpoint_samples.size(); ++index) {
+		if(checkpoint_samples[index] > sample_count ||
+			(index > 0U && checkpoint_samples[index] <= checkpoint_samples[index - 1U])) {
+			return std::unexpected(error(
+				ErrorCode::invalid_value, format_name,
+				"checkpoint sample cursors are not strictly increasing"
+			));
+		}
+	}
+
+	struct PendingRun {
+		replay::InputPhase phase = replay::InputPhase::gameplay;
+		CoreInput input{};
+		std::uint8_t count = 0U;
+	};
+	EncodedRpyInput result{};
+	result.bytes.reserve(records.size() * 2U);
+	result.checkpoints.resize(checkpoint_samples.size());
+	result.checkpoints[0] = {};
+	std::size_t next_checkpoint = 1U;
+	std::uint32_t samples = 0U;
+	CoreInput previous{};
+	bool full_keyframe = true;
+	std::optional<PendingRun> pending{};
+
+	const auto append_u16 = [&](std::uint16_t value) {
+		result.bytes.push_back(static_cast<std::byte>(value));
+		result.bytes.push_back(static_cast<std::byte>(value >> 8U));
+	};
+	const auto flush = [&]() -> std::expected<void, Error> {
+		if(!pending) {
+			return {};
+		}
+		if(pending->count == 0U || pending->count > 64U ||
+			pending->input.charge_mask > 3U) {
+			return std::unexpected(error(
+				ErrorCode::invalid_value, format_name,
+				"input run is not representable in V13 RLE"
+			));
+		}
+		const auto phase = static_cast<std::uint8_t>(pending->phase);
+		if(phase > 1U) {
+			return std::unexpected(error(
+				ErrorCode::invalid_value, format_name,
+				"input run has an unknown phase"
+			));
+		}
+		result.bytes.push_back(static_cast<std::byte>(
+			(phase << 6U) | (pending->count - 1U)
+		));
+		std::uint8_t change = full_keyframe ? 0x0FU : 0U;
+		if(pending->input.p1 != previous.p1) {
+			change |= 0x01U;
+		}
+		if(pending->input.p2 != previous.p2) {
+			change |= 0x02U;
+		}
+		if(pending->input.system != previous.system) {
+			change |= 0x04U;
+		}
+		if(pending->input.charge_mask != previous.charge_mask) {
+			change |= 0x08U;
+		}
+		result.bytes.push_back(static_cast<std::byte>(change));
+		if((change & 0x01U) != 0U) {
+			append_u16(pending->input.p1);
+		}
+		if((change & 0x02U) != 0U) {
+			append_u16(pending->input.p2);
+		}
+		if((change & 0x04U) != 0U) {
+			append_u16(pending->input.system);
+		}
+		if((change & 0x08U) != 0U) {
+			result.bytes.push_back(
+				static_cast<std::byte>(pending->input.charge_mask)
+			);
+		}
+		previous = pending->input;
+		full_keyframe = false;
+		pending.reset();
+		return {};
+	};
+	const auto mark_checkpoint = [&]() -> std::expected<void, Error> {
+		if(auto flushed = flush(); !flushed) {
+			return flushed;
+		}
+		if(result.bytes.size() > std::numeric_limits<std::uint32_t>::max()) {
+			return std::unexpected(error(
+				ErrorCode::invalid_value, format_name,
+				"compressed input cursor exceeds V13"
+			));
+		}
+		result.checkpoints[next_checkpoint] = {
+			.sample_count = samples,
+			.input_size = static_cast<std::uint32_t>(result.bytes.size()),
+		};
+		++next_checkpoint;
+		full_keyframe = true;
+		return {};
+	};
+
+	for(const auto &record : records) {
+		if(const auto *boundary = std::get_if<replay::ProcessBoundary>(&record)) {
+			if(boundary->sample_index != samples) {
+				return std::unexpected(error(
+					ErrorCode::count_mismatch, format_name,
+					"process boundary disagrees with expanded sample cursor"
+				));
+			}
+			if(auto flushed = flush(); !flushed) {
+				return std::unexpected(flushed.error());
+			}
+			const auto tag = (boundary->completed_process == replay::ProcessId::main)
+				? 0x80U : ((boundary->completed_process == replay::ProcessId::mainl)
+					? 0x81U : 0xFFU);
+			if(tag == 0xFFU) {
+				return std::unexpected(error(
+					ErrorCode::invalid_value, format_name,
+					"process boundary has an unknown process"
+				));
+			}
+			result.bytes.push_back(static_cast<std::byte>(tag));
+			result.bytes.push_back(std::byte{0xA5U});
+			previous = {};
+			full_keyframe = true;
+			continue;
+		}
+
+		const auto *sample = std::get_if<replay::InputSample>(&record);
+		if(!sample || sample->frame_index != samples) {
+			return std::unexpected(error(
+				ErrorCode::count_mismatch, format_name,
+				"input record disagrees with expanded sample cursor"
+			));
+		}
+		while(next_checkpoint < checkpoint_samples.size() &&
+			checkpoint_samples[next_checkpoint] == samples) {
+			if(auto marked = mark_checkpoint(); !marked) {
+				return std::unexpected(marked.error());
+			}
+		}
+		if(next_checkpoint < checkpoint_samples.size() &&
+			checkpoint_samples[next_checkpoint] < samples) {
+			return std::unexpected(error(
+				ErrorCode::count_mismatch, format_name,
+				"checkpoint sample was not a record boundary"
+			));
+		}
+		const bool same = pending && pending->phase == sample->phase &&
+			pending->input.p1 == sample->input.p1 &&
+			pending->input.p2 == sample->input.p2 &&
+			pending->input.system == sample->input.system &&
+			pending->input.charge_mask == sample->input.charge_mask &&
+			pending->count < 64U;
+		if(same) {
+			++pending->count;
+		} else {
+			if(auto flushed = flush(); !flushed) {
+				return std::unexpected(flushed.error());
+			}
+			pending = PendingRun{
+				.phase = sample->phase,
+				.input = sample->input,
+				.count = 1U,
+			};
+		}
+		++samples;
+	}
+	if(auto flushed = flush(); !flushed) {
+		return std::unexpected(flushed.error());
+	}
+	while(next_checkpoint < checkpoint_samples.size() &&
+		checkpoint_samples[next_checkpoint] == samples) {
+		if(auto marked = mark_checkpoint(); !marked) {
+			return std::unexpected(marked.error());
+		}
+	}
+	if(samples != sample_count || next_checkpoint != checkpoint_samples.size()) {
+		return std::unexpected(error(
+			ErrorCode::count_mismatch, format_name,
+			"expanded input or checkpoint count disagrees with document"
+		));
+	}
+	return result;
 }
 
 } // namespace th03::formats::detail

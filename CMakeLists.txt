@@ -443,6 +443,7 @@ add_library(th03_formats STATIC
 	src/formats/t3case.cpp
 	src/formats/t3split.cpp
 	src/formats/v13.cpp
+	src/formats/v13_write.cpp
 )
 target_include_directories(th03_formats PUBLIC include)
 target_link_libraries(th03_formats PUBLIC th03_core)
@@ -479,6 +480,7 @@ add_library(th03_app_main STATIC
 	src/app/main_process.cpp
 	src/app/main_process_static_content.cpp
 	src/app/op_compiled_text.cpp
+	src/app/replay_slot_store.cpp
 )
 target_include_directories(th03_app_main PUBLIC include)
 target_link_libraries(
@@ -990,6 +992,18 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-classic-runner-tests
 		COMMAND th03-app-classic-runner-tests
+	)
+
+	add_executable(th03-app-replay-slot-store-tests
+		tests/test_app_replay_slot_store.cpp
+	)
+	target_link_libraries(
+		th03-app-replay-slot-store-tests PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-replay-slot-store-tests)
+	add_test(
+		NAME th03-app-replay-slot-store-tests
+		COMMAND th03-app-replay-slot-store-tests
 	)
 
 	add_executable(th03-app-classic-audio-session-tests

@@ -797,6 +797,58 @@ void test_practice_corruption()
 	expect_rejected(std::move(bytes), "V13 Practice rejects checkpoint gauge disagreement");
 }
 
+void test_canonical_writer()
+{
+	for(const auto scenario : {
+		Scenario::story, Scenario::versus, Scenario::practice,
+	}) {
+		const auto source = make_v13(scenario);
+		const auto parsed = th03::formats::parse_v13_replay(source);
+		const auto written = parsed ?
+			th03::formats::write_v13_replay(*parsed) :
+			std::expected<std::vector<std::byte>, th03::Error>{
+				std::unexpected(parsed.error())
+			};
+		check(
+			written && *written == source,
+			"V13 writer is the byte-exact inverse for each canonical scenario"
+		);
+	}
+
+	const auto two_source = make_v13_two_checkpoints();
+	const auto two_parsed = th03::formats::parse_v13_replay(two_source);
+	const auto two_written = two_parsed ?
+		th03::formats::write_v13_replay(*two_parsed) :
+		std::expected<std::vector<std::byte>, th03::Error>{
+			std::unexpected(two_parsed.error())
+		};
+	check(
+		two_written && *two_written == two_source,
+		"V13 writer preserves checkpoint-sealed keyframes and cursors exactly"
+	);
+
+	if(two_parsed) {
+		auto missing_metadata = *two_parsed;
+		missing_metadata.metadata.reset();
+		check(
+			!th03::formats::write_v13_replay(missing_metadata),
+			"V13 writer rejects a neutral document without V13 metadata"
+		);
+		auto bad_samples = *two_parsed;
+		++bad_samples.session.sample_count;
+		check(
+			!th03::formats::write_v13_replay(bad_samples),
+			"V13 writer rejects a session whose expanded sample count disagrees"
+		);
+		auto missing_snapshot = *two_parsed;
+		missing_snapshot.checkpoints[0].init.round_start_snapshot.reset();
+		check(
+			!th03::formats::write_v13_replay(missing_snapshot),
+			"V13 writer rejects a checkpoint without compact round state"
+		);
+	}
+}
+
 } // namespace
 
 int main()
@@ -805,6 +857,7 @@ int main()
 	test_header_and_metadata_corruption();
 	test_summary_and_checkpoint_corruption();
 	test_practice_corruption();
+	test_canonical_writer();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0 ? 0 : 1;
 }

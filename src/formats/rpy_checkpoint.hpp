@@ -33,6 +33,13 @@ std::expected<CompactCheckpoint, Error> parse_compact_checkpoint(
 	std::string_view format_name
 );
 
+std::expected<void, Error> write_compact_checkpoint(
+	std::span<std::byte> bytes,
+	std::size_t offset,
+	const CompactCheckpoint &checkpoint,
+	std::string_view format_name
+);
+
 } // namespace th03::formats::detail
 
 #endif

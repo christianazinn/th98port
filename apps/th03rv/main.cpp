@@ -12,6 +12,7 @@
 
 #include "th03/formats/enedat.hpp"
 #include "th03/formats/replay.hpp"
+#include "th03/formats/v13.hpp"
 #include "th03/replay/run.hpp"
 
 namespace {
@@ -272,8 +273,11 @@ void print_v13_metadata(const th03::formats::ReplayDocument &document)
 
 int main(int argc, char **argv)
 {
-	if(argc != 2 && argc != 4) {
-		std::cerr << "usage: th03rv <replay> [--enedat <ENEDAT.DAT>]\n";
+	const bool roundtrip_only = argc == 3 &&
+		std::string_view(argv[2]) == "--roundtrip-only";
+	if(argc != 2 && argc != 4 && !roundtrip_only) {
+		std::cerr << "usage: th03rv <replay> [--enedat <ENEDAT.DAT> | "
+			"--roundtrip-only]\n";
 		return 2;
 	}
 	const std::filesystem::path replay_path(argv[1]);
@@ -296,6 +300,35 @@ int main(int argc, char **argv)
 		std::cerr << "error=" << document.error().message
 			<< "\noffset=" << document.error().offset << '\n';
 		return 2;
+	}
+	if(roundtrip_only) {
+		if(document->session.source_version !=
+			th03::formats::replay_v13_version) {
+			std::cerr << "error=roundtrip requires V13\n";
+			return 2;
+		}
+		auto written = th03::formats::write_v13_replay(*document);
+		if(!written) {
+			std::cerr << "error=" << written.error().message
+				<< "\noffset=" << written.error().offset << '\n';
+			return 2;
+		}
+		auto reparsed = th03::formats::parse_v13_replay(*written);
+		auto rewritten = reparsed
+			? th03::formats::write_v13_replay(*reparsed)
+			: std::expected<std::vector<std::byte>, th03::Error>{
+				std::unexpected(reparsed.error())
+			};
+		if(!rewritten || *rewritten != *written) {
+			std::cerr << "error=canonical V13 output is not parse/write stable\n";
+			return 2;
+		}
+		const bool exact = *written == replay_bytes;
+		std::cout << "roundtrip=" << (exact ? "exact" : "canonical")
+			<< "\nbyte_exact=" << (exact ? "yes" : "no")
+			<< "\nsource_bytes=" << replay_bytes.size()
+			<< "\nwritten_bytes=" << written->size() << '\n';
+		return 0;
 	}
 
 	const auto enedat_path = find_enedat(

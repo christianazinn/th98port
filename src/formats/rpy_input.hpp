@@ -18,6 +18,11 @@ struct RpyCheckpointCursor {
 	std::uint32_t input_size = 0U;
 };
 
+struct EncodedRpyInput {
+	std::vector<std::byte> bytes;
+	std::vector<RpyCheckpointCursor> checkpoints;
+};
+
 enum class RpyInputTermination {
 	require_process_control,
 	allow_input_packet,
@@ -41,6 +46,13 @@ std::expected<void, Error> validate_rpy_checkpoint_cursors(
 	std::size_t input_offset,
 	std::size_t input_size,
 	std::span<const RpyCheckpointCursor> checkpoints,
+	std::string_view format_name
+);
+
+std::expected<EncodedRpyInput, Error> encode_rpy_input(
+	std::span<const replay::SessionRecord> records,
+	std::uint32_t sample_count,
+	std::span<const std::uint32_t> checkpoint_samples,
 	std::string_view format_name
 );
 

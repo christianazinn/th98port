@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <expected>
 #include <span>
+#include <vector>
 
 #include "th03/error.hpp"
 #include "th03/formats/replay.hpp"
@@ -19,6 +20,12 @@ inline constexpr std::size_t replay_v13_checkpoint_size = 289U;
 // preserves V13 metadata outside the deterministic gameplay core.
 std::expected<ReplayDocument, Error> parse_v13_replay(
 	std::span<const std::byte> bytes
+);
+
+// Canonical inverse of parse_v13_replay(). The writer owns no filesystem and
+// validates its complete output through the frozen reader before returning it.
+std::expected<std::vector<std::byte>, Error> write_v13_replay(
+	const ReplayDocument &document
 );
 
 } // namespace th03::formats
