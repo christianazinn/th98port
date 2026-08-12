@@ -232,7 +232,7 @@ struct Runner {
 			defeat_started_this_step = false;
 		}
 
-		void count_step(std::uint8_t vsyncs) noexcept
+		void count_step(std::uint8_t vsyncs, bool slowdown_eligible) noexcept
 		{
 			if(!timer_active) {
 				return;
@@ -240,9 +240,11 @@ struct Runner {
 			if(defeat_started_this_step) {
 				timer_active = false;
 				return;
-			}
-			real_frames += vsyncs;
+		}
+		real_frames += vsyncs;
+		if(slowdown_eligible) {
 			timed_frames++;
+		}
 		}
 
 		void main_feedback_cue_requested(
@@ -425,9 +427,10 @@ std::expected<RunResult, Error> run_session(
 					step = *finished;
 				}
 			}
-			if(sample->phase == InputPhase::gameplay) {
-				runner.telemetry.count_step(step.next_step_vsyncs);
-			}
+			runner.telemetry.count_step(
+				step.next_step_vsyncs,
+				sample->phase == InputPhase::gameplay
+			);
 			runner.result.consumed_samples++;
 			auto handled = runner.handle_step(step);
 			if(!handled) {

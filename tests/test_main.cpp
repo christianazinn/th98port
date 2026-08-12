@@ -3226,7 +3226,7 @@ void test_version_neutral_replay_runner()
 		run && run->status == th03::replay::RunStatus::complete &&
 		run->consumed_samples == 3U && run->completed_rounds.size() == 1U &&
 		run->completed_rounds[0].state.route == 0U &&
-		run->completed_rounds[0].real_frames == 1U &&
+		run->completed_rounds[0].real_frames == 3U &&
 		run->completed_rounds[0].timed_frames == 1U &&
 		!run->completed_rounds[0].result_summary &&
 		run->round_starts.size() == 1U &&
