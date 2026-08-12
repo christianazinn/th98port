@@ -1902,6 +1902,8 @@ ExperienceRunResult run_new_classic_experience(
 		}
 		if(*landing.choice == th03::app::NewClassicLandingChoice::play) {
 			parsed.mode = th03::app::ClassicLaunchMode::new_classic;
+			parsed.launch.initial_route =
+				th03::app::ClassicRunnerInitialRoute::title;
 			auto game = run_classic_session(parsed, platform, mapper);
 			if(game.exit_code != 0 || game.disposition ==
 				ExperienceRunDisposition::application_quit) {
@@ -1924,6 +1926,32 @@ ExperienceRunResult run_new_classic_experience(
 				continue;
 			}
 			return game;
+		}
+		if(*landing.choice == th03::app::NewClassicLandingChoice::practice) {
+			parsed.mode = th03::app::ClassicLaunchMode::new_classic;
+			parsed.launch.initial_route =
+				th03::app::ClassicRunnerInitialRoute::new_classic_practice;
+			auto game = run_classic_session(parsed, platform, mapper);
+			if(game.exit_code != 0 || game.disposition ==
+				ExperienceRunDisposition::application_quit) {
+				return game;
+			}
+			if(game.disposition == ExperienceRunDisposition::replay_completed &&
+				game.replay) {
+				auto saved = run_replay_save(
+					std::move(*game.replay), parsed.replay_root,
+					parsed.tick_rate, platform, mapper
+				);
+				if(saved.exit_code != 0) {
+					return {.exit_code = saved.exit_code};
+				}
+				if(saved.application_quit) {
+					return {
+						.disposition = ExperienceRunDisposition::application_quit
+					};
+				}
+			}
+			continue;
 		}
 		if(*landing.choice == th03::app::NewClassicLandingChoice::replay) {
 			auto selected = run_replay_browser(
@@ -1949,7 +1977,7 @@ ExperienceRunResult run_new_classic_experience(
 			}
 			continue;
 		}
-		// Practice, KeyConfig, and expanded Options are separate New Classic
+		// KeyConfig and expanded Options are separate New Classic
 		// owners added by the following QoL parcels. Until each transaction is
 		// constructed, returning here keeps the hub stable without touching the
 		// shared Classic configuration or starting an unintended live run.

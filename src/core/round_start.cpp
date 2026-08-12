@@ -427,16 +427,13 @@ std::uint16_t practice_cpu_safety_frames(
 	std::uint8_t round_id
 ) noexcept
 {
-	const auto policy = init.practice_rules->retry_cpu_timer;
-	if(policy == CpuTimerPolicy::story_native) {
-		return practice_story_safety_frames(
-			init.rank, init.story_stage, round_id
-		);
-	}
-	if(policy == CpuTimerPolicy::infinite) {
-		return 0xFFFFU;
-	}
-	return versus_safety_frames(init);
+	return th03::practice_cpu_safety_frames(
+		init.practice_rules->retry_cpu_timer,
+		init.rank,
+		init.story_stage,
+		round_id,
+		init.is_cpu
+	);
 }
 
 DeterministicState initialize_first_round(
@@ -849,3 +846,30 @@ RoundStartObservation round_start_observation(
 }
 
 } // namespace th03::detail
+
+namespace th03 {
+
+std::uint16_t practice_cpu_safety_frames(
+	CpuTimerPolicy policy,
+	std::uint8_t rank,
+	std::uint8_t stage,
+	std::uint8_t round,
+	std::array<std::uint8_t, 2U> is_cpu
+) noexcept
+{
+	if(policy == CpuTimerPolicy::story_native) {
+		if(stage >= detail::character_count) {
+			return 0U;
+		}
+		return detail::practice_story_safety_frames(rank, stage, round);
+	}
+	if(policy == CpuTimerPolicy::infinite) {
+		return 0xFFFFU;
+	}
+	GameInit init{};
+	init.rank = rank;
+	init.is_cpu = is_cpu;
+	return detail::versus_safety_frames(init);
+}
+
+} // namespace th03

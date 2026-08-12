@@ -330,7 +330,9 @@ ClassicRunner::load(ClassicRunnerRequest request)
 	const auto &paths = request.content;
 	if(paths.data_root.empty() || paths.main_executable.empty() ||
 		paths.mainl_executable.empty() || paths.op_executable.empty() ||
-		paths.font_rom.empty() || paths.config.empty() || paths.score.empty()) {
+		paths.font_rom.empty() || paths.config.empty() || paths.score.empty() ||
+		(request.initial_route == ClassicRunnerInitialRoute::new_classic_practice &&
+		 request.experience != ExperienceProfile::new_classic)) {
 		return std::unexpected(runner_error(
 			ClassicRunnerErrorCode::invalid_request
 		));
@@ -386,7 +388,8 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		std::move(request.content.score),
 		request.fm_available,
 		request.kotohime_compatibility,
-		replay_recorder.get()
+		replay_recorder.get(),
+		request.initial_route == ClassicRunnerInitialRoute::new_classic_practice
 	);
 	if(!session) {
 		return std::unexpected(session_error(session.error()));

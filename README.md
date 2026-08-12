@@ -21,10 +21,10 @@ sample. Initial or later device unavailability drops only final delivery while
 the deterministic PMD session keeps advancing.
 Gameplay-stage music, source-ordered ordinary MAIN SFX emission, and stock
 blocking live pause/resume with effect 21 are integrated. New Classic's host
-identity/lifecycle, V13 recording/browser/playback/save flow, and richer
-pause/restart menu are present. Practice, KeyConfig, expanded Options, typed
-playback interstitials, and the remaining Replay Patch QoL are the active next
-port.
+identity/lifecycle, V13 recording/browser/playback/save flow, richer
+pause/restart menu, and full Practice setup/recording lifecycle are present.
+KeyConfig, expanded Options, typed playback interstitials, and the remaining
+Replay Patch QoL are the active next port.
 
 ## Build and test
 
@@ -74,7 +74,7 @@ by double-clicking; it needs no adjacent DLL/content tree, installed .NET
 runtime, or command-line arguments. It opens the shared Classic/New Classic
 menu; both entries run the complete shared Classic lifecycle, while New
 Classic additionally records/browses/plays V13 replays and owns Replay Patch's
-four-choice gameplay pause/restart loop.
+four-choice gameplay pause/restart loop and two-page Practice setup.
 Exiting either title returns to this menu. Its first launch extracts a content-hash
 cache below `%LOCALAPPDATA%\TH03 Classic Native Test`, while configuration,
 scores, and the last-run diagnostic log live in the separate `user` directory
@@ -176,6 +176,11 @@ In New Classic gameplay, Escape opens the recorded Pause menu, `R` restarts the
 current Story or VS scenario directly, and `Q` exits without saving. Replay
 playback reconstructs recorded pause input; live Escape aborts playback and
 held Shot enables fourfold host-paced fast-forward.
+The New Classic landing's Practice entry uses the authenticated 1P-vs-CPU
+selector, followed by Replay Patch 0.4.10's main and Advanced setup pages.
+Its source defaults, exact-VS fallback, fixed-opponent stages, speed/rank/gauge
+controls, retry policy, pause/restart behavior, and V13 Practice metadata are
+all carried into the shared MAIN runtime.
 Unless overridden with `--config`, `--score`, and `--replay-root`, Classic
 stores `YUME.CFG`, `YUME.NEM`, and New Classic's `REPLAY` directory under the
 selected `--data` root. This avoids dependence on the launcher working

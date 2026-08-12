@@ -513,7 +513,8 @@ std::expected<
 	std::span<const LoadedMainResource> resources,
 	MainlStageTextAssets text,
 	const present::AnkGlyphProvider &font,
-	GameOptions game_options
+	GameOptions game_options,
+	std::optional<formats::ReplayPracticeConfig> practice
 )
 {
 	if(resident.game_mode < game_mode::vs_1p_cpu ||
@@ -528,6 +529,7 @@ std::expected<
 			.game_options = game_options,
 			.kotohime_compatibility = kotohime_compatibility,
 			.policy = EntryPolicy::classic_vs,
+			.practice = std::move(practice),
 		},
 		resources,
 		std::move(text),

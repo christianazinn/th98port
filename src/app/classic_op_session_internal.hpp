@@ -24,6 +24,7 @@
 #include "th03/app/classic_score_store.hpp"
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/main_process.hpp"
+#include "th03/app/new_classic_practice.hpp"
 #include "th03/present/source_surface.hpp"
 
 namespace th03::app {
@@ -127,6 +128,7 @@ struct ClassicOpSessionBackendTick final {
 	bool ready = false;
 	bool process_advanced = false;
 	bool round_started = false;
+	bool return_to_selection = false;
 };
 
 struct ClassicOpSessionTitleResult final {
@@ -207,7 +209,7 @@ struct ClassicOpSessionBackendOperations final {
 	std::expected<void, ClassicOpSessionError> (*finish_demo_main)(void *) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*start_vs_stage)(void *) = nullptr;
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
-	(*advance_vs_stage)(void *, bool) = nullptr;
+	(*advance_vs_stage)(void *, ClassicOpInput) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*start_vs_main)(void *) = nullptr;
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
 	(*advance_vs_main)(void *, const ClassicMainInputSample &) = nullptr;
@@ -267,7 +269,8 @@ public:
 		std::filesystem::path score_path = "YUME.NEM",
 		bool fm_available = true,
 		present::KotohimeBombFadeCompatibility kotohime_compatibility = {},
-		NewClassicReplayRecorder *replay_recorder = nullptr
+		NewClassicReplayRecorder *replay_recorder = nullptr,
+		bool new_classic_practice_route = false
 	);
 	~ClassicOpSession();
 
@@ -303,7 +306,8 @@ private:
 		std::shared_ptr<void> backend_owner,
 		ClassicOpSessionBackendOperations operations,
 		ClassicOpSessionTestHooks test_hooks = {},
-		NewClassicReplayRecorder *replay_recorder = nullptr
+		NewClassicReplayRecorder *replay_recorder = nullptr,
+		bool new_classic_practice_route = false
 	);
 
 	std::unique_ptr<Impl> impl_;

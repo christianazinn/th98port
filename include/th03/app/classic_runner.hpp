@@ -36,6 +36,11 @@ struct ClassicContentPaths final {
 	std::filesystem::path score{"YUME.NEM"};
 };
 
+enum class ClassicRunnerInitialRoute : std::uint8_t {
+	title,
+	new_classic_practice,
+};
+
 struct ClassicRunnerRequest final {
 	ClassicContentPaths content{};
 	std::uint32_t seed = 1U;
@@ -46,6 +51,9 @@ struct ClassicRunnerRequest final {
 	// Host/application policy only. Deterministic gameplay never receives this
 	// identity; New Classic adapters apply recorded transforms at the boundary.
 	ExperienceProfile experience = ExperienceProfile::classic;
+	// New Classic may enter one Replay Patch-owned route without first exposing
+	// Classic's title. The shared authenticated session still owns every child.
+	ClassicRunnerInitialRoute initial_route = ClassicRunnerInitialRoute::title;
 };
 
 enum class ClassicContentFile : std::uint8_t {

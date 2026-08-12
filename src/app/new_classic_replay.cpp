@@ -30,7 +30,8 @@ namespace {
 }
 
 [[nodiscard]] GameInit checkpoint_init(
-	const RoundStartObservation &observation
+	const RoundStartObservation &observation,
+	bool practice
 )
 {
 	auto init = observation.start;
@@ -42,8 +43,67 @@ namespace {
 		.players = observation.runtime.players,
 	};
 	init.round_start_snapshot = observation.round;
-	init.practice_rules.reset();
+	if(!practice) {
+		init.practice_rules.reset();
+	}
 	return init;
+}
+
+[[nodiscard]] bool valid_practice_config(
+	const formats::ReplayPracticeConfig &config
+) noexcept
+{
+	const bool base = config.preset <= 1U && config.cpu_timer <= 2U &&
+		config.round_speed <= 0x7FU && config.bullet_speed <= 0x7FU &&
+		config.p1_spell >= 1U && config.p1_spell <= 16U &&
+		config.cpu_spell >= 1U && config.cpu_spell <= 16U &&
+		config.boss_level <= 15U && config.cpu_damage <= 3U &&
+		config.p1_gauge >= 64U && config.cpu_gauge >= 64U;
+	if(!base) {
+		return false;
+	}
+	if(config.preset == 0U) {
+		return config.stage == 0U && config.round == 0U &&
+			config.stock == 0xFFU && config.extends_gained == 0U;
+	}
+	return config.stage < 9U && config.round <= 5U && config.stock <= 4U &&
+		config.extends_gained <= 2U &&
+		config.stock <= static_cast<std::uint8_t>(2U + config.extends_gained);
+}
+
+[[nodiscard]] bool practice_anchor_matches(
+	const formats::ReplayPracticeConfig &config,
+	const RoundStartObservation &observation
+) noexcept
+{
+	if(!observation.start.practice_rules) {
+		return false;
+	}
+	const auto &rules = *observation.start.practice_rules;
+	const auto &state = observation.round.state;
+	return observation.start.game_mode == game_mode::vs_1p_cpu &&
+		observation.start.story_stage == config.stage &&
+		observation.start.story_lives ==
+			(config.stock == 0xFFU ? 0U : config.stock) &&
+		state.round_id == config.round &&
+		state.round_speed == config.round_speed &&
+		state.bullet_base_speed == config.bullet_speed &&
+		state.gauge_attack_level == std::array<std::uint8_t, 2U>{
+			config.p1_spell, config.cpu_spell,
+		} && state.boss_attack_level == config.boss_level &&
+		state.cpu_hit_damage_additional == config.cpu_damage &&
+		state.extends_gained ==
+			(config.extends_gained >= 2U ? 0xFFU : config.extends_gained) &&
+		state.cpu_safety_frames == std::array<std::uint16_t, 2U>{
+			config.initial_cpu_safety_frames,
+			config.initial_cpu_safety_frames,
+		} && observation.runtime.players[0U].gauge_avail ==
+			static_cast<std::uint16_t>(config.p1_gauge) * 16U &&
+		observation.runtime.players[1U].gauge_avail ==
+			static_cast<std::uint16_t>(config.cpu_gauge) * 16U &&
+		rules.uses_stock == (config.stock != 0xFFU) &&
+		rules.retry_cpu_timer == static_cast<CpuTimerPolicy>(config.cpu_timer) &&
+		rules.retry_cpu_damage == config.cpu_damage;
 }
 
 [[nodiscard]] formats::ReplayMetadata initial_metadata(
@@ -82,16 +142,34 @@ namespace {
 } // namespace
 
 std::expected<void, NewClassicReplayError>
+NewClassicReplayRecorder::configure_practice(
+	std::optional<formats::ReplayPracticeConfig> config
+) noexcept
+{
+	if(document_ || completed_ || (config && !valid_practice_config(*config))) {
+		return std::unexpected(replay_error(
+			NewClassicReplayErrorCode::invalid_sequence
+		));
+	}
+	practice_config_ = std::move(config);
+	return {};
+}
+
+std::expected<void, NewClassicReplayError>
 NewClassicReplayRecorder::round_started(
 	const RoundStartObservation &observation,
 	std::uint16_t dos_date
 )
 {
+	const bool practice = practice_config_.has_value();
 	if(completed_ || !replay_game_mode(observation.start.game_mode) ||
 		observation.start.paletted_character[0U] < 1 ||
 		observation.start.paletted_character[1U] < 1 ||
 		observation.start.autofire_mask > 3U ||
-		observation.runtime.formation_type_ring[0U] == 0xFFU) {
+		observation.runtime.formation_type_ring[0U] == 0xFFU ||
+		(practice ? !practice_anchor_matches(*practice_config_, observation) :
+			observation.start.practice_rules.has_value()) ||
+		(practice && document_ && document_->checkpoints.size() >= 5U)) {
 		return std::unexpected(replay_error(
 			NewClassicReplayErrorCode::invalid_round_start
 		));
@@ -99,7 +177,7 @@ NewClassicReplayRecorder::round_started(
 	if(!document_) {
 		formats::ReplayDocument document{};
 		document.session.source_version = formats::replay_v13_version;
-		document.session.init = checkpoint_init(observation);
+		document.session.init = checkpoint_init(observation, practice);
 		document.metadata = initial_metadata(
 			document.session.init,
 			dos_date != 0U ? dos_date : recording_date_
@@ -107,6 +185,11 @@ NewClassicReplayRecorder::round_started(
 		document.stage_clear_bonuses =
 			std::array<formats::ReplayStageClearBonus, 9U>{};
 		document.slowdown = formats::ReplaySlowdown{};
+		document.practice = practice;
+		if(practice) {
+			document.metadata->flags = 0x0007U;
+			document.metadata->practice = *practice_config_;
+		}
 		document_ = std::move(document);
 	} else if(document_->session.records.empty() ||
 		document_->session.sample_count == 0U) {
@@ -117,9 +200,9 @@ NewClassicReplayRecorder::round_started(
 
 	auto &document = *document_;
 	const auto round = observation.round.state.round_id;
-	const auto stage = observation.start.game_mode == game_mode::story
+	const auto stage = (observation.start.game_mode == game_mode::story || practice)
 		? observation.start.story_stage : static_cast<std::uint8_t>(0x0FU);
-	auto init = checkpoint_init(observation);
+	auto init = checkpoint_init(observation, practice);
 	init.global_frame = document.session.sample_count;
 	document.checkpoints.push_back(formats::ReplayCheckpoint{
 		.stage = stage,
@@ -183,7 +266,7 @@ NewClassicReplayRecorder::round_completed(
 		last_terminal_->story_stage == state.story_stage) {
 		return {};
 	}
-	auto split = formats::make_round_split(state, false);
+	auto split = formats::make_round_split(state, document_->practice);
 	split.real_frames = real_frames;
 	document_->expected_round_splits.push_back(split);
 	last_terminal_ = state;
@@ -243,7 +326,7 @@ std::expected<void, NewClassicReplayError> NewClassicReplayRecorder::finish(
 		metadata.final_round_id = last_terminal_->round_id;
 		metadata.final_winner = last_terminal_->winner;
 		metadata.final_score = formats::make_round_split(
-			*last_terminal_, false
+			*last_terminal_, document_->practice
 		).p1_score;
 	}
 	auto encoded = formats::write_v13_replay(*document_);

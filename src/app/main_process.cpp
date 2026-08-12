@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "th03/app/authentic_text.hpp"
+#include "th03/app/new_classic_practice.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/audio/th03_pmd_service.hpp"
 #include "th03/exact/trig.hpp"
@@ -1079,8 +1080,21 @@ MainProcessClassicVsAccess::create_vs(
 			MainProcessErrorCode::invalid_config
 		));
 	}
+	auto process_init = entry.resident;
+	if(entry.practice) {
+		auto prepared = prepare_new_classic_practice_init(
+			process_init, *entry.practice, static_content->game_content()
+		);
+		if(!prepared) {
+			return std::unexpected(core_error(
+				MainProcessErrorCode::game_create_failed,
+				std::move(prepared.error())
+			));
+		}
+		process_init = std::move(*prepared);
+	}
 	auto process = MainProcess::create_common(
-		entry.resident,
+		process_init,
 		entry.game_options,
 		entry.kotohime_compatibility,
 		{*player_one, *player_two},
@@ -1243,6 +1257,29 @@ MainProcess::create_common(
 		return std::unexpected(process_error(
 			MainProcessErrorCode::presenter_setup_failed
 		));
+	}
+	if(init.practice_rules) {
+		// Replay Patch applies Practice values after the ordinary fresh MAIN
+		// initialization. Prime the presentation-only background from that same
+		// fresh recipe before constructing the checkpoint-backed semantic Game;
+		// the compact snapshot then prevents a second RNG/background startup.
+		auto fresh = init;
+		fresh.runtime_snapshot.reset();
+		fresh.compact_runtime_snapshot.reset();
+		fresh.round_start_snapshot.reset();
+		fresh.practice_rules.reset();
+		auto primed = Game::create(
+			fresh,
+			impl->static_content->game_content(),
+			game_options,
+			&*impl->background
+		);
+		if(!primed) {
+			return std::unexpected(core_error(
+				MainProcessErrorCode::game_create_failed,
+				std::move(primed.error())
+			));
+		}
 	}
 	auto game = Game::create(
 		init,

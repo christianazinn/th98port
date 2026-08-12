@@ -1062,6 +1062,172 @@ bool authentic_vs_gate(
 	return true;
 }
 
+bool authentic_practice_gate(
+	const std::filesystem::path &data_root,
+	const std::filesystem::path &main_executable,
+	const std::filesystem::path &mainl_executable,
+	const std::filesystem::path &op_executable,
+	const std::filesystem::path &font_rom
+)
+{
+	TemporaryDirectory temporary;
+	auto loaded = th03::app::ClassicRunner::load({
+		.content = {
+			.data_root = data_root,
+			.main_executable = main_executable,
+			.mainl_executable = mainl_executable,
+			.op_executable = op_executable,
+			.font_rom = font_rom,
+			.config = temporary.path() / "YUME.CFG",
+			.score = temporary.path() / "YUME.NEM",
+		},
+		.seed = 71U,
+		.fm_available = false,
+		.experience = th03::app::ExperienceProfile::new_classic,
+		.initial_route =
+			th03::app::ClassicRunnerInitialRoute::new_classic_practice,
+	});
+	if(!loaded) {
+		std::cerr << "authentic-practice-load code=" << static_cast<unsigned>(
+			loaded.error().code
+		) << " detail=" << static_cast<unsigned>(loaded.error().detail_code)
+			<< '\n';
+		return false;
+	}
+	auto &runner = **loaded;
+	std::array<
+		th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	> pixels{};
+	if(auto composed = runner.compose_shown_surface(pixels); !composed) {
+		std::cerr << "authentic-practice-compose code=" <<
+			static_cast<unsigned>(composed.error().code) << " detail=" <<
+			static_cast<unsigned>(composed.error().detail_code) << '\n';
+		return false;
+	}
+	const auto drain_audio = [&]() {
+		while(runner.take_audio_command()) {}
+	};
+	drain_audio();
+	std::uint64_t tick_index = 0U;
+	std::optional<th03::app::ClassicRunnerConsumeResult> last{};
+	const auto scene = [&]() {
+		return th03::app::ClassicRunnerTestAccess::scene(runner);
+	};
+	const auto fail_stage = [&](const char *stage) {
+		std::cerr << "authentic-practice-stage=" << stage << " tick="
+			<< tick_index << " scene=" << static_cast<unsigned>(scene().value_or(
+				th03::app::ClassicOpSessionScene::failed
+			)) << '\n';
+		return false;
+	};
+	const auto step = [&](th03::CoreInput input = {}, bool allow_complete = false) {
+		auto advanced = runner.consume({
+			.tick_index = tick_index,
+			.deadline_ns = tick_index * 10U,
+			.input = input,
+		});
+		++tick_index;
+		if(!advanced || (advanced->status !=
+			th03::app::ClassicRunnerStatus::running && !(allow_complete &&
+			advanced->status ==
+				th03::app::ClassicRunnerStatus::session_complete))) {
+			std::cerr << "authentic-practice-step tick=" << tick_index - 1U
+				<< " scene=" << static_cast<unsigned>(scene().value_or(
+					th03::app::ClassicOpSessionScene::failed
+				)) << '\n';
+			return false;
+		}
+		last = *advanced;
+		drain_audio();
+		if(!advanced->surface_changed) {
+			return true;
+		}
+		auto composed = runner.compose_shown_surface(pixels);
+		if(!composed) {
+			std::cerr << "authentic-practice-step-compose tick="
+				<< tick_index - 1U << " code=" << static_cast<unsigned>(
+					composed.error().code
+				) << " detail=" << static_cast<unsigned>(
+					composed.error().detail_code
+				) << " scene=" << static_cast<unsigned>(scene().value_or(
+					th03::app::ClassicOpSessionScene::failed
+				)) << '\n';
+		}
+		return composed.has_value();
+	};
+	const auto pulse = [](std::uint16_t system) {
+		th03::CoreInput input{};
+		input.system = system;
+		return input;
+	};
+
+	if(scene() != th03::app::ClassicOpSessionScene::character_selection) {
+		return fail_stage("initial-selection");
+	}
+	for(std::size_t frame = 0U; frame < 1'024U && scene() ==
+		th03::app::ClassicOpSessionScene::character_selection; ++frame) {
+		if(!step(pulse((frame & 1U) == 0U ? 0x0020U : 0U))) {
+			return false;
+		}
+	}
+	if(scene() != th03::app::ClassicOpSessionScene::vs_stage_splash) {
+		return fail_stage("selection-complete");
+	}
+	// Setup starts on Mode. Release the selector's confirm, move through the
+	// six-row main page to Start, and confirm the Story-native defaults.
+	if(!step()) {
+		return fail_stage("setup-release");
+	}
+	for(std::size_t row = 0U; row < 5U; ++row) {
+		if(!step(pulse(0x0002U)) || !step()) {
+			return fail_stage("setup-move");
+		}
+	}
+	if(!step(pulse(0x0020U))) {
+		return fail_stage("setup-start");
+	}
+
+	for(std::size_t frame = 0U; frame < 1'024U; ++frame) {
+		if(!step(pulse((frame & 1U) == 0U ? 0x0020U : 0U))) {
+			return false;
+		}
+		if(scene() == th03::app::ClassicOpSessionScene::vs_main &&
+			last->process_advanced) {
+			break;
+		}
+	}
+	if(scene() != th03::app::ClassicOpSessionScene::vs_main ||
+		!last || !last->process_advanced ||
+		!th03::app::ClassicRunnerTestAccess::force_vs_main_outcome(
+			runner, th03::app::ClassicOpVsRouteTestOutcome::exit_to_operator
+		) || !step() || !step()) {
+		return fail_stage("main-terminal");
+	}
+	auto replay = runner.take_completed_replay();
+	if(!replay || !replay->practice || !replay->metadata ||
+		!replay->metadata->practice || replay->metadata->flags != 0x0007U ||
+		replay->metadata->practice->preset != 1U ||
+		replay->checkpoints.empty() ||
+		!replay->checkpoints[0U].init.practice_rules ||
+		replay->expected_round_splits.empty() ||
+		replay->expected_round_splits[0U].story_stage !=
+			replay->metadata->practice->stage ||
+		!th03::formats::write_v13_replay(*replay)) {
+		return fail_stage("practice-replay");
+	}
+	// Route 0 recreates the selector; Cancel from this Practice-owned entry
+	// returns to the New Classic landing owner instead of exposing Classic OP.
+	for(std::size_t frame = 0U; frame < 1'024U && runner.status() ==
+		th03::app::ClassicRunnerStatus::running; ++frame) {
+		if(!step(pulse((frame & 1U) == 0U ? 0x1000U : 0U), true)) {
+			return false;
+		}
+	}
+	return runner.status() == th03::app::ClassicRunnerStatus::session_complete ?
+		true : fail_stage("return-to-landing");
+}
+
 bool authentic_gate(
 	const std::filesystem::path &data_root,
 	const std::filesystem::path &main_executable,
@@ -1797,16 +1963,23 @@ int main(int argc, char **argv)
 	test_runner_sequence_audio_surface_and_failure();
 	test_file_and_request_boundaries();
 	if(argc == 7 && (std::string_view(argv[1]) == "--authentic" ||
-		std::string_view(argv[1]) == "--authentic-vs")) {
+		std::string_view(argv[1]) == "--authentic-vs" ||
+		std::string_view(argv[1]) == "--authentic-practice")) {
 		if(std::string_view(argv[1]) == "--authentic") {
 			expect(authentic_gate(argv[2], argv[3], argv[4], argv[5], argv[6]),
 				"supplied originals construct and advance the complete Classic runner");
 		}
-		expect(authentic_vs_gate(argv[2], argv[3], argv[4], argv[5], argv[6]),
-			"supplied originals traverse all three complete Classic VS modes");
+		if(std::string_view(argv[1]) != "--authentic-practice") {
+			expect(authentic_vs_gate(argv[2], argv[3], argv[4], argv[5], argv[6]),
+				"supplied originals traverse all three complete Classic VS modes");
+		} else {
+			expect(authentic_practice_gate(
+				argv[2], argv[3], argv[4], argv[5], argv[6]
+			), "supplied originals traverse complete New Classic Practice");
+		}
 	} else if(argc != 1) {
 		std::cerr << "usage: th03-app-classic-runner-tests "
-			"[--authentic|--authentic-vs "
+			"[--authentic|--authentic-vs|--authentic-practice "
 			"<data-root> <MAIN.EXE> <MAINL.EXE> <OP.EXE> <FONT.ROM>]\n";
 		return 2;
 	}

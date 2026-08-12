@@ -306,7 +306,7 @@ Result fake_call(void *context, Function function)
 			++static_cast<FakeBackend *>(context)->stage_starts;
 			return std::expected<void, ClassicOpSessionError>{};
 		},
-		.advance_vs_stage = [](void *context, bool) {
+		.advance_vs_stage = [](void *context, auto) {
 			return std::expected<ClassicOpSessionBackendTick,
 				ClassicOpSessionError>{
 				static_cast<FakeBackend *>(context)->ready_tick()

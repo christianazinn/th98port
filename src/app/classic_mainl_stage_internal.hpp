@@ -15,6 +15,7 @@
 #include "th03/app/classic_audio.hpp"
 #include "main_stage_handoff_internal.hpp"
 #include "th03/app/main_process.hpp"
+#include "th03/formats/replay.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/assets/types.hpp"
 #include "th03/present/graphics_text.hpp"
@@ -121,7 +122,8 @@ public:
 		std::span<const LoadedMainResource> resources,
 		MainlStageTextAssets text,
 		const present::AnkGlyphProvider &font,
-		GameOptions game_options
+		GameOptions game_options,
+		std::optional<formats::ReplayPracticeConfig> practice = std::nullopt
 	);
 	// Automatic Demo follows OP -> MAINL -> MAIN without a character selector.
 	// The private OP completion proves the exact built-in pairing/RNG recipe.
@@ -177,6 +179,7 @@ private:
 		GameOptions game_options{};
 		present::KotohimeBombFadeCompatibility kotohime_compatibility{};
 		EntryPolicy policy = EntryPolicy::story;
+		std::optional<formats::ReplayPracticeConfig> practice{};
 	};
 
 	struct Prepared final {

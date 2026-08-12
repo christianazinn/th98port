@@ -483,6 +483,7 @@ add_library(th03_app_main STATIC
 	src/app/main_process_static_content.cpp
 	src/app/new_classic_frontend.cpp
 	src/app/new_classic_playback.cpp
+	src/app/new_classic_practice.cpp
 	src/app/new_classic_replay.cpp
 	src/app/op_compiled_text.cpp
 	src/app/replay_slot_store.cpp
@@ -1025,6 +1026,17 @@ if(BUILD_TESTING)
 
 	add_executable(th03-app-new-classic-replay-tests
 		tests/test_app_new_classic_replay.cpp
+	)
+	add_executable(th03-app-new-classic-practice-tests
+		tests/test_app_new_classic_practice.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-practice-tests PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-new-classic-practice-tests)
+	add_test(
+		NAME th03-app-new-classic-practice-tests
+		COMMAND th03-app-new-classic-practice-tests
 	)
 
 	add_executable(th03-app-new-classic-frontend-tests

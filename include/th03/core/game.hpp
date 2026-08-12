@@ -139,6 +139,17 @@ enum class CpuTimerPolicy : std::uint8_t {
 	infinite = 2,
 };
 
+// Replay Patch Practice exposes the source CPU-safety recipes before a Game
+// exists so its typed setup owner can freeze the exact first-round anchor.
+// Ordinary gameplay and retries call the same function through GameInit.
+[[nodiscard]] std::uint16_t practice_cpu_safety_frames(
+	CpuTimerPolicy policy,
+	std::uint8_t rank,
+	std::uint8_t stage,
+	std::uint8_t round,
+	std::array<std::uint8_t, 2U> is_cpu
+) noexcept;
+
 // Practice is a resident rules overlay on GM_VS_1P_CPU, not a separate source
 // game mode. Initial numeric values come from RoundStartSnapshot; these are the
 // only rules that alter later retry/result behavior.

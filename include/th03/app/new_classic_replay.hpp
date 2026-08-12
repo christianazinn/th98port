@@ -35,6 +35,9 @@ public:
 		const RoundStartObservation &observation,
 		std::uint16_t dos_date = 0U
 	);
+	[[nodiscard]] std::expected<void, NewClassicReplayError> configure_practice(
+		std::optional<formats::ReplayPracticeConfig> config
+	) noexcept;
 	[[nodiscard]] std::expected<void, NewClassicReplayError> sample(
 		replay::InputPhase phase,
 		CoreInput input
@@ -61,6 +64,7 @@ private:
 	std::optional<formats::ReplayDocument> document_{};
 	std::optional<formats::ReplayDocument> completed_{};
 	std::optional<CanonicalState> last_terminal_{};
+	std::optional<formats::ReplayPracticeConfig> practice_config_{};
 	std::uint16_t recording_date_ = 0U;
 };
 

@@ -409,17 +409,20 @@ struct ClassicOpSession::Impl final {
 	std::optional<ClassicOpSessionError> failure{};
 	bool boundary_ready = false;
 	NewClassicReplayRecorder *replay_recorder = nullptr;
+	bool new_classic_practice_route = false;
 
 	Impl(
 		std::shared_ptr<void> owner,
 		ClassicOpSessionBackendOperations operations_,
 		ClassicOpSessionTestHooks test_hooks_,
-		NewClassicReplayRecorder *replay_recorder_
+		NewClassicReplayRecorder *replay_recorder_,
+		bool new_classic_practice_route_
 	) :
 		backend_owner(std::move(owner)),
 		operations(operations_),
 		test_hooks(test_hooks_),
-		replay_recorder(replay_recorder_)
+		replay_recorder(replay_recorder_),
+		new_classic_practice_route(new_classic_practice_route_)
 	{}
 
 	void fail(ClassicOpSessionError error)
@@ -545,7 +548,12 @@ struct ClassicOpSession::Impl final {
 				); !returned) {
 					return std::unexpected(std::move(returned.error()));
 				}
-				scene = ClassicOpSessionScene::title_menu;
+				if(new_classic_practice_route) {
+					status = ClassicOpSessionStatus::complete;
+					scene = ClassicOpSessionScene::complete;
+				} else {
+					scene = ClassicOpSessionScene::title_menu;
+				}
 				break;
 			}
 			if(auto committed = operations.commit_config(operations.context);
@@ -689,11 +697,14 @@ struct ClassicOpSessionBackend final {
 	std::unique_ptr<MainProcessDriver> vs_driver{};
 	std::optional<ClassicOpSessionVsTerminal> vs_terminal{};
 	std::optional<NewClassicPauseMenu> vs_pause_menu{};
+	std::optional<NewClassicPracticeMenu> practice_menu{};
+	std::optional<formats::ReplayPracticeConfig> practice_config{};
 	bool vs_restart_requested = false;
 	std::unique_ptr<ClassicMainlWinScene> vs_win{};
 	std::optional<ClassicMainlWinCompletion> vs_win_completion{};
 	GameInit current_main_resident{};
 	bool direct_vs_selection = false;
+	bool new_classic_practice_route = false;
 
 	std::array<ClassicAudioCommand, 64U> audio_commands{};
 	std::size_t audio_head = 0U;
@@ -712,7 +723,8 @@ struct ClassicOpSessionBackend final {
 		ClassicConfigOptions config_,
 		bool fm_available_,
 		present::KotohimeBombFadeCompatibility compatibility,
-		NewClassicReplayRecorder *replay_recorder_
+		NewClassicReplayRecorder *replay_recorder_,
+		bool new_classic_practice_route_
 	) :
 		loader(std::move(loader_)),
 		compiled(std::move(compiled_)),
@@ -725,7 +737,8 @@ struct ClassicOpSessionBackend final {
 		config(config_),
 		fm_available(fm_available_),
 		kotohime_compatibility(compatibility),
-		replay_recorder(replay_recorder_)
+		replay_recorder(replay_recorder_),
+		new_classic_practice_route(new_classic_practice_route_)
 	{
 		blank_tram.fill({
 			' ', static_cast<present::TramAttribute>(present::tram_black)
@@ -1253,6 +1266,11 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
+		if(new_classic_practice_route) {
+			selection.reset();
+			direct_vs_selection = false;
+			return {};
+		}
 		std::expected<
 			std::unique_ptr<ClassicOpTitleMenuScene>,
 			ClassicOpSessionError
@@ -1506,7 +1524,7 @@ struct ClassicOpSessionBackend final {
 	[[nodiscard]] std::expected<ClassicOpSessionBackendTick,
 		ClassicOpSessionError> advance_demo_stage(bool dismiss_pressed)
 	{
-		return advance_vs_stage(dismiss_pressed);
+		return advance_vs_stage(ClassicOpInput{.raw_any = dismiss_pressed});
 	}
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError> start_demo_main()
@@ -1617,6 +1635,12 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
+		if(new_classic_practice_route) {
+			practice_menu.emplace(selection_completion->resident());
+			selection.reset();
+			direct_vs_selection = false;
+			return {};
+		}
 		if(auto prepared = ensure_static_content(); !prepared) {
 			return std::unexpected(std::move(prepared.error()));
 		}
@@ -1644,14 +1668,95 @@ struct ClassicOpSessionBackend final {
 	}
 
 	[[nodiscard]] std::expected<ClassicOpSessionBackendTick,
-		ClassicOpSessionError> advance_vs_stage(bool dismiss_pressed)
+		ClassicOpSessionError> advance_vs_stage(ClassicOpInput input)
 	{
+		if(practice_menu) {
+			const auto status = practice_menu->consume({
+				.raw_any = input.raw_any,
+				.up = input.up,
+				.down = input.down,
+				.left = input.left,
+				.right = input.right,
+				.confirm = input.ok || input.shot,
+				.cancel = input.cancel,
+			});
+			if(status == NewClassicPracticeStatus::running) {
+				return ClassicOpSessionBackendTick{
+					.surface_changed = true,
+					.input_sampled = input.raw_any,
+				};
+			}
+			if(status == NewClassicPracticeStatus::canceled) {
+				if(!selection_completion) {
+					return std::unexpected(session_error(
+						ClassicOpSessionErrorCode::backend_contract_failed
+					));
+				}
+				auto resident = selection_completion->resident();
+				practice_menu.reset();
+				practice_config.reset();
+				selection_completion.reset();
+				auto restarted = create_direct_vs_selection(std::move(resident));
+				if(!restarted) {
+					return std::unexpected(std::move(restarted.error()));
+				}
+				return ClassicOpSessionBackendTick{
+					.surface_changed = true,
+					.input_sampled = true,
+					.return_to_selection = true,
+				};
+			}
+			if(!selection_completion || !font) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			const auto practice_setup = practice_menu->config();
+			practice_config = practice_menu->practice_active() ?
+				std::optional{practice_setup} : std::nullopt;
+			if(replay_recorder) {
+				if(auto configured = replay_recorder->configure_practice(
+					practice_config
+				); !configured) {
+					return std::unexpected(replay_capture_error());
+				}
+			}
+			auto resident = selection_completion->resident();
+			resident.story_stage = practice_setup.stage;
+			resident.story_lives = practice_setup.stock == 0xFFU ? 0U :
+				practice_setup.stock;
+			resident.practice_rules.reset();
+			if(auto prepared = ensure_static_content(); !prepared) {
+				return std::unexpected(std::move(prepared.error()));
+			}
+			const auto request = stage_request(resident);
+			auto resources = loader->load_mainl_stage(request);
+			if(!resources) {
+				return std::unexpected(resource_error(std::move(resources.error())));
+			}
+			auto created = ClassicMainlStageTransition::create_from_restart(
+				resident, kotohime_compatibility, *resources, stage_text, *font,
+				{.input_protocol = InputProtocol::recorded_replay},
+				practice_config
+			);
+			if(!created) {
+				return std::unexpected(stage_error(std::move(created.error())));
+			}
+			current_main_resident = std::move(resident);
+			vs_stage = std::move(*created);
+			practice_menu.reset();
+			selection_completion.reset();
+			return ClassicOpSessionBackendTick{
+				.surface_changed = true,
+				.input_sampled = true,
+			};
+		}
 		if(!vs_stage) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
-		auto tick = vs_stage->advance(dismiss_pressed);
+		auto tick = vs_stage->advance(input.raw_any);
 		if(!tick) {
 			return std::unexpected(stage_error(std::move(tick.error())));
 		}
@@ -1713,6 +1818,7 @@ struct ClassicOpSessionBackend final {
 			));
 		}
 		vs_process = std::move(*created);
+		current_main_resident = vs_process->round_start_observation().start;
 		vs_driver = std::move(*driver);
 		vs_stage.reset();
 		vs_terminal.reset();
@@ -2000,9 +2106,31 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
-		auto resident = prepare_new_classic_vs_restart(
-			terminal.transition.resident
-		);
+		auto resident = terminal.transition.resident;
+		if(practice_config) {
+			resident.demo_number = 0U;
+			resident.winner = 0;
+			resident.story_stage = practice_config->stage;
+			resident.story_lives = practice_config->stock == 0xFFU ? 0U :
+				practice_config->stock;
+			resident.show_score_menu = 0U;
+			resident.last_score = {};
+			resident.global_frame = 0U;
+			resident.runtime_snapshot.reset();
+			resident.compact_runtime_snapshot.reset();
+			resident.round_start_snapshot.reset();
+			resident.practice_rules.reset();
+			resident.random_seed = std::bit_cast<std::uint32_t>(
+				resident.resident_rand
+			);
+			if(auto configured = replay_recorder->configure_practice(
+				practice_config
+			); !configured) {
+				return std::unexpected(replay_capture_error());
+			}
+		} else {
+			resident = prepare_new_classic_vs_restart(std::move(resident));
+		}
 		const auto request = stage_request(resident);
 		auto resources = loader->load_mainl_stage(request);
 		if(!resources) {
@@ -2010,7 +2138,7 @@ struct ClassicOpSessionBackend final {
 		}
 		auto created = ClassicMainlStageTransition::create_from_restart(
 			resident, kotohime_compatibility, *resources, stage_text, *font,
-			{.input_protocol = InputProtocol::recorded_replay}
+			{.input_protocol = InputProtocol::recorded_replay}, practice_config
 		);
 		if(!created) {
 			return std::unexpected(stage_error(std::move(created.error())));
@@ -2337,7 +2465,7 @@ struct ClassicOpSessionBackend final {
 		if(!composed) {
 			return std::unexpected(surface_error(composed.error()));
 		}
-		return *composed;
+		return practice_menu ? practice_menu->compose_over(*composed) : *composed;
 	}
 };
 
@@ -2505,10 +2633,10 @@ Result backend_call(void *context, Method method, Args &&...args)
 				context, &ClassicOpSessionBackend::start_vs_stage
 			);
 		},
-		.advance_vs_stage = [](void *context, bool dismiss) {
+		.advance_vs_stage = [](void *context, ClassicOpInput input) {
 			return backend_call<std::expected<
 				ClassicOpSessionBackendTick, ClassicOpSessionError
-			>>(context, &ClassicOpSessionBackend::advance_vs_stage, dismiss);
+			>>(context, &ClassicOpSessionBackend::advance_vs_stage, input);
 		},
 		.start_vs_main = [](void *context) {
 			return backend_call<std::expected<void, ClassicOpSessionError>>(
@@ -2632,7 +2760,8 @@ ClassicOpSession::create(
 	std::filesystem::path score_path,
 	bool fm_available,
 	present::KotohimeBombFadeCompatibility kotohime_compatibility,
-	NewClassicReplayRecorder *replay_recorder
+	NewClassicReplayRecorder *replay_recorder,
+	bool new_classic_practice_route
 )
 {
 	if(!loader || config_path.empty() || score_path.empty() ||
@@ -2674,7 +2803,8 @@ ClassicOpSession::create(
 		config,
 		fm_available,
 		kotohime_compatibility,
-		replay_recorder
+		replay_recorder,
+		new_classic_practice_route
 	);
 	auto prepared_font = Pc98FontRomProvider::from_exact_font_rom(
 		backend->font_rom
@@ -2696,7 +2826,23 @@ ClassicOpSession::create(
 		));
 	}
 	std::expected<void, ClassicOpSessionError> started{};
-	if(resident.demo_number == 0U && selection_mode_for_game(resident.game_mode)) {
+	if(new_classic_practice_route) {
+		resident.game_mode = game_mode::vs_1p_cpu;
+		resident.is_cpu = {0U, 1U};
+		resident.paletted_character = {1, 1};
+		resident.story_stage = 0U;
+		resident.story_lives = 0U;
+		backend->vs_terminal.emplace(ClassicOpSessionVsTerminal{
+			.terminal = {.route = 0U},
+			.transition = {
+				.action = SessionAction::exit_to_operator,
+				.resident = resident,
+				.high_score_registration = std::nullopt,
+			},
+		});
+		started = backend->start_direct_vs_selection();
+	} else if(resident.demo_number == 0U &&
+		selection_mode_for_game(resident.game_mode)) {
 		backend->vs_terminal.emplace(ClassicOpSessionVsTerminal{
 			.terminal = {.route = 0U},
 			.transition = {
@@ -2714,7 +2860,8 @@ ClassicOpSession::create(
 	}
 	auto session = create_with_backend(
 		std::static_pointer_cast<void>(backend), backend_operations(*backend),
-		backend_test_hooks(*backend), replay_recorder
+		backend_test_hooks(*backend), replay_recorder,
+		new_classic_practice_route
 	);
 	if(session && backend->direct_vs_selection) {
 		(*session)->impl_->scene = ClassicOpSessionScene::character_selection;
@@ -2727,7 +2874,8 @@ ClassicOpSession::create_with_backend(
 	std::shared_ptr<void> backend_owner,
 	ClassicOpSessionBackendOperations operations,
 	ClassicOpSessionTestHooks test_hooks,
-	NewClassicReplayRecorder *replay_recorder
+	NewClassicReplayRecorder *replay_recorder,
+	bool new_classic_practice_route
 )
 {
 	if(!backend_owner || !valid_backend(operations)) {
@@ -2736,7 +2884,8 @@ ClassicOpSession::create_with_backend(
 		));
 	}
 	auto impl = std::make_unique<Impl>(
-		std::move(backend_owner), operations, test_hooks, replay_recorder
+		std::move(backend_owner), operations, test_hooks, replay_recorder,
+		new_classic_practice_route
 	);
 	return std::unique_ptr<ClassicOpSession>(
 		new ClassicOpSession(std::move(impl))
@@ -2824,7 +2973,7 @@ ClassicOpSession::consume(const ClassicOpSessionInput &input)
 			break;
 		case ClassicOpSessionScene::vs_stage_splash:
 			tick = impl_->operations.advance_vs_stage(
-				impl_->operations.context, input.dismiss_pressed
+				impl_->operations.context, input.op
 			);
 			break;
 		case ClassicOpSessionScene::vs_main:
@@ -2848,6 +2997,17 @@ ClassicOpSession::consume(const ClassicOpSessionInput &input)
 			return std::unexpected(*impl_->failure);
 		}
 		backend_tick = *tick;
+		if(tick->return_to_selection) {
+			if(scene_before != ClassicOpSessionScene::vs_stage_splash ||
+				tick->ready) {
+				impl_->fail(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+				return std::unexpected(*impl_->failure);
+			}
+			impl_->scene = ClassicOpSessionScene::character_selection;
+			transitioned = true;
+		}
 		if(tick->input_sampled && impl_->replay_recorder &&
 			impl_->replay_recorder->recording() &&
 			scene_before != ClassicOpSessionScene::story &&
