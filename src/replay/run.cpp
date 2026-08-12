@@ -240,11 +240,11 @@ struct Runner {
 			if(defeat_started_this_step) {
 				timer_active = false;
 				return;
-		}
-		real_frames += vsyncs;
-		if(slowdown_eligible) {
-			timed_frames++;
-		}
+			}
+			real_frames += vsyncs;
+			if(slowdown_eligible) {
+				timed_frames++;
+			}
 		}
 
 		void main_feedback_cue_requested(
