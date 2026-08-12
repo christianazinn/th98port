@@ -15,6 +15,7 @@
 
 #include "th03/app/classic_cli.hpp"
 #include "th03/app/classic_runner.hpp"
+#include "th03/app/classic_score_store.hpp"
 
 #include "classic_runner_internal.hpp"
 
@@ -544,6 +545,57 @@ void test_file_and_request_boundaries()
 		"invalid Classic request fails before touching external content");
 }
 
+[[nodiscard]] std::uint64_t surface_digest(
+	std::span<
+		const th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	> pixels,
+	const th03::present::SourceSurface &surface
+) noexcept
+{
+	constexpr std::uint64_t offset = 1'469'598'103'934'665'603ULL;
+	constexpr std::uint64_t prime = 1'099'511'628'211ULL;
+	auto result = offset;
+	const auto add = [&](std::uint8_t value) {
+		result = (result ^ value) * prime;
+	};
+	for(const auto &pixel : pixels) {
+		add(static_cast<std::uint8_t>(pixel.layer));
+		add(pixel.value);
+	}
+	for(const auto &color : surface.graphics_palette.colors) {
+		add(color.r);
+		add(color.g);
+		add(color.b);
+	}
+	add(static_cast<std::uint8_t>(surface.shown_page));
+	add(static_cast<std::uint8_t>(surface.raster_mode));
+	add(static_cast<std::uint8_t>(surface.effective_scroll_y & 0xFFU));
+	add(static_cast<std::uint8_t>(surface.effective_scroll_y >> 8U));
+	return result;
+}
+
+struct AuthenticRouteTraceEvent final {
+	std::uint64_t host_tick = 0U;
+	std::uint32_t source_sample = 0U;
+	th03::app::ClassicOpSessionScene op_scene =
+		th03::app::ClassicOpSessionScene::failed;
+	std::optional<th03::app::ClassicStorySessionScene> story_scene{};
+	std::uint64_t surface = 0U;
+	std::size_t audio_command_count = 0U;
+};
+
+bool normalized_kotohime_red(
+	void *,
+	const th03::BombFrameStep &,
+	std::uint8_t fade,
+	std::uint8_t &red
+) noexcept
+{
+	red = static_cast<std::uint8_t>(fade << 1U);
+	return true;
+}
+
 bool authentic_gate(
 	const std::filesystem::path &data_root,
 	const std::filesystem::path &main_executable,
@@ -565,6 +617,9 @@ bool authentic_gate(
 		},
 		.seed = 1U,
 		.fm_available = false,
+		.kotohime_compatibility = {
+			.red_provider = &normalized_kotohime_red,
+		},
 	});
 	if(!loaded) {
 		std::cerr << "authentic Classic runner load failed code="
@@ -581,8 +636,10 @@ bool authentic_gate(
 	if(!runner.compose_shown_surface(pixels)) {
 		return false;
 	}
-	auto drain_audio = [&runner]() {
-		while(runner.take_audio_command()) {
+	std::vector<th03::app::ClassicAudioCommand> audio_commands{};
+	auto drain_audio = [&runner, &audio_commands]() {
+		while(auto command = runner.take_audio_command()) {
+			audio_commands.push_back(*command);
 		}
 	};
 	const auto graphics_ink = [&pixels](
@@ -610,7 +667,15 @@ bool authentic_gate(
 	drain_audio();
 	std::uint64_t tick_index = 0U;
 	std::optional<th03::app::ClassicRunnerConsumeResult> last{};
-	const auto step = [&](std::uint16_t system = 0U) {
+	std::optional<th03::present::SourceSurface> last_surface{};
+	const auto composed_initial = runner.compose_shown_surface(pixels);
+	if(!composed_initial) {
+		return false;
+	}
+	last_surface = *composed_initial;
+	const auto step = [&](std::uint16_t system = 0U, bool allow_complete = false) {
+		const auto story_before =
+			th03::app::ClassicRunnerTestAccess::story_scene(runner);
 		th03::CoreInput input{};
 		input.system = system;
 		auto advanced = runner.consume({
@@ -619,8 +684,10 @@ bool authentic_gate(
 			.input = input,
 		});
 		++tick_index;
-		if(!advanced || advanced->status !=
-			th03::app::ClassicRunnerStatus::running) {
+		if(!advanced || (advanced->status !=
+			th03::app::ClassicRunnerStatus::running && !(allow_complete &&
+			advanced->status ==
+				th03::app::ClassicRunnerStatus::session_complete))) {
 			std::cerr << "authentic-script-step=" << tick_index - 1U;
 			if(!advanced) {
 				std::cerr << " code=" << static_cast<unsigned>(
@@ -629,13 +696,43 @@ bool authentic_gate(
 					advanced.error().detail_code
 				);
 			}
+			std::cerr << " op=" << static_cast<unsigned>(
+				th03::app::ClassicRunnerTestAccess::scene(runner).value_or(
+					th03::app::ClassicOpSessionScene::failed
+				)
+			) << " story=" << static_cast<unsigned>(
+				th03::app::ClassicRunnerTestAccess::story_scene(runner).value_or(
+					th03::app::ClassicStorySessionScene::failed
+				)
+			) << " story-error=" << static_cast<unsigned>(
+				th03::app::ClassicRunnerTestAccess::story_failure_code(
+					runner
+				).value_or(
+					th03::app::ClassicStorySessionErrorCode::invalid_config
+				)
+			) << " story-before=" << static_cast<unsigned>(
+				story_before.value_or(
+					th03::app::ClassicStorySessionScene::failed
+				)
+			) << " story-detail=" << static_cast<unsigned>(
+				th03::app::ClassicRunnerTestAccess::story_failure_detail_code(
+					runner
+				).value_or(0xFFU)
+			);
 			std::cerr << '\n';
 			return false;
 		}
 		last = *advanced;
 		drain_audio();
-		return !advanced->surface_changed ||
-			runner.compose_shown_surface(pixels).has_value();
+		if(!advanced->surface_changed) {
+			return true;
+		}
+		auto composed = runner.compose_shown_surface(pixels);
+		if(!composed) {
+			return false;
+		}
+		last_surface = *composed;
+		return true;
 	};
 
 	// Reach the first title input poll, open the menu, and lock the exact
@@ -669,7 +766,9 @@ bool authentic_gate(
 			th03::app::ClassicOpSessionScene::character_selection) {
 		std::cerr << "authentic-script-stage=title-route tick=" << tick_index
 			<< " scene=" << static_cast<unsigned>(
-				th03::app::ClassicRunnerTestAccess::scene(runner)
+				th03::app::ClassicRunnerTestAccess::scene(runner).value_or(
+					th03::app::ClassicOpSessionScene::failed
+				)
 			) << '\n';
 		return false;
 	}
@@ -705,7 +804,9 @@ bool authentic_gate(
 		th03::app::ClassicOpSessionScene::story) {
 		std::cerr << "authentic-script-stage=selection-timeout tick="
 			<< tick_index << " scene=" << static_cast<unsigned>(
-				th03::app::ClassicRunnerTestAccess::scene(runner)
+				th03::app::ClassicRunnerTestAccess::scene(runner).value_or(
+					th03::app::ClassicOpSessionScene::failed
+				)
 			) << '\n';
 		return false;
 	}
@@ -732,20 +833,246 @@ bool authentic_gate(
 			<< tick_index << '\n';
 		return false;
 	}
+	const auto first_splash_host_tick = tick_index;
+	const auto first_splash_source_sample =
+		th03::app::ClassicRunnerTestAccess::story_source_sample_count(
+			runner
+		).value_or(0U);
+	const auto first_splash_surface = last_surface ?
+		surface_digest(pixels, *last_surface) : 0U;
+	const auto first_splash_audio_count = audio_commands.size();
 	for(std::size_t frame = 0U; frame < 33U; ++frame) {
 		if(!step()) { return false; }
 	}
 	if(!step(0x0020U)) { return false; }
+	bool first_main_frame = false;
 	for(std::size_t frame = 0U; frame < 96U; ++frame) {
 		if(!step()) { return false; }
 		if(last->process_advanced) {
-			return last->surface_changed &&
-				runner.compose_shown_surface(pixels).has_value();
+			first_main_frame = true;
+			break;
 		}
 	}
-	std::cerr << "authentic-script-stage=main-start-timeout tick="
-		<< tick_index << '\n';
-	return false;
+	if(!first_main_frame) {
+		std::cerr << "authentic-script-stage=main-start-timeout tick="
+			<< tick_index << '\n';
+		return false;
+	}
+	auto first_forced = th03::app::ClassicRunnerTestAccess::
+		force_story_player_win(runner);
+	if(!first_forced) {
+		std::cerr << "authentic-script-stage=force-first-win tick="
+			<< tick_index << '\n';
+		return false;
+	}
+
+	// From this independently verified MAIN boundary, retain every production
+	// resource, scene, surface, audio, and persistence path while replacing only
+	// the terminal outcome. A scene-transition trace distinguishes host ticks
+	// from donor source samples and fingerprints every published milestone.
+	std::array<std::size_t, 10U> story_scene_entries{};
+	std::vector<AuthenticRouteTraceEvent> trace{{
+		.host_tick = first_splash_host_tick,
+		.source_sample = first_splash_source_sample,
+		.op_scene = th03::app::ClassicOpSessionScene::story,
+		.story_scene = th03::app::ClassicStorySessionScene::stage_splash,
+		.surface = first_splash_surface,
+		.audio_command_count = first_splash_audio_count,
+	}};
+	++story_scene_entries[static_cast<std::size_t>(
+		th03::app::ClassicStorySessionScene::stage_splash
+	)];
+	auto previous_op_scene = th03::app::ClassicOpSessionScene::story;
+	std::optional<th03::app::ClassicStorySessionScene> previous_story_scene =
+		th03::app::ClassicStorySessionScene::stage_splash;
+	const auto record_transition = [&]() {
+		const auto op_scene = th03::app::ClassicRunnerTestAccess::scene(runner);
+		if(!op_scene) {
+			return false;
+		}
+		const auto story_scene =
+			th03::app::ClassicRunnerTestAccess::story_scene(runner);
+		if(*op_scene == previous_op_scene &&
+			story_scene == previous_story_scene) {
+			return true;
+		}
+		if(story_scene) {
+			const auto index = static_cast<std::size_t>(*story_scene);
+			if(index >= story_scene_entries.size()) {
+				return false;
+			}
+			++story_scene_entries[index];
+		}
+		if(!last_surface) {
+			return false;
+		}
+		trace.push_back({
+			.host_tick = tick_index,
+			.source_sample = th03::app::ClassicRunnerTestAccess::
+				story_source_sample_count(runner).value_or(0U),
+			.op_scene = *op_scene,
+			.story_scene = story_scene,
+			.surface = surface_digest(pixels, *last_surface),
+			.audio_command_count = audio_commands.size(),
+		});
+		previous_op_scene = *op_scene;
+		previous_story_scene = story_scene;
+		return true;
+	};
+	if(!record_transition()) {
+		return false;
+	}
+
+	std::size_t real_main_frames = 1U;
+	bool main_forced = true;
+	bool returned_to_title = false;
+	for(std::size_t frame = 0U; frame < 250'000U; ++frame) {
+		const auto before = th03::app::ClassicRunnerTestAccess::story_scene(runner);
+		const std::uint16_t system = before && *before !=
+			th03::app::ClassicStorySessionScene::main &&
+			((tick_index & 1U) == 0U) ? 0x0020U : 0U;
+		if(!step(system)) {
+			return false;
+		}
+		const auto after = th03::app::ClassicRunnerTestAccess::story_scene(runner);
+		if(after != before && after ==
+			th03::app::ClassicStorySessionScene::main) {
+			main_forced = false;
+		}
+		if(after == th03::app::ClassicStorySessionScene::main &&
+			last->process_advanced && !main_forced) {
+			auto forced = th03::app::ClassicRunnerTestAccess::
+				force_story_player_win(runner);
+			if(!forced) {
+				std::cerr << "authentic-script-stage=force-win tick="
+					<< tick_index << " code=" << static_cast<unsigned>(
+						forced.error().code
+					) << " detail=" << static_cast<unsigned>(
+						forced.error().detail_code
+					) << '\n';
+				return false;
+			}
+			main_forced = true;
+			++real_main_frames;
+		}
+		if(!record_transition()) {
+			return false;
+		}
+		if(th03::app::ClassicRunnerTestAccess::scene(runner) ==
+			th03::app::ClassicOpSessionScene::title_menu) {
+			returned_to_title = true;
+			break;
+		}
+	}
+	if(!returned_to_title) {
+		std::cerr << "authentic-script-stage=route-timeout tick="
+			<< tick_index << " story=" << static_cast<unsigned>(
+				th03::app::ClassicRunnerTestAccess::story_scene(runner).value_or(
+					th03::app::ClassicStorySessionScene::failed
+				)
+			) << '\n';
+		return false;
+	}
+
+	const auto scene_count = [&](th03::app::ClassicStorySessionScene scene) {
+		return story_scene_entries[static_cast<std::size_t>(scene)];
+	};
+	const auto trace_valid = real_main_frames == 9U &&
+		scene_count(th03::app::ClassicStorySessionScene::stage_splash) == 9U &&
+		scene_count(th03::app::ClassicStorySessionScene::main) == 9U &&
+		scene_count(th03::app::ClassicStorySessionScene::win) == 7U &&
+		scene_count(th03::app::ClassicStorySessionScene::cutscene) == 4U &&
+		scene_count(th03::app::ClassicStorySessionScene::staff_verdict) == 1U &&
+		scene_count(
+			th03::app::ClassicStorySessionScene::high_score_registration
+		) == 1U && trace.size() >= 32U &&
+		std::ranges::all_of(trace, [](const auto &event) {
+			return event.surface != 0U;
+		}) && std::ranges::any_of(audio_commands, [](const auto &command) {
+			return command.type == th03::app::ClassicAudioCommandType::load_song;
+		}) && std::ranges::any_of(audio_commands, [](const auto &command) {
+			return command.type == th03::app::ClassicAudioCommandType::play_song;
+		});
+	if(!trace_valid) {
+		std::cerr << "authentic-script-stage=trace main=" << real_main_frames
+			<< " splash=" << scene_count(
+				th03::app::ClassicStorySessionScene::stage_splash
+			) << " win=" << scene_count(
+				th03::app::ClassicStorySessionScene::win
+			) << " cutscene=" << scene_count(
+				th03::app::ClassicStorySessionScene::cutscene
+			) << " staff=" << scene_count(
+				th03::app::ClassicStorySessionScene::staff_verdict
+			) << " registration=" << scene_count(
+				th03::app::ClassicStorySessionScene::high_score_registration
+			) << " events=" << trace.size() << " audio="
+			<< audio_commands.size() << '\n';
+		return false;
+	}
+
+	const auto score = th03::app::load_classic_score_store(
+		temporary.path() / "YUME.NEM"
+	);
+	const std::array expected_name{
+		th03::app::ClassicRegistrationGlyph::space,
+		th03::app::ClassicRegistrationGlyph::space,
+		th03::app::ClassicRegistrationGlyph::space,
+		th03::app::ClassicRegistrationGlyph::u,
+		th03::app::ClassicRegistrationGlyph::m,
+		th03::app::ClassicRegistrationGlyph::i,
+		th03::app::ClassicRegistrationGlyph::e,
+		th03::app::ClassicRegistrationGlyph::r,
+	};
+	if(!score || score->document.boards[1U].cleared !=
+		th03::app::ClassicScoreCleared::cleared ||
+		score->document.boards[1U].rows[0U].playchar_optional != 1U ||
+		score->document.boards[1U].rows[0U].name_backwards != expected_name) {
+		std::cerr << "authentic-script-stage=score-persistence";
+		if(score) {
+			for(std::size_t rank = 0U; rank <
+				score->document.boards.size(); ++rank) {
+				const auto &board = score->document.boards[rank];
+				std::cerr << " rank" << rank << "-cleared="
+					<< static_cast<unsigned>(board.cleared)
+					<< "-char=" << static_cast<unsigned>(
+						board.rows[0U].playchar_optional
+					) << "-name=";
+				for(const auto glyph : board.rows[0U].name_backwards) {
+					std::cerr << static_cast<unsigned>(glyph) << ',';
+				}
+			}
+		}
+		std::cerr << '\n';
+		return false;
+	}
+
+	// The returned title is a fresh real scene. Wait for its source input poll,
+	// open the menu, and exit through Cancel instead of ending the harness at an
+	// application-private ownership boundary.
+	reached_input = false;
+	for(std::size_t frame = 0U; frame < 300U && !reached_input; ++frame) {
+		if(!step()) { return false; }
+		reached_input = last->input_sampled;
+	}
+	if(!reached_input || !step(0x0020U)) {
+		return false;
+	}
+	menu_drawn = false;
+	for(std::size_t frame = 0U; frame < 32U && !menu_drawn; ++frame) {
+		if(!step()) { return false; }
+		menu_drawn = last->input_sampled;
+	}
+	if(!menu_drawn || !step() || !step(0x1000U, true)) {
+		return false;
+	}
+	for(std::size_t frame = 0U; frame < 8U && runner.status() ==
+		th03::app::ClassicRunnerStatus::running; ++frame) {
+		if(!step(0U, true)) {
+			return false;
+		}
+	}
+	return runner.status() ==
+		th03::app::ClassicRunnerStatus::session_complete;
 }
 
 } // namespace

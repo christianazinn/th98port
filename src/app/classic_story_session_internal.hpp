@@ -210,6 +210,15 @@ struct ClassicStorySessionBackendOperations final {
 	) = nullptr;
 };
 
+// Internal integration-test capability. Production construction binds this to
+// the concrete resource/scene backend; substituted unit-test operation tables
+// do not gain a way to forge a child completion.
+struct ClassicStorySessionTestHooks final {
+	void *context = nullptr;
+	std::expected<void, ClassicStorySessionError>
+	(*force_player_win)(void *) = nullptr;
+};
+
 class ClassicStorySession final {
 public:
 	[[nodiscard]] static std::expected<
@@ -273,7 +282,8 @@ private:
 	> create_with_backend(
 		const MainStoryConfig &config,
 		std::shared_ptr<void> backend_owner,
-		ClassicStorySessionBackendOperations operations
+		ClassicStorySessionBackendOperations operations,
+		ClassicStorySessionTestHooks test_hooks = {}
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicStorySession>,
@@ -298,6 +308,12 @@ struct ClassicStorySessionTestAccess final {
 		const ClassicMainInputSample &input,
 		InputContext context
 	) noexcept;
+	[[nodiscard]] static std::expected<void, ClassicStorySessionError>
+	force_player_win(ClassicStorySession &session);
+	[[nodiscard]] static std::optional<ClassicStorySessionErrorCode>
+	failure_code(const ClassicStorySession &session) noexcept;
+	[[nodiscard]] static std::optional<std::uint8_t>
+	failure_detail_code(const ClassicStorySession &session) noexcept;
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicStorySession>,
 		ClassicStorySessionError

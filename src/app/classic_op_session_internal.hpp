@@ -219,6 +219,20 @@ struct ClassicOpSessionBackendOperations final {
 	) = nullptr;
 };
 
+// Internal production-backend observation/control used only by the supplied-
+// resource route gate. The ordinary source-private operation table remains
+// unable to synthesize child completion.
+struct ClassicOpSessionTestHooks final {
+	void *context = nullptr;
+	std::optional<ClassicStorySessionScene> (*story_scene)(void *) = nullptr;
+	std::optional<std::uint32_t> (*story_source_sample_count)(void *) = nullptr;
+	std::optional<ClassicStorySessionErrorCode> (*story_failure_code)(void *) =
+		nullptr;
+	std::optional<std::uint8_t> (*story_failure_detail_code)(void *) = nullptr;
+	std::expected<void, ClassicOpSessionError>
+	(*force_story_player_win)(void *) = nullptr;
+};
+
 class ClassicOpSession final {
 public:
 	[[nodiscard]] static std::expected<
@@ -268,7 +282,8 @@ private:
 		ClassicOpSessionError
 	> create_with_backend(
 		std::shared_ptr<void> backend_owner,
-		ClassicOpSessionBackendOperations operations
+		ClassicOpSessionBackendOperations operations,
+		ClassicOpSessionTestHooks test_hooks = {}
 	);
 
 	std::unique_ptr<Impl> impl_;
@@ -283,6 +298,17 @@ struct ClassicOpSessionTestAccess final {
 	[[nodiscard]] static bool attract_input_present(
 		const ClassicMainInputSample &input
 	) noexcept;
+	[[nodiscard]] static std::optional<ClassicStorySessionScene> story_scene(
+		const ClassicOpSession &session
+	) noexcept;
+	[[nodiscard]] static std::optional<std::uint32_t>
+	story_source_sample_count(const ClassicOpSession &session) noexcept;
+	[[nodiscard]] static std::optional<ClassicStorySessionErrorCode>
+	story_failure_code(const ClassicOpSession &session) noexcept;
+	[[nodiscard]] static std::optional<std::uint8_t>
+	story_failure_detail_code(const ClassicOpSession &session) noexcept;
+	[[nodiscard]] static std::expected<void, ClassicOpSessionError>
+	force_story_player_win(ClassicOpSession &session);
 	[[nodiscard]] static CoreInput vs_cpu_main_input(
 		const GameInit &resident,
 		const ClassicMainInputSample &input,

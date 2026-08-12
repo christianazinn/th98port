@@ -363,6 +363,7 @@ namespace {
 struct ClassicOpSession::Impl final {
 	std::shared_ptr<void> backend_owner{};
 	ClassicOpSessionBackendOperations operations{};
+	ClassicOpSessionTestHooks test_hooks{};
 	ClassicOpSessionScene scene = ClassicOpSessionScene::title_menu;
 	ClassicOpSessionStatus status = ClassicOpSessionStatus::running;
 	std::optional<ClassicOpRoute> external{};
@@ -371,10 +372,12 @@ struct ClassicOpSession::Impl final {
 
 	Impl(
 		std::shared_ptr<void> owner,
-		ClassicOpSessionBackendOperations operations_
+		ClassicOpSessionBackendOperations operations_,
+		ClassicOpSessionTestHooks test_hooks_
 	) :
 		backend_owner(std::move(owner)),
-		operations(operations_)
+		operations(operations_),
+		test_hooks(test_hooks_)
 	{}
 
 	void fail(ClassicOpSessionError error)
@@ -1324,6 +1327,49 @@ struct ClassicOpSessionBackend final {
 		return {};
 	}
 
+	[[nodiscard]] std::optional<ClassicStorySessionScene>
+	story_scene_for_route_test() const noexcept
+	{
+		return story ? std::optional{story->scene()} : std::nullopt;
+	}
+
+	[[nodiscard]] std::optional<std::uint32_t>
+	story_source_sample_count_for_route_test() const noexcept
+	{
+		return story ? std::optional{story->source_sample_count()} :
+			std::nullopt;
+	}
+
+	[[nodiscard]] std::optional<ClassicStorySessionErrorCode>
+	story_failure_code_for_route_test() const noexcept
+	{
+		return story ? ClassicStorySessionTestAccess::failure_code(*story) :
+			std::nullopt;
+	}
+
+	[[nodiscard]] std::optional<std::uint8_t>
+	story_failure_detail_code_for_route_test() const noexcept
+	{
+		return story ? ClassicStorySessionTestAccess::failure_detail_code(
+			*story
+		) : std::nullopt;
+	}
+
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	force_story_player_win_for_route_test()
+	{
+		if(!story) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		auto forced = ClassicStorySessionTestAccess::force_player_win(*story);
+		if(!forced) {
+			return std::unexpected(story_error(std::move(forced.error())));
+		}
+		return {};
+	}
+
 	[[nodiscard]] std::expected<void, ClassicOpSessionError> start_demo_stage()
 	{
 		if(!title_completion || vs_stage ||
@@ -2147,6 +2193,35 @@ Result backend_call(void *context, Method method, Args &&...args)
 	};
 }
 
+[[nodiscard]] ClassicOpSessionTestHooks backend_test_hooks(
+	ClassicOpSessionBackend &backend
+) noexcept
+{
+	return {
+		.context = &backend,
+		.story_scene = [](void *context) {
+			return static_cast<ClassicOpSessionBackend *>(context)->
+				story_scene_for_route_test();
+		},
+		.story_source_sample_count = [](void *context) {
+			return static_cast<ClassicOpSessionBackend *>(context)->
+				story_source_sample_count_for_route_test();
+		},
+		.story_failure_code = [](void *context) {
+			return static_cast<ClassicOpSessionBackend *>(context)->
+				story_failure_code_for_route_test();
+		},
+		.story_failure_detail_code = [](void *context) {
+			return static_cast<ClassicOpSessionBackend *>(context)->
+				story_failure_detail_code_for_route_test();
+		},
+		.force_story_player_win = [](void *context) {
+			return static_cast<ClassicOpSessionBackend *>(context)->
+				force_story_player_win_for_route_test();
+		},
+	};
+}
+
 } // namespace
 
 std::expected<std::unique_ptr<ClassicOpSession>, ClassicOpSessionError>
@@ -2233,7 +2308,8 @@ ClassicOpSession::create(
 		return std::unexpected(std::move(started.error()));
 	}
 	auto session = create_with_backend(
-		std::static_pointer_cast<void>(backend), backend_operations(*backend)
+		std::static_pointer_cast<void>(backend), backend_operations(*backend),
+		backend_test_hooks(*backend)
 	);
 	if(session && backend->direct_vs_selection) {
 		(*session)->impl_->scene = ClassicOpSessionScene::character_selection;
@@ -2244,7 +2320,8 @@ ClassicOpSession::create(
 std::expected<std::unique_ptr<ClassicOpSession>, ClassicOpSessionError>
 ClassicOpSession::create_with_backend(
 	std::shared_ptr<void> backend_owner,
-	ClassicOpSessionBackendOperations operations
+	ClassicOpSessionBackendOperations operations,
+	ClassicOpSessionTestHooks test_hooks
 )
 {
 	if(!backend_owner || !valid_backend(operations)) {
@@ -2253,7 +2330,7 @@ ClassicOpSession::create_with_backend(
 		));
 	}
 	auto impl = std::make_unique<Impl>(
-		std::move(backend_owner), operations
+		std::move(backend_owner), operations, test_hooks
 	);
 	return std::unique_ptr<ClassicOpSession>(
 		new ClassicOpSession(std::move(impl))
@@ -2442,6 +2519,79 @@ bool ClassicOpSessionTestAccess::attract_input_present(
 ) noexcept
 {
 	return th03::app::attract_input_present(input);
+}
+
+std::optional<ClassicStorySessionScene>
+ClassicOpSessionTestAccess::story_scene(
+	const ClassicOpSession &session
+) noexcept
+{
+	if(!session.impl_->test_hooks.context ||
+		!session.impl_->test_hooks.story_scene) {
+		return std::nullopt;
+	}
+	return session.impl_->test_hooks.story_scene(
+		session.impl_->test_hooks.context
+	);
+}
+
+std::optional<std::uint32_t>
+ClassicOpSessionTestAccess::story_source_sample_count(
+	const ClassicOpSession &session
+) noexcept
+{
+	if(!session.impl_->test_hooks.context ||
+		!session.impl_->test_hooks.story_source_sample_count) {
+		return std::nullopt;
+	}
+	return session.impl_->test_hooks.story_source_sample_count(
+		session.impl_->test_hooks.context
+	);
+}
+
+std::optional<ClassicStorySessionErrorCode>
+ClassicOpSessionTestAccess::story_failure_code(
+	const ClassicOpSession &session
+) noexcept
+{
+	if(!session.impl_->test_hooks.context ||
+		!session.impl_->test_hooks.story_failure_code) {
+		return std::nullopt;
+	}
+	return session.impl_->test_hooks.story_failure_code(
+		session.impl_->test_hooks.context
+	);
+}
+
+std::optional<std::uint8_t>
+ClassicOpSessionTestAccess::story_failure_detail_code(
+	const ClassicOpSession &session
+) noexcept
+{
+	if(!session.impl_->test_hooks.context ||
+		!session.impl_->test_hooks.story_failure_detail_code) {
+		return std::nullopt;
+	}
+	return session.impl_->test_hooks.story_failure_detail_code(
+		session.impl_->test_hooks.context
+	);
+}
+
+std::expected<void, ClassicOpSessionError>
+ClassicOpSessionTestAccess::force_story_player_win(
+	ClassicOpSession &session
+)
+{
+	if(session.impl_->scene != ClassicOpSessionScene::story ||
+		!session.impl_->test_hooks.context ||
+		!session.impl_->test_hooks.force_story_player_win) {
+		return std::unexpected(session_error(
+			ClassicOpSessionErrorCode::backend_contract_failed
+		));
+	}
+	return session.impl_->test_hooks.force_story_player_win(
+		session.impl_->test_hooks.context
+	);
 }
 
 std::optional<ClassicOpRoute> ClassicOpSession::external_route() const noexcept

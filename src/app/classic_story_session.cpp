@@ -342,6 +342,7 @@ struct ClassicStoryBackend final {
 	std::optional<ClassicMainlGameOverCompletion> game_over_completion{};
 	std::filesystem::path score_path{};
 	GameInit process_start{};
+	std::optional<ClassicStoryTerminal> forced_terminal{};
 
 	ClassicStoryBackend(
 		std::shared_ptr<MainResourceLoader> loader_,
@@ -516,6 +517,12 @@ struct ClassicStoryBackend final {
 	std::expected<ClassicStoryBackendTick, ClassicStorySessionError>
 	advance_main(const ClassicMainInputSample &input)
 	{
+		if(forced_terminal) {
+			return ClassicStoryBackendTick{
+				.surface_changed = true,
+				.ready = true,
+			};
+		}
 		if(!driver || !process) {
 			return std::unexpected(session_error(
 				ClassicStorySessionErrorCode::backend_contract_failed
@@ -547,6 +554,11 @@ struct ClassicStoryBackend final {
 	std::expected<ClassicStoryTerminal, ClassicStorySessionError>
 	main_terminal()
 	{
+		if(forced_terminal) {
+			auto terminal = std::move(*forced_terminal);
+			forced_terminal.reset();
+			return terminal;
+		}
 		if(!driver || !process ||
 			driver->status() != MainProcessDriverStatus::terminal ||
 			!driver->transition()) {
@@ -559,6 +571,93 @@ struct ClassicStoryBackend final {
 			.terminal = process->canonical_state(),
 			.transition = *driver->transition(),
 		};
+	}
+
+	std::expected<void, ClassicStorySessionError>
+	force_player_win_for_route_test()
+	{
+		if(!process || !driver || forced_terminal || process_start.game_mode !=
+				game_mode::story || process_start.story_stage > 8U) {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::backend_contract_failed
+			));
+		}
+
+		auto terminal = process->canonical_state();
+		terminal.route = 2U;
+		terminal.game_mode = game_mode::story;
+		terminal.story_stage = process_start.story_stage;
+		terminal.winner = 0;
+		terminal.p1_score.fill(9U);
+		// finish_main_process() performs this write before the resident
+		// transition is constructed.
+		terminal.resident_rand = static_cast<std::int32_t>(
+			terminal.round_frame
+		);
+
+		SessionTransition transition{};
+		transition.resident = process_start;
+		transition.resident.global_frame = terminal.global_frame;
+		transition.resident.resident_rand = terminal.resident_rand;
+		transition.resident.random_seed = terminal.round_frame;
+		// This route-only seam is armed after exactly one real MAIN frame, a
+		// controlled prefix that cannot change either resident-only field.
+		// CanonicalState deliberately does not duplicate them.
+		transition.resident.story_lives = process_start.story_lives;
+		transition.resident.skill = process_start.skill;
+		transition.resident.winner = terminal.winner;
+		transition.resident.runtime_snapshot.reset();
+		transition.resident.compact_runtime_snapshot.reset();
+		transition.resident.round_start_snapshot.reset();
+		transition.resident.story_stage = static_cast<std::uint8_t>(
+			process_start.story_stage + 1U
+		);
+		transition.resident.last_score = {};
+		transition.resident.last_score[0U] = terminal.p1_score;
+		if(process_start.story_stage == 8U) {
+			transition.resident.story_stage = 99U;
+			transition.high_score_registration = transition.resident;
+			transition.action = SessionAction::ending;
+		} else {
+			transition.resident.paletted_character[1U] =
+				process_start.story_opponents[
+					transition.resident.story_stage
+				];
+			const auto opponent = main_player_selection_from_paletted(
+				transition.resident.paletted_character[1U]
+			);
+			if(!opponent) {
+				return std::unexpected(session_error(
+					ClassicStorySessionErrorCode::backend_contract_failed
+				));
+			}
+			if(transition.resident.story_stage < 7U &&
+				opponent->character >= MainCharacter::chiyuri) {
+				transition.resident.paletted_character[1U] = 1;
+			}
+			transition.action = SessionAction::start_gameplay;
+		}
+
+		// Stages 7 and 8 route directly into a cutscene without the winner
+		// scene that would otherwise publish a handoff Raster.
+		if(process_start.story_stage >= 7U) {
+			if(cutscene_handoff) {
+				return std::unexpected(session_error(
+					ClassicStorySessionErrorCode::backend_contract_failed
+				));
+			}
+			cutscene_handoff.emplace(normalize_main_cutscene_seed(
+				process->raster()
+			));
+		}
+		forced_terminal.emplace(ClassicStoryTerminal{
+			.process_start = process_start,
+			.terminal = terminal,
+			.transition = std::move(transition),
+		});
+		driver.reset();
+		process.reset();
+		return {};
 	}
 
 	std::expected<void, ClassicStorySessionError> start_win(
@@ -1342,12 +1441,26 @@ ClassicStorySessionBackendOperations backend_operations(
 	};
 }
 
+ClassicStorySessionTestHooks backend_test_hooks(
+	ClassicStoryBackend &backend
+) noexcept
+{
+	return {
+		.context = &backend,
+		.force_player_win = [](void *context) {
+			return static_cast<ClassicStoryBackend *>(context)->
+				force_player_win_for_route_test();
+		},
+	};
+}
+
 } // namespace
 
 struct ClassicStorySession::Impl {
 	MainStoryConfig base_config{};
 	std::shared_ptr<void> backend_owner{};
 	ClassicStorySessionBackendOperations operations{};
+	ClassicStorySessionTestHooks test_hooks{};
 	ClassicMainlPlan plan{};
 	std::size_t cursor = 0U;
 	ClassicStorySessionScene scene = ClassicStorySessionScene::failed;
@@ -1360,11 +1473,13 @@ struct ClassicStorySession::Impl {
 		MainStoryConfig config,
 		std::shared_ptr<void> owner,
 		ClassicStorySessionBackendOperations operations_,
+		ClassicStorySessionTestHooks test_hooks_,
 		ClassicMainlPlan plan_
 	) :
 		base_config(std::move(config)),
 		backend_owner(std::move(owner)),
 		operations(operations_),
+		test_hooks(test_hooks_),
 		plan(std::move(plan_))
 	{}
 
@@ -1566,7 +1681,8 @@ ClassicStorySession::create(
 	return create_with_backend(
 		config,
 		std::static_pointer_cast<void>(backend),
-		backend_operations(*backend)
+		backend_operations(*backend),
+		backend_test_hooks(*backend)
 	);
 }
 
@@ -1591,7 +1707,7 @@ ClassicStorySession::create_with_prepared_content(
 	);
 	return create_with_backend(
 		config, std::static_pointer_cast<void>(backend),
-		backend_operations(*backend)
+		backend_operations(*backend), backend_test_hooks(*backend)
 	);
 }
 
@@ -1633,7 +1749,8 @@ std::expected<std::unique_ptr<ClassicStorySession>, ClassicStorySessionError>
 ClassicStorySession::create_with_backend(
 	const MainStoryConfig &config,
 	std::shared_ptr<void> backend_owner,
-	ClassicStorySessionBackendOperations operations
+	ClassicStorySessionBackendOperations operations,
+	ClassicStorySessionTestHooks test_hooks
 )
 {
 	if(!valid_main_story_config(config)) {
@@ -1651,7 +1768,8 @@ ClassicStorySession::create_with_backend(
 		return std::unexpected(plan_error(plan.error()));
 	}
 	auto impl = std::make_unique<Impl>(
-		config, std::move(backend_owner), operations, std::move(*plan)
+		config, std::move(backend_owner), operations, test_hooks,
+		std::move(*plan)
 	);
 	impl->source_sample_count = config.resident.global_frame;
 	if(auto activated = impl->activate(); !activated) {
@@ -1927,6 +2045,59 @@ CoreInput ClassicStorySessionTestAccess::story_main_input(
 ) noexcept
 {
 	return normalize_story_main_input(input, context);
+}
+
+std::expected<void, ClassicStorySessionError>
+ClassicStorySessionTestAccess::force_player_win(
+	ClassicStorySession &session
+)
+{
+	if(session.impl_->scene != ClassicStorySessionScene::main ||
+		!session.impl_->test_hooks.context ||
+		!session.impl_->test_hooks.force_player_win) {
+		return std::unexpected(session_error(
+			ClassicStorySessionErrorCode::backend_contract_failed
+		));
+	}
+	return session.impl_->test_hooks.force_player_win(
+		session.impl_->test_hooks.context
+	);
+}
+
+std::optional<ClassicStorySessionErrorCode>
+ClassicStorySessionTestAccess::failure_code(
+	const ClassicStorySession &session
+) noexcept
+{
+	return session.impl_->failure ?
+		std::optional{session.impl_->failure->code} : std::nullopt;
+}
+
+std::optional<std::uint8_t>
+ClassicStorySessionTestAccess::failure_detail_code(
+	const ClassicStorySession &session
+) noexcept
+{
+	if(!session.impl_->failure) {
+		return std::nullopt;
+	}
+	const auto &error = *session.impl_->failure;
+	if(error.stage_error) {
+		return static_cast<std::uint8_t>(error.stage_error->code);
+	}
+	if(error.main_error) {
+		return static_cast<std::uint8_t>(error.main_error->code);
+	}
+	if(error.win_error) {
+		return static_cast<std::uint8_t>(error.win_error->code);
+	}
+	if(error.cutscene_error) {
+		return static_cast<std::uint8_t>(error.cutscene_error->code);
+	}
+	if(error.registration_error) {
+		return static_cast<std::uint8_t>(error.registration_error->code);
+	}
+	return std::nullopt;
 }
 
 std::uint32_t ClassicStorySession::source_sample_count() const noexcept

@@ -499,13 +499,95 @@ ClassicOpSessionInput ClassicRunnerTestAccess::project_input(
 	return project_session_input(sample, audio);
 }
 
-ClassicOpSessionScene ClassicRunnerTestAccess::scene(
+std::optional<ClassicOpSessionScene> ClassicRunnerTestAccess::scene(
 	const ClassicRunner &runner
 ) noexcept
 {
+	if(runner.impl_->operations.consume != &consume_session) {
+		return std::nullopt;
+	}
 	return static_cast<const ClassicOpSession *>(
 		runner.impl_->operations.context
 	)->scene();
+}
+
+std::optional<ClassicStorySessionScene>
+ClassicRunnerTestAccess::story_scene(
+	const ClassicRunner &runner
+) noexcept
+{
+	if(runner.impl_->operations.consume != &consume_session) {
+		return std::nullopt;
+	}
+	return ClassicOpSessionTestAccess::story_scene(
+		*static_cast<const ClassicOpSession *>(
+			runner.impl_->operations.context
+		)
+	);
+}
+
+std::optional<std::uint32_t>
+ClassicRunnerTestAccess::story_source_sample_count(
+	const ClassicRunner &runner
+) noexcept
+{
+	if(runner.impl_->operations.consume != &consume_session) {
+		return std::nullopt;
+	}
+	return ClassicOpSessionTestAccess::story_source_sample_count(
+		*static_cast<const ClassicOpSession *>(
+			runner.impl_->operations.context
+		)
+	);
+}
+
+std::optional<ClassicStorySessionErrorCode>
+ClassicRunnerTestAccess::story_failure_code(
+	const ClassicRunner &runner
+) noexcept
+{
+	if(runner.impl_->operations.consume != &consume_session) {
+		return std::nullopt;
+	}
+	return ClassicOpSessionTestAccess::story_failure_code(
+		*static_cast<const ClassicOpSession *>(
+			runner.impl_->operations.context
+		)
+	);
+}
+
+std::optional<std::uint8_t>
+ClassicRunnerTestAccess::story_failure_detail_code(
+	const ClassicRunner &runner
+) noexcept
+{
+	if(runner.impl_->operations.consume != &consume_session) {
+		return std::nullopt;
+	}
+	return ClassicOpSessionTestAccess::story_failure_detail_code(
+		*static_cast<const ClassicOpSession *>(
+			runner.impl_->operations.context
+		)
+	);
+}
+
+std::expected<void, ClassicRunnerError>
+ClassicRunnerTestAccess::force_story_player_win(
+	ClassicRunner &runner
+)
+{
+	if(runner.impl_->operations.consume != &consume_session) {
+		return std::unexpected(runner_error(
+			ClassicRunnerErrorCode::invalid_request
+		));
+	}
+	auto forced = ClassicOpSessionTestAccess::force_story_player_win(
+		*static_cast<ClassicOpSession *>(runner.impl_->operations.context)
+	);
+	if(!forced) {
+		return std::unexpected(session_error(forced.error()));
+	}
+	return {};
 }
 
 std::expected<std::vector<std::byte>, ClassicRunnerError>

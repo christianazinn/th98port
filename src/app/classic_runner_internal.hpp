@@ -42,9 +42,20 @@ struct ClassicRunnerTestAccess final {
 		const LogicalTickInput &sample,
 		ClassicAudioStatus audio = {.volume = 255U}
 	) noexcept;
-	[[nodiscard]] static ClassicOpSessionScene scene(
+	[[nodiscard]] static std::optional<ClassicOpSessionScene> scene(
 		const ClassicRunner &runner
 	) noexcept;
+	[[nodiscard]] static std::optional<ClassicStorySessionScene> story_scene(
+		const ClassicRunner &runner
+	) noexcept;
+	[[nodiscard]] static std::optional<std::uint32_t>
+	story_source_sample_count(const ClassicRunner &runner) noexcept;
+	[[nodiscard]] static std::optional<ClassicStorySessionErrorCode>
+	story_failure_code(const ClassicRunner &runner) noexcept;
+	[[nodiscard]] static std::optional<std::uint8_t>
+	story_failure_detail_code(const ClassicRunner &runner) noexcept;
+	[[nodiscard]] static std::expected<void, ClassicRunnerError>
+	force_story_player_win(ClassicRunner &runner);
 
 	[[nodiscard]] static std::expected<
 		std::vector<std::byte>,
