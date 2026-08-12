@@ -124,11 +124,11 @@ void test_main_feedback_policy()
 	}
 }
 
-bool kotohime_red(
+bool kotohime_component(
 	void *,
 	const th03::BombFrameStep &,
 	std::uint8_t,
-	std::uint8_t &red_out
+	std::uint8_t &component_out
 ) noexcept;
 
 void append_u8(std::vector<std::byte> &bytes, std::uint8_t value)
@@ -1246,7 +1246,7 @@ void test_live_bomb_first_frame()
 				.character = static_cast<MainCharacter>(character),
 				.palette = MainPaletteVariant::second,
 			};
-			config.kotohime_compatibility.red_provider = kotohime_red;
+			config.kotohime_compatibility.component_provider = kotohime_component;
 			auto resources = make_resources(config.player_one, config.player_two);
 			auto created = create_synthetic(config, resources);
 			expect(static_cast<bool>(created),
@@ -1943,18 +1943,18 @@ void test_story_factory_transaction_and_lifetime()
 	);
 }
 
-bool kotohime_red(
+bool kotohime_component(
 	void *,
 	const th03::BombFrameStep &,
 	std::uint8_t,
-	std::uint8_t &red_out
+	std::uint8_t &component_out
 ) noexcept
 {
-	red_out = 0U;
+	component_out = 0U;
 	return true;
 }
 
-void test_invalid_config_and_kotohime_policy()
+void test_invalid_config_and_kotohime_normalization()
 {
 	MainDirectVsConfig invalid{};
 	invalid.rank = 4U;
@@ -1997,13 +1997,13 @@ void test_invalid_config_and_kotohime_policy()
 	};
 	auto resources = make_resources(kotohime.player_one, kotohime.player_two);
 	result = create_synthetic(kotohime, resources);
-	expect(!result && result.error().code == MainProcessErrorCode::invalid_config,
-		"Kotohime requires an explicit bomb-fade compatibility policy");
+	expect(static_cast<bool>(result),
+		"Kotohime constructs with the deterministic default normalization");
 
-	kotohime.kotohime_compatibility.red_provider = kotohime_red;
+	kotohime.kotohime_compatibility.component_provider = kotohime_component;
 	result = create_synthetic(kotohime, resources);
 	expect(static_cast<bool>(result),
-		"Kotohime constructs when the explicit compatibility policy is present");
+		"Kotohime retains an optional private research provider");
 }
 
 MainStoryConfig story_config(
@@ -2054,7 +2054,7 @@ MainStoryConfig story_config(
 		resident.story_opponents[current] = paletted;
 	}
 	resident.paletted_character[1U] = resident.story_opponents[stage];
-	config.kotohime_compatibility.red_provider = kotohime_red;
+	config.kotohime_compatibility.component_provider = kotohime_component;
 	return config;
 }
 
@@ -2157,7 +2157,7 @@ void test_classic_demo_handoff_and_runtime()
 	auto stage = ClassicMainlStageTestAccess::
 		create_demo_with_synthetic_resources(
 			completion,
-			{.red_provider = kotohime_red},
+			{.component_provider = kotohime_component},
 			stage_resources,
 			mainl_stage_text_assets(),
 			*stage_font
@@ -2357,7 +2357,7 @@ void test_classic_vs_handoff_transaction_and_lifetime()
 				auto created_stage = ClassicMainlStageTestAccess::
 					create_vs_with_synthetic_resources(
 						completion,
-						{.red_provider = kotohime_red},
+						{.component_provider = kotohime_component},
 						stage_resources,
 						mainl_stage_text_assets(),
 						*stage_font
@@ -2374,7 +2374,7 @@ void test_classic_vs_handoff_transaction_and_lifetime()
 			transition =
 				ClassicMainlStageTestAccess::create_ready_vs_with_handoff(
 					init,
-					{.red_provider = kotohime_red},
+					{.component_provider = kotohime_component},
 					handoff_raster
 				);
 		}
@@ -2808,7 +2808,7 @@ bool run_local_authentic_gate(
 			MainDirectVsConfig config{};
 			config.player_one = selection(player_one);
 			config.player_two = selection(player_two);
-			config.kotohime_compatibility.red_provider = kotohime_red;
+			config.kotohime_compatibility.component_provider = kotohime_component;
 			auto resources = loader.load_direct_vs(
 				config.player_one,
 				config.player_two
@@ -2894,7 +2894,7 @@ int main(int argc, char **argv)
 	test_decode_and_staging_rejections();
 	test_sticky_presentation_preflight();
 	test_story_factory_transaction_and_lifetime();
-	test_invalid_config_and_kotohime_policy();
+	test_invalid_config_and_kotohime_normalization();
 	test_classic_demo_handoff_and_runtime();
 	test_classic_vs_handoff_transaction_and_lifetime();
 	test_story_handoff_transaction_and_shared_lifetime();

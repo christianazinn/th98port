@@ -263,17 +263,17 @@ void MainBombPaletteInterpreter::bomb_frame_step(
 			return;
 		}
 		const auto kotohime_fade = fade_after_shift(frame);
-		std::uint8_t kotohime_red = 0U;
-		if(kotohime_compatibility_.red_provider == nullptr ||
-			!kotohime_compatibility_.red_provider(
+		auto kotohime_red_green = byte_shift_left(kotohime_fade, 1U);
+		if(kotohime_compatibility_.component_provider != nullptr &&
+			!kotohime_compatibility_.component_provider(
 				kotohime_compatibility_.context,
 				step,
 				kotohime_fade,
-				kotohime_red
+				kotohime_red_green
 			)) {
 			// The source writes PaletteTone first, but preserving an unobservable
 			// partial state would make this compatibility failure non-atomic.
-			status_ = MainBombPaletteStatus::unsupported_kotohime_fade;
+			status_ = MainBombPaletteStatus::rejected_kotohime_component;
 			return;
 		}
 		palette_->set_tone_deferred(*raster_, 100);
@@ -281,7 +281,7 @@ void MainBombPaletteInterpreter::bomb_frame_step(
 			*palette_,
 			*raster_,
 			*player,
-			{kotohime_red, kotohime_fade, kotohime_fade}
+			{kotohime_red_green, kotohime_red_green, kotohime_fade}
 		);
 		return;
 	}
@@ -305,7 +305,11 @@ void MainBombPaletteInterpreter::bomb_frame_step(
 			*palette_,
 			*raster_,
 			*player,
-			{byte_shift_left(kana_fade, 1U), kana_fade, kana_fade}
+			{
+				byte_shift_left(kana_fade, 1U),
+				byte_shift_left(kana_fade, 1U),
+				kana_fade,
+			}
 		);
 		return;
 	}

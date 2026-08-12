@@ -1015,6 +1015,15 @@ coverage. A row never authorizes renderer state in core.
 | Score/gauge/combo/result | Report each value at its source boundary: result before control/bonus, score before Story extend, combo before settlement, and transition before mutation | Render exact displayed values and transitions without feeding them back |
 | OP `resident->rand` cadence | Application computes exact logical-wait-derived resident value and supplies it through `GameInit` | Scene rendering must not add or omit logical waits based on host speed |
 
+The stock MAIN binary resolves a source-level ambiguity in both late Bomb
+branches: generated code reuses `DL` for green after loading the doubled local
+for red, then separately loads the computed fade for blue. Kana is therefore
+`{2*fade, 2*fade, fade}`. Kotohime is `{2*stale, 2*stale, fade}`, where `stale`
+is an uninitialized local; the native release policy substitutes Kana's
+contemporaneous fade local and explicitly does not claim undefined stack
+residue fidelity. A research-only provider may replace the final doubled R/G
+component without changing gameplay or replay state.
+
 For any new seam discovered during pixel work, the resolution rule is simple:
 if it can affect later gameplay or shared RNG, it belongs in core at the exact
 source schedule position. If it cannot, it belongs in presenter state. Never

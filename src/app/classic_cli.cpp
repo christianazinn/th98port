@@ -114,9 +114,6 @@ constexpr std::size_t option_count =
 	if(text == "--seed") {
 		return ClassicCliOption::seed;
 	}
-	if(text == "--kotohime-zero-red") {
-		return ClassicCliOption::kotohime_zero_red;
-	}
 	if(text == "--smoke-ticks") {
 		return ClassicCliOption::smoke_ticks;
 	}
@@ -128,8 +125,7 @@ constexpr std::size_t option_count =
 ) noexcept
 {
 	return option != ClassicCliOption::help &&
-		option != ClassicCliOption::classic &&
-		option != ClassicCliOption::kotohime_zero_red;
+		option != ClassicCliOption::classic;
 }
 
 } // namespace
@@ -166,9 +162,6 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 			continue;
 		}
 		if(!option_takes_value(*option)) {
-			if(*option == ClassicCliOption::kotohime_zero_red) {
-				request.kotohime_zero_red = true;
-			}
 			continue;
 		}
 		if(index + 1U >= arguments.size()) {
@@ -240,7 +233,6 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 		case ClassicCliOption::none:
 		case ClassicCliOption::help:
 		case ClassicCliOption::classic:
-		case ClassicCliOption::kotohime_zero_red:
 			break;
 		}
 	}

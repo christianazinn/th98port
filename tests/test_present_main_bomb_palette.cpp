@@ -139,7 +139,10 @@ void test_character_palette_formulas()
 	kana.bomb_frame_step(step(PlayerId::p1, 5U, 66U));
 	expect_pending(kana_raster, 0U, {0U, 0U, 0U}, "Kana dark flash");
 	kana.bomb_frame_step(step(PlayerId::p1, 5U, 144U));
-	expect_pending(kana_raster, 0U, {254U, 127U, 127U}, "Kana late red double");
+	expect_pending(
+		kana_raster, 0U, {254U, 254U, 127U},
+		"Kana generated late stores reuse the doubled byte for red and green"
+	);
 
 	Raster rikako_raster;
 	MainPaletteState rikako_palette;
@@ -176,18 +179,18 @@ void test_character_palette_formulas()
 	expect_pending(chiyuri_raster, 0U, {254U, 127U, 127U}, "Chiyuri late red double");
 }
 
-bool kotohime_red_provider(
+bool kotohime_component_provider(
 	void *context,
 	const BombFrameStep &observed,
-	std::uint8_t fade_green_blue,
-	std::uint8_t &red_out
+	std::uint8_t fade_blue,
+	std::uint8_t &red_green_out
 ) noexcept
 {
 	const auto expected_frame = *static_cast<const std::uint8_t *>(context);
-	if(observed.bomb_frame != expected_frame || fade_green_blue != 127U) {
+	if(observed.bomb_frame != expected_frame || fade_blue != 127U) {
 		return false;
 	}
-	red_out = 0xA5U;
+	red_green_out = 0xA5U;
 	return true;
 }
 
@@ -207,25 +210,22 @@ void test_kotohime_compatibility_is_atomic()
 	Raster raster;
 	MainPaletteState palette;
 	MainBombPaletteInterpreter default_interpreter(raster, palette);
-	const auto before_palette = raster.pending_palette();
-	const auto before_tone = raster.palette_tone();
 	default_interpreter.bomb_frame_step(step(PlayerId::p1, 4U, 144U));
 	expect(
-		default_interpreter.status() ==
-			MainBombPaletteStatus::unsupported_kotohime_fade,
-		"Kotohime late fade explicitly reports unsupported without a provider"
+		default_interpreter.status() == MainBombPaletteStatus::ready &&
+			raster.palette_tone() == 100 && palette.dirty(),
+		"Kotohime defaults to the adjacent Kana late-fade normalization"
 	);
-	expect(
-		raster.pending_palette() == before_palette &&
-			raster.palette_tone() == before_tone && !palette.dirty(),
-		"unsupported Kotohime fade is palette-atomic and fail-closed"
+	expect_pending(
+		raster, 0U, {254U, 254U, 127U},
+		"default Kotohime doubles the normalized fade into red and green"
 	);
 
 	std::uint8_t expected_frame = 144U;
 	MainBombPaletteInterpreter compatible(
 		raster,
 		palette,
-		KotohimeBombFadeCompatibility{kotohime_red_provider, &expected_frame}
+		KotohimeBombFadeCompatibility{kotohime_component_provider, &expected_frame}
 	);
 	compatible.bomb_frame_step(step(PlayerId::p1, 4U, 144U));
 	expect(
@@ -236,8 +236,26 @@ void test_kotohime_compatibility_is_atomic()
 	expect_pending(
 		raster,
 		0U,
-		{0xA5U, 127U, 127U},
-		"Kotohime provider returns the final stored red byte"
+		{0xA5U, 0xA5U, 127U},
+		"Kotohime provider returns the final stored red and green byte"
+	);
+
+	Raster rejected_raster;
+	MainPaletteState rejected_palette;
+	auto rejecting_provider = [](
+		void *, const BombFrameStep &, std::uint8_t, std::uint8_t &
+	) noexcept { return false; };
+	MainBombPaletteInterpreter rejected(
+		rejected_raster, rejected_palette,
+		KotohimeBombFadeCompatibility{rejecting_provider, nullptr}
+	);
+	const auto rejected_before = rejected_raster.pending_palette();
+	rejected.bomb_frame_step(step(PlayerId::p1, 4U, 144U));
+	expect(
+		rejected.status() == MainBombPaletteStatus::rejected_kotohime_component &&
+			rejected_raster.pending_palette() == rejected_before &&
+			!rejected_palette.dirty(),
+		"a rejecting research provider preserves atomic failure"
 	);
 
 	compatible.bomb_frame_step(step(PlayerId::p2, 4U, 64U));

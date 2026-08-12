@@ -40,8 +40,8 @@ struct MainDirectVsConfig {
 	std::uint8_t rank = 1U;
 	std::uint8_t key_mode = 0U;
 	GameOptions game_options{};
-	// Required only if either selected character is Kotohime. The callback and
-	// its context must remain valid for this process's complete lifetime.
+	// Optional Kotohime research override. When supplied, the callback and its
+	// context must remain valid for this process's complete lifetime.
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
 };
 

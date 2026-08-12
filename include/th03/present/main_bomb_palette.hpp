@@ -13,23 +13,23 @@ enum class MainBombPaletteStatus : std::uint8_t {
 	invalid_player,
 	invalid_paletted_character,
 	missing_baseline,
-	unsupported_kotohime_fade,
+	rejected_kotohime_component,
 };
 
 // kotohime_bomb()'s late fade reads a source-local byte before it was
-// initialized, then doubles its value for the red component. A compatibility
-// provider supplies the *final stored RGB8 red byte*, after that doubling; it
-// must return false when its environment cannot provide a compatible value.
-// This stays deliberately outside the gameplay fact and deterministic core.
-using KotohimeBombFadeRedProvider = bool (*) (
+// initialized, doubles it, and stores the result to both red and green before
+// storing the computed fade to blue. The deterministic default substitutes
+// the adjacent kana_bomb() fade local. An optional research provider can
+// instead supply the final doubled R/G byte and fail atomically.
+using KotohimeBombFadeComponentProvider = bool (*) (
 	void *context,
 	const BombFrameStep &step,
-	std::uint8_t fade_green_blue,
-	std::uint8_t &red_out
+	std::uint8_t fade_blue,
+	std::uint8_t &red_green_out
 ) noexcept;
 
 struct KotohimeBombFadeCompatibility {
-	KotohimeBombFadeRedProvider red_provider = nullptr;
+	KotohimeBombFadeComponentProvider component_provider = nullptr;
 	void *context = nullptr;
 };
 
@@ -52,9 +52,9 @@ public:
 	void bomb_frame_step(const BombFrameStep &step) noexcept override;
 	void bomb_finished(const BombFinished &finished) noexcept override;
 
-	// Status is sticky once a callback reports an error. An invalid or
-	// unsupported step makes no Raster or MainPaletteState mutation, but does
-	// not prevent later independently valid presentation facts from rendering.
+	// Status is sticky once a callback reports an error. An invalid step or a
+	// rejected research override makes no Raster or MainPaletteState mutation,
+	// but does not prevent later independently valid facts from rendering.
 	[[nodiscard]] MainBombPaletteStatus status() const noexcept;
 
 private:

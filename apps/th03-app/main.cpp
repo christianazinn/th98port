@@ -111,20 +111,6 @@ load_rhythm_rom(const std::filesystem::path &path)
 	}
 }
 
-bool kotohime_zero_red(
-	void *,
-	const th03::BombFrameStep &,
-	std::uint8_t,
-	std::uint8_t &red_out
-) noexcept
-{
-	// The donor reads an uninitialized source-local byte here. Zero is an
-	// explicit deterministic developer compatibility policy, not a claim about
-	// the original runtime value; VS-3 captures must validate any release policy.
-	red_out = 0U;
-	return true;
-}
-
 void print_usage()
 {
 	std::cout
@@ -132,13 +118,12 @@ void print_usage()
 			"--mainl <MAINL.EXE> --op <OP.EXE> --font <FONT.ROM>\n"
 		<< "       [--config <YUME.CFG>] [--score <YUME.NEM>] [--seed n] "
 			"[--rhythm-rom <YM2608.ROM>] [--tick-rate <ticks>/<seconds>] "
-			"[--kotohime-zero-red] "
 			"[--smoke-ticks n]\n"
 		<< "   or: th03-app --vs --data <root> --main <MAIN.EXE> "
 			"--font <FONT.ROM>\n"
 		<< "       [--p1 <character[:first|second]>] "
 			"[--p2 <character[:first|second]>] [--rank 0..3] [--seed n] "
-			"[--tick-rate <ticks>/<seconds>] [--kotohime-zero-red] "
+			"[--tick-rate <ticks>/<seconds>] "
 			"[--smoke-ticks n]\n"
 		<< "characters: reimu mima marisa ellen kotohime kana rikako "
 			"chiyuri yumemi\n"
@@ -152,8 +137,8 @@ void print_usage()
 			"PCM when SDL playback is available. Supply an exact 8 KiB YM2608 "
 			"ADPCM-A image with --rhythm-rom; otherwise rhythm is deterministically "
 			"silent.\n"
-		<< "Kotohime requires --kotohime-zero-red, an unresolved developer "
-			"compatibility policy rather than an authenticity claim.\n";
+		<< "Kotohime's source-uninitialized late Bomb local is deterministically "
+			"normalized from the adjacent Kana fade routine.\n";
 }
 
 const char *name(th03::app::ClassicRunnerErrorCode code) noexcept
@@ -243,7 +228,6 @@ const char *name(th03::app::ClassicCliOption option) noexcept
 	case th03::app::ClassicCliOption::score: return "score";
 	case th03::app::ClassicCliOption::tick_rate: return "tick-rate";
 	case th03::app::ClassicCliOption::seed: return "seed";
-	case th03::app::ClassicCliOption::kotohime_zero_red: return "kotohime-zero-red";
 	case th03::app::ClassicCliOption::smoke_ticks: return "smoke-ticks";
 	}
 	return "unknown";
@@ -320,7 +304,6 @@ const char *name(th03::app::DirectVsCliErrorCode code) noexcept
 	case th03::app::DirectVsCliErrorCode::invalid_tick_rate: return "invalid-tick-rate";
 	case th03::app::DirectVsCliErrorCode::invalid_rank: return "invalid-rank";
 	case th03::app::DirectVsCliErrorCode::invalid_seed: return "invalid-seed";
-	case th03::app::DirectVsCliErrorCode::kotohime_policy_required: return "kotohime-policy-required";
 	case th03::app::DirectVsCliErrorCode::invalid_smoke_ticks: return "invalid-smoke-ticks";
 	}
 	return "unknown";
@@ -340,7 +323,6 @@ const char *name(th03::app::DirectVsCliOption option) noexcept
 	case th03::app::DirectVsCliOption::tick_rate: return "tick-rate";
 	case th03::app::DirectVsCliOption::rank: return "rank";
 	case th03::app::DirectVsCliOption::seed: return "seed";
-	case th03::app::DirectVsCliOption::kotohime_zero_red: return "kotohime-zero-red";
 	case th03::app::DirectVsCliOption::smoke_ticks: return "smoke-ticks";
 	}
 	return "unknown";
@@ -683,11 +665,6 @@ namespace {
 
 int run_direct_vs(th03::app::DirectVsCliRequest parsed)
 {
-	if(parsed.kotohime_zero_red) {
-		parsed.launch.process.kotohime_compatibility = {
-			.red_provider = &kotohime_zero_red,
-		};
-	}
 	auto process = th03::app::load_direct_vs_process(std::move(parsed.launch));
 	if(!process) {
 		return fail_content(process.error());
@@ -828,11 +805,6 @@ int run_direct_vs(th03::app::DirectVsCliRequest parsed)
 
 int run_classic(th03::app::ClassicCliRequest parsed)
 {
-	if(parsed.kotohime_zero_red) {
-		parsed.launch.kotohime_compatibility = {
-			.red_provider = &kotohime_zero_red,
-		};
-	}
 	const auto data_root = parsed.launch.content.data_root;
 	std::vector<std::byte> rhythm_rom{};
 	if(parsed.rhythm_rom) {

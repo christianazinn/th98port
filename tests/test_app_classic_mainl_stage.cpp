@@ -396,7 +396,7 @@ MainStoryConfig story_config(
 		resident.story_opponents[current] = paletted;
 	}
 	resident.paletted_character[1U] = resident.story_opponents[stage];
-	config.kotohime_compatibility.red_provider = &kotohime_fade;
+	config.kotohime_compatibility.component_provider = &kotohime_fade;
 	return config;
 }
 
@@ -1065,7 +1065,7 @@ void test_all_classic_vs_modes_from_selection()
 		auto stage = ClassicMainlStageTestAccess::
 			create_vs_with_synthetic_resources(
 				completion,
-				{.red_provider = &kotohime_fade},
+				{.component_provider = &kotohime_fade},
 				resources,
 				text_assets(),
 				font
@@ -1109,7 +1109,7 @@ void test_classic_vs_completion_validation()
 		auto rejected = ClassicMainlStageTestAccess::
 			create_vs_with_synthetic_resources(
 				completion,
-				{.red_provider = &kotohime_fade},
+				{.component_provider = &kotohime_fade},
 				valid_resources,
 				text_assets(),
 				font
@@ -1192,7 +1192,7 @@ void test_classic_vs_completion_validation()
 	auto canceled_stage = ClassicMainlStageTestAccess::
 		create_vs_with_synthetic_resources(
 			canceled,
-			{.red_provider = &kotohime_fade},
+			{.component_provider = &kotohime_fade},
 			valid_resources,
 			text_assets(),
 			font
@@ -1205,18 +1205,17 @@ void test_classic_vs_completion_validation()
 	auto kotohime = vs_completion(
 		ClassicOpSelectionMode::vs_1p_cpu, resident
 	);
-	auto missing_kotohime_policy = ClassicMainlStageTestAccess::
+	auto kotohime_resources = resources_for(kotohime);
+	auto default_kotohime = ClassicMainlStageTestAccess::
 		create_vs_with_synthetic_resources(
 			kotohime,
 			{},
-			valid_resources,
+			kotohime_resources,
 			text_assets(),
 			font
 		);
-	expect(!missing_kotohime_policy &&
-		missing_kotohime_policy.error().code ==
-			ClassicMainlStageErrorCode::invalid_config,
-		"Kotohime VS entry requires the process-lifetime compatibility provider");
+	expect(default_kotohime.has_value(),
+		"Kotohime VS entry accepts the deterministic default normalization");
 
 	auto same_base = vs_completion(
 		ClassicOpSelectionMode::vs_1p_2p,
@@ -1226,7 +1225,7 @@ void test_classic_vs_completion_validation()
 	auto same_base_stage = ClassicMainlStageTestAccess::
 		create_vs_with_synthetic_resources(
 			same_base,
-			{.red_provider = &kotohime_fade},
+			{.component_provider = &kotohime_fade},
 			same_base_resources,
 			text_assets(),
 			font
@@ -1241,7 +1240,7 @@ void test_classic_vs_completion_validation()
 	auto rejected = ClassicMainlStageTestAccess::
 		create_vs_with_synthetic_resources(
 			story_completion,
-			{.red_provider = &kotohime_fade},
+			{.component_provider = &kotohime_fade},
 			valid_resources,
 			text_assets(),
 			font
@@ -1260,7 +1259,7 @@ void test_all_automatic_demo_routes()
 		auto stage = ClassicMainlStageTestAccess::
 			create_demo_with_synthetic_resources(
 				completion,
-				{.red_provider = &kotohime_fade},
+				{.component_provider = &kotohime_fade},
 				resources,
 				text_assets(),
 				font
@@ -1296,7 +1295,7 @@ void test_all_automatic_demo_routes()
 	auto rejected = ClassicMainlStageTestAccess::
 		create_demo_with_synthetic_resources(
 			invalid_completion,
-			{.red_provider = &kotohime_fade},
+			{.component_provider = &kotohime_fade},
 			resources,
 			text_assets(),
 			font
@@ -1311,7 +1310,7 @@ void test_all_automatic_demo_routes()
 	rejected = ClassicMainlStageTestAccess::
 		create_demo_with_synthetic_resources(
 			wrong_random,
-			{.red_provider = &kotohime_fade},
+			{.component_provider = &kotohime_fade},
 			resources,
 			text_assets(),
 			font
@@ -1326,7 +1325,7 @@ void test_all_automatic_demo_routes()
 	rejected = ClassicMainlStageTestAccess::
 		create_demo_with_synthetic_resources(
 			resumed,
-			{.red_provider = &kotohime_fade},
+			{.component_provider = &kotohime_fade},
 			resources,
 			text_assets(),
 			font
@@ -1337,13 +1336,12 @@ void test_all_automatic_demo_routes()
 
 	auto kotohime = demo_completion(demo_resident(4U));
 	auto kotohime_resources = resources_for(kotohime);
-	auto missing_policy = ClassicMainlStageTestAccess::
+	auto default_kotohime = ClassicMainlStageTestAccess::
 		create_demo_with_synthetic_resources(
 			kotohime, {}, kotohime_resources, text_assets(), font
 		);
-	expect(!missing_policy && missing_policy.error().code ==
-		ClassicMainlStageErrorCode::invalid_config,
-		"Demo 4 requires the process-lifetime Kotohime compatibility provider");
+	expect(default_kotohime.has_value(),
+		"Demo 4 accepts the deterministic Kotohime normalization");
 }
 
 } // namespace

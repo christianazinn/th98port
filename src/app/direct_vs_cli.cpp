@@ -150,9 +150,6 @@ std::optional<DirectVsCliOption> option_from_text(
 	if(text == "--seed") {
 		return DirectVsCliOption::seed;
 	}
-	if(text == "--kotohime-zero-red") {
-		return DirectVsCliOption::kotohime_zero_red;
-	}
 	if(text == "--smoke-ticks") {
 		return DirectVsCliOption::smoke_ticks;
 	}
@@ -161,8 +158,7 @@ std::optional<DirectVsCliOption> option_from_text(
 
 bool option_takes_value(DirectVsCliOption option) noexcept
 {
-	return option != DirectVsCliOption::help && option != DirectVsCliOption::vs &&
-		option != DirectVsCliOption::kotohime_zero_red;
+	return option != DirectVsCliOption::help && option != DirectVsCliOption::vs;
 }
 
 } // namespace
@@ -200,9 +196,6 @@ std::expected<DirectVsCliRequest, DirectVsCliError> parse_direct_vs_cli(
 			));
 		}
 		if(!option_takes_value(*option)) {
-			if(*option == DirectVsCliOption::kotohime_zero_red) {
-				request.kotohime_zero_red = true;
-			}
 			continue;
 		}
 		if(index + 1U >= arguments.size()) {
@@ -286,8 +279,6 @@ std::expected<DirectVsCliRequest, DirectVsCliError> parse_direct_vs_cli(
 			request.launch.process.seed = *seed;
 			break;
 		}
-		case DirectVsCliOption::kotohime_zero_red:
-			break;
 		case DirectVsCliOption::smoke_ticks: {
 			const auto ticks = parse_u64(value);
 			if(!ticks || *ticks == 0U) {
@@ -321,15 +312,6 @@ std::expected<DirectVsCliRequest, DirectVsCliError> parse_direct_vs_cli(
 				arguments.size()
 			));
 		}
-	}
-	if((request.launch.process.player_one.character == MainCharacter::kotohime ||
-		request.launch.process.player_two.character == MainCharacter::kotohime) &&
-		!request.kotohime_zero_red) {
-		return std::unexpected(cli_error(
-			DirectVsCliErrorCode::kotohime_policy_required,
-			DirectVsCliOption::kotohime_zero_red,
-			arguments.size()
-		));
 	}
 	request.launch.process.game_options.input_protocol = InputProtocol::live;
 	return request;

@@ -166,11 +166,6 @@ struct MainFeedbackPolicy final {
 	return true;
 }
 
-[[nodiscard]] bool selects_kotohime(MainPlayerSelection selection) noexcept
-{
-	return selection.character == MainCharacter::kotohime;
-}
-
 [[nodiscard]] MainResourceKey player_key(
 	MainResourceRole role,
 	MainPlayerSelection selection
@@ -524,10 +519,7 @@ bool valid_main_direct_vs_config(const MainDirectVsConfig &config) noexcept
 		valid_selection(config.player_two) && config.rank <= 3U &&
 		config.key_mode <= 2U &&
 		(config.game_options.input_protocol == InputProtocol::live ||
-		 config.game_options.input_protocol == InputProtocol::recorded_replay) &&
-		(!(selects_kotohime(config.player_one) ||
-		   selects_kotohime(config.player_two)) ||
-		 config.kotohime_compatibility.red_provider != nullptr);
+		 config.game_options.input_protocol == InputProtocol::recorded_replay);
 }
 
 std::optional<MainPlayerSelection> main_player_selection_from_paletted(
@@ -656,11 +648,6 @@ bool valid_main_story_config(const MainStoryConfig &config) noexcept
 		if(digit != 0U) {
 			return false;
 		}
-	}
-	if((player_one->character == MainCharacter::kotohime ||
-		player_two->character == MainCharacter::kotohime) &&
-		config.kotohime_compatibility.red_provider == nullptr) {
-		return false;
 	}
 	return true;
 }

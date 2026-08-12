@@ -104,9 +104,6 @@ void test_all_character_palette_names()
 			auto arguments = valid_arguments();
 			arguments.push_back("--p1");
 			arguments.push_back(selection);
-			if(names[character] == "kotohime") {
-				arguments.push_back("--kotohime-zero-red");
-			}
 			const auto parsed = th03::app::parse_direct_vs_cli(arguments);
 			expect(parsed && static_cast<std::size_t>(
 				parsed->launch.process.player_one.character
@@ -152,14 +149,9 @@ void test_cli_rejections()
 		"--vs", "--data", "d", "--main", "m", "--font", "f",
 		"--tick-rate", "1/1", "--smoke-ticks", "0",
 	});
-	const auto kotohime_without_policy = parse({
+	const auto kotohime = parse({
 		"--vs", "--data", "d", "--main", "m", "--font", "f",
 		"--tick-rate", "1/1", "--p1", "kotohime:first",
-	});
-	const auto kotohime_with_policy = parse({
-		"--vs", "--data", "d", "--main", "m", "--font", "f",
-		"--tick-rate", "1/1", "--p1", "kotohime:first",
-		"--kotohime-zero-red",
 	});
 	expect(!unknown && unknown.error().code ==
 		th03::app::DirectVsCliErrorCode::unknown_option &&
@@ -194,11 +186,9 @@ void test_cli_rejections()
 	expect(!bad_smoke && bad_smoke.error().code ==
 		th03::app::DirectVsCliErrorCode::invalid_smoke_ticks,
 		"developer smoke bound must consume at least one process sample");
-	expect(!kotohime_without_policy &&
-		kotohime_without_policy.error().code ==
-			th03::app::DirectVsCliErrorCode::kotohime_policy_required &&
-		kotohime_with_policy && kotohime_with_policy->kotohime_zero_red,
-		"Kotohime requires an explicit unresolved developer compatibility policy");
+	expect(kotohime && kotohime->launch.process.player_one.character ==
+		th03::app::MainCharacter::kotohime,
+		"Kotohime uses the deterministic release normalization by default");
 }
 
 class TemporaryDirectory {

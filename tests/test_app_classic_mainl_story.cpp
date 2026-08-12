@@ -207,7 +207,7 @@ MainStoryConfig story_config(
 	}
 	config.resident.paletted_character[1U] =
 		config.resident.story_opponents[stage];
-	config.kotohime_compatibility.red_provider = &kotohime_fade;
+	config.kotohime_compatibility.component_provider = &kotohime_fade;
 	return config;
 }
 
@@ -339,11 +339,11 @@ void test_story_config_and_selection_boundary()
 		"Story config rejects impossible retained P2 score");
 	invalid = story_config(3U);
 	invalid.kotohime_compatibility = {};
-	expect(!valid_main_story_config(invalid),
-		"Kotohime Story config requires compatibility policy");
-	invalid.kotohime_compatibility.red_provider = &kotohime_fade;
 	expect(valid_main_story_config(invalid),
-		"Kotohime Story config accepts explicit compatibility policy");
+		"Kotohime Story config accepts the deterministic normalization");
+	invalid.kotohime_compatibility.component_provider = &kotohime_fade;
+	expect(valid_main_story_config(invalid),
+		"Kotohime Story config retains an optional research provider");
 }
 
 void test_fresh_story_start()

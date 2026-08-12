@@ -293,9 +293,11 @@ requirement. The first launch allows selecting each of the nine character
 identities and supported VS mode parameters explicitly. Replay
 playback/recording may be wired at this input boundary later through
 `th03_formats` and `th03_replay`; it must not delay direct VS.
-Kotohime is not silently labeled authentic: selecting her requires the
-developer-only `--kotohime-zero-red` compatibility policy until the donor's
-uninitialized Bomb-fade byte is resolved by evidence.
+Kotohime is not silently labeled pixel-authentic in her undefined late Bomb
+branch. The public launcher uses the documented adjacent-Kana deterministic
+normalization `{2*fade, 2*fade, fade}`; it neither reads host-stack residue nor
+requires a developer flag. The same binary audit also corrects Kana's generated
+green store to reuse the doubled byte.
 
 Acceptance gate VS-2: with external data, all legal direct-launch character pairs enter a match, render a stable 640x400 source surface, accept both players' controls, reach normal round/result routing, and return cleanly to the launcher. For a fixed scripted input, the direct-launch match's final core state/canonical outcome equals headless execution. The same check is performed with a null observer, discard observer, and the full presenter.
 

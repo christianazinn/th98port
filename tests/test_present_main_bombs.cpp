@@ -929,11 +929,11 @@ void test_completion_restores_process_baseline()
 	);
 }
 
-bool fixed_kotohime_red(
-	void *, const BombFrameStep &, std::uint8_t, std::uint8_t &red_out
+bool fixed_kotohime_component(
+	void *, const BombFrameStep &, std::uint8_t, std::uint8_t &component_out
 ) noexcept
 {
-	red_out = 0U;
+	component_out = 0U;
 	return true;
 }
 
@@ -942,7 +942,7 @@ void test_preparing_step_retains_the_prior_source_frame()
 	for(std::uint8_t character = 0U; character < 9U; ++character) {
 		Fixture fixture;
 		fixture.prepare(true, {
-			.red_provider = fixed_kotohime_red,
+			.component_provider = fixed_kotohime_component,
 		});
 		Driver driver{*fixture.presenter, character, 0U, 0};
 		driver.frame(180U, true);

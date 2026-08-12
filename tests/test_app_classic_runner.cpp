@@ -80,15 +80,15 @@ void test_cli()
 		"--op", "o", "--font", "f", "--tick-rate", "3/2",
 		"--rhythm-rom", "ym2608.rom",
 		"--config", "c", "--score", "s", "--seed", "4294967295",
-		"--kotohime-zero-red", "--smoke-ticks", "7",
+		"--smoke-ticks", "7",
 	});
 	expect(complete && complete->launch.content.config == "c" &&
 		complete->launch.content.score == "s" &&
 		complete->rhythm_rom == std::filesystem::path("ym2608.rom") &&
 		complete->launch.seed == 0xFFFF'FFFFU &&
 		complete->tick_rate.ticks == 3U && complete->tick_rate.seconds == 2U &&
-		complete->kotohime_zero_red && complete->smoke_ticks == 7U,
-		"optional Classic paths, rate override, seed, policy, and smoke bound parse");
+		complete->smoke_ticks == 7U,
+		"optional Classic paths, rate override, seed, and smoke bound parse");
 
 	const auto unknown = parse({"--classic", "--wat"});
 	const auto missing_value = parse({"--classic", "--data"});
@@ -585,17 +585,6 @@ struct AuthenticRouteTraceEvent final {
 	std::size_t audio_command_count = 0U;
 };
 
-bool normalized_kotohime_red(
-	void *,
-	const th03::BombFrameStep &,
-	std::uint8_t fade,
-	std::uint8_t &red
-) noexcept
-{
-	red = static_cast<std::uint8_t>(fade << 1U);
-	return true;
-}
-
 bool authentic_gate(
 	const std::filesystem::path &data_root,
 	const std::filesystem::path &main_executable,
@@ -617,9 +606,6 @@ bool authentic_gate(
 		},
 		.seed = 1U,
 		.fm_available = false,
-		.kotohime_compatibility = {
-			.red_provider = &normalized_kotohime_red,
-		},
 	});
 	if(!loaded) {
 		std::cerr << "authentic Classic runner load failed code="

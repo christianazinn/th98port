@@ -74,7 +74,7 @@ MainStoryConfig story_config(std::uint8_t credits = 3U) noexcept
 	resident.is_cpu = {0U, 1U};
 	resident.paletted_character = {2, 5};
 	resident.story_opponents = {5, 1, 7, 9, 11, 13, 3, 15, 17};
-	config.kotohime_compatibility.red_provider = &kotohime_fade;
+	config.kotohime_compatibility.component_provider = &kotohime_fade;
 	return config;
 }
 

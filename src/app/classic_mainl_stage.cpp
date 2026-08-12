@@ -290,8 +290,7 @@ template <typename Value, typename Decoder>
 }
 
 [[nodiscard]] bool valid_demo_completion(
-	const ClassicOpCompletion &completion,
-	present::KotohimeBombFadeCompatibility kotohime_compatibility
+	const ClassicOpCompletion &completion
 ) noexcept
 {
 	constexpr std::array<std::array<std::int8_t, 2U>, 4U> pairings{{
@@ -330,15 +329,11 @@ template <typename Value, typename Decoder>
 		resident.paletted_character[1U]
 	);
 	return resident.paletted_character == pairings[index] &&
-		resident.resident_rand == random[index] && player_one && player_two &&
-		((player_one->character != MainCharacter::kotohime &&
-		  player_two->character != MainCharacter::kotohime) ||
-		 kotohime_compatibility.red_provider != nullptr);
+		resident.resident_rand == random[index] && player_one && player_two;
 }
 
 [[nodiscard]] bool valid_vs_completion(
-	const ClassicOpSelectionCompletion &completion,
-	present::KotohimeBombFadeCompatibility kotohime_compatibility
+	const ClassicOpSelectionCompletion &completion
 ) noexcept
 {
 	if(completion.outcome() != ClassicOpSelectionOutcome::selected ||
@@ -370,9 +365,7 @@ template <typename Value, typename Decoder>
 		!valid_zero_score(resident.last_score[1U])) {
 		return false;
 	}
-	return ((player_one->character != MainCharacter::kotohime &&
-		player_two->character != MainCharacter::kotohime) ||
-		kotohime_compatibility.red_provider != nullptr);
+	return true;
 }
 
 } // namespace
@@ -542,7 +535,7 @@ std::expected<
 	bool authenticate_resource_bytes
 )
 {
-	if(!valid_vs_completion(completion, kotohime_compatibility)) {
+	if(!valid_vs_completion(completion)) {
 		return std::unexpected(stage_error(
 			ClassicMainlStageErrorCode::invalid_config
 		));
@@ -573,7 +566,7 @@ std::expected<
 	bool authenticate_resource_bytes
 )
 {
-	if(!valid_demo_completion(completion, kotohime_compatibility)) {
+	if(!valid_demo_completion(completion)) {
 		return std::unexpected(stage_error(
 			ClassicMainlStageErrorCode::invalid_config
 		));

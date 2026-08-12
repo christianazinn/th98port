@@ -81,10 +81,13 @@ oscillator tolerance. The first logical sample is immediately due, matching
 the source's no-pre-wait process entry; later samples use rational deadlines.
 The pinned source and timing evidence is recorded in
 [`docs/research/PC98_CADENCE.md`](docs/research/PC98_CADENCE.md).
-Kotohime additionally requires the explicit developer flag
-`--kotohime-zero-red` until her source-uninitialized Bomb fade byte has an
-evidence-backed release policy. The Classic path always executes semantic
-commands through the authenticated PMD/OPNA/EFC session and fixed resampler;
+Kotohime's source-uninitialized late Bomb local is normalized from the
+contemporaneous fade byte, following adjacent Kana. Kana's generated path and
+the normalized Kotohime output are `{2*fade, 2*fade, fade}`; stock Kotohime
+instead stores `{2*stale, 2*stale, fade}`. This deterministic policy supports
+ordinary routes but is not a claim about undefined PC-98 stack residue. The
+Classic path always executes semantic commands through the authenticated
+PMD/OPNA/EFC session and fixed resampler;
 SDL availability controls only bounded final playback. Music Off follows fresh
 MAIN/MAINL process behavior and disables both music and FM effects. An exact
 8 KiB `--rhythm-rom` input is copied into the deterministic engine; omitting it

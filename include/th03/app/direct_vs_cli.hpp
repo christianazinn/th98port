@@ -25,7 +25,6 @@ enum class DirectVsCliOption : std::uint8_t {
 	tick_rate,
 	rank,
 	seed,
-	kotohime_zero_red,
 	smoke_ticks,
 };
 
@@ -38,7 +37,6 @@ enum class DirectVsCliErrorCode : std::uint8_t {
 	invalid_tick_rate,
 	invalid_rank,
 	invalid_seed,
-	kotohime_policy_required,
 	invalid_smoke_ticks,
 };
 
@@ -52,9 +50,6 @@ struct DirectVsCliRequest {
 	bool show_help = false;
 	DirectVsLaunchRequest launch{};
 	RationalTickRate tick_rate = pc98_24khz_nominal_tick_rate;
-	// Explicit developer compatibility policy for the donor's uninitialized
-	// Kotohime Bomb fade byte. This is never an authenticity claim.
-	bool kotohime_zero_red = false;
 	std::optional<std::uint64_t> smoke_ticks{};
 };
 

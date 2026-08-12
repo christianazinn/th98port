@@ -27,7 +27,6 @@ enum class ClassicCliOption : std::uint8_t {
 	score,
 	tick_rate,
 	seed,
-	kotohime_zero_red,
 	smoke_ticks,
 };
 
@@ -54,9 +53,6 @@ struct ClassicCliRequest final {
 	// Optional caller-supplied YM2608 ADPCM-A image. The launcher validates the
 	// exact 8 KiB size and the audio engine takes its own copy.
 	std::optional<std::filesystem::path> rhythm_rom{};
-	// Explicit developer compatibility policy for the donor's uninitialized
-	// Kotohime Bomb fade byte. This is never an authenticity claim.
-	bool kotohime_zero_red = false;
 	std::optional<std::uint64_t> smoke_ticks{};
 };
 
