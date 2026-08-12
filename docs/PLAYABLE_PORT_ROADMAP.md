@@ -367,9 +367,14 @@ Once VS-3 holds, add scenes in donor order rather than building a broad launcher
 4. Profile and replay UX. New Classic now records and plays only V13 at the app
    input boundary, owns its browser/save/pause/Practice routes, and persists a
    versioned bounded SDL-scancode profile without extending a historical save
-   block. Format migration remains a tool concern. Remaining Replay Patch work
-   stays in the New Classic adapters/presentation policy rather than forking
-   deterministic Classic gameplay.
+   block. Playback drives the shared typed MAIN/MAINL owners, including
+   recorded cutscenes and Continue plus typed VS winner scenes. Game Over
+   playback preserves the donor's live, unrecorded registration menu and then
+   stops at MAINL_END; final-clear playback preserves the donor's ending skip.
+   Neither path writes score persistence.
+   Format migration remains a tool concern. Any residual profile presentation
+   work stays in New Classic adapters rather than forking deterministic Classic
+   gameplay.
 
 ## Audio plan
 

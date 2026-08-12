@@ -155,6 +155,36 @@ void test_candidate_selection_and_board_repair()
 		"load replaces only one corrupt board and commits the repair");
 }
 
+void test_read_only_load_has_no_filesystem_effect()
+{
+	using namespace th03::app;
+	TemporaryDirectory temporary;
+	const auto path = temporary.path() / "YUME.NEW.NEM";
+	auto empty = load_new_classic_score_store_read_only(path);
+	expect(empty && empty->disposition ==
+			NewClassicScoreStoreDisposition::created_empty && !fs::exists(path),
+		"read-only load materializes a missing document only in memory");
+
+	auto candidate = new_classic_score_empty();
+	candidate.generation = 7U;
+	candidate.boards[0U][0U].stats.play_frames = 321U;
+	auto encoded = encode_new_classic_score_file(candidate);
+	expect(encoded.has_value(), "read-only recovery fixture encodes");
+	if(!encoded) {
+		return;
+	}
+	auto old = path;
+	old += ".old";
+	write_bytes(old, *encoded);
+	auto recovered = load_new_classic_score_store_read_only(path);
+	expect(recovered && recovered->disposition ==
+			NewClassicScoreStoreDisposition::recovered_candidate &&
+			recovered->document.generation == 7U &&
+			recovered->document.boards[0U][0U].stats.play_frames == 321U &&
+			!fs::exists(path) && fs::exists(old),
+		"read-only recovery selects the newest candidate without promotion or cleanup");
+}
+
 } // namespace
 
 int main()
@@ -162,6 +192,7 @@ int main()
 	test_create_commit_and_reload();
 	test_legacy_migration_preserves_source();
 	test_candidate_selection_and_board_repair();
+	test_read_only_load_has_no_filesystem_effect();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }

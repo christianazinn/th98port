@@ -14,6 +14,8 @@
 
 namespace th03::app {
 
+struct NewClassicReplayPlaybackTestAccess;
+
 struct NewClassicPlaybackRequest final {
 	ClassicContentPaths content{};
 	formats::ReplayDocument document{};
@@ -27,9 +29,12 @@ enum class NewClassicPlaybackErrorCode : std::uint8_t {
 	file_missing,
 	file_read_failed,
 	compiled_content_failed,
+	mainl_content_failed,
+	static_content_failed,
 	resource_failed,
 	process_failed,
 	driver_failed,
+	interstitial_failed,
 	replay_contract_failed,
 	surface_failed,
 };
@@ -41,6 +46,7 @@ struct NewClassicPlaybackError final {
 	std::optional<ResourceLoadError> resource{};
 	std::optional<MainProcessError> process{};
 	std::optional<present::SourceSurfaceError> surface{};
+	std::optional<std::uint8_t> interstitial_detail{};
 };
 
 enum class NewClassicPlaybackStatus : std::uint8_t {
@@ -57,9 +63,11 @@ struct NewClassicPlaybackTick final {
 	NewClassicPlaybackStatus status = NewClassicPlaybackStatus::failed;
 };
 
-// Visual V13 player over the same authenticated MainProcess/driver used by
-// live Classic. Later checkpoint starts reconstruct directly from the stored
-// compact snapshot; host abort/fast-forward state never enters the replay.
+// Visual V13 player over the same authenticated MAIN and typed MAINL owners
+// used by live Classic. Later checkpoint starts reconstruct directly from the
+// stored compact snapshot; host abort/fast-forward state never enters the
+// replay. The donor's registration menu remains live during playback, but
+// viewing never publishes score persistence.
 class NewClassicReplayPlayback final {
 public:
 	[[nodiscard]] static std::expected<
@@ -76,7 +84,12 @@ public:
 	[[nodiscard]] std::expected<
 		NewClassicPlaybackTick,
 		NewClassicPlaybackError
-	> advance(bool abort_requested, bool application_quit_requested);
+	> advance(
+		ClassicAudioStatus audio,
+		bool abort_requested,
+		bool application_quit_requested,
+		std::uint16_t live_system_input = 0U
+	);
 	[[nodiscard]] std::optional<ClassicAudioCommand> take_audio_command();
 	[[nodiscard]] std::expected<
 		present::SourceSurface,
@@ -89,10 +102,12 @@ public:
 	) const;
 	void set_fast_forward(bool enabled) noexcept;
 	[[nodiscard]] bool fast_forward() const noexcept;
+	[[nodiscard]] std::size_t fast_forward_step_count() const noexcept;
 	[[nodiscard]] NewClassicPlaybackStatus status() const noexcept;
 	[[nodiscard]] std::uint32_t sample_index() const noexcept;
 
 private:
+	friend struct NewClassicReplayPlaybackTestAccess;
 	struct Impl;
 	explicit NewClassicReplayPlayback(std::unique_ptr<Impl> impl) noexcept;
 	std::unique_ptr<Impl> impl_;

@@ -403,6 +403,9 @@ struct ClassicStoryBackend final {
 	std::optional<ClassicAudioCommand> pause_audio{};
 	bool restart_requested = false;
 	NewClassicReplayRecorder *replay_recorder = nullptr;
+	bool new_classic = false;
+	bool replay_playback = false;
+	bool cutscene_replay_input_due = true;
 	std::optional<NewClassicScoreRun> score_run{};
 	std::uint8_t score_run_rank = 0U;
 	std::uint8_t score_run_character = 0U;
@@ -414,7 +417,9 @@ struct ClassicStoryBackend final {
 		MainlStaffCompiledAssets staff_compiled_,
 		std::filesystem::path score_path_,
 		NewClassicReplayRecorder *replay_recorder_,
-		std::filesystem::path legacy_score_path_
+		std::filesystem::path legacy_score_path_,
+		bool new_classic_ = false,
+		bool replay_playback_ = false
 	) :
 		loader(std::move(loader_)),
 		static_content(std::move(static_content_)),
@@ -422,11 +427,33 @@ struct ClassicStoryBackend final {
 		staff_compiled(std::move(staff_compiled_)),
 		score_path(std::move(score_path_)),
 		legacy_score_path(std::move(legacy_score_path_)),
-		replay_recorder(replay_recorder_)
+		replay_recorder(replay_recorder_),
+		new_classic(new_classic_),
+		replay_playback(replay_playback_)
 	{
 		blank_tram.fill({
 			' ', static_cast<present::TramAttribute>(present::tram_black)
 		});
+	}
+
+	std::expected<void, ClassicStorySessionError> adopt_replay_terminal(
+		const GameInit &start,
+		std::unique_ptr<MainProcess> process_,
+		std::unique_ptr<MainProcessDriver> driver_
+	)
+	{
+		if(!process_ || !driver_ || process || driver || stage || win || cutscene ||
+			staff || registration || continue_scene || game_over ||
+			driver_->status() != MainProcessDriverStatus::terminal ||
+			!driver_->transition()) {
+			return std::unexpected(session_error(
+				ClassicStorySessionErrorCode::backend_contract_failed
+			));
+		}
+		process_start = start;
+		process = std::move(process_);
+		driver = std::move(driver_);
+		return {};
 	}
 
 	std::expected<void, ClassicStorySessionError> begin_score_run(
@@ -603,7 +630,8 @@ struct ClassicStoryBackend final {
 			));
 		}
 		const bool sampled = stage->phase() ==
-			ClassicMainlStagePhase::waiting;
+			ClassicMainlStagePhase::waiting &&
+			(!new_classic || stage->wait_count() >= 32U);
 		auto advanced = stage->advance(dismiss);
 		if(!advanced) {
 			return std::unexpected(stage_error(std::move(advanced.error())));
@@ -1110,6 +1138,7 @@ struct ClassicStoryBackend final {
 			return std::unexpected(cutscene_error(std::move(created.error())));
 		}
 		cutscene = std::move(*created);
+		cutscene_replay_input_due = true;
 		registration_completion.reset();
 		cutscene_handoff.reset();
 		return {};
@@ -1132,9 +1161,24 @@ struct ClassicStoryBackend final {
 				std::move(advanced.error())
 			));
 		}
+		bool input_sampled = advanced->input_sampled;
+		if(new_classic) {
+			// Replay Patch 0.4.10 records at most one interface sample per
+			// VSync even though cutscene_animate() can poll several times in
+			// one interpreter iteration.  Reuse the last sample for those
+			// immediate polls, then arm the next sample after time advances.
+			if(input_sampled) {
+				input_sampled = cutscene_replay_input_due;
+				cutscene_replay_input_due = false;
+			}
+			if(advanced->boundary == ClassicCutsceneBoundary::vsync ||
+				advanced->boundary == ClassicCutsceneBoundary::audio_measure) {
+				cutscene_replay_input_due = true;
+			}
+		}
 		return ClassicStoryBackendTick{
 			.surface_changed = advanced->surface_changed,
-			.input_sampled = advanced->input_sampled,
+			.input_sampled = input_sampled,
 			.ready = advanced->ready,
 		};
 	}
@@ -1246,7 +1290,7 @@ struct ClassicStoryBackend final {
 		const auto score_player = main_player_selection_from_paletted(
 			resident.paletted_character[0U]
 		);
-		if(replay_recorder && (!score_run || !score_player ||
+		if(new_classic && !replay_playback && (!score_run || !score_player ||
 			score_run_rank != resident.rank ||
 			score_run_character != static_cast<std::uint8_t>(
 				score_player->character
@@ -1262,8 +1306,11 @@ struct ClassicStoryBackend final {
 		if(!resources) {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
-		auto created = replay_recorder ?
-			ClassicRegistrationScene::create_new_classic(
+		auto created = new_classic ? (replay_playback ?
+			ClassicRegistrationScene::create_new_classic_playback(
+				resident, score_path, legacy_score_path, *resources,
+				stage_text, static_content->font(), *cutscene_handoff
+			) : ClassicRegistrationScene::create_new_classic(
 				resident, score_path, legacy_score_path, *resources,
 				stage_text, static_content->font(), *cutscene_handoff,
 				[&]() {
@@ -1272,7 +1319,7 @@ struct ClassicStoryBackend final {
 						resident.remaining_credits == 3U;
 					return run;
 				}()
-			) : ClassicRegistrationScene::create(
+			)) : ClassicRegistrationScene::create(
 				resident, score_path, *resources, stage_text,
 				static_content->font(), *cutscene_handoff
 			);
@@ -1835,6 +1882,7 @@ struct ClassicStorySession::Impl {
 	bool continue_pending = false;
 	bool restart_requested = false;
 	NewClassicReplayRecorder *replay_recorder = nullptr;
+	bool stop_before_main = false;
 	std::optional<ClassicStorySessionError> failure{};
 
 	Impl(
@@ -1843,14 +1891,16 @@ struct ClassicStorySession::Impl {
 		ClassicStorySessionBackendOperations operations_,
 		ClassicStorySessionTestHooks test_hooks_,
 		ClassicMainlPlan plan_,
-		NewClassicReplayRecorder *replay_recorder_
+		NewClassicReplayRecorder *replay_recorder_,
+		bool stop_before_main_
 	) :
 		base_config(std::move(config)),
 		backend_owner(std::move(owner)),
 		operations(operations_),
 		test_hooks(test_hooks_),
 		plan(std::move(plan_)),
-		replay_recorder(replay_recorder_)
+		replay_recorder(replay_recorder_),
+		stop_before_main(stop_before_main_)
 	{}
 
 	void fail(ClassicStorySessionError error)
@@ -1883,6 +1933,11 @@ struct ClassicStorySession::Impl {
 				return {};
 			}
 			case ClassicMainlScene::start_main: {
+				if(stop_before_main) {
+					scene = ClassicStorySessionScene::complete;
+					status = ClassicStorySessionStatus::complete;
+					return {};
+				}
 				auto started = operations.start_main(
 					operations.context, current_config()
 				);
@@ -2053,7 +2108,7 @@ ClassicStorySession::create(
 	auto backend = std::make_shared<ClassicStoryBackend>(
 		std::move(shared_loader), std::move(*static_content), std::move(stage_text),
 		std::move(staff_compiled), std::move(score_path), replay_recorder,
-		std::move(legacy_score_path)
+		std::move(legacy_score_path), replay_recorder != nullptr, false
 	);
 	return create_with_backend(
 		config,
@@ -2083,7 +2138,7 @@ ClassicStorySession::create_with_prepared_content(
 	auto backend = std::make_shared<ClassicStoryBackend>(
 		std::move(loader), std::move(static_content), std::move(stage_text),
 		std::move(staff_compiled), std::move(score_path), replay_recorder,
-		std::move(legacy_score_path)
+		std::move(legacy_score_path), replay_recorder != nullptr, false
 	);
 	return create_with_backend(
 		config, std::static_pointer_cast<void>(backend),
@@ -2128,12 +2183,60 @@ ClassicStorySession::create(
 }
 
 std::expected<std::unique_ptr<ClassicStorySession>, ClassicStorySessionError>
+ClassicStorySession::create_replay_interstitial(
+	const MainStoryConfig &process_config,
+	std::shared_ptr<MainResourceLoader> loader,
+	std::shared_ptr<const MainProcessStaticContent> static_content,
+	MainlStageTextAssets stage_text,
+	MainlStaffCompiledAssets staff_compiled,
+	std::filesystem::path score_path,
+	std::filesystem::path legacy_score_path,
+	std::unique_ptr<MainProcess> process,
+	std::unique_ptr<MainProcessDriver> driver
+)
+{
+	if(!valid_main_story_config(process_config) || !loader || !static_content ||
+		!process || !driver ||
+		driver->status() != MainProcessDriverStatus::terminal ||
+		!driver->transition()) {
+		return std::unexpected(session_error(
+			ClassicStorySessionErrorCode::invalid_config
+		));
+	}
+	const auto terminal = process->canonical_state();
+	auto plan = classic_story_mainl_plan(
+		process_config.resident, terminal, *driver->transition()
+	);
+	if(!plan) {
+		return std::unexpected(plan_error(plan.error()));
+	}
+	auto backend = std::make_shared<ClassicStoryBackend>(
+		std::move(loader), std::move(static_content), std::move(stage_text),
+		std::move(staff_compiled), std::move(score_path), nullptr,
+		std::move(legacy_score_path), true, true
+	);
+	if(auto adopted = backend->adopt_replay_terminal(
+		process_config.resident, std::move(process), std::move(driver)
+	); !adopted) {
+		return std::unexpected(std::move(adopted.error()));
+	}
+	return create_with_backend(
+		process_config, std::static_pointer_cast<void>(backend),
+		backend_operations(*backend), {}, nullptr, true, std::move(*plan),
+		terminal.global_frame
+	);
+}
+
+std::expected<std::unique_ptr<ClassicStorySession>, ClassicStorySessionError>
 ClassicStorySession::create_with_backend(
 	const MainStoryConfig &config,
 	std::shared_ptr<void> backend_owner,
 	ClassicStorySessionBackendOperations operations,
 	ClassicStorySessionTestHooks test_hooks,
-	NewClassicReplayRecorder *replay_recorder
+	NewClassicReplayRecorder *replay_recorder,
+	bool stop_before_main,
+	std::optional<ClassicMainlPlan> initial_plan,
+	std::optional<std::uint32_t> initial_source_sample_count
 )
 {
 	if(!valid_main_story_config(config)) {
@@ -2146,15 +2249,20 @@ ClassicStorySession::create_with_backend(
 			ClassicStorySessionErrorCode::invalid_backend
 		));
 	}
-	auto plan = classic_story_start_plan(config);
-	if(!plan) {
-		return std::unexpected(plan_error(plan.error()));
+	if(!initial_plan) {
+		auto plan = classic_story_start_plan(config);
+		if(!plan) {
+			return std::unexpected(plan_error(plan.error()));
+		}
+		initial_plan.emplace(std::move(*plan));
 	}
 	auto impl = std::make_unique<Impl>(
 		config, std::move(backend_owner), operations, test_hooks,
-		std::move(*plan), replay_recorder
+		std::move(*initial_plan), replay_recorder, stop_before_main
 	);
-	impl->source_sample_count = config.resident.global_frame;
+	impl->source_sample_count = initial_source_sample_count.value_or(
+		config.resident.global_frame
+	);
 	if(auto activated = impl->activate(); !activated) {
 		return std::unexpected(std::move(activated.error()));
 	}

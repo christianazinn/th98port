@@ -464,7 +464,8 @@ ClassicRegistrationScene::ClassicRegistrationScene(
 	const present::AnkGlyphProvider *font,
 	std::optional<std::size_t> entered_place,
 	present::Raster raster,
-	bool view_only
+	bool view_only,
+	bool persist_changes
 ) noexcept :
 	prepared_(std::move(prepared)),
 	resident_(std::move(resident)),
@@ -478,7 +479,8 @@ ClassicRegistrationScene::ClassicRegistrationScene(
 	font_(font),
 	entered_place_(entered_place),
 	raster_(std::move(raster)),
-	view_only_(view_only)
+	view_only_(view_only),
+	persist_changes_(persist_changes)
 {}
 
 ClassicRegistrationScene::~ClassicRegistrationScene() = default;
@@ -495,7 +497,7 @@ ClassicRegistrationScene::create(
 {
 	return create_impl(
 		resident, score_path, resources, stage_text, font,
-		std::move(initial_raster), true, false, false, {}, std::nullopt
+		std::move(initial_raster), true, false, false, {}, std::nullopt, true
 	);
 }
 
@@ -513,7 +515,25 @@ ClassicRegistrationScene::create_new_classic(
 {
 	return create_impl(
 		resident, score_path, resources, stage_text, font,
-		std::move(initial_raster), true, false, true, legacy_score_path, run
+		std::move(initial_raster), true, false, true, legacy_score_path, run, true
+	);
+}
+
+std::expected<std::unique_ptr<ClassicRegistrationScene>, ClassicRegistrationError>
+ClassicRegistrationScene::create_new_classic_playback(
+	const GameInit &resident,
+	const std::filesystem::path &score_path,
+	const std::filesystem::path &legacy_score_path,
+	std::span<const LoadedMainResource> resources,
+	const MainlStageTextAssets &stage_text,
+	const present::AnkGlyphProvider &font,
+	present::Raster initial_raster
+)
+{
+	return create_impl(
+		resident, score_path, resources, stage_text, font,
+		std::move(initial_raster), true, false, true, legacy_score_path,
+		NewClassicScoreRun{}, false
 	);
 }
 
@@ -534,7 +554,7 @@ ClassicRegistrationScene::create_viewer(
 	}
 	return create_impl(
 		completion.resident(), score_path, resources, stage_text, font,
-		present::Raster{}, true, true, false, {}, std::nullopt
+		present::Raster{}, true, true, false, {}, std::nullopt, true
 	);
 }
 
@@ -556,7 +576,7 @@ ClassicRegistrationScene::create_new_classic_viewer(
 	}
 	return create_impl(
 		completion.resident(), score_path, resources, stage_text, font,
-		present::Raster{}, true, true, true, legacy_score_path, std::nullopt
+		present::Raster{}, true, true, true, legacy_score_path, std::nullopt, false
 	);
 }
 
@@ -572,7 +592,8 @@ ClassicRegistrationScene::create_impl(
 	bool view_only,
 	bool new_classic,
 	std::filesystem::path legacy_score_path,
-	std::optional<NewClassicScoreRun> run
+	std::optional<NewClassicScoreRun> run,
+	bool persist_changes
 )
 {
 	if(!valid_context(resident, view_only)) {
@@ -684,7 +705,7 @@ ClassicRegistrationScene::create_impl(
 		std::move(*normal), std::move(*highlight),
 		std::move(*next_background), std::move(choice_cels), stage_text, font,
 		std::move(initial_raster), view_only, new_classic,
-		std::move(legacy_score_path), run
+		std::move(legacy_score_path), run, persist_changes
 	);
 }
 
@@ -704,7 +725,8 @@ ClassicRegistrationScene::create_predecoded(
 	bool view_only,
 	bool new_classic,
 	std::filesystem::path legacy_score_path,
-	std::optional<NewClassicScoreRun> run
+	std::optional<NewClassicScoreRun> run,
+	bool persist_changes
 )
 {
 	if(!valid_context(resident, view_only) ||
@@ -785,7 +807,9 @@ ClassicRegistrationScene::create_predecoded(
 		character;
 	std::optional<std::size_t> entered_place{};
 	if(new_classic) {
-		auto loaded = load_new_classic_score_store(score_path, legacy_score_path);
+		auto loaded = persist_changes ?
+			load_new_classic_score_store(score_path, legacy_score_path) :
+			load_new_classic_score_store_read_only(score_path, legacy_score_path);
 		if(!loaded) {
 			return std::unexpected(new_store_error(
 				ClassicRegistrationErrorCode::store_load_failed,
@@ -799,10 +823,12 @@ ClassicRegistrationScene::create_predecoded(
 					ClassicRegistrationErrorCode::invalid_context
 				));
 			}
-			if(auto applied = new_classic_score_apply_run(
-				*new_document, resident.rank, character, *run
-			); !applied) {
-				return std::unexpected(new_score_error(applied.error()));
+			if(persist_changes) {
+				if(auto applied = new_classic_score_apply_run(
+					*new_document, resident.rank, character, *run
+				); !applied) {
+					return std::unexpected(new_score_error(applied.error()));
+				}
 			}
 			const ClassicScoreCandidate candidate{
 				.digits = resident.last_score[0U],
@@ -873,7 +899,7 @@ ClassicRegistrationScene::create_predecoded(
 			std::move(prepared), resident, score_path, std::move(document),
 			load_disposition, commit_codec, std::move(new_document),
 			character, initial_page, &font, entered_place,
-			std::move(initial_raster), view_only
+			std::move(initial_raster), view_only, persist_changes
 		)
 	);
 	if(new_classic) {
@@ -1333,7 +1359,7 @@ ClassicRegistrationScene::fade_tick(bool black_in)
 	}
 
 	if(new_classic_document_) {
-		if(!view_only_) {
+		if(!view_only_ && persist_changes_) {
 			if(auto committed = commit_new_classic_score_store(
 				score_path_, *new_classic_document_
 			); !committed) {
@@ -1344,7 +1370,7 @@ ClassicRegistrationScene::fade_tick(bool black_in)
 				));
 			}
 		}
-	} else {
+	} else if(persist_changes_) {
 		document_.codec[resident_.rank] = commit_codec_;
 		if(auto committed = commit_classic_score_store(score_path_, document_);
 			!committed) {

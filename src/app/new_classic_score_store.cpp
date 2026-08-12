@@ -237,10 +237,11 @@ std::expected<void, NewClassicScoreStoreError> commit_new_classic_score_store(
 	return {};
 }
 
-std::expected<NewClassicScoreStoreLoadResult, NewClassicScoreStoreError>
-load_new_classic_score_store(
+static std::expected<NewClassicScoreStoreLoadResult, NewClassicScoreStoreError>
+load_new_classic_score_store_impl(
 	const std::filesystem::path &path,
-	const std::filesystem::path &legacy_path
+	const std::filesystem::path &legacy_path,
+	bool persist_recovery
 )
 {
 	if(path.empty() || !path.has_filename()) {
@@ -276,12 +277,12 @@ load_new_classic_score_store(
 			);
 		}
 		auto document = std::move(selected->decoded.document);
-		if(selected->source != 0U || repaired != 0) {
+		if(persist_recovery && (selected->source != 0U || repaired != 0)) {
 			if(auto committed = commit_new_classic_score_store(path, document);
 				!committed) {
 				return std::unexpected(std::move(committed.error()));
 			}
-		} else {
+		} else if(persist_recovery) {
 			std::error_code ignored;
 			std::filesystem::remove(candidates[1U], ignored);
 			std::filesystem::remove(candidates[2U], ignored);
@@ -309,14 +310,34 @@ load_new_classic_score_store(
 		document = std::move(*migrated);
 		disposition = NewClassicScoreStoreDisposition::migrated_classic;
 	}
-	if(auto committed = commit_new_classic_score_store(path, document);
-		!committed) {
-		return std::unexpected(std::move(committed.error()));
+	if(persist_recovery) {
+		if(auto committed = commit_new_classic_score_store(path, document);
+			!committed) {
+			return std::unexpected(std::move(committed.error()));
+		}
 	}
 	return NewClassicScoreStoreLoadResult{
 		.document = std::move(document),
 		.disposition = disposition,
 	};
+}
+
+std::expected<NewClassicScoreStoreLoadResult, NewClassicScoreStoreError>
+load_new_classic_score_store(
+	const std::filesystem::path &path,
+	const std::filesystem::path &legacy_path
+)
+{
+	return load_new_classic_score_store_impl(path, legacy_path, true);
+}
+
+std::expected<NewClassicScoreStoreLoadResult, NewClassicScoreStoreError>
+load_new_classic_score_store_read_only(
+	const std::filesystem::path &path,
+	const std::filesystem::path &legacy_path
+)
+{
+	return load_new_classic_score_store_impl(path, legacy_path, false);
 }
 
 } // namespace th03::app

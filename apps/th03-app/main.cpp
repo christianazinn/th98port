@@ -1984,11 +1984,13 @@ ExperienceRunResult run_replay_playback(
 			const bool changed_fast = fast != (*playback)->fast_forward();
 			(*playback)->set_fast_forward(fast);
 			presentation_pending = presentation_pending || changed_fast;
-			const auto steps = fast ? 4U : 1U;
+			const auto steps = (*playback)->fast_forward_step_count();
 			for(std::size_t step_index = 0U; step_index < steps; ++step_index) {
 				auto advanced = (*playback)->advance(
+					audio_session->status(),
 					step_index == 0U && (live_word & input_cancel) != 0U,
-					step_index == 0U && (**due).app_quit_requested
+					step_index == 0U && (**due).app_quit_requested,
+					live_word
 				);
 				if(!advanced) {
 					return {

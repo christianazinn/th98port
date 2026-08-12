@@ -62,6 +62,18 @@ struct NewClassicScoreStoreLoadResult final {
 	const std::filesystem::path &legacy_path = {}
 );
 
+// Same recovery/migration selection as the production loader, but performs no
+// repair publication, candidate cleanup, migration store, or other write.
+// Replay playback uses this to reconstruct the recorded score screen without
+// making viewing itself observable in persistence.
+[[nodiscard]] std::expected<
+	NewClassicScoreStoreLoadResult,
+	NewClassicScoreStoreError
+> load_new_classic_score_store_read_only(
+	const std::filesystem::path &path,
+	const std::filesystem::path &legacy_path = {}
+);
+
 // Increments generation (saturating), validates fixed-size read-back, and uses
 // fixed .tmp/.old siblings so an interrupted replacement is recoverable on the
 // next load.

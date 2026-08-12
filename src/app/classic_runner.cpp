@@ -1,6 +1,7 @@
 #include "th03/app/classic_runner.hpp"
 
 #include "classic_runner_internal.hpp"
+#include "classic_input_bits_internal.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -20,15 +21,6 @@
 
 namespace th03::app {
 namespace {
-
-constexpr std::uint16_t input_up = 0x0001U;
-constexpr std::uint16_t input_down = 0x0002U;
-constexpr std::uint16_t input_left = 0x0004U;
-constexpr std::uint16_t input_right = 0x0008U;
-constexpr std::uint16_t input_bomb = 0x0010U;
-constexpr std::uint16_t input_shot = 0x0020U;
-constexpr std::uint16_t input_cancel = 0x1000U;
-constexpr std::uint16_t input_ok = 0x2000U;
 
 [[nodiscard]] ClassicRunnerError runner_error(
 	ClassicRunnerErrorCode code,

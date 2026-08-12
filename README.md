@@ -21,11 +21,13 @@ sample. Initial or later device unavailability drops only final delivery while
 the deterministic PMD session keeps advancing.
 Gameplay-stage music, source-ordered ordinary MAIN SFX emission, and stock
 blocking live pause/resume with effect 21 are integrated. New Classic's host
-identity/lifecycle, V13 recording/browser/playback/save flow and final
-Splits/Clears/Timers telemetry, richer
+identity/lifecycle, complete shared-owner V13 MAIN/MAINL
+recording/browser/playback/save flow and final Splits/Clears/Timers telemetry,
+richer
 pause/restart menu, full Practice setup/recording lifecycle, three-page
-KeyConfig, and expanded Options are present. Typed playback interstitials and
-the remaining Replay Patch QoL are the active next port.
+KeyConfig, and expanded Options are present. The final systematic Replay Patch
+profile/parity audit is the active next native-port gate; the authenticated
+English resource overlay remains an explicitly deferred content profile.
 
 ## Build and test
 
@@ -74,8 +76,9 @@ With the standard ignored workspace layout, the stable result is
 by double-clicking; it needs no adjacent DLL/content tree, installed .NET
 runtime, or command-line arguments. It opens the shared Classic/New Classic
 menu; both entries run the complete shared Classic lifecycle, while New
-Classic additionally records/browses/plays V13 replays and owns Replay Patch's
-four-choice gameplay pause/restart loop and two-page Practice setup.
+Classic additionally records/browses/plays V13 replays through the shared typed
+MAIN/MAINL scene owners and owns Replay Patch's four-choice gameplay
+pause/restart loop and two-page Practice setup.
 Exiting either title returns to this menu. Its first launch extracts a content-hash
 cache below `%LOCALAPPDATA%\TH03 Classic Native Test`, while configuration,
 scores, and the last-run diagnostic log live in the separate `user` directory

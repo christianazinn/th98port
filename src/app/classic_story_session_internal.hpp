@@ -251,6 +251,23 @@ public:
 		std::filesystem::path score_path = "YUME.NEM",
 		NewClassicReplayRecorder *replay_recorder = nullptr
 	);
+	// Replay-only continuation from a completed retained MAIN owner. The
+	// session runs the exact typed MAINL plan but stops before constructing the
+	// next MAIN, whose state must come from the next V13 checkpoint.
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicStorySession>,
+		ClassicStorySessionError
+	> create_replay_interstitial(
+		const MainStoryConfig &process_config,
+		std::shared_ptr<MainResourceLoader> loader,
+		std::shared_ptr<const MainProcessStaticContent> static_content,
+		MainlStageTextAssets stage_text,
+		MainlStaffCompiledAssets staff_compiled,
+		std::filesystem::path score_path,
+		std::filesystem::path legacy_score_path,
+		std::unique_ptr<MainProcess> process,
+		std::unique_ptr<MainProcessDriver> driver
+	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicStorySession>,
 		ClassicStorySessionError
@@ -304,7 +321,10 @@ private:
 		std::shared_ptr<void> backend_owner,
 		ClassicStorySessionBackendOperations operations,
 		ClassicStorySessionTestHooks test_hooks = {},
-		NewClassicReplayRecorder *replay_recorder = nullptr
+		NewClassicReplayRecorder *replay_recorder = nullptr,
+		bool stop_before_main = false,
+		std::optional<ClassicMainlPlan> initial_plan = std::nullopt,
+		std::optional<std::uint32_t> initial_source_sample_count = std::nullopt
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicStorySession>,
