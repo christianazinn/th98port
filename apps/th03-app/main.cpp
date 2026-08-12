@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -23,6 +24,7 @@
 #include "th03/app/direct_vs_cli.hpp"
 #include "th03/app/direct_vs_launch.hpp"
 #include "th03/app/main_direct_vs_runner.hpp"
+#include "th03/app/main_compiled_content.hpp"
 #include "th03/app/tick_input.hpp"
 #include "th03/platform/sdl_input.hpp"
 #include "th03/platform/sdl_audio_device.hpp"
@@ -47,6 +49,65 @@ struct RhythmRomLoadError final {
 	RhythmRomLoadErrorCode code = RhythmRomLoadErrorCode::file_missing;
 	std::uintmax_t observed_size = 0U;
 };
+
+enum class RhythmPcmLoadErrorCode : std::uint8_t {
+	file_missing,
+	file_status_failed,
+	file_not_regular,
+	file_size_failed,
+	file_size_mismatch,
+	file_open_failed,
+	file_read_failed,
+	digest_mismatch,
+	format_mismatch,
+	allocation_failed,
+};
+
+struct RhythmPcmLoadError final {
+	RhythmPcmLoadErrorCode code = RhythmPcmLoadErrorCode::file_missing;
+	std::uintmax_t observed_size = 0U;
+};
+
+struct LoadedRhythmPcm final {
+	std::array<
+		std::vector<std::int16_t>, th03::audio::ym2608_rhythm_voice_count
+	> voices{};
+
+	[[nodiscard]] th03::audio::PmdOpnaRhythmPcm view() const noexcept
+	{
+		th03::audio::PmdOpnaRhythmPcm result{.sample_rate_hz = 44'100U};
+		for(std::size_t index = 0U; index < voices.size(); ++index) {
+			result.voices[index] = voices[index];
+		}
+		return result;
+	}
+};
+
+constexpr std::size_t rhythm_pcm_header_bytes = 36U;
+constexpr std::size_t rhythm_pcm_profile_bytes = 178'730U;
+constexpr std::array<std::uint8_t, 32U> rhythm_pcm_profile_sha256{
+	0x22U, 0x5FU, 0xD0U, 0x7BU, 0x20U, 0xC5U, 0x1AU, 0xC1U,
+	0x43U, 0x8EU, 0x42U, 0x6FU, 0x92U, 0x25U, 0x2CU, 0x41U,
+	0xACU, 0xE9U, 0x5FU, 0x03U, 0x9CU, 0xA5U, 0x2AU, 0x59U,
+	0xA3U, 0x04U, 0x96U, 0x16U, 0x9DU, 0x0CU, 0x89U, 0x53U,
+};
+constexpr std::array<std::uint32_t, 6U> rhythm_pcm_voice_lengths{
+	0x2590U, 0x3B10U, 0x6EEDU, 0x3E00U, 0x2F5EU, 0x2018U,
+};
+
+std::uint32_t read_le32(std::span<const std::byte> bytes, std::size_t offset)
+{
+	return std::to_integer<std::uint8_t>(bytes[offset]) |
+		(static_cast<std::uint32_t>(
+			std::to_integer<std::uint8_t>(bytes[offset + 1U])
+		) << 8U) |
+		(static_cast<std::uint32_t>(
+			std::to_integer<std::uint8_t>(bytes[offset + 2U])
+		) << 16U) |
+		(static_cast<std::uint32_t>(
+			std::to_integer<std::uint8_t>(bytes[offset + 3U])
+		) << 24U);
+}
 
 [[nodiscard]] std::expected<std::vector<std::byte>, RhythmRomLoadError>
 load_rhythm_rom(const std::filesystem::path &path)
@@ -111,13 +172,115 @@ load_rhythm_rom(const std::filesystem::path &path)
 	}
 }
 
+[[nodiscard]] std::expected<LoadedRhythmPcm, RhythmPcmLoadError>
+load_rhythm_pcm(const std::filesystem::path &path)
+{
+	std::error_code error{};
+	const auto status = std::filesystem::status(path, error);
+	if(error) {
+		return std::unexpected(RhythmPcmLoadError{
+			.code = error == std::errc::no_such_file_or_directory ?
+				RhythmPcmLoadErrorCode::file_missing :
+				RhythmPcmLoadErrorCode::file_status_failed,
+		});
+	}
+	if(!std::filesystem::exists(status)) {
+		return std::unexpected(RhythmPcmLoadError{
+			.code = RhythmPcmLoadErrorCode::file_missing,
+		});
+	}
+	if(!std::filesystem::is_regular_file(status)) {
+		return std::unexpected(RhythmPcmLoadError{
+			.code = RhythmPcmLoadErrorCode::file_not_regular,
+		});
+	}
+	const auto size = std::filesystem::file_size(path, error);
+	if(error) {
+		return std::unexpected(RhythmPcmLoadError{
+			.code = RhythmPcmLoadErrorCode::file_size_failed,
+		});
+	}
+	if(size != rhythm_pcm_profile_bytes) {
+		return std::unexpected(RhythmPcmLoadError{
+			.code = RhythmPcmLoadErrorCode::file_size_mismatch,
+			.observed_size = size,
+		});
+	}
+	try {
+		std::vector<std::byte> bytes(rhythm_pcm_profile_bytes);
+		std::ifstream input(path, std::ios::binary);
+		if(!input.is_open()) {
+			return std::unexpected(RhythmPcmLoadError{
+				.code = RhythmPcmLoadErrorCode::file_open_failed,
+			});
+		}
+		input.read(
+			reinterpret_cast<char *>(bytes.data()),
+			static_cast<std::streamsize>(bytes.size())
+		);
+		if(!input || input.gcount() != static_cast<std::streamsize>(bytes.size())) {
+			return std::unexpected(RhythmPcmLoadError{
+				.code = RhythmPcmLoadErrorCode::file_read_failed,
+			});
+		}
+		if(th03::app::main_executable_sha256(bytes) !=
+			rhythm_pcm_profile_sha256) {
+			return std::unexpected(RhythmPcmLoadError{
+				.code = RhythmPcmLoadErrorCode::digest_mismatch,
+			});
+		}
+		constexpr std::array<std::byte, 8U> magic{
+			std::byte{'T'}, std::byte{'9'}, std::byte{'8'}, std::byte{'R'},
+			std::byte{'H'}, std::byte{'Y'}, std::byte{'0'}, std::byte{0U},
+		};
+		if(!std::equal(magic.begin(), magic.end(), bytes.begin()) ||
+			read_le32(bytes, 8U) != 44'100U) {
+			return std::unexpected(RhythmPcmLoadError{
+				.code = RhythmPcmLoadErrorCode::format_mismatch,
+			});
+		}
+		LoadedRhythmPcm result{};
+		std::size_t cursor = rhythm_pcm_header_bytes;
+		for(std::size_t voice = 0U; voice < result.voices.size(); ++voice) {
+			const auto length = rhythm_pcm_voice_lengths[voice];
+			if(read_le32(bytes, 12U + (voice * 4U)) != length) {
+				return std::unexpected(RhythmPcmLoadError{
+					.code = RhythmPcmLoadErrorCode::format_mismatch,
+				});
+			}
+			auto &samples = result.voices[voice];
+			samples.resize(length);
+			for(auto &sample : samples) {
+				sample = static_cast<std::int16_t>(
+					std::to_integer<std::uint8_t>(bytes[cursor]) |
+					(static_cast<std::uint16_t>(
+						std::to_integer<std::uint8_t>(bytes[cursor + 1U])
+					) << 8U)
+				);
+				cursor += 2U;
+			}
+		}
+		if(cursor != bytes.size()) {
+			return std::unexpected(RhythmPcmLoadError{
+				.code = RhythmPcmLoadErrorCode::format_mismatch,
+			});
+		}
+		return result;
+	} catch(const std::bad_alloc &) {
+		return std::unexpected(RhythmPcmLoadError{
+			.code = RhythmPcmLoadErrorCode::allocation_failed,
+		});
+	}
+}
+
 void print_usage()
 {
 	std::cout
 		<< "usage: th03-app --classic --data <root> --main <MAIN.EXE> "
 			"--mainl <MAINL.EXE> --op <OP.EXE> --font <FONT.ROM>\n"
 		<< "       [--config <YUME.CFG>] [--score <YUME.NEM>] [--seed n] "
-			"[--rhythm-rom <YM2608.ROM>] [--tick-rate <ticks>/<seconds>] "
+			"[--rhythm-rom <YM2608.ROM> | --rhythm-pcm <T98RHYTHM.PCM>] "
+			"[--tick-rate <ticks>/<seconds>] "
 			"[--smoke-ticks n]\n"
 		<< "   or: th03-app --vs --data <root> --main <MAIN.EXE> "
 			"--font <FONT.ROM>\n"
@@ -135,8 +298,9 @@ void print_usage()
 			"(526315/9328 Hz); --tick-rate overrides it.\n"
 		<< "Classic synthesizes external PMD/EFC content and delivers canonical "
 			"PCM when SDL playback is available. Supply an exact 8 KiB YM2608 "
-			"ADPCM-A image with --rhythm-rom; otherwise rhythm is deterministically "
-			"silent.\n"
+			"ADPCM-A image with --rhythm-rom, or an authenticated decoded T98 "
+			"profile with --rhythm-pcm; otherwise rhythm is deterministically "
+			"suppressed.\n"
 		<< "Classic stores YUME.CFG and YUME.NEM under --data by default; "
 			"--config and --score override these paths for read-only installs.\n"
 		<< "Kotohime's source-uninitialized late Bomb local is deterministically "
@@ -226,6 +390,7 @@ const char *name(th03::app::ClassicCliOption option) noexcept
 	case th03::app::ClassicCliOption::op_executable: return "op";
 	case th03::app::ClassicCliOption::font_rom: return "font";
 	case th03::app::ClassicCliOption::rhythm_rom: return "rhythm-rom";
+	case th03::app::ClassicCliOption::rhythm_pcm: return "rhythm-pcm";
 	case th03::app::ClassicCliOption::config: return "config";
 	case th03::app::ClassicCliOption::score: return "score";
 	case th03::app::ClassicCliOption::tick_rate: return "tick-rate";
@@ -246,6 +411,23 @@ const char *name(RhythmRomLoadErrorCode code) noexcept
 	case RhythmRomLoadErrorCode::file_open_failed: return "file-open-failed";
 	case RhythmRomLoadErrorCode::file_read_failed: return "file-read-failed";
 	case RhythmRomLoadErrorCode::allocation_failed: return "allocation-failed";
+	}
+	return "unknown";
+}
+
+const char *name(RhythmPcmLoadErrorCode code) noexcept
+{
+	switch(code) {
+	case RhythmPcmLoadErrorCode::file_missing: return "file-missing";
+	case RhythmPcmLoadErrorCode::file_status_failed: return "file-status-failed";
+	case RhythmPcmLoadErrorCode::file_not_regular: return "file-not-regular";
+	case RhythmPcmLoadErrorCode::file_size_failed: return "file-size-failed";
+	case RhythmPcmLoadErrorCode::file_size_mismatch: return "file-size-mismatch";
+	case RhythmPcmLoadErrorCode::file_open_failed: return "file-open-failed";
+	case RhythmPcmLoadErrorCode::file_read_failed: return "file-read-failed";
+	case RhythmPcmLoadErrorCode::digest_mismatch: return "digest-mismatch";
+	case RhythmPcmLoadErrorCode::format_mismatch: return "format-mismatch";
+	case RhythmPcmLoadErrorCode::allocation_failed: return "allocation-failed";
 	}
 	return "unknown";
 }
@@ -496,6 +678,17 @@ int fail(const char *stage, const RhythmRomLoadError &error)
 		<< name(error.code) << '\n';
 	if(error.code == RhythmRomLoadErrorCode::file_size_mismatch) {
 		std::cerr << "expected-size=" << th03::audio::ym2608_rhythm_rom_bytes
+			<< "\nobserved-size=" << error.observed_size << '\n';
+	}
+	return 1;
+}
+
+int fail(const char *stage, const RhythmPcmLoadError &error)
+{
+	std::cerr << "status=error\nstage=" << stage << "\ncode="
+		<< name(error.code) << '\n';
+	if(error.code == RhythmPcmLoadErrorCode::file_size_mismatch) {
+		std::cerr << "expected-size=" << rhythm_pcm_profile_bytes
 			<< "\nobserved-size=" << error.observed_size << '\n';
 	}
 	return 1;
@@ -809,6 +1002,11 @@ int run_direct_vs(th03::app::DirectVsCliRequest parsed)
 int run_classic(th03::app::ClassicCliRequest parsed)
 {
 	const auto data_root = parsed.launch.content.data_root;
+	if(parsed.rhythm_rom && parsed.rhythm_pcm) {
+		std::cerr << "status=error\nstage=audio-profile\n"
+			"code=conflicting-rhythm-profiles\n";
+		return 1;
+	}
 	std::vector<std::byte> rhythm_rom{};
 	if(parsed.rhythm_rom) {
 		auto loaded = load_rhythm_rom(*parsed.rhythm_rom);
@@ -816,6 +1014,14 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 			return fail("rhythm-rom", loaded.error());
 		}
 		rhythm_rom = std::move(*loaded);
+	}
+	LoadedRhythmPcm rhythm_pcm{};
+	if(parsed.rhythm_pcm) {
+		auto loaded = load_rhythm_pcm(*parsed.rhythm_pcm);
+		if(!loaded) {
+			return fail("rhythm-pcm", loaded.error());
+		}
+		rhythm_pcm = std::move(*loaded);
 	}
 	parsed.launch.fm_available = true;
 	auto runner = th03::app::ClassicRunner::load(std::move(parsed.launch));
@@ -826,6 +1032,7 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 		.data_root = data_root,
 		.tick_rate = parsed.tick_rate,
 		.rhythm_rom = std::span<const std::byte>(rhythm_rom),
+		.rhythm_pcm = rhythm_pcm.view(),
 	});
 	if(!created_session) {
 		return fail("audio-session-create", created_session.error());

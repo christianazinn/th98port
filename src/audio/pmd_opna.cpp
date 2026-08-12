@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <limits>
 #include <new>
@@ -289,6 +290,137 @@ PmdPointer make_pmd() noexcept
 	return PmdPointer(th03_pmd_create());
 }
 
+class DecodedRhythm final {
+public:
+	DecodedRhythm() = default;
+
+	DecodedRhythm(
+		const PmdOpnaRhythmPcm &source,
+		std::uint32_t output_rate
+	) : present_(source.sample_rate_hz != 0U)
+	{
+		if(!present_) {
+			return;
+		}
+		for(std::size_t index = 0U; index < voices_.size(); ++index) {
+			auto &voice = voices_[index];
+			voice.samples.assign(
+				source.voices[index].begin(), source.voices[index].end()
+			);
+			voice.end = static_cast<std::uint64_t>(voice.samples.size()) << 10U;
+			voice.step =
+				(static_cast<std::uint64_t>(source.sample_rate_hz) << 10U) /
+				output_rate;
+		}
+		for(std::size_t attenuation = 0U;
+			attenuation < attenuation_gain_.size(); ++attenuation) {
+			const auto full_scale = std::llround(
+				65'536.0 * std::exp2(
+					-static_cast<double>(attenuation) / 8.0
+				)
+			) - 1LL;
+			attenuation_gain_[attenuation] = static_cast<std::int32_t>(
+				full_scale >> 4U
+			);
+		}
+		reset();
+	}
+
+	[[nodiscard]] bool present() const noexcept { return present_; }
+
+	void reset() noexcept
+	{
+		active_mask_ = 0U;
+		total_attenuation_ = 63U;
+		for(auto &voice : voices_) {
+			voice.cursor = voice.end;
+			voice.pan = 0U;
+			voice.attenuation = 31U;
+		}
+	}
+
+	void write(std::uint16_t address, std::uint8_t value) noexcept
+	{
+		if(!present_) {
+			return;
+		}
+		if(address == 0x10U) {
+			const auto mask = static_cast<std::uint8_t>(value & 0x3FU);
+			if((value & 0x80U) != 0U) {
+				active_mask_ = static_cast<std::uint8_t>(
+					active_mask_ & static_cast<std::uint8_t>(~mask)
+				);
+				return;
+			}
+			active_mask_ = static_cast<std::uint8_t>(active_mask_ | mask);
+			for(std::size_t index = 0U; index < voices_.size(); ++index) {
+				if((mask & (1U << index)) != 0U) {
+					voices_[index].cursor = 0U;
+				}
+			}
+			return;
+		}
+		if(address == 0x11U) {
+			total_attenuation_ = static_cast<std::uint8_t>(~value & 0x3FU);
+			return;
+		}
+		if(address >= 0x18U && address <= 0x1DU) {
+			auto &voice = voices_[address - 0x18U];
+			voice.pan = static_cast<std::uint8_t>((value >> 6U) & 0x03U);
+			voice.attenuation = static_cast<std::uint8_t>(~value & 0x1FU);
+		}
+	}
+
+	[[nodiscard]] std::array<std::int32_t, 2U> render() noexcept
+	{
+		std::array<std::int32_t, 2U> mixed{};
+		if(!present_) {
+			return mixed;
+		}
+		for(std::size_t index = 0U; index < voices_.size(); ++index) {
+			auto &voice = voices_[index];
+			if((active_mask_ & (1U << index)) == 0U ||
+				voice.cursor >= voice.end) {
+				continue;
+			}
+			const auto source_index = static_cast<std::size_t>(
+				voice.cursor >> 10U
+			);
+			voice.cursor += voice.step;
+			const auto attenuation = static_cast<std::size_t>(
+				total_attenuation_ + voice.attenuation
+			);
+			const auto scaled = static_cast<std::int32_t>(
+				(static_cast<std::int64_t>(voice.samples[source_index]) *
+					attenuation_gain_[attenuation]) >> 12U
+			);
+			if((voice.pan & 0x02U) != 0U) {
+				mixed[0] += scaled;
+			}
+			if((voice.pan & 0x01U) != 0U) {
+				mixed[1] += scaled;
+			}
+		}
+		return mixed;
+	}
+
+private:
+	struct Voice final {
+		std::vector<std::int16_t> samples{};
+		std::uint64_t end = 0U;
+		std::uint64_t cursor = 0U;
+		std::uint64_t step = 0U;
+		std::uint8_t pan = 0U;
+		std::uint8_t attenuation = 31U;
+	};
+
+	bool present_ = false;
+	std::uint8_t active_mask_ = 0U;
+	std::uint8_t total_attenuation_ = 63U;
+	std::array<Voice, ym2608_rhythm_voice_count> voices_{};
+	std::array<std::int32_t, 95U> attenuation_gain_{};
+};
+
 } // namespace
 
 struct PmdOpnaEngine::Impl final : ymfm::ymfm_interface {
@@ -296,7 +428,8 @@ struct PmdOpnaEngine::Impl final : ymfm::ymfm_interface {
 		config(requested),
 		clocks_per_sample(clock_divisor(requested.fidelity)),
 		native_sample_rate(requested.input_clock_hz / clocks_per_sample),
-		rhythm_rom(requested.rhythm_rom.size())
+		rhythm_rom(requested.rhythm_rom.size()),
+		decoded_rhythm(requested.rhythm_pcm, native_sample_rate)
 	{
 		std::transform(
 			requested.rhythm_rom.begin(), requested.rhythm_rom.end(),
@@ -351,6 +484,7 @@ struct PmdOpnaEngine::Impl final : ymfm::ymfm_interface {
 		timer_deadlines.fill(-1);
 		irq_asserted = false;
 		chip->reset();
+		decoded_rhythm.reset();
 		timer_deadlines.fill(-1);
 		irq_asserted = false;
 	}
@@ -360,10 +494,23 @@ struct PmdOpnaEngine::Impl final : ymfm::ymfm_interface {
 		const auto bounded_address = static_cast<std::uint16_t>(address & 0x1FFU);
 		const auto bounded_value = static_cast<std::uint8_t>(value);
 		registers[bounded_address] = bounded_value;
-		if((bounded_address & 0x100U) != 0U) {
+		decoded_rhythm.write(bounded_address, bounded_value);
+		const bool is_rhythm_register =
+			bounded_address >= 0x10U && bounded_address < 0x20U;
+		const bool publish_to_chip =
+			!is_rhythm_register || !rhythm_rom.empty();
+		if(!publish_to_chip && bounded_address == 0x10U) {
+			// The decoded/no-data profiles bypass ymfm's ADPCM-A decoder. Keep
+			// its six internal channels explicitly dumped as PMD writes the
+			// source control register; zero external bytes are valid ADPCM and
+			// therefore cannot represent silence.
+			chip->write(0U, 0x10U);
+			chip->write(1U, 0xBFU);
+		}
+		if(publish_to_chip && (bounded_address & 0x100U) != 0U) {
 			chip->write(2U, static_cast<std::uint8_t>(bounded_address));
 			chip->write(3U, bounded_value);
-		} else {
+		} else if(publish_to_chip) {
 			chip->write(0U, static_cast<std::uint8_t>(bounded_address));
 			chip->write(1U, bounded_value);
 		}
@@ -427,12 +574,13 @@ struct PmdOpnaEngine::Impl final : ymfm::ymfm_interface {
 		ymfm::ym2608::output_data generated;
 		generated.clear();
 		chip->generate(&generated, 1U);
+		const auto rhythm = decoded_rhythm.render();
 		static_assert(ymfm::ym2608::OUTPUTS == 3U);
 		sample.left = detail::pmd_mix_to_q31(
-			generated.data[0], generated.data[2]
+			generated.data[0], generated.data[2], rhythm[0]
 		);
 		sample.right = detail::pmd_mix_to_q31(
-			generated.data[1], generated.data[2]
+			generated.data[1], generated.data[2], rhythm[1]
 		);
 		++samples_rendered;
 	}
@@ -461,6 +609,7 @@ struct PmdOpnaEngine::Impl final : ymfm::ymfm_interface {
 	std::uint32_t clocks_per_sample = 0U;
 	std::uint32_t native_sample_rate = 0U;
 	std::vector<std::uint8_t> rhythm_rom{};
+	DecodedRhythm decoded_rhythm{};
 	std::vector<std::uint8_t> prepared_song{};
 	std::optional<PreparedEffectBank> prepared_effect_bank{};
 	std::vector<std::uint8_t> active_song{};
@@ -493,6 +642,39 @@ std::expected<PmdOpnaEngine, PmdOpnaError> PmdOpnaEngine::create(
 			.code = PmdOpnaErrorCode::invalid_rhythm_rom_size,
 			.supplied_size = config.rhythm_rom.size(),
 		});
+	}
+	const auto pcm_voice_count = static_cast<std::size_t>(std::count_if(
+		config.rhythm_pcm.voices.begin(), config.rhythm_pcm.voices.end(),
+		[](auto voice) { return !voice.empty(); }
+	));
+	const bool pcm_requested =
+		pcm_voice_count != 0U || config.rhythm_pcm.sample_rate_hz != 0U;
+	if((pcm_requested &&
+		(pcm_voice_count != ym2608_rhythm_voice_count ||
+		 config.rhythm_pcm.sample_rate_hz == 0U)) ||
+		(!config.rhythm_rom.empty() && pcm_requested)) {
+		return std::unexpected(PmdOpnaError{
+			.code = PmdOpnaErrorCode::invalid_rhythm_pcm,
+			.supplied_size = pcm_voice_count,
+		});
+	}
+	if(pcm_voice_count != 0U) {
+		const auto native_rate = config.input_clock_hz / divisor;
+		const auto step =
+			(static_cast<std::uint64_t>(config.rhythm_pcm.sample_rate_hz) << 10U) /
+			native_rate;
+		if(step == 0U || std::any_of(
+			config.rhythm_pcm.voices.begin(), config.rhythm_pcm.voices.end(),
+			[](auto voice) {
+				return voice.size() >
+					(std::numeric_limits<std::uint64_t>::max() >> 10U);
+			}
+		)) {
+			return std::unexpected(PmdOpnaError{
+				.code = PmdOpnaErrorCode::invalid_rhythm_pcm,
+				.supplied_size = pcm_voice_count,
+			});
+		}
 	}
 	try {
 		return PmdOpnaEngine(std::make_unique<Impl>(config));
@@ -755,6 +937,7 @@ PmdOpnaStatus PmdOpnaEngine::status() const noexcept
 		.paused = th03_pmd_is_paused(pmd),
 		.effect_bank_loaded = impl_->prepared_effect_bank.has_value(),
 		.rhythm_rom_present = !impl_->rhythm_rom.empty(),
+		.rhythm_pcm_present = impl_->decoded_rhythm.present(),
 		.active_effect = [pmd]() -> std::optional<std::uint8_t> {
 			const auto effect = th03_pmd_active_effect(pmd);
 			return effect == 0xFFU ? std::nullopt : std::optional{effect};

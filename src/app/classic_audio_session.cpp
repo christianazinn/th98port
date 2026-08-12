@@ -240,6 +240,7 @@ ClassicAudioSession::create(ClassicAudioSessionConfig config)
 		.input_clock_hz = classic_opna_clock_hz,
 		.fidelity = audio::PmdOpnaFidelity::minimum,
 		.rhythm_rom = config.rhythm_rom,
+		.rhythm_pcm = config.rhythm_pcm,
 	});
 	if(!engine) {
 		return std::unexpected(engine_error({}, engine.error()));

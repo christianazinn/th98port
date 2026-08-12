@@ -270,11 +270,22 @@ to ymfm's shared SSG lane before saturation and Q31 promotion.
 This matters for `OP.M`: before weighting, the first rendered interval had a
 per-stereo-lane absolute mean of about 2091 but a shared-SSG absolute mean of
 about 3438, so the equal-gain adapter let accompaniment mask the FM melody.
-The weighted one-second authentic opening is unclipped, peaks at 1,214,840,832
-in Q31, and has cross-toolchain FNV-1a `8dccd4f4`. Register/timer behavior is
-unchanged. The supplied 16 KiB `SOUND.ROM` is board firmware, not the exact
-8 KiB YM2608 ADPCM-A rhythm image accepted by the port, so it is not rebound as
-rhythm data.
+Read-only disassembly also recovers six contiguous signed-16 44.1 kHz rhythm
+sample arrays from `Sound86.nhw`, with source voice lengths `0x2590`, `0x3b10`,
+`0x6eed`, `0x3e00`, `0x2f5e`, and `0x2018`. The private standalone builder
+authenticates the complete device module before extracting those voices; the
+native decoded-rhythm adapter reproduces Sound86's key-on/dump, total level,
+per-instrument level, panning, Q10 cursor, and attenuation-table behavior. The
+one-second authentic opening with that decoded profile is unclipped, peaks at
+1,662,386,176 in Q31, and has FNV-1a `6e24e269`. FM1-6, SSG1-2, and rhythm are
+also isolated after a ten-second post-mask settling interval and frozen as nine
+distinct ten-second PCM hashes. Register/timer behavior is unchanged.
+
+The supplied 16 KiB `SOUND.ROM` remains board firmware, not the exact 8 KiB
+YM2608 ADPCM-A rhythm image, and is never sliced or mislabeled. Without either
+an 8 KiB image or the decoded profile, the adapter suppresses ADPCM-A writes;
+returning zero bytes is not silence because the decoder turns zero nibbles into
+a real, loud waveform.
 
 The external FM-effect path is a marked TH03 extraction delta, not an upstream
 capability claim. A port-owned validator accepts the 128-word pointer table,
@@ -315,7 +326,8 @@ Limits and maintenance costs:
   device mixer;
 - the caller must provide external data reads for `ACCESS_ADPCM_A` and
   `ACCESS_ADPCM_B`. The YM2608 class fixes the six rhythm address ranges at
-  `0x0000..0x1fff`, so silence is expected without an 8 KiB rhythm image;
+  `0x0000..0x1fff`; zero-filled reads are valid ADPCM rather than silence, so
+  the adapter must suppress the ADPCM-A domain when no rhythm data is present;
 - default maximum-fidelity YM2608 output is input clock divided by 8. At the
   provisional 7,987,200 Hz configuration that is 998,400 samples/s, requiring
   an explicit host-rate converter. The fidelity/rate behavior is documented in
@@ -435,11 +447,16 @@ Policy:
   `--rhythm-rom` option. The launcher validates an ordinary exact-size file and
   the engine copies it before SDL construction. The user is responsible for
   obtaining it lawfully for their jurisdiction.
+- For the private T98-Next conformance build, authenticate the known
+  `Sound86.nhw` profile and extract its six decoded voices into the bounded
+  `T98RHYTHM.PCM` package. Accept that package through `--rhythm-pcm`; never
+  execute the device module or commit/package either input publicly.
 - Optionally support six explicitly user-selected replacement WAVs, but label
   that a non-reference acoustic mode. Only ship replacements whose license and
   authorship are recorded.
-- Missing rhythm data is a deterministic, visible mode: return silence for
-  ADPCM-A and issue one diagnostic. Never fall back to mystery bytes fetched
+- Missing rhythm data is a deterministic, visible mode: suppress ADPCM-A
+  register publication and issue one diagnostic. Never treat zero bytes as
+  silence or fall back to mystery bytes fetched
   from an unofficial ROM site.
 - Repository tests use generated impulses/ramps or purpose-created freely
   licensed samples, never original game or Yamaha ROM bytes.
@@ -447,8 +464,9 @@ Policy:
 TH03 ships no ADPCM-B/PPC/PVI/P86 bank. The byte-silent corpus gate now proves
 that 20 of 21 songs use ADPCM-A rhythm while the ordinary ADPCM/PCM part is
 musically unused across all 21. Authentic playback therefore requires the
-caller-supplied 8 KiB rhythm image; empty input is an explicit deterministic
-silent-rhythm development mode.
+caller-supplied 8 KiB rhythm image for hardware-style playback. The private
+T98-reference build may use its authenticated decoded profile; empty input is
+an explicit rhythm-suppressed development mode.
 
 ## Recommended architecture
 
@@ -542,8 +560,10 @@ Hz. The current minimum-fidelity engine produces exactly 166,400 Hz
 every 52 input samples. `PmdFixedResampler` implements that one ratio only; it
 is not a general host-device rate converter.
 
-The one-chip mixer applies the documented T98-Next SSG weight and promotes
-ymfm's signed-16-scale result into Q31 before this resampler. Without that
+The one-chip mixer applies the documented T98-Next SSG weight, adds either the
+YM2608 ADPCM-A result or decoded T98 rhythm voices under the same signed-16
+saturation policy, and promotes the result into Q31 before this resampler.
+Without that
 promotion, SDL's S32 conversion interprets a nominal 32767 sample against 2^31
 full scale and makes the result effectively silent. The digital weighting and
 promotion are locked; captured PC-98 analog gain remains a separate hardware
@@ -696,13 +716,14 @@ register divergence before a waveform metric.
 4. **Actual song feature subset:** corpus structure and the native byte-silent
    gate resolve rhythm (20/21) and ordinary ADPCM/PCM (unused). Shipped-TSR
    register comparison remains necessary for exact sequencing fidelity.
-5. **Rhythm provenance:** the optional exact-size caller seam and explicit
-   silent-rhythm mode are implemented. Decide which owned 8 KiB image defines
-   reference mode, whether a redistributable replacement exists, and how public
-   packaging communicates that choice. Do not use unofficial download links.
-6. **Stem implementation:** confirm source/channel ownership from `.EFC` traces,
-   then choose the smallest `ymfm` output-mask extension that preserves a single
-   shared chip state.
+5. **Rhythm provenance:** exact-size ROM, authenticated private decoded-T98,
+   and true no-data suppression policies are implemented. Decide whether a
+   redistributable replacement exists and how public packaging communicates
+   that choice. Do not use unofficial download links.
+6. **Stem implementation:** the source/channel ownership probe now proves
+   independent post-settling FM1-6, SSG1-2, and rhythm output without changing
+   the production chip state. Keep those exact hashes as regression evidence;
+   aligned T98/physical capture remains the waveform-fidelity gate.
 7. **Canonical rate/resampler:** resolved as explicit host policy for the current
    minimum-fidelity 166,400 Hz stream: fixed 48 kHz, 15 phases, 128 taps, signed
    Q30, 64-sample lookahead, round-half-away, and signed-32 saturation. The

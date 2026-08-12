@@ -19,7 +19,8 @@ inline constexpr std::int64_t t98_next_ssg_gain_denominator = 2'048LL;
 // the signed-16 source domain, then promote exactly to canonical Q31/S32.
 [[nodiscard]] constexpr std::int32_t pmd_mix_to_q31(
 	std::int32_t stereo,
-	std::int32_t shared
+	std::int32_t shared,
+	std::int32_t rhythm = 0
 ) noexcept
 {
 	const auto weighted_shared =
@@ -27,7 +28,7 @@ inline constexpr std::int64_t t98_next_ssg_gain_denominator = 2'048LL;
 		t98_next_ssg_gain_denominator;
 	const auto mixed = std::clamp(
 		static_cast<std::int64_t>(stereo) +
-			weighted_shared,
+			weighted_shared + static_cast<std::int64_t>(rhythm),
 		static_cast<std::int64_t>(std::numeric_limits<std::int16_t>::min()),
 		static_cast<std::int64_t>(std::numeric_limits<std::int16_t>::max())
 	);

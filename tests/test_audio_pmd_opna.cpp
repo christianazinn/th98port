@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <utility>
@@ -21,6 +22,7 @@ using th03::audio::PmdOpnaErrorCode;
 using th03::audio::PmdOpnaFidelity;
 using th03::audio::PmdOpnaRegisterTraceSink;
 using th03::audio::PmdOpnaRegisterWrite;
+using th03::audio::PmdOpnaRhythmPcm;
 using th03::audio::PmdOpnaStereoSample;
 using th03::audio::pmd_effect_bank_max_bytes;
 using th03::audio::pmd_effect_count;
@@ -296,7 +298,7 @@ public:
 
 void test_config_and_load_validation()
 {
-	for(const auto config : {
+	for(const auto &config : {
 		PmdOpnaConfig{},
 		PmdOpnaConfig{.input_clock_hz = 7U},
 		PmdOpnaConfig{
@@ -360,6 +362,40 @@ void test_config_and_load_validation()
 	expect(
 		with_rhythm && with_rhythm->status().rhythm_rom_present,
 		"caller-supplied exact rhythm image is owned and reported"
+	);
+	std::array<std::int16_t, 4U> one_voice{};
+	PmdOpnaRhythmPcm partial_pcm{.sample_rate_hz = 44'100U};
+	partial_pcm.voices[0] = one_voice;
+	const auto invalid_pcm = PmdOpnaEngine::create(PmdOpnaConfig{
+		.input_clock_hz = 7'987'200U,
+		.rhythm_pcm = partial_pcm,
+	});
+	expect(
+		!invalid_pcm &&
+			invalid_pcm.error().code == PmdOpnaErrorCode::invalid_rhythm_pcm,
+		"decoded rhythm requires all six voices and a sample rate"
+	);
+	const auto rate_without_voices = PmdOpnaEngine::create(PmdOpnaConfig{
+		.input_clock_hz = 7'987'200U,
+		.rhythm_pcm = PmdOpnaRhythmPcm{.sample_rate_hz = 44'100U},
+	});
+	expect(
+		!rate_without_voices &&
+			rate_without_voices.error().code ==
+				PmdOpnaErrorCode::invalid_rhythm_pcm,
+		"decoded rhythm cannot declare a sample rate without six voices"
+	);
+	PmdOpnaRhythmPcm complete_pcm{.sample_rate_hz = 44'100U};
+	complete_pcm.voices.fill(one_voice);
+	const auto conflicting_pcm = PmdOpnaEngine::create(PmdOpnaConfig{
+		.input_clock_hz = 7'987'200U,
+		.rhythm_rom = rhythm,
+		.rhythm_pcm = complete_pcm,
+	});
+	expect(
+		!conflicting_pcm &&
+			conflicting_pcm.error().code == PmdOpnaErrorCode::invalid_rhythm_pcm,
+		"encoded ROM and decoded rhythm profiles are mutually exclusive"
 	);
 
 	auto subject = engine();
@@ -755,19 +791,33 @@ void test_rhythm_rom_is_owned_and_audible()
 		.rhythm_rom = retained_rom,
 	});
 	auto silent = engine();
+	const std::array<std::byte, ym2608_rhythm_rom_bytes> zero_rom{};
+	auto zero_decoded = PmdOpnaEngine::create(PmdOpnaConfig{
+		.input_clock_hz = 7'987'200U,
+		.fidelity = PmdOpnaFidelity::maximum,
+		.rhythm_rom = zero_rom,
+	});
 	expect(!silent.status().rhythm_rom_present, "missing ROM mode is explicit");
 
 	const auto song = synthetic_rhythm_song();
 	expect(copied->load_song(song) && copied->play(), "copied-ROM rhythm starts");
 	expect(reference->load_song(song) && reference->play(), "reference rhythm starts");
 	expect(silent.load_song(song) && silent.play(), "silent-rhythm mode still sequences");
+	expect(
+		zero_decoded && zero_decoded->load_song(song) && zero_decoded->play(),
+		"explicit zero-nibble ADPCM reference starts"
+	);
 
 	std::vector<PmdOpnaStereoSample> copied_pcm(80'000U);
 	std::vector<PmdOpnaStereoSample> reference_pcm(copied_pcm.size());
 	std::vector<PmdOpnaStereoSample> silent_pcm(copied_pcm.size());
+	std::vector<PmdOpnaStereoSample> zero_pcm(copied_pcm.size());
 	copied->render_native(copied_pcm);
 	reference->render_native(reference_pcm);
 	silent.render_native(silent_pcm);
+	if(zero_decoded) {
+		zero_decoded->render_native(zero_pcm);
+	}
 	const auto copied_hash = sample_hash(copied_pcm);
 	expect(
 		copied_hash == sample_hash(reference_pcm),
@@ -781,6 +831,88 @@ void test_rhythm_rom_is_owned_and_audible()
 			}
 		),
 		"ADPCM-A rhythm output reads the supplied ROM rather than silent fallback"
+	);
+	expect(
+		[](const auto &without_data, const auto &zero_nibbles) {
+			const auto magnitude = [](const auto &samples) {
+				std::uint64_t sum = 0U;
+				for(const auto &sample : samples) {
+					sum += static_cast<std::uint64_t>(std::abs(
+						static_cast<std::int64_t>(sample.left)
+					));
+					sum += static_cast<std::uint64_t>(std::abs(
+						static_cast<std::int64_t>(sample.right)
+					));
+				}
+				return sum;
+			};
+			return magnitude(without_data) < magnitude(zero_nibbles);
+		}(silent_pcm, zero_pcm),
+		"missing rhythm data suppresses the loud zero-nibble ADPCM waveform"
+	);
+}
+
+void test_decoded_rhythm_is_owned_and_audible()
+{
+	std::array<std::array<std::int16_t, 256U>, 6U> source{};
+	for(std::size_t voice = 0U; voice < source.size(); ++voice) {
+		for(std::size_t sample = 0U; sample < source[voice].size(); ++sample) {
+			source[voice][sample] = static_cast<std::int16_t>(
+				4'000 + static_cast<std::int32_t>(voice * 500U) -
+				static_cast<std::int32_t>(sample * 8U)
+			);
+		}
+	}
+	const auto retained = source;
+	PmdOpnaRhythmPcm profile{.sample_rate_hz = 44'100U};
+	for(std::size_t voice = 0U; voice < source.size(); ++voice) {
+		profile.voices[voice] = source[voice];
+	}
+	auto copied = PmdOpnaEngine::create(PmdOpnaConfig{
+		.input_clock_hz = 7'987'200U,
+		.fidelity = PmdOpnaFidelity::maximum,
+		.rhythm_pcm = profile,
+	});
+	expect(static_cast<bool>(copied), "decoded six-voice rhythm is accepted");
+	expect(
+		copied && copied->status().rhythm_pcm_present &&
+			!copied->status().rhythm_rom_present,
+		"decoded rhythm profile is reported independently from a ROM"
+	);
+	for(auto &voice : source) {
+		voice.fill(0);
+	}
+	PmdOpnaRhythmPcm reference_profile{.sample_rate_hz = 44'100U};
+	for(std::size_t voice = 0U; voice < retained.size(); ++voice) {
+		reference_profile.voices[voice] = retained[voice];
+	}
+	auto reference = PmdOpnaEngine::create(PmdOpnaConfig{
+		.input_clock_hz = 7'987'200U,
+		.fidelity = PmdOpnaFidelity::maximum,
+		.rhythm_pcm = reference_profile,
+	});
+	const auto song = synthetic_rhythm_song();
+	expect(
+		copied && reference && copied->load_song(song) && copied->play() &&
+			reference->load_song(song) && reference->play(),
+		"decoded-rhythm comparison starts"
+	);
+	if(!copied || !reference) {
+		return;
+	}
+	std::vector<PmdOpnaStereoSample> copied_pcm(80'000U);
+	std::vector<PmdOpnaStereoSample> reference_pcm(copied_pcm.size());
+	copied->render_native(copied_pcm);
+	reference->render_native(reference_pcm);
+	expect(
+		sample_hash(copied_pcm) == sample_hash(reference_pcm),
+		"engine owns decoded rhythm after caller storage changes"
+	);
+	expect(
+		std::any_of(copied_pcm.begin(), copied_pcm.end(), [](const auto &sample) {
+			return sample.left != 0 || sample.right != 0;
+		}),
+		"decoded rhythm reaches the canonical stereo mix"
 	);
 }
 
@@ -827,6 +959,67 @@ std::vector<std::byte> read_external_file(const std::filesystem::path &path)
 		return {};
 	}
 	return bytes;
+}
+
+struct ExternalRhythmPcm final {
+	std::array<std::vector<std::int16_t>, 6U> voices{};
+
+	PmdOpnaRhythmPcm view() const
+	{
+		PmdOpnaRhythmPcm result{.sample_rate_hz = 44'100U};
+		for(std::size_t index = 0U; index < voices.size(); ++index) {
+			result.voices[index] = voices[index];
+		}
+		return result;
+	}
+};
+
+std::optional<ExternalRhythmPcm> read_external_rhythm_pcm(
+	const std::filesystem::path &path
+)
+{
+	std::ifstream input(path, std::ios::binary);
+	if(!input) {
+		return std::nullopt;
+	}
+	std::vector<std::uint8_t> bytes{
+		std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()
+	};
+	constexpr std::array<std::uint8_t, 8U> magic{
+		'T', '9', '8', 'R', 'H', 'Y', '0', 0U,
+	};
+	constexpr std::array<std::uint32_t, 6U> lengths{
+		0x2590U, 0x3B10U, 0x6EEDU, 0x3E00U, 0x2F5EU, 0x2018U,
+	};
+	if(bytes.size() != 178'730U ||
+		!std::equal(magic.begin(), magic.end(), bytes.begin())) {
+		return std::nullopt;
+	}
+	const auto le32 = [&bytes](std::size_t offset) {
+		return static_cast<std::uint32_t>(bytes[offset]) |
+			(static_cast<std::uint32_t>(bytes[offset + 1U]) << 8U) |
+			(static_cast<std::uint32_t>(bytes[offset + 2U]) << 16U) |
+			(static_cast<std::uint32_t>(bytes[offset + 3U]) << 24U);
+	};
+	if(le32(8U) != 44'100U) {
+		return std::nullopt;
+	}
+	ExternalRhythmPcm result{};
+	std::size_t cursor = 36U;
+	for(std::size_t voice = 0U; voice < result.voices.size(); ++voice) {
+		if(le32(12U + (voice * 4U)) != lengths[voice]) {
+			return std::nullopt;
+		}
+		result.voices[voice].resize(lengths[voice]);
+		for(auto &sample : result.voices[voice]) {
+			sample = static_cast<std::int16_t>(
+				static_cast<std::uint16_t>(bytes[cursor]) |
+				(static_cast<std::uint16_t>(bytes[cursor + 1U]) << 8U)
+			);
+			cursor += 2U;
+		}
+	}
+	return result;
 }
 
 void test_authentic_corpus(const std::filesystem::path &yume1_root)
@@ -899,7 +1092,10 @@ void test_authentic_corpus(const std::filesystem::path &yume1_root)
 		<< " rhythm_key_ons=" << rhythm_key_ons << '\n';
 }
 
-void test_authentic_title_mix(const std::filesystem::path &yume1_root)
+void test_authentic_title_mix(
+	const std::filesystem::path &yume1_root,
+	PmdOpnaRhythmPcm rhythm_pcm = {}
+)
 {
 	const auto song = read_external_file(yume1_root / "OP.M");
 	expect(!song.empty(), "authentic title song is readable");
@@ -909,6 +1105,7 @@ void test_authentic_title_mix(const std::filesystem::path &yume1_root)
 	auto created = PmdOpnaEngine::create(PmdOpnaConfig{
 		.input_clock_hz = 7'987'200U,
 		.fidelity = PmdOpnaFidelity::minimum,
+		.rhythm_pcm = rhythm_pcm,
 	});
 	expect(static_cast<bool>(created), "authentic title mix engine is created");
 	if(!created) {
@@ -929,10 +1126,86 @@ void test_authentic_title_mix(const std::filesystem::path &yume1_root)
 			}
 		}
 	}
+	const auto hash = sample_hash(pcm);
+	const bool decoded_profile = rhythm_pcm.sample_rate_hz != 0U;
 	expect(
-		sample_hash(pcm) == 0x8DCCD4F4U && peak == 1'214'840'832LL &&
+		(decoded_profile ?
+			(hash == 1'847'911'017U && peak == 1'662'386'176LL) :
+			(hash == 50'015'953U && peak == 586'481'664LL)) &&
 			saturated == 0U,
-		"T98-weighted authentic OP.M opening is deterministic and unclipped"
+		"authentic OP.M mix is profile-specific, deterministic, and unclipped"
+	);
+}
+
+void test_authentic_complete_voice_routes(
+	const std::filesystem::path &yume1_root,
+	PmdOpnaRhythmPcm rhythm_pcm
+)
+{
+	const auto song = read_external_file(yume1_root / "DEMO1.M");
+	const auto rhythm_song = read_external_file(yume1_root / "OP.M");
+	expect(!song.empty(), "complete-voice reference song is readable");
+	expect(!rhythm_song.empty(), "complete-rhythm reference song is readable");
+	if(song.empty() || rhythm_song.empty()) {
+		return;
+	}
+	std::array<std::uint32_t, 9U> hashes{};
+	for(std::size_t route = 0U; route < hashes.size(); ++route) {
+		const auto audible_part = static_cast<std::uint8_t>(
+			route < 8U ? route : 10U
+		);
+		auto created = PmdOpnaEngine::create(PmdOpnaConfig{
+			.input_clock_hz = 7'987'200U,
+			.fidelity = PmdOpnaFidelity::minimum,
+			.rhythm_pcm = rhythm_pcm,
+		});
+		expect(static_cast<bool>(created), "complete-voice engine is created");
+		if(!created) {
+			continue;
+		}
+		auto subject = std::move(*created);
+		const auto &selected_song = route < 8U ? song : rhythm_song;
+		expect(
+			subject.load_song(selected_song) && subject.play(),
+			"complete-voice reference song starts"
+		);
+		for(std::uint8_t part = 0U; part <= 13U; ++part) {
+			if(part != audible_part) {
+				static_cast<void>(subject.set_part_mask(part, true));
+			}
+		}
+		if(audible_part != 10U) {
+			static_cast<void>(subject.set_part_mask(14U, true));
+		}
+		// Play initializes the first source notes before AH=1Eh can mask parts.
+		// Let those pre-mask key-ons expire before measuring the isolated route.
+		std::vector<PmdOpnaStereoSample> warmup(
+			static_cast<std::size_t>(subject.status().native_sample_rate) * 10U
+		);
+		subject.render_native(warmup);
+		std::vector<PmdOpnaStereoSample> pcm(
+			static_cast<std::size_t>(subject.status().native_sample_rate) * 10U
+		);
+		subject.render_native(pcm);
+		hashes[route] = sample_hash(pcm);
+		const auto route_nonzero = std::count_if(
+			pcm.begin(), pcm.end(), [](const auto &sample) {
+				return sample.left != 0 || sample.right != 0;
+			}
+		);
+		expect(
+			route_nonzero != 0,
+			"each authored FM/SSG/rhythm route reaches stereo PCM"
+		);
+	}
+	constexpr std::array<std::uint32_t, 9U> expected_hashes{
+		1'961'029'913U, 4'203'322'885U, 1'386'951'077U,
+		71'659'365U, 1'708'591'201U, 149'015'673U,
+		3'266'068'125U, 3'834'310'849U, 236'522'255U,
+	};
+	expect(
+		hashes == expected_hashes,
+		"FM1-6, SSG1-2, and decoded rhythm stems are byte-deterministic"
 	);
 }
 
@@ -996,13 +1269,26 @@ int main(int argc, char **argv)
 	test_load_is_chip_silent_and_play_is_traced();
 	test_pcm_and_fresh_replay_are_deterministic();
 	test_rhythm_rom_is_owned_and_audible();
+	test_decoded_rhythm_is_owned_and_audible();
 	test_instances_and_preplay_silence_are_independent();
-	if(argc == 3 && std::string_view(argv[1]) == "--authentic") {
+	if((argc == 3 || argc == 4) &&
+		std::string_view(argv[1]) == "--authentic") {
 		test_authentic_corpus(argv[2]);
-		test_authentic_title_mix(argv[2]);
+		std::optional<ExternalRhythmPcm> rhythm_pcm{};
+		if(argc == 4) {
+			rhythm_pcm = read_external_rhythm_pcm(argv[3]);
+			expect(rhythm_pcm.has_value(), "external T98 rhythm profile is readable");
+		}
+		test_authentic_title_mix(
+			argv[2], rhythm_pcm ? rhythm_pcm->view() : PmdOpnaRhythmPcm{}
+		);
+		if(rhythm_pcm) {
+			test_authentic_complete_voice_routes(argv[2], rhythm_pcm->view());
+		}
 		test_authentic_effect_bank(argv[2]);
 	} else if(argc != 1) {
-		std::cerr << "usage: th03-audio-pmd-tests [--authentic <YUME1.DAT>]\n";
+		std::cerr << "usage: th03-audio-pmd-tests "
+			"[--authentic <YUME1.DAT> [<T98RHYTHM.PCM>]]\n";
 		return 2;
 	}
 

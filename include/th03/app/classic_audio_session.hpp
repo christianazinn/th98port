@@ -31,9 +31,10 @@ struct ClassicAudioSessionConfig final {
 	// snd_determine_mode() when Music is Off, leaving their fresh-process
 	// snd_fm_possible false and disabling sound effects as well.
 	bool bgm_active = true;
-	// Empty selects the engine's deterministic silent-rhythm mode. A supplied
-	// ROM is copied by the engine and must contain exactly 8 KiB.
+	// Empty suppresses ADPCM-A playback unless rhythm_pcm is supplied. A ROM is
+	// copied by the engine and must contain exactly 8 KiB.
 	std::span<const std::byte> rhythm_rom{};
+	audio::PmdOpnaRhythmPcm rhythm_pcm{};
 	MainResourceIntegrity integrity = MainResourceIntegrity::size_and_fnv1a64;
 };
 

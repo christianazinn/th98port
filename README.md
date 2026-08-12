@@ -74,8 +74,12 @@ The no-argument script is the maintained convenience path and should be rerun
 after changes intended for human testing. It rebuilds and overwrites the stable
 artifact rather than publishing versioned copies. Alternate ignored inputs can
 be supplied with `-DataRoot`, `-MainExecutable`, `-MainlExecutable`,
-`-OpExecutable`, `-FontRom`, and optional `-RhythmRom`. The tracked launcher and
-packager contain no original bytes; the generated executable does, so it remains
+`-OpExecutable`, `-FontRom`, and optional `-RhythmRom`. The packager also accepts
+`-T98Sound86`; on this development machine the no-argument path automatically
+recognizes the authenticated T98-Next 13.1th `DEVICE\Sound86.nhw`, extracts its
+six decoded rhythm voices into the private payload, and never executes the
+device module. The tracked launcher and packager contain no original bytes; the
+generated executable does, so it remains
 ignored and is strictly a private testing artifact pending the asset/license
 and public-package work.
 
@@ -84,7 +88,8 @@ and `YUME2.DAT/`, a supported Japanese `MAIN.EXE` compiled-content profile,
 the untouched stock DIET-packed or authenticated unpacked Japanese
 `MAINL.EXE` and `OP.EXE` profiles, and a
 caller-supplied 288,768-byte PC-98 `FONT.ROM`, and optionally a caller-supplied
-8,192-byte YM2608 ADPCM-A rhythm image. No
+8,192-byte YM2608 ADPCM-A rhythm image or the authenticated decoded T98 profile.
+No
 original bytes are embedded or copied into the build. The repository does not
 yet include a DAT extractor or stock-install bootstrap; `--data` must point at
 the already extracted layout documented in
@@ -99,6 +104,13 @@ out\build\msvc-x64-sdl\Debug\th03-app.exe `
   --main X:\th03\MAIN.EXE --mainl X:\th03\MAINL.EXE `
   --op X:\th03\OP.EXE --font X:\pc98\FONT.ROM `
   --rhythm-rom X:\pc98\YM2608.ROM
+
+# Private T98-Next reference alternative to --rhythm-rom:
+out\build\msvc-x64-sdl\Debug\th03-app.exe `
+  --classic --data X:\th03-extracted `
+  --main X:\th03\MAIN.EXE --mainl X:\th03\MAINL.EXE `
+  --op X:\th03\OP.EXE --font X:\pc98\FONT.ROM `
+  --rhythm-pcm X:\private\T98RHYTHM.PCM
 
 out\build\msvc-x64-sdl\Debug\th03-app.exe `
   --vs --data X:\th03-extracted --main X:\th03\MAIN.EXE `
@@ -136,8 +148,12 @@ Classic path always executes semantic commands through the authenticated
 PMD/OPNA/EFC session and fixed resampler;
 SDL availability controls only bounded final playback. Music Off follows fresh
 MAIN/MAINL process behavior and disables both music and FM effects. An exact
-8 KiB `--rhythm-rom` input is copied into the deterministic engine; omitting it
-selects explicit silent-rhythm mode. The repository does not supply or download
+8 KiB `--rhythm-rom` input is copied into the deterministic engine. The private
+standalone builder can instead authenticate the supplied T98-Next Sound86 module
+and package its six decoded 44.1 kHz voices for `--rhythm-pcm`. Omitting both
+suppresses the YM2608 ADPCM-A decoder; zero-filled external data is not used as
+silence because zero nibbles decode into a loud waveform. The repository does
+not supply or download
 that data, so this is not yet a complete redistributable audio-fidelity claim.
 `--help` lists
 keyboard controls and all launch options.

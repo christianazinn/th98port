@@ -73,7 +73,7 @@ void test_cli()
 		parsed->launch.content.score ==
 			std::filesystem::path("data-root") / "YUME.NEM" &&
 		parsed->launch.seed == 1U && !parsed->launch.fm_available &&
-		!parsed->rhythm_rom &&
+		!parsed->rhythm_rom && !parsed->rhythm_pcm &&
 		parsed->tick_rate.ticks == 526'315U &&
 		parsed->tick_rate.seconds == 9'328U,
 		"valid Classic CLI keeps default persistence beside the content root");
@@ -91,6 +91,15 @@ void test_cli()
 		complete->tick_rate.ticks == 3U && complete->tick_rate.seconds == 2U &&
 		complete->smoke_ticks == 7U,
 		"optional Classic paths, rate override, seed, and smoke bound parse");
+	const auto decoded_rhythm = parse({
+		"--classic", "--data", "d", "--main", "m", "--mainl", "l",
+		"--op", "o", "--font", "f", "--rhythm-pcm", "t98.pcm",
+	});
+	expect(
+		decoded_rhythm &&
+			decoded_rhythm->rhythm_pcm == std::filesystem::path("t98.pcm"),
+		"decoded six-voice rhythm profile path parses"
+	);
 
 	const auto unknown = parse({"--classic", "--wat"});
 	const auto missing_value = parse({"--classic", "--data"});

@@ -1,6 +1,7 @@
 #ifndef TH03_AUDIO_PMD_OPNA_HPP
 #define TH03_AUDIO_PMD_OPNA_HPP
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -11,6 +12,7 @@
 namespace th03::audio {
 
 inline constexpr std::size_t ym2608_rhythm_rom_bytes = 8192U;
+inline constexpr std::size_t ym2608_rhythm_voice_count = 6U;
 inline constexpr std::size_t pmd_effect_bank_max_bytes = 2048U;
 inline constexpr std::uint8_t pmd_effect_count = 127U;
 
@@ -20,19 +22,31 @@ enum class PmdOpnaFidelity : std::uint8_t {
 	maximum,
 };
 
+struct PmdOpnaRhythmPcm {
+	std::uint32_t sample_rate_hz = 0U;
+	std::array<
+		std::span<const std::int16_t>, ym2608_rhythm_voice_count
+	> voices{};
+};
+
 struct PmdOpnaConfig {
 	// Deliberately caller-supplied. No PC-98 hardware clock is claimed here
 	// until the tracked hardware-evidence gate establishes one.
 	std::uint32_t input_clock_hz = 0U;
 	PmdOpnaFidelity fidelity = PmdOpnaFidelity::maximum;
-	// Empty selects an explicit deterministic silent-rhythm mode. Authentic
-	// playback requires the caller-supplied 8 KiB YM2608 ADPCM-A ROM.
+	// Empty suppresses ADPCM-A playback unless rhythm_pcm is supplied. A real
+	// hardware-style path uses a caller-supplied 8 KiB YM2608 ADPCM-A ROM.
 	std::span<const std::byte> rhythm_rom{};
+	// Optional decoded six-voice reference profile. This is mutually exclusive
+	// with rhythm_rom and is copied during create(). It exists for emulators such
+	// as T98-Next that supply decoded YM2608 rhythm samples rather than the ROM.
+	PmdOpnaRhythmPcm rhythm_pcm{};
 };
 
 enum class PmdOpnaErrorCode : std::uint8_t {
 	invalid_config,
 	invalid_rhythm_rom_size,
+	invalid_rhythm_pcm,
 	invalid_song_size,
 	invalid_song,
 	invalid_effect_bank_size,
@@ -73,6 +87,7 @@ struct PmdOpnaStatus {
 	bool paused = false;
 	bool effect_bank_loaded = false;
 	bool rhythm_rom_present = false;
+	bool rhythm_pcm_present = false;
 	std::optional<std::uint8_t> active_effect{};
 	std::uint32_t native_sample_rate = 0U;
 	std::uint64_t samples_rendered = 0U;

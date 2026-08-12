@@ -100,6 +100,12 @@ internal static class Program
             arguments.Add("--rhythm-rom");
             arguments.Add(rhythmRom);
         }
+        var rhythmPcm = Path.Combine(content, "T98RHYTHM.PCM");
+        if(File.Exists(rhythmPcm))
+        {
+            arguments.Add("--rhythm-pcm");
+            arguments.Add(rhythmPcm);
+        }
         var smokeTicks = Environment.GetEnvironmentVariable(
             SmokeTicksEnvironment
         );
