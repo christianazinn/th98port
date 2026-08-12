@@ -1437,6 +1437,50 @@ bool authentic_gate(
 		return false;
 	}
 
+	// Replay Patch 0.4.10 accepts released Left, Right, Left, Right while the
+	// title menu owns input. It persists the two Extra characters and plays the
+	// extend effect only on the first successful transition.
+	const auto unlock_audio_begin = audio_commands.size();
+	for(const auto direction : std::array{
+		std::uint16_t{0x0004U}, std::uint16_t{0x0008U},
+		std::uint16_t{0x0004U}, std::uint16_t{0x0008U}
+	}) {
+		if(!step(direction) || !step()) { return false; }
+	}
+	const auto unlocked = th03::app::load_new_classic_score_store(
+		temporary.path() / "YUME.NEW.NEM",
+		temporary.path() / "YUME.NEM"
+	);
+	if(!unlocked || !unlocked->document.extra_unlocked ||
+		audio_commands.size() != unlock_audio_begin + 2U ||
+		audio_commands[unlock_audio_begin] != th03::app::ClassicAudioCommand{
+			.type = th03::app::ClassicAudioCommandType::load_effects,
+		} || audio_commands[unlock_audio_begin + 1U] !=
+			th03::app::ClassicAudioCommand{
+				.type = th03::app::ClassicAudioCommandType::play_effect,
+				.parameter = 8U,
+			}) {
+		std::cerr << "authentic-script-stage=extra-unlock\n";
+		return false;
+	}
+	const auto unlocked_generation = unlocked->document.generation;
+	for(const auto direction : std::array{
+		std::uint16_t{0x0004U}, std::uint16_t{0x0008U},
+		std::uint16_t{0x0004U}, std::uint16_t{0x0008U}
+	}) {
+		if(!step(direction) || !step()) { return false; }
+	}
+	const auto unlocked_again = th03::app::load_new_classic_score_store(
+		temporary.path() / "YUME.NEW.NEM",
+		temporary.path() / "YUME.NEM"
+	);
+	if(!unlocked_again ||
+		unlocked_again->document.generation != unlocked_generation ||
+		audio_commands.size() != unlock_audio_begin + 2U) {
+		std::cerr << "authentic-script-stage=extra-unlock-repeat\n";
+		return false;
+	}
+
 	// Navigate away and back with the source-global arrow channel, then enter
 	// Story. This distinguishes working UI directions from Shot-only control.
 	if(!step(0x0002U) || !last->surface_changed || !step() ||

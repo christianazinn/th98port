@@ -723,6 +723,7 @@ struct ClassicOpSessionBackend final {
 	GameInit current_main_resident{};
 	bool direct_vs_selection = false;
 	bool new_classic_practice_route = false;
+	std::uint8_t title_extra_unlock_step = 0U;
 
 	std::array<ClassicAudioCommand, 64U> audio_commands{};
 	std::size_t audio_head = 0U;
@@ -871,6 +872,52 @@ struct ClassicOpSessionBackend final {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
+		}
+		if(replay_recorder && title->phase_ == ClassicOpPhase::main_menu &&
+			title->menu_input_allowed_ && input.raw_any) {
+			const bool expected = (title_extra_unlock_step & 1U) != 0U ?
+				input.right : input.left;
+			if(expected) {
+				++title_extra_unlock_step;
+			} else {
+				title_extra_unlock_step = input.left ? 1U : 0U;
+			}
+			if(title_extra_unlock_step >= 4U) {
+				title_extra_unlock_step = 0U;
+				auto loaded = load_new_classic_score_store(
+					new_classic_score_path, score_path
+				);
+				if(!loaded) {
+					return std::unexpected(new_score_error(
+						std::move(loaded.error())
+					));
+				}
+				if(!loaded->document.extra_unlocked) {
+					const bool play_feedback = config.sfx_enabled;
+					if(play_feedback && audio_count + 2U > audio_commands.size()) {
+						return std::unexpected(session_error(
+							ClassicOpSessionErrorCode::audio_command_pending
+						));
+					}
+					loaded->document.extra_unlocked = true;
+					if(auto committed = commit_new_classic_score_store(
+						new_classic_score_path, loaded->document
+					); !committed) {
+						return std::unexpected(new_score_error(
+							std::move(committed.error())
+						));
+					}
+					if(play_feedback) {
+						static_cast<void>(push_audio({
+							.type = ClassicAudioCommandType::load_effects,
+						}));
+						static_cast<void>(push_audio({
+							.type = ClassicAudioCommandType::play_effect,
+							.parameter = 8U,
+						}));
+					}
+				}
+			}
 		}
 		auto tick = title->advance(input);
 		if(!tick) {
