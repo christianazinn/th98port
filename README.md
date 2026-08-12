@@ -56,7 +56,10 @@ the untouched stock DIET-packed or authenticated unpacked Japanese
 `MAINL.EXE` and `OP.EXE` profiles, and a
 caller-supplied 288,768-byte PC-98 `FONT.ROM`, and optionally a caller-supplied
 8,192-byte YM2608 ADPCM-A rhythm image. No
-original bytes are embedded or copied into the build. Classic and direct VS
+original bytes are embedded or copied into the build. The repository does not
+yet include a DAT extractor or stock-install bootstrap; `--data` must point at
+the already extracted layout documented in
+[`docs/MAIN_RESOURCE_MANIFEST.md`](docs/MAIN_RESOURCE_MANIFEST.md). Classic and direct VS
 default to the nominal PC-9801 24 kHz timing model, reduced exactly to
 `526315/9328` Hz (56.423134648... Hz). `--tick-rate` remains an optional
 developer/host override:
@@ -85,7 +88,11 @@ The pinned source and timing evidence is recorded in
 SDL presentation independently requires interval-one VSync so a complete
 source frame cannot be replaced mid-scanout on the native renderer. A host
 display whose refresh rate differs from 56.423 Hz can still repeat logical
-frames, but that physical scheduling never changes the PC-98 timeline.
+frames or skip intermediate catch-up frames, but that physical scheduling never
+changes the PC-98 gameplay/PMD timeline. The audio endpoint starts paused after
+the initial blocking present, receives a three-interval prefill, and only then
+resumes. ymfm's signed-16-scale mix is promoted to the declared Q31/S32 domain
+before resampling, avoiding an otherwise effectively silent SDL stream.
 Kotohime's source-uninitialized late Bomb local is normalized from the
 contemporaneous fade byte, following adjacent Kana. Kana's generated path and
 the normalized Kotohime output are `{2*fade, 2*fade, fade}`; stock Kotohime
@@ -100,6 +107,10 @@ selects explicit silent-rhythm mode. The repository does not supply or download
 that data, so this is not yet a complete redistributable audio-fidelity claim.
 `--help` lists
 keyboard controls and all launch options.
+Unless overridden with `--config` and `--score`, Classic stores `YUME.CFG`
+and `YUME.NEM` under the selected `--data` root. This avoids dependence on the
+launcher working directory; use explicit writable paths when the extracted
+content root is read-only.
 
 Validate an external frozen case without copying it into this repository:
 
@@ -209,15 +220,24 @@ split comparisons. Original game data and replay captures remain external.
   Story/all-VS character selection, Story, MAINL/MAIN VS, winner return, and
   the exact four-recipe automatic Demo loop. Every source OP route is now
   internally owned without adding replay UI. A supplied-original integration
-  matrix drives the production owner through a full Reimu clear, used-credit
+  matrix drives the production owner through a Reimu clear, used-credit
   clear, Continue Yes/No, exhausted credits, MAIN route 0, score persistence,
-  fresh-title return, and real Quit while composing every changed surface and
-  draining every audio command on GCC and MSVC.
+  fresh-title return, and real Quit, plus all three VS modes through Win,
+  reselection, route 0, and Cancel, while composing every changed surface and
+  draining every audio command on GCC and MSVC. Each scripted terminal is
+  substituted only after one real MAIN frame; the locked V13 corpus separately
+  validates complete deterministic gameplay through natural terminal
+  boundaries. A human full Story clear and two-controller VS match remain
+  release QA rather than claims made by this automated route gate.
 - The same boundary authenticates either untouched stock DIET-packed or exact
   unpacked Japanese `MAINL.EXE` and `OP.EXE`. Packed input is authenticated,
   boundedly reconstructed in memory, authenticated again as the known unpacked
   profile, and passed to the same exact Story/staff/Music Room importers.
   Original bytes remain external and uncommitted.
+- The eight-byte Classic config codec still accepts the source MIDI value, but
+  a production session normalizes it to Off. Stock TH03 ships no MIDI/MMD song
+  set or MMD launch path, and the native engine must not play FM while the
+  Options screen claims MIDI. Off/FM remain the supported runtime choices.
 - `th03_app_resources` owns the checked external-content root and immutable
   byte cache. Original/extracted files remain local inputs and never enter the
   repository.

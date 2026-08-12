@@ -26,6 +26,8 @@
 namespace th03::app {
 
 struct ClassicRegistrationInput final {
+	// Viewer release/press waits test the complete source input_sp word.
+	bool raw_any = false;
 	bool up = false;
 	bool down = false;
 	bool left = false;
@@ -37,7 +39,8 @@ struct ClassicRegistrationInput final {
 
 	[[nodiscard]] bool any() const noexcept
 	{
-		return up || down || left || right || ok || shot || bomb || cancel;
+		return raw_any || up || down || left || right || ok || shot || bomb ||
+			cancel;
 	}
 };
 

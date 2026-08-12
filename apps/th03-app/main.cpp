@@ -137,6 +137,8 @@ void print_usage()
 			"PCM when SDL playback is available. Supply an exact 8 KiB YM2608 "
 			"ADPCM-A image with --rhythm-rom; otherwise rhythm is deterministically "
 			"silent.\n"
+		<< "Classic stores YUME.CFG and YUME.NEM under --data by default; "
+			"--config and --score override these paths for read-only installs.\n"
 		<< "Kotohime's source-uninitialized late Bomb local is deterministically "
 			"normalized from the adjacent Kana fade routine.\n";
 }
@@ -834,13 +836,6 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 	if(!platform) {
 		return fail("platform-create", platform.error());
 	}
-	std::optional<th03::platform::SdlAudioDevice> audio_device{};
-	auto created_device = th03::platform::SdlAudioDevice::create();
-	if(created_device) {
-		audio_device.emplace(std::move(*created_device));
-	} else {
-		warn_audio_device("audio-device-create", created_device.error());
-	}
 	auto mapper = th03::platform::SdlInputMapper::create(
 		th03::app::detail::classic_direct_vs_bindings(),
 		static_cast<SDL_WindowID>((*platform)->window_id()),
@@ -849,17 +844,6 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 	if(!mapper) {
 		return fail("input-create", mapper.error());
 	}
-	auto scheduler = th03::app::TickInputScheduler::create(
-		parsed.tick_rate,
-		th03::platform::sdl_ticks_now_ns(),
-		parsed.smoke_ticks ?
-			th03::app::TickInputCatchUpPolicy::preserve_all :
-			th03::app::TickInputCatchUpPolicy::discard_missed_deadlines
-	);
-	if(!scheduler) {
-		return fail_tick(scheduler.error());
-	}
-
 	const auto drain_audio = [&]() -> std::expected<
 		void,
 		th03::app::ClassicAudioSessionError
@@ -889,6 +873,26 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 	auto presented = (*platform)->present(*surface);
 	if(!presented) {
 		return fail("present", presented.error());
+	}
+
+	std::optional<th03::platform::SdlAudioDevice> audio_device{};
+	auto created_device = th03::platform::SdlAudioDevice::create({
+		.start_paused = true,
+	});
+	if(created_device) {
+		audio_device.emplace(std::move(*created_device));
+	} else {
+		warn_audio_device("audio-device-create", created_device.error());
+	}
+	bool audio_started = false;
+	std::vector<th03::audio::PmdCanonicalStereoSample> startup_silence{};
+	auto scheduler = th03::app::TickInputScheduler::create(
+		parsed.tick_rate,
+		th03::platform::sdl_ticks_now_ns(),
+		th03::app::classic_interactive_catch_up_policy
+	);
+	if(!scheduler) {
+		return fail_tick(scheduler.error());
 	}
 
 	bool retry_blocked_event = false;
@@ -928,6 +932,25 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 				return fail("audio-tick", audio_tick.error());
 			}
 			if(audio_device) {
+				if(!audio_started && !audio_tick->canonical_frames.empty() &&
+					audio_tick->canonical_frames.size() <=
+						audio_device->maximum_queued_frames() / 3U) {
+					// Two silent source intervals plus the first rendered interval
+					// keep a 50 Hz blocking present from starving the 56.4 Hz
+					// source clock before its first two-tick catch-up.
+					startup_silence.assign(
+						audio_tick->canonical_frames.size() * 2U, {}
+					);
+					const auto prefilled = audio_device->submit(startup_silence);
+					if(!prefilled) {
+						warn_audio_device(
+							"audio-device-prefill", prefilled.error()
+						);
+						audio_device.reset();
+					}
+				}
+			}
+			if(audio_device) {
 				const auto submitted = audio_device->submit(
 					audio_tick->canonical_frames
 				);
@@ -938,6 +961,14 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 						"audio-device-submit", submitted.error()
 					);
 					audio_device.reset();
+				} else if(!audio_started && !audio_tick->canonical_frames.empty()) {
+					const auto resumed = audio_device->resume();
+					if(!resumed) {
+						warn_audio_device("audio-device-resume", resumed.error());
+						audio_device.reset();
+					} else {
+						audio_started = true;
+					}
 				}
 			}
 			presentation_pending =

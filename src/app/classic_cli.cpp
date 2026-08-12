@@ -257,6 +257,17 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 			));
 		}
 	}
+	// Keep source-compatible save names beside the caller-selected content
+	// root instead of depending on the launcher's process working directory.
+	// Explicit --config/--score paths remain available for read-only installs.
+	if(!seen[static_cast<std::size_t>(ClassicCliOption::config)]) {
+		request.launch.content.config =
+			request.launch.content.data_root / "YUME.CFG";
+	}
+	if(!seen[static_cast<std::size_t>(ClassicCliOption::score)]) {
+		request.launch.content.score =
+			request.launch.content.data_root / "YUME.NEM";
+	}
 	request.launch.fm_available = false;
 	return request;
 }

@@ -1,5 +1,7 @@
 #include "th03/audio/pmd_opna.hpp"
 
+#include "../src/audio/pmd_opna_internal.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -249,14 +251,14 @@ std::uint32_t sample_hash(std::span<const PmdOpnaStereoSample> samples)
 {
 	std::uint32_t hash = 2'166'136'261U;
 	for(const auto &sample : samples) {
-		for(const auto value : {sample.left, sample.right}) {
-			const auto word = static_cast<std::uint16_t>(
-				static_cast<std::int16_t>(value)
-			);
-			hash ^= static_cast<std::uint8_t>(word);
-			hash *= 16'777'619U;
-			hash ^= static_cast<std::uint8_t>(word >> 8U);
-			hash *= 16'777'619U;
+		for(const auto value : {
+			static_cast<std::uint32_t>(sample.left),
+			static_cast<std::uint32_t>(sample.right),
+		}) {
+			for(std::uint32_t shift = 0U; shift < 32U; shift += 8U) {
+				hash ^= (value >> shift) & 0xFFU;
+				hash *= 16'777'619U;
+			}
 		}
 	}
 	return hash;
@@ -649,6 +651,15 @@ void test_load_is_chip_silent_and_play_is_traced()
 
 void test_pcm_and_fresh_replay_are_deterministic()
 {
+	expect(
+		th03::audio::detail::pmd_mix_to_q31(32'767, 0) == 0x7FFF0000 &&
+		th03::audio::detail::pmd_mix_to_q31(-32'768, 0) ==
+			std::numeric_limits<std::int32_t>::min() &&
+		th03::audio::detail::pmd_mix_to_q31(30'000, 30'000) == 0x7FFF0000 &&
+		th03::audio::detail::pmd_mix_to_q31(-30'000, -30'000) ==
+			std::numeric_limits<std::int32_t>::min(),
+		"signed-16 ymfm lanes mix with saturation and promote exactly to Q31"
+	);
 	auto subject = engine();
 	const auto song = synthetic_song();
 	const auto caller_song = song;
@@ -657,6 +668,24 @@ void test_pcm_and_fresh_replay_are_deterministic()
 	std::vector<PmdOpnaStereoSample> first(199'680U);
 	subject.render_native(first);
 	const auto first_pcm_hash = sample_hash(first);
+	const auto peak = std::max_element(
+		first.begin(), first.end(), [](const auto &left, const auto &right) {
+			return std::max(std::abs(static_cast<std::int64_t>(left.left)),
+				std::abs(static_cast<std::int64_t>(left.right))) <
+				std::max(std::abs(static_cast<std::int64_t>(right.left)),
+					std::abs(static_cast<std::int64_t>(right.right)));
+		}
+	);
+	expect(
+		peak != first.end() &&
+			std::max(std::abs(static_cast<std::int64_t>(peak->left)),
+				std::abs(static_cast<std::int64_t>(peak->right))) > (1LL << 24U) &&
+			std::all_of(first.begin(), first.end(), [](const auto &sample) {
+				return (static_cast<std::uint32_t>(sample.left) & 0xFFFFU) == 0U &&
+					(static_cast<std::uint32_t>(sample.right) & 0xFFFFU) == 0U;
+			}),
+		"native PMD output occupies the S32 domain with exact Q31 promotion"
+	);
 	const auto first_status = subject.status();
 	expect(first_status.samples_rendered == first.size(), "render count is exact");
 	expect(
@@ -670,8 +699,8 @@ void test_pcm_and_fresh_replay_are_deterministic()
 		"generated-song register trace matches the locked cross-compiler hash"
 	);
 	expect(
-		first_pcm_hash == 0x1DF60DC5U,
-		"generated-song signed-16 PCM matches the locked cross-compiler hash"
+		first_pcm_hash == 0x529831C5U,
+		"generated-song Q31 PCM matches the locked cross-compiler hash"
 	);
 	expect(song == caller_song, "sequencing never mutates caller-owned song bytes");
 
@@ -742,7 +771,12 @@ void test_rhythm_rom_is_owned_and_audible()
 		"engine owns the ROM after caller storage changes"
 	);
 	expect(
-		copied_hash != sample_hash(silent_pcm),
+		!std::equal(
+			copied_pcm.begin(), copied_pcm.end(), silent_pcm.begin(),
+			[](const auto &left, const auto &right) {
+				return left.left == right.left && left.right == right.right;
+			}
+		),
 		"ADPCM-A rhythm output reads the supplied ROM rather than silent fallback"
 	);
 }

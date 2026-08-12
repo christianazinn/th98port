@@ -744,11 +744,11 @@ void test_view_only_schedule_and_unchanged_board()
 	if(!advance_fade(**scene, ClassicRegistrationPhase::wait_release)) {
 		return;
 	}
-	const auto held = (*scene)->advance({.shot = true});
+	const auto held = (*scene)->advance({.raw_any = true});
 	expect(
 		held && held->phase == ClassicRegistrationPhase::wait_release &&
 			held->boundary == ClassicRegistrationBoundary::vsync,
-		"viewer waits for the held title confirmation to release"
+		"viewer waits for every held input_sp bit to release"
 	);
 	const auto released = (*scene)->advance({});
 	expect(
@@ -756,12 +756,12 @@ void test_view_only_schedule_and_unchanged_board()
 			released->boundary == ClassicRegistrationBoundary::input_poll,
 		"viewer accepts the exact release boundary without a VSync"
 	);
-	const auto dismissed = (*scene)->advance({.cancel = true});
+	const auto dismissed = (*scene)->advance({.raw_any = true});
 	expect(
 		dismissed && dismissed->phase == ClassicRegistrationPhase::black_out &&
 			dismissed->boundary == ClassicRegistrationBoundary::input_poll &&
 			!(*scene)->take_audio_command(),
-		"nonzero-credit viewer dismisses on Cancel without fading SCORE.M"
+		"nonzero-credit viewer dismisses on any new input_sp bit without fading SCORE.M"
 	);
 	if(!advance_fade(**scene, ClassicRegistrationPhase::ready)) {
 		return;

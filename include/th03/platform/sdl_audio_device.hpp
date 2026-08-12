@@ -39,6 +39,8 @@ struct SdlAudioDeviceError {
 struct SdlAudioDeviceConfig {
 	// Canonical input frames. 4,800 frames are exactly 100 ms at 48 kHz.
 	std::size_t maximum_queued_frames = sdl_audio_default_queue_frames;
+	// Classic startup pre-fills one block before exposing the device clock.
+	bool start_paused = false;
 };
 
 struct SdlAudioSubmitResult {

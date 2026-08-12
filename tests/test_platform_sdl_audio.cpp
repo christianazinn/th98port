@@ -102,6 +102,7 @@ void test_dummy_queue_and_lifetime()
 
 	auto device_result = SdlAudioDevice::create({
 		.maximum_queued_frames = 4U,
+		.start_paused = true,
 	});
 	expect(static_cast<bool>(device_result), "dummy playback stream creates");
 	if(!device_result) {
@@ -109,7 +110,7 @@ void test_dummy_queue_and_lifetime()
 	}
 	auto device = std::move(*device_result);
 	expect(SDL_WasInit(SDL_INIT_AUDIO) != 0U, "audio subsystem is initialized");
-	expect(!device.paused(), "created playback stream is resumed");
+	expect(device.paused(), "Classic-style playback stream starts paused");
 	expect(device.maximum_queued_frames() == 4U, "queue cap is retained");
 
 	auto metrics = SdlAudioDeviceTestAccess::metrics(device);
@@ -125,9 +126,6 @@ void test_dummy_queue_and_lifetime()
 		expect(metrics->audio_driver == "dummy", "test never falls back from dummy audio");
 	}
 
-	auto paused = device.pause();
-	expect(static_cast<bool>(paused), "playback pause succeeds");
-	expect(device.paused(), "pause state is retained");
 	expect(static_cast<bool>(device.pause()), "repeated pause is idempotent");
 
 	const auto telemetry_before_empty = device.telemetry();
@@ -222,6 +220,35 @@ void test_sequential_recreation()
 	}
 	auto device = SdlAudioDevice::create();
 	expect(static_cast<bool>(device), "audio recreates after full teardown");
+	expect(device && !device->paused(), "default playback stream remains resumed");
+}
+
+void test_paused_startup_prefill()
+{
+	expect(SDL_WasInit(0U) == 0U, "recreated endpoint tears down before prefill");
+	auto platform = SdlPlatform::create(SdlPlatformConfig{
+		.title = "TH03 SDL audio prefill",
+		.hidden = true,
+	});
+	expect(platform.has_value(), "prefill platform creates");
+	if(!platform) {
+		return;
+	}
+	auto device = SdlAudioDevice::create({.start_paused = true});
+	expect(device && device->paused(), "prefill endpoint starts paused");
+	if(!device) {
+		return;
+	}
+	const std::array<PmdCanonicalStereoSample, 850U> interval{};
+	expect(device->submit(interval).has_value() &&
+		device->submit(interval).has_value() &&
+		device->submit(interval).has_value(),
+		"three startup source intervals queue before resume");
+	const auto queued = device->queued_frames();
+	expect(queued && *queued == interval.size() * 3U,
+		"paused startup retains about 53 ms before exposing the device clock");
+	expect(device->resume().has_value() && !device->paused(),
+		"prefilled endpoint resumes only after all three intervals exist");
 }
 
 } // namespace
@@ -231,6 +258,7 @@ int main()
 	test_runtime_preconditions();
 	test_dummy_queue_and_lifetime();
 	test_sequential_recreation();
+	test_paused_startup_prefill();
 
 	if(failures != 0U) {
 		std::cerr << failures << " of " << checks << " SDL audio checks failed\n";

@@ -18,6 +18,12 @@
 
 namespace th03::app {
 
+// Host presentation may be slower than the nominal PC-98 display. Classic
+// retains every source deadline and publishes only the newest completed frame;
+// this keeps gameplay and the PMD service on the PC-98 timeline.
+inline constexpr TickInputCatchUpPolicy classic_interactive_catch_up_policy =
+	TickInputCatchUpPolicy::preserve_all;
+
 struct ClassicContentPaths final {
 	std::filesystem::path data_root{};
 	std::filesystem::path main_executable{};

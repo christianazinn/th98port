@@ -155,6 +155,29 @@ void release_to_controls(ClassicOpMusicRoomScene &scene)
 	);
 }
 
+void test_raw_input_presence_and_release()
+{
+	auto scene = make_scene();
+	if(!scene) {
+		return;
+	}
+	const auto held = scene->advance({.controls = {.raw_any = true}});
+	expect(
+		held && held->boundary == ClassicOpMusicRoomBoundary::vsync &&
+			scene->phase() == ClassicOpMusicRoomPhase::held_release_poll &&
+			scene->selection() == 0U,
+		"raw-only input_sp holds Music Room release without moving selection"
+	);
+	release_to_controls(*scene);
+	const auto pressed = scene->advance({.controls = {.raw_any = true}});
+	expect(
+		pressed && pressed->boundary == ClassicOpMusicRoomBoundary::input_poll &&
+			scene->phase() == ClassicOpMusicRoomPhase::held_release_poll &&
+			scene->selection() == 0U,
+		"raw-only Music Room press re-enters the complete-word release loop"
+	);
+}
+
 void test_asset_validation_and_initial_presentation()
 {
 	auto scene = make_scene();
@@ -813,6 +836,7 @@ void local_original_gate(
 int main(int argc, char **argv)
 {
 	test_asset_validation_and_initial_presentation();
+	test_raw_input_presence_and_release();
 	test_input_flip_and_polygon_cadence();
 	test_track_audio_exit_and_completion();
 	test_persistent_carry_and_bottom_reset();

@@ -29,6 +29,9 @@ enum class ClassicOpSelectionMode : std::uint8_t;
 struct ClassicOpSessionBackend;
 
 struct ClassicOpInput final {
+	// The donor uses the complete input_sp word for wake and release locks,
+	// including Bomb, Q, and diagonal bits that have no action in this menu.
+	bool raw_any = false;
 	bool up = false;
 	bool down = false;
 	bool left = false;
@@ -39,7 +42,7 @@ struct ClassicOpInput final {
 
 	[[nodiscard]] bool any() const noexcept
 	{
-		return up || down || left || right || ok || shot || cancel;
+		return raw_any || up || down || left || right || ok || shot || cancel;
 	}
 };
 
@@ -71,6 +74,7 @@ enum class ClassicOpVsChoice : std::uint8_t {
 	one_player_cpu,
 	one_player_two_player,
 	cpu_cpu,
+	quit,
 };
 
 enum class ClassicOpPhase : std::uint8_t {

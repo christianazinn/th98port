@@ -845,6 +845,12 @@ void test_surface_forwarding()
 	if(!temporary.valid()) {
 		return false;
 	}
+	const auto config_path = temporary.path() / "YUME.CFG";
+	if(!th03::app::commit_classic_config_store(config_path, {
+		.bgm_mode = th03::app::ClassicBgmMode::midi,
+	})) {
+		return false;
+	}
 	th03::GameInit resident{};
 	resident.resident_rand = 1;
 	resident.random_seed = 1U;
@@ -863,7 +869,7 @@ void test_surface_forwarding()
 		*font_rom,
 		*mainl_executable,
 		malformed_op,
-		temporary.path() / "YUME.CFG",
+		config_path,
 		temporary.path() / "YUME.NEM"
 	);
 	if(rejected_op || rejected_op.error().code !=
@@ -879,7 +885,7 @@ void test_surface_forwarding()
 		*font_rom,
 		*mainl_executable,
 		*op_executable,
-		temporary.path() / "YUME.CFG",
+		config_path,
 		temporary.path() / "YUME.NEM"
 	);
 	if(!created) {
@@ -894,6 +900,13 @@ void test_surface_forwarding()
 	> pixels{};
 	if(session.scene() != ClassicOpSessionScene::title_menu ||
 		!session.compose_shown_surface(pixels)) {
+		return false;
+	}
+	const auto normalized_bgm = session.take_audio_command();
+	if(!normalized_bgm || normalized_bgm->type !=
+		ClassicAudioCommandType::set_bgm_active ||
+		normalized_bgm->parameter != 0U) {
+		std::cerr << "local MIDI config was not normalized to inactive BGM\n";
 		return false;
 	}
 	while(session.take_audio_command()) {

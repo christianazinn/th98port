@@ -26,6 +26,8 @@ constexpr std::int32_t box_main_center_x = 228;
 constexpr std::int32_t box_height = 128;
 constexpr std::int32_t box_main_width = 136;
 constexpr std::int32_t box_submenu_width = 240;
+constexpr std::int32_t box_submenu_center_x =
+	box_left + (box_submenu_width / 2);
 constexpr std::int32_t opwin_width = 16;
 constexpr std::int32_t opwin_step_width = 8;
 constexpr std::int32_t initial_box_width =
@@ -766,6 +768,21 @@ bool ClassicOpTitleMenuScene::draw_vs_choice(
 	const auto raw = static_cast<std::size_t>(choice);
 	const auto tram_y = (box_top / present::gaiji_height) + 1 +
 		static_cast<std::int32_t>(raw + 1U);
+	if(choice == ClassicOpVsChoice::quit) {
+		constexpr std::uint8_t first_glyph = 0x48U;
+		constexpr std::uint8_t glyph_count = 3U;
+		const auto tram_left = (box_submenu_center_x -
+			((glyph_count * present::gaiji_width) / 2)) / 8;
+		for(std::uint8_t glyph = 0U; glyph < glyph_count; ++glyph) {
+			if(!tram_.put_gaiji(
+				{tram_left + (static_cast<std::int32_t>(glyph) * 2), tram_y},
+				static_cast<std::uint8_t>(first_glyph + glyph), attribute
+			)) {
+				return false;
+			}
+		}
+		return true;
+	}
 	if(raw >= labels.size()) {
 		return false;
 	}
@@ -782,7 +799,8 @@ bool ClassicOpTitleMenuScene::draw_vs_choice(
 
 bool ClassicOpTitleMenuScene::draw_vs_choices() noexcept
 {
-	for(std::uint8_t raw = 0U; raw < 3U; ++raw) {
+	for(std::uint8_t raw = 0U;
+		raw <= static_cast<std::uint8_t>(ClassicOpVsChoice::quit); ++raw) {
 		const auto choice = static_cast<ClassicOpVsChoice>(raw);
 		if(!draw_vs_choice(
 			choice,
@@ -801,8 +819,8 @@ bool ClassicOpTitleMenuScene::update_vs_selection(int direction) noexcept
 	const auto old = selected_vs_;
 	auto next = static_cast<int>(selected_vs_) + direction;
 	if(next < 0) {
-		next = 2;
-	} else if(next > 2) {
+		next = static_cast<int>(ClassicOpVsChoice::quit);
+	} else if(next > static_cast<int>(ClassicOpVsChoice::quit)) {
 		next = 0;
 	}
 	selected_vs_ = static_cast<ClassicOpVsChoice>(next);
@@ -1220,8 +1238,8 @@ ClassicOpTitleMenuScene::advance(ClassicOpInput input)
 			menu_input_allowed_ = true;
 		}
 		if(menu_input_allowed_) {
-			if(input.up) {
-				if(!update_vs_selection(-1)) {
+			if(input.up || input.down) {
+				if(!update_vs_selection(input.up ? -1 : 1)) {
 					fail();
 					return std::unexpected(op_error(
 						ClassicOpErrorCode::draw_failed
@@ -1230,17 +1248,8 @@ ClassicOpTitleMenuScene::advance(ClassicOpInput input)
 				tram_changed = true;
 				selection_changed = true;
 			}
-			if(input.down) {
-				if(!update_vs_selection(1)) {
-					fail();
-					return std::unexpected(op_error(
-						ClassicOpErrorCode::draw_failed
-					));
-				}
-				tram_changed = true;
-				selection_changed = true;
-			}
-			if(input.cancel) {
+			if(input.cancel || ((input.ok || input.shot) &&
+				selected_vs_ == ClassicOpVsChoice::quit)) {
 				++resident_.resident_rand;
 				tram_.fill({});
 				box_right_left_ =

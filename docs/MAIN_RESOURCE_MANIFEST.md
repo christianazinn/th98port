@@ -34,8 +34,9 @@ DAT archive and not an installation directory. The one accepted layout is:
 For the supplied read-only extraction, `<root>` is
 `th03_full/dat_dumps`. `YUME1.DAT` and `YUME2.DAT` in that directory are
 directory aliases for extracted entries; they are not the non-ASCII original
-archive filenames. Import/extraction remains a Data Manager or `thdat`
-operation. This loader intentionally has no DAT parser.
+archive filenames. This repository does not currently provide a supported DAT
+extractor or stock-install bootstrap command; callers must prepare this layout
+with an external tool. The loader intentionally has no DAT parser.
 
 The loader accepts only manifest keys, joins only checked simple components,
 canonicalizes the archive and selected file, and rejects a resolved path

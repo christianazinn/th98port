@@ -1,5 +1,7 @@
 #include "th03/audio/pmd_opna.hpp"
 
+#include "pmd_opna_internal.hpp"
+
 #include "pmd_shim.h"
 #include "ymfm_opn.h"
 
@@ -287,17 +289,6 @@ PmdPointer make_pmd() noexcept
 	return PmdPointer(th03_pmd_create());
 }
 
-std::int32_t saturated_sum(std::int32_t left, std::int32_t right) noexcept
-{
-	const auto sum = static_cast<std::int64_t>(left) +
-		static_cast<std::int64_t>(right);
-	return static_cast<std::int32_t>(std::clamp(
-		sum,
-		static_cast<std::int64_t>(std::numeric_limits<std::int32_t>::min()),
-		static_cast<std::int64_t>(std::numeric_limits<std::int32_t>::max())
-	));
-}
-
 } // namespace
 
 struct PmdOpnaEngine::Impl final : ymfm::ymfm_interface {
@@ -437,8 +428,12 @@ struct PmdOpnaEngine::Impl final : ymfm::ymfm_interface {
 		generated.clear();
 		chip->generate(&generated, 1U);
 		static_assert(ymfm::ym2608::OUTPUTS == 3U);
-		sample.left = saturated_sum(generated.data[0], generated.data[2]);
-		sample.right = saturated_sum(generated.data[1], generated.data[2]);
+		sample.left = detail::pmd_mix_to_q31(
+			generated.data[0], generated.data[2]
+		);
+		sample.right = detail::pmd_mix_to_q31(
+			generated.data[1], generated.data[2]
+		);
 		++samples_rendered;
 	}
 

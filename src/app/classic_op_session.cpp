@@ -1630,6 +1630,18 @@ struct ClassicOpSessionBackend final {
 			const ClassicMainInputSample &input
 		)
 	{
+		if(vs_terminal) {
+			if(!push_audio({
+				.type = ClassicAudioCommandType::stop_song,
+			})) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::audio_command_pending
+				));
+			}
+			return ClassicOpSessionBackendTick{
+				.ready = true,
+			};
+		}
 		if(!vs_process || !vs_driver) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
@@ -1660,6 +1672,72 @@ struct ClassicOpSessionBackend final {
 			.process_advanced = tick->process_advanced,
 			.round_started = tick->round_started,
 		};
+	}
+
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	force_vs_main_outcome_for_route_test(
+		ClassicOpVsRouteTestOutcome outcome
+	)
+	{
+		if(!vs_process || !vs_driver || vs_terminal ||
+			vs_driver->status() != MainProcessDriverStatus::running ||
+			current_main_resident.game_mode < game_mode::vs_1p_cpu ||
+			current_main_resident.game_mode > game_mode::vs_cpu_cpu ||
+			audio_pending()) {
+			return std::unexpected(session_error(
+				audio_pending() ?
+					ClassicOpSessionErrorCode::audio_command_pending :
+					ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+
+		auto terminal = vs_process->canonical_state();
+		// Arm only after a real process frame. This keeps the route seam from
+		// replacing MAIN construction or its first source publication.
+		if(terminal.global_frame == current_main_resident.global_frame) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		terminal.route = outcome ==
+			ClassicOpVsRouteTestOutcome::exit_to_operator ? 0U : 2U;
+		terminal.game_mode = current_main_resident.game_mode;
+		terminal.story_stage = current_main_resident.story_stage;
+		terminal.winner = outcome ==
+			ClassicOpVsRouteTestOutcome::player_two_win ? 1 : 0;
+		terminal.p1_score.fill(8U);
+		terminal.p2_score.fill(7U);
+		// finish_main_process() performs this source write before constructing
+		// the resident transition.
+		terminal.resident_rand = static_cast<std::int32_t>(
+			terminal.round_frame
+		);
+
+		SessionTransition transition{};
+		transition.action = SessionAction::exit_to_operator;
+		transition.resident = current_main_resident;
+		transition.resident.global_frame = terminal.global_frame;
+		transition.resident.resident_rand = terminal.resident_rand;
+		transition.resident.random_seed = terminal.round_frame;
+		transition.resident.winner = terminal.winner;
+		transition.resident.runtime_snapshot.reset();
+		transition.resident.compact_runtime_snapshot.reset();
+		transition.resident.round_start_snapshot.reset();
+		if(terminal.route == 2U) {
+			const auto winner = static_cast<std::size_t>(terminal.winner);
+			transition.resident.last_score = {};
+			transition.resident.last_score[winner] = winner == 0U ?
+				terminal.p1_score : terminal.p2_score;
+			transition.resident.story_stage = static_cast<std::uint8_t>(
+				transition.resident.story_stage + 1U
+			);
+		}
+		vs_terminal.emplace(ClassicOpSessionVsTerminal{
+			.process_start = current_main_resident,
+			.terminal = terminal,
+			.transition = std::move(transition),
+		});
+		return {};
 	}
 
 	[[nodiscard]] std::expected<ClassicOpSessionVsTerminal,
@@ -1870,6 +1948,24 @@ struct ClassicOpSessionBackend final {
 		vs_win_completion.reset();
 		vs_terminal.reset();
 		return {};
+	}
+
+	[[nodiscard]] std::optional<GameInit>
+	vs_selection_resident_for_route_test() const noexcept
+	{
+		if(!direct_vs_selection || !selection) {
+			return std::nullopt;
+		}
+		return selection->resident();
+	}
+
+	[[nodiscard]] std::optional<GameInit>
+	vs_terminal_resident_for_route_test() const noexcept
+	{
+		if(!vs_terminal) {
+			return std::nullopt;
+		}
+		return vs_terminal->transition.resident;
 	}
 
 	[[nodiscard]] bool audio_pending() const noexcept
@@ -2230,6 +2326,18 @@ Result backend_call(void *context, Method method, Args &&...args)
 			return static_cast<ClassicOpSessionBackend *>(context)->
 				force_story_main_outcome_for_route_test(outcome);
 		},
+		.force_vs_main_outcome = [](void *context, auto outcome) {
+			return static_cast<ClassicOpSessionBackend *>(context)->
+				force_vs_main_outcome_for_route_test(outcome);
+		},
+		.vs_selection_resident = [](void *context) {
+			return static_cast<ClassicOpSessionBackend *>(context)->
+				vs_selection_resident_for_route_test();
+		},
+		.vs_terminal_resident = [](void *context) {
+			return static_cast<ClassicOpSessionBackend *>(context)->
+				vs_terminal_resident_for_route_test();
+		},
 	};
 }
 
@@ -2261,7 +2369,10 @@ ClassicOpSession::create(
 		return std::unexpected(config_error(std::move(loaded_config.error())));
 	}
 	auto config = loaded_config->options;
-	if(!fm_available) {
+	// Stock TH03 ships neither MIDI/MMD songs nor an MMD driver launch path.
+	// Keep the source codec value readable, but never claim MIDI while routing
+	// the session to the FM-only native engine.
+	if(!fm_available || config.bgm_mode == ClassicBgmMode::midi) {
 		config.bgm_mode = ClassicBgmMode::off;
 	}
 	auto imported = import_mainl_stage_text(mainl_executable);
@@ -2607,6 +2718,52 @@ ClassicOpSessionTestAccess::force_story_main_outcome(
 	}
 	return session.impl_->test_hooks.force_story_main_outcome(
 		session.impl_->test_hooks.context, outcome
+	);
+}
+
+std::expected<void, ClassicOpSessionError>
+ClassicOpSessionTestAccess::force_vs_main_outcome(
+	ClassicOpSession &session,
+	ClassicOpVsRouteTestOutcome outcome
+)
+{
+	if(session.impl_->scene != ClassicOpSessionScene::vs_main ||
+		!session.impl_->test_hooks.context ||
+		!session.impl_->test_hooks.force_vs_main_outcome) {
+		return std::unexpected(session_error(
+			ClassicOpSessionErrorCode::backend_contract_failed
+		));
+	}
+	return session.impl_->test_hooks.force_vs_main_outcome(
+		session.impl_->test_hooks.context, outcome
+	);
+}
+
+std::optional<GameInit> ClassicOpSessionTestAccess::vs_selection_resident(
+	const ClassicOpSession &session
+) noexcept
+{
+	if(session.impl_->scene != ClassicOpSessionScene::character_selection ||
+		!session.impl_->test_hooks.context ||
+		!session.impl_->test_hooks.vs_selection_resident) {
+		return std::nullopt;
+	}
+	return session.impl_->test_hooks.vs_selection_resident(
+		session.impl_->test_hooks.context
+	);
+}
+
+std::optional<GameInit> ClassicOpSessionTestAccess::vs_terminal_resident(
+	const ClassicOpSession &session
+) noexcept
+{
+	if(session.impl_->scene != ClassicOpSessionScene::vs_win ||
+		!session.impl_->test_hooks.context ||
+		!session.impl_->test_hooks.vs_terminal_resident) {
+		return std::nullopt;
+	}
+	return session.impl_->test_hooks.vs_terminal_resident(
+		session.impl_->test_hooks.context
 	);
 }
 

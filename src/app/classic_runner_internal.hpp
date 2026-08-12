@@ -59,6 +59,17 @@ struct ClassicRunnerTestAccess final {
 		ClassicRunner &runner,
 		ClassicStoryRouteTestOutcome outcome
 	);
+	[[nodiscard]] static std::expected<void, ClassicRunnerError>
+	force_vs_main_outcome(
+		ClassicRunner &runner,
+		ClassicOpVsRouteTestOutcome outcome
+	);
+	[[nodiscard]] static std::optional<GameInit> vs_selection_resident(
+		const ClassicRunner &runner
+	) noexcept;
+	[[nodiscard]] static std::optional<GameInit> vs_terminal_resident(
+		const ClassicRunner &runner
+	) noexcept;
 
 	[[nodiscard]] static std::expected<
 		std::vector<std::byte>,

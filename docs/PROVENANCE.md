@@ -4,7 +4,7 @@
 |---|---|
 | `core/numeric.hpp` | Anniversary `th01/math/subpixel.hpp`, PC-98 16-bit integer behavior, and the approved fixed-point constraint |
 | `assets/rgb.cpp` and `assets/pi.cpp` | Anniversary master.lib `palette_entry_rgb.asm`, `palette_show.asm`, and `graph_pi_load_pack.asm`, with the exact decoder disposition recorded in `research/ASSET_INVENTORY.md` |
-| `present/raster.cpp` | bounded neutral indexed-page foundation from `research/PRESENTATION_CONTRACT.md`; not yet a claim of complete PC-98 planar/GRCG/EGC/TRAM or scene parity |
+| `present/raster.cpp` | bounded two-page indexed Raster and source-surface model from `research/PRESENTATION_CONTRACT.md`, including the stock-used TRAM, GRCG, palette, and page operations required by the Classic scenes; captured PC-98 pixel parity remains an external gate |
 | `formats/t3case.cpp` | `state/port/T3CASE1_FORMAT.md`, `tools/port/t3case.psm1`, and oracle `th03/t3case.hpp` |
 | `formats/t3split.cpp` | Replay `th03/replay_format.hpp`, `tools/replay/export_splits.ps1`, and `tools/port/compare_th03_oracle_splits.ps1` |
 | `formats/v13.cpp`, `rpy_checkpoint.cpp`, and `rpy_input.cpp` | frozen Replay Patch 0.4.8 `th03/replay_format.hpp`, its MAIN/MAINL/OP readers, and canonical harness `tools/replay/FORMAT.md`; compact checkpoints are reconstructed as format-neutral recipes after ENEDAT content is loaded |

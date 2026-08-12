@@ -162,12 +162,12 @@ std::expected<SdlAudioDevice, SdlAudioDeviceError> SdlAudioDevice::create(
 			SdlAudioDeviceErrorCode::stream_open_failed
 		));
 	}
-	if(!SDL_ResumeAudioStreamDevice(impl->stream)) {
+	if(!config.start_paused && !SDL_ResumeAudioStreamDevice(impl->stream)) {
 		return std::unexpected(error_with_sdl_detail(
 			SdlAudioDeviceErrorCode::resume_failed
 		));
 	}
-	impl->paused = false;
+	impl->paused = config.start_paused;
 	return SdlAudioDevice(std::move(impl));
 }
 

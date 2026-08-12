@@ -301,28 +301,30 @@ void test_story_seed_and_vs_cancel_return()
 		versus->tram().cell({27, 19})->attribute ==
 			th03::present::tram_black &&
 		versus->tram().cell({27, 20})->attribute ==
+			th03::present::tram_black &&
+		versus->tram().cell({32, 21})->attribute ==
 			th03::present::tram_black,
-		"VS submenu draws exactly three source rows"
+		"VS submenu draws all three modes and the centered source Quit row"
 	);
 	const auto simultaneous = versus->advance({.up = true, .down = true});
 	expect(
 		simultaneous && simultaneous->selection_changed &&
 			versus->selected_vs_choice() ==
-				ClassicOpVsChoice::one_player_cpu,
-		"independent Up and Down operations net to the same VS choice"
+				ClassicOpVsChoice::quit,
+		"simultaneous VS Up and Down performs one source step with Up priority"
 	);
 	expect(
 		versus->advance({.up = true, .down = true}).has_value() &&
 			versus->selected_vs_choice() ==
-				ClassicOpVsChoice::one_player_cpu,
+				ClassicOpVsChoice::quit,
 		"held VS input remains suppressed until release"
 	);
 	static_cast<void>(versus->advance());
-	const auto canceled = versus->advance({.cancel = true});
+	const auto canceled = versus->advance({.ok = true});
 	expect(
 		canceled && canceled->phase == ClassicOpPhase::vs_shrink_window &&
 			versus->resident().resident_rand == 42,
-		"VS submenu cancel performs the returning outer-loop random increment"
+		"confirming VS Quit takes the same retained-menu path as Cancel"
 	);
 	for(std::uint16_t frame = 0U; frame < 14U; ++frame) {
 		static_cast<void>(versus->advance());
@@ -338,7 +340,23 @@ void test_story_seed_and_vs_cancel_return()
 	);
 	expect(
 		versus->resident().resident_rand == 43,
-		"VS cancel and retained-main redraw each complete one outer-loop frame"
+		"VS Quit and retained-main redraw each complete one outer-loop frame"
+	);
+	expect(versus->advance().has_value(),
+		"retained main menu releases the confirming input");
+	expect(
+		versus->advance({.ok = true}).has_value(),
+		"retained VS main-menu choice can reopen the submenu"
+	);
+	for(std::uint16_t frame = 0U; frame < 13U; ++frame) {
+		expect(versus->advance().has_value(), "reopened VS submenu grows");
+	}
+	const auto canceled_by_input = versus->advance({.cancel = true});
+	expect(
+		canceled_by_input && canceled_by_input->phase ==
+			ClassicOpPhase::vs_shrink_window &&
+			versus->resident().resident_rand == 45,
+		"VS Cancel independently converges on the retained-menu shrink path"
 	);
 }
 
@@ -487,6 +505,39 @@ void test_demo_timeout_and_blackout()
 	}
 }
 
+void test_raw_input_presence_and_lock()
+{
+	auto scene = make_scene(ClassicOpTitleMode::fast_fade);
+	if(!scene) {
+		return;
+	}
+	reach_title_wait(*scene);
+	expect(
+		scene->advance({.raw_any = true}).has_value() &&
+			scene->phase() == ClassicOpPhase::box_to_main,
+		"a raw-only input_sp bit wakes the title"
+	);
+	for(std::uint16_t frame = 0U; frame < 14U; ++frame) {
+		expect(scene->advance({.raw_any = true}).has_value(),
+			"raw-only held input survives the main-window animation");
+	}
+	expect(scene->advance({.raw_any = true}).has_value(),
+		"raw-only first menu sample arms the complete-word lock");
+	const auto selected = scene->selected_choice();
+	expect(
+		scene->advance({.raw_any = true, .down = true}).has_value() &&
+			scene->selected_choice() == selected,
+		"raw-only held state locks later menu actions"
+	);
+	expect(scene->advance().has_value(),
+		"an exact-zero input_sp sample releases the menu lock");
+	expect(
+		scene->advance({.down = true}).has_value() &&
+			scene->selected_choice() != selected,
+		"direction acts after the complete input_sp word releases"
+	);
+}
+
 void test_long_title_cadence()
 {
 	auto scene = make_scene(ClassicOpTitleMode::long_animation);
@@ -615,6 +666,22 @@ void local_original_gate(const std::filesystem::path &content_root)
 		scene.phase() == ClassicOpPhase::wait_title_input,
 		"local original title reaches the first source input boundary"
 	);
+	expect(scene.advance({.ok = true}).has_value(),
+		"local title accepts the main-menu opening input");
+	for(std::uint16_t frame = 0U; frame < 14U; ++frame) {
+		expect(scene.advance().has_value(), "local main-menu box expands");
+	}
+	expect(scene.advance({.down = true, .ok = true}).has_value(),
+		"local main menu enters the VS submenu");
+	for(std::uint16_t frame = 0U; frame < 13U; ++frame) {
+		expect(scene.advance().has_value(), "local VS submenu box expands");
+	}
+	expect(
+		scene.phase() == ClassicOpPhase::vs_menu &&
+			scene.tram().cell({32, 21})->attribute ==
+				th03::present::tram_black,
+		"local MIKOFT renders the source Quit label in the VS submenu"
+	);
 }
 
 } // namespace
@@ -626,6 +693,7 @@ int main(int argc, char **argv)
 	test_menu_input_lock_and_cancel();
 	test_high_score_route_contract();
 	test_demo_timeout_and_blackout();
+	test_raw_input_presence_and_lock();
 	test_long_title_cadence();
 	test_rejections();
 	if(argc == 2) {

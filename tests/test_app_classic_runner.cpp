@@ -68,13 +68,15 @@ void test_cli()
 		parsed->launch.content.mainl_executable == "MAINL.EXE" &&
 		parsed->launch.content.op_executable == "OP.EXE" &&
 		parsed->launch.content.font_rom == "FONT.ROM" &&
-		parsed->launch.content.config == "YUME.CFG" &&
-		parsed->launch.content.score == "YUME.NEM" &&
+		parsed->launch.content.config ==
+			std::filesystem::path("data-root") / "YUME.CFG" &&
+		parsed->launch.content.score ==
+			std::filesystem::path("data-root") / "YUME.NEM" &&
 		parsed->launch.seed == 1U && !parsed->launch.fm_available &&
 		!parsed->rhythm_rom &&
 		parsed->tick_rate.ticks == 526'315U &&
 		parsed->tick_rate.seconds == 9'328U,
-		"valid Classic CLI preserves external paths and the nominal PC-98 rate");
+		"valid Classic CLI keeps default persistence beside the content root");
 	const auto complete = parse({
 		"--classic", "--data", "d", "--main", "m", "--mainl", "l",
 		"--op", "o", "--font", "f", "--tick-rate", "3/2",
@@ -209,6 +211,22 @@ void test_input_projection()
 			!player_only.story.dismiss_pressed,
 		"player-only controls cannot masquerade as the donor input_sp domain"
 	);
+	constexpr std::array<std::uint16_t, 3U> raw_only_cases{
+		0x0010U, 0x0100U, 0x4000U,
+	};
+	for(const auto raw_only : raw_only_cases) {
+		const auto projected =
+			th03::app::ClassicRunnerTestAccess::project_input({
+				.tick_index = 10U,
+				.deadline_ns = 124U,
+				.input = {.system = raw_only},
+			});
+		expect(
+			projected.op.any() && projected.music_room.controls.any() &&
+				projected.high_scores.any() && projected.dismiss_pressed,
+			"Bomb, diagonal, and Q retain complete input_sp presence"
+		);
+	}
 
 	const auto live = th03::app::ClassicRunnerTestAccess::project_input({
 		.tick_index = 11U,
@@ -242,6 +260,67 @@ void test_input_projection()
 		live.main.physical_domains.has_value() &&
 		live.story.main.physical_domains.has_value(),
 		"live MAIN projections retain aggregate replay input beside physical domains");
+}
+
+void test_classic_catch_up_policy()
+{
+	expect(
+		th03::app::classic_interactive_catch_up_policy ==
+			th03::app::TickInputCatchUpPolicy::preserve_all,
+		"Classic production retains source deadlines across host presentation"
+	);
+	auto created = th03::app::TickInputScheduler::create(
+		th03::app::pc98_24khz_nominal_tick_rate, 0U,
+		th03::app::classic_interactive_catch_up_policy
+	);
+	expect(created.has_value(), "Classic nominal scheduler creates");
+	if(!created) {
+		return;
+	}
+	auto scheduler = std::move(*created);
+	std::size_t ticks = 0U;
+	std::uint64_t canonical_fraction = 0U;
+	std::int64_t queued_frames = 0;
+	bool saw_two_tick_catch_up = false;
+	for(std::uint64_t cutoff = 0U; cutoff <= 1'000'000'000U;
+		cutoff += 20'000'000U) {
+		if(cutoff != 0U) {
+			queued_frames -= 960;
+			expect(
+				queued_frames >= 0,
+				"three-interval prefill survives each 50 Hz presentation period"
+			);
+		}
+		std::size_t cutoff_ticks = 0U;
+		for(;;) {
+			const auto due = scheduler.pop_due(cutoff);
+			expect(due.has_value(), "50 Hz host cutoff remains valid");
+			if(!due || !*due) {
+				break;
+			}
+			canonical_fraction += 48'000ULL *
+				th03::app::pc98_24khz_nominal_tick_rate.seconds;
+			const auto interval_frames = canonical_fraction /
+				th03::app::pc98_24khz_nominal_tick_rate.ticks;
+			canonical_fraction %=
+				th03::app::pc98_24khz_nominal_tick_rate.ticks;
+			if(ticks == 0U) {
+				queued_frames += static_cast<std::int64_t>(interval_frames * 2U);
+			}
+			queued_frames += static_cast<std::int64_t>(interval_frames);
+			++ticks;
+			++cutoff_ticks;
+		}
+		saw_two_tick_catch_up = saw_two_tick_catch_up || cutoff_ticks >= 2U;
+	}
+	expect(
+		ticks == 57U,
+		"50 Hz presentation still advances 57 nominal samples through one second"
+	);
+	expect(
+		saw_two_tick_catch_up,
+		"50 Hz presentation reaches a two-tick source catch-up without underrun"
+	);
 }
 
 void test_fresh_resident_state()
@@ -584,6 +663,326 @@ struct AuthenticRouteTraceEvent final {
 	std::uint64_t surface = 0U;
 	std::size_t audio_command_count = 0U;
 };
+
+bool authentic_vs_gate(
+	const std::filesystem::path &data_root,
+	const std::filesystem::path &main_executable,
+	const std::filesystem::path &mainl_executable,
+	const std::filesystem::path &op_executable,
+	const std::filesystem::path &font_rom
+)
+{
+	for(std::uint8_t mode_index = 0U; mode_index < 3U; ++mode_index) {
+		TemporaryDirectory temporary;
+		auto loaded = th03::app::ClassicRunner::load({
+			.content = {
+				.data_root = data_root,
+				.main_executable = main_executable,
+				.mainl_executable = mainl_executable,
+				.op_executable = op_executable,
+				.font_rom = font_rom,
+				.config = temporary.path() / "YUME.CFG",
+				.score = temporary.path() / "YUME.NEM",
+			},
+			.seed = static_cast<std::uint32_t>(10U + mode_index),
+			.fm_available = false,
+		});
+		if(!loaded) {
+			std::cerr << "authentic-vs-load mode="
+				<< static_cast<unsigned>(mode_index) << " code="
+				<< static_cast<unsigned>(loaded.error().code) << " detail="
+				<< static_cast<unsigned>(loaded.error().detail_code) << '\n';
+			return false;
+		}
+		auto &runner = **loaded;
+		std::array<
+			th03::present::ComposedPixel,
+			th03::present::graphics_page_pixels
+		> pixels{};
+		if(!runner.compose_shown_surface(pixels)) {
+			return false;
+		}
+		std::vector<th03::app::ClassicAudioCommand> audio_commands{};
+		const auto drain_audio = [&]() {
+			while(auto command = runner.take_audio_command()) {
+				audio_commands.push_back(*command);
+			}
+		};
+		drain_audio();
+
+		std::uint64_t tick_index = 0U;
+		std::optional<th03::app::ClassicRunnerConsumeResult> last{};
+		const auto scene = [&]() {
+			return th03::app::ClassicRunnerTestAccess::scene(runner);
+		};
+		const auto fail_stage = [&](const char *stage) {
+			std::cerr << "authentic-vs-stage=" << stage << " mode="
+				<< static_cast<unsigned>(mode_index) << " tick=" << tick_index
+				<< " scene=" << static_cast<unsigned>(scene().value_or(
+					th03::app::ClassicOpSessionScene::failed
+				)) << '\n';
+			return false;
+		};
+		const auto step = [&](th03::CoreInput input = {},
+			bool allow_complete = false) {
+			auto advanced = runner.consume({
+				.tick_index = tick_index,
+				.deadline_ns = tick_index * 10U,
+				.input = input,
+			});
+			++tick_index;
+			if(!advanced || (advanced->status !=
+				th03::app::ClassicRunnerStatus::running && !(allow_complete &&
+				advanced->status ==
+					th03::app::ClassicRunnerStatus::session_complete))) {
+				std::cerr << "authentic-vs-step mode="
+					<< static_cast<unsigned>(mode_index) << " tick="
+					<< tick_index - 1U;
+				if(!advanced) {
+					std::cerr << " code=" << static_cast<unsigned>(
+						advanced.error().code
+					) << " detail=" << static_cast<unsigned>(
+						advanced.error().detail_code
+					);
+				}
+				std::cerr << '\n';
+				return false;
+			}
+			last = *advanced;
+			drain_audio();
+			return !advanced->surface_changed ||
+				runner.compose_shown_surface(pixels).has_value();
+		};
+		const auto wait_for_input = [&](std::size_t limit) {
+			for(std::size_t frame = 0U; frame < limit; ++frame) {
+				if(!step()) { return false; }
+				if(last->input_sampled) { return true; }
+			}
+			return false;
+		};
+		const auto pulse = [](std::uint16_t system) {
+			th03::CoreInput input{};
+			input.system = system;
+			return input;
+		};
+		const auto force_terminal = [&](auto outcome, auto expected_scene) {
+			const auto audio_before = audio_commands.size();
+			if(!th03::app::ClassicRunnerTestAccess::force_vs_main_outcome(
+				runner, outcome
+			) || !step() || scene() !=
+				th03::app::ClassicOpSessionScene::vs_main ||
+				audio_commands.size() != audio_before + 1U ||
+				audio_commands.back().type !=
+					th03::app::ClassicAudioCommandType::stop_song) {
+				return false;
+			}
+			return step() && scene() == expected_scene;
+		};
+
+		// Fresh title -> main menu -> VS submenu. The submenu always starts on
+		// 1P-vs-CPU, so [mode_index] Down edges select all three source modes.
+		if(!wait_for_input(300U) || !step(pulse(0x0020U)) ||
+			!wait_for_input(64U) || !step(pulse(0x0002U)) || !step() ||
+			!step(pulse(0x0020U))) {
+			return fail_stage("open-vs-submenu");
+		}
+		bool submenu_input = false;
+		bool saw_blocking_frame = false;
+		for(std::size_t frame = 0U; frame < 32U && !submenu_input; ++frame) {
+			if(!step()) { return false; }
+			saw_blocking_frame = saw_blocking_frame || !last->input_sampled;
+			submenu_input = saw_blocking_frame && last->input_sampled;
+		}
+		if(!submenu_input) { return fail_stage("submenu-input"); }
+		if(mode_index == 0U) {
+			// Default-Up wraps to the source's fourth Quit row. Confirm it,
+			// observe the retained main-menu return, and reopen VS before the
+			// ordinary mode-selection route.
+			if(!step(pulse(0x0001U)) || !step() || !step(pulse(0x0020U))) {
+				return fail_stage("submenu-quit-confirm");
+			}
+			bool returned_input = false;
+			bool saw_return_block = false;
+			for(std::size_t frame = 0U; frame < 64U && !returned_input; ++frame) {
+				if(!step()) { return fail_stage("submenu-quit-return"); }
+				saw_return_block = saw_return_block || !last->input_sampled;
+				returned_input = saw_return_block && last->input_sampled;
+			}
+			if(!returned_input || !step(pulse(0x0020U))) {
+				return fail_stage("submenu-reopen");
+			}
+			submenu_input = false;
+			saw_blocking_frame = false;
+			for(std::size_t frame = 0U; frame < 32U && !submenu_input; ++frame) {
+				if(!step()) { return fail_stage("submenu-reopen-grow"); }
+				saw_blocking_frame =
+					saw_blocking_frame || !last->input_sampled;
+				submenu_input = saw_blocking_frame && last->input_sampled;
+			}
+			if(!submenu_input) { return fail_stage("submenu-reopen-input"); }
+		}
+		for(std::uint8_t move = 0U; move < mode_index; ++move) {
+			if(!step(pulse(0x0002U)) || !step()) {
+				return fail_stage("submenu-move");
+			}
+		}
+		if(!step(pulse(0x0020U)) || scene() !=
+			th03::app::ClassicOpSessionScene::character_selection) {
+			return fail_stage("submenu-confirm");
+		}
+
+		const auto drive_selection = [&]() {
+			for(std::size_t frame = 0U; frame < 1'024U; ++frame) {
+				if(scene() != th03::app::ClassicOpSessionScene::
+					character_selection) {
+					return scene() == th03::app::ClassicOpSessionScene::
+						vs_stage_splash;
+				}
+				th03::CoreInput input{};
+				if((frame & 1U) == 0U) {
+					if(mode_index == 1U) {
+						input.p1 = 0x0020U;
+						input.p2 = 0x0020U;
+					} else {
+						input.system = 0x0020U;
+					}
+				}
+				if(!step(input)) { return fail_stage("drive-selection-step"); }
+			}
+			return fail_stage("drive-selection-timeout");
+		};
+		const auto drive_stage_to_real_main = [&]() {
+			for(std::size_t frame = 0U; frame < 512U; ++frame) {
+				th03::CoreInput input{};
+				if((frame & 1U) == 0U) { input.system = 0x0020U; }
+				if(!step(input)) { return fail_stage("drive-stage-step"); }
+				if(scene() == th03::app::ClassicOpSessionScene::vs_main &&
+					last->process_advanced) {
+					return true;
+				}
+			}
+			return fail_stage("drive-stage-timeout");
+		};
+
+		if(!drive_selection() || !drive_stage_to_real_main()) {
+			return fail_stage("first-main");
+		}
+		const auto winner = (mode_index & 1U) == 0U ?
+			th03::app::ClassicOpVsRouteTestOutcome::player_one_win :
+			th03::app::ClassicOpVsRouteTestOutcome::player_two_win;
+		if(!force_terminal(
+			winner, th03::app::ClassicOpSessionScene::vs_win
+		)) {
+			return fail_stage("route-two-transition");
+		}
+		const auto route_two_terminal = th03::app::ClassicRunnerTestAccess::
+			vs_terminal_resident(runner);
+		std::array<std::uint8_t, 8U> expected_score{};
+		expected_score.fill((mode_index & 1U) == 0U ? 8U : 7U);
+		if(!route_two_terminal || route_two_terminal->story_stage != 1U ||
+			route_two_terminal->winner != ((mode_index & 1U) == 0U ? 0 : 1) ||
+			route_two_terminal->last_score[
+				(mode_index & 1U) == 0U ? 0U : 1U
+			] != expected_score || route_two_terminal->last_score[
+				(mode_index & 1U) == 0U ? 1U : 0U
+			] != std::array<std::uint8_t, 8U>{}) {
+			return fail_stage("route-two-terminal");
+		}
+		for(std::size_t frame = 0U; frame < 2'048U && scene() ==
+			th03::app::ClassicOpSessionScene::vs_win; ++frame) {
+			if(!step(pulse((frame & 1U) == 0U ? 0x0020U : 0U))) {
+				return fail_stage("win-step");
+			}
+		}
+		if(scene() !=
+			th03::app::ClassicOpSessionScene::character_selection) {
+			return fail_stage("route-two-selection");
+		}
+		const auto route_two_resident = th03::app::ClassicRunnerTestAccess::
+			vs_selection_resident(runner);
+		const std::array<std::uint8_t, 2U> expected_cpu = mode_index == 0U ?
+			std::array<std::uint8_t, 2U>{0U, 1U} : mode_index == 1U ?
+			std::array<std::uint8_t, 2U>{0U, 0U} :
+			std::array<std::uint8_t, 2U>{1U, 1U};
+		if(!route_two_resident || route_two_resident->game_mode !=
+			static_cast<std::uint8_t>(th03::game_mode::vs_1p_cpu + mode_index) ||
+			route_two_resident->is_cpu != expected_cpu ||
+			route_two_resident->story_stage != 0U ||
+			route_two_resident->winner != 0 ||
+			route_two_resident->last_score[
+				(mode_index & 1U) == 0U ? 0U : 1U
+			] != expected_score || route_two_resident->last_score[
+				(mode_index & 1U) == 0U ? 1U : 0U
+			] != std::array<std::uint8_t, 8U>{}) {
+			return fail_stage("route-two-resident");
+		}
+		if(!drive_selection() || !drive_stage_to_real_main()) {
+			return fail_stage("second-main");
+		}
+		if(!force_terminal(
+			th03::app::ClassicOpVsRouteTestOutcome::exit_to_operator,
+			th03::app::ClassicOpSessionScene::character_selection
+		)) {
+			return fail_stage("route-zero-transition");
+		}
+		const auto route_zero_resident = th03::app::ClassicRunnerTestAccess::
+			vs_selection_resident(runner);
+		if(!route_zero_resident || route_zero_resident->game_mode !=
+			route_two_resident->game_mode || route_zero_resident->is_cpu !=
+			route_two_resident->is_cpu ||
+			route_zero_resident->paletted_character !=
+				route_two_resident->paletted_character ||
+			route_zero_resident->story_stage != 0U ||
+			route_zero_resident->winner != 0 ||
+			route_zero_resident->last_score !=
+				decltype(route_zero_resident->last_score){}) {
+			return fail_stage("route-zero-resident");
+		}
+
+		// Route 0 also reenters the direct selector. Cancel there constructs a
+		// fresh title process; canceling its opened main menu exits normally.
+		for(std::size_t frame = 0U; frame < 1'024U && scene() ==
+			th03::app::ClassicOpSessionScene::character_selection; ++frame) {
+			if(!step(pulse((frame & 1U) == 0U ? 0x1000U : 0U))) {
+				return fail_stage("cancel-direct-selector");
+			}
+		}
+		if(scene() != th03::app::ClassicOpSessionScene::title_menu ||
+			!wait_for_input(300U) || !step(pulse(0x0020U)) ||
+			!wait_for_input(64U) || !step(pulse(0x1000U), true)) {
+			return fail_stage("exit-title");
+		}
+		for(std::size_t frame = 0U; frame < 8U && runner.status() ==
+			th03::app::ClassicRunnerStatus::running; ++frame) {
+			if(!step({}, true)) { return fail_stage("complete-step"); }
+		}
+		if(runner.status() !=
+			th03::app::ClassicRunnerStatus::session_complete) {
+			return fail_stage("complete-status");
+		}
+		const auto has_audio = [&](th03::app::ClassicAudioCommandType type,
+			th03::app::ClassicMusicCue cue = th03::app::ClassicMusicCue::none) {
+			return std::ranges::any_of(audio_commands, [&](const auto &command) {
+				return command.type == type && (cue ==
+					th03::app::ClassicMusicCue::none || command.cue == cue);
+			});
+		};
+		if(!has_audio(th03::app::ClassicAudioCommandType::load_song,
+				th03::app::ClassicMusicCue::character_select) ||
+			!has_audio(th03::app::ClassicAudioCommandType::load_song,
+				th03::app::ClassicMusicCue::gameplay) ||
+			!has_audio(th03::app::ClassicAudioCommandType::load_song,
+				th03::app::ClassicMusicCue::winner) ||
+			!has_audio(th03::app::ClassicAudioCommandType::play_song,
+				th03::app::ClassicMusicCue::winner) ||
+			!has_audio(th03::app::ClassicAudioCommandType::load_effects) ||
+			!has_audio(th03::app::ClassicAudioCommandType::reset_effects) ||
+			!has_audio(th03::app::ClassicAudioCommandType::stop_song)) {
+			return fail_stage("audio");
+		}
+	}
+	return true;
+}
 
 bool authentic_gate(
 	const std::filesystem::path &data_root,
@@ -1283,14 +1682,21 @@ int main(int argc, char **argv)
 {
 	test_cli();
 	test_input_projection();
+	test_classic_catch_up_policy();
 	test_fresh_resident_state();
 	test_runner_sequence_audio_surface_and_failure();
 	test_file_and_request_boundaries();
-	if(argc == 7 && std::string_view(argv[1]) == "--authentic") {
-		expect(authentic_gate(argv[2], argv[3], argv[4], argv[5], argv[6]),
-			"supplied originals construct and advance the complete Classic runner");
+	if(argc == 7 && (std::string_view(argv[1]) == "--authentic" ||
+		std::string_view(argv[1]) == "--authentic-vs")) {
+		if(std::string_view(argv[1]) == "--authentic") {
+			expect(authentic_gate(argv[2], argv[3], argv[4], argv[5], argv[6]),
+				"supplied originals construct and advance the complete Classic runner");
+		}
+		expect(authentic_vs_gate(argv[2], argv[3], argv[4], argv[5], argv[6]),
+			"supplied originals traverse all three complete Classic VS modes");
 	} else if(argc != 1) {
-		std::cerr << "usage: th03-app-classic-runner-tests [--authentic "
+		std::cerr << "usage: th03-app-classic-runner-tests "
+			"[--authentic|--authentic-vs "
 			"<data-root> <MAIN.EXE> <MAINL.EXE> <OP.EXE> <FONT.ROM>]\n";
 		return 2;
 	}

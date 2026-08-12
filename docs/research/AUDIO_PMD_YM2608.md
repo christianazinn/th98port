@@ -244,8 +244,11 @@ immutable prepared copy, and creates a new mutable image for every Play. Its C
 header is not valid C++, so public port headers expose no vendor layout.
 
 The generated hermetic gate locks the first 199,680 maximum-fidelity samples:
-61 register writes, register FNV-1a `85023b32`, signed-16 stereo PCM FNV-1a
-`1df60dc5`, and 12 Timer-B ticks, identical on GCC and MSVC. A separate
+61 register writes, register FNV-1a `85023b32`, promoted Q31 stereo PCM FNV-1a
+`529831c5`, and 12 Timer-B ticks, identical on GCC and MSVC. ymfm's signed-16-
+scale stereo and shared lanes are summed with signed-16 saturation and then
+multiplied exactly by 65,536; this supplies the amplitude domain declared by
+the signed-32 canonical/SDL boundary. A separate
 byte-silent external gate loads and advances all 21 shipped songs on both and
 independently confirms that 20 issue ADPCM-A rhythm key-ons.
 
@@ -515,6 +518,12 @@ Hz. The current minimum-fidelity engine produces exactly 166,400 Hz
 every 52 input samples. `PmdFixedResampler` implements that one ratio only; it
 is not a general host-device rate converter.
 
+The one-chip mixer promotes ymfm's signed-16-scale output into Q31 before this
+resampler. Without that promotion, SDL's S32 conversion interprets a nominal
+32767 sample against 2^31 full scale and makes the result effectively silent.
+The exact digital promotion is locked; captured PC-98 analog gain remains a
+separate hardware comparison.
+
 The checked-in port-owned generator produces 15 signed-Q30 phases of a 128-tap
 Blackman-windowed sinc with a 20 kHz cutoff. Every quantized phase is corrected
 to an exact Q30 sum of one. The runtime uses a 128-sample fixed ring and signed
@@ -544,7 +553,11 @@ device conversion, pause, and resume remain final-output facts only. The audio
 owner shares the process-exclusive SDL runtime through a subordinate lease and
 balances `SDL_INIT_AUDIO` independently from video/gamepad ownership. Dummy
 driver tests lock format, queue accounting, failure unwind, moves, and both
-destruction orders; physical WASAPI and hotplug remain release QA.
+destruction orders. Classic opens the endpoint paused after its initial
+VSync-bound presentation, queues two silent plus one rendered source interval,
+and only then resumes it. Its scheduler preserves every nominal PC-98 deadline,
+so a slower host presentation can skip intermediate display frames without
+slowing PMD/game time. Physical WASAPI and hotplug remain release QA.
 
 This makes three validation levels explicit:
 

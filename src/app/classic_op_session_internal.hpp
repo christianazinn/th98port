@@ -143,6 +143,12 @@ struct ClassicOpSessionVsTerminal final {
 	SessionTransition transition{};
 };
 
+enum class ClassicOpVsRouteTestOutcome : std::uint8_t {
+	exit_to_operator,
+	player_one_win,
+	player_two_win,
+};
+
 enum class ClassicOpVsSurfaceSource : std::uint8_t {
 	none,
 	win_completion,
@@ -233,6 +239,10 @@ struct ClassicOpSessionTestHooks final {
 	std::optional<std::uint8_t> (*story_failure_detail_code)(void *) = nullptr;
 	std::expected<void, ClassicOpSessionError>
 	(*force_story_main_outcome)(void *, ClassicStoryRouteTestOutcome) = nullptr;
+	std::expected<void, ClassicOpSessionError>
+	(*force_vs_main_outcome)(void *, ClassicOpVsRouteTestOutcome) = nullptr;
+	std::optional<GameInit> (*vs_selection_resident)(void *) = nullptr;
+	std::optional<GameInit> (*vs_terminal_resident)(void *) = nullptr;
 };
 
 class ClassicOpSession final {
@@ -314,6 +324,17 @@ struct ClassicOpSessionTestAccess final {
 		ClassicOpSession &session,
 		ClassicStoryRouteTestOutcome outcome
 	);
+	[[nodiscard]] static std::expected<void, ClassicOpSessionError>
+	force_vs_main_outcome(
+		ClassicOpSession &session,
+		ClassicOpVsRouteTestOutcome outcome
+	);
+	[[nodiscard]] static std::optional<GameInit> vs_selection_resident(
+		const ClassicOpSession &session
+	) noexcept;
+	[[nodiscard]] static std::optional<GameInit> vs_terminal_resident(
+		const ClassicOpSession &session
+	) noexcept;
 	[[nodiscard]] static CoreInput vs_cpu_main_input(
 		const GameInit &resident,
 		const ClassicMainInputSample &input,

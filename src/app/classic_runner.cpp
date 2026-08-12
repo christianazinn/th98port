@@ -167,6 +167,7 @@ read_external_file(
 {
 	const auto source = input.system;
 	return {
+		.raw_any = source != 0U,
 		.up = pressed(source, input_up),
 		.down = pressed(source, input_down),
 		.left = pressed(source, input_left),
@@ -183,6 +184,7 @@ read_external_file(
 {
 	const auto source = input.system;
 	return {
+		.raw_any = source != 0U,
 		.up = pressed(source, input_up),
 		.down = pressed(source, input_down),
 		.left = pressed(source, input_left),
@@ -590,6 +592,55 @@ ClassicRunnerTestAccess::force_story_main_outcome(
 		return std::unexpected(session_error(forced.error()));
 	}
 	return {};
+}
+
+std::expected<void, ClassicRunnerError>
+ClassicRunnerTestAccess::force_vs_main_outcome(
+	ClassicRunner &runner,
+	ClassicOpVsRouteTestOutcome outcome
+)
+{
+	if(runner.impl_->operations.consume != &consume_session) {
+		return std::unexpected(runner_error(
+			ClassicRunnerErrorCode::invalid_request
+		));
+	}
+	auto forced = ClassicOpSessionTestAccess::force_vs_main_outcome(
+		*static_cast<ClassicOpSession *>(runner.impl_->operations.context),
+		outcome
+	);
+	if(!forced) {
+		return std::unexpected(session_error(forced.error()));
+	}
+	return {};
+}
+
+std::optional<GameInit> ClassicRunnerTestAccess::vs_selection_resident(
+	const ClassicRunner &runner
+) noexcept
+{
+	if(runner.impl_->operations.consume != &consume_session) {
+		return std::nullopt;
+	}
+	return ClassicOpSessionTestAccess::vs_selection_resident(
+		*static_cast<const ClassicOpSession *>(
+			runner.impl_->operations.context
+		)
+	);
+}
+
+std::optional<GameInit> ClassicRunnerTestAccess::vs_terminal_resident(
+	const ClassicRunner &runner
+) noexcept
+{
+	if(runner.impl_->operations.consume != &consume_session) {
+		return std::nullopt;
+	}
+	return ClassicOpSessionTestAccess::vs_terminal_resident(
+		*static_cast<const ClassicOpSession *>(
+			runner.impl_->operations.context
+		)
+	);
 }
 
 std::expected<std::vector<std::byte>, ClassicRunnerError>
