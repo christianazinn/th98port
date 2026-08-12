@@ -30,6 +30,7 @@
 #include "th03/app/main_direct_vs_runner.hpp"
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/new_classic_frontend.hpp"
+#include "th03/app/new_classic_language.hpp"
 #include "th03/app/new_classic_playback.hpp"
 #include "th03/app/replay_slot_store.hpp"
 #include "th03/app/tick_input.hpp"
@@ -336,6 +337,7 @@ void print_usage()
 			"--mainl <MAINL.EXE> --op <OP.EXE> --font <FONT.ROM>\n"
 		<< "       [--config <YUME.CFG>] [--score <YUME.NEM>] "
 			"[--replay-root <REPLAY>] [--seed n] "
+			"[--language-overlay <TH3EN.DAT>] "
 			"[--rhythm-rom <YM2608.ROM> | --rhythm-pcm <T98RHYTHM.PCM>] "
 			"[--tick-rate <ticks>/<seconds>] "
 			"[--smoke-ticks n]\n"
@@ -365,6 +367,9 @@ void print_usage()
 		<< "Classic stores YUME.CFG, YUME.NEM, and New Classic's REPLAY "
 			"directory under --data by default; --config, --score, and "
 			"--replay-root override them for read-only installs.\n"
+		<< "New Classic enables its persistent English option only when the "
+			"authenticated Replay Patch 0.4.10 TH3EN.DAT is supplied with "
+			"--language-overlay. Classic remains Japanese.\n"
 		<< "Kotohime's source-uninitialized late Bomb local is deterministically "
 			"normalized from the adjacent Kana fade routine.\n";
 }
@@ -453,6 +458,8 @@ const char *name(th03::app::ClassicCliOption option) noexcept
 	case th03::app::ClassicCliOption::mainl_executable: return "mainl";
 	case th03::app::ClassicCliOption::op_executable: return "op";
 	case th03::app::ClassicCliOption::font_rom: return "font";
+	case th03::app::ClassicCliOption::language_overlay:
+		return "language-overlay";
 	case th03::app::ClassicCliOption::rhythm_rom: return "rhythm-rom";
 	case th03::app::ClassicCliOption::rhythm_pcm: return "rhythm-pcm";
 	case th03::app::ClassicCliOption::config: return "config";
@@ -1696,12 +1703,13 @@ NewClassicKeyConfigRunResult run_new_classic_options(
 	const std::filesystem::path &key_path,
 	th03::app::NewClassicKeyConfig &key_config,
 	const th03::app::NewClassicKeyConfig &key_defaults,
+	bool english_available,
 	th03::app::RationalTickRate tick_rate,
 	th03::platform::SdlPlatform &platform,
 	th03::platform::SdlInputMapper &mapper
 )
 {
-	th03::app::NewClassicOptionsMenu menu(config);
+	th03::app::NewClassicOptionsMenu menu(config, english_available);
 	for(;;) {
 		auto driven = run_host_ui(
 			tick_rate, platform, mapper,
@@ -1887,6 +1895,7 @@ ExperienceRunResult run_replay_playback(
 		.checkpoint_index = checkpoint,
 		.kotohime_compatibility = parsed.launch.kotohime_compatibility,
 		.reduced_flash = persisted->options.reduced_flash,
+		.language = persisted->options.language,
 	});
 	if(!playback) {
 		return {.exit_code = fail("replay-playback-load", playback.error())};
@@ -2121,6 +2130,25 @@ ExperienceRunResult run_new_classic_experience(
 		return {.exit_code = fail("config-load", loaded_options.error())};
 	}
 	auto config_options = loaded_options->options;
+	bool english_available = false;
+	if(!parsed.launch.content.language_overlay.empty()) {
+		auto overlay = th03::app::load_new_classic_language_overlay(
+			parsed.launch.content.language_overlay
+		);
+		if(!overlay) {
+			return {.exit_code = fail("language-overlay", overlay.error())};
+		}
+		english_available = true;
+	}
+	if(!english_available &&
+		config_options.language == th03::app::ClassicLanguage::english) {
+		config_options.language = th03::app::ClassicLanguage::japanese;
+		if(auto stored = th03::app::commit_classic_config_store(
+			parsed.launch.content.config, config_options
+		); !stored) {
+			return {.exit_code = fail("config-language-fallback", stored.error())};
+		}
+	}
 	const auto key_path = parsed.launch.content.config.parent_path() /
 		"TH3KEY.CFG";
 	auto loaded_keys = th03::app::load_new_classic_key_config(
@@ -2254,7 +2282,8 @@ ExperienceRunResult run_new_classic_experience(
 			th03::app::NewClassicLandingChoice::options) {
 			auto configured = run_new_classic_options(
 				parsed.launch.content.config, config_options, key_path,
-				key_config, key_defaults, parsed.tick_rate, platform, mapper
+				key_config, key_defaults, english_available, parsed.tick_rate,
+				platform, mapper
 			);
 			if(configured.exit_code != 0) {
 				return {.exit_code = configured.exit_code};

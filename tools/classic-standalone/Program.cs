@@ -95,6 +95,12 @@ internal static class Program
             "--score", Path.Combine(userRoot, "YUME.NEM"),
             "--replay-root", Path.Combine(userRoot, "REPLAY"),
         };
+        var languageOverlay = Path.Combine(content, "TH3EN.DAT");
+        if(File.Exists(languageOverlay))
+        {
+            arguments.Add("--language-overlay");
+            arguments.Add(languageOverlay);
+        }
         var rhythmRom = Path.Combine(content, "YM2608.ROM");
         if(File.Exists(rhythmRom))
         {

@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "th03/app/classic_cli.hpp"
+#include "th03/app/classic_config_store.hpp"
 #include "th03/app/classic_runner.hpp"
 #include "th03/app/classic_score_store.hpp"
 #include "th03/formats/v13.hpp"
@@ -118,6 +119,7 @@ void test_cli()
 	const auto complete = parse({
 		"--classic", "--data", "d", "--main", "m", "--mainl", "l",
 		"--op", "o", "--font", "f", "--tick-rate", "3/2",
+		"--language-overlay", "TH3EN.DAT",
 		"--rhythm-rom", "ym2608.rom",
 		"--config", "c", "--score", "s", "--replay-root", "r",
 		"--seed", "4294967295",
@@ -126,11 +128,12 @@ void test_cli()
 	expect(complete && complete->launch.content.config == "c" &&
 		complete->launch.content.score == "s" &&
 		complete->replay_root == "r" &&
+		complete->launch.content.language_overlay == "TH3EN.DAT" &&
 		complete->rhythm_rom == std::filesystem::path("ym2608.rom") &&
 		complete->launch.seed == 0xFFFF'FFFFU &&
 		complete->tick_rate.ticks == 3U && complete->tick_rate.seconds == 2U &&
 		complete->smoke_ticks == 7U,
-		"optional Classic paths, rate override, seed, and smoke bound parse");
+		"optional Classic paths, language, rate, seed, and smoke bound parse");
 	const auto decoded_rhythm = parse({
 		"--classic", "--data", "d", "--main", "m", "--mainl", "l",
 		"--op", "o", "--font", "f", "--rhythm-pcm", "t98.pcm",
@@ -1283,10 +1286,20 @@ bool authentic_gate(
 	const std::filesystem::path &main_executable,
 	const std::filesystem::path &mainl_executable,
 	const std::filesystem::path &op_executable,
-	const std::filesystem::path &font_rom
+	const std::filesystem::path &font_rom,
+	const std::filesystem::path &language_overlay = {}
 )
 {
 	TemporaryDirectory temporary;
+	if(!language_overlay.empty()) {
+		th03::app::ClassicConfigOptions options{};
+		options.language = th03::app::ClassicLanguage::english;
+		if(!th03::app::commit_classic_config_store(
+			temporary.path() / "YUME.CFG", options
+		)) {
+			return false;
+		}
+	}
 	auto loaded = th03::app::ClassicRunner::load({
 		.content = {
 			.data_root = data_root,
@@ -1294,6 +1307,7 @@ bool authentic_gate(
 			.mainl_executable = mainl_executable,
 			.op_executable = op_executable,
 			.font_rom = font_rom,
+			.language_overlay = language_overlay,
 			.config = temporary.path() / "YUME.CFG",
 			.score = temporary.path() / "YUME.NEM",
 		},
@@ -1554,6 +1568,12 @@ bool authentic_gate(
 		!graphics_ink(336, 292, 240U, 16U) ||
 		!graphics_ink(384, 308, 176U, 16U)) {
 		std::cerr << "authentic-script-stage=splash-text-blank tick="
+			<< tick_index << '\n';
+		return false;
+	}
+	if(!language_overlay.empty() && (!graphics_ink(80, 276, 240U, 16U) ||
+		!graphics_ink(336, 276, 240U, 16U))) {
+		std::cerr << "authentic-script-stage=english-splash-title-blank tick="
 			<< tick_index << '\n';
 		return false;
 	}
@@ -2063,7 +2083,11 @@ int main(int argc, char **argv)
 	test_fresh_resident_state();
 	test_runner_sequence_audio_surface_and_failure();
 	test_file_and_request_boundaries();
-	if(argc == 7 && (std::string_view(argv[1]) == "--authentic" ||
+	if(argc == 8 && std::string_view(argv[1]) == "--authentic-english") {
+		expect(authentic_gate(
+			argv[2], argv[3], argv[4], argv[5], argv[6], argv[7]
+		), "supplied English overlay traverses the complete New Classic runner");
+	} else if(argc == 7 && (std::string_view(argv[1]) == "--authentic" ||
 		std::string_view(argv[1]) == "--authentic-vs" ||
 		std::string_view(argv[1]) == "--authentic-practice")) {
 		if(std::string_view(argv[1]) == "--authentic") {
@@ -2081,7 +2105,9 @@ int main(int argc, char **argv)
 	} else if(argc != 1) {
 		std::cerr << "usage: th03-app-classic-runner-tests "
 			"[--authentic|--authentic-vs|--authentic-practice "
-			"<data-root> <MAIN.EXE> <MAINL.EXE> <OP.EXE> <FONT.ROM>]\n";
+			"<data-root> <MAIN.EXE> <MAINL.EXE> <OP.EXE> <FONT.ROM> | "
+			"--authentic-english <data-root> <MAIN.EXE> <MAINL.EXE> "
+			"<OP.EXE> <FONT.ROM> <TH3EN.DAT>]\n";
 		return 2;
 	}
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

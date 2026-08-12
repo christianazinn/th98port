@@ -393,7 +393,8 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		request.kotohime_compatibility,
 		replay_recorder.get(),
 		request.initial_route == ClassicRunnerInitialRoute::new_classic_practice,
-		std::move(request.content.new_classic_score)
+		std::move(request.content.new_classic_score),
+		std::move(request.content.language_overlay)
 	);
 	if(!session) {
 		return std::unexpected(session_error(session.error()));

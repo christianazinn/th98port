@@ -54,6 +54,17 @@ extraction identity recorded in `research/ASSET_INVENTORY.md`. One
 repeated requests return its cached bytes, so no per-frame file I/O occurs.
 `th03_assets` receives a caller-borrowed byte span only.
 
+## New Classic language overlay
+
+New Classic optionally accepts Replay Patch 0.4.10's exact `TH3EN.DAT` through
+`--language-overlay`. The application authenticates the complete 295,731-byte
+archive by SHA-256 before decrypting its 52-entry directory, bounds every
+uncompressed member, and requires the exact translated-member set. Only then
+does `MainResourceLoader` receive immutable filename replacements. Scene
+decoders and geometry checks still apply, while the stock per-member size/FNV
+profiles are correctly bypassed for those separately authenticated translated
+members. Classic never installs these replacements.
+
 ## MAIN direct-VS batch
 
 `direct_vs_resource_keys()` deterministically loads these five static MAIN

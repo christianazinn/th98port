@@ -9,7 +9,9 @@
 #include <span>
 
 #include "th03/app/classic_runner.hpp"
+#include "th03/app/classic_config.hpp"
 #include "th03/app/main_process.hpp"
+#include "th03/app/new_classic_language.hpp"
 #include "th03/formats/replay.hpp"
 
 namespace th03::app {
@@ -22,6 +24,8 @@ struct NewClassicPlaybackRequest final {
 	std::size_t checkpoint_index = 0U;
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
 	bool reduced_flash = false;
+	// Presentation-only viewer choice. It is deliberately not read from V13.
+	ClassicLanguage language = ClassicLanguage::japanese;
 };
 
 enum class NewClassicPlaybackErrorCode : std::uint8_t {
@@ -30,6 +34,7 @@ enum class NewClassicPlaybackErrorCode : std::uint8_t {
 	file_read_failed,
 	compiled_content_failed,
 	mainl_content_failed,
+	language_overlay_failed,
 	static_content_failed,
 	resource_failed,
 	process_failed,
@@ -43,6 +48,7 @@ struct NewClassicPlaybackError final {
 	NewClassicPlaybackErrorCode code =
 		NewClassicPlaybackErrorCode::invalid_request;
 	std::optional<MainCompiledContentError> compiled_content{};
+	std::optional<NewClassicLanguageOverlayError> language_overlay{};
 	std::optional<ResourceLoadError> resource{};
 	std::optional<MainProcessError> process{};
 	std::optional<present::SourceSurfaceError> surface{};

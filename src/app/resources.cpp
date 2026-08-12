@@ -2148,6 +2148,22 @@ MainResourceLoader::MainResourceLoader(
 	integrity_(integrity)
 {}
 
+bool MainResourceLoader::install_authenticated_overrides(
+	std::map<std::string, ResourceBytes> overrides
+)
+{
+	if(!cache_.empty() || !overrides_.empty()) {
+		return false;
+	}
+	for(const auto &[name, bytes] : overrides) {
+		if(!is_safe_extracted_entry_name(name) || !bytes || bytes->empty()) {
+			return false;
+		}
+	}
+	overrides_ = std::move(overrides);
+	return true;
+}
+
 std::expected<ResourceBytes, ResourceLoadError> MainResourceLoader::load(
 	MainResourceKey key
 )
@@ -2159,6 +2175,11 @@ std::expected<ResourceBytes, ResourceLoadError> MainResourceLoader::load(
 	const auto cached = cache_.find(key);
 	if(cached != cache_.end()) {
 		return cached->second;
+	}
+	const auto replacement = overrides_.find(spec->filename);
+	if(replacement != overrides_.end()) {
+		cache_.emplace(key, replacement->second);
+		return replacement->second;
 	}
 
 	const auto archive = archive_directory(spec->archive);
@@ -2377,7 +2398,11 @@ MainResourceLoader::load_batch(std::span<const MainResourceKey> keys)
 		if(!resource) {
 			return std::unexpected(resource.error());
 		}
-		result.push_back({.spec = *spec, .bytes = *resource});
+		result.push_back({
+			.spec = *spec,
+			.bytes = *resource,
+			.authenticated_override = overrides_.contains(spec->filename),
+		});
 	}
 	cache_ = std::move(candidate.cache_);
 	return result;

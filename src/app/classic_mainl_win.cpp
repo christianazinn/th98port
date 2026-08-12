@@ -101,10 +101,11 @@ validate_resource_set(
 				key
 			));
 		}
-		if(resource.bytes->size() != canonical->expected_bytes ||
+		if(!resource.authenticated_override &&
+			(resource.bytes->size() != canonical->expected_bytes ||
 			(authenticate_resource_bytes && main_resource_fnv1a64(
 				*resource.bytes
-			) != canonical->expected_fnv1a64)) {
+			) != canonical->expected_fnv1a64))) {
 			return std::unexpected(win_error(
 				ClassicMainlWinErrorCode::resource_integrity_failed,
 				key

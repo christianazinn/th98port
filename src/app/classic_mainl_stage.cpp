@@ -109,10 +109,11 @@ validate_resource_set(
 				key
 			));
 		}
-		if(resource.bytes->size() != canonical->expected_bytes ||
+		if(!resource.authenticated_override &&
+			(resource.bytes->size() != canonical->expected_bytes ||
 			(authenticate_resource_bytes && main_resource_fnv1a64(
 				*resource.bytes
-			) != canonical->expected_fnv1a64)) {
+			) != canonical->expected_fnv1a64))) {
 			return std::unexpected(stage_error(
 				ClassicMainlStageErrorCode::resource_integrity_failed,
 				key
@@ -877,17 +878,49 @@ std::expected<
 		if(!name) {
 			return std::unexpected(text_error(name.error()));
 		}
+		if(!text.characters[character].title_second.empty()) {
+			auto second = present::prepare_graphics_text_8x16(
+				text.characters[character].title_second,
+				font
+			);
+			if(!second) {
+				return std::unexpected(text_error(second.error()));
+			}
+		}
 	}
-	const std::array selected_text{
-		&text.characters[character_index(player_one->character)].title,
-		&text.characters[character_index(player_one->character)].name,
-		&text.characters[character_index(player_two->character)].title,
-		&text.characters[character_index(player_two->character)].name,
-	};
-	for(std::size_t index = 0U; index < selected_text.size(); ++index) {
+	prepared->english_text = std::ranges::all_of(
+		text.characters,
+		[](const MainlStageCharacterText &character) {
+			return !character.title_second.empty();
+		}
+	);
+	if(!prepared->english_text && std::ranges::any_of(
+		text.characters,
+		[](const MainlStageCharacterText &character) {
+			return !character.title_second.empty();
+		}
+	)) {
+		return std::unexpected(stage_error(
+			ClassicMainlStageErrorCode::invalid_config
+		));
+	}
+	const auto &first = text.characters[character_index(player_one->character)];
+	const auto &second = text.characters[character_index(player_two->character)];
+	const std::array<const std::vector<std::uint8_t> *, 6U> selected_text =
+		prepared->english_text ? std::array{
+			&first.title, &first.title_second, &first.name,
+			&second.title, &second.title_second, &second.name,
+		} : std::array{
+			&first.title, &first.name, &first.name,
+			&second.title, &second.name, &second.name,
+		};
+	const auto prepared_count = prepared->english_text ? 6U : 5U;
+	for(std::size_t index = 0U; index < prepared_count; ++index) {
+		if(!prepared->english_text && index == 2U) {
+			continue;
+		}
 		auto selected = present::prepare_graphics_text_8x16(
-			*selected_text[index],
-			font
+			*selected_text[index], font
 		);
 		if(!selected) {
 			return std::unexpected(text_error(selected.error()));
@@ -923,6 +956,7 @@ std::expected<
 
 bool ClassicMainlStageTransition::begin_splash_show() noexcept
 {
+	const bool english = prepared_ && prepared_->english_text;
 	if(!prepared_ || !raster_.copy_page(
 		present::Page::one,
 		{0, 0, present::graphics_width, present::graphics_height},
@@ -930,32 +964,41 @@ bool ClassicMainlStageTransition::begin_splash_show() noexcept
 		{0, 0}
 	) || !raster_.set_access_page(present::Page::zero) ||
 		!present::cdg_put_8(
-			raster_, 96, 96, prepared_->portraits[0U]
+			raster_, 96, english ? 80 : 96, prepared_->portraits[0U]
 		) || !present::cdg_put_hflip_8(
-			raster_, 352, 96, prepared_->portraits[1U]
+			raster_, 352, english ? 80 : 96, prepared_->portraits[1U]
 		) || (prepared_->stage_number && !present::cdg_put_8(
-			raster_, 384, 46, *prepared_->stage_number
-		)) || !present::graphics_text_put_8x16(
-			raster_,
-			{80, 292},
-			*prepared_->text[0U],
-			{15U, present::GraphicsTextWeight::bold, 0U}
-		) || !present::graphics_text_put_8x16(
-			raster_,
-			{128, 308},
-			*prepared_->text[1U],
-			{15U, present::GraphicsTextWeight::bold, 0U}
-		) || !present::graphics_text_put_8x16(
-			raster_,
-			{336, 292},
-			*prepared_->text[2U],
-			{15U, present::GraphicsTextWeight::bold, 0U}
-		) || !present::graphics_text_put_8x16(
-			raster_,
-			{384, 308},
-			*prepared_->text[3U],
-			{15U, present::GraphicsTextWeight::bold, 0U}
-		)) {
+			raster_, 384, english ? 23 : 46, *prepared_->stage_number
+		))) {
+		return false;
+	}
+	const present::GraphicsTextStyle style{
+		15U, present::GraphicsTextWeight::bold, 0U
+	};
+	const bool text_drawn = english ?
+		(present::graphics_text_put_8x16(
+			raster_, {80, 276}, *prepared_->text[0U], style
+		) && present::graphics_text_put_8x16(
+			raster_, {80, 292}, *prepared_->text[1U], style
+		) && present::graphics_text_put_8x16(
+			raster_, {80, 308}, *prepared_->text[2U], style
+		) && present::graphics_text_put_8x16(
+			raster_, {336, 276}, *prepared_->text[3U], style
+		) && present::graphics_text_put_8x16(
+			raster_, {336, 292}, *prepared_->text[4U], style
+		) && present::graphics_text_put_8x16(
+			raster_, {336, 308}, *prepared_->text[5U], style
+		)) :
+		(present::graphics_text_put_8x16(
+			raster_, {80, 292}, *prepared_->text[0U], style
+		) && present::graphics_text_put_8x16(
+			raster_, {128, 308}, *prepared_->text[1U], style
+		) && present::graphics_text_put_8x16(
+			raster_, {336, 292}, *prepared_->text[3U], style
+		) && present::graphics_text_put_8x16(
+			raster_, {384, 308}, *prepared_->text[4U], style
+		));
+	if(!text_drawn) {
 		return false;
 	}
 	raster_.set_palette_tone(0);

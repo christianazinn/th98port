@@ -81,12 +81,15 @@ struct NewClassicOptionsResult final {
 	NewClassicOptionsStatus status = NewClassicOptionsStatus::running;
 };
 
-// Replay Patch's expanded option set. English remains unavailable until an
-// authenticated translated-resource overlay is supplied; the menu discloses
-// that boundary and retains Japanese instead of pretending to switch assets.
+// Replay Patch's expanded option set. The caller proves whether the complete
+// authenticated translated-resource profile is available; a missing profile
+// is disclosed and can never leave a persisted partial-English selection.
 class NewClassicOptionsMenu final {
 public:
-	explicit NewClassicOptionsMenu(ClassicConfigOptions config) noexcept;
+	explicit NewClassicOptionsMenu(
+		ClassicConfigOptions config,
+		bool english_available = false
+	) noexcept;
 	[[nodiscard]] NewClassicOptionsResult consume(
 		NewClassicUiInput input
 	) noexcept;
@@ -105,6 +108,7 @@ private:
 	bool input_allowed_ = false;
 	bool commit_failure_ = false;
 	bool english_unavailable_notice_ = false;
+	bool english_available_ = false;
 };
 
 enum class ReplayCatalogSlotState : std::uint8_t {

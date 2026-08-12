@@ -94,10 +94,11 @@ constexpr std::uint8_t source_fade_steps = 4U;
 				ClassicStaffErrorCode::resource_set_mismatch, key
 			));
 		}
-		if(resource.bytes->size() != canonical->expected_bytes ||
+		if(!resource.authenticated_override &&
+			(resource.bytes->size() != canonical->expected_bytes ||
 			(authenticate_resource_bytes && main_resource_fnv1a64(
 				*resource.bytes
-			) != canonical->expected_fnv1a64)) {
+			) != canonical->expected_fnv1a64))) {
 			return std::unexpected(staff_error(
 				ClassicStaffErrorCode::resource_integrity_failed, key
 			));

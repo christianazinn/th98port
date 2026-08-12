@@ -8,6 +8,7 @@
 #include <expected>
 #include <limits>
 #include <span>
+#include <string_view>
 #include <utility>
 
 #include "main_compiled_content_internal.hpp"
@@ -575,6 +576,53 @@ MainCompiledContent::hud_result_tram_assets() const noexcept {
 	assets.combo_bonus = combo_bonus_;
 	assets.combo_erase = combo_erase_;
 	return assets;
+}
+
+void MainCompiledContent::apply_new_classic_english_results() noexcept
+{
+	using namespace std::string_view_literals;
+	constexpr std::array labels{
+		"\x82\x66\x82\x60\x82\x74\x82\x66\x82\x64\x81\x40"
+		"\x82\x60\x82\x73\x82\x6A\x81\x40\x81\x40\x81\x40\x81\x7E"sv,
+		"\x82\x61\x82\x6E\x82\x72\x82\x72\x81\x40"
+		"\x82\x60\x82\x73\x82\x6A\x81\x40\x81\x40\x81\x40\x81\x40\x81\x7E"sv,
+		"\x82\x61\x82\x6E\x82\x72\x82\x72\x81\x40"
+		"\x82\x65\x82\x6B\x82\x68\x82\x6F\x81\x40\x81\x40\x81\x40\x81\x7E"sv,
+		"\x82\x61\x82\x6E\x82\x72\x82\x72\x81\x40"
+		"\x82\x6F\x82\x60\x82\x6D\x82\x68\x82\x62\x81\x40\x81\x40\x81\x7E"sv,
+		"\x82\x6B\x82\x68\x82\x75\x82\x64\x82\x72\x81\x40"
+		"\x82\x6B\x82\x64\x82\x65\x82\x73\x81\x40\x81\x40\x81\x7E"sv,
+	};
+	constexpr std::array destinations{
+		MainResultLabel::gauge_attack,
+		MainResultLabel::boss_attack,
+		MainResultLabel::boss_attack_reversed,
+		MainResultLabel::boss_panic,
+		MainResultLabel::player_remaining,
+	};
+	static_assert(std::ranges::all_of(labels, [](std::string_view label) {
+		return label.size() == 26U;
+	}));
+	for(std::size_t index = 0U; index < labels.size(); ++index) {
+		std::array<std::byte, 27U> source{};
+		for(std::size_t byte = 0U; byte < labels[index].size(); ++byte) {
+			source[byte] = static_cast<std::byte>(
+				static_cast<unsigned char>(labels[index][byte])
+			);
+		}
+		const ResultSpec spec{
+			.label = destinations[index],
+			.item = MainCompiledContentItem::none,
+			.load_offset = 0U,
+			.payload_bytes = 26U,
+		};
+		static_cast<void>(decode_result_label(
+			result_labels_[static_cast<std::size_t>(destinations[index])],
+			source,
+			spec,
+			0U
+		));
+	}
 }
 
 std::expected<MainCompiledContent, MainCompiledContentError>

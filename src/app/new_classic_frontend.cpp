@@ -353,13 +353,14 @@ NewClassicLandingChoice NewClassicLandingMenu::choice() const noexcept
 }
 
 NewClassicOptionsMenu::NewClassicOptionsMenu(
-	ClassicConfigOptions config
-) noexcept : config_(config)
+	ClassicConfigOptions config,
+	bool english_available
+) noexcept : config_(config), english_available_(english_available)
 {
 	if(config_.bgm_mode == ClassicBgmMode::midi) {
 		config_.bgm_mode = ClassicBgmMode::off;
 	}
-	if(config_.language != ClassicLanguage::japanese) {
+	if(!english_available_ && config_.language != ClassicLanguage::japanese) {
 		config_.language = ClassicLanguage::japanese;
 		english_unavailable_notice_ = true;
 	}
@@ -396,7 +397,8 @@ void NewClassicOptionsMenu::draw() noexcept
 			value = config_.bgm_mode == ClassicBgmMode::off ? "Off" : "FM";
 			break;
 		case 2U: value = config_.sfx_enabled ? "On" : "Off"; break;
-		case 3U: value = "Japanese"; break;
+		case 3U: value = config_.language == ClassicLanguage::english ?
+			"English" : "Japanese"; break;
 		case 5U: value = config_.reduced_flash ? "Reduced" : "Full"; break;
 		default: break;
 		}
@@ -477,7 +479,13 @@ NewClassicOptionsResult NewClassicOptionsMenu::consume(
 		return {.status = status_};
 	}
 	if(selected_ == 3U && (input.confirm || input.left || input.right)) {
-		english_unavailable_notice_ = true;
+		if(english_available_) {
+			config_.language = config_.language == ClassicLanguage::japanese ?
+				ClassicLanguage::english : ClassicLanguage::japanese;
+			english_unavailable_notice_ = false;
+		} else {
+			english_unavailable_notice_ = true;
+		}
 		draw();
 		return {.surface_changed = true, .status = status_};
 	}

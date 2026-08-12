@@ -34,6 +34,7 @@ classic_main_gameplay_song(const GameInit &resident) noexcept;
 
 struct MainlStageCharacterText final {
 	std::vector<std::uint8_t> title{};
+	std::vector<std::uint8_t> title_second{};
 	std::vector<std::uint8_t> name{};
 };
 
@@ -195,8 +196,9 @@ private:
 		assets::PiImage opponent_enemies{};
 		std::array<
 			std::optional<present::PreparedGraphicsText8x16>,
-			4U
+			6U
 		> text{};
+		bool english_text = false;
 		std::optional<PreparedGameftGaiji> mainl_gaiji{};
 	};
 	explicit ClassicMainlStageTransition(

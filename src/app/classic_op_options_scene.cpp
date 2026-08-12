@@ -129,9 +129,10 @@ constexpr std::array<std::uint8_t, 6U> value_key_joy{{
 				ClassicOpErrorCode::resource_set_mismatch, key
 			));
 		}
-		if(resource.bytes->size() != canonical->expected_bytes ||
+		if(!resource.authenticated_override &&
+			(resource.bytes->size() != canonical->expected_bytes ||
 			main_resource_fnv1a64(*resource.bytes) !=
-				canonical->expected_fnv1a64) {
+				canonical->expected_fnv1a64)) {
 			return std::unexpected(options_error(
 				ClassicOpErrorCode::resource_integrity_failed, key
 			));

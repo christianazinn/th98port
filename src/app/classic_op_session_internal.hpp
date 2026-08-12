@@ -24,6 +24,7 @@
 #include "th03/app/classic_score_store.hpp"
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/main_process.hpp"
+#include "th03/app/new_classic_language.hpp"
 #include "th03/app/new_classic_practice.hpp"
 #include "th03/present/source_surface.hpp"
 
@@ -79,6 +80,7 @@ enum class ClassicOpSessionErrorCode : std::uint8_t {
 	session_not_running,
 	surface_failed,
 	op_text_failed,
+	language_overlay_failed,
 };
 
 struct ClassicOpSessionError final {
@@ -89,6 +91,7 @@ struct ClassicOpSessionError final {
 	std::optional<NewClassicScoreStoreError> new_score_store_error{};
 	std::optional<MainlCompiledTextError> mainl_text_error{};
 	std::optional<OpCompiledTextError> op_text_error{};
+	std::optional<NewClassicLanguageOverlayError> language_overlay_error{};
 	std::optional<AuthenticTextError> font_error{};
 	std::optional<MainProcessError> main_error{};
 	std::optional<ClassicOpError> title_error{};
@@ -272,7 +275,8 @@ public:
 		present::KotohimeBombFadeCompatibility kotohime_compatibility = {},
 		NewClassicReplayRecorder *replay_recorder = nullptr,
 		bool new_classic_practice_route = false,
-		std::filesystem::path new_classic_score_path = {}
+		std::filesystem::path new_classic_score_path = {},
+		std::filesystem::path language_overlay_path = {}
 	);
 	~ClassicOpSession();
 

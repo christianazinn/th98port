@@ -14,6 +14,7 @@
 #include "main_process_driver_internal.hpp"
 #include "main_process_internal.hpp"
 #include "main_process_static_content_internal.hpp"
+#include "new_classic_language_internal.hpp"
 #include "th03/app/authentic_text.hpp"
 #include "th03/app/new_classic_pause.hpp"
 #include "th03/app/new_classic_replay.hpp"
@@ -94,6 +95,17 @@ namespace {
 {
 	auto result = session_error(ClassicOpSessionErrorCode::op_text_failed);
 	result.op_text_error.emplace(std::move(error));
+	return result;
+}
+
+[[nodiscard]] ClassicOpSessionError language_overlay_error(
+	NewClassicLanguageOverlayError error
+)
+{
+	auto result = session_error(
+		ClassicOpSessionErrorCode::language_overlay_failed
+	);
+	result.language_overlay_error.emplace(std::move(error));
 	return result;
 }
 
@@ -2864,7 +2876,8 @@ ClassicOpSession::create(
 	present::KotohimeBombFadeCompatibility kotohime_compatibility,
 	NewClassicReplayRecorder *replay_recorder,
 	bool new_classic_practice_route,
-	std::filesystem::path new_classic_score_path
+	std::filesystem::path new_classic_score_path,
+	std::filesystem::path language_overlay_path
 )
 {
 	if(!loader || config_path.empty() || score_path.empty() ||
@@ -2879,6 +2892,9 @@ ClassicOpSession::create(
 		return std::unexpected(config_error(std::move(loaded_config.error())));
 	}
 	auto config = loaded_config->options;
+	if(!replay_recorder) {
+		config.language = ClassicLanguage::japanese;
+	}
 	// Stock TH03 ships neither MIDI/MMD songs nor an MMD driver launch path.
 	// Keep the source codec value readable, but never claim MIDI while routing
 	// the session to the FM-only native engine.
@@ -2892,6 +2908,24 @@ ClassicOpSession::create(
 	auto imported_op = import_op_music_room_text(op_executable);
 	if(!imported_op) {
 		return std::unexpected(op_text_error(std::move(imported_op.error())));
+	}
+	if(replay_recorder && config.language == ClassicLanguage::english) {
+		auto overlay = load_new_classic_language_overlay(language_overlay_path);
+		if(!overlay) {
+			return std::unexpected(language_overlay_error(
+				std::move(overlay.error())
+			));
+		}
+		if(!loader->install_authenticated_overrides(
+			std::move(*overlay).release_members()
+		)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		apply_new_classic_english_text(
+			compiled_content, imported->assets, *imported_op
+		);
 	}
 	auto shared_loader = std::shared_ptr<MainResourceLoader>(std::move(loader));
 	auto backend = std::make_shared<ClassicOpSessionBackend>(

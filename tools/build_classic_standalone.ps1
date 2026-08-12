@@ -8,6 +8,7 @@ param(
 	[string]$MainlExecutable,
 	[string]$OpExecutable,
 	[string]$FontRom,
+	[string]$LanguageOverlay,
 	[string]$RhythmRom,
 	[string]$T98Sound86,
 	[string]$Output,
@@ -49,6 +50,17 @@ if(-not $FontRom) {
 		$FontRom = $fontCandidates[0]
 	}
 }
+if(-not $LanguageOverlay) {
+	$languageCandidates = @(
+		(Join-Path $originalRoot "th03_en\TH3EN.DAT"),
+		(Join-Path (Split-Path -Parent $worktreeRoot) (
+			"replays-and-validation-17ptz\.scratch\assets\th03-language\TH3EN.DAT"
+		))
+	)
+	$LanguageOverlay = $languageCandidates |
+		Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+		Select-Object -First 1
+}
 if(-not $Output) {
 	$Output = Join-Path $standaloneRoot "TH03-Classic-Test.exe"
 }
@@ -82,6 +94,9 @@ $MainExecutable = Resolve-RequiredFile $MainExecutable "MAIN.EXE"
 $MainlExecutable = Resolve-RequiredFile $MainlExecutable "MAINL.EXE"
 $OpExecutable = Resolve-RequiredFile $OpExecutable "OP.EXE"
 $FontRom = Resolve-RequiredFile $FontRom "FONT.ROM"
+if($LanguageOverlay) {
+	$LanguageOverlay = Resolve-RequiredFile $LanguageOverlay "TH3EN.DAT"
+}
 if($RhythmRom) {
 	$RhythmRom = Resolve-RequiredFile $RhythmRom "YM2608 rhythm ROM"
 }
@@ -164,6 +179,10 @@ try {
 		-Destination (Join-Path $contentRoot "OP.EXE")
 	Copy-Item -LiteralPath $FontRom `
 		-Destination (Join-Path $contentRoot "FONT.ROM")
+	if($LanguageOverlay) {
+		Copy-Item -LiteralPath $LanguageOverlay `
+			-Destination (Join-Path $contentRoot "TH3EN.DAT")
+	}
 	if($RhythmRom) {
 		Copy-Item -LiteralPath $RhythmRom `
 			-Destination (Join-Path $contentRoot "YM2608.ROM")
@@ -246,6 +265,11 @@ try {
 				"--score", (Join-Path $workRoot "smoke-YUME.NEM"),
 				"--smoke-ticks", "8"
 			)
+			if($LanguageOverlay) {
+				$nativeArguments += @(
+					"--language-overlay", (Join-Path $contentRoot "TH3EN.DAT")
+				)
+			}
 			if($RhythmRom) {
 				$nativeArguments += @(
 					"--rhythm-rom", (Join-Path $contentRoot "YM2608.ROM")

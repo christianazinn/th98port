@@ -117,9 +117,10 @@ validate_music_room_resources(
 				ClassicOpMusicRoomErrorCode::resource_set_mismatch, key
 			));
 		}
-		if(resource.bytes->size() != canonical->expected_bytes ||
+		if(!resource.authenticated_override &&
+			(resource.bytes->size() != canonical->expected_bytes ||
 			main_resource_fnv1a64(*resource.bytes) !=
-				canonical->expected_fnv1a64) {
+				canonical->expected_fnv1a64)) {
 			return std::unexpected(resource_error(
 				ClassicOpMusicRoomErrorCode::resource_integrity_failed, key
 			));

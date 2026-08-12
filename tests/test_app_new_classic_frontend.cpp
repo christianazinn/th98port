@@ -559,6 +559,24 @@ void test_expanded_options_menu()
 	menu.report_commit(true);
 	expect(menu.status() == NewClassicOptionsStatus::applied,
 		"successful Options retry completes the transaction");
+
+	initial.bgm_mode = ClassicBgmMode::fm;
+	initial.language = ClassicLanguage::english;
+	NewClassicOptionsMenu translated(initial, true);
+	expect(translated.config().language == ClassicLanguage::english,
+		"authenticated overlay preserves a persisted English selection");
+	static_cast<void>(translated.consume({}));
+	for(std::size_t row = 0U; row < 3U; ++row) {
+		static_cast<void>(translated.consume({.down = true}));
+		static_cast<void>(translated.consume({}));
+	}
+	static_cast<void>(translated.consume({.confirm = true}));
+	expect(translated.config().language == ClassicLanguage::japanese,
+		"available language row toggles English and Japanese");
+	static_cast<void>(translated.consume({}));
+	static_cast<void>(translated.consume({.right = true}));
+	expect(translated.config().language == ClassicLanguage::english,
+		"available language row accepts arrow toggles too");
 }
 
 } // namespace

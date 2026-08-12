@@ -24,6 +24,7 @@ enum class ClassicCliOption : std::uint8_t {
 	mainl_executable,
 	op_executable,
 	font_rom,
+	language_overlay,
 	rhythm_rom,
 	rhythm_pcm,
 	config,

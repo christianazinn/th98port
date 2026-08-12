@@ -5,6 +5,7 @@
 #include "classic_mainl_win_internal.hpp"
 #include "classic_story_session_internal.hpp"
 #include "main_process_static_content_internal.hpp"
+#include "new_classic_language_internal.hpp"
 #include "new_classic_playback_internal.hpp"
 #include "main_process_driver_internal.hpp"
 #include "th03/app/new_classic_pause.hpp"
@@ -529,6 +530,29 @@ NewClassicReplayPlayback::load(NewClassicPlaybackRequest request)
 	auto loader = std::make_shared<MainResourceLoader>(
 		request.content.data_root
 	);
+	if(request.language == ClassicLanguage::english) {
+		auto overlay = load_new_classic_language_overlay(
+			request.content.language_overlay
+		);
+		if(!overlay) {
+			auto error = playback_error(
+				NewClassicPlaybackErrorCode::language_overlay_failed
+			);
+			error.language_overlay.emplace(std::move(overlay.error()));
+			return std::unexpected(std::move(error));
+		}
+		if(!loader->install_authenticated_overrides(
+			std::move(*overlay).release_members()
+		)) {
+			return std::unexpected(playback_error(
+				NewClassicPlaybackErrorCode::language_overlay_failed
+			));
+		}
+		OpMusicRoomTextImport unused_music{};
+		apply_new_classic_english_text(
+			*compiled, mainl_text->assets, unused_music
+		);
+	}
 	auto static_resources = loader->load_main_static();
 	if(!static_resources) {
 		auto error = playback_error(NewClassicPlaybackErrorCode::resource_failed);

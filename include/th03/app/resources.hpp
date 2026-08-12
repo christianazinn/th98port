@@ -338,6 +338,10 @@ using ResourceBytes = std::shared_ptr<const std::vector<std::byte>>;
 struct LoadedMainResource {
 	MainResourceSpec spec{};
 	ResourceBytes bytes{};
+	// Bytes came from a separately whole-profile-authenticated caller overlay.
+	// Scene geometry/decoders still validate them; stock per-member fingerprints
+	// intentionally do not describe translated replacements.
+	bool authenticated_override = false;
 };
 
 struct MainPlayerSelection {
@@ -436,6 +440,12 @@ public:
 		std::filesystem::path content_root,
 		MainResourceIntegrity integrity = MainResourceIntegrity::size_and_fnv1a64
 	);
+	// Installs caller-authenticated replacements before the first load. New
+	// Classic's TH3EN.DAT parser is the production caller; the resource loader
+	// intentionally remains unaware of language policy and archive formats.
+	[[nodiscard]] bool install_authenticated_overrides(
+		std::map<std::string, ResourceBytes> overrides
+	);
 
 	[[nodiscard]] std::expected<ResourceBytes, ResourceLoadError> load(
 		MainResourceKey key
@@ -480,6 +490,7 @@ private:
 	std::filesystem::path content_root_{};
 	MainResourceIntegrity integrity_ = MainResourceIntegrity::size_and_fnv1a64;
 	std::map<MainResourceKey, ResourceBytes> cache_{};
+	std::map<std::string, ResourceBytes> overrides_{};
 	[[nodiscard]] std::expected<std::vector<LoadedMainResource>, ResourceLoadError>
 	load_batch(std::span<const MainResourceKey> keys);
 };

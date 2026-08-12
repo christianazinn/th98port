@@ -73,6 +73,9 @@ public:
 	[[nodiscard]] present::PelletMasks pellet_masks() const noexcept;
 	[[nodiscard]] present::MainHudResultTramAssets
 		hud_result_tram_assets() const noexcept;
+	// Replay Patch's English profile replaces only five source result labels;
+	// score glyphs, combo gaiji, and all gameplay data remain authenticated MAIN.
+	void apply_new_classic_english_results() noexcept;
 
 private:
 	friend struct MainCompiledContentImportAccess;

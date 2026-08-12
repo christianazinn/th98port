@@ -126,10 +126,11 @@ constexpr std::array<std::int32_t, 4U> demo_random{{
 				ClassicOpErrorCode::resource_set_mismatch, key
 			));
 		}
-		if(resource.bytes->size() != canonical->expected_bytes ||
+		if(!resource.authenticated_override &&
+			(resource.bytes->size() != canonical->expected_bytes ||
 			(authenticate_resource_bytes && main_resource_fnv1a64(
 				*resource.bytes
-			) != canonical->expected_fnv1a64)) {
+			) != canonical->expected_fnv1a64))) {
 			return std::unexpected(op_error(
 				ClassicOpErrorCode::resource_integrity_failed, key
 			));

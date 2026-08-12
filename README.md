@@ -25,9 +25,9 @@ identity/lifecycle, complete shared-owner V13 MAIN/MAINL
 recording/browser/playback/save flow and final Splits/Clears/Timers telemetry,
 richer
 pause/restart menu, full Practice setup/recording lifecycle, three-page
-KeyConfig, and expanded Options are present. The final systematic Replay Patch
-profile/parity audit is the active next native-port gate; the authenticated
-English resource overlay remains an explicitly deferred content profile.
+KeyConfig, expanded Options, title Extra unlock, and the complete authenticated
+Replay Patch 0.4.10 English profile are present. The final systematic Replay
+Patch profile/parity audit is the active next native-port gate.
 
 ## Build and test
 
@@ -199,10 +199,13 @@ the result atomically in `TH3KEY.CFG` beside `YUME.CFG`. Story and 1P-vs-CPU
 use the dedicated Story movement bindings while retaining P1 actions; the P1
 and P2 Autofire selections feed the recorded logical input boundary. Options
 persists Rank, FM music, independently switchable SFX, KeyConfig, and the
-Replay Patch's exact MAIN warning-flash reduction. The Language row currently
-states that English is unavailable: the authenticated `TH3EN.DAT` translated
-resource overlay has not yet been ported, so the native application does not
-claim a partial English mode.
+Replay Patch's exact MAIN warning-flash reduction. With
+`--language-overlay <TH3EN.DAT>`, the Language row selects the complete
+authenticated 0.4.10 English profile: all 52 translated archive members,
+Music Room choices, two-line character titles/names, registration names, and
+five result labels move together. Without that exact profile the menu retains
+Japanese instead of claiming a partial translation. Classic is always
+Japanese.
 New Classic also owns the Replay Patch's versioned per-character HiScore file.
 Its viewer opens on `ALL CHARACTERS`, cycles through the unlocked character
 pages with Left/Right, appends the derived TOTAL row, and shows play time, 1CC,

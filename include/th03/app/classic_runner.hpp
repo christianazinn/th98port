@@ -32,6 +32,9 @@ struct ClassicContentPaths final {
 	std::filesystem::path mainl_executable{};
 	std::filesystem::path op_executable{};
 	std::filesystem::path font_rom{};
+	// Optional authenticated Replay Patch 0.4.10 TH3EN.DAT. Classic ignores
+	// this profile; New Classic may select it through the persisted language.
+	std::filesystem::path language_overlay{};
 	std::filesystem::path config{"YUME.CFG"};
 	std::filesystem::path score{"YUME.NEM"};
 	// New Classic's versioned per-character store. An empty value derives
