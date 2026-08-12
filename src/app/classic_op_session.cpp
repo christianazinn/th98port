@@ -1343,6 +1343,7 @@ struct ClassicOpSessionBackend final {
 			.game_options = {
 				.input_protocol = replay_recorder ?
 					InputProtocol::recorded_replay : InputProtocol::live,
+				.three_digit_combos = replay_recorder != nullptr,
 			},
 			.kotohime_compatibility = kotohime_compatibility,
 		};
@@ -1405,6 +1406,7 @@ struct ClassicOpSessionBackend final {
 				.resident = std::move(resident),
 				.game_options = {
 					.input_protocol = InputProtocol::recorded_replay,
+					.three_digit_combos = true,
 				},
 				.kotohime_compatibility = kotohime_compatibility,
 			};
@@ -1515,7 +1517,10 @@ struct ClassicOpSessionBackend final {
 		}
 		auto created = ClassicMainlStageTransition::create_from_demo(
 			*title_completion, kotohime_compatibility, *resources,
-			stage_text, *font
+			stage_text, *font, {
+				.input_protocol = InputProtocol::live,
+				.three_digit_combos = replay_recorder != nullptr,
+			}
 		);
 		if(!created) {
 			return std::unexpected(stage_error(std::move(created.error())));
@@ -1660,6 +1665,7 @@ struct ClassicOpSessionBackend final {
 			stage_text, *font, {
 				.input_protocol = replay_recorder ?
 					InputProtocol::recorded_replay : InputProtocol::live,
+				.three_digit_combos = replay_recorder != nullptr,
 			}
 		);
 		if(!created) {
@@ -1742,7 +1748,10 @@ struct ClassicOpSessionBackend final {
 			}
 			auto created = ClassicMainlStageTransition::create_from_restart(
 				resident, kotohime_compatibility, *resources, stage_text, *font,
-				{.input_protocol = InputProtocol::recorded_replay},
+				{
+					.input_protocol = InputProtocol::recorded_replay,
+					.three_digit_combos = true,
+				},
 				practice_config
 			);
 			if(!created) {
@@ -2145,7 +2154,10 @@ struct ClassicOpSessionBackend final {
 		}
 		auto created = ClassicMainlStageTransition::create_from_restart(
 			resident, kotohime_compatibility, *resources, stage_text, *font,
-			{.input_protocol = InputProtocol::recorded_replay}, practice_config
+			{
+				.input_protocol = InputProtocol::recorded_replay,
+				.three_digit_combos = true,
+			}, practice_config
 		);
 		if(!created) {
 			return std::unexpected(stage_error(std::move(created.error())));

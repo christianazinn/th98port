@@ -237,6 +237,7 @@ Game::Impl::Impl(
 	),
 	effective_reset_seed(initial_effective_reset_seed(init))
 {
+	state.three_digit_combos = options.three_digit_combos;
 	round_start = detail::round_start_observation(
 		state, initial_init, effective_reset_seed
 	);

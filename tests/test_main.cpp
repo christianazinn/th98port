@@ -439,6 +439,8 @@ void test_anniversary_combo_display_limit()
 	pellet.center_y = explosion.center_y;
 	pellet.player_id = 0U;
 	pellet.speed_next = 24U;
+	auto replay_three_digit = state;
+	replay_three_digit.three_digit_combos = true;
 
 	check(
 		th03::detail::gameplay_frame_prefix(state, th03::GameContent{}) &&
@@ -448,8 +450,14 @@ void test_anniversary_combo_display_limit()
 		"Anniversary clamps the live combo display while preserving the raw defeat-screen maximum"
 	);
 
-	auto replay_three_digit = state;
-	replay_three_digit.combos[0].hits_highest = 113U;
+	check(
+		th03::detail::gameplay_frame_prefix(
+			replay_three_digit, th03::GameContent{}
+		) && replay_three_digit.chains.hits[0][0] == 113U &&
+		replay_three_digit.combos[0].hits_highest == 113U &&
+		replay_three_digit.players[0].combo_hits_max == 113U,
+		"Replay Patch publishes the complete unsigned-byte active combo count"
+	);
 	check(
 		th03::detail::state_hash(state) ==
 			th03::detail::state_hash(replay_three_digit),

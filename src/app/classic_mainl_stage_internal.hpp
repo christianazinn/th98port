@@ -135,7 +135,8 @@ public:
 		present::KotohimeBombFadeCompatibility kotohime_compatibility,
 		std::span<const LoadedMainResource> resources,
 		MainlStageTextAssets text,
-		const present::AnkGlyphProvider &font
+		const present::AnkGlyphProvider &font,
+		GameOptions game_options = {}
 	);
 	~ClassicMainlStageTransition();
 
@@ -233,6 +234,7 @@ private:
 		std::span<const LoadedMainResource> resources,
 		MainlStageTextAssets text,
 		const present::AnkGlyphProvider &font,
+		GameOptions game_options,
 		bool authenticate_resource_bytes
 	);
 	[[nodiscard]] bool stage_hidden_sheet() noexcept;
@@ -338,7 +340,8 @@ struct ClassicMainlStageTestAccess final {
 		present::KotohimeBombFadeCompatibility kotohime_compatibility,
 		std::span<const LoadedMainResource> resources,
 		MainlStageTextAssets text,
-		const present::AnkGlyphProvider &font
+		const present::AnkGlyphProvider &font,
+		GameOptions game_options = {}
 	)
 	{
 		return ClassicMainlStageTransition::create_from_demo_impl(
@@ -347,8 +350,17 @@ struct ClassicMainlStageTestAccess final {
 			resources,
 			std::move(text),
 			font,
+			game_options,
 			false
 		);
+	}
+
+	[[nodiscard]] static GameOptions entry_game_options(
+		const ClassicMainlStageTransition &transition
+	) noexcept
+	{
+		return transition.prepared_ ?
+			transition.prepared_->entry.game_options : GameOptions{};
 	}
 
 	[[nodiscard]] static const MainStageHandoff *handoff(

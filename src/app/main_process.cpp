@@ -662,6 +662,7 @@ bool valid_main_replay_config(const MainReplayConfig &config) noexcept
 		checkpoint.game_mode == game_mode::vs_1p_2p ||
 		checkpoint.game_mode == game_mode::vs_cpu_cpu;
 	return valid_mode && checkpoint.rank <= 3U && checkpoint.key_mode <= 2U &&
+		config.game_options.input_protocol == InputProtocol::recorded_replay &&
 		checkpoint.remaining_credits <= 3U && checkpoint.story_stage <= 8U &&
 		checkpoint.autofire_mask <= 3U &&
 		checkpoint.compact_runtime_snapshot.has_value() &&
@@ -955,7 +956,7 @@ MainProcess::create_replay(
 		: std::uint8_t{0U};
 	return create_common(
 		init,
-		GameOptions{.input_protocol = InputProtocol::recorded_replay},
+		config.game_options,
 		config.kotohime_compatibility,
 		selections,
 		handoff,

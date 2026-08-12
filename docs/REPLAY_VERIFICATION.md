@@ -180,8 +180,10 @@ divergences. Anniversary stores at most 99 in the active display field while
 retaining the raw 8-bit chain and defeat-screen maximum; Replay stores the raw
 value in the display field as well. Both execute the same unconditional
 post-99 timer refresh before that assignment. The Classic core therefore keeps
-Anniversary's display state and canonical normalization without changing score,
-combo duration, or V12 summary verification.
+Anniversary's display state, while New Classic explicitly selects the Replay
+Patch field and renderer policy at MAIN creation. Both use the same canonical
+normalization without changing score, combo duration, V12 summary verification,
+or checkpoint bytes.
 
 V12 TH3R05's source-backed correction was shared bullet-template inheritance.
 At sample 3,626, a Kana Boss ring must inherit angle `0x40` from Kana Extra

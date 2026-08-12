@@ -1262,13 +1262,20 @@ void test_all_automatic_demo_routes()
 				{.component_provider = &kotohime_fade},
 				resources,
 				text_assets(),
-				font
+				font,
+				{
+					.input_protocol = th03::InputProtocol::live,
+					.three_digit_combos = true,
+				}
 			);
 		expect(stage.has_value(),
 			"each stock automatic-Demo recipe constructs its MAINL splash");
 		if(!stage) {
 			continue;
 		}
+		expect(ClassicMainlStageTestAccess::entry_game_options(**stage).
+			three_digit_combos,
+			"New Classic automatic Demo retains its combo-display policy");
 		expect_pixel((*stage)->raster(), Page::zero, {10, 10}, 3U,
 			"automatic Demo uses the non-Story STNX5 background");
 		for(std::size_t tick = 0U;

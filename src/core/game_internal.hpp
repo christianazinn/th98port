@@ -410,6 +410,7 @@ struct DeterministicState {
 	std::uint16_t demo_frame = 0;
 	std::uint8_t extends_gained = 255;
 	bool practice_uses_stock = false;
+	bool three_digit_combos = false;
 	std::int32_t resident_rand = 0;
 	std::int8_t winner = 0;
 	std::uint8_t last_fatal_player = 0;

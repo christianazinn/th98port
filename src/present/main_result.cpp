@@ -376,8 +376,7 @@ void MainHudResultPresenter::main_combo_state(const MainComboState &state) noexc
 		return;
 	}
 	for(const auto &combo : state.players) {
-		if(combo.time > combo_frames ||
-			(combo.time == combo_frames && combo.hits_highest > 99U)) {
+		if(combo.time > combo_frames) {
 			status_ = MainHudResultStatus::invalid_event_sequence;
 			return;
 		}
@@ -389,13 +388,23 @@ void MainHudResultPresenter::main_combo_state(const MainComboState &state) noexc
 		}
 		const auto tram_left = static_cast<std::int32_t>(4U + (player * 40U));
 		if(combo.time == combo_frames) {
-			const auto tens = static_cast<std::uint8_t>(combo.hits_highest / 10U);
+			const auto hundreds = static_cast<std::uint8_t>(
+				combo.hits_highest / 100U
+			);
+			const auto remainder = static_cast<std::uint8_t>(
+				combo.hits_highest % 100U
+			);
+			const auto tens = static_cast<std::uint8_t>(remainder / 10U);
 			const auto ones = static_cast<std::uint8_t>(combo.hits_highest % 10U);
 			if(!put_cells(
 				*tram_, {tram_left + 4, 2}, tram_assets_.combo_hit
 			) || !put_cells(
 				*tram_, {tram_left, 3}, tram_assets_.combo_bonus
-			) || !tram_->put_gaiji(
+			) || (combo.hits_highest >= 100U && !tram_->put_gaiji(
+				{tram_left - 2, 2},
+				static_cast<std::uint8_t>(gaiji_bold_digit_0 + hundreds),
+				tram_white
+			)) || !tram_->put_gaiji(
 				{tram_left, 2},
 				(combo.hits_highest >= 10U) ?
 					static_cast<std::uint8_t>(gaiji_bold_digit_0 + tens) : gaiji_space,
@@ -423,7 +432,9 @@ void MainHudResultPresenter::main_combo_state(const MainComboState &state) noexc
 			color,
 			true
 		) || (post_time == 0U &&
-			(!put_cells(*tram_, {tram_left, 2}, tram_assets_.combo_erase) ||
+			((combo.hits_highest >= 100U && !tram_->put_gaiji(
+				{tram_left - 2, 2}, gaiji_space, tram_white
+			)) || !put_cells(*tram_, {tram_left, 2}, tram_assets_.combo_erase) ||
 			 !put_cells(*tram_, {tram_left, 3}, tram_assets_.combo_erase)))) {
 			status_ = MainHudResultStatus::draw_failed;
 			return;

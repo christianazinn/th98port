@@ -68,6 +68,9 @@ struct MainStoryConfig {
 // compact round/runtime snapshots and is always run under recorded input.
 struct MainReplayConfig final {
 	GameInit checkpoint{};
+	GameOptions game_options{
+		.input_protocol = InputProtocol::recorded_replay,
+	};
 	// Playback starts each MAIN process from its process-entry checkpoint and
 	// pre-rolls repeat-round checkpoints. Fresh process entry must replay Game
 	// initialization so presentation observers receive their private pool facts.

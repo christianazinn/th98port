@@ -546,7 +546,8 @@ std::expected<
 	present::KotohimeBombFadeCompatibility kotohime_compatibility,
 	std::span<const LoadedMainResource> resources,
 	MainlStageTextAssets text,
-	const present::AnkGlyphProvider &font
+	const present::AnkGlyphProvider &font,
+	GameOptions game_options
 )
 {
 	return create_from_demo_impl(
@@ -555,6 +556,7 @@ std::expected<
 		resources,
 		std::move(text),
 		font,
+		game_options,
 		true
 	);
 }
@@ -600,6 +602,7 @@ std::expected<
 	std::span<const LoadedMainResource> resources,
 	MainlStageTextAssets text,
 	const present::AnkGlyphProvider &font,
+	GameOptions game_options,
 	bool authenticate_resource_bytes
 )
 {
@@ -615,7 +618,7 @@ std::expected<
 	return create_impl(
 		{
 			.resident = std::move(resident),
-			.game_options = {.input_protocol = InputProtocol::live},
+			.game_options = game_options,
 			.kotohime_compatibility = kotohime_compatibility,
 			.policy = EntryPolicy::demo,
 		},

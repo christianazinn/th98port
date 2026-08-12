@@ -212,6 +212,10 @@ struct NewClassicReplayPlayback::Impl final {
 		auto created = MainProcess::create_replay(
 			{
 				.checkpoint = checkpoint.init,
+				.game_options = {
+					.input_protocol = InputProtocol::recorded_replay,
+					.three_digit_combos = true,
+				},
 				.initialize_fresh = true,
 				.kotohime_compatibility = kotohime_compatibility,
 			},

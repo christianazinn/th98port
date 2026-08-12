@@ -45,6 +45,9 @@ enum class InputProtocol : std::uint8_t {
 
 struct GameOptions {
 	InputProtocol input_protocol = InputProtocol::live;
+	// Replay Patch 0.2.10 exposes the complete unsigned-byte active combo
+	// count. Classic leaves the source 99-hit display cap enabled.
+	bool three_digit_combos = false;
 };
 
 enum class DeferredFrameAction : std::uint8_t {

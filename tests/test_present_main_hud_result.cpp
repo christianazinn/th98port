@@ -559,6 +559,34 @@ void test_score_combo_and_dynamic_hud()
 	);
 	expect_pixel(combo.raster, {64, 25}, 8U, "last combo leaves flashed raster bonus visible");
 
+	Fixture three_digit;
+	three_digit.prepare();
+	combo_state = {};
+	combo_state.players[0U] = {80U, 113U, 12U};
+	three_digit.presenter->main_combo_state(combo_state);
+	expect(
+		three_digit.tram.cell({2, 2})->code ==
+			th03::present::gaiji_cell_code(
+				0xA1U, th03::present::GaijiHalf::left
+			) && three_digit.tram.cell({4, 2})->code ==
+			th03::present::gaiji_cell_code(
+				0xA1U, th03::present::GaijiHalf::left
+			) && three_digit.tram.cell({6, 2})->code ==
+			th03::present::gaiji_cell_code(
+				0xA3U, th03::present::GaijiHalf::left
+			),
+		"Replay Patch combo display adds a hundreds digit left of the source field"
+	);
+	combo_state.players[0U].time = 1U;
+	three_digit.presenter->main_combo_state(combo_state);
+	expect(
+		three_digit.tram.cell({2, 2})->code ==
+			th03::present::gaiji_cell_code(
+				th03::present::gaiji_space, th03::present::GaijiHalf::left
+			),
+		"three-digit combo teardown erases the added hundreds cell"
+	);
+
 	Fixture dynamic;
 	dynamic.prepare();
 	dynamic.presenter->main_hud_player_value_changed({

@@ -181,6 +181,10 @@ selector, followed by Replay Patch 0.4.10's main and Advanced setup pages.
 Its source defaults, exact-VS fallback, fixed-opponent stages, speed/rank/gauge
 controls, retry policy, pause/restart behavior, and V13 Practice metadata are
 all carried into the shared MAIN runtime.
+New Classic also renders the Replay Patch's complete unsigned-byte active
+combo count (100-255 adds a hundreds digit); Classic preserves the
+source-compatible 99-hit display cap. This presentation choice does not alter
+canonical replay hashes, combo timing, scoring, or checkpoint bytes.
 New Classic's landing also owns Replay Patch-style KeyConfig and Options.
 KeyConfig remaps 26 SDL scancodes across P1, P2, and Story pages, swaps
 duplicate assignments within a page, restores page-local defaults, and stores
