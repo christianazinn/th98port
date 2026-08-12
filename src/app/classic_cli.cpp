@@ -84,6 +84,12 @@ constexpr std::size_t option_count =
 	if(text == "--classic") {
 		return ClassicCliOption::classic;
 	}
+	if(text == "--new-classic") {
+		return ClassicCliOption::new_classic;
+	}
+	if(text == "--shell") {
+		return ClassicCliOption::shell;
+	}
 	if(text == "--data") {
 		return ClassicCliOption::data;
 	}
@@ -128,7 +134,9 @@ constexpr std::size_t option_count =
 ) noexcept
 {
 	return option != ClassicCliOption::help &&
-		option != ClassicCliOption::classic;
+		option != ClassicCliOption::classic &&
+		option != ClassicCliOption::new_classic &&
+		option != ClassicCliOption::shell;
 }
 
 } // namespace
@@ -144,6 +152,7 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 
 	ClassicCliRequest request{};
 	std::array<bool, option_count> seen{};
+	std::optional<ClassicCliOption> selected_mode{};
 	for(std::size_t index = 0U; index < arguments.size(); ++index) {
 		const auto option = option_from_text(arguments[index]);
 		if(!option) {
@@ -160,6 +169,21 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 			));
 		}
 		seen[option_index] = true;
+		const bool mode_option = *option == ClassicCliOption::classic ||
+			*option == ClassicCliOption::new_classic ||
+			*option == ClassicCliOption::shell;
+		if(mode_option) {
+			if(selected_mode) {
+				return std::unexpected(cli_error(
+					ClassicCliErrorCode::duplicate_option, *option, index
+				));
+			}
+			selected_mode = *option;
+			request.mode = (*option == ClassicCliOption::shell) ?
+				ClassicLaunchMode::shell :
+				((*option == ClassicCliOption::new_classic) ?
+					ClassicLaunchMode::new_classic : ClassicLaunchMode::classic);
+		}
 		if(*option == ClassicCliOption::help) {
 			request.show_help = true;
 			continue;
@@ -239,6 +263,8 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 		case ClassicCliOption::none:
 		case ClassicCliOption::help:
 		case ClassicCliOption::classic:
+		case ClassicCliOption::new_classic:
+		case ClassicCliOption::shell:
 			break;
 		}
 	}
@@ -246,8 +272,14 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 		return request;
 	}
 
+	if(!selected_mode) {
+		return std::unexpected(cli_error(
+			ClassicCliErrorCode::missing_required_option,
+			ClassicCliOption::classic,
+			arguments.size()
+		));
+	}
 	constexpr std::array required{
-		ClassicCliOption::classic,
 		ClassicCliOption::data,
 		ClassicCliOption::main_executable,
 		ClassicCliOption::mainl_executable,

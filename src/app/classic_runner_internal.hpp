@@ -35,8 +35,12 @@ struct ClassicRunnerTestAccess final {
 		ClassicRunnerError
 	> create(
 		std::shared_ptr<void> owner,
-		ClassicRunnerOperations operations
+		ClassicRunnerOperations operations,
+		ExperienceProfile experience = ExperienceProfile::classic
 	);
+	[[nodiscard]] static ExperienceProfile experience(
+		const ClassicRunner &runner
+	) noexcept;
 
 	[[nodiscard]] static ClassicOpSessionInput project_input(
 		const LogicalTickInput &sample,

@@ -85,7 +85,7 @@ internal static class Program
         var content = Path.Combine(installRoot, "content");
         var arguments = new List<string>
         {
-            "--classic",
+            "--shell",
             "--data", content,
             "--main", Path.Combine(content, "MAIN.EXE"),
             "--mainl", Path.Combine(content, "MAINL.EXE"),

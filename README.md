@@ -6,9 +6,12 @@ gate, and Phase 3 now verifies 19 locked V13 conversions across Story,
 Practice, and ordinary VS, plus a separate title-Demo gate, on top of the Phase
 1 format/session runway. A
 strict V13 span adapter and the first stdlib-only asset/indexed-raster
-foundations now sit beside that core. An optional SDL 3 application now launches
-both the integrated authenticated Classic OP/MAINL/MAIN lifecycle and the earlier
-direct-VS developer path. A separate byte-fed PMD/YM2608 engine and TH03
+foundations now sit beside that core. An optional SDL 3 application now opens a
+shared host menu for the authenticated Classic lifecycle and the developing
+Replay Patch 0.4.10-derived New Classic experience, alongside the earlier
+direct-VS developer path. Both product identities reuse the same gameplay,
+presentation, content, and audio owners; title Exit returns to the host menu.
+A separate byte-fed PMD/YM2608 engine and TH03
 transport/SFX service, bounded `YUME.EFC` playback on FM6, deterministic
 166.4-to-48 kHz resampling, and a bounded SDL playback endpoint are now present,
 and a platform-neutral Classic session now executes the existing semantic scene
@@ -17,8 +20,9 @@ session to the SDL endpoint at one deterministic audio interval per logical
 sample. Initial or later device unavailability drops only final delivery while
 the deterministic PMD session keeps advancing.
 Gameplay-stage music, source-ordered ordinary MAIN SFX emission, and stock
-blocking live pause/resume with effect 21 are integrated. The Replay Patch's
-richer pause menu and replay UI remain intentionally deferred.
+blocking live pause/resume with effect 21 are integrated. New Classic's host
+identity/lifecycle is present; its V13 browser, recording, richer pause menu,
+Practice, KeyConfig, and remaining Replay Patch QoL are the active next port.
 
 ## Build and test
 
@@ -50,7 +54,7 @@ cmake --build --preset msvc-x64-sdl
 ctest --preset msvc-x64-sdl
 ```
 
-#### Maintained one-file Classic test build
+#### Maintained one-file Classic/New Classic test build
 
 For ongoing human testing, the repository has a local-only packager that
 rebuilds the current Release application, embeds its SDL runtime and the
@@ -65,7 +69,10 @@ tools\build_classic_standalone.ps1
 With the standard ignored workspace layout, the stable result is
 `out\standalone\TH03-Classic-Test.exe`. It can be copied elsewhere and launched
 by double-clicking; it needs no adjacent DLL/content tree, installed .NET
-runtime, or command-line arguments. Its first launch extracts a content-hash
+runtime, or command-line arguments. It opens the shared Classic/New Classic
+menu; both entries currently run the complete shared Classic lifecycle while
+New Classic's Replay Patch-owned features are brought online incrementally.
+Exiting either title returns to this menu. Its first launch extracts a content-hash
 cache below `%LOCALAPPDATA%\TH03 Classic Native Test`, while configuration,
 scores, and the last-run diagnostic log live in the separate `user` directory
 there and survive artifact updates.
@@ -100,7 +107,7 @@ developer/host override:
 
 ```powershell
 out\build\msvc-x64-sdl\Debug\th03-app.exe `
-  --classic --data X:\th03-extracted `
+  --shell --data X:\th03-extracted `
   --main X:\th03\MAIN.EXE --mainl X:\th03\MAINL.EXE `
   --op X:\th03\OP.EXE --font X:\pc98\FONT.ROM `
   --rhythm-rom X:\pc98\YM2608.ROM
@@ -111,6 +118,9 @@ out\build\msvc-x64-sdl\Debug\th03-app.exe `
   --main X:\th03\MAIN.EXE --mainl X:\th03\MAINL.EXE `
   --op X:\th03\OP.EXE --font X:\pc98\FONT.ROM `
   --rhythm-pcm X:\private\T98RHYTHM.PCM
+
+# Developer bypasses for one experience without the shared menu:
+# replace --shell with --classic or --new-classic.
 
 out\build\msvc-x64-sdl\Debug\th03-app.exe `
   --vs --data X:\th03-extracted --main X:\th03\MAIN.EXE `
@@ -245,7 +255,8 @@ split comparisons. Original game data and replay captures remain external.
   API in `th03_core`; the core has no reciprocal dependency, and `th03rv`
   links neither presentation nor assets. Captured PC-98 pixel parity remains a
   separate external-data acceptance gate.
-- `th03_app_runtime` owns dependency-free host policy: caller-selected rational
+- `th03_app_runtime` owns dependency-free host policy: the minimal
+  Classic/New Classic/Exit product menu, caller-selected rational
   logical deadlines, timestamped two-player input accumulation, exact
   SourceSurface-to-RGBA expansion into caller storage, and centered integer
   640x400 letterboxing. Its scheduler assumes no source cadence, SDL type, key binding,

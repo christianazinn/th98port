@@ -279,16 +279,19 @@ struct ClassicRunner::Impl final {
 	std::shared_ptr<void> owner{};
 	ClassicRunnerOperations operations{};
 	ClassicRunnerStatus status = ClassicRunnerStatus::running;
+	ExperienceProfile experience = ExperienceProfile::classic;
 	std::optional<ClassicRunnerError> failure{};
 	std::uint64_t expected_tick_index = 0U;
 	std::optional<TickTimestampNs> last_deadline{};
 
 	Impl(
 		std::shared_ptr<void> owner_,
-		ClassicRunnerOperations operations_
+		ClassicRunnerOperations operations_,
+		ExperienceProfile experience_
 	) noexcept :
 		owner(std::move(owner_)),
-		operations(operations_)
+		operations(operations_),
+		experience(experience_)
 	{}
 };
 
@@ -364,7 +367,8 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		.compose_shown_surface = &compose_session,
 	};
 	auto impl = std::make_unique<Impl>(
-		std::static_pointer_cast<void>(std::move(owner)), operations
+		std::static_pointer_cast<void>(std::move(owner)), operations,
+		request.experience
 	);
 	return std::unique_ptr<ClassicRunner>(
 		new ClassicRunner(std::move(impl))
@@ -472,7 +476,8 @@ ClassicRunnerStatus ClassicRunner::status() const noexcept
 std::expected<std::unique_ptr<ClassicRunner>, ClassicRunnerError>
 ClassicRunnerTestAccess::create(
 	std::shared_ptr<void> owner,
-	ClassicRunnerOperations operations
+	ClassicRunnerOperations operations,
+	ExperienceProfile experience
 )
 {
 	if(!owner || !valid_operations(operations)) {
@@ -481,11 +486,18 @@ ClassicRunnerTestAccess::create(
 		));
 	}
 	auto impl = std::make_unique<ClassicRunner::Impl>(
-		std::move(owner), operations
+		std::move(owner), operations, experience
 	);
 	return std::unique_ptr<ClassicRunner>(
 		new ClassicRunner(std::move(impl))
 	);
+}
+
+ExperienceProfile ClassicRunnerTestAccess::experience(
+	const ClassicRunner &runner
+) noexcept
+{
+	return runner.impl_->experience;
 }
 
 GameInit ClassicRunnerTestAccess::initial_resident(std::uint32_t seed) noexcept

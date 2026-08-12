@@ -17,6 +17,8 @@ enum class ClassicCliOption : std::uint8_t {
 	none,
 	help,
 	classic,
+	new_classic,
+	shell,
 	data,
 	main_executable,
 	mainl_executable,
@@ -29,6 +31,12 @@ enum class ClassicCliOption : std::uint8_t {
 	tick_rate,
 	seed,
 	smoke_ticks,
+};
+
+enum class ClassicLaunchMode : std::uint8_t {
+	classic,
+	new_classic,
+	shell,
 };
 
 enum class ClassicCliErrorCode : std::uint8_t {
@@ -49,6 +57,7 @@ struct ClassicCliError final {
 
 struct ClassicCliRequest final {
 	bool show_help = false;
+	ClassicLaunchMode mode = ClassicLaunchMode::classic;
 	ClassicRunnerRequest launch{};
 	RationalTickRate tick_rate = pc98_24khz_nominal_tick_rate;
 	// Optional caller-supplied YM2608 ADPCM-A image. The launcher validates the

@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <new>
 #include <optional>
 #include <span>
@@ -23,6 +24,7 @@
 #include "th03/app/classic_runner.hpp"
 #include "th03/app/direct_vs_cli.hpp"
 #include "th03/app/direct_vs_launch.hpp"
+#include "th03/app/experience_menu.hpp"
 #include "th03/app/main_direct_vs_runner.hpp"
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/tick_input.hpp"
@@ -33,6 +35,24 @@
 namespace {
 
 constexpr std::uint64_t maximum_idle_delay_ns = 1'000'000U;
+
+enum class ExperienceRunDisposition : std::uint8_t {
+	return_to_menu,
+	application_quit,
+	smoke_complete,
+	failed,
+};
+
+struct ExperienceRunResult final {
+	int exit_code = 0;
+	ExperienceRunDisposition disposition =
+		ExperienceRunDisposition::failed;
+};
+
+struct MenuRunResult final {
+	int exit_code = 0;
+	std::optional<th03::app::ExperienceMenuChoice> choice{};
+};
 
 enum class RhythmRomLoadErrorCode : std::uint8_t {
 	file_missing,
@@ -276,7 +296,8 @@ load_rhythm_pcm(const std::filesystem::path &path)
 void print_usage()
 {
 	std::cout
-		<< "usage: th03-app --classic --data <root> --main <MAIN.EXE> "
+		<< "usage: th03-app --shell|--classic|--new-classic --data <root> "
+			"--main <MAIN.EXE> "
 			"--mainl <MAINL.EXE> --op <OP.EXE> --font <FONT.ROM>\n"
 		<< "       [--config <YUME.CFG>] [--score <YUME.NEM>] [--seed n] "
 			"[--rhythm-rom <YM2608.ROM> | --rhythm-pcm <T98RHYTHM.PCM>] "
@@ -293,7 +314,9 @@ void print_usage()
 		<< "P1: T/F/H/B, diagonals R/Y/V/N, Z shot, X bomb\n"
 		<< "P2: keypad 8/4/6/2, diagonals 7/9/1/3, Left shot, Right bomb\n"
 		<< "Classic UI: arrows/keypad, Z/X/Space, Return OK, Escape Cancel\n"
-		<< "In --vs, Escape exits. In --classic, Escape is source Cancel and "
+		<< "--shell opens the shared Classic/New Classic product menu. "
+			"Title Exit returns to it. In --vs, Escape exits. In either "
+			"experience, Escape is source Cancel and "
 			"window close exits. The default cadence is nominal PC-9801 24 kHz "
 			"(526315/9328 Hz); --tick-rate overrides it.\n"
 		<< "Classic synthesizes external PMD/EFC content and delivers canonical "
@@ -384,6 +407,8 @@ const char *name(th03::app::ClassicCliOption option) noexcept
 	case th03::app::ClassicCliOption::none: return "none";
 	case th03::app::ClassicCliOption::help: return "help";
 	case th03::app::ClassicCliOption::classic: return "classic";
+	case th03::app::ClassicCliOption::new_classic: return "new-classic";
+	case th03::app::ClassicCliOption::shell: return "shell";
 	case th03::app::ClassicCliOption::data: return "data";
 	case th03::app::ClassicCliOption::main_executable: return "main";
 	case th03::app::ClassicCliOption::mainl_executable: return "mainl";
@@ -999,19 +1024,23 @@ int run_direct_vs(th03::app::DirectVsCliRequest parsed)
 	return 0;
 }
 
-int run_classic(th03::app::ClassicCliRequest parsed)
+ExperienceRunResult run_classic_session(
+	th03::app::ClassicCliRequest parsed,
+	th03::platform::SdlPlatform &platform,
+	th03::platform::SdlInputMapper &mapper
+)
 {
 	const auto data_root = parsed.launch.content.data_root;
 	if(parsed.rhythm_rom && parsed.rhythm_pcm) {
 		std::cerr << "status=error\nstage=audio-profile\n"
 			"code=conflicting-rhythm-profiles\n";
-		return 1;
+		return {.exit_code = 1};
 	}
 	std::vector<std::byte> rhythm_rom{};
 	if(parsed.rhythm_rom) {
 		auto loaded = load_rhythm_rom(*parsed.rhythm_rom);
 		if(!loaded) {
-			return fail("rhythm-rom", loaded.error());
+			return {.exit_code = fail("rhythm-rom", loaded.error())};
 		}
 		rhythm_rom = std::move(*loaded);
 	}
@@ -1019,14 +1048,18 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 	if(parsed.rhythm_pcm) {
 		auto loaded = load_rhythm_pcm(*parsed.rhythm_pcm);
 		if(!loaded) {
-			return fail("rhythm-pcm", loaded.error());
+			return {.exit_code = fail("rhythm-pcm", loaded.error())};
 		}
 		rhythm_pcm = std::move(*loaded);
 	}
 	parsed.launch.fm_available = true;
+	parsed.launch.experience =
+		(parsed.mode == th03::app::ClassicLaunchMode::new_classic) ?
+			th03::app::ExperienceProfile::new_classic :
+			th03::app::ExperienceProfile::classic;
 	auto runner = th03::app::ClassicRunner::load(std::move(parsed.launch));
 	if(!runner) {
-		return fail("classic-load", runner.error());
+		return {.exit_code = fail("classic-load", runner.error())};
 	}
 	auto created_session = th03::app::ClassicAudioSession::create({
 		.data_root = data_root,
@@ -1035,22 +1068,11 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 		.rhythm_pcm = rhythm_pcm.view(),
 	});
 	if(!created_session) {
-		return fail("audio-session-create", created_session.error());
+		return {
+			.exit_code = fail("audio-session-create", created_session.error())
+		};
 	}
 	auto audio_session = std::move(*created_session);
-
-	auto platform = th03::platform::SdlPlatform::create({});
-	if(!platform) {
-		return fail("platform-create", platform.error());
-	}
-	auto mapper = th03::platform::SdlInputMapper::create(
-		th03::app::detail::classic_direct_vs_bindings(),
-		static_cast<SDL_WindowID>((*platform)->window_id()),
-		th03::platform::native_sdl_gamepad_backend()
-	);
-	if(!mapper) {
-		return fail("input-create", mapper.error());
-	}
 	const auto drain_audio = [&]() -> std::expected<
 		void,
 		th03::app::ClassicAudioSessionError
@@ -1063,7 +1085,7 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 		return {};
 	};
 	if(auto drained = drain_audio(); !drained) {
-		return fail("audio-command", drained.error());
+		return {.exit_code = fail("audio-command", drained.error())};
 	}
 
 	std::vector<th03::present::ComposedPixel> pixels(
@@ -1075,11 +1097,11 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 	>(pixels.data(), pixels.size());
 	auto surface = (*runner)->compose_shown_surface(pixel_span);
 	if(!surface) {
-		return fail("compose", surface.error());
+		return {.exit_code = fail("compose", surface.error())};
 	}
-	auto presented = (*platform)->present(*surface);
+	auto presented = platform.present(*surface);
 	if(!presented) {
-		return fail("present", presented.error());
+		return {.exit_code = fail("present", presented.error())};
 	}
 
 	std::optional<th03::platform::SdlAudioDevice> audio_device{};
@@ -1099,7 +1121,7 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 		th03::app::classic_interactive_catch_up_policy
 	);
 	if(!scheduler) {
-		return fail_tick(scheduler.error());
+		return {.exit_code = fail_tick(scheduler.error())};
 	}
 
 	bool retry_blocked_event = false;
@@ -1108,9 +1130,9 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 	while((*runner)->status() == th03::app::ClassicRunnerStatus::running) {
 		const auto cutoff = th03::platform::sdl_ticks_now_ns();
 		if(!retry_blocked_event) {
-			auto result = mapper->pump_events(*scheduler, false);
+			auto result = mapper.pump_events(*scheduler, false);
 			if(!result) {
-				return fail("input-pump", result.error());
+				return {.exit_code = fail("input-pump", result.error())};
 			}
 			retry_blocked_event = result->queue_blocked;
 		}
@@ -1119,7 +1141,7 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 		for(;;) {
 			auto due = scheduler->pop_due(cutoff);
 			if(!due) {
-				return fail_tick(due.error());
+				return {.exit_code = fail_tick(due.error())};
 			}
 			if(!*due) {
 				break;
@@ -1127,16 +1149,18 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 			auto consumed = (*runner)->consume(**due, audio_session->status());
 			if(!consumed) {
 				std::cerr << "logical-tick=" << logical_ticks << '\n';
-				return fail("classic-runner", consumed.error());
+				return {
+					.exit_code = fail("classic-runner", consumed.error())
+				};
 			}
 			if(auto drained = drain_audio(); !drained) {
 				std::cerr << "logical-tick=" << logical_ticks << '\n';
-				return fail("audio-command", drained.error());
+				return {.exit_code = fail("audio-command", drained.error())};
 			}
 			auto audio_tick = audio_session->advance_tick();
 			if(!audio_tick) {
 				std::cerr << "logical-tick=" << logical_ticks << '\n';
-				return fail("audio-tick", audio_tick.error());
+				return {.exit_code = fail("audio-tick", audio_tick.error())};
 			}
 			if(audio_device) {
 				if(!audio_started && !audio_tick->canonical_frames.empty() &&
@@ -1182,9 +1206,9 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 				presentation_pending || consumed->surface_changed;
 			logical_ticks++;
 			if(retry_blocked_event) {
-				auto retried = mapper->pump_events(*scheduler, false);
+				auto retried = mapper.pump_events(*scheduler, false);
 				if(!retried) {
-					return fail("input-pump", retried.error());
+					return {.exit_code = fail("input-pump", retried.error())};
 				}
 				retry_blocked_event = retried->queue_blocked;
 			}
@@ -1199,7 +1223,7 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 
 		if((*runner)->status() ==
 			th03::app::ClassicRunnerStatus::quit_requested) {
-			return 0;
+			return {.disposition = ExperienceRunDisposition::application_quit};
 		}
 		const bool session_complete = (*runner)->status() ==
 			th03::app::ClassicRunnerStatus::session_complete;
@@ -1208,17 +1232,20 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 			(!retry_blocked_event || session_complete || smoke_complete)) {
 			surface = (*runner)->compose_shown_surface(pixel_span);
 			if(!surface) {
-				return fail("compose", surface.error());
+				return {.exit_code = fail("compose", surface.error())};
 			}
-			presented = (*platform)->present(*surface);
+			presented = platform.present(*surface);
 			if(!presented) {
-				return fail("present", presented.error());
+				return {.exit_code = fail("present", presented.error())};
 			}
 			presentation_pending = false;
 			presented_this_iteration = true;
 		}
-		if(session_complete || smoke_complete) {
-			return 0;
+		if(session_complete) {
+			return {.disposition = ExperienceRunDisposition::return_to_menu};
+		}
+		if(smoke_complete) {
+			return {.disposition = ExperienceRunDisposition::smoke_complete};
 		}
 		if(presented_this_iteration) {
 			continue;
@@ -1229,7 +1256,176 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 			SDL_DelayPrecise(std::min(*deadline - now, maximum_idle_delay_ns));
 		}
 	}
-	return 0;
+	return {.disposition = ExperienceRunDisposition::return_to_menu};
+}
+
+MenuRunResult run_experience_menu(
+	th03::app::RationalTickRate tick_rate,
+	th03::platform::SdlPlatform &platform,
+	th03::platform::SdlInputMapper &mapper
+)
+{
+	constexpr std::uint16_t input_up = 0x0001U;
+	constexpr std::uint16_t input_down = 0x0002U;
+	constexpr std::uint16_t input_shot = 0x0020U;
+	constexpr std::uint16_t input_cancel = 0x1000U;
+	constexpr std::uint16_t input_ok = 0x2000U;
+	const auto pressed = [](std::uint16_t word, std::uint16_t bit) noexcept {
+		return (word & bit) != 0U;
+	};
+
+	th03::app::ExperienceMenu menu;
+	auto presented = platform.present(menu.surface());
+	if(!presented) {
+		return {.exit_code = fail("menu-present", presented.error())};
+	}
+	auto scheduler = th03::app::TickInputScheduler::create(
+		tick_rate,
+		th03::platform::sdl_ticks_now_ns(),
+		th03::app::TickInputCatchUpPolicy::discard_missed_deadlines
+	);
+	if(!scheduler) {
+		return {.exit_code = fail_tick(scheduler.error())};
+	}
+
+	bool retry_blocked_event = false;
+	while(menu.status() == th03::app::ExperienceMenuStatus::running) {
+		const auto cutoff = th03::platform::sdl_ticks_now_ns();
+		if(!retry_blocked_event) {
+			auto result = mapper.pump_events(*scheduler, false);
+			if(!result) {
+				return {.exit_code = fail("menu-input-pump", result.error())};
+			}
+			retry_blocked_event = result->queue_blocked;
+		}
+
+		bool presentation_pending = false;
+		for(;;) {
+			auto due = scheduler->pop_due(cutoff);
+			if(!due) {
+				return {.exit_code = fail_tick(due.error())};
+			}
+			if(!*due) {
+				break;
+			}
+			const auto word = (**due).input.system;
+			const auto consumed = menu.consume({
+				.up = pressed(word, input_up),
+				.down = pressed(word, input_down),
+				.confirm = pressed(word, input_shot) || pressed(word, input_ok),
+				.cancel = pressed(word, input_cancel),
+				.app_quit_requested = (**due).app_quit_requested,
+			});
+			presentation_pending =
+				presentation_pending || consumed.surface_changed;
+			if(retry_blocked_event) {
+				auto retried = mapper.pump_events(*scheduler, false);
+				if(!retried) {
+					return {
+						.exit_code = fail("menu-input-pump", retried.error())
+					};
+				}
+				retry_blocked_event = retried->queue_blocked;
+			}
+			if(consumed.status != th03::app::ExperienceMenuStatus::running) {
+				break;
+			}
+		}
+
+		if(presentation_pending) {
+			presented = platform.present(menu.surface());
+			if(!presented) {
+				return {.exit_code = fail("menu-present", presented.error())};
+			}
+		}
+		if(menu.status() == th03::app::ExperienceMenuStatus::quit_requested) {
+			return {};
+		}
+		if(menu.status() ==
+			th03::app::ExperienceMenuStatus::experience_selected) {
+			return {.choice = menu.choice()};
+		}
+		const auto deadline = scheduler->next_deadline_ns();
+		const auto now = th03::platform::sdl_ticks_now_ns();
+		if(deadline && *deadline > now) {
+			SDL_DelayPrecise(std::min(*deadline - now, maximum_idle_delay_ns));
+		}
+	}
+	return {};
+}
+
+std::expected<
+	std::pair<
+		std::unique_ptr<th03::platform::SdlPlatform>,
+		th03::platform::SdlInputMapper
+	>,
+	int
+> create_product_platform()
+{
+	auto platform = th03::platform::SdlPlatform::create({});
+	if(!platform) {
+		return std::unexpected(fail("platform-create", platform.error()));
+	}
+	auto mapper = th03::platform::SdlInputMapper::create(
+		th03::app::detail::classic_direct_vs_bindings(),
+		static_cast<SDL_WindowID>((*platform)->window_id()),
+		th03::platform::native_sdl_gamepad_backend()
+	);
+	if(!mapper) {
+		return std::unexpected(fail("input-create", mapper.error()));
+	}
+	return std::pair{std::move(*platform), std::move(*mapper)};
+}
+
+int run_classic(th03::app::ClassicCliRequest parsed)
+{
+	auto product = create_product_platform();
+	if(!product) {
+		return product.error();
+	}
+	auto result = run_classic_session(
+		std::move(parsed), *product->first, product->second
+	);
+	return result.exit_code;
+}
+
+int run_product_shell(th03::app::ClassicCliRequest parsed)
+{
+	auto product = create_product_platform();
+	if(!product) {
+		return product.error();
+	}
+	// Automated packaging smoke retains the historical deterministic Classic
+	// entry and does not wait for a physical menu selection.
+	if(parsed.smoke_ticks) {
+		parsed.mode = th03::app::ClassicLaunchMode::classic;
+		return run_classic_session(
+			std::move(parsed), *product->first, product->second
+		).exit_code;
+	}
+
+	for(;;) {
+		const auto menu = run_experience_menu(
+			parsed.tick_rate, *product->first, product->second
+		);
+		if(menu.exit_code != 0 || !menu.choice) {
+			return menu.exit_code;
+		}
+		parsed.mode = (*menu.choice ==
+			th03::app::ExperienceMenuChoice::new_classic) ?
+			th03::app::ClassicLaunchMode::new_classic :
+			th03::app::ClassicLaunchMode::classic;
+		auto experience = run_classic_session(
+			parsed, *product->first, product->second
+		);
+		if(experience.exit_code != 0) {
+			return experience.exit_code;
+		}
+		if(experience.disposition !=
+			ExperienceRunDisposition::return_to_menu) {
+			return 0;
+		}
+	}
 }
 
 } // namespace
@@ -1243,7 +1439,9 @@ int main(int argc, char **argv)
 	}
 
 	const bool classic = std::ranges::find(arguments, "--classic") !=
-		arguments.end();
+		arguments.end() ||
+		std::ranges::find(arguments, "--new-classic") != arguments.end() ||
+		std::ranges::find(arguments, "--shell") != arguments.end();
 	if(classic) {
 		auto parsed = th03::app::parse_classic_cli(arguments);
 		if(!parsed) {
@@ -1252,6 +1450,9 @@ int main(int argc, char **argv)
 		if(parsed->show_help) {
 			print_usage();
 			return 0;
+		}
+		if(parsed->mode == th03::app::ClassicLaunchMode::shell) {
+			return run_product_shell(std::move(*parsed));
 		}
 		return run_classic(std::move(*parsed));
 	}

@@ -9,6 +9,7 @@
 #include <span>
 
 #include "th03/app/classic_audio.hpp"
+#include "th03/app/experience_menu.hpp"
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/main_process.hpp"
 #include "th03/app/resources.hpp"
@@ -41,6 +42,9 @@ struct ClassicRunnerRequest final {
 	// publishing and requiring the caller to drain every semantic command.
 	bool fm_available = false;
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
+	// Host/application policy only. Deterministic gameplay never receives this
+	// identity; New Classic adapters apply recorded transforms at the boundary.
+	ExperienceProfile experience = ExperienceProfile::classic;
 };
 
 enum class ClassicContentFile : std::uint8_t {

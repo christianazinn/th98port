@@ -387,6 +387,7 @@ target_link_libraries(th03_present PUBLIC th03_core)
 # events, clocks, and texture storage at this boundary; none enter core or
 # presentation state.
 add_library(th03_app_runtime STATIC
+	src/app/experience_menu.cpp
 	src/app/host_surface.cpp
 	src/app/tick_input.cpp
 )
@@ -638,6 +639,18 @@ if(BUILD_TESTING)
 		COMMAND th03-app-host-surface-tests
 	)
 
+	add_executable(th03-app-experience-menu-tests
+		tests/test_app_experience_menu.cpp
+	)
+	target_link_libraries(
+		th03-app-experience-menu-tests PRIVATE th03_app_runtime
+	)
+	th03_set_warnings(th03-app-experience-menu-tests)
+	add_test(
+		NAME th03-app-experience-menu-tests
+		COMMAND th03-app-experience-menu-tests
+	)
+
 	add_executable(th03-app-tick-input-tests
 		tests/test_app_tick_input.cpp
 	)
@@ -810,6 +823,8 @@ if(BUILD_TESTING)
 	if(TH03_ENABLE_SDL)
 		add_test(NAME th03-app-help COMMAND th03-app --help)
 		add_test(NAME th03-app-classic-help COMMAND th03-app --classic --help)
+		add_test(NAME th03-app-new-classic-help COMMAND th03-app --new-classic --help)
+		add_test(NAME th03-app-shell-help COMMAND th03-app --shell --help)
 		add_test(
 			NAME th03-app-missing-main
 			COMMAND ${CMAKE_COMMAND}

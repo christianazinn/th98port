@@ -60,9 +60,13 @@ void test_cli()
 	const auto selected_help = parse({"--classic", "--help"});
 	expect(selected_help && selected_help->show_help,
 		"explicit Classic help is also a no-I/O parse result");
+	const auto shell_help = parse({"--shell", "--help"});
+	expect(shell_help && shell_help->show_help,
+		"explicit product-shell help is also a no-I/O parse result");
 	const auto arguments = valid_arguments();
 	const auto parsed = th03::app::parse_classic_cli(arguments);
 	expect(parsed && !parsed->show_help &&
+		parsed->mode == th03::app::ClassicLaunchMode::classic &&
 		parsed->launch.content.data_root == "data-root" &&
 		parsed->launch.content.main_executable == "MAIN.EXE" &&
 		parsed->launch.content.mainl_executable == "MAINL.EXE" &&
@@ -77,6 +81,20 @@ void test_cli()
 		parsed->tick_rate.ticks == 526'315U &&
 		parsed->tick_rate.seconds == 9'328U,
 		"valid Classic CLI keeps default persistence beside the content root");
+	const auto new_classic = parse({
+		"--new-classic", "--data", "d", "--main", "m", "--mainl", "l",
+		"--op", "o", "--font", "f",
+	});
+	const auto shell = parse({
+		"--shell", "--data", "d", "--main", "m", "--mainl", "l",
+		"--op", "o", "--font", "f",
+	});
+	expect(
+		new_classic && shell &&
+		new_classic->mode == th03::app::ClassicLaunchMode::new_classic &&
+		shell->mode == th03::app::ClassicLaunchMode::shell,
+		"New Classic and the shared shell are explicit launch identities"
+	);
 	const auto complete = parse({
 		"--classic", "--data", "d", "--main", "m", "--mainl", "l",
 		"--op", "o", "--font", "f", "--tick-rate", "3/2",
@@ -104,6 +122,7 @@ void test_cli()
 	const auto unknown = parse({"--classic", "--wat"});
 	const auto missing_value = parse({"--classic", "--data"});
 	const auto duplicate = parse({"--classic", "--classic"});
+	const auto conflicting_mode = parse({"--classic", "--shell"});
 	const auto missing_required = parse({"--classic"});
 	const auto bad_rate = parse({
 		"--classic", "--data", "d", "--main", "m", "--mainl", "l",
@@ -128,6 +147,9 @@ void test_cli()
 	expect(!duplicate && duplicate.error().code ==
 		th03::app::ClassicCliErrorCode::duplicate_option,
 		"duplicate Classic CLI options are rejected");
+	expect(!conflicting_mode && conflicting_mode.error().code ==
+		th03::app::ClassicCliErrorCode::duplicate_option,
+		"conflicting experience selectors are rejected");
 	expect(!missing_required && missing_required.error().code ==
 		th03::app::ClassicCliErrorCode::missing_required_option,
 		"every required Classic content input remains explicit");
@@ -432,6 +454,18 @@ void test_runner_sequence_audio_surface_and_failure()
 		!invalid && invalid.error().code ==
 			th03::app::ClassicRunnerErrorCode::invalid_request,
 		"invalid private runner operations are rejected"
+	);
+	auto profile_backend = std::make_shared<FakeRunnerBackend>();
+	auto new_classic = th03::app::ClassicRunnerTestAccess::create(
+		std::static_pointer_cast<void>(profile_backend),
+		runner_operations(*profile_backend),
+		th03::app::ExperienceProfile::new_classic
+	);
+	expect(
+		new_classic && th03::app::ClassicRunnerTestAccess::experience(
+			**new_classic
+		) == th03::app::ExperienceProfile::new_classic,
+		"the shared runner retains New Classic as host policy only"
 	);
 
 	auto backend = std::make_shared<FakeRunnerBackend>();
