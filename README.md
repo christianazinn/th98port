@@ -132,12 +132,13 @@ display whose refresh rate differs from 56.423 Hz can still repeat logical
 frames or skip intermediate catch-up frames, but that physical scheduling never
 changes the PC-98 gameplay/PMD timeline. The audio endpoint starts paused after
 the initial blocking present, receives a three-interval prefill, and only then
-resumes. ymfm's shared SSG lane is weighted by the maintained T98-Next test
-profile (`543/2048` relative to its FM/ADPCM lanes), then the signed-16-scale
-mix is promoted to the declared Q31/S32 domain before resampling. This keeps
-the shared accompaniment from dominating the title melody and avoids an
-otherwise effectively silent SDL stream. The weighting is a practical
-emulator-reference policy;
+resumes. The maintained T98-Next profile consumes ordinary FM key edges
+immediately, matching FMGEN and preventing same-sample PMD key-off/key-on pairs
+from collapsing. Its SSG lane is bipolar and weighted by `725/2048`, and its FM
+lane is scaled by `5/2`, before the signed-16-scale mix is promoted to the
+declared Q31/S32 domain and resampled. These values come from driving the
+authenticated Sound86 mixer over all 21 songs; they are a practical
+emulator-reference policy, while
 physical PC-98 analog gain remains a later capture gate.
 Kotohime's source-uninitialized late Bomb local is normalized from the
 contemporaneous fade byte, following adjacent Kana. Kana's generated path and

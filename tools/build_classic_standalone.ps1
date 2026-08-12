@@ -169,12 +169,19 @@ try {
 			-Destination (Join-Path $contentRoot "YM2608.ROM")
 	}
 	if($T98Sound86) {
-		$expectedSound86Hash =
-			"1DB3840C09908BA859CDFABC43C59EA89FDAA7F02DC91A8E952BAF369412FF88"
+		# The installed and official-update modules have identical executable
+		# and rhythm-data sections; their resource sections differ. Authenticate
+		# each observed full-file profile here, then independently authenticate
+		# the extracted six-voice payload below.
+		$expectedSound86Hashes = @(
+			"1DB3840C09908BA859CDFABC43C59EA89FDAA7F02DC91A8E952BAF369412FF88",
+			"068882F89CD1E187878FE7052B19D02325D100FA8CAECBB63EBCB0FD96518916",
+			"81D0C3071A0B242C6649308B25C277E5413E2214AEA7CDFCFB62DE5BDC651F01"
+		)
 		$observedSound86Hash = (Get-FileHash -Algorithm SHA256 `
 			-LiteralPath $T98Sound86).Hash
-		if($observedSound86Hash -ne $expectedSound86Hash) {
-			throw "T98-Next Sound86.nhw digest is not the accepted 13.1th profile."
+		if($observedSound86Hash -notin $expectedSound86Hashes) {
+			throw "T98-Next Sound86.nhw digest is not an accepted Sound86 profile."
 		}
 		$device = [IO.File]::ReadAllBytes($T98Sound86)
 		$voiceOffsets = @(0x120F0, 0x22840, 0x2FD1C, 0x16C10, 0x29E60, 0x1E810)

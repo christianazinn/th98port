@@ -172,8 +172,7 @@ void ssg_engine::clock()
 
 void ssg_engine::output(output_data &output)
 {
-	// volume to amplitude table, taken from MAME's implementation but biased
-	// so that 0 == 0
+	// volume-to-amplitude table taken from MAME's implementation
 	static int16_t const s_amplitudes[32] =
 	{
 		     0,   32,   78,  141,  178,  222,  262,  306,
@@ -206,13 +205,9 @@ void ssg_engine::output(output_data &output)
 		// tone depends on the current tone state
 		uint32_t tone_on = m_regs.ch_tone_enable_n(chan) | m_tone_state[chan];
 
-		// if neither tone nor noise enabled, return 0
+		// determine the current magnitude from the envelope or fixed level
 		uint32_t volume;
-		if ((noise_on & tone_on) == 0)
-			volume = 0;
-
-		// if the envelope is enabled, use its amplitude
-		else if (m_regs.ch_envelope_enable(chan))
+		if (m_regs.ch_envelope_enable(chan))
 			volume = envelope_volume;
 
 		// otherwise, scale the tone amplitude up to match envelope values
@@ -224,8 +219,12 @@ void ssg_engine::output(output_data &output)
 				volume |= 1;
 		}
 
-		// convert to amplitude
-		output.data[chan] = s_amplitudes[volume];
+		// AY/SSG output is bipolar. The former zero-biased representation made
+		// the shared lane carry a large DC offset and halved the square-wave
+		// swing relative to T98-Next's FMGEN PSG renderer.
+		const int32_t amplitude = s_amplitudes[volume];
+		output.data[chan] = (noise_on & tone_on) != 0 ?
+			amplitude : -amplitude;
 	}
 }
 

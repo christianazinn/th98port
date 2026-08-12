@@ -296,6 +296,23 @@ public:
 	std::size_t fm6_key_offs = 0U;
 };
 
+class RetriggerTrace final : public PmdOpnaRegisterTraceSink {
+public:
+	void register_written(const PmdOpnaRegisterWrite &write) noexcept override
+	{
+		if(write.address == 0x28U && (write.value & 0x07U) == 0x02U) {
+			if((write.value & 0xF0U) == 0U) {
+				++fm3_key_offs;
+			} else {
+				++fm3_key_ons;
+			}
+		}
+	}
+
+	std::size_t fm3_key_ons = 0U;
+	std::size_t fm3_key_offs = 0U;
+};
+
 void test_config_and_load_validation()
 {
 	for(const auto &config : {
@@ -675,12 +692,16 @@ void test_load_is_chip_silent_and_play_is_traced()
 	expect(static_cast<bool>(subject.play()), "prepared song starts");
 	const auto started = subject.status();
 	expect(started.playing, "play publishes sequencer state");
-	expect(started.register_writes == 17U, "PMD start emits exact reset prefix");
+	expect(started.register_writes == 53U, "PMD start emits Stop then reset prefixes");
 	expect(trace.count == started.register_writes, "trace observes every chip write");
 	expect(
 		trace.first.sequence == 1U && trace.first.chip_clock == 0U &&
-			trace.first.address == 0x29U && trace.first.value == 0x83U,
-		"trace begins with PMD's OPNA enable/reset write"
+			trace.first.address == 0x80U && trace.first.value == 0xFFU,
+		"trace begins with PMD's source Stop mute sequence"
+	);
+	expect(
+		trace.last.address == 0x27U && trace.last.value == 0x3FU,
+		"trace ends with PMD's timer reset/start write"
 	);
 	expect(trace.last.sequence == trace.count, "trace sequence is contiguous");
 }
@@ -691,9 +712,9 @@ void test_pcm_and_fresh_replay_are_deterministic()
 		th03::audio::detail::pmd_mix_to_q31(32'767, 0) == 0x7FFF0000 &&
 		th03::audio::detail::pmd_mix_to_q31(-32'768, 0) ==
 			std::numeric_limits<std::int32_t>::min() &&
-		th03::audio::detail::pmd_mix_to_q31(0, 2'048) == 543 * 65'536 &&
-		th03::audio::detail::pmd_mix_to_q31(0, -2'048) == -543 * 65'536 &&
-		th03::audio::detail::pmd_mix_to_q31(0, 32'764) == 8'686 * 65'536 &&
+		th03::audio::detail::pmd_mix_to_q31(0, 2'048) == 725 * 65'536 &&
+		th03::audio::detail::pmd_mix_to_q31(0, -2'048) == -725 * 65'536 &&
+		th03::audio::detail::pmd_mix_to_q31(0, 32'764) == 11'598 * 65'536 &&
 		th03::audio::detail::pmd_mix_to_q31(30'000, 30'000) == 0x7FFF0000 &&
 		th03::audio::detail::pmd_mix_to_q31(-30'000, -30'000) ==
 			std::numeric_limits<std::int32_t>::min(),
@@ -733,12 +754,12 @@ void test_pcm_and_fresh_replay_are_deterministic()
 	);
 	expect(first_status.timer_b_count == 12U, "ymfm timers drive exact PMD ticks");
 	expect(
-		first_status.register_writes == 61U &&
-			first_status.register_hash == 0x85023B32U,
+		first_status.register_writes == 97U &&
+			first_status.register_hash == 3'708'942'061U,
 		"generated-song register trace matches the locked cross-compiler hash"
 	);
 	expect(
-		first_pcm_hash == 0x17A82FC5U,
+		first_pcm_hash == 1'269'644'741U,
 		"generated-song Q31 PCM matches the locked cross-compiler hash"
 	);
 	expect(song == caller_song, "sequencing never mutates caller-owned song bytes");
@@ -1130,7 +1151,7 @@ void test_authentic_title_mix(
 	const bool decoded_profile = rhythm_pcm.sample_rate_hz != 0U;
 	expect(
 		(decoded_profile ?
-			(hash == 1'847'911'017U && peak == 1'662'386'176LL) :
+			(hash == 810'350'003U && peak == 2'143'813'632LL) :
 			(hash == 50'015'953U && peak == 586'481'664LL)) &&
 			saturated == 0U,
 		"authentic OP.M mix is profile-specific, deterministic, and unclipped"
@@ -1199,13 +1220,65 @@ void test_authentic_complete_voice_routes(
 		);
 	}
 	constexpr std::array<std::uint32_t, 9U> expected_hashes{
-		1'961'029'913U, 4'203'322'885U, 1'386'951'077U,
-		71'659'365U, 1'708'591'201U, 149'015'673U,
-		3'266'068'125U, 3'834'310'849U, 236'522'255U,
+		2'904'482'297U, 3'780'384'473U, 3'811'188'617U,
+		2'563'435'317U, 1'529'891'017U, 2'822'471'361U,
+		2'310'860'309U, 1'927'665'801U, 1'043'687'390U,
 	};
 	expect(
 		hashes == expected_hashes,
 		"FM1-6, SSG1-2, and decoded rhythm stems are byte-deterministic"
+	);
+}
+
+void test_authentic_fm_retriggers_remain_audible(
+	const std::filesystem::path &yume1_root
+)
+{
+	const auto song = read_external_file(yume1_root / "OP.M");
+	expect(!song.empty(), "authentic retrigger song is readable");
+	if(song.empty()) {
+		return;
+	}
+	auto created = PmdOpnaEngine::create(PmdOpnaConfig{
+		.input_clock_hz = 7'987'200U,
+		.fidelity = PmdOpnaFidelity::minimum,
+	});
+	expect(static_cast<bool>(created), "authentic retrigger engine is created");
+	if(!created) {
+		return;
+	}
+	auto subject = std::move(*created);
+	expect(subject.load_song(song) && subject.play(), "authentic retrigger song starts");
+	for(std::uint8_t part = 0U; part <= 14U; ++part) {
+		if(part != 2U) {
+			static_cast<void>(subject.set_part_mask(part, true));
+		}
+	}
+	RetriggerTrace trace;
+	subject.set_register_trace_sink(&trace);
+	const auto rate = static_cast<std::size_t>(subject.status().native_sample_rate);
+	std::array<std::int64_t, 12U> second_energy{};
+	std::array<PmdOpnaStereoSample, 4'096U> scratch{};
+	for(auto &energy : second_energy) {
+		std::size_t remaining = rate;
+		while(remaining != 0U) {
+			const auto count = std::min(remaining, scratch.size());
+			subject.render_native(std::span(scratch).first(count));
+			for(std::size_t index = 0U; index < count; ++index) {
+				energy += std::abs(static_cast<std::int64_t>(scratch[index].left));
+				energy += std::abs(static_cast<std::int64_t>(scratch[index].right));
+			}
+			remaining -= count;
+		}
+	}
+	expect(
+		trace.fm3_key_ons >= 20U && trace.fm3_key_offs >= 20U,
+		"authentic FM3 issues repeated direct key-off/key-on pairs"
+	);
+	expect(
+		std::all_of(second_energy.begin() + 3U, second_energy.end(),
+			[](auto energy) { return energy > (1LL << 42U); }),
+		"authentic FM3 retriggers remain audible instead of decaying to silence"
 	);
 }
 
@@ -1285,6 +1358,7 @@ int main(int argc, char **argv)
 		if(rhythm_pcm) {
 			test_authentic_complete_voice_routes(argv[2], rhythm_pcm->view());
 		}
+		test_authentic_fm_retriggers_remain_audible(argv[2]);
 		test_authentic_effect_bank(argv[2]);
 	} else if(argc != 1) {
 		std::cerr << "usage: th03-audio-pmd-tests "

@@ -244,8 +244,8 @@ immutable prepared copy, and creates a new mutable image for every Play. Its C
 header is not valid C++, so public port headers expose no vendor layout.
 
 The generated hermetic gate locks the first 199,680 maximum-fidelity samples:
-61 register writes, register FNV-1a `85023b32`, promoted Q31 stereo PCM FNV-1a
-`17a82fc5`, and 12 Timer-B ticks, identical on GCC and MSVC. ymfm's signed-16-
+97 register writes, register FNV-1a `dd11f6ed`, promoted Q31 stereo PCM FNV-1a
+`4bad3dc5`, and 12 Timer-B ticks, identical on GCC and MSVC. ymfm's signed-16-
 scale shared SSG lane is weighted by the T98-Next profile described below,
 summed with each stereo FM/ADPCM lane under signed-16 saturation, and then
 multiplied exactly by 65,536. This supplies the amplitude domain declared by
@@ -260,16 +260,21 @@ as a practical listening reference. This is deliberately narrower than a claim
 about the physical PC-9801-86 analog output. The supplied `MAIN.INI` has FM,
 rhythm, and PCM at 20 and SSG at 14. Read-only disassembly of the supplied
 `Sound86.nhw` shows that initialization subtracts 20 from each value. Its SSG
-setter maps -6 to attenuation-table index 4; the table is generated as
-`2^(-index/8) * 65536`, and each of the three SSG channels is shifted by 4
-before summation. Full SSG output at that setting is therefore
-`3 * 2896 = 8688`, against the FM engine's nominal six-channel full scale of
-32768. The canonical adapter applies that reduced ratio exactly as `543/2048`
-to ymfm's shared SSG lane before saturation and Q31 promotion.
+setter uses `pow(10, dB/40)`, so -6 half-dB units produce 3866 per PSG voice,
+or 11598 for all three. ymfm's shared lane has a 32764 full-scale sum, giving
+the nearest bounded ratio `725/2048`. The upstream zero-biased SSG waveform is
+made bipolar to match FMGEN and remove its large DC offset. After ordinary key
+edges are consumed immediately, an exact Sound86-versus-ymfm corpus drive finds
+a stable FM amplitude ratio of 2.40..2.61 across 19 sounding songs; the
+canonical T98 profile uses the center ratio `5/2` before saturation and Q31
+promotion.
 
-This matters for `OP.M`: before weighting, the first rendered interval had a
-per-stereo-lane absolute mean of about 2091 but a shared-SSG absolute mean of
-about 3438, so the equal-gain adapter let accompaniment mask the FM melody.
+This matters for `OP.M`: YMFM formerly deferred PMD's adjacent direct key-off
+and key-on until the next generated sample, collapsing both writes into an
+unchanged live-on state. FM3 became exactly silent after roughly three seconds
+despite continuing authored key-ons. T98/FMGEN applies each edge immediately;
+the native compatibility patch now does the same after refreshing operator
+cache state. An authentic twelve-second FM3 gate fails if the notes decay away.
 Read-only disassembly also recovers six contiguous signed-16 44.1 kHz rhythm
 sample arrays from `Sound86.nhw`, with source voice lengths `0x2590`, `0x3b10`,
 `0x6eed`, `0x3e00`, `0x2f5e`, and `0x2018`. The private standalone builder
@@ -277,7 +282,7 @@ authenticates the complete device module before extracting those voices; the
 native decoded-rhythm adapter reproduces Sound86's key-on/dump, total level,
 per-instrument level, panning, Q10 cursor, and attenuation-table behavior. The
 one-second authentic opening with that decoded profile is unclipped, peaks at
-1,662,386,176 in Q31, and has FNV-1a `6e24e269`. FM1-6, SSG1-2, and rhythm are
+2,143,813,632 in Q31, and has FNV-1a `304CF5B3`. FM1-6, SSG1-2, and rhythm are
 also isolated after a ten-second post-mask settling interval and frozen as nine
 distinct ten-second PCM hashes. Register/timer behavior is unchanged.
 

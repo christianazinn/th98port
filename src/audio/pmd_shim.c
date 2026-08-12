@@ -83,7 +83,7 @@ static void silence_song(struct th03_pmd_handle *handle)
 	unsigned bank;
 	unsigned slot;
 	unsigned channel;
-	if(!handle || !handle->started) {
+	if(!handle) {
 		return;
 	}
 
@@ -222,6 +222,11 @@ bool th03_pmd_start(
 	handle->work.opna = owner;
 	handle->work.ppz8 = NULL;
 	handle->work.ppz8_functbl = NULL;
+	/* PMD's MStart begins with MStop, which initializes the SSG mixer to
+	 * tone/noise-off before the first part update reads and modifies register
+	 * 07h.  A freshly constructed software chip otherwise exposes its zeroed
+	 * register image here, erroneously enabling every SSG tone and noise lane. */
+	silence_song(handle);
 	pmd_init(&handle->work, &handle->driver);
 	handle->started = true;
 	return true;

@@ -519,6 +519,16 @@ template<class RegisterType>
 void fm_operator<RegisterType>::keyonoff(uint32_t on, keyon_type type)
 {
 	m_keyon_live = (m_keyon_live & ~(1 << int(type))) | (bitfield(on, 0) << int(type));
+
+	// The PC-98 PMD driver can issue a direct key-off followed by a key-on
+	// before the next generated sample. Consume each register edge here so the
+	// pair cannot collapse into one unchanged live state. This matches FMGEN's
+	// immediate KeyControl behavior and preserves the phase/envelope retrigger.
+	if (type == KEYON_NORMAL)
+	{
+		m_regs.cache_operator_data(m_choffs, m_opoffs, m_cache);
+		clock_keystate(uint32_t(m_keyon_live != 0));
+	}
 }
 
 
