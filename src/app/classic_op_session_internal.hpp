@@ -28,6 +28,8 @@
 
 namespace th03::app {
 
+class NewClassicReplayRecorder;
+
 enum class ClassicOpSessionScene : std::uint8_t {
 	title_menu,
 	options,
@@ -260,7 +262,8 @@ public:
 		std::filesystem::path config_path = "YUME.CFG",
 		std::filesystem::path score_path = "YUME.NEM",
 		bool fm_available = true,
-		present::KotohimeBombFadeCompatibility kotohime_compatibility = {}
+		present::KotohimeBombFadeCompatibility kotohime_compatibility = {},
+		NewClassicReplayRecorder *replay_recorder = nullptr
 	);
 	~ClassicOpSession();
 
@@ -295,7 +298,8 @@ private:
 	> create_with_backend(
 		std::shared_ptr<void> backend_owner,
 		ClassicOpSessionBackendOperations operations,
-		ClassicOpSessionTestHooks test_hooks = {}
+		ClassicOpSessionTestHooks test_hooks = {},
+		NewClassicReplayRecorder *replay_recorder = nullptr
 	);
 
 	std::unique_ptr<Impl> impl_;

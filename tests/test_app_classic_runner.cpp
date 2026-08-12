@@ -16,6 +16,7 @@
 #include "th03/app/classic_cli.hpp"
 #include "th03/app/classic_runner.hpp"
 #include "th03/app/classic_score_store.hpp"
+#include "th03/formats/v13.hpp"
 
 #include "classic_runner_internal.hpp"
 
@@ -31,6 +32,23 @@ void expect(bool condition, const char *message)
 		++failures;
 		std::cerr << "FAIL: " << message << '\n';
 	}
+}
+
+bool valid_completed_replay(
+	std::optional<th03::formats::ReplayDocument> document,
+	th03::formats::ReplayEndReason reason,
+	std::size_t minimum_checkpoints = 1U
+)
+{
+	if(!document || !document->metadata ||
+		document->metadata->status != th03::formats::ReplayStatus::finalized ||
+		document->metadata->end_reason != reason ||
+		document->checkpoints.size() < minimum_checkpoints ||
+		document->expected_round_splits.empty()) {
+		return false;
+	}
+	auto encoded = th03::formats::write_v13_replay(*document);
+	return encoded && th03::formats::parse_v13_replay(*encoded).has_value();
 }
 
 std::expected<th03::app::ClassicCliRequest, th03::app::ClassicCliError>
@@ -729,6 +747,7 @@ bool authentic_vs_gate(
 			},
 			.seed = static_cast<std::uint32_t>(10U + mode_index),
 			.fm_available = false,
+			.experience = th03::app::ExperienceProfile::new_classic,
 		});
 		if(!loaded) {
 			std::cerr << "authentic-vs-load mode="
@@ -959,6 +978,12 @@ bool authentic_vs_gate(
 			] != std::array<std::uint8_t, 8U>{}) {
 			return fail_stage("route-two-resident");
 		}
+		if(!valid_completed_replay(
+			runner.take_completed_replay(),
+			th03::formats::ReplayEndReason::game_over
+		)) {
+			return fail_stage("route-two-replay");
+		}
 		if(!drive_selection() || !drive_stage_to_real_main()) {
 			return fail_stage("second-main");
 		}
@@ -980,6 +1005,12 @@ bool authentic_vs_gate(
 			route_zero_resident->last_score !=
 				decltype(route_zero_resident->last_score){}) {
 			return fail_stage("route-zero-resident");
+		}
+		if(!valid_completed_replay(
+			runner.take_completed_replay(),
+			th03::formats::ReplayEndReason::menu_return
+		)) {
+			return fail_stage("route-zero-replay");
 		}
 
 		// Route 0 also reenters the direct selector. Cancel there constructs a
@@ -1048,6 +1079,7 @@ bool authentic_gate(
 		},
 		.seed = 1U,
 		.fm_available = false,
+		.experience = th03::app::ExperienceProfile::new_classic,
 	});
 	if(!loaded) {
 		std::cerr << "authentic Classic runner load failed code="
@@ -1443,6 +1475,13 @@ bool authentic_gate(
 			<< audio_commands.size() << '\n';
 		return false;
 	}
+	if(!valid_completed_replay(
+		runner.take_completed_replay(),
+		th03::formats::ReplayEndReason::complete, 9U
+	)) {
+		std::cerr << "authentic-script-stage=clear-replay\n";
+		return false;
+	}
 
 	const auto score = th03::app::load_classic_score_store(
 		temporary.path() / "YUME.NEM"
@@ -1653,6 +1692,12 @@ bool authentic_gate(
 		std::cerr << "authentic-script-stage=continue-clear-branch\n";
 		return false;
 	}
+	if(!valid_completed_replay(
+		runner.take_completed_replay(),
+		th03::formats::ReplayEndReason::complete, 10U
+	)) {
+		return false;
+	}
 
 	if(!enter_story_main()) { return false; }
 	const auto declined = drive_branch(BranchPolicy::decline_continue);
@@ -1666,6 +1711,12 @@ bool authentic_gate(
 		count_branch_scene(*declined,
 			th03::app::ClassicStorySessionScene::high_score_registration) != 1U) {
 		std::cerr << "authentic-script-stage=continue-decline-branch\n";
+		return false;
+	}
+	if(!valid_completed_replay(
+		runner.take_completed_replay(),
+		th03::formats::ReplayEndReason::game_over
+	)) {
 		return false;
 	}
 
@@ -1683,6 +1734,12 @@ bool authentic_gate(
 		std::cerr << "authentic-script-stage=continue-exhausted-branch\n";
 		return false;
 	}
+	if(!valid_completed_replay(
+		runner.take_completed_replay(),
+		th03::formats::ReplayEndReason::game_over, 4U
+	)) {
+		return false;
+	}
 
 	if(!enter_story_main()) { return false; }
 	const auto exited = drive_branch(BranchPolicy::exit_main);
@@ -1692,6 +1749,12 @@ bool authentic_gate(
 		count_branch_scene(*exited,
 			th03::app::ClassicStorySessionScene::high_score_registration) != 0U) {
 		std::cerr << "authentic-script-stage=main-exit-branch\n";
+		return false;
+	}
+	if(!valid_completed_replay(
+		runner.take_completed_replay(),
+		th03::formats::ReplayEndReason::menu_return
+	)) {
 		return false;
 	}
 

@@ -10,6 +10,7 @@
 
 #include "main_process_internal.hpp"
 #include "main_process_static_content_internal.hpp"
+#include "th03/app/new_classic_replay.hpp"
 #include "th03/present/text.hpp"
 
 namespace th03::app {
@@ -103,6 +104,13 @@ namespace {
 	return result;
 }
 
+[[nodiscard]] ClassicStorySessionError replay_capture_error() noexcept
+{
+	return session_error(
+		ClassicStorySessionErrorCode::backend_contract_failed
+	);
+}
+
 [[nodiscard]] ClassicStorySessionError surface_error(
 	present::SourceSurfaceError error
 ) noexcept
@@ -153,6 +161,22 @@ namespace {
 	input.p2 = 0U;
 	input.charge_mask = static_cast<std::uint8_t>(
 		physical.keyboard.charge_mask & 0x01U
+	);
+	return input;
+}
+
+[[nodiscard]] CoreInput normalize_replay_interstitial_input(
+	const ClassicMainInputSample &sample
+) noexcept
+{
+	auto input = sample.aggregate;
+	if(!sample.physical_domains) {
+		return input;
+	}
+	const auto &physical = *sample.physical_domains;
+	input.system = static_cast<std::uint16_t>(
+		physical.keyboard.system | physical.keyboard.p1 |
+		(physical.first_joystick_present ? physical.first_joystick : 0U)
 	);
 	return input;
 }
@@ -344,19 +368,22 @@ struct ClassicStoryBackend final {
 	GameInit process_start{};
 	std::optional<ClassicStoryTerminal> forced_terminal{};
 	std::optional<ClassicStoryTerminal> forced_continue_terminal{};
+	NewClassicReplayRecorder *replay_recorder = nullptr;
 
 	ClassicStoryBackend(
 		std::shared_ptr<MainResourceLoader> loader_,
 		std::shared_ptr<const MainProcessStaticContent> static_content_,
 		MainlStageTextAssets stage_text_,
 		MainlStaffCompiledAssets staff_compiled_,
-		std::filesystem::path score_path_
+		std::filesystem::path score_path_,
+		NewClassicReplayRecorder *replay_recorder_
 	) :
 		loader(std::move(loader_)),
 		static_content(std::move(static_content_)),
 		stage_text(std::move(stage_text_)),
 		staff_compiled(std::move(staff_compiled_)),
-		score_path(std::move(score_path_))
+		score_path(std::move(score_path_)),
+		replay_recorder(replay_recorder_)
 	{
 		blank_tram.fill({
 			' ', static_cast<present::TramAttribute>(present::tram_black)
@@ -512,6 +539,20 @@ struct ClassicStoryBackend final {
 			));
 		}
 		driver = std::move(*created_driver);
+		if(replay_recorder) {
+			if(replay_recorder->recording()) {
+				if(auto boundary = replay_recorder->process_completed(
+					replay::ProcessId::mainl
+				); !boundary) {
+					return std::unexpected(replay_capture_error());
+				}
+			}
+			if(auto checkpoint = replay_recorder->round_started(
+				process->round_start_observation()
+			); !checkpoint) {
+				return std::unexpected(replay_capture_error());
+			}
+		}
 		return {};
 	}
 
@@ -529,9 +570,10 @@ struct ClassicStoryBackend final {
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
 		}
-		auto advanced = driver->consume(normalize_story_main_input(
+		const auto normalized = normalize_story_main_input(
 			input, driver->input_context()
-		));
+		);
+		auto advanced = driver->consume(normalized);
 		if(!advanced) {
 			if(advanced.error().process_error) {
 				return std::unexpected(main_error(
@@ -541,6 +583,28 @@ struct ClassicStoryBackend final {
 			return std::unexpected(session_error(
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
+		}
+		if(replay_recorder && advanced->process_advanced) {
+			if(auto sampled = replay_recorder->sample(
+				replay::InputPhase::gameplay, normalized
+			); !sampled) {
+				return std::unexpected(replay_capture_error());
+			}
+			if(advanced->step_result.status == StepStatus::round_transition ||
+				advanced->step_result.status == StepStatus::terminal) {
+				if(auto split = replay_recorder->round_completed(
+					advanced->step_result.input_boundary_state
+				); !split) {
+					return std::unexpected(replay_capture_error());
+				}
+			}
+			if(advanced->round_started) {
+				if(auto checkpoint = replay_recorder->round_started(
+					process->round_start_observation()
+				); !checkpoint) {
+					return std::unexpected(replay_capture_error());
+				}
+			}
 		}
 		return ClassicStoryBackendTick{
 			.surface_changed = advanced->surface_changed,
@@ -1519,6 +1583,7 @@ struct ClassicStorySession::Impl {
 	ClassicStorySessionStatus status = ClassicStorySessionStatus::running;
 	std::uint32_t source_sample_count = 0U;
 	bool continue_pending = false;
+	NewClassicReplayRecorder *replay_recorder = nullptr;
 	std::optional<ClassicStorySessionError> failure{};
 
 	Impl(
@@ -1526,13 +1591,15 @@ struct ClassicStorySession::Impl {
 		std::shared_ptr<void> owner,
 		ClassicStorySessionBackendOperations operations_,
 		ClassicStorySessionTestHooks test_hooks_,
-		ClassicMainlPlan plan_
+		ClassicMainlPlan plan_,
+		NewClassicReplayRecorder *replay_recorder_
 	) :
 		base_config(std::move(config)),
 		backend_owner(std::move(owner)),
 		operations(operations_),
 		test_hooks(test_hooks_),
-		plan(std::move(plan_))
+		plan(std::move(plan_)),
+		replay_recorder(replay_recorder_)
 	{}
 
 	void fail(ClassicStorySessionError error)
@@ -1696,7 +1763,8 @@ ClassicStorySession::create(
 	std::span<const std::byte> font_rom,
 	MainlStageTextAssets stage_text,
 	MainlStaffCompiledAssets staff_compiled,
-	std::filesystem::path score_path
+	std::filesystem::path score_path,
+	NewClassicReplayRecorder *replay_recorder
 )
 {
 	if(!loader) {
@@ -1728,13 +1796,13 @@ ClassicStorySession::create(
 	auto shared_loader = std::shared_ptr<MainResourceLoader>(std::move(loader));
 	auto backend = std::make_shared<ClassicStoryBackend>(
 		std::move(shared_loader), std::move(*static_content), std::move(stage_text),
-		std::move(staff_compiled), std::move(score_path)
+		std::move(staff_compiled), std::move(score_path), replay_recorder
 	);
 	return create_with_backend(
 		config,
 		std::static_pointer_cast<void>(backend),
 		backend_operations(*backend),
-		backend_test_hooks(*backend)
+		backend_test_hooks(*backend), replay_recorder
 	);
 }
 
@@ -1745,7 +1813,8 @@ ClassicStorySession::create_with_prepared_content(
 	std::shared_ptr<const MainProcessStaticContent> static_content,
 	MainlStageTextAssets stage_text,
 	MainlStaffCompiledAssets staff_compiled,
-	std::filesystem::path score_path
+	std::filesystem::path score_path,
+	NewClassicReplayRecorder *replay_recorder
 )
 {
 	if(!loader || !static_content) {
@@ -1755,11 +1824,11 @@ ClassicStorySession::create_with_prepared_content(
 	}
 	auto backend = std::make_shared<ClassicStoryBackend>(
 		std::move(loader), std::move(static_content), std::move(stage_text),
-		std::move(staff_compiled), std::move(score_path)
+		std::move(staff_compiled), std::move(score_path), replay_recorder
 	);
 	return create_with_backend(
 		config, std::static_pointer_cast<void>(backend),
-		backend_operations(*backend), backend_test_hooks(*backend)
+		backend_operations(*backend), backend_test_hooks(*backend), replay_recorder
 	);
 }
 
@@ -1770,7 +1839,8 @@ ClassicStorySession::create(
 	MainCompiledContent compiled_content,
 	std::span<const std::byte> font_rom,
 	std::span<const std::byte> mainl_executable,
-	std::filesystem::path score_path
+	std::filesystem::path score_path,
+	NewClassicReplayRecorder *replay_recorder
 )
 {
 	if(!valid_main_story_config(config)) {
@@ -1793,7 +1863,8 @@ ClassicStorySession::create(
 		font_rom,
 		std::move(text->assets),
 		std::move(text->staff),
-		std::move(score_path)
+		std::move(score_path),
+		replay_recorder
 	);
 }
 
@@ -1802,7 +1873,8 @@ ClassicStorySession::create_with_backend(
 	const MainStoryConfig &config,
 	std::shared_ptr<void> backend_owner,
 	ClassicStorySessionBackendOperations operations,
-	ClassicStorySessionTestHooks test_hooks
+	ClassicStorySessionTestHooks test_hooks,
+	NewClassicReplayRecorder *replay_recorder
 )
 {
 	if(!valid_main_story_config(config)) {
@@ -1821,7 +1893,7 @@ ClassicStorySession::create_with_backend(
 	}
 	auto impl = std::make_unique<Impl>(
 		config, std::move(backend_owner), operations, test_hooks,
-		std::move(*plan)
+		std::move(*plan), replay_recorder
 	);
 	impl->source_sample_count = config.resident.global_frame;
 	if(auto activated = impl->activate(); !activated) {
@@ -1858,6 +1930,7 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 		};
 	}
 
+	const auto scene_before = impl_->scene;
 	std::expected<ClassicStoryBackendTick, ClassicStorySessionError> tick =
 		std::unexpected(session_error(
 			ClassicStorySessionErrorCode::backend_contract_failed
@@ -1911,6 +1984,16 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 		impl_->fail(std::move(tick.error()));
 		return std::unexpected(*impl_->failure);
 	}
+	if(tick->input_sampled && scene_before != ClassicStorySessionScene::main &&
+		impl_->replay_recorder && impl_->replay_recorder->recording()) {
+		if(auto sampled = impl_->replay_recorder->sample(
+			replay::InputPhase::interstitial,
+			normalize_replay_interstitial_input(input.main)
+		); !sampled) {
+			impl_->fail(replay_capture_error());
+			return std::unexpected(*impl_->failure);
+		}
+	}
 	if(tick->input_sampled) {
 		++impl_->source_sample_count;
 	}
@@ -1949,6 +2032,24 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 			if(!plan) {
 				advanced = std::unexpected(plan_error(plan.error()));
 				break;
+			}
+			if(impl_->replay_recorder) {
+				const auto *last = impl_->replay_recorder->last_terminal();
+				if(!last || last->global_frame != terminal->terminal.global_frame ||
+					last->round_id != terminal->terminal.round_id) {
+					if(auto split = impl_->replay_recorder->round_completed(
+						terminal->terminal
+					); !split) {
+						advanced = std::unexpected(replay_capture_error());
+						break;
+					}
+				}
+				if(auto boundary = impl_->replay_recorder->process_completed(
+					replay::ProcessId::main
+				); !boundary) {
+					advanced = std::unexpected(replay_capture_error());
+					break;
+				}
 			}
 			impl_->continue_pending = terminal->transition.action ==
 				SessionAction::request_continue;
@@ -2039,6 +2140,15 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 		if(!advanced) {
 			impl_->fail(std::move(advanced.error()));
 			return std::unexpected(*impl_->failure);
+		}
+		if(impl_->status == ClassicStorySessionStatus::complete &&
+			impl_->replay_recorder && impl_->replay_recorder->recording()) {
+			if(auto boundary = impl_->replay_recorder->process_completed(
+				replay::ProcessId::mainl
+			); !boundary) {
+				impl_->fail(replay_capture_error());
+				return std::unexpected(*impl_->failure);
+			}
 		}
 		transitioned = true;
 	}

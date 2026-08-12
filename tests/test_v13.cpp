@@ -476,6 +476,22 @@ void test_valid_scenarios()
 		}(),
 		"V13 accepts a later Story-stage checkpoint with its scenario opponent"
 	);
+	auto continued_story = make_v13_two_checkpoints();
+	put_u8(continued_story, 0x260U, 0x00U);
+	put_u8(
+		continued_story,
+		622U + th03::formats::replay_v13_checkpoint_size + 12U + 11U,
+		0U
+	);
+	put_u8(
+		continued_story,
+		622U + th03::formats::replay_v13_checkpoint_size + 12U + 22U,
+		4U
+	);
+	check(
+		th03::formats::parse_v13_replay(continued_story).has_value(),
+		"V13 accepts a later Continue checkpoint with repeated stage/round identity"
+	);
 
 	auto versus = make_v13(Scenario::versus);
 	check(
@@ -733,10 +749,6 @@ void test_summary_and_checkpoint_corruption()
 	bytes = make_v13(Scenario::story);
 	put_u8(bytes, 0x25EU, 16U);
 	expect_rejected(std::move(bytes), "V13 rejects a checkpoint count above Story capacity");
-	bytes = make_v13(Scenario::story);
-	put_u8(bytes, 0x25EU, 2U);
-	put_u8(bytes, 0x260U, 0U);
-	expect_rejected(std::move(bytes), "V13 rejects duplicate checkpoint directory entries");
 	bytes = make_v13(Scenario::story);
 	put_u8(bytes, 0x25FU, 0x0FU);
 	expect_rejected(std::move(bytes), "V13 rejects a VS-tagged Story checkpoint");

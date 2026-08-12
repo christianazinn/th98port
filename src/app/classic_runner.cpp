@@ -2,9 +2,11 @@
 
 #include "classic_runner_internal.hpp"
 
+#include <algorithm>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <ctime>
 #include <fstream>
 #include <limits>
 #include <memory>
@@ -14,6 +16,7 @@
 #include <vector>
 
 #include "th03/app/authentic_text.hpp"
+#include "th03/app/new_classic_replay.hpp"
 
 namespace th03::app {
 namespace {
@@ -273,6 +276,27 @@ read_external_file(
 	return resident;
 }
 
+[[nodiscard]] std::uint16_t current_dos_date() noexcept
+{
+	const auto now = std::time(nullptr);
+	std::tm local{};
+#if defined(_WIN32)
+	if(localtime_s(&local, &now) != 0) {
+		return 0U;
+	}
+#else
+	if(!localtime_r(&now, &local)) {
+		return 0U;
+	}
+#endif
+	const auto year = std::clamp(local.tm_year + 1900, 1980, 2107) - 1980;
+	return static_cast<std::uint16_t>(
+		(static_cast<std::uint16_t>(year) << 9U) |
+		(static_cast<std::uint16_t>(local.tm_mon + 1) << 5U) |
+		static_cast<std::uint16_t>(local.tm_mday)
+	);
+}
+
 } // namespace
 
 struct ClassicRunner::Impl final {
@@ -280,6 +304,7 @@ struct ClassicRunner::Impl final {
 	ClassicRunnerOperations operations{};
 	ClassicRunnerStatus status = ClassicRunnerStatus::running;
 	ExperienceProfile experience = ExperienceProfile::classic;
+	std::unique_ptr<NewClassicReplayRecorder> replay_recorder{};
 	std::optional<ClassicRunnerError> failure{};
 	std::uint64_t expected_tick_index = 0U;
 	std::optional<TickTimestampNs> last_deadline{};
@@ -287,11 +312,13 @@ struct ClassicRunner::Impl final {
 	Impl(
 		std::shared_ptr<void> owner_,
 		ClassicRunnerOperations operations_,
-		ExperienceProfile experience_
+		ExperienceProfile experience_,
+		std::unique_ptr<NewClassicReplayRecorder> replay_recorder_ = nullptr
 	) noexcept :
 		owner(std::move(owner_)),
 		operations(operations_),
-		experience(experience_)
+		experience(experience_),
+		replay_recorder(std::move(replay_recorder_))
 	{}
 };
 
@@ -344,6 +371,8 @@ ClassicRunner::load(ClassicRunnerRequest request)
 	}
 
 	auto resident = initial_resident(request.seed);
+	auto replay_recorder = request.experience == ExperienceProfile::new_classic
+		? std::make_unique<NewClassicReplayRecorder>(current_dos_date()) : nullptr;
 	auto session = ClassicOpSession::create(
 		std::move(resident),
 		std::make_unique<MainResourceLoader>(paths.data_root),
@@ -354,7 +383,8 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		std::move(request.content.config),
 		std::move(request.content.score),
 		request.fm_available,
-		request.kotohime_compatibility
+		request.kotohime_compatibility,
+		replay_recorder.get()
 	);
 	if(!session) {
 		return std::unexpected(session_error(session.error()));
@@ -368,7 +398,7 @@ ClassicRunner::load(ClassicRunnerRequest request)
 	};
 	auto impl = std::make_unique<Impl>(
 		std::static_pointer_cast<void>(std::move(owner)), operations,
-		request.experience
+		request.experience, std::move(replay_recorder)
 	);
 	return std::unique_ptr<ClassicRunner>(
 		new ClassicRunner(std::move(impl))
@@ -471,6 +501,12 @@ ClassicRunner::compose_shown_surface(
 ClassicRunnerStatus ClassicRunner::status() const noexcept
 {
 	return impl_->status;
+}
+
+std::optional<formats::ReplayDocument> ClassicRunner::take_completed_replay()
+{
+	return impl_->replay_recorder
+		? impl_->replay_recorder->take_completed() : std::nullopt;
 }
 
 std::expected<std::unique_ptr<ClassicRunner>, ClassicRunnerError>

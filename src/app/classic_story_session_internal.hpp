@@ -24,6 +24,8 @@
 
 namespace th03::app {
 
+class NewClassicReplayRecorder;
+
 struct ClassicOpSessionBackend;
 class MainProcessStaticContent;
 
@@ -237,7 +239,8 @@ public:
 		std::span<const std::byte> font_rom,
 		MainlStageTextAssets stage_text,
 		MainlStaffCompiledAssets staff_compiled,
-		std::filesystem::path score_path = "YUME.NEM"
+		std::filesystem::path score_path = "YUME.NEM",
+		NewClassicReplayRecorder *replay_recorder = nullptr
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicStorySession>,
@@ -248,7 +251,8 @@ public:
 		MainCompiledContent compiled_content,
 		std::span<const std::byte> font_rom,
 		std::span<const std::byte> mainl_executable,
-		std::filesystem::path score_path = "YUME.NEM"
+		std::filesystem::path score_path = "YUME.NEM",
+		NewClassicReplayRecorder *replay_recorder = nullptr
 	);
 	~ClassicStorySession();
 
@@ -289,7 +293,8 @@ private:
 		const MainStoryConfig &config,
 		std::shared_ptr<void> backend_owner,
 		ClassicStorySessionBackendOperations operations,
-		ClassicStorySessionTestHooks test_hooks = {}
+		ClassicStorySessionTestHooks test_hooks = {},
+		NewClassicReplayRecorder *replay_recorder = nullptr
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicStorySession>,
@@ -300,7 +305,8 @@ private:
 		std::shared_ptr<const MainProcessStaticContent> static_content,
 		MainlStageTextAssets stage_text,
 		MainlStaffCompiledAssets staff_compiled,
-		std::filesystem::path score_path
+		std::filesystem::path score_path,
+		NewClassicReplayRecorder *replay_recorder
 	);
 
 	std::unique_ptr<Impl> impl_;

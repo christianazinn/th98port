@@ -775,18 +775,9 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 	checkpoints.reserve(reached_count);
 	checkpoint_directory.reserve(reached_count);
 	cursors.reserve(reached_count);
-	std::array<bool, 256> directory_seen{};
 	for(std::size_t index = 0U; index < reached_count; ++index) {
 		const auto directory_offset = checkpoint_directory_offset + index;
 		const auto stage_round = detail::u8(bytes, directory_offset);
-		if(directory_seen[stage_round]) {
-			return std::unexpected(error(
-				ErrorCode::invalid_value,
-				"V13 checkpoint directory contains a duplicate round",
-				directory_offset
-			));
-		}
-		directory_seen[stage_round] = true;
 		const auto offset = static_cast<std::size_t>(snapshot_offset) +
 			(index * replay_v13_checkpoint_size);
 		auto checkpoint = detail::parse_compact_checkpoint(

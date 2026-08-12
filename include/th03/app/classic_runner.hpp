@@ -12,6 +12,7 @@
 #include "th03/app/experience_menu.hpp"
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/main_process.hpp"
+#include "th03/formats/replay.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/app/tick_input.hpp"
 #include "th03/present/main_bomb_palette.hpp"
@@ -135,6 +136,10 @@ public:
 		std::span<present::ComposedPixel, present::graphics_page_pixels> output
 	) const;
 	[[nodiscard]] ClassicRunnerStatus status() const noexcept;
+	// Present only for New Classic after a complete recorded route. Taking the
+	// document transfers it to the save/browser owner and enables a later run.
+	[[nodiscard]] std::optional<formats::ReplayDocument>
+	take_completed_replay();
 
 private:
 	friend struct ClassicRunnerTestAccess;
