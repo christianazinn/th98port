@@ -482,6 +482,19 @@ out\build\msvc-x64\Debug\th03rv.exe X:\path\TH3R00.RPY
 ```
 
 `th03rv` locates `ENEDAT.DAT` beside the replay or in a development harness.
+
+To reconstruct telemetry omitted by historical replay formats after converting
+them to V13, run:
+
+```powershell
+out\build\msvc-x64\Release\th03replay-hydrate.exe `
+  X:\path\input-v13.rpy --enedat X:\path\ENEDAT.DAT `
+  --output X:\path\hydrated-v13.rpy
+```
+
+The hydrator verifies every round summary and checkpoint before publishing its
+output. It fills only zero timer, clear-bonus, and slowdown fields, preserves
+existing telemetry, and leaves V13's optional accelerator tail byte-exact.
 For a standalone installation, pass `--enedat <file>` or set `TH03_ENEDAT`.
 It runs the neutral replay session at unbounded speed, prints every computed
 round split, and reports whether all embedded summaries match.

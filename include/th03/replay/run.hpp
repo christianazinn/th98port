@@ -25,6 +25,11 @@ enum class RunStatus : std::uint8_t {
 struct CompletedRound {
 	std::uint32_t sample_index = 0;
 	CanonicalState state{};
+	// Reconstructed reporting metadata. This never participates in gameplay
+	// state, checkpoint validation, or replay synchronization.
+	std::uint32_t real_frames = 0;
+	std::uint32_t timed_frames = 0;
+	std::optional<MainResultState> result_summary;
 };
 
 struct RoundStartRecord {

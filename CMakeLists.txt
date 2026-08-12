@@ -976,6 +976,15 @@ if(TH03_ENABLE_RTC)
 	th03_set_warnings(th03_platform_rtc)
 endif()
 
+add_library(th03_replay_tools STATIC
+	src/tools/replay_hydrate.cpp
+)
+target_include_directories(th03_replay_tools PUBLIC include)
+target_link_libraries(th03_replay_tools PUBLIC th03_formats th03_replay)
+target_compile_features(th03_replay_tools PUBLIC cxx_std_23)
+set_target_properties(th03_replay_tools PROPERTIES CXX_EXTENSIONS OFF)
+th03_set_warnings(th03_replay_tools)
+
 # Stable MAIN-process/application policy. It owns both the guarded direct-VS
 # process and the complete source-private Classic OP/MAINL/MAIN lifecycle;
 # platform code sees only the narrow public runners and composed surface.
@@ -1166,6 +1175,13 @@ if(WIN32)
 endif()
 th03_set_warnings(th03-replay-video)
 th03_stage_audio_licenses(th03-replay-video)
+
+add_executable(
+	th03replay-hydrate
+	apps/th03replay-hydrate/main.cpp
+)
+target_link_libraries(th03replay-hydrate PRIVATE th03_replay_tools)
+th03_set_warnings(th03replay-hydrate)
 
 if(TH03_ENABLE_SDL)
 	add_executable(th03-app

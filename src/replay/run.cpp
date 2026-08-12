@@ -216,20 +216,82 @@ private:
 };
 
 struct Runner {
+	class TelemetryObserver final : public GameplayObserver {
+	public:
+		void reset_round() noexcept
+		{
+			real_frames = 0U;
+			timed_frames = 0U;
+			timer_active = true;
+			defeat_started_this_step = false;
+			result_summary.reset();
+		}
+
+		void begin_step() noexcept
+		{
+			defeat_started_this_step = false;
+		}
+
+		void count_step(std::uint8_t vsyncs) noexcept
+		{
+			if(!timer_active) {
+				return;
+			}
+			if(defeat_started_this_step) {
+				timer_active = false;
+				return;
+			}
+			real_frames += vsyncs;
+			timed_frames++;
+		}
+
+		void main_feedback_cue_requested(
+			const MainFeedbackCueRequested &cue
+		) noexcept override
+		{
+			if(cue.site == MainFeedbackCueSite::player_defeat_explode) {
+				defeat_started_this_step = true;
+			}
+		}
+
+		void main_result_state(const MainResultState &state) noexcept override
+		{
+			if(state.summary_active) {
+				result_summary = state;
+			}
+		}
+
+		std::uint32_t real_frames = 0U;
+		std::uint32_t timed_frames = 0U;
+		bool timer_active = true;
+		bool defeat_started_this_step = false;
+		std::optional<MainResultState> result_summary;
+	};
+
 	RunResult result{};
 	std::optional<Game> simulation;
 	ProcessId process = ProcessId::main;
 	bool main_terminal = false;
 	std::optional<GameInit> next_story_stage;
 	PauseCoordinator pause;
+	TelemetryObserver telemetry;
 	const GameContent &content;
+
+	CompletedRound completed_round() const
+	{
+		return CompletedRound{
+			.sample_index = result.consumed_samples,
+			.state = simulation->canonical_state(),
+			.real_frames = telemetry.real_frames,
+			.timed_frames = telemetry.timed_frames,
+			.result_summary = telemetry.result_summary,
+		};
+	}
 
 	std::expected<void, Error> handle_step(const StepResult &step)
 	{
 		if(step.status == StepStatus::round_transition) {
-			result.completed_rounds.push_back(CompletedRound{
-				result.consumed_samples, simulation->canonical_state(),
-			});
+			result.completed_rounds.push_back(completed_round());
 			auto next_round = simulation->start_next_round();
 			if(!next_round) {
 				return std::unexpected(next_round.error());
@@ -238,15 +300,14 @@ struct Runner {
 				.sample_index = result.consumed_samples,
 				.observation = simulation->round_start_observation(),
 			});
+			telemetry.reset_round();
 			return {};
 		}
 		if(step.status != StepStatus::terminal) {
 			return {};
 		}
 
-		result.completed_rounds.push_back(CompletedRound{
-			result.consumed_samples, simulation->canonical_state(),
-		});
+		result.completed_rounds.push_back(completed_round());
 		auto finished = simulation->finish_main_process();
 		if(!finished) {
 			return std::unexpected(finished.error());
@@ -269,9 +330,7 @@ struct Runner {
 		if(main_terminal) {
 			return {};
 		}
-		result.completed_rounds.push_back(CompletedRound{
-			result.consumed_samples, simulation->canonical_state(),
-		});
+		result.completed_rounds.push_back(completed_round());
 		auto finished = simulation->finish_main_process();
 		if(!finished) {
 			return std::unexpected(finished.error());
@@ -311,6 +370,7 @@ std::expected<RunResult, Error> run_session(
 		.main_terminal = false,
 		.next_story_stage = std::nullopt,
 		.pause = {},
+		.telemetry = {},
 		.content = content,
 	};
 	runner.result.round_starts.push_back(RoundStartRecord{
@@ -335,7 +395,10 @@ std::expected<RunResult, Error> run_session(
 
 			const auto context = (sample->phase == InputPhase::gameplay)
 				? InputContext::gameplay : InputContext::interstitial;
-			auto step = runner.simulation->step(sample->input, context);
+			runner.telemetry.begin_step();
+			auto step = runner.simulation->step(
+				sample->input, context, &runner.telemetry
+			);
 			if(step.status == StepStatus::invalid_input_context) {
 				runner.result.status = RunStatus::input_context_mismatch;
 				return runner.result;
@@ -353,12 +416,17 @@ std::expected<RunResult, Error> run_session(
 				context == InputContext::interstitial && runner.pause.active()
 			) {
 				if(const auto action = runner.pause.sample(sample->input)) {
-					auto finished = runner.simulation->finish_deferred_frame(*action);
+					auto finished = runner.simulation->finish_deferred_frame(
+						*action, &runner.telemetry
+					);
 					if(!finished) {
 						return std::unexpected(finished.error());
 					}
 					step = *finished;
 				}
+			}
+			if(sample->phase == InputPhase::gameplay) {
+				runner.telemetry.count_step(step.next_step_vsyncs);
 			}
 			runner.result.consumed_samples++;
 			auto handled = runner.handle_step(step);
@@ -430,6 +498,7 @@ std::expected<RunResult, Error> run_session(
 		});
 		runner.process = ProcessId::main;
 		runner.main_terminal = false;
+		runner.telemetry.reset_round();
 		runner.next_story_stage.reset();
 		runner.result.terminal_state.reset();
 		runner.result.terminal_transition.reset();
