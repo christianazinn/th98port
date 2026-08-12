@@ -38,6 +38,7 @@ void expect(bool condition, const char *message)
 struct FakeProcess {
 	static constexpr std::size_t capacity = 128U;
 	std::array<th03::StepStatus, capacity> results{};
+	std::array<std::uint8_t, capacity> result_vsyncs{};
 	std::size_t result_count = 0U;
 	std::size_t result_cursor = 0U;
 	std::array<th03::CoreInput, capacity> inputs{};
@@ -75,7 +76,12 @@ std::expected<th03::StepResult, th03::app::MainProcessError> fake_step(
 	fake.inputs[fake.step_count] = input;
 	fake.contexts[fake.step_count] = input_context;
 	fake.step_count++;
-	return th03::StepResult{fake.results[fake.result_cursor++]};
+	const auto result_index = fake.result_cursor++;
+	auto result = th03::StepResult{fake.results[result_index]};
+	if(fake.result_vsyncs[result_index] != 0U) {
+		result.next_step_vsyncs = fake.result_vsyncs[result_index];
+	}
+	return result;
 }
 
 std::expected<void, th03::app::MainProcessError> fake_repeat(
@@ -333,6 +339,57 @@ void test_app_quit_is_not_gameplay_cancel()
 		fake.step_count == 0U && fake.finish_count == 0U &&
 		fake.transition_count == 0U,
 		"app quit stops before core mutation and never forges a terminal route");
+}
+
+void test_defeat_cadence_holds_every_second_vsync()
+{
+	FakeProcess fake{};
+	for(std::size_t index = 0U; index < 50U; ++index) {
+		fake.results[index] = th03::StepStatus::running;
+	}
+	for(std::size_t index = 0U; index < 48U; ++index) {
+		fake.result_vsyncs[index] = 2U;
+	}
+	fake.result_count = 50U;
+	auto created = MainDirectVsRunnerTestAccess::create(operations(fake));
+	expect(created.has_value(), "defeat-cadence runner constructs");
+	if(!created) {
+		return;
+	}
+	auto &runner = **created;
+	std::size_t advances = 0U;
+	std::size_t holds = 0U;
+	for(std::uint64_t index = 0U; index <= 96U; ++index) {
+		const auto transient = (index == 1U) ?
+			th03::CoreInput{.p1 = 0x0020U} : th03::CoreInput{};
+		const auto consumed = runner.consume(sample(index, index, transient));
+		const bool expected_advance = (index & 1U) == 0U;
+		expect(
+			consumed && consumed->process_advanced == expected_advance &&
+				consumed->surface_changed == expected_advance &&
+				consumed->step_result.has_value() == expected_advance,
+			"defeat cadence alternates one published MAIN frame and one hold"
+		);
+		if(consumed && consumed->process_advanced) {
+			++advances;
+		} else {
+			++holds;
+		}
+	}
+	expect(
+		advances == 49U && holds == 48U && fake.step_count == 49U,
+		"fatal publication through banner consumes 49 MAIN advances in 97 VSyncs"
+	);
+	expect(
+		fake.inputs[1U].p1 == 0U,
+		"input that exists only during a defeat hold is not sampled"
+	);
+	const auto ordinary = runner.consume(sample(97U, 97U));
+	expect(
+		ordinary && ordinary->process_advanced && ordinary->surface_changed &&
+			ordinary->step_result && fake.step_count == 50U,
+		"ordinary one-VSync cadence resumes immediately after the banner frame"
+	);
 }
 
 void test_live_pause_context_and_surface_contract()
@@ -621,6 +678,7 @@ int main()
 	test_repeat_and_terminal_routing();
 	test_terminal_from_final_warning_sample();
 	test_app_quit_is_not_gameplay_cancel();
+	test_defeat_cadence_holds_every_second_vsync();
 	test_live_pause_context_and_surface_contract();
 	test_warning_pause_returns_to_interstitial();
 	test_process_failures_and_transition_domain();

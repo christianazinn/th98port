@@ -595,6 +595,11 @@ struct ObserverAccess {
 
 std::uint32_t state_hash(const DeterministicState &state) noexcept;
 CanonicalState canonical_state(const DeterministicState &state) noexcept;
+StepResult gameplay_step_result(
+	StepStatus status,
+	const CanonicalState &input_boundary,
+	const DeterministicState &state
+) noexcept;
 DeterministicState initialize_first_round(
 	const GameInit &init,
 	std::size_t formation_count = 0U,

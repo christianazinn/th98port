@@ -243,6 +243,8 @@ enum class StepStatus {
 struct StepResult {
 	StepStatus status = StepStatus::simulation_not_implemented;
 	CanonicalState input_boundary_state{};
+	// Publication interval before the next process step, in host VSync samples.
+	std::uint8_t next_step_vsyncs = 1U;
 };
 
 class Game {

@@ -13,9 +13,10 @@ constexpr std::size_t profile_file_bytes = 63866U;
 constexpr std::size_t mz_minimum_header_bytes = 28U;
 constexpr std::size_t mz_page_bytes = 512U;
 constexpr std::size_t track_load_offset = 0xDE84U;
-constexpr std::size_t quit_load_offset = 0xE0F7U;
 constexpr std::size_t choice_payload_bytes = 32U;
 constexpr std::size_t choice_stride_bytes = choice_payload_bytes + 1U;
+constexpr std::size_t quit_load_offset = track_load_offset +
+	(OpMusicRoomTextImport::quit_choice_index * choice_stride_bytes);
 
 constexpr MainExecutableSha256 profile_sha256 = {
 	0xEFU, 0xD8U, 0x58U, 0xAEU, 0xF6U, 0x9AU, 0x24U, 0x0AU,

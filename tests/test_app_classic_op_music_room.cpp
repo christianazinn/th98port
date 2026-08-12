@@ -177,8 +177,9 @@ void test_asset_validation_and_initial_presentation()
 	for(const auto page : {Page::zero, Page::one}) {
 		expect(
 			scene->raster().pixel(page, {16, 40}) == 15U &&
-				scene->raster().pixel(page, {16, 56}) == 3U,
-			"initial selected and unselected labels are drawn on both pages"
+				scene->raster().pixel(page, {16, 56}) == 3U &&
+				scene->raster().pixel(page, {16, 360}) == 3U,
+			"initial selected, unselected, and Quit labels draw on both pages"
 		);
 		expect(
 			scene->raster().pixel(page, {304, 64}) == 15U &&
@@ -720,9 +721,10 @@ void local_original_gate(
 	for(const auto page : {Page::zero, Page::one}) {
 		expect(
 			has_ink(page, {16, 32, 272U, 16U}, 15U) &&
+				has_ink(page, {16, 360, 272U, 16U}, 3U) &&
 				has_ink(page, {304, 64, 320U, 16U}, 15U) &&
 				has_ink(page, {304, 80, 320U, 128U}, 13U),
-			"authenticated Music Room visibly draws labels and comment text"
+			"authenticated Music Room visibly draws track, Quit, and comment text"
 		);
 	}
 	release_to_controls(**music);

@@ -23,9 +23,10 @@ using th03::app::OpMusicRoomTextImport;
 constexpr std::size_t profile_file_bytes = 63866U;
 constexpr std::size_t header_bytes = 4096U;
 constexpr std::size_t track_load_offset = 0xDE84U;
-constexpr std::size_t quit_load_offset = 0xE0F7U;
 constexpr std::size_t payload_bytes = 32U;
 constexpr std::size_t stride_bytes = payload_bytes + 1U;
+constexpr std::size_t quit_load_offset = track_load_offset +
+	(OpMusicRoomTextImport::quit_choice_index * stride_bytes);
 
 std::size_t checks = 0U;
 std::size_t failures = 0U;

@@ -49,6 +49,7 @@ struct MainProcessDriverError final {
 struct MainProcessDriverTick final {
 	StepResult step_result{};
 	bool surface_changed = false;
+	bool process_advanced = false;
 	bool round_started = false;
 	bool terminal = false;
 };
@@ -95,6 +96,7 @@ private:
 	MainProcessDriverStatus status_ = MainProcessDriverStatus::running;
 	InputContext input_context_ = InputContext::gameplay;
 	std::uint8_t warning_samples_remaining_ = 0U;
+	std::uint8_t hold_samples_remaining_ = 0U;
 	std::optional<InputContext> pause_return_context_{};
 	std::optional<SessionTransition> transition_{};
 	std::optional<SessionTransition> continue_transition_{};

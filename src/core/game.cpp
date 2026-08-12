@@ -7,6 +7,31 @@
 
 namespace th03 {
 
+namespace detail {
+
+StepResult gameplay_step_result(
+	StepStatus status,
+	const CanonicalState &input_boundary,
+	const DeterministicState &state
+) noexcept
+{
+	StepResult result{status, input_boundary};
+	if(state.defeat_flag == DefeatFlag::banner) {
+		return result;
+	}
+	for(const auto &player : state.players) {
+		if(player.lose_anim_time >= 1U && player.lose_anim_time <= 0x30U) {
+			// defeat.cpp raises the MAIN loop's VSync wait to 2 while the
+			// fatal animation is pending.
+			result.next_step_vsyncs = 2U;
+			break;
+		}
+	}
+	return result;
+}
+
+} // namespace detail
+
 namespace {
 
 constexpr std::uint16_t input_cancel = 0x1000U;
@@ -42,18 +67,24 @@ StepResult finish_gameplay_frame_after_control(
 {
 	if(detail::warning_interstitial_begin(impl.state, observer)) {
 		impl.warning_interstitial_samples_remaining = 27U;
-		return StepResult{StepStatus::phase_transition, input_boundary};
+		return detail::gameplay_step_result(
+			StepStatus::phase_transition, input_boundary,
+			impl.state
+		);
 	}
 	detail::gameplay_frame_suffix_after_interstitial(impl.state, observer);
 	if(impl.state.round_complete) {
-		return StepResult{
+		return detail::gameplay_step_result(
 			(impl.state.route == 1U)
 				? StepStatus::round_transition
 				: StepStatus::terminal,
 			input_boundary,
-		};
+			impl.state
+		);
 	}
-	return StepResult{StepStatus::running, input_boundary};
+	return detail::gameplay_step_result(
+		StepStatus::running, input_boundary, impl.state
+	);
 }
 
 StepResult finish_gameplay_frame(auto &impl, GameplayObserver *observer)

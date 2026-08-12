@@ -536,9 +536,9 @@ struct ClassicStoryBackend final {
 		}
 		return ClassicStoryBackendTick{
 			.surface_changed = advanced->surface_changed,
-			.input_sampled = true,
+			.input_sampled = advanced->process_advanced,
 			.ready = advanced->terminal,
-			.process_advanced = true,
+			.process_advanced = advanced->process_advanced,
 			.round_started = advanced->round_started,
 			.step_result = advanced->step_result,
 		};

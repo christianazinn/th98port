@@ -1598,9 +1598,9 @@ struct ClassicOpSessionBackend final {
 		}
 		return ClassicOpSessionBackendTick{
 			.surface_changed = tick->surface_changed,
-			.input_sampled = true,
+			.input_sampled = tick->process_advanced,
 			.ready = tick->terminal,
-			.process_advanced = true,
+			.process_advanced = tick->process_advanced,
 			.round_started = tick->round_started,
 		};
 	}

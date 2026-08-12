@@ -518,9 +518,18 @@ void test_defeat_playfield_shake()
 {
 	th03::detail::DeterministicState state{};
 	state.players[0].lose_anim_time = 0x30U;
+	check(
+		th03::detail::gameplay_step_result(
+			th03::StepStatus::running, {}, state
+		).next_step_vsyncs == 2U,
+		"An armed defeat doubles the interval before the next MAIN step"
+	);
 	(void)th03::detail::gameplay_frame_suffix_before_interstitial(state);
 	check(
-		state.playfield_fg_shift_x[0] == 6,
+		state.playfield_fg_shift_x[0] == 6 &&
+			th03::detail::gameplay_step_result(
+				th03::StepStatus::running, {}, state
+			).next_step_vsyncs == 2U,
 		"Defeat frame 0x30 applies the source's positive playfield shift"
 	);
 	state.players[0].lose_anim_time = 1U;
@@ -528,8 +537,18 @@ void test_defeat_playfield_shake()
 	(void)th03::detail::gameplay_frame_suffix_before_interstitial(state);
 	check(
 		state.playfield_fg_shift_x[0] == 0 &&
-		state.players[0].lose_anim_time == 0xFFU,
+		state.players[0].lose_anim_time == 0xFFU &&
+		th03::detail::gameplay_step_result(
+			th03::StepStatus::running, {}, state
+		).next_step_vsyncs == 1U,
 		"The terminal defeat frame restores the playfield shift"
+	);
+	state.players[1].lose_anim_time = 2U;
+	check(
+		th03::detail::gameplay_step_result(
+			th03::StepStatus::running, {}, state
+		).next_step_vsyncs == 1U,
+		"The defeat banner restores ordinary cadence despite a suppressed second timer"
 	);
 }
 

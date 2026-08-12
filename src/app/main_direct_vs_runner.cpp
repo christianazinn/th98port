@@ -181,8 +181,10 @@ MainDirectVsRunner::consume(const LogicalTickInput &sample) noexcept
 		return std::unexpected(*impl_->failure);
 	}
 	consumed.surface_changed = driven->surface_changed;
-	consumed.process_advanced = true;
-	consumed.step_result = driven->step_result;
+	consumed.process_advanced = driven->process_advanced;
+	if(driven->process_advanced) {
+		consumed.step_result = driven->step_result;
+	}
 	consumed.round_started = driven->round_started;
 
 	if(driven->terminal) {

@@ -71,6 +71,10 @@ MainProcessDriver::consume(CoreInput input) noexcept
 			MainProcessDriverErrorCode::not_running
 		));
 	}
+	if(hold_samples_remaining_ != 0U) {
+		--hold_samples_remaining_;
+		return MainProcessDriverTick{};
+	}
 
 	const auto context_before = input_context_;
 	auto stepped = operations_.step(
@@ -84,6 +88,7 @@ MainProcessDriver::consume(CoreInput input) noexcept
 	MainProcessDriverTick result{
 		.step_result = *stepped,
 		.surface_changed = stepped->status != StepStatus::paused,
+		.process_advanced = true,
 	};
 	const bool completed_paused_warning =
 		context_before == InputContext::pause && pause_return_context_ &&
@@ -195,6 +200,12 @@ MainProcessDriver::consume(CoreInput input) noexcept
 			.step_status = stepped->status,
 		});
 		return std::unexpected(*failure_);
+	}
+	if(status_ == MainProcessDriverStatus::running &&
+		stepped->next_step_vsyncs > 1U) {
+		hold_samples_remaining_ = static_cast<std::uint8_t>(
+			stepped->next_step_vsyncs - 1U
+		);
 	}
 
 	return result;
