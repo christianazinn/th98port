@@ -216,6 +216,11 @@ SdlPlatform::create(const SdlPlatformConfig &config)
 			SdlPlatformErrorCode::window_renderer_failed
 		));
 	}
+	if(!SDL_SetRenderVSync(impl->renderer, 1)) {
+		return std::unexpected(error_with_sdl_detail(
+			SdlPlatformErrorCode::present_vsync_failed
+		));
+	}
 	if(!SDL_SetWindowMinimumSize(impl->window, source_width, source_height)) {
 		return std::unexpected(error_with_sdl_detail(
 			SdlPlatformErrorCode::window_setup_failed
@@ -345,6 +350,7 @@ SdlPlatformTestAccess::metrics(const SdlPlatform &platform) noexcept
 	float texture_height = 0.0F;
 	SDL_ScaleMode scale_mode = SDL_SCALEMODE_INVALID;
 	SDL_BlendMode blend_mode = SDL_BLENDMODE_INVALID;
+	int renderer_vsync = SDL_RENDERER_VSYNC_DISABLED;
 	if(!SDL_GetRenderOutputSize(
 		platform.impl_->renderer, &output_width, &output_height
 	) || output_width < 0 || output_height < 0 ||
@@ -352,7 +358,8 @@ SdlPlatformTestAccess::metrics(const SdlPlatform &platform) noexcept
 		!SDL_GetTextureSize(
 			platform.impl_->texture, &texture_width, &texture_height
 		) || !SDL_GetTextureScaleMode(platform.impl_->texture, &scale_mode) ||
-		!SDL_GetTextureBlendMode(platform.impl_->texture, &blend_mode)) {
+		!SDL_GetTextureBlendMode(platform.impl_->texture, &blend_mode) ||
+		!SDL_GetRenderVSync(platform.impl_->renderer, &renderer_vsync)) {
 		return std::unexpected(error_with_sdl_detail(
 			SdlPlatformErrorCode::render_output_failed
 		));
@@ -382,6 +389,7 @@ SdlPlatformTestAccess::metrics(const SdlPlatform &platform) noexcept
 		)),
 		.texture_scale_mode = static_cast<std::int32_t>(scale_mode),
 		.texture_blend_mode = static_cast<std::uint32_t>(blend_mode),
+		.renderer_vsync = renderer_vsync,
 		.video_driver = (video == nullptr) ? std::string_view{} :
 			std::string_view{video},
 		.renderer_name = (renderer == nullptr) ? std::string_view{} :

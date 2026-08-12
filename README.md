@@ -82,6 +82,10 @@ oscillator tolerance. The first logical sample is immediately due, matching
 the source's no-pre-wait process entry; later samples use rational deadlines.
 The pinned source and timing evidence is recorded in
 [`docs/research/PC98_CADENCE.md`](docs/research/PC98_CADENCE.md).
+SDL presentation independently requires interval-one VSync so a complete
+source frame cannot be replaced mid-scanout on the native renderer. A host
+display whose refresh rate differs from 56.423 Hz can still repeat logical
+frames, but that physical scheduling never changes the PC-98 timeline.
 Kotohime's source-uninitialized late Bomb local is normalized from the
 contemporaneous fade byte, following adjacent Kana. Kana's generated path and
 the normalized Kotohime output are `{2*fade, 2*fade, fade}`; stock Kotohime

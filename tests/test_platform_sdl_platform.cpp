@@ -207,6 +207,8 @@ void test_dummy_platform_lifecycle_and_present()
 	SDL_Quit();
 	expect(SDL_WasInit(0U) == 0U,
 		"external SDL test owner performs its own teardown");
+	expect(SDL_SetHint(SDL_HINT_RENDER_VSYNC, "0"),
+		"test establishes a conflicting ambient renderer VSync hint");
 
 	{
 		auto created = SdlPlatform::create(SdlPlatformConfig{
@@ -235,8 +237,9 @@ void test_dummy_platform_lifecycle_and_present()
 		const auto metrics = SdlPlatformTestAccess::metrics(platform);
 		expect(
 			metrics && metrics->video_driver == "dummy" &&
-				metrics->renderer_name == "software",
-			"test gate uses the requested dummy video and software renderer without fallback"
+				metrics->renderer_name == "software" &&
+				metrics->renderer_vsync == 1,
+			"platform overrides ambient policy with interval-one VSync on the requested dummy/software renderer"
 		);
 		expect(
 			metrics && metrics->texture_width == 640.0F &&

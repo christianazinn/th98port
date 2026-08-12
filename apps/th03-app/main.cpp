@@ -405,6 +405,7 @@ const char *name(th03::platform::SdlPlatformErrorCode code) noexcept
 	case th03::platform::SdlPlatformErrorCode::invalid_texture_pitch: return "invalid-texture-pitch";
 	case th03::platform::SdlPlatformErrorCode::surface_conversion_failed: return "surface-conversion-failed";
 	case th03::platform::SdlPlatformErrorCode::render_failed: return "render-failed";
+	case th03::platform::SdlPlatformErrorCode::present_vsync_failed: return "present-vsync-failed";
 	}
 	return "unknown";
 }

@@ -25,6 +25,7 @@ enum class SdlPlatformErrorCode : std::uint8_t {
 	invalid_texture_pitch,
 	surface_conversion_failed,
 	render_failed,
+	present_vsync_failed,
 };
 
 struct SdlPlatformError {
@@ -51,8 +52,9 @@ struct SdlPresentResult {
 
 // Main-thread owner of the SDL video and gamepad subsystems, one resizable
 // window/renderer, and one persistent 640x400 streaming texture. Simulation
-// cadence is intentionally outside this class; presenting never emits or
-// drops a logical tick.
+// cadence is intentionally outside this class. Presentation requests strict
+// interval-one VSync to prevent mid-scanout replacement on native renderers;
+// waiting for a physical refresh never emits or drops a logical tick.
 class SdlPlatform final {
 public:
 	[[nodiscard]] static std::expected<

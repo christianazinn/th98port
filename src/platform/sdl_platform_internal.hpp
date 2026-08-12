@@ -29,6 +29,7 @@ struct SdlPlatformMetrics {
 	std::int32_t texture_access = 0;
 	std::int32_t texture_scale_mode = 0;
 	std::uint32_t texture_blend_mode = 0U;
+	std::int32_t renderer_vsync = 0;
 	std::string_view video_driver{};
 	std::string_view renderer_name{};
 };
