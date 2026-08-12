@@ -655,10 +655,13 @@ void test_pcm_and_fresh_replay_are_deterministic()
 		th03::audio::detail::pmd_mix_to_q31(32'767, 0) == 0x7FFF0000 &&
 		th03::audio::detail::pmd_mix_to_q31(-32'768, 0) ==
 			std::numeric_limits<std::int32_t>::min() &&
+		th03::audio::detail::pmd_mix_to_q31(0, 2'048) == 543 * 65'536 &&
+		th03::audio::detail::pmd_mix_to_q31(0, -2'048) == -543 * 65'536 &&
+		th03::audio::detail::pmd_mix_to_q31(0, 32'764) == 8'686 * 65'536 &&
 		th03::audio::detail::pmd_mix_to_q31(30'000, 30'000) == 0x7FFF0000 &&
 		th03::audio::detail::pmd_mix_to_q31(-30'000, -30'000) ==
 			std::numeric_limits<std::int32_t>::min(),
-		"signed-16 ymfm lanes mix with saturation and promote exactly to Q31"
+		"T98-weighted signed-16 ymfm lanes saturate and promote exactly to Q31"
 	);
 	auto subject = engine();
 	const auto song = synthetic_song();
@@ -699,7 +702,7 @@ void test_pcm_and_fresh_replay_are_deterministic()
 		"generated-song register trace matches the locked cross-compiler hash"
 	);
 	expect(
-		first_pcm_hash == 0x529831C5U,
+		first_pcm_hash == 0x17A82FC5U,
 		"generated-song Q31 PCM matches the locked cross-compiler hash"
 	);
 	expect(song == caller_song, "sequencing never mutates caller-owned song bytes");
@@ -896,6 +899,43 @@ void test_authentic_corpus(const std::filesystem::path &yume1_root)
 		<< " rhythm_key_ons=" << rhythm_key_ons << '\n';
 }
 
+void test_authentic_title_mix(const std::filesystem::path &yume1_root)
+{
+	const auto song = read_external_file(yume1_root / "OP.M");
+	expect(!song.empty(), "authentic title song is readable");
+	if(song.empty()) {
+		return;
+	}
+	auto created = PmdOpnaEngine::create(PmdOpnaConfig{
+		.input_clock_hz = 7'987'200U,
+		.fidelity = PmdOpnaFidelity::minimum,
+	});
+	expect(static_cast<bool>(created), "authentic title mix engine is created");
+	if(!created) {
+		return;
+	}
+	auto subject = std::move(*created);
+	expect(subject.load_song(song) && subject.play(), "authentic title mix starts");
+	std::vector<PmdOpnaStereoSample> pcm(subject.status().native_sample_rate);
+	subject.render_native(pcm);
+	std::int64_t peak = 0;
+	std::size_t saturated = 0U;
+	for(const auto &sample : pcm) {
+		for(const auto value : {sample.left, sample.right}) {
+			peak = std::max(peak, std::abs(static_cast<std::int64_t>(value)));
+			if(value == std::numeric_limits<std::int32_t>::min() ||
+				value == 0x7FFF0000) {
+				++saturated;
+			}
+		}
+	}
+	expect(
+		sample_hash(pcm) == 0x8DCCD4F4U && peak == 1'214'840'832LL &&
+			saturated == 0U,
+		"T98-weighted authentic OP.M opening is deterministic and unclipped"
+	);
+}
+
 void test_authentic_effect_bank(const std::filesystem::path &yume1_root)
 {
 	const auto song = read_external_file(yume1_root / "OP.M");
@@ -959,6 +999,7 @@ int main(int argc, char **argv)
 	test_instances_and_preplay_silence_are_independent();
 	if(argc == 3 && std::string_view(argv[1]) == "--authentic") {
 		test_authentic_corpus(argv[2]);
+		test_authentic_title_mix(argv[2]);
 		test_authentic_effect_bank(argv[2]);
 	} else if(argc != 1) {
 		std::cerr << "usage: th03-audio-pmd-tests [--authentic <YUME1.DAT>]\n";

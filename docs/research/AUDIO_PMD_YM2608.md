@@ -245,12 +245,36 @@ header is not valid C++, so public port headers expose no vendor layout.
 
 The generated hermetic gate locks the first 199,680 maximum-fidelity samples:
 61 register writes, register FNV-1a `85023b32`, promoted Q31 stereo PCM FNV-1a
-`529831c5`, and 12 Timer-B ticks, identical on GCC and MSVC. ymfm's signed-16-
-scale stereo and shared lanes are summed with signed-16 saturation and then
-multiplied exactly by 65,536; this supplies the amplitude domain declared by
+`17a82fc5`, and 12 Timer-B ticks, identical on GCC and MSVC. ymfm's signed-16-
+scale shared SSG lane is weighted by the T98-Next profile described below,
+summed with each stereo FM/ADPCM lane under signed-16 saturation, and then
+multiplied exactly by 65,536. This supplies the amplitude domain declared by
 the signed-32 canonical/SDL boundary. A separate
 byte-silent external gate loads and advances all 21 shipped songs on both and
 independently confirms that 20 issue ADPCM-A rhythm key-ons.
+
+### T98-Next reference mix
+
+The private testing build uses T98-Next 13.1th's configured Sound86/FMGEN mix
+as a practical listening reference. This is deliberately narrower than a claim
+about the physical PC-9801-86 analog output. The supplied `MAIN.INI` has FM,
+rhythm, and PCM at 20 and SSG at 14. Read-only disassembly of the supplied
+`Sound86.nhw` shows that initialization subtracts 20 from each value. Its SSG
+setter maps -6 to attenuation-table index 4; the table is generated as
+`2^(-index/8) * 65536`, and each of the three SSG channels is shifted by 4
+before summation. Full SSG output at that setting is therefore
+`3 * 2896 = 8688`, against the FM engine's nominal six-channel full scale of
+32768. The canonical adapter applies that reduced ratio exactly as `543/2048`
+to ymfm's shared SSG lane before saturation and Q31 promotion.
+
+This matters for `OP.M`: before weighting, the first rendered interval had a
+per-stereo-lane absolute mean of about 2091 but a shared-SSG absolute mean of
+about 3438, so the equal-gain adapter let accompaniment mask the FM melody.
+The weighted one-second authentic opening is unclipped, peaks at 1,214,840,832
+in Q31, and has cross-toolchain FNV-1a `8dccd4f4`. Register/timer behavior is
+unchanged. The supplied 16 KiB `SOUND.ROM` is board firmware, not the exact
+8 KiB YM2608 ADPCM-A rhythm image accepted by the port, so it is not rebound as
+rhythm data.
 
 The external FM-effect path is a marked TH03 extraction delta, not an upstream
 capability claim. A port-owned validator accepts the 128-word pointer table,
@@ -518,11 +542,12 @@ Hz. The current minimum-fidelity engine produces exactly 166,400 Hz
 every 52 input samples. `PmdFixedResampler` implements that one ratio only; it
 is not a general host-device rate converter.
 
-The one-chip mixer promotes ymfm's signed-16-scale output into Q31 before this
-resampler. Without that promotion, SDL's S32 conversion interprets a nominal
-32767 sample against 2^31 full scale and makes the result effectively silent.
-The exact digital promotion is locked; captured PC-98 analog gain remains a
-separate hardware comparison.
+The one-chip mixer applies the documented T98-Next SSG weight and promotes
+ymfm's signed-16-scale result into Q31 before this resampler. Without that
+promotion, SDL's S32 conversion interprets a nominal 32767 sample against 2^31
+full scale and makes the result effectively silent. The digital weighting and
+promotion are locked; captured PC-98 analog gain remains a separate hardware
+comparison.
 
 The checked-in port-owned generator produces 15 signed-Q30 phases of a 128-tap
 Blackman-windowed sinc with a 20 kHz cutoff. Every quantized phase is corrected
