@@ -547,6 +547,15 @@ if(TH03_ENABLE_SDL)
 endif()
 
 if(BUILD_TESTING)
+	find_package(Python3 COMPONENTS Interpreter)
+	if(Python3_Interpreter_FOUND)
+		add_test(
+			NAME th03-pixel-frame-comparator-tests
+			COMMAND ${Python3_EXECUTABLE}
+				${CMAKE_CURRENT_SOURCE_DIR}/tests/test_compare_pixel_frames.py
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/compare_pixel_frames.py
+		)
+	endif()
 	find_program(TH03_PWSH_EXECUTABLE NAMES pwsh)
 	if(TH03_PWSH_EXECUTABLE)
 		add_test(

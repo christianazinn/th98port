@@ -1,9 +1,11 @@
 # Classic / New Classic pixel verification
 
-The port has one maintained daily presentation oracle and one deliberately
-separate PC-98 raw-capture plan. The first is implemented and automated. The
-second is the remaining emulator-instrumentation parcel; this document does
-not claim that a guest producer exists yet.
+The port has two maintained host-side presentation oracles and one deliberately
+separate PC-98 raw-capture plan. The compact state stream and exact published
+RGB stream are implemented and automated. Lossless DOSBox-X video can be
+normalized into the same exact-frame comparator. The publication-aligned guest
+producer is the remaining emulator-instrumentation parcel; this document does
+not claim pixel parity until that producer aligns the two timelines.
 
 ## Host-publication fingerprints (`T3PXH2`)
 
@@ -78,7 +80,89 @@ field decisively proves a published-state difference, but a finite hash match
 does not prove equality of every pixel. Use the same content, seed, language,
 reduced-flash policy, input/replay, and audio-status timeline on both sides.
 
-## Raw PC-98 oracle (`T3PIX1`, planned)
+## Exact host RGB publications (`T3RGB1`)
+
+Set `TH03_PIXEL_ORACLE_RGB_DIR` to a new ignored directory before launching
+`th03-app`. Each successful SDL publication is committed as one binary PPM
+(`P6`, 640x400, RGB24) plus one manifest row. The bytes are copied from the
+completed 640x400 conversion buffer before SDL scaling or texture upload, so
+window size, monitor scaling, GPU backend, and screenshot timing do not enter
+the evidence.
+
+```powershell
+$env:TH03_PIXEL_ORACLE_RGB_DIR = "$PWD\.scratch\pix\classic-rgb"
+.\out\build\msvc-x64-sdl\Release\th03-app.exe --classic <normal arguments>
+```
+
+`T3RGB1.tsv` carries the same publication/tick/overlay/page/palette identity as
+`T3PXH2`, the FNV-1a/64 of the actual RGB payload, and the relative PPM path.
+Frames are written to a temporary file before present and renamed only after a
+successful `SDL_RenderPresent`; failed publications cannot create manifest
+gaps or stale accepted frames. The output directory must be empty so
+independent captures cannot be mixed.
+
+Compare two exact streams with:
+
+```powershell
+python tools\compare_pixel_frames.py `
+  --base .scratch\pix\classic-rgb\T3RGB1.tsv `
+  --candidate .scratch\pix\new-classic-rgb\T3RGB1.tsv `
+  --report .scratch\pix\classic-vs-new-classic.json `
+  --diff-directory .scratch\pix\classic-vs-new-classic-diff
+```
+
+The comparator validates every declared payload hash and compares the RGB
+bytes themselves. On the first mismatch it reports the differing-pixel count,
+first `(x,y)` and both RGB triples, bounding box, maximum channel delta, and
+mean absolute channel delta; optional PPMs retain the base, candidate, and
+amplified absolute diff. Consecutive duplicate scanouts are collapsed by
+default so an emulator that submits unchanged frames can be compared with the
+port's change-only publication stream. Prefix/suffix comparisons require an
+explicit flag.
+
+The exact stream is intentionally opt-in: one frame occupies 768,015 bytes,
+so a long full-game capture belongs under ignored scratch storage.
+
+## Lossless emulator-video ingestion (`T3EMU1`)
+
+Both `tools\emu\run_replay.ps1` and `run_t3case.ps1` accept `-VideoCapture`.
+The switch requires source-rate rendering (no `-Turbo` or force-stop split
+target), forces the visible SDL renderer even for unattended runs, and asks the
+pinned DOSBox-X build for ZMBV AVI capture around the guest command. Capture
+artifacts are SHA-256 inventoried beside the ordinary oracle outputs.
+Pass the same authenticated `FONT.ROM` used by the native run with
+`-FontRomPath`; otherwise DOSBox-X may silently fall back to FREECG98 and make
+all guest TRAM text pixels incomparable.
+
+Normalize an AVI without scaling or lossy conversion:
+
+```powershell
+python th03-port\tools\import_emulator_video.py `
+  --video .scratch\emu\t3case\<run>\capture\command_000.avi `
+  --output .scratch\pix\guest-th3r03
+```
+
+The importer requires an exact 640x400 stream, decodes losslessly through
+`ffmpeg`, verifies every PPM, collapses consecutive duplicate scanouts, and
+writes `T3EMU1.tsv` plus source metadata and SHA-256. `compare_pixel_frames.py`
+accepts `T3EMU1` and `T3RGB1` on either side.
+
+The wrappers require an AVI to exist before reporting capture success. They
+record `video_capture_status=ready|missing|prepared` in `run-info.json`, append
+`EXIT` after the synchronous `DX-CAPTURE` command so a completed guest command
+closes the emulator cleanly, and report `result=capture-missing` if the selected
+DOSBox-X binary silently accepts `DX-CAPTURE` without an encoder. The two
+installed 2026.05.02 MinGW binaries on the development workstation currently
+take that `missing` path; a scratch build whose configure report explicitly
+enables screenshots/movie recording is being used for the external gate.
+
+This provides a useful review and first-divergence mechanism, but an AVI frame
+still lacks an authenticated TH03 publication identity. It must not be aligned
+by guessed wall-clock time and called parity. The raw guest producer below is
+what turns the RGB comparison into a source-boundary gate across title, menus,
+selection, MAINL, gameplay, result, and ending scenes.
+
+## Raw PC-98 oracle (`T3PIX1`, next layer)
 
 The authoritative external pixel gate will be a versioned raw capture written
 by a devtools-only PC-98 build into an emulator-mounted host directory. It is
@@ -103,15 +187,16 @@ The implementation sequence is:
 1. freeze the `T3PIX1` reader/writer/comparator and native raw-state adapter;
 2. add a disposable `TH03_PIXEL_CAPTURE` guest profile at Replay Patch 0.4.10's
    publication boundaries, then at the equivalent stock/Anniversary boundaries;
-3. run locked no-input and V13 cases through `tools\emu` with an ignored mounted
-   capture directory; and
+3. run locked no-input and V13 cases through `tools\emu`, correlate each raw
+   guest publication with the lossless scanout frame, and compare against
+   `T3RGB1`; and
 4. track only identities, SHA-256 digests, verdicts, and first-divergence
    metadata, never original capture payloads.
 
 Guest instrumentation must remain devtools-only on a disposable branch. It
 must not enter the shipping Replay Patch executable or become implementation
-authority. `T3PXH2` is the practical daily regression mechanism while this
-raw producer remains future work.
+authority. `T3PXH2` plus `T3RGB1` are the practical daily regression mechanisms
+while this raw producer remains future work.
 
 ## Why not screenshots?
 

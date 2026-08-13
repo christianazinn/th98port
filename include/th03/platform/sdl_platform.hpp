@@ -29,6 +29,8 @@ enum class SdlPlatformErrorCode : std::uint8_t {
 	present_vsync_failed,
 	oracle_log_open_failed,
 	oracle_log_write_failed,
+	oracle_rgb_open_failed,
+	oracle_rgb_write_failed,
 };
 
 struct SdlPlatformError {
@@ -49,6 +51,11 @@ struct SdlPlatformConfig {
 	// source-domain and complete host-input hashes for PC-98 visual-oracle
 	// comparison. Consumed synchronously by create().
 	std::string oracle_log_path{};
+	// Optional developer-only directory for one exact 640x400 PPM per
+	// successful host publication plus a T3RGB1 identity manifest. The
+	// directory may exist but its manifest and frame names must be unused, so
+	// separate runs cannot silently mix. Consumed synchronously by create().
+	std::string oracle_rgb_directory{};
 };
 
 struct SdlPresentResult {

@@ -43,6 +43,7 @@ namespace {
 
 constexpr std::uint64_t maximum_idle_delay_ns = 1'000'000U;
 constexpr const char *pixel_oracle_log_environment = "TH03_PIXEL_ORACLE_LOG";
+constexpr const char *pixel_oracle_rgb_environment = "TH03_PIXEL_ORACLE_RGB_DIR";
 
 [[nodiscard]] th03::platform::SdlPlatformConfig platform_config()
 {
@@ -55,10 +56,21 @@ constexpr const char *pixel_oracle_log_environment = "TH03_PIXEL_ORACLE_LOG";
 		config.oracle_log_path = path;
 	}
 	std::free(path);
+	path = nullptr;
+	path_bytes = 0U;
+	if(_dupenv_s(&path, &path_bytes, pixel_oracle_rgb_environment) == 0 &&
+		path != nullptr) {
+		config.oracle_rgb_directory = path;
+	}
+	std::free(path);
 #else
 	if(const char *const path = std::getenv(pixel_oracle_log_environment);
 		path != nullptr) {
 		config.oracle_log_path = path;
+	}
+	if(const char *const path = std::getenv(pixel_oracle_rgb_environment);
+		path != nullptr) {
+		config.oracle_rgb_directory = path;
 	}
 #endif
 	return config;
@@ -700,6 +712,8 @@ const char *name(th03::platform::SdlPlatformErrorCode code) noexcept
 	case th03::platform::SdlPlatformErrorCode::present_vsync_failed: return "present-vsync-failed";
 	case th03::platform::SdlPlatformErrorCode::oracle_log_open_failed: return "oracle-log-open-failed";
 	case th03::platform::SdlPlatformErrorCode::oracle_log_write_failed: return "oracle-log-write-failed";
+	case th03::platform::SdlPlatformErrorCode::oracle_rgb_open_failed: return "oracle-rgb-open-failed";
+	case th03::platform::SdlPlatformErrorCode::oracle_rgb_write_failed: return "oracle-rgb-write-failed";
 	}
 	return "unknown";
 }

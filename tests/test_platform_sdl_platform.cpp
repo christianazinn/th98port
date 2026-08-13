@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <span>
 #include <string>
 #include <string_view>
@@ -197,9 +198,11 @@ void test_dummy_platform_lifecycle_and_present()
 	const auto oracle_root = std::filesystem::temp_directory_path() /
 		("th03-platform-pixel-oracle-test-" + std::to_string(nonce));
 	const auto oracle_path = oracle_root / "capture.tsv";
+	const auto rgb_root = oracle_root / "rgb";
 	std::error_code remove_error;
 	std::filesystem::remove_all(oracle_root, remove_error);
 	const auto oracle_path_text = oracle_path.string();
+	const auto rgb_root_text = rgb_root.string();
 	expect(SDL_VERSION == SDL_VERSIONNUM(3, 4, 10),
 		"platform tests compile against exactly SDL 3.4.10");
 	expect(SDL_GetVersion() == SDL_VERSIONNUM(3, 4, 10),
@@ -241,6 +244,7 @@ void test_dummy_platform_lifecycle_and_present()
 			.initial_height = 400U,
 			.hidden = true,
 			.oracle_log_path = oracle_path_text,
+			.oracle_rgb_directory = rgb_root_text,
 		});
 		expect(static_cast<bool>(created),
 			"pinned dummy/software SDL platform is created");
@@ -248,6 +252,8 @@ void test_dummy_platform_lifecycle_and_present()
 			return;
 		}
 		auto &platform = **created;
+		expect(platform.oracle_enabled(),
+			"state and RGB capture make publication-preserving oracle policy observable");
 		expect(platform.window_id() != 0U,
 			"opaque platform exposes the stable numeric window identity needed by its input mapper");
 		const auto duplicate = SdlPlatform::create(SdlPlatformConfig{
@@ -352,6 +358,78 @@ void test_dummy_platform_lifecycle_and_present()
 				rows[1U].find("\t1122334455667788\t8877665544332211\t") !=
 					std::string::npos && rows[5U].starts_with("T3PXH\t2\t4\tna\t0\t"),
 			"T3PXH2 records five successful publications with aligned schema, logical identity, and source fingerprints"
+		);
+	}
+	{
+		std::ifstream manifest{rgb_root / "T3RGB1.tsv"};
+		std::vector<std::string> rows{};
+		for(std::string row; std::getline(manifest, row);) {
+			rows.push_back(std::move(row));
+		}
+		expect(
+			rows.size() == 6U && rows[0U] ==
+				"stream\tschema\tpublication\tlogical_tick\tcoalesced_ticks\t"
+				"overlay\treduced_flash\tsource_fnv64\traster_fnv64\t"
+				"tram_fnv64\tshown_page\traster_mode\tscroll_y\ttone\t"
+				"rgb_fnv64\tfile" &&
+				rows[1U].starts_with("T3RGB\t1\t0\t17\t1\t0\t0\t") &&
+				rows[1U].ends_with("\tframe-00000000.ppm") &&
+				rows[5U].starts_with("T3RGB\t1\t4\tna\t0\t"),
+			"T3RGB1 records one exact frame identity for every successful publication"
+		);
+		std::ifstream first{
+			rgb_root / "frame-00000000.ppm", std::ios::binary
+		};
+		const std::vector<std::uint8_t> bytes{
+			std::istreambuf_iterator<char>(first),
+			std::istreambuf_iterator<char>()
+		};
+		constexpr std::string_view ppm_header{"P6\n640 400\n255\n"};
+		expect(
+			bytes.size() == ppm_header.size() + (pixel_count * 3U) &&
+			std::equal(ppm_header.begin(), ppm_header.end(), bytes.begin()) &&
+			bytes[ppm_header.size() + 0U] == 255U &&
+			bytes[ppm_header.size() + 1U] == 0U &&
+			bytes[ppm_header.size() + 2U] == 136U &&
+			bytes[bytes.size() - 3U] == 255U &&
+			bytes[bytes.size() - 2U] == 0U &&
+			bytes[bytes.size() - 1U] == 136U,
+			"T3RGB1 PPM preserves every exact RGB byte from first through final pixel"
+		);
+		expect(
+			std::filesystem::file_size(rgb_root / "frame-00000001.ppm") ==
+				bytes.size() &&
+				std::filesystem::file_size(rgb_root / "frame-00000004.ppm") ==
+				bytes.size() &&
+				!std::filesystem::exists(rgb_root / "frame-00000005.ppm") &&
+				!std::filesystem::exists(rgb_root / "frame-00000005.ppm.tmp"),
+			"failed source conversion emits no raw frame and later publication stays contiguous"
+		);
+	}
+	{
+		const auto rgb_only_root = oracle_root / "rgb-only";
+		auto created = SdlPlatform::create(SdlPlatformConfig{
+			.title = "th03 SDL RGB-only oracle test",
+			.initial_width = 640U,
+			.initial_height = 400U,
+			.hidden = true,
+			.oracle_rgb_directory = rgb_only_root.string(),
+		});
+		expect(created && (*created)->oracle_enabled(),
+			"RGB-only capture preserves every source publication instead of host catch-up coalescing");
+	}
+	{
+		const auto reused = SdlPlatform::create(SdlPlatformConfig{
+			.title = "th03 SDL reused RGB oracle test",
+			.initial_width = 640U,
+			.initial_height = 400U,
+			.hidden = true,
+			.oracle_rgb_directory = (oracle_root / "rgb-only").string(),
+		});
+		expect(
+			!reused && reused.error().code ==
+				SdlPlatformErrorCode::oracle_rgb_open_failed,
+			"RGB capture rejects a nonempty directory instead of mixing independent runs"
 		);
 	}
 	std::filesystem::remove_all(oracle_root, remove_error);

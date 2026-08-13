@@ -251,6 +251,13 @@ and emits a structured JSON verdict. See `docs\PIXEL_ORACLE.md` for commands,
 the proven two-run/cross-compiler gate, and the explicitly still-planned raw
 PC-98 planar producer; the lightweight hash stream is not represented as
 collision-proof pixel evidence.
+Setting `TH03_PIXEL_ORACLE_RGB_DIR` additionally commits the exact RGB bytes of
+every successful 640x400 host publication as a `T3RGB1` manifest plus lossless
+PPMs. `tools\compare_pixel_frames.py` compares the bytes, localizes the first
+differing pixel and bounding box, and accepts losslessly imported DOSBox-X
+`T3EMU1` video streams. This closes repeat-run/cross-compiler pixel equality and
+provides the external comparator; source-boundary alignment with the planned
+devtools-only PC-98 producer remains required before claiming guest parity.
 Unless overridden with `--config`, `--score`, and `--replay-root`, Classic
 stores `YUME.CFG` and `YUME.NEM`; New Classic derives `YUME.NEW.NEM` beside
 the selected `--score` path and stores `TH3KEY.CFG` plus the `REPLAY`

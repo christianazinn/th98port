@@ -4,6 +4,7 @@
 #include "sdl_runtime_internal.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -11,6 +12,7 @@
 #include <iomanip>
 #include <limits>
 #include <memory>
+#include <sstream>
 #include <span>
 #include <string>
 #include <string_view>
@@ -89,13 +91,120 @@ void hash_palette(
 } // namespace
 
 struct SdlPlatform::Impl {
+	struct PreparedRgbFrame {
+		std::filesystem::path temporary{};
+		std::filesystem::path final{};
+		std::string filename{};
+		std::uint64_t hash = 0U;
+	};
+
 	SDL_Window *window = nullptr;
 	SDL_Renderer *renderer = nullptr;
 	SDL_Texture *texture = nullptr;
 	bool runtime_lease = false;
 	std::ofstream oracle_log{};
 	std::uint64_t oracle_publication = 0U;
+	std::filesystem::path oracle_rgb_directory{};
+	std::ofstream oracle_rgb_manifest{};
+	std::uint64_t oracle_rgb_publication = 0U;
 	bool oracle_hash_lease = false;
+
+	[[nodiscard]] std::optional<PreparedRgbFrame> prepare_rgb_frame(
+		const void *pixels,
+		int pitch_bytes
+	)
+	{
+		if(!oracle_rgb_manifest.is_open()) {
+			return PreparedRgbFrame{};
+		}
+		std::ostringstream filename;
+		filename << "frame-" << std::setfill('0') << std::setw(8)
+			<< std::dec << oracle_rgb_publication << ".ppm";
+		PreparedRgbFrame frame{};
+		frame.filename = filename.str();
+		frame.final = oracle_rgb_directory / frame.filename;
+		frame.temporary = frame.final;
+		frame.temporary += ".tmp";
+		std::ofstream output{frame.temporary, std::ios::binary | std::ios::trunc};
+		output << "P6\n" << source_width << ' ' << source_height << "\n255\n";
+		if(!output) {
+			output.close();
+			std::error_code ignored;
+			std::filesystem::remove(frame.temporary, ignored);
+			return std::nullopt;
+		}
+		const auto *const bytes = static_cast<const std::uint8_t *>(pixels);
+		frame.hash = fnv_offset_basis;
+		std::array<std::uint8_t, present::graphics_width * 3U> rgb_row{};
+		for(int y = 0; y < source_height; ++y) {
+			const auto *const row = bytes +
+				(static_cast<std::size_t>(y) * static_cast<std::size_t>(pitch_bytes));
+			for(int x = 0; x < source_width; ++x) {
+				const auto *const pixel = row + (static_cast<std::size_t>(x) * 4U);
+				for(std::size_t channel = 0U; channel < 3U; ++channel) {
+					hash_byte(frame.hash, pixel[channel]);
+					rgb_row[(static_cast<std::size_t>(x) * 3U) + channel] =
+						pixel[channel];
+				}
+			}
+			output.write(
+				reinterpret_cast<const char *>(rgb_row.data()),
+				static_cast<std::streamsize>(rgb_row.size())
+			);
+		}
+		output.close();
+		if(!output) {
+			std::error_code ignored;
+			std::filesystem::remove(frame.temporary, ignored);
+			return std::nullopt;
+		}
+		return frame;
+	}
+
+	[[nodiscard]] bool publish_rgb_frame(
+		const present::SourceSurface &surface,
+		SdlPresentationOracleIdentity identity,
+		const PreparedRgbFrame &frame
+	)
+	{
+		if(!oracle_rgb_manifest.is_open()) {
+			return true;
+		}
+		std::error_code error;
+		std::filesystem::rename(frame.temporary, frame.final, error);
+		if(error) {
+			std::filesystem::remove(frame.temporary, error);
+			return false;
+		}
+		oracle_rgb_manifest << "T3RGB\t1\t" << std::dec
+			<< oracle_rgb_publication++ << '\t';
+		if(identity.logical_tick) {
+			oracle_rgb_manifest << *identity.logical_tick;
+		} else {
+			oracle_rgb_manifest << "na";
+		}
+		oracle_rgb_manifest << '\t' << identity.coalesced_ticks << '\t'
+			<< static_cast<unsigned>(surface.host_overlay) << '\t'
+			<< static_cast<unsigned>(surface.reduced_flash_applied) << '\t'
+			<< std::hex << std::setfill('0') << std::setw(16)
+			<< detail::source_surface_state_hash(surface) << '\t';
+		if(surface.oracle_hashes) {
+			oracle_rgb_manifest << std::setw(16)
+				<< surface.oracle_hashes->raster_display << '\t'
+				<< std::setw(16) << surface.oracle_hashes->tram_visible;
+		} else {
+			oracle_rgb_manifest << "na\tna";
+		}
+		oracle_rgb_manifest << std::dec << '\t'
+			<< static_cast<unsigned>(surface.shown_page) << '\t'
+			<< static_cast<unsigned>(surface.raster_mode) << '\t'
+			<< surface.effective_scroll_y << '\t'
+			<< surface.palette_tone << '\t'
+			<< std::hex << std::setw(16) << frame.hash << '\t'
+			<< frame.filename << '\n';
+		oracle_rgb_manifest.flush();
+		return static_cast<bool>(oracle_rgb_manifest);
+	}
 
 	[[nodiscard]] bool record_oracle(
 		const present::SourceSurface &surface,
@@ -373,6 +482,39 @@ SdlPlatform::create(const SdlPlatformConfig &config)
 				.code = SdlPlatformErrorCode::oracle_log_open_failed,
 			});
 		}
+	}
+	if(!config.oracle_rgb_directory.empty()) {
+		impl->oracle_rgb_directory = std::filesystem::path{
+			config.oracle_rgb_directory
+		};
+		std::error_code error;
+		std::filesystem::create_directories(impl->oracle_rgb_directory, error);
+		const auto manifest = impl->oracle_rgb_directory / "T3RGB1.tsv";
+		const bool directory_empty = !error &&
+			(std::filesystem::directory_iterator{
+				impl->oracle_rgb_directory, error
+			} == std::filesystem::directory_iterator{});
+		if(error || !directory_empty) {
+			return std::unexpected(SdlPlatformError{
+				.code = SdlPlatformErrorCode::oracle_rgb_open_failed,
+			});
+		}
+		impl->oracle_rgb_manifest.open(
+			manifest, std::ios::out | std::ios::trunc
+		);
+		impl->oracle_rgb_manifest <<
+			"stream\tschema\tpublication\tlogical_tick\tcoalesced_ticks\t"
+			"overlay\treduced_flash\tsource_fnv64\traster_fnv64\t"
+			"tram_fnv64\tshown_page\traster_mode\tscroll_y\ttone\t"
+			"rgb_fnv64\tfile\n";
+		impl->oracle_rgb_manifest.flush();
+		if(!impl->oracle_rgb_manifest) {
+			return std::unexpected(SdlPlatformError{
+				.code = SdlPlatformErrorCode::oracle_rgb_open_failed,
+			});
+		}
+	}
+	if(impl->oracle_log.is_open() || impl->oracle_rgb_manifest.is_open()) {
 		present::set_source_surface_oracle_hashes_enabled(true);
 		impl->oracle_hash_lease = true;
 	}
@@ -393,16 +535,32 @@ std::expected<SdlPresentResult, SdlPlatformError> SdlPlatform::present(
 		));
 	}
 	const auto converted = detail::write_locked_rgba(pixels, pitch, surface);
+	std::optional<Impl::PreparedRgbFrame> rgb_frame{};
+	if(converted && impl_->oracle_rgb_manifest.is_open()) {
+		rgb_frame = impl_->prepare_rgb_frame(pixels, pitch);
+	}
 	SDL_UnlockTexture(impl_->texture);
 	if(!converted) {
 		return std::unexpected(converted.error());
 	}
+	if(impl_->oracle_rgb_manifest.is_open() && !rgb_frame) {
+		return std::unexpected(SdlPlatformError{
+			.code = SdlPlatformErrorCode::oracle_rgb_write_failed,
+		});
+	}
+	const auto discard_rgb_frame = [&rgb_frame]() noexcept {
+		if(rgb_frame) {
+			std::error_code ignored;
+			std::filesystem::remove(rgb_frame->temporary, ignored);
+		}
+	};
 
 	int output_width = 0;
 	int output_height = 0;
 	if(!SDL_GetRenderOutputSize(
 		impl_->renderer, &output_width, &output_height
 	) || output_width < 0 || output_height < 0) {
+		discard_rgb_frame();
 		return std::unexpected(error_with_sdl_detail(
 			SdlPlatformErrorCode::render_output_failed
 		));
@@ -413,24 +571,33 @@ std::expected<SdlPresentResult, SdlPlatformError> SdlPlatform::present(
 	);
 	if(!SDL_SetRenderDrawColor(impl_->renderer, 0U, 0U, 0U, 0xFFU) ||
 		!SDL_RenderClear(impl_->renderer)) {
+		discard_rgb_frame();
 		return std::unexpected(error_with_sdl_detail(
 			SdlPlatformErrorCode::render_failed
 		));
 	}
 	if(destination &&
 		!SDL_RenderTexture(impl_->renderer, impl_->texture, nullptr, nullptr)) {
+		discard_rgb_frame();
 		return std::unexpected(error_with_sdl_detail(
 			SdlPlatformErrorCode::render_failed
 		));
 	}
 	if(!SDL_RenderPresent(impl_->renderer)) {
+		discard_rgb_frame();
 		return std::unexpected(error_with_sdl_detail(
 			SdlPlatformErrorCode::render_failed
 		));
 	}
 	if(!impl_->record_oracle(surface, identity)) {
+		discard_rgb_frame();
 		return std::unexpected(SdlPlatformError{
 			.code = SdlPlatformErrorCode::oracle_log_write_failed,
+		});
+	}
+	if(rgb_frame && !impl_->publish_rgb_frame(surface, identity, *rgb_frame)) {
+		return std::unexpected(SdlPlatformError{
+			.code = SdlPlatformErrorCode::oracle_rgb_write_failed,
 		});
 	}
 	return SdlPresentResult{destination};
@@ -438,7 +605,7 @@ std::expected<SdlPresentResult, SdlPlatformError> SdlPlatform::present(
 
 bool SdlPlatform::oracle_enabled() const noexcept
 {
-	return impl_->oracle_log.is_open();
+	return impl_->oracle_log.is_open() || impl_->oracle_rgb_manifest.is_open();
 }
 
 std::uint32_t SdlPlatform::window_id() const noexcept
