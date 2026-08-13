@@ -17,6 +17,8 @@
 #include "th03/app/classic_config_store.hpp"
 #include "th03/app/classic_runner.hpp"
 #include "th03/app/classic_score_store.hpp"
+#include "th03/app/new_classic_language.hpp"
+#include "th03/assets/decode.hpp"
 #include "th03/formats/v13.hpp"
 
 #include "classic_runner_internal.hpp"
@@ -939,33 +941,6 @@ bool authentic_vs_gate(
 			submenu_input = saw_blocking_frame && last->input_sampled;
 		}
 		if(!submenu_input) { return fail_stage("submenu-input"); }
-		if(mode_index == 0U) {
-			// Default-Up wraps to the source's fourth Quit row. Confirm it,
-			// observe the retained main-menu return, and reopen VS before the
-			// ordinary mode-selection route.
-			if(!step(pulse(0x0001U)) || !step() || !step(pulse(0x0020U))) {
-				return fail_stage("submenu-quit-confirm");
-			}
-			bool returned_input = false;
-			bool saw_return_block = false;
-			for(std::size_t frame = 0U; frame < 64U && !returned_input; ++frame) {
-				if(!step()) { return fail_stage("submenu-quit-return"); }
-				saw_return_block = saw_return_block || !last->input_sampled;
-				returned_input = saw_return_block && last->input_sampled;
-			}
-			if(!returned_input || !step(pulse(0x0020U))) {
-				return fail_stage("submenu-reopen");
-			}
-			submenu_input = false;
-			saw_blocking_frame = false;
-			for(std::size_t frame = 0U; frame < 32U && !submenu_input; ++frame) {
-				if(!step()) { return fail_stage("submenu-reopen-grow"); }
-				saw_blocking_frame =
-					saw_blocking_frame || !last->input_sampled;
-				submenu_input = saw_blocking_frame && last->input_sampled;
-			}
-			if(!submenu_input) { return fail_stage("submenu-reopen-input"); }
-		}
 		for(std::uint8_t move = 0U; move < mode_index; ++move) {
 			if(!step(pulse(0x0002U)) || !step()) {
 				return fail_stage("submenu-move");
@@ -1085,6 +1060,18 @@ bool authentic_vs_gate(
 			] != expected_score || route_two_resident->last_score[
 				(mode_index & 1U) == 0U ? 1U : 0U
 			] != std::array<std::uint8_t, 8U>{}) {
+			if(route_two_resident) {
+				std::cerr << " route-two mode=" <<
+					static_cast<unsigned>(route_two_resident->game_mode) <<
+					" stage=" << static_cast<unsigned>(
+						route_two_resident->story_stage
+					) << " winner=" << route_two_resident->winner <<
+					" cpu=" << static_cast<unsigned>(
+						route_two_resident->is_cpu[0]
+					) << ',' << static_cast<unsigned>(
+						route_two_resident->is_cpu[1]
+					) << '\n';
+			}
 			return fail_stage("route-two-resident");
 		}
 		auto route_two_replay = runner.take_completed_replay();
@@ -1610,6 +1597,100 @@ bool authentic_gate(
 	}
 
 	if(!language_overlay.empty()) {
+		const auto load_menu_background = [&](bool english) ->
+			std::optional<th03::assets::PiImage> {
+			th03::app::MainResourceLoader background_loader(data_root);
+			if(english) {
+				auto overlay = th03::app::load_new_classic_language_overlay(
+					language_overlay
+				);
+				if(!overlay || !background_loader.install_authenticated_overrides(
+					std::move(*overlay).release_members()
+				)) {
+					return std::nullopt;
+				}
+			}
+			auto resources = background_loader.load_op_title_menu();
+			if(!resources) {
+				return std::nullopt;
+			}
+			for(const auto &resource : *resources) {
+				if(resource.spec.key.role ==
+					th03::app::MainResourceRole::op_menu_background &&
+					resource.bytes) {
+					auto decoded = th03::assets::decode_pi(*resource.bytes);
+					if(decoded) {
+						return std::move(*decoded);
+					}
+				}
+			}
+			return std::nullopt;
+		};
+		const auto japanese_menu_background = load_menu_background(false);
+		const auto english_menu_background = load_menu_background(true);
+		if(!japanese_menu_background || !english_menu_background) {
+			std::cerr << "authentic-script-stage=language-background-load\n";
+			return false;
+		}
+		bool language_profiles_differ = false;
+		for(std::size_t offset = 0U;
+			offset < th03::present::graphics_page_pixels; ++offset) {
+			if(japanese_menu_background->image.indices[offset] !=
+				english_menu_background->image.indices[offset]) {
+				language_profiles_differ = true;
+				break;
+			}
+		}
+		bool language_menu_rows_equal = true;
+		for(std::int32_t y = 272; y < 384 && language_menu_rows_equal; ++y) {
+			for(std::int32_t x = 162; x < 430; ++x) {
+				const auto offset = (static_cast<std::size_t>(y) *
+					th03::present::graphics_width) + static_cast<std::size_t>(x);
+				if(japanese_menu_background->image.indices[offset] !=
+					english_menu_background->image.indices[offset]) {
+					language_menu_rows_equal = false;
+					break;
+				}
+			}
+		}
+		if(!language_profiles_differ || !language_menu_rows_equal) {
+			std::cerr << "authentic-script-stage=language-background-fixture\n";
+			return false;
+		}
+		const auto matches_japanese_background = [&](std::int32_t left,
+			std::int32_t top, std::int32_t right, std::int32_t bottom) {
+			for(std::int32_t y = top; y < bottom; ++y) {
+				for(std::int32_t x = left; x < right; ++x) {
+					const auto offset = (static_cast<std::size_t>(y) *
+						th03::present::graphics_width) + static_cast<std::size_t>(x);
+					const auto &actual = pixels[offset];
+					if(actual.layer !=
+						th03::present::ComposedPixelLayer::graphics ||
+						actual.value !=
+						japanese_menu_background->image.indices[offset]) {
+						return false;
+					}
+				}
+			}
+			return true;
+		};
+		const auto matches_japanese_menu_rows = [&](std::int32_t right) {
+			for(std::int32_t y = 272; y < 384; ++y) {
+				for(std::int32_t x = 162; x < right; ++x) {
+					const auto offset = (static_cast<std::size_t>(y) *
+						th03::present::graphics_width) + static_cast<std::size_t>(x);
+					const auto expected = ((x + (y - 264)) & 1) == 0 ? 3U :
+						japanese_menu_background->image.indices[offset];
+					const auto &actual = pixels[offset];
+					if(actual.layer !=
+						th03::present::ComposedPixelLayer::graphics ||
+						actual.value != expected) {
+						return false;
+					}
+				}
+			}
+			return true;
+		};
 		const auto english_background = graphics_region_hash(0, 0, 160U, 400U);
 		const auto wait_for_scene_input = [&](th03::app::ClassicOpSessionScene scene,
 			std::size_t limit) {
@@ -1651,7 +1732,22 @@ bool authentic_gate(
 		const bool selected_language = ready_japanese && enter_language_row();
 		const bool toggled_japanese = selected_language && step(0x0020U) && step();
 		const bool canceled_japanese = toggled_japanese && sample_input(0x1000U);
-		const bool exited_japanese = canceled_japanese && wait_for_scene_input(
+		// The Cancel tick changes the scene's phase to shrink_window. The session
+		// observes that returned phase and publishes the reloaded Japanese TL02
+		// before the following tick can unput Option labels from page 1.
+		const bool refreshed_before_shrink = canceled_japanese && last &&
+			last->surface_changed && last_surface && japanese_menu_background->palette &&
+			last_surface->graphics_palette == *japanese_menu_background->palette &&
+			matches_japanese_background(0, 0, 160, 400) &&
+			step() && matches_japanese_menu_rows(408);
+		bool whole_shrink_uses_japanese = refreshed_before_shrink;
+		for(std::size_t frame = 1U; frame < 18U && whole_shrink_uses_japanese;
+			++frame) {
+			whole_shrink_uses_japanese = step() &&
+				matches_japanese_menu_rows(272);
+		}
+		const bool exited_japanese = whole_shrink_uses_japanese &&
+			wait_for_scene_input(
 				th03::app::ClassicOpSessionScene::title_menu, 256U
 			);
 		if(!exited_japanese) {

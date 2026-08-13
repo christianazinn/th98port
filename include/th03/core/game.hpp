@@ -311,6 +311,10 @@ public:
 	std::expected<SessionTransition, Error> session_transition(
 		std::optional<ContinueChoice> continue_choice = std::nullopt
 	) const;
+	// Project the exact resident handoff produced by a route-0 MAIN exit at the
+	// current boundary. Unlike the canonical terminal path, this neither
+	// mutates the Game nor requires a completed round.
+	std::expected<SessionTransition, Error> abort_transition() const;
 	std::expected<GameInit, Error> next_story_stage_init() const;
 
 private:

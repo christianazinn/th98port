@@ -177,6 +177,10 @@ public:
 	session_transition(
 		std::optional<ContinueChoice> continue_choice = std::nullopt
 	) const;
+	// Host-owned replay aborts return through the same route-0 resident
+	// projection as a natural MAIN exit without advancing the visible process.
+	[[nodiscard]] std::expected<SessionTransition, MainProcessError>
+	abort_transition() const;
 
 	[[nodiscard]] CanonicalState canonical_state() const;
 	[[nodiscard]] std::uint32_t live_random_seed() const noexcept;

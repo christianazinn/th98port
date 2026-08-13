@@ -33,7 +33,7 @@ struct NewClassicKeyConfigSceneResult final {
 		NewClassicKeyConfigSceneStatus::running;
 };
 
-// Native Replay Patch 0.4.11 KeyConfig scene. NewClassicKeyConfig remains the
+// Native Replay Patch 0.4.12 KeyConfig scene. NewClassicKeyConfig remains the
 // host-scancode persistence boundary, but the scene's pages, rendering, page
 // flips, palette cadence, and release barriers follow th03/keycfg_o.cpp.
 class NewClassicKeyConfigScene final {

@@ -498,9 +498,16 @@ ClassicOpOptionsScene::refresh_patch_language_background(
 			raster_, 638, 0, "The PoDD Arrange Project", 0U
 		) || !patch_assets_->menu_font.put_right(
 			raster_, 638, 16,
-			"Replay Patch v0.4.11 by Christian Azinn", 0U
+			"Replay Patch v0.4.12 by Christian Azinn", 0U
 		)) {
 		return std::unexpected(options_error(ClassicOpErrorCode::draw_failed));
+	}
+	for(std::size_t index = 0U; index < background->palette->colors.size(); ++index) {
+		if(!raster_.set_pending_palette_entry(
+			static_cast<std::uint8_t>(index), background->palette->colors[index]
+		)) {
+			return std::unexpected(options_error(ClassicOpErrorCode::draw_failed));
+		}
 	}
 	raster_.apply_pending_palette();
 	prepared_->menu_background = std::move(*background);
@@ -1140,6 +1147,14 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 		if(!transition_input_latched_) {
 			transition_input_ = input;
 			transition_input_latched_ = true;
+			if(patch_assets_ && !restore_patch_rows(
+				0U, 7U, box_left + box_option_width
+			)) {
+				fail();
+				return std::unexpected(options_error(
+					ClassicOpErrorCode::draw_failed
+				));
+			}
 			tram_.fill({});
 			sampled = true;
 			tram_changed = true;

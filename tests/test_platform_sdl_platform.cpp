@@ -46,6 +46,13 @@ void expect(bool condition, const char *message)
 	}
 }
 
+static_assert(
+	th03::platform::th03_product_window_title ==
+		"The Phantasmagoria of Dim. Dream" &&
+	SdlPlatformConfig{}.title == th03::platform::th03_product_window_title,
+	"every SDL launch profile uses the product title"
+);
+
 struct SurfaceFixture {
 	std::vector<ComposedPixel> pixels = std::vector<ComposedPixel>(
 		pixel_count,

@@ -46,7 +46,7 @@ struct NewClassicAssetsError final {
 	std::optional<assets::AssetError> asset_error{};
 };
 
-// Native form of Replay Patch 0.4.11's MNUFONT.PF. The renderer deliberately
+// Native form of Replay Patch 0.4.12's MNUFONT.PF. The renderer deliberately
 // preserves mnufont.cpp's 16x16, MSB-first, GRCG-RMW contract: set glyph bits
 // replace pixels with [color], while zero bits leave the destination intact.
 class NewClassicMenuFont final {
@@ -156,7 +156,7 @@ private:
 	bool initialized_ = false;
 };
 
-// Accepts only the complete Replay Patch 0.4.11 AZINN.DAT profile. The whole
+// Accepts only the complete Replay Patch 0.4.12 AZINN.DAT profile. The whole
 // archive is authenticated before its encrypted directory or any member is
 // parsed. Original-derived payload bytes remain caller-owned external data.
 [[nodiscard]] std::expected<

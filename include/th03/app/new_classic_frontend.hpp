@@ -115,6 +115,9 @@ public:
 	[[nodiscard]] std::uint8_t selected_slot() const noexcept;
 	[[nodiscard]] std::size_t selected_checkpoint() const noexcept;
 	[[nodiscard]] NewClassicReplayDetailPage detail_page() const noexcept;
+	// Mirrors OP's game-exit handoff before replay playback: blacken and clear
+	// both source pages before the synchronous hidden MAINL/MAIN reconstruction.
+	[[nodiscard]] bool prepare_playback_transition() noexcept;
 	[[nodiscard]] std::optional<formats::ReplayDocument>
 	take_selected_document();
 

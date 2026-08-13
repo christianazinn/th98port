@@ -1375,6 +1375,12 @@ NewClassicReplayBrowser::detail_page() const noexcept
 	return detail_page_;
 }
 
+bool NewClassicReplayBrowser::prepare_playback_transition() noexcept
+{
+	return status_ == NewClassicReplayBrowserStatus::play_selected &&
+		patch_surface_.terminal_black_clear();
+}
+
 std::optional<formats::ReplayDocument>
 NewClassicReplayBrowser::take_selected_document()
 {

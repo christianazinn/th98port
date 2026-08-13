@@ -13,6 +13,7 @@
 
 #include "th03/app/new_classic_playback.hpp"
 #include "th03/formats/v13.hpp"
+#include "../src/app/classic_mainl_stage_internal.hpp"
 #include "../src/app/new_classic_playback_internal.hpp"
 
 namespace {
@@ -170,9 +171,9 @@ void test_exact_main_replay_overlay()
 			(page == th03::present::Page::zero ? 2U : 3U),
 			"Replay backing preserves the row below on each page");
 	}
-	expect(raster.access_page() == raster.shown_page() &&
+	expect(raster.access_page() == th03::present::Page::zero &&
 		raster.shown_page() == th03::present::Page::one,
-		"Replay overlay restores graphics access to the shown front page");
+		"post-footer Replay overlay restores graphics access to the hidden page");
 	constexpr std::array<char, 6U> replay{{'R', 'E', 'P', 'L', 'A', 'Y'}};
 	for(std::size_t index = 0U; index < replay.size(); ++index) {
 		const auto cell = tram.cell({
@@ -197,6 +198,235 @@ void test_invalid_request()
 			th03::app::NewClassicPlaybackErrorCode::invalid_request,
 		"playback rejects an empty document and content request"
 	);
+}
+
+void test_mainl_end_input_ownership()
+{
+	const auto same_input = [](const th03::CoreInput &left,
+		const th03::CoreInput &right) noexcept {
+		return left.p1 == right.p1 && left.p2 == right.p2 &&
+			left.system == right.system &&
+			left.charge_mask == right.charge_mask;
+	};
+	const th03::CoreInput replay_input{
+		.p1 = 0x0001U,
+		.p2 = 0x0002U,
+		.system = 0U,
+		.charge_mask = 0x01U,
+	};
+	const th03::CoreInput held_live_input{
+		.p1 = 0x0004U,
+		.p2 = 0x0008U,
+		.system = 0x2000U,
+		.charge_mask = 0x02U,
+	};
+	expect(
+		same_input(
+			th03::app::NewClassicReplayPlaybackTestAccess::mainl_end_input(
+				replay_input, held_live_input, false
+			), replay_input
+		),
+		"MAINL_END repeats the last replay sample and discards held live dismissal input"
+	);
+	expect(
+		same_input(
+			th03::app::NewClassicReplayPlaybackTestAccess::mainl_end_input(
+				replay_input, held_live_input, true
+			), held_live_input
+		),
+		"registration remains on the donor's live input interface after MAINL_END"
+	);
+}
+
+void test_physical_abort_resident(
+	const std::filesystem::path &data,
+	const std::filesystem::path &main,
+	const std::filesystem::path &font,
+	const std::filesystem::path &score,
+	const th03::formats::ReplayDocument &document
+)
+{
+	auto abort_probe = th03::app::NewClassicReplayPlayback::load({
+		.content = {
+			.data_root = data,
+			.main_executable = main,
+			.mainl_executable = main.parent_path() / "MAINL.EXE",
+			.font_rom = font,
+			.score = score,
+		},
+		.document = document,
+		.checkpoint_index = 0U,
+	});
+	expect(abort_probe.has_value(),
+		"physical-Esc resident probe constructs from checkpoint 0");
+	if(!abort_probe) {
+		return;
+	}
+	while((*abort_probe)->take_audio_command()) {
+	}
+	std::size_t guard = 0U;
+	while(guard++ < 1024U &&
+		th03::app::NewClassicReplayPlaybackTestAccess::main_input_context(
+			**abort_probe
+		) != static_cast<std::uint8_t>(th03::InputContext::gameplay)) {
+		auto advanced_to_gameplay = (*abort_probe)->advance({}, false, false);
+		expect(advanced_to_gameplay.has_value(),
+			"physical-Esc probe reaches a gameplay input boundary");
+		if(!advanced_to_gameplay) {
+			return;
+		}
+		while((*abort_probe)->take_audio_command()) {
+		}
+	}
+	const auto abort_sample = (*abort_probe)->sample_index();
+	const auto pre_abort_round_frame =
+		th03::app::NewClassicReplayPlaybackTestAccess::main_round_frame(
+			**abort_probe
+		);
+	expect(pre_abort_round_frame.has_value(),
+		"physical-Esc probe observes the live pre-suffix round frame");
+	auto aborted = (*abort_probe)->advance(
+		{}, true, false, {.p1 = 0x0004U, .p2 = 0x0008U, .system = 0x1000U}
+	);
+	expect(aborted && aborted->status ==
+		th03::app::NewClassicPlaybackStatus::aborted &&
+		(*abort_probe)->sample_index() == abort_sample,
+		"physical Esc completes one neutral MAIN frame without consuming replay input");
+	auto abort_resident = (*abort_probe)->take_exit_resident();
+	if(pre_abort_round_frame) {
+		const auto expected_seed = *pre_abort_round_frame + 1U;
+		expect(abort_resident &&
+			static_cast<std::uint32_t>(abort_resident->resident_rand) ==
+				expected_seed &&
+			abort_resident->random_seed == expected_seed,
+			"physical Esc projects the donor post-suffix round-frame seed");
+	}
+	const auto live_suffix_hash =
+		th03::app::NewClassicReplayPlaybackTestAccess::main_state_hash(
+			**abort_probe
+		);
+	auto neutral_probe = th03::app::NewClassicReplayPlayback::load({
+		.content = {
+			.data_root = data,
+			.main_executable = main,
+			.mainl_executable = main.parent_path() / "MAINL.EXE",
+			.font_rom = font,
+			.score = score,
+		},
+		.document = document,
+		.checkpoint_index = 0U,
+	});
+	expect(neutral_probe.has_value(),
+		"neutral Esc-suffix comparison constructs from checkpoint 0");
+	if(neutral_probe) {
+		while((*neutral_probe)->take_audio_command()) {
+		}
+		std::size_t neutral_guard = 0U;
+		while(neutral_guard++ < 1024U &&
+			((*neutral_probe)->sample_index() != abort_sample ||
+			 th03::app::NewClassicReplayPlaybackTestAccess::main_input_context(
+				**neutral_probe
+			 ) != static_cast<std::uint8_t>(th03::InputContext::gameplay))) {
+			auto advanced = (*neutral_probe)->advance({}, false, false);
+			expect(advanced.has_value(),
+				"neutral Esc-suffix comparison reaches the identical boundary");
+			if(!advanced) {
+				break;
+			}
+			while((*neutral_probe)->take_audio_command()) {
+			}
+		}
+		auto neutral_abort = (*neutral_probe)->advance({}, true, false);
+		const auto neutral_suffix_hash =
+			th03::app::NewClassicReplayPlaybackTestAccess::main_state_hash(
+				**neutral_probe
+			);
+		expect(neutral_abort && live_suffix_hash && neutral_suffix_hash &&
+			*live_suffix_hash != *neutral_suffix_hash,
+			"physical Esc clears only system input and preserves live P1/P2 through the trailing MAIN suffix");
+	}
+}
+
+void test_mainl_abort_forced_ok_progression(
+	const std::filesystem::path &data,
+	const std::filesystem::path &main,
+	const std::filesystem::path &font,
+	const std::filesystem::path &score,
+	const th03::formats::ReplayDocument &document
+)
+{
+	auto probe = th03::app::NewClassicReplayPlayback::load({
+		.content = {
+			.data_root = data,
+			.main_executable = main,
+			.mainl_executable = main.parent_path() / "MAINL.EXE",
+			.font_rom = font,
+			.score = score,
+		},
+		.document = document,
+		.checkpoint_index = 0U,
+	});
+	expect(probe.has_value(),
+		"MAINL physical-Esc progression constructs from checkpoint 0");
+	if(!probe) {
+		return;
+	}
+	while((*probe)->take_audio_command()) {
+	}
+	std::size_t reach_guard = 0U;
+	while(reach_guard++ < 150000U &&
+		th03::app::NewClassicReplayPlaybackTestAccess::owner(**probe) !=
+			th03::app::NewClassicPlaybackOwner::story_win) {
+		auto advanced = (*probe)->advance({}, false, false);
+		if(!advanced) {
+			expect(false,
+				"MAINL physical-Esc progression reaches an authentic win owner");
+			return;
+		}
+		while((*probe)->take_audio_command()) {
+		}
+	}
+	expect(reach_guard < 150000U,
+		"MAINL physical-Esc progression reaches an authentic win owner");
+	if(reach_guard >= 150000U) {
+		return;
+	}
+	const auto abort_sample = (*probe)->sample_index();
+	auto first = (*probe)->advance(
+		{}, true, false, {.system = 0x1000U}
+	);
+	expect(first && first->status ==
+		th03::app::NewClassicPlaybackStatus::running &&
+		th03::app::NewClassicReplayPlaybackTestAccess::
+			mainl_error_progression_active(**probe) &&
+		(*probe)->sample_index() == abort_sample,
+		"MAINL physical Esc enters MR_ERROR forced-OK progression without teleporting or consuming replay input");
+	bool surface_changed = first && first->surface_changed;
+	bool stop_seen = false;
+	std::size_t progression_ticks = 0U;
+	for(; progression_ticks < 50000U && (*probe)->status() ==
+		th03::app::NewClassicPlaybackStatus::running; ++progression_ticks) {
+		auto advanced = (*probe)->advance({}, false, false);
+		if(!advanced) {
+			expect(false,
+				"MAINL MR_ERROR forced-OK progression advances its retained owner");
+			return;
+		}
+		surface_changed = surface_changed || advanced->surface_changed;
+		while(auto command = (*probe)->take_audio_command()) {
+			stop_seen = stop_seen || command->type ==
+				th03::app::ClassicAudioCommandType::stop_song;
+		}
+	}
+	expect(progression_ticks > 1U && surface_changed &&
+		(*probe)->status() == th03::app::NewClassicPlaybackStatus::aborted &&
+		(*probe)->sample_index() == abort_sample,
+		"MAINL MR_ERROR visibly progresses under forced OK before reaching the normal exit boundary");
+	expect(stop_seen,
+		"completed MAINL physical-Esc progression stops the retained playback song");
+	auto resident = (*probe)->take_exit_resident();
+	expect(resident && resident->game_mode == th03::game_mode::none,
+		"MAINL MR_ERROR progression exports the fresh-OP resident only at its normal exit");
 }
 
 void test_authentic(
@@ -260,6 +490,10 @@ void test_authentic(
 	}
 	expect(audio_commands == 3U,
 		"playback publishes load/reset/play before the first recorded sample");
+	test_physical_abort_resident(data, main, font, score, later_document);
+	test_mainl_abort_forced_ok_progression(
+		data, main, font, score, later_document
+	);
 	std::vector<th03::present::ComposedPixel> pixels(
 		th03::present::graphics_page_pixels
 	);
@@ -319,6 +553,24 @@ void test_authentic(
 			"later checkpoint performs hidden process-start pre-roll to its exact cursor"
 		);
 		if(later) {
+			const auto expected_song = th03::app::classic_main_gameplay_song(
+				later_document.checkpoints[later_checkpoint].init
+			);
+			std::vector<th03::app::ClassicAudioCommand> checkpoint_audio{};
+			while(auto command = (*later)->take_audio_command()) {
+				checkpoint_audio.push_back(*command);
+			}
+			auto expected_play = expected_song.value_or(
+				th03::app::ClassicAudioCommand{}
+			);
+			expected_play.type = th03::app::ClassicAudioCommandType::play_song;
+			expect(expected_song && checkpoint_audio == std::vector{
+				*expected_song,
+				th03::app::ClassicAudioCommand{
+					.type = th03::app::ClassicAudioCommandType::reset_effects,
+				},
+				expected_play,
+			}, "hidden later-checkpoint preroll re-arms gameplay load/reset/play before publication");
 			std::vector<th03::present::ComposedPixel> later_pixels(
 				th03::present::graphics_page_pixels
 			);
@@ -409,13 +661,30 @@ void test_authentic(
 		.document = later_document,
 		.checkpoint_index = 0U,
 	});
+	auto released = th03::app::NewClassicReplayPlayback::load({
+		.content = {
+			.data_root = data,
+			.main_executable = main,
+			.mainl_executable = mainl,
+			.font_rom = font,
+			.score = score,
+		},
+		.document = later_document,
+		.checkpoint_index = 0U,
+	});
 	expect(full.has_value(),
 		"complete authentic Story replay constructs from its first checkpoint");
-	if(full) {
+	expect(released.has_value(),
+		"authentic held-input comparison constructs from its first checkpoint");
+	if(full && released) {
+		while((*released)->take_audio_command()) {
+		}
 		std::array<bool, 11U> owners{};
 		std::array<std::uint32_t, 11U> owner_first_samples{};
 		owner_first_samples.fill(UINT32_MAX);
 		bool advance_failed = false;
+		bool live_input_isolated = true;
+		bool final_mainl_owner_exposed = false;
 		std::uint8_t failure_code = 0U;
 		std::optional<std::uint8_t> failure_detail{};
 		std::size_t guard = 0U;
@@ -424,6 +693,11 @@ void test_authentic(
 			const auto owner =
 				th03::app::NewClassicReplayPlaybackTestAccess::owner(**full);
 			const auto owner_index = static_cast<std::size_t>(owner);
+			if((*full)->sample_index() >= later_sample &&
+				owner != th03::app::NewClassicPlaybackOwner::main &&
+				owner != th03::app::NewClassicPlaybackOwner::none) {
+				final_mainl_owner_exposed = true;
+			}
 			if(owner_index < owners.size() && !owners[owner_index]) {
 				owners[owner_index] = true;
 				owner_first_samples[owner_index] = (*full)->sample_index();
@@ -434,14 +708,42 @@ void test_authentic(
 				expect(owner_surface.has_value(),
 					"every authentic playback owner composes a shared surface");
 			}
-			auto tick = (*full)->advance({}, false, false);
-			if(!tick) {
+			const auto released_owner =
+				th03::app::NewClassicReplayPlaybackTestAccess::owner(**released);
+			live_input_isolated = live_input_isolated &&
+				released_owner == owner &&
+				(*released)->sample_index() == (*full)->sample_index();
+			auto released_tick = (*released)->advance({}, false, false);
+			const auto live_input = owner ==
+				th03::app::NewClassicPlaybackOwner::story_registration ?
+				static_cast<std::uint16_t>(0U) :
+				static_cast<std::uint16_t>(0x2000U);
+			auto tick = (*full)->advance(
+				{}, false, false, {.system = live_input}
+			);
+			if(!tick || !released_tick) {
 				advance_failed = true;
-				failure_code = static_cast<std::uint8_t>(tick.error().code);
-				failure_detail = tick.error().interstitial_detail;
+				if(!tick) {
+					failure_code = static_cast<std::uint8_t>(tick.error().code);
+					failure_detail = tick.error().interstitial_detail;
+				} else {
+					failure_code = static_cast<std::uint8_t>(
+						released_tick.error().code
+					);
+					failure_detail = released_tick.error().interstitial_detail;
+				}
 				break;
 			}
+			live_input_isolated = live_input_isolated &&
+				released_tick->surface_changed == tick->surface_changed &&
+				released_tick->process_advanced == tick->process_advanced &&
+				released_tick->status == tick->status &&
+				(*released)->sample_index() == (*full)->sample_index() &&
+				th03::app::NewClassicReplayPlaybackTestAccess::owner(**released) ==
+					th03::app::NewClassicReplayPlaybackTestAccess::owner(**full);
 			while((*full)->take_audio_command()) {
+			}
+			while((*released)->take_audio_command()) {
 			}
 		}
 		if(advance_failed) {
@@ -491,9 +793,15 @@ void test_authentic(
 		}
 		expect(!advance_failed,
 			"complete authentic Story replay has no process or MAINL contract failure");
+		expect(live_input_isolated,
+			"held live OK cannot alter any replay-owned MAINL owner outside registration");
 		expect(guard < 300000U && (*full)->status() ==
 				th03::app::NewClassicPlaybackStatus::complete,
 			"complete authentic Story replay reaches its recorded terminal boundary");
+		auto exit_resident = (*full)->take_exit_resident();
+		expect(exit_resident.has_value() &&
+			exit_resident->game_mode == th03::game_mode::none,
+			"completed playback exports the evolved fresh-OP resident");
 		expect(owners[static_cast<std::size_t>(
 				th03::app::NewClassicPlaybackOwner::story_win)],
 			"authentic Story playback visits the shared win interstitial");
@@ -503,9 +811,14 @@ void test_authentic(
 		expect(owners[static_cast<std::size_t>(
 				th03::app::NewClassicPlaybackOwner::story_stage_splash)],
 			"authentic Story playback visits the shared next-stage splash");
-		expect(owners[static_cast<std::size_t>(
-				th03::app::NewClassicPlaybackOwner::final_clear_skip)],
-			"final Story clear drains the recorded MAINL tail without replaying the ending");
+		expect(!owners[static_cast<std::size_t>(
+				th03::app::NewClassicPlaybackOwner::story_staff_verdict)] &&
+			!owners[static_cast<std::size_t>(
+				th03::app::NewClassicPlaybackOwner::story_registration)] &&
+			!final_mainl_owner_exposed &&
+			th03::app::NewClassicReplayPlaybackTestAccess::
+				terminal_mainl_bypass_taken(**full),
+			"final Story playback bypasses ending, staff, verdict, and registration at the donor ending entry");
 	}
 	expect(!std::filesystem::exists(new_score),
 		"replay viewing never creates or mutates New Classic score persistence");
@@ -537,6 +850,9 @@ void test_additional_authentic_route(
 		));
 	std::error_code filesystem_error{};
 	std::filesystem::create_directories(score_directory, filesystem_error);
+	test_physical_abort_resident(
+		data, main, font, score_directory / "YUME.NEM", debug_document
+	);
 	auto loaded = th03::app::NewClassicReplayPlayback::load({
 		.content = {
 			.data_root = data,
@@ -555,21 +871,29 @@ void test_additional_authentic_route(
 		return;
 	}
 	bool saw_required = !required_owner.has_value();
+	bool saw_game_over_ui = false;
+	bool exposed_terminal_bypass = false;
 	bool failed = false;
 	std::size_t guard = 0U;
 	for(; guard < 300000U && (*loaded)->status() ==
 		th03::app::NewClassicPlaybackStatus::running; ++guard) {
-		if(required_owner &&
-			th03::app::NewClassicReplayPlaybackTestAccess::owner(**loaded) ==
-				*required_owner) {
+		const auto owner =
+			th03::app::NewClassicReplayPlaybackTestAccess::owner(**loaded);
+		exposed_terminal_bypass = exposed_terminal_bypass || owner ==
+			th03::app::NewClassicPlaybackOwner::terminal_mainl_bypass;
+		if(required_owner && owner == *required_owner) {
 			saw_required = true;
 		}
+		saw_game_over_ui = saw_game_over_ui ||
+			owner == th03::app::NewClassicPlaybackOwner::story_registration ||
+			owner == th03::app::NewClassicPlaybackOwner::story_continue ||
+			owner == th03::app::NewClassicPlaybackOwner::story_game_over;
 		const std::uint16_t live_input = required_owner ==
 			th03::app::NewClassicPlaybackOwner::story_registration ?
 			static_cast<std::uint16_t>((guard % 2U) == 0U ? 0x0020U : 0U) :
 			static_cast<std::uint16_t>(0U);
 		auto advanced = (*loaded)->advance(
-			{}, false, false, live_input
+			{}, false, false, {.system = live_input}
 		);
 		if(!advanced) {
 			failed = true;
@@ -585,7 +909,15 @@ void test_additional_authentic_route(
 			if(advanced.error().process) {
 				std::cerr << "process-error=" << static_cast<unsigned>(
 					advanced.error().process->code
+				) << " presentation=" << static_cast<unsigned>(
+					advanced.error().process->presentation_status
 				) << '\n';
+				if(advanced.error().process->core_error) {
+					std::cerr << "core-error=" << static_cast<unsigned>(
+						advanced.error().process->core_error->code
+					) << " message=" <<
+						advanced.error().process->core_error->message << '\n';
+				}
 			}
 			if(advanced.error().interstitial_detail) {
 				std::cerr << "interstitial-detail=" << static_cast<unsigned>(
@@ -623,7 +955,20 @@ void test_additional_authentic_route(
 	}
 	expect(!failed && guard < 300000U && (*loaded)->status() ==
 		th03::app::NewClassicPlaybackStatus::complete, completion_message);
+	if(required_owner ==
+		th03::app::NewClassicPlaybackOwner::terminal_mainl_bypass) {
+		saw_required = th03::app::NewClassicReplayPlaybackTestAccess::
+			terminal_mainl_bypass_taken(**loaded);
+		expect(!saw_game_over_ui,
+			"0.4.12 Game Over playback never constructs registration, Continue, or Game Over UI");
+		expect(!exposed_terminal_bypass,
+			"terminal MAINL bypass drains atomically without a host-visible frozen owner");
+	}
 	expect(saw_required, owner_message);
+	auto exit_resident = (*loaded)->take_exit_resident();
+	expect(exit_resident.has_value() &&
+		exit_resident->game_mode == th03::game_mode::none,
+		"every completed replay route exports a fresh-OP resident");
 	expect(!std::filesystem::exists(score_directory / "YUME.NEW.NEM"),
 		"additional replay viewing leaves New Classic score persistence untouched");
 	std::filesystem::remove_all(score_directory, filesystem_error);
@@ -635,12 +980,13 @@ int main(int argc, char **argv)
 {
 	test_exact_main_replay_overlay();
 	test_invalid_request();
+	test_mainl_end_input_ownership();
 	if(argc == 6 && std::string_view(argv[4]) == "--game-over") {
 		test_additional_authentic_route(
 			argv[1], argv[2], argv[3], argv[5],
-			th03::app::NewClassicPlaybackOwner::story_registration,
+			th03::app::NewClassicPlaybackOwner::terminal_mainl_bypass,
 			"authentic Story Game Over replay reaches its terminal boundary",
-			"authentic Story Game Over replay visits the shared registration owner"
+			"0.4.12 Game Over playback bypasses registration and Continue"
 		);
 	} else if(argc == 6 && std::string_view(argv[4]) == "--vs-win") {
 		test_additional_authentic_route(
@@ -654,9 +1000,9 @@ int main(int argc, char **argv)
 		if(argc >= 6) {
 			test_additional_authentic_route(
 				argv[1], argv[2], argv[3], argv[5],
-				th03::app::NewClassicPlaybackOwner::story_registration,
+				th03::app::NewClassicPlaybackOwner::terminal_mainl_bypass,
 				"authentic Story Game Over replay reaches its terminal boundary",
-				"authentic Story Game Over replay visits the shared registration owner"
+				"0.4.12 Game Over playback bypasses registration and Continue"
 			);
 		}
 		if(argc >= 7) {

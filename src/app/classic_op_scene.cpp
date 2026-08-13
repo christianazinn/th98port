@@ -348,8 +348,35 @@ ClassicOpTitleMenuScene::ClassicOpTitleMenuScene(
 	page_snapshot_(present::graphics_page_pixels, 0U),
 	phase_(ClassicOpPhase::main_menu),
 	selected_(ClassicOpMenuChoice::options),
+	phase_frame_(1U),
 	menu_input_allowed_(input_allowed)
-{}
+{
+	if(!patch_assets_) {
+		return;
+	}
+	const auto visible = raster_.graphics(present::Page::zero);
+	const auto bare = raster_.graphics(present::Page::one);
+	if(visible.size() != page_snapshot_.size() ||
+		bare.size() != page_snapshot_.size()) {
+		fail();
+		return;
+	}
+	std::copy(visible.begin(), visible.end(), page_snapshot_.begin());
+	const auto top = ((replay_patch_box_top / present::gaiji_height) + 1) *
+		present::gaiji_height;
+	for(std::int32_t y = top;
+		y < top + (7 * present::gaiji_height); ++y) {
+		for(std::int32_t x = box_left + 2;
+			x < box_left + box_main_width - 2; ++x) {
+			const auto offset = (static_cast<std::size_t>(y) *
+				present::graphics_width) + static_cast<std::size_t>(x);
+			page_snapshot_[offset] =
+				(((x + (y - replay_patch_box_top)) & 1) == 0) ?
+					3U : bare[offset];
+		}
+	}
+	menu_base_snapshot_valid_ = true;
+}
 
 std::expected<std::unique_ptr<ClassicOpTitleMenuScene>, ClassicOpError>
 ClassicOpTitleMenuScene::create(
@@ -415,13 +442,17 @@ ClassicOpTitleMenuScene::resume_from_options(
 	if(!prepared) {
 		return std::unexpected(std::move(prepared.error()));
 	}
-	return std::unique_ptr<ClassicOpTitleMenuScene>(
+	auto result = std::unique_ptr<ClassicOpTitleMenuScene>(
 		new ClassicOpTitleMenuScene(
 			std::move(*prepared), completion.resident(), completion.raster(),
 			completion.tram(), completion.main_input_allowed(),
 			std::move(patch_assets)
 		)
 	);
+	if(result->phase_ == ClassicOpPhase::failed) {
+		return std::unexpected(op_error(ClassicOpErrorCode::draw_failed));
+	}
+	return result;
 }
 
 std::expected<std::unique_ptr<ClassicOpTitleMenuScene>, ClassicOpError>
@@ -714,16 +745,31 @@ bool ClassicOpTitleMenuScene::initialize_fast_title() noexcept
 	return true;
 }
 
-bool ClassicOpTitleMenuScene::draw_menu_background() noexcept
+bool ClassicOpTitleMenuScene::draw_menu_background(bool populate_hidden) noexcept
 {
 	const auto &image = prepared_->menu_background;
 	if(!image.palette || !apply_palette(*image.palette)) {
 		return false;
 	}
 	raster_.apply_pending_palette();
-	return raster_.set_access_page(present::Page::zero) &&
+	// OP keeps page 1 as the bare title backing for every proportional-font
+	// unput while page 0 owns the animated window. Leaving page 1 at reset or
+	// at TL01 makes later VS/Option text restoration punch black holes through
+	// OPWIN's transparent checker.
+	return (!populate_hidden || (
+			raster_.set_access_page(present::Page::one) &&
+			present::pi_put_8(raster_, 0, 0, image)
+		)) &&
+		raster_.set_access_page(present::Page::zero) &&
 		present::pi_put_8(raster_, 0, 0, image) &&
 		raster_.set_shown_page(present::Page::zero);
+}
+
+bool ClassicOpTitleMenuScene::draw_hidden_menu_background() noexcept
+{
+	return raster_.set_access_page(present::Page::one) &&
+		present::pi_put_8(raster_, 0, 0, prepared_->menu_background) &&
+		raster_.set_access_page(present::Page::zero);
 }
 
 bool ClassicOpTitleMenuScene::restore_menu_background(
@@ -853,6 +899,56 @@ bool ClassicOpTitleMenuScene::draw_main_choices() noexcept
 	return true;
 }
 
+bool ClassicOpTitleMenuScene::restore_patch_choice_rows(
+	std::int32_t box_right
+) noexcept
+{
+	if(!patch_assets_ || !menu_base_snapshot_valid_ ||
+		box_right <= box_left + 4 || box_right > present::graphics_width) {
+		return false;
+	}
+	const auto top = ((replay_patch_box_top / present::gaiji_height) + 1) *
+		present::gaiji_height;
+	const auto left = box_left + 2;
+	const auto right = box_right - 2;
+	const auto bare = raster_.graphics(present::Page::one);
+	if(bare.size() != present::graphics_page_pixels ||
+		!raster_.set_access_page(present::Page::zero)) {
+		return false;
+	}
+	for(std::int32_t y = top;
+		y < top + (7 * present::gaiji_height); ++y) {
+		for(std::int32_t x = left; x < right; ++x) {
+			const auto offset = (static_cast<std::size_t>(y) *
+				present::graphics_width) + static_cast<std::size_t>(x);
+			if(!raster_.plot({x, y}, bare[offset])) {
+				return false;
+			}
+			if(((x + (y - replay_patch_box_top)) & 1) == 0 &&
+				!raster_.plot({x, y}, 3U)) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+bool ClassicOpTitleMenuScene::restore_patch_menu_rows(
+	std::int32_t box_right
+) noexcept
+{
+	if(!restore_patch_choice_rows(box_right)) {
+		return false;
+	}
+	const auto bare = raster_.graphics(present::Page::one);
+	return raster_.blit({
+		.pixels = bare,
+		.width = present::graphics_width,
+		.height = 32U,
+		.stride = present::graphics_width,
+	}, {0, 0});
+}
+
 bool ClassicOpTitleMenuScene::draw_title_credit() noexcept
 {
 	if(!patch_assets_ || !raster_.set_access_page(present::Page::zero)) {
@@ -861,7 +957,7 @@ bool ClassicOpTitleMenuScene::draw_title_credit() noexcept
 	return patch_assets_->menu_font.put_right(
 		raster_, 638, 0, "The PoDD Arrange Project", 0U
 	) && patch_assets_->menu_font.put_right(
-		raster_, 638, 16, "Replay Patch v0.4.11 by Christian Azinn", 0U
+		raster_, 638, 16, "Replay Patch v0.4.12 by Christian Azinn", 0U
 	);
 }
 
@@ -898,8 +994,11 @@ bool ClassicOpTitleMenuScene::draw_vs_choice(
 	}};
 	const auto raw = static_cast<std::size_t>(choice);
 	const auto tram_y = (box_top_value() / present::gaiji_height) + 1 +
-		static_cast<std::int32_t>(raw + 1U);
+		static_cast<std::int32_t>(raw + (patch_assets_ ? 2U : 1U));
 	if(choice == ClassicOpVsChoice::quit) {
+		if(patch_assets_) {
+			return false;
+		}
 		constexpr std::uint8_t first_glyph = 0x48U;
 		constexpr std::uint8_t glyph_count = 3U;
 		const auto tram_left = (box_submenu_center_x -
@@ -917,9 +1016,10 @@ bool ClassicOpTitleMenuScene::draw_vs_choice(
 	if(raw >= labels.size()) {
 		return false;
 	}
+	const std::int32_t tram_left = patch_assets_ ? 28 : 27;
 	for(std::size_t glyph = 0U; glyph < labels[raw].size(); ++glyph) {
 		if(!tram_.put_gaiji(
-			{27 + (static_cast<std::int32_t>(glyph) * 2), tram_y},
+			{tram_left + (static_cast<std::int32_t>(glyph) * 2), tram_y},
 			labels[raw][glyph], attribute
 		)) {
 			return false;
@@ -930,8 +1030,10 @@ bool ClassicOpTitleMenuScene::draw_vs_choice(
 
 bool ClassicOpTitleMenuScene::draw_vs_choices() noexcept
 {
+	const auto last = patch_assets_ ? ClassicOpVsChoice::cpu_cpu :
+		ClassicOpVsChoice::quit;
 	for(std::uint8_t raw = 0U;
-		raw <= static_cast<std::uint8_t>(ClassicOpVsChoice::quit); ++raw) {
+		raw <= static_cast<std::uint8_t>(last); ++raw) {
 		const auto choice = static_cast<ClassicOpVsChoice>(raw);
 		if(!draw_vs_choice(
 			choice,
@@ -948,10 +1050,12 @@ bool ClassicOpTitleMenuScene::draw_vs_choices() noexcept
 bool ClassicOpTitleMenuScene::update_vs_selection(int direction) noexcept
 {
 	const auto old = selected_vs_;
+	const auto last = patch_assets_ ? ClassicOpVsChoice::cpu_cpu :
+		ClassicOpVsChoice::quit;
 	auto next = static_cast<int>(selected_vs_) + direction;
 	if(next < 0) {
-		next = static_cast<int>(ClassicOpVsChoice::quit);
-	} else if(next > static_cast<int>(ClassicOpVsChoice::quit)) {
+		next = static_cast<int>(last);
+	} else if(next > static_cast<int>(last)) {
 		next = 0;
 	}
 	selected_vs_ = static_cast<ClassicOpVsChoice>(next);
@@ -988,7 +1092,7 @@ bool ClassicOpTitleMenuScene::shrink_box_step() noexcept
 bool ClassicOpTitleMenuScene::begin_menu_swap() noexcept
 {
 	raster_.set_palette_tone(200);
-	if(!draw_menu_background() || !push_audio_command({
+	if(!draw_menu_background(false) || !push_audio_command({
 		.type = ClassicAudioCommandType::play_song,
 		.cue = ClassicMusicCue::menu_main,
 	})) {
@@ -1200,6 +1304,12 @@ ClassicOpTitleMenuScene::advance(ClassicOpInput input)
 		raster_.apply_pending_palette();
 		++phase_frame_;
 		if(phase_frame_ == flash_frames) {
+			if(!draw_hidden_menu_background()) {
+				fail();
+				return std::unexpected(op_error(
+					ClassicOpErrorCode::draw_failed
+				));
+			}
 			phase_frame_ = 0U;
 			phase_ = ClassicOpPhase::wait_title_input;
 		}
@@ -1220,7 +1330,7 @@ ClassicOpTitleMenuScene::advance(ClassicOpInput input)
 		return tick(ClassicOpBoundary::vsync, true);
 	case ClassicOpPhase::fast_initial_pause:
 		raster_.set_palette_tone(0);
-		if(!draw_menu_background() || (restart_bgm_ && !push_audio_command({
+		if(!draw_menu_background(true) || (restart_bgm_ && !push_audio_command({
 			.type = ClassicAudioCommandType::play_song,
 			.cue = ClassicMusicCue::menu_main,
 		}))) {
@@ -1325,13 +1435,24 @@ ClassicOpTitleMenuScene::advance(ClassicOpInput input)
 		}
 		if(selected_route == ClassicOpRoute::versus) {
 			resident_.paletted_character = {1, 1};
+			if(patch_assets_ && !restore_patch_menu_rows(
+				box_left + box_main_width
+			)) {
+				fail();
+				return std::unexpected(op_error(
+					ClassicOpErrorCode::draw_failed
+				));
+			}
 			tram_.fill({});
 			selected_vs_ = ClassicOpVsChoice::one_player_cpu;
 			box_right_left_ =
 				box_left + box_main_width - opwin_step_width;
 			phase_frame_ = 0U;
 			phase_ = ClassicOpPhase::vs_grow_window;
-			tram_changed = true;
+			// The Replay Patch removes the proportional title text and enters
+			// vs_menu() synchronously.  Its first observable boundary is the
+			// first expanded-window frame, not this cleaned intermediate page.
+			tram_changed = false;
 		} else if(selected_route == ClassicOpRoute::story) {
 			select_route(
 				ClassicOpRoute::story, ClassicOpSelectionMode::story
@@ -1379,15 +1500,28 @@ ClassicOpTitleMenuScene::advance(ClassicOpInput input)
 				tram_changed = true;
 				selection_changed = true;
 			}
-			if(input.cancel || ((input.ok || input.shot) &&
+			if(input.cancel || (!patch_assets_ &&
+				(input.ok || input.shot) &&
 				selected_vs_ == ClassicOpVsChoice::quit)) {
+				// Replay Patch vs_menu() unputs the complete submenu-width
+				// proportional-font interior before contracting the window.
+				if(patch_assets_ && !restore_patch_choice_rows(
+					box_left + box_submenu_width
+				)) {
+					fail();
+					return std::unexpected(op_error(
+						ClassicOpErrorCode::draw_failed
+					));
+				}
 				++resident_.resident_rand;
 				tram_.fill({});
 				box_right_left_ =
 					box_left + box_submenu_width - opwin_step_width;
 				phase_frame_ = 0U;
 				phase_ = ClassicOpPhase::vs_shrink_window;
-				tram_changed = true;
+				// vs_menu() contracts synchronously as well.  Keep the cleared
+				// submenu private until the first contracted-window boundary.
+				tram_changed = false;
 			} else if(input.ok || input.shot) {
 				const auto mode = static_cast<ClassicOpSelectionMode>(
 					static_cast<std::uint8_t>(selected_vs_) + 1U

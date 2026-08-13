@@ -56,7 +56,7 @@ repeated requests return its cached bytes, so no per-frame file I/O occurs.
 
 ## New Classic language overlay
 
-New Classic optionally accepts Replay Patch 0.4.11's exact `TH3EN.DAT` through
+New Classic optionally accepts Replay Patch 0.4.12's exact `TH3EN.DAT` through
 `--language-overlay`. The application authenticates the complete 295,731-byte
 archive by SHA-256 before decrypting its 52-entry directory, bounds every
 uncompressed member, and requires the exact translated-member set. Only then

@@ -18,7 +18,7 @@ using present::ComposedPixelLayer;
 constexpr std::size_t width = present::graphics_width;
 constexpr std::size_t height = present::graphics_height;
 
-// Compact host-only uppercase font. The shell must remain able to identify a
+// Compact host-only font. The shell must remain able to identify a
 // content failure before a selected experience authenticates FONT.ROM.
 constexpr std::array<std::array<std::uint8_t, 7U>, 26U> uppercase_font{{
 	{{0x0EU,0x11U,0x11U,0x1FU,0x11U,0x11U,0x11U}},
@@ -48,6 +48,16 @@ constexpr std::array<std::array<std::uint8_t, 7U>, 26U> uppercase_font{{
 	{{0x11U,0x11U,0x0AU,0x04U,0x04U,0x04U,0x04U}},
 	{{0x1FU,0x01U,0x02U,0x04U,0x08U,0x10U,0x1FU}},
 }};
+
+constexpr std::array<std::uint8_t, 7U> lowercase_o{
+	0x00U,0x00U,0x0EU,0x11U,0x11U,0x11U,0x0EU
+};
+constexpr std::array<std::uint8_t, 7U> lowercase_r{
+	0x00U,0x00U,0x16U,0x19U,0x10U,0x10U,0x10U
+};
+constexpr std::array<std::uint8_t, 7U> lowercase_t{
+	0x04U,0x04U,0x0EU,0x04U,0x04U,0x05U,0x02U
+};
 
 constexpr std::array<std::string_view, 3U> labels{
 	"CLASSIC", "NEW CLASSIC", "EXIT"
@@ -97,13 +107,22 @@ void draw_text(
 	std::size_t x = (center_x >= (text_width / 2U)) ?
 		center_x - (text_width / 2U) : 0U;
 	for(const auto character : text) {
+		const std::array<std::uint8_t, 7U> *glyph = nullptr;
 		if(character >= 'A' && character <= 'Z') {
-			const auto &glyph = uppercase_font[
+			glyph = &uppercase_font[
 				static_cast<std::size_t>(character - 'A')
 			];
-			for(std::size_t row = 0U; row < glyph.size(); ++row) {
+		} else if(character == 'o') {
+			glyph = &lowercase_o;
+		} else if(character == 'r') {
+			glyph = &lowercase_r;
+		} else if(character == 't') {
+			glyph = &lowercase_t;
+		}
+		if(glyph) {
+			for(std::size_t row = 0U; row < glyph->size(); ++row) {
 				for(std::size_t column = 0U; column < 5U; ++column) {
-					if((glyph[row] & (0x10U >> column)) != 0U) {
+					if(((*glyph)[row] & (0x10U >> column)) != 0U) {
 						fill_rect(
 							pixels,
 							x + (column * scale), y + (row * scale),
@@ -149,8 +168,7 @@ struct ExperienceMenu::Impl final {
 		);
 		fill_rect(pixels, 48U, 34U, 544U, 92U, 1U);
 		fill_rect(pixels, 52U, 38U, 536U, 84U, 3U);
-		draw_text(pixels, "PHANTASMAGORIA", width / 2U, 58U, 4U, 15U);
-		draw_text(pixels, "EXPERIENCE", width / 2U, 96U, 2U, 14U);
+		draw_text(pixels, "PoDD Port", width / 2U, 68U, 4U, 15U);
 
 		for(std::size_t index = 0U; index < labels.size(); ++index) {
 			const bool selected = index == choice_index(choice);

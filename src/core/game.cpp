@@ -646,6 +646,31 @@ std::expected<void, Error> Game::finish_main_process()
 
 namespace detail {
 
+namespace {
+
+SessionTransition project_session_transition(
+	const DeterministicState &state,
+	const GameInit &initial_init,
+	std::int32_t resident_rand
+)
+{
+	SessionTransition transition{};
+	transition.resident = initial_init;
+	auto &resident = transition.resident;
+	resident.global_frame = state.global_frame;
+	resident.resident_rand = resident_rand;
+	resident.random_seed = state.round_frame;
+	resident.story_lives = state.story_lives;
+	resident.skill = state.skill;
+	resident.winner = state.winner;
+	resident.runtime_snapshot.reset();
+	resident.compact_runtime_snapshot.reset();
+	resident.round_start_snapshot.reset();
+	return transition;
+}
+
+} // namespace
+
 std::expected<SessionTransition, Error> build_session_transition(
 	const DeterministicState &state,
 	const GameInit &initial_init,
@@ -660,18 +685,10 @@ std::expected<SessionTransition, Error> build_session_transition(
 		});
 	}
 
-	SessionTransition transition{};
-	transition.resident = initial_init;
+	auto transition = project_session_transition(
+		state, initial_init, state.resident_rand
+	);
 	auto &resident = transition.resident;
-	resident.global_frame = state.global_frame;
-	resident.resident_rand = state.resident_rand;
-	resident.random_seed = state.round_frame;
-	resident.story_lives = state.story_lives;
-	resident.skill = state.skill;
-	resident.winner = state.winner;
-	resident.runtime_snapshot.reset();
-	resident.compact_runtime_snapshot.reset();
-	resident.round_start_snapshot.reset();
 
 	// Route 0 jumps directly back to OP. In particular, MAIN does not perform
 	// its otherwise-unconditional Story-stage increment or score persistence.
@@ -767,6 +784,21 @@ std::expected<SessionTransition, Error> build_session_transition(
 	return transition;
 }
 
+std::expected<SessionTransition, Error> build_abort_transition(
+	const DeterministicState &state,
+	const GameInit &initial_init
+)
+{
+	// main_entry() performs this write after choosing route 0 and before its
+	// canonical transition builder runs. Project it without mutating a live
+	// Game so host-owned replay abort cannot enter deterministic simulation.
+	return project_session_transition(
+		state,
+		initial_init,
+		static_cast<std::int32_t>(state.round_frame)
+	);
+}
+
 } // namespace detail
 
 std::expected<SessionTransition, Error> Game::session_transition(
@@ -778,6 +810,14 @@ std::expected<SessionTransition, Error> Game::session_transition(
 		impl_->initial_init,
 		impl_->main_process_finished,
 		continue_choice
+	);
+}
+
+std::expected<SessionTransition, Error> Game::abort_transition() const
+{
+	return detail::build_abort_transition(
+		impl_->state,
+		impl_->initial_init
 	);
 }
 

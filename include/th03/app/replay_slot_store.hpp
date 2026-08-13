@@ -73,7 +73,7 @@ load_replay_slot(
 	const formats::ReplayDocument &document
 );
 
-// Replay Patch 0.4.11 keeps the live user recording in TH3LAST.RPY. Native
+// Replay Patch 0.4.12 keeps the live user recording in TH3LAST.RPY. Native
 // checkpoints replace the whole canonical V13 artifact atomically, which is
 // the host equivalent of the patch's flushed header/input prefix.
 [[nodiscard]] std::expected<ReplaySlotLoadResult, ReplaySlotStoreError>

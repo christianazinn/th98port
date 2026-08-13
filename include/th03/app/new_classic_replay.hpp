@@ -29,7 +29,7 @@ struct NewClassicReplayError final {
 	std::optional<ReplaySlotStoreError> store{};
 };
 
-// Replay Patch 0.4.11's replay_finish() preserves master.lib's live RNG only
+// Replay Patch 0.4.12's replay_finish() preserves master.lib's live RNG only
 // for an Esc+R restart handoff. The ordinary post-round resident seed remains
 // authoritative for every other exit and transition.
 void preserve_new_classic_restart_random_seed(

@@ -632,6 +632,10 @@ std::expected<SessionTransition, Error> build_session_transition(
 	bool main_process_finished,
 	std::optional<ContinueChoice> continue_choice = std::nullopt
 );
+std::expected<SessionTransition, Error> build_abort_transition(
+	const DeterministicState &state,
+	const GameInit &initial_init
+);
 bool gameplay_frame_prefix(
 	DeterministicState &state,
 	const GameContent &content,

@@ -49,6 +49,7 @@ constexpr const char *pixel_oracle_rgb_environment = "TH03_PIXEL_ORACLE_RGB_DIR"
 [[nodiscard]] th03::platform::SdlPlatformConfig platform_config()
 {
 	th03::platform::SdlPlatformConfig config{};
+	config.title = th03::platform::th03_product_window_title;
 #if defined(_MSC_VER)
 	char *path = nullptr;
 	std::size_t path_bytes = 0U;
@@ -107,6 +108,12 @@ struct ReplaySaveRunResult final {
 	bool application_quit = false;
 };
 
+struct ReplaySaveAudioContext final {
+	th03::app::ClassicAudioSession *session = nullptr;
+	std::optional<th03::platform::SdlAudioDevice> *device = nullptr;
+	bool *started = nullptr;
+};
+
 [[nodiscard]] std::uint16_t current_dos_date(void *) noexcept
 {
 	const auto now = std::time(nullptr);
@@ -136,7 +143,8 @@ ReplaySaveRunResult run_replay_save(
 	th03::platform::SdlInputMapper &mapper,
 	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets>
 		patch_assets = {},
-	std::shared_ptr<const th03::app::NewClassicReplaySaveArt> save_art = {}
+	std::shared_ptr<const th03::app::NewClassicReplaySaveArt> save_art = {},
+	ReplaySaveAudioContext audio = {}
 );
 
 enum class RhythmRomLoadErrorCode : std::uint8_t {
@@ -423,7 +431,7 @@ void print_usage()
 			"directory under --data by default; --config, --score, and "
 			"--replay-root override them for read-only installs.\n"
 		<< "New Classic enables its persistent English option only when the "
-			"authenticated Replay Patch 0.4.11 TH3EN.DAT is supplied with "
+			"authenticated Replay Patch 0.4.12 TH3EN.DAT is supplied with "
 			"--language-overlay. Classic remains Japanese.\n"
 		<< "Kotohime's source-uninitialized late Bomb local is deterministically "
 			"normalized from the adjacent Kana fade routine.\n";
@@ -1449,7 +1457,12 @@ ExperienceRunResult run_classic_session(
 			auto saved = run_replay_save(
 				std::move(*completed_replay), parsed.replay_root,
 				parsed.tick_rate, platform, mapper, patch_assets,
-				(*runner)->new_classic_replay_save_art()
+				(*runner)->new_classic_replay_save_art(),
+				{
+					.session = audio_session.get(),
+					.device = &audio_device,
+					.started = &audio_started,
+				}
 			);
 			completed_replay.reset();
 			if(saved.exit_code != 0) {
@@ -1649,7 +1662,8 @@ std::expected<void, int> run_host_ui(
 	th03::platform::SdlPlatform &platform,
 	th03::platform::SdlInputMapper &mapper,
 	Surface surface,
-	Consume consume
+	Consume consume,
+	ReplaySaveAudioContext audio = {}
 )
 {
 	auto presented = platform.present(surface());
@@ -1659,7 +1673,9 @@ std::expected<void, int> run_host_ui(
 	auto scheduler = th03::app::TickInputScheduler::create(
 		tick_rate,
 		th03::platform::sdl_ticks_now_ns(),
-		th03::app::TickInputCatchUpPolicy::discard_missed_deadlines
+		// Replay Patch menus and a retained SCORE.M still live on the same
+		// 56.423 Hz source timeline while the host owns this modal transaction.
+		th03::app::classic_interactive_catch_up_policy
 	);
 	if(!scheduler) {
 		return std::unexpected(fail_tick(scheduler.error()));
@@ -1692,6 +1708,36 @@ std::expected<void, int> run_host_ui(
 			}
 			presentation_pending =
 				presentation_pending || step->surface_changed;
+			if(audio.session) {
+				auto rendered = audio.session->advance_tick();
+				if(!rendered) {
+					return std::unexpected(fail(
+						"replay-save-audio-tick", rendered.error()
+					));
+				}
+				if(audio.device && *audio.device) {
+					auto submitted = (*audio.device)->submit(
+						rendered->canonical_frames
+					);
+					if(!submitted) {
+						warn_audio_device(
+							"replay-save-audio-submit", submitted.error()
+						);
+						audio.device->reset();
+					} else if(audio.started && !*audio.started &&
+						!rendered->canonical_frames.empty()) {
+						auto resumed = (*audio.device)->resume();
+						if(!resumed) {
+							warn_audio_device(
+								"replay-save-audio-resume", resumed.error()
+							);
+							audio.device->reset();
+						} else {
+							*audio.started = true;
+						}
+					}
+				}
+			}
 			done = step->done;
 			if(retry_blocked_event) {
 				auto retried = mapper.pump_events(*scheduler, false);
@@ -1840,7 +1886,8 @@ ReplaySaveRunResult run_replay_save(
 	th03::platform::SdlPlatform &platform,
 	th03::platform::SdlInputMapper &mapper,
 	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets,
-	std::shared_ptr<const th03::app::NewClassicReplaySaveArt> save_art
+	std::shared_ptr<const th03::app::NewClassicReplaySaveArt> save_art,
+	ReplaySaveAudioContext audio
 )
 {
 	auto catalog = th03::app::scan_new_classic_replays(replay_root);
@@ -1892,7 +1939,8 @@ ReplaySaveRunResult run_replay_save(
 				.done = result.status !=
 					th03::app::NewClassicReplaySaveStatus::running,
 			};
-		}
+		},
+		audio
 	);
 	if(!driven) {
 		return {.exit_code = driven.error()};

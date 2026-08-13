@@ -48,7 +48,7 @@ prepare_new_classic_practice_init(
 	const GameContent &content
 );
 
-// Replay Patch 0.4.11's two-page Practice setup. The patch-enabled constructor
+// Replay Patch 0.4.12's two-page Practice setup. The patch-enabled constructor
 // draws the exact MNUFONT overlay over the selector-owned curves-only frame.
 // The one-argument constructor remains available for model-only tests and
 // returns an unchanged base surface.

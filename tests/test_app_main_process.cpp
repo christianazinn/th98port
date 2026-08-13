@@ -1381,6 +1381,26 @@ void test_recorded_pause_deferred_frame()
 		process.canonical_state().round_frame == 1U,
 		"deferred replay-pause suffix resumes through the retained observer"
 	);
+	const auto before_abort = process.canonical_state();
+	const auto start = process.round_start_observation().start;
+	const auto abort = process.abort_transition();
+	expect(
+		!process.session_transition() && abort &&
+		abort->action == th03::SessionAction::exit_to_operator &&
+		abort->resident.global_frame == before_abort.global_frame &&
+		abort->resident.resident_rand == static_cast<std::int32_t>(
+			before_abort.round_frame
+		) && abort->resident.random_seed == before_abort.round_frame &&
+		abort->resident.story_lives == start.story_lives &&
+		abort->resident.skill == start.skill &&
+		abort->resident.paletted_character == start.paletted_character &&
+		!abort->resident.runtime_snapshot &&
+		!abort->resident.compact_runtime_snapshot &&
+		!abort->resident.round_start_snapshot &&
+		!abort->high_score_registration &&
+		same_canonical(process.canonical_state(), before_abort),
+		"recorded MAIN abort projects natural route zero before completion without mutating the process"
+	);
 
 	const auto reopened = process.step(
 		th03::CoreInput{.system = 0x1000U},
@@ -1735,11 +1755,13 @@ void test_sticky_presentation_preflight()
 	const auto repeated = process.start_next_round();
 	const auto finished = process.finish_main_process();
 	const auto transitioned = process.session_transition();
+	const auto aborted = process.abort_transition();
 	expect(!stepped && presentation_failure(stepped.error()) &&
 		!deferred && presentation_failure(deferred.error()) &&
 		!repeated && presentation_failure(repeated.error()) &&
 		!finished && presentation_failure(finished.error()) &&
-		!transitioned && presentation_failure(transitioned.error()),
+		!transitioned && presentation_failure(transitioned.error()) &&
+		!aborted && presentation_failure(aborted.error()),
 		"every process lifecycle entry preflights the sticky presentation failure");
 	expect(process.presentation_status() == failure_status &&
 		same_canonical(process.canonical_state(), canonical_before) &&

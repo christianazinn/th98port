@@ -35,10 +35,10 @@ struct ClassicContentPaths final {
 	std::filesystem::path mainl_executable{};
 	std::filesystem::path op_executable{};
 	std::filesystem::path font_rom{};
-	// Optional authenticated Replay Patch 0.4.11 TH3EN.DAT. Classic ignores
+	// Optional authenticated Replay Patch 0.4.12 TH3EN.DAT. Classic ignores
 	// this profile; New Classic may select it through the persisted language.
 	std::filesystem::path language_overlay{};
-	// Complete authenticated Replay Patch 0.4.11 AZINN.DAT. Classic ignores
+	// Complete authenticated Replay Patch 0.4.12 AZINN.DAT. Classic ignores
 	// this profile. An empty New Classic path derives AZINN.DAT under data_root.
 	std::filesystem::path replay_patch_assets{};
 	// Replay Patch's native REPLAY/ directory. New Classic derives this under

@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -48,6 +49,15 @@ public:
 		std::uint8_t
 	) const override {
 		return std::nullopt;
+	}
+	[[nodiscard]] std::optional<th03::present::JisGlyph> jis_glyph(
+		std::uint16_t canonical_jis
+	) const override {
+		th03::present::JisGlyph result{};
+		result.row_halves[0U] = static_cast<std::uint8_t>(
+			0x80U >> (canonical_jis & 0x07U)
+		);
+		return result;
 	}
 };
 
@@ -129,6 +139,85 @@ std::unique_ptr<ClassicOpOptionsScene> make_scene(
 	);
 	expect(created.has_value(), "synthetic Options scene creates");
 	return created ? std::move(*created) : nullptr;
+}
+
+void test_replay_patch_option_unput_if_assets_supplied()
+{
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4996)
+#endif
+	const auto *path = std::getenv("TH03_AZINN_DAT");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+	if(!path || *path == '\0') {
+		return;
+	}
+	auto loaded = th03::app::load_new_classic_replay_patch_assets(path);
+	expect(loaded.has_value(), "authenticated Replay Patch Option assets load");
+	if(!loaded) {
+		return;
+	}
+	auto assets = std::make_shared<const th03::app::NewClassicReplayPatchAssets>(
+		std::move(*loaded)
+	);
+	auto raster = main_menu_raster();
+	const auto background = menu_background();
+	expect(raster.set_access_page(Page::one) && raster.blit({
+		.pixels = background.image.indices,
+		.width = background.image.width,
+		.height = background.image.height,
+		.stride = background.image.width,
+	}, {0, 0}) && raster.set_access_page(Page::zero) &&
+		raster.clear({162, 272, 132U, 112U}, 15U),
+		"Replay Patch Option fixture has bare TL02 page 1 and rasterized main labels"
+	);
+	GameInit resident{};
+	resident.rank = static_cast<std::uint8_t>(ClassicRank::normal);
+	EmptyAnk font{};
+	auto created = ClassicOpOptionsScene::create(
+		resident, {}, true, std::move(raster), {}, menu_background(),
+		window_sheet(), assets, &font, true
+	);
+	expect(created.has_value(), "Replay Patch Option scene creates");
+	if(!created) {
+		return;
+	}
+	auto &scene = **created;
+	expect(scene.advance({.ok = true}).has_value(),
+		"first Option expansion boundary advances");
+	bool main_rows_clean = true;
+	for(std::int32_t y = 272; y < 384 && main_rows_clean; ++y) {
+		for(std::int32_t x = 162; x < 294; ++x) {
+			const auto expected = x >= 288 ? 2U :
+				(((x + (y - 264)) & 1) == 0 ? 3U : 4U);
+			const auto actual = scene.raster().pixel(Page::zero, {x, y});
+			main_rows_clean = main_rows_clean && actual == expected;
+		}
+	}
+	expect(main_rows_clean,
+		"Option grow immediately unputs main labels onto the transparent checker");
+	for(std::uint16_t frame = 1U; frame < 17U; ++frame) {
+		expect(scene.advance().has_value(), "Replay Patch Option grow advances");
+	}
+	expect(scene.advance().has_value(), "Replay Patch Option labels draw");
+	expect(scene.advance().has_value(), "Replay Patch Option input unlocks");
+	expect(scene.advance({.cancel = true}).has_value(),
+		"Replay Patch Option cancel starts contraction");
+	expect(scene.advance().has_value(),
+		"first Option contraction boundary unputs all option labels");
+	bool option_rows_clean = true;
+	for(std::int32_t y = 272; y < 384 && option_rows_clean; ++y) {
+		for(std::int32_t x = 162; x < 430; ++x) {
+			const auto expected = x >= 416 ? 2U :
+				(((x + (y - 264)) & 1) == 0 ? 3U : 4U);
+			const auto actual = scene.raster().pixel(Page::zero, {x, y});
+			option_rows_clean = option_rows_clean && actual == expected;
+		}
+	}
+	expect(option_rows_clean,
+		"Option contraction removes all proportional labels before shrinking");
 }
 
 void expect_gaiji(
@@ -756,18 +845,199 @@ void local_original_gate(const std::filesystem::path &content_root)
 			!(*resumed)->take_audio_command(),
 		"Options return resumes the retained title without fade or audio"
 	);
+	if(resumed) {
+		const auto held = (*resumed)->advance({.ok = true});
+		expect(
+			held && (*resumed)->phase() == th03::app::ClassicOpPhase::main_menu &&
+				!held->surface_changed,
+			"Options return preserves the held-input lock without a redundant redraw"
+		);
+		expect((*resumed)->advance().has_value(),
+			"Options return unlocks only after exact input release");
+		const auto repressed = (*resumed)->advance({.ok = true});
+		auto completion = (*resumed)->take_completion();
+		expect(repressed && repressed->ready && completion &&
+			completion->route() == th03::app::ClassicOpRoute::options,
+			"Options return accepts a fresh confirm after release");
+	}
+}
+
+void local_replay_patch_return_gate(const std::filesystem::path &content_root)
+{
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4996)
+#endif
+	const auto *path = std::getenv("TH03_AZINN_DAT");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+	if(!path || *path == '\0') {
+		return;
+	}
+	auto loaded = th03::app::load_new_classic_replay_patch_assets(path);
+	expect(loaded.has_value(),
+		"authenticated Replay Patch assets load for the Options return");
+	if(!loaded) {
+		return;
+	}
+	auto patch_assets =
+		std::make_shared<const th03::app::NewClassicReplayPatchAssets>(
+			std::move(*loaded)
+		);
+	th03::app::MainResourceLoader loader(content_root);
+	const auto closure = loader.load_op_title_menu();
+	expect(closure.has_value(),
+		"authenticated title closure loads for the Replay Patch return");
+	if(!closure) {
+		return;
+	}
+
+	ClassicConfigOptions config{};
+	GameInit resident{};
+	resident.rank = static_cast<std::uint8_t>(config.rank);
+	resident.key_mode = static_cast<std::uint8_t>(config.key_mode);
+	resident.fast_op_animation = 1U;
+	auto title = th03::app::ClassicOpTitleMenuScene::create(
+		resident, th03::app::ClassicOpTitleMode::fast_fade, *closure,
+		patch_assets
+	);
+	expect(title.has_value(),
+		"authenticated Replay Patch title creates for the Options return");
+	if(!title) {
+		return;
+	}
+	expect((*title)->advance().has_value(),
+		"Replay Patch title black frame advances");
+	expect((*title)->take_audio_command().has_value() &&
+		(*title)->take_audio_command().has_value(),
+		"Replay Patch title startup audio drains");
+	expect((*title)->advance().has_value(),
+		"Replay Patch title initial frame advances");
+	expect((*title)->take_audio_command().has_value(),
+		"Replay Patch title play command drains");
+	for(std::uint16_t frame = 0U; frame < 25U; ++frame) {
+		expect((*title)->advance().has_value(),
+			"Replay Patch title fade advances");
+	}
+	expect((*title)->advance({.ok = true}).has_value(),
+		"Replay Patch title accepts the pre-menu input");
+	for(std::uint16_t frame = 0U; frame < 14U; ++frame) {
+		expect((*title)->advance().has_value(),
+			"Replay Patch title box step advances");
+	}
+	expect((*title)->advance().has_value(),
+		"Replay Patch title main menu draws");
+	for(std::uint8_t row = 0U; row < 4U; ++row) {
+		expect((*title)->advance({.down = true}).has_value(),
+			"Replay Patch title selection advances toward Option");
+		expect((*title)->advance().has_value(),
+			"Replay Patch title selection releases toward Option");
+	}
+	expect((*title)->advance({.ok = true}).has_value(),
+		"Replay Patch title confirms Option");
+	auto title_completion = (*title)->take_completion();
+	expect(title_completion && title_completion->route() ==
+		th03::app::ClassicOpRoute::options,
+		"Replay Patch title publishes the Option route");
+	if(!title_completion) {
+		return;
+	}
+
+	EmptyAnk font{};
+	auto options = ClassicOpOptionsScene::create_from_op(
+		*title_completion, config, true, *closure, patch_assets, &font, true
+	);
+	expect(options.has_value(),
+		"authenticated Replay Patch Options adopts the title");
+	if(!options) {
+		return;
+	}
+	for(std::uint16_t frame = 0U; frame < 17U; ++frame) {
+		expect((*options)->advance(
+			frame == 0U ? ClassicOpInput{.ok = true} : ClassicOpInput{}
+		).has_value(), "Replay Patch Options grow advances");
+	}
+	expect((*options)->advance().has_value(),
+		"Replay Patch Options labels draw");
+	expect((*options)->advance().has_value(),
+		"Replay Patch Options transition input releases");
+	expect((*options)->advance({.cancel = true}).has_value(),
+		"Replay Patch Options cancel starts its return");
+	for(std::uint16_t frame = 0U; frame < 18U; ++frame) {
+		expect((*options)->advance(
+			frame == 0U ? ClassicOpInput{.cancel = true} : ClassicOpInput{}
+		).has_value(), "Replay Patch Options shrink advances");
+	}
+	expect((*options)->advance().has_value(),
+		"Replay Patch Options redraws the main menu");
+	auto options_completion = (*options)->take_completion();
+	expect(options_completion.has_value(),
+		"Replay Patch Options publishes its typed return");
+	if(!options_completion) {
+		return;
+	}
+
+	auto resumed = th03::app::ClassicOpTitleMenuScene::resume_from_options(
+		*options_completion, *closure, patch_assets
+	);
+	expect(resumed.has_value(),
+		"Replay Patch Options return rebuilds the retained title owner");
+	if(!resumed) {
+		return;
+	}
+	const auto held = (*resumed)->advance({.ok = true});
+	expect(held && (*resumed)->phase() ==
+		th03::app::ClassicOpPhase::main_menu && !held->surface_changed,
+		"Replay Patch Options return preserves the held-input lock");
+	expect((*resumed)->advance().has_value(),
+		"Replay Patch Options return unlocks on release");
+	const auto down = (*resumed)->advance({.down = true});
+	expect(down && down->selection_changed &&
+		(*resumed)->selected_choice() ==
+			th03::app::ClassicOpMenuChoice::replay,
+		"Replay Patch Options return accepts Down without losing its base snapshot");
+	expect((*resumed)->advance().has_value(),
+		"Replay Patch Replay selection releases");
+	for(std::uint8_t row = 0U; row < 4U; ++row) {
+		expect((*resumed)->advance({.up = true}).has_value(),
+			"Replay Patch return selection advances toward VS Start");
+		expect((*resumed)->advance().has_value(),
+			"Replay Patch return selection releases toward VS Start");
+	}
+	expect((*resumed)->selected_choice() ==
+		th03::app::ClassicOpMenuChoice::versus,
+		"Replay Patch return reaches VS Start");
+	expect((*resumed)->advance({.ok = true}).has_value() &&
+		(*resumed)->phase() == th03::app::ClassicOpPhase::vs_grow_window,
+		"Replay Patch return opens VS Start without losing its base snapshot");
+	for(std::uint16_t frame = 0U; frame < 13U; ++frame) {
+		expect((*resumed)->advance().has_value(),
+			"Replay Patch VS Start grow advances");
+	}
+	expect((*resumed)->phase() == th03::app::ClassicOpPhase::vs_menu,
+		"Replay Patch VS Start reaches its menu");
+	expect((*resumed)->advance().has_value(),
+		"Replay Patch VS Start transition input releases");
+	const auto vs_down = (*resumed)->advance({.down = true});
+	expect(vs_down && vs_down->selection_changed &&
+		(*resumed)->selected_vs_choice() ==
+			th03::app::ClassicOpVsChoice::one_player_two_player,
+		"Replay Patch VS Start accepts its first selection change");
 }
 
 } // namespace
 
 int main(int argc, char **argv)
 {
+	test_replay_patch_option_unput_if_assets_supplied();
 	test_exact_rows_and_transition_lock();
 	test_config_audio_and_return_cadence();
 	test_bgm_modes_and_disabled_selection();
 	test_key_ring_and_rejections();
 	if(argc == 2) {
 		local_original_gate(argv[1]);
+		local_replay_patch_return_gate(argv[1]);
 	} else {
 		expect(argc == 1, "optional local gate accepts one content root");
 	}

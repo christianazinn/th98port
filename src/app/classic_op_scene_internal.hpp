@@ -323,7 +323,8 @@ private:
 		const assets::Palette16Rgb4 &palette
 	) noexcept;
 	[[nodiscard]] bool shift_access_page_left(std::uint16_t pixels) noexcept;
-	[[nodiscard]] bool draw_menu_background() noexcept;
+	[[nodiscard]] bool draw_menu_background(bool populate_hidden) noexcept;
+	[[nodiscard]] bool draw_hidden_menu_background() noexcept;
 	[[nodiscard]] bool restore_menu_background(
 		std::int32_t left,
 		std::int32_t top,
@@ -335,6 +336,10 @@ private:
 		std::uint16_t glyph
 	) noexcept;
 	[[nodiscard]] bool draw_main_choices() noexcept;
+	[[nodiscard]] bool restore_patch_choice_rows(
+		std::int32_t box_right
+	) noexcept;
+	[[nodiscard]] bool restore_patch_menu_rows(std::int32_t box_right) noexcept;
 	[[nodiscard]] bool draw_title_credit() noexcept;
 	[[nodiscard]] bool draw_choice(
 		ClassicOpMenuChoice choice,

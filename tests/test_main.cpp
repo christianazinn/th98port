@@ -2287,6 +2287,79 @@ void test_main_and_mainl_session_transitions()
 		!th03::detail::build_session_transition(state, init, false),
 		"session handoff rejects an unfinished MAIN process"
 	);
+
+	state.route = 2U;
+	state.round_complete = false;
+	state.global_frame = 0x12345678U;
+	state.round_frame = 0xFEDCBA98U;
+	state.resident_rand = 0x13579BDF;
+	state.random_seed = 0x2468ACE0U;
+	state.story_lives = 7U;
+	state.skill = 19U;
+	state.winner = 1;
+	init.runtime_snapshot.emplace();
+	init.compact_runtime_snapshot.emplace();
+	init.round_start_snapshot.emplace();
+	auto natural_state = state;
+	natural_state.route = 0U;
+	natural_state.round_complete = true;
+	natural_state.resident_rand = static_cast<std::int32_t>(
+		natural_state.round_frame
+	);
+	const auto natural_abort = th03::detail::build_session_transition(
+		natural_state, init, true
+	);
+	const auto projected_abort = th03::detail::build_abort_transition(
+		state, init
+	);
+	check(
+		natural_abort && projected_abort &&
+		projected_abort->action == th03::SessionAction::exit_to_operator &&
+		projected_abort->action == natural_abort->action &&
+		projected_abort->resident.global_frame ==
+			natural_abort->resident.global_frame &&
+		projected_abort->resident.resident_rand ==
+			natural_abort->resident.resident_rand &&
+		projected_abort->resident.random_seed ==
+			natural_abort->resident.random_seed &&
+		projected_abort->resident.story_lives ==
+			natural_abort->resident.story_lives &&
+		projected_abort->resident.skill == natural_abort->resident.skill &&
+		projected_abort->resident.winner == natural_abort->resident.winner &&
+		projected_abort->resident.story_stage == init.story_stage &&
+		projected_abort->resident.last_score == init.last_score &&
+		!projected_abort->resident.runtime_snapshot &&
+		!projected_abort->resident.compact_runtime_snapshot &&
+		!projected_abort->resident.round_start_snapshot &&
+		!projected_abort->high_score_registration,
+		"unfinished replay abort projects the exact natural route-zero resident without consuming live simulation"
+	);
+
+	th03::GameInit public_init{};
+	public_init.global_frame = 77U;
+	public_init.resident_rand = 0x12345678;
+	public_init.random_seed = 0x87654321U;
+	public_init.game_mode = th03::game_mode::vs_1p_2p;
+	public_init.story_lives = 6U;
+	public_init.skill = 11U;
+	public_init.is_cpu = {0U, 0U};
+	public_init.paletted_character = {1, 4};
+	auto public_game = th03::Game::create(public_init);
+	check(static_cast<bool>(public_game),
+		"public abort projection fixture creates before any terminal boundary");
+	if(public_game) {
+		const auto public_abort = public_game->abort_transition();
+		check(
+			!public_game->session_transition() && public_abort &&
+			public_abort->action == th03::SessionAction::exit_to_operator &&
+			public_abort->resident.global_frame == public_init.global_frame &&
+			public_abort->resident.resident_rand == 0 &&
+			public_abort->resident.random_seed == 0U &&
+			public_abort->resident.story_lives == public_init.story_lives &&
+			public_abort->resident.skill == public_init.skill,
+			"Game abort transition is available before round completion and retains live resident counters"
+		);
+	}
 }
 
 void test_story_extends()

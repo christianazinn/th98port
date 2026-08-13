@@ -168,7 +168,7 @@ The authoritative source-side producer is implemented in the companion ReC98
 authority tree as a devtools-only profile. It builds separate
 `bin/th03/pixcap/{op,main,mainl}.exe` binaries and writes a versioned raw
 capture into an emulator-mounted host directory. Release and combined-debug
-OP/MAIN/MAINL remain byte-identical to the preserved 0.4.11 artifacts. The
+OP/MAIN/MAINL remain byte-identical to the preserved 0.4.12 artifacts. The
 frozen stream records, at matching source publication acts:
 
 - all four planar VRAM planes for the shown page, plus selected hidden-page
@@ -188,19 +188,26 @@ The completed source parcel includes the strict `tools/port/t3pix1.py`
 parser/control writer, planar PPM renderer, synthetic tests, and the frozen
 `state/port/T3PIX1_FORMAT.md` contract. The remaining acceptance sequence is:
 
-1. run the pixcap OP/MAINL/MAIN binaries at Replay Patch 0.4.11 publication
-   boundaries, then add the equivalent stock/Anniversary profiles;
+1. add the per-publication mutable-gaiji and guest/native route-identity
+   sidecars needed for a strict record join, then add equivalent
+   stock/Anniversary profiles;
 2. run locked no-input and V13 cases through `tools\emu`, correlate each raw
    guest publication with the lossless scanout frame, and compare against
    `T3RGB1`; and
 3. track only identities, SHA-256 digests, verdicts, and first-divergence
    metadata, never original capture payloads.
 
+Runtime acceptance now covers OP, MAINL, and MAIN. The integrated 0.4.12
+producer completed a silent, hidden, Turbo/max finalized-V13 route with one
+MAINL and 25 MAIN records. Raw MAIN publication 0 passed every plane/TRAM hash,
+and the guest continued through global frame 1279. The 276,224-byte stream is
+SHA-256 `D40AA1D2B61A0CBDD3947BE0C48CEFE4B188E57D076D136645D15EB75A9751D7`.
+
 Guest instrumentation must remain devtools-only on a disposable branch. It
 must not enter the shipping Replay Patch executable or become implementation
-authority. Runtime guest acceptance is deliberately still open: it must use a
-silent/headless Turbo emulator route, and final TRAM composition still needs
-the authenticated FONT.ROM/gaiji provider. `T3PXH2` plus `T3RGB1` remain the
+authority. Strict guest/native route acceptance remains open: final TRAM
+composition needs the per-publication gaiji provider and the two sides still
+need a shared route-identity sidecar. `T3PXH2` plus `T3RGB1` remain the
 practical daily regression mechanisms until that external matrix is captured.
 
 ## Why not screenshots?

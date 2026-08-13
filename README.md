@@ -8,7 +8,7 @@ Practice, and ordinary VS, plus a separate title-Demo gate, on top of the Phase
 strict V13 span adapter and the first stdlib-only asset/indexed-raster
 foundations now sit beside that core. An optional SDL 3 application now opens a
 shared host menu for the authenticated Classic lifecycle and the faithful
-Replay Patch 0.4.11-derived New Classic experience, alongside the earlier
+Replay Patch 0.4.12-derived New Classic experience, alongside the earlier
 direct-VS developer path. Both product identities reuse the same gameplay,
 presentation, content, and audio owners; title Exit returns to the host menu.
 A separate byte-fed PMD/YM2608 engine and TH03
@@ -27,6 +27,14 @@ source-rendered pause/restart, Practice setup, three-page KeyConfig, expanded
 Options, title Extra unlock, and the complete authenticated Replay Patch
 English profile are present. The source-parity audit includes physical-Z Staff/replay
 acceleration and no-wait playback of recorded Pause control streams.
+Replay Patch 0.4.12's Game Over handoff is also preserved: replay playback of
+any recorded P2 win returns through MAINL directly to the patched title without
+constructing registration, Continue, Game Over, or VS winner UI. Live recording
+still runs the ordinary Game Over flow, and SCORE.M keeps its current playback,
+fade, or stopped state while the in-game replay save transaction is open.
+Completed Story playback likewise drains its recorded MAINL tail at the donor's
+ending entry and returns directly to OP without replaying the ending, staff,
+verdict, registration, or save flow.
 
 ## Build and test
 
@@ -212,7 +220,7 @@ new recording over it. Matching Replay Patch, an unreadable fallback is treated
 as no pending save and removed so OP and a later fresh recording can proceed;
 other filesystem failures remain explicit.
 New Classic Practice is entered through the patched title's VS Start route,
-1P-vs-CPU selector, and Replay Patch 0.4.11's main and Advanced setup pages.
+1P-vs-CPU selector, and Replay Patch 0.4.12's main and Advanced setup pages.
 Its source defaults, exact-VS fallback, fixed-opponent stages, speed/rank/gauge
 controls, retry policy, pause/restart behavior, and V13 Practice metadata are
 all carried into the shared MAIN runtime.
@@ -243,7 +251,7 @@ board by value, but New Classic then writes only `YUME.NEW.NEM`; Classic's
 registration, Continue, menu return, restart, and application exit, while
 Demo, Practice, and replay playback remain excluded.
 The private `tools\th03-private-editor` utility provides direct migration:
-it accepts an original 824-byte PC-98 scorefile or Replay Patch 0.4.11's exact
+it accepts an original 824-byte PC-98 scorefile or Replay Patch 0.4.12's exact
 7,812-byte expanded file, validates it, backs up any current native score, and
 atomically installs `YUME.NEW.NEM`. Expanded imports and all exports remain
 byte-for-byte exact. Close the game before importing or exporting so the live
@@ -449,8 +457,11 @@ split comparisons. Original game data and replay captures remain external.
 - V13 produces the same neutral document/session types without changing the
   core or runner. Its structural tests and converted 19-file corpus gate are
   green on both compilers. Later compact checkpoints and their raw V13 reset
-  recipes are preserved in the neutral document, but complete-state comparison
-  and application-side selection remain a separate preroll acceptance gate.
+  recipes are preserved, selected, and simulated behind the source-black
+  transition. The source masks an already-running PMD song during that hidden
+  preroll; native playback instead re-arms the correct cue at the selected
+  frame, so exact chip phase remains part of the external register/waveform
+  oracle rather than a claimed local equivalence.
 
 See `docs/ARCHITECTURE.md`, `docs/PARITY_SOURCE_COVERAGE.md`,
 `docs/REPLAY_VERIFICATION.md`, `docs/ORACLE_CONTRACT.md`, and

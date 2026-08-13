@@ -188,6 +188,14 @@ void reach_title_wait(ClassicOpTitleMenuScene &scene)
 			scene.raster().palette_tone() == 100,
 		"fast title reaches input after tones 4 through 100"
 	);
+	expect(
+		std::all_of(
+			scene.raster().graphics(Page::one).begin(),
+			scene.raster().graphics(Page::one).end(),
+			[](auto pixel) { return pixel == 4U; }
+		),
+		"fast title retains a bare TL02 page 1 for later graphics-font unputs"
+	);
 }
 
 void reach_main_menu(ClassicOpTitleMenuScene &scene)
@@ -321,6 +329,61 @@ void test_replay_patch_title_if_assets_supplied()
 	expect(selected && selected->ready && completion &&
 		completion->route() == ClassicOpRoute::replay,
 		"the proportional title Replay row publishes its typed route");
+
+	GameInit vs_resident{};
+	vs_resident.resident_rand = 40;
+	vs_resident.fast_op_animation = 1U;
+	auto vs_created = ClassicOpSceneTestAccess::create_with_predecoded_assets(
+		vs_resident, ClassicOpTitleMode::fast_fade, fullscreen_pi(true),
+		fullscreen_pi(false), window_sheet(), gaiji_sheet(), assets
+	);
+	expect(vs_created.has_value(),
+		"Replay Patch VS cleanup scene creates");
+	if(!vs_created) {
+		return;
+	}
+	reach_main_menu(**vs_created);
+	const auto entered_vs = (*vs_created)->advance({.down = true, .ok = true});
+	expect(entered_vs && !entered_vs->surface_changed &&
+		!entered_vs->tram_changed && (*vs_created)->phase() ==
+		ClassicOpPhase::vs_grow_window,
+		"Replay Patch VS cleanup remains private until the first grow frame");
+	bool credits_clean = true;
+	for(std::int32_t y = 0; y < 32 && credits_clean; ++y) {
+		for(std::int32_t x = 0; x < th03::present::graphics_width; ++x) {
+			credits_clean = credits_clean &&
+				(*vs_created)->raster().pixel(Page::zero, {x, y}) == 4U;
+		}
+	}
+	expect(credits_clean,
+		"VS entry unputs both rasterized title-credit lines from bare page 1");
+	bool rows_clean = true;
+	for(std::int32_t y = 272; y < 384 && rows_clean; ++y) {
+		for(std::int32_t x = 162; x < 294; ++x) {
+			const auto expected = ((x + (y - 264)) & 1) == 0 ? 3U : 4U;
+			rows_clean = rows_clean &&
+				(*vs_created)->raster().pixel(Page::zero, {x, y}) == expected;
+		}
+	}
+	expect(rows_clean,
+		"VS entry removes all seven proportional main labels and restores checker transparency");
+	for(std::uint16_t frame = 0U; frame < 13U; ++frame) {
+		expect((*vs_created)->advance().has_value(),
+			"Replay Patch VS submenu expansion advances");
+	}
+	expect(
+		(*vs_created)->tram().cell({28, 19})->attribute ==
+			th03::present::tram_white &&
+		(*vs_created)->tram().cell({28, 20})->attribute ==
+			th03::present::tram_black &&
+		(*vs_created)->tram().cell({28, 21})->attribute ==
+			th03::present::tram_black,
+		"Replay Patch VS submenu uses the exact three-row shifted geometry"
+	);
+	const auto canceled = (*vs_created)->advance({.cancel = true});
+	expect(canceled && canceled->phase == ClassicOpPhase::vs_shrink_window &&
+		!canceled->surface_changed && !canceled->tram_changed,
+		"Replay Patch VS Cancel privately begins the retained-title contraction");
 }
 
 void test_story_seed_and_vs_cancel_return()
@@ -359,7 +422,7 @@ void test_story_seed_and_vs_cancel_return()
 			th03::present::tram_black &&
 		versus->tram().cell({32, 21})->attribute ==
 			th03::present::tram_black,
-		"VS submenu draws all three modes and the centered source Quit row"
+		"Anniversary Classic draws three modes and its fourth Quit row"
 	);
 	const auto simultaneous = versus->advance({.up = true, .down = true});
 	expect(
@@ -378,8 +441,9 @@ void test_story_seed_and_vs_cancel_return()
 	const auto canceled = versus->advance({.ok = true});
 	expect(
 		canceled && canceled->phase == ClassicOpPhase::vs_shrink_window &&
+			!canceled->surface_changed && !canceled->tram_changed &&
 			versus->resident().resident_rand == 42,
-		"confirming VS Quit takes the same retained-menu path as Cancel"
+		"confirming Anniversary Quit defers publication to the first shrink frame"
 	);
 	for(std::uint16_t frame = 0U; frame < 14U; ++frame) {
 		static_cast<void>(versus->advance());
@@ -410,8 +474,10 @@ void test_story_seed_and_vs_cancel_return()
 	expect(
 		canceled_by_input && canceled_by_input->phase ==
 			ClassicOpPhase::vs_shrink_window &&
+			!canceled_by_input->surface_changed &&
+			!canceled_by_input->tram_changed &&
 			versus->resident().resident_rand == 45,
-		"VS Cancel independently converges on the retained-menu shrink path"
+		"Anniversary VS Cancel also defers publication to the first shrink frame"
 	);
 }
 
@@ -650,6 +716,14 @@ void test_long_title_cadence()
 		scene->phase() == ClassicOpPhase::wait_title_input,
 		"long title reaches input after the second eight flashes"
 	);
+	expect(
+		std::all_of(
+			scene->raster().graphics(Page::one).begin(),
+			scene->raster().graphics(Page::one).end(),
+			[](auto pixel) { return pixel == 4U; }
+		),
+		"long title populates bare TL02 page 1 only after the second flash"
+	);
 }
 
 void test_rejections()
@@ -735,7 +809,7 @@ void local_original_gate(const std::filesystem::path &content_root)
 		scene.phase() == ClassicOpPhase::vs_menu &&
 			scene.tram().cell({32, 21})->attribute ==
 				th03::present::tram_black,
-		"local MIKOFT renders the source Quit label in the VS submenu"
+		"local MIKOFT renders the Anniversary Classic Quit row"
 	);
 }
 

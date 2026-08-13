@@ -1631,6 +1631,22 @@ MainProcess::session_transition(
 	return std::move(*transition);
 }
 
+std::expected<SessionTransition, MainProcessError>
+MainProcess::abort_transition() const
+{
+	if(const auto error = presentation_precheck()) {
+		return std::unexpected(*error);
+	}
+	auto transition = impl_->game->abort_transition();
+	if(!transition) {
+		return std::unexpected(core_error(
+			MainProcessErrorCode::core_operation_failed,
+			std::move(transition.error())
+		));
+	}
+	return std::move(*transition);
+}
+
 CanonicalState MainProcess::canonical_state() const
 {
 	return impl_->game->canonical_state();

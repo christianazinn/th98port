@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -329,6 +330,17 @@ void test_catalog_browser_and_save()
 			(*browser)->selected_checkpoint() == 0U &&
 			(*browser)->take_selected_document().has_value(),
 			"detail confirmation publishes the selected checkpoint document"
+		);
+		expect((*browser)->prepare_playback_transition(),
+			"selected replay prepares the source-cleared OP exit boundary");
+		const auto transition = (*browser)->surface();
+		expect(
+			transition.palette_tone == 0 &&
+			transition.shown_page == th03::present::Page::zero &&
+			std::all_of(transition.pixels.begin(), transition.pixels.end(), [](const auto &pixel) {
+				return pixel.value == 0U;
+			}),
+			"playback transition publishes black page 0 before synchronous preroll"
 		);
 	}
 

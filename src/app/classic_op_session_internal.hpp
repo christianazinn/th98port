@@ -155,6 +155,7 @@ struct ClassicOpSessionSelectionResult final {
 
 enum class ClassicOpSessionReplayResult : std::uint8_t {
 	back,
+	preparing_playback,
 	play,
 	application_quit,
 };
@@ -208,7 +209,7 @@ struct ClassicOpSessionBackendOperations final {
 	(*finish_replay_browser)(void *) = nullptr;
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
 	(*advance_replay_playback)(
-		void *, ClassicAudioStatus, NewClassicUiInput, std::uint16_t, bool
+		void *, ClassicAudioStatus, NewClassicUiInput, CoreInput, bool
 	) = nullptr;
 	std::expected<bool, ClassicOpSessionError>
 	(*finish_replay_playback)(void *) = nullptr;

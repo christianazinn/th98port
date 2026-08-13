@@ -41,9 +41,12 @@ struct SdlPlatformError {
 	std::array<char, 256U> sdl_detail{};
 };
 
+inline constexpr std::string_view th03_product_window_title =
+	"The Phantasmagoria of Dim. Dream";
+
 struct SdlPlatformConfig {
 	// Consumed synchronously by create(); no title storage is borrowed.
-	std::string_view title{"Touhou 3 Classic"};
+	std::string_view title{th03_product_window_title};
 	std::uint32_t initial_width = 640U;
 	std::uint32_t initial_height = 400U;
 	bool hidden = false;

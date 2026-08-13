@@ -1099,6 +1099,14 @@ if(BUILD_TESTING)
 	target_include_directories(
 		th03-app-classic-runner-tests PRIVATE src/app
 	)
+	if(MSVC)
+		# The supplied-original lifecycle gate keeps several full 640x400
+		# source surfaces live at once. Give the test harness enough stack to
+		# exercise that route under MSVC Debug as well as GCC.
+		target_link_options(
+			th03-app-classic-runner-tests PRIVATE "/STACK:8388608"
+		)
+	endif()
 	th03_set_warnings(th03-app-classic-runner-tests)
 	add_test(
 		NAME th03-app-classic-runner-tests

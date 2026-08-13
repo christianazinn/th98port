@@ -74,8 +74,9 @@ struct NewClassicPlaybackTick final {
 // Visual V13 player over the same authenticated MAIN and typed MAINL owners
 // used by live Classic. Later checkpoint starts reconstruct directly from the
 // stored compact snapshot; host abort/fast-forward state never enters the
-// replay. The donor's registration menu remains live during playback, but
-// viewing never publishes score persistence.
+// replay. Ordinary clear/interstitial owners retain their donor input domains;
+// 0.4.12 Game Over playback bypasses registration and Continue entirely.
+// Viewing never publishes score persistence.
 class NewClassicReplayPlayback final {
 public:
 	[[nodiscard]] static std::expected<
@@ -96,7 +97,7 @@ public:
 		ClassicAudioStatus audio,
 		bool abort_requested,
 		bool application_quit_requested,
-		std::uint16_t live_system_input = 0U
+		CoreInput live_interface_input = {}
 	);
 	[[nodiscard]] std::optional<ClassicAudioCommand> take_audio_command();
 	[[nodiscard]] std::expected<
@@ -113,6 +114,7 @@ public:
 	[[nodiscard]] std::size_t fast_forward_step_count() const noexcept;
 	[[nodiscard]] NewClassicPlaybackStatus status() const noexcept;
 	[[nodiscard]] std::uint32_t sample_index() const noexcept;
+	[[nodiscard]] std::optional<GameInit> take_exit_resident() noexcept;
 
 private:
 	friend struct NewClassicReplayPlaybackTestAccess;

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
 
 namespace {
@@ -28,6 +29,18 @@ void release(ExperienceMenu &menu)
 	(void)menu.consume({});
 }
 
+std::uint64_t surface_hash(const th03::present::SourceSurface &surface)
+{
+	std::uint64_t hash = 14695981039346656037ULL;
+	for(const auto &pixel : surface.pixels) {
+		hash ^= static_cast<std::uint8_t>(pixel.layer);
+		hash *= 1099511628211ULL;
+		hash ^= pixel.value;
+		hash *= 1099511628211ULL;
+	}
+	return hash;
+}
+
 void test_surface_and_profiles()
 {
 	ExperienceMenu menu;
@@ -42,6 +55,17 @@ void test_surface_and_profiles()
 			[](const auto &pixel) { return pixel.value == 14U; }
 		),
 		"the initial Classic choice has visible selected-label ink"
+	);
+	const auto at = [&surface](std::size_t x, std::size_t y) {
+		return surface.pixels[(y * th03::present::graphics_width) + x].value;
+	};
+	expect(
+		at(242U, 68U) == 3U && at(242U, 76U) == 15U,
+		"the shell heading renders the exact mixed-case PoDD Port title"
+	);
+	expect(
+		surface_hash(surface) == 3737366376350595403ULL,
+		"the complete initial shell publication locks PoDD Port and removes the superseded heading"
 	);
 	expect(
 		th03::app::experience_profile(ExperienceMenuChoice::classic) ==

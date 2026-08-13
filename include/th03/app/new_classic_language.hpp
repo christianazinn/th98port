@@ -49,7 +49,7 @@ private:
 	std::map<std::string, ResourceBytes> members_{};
 };
 
-// Accepts only the complete Replay Patch 0.4.11 TH3EN.DAT profile. The whole
+// Accepts only the complete Replay Patch 0.4.12 TH3EN.DAT profile. The whole
 // archive is authenticated before its encrypted directory or any translated
 // payload is consulted.
 [[nodiscard]] std::expected<
