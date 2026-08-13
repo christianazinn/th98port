@@ -260,6 +260,8 @@ struct NewClassicReplayPlayback::Impl final {
 	bool terminal_mainl_bypass_taken = false;
 	bool mainl_error_progression = false;
 	bool preroll_simulating = false;
+	bool suppress_preroll_presentation = true;
+	std::uint32_t preroll_sample_count = 0U;
 	bool fast_forward = false;
 	bool reduced_flash = false;
 	NewClassicPlaybackStatus status = NewClassicPlaybackStatus::running;
@@ -469,6 +471,10 @@ struct NewClassicReplayPlayback::Impl final {
 			return std::unexpected(std::move(error));
 		}
 		process = std::move(*created);
+		MainProcessReplayPresentationAccess::set_preroll_simulating(
+			*process,
+			preroll_simulating && suppress_preroll_presentation
+		);
 		auto created_driver = MainProcessDriver::create({
 			.context = process.get(),
 			.step = &process_step,
@@ -725,6 +731,15 @@ struct NewClassicReplayPlayback::Impl final {
 std::expected<std::unique_ptr<NewClassicReplayPlayback>, NewClassicPlaybackError>
 NewClassicReplayPlayback::load(NewClassicPlaybackRequest request)
 {
+	return load_internal(std::move(request), true);
+}
+
+std::expected<std::unique_ptr<NewClassicReplayPlayback>, NewClassicPlaybackError>
+NewClassicReplayPlayback::load_internal(
+	NewClassicPlaybackRequest request,
+	bool suppress_preroll_presentation
+)
+{
 	if(request.content.data_root.empty() ||
 		request.content.main_executable.empty() ||
 		request.content.mainl_executable.empty() ||
@@ -869,17 +884,32 @@ NewClassicReplayPlayback::load(NewClassicPlaybackRequest request)
 	auto result = std::unique_ptr<NewClassicReplayPlayback>(
 		new NewClassicReplayPlayback(std::move(impl))
 	);
+	result->impl_->suppress_preroll_presentation =
+		suppress_preroll_presentation;
 	result->impl_->preroll_simulating = true;
+	if(suppress_preroll_presentation) {
+		MainProcessReplayPresentationAccess::set_preroll_simulating(
+			*result->impl_->process, true
+		);
+	}
 	while(result->sample_index() < target_sample &&
 		result->status() == NewClassicPlaybackStatus::running) {
+		const auto sample_before = result->sample_index();
 		auto advanced = result->advance({}, false, false);
 		if(!advanced) {
 			return std::unexpected(std::move(advanced.error()));
 		}
 		while(result->take_audio_command()) {
 		}
+		result->impl_->preroll_sample_count +=
+			result->sample_index() - sample_before;
 	}
 	result->impl_->preroll_simulating = false;
+	if(result->impl_->process && suppress_preroll_presentation) {
+		MainProcessReplayPresentationAccess::set_preroll_simulating(
+			*result->impl_->process, false
+		);
+	}
 	if(result->sample_index() != target_sample ||
 		result->status() != NewClassicPlaybackStatus::running) {
 		return std::unexpected(playback_error(
@@ -1594,6 +1624,16 @@ NewClassicPlaybackOwner NewClassicReplayPlaybackTestAccess::owner(
 		NewClassicPlaybackOwner::none;
 }
 
+std::expected<std::unique_ptr<NewClassicReplayPlayback>, NewClassicPlaybackError>
+NewClassicReplayPlaybackTestAccess::load_with_full_preroll(
+	NewClassicPlaybackRequest request
+)
+{
+	return NewClassicReplayPlayback::load_internal(
+		std::move(request), false
+	);
+}
+
 std::uint32_t NewClassicReplayPlaybackTestAccess::interstitial_sample_count(
 	const NewClassicReplayPlayback &playback
 ) noexcept
@@ -1654,6 +1694,13 @@ bool NewClassicReplayPlaybackTestAccess::mainl_error_progression_active(
 ) noexcept
 {
 	return playback.impl_->mainl_error_progression;
+}
+
+std::uint32_t NewClassicReplayPlaybackTestAccess::preroll_sample_count(
+	const NewClassicReplayPlayback &playback
+) noexcept
+{
+	return playback.impl_->preroll_sample_count;
 }
 
 bool NewClassicReplayPlaybackTestAccess::put_main_replay_overlay(

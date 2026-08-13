@@ -144,6 +144,64 @@ th03::formats::ReplayDocument make_story_document()
 	return document;
 }
 
+th03::formats::ReplayDocument make_multi_round_story_document()
+{
+	auto document = make_story_document();
+	auto &metadata = *document.metadata;
+	metadata.final_story_stage = std::uint8_t{8U};
+	metadata.final_round_id = std::uint8_t{2U};
+	metadata.stage_reached_count = 9U;
+	for(std::size_t stage = 0U; stage < 9U; ++stage) {
+		metadata.story->stage_opponents[stage] = 4U;
+	}
+	document.checkpoints.clear();
+	document.expected_round_splits.clear();
+	document.session.records.clear();
+	for(std::uint32_t sample = 0U; sample < 11U; ++sample) {
+		document.session.records.push_back(th03::replay::InputSample{
+			.frame_index = sample,
+			.phase = th03::replay::InputPhase::gameplay,
+			.input = {},
+			.round_frame = std::nullopt,
+			.round_or_result_frame = std::nullopt,
+		});
+	}
+	document.session.records.push_back(th03::replay::ProcessBoundary{
+		.sample_index = 11U,
+		.completed_process = th03::replay::ProcessId::main,
+	});
+	document.session.sample_count = 11U;
+	metadata.sample_count = 11U;
+	metadata.final_frame_count = 11U;
+	std::uint32_t checkpoint_sample = 0U;
+	for(std::uint8_t stage = 0U; stage < 9U; ++stage) {
+		const auto count = stage == 8U ? 3U : 1U;
+		for(std::uint8_t round = 0U; round < count; ++round) {
+			auto init = document.session.init;
+			init.story_stage = stage;
+			init.story_opponents.fill(4);
+			init.round_start_snapshot->state.round_id = round;
+			document.checkpoints.push_back({
+				.stage = stage,
+				.round = round,
+				.sample_index = checkpoint_sample,
+				.global_frame = checkpoint_sample,
+				.input_byte_cursor = 0U,
+				.init = init,
+			});
+			document.expected_round_splits.push_back({
+				.story_stage = stage,
+				.round_id = round,
+				.route = 2U,
+				.winner = 0,
+				.real_frames = std::nullopt,
+			});
+			++checkpoint_sample;
+		}
+	}
+	return document;
+}
+
 th03::formats::ReplayDocument make_practice_document()
 {
 	auto document = make_document();
@@ -342,6 +400,60 @@ void test_catalog_browser_and_save()
 			}),
 			"playback transition publishes black page 0 before synchronous preroll"
 		);
+	}
+	auto multi_round_document = make_multi_round_story_document();
+	auto multi_round_encoded = th03::formats::write_v13_replay(
+		multi_round_document
+	);
+	if(!multi_round_encoded) {
+		std::cerr << "multi-round writer: " <<
+			multi_round_encoded.error().message << '\n';
+	}
+	expect(multi_round_encoded.has_value(),
+		"multi-round Story fixture encodes as strict V13");
+	auto multi_round_commit = commit_replay_slot(
+		root, 4U, multi_round_document
+	);
+	expect(
+		multi_round_commit.has_value(),
+		"multi-round Story fixture commits through the real V13 store"
+	);
+	if(multi_round_commit) {
+		auto multi_round = NewClassicReplayBrowser::load(root, patch_assets);
+		expect(multi_round.has_value(),
+			"browser reloads the committed multi-round Story fixture");
+		if(multi_round) {
+			finish_entry_fade(**multi_round);
+			for(std::size_t slot = 0U; slot < 4U; ++slot) {
+				static_cast<void>((*multi_round)->consume({}));
+				static_cast<void>((*multi_round)->consume({.down = true}));
+			}
+			static_cast<void>((*multi_round)->consume({}));
+			auto opened = (*multi_round)->consume({.confirm = true});
+			expect(opened && opened->surface_changed,
+				"browser opens the later-round Story fixture");
+			for(std::size_t checkpoint = 0U; checkpoint < 10U; ++checkpoint) {
+				static_cast<void>((*multi_round)->consume({}));
+				static_cast<void>((*multi_round)->consume({.down = true}));
+			}
+			static_cast<void>((*multi_round)->consume({}));
+			auto selected = (*multi_round)->consume({.confirm = true});
+			if(!selected || selected->status !=
+				NewClassicReplayBrowserStatus::play_selected ||
+				(*multi_round)->selected_checkpoint() != 10U) {
+				std::cerr << "multi-round selection slot=" <<
+					static_cast<unsigned>((*multi_round)->selected_slot()) <<
+					" checkpoint=" << (*multi_round)->selected_checkpoint() <<
+					" status=" << (selected ? static_cast<unsigned>(selected->status) :
+						999U) << '\n';
+			}
+			expect(
+				selected && selected->status ==
+					NewClassicReplayBrowserStatus::play_selected &&
+				(*multi_round)->selected_checkpoint() == 10U,
+				"Story physical-round navigation launches checkpoint index 10"
+			);
+		}
 	}
 
 	{

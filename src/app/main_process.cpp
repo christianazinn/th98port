@@ -450,6 +450,31 @@ struct MainProcess::Impl {
 	std::optional<present::MainHudResultPresenter> hud_result{};
 	std::optional<present::MainRoundPresenter> round{};
 	std::optional<Game> game{};
+	bool preroll_simulating = false;
+
+	void emplace_round_presenter() noexcept
+	{
+		round.emplace(
+			raster,
+			tram,
+			static_presenter,
+			palette,
+			*background,
+			*bosses,
+			*entities,
+			*effects,
+			*extra_charge,
+			*players_bullets,
+			*bombs,
+			*warning_gauge,
+			*hud_result,
+			present::MainFeedbackSink{
+				.context = this,
+				.request = &Impl::request_feedback_callback,
+				.dispatch = &Impl::feedback_dispatch_callback,
+			}
+		);
+	}
 };
 
 const assets::MrsImage *MainProcessTestAccess::portrait(
@@ -1417,26 +1442,7 @@ MainProcess::create_common(
 			MainProcessErrorCode::presenter_setup_failed
 		));
 	}
-	impl->round.emplace(
-		impl->raster,
-		impl->tram,
-		impl->static_presenter,
-		impl->palette,
-		*impl->background,
-		*impl->bosses,
-		*impl->entities,
-		*impl->effects,
-		*impl->extra_charge,
-		*impl->players_bullets,
-		*impl->bombs,
-		*impl->warning_gauge,
-		*impl->hud_result,
-		present::MainFeedbackSink{
-			.context = impl.get(),
-			.request = &Impl::request_feedback_callback,
-			.dispatch = &Impl::feedback_dispatch_callback,
-		}
-	);
+	impl->emplace_round_presenter();
 	if(!impl->round->ready()) {
 		return std::unexpected(presentation_error(impl->round->status()));
 	}
@@ -1494,7 +1500,21 @@ std::expected<StepResult, MainProcessError> MainProcess::step(
 			MainProcessErrorCode::invalid_runtime_argument
 		));
 	}
-	const auto result = impl_->game->step(input, context, &*impl_->round);
+	const auto result = impl_->game->step(
+		input,
+		context,
+		impl_->preroll_simulating ? static_cast<GameplayObserver *>(
+			&*impl_->background
+		) : static_cast<GameplayObserver *>(&*impl_->round)
+	);
+	if(impl_->preroll_simulating) {
+		if(!impl_->background->ready()) {
+			return std::unexpected(process_error(
+				MainProcessErrorCode::presentation_failed
+			));
+		}
+		return result;
+	}
 	if(impl_->audio_feedback_failed) {
 		return std::unexpected(process_error(
 			MainProcessErrorCode::audio_command_pending
@@ -1565,7 +1585,17 @@ std::expected<void, MainProcessError> MainProcess::start_next_round() noexcept
 			MainProcessErrorCode::repeat_startup_failed
 		));
 	}
-	if(!impl_->round->repeat_round_startup(*hud)) {
+	if(impl_->preroll_simulating) {
+		if(!impl_->static_presenter.repeat_round_startup(
+			impl_->raster, impl_->tram, *hud, impl_->palette
+		)) {
+			return std::unexpected(process_error(
+				MainProcessErrorCode::repeat_startup_failed
+			));
+		}
+		impl_->palette.set_tone_and_show_now(impl_->raster, 100);
+		impl_->emplace_round_presenter();
+	} else if(!impl_->round->repeat_round_startup(*hud)) {
 		if(!impl_->round->ready()) {
 			return std::unexpected(presentation_error(impl_->round->status()));
 		}
@@ -1703,6 +1733,15 @@ present::Tram &MainProcessReplayPresentationAccess::tram(
 ) noexcept
 {
 	return process.impl_->tram;
+}
+
+void MainProcessReplayPresentationAccess::set_preroll_simulating(
+	MainProcess &process,
+	bool simulating
+) noexcept
+{
+	process.impl_->preroll_simulating = simulating;
+	process.impl_->background->set_rendering_enabled(!simulating);
 }
 
 present::MainRoundStatus MainProcess::presentation_status() const noexcept

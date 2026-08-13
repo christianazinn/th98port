@@ -406,6 +406,7 @@ struct FakeRunnerBackend final {
 		th03::app::ClassicOpSessionStatus::running;
 	bool fail_consume = false;
 	bool fail_compose = false;
+	bool clock_rebase_next = false;
 	std::optional<th03::app::ClassicAudioCommand> audio{};
 	std::optional<bool> reduced_flash_update{};
 	th03::app::PixelOracleSourceIdentity pixel_oracle_source_identity{
@@ -447,6 +448,9 @@ th03::app::ClassicRunnerOperations runner_operations(
 				self.pixel_oracle_source_identity.replay_global_frame = next;
 				self.pixel_oracle_source_identity.round_frame = next;
 			}
+			const bool clock_rebase = std::exchange(
+				self.clock_rebase_next, false
+			);
 			return std::expected<
 				th03::app::ClassicOpSessionTick,
 				th03::app::ClassicOpSessionError
@@ -455,6 +459,7 @@ th03::app::ClassicRunnerOperations runner_operations(
 				.status = status,
 				.surface_changed = true,
 				.input_sampled = true,
+				.clock_rebase_requested = clock_rebase,
 				.pixel_oracle_source_identity = publication_identity,
 			}};
 		},
@@ -649,6 +654,7 @@ void test_runner_sequence_audio_surface_and_failure()
 		"runner forwards each semantic audio command exactly once"
 	);
 
+	backend->clock_rebase_next = true;
 	auto first = runner->consume({
 		.tick_index = 0U,
 		.deadline_ns = 10U,
@@ -657,10 +663,11 @@ void test_runner_sequence_audio_surface_and_failure()
 	expect(
 		first && first->status == th03::app::ClassicRunnerStatus::running &&
 			first->surface_changed && first->input_sampled &&
+			first->clock_rebase_requested &&
 			backend->consume_count == 1U &&
 			backend->last_input.op.shot &&
 			backend->last_input.audio.volume == 255U,
-		"one logical sample reaches the session with the silent-audio default"
+		"one logical sample forwards a synchronous reconstruction clock rebase"
 	);
 	const auto skipped = runner->consume({
 		.tick_index = 2U,

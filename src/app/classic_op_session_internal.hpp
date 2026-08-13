@@ -133,6 +133,7 @@ struct ClassicOpSessionTick final {
 	bool input_sampled = false;
 	bool process_advanced = false;
 	bool round_started = false;
+	bool clock_rebase_requested = false;
 	PixelOracleSourceIdentity pixel_oracle_source_identity{};
 };
 

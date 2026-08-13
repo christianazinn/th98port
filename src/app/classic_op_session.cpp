@@ -473,6 +473,7 @@ struct ClassicOpSession::Impl final {
 	ClassicOpSessionStatus status = ClassicOpSessionStatus::running;
 	std::optional<ClassicOpSessionError> failure{};
 	bool boundary_ready = false;
+	bool clock_rebase_requested = false;
 	NewClassicReplayRecorder *replay_recorder = nullptr;
 	bool new_classic_practice_route = false;
 
@@ -636,6 +637,7 @@ struct ClassicOpSession::Impl final {
 				break;
 			case ClassicOpSessionReplayResult::play:
 				scene = ClassicOpSessionScene::replay_playback;
+				clock_rebase_requested = true;
 				break;
 			case ClassicOpSessionReplayResult::application_quit:
 				status = ClassicOpSessionStatus::quit_requested;
@@ -4094,6 +4096,9 @@ ClassicOpSession::consume(const ClassicOpSessionInput &input)
 		.input_sampled = backend_tick.input_sampled,
 		.process_advanced = backend_tick.process_advanced,
 		.round_started = backend_tick.round_started,
+		.clock_rebase_requested = std::exchange(
+			impl_->clock_rebase_requested, false
+		),
 		.pixel_oracle_source_identity = publication_identity,
 	};
 }

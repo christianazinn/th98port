@@ -467,6 +467,9 @@ void MainBackgroundPresenter::move(Record &record) noexcept
 
 bool MainBackgroundPresenter::draw_dot(const Record &record) noexcept
 {
+	if(!rendering_enabled_) {
+		return true;
+	}
 	const auto x = signed_shift_right(record.x_q12_4, 4U);
 	const auto screen_y = signed_shift_right(record.y_q12_4, 4U);
 	const auto raw_y = signed_shift_right(
@@ -499,6 +502,9 @@ bool MainBackgroundPresenter::draw_sprite(
 			(frame_mod_4096 & 0x001FU) >> 3U
 		);
 		source = layout_.type_b_animation[cel];
+	}
+	if(!rendering_enabled_) {
+		return true;
 	}
 
 	const Point position{
@@ -600,6 +606,11 @@ bool MainBackgroundPresenter::ready() const noexcept
 bool MainBackgroundPresenter::initialization_complete() const noexcept
 {
 	return ready() && initialized_ && read_stream_ == ReadStream::none;
+}
+
+void MainBackgroundPresenter::set_rendering_enabled(bool enabled) noexcept
+{
+	rendering_enabled_ = enabled;
 }
 
 } // namespace th03::present

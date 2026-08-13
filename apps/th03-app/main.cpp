@@ -1476,6 +1476,18 @@ ExperienceRunResult run_classic_session(
 					return {.exit_code = fail("key-config-apply", replaced.error())};
 				}
 			}
+			if(consumed->clock_rebase_requested) {
+				const auto resumed_at = th03::platform::sdl_ticks_now_ns();
+				if(auto rebased = scheduler->rebase_after_modal(resumed_at);
+					!rebased) {
+					return {.exit_code = fail_tick(rebased.error())};
+				}
+				if(auto reset = mapper.reset_after_modal(*scheduler, resumed_at);
+					!reset) {
+					return {.exit_code = fail("input-rebase", reset.error())};
+				}
+				retry_blocked_event = false;
+			}
 			const auto next_source_deadline = scheduler->next_deadline_ns();
 			(*runner)->classify_pending_replay_frame(
 				next_source_deadline &&

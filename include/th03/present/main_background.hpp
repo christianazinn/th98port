@@ -76,6 +76,11 @@ public:
 	// has been consumed. `ready()` alone also describes the valid pre-stream
 	// state used while an application assembles a MAIN process.
 	[[nodiscard]] bool initialization_complete() const noexcept;
+	// Replay Patch RC11/RC12 advances this process-private pool while its
+	// hardware put entry points are suppressed. Native later-checkpoint preroll
+	// uses the same split: positions, velocities, phases, and RNG observations
+	// advance, but hidden frames do not touch the Raster.
+	void set_rendering_enabled(bool enabled) noexcept;
 
 private:
 	struct Record {
@@ -125,6 +130,7 @@ private:
 	// D1E7/D3F9 leave their automatic flag untouched in two schedule gaps.
 	// Retaining its preceding value makes that source stack dependency explicit.
 	bool vector_latch_ = false;
+	bool rendering_enabled_ = true;
 	MainBackgroundStatus status_ = MainBackgroundStatus::ready;
 };
 

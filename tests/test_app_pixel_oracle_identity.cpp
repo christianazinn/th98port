@@ -143,12 +143,12 @@ void test_capture_cli()
 		std::string_view("FONT.ROM"), std::string_view("--smoke-ticks"),
 		std::string_view("200"), std::string_view("--capture-replay"),
 		std::string_view("route.rpy"), std::string_view("--capture-checkpoint"),
-		std::string_view("0"),
+		std::string_view("10"),
 	};
 	const auto accepted = parse(valid);
 	expect(accepted && accepted->capture_replay == "route.rpy" &&
-		accepted->capture_checkpoint == 0U && accepted->smoke_ticks == 200U,
-		"bounded New Classic replay capture CLI accepts V13 and checkpoint");
+		accepted->capture_checkpoint == 10U && accepted->smoke_ticks == 200U,
+		"bounded New Classic replay capture accepts a later-round checkpoint");
 
 	constexpr std::array no_bound{
 		std::string_view("--new-classic"), std::string_view("--data"),
@@ -180,10 +180,10 @@ void test_capture_cli()
 		"replay capture cannot silently change Classic mode authority");
 	auto later_checkpoint = valid;
 	later_checkpoint.back() = "3";
-	const auto unsupported_checkpoint = parse(later_checkpoint);
-	expect(!unsupported_checkpoint && unsupported_checkpoint.error().code ==
-		th03::app::ClassicCliErrorCode::invalid_capture_route,
-		"capture rejects later checkpoints until skipped invocation count is proven");
+	const auto accepted_other_checkpoint = parse(later_checkpoint);
+	expect(accepted_other_checkpoint &&
+		accepted_other_checkpoint->capture_checkpoint == 3U,
+		"capture accepts each replay checkpoint selected by the pixel corpus");
 }
 
 } // namespace

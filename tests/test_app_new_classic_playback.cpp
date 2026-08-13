@@ -9,6 +9,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "th03/app/new_classic_playback.hpp"
@@ -54,6 +55,39 @@ std::vector<std::byte> read_file(const std::filesystem::path &path)
 		static_cast<std::streamsize>(result.size())
 	);
 	return input ? result : std::vector<std::byte>{};
+}
+
+std::uint64_t composed_surface_hash(
+	std::span<const th03::present::ComposedPixel> pixels
+) noexcept
+{
+	std::uint64_t hash = 1469598103934665603ULL;
+	for(const auto pixel : pixels) {
+		hash ^= static_cast<std::uint8_t>(pixel.layer);
+		hash *= 1099511628211ULL;
+		hash ^= pixel.value;
+		hash *= 1099511628211ULL;
+	}
+	return hash;
+}
+
+bool process_start_checkpoint(
+	const th03::formats::ReplayDocument &document,
+	std::size_t checkpoint_index
+) noexcept
+{
+	const auto sample = document.checkpoints[checkpoint_index].sample_index;
+	if(sample == 0U) {
+		return true;
+	}
+	for(const auto &record : document.session.records) {
+		const auto *boundary = std::get_if<th03::replay::ProcessBoundary>(&record);
+		if(boundary && boundary->sample_index == sample &&
+			boundary->completed_process == th03::replay::ProcessId::mainl) {
+			return true;
+		}
+	}
+	return false;
 }
 
 std::optional<th03::formats::ReplayDocument> insert_recorded_pause(
@@ -536,7 +570,20 @@ void test_authentic(
 	}
 	expect(advanced != 0U && (*loaded)->sample_index() != 0U,
 		"authentic playback advances recorded MAIN state and sample cursor");
-	if(later_checkpoint != 0U) {
+	for(std::size_t checkpoint_index = 1U;
+		checkpoint_index < later_document.checkpoints.size(); ++checkpoint_index) {
+		if(later_document.checkpoints[checkpoint_index].round == 0U) {
+			continue;
+		}
+		std::size_t anchor_index = checkpoint_index;
+		while(anchor_index != 0U &&
+			!process_start_checkpoint(later_document, anchor_index)) {
+			--anchor_index;
+		}
+		const auto checkpoint_sample =
+			later_document.checkpoints[checkpoint_index].sample_index;
+		const auto anchor_sample =
+			later_document.checkpoints[anchor_index].sample_index;
 		auto later = th03::app::NewClassicReplayPlayback::load({
 			.content = {
 				.data_root = data,
@@ -546,15 +593,26 @@ void test_authentic(
 				.score = score,
 			},
 			.document = later_document,
-			.checkpoint_index = later_checkpoint,
+			.checkpoint_index = checkpoint_index,
 		});
 		expect(
-			later && (*later)->sample_index() == later_sample,
-			"later checkpoint performs hidden process-start pre-roll to its exact cursor"
+			later && (*later)->sample_index() == checkpoint_sample,
+			"later checkpoint lands on its exact selected-round cursor"
 		);
 		if(later) {
+			expect(
+				th03::app::NewClassicReplayPlaybackTestAccess::
+					preroll_sample_count(**later) ==
+						checkpoint_sample - anchor_sample,
+				"later checkpoint reconstructs exactly the process-anchor sample span"
+			);
+			expect(
+				th03::app::NewClassicReplayPlaybackTestAccess::
+					main_round_frame(**later) == 0U,
+				"later checkpoint is public before the selected round's first frame"
+			);
 			const auto expected_song = th03::app::classic_main_gameplay_song(
-				later_document.checkpoints[later_checkpoint].init
+				later_document.checkpoints[checkpoint_index].init
 			);
 			std::vector<th03::app::ClassicAudioCommand> checkpoint_audio{};
 			while(auto command = (*later)->take_audio_command()) {
@@ -574,13 +632,128 @@ void test_authentic(
 			std::vector<th03::present::ComposedPixel> later_pixels(
 				th03::present::graphics_page_pixels
 			);
-			expect(
-				(*later)->compose_shown_surface(std::span<
+			auto later_surface = (*later)->compose_shown_surface(std::span<
 					th03::present::ComposedPixel,
 					th03::present::graphics_page_pixels
-				>(later_pixels.data(), later_pixels.size())).has_value(),
-				"pre-rolled checkpoint retains a composable shared presentation surface"
+				>(later_pixels.data(), later_pixels.size()));
+			expect(
+				later_surface && later_surface->shown_page == th03::present::Page::one,
+				"later checkpoint publishes the selected round-start page"
 			);
+			constexpr std::array<std::pair<std::uint32_t, std::uint64_t>, 4U>
+				reference_surfaces{{
+					{76'175U, 0x9AA4BAA7E3AC9DBBULL},
+					{133'776U, 0x74068078AE1CAA23ULL},
+					{143'167U, 0x3FDB8049E8086ACBULL},
+					{153'036U, 0x89004C608E844743ULL},
+				}};
+			for(const auto &[sample, expected_hash] : reference_surfaces) {
+				if(checkpoint_sample == sample) {
+					expect(
+						composed_surface_hash(later_pixels) == expected_hash,
+						"TH3R01 later checkpoint matches the locked full-preroll surface"
+					);
+				}
+			}
+			auto first = (*later)->advance({}, false, false);
+			expect(
+				first && first->process_advanced &&
+					(*later)->sample_index() == checkpoint_sample + 1U,
+				"first visible advance consumes the selected round's first sample"
+			);
+		}
+	}
+	const auto reference_checkpoint = std::find_if(
+		later_document.checkpoints.begin(),
+		later_document.checkpoints.end(),
+		[](const th03::formats::ReplayCheckpoint &checkpoint) {
+			return checkpoint.sample_index == 133'776U;
+		}
+	);
+	expect(reference_checkpoint != later_document.checkpoints.end(),
+		"TH3R01 contains the locked Stage 9 Round 2 checkpoint");
+	if(reference_checkpoint != later_document.checkpoints.end()) {
+		const auto checkpoint_index = static_cast<std::size_t>(std::distance(
+			later_document.checkpoints.begin(), reference_checkpoint
+		));
+		const auto playback_request = [&]() {
+			return th03::app::NewClassicPlaybackRequest{
+				.content = {
+					.data_root = data,
+					.main_executable = main,
+					.mainl_executable = mainl,
+					.font_rom = font,
+					.score = score,
+				},
+				.document = later_document,
+				.checkpoint_index = checkpoint_index,
+			};
+		};
+		auto optimized = th03::app::NewClassicReplayPlayback::load(
+			playback_request()
+		);
+		auto full = th03::app::NewClassicReplayPlaybackTestAccess::
+			load_with_full_preroll(playback_request());
+		expect(optimized && full,
+			"suppressed and full-presenter checkpoint reconstruction both load");
+		if(optimized && full) {
+			while((*optimized)->take_audio_command()) {
+			}
+			while((*full)->take_audio_command()) {
+			}
+			std::vector<th03::present::ComposedPixel> optimized_pixels(
+				th03::present::graphics_page_pixels
+			);
+			std::vector<th03::present::ComposedPixel> full_pixels(
+				th03::present::graphics_page_pixels
+			);
+			for(std::size_t frame = 0U; frame <= 120U; ++frame) {
+				auto optimized_surface = (*optimized)->compose_shown_surface(
+					std::span<
+						th03::present::ComposedPixel,
+						th03::present::graphics_page_pixels
+					>(optimized_pixels.data(), optimized_pixels.size())
+				);
+				auto full_surface = (*full)->compose_shown_surface(std::span<
+					th03::present::ComposedPixel,
+					th03::present::graphics_page_pixels
+				>(full_pixels.data(), full_pixels.size()));
+				expect(
+					optimized_surface && full_surface &&
+					optimized_pixels == full_pixels &&
+					(*optimized)->sample_index() == (*full)->sample_index() &&
+					th03::app::NewClassicReplayPlaybackTestAccess::owner(
+						**optimized
+					) == th03::app::NewClassicReplayPlaybackTestAccess::owner(
+						**full
+					) &&
+					th03::app::NewClassicReplayPlaybackTestAccess::main_state_hash(
+						**optimized
+					) == th03::app::NewClassicReplayPlaybackTestAccess::main_state_hash(
+						**full
+					),
+					"suppressed preroll remains pixel/state-exact for 120 visible Stage 9 Round 2 frames"
+				);
+				if(frame == 120U || !optimized_surface || !full_surface) {
+					break;
+				}
+				auto optimized_tick = (*optimized)->advance({}, false, false);
+				auto full_tick = (*full)->advance({}, false, false);
+				expect(
+					optimized_tick && full_tick &&
+					optimized_tick->surface_changed == full_tick->surface_changed &&
+					optimized_tick->process_advanced == full_tick->process_advanced &&
+					optimized_tick->status == full_tick->status,
+					"suppressed preroll preserves the full-presenter visible tick trajectory"
+				);
+				while((*optimized)->take_audio_command()) {
+				}
+				while((*full)->take_audio_command()) {
+				}
+				if(!optimized_tick || !full_tick) {
+					break;
+				}
+			}
 		}
 	}
 	if(paused_document) {

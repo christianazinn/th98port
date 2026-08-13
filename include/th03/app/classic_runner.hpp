@@ -145,6 +145,10 @@ struct ClassicRunnerConsumeResult final {
 	bool input_sampled = false;
 	bool process_advanced = false;
 	bool round_started = false;
+	// A synchronous source-owned reconstruction completed behind a black
+	// boundary. The platform must discard elapsed wall-clock debt before it
+	// publishes or advances the reconstructed owner.
+	bool clock_rebase_requested = false;
 	PixelOracleIdentity pixel_oracle_identity{};
 	ClassicRunnerStatus status = ClassicRunnerStatus::failed;
 };

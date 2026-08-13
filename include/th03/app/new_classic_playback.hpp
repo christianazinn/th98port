@@ -122,6 +122,13 @@ public:
 private:
 	friend struct NewClassicReplayPlaybackTestAccess;
 	struct Impl;
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<NewClassicReplayPlayback>,
+		NewClassicPlaybackError
+	> load_internal(
+		NewClassicPlaybackRequest request,
+		bool suppress_preroll_presentation
+	);
 	explicit NewClassicReplayPlayback(std::unique_ptr<Impl> impl) noexcept;
 	std::unique_ptr<Impl> impl_;
 };

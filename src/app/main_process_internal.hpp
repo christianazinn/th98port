@@ -150,6 +150,10 @@ struct MainProcessDemoAccess final {
 struct MainProcessReplayPresentationAccess final {
 	[[nodiscard]] static present::Raster &raster(MainProcess &process) noexcept;
 	[[nodiscard]] static present::Tram &tram(MainProcess &process) noexcept;
+	static void set_preroll_simulating(
+		MainProcess &process,
+		bool simulating
+	) noexcept;
 };
 
 } // namespace th03::app

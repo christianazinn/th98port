@@ -163,7 +163,7 @@ optional checkpoint. The explicit smoke bound is mandatory:
 
 ```powershell
 th03-app --new-classic <normal arguments> `
-  --capture-replay .scratch\route.rpy --capture-checkpoint 0 `
+  --capture-replay .scratch\route.rpy --capture-checkpoint 10 `
   --smoke-ticks 2000
 ```
 
@@ -171,8 +171,11 @@ This starts the shared authenticated replay owner directly, without synthetic
 UI input, and creates SDL hidden so unattended capture cannot steal focus.
 T3PXH2 and T3RGB1 remain unchanged; T3ALI1's successful
 `publication` ordinal is the only join to those streams.
-Checkpoint zero is currently required so the skipped OP/MAINL invocation chain
-is exact rather than inferred from an arbitrary later snapshot.
+Later-round capture reconstructs the exact selected round-start source surface,
+then rebases the host clock before the first visible replay sample. The locked
+TH3R01 corpus covers its accelerated Stage 8 and Stage 9 Round 2/3/4 entries;
+their initial full composed surfaces must match the independent, pre-optimization
+full-preroll baselines before they are admitted to the guest/native pixel corpus.
 
 ## Lossless emulator-video ingestion (`T3EMU1`)
 

@@ -319,8 +319,7 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 	if((request.capture_replay && request.mode !=
 			ClassicLaunchMode::new_classic) ||
 		(checkpoint_selected && !request.capture_replay) ||
-		(request.capture_replay && !request.smoke_ticks) ||
-		(request.capture_replay && request.capture_checkpoint != 0U)) {
+		(request.capture_replay && !request.smoke_ticks)) {
 		return std::unexpected(cli_error(
 			ClassicCliErrorCode::invalid_capture_route,
 			request.capture_replay ? ClassicCliOption::capture_replay :

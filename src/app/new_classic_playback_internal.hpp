@@ -24,6 +24,10 @@ enum class NewClassicPlaybackOwner : std::uint8_t {
 };
 
 struct NewClassicReplayPlaybackTestAccess final {
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<NewClassicReplayPlayback>,
+		NewClassicPlaybackError
+	> load_with_full_preroll(NewClassicPlaybackRequest request);
 	[[nodiscard]] static NewClassicPlaybackOwner owner(
 		const NewClassicReplayPlayback &playback
 	) noexcept;
@@ -48,6 +52,9 @@ struct NewClassicReplayPlaybackTestAccess final {
 		bool registration
 	) noexcept;
 	[[nodiscard]] static bool mainl_error_progression_active(
+		const NewClassicReplayPlayback &playback
+	) noexcept;
+	[[nodiscard]] static std::uint32_t preroll_sample_count(
 		const NewClassicReplayPlayback &playback
 	) noexcept;
 	[[nodiscard]] static bool put_main_replay_overlay(

@@ -537,6 +537,7 @@ ClassicRunner::consume(
 		.input_sampled = advanced->input_sampled,
 		.process_advanced = advanced->process_advanced,
 		.round_started = advanced->round_started,
+		.clock_rebase_requested = advanced->clock_rebase_requested,
 		.pixel_oracle_identity = impl_->pixel_oracle_tracker.consume(
 			advanced->pixel_oracle_source_identity,
 			advanced->surface_changed
