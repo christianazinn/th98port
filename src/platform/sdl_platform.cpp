@@ -527,6 +527,18 @@ std::expected<SdlPresentResult, SdlPlatformError> SdlPlatform::present(
 	SdlPresentationOracleIdentity identity
 ) noexcept
 {
+	std::optional<std::uint64_t> publication{};
+	if(impl_->oracle_log.is_open()) {
+		publication = impl_->oracle_publication;
+	}
+	if(impl_->oracle_rgb_manifest.is_open()) {
+		if(publication && *publication != impl_->oracle_rgb_publication) {
+			return std::unexpected(SdlPlatformError{
+				.code = SdlPlatformErrorCode::oracle_rgb_write_failed,
+			});
+		}
+		publication = impl_->oracle_rgb_publication;
+	}
 	void *pixels = nullptr;
 	int pitch = 0;
 	if(!SDL_LockTexture(impl_->texture, nullptr, &pixels, &pitch)) {
@@ -600,7 +612,10 @@ std::expected<SdlPresentResult, SdlPlatformError> SdlPlatform::present(
 			.code = SdlPlatformErrorCode::oracle_rgb_write_failed,
 		});
 	}
-	return SdlPresentResult{destination};
+	return SdlPresentResult{
+		.destination = destination,
+		.oracle_publication = publication,
+	};
 }
 
 bool SdlPlatform::oracle_enabled() const noexcept

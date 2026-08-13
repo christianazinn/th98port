@@ -33,6 +33,8 @@ enum class ClassicCliOption : std::uint8_t {
 	tick_rate,
 	seed,
 	smoke_ticks,
+	capture_replay,
+	capture_checkpoint,
 };
 
 enum class ClassicLaunchMode : std::uint8_t {
@@ -49,6 +51,8 @@ enum class ClassicCliErrorCode : std::uint8_t {
 	invalid_tick_rate,
 	invalid_seed,
 	invalid_smoke_ticks,
+	invalid_capture_checkpoint,
+	invalid_capture_route,
 };
 
 struct ClassicCliError final {
@@ -70,6 +74,8 @@ struct ClassicCliRequest final {
 	std::optional<std::filesystem::path> rhythm_pcm{};
 	std::filesystem::path replay_root{};
 	std::optional<std::uint64_t> smoke_ticks{};
+	std::optional<std::filesystem::path> capture_replay{};
+	std::size_t capture_checkpoint = 0U;
 };
 
 // Parses arguments after argv[0]. The nominal PC-9801 24 kHz cadence is the

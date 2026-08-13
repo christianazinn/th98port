@@ -65,6 +65,10 @@ struct SdlPresentResult {
 	// Destination in physical output pixels. A drawable smaller than 640x400
 	// is a successful black-only presentation rather than a stretched frame.
 	std::optional<app::IntegerLetterboxRect> destination{};
+	// Shared successful T3PXH2/T3RGB1 ordinal when either developer oracle is
+	// active. This binds a separate app-layer identity sidecar without adding
+	// route semantics to SDL or changing either frozen manifest schema.
+	std::optional<std::uint64_t> oracle_publication{};
 };
 
 struct SdlPresentationOracleIdentity {

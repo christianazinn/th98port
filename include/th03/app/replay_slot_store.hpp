@@ -56,6 +56,11 @@ struct ReplaySlotLoadResult final {
 	const std::filesystem::path &replay_root
 );
 
+// Developer tools may name an exact V13 artifact without projecting it into a
+// player-facing slot. A missing path is reported as an empty result.
+[[nodiscard]] std::expected<ReplaySlotLoadResult, ReplaySlotStoreError>
+load_replay_file(const std::filesystem::path &path);
+
 // Missing slots are ordinary empty results. Existing bytes must be bounded,
 // regular, and accepted by the frozen V13 reader.
 [[nodiscard]] std::expected<ReplaySlotLoadResult, ReplaySlotStoreError>

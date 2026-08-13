@@ -27,6 +27,7 @@
 #include "th03/app/main_process.hpp"
 #include "th03/app/new_classic_language.hpp"
 #include "th03/app/new_classic_practice.hpp"
+#include "th03/app/pixel_oracle_identity.hpp"
 #include "th03/present/source_surface.hpp"
 
 namespace th03::app {
@@ -132,6 +133,7 @@ struct ClassicOpSessionTick final {
 	bool input_sampled = false;
 	bool process_advanced = false;
 	bool round_started = false;
+	PixelOracleSourceIdentity pixel_oracle_source_identity{};
 };
 
 struct ClassicOpSessionBackendTick final {
@@ -141,6 +143,7 @@ struct ClassicOpSessionBackendTick final {
 	bool process_advanced = false;
 	bool round_started = false;
 	bool return_to_selection = false;
+	std::optional<PixelOracleSourceIdentity> pixel_oracle_source_identity{};
 };
 
 struct ClassicOpSessionTitleResult final {
@@ -266,6 +269,8 @@ struct ClassicOpSessionBackendOperations final {
 	(*start_direct_vs_selection)(void *) = nullptr;
 	bool (*audio_pending)(void *) = nullptr;
 	std::optional<ClassicAudioCommand> (*take_audio_command)(void *) = nullptr;
+	std::optional<PixelOracleSourceIdentity>
+	(*pixel_oracle_source_identity)(void *) = nullptr;
 	std::expected<present::SourceSurface, ClassicOpSessionError>
 	(*compose_shown_surface)(
 		void *,
@@ -340,6 +345,8 @@ public:
 
 	[[nodiscard]] ClassicOpSessionScene scene() const noexcept;
 	[[nodiscard]] ClassicOpSessionStatus status() const noexcept;
+	[[nodiscard]] PixelOracleSourceIdentity
+	pixel_oracle_source_identity() const noexcept;
 
 private:
 	friend struct ClassicOpSessionTestAccess;

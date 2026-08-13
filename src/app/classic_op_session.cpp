@@ -430,6 +430,39 @@ namespace {
 	};
 }
 
+[[nodiscard]] constexpr PixelOracleScene pixel_oracle_scene(
+	ClassicOpSessionScene scene
+) noexcept
+{
+	switch(scene) {
+	case ClassicOpSessionScene::title_menu: return PixelOracleScene::title;
+	case ClassicOpSessionScene::options: return PixelOracleScene::options;
+	case ClassicOpSessionScene::key_config: return PixelOracleScene::key_config;
+	case ClassicOpSessionScene::replay_browser:
+		return PixelOracleScene::replay_browser;
+	case ClassicOpSessionScene::replay_playback:
+	case ClassicOpSessionScene::story:
+		return PixelOracleScene::unknown;
+	case ClassicOpSessionScene::music_room:
+		return PixelOracleScene::music_room;
+	case ClassicOpSessionScene::high_scores:
+		return PixelOracleScene::high_score;
+	case ClassicOpSessionScene::character_selection:
+		return PixelOracleScene::character_select;
+	case ClassicOpSessionScene::demo_stage_splash:
+	case ClassicOpSessionScene::vs_stage_splash:
+		return PixelOracleScene::stage_splash;
+	case ClassicOpSessionScene::demo_main:
+	case ClassicOpSessionScene::vs_main:
+		return PixelOracleScene::gameplay;
+	case ClassicOpSessionScene::vs_win: return PixelOracleScene::win;
+	case ClassicOpSessionScene::complete:
+	case ClassicOpSessionScene::failed:
+		return PixelOracleScene::unknown;
+	}
+	return PixelOracleScene::unknown;
+}
+
 } // namespace
 
 struct ClassicOpSession::Impl final {
@@ -959,6 +992,39 @@ struct ClassicOpSessionBackend final {
 		return {};
 	}
 
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	start_initial_replay(
+		const formats::ReplayDocument &document,
+		std::size_t checkpoint_index
+	)
+	{
+		if(replay_playback || !content_paths || !patch_assets) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		auto loaded = NewClassicReplayPlayback::load({
+			.content = *content_paths,
+			.document = document,
+			.checkpoint_index = checkpoint_index,
+			.kotohime_compatibility = kotohime_compatibility,
+			.reduced_flash = config.reduced_flash,
+			.language = config.language,
+		});
+		if(!loaded) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::replay_playback_failed
+			));
+		}
+		replay_playback = std::move(*loaded);
+		if(!drain_audio(*replay_playback)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::audio_command_pending
+			));
+		}
+		return {};
+	}
+
 	[[nodiscard]] std::expected<ClassicOpSessionBackendTick,
 		ClassicOpSessionError> advance_replay_browser(NewClassicUiInput input)
 	{
@@ -1091,8 +1157,11 @@ struct ClassicOpSessionBackend final {
 		replay_playback->set_fast_forward(fast_forward);
 		bool surface_changed = false;
 		bool process_advanced = false;
+		std::optional<PixelOracleSourceIdentity> publication_identity{};
 		const auto steps = replay_playback->fast_forward_step_count();
 		for(std::size_t step_index = 0U; step_index < steps; ++step_index) {
+			const auto identity_before =
+				replay_playback->pixel_oracle_source_identity();
 			auto advanced = replay_playback->advance(
 				audio,
 				step_index == 0U && input.cancel,
@@ -1103,6 +1172,17 @@ struct ClassicOpSessionBackend final {
 				return std::unexpected(session_error(
 					ClassicOpSessionErrorCode::replay_playback_failed
 				));
+			}
+			if(advanced->surface_changed) {
+				const auto identity_after =
+					replay_playback->pixel_oracle_source_identity();
+				// MAIN publishes after advancing its counters, but the frame still
+				// owns replay_frame_io()'s pre-sample identity. A process or scene
+				// replacement instead exposes the incoming owner's startup surface.
+				publication_identity =
+					(identity_before.process != identity_after.process ||
+					 identity_before.scene != identity_after.scene) ?
+						identity_after : identity_before;
 			}
 			surface_changed = surface_changed || advanced->surface_changed;
 			process_advanced = process_advanced || advanced->process_advanced;
@@ -1121,7 +1201,16 @@ struct ClassicOpSessionBackend final {
 			.ready = replay_playback->status() !=
 				NewClassicPlaybackStatus::running,
 			.process_advanced = process_advanced,
+			.pixel_oracle_source_identity = publication_identity,
 		};
+	}
+
+	[[nodiscard]] std::optional<PixelOracleSourceIdentity>
+	pixel_oracle_source_identity() const noexcept
+	{
+		return replay_playback ? std::optional<PixelOracleSourceIdentity>(
+			replay_playback->pixel_oracle_source_identity()
+		) : std::nullopt;
 	}
 
 	[[nodiscard]] std::expected<bool, ClassicOpSessionError>
@@ -3554,6 +3643,10 @@ Result backend_call(void *context, Method method, Args &&...args)
 			return static_cast<ClassicOpSessionBackend *>(context)->
 				take_audio_command();
 		},
+		.pixel_oracle_source_identity = [](void *context) {
+			return static_cast<const ClassicOpSessionBackend *>(context)->
+				pixel_oracle_source_identity();
+		},
 		.compose_shown_surface = [](void *context, auto output) {
 			return backend_call<std::expected<
 				present::SourceSurface, ClassicOpSessionError
@@ -3737,7 +3830,16 @@ ClassicOpSession::create(
 		));
 	}
 	std::expected<void, ClassicOpSessionError> started{};
-	if(new_classic_practice_route) {
+	const bool initial_replay = runner_request &&
+		runner_request->initial_route ==
+			ClassicRunnerInitialRoute::new_classic_replay &&
+		runner_request->initial_replay;
+	if(initial_replay) {
+		started = backend->start_initial_replay(
+			runner_request->initial_replay->document,
+			runner_request->initial_replay->checkpoint_index
+		);
+	} else if(new_classic_practice_route) {
 		resident.game_mode = game_mode::vs_1p_cpu;
 		resident.is_cpu = {0U, 1U};
 		resident.paletted_character = {1, 1};
@@ -3776,6 +3878,8 @@ ClassicOpSession::create(
 	);
 	if(session && backend->direct_vs_selection) {
 		(*session)->impl_->scene = ClassicOpSessionScene::character_selection;
+	} else if(session && initial_replay) {
+		(*session)->impl_->scene = ClassicOpSessionScene::replay_playback;
 	}
 	return session;
 }
@@ -3825,6 +3929,7 @@ ClassicOpSession::consume(const ClassicOpSessionInput &input)
 		return ClassicOpSessionTick{
 			.scene = impl_->scene,
 			.status = impl_->status,
+			.pixel_oracle_source_identity = pixel_oracle_source_identity(),
 		};
 	}
 	if(impl_->operations.audio_pending(impl_->operations.context)) {
@@ -3833,6 +3938,7 @@ ClassicOpSession::consume(const ClassicOpSessionInput &input)
 		));
 	}
 
+	const auto identity_before = pixel_oracle_source_identity();
 	ClassicOpSessionBackendTick backend_tick{};
 	bool transitioned = false;
 	const auto scene_before = impl_->scene;
@@ -3971,6 +4077,16 @@ ClassicOpSession::consume(const ClassicOpSessionInput &input)
 		transitioned = true;
 	}
 
+	auto publication_identity = backend_tick.pixel_oracle_source_identity.value_or(
+		identity_before
+	);
+	if(transitioned && impl_->status == ClassicOpSessionStatus::running) {
+		// transition() constructs the owner selected by compose_shown_surface().
+		// Its startup surface, not the completed child's last counters, owns this
+		// publication. Terminal routes retain the outgoing surface and therefore
+		// keep its identity.
+		publication_identity = pixel_oracle_source_identity();
+	}
 	return ClassicOpSessionTick{
 		.scene = impl_->scene,
 		.status = impl_->status,
@@ -3978,6 +4094,7 @@ ClassicOpSession::consume(const ClassicOpSessionInput &input)
 		.input_sampled = backend_tick.input_sampled,
 		.process_advanced = backend_tick.process_advanced,
 		.round_started = backend_tick.round_started,
+		.pixel_oracle_source_identity = publication_identity,
 	};
 }
 
@@ -4039,6 +4156,22 @@ ClassicOpSessionScene ClassicOpSession::scene() const noexcept
 ClassicOpSessionStatus ClassicOpSession::status() const noexcept
 {
 	return impl_->status;
+}
+
+PixelOracleSourceIdentity
+ClassicOpSession::pixel_oracle_source_identity() const noexcept
+{
+	if(impl_->operations.pixel_oracle_source_identity) {
+		if(auto child = impl_->operations.pixel_oracle_source_identity(
+			impl_->operations.context
+		)) {
+			return *child;
+		}
+	}
+	return {
+		.process = PixelOracleProcess::op,
+		.scene = pixel_oracle_scene(impl_->scene),
+	};
 }
 
 ClassicOpVsSurfaceSource ClassicOpSessionTestAccess::vs_surface_source(

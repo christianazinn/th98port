@@ -217,6 +217,7 @@ struct ClassicStorySessionBackendOperations final {
 	) = nullptr;
 	std::optional<ClassicAudioCommand> (*take_audio_command)(void *) =
 		nullptr;
+	std::optional<CanonicalState> (*main_canonical_state)(void *) = nullptr;
 	std::expected<present::SourceSurface, ClassicStorySessionError>
 	(*compose_shown_surface)(
 		void *,
@@ -306,6 +307,8 @@ public:
 	[[nodiscard]] ClassicStorySessionScene scene() const noexcept;
 	[[nodiscard]] ClassicStorySessionStatus status() const noexcept;
 	[[nodiscard]] std::uint32_t source_sample_count() const noexcept;
+	[[nodiscard]] std::optional<CanonicalState>
+	main_canonical_state() const noexcept;
 	[[nodiscard]] const GameInit &resident() const noexcept;
 	[[nodiscard]] bool restart_requested() const noexcept;
 private:

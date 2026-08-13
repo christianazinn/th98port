@@ -511,6 +511,7 @@ add_library(th03_app_main STATIC
 	src/app/new_classic_practice.cpp
 	src/app/new_classic_replay.cpp
 	src/app/op_compiled_text.cpp
+	src/app/pixel_oracle_identity.cpp
 	src/app/replay_slot_store.cpp
 )
 target_include_directories(th03_app_main PUBLIC include)
@@ -1111,6 +1112,18 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-classic-runner-tests
 		COMMAND th03-app-classic-runner-tests
+	)
+
+	add_executable(th03-app-pixel-oracle-identity-tests
+		tests/test_app_pixel_oracle_identity.cpp
+	)
+	target_link_libraries(
+		th03-app-pixel-oracle-identity-tests PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-pixel-oracle-identity-tests)
+	add_test(
+		NAME th03-app-pixel-oracle-identity-tests
+		COMMAND th03-app-pixel-oracle-identity-tests
 	)
 
 	add_executable(th03-app-new-classic-language-tests

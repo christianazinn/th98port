@@ -145,6 +145,10 @@ struct FakeBackend final {
 	std::size_t win_finishes = 0U;
 	std::size_t direct_selection_starts = 0U;
 	ClassicOpSelectionMode started_mode = ClassicOpSelectionMode::story;
+	th03::app::PixelOracleSourceIdentity pixel_oracle_source_identity{
+		.process = th03::app::PixelOracleProcess::op,
+		.scene = th03::app::PixelOracleScene::title,
+	};
 
 	[[nodiscard]] ClassicOpSessionBackendTick ready_tick() const noexcept
 	{
@@ -198,6 +202,8 @@ Result fake_call(void *context, Function function)
 					std::unexpected(error())
 				};
 			}
+			backend.pixel_oracle_source_identity.scene =
+				th03::app::PixelOracleScene::options;
 			return std::expected<void, ClassicOpSessionError>{};
 		},
 		.advance_options = [](void *context, auto) {
@@ -207,7 +213,10 @@ Result fake_call(void *context, Function function)
 			};
 		},
 		.finish_options = [](void *context) {
-			++static_cast<FakeBackend *>(context)->options_finishes;
+			auto &backend = *static_cast<FakeBackend *>(context);
+			++backend.options_finishes;
+			backend.pixel_oracle_source_identity.scene =
+				th03::app::PixelOracleScene::title;
 			return std::expected<void, ClassicOpSessionError>{};
 		},
 		.start_music_room = [](void *context) {
@@ -363,6 +372,12 @@ Result fake_call(void *context, Function function)
 			return std::optional<ClassicAudioCommand>{ClassicAudioCommand{
 				.type = ClassicAudioCommandType::stop_song,
 			}};
+		},
+		.pixel_oracle_source_identity = [](void *context) {
+			return std::optional<th03::app::PixelOracleSourceIdentity>{
+				static_cast<FakeBackend *>(context)->
+					pixel_oracle_source_identity
+			};
 		},
 		.compose_shown_surface = [](void *, auto output) {
 			std::fill(output.begin(), output.end(), th03::present::ComposedPixel{});
@@ -542,7 +557,9 @@ void test_retained_children_and_audio_barrier()
 	auto tick = session->consume({});
 	expect(
 		tick && tick->scene == ClassicOpSessionScene::title_menu &&
-			backend->title_advances == 1U && backend->options_starts == 0U,
+			backend->title_advances == 1U && backend->options_starts == 0U &&
+			tick->pixel_oracle_source_identity.scene ==
+				th03::app::PixelOracleScene::title,
 		"ready title waits for its semantic audio queue before adoption"
 	);
 	expect(
@@ -552,7 +569,11 @@ void test_retained_children_and_audio_barrier()
 	tick = session->consume({});
 	expect(
 		tick && tick->scene == ClassicOpSessionScene::options &&
-			backend->title_advances == 1U && backend->options_starts == 1U,
+			backend->title_advances == 1U && backend->options_starts == 1U &&
+			tick->pixel_oracle_source_identity.process ==
+				th03::app::PixelOracleProcess::op &&
+			tick->pixel_oracle_source_identity.scene ==
+				th03::app::PixelOracleScene::options,
 		"drained audio resumes the cached boundary without a second advance"
 	);
 	backend->queue_title_audio = false;

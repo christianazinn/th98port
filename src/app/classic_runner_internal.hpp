@@ -22,6 +22,7 @@ struct ClassicRunnerOperations final {
 	std::optional<ClassicAudioCommand> (*take_audio_command)(void *) = nullptr;
 	std::optional<NewClassicKeyConfig> (*take_key_config_update)(void *) = nullptr;
 	std::optional<bool> (*take_reduced_flash_update)(void *) = nullptr;
+	PixelOracleSourceIdentity (*pixel_oracle_source_identity)(void *) = nullptr;
 	std::expected<present::SourceSurface, ClassicOpSessionError>
 	(*compose_shown_surface)(
 		void *,

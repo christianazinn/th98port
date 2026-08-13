@@ -75,6 +75,14 @@ consume_session(void *context, const ClassicOpSessionInput &input)
 	return static_cast<ClassicOpSession *>(context)->take_reduced_flash_update();
 }
 
+[[nodiscard]] PixelOracleSourceIdentity pixel_oracle_session_identity(
+	void *context
+) noexcept
+{
+	return static_cast<ClassicOpSession *>(context)->
+		pixel_oracle_source_identity();
+}
+
 [[nodiscard]] std::expected<present::SourceSurface, ClassicOpSessionError>
 compose_session(
 	void *context,
@@ -317,6 +325,8 @@ struct ClassicRunner::Impl final {
 	std::unique_ptr<NewClassicReplayRecorder> replay_recorder{};
 	std::optional<ClassicRunnerError> failure{};
 	std::optional<NewClassicKeyConfig> latest_key_config{};
+	PixelOracleIdentityTracker pixel_oracle_tracker{};
+	bool initial_replay = false;
 	std::uint64_t expected_tick_index = 0U;
 	std::optional<TickTimestampNs> last_deadline{};
 
@@ -325,13 +335,15 @@ struct ClassicRunner::Impl final {
 		ClassicRunnerOperations operations_,
 		ExperienceProfile experience_,
 		bool reduced_flash_ = false,
-		std::unique_ptr<NewClassicReplayRecorder> replay_recorder_ = nullptr
+		std::unique_ptr<NewClassicReplayRecorder> replay_recorder_ = nullptr,
+		bool initial_replay_ = false
 	) noexcept :
 		owner(std::move(owner_)),
 		operations(operations_),
 		experience(experience_),
 		reduced_flash(reduced_flash_),
-		replay_recorder(std::move(replay_recorder_))
+		replay_recorder(std::move(replay_recorder_)),
+		initial_replay(initial_replay_)
 	{}
 };
 
@@ -345,8 +357,10 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		(request.autofire_mask > 3U) ||
 		(request.experience == ExperienceProfile::classic &&
 		 (request.autofire_mask != 0U || request.reduced_flash)) ||
-		(request.initial_route == ClassicRunnerInitialRoute::new_classic_practice &&
-		 request.experience != ExperienceProfile::new_classic)) {
+		(request.initial_route != ClassicRunnerInitialRoute::title &&
+		 request.experience != ExperienceProfile::new_classic) ||
+		(request.initial_route == ClassicRunnerInitialRoute::new_classic_replay) !=
+			request.initial_replay.has_value()) {
 		return std::unexpected(runner_error(
 			ClassicRunnerErrorCode::invalid_request
 		));
@@ -430,14 +444,14 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		*font,
 		*mainl,
 		*op,
-		std::move(request.content.config),
-		std::move(request.content.score),
+		request.content.config,
+		request.content.score,
 		request.fm_available,
 		request.kotohime_compatibility,
 		replay_recorder.get(),
 		request.initial_route == ClassicRunnerInitialRoute::new_classic_practice,
-		std::move(request.content.new_classic_score),
-		std::move(request.content.language_overlay),
+		request.content.new_classic_score,
+		request.content.language_overlay,
 		std::move(patch_assets), &request
 	);
 	if(!session) {
@@ -450,11 +464,13 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		.take_audio_command = &take_session_audio,
 		.take_key_config_update = &take_session_key_config,
 		.take_reduced_flash_update = &take_session_reduced_flash,
+		.pixel_oracle_source_identity = &pixel_oracle_session_identity,
 		.compose_shown_surface = &compose_session,
 	};
 	auto impl = std::make_unique<Impl>(
 		std::static_pointer_cast<void>(std::move(owner)), operations,
-		request.experience, request.reduced_flash, std::move(replay_recorder)
+		request.experience, request.reduced_flash, std::move(replay_recorder),
+		request.initial_route == ClassicRunnerInitialRoute::new_classic_replay
 	);
 	return std::unique_ptr<ClassicRunner>(
 		new ClassicRunner(std::move(impl))
@@ -521,6 +537,10 @@ ClassicRunner::consume(
 		.input_sampled = advanced->input_sampled,
 		.process_advanced = advanced->process_advanced,
 		.round_started = advanced->round_started,
+		.pixel_oracle_identity = impl_->pixel_oracle_tracker.consume(
+			advanced->pixel_oracle_source_identity,
+			advanced->surface_changed
+		),
 		.status = impl_->status,
 	};
 	switch(advanced->status) {
@@ -575,6 +595,19 @@ ClassicRunner::compose_shown_surface(
 ClassicRunnerStatus ClassicRunner::status() const noexcept
 {
 	return impl_->status;
+}
+
+PixelOracleIdentity ClassicRunner::pixel_oracle_bootstrap_identity()
+{
+	auto source = impl_->operations.pixel_oracle_source_identity ?
+		impl_->operations.pixel_oracle_source_identity(impl_->operations.context) :
+		PixelOracleSourceIdentity{};
+	if(impl_->expected_tick_index == 0U && impl_->initial_replay) {
+		impl_->pixel_oracle_tracker = PixelOracleIdentityTracker(
+			pixel_oracle_direct_replay_first_process_instance(source.process)
+		);
+	}
+	return impl_->pixel_oracle_tracker.bootstrap(source);
 }
 
 std::optional<formats::ReplayDocument> ClassicRunner::take_completed_replay()

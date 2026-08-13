@@ -4,13 +4,14 @@
 #include <charconv>
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <optional>
 
 namespace th03::app {
 namespace {
 
 constexpr std::size_t option_count =
-	static_cast<std::size_t>(ClassicCliOption::smoke_ticks) + 1U;
+	static_cast<std::size_t>(ClassicCliOption::capture_checkpoint) + 1U;
 
 [[nodiscard]] ClassicCliError cli_error(
 	ClassicCliErrorCode code,
@@ -131,6 +132,12 @@ constexpr std::size_t option_count =
 	}
 	if(text == "--smoke-ticks") {
 		return ClassicCliOption::smoke_ticks;
+	}
+	if(text == "--capture-replay") {
+		return ClassicCliOption::capture_replay;
+	}
+	if(text == "--capture-checkpoint") {
+		return ClassicCliOption::capture_checkpoint;
 	}
 	return std::nullopt;
 }
@@ -272,6 +279,22 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 			request.smoke_ticks = *ticks;
 			break;
 		}
+		case ClassicCliOption::capture_replay:
+			request.capture_replay = std::filesystem::path(value);
+			break;
+		case ClassicCliOption::capture_checkpoint: {
+			const auto checkpoint = parse_u64(value);
+			if(!checkpoint || *checkpoint >
+				std::numeric_limits<std::size_t>::max()) {
+				return std::unexpected(cli_error(
+					ClassicCliErrorCode::invalid_capture_checkpoint,
+					*option,
+					value_index
+				));
+			}
+			request.capture_checkpoint = static_cast<std::size_t>(*checkpoint);
+			break;
+		}
 		case ClassicCliOption::none:
 		case ClassicCliOption::help:
 		case ClassicCliOption::classic:
@@ -288,6 +311,20 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 		return std::unexpected(cli_error(
 			ClassicCliErrorCode::missing_required_option,
 			ClassicCliOption::classic,
+			arguments.size()
+		));
+	}
+	const bool checkpoint_selected =
+		seen[static_cast<std::size_t>(ClassicCliOption::capture_checkpoint)];
+	if((request.capture_replay && request.mode !=
+			ClassicLaunchMode::new_classic) ||
+		(checkpoint_selected && !request.capture_replay) ||
+		(request.capture_replay && !request.smoke_ticks) ||
+		(request.capture_replay && request.capture_checkpoint != 0U)) {
+		return std::unexpected(cli_error(
+			ClassicCliErrorCode::invalid_capture_route,
+			request.capture_replay ? ClassicCliOption::capture_replay :
+				ClassicCliOption::capture_checkpoint,
 			arguments.size()
 		));
 	}

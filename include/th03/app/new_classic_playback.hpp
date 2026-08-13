@@ -12,6 +12,7 @@
 #include "th03/app/classic_config.hpp"
 #include "th03/app/main_process.hpp"
 #include "th03/app/new_classic_language.hpp"
+#include "th03/app/pixel_oracle_identity.hpp"
 #include "th03/formats/replay.hpp"
 
 namespace th03::app {
@@ -114,6 +115,8 @@ public:
 	[[nodiscard]] std::size_t fast_forward_step_count() const noexcept;
 	[[nodiscard]] NewClassicPlaybackStatus status() const noexcept;
 	[[nodiscard]] std::uint32_t sample_index() const noexcept;
+	[[nodiscard]] PixelOracleSourceIdentity
+	pixel_oracle_source_identity() const noexcept;
 	[[nodiscard]] std::optional<GameInit> take_exit_resident() noexcept;
 
 private:

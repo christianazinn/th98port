@@ -123,6 +123,50 @@ explicit flag.
 The exact stream is intentionally opt-in: one frame occupies 768,015 bytes,
 so a long full-game capture belongs under ignored scratch storage.
 
+## Typed route/cadence sidecar (`T3ALI1`)
+
+Set `TH03_PIXEL_ORACLE_IDENTITY_LOG` together with either host publication
+oracle and provide the authoritative 64-hex route digest in
+`TH03_PIXEL_ORACLE_FIXTURE_SHA256`. The sidecar records every native source
+boundary, including unchanged boundaries whose `publication` is `na`; a
+changed boundary is written only after the matching SDL publication succeeds.
+The frozen columns are:
+
+```text
+stream schema event fixture_sha256 process_instance process scene scene_visit logical_sample replay_global_frame round_frame commit boundary source_changed publication
+```
+
+`process_instance` advances on every OP/MAINL/MAIN executable transition,
+including a resumed OP. `scene_visit` and `commit` disambiguate repeated menu
+visits and multiple publications at one logical replay identity. The fixture
+digest must cover the selected replay/route and checkpoint plus content,
+configuration, language, score, and presentation-policy authorities; it is
+repeated on every row so unrelated captures cannot be joined accidentally.
+
+Identity belongs to the source owner that produced the published surface.
+Ordinary MAIN advances retain the pre-sample replay identity, an in-consume
+transition that exposes an incoming startup surface uses the incoming owner,
+and terminal surfaces retain the outgoing owner. Fast-forward retains the last
+changed substep. Focused runner/session regressions freeze the first three
+page/identity pairs and a Title-to-Options ownership transition; the aligner
+also rejects bootstrap rows as gameplay source ticks.
+
+For a bounded unattended New Classic capture, pass an exact V13 artifact and
+optional checkpoint. The explicit smoke bound is mandatory:
+
+```powershell
+th03-app --new-classic <normal arguments> `
+  --capture-replay .scratch\route.rpy --capture-checkpoint 0 `
+  --smoke-ticks 2000
+```
+
+This starts the shared authenticated replay owner directly, without synthetic
+UI input, and creates SDL hidden so unattended capture cannot steal focus.
+T3PXH2 and T3RGB1 remain unchanged; T3ALI1's successful
+`publication` ordinal is the only join to those streams.
+Checkpoint zero is currently required so the skipped OP/MAINL invocation chain
+is exact rather than inferred from an arbitrary later snapshot.
+
 ## Lossless emulator-video ingestion (`T3EMU1`)
 
 Both `tools\emu\run_replay.ps1` and `run_t3case.ps1` accept `-VideoCapture`.
@@ -162,7 +206,7 @@ by guessed wall-clock time and called parity. The raw guest producer below is
 what turns the RGB comparison into a source-boundary gate across title, menus,
 selection, MAINL, gameplay, result, and ending scenes.
 
-## Raw PC-98 oracle (`T3PIX1`)
+## Raw PC-98 oracle (`T3PIX2`)
 
 The authoritative source-side producer is implemented in the companion ReC98
 authority tree as a devtools-only profile. It builds separate
@@ -175,40 +219,41 @@ frozen stream records, at matching source publication acts:
   diagnostics;
 - shown/access page, 400/200-line raster mode, vertical scroll, and raw tone;
 - applied and pending palettes plus the deferred-palette flag;
-- raw TRAM code/attribute words; and
-- process, scene, publication, logical-sample, and gameplay-frame identities.
+- raw TRAM code/attribute words and the full mutable 8,192-byte gaiji bank; and
+- process instance, scene visit, event/boundary, commit ordinal, logical
+  sample, replay-global frame, and round-frame identities.
 
-Dense rows will contain fixed scalar state and FNV-1a/32 layer hashes. Selected
-ordinals will additionally contain raw planar/TRAM payloads, allowing an
+Dense rows contain fixed scalar state and FNV-1a/32 layer hashes. Selected
+ordinals additionally contain raw planar/TRAM/gaiji payloads, allowing an
 offline comparator to localize the first mismatch to a plane byte and physical
 pixel. Indexed and RGBA review images are derived artifacts; raw planar,
 palette, TRAM, and selector equality are the actual gate.
 
 The completed source parcel includes the strict `tools/port/t3pix1.py`
-parser/control writer, planar PPM renderer, synthetic tests, and the frozen
-`state/port/T3PIX1_FORMAT.md` contract. The remaining acceptance sequence is:
+dual-version parser/control writer, planar PPM renderer, synthetic tests, and
+the frozen `state/port/T3PIX2_FORMAT.md` contract. T3FIX1 hashes the exact
+size-changing PIXCAP OP/MAINL/MAIN binaries separately from the Replay Patch
+release authority named in the stream header. The supported runner verifies
+those staged role/length/SHA-256 declarations before accepting a stream.
 
-1. add the per-publication mutable-gaiji and guest/native route-identity
-   sidecars needed for a strict record join, then add equivalent
-   stock/Anniversary profiles;
-2. run locked no-input and V13 cases through `tools\emu`, correlate each raw
-   guest publication with the lossless scanout frame, and compare against
-   `T3RGB1`; and
-3. track only identities, SHA-256 digests, verdicts, and first-divergence
-   metadata, never original capture payloads.
+Runtime acceptance covers OP, MAINL, and MAIN. Silent, hidden, Turbo/max
+single-selection runs for guest MAIN publications 3, 4, and 5 join T3ALI1
+native `source_tick` events without ordinal or pixel inference. Publication 3
+matches full Raster, TRAM, SourceSurface, and RGB state. Publications 4 and 5
+match source composition, TRAM, and every output RGB byte; their separate
+full-Raster mismatch is confined to the undisplayed lower half of zoomed
+200-line VRAM. Guest publication 2 is not accepted: its only same-counter
+native surface is the product bootstrap (`logical_tick=na`), which the aligner
+explicitly excludes from source-tick joins.
 
-Runtime acceptance now covers OP, MAINL, and MAIN. The integrated 0.4.12
-producer completed a silent, hidden, Turbo/max finalized-V13 route with one
-MAINL and 25 MAIN records. Raw MAIN publication 0 passed every plane/TRAM hash,
-and the guest continued through global frame 1279. The 276,224-byte stream is
-SHA-256 `D40AA1D2B61A0CBDD3947BE0C48CEFE4B188E57D076D136645D15EB75A9751D7`.
-
-Guest instrumentation must remain devtools-only on a disposable branch. It
-must not enter the shipping Replay Patch executable or become implementation
-authority. Strict guest/native route acceptance remains open: final TRAM
-composition needs the per-publication gaiji provider and the two sides still
-need a shared route-identity sidecar. `T3PXH2` plus `T3RGB1` remain the
-practical daily regression mechanisms until that external matrix is captured.
+Guest instrumentation remains devtools-only on the dedicated
+`codex/t3pix-main-stack-fix` branch. It must not enter the shipping Replay
+Patch executable or become implementation authority. Strict guest/native route
+acceptance remains open because the selected-publication corpus does not yet
+cover every gameplay route and OP/MAINL menu state. The separate complete-VRAM
+policy for undisplayed lower-half state also remains explicit. `T3PXH2` plus
+`T3RGB1` remain the practical daily regression mechanisms while that external
+matrix expands.
 
 ## Why not screenshots?
 

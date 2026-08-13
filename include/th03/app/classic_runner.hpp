@@ -2,6 +2,7 @@
 #define TH03_APP_CLASSIC_RUNNER_HPP
 
 #include <cstdint>
+#include <cstddef>
 #include <expected>
 #include <filesystem>
 #include <memory>
@@ -15,6 +16,7 @@
 #include "th03/app/new_classic_assets.hpp"
 #include "th03/app/new_classic_frontend.hpp"
 #include "th03/app/new_classic_key_config_store.hpp"
+#include "th03/app/pixel_oracle_identity.hpp"
 #include "th03/formats/replay.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/app/tick_input.hpp"
@@ -54,6 +56,12 @@ struct ClassicContentPaths final {
 enum class ClassicRunnerInitialRoute : std::uint8_t {
 	title,
 	new_classic_practice,
+	new_classic_replay,
+};
+
+struct ClassicRunnerInitialReplay final {
+	formats::ReplayDocument document{};
+	std::size_t checkpoint_index = 0U;
 };
 
 struct ClassicRunnerRequest final {
@@ -79,6 +87,7 @@ struct ClassicRunnerRequest final {
 	// New Classic may enter one Replay Patch-owned route without first exposing
 	// Classic's title. The shared authenticated session still owns every child.
 	ClassicRunnerInitialRoute initial_route = ClassicRunnerInitialRoute::title;
+	std::optional<ClassicRunnerInitialReplay> initial_replay{};
 };
 
 enum class ClassicContentFile : std::uint8_t {
@@ -136,6 +145,7 @@ struct ClassicRunnerConsumeResult final {
 	bool input_sampled = false;
 	bool process_advanced = false;
 	bool round_started = false;
+	PixelOracleIdentity pixel_oracle_identity{};
 	ClassicRunnerStatus status = ClassicRunnerStatus::failed;
 };
 
@@ -172,6 +182,7 @@ public:
 		std::span<present::ComposedPixel, present::graphics_page_pixels> output
 	) const;
 	[[nodiscard]] ClassicRunnerStatus status() const noexcept;
+	[[nodiscard]] PixelOracleIdentity pixel_oracle_bootstrap_identity();
 	// Present only for New Classic after a complete recorded route. Taking the
 	// document transfers it to the save/browser owner and enables a later run.
 	[[nodiscard]] std::optional<formats::ReplayDocument>

@@ -274,6 +274,71 @@ struct NewClassicReplayPlayback::Impl final {
 	std::size_t ui_audio_count = 0U;
 	std::optional<NewClassicPauseMenu> pause_menu{};
 
+	[[nodiscard]] PixelOracleSourceIdentity pixel_oracle_source_identity(
+	) const noexcept
+	{
+		PixelOracleSourceIdentity identity{
+			.process = in_mainl ? PixelOracleProcess::mainl :
+				PixelOracleProcess::main,
+			.scene = PixelOracleScene::unknown,
+			.logical_sample = sample_index,
+			.replay_global_frame = sample_index,
+		};
+		if(pause_menu) {
+			identity.scene = PixelOracleScene::pause;
+		} else if(story) {
+			identity.replay_global_frame = story->source_sample_count();
+			switch(story->scene()) {
+			case ClassicStorySessionScene::stage_splash:
+				identity.scene = PixelOracleScene::stage_splash;
+				break;
+			case ClassicStorySessionScene::main:
+				identity.process = PixelOracleProcess::main;
+				identity.scene = PixelOracleScene::gameplay;
+				break;
+			case ClassicStorySessionScene::win:
+				identity.scene = PixelOracleScene::win;
+				break;
+			case ClassicStorySessionScene::cutscene:
+				identity.scene = PixelOracleScene::ending;
+				break;
+			case ClassicStorySessionScene::staff_verdict:
+				identity.scene = PixelOracleScene::staff_roll;
+				break;
+			case ClassicStorySessionScene::high_score_registration:
+				identity.scene = PixelOracleScene::high_score;
+				break;
+			case ClassicStorySessionScene::continue_menu:
+				identity.scene = PixelOracleScene::continue_menu;
+				break;
+			case ClassicStorySessionScene::game_over:
+				identity.scene = PixelOracleScene::game_over;
+				break;
+			case ClassicStorySessionScene::complete:
+			case ClassicStorySessionScene::failed:
+				break;
+			}
+			if(identity.process == PixelOracleProcess::main) {
+				if(const auto state = story->main_canonical_state()) {
+					identity.replay_global_frame = state->global_frame;
+					identity.round_frame = state->round_frame;
+				}
+			}
+		} else if(vs_win) {
+			identity.scene = PixelOracleScene::win;
+		} else if(terminal_mainl_bypass) {
+			identity.scene = PixelOracleScene::game_over;
+		} else if(process) {
+			identity.scene = PixelOracleScene::gameplay;
+		}
+		if(process && identity.process == PixelOracleProcess::main) {
+			const auto state = process->canonical_state();
+			identity.replay_global_frame = state.global_frame;
+			identity.round_frame = state.round_frame;
+		}
+		return identity;
+	}
+
 	[[nodiscard]] bool put_replay_overlay() noexcept
 	{
 		if(preroll_simulating) {
@@ -1602,6 +1667,12 @@ bool NewClassicReplayPlaybackTestAccess::put_main_replay_overlay(
 std::uint32_t NewClassicReplayPlayback::sample_index() const noexcept
 {
 	return impl_->sample_index;
+}
+
+PixelOracleSourceIdentity
+NewClassicReplayPlayback::pixel_oracle_source_identity() const noexcept
+{
+	return impl_->pixel_oracle_source_identity();
 }
 
 std::optional<GameInit>

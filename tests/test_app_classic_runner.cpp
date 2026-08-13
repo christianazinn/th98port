@@ -408,6 +408,12 @@ struct FakeRunnerBackend final {
 	bool fail_compose = false;
 	std::optional<th03::app::ClassicAudioCommand> audio{};
 	std::optional<bool> reduced_flash_update{};
+	th03::app::PixelOracleSourceIdentity pixel_oracle_source_identity{
+		.process = th03::app::PixelOracleProcess::op,
+		.scene = th03::app::PixelOracleScene::title,
+	};
+	th03::present::Page shown_page = th03::present::Page::zero;
+	bool oracle_main_sequence = false;
 };
 
 th03::app::ClassicRunnerOperations runner_operations(
@@ -431,6 +437,16 @@ th03::app::ClassicRunnerOperations runner_operations(
 			const auto status = input.app_quit_requested ?
 				th03::app::ClassicOpSessionStatus::quit_requested :
 				self.next_status;
+			const auto publication_identity = self.pixel_oracle_source_identity;
+			if(self.oracle_main_sequence) {
+				self.shown_page = self.shown_page == th03::present::Page::zero ?
+					th03::present::Page::one : th03::present::Page::zero;
+				const auto next = self.pixel_oracle_source_identity.logical_sample
+					.value_or(0U) + 1U;
+				self.pixel_oracle_source_identity.logical_sample = next;
+				self.pixel_oracle_source_identity.replay_global_frame = next;
+				self.pixel_oracle_source_identity.round_frame = next;
+			}
 			return std::expected<
 				th03::app::ClassicOpSessionTick,
 				th03::app::ClassicOpSessionError
@@ -439,6 +455,7 @@ th03::app::ClassicRunnerOperations runner_operations(
 				.status = status,
 				.surface_changed = true,
 				.input_sampled = true,
+				.pixel_oracle_source_identity = publication_identity,
 			}};
 		},
 		.take_audio_command = [](void *context) {
@@ -450,6 +467,10 @@ th03::app::ClassicRunnerOperations runner_operations(
 		.take_reduced_flash_update = [](void *context) {
 			auto &self = *static_cast<FakeRunnerBackend *>(context);
 			return std::exchange(self.reduced_flash_update, std::nullopt);
+		},
+		.pixel_oracle_source_identity = [](void *context) {
+			return static_cast<FakeRunnerBackend *>(context)->
+				pixel_oracle_source_identity;
 		},
 		.compose_shown_surface = [](void *context, auto output) {
 			auto &self = *static_cast<FakeRunnerBackend *>(context);
@@ -471,11 +492,69 @@ th03::app::ClassicRunnerOperations runner_operations(
 			>{th03::present::SourceSurface{
 				.pixels = output,
 				.graphics_palette = {},
+				.shown_page = self.shown_page,
 				.palette_tone = 150,
 				.reduced_flash_palette = {{th03::assets::Rgb4{3U, 4U, 5U}}},
 			}};
 		},
 	};
+}
+
+std::unique_ptr<th03::app::ClassicRunner> make_fake_runner(
+	const std::shared_ptr<FakeRunnerBackend> &backend
+);
+
+void test_pixel_oracle_publication_ownership()
+{
+	auto backend = std::make_shared<FakeRunnerBackend>();
+	backend->pixel_oracle_source_identity = {
+		.process = th03::app::PixelOracleProcess::main,
+		.scene = th03::app::PixelOracleScene::gameplay,
+		.logical_sample = 0U,
+		.replay_global_frame = 0U,
+		.round_frame = 0U,
+	};
+	backend->shown_page = th03::present::Page::one;
+	backend->oracle_main_sequence = true;
+	auto runner = make_fake_runner(backend);
+	if(!runner) {
+		return;
+	}
+	std::array<
+		th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	> pixels{};
+	const auto bootstrap = runner->pixel_oracle_bootstrap_identity();
+	const auto bootstrap_surface = runner->compose_shown_surface(pixels);
+	const auto first = runner->consume({.tick_index = 0U});
+	const auto first_surface = runner->compose_shown_surface(pixels);
+	const auto second = runner->consume({.tick_index = 1U});
+	const auto second_surface = runner->compose_shown_surface(pixels);
+	expect(
+		bootstrap.logical_sample == 0U &&
+			bootstrap.replay_global_frame == 0U &&
+			bootstrap.round_frame == 0U && bootstrap.commit == 0U &&
+			bootstrap.boundary == th03::app::PixelOracleBoundary::bootstrap &&
+			bootstrap_surface && bootstrap_surface->shown_page ==
+				th03::present::Page::one,
+		"pixel oracle bootstrap owns MAIN's initial shown page 1"
+	);
+	expect(
+		first && first->pixel_oracle_identity.logical_sample == 0U &&
+			first->pixel_oracle_identity.replay_global_frame == 0U &&
+			first->pixel_oracle_identity.round_frame == 0U &&
+			first->pixel_oracle_identity.commit == 1U && first_surface &&
+			first_surface->shown_page == th03::present::Page::zero,
+		"first MAIN publication keeps pre-consume IDs 0 on shown page 0"
+	);
+	expect(
+		second && second->pixel_oracle_identity.logical_sample == 1U &&
+			second->pixel_oracle_identity.replay_global_frame == 1U &&
+			second->pixel_oracle_identity.round_frame == 1U &&
+			second->pixel_oracle_identity.commit == 0U && second_surface &&
+			second_surface->shown_page == th03::present::Page::one,
+		"second MAIN publication advances to IDs 1 on shown page 1"
+	);
 }
 
 std::unique_ptr<th03::app::ClassicRunner> make_fake_runner(
@@ -2355,6 +2434,7 @@ int main(int argc, char **argv)
 	test_input_projection();
 	test_classic_catch_up_policy();
 	test_fresh_resident_state();
+	test_pixel_oracle_publication_ownership();
 	test_runner_sequence_audio_surface_and_failure();
 	test_file_and_request_boundaries();
 	if(argc == 8 && std::string_view(argv[1]) == "--authentic-english") {

@@ -297,7 +297,7 @@ void test_dummy_platform_lifecycle_and_present()
 		expect(
 			first && first->destination == th03::app::IntegerLetterboxRect{
 				0U, 0U, 640U, 400U, 1U
-			},
+			} && first->oracle_publication == 0U,
 			"native-size source surface uploads and presents at integer scale one"
 		);
 		fixture.pixels[0U] = {ComposedPixelLayer::text, 4U};

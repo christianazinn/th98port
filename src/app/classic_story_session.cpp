@@ -1944,6 +1944,12 @@ ClassicStorySessionBackendOperations backend_operations(
 			return static_cast<ClassicStoryBackend *>(context)->
 				take_audio_command();
 		},
+		.main_canonical_state = [](void *context) {
+			const auto &process = static_cast<ClassicStoryBackend *>(context)->process;
+			return process ? std::optional<CanonicalState>(
+				process->canonical_state()
+			) : std::nullopt;
+		},
 		.compose_shown_surface = [](void *context, auto output) {
 			return static_cast<ClassicStoryBackend *>(context)->compose(output);
 		},
@@ -2743,6 +2749,14 @@ ClassicStorySessionTestAccess::failure_detail_code(
 std::uint32_t ClassicStorySession::source_sample_count() const noexcept
 {
 	return impl_->source_sample_count;
+}
+
+std::optional<CanonicalState>
+ClassicStorySession::main_canonical_state() const noexcept
+{
+	return impl_->operations.main_canonical_state ?
+		impl_->operations.main_canonical_state(impl_->operations.context) :
+		std::nullopt;
 }
 
 const GameInit &ClassicStorySession::resident() const noexcept

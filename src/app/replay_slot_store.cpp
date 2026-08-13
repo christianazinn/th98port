@@ -472,6 +472,12 @@ std::filesystem::path replay_fallback_path(
 	return replay_root / "TH3LAST.RPY";
 }
 
+std::expected<ReplaySlotLoadResult, ReplaySlotStoreError>
+load_replay_file(const std::filesystem::path &path)
+{
+	return load_document(path);
+}
+
 std::expected<ReplaySlotLoadResult, ReplaySlotStoreError> load_replay_slot(
 	const std::filesystem::path &replay_root,
 	std::uint8_t slot

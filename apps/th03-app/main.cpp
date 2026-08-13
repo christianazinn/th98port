@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -45,8 +46,71 @@ namespace {
 constexpr std::uint64_t maximum_idle_delay_ns = 1'000'000U;
 constexpr const char *pixel_oracle_log_environment = "TH03_PIXEL_ORACLE_LOG";
 constexpr const char *pixel_oracle_rgb_environment = "TH03_PIXEL_ORACLE_RGB_DIR";
+constexpr const char *pixel_oracle_identity_environment =
+	"TH03_PIXEL_ORACLE_IDENTITY_LOG";
+constexpr const char *pixel_oracle_fixture_environment =
+	"TH03_PIXEL_ORACLE_FIXTURE_SHA256";
 
-[[nodiscard]] th03::platform::SdlPlatformConfig platform_config()
+struct PixelOracleIdentityOutput final {
+	std::ofstream stream{};
+	std::string fixture_sha256{};
+
+	[[nodiscard]] bool enabled() const noexcept { return stream.is_open(); }
+};
+
+[[nodiscard]] std::optional<std::string> environment_value(const char *name)
+{
+#if defined(_MSC_VER)
+	char *value = nullptr;
+	std::size_t value_bytes = 0U;
+	if(_dupenv_s(&value, &value_bytes, name) != 0 || value == nullptr) {
+		std::free(value);
+		return std::nullopt;
+	}
+	std::string result(value);
+	std::free(value);
+	return result;
+#else
+	const char *const value = std::getenv(name);
+	return value ? std::optional<std::string>(value) : std::nullopt;
+#endif
+}
+
+[[nodiscard]] std::expected<PixelOracleIdentityOutput, const char *>
+pixel_oracle_identity_output(bool publication_oracle_enabled)
+{
+	const auto path = environment_value(pixel_oracle_identity_environment);
+	const auto fixture = environment_value(pixel_oracle_fixture_environment);
+	if(!path && !fixture) {
+		return PixelOracleIdentityOutput{};
+	}
+	if(!path || !fixture || path->empty() || !publication_oracle_enabled ||
+		!th03::app::valid_pixel_oracle_fixture_sha256(*fixture)) {
+		return std::unexpected("invalid-identity-oracle-config");
+	}
+	std::error_code error;
+	if(std::filesystem::exists(*path, error) || error) {
+		return std::unexpected("identity-oracle-path-used");
+	}
+	PixelOracleIdentityOutput output{
+		.stream = std::ofstream(*path, std::ios::out | std::ios::binary),
+		.fixture_sha256 = *fixture,
+	};
+	std::ranges::transform(
+		output.fixture_sha256, output.fixture_sha256.begin(),
+		[](char digit) { return static_cast<char>(std::tolower(
+			static_cast<unsigned char>(digit)
+		)); }
+	);
+	if(!output.stream || !th03::app::write_t3ali1_header(output.stream)) {
+		return std::unexpected("identity-oracle-open-failed");
+	}
+	return output;
+}
+
+[[nodiscard]] th03::platform::SdlPlatformConfig platform_config(
+	bool force_hidden = false
+)
 {
 	th03::platform::SdlPlatformConfig config{};
 	config.title = th03::platform::th03_product_window_title;
@@ -75,6 +139,14 @@ constexpr const char *pixel_oracle_rgb_environment = "TH03_PIXEL_ORACLE_RGB_DIR"
 		config.oracle_rgb_directory = path;
 	}
 #endif
+	// Developer identity captures are unattended evidence runs. Hide the native
+	// window from creation onward so capture cannot steal focus.
+	const auto identity_path = environment_value(
+		pixel_oracle_identity_environment
+	);
+	config.hidden = force_hidden || th03::app::pixel_oracle_identity_capture_hidden(
+		identity_path.value_or("")
+	);
 	return config;
 }
 
@@ -402,7 +474,8 @@ void print_usage()
 			"[--language-overlay <TH3EN.DAT>] "
 			"[--rhythm-rom <YM2608.ROM> | --rhythm-pcm <T98RHYTHM.PCM>] "
 			"[--tick-rate <ticks>/<seconds>] "
-			"[--smoke-ticks n]\n"
+			"[--smoke-ticks n] [--capture-replay <V13.RPY> "
+			"[--capture-checkpoint n]]\n"
 		<< "   or: th03-app --vs --data <root> --main <MAIN.EXE> "
 			"--font <FONT.ROM>\n"
 		<< "       [--p1 <character[:first|second]>] "
@@ -506,6 +579,10 @@ const char *name(th03::app::ClassicCliErrorCode code) noexcept
 	case th03::app::ClassicCliErrorCode::invalid_tick_rate: return "invalid-tick-rate";
 	case th03::app::ClassicCliErrorCode::invalid_seed: return "invalid-seed";
 	case th03::app::ClassicCliErrorCode::invalid_smoke_ticks: return "invalid-smoke-ticks";
+	case th03::app::ClassicCliErrorCode::invalid_capture_checkpoint:
+		return "invalid-capture-checkpoint";
+	case th03::app::ClassicCliErrorCode::invalid_capture_route:
+		return "invalid-capture-route";
 	}
 	return "unknown";
 }
@@ -533,6 +610,9 @@ const char *name(th03::app::ClassicCliOption option) noexcept
 	case th03::app::ClassicCliOption::tick_rate: return "tick-rate";
 	case th03::app::ClassicCliOption::seed: return "seed";
 	case th03::app::ClassicCliOption::smoke_ticks: return "smoke-ticks";
+	case th03::app::ClassicCliOption::capture_replay: return "capture-replay";
+	case th03::app::ClassicCliOption::capture_checkpoint:
+		return "capture-checkpoint";
 	}
 	return "unknown";
 }
@@ -1179,10 +1259,36 @@ ExperienceRunResult run_classic_session(
 			th03::app::ExperienceProfile::new_classic :
 			th03::app::ExperienceProfile::classic;
 	parsed.launch.content.replay_root = parsed.replay_root;
+	if(parsed.capture_replay) {
+		auto replay = th03::app::load_replay_file(*parsed.capture_replay);
+		if(!replay) {
+			return {.exit_code = fail("capture-replay-load", replay.error())};
+		}
+		if(!replay->document) {
+			std::cerr << "status=error\nstage=capture-replay-load\n"
+				"code=file-missing\n";
+			return {.exit_code = 1};
+		}
+		parsed.launch.initial_route =
+			th03::app::ClassicRunnerInitialRoute::new_classic_replay;
+		parsed.launch.initial_replay = th03::app::ClassicRunnerInitialReplay{
+			.document = std::move(*replay->document),
+			.checkpoint_index = parsed.capture_checkpoint,
+		};
+	}
 	auto runner = th03::app::ClassicRunner::load(std::move(parsed.launch));
 	if(!runner) {
 		return {.exit_code = fail("classic-load", runner.error())};
 	}
+	auto identity_output_result = pixel_oracle_identity_output(
+		platform.oracle_enabled()
+	);
+	if(!identity_output_result) {
+		std::cerr << "status=error\nstage=pixel-oracle-identity\ncode="
+			<< identity_output_result.error() << '\n';
+		return {.exit_code = 1};
+	}
+	auto identity_output = std::move(*identity_output_result);
 	// Authenticate the selected game corpus before creating or recovering a
 	// persistence file. A misspelled/incomplete content root must remain a
 	// read-only startup failure rather than leaving a stray YUME.CFG behind.
@@ -1223,7 +1329,7 @@ ExperienceRunResult run_classic_session(
 		return {.exit_code = fail("audio-command", drained.error())};
 	}
 	bool recovered_replay_modal = false;
-	if(new_classic) {
+	if(new_classic && !parsed.capture_replay) {
 		auto fallback = th03::app::load_replay_fallback(parsed.replay_root);
 		if(!fallback) {
 			if(fallback.error().code !=
@@ -1272,9 +1378,19 @@ ExperienceRunResult run_classic_session(
 	if(!surface) {
 		return {.exit_code = fail("compose", surface.error())};
 	}
+	const auto bootstrap_identity = (*runner)->pixel_oracle_bootstrap_identity();
 	auto presented = platform.present(*surface);
 	if(!presented) {
 		return {.exit_code = fail("present", presented.error())};
+	}
+	if(identity_output.enabled() &&
+		(!presented->oracle_publication || !th03::app::write_t3ali1_event(
+			identity_output.stream, identity_output.fixture_sha256,
+			bootstrap_identity, presented->oracle_publication
+		))) {
+		std::cerr << "status=error\nstage=pixel-oracle-identity\n"
+			"code=identity-oracle-write-failed\n";
+		return {.exit_code = 1};
 	}
 
 	std::optional<th03::platform::SdlAudioDevice> audio_device{};
@@ -1308,6 +1424,8 @@ ExperienceRunResult run_classic_session(
 	bool presentation_pending = false;
 	std::optional<std::uint64_t> pending_publication_tick{};
 	std::uint32_t pending_publication_ticks = 0U;
+	std::optional<th03::app::PixelOracleIdentity>
+		pending_publication_identity{};
 	std::uint64_t logical_ticks = 0U;
 	std::optional<th03::formats::ReplayDocument> completed_replay{};
 	while((*runner)->status() == th03::app::ClassicRunnerStatus::running) {
@@ -1415,8 +1533,22 @@ ExperienceRunResult run_classic_session(
 			presentation_pending =
 				presentation_pending || consumed->surface_changed;
 			if(consumed->surface_changed) {
+				if(identity_output.enabled() && pending_publication_identity) {
+					std::cerr << "status=error\nstage=pixel-oracle-identity\n"
+						"code=identity-oracle-coalesced-publication\n";
+					return {.exit_code = 1};
+				}
 				pending_publication_tick = logical_ticks;
 				++pending_publication_ticks;
+				pending_publication_identity = consumed->pixel_oracle_identity;
+			} else if(identity_output.enabled() &&
+				!th03::app::write_t3ali1_event(
+					identity_output.stream, identity_output.fixture_sha256,
+					consumed->pixel_oracle_identity, std::nullopt
+				)) {
+				std::cerr << "status=error\nstage=pixel-oracle-identity\n"
+					"code=identity-oracle-write-failed\n";
+				return {.exit_code = 1};
 			}
 			if(auto replay = (*runner)->take_completed_replay()) {
 				completed_replay = std::move(*replay);
@@ -1504,9 +1636,22 @@ ExperienceRunResult run_classic_session(
 			if(!presented) {
 				return {.exit_code = fail("present", presented.error())};
 			}
+			if(identity_output.enabled() &&
+				(!pending_publication_identity ||
+				 !presented->oracle_publication ||
+				 !th03::app::write_t3ali1_event(
+					identity_output.stream, identity_output.fixture_sha256,
+					*pending_publication_identity,
+					presented->oracle_publication
+				 ))) {
+				std::cerr << "status=error\nstage=pixel-oracle-identity\n"
+					"code=identity-oracle-write-failed\n";
+				return {.exit_code = 1};
+			}
 			presentation_pending = false;
 			pending_publication_tick.reset();
 			pending_publication_ticks = 0U;
+			pending_publication_identity.reset();
 			presented_this_iteration = true;
 		}
 		if(session_complete) {
@@ -1954,9 +2099,11 @@ std::expected<
 		th03::platform::SdlInputMapper
 	>,
 	int
-> create_product_platform()
+> create_product_platform(bool force_hidden = false)
 {
-	auto platform = th03::platform::SdlPlatform::create(platform_config());
+	auto platform = th03::platform::SdlPlatform::create(
+		platform_config(force_hidden)
+	);
 	if(!platform) {
 		return std::unexpected(fail("platform-create", platform.error()));
 	}
@@ -2056,7 +2203,7 @@ ExperienceRunResult run_new_classic_experience(
 
 int run_classic(th03::app::ClassicCliRequest parsed)
 {
-	auto product = create_product_platform();
+	auto product = create_product_platform(parsed.capture_replay.has_value());
 	if(!product) {
 		return product.error();
 	}
