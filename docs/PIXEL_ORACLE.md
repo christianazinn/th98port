@@ -137,11 +137,18 @@ stream schema event fixture_sha256 process_instance process scene scene_visit lo
 ```
 
 `process_instance` advances on every OP/MAINL/MAIN executable transition,
-including a resumed OP. `scene_visit` and `commit` disambiguate repeated menu
-visits and multiple publications at one logical replay identity. The fixture
-digest must cover the selected replay/route and checkpoint plus content,
+including a resumed OP. `scene_visit` disambiguates repeated menu visits;
+`commit` records native publication cadence for diagnostics and is not a
+cross-runtime identity. The fixture digest must cover the selected replay/route and checkpoint plus content,
 configuration, language, score, and presentation-policy authorities; it is
 repeated on every row so unrelated captures cannot be joined accidentally.
+
+The current strict host join admits one raw-selected PC-98 `show-page/state`
+publication per stream and fails closed on duplicate source identities. It
+joins fixture, process/scene ownership, scene visit, logical sample,
+replay-global frame, and round frame; transaction and commit ordinals are
+deliberately excluded because the two runtimes publish at different internal
+event cadences.
 
 Identity belongs to the source owner that produced the published surface.
 Ordinary MAIN advances retain the pre-sample replay identity, an in-consume
