@@ -23,6 +23,7 @@
 #include "th03/app/classic_config_store.hpp"
 #include "th03/app/classic_score_store.hpp"
 #include "th03/app/main_compiled_content.hpp"
+#include "th03/app/new_classic_frontend.hpp"
 #include "th03/app/main_process.hpp"
 #include "th03/app/new_classic_language.hpp"
 #include "th03/app/new_classic_practice.hpp"
@@ -31,10 +32,14 @@
 namespace th03::app {
 
 class NewClassicReplayRecorder;
+struct ClassicRunnerRequest;
 
 enum class ClassicOpSessionScene : std::uint8_t {
 	title_menu,
 	options,
+	key_config,
+	replay_browser,
+	replay_playback,
 	music_room,
 	high_scores,
 	character_selection,
@@ -44,14 +49,12 @@ enum class ClassicOpSessionScene : std::uint8_t {
 	vs_stage_splash,
 	vs_main,
 	vs_win,
-	external_route,
 	complete,
 	failed,
 };
 
 enum class ClassicOpSessionStatus : std::uint8_t {
 	running,
-	external_route,
 	complete,
 	quit_requested,
 	failed,
@@ -68,6 +71,8 @@ enum class ClassicOpSessionErrorCode : std::uint8_t {
 	static_content_failed,
 	title_failed,
 	options_failed,
+	replay_browser_failed,
+	replay_playback_failed,
 	music_room_failed,
 	high_scores_failed,
 	selection_failed,
@@ -112,6 +117,10 @@ struct ClassicOpSessionInput final {
 	ClassicStorySessionInput story{};
 	ClassicMainInputSample main{};
 	ClassicAudioStatus audio{};
+	NewClassicUiInput replay_ui{};
+	bool replay_fast_forward = false;
+	std::optional<std::uint16_t> scancode_pressed{};
+	bool any_scancode_held = false;
 	bool dismiss_pressed = false;
 	bool app_quit_requested = false;
 };
@@ -123,7 +132,6 @@ struct ClassicOpSessionTick final {
 	bool input_sampled = false;
 	bool process_advanced = false;
 	bool round_started = false;
-	std::optional<ClassicOpRoute> external_route{};
 };
 
 struct ClassicOpSessionBackendTick final {
@@ -143,6 +151,12 @@ struct ClassicOpSessionTitleResult final {
 struct ClassicOpSessionSelectionResult final {
 	ClassicOpSelectionOutcome outcome = ClassicOpSelectionOutcome::canceled;
 	ClassicOpSelectionMode mode = ClassicOpSelectionMode::story;
+};
+
+enum class ClassicOpSessionReplayResult : std::uint8_t {
+	back,
+	play,
+	application_quit,
 };
 
 struct ClassicOpSessionVsTerminal final {
@@ -179,6 +193,25 @@ struct ClassicOpSessionBackendOperations final {
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
 	(*advance_options)(void *, ClassicOpInput) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*finish_options)(void *) = nullptr;
+	bool (*key_config_active)(void *) = nullptr;
+	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
+	(*advance_key_config)(
+		void *, NewClassicUiInput, std::optional<std::uint16_t>, bool
+	) = nullptr;
+	std::expected<void, ClassicOpSessionError>
+	(*finish_key_config)(void *) = nullptr;
+	std::expected<void, ClassicOpSessionError>
+	(*start_replay_browser)(void *) = nullptr;
+	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
+	(*advance_replay_browser)(void *, NewClassicUiInput) = nullptr;
+	std::expected<ClassicOpSessionReplayResult, ClassicOpSessionError>
+	(*finish_replay_browser)(void *) = nullptr;
+	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
+	(*advance_replay_playback)(
+		void *, ClassicAudioStatus, NewClassicUiInput, std::uint16_t, bool
+	) = nullptr;
+	std::expected<bool, ClassicOpSessionError>
+	(*finish_replay_playback)(void *) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*start_music_room)(void *) = nullptr;
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
 	(*advance_music_room)(void *, const ClassicOpMusicRoomInput &) = nullptr;
@@ -276,7 +309,9 @@ public:
 		NewClassicReplayRecorder *replay_recorder = nullptr,
 		bool new_classic_practice_route = false,
 		std::filesystem::path new_classic_score_path = {},
-		std::filesystem::path language_overlay_path = {}
+		std::filesystem::path language_overlay_path = {},
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {},
+		const ClassicRunnerRequest *runner_request = nullptr
 	);
 	~ClassicOpSession();
 
@@ -290,6 +325,11 @@ public:
 		ClassicOpSessionError
 	> consume(const ClassicOpSessionInput &input);
 	[[nodiscard]] std::optional<ClassicAudioCommand> take_audio_command();
+	[[nodiscard]] std::optional<NewClassicKeyConfig>
+	take_key_config_update() noexcept;
+	[[nodiscard]] std::optional<bool> take_reduced_flash_update() noexcept;
+	[[nodiscard]] std::shared_ptr<const NewClassicReplaySaveArt>
+	replay_save_art() const noexcept;
 	[[nodiscard]] std::expected<
 		present::SourceSurface,
 		ClassicOpSessionError
@@ -299,7 +339,6 @@ public:
 
 	[[nodiscard]] ClassicOpSessionScene scene() const noexcept;
 	[[nodiscard]] ClassicOpSessionStatus status() const noexcept;
-	[[nodiscard]] std::optional<ClassicOpRoute> external_route() const noexcept;
 
 private:
 	friend struct ClassicOpSessionTestAccess;

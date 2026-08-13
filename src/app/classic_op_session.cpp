@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -17,6 +18,9 @@
 #include "new_classic_language_internal.hpp"
 #include "th03/app/authentic_text.hpp"
 #include "th03/app/new_classic_pause.hpp"
+#include "th03/app/new_classic_frontend.hpp"
+#include "th03/app/new_classic_key_config_scene.hpp"
+#include "th03/app/new_classic_playback.hpp"
 #include "th03/app/new_classic_replay.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/present/source_surface.hpp"
@@ -434,7 +438,6 @@ struct ClassicOpSession::Impl final {
 	ClassicOpSessionTestHooks test_hooks{};
 	ClassicOpSessionScene scene = ClassicOpSessionScene::title_menu;
 	ClassicOpSessionStatus status = ClassicOpSessionStatus::running;
-	std::optional<ClassicOpRoute> external{};
 	std::optional<ClassicOpSessionError> failure{};
 	bool boundary_ready = false;
 	NewClassicReplayRecorder *replay_recorder = nullptr;
@@ -523,6 +526,19 @@ struct ClassicOpSession::Impl final {
 				}
 				scene = ClassicOpSessionScene::high_scores;
 				break;
+			case ClassicOpRoute::replay:
+				if(!operations.start_replay_browser) {
+					return std::unexpected(session_error(
+						ClassicOpSessionErrorCode::backend_contract_failed
+					));
+				}
+				if(auto started = operations.start_replay_browser(
+					operations.context
+				); !started) {
+					return std::unexpected(std::move(started.error()));
+				}
+				scene = ClassicOpSessionScene::replay_browser;
+				break;
 			case ClassicOpRoute::demo:
 				if(auto committed = operations.commit_config(operations.context);
 					!committed) {
@@ -550,8 +566,65 @@ struct ClassicOpSession::Impl final {
 				!finished) {
 				return std::unexpected(std::move(finished.error()));
 			}
+			scene = operations.key_config_active &&
+				operations.key_config_active(operations.context) ?
+				ClassicOpSessionScene::key_config :
+				ClassicOpSessionScene::title_menu;
+			break;
+		case ClassicOpSessionScene::key_config:
+			if(!operations.finish_key_config) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			if(auto finished = operations.finish_key_config(operations.context);
+				!finished) {
+				return std::unexpected(std::move(finished.error()));
+			}
 			scene = ClassicOpSessionScene::title_menu;
 			break;
+		case ClassicOpSessionScene::replay_browser: {
+			if(!operations.finish_replay_browser) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			auto finished = operations.finish_replay_browser(operations.context);
+			if(!finished) {
+				return std::unexpected(std::move(finished.error()));
+			}
+			switch(*finished) {
+			case ClassicOpSessionReplayResult::back:
+				scene = ClassicOpSessionScene::title_menu;
+				break;
+			case ClassicOpSessionReplayResult::play:
+				scene = ClassicOpSessionScene::replay_playback;
+				break;
+			case ClassicOpSessionReplayResult::application_quit:
+				status = ClassicOpSessionStatus::quit_requested;
+				scene = ClassicOpSessionScene::complete;
+				break;
+			}
+			break;
+		}
+		case ClassicOpSessionScene::replay_playback: {
+			if(!operations.finish_replay_playback) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			auto quit = operations.finish_replay_playback(operations.context);
+			if(!quit) {
+				return std::unexpected(std::move(quit.error()));
+			}
+			if(*quit) {
+				status = ClassicOpSessionStatus::quit_requested;
+				scene = ClassicOpSessionScene::complete;
+			} else {
+				scene = ClassicOpSessionScene::title_menu;
+			}
+			break;
+		}
 		case ClassicOpSessionScene::music_room:
 			if(auto finished = operations.finish_music_room(operations.context);
 				!finished) {
@@ -680,7 +753,6 @@ struct ClassicOpSession::Impl final {
 			}
 			scene = ClassicOpSessionScene::character_selection;
 			break;
-		case ClassicOpSessionScene::external_route:
 		case ClassicOpSessionScene::complete:
 		case ClassicOpSessionScene::failed:
 			return std::unexpected(session_error(
@@ -700,6 +772,11 @@ struct ClassicOpSessionBackend final {
 	MainlStageTextAssets stage_text{};
 	MainlStaffCompiledAssets staff_compiled{};
 	OpMusicRoomTextImport op_music_labels{};
+	std::optional<MainCompiledContent> japanese_compiled{};
+	std::optional<MainlStageTextAssets> japanese_stage_text{};
+	std::optional<OpMusicRoomTextImport> japanese_op_music_labels{};
+	std::map<std::string, ResourceBytes> english_resources{};
+	ClassicLanguage active_language = ClassicLanguage::japanese;
 	std::shared_ptr<const MainProcessStaticContent> static_content{};
 	std::filesystem::path config_path{};
 	std::filesystem::path score_path{};
@@ -708,6 +785,19 @@ struct ClassicOpSessionBackend final {
 	bool fm_available = true;
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
 	NewClassicReplayRecorder *replay_recorder = nullptr;
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets{};
+	std::shared_ptr<const NewClassicReplaySaveArt> replay_save_art{};
+	std::optional<ClassicContentPaths> content_paths{};
+	std::optional<NewClassicKeyConfig> key_config{};
+	NewClassicKeyConfig key_defaults{};
+	std::uint16_t maximum_key = 0U;
+	std::uint16_t capture_cancel_key = 0U;
+	NewClassicHostKeyName key_name = nullptr;
+	void *key_name_context = nullptr;
+	std::unique_ptr<NewClassicReplayBrowser> replay_browser{};
+	std::optional<NewClassicReplayBrowserResult> replay_browser_result{};
+	std::unique_ptr<NewClassicReplayPlayback> replay_playback{};
+	GameInit replay_return_resident{};
 	ClassicOpMusicRoomCarry music_carry{};
 	ClassicOpSelectionCarry selection_carry{};
 
@@ -715,6 +805,10 @@ struct ClassicOpSessionBackend final {
 	std::optional<ClassicOpCompletion> title_completion{};
 	std::unique_ptr<ClassicOpOptionsScene> options{};
 	std::optional<ClassicOpOptionsCompletion> options_completion{};
+	std::unique_ptr<NewClassicKeyConfigScene> key_config_scene{};
+	std::optional<NewClassicKeyConfig> pending_key_config_update{};
+	std::optional<bool> pending_reduced_flash_update{};
+	GameInit key_config_return_resident{};
 	std::unique_ptr<ClassicOpMusicRoomScene> music_room{};
 	std::optional<ClassicOpMusicRoomCompletion> music_completion{};
 	std::unique_ptr<ClassicRegistrationScene> high_scores{};
@@ -756,7 +850,10 @@ struct ClassicOpSessionBackend final {
 		present::KotohimeBombFadeCompatibility compatibility,
 		NewClassicReplayRecorder *replay_recorder_,
 		bool new_classic_practice_route_,
-		std::filesystem::path new_classic_score_path_
+		std::filesystem::path new_classic_score_path_,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_,
+		std::map<std::string, ResourceBytes> english_resources_,
+		const ClassicRunnerRequest *runner_request
 	) :
 		loader(std::move(loader_)),
 		compiled(std::move(compiled_)),
@@ -764,6 +861,7 @@ struct ClassicOpSessionBackend final {
 		stage_text(std::move(stage_text_)),
 		staff_compiled(std::move(staff_compiled_)),
 		op_music_labels(std::move(op_music_labels_)),
+		english_resources(std::move(english_resources_)),
 		config_path(std::move(config_path_)),
 		score_path(std::move(score_path_)),
 		new_classic_score_path(std::move(new_classic_score_path_)),
@@ -771,8 +869,21 @@ struct ClassicOpSessionBackend final {
 		fm_available(fm_available_),
 		kotohime_compatibility(compatibility),
 		replay_recorder(replay_recorder_),
+		patch_assets(std::move(patch_assets_)),
 		new_classic_practice_route(new_classic_practice_route_)
 	{
+		japanese_compiled = compiled;
+		japanese_stage_text = stage_text;
+		japanese_op_music_labels = op_music_labels;
+		if(runner_request) {
+			content_paths = runner_request->content;
+			key_config = runner_request->new_classic_key_config;
+			key_defaults = runner_request->new_classic_key_defaults;
+			maximum_key = runner_request->new_classic_maximum_key;
+			capture_cancel_key = runner_request->new_classic_capture_cancel_key;
+			key_name = runner_request->new_classic_key_name;
+			key_name_context = runner_request->new_classic_key_name_context;
+		}
 		if(replay_recorder && new_classic_score_path.empty()) {
 			new_classic_score_path =
 				score_path.parent_path() / "YUME.NEW.NEM";
@@ -780,6 +891,229 @@ struct ClassicOpSessionBackend final {
 		blank_tram.fill({
 			' ', static_cast<present::TramAttribute>(present::tram_black)
 		});
+	}
+
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	apply_language_profile(ClassicLanguage language)
+	{
+		if(!japanese_compiled || !japanese_stage_text ||
+			!japanese_op_music_labels ||
+			(language == ClassicLanguage::english && english_resources.empty())) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		if(active_language == language) {
+			return {};
+		}
+		if(!loader->switch_authenticated_overrides(
+			language == ClassicLanguage::english ? english_resources :
+				std::map<std::string, ResourceBytes>{}
+		)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		compiled = *japanese_compiled;
+		stage_text = *japanese_stage_text;
+		op_music_labels = *japanese_op_music_labels;
+		if(language == ClassicLanguage::english) {
+			apply_new_classic_english_text(
+				compiled, stage_text, op_music_labels
+			);
+		}
+		static_content.reset();
+		active_language = language;
+		return {};
+	}
+
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	start_replay_browser()
+	{
+		if(!title_completion || replay_browser || !patch_assets ||
+			!content_paths || content_paths->replay_root.empty()) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		replay_return_resident = title_completion->resident();
+		auto loaded = NewClassicReplayBrowser::load(
+			content_paths->replay_root, patch_assets
+		);
+		if(!loaded) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::replay_browser_failed
+			));
+		}
+		replay_browser = std::move(*loaded);
+		replay_browser_result.reset();
+		title.reset();
+		title_completion.reset();
+		return {};
+	}
+
+	[[nodiscard]] std::expected<ClassicOpSessionBackendTick,
+		ClassicOpSessionError> advance_replay_browser(NewClassicUiInput input)
+	{
+		if(!replay_browser) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		auto advanced = replay_browser->consume(input);
+		if(!advanced) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::replay_browser_failed
+			));
+		}
+		replay_browser_result = *advanced;
+		return ClassicOpSessionBackendTick{
+			.surface_changed = advanced->surface_changed,
+			.input_sampled = true,
+			.ready = advanced->status != NewClassicReplayBrowserStatus::running,
+		};
+	}
+
+	[[nodiscard]] std::expected<ClassicOpSessionReplayResult,
+		ClassicOpSessionError> finish_replay_browser()
+	{
+		if(!replay_browser || !replay_browser_result) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		switch(replay_browser_result->status) {
+		case NewClassicReplayBrowserStatus::back: {
+			auto resources = loader->load_op_title_menu();
+			if(!resources) {
+				return std::unexpected(resource_error(std::move(resources.error())));
+			}
+			auto returned = ClassicOpTitleMenuScene::return_from_other_screen(
+				replay_return_resident, *resources, patch_assets, false
+			);
+			if(!returned) {
+				return std::unexpected(title_error(std::move(returned.error())));
+			}
+			title = std::move(*returned);
+			replay_browser.reset();
+			replay_browser_result.reset();
+			return ClassicOpSessionReplayResult::back;
+		}
+		case NewClassicReplayBrowserStatus::play_selected: {
+			auto document = replay_browser->take_selected_document();
+			if(!document || !content_paths) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			auto loaded = NewClassicReplayPlayback::load({
+				.content = *content_paths,
+				.document = std::move(*document),
+				.checkpoint_index = replay_browser->selected_checkpoint(),
+				.kotohime_compatibility = kotohime_compatibility,
+				.reduced_flash = config.reduced_flash,
+				.language = config.language,
+			});
+			if(!loaded) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::replay_playback_failed
+				));
+			}
+			replay_playback = std::move(*loaded);
+			if(!drain_audio(*replay_playback)) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::audio_command_pending
+				));
+			}
+			replay_browser.reset();
+			replay_browser_result.reset();
+			return ClassicOpSessionReplayResult::play;
+		}
+		case NewClassicReplayBrowserStatus::application_quit:
+			return ClassicOpSessionReplayResult::application_quit;
+		case NewClassicReplayBrowserStatus::running:
+			break;
+		}
+		return std::unexpected(session_error(
+			ClassicOpSessionErrorCode::backend_contract_failed
+		));
+	}
+
+	[[nodiscard]] std::expected<ClassicOpSessionBackendTick,
+		ClassicOpSessionError> advance_replay_playback(
+		ClassicAudioStatus audio,
+		NewClassicUiInput input,
+		std::uint16_t live_system_input,
+		bool fast_forward
+	)
+	{
+		if(!replay_playback) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		replay_playback->set_fast_forward(fast_forward);
+		bool surface_changed = false;
+		bool process_advanced = false;
+		const auto steps = replay_playback->fast_forward_step_count();
+		for(std::size_t step_index = 0U; step_index < steps; ++step_index) {
+			auto advanced = replay_playback->advance(
+				audio,
+				step_index == 0U && input.cancel,
+				step_index == 0U && input.app_quit_requested,
+				live_system_input
+			);
+			if(!advanced) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::replay_playback_failed
+				));
+			}
+			surface_changed = surface_changed || advanced->surface_changed;
+			process_advanced = process_advanced || advanced->process_advanced;
+			if(!drain_audio(*replay_playback)) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::audio_command_pending
+				));
+			}
+			if(advanced->status != NewClassicPlaybackStatus::running) {
+				break;
+			}
+		}
+		return ClassicOpSessionBackendTick{
+			.surface_changed = surface_changed,
+			.input_sampled = process_advanced,
+			.ready = replay_playback->status() !=
+				NewClassicPlaybackStatus::running,
+			.process_advanced = process_advanced,
+		};
+	}
+
+	[[nodiscard]] std::expected<bool, ClassicOpSessionError>
+	finish_replay_playback()
+	{
+		if(!replay_playback) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		if(replay_playback->status() ==
+			NewClassicPlaybackStatus::application_quit) {
+			replay_playback.reset();
+			return true;
+		}
+		auto resources = loader->load_op_title_menu();
+		if(!resources) {
+			return std::unexpected(resource_error(std::move(resources.error())));
+		}
+		auto returned = ClassicOpTitleMenuScene::return_from_other_screen(
+			replay_return_resident, *resources, patch_assets, false
+		);
+		if(!returned) {
+			return std::unexpected(title_error(std::move(returned.error())));
+		}
+		title = std::move(*returned);
+		replay_playback.reset();
+		return false;
 	}
 
 	[[nodiscard]] bool push_audio(ClassicAudioCommand command) noexcept
@@ -840,7 +1174,7 @@ struct ClassicOpSessionBackend final {
 		const auto mode = resident.fast_op_animation == 0U ?
 			ClassicOpTitleMode::long_animation : ClassicOpTitleMode::fast_fade;
 		auto created = ClassicOpTitleMenuScene::create(
-			std::move(resident), mode, *resources
+			std::move(resident), mode, *resources, patch_assets
 		);
 		if(!created) {
 			return std::unexpected(title_error(std::move(created.error())));
@@ -858,7 +1192,8 @@ struct ClassicOpSessionBackend final {
 		bool reset_process_carry
 	)
 	{
-		if(title || options || music_room || high_scores || selection || story ||
+		if(title || options || key_config_scene || replay_browser ||
+			replay_playback || music_room || high_scores || selection || story ||
 			vs_stage || vs_process || vs_driver || vs_win) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
@@ -981,7 +1316,8 @@ struct ClassicOpSessionBackend final {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
 		auto created = ClassicOpOptionsScene::create_from_op(
-			*title_completion, config, fm_available, *resources
+			*title_completion, config, fm_available, *resources,
+			patch_assets, font ? &*font : nullptr, !english_resources.empty()
 		);
 		if(!created) {
 			return std::unexpected(title_error(std::move(created.error())));
@@ -1011,6 +1347,22 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::audio_command_pending
 			));
 		}
+		if(tick->phase == ClassicOpOptionsPhase::shrink_window &&
+			options->config().language != active_language) {
+			if(auto applied = apply_language_profile(options->config().language);
+				!applied) {
+				return std::unexpected(std::move(applied.error()));
+			}
+			auto resources = loader->load_op_title_menu();
+			if(!resources) {
+				return std::unexpected(resource_error(std::move(resources.error())));
+			}
+			if(auto refreshed = options->refresh_patch_language_background(
+				*resources
+			); !refreshed) {
+				return std::unexpected(title_error(std::move(refreshed.error())));
+			}
+		}
 		return ClassicOpSessionBackendTick{
 			.surface_changed = tick->surface_changed || tick->tram_changed,
 			.input_sampled = tick->input_sampled,
@@ -1033,20 +1385,134 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
+		config = options_completion->config();
+		pending_reduced_flash_update = config.reduced_flash;
+		if(config.language != active_language) {
+			if(auto applied = apply_language_profile(config.language); !applied) {
+				return std::unexpected(std::move(applied.error()));
+			}
+		}
+		if(options_completion->outcome() ==
+			ClassicOpOptionsOutcome::key_config) {
+			if(!key_config || !patch_assets || !key_name || maximum_key == 0U) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			key_config_return_resident = options_completion->resident();
+			auto scene = std::make_unique<NewClassicKeyConfigScene>(
+				*key_config, key_defaults, maximum_key, capture_cancel_key,
+				key_name, patch_assets, key_name_context
+			);
+			if(!scene->valid()) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			key_config_scene = std::move(scene);
+			options.reset();
+			options_completion.reset();
+			return {};
+		}
 		auto resources = loader->load_op_title_menu();
 		if(!resources) {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
 		auto resumed = ClassicOpTitleMenuScene::resume_from_options(
-			*options_completion, *resources
+			*options_completion, *resources, patch_assets
 		);
 		if(!resumed) {
 			return std::unexpected(title_error(std::move(resumed.error())));
 		}
-		config = options_completion->config();
 		title = std::move(*resumed);
 		options.reset();
 		options_completion.reset();
+		return {};
+	}
+
+	[[nodiscard]] bool key_config_active() const noexcept
+	{
+		return static_cast<bool>(key_config_scene);
+	}
+
+	[[nodiscard]] std::expected<ClassicOpSessionBackendTick,
+		ClassicOpSessionError> advance_key_config(
+		NewClassicUiInput input,
+		std::optional<std::uint16_t> scancode_pressed,
+		bool any_scancode_held
+	)
+	{
+		if(!key_config_scene) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		auto advanced = key_config_scene->consume({
+			.ui = input,
+			.scancode_pressed = scancode_pressed,
+			.any_scancode_held = any_scancode_held,
+		});
+		if(advanced.status == NewClassicKeyConfigSceneStatus::surface_failed) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		if(advanced.status == NewClassicKeyConfigSceneStatus::apply_requested) {
+			const auto key_path = config_path.parent_path() / "TH3KEY.CFG";
+			auto stored = store_new_classic_key_config(
+				key_path, key_config_scene->config(), maximum_key
+			);
+			if(stored) {
+				config.legacy_autofire =
+					key_config_scene->config().autofire != 0U;
+				auto config_stored = commit_classic_config_store(config_path, config);
+				stored = config_stored ?
+					std::expected<void, NewClassicKeyConfigStoreError>{} :
+					std::unexpected(NewClassicKeyConfigStoreError{
+						.code = NewClassicKeyConfigStoreErrorCode::write_failed,
+					});
+			}
+			key_config_scene->report_commit(static_cast<bool>(stored));
+			if(stored) {
+				key_config = key_config_scene->config();
+				pending_key_config_update = *key_config;
+			}
+			return ClassicOpSessionBackendTick{
+				.surface_changed = true,
+				.input_sampled = true,
+			};
+		}
+		const bool ready = advanced.status ==
+			NewClassicKeyConfigSceneStatus::applied ||
+			advanced.status == NewClassicKeyConfigSceneStatus::back ||
+			advanced.status == NewClassicKeyConfigSceneStatus::application_quit;
+		return ClassicOpSessionBackendTick{
+			.surface_changed = advanced.surface_changed,
+			.input_sampled = true,
+			.ready = ready,
+		};
+	}
+
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	finish_key_config()
+	{
+		if(!key_config_scene) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		auto resources = loader->load_op_title_menu();
+		if(!resources) {
+			return std::unexpected(resource_error(std::move(resources.error())));
+		}
+		auto returned = ClassicOpTitleMenuScene::return_from_other_screen(
+			key_config_return_resident, *resources, patch_assets, false
+		);
+		if(!returned) {
+			return std::unexpected(title_error(std::move(returned.error())));
+		}
+		title = std::move(*returned);
+		key_config_scene.reset();
 		return {};
 	}
 
@@ -1125,7 +1591,7 @@ struct ClassicOpSessionBackend final {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
 		auto returned = ClassicOpTitleMenuScene::return_from_music_room(
-			*music_completion, *resources
+			*music_completion, *resources, patch_assets
 		);
 		if(!returned) {
 			return std::unexpected(title_error(std::move(returned.error())));
@@ -1166,7 +1632,7 @@ struct ClassicOpSessionBackend final {
 		auto created = replay_recorder ?
 			ClassicRegistrationScene::create_new_classic_viewer(
 				*title_completion, new_classic_score_path, score_path,
-				*resources, stage_text, *font
+				*resources, stage_text, *font, patch_assets
 			) : ClassicRegistrationScene::create_viewer(
 				*title_completion, score_path, *resources, stage_text, *font
 			);
@@ -1387,7 +1853,7 @@ struct ClassicOpSessionBackend final {
 			}
 			auto created =
 				ClassicOpTitleMenuScene::return_from_canceled_selection(
-					*selection_completion, *resources
+					*selection_completion, *resources, patch_assets
 				);
 			if(!created) {
 				return std::unexpected(title_error(std::move(created.error())));
@@ -1443,7 +1909,8 @@ struct ClassicOpSessionBackend final {
 		auto created = ClassicStorySession::create_with_prepared_content(
 			story_config, loader, static_content, stage_text, staff_compiled,
 			replay_recorder ? new_classic_score_path : score_path,
-			replay_recorder, replay_recorder ? score_path : std::filesystem::path{}
+			replay_recorder, replay_recorder ? score_path : std::filesystem::path{},
+			patch_assets
 		);
 		if(!created) {
 			return std::unexpected(story_error(std::move(created.error())));
@@ -1508,7 +1975,8 @@ struct ClassicOpSessionBackend final {
 				story_config, loader, static_content, stage_text, staff_compiled,
 				replay_recorder ? new_classic_score_path : score_path,
 				replay_recorder,
-				replay_recorder ? score_path : std::filesystem::path{}
+				replay_recorder ? score_path : std::filesystem::path{},
+				patch_assets
 			);
 			if(!created) {
 				return std::unexpected(story_error(std::move(created.error())));
@@ -1745,7 +2213,9 @@ struct ClassicOpSessionBackend final {
 		if(new_classic_practice_route ||
 			(replay_recorder && selection_completion->resident().game_mode ==
 				game_mode::vs_1p_cpu)) {
-			practice_menu.emplace(selection_completion->resident());
+			practice_menu.emplace(
+				selection_completion->resident(), patch_assets
+			);
 			direct_vs_selection = false;
 			return {};
 		}
@@ -1782,7 +2252,7 @@ struct ClassicOpSessionBackend final {
 		ClassicOpSessionError> advance_vs_stage(ClassicOpInput input)
 	{
 		if(practice_menu) {
-			const auto status = practice_menu->consume({
+			const NewClassicPracticeInput menu_input{
 				.raw_any = input.raw_any,
 				.up = input.up,
 				.down = input.down,
@@ -1790,11 +2260,64 @@ struct ClassicOpSessionBackend final {
 				.right = input.right,
 				.confirm = input.ok || input.shot,
 				.cancel = input.cancel,
-			});
-			if(status == NewClassicPracticeStatus::running) {
+			};
+			auto status = practice_menu->status();
+			const bool sampled_from_running =
+				status == NewClassicPracticeStatus::running;
+
+			if(status == NewClassicPracticeStatus::start_fade) {
+				status = practice_menu->consume(menu_input);
+				if(status == NewClassicPracticeStatus::start_fade) {
+					return ClassicOpSessionBackendTick{
+						.surface_changed =
+							practice_menu->consume_surface_changed(),
+					};
+				}
+			} else if(status ==
+				NewClassicPracticeStatus::cancel_wait_release) {
+				status = practice_menu->consume(menu_input);
+				if(status == NewClassicPracticeStatus::cancel_wait_release) {
+					return ClassicOpSessionBackendTick{
+						.input_sampled = true,
+					};
+				}
+			} else if(status == NewClassicPracticeStatus::running ||
+				status == NewClassicPracticeStatus::cancel_frame) {
+				// Replay Patch redraws and publishes the retained selector's
+				// curves before each Practice Setup input poll. Portraits,
+				// names, and the completed-selection HUD are absent.
+				if(!selection) {
+					return std::unexpected(session_error(
+						ClassicOpSessionErrorCode::backend_contract_failed
+					));
+				}
+				const auto background =
+					selection->advance_new_classic_practice_background();
+				if(background == ClassicOpPracticeBackgroundStatus::failed) {
+					return std::unexpected(session_error(
+						ClassicOpSessionErrorCode::backend_contract_failed
+					));
+				}
+				if(background == ClassicOpPracticeBackgroundStatus::waiting) {
+					return ClassicOpSessionBackendTick{};
+				}
+				practice_menu->mark_background_published();
+				status = practice_menu->consume(menu_input);
+				if(status == NewClassicPracticeStatus::start_fade) {
+					return ClassicOpSessionBackendTick{
+						.surface_changed =
+							practice_menu->consume_surface_changed(),
+						.input_sampled = sampled_from_running && input.raw_any,
+					};
+				}
+			}
+
+			if(status == NewClassicPracticeStatus::running ||
+				status == NewClassicPracticeStatus::cancel_frame ||
+				status == NewClassicPracticeStatus::cancel_wait_release) {
 				return ClassicOpSessionBackendTick{
 					.surface_changed = true,
-					.input_sampled = input.raw_any,
+					.input_sampled = sampled_from_running && input.raw_any,
 				};
 			}
 			if(status == NewClassicPracticeStatus::canceled) {
@@ -1818,6 +2341,11 @@ struct ClassicOpSessionBackend final {
 					.return_to_selection = true,
 				};
 			}
+			if(status != NewClassicPracticeStatus::started) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
 			if(!selection_completion || !font) {
 				return std::unexpected(session_error(
 					ClassicOpSessionErrorCode::backend_contract_failed
@@ -1838,7 +2366,8 @@ struct ClassicOpSessionBackend final {
 					return std::unexpected(replay_capture_error());
 				}
 			}
-			auto resident = selection_completion->resident();
+			auto resident = selection ? selection->resident() :
+				selection_completion->resident();
 			resident.story_stage = practice_setup.stage;
 			resident.story_lives = practice_setup.stock == 0xFFU ? 0U :
 				practice_setup.stock;
@@ -1995,6 +2524,7 @@ struct ClassicOpSessionBackend final {
 			replay_recorder && replay_recorder->recording()
 		);
 		const bool source_frame_io = !vs_pause_menu;
+		bool pause_refresh_requested = false;
 		std::array<ClassicAudioCommand, 2U> ui_audio{};
 		std::size_t ui_audio_count = 0U;
 		std::expected<MainProcessDriverTick, MainProcessDriverError> tick =
@@ -2006,6 +2536,8 @@ struct ClassicOpSessionBackend final {
 					input.restart_requested
 				)
 			);
+			pause_refresh_requested =
+				vs_pause_menu->take_replay_flush_request();
 			if(vs_pause_menu->take_rejected_save_effect() && !push_audio({
 				.type = ClassicAudioCommandType::play_effect,
 				.parameter = 21U,
@@ -2021,6 +2553,11 @@ struct ClassicOpSessionBackend final {
 						normalize_replay_interstitial_input(input)
 					); !sampled) {
 						return std::unexpected(replay_capture_error());
+					}
+					if(pause_refresh_requested) {
+						if(auto flushed = replay_recorder->periodic_flush(); !flushed) {
+							return std::unexpected(replay_capture_error());
+						}
 					}
 				}
 				return ClassicOpSessionBackendTick{
@@ -2039,7 +2576,10 @@ struct ClassicOpSessionBackend final {
 			}
 			if((restart || status == NewClassicPauseStatus::discard_exit) &&
 				replay_recorder) {
-				replay_recorder->discard();
+				if(auto discarded = replay_recorder->discard_persistent();
+					!discarded) {
+					return std::unexpected(replay_capture_error());
+				}
 			}
 			vs_restart_requested = restart;
 			tick = vs_driver->finish_deferred_frame(
@@ -2063,8 +2603,13 @@ struct ClassicOpSessionBackend final {
 			tick = vs_driver->consume(normalized);
 			if(tick && vs_driver->deferred_frame_pending()) {
 				vs_pause_menu.emplace(
-					replay_recorder && replay_recorder->recording()
+					replay_recorder && replay_recorder->recording(), patch_assets
 				);
+				if(replay_recorder && replay_recorder->recording()) {
+					if(auto flushed = replay_recorder->periodic_flush(); !flushed) {
+						return std::unexpected(replay_capture_error());
+					}
+				}
 				ui_audio[ui_audio_count++] = ClassicAudioCommand{
 					.type = ClassicAudioCommandType::pause_song,
 				};
@@ -2117,6 +2662,11 @@ struct ClassicOpSessionBackend final {
 				recorded_input
 			); !sampled) {
 				return std::unexpected(replay_capture_error());
+			}
+			if(pause_refresh_requested) {
+				if(auto flushed = replay_recorder->periodic_flush(); !flushed) {
+					return std::unexpected(replay_capture_error());
+				}
 			}
 			if(tick->step_result.status == StepStatus::round_transition ||
 				tick->step_result.status == StepStatus::terminal) {
@@ -2226,6 +2776,13 @@ struct ClassicOpSessionBackend final {
 				.transition = *vs_driver->transition(),
 				.restart_requested = vs_restart_requested,
 			});
+			if(vs_restart_requested &&
+				vs_terminal->terminal.route == 0U) {
+				preserve_new_classic_restart_random_seed(
+					vs_terminal->transition.resident,
+					vs_process->live_random_seed()
+				);
+			}
 		}
 		if(vs_terminal->terminal.game_mode < game_mode::vs_1p_cpu ||
 			vs_terminal->terminal.game_mode > game_mode::vs_cpu_cpu ||
@@ -2554,12 +3111,38 @@ struct ClassicOpSessionBackend final {
 		return result;
 	}
 
+	[[nodiscard]] std::optional<NewClassicKeyConfig>
+	take_key_config_update() noexcept
+	{
+		return std::exchange(pending_key_config_update, std::nullopt);
+	}
+
+	[[nodiscard]] std::optional<bool> take_reduced_flash_update() noexcept
+	{
+		return std::exchange(pending_reduced_flash_update, std::nullopt);
+	}
+
 	[[nodiscard]] std::expected<present::SourceSurface, ClassicOpSessionError>
 	compose(std::span<
 		present::ComposedPixel,
 		present::graphics_page_pixels
 	> output)
 	{
+		if(replay_playback) {
+			auto composed = replay_playback->compose_shown_surface(output);
+			if(!composed) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::replay_playback_failed
+				));
+			}
+			return *composed;
+		}
+		if(replay_browser) {
+			return replay_browser->surface();
+		}
+		if(key_config_scene) {
+			return key_config_scene->surface();
+		}
 		if(story) {
 			auto composed = story->compose_shown_surface(output);
 			if(!composed) {
@@ -2615,6 +3198,9 @@ struct ClassicOpSessionBackend final {
 			raster = &high_score_completion->raster();
 		} else if(!raster && high_scores) {
 			raster = &high_scores->raster();
+		} else if(!raster && practice_menu && selection) {
+			raster = &selection->raster();
+			tram = &selection->tram();
 		} else if(!raster && selection_completion) {
 			raster = &selection_completion->raster();
 			tram = &selection_completion->tram();
@@ -2636,7 +3222,8 @@ struct ClassicOpSessionBackend final {
 		if(!composed) {
 			return std::unexpected(surface_error(composed.error()));
 		}
-		return practice_menu ? practice_menu->compose_over(*composed) : *composed;
+		return practice_menu ? practice_menu->compose_over(*composed, true) :
+			*composed;
 	}
 };
 
@@ -2679,6 +3266,66 @@ Result backend_call(void *context, Method method, Args &&...args)
 		.finish_options = [](void *context) {
 			return backend_call<std::expected<void, ClassicOpSessionError>>(
 				context, &ClassicOpSessionBackend::finish_options
+			);
+		},
+		.key_config_active = [](void *context) {
+			return static_cast<ClassicOpSessionBackend *>(context)->
+				key_config_active();
+		},
+		.advance_key_config = [](
+			void *context,
+			NewClassicUiInput input,
+			std::optional<std::uint16_t> scancode_pressed,
+			bool any_scancode_held
+		) {
+			return backend_call<std::expected<
+				ClassicOpSessionBackendTick, ClassicOpSessionError
+			>>(
+				context, &ClassicOpSessionBackend::advance_key_config,
+				input, scancode_pressed, any_scancode_held
+			);
+		},
+		.finish_key_config = [](void *context) {
+			return backend_call<std::expected<void, ClassicOpSessionError>>(
+				context, &ClassicOpSessionBackend::finish_key_config
+			);
+		},
+		.start_replay_browser = [](void *context) {
+			return backend_call<std::expected<void, ClassicOpSessionError>>(
+				context, &ClassicOpSessionBackend::start_replay_browser
+			);
+		},
+		.advance_replay_browser = [](
+			void *context, NewClassicUiInput input
+		) {
+			return backend_call<std::expected<
+				ClassicOpSessionBackendTick, ClassicOpSessionError
+			>>(
+				context, &ClassicOpSessionBackend::advance_replay_browser, input
+			);
+		},
+		.finish_replay_browser = [](void *context) {
+			return backend_call<std::expected<
+				ClassicOpSessionReplayResult, ClassicOpSessionError
+			>>(context, &ClassicOpSessionBackend::finish_replay_browser);
+		},
+		.advance_replay_playback = [](
+			void *context,
+			ClassicAudioStatus audio,
+			NewClassicUiInput input,
+			std::uint16_t live_system_input,
+			bool fast_forward
+		) {
+			return backend_call<std::expected<
+				ClassicOpSessionBackendTick, ClassicOpSessionError
+			>>(
+				context, &ClassicOpSessionBackend::advance_replay_playback,
+				audio, input, live_system_input, fast_forward
+			);
+		},
+		.finish_replay_playback = [](void *context) {
+			return backend_call<std::expected<bool, ClassicOpSessionError>>(
+				context, &ClassicOpSessionBackend::finish_replay_playback
 			);
 		},
 		.start_music_room = [](void *context) {
@@ -2934,7 +3581,9 @@ ClassicOpSession::create(
 	NewClassicReplayRecorder *replay_recorder,
 	bool new_classic_practice_route,
 	std::filesystem::path new_classic_score_path,
-	std::filesystem::path language_overlay_path
+	std::filesystem::path language_overlay_path,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	const ClassicRunnerRequest *runner_request
 )
 {
 	if(!loader || config_path.empty() || score_path.empty() ||
@@ -2966,23 +3615,19 @@ ClassicOpSession::create(
 	if(!imported_op) {
 		return std::unexpected(op_text_error(std::move(imported_op.error())));
 	}
-	if(replay_recorder && config.language == ClassicLanguage::english) {
+	std::map<std::string, ResourceBytes> english_resources{};
+	if(replay_recorder && !language_overlay_path.empty()) {
 		auto overlay = load_new_classic_language_overlay(language_overlay_path);
 		if(!overlay) {
 			return std::unexpected(language_overlay_error(
 				std::move(overlay.error())
 			));
 		}
-		if(!loader->install_authenticated_overrides(
-			std::move(*overlay).release_members()
-		)) {
-			return std::unexpected(session_error(
-				ClassicOpSessionErrorCode::backend_contract_failed
-			));
-		}
-		apply_new_classic_english_text(
-			compiled_content, imported->assets, *imported_op
-		);
+		english_resources = std::move(*overlay).release_members();
+	}
+	if(config.language == ClassicLanguage::english &&
+		english_resources.empty()) {
+		config.language = ClassicLanguage::japanese;
 	}
 	auto shared_loader = std::shared_ptr<MainResourceLoader>(std::move(loader));
 	auto backend = std::make_shared<ClassicOpSessionBackend>(
@@ -2999,8 +3644,15 @@ ClassicOpSession::create(
 		kotohime_compatibility,
 		replay_recorder,
 		new_classic_practice_route,
-		std::move(new_classic_score_path)
+		std::move(new_classic_score_path),
+		std::move(patch_assets), std::move(english_resources), runner_request
 	);
+	if(config.language == ClassicLanguage::english) {
+		if(auto applied = backend->apply_language_profile(config.language);
+			!applied) {
+			return std::unexpected(std::move(applied.error()));
+		}
+	}
 	auto prepared_font = Pc98FontRomProvider::from_exact_font_rom(
 		backend->font_rom
 	);
@@ -3008,6 +3660,31 @@ ClassicOpSession::create(
 		return std::unexpected(font_error(std::move(prepared_font.error())));
 	}
 	backend->font.emplace(std::move(*prepared_font));
+	if(backend->patch_assets) {
+		auto normal = backend->loader->load({
+			.role = MainResourceRole::registration_normal_glyphs,
+		});
+		if(!normal) {
+			return std::unexpected(resource_error(std::move(normal.error())));
+		}
+		auto highlight = backend->loader->load({
+			.role = MainResourceRole::registration_highlight_glyphs,
+		});
+		if(!highlight) {
+			return std::unexpected(resource_error(std::move(highlight.error())));
+		}
+		auto save_art = NewClassicReplaySaveArt::prepare(
+			std::span<const std::byte>{**normal},
+			std::span<const std::byte>{**highlight},
+			backend->font_rom
+		);
+		if(!save_art) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		backend->replay_save_art = std::move(*save_art);
+	}
 	resident.rank = static_cast<std::uint8_t>(config.rank);
 	resident.key_mode = static_cast<std::uint8_t>(config.key_mode);
 	if(!backend->push_audio({
@@ -3131,9 +3808,34 @@ ClassicOpSession::consume(const ClassicOpSessionInput &input)
 				impl_->operations.context, input.op
 			);
 			break;
+		case ClassicOpSessionScene::key_config:
+			if(!impl_->operations.advance_key_config) {
+				break;
+			}
+			tick = impl_->operations.advance_key_config(
+				impl_->operations.context,
+				input.replay_ui,
+				input.scancode_pressed,
+				input.any_scancode_held
+			);
+			break;
 		case ClassicOpSessionScene::options:
 			tick = impl_->operations.advance_options(
 				impl_->operations.context, input.op
+			);
+			break;
+		case ClassicOpSessionScene::replay_browser:
+			tick = impl_->operations.advance_replay_browser(
+				impl_->operations.context, input.replay_ui
+			);
+			break;
+		case ClassicOpSessionScene::replay_playback:
+			tick = impl_->operations.advance_replay_playback(
+				impl_->operations.context,
+				input.audio,
+				input.replay_ui,
+				input.main.aggregate.system,
+				input.replay_fast_forward
 			);
 			break;
 		case ClassicOpSessionScene::music_room:
@@ -3182,7 +3884,6 @@ ClassicOpSession::consume(const ClassicOpSessionInput &input)
 				input.dismiss_pressed
 			);
 			break;
-		case ClassicOpSessionScene::external_route:
 		case ClassicOpSessionScene::complete:
 		case ClassicOpSessionScene::failed:
 			break;
@@ -3238,13 +3939,44 @@ ClassicOpSession::consume(const ClassicOpSessionInput &input)
 		.input_sampled = backend_tick.input_sampled,
 		.process_advanced = backend_tick.process_advanced,
 		.round_started = backend_tick.round_started,
-		.external_route = impl_->external,
 	};
 }
 
 std::optional<ClassicAudioCommand> ClassicOpSession::take_audio_command()
 {
 	return impl_->operations.take_audio_command(impl_->operations.context);
+}
+
+std::optional<NewClassicKeyConfig>
+ClassicOpSession::take_key_config_update() noexcept
+{
+	if(!impl_ || !impl_->operations.context) {
+		return std::nullopt;
+	}
+	return static_cast<ClassicOpSessionBackend *>(
+		impl_->operations.context
+	)->take_key_config_update();
+}
+
+std::optional<bool> ClassicOpSession::take_reduced_flash_update() noexcept
+{
+	if(!impl_ || !impl_->operations.context) {
+		return std::nullopt;
+	}
+	return static_cast<ClassicOpSessionBackend *>(
+		impl_->operations.context
+	)->take_reduced_flash_update();
+}
+
+std::shared_ptr<const NewClassicReplaySaveArt>
+ClassicOpSession::replay_save_art() const noexcept
+{
+	if(!impl_ || !impl_->operations.context) {
+		return {};
+	}
+	return static_cast<const ClassicOpSessionBackend *>(
+		impl_->operations.context
+	)->replay_save_art;
 }
 
 std::expected<present::SourceSurface, ClassicOpSessionError>
@@ -3414,11 +4146,6 @@ std::optional<GameInit> ClassicOpSessionTestAccess::vs_terminal_resident(
 	return session.impl_->test_hooks.vs_terminal_resident(
 		session.impl_->test_hooks.context
 	);
-}
-
-std::optional<ClassicOpRoute> ClassicOpSession::external_route() const noexcept
-{
-	return impl_->external;
 }
 
 } // namespace th03::app

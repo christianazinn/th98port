@@ -8,14 +8,19 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
-#include "th03/app/host_menu_canvas.hpp"
+#include "th03/app/authentic_text.hpp"
 #include "th03/app/classic_config.hpp"
+#include "th03/app/classic_score.hpp"
+#include "th03/app/new_classic_assets.hpp"
 #include "th03/app/new_classic_key_config_store.hpp"
 #include "th03/app/replay_slot_store.hpp"
 #include "th03/formats/replay.hpp"
+#include "th03/present/graphics_text.hpp"
+#include "th03/present/superimpose.hpp"
 
 namespace th03::app {
 
@@ -30,88 +35,10 @@ struct NewClassicUiInput final {
 	bool app_quit_requested = false;
 };
 
-enum class NewClassicLandingChoice : std::uint8_t {
-	play,
-	replay,
-	practice,
-	key_config,
-	options,
-	back,
-};
-
-enum class NewClassicLandingStatus : std::uint8_t {
-	running,
-	selected,
-	application_quit,
-};
-
-struct NewClassicLandingResult final {
-	bool surface_changed = false;
-	NewClassicLandingStatus status = NewClassicLandingStatus::running;
-	NewClassicLandingChoice choice = NewClassicLandingChoice::play;
-};
-
-class NewClassicLandingMenu final {
-public:
-	NewClassicLandingMenu();
-
-	[[nodiscard]] NewClassicLandingResult consume(
-		NewClassicUiInput input
-	) noexcept;
-	[[nodiscard]] present::SourceSurface surface() const noexcept;
-	[[nodiscard]] NewClassicLandingChoice choice() const noexcept;
-
-private:
-	void draw() noexcept;
-	HostMenuCanvas canvas_{};
-	NewClassicLandingChoice choice_ = NewClassicLandingChoice::play;
-	NewClassicLandingStatus status_ = NewClassicLandingStatus::running;
-	bool input_allowed_ = false;
-};
-
-enum class NewClassicOptionsStatus : std::uint8_t {
-	running,
-	key_config_requested,
-	apply_requested,
-	applied,
-	application_quit,
-};
-
-struct NewClassicOptionsResult final {
-	bool surface_changed = false;
-	NewClassicOptionsStatus status = NewClassicOptionsStatus::running;
-};
-
-// Replay Patch's expanded option set. The caller proves whether the complete
-// authenticated translated-resource profile is available; a missing profile
-// is disclosed and can never leave a persisted partial-English selection.
-class NewClassicOptionsMenu final {
-public:
-	explicit NewClassicOptionsMenu(
-		ClassicConfigOptions config,
-		bool english_available = false
-	) noexcept;
-	[[nodiscard]] NewClassicOptionsResult consume(
-		NewClassicUiInput input
-	) noexcept;
-	void report_commit(bool success) noexcept;
-	void resume_after_key_config() noexcept;
-	void synchronize_legacy_autofire(bool enabled) noexcept;
-	[[nodiscard]] present::SourceSurface surface() const noexcept;
-	[[nodiscard]] const ClassicConfigOptions &config() const noexcept;
-	[[nodiscard]] NewClassicOptionsStatus status() const noexcept;
-
-private:
-	void draw() noexcept;
-	HostMenuCanvas canvas_{};
-	ClassicConfigOptions config_{};
-	std::size_t selected_ = 0U;
-	NewClassicOptionsStatus status_ = NewClassicOptionsStatus::running;
-	bool input_allowed_ = false;
-	bool commit_failure_ = false;
-	bool english_unavailable_notice_ = false;
-	bool english_available_ = false;
-};
+using NewClassicHostKeyName = std::string_view (*)(
+	void *context,
+	std::uint16_t key
+) noexcept;
 
 enum class ReplayCatalogSlotState : std::uint8_t {
 	empty,
@@ -175,7 +102,10 @@ public:
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<NewClassicReplayBrowser>,
 		ReplaySlotStoreError
-	> load(std::filesystem::path replay_root);
+	> load(
+		std::filesystem::path replay_root,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	);
 
 	[[nodiscard]] std::expected<
 		NewClassicReplayBrowserResult,
@@ -192,22 +122,28 @@ private:
 	friend struct NewClassicReplayBrowserTestAccess;
 	explicit NewClassicReplayBrowser(
 		std::filesystem::path replay_root,
-		NewClassicReplayCatalog catalog
+		NewClassicReplayCatalog catalog,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
 	);
 	void draw() noexcept;
+	void draw_patch() noexcept;
 	[[nodiscard]] std::expected<void, ReplaySlotStoreError>
 	open_selected();
 
 	std::filesystem::path replay_root_{};
 	NewClassicReplayCatalog catalog_{};
-	HostMenuCanvas canvas_{};
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
+	NewClassicPatchSurface patch_surface_{};
 	std::uint8_t selected_slot_ = 0U;
+	std::uint8_t top_slot_ = 0U;
 	std::size_t selected_checkpoint_ = 0U;
 	NewClassicReplayDetailPage detail_page_ =
 		NewClassicReplayDetailPage::splits;
 	std::optional<formats::ReplayDocument> detail_document_{};
 	bool checkpoint_focus_ = true;
 	bool practice_settings_modal_ = false;
+	bool fade_in_active_ = false;
+	std::uint8_t fade_boundary_ = 0U;
 	NewClassicReplayBrowserStatus status_ =
 		NewClassicReplayBrowserStatus::running;
 	bool input_allowed_ = false;
@@ -238,12 +174,73 @@ struct NewClassicReplaySaveResult final {
 	NewClassicReplaySaveStatus status = NewClassicReplaySaveStatus::running;
 };
 
+enum class NewClassicReplaySaveArtErrorCode : std::uint8_t {
+	normal_glyphs_failed,
+	highlight_glyphs_failed,
+	invalid_glyph_geometry,
+	font_failed,
+	character_name_failed,
+};
+
+struct NewClassicReplaySaveArtError final {
+	NewClassicReplaySaveArtErrorCode code =
+		NewClassicReplaySaveArtErrorCode::normal_glyphs_failed;
+	std::optional<assets::AssetError> asset_error{};
+	std::optional<AuthenticTextError> font_error{};
+	std::optional<present::GraphicsTextError> text_error{};
+};
+
+// Prepared source REGI patterns and FONT.ROM character names used by the
+// Replay Patch save screen. Preparation reproduces the patch's post-load
+// REGI color-plane mutations while preserving master.lib's opacity masks.
+class NewClassicReplaySaveArt final {
+public:
+	NewClassicReplaySaveArt(NewClassicReplaySaveArt &&) noexcept = default;
+	NewClassicReplaySaveArt &operator=(NewClassicReplaySaveArt &&) noexcept =
+		default;
+	NewClassicReplaySaveArt(const NewClassicReplaySaveArt &) = delete;
+	NewClassicReplaySaveArt &operator=(const NewClassicReplaySaveArt &) = delete;
+
+	[[nodiscard]] static std::expected<
+		std::shared_ptr<const NewClassicReplaySaveArt>,
+		NewClassicReplaySaveArtError
+	> prepare(
+		std::span<const std::byte> normal_bfnt,
+		std::span<const std::byte> highlight_bfnt,
+		std::span<const std::byte> font_rom
+	);
+
+private:
+	friend class NewClassicReplaySaveMenu;
+	present::PreparedSuperimposeSheet normal_;
+	present::PreparedSuperimposeSheet highlight_;
+	std::array<
+		std::optional<present::PreparedGraphicsText8x16>,
+		10U
+	> character_names_{};
+
+	NewClassicReplaySaveArt(
+		present::PreparedSuperimposeSheet normal,
+		present::PreparedSuperimposeSheet highlight
+	) noexcept;
+};
+
+using NewClassicDosDateProvider = std::uint16_t (*)(void *) noexcept;
+
 // UI-only save transaction. The caller performs the atomic commit when
 // save_requested is returned, reports success/failure, and retains document
-// ownership until success so endpoint failures are retryable.
+// ownership until success so endpoint failures are retryable. AZINN supplies
+// SLB1B/SLB1 and MNUFONT; exact name-entry glyph art additionally requires the
+// caller's prepared REGI1.BFT/REGI2.BFT MAINL resources (not AZINN members).
 class NewClassicReplaySaveMenu final {
 public:
-	explicit NewClassicReplaySaveMenu(formats::ReplayDocument document);
+	explicit NewClassicReplaySaveMenu(
+		formats::ReplayDocument document,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+		std::shared_ptr<const NewClassicReplaySaveArt> save_art = {},
+		NewClassicDosDateProvider date_provider = nullptr,
+		void *date_provider_context = nullptr
+	);
 
 	[[nodiscard]] NewClassicReplaySaveResult consume(
 		NewClassicUiInput input,
@@ -268,24 +265,35 @@ private:
 		slots,
 		overwrite,
 		quit_confirm,
-		failure,
 		saved_wait,
 	};
 	void draw(const NewClassicReplayCatalog &catalog) noexcept;
+	void draw_patch(const NewClassicReplayCatalog &catalog) noexcept;
 	void apply_name() noexcept;
+	void capture_date() noexcept;
 
 	formats::ReplayDocument document_{};
-	HostMenuCanvas canvas_{};
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
+	std::shared_ptr<const NewClassicReplaySaveArt> save_art_{};
+	NewClassicDosDateProvider date_provider_ = nullptr;
+	void *date_provider_context_ = nullptr;
+	NewClassicPatchSurface patch_surface_{};
 	Phase phase_ = Phase::prompt;
 	NewClassicReplaySaveStatus status_ = NewClassicReplaySaveStatus::running;
 	std::array<char, 8U> name_{{' ',' ',' ',' ',' ',' ',' ',' '}};
 	std::size_t name_position_ = 0U;
 	std::size_t keyboard_position_ = 0U;
 	std::uint8_t selected_slot_ = 0U;
+	std::uint8_t top_slot_ = 0U;
 	bool yes_ = true;
 	Phase return_phase_ = Phase::prompt;
 	bool return_yes_ = true;
 	bool input_allowed_ = false;
+	bool commit_failed_ = false;
+	bool fade_in_active_ = false;
+	std::uint8_t fade_boundary_ = 0U;
+	std::optional<Phase> drawn_phase_{};
+	std::optional<present::Page> dialog_restore_page_{};
 };
 
 struct NewClassicReplaySaveTestAccess final {
@@ -307,84 +315,6 @@ struct NewClassicReplaySaveTestAccess final {
 	[[nodiscard]] static std::size_t name_position(
 		const NewClassicReplaySaveMenu &menu
 	) noexcept;
-};
-
-enum class NewClassicKeyConfigStatus : std::uint8_t {
-	running,
-	apply_requested,
-	applied,
-	back,
-	application_quit,
-};
-
-struct NewClassicKeyConfigInput final {
-	NewClassicUiInput ui{};
-	std::optional<std::uint16_t> scancode_pressed{};
-	bool any_scancode_held = false;
-};
-
-struct NewClassicKeyConfigResult final {
-	bool surface_changed = false;
-	NewClassicKeyConfigStatus status = NewClassicKeyConfigStatus::running;
-};
-
-using NewClassicHostKeyName = std::string_view (*)(
-	void *context,
-	std::uint16_t key
-) noexcept;
-
-// Replay Patch's three-page keyboard transaction, expressed in host scancodes.
-// Persistence and SDL remapping remain caller-owned and retryable.
-class NewClassicKeyConfigMenu final {
-public:
-	NewClassicKeyConfigMenu(
-		NewClassicKeyConfig config,
-		NewClassicKeyConfig defaults,
-		std::uint16_t maximum_key,
-		std::uint16_t capture_cancel_key,
-		NewClassicHostKeyName key_name,
-		void *key_name_context = nullptr
-	) noexcept;
-
-	[[nodiscard]] NewClassicKeyConfigResult consume(
-		NewClassicKeyConfigInput input
-	) noexcept;
-	void report_commit(bool success) noexcept;
-	[[nodiscard]] present::SourceSurface surface() const noexcept;
-	[[nodiscard]] const NewClassicKeyConfig &config() const noexcept;
-	[[nodiscard]] NewClassicKeyConfigStatus status() const noexcept;
-
-private:
-	enum class Page : std::uint8_t { p1, p2, story };
-	enum class Phase : std::uint8_t {
-		menu,
-		capture_wait_release,
-		capture_wait_press,
-		capture_wait_final_release,
-		discard,
-		commit_failure,
-	};
-	void draw() noexcept;
-	void set_page(Page page) noexcept;
-	void restore_defaults() noexcept;
-	void assign(std::uint16_t key) noexcept;
-	[[nodiscard]] std::size_t row_count() const noexcept;
-	[[nodiscard]] std::optional<std::size_t> binding_index() const noexcept;
-
-	NewClassicKeyConfig original_{};
-	NewClassicKeyConfig config_{};
-	NewClassicKeyConfig defaults_{};
-	std::uint16_t maximum_key_ = 0U;
-	std::uint16_t capture_cancel_key_ = 0U;
-	NewClassicHostKeyName key_name_ = nullptr;
-	void *key_name_context_ = nullptr;
-	HostMenuCanvas canvas_{};
-	Page page_ = Page::story;
-	Phase phase_ = Phase::menu;
-	std::size_t selected_ = 0U;
-	std::optional<std::size_t> capture_binding_{};
-	NewClassicKeyConfigStatus status_ = NewClassicKeyConfigStatus::running;
-	bool input_allowed_ = false;
 };
 
 } // namespace th03::app

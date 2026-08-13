@@ -1392,12 +1392,14 @@ void test_recorded_pause_deferred_frame()
 	const auto exited = process.finish_deferred_frame(
 		th03::DeferredFrameAction::exit_session
 	);
+	const auto live_seed = process.live_random_seed();
 	expect(reopened &&
 		reopened->status == th03::StepStatus::phase_transition &&
 		exit_release && exit_release->status == th03::StepStatus::running &&
 		exited && exited->status == th03::StepStatus::terminal &&
 		process.presentation_status() == th03::present::MainRoundStatus::ready &&
-		process.canonical_state().round_frame == 2U,
+		process.canonical_state().round_frame == 2U &&
+		live_seed != process.canonical_state().round_frame,
 		"deferred replay-pause exit publishes its final observed footer before terminal"
 	);
 }
@@ -1889,6 +1891,32 @@ void test_story_factory_transaction_and_lifetime()
 			.parameter = 1U,
 		} && !process.take_audio_command(),
 		"Story process remains usable and dispatches a shot at the source boundary after every caller-owned input is destroyed");
+
+	// sub_F1FA() requests terminal-Boss effect 16 from the late Boss renderer,
+	// after this frame's snd_se_update(). The request therefore belongs to the
+	// next frame's arbitration window, where an early higher-priority request
+	// can replace it before that frame's update.
+	MainProcessTestAccess::feedback_dispatch_boundary(process);
+	MainProcessTestAccess::request_feedback(process, {
+		.site = th03::MainFeedbackCueSite::boss_terminal_first_frame,
+		.player = th03::PlayerId::p1,
+	});
+	expect(
+		!process.take_audio_command(),
+		"late terminal-Boss effect 16 remains queued after the current source boundary"
+	);
+	MainProcessTestAccess::request_feedback(process, {
+		.site = th03::MainFeedbackCueSite::ellen_bomb_started,
+		.player = th03::PlayerId::p1,
+	});
+	MainProcessTestAccess::feedback_dispatch_boundary(process);
+	expect(
+		process.take_audio_command() == th03::app::ClassicAudioCommand{
+			.type = th03::app::ClassicAudioCommandType::dispatch_effect,
+			.parameter = 17U,
+		} && !process.take_audio_command(),
+		"next-frame prefix arbitration replaces late terminal effect 16 before dispatch"
+	);
 
 	const auto pause_global_frame_before = process.canonical_state().global_frame;
 	const auto pause_round_frame_before = process.canonical_state().round_frame;

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "classic_op_selection_internal.hpp"
+#include "th03/app/new_classic_replay.hpp"
 #include "th03/exact/trig.hpp"
 
 namespace {
@@ -22,6 +23,7 @@ using th03::app::ClassicAudioCommandType;
 using th03::app::ClassicMusicCue;
 using th03::app::ClassicOpCharacterSelection;
 using th03::app::ClassicOpPhase;
+using th03::app::ClassicOpPracticeBackgroundStatus;
 using th03::app::ClassicOpSelectionCarry;
 using th03::app::ClassicOpSelectionCompletion;
 using th03::app::ClassicOpSelectionInput;
@@ -851,6 +853,76 @@ void test_new_classic_practice_retains_selection()
 	);
 	const auto selected = scene->local_selection();
 	auto completion = scene->take_completion();
+	const auto shown_before_practice = scene->raster().shown_page();
+	const auto cycle_before_practice = scene->carry().curve_cycle;
+	const auto rand_before_practice = std::bit_cast<std::uint32_t>(
+		scene->resident().resident_rand
+	);
+	const auto practice_wait_1 =
+		scene->advance_new_classic_practice_background();
+	const auto cycle_after_wait_1 = scene->carry().curve_cycle;
+	const auto shown_after_wait_1 = scene->raster().shown_page();
+	const auto rand_after_wait_1 = std::bit_cast<std::uint32_t>(
+		scene->resident().resident_rand
+	);
+	const auto practice_wait_2 =
+		scene->advance_new_classic_practice_background();
+	const auto cycle_after_wait_2 = scene->carry().curve_cycle;
+	const auto shown_after_wait_2 = scene->raster().shown_page();
+	const auto rand_after_wait_2 = std::bit_cast<std::uint32_t>(
+		scene->resident().resident_rand
+	);
+	const auto practice_background =
+		scene->advance_new_classic_practice_background();
+	const auto practice_page = scene->raster().graphics(
+		scene->raster().shown_page()
+	);
+	const auto curves_only = std::ranges::all_of(
+		practice_page,
+		[](std::uint8_t color) {
+			return color == 0U || color == 1U || color == 5U || color == 6U;
+		}
+	) && std::ranges::any_of(
+		practice_page, [](std::uint8_t color) { return color != 0U; }
+	);
+	expect(
+		practice_wait_1 == ClassicOpPracticeBackgroundStatus::waiting &&
+		practice_wait_2 == ClassicOpPracticeBackgroundStatus::waiting &&
+		practice_background == ClassicOpPracticeBackgroundStatus::published &&
+		cycle_after_wait_1 == static_cast<std::uint8_t>(
+			cycle_before_practice + 2U
+		) && cycle_after_wait_2 == cycle_after_wait_1 &&
+		shown_after_wait_1 == shown_before_practice &&
+		shown_after_wait_2 == shown_before_practice &&
+		rand_after_wait_1 == rand_before_practice &&
+		rand_after_wait_2 == rand_before_practice &&
+		scene->raster().shown_page() != shown_before_practice &&
+		scene->carry().curve_cycle == static_cast<std::uint8_t>(
+			cycle_before_practice + 2U
+		) &&
+		std::bit_cast<std::uint32_t>(scene->resident().resident_rand) ==
+			rand_before_practice + 1U &&
+		scene->resident().random_seed == rand_before_practice + 1U &&
+		curves_only,
+		"Practice waits three VSyncs, then advances retained curve/page/rand owners without redrawing selector portraits"
+	);
+	const auto cancel_wait_1 =
+		scene->advance_new_classic_practice_background();
+	const auto cancel_wait_2 =
+		scene->advance_new_classic_practice_background();
+	const auto cancel_background =
+		scene->advance_new_classic_practice_background();
+	expect(
+		cancel_wait_1 == ClassicOpPracticeBackgroundStatus::waiting &&
+		cancel_wait_2 == ClassicOpPracticeBackgroundStatus::waiting &&
+		cancel_background == ClassicOpPracticeBackgroundStatus::published &&
+		scene->carry().curve_cycle == static_cast<std::uint8_t>(
+			cycle_before_practice + 4U
+		) &&
+		std::bit_cast<std::uint32_t>(scene->resident().resident_rand) ==
+			rand_before_practice + 2U,
+		"Practice Esc can publish its required second three-VSync curves-only frame"
+	);
 	expect(
 		completion && scene->resume_from_new_classic_practice() &&
 		scene->phase() == ClassicOpSelectionPhase::draw_and_input &&
@@ -1001,6 +1073,21 @@ bool rectangle_has_ink(
 
 void test_new_classic_restart_resident_preparation()
 {
+	GameInit handoff{};
+	handoff.global_frame = 41U;
+	handoff.resident_rand = 1;
+	handoff.random_seed = 2U;
+	handoff.game_mode = th03::game_mode::story;
+	th03::app::preserve_new_classic_restart_random_seed(
+		handoff, 0xFEDCBA98U
+	);
+	expect(
+		std::bit_cast<std::uint32_t>(handoff.resident_rand) == 0xFEDCBA98U &&
+		handoff.random_seed == 2U && handoff.global_frame == 41U &&
+		handoff.game_mode == th03::game_mode::story,
+		"0.4.11 restart handoff replaces only resident rand with the live seed"
+	);
+
 	GameInit story{
 		.global_frame = 900U,
 		.resident_rand = 1234,
@@ -1162,7 +1249,7 @@ void local_original_gate(const std::filesystem::path &content_root)
 	);
 	if(!selection_completion) { return; }
 	auto returned = ClassicOpTitleMenuScene::return_from_canceled_selection(
-		*selection_completion, *title_resources
+		*selection_completion, *title_resources, {}
 	);
 	expect(
 		returned && (*returned)->phase() == ClassicOpPhase::fast_black &&

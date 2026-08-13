@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <string_view>
@@ -266,6 +267,60 @@ void test_fast_title_and_held_first_choice()
 		scene->phase() == ClassicOpPhase::consumed,
 		"typed OP handoff is single-consumer"
 	);
+}
+
+void test_replay_patch_title_if_assets_supplied()
+{
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4996)
+#endif
+	const auto *path = std::getenv("TH03_AZINN_DAT");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+	if(!path || *path == '\0') {
+		return;
+	}
+	auto loaded = th03::app::load_new_classic_replay_patch_assets(path);
+	expect(loaded.has_value(), "authenticated Replay Patch title assets load");
+	if(!loaded) {
+		return;
+	}
+	GameInit resident{};
+	resident.resident_rand = 40;
+	resident.fast_op_animation = 1U;
+	auto assets = std::make_shared<const th03::app::NewClassicReplayPatchAssets>(
+		std::move(*loaded)
+	);
+	auto created = ClassicOpSceneTestAccess::create_with_predecoded_assets(
+		resident, ClassicOpTitleMode::fast_fade, fullscreen_pi(true),
+		fullscreen_pi(false), window_sheet(), gaiji_sheet(), assets
+	);
+	expect(created.has_value(), "Replay Patch-profile OP title creates");
+	if(!created) {
+		return;
+	}
+	auto &scene = **created;
+	reach_main_menu(scene);
+	expect(
+		scene.raster().pixel(Page::zero, {160, 264}) == 1U &&
+		scene.raster().pixel(Page::zero, {288, 264}) == 2U,
+		"Replay Patch title uses the source 264-pixel seven-row window"
+	);
+	for(std::uint8_t step = 0U; step < 5U; ++step) {
+		expect(scene.advance({.down = true}).has_value(),
+			"Replay Patch main-menu selection advances");
+		expect(scene.advance().has_value(),
+			"Replay Patch main-menu direction lock releases");
+	}
+	expect(scene.selected_choice() == ClassicOpMenuChoice::replay,
+		"the sixth in-game Replay Patch title row is Replay");
+	const auto selected = scene.advance({.ok = true});
+	auto completion = scene.take_completion();
+	expect(selected && selected->ready && completion &&
+		completion->route() == ClassicOpRoute::replay,
+		"the proportional title Replay row publishes its typed route");
 }
 
 void test_story_seed_and_vs_cancel_return()
@@ -689,6 +744,7 @@ void local_original_gate(const std::filesystem::path &content_root)
 int main(int argc, char **argv)
 {
 	test_fast_title_and_held_first_choice();
+	test_replay_patch_title_if_assets_supplied();
 	test_story_seed_and_vs_cancel_return();
 	test_menu_input_lock_and_cancel();
 	test_high_score_route_contract();

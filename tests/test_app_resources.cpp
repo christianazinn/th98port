@@ -8,8 +8,10 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 namespace {
 
@@ -389,6 +391,39 @@ void test_manifest()
 			ResourceLoadErrorCode::duplicate_logical_role,
 		"duplicate logical roles fail with a deterministic named manifest error"
 	);
+}
+
+void test_authenticated_profile_switch()
+{
+	TemporaryRoot root;
+	expect(root.valid(), "temporary language-profile root was created");
+	if(!root.valid()) {
+		return;
+	}
+	const MainResourceKey key{.role = MainResourceRole::enemy_scripts};
+	const auto spec = th03::app::main_resource_spec(key);
+	expect(static_cast<bool>(spec), "language-profile fixture has manifest spec");
+	if(!spec) {
+		return;
+	}
+	write_spec(root.path(), key, std::byte{0x11U});
+	MainResourceLoader loader(root.path(), MainResourceIntegrity::size_only);
+	const auto base = loader.load(key);
+	expect(base && !(*base)->empty() && (*base)->front() == std::byte{0x11U},
+		"base profile populates the resource cache");
+	auto translated = std::make_shared<const std::vector<std::byte>>(
+		spec->expected_bytes, std::byte{0x22U}
+	);
+	expect(loader.switch_authenticated_overrides({{spec->filename, translated}}),
+		"authenticated profile switch accepts a complete named replacement");
+	const auto english = loader.load(key);
+	expect(english && (*english)->front() == std::byte{0x22U},
+		"profile switch invalidates the base cache and serves the replacement");
+	expect(loader.switch_authenticated_overrides({}),
+		"empty authenticated profile restores extracted Japanese resources");
+	const auto restored = loader.load(key);
+	expect(restored && (*restored)->front() == std::byte{0x11U},
+		"restoring the base profile invalidates translated cache entries");
 }
 
 void test_op_title_menu_resource_batch()
@@ -1380,6 +1415,7 @@ void test_rejections()
 int main()
 {
 	test_manifest();
+	test_authenticated_profile_switch();
 	test_op_title_menu_resource_batch();
 	test_op_character_selection_resource_batch();
 	test_op_music_room_resource_batch();

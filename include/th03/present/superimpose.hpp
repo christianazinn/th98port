@@ -42,6 +42,17 @@ private:
 		Point,
 		std::uint16_t
 	) noexcept;
+	friend bool superimpose_remap_color_preserve_opacity(
+		PreparedSuperimposeSheet &,
+		Index4,
+		Index4
+	) noexcept;
+	friend bool superimpose_fill_glyph_rect_preserve_opacity(
+		PreparedSuperimposeSheet &,
+		std::uint16_t,
+		Rect,
+		Index4
+	) noexcept;
 	friend bool superimpose_put_blue_plane_row_white(
 		Raster &,
 		const PreparedSuperimposeSheet &,
@@ -88,6 +99,23 @@ prepare_superimpose_sheet(const assets::BfntSheet &sheet);
 	const PreparedSuperimposeSheet &sheet,
 	Point position,
 	std::uint16_t glyph_code
+) noexcept;
+
+// Recolors matching opaque pixels without rebuilding the sheet's positive
+// mask. This models callers that modify master.lib's registered color planes
+// after super_entry_bfnt(); mapping a visible color to the transparent color
+// therefore still produces an opaque write.
+[[nodiscard]] bool superimpose_remap_color_preserve_opacity(
+	PreparedSuperimposeSheet &sheet,
+	Index4 from,
+	Index4 to
+) noexcept;
+
+[[nodiscard]] bool superimpose_fill_glyph_rect_preserve_opacity(
+	PreparedSuperimposeSheet &sheet,
+	std::uint16_t glyph_code,
+	Rect local_rect,
+	Index4 color
 ) noexcept;
 
 // Exact SUB_BDC2() subset used by MAIN's flying HUD banner. The sheet must be

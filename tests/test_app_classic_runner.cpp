@@ -405,6 +405,7 @@ struct FakeRunnerBackend final {
 	bool fail_consume = false;
 	bool fail_compose = false;
 	std::optional<th03::app::ClassicAudioCommand> audio{};
+	std::optional<bool> reduced_flash_update{};
 };
 
 th03::app::ClassicRunnerOperations runner_operations(
@@ -443,6 +444,10 @@ th03::app::ClassicRunnerOperations runner_operations(
 			auto command = self.audio;
 			self.audio.reset();
 			return command;
+		},
+		.take_reduced_flash_update = [](void *context) {
+			auto &self = *static_cast<FakeRunnerBackend *>(context);
+			return std::exchange(self.reduced_flash_update, std::nullopt);
 		},
 		.compose_shown_surface = [](void *context, auto output) {
 			auto &self = *static_cast<FakeRunnerBackend *>(context);
@@ -502,6 +507,21 @@ void test_runner_sequence_audio_surface_and_failure()
 		) == th03::app::ExperienceProfile::new_classic,
 		"the shared runner retains New Classic as host policy only"
 	);
+	if(new_classic) {
+		profile_backend->reduced_flash_update = true;
+		auto live_flash = (*new_classic)->consume({});
+		std::vector<th03::present::ComposedPixel> live_pixels(
+			th03::present::graphics_page_pixels
+		);
+		const auto live_surface = (*new_classic)->compose_shown_surface(
+			std::span<th03::present::ComposedPixel,
+				th03::present::graphics_page_pixels>(
+				live_pixels.data(), live_pixels.size()
+			)
+		);
+		expect(live_flash && live_surface && live_surface->reduced_flash_applied,
+			"New Classic applies a live Flash FX option update in the retained runner");
+	}
 	auto reduced = th03::app::ClassicRunnerTestAccess::create(
 		std::static_pointer_cast<void>(profile_backend),
 		runner_operations(*profile_backend),
@@ -804,6 +824,7 @@ bool authentic_vs_gate(
 				.mainl_executable = mainl_executable,
 				.op_executable = op_executable,
 				.font_rom = font_rom,
+				.replay_root = temporary.path() / "REPLAY",
 				.config = temporary.path() / "YUME.CFG",
 				.score = temporary.path() / "YUME.NEM",
 			},
@@ -991,18 +1012,26 @@ bool authentic_vs_gate(
 			if(mode_index != 0U) {
 				return true;
 			}
+			const auto practice_poll = [&](th03::CoreInput input = {}) {
+				for(std::size_t wait = 0U; wait < 8U; ++wait) {
+					if(!step(input)) { return false; }
+					if(last && last->surface_changed) { return true; }
+				}
+				return false;
+			};
 			// Replay Patch inserts Practice setup after the ordinary 1P-vs-CPU
 			// selector. Switch its default Practice preset to VS, move to Start,
 			// and confirm so this matrix still exercises the ordinary VS route.
-			if(!step() || !step(pulse(0x0008U)) || !step()) {
+			if(!practice_poll() || !practice_poll(pulse(0x0008U)) ||
+				!practice_poll()) {
 				return fail_stage("practice-select-vs");
 			}
 			for(std::size_t row = 0U; row < 5U; ++row) {
-				if(!step(pulse(0x0002U)) || !step()) {
+				if(!practice_poll(pulse(0x0002U)) || !practice_poll()) {
 					return fail_stage("practice-select-start");
 				}
 			}
-			return step(pulse(0x0020U));
+			return practice_poll(pulse(0x0020U));
 		};
 
 		if(!drive_selection() || !select_ordinary_vs_if_offered() ||
@@ -1172,6 +1201,7 @@ bool authentic_practice_gate(
 			.mainl_executable = mainl_executable,
 			.op_executable = op_executable,
 			.font_rom = font_rom,
+			.replay_root = temporary.path() / "REPLAY",
 			.config = temporary.path() / "YUME.CFG",
 			.score = temporary.path() / "YUME.NEM",
 		},
@@ -1189,6 +1219,10 @@ bool authentic_practice_gate(
 		return false;
 	}
 	auto &runner = **loaded;
+	if(!runner.new_classic_replay_save_art()) {
+		std::cerr << "authentic-practice-stage=replay-save-art\n";
+		return false;
+	}
 	std::array<
 		th03::present::ComposedPixel,
 		th03::present::graphics_page_pixels
@@ -1255,6 +1289,17 @@ bool authentic_practice_gate(
 		input.system = system;
 		return input;
 	};
+	const auto practice_poll = [&](th03::CoreInput input = {}) {
+		for(std::size_t wait = 0U; wait < 8U; ++wait) {
+			if(!step(input)) {
+				return false;
+			}
+			if(last && last->surface_changed) {
+				return true;
+			}
+		}
+		return false;
+	};
 
 	if(scene() != th03::app::ClassicOpSessionScene::character_selection) {
 		return fail_stage("initial-selection");
@@ -1270,16 +1315,24 @@ bool authentic_practice_gate(
 	}
 	// Setup starts on Mode. Release the selector's confirm, move through the
 	// six-row main page to Start, and confirm the Story-native defaults.
-	if(!step()) {
+	if(!practice_poll()) {
 		return fail_stage("setup-release");
 	}
 	for(std::size_t row = 0U; row < 5U; ++row) {
-		if(!step(pulse(0x0002U)) || !step()) {
+		if(!practice_poll(pulse(0x0002U)) || !practice_poll()) {
 			return fail_stage("setup-move");
 		}
 	}
-	if(!step(pulse(0x0020U))) {
+	if(!practice_poll(pulse(0x0020U))) {
 		return fail_stage("setup-start");
+	}
+	// The Replay Patch owns a 19-boundary black-out after Start. Input is not
+	// sampled during it, so do not let a one-tick test pulse accidentally
+	// become the MAINL dismissal.
+	for(std::size_t frame = 0U; frame < 24U; ++frame) {
+		if(!step()) {
+			return fail_stage("setup-start-fade");
+		}
 	}
 
 	for(std::size_t frame = 0U; frame < 1'024U; ++frame) {
@@ -1310,8 +1363,8 @@ bool authentic_practice_gate(
 		!th03::formats::write_v13_replay(*replay)) {
 		return fail_stage("practice-replay");
 	}
-	// Route 0 recreates the selector; Cancel from this Practice-owned entry
-	// returns to the New Classic landing owner instead of exposing Classic OP.
+	// Route 0 recreates the selector; Cancel from this dedicated product entry
+	// returns across the New Classic session boundary without exposing Classic OP.
 	for(std::size_t frame = 0U; frame < 1'024U && runner.status() ==
 		th03::app::ClassicRunnerStatus::running; ++frame) {
 		if(!step(pulse((frame & 1U) == 0U ? 0x1000U : 0U), true)) {
@@ -1319,7 +1372,7 @@ bool authentic_practice_gate(
 		}
 	}
 	return runner.status() == th03::app::ClassicRunnerStatus::session_complete ?
-		true : fail_stage("return-to-landing");
+		true : fail_stage("return-to-product-selector");
 }
 
 bool authentic_gate(
@@ -1349,6 +1402,7 @@ bool authentic_gate(
 			.op_executable = op_executable,
 			.font_rom = font_rom,
 			.language_overlay = language_overlay,
+			.replay_root = temporary.path() / "REPLAY",
 			.config = temporary.path() / "YUME.CFG",
 			.score = temporary.path() / "YUME.NEM",
 		},
@@ -1398,6 +1452,26 @@ bool authentic_gate(
 			}
 		}
 		return false;
+	};
+	const auto graphics_region_hash = [&pixels](
+		std::int32_t left,
+		std::int32_t top,
+		std::uint16_t width,
+		std::uint16_t height
+	) {
+		std::uint64_t hash = 14695981039346656037ULL;
+		for(std::int32_t y = top; y < top + height; ++y) {
+			for(std::int32_t x = left; x < left + width; ++x) {
+				const auto &pixel = pixels[
+					(static_cast<std::size_t>(y) *
+						th03::present::graphics_width) +
+					static_cast<std::size_t>(x)
+				];
+				hash ^= static_cast<std::uint8_t>(pixel.value);
+				hash *= 1099511628211ULL;
+			}
+		}
+		return hash;
 	};
 	drain_audio();
 	std::uint64_t tick_index = 0U;
@@ -1479,20 +1553,19 @@ bool authentic_gate(
 	}
 	if(!reached_input || !step(0x0020U)) { return false; }
 	bool menu_drawn = false;
+	bool menu_surface_published = false;
 	for(std::size_t frame = 0U; frame < 32U && !menu_drawn; ++frame) {
 		if(!step()) { return false; }
+		menu_surface_published = menu_surface_published || last->surface_changed;
 		menu_drawn = last->input_sampled;
 	}
-	if(!menu_drawn || !last->surface_changed || std::ranges::none_of(
-		pixels, [](const auto &pixel) {
-			return pixel.layer == th03::present::ComposedPixelLayer::text;
-		}
-	)) {
+	if(!menu_drawn || !menu_surface_published ||
+		!graphics_ink(160, 264, 136U, 128U)) {
 		std::cerr << "authentic-script-stage=menu tick=" << tick_index << '\n';
 		return false;
 	}
 
-	// Replay Patch 0.4.10 accepts released Left, Right, Left, Right while the
+	// Replay Patch 0.4.11 accepts released Left, Right, Left, Right while the
 	// title menu owns input. It persists the two Extra characters and plays the
 	// extend effect only on the first successful transition.
 	const auto unlock_audio_begin = audio_commands.size();
@@ -1534,6 +1607,70 @@ bool authentic_gate(
 		audio_commands.size() != unlock_audio_begin + 2U) {
 		std::cerr << "authentic-script-stage=extra-unlock-repeat\n";
 		return false;
+	}
+
+	if(!language_overlay.empty()) {
+		const auto english_background = graphics_region_hash(0, 0, 160U, 400U);
+		const auto wait_for_scene_input = [&](th03::app::ClassicOpSessionScene scene,
+			std::size_t limit) {
+			for(std::size_t frame = 0U; frame < limit; ++frame) {
+				if(!step()) { return false; }
+				if(th03::app::ClassicRunnerTestAccess::scene(runner) == scene &&
+					last && last->input_sampled) {
+					return true;
+				}
+			}
+			return false;
+		};
+		const auto enter_language_row = [&]() {
+			for(std::size_t row = 0U; row < 3U; ++row) {
+				if(!step(0x0002U) || !step()) { return false; }
+			}
+			return true;
+		};
+		const auto sample_input = [&](std::uint16_t system) {
+			for(std::size_t frame = 0U; frame < 8U; ++frame) {
+				if(!step(system)) { return false; }
+				if(last && last->input_sampled) { return true; }
+			}
+			return false;
+		};
+		const auto settle_options = [&]() {
+			for(std::size_t frame = 0U; frame < 32U; ++frame) {
+				if(!step()) { return false; }
+			}
+			return th03::app::ClassicRunnerTestAccess::scene(runner) ==
+				th03::app::ClassicOpSessionScene::options && last &&
+				last->input_sampled;
+		};
+		for(std::size_t row = 0U; row < 4U; ++row) {
+			if(!step(0x0002U) || !step()) { return false; }
+		}
+		const bool opened_japanese = step(0x0020U);
+		const bool ready_japanese = opened_japanese && settle_options();
+		const bool selected_language = ready_japanese && enter_language_row();
+		const bool toggled_japanese = selected_language && step(0x0020U) && step();
+		const bool canceled_japanese = toggled_japanese && sample_input(0x1000U);
+		const bool exited_japanese = canceled_japanese && wait_for_scene_input(
+				th03::app::ClassicOpSessionScene::title_menu, 256U
+			);
+		if(!exited_japanese) {
+			std::cerr << "authentic-script-stage=language-japanese\n";
+			return false;
+		}
+		const auto japanese_background = graphics_region_hash(0, 0, 160U, 400U);
+		if(japanese_background == english_background ||
+			!step(0x0020U) || !settle_options() || !enter_language_row() ||
+			!step(0x0020U) || !step() ||
+			!sample_input(0x1000U) || !wait_for_scene_input(
+				th03::app::ClassicOpSessionScene::title_menu, 256U
+			) || graphics_region_hash(0, 0, 160U, 400U) != english_background) {
+			std::cerr << "authentic-script-stage=language-english\n";
+			return false;
+		}
+		for(std::size_t row = 0U; row < 4U; ++row) {
+			if(!step(0x0001U) || !step()) { return false; }
+		}
 	}
 
 	// Navigate away and back with the source-global arrow channel, then enter

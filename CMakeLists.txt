@@ -411,7 +411,6 @@ target_link_libraries(th03_present PUBLIC th03_core)
 # presentation state.
 add_library(th03_app_runtime STATIC
 	src/app/experience_menu.cpp
-	src/app/host_menu_canvas.cpp
 	src/app/host_surface.cpp
 	src/app/new_classic_pause.cpp
 	src/app/tick_input.cpp
@@ -504,7 +503,9 @@ add_library(th03_app_main STATIC
 	src/app/main_process_driver.cpp
 	src/app/main_process.cpp
 	src/app/main_process_static_content.cpp
+	src/app/new_classic_assets.cpp
 	src/app/new_classic_frontend.cpp
+	src/app/new_classic_key_config_scene.cpp
 	src/app/new_classic_language.cpp
 	src/app/new_classic_playback.cpp
 	src/app/new_classic_practice.cpp
@@ -1048,6 +1049,30 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-main-process-tests
 		COMMAND th03-app-main-process-tests
+	)
+
+	add_executable(th03-app-new-classic-assets-tests
+		tests/test_app_new_classic_assets.cpp
+	)
+
+	add_executable(th03-app-new-classic-key-config-scene-tests
+		tests/test_app_new_classic_key_config_scene.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-key-config-scene-tests PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-new-classic-key-config-scene-tests)
+	add_test(
+		NAME th03-app-new-classic-key-config-scene-tests
+		COMMAND th03-app-new-classic-key-config-scene-tests
+	)
+	target_link_libraries(
+		th03-app-new-classic-assets-tests PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-new-classic-assets-tests)
+	add_test(
+		NAME th03-app-new-classic-assets-tests
+		COMMAND th03-app-new-classic-assets-tests
 	)
 
 	add_executable(th03-app-main-direct-vs-runner-tests

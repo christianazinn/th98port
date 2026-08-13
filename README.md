@@ -7,8 +7,8 @@ Practice, and ordinary VS, plus a separate title-Demo gate, on top of the Phase
 1 format/session runway. A
 strict V13 span adapter and the first stdlib-only asset/indexed-raster
 foundations now sit beside that core. An optional SDL 3 application now opens a
-shared host menu for the authenticated Classic lifecycle and the developing
-Replay Patch 0.4.10-derived New Classic experience, alongside the earlier
+shared host menu for the authenticated Classic lifecycle and the faithful
+Replay Patch 0.4.11-derived New Classic experience, alongside the earlier
 direct-VS developer path. Both product identities reuse the same gameplay,
 presentation, content, and audio owners; title Exit returns to the host menu.
 A separate byte-fed PMD/YM2608 engine and TH03
@@ -23,11 +23,9 @@ Gameplay-stage music, source-ordered ordinary MAIN SFX emission, and stock
 blocking live pause/resume with effect 21 are integrated. New Classic's host
 identity/lifecycle, complete shared-owner V13 MAIN/MAINL
 recording/browser/playback/save flow and final Splits/Clears/Timers telemetry,
-richer
-pause/restart menu, full Practice setup/recording lifecycle, three-page
-KeyConfig, expanded Options, title Extra unlock, and the complete authenticated
-Replay Patch 0.4.10 English profile are present. The final systematic Replay
-Patch profile/parity audit is complete, including physical-Z Staff/replay
+source-rendered pause/restart, Practice setup, three-page KeyConfig, expanded
+Options, title Extra unlock, and the complete authenticated Replay Patch
+English profile are present. The source-parity audit includes physical-Z Staff/replay
 acceleration and no-wait playback of recorded Pause control streams.
 
 ## Build and test
@@ -202,8 +200,19 @@ the first clear cannot accelerate itself. Replay details expose the
 frozen V13 result/date/score, checkpoint splits, stage clear-bonus counters,
 slowdown, and Replay Patch `m:ss.cc` real-frame timers. Clears is read-only;
 Splits and Timers retain checkpoint launch.
-The New Classic landing's Practice entry uses the authenticated 1P-vs-CPU
-selector, followed by Replay Patch 0.4.10's main and Advanced setup pages.
+The active recording is crash-checkpointed as canonical V13
+`REPLAY\TH3LAST.RPY` after its first input, at process/checkpoint boundaries,
+periodically during MAIN, whenever Replay Pause opens, and on its navigation
+and Save choices. A normal save
+atomically publishes that exact artifact as `TH3Rxx.RPY`; explicit discard
+removes it, while an application quit or storage failure preserves it. If a
+valid fallback remains on the next launch, New Classic opens the source-style
+save transaction before OP so it can be named and published without starting a
+new recording over it. Matching Replay Patch, an unreadable fallback is treated
+as no pending save and removed so OP and a later fresh recording can proceed;
+other filesystem failures remain explicit.
+New Classic Practice is entered through the patched title's VS Start route,
+1P-vs-CPU selector, and Replay Patch 0.4.11's main and Advanced setup pages.
 Its source defaults, exact-VS fallback, fixed-opponent stages, speed/rank/gauge
 controls, retry policy, pause/restart behavior, and V13 Practice metadata are
 all carried into the shared MAIN runtime.
@@ -211,7 +220,7 @@ New Classic also renders the Replay Patch's complete unsigned-byte active
 combo count (100-255 adds a hundreds digit); Classic preserves the
 source-compatible 99-hit display cap. This presentation choice does not alter
 canonical replay hashes, combo timing, scoring, or checkpoint bytes.
-New Classic's landing also owns Replay Patch-style KeyConfig and Options.
+The patched title's Option row owns Replay Patch-style KeyConfig and Options.
 KeyConfig remaps 26 SDL scancodes across P1, P2, and Story pages, swaps
 duplicate assignments within a page, restores page-local defaults, and stores
 the result atomically in `TH3KEY.CFG` beside `YUME.CFG`. Story and 1P-vs-CPU
@@ -220,7 +229,7 @@ and P2 Autofire selections feed the recorded logical input boundary. Options
 persists Rank, FM music, independently switchable SFX, KeyConfig, and the
 Replay Patch's exact MAIN warning-flash reduction. With
 `--language-overlay <TH3EN.DAT>`, the Language row selects the complete
-authenticated 0.4.10 English profile: all 52 translated archive members,
+authenticated English profile: all 52 translated archive members,
 Music Room choices, two-line character titles/names, registration names, and
 five result labels move together. Without that exact profile the menu retains
 Japanese instead of claiming a partial translation. Classic is always
@@ -234,7 +243,7 @@ board by value, but New Classic then writes only `YUME.NEW.NEM`; Classic's
 registration, Continue, menu return, restart, and application exit, while
 Demo, Practice, and replay playback remain excluded.
 The private `tools\th03-private-editor` utility provides direct migration:
-it accepts an original 824-byte PC-98 scorefile or Replay Patch 0.4.10's exact
+it accepts an original 824-byte PC-98 scorefile or Replay Patch 0.4.11's exact
 7,812-byte expanded file, validates it, backs up any current native score, and
 atomically installs `YUME.NEW.NEM`. Expanded imports and all exports remain
 byte-for-byte exact. Close the game before importing or exporting so the live
@@ -248,9 +257,10 @@ identity. Capture mode publishes every surface-changing logical tick separately
 so host catch-up cannot hide a source publication. The strict
 `tools\compare_pixel_oracle.ps1` comparator reports the first differing field
 and emits a structured JSON verdict. See `docs\PIXEL_ORACLE.md` for commands,
-the proven two-run/cross-compiler gate, and the explicitly still-planned raw
-PC-98 planar producer; the lightweight hash stream is not represented as
-collision-proof pixel evidence.
+the proven two-run/cross-compiler gate, and the implemented devtools-only raw
+PC-98 planar producer. Silent/Turbo guest execution and final FONT/gaiji TRAM
+composition remain external acceptance work; the lightweight hash stream is
+not represented as collision-proof pixel evidence.
 Setting `TH03_PIXEL_ORACLE_RGB_DIR` additionally commits the exact RGB bytes of
 every successful 640x400 host publication as a `T3RGB1` manifest plus lossless
 PPMs. `tools\compare_pixel_frames.py` compares the bytes, localizes the first

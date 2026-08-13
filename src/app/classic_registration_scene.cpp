@@ -44,6 +44,13 @@ new_classic_page_names{{
 	"RIKAKO", "CHIYURI", "YUMEMI", "ALL CHARACTERS",
 }};
 
+[[nodiscard]] constexpr present::Page new_classic_raster_page(
+	std::uint8_t page
+) noexcept
+{
+	return (page & 1U) != 0U ? present::Page::one : present::Page::zero;
+}
+
 using Glyph = ClassicRegistrationGlyph;
 
 constexpr std::array<std::array<Glyph, classic_score_name_length>, 9U>
@@ -463,6 +470,7 @@ ClassicRegistrationScene::ClassicRegistrationScene(
 	std::uint8_t new_classic_character,
 	std::uint8_t new_classic_page,
 	const present::AnkGlyphProvider *font,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 	std::optional<std::size_t> entered_place,
 	present::Raster raster,
 	bool view_only,
@@ -478,6 +486,7 @@ ClassicRegistrationScene::ClassicRegistrationScene(
 	new_classic_character_(new_classic_character),
 	new_classic_page_(new_classic_page),
 	font_(font),
+	patch_assets_(std::move(patch_assets)),
 	entered_place_(entered_place),
 	raster_(std::move(raster)),
 	view_only_(view_only),
@@ -498,7 +507,7 @@ ClassicRegistrationScene::create(
 {
 	return create_impl(
 		resident, score_path, resources, stage_text, font,
-		std::move(initial_raster), true, false, false, {}, std::nullopt, true
+		std::move(initial_raster), true, false, false, {}, std::nullopt, true, {}
 	);
 }
 
@@ -516,7 +525,8 @@ ClassicRegistrationScene::create_new_classic(
 {
 	return create_impl(
 		resident, score_path, resources, stage_text, font,
-		std::move(initial_raster), true, false, true, legacy_score_path, run, true
+		std::move(initial_raster), true, false, true, legacy_score_path, run, true,
+		{}
 	);
 }
 
@@ -534,7 +544,7 @@ ClassicRegistrationScene::create_new_classic_playback(
 	return create_impl(
 		resident, score_path, resources, stage_text, font,
 		std::move(initial_raster), true, false, true, legacy_score_path,
-		NewClassicScoreRun{}, false
+		NewClassicScoreRun{}, false, {}
 	);
 }
 
@@ -555,7 +565,7 @@ ClassicRegistrationScene::create_viewer(
 	}
 	return create_impl(
 		completion.resident(), score_path, resources, stage_text, font,
-		present::Raster{}, true, true, false, {}, std::nullopt, true
+		present::Raster{}, true, true, false, {}, std::nullopt, true, {}
 	);
 }
 
@@ -566,7 +576,8 @@ ClassicRegistrationScene::create_new_classic_viewer(
 	const std::filesystem::path &legacy_score_path,
 	std::span<const LoadedMainResource> resources,
 	const MainlStageTextAssets &stage_text,
-	const present::AnkGlyphProvider &font
+	const present::AnkGlyphProvider &font,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
 )
 {
 	if(completion.route() != ClassicOpRoute::high_scores ||
@@ -577,7 +588,8 @@ ClassicRegistrationScene::create_new_classic_viewer(
 	}
 	return create_impl(
 		completion.resident(), score_path, resources, stage_text, font,
-		present::Raster{}, true, true, true, legacy_score_path, std::nullopt, false
+		present::Raster{}, true, true, true, legacy_score_path, std::nullopt, false,
+		std::move(patch_assets)
 	);
 }
 
@@ -594,7 +606,8 @@ ClassicRegistrationScene::create_impl(
 	bool new_classic,
 	std::filesystem::path legacy_score_path,
 	std::optional<NewClassicScoreRun> run,
-	bool persist_changes
+	bool persist_changes,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
 )
 {
 	if(!valid_context(resident, view_only)) {
@@ -706,7 +719,8 @@ ClassicRegistrationScene::create_impl(
 		std::move(*normal), std::move(*highlight),
 		std::move(*next_background), std::move(choice_cels), stage_text, font,
 		std::move(initial_raster), view_only, new_classic,
-		std::move(legacy_score_path), run, persist_changes
+		std::move(legacy_score_path), run, persist_changes,
+		std::move(patch_assets)
 	);
 }
 
@@ -727,10 +741,12 @@ ClassicRegistrationScene::create_predecoded(
 	bool new_classic,
 	std::filesystem::path legacy_score_path,
 	std::optional<NewClassicScoreRun> run,
-	bool persist_changes
+	bool persist_changes,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
 )
 {
 	if(!valid_context(resident, view_only) ||
+		(new_classic && view_only && !patch_assets) ||
 		initial_raster.raster_mode() != present::RasterMode::lines_400) {
 		return std::unexpected(registration_error(
 			ClassicRegistrationErrorCode::invalid_context
@@ -899,7 +915,7 @@ ClassicRegistrationScene::create_predecoded(
 		new ClassicRegistrationScene(
 			std::move(prepared), resident, score_path, std::move(document),
 			load_disposition, commit_codec, std::move(new_document),
-			character, initial_page, &font, entered_place,
+			character, initial_page, &font, std::move(patch_assets), entered_place,
 			std::move(initial_raster), view_only, persist_changes
 		)
 	);
@@ -912,6 +928,9 @@ ClassicRegistrationScene::create_predecoded(
 		return std::unexpected(registration_error(
 			ClassicRegistrationErrorCode::draw_failed
 		));
+	}
+	if(new_classic && view_only) {
+		scene->phase_ = ClassicRegistrationPhase::initial_view_vsync;
 	}
 	if(!scene->push_audio_command({
 		.type = ClassicAudioCommandType::load_song,
@@ -951,7 +970,8 @@ bool ClassicRegistrationScene::initialize_visuals() noexcept
 		!present::cdg_put_8(raster_, 320, 312, prepared_->rank) ||
 		(view_only_ && !copy_visible_to_backup()) || !draw_rows(false) ||
 		(!view_only_ && !copy_visible_to_backup()) ||
-		!raster_.set_access_page(present::Page::zero)) {
+		(!(view_only_ && new_classic_document_) &&
+		 !raster_.set_access_page(present::Page::zero))) {
 		return false;
 	}
 	return !entered_place_ || draw_alphabet();
@@ -1081,6 +1101,24 @@ bool ClassicRegistrationScene::draw_row(std::size_t place) noexcept
 
 bool ClassicRegistrationScene::draw_rows(bool restore_background) noexcept
 {
+	if(view_only_ && new_classic_document_) {
+		const auto target = new_classic_raster_page(new_classic_page_);
+		if(!raster_.set_access_page(target) ||
+			!present::pi_put_8(raster_, 0, 0, prepared_->background) ||
+			!present::cdg_put_8(raster_, 320, 312, prepared_->rank)) {
+			return false;
+		}
+		for(std::size_t place = 0U; place < classic_score_place_count; ++place) {
+			if(!draw_row(place)) {
+				return false;
+			}
+		}
+		if(!draw_new_classic_overlay()) {
+			return false;
+		}
+		return !restore_background ||
+			(raster_.set_shown_page(target) && raster_.set_access_page(target));
+	}
 	if(restore_background && !raster_.copy_page(
 		present::Page::one,
 		{0, 0, present::graphics_width, present::graphics_height},
@@ -1103,22 +1141,34 @@ bool ClassicRegistrationScene::draw_rows(bool restore_background) noexcept
 
 bool ClassicRegistrationScene::draw_new_classic_overlay() noexcept
 {
-	if(!new_classic_document_ || !view_only_ ||
-		std::ranges::any_of(new_classic_overlay_, [](const auto &text) {
-			return !text.has_value();
-		})) {
+	if(!new_classic_document_ || !view_only_ || !patch_assets_ ||
+		new_classic_overlay_[0U].empty() || new_classic_overlay_[1U].empty() ||
+		new_classic_overlay_[2U].empty()) {
 		return false;
 	}
-	return present::graphics_text_put_8x16(
-		raster_, {24, 320}, *new_classic_overlay_[0U],
-		{15U, present::GraphicsTextWeight::bold, 0U}
-	) && present::graphics_text_put_8x16(
-		raster_, {24, 340}, *new_classic_overlay_[1U],
-		{15U, present::GraphicsTextWeight::bold, 0U}
-	) && present::graphics_text_put_8x16(
-		raster_, {24, 360}, *new_classic_overlay_[2U],
-		{15U, present::GraphicsTextWeight::bold, 0U}
-	);
+	const auto &menu_font = patch_assets_->menu_font;
+	if(!menu_font.put(raster_, 24, 320, new_classic_overlay_[0U], 15U)) {
+		return false;
+	}
+	std::int32_t left = 24;
+	for(const auto value : new_classic_overlay_[1U]) {
+		const std::string_view glyph(&value, 1U);
+		if(value >= '0' && value <= '9') {
+			if(!menu_font.put_n(
+				raster_, left + (value == '1' ? 2 : 0), 340,
+				glyph, 1U, 15U
+			)) {
+				return false;
+			}
+			left += 12;
+		} else {
+			if(!menu_font.put_n(raster_, left, 340, glyph, 1U, 15U)) {
+				return false;
+			}
+			left += menu_font.width_n(glyph, 1U);
+		}
+	}
+	return menu_font.put(raster_, 24, 360, new_classic_overlay_[2U], 15U);
 }
 
 std::expected<void, ClassicRegistrationError>
@@ -1161,21 +1211,10 @@ ClassicRegistrationScene::load_new_classic_page(
 		std::string("1CC ") + std::to_string(view->stats.one_ccs) +
 			"   CONTINUES " + std::to_string(view->stats.continues_used),
 	}};
-	std::array<std::optional<present::PreparedGraphicsText8x16>, 3U> prepared{};
-	for(std::size_t line = 0U; line < lines.size(); ++line) {
-		const auto bytes = std::vector<std::uint8_t>(
-			lines[line].begin(), lines[line].end()
-		);
-		auto text = present::prepare_graphics_text_8x16(bytes, *font_);
-		if(!text) {
-			return std::unexpected(text_error(text.error()));
-		}
-		prepared[line].emplace(std::move(*text));
-	}
 	document_.boards[resident_.rank] = std::move(view->board);
 	new_classic_row_total_ = view->total;
 	new_classic_page_ = page;
-	new_classic_overlay_ = std::move(prepared);
+	new_classic_overlay_ = lines;
 	if(redraw && !draw_rows(true)) {
 		return std::unexpected(registration_error(
 			ClassicRegistrationErrorCode::draw_failed
@@ -1419,6 +1458,17 @@ ClassicRegistrationScene::advance(
 		));
 	}
 
+	if(phase_ == ClassicRegistrationPhase::initial_view_vsync) {
+		const auto target = new_classic_raster_page(new_classic_page_);
+		if(!raster_.set_shown_page(target) || !raster_.set_access_page(target)) {
+			fail();
+			return std::unexpected(registration_error(
+				ClassicRegistrationErrorCode::draw_failed
+			));
+		}
+		phase_ = ClassicRegistrationPhase::black_in;
+		return tick(ClassicRegistrationBoundary::vsync, true);
+	}
 	if(phase_ == ClassicRegistrationPhase::black_in) {
 		return fade_tick(true);
 	}
@@ -1488,7 +1538,7 @@ ClassicRegistrationScene::advance(
 			}
 			phase_ = ClassicRegistrationPhase::wait_release;
 			return tick(
-				ClassicRegistrationBoundary::input_poll, true, true,
+				ClassicRegistrationBoundary::vsync, true, true,
 				true
 			);
 		}

@@ -696,6 +696,23 @@ void test_new_classic_independent_sfx(const fs::path &root)
 	expect(effect && !effect->status.bgm_active &&
 		effect->effect_started == 1U,
 		"independent New Classic SFX starts while BGM status remains Off");
+	expect((*effects_only)->apply({
+		.type = ClassicAudioCommandType::set_effects_active,
+		.parameter = 0U,
+	}).has_value() && !(*effects_only)->request_effect(1U).value_or(true),
+		"live New Classic SFX Off immediately suppresses the active effect service");
+	expect((*effects_only)->apply({
+		.type = ClassicAudioCommandType::set_effects_active,
+		.parameter = 1U,
+	}).has_value() && (*effects_only)->request_effect(1U).value_or(false),
+		"live New Classic SFX On immediately restores independent effects");
+	const auto invalid_effects_active = (*effects_only)->apply({
+		.type = ClassicAudioCommandType::set_effects_active,
+		.parameter = 2U,
+	});
+	expect(!invalid_effects_active && invalid_effects_active.error().code ==
+		ClassicAudioSessionErrorCode::invalid_parameter,
+		"live SFX policy rejects values outside the source boolean domain");
 
 	auto music_only_config = config(root);
 	music_only_config.effects_active = false;

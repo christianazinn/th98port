@@ -591,6 +591,11 @@ CanonicalState Game::canonical_state() const
 	return detail::canonical_state(impl_->state);
 }
 
+std::uint32_t Game::live_random_seed() const noexcept
+{
+	return impl_->state.random_seed;
+}
+
 RoundStartObservation Game::round_start_observation() const
 {
 	return impl_->round_start;

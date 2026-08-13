@@ -14,57 +14,177 @@
 #include <utility>
 #include <vector>
 
+#include "th03/assets/decode.hpp"
+
 namespace th03::app {
 namespace {
 
 constexpr std::size_t screen_center = present::graphics_width / 2U;
 constexpr std::size_t browser_rows = 15U;
-constexpr std::array<std::string_view, 6U> landing_labels{
-	"PLAY GAME", "REPLAY", "PRACTICE", "KEY CONFIG", "OPTIONS", "BACK",
-};
-constexpr std::string_view keyboard_symbols =
-	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,!?BE";
-constexpr std::size_t keyboard_columns = 13U;
-constexpr std::size_t keyboard_back = 41U;
-constexpr std::size_t keyboard_end = 42U;
+constexpr std::size_t replay_name_grid_columns = 16U;
+constexpr std::size_t replay_name_grid_count = 48U;
+constexpr std::size_t keyboard_space = 14U;
+constexpr std::size_t keyboard_back = 30U;
+constexpr std::size_t keyboard_question = 45U;
+constexpr std::size_t keyboard_end = 46U;
+constexpr std::uint8_t palette_fade_boundary_count = 19U;
+
+constexpr std::array<std::array<std::uint8_t, 6U>, 9U>
+replay_name_playchar_sjis{{
+	{{0xE8U, 0xCBU, 0x96U, 0xB2U, 0x00U, 0x00U}},
+	{{0x96U, 0xA3U, 0x96U, 0x82U, 0x00U, 0x00U}},
+	{{0x96U, 0x82U, 0x97U, 0x9DU, 0x8DU, 0xB9U}},
+	{{0x83U, 0x47U, 0x83U, 0x8CU, 0x83U, 0x93U}},
+	{{0x8FU, 0xACU, 0x93U, 0x65U, 0x95U, 0x50U}},
+	{{0x83U, 0x4AU, 0x83U, 0x69U, 0x00U, 0x00U}},
+	{{0x97U, 0x9DU, 0x8DU, 0x81U, 0x8EU, 0x71U}},
+	{{0x82U, 0xBFU, 0x82U, 0xE4U, 0x82U, 0xE8U}},
+	{{0x96U, 0xB2U, 0x94U, 0xFCU, 0x00U, 0x00U}},
+}};
+
+[[nodiscard]] constexpr std::size_t playchar_sjis_size(
+	std::size_t character
+) noexcept
+{
+	return character == 0U || character == 1U || character == 5U ||
+		character == 8U ? 4U : 6U;
+}
+
+[[nodiscard]] constexpr bool replay_name_grid_skip(
+	std::size_t position
+) noexcept
+{
+	return position == 13U || position == 15U || position == 29U ||
+		position == 31U || position == 47U;
+}
+
+[[nodiscard]] constexpr char replay_name_ascii(
+	std::size_t position
+) noexcept
+{
+	if(position <= 12U) {
+		return static_cast<char>('A' + position);
+	}
+	if(position >= 16U && position <= 28U) {
+		return static_cast<char>('N' + (position - 16U));
+	}
+	if(position >= 32U && position <= 41U) {
+		return static_cast<char>('0' + (position - 32U));
+	}
+	switch(position) {
+	case 14U: return ' ';
+	case 42U: return '.';
+	case 43U: return ',';
+	case 44U: return '!';
+	case 45U: return '?';
+	default: return '\0';
+	}
+}
+
+[[nodiscard]] std::string replay_name_grid_label(std::size_t position)
+{
+	if(position == keyboard_space) {
+		return "SP";
+	}
+	if(position == keyboard_back) {
+		return "BS";
+	}
+	if(position == keyboard_end) {
+		return "END";
+	}
+	const auto value = replay_name_ascii(position);
+	return value == '\0' ? std::string{} : std::string(1U, value);
+}
+
+bool patch_put_fixed(
+	const NewClassicMenuFont &font,
+	present::Raster &raster,
+	std::int32_t left,
+	std::int32_t top,
+	std::string_view text,
+	std::int32_t cell_width,
+	present::Index4 color
+) noexcept
+{
+	for(const char character : text) {
+		auto glyph_left = left;
+		if(character == '1') {
+			glyph_left += 2;
+		} else if(character == 'I' && cell_width == 13) {
+			glyph_left += 5;
+		}
+		if(!font.put_n(raster, glyph_left, top,
+			std::string_view(&character, 1U), 1U, color)) {
+			return false;
+		}
+		left += cell_width;
+	}
+	return true;
+}
+
+bool patch_put_timer_right(
+	const NewClassicMenuFont &font,
+	present::Raster &raster,
+	std::int32_t right,
+	std::int32_t top,
+	std::string_view text,
+	present::Index4 color
+) noexcept
+{
+	if(text == "-") {
+		return font.put_right(raster, right, top, text, color);
+	}
+	const auto width = static_cast<std::int32_t>(
+		(text.size() - 2U) * 12U
+	) + font.width(":.");
+	auto left = right - width;
+	for(const char character : text) {
+		auto glyph_left = left;
+		if(character == '1') {
+			glyph_left += 2;
+		}
+		if(!font.put_n(raster, glyph_left, top,
+			std::string_view(&character, 1U), 1U, color)) {
+			return false;
+		}
+		left += (character >= '0' && character <= '9') ?
+			std::int32_t{12} :
+			font.width_n(std::string_view(&character, 1U), 1U);
+	}
+	return true;
+}
+
+[[nodiscard]] constexpr std::string_view patch_winner_label(
+	std::int8_t winner
+) noexcept
+{
+	return winner == 0 ? "1" : winner == 1 ? "2" : "-";
+}
+
+std::string source_fixed_name(const std::array<char, 8U> &name)
+{
+	std::string result(name.begin(), name.end());
+	for(char &value : result) {
+		if(value == '\0') {
+			value = ' ';
+		}
+	}
+	return result;
+}
+
+std::string source_trimmed_name(const std::array<char, 8U> &name)
+{
+	auto result = source_fixed_name(name);
+	while(!result.empty() && result.back() == ' ') {
+		result.pop_back();
+	}
+	return result;
+}
 
 [[nodiscard]] constexpr bool any(NewClassicUiInput input) noexcept
 {
 	return input.up || input.down || input.left || input.right ||
 		input.confirm || input.bomb || input.cancel;
-}
-
-void draw_header(HostMenuCanvas &canvas, std::string_view subtitle) noexcept
-{
-	canvas.clear();
-	canvas.fill_rect(32U, 20U, 576U, 58U, 1U);
-	canvas.fill_rect(36U, 24U, 568U, 50U, 3U);
-	canvas.draw_text_centered("NEW CLASSIC", screen_center, 33U, 3U, 15U);
-	canvas.draw_text_centered(subtitle, screen_center, 62U, 1U, 14U);
-}
-
-void draw_row(
-	HostMenuCanvas &canvas,
-	std::string_view label,
-	std::size_t y,
-	bool selected,
-	std::uint8_t normal_color = 15U
-) noexcept
-{
-	canvas.fill_rect(104U, y, 432U, 32U, selected ? 4U : 1U);
-	canvas.fill_rect(108U, y + 3U, 424U, 26U, selected ? 3U : 2U);
-	canvas.draw_text_centered(
-		label, screen_center, y + 7U, 2U, selected ? 14U : normal_color
-	);
-}
-
-[[nodiscard]] std::string fixed_name(const std::array<char, 8U> &name)
-{
-	std::string result(name.begin(), name.end());
-	while(!result.empty() && (result.back() == ' ' || result.back() == '\0')) {
-		result.pop_back();
-	}
-	return result.empty() ? std::string{"NO NAME"} : result;
 }
 
 [[nodiscard]] std::string slot_number(std::size_t slot)
@@ -89,6 +209,11 @@ void draw_row(
 			static_cast<std::uint8_t>(value & 0x0FU),
 		};
 		for(const auto digit : digits) {
+			if(digit >= 10U) {
+				significant = true;
+				result.push_back('?');
+				continue;
+			}
 			significant = significant || digit != 0U;
 			result.push_back(significant ? static_cast<char>('0' + digit) : ' ');
 		}
@@ -161,26 +286,6 @@ void draw_row(
 		std::to_string(slot.stage_reached);
 }
 
-[[nodiscard]] std::string mode_label(std::uint8_t mode, bool practice)
-{
-	if(practice) {
-		return "PRACTICE";
-	}
-	if(mode == game_mode::story) {
-		return "STORY";
-	}
-	if(mode == game_mode::vs_1p_cpu) {
-		return "1P CPU";
-	}
-	if(mode == game_mode::vs_1p_2p) {
-		return "1P 2P";
-	}
-	if(mode == game_mode::vs_cpu_cpu) {
-		return "CPU CPU";
-	}
-	return "UNKNOWN";
-}
-
 [[nodiscard]] constexpr std::string_view rank_label(std::uint8_t rank) noexcept
 {
 	constexpr std::array<std::string_view, 4U> labels{
@@ -201,6 +306,46 @@ void draw_row(
 		return "UNKNOWN";
 	}
 	return labels[static_cast<std::size_t>(paletted_character - 1) / 2U];
+}
+
+[[nodiscard]] constexpr std::string_view patch_rank_label(
+	std::uint8_t rank
+) noexcept
+{
+	constexpr std::array<std::string_view, 4U> labels{
+		"Easy", "Normal", "Hard", "Lunatic",
+	};
+	return rank < labels.size() ? labels[rank] : "?";
+}
+
+[[nodiscard]] constexpr std::string_view patch_character_label(
+	std::int8_t paletted_character
+) noexcept
+{
+	constexpr std::array<std::string_view, 9U> labels{
+		"Reimu", "Mima", "Marisa", "Ellen", "Kotohime",
+		"Kana", "Rikako", "Chiyuri", "Yumemi",
+	};
+	if(paletted_character < 1 || paletted_character > 18) {
+		return "-";
+	}
+	return labels[static_cast<std::size_t>(paletted_character - 1) / 2U];
+}
+
+[[nodiscard]] constexpr std::string_view patch_end_reason_label(
+	formats::ReplayEndReason reason
+) noexcept
+{
+	switch(reason) {
+	case formats::ReplayEndReason::complete: return "Clear";
+	case formats::ReplayEndReason::game_over: return "Game Over";
+	case formats::ReplayEndReason::menu_return: return "Menu Return";
+	case formats::ReplayEndReason::input_end: return "Input End";
+	case formats::ReplayEndReason::partial: return "Partial";
+	case formats::ReplayEndReason::error: return "Error";
+	case formats::ReplayEndReason::none: return "None";
+	}
+	return "None";
 }
 
 [[nodiscard]] constexpr std::string_view end_reason_label(
@@ -226,10 +371,10 @@ void draw_row(
 	}
 	char buffer[11U]{};
 	static_cast<void>(std::snprintf(
-		buffer, sizeof(buffer), "%04u-%02u-%02u",
-		static_cast<unsigned>(1980U + (packed >> 9U)),
+		buffer, sizeof(buffer), "%02u-%02u-%04u",
 		static_cast<unsigned>((packed >> 5U) & 0x0FU),
-		static_cast<unsigned>(packed & 0x1FU)
+		static_cast<unsigned>(packed & 0x1FU),
+		static_cast<unsigned>(1980U + (packed >> 9U))
 	));
 	return buffer;
 }
@@ -276,9 +421,17 @@ void draw_row(
 	return result;
 }
 
+enum class ReplayDetailRowKind : std::uint8_t {
+	stage,
+	round,
+};
+
 struct ReplayDetailRow final {
 	std::string label{};
 	std::optional<std::size_t> checkpoint{};
+	ReplayDetailRowKind kind = ReplayDetailRowKind::stage;
+	std::uint8_t stage = 0U;
+	std::uint8_t stage_checkpoint_count = 0U;
 };
 
 [[nodiscard]] std::vector<ReplayDetailRow> story_detail_rows(
@@ -315,29 +468,54 @@ struct ReplayDetailRow final {
 				}
 			}
 			if(checkpoints.size() != 1U) {
-				rows.push_back({stage_prefix + (valid ?
-					new_classic_replay_timer_label(total) : "-")});
+				rows.push_back({
+					.label = stage_prefix + (valid ?
+						new_classic_replay_timer_label(total) : "-"),
+					.kind = ReplayDetailRowKind::stage,
+					.stage = static_cast<std::uint8_t>(stage),
+					.stage_checkpoint_count = static_cast<std::uint8_t>(
+						checkpoints.size()
+					),
+				});
 			}
 			for(const auto index : checkpoints) {
 				const auto *split = round_split(document, document.checkpoints[index]);
 				const auto value = split && split->real_frames ?
 					new_classic_replay_timer_label(*split->real_frames) : "-";
 				rows.push_back({
-					checkpoints.size() == 1U ? stage_prefix + value :
+					.label = checkpoints.size() == 1U ? stage_prefix + value :
 						"   ROUND " + std::to_string(
 							document.checkpoints[index].round + 1U
 						) + " " + value,
-					index,
+					.checkpoint = index,
+					.kind = checkpoints.size() == 1U ?
+						ReplayDetailRowKind::stage : ReplayDetailRowKind::round,
+					.stage = static_cast<std::uint8_t>(stage),
+					.stage_checkpoint_count = static_cast<std::uint8_t>(
+						checkpoints.size()
+					),
 				});
 			}
 			continue;
 		}
 		if(checkpoints.empty()) {
-			rows.push_back({stage_prefix + "-"});
+			rows.push_back({
+				.label = stage_prefix + "-",
+				.kind = ReplayDetailRowKind::stage,
+				.stage = static_cast<std::uint8_t>(stage),
+				.stage_checkpoint_count = 0U,
+			});
 			continue;
 		}
 		if(checkpoints.size() > 1U) {
-			rows.push_back({stage_prefix + "-"});
+			rows.push_back({
+				.label = stage_prefix + "-",
+				.kind = ReplayDetailRowKind::stage,
+				.stage = static_cast<std::uint8_t>(stage),
+				.stage_checkpoint_count = static_cast<std::uint8_t>(
+					checkpoints.size()
+				),
+			});
 		}
 		for(const auto index : checkpoints) {
 			const auto *split = round_split(document, document.checkpoints[index]);
@@ -345,54 +523,21 @@ struct ReplayDetailRow final {
 				decimal_score(metadata->story->stage_scores[stage]) :
 				split ? decimal_score(split->p1_score) : "-";
 			rows.push_back({
-				checkpoints.size() == 1U ? stage_prefix + value :
+				.label = checkpoints.size() == 1U ? stage_prefix + value :
 					"   ROUND " + std::to_string(
 						document.checkpoints[index].round + 1U
 					) + " " + value,
-				index,
+				.checkpoint = index,
+				.kind = checkpoints.size() == 1U ?
+					ReplayDetailRowKind::stage : ReplayDetailRowKind::round,
+				.stage = static_cast<std::uint8_t>(stage),
+				.stage_checkpoint_count = static_cast<std::uint8_t>(
+					checkpoints.size()
+				),
 			});
 		}
 	}
 	return rows;
-}
-
-void draw_practice_settings_modal(
-	HostMenuCanvas &canvas,
-	const formats::ReplayPracticeConfig &config
-) noexcept
-{
-	canvas.fill_rect(72U, 104U, 496U, 192U, 0U);
-	const auto timer = config.cpu_timer == 0U ? "VS Default" :
-		config.cpu_timer == 1U ? "Story Native" : "Infinite";
-	std::array<std::string, 8U> rows{
-		"Life Stock " + (config.stock == 0xFFU ? std::string{"VS Rules"} :
-			std::to_string(config.stock) + " (" +
-			std::to_string(config.extends_gained) + " Extends Gained)"),
-		"CPU Timer: " + std::string(timer),
-		"CPU Safety: " + std::to_string(config.initial_cpu_safety_frames),
-		"Speeds: " + q4_label(config.round_speed) + " / " +
-			q4_label(config.bullet_speed),
-		"Spell Rank: P1 " + std::to_string(config.p1_spell) + " / CPU " +
-			std::to_string(config.cpu_spell),
-		"Start Gauge: P1 " + std::to_string(config.p1_gauge) + " / CPU " +
-			std::to_string(config.cpu_gauge),
-		"Boss Rank: " + std::to_string(config.boss_level + 1U),
-		"CPU Damage: " + std::to_string(config.cpu_damage),
-	};
-	for(std::size_t index = 0U; index < rows.size(); ++index) {
-		canvas.draw_text(rows[index], 96U, 120U + (index * 20U), 1U, 15U);
-	}
-}
-
-[[nodiscard]] std::string winner_label(std::int8_t winner)
-{
-	if(winner == 0) {
-		return "P1";
-	}
-	if(winner == 1) {
-		return "P2";
-	}
-	return "-";
 }
 
 [[nodiscard]] bool clear_bonus_valid(
@@ -404,35 +549,6 @@ void draw_practice_settings_modal(
 		bonus.max_combo != 0U || bonus.gauge_attacks != 0U ||
 		bonus.boss_attacks != 0U || bonus.boss_reversals != 0U ||
 		bonus.boss_panics != 0U || bonus.remaining_lives != 0U;
-}
-
-void draw_compact_row(
-	HostMenuCanvas &canvas,
-	std::string_view label,
-	std::size_t y,
-	bool selected
-) noexcept
-{
-	canvas.fill_rect(48U, y, 544U, 17U, selected ? 4U : 1U);
-	canvas.draw_text(label, 58U, y + 3U, 1U, selected ? 14U : 15U);
-}
-
-void draw_detail_tabs(
-	HostMenuCanvas &canvas,
-	NewClassicReplayDetailPage selected
-) noexcept
-{
-	constexpr std::array<std::string_view, 3U> labels{
-		"SPLITS", "CLEARS", "TIMERS",
-	};
-	for(std::size_t index = 0U; index < labels.size(); ++index) {
-		const auto active = index == static_cast<std::size_t>(selected);
-		const auto x = 104U + (index * 144U);
-		canvas.fill_rect(x, 164U, 128U, 19U, active ? 4U : 1U);
-		canvas.draw_text_centered(
-			labels[index], x + 64U, 168U, 1U, active ? 14U : 6U
-		);
-	}
 }
 
 [[nodiscard]] ReplayCatalogSlot catalog_slot(
@@ -467,6 +583,103 @@ void draw_detail_tabs(
 
 } // namespace
 
+NewClassicReplaySaveArt::NewClassicReplaySaveArt(
+	present::PreparedSuperimposeSheet normal,
+	present::PreparedSuperimposeSheet highlight
+) noexcept :
+	normal_(std::move(normal)),
+	highlight_(std::move(highlight))
+{}
+
+std::expected<
+	std::shared_ptr<const NewClassicReplaySaveArt>,
+	NewClassicReplaySaveArtError
+> NewClassicReplaySaveArt::prepare(
+	std::span<const std::byte> normal_bfnt,
+	std::span<const std::byte> highlight_bfnt,
+	std::span<const std::byte> font_rom
+)
+{
+	auto normal = assets::decode_bfnt(
+		normal_bfnt, assets::BfntConsumerPolicy::superimpose
+	);
+	if(!normal) {
+		return std::unexpected(NewClassicReplaySaveArtError{
+			.code = NewClassicReplaySaveArtErrorCode::normal_glyphs_failed,
+			.asset_error = std::move(normal.error()),
+		});
+	}
+	auto highlight = assets::decode_bfnt(
+		highlight_bfnt, assets::BfntConsumerPolicy::superimpose
+	);
+	if(!highlight) {
+		return std::unexpected(NewClassicReplaySaveArtError{
+			.code = NewClassicReplaySaveArtErrorCode::highlight_glyphs_failed,
+			.asset_error = std::move(highlight.error()),
+		});
+	}
+	auto normal_prepared = present::prepare_superimpose_sheet(*normal);
+	auto highlight_prepared = present::prepare_superimpose_sheet(*highlight);
+	const auto valid = [](const present::PreparedSuperimposeSheet &sheet) {
+		return sheet.first_code() == 0U && sheet.last_code() == 48U &&
+			sheet.pixel_width() == 32U && sheet.pixel_height() == 32U;
+	};
+	if(!normal_prepared || !highlight_prepared || !valid(*normal_prepared) ||
+		!valid(*highlight_prepared) ||
+		!present::superimpose_remap_color_preserve_opacity(
+			*normal_prepared, 10U, 15U
+		) || !present::superimpose_remap_color_preserve_opacity(
+			*highlight_prepared, 15U, 0U
+		) || !present::superimpose_fill_glyph_rect_preserve_opacity(
+			*normal_prepared, 13U, {8, 13, 16U, 1U}, 3U
+		) || !present::superimpose_fill_glyph_rect_preserve_opacity(
+			*normal_prepared, 13U, {8, 14, 16U, 4U}, 15U
+		) || !present::superimpose_fill_glyph_rect_preserve_opacity(
+			*normal_prepared, 13U, {8, 18, 16U, 1U}, 3U
+		)) {
+		return std::unexpected(NewClassicReplaySaveArtError{
+			.code = NewClassicReplaySaveArtErrorCode::invalid_glyph_geometry,
+		});
+	}
+	auto font = Pc98FontRomProvider::from_exact_font_rom(font_rom);
+	if(!font) {
+		return std::unexpected(NewClassicReplaySaveArtError{
+			.code = NewClassicReplaySaveArtErrorCode::font_failed,
+			.font_error = std::move(font.error()),
+		});
+	}
+	auto art = std::shared_ptr<NewClassicReplaySaveArt>(
+		new NewClassicReplaySaveArt(
+			std::move(*normal_prepared), std::move(*highlight_prepared)
+		)
+	);
+	for(std::size_t character = 0U;
+		character < replay_name_playchar_sjis.size(); ++character) {
+		auto prepared = present::prepare_graphics_text_8x16(
+			std::span<const std::uint8_t>(replay_name_playchar_sjis[character])
+				.first(playchar_sjis_size(character)),
+			*font
+		);
+		if(!prepared) {
+			return std::unexpected(NewClassicReplaySaveArtError{
+				.code = NewClassicReplaySaveArtErrorCode::character_name_failed,
+				.text_error = std::move(prepared.error()),
+			});
+		}
+		art->character_names_[character].emplace(std::move(*prepared));
+	}
+	constexpr std::array<std::uint8_t, 1U> question{{'?'}};
+	auto unknown = present::prepare_graphics_text_8x16(question, *font);
+	if(!unknown) {
+		return std::unexpected(NewClassicReplaySaveArtError{
+			.code = NewClassicReplaySaveArtErrorCode::character_name_failed,
+			.text_error = std::move(unknown.error()),
+		});
+	}
+	art->character_names_[9U].emplace(std::move(*unknown));
+	return std::shared_ptr<const NewClassicReplaySaveArt>{std::move(art)};
+}
+
 std::string new_classic_replay_timer_label(std::uint32_t real_frames)
 {
 	const auto minutes = real_frames / 3'384U;
@@ -482,671 +695,6 @@ std::string new_classic_replay_timer_label(std::uint32_t real_frames)
 		static_cast<unsigned>(centiseconds % 100U)
 	));
 	return buffer;
-}
-
-NewClassicLandingMenu::NewClassicLandingMenu()
-{
-	draw();
-}
-
-void NewClassicLandingMenu::draw() noexcept
-{
-	draw_header(canvas_, "REPLAY PATCH 0.4.10 EXPERIENCE");
-	for(std::size_t index = 0U; index < landing_labels.size(); ++index) {
-		draw_row(
-			canvas_, landing_labels[index], 98U + (index * 46U),
-			index == static_cast<std::size_t>(choice_)
-		);
-	}
-	canvas_.draw_text_centered(
-		"BY CHRISTIAN AZINN", screen_center, 380U, 1U, 14U
-	);
-}
-
-NewClassicLandingResult NewClassicLandingMenu::consume(
-	NewClassicUiInput input
-) noexcept
-{
-	if(status_ != NewClassicLandingStatus::running) {
-		return {.status = status_, .choice = choice_};
-	}
-	if(input.app_quit_requested) {
-		status_ = NewClassicLandingStatus::application_quit;
-		return {.status = status_, .choice = choice_};
-	}
-	if(!input_allowed_) {
-		if(!any(input)) {
-			input_allowed_ = true;
-		}
-		return {.status = status_, .choice = choice_};
-	}
-	if(!any(input)) {
-		return {.status = status_, .choice = choice_};
-	}
-	input_allowed_ = false;
-	if(input.cancel) {
-		choice_ = NewClassicLandingChoice::back;
-		status_ = NewClassicLandingStatus::selected;
-		return {.status = status_, .choice = choice_};
-	}
-	if(input.up || input.down) {
-		const auto count = landing_labels.size();
-		const auto old = static_cast<std::size_t>(choice_);
-		choice_ = static_cast<NewClassicLandingChoice>(
-			input.up ? (old + count - 1U) % count : (old + 1U) % count
-		);
-		draw();
-		return {.surface_changed = true, .status = status_, .choice = choice_};
-	}
-	if(input.confirm) {
-		status_ = NewClassicLandingStatus::selected;
-	}
-	return {.status = status_, .choice = choice_};
-}
-
-present::SourceSurface NewClassicLandingMenu::surface() const noexcept
-{
-	return canvas_.surface();
-}
-
-NewClassicLandingChoice NewClassicLandingMenu::choice() const noexcept
-{
-	return choice_;
-}
-
-NewClassicOptionsMenu::NewClassicOptionsMenu(
-	ClassicConfigOptions config,
-	bool english_available
-) noexcept : config_(config), english_available_(english_available)
-{
-	if(config_.bgm_mode == ClassicBgmMode::midi) {
-		config_.bgm_mode = ClassicBgmMode::off;
-	}
-	if(!english_available_ && config_.language != ClassicLanguage::japanese) {
-		config_.language = ClassicLanguage::japanese;
-		english_unavailable_notice_ = true;
-	}
-	draw();
-}
-
-void NewClassicOptionsMenu::draw() noexcept
-{
-	draw_header(canvas_, commit_failure_ ? "OPTIONS SAVE FAILED" :
-		"NEW CLASSIC OPTIONS");
-	if(commit_failure_) {
-		canvas_.draw_text_centered(
-			"COULD NOT SAVE YUME.CFG", screen_center, 170U, 2U, 14U
-		);
-		canvas_.draw_text_centered(
-			"Z: RETRY   ESC: RETURN", screen_center, 220U, 2U, 15U
-		);
-		return;
-	}
-	constexpr std::array<std::string_view, 7U> labels{
-		"Rank", "Music", "Sound Effects", "Language", "KeyConfig",
-		"Flash FX", "Back",
-	};
-	constexpr std::array<std::string_view, 4U> ranks{
-		"Easy", "Normal", "Hard", "Lunatic",
-	};
-	for(std::size_t row = 0U; row < labels.size(); ++row) {
-		std::string value{};
-		switch(row) {
-		case 0U:
-			value = ranks[static_cast<std::size_t>(config_.rank)];
-			break;
-		case 1U:
-			value = config_.bgm_mode == ClassicBgmMode::off ? "Off" : "FM";
-			break;
-		case 2U: value = config_.sfx_enabled ? "On" : "Off"; break;
-		case 3U: value = config_.language == ClassicLanguage::english ?
-			"English" : "Japanese"; break;
-		case 4U:
-			switch(config_.key_mode) {
-			case ClassicKeyMode::key_key: value = "Key / Key"; break;
-			case ClassicKeyMode::joy_key: value = "Joy / Key"; break;
-			case ClassicKeyMode::key_joy: value = "Key / Joy"; break;
-			}
-			break;
-		case 5U: value = config_.reduced_flash ? "Reduced" : "Full"; break;
-		default: break;
-		}
-		const auto y = 100U + (row * 38U);
-		if(row == selected_) {
-			canvas_.fill_rect(96U, y - 5U, 448U, 29U, 3U);
-		}
-		canvas_.draw_text(
-			(row == selected_ ? "> " : "  ") + std::string(labels[row]),
-			112U, y, 2U, row == selected_ ? 14U : 15U
-		);
-		if(!value.empty()) {
-			canvas_.draw_text(value, 410U, y, 2U,
-				row == selected_ ? 14U : 7U);
-		}
-	}
-	canvas_.draw_text_centered(
-		english_unavailable_notice_ ?
-			"English resource overlay is not installed." :
-			"Arrows: Change   Z: Select   Esc: Save/Back",
-		screen_center, 382U, 1U,
-		english_unavailable_notice_ ? 14U : 7U
-	);
-}
-
-NewClassicOptionsResult NewClassicOptionsMenu::consume(
-	NewClassicUiInput input
-) noexcept
-{
-	if(status_ != NewClassicOptionsStatus::running) {
-		return {.status = status_};
-	}
-	if(input.app_quit_requested) {
-		status_ = NewClassicOptionsStatus::application_quit;
-		return {.status = status_};
-	}
-	const bool any = input.up || input.down || input.left || input.right ||
-		input.confirm || input.cancel;
-	if(!input_allowed_) {
-		if(!any) {
-			input_allowed_ = true;
-		}
-		return {.status = status_};
-	}
-	if(!any) {
-		return {.status = status_};
-	}
-	input_allowed_ = false;
-	if(commit_failure_) {
-		if(input.confirm) {
-			status_ = NewClassicOptionsStatus::apply_requested;
-		} else if(input.cancel) {
-			commit_failure_ = false;
-			input_allowed_ = false;
-			draw();
-			return {.surface_changed = true, .status = status_};
-		}
-		return {.status = status_};
-	}
-	if(input.cancel) {
-		status_ = NewClassicOptionsStatus::apply_requested;
-		return {.status = status_};
-	}
-	if(input.up || input.down) {
-		constexpr std::size_t row_count = 7U;
-		selected_ = input.up ? (selected_ + row_count - 1U) % row_count :
-			(selected_ + 1U) % row_count;
-		english_unavailable_notice_ = false;
-		draw();
-		return {.surface_changed = true, .status = status_};
-	}
-	if(selected_ == 4U && input.confirm) {
-		status_ = NewClassicOptionsStatus::key_config_requested;
-		return {.status = status_};
-	}
-	if(selected_ == 6U && input.confirm) {
-		status_ = NewClassicOptionsStatus::apply_requested;
-		return {.status = status_};
-	}
-	if(selected_ == 3U && (input.confirm || input.left || input.right)) {
-		if(english_available_) {
-			config_.language = config_.language == ClassicLanguage::japanese ?
-				ClassicLanguage::english : ClassicLanguage::japanese;
-			english_unavailable_notice_ = false;
-		} else {
-			english_unavailable_notice_ = true;
-		}
-		draw();
-		return {.surface_changed = true, .status = status_};
-	}
-	if(!(input.confirm || input.left || input.right)) {
-		return {.status = status_};
-	}
-	switch(selected_) {
-	case 0U: {
-		constexpr auto count = 4U;
-		const auto rank = static_cast<std::uint8_t>(config_.rank);
-		config_.rank = static_cast<ClassicRank>(input.left ?
-			(rank + count - 1U) % count : (rank + 1U) % count);
-		break;
-	}
-	case 1U:
-		config_.bgm_mode = config_.bgm_mode == ClassicBgmMode::off ?
-			ClassicBgmMode::fm : ClassicBgmMode::off;
-		break;
-	case 2U: config_.sfx_enabled = !config_.sfx_enabled; break;
-	case 4U: {
-		constexpr auto count = 3U;
-		const auto mode = static_cast<std::uint8_t>(config_.key_mode);
-		config_.key_mode = static_cast<ClassicKeyMode>(input.left ?
-			(mode + count - 1U) % count : (mode + 1U) % count);
-		break;
-	}
-	case 5U: config_.reduced_flash = !config_.reduced_flash; break;
-	default: return {.status = status_};
-	}
-	english_unavailable_notice_ = false;
-	draw();
-	return {.surface_changed = true, .status = status_};
-}
-
-void NewClassicOptionsMenu::report_commit(bool success) noexcept
-{
-	if(status_ != NewClassicOptionsStatus::apply_requested) {
-		return;
-	}
-	if(success) {
-		status_ = NewClassicOptionsStatus::applied;
-		return;
-	}
-	status_ = NewClassicOptionsStatus::running;
-	commit_failure_ = true;
-	input_allowed_ = false;
-	draw();
-}
-
-void NewClassicOptionsMenu::resume_after_key_config() noexcept
-{
-	if(status_ != NewClassicOptionsStatus::key_config_requested) {
-		return;
-	}
-	status_ = NewClassicOptionsStatus::running;
-	input_allowed_ = false;
-	draw();
-}
-
-void NewClassicOptionsMenu::synchronize_legacy_autofire(bool enabled) noexcept
-{
-	config_.legacy_autofire = enabled;
-}
-
-present::SourceSurface NewClassicOptionsMenu::surface() const noexcept
-{
-	return canvas_.surface();
-}
-
-const ClassicConfigOptions &NewClassicOptionsMenu::config() const noexcept
-{
-	return config_;
-}
-
-NewClassicOptionsStatus NewClassicOptionsMenu::status() const noexcept
-{
-	return status_;
-}
-
-namespace {
-
-constexpr std::array<std::string_view, new_classic_player_action_count>
-	key_player_actions{
-		"Up-Left", "Up", "Up-Right", "Left", "Right", "Down-Left",
-		"Down", "Down-Right", "Shot", "Bomb", "Charge",
-	};
-constexpr std::array<std::string_view, new_classic_story_action_count>
-	key_story_actions{"Up", "Left", "Right", "Down"};
-
-[[nodiscard]] std::string host_key_label(
-	NewClassicHostKeyName resolver,
-	void *context,
-	std::uint16_t key
-)
-{
-	if(key == new_classic_host_key_unbound) {
-		return "Unbound";
-	}
-	if(resolver) {
-		const auto resolved = resolver(context, key);
-		if(!resolved.empty()) {
-			return std::string(resolved);
-		}
-	}
-	return "Key " + std::to_string(key);
-}
-
-} // namespace
-
-NewClassicKeyConfigMenu::NewClassicKeyConfigMenu(
-	NewClassicKeyConfig config,
-	NewClassicKeyConfig defaults,
-	std::uint16_t maximum_key,
-	std::uint16_t capture_cancel_key,
-	NewClassicHostKeyName key_name,
-	void *key_name_context
-) noexcept :
-	original_(config),
-	config_(std::move(config)),
-	defaults_(std::move(defaults)),
-	maximum_key_(maximum_key),
-	capture_cancel_key_(capture_cancel_key),
-	key_name_(key_name),
-	key_name_context_(key_name_context)
-{
-	draw();
-}
-
-std::size_t NewClassicKeyConfigMenu::row_count() const noexcept
-{
-	return page_ == Page::story ? 11U : 15U;
-}
-
-void NewClassicKeyConfigMenu::set_page(Page page) noexcept
-{
-	page_ = page;
-	selected_ = page_ == Page::story ? 0U : 9U;
-}
-
-std::optional<std::size_t>
-NewClassicKeyConfigMenu::binding_index() const noexcept
-{
-	if(page_ == Page::story) {
-		if(selected_ < new_classic_story_action_count) {
-			return (2U * new_classic_player_action_count) + selected_;
-		}
-		if(selected_ >= 4U && selected_ <= 6U) {
-			return static_cast<std::size_t>(NewClassicPlayerAction::shot) +
-				(selected_ - 4U);
-		}
-		return std::nullopt;
-	}
-	if(selected_ >= 1U && selected_ <= new_classic_player_action_count) {
-		const auto player = page_ == Page::p1 ? 0U : 1U;
-		return (player * new_classic_player_action_count) + (selected_ - 1U);
-	}
-	return std::nullopt;
-}
-
-void NewClassicKeyConfigMenu::restore_defaults() noexcept
-{
-	if(page_ == Page::story) {
-		for(std::size_t index = 0U; index < new_classic_story_action_count;
-			++index) {
-			config_.bindings[(2U * new_classic_player_action_count) + index] =
-				defaults_.bindings[(2U * new_classic_player_action_count) + index];
-		}
-		for(std::size_t action = static_cast<std::size_t>(
-			NewClassicPlayerAction::shot
-		); action <= static_cast<std::size_t>(NewClassicPlayerAction::charge);
-			++action) {
-			config_.bindings[action] = defaults_.bindings[action];
-		}
-		config_.autofire = static_cast<std::uint8_t>(config_.autofire & ~1U);
-		return;
-	}
-	const auto player = page_ == Page::p1 ? 0U : 1U;
-	for(std::size_t action = 0U; action < new_classic_player_action_count;
-		++action) {
-		const auto index = (player * new_classic_player_action_count) + action;
-		config_.bindings[index] = defaults_.bindings[index];
-	}
-	config_.autofire = static_cast<std::uint8_t>(
-		config_.autofire & ~(1U << player)
-	);
-}
-
-void NewClassicKeyConfigMenu::assign(std::uint16_t key) noexcept
-{
-	if(!capture_binding_ || key == 0U || key >= maximum_key_) {
-		return;
-	}
-	const auto index = *capture_binding_;
-	const auto old = config_.bindings[index];
-	const auto first = index < 2U * new_classic_player_action_count ?
-		0U : 2U * new_classic_player_action_count;
-	const auto end = index < 2U * new_classic_player_action_count ?
-		2U * new_classic_player_action_count : new_classic_key_binding_count;
-	for(std::size_t other = first; other < end; ++other) {
-		if(other != index && config_.bindings[other] == key) {
-			config_.bindings[other] = old;
-			break;
-		}
-	}
-	config_.bindings[index] = key;
-}
-
-void NewClassicKeyConfigMenu::draw() noexcept
-{
-	draw_header(canvas_, phase_ == Phase::discard ? "DISCARD CHANGES?" :
-		phase_ == Phase::commit_failure ? "SAVE FAILED" : "KEY CONFIGURATION");
-	if(phase_ == Phase::discard) {
-		canvas_.draw_text_centered(
-			"Z / ENTER: DISCARD", screen_center, 172U, 2U, 14U
-		);
-		canvas_.draw_text_centered(
-			"ESC: KEEP EDITING", screen_center, 218U, 2U, 15U
-		);
-		return;
-	}
-	if(phase_ == Phase::commit_failure) {
-		canvas_.draw_text_centered(
-			"COULD NOT SAVE TH3KEY.CFG", screen_center, 168U, 2U, 14U
-		);
-		canvas_.draw_text_centered(
-			"Z: RETRY   ESC: RETURN", screen_center, 218U, 2U, 15U
-		);
-		return;
-	}
-	const auto title = page_ == Page::p1 ? "[ P1 ]" :
-		page_ == Page::p2 ? "[ P2 ]" : "[ STORY ]";
-	canvas_.draw_text_centered(title, screen_center, 82U, 2U, 14U);
-	const auto put = [&](std::size_t row, std::string label, std::string value) {
-		const auto y = 108U + (row * 18U);
-		const bool selected = row == selected_;
-		if(selected) {
-			canvas_.fill_rect(72U, y - 1U, 496U, 17U, 3U);
-		}
-		canvas_.draw_text(selected ? "> " + label : "  " + label,
-			88U, y, 1U, selected ? 14U : 15U);
-		if(!value.empty()) {
-			canvas_.draw_text(value, 376U, y, 1U, selected ? 14U : 7U);
-		}
-	};
-	if(page_ == Page::story) {
-		for(std::size_t row = 0U; row < key_story_actions.size(); ++row) {
-			put(row, std::string(key_story_actions[row]), host_key_label(
-				key_name_, key_name_context_,
-				config_.bindings[(2U * new_classic_player_action_count) + row]
-			));
-		}
-		for(std::size_t row = 4U; row <= 6U; ++row) {
-			const auto action = static_cast<std::size_t>(
-				NewClassicPlayerAction::shot
-			) + (row - 4U);
-			put(row, std::string(key_player_actions[action]), host_key_label(
-				key_name_, key_name_context_, config_.bindings[action]
-			));
-		}
-		put(7U, "Autofire", (config_.autofire & 1U) ? "On" : "Off");
-		put(8U, "Defaults for Story", {});
-		put(9U, "Apply and return", {});
-		put(10U, "Cancel", {});
-	} else {
-		const auto player = page_ == Page::p1 ? 0U : 1U;
-		put(0U, "Autofire", (config_.autofire & (1U << player)) ? "On" : "Off");
-		for(std::size_t action = 0U; action < key_player_actions.size(); ++action) {
-			put(action + 1U, std::string(key_player_actions[action]), host_key_label(
-				key_name_, key_name_context_, config_.bindings[
-					(player * new_classic_player_action_count) + action
-				]
-			));
-		}
-		put(12U, "Defaults for this player", {});
-		put(13U, "Apply and return", {});
-		put(14U, "Cancel", {});
-	}
-	const bool capture = phase_ == Phase::capture_wait_release ||
-		phase_ == Phase::capture_wait_press ||
-		phase_ == Phase::capture_wait_final_release;
-	canvas_.draw_text_centered(
-		capture ? "Release, then press a key. Esc cancels." :
-			"Left/Right: Page   Z: Edit   Esc: Cancel",
-		screen_center, 382U, 1U, capture ? 14U : 7U
-	);
-}
-
-NewClassicKeyConfigResult NewClassicKeyConfigMenu::consume(
-	NewClassicKeyConfigInput input
-) noexcept
-{
-	if(status_ != NewClassicKeyConfigStatus::running) {
-		return {.status = status_};
-	}
-	if(input.ui.app_quit_requested) {
-		status_ = NewClassicKeyConfigStatus::application_quit;
-		return {.status = status_};
-	}
-	if(phase_ == Phase::capture_wait_release) {
-		if(!input.any_scancode_held) {
-			phase_ = Phase::capture_wait_press;
-		}
-		return {.status = status_};
-	}
-	if(phase_ == Phase::capture_wait_press) {
-		if(!input.scancode_pressed) {
-			return {.status = status_};
-		}
-		if(*input.scancode_pressed != capture_cancel_key_) {
-			assign(*input.scancode_pressed);
-		}
-		phase_ = Phase::capture_wait_final_release;
-		draw();
-		return {.surface_changed = true, .status = status_};
-	}
-	if(phase_ == Phase::capture_wait_final_release) {
-		if(!input.any_scancode_held) {
-			phase_ = Phase::menu;
-			capture_binding_.reset();
-			input_allowed_ = false;
-			draw();
-			return {.surface_changed = true, .status = status_};
-		}
-		return {.status = status_};
-	}
-	if(phase_ == Phase::discard) {
-		if(input.ui.confirm) {
-			config_ = original_;
-			status_ = NewClassicKeyConfigStatus::back;
-		} else if(input.ui.cancel) {
-			phase_ = Phase::menu;
-			input_allowed_ = false;
-			draw();
-			return {.surface_changed = true, .status = status_};
-		}
-		return {.status = status_};
-	}
-	if(phase_ == Phase::commit_failure) {
-		if(input.ui.confirm) {
-			status_ = NewClassicKeyConfigStatus::apply_requested;
-		} else if(input.ui.cancel) {
-			phase_ = Phase::menu;
-			input_allowed_ = false;
-			draw();
-			return {.surface_changed = true, .status = status_};
-		}
-		return {.status = status_};
-	}
-	const bool any = input.ui.up || input.ui.down || input.ui.left ||
-		input.ui.right || input.ui.confirm || input.ui.cancel;
-	if(!input_allowed_) {
-		if(!any) {
-			input_allowed_ = true;
-		}
-		return {.status = status_};
-	}
-	if(!any) {
-		return {.status = status_};
-	}
-	input_allowed_ = false;
-	if(input.ui.cancel) {
-		if(config_ == original_) {
-			status_ = NewClassicKeyConfigStatus::back;
-		} else {
-			phase_ = Phase::discard;
-			draw();
-			return {.surface_changed = true, .status = status_};
-		}
-		return {.status = status_};
-	}
-	if(input.ui.left || input.ui.right) {
-		const auto current = static_cast<std::size_t>(page_);
-		set_page(static_cast<Page>(input.ui.left ? (current + 2U) % 3U :
-			(current + 1U) % 3U));
-		draw();
-		return {.surface_changed = true, .status = status_};
-	}
-	if(input.ui.up || input.ui.down) {
-		const auto count = row_count();
-		selected_ = input.ui.up ? (selected_ + count - 1U) % count :
-			(selected_ + 1U) % count;
-		draw();
-		return {.surface_changed = true, .status = status_};
-	}
-	if(!input.ui.confirm) {
-		return {.status = status_};
-	}
-	if(const auto binding = binding_index()) {
-		capture_binding_ = binding;
-		phase_ = Phase::capture_wait_release;
-		draw();
-		return {.surface_changed = true, .status = status_};
-	}
-	const auto autofire_row = page_ == Page::story ? 7U : 0U;
-	const auto defaults_row = page_ == Page::story ? 8U : 12U;
-	const auto apply_row = page_ == Page::story ? 9U : 13U;
-	if(selected_ == autofire_row) {
-		const auto player = page_ == Page::p2 ? 1U : 0U;
-		config_.autofire = static_cast<std::uint8_t>(
-			config_.autofire ^ (1U << player)
-		);
-		draw();
-		return {.surface_changed = true, .status = status_};
-	}
-	if(selected_ == defaults_row) {
-		restore_defaults();
-		draw();
-		return {.surface_changed = true, .status = status_};
-	}
-	if(selected_ == apply_row) {
-		status_ = NewClassicKeyConfigStatus::apply_requested;
-		return {.status = status_};
-	}
-	if(config_ == original_) {
-		status_ = NewClassicKeyConfigStatus::back;
-	} else {
-		phase_ = Phase::discard;
-		draw();
-		return {.surface_changed = true, .status = status_};
-	}
-	return {.status = status_};
-}
-
-void NewClassicKeyConfigMenu::report_commit(bool success) noexcept
-{
-	if(status_ != NewClassicKeyConfigStatus::apply_requested) {
-		return;
-	}
-	if(success) {
-		original_ = config_;
-		status_ = NewClassicKeyConfigStatus::applied;
-		return;
-	}
-	status_ = NewClassicKeyConfigStatus::running;
-	phase_ = Phase::commit_failure;
-	input_allowed_ = false;
-	draw();
-}
-
-present::SourceSurface NewClassicKeyConfigMenu::surface() const noexcept
-{
-	return canvas_.surface();
-}
-
-const NewClassicKeyConfig &NewClassicKeyConfigMenu::config() const noexcept
-{
-	return config_;
-}
-
-NewClassicKeyConfigStatus NewClassicKeyConfigMenu::status() const noexcept
-{
-	return status_;
 }
 
 std::expected<NewClassicReplayCatalog, ReplaySlotStoreError>
@@ -1174,215 +722,431 @@ scan_new_classic_replays(const std::filesystem::path &replay_root)
 }
 
 std::expected<std::unique_ptr<NewClassicReplayBrowser>, ReplaySlotStoreError>
-NewClassicReplayBrowser::load(std::filesystem::path replay_root)
+NewClassicReplayBrowser::load(
+	std::filesystem::path replay_root,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+)
 {
 	auto catalog = scan_new_classic_replays(replay_root);
 	if(!catalog) {
 		return std::unexpected(std::move(catalog.error()));
 	}
 	return std::unique_ptr<NewClassicReplayBrowser>(
-		new NewClassicReplayBrowser(std::move(replay_root), std::move(*catalog))
+		new NewClassicReplayBrowser(
+			std::move(replay_root), std::move(*catalog), std::move(patch_assets)
+		)
 	);
 }
 
 NewClassicReplayBrowser::NewClassicReplayBrowser(
 	std::filesystem::path replay_root,
-	NewClassicReplayCatalog catalog
-) : replay_root_(std::move(replay_root)), catalog_(std::move(catalog))
+	NewClassicReplayCatalog catalog,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+) :
+	replay_root_(std::move(replay_root)),
+	catalog_(std::move(catalog)),
+	patch_assets_(std::move(patch_assets))
 {
+	const auto first = std::find_if(
+		catalog_.slots.begin(), catalog_.slots.end(),
+		[](const ReplayCatalogSlot &slot) {
+			return slot.state == ReplayCatalogSlotState::ready;
+		}
+	);
+	if(first != catalog_.slots.end()) {
+		selected_slot_ = static_cast<std::uint8_t>(
+			first - catalog_.slots.begin()
+		);
+		top_slot_ = static_cast<std::uint8_t>(std::min<std::size_t>(
+			selected_slot_, replay_slot_count - browser_rows
+		));
+	}
 	draw();
+	patch_surface_.raster().set_palette_tone(0);
+	patch_surface_.raster().apply_pending_palette();
+	fade_in_active_ = true;
 }
 
 void NewClassicReplayBrowser::draw() noexcept
 {
-	draw_header(canvas_, detail_document_ ? "REPLAY DETAILS" : "REPLAY BROWSER");
-	if(detail_document_) {
-		const auto &document = *detail_document_;
-		const auto &entry = catalog_.slots[selected_slot_];
-		const auto *metadata = document.metadata ? &*document.metadata : nullptr;
-		canvas_.draw_text(
-			"SLOT " + slot_number(selected_slot_) + "  " + fixed_name(entry.name) +
-				"  " + mode_label(entry.game_mode, document.practice),
-			52U, 88U, 1U, 14U
-		);
-		canvas_.draw_text(
-			"RESULT " + std::string(metadata ? end_reason_label(metadata->end_reason) :
-				std::string_view{"UNKNOWN"}) + "  SCORE " +
-				decimal_score(entry.final_score) + "  DATE " +
-				(metadata ? dos_date_label(metadata->dos_date) : std::string{"-"}),
-			52U, 106U, 1U, 15U
-		);
-		if(metadata) {
-			canvas_.draw_text(
-				"RANK " + std::string(rank_label(metadata->rank)) + "  P1 " +
-					std::string(character_label(metadata->paletted_character[0U])) +
-					"  P2 " +
-					std::string(character_label(metadata->paletted_character[1U])) +
-					"  AF " + ((metadata->autofire & 1U) ? "ON" : "OFF") +
-					"/" + ((metadata->autofire & 2U) ? "ON" : "OFF"),
-				52U, 124U, 1U, 15U
-			);
-		}
-		std::string context = "SLOWDOWN " + slowdown_label(document) +
-			"  CHECKPOINTS " + std::to_string(document.checkpoints.size());
-		if(document.practice && metadata && metadata->practice) {
-			const auto &practice = *metadata->practice;
-			context += "  START S" + std::to_string(practice.stage + 1U) +
-				" R" + std::to_string(practice.round + 1U) +
-				(practice.round == 5U ? "+" : "") +
-				" STOCK " + std::to_string(practice.stock);
-		}
-		canvas_.draw_text(context, 52U, 142U, 1U, 15U);
-		draw_detail_tabs(canvas_, detail_page_);
-		if(document.practice) {
-			canvas_.fill_rect(48U, 164U, 52U, 19U,
-				checkpoint_focus_ ? 1U : 4U);
-			canvas_.draw_text("SET", 60U, 168U, 1U,
-				checkpoint_focus_ ? 6U : 14U);
-		}
-
-		if(detail_page_ == NewClassicReplayDetailPage::clear_bonuses) {
-			if(!document.stage_clear_bonuses) {
-				draw_compact_row(
-					canvas_, "NO CLEAR-BONUS TELEMETRY.", 188U, false
-				);
-			} else if(entry.game_mode != game_mode::story && !document.practice) {
-				draw_compact_row(
-					canvas_, "NO STAGE CLEAR BONUSES IN VS MODE.", 188U, false
-				);
-			} else {
-				const auto first_stage = document.practice && metadata &&
-					metadata->practice ? metadata->practice->stage : 0U;
-				const auto last_stage = document.practice ?
-					std::min<std::size_t>(first_stage + 1U, 9U) : 9U;
-				for(std::size_t stage = first_stage; stage < last_stage; ++stage) {
-					const auto &bonus = (*document.stage_clear_bonuses)[stage];
-					std::string label = "S" + std::to_string(stage + 1U) + "  ";
-					if(metadata && metadata->story &&
-						stage < metadata->stage_reached_count) {
-						label += std::string(character_label(static_cast<std::int8_t>(
-							metadata->story->stage_opponents[stage]
-						))) + "  ";
-					}
-					if(!clear_bonus_valid(bonus)) {
-						label += "-";
-					} else {
-						label += decimal_score(bonus.total) +
-							"  MAX " + std::to_string(bonus.max_combo) +
-							"  GA " + std::to_string(bonus.gauge_attacks) +
-							"  BA " + std::to_string(bonus.boss_attacks) +
-							"  RV " + std::to_string(bonus.boss_reversals) +
-							"  PN " + std::to_string(bonus.boss_panics) +
-							"  LIFE " + std::to_string(bonus.remaining_lives);
-					}
-					draw_compact_row(
-						canvas_, label, 188U + ((stage - first_stage) * 19U), false
-					);
-				}
+	draw_patch();
+}
+void NewClassicReplayBrowser::draw_patch() noexcept
+{
+	if(!patch_assets_ ||
+		!patch_surface_.begin_hidden_frame(
+			patch_assets_->replay_list_background
+		)) {
+		return;
+	}
+	auto &raster = patch_surface_.raster();
+	static_cast<void>(raster.set_pending_palette_entry(12U, {15U, 15U, 0U}));
+	raster.apply_pending_palette();
+	const auto &font = patch_assets_->menu_font;
+	const auto put = [&](std::int32_t left, std::int32_t top,
+		std::string_view text, present::Index4 color) {
+		return font.put(raster, left, top, text, color);
+	};
+	const auto put_right = [&](std::int32_t right, std::int32_t top,
+		std::string_view text, present::Index4 color) {
+		return font.put_right(raster, right, top, text, color);
+	};
+	if(!detail_document_) {
+		bool drawn = put(64, 80, "Slot", 9U) &&
+			put(104, 80, "Name", 9U) &&
+			put_right(340, 80, "Score", 9U) &&
+			put(364, 80, "Character", 9U) &&
+			put(476, 80, "Rank", 9U) && put(560, 80, "Stg", 9U);
+		for(std::size_t row = 0U; drawn && row < browser_rows; ++row) {
+			const auto slot = static_cast<std::size_t>(top_slot_) + row;
+			if(slot >= replay_slot_count) {
+				break;
 			}
-			canvas_.draw_text_centered(
-				"LEFT RIGHT TAB  ESC BACK", screen_center, 378U, 1U, 6U
-			);
-			return;
-		}
-
-		if(entry.game_mode == game_mode::story && !document.practice) {
-			const auto rows = story_detail_rows(document, detail_page_);
-			auto selected_row = std::size_t{0U};
-			for(std::size_t row = 0U; row < rows.size(); ++row) {
-				if(rows[row].checkpoint == selected_checkpoint_) {
-					selected_row = row;
-					break;
-				}
+			const auto &entry = catalog_.slots[slot];
+			const auto color = static_cast<present::Index4>(
+				slot == selected_slot_ ? 12U : 15U);
+			const auto top = static_cast<std::int32_t>(96U + (row * 16U));
+			if(slot == selected_slot_) {
+				drawn = put(40, top, ">", 12U);
 			}
-			const auto first = selected_row >= 10U ? selected_row - 9U : 0U;
-			const auto last = std::min(first + 10U, rows.size());
-			for(std::size_t row = first; row < last; ++row) {
-				draw_compact_row(
-					canvas_, rows[row].label, 188U + ((row - first) * 19U),
-					checkpoint_focus_ && rows[row].checkpoint == selected_checkpoint_
-				);
+			drawn = drawn && patch_put_fixed(
+				font, raster, 64, top, slot_number(slot), 12, color
+			);
+			if(entry.state != ReplayCatalogSlotState::ready) {
+				drawn = drawn && put(104, top, "none", color);
+				continue;
 			}
-			canvas_.draw_text_centered(
-				"UP DOWN CHECKPOINT  Z PLAY  LEFT RIGHT TAB  ESC BACK",
-				screen_center, 378U, 1U, 6U
+			drawn = drawn && patch_put_fixed(
+				font, raster, 104, top, source_fixed_name(entry.name), 13, color
 			);
-			return;
+			const auto score = decimal_score(entry.final_score);
+			drawn = drawn && patch_put_fixed(
+				font, raster,
+				340 - static_cast<std::int32_t>(score.size() * 12U), top,
+				score, 12, color
+			) && put(364, top,
+				patch_character_label(entry.p1_paletted_character), color) &&
+				put(476, top, patch_rank_label(entry.rank), color) &&
+				patch_put_fixed(font, raster, 560, top, catalog_marker(entry), 12, color);
 		}
-
-		const auto first = selected_checkpoint_ >= 10U ?
-			selected_checkpoint_ - 9U : 0U;
-		const auto last = std::min(first + 10U, document.checkpoints.size());
-		for(std::size_t index = first; index < last; ++index) {
-			const auto &checkpoint = document.checkpoints[index];
-			const auto *split = round_split(document, checkpoint);
-			const auto stage = checkpoint.stage == 0x0FU ?
-				std::string{"VS"} : "S" + std::to_string(checkpoint.stage + 1U);
-			std::string label = "CP " + std::to_string(index + 1U) + "  " +
-				stage + " R" + std::to_string(checkpoint.round + 1U);
-			if(detail_page_ == NewClassicReplayDetailPage::timers) {
-				label += "  TIME " + (split && split->real_frames ?
-					new_classic_replay_timer_label(*split->real_frames) :
-					std::string{"-"});
-			} else if(split) {
-				label += "  P1 " + decimal_score(split->p1_score) +
-					"  P2 " + decimal_score(split->p2_score) +
-					"  WIN " + winner_label(split->winner);
-			} else {
-				label += "  SPLIT -";
-			}
-			draw_compact_row(
-				canvas_, label, 188U + ((index - first) * 19U),
-				checkpoint_focus_ && index == selected_checkpoint_
-			);
-		}
-		if(document.checkpoints.empty()) {
-			draw_compact_row(canvas_, "NO PLAYABLE CHECKPOINTS.", 188U, false);
-		}
-		if(practice_settings_modal_ && metadata && metadata->practice) {
-			draw_practice_settings_modal(canvas_, *metadata->practice);
-		} else {
-			canvas_.draw_text_centered(
-				document.practice && !checkpoint_focus_ ?
-					"Z SETTINGS  RIGHT SPLITS  ESC BACK" :
-					"UP DOWN CHECKPOINT  Z PLAY  LEFT RIGHT TAB  ESC BACK",
-				screen_center, 378U, 1U, 6U
-			);
-		}
+		static_cast<void>(drawn);
+		static_cast<void>(patch_surface_.publish(raster.access_page()));
 		return;
 	}
 
-	const auto page = static_cast<std::size_t>(selected_slot_) / browser_rows;
-	const auto first = page * browser_rows;
-	const auto last = std::min(first + browser_rows, replay_slot_count);
-	for(std::size_t slot = first; slot < last; ++slot) {
-		const auto &entry = catalog_.slots[slot];
-		std::string label = "SLOT " + slot_number(slot) + "  ";
-		if(entry.state == ReplayCatalogSlotState::empty) {
-			label += "EMPTY";
-		} else if(entry.state == ReplayCatalogSlotState::invalid) {
-			label += "INVALID";
+	const auto &document = *detail_document_;
+	const auto &entry = catalog_.slots[selected_slot_];
+	const auto *metadata = document.metadata ? &*document.metadata : nullptr;
+	const auto trimmed_name = source_trimmed_name(entry.name);
+	static_cast<void>(put(48, 80, trimmed_name, 15U));
+	static_cast<void>(put_right(
+		304, 80, "Slot " + slot_number(selected_slot_), 9U
+	));
+	std::int32_t tab_left = 328;
+	auto tab = [&](std::string_view label, bool selected) {
+		const auto ok = put(tab_left, 80, label, selected ? 12U : 9U);
+		tab_left += font.width(label);
+		return ok;
+	};
+	static_cast<void>(tab("Splits", detail_page_ ==
+		NewClassicReplayDetailPage::splits));
+	static_cast<void>(tab(" / ", false));
+	static_cast<void>(tab("Clears", detail_page_ ==
+		NewClassicReplayDetailPage::clear_bonuses));
+	static_cast<void>(tab(" / ", false));
+	static_cast<void>(tab("Timers", detail_page_ ==
+		NewClassicReplayDetailPage::timers));
+	if(metadata) {
+		const auto story = metadata->game_mode == game_mode::story &&
+			!document.practice;
+		const auto score_label = metadata->game_mode == game_mode::vs_1p_cpu ?
+			"P1 Score" : (story || document.practice) ?
+			"Final Score" : "Win Score";
+		std::string mode;
+		if(document.practice) {
+			mode = "Practice Mode";
+		} else if(story) {
+			mode = "Story Mode - ";
+			mode += patch_end_reason_label(metadata->end_reason);
 		} else {
-			label += fixed_name(entry.name) + " " +
-				decimal_score(entry.final_score) + " " +
-				std::string(character_label(entry.p1_paletted_character)) + " " +
-				std::string(rank_label(entry.rank)) + " " +
-				catalog_marker(entry);
+			mode = "Vs Mode ";
+			mode += metadata->game_mode == game_mode::vs_1p_cpu ? "1P-CPU" :
+				metadata->game_mode == game_mode::vs_1p_2p ? "1P-2P" :
+				"CPU-CPU";
 		}
-		const auto y = 86U + ((slot - first) * 19U);
-		canvas_.fill_rect(
-			48U, y, 544U, 17U,
-			slot == selected_slot_ ? 4U : 1U
-		);
-		canvas_.draw_text(
-			label, 58U, y + 3U, 1U,
-			slot == selected_slot_ ? 14U : 15U
-		);
+		static_cast<void>(put(48, 96, mode, 9U));
+		static_cast<void>(put(48, 112, score_label, 15U));
+		const auto score = decimal_score(entry.final_score);
+		static_cast<void>(patch_put_fixed(
+			font, raster, 304 - static_cast<std::int32_t>(score.size() * 12U),
+			112, score, 12, 15U
+		));
+		static_cast<void>(put(48, 128, "Date", 15U));
+		static_cast<void>(put_right(304, 128,
+			dos_date_label(metadata->dos_date), 15U));
+		static_cast<void>(put(
+			48, 144,
+			std::string(patch_rank_label(metadata->rank)) + " " +
+			std::string(patch_character_label(
+				metadata->paletted_character[0U]
+			)) +
+			(story ? "" : " vs " + std::string(patch_character_label(
+					metadata->paletted_character[1U]
+				))),
+			15U
+		));
+		std::string context;
+		if(document.practice && metadata->practice) {
+			context = "Stage " + std::to_string(
+				metadata->practice->stage + 1U
+			) + " Round " + std::to_string(
+				metadata->practice->round + 1U
+			) + (metadata->practice->round == 5U ? "+" : "") + " Start";
+		} else {
+			context = (metadata->autofire & 0x01U) ?
+				"AutofireOn" : "AutofireOff";
+			if(!story) {
+				context += " ";
+				context += (metadata->autofire & 0x02U) ?
+					"AutofireOn" : "AutofireOff";
+			}
+		}
+		static_cast<void>(put(48, 160, context, 15U));
+		static_cast<void>(put(48, 176, "Slowdown", 15U));
+		static_cast<void>(put_right(
+			304, 176, slowdown_label(document), 15U
+		));
+		if(document.practice) {
+			if(!checkpoint_focus_) {
+				static_cast<void>(put(32, 192, ">", 12U));
+			}
+			static_cast<void>(put(
+				48, 192, "View Settings", checkpoint_focus_ ? 15U : 12U
+			));
+		}
 	}
-	canvas_.draw_text_centered(
-		"UP DOWN SELECT  LEFT RIGHT PAGE  ESC BACK",
-		screen_center, 378U, 1U, 6U
-	);
+	const auto story_detail = metadata &&
+		metadata->game_mode == game_mode::story && !document.practice;
+	if(detail_page_ == NewClassicReplayDetailPage::clear_bonuses ||
+		story_detail) {
+		static_cast<void>(put(344, 112, "St", 9U));
+		static_cast<void>(put(376, 112, "Opponent", 9U));
+		static_cast<void>(put_right(
+			592, 112,
+			detail_page_ == NewClassicReplayDetailPage::clear_bonuses ?
+				"Bonus" : detail_page_ == NewClassicReplayDetailPage::timers ?
+					"Time" : "Score",
+			9U
+		));
+	} else {
+		static_cast<void>(put(328, 112, "Rd", 9U));
+		if(detail_page_ == NewClassicReplayDetailPage::timers) {
+			static_cast<void>(put_right(568, 112, "Time", 9U));
+		} else {
+			static_cast<void>(put_right(452, 112, "P1 Score", 9U));
+			static_cast<void>(put_right(568, 112, "P2 Score", 9U));
+			static_cast<void>(put(584, 112, "W", 9U));
+		}
+	}
+	if(practice_settings_modal_ && metadata && metadata->practice) {
+		const auto &cfg = *metadata->practice;
+		static_cast<void>(raster.clear({72, 104, 496U, 192U}, 0U));
+		const auto timer = cfg.cpu_timer == 0U ? "VS Default" :
+			cfg.cpu_timer == 1U ? "Story Native" : "Infinite";
+		std::array<std::string, 8U> rows{{
+			"Life Stock " + (cfg.stock == 0xFFU ? std::string{"VS Rules"} :
+				std::to_string(cfg.stock) + " (" +
+				std::to_string(cfg.extends_gained) + " Extends Gained)"),
+			"CPU Timer: " + std::string(timer),
+			"CPU Safety: " + std::to_string(cfg.initial_cpu_safety_frames),
+			"Speeds: " + q4_label(cfg.round_speed) + " / " +
+				q4_label(cfg.bullet_speed),
+			"Spell Rank: P1 " + std::to_string(cfg.p1_spell) + " / CPU " +
+				std::to_string(cfg.cpu_spell),
+			"Start Gauge: P1 " + std::to_string(cfg.p1_gauge) + " / CPU " +
+				std::to_string(cfg.cpu_gauge),
+			"Boss Rank: " + std::to_string(cfg.boss_level + 1U),
+			"CPU Damage: " + std::to_string(cfg.cpu_damage),
+		}};
+		for(std::size_t row = 0U; row < rows.size(); ++row) {
+			static_cast<void>(put(
+				96, 128 + static_cast<std::int32_t>(row * 16U), rows[row], 15U
+			));
+		}
+		static_cast<void>(patch_surface_.publish(raster.access_page()));
+		return;
+	}
+	if(detail_page_ == NewClassicReplayDetailPage::clear_bonuses) {
+		if(metadata && metadata->game_mode != game_mode::story &&
+			!document.practice) {
+			static_cast<void>(put(344, 128, "No stage clear bonuses.", 15U));
+		} else {
+			const auto first_stage = document.practice && metadata &&
+				metadata->practice ? metadata->practice->stage : 0U;
+			const auto last_stage = document.practice ?
+				std::min<std::size_t>(first_stage + 1U, 9U) : 9U;
+			for(std::size_t stage = first_stage; stage < last_stage; ++stage) {
+				const auto top = static_cast<std::int32_t>(
+					128U + ((stage - first_stage) * 16U)
+				);
+				static_cast<void>(patch_put_fixed(
+					font, raster, 344, top, std::to_string(stage + 1U),
+					12, 15U
+				));
+				const bool reached = metadata && metadata->story &&
+					stage < metadata->stage_reached_count;
+				static_cast<void>(put(
+					376, top,
+					reached ? patch_character_label(static_cast<std::int8_t>(
+						metadata->story->stage_opponents[stage]
+					)) : "-", 15U
+				));
+				const auto valid = document.stage_clear_bonuses &&
+					clear_bonus_valid((*document.stage_clear_bonuses)[stage]);
+				const auto score = valid ? decimal_score(
+					(*document.stage_clear_bonuses)[stage].total
+				) : std::string(9U, '-');
+				static_cast<void>(patch_put_fixed(
+					font, raster, 592 - static_cast<std::int32_t>(score.size() * 12U),
+					top, score, 12, 15U
+				));
+			}
+		}
+		static_cast<void>(patch_surface_.publish(raster.access_page()));
+		return;
+	}
+	if(story_detail) {
+		const auto rows = story_detail_rows(document, detail_page_);
+		auto selected_row = std::size_t{0U};
+		for(std::size_t row = 0U; row < rows.size(); ++row) {
+			if(rows[row].checkpoint == selected_checkpoint_) {
+				selected_row = row;
+				break;
+			}
+		}
+		const auto first = selected_row >= 14U ? selected_row - 13U : 0U;
+		const auto last = std::min(first + 14U, rows.size());
+		for(std::size_t index = first; index < last; ++index) {
+			const auto &row = rows[index];
+			const auto top = static_cast<std::int32_t>(
+				128U + ((index - first) * 16U)
+			);
+			const auto selected = checkpoint_focus_ &&
+				row.checkpoint == selected_checkpoint_;
+			const auto color = static_cast<present::Index4>(selected ? 12U : 15U);
+			if(selected) {
+				static_cast<void>(put(328, top, ">", 12U));
+			}
+			if(row.kind == ReplayDetailRowKind::round && row.checkpoint) {
+				const auto &checkpoint = document.checkpoints[*row.checkpoint];
+				static_cast<void>(put(
+					400, top, "Round " + std::to_string(checkpoint.round + 1U),
+					color
+				));
+				const auto *split = round_split(document, checkpoint);
+				if(detail_page_ == NewClassicReplayDetailPage::timers) {
+					static_cast<void>(patch_put_timer_right(
+						font, raster, 592, top,
+						split && split->real_frames ?
+							new_classic_replay_timer_label(*split->real_frames) : "-",
+						color
+					));
+				} else {
+					const auto score = split ? decimal_score(split->p1_score) :
+						std::string(9U, '-');
+					static_cast<void>(patch_put_fixed(
+						font, raster,
+						592 - static_cast<std::int32_t>(score.size() * 12U),
+						top, score, 12, color
+					));
+				}
+				continue;
+			}
+
+			static_cast<void>(patch_put_fixed(
+				font, raster, 344, top, std::to_string(row.stage + 1U),
+				12, color
+			));
+			const auto reached = row.stage < metadata->stage_reached_count &&
+				metadata->story.has_value();
+			static_cast<void>(put(
+				376, top,
+				reached ? patch_character_label(static_cast<std::int8_t>(
+					metadata->story->stage_opponents[row.stage]
+				)) : "-",
+				color
+			));
+			if(detail_page_ == NewClassicReplayDetailPage::timers) {
+				std::uint32_t total = 0U;
+				bool valid = false;
+				for(const auto &checkpoint : document.checkpoints) {
+					if(checkpoint.stage != row.stage) {
+						continue;
+					}
+					if(const auto *split = round_split(document, checkpoint);
+						split && split->real_frames) {
+						total += *split->real_frames;
+						valid = true;
+					}
+				}
+				static_cast<void>(patch_put_timer_right(
+					font, raster, 592, top,
+					valid ? new_classic_replay_timer_label(total) : "-", color
+				));
+			} else {
+				const auto score = reached && row.stage_checkpoint_count == 1U ?
+					decimal_score(metadata->story->stage_scores[row.stage]) :
+					std::string(9U, '-');
+				static_cast<void>(patch_put_fixed(
+					font, raster,
+					592 - static_cast<std::int32_t>(score.size() * 12U),
+					top, score, 12, color
+				));
+			}
+		}
+		static_cast<void>(patch_surface_.publish(raster.access_page()));
+		return;
+	}
+	const auto count = document.checkpoints.size();
+	const auto first = selected_checkpoint_ >= 14U ?
+		selected_checkpoint_ - 13U : 0U;
+	const auto last = std::min(first + 14U, count);
+	for(std::size_t index = first; index < last; ++index) {
+		const auto top = static_cast<std::int32_t>(128U + ((index - first) * 16U));
+		const auto color = static_cast<present::Index4>(
+			checkpoint_focus_ && index == selected_checkpoint_ ? 12U : 15U);
+		if(checkpoint_focus_ && index == selected_checkpoint_) {
+			static_cast<void>(put(304, top, ">", 12U));
+		}
+		const auto &checkpoint = document.checkpoints[index];
+		static_cast<void>(put(328, top,
+			std::to_string(checkpoint.round + 1U), color));
+		if(detail_page_ == NewClassicReplayDetailPage::timers) {
+			const auto *split = round_split(document, checkpoint);
+			static_cast<void>(patch_put_timer_right(font, raster, 568, top,
+				split && split->real_frames ?
+					new_classic_replay_timer_label(*split->real_frames) : "-",
+				color));
+		} else if(detail_page_ == NewClassicReplayDetailPage::splits) {
+			const auto *split = round_split(document, checkpoint);
+			const auto p1 = split ? decimal_score(split->p1_score) :
+				std::string(9U, '-');
+			const auto p2 = split ? decimal_score(split->p2_score) :
+				std::string(9U, '-');
+			static_cast<void>(patch_put_fixed(
+				font, raster, 452 - static_cast<std::int32_t>(p1.size() * 12U),
+				top, p1, 12, color
+			));
+			static_cast<void>(patch_put_fixed(
+				font, raster, 568 - static_cast<std::int32_t>(p2.size() * 12U),
+				top, p2, 12, color
+			));
+			static_cast<void>(put(
+				584, top, split ? patch_winner_label(split->winner) : "-", color
+			));
+		}
+	}
+	static_cast<void>(patch_surface_.publish(raster.access_page()));
 }
 
 std::expected<void, ReplaySlotStoreError>
@@ -1418,6 +1182,28 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 		status_ = NewClassicReplayBrowserStatus::application_quit;
 		return NewClassicReplayBrowserResult{.status = status_};
 	}
+	if(fade_in_active_) {
+		auto &raster = patch_surface_.raster();
+		bool changed = false;
+		if(fade_boundary_ != 0U && fade_boundary_ <= 17U) {
+			const auto pair = static_cast<std::int16_t>(fade_boundary_ - 1U);
+			raster.set_palette_tone(static_cast<std::int16_t>(pair * 6));
+			raster.apply_pending_palette();
+			changed = true;
+		}
+		++fade_boundary_;
+		if(fade_boundary_ >= palette_fade_boundary_count) {
+			raster.set_palette_tone(100);
+			raster.apply_pending_palette();
+			fade_in_active_ = false;
+			input_allowed_ = !any(input);
+			changed = true;
+		}
+		return NewClassicReplayBrowserResult{
+			.surface_changed = changed,
+			.status = status_,
+		};
+	}
 	if(!input_allowed_) {
 		if(!any(input)) {
 			input_allowed_ = true;
@@ -1435,7 +1221,7 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 			.surface_changed = true, .status = status_
 		};
 	}
-	if(input.cancel || input.bomb) {
+	if(detail_document_ && (input.cancel || input.bomb)) {
 		if(detail_document_) {
 			detail_document_.reset();
 			selected_checkpoint_ = 0U;
@@ -1446,24 +1232,18 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 				.surface_changed = true, .status = status_
 			};
 		}
+	}
+	if(!detail_document_ && input.cancel) {
 		status_ = NewClassicReplayBrowserStatus::back;
 		return NewClassicReplayBrowserResult{.status = status_};
 	}
 	if(detail_document_) {
 		const auto count = detail_document_->checkpoints.size();
-		if(input.left || input.right) {
+		if(input.left) {
 			if(detail_document_->practice && !checkpoint_focus_) {
-				if(input.right) {
-					checkpoint_focus_ = true;
-					detail_page_ = NewClassicReplayDetailPage::splits;
-					draw();
-					return NewClassicReplayBrowserResult{
-						.surface_changed = true, .status = status_
-					};
-				}
 				return NewClassicReplayBrowserResult{.status = status_};
 			}
-			if(detail_document_->practice && input.left &&
+			if(detail_document_->practice &&
 				detail_page_ == NewClassicReplayDetailPage::splits) {
 				checkpoint_focus_ = false;
 				draw();
@@ -1471,13 +1251,30 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 					.surface_changed = true, .status = status_
 				};
 			}
-			const auto old = static_cast<std::size_t>(detail_page_);
-			const auto next = input.left ? (old == 0U ? 0U : old - 1U) :
-				std::min(old + 1U, static_cast<std::size_t>(
-					NewClassicReplayDetailPage::timers
-				));
-			if(next != old) {
-				detail_page_ = static_cast<NewClassicReplayDetailPage>(next);
+			if(detail_page_ != NewClassicReplayDetailPage::splits) {
+				detail_page_ = static_cast<NewClassicReplayDetailPage>(
+					static_cast<std::size_t>(detail_page_) - 1U
+				);
+				draw();
+				return NewClassicReplayBrowserResult{
+					.surface_changed = true, .status = status_
+				};
+			}
+			return NewClassicReplayBrowserResult{.status = status_};
+		}
+		if(input.right) {
+			if(detail_document_->practice && !checkpoint_focus_) {
+				checkpoint_focus_ = true;
+				detail_page_ = NewClassicReplayDetailPage::splits;
+				draw();
+				return NewClassicReplayBrowserResult{
+					.surface_changed = true, .status = status_
+				};
+			}
+			if(detail_page_ != NewClassicReplayDetailPage::timers) {
+				detail_page_ = static_cast<NewClassicReplayDetailPage>(
+					static_cast<std::size_t>(detail_page_) + 1U
+				);
 				draw();
 				return NewClassicReplayBrowserResult{
 					.surface_changed = true, .status = status_
@@ -1534,7 +1331,22 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 			.surface_changed = true, .status = status_
 		};
 	} else {
+		// Replay Patch only maps Cancel in the catalog. Bomb is a detail-view
+		// back action and is deliberately inert here.
 		return NewClassicReplayBrowserResult{.status = status_};
+	}
+	if(selected_slot_ < top_slot_) {
+		top_slot_ = selected_slot_;
+	} else if(static_cast<std::size_t>(selected_slot_) >=
+		static_cast<std::size_t>(top_slot_) + browser_rows) {
+		top_slot_ = static_cast<std::uint8_t>(
+			selected_slot_ - (browser_rows - 1U)
+		);
+	}
+	if(top_slot_ > replay_slot_count - browser_rows) {
+		top_slot_ = static_cast<std::uint8_t>(
+			replay_slot_count - browser_rows
+		);
 	}
 	draw();
 	return NewClassicReplayBrowserResult{
@@ -1544,7 +1356,7 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 
 present::SourceSurface NewClassicReplayBrowser::surface() const noexcept
 {
-	return canvas_.surface();
+	return patch_surface_.surface();
 }
 
 std::uint8_t NewClassicReplayBrowser::selected_slot() const noexcept
@@ -1602,15 +1414,35 @@ std::size_t NewClassicReplayBrowserTestAccess::physical_row_count(
 }
 
 NewClassicReplaySaveMenu::NewClassicReplaySaveMenu(
-	formats::ReplayDocument document
-) : document_(std::move(document))
+	formats::ReplayDocument document,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	std::shared_ptr<const NewClassicReplaySaveArt> save_art,
+	NewClassicDosDateProvider date_provider,
+	void *date_provider_context
+) :
+	document_(std::move(document)),
+	patch_assets_(std::move(patch_assets)),
+	save_art_(std::move(save_art)),
+	date_provider_(date_provider),
+	date_provider_context_(date_provider_context)
 {
 	if(document_.metadata && document_.metadata->end_reason ==
 		formats::ReplayEndReason::menu_return) {
 		phase_ = Phase::name;
+		capture_date();
 	}
 	NewClassicReplayCatalog empty{};
 	draw(empty);
+	patch_surface_.raster().set_palette_tone(0);
+	patch_surface_.raster().apply_pending_palette();
+	fade_in_active_ = true;
+}
+
+void NewClassicReplaySaveMenu::capture_date() noexcept
+{
+	if(document_.metadata && date_provider_) {
+		document_.metadata->dos_date = date_provider_(date_provider_context_);
+	}
 }
 
 void NewClassicReplaySaveMenu::apply_name() noexcept
@@ -1624,82 +1456,330 @@ void NewClassicReplaySaveMenu::draw(
 	const NewClassicReplayCatalog &catalog
 ) noexcept
 {
-	if(phase_ == Phase::prompt) {
-		draw_header(canvas_, "RECORDING COMPLETE");
-		canvas_.draw_text_centered("SAVE REPLAY?", screen_center, 150U, 3U, 15U);
-		draw_row(canvas_, "YES", 230U, yes_);
-		draw_row(canvas_, "NO", 278U, !yes_);
+	draw_patch(catalog);
+}
+void NewClassicReplaySaveMenu::draw_patch(
+	const NewClassicReplayCatalog &catalog
+) noexcept
+{
+	if(!patch_assets_) {
 		return;
 	}
-	if(phase_ == Phase::name) {
-		draw_header(canvas_, "REPLAY NAME");
-		std::string shown(name_.begin(), name_.end());
-		canvas_.draw_text_centered(shown, screen_center, 100U, 3U, 15U);
-		if(name_position_ < name_.size()) {
-			canvas_.fill_rect(
-				104U + (name_position_ * 54U), 126U, 42U, 4U, 14U
+	const auto name_background = phase_ == Phase::prompt ||
+		phase_ == Phase::name ||
+		(phase_ == Phase::quit_confirm &&
+			(return_phase_ == Phase::prompt || return_phase_ == Phase::name));
+	const auto &background = name_background ?
+		patch_assets_->replay_name_background :
+		patch_assets_->replay_list_background;
+	const auto dialog = phase_ == Phase::prompt ||
+		phase_ == Phase::overwrite || phase_ == Phase::quit_confirm;
+	const auto previous_dialog = drawn_phase_ &&
+		(*drawn_phase_ == Phase::prompt || *drawn_phase_ == Phase::overwrite ||
+		 *drawn_phase_ == Phase::quit_confirm);
+	if(previous_dialog && !dialog && dialog_restore_page_) {
+		if(!patch_surface_.publish(*dialog_restore_page_)) {
+			return;
+		}
+		dialog_restore_page_.reset();
+		if(phase_ == Phase::name && *drawn_phase_ != Phase::prompt) {
+			drawn_phase_ = phase_;
+			return;
+		}
+	}
+	if(previous_dialog && !dialog && phase_ == Phase::name &&
+		*drawn_phase_ == Phase::prompt) {
+		if(!patch_surface_.reset(background)) {
+			return;
+		}
+	}
+	const auto changed_dialog = dialog && previous_dialog && drawn_phase_ &&
+		*drawn_phase_ != phase_;
+	if(changed_dialog) {
+		// Each source yes/no transaction ends by showing its saved copy. A
+		// nested Quit confirmation therefore closes the first dialog before
+		// copying and drawing the second one.
+		if(!dialog_restore_page_ ||
+			!patch_surface_.publish(*dialog_restore_page_)) {
+			return;
+		}
+		dialog_restore_page_.reset();
+	}
+	if(dialog && (!previous_dialog || changed_dialog)) {
+		if(!drawn_phase_ && !patch_surface_.reset(background)) {
+			return;
+		}
+		dialog_restore_page_ = patch_surface_.copy_shown_to_hidden();
+		if(!dialog_restore_page_) {
+			return;
+		}
+	}
+	// Replay Patch dialogs copy the complete visible page to the hidden page,
+	// then clear and redraw only the dialog rectangle on the still-visible
+	// page. Reblitting SLB1B/SLB1 here would erase the name grid or slot list
+	// underneath the dialog until the restore-page flip.
+	const auto frame_ready = dialog ?
+		patch_surface_.raster().set_access_page(
+			patch_surface_.raster().shown_page()
+		) :
+		(name_background ? patch_surface_.begin_shown_frame(background) :
+			patch_surface_.begin_hidden_frame(background));
+	if(!frame_ready) {
+		return;
+	}
+	auto &raster = patch_surface_.raster();
+	if(!name_background) {
+		static_cast<void>(raster.set_pending_palette_entry(12U, {15U, 15U, 0U}));
+		raster.apply_pending_palette();
+	}
+	const auto &font = patch_assets_->menu_font;
+	const auto put = [&](std::int32_t left, std::int32_t top,
+		std::string_view text, present::Index4 color) {
+		return font.put(raster, left, top, text, color);
+	};
+	const auto put_right = [&](std::int32_t right, std::int32_t top,
+		std::string_view text, present::Index4 color) {
+		return font.put_right(raster, right, top, text, color);
+	};
+	const auto put_regi = [&](std::int32_t left, std::int32_t top,
+		ClassicRegistrationGlyph glyph, bool selected) {
+		if(!save_art_ || !classic_registration_glyph_valid(glyph)) {
+			return false;
+		}
+		const auto raw = static_cast<std::uint16_t>(glyph);
+		const auto &sheet = selected ? save_art_->highlight_ : save_art_->normal_;
+		if(!present::superimpose_put(raster, sheet, {left, top}, raw)) {
+			return false;
+		}
+		return glyph != ClassicRegistrationGlyph::space &&
+			glyph != ClassicRegistrationGlyph::backspace &&
+			glyph != ClassicRegistrationGlyph::end ? true :
+			present::superimpose_put(raster, sheet, {left + 32, top}, raw + 1U);
+	};
+	const auto ascii_regi = [](char character) ->
+		std::optional<ClassicRegistrationGlyph> {
+		if(character >= 'a' && character <= 'z') {
+			character = static_cast<char>('A' + (character - 'a'));
+		}
+		if(character >= 'A' && character <= 'M') {
+			return static_cast<ClassicRegistrationGlyph>(character - 'A');
+		}
+		if(character >= 'N' && character <= 'Z') {
+			return static_cast<ClassicRegistrationGlyph>(
+				static_cast<std::uint8_t>(ClassicRegistrationGlyph::n) +
+				(character - 'N')
 			);
 		}
-		for(std::size_t index = 0U; index < keyboard_symbols.size(); ++index) {
-			const auto x = 48U + ((index % keyboard_columns) * 43U);
-			const auto y = 180U + ((index / keyboard_columns) * 48U);
-			if(index == keyboard_position_) {
-				canvas_.fill_rect(x - 8U, y - 7U, 34U, 34U, 4U);
+		if(character >= '0' && character <= '9') {
+			return static_cast<ClassicRegistrationGlyph>(
+				static_cast<std::uint8_t>(ClassicRegistrationGlyph::digit_0) +
+				(character - '0')
+			);
+		}
+		switch(character) {
+		case '.': return ClassicRegistrationGlyph::period;
+		case ',': return ClassicRegistrationGlyph::comma;
+		case '!': return ClassicRegistrationGlyph::exclamation;
+		case '?': return ClassicRegistrationGlyph::question;
+		case '-': return ClassicRegistrationGlyph::blank_1;
+		default: return std::nullopt;
+		}
+	};
+	const auto put_regi_text = [&](std::int32_t left, std::int32_t top,
+		std::string_view text, std::int32_t spacing) {
+		if(!save_art_) {
+			return false;
+		}
+		for(const auto character : text) {
+			if(const auto glyph = ascii_regi(character)) {
+				if(!put_regi(left, top, *glyph, false)) {
+					return false;
+				}
 			}
-			const char value = keyboard_symbols[index];
-			const std::string label = index == keyboard_back ? "BS" :
-				(index == keyboard_end ? "END" : std::string(1U, value));
-			canvas_.draw_text(
-				label, x, y, 2U, index == keyboard_position_ ? 14U : 15U
-			);
+			left += spacing;
 		}
-		canvas_.draw_text_centered("ESC BACK", screen_center, 370U, 1U, 6U);
-		return;
-	}
-	if(phase_ == Phase::quit_confirm) {
-		draw_header(canvas_, "QUIT SAVING REPLAY?");
-		draw_row(canvas_, "YES", 230U, yes_);
-		draw_row(canvas_, "NO", 278U, !yes_);
-		return;
-	}
-	if(phase_ == Phase::overwrite) {
-		draw_header(canvas_, "REPLACE EXISTING REPLAY?");
-		canvas_.draw_text_centered(
-			"SLOT " + slot_number(selected_slot_), screen_center, 150U, 3U, 15U
-		);
-		draw_row(canvas_, "YES", 230U, yes_);
-		draw_row(canvas_, "NO", 278U, !yes_);
-		return;
-	}
-	if(phase_ == Phase::failure) {
-		draw_header(canvas_, "SAVE FAILED");
-		canvas_.draw_text_centered("REPLAY WAS NOT LOST", screen_center, 170U, 2U, 15U);
-		canvas_.draw_text_centered("Z RETRY SLOT LIST", screen_center, 230U, 2U, 14U);
-		return;
+		return true;
+	};
+
+	const auto draw_slots = [&]() {
+		static_cast<void>(put(64, 80, "Slot", 9U));
+		static_cast<void>(put(104, 80, "Name", 9U));
+		static_cast<void>(put_right(340, 80, "Score", 9U));
+		static_cast<void>(put(364, 80, "Character", 9U));
+		static_cast<void>(put(476, 80, "Rank", 9U));
+		static_cast<void>(put(560, 80, "Stg", 9U));
+		for(std::size_t row = 0U; row < browser_rows; ++row) {
+			const auto slot = static_cast<std::size_t>(top_slot_) + row;
+			if(slot >= replay_slot_count) {
+				break;
+			}
+			const auto &entry = catalog.slots[slot];
+			const auto color = static_cast<present::Index4>(
+				slot == selected_slot_ ? 12U : 15U
+			);
+			const auto top = static_cast<std::int32_t>(96U + (row * 16U));
+			if(slot == selected_slot_) {
+				static_cast<void>(put(40, top, ">", 12U));
+			}
+			static_cast<void>(patch_put_fixed(
+				font, raster, 64, top, slot_number(slot), 12, color
+			));
+			if(entry.state != ReplayCatalogSlotState::ready) {
+				static_cast<void>(put(104, top, "none", color));
+				continue;
+			}
+			static_cast<void>(patch_put_fixed(
+				font, raster, 104, top, source_fixed_name(entry.name), 13, color
+			));
+			const auto score = decimal_score(entry.final_score);
+			static_cast<void>(patch_put_fixed(
+				font, raster,
+				340 - static_cast<std::int32_t>(score.size() * 12U), top,
+				score, 12, color
+			));
+			static_cast<void>(put(
+				364, top, patch_character_label(entry.p1_paletted_character), color
+			));
+			static_cast<void>(put(476, top, patch_rank_label(entry.rank), color));
+			static_cast<void>(patch_put_fixed(
+				font, raster, 560, top, catalog_marker(entry), 12, color
+			));
+		}
+	};
+
+	if(phase_ == Phase::name) {
+		const auto fixed_name = source_fixed_name(name_);
+		const auto score = decimal_score(replay_list_score(document_));
+		if(save_art_) {
+			static_cast<void>(put_regi_text(80, 96, fixed_name, 24));
+			static_cast<void>(put_regi_text(
+				400 + static_cast<std::int32_t>((9U - score.size()) * 16U),
+				96, score, 16
+			));
+		} else {
+			static_cast<void>(patch_put_fixed(
+				font, raster, 80, 96, fixed_name, 24, 15U
+			));
+			static_cast<void>(patch_put_fixed(
+				font, raster,
+				400 + static_cast<std::int32_t>((9U - score.size()) * 16U),
+				96, score, 16, 15U
+			));
+		}
+		if(document_.metadata) {
+			const auto date = dos_date_label(document_.metadata->dos_date);
+			if(save_art_) {
+				static_cast<void>(put_regi_text(80, 160, date, 20));
+			} else {
+				static_cast<void>(patch_put_fixed(
+					font, raster, 80, 160, date, 20, 15U
+				));
+			}
+			const auto rank = patch_rank_label(document_.metadata->rank);
+			const auto rank_initial = rank.empty() ? std::string{"?"} :
+				rank.substr(0U, 1U);
+			if(save_art_) {
+				static_cast<void>(put_regi_text(344, 160, rank_initial, 24));
+				const auto paletted = document_.metadata->paletted_character[0U];
+				const auto character = paletted >= 1 && paletted <= 18 ?
+					static_cast<std::size_t>((paletted - 1) / 2) : 9U;
+				if(save_art_->character_names_[character]) {
+					const auto &name = *save_art_->character_names_[character];
+					const auto left = 416 + static_cast<std::int32_t>(
+						(96U - name.pixel_width()) / 2U
+					);
+					static_cast<void>(present::graphics_text_put_8x16(
+						raster, {left, 168}, name,
+						{.color = 15U,
+						 .weight = present::GraphicsTextWeight::bold}
+					));
+				}
+			} else {
+				static_cast<void>(put(344, 160, rank_initial, 15U));
+				static_cast<void>(font.put_centered(
+					raster, 464, 168,
+					patch_character_label(document_.metadata->paletted_character[0U]),
+					15U
+				));
+			}
+			std::string marker;
+			if(document_.metadata->practice) {
+				marker = "P";
+			} else if(document_.metadata->game_mode != game_mode::story) {
+				marker = "VS";
+			} else if(document_.metadata->end_reason ==
+				formats::ReplayEndReason::complete) {
+				if(save_art_) {
+					static_cast<void>(put_regi(
+						528, 160, ClassicRegistrationGlyph::all, false
+					));
+				}
+			} else if(document_.metadata->stage_reached_count >= 1U &&
+				document_.metadata->stage_reached_count <= 9U) {
+				marker = std::to_string(document_.metadata->stage_reached_count);
+			} else {
+				marker = "-";
+			}
+			if(!marker.empty()) {
+				const auto left = 560 - static_cast<std::int32_t>(marker.size() * 24U);
+				if(save_art_) {
+					static_cast<void>(put_regi_text(left, 160, marker, 24));
+				} else {
+					static_cast<void>(patch_put_fixed(
+						font, raster, left, 160, marker, 24, 15U
+					));
+				}
+			}
+		}
+		for(std::size_t position = 0U; position < replay_name_grid_count;
+			++position) {
+			if(replay_name_grid_skip(position)) {
+				continue;
+			}
+			const auto left = 64 + static_cast<std::int32_t>(
+				(position % replay_name_grid_columns) * 32U
+			);
+			const auto top = 256 + static_cast<std::int32_t>(
+				(position / replay_name_grid_columns) * 24U
+			);
+			if(save_art_) {
+				static_cast<void>(put_regi(
+					left, top, static_cast<ClassicRegistrationGlyph>(position),
+					position == keyboard_position_
+				));
+			} else {
+				static_cast<void>(put(
+					left, top, replay_name_grid_label(position),
+					position == keyboard_position_ ? 12U : 15U
+				));
+			}
+		}
+	} else if(!name_background) {
+		draw_slots();
+		if(phase_ == Phase::saved_wait) {
+			static_cast<void>(font.put_centered(
+				raster, 320, 352, "Saved. Press any key.", 13U
+			));
+		}
 	}
 
-	draw_header(canvas_, "SAVE REPLAY");
-	const auto page = static_cast<std::size_t>(selected_slot_) / browser_rows;
-	const auto first = page * browser_rows;
-	const auto last = std::min(first + browser_rows, replay_slot_count);
-	for(std::size_t slot = first; slot < last; ++slot) {
-		std::string label = "SLOT " + slot_number(slot) + "  ";
-		const auto &entry = catalog.slots[slot];
-		label += entry.state == ReplayCatalogSlotState::empty ? "EMPTY" :
-			(entry.state == ReplayCatalogSlotState::invalid ? "INVALID" :
-			 fixed_name(entry.name));
-		const auto y = 86U + ((slot - first) * 19U);
-		canvas_.fill_rect(72U, y, 496U, 17U,
-			slot == selected_slot_ ? 4U : 1U);
-		canvas_.draw_text(label, 82U, y + 3U, 1U,
-			slot == selected_slot_ ? 14U : 15U);
+	if(phase_ == Phase::prompt || phase_ == Phase::overwrite ||
+		phase_ == Phase::quit_confirm) {
+		static_cast<void>(raster.clear({208, 160, 224U, 80U}, 0U));
+		std::string question;
+		if(phase_ == Phase::prompt) {
+			question = "Save Replay?";
+		} else if(phase_ == Phase::overwrite) {
+			question = "Overwrite Slot " + slot_number(selected_slot_) + "?";
+		} else {
+			question = "Quit saving replay?";
+		}
+		static_cast<void>(font.put_centered(raster, 320, 176, question, 9U));
+		static_cast<void>(put(264, 208, "Yes", yes_ ? 12U : 15U));
+		static_cast<void>(put(360, 208, "No", yes_ ? 15U : 12U));
 	}
-	canvas_.draw_text_centered(
-		phase_ == Phase::saved_wait ?
-			"REPLAY SAVED - PRESS ANY KEY" :
-			"Z SAVE  LEFT RIGHT PAGE  ESC BACK",
-		screen_center, 378U, 1U, phase_ == Phase::saved_wait ? 14U : 6U
-	);
+	static_cast<void>(patch_surface_.publish(raster.access_page()));
+	drawn_phase_ = phase_;
 }
 
 NewClassicReplaySaveResult NewClassicReplaySaveMenu::consume(
@@ -1712,7 +1792,32 @@ NewClassicReplaySaveResult NewClassicReplaySaveMenu::consume(
 	}
 	if(input.app_quit_requested) {
 		status_ = NewClassicReplaySaveStatus::application_quit;
-		return {.status = status_};
+		return {
+			.surface_changed = patch_surface_.terminal_black_clear(),
+			.status = status_,
+		};
+	}
+	if(fade_in_active_) {
+		auto &raster = patch_surface_.raster();
+		bool changed = false;
+		if(fade_boundary_ != 0U && fade_boundary_ <= 17U) {
+			const auto pair = static_cast<std::int16_t>(fade_boundary_ - 1U);
+			raster.set_palette_tone(static_cast<std::int16_t>(pair * 6));
+			raster.apply_pending_palette();
+			changed = true;
+		}
+		++fade_boundary_;
+		if(fade_boundary_ >= palette_fade_boundary_count) {
+			raster.set_palette_tone(100);
+			raster.apply_pending_palette();
+			fade_in_active_ = false;
+			input_allowed_ = !any(input);
+			changed = true;
+		}
+		return {
+			.surface_changed = changed,
+			.status = status_,
+		};
 	}
 	if(!input_allowed_) {
 		if(!any(input)) {
@@ -1724,17 +1829,12 @@ NewClassicReplaySaveResult NewClassicReplaySaveMenu::consume(
 		return {.status = status_};
 	}
 	input_allowed_ = false;
-	if(phase_ == Phase::failure) {
-		if(input.confirm || input.cancel) {
-			phase_ = Phase::slots;
-			draw(catalog);
-			return {.surface_changed = true, .status = status_};
-		}
-		return {.status = status_};
-	}
 	if(phase_ == Phase::saved_wait) {
 		status_ = NewClassicReplaySaveStatus::saved;
-		return {.status = status_};
+		return {
+			.surface_changed = patch_surface_.terminal_black_clear(),
+			.status = status_,
+		};
 	}
 	if(phase_ == Phase::quit_confirm) {
 		if(input.cancel) {
@@ -1751,7 +1851,10 @@ NewClassicReplaySaveResult NewClassicReplaySaveMenu::consume(
 		if(input.confirm) {
 			if(yes_) {
 				status_ = NewClassicReplaySaveStatus::discarded;
-				return {.status = status_};
+				return {
+					.surface_changed = patch_surface_.terminal_black_clear(),
+					.status = status_,
+				};
 			}
 			phase_ = return_phase_;
 			yes_ = return_yes_;
@@ -1778,8 +1881,13 @@ NewClassicReplaySaveResult NewClassicReplaySaveMenu::consume(
 			if(phase_ == Phase::prompt) {
 				if(!yes_) {
 					status_ = NewClassicReplaySaveStatus::discarded;
+					return {
+						.surface_changed = patch_surface_.terminal_black_clear(),
+						.status = status_,
+					};
 				} else {
 					phase_ = Phase::name;
+					capture_date();
 					draw(catalog);
 					return {.surface_changed = true, .status = status_};
 				}
@@ -1810,17 +1918,34 @@ NewClassicReplaySaveResult NewClassicReplaySaveMenu::consume(
 			draw(catalog);
 			return {.surface_changed = true, .status = status_};
 		}
-		const auto count = keyboard_symbols.size();
 		if(input.left) {
-			keyboard_position_ = (keyboard_position_ + count - 1U) % count;
+			if((keyboard_position_ % replay_name_grid_columns) == 0U) {
+				keyboard_position_ += keyboard_space;
+			} else if(keyboard_position_ == keyboard_back ||
+				keyboard_position_ == keyboard_space) {
+				keyboard_position_ -= 2U;
+			} else {
+				--keyboard_position_;
+			}
 		} else if(input.right) {
-			keyboard_position_ = (keyboard_position_ + 1U) % count;
+			if((keyboard_position_ % replay_name_grid_columns) == keyboard_space) {
+				keyboard_position_ -= keyboard_space;
+			} else if(keyboard_position_ == 12U || keyboard_position_ == 28U) {
+				keyboard_position_ += 2U;
+			} else {
+				++keyboard_position_;
+			}
 		} else if(input.up) {
-			keyboard_position_ =
-				(keyboard_position_ + count - keyboard_columns) % count;
+			if(keyboard_position_ != keyboard_question) {
+				keyboard_position_ = (keyboard_position_ +
+					replay_name_grid_count - replay_name_grid_columns) %
+					replay_name_grid_count;
+			}
 		} else if(input.down) {
-			keyboard_position_ =
-				(keyboard_position_ + keyboard_columns) % count;
+			if(keyboard_position_ != keyboard_question) {
+				keyboard_position_ = (keyboard_position_ +
+					replay_name_grid_columns) % replay_name_grid_count;
+			}
 		} else if(input.confirm) {
 			if(keyboard_position_ == keyboard_end) {
 				apply_name();
@@ -1831,8 +1956,9 @@ NewClassicReplaySaveResult NewClassicReplaySaveMenu::consume(
 					name_[name_position_] = ' ';
 				}
 			} else {
-				if(name_position_ < name_.size()) {
-					name_[name_position_++] = keyboard_symbols[keyboard_position_];
+				const auto value = replay_name_ascii(keyboard_position_);
+				if(value != '\0' && name_position_ < name_.size()) {
+					name_[name_position_++] = value;
 					if(name_position_ == name_.size()) {
 						keyboard_position_ = keyboard_end;
 					}
@@ -1875,6 +2001,19 @@ NewClassicReplaySaveResult NewClassicReplaySaveMenu::consume(
 	} else {
 		return {.status = status_};
 	}
+	if(selected_slot_ < top_slot_) {
+		top_slot_ = selected_slot_;
+	} else if(static_cast<std::size_t>(selected_slot_) >=
+		static_cast<std::size_t>(top_slot_) + browser_rows) {
+		top_slot_ = static_cast<std::uint8_t>(
+			selected_slot_ - (browser_rows - 1U)
+		);
+	}
+	if(top_slot_ > replay_slot_count - browser_rows) {
+		top_slot_ = static_cast<std::uint8_t>(
+			replay_slot_count - browser_rows
+		);
+	}
 	draw(catalog);
 	return {.surface_changed = true, .status = status_};
 }
@@ -1888,19 +2027,21 @@ void NewClassicReplaySaveMenu::report_commit(
 		return;
 	}
 	if(success) {
+		commit_failed_ = false;
 		status_ = NewClassicReplaySaveStatus::running;
 		phase_ = Phase::saved_wait;
 		draw(catalog);
 		return;
 	}
+	commit_failed_ = true;
 	status_ = NewClassicReplaySaveStatus::running;
-	phase_ = Phase::failure;
+	phase_ = Phase::slots;
 	draw(catalog);
 }
 
 present::SourceSurface NewClassicReplaySaveMenu::surface() const noexcept
 {
-	return canvas_.surface();
+	return patch_surface_.surface();
 }
 
 std::uint8_t NewClassicReplaySaveMenu::selected_slot() const noexcept
@@ -1920,7 +2061,7 @@ formats::ReplayDocument NewClassicReplaySaveMenu::take_document()
 
 bool NewClassicReplaySaveMenu::commit_failed() const noexcept
 {
-	return phase_ == Phase::failure;
+	return commit_failed_;
 }
 
 std::array<char, 8U> NewClassicReplaySaveMenu::edited_name() const noexcept
@@ -1941,6 +2082,9 @@ void NewClassicReplaySaveTestAccess::set_slot(
 ) noexcept
 {
 	menu.selected_slot_ = slot < replay_slot_count ? slot : 0U;
+	menu.top_slot_ = static_cast<std::uint8_t>(std::min<std::size_t>(
+		menu.selected_slot_, replay_slot_count - browser_rows
+	));
 }
 
 bool NewClassicReplaySaveTestAccess::in_name(

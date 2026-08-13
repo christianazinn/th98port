@@ -24,6 +24,7 @@ class MainStageHandoff;
 struct MainProcessStoryAccess;
 struct MainProcessClassicVsAccess;
 struct MainProcessDemoAccess;
+struct MainProcessReplayPresentationAccess;
 
 // One fresh, human P1-vs-P2 MAIN process. Story and automatic-Demo entry are
 // source-private and require completed MAINL handoffs; arbitrary CPU and
@@ -178,6 +179,7 @@ public:
 	) const;
 
 	[[nodiscard]] CanonicalState canonical_state() const;
+	[[nodiscard]] std::uint32_t live_random_seed() const noexcept;
 	[[nodiscard]] RoundStartObservation round_start_observation() const;
 	[[nodiscard]] InputProtocol input_protocol() const noexcept;
 	[[nodiscard]] std::expected<
@@ -203,6 +205,7 @@ private:
 	friend struct MainProcessStoryAccess;
 	friend struct MainProcessClassicVsAccess;
 	friend struct MainProcessDemoAccess;
+	friend struct MainProcessReplayPresentationAccess;
 	struct Impl;
 	explicit MainProcess(std::unique_ptr<Impl> impl) noexcept;
 	[[nodiscard]] static std::expected<

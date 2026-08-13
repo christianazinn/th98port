@@ -1,11 +1,14 @@
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <memory>
+#include <span>
 #include <string>
+#include <string_view>
+#include <vector>
 
-#include "th03/app/host_menu_canvas.hpp"
+#include "th03/app/new_classic_assets.hpp"
 #include "th03/app/new_classic_practice.hpp"
 #include "th03/app/new_classic_replay.hpp"
 #include "th03/formats/v13.hpp"
@@ -22,6 +25,79 @@ void check(bool condition, const std::string &message)
 		++failures;
 		std::cerr << "FAIL: " << message << '\n';
 	}
+}
+
+void put_u16(std::vector<std::byte> &bytes, std::size_t at, std::uint16_t value)
+{
+	bytes[at] = static_cast<std::byte>(value & 0xFFU);
+	bytes[at + 1U] = static_cast<std::byte>(value >> 8U);
+}
+
+std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets()
+{
+	std::vector<std::byte> bytes(3'168U, std::byte{0U});
+	constexpr std::array magic{'T', '3', 'P', 'F', 'N', 'T', '1'};
+	for(std::size_t index = 0U; index < magic.size(); ++index) {
+		bytes[index] = static_cast<std::byte>(magic[index]);
+	}
+	put_u16(bytes, 8U, 3'168U);
+	put_u16(bytes, 10U, 32U);
+	put_u16(bytes, 12U, 32U);
+	put_u16(bytes, 14U, 128U);
+	put_u16(bytes, 16U, 95U);
+	bytes[18U] = std::byte{0x20U};
+	bytes[19U] = std::byte{0x7EU};
+	bytes[20U] = std::byte{16U};
+	bytes[21U] = std::byte{16U};
+	bytes[22U] = std::byte{0x3FU};
+	for(std::size_t glyph = 0U; glyph < 95U; ++glyph) {
+		bytes[32U + glyph] = std::byte{8U};
+		bytes[128U + (glyph * 32U)] = std::byte{0x80U};
+	}
+	std::uint16_t checksum = 0U;
+	for(std::size_t index = 32U; index < bytes.size(); ++index) {
+		checksum = static_cast<std::uint16_t>(
+			checksum + std::to_integer<std::uint8_t>(bytes[index])
+		);
+	}
+	put_u16(bytes, 24U, checksum);
+	auto font = th03::app::detail::decode_new_classic_menu_font(bytes);
+	check(font.has_value(), "synthetic Replay Patch MNUFONT decodes");
+	if(!font) {
+		return {};
+	}
+	auto assets = std::make_shared<th03::app::NewClassicReplayPatchAssets>();
+	assets->menu_font = std::move(*font);
+	return assets;
+}
+
+struct RetainedSelection final {
+	std::vector<th03::present::ComposedPixel> pixels{
+		th03::present::graphics_page_pixels,
+		{th03::present::ComposedPixelLayer::graphics, 3U},
+	};
+
+	[[nodiscard]] th03::present::SourceSurface surface() const noexcept
+	{
+		return {
+			.pixels = std::span<
+				const th03::present::ComposedPixel,
+				th03::present::graphics_page_pixels
+			>(pixels.data(), pixels.size()),
+			.shown_page = th03::present::Page::zero,
+			.palette_tone = 100,
+			.host_overlay = false,
+		};
+	}
+};
+
+const th03::present::ComposedPixel &pixel(
+	th03::present::SourceSurface surface,
+	std::size_t x,
+	std::size_t y
+)
+{
+	return surface.pixels[(y * th03::present::graphics_width) + x];
 }
 
 th03::GameInit selected(std::int8_t p1 = 1, std::int8_t cpu = 3)
@@ -61,6 +137,17 @@ void press(
 	release(menu);
 }
 
+th03::app::NewClassicPracticeStatus finish_start_fade(
+	th03::app::NewClassicPracticeMenu &menu
+)
+{
+	auto status = menu.status();
+	for(std::size_t boundary = 0U; boundary < 19U; ++boundary) {
+		status = menu.consume({});
+	}
+	return status;
+}
+
 void test_source_menu()
 {
 	th03::app::NewClassicPracticeMenu menu(selected());
@@ -91,19 +178,236 @@ void test_source_menu()
 	press(menu, {.raw_any = true, .down = true});
 	check(
 		menu.consume({.raw_any = true, .confirm = true}) ==
+			th03::app::NewClassicPracticeStatus::start_fade &&
+		finish_start_fade(menu) ==
 			th03::app::NewClassicPracticeStatus::started &&
 		menu.practice_active(),
-		"main Start completes a customized Practice transaction"
+		"main Start completes a customized Practice after black-out"
 	);
 
-	th03::app::HostMenuCanvas base;
-	base.clear();
-	auto surface = menu.compose_over(base.surface());
-	const auto ink = std::count_if(
-		surface.pixels.begin(), surface.pixels.end(),
-		[](const auto &pixel) { return pixel.value != 0U; }
+}
+
+void test_exact_patch_surface()
+{
+	auto assets = patch_assets();
+	if(!assets) {
+		return;
+	}
+	RetainedSelection base{};
+	th03::app::NewClassicPracticeMenu menu(selected(), assets);
+	check(menu.has_patch_assets(), "Practice exact renderer owns patch assets");
+	release(menu);
+	check(
+		menu.compose_over(base.surface()).pixels.data() == base.surface().pixels.data(),
+		"Practice overlay remains hidden until the retained curves frame publishes"
 	);
-	check(ink > 100U, "Practice setup composes visible host-owned text");
+	menu.mark_background_published();
+	auto main = menu.compose_over(base.surface());
+	check(
+		pixel(main, 288U, 32U) == th03::present::ComposedPixel{
+			th03::present::ComposedPixelLayer::graphics, 10U,
+		},
+		"VS SETUP is centered at source y=32 in header color 10"
+	);
+	check(
+		pixel(main, 224U, 96U).value == 14U &&
+		pixel(main, 240U, 96U).value == 14U &&
+		pixel(main, 328U, 96U).value == 14U,
+		"selected Mode cursor, label, and value use exact source geometry/color"
+	);
+	check(
+		pixel(main, 240U, 112U).value == 13U &&
+		pixel(main, 328U, 112U).value == 11U,
+		"fixed Stage keeps the normal label and gray disabled value"
+	);
+	constexpr std::string_view footer =
+		"Arrows: Select / Change   Z: Confirm   Esc: Back";
+	const auto footer_left = static_cast<std::size_t>(
+		320 - (static_cast<std::int32_t>(footer.size() * 8U) / 2)
+	);
+	check(
+		pixel(main, footer_left, 320U).value == 10U,
+		"Practice footer retains exact spaces, centering, y, and color"
+	);
+	check(
+		pixel(main, 0U, 0U) == th03::present::ComposedPixel{
+			th03::present::ComposedPixelLayer::graphics, 3U,
+		},
+		"MNUFONT preserves retained selector graphics outside its glyph masks"
+	);
+	check(
+		main.graphics_palette.colors[14U] == th03::assets::Rgb4{2U, 14U, 15U} &&
+		main.graphics_palette.colors[11U] == th03::assets::Rgb4{8U, 8U, 8U} &&
+		main.palette_tone == 100 && !main.host_overlay &&
+		main.shown_page == th03::present::Page::one,
+		"Practice applies its two palette overrides and publishes the hidden page"
+	);
+	th03::app::NewClassicPracticeMenu retained_page_menu(selected(), assets);
+	release(retained_page_menu);
+	retained_page_menu.mark_background_published();
+	check(
+		retained_page_menu.compose_over(base.surface(), true).shown_page ==
+			base.surface().shown_page,
+		"an already-flipped retained selector page remains the published Practice page"
+	);
+
+	for(int row = 0; row < 3; ++row) {
+		press(menu, {.raw_any = true, .down = true});
+	}
+	press(menu, {.raw_any = true, .confirm = true});
+	auto advanced = menu.compose_over(base.surface());
+	check(
+		pixel(advanced, 252U, 32U).value == 10U &&
+		pixel(advanced, 96U, 64U).value == 14U &&
+		pixel(advanced, 112U, 64U).value == 14U &&
+		pixel(advanced, 336U, 64U).value == 14U,
+		"Advanced header and selected CPU Timer row match patch coordinates"
+	);
+	check(
+		pixel(advanced, 336U, 80U).value == 15U &&
+		pixel(advanced, 348U, 80U).value == 15U &&
+		pixel(advanced, 356U, 80U).value == 15U,
+		"Q4 values retain Replay Patch fixed numeric-cell spacing"
+	);
+	check(
+		pixel(advanced, 336U, 176U).value == 15U &&
+		advanced.shown_page == th03::present::Page::zero,
+		"Boss Rank includes its source value/raw suffix and pages alternate"
+	);
+
+	th03::app::NewClassicPracticeMenu vs_menu(selected(1, 5), assets);
+	release(vs_menu);
+	vs_menu.mark_background_published();
+	press(vs_menu, {.raw_any = true, .right = true});
+	for(int row = 0; row < 3; ++row) {
+		press(vs_menu, {.raw_any = true, .down = true});
+	}
+	press(vs_menu, {.raw_any = true, .confirm = true});
+	auto vs_advanced = vs_menu.compose_over(base.surface());
+	check(
+		pixel(vs_advanced, 336U, 208U).value == 11U &&
+		pixel(vs_advanced, 336U, 224U).value == 11U,
+		"VS-default Stock and Extends values render disabled gray"
+	);
+}
+
+void test_input_priority_and_release_lock()
+{
+	th03::app::NewClassicPracticeMenu menu(selected(1, 5));
+	release(menu);
+	check(
+		menu.consume({.raw_any = true, .up = true, .cancel = true}) ==
+			th03::app::NewClassicPracticeStatus::running,
+		"simultaneous Up and Cancel follows source Up-first priority"
+	);
+	release(menu);
+	check(
+		menu.consume({.raw_any = true, .confirm = true}) ==
+			th03::app::NewClassicPracticeStatus::start_fade,
+		"Up from Mode wrapped to Start before the lower-priority Cancel"
+	);
+
+	th03::app::NewClassicPracticeMenu held(selected(1, 5));
+	release(held);
+	static_cast<void>(held.consume({.raw_any = true}));
+	static_cast<void>(held.consume({.raw_any = true, .right = true}));
+	check(
+		held.config().preset == 1U,
+		"an arbitrary held interface bit locks a later mapped press"
+	);
+	release(held);
+	press(held, {.raw_any = true, .right = true});
+	check(held.config().preset == 0U, "release re-arms Practice input");
+
+	th03::app::NewClassicPracticeMenu directions(selected(1, 5));
+	release(directions);
+	for(int row = 0; row < 3; ++row) {
+		press(directions, {.raw_any = true, .down = true});
+	}
+	press(directions, {.raw_any = true, .confirm = true});
+	press(directions, {.raw_any = true, .down = true});
+	const auto before = directions.config().round_speed;
+	static_cast<void>(directions.consume({
+		.raw_any = true, .left = true, .right = true,
+	}));
+	check(
+		directions.config().round_speed == before,
+		"simultaneous Left/Right follows source Left-first priority"
+	);
+}
+
+void test_exact_exit_transitions()
+{
+	auto assets = patch_assets();
+	if(!assets) {
+		return;
+	}
+	RetainedSelection base{};
+	th03::app::NewClassicPracticeMenu cancel(selected(), assets);
+	release(cancel);
+	cancel.mark_background_published();
+	check(
+		cancel.consume({.raw_any = true, .cancel = true}) ==
+			th03::app::NewClassicPracticeStatus::cancel_frame &&
+		cancel.consume_surface_changed(),
+		"Practice Esc enters the retained extra-frame phase"
+	);
+	const auto restored = cancel.compose_over(base.surface(), true);
+	check(
+		pixel(restored, 224U, 96U).value == 14U &&
+		restored.graphics_palette.colors[14U] ==
+			th03::assets::Rgb4{2U, 14U, 15U} &&
+		restored.graphics_palette.colors[11U] ==
+			th03::assets::Rgb4{8U, 8U, 8U},
+		"the input-sampled Esc frame keeps the visible Practice menu and palette"
+	);
+	cancel.mark_background_published();
+	check(
+		cancel.status() ==
+			th03::app::NewClassicPracticeStatus::cancel_wait_release &&
+		cancel.compose_over(base.surface(), true).pixels.data() ==
+			base.surface().pixels.data() &&
+		cancel.compose_over(base.surface(), true).graphics_palette.colors[14U] ==
+			base.surface().graphics_palette.colors[14U] &&
+		cancel.compose_over(base.surface(), true).graphics_palette.colors[11U] ==
+			base.surface().graphics_palette.colors[11U],
+		"the extra curves-only publication removes Practice glyphs and restores TLSL colors"
+	);
+	check(
+		cancel.consume({}) ==
+			th03::app::NewClassicPracticeStatus::cancel_wait_release &&
+		cancel.consume({}) == th03::app::NewClassicPracticeStatus::canceled,
+		"Esc waits one mandatory release-poll VSync before returning"
+	);
+
+	th03::app::NewClassicPracticeMenu start(selected(), assets);
+	release(start);
+	start.mark_background_published();
+	for(std::size_t row = 0U; row < 5U; ++row) {
+		press(start, {.raw_any = true, .down = true});
+	}
+	check(
+		start.consume({.raw_any = true, .confirm = true}) ==
+			th03::app::NewClassicPracticeStatus::start_fade,
+		"Start enters palette_black_out(1) before becoming ready"
+	);
+	bool exact_fade = true;
+	for(std::uint8_t call = 0U; call < 19U; ++call) {
+		const auto status = start.consume({});
+		const auto surface = start.compose_over(base.surface(), true);
+		const auto expected_tone = static_cast<std::int16_t>(
+			call == 0U ? 100 : call <= 17U ? 100 - ((call - 1U) * 6U) : 0
+		);
+		exact_fade = exact_fade && surface.palette_tone == expected_tone &&
+			start.consume_surface_changed() == (call != 0U) &&
+			status == (call == 18U ?
+				th03::app::NewClassicPracticeStatus::started :
+				th03::app::NewClassicPracticeStatus::start_fade);
+	}
+	check(
+		exact_fade,
+		"Start black-out has one alignment, 17 tone writes, and final tone 0"
+	);
 }
 
 void test_exact_vs_default()
@@ -121,9 +425,11 @@ void test_exact_vs_default()
 	}
 	check(
 		menu.consume({.raw_any = true, .confirm = true}) ==
+			th03::app::NewClassicPracticeStatus::start_fade &&
+		finish_start_fade(menu) ==
 			th03::app::NewClassicPracticeStatus::started &&
 		!menu.practice_active(),
-		"exact VS Start stays distinguishable from an active Practice overlay"
+		"exact VS Start stays distinguishable after its exact black-out"
 	);
 
 	th03::app::NewClassicPracticeMenu chiyuri(selected(1, 15));
@@ -207,6 +513,9 @@ void test_checkpoint_and_recording()
 int main()
 {
 	test_source_menu();
+	test_exact_patch_surface();
+	test_input_priority_and_release_lock();
+	test_exact_exit_transitions();
 	test_exact_vs_default();
 	test_checkpoint_and_recording();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

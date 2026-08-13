@@ -68,6 +68,12 @@ enum class ClassicOpSelectionOutcome : std::uint8_t {
 	selected,
 };
 
+enum class ClassicOpPracticeBackgroundStatus : std::uint8_t {
+	waiting,
+	published,
+	failed,
+};
+
 enum class ClassicOpSelectionErrorCode : std::uint8_t {
 	invalid_config,
 	invalid_input,
@@ -175,6 +181,8 @@ public:
 	take_audio_command() noexcept;
 	[[nodiscard]] std::optional<ClassicOpSelectionCompletion>
 	take_completion() noexcept;
+	[[nodiscard]] ClassicOpPracticeBackgroundStatus
+	advance_new_classic_practice_background() noexcept;
 	[[nodiscard]] bool resume_from_new_classic_practice() noexcept;
 
 	[[nodiscard]] ClassicOpSelectionPhase phase() const noexcept;
@@ -312,6 +320,8 @@ private:
 	bool retain_for_new_classic_practice_ = false;
 	bool practice_completion_pending_ = false;
 	bool practice_resume_release_lock_ = false;
+	bool practice_frame_drawn_ = false;
+	std::uint8_t practice_frame_vsyncs_ = 0U;
 	ClassicOpSelectionPhase phase_ = ClassicOpSelectionPhase::initial_blank;
 	std::array<ClassicAudioCommand, 4U> audio_commands_{};
 	std::size_t audio_head_ = 0U;

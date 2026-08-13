@@ -216,6 +216,86 @@ bool superimpose_put(
 	);
 }
 
+bool superimpose_remap_color_preserve_opacity(
+	PreparedSuperimposeSheet &sheet,
+	Index4 from,
+	Index4 to
+) noexcept
+{
+	if(from > 0x0FU || to > 0x0FU) {
+		return false;
+	}
+	const auto bytes = sheet.opacity_.size();
+	for(std::size_t offset = 0U; offset < bytes; ++offset) {
+		for(std::uint8_t bit = 0U; bit < 8U; ++bit) {
+			const auto mask = static_cast<std::uint8_t>(0x80U >> bit);
+			if((sheet.opacity_[offset] & mask) == 0U) {
+				continue;
+			}
+			Index4 color = 0U;
+			for(std::size_t plane = 0U; plane < planar_plane_count; ++plane) {
+				if((sheet.color_planes_[plane][offset] & mask) != 0U) {
+					color = static_cast<Index4>(color | (1U << plane));
+				}
+			}
+			if(color != from) {
+				continue;
+			}
+			for(std::size_t plane = 0U; plane < planar_plane_count; ++plane) {
+				auto &value = sheet.color_planes_[plane][offset];
+				if((to & (1U << plane)) != 0U) {
+					value = static_cast<std::uint8_t>(value | mask);
+				} else {
+					value = static_cast<std::uint8_t>(value & ~mask);
+				}
+			}
+		}
+	}
+	return true;
+}
+
+bool superimpose_fill_glyph_rect_preserve_opacity(
+	PreparedSuperimposeSheet &sheet,
+	std::uint16_t glyph_code,
+	Rect local_rect,
+	Index4 color
+) noexcept
+{
+	if(color > 0x0FU || glyph_code < sheet.first_code_ ||
+		glyph_code > sheet.last_code_ || local_rect.x < 0 || local_rect.y < 0 ||
+		local_rect.width == 0U || local_rect.height == 0U ||
+		static_cast<std::uint32_t>(local_rect.x) + local_rect.width > sheet.width_ ||
+		static_cast<std::uint32_t>(local_rect.y) + local_rect.height >
+			sheet.height_ || (sheet.width_ % 8U) != 0U) {
+		return false;
+	}
+	const auto stride = static_cast<std::size_t>(sheet.width_ / 8U);
+	const auto glyph_index = static_cast<std::size_t>(glyph_code -
+		sheet.first_code_);
+	const auto glyph_offset = glyph_index * sheet.plane_size_;
+	for(std::uint32_t y = 0U; y < local_rect.height; ++y) {
+		for(std::uint32_t x = 0U; x < local_rect.width; ++x) {
+			const auto local_x = static_cast<std::uint32_t>(local_rect.x) + x;
+			const auto local_y = static_cast<std::uint32_t>(local_rect.y) + y;
+			const auto offset = glyph_offset + (local_y * stride) +
+				(local_x / 8U);
+			const auto mask = static_cast<std::uint8_t>(0x80U >> (local_x % 8U));
+			sheet.opacity_[offset] = static_cast<std::uint8_t>(
+				sheet.opacity_[offset] | mask
+			);
+			for(std::size_t plane = 0U; plane < planar_plane_count; ++plane) {
+				auto &value = sheet.color_planes_[plane][offset];
+				if((color & (1U << plane)) != 0U) {
+					value = static_cast<std::uint8_t>(value | mask);
+				} else {
+					value = static_cast<std::uint8_t>(value & ~mask);
+				}
+			}
+		}
+	}
+	return true;
+}
+
 bool superimpose_put_blue_plane_row_white(
 	Raster &raster,
 	const PreparedSuperimposeSheet &sheet,

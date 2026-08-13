@@ -337,7 +337,8 @@ private:
 		MainlStaffCompiledAssets staff_compiled,
 		std::filesystem::path score_path,
 		NewClassicReplayRecorder *replay_recorder,
-		std::filesystem::path legacy_score_path = {}
+		std::filesystem::path legacy_score_path = {},
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {}
 	);
 
 	std::unique_ptr<Impl> impl_;

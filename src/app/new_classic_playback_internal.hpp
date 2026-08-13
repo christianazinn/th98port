@@ -4,6 +4,8 @@
 #include <cstdint>
 
 #include "th03/app/new_classic_playback.hpp"
+#include "th03/present/raster.hpp"
+#include "th03/present/tram.hpp"
 
 namespace th03::app {
 
@@ -30,6 +32,10 @@ struct NewClassicReplayPlaybackTestAccess final {
 	) noexcept;
 	[[nodiscard]] static std::uint8_t main_input_context(
 		const NewClassicReplayPlayback &playback
+	) noexcept;
+	[[nodiscard]] static bool put_main_replay_overlay(
+		present::Raster &raster,
+		present::Tram &tram
 	) noexcept;
 };
 

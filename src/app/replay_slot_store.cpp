@@ -30,6 +30,18 @@
 namespace th03::app {
 namespace {
 
+std::atomic<ReplaySlotStoreFaultPoint> fault_point{
+	ReplaySlotStoreFaultPoint::none
+};
+
+[[nodiscard]] bool fail(ReplaySlotStoreFaultPoint point) noexcept
+{
+	auto expected = point;
+	return fault_point.compare_exchange_strong(
+		expected, ReplaySlotStoreFaultPoint::none, std::memory_order_relaxed
+	);
+}
+
 [[nodiscard]] ReplaySlotStoreError store_error(
 	ReplaySlotStoreErrorCode code,
 	std::error_code system = {},
@@ -131,6 +143,12 @@ private:
 [[nodiscard]] std::expected<NativeTemporaryFile, ReplaySlotStoreError>
 create_temporary(const std::filesystem::path &target)
 {
+	if(fail(ReplaySlotStoreFaultPoint::temporary_create)) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::temporary_create,
+			std::make_error_code(std::errc::io_error)
+		));
+	}
 	static std::atomic<std::uint64_t> sequence{0U};
 	for(std::size_t attempt = 0U; attempt < 128U; ++attempt) {
 		auto candidate = target;
@@ -177,6 +195,12 @@ create_temporary(const std::filesystem::path &target)
 	std::span<const std::byte> bytes
 )
 {
+	if(fail(ReplaySlotStoreFaultPoint::temporary_write)) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::temporary_write,
+			std::make_error_code(std::errc::io_error)
+		));
+	}
 	std::size_t written = 0U;
 	while(written < bytes.size()) {
 #if defined(_WIN32)
@@ -211,6 +235,12 @@ create_temporary(const std::filesystem::path &target)
 	NativeTemporaryFile &file
 )
 {
+	if(fail(ReplaySlotStoreFaultPoint::temporary_flush)) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::temporary_flush,
+			std::make_error_code(std::errc::io_error)
+		));
+	}
 #if defined(_WIN32)
 	if(FlushFileBuffers(file.handle()) == 0) {
 #else
@@ -218,6 +248,12 @@ create_temporary(const std::filesystem::path &target)
 #endif
 		return std::unexpected(store_error(
 			ReplaySlotStoreErrorCode::temporary_flush, last_system_error()
+		));
+	}
+	if(fail(ReplaySlotStoreFaultPoint::temporary_seek)) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::temporary_seek,
+			std::make_error_code(std::errc::io_error)
 		));
 	}
 #if defined(_WIN32)
@@ -236,6 +272,12 @@ create_temporary(const std::filesystem::path &target)
 [[nodiscard]] std::expected<std::vector<std::byte>, ReplaySlotStoreError>
 read_back(NativeTemporaryFile &file, std::size_t size)
 {
+	if(fail(ReplaySlotStoreFaultPoint::temporary_read)) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::temporary_read,
+			std::make_error_code(std::errc::io_error)
+		));
+	}
 	std::vector<std::byte> bytes(size);
 	std::size_t read = 0U;
 	while(read < bytes.size()) {
@@ -270,6 +312,12 @@ read_back(NativeTemporaryFile &file, std::size_t size)
 	const std::filesystem::path &target
 )
 {
+	if(fail(ReplaySlotStoreFaultPoint::replace_target)) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::replace_target,
+			std::make_error_code(std::errc::io_error)
+		));
+	}
 #if defined(_WIN32)
 	if(MoveFileExW(file.path().c_str(), target.c_str(),
 		MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0) {
@@ -284,33 +332,9 @@ read_back(NativeTemporaryFile &file, std::size_t size)
 	return {};
 }
 
-} // namespace
-
-std::filesystem::path replay_slot_path(
-	const std::filesystem::path &replay_root,
-	std::uint8_t slot
-)
+[[nodiscard]] std::expected<ReplaySlotLoadResult, ReplaySlotStoreError>
+load_document(const std::filesystem::path &path)
 {
-	const auto tens = static_cast<char>('0' + (slot / 10U));
-	const auto ones = static_cast<char>('0' + (slot % 10U));
-	std::string filename{"TH3R00.RPY"};
-	filename[4] = tens;
-	filename[5] = ones;
-	return replay_root / filename;
-}
-
-std::expected<ReplaySlotLoadResult, ReplaySlotStoreError> load_replay_slot(
-	const std::filesystem::path &replay_root,
-	std::uint8_t slot
-)
-{
-	if(replay_root.empty()) {
-		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_root));
-	}
-	if(slot >= replay_slot_count) {
-		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_slot));
-	}
-	const auto path = replay_slot_path(replay_root, slot);
 	std::error_code system;
 	const auto status = std::filesystem::status(path, system);
 	if(system == std::errc::no_such_file_or_directory ||
@@ -360,18 +384,12 @@ std::expected<ReplaySlotLoadResult, ReplaySlotStoreError> load_replay_slot(
 	return ReplaySlotLoadResult{.document = std::move(*parsed)};
 }
 
-std::expected<void, ReplaySlotStoreError> commit_replay_slot(
+[[nodiscard]] std::expected<void, ReplaySlotStoreError> write_document(
 	const std::filesystem::path &replay_root,
-	std::uint8_t slot,
+	const std::filesystem::path &target,
 	const formats::ReplayDocument &document
 )
 {
-	if(replay_root.empty()) {
-		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_root));
-	}
-	if(slot >= replay_slot_count) {
-		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_slot));
-	}
 	auto encoded = formats::write_v13_replay(document);
 	if(!encoded) {
 		return std::unexpected(store_error(
@@ -383,6 +401,12 @@ std::expected<void, ReplaySlotStoreError> commit_replay_slot(
 			ReplaySlotStoreErrorCode::source_too_large
 		));
 	}
+	if(fail(ReplaySlotStoreFaultPoint::directory_create)) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::directory_create,
+			std::make_error_code(std::errc::io_error)
+		));
+	}
 	std::error_code system;
 	std::filesystem::create_directories(replay_root, system);
 	if(system) {
@@ -390,7 +414,6 @@ std::expected<void, ReplaySlotStoreError> commit_replay_slot(
 			ReplaySlotStoreErrorCode::directory_create, system
 		));
 	}
-	const auto target = replay_slot_path(replay_root, slot);
 	auto temporary = create_temporary(target);
 	if(!temporary) {
 		return std::unexpected(std::move(temporary.error()));
@@ -406,10 +429,17 @@ std::expected<void, ReplaySlotStoreError> commit_replay_slot(
 		return std::unexpected(std::move(readback.error()));
 	}
 	auto parsed = formats::parse_v13_replay(*readback);
-	if(*readback != *encoded || !parsed) {
+	if(fail(ReplaySlotStoreFaultPoint::temporary_validation) ||
+		*readback != *encoded || !parsed) {
 		return std::unexpected(store_error(
 			ReplaySlotStoreErrorCode::temporary_validation, {},
 			parsed ? std::nullopt : std::optional<Error>{parsed.error()}
+		));
+	}
+	if(fail(ReplaySlotStoreFaultPoint::temporary_close)) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::temporary_close,
+			std::make_error_code(std::errc::io_error)
 		));
 	}
 	if(!temporary->close()) {
@@ -418,6 +448,154 @@ std::expected<void, ReplaySlotStoreError> commit_replay_slot(
 		));
 	}
 	return replace_target(*temporary, target);
+}
+
+} // namespace
+
+std::filesystem::path replay_slot_path(
+	const std::filesystem::path &replay_root,
+	std::uint8_t slot
+)
+{
+	const auto tens = static_cast<char>('0' + (slot / 10U));
+	const auto ones = static_cast<char>('0' + (slot % 10U));
+	std::string filename{"TH3R00.RPY"};
+	filename[4] = tens;
+	filename[5] = ones;
+	return replay_root / filename;
+}
+
+std::filesystem::path replay_fallback_path(
+	const std::filesystem::path &replay_root
+)
+{
+	return replay_root / "TH3LAST.RPY";
+}
+
+std::expected<ReplaySlotLoadResult, ReplaySlotStoreError> load_replay_slot(
+	const std::filesystem::path &replay_root,
+	std::uint8_t slot
+)
+{
+	if(replay_root.empty()) {
+		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_root));
+	}
+	if(slot >= replay_slot_count) {
+		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_slot));
+	}
+	return load_document(replay_slot_path(replay_root, slot));
+}
+
+std::expected<void, ReplaySlotStoreError> commit_replay_slot(
+	const std::filesystem::path &replay_root,
+	std::uint8_t slot,
+	const formats::ReplayDocument &document
+)
+{
+	if(replay_root.empty()) {
+		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_root));
+	}
+	if(slot >= replay_slot_count) {
+		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_slot));
+	}
+	return write_document(
+		replay_root, replay_slot_path(replay_root, slot), document
+	);
+}
+
+std::expected<ReplaySlotLoadResult, ReplaySlotStoreError>
+load_replay_fallback(const std::filesystem::path &replay_root)
+{
+	if(replay_root.empty()) {
+		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_root));
+	}
+	return load_document(replay_fallback_path(replay_root));
+}
+
+std::expected<void, ReplaySlotStoreError> checkpoint_replay_fallback(
+	const std::filesystem::path &replay_root,
+	const formats::ReplayDocument &document
+)
+{
+	if(replay_root.empty()) {
+		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_root));
+	}
+	return write_document(
+		replay_root, replay_fallback_path(replay_root), document
+	);
+}
+
+std::expected<void, ReplaySlotStoreError> remove_replay_fallback(
+	const std::filesystem::path &replay_root
+)
+{
+	if(replay_root.empty()) {
+		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_root));
+	}
+	if(fail(ReplaySlotStoreFaultPoint::remove_target)) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::remove_target,
+			std::make_error_code(std::errc::io_error)
+		));
+	}
+	std::error_code system;
+	static_cast<void>(std::filesystem::remove(
+		replay_fallback_path(replay_root), system
+	));
+	if(system) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::remove_target, system
+		));
+	}
+	return {};
+}
+
+std::expected<void, ReplaySlotStoreError> commit_replay_fallback_to_slot(
+	const std::filesystem::path &replay_root,
+	std::uint8_t slot,
+	const formats::ReplayDocument &document
+)
+{
+	if(replay_root.empty()) {
+		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_root));
+	}
+	if(slot >= replay_slot_count) {
+		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_slot));
+	}
+	if(auto staged = checkpoint_replay_fallback(replay_root, document); !staged) {
+		return staged;
+	}
+	const auto fallback = replay_fallback_path(replay_root);
+	const auto target = replay_slot_path(replay_root, slot);
+	if(fail(ReplaySlotStoreFaultPoint::publish_slot)) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::publish_slot,
+			std::make_error_code(std::errc::io_error)
+		));
+	}
+#if defined(_WIN32)
+	if(MoveFileExW(fallback.c_str(), target.c_str(),
+		MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0) {
+#else
+	if(::rename(fallback.c_str(), target.c_str()) != 0) {
+#endif
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::publish_slot, last_system_error()
+		));
+	}
+	return {};
+}
+
+void ReplaySlotStoreTestAccess::fail_next(
+	ReplaySlotStoreFaultPoint point
+) noexcept
+{
+	fault_point.store(point, std::memory_order_relaxed);
+}
+
+void ReplaySlotStoreTestAccess::clear_failure() noexcept
+{
+	fault_point.store(ReplaySlotStoreFaultPoint::none, std::memory_order_relaxed);
 }
 
 } // namespace th03::app

@@ -206,10 +206,12 @@ The faithful renderer should initially be deliberately simple:
 5. keep fullscreen, window size, aspect policy, and optional non-integer
    scaling in platform configuration rather than gameplay.
 
-This is pixel-faithful without emulating the PC-98 CPU or spending meaningful
-modern resources. An enhanced renderer can later consume the same semantic
-presentation stream. It must not be the first proof that Classic draw order is
-correct.
+This indexed-surface design can reproduce PC-98 pixels without emulating the
+PC-98 CPU or spending meaningful modern resources. Pixel fidelity is a
+captured guest-versus-host evidence claim, however, and remains unproved until
+the T3PIX1/T3PXH2 publication traces compare equal. An enhanced renderer can
+later consume the same semantic presentation stream. It must not be the first
+proof that Classic draw order is correct.
 
 Do not equate an SDL support claim with a binary support claim. The current
 C++23/MSVC build uses the Universal CRT and MSVC redistributable. Before the

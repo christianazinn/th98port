@@ -472,6 +472,14 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 		}
 		set_bgm_active(command.parameter != 0U);
 		return {};
+	case ClassicAudioCommandType::set_effects_active:
+		if(command.cue != ClassicMusicCue::none || command.parameter > 1U) {
+			return std::unexpected(session_error(
+				ClassicAudioSessionErrorCode::invalid_parameter, command
+			));
+		}
+		set_effects_active(command.parameter != 0U);
+		return {};
 	}
 	return std::unexpected(session_error(
 		ClassicAudioSessionErrorCode::invalid_parameter, command
@@ -507,6 +515,17 @@ ClassicAudioSession::request_effect(std::uint8_t effect_id) noexcept
 void ClassicAudioSession::set_bgm_active(bool active) noexcept
 {
 	impl_->bgm_active = active;
+	const auto effects_available = impl_->effects_available();
+	impl_->effects.set_active(effects_available);
+	if(!effects_available) {
+		impl_->effects.reset();
+		impl_->engine.stop_effect();
+	}
+}
+
+void ClassicAudioSession::set_effects_active(bool active) noexcept
+{
+	impl_->effects_active = active;
 	const auto effects_available = impl_->effects_available();
 	impl_->effects.set_active(effects_available);
 	if(!effects_available) {

@@ -820,7 +820,7 @@ void local_original_gate(
 		return;
 	}
 	auto returned = th03::app::ClassicOpTitleMenuScene::return_from_music_room(
-		*music_completion, *title_resources
+		*music_completion, *title_resources, {}
 	);
 	expect(
 		returned && (*returned)->phase() == th03::app::ClassicOpPhase::fast_black &&

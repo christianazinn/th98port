@@ -97,6 +97,7 @@ public:
 		std::uint8_t effect_id
 	) noexcept;
 	void set_bgm_active(bool active) noexcept;
+	void set_effects_active(bool active) noexcept;
 	[[nodiscard]] std::expected<ClassicAudioTick, ClassicAudioSessionError>
 	advance_tick();
 

@@ -1082,7 +1082,7 @@ The first host-publication fingerprint layer is implemented and documented in
 `docs/PIXEL_ORACLE.md`. It is a fast localization/regression stream, not raw
 pixel proof. No emulator run is part of this research parcel. The following is
 the stronger raw-planar objective for empirical validation using the pinned
-Anniversary authority and Replay Patch 0.4.10.
+Anniversary authority and Replay Patch 0.4.11.
 
 ### Capture mode
 

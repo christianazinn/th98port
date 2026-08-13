@@ -9,6 +9,7 @@ param(
 	[string]$OpExecutable,
 	[string]$FontRom,
 	[string]$LanguageOverlay,
+	[string]$ReplayPatchAssets,
 	[string]$RhythmRom,
 	[string]$T98Sound86,
 	[string]$Output,
@@ -60,6 +61,20 @@ if(-not $LanguageOverlay) {
 	$LanguageOverlay = $languageCandidates |
 		Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
 		Select-Object -First 1
+}
+if(-not $ReplayPatchAssets) {
+	$assetCandidates = @(
+		(Join-Path $originalRoot "th03_full\AZINN.DAT"),
+		(Join-Path (Split-Path -Parent $worktreeRoot) (
+			"replays-and-validation-17ptz\.scratch\assets\th03-replay-ui\AZINN.DAT"
+		))
+	)
+	$ReplayPatchAssets = $assetCandidates |
+		Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+		Select-Object -First 1
+	if(-not $ReplayPatchAssets) {
+		$ReplayPatchAssets = $assetCandidates[0]
+	}
 }
 if(-not $Output) {
 	$Output = Join-Path $standaloneRoot "TH03-Classic-Test.exe"
@@ -120,6 +135,7 @@ $MainExecutable = Resolve-RequiredFile $MainExecutable "MAIN.EXE"
 $MainlExecutable = Resolve-RequiredFile $MainlExecutable "MAINL.EXE"
 $OpExecutable = Resolve-RequiredFile $OpExecutable "OP.EXE"
 $FontRom = Resolve-RequiredFile $FontRom "FONT.ROM"
+$ReplayPatchAssets = Resolve-RequiredFile $ReplayPatchAssets "AZINN.DAT"
 if($LanguageOverlay) {
 	$LanguageOverlay = Resolve-RequiredFile $LanguageOverlay "TH3EN.DAT"
 }
@@ -217,6 +233,8 @@ try {
 		-Destination (Join-Path $contentRoot "OP.EXE")
 	Copy-Item -LiteralPath $FontRom `
 		-Destination (Join-Path $contentRoot "FONT.ROM")
+	Copy-Item -LiteralPath $ReplayPatchAssets `
+		-Destination (Join-Path $contentRoot "AZINN.DAT")
 	if($LanguageOverlay) {
 		Copy-Item -LiteralPath $LanguageOverlay `
 			-Destination (Join-Path $contentRoot "TH3EN.DAT")

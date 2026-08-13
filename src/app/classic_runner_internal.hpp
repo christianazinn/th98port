@@ -20,6 +20,8 @@ struct ClassicRunnerOperations final {
 		void *, const ClassicOpSessionInput &
 	) = nullptr;
 	std::optional<ClassicAudioCommand> (*take_audio_command)(void *) = nullptr;
+	std::optional<NewClassicKeyConfig> (*take_key_config_update)(void *) = nullptr;
+	std::optional<bool> (*take_reduced_flash_update)(void *) = nullptr;
 	std::expected<present::SourceSurface, ClassicOpSessionError>
 	(*compose_shown_surface)(
 		void *,

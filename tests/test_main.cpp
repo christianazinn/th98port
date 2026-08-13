@@ -2789,10 +2789,12 @@ void test_recorded_pause_frame_boundary()
 	auto exited = game->finish_deferred_frame(
 		th03::DeferredFrameAction::exit_session
 	);
+	const auto live_seed = game->live_random_seed();
 	check(
 		exited && exited->status == th03::StepStatus::terminal &&
 		game->canonical_state().route == 0U &&
-		game->canonical_state().round_frame == 2U,
+		game->canonical_state().round_frame == 2U &&
+		live_seed != game->canonical_state().round_frame,
 		"recorded pause Exit applies the sticky loop exit only after the deferred source frame"
 	);
 }

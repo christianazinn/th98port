@@ -5,6 +5,7 @@
 #include "classic_mainl_win_internal.hpp"
 #include "classic_story_session_internal.hpp"
 #include "main_process_static_content_internal.hpp"
+#include "main_process_internal.hpp"
 #include "new_classic_language_internal.hpp"
 #include "new_classic_playback_internal.hpp"
 #include "main_process_driver_internal.hpp"
@@ -115,39 +116,34 @@ std::expected<SessionTransition, MainProcessError> process_transition(
 	return static_cast<MainProcess *>(context)->session_transition(choice);
 }
 
-constexpr std::array<std::array<std::uint8_t, 7U>, 8U> overlay_glyphs{{
-	{{0x1EU,0x11U,0x11U,0x1EU,0x14U,0x12U,0x11U}},
-	{{0x1FU,0x10U,0x10U,0x1EU,0x10U,0x10U,0x1FU}},
-	{{0x1EU,0x11U,0x11U,0x1EU,0x10U,0x10U,0x10U}},
-	{{0x10U,0x10U,0x10U,0x10U,0x10U,0x10U,0x1FU}},
-	{{0x0EU,0x11U,0x11U,0x1FU,0x11U,0x11U,0x11U}},
-	{{0x11U,0x11U,0x0AU,0x04U,0x04U,0x04U,0x04U}},
-	{{0x1FU,0x10U,0x10U,0x1EU,0x10U,0x10U,0x10U}},
-	{{0x1FU,0x10U,0x10U,0x1EU,0x10U,0x10U,0x10U}},
-}};
-
-void draw_overlay_word(
-	std::span<present::ComposedPixel, present::graphics_page_pixels> output,
-	std::span<const std::size_t> glyphs,
-	std::size_t x,
-	std::size_t y
+[[nodiscard]] bool put_main_replay_overlay(
+	present::Raster &raster,
+	present::Tram &tram
 ) noexcept
 {
-	for(const auto glyph_index : glyphs) {
-		const auto &glyph = overlay_glyphs[glyph_index];
-		for(std::size_t row = 0U; row < glyph.size(); ++row) {
-			for(std::size_t column = 0U; column < 5U; ++column) {
-				if((glyph[row] & (0x10U >> column)) != 0U) {
-					const auto offset = (y + row) * present::graphics_width +
-						x + column;
-					output[offset] = {
-						present::ComposedPixelLayer::text, 5U
-					};
-				}
-			}
+	const auto front = raster.shown_page();
+	for(const auto page : {present::Page::zero, present::Page::one}) {
+		if(!raster.set_access_page(page) ||
+			!raster.clear({296, 0, 48U, 8U}, 15U)) {
+			return false;
 		}
-		x += 6U;
 	}
+	if(!raster.set_access_page(front)) {
+		return false;
+	}
+	constexpr std::array<char, 6U> text{{'R', 'E', 'P', 'L', 'A', 'Y'}};
+	constexpr auto attribute = static_cast<present::TramAttribute>(
+		present::tram_black | present::tram_reverse
+	);
+	for(std::size_t index = 0U; index < text.size(); ++index) {
+		if(!tram.put_cell(
+			{37 + static_cast<std::int32_t>(index), 0},
+			{static_cast<present::TramCode>(text[index]), attribute}
+		)) {
+			return false;
+		}
+	}
+	return true;
 }
 
 [[nodiscard]] ClassicStorySessionInput playback_story_input(
@@ -209,6 +205,7 @@ struct NewClassicReplayPlayback::Impl final {
 	MainlStaffCompiledAssets staff_compiled{};
 	std::filesystem::path score_path{};
 	std::filesystem::path legacy_score_path{};
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets{};
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
 	std::unique_ptr<MainProcess> process{};
 	std::unique_ptr<MainProcessDriver> driver{};
@@ -221,6 +218,7 @@ struct NewClassicReplayPlayback::Impl final {
 	std::uint32_t sample_index = 0U;
 	bool in_mainl = false;
 	bool skip_mainl = false;
+	bool preroll_simulating = false;
 	bool fast_forward = false;
 	bool reduced_flash = false;
 	NewClassicPlaybackStatus status = NewClassicPlaybackStatus::running;
@@ -229,6 +227,17 @@ struct NewClassicReplayPlayback::Impl final {
 	std::size_t ui_audio_index = 0U;
 	std::size_t ui_audio_count = 0U;
 	std::optional<NewClassicPauseMenu> pause_menu{};
+
+	[[nodiscard]] bool put_replay_overlay() noexcept
+	{
+		if(preroll_simulating) {
+			return true;
+		}
+		return process && !in_mainl && put_main_replay_overlay(
+			MainProcessReplayPresentationAccess::raster(*process),
+			MainProcessReplayPresentationAccess::tram(*process)
+		);
+	}
 
 	Impl(
 		formats::ReplayDocument document_,
@@ -240,6 +249,7 @@ struct NewClassicReplayPlayback::Impl final {
 		MainlStaffCompiledAssets staff_compiled_,
 		std::filesystem::path score_path_,
 		std::filesystem::path legacy_score_path_,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_,
 		present::KotohimeBombFadeCompatibility compatibility,
 		bool reduced_flash_
 	) :
@@ -252,6 +262,7 @@ struct NewClassicReplayPlayback::Impl final {
 		staff_compiled(std::move(staff_compiled_)),
 		score_path(std::move(score_path_)),
 		legacy_score_path(std::move(legacy_score_path_)),
+		patch_assets(std::move(patch_assets_)),
 		kotohime_compatibility(compatibility),
 		reduced_flash(reduced_flash_)
 	{
@@ -572,13 +583,33 @@ NewClassicReplayPlayback::load(NewClassicPlaybackRequest request)
 		error.process = std::move(static_content.error());
 		return std::unexpected(std::move(error));
 	}
+	if(request.content.replay_patch_assets.empty()) {
+		request.content.replay_patch_assets =
+			request.content.data_root / "AZINN.DAT";
+	}
+	auto loaded_patch_assets = load_new_classic_replay_patch_assets(
+		request.content.replay_patch_assets
+	);
+	if(!loaded_patch_assets) {
+		auto error = playback_error(
+			NewClassicPlaybackErrorCode::replay_patch_assets_failed
+		);
+		error.replay_patch_assets.emplace(
+			std::move(loaded_patch_assets.error())
+		);
+		return std::unexpected(std::move(error));
+	}
+	auto patch_assets = std::make_shared<const NewClassicReplayPatchAssets>(
+		std::move(*loaded_patch_assets)
+	);
 	const auto legacy_score_path = request.content.score;
 	const auto score_path = legacy_score_path.parent_path() / "YUME.NEW.NEM";
 	auto impl = std::make_unique<Impl>(
 		std::move(request.document), std::move(loader),
 		std::move(*compiled), std::move(*font), std::move(*static_content),
 		std::move(mainl_text->assets), std::move(mainl_text->staff),
-		score_path, legacy_score_path, request.kotohime_compatibility,
+		score_path, legacy_score_path, std::move(patch_assets),
+		request.kotohime_compatibility,
 		request.reduced_flash
 	);
 	const auto target_sample =
@@ -617,6 +648,7 @@ NewClassicReplayPlayback::load(NewClassicPlaybackRequest request)
 	auto result = std::unique_ptr<NewClassicReplayPlayback>(
 		new NewClassicReplayPlayback(std::move(impl))
 	);
+	result->impl_->preroll_simulating = true;
 	while(result->sample_index() < target_sample &&
 		result->status() == NewClassicPlaybackStatus::running) {
 		auto advanced = result->advance({}, false, false);
@@ -626,10 +658,18 @@ NewClassicReplayPlayback::load(NewClassicPlaybackRequest request)
 		while(result->take_audio_command()) {
 		}
 	}
+	result->impl_->preroll_simulating = false;
 	if(result->sample_index() != target_sample ||
 		result->status() != NewClassicPlaybackStatus::running) {
 		return std::unexpected(playback_error(
 			NewClassicPlaybackErrorCode::replay_contract_failed
+		));
+	}
+	// Hidden checkpoint preroll owns no Replay Patch overlay. Install the
+	// native MAIN backing/TRAM only once the selected frame becomes public.
+	if(!result->impl_->put_replay_overlay()) {
+		return std::unexpected(playback_error(
+			NewClassicPlaybackErrorCode::surface_failed
 		));
 	}
 	return result;
@@ -740,6 +780,11 @@ NewClassicReplayPlayback::advance(
 			if(advanced->process_advanced) {
 				++impl_->record_index;
 				++impl_->sample_index;
+				if(!impl_->put_replay_overlay()) {
+					return std::unexpected(playback_error(
+						NewClassicPlaybackErrorCode::surface_failed
+					));
+				}
 			}
 			result.surface_changed = result.surface_changed ||
 				advanced->surface_changed;
@@ -770,7 +815,7 @@ NewClassicReplayPlayback::advance(
 			if(impl_->story) {
 				if(impl_->story->scene() ==
 					ClassicStorySessionScene::high_score_registration) {
-					// Replay Patch 0.4.10 leaves regist_menu() on the live
+					// Replay Patch 0.4.11 leaves regist_menu() on the live
 					// input_mode_interface() path.  It therefore contributes no
 					// replay samples; any samples left before MAINL_END belong to
 					// the preceding replay-aware owner and are only transition
@@ -856,7 +901,7 @@ NewClassicReplayPlayback::advance(
 			std::unexpected(MainProcessDriverError{});
 		advanced = impl_->driver->consume(sample->input);
 		if(advanced && impl_->driver->deferred_frame_pending()) {
-			impl_->pause_menu.emplace(true);
+			impl_->pause_menu.emplace(true, impl_->patch_assets);
 			impl_->ui_audio = {{
 				{.type = ClassicAudioCommandType::pause_song},
 				{.type = ClassicAudioCommandType::play_effect, .parameter = 21U},
@@ -876,6 +921,11 @@ NewClassicReplayPlayback::advance(
 		if(advanced->process_advanced) {
 			++impl_->record_index;
 			++impl_->sample_index;
+			if(!impl_->put_replay_overlay()) {
+				return std::unexpected(playback_error(
+					NewClassicPlaybackErrorCode::surface_failed
+				));
+			}
 		}
 		return NewClassicPlaybackTick{
 			.surface_changed = advanced->surface_changed,
@@ -997,6 +1047,11 @@ NewClassicReplayPlayback::advance(
 	if(auto started = impl_->start_checkpoint(*next); !started) {
 		return std::unexpected(std::move(started.error()));
 	}
+	if(!impl_->put_replay_overlay()) {
+		return std::unexpected(playback_error(
+			NewClassicPlaybackErrorCode::surface_failed
+		));
+	}
 	return NewClassicPlaybackTick{
 		.surface_changed = true,
 		.status = impl_->status,
@@ -1088,15 +1143,7 @@ NewClassicReplayPlayback::compose_shown_surface(
 	if(impl_->pause_menu) {
 		return impl_->pause_menu->compose_over(*surface);
 	}
-	constexpr std::array<std::size_t, 6U> replay_word{0U, 1U, 2U, 3U, 4U, 5U};
-	draw_overlay_word(output, replay_word, 302U, 5U);
-	if(impl_->fast_forward && fast_forward_step_count() > 1U) {
-		constexpr std::array<std::size_t, 2U> ff_word{6U, 7U};
-		draw_overlay_word(output, ff_word, 342U, 5U);
-	}
 	auto result = *surface;
-	result.pixels = output;
-	result.host_overlay = true;
 	if(impl_->reduced_flash && result.palette_tone == 150) {
 		result.graphics_palette = result.reduced_flash_palette;
 		result.reduced_flash_applied = true;
@@ -1184,6 +1231,14 @@ std::uint8_t NewClassicReplayPlaybackTestAccess::main_input_context(
 	return playback.impl_->driver ? static_cast<std::uint8_t>(
 		playback.impl_->driver->input_context()
 	) : 0xFFU;
+}
+
+bool NewClassicReplayPlaybackTestAccess::put_main_replay_overlay(
+	present::Raster &raster,
+	present::Tram &tram
+) noexcept
+{
+	return ::th03::app::put_main_replay_overlay(raster, tram);
 }
 
 std::uint32_t NewClassicReplayPlayback::sample_index() const noexcept

@@ -301,6 +301,10 @@ public:
 	);
 	[[nodiscard]] bool deferred_frame_pending() const noexcept;
 	CanonicalState canonical_state() const;
+	// Replay Patch 0.4.11 copies master.lib's live 32-bit seed into the
+	// resident restart handoff. This accessor exposes that source value without
+	// adding it to the canonical/oracle schema.
+	[[nodiscard]] std::uint32_t live_random_seed() const noexcept;
 	RoundStartObservation round_start_observation() const;
 	std::expected<void, Error> start_next_round();
 	std::expected<void, Error> finish_main_process();

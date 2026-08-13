@@ -11,7 +11,9 @@
 
 #include "classic_op_scene_internal.hpp"
 #include "th03/app/classic_config.hpp"
+#include "th03/app/new_classic_assets.hpp"
 #include "th03/assets/types.hpp"
+#include "th03/present/graphics_text.hpp"
 #include "th03/present/raster.hpp"
 #include "th03/present/superimpose.hpp"
 #include "th03/present/tram.hpp"
@@ -23,6 +25,14 @@ enum class ClassicOpOptionsChoice : std::uint8_t {
 	bgm,
 	key_mode,
 	quit,
+	sfx,
+	language,
+	photosensitivity,
+};
+
+enum class ClassicOpOptionsOutcome : std::uint8_t {
+	return_main,
+	key_config,
 };
 
 enum class ClassicOpOptionsPhase : std::uint8_t {
@@ -63,6 +73,7 @@ public:
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 	[[nodiscard]] const present::Tram &tram() const noexcept;
 	[[nodiscard]] bool main_input_allowed() const noexcept;
+	[[nodiscard]] ClassicOpOptionsOutcome outcome() const noexcept;
 
 private:
 	friend class ClassicOpOptionsScene;
@@ -71,7 +82,8 @@ private:
 		ClassicConfigOptions config,
 		present::Raster raster,
 		present::Tram tram,
-		bool main_input_allowed
+		bool main_input_allowed,
+		ClassicOpOptionsOutcome outcome
 	) noexcept;
 
 	GameInit resident_{};
@@ -79,6 +91,7 @@ private:
 	present::Raster raster_{};
 	present::Tram tram_{};
 	bool main_input_allowed_ = false;
+	ClassicOpOptionsOutcome outcome_ = ClassicOpOptionsOutcome::return_main;
 };
 
 // Source-private owner of OP.EXE's in-process Options child. The caller has
@@ -93,7 +106,10 @@ public:
 		const ClassicOpCompletion &completion,
 		ClassicConfigOptions config,
 		bool fm_available,
-		std::span<const LoadedMainResource> resources
+		std::span<const LoadedMainResource> resources,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {},
+		const present::AnkGlyphProvider *font = nullptr,
+		bool language_available = false
 	);
 
 	[[nodiscard]] static std::expected<
@@ -106,7 +122,14 @@ public:
 		present::Raster raster,
 		present::Tram tram,
 		assets::PiImage menu_background,
-		assets::BfntSheet window_sheet
+		assets::BfntSheet window_sheet,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {},
+		const present::AnkGlyphProvider *font = nullptr,
+		bool language_available = false
+	);
+	[[nodiscard]] std::expected<void, ClassicOpError>
+	refresh_patch_language_background(
+		std::span<const LoadedMainResource> resources
 	);
 	~ClassicOpOptionsScene() = default;
 
@@ -134,6 +157,7 @@ private:
 	struct Prepared final {
 		assets::PiImage menu_background{};
 		std::optional<present::PreparedSuperimposeSheet> window_sheet{};
+		std::optional<present::PreparedGraphicsText8x16> japanese{};
 	};
 
 	ClassicOpOptionsScene(
@@ -142,7 +166,9 @@ private:
 		ClassicConfigOptions config,
 		bool fm_available,
 		present::Raster raster,
-		present::Tram tram
+		present::Tram tram,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+		bool language_available
 	) noexcept;
 
 	[[nodiscard]] bool restore_menu_background(
@@ -161,6 +187,15 @@ private:
 	) noexcept;
 	[[nodiscard]] bool draw_all_option_choices() noexcept;
 	[[nodiscard]] bool draw_main_choices() noexcept;
+	[[nodiscard]] bool restore_patch_rows(
+		std::uint8_t first,
+		std::uint8_t count,
+		std::int32_t box_right
+	) noexcept;
+	[[nodiscard]] bool draw_patch_choice(
+		ClassicOpOptionsChoice choice,
+		present::Index4 color
+	) noexcept;
 	[[nodiscard]] bool update_selection(int direction) noexcept;
 	[[nodiscard]] bool update_horizontal(
 		ClassicOpInput input,
@@ -169,7 +204,9 @@ private:
 	[[nodiscard]] bool push_audio_command(
 		ClassicAudioCommand command
 	) noexcept;
-	void finish() noexcept;
+	void finish(
+		ClassicOpOptionsOutcome outcome = ClassicOpOptionsOutcome::return_main
+	) noexcept;
 	void fail() noexcept;
 	[[nodiscard]] ClassicOpOptionsTick tick(
 		ClassicOpBoundary boundary,
@@ -185,7 +222,7 @@ private:
 	ClassicConfigOptions config_{};
 	present::Raster raster_{};
 	present::Tram tram_{};
-	std::array<ClassicAudioCommand, 3U> audio_commands_{};
+	std::array<ClassicAudioCommand, 8U> audio_commands_{};
 	std::size_t audio_head_ = 0U;
 	std::size_t audio_count_ = 0U;
 	ClassicOpOptionsPhase phase_ = ClassicOpOptionsPhase::failed;
@@ -196,6 +233,8 @@ private:
 	bool transition_input_latched_ = false;
 	bool menu_input_allowed_ = false;
 	bool fm_available_ = false;
+	bool language_available_ = false;
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
 	std::optional<ClassicOpOptionsCompletion> completion_{};
 };
 

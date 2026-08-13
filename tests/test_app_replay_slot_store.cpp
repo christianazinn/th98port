@@ -119,6 +119,123 @@ void write_malformed(const std::filesystem::path &path)
 	output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
 }
 
+void test_fallback_and_faults(
+	const std::filesystem::path &root,
+	const th03::formats::ReplayDocument &base
+)
+{
+	using th03::app::ReplaySlotStoreErrorCode;
+	using th03::app::ReplaySlotStoreFaultPoint;
+	using th03::app::ReplaySlotStoreTestAccess;
+
+	check(
+		th03::app::replay_fallback_path(root).filename() == "TH3LAST.RPY",
+		"the native fallback keeps Replay Patch 0.4.11's filename"
+	);
+	check(
+		th03::app::checkpoint_replay_fallback(root, base).has_value(),
+		"a valid recording checkpoint atomically creates the fallback"
+	);
+	const auto base_bytes = read_file(th03::app::replay_fallback_path(root));
+	const auto loaded = th03::app::load_replay_fallback(root);
+	check(
+		!base_bytes.empty() && loaded && loaded->document,
+		"the fallback reads back through the canonical V13 parser"
+	);
+
+	auto replacement = base;
+	replacement.metadata->name = {'F', 'A', 'U', 'L', 'T', 'E', 'D', '!'};
+	const std::array faults{
+		std::pair{ReplaySlotStoreFaultPoint::directory_create,
+			ReplaySlotStoreErrorCode::directory_create},
+		std::pair{ReplaySlotStoreFaultPoint::temporary_create,
+			ReplaySlotStoreErrorCode::temporary_create},
+		std::pair{ReplaySlotStoreFaultPoint::temporary_write,
+			ReplaySlotStoreErrorCode::temporary_write},
+		std::pair{ReplaySlotStoreFaultPoint::temporary_flush,
+			ReplaySlotStoreErrorCode::temporary_flush},
+		std::pair{ReplaySlotStoreFaultPoint::temporary_seek,
+			ReplaySlotStoreErrorCode::temporary_seek},
+		std::pair{ReplaySlotStoreFaultPoint::temporary_read,
+			ReplaySlotStoreErrorCode::temporary_read},
+		std::pair{ReplaySlotStoreFaultPoint::temporary_validation,
+			ReplaySlotStoreErrorCode::temporary_validation},
+		std::pair{ReplaySlotStoreFaultPoint::temporary_close,
+			ReplaySlotStoreErrorCode::temporary_close},
+		std::pair{ReplaySlotStoreFaultPoint::replace_target,
+			ReplaySlotStoreErrorCode::replace_target},
+	};
+	for(const auto &[point, code] : faults) {
+		ReplaySlotStoreTestAccess::fail_next(point);
+		auto failed = th03::app::checkpoint_replay_fallback(root, replacement);
+		check(
+			!failed && failed.error().code == code,
+			"the injected checkpoint boundary returns its exact storage error"
+		);
+		check(
+			read_file(th03::app::replay_fallback_path(root)) == base_bytes,
+			"every failed pre-replacement checkpoint preserves the fallback"
+		);
+	}
+
+	check(
+		th03::app::commit_replay_slot(root, 6U, base).has_value(),
+		"fault fixture installs an occupied destination slot"
+	);
+	const auto old_slot = read_file(th03::app::replay_slot_path(root, 6U));
+	ReplaySlotStoreTestAccess::fail_next(ReplaySlotStoreFaultPoint::publish_slot);
+	auto publish_failed = th03::app::commit_replay_fallback_to_slot(
+		root, 6U, replacement
+	);
+	check(
+		!publish_failed && publish_failed.error().code ==
+			ReplaySlotStoreErrorCode::publish_slot,
+		"a final fallback-to-slot publication failure is observable"
+	);
+	check(
+		read_file(th03::app::replay_slot_path(root, 6U)) == old_slot,
+		"failed publication preserves the occupied slot byte-for-byte"
+	);
+	const auto recoverable = th03::app::load_replay_fallback(root);
+	check(
+		recoverable && recoverable->document &&
+		recoverable->document->metadata->name == replacement.metadata->name,
+		"failed publication leaves the final menu-edited fallback recoverable"
+	);
+	check(
+		th03::app::commit_replay_fallback_to_slot(root, 6U, replacement)
+			.has_value(),
+		"retry atomically moves the fallback over the selected slot"
+	);
+	const auto published = th03::app::load_replay_slot(root, 6U);
+	const auto no_fallback = th03::app::load_replay_fallback(root);
+	check(
+		published && published->document &&
+		published->document->metadata->name == replacement.metadata->name &&
+		no_fallback && !no_fallback->document,
+		"successful publication exposes one slot artifact and removes TH3LAST"
+	);
+
+	check(
+		th03::app::checkpoint_replay_fallback(root, base).has_value(),
+		"discard fault fixture recreates the fallback"
+	);
+	ReplaySlotStoreTestAccess::fail_next(ReplaySlotStoreFaultPoint::remove_target);
+	auto remove_failed = th03::app::remove_replay_fallback(root);
+	check(
+		!remove_failed && remove_failed.error().code ==
+			ReplaySlotStoreErrorCode::remove_target &&
+		std::filesystem::is_regular_file(th03::app::replay_fallback_path(root)),
+		"failed discard reports the boundary and preserves the fallback"
+	);
+	check(
+		th03::app::remove_replay_fallback(root).has_value() &&
+		!std::filesystem::exists(th03::app::replay_fallback_path(root)),
+		"discard retry removes the fallback"
+	);
+	ReplaySlotStoreTestAccess::clear_failure();
+}
+
 } // namespace
 
 int main()
@@ -148,6 +265,7 @@ int main()
 		!th03::app::load_replay_slot(root, 100U),
 		"slot indices outside 00..99 are rejected"
 	);
+	test_fallback_and_faults(root, document);
 
 	check(
 		th03::app::commit_replay_slot(root, 7U, document).has_value(),

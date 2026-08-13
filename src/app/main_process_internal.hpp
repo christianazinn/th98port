@@ -76,6 +76,13 @@ struct MainProcessTestAccess final {
 		MainFeedbackCueSite site
 	) noexcept;
 
+	static void request_feedback(
+		MainProcess &process,
+		MainFeedbackCueRequested request
+	) noexcept;
+
+	static void feedback_dispatch_boundary(MainProcess &process) noexcept;
+
 	[[nodiscard]] static std::expected<
 		std::shared_ptr<const MainProcessStaticContent>,
 		MainProcessError
@@ -135,6 +142,14 @@ struct MainProcessDemoAccess final {
 		std::shared_ptr<const MainProcessStaticContent> static_content,
 		bool authenticate_resource_bytes = true
 	);
+};
+
+// Replay Patch MAIN owns one late native presentation hook after the ordinary
+// round presenters. Keep mutable Raster/TRAM access source-private so replay
+// UI cannot leak into the shared deterministic process API.
+struct MainProcessReplayPresentationAccess final {
+	[[nodiscard]] static present::Raster &raster(MainProcess &process) noexcept;
+	[[nodiscard]] static present::Tram &tram(MainProcess &process) noexcept;
 };
 
 } // namespace th03::app

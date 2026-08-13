@@ -1,5 +1,6 @@
 #include "classic_op_options_scene_internal.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -7,20 +8,26 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <utility>
 
 #include "th03/assets/decode.hpp"
+#include "th03/present/pi.hpp"
 
 namespace th03::app {
 namespace {
 
 constexpr std::int32_t box_left = 160;
-constexpr std::int32_t box_top = 256;
+constexpr std::int32_t classic_box_top = 256;
+constexpr std::int32_t replay_patch_box_top = 264;
 constexpr std::int32_t box_height = 128;
 constexpr std::int32_t box_main_width = 136;
 constexpr std::int32_t box_submenu_width = 240;
+constexpr std::int32_t box_option_width = 272;
 constexpr std::int32_t box_main_center_x = 228;
 constexpr std::int32_t box_submenu_center_x = 280;
+constexpr std::int32_t box_option_center_x = 296;
+constexpr std::int32_t box_option_value_center_x = 356;
 constexpr std::int32_t opwin_step_width = 8;
 constexpr std::int32_t opwin_width = 16;
 constexpr std::uint16_t grow_frames = 13U;
@@ -82,6 +89,42 @@ constexpr std::array<std::uint8_t, 6U> value_joy_key{{
 constexpr std::array<std::uint8_t, 6U> value_key_joy{{
 	0x68U, 0x69U, 0x6CU, 0x6DU, 0x6AU, 0x6BU,
 }};
+
+constexpr std::array<std::string_view, 7U> patch_labels{{
+	"Rank", "Music", "SFX", "Language", "KeyConfig", "Flash FX", "Quit",
+}};
+constexpr std::array<ClassicOpOptionsChoice, 7U> patch_choices{{
+	ClassicOpOptionsChoice::rank,
+	ClassicOpOptionsChoice::bgm,
+	ClassicOpOptionsChoice::sfx,
+	ClassicOpOptionsChoice::language,
+	ClassicOpOptionsChoice::key_mode,
+	ClassicOpOptionsChoice::photosensitivity,
+	ClassicOpOptionsChoice::quit,
+}};
+constexpr std::array<std::string_view, 7U> patch_main_labels{{
+	"Start", "VS Start", "Music room", "HiScore", "Option", "Replay", "Quit",
+}};
+
+[[nodiscard]] constexpr std::int32_t choice_top(
+	std::int32_t box_top,
+	std::uint8_t line
+) noexcept
+{
+	return ((box_top / present::gaiji_height) + 1 + line) *
+		present::gaiji_height;
+}
+
+[[nodiscard]] std::optional<std::uint8_t> patch_choice_line(
+	ClassicOpOptionsChoice choice
+) noexcept
+{
+	const auto found = std::find(patch_choices.begin(), patch_choices.end(), choice);
+	if(found == patch_choices.end()) {
+		return std::nullopt;
+	}
+	return static_cast<std::uint8_t>(found - patch_choices.begin());
+}
 
 [[nodiscard]] ClassicOpError options_error(
 	ClassicOpErrorCode code,
@@ -196,7 +239,7 @@ constexpr std::array<std::uint8_t, 6U> value_key_joy{{
 		static_cast<std::int32_t>(glyphs.size()) + center_shift
 	) * present::gaiji_width;
 	const auto left = (center_x - (shifted_width / 2)) / 8;
-	const auto y = (box_top / present::gaiji_height) + 1 + line;
+	const auto y = (classic_box_top / present::gaiji_height) + 1 + line;
 	return put_gaiji_run(tram, left, y, glyphs, attribute);
 }
 
@@ -219,13 +262,15 @@ ClassicOpOptionsCompletion::ClassicOpOptionsCompletion(
 	ClassicConfigOptions config,
 	present::Raster raster,
 	present::Tram tram,
-	bool main_input_allowed
+	bool main_input_allowed,
+	ClassicOpOptionsOutcome outcome
 ) noexcept :
 	resident_(std::move(resident)),
 	config_(config),
 	raster_(std::move(raster)),
 	tram_(std::move(tram)),
-	main_input_allowed_(main_input_allowed)
+	main_input_allowed_(main_input_allowed),
+	outcome_(outcome)
 {}
 
 const GameInit &ClassicOpOptionsCompletion::resident() const noexcept
@@ -253,13 +298,20 @@ bool ClassicOpOptionsCompletion::main_input_allowed() const noexcept
 	return main_input_allowed_;
 }
 
+ClassicOpOptionsOutcome ClassicOpOptionsCompletion::outcome() const noexcept
+{
+	return outcome_;
+}
+
 ClassicOpOptionsScene::ClassicOpOptionsScene(
 	std::unique_ptr<Prepared> prepared,
 	GameInit resident,
 	ClassicConfigOptions config,
 	bool fm_available,
 	present::Raster raster,
-	present::Tram tram
+	present::Tram tram,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	bool language_available
 ) noexcept :
 	prepared_(std::move(prepared)),
 	resident_(std::move(resident)),
@@ -268,7 +320,9 @@ ClassicOpOptionsScene::ClassicOpOptionsScene(
 	tram_(std::move(tram)),
 	phase_(ClassicOpOptionsPhase::grow_window),
 	box_right_left_(box_left + box_main_width - opwin_step_width),
-	fm_available_(fm_available)
+	fm_available_(fm_available),
+	language_available_(language_available),
+	patch_assets_(std::move(patch_assets))
 {}
 
 std::expected<std::unique_ptr<ClassicOpOptionsScene>, ClassicOpError>
@@ -276,7 +330,10 @@ ClassicOpOptionsScene::create_from_op(
 	const ClassicOpCompletion &completion,
 	ClassicConfigOptions config,
 	bool fm_available,
-	std::span<const LoadedMainResource> resources
+	std::span<const LoadedMainResource> resources,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	const present::AnkGlyphProvider *font,
+	bool language_available
 )
 {
 	if(completion.route() != ClassicOpRoute::options) {
@@ -316,7 +373,8 @@ ClassicOpOptionsScene::create_from_op(
 	}
 	return create(
 		completion.resident(), config, fm_available, completion.raster(),
-		completion.tram(), std::move(*background), std::move(*window)
+		completion.tram(), std::move(*background), std::move(*window),
+		std::move(patch_assets), font, language_available
 	);
 }
 
@@ -328,10 +386,13 @@ ClassicOpOptionsScene::create(
 	present::Raster raster,
 	present::Tram tram,
 	assets::PiImage menu_background,
-	assets::BfntSheet window_sheet
+	assets::BfntSheet window_sheet,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	const present::AnkGlyphProvider *font,
+	bool language_available
 )
 {
-	if(!classic_config_valid(config) ||
+	if(!classic_config_valid(config) || (patch_assets && !font) ||
 		resident.rank != static_cast<std::uint8_t>(config.rank) ||
 		resident.key_mode != static_cast<std::uint8_t>(config.key_mode) ||
 		(!fm_available && config.bgm_mode != ClassicBgmMode::off) ||
@@ -360,10 +421,90 @@ ClassicOpOptionsScene::create(
 	auto prepared = std::make_unique<Prepared>();
 	prepared->menu_background = std::move(menu_background);
 	prepared->window_sheet.emplace(std::move(*prepared_window));
+	if(patch_assets) {
+		constexpr std::array<std::uint8_t, 6U> japanese{{
+			0x93U, 0xFAU, 0x96U, 0x7BU, 0x8CU, 0xEAU,
+		}};
+		auto prepared_japanese = present::prepare_graphics_text_8x16(
+			japanese, *font
+		);
+		if(!prepared_japanese) {
+			return std::unexpected(options_error(
+				ClassicOpErrorCode::font_prepare_failed
+			));
+		}
+		prepared->japanese.emplace(std::move(*prepared_japanese));
+	}
 	return std::unique_ptr<ClassicOpOptionsScene>(new ClassicOpOptionsScene(
 		std::move(prepared), std::move(resident), config, fm_available,
-		std::move(raster), std::move(tram)
+		std::move(raster), std::move(tram), std::move(patch_assets),
+		language_available
 	));
+}
+
+std::expected<void, ClassicOpError>
+ClassicOpOptionsScene::refresh_patch_language_background(
+	std::span<const LoadedMainResource> resources
+)
+{
+	if(!patch_assets_ || phase_ != ClassicOpOptionsPhase::shrink_window) {
+		return std::unexpected(options_error(ClassicOpErrorCode::invalid_state));
+	}
+	if(const auto validated = validate_title_resources(resources); !validated) {
+		return std::unexpected(validated.error());
+	}
+	const auto *background_resource = find_resource(
+		resources, MainResourceRole::op_menu_background
+	);
+	if(!background_resource || !background_resource->bytes) {
+		return std::unexpected(options_error(
+			ClassicOpErrorCode::resource_set_mismatch
+		));
+	}
+	auto background = assets::decode_pi(*background_resource->bytes);
+	if(!background) {
+		return std::unexpected(decode_error(
+			background_resource->spec.key, std::move(background.error())
+		));
+	}
+	if(!valid_menu_background(*background) ||
+		!raster_.set_access_page(present::Page::one) ||
+		!present::pi_put_8(raster_, 0, 0, *background) ||
+		!raster_.set_access_page(present::Page::zero)) {
+		return std::unexpected(options_error(
+			ClassicOpErrorCode::invalid_asset_geometry
+		));
+	}
+	const auto &image = background->image;
+	const auto blit = [&](std::int32_t left, std::int32_t top,
+		std::uint16_t width, std::uint16_t height) {
+		const auto offset = (static_cast<std::size_t>(top) * image.width) +
+			static_cast<std::size_t>(left);
+		return raster_.blit({
+			.pixels = std::span<const present::Index4>(image.indices).subspan(offset),
+			.width = width,
+			.height = height,
+			.stride = image.width,
+		}, {left, top});
+	};
+	if(!blit(0, 0, present::graphics_width, replay_patch_box_top) ||
+		!blit(0, replay_patch_box_top + box_height,
+			present::graphics_width,
+			present::graphics_height - (replay_patch_box_top + box_height)) ||
+		!blit(0, replay_patch_box_top, box_left, box_height) ||
+		!blit(box_left + box_option_width, replay_patch_box_top,
+			present::graphics_width - (box_left + box_option_width), box_height) ||
+		!patch_assets_->menu_font.put_right(
+			raster_, 638, 0, "The PoDD Arrange Project", 0U
+		) || !patch_assets_->menu_font.put_right(
+			raster_, 638, 16,
+			"Replay Patch v0.4.11 by Christian Azinn", 0U
+		)) {
+		return std::unexpected(options_error(ClassicOpErrorCode::draw_failed));
+	}
+	raster_.apply_pending_palette();
+	prepared_->menu_background = std::move(*background);
+	return {};
 }
 
 bool ClassicOpOptionsScene::restore_menu_background(
@@ -372,6 +513,7 @@ bool ClassicOpOptionsScene::restore_menu_background(
 ) noexcept
 {
 	const auto &image = prepared_->menu_background.image;
+	const auto box_top = patch_assets_ ? replay_patch_box_top : classic_box_top;
 	if(left < 0 || static_cast<std::uint32_t>(left) + width > image.width ||
 		box_top + box_height > image.height) {
 		return false;
@@ -392,6 +534,7 @@ bool ClassicOpOptionsScene::draw_window_glyph(
 	std::uint16_t glyph
 ) noexcept
 {
+	const auto box_top = patch_assets_ ? replay_patch_box_top : classic_box_top;
 	return prepared_->window_sheet && present::superimpose_put(
 		raster_, *prepared_->window_sheet, {left, box_top}, glyph
 	);
@@ -419,11 +562,120 @@ bool ClassicOpOptionsScene::shrink_step() noexcept
 	return true;
 }
 
+bool ClassicOpOptionsScene::restore_patch_rows(
+	std::uint8_t first,
+	std::uint8_t count,
+	std::int32_t box_right
+) noexcept
+{
+	if(!patch_assets_ || box_right <= (box_left + 4) ||
+		static_cast<std::uint16_t>(first) + count > patch_labels.size()) {
+		return false;
+	}
+	const auto bare = raster_.graphics(present::Page::one);
+	if(bare.size() != present::graphics_page_pixels ||
+		!raster_.set_access_page(present::Page::zero)) {
+		return false;
+	}
+	const auto top = choice_top(replay_patch_box_top, first);
+	const auto height = static_cast<std::int32_t>(count) *
+		present::gaiji_height;
+	for(std::int32_t y = top; y < top + height; ++y) {
+		for(std::int32_t x = box_left + 2; x < box_right - 2; ++x) {
+			const auto offset = (static_cast<std::size_t>(y) *
+				present::graphics_width) + static_cast<std::size_t>(x);
+			if(!raster_.plot({x, y}, bare[offset])) {
+				return false;
+			}
+			if(((x + (y - replay_patch_box_top)) & 1) == 0 &&
+				!raster_.plot({x, y}, 3U)) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+bool ClassicOpOptionsScene::draw_patch_choice(
+	ClassicOpOptionsChoice choice,
+	present::Index4 color
+) noexcept
+{
+	if(!patch_assets_) {
+		return false;
+	}
+	const auto line = patch_choice_line(choice);
+	if(!line || !restore_patch_rows(
+		*line, 1U, box_left + box_option_width
+	)) {
+		return false;
+	}
+	const auto y = choice_top(replay_patch_box_top, *line);
+	const auto &font = patch_assets_->menu_font;
+	if(choice == ClassicOpOptionsChoice::quit) {
+		return font.put_centered(
+			raster_, box_option_center_x, y, patch_labels[*line], color
+		);
+	}
+	if(!font.put_centered(
+		raster_, box_main_center_x, y, patch_labels[*line], color
+	)) {
+		return false;
+	}
+	std::string_view value{};
+	switch(choice) {
+	case ClassicOpOptionsChoice::rank:
+		switch(config_.rank) {
+		case ClassicRank::easy: value = "Easy"; break;
+		case ClassicRank::normal: value = "Normal"; break;
+		case ClassicRank::hard: value = "Hard"; break;
+		case ClassicRank::lunatic: value = "Lunatic"; break;
+		}
+		break;
+	case ClassicOpOptionsChoice::bgm:
+		value = config_.bgm_mode == ClassicBgmMode::off ? "Off" : "FM (86)";
+		break;
+	case ClassicOpOptionsChoice::sfx:
+		value = config_.sfx_enabled ? "On" : "Off";
+		break;
+	case ClassicOpOptionsChoice::language:
+		if(config_.language == ClassicLanguage::english) {
+			value = "English";
+		} else {
+			return prepared_->japanese && present::graphics_text_put_8x16(
+				raster_, {box_option_value_center_x - 24, y},
+				*prepared_->japanese, {.color = color}
+			);
+		}
+		break;
+	case ClassicOpOptionsChoice::key_mode:
+		switch(config_.key_mode) {
+		case ClassicKeyMode::key_key: value = "Key vs Key"; break;
+		case ClassicKeyMode::joy_key: value = "Joy vs Key"; break;
+		case ClassicKeyMode::key_joy: value = "Key vs Joy"; break;
+		}
+		break;
+	case ClassicOpOptionsChoice::photosensitivity:
+		value = config_.reduced_flash ? "Reduced" : "Full";
+		break;
+	case ClassicOpOptionsChoice::quit:
+		return false;
+	}
+	return font.put_centered(
+		raster_, box_option_value_center_x, y, value, color
+	);
+}
+
 bool ClassicOpOptionsScene::draw_option_choice(
 	ClassicOpOptionsChoice choice,
 	present::TramAttribute attribute
 ) noexcept
 {
+	if(patch_assets_) {
+		return draw_patch_choice(
+			choice, attribute == present::tram_black ? 0U : 15U
+		);
+	}
 	switch(choice) {
 	case ClassicOpOptionsChoice::rank: {
 		// ZUN quirk: Labels use the old main-box center rather than the
@@ -453,7 +705,7 @@ bool ClassicOpOptionsScene::draw_option_choice(
 		)) {
 			return false;
 		}
-		const auto y = (box_top / present::gaiji_height) + 3;
+		const auto y = (classic_box_top / present::gaiji_height) + 3;
 		switch(config_.bgm_mode) {
 		case ClassicBgmMode::off:
 			return put_gaiji_run(tram_, 35, y, value_off, attribute);
@@ -480,6 +732,10 @@ bool ClassicOpOptionsScene::draw_option_choice(
 		}
 		return false;
 	}
+	case ClassicOpOptionsChoice::sfx:
+	case ClassicOpOptionsChoice::language:
+	case ClassicOpOptionsChoice::photosensitivity:
+		return false;
 	case ClassicOpOptionsChoice::quit:
 		return put_centered(
 			tram_, box_submenu_center_x, 5, 0, label_quit, attribute
@@ -490,8 +746,18 @@ bool ClassicOpOptionsScene::draw_option_choice(
 
 bool ClassicOpOptionsScene::draw_all_option_choices() noexcept
 {
-	for(std::uint8_t raw = 0U; raw < 4U; ++raw) {
-		const auto choice = static_cast<ClassicOpOptionsChoice>(raw);
+	const auto choices = patch_assets_ ?
+		std::span<const ClassicOpOptionsChoice>(patch_choices) :
+		std::span<const ClassicOpOptionsChoice>(patch_choices.data(), 2U);
+	constexpr std::array<ClassicOpOptionsChoice, 4U> classic_choices{{
+		ClassicOpOptionsChoice::rank,
+		ClassicOpOptionsChoice::bgm,
+		ClassicOpOptionsChoice::key_mode,
+		ClassicOpOptionsChoice::quit,
+	}};
+	const auto active = patch_assets_ ? choices :
+		std::span<const ClassicOpOptionsChoice>(classic_choices);
+	for(const auto choice : active) {
 		if(!draw_option_choice(
 			choice,
 			(choice == selected_) ? present::tram_white : present::tram_black
@@ -504,6 +770,25 @@ bool ClassicOpOptionsScene::draw_all_option_choices() noexcept
 
 bool ClassicOpOptionsScene::draw_main_choices() noexcept
 {
+	if(patch_assets_) {
+		if(!restore_patch_rows(0U, 7U, box_left + box_main_width)) {
+			return false;
+		}
+		for(std::size_t index = 0U; index < patch_main_labels.size(); ++index) {
+			if(!patch_assets_->menu_font.put_centered(
+				raster_, box_main_center_x,
+				choice_top(
+					replay_patch_box_top, static_cast<std::uint8_t>(index)
+				),
+				patch_main_labels[index],
+				index == static_cast<std::size_t>(ClassicOpMenuChoice::options) ?
+					15U : 0U
+			)) {
+				return false;
+			}
+		}
+		return true;
+	}
 	for(std::size_t index = 0U; index < main_labels.size(); ++index) {
 		const auto &label = main_labels[index];
 		const std::array<std::uint8_t, 7U> storage{{
@@ -532,10 +817,26 @@ bool ClassicOpOptionsScene::update_selection(int direction) noexcept
 	if(!draw_option_choice(selected_, present::tram_black)) {
 		return false;
 	}
-	auto raw = ring_step(
-		static_cast<std::uint8_t>(selected_), direction, 3U
-	);
-	selected_ = static_cast<ClassicOpOptionsChoice>(raw);
+	constexpr std::array<ClassicOpOptionsChoice, 4U> classic_choices{{
+		ClassicOpOptionsChoice::rank,
+		ClassicOpOptionsChoice::bgm,
+		ClassicOpOptionsChoice::key_mode,
+		ClassicOpOptionsChoice::quit,
+	}};
+	const auto choices = patch_assets_ ?
+		std::span<const ClassicOpOptionsChoice>(patch_choices) :
+		std::span<const ClassicOpOptionsChoice>(classic_choices);
+	const auto found = std::find(choices.begin(), choices.end(), selected_);
+	if(found == choices.end()) {
+		return false;
+	}
+	auto next = static_cast<int>(found - choices.begin()) + direction;
+	if(next < 0) {
+		next = static_cast<int>(choices.size() - 1U);
+	} else if(next >= static_cast<int>(choices.size())) {
+		next = 0;
+	}
+	selected_ = choices[static_cast<std::size_t>(next)];
 	return draw_option_choice(selected_, present::tram_white);
 }
 
@@ -586,6 +887,26 @@ bool ClassicOpOptionsScene::update_horizontal(
 			config_changed = true;
 		}
 		break;
+	case ClassicOpOptionsChoice::sfx:
+		if(patch_assets_) {
+			const bool enabled = !config_.sfx_enabled;
+			if(!push_audio_command({
+				.type = ClassicAudioCommandType::set_effects_active,
+				.parameter = static_cast<std::uint16_t>(enabled ? 1U : 0U),
+			})) {
+				return false;
+			}
+			config_.sfx_enabled = enabled;
+			config_changed = true;
+		}
+		break;
+	case ClassicOpOptionsChoice::language:
+		if(patch_assets_ && language_available_) {
+			config_.language = config_.language == ClassicLanguage::japanese ?
+				ClassicLanguage::english : ClassicLanguage::japanese;
+			config_changed = true;
+		}
+		break;
 	case ClassicOpOptionsChoice::key_mode: {
 		const auto next = ring_step(
 			static_cast<std::uint8_t>(config_.key_mode), direction, 2U
@@ -595,6 +916,12 @@ bool ClassicOpOptionsScene::update_horizontal(
 		config_changed = true;
 		break;
 	}
+	case ClassicOpOptionsChoice::photosensitivity:
+		if(patch_assets_) {
+			config_.reduced_flash = !config_.reduced_flash;
+			config_changed = true;
+		}
+		break;
 	case ClassicOpOptionsChoice::quit:
 		break;
 	}
@@ -614,11 +941,11 @@ bool ClassicOpOptionsScene::push_audio_command(
 	return true;
 }
 
-void ClassicOpOptionsScene::finish() noexcept
+void ClassicOpOptionsScene::finish(ClassicOpOptionsOutcome outcome) noexcept
 {
 	completion_ = ClassicOpOptionsCompletion(
 		std::move(resident_), config_, std::move(raster_), std::move(tram_),
-		menu_input_allowed_
+		menu_input_allowed_, outcome
 	);
 	phase_ = ClassicOpOptionsPhase::ready;
 }
@@ -667,6 +994,13 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 			tram_.fill({});
 			sampled = true;
 			tram_changed = true;
+			if(patch_assets_ &&
+				!restore_patch_rows(0U, 7U, box_left + box_main_width)) {
+				fail();
+				return std::unexpected(options_error(
+					ClassicOpErrorCode::draw_failed
+				));
+			}
 		}
 		if(!grow_step()) {
 			fail();
@@ -675,7 +1009,10 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 			));
 		}
 		++phase_frame_;
-		if(phase_frame_ == grow_frames) {
+		const auto frames = static_cast<std::uint16_t>(
+			patch_assets_ ? 17U : grow_frames
+		);
+		if(phase_frame_ == frames) {
 			phase_frame_ = 0U;
 			phase_ = ClassicOpOptionsPhase::enter_options;
 		}
@@ -706,6 +1043,7 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 		bool selection_changed = false;
 		bool config_changed = false;
 		bool horizontal_processed = false;
+		bool key_config_requested = false;
 		if(!input.any()) {
 			menu_input_allowed_ = true;
 		}
@@ -729,14 +1067,43 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 				}
 				selection_changed = true;
 			}
-			if(input.left || input.right) {
-				if(!update_horizontal(input, config_changed)) {
+			if(input.right && (patch_assets_ || !input.left)) {
+				ClassicOpInput horizontal{};
+				horizontal.right = true;
+				if(!update_horizontal(horizontal, config_changed)) {
 					fail();
 					return std::unexpected(options_error(
 						ClassicOpErrorCode::audio_command_pending
 					));
 				}
 				horizontal_processed = true;
+			}
+			if(input.left) {
+				ClassicOpInput horizontal{};
+				horizontal.left = true;
+				if(!update_horizontal(horizontal, config_changed)) {
+					fail();
+					return std::unexpected(options_error(
+						ClassicOpErrorCode::audio_command_pending
+					));
+				}
+				horizontal_processed = true;
+			}
+			if(patch_assets_ && (input.ok || input.shot)) {
+				if(selected_ == ClassicOpOptionsChoice::language ||
+					selected_ == ClassicOpOptionsChoice::photosensitivity) {
+					ClassicOpInput horizontal{};
+					horizontal.right = true;
+					if(!update_horizontal(horizontal, config_changed)) {
+						fail();
+						return std::unexpected(options_error(
+							ClassicOpErrorCode::draw_failed
+						));
+					}
+					horizontal_processed = true;
+				} else if(selected_ == ClassicOpOptionsChoice::key_mode) {
+					key_config_requested = true;
+				}
 			}
 			return_requested = input.cancel ||
 				((input.ok || input.shot) &&
@@ -746,11 +1113,19 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 			menu_input_allowed_ = false;
 		}
 		++resident_.resident_rand;
+		if(key_config_requested) {
+			finish(ClassicOpOptionsOutcome::key_config);
+			return tick(
+				ClassicOpBoundary::vsync, false, horizontal_processed, true,
+				selection_changed, config_changed
+			);
+		}
 		if(return_requested) {
 			phase_ = ClassicOpOptionsPhase::shrink_window;
 			phase_frame_ = 0U;
-			box_right_left_ =
-				box_left + box_submenu_width - opwin_step_width;
+			box_right_left_ = box_left +
+				(patch_assets_ ? box_option_width : box_submenu_width) -
+				opwin_step_width;
 			transition_input_latched_ = false;
 		}
 		return tick(
@@ -776,7 +1151,10 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 			));
 		}
 		++phase_frame_;
-		if(phase_frame_ == shrink_frames) {
+		const auto frames = static_cast<std::uint16_t>(
+			patch_assets_ ? 18U : shrink_frames
+		);
+		if(phase_frame_ == frames) {
 			phase_frame_ = 0U;
 			phase_ = ClassicOpOptionsPhase::return_main;
 		}

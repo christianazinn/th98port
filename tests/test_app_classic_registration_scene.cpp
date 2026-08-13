@@ -234,6 +234,50 @@ th03::assets::BfntSheet glyph_sheet(std::uint8_t color)
 	return result;
 }
 
+void put_u16(std::vector<std::byte> &bytes, std::size_t at, std::uint16_t value)
+{
+	bytes[at] = static_cast<std::byte>(value & 0xFFU);
+	bytes[at + 1U] = static_cast<std::byte>(value >> 8U);
+}
+
+std::shared_ptr<const th03::app::NewClassicReplayPatchAssets>
+patch_assets()
+{
+	std::vector<std::byte> bytes(3'168U, std::byte{0U});
+	constexpr std::array magic{'T', '3', 'P', 'F', 'N', 'T', '1'};
+	for(std::size_t index = 0U; index < magic.size(); ++index) {
+		bytes[index] = static_cast<std::byte>(magic[index]);
+	}
+	put_u16(bytes, 8U, 3'168U);
+	put_u16(bytes, 10U, 32U);
+	put_u16(bytes, 12U, 32U);
+	put_u16(bytes, 14U, 128U);
+	put_u16(bytes, 16U, 95U);
+	bytes[18U] = std::byte{0x20U};
+	bytes[19U] = std::byte{0x7EU};
+	bytes[20U] = std::byte{16U};
+	bytes[21U] = std::byte{16U};
+	bytes[22U] = std::byte{0x3FU};
+	for(std::size_t glyph = 0U; glyph < 95U; ++glyph) {
+		bytes[32U + glyph] = std::byte{8U};
+		bytes[128U + glyph * 32U] = std::byte{0x80U};
+	}
+	std::uint16_t checksum = 0U;
+	for(std::size_t index = 32U; index < bytes.size(); ++index) {
+		checksum = static_cast<std::uint16_t>(
+			checksum + std::to_integer<std::uint8_t>(bytes[index])
+		);
+	}
+	put_u16(bytes, 24U, checksum);
+	auto menu_font = th03::app::detail::decode_new_classic_menu_font(bytes);
+	if(!menu_font) {
+		return {};
+	}
+	auto result = std::make_shared<th03::app::NewClassicReplayPatchAssets>();
+	result->menu_font = std::move(*menu_font);
+	return result;
+}
+
 GameInit resident()
 {
 	GameInit result{};
@@ -349,7 +393,7 @@ std::expected<
 			preload_continue ? background(5U, 1U) : background(9U, 7U),
 			preload_continue ? choice_cels() :
 				std::array<std::optional<th03::assets::PlanarCel4>, 4U>{},
-			stage_text(), font
+			stage_text(), font, patch_assets()
 		);
 }
 
@@ -955,18 +999,66 @@ void test_new_classic_registration_and_paged_viewer()
 		return;
 	}
 	drain_initial_audio(**viewer);
+	const auto &overlay =
+		ClassicRegistrationSceneTestAccess::new_classic_overlay(**viewer);
+	expect(overlay[0U] == "ALL CHARACTERS" &&
+		overlay[1U] == "PLAY TIME 0000:00:15" &&
+		overlay[2U] == "1CC 2   CONTINUES 3",
+		"expanded HiScore constructs the exact aggregate overlay strings");
+	expect((*viewer)->phase() == ClassicRegistrationPhase::initial_view_vsync &&
+		(*viewer)->raster().shown_page() == Page::zero &&
+		(*viewer)->raster().access_page() == Page::one,
+		"New Classic first ALL frame is complete on hidden page 1 before publication");
+	expect((*viewer)->raster().pixel(Page::zero, {24, 320}) == 1U &&
+		(*viewer)->raster().pixel(Page::one, {24, 320}) == 15U,
+		"MNUFONT ALL CHARACTERS ink exists only on the first hidden page");
+	const auto first_page = (*viewer)->advance({});
+	expect(first_page && first_page->boundary == ClassicRegistrationBoundary::vsync &&
+		first_page->surface_changed &&
+		(*viewer)->raster().shown_page() == Page::one &&
+		(*viewer)->raster().access_page() == Page::one,
+		"first expanded HiScore publication waits one VSync then shows page 1");
+	expect((*viewer)->raster().pixel(Page::one, {24, 340}) == 15U &&
+		(*viewer)->raster().pixel(Page::one, {192, 340}) == 1U &&
+		(*viewer)->raster().pixel(Page::one, {194, 340}) == 15U &&
+		(*viewer)->raster().pixel(Page::one, {24, 360}) == 15U,
+		"MNUFONT overlay uses proportional lines and the exact +2 inset for digit 1");
 	if(!advance_fade(**viewer, ClassicRegistrationPhase::wait_release)) {
 		return;
 	}
-	expect(static_cast<bool>((*viewer)->advance({})) &&
-		static_cast<bool>((*viewer)->advance({.right = true})) &&
+	const auto release_all = (*viewer)->advance({});
+	const auto show_reimu = (*viewer)->advance({.right = true});
+	expect(release_all && show_reimu &&
+		show_reimu->boundary == ClassicRegistrationBoundary::vsync &&
+		show_reimu->surface_changed &&
+		(*viewer)->raster().shown_page() == Page::zero &&
+		(*viewer)->raster().access_page() == Page::zero &&
 		ClassicRegistrationSceneTestAccess::new_classic_page(**viewer) == 0U,
-		"Right wraps ALL CHARACTERS to Reimu and redraws one retained page");
-	expect(static_cast<bool>((*viewer)->advance({})) &&
-		static_cast<bool>((*viewer)->advance({.left = true})) &&
+		"Right redraws Reimu on hidden page 0 and publishes only at VSync");
+	const auto release_reimu = (*viewer)->advance({});
+	const auto show_all = (*viewer)->advance({.left = true});
+	expect(release_reimu && show_all &&
+		show_all->boundary == ClassicRegistrationBoundary::vsync &&
+		(*viewer)->raster().shown_page() == Page::one &&
+		(*viewer)->raster().access_page() == Page::one &&
 		ClassicRegistrationSceneTestAccess::new_classic_page(**viewer) ==
 			th03::app::new_classic_score_all_characters,
-		"Left wraps Reimu back to ALL CHARACTERS");
+		"Left redraws ALL on hidden page 1 and alternates the published page");
+	constexpr std::array<std::uint8_t, 8U> locked_cycle{{
+		0U, 1U, 2U, 3U, 4U, 5U, 6U,
+		th03::app::new_classic_score_all_characters,
+	}};
+	for(const auto page : locked_cycle) {
+		const auto release = (*viewer)->advance({});
+		const auto changed = (*viewer)->advance({.right = true});
+		const auto expected_page = (page & 1U) != 0U ? Page::one : Page::zero;
+		expect(release && changed &&
+			changed->boundary == ClassicRegistrationBoundary::vsync &&
+			ClassicRegistrationSceneTestAccess::new_classic_page(**viewer) == page &&
+			(*viewer)->raster().shown_page() == expected_page &&
+			(*viewer)->raster().access_page() == expected_page,
+			"locked expanded HiScore cycle alternates every hidden graphics page");
+	}
 	expect(static_cast<bool>((*viewer)->advance({})) &&
 		static_cast<bool>((*viewer)->advance({.ok = true})),
 		"New Classic paged viewer dismisses after an exact release");

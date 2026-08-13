@@ -5,6 +5,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -15,6 +17,28 @@ namespace {
 constexpr std::uint8_t preset_vs = 0U;
 constexpr std::uint8_t preset_story = 1U;
 constexpr std::uint8_t stock_vs_rules = 0xFFU;
+
+constexpr present::Index4 practice_color_header = 10U;
+constexpr present::Index4 practice_color_footer = practice_color_header;
+constexpr present::Index4 practice_color_label = 13U;
+constexpr present::Index4 practice_color_selected = 14U;
+constexpr present::Index4 practice_color_disabled = 11U;
+constexpr present::Index4 practice_color_value = 15U;
+
+constexpr std::int32_t practice_header_top = 32;
+constexpr std::int32_t practice_footer_top = 320;
+constexpr std::int32_t practice_main_label_left = 240;
+constexpr std::int32_t practice_main_value_left = 328;
+constexpr std::int32_t practice_advanced_label_left = 112;
+constexpr std::int32_t practice_advanced_value_left = 336;
+constexpr std::int32_t practice_cursor_gap = 16;
+constexpr std::int32_t replay_numeric_cell_width = 12;
+// palette_black_out(1): one alignment boundary, 17 PaletteTone values at one
+// VSync apiece, then the final tone-0 publication after the loop.
+constexpr std::uint8_t fade_boundary_count = 19U;
+constexpr present::Rect full_screen{
+	0, 0, present::graphics_width, present::graphics_height,
+};
 
 constexpr std::array<std::string_view, 6U> main_labels{
 	"Mode", "Stage", "Round", "Advanced Settings", "Reset Defaults", "Start",
@@ -40,8 +64,7 @@ constexpr std::array<std::uint8_t, 9U> stage_six_opponent{
 	case 2U: result = static_cast<std::uint16_t>(
 		(static_cast<std::uint16_t>(round) << 5U) + 0x20U
 	); break;
-	case 3U: result = 0x60U; break;
-	default: break;
+	default: result = 0x60U; break;
 	}
 	return static_cast<std::uint8_t>(std::min<std::uint16_t>(result, 0x7FU));
 }
@@ -60,13 +83,12 @@ constexpr std::array<std::uint8_t, 9U> stage_six_opponent{
 	std::uint16_t level = stage;
 	if(rank == 0U) {
 		level = static_cast<std::uint16_t>((stage / 2U) + round);
-	} else {
+	} else if(rank == 1U) {
 		level = static_cast<std::uint16_t>(stage + (round * 2U));
-		if(rank == 2U) {
-			level += 2U;
-		} else if(rank == 3U) {
-			level += 8U;
-		}
+	} else if(rank == 2U) {
+		level = static_cast<std::uint16_t>(stage + (round * 2U) + 2U);
+	} else {
+		level = static_cast<std::uint16_t>(stage + (round * 2U) + 8U);
 	}
 	return static_cast<std::uint8_t>(std::min<std::uint16_t>(level, 15U));
 }
@@ -91,6 +113,56 @@ constexpr std::array<std::uint8_t, 9U> stage_six_opponent{
 	result += static_cast<char>('0' + ((fraction / 10U) % 10U));
 	result += static_cast<char>('0' + (fraction % 10U));
 	return result;
+}
+
+[[nodiscard]] bool put_fixed_n(
+	const NewClassicMenuFont &font,
+	present::Raster &raster,
+	std::int32_t left,
+	std::int32_t top,
+	std::string_view text,
+	std::size_t count,
+	present::Index4 color
+) noexcept
+{
+	const auto size = std::min(text.size(), count);
+	for(std::size_t index = 0U; index < size; ++index) {
+		const auto character = text[index];
+		const auto inset = character == '1' ? 2 : 0;
+		if(!font.put_n(raster, left + inset, top, text.substr(index), 1U, color)) {
+			return false;
+		}
+		left += replay_numeric_cell_width;
+	}
+	return true;
+}
+
+[[nodiscard]] bool put_fixed_q4(
+	const NewClassicMenuFont &font,
+	present::Raster &raster,
+	std::int32_t left,
+	std::int32_t top,
+	std::string_view text,
+	present::Index4 color
+) noexcept
+{
+	if(text.size() != 6U || !put_fixed_n(
+		font, raster, left, top, text, 1U, color
+	)) {
+		return false;
+	}
+	left += replay_numeric_cell_width;
+	if(!font.put_n(raster, left, top, text.substr(1U), 1U, color)) {
+		return false;
+	}
+	left += font.width_n(text.substr(1U), 1U);
+	return put_fixed_n(font, raster, left, top, text.substr(2U), 4U, color);
+}
+
+[[nodiscard]] present::Page other_page(present::Page page) noexcept
+{
+	return page == present::Page::zero ? present::Page::one :
+		present::Page::zero;
 }
 
 [[nodiscard]] bool valid_base_config(
@@ -220,7 +292,16 @@ std::expected<GameInit, Error> prepare_new_classic_practice_init(
 NewClassicPracticeMenu::NewClassicPracticeMenu(
 	GameInit selected_resident
 ) noexcept :
-	selected_resident_(std::move(selected_resident))
+	NewClassicPracticeMenu(std::move(selected_resident), {})
+{}
+
+NewClassicPracticeMenu::NewClassicPracticeMenu(
+	GameInit selected_resident,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+) noexcept :
+	selected_resident_(std::move(selected_resident)),
+	patch_assets_(std::move(patch_assets)),
+	composed_pixels_(present::graphics_page_pixels)
 {
 	config_.preset = preset_story;
 	config_.stage = fixed_stage();
@@ -299,6 +380,23 @@ void NewClassicPracticeMenu::reset_defaults() noexcept
 std::uint8_t NewClassicPracticeMenu::row_count() const noexcept
 {
 	return page_ == Page::main ? 6U : 12U;
+}
+
+bool NewClassicPracticeMenu::row_enabled(std::uint8_t row) const noexcept
+{
+	if(page_ == Page::main) {
+		if(row == 1U) {
+			return config_.preset == preset_story && fixed_stage() == 0xFFU;
+		}
+		if(row == 2U) {
+			return config_.preset == preset_story;
+		}
+		return true;
+	}
+	if(row == 9U || row == 10U) {
+		return config_.preset == preset_story;
+	}
+	return true;
 }
 
 void NewClassicPracticeMenu::step_value(bool forward) noexcept
@@ -428,21 +526,26 @@ NewClassicPracticeStatus NewClassicPracticeMenu::consume(
 	NewClassicPracticeInput input
 ) noexcept
 {
+	consume_surface_changed_ = false;
+	if(status_ == NewClassicPracticeStatus::start_fade) {
+		advance_start_fade();
+		return status_;
+	}
+	if(status_ == NewClassicPracticeStatus::cancel_wait_release) {
+		if(cancel_release_first_poll_) {
+			cancel_release_first_poll_ = false;
+			return status_;
+		}
+		if(!input.raw_any) {
+			status_ = NewClassicPracticeStatus::canceled;
+		}
+		return status_;
+	}
 	if(status_ != NewClassicPracticeStatus::running) {
 		return status_;
 	}
 	if(input_locked_) {
 		input_locked_ = input.raw_any;
-		return status_;
-	}
-	if(input.cancel) {
-		if(page_ == Page::advanced) {
-			page_ = Page::main;
-			selected_ = 3U;
-			input_locked_ = true;
-		} else {
-			status_ = NewClassicPracticeStatus::canceled;
-		}
 		return status_;
 	}
 	if(input.up || input.down) {
@@ -451,43 +554,88 @@ NewClassicPracticeStatus NewClassicPracticeMenu::consume(
 			static_cast<std::uint8_t>(selected_ == 0U ? count - 1U :
 				selected_ - 1U) :
 			static_cast<std::uint8_t>((selected_ + 1U) % count);
-		input_locked_ = true;
-		return status_;
+	} else if(input.left || input.right) {
+		if(row_enabled(selected_)) {
+			// Source priority is Left before Right when both bits are set.
+			step_value(!input.left);
+		}
+	} else if(input.confirm) {
+		if(page_ == Page::main && selected_ == 3U) {
+			page_ = Page::advanced;
+			selected_ = 0U;
+		} else if(page_ == Page::main && selected_ == 4U) {
+			reset_defaults();
+		} else if(page_ == Page::main && selected_ == 5U) {
+			refresh_safety();
+			status_ = NewClassicPracticeStatus::start_fade;
+			fade_boundary_ = 0U;
+			palette_tone_ = 100;
+		} else if(page_ == Page::advanced && selected_ == 11U) {
+			page_ = Page::main;
+			selected_ = 3U;
+		}
+	} else if(input.cancel) {
+		if(page_ == Page::advanced) {
+			page_ = Page::main;
+			selected_ = 3U;
+		} else {
+			// The patch restores TLSL.RGB immediately, then renders one final
+			// curves-only frame through the retained selector bridge.
+			status_ = NewClassicPracticeStatus::cancel_frame;
+			consume_surface_changed_ = true;
+		}
 	}
-	if(input.left || input.right) {
-		step_value(input.right);
-		input_locked_ = true;
-		return status_;
-	}
-	if(!input.confirm) {
-		return status_;
-	}
-	if(page_ == Page::main && selected_ == 3U) {
-		page_ = Page::advanced;
-		selected_ = 0U;
-		input_locked_ = true;
-	} else if(page_ == Page::main && selected_ == 4U) {
-		reset_defaults();
-		input_locked_ = true;
-	} else if(page_ == Page::main && selected_ == 5U) {
-		refresh_safety();
-		status_ = NewClassicPracticeStatus::started;
-	} else if(page_ == Page::advanced && selected_ == 11U) {
-		page_ = Page::main;
-		selected_ = 3U;
-		input_locked_ = true;
-	}
+	input_locked_ = input.raw_any;
 	return status_;
 }
 
-void NewClassicPracticeMenu::draw() noexcept
+void NewClassicPracticeMenu::advance_start_fade() noexcept
 {
-	constexpr auto layer = present::ComposedPixelLayer::text;
-	canvas_.fill_rect(72U, 32U, 496U, 336U, 0U, layer);
-	canvas_.draw_text_centered(
-		page_ == Page::main ? "VS Setup" : "Advanced Settings",
-		320U, 48U, 2U, 6U, layer
-	);
+	if(fade_boundary_ != 0U && fade_boundary_ <= 17U) {
+		const auto pair = static_cast<std::int16_t>(fade_boundary_ - 1U);
+		palette_tone_ = static_cast<std::int16_t>(100 - (pair * 6));
+		consume_surface_changed_ = true;
+	}
+	++fade_boundary_;
+	if(fade_boundary_ < fade_boundary_count) {
+		return;
+	}
+	palette_tone_ = 0;
+	consume_surface_changed_ = true;
+	status_ = NewClassicPracticeStatus::started;
+}
+
+void NewClassicPracticeMenu::mark_background_published() noexcept
+{
+	background_published_ = true;
+	if(status_ == NewClassicPracticeStatus::cancel_frame) {
+		// The extra frame is now visible. The caller next reproduces the
+		// source's frame-delay/input-mode release loop without redrawing it.
+		background_published_ = false;
+		cancel_release_first_poll_ = true;
+		status_ = NewClassicPracticeStatus::cancel_wait_release;
+	}
+}
+
+bool NewClassicPracticeMenu::draw() noexcept
+{
+	if(!patch_assets_ ||
+		!overlay_raster_.set_access_page(present::Page::zero) ||
+		!overlay_raster_.clear(full_screen, 0U)) {
+		return false;
+	}
+	const auto &font = patch_assets_->menu_font;
+	if(!font.put_centered(
+		overlay_raster_, 320, practice_header_top,
+		page_ == Page::main ? "VS SETUP" : "ADVANCED SETTINGS",
+		practice_color_header
+	) || !font.put_centered(
+		overlay_raster_, 320, practice_footer_top,
+		"Arrows: Select / Change   Z: Confirm   Esc: Back",
+		practice_color_footer
+	)) {
+		return false;
+	}
 	const auto &labels = page_ == Page::main ?
 		std::span<const std::string_view>(main_labels) :
 		std::span<const std::string_view>(advanced_labels);
@@ -510,9 +658,10 @@ void NewClassicPracticeMenu::draw() noexcept
 		case 4U: return decimal(config_.cpu_spell);
 		case 5U: return decimal(config_.p1_gauge);
 		case 6U: return decimal(config_.cpu_gauge);
-		case 7U: return decimal(static_cast<std::uint16_t>(
-			config_.boss_level >= 15U ? 16U : config_.boss_level + 1U
-		));
+		case 7U:
+			return decimal(static_cast<std::uint16_t>(
+				config_.boss_level >= 15U ? 16U : config_.boss_level + 1U
+			)) + "  raw " + decimal(config_.boss_level);
 		case 8U: return decimal(config_.cpu_damage);
 		case 9U: return config_.stock == stock_vs_rules ? "VS Rules" :
 			decimal(config_.stock);
@@ -521,33 +670,112 @@ void NewClassicPracticeMenu::draw() noexcept
 		default: return {};
 		}
 	};
-	const auto top = page_ == Page::main ? 104U : 84U;
-	const auto step = page_ == Page::main ? 38U : 22U;
 	for(std::size_t row = 0U; row < labels.size(); ++row) {
 		const bool selected = row == selected_;
-		const auto color = static_cast<std::uint8_t>(selected ? 6U : 7U);
-		canvas_.draw_text(selected ? ">" : " ", 104U, top + row * step,
-			1U, color, layer);
-		canvas_.draw_text(labels[row], 128U, top + row * step, 1U, color, layer);
+		const bool command = page_ == Page::main ? row >= 3U : row == 11U;
+		const auto enabled = row_enabled(static_cast<std::uint8_t>(row));
+		auto label_left = page_ == Page::main ?
+			practice_main_label_left : practice_advanced_label_left;
+		const auto value_left = page_ == Page::main ?
+			practice_main_value_left : practice_advanced_value_left;
+		const auto top = page_ == Page::main ?
+			(row <= 3U ? 96 + static_cast<std::int32_t>(row * 16U) :
+				176 + static_cast<std::int32_t>((row - 4U) * 16U)) :
+			(row < 11U ? 64 + static_cast<std::int32_t>(row * 16U) : 256);
+		if(command) {
+			label_left = 320 - (font.width(labels[row]) / 2);
+		}
+		const auto label_color = static_cast<present::Index4>(
+			selected ? practice_color_selected :
+			(command ? practice_color_header : practice_color_label)
+		);
+		const auto value_color = static_cast<present::Index4>(
+			!enabled ? practice_color_disabled :
+			(selected ? practice_color_selected : practice_color_value)
+		);
+		if(selected && !font.put(
+			overlay_raster_, label_left - practice_cursor_gap, top, ">",
+			practice_color_selected
+		)) {
+			return false;
+		}
+		if(!font.put(
+			overlay_raster_, label_left, top, labels[row], label_color
+		)) {
+			return false;
+		}
 		const auto text = value(row);
 		if(!text.empty()) {
-			canvas_.draw_text(text, 392U, top + row * step, 1U,
-				color, layer);
+			const bool fixed_q4 = page_ == Page::advanced &&
+				(row == 1U || row == 2U);
+			if(fixed_q4 ? !put_fixed_q4(
+				font, overlay_raster_, value_left, top, text, value_color
+			) : !font.put(
+				overlay_raster_, value_left, top, text, value_color
+			)) {
+				return false;
+			}
 		}
 	}
-	canvas_.draw_text_centered(
-		"Arrows: Select/Change  Z: Confirm  Esc: Back",
-		320U, 344U, 1U, 5U, layer
-	);
+	return true;
 }
 
 present::SourceSurface NewClassicPracticeMenu::compose_over(
-	present::SourceSurface base
+	present::SourceSurface base,
+	bool base_is_retained_selection_frame
 ) noexcept
 {
-	canvas_.copy_from(base);
-	draw();
-	return canvas_.surface();
+	if(!background_published_) {
+		return base;
+	}
+	if(!patch_assets_ || composed_pixels_.size() != base.pixels.size() ||
+		!draw()) {
+		return base;
+	}
+	std::ranges::copy(base.pixels, composed_pixels_.begin());
+	const auto overlay = overlay_raster_.graphics(present::Page::zero);
+	for(std::size_t index = 0U; index < overlay.size(); ++index) {
+		if(overlay[index] != 0U) {
+			composed_pixels_[index] = {
+				present::ComposedPixelLayer::graphics, overlay[index],
+			};
+		}
+	}
+	if(base_is_retained_selection_frame) {
+		// The retained selector already performed the source page flip after
+		// drawing the curves. The overlay belongs to that published page.
+		published_page_ = base.shown_page;
+		published_page_initialized_ = true;
+	} else if(!published_page_initialized_) {
+		published_page_ = other_page(base.shown_page);
+		published_page_initialized_ = true;
+	} else {
+		published_page_ = other_page(published_page_);
+	}
+	auto palette = base.graphics_palette;
+	auto reduced_palette = base.reduced_flash_palette;
+	// The Cancel input is sampled after the current Practice frame has already
+	// been drawn. Its overlay therefore keeps the Practice palette for this
+	// publication; TLSL colors return on the following curves-only frame when
+	// mark_background_published() clears background_published_.
+	palette.colors[practice_color_selected] = {2U, 14U, 15U};
+	palette.colors[practice_color_disabled] = {8U, 8U, 8U};
+	reduced_palette.colors[practice_color_selected] = {2U, 14U, 15U};
+	reduced_palette.colors[practice_color_disabled] = {8U, 8U, 8U};
+	return {
+		.pixels = std::span<
+			const present::ComposedPixel, present::graphics_page_pixels
+		>(composed_pixels_.data(), composed_pixels_.size()),
+		.graphics_palette = palette,
+		.shown_page = published_page_,
+		.raster_mode = base.raster_mode,
+		.effective_scroll_y = base.effective_scroll_y,
+		.palette_tone = palette_tone_,
+		.reduced_flash_palette = reduced_palette,
+		.oracle_hashes = {},
+		.host_overlay = false,
+		.reduced_flash_applied = false,
+	};
 }
 
 NewClassicPracticeStatus NewClassicPracticeMenu::status() const noexcept
@@ -565,6 +793,16 @@ bool NewClassicPracticeMenu::practice_active() const noexcept
 	return !new_classic_practice_is_exact_vs_default(
 		config_, selected_resident_.rank
 	);
+}
+
+bool NewClassicPracticeMenu::has_patch_assets() const noexcept
+{
+	return patch_assets_ != nullptr;
+}
+
+bool NewClassicPracticeMenu::consume_surface_changed() const noexcept
+{
+	return consume_surface_changed_;
 }
 
 } // namespace th03::app

@@ -747,7 +747,7 @@ void local_original_gate(const std::filesystem::path &content_root)
 		return;
 	}
 	auto resumed = th03::app::ClassicOpTitleMenuScene::resume_from_options(
-		*options_completion, *closure
+		*options_completion, *closure, {}
 	);
 	expect(
 		resumed && (*resumed)->phase() == th03::app::ClassicOpPhase::main_menu &&

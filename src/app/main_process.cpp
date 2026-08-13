@@ -498,6 +498,21 @@ MainFeedbackPolicyFact MainProcessTestAccess::feedback_policy(
 	return {.effect_id = policy.effect_id, .scheduling = scheduling};
 }
 
+void MainProcessTestAccess::request_feedback(
+	MainProcess &process,
+	MainFeedbackCueRequested request
+) noexcept
+{
+	process.impl_->request_feedback(request);
+}
+
+void MainProcessTestAccess::feedback_dispatch_boundary(
+	MainProcess &process
+) noexcept
+{
+	process.impl_->feedback_dispatch_boundary();
+}
+
 std::expected<std::unique_ptr<MainProcess>, MainProcessError>
 MainProcess::create(
 	const MainDirectVsConfig &config,
@@ -1621,6 +1636,11 @@ CanonicalState MainProcess::canonical_state() const
 	return impl_->game->canonical_state();
 }
 
+std::uint32_t MainProcess::live_random_seed() const noexcept
+{
+	return impl_->game->live_random_seed();
+}
+
 RoundStartObservation MainProcess::round_start_observation() const
 {
 	return impl_->game->round_start_observation();
@@ -1653,6 +1673,20 @@ const present::Raster &MainProcess::raster() const noexcept
 const present::Tram &MainProcess::tram() const noexcept
 {
 	return impl_->tram;
+}
+
+present::Raster &MainProcessReplayPresentationAccess::raster(
+	MainProcess &process
+) noexcept
+{
+	return process.impl_->raster;
+}
+
+present::Tram &MainProcessReplayPresentationAccess::tram(
+	MainProcess &process
+) noexcept
+{
+	return process.impl_->tram;
 }
 
 present::MainRoundStatus MainProcess::presentation_status() const noexcept

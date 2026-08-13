@@ -446,6 +446,12 @@ public:
 	[[nodiscard]] bool install_authenticated_overrides(
 		std::map<std::string, ResourceBytes> overrides
 	);
+	// Replaces a previously authenticated language profile at an OP-owned
+	// process boundary. Existing scene resources retain shared ownership;
+	// future loads are invalidated and resolve against the new profile.
+	[[nodiscard]] bool switch_authenticated_overrides(
+		std::map<std::string, ResourceBytes> overrides
+	);
 
 	[[nodiscard]] std::expected<ResourceBytes, ResourceLoadError> load(
 		MainResourceKey key

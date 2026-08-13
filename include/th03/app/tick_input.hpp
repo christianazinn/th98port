@@ -120,6 +120,10 @@ struct LogicalTickInput {
 	// than the configurable Shot action. It is presentation pacing only and is
 	// therefore kept out of CoreInput and replay serialization.
 	bool fast_forward_requested = false;
+	// Raw keyboard capture is consumed only by Replay Patch KeyConfig. It is
+	// outside deterministic gameplay and replay serialization.
+	std::optional<std::uint16_t> scancode_pressed{};
+	bool any_scancode_held = false;
 };
 
 // Fixed-capacity event history plus a rational fake-clock-friendly scheduler.

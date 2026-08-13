@@ -35,6 +35,7 @@ enum class NewClassicPlaybackErrorCode : std::uint8_t {
 	compiled_content_failed,
 	mainl_content_failed,
 	language_overlay_failed,
+	replay_patch_assets_failed,
 	static_content_failed,
 	resource_failed,
 	process_failed,
@@ -49,6 +50,7 @@ struct NewClassicPlaybackError final {
 		NewClassicPlaybackErrorCode::invalid_request;
 	std::optional<MainCompiledContentError> compiled_content{};
 	std::optional<NewClassicLanguageOverlayError> language_overlay{};
+	std::optional<NewClassicAssetsError> replay_patch_assets{};
 	std::optional<ResourceLoadError> resource{};
 	std::optional<MainProcessError> process{};
 	std::optional<present::SourceSurfaceError> surface{};

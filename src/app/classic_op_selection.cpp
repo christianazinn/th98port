@@ -1241,6 +1241,10 @@ bool ClassicOpCharacterSelection::finish_selected() noexcept
 		})) {
 			return false;
 		}
+	} else if(!raster_.clear(full_screen, 0U)) {
+		// The source's final retained selector flip clears the now-hidden page
+		// before Practice Setup renders its first curves-only background.
+		return false;
 	}
 	completion_ = ClassicOpSelectionCompletion(
 		ClassicOpSelectionOutcome::selected, mode_, resident_, carry_,
@@ -1441,6 +1445,49 @@ ClassicOpCharacterSelection::take_completion() noexcept
 	return result;
 }
 
+ClassicOpPracticeBackgroundStatus ClassicOpCharacterSelection::
+advance_new_classic_practice_background() noexcept
+{
+	if(!retain_for_new_classic_practice_ ||
+		mode_ != ClassicOpSelectionMode::vs_1p_cpu ||
+		phase_ != ClassicOpSelectionPhase::consumed) {
+		return ClassicOpPracticeBackgroundStatus::failed;
+	}
+	// Replay Patch's Practice bridge retains the selector's curve state and
+	// page ownership, but deliberately omits portraits, stats, names, and
+	// cursors while the setup text is visible.
+	if(!practice_frame_drawn_) {
+		if(!draw_curves()) {
+			return ClassicOpPracticeBackgroundStatus::failed;
+		}
+		practice_frame_drawn_ = true;
+	}
+	++practice_frame_vsyncs_;
+	if(practice_frame_vsyncs_ < ordinary_frame_vsyncs) {
+		return ClassicOpPracticeBackgroundStatus::waiting;
+	}
+	const auto old_shown = raster_.shown_page();
+	const auto next_shown = (old_shown == present::Page::zero) ?
+		present::Page::one : present::Page::zero;
+	if(!raster_.set_access_page(old_shown) ||
+		!raster_.set_shown_page(next_shown) ||
+		!raster_.clear(full_screen, 0U)) {
+		return ClassicOpPracticeBackgroundStatus::failed;
+	}
+	practice_frame_drawn_ = false;
+	practice_frame_vsyncs_ = 0U;
+	fade_counter_ = static_cast<std::uint8_t>(fade_counter_ + 1U);
+	resident_.resident_rand = std::bit_cast<std::int32_t>(
+		std::bit_cast<std::uint32_t>(resident_.resident_rand) + 1U
+	);
+	// OP stores this value in resident.rand. Keep the explicit native seed
+	// handoff synchronized until Practice finally starts MAINL.
+	resident_.random_seed = std::bit_cast<std::uint32_t>(
+		resident_.resident_rand
+	);
+	return ClassicOpPracticeBackgroundStatus::published;
+}
+
 bool ClassicOpCharacterSelection::resume_from_new_classic_practice() noexcept
 {
 	if(!retain_for_new_classic_practice_ ||
@@ -1470,6 +1517,8 @@ bool ClassicOpCharacterSelection::resume_from_new_classic_practice() noexcept
 	confirmation_frame_ = 0U;
 	practice_completion_pending_ = false;
 	practice_resume_release_lock_ = true;
+	practice_frame_drawn_ = false;
+	practice_frame_vsyncs_ = 0U;
 	raster_.set_palette_tone(100);
 	raster_.apply_pending_palette();
 	phase_ = ClassicOpSelectionPhase::draw_and_input;

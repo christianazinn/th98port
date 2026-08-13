@@ -5,7 +5,9 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <optional>
+#include <cstdlib>
 #include <string>
 
 #include "th03/app/new_classic_frontend.hpp"
@@ -25,9 +27,9 @@ void expect(bool condition, const char *message)
 	}
 }
 
-void release(th03::app::NewClassicLandingMenu &menu)
+std::uint16_t injected_dos_date(void *context) noexcept
 {
-	static_cast<void>(menu.consume({}));
+	return *static_cast<const std::uint16_t *>(context);
 }
 
 template <typename Menu, typename Catalog>
@@ -183,46 +185,46 @@ std::uint64_t surface_hash(th03::present::SourceSurface surface)
 	return hash;
 }
 
-void test_landing()
+std::shared_ptr<const th03::app::NewClassicReplayPatchAssets>
+optional_patch_assets()
 {
-	using namespace th03::app;
-	NewClassicLandingMenu menu;
-	expect(
-		menu.choice() == NewClassicLandingChoice::play,
-		"New Classic hub begins at Play Game"
-	);
-	const auto landing = menu.surface();
-	bool credit_ink = false;
-	for(std::size_t y = 380U; y < 388U; ++y) {
-		for(std::size_t x = 0U; x < th03::present::graphics_width; ++x) {
-			credit_ink = credit_ink || landing.pixels[
-				(y * th03::present::graphics_width) + x
-			].value != 0U;
-		}
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4996)
+#endif
+	const auto *path = std::getenv("TH03_AZINN_DAT");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+	if(!path || *path == '\0') {
+		return {};
 	}
-	expect(credit_ink,
-		"minimal New Classic landing retains the Replay Patch author credit");
-	release(menu);
-	auto moved = menu.consume({.down = true});
-	expect(
-		moved.surface_changed && moved.choice ==
-			NewClassicLandingChoice::replay,
-		"hub navigates to Replay with edge-locked input"
+	auto loaded = th03::app::load_new_classic_replay_patch_assets(
+		std::filesystem::path(path)
 	);
-	release(menu);
-	auto selected = menu.consume({.confirm = true});
-	expect(
-		selected.status == NewClassicLandingStatus::selected &&
-		selected.choice == NewClassicLandingChoice::replay,
-		"hub publishes the selected Replay route"
+	if(!loaded) {
+		return {};
+	}
+	return std::make_shared<const th03::app::NewClassicReplayPatchAssets>(
+		std::move(*loaded)
 	);
-	NewClassicLandingMenu cancel;
-	release(cancel);
-	expect(
-		cancel.consume({.cancel = true}).choice ==
-			NewClassicLandingChoice::back,
-		"hub Cancel returns to the product menu"
-	);
+}
+
+void finish_entry_fade(th03::app::NewClassicReplayBrowser &browser)
+{
+	for(std::size_t boundary = 0U; boundary < 19U; ++boundary) {
+		static_cast<void>(browser.consume({}));
+	}
+}
+
+void finish_entry_fade(
+	th03::app::NewClassicReplaySaveMenu &menu,
+	const th03::app::NewClassicReplayCatalog &catalog
+)
+{
+	for(std::size_t boundary = 0U; boundary < 19U; ++boundary) {
+		static_cast<void>(menu.consume({}, catalog));
+	}
 }
 
 void test_catalog_browser_and_save()
@@ -275,9 +277,15 @@ void test_catalog_browser_and_save()
 		new_classic_replay_timer_label(3'948U) == "1:10.00",
 		"timer labels preserve Replay Patch 0.4.9 integer formatting"
 	);
-	auto browser = NewClassicReplayBrowser::load(root);
+	const auto patch_assets = optional_patch_assets();
+	if(!patch_assets) {
+		std::filesystem::remove_all(root, ignored);
+		return;
+	}
+	auto browser = NewClassicReplayBrowser::load(root, patch_assets);
 	expect(browser.has_value(), "browser loads the complete 100-slot catalog");
 	if(browser) {
+		finish_entry_fade(**browser);
 		static_cast<void>((*browser)->consume({}));
 		auto opened = (*browser)->consume({.confirm = true});
 		expect(opened && opened->surface_changed,
@@ -324,15 +332,82 @@ void test_catalog_browser_and_save()
 		);
 	}
 
+	{
+		auto patch_browser = NewClassicReplayBrowser::load(root, patch_assets);
+		expect(patch_browser.has_value(),
+			"patch-enabled browser loads through authenticated AZINN assets");
+		if(patch_browser) {
+			const auto list = (*patch_browser)->surface();
+			expect(
+				list.pixels.size() == th03::present::graphics_width *
+					th03::present::graphics_height &&
+				!list.host_overlay,
+				"patch browser publishes a source-domain 640x400 indexed list surface"
+			);
+			expect(list.palette_tone == 0,
+				"patch browser begins on the source black-in boundary");
+			for(std::size_t boundary = 0U; boundary < 19U; ++boundary) {
+				static_cast<void>((*patch_browser)->consume({}));
+			}
+			expect((*patch_browser)->surface().palette_tone == 100,
+				"patch browser completes palette_black_in(1) before input");
+			expect(
+				(*patch_browser)->surface().graphics_palette.colors[12U] ==
+					th03::assets::Rgb4{15U, 15U, 0U},
+				"patch browser applies the source yellow selection color"
+			);
+			static_cast<void>((*patch_browser)->consume({.down = true}));
+			static_cast<void>((*patch_browser)->consume({}));
+			static_cast<void>((*patch_browser)->consume({.down = true}));
+			static_cast<void>((*patch_browser)->consume({}));
+			expect(
+				(*patch_browser)->consume({.confirm = true})->surface_changed &&
+				NewClassicReplayBrowserTestAccess::physical_row_count(
+					**patch_browser
+				) == 9U,
+				"patch Story detail publishes all nine source physical stage rows"
+			);
+		}
+
+		NewClassicReplaySaveMenu patch_save(make_document(), patch_assets);
+		expect(
+			patch_save.surface().palette_tone == 0 &&
+			!patch_save.surface().host_overlay,
+			"patch save name scene uses authenticated SLB1B palette"
+		);
+		for(std::size_t boundary = 0U; boundary < 19U; ++boundary) {
+			static_cast<void>(patch_save.consume({}, *catalog));
+		}
+		expect(patch_save.surface().palette_tone == 100,
+			"patch save completes replay_name_background_init black-in");
+		expect(
+			patch_save.surface().graphics_palette ==
+				*patch_assets->replay_name_background.palette,
+			"patch save applies the authenticated SLB1B palette after black-in"
+		);
+		NewClassicReplaySaveTestAccess::select_end(patch_save);
+		expect(
+			patch_save.consume({.confirm = true}, *catalog).surface_changed &&
+			NewClassicReplaySaveTestAccess::in_slots(patch_save),
+			"patch save transitions from exact name topology to SLB1 slots"
+		);
+		expect(
+			patch_save.surface().graphics_palette.colors[12U] ==
+				th03::assets::Rgb4{15U, 15U, 0U},
+			"patch save slot list installs Replay Patch selected palette 12"
+		);
+	}
+
 	for(const auto [slot, practice] : std::array{
 		std::pair<std::uint8_t, bool>{std::uint8_t{2U}, false},
 		std::pair<std::uint8_t, bool>{std::uint8_t{3U}, true},
 	}) {
-		auto telemetry = NewClassicReplayBrowser::load(root);
+		auto telemetry = NewClassicReplayBrowser::load(root, patch_assets);
 		expect(telemetry.has_value(), "telemetry browser reload succeeds");
 		if(!telemetry) {
 			continue;
 		}
+		finish_entry_fade(**telemetry);
 		static_cast<void>((*telemetry)->consume({}));
 		for(std::uint8_t index = 0U; index < slot; ++index) {
 			static_cast<void>((*telemetry)->consume({.down = true}));
@@ -395,16 +470,45 @@ void test_catalog_browser_and_save()
 		);
 	}
 
-	NewClassicReplaySaveMenu direct(make_document());
+	std::uint16_t save_date = 0x5D0DU;
+	NewClassicReplaySaveMenu direct(
+		make_document(), patch_assets, {}, &injected_dos_date, &save_date
+	);
+	finish_entry_fade(direct, *catalog);
 	expect(
 		NewClassicReplaySaveTestAccess::in_name(direct),
 		"Pause Save and Exit begins directly at the name editor"
 	);
+	expect(
+		direct.document().metadata &&
+		direct.document().metadata->dos_date == save_date,
+		"direct Save and Exit captures the DOS date immediately before name entry"
+	);
+	const auto name_surface = direct.surface();
 	release(direct, *catalog);
 	expect(
 		direct.consume({.cancel = true}, *catalog).surface_changed &&
 		NewClassicReplaySaveTestAccess::in_quit_confirm(direct),
 		"name Cancel opens the default-No quit confirmation"
+	);
+	const auto dialog_surface = direct.surface();
+	bool preserved_outside_dialog =
+		name_surface.pixels.size() == dialog_surface.pixels.size();
+	for(std::size_t y = 0U; preserved_outside_dialog && y < 400U; ++y) {
+		for(std::size_t x = 0U; x < 640U; ++x) {
+			if(x >= 208U && x < 432U && y >= 160U && y < 240U) {
+				continue;
+			}
+			const auto offset = (y * 640U) + x;
+			if(name_surface.pixels[offset] != dialog_surface.pixels[offset]) {
+				preserved_outside_dialog = false;
+				break;
+			}
+		}
+	}
+	expect(
+		preserved_outside_dialog,
+		"name quit confirmation preserves the complete shown name screen outside the dialog"
 	);
 	release(direct, *catalog);
 	expect(
@@ -413,7 +517,8 @@ void test_catalog_browser_and_save()
 		"quit confirmation No restores the exact name phase"
 	);
 
-	NewClassicReplaySaveMenu full_name(make_document());
+	NewClassicReplaySaveMenu full_name(make_document(), patch_assets);
+	finish_entry_fade(full_name, *catalog);
 	release(full_name, *catalog);
 	for(std::size_t index = 0U; index < 8U; ++index) {
 		static_cast<void>(full_name.consume({.confirm = true}, *catalog));
@@ -429,7 +534,8 @@ void test_catalog_browser_and_save()
 		"automatic End focus accepts all eight name characters"
 	);
 
-	NewClassicReplaySaveMenu backspace(make_document());
+	NewClassicReplaySaveMenu backspace(make_document(), patch_assets);
+	finish_entry_fade(backspace, *catalog);
 	release(backspace, *catalog);
 	static_cast<void>(backspace.consume({.confirm = true}, *catalog));
 	release(backspace, *catalog);
@@ -443,7 +549,8 @@ void test_catalog_browser_and_save()
 	auto prompt_document = make_document();
 	prompt_document.metadata->end_reason =
 		th03::formats::ReplayEndReason::game_over;
-	NewClassicReplaySaveMenu prompt_no(prompt_document);
+	NewClassicReplaySaveMenu prompt_no(prompt_document, patch_assets);
+	finish_entry_fade(prompt_no, *catalog);
 	release(prompt_no, *catalog);
 	static_cast<void>(prompt_no.consume({.down = true}, *catalog));
 	release(prompt_no, *catalog);
@@ -453,11 +560,25 @@ void test_catalog_browser_and_save()
 		"the post-run Save Replay prompt still discards immediately on No"
 	);
 
-	NewClassicReplaySaveMenu save(prompt_document);
+	save_date = 0x5D0EU;
+	NewClassicReplaySaveMenu save(
+		prompt_document, patch_assets, {}, &injected_dos_date, &save_date
+	);
+	finish_entry_fade(save, *catalog);
 	release(save, *catalog);
+	expect(
+		save.document().metadata &&
+		save.document().metadata->dos_date != save_date,
+		"post-run prompt does not capture the replay date before the save decision"
+	);
 	expect(
 		save.consume({.confirm = true}, *catalog).surface_changed,
 		"save prompt defaults to Yes and opens the name screen"
+	);
+	expect(
+		save.document().metadata &&
+		save.document().metadata->dos_date == save_date,
+		"post-run save captures the DOS date on entry to the name screen"
 	);
 	release(save, *catalog);
 	NewClassicReplaySaveTestAccess::select_end(save);
@@ -487,17 +608,19 @@ void test_catalog_browser_and_save()
 	expect(save.commit_failed(), "failed commits retain the document for retry");
 	static_cast<void>(save.consume({} , *catalog));
 	expect(
-		save.consume({.confirm = true}, *catalog).surface_changed,
-		"failure acknowledgement returns to the slot list"
+		NewClassicReplaySaveTestAccess::in_slots(save),
+		"failed commit returns immediately to the retryable slot list"
 	);
 
-	NewClassicReplaySaveMenu overwrite(make_document());
+	NewClassicReplaySaveMenu overwrite(make_document(), patch_assets);
+	finish_entry_fade(overwrite, *catalog);
 	release(overwrite, *catalog);
 	static_cast<void>(overwrite.consume({.confirm = true}, *catalog));
 	release(overwrite, *catalog);
 	NewClassicReplaySaveTestAccess::select_end(overwrite);
 	static_cast<void>(overwrite.consume({.confirm = true}, *catalog));
 	release(overwrite, *catalog);
+	const auto nested_dialog_start_page = overwrite.surface().shown_page;
 	auto existing = overwrite.consume({.confirm = true}, *catalog);
 	expect(existing.surface_changed,
 		"occupied slot enters explicit overwrite confirmation");
@@ -513,6 +636,10 @@ void test_catalog_browser_and_save()
 		NewClassicReplaySaveTestAccess::in_slots(overwrite),
 		"quit confirmation No dismisses overwrite and returns to the slot list"
 	);
+	expect(
+		overwrite.surface().shown_page != nested_dialog_start_page,
+		"nested overwrite and quit dialogs retain the source three-flip list-page identity"
+	);
 	release(overwrite, *catalog);
 	static_cast<void>(overwrite.consume({.confirm = true}, *catalog));
 	release(overwrite, *catalog);
@@ -525,11 +652,16 @@ void test_catalog_browser_and_save()
 	);
 	overwrite.report_commit(true, *catalog);
 	const auto saved_surface = overwrite.surface();
-	const auto saved_selected_row = saved_surface.pixels[
-		(86U * th03::present::graphics_width) + 72U
-	];
+	bool saved_selected_row = false;
+	for(std::size_t y = 96U; y < 112U; ++y) {
+		for(std::size_t x = 40U; x < 600U; ++x) {
+			saved_selected_row = saved_selected_row || saved_surface.pixels[
+				(y * th03::present::graphics_width) + x
+			].value == 12U;
+		}
+	}
 	expect(
-		saved_selected_row.value == 4U,
+		saved_selected_row,
 		"successful save keeps the refreshed selected slot row visible behind its acknowledgement"
 	);
 	expect(
@@ -544,7 +676,8 @@ void test_catalog_browser_and_save()
 		"the saved acknowledgement waits for one released input"
 	);
 
-	NewClassicReplaySaveMenu invalid_slot(make_document());
+	NewClassicReplaySaveMenu invalid_slot(make_document(), patch_assets);
+	finish_entry_fade(invalid_slot, *catalog);
 	release(invalid_slot, *catalog);
 	static_cast<void>(invalid_slot.consume({.confirm = true}, *catalog));
 	release(invalid_slot, *catalog);
@@ -560,199 +693,11 @@ void test_catalog_browser_and_save()
 	std::filesystem::remove_all(root, ignored);
 }
 
-std::string_view key_name(void *, std::uint16_t key) noexcept
-{
-	return key == 25U ? "TWENTY FIVE" : "KEY";
-}
-
-void test_key_config_menu()
-{
-	using namespace th03::app;
-	NewClassicKeyConfig defaults{};
-	for(std::size_t index = 0U; index < defaults.bindings.size(); ++index) {
-		defaults.bindings[index] = static_cast<std::uint16_t>(index + 1U);
-	}
-	auto initial = defaults;
-	initial.autofire = 2U;
-	NewClassicKeyConfigMenu menu(initial, defaults, 512U, 41U, key_name);
-	static_cast<void>(menu.consume({}));
-	// Story Up begins selected. Capture Story's existing fourth binding to
-	// prove source duplicate assignment swaps within the Story range.
-	static_cast<void>(menu.consume({.ui = {.confirm = true}}));
-	static_cast<void>(menu.consume({.any_scancode_held = false}));
-	static_cast<void>(menu.consume({
-		.scancode_pressed = static_cast<std::uint16_t>(25U),
-		.any_scancode_held = true,
-	}));
-	static_cast<void>(menu.consume({.any_scancode_held = false}));
-	expect(
-		menu.config().bindings[22U] == 25U &&
-		menu.config().bindings[24U] == 23U,
-		"KeyConfig swaps duplicate Story assignments"
-	);
-
-	// A released Right changes to P1 and selects Shot, matching the patch's
-	// initial player-page action column.
-	static_cast<void>(menu.consume({}));
-	auto page = menu.consume({.ui = {.right = true}});
-	expect(page.surface_changed, "KeyConfig changes among all three pages");
-	static_cast<void>(menu.consume({}));
-	static_cast<void>(menu.consume({.ui = {.confirm = true}}));
-	static_cast<void>(menu.consume({.any_scancode_held = false}));
-	static_cast<void>(menu.consume({
-		.scancode_pressed = static_cast<std::uint16_t>(41U),
-		.any_scancode_held = true,
-	}));
-	static_cast<void>(menu.consume({.any_scancode_held = false}));
-	expect(
-		menu.config().bindings[static_cast<std::size_t>(
-			NewClassicPlayerAction::shot
-		)] == defaults.bindings[static_cast<std::size_t>(
-			NewClassicPlayerAction::shot
-		)],
-		"Escape cancels raw key capture without changing the binding"
-	);
-
-	// Move from Shot to Apply and exercise the retryable persistence handoff.
-	for(std::size_t row = 0U; row < 4U; ++row) {
-		static_cast<void>(menu.consume({}));
-		static_cast<void>(menu.consume({.ui = {.down = true}}));
-	}
-	static_cast<void>(menu.consume({}));
-	auto apply = menu.consume({.ui = {.confirm = true}});
-	expect(
-		apply.status == NewClassicKeyConfigStatus::apply_requested,
-		"KeyConfig publishes a retryable Apply transaction"
-	);
-	menu.report_commit(false);
-	expect(
-		menu.status() == NewClassicKeyConfigStatus::running,
-		"failed KeyConfig store retains the edited document"
-	);
-	static_cast<void>(menu.consume({}));
-	static_cast<void>(menu.consume({.ui = {.confirm = true}}));
-	menu.report_commit(true);
-	expect(
-		menu.status() == NewClassicKeyConfigStatus::applied,
-		"successful KeyConfig store completes the transaction"
-	);
-
-	NewClassicKeyConfigMenu discard(initial, defaults, 512U, 41U, key_name);
-	static_cast<void>(discard.consume({}));
-	static_cast<void>(discard.consume({.ui = {.down = true}}));
-	static_cast<void>(discard.consume({}));
-	static_cast<void>(discard.consume({.ui = {.confirm = true}}));
-	static_cast<void>(discard.consume({.any_scancode_held = false}));
-	static_cast<void>(discard.consume({
-		.scancode_pressed = static_cast<std::uint16_t>(30U),
-		.any_scancode_held = true,
-	}));
-	static_cast<void>(discard.consume({.any_scancode_held = false}));
-	static_cast<void>(discard.consume({}));
-	expect(
-		discard.consume({.ui = {.cancel = true}}).surface_changed,
-		"Cancel on edited KeyConfig opens discard confirmation"
-	);
-	expect(
-		discard.consume({.ui = {.confirm = true}}).status ==
-			NewClassicKeyConfigStatus::back && discard.config() == initial,
-		"discard confirmation restores the complete original document"
-	);
-}
-
-void test_expanded_options_menu()
-{
-	using namespace th03::app;
-	ClassicConfigOptions initial{};
-	initial.bgm_mode = ClassicBgmMode::midi;
-	initial.sfx_enabled = true;
-	initial.language = ClassicLanguage::english;
-	NewClassicOptionsMenu menu(initial);
-	expect(menu.config().bgm_mode == ClassicBgmMode::off &&
-		menu.config().language == ClassicLanguage::japanese,
-		"New Classic Options normalizes unsupported MIDI and English profiles");
-	static_cast<void>(menu.consume({}));
-	static_cast<void>(menu.consume({.right = true}));
-	expect(menu.config().rank == ClassicRank::hard,
-		"Options cycles Replay Patch rank choices");
-	static_cast<void>(menu.consume({}));
-	static_cast<void>(menu.consume({.down = true}));
-	static_cast<void>(menu.consume({}));
-	static_cast<void>(menu.consume({.confirm = true}));
-	expect(menu.config().bgm_mode == ClassicBgmMode::fm,
-		"Options independently toggles FM music");
-	static_cast<void>(menu.consume({}));
-	static_cast<void>(menu.consume({.down = true}));
-	static_cast<void>(menu.consume({}));
-	static_cast<void>(menu.consume({.confirm = true}));
-	expect(!menu.config().sfx_enabled,
-		"Options independently toggles sound effects");
-	static_cast<void>(menu.consume({}));
-	static_cast<void>(menu.consume({.down = true}));
-	static_cast<void>(menu.consume({}));
-	const auto language = menu.consume({.confirm = true});
-	expect(language.surface_changed &&
-		menu.config().language == ClassicLanguage::japanese,
-		"unavailable English selection is disclosed without faking resources");
-	static_cast<void>(menu.consume({}));
-	static_cast<void>(menu.consume({.down = true}));
-	static_cast<void>(menu.consume({}));
-	static_cast<void>(menu.consume({.right = true}));
-	expect(menu.config().key_mode == ClassicKeyMode::joy_key,
-		"Options KeyConfig row cycles the source Key/Joy assignment mode");
-	static_cast<void>(menu.consume({}));
-	expect(menu.consume({.confirm = true}).status ==
-		NewClassicOptionsStatus::key_config_requested,
-		"expanded Options hands KeyConfig to its dedicated transaction");
-	menu.resume_after_key_config();
-	static_cast<void>(menu.consume({}));
-	static_cast<void>(menu.consume({.down = true}));
-	static_cast<void>(menu.consume({}));
-	static_cast<void>(menu.consume({.confirm = true}));
-	expect(menu.config().reduced_flash,
-		"Options toggles Replay Patch reduced-flash policy");
-	static_cast<void>(menu.consume({}));
-	static_cast<void>(menu.consume({.down = true}));
-	static_cast<void>(menu.consume({}));
-	expect(menu.consume({.confirm = true}).status ==
-		NewClassicOptionsStatus::apply_requested,
-		"Options Back publishes an atomic config commit");
-	menu.report_commit(false);
-	expect(menu.status() == NewClassicOptionsStatus::running,
-		"failed Options commit retains edits for retry");
-	static_cast<void>(menu.consume({}));
-	static_cast<void>(menu.consume({.confirm = true}));
-	menu.report_commit(true);
-	expect(menu.status() == NewClassicOptionsStatus::applied,
-		"successful Options retry completes the transaction");
-
-	initial.bgm_mode = ClassicBgmMode::fm;
-	initial.language = ClassicLanguage::english;
-	NewClassicOptionsMenu translated(initial, true);
-	expect(translated.config().language == ClassicLanguage::english,
-		"authenticated overlay preserves a persisted English selection");
-	static_cast<void>(translated.consume({}));
-	for(std::size_t row = 0U; row < 3U; ++row) {
-		static_cast<void>(translated.consume({.down = true}));
-		static_cast<void>(translated.consume({}));
-	}
-	static_cast<void>(translated.consume({.confirm = true}));
-	expect(translated.config().language == ClassicLanguage::japanese,
-		"available language row toggles English and Japanese");
-	static_cast<void>(translated.consume({}));
-	static_cast<void>(translated.consume({.right = true}));
-	expect(translated.config().language == ClassicLanguage::english,
-		"available language row accepts arrow toggles too");
-}
-
 } // namespace
 
 int main()
 {
-	test_landing();
 	test_catalog_browser_and_save();
-	test_key_config_menu();
-	test_expanded_options_menu();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }

@@ -7,7 +7,6 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <ctime>
 #include <fstream>
 #include <limits>
 #include <memory>
@@ -62,6 +61,18 @@ consume_session(void *context, const ClassicOpSessionInput &input)
 )
 {
 	return static_cast<ClassicOpSession *>(context)->take_audio_command();
+}
+
+[[nodiscard]] std::optional<NewClassicKeyConfig> take_session_key_config(
+	void *context
+)
+{
+	return static_cast<ClassicOpSession *>(context)->take_key_config_update();
+}
+
+[[nodiscard]] std::optional<bool> take_session_reduced_flash(void *context)
+{
+	return static_cast<ClassicOpSession *>(context)->take_reduced_flash_update();
 }
 
 [[nodiscard]] std::expected<present::SourceSurface, ClassicOpSessionError>
@@ -191,6 +202,24 @@ read_external_file(
 	};
 }
 
+[[nodiscard]] NewClassicUiInput project_new_classic_ui_input(
+	const CoreInput &input,
+	bool app_quit_requested
+) noexcept
+{
+	return {
+		.up = pressed(input.system, input_up),
+		.down = pressed(input.system, input_down),
+		.left = pressed(input.system, input_left),
+		.right = pressed(input.system, input_right),
+		.confirm = pressed(input.system, input_ok) ||
+			pressed(input.system, input_shot),
+		.bomb = pressed(input.system, input_bomb),
+		.cancel = pressed(input.system, input_cancel),
+		.app_quit_requested = app_quit_requested,
+	};
+}
+
 [[nodiscard]] ClassicOpSessionInput project_session_input(
 	const LogicalTickInput &sample,
 	ClassicAudioStatus audio
@@ -258,6 +287,12 @@ read_external_file(
 			.restart_requested = sample.restart_requested,
 		},
 		.audio = audio,
+		.replay_ui = project_new_classic_ui_input(
+			interface_input, sample.app_quit_requested
+		),
+		.replay_fast_forward = sample.fast_forward_requested,
+		.scancode_pressed = sample.scancode_pressed,
+		.any_scancode_held = sample.any_scancode_held,
 		.dismiss_pressed = any,
 		.app_quit_requested = sample.app_quit_requested,
 	};
@@ -271,27 +306,6 @@ read_external_file(
 	return resident;
 }
 
-[[nodiscard]] std::uint16_t current_dos_date() noexcept
-{
-	const auto now = std::time(nullptr);
-	std::tm local{};
-#if defined(_WIN32)
-	if(localtime_s(&local, &now) != 0) {
-		return 0U;
-	}
-#else
-	if(!localtime_r(&now, &local)) {
-		return 0U;
-	}
-#endif
-	const auto year = std::clamp(local.tm_year + 1900, 1980, 2107) - 1980;
-	return static_cast<std::uint16_t>(
-		(static_cast<std::uint16_t>(year) << 9U) |
-		(static_cast<std::uint16_t>(local.tm_mon + 1) << 5U) |
-		static_cast<std::uint16_t>(local.tm_mday)
-	);
-}
-
 } // namespace
 
 struct ClassicRunner::Impl final {
@@ -302,6 +316,7 @@ struct ClassicRunner::Impl final {
 	bool reduced_flash = false;
 	std::unique_ptr<NewClassicReplayRecorder> replay_recorder{};
 	std::optional<ClassicRunnerError> failure{};
+	std::optional<NewClassicKeyConfig> latest_key_config{};
 	std::uint64_t expected_tick_index = 0U;
 	std::optional<TickTimestampNs> last_deadline{};
 
@@ -372,6 +387,31 @@ ClassicRunner::load(ClassicRunnerRequest request)
 	if(!font) {
 		return std::unexpected(std::move(font.error()));
 	}
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets{};
+	if(request.experience == ExperienceProfile::new_classic) {
+		if(request.content.replay_root.empty()) {
+			request.content.replay_root = request.content.data_root / "REPLAY";
+		}
+		if(request.content.replay_patch_assets.empty()) {
+			request.content.replay_patch_assets =
+				request.content.data_root / "AZINN.DAT";
+		}
+		auto loaded_assets = load_new_classic_replay_patch_assets(
+			request.content.replay_patch_assets
+		);
+		if(!loaded_assets) {
+			auto result = runner_error(
+				ClassicRunnerErrorCode::replay_patch_assets_failed,
+				ClassicContentFile::replay_patch_assets
+			);
+			result.replay_patch_assets_error =
+				std::move(loaded_assets.error());
+			return std::unexpected(std::move(result));
+		}
+		patch_assets = std::make_shared<const NewClassicReplayPatchAssets>(
+			std::move(*loaded_assets)
+		);
+	}
 
 	auto resident = initial_resident(request.seed);
 	resident.autofire_mask = request.autofire_mask;
@@ -380,7 +420,9 @@ ClassicRunner::load(ClassicRunnerRequest request)
 			request.content.score.parent_path() / "YUME.NEW.NEM";
 	}
 	auto replay_recorder = request.experience == ExperienceProfile::new_classic
-		? std::make_unique<NewClassicReplayRecorder>(current_dos_date()) : nullptr;
+		? std::make_unique<NewClassicReplayRecorder>(
+			request.content.replay_root
+		) : nullptr;
 	auto session = ClassicOpSession::create(
 		std::move(resident),
 		std::make_unique<MainResourceLoader>(paths.data_root),
@@ -395,7 +437,8 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		replay_recorder.get(),
 		request.initial_route == ClassicRunnerInitialRoute::new_classic_practice,
 		std::move(request.content.new_classic_score),
-		std::move(request.content.language_overlay)
+		std::move(request.content.language_overlay),
+		std::move(patch_assets), &request
 	);
 	if(!session) {
 		return std::unexpected(session_error(session.error()));
@@ -405,6 +448,8 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		.context = owner.get(),
 		.consume = &consume_session,
 		.take_audio_command = &take_session_audio,
+		.take_key_config_update = &take_session_key_config,
+		.take_reduced_flash_update = &take_session_reduced_flash,
 		.compose_shown_surface = &compose_session,
 	};
 	auto impl = std::make_unique<Impl>(
@@ -454,6 +499,20 @@ ClassicRunner::consume(
 	}
 	impl_->expected_tick_index++;
 	impl_->last_deadline = sample.deadline_ns;
+	if(impl_->operations.take_key_config_update) {
+		if(auto update = impl_->operations.take_key_config_update(
+			impl_->operations.context
+		)) {
+			impl_->latest_key_config = std::move(*update);
+		}
+	}
+	if(impl_->operations.take_reduced_flash_update) {
+		if(auto update = impl_->operations.take_reduced_flash_update(
+			impl_->operations.context
+		)) {
+			impl_->reduced_flash = *update;
+		}
+	}
 
 	ClassicRunnerConsumeResult consumed{
 		.tick_index = sample.tick_index,
@@ -473,7 +532,6 @@ ClassicRunner::consume(
 	case ClassicOpSessionStatus::quit_requested:
 		impl_->status = ClassicRunnerStatus::quit_requested;
 		break;
-	case ClassicOpSessionStatus::external_route:
 	case ClassicOpSessionStatus::failed:
 		impl_->failure = runner_error(
 			ClassicRunnerErrorCode::unexpected_session_status
@@ -532,6 +590,24 @@ void ClassicRunner::classify_pending_replay_frame(
 	if(impl_->replay_recorder) {
 		impl_->replay_recorder->classify_pending_frame(deadline_missed);
 	}
+}
+
+std::optional<NewClassicKeyConfig>
+ClassicRunner::take_new_classic_key_config_update() noexcept
+{
+	return impl_ ? std::exchange(impl_->latest_key_config, std::nullopt) :
+		std::nullopt;
+}
+
+std::shared_ptr<const NewClassicReplaySaveArt>
+ClassicRunner::new_classic_replay_save_art() const noexcept
+{
+	if(!impl_ || impl_->operations.consume != &consume_session) {
+		return {};
+	}
+	return static_cast<const ClassicOpSession *>(
+		impl_->operations.context
+	)->replay_save_art();
 }
 
 std::expected<std::unique_ptr<ClassicRunner>, ClassicRunnerError>

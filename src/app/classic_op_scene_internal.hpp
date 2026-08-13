@@ -13,6 +13,7 @@
 
 #include "th03/app/authentic_text.hpp"
 #include "th03/app/classic_audio.hpp"
+#include "th03/app/new_classic_assets.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/assets/types.hpp"
 #include "th03/core/game.hpp"
@@ -57,6 +58,7 @@ enum class ClassicOpMenuChoice : std::uint8_t {
 	music_room,
 	high_scores,
 	options,
+	replay,
 	quit,
 };
 
@@ -66,6 +68,7 @@ enum class ClassicOpRoute : std::uint8_t {
 	music_room,
 	high_scores,
 	options,
+	replay,
 	quit,
 	demo,
 };
@@ -184,28 +187,41 @@ public:
 	> create(
 		GameInit resident,
 		ClassicOpTitleMode title_mode,
-		std::span<const LoadedMainResource> resources
+		std::span<const LoadedMainResource> resources,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {}
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpTitleMenuScene>,
 		ClassicOpError
 	> resume_from_options(
 		const ClassicOpOptionsCompletion &completion,
-		std::span<const LoadedMainResource> resources
+		std::span<const LoadedMainResource> resources,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpTitleMenuScene>,
 		ClassicOpError
 	> return_from_music_room(
 		const ClassicOpMusicRoomCompletion &completion,
-		std::span<const LoadedMainResource> resources
+		std::span<const LoadedMainResource> resources,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpTitleMenuScene>,
 		ClassicOpError
 	> return_from_canceled_selection(
 		const ClassicOpSelectionCompletion &completion,
-		std::span<const LoadedMainResource> resources
+		std::span<const LoadedMainResource> resources,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicOpTitleMenuScene>,
+		ClassicOpError
+	> return_from_other_screen(
+		GameInit resident,
+		std::span<const LoadedMainResource> resources,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+		bool restart_bgm
 	);
 	// A fresh OP process returning from non-demo VS bypasses the title and
 	// enters character selection directly. This source-private factory
@@ -259,14 +275,17 @@ private:
 	ClassicOpTitleMenuScene(
 		std::unique_ptr<Prepared> prepared,
 		GameInit resident,
-		EntryPolicy policy
+		EntryPolicy policy,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {},
+		bool restart_bgm = true
 	) noexcept;
 	ClassicOpTitleMenuScene(
 		std::unique_ptr<Prepared> prepared,
 		GameInit resident,
 		present::Raster raster,
 		present::Tram tram,
-		bool input_allowed
+		bool input_allowed,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {}
 	) noexcept;
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<Prepared>,
@@ -282,7 +301,8 @@ private:
 		GameInit resident,
 		ClassicOpTitleMode title_mode,
 		std::span<const LoadedMainResource> resources,
-		bool authenticate_resource_bytes
+		bool authenticate_resource_bytes,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {}
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpTitleMenuScene>,
@@ -293,7 +313,8 @@ private:
 		assets::PiImage long_background,
 		assets::PiImage menu_background,
 		assets::BfntSheet window_sheet,
-		assets::BfntSheet gaiji
+		assets::BfntSheet gaiji,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {}
 	);
 
 	[[nodiscard]] bool initialize_long_title() noexcept;
@@ -314,6 +335,7 @@ private:
 		std::uint16_t glyph
 	) noexcept;
 	[[nodiscard]] bool draw_main_choices() noexcept;
+	[[nodiscard]] bool draw_title_credit() noexcept;
 	[[nodiscard]] bool draw_choice(
 		ClassicOpMenuChoice choice,
 		present::TramAttribute attribute
@@ -330,6 +352,7 @@ private:
 	[[nodiscard]] bool begin_menu_swap() noexcept;
 	[[nodiscard]] bool begin_box_animation() noexcept;
 	[[nodiscard]] bool box_step() noexcept;
+	[[nodiscard]] std::int32_t box_top_value() const noexcept;
 	[[nodiscard]] bool push_audio_command(ClassicAudioCommand command) noexcept;
 	void select_route(
 		ClassicOpRoute route,
@@ -346,6 +369,7 @@ private:
 	) const noexcept;
 
 	std::unique_ptr<Prepared> prepared_{};
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
 	GameInit resident_{};
 	present::Raster raster_{};
 	present::Tram tram_{};
@@ -363,7 +387,9 @@ private:
 	present::Page title_page_ = present::Page::zero;
 	bool menu_input_allowed_ = false;
 	bool increment_rand_after_box_ = false;
+	bool restart_bgm_ = true;
 	bool demo_route_pending_ = false;
+	bool menu_base_snapshot_valid_ = false;
 	std::optional<ClassicOpCompletion> completion_{};
 };
 
@@ -389,13 +415,14 @@ struct ClassicOpSceneTestAccess final {
 		assets::PiImage long_background,
 		assets::PiImage menu_background,
 		assets::BfntSheet window_sheet,
-		assets::BfntSheet gaiji
+		assets::BfntSheet gaiji,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {}
 	)
 	{
 		return ClassicOpTitleMenuScene::create_predecoded(
 			std::move(resident), title_mode, std::move(long_background),
 			std::move(menu_background), std::move(window_sheet),
-			std::move(gaiji)
+			std::move(gaiji), std::move(patch_assets)
 		);
 	}
 };

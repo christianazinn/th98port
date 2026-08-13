@@ -12,6 +12,9 @@
 #include "th03/app/experience_menu.hpp"
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/main_process.hpp"
+#include "th03/app/new_classic_assets.hpp"
+#include "th03/app/new_classic_frontend.hpp"
+#include "th03/app/new_classic_key_config_store.hpp"
 #include "th03/formats/replay.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/app/tick_input.hpp"
@@ -32,9 +35,15 @@ struct ClassicContentPaths final {
 	std::filesystem::path mainl_executable{};
 	std::filesystem::path op_executable{};
 	std::filesystem::path font_rom{};
-	// Optional authenticated Replay Patch 0.4.10 TH3EN.DAT. Classic ignores
+	// Optional authenticated Replay Patch 0.4.11 TH3EN.DAT. Classic ignores
 	// this profile; New Classic may select it through the persisted language.
 	std::filesystem::path language_overlay{};
+	// Complete authenticated Replay Patch 0.4.11 AZINN.DAT. Classic ignores
+	// this profile. An empty New Classic path derives AZINN.DAT under data_root.
+	std::filesystem::path replay_patch_assets{};
+	// Replay Patch's native REPLAY/ directory. New Classic derives this under
+	// data_root when omitted; Classic never opens it.
+	std::filesystem::path replay_root{};
 	std::filesystem::path config{"YUME.CFG"};
 	std::filesystem::path score{"YUME.NEM"};
 	// New Classic's versioned per-character store. An empty value derives
@@ -61,6 +70,12 @@ struct ClassicRunnerRequest final {
 	std::uint8_t autofire_mask = 0U;
 	// Replay Patch's MAIN-only warning-flash reduction (tone 150 -> 100).
 	bool reduced_flash = false;
+	std::optional<NewClassicKeyConfig> new_classic_key_config{};
+	NewClassicKeyConfig new_classic_key_defaults{};
+	std::uint16_t new_classic_maximum_key = 0U;
+	std::uint16_t new_classic_capture_cancel_key = 0U;
+	NewClassicHostKeyName new_classic_key_name = nullptr;
+	void *new_classic_key_name_context = nullptr;
 	// New Classic may enter one Replay Patch-owned route without first exposing
 	// Classic's title. The shared authenticated session still owns every child.
 	ClassicRunnerInitialRoute initial_route = ClassicRunnerInitialRoute::title;
@@ -72,6 +87,7 @@ enum class ClassicContentFile : std::uint8_t {
 	mainl_executable,
 	op_executable,
 	font_rom,
+	replay_patch_assets,
 };
 
 enum class ClassicRunnerErrorCode : std::uint8_t {
@@ -83,6 +99,7 @@ enum class ClassicRunnerErrorCode : std::uint8_t {
 	file_open_failed,
 	file_read_failed,
 	compiled_content_failed,
+	replay_patch_assets_failed,
 	session_failed,
 	invalid_sample_order,
 	runner_not_running,
@@ -101,6 +118,7 @@ struct ClassicRunnerError final {
 	std::optional<ResourceLoadError> resource_error{};
 	std::optional<MainCompiledContentError> compiled_content_error{};
 	std::optional<MainProcessError> process_error{};
+	std::optional<NewClassicAssetsError> replay_patch_assets_error{};
 	std::optional<present::SourceSurfaceError> surface_error{};
 };
 
@@ -159,6 +177,10 @@ public:
 	[[nodiscard]] std::optional<formats::ReplayDocument>
 	take_completed_replay();
 	void classify_pending_replay_frame(bool deadline_missed) noexcept;
+	[[nodiscard]] std::optional<NewClassicKeyConfig>
+	take_new_classic_key_config_update() noexcept;
+	[[nodiscard]] std::shared_ptr<const NewClassicReplaySaveArt>
+	new_classic_replay_save_art() const noexcept;
 
 private:
 	friend struct ClassicRunnerTestAccess;

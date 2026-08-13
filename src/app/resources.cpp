@@ -2164,6 +2164,20 @@ bool MainResourceLoader::install_authenticated_overrides(
 	return true;
 }
 
+bool MainResourceLoader::switch_authenticated_overrides(
+	std::map<std::string, ResourceBytes> overrides
+)
+{
+	for(const auto &[name, bytes] : overrides) {
+		if(!is_safe_extracted_entry_name(name) || !bytes || bytes->empty()) {
+			return false;
+		}
+	}
+	overrides_ = std::move(overrides);
+	cache_.clear();
+	return true;
+}
+
 std::expected<ResourceBytes, ResourceLoadError> MainResourceLoader::load(
 	MainResourceKey key
 )

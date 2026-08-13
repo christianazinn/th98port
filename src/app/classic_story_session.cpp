@@ -406,6 +406,7 @@ struct ClassicStoryBackend final {
 	std::size_t pause_audio_count = 0U;
 	bool restart_requested = false;
 	NewClassicReplayRecorder *replay_recorder = nullptr;
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets{};
 	bool new_classic = false;
 	bool replay_playback = false;
 	bool replay_capture_closed = false;
@@ -423,7 +424,8 @@ struct ClassicStoryBackend final {
 		NewClassicReplayRecorder *replay_recorder_,
 		std::filesystem::path legacy_score_path_,
 		bool new_classic_ = false,
-		bool replay_playback_ = false
+		bool replay_playback_ = false,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_ = {}
 	) :
 		loader(std::move(loader_)),
 		static_content(std::move(static_content_)),
@@ -432,6 +434,7 @@ struct ClassicStoryBackend final {
 		score_path(std::move(score_path_)),
 		legacy_score_path(std::move(legacy_score_path_)),
 		replay_recorder(replay_recorder_),
+		patch_assets(std::move(patch_assets_)),
 		new_classic(new_classic_),
 		replay_playback(replay_playback_)
 	{
@@ -738,6 +741,7 @@ struct ClassicStoryBackend final {
 			input, input_context, replay_recorder != nullptr
 		);
 		const bool source_frame_io = !pause_menu;
+		bool pause_refresh_requested = false;
 		std::expected<MainProcessDriverTick, MainProcessDriverError> advanced =
 			std::unexpected(MainProcessDriverError{});
 		if(pause_menu) {
@@ -747,6 +751,7 @@ struct ClassicStoryBackend final {
 					input.restart_requested
 				)
 			);
+			pause_refresh_requested = pause_menu->take_replay_flush_request();
 			if(pause_menu->take_rejected_save_effect()) {
 				pause_audio = {{
 					{.type = ClassicAudioCommandType::play_effect, .parameter = 21U},
@@ -762,6 +767,11 @@ struct ClassicStoryBackend final {
 						normalize_replay_interstitial_input(input)
 					); !sampled) {
 						return std::unexpected(replay_capture_error());
+					}
+					if(pause_refresh_requested) {
+						if(auto flushed = replay_recorder->periodic_flush(); !flushed) {
+							return std::unexpected(replay_capture_error());
+						}
 					}
 				}
 				return ClassicStoryBackendTick{
@@ -781,7 +791,10 @@ struct ClassicStoryBackend final {
 			}
 			if((restart || status == NewClassicPauseStatus::discard_exit) &&
 				replay_recorder) {
-				replay_recorder->discard();
+				if(auto discarded = replay_recorder->discard_persistent();
+					!discarded) {
+					return std::unexpected(replay_capture_error());
+				}
 			}
 			restart_requested = restart;
 			advanced = driver->finish_deferred_frame(
@@ -801,8 +814,13 @@ struct ClassicStoryBackend final {
 			advanced = driver->consume(normalized);
 			if(advanced && driver->deferred_frame_pending()) {
 				pause_menu.emplace(
-					replay_recorder && replay_recorder->recording()
+					replay_recorder && replay_recorder->recording(), patch_assets
 				);
+				if(replay_recorder && replay_recorder->recording()) {
+					if(auto flushed = replay_recorder->periodic_flush(); !flushed) {
+						return std::unexpected(replay_capture_error());
+					}
+				}
 				pause_audio = {{
 					{.type = ClassicAudioCommandType::pause_song},
 					{.type = ClassicAudioCommandType::play_effect, .parameter = 21U},
@@ -839,6 +857,11 @@ struct ClassicStoryBackend final {
 				recorded_input
 			); !sampled) {
 				return std::unexpected(replay_capture_error());
+			}
+			if(pause_refresh_requested) {
+				if(auto flushed = replay_recorder->periodic_flush(); !flushed) {
+					return std::unexpected(replay_capture_error());
+				}
 			}
 			if(advanced->step_result.status == StepStatus::round_transition ||
 				advanced->step_result.status == StepStatus::terminal) {
@@ -898,6 +921,11 @@ struct ClassicStoryBackend final {
 			.terminal = process->canonical_state(),
 			.transition = *driver->transition(),
 		};
+		if(new_classic && restart_requested && terminal.terminal.route == 0U) {
+			preserve_new_classic_restart_random_seed(
+				terminal.transition.resident, process->live_random_seed()
+			);
+		}
 		if(terminal.terminal.route == 0U) {
 			if(auto checkpoint = checkpoint_score_run(); !checkpoint) {
 				return std::unexpected(std::move(checkpoint.error()));
@@ -1193,7 +1221,7 @@ struct ClassicStoryBackend final {
 		}
 		bool input_sampled = advanced->input_sampled;
 		if(new_classic) {
-			// Replay Patch 0.4.10 records at most one interface sample per
+			// Replay Patch 0.4.11 records at most one interface sample per
 			// VSync even though cutscene_animate() can poll several times in
 			// one interpreter iteration.  Reuse the last sample for those
 			// immediate polls, then arm the next sample after time advances.
@@ -2195,7 +2223,8 @@ ClassicStorySession::create_with_prepared_content(
 	MainlStaffCompiledAssets staff_compiled,
 	std::filesystem::path score_path,
 	NewClassicReplayRecorder *replay_recorder,
-	std::filesystem::path legacy_score_path
+	std::filesystem::path legacy_score_path,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
 )
 {
 	if(!loader || !static_content) {
@@ -2206,7 +2235,8 @@ ClassicStorySession::create_with_prepared_content(
 	auto backend = std::make_shared<ClassicStoryBackend>(
 		std::move(loader), std::move(static_content), std::move(stage_text),
 		std::move(staff_compiled), std::move(score_path), replay_recorder,
-		std::move(legacy_score_path), replay_recorder != nullptr, false
+		std::move(legacy_score_path), replay_recorder != nullptr, false,
+		std::move(patch_assets)
 	);
 	return create_with_backend(
 		config, std::static_pointer_cast<void>(backend),

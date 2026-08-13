@@ -162,12 +162,14 @@ by guessed wall-clock time and called parity. The raw guest producer below is
 what turns the RGB comparison into a source-boundary gate across title, menus,
 selection, MAINL, gameplay, result, and ending scenes.
 
-## Raw PC-98 oracle (`T3PIX1`, next layer)
+## Raw PC-98 oracle (`T3PIX1`)
 
-The authoritative external pixel gate will be a versioned raw capture written
-by a devtools-only PC-98 build into an emulator-mounted host directory. It is
-not implemented in the current tree. The frozen design records, at matching
-source publication acts:
+The authoritative source-side producer is implemented in the companion ReC98
+authority tree as a devtools-only profile. It builds separate
+`bin/th03/pixcap/{op,main,mainl}.exe` binaries and writes a versioned raw
+capture into an emulator-mounted host directory. Release and combined-debug
+OP/MAIN/MAINL remain byte-identical to the preserved 0.4.11 artifacts. The
+frozen stream records, at matching source publication acts:
 
 - all four planar VRAM planes for the shown page, plus selected hidden-page
   diagnostics;
@@ -182,21 +184,24 @@ offline comparator to localize the first mismatch to a plane byte and physical
 pixel. Indexed and RGBA review images are derived artifacts; raw planar,
 palette, TRAM, and selector equality are the actual gate.
 
-The implementation sequence is:
+The completed source parcel includes the strict `tools/port/t3pix1.py`
+parser/control writer, planar PPM renderer, synthetic tests, and the frozen
+`state/port/T3PIX1_FORMAT.md` contract. The remaining acceptance sequence is:
 
-1. freeze the `T3PIX1` reader/writer/comparator and native raw-state adapter;
-2. add a disposable `TH03_PIXEL_CAPTURE` guest profile at Replay Patch 0.4.10's
-   publication boundaries, then at the equivalent stock/Anniversary boundaries;
-3. run locked no-input and V13 cases through `tools\emu`, correlate each raw
+1. run the pixcap OP/MAINL/MAIN binaries at Replay Patch 0.4.11 publication
+   boundaries, then add the equivalent stock/Anniversary profiles;
+2. run locked no-input and V13 cases through `tools\emu`, correlate each raw
    guest publication with the lossless scanout frame, and compare against
    `T3RGB1`; and
-4. track only identities, SHA-256 digests, verdicts, and first-divergence
+3. track only identities, SHA-256 digests, verdicts, and first-divergence
    metadata, never original capture payloads.
 
 Guest instrumentation must remain devtools-only on a disposable branch. It
 must not enter the shipping Replay Patch executable or become implementation
-authority. `T3PXH2` plus `T3RGB1` are the practical daily regression mechanisms
-while this raw producer remains future work.
+authority. Runtime guest acceptance is deliberately still open: it must use a
+silent/headless Turbo emulator route, and final TRAM composition still needs
+the authenticated FONT.ROM/gaiji provider. `T3PXH2` plus `T3RGB1` remain the
+practical daily regression mechanisms until that external matrix is captured.
 
 ## Why not screenshots?
 

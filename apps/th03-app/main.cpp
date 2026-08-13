@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <ctime>
 #include <expected>
 #include <filesystem>
 #include <fstream>
@@ -101,35 +102,41 @@ struct HostUiStep final {
 	bool done = false;
 };
 
-struct NewClassicLandingRunResult final {
-	int exit_code = 0;
-	std::optional<th03::app::NewClassicLandingChoice> choice{};
-	bool application_quit = false;
-};
-
-struct NewClassicKeyConfigRunResult final {
-	int exit_code = 0;
-	bool application_quit = false;
-};
-
-struct ReplayBrowserRunResult final {
-	int exit_code = 0;
-	std::optional<th03::formats::ReplayDocument> document{};
-	std::size_t checkpoint = 0U;
-	bool application_quit = false;
-};
-
 struct ReplaySaveRunResult final {
 	int exit_code = 0;
 	bool application_quit = false;
 };
+
+[[nodiscard]] std::uint16_t current_dos_date(void *) noexcept
+{
+	const auto now = std::time(nullptr);
+	std::tm local{};
+#if defined(_WIN32)
+	if(localtime_s(&local, &now) != 0) {
+		return 0U;
+	}
+#else
+	if(!localtime_r(&now, &local)) {
+		return 0U;
+	}
+#endif
+	const auto year = std::clamp(local.tm_year + 1900, 1980, 2107) - 1980;
+	return static_cast<std::uint16_t>(
+		(static_cast<std::uint16_t>(year) << 9U) |
+		(static_cast<std::uint16_t>(local.tm_mon + 1) << 5U) |
+		static_cast<std::uint16_t>(local.tm_mday)
+	);
+}
 
 ReplaySaveRunResult run_replay_save(
 	th03::formats::ReplayDocument document,
 	const std::filesystem::path &replay_root,
 	th03::app::RationalTickRate tick_rate,
 	th03::platform::SdlPlatform &platform,
-	th03::platform::SdlInputMapper &mapper
+	th03::platform::SdlInputMapper &mapper,
+	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets>
+		patch_assets = {},
+	std::shared_ptr<const th03::app::NewClassicReplaySaveArt> save_art = {}
 );
 
 enum class RhythmRomLoadErrorCode : std::uint8_t {
@@ -416,7 +423,7 @@ void print_usage()
 			"directory under --data by default; --config, --score, and "
 			"--replay-root override them for read-only installs.\n"
 		<< "New Classic enables its persistent English option only when the "
-			"authenticated Replay Patch 0.4.10 TH3EN.DAT is supplied with "
+			"authenticated Replay Patch 0.4.11 TH3EN.DAT is supplied with "
 			"--language-overlay. Classic remains Japanese.\n"
 		<< "Kotohime's source-uninitialized late Bomb local is deterministically "
 			"normalized from the adjacent Kana fade routine.\n";
@@ -433,6 +440,7 @@ const char *name(th03::app::ClassicRunnerErrorCode code) noexcept
 	case th03::app::ClassicRunnerErrorCode::file_open_failed: return "file-open-failed";
 	case th03::app::ClassicRunnerErrorCode::file_read_failed: return "file-read-failed";
 	case th03::app::ClassicRunnerErrorCode::compiled_content_failed: return "compiled-content-failed";
+	case th03::app::ClassicRunnerErrorCode::replay_patch_assets_failed: return "replay-patch-assets-failed";
 	case th03::app::ClassicRunnerErrorCode::session_failed: return "session-failed";
 	case th03::app::ClassicRunnerErrorCode::invalid_sample_order: return "invalid-sample-order";
 	case th03::app::ClassicRunnerErrorCode::runner_not_running: return "runner-not-running";
@@ -475,6 +483,7 @@ const char *name(th03::app::ClassicContentFile file) noexcept
 	case th03::app::ClassicContentFile::mainl_executable: return "mainl-executable";
 	case th03::app::ClassicContentFile::op_executable: return "op-executable";
 	case th03::app::ClassicContentFile::font_rom: return "font-rom";
+	case th03::app::ClassicContentFile::replay_patch_assets: return "azinn-dat";
 	}
 	return "unknown";
 }
@@ -1126,7 +1135,9 @@ int run_direct_vs(th03::app::DirectVsCliRequest parsed)
 ExperienceRunResult run_classic_session(
 	th03::app::ClassicCliRequest parsed,
 	th03::platform::SdlPlatform &platform,
-	th03::platform::SdlInputMapper &mapper
+	th03::platform::SdlInputMapper &mapper,
+	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets>
+		patch_assets = {}
 )
 {
 	const auto data_root = parsed.launch.content.data_root;
@@ -1159,6 +1170,7 @@ ExperienceRunResult run_classic_session(
 		new_classic ?
 			th03::app::ExperienceProfile::new_classic :
 			th03::app::ExperienceProfile::classic;
+	parsed.launch.content.replay_root = parsed.replay_root;
 	auto runner = th03::app::ClassicRunner::load(std::move(parsed.launch));
 	if(!runner) {
 		return {.exit_code = fail("classic-load", runner.error())};
@@ -1202,6 +1214,44 @@ ExperienceRunResult run_classic_session(
 	if(auto drained = drain_audio(); !drained) {
 		return {.exit_code = fail("audio-command", drained.error())};
 	}
+	bool recovered_replay_modal = false;
+	if(new_classic) {
+		auto fallback = th03::app::load_replay_fallback(parsed.replay_root);
+		if(!fallback) {
+			if(fallback.error().code !=
+				th03::app::ReplaySlotStoreErrorCode::format) {
+				return {
+					.exit_code = fail("replay-fallback-load", fallback.error())
+				};
+			}
+			// Replay Patch replay_save_pending() treats an unreadable TH3LAST as
+			// no pending save and lets the next recording replace it. Mirror that
+			// availability policy at startup; I/O and removal failures remain loud.
+			if(auto removed =
+				th03::app::remove_replay_fallback(parsed.replay_root); !removed) {
+				return {
+					.exit_code = fail("replay-fallback-remove", removed.error())
+				};
+			}
+			fallback = th03::app::ReplaySlotLoadResult{};
+		}
+		if(fallback->document) {
+			auto saved = run_replay_save(
+				std::move(*fallback->document), parsed.replay_root,
+				parsed.tick_rate, platform, mapper, patch_assets,
+				(*runner)->new_classic_replay_save_art()
+			);
+			if(saved.exit_code != 0) {
+				return {.exit_code = saved.exit_code};
+			}
+			if(saved.application_quit) {
+				return {
+					.disposition = ExperienceRunDisposition::application_quit
+				};
+			}
+			recovered_replay_modal = true;
+		}
+	}
 
 	std::vector<th03::present::ComposedPixel> pixels(
 		th03::present::graphics_page_pixels
@@ -1238,6 +1288,13 @@ ExperienceRunResult run_classic_session(
 	if(!scheduler) {
 		return {.exit_code = fail_tick(scheduler.error())};
 	}
+	if(recovered_replay_modal) {
+		const auto resumed_at = th03::platform::sdl_ticks_now_ns();
+		if(auto reset = mapper.reset_after_modal(*scheduler, resumed_at);
+			!reset) {
+			return {.exit_code = fail("input-rebase", reset.error())};
+		}
+	}
 
 	bool retry_blocked_event = false;
 	bool presentation_pending = false;
@@ -1270,12 +1327,28 @@ ExperienceRunResult run_classic_session(
 			(*due)->fast_forward_requested =
 				parsed.mode == th03::app::ClassicLaunchMode::new_classic &&
 				mapper.keyboard_scancode_held(SDL_SCANCODE_Z);
+			if(new_classic) {
+				const auto scancode = mapper.take_keyboard_scancode_press();
+				(*due)->scancode_pressed = scancode ?
+					std::optional<std::uint16_t>{static_cast<std::uint16_t>(
+						*scancode
+					)} : std::nullopt;
+				(*due)->any_scancode_held =
+					mapper.any_keyboard_scancode_held();
+			}
 			auto consumed = (*runner)->consume(**due, audio_session->status());
 			if(!consumed) {
 				std::cerr << "logical-tick=" << logical_ticks << '\n';
 				return {
 					.exit_code = fail("classic-runner", consumed.error())
 				};
+			}
+			if(auto update = (*runner)->take_new_classic_key_config_update()) {
+				if(auto replaced = mapper.replace_bindings(
+					th03::app::detail::new_classic_bindings(*update)
+				); !replaced) {
+					return {.exit_code = fail("key-config-apply", replaced.error())};
+				}
 			}
 			const auto next_source_deadline = scheduler->next_deadline_ns();
 			(*runner)->classify_pending_replay_frame(
@@ -1375,7 +1448,8 @@ ExperienceRunResult run_classic_session(
 		if(completed_replay && new_classic) {
 			auto saved = run_replay_save(
 				std::move(*completed_replay), parsed.replay_root,
-				parsed.tick_rate, platform, mapper
+				parsed.tick_rate, platform, mapper, patch_assets,
+				(*runner)->new_classic_replay_save_art()
 			);
 			completed_replay.reset();
 			if(saved.exit_code != 0) {
@@ -1651,36 +1725,6 @@ std::expected<void, int> run_host_ui(
 	}
 }
 
-NewClassicLandingRunResult run_new_classic_landing(
-	th03::app::RationalTickRate tick_rate,
-	th03::platform::SdlPlatform &platform,
-	th03::platform::SdlInputMapper &mapper
-)
-{
-	th03::app::NewClassicLandingMenu menu;
-	auto driven = run_host_ui(
-		tick_rate, platform, mapper,
-		[&]() { return menu.surface(); },
-		[&](th03::app::NewClassicUiInput input) ->
-			std::expected<HostUiStep, int> {
-			const auto result = menu.consume(input);
-			return HostUiStep{
-				.surface_changed = result.surface_changed,
-				.done = result.status !=
-					th03::app::NewClassicLandingStatus::running,
-			};
-		}
-	);
-	if(!driven) {
-		return {.exit_code = driven.error()};
-	}
-	const auto result = menu.consume({});
-	if(result.status == th03::app::NewClassicLandingStatus::application_quit) {
-		return {.application_quit = true};
-	}
-	return {.choice = result.choice};
-}
-
 [[nodiscard]] std::string_view sdl_scancode_name(
 	void *,
 	std::uint16_t key
@@ -1689,240 +1733,104 @@ NewClassicLandingRunResult run_new_classic_landing(
 	if(key == 0U || key >= static_cast<std::uint16_t>(SDL_SCANCODE_COUNT)) {
 		return {};
 	}
+	// Keep the Replay Patch's visible PC-98 vocabulary for native keys with a
+	// direct host equivalent. SDL's platform-local names are only a fallback
+	// for host-only extensions that could not exist in TH3KEY.CFG.
+	switch(static_cast<SDL_Scancode>(key)) {
+	case SDL_SCANCODE_1: return "1";
+	case SDL_SCANCODE_2: return "2";
+	case SDL_SCANCODE_3: return "3";
+	case SDL_SCANCODE_4: return "4";
+	case SDL_SCANCODE_5: return "5";
+	case SDL_SCANCODE_6: return "6";
+	case SDL_SCANCODE_7: return "7";
+	case SDL_SCANCODE_8: return "8";
+	case SDL_SCANCODE_9: return "9";
+	case SDL_SCANCODE_0: return "0";
+	case SDL_SCANCODE_A: return "A";
+	case SDL_SCANCODE_B: return "B";
+	case SDL_SCANCODE_C: return "C";
+	case SDL_SCANCODE_D: return "D";
+	case SDL_SCANCODE_E: return "E";
+	case SDL_SCANCODE_F: return "F";
+	case SDL_SCANCODE_G: return "G";
+	case SDL_SCANCODE_H: return "H";
+	case SDL_SCANCODE_I: return "I";
+	case SDL_SCANCODE_J: return "J";
+	case SDL_SCANCODE_K: return "K";
+	case SDL_SCANCODE_L: return "L";
+	case SDL_SCANCODE_M: return "M";
+	case SDL_SCANCODE_N: return "N";
+	case SDL_SCANCODE_O: return "O";
+	case SDL_SCANCODE_P: return "P";
+	case SDL_SCANCODE_Q: return "Q";
+	case SDL_SCANCODE_R: return "R";
+	case SDL_SCANCODE_S: return "S";
+	case SDL_SCANCODE_T: return "T";
+	case SDL_SCANCODE_U: return "U";
+	case SDL_SCANCODE_V: return "V";
+	case SDL_SCANCODE_W: return "W";
+	case SDL_SCANCODE_X: return "X";
+	case SDL_SCANCODE_Y: return "Y";
+	case SDL_SCANCODE_Z: return "Z";
+	case SDL_SCANCODE_MINUS: return "Minus";
+	case SDL_SCANCODE_EQUALS: return "Plus";
+	case SDL_SCANCODE_BACKSPACE: return "Backspace";
+	case SDL_SCANCODE_TAB: return "Tab";
+	case SDL_SCANCODE_LEFTBRACKET: return "LBracket";
+	case SDL_SCANCODE_RIGHTBRACKET: return "RBracket";
+	case SDL_SCANCODE_RETURN: return "Return";
+	case SDL_SCANCODE_COMMA: return "Comma";
+	case SDL_SCANCODE_PERIOD: return "Period";
+	case SDL_SCANCODE_SLASH: return "Slash";
+	case SDL_SCANCODE_SPACE: return "Space";
+	case SDL_SCANCODE_PAGEUP: return "Roll Up";
+	case SDL_SCANCODE_PAGEDOWN: return "Roll Down";
+	case SDL_SCANCODE_INSERT: return "Insert";
+	case SDL_SCANCODE_DELETE: return "Delete";
+	case SDL_SCANCODE_UP: return "Up Arrow";
+	case SDL_SCANCODE_LEFT: return "Left Arrow";
+	case SDL_SCANCODE_RIGHT: return "Right Arrow";
+	case SDL_SCANCODE_DOWN: return "Down Arrow";
+	case SDL_SCANCODE_HOME: return "Home/Clear";
+	case SDL_SCANCODE_END: return "End";
+	case SDL_SCANCODE_KP_0: return "Num 0";
+	case SDL_SCANCODE_KP_1: return "Num 1";
+	case SDL_SCANCODE_KP_2: return "Num 2";
+	case SDL_SCANCODE_KP_3: return "Num 3";
+	case SDL_SCANCODE_KP_4: return "Num 4";
+	case SDL_SCANCODE_KP_5: return "Num 5";
+	case SDL_SCANCODE_KP_6: return "Num 6";
+	case SDL_SCANCODE_KP_7: return "Num 7";
+	case SDL_SCANCODE_KP_8: return "Num 8";
+	case SDL_SCANCODE_KP_9: return "Num 9";
+	case SDL_SCANCODE_KP_MINUS: return "Num Minus";
+	case SDL_SCANCODE_KP_DIVIDE: return "Num Divide";
+	case SDL_SCANCODE_KP_MULTIPLY: return "Num Multiply";
+	case SDL_SCANCODE_KP_PLUS: return "Num Plus";
+	case SDL_SCANCODE_KP_EQUALS: return "Num Equals";
+	case SDL_SCANCODE_KP_COMMA: return "Num Comma";
+	case SDL_SCANCODE_KP_PERIOD: return "Num Period";
+	case SDL_SCANCODE_F1: return "F1";
+	case SDL_SCANCODE_F2: return "F2";
+	case SDL_SCANCODE_F3: return "F3";
+	case SDL_SCANCODE_F4: return "F4";
+	case SDL_SCANCODE_F5: return "F5";
+	case SDL_SCANCODE_F6: return "F6";
+	case SDL_SCANCODE_F7: return "F7";
+	case SDL_SCANCODE_F8: return "F8";
+	case SDL_SCANCODE_F9: return "F9";
+	case SDL_SCANCODE_F10: return "F10";
+	case SDL_SCANCODE_LSHIFT:
+	case SDL_SCANCODE_RSHIFT: return "Shift";
+	case SDL_SCANCODE_LALT:
+	case SDL_SCANCODE_RALT: return "GRPH";
+	case SDL_SCANCODE_LCTRL:
+	case SDL_SCANCODE_RCTRL: return "Ctrl";
+	default: break;
+	}
 	const auto *name = SDL_GetScancodeName(static_cast<SDL_Scancode>(key));
 	return name != nullptr ? std::string_view{name} : std::string_view{};
-}
-
-NewClassicKeyConfigRunResult run_new_classic_key_config(
-	const std::filesystem::path &path,
-	th03::app::NewClassicKeyConfig &config,
-	const th03::app::NewClassicKeyConfig &defaults,
-	th03::app::RationalTickRate tick_rate,
-	th03::platform::SdlPlatform &platform,
-	th03::platform::SdlInputMapper &mapper
-)
-{
-	constexpr auto maximum_key = static_cast<std::uint16_t>(
-		SDL_SCANCODE_COUNT
-	);
-	th03::app::NewClassicKeyConfigMenu menu(
-		config, defaults, maximum_key,
-		static_cast<std::uint16_t>(SDL_SCANCODE_ESCAPE),
-		&sdl_scancode_name
-	);
-	auto presented = platform.present(menu.surface());
-	if(!presented) {
-		return {.exit_code = fail("key-config-present", presented.error())};
-	}
-	auto scheduler = th03::app::TickInputScheduler::create(
-		tick_rate,
-		th03::platform::sdl_ticks_now_ns(),
-		th03::app::TickInputCatchUpPolicy::discard_missed_deadlines
-	);
-	if(!scheduler) {
-		return {.exit_code = fail_tick(scheduler.error())};
-	}
-	bool retry_blocked_event = false;
-	while(menu.status() == th03::app::NewClassicKeyConfigStatus::running) {
-		const auto cutoff = th03::platform::sdl_ticks_now_ns();
-		if(!retry_blocked_event) {
-			auto pumped = mapper.pump_events(*scheduler, false);
-			if(!pumped) {
-				return {
-					.exit_code = fail("key-config-input-pump", pumped.error())
-				};
-			}
-			retry_blocked_event = pumped->queue_blocked;
-		}
-
-		bool presentation_pending = false;
-		for(;;) {
-			auto due = scheduler->pop_due(cutoff);
-			if(!due) {
-				return {.exit_code = fail_tick(due.error())};
-			}
-			if(!*due) {
-				break;
-			}
-			const auto pressed = mapper.take_keyboard_scancode_press();
-			auto consumed = menu.consume({
-				.ui = project_new_classic_ui(**due),
-				.scancode_pressed = pressed ? std::optional<std::uint16_t>{
-					static_cast<std::uint16_t>(*pressed)
-				} : std::nullopt,
-				.any_scancode_held = mapper.any_keyboard_scancode_held(),
-			});
-			presentation_pending = presentation_pending ||
-				consumed.surface_changed;
-			if(consumed.status ==
-				th03::app::NewClassicKeyConfigStatus::apply_requested) {
-				auto stored = th03::app::store_new_classic_key_config(
-					path, menu.config(), maximum_key
-				);
-				if(stored) {
-					auto replaced = mapper.replace_bindings(
-						th03::app::detail::new_classic_bindings(menu.config())
-					);
-					if(!replaced) {
-						return {.exit_code = fail(
-							"key-config-apply", replaced.error()
-						)};
-					}
-					config = menu.config();
-				}
-				menu.report_commit(stored.has_value());
-				presentation_pending = true;
-			}
-			if(retry_blocked_event) {
-				auto retried = mapper.pump_events(*scheduler, false);
-				if(!retried) {
-					return {.exit_code = fail(
-						"key-config-input-pump", retried.error()
-					)};
-				}
-				retry_blocked_event = retried->queue_blocked;
-			}
-			if(menu.status() !=
-				th03::app::NewClassicKeyConfigStatus::running) {
-				break;
-			}
-		}
-		if(presentation_pending && menu.status() ==
-			th03::app::NewClassicKeyConfigStatus::running) {
-			presented = platform.present(menu.surface());
-			if(!presented) {
-				return {.exit_code = fail(
-					"key-config-present", presented.error()
-				)};
-			}
-		}
-		const auto deadline = scheduler->next_deadline_ns();
-		const auto now = th03::platform::sdl_ticks_now_ns();
-		if(deadline && *deadline > now) {
-			SDL_DelayPrecise(std::min(*deadline - now, maximum_idle_delay_ns));
-		}
-	}
-	return {
-		.application_quit = menu.status() ==
-			th03::app::NewClassicKeyConfigStatus::application_quit,
-	};
-}
-
-NewClassicKeyConfigRunResult run_new_classic_options(
-	const std::filesystem::path &config_path,
-	th03::app::ClassicConfigOptions &config,
-	const std::filesystem::path &key_path,
-	th03::app::NewClassicKeyConfig &key_config,
-	const th03::app::NewClassicKeyConfig &key_defaults,
-	bool english_available,
-	th03::app::RationalTickRate tick_rate,
-	th03::platform::SdlPlatform &platform,
-	th03::platform::SdlInputMapper &mapper
-)
-{
-	th03::app::NewClassicOptionsMenu menu(config, english_available);
-	for(;;) {
-		auto driven = run_host_ui(
-			tick_rate, platform, mapper,
-			[&]() { return menu.surface(); },
-			[&](th03::app::NewClassicUiInput input) ->
-				std::expected<HostUiStep, int> {
-				auto result = menu.consume(input);
-				if(result.status ==
-					th03::app::NewClassicOptionsStatus::apply_requested) {
-					auto stored = th03::app::commit_classic_config_store(
-						config_path, menu.config()
-					);
-					menu.report_commit(stored.has_value());
-					result.surface_changed = true;
-					result.status = menu.status();
-				}
-				return HostUiStep{
-					.surface_changed = result.surface_changed,
-					.done = result.status !=
-						th03::app::NewClassicOptionsStatus::running,
-				};
-			}
-		);
-		if(!driven) {
-			return {.exit_code = driven.error()};
-		}
-		if(menu.status() ==
-			th03::app::NewClassicOptionsStatus::application_quit) {
-			return {.application_quit = true};
-		}
-		if(menu.status() == th03::app::NewClassicOptionsStatus::applied) {
-			config = menu.config();
-			return {};
-		}
-		if(menu.status() ==
-			th03::app::NewClassicOptionsStatus::key_config_requested) {
-			auto configured = run_new_classic_key_config(
-				key_path, key_config, key_defaults, tick_rate, platform, mapper
-			);
-			if(configured.exit_code != 0 || configured.application_quit) {
-				return configured;
-			}
-			menu.synchronize_legacy_autofire(key_config.autofire != 0U);
-			if(auto stored = th03::app::commit_classic_config_store(
-				config_path, menu.config()
-			); !stored) {
-				return {.exit_code = fail("config-key-sync", stored.error())};
-			}
-			menu.resume_after_key_config();
-			continue;
-		}
-		return {.exit_code = 1};
-	}
-}
-
-ReplayBrowserRunResult run_replay_browser(
-	const std::filesystem::path &replay_root,
-	th03::app::RationalTickRate tick_rate,
-	th03::platform::SdlPlatform &platform,
-	th03::platform::SdlInputMapper &mapper
-)
-{
-	auto loaded = th03::app::NewClassicReplayBrowser::load(replay_root);
-	if(!loaded) {
-		return {.exit_code = fail("replay-catalog", loaded.error())};
-	}
-	auto browser = std::move(*loaded);
-	auto driven = run_host_ui(
-		tick_rate, platform, mapper,
-		[&]() { return browser->surface(); },
-		[&](th03::app::NewClassicUiInput input) ->
-			std::expected<HostUiStep, int> {
-			auto result = browser->consume(input);
-			if(!result) {
-				return std::unexpected(fail("replay-browser", result.error()));
-			}
-			return HostUiStep{
-				.surface_changed = result->surface_changed,
-				.done = result->status !=
-					th03::app::NewClassicReplayBrowserStatus::running,
-			};
-		}
-	);
-	if(!driven) {
-		return {.exit_code = driven.error()};
-	}
-	auto final = browser->consume({});
-	if(!final) {
-		return {.exit_code = fail("replay-browser", final.error())};
-	}
-	if(final->status ==
-		th03::app::NewClassicReplayBrowserStatus::application_quit) {
-		return {.application_quit = true};
-	}
-	if(final->status !=
-		th03::app::NewClassicReplayBrowserStatus::play_selected) {
-		return {};
-	}
-	return {
-		.document = browser->take_selected_document(),
-		.checkpoint = browser->selected_checkpoint(),
-	};
 }
 
 ReplaySaveRunResult run_replay_save(
@@ -1930,14 +1838,19 @@ ReplaySaveRunResult run_replay_save(
 	const std::filesystem::path &replay_root,
 	th03::app::RationalTickRate tick_rate,
 	th03::platform::SdlPlatform &platform,
-	th03::platform::SdlInputMapper &mapper
+	th03::platform::SdlInputMapper &mapper,
+	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets,
+	std::shared_ptr<const th03::app::NewClassicReplaySaveArt> save_art
 )
 {
 	auto catalog = th03::app::scan_new_classic_replays(replay_root);
 	if(!catalog) {
 		return {.exit_code = fail("replay-catalog", catalog.error())};
 	}
-	th03::app::NewClassicReplaySaveMenu menu(std::move(document));
+	th03::app::NewClassicReplaySaveMenu menu(
+		std::move(document), std::move(patch_assets), std::move(save_art),
+		&current_dos_date
+	);
 	bool application_quit = false;
 	auto driven = run_host_ui(
 		tick_rate, platform, mapper,
@@ -1947,7 +1860,7 @@ ReplaySaveRunResult run_replay_save(
 			auto result = menu.consume(input, *catalog);
 			if(result.status ==
 				th03::app::NewClassicReplaySaveStatus::save_requested) {
-				auto committed = th03::app::commit_replay_slot(
+				auto committed = th03::app::commit_replay_fallback_to_slot(
 					replay_root, menu.selected_slot(), menu.document()
 				);
 				if(committed) {
@@ -1963,6 +1876,15 @@ ReplaySaveRunResult run_replay_save(
 				result.surface_changed = true;
 				result.status = th03::app::NewClassicReplaySaveStatus::running;
 			}
+			if(result.status ==
+				th03::app::NewClassicReplaySaveStatus::discarded) {
+				if(auto removed = th03::app::remove_replay_fallback(replay_root);
+					!removed) {
+					return std::unexpected(fail(
+						"replay-fallback-remove", removed.error()
+					));
+				}
+			}
 			application_quit = result.status ==
 				th03::app::NewClassicReplaySaveStatus::application_quit;
 			return HostUiStep{
@@ -1976,237 +1898,6 @@ ReplaySaveRunResult run_replay_save(
 		return {.exit_code = driven.error()};
 	}
 	return {.application_quit = application_quit};
-}
-
-ExperienceRunResult run_replay_playback(
-	th03::app::ClassicCliRequest parsed,
-	th03::formats::ReplayDocument document,
-	std::size_t checkpoint,
-	th03::platform::SdlPlatform &platform,
-	th03::platform::SdlInputMapper &mapper
-)
-{
-	const auto data_root = parsed.launch.content.data_root;
-	auto persisted = th03::app::load_classic_config_store(
-		parsed.launch.content.config
-	);
-	if(!persisted) {
-		return {.exit_code = fail("config-load", persisted.error())};
-	}
-	std::vector<std::byte> rhythm_rom{};
-	if(parsed.rhythm_rom) {
-		auto loaded = load_rhythm_rom(*parsed.rhythm_rom);
-		if(!loaded) {
-			return {.exit_code = fail("rhythm-rom", loaded.error())};
-		}
-		rhythm_rom = std::move(*loaded);
-	}
-	LoadedRhythmPcm rhythm_pcm{};
-	if(parsed.rhythm_pcm) {
-		auto loaded = load_rhythm_pcm(*parsed.rhythm_pcm);
-		if(!loaded) {
-			return {.exit_code = fail("rhythm-pcm", loaded.error())};
-		}
-		rhythm_pcm = std::move(*loaded);
-	}
-	auto playback = th03::app::NewClassicReplayPlayback::load({
-		.content = parsed.launch.content,
-		.document = std::move(document),
-		.checkpoint_index = checkpoint,
-		.kotohime_compatibility = parsed.launch.kotohime_compatibility,
-		.reduced_flash = persisted->options.reduced_flash,
-		.language = persisted->options.language,
-	});
-	if(!playback) {
-		return {.exit_code = fail("replay-playback-load", playback.error())};
-	}
-	auto created_session = th03::app::ClassicAudioSession::create({
-		.data_root = data_root,
-		.tick_rate = parsed.tick_rate,
-		.bgm_active = persisted->options.bgm_mode ==
-			th03::app::ClassicBgmMode::fm,
-		.effects_active = persisted->options.sfx_enabled,
-		.effects_follow_bgm = false,
-		.rhythm_rom = std::span<const std::byte>(rhythm_rom),
-		.rhythm_pcm = rhythm_pcm.view(),
-	});
-	if(!created_session) {
-		return {
-			.exit_code = fail("audio-session-create", created_session.error())
-		};
-	}
-	auto audio_session = std::move(*created_session);
-	const auto drain_audio = [&]() -> std::expected<
-		void, th03::app::ClassicAudioSessionError
-	> {
-		while(const auto command = (*playback)->take_audio_command()) {
-			if(auto applied = audio_session->apply(*command); !applied) {
-				return std::unexpected(applied.error());
-			}
-		}
-		return {};
-	};
-	if(auto drained = drain_audio(); !drained) {
-		return {.exit_code = fail("audio-command", drained.error())};
-	}
-
-	std::vector<th03::present::ComposedPixel> pixels(
-		th03::present::graphics_page_pixels
-	);
-	const auto pixel_span = std::span<
-		th03::present::ComposedPixel,
-		th03::present::graphics_page_pixels
-	>(pixels.data(), pixels.size());
-	auto surface = (*playback)->compose_shown_surface(pixel_span);
-	if(!surface) {
-		return {.exit_code = fail("replay-compose", surface.error())};
-	}
-	auto presented = platform.present(*surface);
-	if(!presented) {
-		return {.exit_code = fail("present", presented.error())};
-	}
-
-	std::optional<th03::platform::SdlAudioDevice> audio_device{};
-	auto created_device = th03::platform::SdlAudioDevice::create({
-		.start_paused = true,
-	});
-	if(created_device) {
-		audio_device.emplace(std::move(*created_device));
-	} else {
-		warn_audio_device("audio-device-create", created_device.error());
-	}
-	bool audio_started = false;
-	std::vector<th03::audio::PmdCanonicalStereoSample> startup_silence{};
-	auto scheduler = th03::app::TickInputScheduler::create(
-		parsed.tick_rate,
-		th03::platform::sdl_ticks_now_ns(),
-		th03::app::classic_interactive_catch_up_policy
-	);
-	if(!scheduler) {
-		return {.exit_code = fail_tick(scheduler.error())};
-	}
-	constexpr std::uint16_t input_cancel = 0x1000U;
-	bool retry_blocked_event = false;
-	bool presentation_pending = false;
-	while((*playback)->status() ==
-		th03::app::NewClassicPlaybackStatus::running) {
-		const auto cutoff = th03::platform::sdl_ticks_now_ns();
-		if(!retry_blocked_event) {
-			auto pumped = mapper.pump_events(*scheduler, false);
-			if(!pumped) {
-				return {.exit_code = fail("input-pump", pumped.error())};
-			}
-			retry_blocked_event = pumped->queue_blocked;
-		}
-		bool done = false;
-		for(;;) {
-			auto due = scheduler->pop_due(cutoff);
-			if(!due) {
-				return {.exit_code = fail_tick(due.error())};
-			}
-			if(!*due) {
-				break;
-			}
-			const auto live_word = (**due).input.system;
-			const bool fast = mapper.keyboard_scancode_held(SDL_SCANCODE_Z);
-			const bool changed_fast = fast != (*playback)->fast_forward();
-			(*playback)->set_fast_forward(fast);
-			presentation_pending = presentation_pending || changed_fast;
-			const auto steps = (*playback)->fast_forward_step_count();
-			for(std::size_t step_index = 0U; step_index < steps; ++step_index) {
-				auto advanced = (*playback)->advance(
-					audio_session->status(),
-					step_index == 0U && (live_word & input_cancel) != 0U,
-					step_index == 0U && (**due).app_quit_requested,
-					live_word
-				);
-				if(!advanced) {
-					return {
-						.exit_code = fail("replay-playback", advanced.error())
-					};
-				}
-				presentation_pending = presentation_pending ||
-					advanced->surface_changed;
-				if(auto drained = drain_audio(); !drained) {
-					return {.exit_code = fail("audio-command", drained.error())};
-				}
-				if(advanced->status !=
-					th03::app::NewClassicPlaybackStatus::running) {
-					done = true;
-					break;
-				}
-			}
-			auto audio_tick = audio_session->advance_tick();
-			if(!audio_tick) {
-				return {.exit_code = fail("audio-tick", audio_tick.error())};
-			}
-			if(audio_device && !audio_started &&
-				!audio_tick->canonical_frames.empty() &&
-				audio_tick->canonical_frames.size() <=
-					audio_device->maximum_queued_frames() / 3U) {
-				startup_silence.assign(
-					audio_tick->canonical_frames.size() * 2U, {}
-				);
-				if(auto prefilled = audio_device->submit(startup_silence);
-					!prefilled) {
-					warn_audio_device("audio-device-prefill", prefilled.error());
-					audio_device.reset();
-				}
-			}
-			if(audio_device) {
-				auto submitted = audio_device->submit(
-					audio_tick->canonical_frames
-				);
-				if(!submitted) {
-					warn_audio_device("audio-device-submit", submitted.error());
-					audio_device.reset();
-				} else if(!audio_started &&
-					!audio_tick->canonical_frames.empty()) {
-					auto resumed = audio_device->resume();
-					if(!resumed) {
-						warn_audio_device("audio-device-resume", resumed.error());
-						audio_device.reset();
-					} else {
-						audio_started = true;
-					}
-				}
-			}
-			if(retry_blocked_event) {
-				auto retried = mapper.pump_events(*scheduler, false);
-				if(!retried) {
-					return {.exit_code = fail("input-pump", retried.error())};
-				}
-				retry_blocked_event = retried->queue_blocked;
-			}
-			if(done) {
-				break;
-			}
-		}
-		if(presentation_pending) {
-			surface = (*playback)->compose_shown_surface(pixel_span);
-			if(!surface) {
-				return {.exit_code = fail("replay-compose", surface.error())};
-			}
-			presented = platform.present(*surface);
-			if(!presented) {
-				return {.exit_code = fail("present", presented.error())};
-			}
-			presentation_pending = false;
-		}
-		if(done) {
-			break;
-		}
-		const auto deadline = scheduler->next_deadline_ns();
-		const auto now = th03::platform::sdl_ticks_now_ns();
-		if(deadline && *deadline > now) {
-			SDL_DelayPrecise(std::min(*deadline - now, maximum_idle_delay_ns));
-		}
-	}
-	if((*playback)->status() ==
-		th03::app::NewClassicPlaybackStatus::application_quit) {
-		return {.disposition = ExperienceRunDisposition::application_quit};
-	}
-	return {.disposition = ExperienceRunDisposition::return_to_menu};
 }
 
 std::expected<
@@ -2249,6 +1940,18 @@ ExperienceRunResult run_new_classic_experience(
 		return {.exit_code = fail("config-load", loaded_options.error())};
 	}
 	auto config_options = loaded_options->options;
+	auto patch_asset_path = parsed.launch.content.replay_patch_assets;
+	if(patch_asset_path.empty()) {
+		patch_asset_path = parsed.launch.content.data_root / "AZINN.DAT";
+	}
+	auto loaded_patch_assets =
+		th03::app::load_new_classic_replay_patch_assets(patch_asset_path);
+	if(!loaded_patch_assets) {
+		return {.exit_code = fail("replay-patch-assets", loaded_patch_assets.error())};
+	}
+	auto patch_assets = std::make_shared<
+		const th03::app::NewClassicReplayPatchAssets
+	>(std::move(*loaded_patch_assets));
 	bool english_available = false;
 	if(!parsed.launch.content.language_overlay.empty()) {
 		auto overlay = th03::app::load_new_classic_language_overlay(
@@ -2286,144 +1989,21 @@ ExperienceRunResult run_new_classic_experience(
 	); !replaced) {
 		return {.exit_code = fail("key-config-apply", replaced.error())};
 	}
-	for(;;) {
-		auto landing = run_new_classic_landing(
-			parsed.tick_rate, platform, mapper
-		);
-		if(landing.exit_code != 0) {
-			return {.exit_code = landing.exit_code};
-		}
-		if(landing.application_quit) {
-			return {.disposition = ExperienceRunDisposition::application_quit};
-		}
-		if(!landing.choice || *landing.choice ==
-			th03::app::NewClassicLandingChoice::back) {
-			return {.disposition = ExperienceRunDisposition::return_to_menu};
-		}
-		if(*landing.choice == th03::app::NewClassicLandingChoice::play) {
-			parsed.mode = th03::app::ClassicLaunchMode::new_classic;
-			parsed.launch.autofire_mask = key_config.autofire;
-			parsed.launch.reduced_flash = config_options.reduced_flash;
-			parsed.launch.initial_route =
-				th03::app::ClassicRunnerInitialRoute::title;
-			auto game = run_classic_session(parsed, platform, mapper);
-			if(game.exit_code != 0 || game.disposition ==
-				ExperienceRunDisposition::application_quit) {
-				return game;
-			}
-			if(game.disposition == ExperienceRunDisposition::replay_completed &&
-				game.replay) {
-				auto saved = run_replay_save(
-					std::move(*game.replay), parsed.replay_root,
-					parsed.tick_rate, platform, mapper
-				);
-				if(saved.exit_code != 0) {
-					return {.exit_code = saved.exit_code};
-				}
-				if(saved.application_quit) {
-					return {
-						.disposition = ExperienceRunDisposition::application_quit
-					};
-				}
-				continue;
-			}
-			return game;
-		}
-		if(*landing.choice == th03::app::NewClassicLandingChoice::practice) {
-			parsed.mode = th03::app::ClassicLaunchMode::new_classic;
-			parsed.launch.autofire_mask = key_config.autofire;
-			parsed.launch.reduced_flash = config_options.reduced_flash;
-			parsed.launch.initial_route =
-				th03::app::ClassicRunnerInitialRoute::new_classic_practice;
-			auto game = run_classic_session(parsed, platform, mapper);
-			if(game.exit_code != 0 || game.disposition ==
-				ExperienceRunDisposition::application_quit) {
-				return game;
-			}
-			if(game.disposition == ExperienceRunDisposition::replay_completed &&
-				game.replay) {
-				auto saved = run_replay_save(
-					std::move(*game.replay), parsed.replay_root,
-					parsed.tick_rate, platform, mapper
-				);
-				if(saved.exit_code != 0) {
-					return {.exit_code = saved.exit_code};
-				}
-				if(saved.application_quit) {
-					return {
-						.disposition = ExperienceRunDisposition::application_quit
-					};
-				}
-			}
-			continue;
-		}
-		if(*landing.choice == th03::app::NewClassicLandingChoice::replay) {
-			auto selected = run_replay_browser(
-				parsed.replay_root, parsed.tick_rate, platform, mapper
-			);
-			if(selected.exit_code != 0) {
-				return {.exit_code = selected.exit_code};
-			}
-			if(selected.application_quit) {
-				return {
-					.disposition = ExperienceRunDisposition::application_quit
-				};
-			}
-			if(selected.document) {
-				auto played = run_replay_playback(
-					parsed, std::move(*selected.document), selected.checkpoint,
-					platform, mapper
-				);
-				if(played.exit_code != 0 || played.disposition ==
-					ExperienceRunDisposition::application_quit) {
-					return played;
-				}
-			}
-			continue;
-		}
-		if(*landing.choice ==
-			th03::app::NewClassicLandingChoice::key_config) {
-			auto configured = run_new_classic_key_config(
-				key_path, key_config, key_defaults, parsed.tick_rate,
-				platform, mapper
-			);
-			if(configured.exit_code != 0) {
-				return {.exit_code = configured.exit_code};
-			}
-			if(configured.application_quit) {
-				return {
-					.disposition = ExperienceRunDisposition::application_quit
-				};
-			}
-			const bool legacy_autofire = key_config.autofire != 0U;
-			if(config_options.legacy_autofire != legacy_autofire) {
-				config_options.legacy_autofire = legacy_autofire;
-				if(auto stored = th03::app::commit_classic_config_store(
-					parsed.launch.content.config, config_options
-				); !stored) {
-					return {.exit_code = fail("config-key-sync", stored.error())};
-				}
-			}
-			continue;
-		}
-		if(*landing.choice ==
-			th03::app::NewClassicLandingChoice::options) {
-			auto configured = run_new_classic_options(
-				parsed.launch.content.config, config_options, key_path,
-				key_config, key_defaults, english_available, parsed.tick_rate,
-				platform, mapper
-			);
-			if(configured.exit_code != 0) {
-				return {.exit_code = configured.exit_code};
-			}
-			if(configured.application_quit) {
-				return {
-					.disposition = ExperienceRunDisposition::application_quit
-				};
-			}
-			continue;
-		}
-	}
+	parsed.mode = th03::app::ClassicLaunchMode::new_classic;
+	parsed.launch.autofire_mask = key_config.autofire;
+	parsed.launch.reduced_flash = config_options.reduced_flash;
+	parsed.launch.new_classic_key_config = key_config;
+	parsed.launch.new_classic_key_defaults = key_defaults;
+	parsed.launch.new_classic_maximum_key = maximum_key;
+	parsed.launch.new_classic_capture_cancel_key = static_cast<std::uint16_t>(
+		SDL_SCANCODE_ESCAPE
+	);
+	parsed.launch.new_classic_key_name = &sdl_scancode_name;
+	parsed.launch.initial_route = th03::app::ClassicRunnerInitialRoute::title;
+	// Replay, Practice, KeyConfig, Options, and replay playback are children of
+	// the patched OP session. Only its final Quit crosses back to the product
+	// selector; no Replay Patch screen is substituted by a host route.
+	return run_classic_session(parsed, platform, mapper, patch_assets);
 }
 
 int run_classic(th03::app::ClassicCliRequest parsed)

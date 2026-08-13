@@ -34,6 +34,8 @@ enum class ReplaySlotStoreErrorCode : std::uint8_t {
 	temporary_validation,
 	temporary_close,
 	replace_target,
+	publish_slot,
+	remove_target,
 };
 
 struct ReplaySlotStoreError final {
@@ -49,6 +51,9 @@ struct ReplaySlotLoadResult final {
 [[nodiscard]] std::filesystem::path replay_slot_path(
 	const std::filesystem::path &replay_root,
 	std::uint8_t slot
+);
+[[nodiscard]] std::filesystem::path replay_fallback_path(
+	const std::filesystem::path &replay_root
 );
 
 // Missing slots are ordinary empty results. Existing bytes must be bounded,
@@ -67,6 +72,51 @@ load_replay_slot(
 	std::uint8_t slot,
 	const formats::ReplayDocument &document
 );
+
+// Replay Patch 0.4.11 keeps the live user recording in TH3LAST.RPY. Native
+// checkpoints replace the whole canonical V13 artifact atomically, which is
+// the host equivalent of the patch's flushed header/input prefix.
+[[nodiscard]] std::expected<ReplaySlotLoadResult, ReplaySlotStoreError>
+load_replay_fallback(const std::filesystem::path &replay_root);
+[[nodiscard]] std::expected<void, ReplaySlotStoreError>
+checkpoint_replay_fallback(
+	const std::filesystem::path &replay_root,
+	const formats::ReplayDocument &document
+);
+[[nodiscard]] std::expected<void, ReplaySlotStoreError>
+remove_replay_fallback(const std::filesystem::path &replay_root);
+
+// Rewrites the fallback with the final menu-edited document, validates it, and
+// then atomically renames that exact artifact over the selected slot. A failed
+// publication preserves the old slot and leaves the fallback recoverable.
+[[nodiscard]] std::expected<void, ReplaySlotStoreError>
+commit_replay_fallback_to_slot(
+	const std::filesystem::path &replay_root,
+	std::uint8_t slot,
+	const formats::ReplayDocument &document
+);
+
+enum class ReplaySlotStoreFaultPoint : std::uint8_t {
+	none,
+	directory_create,
+	temporary_create,
+	temporary_write,
+	temporary_flush,
+	temporary_seek,
+	temporary_read,
+	temporary_validation,
+	temporary_close,
+	replace_target,
+	publish_slot,
+	remove_target,
+};
+
+// Deterministic one-shot storage failures for unit tests. Production never
+// arms this seam.
+struct ReplaySlotStoreTestAccess final {
+	static void fail_next(ReplaySlotStoreFaultPoint point) noexcept;
+	static void clear_failure() noexcept;
+};
 
 } // namespace th03::app
 

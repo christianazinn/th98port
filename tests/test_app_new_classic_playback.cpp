@@ -131,6 +131,64 @@ std::optional<th03::formats::ReplayDocument> insert_recorded_pause(
 	return document;
 }
 
+void test_exact_main_replay_overlay()
+{
+	th03::present::Raster raster{};
+	th03::present::Tram tram{};
+	tram.fill({' ', th03::present::tram_white});
+	for(const auto page : {th03::present::Page::zero, th03::present::Page::one}) {
+		expect(raster.set_access_page(page),
+			"overlay fixture selects each graphics page");
+		expect(raster.clear({0, 0, 640U, 24U},
+			page == th03::present::Page::zero ? 2U : 3U),
+			"overlay fixture initializes distinguishable graphics pages");
+	}
+	expect(raster.set_shown_page(th03::present::Page::one),
+		"overlay fixture selects page 1 as the front page");
+	expect(raster.set_access_page(th03::present::Page::zero),
+		"overlay fixture starts with a non-front access page");
+	expect(
+		th03::app::NewClassicReplayPlaybackTestAccess::put_main_replay_overlay(
+			raster, tram
+		),
+		"Replay Patch MAIN overlay writes its native Raster/TRAM state"
+	);
+	for(const auto page : {th03::present::Page::zero, th03::present::Page::one}) {
+		for(std::int32_t y = 0; y < 8; ++y) {
+			for(std::int32_t x = 296; x <= 343; ++x) {
+				expect(raster.pixel(page, {x, y}) == 15U,
+					"Replay backing is white across the exact 48x8 box on both pages");
+			}
+		}
+		expect(raster.pixel(page, {295, 0}) ==
+			(page == th03::present::Page::zero ? 2U : 3U),
+			"Replay backing preserves the left neighbor on each page");
+		expect(raster.pixel(page, {344, 7}) ==
+			(page == th03::present::Page::zero ? 2U : 3U),
+			"Replay backing preserves the right neighbor on each page");
+		expect(raster.pixel(page, {296, 8}) ==
+			(page == th03::present::Page::zero ? 2U : 3U),
+			"Replay backing preserves the row below on each page");
+	}
+	expect(raster.access_page() == raster.shown_page() &&
+		raster.shown_page() == th03::present::Page::one,
+		"Replay overlay restores graphics access to the shown front page");
+	constexpr std::array<char, 6U> replay{{'R', 'E', 'P', 'L', 'A', 'Y'}};
+	for(std::size_t index = 0U; index < replay.size(); ++index) {
+		const auto cell = tram.cell({
+			37 + static_cast<std::int32_t>(index), 0
+		});
+		expect(cell && cell->code == static_cast<std::uint16_t>(replay[index]) &&
+			cell->attribute == 0x0005U,
+			"Replay overlay writes exact reversed-black ANK cells");
+	}
+	expect(tram.cell({36, 0}) == th03::present::TramCell{
+		' ', th03::present::tram_white
+	} && tram.cell({43, 0}) == th03::present::TramCell{
+		' ', th03::present::tram_white
+	}, "Replay overlay preserves adjacent TRAM cells and emits no FF label");
+}
+
 void test_invalid_request()
 {
 	auto invalid = th03::app::NewClassicReplayPlayback::load({});
@@ -211,6 +269,22 @@ void test_authentic(
 	>(pixels.data(), pixels.size()));
 	expect(surface.has_value(),
 		"visual playback composes the shared MAIN surface and replay overlay");
+	if(surface) {
+		expect(!surface->host_overlay,
+			"Replay indicator remains native source state, not a host overlay");
+		const auto released_pixels = pixels;
+		(*loaded)->set_fast_forward(true);
+		std::vector<th03::present::ComposedPixel> held_pixels(
+			th03::present::graphics_page_pixels
+		);
+		auto held = (*loaded)->compose_shown_surface(std::span<
+			th03::present::ComposedPixel,
+			th03::present::graphics_page_pixels
+		>(held_pixels.data(), held_pixels.size()));
+		expect(held && held_pixels == released_pixels,
+			"physical-Z fast-forward changes cadence without adding FF pixels");
+		(*loaded)->set_fast_forward(false);
+	}
 	std::size_t advanced = 0U;
 	for(std::size_t tick = 0U; tick < 240U &&
 		(*loaded)->status() == th03::app::NewClassicPlaybackStatus::running;
@@ -559,6 +633,7 @@ void test_additional_authentic_route(
 
 int main(int argc, char **argv)
 {
+	test_exact_main_replay_overlay();
 	test_invalid_request();
 	if(argc == 6 && std::string_view(argv[4]) == "--game-over") {
 		test_additional_authentic_route(

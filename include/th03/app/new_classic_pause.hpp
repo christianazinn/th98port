@@ -1,12 +1,17 @@
 #ifndef TH03_APP_NEW_CLASSIC_PAUSE_HPP
 #define TH03_APP_NEW_CLASSIC_PAUSE_HPP
 
+#include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <vector>
 
-#include "th03/app/host_menu_canvas.hpp"
 #include "th03/core/game.hpp"
+#include "th03/present/source_surface.hpp"
 
 namespace th03::app {
+
+struct NewClassicReplayPatchAssets;
 
 enum class NewClassicPauseChoice : std::uint8_t {
 	resume,
@@ -46,7 +51,10 @@ struct NewClassicPauseInput final {
 // samples; callers complete that frame exactly once after a terminal result.
 class NewClassicPauseMenu final {
 public:
-	explicit NewClassicPauseMenu(bool save_enabled) noexcept;
+	explicit NewClassicPauseMenu(
+		bool save_enabled,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {}
+	) noexcept;
 
 	[[nodiscard]] NewClassicPauseStatus consume(
 		NewClassicPauseInput input
@@ -58,6 +66,7 @@ public:
 	[[nodiscard]] NewClassicPauseChoice choice() const noexcept;
 	[[nodiscard]] bool save_enabled() const noexcept;
 	[[nodiscard]] bool take_rejected_save_effect() noexcept;
+	[[nodiscard]] bool take_replay_flush_request() noexcept;
 
 private:
 	friend struct NewClassicPauseTestAccess;
@@ -69,13 +78,29 @@ private:
 
 	void move(int delta) noexcept;
 	void draw() noexcept;
+	void fill_text_black(
+		std::size_t left,
+		std::size_t top,
+		std::size_t width,
+		std::size_t height
+	) noexcept;
+	void put_gaiji(
+		std::size_t cell_left,
+		std::size_t cell_top,
+		std::size_t tile,
+		std::size_t count,
+		present::Index4 graphics_color
+	) noexcept;
 
 	bool save_enabled_ = false;
 	NewClassicPauseChoice choice_ = NewClassicPauseChoice::resume;
 	NewClassicPauseStatus status_ = NewClassicPauseStatus::running;
 	Phase phase_ = Phase::release_before_choice;
+	bool visible_ = false;
 	bool rejected_save_effect_ = false;
-	HostMenuCanvas canvas_{};
+	bool replay_flush_requested_ = false;
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
+	std::vector<present::ComposedPixel> pixels_{};
 };
 
 struct NewClassicPauseTestAccess final {

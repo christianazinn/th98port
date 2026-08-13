@@ -3,8 +3,10 @@
 
 #include <cstdint>
 #include <expected>
+#include <memory>
+#include <vector>
 
-#include "th03/app/host_menu_canvas.hpp"
+#include "th03/app/new_classic_assets.hpp"
 #include "th03/core/game.hpp"
 #include "th03/formats/replay.hpp"
 
@@ -12,6 +14,9 @@ namespace th03::app {
 
 enum class NewClassicPracticeStatus : std::uint8_t {
 	running,
+	cancel_frame,
+	cancel_wait_release,
+	start_fade,
 	started,
 	canceled,
 };
@@ -43,33 +48,44 @@ prepare_new_classic_practice_init(
 	const GameContent &content
 );
 
-// Replay Patch 0.4.10's two-page Practice setup. It is host-rendered over the
-// completed authentic selector, but every field and step rule remains source-
-// shaped and the output is the frozen V13 Practice configuration.
+// Replay Patch 0.4.11's two-page Practice setup. The patch-enabled constructor
+// draws the exact MNUFONT overlay over the selector-owned curves-only frame.
+// The one-argument constructor remains available for model-only tests and
+// returns an unchanged base surface.
 class NewClassicPracticeMenu final {
 public:
 	explicit NewClassicPracticeMenu(GameInit selected_resident) noexcept;
+	NewClassicPracticeMenu(
+		GameInit selected_resident,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	) noexcept;
 
 	[[nodiscard]] NewClassicPracticeStatus consume(
 		NewClassicPracticeInput input
 	) noexcept;
+	void mark_background_published() noexcept;
 	[[nodiscard]] present::SourceSurface compose_over(
-		present::SourceSurface base
+		present::SourceSurface base,
+		bool base_is_retained_selection_frame = false
 	) noexcept;
 
 	[[nodiscard]] NewClassicPracticeStatus status() const noexcept;
 	[[nodiscard]] const formats::ReplayPracticeConfig &config() const noexcept;
 	[[nodiscard]] bool practice_active() const noexcept;
+	[[nodiscard]] bool has_patch_assets() const noexcept;
+	[[nodiscard]] bool consume_surface_changed() const noexcept;
 
 private:
 	enum class Page : std::uint8_t { main, advanced };
 
 	void reset_defaults() noexcept;
 	void step_value(bool forward) noexcept;
-	void draw() noexcept;
+	void advance_start_fade() noexcept;
+	[[nodiscard]] bool draw() noexcept;
 	void refresh_safety() noexcept;
 	[[nodiscard]] std::uint8_t fixed_stage() const noexcept;
 	[[nodiscard]] std::uint8_t row_count() const noexcept;
+	[[nodiscard]] bool row_enabled(std::uint8_t row) const noexcept;
 
 	GameInit selected_resident_{};
 	formats::ReplayPracticeConfig config_{};
@@ -77,7 +93,16 @@ private:
 	std::uint8_t selected_ = 0U;
 	bool input_locked_ = true;
 	NewClassicPracticeStatus status_ = NewClassicPracticeStatus::running;
-	HostMenuCanvas canvas_{};
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
+	present::Raster overlay_raster_{};
+	std::vector<present::ComposedPixel> composed_pixels_{};
+	present::Page published_page_ = present::Page::zero;
+	bool published_page_initialized_ = false;
+	bool background_published_ = false;
+	bool cancel_release_first_poll_ = false;
+	bool consume_surface_changed_ = false;
+	std::uint8_t fade_boundary_ = 0U;
+	std::int16_t palette_tone_ = 100;
 };
 
 } // namespace th03::app
