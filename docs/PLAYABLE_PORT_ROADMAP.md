@@ -322,6 +322,12 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | Audio | Engine, TH03 transport/SFX/EFC service, fixed resampler, Classic session, and SDL endpoint integrated | The launcher applies source-semantic scene commands, advances one deterministic audio interval per logical sample, and treats device loss as delivery-only. MAINL selects and loads the exact character/decisive song and effect bank; fresh/repeat/terminal MAIN publishes source Reset/Play/Stop lifecycle commands. All 61 ordinary live-MAIN donor SFX rows feed the source `snd_se_update()` boundary, including forced warning effect 19, and live pause/resume emits effect 21. Authenticated gates cover all 40 semantic cue identities, 22 effects, all 21 songs, and independent FM1-6/SSG1-2/rhythm stems. Exact-size `--rhythm-rom` and authenticated decoded `--rhythm-pcm` paths reach the engine; replacement-data packaging, aligned reference capture, shipped-TSR traces, and physical-device QA remain release work. |
 | Persistent score/configuration UI and localization/QoL | Original UI plus New Classic score/statistics, KeyConfig, Options, Extra unlock, and authenticated English integrated | Classic retains the exact original score/config codecs and UI. New Classic owns the Replay Patch's versioned 4-rank x 9-character score store, legacy-by-value migration, aggregate/TOTAL and character pages, live play-time/1CC/continue accounting, bounded 26-scancode store, Story movement override, per-player Autofire, independent SFX, exact warning-flash reduction, title Extra unlock, and all-or-nothing 52-member `TH3EN.DAT` English profile. |
 
+The next product-facing menu and settings sequence is specified in
+`NEW_CLASSIC_PRODUCT_DESIGN.md`. It supersedes the earlier product assumption
+that the host-rendered Classic/New Classic selector remains the normal startup
+root. Classic stays sealed; New Classic becomes the direct product root and
+owns native extensions through source-styled hierarchical menus.
+
 The following parcels can proceed now, provided they do not claim readiness for VS or change core semantics:
 
 | Parallel parcel | Target / boundary | Initial acceptance gate |
