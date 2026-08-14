@@ -19,7 +19,7 @@ Replay Patch 0.4.13 / New Classic experience donor (native work does not
 modify this source authority):
   discovery ref: origin/replays (moving; never substitutes for the commit)
   commit: 2a1a9cc9e07af97d0953b2be37bfdf0a39bb625d
-  release-inert instrumentation descendant: 829be82d73da9cb83b31cab3041cd2fa4e4386d9
+  release-inert instrumentation descendant: 2dec6338606442b357f6035cfb5d6a31f7fcd44d
 
 Behavior precedence:
   Anniversary defines Classic gameplay.
