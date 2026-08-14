@@ -873,7 +873,9 @@ void test_malformed_stale_and_capacity_events()
 	malformed_key.key.down = false;
 	for(const auto &event : std::array{
 		malformed_key,
-		key_event(1U, SDL_SCANCODE_UNKNOWN, true),
+		key_event(
+			1U, static_cast<SDL_Scancode>(SDL_SCANCODE_COUNT), true
+		),
 		gamepad_device_event(SDL_EVENT_GAMEPAD_ADDED, 1U, 0U),
 		gamepad_button_event(1U, 0U, SDL_GAMEPAD_BUTTON_SOUTH, true),
 		gamepad_button_event(1U, 1U, SDL_GAMEPAD_BUTTON_INVALID, true),
@@ -888,6 +890,19 @@ void test_malformed_stale_and_capacity_events()
 			"malformed SDL event is rejected without scheduler mutation"
 		);
 	}
+
+	const auto sysrq = expect_event(
+		mapper, input,
+		key_event(2U, SDL_SCANCODE_UNKNOWN, true),
+		"Windows Alt+PrintScreen SysRq event is accepted"
+	);
+	expect(
+		sysrq.handled && !sysrq.physical_event_queued &&
+			input.pending_event_count() == 0U &&
+			!mapper.take_keyboard_scancode_press() &&
+			!mapper.any_keyboard_scancode_held(),
+		"unknown raw key is ignored without gameplay or KeyConfig state"
+	);
 
 	SDL_Event mouse{};
 	mouse.type = SDL_EVENT_MOUSE_MOTION;

@@ -769,7 +769,8 @@ void test_story_success()
 {
 	GameInit resident{};
 	resident.rank = 2U;
-	resident.resident_rand = 0x12345678;
+	resident.resident_rand = 1;
+	const auto initial_rand = resident.resident_rand;
 	resident.paletted_character[0U] = 9;
 	auto scene = make_scene(ClassicOpSelectionMode::story, resident);
 	if(!scene) { return; }
@@ -808,6 +809,11 @@ void test_story_success()
 	);
 	if(!completion) { return; }
 	const auto &result = completion->resident();
+	expect(
+		result.resident_rand == initial_rand + 33 &&
+			result.resident_rand == 34,
+		"earliest Story confirmation publishes 33 selector frames and reaches seed 34"
+	);
 	std::array<bool, 7U> seen{};
 	bool six_distinct = true;
 	for(std::size_t stage = 0U; stage < 6U; ++stage) {

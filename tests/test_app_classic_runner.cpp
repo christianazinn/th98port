@@ -102,11 +102,11 @@ void test_cli()
 			std::filesystem::path("data-root") / "YUME.NEM" &&
 		parsed->replay_root ==
 			std::filesystem::path("data-root") / "REPLAY" &&
-		parsed->launch.seed == 1U && !parsed->launch.fm_available &&
+		parsed->launch.seed == 0U && !parsed->launch.fm_available &&
 		!parsed->rhythm_rom && !parsed->rhythm_pcm &&
 		parsed->tick_rate.ticks == 526'315U &&
 		parsed->tick_rate.seconds == 9'328U,
-		"valid Classic CLI keeps default persistence beside the content root");
+		"valid Classic CLI keeps source-zero power-on seed and persistence beside the content root");
 	const auto new_classic = parse({
 		"--new-classic", "--data", "d", "--main", "m", "--mainl", "l",
 		"--op", "o", "--font", "f",

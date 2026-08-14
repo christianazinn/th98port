@@ -66,7 +66,8 @@ struct ClassicRunnerInitialReplay final {
 
 struct ClassicRunnerRequest final {
 	ClassicContentPaths content{};
-	std::uint32_t seed = 1U;
+	// RES_YUME.COM zero-fills the original resident structure on power-on.
+	std::uint32_t seed = 0U;
 	// False selects the source's sound-unavailable fallback paths while still
 	// publishing and requiring the caller to drain every semantic command.
 	bool fm_available = false;

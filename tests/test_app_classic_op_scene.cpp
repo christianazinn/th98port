@@ -116,11 +116,12 @@ BfntSheet window_sheet()
 }
 
 std::unique_ptr<ClassicOpTitleMenuScene> make_scene(
-	ClassicOpTitleMode mode
+	ClassicOpTitleMode mode,
+	std::int32_t resident_rand = 40
 )
 {
 	GameInit resident{};
-	resident.resident_rand = 40;
+	resident.resident_rand = resident_rand;
 	resident.fast_op_animation =
 		(mode == ClassicOpTitleMode::fast_fade) ? 1U : 0U;
 	auto created = ClassicOpSceneTestAccess::create_with_predecoded_assets(
@@ -388,6 +389,20 @@ void test_replay_patch_title_if_assets_supplied()
 
 void test_story_seed_and_vs_cancel_return()
 {
+	auto powered_on = make_scene(ClassicOpTitleMode::fast_fade, 0);
+	if(!powered_on) {
+		return;
+	}
+	reach_main_menu(*powered_on);
+	const auto powered_selected = powered_on->advance({.ok = true});
+	auto powered_completion = powered_on->take_completion();
+	expect(
+		powered_selected && powered_selected->ready && powered_completion &&
+			powered_completion->route() == ClassicOpRoute::story &&
+			powered_completion->resident().resident_rand == 1,
+		"source-zero power-on adds one accepted title poll before Story"
+	);
+
 	auto story = make_scene(ClassicOpTitleMode::fast_fade);
 	if(!story) {
 		return;

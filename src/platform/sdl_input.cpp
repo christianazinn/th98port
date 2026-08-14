@@ -538,7 +538,19 @@ SdlInputMapper::handle_event(
 		if(event.key.windowID != main_window_) {
 			return SdlInputEventResult{};
 		}
-		if(event.key.down != down || !valid_scancode(event.key.scancode)) {
+		if(event.key.down != down) {
+			return std::unexpected(mapper_error(
+				SdlInputMapperErrorCode::malformed_event
+			));
+		}
+		// SDL's Windows raw-input backend reports some legitimate keys without
+		// a portable scancode. In particular, Alt+PrintScreen produces the
+		// SysRq scan (0x54) as SDL_SCANCODE_UNKNOWN. It is outside the game's
+		// input vocabulary, but it is not a malformed event.
+		if(event.key.scancode == SDL_SCANCODE_UNKNOWN) {
+			return SdlInputEventResult{.handled = true};
+		}
+		if(!valid_scancode(event.key.scancode)) {
 			return std::unexpected(mapper_error(
 				SdlInputMapperErrorCode::malformed_event
 			));
