@@ -76,13 +76,13 @@ constexpr std::array<ClassicOpMenuChoice, 7U> replay_patch_menu_choices{
 	ClassicOpMenuChoice::versus,
 	ClassicOpMenuChoice::music_room,
 	ClassicOpMenuChoice::high_scores,
-	ClassicOpMenuChoice::options,
 	ClassicOpMenuChoice::replay,
+	ClassicOpMenuChoice::options,
 	ClassicOpMenuChoice::quit,
 };
 
 constexpr std::array<std::string_view, 7U> replay_patch_menu_labels{
-	"Start", "VS Start", "Music room", "HiScore", "Option", "Replay",
+	"Start", "VS Start", "Music room", "HiScore", "Replay", "Option",
 	"Quit",
 };
 
@@ -818,14 +818,20 @@ bool ClassicOpTitleMenuScene::draw_choice(
 ) noexcept
 {
 	if(patch_assets_) {
-		const auto raw = static_cast<std::size_t>(choice);
-		if(raw >= replay_patch_menu_labels.size() ||
+		const auto found = std::find(
+			replay_patch_menu_choices.begin(), replay_patch_menu_choices.end(),
+			choice
+		);
+		if(found == replay_patch_menu_choices.end() ||
 			!menu_base_snapshot_valid_ ||
 			page_snapshot_.size() != present::graphics_page_pixels) {
 			return false;
 		}
+		const auto row = static_cast<std::size_t>(
+			found - replay_patch_menu_choices.begin()
+		);
 		const auto top = ((replay_patch_box_top / present::gaiji_height) + 1 +
-			static_cast<std::int32_t>(raw)) * present::gaiji_height;
+			static_cast<std::int32_t>(row)) * present::gaiji_height;
 		const auto offset = (static_cast<std::size_t>(top) *
 			present::graphics_width) + static_cast<std::size_t>(box_left);
 		const present::IndexedSource source{
@@ -838,7 +844,7 @@ bool ClassicOpTitleMenuScene::draw_choice(
 			raster_.blit(source, {box_left, top}) &&
 			patch_assets_->menu_font.put_centered(
 				raster_, box_main_center_x, top,
-				replay_patch_menu_labels[raw],
+				replay_patch_menu_labels[row],
 				attribute == present::tram_black ? 0U : 15U
 			);
 	}

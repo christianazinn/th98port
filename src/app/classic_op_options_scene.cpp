@@ -103,7 +103,16 @@ constexpr std::array<ClassicOpOptionsChoice, 7U> patch_choices{{
 	ClassicOpOptionsChoice::quit,
 }};
 constexpr std::array<std::string_view, 7U> patch_main_labels{{
-	"Start", "VS Start", "Music room", "HiScore", "Option", "Replay", "Quit",
+	"Start", "VS Start", "Music room", "HiScore", "Replay", "Option", "Quit",
+}};
+constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
+	ClassicOpMenuChoice::story,
+	ClassicOpMenuChoice::versus,
+	ClassicOpMenuChoice::music_room,
+	ClassicOpMenuChoice::high_scores,
+	ClassicOpMenuChoice::replay,
+	ClassicOpMenuChoice::options,
+	ClassicOpMenuChoice::quit,
 }};
 
 [[nodiscard]] constexpr std::int32_t choice_top(
@@ -788,7 +797,7 @@ bool ClassicOpOptionsScene::draw_main_choices() noexcept
 					replay_patch_box_top, static_cast<std::uint8_t>(index)
 				),
 				patch_main_labels[index],
-				index == static_cast<std::size_t>(ClassicOpMenuChoice::options) ?
+				patch_main_choices[index] == ClassicOpMenuChoice::options ?
 					15U : 0U
 			)) {
 				return false;

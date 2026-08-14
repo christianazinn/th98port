@@ -317,14 +317,14 @@ void test_replay_patch_title_if_assets_supplied()
 		scene.raster().pixel(Page::zero, {288, 264}) == 2U,
 		"Replay Patch title uses the source 264-pixel seven-row window"
 	);
-	for(std::uint8_t step = 0U; step < 5U; ++step) {
+	for(std::uint8_t step = 0U; step < 4U; ++step) {
 		expect(scene.advance({.down = true}).has_value(),
 			"Replay Patch main-menu selection advances");
 		expect(scene.advance().has_value(),
 			"Replay Patch main-menu direction lock releases");
 	}
 	expect(scene.selected_choice() == ClassicOpMenuChoice::replay,
-		"the sixth in-game Replay Patch title row is Replay");
+		"the fifth New Classic title row is Replay");
 	const auto selected = scene.advance({.ok = true});
 	auto completion = scene.take_completion();
 	expect(selected && selected->ready && completion &&

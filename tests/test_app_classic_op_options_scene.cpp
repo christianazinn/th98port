@@ -992,14 +992,14 @@ void local_replay_patch_return_gate(const std::filesystem::path &content_root)
 		"Replay Patch Options return preserves the held-input lock");
 	expect((*resumed)->advance().has_value(),
 		"Replay Patch Options return unlocks on release");
-	const auto down = (*resumed)->advance({.down = true});
-	expect(down && down->selection_changed &&
+	const auto up = (*resumed)->advance({.up = true});
+	expect(up && up->selection_changed &&
 		(*resumed)->selected_choice() ==
 			th03::app::ClassicOpMenuChoice::replay,
-		"Replay Patch Options return accepts Down without losing its base snapshot");
+		"New Classic Options return accepts Up to Replay without losing its base snapshot");
 	expect((*resumed)->advance().has_value(),
-		"Replay Patch Replay selection releases");
-	for(std::uint8_t row = 0U; row < 4U; ++row) {
+		"New Classic Replay selection releases");
+	for(std::uint8_t row = 0U; row < 3U; ++row) {
 		expect((*resumed)->advance({.up = true}).has_value(),
 			"Replay Patch return selection advances toward VS Start");
 		expect((*resumed)->advance().has_value(),
