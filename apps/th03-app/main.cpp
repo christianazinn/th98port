@@ -36,6 +36,7 @@
 #include "th03/app/new_classic_language.hpp"
 #include "th03/app/new_classic_playback.hpp"
 #include "th03/app/replay_slot_store.hpp"
+#include "th03/app/startup_sequence.hpp"
 #include "th03/app/tick_input.hpp"
 #include "th03/platform/sdl_input.hpp"
 #include "th03/platform/sdl_audio_device.hpp"
@@ -168,6 +169,11 @@ struct ExperienceRunResult final {
 struct MenuRunResult final {
 	int exit_code = 0;
 	std::optional<th03::app::ExperienceMenuChoice> choice{};
+};
+
+struct StartupRunResult final {
+	int exit_code = 0;
+	bool application_quit = false;
 };
 
 struct HostUiStep final {
@@ -506,6 +512,8 @@ void print_usage()
 		<< "New Classic enables its persistent English option only when the "
 			"authenticated Replay Patch 0.4.13 TH3EN.DAT is supplied with "
 			"--language-overlay. Classic remains Japanese.\n"
+		<< "The product shell also requires the original root TOUHOU.DAT "
+			"ZUN Soft logo resource under --data.\n"
 		<< "Kotohime's source-uninitialized late Bomb local is deterministically "
 			"normalized from the adjacent Kana fade routine.\n";
 }
@@ -911,6 +919,50 @@ int fail(const char *stage, const RhythmPcmLoadError &error)
 	if(error.code == RhythmPcmLoadErrorCode::file_size_mismatch) {
 		std::cerr << "expected-size=" << rhythm_pcm_profile_bytes
 			<< "\nobserved-size=" << error.observed_size << '\n';
+	}
+	return 1;
+}
+
+const char *name(th03::app::StartupSequenceErrorCode code) noexcept
+{
+	switch(code) {
+	case th03::app::StartupSequenceErrorCode::invalid_path: return "invalid-path";
+	case th03::app::StartupSequenceErrorCode::file_status_failed:
+		return "file-status-failed";
+	case th03::app::StartupSequenceErrorCode::file_missing: return "file-missing";
+	case th03::app::StartupSequenceErrorCode::file_not_regular:
+		return "file-not-regular";
+	case th03::app::StartupSequenceErrorCode::file_size_failed:
+		return "file-size-failed";
+	case th03::app::StartupSequenceErrorCode::file_size_mismatch:
+		return "file-size-mismatch";
+	case th03::app::StartupSequenceErrorCode::file_open_failed:
+		return "file-open-failed";
+	case th03::app::StartupSequenceErrorCode::file_read_failed:
+		return "file-read-failed";
+	case th03::app::StartupSequenceErrorCode::digest_mismatch:
+		return "digest-mismatch";
+	case th03::app::StartupSequenceErrorCode::asset_decode_failed:
+		return "asset-decode-failed";
+	case th03::app::StartupSequenceErrorCode::asset_profile_mismatch:
+		return "asset-profile-mismatch";
+	case th03::app::StartupSequenceErrorCode::asset_prepare_failed:
+		return "asset-prepare-failed";
+	case th03::app::StartupSequenceErrorCode::allocation_failed:
+		return "allocation-failed";
+	case th03::app::StartupSequenceErrorCode::draw_failed: return "draw-failed";
+	}
+	return "unknown";
+}
+
+int fail(const char *stage, const th03::app::StartupSequenceError &error)
+{
+	std::cerr << "status=error\nstage=" << stage << "\ncode="
+		<< name(error.code) << '\n';
+	if(error.code ==
+		th03::app::StartupSequenceErrorCode::file_size_mismatch) {
+		std::cerr << "expected-size=8272\nobserved-size="
+			<< error.observed_size << '\n';
 	}
 	return 1;
 }
@@ -1794,6 +1846,99 @@ MenuRunResult run_experience_menu(
 	return {};
 }
 
+StartupRunResult run_startup_sequence(
+	th03::app::RationalTickRate tick_rate,
+	th03::platform::SdlPlatform &platform,
+	th03::platform::SdlInputMapper &mapper,
+	th03::app::StartupSequence sequence
+)
+{
+	auto presented = platform.present(sequence.surface());
+	if(!presented) {
+		return {.exit_code = fail("startup-present", presented.error())};
+	}
+	auto scheduler = th03::app::TickInputScheduler::create(
+		tick_rate,
+		th03::platform::sdl_ticks_now_ns(),
+		th03::app::TickInputCatchUpPolicy::discard_missed_deadlines
+	);
+	if(!scheduler) {
+		return {.exit_code = fail_tick(scheduler.error())};
+	}
+
+	bool retry_blocked_event = false;
+	while(sequence.status() == th03::app::StartupSequenceStatus::running) {
+		const auto cutoff = th03::platform::sdl_ticks_now_ns();
+		if(!retry_blocked_event) {
+			auto result = mapper.pump_events(*scheduler, false);
+			if(!result) {
+				return {.exit_code = fail("startup-input-pump", result.error())};
+			}
+			retry_blocked_event = result->queue_blocked;
+		}
+
+		bool presentation_pending = false;
+		for(;;) {
+			auto due = scheduler->pop_due(cutoff);
+			if(!due) {
+				return {.exit_code = fail_tick(due.error())};
+			}
+			if(!*due) {
+				break;
+			}
+			const auto &sample = **due;
+			const auto consumed = sequence.consume({
+				.any_input = sample.input.system != 0U ||
+					sample.input.p1 != 0U || sample.input.p2 != 0U ||
+					mapper.any_keyboard_scancode_held(),
+				.app_quit_requested = sample.app_quit_requested,
+			});
+			presentation_pending =
+				presentation_pending || consumed.surface_changed;
+			if(retry_blocked_event) {
+				auto retried = mapper.pump_events(*scheduler, false);
+				if(!retried) {
+					return {
+						.exit_code = fail("startup-input-pump", retried.error())
+					};
+				}
+				retry_blocked_event = retried->queue_blocked;
+			}
+			if(consumed.status != th03::app::StartupSequenceStatus::running) {
+				break;
+			}
+		}
+
+		if(presentation_pending) {
+			presented = platform.present(sequence.surface());
+			if(!presented) {
+				return {.exit_code = fail("startup-present", presented.error())};
+			}
+		}
+		if(sequence.status() ==
+			th03::app::StartupSequenceStatus::quit_requested) {
+			return {.application_quit = true};
+		}
+		if(sequence.status() == th03::app::StartupSequenceStatus::failed) {
+			return {.exit_code = fail(
+				"startup-render",
+				th03::app::StartupSequenceError{
+					.code = th03::app::StartupSequenceErrorCode::draw_failed,
+				}
+			)};
+		}
+		if(sequence.status() == th03::app::StartupSequenceStatus::complete) {
+			return {};
+		}
+		const auto deadline = scheduler->next_deadline_ns();
+		const auto now = th03::platform::sdl_ticks_now_ns();
+		if(deadline && *deadline > now) {
+			SDL_DelayPrecise(std::min(*deadline - now, maximum_idle_delay_ns));
+		}
+	}
+	return {};
+}
+
 [[nodiscard]] th03::app::NewClassicUiInput project_new_classic_ui(
 	const th03::app::LogicalTickInput &sample
 ) noexcept
@@ -2250,6 +2395,21 @@ int run_product_shell(th03::app::ClassicCliRequest parsed)
 		return run_classic_session(
 			std::move(parsed), *product->first, product->second
 		).exit_code;
+	}
+	auto startup = th03::app::StartupSequence::load(
+		parsed.launch.content.data_root / "TOUHOU.DAT"
+	);
+	if(!startup) {
+		return fail("startup-logo-load", startup.error());
+	}
+	const auto startup_result = run_startup_sequence(
+		parsed.tick_rate,
+		*product->first,
+		product->second,
+		std::move(*startup)
+	);
+	if(startup_result.exit_code != 0 || startup_result.application_quit) {
+		return startup_result.exit_code;
 	}
 
 	for(;;) {

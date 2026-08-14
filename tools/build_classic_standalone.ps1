@@ -8,6 +8,7 @@ param(
 	[string]$MainlExecutable,
 	[string]$OpExecutable,
 	[string]$FontRom,
+	[string]$StartupLogo,
 	[string]$LanguageOverlay,
 	[string]$ReplayPatchAssets,
 	[string]$RhythmRom,
@@ -50,6 +51,9 @@ if(-not $FontRom) {
 	if(-not $FontRom) {
 		$FontRom = $fontCandidates[0]
 	}
+}
+if(-not $StartupLogo) {
+	$StartupLogo = Join-Path $originalRoot "th03_full\TOUHOU.DAT"
 }
 if(-not $LanguageOverlay) {
 	$languageCandidates = @(
@@ -136,7 +140,15 @@ $MainExecutable = Resolve-RequiredFile $MainExecutable "MAIN.EXE"
 $MainlExecutable = Resolve-RequiredFile $MainlExecutable "MAINL.EXE"
 $OpExecutable = Resolve-RequiredFile $OpExecutable "OP.EXE"
 $FontRom = Resolve-RequiredFile $FontRom "FONT.ROM"
+$StartupLogo = Resolve-RequiredFile $StartupLogo "TOUHOU.DAT startup logo"
 $ReplayPatchAssets = Resolve-RequiredFile $ReplayPatchAssets "AZINN.DAT"
+$observedStartupLogoHash = (Get-FileHash -Algorithm SHA256 `
+	-LiteralPath $StartupLogo).Hash
+$expectedStartupLogoHash =
+	"A9C31CF058B528479FE9C5B8FB7A4AC538000C8C2F3B9FB276CBC3DD7AA20532"
+if($observedStartupLogoHash -ne $expectedStartupLogoHash) {
+	throw "TOUHOU.DAT is not the authenticated TH01-TH03 ZUN Soft logo profile."
+}
 if($LanguageOverlay) {
 	$LanguageOverlay = Resolve-RequiredFile $LanguageOverlay "TH3EN.DAT"
 }
@@ -247,6 +259,8 @@ try {
 		-Destination (Join-Path $contentRoot "OP.EXE")
 	Copy-Item -LiteralPath $FontRom `
 		-Destination (Join-Path $contentRoot "FONT.ROM")
+	Copy-Item -LiteralPath $StartupLogo `
+		-Destination (Join-Path $contentRoot "TOUHOU.DAT")
 	Copy-Item -LiteralPath $ReplayPatchAssets `
 		-Destination (Join-Path $contentRoot "AZINN.DAT")
 	if($LanguageOverlay) {

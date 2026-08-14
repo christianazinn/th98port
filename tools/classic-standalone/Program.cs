@@ -467,6 +467,9 @@ internal static class Program
                 File.Exists(Path.Combine(
                     Path.GetDirectoryName(marker)!, "app", "th03-app.exe"
                 )) &&
+                File.Exists(Path.Combine(
+                    Path.GetDirectoryName(marker)!, "content", "TOUHOU.DAT"
+                )) &&
                 Directory.Exists(Path.Combine(
                     Path.GetDirectoryName(marker)!, "content", "YUME2.DAT"
                 ));

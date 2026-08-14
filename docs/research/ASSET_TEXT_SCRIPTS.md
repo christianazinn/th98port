@@ -162,7 +162,7 @@ not belong in `th03_assets`, the deterministic core, or a replay document.
 |---|---|---|
 | `YUME.CFG` | Eight-byte serialized `cfg_t`: three option bytes (BGM mode, key mode, rank), a 16-bit unused field, a 16-bit resident segment pointer, and one debug byte (`th03/formats/cfg.hpp`, `th02/formats/cfg.hpp`). OP reads it verbatim through `cfg_load_and_set_resident`; ordinary saves overwrite only the first four bytes, while exit saves write all eight and reset the resident pointer (`th03/op_01.cpp:cfg_load`, `cfg_save`, `cfg_save_exit`). The pinned source does not validate hostile values. | Future client settings/persistence adapter with explicit migration and safe validation; never a content-import requirement. |
 | `YUME.NEM` | Four 206-byte rank sections, matching the observed 824-byte stock file. Each section is a little-endian 16-bit checksum plus 204 bytes: 80 backwards-stored name-glyph IDs, cleared flag, unknown byte, 100 score-glyph IDs, 10 optional character IDs, 10 stage-glyph IDs, and two keys. `scoredat_encode_and_save` sets keys, computes the pre-encryption byte sum, encrypts backward using the stored keys/feedback; `scoredat_load_and_decode` decrypts forward and recreates all ranks on a missing file or checksum failure (`th03/formats/scoredat.hpp`, `scoredat.inc`, `scoredat.cpp`, `score_es.cpp`, `score_ld.cpp`, `scorecry.hpp`). It stores high scores and the clear/unlock flag. | Future high-score/unlock persistence adapter. A safe parser/writer may use synthetic fixtures, but it must be versioned separately from static-content import. |
-| `TOUHOU.DAT` | The read-only installation file is 8,272 bytes. A source-wide search of the pinned TH03 code finds no literal filename, loader, or layout authority. It is not the 824-byte `YUME.NEM` format. The earlier inventory's broad “score/persistence” label is therefore only a filename/context hypothesis, not a source-backed decoder claim. | Unclassified; do not parse, import, migrate, or redistribute without a loader/layout authority. |
+| `TOUHOU.DAT` | The read-only installation file is 8,272 bytes. TH03 `GAME.BAT` invokes `ZUN.COM -3` before `OP.EXE`; the TH03 ZUN build embeds the shared TH01-TH03 `th01/zunsoft.cpp`, which opens `touhou.dat` through `super_entry_bfnt()`. It is a palette-bearing 64x16 BFNT (`ZUNOP`, codes 0..15), not persistence. | Authenticated static input to the native one-time ZUN Soft startup owner. Original bytes remain external and untracked. |
 
 ## Native boundary and follow-up
 
@@ -186,8 +186,9 @@ When a MAINL client is in scope, split the work deliberately:
    after the product chooses migration/compatibility policy. Test the NEM
    cipher/checksum against synthetic sections; do not use original files as
    tracked fixtures.
-4. Leave root manuals and `TOUHOU.DAT` out of the playable path until source
-   or empirical evidence establishes a consumer and semantics.
+4. Keep root manuals outside the playable path. `TOUHOU.DAT` is the one
+   source-established exception: the startup owner consumes it before the
+   product selector, matching the original executable chain.
 
 Validation performed for this note: all 43 `.TXT` paths and 151,716 bytes
 reconcile to `ASSET_INVENTORY.md`; the source-visible split is 28 cutscene

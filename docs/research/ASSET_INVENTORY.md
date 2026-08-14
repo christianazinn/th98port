@@ -77,7 +77,8 @@ Source-backed archive semantics: `th03/formats/pfopen.asm` recognizes stored typ
 | M/EFC/PMD | `th02/snd/snd.h` and TH03 sound shims; external PMD driver | Missing PMD/YM2608 stack; separate audio parcel. |
 | TXT scripts | `th03/formats/script.hpp`, `th03/cutscene/cutscene.cpp`, MAINL callers | Format and ownership are fully inventoried in [`ASSET_TEXT_SCRIPTS.md`](ASSET_TEXT_SCRIPTS.md). A bounded cutscene VM is deferred until a MAINL client consumes it; the two fixed-record tables are client-local data. |
 | YUME.CFG / YUME.NEM | `th03/formats/cfg.hpp`, `th03/formats/scoredat.hpp`, score load/save code | Mutable configuration and high-score/unlock persistence, outside core/assets. Native migration policy and parsers are deferred to the application layer. |
-| TOUHOU.DAT, PMD/DOS executables | no TH03 loader or layout authority found for `TOUHOU.DAT`; PMD binaries are external support programs | Unclassified/support only; do not import, parse, emulate, or redistribute without separate authority. |
+| TOUHOU.DAT | shared TH01-TH03 `th01/zunsoft.cpp`; TH03 `GAME.BAT` invokes `ZUN.COM -3`, whose TH03 build embeds the shared logo program | Authenticated 8,272-byte, palette-bearing 64x16 superimpose BFNT (`ZUNOP`, codes 0..15) consumed only by the pre-OP ZUN Soft opening. |
+| PMD/DOS executables | PMD binaries are external support programs | External support programs; do not import or redistribute without separate authority. |
 
 ## Proposed `th03_assets` boundary
 
@@ -161,8 +162,9 @@ after licensing/rhythm-data decisions. ENEDAT stays in `th03_formats`.
 - Original entries and decoded cache are copyrighted user-owned data. Hashes are identity metadata, not redistribution authorization; import requires a user installation and remains untracked.
 - PMD music/effects, PMD binaries, and YM2608 rhythm ROM/sample material require focused licensing/provenance review. An engine license does not authorize distributing game music, effects, drivers, ROMs or captured audio.
 - `YUME.NEM` is four encrypted/checksummed 206-byte high-score sections and is
-  application persistence, not an imported asset. `TOUHOU.DAT` remains
-  unclassified because no pinned TH03 loader or layout authority was found.
+  application persistence, not an imported asset. `TOUHOU.DAT` is a static,
+  source-owned logo BFNT; its original bytes remain user-supplied runtime
+  content and are never committed or redistributed by the native codebase.
 - DAT extraction is an external-tool boundary: pin/test importer-tool versions before claiming reproducible import.
 
 ## Per-file metadata manifest
@@ -179,7 +181,7 @@ Metadata only. `root/SHIFTJIS-NONASCII-*` aliases non-ASCII DOS names determinis
 | installation root | root/SHIFTJIS-NONASCII-2.TXT | .TXT | 4918 | `7fe20c6341d0181204cf07f4fcd73ca94070b8b590ccb69b79ab46ded1665809` | documentation: Shift-JIS text |
 | installation root | root/SHIFTJIS-NONASCII-3.TXT | .TXT | 7075 | `8a1f04c0eda4d3720352d8a09cd08fc3708a9ba6b2bdcdfcdd125f3092b86244` | documentation: Shift-JIS text |
 | installation root | root/README.TXT | .TXT | 7410 | `6ac45f51e33442ccba2cf21746e8243d603d02c9d5a65062a77fdaa48ab5e4cd` | documentation: Shift-JIS text |
-| installation root | root/TOUHOU.DAT | .DAT | 8272 | `a9c31cf058b528479fe9c5b8fb7a4ac538000c8c2f3b9fb276cbc3dd7aa20532` | unclassified support resource |
+| installation root | root/TOUHOU.DAT | .DAT | 8272 | `a9c31cf058b528479fe9c5b8fb7a4ac538000c8c2f3b9fb276cbc3dd7aa20532` | ZUN Soft opening BFNT |
 | installation root | root/ZUN.COM | .COM | 16242 | `5896bbd673aeb10f0df9c1e34716c64fda83655a788ae1ac0fcf58e3616add27` | PMD/DOS support executable |
 | installation root | root/CANBE.EXE | .EXE | 17972 | `c1449649dc90376e6bac997e4e967a978b00a9668ba8ed85a1efea510d82f888` | support executable |
 | installation root | root/PMD.COM | .COM | 20379 | `cbbe9bd610aedda586d8bd7f6dd13d21f037a089458a21ddda0b11a53b4b29e4` | PMD/DOS support executable |
