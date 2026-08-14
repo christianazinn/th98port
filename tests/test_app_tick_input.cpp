@@ -183,6 +183,12 @@ void test_rate_validation_and_exact_rational_deadlines()
 			scheduler.rebase_after_modal(3'000'000'000ULL).has_value(),
 		"a modal boundary rebases an idle live timeline"
 	);
+	const auto stale_modal_cutoff = scheduler.pop_due(2'000'000'100ULL);
+	expect(
+		!stale_modal_cutoff && stale_modal_cutoff.error() ==
+			TickInputError::timestamp_regressed,
+		"a host catch-up batch must end after a modal clock rebase"
+	);
 	const auto rebased = expect_tick(
 		scheduler, 3'000'000'000ULL, "the rebased deadline is immediately due"
 	);

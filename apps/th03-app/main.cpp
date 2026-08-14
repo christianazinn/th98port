@@ -1488,6 +1488,8 @@ ExperienceRunResult run_classic_session(
 				}
 				retry_blocked_event = false;
 			}
+			const bool clock_rebased_this_tick =
+				consumed->clock_rebase_requested;
 			const auto next_source_deadline = scheduler->next_deadline_ns();
 			(*runner)->classify_pending_replay_frame(
 				next_source_deadline &&
@@ -1579,6 +1581,13 @@ ExperienceRunResult run_classic_session(
 			}
 			if(completed_replay || consumed->status !=
 				th03::app::ClassicRunnerStatus::running) {
+				break;
+			}
+			if(clock_rebased_this_tick) {
+				// cutoff was sampled before synchronous replay reconstruction
+				// established the new scheduler baseline. Publish the selected
+				// checkpoint now, then begin a fresh host iteration before asking
+				// the rebased scheduler for another logical tick.
 				break;
 			}
 			if(platform.oracle_enabled() && presentation_pending) {
