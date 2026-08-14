@@ -504,7 +504,7 @@ void print_usage()
 			"directory under --data by default; --config, --score, and "
 			"--replay-root override them for read-only installs.\n"
 		<< "New Classic enables its persistent English option only when the "
-			"authenticated Replay Patch 0.4.12 TH3EN.DAT is supplied with "
+			"authenticated Replay Patch 0.4.13 TH3EN.DAT is supplied with "
 			"--language-overlay. Classic remains Japanese.\n"
 		<< "Kotohime's source-uninitialized late Bomb local is deterministically "
 			"normalized from the adjacent Kana fade routine.\n";

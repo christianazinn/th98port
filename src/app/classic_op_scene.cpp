@@ -957,7 +957,7 @@ bool ClassicOpTitleMenuScene::draw_title_credit() noexcept
 	return patch_assets_->menu_font.put_right(
 		raster_, 638, 0, "The PoDD Arrange Project", 0U
 	) && patch_assets_->menu_font.put_right(
-		raster_, 638, 16, "Replay Patch v0.4.12 by Christian Azinn", 0U
+		raster_, 638, 16, "Replay Patch v0.4.13 by Christian Azinn", 0U
 	);
 }
 

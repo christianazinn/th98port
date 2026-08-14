@@ -8,7 +8,7 @@ Practice, and ordinary VS, plus a separate title-Demo gate, on top of the Phase
 strict V13 span adapter and the first stdlib-only asset/indexed-raster
 foundations now sit beside that core. An optional SDL 3 application now opens a
 shared host menu for the authenticated Classic lifecycle and the faithful
-Replay Patch 0.4.12-derived New Classic experience, alongside the earlier
+Replay Patch 0.4.13-derived New Classic experience, alongside the earlier
 direct-VS developer path. Both product identities reuse the same gameplay,
 presentation, content, and audio owners; title Exit returns to the host menu.
 A separate byte-fed PMD/YM2608 engine and TH03
