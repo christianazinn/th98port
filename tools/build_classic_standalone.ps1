@@ -76,8 +76,9 @@ if(-not $ReplayPatchAssets) {
 		$ReplayPatchAssets = $assetCandidates[0]
 	}
 }
-if(-not $Output) {
-	$Output = Join-Path $standaloneRoot "TH03-Classic-Test.exe"
+$usingDefaultOutput = [string]::IsNullOrWhiteSpace($Output)
+if($usingDefaultOutput) {
+	$Output = Join-Path $standaloneRoot "PoDD-Port-Test.exe"
 }
 if(-not $RhythmRom -and -not $T98Sound86) {
 	$t98Candidate = Join-Path $env:USERPROFILE (
@@ -130,7 +131,7 @@ function Publish-SmokeFailure(
 	)
 }
 
-$DataRoot = Resolve-RequiredDirectory $DataRoot "Classic data root"
+$DataRoot = Resolve-RequiredDirectory $DataRoot "TH03 data root"
 $MainExecutable = Resolve-RequiredFile $MainExecutable "MAIN.EXE"
 $MainlExecutable = Resolve-RequiredFile $MainlExecutable "MAINL.EXE"
 $OpExecutable = Resolve-RequiredFile $OpExecutable "OP.EXE"
@@ -204,6 +205,19 @@ if(-not $workRoot.StartsWith(
 	[StringComparison]::OrdinalIgnoreCase
 )) {
 	throw "Generated work directory escaped the standalone output root."
+}
+$temporaryPrefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd(
+	[IO.Path]::DirectorySeparatorChar,
+	[IO.Path]::AltDirectorySeparatorChar
+) + [IO.Path]::DirectorySeparatorChar
+$smokeProductRoot = [IO.Path]::GetFullPath((Join-Path $temporaryPrefix (
+	"th03-podd-port-smoke-" + [Guid]::NewGuid().ToString("N")
+)))
+if(-not $smokeProductRoot.StartsWith(
+	$temporaryPrefix,
+	[StringComparison]::OrdinalIgnoreCase
+)) {
+	throw "Generated smoke directory escaped the system temporary root."
 }
 
 try {
@@ -412,7 +426,7 @@ try {
 		ForEach-Object { $_.LastWriteTimeUtc = $payloadEpoch }
 
 	Add-Type -AssemblyName System.IO.Compression.FileSystem
-	$payloadZip = Join-Path $workRoot "classic-payload.zip"
+	$payloadZip = Join-Path $workRoot "podd-port-payload.zip"
 	[IO.Compression.ZipFile]::CreateFromDirectory(
 		$payloadRoot,
 		$payloadZip,
@@ -435,31 +449,46 @@ try {
 		throw "Standalone launcher publish failed with exit code $LASTEXITCODE."
 	}
 	$published = Resolve-RequiredFile (
-		Join-Path $publishRoot "TH03-Classic-Test.exe"
+		Join-Path $publishRoot "PoDD-Port-Test.exe"
 	) "Published standalone executable"
 	Copy-Item -LiteralPath $published -Destination $Output -Force
 
 	if(-not $SkipSmoke) {
 		$previousVideo = $env:SDL_VIDEODRIVER
 		$previousAudio = $env:SDL_AUDIODRIVER
-		$previousTicks = $env:TH03_CLASSIC_STANDALONE_SMOKE_TICKS
-		$previousUserRoot = $env:TH03_CLASSIC_STANDALONE_USER_ROOT
-		$previousReplayRoot = $env:TH03_CLASSIC_STANDALONE_REPLAY_ROOT
+		$previousProductRoot = $env:TH03_PODD_PORT_PRODUCT_ROOT
+		$previousLegacyProductRoot = $env:TH03_PODD_PORT_LEGACY_PRODUCT_ROOT
+		$previousTicks = $env:TH03_PODD_PORT_SMOKE_TICKS
+		$previousUserRoot = $env:TH03_PODD_PORT_USER_ROOT
+		$previousReplayRoot = $env:TH03_PODD_PORT_REPLAY_ROOT
 		try {
 			$env:SDL_VIDEODRIVER = "dummy"
 			$env:SDL_AUDIODRIVER = "dummy"
-			$env:TH03_CLASSIC_STANDALONE_SMOKE_TICKS = "8"
-			Remove-Item Env:TH03_CLASSIC_STANDALONE_REPLAY_ROOT `
+			$env:TH03_PODD_PORT_SMOKE_TICKS = "8"
+			Remove-Item Env:TH03_PODD_PORT_REPLAY_ROOT `
 				-ErrorAction SilentlyContinue
 
 			$portableRoot = Join-Path $workRoot "portable-smoke"
-			$portableUser = Join-Path $workRoot "portable-smoke-user"
+			$portableProduct = Join-Path $smokeProductRoot "portable-product"
+			$portableLegacyProduct = Join-Path $smokeProductRoot (
+				"portable-smoke-legacy-product"
+			)
+			$portableUser = Join-Path $portableProduct "user"
 			[IO.Directory]::CreateDirectory($portableRoot) | Out-Null
-			$portableExecutable = Join-Path $portableRoot "TH03-Classic-Test.exe"
+			[IO.Directory]::CreateDirectory(
+				(Join-Path $portableLegacyProduct "user")
+			) | Out-Null
+			$migrationMarker = Join-Path $portableLegacyProduct (
+				"user\profile-migration.marker"
+			)
+			[IO.File]::WriteAllText($migrationMarker, "PoDD Port")
+			$portableExecutable = Join-Path $portableRoot "PoDD-Port-Test.exe"
 			Copy-Item -LiteralPath $Output -Destination $portableExecutable
 			$portableOut = Join-Path $workRoot "portable-smoke.stdout.log"
 			$portableErr = Join-Path $workRoot "portable-smoke.stderr.log"
-			$env:TH03_CLASSIC_STANDALONE_USER_ROOT = $portableUser
+			$env:TH03_PODD_PORT_PRODUCT_ROOT = $portableProduct
+			$env:TH03_PODD_PORT_LEGACY_PRODUCT_ROOT = $portableLegacyProduct
+			$env:TH03_PODD_PORT_USER_ROOT = $portableUser
 			$smoke = Start-Process -FilePath $portableExecutable -Wait -PassThru `
 				-WindowStyle Hidden -RedirectStandardOutput $portableOut `
 				-RedirectStandardError $portableErr
@@ -467,6 +496,12 @@ try {
 				Publish-SmokeFailure "portable" $smoke.ExitCode $portableUser `
 					$portableOut $portableErr $failedSmokeLog
 				throw "Standalone portable smoke failed with exit code $($smoke.ExitCode). See $failedSmokeLog"
+			}
+			if([IO.Directory]::Exists($portableLegacyProduct) -or
+				-not [IO.File]::Exists((Join-Path $portableUser (
+					"profile-migration.marker"
+				)))) {
+				throw "Standalone AppData profile migration smoke failed."
 			}
 			$portableLog = Join-Path $portableUser "last-run.log"
 			$portableReplay = Join-Path $portableRoot "REPLAY"
@@ -505,12 +540,17 @@ try {
 			$fallbackRoot = Join-Path $workRoot "fallback-smoke"
 			$fallbackUser = Join-Path $workRoot "fallback-smoke-user"
 			[IO.Directory]::CreateDirectory($fallbackRoot) | Out-Null
-			$fallbackExecutable = Join-Path $fallbackRoot "TH03-Classic-Test.exe"
+			$fallbackExecutable = Join-Path $fallbackRoot "PoDD-Port-Test.exe"
 			Copy-Item -LiteralPath $Output -Destination $fallbackExecutable
 			[IO.File]::WriteAllText((Join-Path $fallbackRoot "REPLAY"), "blocked")
 			$fallbackOut = Join-Path $workRoot "fallback-smoke.stdout.log"
 			$fallbackErr = Join-Path $workRoot "fallback-smoke.stderr.log"
-			$env:TH03_CLASSIC_STANDALONE_USER_ROOT = $fallbackUser
+			$env:TH03_PODD_PORT_PRODUCT_ROOT = Join-Path $smokeProductRoot (
+				"fallback-smoke-product"
+			)
+			Remove-Item Env:TH03_PODD_PORT_LEGACY_PRODUCT_ROOT `
+				-ErrorAction SilentlyContinue
+			$env:TH03_PODD_PORT_USER_ROOT = $fallbackUser
 			$smoke = Start-Process -FilePath $fallbackExecutable -Wait -PassThru `
 				-WindowStyle Hidden -RedirectStandardOutput $fallbackOut `
 				-RedirectStandardError $fallbackErr
@@ -530,9 +570,17 @@ try {
 		} finally {
 			$env:SDL_VIDEODRIVER = $previousVideo
 			$env:SDL_AUDIODRIVER = $previousAudio
-			$env:TH03_CLASSIC_STANDALONE_SMOKE_TICKS = $previousTicks
-			$env:TH03_CLASSIC_STANDALONE_USER_ROOT = $previousUserRoot
-			$env:TH03_CLASSIC_STANDALONE_REPLAY_ROOT = $previousReplayRoot
+			$env:TH03_PODD_PORT_PRODUCT_ROOT = $previousProductRoot
+			$env:TH03_PODD_PORT_LEGACY_PRODUCT_ROOT = $previousLegacyProductRoot
+			$env:TH03_PODD_PORT_SMOKE_TICKS = $previousTicks
+			$env:TH03_PODD_PORT_USER_ROOT = $previousUserRoot
+			$env:TH03_PODD_PORT_REPLAY_ROOT = $previousReplayRoot
+		}
+	}
+	if($usingDefaultOutput) {
+		$legacyOutput = Join-Path $standaloneRoot "TH03-Classic-Test.exe"
+		if([IO.File]::Exists($legacyOutput)) {
+			Remove-Item -LiteralPath $legacyOutput -Force
 		}
 	}
 
@@ -544,5 +592,8 @@ try {
 } finally {
 	if(Test-Path -LiteralPath $workRoot -PathType Container) {
 		Remove-Item -LiteralPath $workRoot -Recurse -Force
+	}
+	if(Test-Path -LiteralPath $smokeProductRoot -PathType Container) {
+		Remove-Item -LiteralPath $smokeProductRoot -Recurse -Force
 	}
 }

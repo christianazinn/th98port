@@ -486,7 +486,7 @@ void print_usage()
 			"chiyuri yumemi\n"
 		<< "P1: T/F/H/B, diagonals R/Y/V/N, Z shot, X bomb\n"
 		<< "P2: keypad 8/4/6/2, diagonals 7/9/1/3, Left shot, Right bomb\n"
-		<< "Classic UI: arrows/keypad, Z/X/Space, Return OK, Escape Cancel\n"
+		<< "TH03 UI: arrows/keypad, Z/X/Space, Return OK, Escape Cancel\n"
 		<< "--shell opens the shared Classic/New Classic product menu. "
 			"Title Exit returns to it. In New Classic gameplay, Escape opens "
 			"Pause, R restarts, and Q exits without saving. During New Classic "
@@ -495,12 +495,12 @@ void print_usage()
 			"Escape exits. In Classic, Escape remains source Cancel and "
 			"window close exits. The default cadence is nominal PC-9801 24 kHz "
 			"(526315/9328 Hz); --tick-rate overrides it.\n"
-		<< "Classic synthesizes external PMD/EFC content and delivers canonical "
+		<< "PoDD Port synthesizes external PMD/EFC content and delivers canonical "
 			"PCM when SDL playback is available. Supply an exact 8 KiB YM2608 "
 			"ADPCM-A image with --rhythm-rom, or an authenticated decoded T98 "
 			"profile with --rhythm-pcm; otherwise rhythm is deterministically "
 			"suppressed.\n"
-		<< "Classic stores YUME.CFG, YUME.NEM, and New Classic's REPLAY "
+		<< "PoDD Port stores YUME.CFG, YUME.NEM, and New Classic's REPLAY "
 			"directory under --data by default; --config, --score, and "
 			"--replay-root override them for read-only installs.\n"
 		<< "New Classic enables its persistent English option only when the "
@@ -1278,7 +1278,7 @@ ExperienceRunResult run_classic_session(
 	}
 	auto runner = th03::app::ClassicRunner::load(std::move(parsed.launch));
 	if(!runner) {
-		return {.exit_code = fail("classic-load", runner.error())};
+		return {.exit_code = fail("th03-load", runner.error())};
 	}
 	auto identity_output_result = pixel_oracle_identity_output(
 		platform.oracle_enabled()
@@ -1466,7 +1466,7 @@ ExperienceRunResult run_classic_session(
 			if(!consumed) {
 				std::cerr << "logical-tick=" << logical_ticks << '\n';
 				return {
-					.exit_code = fail("classic-runner", consumed.error())
+					.exit_code = fail("th03-runner", consumed.error())
 				};
 			}
 			if(auto update = (*runner)->take_new_classic_key_config_update()) {

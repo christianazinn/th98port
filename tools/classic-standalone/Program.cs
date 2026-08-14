@@ -5,18 +5,25 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Th03ClassicStandalone;
+namespace Th03PoddPortStandalone;
 
 internal static class Program
 {
-    private const string PayloadResource = "TH03.Classic.Payload.zip";
-    private const string ProductDirectory = "TH03 Classic Native Test";
+    private const string PayloadResource = "TH03.PoDDPort.Payload.zip";
+    private const string ProductDirectory = "PoDD Port";
+    // Retained only to move an existing private profile to the neutral product
+    // identity. New files and diagnostics are never written below this name.
+    private const string LegacyProductDirectory = "TH03 Classic Native Test";
+    private const string ProductRootEnvironment =
+        "TH03_PODD_PORT_PRODUCT_ROOT";
+    private const string LegacyProductRootEnvironment =
+        "TH03_PODD_PORT_LEGACY_PRODUCT_ROOT";
     private const string SmokeTicksEnvironment =
-        "TH03_CLASSIC_STANDALONE_SMOKE_TICKS";
+        "TH03_PODD_PORT_SMOKE_TICKS";
     private const string UserRootEnvironment =
-        "TH03_CLASSIC_STANDALONE_USER_ROOT";
+        "TH03_PODD_PORT_USER_ROOT";
     private const string ReplayRootEnvironment =
-        "TH03_CLASSIC_STANDALONE_REPLAY_ROOT";
+        "TH03_PODD_PORT_REPLAY_ROOT";
     private const string DeduplicatedArchiveMarker =
         ".deduplicate-YUME2.DAT";
 
@@ -45,7 +52,7 @@ internal static class Program
         }
         catch(Exception exception)
         {
-            var message = "The standalone Classic test build could not start.\n\n" +
+            var message = "PoDD Port could not start.\n\n" +
                 exception.Message;
             if(IsSmokeMode())
             {
@@ -71,7 +78,28 @@ internal static class Program
             );
         }
 
-        var productRoot = Path.Combine(localApplicationData, ProductDirectory);
+        var productRootOverride = Environment.GetEnvironmentVariable(
+            ProductRootEnvironment
+        );
+        var productRoot = string.IsNullOrWhiteSpace(productRootOverride) ?
+            Path.Combine(localApplicationData, ProductDirectory) :
+            Path.GetFullPath(productRootOverride);
+        var legacyProductRootOverride = Environment.GetEnvironmentVariable(
+            LegacyProductRootEnvironment
+        );
+        if(!string.IsNullOrWhiteSpace(legacyProductRootOverride))
+        {
+            MigrateLegacyProductRoot(
+                Path.GetFullPath(legacyProductRootOverride), productRoot
+            );
+        }
+        else if(string.IsNullOrWhiteSpace(productRootOverride))
+        {
+            MigrateLegacyProductRoot(
+                Path.Combine(localApplicationData, LegacyProductDirectory),
+                productRoot
+            );
+        }
         var cacheRoot = Path.Combine(productRoot, "cache");
         var userRootOverride = Environment.GetEnvironmentVariable(
             UserRootEnvironment
@@ -94,13 +122,13 @@ internal static class Program
         using var payload = Assembly.GetExecutingAssembly().
             GetManifestResourceStream(PayloadResource) ??
             throw new InvalidOperationException(
-                "The embedded Classic payload is missing."
+                "The embedded TH03 payload is missing."
             );
         var payloadHash = Convert.ToHexString(SHA256.HashData(payload));
         if(!payload.CanSeek)
         {
             throw new InvalidOperationException(
-                "The embedded Classic payload cannot be rewound."
+                "The embedded TH03 payload cannot be rewound."
             );
         }
         payload.Position = 0;
@@ -172,7 +200,7 @@ internal static class Program
 
         using var process = Process.Start(start) ??
             throw new InvalidOperationException(
-                "Windows refused to start the native Classic executable."
+                "Windows refused to start the native TH03 executable."
             );
         var standardOutput = process.StandardOutput.ReadToEndAsync();
         var standardError = process.StandardError.ReadToEndAsync();
@@ -189,7 +217,7 @@ internal static class Program
         File.WriteAllText(logPath, log.ToString(), Encoding.UTF8);
         if(process.ExitCode != 0)
         {
-            var message = $"Classic exited with code {process.ExitCode}.\n\n" +
+            var message = $"PoDD Port exited with code {process.ExitCode}.\n\n" +
                 $"Diagnostic log:\n{logPath}";
             if(IsSmokeMode())
             {
@@ -224,9 +252,34 @@ internal static class Program
             ))
             {
                 throw new InvalidOperationException(
-                    "Persistent Classic data must remain outside the payload cache."
+                    "Persistent TH03 data must remain outside the payload cache."
                 );
             }
+        }
+    }
+
+    private static void MigrateLegacyProductRoot(
+        string legacyRoot,
+        string productRoot
+    )
+    {
+        if(!Directory.Exists(legacyRoot))
+        {
+            return;
+        }
+        if(!Directory.Exists(productRoot))
+        {
+            Directory.Move(legacyRoot, productRoot);
+            return;
+        }
+
+        // A packaging smoke may already have populated the new content cache.
+        // Move the durable profile independently if no new profile exists yet.
+        var legacyUserRoot = Path.Combine(legacyRoot, "user");
+        var productUserRoot = Path.Combine(productRoot, "user");
+        if(Directory.Exists(legacyUserRoot) && !Directory.Exists(productUserRoot))
+        {
+            Directory.Move(legacyUserRoot, productUserRoot);
         }
     }
 
@@ -436,7 +489,7 @@ internal static class Program
         if(!Directory.Exists(sourceRoot) || Directory.Exists(aliasRoot))
         {
             throw new InvalidDataException(
-                "The deduplicated Classic archive marker is inconsistent."
+                "The deduplicated TH03 archive marker is inconsistent."
             );
         }
         Directory.CreateDirectory(aliasRoot);
@@ -500,7 +553,7 @@ internal static class Program
         _ = MessageBoxW(
             0,
             message,
-            "TH03 Classic Test",
+            "PoDD Port",
             errorIcon
         );
     }

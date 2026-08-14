@@ -15,7 +15,7 @@ execute_process(
 if(result EQUAL 0)
 	message(FATAL_ERROR "missing Classic MAIN input unexpectedly succeeded")
 endif()
-if(NOT error MATCHES "stage=classic-load")
+if(NOT error MATCHES "stage=th03-load")
 	message(FATAL_ERROR "missing Classic MAIN diagnostic omitted the load stage")
 endif()
 if(NOT error MATCHES "code=file-missing")

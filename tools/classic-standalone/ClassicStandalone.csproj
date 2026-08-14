@@ -12,8 +12,10 @@
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-    <AssemblyName>TH03-Classic-Test</AssemblyName>
-    <RootNamespace>Th03ClassicStandalone</RootNamespace>
+    <AssemblyName>PoDD-Port-Test</AssemblyName>
+    <RootNamespace>Th03PoddPortStandalone</RootNamespace>
+    <AssemblyTitle>PoDD Port</AssemblyTitle>
+    <Product>PoDD Port</Product>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -21,7 +23,7 @@
 
   <ItemGroup Condition="'$(PayloadZip)' != ''">
     <EmbeddedResource Include="$(PayloadZip)"
-                      LogicalName="TH03.Classic.Payload.zip" />
+                      LogicalName="TH03.PoDDPort.Payload.zip" />
   </ItemGroup>
 
   <ItemGroup>
@@ -31,7 +33,7 @@
 
   <Target Name="ValidatePayload" BeforeTargets="BeforeBuild">
     <Error Condition="'$(PayloadZip)' == ''"
-           Text="PayloadZip must name the generated Classic payload ZIP." />
+           Text="PayloadZip must name the generated TH03 payload ZIP." />
     <Error Condition="!Exists('$(PayloadZip)')"
            Text="PayloadZip does not exist: $(PayloadZip)" />
   </Target>

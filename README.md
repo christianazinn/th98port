@@ -66,7 +66,7 @@ cmake --build --preset msvc-x64-sdl
 ctest --preset msvc-x64-sdl
 ```
 
-#### Maintained one-file Classic/New Classic test build
+#### Maintained one-file PoDD Port test build
 
 For ongoing human testing, the repository has a local-only packager that
 rebuilds the current Release application, embeds its SDL runtime and the
@@ -79,7 +79,7 @@ tools\build_classic_standalone.ps1
 ```
 
 With the standard ignored workspace layout, the stable result is
-`out\standalone\TH03-Classic-Test.exe`. It can be copied elsewhere and launched
+`out\standalone\PoDD-Port-Test.exe`. It can be copied elsewhere and launched
 by double-clicking; it needs no adjacent DLL/content tree, installed .NET
 runtime, or command-line arguments. Its NativeAOT launcher avoids carrying the
 ordinary .NET runtime bundle. It opens the shared Classic/New Classic
@@ -88,7 +88,7 @@ Classic additionally records/browses/plays V13 replays through the shared typed
 MAIN/MAINL scene owners and owns Replay Patch's four-choice gameplay
 pause/restart loop and two-page Practice setup.
 Exiting either title returns to this menu. Its first launch extracts a content-hash
-cache below `%LOCALAPPDATA%\TH03 Classic Native Test`, while configuration,
+cache below `%LOCALAPPDATA%\PoDD Port`, while configuration,
 scores, and the last-run diagnostic log live in the separate `user` directory
 there and survive artifact updates. New Classic V13 files instead live in a
 visible `REPLAY` directory beside the executable. A read-only installation
