@@ -584,6 +584,21 @@ target_compile_features(th03_app_main PUBLIC cxx_std_23)
 set_target_properties(th03_app_main PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_app_main)
 
+if(WIN32)
+	add_library(th03_platform_windows_online STATIC
+		src/platform/windows_online.cpp
+	)
+	target_include_directories(th03_platform_windows_online PUBLIC include)
+	target_link_libraries(
+		th03_platform_windows_online PUBLIC th03_app_main winhttp crypt32
+	)
+	target_compile_features(th03_platform_windows_online PUBLIC cxx_std_23)
+	set_target_properties(
+		th03_platform_windows_online PROPERTIES CXX_EXTENSIONS OFF
+	)
+	th03_set_warnings(th03_platform_windows_online)
+endif()
+
 add_executable(th03-headless apps/th03-headless/main.cpp)
 target_link_libraries(th03-headless PRIVATE th03_formats)
 th03_set_warnings(th03-headless)
@@ -814,6 +829,23 @@ if(BUILD_TESTING)
 	add_executable(th03-app-new-classic-online-client-tests
 		tests/test_app_new_classic_online_client.cpp
 	)
+
+	if(WIN32)
+		add_executable(th03-platform-windows-online-tests
+			tests/test_platform_windows_online.cpp
+		)
+		target_link_libraries(
+			th03-platform-windows-online-tests PRIVATE th03_platform_windows_online
+		)
+		target_compile_features(
+			th03-platform-windows-online-tests PRIVATE cxx_std_23
+		)
+		th03_set_warnings(th03-platform-windows-online-tests)
+		add_test(
+			NAME th03-platform-windows-online-tests
+			COMMAND th03-platform-windows-online-tests
+		)
+	endif()
 	target_link_libraries(
 		th03-app-new-classic-online-client-tests PRIVATE th03_app_main
 	)

@@ -1,8 +1,8 @@
 # New Classic online leaderboard and replay service
 
-Status: **local foundation, strict client/cache projection, and platform-neutral
-transactions implemented; production adapter, deployment, and visible UI
-pending**
+Status: **local foundation, strict client/cache projection, platform-neutral
+transactions, and disabled Windows adapter implemented; production deployment
+and visible UI pending**
 
 Decision date: 2026-08-15
 
@@ -294,5 +294,13 @@ request memory and never writes a candidate journal or temporary replay.
 Download verifies the content digest, V13 parse, and every available cached
 metadata field before atomically preserving the exact response bytes (including
 optional accelerator tails) under the online replay directory. The remaining
-client work is the Windows HTTPS/protected-credential adapter and source-styled
-asynchronous visible owner.
+client work is the source-styled asynchronous visible owner and configured
+production deployment.
+
+Session 200 supplies that disabled Windows boundary. WinHTTP is fixed to one
+explicit HTTPS origin, rejects redirects and cross-origin/absolute targets,
+bounds connect/request time and reply bytes, and exposes no platform state to
+gameplay. DPAPI protects the opaque user ID and token together for the current
+Windows account through an atomic read-back-validated store. No production
+origin is compiled in or instantiated; therefore the remaining work is a
+configured deployment plus the source-styled asynchronous owner.

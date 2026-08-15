@@ -306,6 +306,13 @@ std::filesystem::path new_classic_online_board_cache_path(
 	);
 }
 
+bool validate_new_classic_online_credentials(
+	const NewClassicOnlineCredentials &credentials
+) noexcept
+{
+	return credentials_valid(credentials);
+}
+
 std::expected<NewClassicOnlineCacheDocument, NewClassicOnlineClientError>
 refresh_new_classic_online_board(
 	const NewClassicOnlineCategory &category,

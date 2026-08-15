@@ -74,6 +74,10 @@ struct NewClassicOnlineCredentials final {
 	) = default;
 };
 
+[[nodiscard]] bool validate_new_classic_online_credentials(
+	const NewClassicOnlineCredentials &credentials
+) noexcept;
+
 enum class NewClassicOnlineUploadStatus : std::uint8_t {
 	accepted,
 	rejected,
