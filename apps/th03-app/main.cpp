@@ -1411,6 +1411,8 @@ ExperienceRunResult run_classic_session(
 	// read-only startup failure rather than leaving a stray YUME.CFG behind.
 	th03::app::ClassicConfigOptions persisted_options{};
 	std::uint8_t master_volume_percent = 100U;
+	std::uint8_t music_volume_percent = 100U;
+	std::uint8_t effect_volume_percent = 100U;
 	th03::app::NewClassicWindowPresentation window_presentation{};
 	if(new_classic) {
 		auto persisted = th03::app::load_new_classic_settings_store(
@@ -1421,6 +1423,8 @@ ExperienceRunResult run_classic_session(
 		}
 		persisted_options = persisted->settings.options;
 		master_volume_percent = persisted->settings.master_volume_percent;
+		music_volume_percent = persisted->settings.music_volume_percent;
+		effect_volume_percent = persisted->settings.effect_volume_percent;
 		window_presentation = persisted->settings.window;
 		if(auto applied = platform.apply_window_presentation(
 			platform_window_presentation(window_presentation)
@@ -1441,6 +1445,10 @@ ExperienceRunResult run_classic_session(
 			th03::app::ClassicBgmMode::fm,
 		.effects_active = !new_classic || persisted_options.sfx_enabled,
 		.effects_follow_bgm = !new_classic,
+		.music_volume_percent = new_classic ? music_volume_percent :
+			std::uint8_t{100},
+		.effect_volume_percent = new_classic ? effect_volume_percent :
+			std::uint8_t{100},
 		.rhythm_rom = std::span<const std::byte>(rhythm_rom),
 		.rhythm_pcm = rhythm_pcm.view(),
 	});

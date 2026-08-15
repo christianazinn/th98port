@@ -673,6 +673,64 @@ void test_effect_pcm_and_registers_are_deterministic()
 	);
 }
 
+void test_user_category_volumes_preserve_one_chip()
+{
+	const auto song = synthetic_song();
+	const auto bank = synthetic_effect_bank();
+	auto muted_music = engine();
+	expect(
+		muted_music.set_user_volumes(0U, 100U) &&
+			muted_music.load_song(song) && muted_music.load_effect_bank(bank) &&
+			muted_music.play(),
+		"music mute installs before one fresh PMD playback"
+	);
+	std::vector<PmdOpnaStereoSample> muted_song_pcm(20'000U);
+	muted_music.render_native(muted_song_pcm);
+	expect(std::all_of(
+		muted_song_pcm.begin(), muted_song_pcm.end(), [](const auto &sample) {
+			return sample.left == 0 && sample.right == 0;
+		}
+	), "0% music silences every authored song category");
+	expect(static_cast<bool>(muted_music.play_effect(1U)),
+		"100% SFX retains external FM6 ownership over muted music");
+	std::vector<PmdOpnaStereoSample> audible_effect_pcm(20'000U);
+	muted_music.render_native(audible_effect_pcm);
+	expect(std::any_of(
+		audible_effect_pcm.begin(), audible_effect_pcm.end(), [](const auto &sample) {
+			return sample.left != 0 || sample.right != 0;
+		}
+	), "independent SFX remains audible while music is 0%");
+
+	auto baseline = engine();
+	auto muted_effect = engine();
+	expect(
+		baseline.load_song(song) && baseline.load_effect_bank(bank) &&
+			baseline.play() && muted_effect.set_user_volumes(100U, 0U) &&
+			muted_effect.load_song(song) && muted_effect.load_effect_bank(bank) &&
+			muted_effect.play() && muted_effect.play_effect(1U),
+		"effect mute and music baseline share one PMD setup"
+	);
+	std::vector<PmdOpnaStereoSample> baseline_pcm(20'000U);
+	std::vector<PmdOpnaStereoSample> muted_effect_pcm(baseline_pcm.size());
+	baseline.render_native(baseline_pcm);
+	muted_effect.render_native(muted_effect_pcm);
+	expect(std::equal(
+		baseline_pcm.begin(), baseline_pcm.end(), muted_effect_pcm.begin(),
+		[](const auto &left, const auto &right) {
+			return left.left == right.left && left.right == right.right;
+		}
+	),
+		"0% external effect adds no PCM while ordinary song parts continue");
+	expect(muted_effect.status().active_effect.has_value(),
+		"muted effects still retain source Timer-A ownership");
+	expect(muted_effect.set_user_volumes(100U, 50U) &&
+		muted_effect.status().effect_volume_percent == 50U,
+		"active effect gain updates live without restarting PMD");
+	const auto invalid = muted_effect.set_user_volumes(105U, 100U);
+	expect(!invalid && invalid.error().code == PmdOpnaErrorCode::invalid_volume,
+		"category gain rejects values outside the percentage domain");
+}
+
 void test_load_is_chip_silent_and_play_is_traced()
 {
 	auto subject = engine();
@@ -1339,6 +1397,7 @@ int main(int argc, char **argv)
 	test_effect_bank_validation_is_transactional();
 	test_effect_transport_and_timer_a_ownership();
 	test_effect_pcm_and_registers_are_deterministic();
+	test_user_category_volumes_preserve_one_chip();
 	test_load_is_chip_silent_and_play_is_traced();
 	test_pcm_and_fresh_replay_are_deterministic();
 	test_rhythm_rom_is_owned_and_audible();

@@ -615,6 +615,8 @@ struct PmdOpnaEngine::Impl final : ymfm::ymfm_interface {
 	std::vector<std::uint8_t> active_song{};
 	PmdPointer active_pmd{};
 	bool active_effect_bank = false;
+	std::uint8_t music_volume_percent = 100U;
+	std::uint8_t effect_volume_percent = 100U;
 	std::array<std::uint8_t, 512U> registers{};
 	std::array<std::int64_t, 2U> timer_deadlines{-1, -1};
 	bool irq_asserted = false;
@@ -817,6 +819,14 @@ std::expected<void, PmdOpnaError> PmdOpnaEngine::play()
 				.code = PmdOpnaErrorCode::invalid_effect_bank,
 			});
 		}
+		if(!th03_pmd_set_user_volumes(
+			candidate_pmd.get(), impl_->music_volume_percent,
+			impl_->effect_volume_percent
+		)) {
+			return std::unexpected(PmdOpnaError{
+				.code = PmdOpnaErrorCode::invalid_volume,
+			});
+		}
 		impl_->active_song = std::move(candidate_song);
 		impl_->active_pmd = std::move(candidate_pmd);
 		impl_->active_effect_bank = effect_layout.has_value();
@@ -851,6 +861,29 @@ void PmdOpnaEngine::fade(std::int8_t speed) noexcept
 void PmdOpnaEngine::set_volume(std::uint8_t volume) noexcept
 {
 	th03_pmd_set_volume(impl_->active_pmd.get(), volume);
+}
+
+std::expected<void, PmdOpnaError> PmdOpnaEngine::set_user_volumes(
+	std::uint8_t music_percent,
+	std::uint8_t effect_percent
+) noexcept
+{
+	if(music_percent > 100U || effect_percent > 100U) {
+		return std::unexpected(PmdOpnaError{
+			.code = PmdOpnaErrorCode::invalid_volume,
+			.supplied_size = std::max(music_percent, effect_percent),
+		});
+	}
+	if(impl_->active_pmd && !th03_pmd_set_user_volumes(
+		impl_->active_pmd.get(), music_percent, effect_percent
+	)) {
+		return std::unexpected(PmdOpnaError{
+			.code = PmdOpnaErrorCode::invalid_volume,
+		});
+	}
+	impl_->music_volume_percent = music_percent;
+	impl_->effect_volume_percent = effect_percent;
+	return {};
 }
 
 std::expected<void, PmdOpnaError> PmdOpnaEngine::play_effect(
@@ -954,6 +987,8 @@ PmdOpnaStatus PmdOpnaEngine::status() const noexcept
 		.fade_volume = th03_pmd_fade_volume(pmd),
 		.fade_speed = th03_pmd_fade_speed(pmd),
 		.part_mask = th03_pmd_part_mask(pmd),
+		.music_volume_percent = impl_->music_volume_percent,
+		.effect_volume_percent = impl_->effect_volume_percent,
 	};
 }
 

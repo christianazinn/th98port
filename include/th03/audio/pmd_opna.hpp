@@ -53,6 +53,7 @@ enum class PmdOpnaErrorCode : std::uint8_t {
 	invalid_effect_bank,
 	invalid_effect_id,
 	invalid_part,
+	invalid_volume,
 	no_song_loaded,
 	no_effect_bank_loaded,
 	allocation_failed,
@@ -101,6 +102,8 @@ struct PmdOpnaStatus {
 	std::uint8_t fade_volume = 0U;
 	std::int8_t fade_speed = 0;
 	std::uint32_t part_mask = 0U;
+	std::uint8_t music_volume_percent = 100U;
+	std::uint8_t effect_volume_percent = 100U;
 };
 
 // Platform-neutral, byte-fed PMD/YM2608 engine. It owns both the immutable
@@ -140,6 +143,10 @@ public:
 	void resume() noexcept;
 	void fade(std::int8_t speed) noexcept;
 	void set_volume(std::uint8_t volume) noexcept;
+	std::expected<void, PmdOpnaError> set_user_volumes(
+		std::uint8_t music_percent,
+		std::uint8_t effect_percent
+	) noexcept;
 	std::expected<void, PmdOpnaError> play_effect(
 		std::uint8_t effect_id
 	) noexcept;

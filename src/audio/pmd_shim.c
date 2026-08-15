@@ -169,6 +169,10 @@ struct th03_pmd_handle *th03_pmd_create(void)
 {
 	struct th03_pmd_owned_handle *handle =
 		(struct th03_pmd_owned_handle *)calloc(1U, sizeof(*handle));
+	if(handle) {
+		handle->base.driver.user_music_percent = 100U;
+		handle->base.driver.user_effect_percent = 100U;
+	}
 	return handle ? &handle->base : NULL;
 }
 
@@ -188,6 +192,8 @@ bool th03_pmd_load(
 	}
 	memset(&handle->work, 0, sizeof(handle->work));
 	memset(&handle->driver, 0, sizeof(handle->driver));
+	handle->driver.user_music_percent = 100U;
+	handle->driver.user_effect_percent = 100U;
 	handle->effect_table_offset = 0U;
 	handle->effect_tone_offset = 0U;
 	handle->effect_count = 0U;
@@ -342,6 +348,22 @@ void th03_pmd_set_volume(struct th03_pmd_handle *handle, uint8_t volume)
 	if(handle && handle->started && handle->driver.playing) {
 		handle->driver.fadeout_vol = volume;
 	}
+}
+
+bool th03_pmd_set_user_volumes(
+	struct th03_pmd_handle *handle,
+	uint8_t music_percent,
+	uint8_t effect_percent
+)
+{
+	if(!handle || !handle->started || music_percent > 100U ||
+		effect_percent > 100U) {
+		return false;
+	}
+	pmd_set_user_volumes(
+		&handle->work, &handle->driver, music_percent, effect_percent
+	);
+	return true;
 }
 
 bool th03_pmd_set_part_mask(

@@ -106,6 +106,8 @@ public:
 	[[nodiscard]] const GameInit &resident() const noexcept;
 	[[nodiscard]] ClassicConfigOptions config() const noexcept;
 	[[nodiscard]] std::uint8_t master_volume_percent() const noexcept;
+	[[nodiscard]] std::uint8_t music_volume_percent() const noexcept;
+	[[nodiscard]] std::uint8_t effect_volume_percent() const noexcept;
 	[[nodiscard]] NewClassicWindowPresentation window_presentation() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 	[[nodiscard]] const present::Tram &tram() const noexcept;
@@ -119,6 +121,8 @@ private:
 		ClassicConfigOptions config,
 		std::uint8_t master_volume_percent,
 		NewClassicWindowPresentation window_presentation,
+		std::uint8_t music_volume_percent,
+		std::uint8_t effect_volume_percent,
 		present::Raster raster,
 		present::Tram tram,
 		bool main_input_allowed,
@@ -128,6 +132,8 @@ private:
 	GameInit resident_{};
 	ClassicConfigOptions config_{};
 	std::uint8_t master_volume_percent_ = 100U;
+	std::uint8_t music_volume_percent_ = 100U;
+	std::uint8_t effect_volume_percent_ = 100U;
 	NewClassicWindowPresentation window_presentation_{};
 	present::Raster raster_{};
 	present::Tram tram_{};
@@ -152,7 +158,9 @@ public:
 		const present::AnkGlyphProvider *font = nullptr,
 		bool language_available = false,
 		std::uint8_t master_volume_percent = 100U,
-		NewClassicWindowPresentation window_presentation = {}
+		NewClassicWindowPresentation window_presentation = {},
+		std::uint8_t music_volume_percent = 100U,
+		std::uint8_t effect_volume_percent = 100U
 	);
 
 	[[nodiscard]] static std::expected<
@@ -166,7 +174,9 @@ public:
 		const present::AnkGlyphProvider *font,
 		bool language_available,
 		std::uint8_t master_volume_percent = 100U,
-		NewClassicWindowPresentation window_presentation = {}
+		NewClassicWindowPresentation window_presentation = {},
+		std::uint8_t music_volume_percent = 100U,
+		std::uint8_t effect_volume_percent = 100U
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpOptionsScene>,
@@ -179,7 +189,9 @@ public:
 		const present::AnkGlyphProvider *font,
 		bool language_available,
 		std::uint8_t master_volume_percent = 100U,
-		NewClassicWindowPresentation window_presentation = {}
+		NewClassicWindowPresentation window_presentation = {},
+		std::uint8_t music_volume_percent = 100U,
+		std::uint8_t effect_volume_percent = 100U
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpOptionsScene>,
@@ -192,7 +204,9 @@ public:
 		const present::AnkGlyphProvider *font,
 		bool language_available,
 		std::uint8_t master_volume_percent = 100U,
-		NewClassicWindowPresentation window_presentation = {}
+		NewClassicWindowPresentation window_presentation = {},
+		std::uint8_t music_volume_percent = 100U,
+		std::uint8_t effect_volume_percent = 100U
 	);
 
 	[[nodiscard]] static std::expected<
@@ -210,7 +224,9 @@ public:
 		const present::AnkGlyphProvider *font = nullptr,
 		bool language_available = false,
 		std::uint8_t master_volume_percent = 100U,
-		NewClassicWindowPresentation window_presentation = {}
+		NewClassicWindowPresentation window_presentation = {},
+		std::uint8_t music_volume_percent = 100U,
+		std::uint8_t effect_volume_percent = 100U
 	);
 	[[nodiscard]] std::expected<void, ClassicOpError>
 	refresh_patch_language_background(
@@ -235,6 +251,8 @@ public:
 	[[nodiscard]] ClassicOpOptionsChoice selected_choice() const noexcept;
 	[[nodiscard]] ClassicConfigOptions config() const noexcept;
 	[[nodiscard]] std::uint8_t master_volume_percent() const noexcept;
+	[[nodiscard]] std::uint8_t music_volume_percent() const noexcept;
+	[[nodiscard]] std::uint8_t effect_volume_percent() const noexcept;
 	[[nodiscard]] NewClassicWindowPresentation window_presentation() const noexcept;
 	[[nodiscard]] const GameInit &resident() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
@@ -258,7 +276,9 @@ private:
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 		bool language_available,
 		std::uint8_t master_volume_percent,
-		NewClassicWindowPresentation window_presentation
+		NewClassicWindowPresentation window_presentation,
+		std::uint8_t music_volume_percent,
+		std::uint8_t effect_volume_percent
 	) noexcept;
 
 	[[nodiscard]] bool restore_menu_background(
@@ -317,6 +337,8 @@ private:
 	GameInit resident_{};
 	ClassicConfigOptions config_{};
 	std::uint8_t master_volume_percent_ = 100U;
+	std::uint8_t music_volume_percent_ = 100U;
+	std::uint8_t effect_volume_percent_ = 100U;
 	NewClassicWindowPresentation window_presentation_{};
 	present::Raster raster_{};
 	present::Tram tram_{};

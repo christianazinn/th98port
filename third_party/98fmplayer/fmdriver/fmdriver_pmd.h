@@ -465,6 +465,11 @@ struct driver_pmd {
   char ppzfile2[PMD_FILENAMELEN+1];
   char ppsfile[PMD_FILENAMELEN+1];
   char ppcfile[PMD_FILENAMELEN+1];
+
+  /* TH03 extraction: host-controlled category gains. These remain outside
+   * PMD's own fade/voldown state so MML commands cannot erase user policy. */
+  uint8_t user_music_percent;
+  uint8_t user_effect_percent;
 };
 
 bool pmd_load(struct driver_pmd *pmd, uint8_t *data, uint16_t datalen);
@@ -478,6 +483,12 @@ bool pmd_fmeff_start(
   uint16_t tone_ptr
 );
 void pmd_fmeff_stop(struct fmdriver_work *work, struct driver_pmd *pmd);
+void pmd_set_user_volumes(
+  struct fmdriver_work *work,
+  struct driver_pmd *pmd,
+  uint8_t music_percent,
+  uint8_t effect_percent
+);
 bool pmd_ppc_load(struct fmdriver_work *work, uint8_t *data, size_t datalen);
 #ifdef __cplusplus
 }

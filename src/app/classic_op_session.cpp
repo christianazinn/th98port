@@ -1494,7 +1494,11 @@ struct ClassicOpSessionBackend final {
 			new_classic_settings ?
 				new_classic_settings->master_volume_percent : 100U,
 			new_classic_settings ? new_classic_settings->window :
-				NewClassicWindowPresentation{}
+				NewClassicWindowPresentation{},
+			new_classic_settings ?
+				new_classic_settings->music_volume_percent : 100U,
+			new_classic_settings ?
+				new_classic_settings->effect_volume_percent : 100U
 		);
 		if(!created) {
 			return std::unexpected(title_error(std::move(created.error())));
@@ -1535,6 +1539,12 @@ struct ClassicOpSessionBackend final {
 			options->window_presentation()) {
 			new_classic_settings->window = options->window_presentation();
 			pending_window_presentation_update = new_classic_settings->window;
+		}
+		if(new_classic_settings) {
+			new_classic_settings->music_volume_percent =
+				options->music_volume_percent();
+			new_classic_settings->effect_volume_percent =
+				options->effect_volume_percent();
 		}
 		bool language_background_refreshed = false;
 		if(tick->phase == ClassicOpOptionsPhase::shrink_window &&
@@ -1591,6 +1601,12 @@ struct ClassicOpSessionBackend final {
 			new_classic_settings->window =
 				options_completion->window_presentation();
 			pending_window_presentation_update = new_classic_settings->window;
+		}
+		if(new_classic_settings) {
+			new_classic_settings->music_volume_percent =
+				options_completion->music_volume_percent();
+			new_classic_settings->effect_volume_percent =
+				options_completion->effect_volume_percent();
 		}
 		if(config.language != active_language) {
 			if(auto applied = apply_language_profile(config.language); !applied) {
@@ -1853,18 +1869,24 @@ struct ClassicOpSessionBackend final {
 				*key_config_return_options, fm_available, *resources, patch_assets,
 				&*font, !english_resources.empty(),
 				key_config_return_options->master_volume_percent(),
-				key_config_return_options->window_presentation()
+				key_config_return_options->window_presentation(),
+				key_config_return_options->music_volume_percent(),
+				key_config_return_options->effect_volume_percent()
 			) : joy_config_scene ?
 			ClassicOpOptionsScene::resume_after_joy_config(
 				*key_config_return_options, fm_available, *resources, patch_assets,
 				&*font, !english_resources.empty(),
 				key_config_return_options->master_volume_percent(),
-				key_config_return_options->window_presentation()
+				key_config_return_options->window_presentation(),
+				key_config_return_options->music_volume_percent(),
+				key_config_return_options->effect_volume_percent()
 			) : ClassicOpOptionsScene::resume_after_key_config(
 				*key_config_return_options, fm_available, *resources, patch_assets,
 				&*font, !english_resources.empty(),
 				key_config_return_options->master_volume_percent(),
-				key_config_return_options->window_presentation()
+				key_config_return_options->window_presentation(),
+				key_config_return_options->music_volume_percent(),
+				key_config_return_options->effect_volume_percent()
 			);
 		if(!returned) {
 			return std::unexpected(title_error(std::move(returned.error())));

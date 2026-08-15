@@ -320,13 +320,66 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		scene->selected_choice() == ClassicOpOptionsChoice::bgm,
 		"Audio navigation reaches source Music below Master Volume");
 	expect(scene->advance({.right = true}).has_value() &&
-		scene->config().bgm_mode == ClassicBgmMode::off,
-		"Audio Music retains live On/Off behavior");
-	expect(scene->take_audio_command().has_value() &&
-		scene->take_audio_command().has_value() &&
+		scene->config().bgm_mode == ClassicBgmMode::off &&
+		scene->music_volume_percent() == 0U,
+		"Audio Music wraps through 0% in five-percent steps");
+	const auto music_stop = scene->take_audio_command();
+	const auto music_disable = scene->take_audio_command();
+	const auto music_level = scene->take_audio_command();
+	expect(music_stop && music_stop->type == ClassicAudioCommandType::stop_song &&
+		music_disable && music_disable->type ==
+			ClassicAudioCommandType::set_bgm_active &&
+		music_level && music_level->type ==
+			ClassicAudioCommandType::set_music_volume &&
+		music_level->parameter == 0U &&
 		!scene->take_audio_command(),
-		"Audio Music preserves its exact two-command disable transaction");
-	expect(scene->advance().has_value(), "Audio toggle releases");
+		"Audio Music 0% preserves source Stop/disable and installs its gain");
+	expect(scene->advance().has_value() &&
+		scene->advance({.right = true}).has_value() &&
+		scene->music_volume_percent() == 5U &&
+		scene->config().bgm_mode == ClassicBgmMode::fm,
+		"Audio Music raises 0% to 5% and re-enables FM");
+	const auto music_restore_level = scene->take_audio_command();
+	const auto music_enable = scene->take_audio_command();
+	const auto music_restart = scene->take_audio_command();
+	expect(music_restore_level && music_restore_level->type ==
+			ClassicAudioCommandType::set_music_volume &&
+			music_restore_level->parameter == 5U && music_enable &&
+			music_enable->type == ClassicAudioCommandType::set_bgm_active &&
+			music_enable->parameter == 1U && music_restart &&
+			music_restart->type == ClassicAudioCommandType::play_song &&
+			music_restart->cue == ClassicMusicCue::menu_main &&
+			!scene->take_audio_command(),
+		"Audio Music re-enable installs gain before restarting the menu song");
+	expect(scene->advance().has_value() &&
+		scene->advance({.down = true}).has_value() &&
+		scene->advance().has_value() &&
+		scene->selected_choice() == ClassicOpOptionsChoice::sfx,
+		"Audio navigation reaches independent SFX percentage");
+	expect(scene->advance({.right = true}).has_value() &&
+		scene->effect_volume_percent() == 0U && !scene->config().sfx_enabled,
+		"Audio SFX wraps through 0% in five-percent steps");
+	const auto effect_disable = scene->take_audio_command();
+	const auto effect_level = scene->take_audio_command();
+	expect(effect_disable && effect_disable->type ==
+			ClassicAudioCommandType::set_effects_active &&
+		effect_level && effect_level->type ==
+			ClassicAudioCommandType::set_effect_volume &&
+		effect_level->parameter == 0U && !scene->take_audio_command(),
+		"Audio SFX 0% disables arbitration and installs its gain");
+	expect(scene->advance().has_value() &&
+		scene->advance({.right = true}).has_value() &&
+		scene->effect_volume_percent() == 5U && scene->config().sfx_enabled,
+		"Audio SFX raises 0% to 5% and re-enables effects");
+	const auto effect_restore_level = scene->take_audio_command();
+	const auto effect_enable = scene->take_audio_command();
+	expect(effect_restore_level && effect_restore_level->type ==
+			ClassicAudioCommandType::set_effect_volume &&
+			effect_restore_level->parameter == 5U && effect_enable &&
+			effect_enable->type == ClassicAudioCommandType::set_effects_active &&
+			effect_enable->parameter == 1U && !scene->take_audio_command(),
+		"Audio SFX re-enable installs gain before restoring arbitration");
+	expect(scene->advance().has_value(), "Audio SFX releases");
 	expect(scene->advance({.cancel = true}).has_value() &&
 		scene->advance().has_value() &&
 		scene->advance({.down = true}).has_value() &&
@@ -345,7 +398,9 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 	auto key_config = scene->take_completion();
 	expect(key_config && key_config->outcome() ==
 		ClassicOpOptionsOutcome::key_config &&
-		key_config->master_volume_percent() == 40U,
+		key_config->master_volume_percent() == 40U &&
+		key_config->music_volume_percent() == 5U &&
+		key_config->effect_volume_percent() == 5U,
 		"KeyConfig retains its typed handoff outcome");
 
 	auto video = make_patch_scene_if_assets_supplied();

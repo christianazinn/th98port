@@ -35,6 +35,10 @@ struct ClassicAudioSessionConfig final {
 	// retains the original fresh-process dependency through effects_follow_bgm.
 	bool effects_active = true;
 	bool effects_follow_bgm = true;
+	// New Classic category gains. Classic always leaves both at 100%. Values
+	// are restricted to the UI's 5% steps and do not replace source fades.
+	std::uint8_t music_volume_percent = 100U;
+	std::uint8_t effect_volume_percent = 100U;
 	// Empty suppresses ADPCM-A playback unless rhythm_pcm is supplied. A ROM is
 	// copied by the engine and must contain exactly 8 KiB.
 	std::span<const std::byte> rhythm_rom{};
@@ -98,6 +102,11 @@ public:
 	) noexcept;
 	void set_bgm_active(bool active) noexcept;
 	void set_effects_active(bool active) noexcept;
+	[[nodiscard]] std::expected<void, ClassicAudioSessionError>
+	set_user_volumes(
+		std::uint8_t music_percent,
+		std::uint8_t effect_percent
+	) noexcept;
 	[[nodiscard]] std::expected<ClassicAudioTick, ClassicAudioSessionError>
 	advance_tick();
 

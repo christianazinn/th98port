@@ -195,6 +195,8 @@ struct ClassicAudioSession::Impl final {
 	bool bgm_active = true;
 	bool effects_active = true;
 	bool effects_follow_bgm = true;
+	std::uint8_t music_volume_percent = 100U;
+	std::uint8_t effect_volume_percent = 100U;
 	std::optional<ClassicAudioCommand> loaded{};
 	std::vector<audio::PmdCanonicalStereoSample> output{};
 	std::array<audio::PmdOpnaStereoSample, native_chunk_frames> native_scratch{};
@@ -208,7 +210,9 @@ struct ClassicAudioSession::Impl final {
 		std::uint64_t native_frames_numerator_,
 		bool bgm_active_,
 		bool effects_active_,
-		bool effects_follow_bgm_
+		bool effects_follow_bgm_,
+		std::uint8_t music_volume_percent_,
+		std::uint8_t effect_volume_percent_
 	) :
 		loader(std::move(loader_)),
 		engine(std::move(engine_)),
@@ -218,7 +222,9 @@ struct ClassicAudioSession::Impl final {
 		native_frames_numerator(native_frames_numerator_),
 		bgm_active(bgm_active_),
 		effects_active(effects_active_),
-		effects_follow_bgm(effects_follow_bgm_)
+		effects_follow_bgm(effects_follow_bgm_),
+		music_volume_percent(music_volume_percent_),
+		effect_volume_percent(effect_volume_percent_)
 	{}
 
 	[[nodiscard]] bool effects_available() const noexcept
@@ -231,7 +237,10 @@ std::expected<std::unique_ptr<ClassicAudioSession>, ClassicAudioSessionError>
 ClassicAudioSession::create(ClassicAudioSessionConfig config)
 {
 	if(config.data_root.empty() || config.tick_rate.ticks == 0U ||
-		config.tick_rate.seconds == 0U) {
+		config.tick_rate.seconds == 0U || config.music_volume_percent > 100U ||
+		config.effect_volume_percent > 100U ||
+		(config.music_volume_percent % 5U) != 0U ||
+		(config.effect_volume_percent % 5U) != 0U) {
 		return std::unexpected(session_error(
 			ClassicAudioSessionErrorCode::invalid_config
 		));
@@ -269,11 +278,17 @@ ClassicAudioSession::create(ClassicAudioSessionConfig config)
 	if(!loaded_bank) {
 		return std::unexpected(engine_error(load_effects, loaded_bank.error()));
 	}
+	if(auto volumes = engine->set_user_volumes(
+		config.music_volume_percent, config.effect_volume_percent
+	); !volumes) {
+		return std::unexpected(engine_error({}, volumes.error()));
+	}
 
 	try {
 		auto impl = std::make_unique<Impl>(
 			std::move(loader), std::move(*engine), config.tick_rate, numerator,
-			config.bgm_active, config.effects_active, config.effects_follow_bgm
+			config.bgm_active, config.effects_active, config.effects_follow_bgm,
+			config.music_volume_percent, config.effect_volume_percent
 		);
 		const auto initial_capacity = divide_round_up(
 			(maximum_tick_frames + audio::pmd_resampler_lookahead_samples + 1U) *
@@ -480,6 +495,22 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 		}
 		set_effects_active(command.parameter != 0U);
 		return {};
+	case ClassicAudioCommandType::set_music_volume:
+	case ClassicAudioCommandType::set_effect_volume: {
+		if(command.cue != ClassicMusicCue::none || command.parameter > 100U ||
+			(command.parameter % 5U) != 0U) {
+			return std::unexpected(session_error(
+				ClassicAudioSessionErrorCode::invalid_parameter, command
+			));
+		}
+		const auto percent = static_cast<std::uint8_t>(command.parameter);
+		return set_user_volumes(
+			command.type == ClassicAudioCommandType::set_music_volume ? percent :
+				impl_->music_volume_percent,
+			command.type == ClassicAudioCommandType::set_effect_volume ? percent :
+				impl_->effect_volume_percent
+		);
+	}
 	}
 	return std::unexpected(session_error(
 		ClassicAudioSessionErrorCode::invalid_parameter, command
@@ -532,6 +563,32 @@ void ClassicAudioSession::set_effects_active(bool active) noexcept
 		impl_->effects.reset();
 		impl_->engine.stop_effect();
 	}
+}
+
+std::expected<void, ClassicAudioSessionError>
+ClassicAudioSession::set_user_volumes(
+	std::uint8_t music_percent,
+	std::uint8_t effect_percent
+) noexcept
+{
+	const ClassicAudioCommand command{
+		.type = ClassicAudioCommandType::set_music_volume,
+		.parameter = music_percent,
+	};
+	if(music_percent > 100U || effect_percent > 100U ||
+		(music_percent % 5U) != 0U || (effect_percent % 5U) != 0U) {
+		return std::unexpected(session_error(
+			ClassicAudioSessionErrorCode::invalid_parameter, command
+		));
+	}
+	if(auto applied = impl_->engine.set_user_volumes(
+		music_percent, effect_percent
+	); !applied) {
+		return std::unexpected(engine_error(command, applied.error()));
+	}
+	impl_->music_volume_percent = music_percent;
+	impl_->effect_volume_percent = effect_percent;
+	return {};
 }
 
 std::expected<ClassicAudioTick, ClassicAudioSessionError>

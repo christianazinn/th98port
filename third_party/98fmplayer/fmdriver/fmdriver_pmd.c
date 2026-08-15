@@ -320,7 +320,10 @@ static void pmd_reset_opna(
   } else {
     pmd->opnarhythm_tl = 0x30;
   }
-  work->opna_writereg(work, 0x11, pmd->opnarhythm_tl);
+  work->opna_writereg(work, 0x11,
+    pmd->user_music_percent < 100 ?
+      ((uint16_t)pmd->opnarhythm_tl * pmd->user_music_percent) / 100 :
+      pmd->opnarhythm_tl);
   // 11a0
   // adpcm: set limit address to 0xffff
   if (!pmd->adpcm_disabled) {
@@ -434,6 +437,9 @@ static void pmd_opnarhythm_tl_write(
   uint8_t outvol = pmd->fadeout_vol;
   if (outvol) {
     outvol = ((uint16_t)vol * (0x100-outvol)) >> 8;
+  }
+  if (pmd->user_music_percent < 100) {
+    outvol = ((uint16_t)outvol * pmd->user_music_percent) / 100;
   }
   work->opna_writereg(work, 0x11, outvol);
 }
@@ -1550,6 +1556,11 @@ static void pmd_fm_vol_out(
       uint8_t fadeout = -pmd->fadeout_vol;
       vol = (vol * fadeout) >> 8;
     }
+    if (pmd->user_music_percent < 100) {
+      vol = ((uint16_t)vol * pmd->user_music_percent) / 100;
+    }
+  } else if (pmd->user_effect_percent < 100) {
+    vol = ((uint16_t)vol * pmd->user_effect_percent) / 100;
   }
   // 2a72
   // 4, 3, 2, 1
@@ -1659,6 +1670,9 @@ static void pmd_ssg_vol_out(
       }
     }
   }
+  if (pmd->user_music_percent < 100) {
+    vol = ((uint16_t)vol * pmd->user_music_percent) / 100;
+  }
   // 2c0f
   work->opna_writereg(work, 0x07+pmd->proc_ch, vol);
 }
@@ -1723,6 +1737,9 @@ static void pmd_adpcm_vol_out(
       }
     }
   }
+  if (pmd->user_music_percent < 100) {
+    vol = ((uint16_t)vol * pmd->user_music_percent) / 100;
+  }
   // 053f
   work->opna_writereg(work, 0x10b, vol);
 }
@@ -1783,6 +1800,9 @@ static void pmd_ppz8_vol_out(
         vol = 0xff;
       }
     }
+  }
+  if (pmd->user_music_percent < 100) {
+    vol = ((uint16_t)vol * pmd->user_music_percent) / 100;
   }
   // 0bd4
   if (work->ppz8) {
@@ -2864,7 +2884,9 @@ static void pmd_cmde8_opnarhythm_tl(
   if (pmd->fadeout_vol) {
     tl = ((uint16_t)tl * (0x100-pmd->fadeout_vol)) >> 8;
   }
-  work->opna_writereg(work, 0x11, tl);
+    work->opna_writereg(work, 0x11,
+      pmd->user_music_percent < 100 ?
+        ((uint16_t)tl * pmd->user_music_percent) / 100 : tl);
 }
 
 // 23e7
@@ -2890,7 +2912,9 @@ static void pmd_cmde6_opnarhythm_tl_rel(
   if (pmd->fadeout_vol) {
     tl = ((uint16_t)tl * (0x100-pmd->fadeout_vol)) >> 8;
   }
-  work->opna_writereg(work, 0x11, tl);
+  work->opna_writereg(work, 0x11,
+    pmd->user_music_percent < 100 ?
+      ((uint16_t)tl * pmd->user_music_percent) / 100 : tl);
 }
 
 // 2695
@@ -5299,6 +5323,77 @@ bool pmd_fmeff_start(
   pmd->opna_a1 = saved_a1;
   pmd_fmeff_advance(work, pmd);
   return true;
+}
+
+/* TH03 extraction: apply host category gains without changing the single-chip
+ * PMD timeline or external-effect ownership. A value of 100 deliberately
+ * bypasses every scaling operation, preserving the source register stream. */
+void pmd_set_user_volumes(
+  struct fmdriver_work *work,
+  struct driver_pmd *pmd,
+  uint8_t music_percent,
+  uint8_t effect_percent
+) {
+  bool const saved_a1 = pmd->opna_a1;
+  uint8_t const saved_ch = pmd->proc_ch;
+  bool const music_changed = pmd->user_music_percent != music_percent;
+  bool const effect_changed = pmd->user_effect_percent != effect_percent;
+  if (music_percent > 100 || effect_percent > 100) return;
+  if (!music_changed && !effect_changed) return;
+  pmd->user_music_percent = music_percent;
+  pmd->user_effect_percent = effect_percent;
+  if (!pmd->playing) return;
+
+  if (music_changed) {
+    if (!pmd->opm_flag) {
+      for (int c = 0; c < 3; c++) {
+        pmd->proc_ch = c+1;
+        pmd_ssg_vol_out(work, pmd, &pmd->parts[PMD_PART_SSG_1+c]);
+      }
+    }
+    pmd_opna_a1_on(pmd);
+    for (int c = 0; c < 3; c++) {
+      pmd->proc_ch = c+1;
+      if (c != 2 || !pmd->fmeff_playing) {
+        pmd_fm_vol_out(work, pmd, &pmd->parts[PMD_PART_FM_4+c]);
+      }
+    }
+    pmd_opna_a1_off(pmd);
+    for (int c = 0; c < 3; c++) {
+      pmd->proc_ch = c+1;
+      pmd_fm_vol_out(work, pmd, &pmd->parts[PMD_PART_FM_1+c]);
+    }
+    pmd->proc_ch = 3;
+    for (int c = 0; c < 3; c++) {
+      pmd_fm_vol_out(work, pmd, &pmd->parts[PMD_PART_FM_3B+c]);
+    }
+    if (!pmd->opm_flag) {
+      uint8_t rhythm = pmd->opnarhythm_tl;
+      pmd_adpcm_vol_out(work, pmd, &pmd->parts[PMD_PART_ADPCM]);
+      if (pmd->fadeout_vol) {
+        rhythm = ((uint16_t)rhythm * (0x100-pmd->fadeout_vol)) >> 8;
+      }
+      if (music_percent < 100) {
+        rhythm = ((uint16_t)rhythm * music_percent) / 100;
+      }
+      work->opna_writereg(work, 0x11, rhythm);
+      for (int c = 0; c < 8; c++) {
+        pmd->proc_ch = c;
+        pmd_ppz8_vol_out(work, pmd, &pmd->parts[PMD_PART_PPZ_1+c]);
+      }
+    }
+  }
+  if (effect_changed && pmd->fmeff_playing) {
+    pmd_opna_a1_on(pmd);
+    pmd->proc_ch = 3;
+    pmd_fm_vol_out(work, pmd, &pmd->parts[PMD_PART_FM_EFF]);
+  }
+  if (saved_a1) {
+    pmd_opna_a1_on(pmd);
+  } else {
+    pmd_opna_a1_off(pmd);
+  }
+  pmd->proc_ch = saved_ch;
 }
 
 // 156f / 1689

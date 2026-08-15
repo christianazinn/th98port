@@ -295,6 +295,27 @@ std::expected<
 			};
 		}
 		malformed = decoded.error();
+	} else if(size == new_classic_settings_v1_file_bytes) {
+		auto bytes = read_exact<new_classic_settings_v1_file_bytes>(
+			path,
+			NewClassicSettingsStoreErrorCode::source_open,
+			NewClassicSettingsStoreErrorCode::source_read
+		);
+		if(!bytes) {
+			return std::unexpected(std::move(bytes.error()));
+		}
+		auto decoded = decode_new_classic_settings(*bytes);
+		if(decoded) {
+			if(auto committed = commit_new_classic_settings_store(path, *decoded);
+				!committed) {
+				return std::unexpected(std::move(committed.error()));
+			}
+			return NewClassicSettingsStoreLoadResult{
+				.settings = *decoded,
+				.disposition = NewClassicSettingsStoreDisposition::upgraded_v1,
+			};
+		}
+		malformed = decoded.error();
 	} else {
 		malformed = NewClassicSettingsError{
 			.code = NewClassicSettingsErrorCode::input_size,

@@ -333,6 +333,12 @@ void test_config_and_resource_failures()
 			ClassicAudioSessionErrorCode::invalid_config,
 		"more than one native second per logical tick is rejected"
 	);
+	auto invalid_gain_config = config(missing.path());
+	invalid_gain_config.music_volume_percent = 42U;
+	const auto invalid_gain = ClassicAudioSession::create(invalid_gain_config);
+	expect(!invalid_gain && invalid_gain.error().code ==
+		ClassicAudioSessionErrorCode::invalid_config,
+		"category gains reject values outside five-percent steps before I/O");
 	std::array<std::byte, 1U> bad_rom{};
 	auto invalid_rom_config = config(missing.path());
 	invalid_rom_config.rhythm_rom = bad_rom;
@@ -713,6 +719,21 @@ void test_new_classic_independent_sfx(const fs::path &root)
 	expect(!invalid_effects_active && invalid_effects_active.error().code ==
 		ClassicAudioSessionErrorCode::invalid_parameter,
 		"live SFX policy rejects values outside the source boolean domain");
+	expect((*effects_only)->apply({
+		.type = ClassicAudioCommandType::set_music_volume,
+		.parameter = 35U,
+	}).has_value() && (*effects_only)->apply({
+		.type = ClassicAudioCommandType::set_effect_volume,
+		.parameter = 65U,
+	}).has_value(),
+		"New Classic music and SFX gains apply independently at runtime");
+	const auto invalid_category_gain = (*effects_only)->apply({
+		.type = ClassicAudioCommandType::set_effect_volume,
+		.parameter = 64U,
+	});
+	expect(!invalid_category_gain && invalid_category_gain.error().code ==
+		ClassicAudioSessionErrorCode::invalid_parameter,
+		"live category gain rejects non-five-percent values atomically");
 
 	auto music_only_config = config(root);
 	music_only_config.effects_active = false;

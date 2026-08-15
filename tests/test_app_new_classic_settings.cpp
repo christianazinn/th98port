@@ -3,6 +3,7 @@
 #include "th03/app/new_classic_settings.hpp"
 #include "th03/app/new_classic_settings_store.hpp"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -32,9 +33,53 @@ using th03::app::NewClassicFiltering;
 using th03::app::NewClassicWindowMode;
 using th03::app::NewClassicWindowScale;
 using th03::app::new_classic_settings_file_bytes;
+using th03::app::new_classic_settings_v1_file_bytes;
 
 std::size_t checks = 0U;
 std::size_t failures = 0U;
+
+[[nodiscard]] std::uint32_t fnv1a32(std::span<const std::byte> bytes)
+{
+	std::uint32_t hash = 2'166'136'261U;
+	for(const auto value : bytes) {
+		hash ^= std::to_integer<std::uint8_t>(value);
+		hash *= 16'777'619U;
+	}
+	return hash;
+}
+
+void put_u16(std::span<std::byte> bytes, std::size_t offset, std::uint16_t value)
+{
+	bytes[offset] = static_cast<std::byte>(value & 0xFFU);
+	bytes[offset + 1U] = static_cast<std::byte>(value >> 8U);
+}
+
+void put_u32(std::span<std::byte> bytes, std::size_t offset, std::uint32_t value)
+{
+	for(std::size_t index = 0U; index < 4U; ++index) {
+		bytes[offset + index] = static_cast<std::byte>(value >> (index * 8U));
+	}
+}
+
+[[nodiscard]] std::array<std::byte, new_classic_settings_v1_file_bytes>
+v1_settings(bool music, bool effects)
+{
+	std::array<std::byte, new_classic_settings_v1_file_bytes> bytes{};
+	constexpr std::array magic{
+		std::byte{'T'}, std::byte{'3'}, std::byte{'N'}, std::byte{'S'},
+		std::byte{'E'}, std::byte{'T'}, std::byte{'0'}, std::byte{'1'},
+	};
+	std::copy(magic.begin(), magic.end(), bytes.begin());
+	put_u16(bytes, 8U, 1U);
+	put_u16(bytes, 10U, new_classic_settings_v1_file_bytes);
+	bytes[12U] = static_cast<std::byte>(static_cast<std::uint8_t>(
+		music ? ClassicBgmMode::fm : ClassicBgmMode::off
+	));
+	bytes[15U] = static_cast<std::byte>(effects ? 0x01U : 0U);
+	bytes[16U] = std::byte{75U};
+	put_u32(bytes, 20U, fnv1a32(std::span<const std::byte>(bytes).first(20U)));
+	return bytes;
+}
 
 void expect(bool condition, std::string_view message)
 {
@@ -122,6 +167,8 @@ void test_codec()
 			.reduced_flash = true,
 		},
 		.master_volume_percent = 65U,
+		.music_volume_percent = 35U,
+		.effect_volume_percent = 80U,
 		.window = {
 			.mode = NewClassicWindowMode::borderless_fullscreen,
 			.scale = NewClassicWindowScale::x3,
@@ -138,14 +185,14 @@ void test_codec()
 	expect(encoded && decoded && *decoded == settings,
 		"versioned New Classic settings round-trip every field");
 	expect(encoded && encoded->size() == new_classic_settings_file_bytes,
-		"New Classic settings have one frozen v1 size");
+		"New Classic settings have one frozen v2 size");
 
 	if(encoded) {
 		for(const auto mutation : std::array{
 			std::pair{0U, NewClassicSettingsErrorCode::magic},
 			std::pair{8U, NewClassicSettingsErrorCode::version},
 			std::pair{10U, NewClassicSettingsErrorCode::declared_size},
-			std::pair{20U, NewClassicSettingsErrorCode::digest},
+			std::pair{24U, NewClassicSettingsErrorCode::digest},
 		}) {
 			auto bytes = *encoded;
 			bytes[mutation.first] ^= std::byte{0xFFU};
@@ -159,8 +206,29 @@ void test_codec()
 			th03::app::decode_new_classic_settings(reserved);
 		expect(!invalid_reserved && invalid_reserved.error().code ==
 			NewClassicSettingsErrorCode::reserved_nonzero,
-			"nonzero v1 reserved bytes are rejected");
+			"nonzero v2 reserved bytes are rejected");
+		auto reserved_tail = *encoded;
+		reserved_tail[22U] = std::byte{1U};
+		const auto invalid_tail =
+			th03::app::decode_new_classic_settings(reserved_tail);
+		expect(!invalid_tail && invalid_tail.error().code ==
+			NewClassicSettingsErrorCode::reserved_nonzero,
+			"nonzero v2 extension-reserved bytes are rejected");
 	}
+	const auto legacy_on = v1_settings(true, true);
+	const auto decoded_legacy_on =
+		th03::app::decode_new_classic_settings(legacy_on);
+	expect(decoded_legacy_on &&
+		decoded_legacy_on->music_volume_percent == 100U &&
+		decoded_legacy_on->effect_volume_percent == 100U,
+		"v1 On flags migrate to full category levels");
+	const auto legacy_off = v1_settings(false, false);
+	const auto decoded_legacy_off =
+		th03::app::decode_new_classic_settings(legacy_off);
+	expect(decoded_legacy_off &&
+		decoded_legacy_off->music_volume_percent == 0U &&
+		decoded_legacy_off->effect_volume_percent == 0U,
+		"v1 Off flags migrate to muted category levels");
 
 	auto invalid = settings;
 	invalid.master_volume_percent = 63U;
@@ -169,6 +237,18 @@ void test_codec()
 	expect(!invalid_volume && invalid_volume.error().code ==
 		NewClassicSettingsErrorCode::invalid_master_volume,
 		"master percentage is bounded to five-percent steps");
+	invalid = settings;
+	invalid.music_volume_percent = 101U;
+	const auto invalid_music = th03::app::encode_new_classic_settings(invalid);
+	expect(!invalid_music && invalid_music.error().code ==
+		NewClassicSettingsErrorCode::invalid_music_volume,
+		"music percentage is bounded to five-percent steps");
+	invalid = settings;
+	invalid.effect_volume_percent = 42U;
+	const auto invalid_effect = th03::app::encode_new_classic_settings(invalid);
+	expect(!invalid_effect && invalid_effect.error().code ==
+		NewClassicSettingsErrorCode::invalid_effect_volume,
+		"effect percentage is bounded to five-percent steps");
 	invalid = settings;
 	invalid.window.mode = static_cast<NewClassicWindowMode>(2U);
 	const auto invalid_mode = th03::app::encode_new_classic_settings(invalid);
@@ -225,6 +305,8 @@ void test_absent_only_migration_and_isolation()
 		NewClassicSettingsStoreDisposition::migrated_classic &&
 		migrated->settings.options == classic &&
 		migrated->settings.master_volume_percent == 100U &&
+		migrated->settings.music_volume_percent == 0U &&
+		migrated->settings.effect_volume_percent == 0U &&
 		migrated->settings.window ==
 			th03::app::NewClassicWindowPresentation{},
 		"absent New Classic settings migrate Classic values once");
@@ -284,7 +366,20 @@ void test_defaults_recovery_and_errors()
 			NewClassicSettingsErrorCode::input_size,
 		"present malformed settings recover defaults without migration");
 	expect(fs::file_size(settings_path) == new_classic_settings_file_bytes,
-		"recovery publishes the exact v1 document");
+		"recovery publishes the exact v2 document");
+
+	const auto legacy_path = temporary.path() / "LEGACY.CFG";
+	expect(write_bytes(legacy_path, v1_settings(true, false)),
+		"v1 settings fixture writes");
+	const auto upgraded = th03::app::load_new_classic_settings_store(
+		legacy_path, classic_path
+	);
+	expect(upgraded && upgraded->disposition ==
+		NewClassicSettingsStoreDisposition::upgraded_v1 &&
+		upgraded->settings.music_volume_percent == 100U &&
+		upgraded->settings.effect_volume_percent == 0U &&
+		fs::file_size(legacy_path) == new_classic_settings_file_bytes,
+		"v1 documents upgrade atomically to v2 category levels");
 
 	const auto malformed_classic = temporary.path() / "BROKEN.CFG";
 	const auto migrated_defaults = temporary.path() / "DEFAULT.CFG";

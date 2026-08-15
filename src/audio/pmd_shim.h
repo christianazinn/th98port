@@ -53,6 +53,11 @@ void th03_pmd_pause(struct th03_pmd_handle *handle);
 void th03_pmd_resume(struct th03_pmd_handle *handle);
 void th03_pmd_fade(struct th03_pmd_handle *handle, int8_t speed);
 void th03_pmd_set_volume(struct th03_pmd_handle *handle, uint8_t volume);
+bool th03_pmd_set_user_volumes(
+	struct th03_pmd_handle *handle,
+	uint8_t music_percent,
+	uint8_t effect_percent
+);
 bool th03_pmd_set_part_mask(
 	struct th03_pmd_handle *handle,
 	uint8_t part,

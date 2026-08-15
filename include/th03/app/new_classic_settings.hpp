@@ -11,8 +11,9 @@
 
 namespace th03::app {
 
-inline constexpr std::size_t new_classic_settings_file_bytes = 24U;
-inline constexpr std::uint16_t new_classic_settings_format_version = 1U;
+inline constexpr std::size_t new_classic_settings_file_bytes = 28U;
+inline constexpr std::size_t new_classic_settings_v1_file_bytes = 24U;
+inline constexpr std::uint16_t new_classic_settings_format_version = 2U;
 
 enum class NewClassicWindowMode : std::uint8_t {
 	windowed,
@@ -51,6 +52,8 @@ struct NewClassicWindowPresentation final {
 struct NewClassicSettings final {
 	ClassicConfigOptions options{};
 	std::uint8_t master_volume_percent = 100U;
+	std::uint8_t music_volume_percent = 100U;
+	std::uint8_t effect_volume_percent = 100U;
 	NewClassicWindowPresentation window{};
 
 	friend constexpr bool operator==(
@@ -69,6 +72,8 @@ enum class NewClassicSettingsErrorCode : std::uint8_t {
 	invalid_rank,
 	invalid_flags,
 	invalid_master_volume,
+	invalid_music_volume,
+	invalid_effect_volume,
 	invalid_window_mode,
 	invalid_window_scale,
 	invalid_aspect_ratio,
@@ -92,7 +97,15 @@ new_classic_settings_defaults() noexcept
 [[nodiscard]] constexpr NewClassicSettings
 new_classic_settings_from_classic(ClassicConfigOptions options) noexcept
 {
-	return {.options = options};
+	return {
+		.options = options,
+		.music_volume_percent = static_cast<std::uint8_t>(
+			options.bgm_mode == ClassicBgmMode::off ? 0U : 100U
+		),
+		.effect_volume_percent = static_cast<std::uint8_t>(
+			options.sfx_enabled ? 100U : 0U
+		),
+	};
 }
 
 [[nodiscard]] std::expected<void, NewClassicSettingsError>

@@ -331,6 +331,8 @@ ClassicOpOptionsCompletion::ClassicOpOptionsCompletion(
 	ClassicConfigOptions config,
 	std::uint8_t master_volume_percent,
 	NewClassicWindowPresentation window_presentation,
+	std::uint8_t music_volume_percent,
+	std::uint8_t effect_volume_percent,
 	present::Raster raster,
 	present::Tram tram,
 	bool main_input_allowed,
@@ -339,6 +341,8 @@ ClassicOpOptionsCompletion::ClassicOpOptionsCompletion(
 	resident_(std::move(resident)),
 	config_(config),
 	master_volume_percent_(master_volume_percent),
+	music_volume_percent_(music_volume_percent),
+	effect_volume_percent_(effect_volume_percent),
 	window_presentation_(window_presentation),
 	raster_(std::move(raster)),
 	tram_(std::move(tram)),
@@ -359,6 +363,16 @@ ClassicConfigOptions ClassicOpOptionsCompletion::config() const noexcept
 std::uint8_t ClassicOpOptionsCompletion::master_volume_percent() const noexcept
 {
 	return master_volume_percent_;
+}
+
+std::uint8_t ClassicOpOptionsCompletion::music_volume_percent() const noexcept
+{
+	return music_volume_percent_;
+}
+
+std::uint8_t ClassicOpOptionsCompletion::effect_volume_percent() const noexcept
+{
+	return effect_volume_percent_;
 }
 
 NewClassicWindowPresentation
@@ -397,12 +411,16 @@ ClassicOpOptionsScene::ClassicOpOptionsScene(
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 	bool language_available,
 	std::uint8_t master_volume_percent,
-	NewClassicWindowPresentation window_presentation
+	NewClassicWindowPresentation window_presentation,
+	std::uint8_t music_volume_percent,
+	std::uint8_t effect_volume_percent
 ) noexcept :
 	prepared_(std::move(prepared)),
 	resident_(std::move(resident)),
 	config_(config),
 	master_volume_percent_(master_volume_percent),
+	music_volume_percent_(music_volume_percent),
+	effect_volume_percent_(effect_volume_percent),
 	window_presentation_(window_presentation),
 	raster_(std::move(raster)),
 	tram_(std::move(tram)),
@@ -427,7 +445,9 @@ ClassicOpOptionsScene::create_from_op(
 	const present::AnkGlyphProvider *font,
 	bool language_available,
 	std::uint8_t master_volume_percent,
-	NewClassicWindowPresentation window_presentation
+	NewClassicWindowPresentation window_presentation,
+	std::uint8_t music_volume_percent,
+	std::uint8_t effect_volume_percent
 )
 {
 	if(completion.route() != ClassicOpRoute::options) {
@@ -469,7 +489,8 @@ ClassicOpOptionsScene::create_from_op(
 		completion.resident(), config, fm_available, completion.raster(),
 		completion.tram(), std::move(*background), std::move(*window),
 		std::move(patch_assets), font, language_available,
-		master_volume_percent, window_presentation
+		master_volume_percent, window_presentation, music_volume_percent,
+		effect_volume_percent
 	);
 }
 
@@ -482,7 +503,9 @@ ClassicOpOptionsScene::resume_after_key_config(
 	const present::AnkGlyphProvider *font,
 	bool language_available,
 	std::uint8_t master_volume_percent,
-	NewClassicWindowPresentation window_presentation
+	NewClassicWindowPresentation window_presentation,
+	std::uint8_t music_volume_percent,
+	std::uint8_t effect_volume_percent
 )
 {
 	if((completion.outcome() != ClassicOpOptionsOutcome::key_config &&
@@ -528,7 +551,8 @@ ClassicOpOptionsScene::resume_after_key_config(
 		completion.resident(), completion.config(), fm_available,
 		completion.raster(), completion.tram(), std::move(*background),
 		std::move(*window), std::move(patch_assets), font,
-		language_available, master_volume_percent, window_presentation
+		language_available, master_volume_percent, window_presentation,
+		music_volume_percent, effect_volume_percent
 	);
 	if(!created) {
 		return std::unexpected(std::move(created.error()));
@@ -573,7 +597,9 @@ ClassicOpOptionsScene::resume_after_joy_config(
 	const present::AnkGlyphProvider *font,
 	bool language_available,
 	std::uint8_t master_volume_percent,
-	NewClassicWindowPresentation window_presentation
+	NewClassicWindowPresentation window_presentation,
+	std::uint8_t music_volume_percent,
+	std::uint8_t effect_volume_percent
 )
 {
 	if(completion.outcome() != ClassicOpOptionsOutcome::joy_config) {
@@ -581,7 +607,8 @@ ClassicOpOptionsScene::resume_after_joy_config(
 	}
 	return resume_after_key_config(
 		completion, fm_available, resources, std::move(patch_assets), font,
-		language_available, master_volume_percent, window_presentation
+		language_available, master_volume_percent, window_presentation,
+		music_volume_percent, effect_volume_percent
 	);
 }
 
@@ -594,7 +621,9 @@ ClassicOpOptionsScene::resume_after_device_scene(
 	const present::AnkGlyphProvider *font,
 	bool language_available,
 	std::uint8_t master_volume_percent,
-	NewClassicWindowPresentation window_presentation
+	NewClassicWindowPresentation window_presentation,
+	std::uint8_t music_volume_percent,
+	std::uint8_t effect_volume_percent
 )
 {
 	if(completion.outcome() != ClassicOpOptionsOutcome::device_assignment &&
@@ -603,7 +632,8 @@ ClassicOpOptionsScene::resume_after_device_scene(
 	}
 	return resume_after_key_config(
 		completion, fm_available, resources, std::move(patch_assets), font,
-		language_available, master_volume_percent, window_presentation
+		language_available, master_volume_percent, window_presentation,
+		music_volume_percent, effect_volume_percent
 	);
 }
 
@@ -620,11 +650,15 @@ ClassicOpOptionsScene::create(
 	const present::AnkGlyphProvider *font,
 	bool language_available,
 	std::uint8_t master_volume_percent,
-	NewClassicWindowPresentation window_presentation
+	NewClassicWindowPresentation window_presentation,
+	std::uint8_t music_volume_percent,
+	std::uint8_t effect_volume_percent
 )
 {
 	if(!classic_config_valid(config) || (patch_assets && !font) ||
 		master_volume_percent > 100U || (master_volume_percent % 5U) != 0U ||
+		music_volume_percent > 100U || (music_volume_percent % 5U) != 0U ||
+		effect_volume_percent > 100U || (effect_volume_percent % 5U) != 0U ||
 		static_cast<std::uint8_t>(window_presentation.mode) >
 			static_cast<std::uint8_t>(
 				NewClassicWindowMode::borderless_fullscreen
@@ -636,6 +670,8 @@ ClassicOpOptionsScene::create(
 		static_cast<std::uint8_t>(window_presentation.filtering) >
 			static_cast<std::uint8_t>(NewClassicFiltering::linear) ||
 		(!patch_assets && master_volume_percent != 100U) ||
+		(!patch_assets && (music_volume_percent != 100U ||
+			effect_volume_percent != 100U)) ||
 		(!patch_assets && window_presentation !=
 			NewClassicWindowPresentation{}) ||
 		resident.rank != static_cast<std::uint8_t>(config.rank) ||
@@ -683,7 +719,8 @@ ClassicOpOptionsScene::create(
 	return std::unique_ptr<ClassicOpOptionsScene>(new ClassicOpOptionsScene(
 		std::move(prepared), std::move(resident), config, fm_available,
 		std::move(raster), std::move(tram), std::move(patch_assets),
-		language_available, master_volume_percent, window_presentation
+		language_available, master_volume_percent, window_presentation,
+		music_volume_percent, effect_volume_percent
 	));
 }
 
@@ -987,6 +1024,25 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	}
 	std::string_view value{};
 	std::array<char, 4U> percent_storage{};
+	const auto percent_value = [&](std::uint8_t percent) noexcept {
+		if(percent == 100U) {
+			percent_storage = {'1', '0', '0', '%'};
+			return std::string_view(
+				percent_storage.data(), percent_storage.size()
+			);
+		}
+		if(percent >= 10U) {
+			percent_storage = {
+				static_cast<char>('0' + (percent / 10U)),
+				static_cast<char>('0' + (percent % 10U)), '%', '\0',
+			};
+			return std::string_view(percent_storage.data(), 3U);
+		}
+		percent_storage = {
+			static_cast<char>('0' + percent), '%', '\0', '\0',
+		};
+		return std::string_view(percent_storage.data(), 2U);
+	};
 	switch(choice) {
 	case ClassicOpOptionsChoice::rank:
 		switch(config_.rank) {
@@ -997,24 +1053,7 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 		}
 		break;
 	case ClassicOpOptionsChoice::master_volume:
-		if(master_volume_percent_ == 100U) {
-			percent_storage = {'1', '0', '0', '%'};
-			value = std::string_view(
-				percent_storage.data(), percent_storage.size()
-			);
-		} else if(master_volume_percent_ >= 10U) {
-			percent_storage = {
-				static_cast<char>('0' + (master_volume_percent_ / 10U)),
-				static_cast<char>('0' + (master_volume_percent_ % 10U)),
-				'%', '\0',
-			};
-			value = std::string_view(percent_storage.data(), 3U);
-		} else {
-			percent_storage = {
-				static_cast<char>('0' + master_volume_percent_), '%', '\0', '\0',
-			};
-			value = std::string_view(percent_storage.data(), 2U);
-		}
+		value = percent_value(master_volume_percent_);
 		break;
 	case ClassicOpOptionsChoice::window_mode:
 		value = window_presentation_.mode == NewClassicWindowMode::windowed ?
@@ -1037,10 +1076,12 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 			"Nearest" : "Linear";
 		break;
 	case ClassicOpOptionsChoice::bgm:
-		value = config_.bgm_mode == ClassicBgmMode::off ? "Off" : "FM (86)";
+		value = patch_assets_ ? percent_value(music_volume_percent_) :
+			(config_.bgm_mode == ClassicBgmMode::off ? "Off" : "FM (86)");
 		break;
 	case ClassicOpOptionsChoice::sfx:
-		value = config_.sfx_enabled ? "On" : "Off";
+		value = patch_assets_ ? percent_value(effect_volume_percent_) :
+			(config_.sfx_enabled ? "On" : "Off");
 		break;
 	case ClassicOpOptionsChoice::language:
 		if(config_.language == ClassicLanguage::english) {
@@ -1323,6 +1364,51 @@ bool ClassicOpOptionsScene::update_horizontal(
 		config_changed = true;
 		break;
 	case ClassicOpOptionsChoice::bgm:
+		if(patch_assets_) {
+			const auto step = static_cast<std::uint8_t>(
+				music_volume_percent_ / 5U
+			);
+			const auto next = static_cast<std::uint8_t>(
+				ring_step(step, direction, 20U) * 5U
+			);
+			const auto previous = music_volume_percent_;
+			music_volume_percent_ = next;
+			config_.bgm_mode = next == 0U ? ClassicBgmMode::off :
+				ClassicBgmMode::fm;
+			if(previous != 0U && next == 0U) {
+				if(!push_audio_command({
+					.type = ClassicAudioCommandType::stop_song,
+				}) || !push_audio_command({
+					.type = ClassicAudioCommandType::set_bgm_active,
+					.parameter = 0U,
+				}) || !push_audio_command({
+					.type = ClassicAudioCommandType::set_music_volume,
+					.parameter = next,
+				})) {
+					return false;
+				}
+			} else if(previous == 0U && next != 0U) {
+				if(!push_audio_command({
+					.type = ClassicAudioCommandType::set_music_volume,
+					.parameter = next,
+				}) || !push_audio_command({
+					.type = ClassicAudioCommandType::set_bgm_active,
+					.parameter = 1U,
+				}) || !push_audio_command({
+					.type = ClassicAudioCommandType::play_song,
+					.cue = ClassicMusicCue::menu_main,
+				})) {
+					return false;
+				}
+			} else if(!push_audio_command({
+				.type = ClassicAudioCommandType::set_music_volume,
+				.parameter = next,
+			})) {
+				return false;
+			}
+			config_changed = true;
+			break;
+		}
 		if(fm_available_) {
 			// ZUN quirk: Both directions toggle Off and FM, while a loaded
 			// MIDI setting collapses to Off instead of participating in a ring.
@@ -1355,14 +1441,41 @@ bool ClassicOpOptionsScene::update_horizontal(
 		break;
 	case ClassicOpOptionsChoice::sfx:
 		if(patch_assets_) {
-			const bool enabled = !config_.sfx_enabled;
-			if(!push_audio_command({
-				.type = ClassicAudioCommandType::set_effects_active,
-				.parameter = static_cast<std::uint16_t>(enabled ? 1U : 0U),
+			const auto step = static_cast<std::uint8_t>(
+				effect_volume_percent_ / 5U
+			);
+			const auto next = static_cast<std::uint8_t>(
+				ring_step(step, direction, 20U) * 5U
+			);
+			const auto previous = effect_volume_percent_;
+			effect_volume_percent_ = next;
+			config_.sfx_enabled = next != 0U;
+			if(previous != 0U && next == 0U) {
+				if(!push_audio_command({
+					.type = ClassicAudioCommandType::set_effects_active,
+					.parameter = 0U,
+				}) || !push_audio_command({
+					.type = ClassicAudioCommandType::set_effect_volume,
+					.parameter = next,
+				})) {
+					return false;
+				}
+			} else if(previous == 0U && next != 0U) {
+				if(!push_audio_command({
+					.type = ClassicAudioCommandType::set_effect_volume,
+					.parameter = next,
+				}) || !push_audio_command({
+					.type = ClassicAudioCommandType::set_effects_active,
+					.parameter = 1U,
+				})) {
+					return false;
+				}
+			} else if(!push_audio_command({
+				.type = ClassicAudioCommandType::set_effect_volume,
+				.parameter = next,
 			})) {
 				return false;
 			}
-			config_.sfx_enabled = enabled;
 			config_changed = true;
 		}
 		break;
@@ -1425,7 +1538,7 @@ void ClassicOpOptionsScene::finish(ClassicOpOptionsOutcome outcome) noexcept
 {
 	completion_ = ClassicOpOptionsCompletion(
 		std::move(resident_), config_, master_volume_percent_,
-		window_presentation_,
+		window_presentation_, music_volume_percent_, effect_volume_percent_,
 		std::move(raster_), std::move(tram_),
 		menu_input_allowed_, outcome
 	);
@@ -1835,6 +1948,16 @@ ClassicConfigOptions ClassicOpOptionsScene::config() const noexcept
 std::uint8_t ClassicOpOptionsScene::master_volume_percent() const noexcept
 {
 	return master_volume_percent_;
+}
+
+std::uint8_t ClassicOpOptionsScene::music_volume_percent() const noexcept
+{
+	return music_volume_percent_;
+}
+
+std::uint8_t ClassicOpOptionsScene::effect_volume_percent() const noexcept
+{
+	return effect_volume_percent_;
 }
 
 NewClassicWindowPresentation

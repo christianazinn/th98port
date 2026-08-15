@@ -15,7 +15,7 @@ severs an unused PPZ8/`stdatomic.h`/visualizer dependency that MSVC cannot parse
 as C. The port always binds the guarded PPZ8 pointers to null because TH03 ships
 no PPZ8 data.
 
-`fmdriver_pmd.c` and `fmdriver_pmd.h` have two bounded TH03 service deltas,
+`fmdriver_pmd.c` and `fmdriver_pmd.h` have three bounded TH03 service deltas,
 marked at their source sites. First, upstream computes each intermediate signed
 fade volume but stores only the two saturated endpoints; the port stores the
 already-computed in-range byte. Second, upstream leaves external FM effects as
@@ -23,7 +23,10 @@ a stub; the port connects the existing FM part interpreter to a validated
 external `.EFC` image, advances it from Timer A on FM6, and masks/releases the
 ordinary FM6 part around effect ownership. The public port layer authenticates
 the bank grammar and relocates its internal pointers before these functions are
-reachable. No GPL/reference implementation source was imported. The other
+reachable. Third, two host category-gain bytes scale ordinary PMD parts and the
+external FM-effect part independently while retaining one sequencer and one
+YM2608 timeline; the 100% path bypasses scaling and preserves the source
+register stream. No GPL/reference implementation source was imported. The other
 three retained PMD driver files remain byte-identical to the pin.
 
 The driver accepts caller-owned mutable PMD byte images and emits chip access

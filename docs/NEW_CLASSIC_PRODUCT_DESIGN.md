@@ -126,24 +126,18 @@ Mute When Unfocused Off
 Return
 ```
 
-Implemented now: `Master Volume` in 5% steps, followed by the retained source
-`Music` and `SFX` On/Off controls and `Return`. The remaining percentage split
-and focus mute stay separate parcels because PMD currently exposes one mixed
-canonical stream.
+Implemented now: `Master Volume`, `Music Volume`, and `Sound FX Volume` in 5%
+steps, followed by `Return`. Focus mute remains a separate parcel.
 
 Percentages use 5% increments. Zero percent has the existing disabled
 semantics; raising a value above zero re-enables that category. At 100%, the
 current source-faithful PMD/OPNA sample stream must remain unchanged.
 
-Master volume is a final native output gain and is a small isolated feature.
-Independent Music and SFX gain is a separate audio-architecture parcel: the
-current PMD/OPNA path produces one mixed stream, and effects share and override
-chip channels. The implementation must preserve source effect arbitration and
-source fade volume; it must not misuse PMD's fade control as a user volume.
-
-Until independent gains are implemented and verified, the Audio page may move
-the existing Music and SFX On/Off controls without pretending they are
-percentages.
+Master volume remains a final native output gain. Independent Music and SFX
+gain is implemented inside the shared PMD driver, before song parts and the
+external FM effect part converge on the one YM2608. This preserves source
+effect arbitration, FM6 takeover, and source fade volume. The 100% path bypasses
+scaling; 0% retains the prior disabled semantics.
 
 ### Input
 
@@ -407,16 +401,21 @@ exist:
    in session 182. Session 183 completes stable GUID-plus-serial/path device
    identity, atomic `TH3DEV.CFG` assignment persistence, hotplug reassignment,
    and the retained source-styled live Input Test page.
-5. Move the existing Japanese/English selector to the Language page.
+5. The existing Japanese/English selector moved to the Language page with the
+   category hierarchy in session 175.
 
 Each feature becomes visible only when its apply, persistence, rollback, and
 return-to-menu paths are complete.
 
 ### 6. Independent Music and SFX percentages
 
-First perform a focused audio ownership design against the current shared
-OPNA stream. Then implement category gain without altering PMD fades, effect
-priority, channel takeover, pause/resume, or source command timing.
+Status: complete in session 184. New Classic persists and applies independent
+5%-step Music and Sound FX levels; Classic remains on the exact 100% path and
+its original On/Off UI.
+
+The implementation places category gain at the shared PMD ownership seam
+without altering PMD fades, effect priority, channel takeover, pause/resume,
+or source command timing.
 
 Gate: 100% output is byte-identical across the complete 21-song/22-effect
 matrix; 0%, intermediate gain, clipping, fade, simultaneous music/effect, and

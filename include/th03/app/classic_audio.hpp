@@ -21,6 +21,8 @@ enum class ClassicAudioCommandType : std::uint8_t {
 	play_effect,
 	set_bgm_active,
 	set_effects_active,
+	set_music_volume,
+	set_effect_volume,
 };
 
 enum class ClassicMusicCue : std::uint8_t {
