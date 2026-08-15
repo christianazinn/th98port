@@ -1,7 +1,7 @@
 # New Classic online leaderboard and replay service
 
-Status: **local foundation implemented; production adapter, deployment, and
-client projection pending**
+Status: **local foundation and strict client/cache projection implemented;
+production adapter, deployment, networking, and visible UI pending**
 
 Decision date: 2026-08-15
 
@@ -278,9 +278,11 @@ verifier replies at 16 KiB, and aborts the verifier call after 15 seconds. The
 pinned Container wrapper must also kill its fixed native process within a
 shorter deadline.
 
-This foundation is not yet a client-ready projection for the frozen
-`T3ONL001` cache. That cache additionally requires digest entry/snapshot IDs,
-pinned identity and DOS-date fields, replay availability, and a revised
-curated-history invariant compatible with records that intentionally expose no
-evidence link. Freeze that response mapping before wiring the native client;
-do not treat the current server-internal UUID/JSON shape as `T3ONL001`.
+Session 198 adds the explicit client projection. The ordinary leaderboard JSON
+remains an operator surface; `format=t3onl2` joins the pinned replay facts and
+returns the strict `T3ONL002` binary cache. It derives stable typed entry and
+snapshot SHA-256 identities, binds the response to one category, preserves DOS
+date/payload availability, and carries exact Autofire/timed/slow frames. A
+cross-language golden vector proves Worker/native byte compatibility. The
+remaining client work is bounded transport, per-category persistence,
+download/upload transactions, and the source-styled visible owner.

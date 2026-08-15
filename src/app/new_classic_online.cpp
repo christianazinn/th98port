@@ -18,9 +18,9 @@ namespace {
 
 constexpr std::array<std::byte, 8U> cache_magic{
 	std::byte{'T'}, std::byte{'3'}, std::byte{'O'}, std::byte{'N'},
-	std::byte{'L'}, std::byte{'0'}, std::byte{'0'}, std::byte{'1'},
+	std::byte{'L'}, std::byte{'0'}, std::byte{'0'}, std::byte{'2'},
 };
-constexpr std::uint16_t cache_version = 1U;
+constexpr std::uint16_t cache_version = 2U;
 constexpr std::uint64_t maximum_score = 999999990ULL;
 
 [[nodiscard]] NewClassicOnlineError error(
@@ -379,18 +379,19 @@ std::expected<void, NewClassicOnlineError> validate_new_classic_online_cache(
 		document.replay_records.size() > new_classic_online_replay_limit) {
 		return std::unexpected(error(NewClassicOnlineErrorCode::count));
 	}
-	const bool empty = document.leaderboard_entries.empty() &&
+	const bool no_records = document.leaderboard_entries.empty() &&
 		document.replay_records.empty();
-	if(empty) {
-		if(new_classic_online_identity_present(document.snapshot_id) ||
+	if(!document.board_category) {
+		if(!no_records ||
+			new_classic_online_identity_present(document.snapshot_id) ||
 			document.fetched_unix_seconds != 0U) {
 			return std::unexpected(error(NewClassicOnlineErrorCode::document_shape));
 		}
-	} else if(!new_classic_online_identity_present(document.snapshot_id) ||
+	} else if(!valid_category(*document.board_category) ||
+		!new_classic_online_identity_present(document.snapshot_id) ||
 		document.fetched_unix_seconds == 0U) {
 		return std::unexpected(error(NewClassicOnlineErrorCode::document_shape));
 	}
-
 	for(std::size_t index = 0U; index < document.replay_records.size(); ++index) {
 		const auto &record = document.replay_records[index];
 		if(!new_classic_online_identity_present(record.replay_id) ||
@@ -405,16 +406,25 @@ std::expected<void, NewClassicOnlineError> validate_new_classic_online_cache(
 				));
 			}
 		}
-		if(!valid_category(record.category)) {
+		if(!valid_category(record.category) || !document.board_category ||
+			record.category != *document.board_category) {
 			return std::unexpected(error(NewClassicOnlineErrorCode::category, index));
 		}
 		if(!valid_result(record.category, record.result)) {
 			return std::unexpected(error(NewClassicOnlineErrorCode::result, index));
 		}
 		if(record.availability > NewClassicOnlineReplayAvailability::downloaded ||
-			record.payload_bytes == 0U || record.title.empty() ||
-			record.title.size() > new_classic_online_title_bytes ||
-			!valid_utf8(record.title)) {
+			record.payload_bytes == 0U || record.autofire > 3U ||
+			record.timed_frames == 0U ||
+			record.slow_frames > record.timed_frames ||
+			(static_cast<std::uint64_t>(record.slow_frames) * 100U) >
+				(static_cast<std::uint64_t>(record.timed_frames) * 5U)) {
+			return std::unexpected(error(
+				NewClassicOnlineErrorCode::telemetry, index
+			));
+		}
+		if(record.title.size() > new_classic_online_title_bytes ||
+			(!record.title.empty() && !valid_utf8(record.title))) {
 			return std::unexpected(error(NewClassicOnlineErrorCode::text, index));
 		}
 	}
@@ -433,14 +443,15 @@ std::expected<void, NewClassicOnlineError> validate_new_classic_online_cache(
 				));
 			}
 		}
-		if(!valid_category(entry.category)) {
+		if(!valid_category(entry.category) || !document.board_category ||
+			entry.category != *document.board_category) {
 			return std::unexpected(error(NewClassicOnlineErrorCode::category, index));
 		}
 		if(!valid_result(entry.category, entry.result)) {
 			return std::unexpected(error(NewClassicOnlineErrorCode::result, index));
 		}
-		if(entry.player.empty() || entry.player.size() >
-			new_classic_online_player_bytes || !valid_utf8(entry.player) ||
+		if(entry.player.size() > new_classic_online_player_bytes ||
+			(!entry.player.empty() && !valid_utf8(entry.player)) ||
 			entry.evidence_source.size() > new_classic_online_evidence_bytes ||
 			entry.curator_note.size() > new_classic_online_note_bytes ||
 			(!entry.evidence_source.empty() && !valid_utf8(entry.evidence_source)) ||
@@ -459,8 +470,7 @@ std::expected<void, NewClassicOnlineError> validate_new_classic_online_cache(
 			}
 			break;
 		case NewClassicOnlineProvenance::curated_legacy:
-			if(entry.replay_id || entry.verifier_id ||
-				entry.evidence_source.empty() || entry.curator_note.empty()) {
+			if(entry.replay_id || entry.verifier_id) {
 				return std::unexpected(error(
 					NewClassicOnlineErrorCode::provenance, index
 				));
@@ -518,6 +528,14 @@ encode_new_classic_online_cache(const NewClassicOnlineCacheDocument &document)
 			document.snapshot_id.bytes[byte]
 		);
 	}
+	if(document.board_category) {
+		output[64U] = static_cast<std::byte>(document.board_category->mode);
+		output[65U] = static_cast<std::byte>(document.board_category->rank);
+		output[66U] = static_cast<std::byte>(document.board_category->character);
+		output[67U] = static_cast<std::byte>(document.board_category->start_stage);
+		output[68U] = static_cast<std::byte>(document.board_category->start_round);
+		output[69U] = std::byte{1U};
+	}
 
 	for(const auto &entry : document.leaderboard_entries) {
 		const auto begin = output.size();
@@ -547,6 +565,12 @@ encode_new_classic_online_cache(const NewClassicOnlineCacheDocument &document)
 			static_cast<std::uint8_t>(record.availability));
 		append_u16(output, record.dos_date);
 		append_u32(output, record.payload_bytes);
+		append_u8(output, record.autofire);
+		append_u8(output, 0U);
+		append_u8(output, 0U);
+		append_u8(output, 0U);
+		append_u32(output, record.timed_frames);
+		append_u32(output, record.slow_frames);
 		append_text(output, record.title);
 		set_u16(output, begin, static_cast<std::uint16_t>(output.size() - begin));
 	}
@@ -585,12 +609,26 @@ decode_new_classic_online_cache(std::span<const std::byte> bytes)
 	const auto replay_count = reader.u16();
 	const auto fetched = reader.u64();
 	const auto snapshot = reader.identity<NewClassicOnlineSnapshotTag>();
+	const auto board_mode = reader.u8();
+	const auto board_rank = reader.u8();
+	const auto board_character = reader.u8();
+	const auto board_stage = reader.u8();
+	const auto board_round = reader.u8();
+	const auto board_present = reader.u8();
+	std::array<std::optional<std::uint8_t>, 10U> reserved{};
+	for(auto &byte : reserved) {
+		byte = reader.u8();
+	}
 	if(!version || *version != cache_version) {
 		return std::unexpected(error(NewClassicOnlineErrorCode::version, 0U, 8U));
 	}
 	if(!header || *header != new_classic_online_cache_header_bytes || !total ||
 		*total != bytes.size() || !generation || !entry_count || !replay_count ||
-		!fetched || !snapshot || *entry_count > new_classic_online_entry_limit ||
+		!fetched || !snapshot || !board_mode || !board_rank || !board_character ||
+		!board_stage || !board_round || !board_present || *board_present > 1U ||
+		std::ranges::any_of(reserved, [](const auto &byte) {
+			return !byte || *byte != 0U;
+		}) || *entry_count > new_classic_online_entry_limit ||
 		*replay_count > new_classic_online_replay_limit) {
 		return std::unexpected(error(NewClassicOnlineErrorCode::header_shape));
 	}
@@ -606,6 +644,18 @@ decode_new_classic_online_cache(std::span<const std::byte> bytes)
 	document.generation = *generation;
 	document.snapshot_id = *snapshot;
 	document.fetched_unix_seconds = *fetched;
+	if(*board_present != 0U) {
+		document.board_category = NewClassicOnlineCategory{
+			static_cast<NewClassicOnlineMode>(*board_mode),
+			*board_rank,
+			*board_character,
+			*board_stage,
+			*board_round,
+		};
+	} else if(*board_mode != 0U || *board_rank != 0U ||
+		*board_character != 0U || *board_stage != 0U || *board_round != 0U) {
+		return std::unexpected(error(NewClassicOnlineErrorCode::header_shape));
+	}
 	document.leaderboard_entries.reserve(*entry_count);
 	document.replay_records.reserve(*replay_count);
 	if(!reader.seek(new_classic_online_cache_header_bytes)) {
@@ -664,11 +714,20 @@ decode_new_classic_online_cache(std::span<const std::byte> bytes)
 		const auto result_policy = read_result_policy(reader);
 		const auto date = reader.u16();
 		const auto payload_bytes = reader.u32();
+		const auto autofire = reader.u8();
+		const auto reserved_0 = reader.u8();
+		const auto reserved_1 = reader.u8();
+		const auto reserved_2 = reader.u8();
+		const auto timed_frames = reader.u32();
+		const auto slow_frames = reader.u32();
 		const auto title = reader.text();
 		if(!record_size || *record_size < 2U ||
 			record_start + *record_size > stored_checksum_offset ||
 			!replay_id || !content_id || !ruleset_id || !category ||
-			!result_policy || !date || !payload_bytes || !title ||
+			!result_policy || !date || !payload_bytes || !autofire ||
+			!reserved_0 || *reserved_0 != 0U || !reserved_1 ||
+			*reserved_1 != 0U || !reserved_2 || *reserved_2 != 0U ||
+			!timed_frames || !slow_frames || !title ||
 			reader.offset() != record_start + *record_size) {
 			return std::unexpected(error(
 				NewClassicOnlineErrorCode::record_shape, index, record_start
@@ -683,6 +742,9 @@ decode_new_classic_online_cache(std::span<const std::byte> bytes)
 			static_cast<NewClassicOnlineReplayAvailability>(result_policy->policy),
 			*date,
 			*payload_bytes,
+			*autofire,
+			*timed_frames,
+			*slow_frames,
 			std::move(*title),
 		});
 	}

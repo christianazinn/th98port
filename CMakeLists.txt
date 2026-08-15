@@ -807,6 +807,7 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-new-classic-online-tests
 		COMMAND th03-app-new-classic-online-tests
+			${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/online_service_projection_t3onl2.hex
 	)
 
 	add_executable(th03-app-classic-config-tests

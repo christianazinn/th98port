@@ -1,7 +1,7 @@
 # New Classic online identity and offline cache
 
-Status: client-side domain boundary frozen in session 189. No service or
-visible online route is implemented.
+Status: `T3ONL002` client/service projection implemented locally. No visible
+online route or production network binding is implemented.
 
 ## Ownership
 
@@ -17,8 +17,8 @@ The boundary is offline-first:
 - the cache contains no endpoint, provider, credential, token, or authority
   over a submitted score;
 - a replay-verified score must name both an exact replay and a verifier;
-- a curated historical score must name its evidence and curator note and must
-  not contain a replay or verifier identity; and
+- a curated historical score has no replay or verifier identity and does not
+  require a public evidence link; and
 - downloaded replay filenames are content-addressed local names, never remote
   paths.
 
@@ -49,28 +49,34 @@ mode-compatible result kind.
 
 `replay_verified` entries require nonzero replay and verifier identities and
 forbid evidence/curator text. `curated_legacy` entries require absent replay
-and verifier identities plus nonempty evidence and curator text. When cached
+and verifier identities; internal evidence/curator text is optional. When cached
 replay metadata is present for a verified entry, its content, ruleset,
 category, and result must match the leaderboard entry exactly.
 
-All visible strings are bounded, control-free UTF-8. The document is limited
-to 256 leaderboard entries, 256 replay records, and 256 KiB.
+Every fetched document is bound to one exact board category. Replay records
+also retain exact Autofire, timed-frame, and slow-frame values and enforce the
+service's literal five-percent eligibility ratio. All visible strings are
+bounded, control-free UTF-8; an empty saved name is valid. The document is
+limited to 256 leaderboard entries, 256 replay records, and 256 KiB.
 
-## `T3ONL001` cache format
+## `T3ONL002` cache format
 
-All integers are little-endian. The header is 64 bytes:
+All integers are little-endian. The header is 80 bytes:
 
 | Offset | Size | Field |
 |---:|---:|---|
-| 0 | 8 | `T3ONL001` |
-| 8 | 2 | version `1` |
-| 10 | 2 | header size `64` |
+| 0 | 8 | `T3ONL002` |
+| 8 | 2 | version `2` |
+| 10 | 2 | header size `80` |
 | 12 | 4 | total file size |
 | 16 | 4 | local atomic generation |
 | 20 | 2 | leaderboard-entry count |
 | 22 | 2 | replay-record count |
 | 24 | 8 | fetch time, Unix seconds |
 | 32 | 32 | snapshot identity |
+| 64 | 5 | mode, rank, character, start stage, start round |
+| 69 | 1 | board-category-present flag |
+| 70 | 10 | zero |
 
 Leaderboard records follow in cache order, then replay records. Each begins
 with a two-byte total record length and uses fixed typed identities plus
@@ -103,18 +109,34 @@ u8 result_kind end_stage continues availability reserved_zero
 u64 score
 u16 dos_date
 u32 exact_payload_bytes
+u8 autofire
+u8[3] zero
+u32 timed_frames
+u32 slow_frames
 u16+bytes title
 ```
 
-An empty document has no snapshot/fetch identity and is the normal result when
-no cache file exists. A nonempty document requires both. `PODD.ONL`, `.tmp`,
-and `.old` are a fixed atomic recovery family; the greatest valid generation
-wins. A present but wholly corrupt family returns an error rather than being
-silently reinterpreted as online data.
+An absent cache has no board, snapshot, or fetch identity. A successfully
+fetched empty board has all three and zero records, so offline UI can
+distinguish `no cache` from `this board is empty`. `PODD.ONL`, `.tmp`, and
+`.old` are a fixed atomic recovery family; the greatest valid generation wins.
+A present but wholly corrupt family returns an error rather than being silently
+reinterpreted as online data.
 
 Downloaded payloads use `<64 uppercase replay-id hex digits>.RPY`. The cache
 only records metadata and availability; V13 validation remains the replay
 reader's responsibility when a future client actually stores or opens one.
+
+## Worker projection
+
+`GET /api/th03/leaderboard?category=story:rN:cN&format=t3onl2` returns the
+strict binary cache representation. The ordinary request remains JSON for
+operator/debug use. Entry IDs are SHA-256 digests of a frozen `T3ENT001`
+document containing the server-internal stable entry key. Snapshot IDs digest
+the fetched category's canonical zero-time/zero-snapshot cache bytes, so fetch
+time and local atomic generation do not change content identity. A checked-in
+golden vector is encoded by TypeScript and decoded/re-encoded byte-identically
+by the native C++ implementation.
 
 ## Deferred work
 
@@ -122,6 +144,6 @@ reader's responsibility when a future client actually stores or opens one.
   model.
 - Select and operate a service, verifier queue, authentication, moderation,
   and privacy policy.
-- Add service/cache merge and downloaded-payload transactions above this
-  boundary.
+- Add bounded HTTP fetch, per-category store naming, cache refresh, and
+  downloaded-payload transactions above this boundary.
 - Add HiScore/Replay hubs only once real cached or service-backed views exist.

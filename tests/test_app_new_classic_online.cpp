@@ -69,6 +69,9 @@ template<typename Identity>
 		NewClassicOnlineReplayAvailability::downloaded,
 		0x5D2FU,
 		213592U,
+		1U,
+		10'000U,
+		200U,
 		"Lunatic Reimu clear",
 	};
 }
@@ -103,14 +106,14 @@ template<typename Identity>
 		identity<NewClassicOnlineRulesetId>(0x60U),
 		std::nullopt,
 		std::nullopt,
-		{NewClassicOnlineMode::story, 3U, 2U, 0U, 0U},
+		{NewClassicOnlineMode::story, 2U, 4U, 0U, 0U},
 		{NewClassicOnlineResultKind::game_over, 987654320ULL, 7U, 1U},
 		NewClassicOnlineProvenance::curated_legacy,
 		0x4A21U,
 		1786765000ULL,
 		"Pre-patch WR",
-		"Tournament archive, 1998-12-03",
-		"Curated from the preserved score photograph",
+		{},
+		{},
 	};
 }
 
@@ -121,6 +124,7 @@ template<typename Identity>
 	document.generation = 7U;
 	document.snapshot_id = identity<NewClassicOnlineSnapshotId>(0xA0U);
 	document.fetched_unix_seconds = 1786766000ULL;
+	document.board_category = replay_record().category;
 	document.leaderboard_entries = {verified_entry(), legacy_entry()};
 	document.replay_records = {replay_record()};
 	return document;
@@ -135,6 +139,31 @@ void write_bytes(const fs::path &path, const std::vector<std::byte> &bytes)
 	);
 }
 
+[[nodiscard]] std::vector<std::byte> read_hex(const fs::path &path)
+{
+	std::ifstream input(path);
+	std::string text{
+		std::istreambuf_iterator<char>{input},
+		std::istreambuf_iterator<char>{},
+	};
+	std::vector<std::byte> bytes;
+	for(std::size_t index = 0U; index + 1U < text.size(); index += 2U) {
+		auto digit = [](char value) -> std::uint8_t {
+			if(value >= '0' && value <= '9') {
+				return static_cast<std::uint8_t>(value - '0');
+			}
+			return static_cast<std::uint8_t>(value - 'A' + 10);
+		};
+		if(text[index] == '\n' || text[index] == '\r') {
+			break;
+		}
+		bytes.push_back(static_cast<std::byte>(
+			(digit(text[index]) << 4U) | digit(text[index + 1U])
+		));
+	}
+	return bytes;
+}
+
 void test_identity_and_provenance_contract()
 {
 	using namespace th03::app;
@@ -142,8 +171,10 @@ void test_identity_and_provenance_contract()
 	expect(validate_new_classic_online_cache(document).has_value(),
 		"verified and curated records satisfy the shared domain contract");
 	expect(!document.leaderboard_entries[1U].replay_id &&
-		!document.leaderboard_entries[1U].verifier_id,
-		"curated historical records carry no invented replay or verifier ID");
+		!document.leaderboard_entries[1U].verifier_id &&
+		document.leaderboard_entries[1U].evidence_source.empty() &&
+		document.leaderboard_entries[1U].curator_note.empty(),
+		"curated records need no invented replay, verifier, or public evidence");
 
 	auto legacy_with_replay = document;
 	legacy_with_replay.leaderboard_entries[1U].replay_id =
@@ -180,6 +211,27 @@ void test_identity_and_provenance_contract()
 	expect(!invalid && invalid.error().code ==
 		NewClassicOnlineErrorCode::document_shape,
 		"empty offline state cannot retain a stale service snapshot identity");
+
+	NewClassicOnlineCacheDocument fetched_empty{};
+	fetched_empty.snapshot_id = identity<NewClassicOnlineSnapshotId>(0xB0U);
+	fetched_empty.fetched_unix_seconds = 1786766100ULL;
+	fetched_empty.board_category = replay_record().category;
+	expect(validate_new_classic_online_cache(fetched_empty).has_value(),
+		"an explicitly fetched empty board remains distinguishable from no cache");
+
+	auto mismatched_board = document;
+	mismatched_board.board_category->character = 5U;
+	invalid = validate_new_classic_online_cache(mismatched_board);
+	expect(!invalid && invalid.error().code ==
+		NewClassicOnlineErrorCode::category,
+		"every projected row must belong to the cache's bound board category");
+
+	auto invalid_telemetry = document;
+	invalid_telemetry.replay_records[0U].slow_frames = 501U;
+	invalid_telemetry.replay_records[0U].timed_frames = 10'000U;
+	invalid = validate_new_classic_online_cache(invalid_telemetry);
+	expect(!invalid && invalid.error().code == NewClassicOnlineErrorCode::telemetry,
+		"cached replay telemetry enforces the exact five-percent boundary");
 }
 
 void test_codec_round_trip_and_corruption()
@@ -270,14 +322,53 @@ void test_recovery_and_fail_closed_corruption()
 		"a wholly corrupt cache fails closed rather than becoming online data");
 }
 
+void test_worker_projection_fixture(const fs::path &fixture)
+{
+	using namespace th03::app;
+	const auto bytes = read_hex(fixture);
+	auto decoded = decode_new_classic_online_cache(bytes);
+	expect(bytes.size() == 629U && decoded.has_value(),
+		"the Worker T3ONL002 golden vector decodes in the native client");
+	if(!decoded) {
+		return;
+	}
+	expect(decoded->board_category &&
+		decoded->board_category->mode == NewClassicOnlineMode::story &&
+		decoded->board_category->rank == 1U &&
+		decoded->board_category->character == 0U &&
+		decoded->leaderboard_entries.size() == 2U &&
+		decoded->replay_records.size() == 1U,
+		"the projected cache binds one exact category and its ordered rows");
+	expect(decoded->leaderboard_entries[0U].provenance ==
+		NewClassicOnlineProvenance::curated_legacy &&
+		!decoded->leaderboard_entries[0U].replay_id &&
+		decoded->leaderboard_entries[0U].evidence_source.empty() &&
+		decoded->leaderboard_entries[1U].provenance ==
+			NewClassicOnlineProvenance::replay_verified,
+		"historical and replay-backed rows retain their distinct authority");
+	const auto &replay = decoded->replay_records[0U];
+	expect(replay.availability ==
+		NewClassicOnlineReplayAvailability::metadata_only &&
+		replay.autofire == 2U && replay.timed_frames == 10'000U &&
+		replay.slow_frames == 500U && replay.payload_bytes == 7U,
+		"online replay metadata carries visible Autofire and exact slowdown facts");
+	auto encoded = encode_new_classic_online_cache(*decoded);
+	expect(encoded && *encoded == bytes,
+		"native re-encoding is byte-identical to the Worker golden vector");
+}
+
 } // namespace
 
-int main()
+int main(int argc, char **argv)
 {
 	test_identity_and_provenance_contract();
 	test_codec_round_trip_and_corruption();
 	test_empty_and_atomic_store();
 	test_recovery_and_fail_closed_corruption();
+	expect(argc == 2, "the cross-language projection fixture is supplied");
+	if(argc == 2) {
+		test_worker_projection_fixture(argv[1]);
+	}
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }

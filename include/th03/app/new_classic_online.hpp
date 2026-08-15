@@ -20,7 +20,7 @@ inline constexpr std::size_t new_classic_online_title_bytes = 80U;
 inline constexpr std::size_t new_classic_online_entry_limit = 256U;
 inline constexpr std::size_t new_classic_online_replay_limit = 256U;
 inline constexpr std::size_t new_classic_online_cache_max_bytes = 256U * 1024U;
-inline constexpr std::size_t new_classic_online_cache_header_bytes = 64U;
+inline constexpr std::size_t new_classic_online_cache_header_bytes = 80U;
 inline constexpr std::size_t new_classic_online_cache_footer_bytes = 4U;
 
 template<typename Tag>
@@ -138,6 +138,9 @@ struct NewClassicOnlineReplayRecord final {
 		NewClassicOnlineReplayAvailability::metadata_only;
 	std::uint16_t dos_date = 0U;
 	std::uint32_t payload_bytes = 0U;
+	std::uint8_t autofire = 0U;
+	std::uint32_t timed_frames = 0U;
+	std::uint32_t slow_frames = 0U;
 	std::string title{};
 
 	friend bool operator==(
@@ -150,6 +153,7 @@ struct NewClassicOnlineCacheDocument final {
 	std::uint32_t generation = 0U;
 	NewClassicOnlineSnapshotId snapshot_id{};
 	std::uint64_t fetched_unix_seconds = 0U;
+	std::optional<NewClassicOnlineCategory> board_category{};
 	std::vector<NewClassicLeaderboardEntry> leaderboard_entries{};
 	std::vector<NewClassicOnlineReplayRecord> replay_records{};
 
@@ -170,6 +174,7 @@ enum class NewClassicOnlineErrorCode : std::uint8_t {
 	identity,
 	category,
 	result,
+	telemetry,
 	provenance,
 	text,
 	duplicate_identity,
