@@ -767,7 +767,6 @@ struct ClassicStoryBackend final {
 			input, input_context, replay_recorder != nullptr
 		);
 		const bool source_frame_io = !pause_menu;
-		bool pause_refresh_requested = false;
 		std::expected<MainProcessDriverTick, MainProcessDriverError> advanced =
 			std::unexpected(MainProcessDriverError{});
 		if(pause_menu) {
@@ -777,7 +776,6 @@ struct ClassicStoryBackend final {
 					input.restart_requested
 				)
 			);
-			pause_refresh_requested = pause_menu->take_replay_flush_request();
 			if(pause_menu->take_rejected_save_effect()) {
 				pause_audio = {{
 					{.type = ClassicAudioCommandType::play_effect, .parameter = 21U},
@@ -793,11 +791,6 @@ struct ClassicStoryBackend final {
 						normalize_replay_interstitial_input(input)
 					); !sampled) {
 						return std::unexpected(replay_capture_error());
-					}
-					if(pause_refresh_requested) {
-						if(auto flushed = replay_recorder->periodic_flush(); !flushed) {
-							return std::unexpected(replay_capture_error());
-						}
 					}
 				}
 				account_score_vsync();
@@ -818,10 +811,7 @@ struct ClassicStoryBackend final {
 			}
 			if((restart || status == NewClassicPauseStatus::discard_exit) &&
 				replay_recorder) {
-				if(auto discarded = replay_recorder->discard_persistent();
-					!discarded) {
-					return std::unexpected(replay_capture_error());
-				}
+				replay_recorder->discard();
 			}
 			restart_requested = restart;
 			advanced = driver->finish_deferred_frame(
@@ -843,11 +833,6 @@ struct ClassicStoryBackend final {
 				pause_menu.emplace(
 					replay_recorder && replay_recorder->recording(), patch_assets
 				);
-				if(replay_recorder && replay_recorder->recording()) {
-					if(auto flushed = replay_recorder->periodic_flush(); !flushed) {
-						return std::unexpected(replay_capture_error());
-					}
-				}
 				pause_audio = {{
 					{.type = ClassicAudioCommandType::pause_song},
 					{.type = ClassicAudioCommandType::play_effect, .parameter = 21U},
@@ -885,11 +870,6 @@ struct ClassicStoryBackend final {
 				recorded_input
 			); !sampled) {
 				return std::unexpected(replay_capture_error());
-			}
-			if(pause_refresh_requested) {
-				if(auto flushed = replay_recorder->periodic_flush(); !flushed) {
-					return std::unexpected(replay_capture_error());
-				}
 			}
 			if(advanced->step_result.status == StepStatus::round_transition ||
 				advanced->step_result.status == StepStatus::terminal) {

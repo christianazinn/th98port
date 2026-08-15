@@ -119,7 +119,7 @@ void write_malformed(const std::filesystem::path &path)
 	output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
 }
 
-void test_fallback_and_faults(
+void test_atomic_slot_faults_and_legacy_cleanup(
 	const std::filesystem::path &root,
 	const th03::formats::ReplayDocument &base
 )
@@ -130,17 +130,16 @@ void test_fallback_and_faults(
 
 	check(
 		th03::app::replay_fallback_path(root).filename() == "TH3LAST.RPY",
-		"the native fallback keeps Replay Patch 0.4.11's filename"
+		"legacy cleanup recognizes the old native journal filename"
 	);
 	check(
-		th03::app::checkpoint_replay_fallback(root, base).has_value(),
-		"a valid recording checkpoint atomically creates the fallback"
+		th03::app::commit_replay_slot(root, 6U, base).has_value(),
+		"the direct slot fixture installs a validated destination"
 	);
-	const auto base_bytes = read_file(th03::app::replay_fallback_path(root));
-	const auto loaded = th03::app::load_replay_fallback(root);
+	const auto base_bytes = read_file(th03::app::replay_slot_path(root, 6U));
 	check(
-		!base_bytes.empty() && loaded && loaded->document,
-		"the fallback reads back through the canonical V13 parser"
+		!base_bytes.empty(),
+		"the direct slot contains canonical V13 bytes"
 	);
 
 	auto replacement = base;
@@ -167,92 +166,60 @@ void test_fallback_and_faults(
 	};
 	for(const auto &[point, code] : faults) {
 		ReplaySlotStoreTestAccess::fail_next(point);
-		auto failed = th03::app::checkpoint_replay_fallback(root, replacement);
+		auto failed = th03::app::commit_replay_slot(root, 6U, replacement);
 		check(
 			!failed && failed.error().code == code,
-			"the injected checkpoint boundary returns its exact storage error"
+			"the injected slot boundary returns its exact storage error"
 		);
 		check(
-			read_file(th03::app::replay_fallback_path(root)) == base_bytes,
-			"every failed pre-replacement checkpoint preserves the fallback"
+			read_file(th03::app::replay_slot_path(root, 6U)) == base_bytes,
+			"every failed atomic commit preserves the occupied slot"
 		);
 	}
 
 	check(
-		th03::app::commit_replay_slot(root, 6U, base).has_value(),
-		"fault fixture installs an occupied destination slot"
-	);
-	const auto old_slot = read_file(th03::app::replay_slot_path(root, 6U));
-	ReplaySlotStoreTestAccess::fail_next(ReplaySlotStoreFaultPoint::publish_slot);
-	auto publish_failed = th03::app::commit_replay_fallback_to_slot(
-		root, 6U, replacement
-	);
-	check(
-		!publish_failed && publish_failed.error().code ==
-			ReplaySlotStoreErrorCode::publish_slot,
-		"a final fallback-to-slot publication failure is observable"
-	);
-	check(
-		read_file(th03::app::replay_slot_path(root, 6U)) == old_slot,
-		"failed publication preserves the occupied slot byte-for-byte"
-	);
-	const auto recoverable = th03::app::load_replay_fallback(root);
-	check(
-		recoverable && recoverable->document &&
-		recoverable->document->metadata->name == replacement.metadata->name,
-		"failed publication leaves the final menu-edited fallback recoverable"
-	);
-	check(
-		th03::app::commit_replay_fallback_to_slot(root, 6U, replacement)
-			.has_value(),
-		"retry atomically moves the fallback over the selected slot"
+		th03::app::commit_replay_slot(root, 6U, replacement).has_value(),
+		"a successful retry publishes the in-memory document directly"
 	);
 	const auto published = th03::app::load_replay_slot(root, 6U);
-	const auto no_fallback = th03::app::load_replay_fallback(root);
 	check(
 		published && published->document &&
-		published->document->metadata->name == replacement.metadata->name &&
-		no_fallback && !no_fallback->document,
-		"successful publication exposes one slot artifact and removes TH3LAST"
+		published->document->metadata->name == replacement.metadata->name,
+		"successful publication exposes the validated numbered-slot artifact"
 	);
 
+	std::filesystem::copy_file(
+		th03::app::replay_slot_path(root, 6U),
+		th03::app::replay_fallback_path(root),
+		std::filesystem::copy_options::overwrite_existing
+	);
 	check(
-		th03::app::checkpoint_replay_fallback(root, base).has_value(),
-		"discard fault fixture recreates the fallback"
+		std::filesystem::is_regular_file(th03::app::replay_fallback_path(root)),
+		"legacy cleanup fixture stages an old-build TH3LAST"
 	);
 	ReplaySlotStoreTestAccess::fail_next(ReplaySlotStoreFaultPoint::remove_target);
-	auto remove_failed = th03::app::remove_replay_fallback(root);
+	auto remove_failed = th03::app::discard_replay_fallback_on_startup(root);
 	check(
 		!remove_failed && remove_failed.error().code ==
 			ReplaySlotStoreErrorCode::remove_target &&
 		std::filesystem::is_regular_file(th03::app::replay_fallback_path(root)),
-		"failed discard reports the boundary and preserves the fallback"
-	);
-	check(
-		th03::app::remove_replay_fallback(root).has_value() &&
-		!std::filesystem::exists(th03::app::replay_fallback_path(root)),
-		"discard retry removes the fallback"
-	);
-
-	check(
-		th03::app::checkpoint_replay_fallback(root, base).has_value(),
-		"startup policy fixture creates a valid interrupted journal"
+		"failed legacy cleanup reports the boundary and preserves the file"
 	);
 	check(
 		th03::app::discard_replay_fallback_on_startup(root).has_value() &&
 		!std::filesystem::exists(th03::app::replay_fallback_path(root)),
-		"a fresh application launch discards even a valid interrupted journal"
+		"legacy cleanup retry removes TH3LAST"
 	);
 	check(
 		th03::app::discard_replay_fallback_on_startup(root).has_value(),
-		"startup discard is idempotent when no journal exists"
+		"legacy cleanup is idempotent when no old-build file exists"
 	);
 
 	write_malformed(th03::app::replay_fallback_path(root));
 	check(
 		th03::app::discard_replay_fallback_on_startup(root).has_value() &&
 		!std::filesystem::exists(th03::app::replay_fallback_path(root)),
-		"startup discard removes malformed bytes without parsing them"
+		"legacy cleanup removes malformed old-build bytes without parsing them"
 	);
 	ReplaySlotStoreTestAccess::clear_failure();
 }
@@ -286,7 +253,7 @@ int main()
 		!th03::app::load_replay_slot(root, 100U),
 		"slot indices outside 00..99 are rejected"
 	);
-	test_fallback_and_faults(root, document);
+	test_atomic_slot_faults_and_legacy_cleanup(root, document);
 
 	check(
 		th03::app::commit_replay_slot(root, 7U, document).has_value(),

@@ -517,9 +517,7 @@ ClassicRunner::load(ClassicRunnerRequest request)
 			request.content.config.parent_path() / "PODD.CFG";
 	}
 	auto replay_recorder = request.experience == ExperienceProfile::new_classic
-		? std::make_unique<NewClassicReplayRecorder>(
-			request.content.replay_root
-		) : nullptr;
+		? std::make_unique<NewClassicReplayRecorder>() : nullptr;
 	auto session = ClassicOpSession::create(
 		std::move(resident),
 		std::make_unique<MainResourceLoader>(paths.data_root),

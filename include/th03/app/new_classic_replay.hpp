@@ -3,11 +3,8 @@
 
 #include <cstdint>
 #include <expected>
-#include <filesystem>
 #include <optional>
-#include <utility>
 
-#include "th03/app/replay_slot_store.hpp"
 #include "th03/core/game.hpp"
 #include "th03/formats/replay.hpp"
 #include "th03/replay/session.hpp"
@@ -18,15 +15,12 @@ enum class NewClassicReplayErrorCode : std::uint8_t {
 	invalid_round_start,
 	invalid_sequence,
 	document_invalid,
-	journal_conflict,
-	journal_store,
 };
 
 struct NewClassicReplayError final {
 	NewClassicReplayErrorCode code =
 		NewClassicReplayErrorCode::invalid_sequence;
 	std::optional<Error> format{};
-	std::optional<ReplaySlotStoreError> store{};
 };
 
 // Replay Patch 0.4.12's replay_finish() preserves master.lib's live RNG only
@@ -44,12 +38,6 @@ class NewClassicReplayRecorder final {
 public:
 	explicit NewClassicReplayRecorder(std::uint16_t recording_date = 0U) noexcept :
 		recording_date_(recording_date)
-	{}
-	explicit NewClassicReplayRecorder(
-		std::filesystem::path replay_root,
-		std::uint16_t recording_date = 0U
-	) noexcept :
-		replay_root_(std::move(replay_root)), recording_date_(recording_date)
 	{}
 	[[nodiscard]] std::expected<void, NewClassicReplayError> round_started(
 		const RoundStartObservation &observation,
@@ -84,32 +72,21 @@ public:
 		formats::ReplayEndReason reason,
 		const GameInit &resident
 	);
-	// Replay Patch replay_pause_save_refresh() flushes the live fallback every
-	// time Replay Pause opens. This call is also safe at explicit native
-	// process handoff boundaries.
-	[[nodiscard]] std::expected<void, NewClassicReplayError>
-	periodic_flush();
 
 	[[nodiscard]] bool recording() const noexcept;
 	[[nodiscard]] const formats::ReplayDocument *document() const noexcept;
 	[[nodiscard]] const CanonicalState *last_terminal() const noexcept;
 	[[nodiscard]] std::optional<formats::ReplayDocument> take_completed();
 	void discard() noexcept;
-	[[nodiscard]] std::expected<void, NewClassicReplayError>
-	discard_persistent() noexcept;
 
 private:
-	[[nodiscard]] std::expected<void, NewClassicReplayError>
-	checkpoint_journal(const formats::ReplayDocument &document);
 	void clear_memory() noexcept;
 
 	std::optional<formats::ReplayDocument> document_{};
 	std::optional<formats::ReplayDocument> completed_{};
 	std::optional<CanonicalState> last_terminal_{};
 	std::optional<formats::ReplayPracticeConfig> practice_config_{};
-	std::filesystem::path replay_root_{};
 	std::uint16_t recording_date_ = 0U;
-	bool journal_claimed_ = false;
 	std::uint32_t source_vsync_clock_ = 0U;
 	std::uint32_t round_vsync_last_ = 0U;
 	std::uint32_t round_real_frames_ = 0U;

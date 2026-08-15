@@ -66,7 +66,6 @@ public:
 	[[nodiscard]] NewClassicPauseChoice choice() const noexcept;
 	[[nodiscard]] bool save_enabled() const noexcept;
 	[[nodiscard]] bool take_rejected_save_effect() noexcept;
-	[[nodiscard]] bool take_replay_flush_request() noexcept;
 
 private:
 	friend struct NewClassicPauseTestAccess;
@@ -98,7 +97,6 @@ private:
 	Phase phase_ = Phase::release_before_choice;
 	bool visible_ = false;
 	bool rejected_save_effect_ = false;
-	bool replay_flush_requested_ = false;
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
 	std::vector<present::ComposedPixel> pixels_{};
 };

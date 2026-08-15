@@ -509,29 +509,7 @@ std::expected<void, ReplaySlotStoreError> commit_replay_slot(
 	);
 }
 
-std::expected<ReplaySlotLoadResult, ReplaySlotStoreError>
-load_replay_fallback(const std::filesystem::path &replay_root)
-{
-	if(replay_root.empty()) {
-		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_root));
-	}
-	return load_document(replay_fallback_path(replay_root));
-}
-
-std::expected<void, ReplaySlotStoreError> checkpoint_replay_fallback(
-	const std::filesystem::path &replay_root,
-	const formats::ReplayDocument &document
-)
-{
-	if(replay_root.empty()) {
-		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_root));
-	}
-	return write_document(
-		replay_root, replay_fallback_path(replay_root), document
-	);
-}
-
-std::expected<void, ReplaySlotStoreError> remove_replay_fallback(
+std::expected<void, ReplaySlotStoreError> discard_replay_fallback_on_startup(
 	const std::filesystem::path &replay_root
 )
 {
@@ -551,49 +529,6 @@ std::expected<void, ReplaySlotStoreError> remove_replay_fallback(
 	if(system) {
 		return std::unexpected(store_error(
 			ReplaySlotStoreErrorCode::remove_target, system
-		));
-	}
-	return {};
-}
-
-std::expected<void, ReplaySlotStoreError> discard_replay_fallback_on_startup(
-	const std::filesystem::path &replay_root
-)
-{
-	return remove_replay_fallback(replay_root);
-}
-
-std::expected<void, ReplaySlotStoreError> commit_replay_fallback_to_slot(
-	const std::filesystem::path &replay_root,
-	std::uint8_t slot,
-	const formats::ReplayDocument &document
-)
-{
-	if(replay_root.empty()) {
-		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_root));
-	}
-	if(slot >= replay_slot_count) {
-		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_slot));
-	}
-	if(auto staged = checkpoint_replay_fallback(replay_root, document); !staged) {
-		return staged;
-	}
-	const auto fallback = replay_fallback_path(replay_root);
-	const auto target = replay_slot_path(replay_root, slot);
-	if(fail(ReplaySlotStoreFaultPoint::publish_slot)) {
-		return std::unexpected(store_error(
-			ReplaySlotStoreErrorCode::publish_slot,
-			std::make_error_code(std::errc::io_error)
-		));
-	}
-#if defined(_WIN32)
-	if(MoveFileExW(fallback.c_str(), target.c_str(),
-		MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0) {
-#else
-	if(::rename(fallback.c_str(), target.c_str()) != 0) {
-#endif
-		return std::unexpected(store_error(
-			ReplaySlotStoreErrorCode::publish_slot, last_system_error()
 		));
 	}
 	return {};

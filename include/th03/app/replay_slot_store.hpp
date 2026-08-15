@@ -34,7 +34,6 @@ enum class ReplaySlotStoreErrorCode : std::uint8_t {
 	temporary_validation,
 	temporary_close,
 	replace_target,
-	publish_slot,
 	remove_target,
 };
 
@@ -78,35 +77,11 @@ load_replay_slot(
 	const formats::ReplayDocument &document
 );
 
-// Replay Patch 0.4.12 keeps the live user recording in TH3LAST.RPY. Native
-// checkpoints replace the whole canonical V13 artifact atomically, which is
-// the host equivalent of the patch's flushed header/input prefix.
-[[nodiscard]] std::expected<ReplaySlotLoadResult, ReplaySlotStoreError>
-load_replay_fallback(const std::filesystem::path &replay_root);
-[[nodiscard]] std::expected<void, ReplaySlotStoreError>
-checkpoint_replay_fallback(
-	const std::filesystem::path &replay_root,
-	const formats::ReplayDocument &document
-);
-[[nodiscard]] std::expected<void, ReplaySlotStoreError>
-remove_replay_fallback(const std::filesystem::path &replay_root);
-
-// TH3LAST is a current-process durability journal, not a pending-save queue.
-// An ordinary fresh application launch discards any interrupted journal before
-// OP can be presented or a new recording can claim the path.
+// Builds before the memory-only recorder may have left TH3LAST behind. An
+// ordinary fresh application launch removes that legacy artifact before OP.
 [[nodiscard]] std::expected<void, ReplaySlotStoreError>
 discard_replay_fallback_on_startup(
 	const std::filesystem::path &replay_root
-);
-
-// Rewrites the fallback with the final menu-edited document, validates it, and
-// then atomically renames that exact artifact over the selected slot. A failed
-// publication preserves the old slot and leaves the fallback recoverable.
-[[nodiscard]] std::expected<void, ReplaySlotStoreError>
-commit_replay_fallback_to_slot(
-	const std::filesystem::path &replay_root,
-	std::uint8_t slot,
-	const formats::ReplayDocument &document
 );
 
 enum class ReplaySlotStoreFaultPoint : std::uint8_t {
@@ -120,7 +95,6 @@ enum class ReplaySlotStoreFaultPoint : std::uint8_t {
 	temporary_validation,
 	temporary_close,
 	replace_target,
-	publish_slot,
 	remove_target,
 };
 

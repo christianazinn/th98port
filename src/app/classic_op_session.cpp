@@ -2950,7 +2950,6 @@ struct ClassicOpSessionBackend final {
 			replay_recorder && replay_recorder->recording()
 		);
 		const bool source_frame_io = !vs_pause_menu;
-		bool pause_refresh_requested = false;
 		std::array<ClassicAudioCommand, 2U> ui_audio{};
 		std::size_t ui_audio_count = 0U;
 		std::expected<MainProcessDriverTick, MainProcessDriverError> tick =
@@ -2962,8 +2961,6 @@ struct ClassicOpSessionBackend final {
 					input.restart_requested
 				)
 			);
-			pause_refresh_requested =
-				vs_pause_menu->take_replay_flush_request();
 			if(vs_pause_menu->take_rejected_save_effect() && !push_audio({
 				.type = ClassicAudioCommandType::play_effect,
 				.parameter = 21U,
@@ -2979,11 +2976,6 @@ struct ClassicOpSessionBackend final {
 						normalize_replay_interstitial_input(input)
 					); !sampled) {
 						return std::unexpected(replay_capture_error());
-					}
-					if(pause_refresh_requested) {
-						if(auto flushed = replay_recorder->periodic_flush(); !flushed) {
-							return std::unexpected(replay_capture_error());
-						}
 					}
 				}
 				return ClassicOpSessionBackendTick{
@@ -3002,10 +2994,7 @@ struct ClassicOpSessionBackend final {
 			}
 			if((restart || status == NewClassicPauseStatus::discard_exit) &&
 				replay_recorder) {
-				if(auto discarded = replay_recorder->discard_persistent();
-					!discarded) {
-					return std::unexpected(replay_capture_error());
-				}
+				replay_recorder->discard();
 			}
 			vs_restart_requested = restart;
 			tick = vs_driver->finish_deferred_frame(
@@ -3031,11 +3020,6 @@ struct ClassicOpSessionBackend final {
 				vs_pause_menu.emplace(
 					replay_recorder && replay_recorder->recording(), patch_assets
 				);
-				if(replay_recorder && replay_recorder->recording()) {
-					if(auto flushed = replay_recorder->periodic_flush(); !flushed) {
-						return std::unexpected(replay_capture_error());
-					}
-				}
 				ui_audio[ui_audio_count++] = ClassicAudioCommand{
 					.type = ClassicAudioCommandType::pause_song,
 				};
@@ -3088,11 +3072,6 @@ struct ClassicOpSessionBackend final {
 				recorded_input
 			); !sampled) {
 				return std::unexpected(replay_capture_error());
-			}
-			if(pause_refresh_requested) {
-				if(auto flushed = replay_recorder->periodic_flush(); !flushed) {
-					return std::unexpected(replay_capture_error());
-				}
 			}
 			if(tick->step_result.status == StepStatus::round_transition ||
 				tick->step_result.status == StepStatus::terminal) {

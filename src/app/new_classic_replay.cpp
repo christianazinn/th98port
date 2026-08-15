@@ -24,18 +24,14 @@ void preserve_new_classic_restart_random_seed(
 
 namespace {
 
-constexpr std::uint32_t replay_disk_interval_samples = 128U;
-
 [[nodiscard]] NewClassicReplayError replay_error(
 	NewClassicReplayErrorCode code,
-	std::optional<Error> format = std::nullopt,
-	std::optional<ReplaySlotStoreError> store = std::nullopt
+	std::optional<Error> format = std::nullopt
 )
 {
 	return {
 		.code = code,
 		.format = std::move(format),
-		.store = std::move(store),
 	};
 }
 
@@ -172,38 +168,6 @@ constexpr std::uint32_t replay_disk_interval_samples = 128U;
 } // namespace
 
 std::expected<void, NewClassicReplayError>
-NewClassicReplayRecorder::checkpoint_journal(
-	const formats::ReplayDocument &document
-)
-{
-	if(replay_root_.empty()) {
-		return {};
-	}
-	if(!journal_claimed_) {
-		auto existing = load_replay_fallback(replay_root_);
-		if(!existing) {
-			return std::unexpected(replay_error(
-				NewClassicReplayErrorCode::journal_store, std::nullopt,
-				std::move(existing.error())
-			));
-		}
-		if(existing->document) {
-			return std::unexpected(replay_error(
-				NewClassicReplayErrorCode::journal_conflict
-			));
-		}
-	}
-	if(auto stored = checkpoint_replay_fallback(replay_root_, document); !stored) {
-		return std::unexpected(replay_error(
-			NewClassicReplayErrorCode::journal_store, std::nullopt,
-			std::move(stored.error())
-		));
-	}
-	journal_claimed_ = true;
-	return {};
-}
-
-std::expected<void, NewClassicReplayError>
 NewClassicReplayRecorder::configure_practice(
 	std::optional<formats::ReplayPracticeConfig> config
 ) noexcept
@@ -281,12 +245,6 @@ NewClassicReplayRecorder::round_started(
 	round_real_frames_ = 0U;
 	round_timed_frames_ = 0U;
 	round_timer_active_ = true;
-	if(document.session.sample_count != 0U) {
-		auto durable = document;
-		durable.metadata->status = formats::ReplayStatus::recording;
-		durable.metadata->end_reason = formats::ReplayEndReason::partial;
-		return checkpoint_journal(durable);
-	}
 	return {};
 }
 
@@ -311,15 +269,6 @@ std::expected<void, NewClassicReplayError> NewClassicReplayRecorder::sample(
 	++session.sample_count;
 	document_->metadata->sample_count = session.sample_count;
 	document_->metadata->final_frame_count = session.sample_count;
-	if(!journal_claimed_) {
-		auto durable = *document_;
-		durable.metadata->status = formats::ReplayStatus::recording;
-		durable.metadata->end_reason = formats::ReplayEndReason::partial;
-		return checkpoint_journal(durable);
-	}
-	if((session.sample_count & (replay_disk_interval_samples - 1U)) == 0U) {
-		return periodic_flush();
-	}
 	return {};
 }
 
@@ -437,14 +386,14 @@ NewClassicReplayRecorder::process_completed(replay::ProcessId process)
 			&document_->session.records.back()
 		); boundary && boundary->completed_process == process &&
 			boundary->sample_index == document_->session.sample_count) {
-			return periodic_flush();
+			return {};
 		}
 	}
 	document_->session.records.push_back(replay::ProcessBoundary{
 		.sample_index = document_->session.sample_count,
 		.completed_process = process,
 	});
-	return periodic_flush();
+	return {};
 }
 
 std::expected<void, NewClassicReplayError> NewClassicReplayRecorder::finish(
@@ -493,26 +442,9 @@ std::expected<void, NewClassicReplayError> NewClassicReplayRecorder::finish(
 			std::move(parsed.error())
 		));
 	}
-	if(auto stored = checkpoint_journal(*parsed); !stored) {
-		return stored;
-	}
 	completed_ = std::move(*parsed);
 	clear_memory();
 	return {};
-}
-
-std::expected<void, NewClassicReplayError>
-NewClassicReplayRecorder::periodic_flush()
-{
-	if(!document_ || completed_ || document_->session.sample_count == 0U) {
-		return std::unexpected(replay_error(
-			NewClassicReplayErrorCode::invalid_sequence
-		));
-	}
-	auto durable = *document_;
-	durable.metadata->status = formats::ReplayStatus::recording;
-	durable.metadata->end_reason = formats::ReplayEndReason::partial;
-	return checkpoint_journal(durable);
 }
 
 bool NewClassicReplayRecorder::recording() const noexcept
@@ -546,26 +478,10 @@ void NewClassicReplayRecorder::clear_memory() noexcept
 	slow_sample_pending_ = false;
 }
 
-std::expected<void, NewClassicReplayError>
-NewClassicReplayRecorder::discard_persistent() noexcept
-{
-	if(!replay_root_.empty() && journal_claimed_) {
-		if(auto removed = remove_replay_fallback(replay_root_); !removed) {
-			return std::unexpected(replay_error(
-				NewClassicReplayErrorCode::journal_store, std::nullopt,
-				std::move(removed.error())
-			));
-		}
-	}
-	clear_memory();
-	completed_.reset();
-	journal_claimed_ = false;
-	return {};
-}
-
 void NewClassicReplayRecorder::discard() noexcept
 {
-	static_cast<void>(discard_persistent());
+	clear_memory();
+	completed_.reset();
 }
 
 } // namespace th03::app

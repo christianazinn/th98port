@@ -2408,7 +2408,7 @@ ReplaySaveRunResult run_replay_save(
 			auto result = menu.consume(input, *catalog);
 			if(result.status ==
 				th03::app::NewClassicReplaySaveStatus::save_requested) {
-				auto committed = th03::app::commit_replay_fallback_to_slot(
+				auto committed = th03::app::commit_replay_slot(
 					replay_root, menu.selected_slot(), menu.document()
 				);
 				if(committed) {
@@ -2423,15 +2423,6 @@ ReplaySaveRunResult run_replay_save(
 				menu.report_commit(committed.has_value(), *catalog);
 				result.surface_changed = true;
 				result.status = th03::app::NewClassicReplaySaveStatus::running;
-			}
-			if(result.status ==
-				th03::app::NewClassicReplaySaveStatus::discarded) {
-				if(auto removed = th03::app::remove_replay_fallback(replay_root);
-					!removed) {
-					return std::unexpected(fail(
-						"replay-fallback-remove", removed.error()
-					));
-				}
 			}
 			application_quit = result.status ==
 				th03::app::NewClassicReplaySaveStatus::application_quit;

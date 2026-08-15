@@ -1,15 +1,11 @@
 #include <array>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <string>
 #include <variant>
 
 #include "th03/app/new_classic_replay.hpp"
-#include "th03/app/replay_slot_store.hpp"
 #include "th03/core/game.hpp"
 #include "th03/formats/replay.hpp"
 #include "th03/formats/v13.hpp"
@@ -377,164 +373,86 @@ void test_invalid_sequences()
 	check(!recorder.recording(), "discard clears an incomplete capture");
 }
 
-std::vector<std::byte> read_file(const std::filesystem::path &path)
+void test_memory_only_lifecycle()
 {
-	std::ifstream input(path, std::ios::binary | std::ios::ate);
-	if(!input) {
-		return {};
-	}
-	const auto end = input.tellg();
-	if(end < 0) {
-		return {};
-	}
-	std::vector<std::byte> bytes(static_cast<std::size_t>(end));
-	input.seekg(0);
-	if(!bytes.empty()) {
-		input.read(
-			reinterpret_cast<char *>(bytes.data()),
-			static_cast<std::streamsize>(bytes.size())
-		);
-	}
-	return input ? bytes : std::vector<std::byte>{};
-}
-
-void test_durable_fallback_lifecycle()
-{
-	using th03::app::NewClassicReplayErrorCode;
-	using th03::app::ReplaySlotStoreFaultPoint;
-	using th03::app::ReplaySlotStoreTestAccess;
 	constexpr auto mode = th03::game_mode::vs_1p_cpu;
-	const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
-	const auto root = std::filesystem::temp_directory_path() /
-		("th03-replay-recorder-" + std::to_string(nonce));
-	std::error_code ignored;
-	std::filesystem::remove_all(root, ignored);
-
-	th03::app::NewClassicReplayRecorder recorder(root, 0x5D0CU);
+	th03::app::NewClassicReplayRecorder recorder(0x5D0CU);
 	check(
-		recorder.round_started(round_start(mode, 0U, 0U, 101U)).has_value() &&
-		!std::filesystem::exists(th03::app::replay_fallback_path(root)),
-		"checkpoint zero is held until V13 has its first representable sample"
+		recorder.round_started(round_start(mode, 0U, 0U, 101U)).has_value(),
+		"memory-only capture starts without a storage path"
 	);
 	check(
 		recorder.sample(th03::replay::InputPhase::gameplay,
 			{.p1 = 1U}).has_value(),
-		"the first input atomically claims TH3LAST"
+		"the first input is retained in memory"
 	);
-	auto first = th03::app::load_replay_fallback(root);
 	check(
-		first && first->document && first->document->metadata &&
-		first->document->metadata->status ==
+		recorder.document() && recorder.document()->metadata &&
+		recorder.document()->metadata->status ==
 			th03::formats::ReplayStatus::recording &&
-		first->document->metadata->end_reason ==
-			th03::formats::ReplayEndReason::partial &&
-		first->document->session.sample_count == 1U,
-		"the live fallback is a parseable Recording/Partial V13 artifact"
+		recorder.document()->metadata->end_reason ==
+			th03::formats::ReplayEndReason::none &&
+		recorder.document()->metadata->dos_date == 0x5D0CU &&
+		recorder.document()->session.sample_count == 1U,
+		"active recording metadata and samples remain directly available"
 	);
 	check(
 		recorder.sample(th03::replay::InputPhase::gameplay,
 			{.p1 = 2U}).has_value(),
-		"ordinary samples remain in the source-shaped in-memory write buffer"
-	);
-	auto still_first = th03::app::load_replay_fallback(root);
-	check(
-		still_first && still_first->document &&
-		still_first->document->session.sample_count == 1U,
-		"ordinary input does not force a disk flush every frame"
-	);
-	ReplaySlotStoreTestAccess::fail_next(ReplaySlotStoreFaultPoint::replace_target);
-	auto pause_failed = recorder.periodic_flush();
-	check(
-		!pause_failed && pause_failed.error().code ==
-			NewClassicReplayErrorCode::journal_store && recorder.document() &&
-		recorder.document()->session.sample_count == 2U,
-		"a failed Replay Pause flush preserves the complete in-memory prefix"
+		"ordinary samples append to the in-memory document"
 	);
 	check(
-		recorder.periodic_flush().has_value(),
-		"Replay Pause periodic flush retry publishes the buffered prefix"
-	);
-	auto paused = th03::app::load_replay_fallback(root);
-	check(
-		paused && paused->document &&
-		paused->document->session.sample_count == 2U,
-		"the periodic checkpoint contains every accepted sample"
+		recorder.document() &&
+		recorder.document()->session.sample_count == 2U &&
+		recorder.document()->session.records.size() == 2U,
+		"the recorder owns the complete live input prefix"
 	);
 	check(
 		recorder.round_completed(terminal(mode, 0U, 0U, 2U, 0)).has_value(),
-		"the terminal summary precedes the MAIN_END checkpoint"
-	);
-	ReplaySlotStoreTestAccess::fail_next(ReplaySlotStoreFaultPoint::replace_target);
-	auto handoff_failed = recorder.process_completed(
-		th03::replay::ProcessId::main
+		"the terminal summary precedes the in-memory MAIN_END boundary"
 	);
 	check(
-		!handoff_failed && handoff_failed.error().code ==
-			NewClassicReplayErrorCode::journal_store && recorder.document() &&
+		recorder.process_completed(th03::replay::ProcessId::main).has_value() &&
+		recorder.process_completed(th03::replay::ProcessId::main).has_value() &&
+		recorder.document() &&
 		std::holds_alternative<th03::replay::ProcessBoundary>(
 			recorder.document()->session.records.back()),
-		"a failed MAIN_END flush retains the process control for retry"
-	);
-	check(
-		recorder.process_completed(th03::replay::ProcessId::main).has_value(),
-		"repeating MAIN_END idempotently retries the recoverable handoff"
-	);
-	auto handoff = th03::app::load_replay_fallback(root);
-	check(
-		handoff && handoff->document &&
-		std::holds_alternative<th03::replay::ProcessBoundary>(
-			handoff->document->session.records.back()) &&
-		handoff->document->metadata->status ==
-			th03::formats::ReplayStatus::recording,
-		"the handoff fallback terminates at the exact process control"
+		"MAIN_END is retained exactly once and duplicate handoff is idempotent"
 	);
 	check(
 		recorder.sample(th03::replay::InputPhase::interstitial, {}).has_value() &&
 		recorder.process_completed(th03::replay::ProcessId::mainl).has_value(),
-		"MAINL_END flushes the next continuation boundary"
+		"the interstitial sample and MAINL_END remain in memory"
 	);
 	auto resident = round_start(mode, 0U, 0U, 101U).start;
-	const auto partial_before_finish = read_file(
-		th03::app::replay_fallback_path(root)
-	);
-	ReplaySlotStoreTestAccess::fail_next(ReplaySlotStoreFaultPoint::replace_target);
-	auto finish_failed = recorder.finish(
-		th03::formats::ReplayEndReason::game_over, resident
-	);
-	check(
-		!finish_failed && finish_failed.error().code ==
-			NewClassicReplayErrorCode::journal_store && recorder.recording() &&
-		read_file(th03::app::replay_fallback_path(root)) == partial_before_finish,
-		"failed finalization preserves the active recorder and partial fallback"
-	);
 	check(
 		recorder.finish(th03::formats::ReplayEndReason::game_over, resident)
 			.has_value(),
-		"finalization retry publishes the final replay before UI save"
+		"finalization validates and closes the in-memory replay"
 	);
-	const auto finalized_bytes = read_file(th03::app::replay_fallback_path(root));
-	auto finalized = th03::app::load_replay_fallback(root);
+	auto finalized = recorder.take_completed();
 	check(
-		!finalized_bytes.empty() && finalized && finalized->document &&
-		finalized->document->metadata->status ==
+		finalized && finalized->metadata &&
+		finalized->metadata->status ==
 			th03::formats::ReplayStatus::finalized &&
-		finalized->document->metadata->end_reason ==
+		finalized->metadata->end_reason ==
 			th03::formats::ReplayEndReason::game_over &&
-		!recorder.recording() && recorder.take_completed().has_value(),
-		"post-run save owns a durable finalized fallback after capture closes"
+		finalized->session.sample_count == 3U &&
+		!recorder.recording() &&
+		th03::formats::write_v13_replay(*finalized).has_value(),
+		"post-run Save receives one complete serializable in-memory document"
 	);
+	check(!recorder.take_completed(), "the completed replay can only be taken once");
 
-	const auto automatic_root = root / "automatic";
-	th03::app::NewClassicReplayRecorder automatic(automatic_root);
+	th03::app::NewClassicReplayRecorder buffered;
 	check(
-		automatic.round_started(round_start(mode, 0U, 0U, 102U)).has_value() &&
-		automatic.sample(th03::replay::InputPhase::gameplay, {}).has_value(),
-		"automatic-flush fixture claims an independent fallback"
+		buffered.round_started(round_start(mode, 0U, 0U, 102U)).has_value(),
+		"a second recorder starts independently in memory"
 	);
 	for(std::uint16_t sample = 0U; sample < 130U; ++sample) {
 		const auto odd = (sample & 1U) != 0U;
 		check(
-			automatic.sample(
+			buffered.sample(
 				th03::replay::InputPhase::gameplay,
 				{
 					.p1 = static_cast<std::uint16_t>(odd ? 0x155U : 0x2AAU),
@@ -543,91 +461,20 @@ void test_durable_fallback_lifecycle()
 					.charge_mask = static_cast<std::uint8_t>(odd ? 1U : 2U),
 				}
 			).has_value(),
-			"high-entropy input remains recordable across the 128-sample boundary"
+			"high-entropy input remains memory-resident past the old flush boundary"
 		);
 	}
-	const auto automatically_flushed = th03::app::load_replay_fallback(
-		automatic_root
-	);
 	check(
-		automatically_flushed && automatically_flushed->document &&
-		automatically_flushed->document->session.sample_count == 128U &&
-		automatically_flushed->document->session.sample_count <
-			automatic.document()->session.sample_count,
-		"the source 128-sample cadence flushes without Pause or a handoff"
+		buffered.document() &&
+		buffered.document()->session.sample_count == 130U &&
+		buffered.document()->session.records.size() == 130U,
+		"the former 128-sample disk checkpoint is now an ordinary memory boundary"
 	);
+	buffered.discard();
 	check(
-		automatic.discard_persistent().has_value(),
-		"automatic-flush fixture discards its fallback"
+		!buffered.recording() && !buffered.document(),
+		"restart or discard drops the active replay without storage work"
 	);
-
-	// A second recorder must not destroy pending crash recovery.
-	th03::app::NewClassicReplayRecorder conflict(root);
-	check(
-		conflict.round_started(round_start(mode, 0U, 0U, 103U)).has_value(),
-		"a new capture can build state before it attempts to claim the journal"
-	);
-	auto conflict_result = conflict.sample(
-		th03::replay::InputPhase::gameplay, {}
-	);
-	check(
-		!conflict_result && conflict_result.error().code ==
-			NewClassicReplayErrorCode::journal_conflict &&
-		read_file(th03::app::replay_fallback_path(root)) == finalized_bytes,
-		"a valid preexisting TH3LAST is reported and never overwritten"
-	);
-
-	check(
-		th03::app::remove_replay_fallback(root).has_value(),
-		"the conflict fixture can explicitly discard the pending artifact"
-	);
-	th03::app::NewClassicReplayRecorder discard(root);
-	check(
-		discard.round_started(round_start(mode, 0U, 0U, 107U)).has_value() &&
-		discard.sample(th03::replay::InputPhase::gameplay, {}).has_value(),
-		"restart/discard fixture claims a fresh fallback"
-	);
-	ReplaySlotStoreTestAccess::fail_next(ReplaySlotStoreFaultPoint::remove_target);
-	auto discard_failed = discard.discard_persistent();
-	check(
-		!discard_failed && discard_failed.error().code ==
-			NewClassicReplayErrorCode::journal_store && discard.recording() &&
-		std::filesystem::exists(th03::app::replay_fallback_path(root)),
-		"failed restart/discard removal preserves both memory and disk recovery"
-	);
-	check(
-		discard.discard_persistent().has_value() && !discard.recording() &&
-		!std::filesystem::exists(th03::app::replay_fallback_path(root)),
-		"restart/discard retry removes TH3LAST before closing capture"
-	);
-
-	std::filesystem::create_directories(root);
-	{
-		std::ofstream malformed(
-			th03::app::replay_fallback_path(root),
-			std::ios::binary | std::ios::trunc
-		);
-		malformed << "bad";
-	}
-	const auto malformed_bytes = read_file(th03::app::replay_fallback_path(root));
-	th03::app::NewClassicReplayRecorder malformed(root);
-	check(
-		malformed.round_started(round_start(mode, 0U, 0U, 109U)).has_value(),
-		"malformed conflict fixture reaches its first input"
-	);
-	auto malformed_result = malformed.sample(
-		th03::replay::InputPhase::gameplay, {}
-	);
-	check(
-		!malformed_result && malformed_result.error().code ==
-			NewClassicReplayErrorCode::journal_store &&
-		malformed_result.error().store &&
-		malformed_result.error().store->code ==
-			th03::app::ReplaySlotStoreErrorCode::format &&
-		read_file(th03::app::replay_fallback_path(root)) == malformed_bytes,
-		"a malformed preexisting TH3LAST fails explicitly without replacement"
-	);
-	std::filesystem::remove_all(root, ignored);
 }
 
 } // namespace
@@ -638,7 +485,7 @@ int main()
 	test_story_capture();
 	test_timing_scope();
 	test_invalid_sequences();
-	test_durable_fallback_lifecycle();
+	test_memory_only_lifecycle();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0 ? 0 : 1;
 }

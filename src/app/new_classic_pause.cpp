@@ -133,16 +133,12 @@ NewClassicPauseStatus NewClassicPauseMenu::consume(
 		return status_;
 	}
 	if(input.up || input.down) {
-		replay_flush_requested_ = true;
 		move(input.up ? -1 : 1);
 		phase_ = Phase::release_before_choice;
 		return status_;
 	}
 	if(!input.confirm) {
 		return status_;
-	}
-	if(choice_ == NewClassicPauseChoice::save_exit) {
-		replay_flush_requested_ = true;
 	}
 	switch(choice_) {
 	case NewClassicPauseChoice::resume:
@@ -333,13 +329,6 @@ bool NewClassicPauseMenu::take_rejected_save_effect() noexcept
 	const bool result = rejected_save_effect_;
 	rejected_save_effect_ = false;
 	return result;
-}
-
-bool NewClassicPauseMenu::take_replay_flush_request() noexcept
-{
-	const auto requested = replay_flush_requested_;
-	replay_flush_requested_ = false;
-	return requested;
 }
 
 } // namespace th03::app

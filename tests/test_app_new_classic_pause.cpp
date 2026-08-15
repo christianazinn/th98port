@@ -52,10 +52,6 @@ void test_navigation_and_actions()
 	static_cast<void>(menu.consume({.down = true, .raw_any = true}));
 	expect(menu.choice() == NewClassicPauseChoice::restart,
 		"Down selects Restart");
-	expect(
-		menu.take_replay_flush_request() && !menu.take_replay_flush_request(),
-		"Pause navigation requests exactly one source periodic replay flush"
-	);
 	release(menu);
 	static_cast<void>(menu.consume({.down = true, .raw_any = true}));
 	expect(menu.choice() == NewClassicPauseChoice::save_exit,
@@ -64,8 +60,6 @@ void test_navigation_and_actions()
 	expect(menu.consume({.confirm = true, .raw_any = true}) ==
 		NewClassicPauseStatus::save_exit,
 		"confirm returns the save-and-exit action");
-	expect(menu.take_replay_flush_request(),
-		"Save and Exit refreshes TH3LAST before leaving Pause");
 
 	NewClassicPauseMenu direct(true);
 	expect(direct.consume({.restart = true}) ==
@@ -118,8 +112,7 @@ void test_disabled_save_and_resume_release()
 			NewClassicPauseStatus::running &&
 		rejected.choice() == NewClassicPauseChoice::discard_exit &&
 		rejected.take_rejected_save_effect() &&
-		!rejected.take_rejected_save_effect() &&
-		rejected.take_replay_flush_request(),
+		!rejected.take_rejected_save_effect(),
 		"disabled Save moves to Exit and emits exactly one forced SE 21 request"
 	);
 }
