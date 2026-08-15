@@ -1,6 +1,7 @@
 # Display-refresh decoupling draft
 
-Status: **proposed for iteration; interpolation is explicitly deferred**
+Status: **sample-and-hold direction accepted; implementation parcel pending;
+interpolation explicitly deferred**
 
 Draft date: 2026-08-15
 
@@ -24,7 +25,13 @@ For non-interpolated output, use **sample and hold**:
    every source tick while host presentation keeps only the newest complete
    image.
 
-This is already close to the production loop. Repeatedly calling blocking
+This is already the ordinary visible production behavior: the application
+submits changed source publications and the display holds the resident image.
+The remaining parcel is to freeze that behavior in cross-refresh tests and
+isolate simulation from a blocked present when the window is minimized or
+otherwise genuinely unpresentable. It is not a new per-refresh repeat loop.
+
+Repeatedly calling blocking
 `SDL_RenderPresent()` with the same texture would create no visual information,
 reduce input-poll opportunities, and can block across the next source deadline.
 The physical display repeats the committed image without another app call.
@@ -126,9 +133,10 @@ repaid as gameplay ticks.
   repeated physical scanouts.
 - Scaling, aspect, filtering, VSync phase, DWM, and VRR stay outside the exact
   640x400 source-pixel oracle.
-- Classic exposes no setting. Applying the same internal presentability
-  isolation to Classic is recommended because it changes no source state or
-  source image.
+- Classic exposes no setting. It uses the same internal sample-and-hold and
+  presentability isolation because that matches the emulator output model: a
+  complete emulated PC-98 frame is delivered to the host and the display
+  rescans it. This changes no Classic source state, cadence, or 640x400 image.
 
 ## Player-facing setting
 
@@ -196,15 +204,13 @@ explicit rule.
 
 Only after D0-D2 are stable, specify and build the separate `Smooth` owner.
 
-## Decisions to iterate with the product owner
+## Remaining decisions to iterate with the product owner
 
-1. Apply presentability isolation internally to Classic too (recommended) or
-   only New Classic?
-2. Confirm explicit OS suspend/rebase while focus loss and minimize continue
+1. Confirm explicit OS suspend/rebase while focus loss and minimize continue
    source simulation.
-3. Confirm no VRR control or refresh selector unless field reports demand a
+2. Confirm no VRR control or refresh selector unless field reports demand a
    troubleshooting option.
-4. Reserve `Frame Output: Repeat / Smooth` as the future label without showing
+3. Reserve `Frame Output: Repeat / Smooth` as the future label without showing
    it yet.
-5. Confirm gameplay/scroll-only first interpolation scope and stepped menus,
+4. Confirm gameplay/scroll-only first interpolation scope and stepped menus,
    text, palettes, pause, and flashes.

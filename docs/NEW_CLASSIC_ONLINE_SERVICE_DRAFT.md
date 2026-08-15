@@ -1,248 +1,242 @@
-# New Classic online service and verifier draft
+# New Classic online leaderboard and replay service
 
-Status: **proposed for iteration; no service has been deployed**
+Status: **accepted small-v1 direction; implementation pending**
 
-Draft date: 2026-08-15
+Decision date: 2026-08-15
 
-This document turns the frozen client-side identities and `T3ONL001` cache
-boundary into a deployable service shape. It deliberately keeps the protocol
-independent of Cloudflare even though the first deployment is expected to use
-a Cloudflare Worker.
+The first service should be deliberately small. A client identifies itself,
+uploads one V13 replay, the server runs one pinned `th03rv` verification, and
+an accepted result becomes an online leaderboard/replay row. The online screen
+should look and behave like the existing Replay browser, with score ordering
+and online ownership added rather than a separate web-style UI language.
 
-## Recommended launch promise
+## Product policy
 
-The first public boards should be described as **replay-verified/open**, not
-human-only or real-time-attack boards. A deterministic verifier proves that a
-V13 input stream legally reaches a result under a pinned build and ruleset. It
-cannot prove who generated the inputs, whether a tool or macro was used, or
-whether the original play session ran in real time.
+- The visible product calls these ordinary online leaderboards. It does not
+  display an explanatory `Replay Verified` or `Open` badge.
+- Users may treat the boards as RTA under the community honor system.
+- Internally, the server's actual proof remains deterministic replay validity:
+  it does not establish human authorship, an unmodified Windows client, or
+  real-time execution.
+- Stock New Classic Story is the first uploadable mode.
+- The main board shows only the best entry per backend user profile and
+  category. The profile's other accepted records remain available in `My
+  Records`.
+- Higher score ranks first. Equal scores rank by oldest accepted record first.
+- Historical pre-Replay Patch records are manually inserted into the same
+  board. They were reviewed against video evidence but do not need a public
+  evidence link and have no downloadable replay action.
+- Every normal accepted entry links to its exact downloadable replay.
+- Autofire and the replay's recorded slowdown are visible in replay details in
+  the same style as existing metadata.
+- A replay whose recorded slowdown is greater than 5% is ineligible and must
+  be rejected before publication.
 
-Recommended first scope:
+Slowdown is the exact value written by the local recording path. The server
+checks the encoded value and threshold but cannot independently reproduce the
+original machine's wall-clock performance. That is an accepted limitation of
+the chosen small honor-system model.
 
-- stock New Classic Story only;
-- one pinned content manifest, ruleset, and verifier image;
-- anonymous reads and account/invite-authorized publishing;
-- exact replay download required for every published verified score;
-- best score per public profile on the main board, with all accepted runs in
-  profile history;
-- curated pre-Replay Patch records in `Historical Records`, not silently mixed
-  into the verified board; and
-- Autofire as a visible filter/facet, never mixed invisibly. Slowdown remains
-  non-authoritative replay detail because a server replay cannot verify the
-  uploader's wall-clock host performance.
+## Minimal trust statement
 
-Practice, VS, Arrange rules, human/RTA moderation, and cross-ruleset rankings
-should wait until each has an explicit board policy.
+Building or uploading the replay from memory is useful and avoids unnecessary
+temporary files, but it is not an anti-cheat boundary. A modified Windows
+client can alter memory, code, or the request body. The v1 server therefore
+does only what it can prove simply and deterministically:
 
-## Trust boundary
+1. Strictly parse the uploaded V13 file.
+2. Run the complete input stream through the pinned stock verifier.
+3. Require every stored checkpoint/split/result checked by `th03rv` to match
+   the simulated result.
+4. Require the encoded slowdown to be at most 5%.
+5. Publish the server-derived row only after those checks pass.
+
+There is no speculative anti-cheat, heuristic flagging, executable attestation,
+or claim that file storage versus memory storage prevents cheating.
+
+## Small Cloudflare shape
 
 ```text
-untrusted native client
-  -> edge API: auth, quotas, strict byte gate, SHA-256, durable request
-  -> exact replay object + verification job
-  -> at-least-once queue carrying IDs only
-  -> isolated pinned native th03rv runner
-  -> structured simulation-derived result
-  -> idempotent publication transaction
-  -> anonymous read API / immutable replay download / offline cache
+native client
+  -> Worker endpoint
+  -> pinned native th03rv verifier
+  -> accepted replay bytes in R2
+  -> accepted row in D1
+  -> leaderboard/replay read endpoints
 ```
 
-The client never supplies an authoritative score, terminal result, category,
-content file, executable, verifier verdict, or storage path. Client metadata is
-only a submission hint. The verifier selects server-owned allowlisted content,
-parses the exact replay bytes, reconstructs every checkpoint, runs the complete
-input stream, and derives the publishable outcome from simulation.
+The existing site is deployed with `npx wrangler deploy` from
+`tools/azinn-site-v2` in the retained replay-validation worktree. The service
+should extend that Worker project rather than create an unrelated deployment.
 
-The runner must be unprivileged and resource-limited, with a read-only image and
-content set, an empty per-job directory, no credentials, bounded input/sample/
-CPU/wall/memory/output, and process-tree termination. It accepts object and
-manifest IDs, never a client URL or shell fragment.
+Recommended bindings:
 
-## Cloudflare mapping
-
-The current platform supports this split without making it part of the wire
-protocol:
-
-| Concern | First deployment owner |
+| Owner | Purpose |
 |---|---|
-| `/v1` request/auth/read API | Worker |
-| Exact V13 objects and bounded private diagnostics | R2 |
-| Submission, lease, result, entry, moderation, and idempotency rows | D1 |
-| At-least-once verification wake-ups | Queue |
-| Pinned native `th03rv` process | Cloudflare Container if its operational isolation is sufficient; otherwise a minimal external container pull-consumer |
+| Worker | user enrollment, authenticated upload, fixed validation gate, read API |
+| Cloudflare Container | pinned native `th03rv` invocation if current account support and limits are suitable |
+| R2 | exact accepted V13 bytes keyed by replay SHA-256 |
+| D1 | users, accepted entries, historical entries, and best-per-profile queries |
 
-Cloudflare Queues documents at-least-once, unordered delivery, so the durable
-D1 row is the job state machine and queue delivery is only a wake-up. D1 unique
-constraints and transactional batches enforce deduplication and atomic result
-publication. R2's direct bindings are strongly consistent; immutable digest
-keys avoid cached-overwrite ambiguity.
+No Queue is required for v1. Verification should run synchronously behind one
+bounded service call if measured replay-verification time and Container startup
+fit the deployed request path. If they do not, the same endpoint may later
+return a submission ID and use one Queue without changing replay, user, or
+leaderboard schemas.
 
-Cloudflare Containers can currently run arbitrary `linux/amd64` images behind
-a Worker and Durable Object. That makes a native verifier plausible, but the
-compute adapter remains open until the actual account, limits, cold-start cost,
-outbound-network policy, and per-process isolation are inspected. An external
-runner can consume the same queue contract without changing any public API.
-
-Current primary references:
+Current primary platform references:
 
 - [Cloudflare Containers](https://developers.cloudflare.com/containers/)
-- [Queues delivery guarantees](https://developers.cloudflare.com/queues/reference/delivery-guarantees/)
-- [Queues batching, retries, and dead letters](https://developers.cloudflare.com/queues/configuration/batching-retries/)
 - [D1 transactional batches](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch)
 - [R2 consistency](https://developers.cloudflare.com/r2/reference/consistency/)
 
-## Immutable identities
+## Identity and authentication
 
-Use canonical binary manifests for authority and JSON only as an API/operator
-projection:
+The backend issues one opaque random user ID and one random secret token. The
+client stores both outside `PODD.CFG`; D1 stores the user ID and only a salted
+token hash. The token authenticates uploads and `My Records`. There is no
+email, OAuth, passkey, public account page, rename system, or recovery flow in
+v1.
 
-| ID | Canonical input |
-|---|---|
-| `ReplayId` | exact strict-valid V13 bytes, including optional accelerator tail |
-| `ContentId` | `T3CNT001`: sorted gameplay-content role/name/size/SHA-256 records |
-| `RulesetId` | `T3RUL001`: deterministic rules ABI and accepted input/options |
-| `VerifierId` | `T3VER001`: source, exact binary/image, toolchain, schema, sandbox and acceptance-corpus digests |
-| `BoardId` | `T3BRD001`: eligibility, ranking, tie, Autofire, publication, and legacy policy |
-| `VerificationResultId` | `T3VFY001`: four proof IDs, derived outcome, counters, verdict, and schema |
-| `EntryId` | `T3ENT001`: board, proof/evidence, result, public profile, and publication nonce |
-| `SnapshotId` | `T3SNP001`: query, board/revision, ordered entries/replays, cursor, time, and tombstones |
+The user ID is backend ownership, not display identity. Leaderboard and replay
+rows display the eight-character name encoded in that replay. Historical rows
+display the curator-entered name.
 
-The allowlist, not possession of a digest, grants authority. V13 does not embed
-content or ruleset identities, so the stock server selects and records them.
-Arrange should use a future replay format that binds those IDs.
+This one secret is the minimum idiomatic protection against submitting records
+under another user's ID. It is not presented as strong client attestation.
 
-`ReplayId` intentionally includes accelerator bytes. Public download must
-return the exact submitted bytes. A semantic input-stream ID, if ever useful,
-would be a separate identity.
+## API
 
-## Structured verifier contract
+The initial API can remain five routes:
 
-Do not scrape the current human-readable `th03rv` stdout and do not publish
-header `final_score` as truth. Add a library boundary or sibling service-mode
-executable whose success result derives:
+```text
+POST /api/th03/users
+POST /api/th03/replays
+GET  /api/th03/leaderboard?category=...
+GET  /api/th03/users/{user-id}/records
+GET  /api/th03/replays/{replay-id}
+```
 
-- replay digest and exact byte count after strict V13 parsing;
-- content, ruleset, verifier, and requested board IDs;
-- mode, rank, characters, Practice coordinates, Key Mode, and Autofire;
-- terminal kind/stage/round/winner, exact numeric score, and continues used;
-- consumed sample count, checkpoint and split agreement, and completion state;
-- bounded stable verdict/rejection code and result digest.
+`POST /users` returns the new user ID and token once. `POST /replays` takes an
+authorization token and raw replay bytes; filenames, client score fields,
+split fields, and result fields are not authoritative request inputs.
 
-The replay header remains comparison evidence. The replay runner needs to
-retain its typed final transition (or equivalent outcome) so score and terminal
-state come from simulation. Service verdict classes should be stable and small:
+Public outcomes are intentionally only:
 
 ```text
 accepted
-format_rejected
-content_rejected
-simulation_mismatch
-policy_rejected
-resource_limit
-verifier_fault
+rejected
+error
 ```
 
-Only deterministic final verdicts are reusable forever. Resource and verifier
-faults are retryable.
+- `accepted`: deterministic checks and eligibility passed; response includes
+  the published row/replay ID.
+- `rejected`: the replay is invalid, mismatched, unsupported, or over 5%
+  slowdown; response includes one bounded player-facing reason.
+- `error`: infrastructure/verifier failure; retry may succeed.
 
-## Submission state and idempotency
+Internally logged details may be more precise for diagnosis, but do not create
+a public verdict taxonomy.
+
+## Data model
+
+### `users`
 
 ```text
-received -> object_committed -> queued -> verifying
-         -> accepted -> published | unlisted
-         -> rejected
-         -> retry_wait -> queued
-         -> quarantined
+user_id TEXT PRIMARY KEY
+token_hash BLOB NOT NULL
+created_at INTEGER NOT NULL
 ```
 
-- Scope `Idempotency-Key` to the publishing principal and retain the body
-  digest plus original response. Reuse with different bytes is `409`.
-- Store an exact replay once by `ReplayId`, with put-if-absent and read-back
-  digest/size validation.
-- Make verification unique on
-  `(ReplayId, ContentId, RulesetId, VerifierId)`.
-- Claim work with a lease, attempt, and lease generation; complete with a
-  compare-and-set operation.
-- Make result insertion and entry publication independently idempotent.
-- Route exhausted retries to a dead-letter/quarantine path; never infer job
-  truth from the queue itself.
-
-## Minimal API
+### `replays`
 
 ```text
-GET    /v1/capabilities
-POST   /v1/submissions
-GET    /v1/submissions/{id}
-DELETE /v1/submissions/{id}
-GET    /v1/leaderboards/{board-id}?category=...&cursor=...
-GET    /v1/replays/{replay-id}
-GET    /v1/replays/{replay-id}/download
-GET    /v1/me/submissions
-POST   /v1/reports
+replay_id BLOB PRIMARY KEY       -- SHA-256 of exact accepted bytes
+object_key TEXT UNIQUE NOT NULL
+byte_count INTEGER NOT NULL
+name TEXT NOT NULL               -- from replay metadata
+mode/rank/character/category
+score/end_stage/result
+autofire INTEGER NOT NULL
+slowdown_percent INTEGER NOT NULL
+accepted_at INTEGER NOT NULL
 ```
 
-Uploads are raw V13 only: no zip, content encoding, URL import, executable, or
-user filename. Immutable replays/manifests use digest ETags and long caching;
-leaderboard snapshots use bounded freshness and conditional refresh.
+### `entries`
 
-## Identity, privacy, and moderation
+```text
+entry_id INTEGER PRIMARY KEY
+user_id TEXT NULL                -- NULL only for curated historical rows
+replay_id BLOB NULL              -- NULL only for historical rows
+source_kind INTEGER NOT NULL     -- replay or historical_video
+display_name TEXT NOT NULL
+category fields
+score/result fields
+accepted_at INTEGER NOT NULL
+```
 
-Reads remain anonymous. Recommended private beta is invite-token publishing
-with a secret management token; the later public flow pairs the game through a
-browser to a passkey, OAuth, or magic-link account and stores only a scoped
-rotatable credential in the OS secret store. `PODD.CFG` never stores secrets.
+The main-board query partitions by `(user_id, category)` for normal records,
+chooses score descending then accepted time ascending, and unions curated
+historical rows into the same ordered result. Historical rows do not need a
+backend user ID and simply disable replay watch/download actions.
 
-Publishing is explicit and off by default. The consent text must say that the
-exact replay exposes its eight-character name, packed date, and complete input
-stream. Public profiles use opaque IDs and chosen display names; email/OAuth
-identity, IP data, and security logs remain private and retention-bounded.
+## Replay bytes and local recording
 
-Withdrawal unlists an entry and its download. Physical deletion occurs only
-after a grace period and when no other publication, audit, or legal reference
-owns the deduplicated object. Curated legacy records require logged operator
-review and explicit evidence; they never receive a fake replay or verifier ID.
+The live native recorder remains an in-memory document authority. Online
+submission can encode the finalized V13 document to a byte vector and send
+those bytes directly, avoiding a temporary numbered replay file.
 
-## Client/offline evolution
+Keep the existing `TH3LAST.RPY` crash-recovery journal. It protects users from
+data loss and its removal would not make memory or network submission harder to
+tamper with. An ordinary saved/downloaded replay remains a normal disk file and
+can be uploaded later from the Replay menu.
 
-The frozen `T3ONL001` codec remains valid as one bounded snapshot, but one
-256-record `PODD.ONL` cannot own every rank/character/query. Before visible
-hubs, add:
+R2 stores only accepted exact bytes under their digest. Rejected payloads are
+not retained. Before D1 publication, read back the accepted R2 object and
+confirm its size and SHA-256.
 
-- a small query/index document;
-- one content-addressed `T3ONL001` snapshot file per query;
-- atomic full-query replacement;
-- ETag refresh with stale/current/offline/service-unavailable states; and
-- merge of local `downloaded` flags only after exact ReplayId/size validation.
+## Required safety without product complexity
 
-Downloads publish atomically under `<REPLAYID>.RPY` and never overwrite local
-numbered slots. Service signatures for offline-authenticated snapshots are a
-useful later hardening step, not a private-beta blocker.
+These are fixed parser boundaries, not a quota product:
 
-## No-regret implementation order
+- accept raw V13 bytes only;
+- enforce one conservative maximum byte count and verifier wall-time;
+- never accept client paths, URLs, archives, content files, or executables;
+- use prepared D1 statements and bounded strings;
+- compare SHA-256 before and after R2 publication;
+- invoke a fixed verifier binary/content path with no user-generated command
+  line; and
+- redact the secret token and replay bytes from logs.
 
-1. Add structured simulation-derived verifier output and hostile/resource
-   limit tests locally.
-2. Encode and reproducibly generate the five authority manifests through
-   `T3VFY001` on GCC and MSVC.
-3. Decide launch board promise, Story scope, Autofire display, replay-public
-   consent, and beta identity.
-4. Extend the cache/domain with BoardId, policy, Autofire, opaque profile, and
-   per-query ownership.
-5. Implement a completely local fake edge/object/database/queue/runner stack.
-6. After Cloudflare onboarding, bind that tested contract to Worker, D1, R2,
-   Queue, and the selected container adapter.
-7. Ship read-only/cached hubs before enabling public upload if operational
-   confidence warrants it.
+No per-day upload quotas, moderation workflow, reports system, proof manifests,
+queue lease state machine, or account platform is required for v1. Add one only
+after an observed operational need.
 
-## Decisions to iterate with the product owner
+## Client presentation
 
-1. Confirm `Replay Verified`/open rather than human/RTA as the launch promise.
-2. Confirm Story-only first.
-3. Confirm Autofire as a visible filter and no slowdown eligibility gate.
-4. Confirm every published verified score has a public exact replay.
-5. Choose invite-token beta, then passkey/OAuth/magic-link public identity.
-6. Confirm best-per-profile main ranking, deterministic tie order, and
-   Historical-only legacy records initially.
-7. Decide whether offline snapshot signatures are needed before public launch.
-8. Select Cloudflare Container versus external pull runner after account and
-   isolation inspection.
+The first online leaderboard reuses the Replay browser's proportional rows,
+detail page, tabs, and metadata vocabulary. It adds rank/order and online
+availability without inventing a host-styled surface.
+
+- Normal row: name, score, character, rank, stage/result; detail includes
+  Autofire, slowdown, splits, and replay watch/download.
+- Historical row: the same score row, no replay action, no required evidence
+  link.
+- `My Records`: all accepted rows owned by the hidden backend user ID.
+- The main board: one best row per backend profile/category plus historical
+  rows, with older equal scores first.
+
+## Implementation order
+
+1. Add structured machine-readable output to `th03rv` with only
+   `accepted/rejected/error`, server-derived score/category, exact split
+   agreement, Autofire, and slowdown.
+2. Audit the existing V13 slowdown encoding and freeze `>5%` rejection with
+   the same rounding/display value used by the local replay viewer.
+3. Inspect and extend `tools/azinn-site-v2`; bind local D1/R2/Container
+   development without deploying production data first.
+4. Add the small D1 schema and fixed endpoints with a fake verifier, then swap
+   in the pinned native verifier.
+5. Add in-memory finalized replay upload and the online Replay-style views.
+6. Seed reviewed historical records directly into D1 and run one private beta
+   before public upload.

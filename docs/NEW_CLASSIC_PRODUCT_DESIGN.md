@@ -101,6 +101,12 @@ background, checkerboard window, palette, release-edge input, and grow/shrink
 visual vocabulary. A page should normally contain no more than six choices
 plus `Return`. Variable-length language and device lists may page or scroll.
 
+Every Option label receives one reciprocal shadow pixel at (+1,+1): selected
+white text uses a black shadow and unselected black text uses a white shadow.
+This preserves the source glyph colors and retained-title transparency while
+keeping the detailed upper background readable. The shadow remains inside the
+existing row restoration domain so transitions erase it with the label.
+
 ### Gameplay
 
 Initial contents:
@@ -266,7 +272,6 @@ The eventual HiScore hub is:
 Local HiScores
 Online Leaderboards
 Personal Bests
-Historical Records
 Return
 ```
 
@@ -289,12 +294,10 @@ resource-limited server verifier from an uploaded V13 replay. The client never
 supplies an authoritative score. The entry links to the replay and exposes
 watch, download, and split-detail actions.
 
-Pre-Replay Patch records may be seeded as curated legacy entries with explicit
-player, score, date/event, evidence source, and curator note. Their replay
-reference is absent and the UI labels them `Historical` or `No replay
-available`. They may share a ranking with replay-verified entries only when the
-ruleset and evidence are sufficiently comparable; otherwise they remain in the
-Historical Records view.
+Pre-Replay Patch records may be seeded as curated legacy entries after their
+video evidence has been reviewed. They appear directly on the same leaderboard
+and use the same score ordering, but have no replay watch/download action and
+need no public evidence link.
 
 The domain model therefore treats a replay reference as optional and records
 verification provenance explicitly:
