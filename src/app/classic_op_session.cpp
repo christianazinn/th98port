@@ -19,6 +19,7 @@
 #include "th03/app/authentic_text.hpp"
 #include "th03/app/new_classic_pause.hpp"
 #include "th03/app/new_classic_frontend.hpp"
+#include "th03/app/new_classic_device_scene.hpp"
 #include "th03/app/new_classic_key_config_scene.hpp"
 #include "th03/app/new_classic_joy_config_scene.hpp"
 #include "th03/app/new_classic_playback.hpp"
@@ -853,6 +854,10 @@ struct ClassicOpSessionBackend final {
 	NewClassicKeyConfig key_defaults{};
 	std::optional<NewClassicJoyConfig> joy_config{};
 	NewClassicJoyConfig joy_defaults{};
+	std::optional<NewClassicDeviceAssignment> device_assignment{};
+	NewClassicDeviceAssignment device_defaults{};
+	NewClassicControllerCatalogRead controller_catalog = nullptr;
+	void *controller_context = nullptr;
 	std::uint16_t maximum_key = 0U;
 	std::uint16_t capture_cancel_key = 0U;
 	NewClassicHostKeyName key_name = nullptr;
@@ -873,8 +878,11 @@ struct ClassicOpSessionBackend final {
 	std::optional<ClassicOpOptionsCompletion> options_completion{};
 	std::unique_ptr<NewClassicKeyConfigScene> key_config_scene{};
 	std::unique_ptr<NewClassicJoyConfigScene> joy_config_scene{};
+	std::unique_ptr<NewClassicDeviceScene> device_scene{};
 	std::optional<NewClassicKeyConfig> pending_key_config_update{};
 	std::optional<NewClassicJoyConfig> pending_joy_config_update{};
+	std::optional<NewClassicDeviceAssignment>
+		pending_device_assignment_update{};
 	std::optional<bool> pending_reduced_flash_update{};
 	std::optional<std::uint8_t> pending_master_volume_update{};
 	std::optional<NewClassicWindowPresentation>
@@ -954,6 +962,10 @@ struct ClassicOpSessionBackend final {
 			key_defaults = runner_request->new_classic_key_defaults;
 			joy_config = runner_request->new_classic_joy_config;
 			joy_defaults = runner_request->new_classic_joy_defaults;
+			device_assignment = runner_request->new_classic_device_assignment;
+			device_defaults = runner_request->new_classic_device_defaults;
+			controller_catalog = runner_request->new_classic_controller_catalog;
+			controller_context = runner_request->new_classic_controller_context;
 			maximum_key = runner_request->new_classic_maximum_key;
 			capture_cancel_key = runner_request->new_classic_capture_cancel_key;
 			key_name = runner_request->new_classic_key_name;
@@ -1352,7 +1364,8 @@ struct ClassicOpSessionBackend final {
 		bool reset_process_carry
 	)
 	{
-		if(title || options || key_config_scene || joy_config_scene || replay_browser ||
+		if(title || options || key_config_scene || joy_config_scene || device_scene ||
+			replay_browser ||
 			replay_playback || music_room || high_scores || selection || story ||
 			vs_stage || vs_process || vs_driver || vs_win) {
 			return std::unexpected(session_error(
@@ -1635,6 +1648,34 @@ struct ClassicOpSessionBackend final {
 			return false;
 		}
 		if(options_completion->outcome() ==
+			ClassicOpOptionsOutcome::device_assignment ||
+			options_completion->outcome() ==
+				ClassicOpOptionsOutcome::input_test) {
+			if(!device_assignment || !patch_assets || !controller_catalog) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			const auto mode = options_completion->outcome() ==
+				ClassicOpOptionsOutcome::device_assignment ?
+				NewClassicDeviceSceneMode::assignment :
+				NewClassicDeviceSceneMode::input_test;
+			key_config_return_options.emplace(std::move(*options_completion));
+			auto scene = std::make_unique<NewClassicDeviceScene>(
+				mode,
+				*device_assignment, device_defaults, patch_assets
+			);
+			if(!scene->valid()) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			device_scene = std::move(scene);
+			options.reset();
+			options_completion.reset();
+			return false;
+		}
+		if(options_completion->outcome() ==
 			ClassicOpOptionsOutcome::switch_classic) {
 			options.reset();
 			options_completion.reset();
@@ -1659,20 +1700,61 @@ struct ClassicOpSessionBackend final {
 	[[nodiscard]] bool key_config_active() const noexcept
 	{
 		return static_cast<bool>(key_config_scene) ||
-			static_cast<bool>(joy_config_scene);
+			static_cast<bool>(joy_config_scene) ||
+			static_cast<bool>(device_scene);
 	}
 
 	[[nodiscard]] std::expected<ClassicOpSessionBackendTick,
 		ClassicOpSessionError> advance_key_config(
 		NewClassicUiInput input,
+		CoreInput logical_input,
 		std::optional<std::uint16_t> scancode_pressed,
 		bool any_scancode_held
 	)
 	{
-		if(!key_config_scene && !joy_config_scene) {
+		if(!key_config_scene && !joy_config_scene && !device_scene) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
+		}
+		if(device_scene) {
+			NewClassicControllerCatalog catalog{};
+			if(!controller_catalog || !controller_catalog(
+				controller_context, catalog
+			) || catalog.count > catalog.controllers.size()) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			auto advanced = device_scene->consume(input, catalog, logical_input);
+			if(advanced.status == NewClassicDeviceSceneStatus::surface_failed) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			if(advanced.status == NewClassicDeviceSceneStatus::apply_requested) {
+				const auto path = config_path.parent_path() / "TH3DEV.CFG";
+				auto stored = store_new_classic_device_assignment(
+					path, device_scene->assignment()
+				);
+				device_scene->report_commit(static_cast<bool>(stored));
+				if(stored) {
+					device_assignment = device_scene->assignment();
+				}
+				return ClassicOpSessionBackendTick{
+					.surface_changed = true,
+					.input_sampled = true,
+				};
+			}
+			const bool ready = advanced.status ==
+				NewClassicDeviceSceneStatus::applied || advanced.status ==
+				NewClassicDeviceSceneStatus::back || advanced.status ==
+				NewClassicDeviceSceneStatus::application_quit;
+			return ClassicOpSessionBackendTick{
+				.surface_changed = advanced.surface_changed,
+				.input_sampled = true,
+				.ready = ready,
+			};
 		}
 		if(joy_config_scene) {
 			auto advanced = joy_config_scene->consume(input);
@@ -1755,7 +1837,7 @@ struct ClassicOpSessionBackend final {
 	[[nodiscard]] std::expected<bool, ClassicOpSessionError>
 	finish_key_config()
 	{
-		if((!key_config_scene && !joy_config_scene) ||
+		if((!key_config_scene && !joy_config_scene && !device_scene) ||
 			!key_config_return_options || !patch_assets ||
 			!font) {
 			return std::unexpected(session_error(
@@ -1766,7 +1848,13 @@ struct ClassicOpSessionBackend final {
 		if(!resources) {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
-		auto returned = joy_config_scene ?
+		auto returned = device_scene ?
+			ClassicOpOptionsScene::resume_after_device_scene(
+				*key_config_return_options, fm_available, *resources, patch_assets,
+				&*font, !english_resources.empty(),
+				key_config_return_options->master_volume_percent(),
+				key_config_return_options->window_presentation()
+			) : joy_config_scene ?
 			ClassicOpOptionsScene::resume_after_joy_config(
 				*key_config_return_options, fm_available, *resources, patch_assets,
 				&*font, !english_resources.empty(),
@@ -1789,9 +1877,14 @@ struct ClassicOpSessionBackend final {
 			NewClassicJoyConfigSceneStatus::applied && joy_config) {
 			pending_joy_config_update = *joy_config;
 		}
+		if(device_scene && device_scene->status() ==
+			NewClassicDeviceSceneStatus::applied && device_assignment) {
+			pending_device_assignment_update = *device_assignment;
+		}
 		options = std::move(*returned);
 		key_config_scene.reset();
 		joy_config_scene.reset();
+		device_scene.reset();
 		key_config_return_options.reset();
 		return true;
 	}
@@ -3415,6 +3508,12 @@ struct ClassicOpSessionBackend final {
 		return std::exchange(pending_joy_config_update, std::nullopt);
 	}
 
+	[[nodiscard]] std::optional<NewClassicDeviceAssignment>
+	take_device_assignment_update() noexcept
+	{
+		return std::exchange(pending_device_assignment_update, std::nullopt);
+	}
+
 	[[nodiscard]] std::optional<bool> take_reduced_flash_update() noexcept
 	{
 		return std::exchange(pending_reduced_flash_update, std::nullopt);
@@ -3457,6 +3556,9 @@ struct ClassicOpSessionBackend final {
 		}
 		if(joy_config_scene) {
 			return joy_config_scene->surface();
+		}
+		if(device_scene) {
+			return device_scene->surface();
 		}
 		if(story) {
 			auto composed = story->compose_shown_surface(output);
@@ -3590,6 +3692,7 @@ Result backend_call(void *context, Method method, Args &&...args)
 		.advance_key_config = [](
 			void *context,
 			NewClassicUiInput input,
+			CoreInput logical_input,
 			std::optional<std::uint16_t> scancode_pressed,
 			bool any_scancode_held
 		) {
@@ -3597,7 +3700,7 @@ Result backend_call(void *context, Method method, Args &&...args)
 				ClassicOpSessionBackendTick, ClassicOpSessionError
 			>>(
 				context, &ClassicOpSessionBackend::advance_key_config,
-				input, scancode_pressed, any_scancode_held
+				input, logical_input, scancode_pressed, any_scancode_held
 			);
 		},
 		.finish_key_config = [](void *context) {
@@ -4171,6 +4274,7 @@ ClassicOpSession::consume(const ClassicOpSessionInput &input)
 			tick = impl_->operations.advance_key_config(
 				impl_->operations.context,
 				input.replay_ui,
+				input.main.aggregate,
 				input.scancode_pressed,
 				input.any_scancode_held
 			);
@@ -4337,6 +4441,17 @@ ClassicOpSession::take_joy_config_update() noexcept
 	return static_cast<ClassicOpSessionBackend *>(
 		impl_->operations.context
 	)->take_joy_config_update();
+}
+
+std::optional<NewClassicDeviceAssignment>
+ClassicOpSession::take_device_assignment_update() noexcept
+{
+	if(!impl_ || !impl_->operations.context) {
+		return std::nullopt;
+	}
+	return static_cast<ClassicOpSessionBackend *>(
+		impl_->operations.context
+	)->take_device_assignment_update();
 }
 
 std::optional<bool> ClassicOpSession::take_reduced_flash_update() noexcept

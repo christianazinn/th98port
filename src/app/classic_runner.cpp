@@ -77,6 +77,13 @@ consume_session(void *context, const ClassicOpSessionInput &input)
 	return static_cast<ClassicOpSession *>(context)->take_joy_config_update();
 }
 
+[[nodiscard]] std::optional<NewClassicDeviceAssignment>
+take_session_device_assignment(void *context)
+{
+	return static_cast<ClassicOpSession *>(context)->
+		take_device_assignment_update();
+}
+
 [[nodiscard]] std::optional<bool> take_session_reduced_flash(void *context)
 {
 	return static_cast<ClassicOpSession *>(context)->take_reduced_flash_update();
@@ -346,6 +353,7 @@ struct ClassicRunner::Impl final {
 	std::optional<ClassicRunnerError> failure{};
 	std::optional<NewClassicKeyConfig> latest_key_config{};
 	std::optional<NewClassicJoyConfig> latest_joy_config{};
+	std::optional<NewClassicDeviceAssignment> latest_device_assignment{};
 	std::optional<std::uint8_t> latest_master_volume{};
 	std::optional<NewClassicWindowPresentation> latest_window_presentation{};
 	PixelOracleIdentityTracker pixel_oracle_tracker{};
@@ -383,7 +391,14 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		(request.initial_route != ClassicRunnerInitialRoute::title &&
 		 request.experience != ExperienceProfile::new_classic) ||
 		(request.initial_route == ClassicRunnerInitialRoute::new_classic_replay) !=
-			request.initial_replay.has_value()) {
+			request.initial_replay.has_value() ||
+		!valid_new_classic_device_assignment(
+			request.new_classic_device_defaults
+		) ||
+		(request.new_classic_device_assignment &&
+		 !valid_new_classic_device_assignment(
+			*request.new_classic_device_assignment
+		 ))) {
 		return std::unexpected(runner_error(
 			ClassicRunnerErrorCode::invalid_request
 		));
@@ -491,6 +506,7 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		.take_audio_command = &take_session_audio,
 		.take_key_config_update = &take_session_key_config,
 		.take_joy_config_update = &take_session_joy_config,
+		.take_device_assignment_update = &take_session_device_assignment,
 		.take_reduced_flash_update = &take_session_reduced_flash,
 		.take_master_volume_update = &take_session_master_volume,
 		.take_window_presentation_update = &take_session_window_presentation,
@@ -557,6 +573,13 @@ ClassicRunner::consume(
 			impl_->operations.context
 		)) {
 			impl_->latest_joy_config = std::move(*update);
+		}
+	}
+	if(impl_->operations.take_device_assignment_update) {
+		if(auto update = impl_->operations.take_device_assignment_update(
+			impl_->operations.context
+		)) {
+			impl_->latest_device_assignment = std::move(*update);
 		}
 	}
 	if(impl_->operations.take_reduced_flash_update) {
@@ -692,6 +715,14 @@ ClassicRunner::take_new_classic_joy_config_update() noexcept
 {
 	return impl_ ? std::exchange(impl_->latest_joy_config, std::nullopt) :
 		std::nullopt;
+}
+
+std::optional<NewClassicDeviceAssignment>
+ClassicRunner::take_new_classic_device_assignment_update() noexcept
+{
+	return impl_ ? std::exchange(
+		impl_->latest_device_assignment, std::nullopt
+	) : std::nullopt;
 }
 
 std::optional<std::uint8_t>

@@ -528,8 +528,8 @@ void print_usage()
 			"ADPCM-A image with --rhythm-rom, or an authenticated decoded T98 "
 			"profile with --rhythm-pcm; otherwise rhythm is deterministically "
 			"suppressed.\n"
-		<< "PoDD Port stores Classic YUME.CFG/YUME.NEM, New Classic PODD.CFG, "
-			"and New Classic's REPLAY "
+		<< "PoDD Port stores sealed YUME.CFG/YUME.NEM, New Classic PODD.CFG, "
+			"TH3KEY.CFG, TH3JOY.CFG, TH3DEV.CFG, YUME.NEW.NEM, and REPLAY "
 			"directory under --data by default; --config, --score, and "
 			"--replay-root override them for read-only installs.\n"
 		<< "New Classic enables its persistent English option only when the "
@@ -1391,6 +1391,8 @@ ExperienceRunResult run_classic_session(
 	}
 	auto active_key_config = parsed.launch.new_classic_key_config;
 	auto active_joy_config = parsed.launch.new_classic_joy_config;
+	auto active_device_assignment =
+		parsed.launch.new_classic_device_assignment;
 	auto runner = th03::app::ClassicRunner::load(std::move(parsed.launch));
 	if(!runner) {
 		return {.exit_code = fail("th03-load", runner.error())};
@@ -1606,14 +1608,15 @@ ExperienceRunResult run_classic_session(
 			}
 			if(auto update = (*runner)->take_new_classic_key_config_update()) {
 				active_key_config = *update;
-				if(!active_joy_config) {
+				if(!active_joy_config || !active_device_assignment) {
 					std::cerr << "status=error\nstage=key-config-apply\n"
-						"code=joy-config-missing\n";
+						"code=input-config-missing\n";
 					return {.exit_code = 1};
 				}
 				if(auto replaced = mapper.replace_bindings(
 					th03::app::detail::new_classic_bindings(
-						*active_key_config, *active_joy_config
+						*active_key_config, *active_joy_config,
+						*active_device_assignment
 					)
 				); !replaced) {
 					return {.exit_code = fail("key-config-apply", replaced.error())};
@@ -1621,17 +1624,38 @@ ExperienceRunResult run_classic_session(
 			}
 			if(auto update = (*runner)->take_new_classic_joy_config_update()) {
 				active_joy_config = *update;
-				if(!active_key_config) {
+				if(!active_key_config || !active_device_assignment) {
 					std::cerr << "status=error\nstage=joy-config-apply\n"
-						"code=key-config-missing\n";
+						"code=input-config-missing\n";
 					return {.exit_code = 1};
 				}
 				if(auto replaced = mapper.replace_bindings(
 					th03::app::detail::new_classic_bindings(
-						*active_key_config, *active_joy_config
+						*active_key_config, *active_joy_config,
+						*active_device_assignment
 					)
 				); !replaced) {
 					return {.exit_code = fail("joy-config-apply", replaced.error())};
+				}
+			}
+			if(auto update =
+				(*runner)->take_new_classic_device_assignment_update()) {
+				active_device_assignment = *update;
+				if(!active_key_config || !active_joy_config) {
+					std::cerr << "status=error\n"
+						"stage=device-assignment-apply\n"
+						"code=input-config-missing\n";
+					return {.exit_code = 1};
+				}
+				if(auto replaced = mapper.replace_bindings(
+					th03::app::detail::new_classic_bindings(
+						*active_key_config, *active_joy_config,
+						*active_device_assignment
+					)
+				); !replaced) {
+					return {.exit_code = fail(
+						"device-assignment-apply", replaced.error()
+					)};
 				}
 			}
 			if(consumed->clock_rebase_requested) {
@@ -2238,6 +2262,19 @@ std::expected<void, int> run_host_ui(
 	return name != nullptr ? std::string_view{name} : std::string_view{};
 }
 
+[[nodiscard]] bool sdl_controller_catalog(
+	void *context,
+	th03::app::NewClassicControllerCatalog &catalog
+) noexcept
+{
+	if(context == nullptr) {
+		return false;
+	}
+	catalog = static_cast<th03::platform::SdlInputMapper *>(context)->
+		controller_catalog();
+	return true;
+}
+
 ReplaySaveRunResult run_replay_save(
 	th03::formats::ReplayDocument document,
 	const std::filesystem::path &replay_root,
@@ -2388,6 +2425,9 @@ ExperienceRunResult run_new_classic_experience(
 	const auto joy_defaults = th03::app::detail::new_classic_default_joy_config();
 	const auto joy_path = parsed.launch.content.config.parent_path() /
 		"TH3JOY.CFG";
+	const th03::app::NewClassicDeviceAssignment device_defaults{};
+	const auto device_path = parsed.launch.content.config.parent_path() /
+		"TH3DEV.CFG";
 	auto loaded_keys = th03::app::load_new_classic_key_config(
 		key_path, key_defaults, maximum_key, config_options.legacy_autofire
 	);
@@ -2410,8 +2450,23 @@ ExperienceRunResult run_new_classic_experience(
 		std::cerr << "status=warning\nstage=joy-config-load\n"
 			"code=recovered-defaults\n";
 	}
+	auto loaded_device = th03::app::load_new_classic_device_assignment(
+		device_path, device_defaults
+	);
+	if(!loaded_device) {
+		return {
+			.exit_code = fail("device-assignment-load", loaded_device.error())
+		};
+	}
+	auto device_assignment = loaded_device->assignment;
+	if(loaded_device->recovered_defaults) {
+		std::cerr << "status=warning\nstage=device-assignment-load\n"
+			"code=recovered-defaults\n";
+	}
 	if(auto replaced = mapper.replace_bindings(
-		th03::app::detail::new_classic_bindings(key_config, joy_config)
+		th03::app::detail::new_classic_bindings(
+			key_config, joy_config, device_assignment
+		)
 	); !replaced) {
 		return {.exit_code = fail("key-config-apply", replaced.error())};
 	}
@@ -2422,6 +2477,10 @@ ExperienceRunResult run_new_classic_experience(
 	parsed.launch.new_classic_key_defaults = key_defaults;
 	parsed.launch.new_classic_joy_config = joy_config;
 	parsed.launch.new_classic_joy_defaults = joy_defaults;
+	parsed.launch.new_classic_device_assignment = device_assignment;
+	parsed.launch.new_classic_device_defaults = device_defaults;
+	parsed.launch.new_classic_controller_catalog = &sdl_controller_catalog;
+	parsed.launch.new_classic_controller_context = &mapper;
 	parsed.launch.new_classic_maximum_key = maximum_key;
 	parsed.launch.new_classic_capture_cancel_key = static_cast<std::uint16_t>(
 		SDL_SCANCODE_ESCAPE

@@ -414,6 +414,8 @@ struct FakeRunnerBackend final {
 	std::optional<th03::app::ClassicAudioCommand> audio{};
 	std::optional<th03::app::NewClassicKeyConfig> key_config_update{};
 	std::optional<th03::app::NewClassicJoyConfig> joy_config_update{};
+	std::optional<th03::app::NewClassicDeviceAssignment>
+		device_assignment_update{};
 	std::optional<bool> reduced_flash_update{};
 	std::optional<std::uint8_t> master_volume_update{};
 	std::optional<th03::app::NewClassicWindowPresentation>
@@ -485,6 +487,12 @@ th03::app::ClassicRunnerOperations runner_operations(
 		.take_joy_config_update = [](void *context) {
 			auto &self = *static_cast<FakeRunnerBackend *>(context);
 			return std::exchange(self.joy_config_update, std::nullopt);
+		},
+		.take_device_assignment_update = [](void *context) {
+			auto &self = *static_cast<FakeRunnerBackend *>(context);
+			return std::exchange(
+				self.device_assignment_update, std::nullopt
+			);
 		},
 		.take_reduced_flash_update = [](void *context) {
 			auto &self = *static_cast<FakeRunnerBackend *>(context);
@@ -646,6 +654,10 @@ void test_runner_sequence_audio_surface_and_failure()
 		profile_backend->joy_config_update = th03::app::NewClassicJoyConfig{
 			.dead_zone_percent = 35U,
 		};
+		th03::app::NewClassicDeviceAssignment assignment{};
+		assignment.mode[0] =
+			th03::app::NewClassicControllerAssignmentMode::disabled;
+		profile_backend->device_assignment_update = assignment;
 		profile_backend->master_volume_update = std::uint8_t{35U};
 		profile_backend->window_presentation_update =
 			th03::app::NewClassicWindowPresentation{
@@ -669,6 +681,12 @@ void test_runner_sequence_audio_surface_and_failure()
 				th03::app::NewClassicJoyConfig{.dead_zone_percent = 35U} &&
 			!(*new_classic)->take_new_classic_joy_config_update(),
 			"New Classic publishes each typed JoyConfig update once"
+		);
+		expect(
+			(*new_classic)->take_new_classic_device_assignment_update() ==
+				assignment &&
+			!(*new_classic)->take_new_classic_device_assignment_update(),
+			"New Classic publishes each typed device assignment update once"
 		);
 		expect(
 			(*new_classic)->take_new_classic_master_volume_update() == 35U &&
@@ -941,12 +959,23 @@ void test_file_and_request_boundaries()
 		.experience = th03::app::ExperienceProfile::new_classic,
 		.autofire_mask = 4U,
 	});
+	th03::app::NewClassicDeviceAssignment invalid_device{};
+	invalid_device.mode[0] =
+		th03::app::NewClassicControllerAssignmentMode::specific;
+	const auto invalid_assignment = th03::app::ClassicRunner::load({
+		.content = placeholder,
+		.experience = th03::app::ExperienceProfile::new_classic,
+		.new_classic_device_assignment = invalid_device,
+	});
 	expect(!classic_autofire && !invalid_autofire &&
 		classic_autofire.error().code ==
 			th03::app::ClassicRunnerErrorCode::invalid_request &&
 		invalid_autofire.error().code ==
 			th03::app::ClassicRunnerErrorCode::invalid_request,
 		"Autofire is bounded to New Classic's two player bits");
+	expect(!invalid_assignment && invalid_assignment.error().code ==
+		th03::app::ClassicRunnerErrorCode::invalid_request,
+		"invalid stable device identities fail before external content I/O");
 }
 
 [[nodiscard]] std::uint64_t surface_digest(

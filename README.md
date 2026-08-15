@@ -236,10 +236,15 @@ page, restores page-local defaults, and stores the result atomically in
 `TH3KEY.CFG` beside `PODD.CFG`. JoyConfig similarly persists host-neutral
 controller button, stick-axis, direction, and 5%-step dead-zone choices in
 `TH3JOY.CFG`; SDL conversion and live mapper replacement remain outside the
-deterministic gameplay owner. D-pad movement remains available independently
-of the selected stick. Stable physical-device assignment and an input-test
-page remain later work. Story and 1P-vs-CPU use the dedicated Story movement
-bindings while retaining P1 actions; the P1 and P2 Autofire selections feed
+deterministic gameplay owner. `TH3DEV.CFG` separately persists Automatic,
+Disabled, or stable specific-device ownership for P1 and P2. SDL identities
+use the controller GUID plus serial where available, otherwise the same-host
+device path; reconnecting a selected device restores its owner without writing
+transient instance IDs or source slots. The source-styled Input Test reports
+aggregate logical words and per-controller contributions. D-pad movement
+remains available independently of the selected stick. Story and 1P-vs-CPU
+use the dedicated Story movement bindings while retaining P1 actions; the P1
+and P2 Autofire selections feed
 the recorded logical input boundary. Options persists Rank, audio levels,
 KeyConfig, JoyConfig, and the Replay Patch's exact MAIN warning-flash
 reduction. With
@@ -286,8 +291,9 @@ devtools-only PC-98 producer remains required before claiming guest parity.
 Unless overridden with `--config`, `--score`, and `--replay-root`, Classic
 stores its exact `YUME.CFG` and `YUME.NEM`. New Classic stores its versioned
 `PODD.CFG`, derives `YUME.NEW.NEM` beside the selected `--score` path, and
-stores `TH3KEY.CFG` plus the `REPLAY` directory under the selected `--data`
-root. An absent `PODD.CFG` imports valid Classic option values once by value;
+stores `TH3KEY.CFG`, `TH3JOY.CFG`, and `TH3DEV.CFG` plus the `REPLAY`
+directory under the selected `--data` root. An absent `PODD.CFG` imports valid
+Classic option values once by value;
 later New Classic changes never rewrite `YUME.CFG`. This avoids dependence on
 the launcher working directory; use explicit writable paths when the extracted
 content root is read-only.

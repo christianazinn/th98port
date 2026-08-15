@@ -154,15 +154,19 @@ Key Mode
 KeyConfig
 JoyConfig
 Device Assignment
-Test Inputs
-Restore Defaults
+Input Test
 Return
 ```
 
 The existing New Classic keyboard/Story/Autofire store and exact KeyConfig
-screen are retained. JoyConfig adds controller buttons, axes, dead zones, and
-hotplug-safe device assignment through the existing logical input boundary.
-None of these mappings apply to Classic.
+screen are retained. JoyConfig adds controller buttons, axes, and dead zones;
+the separate assignment owner adds hotplug-safe identity through the existing
+logical input boundary.
+Device Assignment offers Automatic, Disabled, or one stable connected-device
+identity independently for P1 and P2; its child screen owns Restore Defaults.
+Input Test shows both aggregate logical words and each connected controller's
+current contribution without exposing raw host input to gameplay. None of
+these mappings apply to Classic.
 
 ### Video
 
@@ -240,8 +244,8 @@ product settings document.
   configuration behavior.
 - New Classic receives a distinct, versioned, atomically published native
   settings document for its source-compatible options and host extensions.
-- Existing `TH3KEY.CFG`, replay, and expanded-score stores remain distinct
-  typed documents.
+- Existing `TH3KEY.CFG`, `TH3JOY.CFG`, `TH3DEV.CFG`, replay, and
+  expanded-score stores remain distinct typed documents.
 - First migration may import current New Classic values from the existing
   `YUME.CFG`, but it must not destroy or reinterpret the Classic file.
 - Authentication credentials and secrets, if later required, do not belong in
@@ -400,8 +404,9 @@ exist:
 4. JoyConfig, device assignment, dead-zone calibration, and input test page.
    Host-neutral button/stick/direction/dead-zone persistence, the retained
    source-styled JoyConfig screen, and live SDL mapper replacement are complete
-   in session 182. Stable hotplug-safe device assignment and the input-test
-   page remain the next input parcel.
+   in session 182. Session 183 completes stable GUID-plus-serial/path device
+   identity, atomic `TH3DEV.CFG` assignment persistence, hotplug reassignment,
+   and the retained source-styled live Input Test page.
 5. Move the existing Japanese/English selector to the Language page.
 
 Each feature becomes visible only when its apply, persistence, rollback, and

@@ -27,6 +27,7 @@
 #include "th03/app/main_process.hpp"
 #include "th03/app/new_classic_language.hpp"
 #include "th03/app/new_classic_joy_config_store.hpp"
+#include "th03/app/new_classic_device_store.hpp"
 #include "th03/app/new_classic_practice.hpp"
 #include "th03/app/new_classic_settings_store.hpp"
 #include "th03/app/pixel_oracle_identity.hpp"
@@ -205,7 +206,7 @@ struct ClassicOpSessionBackendOperations final {
 	bool (*key_config_active)(void *) = nullptr;
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
 	(*advance_key_config)(
-		void *, NewClassicUiInput, std::optional<std::uint16_t>, bool
+		void *, NewClassicUiInput, CoreInput, std::optional<std::uint16_t>, bool
 	) = nullptr;
 	std::expected<bool, ClassicOpSessionError>
 	(*finish_key_config)(void *) = nullptr;
@@ -340,6 +341,8 @@ public:
 	take_key_config_update() noexcept;
 	[[nodiscard]] std::optional<NewClassicJoyConfig>
 	take_joy_config_update() noexcept;
+	[[nodiscard]] std::optional<NewClassicDeviceAssignment>
+	take_device_assignment_update() noexcept;
 	[[nodiscard]] std::optional<bool> take_reduced_flash_update() noexcept;
 	[[nodiscard]] std::optional<std::uint8_t>
 	take_master_volume_update() noexcept;

@@ -290,6 +290,7 @@ add_library(th03_app_persistence STATIC
 	src/app/classic_config_store.cpp
 	src/app/classic_score.cpp
 	src/app/classic_score_store.cpp
+	src/app/new_classic_device_store.cpp
 	src/app/new_classic_joy_config_store.cpp
 	src/app/new_classic_key_config_store.cpp
 	src/app/new_classic_settings.cpp
@@ -340,6 +341,26 @@ th03_set_warnings(th03-app-new-classic-joy-config-store-tests)
 add_test(
 	NAME th03-app-new-classic-joy-config-store-tests
 	COMMAND th03-app-new-classic-joy-config-store-tests
+)
+
+add_executable(
+	th03-app-new-classic-device-store-tests
+	tests/test_app_new_classic_device_store.cpp
+)
+target_link_libraries(
+	th03-app-new-classic-device-store-tests
+	PRIVATE th03_app_persistence
+)
+target_compile_features(
+	th03-app-new-classic-device-store-tests PRIVATE cxx_std_23
+)
+set_target_properties(
+	th03-app-new-classic-device-store-tests PROPERTIES CXX_EXTENSIONS OFF
+)
+th03_set_warnings(th03-app-new-classic-device-store-tests)
+add_test(
+	NAME th03-app-new-classic-device-store-tests
+	COMMAND th03-app-new-classic-device-store-tests
 )
 
 add_library(th03_present STATIC
@@ -528,6 +549,7 @@ add_library(th03_app_main STATIC
 	src/app/main_process.cpp
 	src/app/main_process_static_content.cpp
 	src/app/new_classic_assets.cpp
+	src/app/new_classic_device_scene.cpp
 	src/app/new_classic_frontend.cpp
 	src/app/new_classic_joy_config_scene.cpp
 	src/app/new_classic_key_config_scene.cpp
@@ -1125,6 +1147,18 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-new-classic-joy-config-scene-tests
 		COMMAND th03-app-new-classic-joy-config-scene-tests
+	)
+
+	add_executable(th03-app-new-classic-device-scene-tests
+		tests/test_app_new_classic_device_scene.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-device-scene-tests PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-new-classic-device-scene-tests)
+	add_test(
+		NAME th03-app-new-classic-device-scene-tests
+		COMMAND th03-app-new-classic-device-scene-tests
 	)
 	target_link_libraries(
 		th03-app-new-classic-assets-tests PRIVATE th03_app_main

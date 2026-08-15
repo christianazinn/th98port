@@ -82,12 +82,32 @@ struct FakeGamepads {
 		++self.close_count;
 	}
 
+	[[nodiscard]] static bool identify(
+		void *,
+		SDL_Gamepad *,
+		SDL_JoystickID id,
+		th03::app::NewClassicControllerIdentity &identity,
+		std::array<char, th03::app::new_classic_controller_name_bytes> &name
+	) noexcept
+	{
+		// A reconnect receives a new transient SDL instance ID while retaining
+		// the same device identity.
+		const auto stable_id = id == 111U ? 11U : id;
+		identity.bytes[0] = static_cast<std::uint8_t>(stable_id & 0xFFU);
+		identity.bytes[1] = static_cast<std::uint8_t>((id >> 8U) & 0xFFU);
+		name[0] = 'P';
+		name[1] = 'a';
+		name[2] = 'd';
+		return true;
+	}
+
 	[[nodiscard]] SdlGamepadBackend backend() noexcept
 	{
 		return {
 			.context = this,
 			.open = open,
 			.close = close,
+			.identify = identify,
 		};
 	}
 };
@@ -734,6 +754,96 @@ void test_gamepad_buttons_axes_and_lifecycle()
 		"mapper destruction closes every still-connected gamepad exactly once");
 }
 
+void test_stable_identity_assignment_and_catalog()
+{
+	FakeGamepads fake{};
+	auto configured = bindings();
+	configured.identity_assignment_enabled = true;
+	configured.device_assignment.mode = {
+		th03::app::NewClassicControllerAssignmentMode::specific,
+		th03::app::NewClassicControllerAssignmentMode::specific,
+	};
+	configured.device_assignment.identity[0].bytes[0] = 22U;
+	configured.device_assignment.identity[1].bytes[0] = 11U;
+	auto made = SdlInputMapper::create(
+		configured, main_window, fake.backend()
+	);
+	expect(static_cast<bool>(made), "identity mapper is created");
+	if(!made) {
+		return;
+	}
+	auto mapper = std::move(*made);
+	auto input = scheduler(20U);
+	(void)expect_event(mapper, input,
+		gamepad_device_event(SDL_EVENT_GAMEPAD_ADDED, 1U, 11U),
+		"P2-specific controller connects first");
+	(void)expect_event(mapper, input,
+		gamepad_device_event(SDL_EVENT_GAMEPAD_ADDED, 2U, 22U),
+		"P1-specific controller connects second");
+	(void)expect_event(mapper, input,
+		gamepad_button_event(3U, 11U, SDL_GAMEPAD_BUTTON_SOUTH, true),
+		"specific P2 controller presses Shot");
+	auto tick = expect_tick(input, 20U, "specific assignment tick is due");
+	expect(tick.input.p1 == 0U && tick.input.p2 == input_shot,
+		"stable identity overrides connection-order player parity");
+	auto catalog = mapper.controller_catalog();
+	expect(catalog.count == 2U &&
+		catalog.controllers[0].player ==
+			th03::app::NewClassicControllerPlayer::p2 &&
+		catalog.controllers[1].player ==
+			th03::app::NewClassicControllerPlayer::p1 &&
+		catalog.controllers[0].p2 == input_shot,
+		"catalog exposes stable assignment and current logical contribution");
+
+	(void)expect_event(mapper, input,
+		gamepad_device_event(SDL_EVENT_GAMEPAD_REMOVED, 21U, 11U),
+		"specific controller disconnects");
+	(void)expect_event(mapper, input,
+		gamepad_device_event(SDL_EVENT_GAMEPAD_ADDED, 22U, 111U),
+		"specific controller reconnects with a new transient instance ID");
+	(void)expect_event(mapper, input,
+		gamepad_button_event(23U, 111U, SDL_GAMEPAD_BUTTON_SOUTH, true),
+		"reconnected specific controller presses Shot");
+	tick = expect_tick(input, 30U, "reconnected assignment tick is due");
+	expect(tick.input.p1 == 0U && tick.input.p2 == input_shot,
+		"hotplug retains the identity-selected player");
+	(void)expect_event(mapper, input,
+		gamepad_button_event(31U, 111U, SDL_GAMEPAD_BUTTON_SOUTH, false),
+		"specific controller releases Shot before reassignment");
+	auto only_p2 = configured;
+	only_p2.device_assignment = {};
+	only_p2.device_assignment.mode[0] =
+		th03::app::NewClassicControllerAssignmentMode::disabled;
+	expect(static_cast<bool>(mapper.replace_bindings(only_p2)),
+		"one-player Automatic policy replaces between released boundaries");
+	catalog = mapper.controller_catalog();
+	expect(catalog.count == 2U &&
+		catalog.controllers[0].player ==
+			th03::app::NewClassicControllerPlayer::p2 &&
+		catalog.controllers[1].player ==
+			th03::app::NewClassicControllerPlayer::p2,
+		"one Automatic player owns every unmatched connected controller");
+	auto disabled = configured;
+	disabled.device_assignment = {};
+	disabled.device_assignment.mode = {
+		th03::app::NewClassicControllerAssignmentMode::disabled,
+		th03::app::NewClassicControllerAssignmentMode::disabled,
+	};
+	disabled.gamepad_buttons[disabled.gamepad_button_count++] = {
+		.button = SDL_GAMEPAD_BUTTON_START,
+		.action = SdlLogicalAction::ok,
+	};
+	expect(static_cast<bool>(mapper.replace_bindings(disabled)),
+		"live device assignment replaces between released input boundaries");
+	(void)expect_event(mapper, input,
+		gamepad_button_event(32U, 111U, SDL_GAMEPAD_BUTTON_START, true),
+		"unassigned controller presses the fixed Menu OK button");
+	tick = expect_tick(input, 40U, "unassigned menu input tick is due");
+	expect(tick.input.p1 == 0U && tick.input.p2 == 0U &&
+		tick.input.system == input_ok,
+		"unassigned controllers retain menu access without controlling a player");
+}
+
 void test_focus_keyboard_device_release_and_quit_separation()
 {
 	FakeGamepads fake{};
@@ -1076,6 +1186,7 @@ int main()
 	test_equal_and_regressed_event_order();
 	test_keyboard_window_scope();
 	test_gamepad_buttons_axes_and_lifecycle();
+	test_stable_identity_assignment_and_catalog();
 	test_focus_keyboard_device_release_and_quit_separation();
 	test_modal_reset_releases_input_and_retains_devices();
 	test_malformed_stale_and_capacity_events();

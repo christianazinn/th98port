@@ -154,7 +154,8 @@ NewClassicKeyConfig new_classic_default_key_config() noexcept
 
 SdlInputBindings new_classic_bindings(
 	const NewClassicKeyConfig &config,
-	const NewClassicJoyConfig &joy_config
+	const NewClassicJoyConfig &joy_config,
+	const NewClassicDeviceAssignment &device_assignment
 ) noexcept
 {
 	SdlInputBindings bindings{};
@@ -278,6 +279,8 @@ SdlInputBindings new_classic_bindings(
 		bindings.gamepad_players[slot] = (slot % 2U == 0U) ?
 			SdlInputPlayer::p1 : SdlInputPlayer::p2;
 	}
+	bindings.identity_assignment_enabled = true;
+	bindings.device_assignment = device_assignment;
 	const auto press = static_cast<std::int32_t>(
 		(32'768 * joy_config.dead_zone_percent) / 100U
 	);
@@ -286,6 +289,14 @@ SdlInputBindings new_classic_bindings(
 		(press * 3) / 4
 	);
 	return bindings;
+}
+
+SdlInputBindings new_classic_bindings(
+	const NewClassicKeyConfig &config,
+	const NewClassicJoyConfig &joy_config
+) noexcept
+{
+	return new_classic_bindings(config, joy_config, {});
 }
 
 NewClassicJoyConfig new_classic_default_joy_config() noexcept

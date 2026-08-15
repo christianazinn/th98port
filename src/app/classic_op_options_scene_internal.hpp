@@ -42,6 +42,8 @@ enum class ClassicOpOptionsChoice : std::uint8_t {
 	category_system,
 	key_config,
 	joy_config,
+	device_assignment,
+	input_test,
 	return_page,
 	switch_classic,
 	confirm_switch_classic,
@@ -63,6 +65,8 @@ enum class ClassicOpOptionsOutcome : std::uint8_t {
 	return_main,
 	key_config,
 	joy_config,
+	device_assignment,
+	input_test,
 	switch_classic,
 };
 
@@ -168,6 +172,19 @@ public:
 		std::unique_ptr<ClassicOpOptionsScene>,
 		ClassicOpError
 	> resume_after_joy_config(
+		const ClassicOpOptionsCompletion &completion,
+		bool fm_available,
+		std::span<const LoadedMainResource> resources,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+		const present::AnkGlyphProvider *font,
+		bool language_available,
+		std::uint8_t master_volume_percent = 100U,
+		NewClassicWindowPresentation window_presentation = {}
+	);
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicOpOptionsScene>,
+		ClassicOpError
+	> resume_after_device_scene(
 		const ClassicOpOptionsCompletion &completion,
 		bool fm_available,
 		std::span<const LoadedMainResource> resources,

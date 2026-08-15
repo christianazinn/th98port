@@ -196,6 +196,9 @@ void test_new_classic_joy_config()
 	expect(defaults.axis_press_threshold == 16384 &&
 		defaults.axis_release_threshold == 12288,
 		"default controller dead zone preserves the existing hysteresis");
+	expect(defaults.identity_assignment_enabled &&
+		defaults.device_assignment == NewClassicDeviceAssignment{},
+		"New Classic defaults use the stable automatic assignment policy");
 
 	auto custom = joy;
 	custom.buttons = {
@@ -235,6 +238,12 @@ void test_new_classic_joy_config()
 	const auto unbound = detail::new_classic_bindings(keys, custom);
 	expect(unbound.gamepad_button_count == 14U,
 		"an explicitly unbound controller action emits no SDL binding");
+	NewClassicDeviceAssignment assignment{};
+	assignment.mode[0] = NewClassicControllerAssignmentMode::disabled;
+	const auto assigned = detail::new_classic_bindings(keys, custom, assignment);
+	expect(assigned.identity_assignment_enabled &&
+		assigned.device_assignment == assignment,
+		"device assignment crosses only the SDL binding boundary");
 }
 
 SDL_Gamepad *fake_open_gamepad(void *context, SDL_JoystickID) noexcept

@@ -14,6 +14,7 @@
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/main_process.hpp"
 #include "th03/app/new_classic_assets.hpp"
+#include "th03/app/new_classic_device_store.hpp"
 #include "th03/app/new_classic_frontend.hpp"
 #include "th03/app/new_classic_key_config_store.hpp"
 #include "th03/app/new_classic_joy_config_store.hpp"
@@ -88,6 +89,10 @@ struct ClassicRunnerRequest final {
 	NewClassicKeyConfig new_classic_key_defaults{};
 	std::optional<NewClassicJoyConfig> new_classic_joy_config{};
 	NewClassicJoyConfig new_classic_joy_defaults{};
+	std::optional<NewClassicDeviceAssignment> new_classic_device_assignment{};
+	NewClassicDeviceAssignment new_classic_device_defaults{};
+	NewClassicControllerCatalogRead new_classic_controller_catalog = nullptr;
+	void *new_classic_controller_context = nullptr;
 	std::uint16_t new_classic_maximum_key = 0U;
 	std::uint16_t new_classic_capture_cancel_key = 0U;
 	NewClassicHostKeyName new_classic_key_name = nullptr;
@@ -205,6 +210,8 @@ public:
 	take_new_classic_key_config_update() noexcept;
 	[[nodiscard]] std::optional<NewClassicJoyConfig>
 	take_new_classic_joy_config_update() noexcept;
+	[[nodiscard]] std::optional<NewClassicDeviceAssignment>
+	take_new_classic_device_assignment_update() noexcept;
 	[[nodiscard]] std::optional<std::uint8_t>
 	take_new_classic_master_volume_update() noexcept;
 	[[nodiscard]] std::optional<NewClassicWindowPresentation>

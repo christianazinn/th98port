@@ -109,10 +109,12 @@ constexpr std::array<ClassicOpOptionsChoice, 4U> audio_choices{{
 	ClassicOpOptionsChoice::sfx,
 	ClassicOpOptionsChoice::return_page,
 }};
-constexpr std::array<ClassicOpOptionsChoice, 4U> input_choices{{
+constexpr std::array<ClassicOpOptionsChoice, 6U> input_choices{{
 	ClassicOpOptionsChoice::key_mode,
 	ClassicOpOptionsChoice::key_config,
 	ClassicOpOptionsChoice::joy_config,
+	ClassicOpOptionsChoice::device_assignment,
+	ClassicOpOptionsChoice::input_test,
 	ClassicOpOptionsChoice::return_page,
 }};
 
@@ -183,6 +185,8 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 	case ClassicOpOptionsChoice::category_system: return "System";
 	case ClassicOpOptionsChoice::key_config: return "KeyConfig";
 	case ClassicOpOptionsChoice::joy_config: return "JoyConfig";
+	case ClassicOpOptionsChoice::device_assignment: return "Device Assignment";
+	case ClassicOpOptionsChoice::input_test: return "Input Test";
 	case ClassicOpOptionsChoice::return_page: return "Return";
 	case ClassicOpOptionsChoice::switch_classic: return "Switch to Classic";
 	case ClassicOpOptionsChoice::confirm_switch_classic: return "Yes";
@@ -482,7 +486,9 @@ ClassicOpOptionsScene::resume_after_key_config(
 )
 {
 	if((completion.outcome() != ClassicOpOptionsOutcome::key_config &&
-		completion.outcome() != ClassicOpOptionsOutcome::joy_config) ||
+		completion.outcome() != ClassicOpOptionsOutcome::joy_config &&
+		completion.outcome() != ClassicOpOptionsOutcome::device_assignment &&
+		completion.outcome() != ClassicOpOptionsOutcome::input_test) ||
 		!patch_assets || !font) {
 		return std::unexpected(options_error(
 			ClassicOpErrorCode::invalid_state
@@ -530,8 +536,25 @@ ClassicOpOptionsScene::resume_after_key_config(
 	auto &scene = **created;
 	scene.phase_ = ClassicOpOptionsPhase::options_menu;
 	scene.page_ = ClassicOpOptionsPage::input;
-	scene.selected_ = completion.outcome() == ClassicOpOptionsOutcome::key_config ?
-		ClassicOpOptionsChoice::key_config : ClassicOpOptionsChoice::joy_config;
+	switch(completion.outcome()) {
+	case ClassicOpOptionsOutcome::key_config:
+		scene.selected_ = ClassicOpOptionsChoice::key_config;
+		break;
+	case ClassicOpOptionsOutcome::joy_config:
+		scene.selected_ = ClassicOpOptionsChoice::joy_config;
+		break;
+	case ClassicOpOptionsOutcome::device_assignment:
+		scene.selected_ = ClassicOpOptionsChoice::device_assignment;
+		break;
+	case ClassicOpOptionsOutcome::input_test:
+		scene.selected_ = ClassicOpOptionsChoice::input_test;
+		break;
+	case ClassicOpOptionsOutcome::return_main:
+	case ClassicOpOptionsOutcome::switch_classic:
+		return std::unexpected(options_error(
+			ClassicOpErrorCode::invalid_state
+		));
+	}
 	scene.menu_input_allowed_ = false;
 	scene.box_right_left_ = box_left + box_option_width - opwin_step_width;
 	if(!scene.restore_patch_rows(0U, 7U, box_left + box_option_width) ||
@@ -554,6 +577,28 @@ ClassicOpOptionsScene::resume_after_joy_config(
 )
 {
 	if(completion.outcome() != ClassicOpOptionsOutcome::joy_config) {
+		return std::unexpected(options_error(ClassicOpErrorCode::invalid_state));
+	}
+	return resume_after_key_config(
+		completion, fm_available, resources, std::move(patch_assets), font,
+		language_available, master_volume_percent, window_presentation
+	);
+}
+
+std::expected<std::unique_ptr<ClassicOpOptionsScene>, ClassicOpError>
+ClassicOpOptionsScene::resume_after_device_scene(
+	const ClassicOpOptionsCompletion &completion,
+	bool fm_available,
+	std::span<const LoadedMainResource> resources,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	const present::AnkGlyphProvider *font,
+	bool language_available,
+	std::uint8_t master_volume_percent,
+	NewClassicWindowPresentation window_presentation
+)
+{
+	if(completion.outcome() != ClassicOpOptionsOutcome::device_assignment &&
+		completion.outcome() != ClassicOpOptionsOutcome::input_test) {
 		return std::unexpected(options_error(ClassicOpErrorCode::invalid_state));
 	}
 	return resume_after_key_config(
@@ -920,6 +965,8 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 		choice == ClassicOpOptionsChoice::return_page ||
 		choice == ClassicOpOptionsChoice::key_config ||
 		choice == ClassicOpOptionsChoice::joy_config ||
+		choice == ClassicOpOptionsChoice::device_assignment ||
+		choice == ClassicOpOptionsChoice::input_test ||
 		choice == ClassicOpOptionsChoice::switch_classic ||
 		choice == ClassicOpOptionsChoice::confirm_switch_classic ||
 		choice == ClassicOpOptionsChoice::cancel_switch_classic ||
@@ -1023,6 +1070,8 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	case ClassicOpOptionsChoice::category_system:
 	case ClassicOpOptionsChoice::key_config:
 	case ClassicOpOptionsChoice::joy_config:
+	case ClassicOpOptionsChoice::device_assignment:
+	case ClassicOpOptionsChoice::input_test:
 	case ClassicOpOptionsChoice::return_page:
 	case ClassicOpOptionsChoice::switch_classic:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
@@ -1117,6 +1166,8 @@ bool ClassicOpOptionsScene::draw_option_choice(
 	case ClassicOpOptionsChoice::category_system:
 	case ClassicOpOptionsChoice::key_config:
 	case ClassicOpOptionsChoice::joy_config:
+	case ClassicOpOptionsChoice::device_assignment:
+	case ClassicOpOptionsChoice::input_test:
 	case ClassicOpOptionsChoice::return_page:
 	case ClassicOpOptionsChoice::switch_classic:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
@@ -1345,6 +1396,8 @@ bool ClassicOpOptionsScene::update_horizontal(
 	case ClassicOpOptionsChoice::category_system:
 	case ClassicOpOptionsChoice::key_config:
 	case ClassicOpOptionsChoice::joy_config:
+	case ClassicOpOptionsChoice::device_assignment:
+	case ClassicOpOptionsChoice::input_test:
 	case ClassicOpOptionsChoice::return_page:
 	case ClassicOpOptionsChoice::switch_classic:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
@@ -1475,6 +1528,8 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 		bool page_changed = false;
 		bool key_config_requested = false;
 		bool joy_config_requested = false;
+		bool device_assignment_requested = false;
+		bool input_test_requested = false;
 		bool switch_classic_requested = false;
 		if(!input.any()) {
 			menu_input_allowed_ = true;
@@ -1582,6 +1637,11 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 					key_config_requested = true;
 				} else if(selected_ == ClassicOpOptionsChoice::joy_config) {
 					joy_config_requested = true;
+				} else if(selected_ ==
+					ClassicOpOptionsChoice::device_assignment) {
+					device_assignment_requested = true;
+				} else if(selected_ == ClassicOpOptionsChoice::input_test) {
+					input_test_requested = true;
 				} else if(selected_ == ClassicOpOptionsChoice::switch_classic) {
 					if(!open_patch_page(
 						ClassicOpOptionsPage::switch_confirmation
@@ -1634,6 +1694,15 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 		}
 		if(joy_config_requested) {
 			finish(ClassicOpOptionsOutcome::joy_config);
+			return tick(
+				ClassicOpBoundary::vsync, false, horizontal_processed, true,
+				selection_changed, config_changed
+			);
+		}
+		if(device_assignment_requested || input_test_requested) {
+			finish(device_assignment_requested ?
+				ClassicOpOptionsOutcome::device_assignment :
+				ClassicOpOptionsOutcome::input_test);
 			return tick(
 				ClassicOpBoundary::vsync, false, horizontal_processed, true,
 				selection_changed, config_changed

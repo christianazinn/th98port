@@ -1244,6 +1244,64 @@ void local_replay_patch_return_gate(const std::filesystem::path &content_root)
 	options = std::move(resumed_joy);
 	expect((*options)->advance().has_value(),
 		"JoyConfig return unlocks after release");
+	expect((*options)->advance({.down = true}).has_value() &&
+		(*options)->selected_choice() ==
+			ClassicOpOptionsChoice::device_assignment,
+		"Replay Patch Input exposes Device Assignment below JoyConfig");
+	expect((*options)->advance().has_value(),
+		"Device Assignment selection releases");
+	expect((*options)->advance({.ok = true}).has_value(),
+		"Replay Patch Input hands off to Device Assignment");
+	auto device_completion = (*options)->take_completion();
+	expect(device_completion && device_completion->outcome() ==
+		ClassicOpOptionsOutcome::device_assignment,
+		"Replay Patch Device Assignment handoff is typed");
+	if(!device_completion) {
+		return;
+	}
+	auto resumed_device = ClassicOpOptionsScene::resume_after_device_scene(
+		*device_completion, true, *closure, patch_assets, &font, true
+	);
+	expect(resumed_device &&
+		(*resumed_device)->page() == ClassicOpOptionsPage::input &&
+		(*resumed_device)->selected_choice() ==
+			ClassicOpOptionsChoice::device_assignment &&
+		!(*resumed_device)->input_allowed(),
+		"Device Assignment return restores its Input cursor and release lock");
+	if(!resumed_device) {
+		return;
+	}
+	options = std::move(resumed_device);
+	expect((*options)->advance().has_value(),
+		"Device Assignment return unlocks after release");
+	expect((*options)->advance({.down = true}).has_value() &&
+		(*options)->selected_choice() == ClassicOpOptionsChoice::input_test,
+		"Replay Patch Input exposes Input Test below Device Assignment");
+	expect((*options)->advance().has_value(),
+		"Input Test selection releases");
+	expect((*options)->advance({.ok = true}).has_value(),
+		"Replay Patch Input hands off to Input Test");
+	auto input_test_completion = (*options)->take_completion();
+	expect(input_test_completion && input_test_completion->outcome() ==
+		ClassicOpOptionsOutcome::input_test,
+		"Replay Patch Input Test handoff is typed");
+	if(!input_test_completion) {
+		return;
+	}
+	auto resumed_test = ClassicOpOptionsScene::resume_after_device_scene(
+		*input_test_completion, true, *closure, patch_assets, &font, true
+	);
+	expect(resumed_test &&
+		(*resumed_test)->page() == ClassicOpOptionsPage::input &&
+		(*resumed_test)->selected_choice() ==
+			ClassicOpOptionsChoice::input_test,
+		"Input Test return restores its exact Input cursor");
+	if(!resumed_test) {
+		return;
+	}
+	options = std::move(resumed_test);
+	expect((*options)->advance().has_value(),
+		"Input Test return unlocks after release");
 	expect((*options)->advance({.cancel = true}).has_value() &&
 		(*options)->page() == ClassicOpOptionsPage::categories &&
 		(*options)->selected_choice() ==

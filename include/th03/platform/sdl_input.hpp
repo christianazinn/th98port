@@ -11,6 +11,7 @@
 #include <SDL3/SDL_gamepad.h>
 #include <SDL3/SDL_timer.h>
 
+#include "th03/app/new_classic_controller.hpp"
 #include "th03/app/tick_input.hpp"
 
 namespace th03::platform {
@@ -24,6 +25,7 @@ inline constexpr std::size_t sdl_gamepad_capacity =
 enum class SdlInputPlayer : std::uint8_t {
 	p1,
 	p2,
+	none,
 };
 
 enum class SdlLogicalAction : std::uint8_t {
@@ -95,6 +97,8 @@ struct SdlInputBindings {
 		gamepad_axes{};
 	std::size_t gamepad_axis_count = 0U;
 	std::array<SdlInputPlayer, sdl_gamepad_capacity> gamepad_players{};
+	bool identity_assignment_enabled = false;
+	app::NewClassicDeviceAssignment device_assignment{};
 	std::int16_t axis_press_threshold = 16384;
 	std::int16_t axis_release_threshold = 12288;
 };
@@ -107,6 +111,13 @@ using SdlGamepadClose = void (*) (
 	void *context,
 	SDL_Gamepad *gamepad
 ) noexcept;
+using SdlGamepadIdentify = bool (*) (
+	void *context,
+	SDL_Gamepad *gamepad,
+	SDL_JoystickID instance_id,
+	app::NewClassicControllerIdentity &identity,
+	std::array<char, app::new_classic_controller_name_bytes> &name
+) noexcept;
 
 // Device lifecycle is injectable so the fixed event mapper has hermetic tests.
 // The native backend may allocate inside SDL only on add/remove, never on an
@@ -115,6 +126,7 @@ struct SdlGamepadBackend {
 	void *context = nullptr;
 	SdlGamepadOpen open = nullptr;
 	SdlGamepadClose close = nullptr;
+	SdlGamepadIdentify identify = nullptr;
 };
 
 [[nodiscard]] SdlGamepadBackend native_sdl_gamepad_backend() noexcept;
@@ -192,6 +204,8 @@ public:
 	) noexcept;
 
 	[[nodiscard]] std::size_t connected_gamepad_count() const noexcept;
+	[[nodiscard]] app::NewClassicControllerCatalog controller_catalog()
+		const noexcept;
 	[[nodiscard]] std::optional<std::uint8_t> source_for(
 		SDL_JoystickID gamepad_id
 	) const noexcept;
@@ -221,6 +235,9 @@ private:
 	struct GamepadState {
 		SDL_Gamepad *handle = nullptr;
 		SDL_JoystickID id = 0U;
+		app::NewClassicControllerIdentity identity{};
+		std::array<char, app::new_classic_controller_name_bytes> name{};
+		SdlInputPlayer player = SdlInputPlayer::none;
 		std::array<bool, sdl_gamepad_button_binding_capacity> button_held{};
 		std::array<bool, sdl_gamepad_axis_binding_capacity> axis_held{};
 		app::PhysicalInputSourceState contribution{};
@@ -240,6 +257,10 @@ private:
 		std::size_t slot,
 		const std::array<bool, sdl_gamepad_button_binding_capacity> &buttons,
 		const std::array<bool, sdl_gamepad_axis_binding_capacity> &axes
+	) const noexcept;
+	[[nodiscard]] SdlInputPlayer assigned_player(
+		std::size_t slot,
+		const app::NewClassicControllerIdentity &identity
 	) const noexcept;
 	[[nodiscard]] std::expected<void, SdlInputMapperError> push_event(
 		app::TickInputScheduler &scheduler,

@@ -2,10 +2,13 @@
 
 #include "sdl_runtime_internal.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <optional>
+#include <string_view>
 #include <utility>
 
 namespace th03::platform {
@@ -74,11 +77,18 @@ constexpr std::uint16_t input_q = 0x4000U;
 ) noexcept
 {
 	if(main_window == 0U || backend.open == nullptr || backend.close == nullptr ||
+		(bindings.identity_assignment_enabled && backend.identify == nullptr) ||
 		bindings.keyboard_count > bindings.keyboard.size() ||
 		bindings.gamepad_button_count > bindings.gamepad_buttons.size() ||
 		bindings.gamepad_axis_count > bindings.gamepad_axes.size() ||
 		bindings.axis_release_threshold <= 0 ||
 		bindings.axis_press_threshold <= bindings.axis_release_threshold) {
+		return false;
+	}
+	if(bindings.identity_assignment_enabled &&
+		!app::valid_new_classic_device_assignment(
+			bindings.device_assignment
+		)) {
 		return false;
 	}
 	for(std::size_t index = 0U; index < bindings.keyboard_count; ++index) {
@@ -121,37 +131,47 @@ void apply_action(
 	SdlLogicalAction action
 ) noexcept
 {
-	auto &player_bits = (player == SdlInputPlayer::p1) ? state.p1 : state.p2;
+	std::uint16_t *player_bits = nullptr;
+	if(player == SdlInputPlayer::p1) {
+		player_bits = &state.p1;
+	} else if(player == SdlInputPlayer::p2) {
+		player_bits = &state.p2;
+	}
+	const auto apply_player_bit = [&](std::uint16_t bit) noexcept {
+		if(player_bits) {
+			*player_bits = static_cast<std::uint16_t>(*player_bits | bit);
+		}
+	};
 	switch(action) {
 	case SdlLogicalAction::up:
-		player_bits = static_cast<std::uint16_t>(player_bits | input_up);
+		apply_player_bit(input_up);
 		break;
 	case SdlLogicalAction::down:
-		player_bits = static_cast<std::uint16_t>(player_bits | input_down);
+		apply_player_bit(input_down);
 		break;
 	case SdlLogicalAction::left:
-		player_bits = static_cast<std::uint16_t>(player_bits | input_left);
+		apply_player_bit(input_left);
 		break;
 	case SdlLogicalAction::right:
-		player_bits = static_cast<std::uint16_t>(player_bits | input_right);
+		apply_player_bit(input_right);
 		break;
 	case SdlLogicalAction::bomb:
-		player_bits = static_cast<std::uint16_t>(player_bits | input_bomb);
+		apply_player_bit(input_bomb);
 		break;
 	case SdlLogicalAction::shot:
-		player_bits = static_cast<std::uint16_t>(player_bits | input_shot);
+		apply_player_bit(input_shot);
 		break;
 	case SdlLogicalAction::up_left:
-		player_bits = static_cast<std::uint16_t>(player_bits | input_up_left);
+		apply_player_bit(input_up_left);
 		break;
 	case SdlLogicalAction::down_left:
-		player_bits = static_cast<std::uint16_t>(player_bits | input_down_left);
+		apply_player_bit(input_down_left);
 		break;
 	case SdlLogicalAction::up_right:
-		player_bits = static_cast<std::uint16_t>(player_bits | input_up_right);
+		apply_player_bit(input_up_right);
 		break;
 	case SdlLogicalAction::down_right:
-		player_bits = static_cast<std::uint16_t>(player_bits | input_down_right);
+		apply_player_bit(input_down_right);
 		break;
 	case SdlLogicalAction::single_up:
 		state.system = static_cast<std::uint16_t>(state.system | input_up);
@@ -195,11 +215,13 @@ void apply_action(
 		state.system = static_cast<std::uint16_t>(state.system | input_q);
 		break;
 	case SdlLogicalAction::charge:
-		player_bits = static_cast<std::uint16_t>(player_bits | input_shot);
-		state.charge_mask = static_cast<std::uint8_t>(
-			state.charge_mask |
-			((player == SdlInputPlayer::p1) ? 0x01U : 0x02U)
-		);
+		apply_player_bit(input_shot);
+		if(player == SdlInputPlayer::p1 || player == SdlInputPlayer::p2) {
+			state.charge_mask = static_cast<std::uint8_t>(
+				state.charge_mask |
+				((player == SdlInputPlayer::p1) ? 0x01U : 0x02U)
+			);
+		}
 		break;
 	}
 }
@@ -265,6 +287,78 @@ void native_close_gamepad(void *, SDL_Gamepad *gamepad) noexcept
 	SDL_CloseGamepad(gamepad);
 }
 
+constexpr void identity_hash_byte(
+	std::uint64_t &hash,
+	std::uint8_t value
+) noexcept
+{
+	hash ^= value;
+	hash *= 1'099'511'628'211ULL;
+}
+
+bool native_identify_gamepad(
+	void *,
+	SDL_Gamepad *gamepad,
+	SDL_JoystickID instance_id,
+	app::NewClassicControllerIdentity &identity,
+	std::array<char, app::new_classic_controller_name_bytes> &name
+) noexcept
+{
+	if(!gamepad || instance_id == 0U) {
+		return false;
+	}
+	const auto guid = SDL_GetGamepadGUIDForID(instance_id);
+	const char *display = SDL_GetGamepadName(gamepad);
+	if(!display || *display == '\0') {
+		display = "Controller";
+	}
+	const auto display_view = std::string_view(display);
+	const auto display_count = std::min(
+		display_view.size(), name.size() - 1U
+	);
+	std::copy_n(display_view.begin(), display_count, name.begin());
+
+	const char *discriminator = SDL_GetGamepadSerial(gamepad);
+	std::uint8_t discriminator_kind = 1U;
+	if(!discriminator || *discriminator == '\0') {
+		discriminator = SDL_GetGamepadPath(gamepad);
+		discriminator_kind = 2U;
+	}
+	if(!discriminator || *discriminator == '\0') {
+		discriminator = display;
+		discriminator_kind = 3U;
+	}
+	std::uint64_t first = 14'695'981'039'346'656'037ULL;
+	std::uint64_t second = 7'806'847'409'688'041'587ULL;
+	for(const auto value : guid.data) {
+		identity_hash_byte(first, value);
+		identity_hash_byte(second, static_cast<std::uint8_t>(value ^ 0xA5U));
+	}
+	identity_hash_byte(first, discriminator_kind);
+	identity_hash_byte(second, static_cast<std::uint8_t>(
+		discriminator_kind ^ 0x5AU
+	));
+	for(const auto value : std::string_view(discriminator)) {
+		const auto byte_value = static_cast<std::uint8_t>(
+			static_cast<unsigned char>(value)
+		);
+		identity_hash_byte(first, byte_value);
+		identity_hash_byte(second, static_cast<std::uint8_t>(
+			byte_value ^ 0xA5U
+		));
+	}
+	for(std::size_t index = 0U; index < 8U; ++index) {
+		identity.bytes[index] = static_cast<std::uint8_t>(first >> (index * 8U));
+		identity.bytes[index + 8U] = static_cast<std::uint8_t>(
+			second >> (index * 8U)
+		);
+	}
+	if(identity.empty()) {
+		identity.bytes.back() = 1U;
+	}
+	return true;
+}
+
 } // namespace
 
 SdlGamepadBackend native_sdl_gamepad_backend() noexcept
@@ -272,6 +366,7 @@ SdlGamepadBackend native_sdl_gamepad_backend() noexcept
 	return {
 		.open = native_open_gamepad,
 		.close = native_close_gamepad,
+		.identify = native_identify_gamepad,
 	};
 }
 
@@ -310,7 +405,8 @@ std::expected<SdlInputMapper, SdlInputMapperError> SdlInputMapper::create(
 	}
 	const bool native_backend = gamepad_backend.context == nullptr &&
 		gamepad_backend.open == native_open_gamepad &&
-		gamepad_backend.close == native_close_gamepad;
+		gamepad_backend.close == native_close_gamepad &&
+		gamepad_backend.identify == native_identify_gamepad;
 	if(native_backend && !detail::acquire_platform_runtime_lease()) {
 		return std::unexpected(mapper_error(
 			SdlInputMapperErrorCode::runtime_unavailable
@@ -378,7 +474,7 @@ app::PhysicalInputSourceState SdlInputMapper::gamepad_contribution(
 ) const noexcept
 {
 	app::PhysicalInputSourceState state{.device_present = true};
-	const auto player = bindings_.gamepad_players[slot];
+	const auto player = gamepads_[slot].player;
 	for(std::size_t index = 0U;
 		index < bindings_.gamepad_button_count;
 		++index) {
@@ -394,6 +490,38 @@ app::PhysicalInputSourceState SdlInputMapper::gamepad_contribution(
 		}
 	}
 	return state;
+}
+
+SdlInputPlayer SdlInputMapper::assigned_player(
+	std::size_t slot,
+	const app::NewClassicControllerIdentity &identity
+) const noexcept
+{
+	if(!bindings_.identity_assignment_enabled) {
+		return bindings_.gamepad_players[slot];
+	}
+	const auto &assignment = bindings_.device_assignment;
+	for(std::size_t player = 0U; player < 2U; ++player) {
+		if(assignment.mode[player] ==
+			app::NewClassicControllerAssignmentMode::specific &&
+			assignment.identity[player] == identity) {
+			return player == 0U ? SdlInputPlayer::p1 : SdlInputPlayer::p2;
+		}
+	}
+	const bool p1_auto = assignment.mode[0] ==
+		app::NewClassicControllerAssignmentMode::automatic;
+	const bool p2_auto = assignment.mode[1] ==
+		app::NewClassicControllerAssignmentMode::automatic;
+	if(p1_auto && p2_auto) {
+		return (slot % 2U) == 0U ? SdlInputPlayer::p1 : SdlInputPlayer::p2;
+	}
+	if(p1_auto) {
+		return SdlInputPlayer::p1;
+	}
+	if(p2_auto) {
+		return SdlInputPlayer::p2;
+	}
+	return SdlInputPlayer::none;
 }
 
 std::expected<void, SdlInputMapperError> SdlInputMapper::push_event(
@@ -440,6 +568,36 @@ void SdlInputMapper::close_connected_gamepads() noexcept
 std::size_t SdlInputMapper::connected_gamepad_count() const noexcept
 {
 	return connected_gamepad_count_;
+}
+
+app::NewClassicControllerCatalog SdlInputMapper::controller_catalog()
+	const noexcept
+{
+	app::NewClassicControllerCatalog result{};
+	for(const auto &gamepad : gamepads_) {
+		if(gamepad.handle == nullptr) {
+			continue;
+		}
+		auto &entry = result.controllers[result.count++];
+		entry.identity = gamepad.identity;
+		entry.name = gamepad.name;
+		switch(gamepad.player) {
+		case SdlInputPlayer::none:
+			entry.player = app::NewClassicControllerPlayer::none;
+			break;
+		case SdlInputPlayer::p1:
+			entry.player = app::NewClassicControllerPlayer::p1;
+			break;
+		case SdlInputPlayer::p2:
+			entry.player = app::NewClassicControllerPlayer::p2;
+			break;
+		}
+		entry.p1 = gamepad.contribution.p1;
+		entry.p2 = gamepad.contribution.p2;
+		entry.system = gamepad.contribution.system;
+		entry.charge_mask = gamepad.contribution.charge_mask;
+	}
+	return result;
 }
 
 std::optional<std::uint8_t> SdlInputMapper::source_for(
@@ -489,6 +647,13 @@ std::expected<void, SdlInputMapperError> SdlInputMapper::replace_bindings(
 		));
 	}
 	bindings_ = std::move(bindings);
+	for(std::size_t slot = 0U; slot < gamepads_.size(); ++slot) {
+		if(gamepads_[slot].handle != nullptr) {
+			gamepads_[slot].player = assigned_player(
+				slot, gamepads_[slot].identity
+			);
+		}
+	}
 	clear_held_states();
 	return {};
 }
@@ -649,6 +814,22 @@ SdlInputMapper::handle_event(
 				id
 			));
 		}
+		app::NewClassicControllerIdentity identity{};
+		std::array<char, app::new_classic_controller_name_bytes> name{};
+		if(gamepad_backend_.identify != nullptr && !gamepad_backend_.identify(
+			gamepad_backend_.context, handle, id, identity, name
+		)) {
+			gamepad_backend_.close(gamepad_backend_.context, handle);
+			return std::unexpected(mapper_error(
+				SdlInputMapperErrorCode::gamepad_open_failed, id
+			));
+		}
+		if(bindings_.identity_assignment_enabled && identity.empty()) {
+			gamepad_backend_.close(gamepad_backend_.context, handle);
+			return std::unexpected(mapper_error(
+				SdlInputMapperErrorCode::gamepad_open_failed, id
+			));
+		}
 		const auto source = static_cast<std::uint8_t>(slot + 1U);
 		const auto pushed = push_event(scheduler, {
 			.timestamp_ns = timestamp,
@@ -662,6 +843,9 @@ SdlInputMapper::handle_event(
 		}
 		gamepads_[slot].handle = handle;
 		gamepads_[slot].id = id;
+		gamepads_[slot].identity = identity;
+		gamepads_[slot].name = name;
+		gamepads_[slot].player = assigned_player(slot, identity);
 		gamepads_[slot].contribution.device_present = true;
 		++connected_gamepad_count_;
 		return SdlInputEventResult{
