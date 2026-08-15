@@ -36,6 +36,8 @@ using th03::app::ClassicOpOptionsPage;
 using th03::app::ClassicOpOptionsPhase;
 using th03::app::ClassicOpOptionsScene;
 using th03::app::ClassicRank;
+using th03::app::NewClassicWindowMode;
+using th03::app::NewClassicWindowScale;
 using th03::assets::BfntConsumerPolicy;
 using th03::assets::BfntSheet;
 using th03::assets::PiImage;
@@ -345,6 +347,33 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		ClassicOpOptionsOutcome::key_config &&
 		key_config->master_volume_percent() == 40U,
 		"KeyConfig retains its typed handoff outcome");
+
+	auto video = make_patch_scene_if_assets_supplied();
+	if(!video) {
+		return;
+	}
+	enter_patch_options(*video);
+	for(std::uint8_t row = 0U; row < 3U; ++row) {
+		expect(video->advance({.down = true}).has_value() &&
+			video->advance().has_value(),
+			"Video category navigation advances and releases");
+	}
+	expect(video->advance({.ok = true}).has_value() &&
+		video->page() == ClassicOpOptionsPage::video &&
+		video->selected_choice() == ClassicOpOptionsChoice::window_mode,
+		"Video opens on Window Mode");
+	expect(video->advance().has_value() &&
+		video->advance({.right = true}).has_value() &&
+		video->window_presentation().mode ==
+			NewClassicWindowMode::borderless_fullscreen,
+		"Window Mode applies its two-value live ring");
+	expect(video->advance().has_value() &&
+		video->advance({.down = true}).has_value() &&
+		video->advance().has_value() &&
+		video->selected_choice() == ClassicOpOptionsChoice::window_scale &&
+		video->advance({.right = true}).has_value() &&
+		video->window_presentation().scale == NewClassicWindowScale::x2,
+		"Window Scale advances through exact integer presets");
 
 	auto system = make_patch_scene_if_assets_supplied();
 	if(!system) {

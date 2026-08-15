@@ -414,6 +414,8 @@ struct FakeRunnerBackend final {
 	std::optional<th03::app::ClassicAudioCommand> audio{};
 	std::optional<bool> reduced_flash_update{};
 	std::optional<std::uint8_t> master_volume_update{};
+	std::optional<th03::app::NewClassicWindowPresentation>
+		window_presentation_update{};
 	th03::app::PixelOracleSourceIdentity pixel_oracle_source_identity{
 		.process = th03::app::PixelOracleProcess::op,
 		.scene = th03::app::PixelOracleScene::title,
@@ -481,6 +483,12 @@ th03::app::ClassicRunnerOperations runner_operations(
 		.take_master_volume_update = [](void *context) {
 			auto &self = *static_cast<FakeRunnerBackend *>(context);
 			return std::exchange(self.master_volume_update, std::nullopt);
+		},
+		.take_window_presentation_update = [](void *context) {
+			auto &self = *static_cast<FakeRunnerBackend *>(context);
+			return std::exchange(
+				self.window_presentation_update, std::nullopt
+			);
 		},
 		.pixel_oracle_source_identity = [](void *context) {
 			return static_cast<FakeRunnerBackend *>(context)->
@@ -626,6 +634,11 @@ void test_runner_sequence_audio_surface_and_failure()
 	if(new_classic) {
 		profile_backend->reduced_flash_update = true;
 		profile_backend->master_volume_update = std::uint8_t{35U};
+		profile_backend->window_presentation_update =
+			th03::app::NewClassicWindowPresentation{
+				.mode = th03::app::NewClassicWindowMode::borderless_fullscreen,
+				.scale = th03::app::NewClassicWindowScale::x2,
+			};
 		auto live_flash = (*new_classic)->consume({});
 		std::vector<th03::present::ComposedPixel> live_pixels(
 			th03::present::graphics_page_pixels
@@ -642,6 +655,17 @@ void test_runner_sequence_audio_surface_and_failure()
 			(*new_classic)->take_new_classic_master_volume_update() == 35U &&
 			!(*new_classic)->take_new_classic_master_volume_update(),
 			"New Classic publishes each typed master-volume update once"
+		);
+		expect(
+			(*new_classic)->take_new_classic_window_presentation_update() ==
+				profile_backend->window_presentation_update.value_or(
+					th03::app::NewClassicWindowPresentation{
+						.mode = th03::app::NewClassicWindowMode::borderless_fullscreen,
+						.scale = th03::app::NewClassicWindowScale::x2,
+					}
+				) &&
+			!(*new_classic)->take_new_classic_window_presentation_update(),
+			"New Classic publishes each typed window-presentation update once"
 		);
 	}
 	auto reduced = th03::app::ClassicRunnerTestAccess::create(

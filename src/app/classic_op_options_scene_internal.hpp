@@ -12,6 +12,7 @@
 #include "classic_op_scene_internal.hpp"
 #include "th03/app/classic_config.hpp"
 #include "th03/app/new_classic_assets.hpp"
+#include "th03/app/new_classic_settings.hpp"
 #include "th03/assets/types.hpp"
 #include "th03/present/graphics_text.hpp"
 #include "th03/present/raster.hpp"
@@ -23,6 +24,8 @@ namespace th03::app {
 enum class ClassicOpOptionsChoice : std::uint8_t {
 	rank,
 	master_volume,
+	window_mode,
+	window_scale,
 	bgm,
 	key_mode,
 	quit,
@@ -95,6 +98,7 @@ public:
 	[[nodiscard]] const GameInit &resident() const noexcept;
 	[[nodiscard]] ClassicConfigOptions config() const noexcept;
 	[[nodiscard]] std::uint8_t master_volume_percent() const noexcept;
+	[[nodiscard]] NewClassicWindowPresentation window_presentation() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 	[[nodiscard]] const present::Tram &tram() const noexcept;
 	[[nodiscard]] bool main_input_allowed() const noexcept;
@@ -106,6 +110,7 @@ private:
 		GameInit resident,
 		ClassicConfigOptions config,
 		std::uint8_t master_volume_percent,
+		NewClassicWindowPresentation window_presentation,
 		present::Raster raster,
 		present::Tram tram,
 		bool main_input_allowed,
@@ -115,6 +120,7 @@ private:
 	GameInit resident_{};
 	ClassicConfigOptions config_{};
 	std::uint8_t master_volume_percent_ = 100U;
+	NewClassicWindowPresentation window_presentation_{};
 	present::Raster raster_{};
 	present::Tram tram_{};
 	bool main_input_allowed_ = false;
@@ -137,7 +143,8 @@ public:
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {},
 		const present::AnkGlyphProvider *font = nullptr,
 		bool language_available = false,
-		std::uint8_t master_volume_percent = 100U
+		std::uint8_t master_volume_percent = 100U,
+		NewClassicWindowPresentation window_presentation = {}
 	);
 
 	[[nodiscard]] static std::expected<
@@ -150,7 +157,8 @@ public:
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 		const present::AnkGlyphProvider *font,
 		bool language_available,
-		std::uint8_t master_volume_percent = 100U
+		std::uint8_t master_volume_percent = 100U,
+		NewClassicWindowPresentation window_presentation = {}
 	);
 
 	[[nodiscard]] static std::expected<
@@ -167,7 +175,8 @@ public:
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {},
 		const present::AnkGlyphProvider *font = nullptr,
 		bool language_available = false,
-		std::uint8_t master_volume_percent = 100U
+		std::uint8_t master_volume_percent = 100U,
+		NewClassicWindowPresentation window_presentation = {}
 	);
 	[[nodiscard]] std::expected<void, ClassicOpError>
 	refresh_patch_language_background(
@@ -192,6 +201,7 @@ public:
 	[[nodiscard]] ClassicOpOptionsChoice selected_choice() const noexcept;
 	[[nodiscard]] ClassicConfigOptions config() const noexcept;
 	[[nodiscard]] std::uint8_t master_volume_percent() const noexcept;
+	[[nodiscard]] NewClassicWindowPresentation window_presentation() const noexcept;
 	[[nodiscard]] const GameInit &resident() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 	[[nodiscard]] const present::Tram &tram() const noexcept;
@@ -213,7 +223,8 @@ private:
 		present::Tram tram,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 		bool language_available,
-		std::uint8_t master_volume_percent
+		std::uint8_t master_volume_percent,
+		NewClassicWindowPresentation window_presentation
 	) noexcept;
 
 	[[nodiscard]] bool restore_menu_background(
@@ -272,6 +283,7 @@ private:
 	GameInit resident_{};
 	ClassicConfigOptions config_{};
 	std::uint8_t master_volume_percent_ = 100U;
+	NewClassicWindowPresentation window_presentation_{};
 	present::Raster raster_{};
 	present::Tram tram_{};
 	std::array<ClassicAudioCommand, 8U> audio_commands_{};

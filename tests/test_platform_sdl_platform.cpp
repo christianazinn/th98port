@@ -25,6 +25,8 @@ using th03::platform::SdlPlatform;
 using th03::platform::SdlPlatformConfig;
 using th03::platform::SdlPlatformErrorCode;
 using th03::platform::SdlPlatformTestAccess;
+using th03::platform::SdlWindowMode;
+using th03::platform::SdlWindowPresentation;
 using th03::present::ComposedPixel;
 using th03::present::ComposedPixelLayer;
 
@@ -300,6 +302,55 @@ void test_dummy_platform_lifecycle_and_present()
 			} && first->oracle_publication == 0U,
 			"native-size source surface uploads and presents at integer scale one"
 		);
+		const auto before_invalid = platform.window_presentation();
+		expect(
+			!platform.apply_window_presentation({
+				.integer_scale = 4U,
+			}) && platform.window_presentation() == before_invalid,
+			"invalid window presentation is rejected before mutating SDL state"
+		);
+		expect(
+			platform.apply_window_presentation({
+				.mode = SdlWindowMode::windowed,
+				.integer_scale = 2U,
+			}).has_value(),
+			"windowed 2x presentation applies live"
+		);
+		const auto doubled = SdlPlatformTestAccess::metrics(platform);
+		expect(
+			doubled && doubled->output_width == 1280U &&
+				doubled->output_height == 800U &&
+				platform.window_presentation() == SdlWindowPresentation{
+					.mode = SdlWindowMode::windowed,
+					.integer_scale = 2U,
+				},
+			"windowed preset changes only the physical output extent"
+		);
+		expect(
+			platform.apply_window_presentation({
+				.mode = SdlWindowMode::borderless_fullscreen,
+				.integer_scale = 2U,
+			}).has_value() && platform.window_presentation().mode ==
+				SdlWindowMode::borderless_fullscreen,
+			"borderless desktop fullscreen applies as a complete mode"
+		);
+		expect(
+			platform.apply_window_presentation({
+				.mode = SdlWindowMode::windowed,
+				.integer_scale = 1U,
+			}).has_value(),
+			"leaving borderless mode restores the requested windowed preset"
+		);
+		expect(
+			platform.apply_window_presentation({
+				.mode = SdlWindowMode::windowed,
+				.integer_scale = 0U,
+			}).has_value() &&
+				platform.window_presentation().integer_scale == 0U,
+			"automatic scale resolves against the current display while retaining its typed policy"
+		);
+		expect(platform.apply_window_presentation({}).has_value(),
+			"explicit 1x restores the canonical default after automatic scale");
 		fixture.pixels[0U] = {ComposedPixelLayer::text, 4U};
 		expect(static_cast<bool>(platform.present(fixture.source())),
 			"persistent texture accepts a distinct second complete frame");

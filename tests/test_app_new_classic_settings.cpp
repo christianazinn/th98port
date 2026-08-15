@@ -27,6 +27,8 @@ using th03::app::NewClassicSettings;
 using th03::app::NewClassicSettingsErrorCode;
 using th03::app::NewClassicSettingsStoreDisposition;
 using th03::app::NewClassicSettingsStoreErrorCode;
+using th03::app::NewClassicWindowMode;
+using th03::app::NewClassicWindowScale;
 using th03::app::new_classic_settings_file_bytes;
 
 std::size_t checks = 0U;
@@ -118,6 +120,10 @@ void test_codec()
 			.reduced_flash = true,
 		},
 		.master_volume_percent = 65U,
+		.window = {
+			.mode = NewClassicWindowMode::borderless_fullscreen,
+			.scale = NewClassicWindowScale::x3,
+		},
 	};
 	const auto encoded = th03::app::encode_new_classic_settings(settings);
 	const auto decoded = encoded ?
@@ -144,7 +150,7 @@ void test_codec()
 				"header and digest mutations report their exact domain");
 		}
 		auto reserved = *encoded;
-		reserved[17U] = std::byte{1U};
+		reserved[19U] = std::byte{1U};
 		const auto invalid_reserved =
 			th03::app::decode_new_classic_settings(reserved);
 		expect(!invalid_reserved && invalid_reserved.error().code ==
@@ -159,6 +165,18 @@ void test_codec()
 	expect(!invalid_volume && invalid_volume.error().code ==
 		NewClassicSettingsErrorCode::invalid_master_volume,
 		"master percentage is bounded to five-percent steps");
+	invalid = settings;
+	invalid.window.mode = static_cast<NewClassicWindowMode>(2U);
+	const auto invalid_mode = th03::app::encode_new_classic_settings(invalid);
+	expect(!invalid_mode && invalid_mode.error().code ==
+		NewClassicSettingsErrorCode::invalid_window_mode,
+		"window mode rejects values outside the frozen ring");
+	invalid = settings;
+	invalid.window.scale = static_cast<NewClassicWindowScale>(4U);
+	const auto invalid_scale = th03::app::encode_new_classic_settings(invalid);
+	expect(!invalid_scale && invalid_scale.error().code ==
+		NewClassicSettingsErrorCode::invalid_window_scale,
+		"window scale rejects values outside 1x through 3x and Auto");
 }
 
 void test_absent_only_migration_and_isolation()
@@ -189,7 +207,9 @@ void test_absent_only_migration_and_isolation()
 	expect(migrated && migrated->disposition ==
 		NewClassicSettingsStoreDisposition::migrated_classic &&
 		migrated->settings.options == classic &&
-		migrated->settings.master_volume_percent == 100U,
+		migrated->settings.master_volume_percent == 100U &&
+		migrated->settings.window ==
+			th03::app::NewClassicWindowPresentation{},
 		"absent New Classic settings migrate Classic values once");
 	expect(read_bytes(classic_path) == classic_before,
 		"migration never rewrites Classic YUME.CFG");

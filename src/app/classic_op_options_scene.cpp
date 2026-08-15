@@ -114,7 +114,10 @@ constexpr std::array<ClassicOpOptionsChoice, 3U> input_choices{{
 	ClassicOpOptionsChoice::key_config,
 	ClassicOpOptionsChoice::return_page,
 }};
-constexpr std::array<ClassicOpOptionsChoice, 2U> video_choices{{
+
+constexpr std::array<ClassicOpOptionsChoice, 4U> video_choices{{
+	ClassicOpOptionsChoice::window_mode,
+	ClassicOpOptionsChoice::window_scale,
 	ClassicOpOptionsChoice::photosensitivity,
 	ClassicOpOptionsChoice::return_page,
 }};
@@ -159,6 +162,8 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 	switch(choice) {
 	case ClassicOpOptionsChoice::rank: return "Rank";
 	case ClassicOpOptionsChoice::master_volume: return "Master Volume";
+	case ClassicOpOptionsChoice::window_mode: return "Window Mode";
+	case ClassicOpOptionsChoice::window_scale: return "Window Scale";
 	case ClassicOpOptionsChoice::bgm: return "Music";
 	case ClassicOpOptionsChoice::key_mode: return "Key Mode";
 	case ClassicOpOptionsChoice::quit: return "Return";
@@ -315,6 +320,7 @@ ClassicOpOptionsCompletion::ClassicOpOptionsCompletion(
 	GameInit resident,
 	ClassicConfigOptions config,
 	std::uint8_t master_volume_percent,
+	NewClassicWindowPresentation window_presentation,
 	present::Raster raster,
 	present::Tram tram,
 	bool main_input_allowed,
@@ -323,6 +329,7 @@ ClassicOpOptionsCompletion::ClassicOpOptionsCompletion(
 	resident_(std::move(resident)),
 	config_(config),
 	master_volume_percent_(master_volume_percent),
+	window_presentation_(window_presentation),
 	raster_(std::move(raster)),
 	tram_(std::move(tram)),
 	main_input_allowed_(main_input_allowed),
@@ -342,6 +349,12 @@ ClassicConfigOptions ClassicOpOptionsCompletion::config() const noexcept
 std::uint8_t ClassicOpOptionsCompletion::master_volume_percent() const noexcept
 {
 	return master_volume_percent_;
+}
+
+NewClassicWindowPresentation
+ClassicOpOptionsCompletion::window_presentation() const noexcept
+{
+	return window_presentation_;
 }
 
 const present::Raster &ClassicOpOptionsCompletion::raster() const noexcept
@@ -373,12 +386,14 @@ ClassicOpOptionsScene::ClassicOpOptionsScene(
 	present::Tram tram,
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 	bool language_available,
-	std::uint8_t master_volume_percent
+	std::uint8_t master_volume_percent,
+	NewClassicWindowPresentation window_presentation
 ) noexcept :
 	prepared_(std::move(prepared)),
 	resident_(std::move(resident)),
 	config_(config),
 	master_volume_percent_(master_volume_percent),
+	window_presentation_(window_presentation),
 	raster_(std::move(raster)),
 	tram_(std::move(tram)),
 	phase_(ClassicOpOptionsPhase::grow_window),
@@ -401,7 +416,8 @@ ClassicOpOptionsScene::create_from_op(
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 	const present::AnkGlyphProvider *font,
 	bool language_available,
-	std::uint8_t master_volume_percent
+	std::uint8_t master_volume_percent,
+	NewClassicWindowPresentation window_presentation
 )
 {
 	if(completion.route() != ClassicOpRoute::options) {
@@ -443,7 +459,7 @@ ClassicOpOptionsScene::create_from_op(
 		completion.resident(), config, fm_available, completion.raster(),
 		completion.tram(), std::move(*background), std::move(*window),
 		std::move(patch_assets), font, language_available,
-		master_volume_percent
+		master_volume_percent, window_presentation
 	);
 }
 
@@ -455,7 +471,8 @@ ClassicOpOptionsScene::resume_after_key_config(
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 	const present::AnkGlyphProvider *font,
 	bool language_available,
-	std::uint8_t master_volume_percent
+	std::uint8_t master_volume_percent,
+	NewClassicWindowPresentation window_presentation
 )
 {
 	if(completion.outcome() != ClassicOpOptionsOutcome::key_config ||
@@ -498,7 +515,7 @@ ClassicOpOptionsScene::resume_after_key_config(
 		completion.resident(), completion.config(), fm_available,
 		completion.raster(), completion.tram(), std::move(*background),
 		std::move(*window), std::move(patch_assets), font,
-		language_available, master_volume_percent
+		language_available, master_volume_percent, window_presentation
 	);
 	if(!created) {
 		return std::unexpected(std::move(created.error()));
@@ -528,12 +545,21 @@ ClassicOpOptionsScene::create(
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 	const present::AnkGlyphProvider *font,
 	bool language_available,
-	std::uint8_t master_volume_percent
+	std::uint8_t master_volume_percent,
+	NewClassicWindowPresentation window_presentation
 )
 {
 	if(!classic_config_valid(config) || (patch_assets && !font) ||
 		master_volume_percent > 100U || (master_volume_percent % 5U) != 0U ||
+		static_cast<std::uint8_t>(window_presentation.mode) >
+			static_cast<std::uint8_t>(
+				NewClassicWindowMode::borderless_fullscreen
+			) ||
+		static_cast<std::uint8_t>(window_presentation.scale) >
+			static_cast<std::uint8_t>(NewClassicWindowScale::automatic) ||
 		(!patch_assets && master_volume_percent != 100U) ||
+		(!patch_assets && window_presentation !=
+			NewClassicWindowPresentation{}) ||
 		resident.rank != static_cast<std::uint8_t>(config.rank) ||
 		resident.key_mode != static_cast<std::uint8_t>(config.key_mode) ||
 		(!fm_available && config.bgm_mode != ClassicBgmMode::off) ||
@@ -579,7 +605,7 @@ ClassicOpOptionsScene::create(
 	return std::unique_ptr<ClassicOpOptionsScene>(new ClassicOpOptionsScene(
 		std::move(prepared), std::move(resident), config, fm_available,
 		std::move(raster), std::move(tram), std::move(patch_assets),
-		language_available, master_volume_percent
+		language_available, master_volume_percent, window_presentation
 	));
 }
 
@@ -909,6 +935,18 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 			value = std::string_view(percent_storage.data(), 2U);
 		}
 		break;
+	case ClassicOpOptionsChoice::window_mode:
+		value = window_presentation_.mode == NewClassicWindowMode::windowed ?
+			"Windowed" : "Borderless";
+		break;
+	case ClassicOpOptionsChoice::window_scale:
+		switch(window_presentation_.scale) {
+		case NewClassicWindowScale::x1: value = "1x"; break;
+		case NewClassicWindowScale::x2: value = "2x"; break;
+		case NewClassicWindowScale::x3: value = "3x"; break;
+		case NewClassicWindowScale::automatic: value = "Auto"; break;
+		}
+		break;
 	case ClassicOpOptionsChoice::bgm:
 		value = config_.bgm_mode == ClassicBgmMode::off ? "Off" : "FM (86)";
 		break;
@@ -1022,6 +1060,8 @@ bool ClassicOpOptionsScene::draw_option_choice(
 	}
 	case ClassicOpOptionsChoice::sfx:
 	case ClassicOpOptionsChoice::master_volume:
+	case ClassicOpOptionsChoice::window_mode:
+	case ClassicOpOptionsChoice::window_scale:
 	case ClassicOpOptionsChoice::language:
 	case ClassicOpOptionsChoice::photosensitivity:
 	case ClassicOpOptionsChoice::category_gameplay:
@@ -1156,6 +1196,22 @@ bool ClassicOpOptionsScene::update_horizontal(
 		config_changed = true;
 		break;
 	}
+	case ClassicOpOptionsChoice::window_mode:
+		window_presentation_.mode =
+			window_presentation_.mode == NewClassicWindowMode::windowed ?
+				NewClassicWindowMode::borderless_fullscreen :
+				NewClassicWindowMode::windowed;
+		config_changed = true;
+		break;
+	case ClassicOpOptionsChoice::window_scale: {
+		const auto next = ring_step(
+			static_cast<std::uint8_t>(window_presentation_.scale),
+			direction, 3U
+		);
+		window_presentation_.scale = static_cast<NewClassicWindowScale>(next);
+		config_changed = true;
+		break;
+	}
 	case ClassicOpOptionsChoice::bgm:
 		if(fm_available_) {
 			// ZUN quirk: Both directions toggle Off and FM, while a loaded
@@ -1256,6 +1312,7 @@ void ClassicOpOptionsScene::finish(ClassicOpOptionsOutcome outcome) noexcept
 {
 	completion_ = ClassicOpOptionsCompletion(
 		std::move(resident_), config_, master_volume_percent_,
+		window_presentation_,
 		std::move(raster_), std::move(tram_),
 		menu_input_allowed_, outcome
 	);
@@ -1446,6 +1503,8 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 					}
 					page_changed = true;
 				} else if(selected_ == ClassicOpOptionsChoice::language ||
+					selected_ == ClassicOpOptionsChoice::window_mode ||
+					selected_ == ClassicOpOptionsChoice::window_scale ||
 					selected_ == ClassicOpOptionsChoice::photosensitivity) {
 					ClassicOpInput horizontal{};
 					horizontal.right = true;
@@ -1635,6 +1694,12 @@ ClassicConfigOptions ClassicOpOptionsScene::config() const noexcept
 std::uint8_t ClassicOpOptionsScene::master_volume_percent() const noexcept
 {
 	return master_volume_percent_;
+}
+
+NewClassicWindowPresentation
+ClassicOpOptionsScene::window_presentation() const noexcept
+{
+	return window_presentation_;
 }
 
 const GameInit &ClassicOpOptionsScene::resident() const noexcept

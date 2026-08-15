@@ -14,9 +14,32 @@ namespace th03::app {
 inline constexpr std::size_t new_classic_settings_file_bytes = 24U;
 inline constexpr std::uint16_t new_classic_settings_format_version = 1U;
 
+enum class NewClassicWindowMode : std::uint8_t {
+	windowed,
+	borderless_fullscreen,
+};
+
+enum class NewClassicWindowScale : std::uint8_t {
+	x1,
+	x2,
+	x3,
+	automatic,
+};
+
+struct NewClassicWindowPresentation final {
+	NewClassicWindowMode mode = NewClassicWindowMode::windowed;
+	NewClassicWindowScale scale = NewClassicWindowScale::x1;
+
+	friend constexpr bool operator==(
+		const NewClassicWindowPresentation &,
+		const NewClassicWindowPresentation &
+	) = default;
+};
+
 struct NewClassicSettings final {
 	ClassicConfigOptions options{};
 	std::uint8_t master_volume_percent = 100U;
+	NewClassicWindowPresentation window{};
 
 	friend constexpr bool operator==(
 		const NewClassicSettings &,
@@ -34,6 +57,8 @@ enum class NewClassicSettingsErrorCode : std::uint8_t {
 	invalid_rank,
 	invalid_flags,
 	invalid_master_volume,
+	invalid_window_mode,
+	invalid_window_scale,
 	reserved_nonzero,
 	digest,
 };

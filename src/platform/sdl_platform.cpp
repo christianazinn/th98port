@@ -108,6 +108,7 @@ struct SdlPlatform::Impl {
 	std::ofstream oracle_rgb_manifest{};
 	std::uint64_t oracle_rgb_publication = 0U;
 	bool oracle_hash_lease = false;
+	SdlWindowPresentation window_presentation{};
 
 	[[nodiscard]] std::optional<PreparedRgbFrame> prepare_rgb_frame(
 		const void *pixels,
@@ -402,6 +403,15 @@ SdlPlatform::create(const SdlPlatformConfig &config)
 		));
 	}
 	impl->runtime_lease = true;
+	if(config.initial_width % present::graphics_width == 0U &&
+		config.initial_height % present::graphics_height == 0U) {
+		const auto width_scale = config.initial_width / present::graphics_width;
+		const auto height_scale = config.initial_height / present::graphics_height;
+		if(width_scale == height_scale && width_scale >= 1U && width_scale <= 3U) {
+			impl->window_presentation.integer_scale =
+				static_cast<std::uint8_t>(width_scale);
+		}
+	}
 
 	const std::string title{config.title};
 	SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN;
@@ -621,6 +631,69 @@ std::expected<SdlPresentResult, SdlPlatformError> SdlPlatform::present(
 bool SdlPlatform::oracle_enabled() const noexcept
 {
 	return impl_->oracle_log.is_open() || impl_->oracle_rgb_manifest.is_open();
+}
+
+std::expected<void, SdlPlatformError>
+SdlPlatform::apply_window_presentation(
+	SdlWindowPresentation presentation
+) noexcept
+{
+	if(!impl_ || presentation.integer_scale > 3U ||
+		static_cast<std::uint8_t>(presentation.mode) >
+			static_cast<std::uint8_t>(SdlWindowMode::borderless_fullscreen)) {
+		return std::unexpected(SdlPlatformError{
+			.code = SdlPlatformErrorCode::invalid_config,
+		});
+	}
+	if(presentation == impl_->window_presentation) {
+		return {};
+	}
+	const auto apply = [this](SdlWindowPresentation value) noexcept {
+		if(value.mode == SdlWindowMode::borderless_fullscreen) {
+			return SDL_SetWindowFullscreenMode(impl_->window, nullptr) &&
+				SDL_SetWindowFullscreen(impl_->window, true) &&
+				SDL_SyncWindow(impl_->window);
+		}
+		auto scale = value.integer_scale;
+		if(scale == 0U) {
+			SDL_Rect usable{};
+			const auto display = SDL_GetDisplayForWindow(impl_->window);
+			if(display == 0U || !SDL_GetDisplayUsableBounds(display, &usable) ||
+				usable.w < source_width || usable.h < source_height) {
+				return false;
+			}
+			scale = static_cast<std::uint8_t>(std::clamp(
+				std::min(usable.w / source_width, usable.h / source_height),
+				1, 3
+			));
+		}
+		const auto width = static_cast<int>(present::graphics_width * scale);
+		const auto height = static_cast<int>(present::graphics_height * scale);
+		return SDL_SetWindowFullscreen(impl_->window, false) &&
+			SDL_SetWindowSize(impl_->window, width, height) &&
+			SDL_SetWindowPosition(
+				impl_->window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED
+			) && SDL_SyncWindow(impl_->window);
+	};
+	const auto previous = impl_->window_presentation;
+	if(!apply(presentation)) {
+		const auto transition_error = error_with_sdl_detail(
+			SdlPlatformErrorCode::window_presentation_failed
+		);
+		if(!apply(previous)) {
+			return std::unexpected(error_with_sdl_detail(
+				SdlPlatformErrorCode::window_presentation_rollback_failed
+			));
+		}
+		return std::unexpected(transition_error);
+	}
+	impl_->window_presentation = presentation;
+	return {};
+}
+
+SdlWindowPresentation SdlPlatform::window_presentation() const noexcept
+{
+	return impl_ ? impl_->window_presentation : SdlWindowPresentation{};
 }
 
 std::uint32_t SdlPlatform::window_id() const noexcept

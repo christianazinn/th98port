@@ -23,6 +23,8 @@ struct ClassicRunnerOperations final {
 	std::optional<NewClassicKeyConfig> (*take_key_config_update)(void *) = nullptr;
 	std::optional<bool> (*take_reduced_flash_update)(void *) = nullptr;
 	std::optional<std::uint8_t> (*take_master_volume_update)(void *) = nullptr;
+	std::optional<NewClassicWindowPresentation>
+		(*take_window_presentation_update)(void *) = nullptr;
 	PixelOracleSourceIdentity (*pixel_oracle_source_identity)(void *) = nullptr;
 	std::expected<present::SourceSurface, ClassicOpSessionError>
 	(*compose_shown_surface)(

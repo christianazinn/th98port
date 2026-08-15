@@ -27,10 +27,28 @@ enum class SdlPlatformErrorCode : std::uint8_t {
 	surface_conversion_failed,
 	render_failed,
 	present_vsync_failed,
+	window_presentation_failed,
+	window_presentation_rollback_failed,
 	oracle_log_open_failed,
 	oracle_log_write_failed,
 	oracle_rgb_open_failed,
 	oracle_rgb_write_failed,
+};
+
+enum class SdlWindowMode : std::uint8_t {
+	windowed,
+	borderless_fullscreen,
+};
+
+struct SdlWindowPresentation final {
+	SdlWindowMode mode = SdlWindowMode::windowed;
+	// Zero selects the largest 1x..3x window that fits the current display.
+	std::uint8_t integer_scale = 1U;
+
+	friend constexpr bool operator==(
+		const SdlWindowPresentation &,
+		const SdlWindowPresentation &
+	) = default;
 };
 
 struct SdlPlatformError {
@@ -99,6 +117,12 @@ public:
 		SdlPresentationOracleIdentity identity = {}
 	) noexcept;
 	[[nodiscard]] bool oracle_enabled() const noexcept;
+	// Applies a complete host-window policy. A failed transition restores the
+	// previous SDL mode and dimensions before returning an error. The renderer,
+	// canonical 640x400 texture, and source publication state are untouched.
+	[[nodiscard]] std::expected<void, SdlPlatformError>
+	apply_window_presentation(SdlWindowPresentation presentation) noexcept;
+	[[nodiscard]] SdlWindowPresentation window_presentation() const noexcept;
 	// Stable for this platform's lifetime and accepted directly by
 	// SdlInputMapper::create(). Keeping the numeric type here leaves SDL types
 	// out of this opaque host header.

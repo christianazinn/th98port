@@ -340,6 +340,8 @@ public:
 	[[nodiscard]] std::optional<bool> take_reduced_flash_update() noexcept;
 	[[nodiscard]] std::optional<std::uint8_t>
 	take_master_volume_update() noexcept;
+	[[nodiscard]] std::optional<NewClassicWindowPresentation>
+	take_window_presentation_update() noexcept;
 	[[nodiscard]] std::shared_ptr<const NewClassicReplaySaveArt>
 	replay_save_art() const noexcept;
 	[[nodiscard]] std::expected<

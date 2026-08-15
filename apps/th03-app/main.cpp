@@ -838,6 +838,10 @@ const char *name(th03::platform::SdlPlatformErrorCode code) noexcept
 	case th03::platform::SdlPlatformErrorCode::surface_conversion_failed: return "surface-conversion-failed";
 	case th03::platform::SdlPlatformErrorCode::render_failed: return "render-failed";
 	case th03::platform::SdlPlatformErrorCode::present_vsync_failed: return "present-vsync-failed";
+	case th03::platform::SdlPlatformErrorCode::window_presentation_failed:
+		return "window-presentation-failed";
+	case th03::platform::SdlPlatformErrorCode::window_presentation_rollback_failed:
+		return "window-presentation-rollback-failed";
 	case th03::platform::SdlPlatformErrorCode::oracle_log_open_failed: return "oracle-log-open-failed";
 	case th03::platform::SdlPlatformErrorCode::oracle_log_write_failed: return "oracle-log-write-failed";
 	case th03::platform::SdlPlatformErrorCode::oracle_rgb_open_failed: return "oracle-rgb-open-failed";
@@ -1157,6 +1161,24 @@ int fail_tick(th03::app::TickInputError error)
 	return 1;
 }
 
+[[nodiscard]] constexpr th03::platform::SdlWindowPresentation
+platform_window_presentation(
+	th03::app::NewClassicWindowPresentation presentation
+) noexcept
+{
+	return {
+		.mode = presentation.mode ==
+			th03::app::NewClassicWindowMode::windowed ?
+				th03::platform::SdlWindowMode::windowed :
+				th03::platform::SdlWindowMode::borderless_fullscreen,
+		.integer_scale = static_cast<std::uint8_t>(
+			presentation.scale ==
+				th03::app::NewClassicWindowScale::automatic ? 0U :
+				static_cast<unsigned>(presentation.scale) + 1U
+		),
+	};
+}
+
 } // namespace
 
 namespace {
@@ -1377,6 +1399,7 @@ ExperienceRunResult run_classic_session(
 	// read-only startup failure rather than leaving a stray YUME.CFG behind.
 	th03::app::ClassicConfigOptions persisted_options{};
 	std::uint8_t master_volume_percent = 100U;
+	th03::app::NewClassicWindowPresentation window_presentation{};
 	if(new_classic) {
 		auto persisted = th03::app::load_new_classic_settings_store(
 			new_classic_settings_path, config_path
@@ -1386,6 +1409,12 @@ ExperienceRunResult run_classic_session(
 		}
 		persisted_options = persisted->settings.options;
 		master_volume_percent = persisted->settings.master_volume_percent;
+		window_presentation = persisted->settings.window;
+		if(auto applied = platform.apply_window_presentation(
+			platform_window_presentation(window_presentation)
+		); !applied) {
+			return {.exit_code = fail("window-presentation", applied.error())};
+		}
 	} else {
 		auto persisted = th03::app::load_classic_config_store(config_path);
 		if(!persisted) {
@@ -1587,6 +1616,17 @@ ExperienceRunResult run_classic_session(
 			if(auto update =
 				(*runner)->take_new_classic_master_volume_update()) {
 				master_volume_percent = *update;
+			}
+			if(auto update =
+				(*runner)->take_new_classic_window_presentation_update()) {
+				if(auto applied = platform.apply_window_presentation(
+					platform_window_presentation(*update)
+				); !applied) {
+					return {.exit_code = fail(
+						"window-presentation", applied.error()
+					)};
+				}
+				window_presentation = *update;
 			}
 			const bool clock_rebased_this_tick =
 				consumed->clock_rebase_requested;

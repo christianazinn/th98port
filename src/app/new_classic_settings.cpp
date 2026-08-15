@@ -117,6 +117,20 @@ std::expected<void, NewClassicSettingsError> validate_new_classic_settings(
 			NewClassicSettingsErrorCode::invalid_master_volume, 16U
 		));
 	}
+	if(static_cast<std::uint8_t>(settings.window.mode) >
+		static_cast<std::uint8_t>(
+			NewClassicWindowMode::borderless_fullscreen
+		)) {
+		return std::unexpected(error(
+			NewClassicSettingsErrorCode::invalid_window_mode, 17U
+		));
+	}
+	if(static_cast<std::uint8_t>(settings.window.scale) >
+		static_cast<std::uint8_t>(NewClassicWindowScale::automatic)) {
+		return std::unexpected(error(
+			NewClassicSettingsErrorCode::invalid_window_scale, 18U
+		));
+	}
 	return {};
 }
 
@@ -151,7 +165,7 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 			NewClassicSettingsErrorCode::invalid_flags, 15U
 		));
 	}
-	for(std::size_t index = 17U; index < digest_offset; ++index) {
+	for(std::size_t index = 19U; index < digest_offset; ++index) {
 		if(bytes[index] != std::byte{0U}) {
 			return std::unexpected(error(
 				NewClassicSettingsErrorCode::reserved_nonzero, index
@@ -175,6 +189,10 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 			.reduced_flash = (flags & 0x08U) != 0U,
 		},
 		.master_volume_percent = byte(bytes[16U]),
+		.window = {
+			.mode = static_cast<NewClassicWindowMode>(byte(bytes[17U])),
+			.scale = static_cast<NewClassicWindowScale>(byte(bytes[18U])),
+		},
 	};
 	if(auto valid = validate_new_classic_settings(settings); !valid) {
 		return std::unexpected(valid.error());
@@ -204,6 +222,8 @@ std::expected<
 		(settings.options.reduced_flash ? 0x08U : 0U)
 	);
 	bytes[16U] = static_cast<std::byte>(settings.master_volume_percent);
+	bytes[17U] = static_cast<std::byte>(settings.window.mode);
+	bytes[18U] = static_cast<std::byte>(settings.window.scale);
 	put_u32(bytes, digest_offset, fnv1a32(
 		std::span<const std::byte>(bytes).first(digest_offset)
 	));

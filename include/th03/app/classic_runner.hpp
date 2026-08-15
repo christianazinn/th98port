@@ -16,6 +16,7 @@
 #include "th03/app/new_classic_assets.hpp"
 #include "th03/app/new_classic_frontend.hpp"
 #include "th03/app/new_classic_key_config_store.hpp"
+#include "th03/app/new_classic_settings.hpp"
 #include "th03/app/pixel_oracle_identity.hpp"
 #include "th03/formats/replay.hpp"
 #include "th03/app/resources.hpp"
@@ -201,6 +202,8 @@ public:
 	take_new_classic_key_config_update() noexcept;
 	[[nodiscard]] std::optional<std::uint8_t>
 	take_new_classic_master_volume_update() noexcept;
+	[[nodiscard]] std::optional<NewClassicWindowPresentation>
+	take_new_classic_window_presentation_update() noexcept;
 	[[nodiscard]] std::shared_ptr<const NewClassicReplaySaveArt>
 	new_classic_replay_save_art() const noexcept;
 

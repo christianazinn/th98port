@@ -183,6 +183,13 @@ presentation only. Initial scale choices should cover 640x400, 1280x800,
 1920x1200, and automatic integer scaling. Aspect and filtering choices must
 not change the canonical surface used by pixel and replay verification.
 
+Implemented now: `Window Mode` selects a resizable window or borderless
+desktop fullscreen. `Window Scale` selects 1x, 2x, 3x, or the largest of
+those presets that fits the current display. Changes apply live through an
+atomic SDL transition and persist in `PODD.CFG`; the renderer continues to
+publish the same nearest-scaled 640x400 texture and Classic exposes no such
+setting. Aspect, filtering, and frame-presentation policy remain later work.
+
 Simulation remains at the source rational cadence. A display-synchronized mode
 may repeat the latest complete source frame at the monitor refresh rate. True
 interpolation is a later, explicitly non-authentic experiment and must never

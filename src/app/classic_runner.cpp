@@ -81,6 +81,13 @@ take_session_master_volume(void *context)
 	return static_cast<ClassicOpSession *>(context)->take_master_volume_update();
 }
 
+[[nodiscard]] std::optional<NewClassicWindowPresentation>
+take_session_window_presentation(void *context)
+{
+	return static_cast<ClassicOpSession *>(context)->
+		take_window_presentation_update();
+}
+
 [[nodiscard]] PixelOracleSourceIdentity pixel_oracle_session_identity(
 	void *context
 ) noexcept
@@ -332,6 +339,7 @@ struct ClassicRunner::Impl final {
 	std::optional<ClassicRunnerError> failure{};
 	std::optional<NewClassicKeyConfig> latest_key_config{};
 	std::optional<std::uint8_t> latest_master_volume{};
+	std::optional<NewClassicWindowPresentation> latest_window_presentation{};
 	PixelOracleIdentityTracker pixel_oracle_tracker{};
 	bool initial_replay = false;
 	std::uint64_t expected_tick_index = 0U;
@@ -476,6 +484,7 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		.take_key_config_update = &take_session_key_config,
 		.take_reduced_flash_update = &take_session_reduced_flash,
 		.take_master_volume_update = &take_session_master_volume,
+		.take_window_presentation_update = &take_session_window_presentation,
 		.pixel_oracle_source_identity = &pixel_oracle_session_identity,
 		.compose_shown_surface = &compose_session,
 	};
@@ -546,6 +555,13 @@ ClassicRunner::consume(
 			impl_->operations.context
 		)) {
 			impl_->latest_master_volume = *update;
+		}
+	}
+	if(impl_->operations.take_window_presentation_update) {
+		if(auto update = impl_->operations.take_window_presentation_update(
+			impl_->operations.context
+		)) {
+			impl_->latest_window_presentation = *update;
 		}
 	}
 
@@ -660,6 +676,14 @@ ClassicRunner::take_new_classic_master_volume_update() noexcept
 {
 	return impl_ ? std::exchange(impl_->latest_master_volume, std::nullopt) :
 		std::nullopt;
+}
+
+std::optional<NewClassicWindowPresentation>
+ClassicRunner::take_new_classic_window_presentation_update() noexcept
+{
+	return impl_ ? std::exchange(
+		impl_->latest_window_presentation, std::nullopt
+	) : std::nullopt;
 }
 
 std::shared_ptr<const NewClassicReplaySaveArt>
