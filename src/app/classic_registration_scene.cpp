@@ -1354,9 +1354,15 @@ ClassicRegistrationTick ClassicRegistrationScene::tick(
 	bool surface_changed,
 	bool input_sampled,
 	bool selection_changed,
-	bool name_changed
-) const noexcept
+	bool name_changed,
+	bool account_playtime
+) noexcept
 {
+	if(account_playtime &&
+		(boundary == ClassicRegistrationBoundary::vsync ||
+		 boundary == ClassicRegistrationBoundary::audio_volume)) {
+		account_new_classic_playtime();
+	}
 	return {
 		.phase = phase_,
 		.boundary = boundary,
@@ -1366,6 +1372,20 @@ ClassicRegistrationTick ClassicRegistrationScene::tick(
 		.name_changed = name_changed,
 		.ready = phase_ == ClassicRegistrationPhase::ready,
 	};
+}
+
+void ClassicRegistrationScene::account_new_classic_playtime() noexcept
+{
+	if(!new_classic_document_ || view_only_ || !persist_changes_ ||
+		new_classic_score_committed_) {
+		return;
+	}
+	auto &frames = new_classic_document_->boards[
+		resident_.rank
+	][new_classic_character_].stats.play_frames;
+	if(frames != 0xFFFFFFFFU) {
+		++frames;
+	}
 }
 
 std::expected<ClassicRegistrationTick, ClassicRegistrationError>
@@ -1398,6 +1418,7 @@ ClassicRegistrationScene::fade_tick(bool black_in)
 		return tick(ClassicRegistrationBoundary::vsync, changed);
 	}
 
+	account_new_classic_playtime();
 	if(new_classic_document_) {
 		if(!view_only_ && persist_changes_) {
 			if(auto committed = commit_new_classic_score_store(
@@ -1409,6 +1430,7 @@ ClassicRegistrationScene::fade_tick(bool black_in)
 					std::move(committed.error())
 				));
 			}
+			new_classic_score_committed_ = true;
 		}
 	} else if(persist_changes_) {
 		document_.codec[resident_.rank] = commit_codec_;
@@ -1431,7 +1453,12 @@ ClassicRegistrationScene::fade_tick(bool black_in)
 		resident_.story_stage == 99U) ?
 		ClassicRegistrationPhase::wait_volume :
 		ClassicRegistrationPhase::ready;
-	return tick(ClassicRegistrationBoundary::vsync, changed);
+	auto result = tick(
+		ClassicRegistrationBoundary::vsync, changed, false, false, false,
+		false
+	);
+	result.new_classic_score_committed = new_classic_score_committed_;
+	return result;
 }
 
 void ClassicRegistrationScene::fail() noexcept

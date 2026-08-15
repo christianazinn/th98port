@@ -501,17 +501,39 @@ struct ClassicStoryBackend final {
 		if(!new_classic || replay_playback) {
 			return {};
 		}
-		score_run.reset();
-		if(auto begun = begin_score_run(resident); !begun) {
-			return begun;
+		if(!score_run) {
+			if(auto begun = begin_score_run(resident); !begun) {
+				return begun;
+			}
 		}
 		if(!score_run) {
 			return std::unexpected(session_error(
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
 		}
-		score_run->continues_used = 1U;
+		if(score_run->continues_used != 0xFFFFFFFFU) {
+			++score_run->continues_used;
+		}
 		return {};
+	}
+
+	void account_score_vsync() noexcept
+	{
+		if(score_run && score_run->play_frames != 0xFFFFFFFFU) {
+			++score_run->play_frames;
+		}
+	}
+
+	void rollover_score_run() noexcept
+	{
+		if(!score_run) {
+			return;
+		}
+		auto run_id = score_run->run_id + 1U;
+		if(run_id == 0U) {
+			run_id = 1U;
+		}
+		score_run = NewClassicScoreRun{.run_id = run_id};
 	}
 
 	std::expected<void, ClassicStorySessionError> checkpoint_score_run()
@@ -624,6 +646,9 @@ struct ClassicStoryBackend final {
 			}
 			cutscene_handoff.reset();
 		}
+		if(auto run = begin_score_run(config.resident); !run) {
+			return std::unexpected(std::move(run.error()));
+		}
 		stage = std::move(*created);
 		return {};
 	}
@@ -643,6 +668,7 @@ struct ClassicStoryBackend final {
 		if(!advanced) {
 			return std::unexpected(stage_error(std::move(advanced.error())));
 		}
+		account_score_vsync();
 		return ClassicStoryBackendTick{
 			.surface_changed = true,
 			.input_sampled = sampled,
@@ -774,6 +800,7 @@ struct ClassicStoryBackend final {
 						}
 					}
 				}
+				account_score_vsync();
 				return ClassicStoryBackendTick{
 					.surface_changed = true,
 					.input_sampled = true,
@@ -839,6 +866,7 @@ struct ClassicStoryBackend final {
 				ClassicStorySessionErrorCode::backend_contract_failed
 			));
 		}
+		account_score_vsync();
 		if(replay_recorder && replay_recorder->recording() &&
 			source_frame_io && input_context == InputContext::gameplay &&
 			advanced->process_advanced) {
@@ -879,11 +907,6 @@ struct ClassicStoryBackend final {
 					return std::unexpected(replay_capture_error());
 				}
 			}
-		}
-		if(score_run && advanced->process_advanced &&
-			advanced->step_result.status != StepStatus::paused &&
-			score_run->play_frames != 0xFFFFFFFFU) {
-			++score_run->play_frames;
 		}
 		return ClassicStoryBackendTick{
 			.surface_changed = advanced->surface_changed,
@@ -1090,6 +1113,10 @@ struct ClassicStoryBackend final {
 		if(!advanced) {
 			return std::unexpected(win_error(std::move(advanced.error())));
 		}
+		if(advanced->boundary != ClassicMainlWinBoundary::immediate &&
+			advanced->boundary != ClassicMainlWinBoundary::stage_preload) {
+			account_score_vsync();
+		}
 		return ClassicStoryBackendTick{
 			.surface_changed = advanced->surface_changed,
 			.input_sampled = advanced->input_sampled,
@@ -1219,6 +1246,9 @@ struct ClassicStoryBackend final {
 				std::move(advanced.error())
 			));
 		}
+		if(advanced->boundary != ClassicCutsceneBoundary::immediate) {
+			account_score_vsync();
+		}
 		bool input_sampled = advanced->input_sampled;
 		if(new_classic) {
 			// Replay Patch 0.4.11 records at most one interface sample per
@@ -1319,6 +1349,9 @@ struct ClassicStoryBackend final {
 		if(!advanced) {
 			return std::unexpected(staff_error(std::move(advanced.error())));
 		}
+		if(advanced->boundary != ClassicStaffBoundary::immediate) {
+			account_score_vsync();
+		}
 		return ClassicStoryBackendTick{
 			.surface_changed = advanced->surface_changed,
 			.input_sampled = advanced->input_sampled,
@@ -1401,9 +1434,6 @@ struct ClassicStoryBackend final {
 				std::move(created.error())
 			));
 		}
-		if(replay_recorder) {
-			score_run.reset();
-		}
 		cutscene_handoff.reset();
 		registration = std::move(*created);
 		return {};
@@ -1428,6 +1458,13 @@ struct ClassicStoryBackend final {
 			return std::unexpected(registration_error(
 				std::move(advanced.error())
 			));
+		}
+		if(advanced->boundary == ClassicRegistrationBoundary::vsync ||
+			advanced->boundary == ClassicRegistrationBoundary::audio_volume) {
+			account_score_vsync();
+		}
+		if(advanced->new_classic_score_committed) {
+			rollover_score_run();
 		}
 		return ClassicStoryBackendTick{
 			.surface_changed = advanced->surface_changed,
@@ -1512,6 +1549,9 @@ struct ClassicStoryBackend final {
 		auto advanced = continue_scene->advance(input);
 		if(!advanced) {
 			return std::unexpected(continue_error(std::move(advanced.error())));
+		}
+		if(advanced->boundary == ClassicMainlContinueBoundary::vsync) {
+			account_score_vsync();
 		}
 		if(advanced->gameover_preload_requested) {
 			auto resources = loader->load_mainl_gameover();
@@ -1654,6 +1694,9 @@ struct ClassicStoryBackend final {
 				std::move(advanced.error()),
 				ClassicStorySessionErrorCode::game_over_failed
 			));
+		}
+		if(advanced->boundary != ClassicMainlGameOverBoundary::immediate) {
+			account_score_vsync();
 		}
 		return ClassicStoryBackendTick{
 			.surface_changed = advanced->surface_changed,
@@ -2629,6 +2672,16 @@ ClassicStorySession::consume(const ClassicStorySessionInput &input)
 				replay::ProcessId::mainl
 			); !boundary) {
 				impl_->fail(replay_capture_error());
+				return std::unexpected(*impl_->failure);
+			}
+		}
+		if(impl_->status == ClassicStorySessionStatus::complete &&
+			impl_->operations.checkpoint_score_run) {
+			auto checkpoint = impl_->operations.checkpoint_score_run(
+				impl_->operations.context
+			);
+			if(!checkpoint) {
+				impl_->fail(std::move(checkpoint.error()));
 				return std::unexpected(*impl_->failure);
 			}
 		}

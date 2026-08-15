@@ -972,10 +972,10 @@ void test_new_classic_registration_and_paged_viewer()
 	);
 	const std::array expected_name{'R', 'E', 'I', 'M', 'U', ' ', ' ', ' '};
 	expect(loaded && loaded->document.last_run_id == 1U &&
-		loaded->document.boards[2U][0U].stats.play_frames == 282U &&
+		loaded->document.boards[2U][0U].stats.play_frames == 368U &&
 		loaded->document.boards[2U][0U].entries[0U].name == expected_name &&
 		fs::is_regular_file(legacy_path),
-		"one atomic expanded commit stores the run, score, and final name without touching Classic");
+		"one atomic expanded commit stores the run, all 86 registration VSyncs, score, and final name without touching Classic");
 
 	auto document = loaded ? loaded->document :
 		th03::app::new_classic_score_empty();
@@ -1002,7 +1002,7 @@ void test_new_classic_registration_and_paged_viewer()
 	const auto &overlay =
 		ClassicRegistrationSceneTestAccess::new_classic_overlay(**viewer);
 	expect(overlay[0U] == "ALL CHARACTERS" &&
-		overlay[1U] == "PLAY TIME 0000:00:15" &&
+		overlay[1U] == "PLAY TIME 0000:00:16" &&
 		overlay[2U] == "1CC 2   CONTINUES 3",
 		"expanded HiScore constructs the exact aggregate overlay strings");
 	expect((*viewer)->phase() == ClassicRegistrationPhase::initial_view_vsync &&

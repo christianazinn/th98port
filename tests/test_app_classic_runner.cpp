@@ -2534,8 +2534,11 @@ bool authentic_gate(
 	const auto final_score = th03::app::load_new_classic_score_store(
 		temporary.path() / "YUME.NEW.NEM"
 	);
-	if(!final_score || final_score->document.last_run_id != 9U ||
-		final_score->document.boards[1U][0U].stats.play_frames != 24U ||
+	// Four successful registrations each roll the committed run into a fresh
+	// active run. The aggregate includes every source VSync owned by MAIN or
+	// MAINL across the complete Story branch matrix above, and excludes OP.
+	if(!final_score || final_score->document.last_run_id != 13U ||
+		final_score->document.boards[1U][0U].stats.play_frames != 33084U ||
 		final_score->document.boards[1U][0U].stats.one_ccs != 1U ||
 		final_score->document.boards[1U][0U].stats.continues_used != 4U) {
 		std::cerr << "authentic-script-stage=score-statistics";

@@ -107,6 +107,7 @@ struct ClassicRegistrationTick final {
 	bool input_sampled = false;
 	bool selection_changed = false;
 	bool name_changed = false;
+	bool new_classic_score_committed = false;
 	bool ready = false;
 };
 
@@ -345,8 +346,10 @@ private:
 		bool surface_changed = false,
 		bool input_sampled = false,
 		bool selection_changed = false,
-		bool name_changed = false
-	) const noexcept;
+		bool name_changed = false,
+		bool account_playtime = true
+	) noexcept;
+	void account_new_classic_playtime() noexcept;
 	[[nodiscard]] std::expected<ClassicRegistrationTick, ClassicRegistrationError>
 	fade_tick(bool black_in);
 	void fail() noexcept;
@@ -381,6 +384,7 @@ private:
 	std::size_t audio_count_ = 0U;
 	bool view_only_ = false;
 	bool persist_changes_ = true;
+	bool new_classic_score_committed_ = false;
 };
 
 struct ClassicRegistrationSceneTestAccess final {
