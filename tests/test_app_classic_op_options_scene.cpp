@@ -224,7 +224,9 @@ void test_replay_patch_option_unput_if_assets_supplied()
 		"Option contraction removes all proportional labels before shrinking");
 }
 
-std::unique_ptr<ClassicOpOptionsScene> make_patch_scene_if_assets_supplied()
+std::unique_ptr<ClassicOpOptionsScene> make_patch_scene_if_assets_supplied(
+	bool localized = false
+)
 {
 #if defined(_MSC_VER)
 #pragma warning(push)
@@ -241,6 +243,25 @@ std::unique_ptr<ClassicOpOptionsScene> make_patch_scene_if_assets_supplied()
 	expect(loaded.has_value(), "hierarchical Options assets load");
 	if(!loaded) {
 		return {};
+	}
+	if(localized) {
+		const auto pack = std::filesystem::path{__FILE__}.parent_path().parent_path() /
+			"localization" / "qps-ploc.t3lang";
+		const auto &fallback = th03::app::new_classic_builtin_messages(
+			th03::app::NewClassicLanguageAssetProfile::english
+		);
+		auto messages = th03::app::load_new_classic_message_pack(
+			pack, loaded->menu_font, &fallback
+		);
+		expect(messages.has_value(),
+			"width-stressing Options message package loads");
+		if(!messages) {
+			return {};
+		}
+		loaded->custom_messages =
+			std::make_shared<const th03::app::NewClassicMessageCatalog>(
+				std::move(*messages)
+			);
 	}
 	auto assets = std::make_shared<const th03::app::NewClassicReplayPatchAssets>(
 		std::move(*loaded)
@@ -263,6 +284,27 @@ std::unique_ptr<ClassicOpOptionsScene> make_patch_scene_if_assets_supplied()
 	);
 	expect(created.has_value(), "hierarchical Options scene creates");
 	return created ? std::move(*created) : nullptr;
+}
+
+void enter_patch_options(ClassicOpOptionsScene &scene);
+
+void test_localized_option_snapshot_if_assets_supplied()
+{
+	auto baseline = make_patch_scene_if_assets_supplied();
+	auto localized_a = make_patch_scene_if_assets_supplied(true);
+	auto localized_b = make_patch_scene_if_assets_supplied(true);
+	if(!baseline || !localized_a || !localized_b) {
+		return;
+	}
+	enter_patch_options(*baseline);
+	enter_patch_options(*localized_a);
+	enter_patch_options(*localized_b);
+	const auto baseline_hash = baseline->raster().display_state_hash();
+	const auto localized_hash = localized_a->raster().display_state_hash();
+	expect(localized_hash != baseline_hash,
+		"pseudo-locale changes the representative Options publication");
+	expect(localized_hash == localized_b->raster().display_state_hash(),
+		"pseudo-locale representative Options publication is deterministic");
 }
 
 void enter_patch_options(ClassicOpOptionsScene &scene)
@@ -1446,6 +1488,7 @@ int main(int argc, char **argv)
 {
 	test_replay_patch_option_unput_if_assets_supplied();
 	test_replay_patch_option_hierarchy_if_assets_supplied();
+	test_localized_option_snapshot_if_assets_supplied();
 	test_exact_rows_and_transition_lock();
 	test_config_audio_and_return_cadence();
 	test_bgm_modes_and_disabled_selection();

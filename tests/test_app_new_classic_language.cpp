@@ -1,14 +1,18 @@
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <string>
 #include <span>
 #include <string_view>
 #include <vector>
 
 #include "new_classic_language_internal.hpp"
+#include "th03/app/new_classic_assets.hpp"
+#include "th03/app/new_classic_messages.hpp"
 
 namespace {
 
@@ -210,17 +214,169 @@ bool authentic_text_gate(
 		);
 }
 
+std::filesystem::path localization_root()
+{
+	return std::filesystem::path{__FILE__}.parent_path().parent_path() /
+		"localization";
+}
+
+void write_file(const std::filesystem::path &path, std::span<const std::byte> bytes)
+{
+	std::ofstream output(path, std::ios::binary | std::ios::trunc);
+	output.write(reinterpret_cast<const char *>(bytes.data()),
+		static_cast<std::streamsize>(bytes.size()));
+}
+
+void test_message_packs(const th03::app::NewClassicMenuFont *authentic_font)
+{
+	const th03::app::NewClassicMenuFont empty_font{};
+	const auto &font = authentic_font ? *authentic_font : empty_font;
+	const auto root = localization_root();
+	auto english = th03::app::load_new_classic_message_pack(
+		root / "en-US.t3lang", font
+	);
+	if(!english) {
+		std::cerr << "language-pack-error=" << static_cast<unsigned>(
+			english.error().code
+		) << " offset=" << english.error().offset << " message=" <<
+			static_cast<unsigned>(english.error().message) << '\n';
+	}
+	expect(english && english->locale() == "en-US" &&
+		english->fallback_locale().empty() &&
+		english->asset_profile() ==
+			th03::app::NewClassicLanguageAssetProfile::english &&
+		english->text(th03::app::NewClassicMessageId::title_start) == "Start" &&
+		english->format_percent(
+			th03::app::NewClassicMessageId::value_percent, 85U
+		) == "85%",
+		"complete deterministic English pack loads and formats placeholders");
+	if(!english) {
+		return;
+	}
+	auto japanese = th03::app::load_new_classic_message_pack(
+		root / "ja-JP.t3lang", font, &*english
+	);
+	expect(japanese && japanese->locale() == "ja-JP" &&
+		japanese->fallback_locale() == "en-US" &&
+		japanese->asset_profile() ==
+			th03::app::NewClassicLanguageAssetProfile::japanese &&
+		japanese->text(th03::app::NewClassicMessageId::title_start) == "Start",
+		"partial Japanese pack resolves only through its exact English fallback");
+	auto missing_fallback = th03::app::load_new_classic_message_pack(
+		root / "ja-JP.t3lang", font
+	);
+	expect(!missing_fallback && missing_fallback.error().code ==
+		th03::app::NewClassicMessagePackErrorCode::fallback_missing,
+		"partial pack fails closed without its declared fallback");
+	auto width_test = th03::app::load_new_classic_message_pack(
+		root / "qps-ploc.t3lang", font, &*english
+	);
+	if(!width_test) {
+		std::cerr << "width-pack-error=" << static_cast<unsigned>(
+			width_test.error().code
+		) << " message=" << static_cast<unsigned>(
+			width_test.error().message
+		) << '\n';
+	}
+	expect(width_test && width_test->text(
+		th03::app::NewClassicMessageId::option_device_assignment
+	) == "[ Device Assignment ]" && width_test->format_percent(
+		th03::app::NewClassicMessageId::value_percent, 100U
+	) == "[100%]",
+		"width-stressing pseudo-locale resolves and retains placeholders");
+
+	auto tampered = read_file(root / "qps-ploc.t3lang");
+	const std::string_view needle = "[{percent}%]";
+	const auto found = std::search(
+		tampered.begin(), tampered.end(),
+		reinterpret_cast<const std::byte *>(needle.data()),
+		reinterpret_cast<const std::byte *>(needle.data() + needle.size())
+	);
+	expect(found != tampered.end(), "pseudo-locale fixture contains percent message");
+	if(found != tampered.end()) {
+		constexpr std::string_view replacement = "[{invalid}%]";
+		std::copy(
+			reinterpret_cast<const std::byte *>(replacement.data()),
+			reinterpret_cast<const std::byte *>(replacement.data() + replacement.size()),
+			found
+		);
+		const auto body = std::span<const std::byte>{tampered}.subspan(96U);
+		const auto digest = th03::app::main_executable_sha256(body);
+		for(std::size_t index = 0U; index < digest.size(); ++index) {
+			tampered[64U + index] = static_cast<std::byte>(digest[index]);
+		}
+		const auto temporary = std::filesystem::temp_directory_path() /
+			"th03-invalid-placeholder.t3lang";
+		write_file(temporary, tampered);
+		auto rejected = th03::app::load_new_classic_message_pack(
+			temporary, font, &*english
+		);
+		std::error_code ignored;
+		std::filesystem::remove(temporary, ignored);
+			expect(!rejected && rejected.error().code ==
+			th03::app::NewClassicMessagePackErrorCode::placeholder_mismatch,
+			"runtime rejects a correctly hashed pack with the wrong placeholder set");
+	}
+	if(authentic_font) {
+		auto too_wide = read_file(root / "qps-ploc.t3lang");
+		constexpr std::string_view width_needle = "[Music room]";
+		constexpr std::string_view width_replacement = "WWWWWWWWWWWW";
+		const auto width_found = std::search(
+			too_wide.begin(), too_wide.end(),
+			reinterpret_cast<const std::byte *>(width_needle.data()),
+			reinterpret_cast<const std::byte *>(
+				width_needle.data() + width_needle.size()
+			)
+		);
+		expect(width_found != too_wide.end(),
+			"pseudo-locale fixture contains a title-width message");
+		if(width_found != too_wide.end()) {
+			std::copy(
+				reinterpret_cast<const std::byte *>(width_replacement.data()),
+				reinterpret_cast<const std::byte *>(
+					width_replacement.data() + width_replacement.size()
+				),
+				width_found
+			);
+			const auto body = std::span<const std::byte>{too_wide}.subspan(96U);
+			const auto digest = th03::app::main_executable_sha256(body);
+			for(std::size_t index = 0U; index < digest.size(); ++index) {
+				too_wide[64U + index] = static_cast<std::byte>(digest[index]);
+			}
+			const auto temporary = std::filesystem::temp_directory_path() /
+				"th03-invalid-width.t3lang";
+			write_file(temporary, too_wide);
+			auto rejected = th03::app::load_new_classic_message_pack(
+				temporary, font, &*english
+			);
+			std::error_code ignored;
+			std::filesystem::remove(temporary, ignored);
+			expect(!rejected && rejected.error().code ==
+				th03::app::NewClassicMessagePackErrorCode::width_exceeded,
+				"runtime rejects a correctly hashed pack wider than its source row");
+		}
+	}
+}
+
 } // namespace
 
 int main(int argc, char **argv)
 {
 	test_bounded_archive();
-	if(argc == 6 && std::string_view(argv[1]) == "--authentic") {
+	test_message_packs(nullptr);
+	if(argc == 7 && std::string_view(argv[1]) == "--authentic") {
 		expect(authentic_text_gate(argv[2], argv[3], argv[4], argv[5]),
 			"authenticated overlay applies every compiled English text family");
+		auto assets = th03::app::load_new_classic_replay_patch_assets(argv[6]);
+		expect(static_cast<bool>(assets),
+			"authenticated AZINN profile loads for exact message widths");
+		if(assets) {
+			test_message_packs(&assets->menu_font);
+		}
 	} else if(argc != 1) {
 		std::cerr << "usage: th03-app-new-classic-language-tests "
-			"[--authentic <MAIN.EXE> <MAINL.EXE> <OP.EXE> <TH3EN.DAT>]\n";
+			"[--authentic <MAIN.EXE> <MAINL.EXE> <OP.EXE> <TH3EN.DAT> "
+			"<AZINN.DAT>]\n";
 		return 2;
 	}
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

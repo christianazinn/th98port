@@ -4091,6 +4091,10 @@ ClassicOpSession::create(
 	}
 	if(!replay_recorder) {
 		config.language = ClassicLanguage::japanese;
+	} else if(patch_assets && patch_assets->custom_messages) {
+		config.language = patch_assets->custom_messages->asset_profile() ==
+			NewClassicLanguageAssetProfile::english ?
+			ClassicLanguage::english : ClassicLanguage::japanese;
 	}
 	// Stock TH03 ships neither MIDI/MMD songs nor an MMD driver launch path.
 	// Keep the source codec value readable, but never claim MIDI while routing

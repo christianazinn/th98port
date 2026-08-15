@@ -8,6 +8,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -139,8 +140,14 @@ constexpr std::array<ClassicOpOptionsChoice, 2U> switch_confirmation_choices{{
 	ClassicOpOptionsChoice::confirm_switch_classic,
 	ClassicOpOptionsChoice::cancel_switch_classic,
 }};
-constexpr std::array<std::string_view, 7U> patch_main_labels{{
-	"Start", "VS Start", "Music room", "HiScore", "Replay", "Option", "Quit",
+constexpr std::array<NewClassicMessageId, 7U> patch_main_labels{{
+	NewClassicMessageId::title_start,
+	NewClassicMessageId::title_vs_start,
+	NewClassicMessageId::title_music_room,
+	NewClassicMessageId::title_hiscore,
+	NewClassicMessageId::title_replay,
+	NewClassicMessageId::title_option,
+	NewClassicMessageId::title_quit,
 }};
 constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 	ClassicOpMenuChoice::story,
@@ -161,40 +168,44 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 		present::gaiji_height;
 }
 
-[[nodiscard]] constexpr std::string_view patch_choice_label(
+[[nodiscard]] constexpr NewClassicMessageId patch_choice_message(
 	ClassicOpOptionsChoice choice
 ) noexcept
 {
 	switch(choice) {
-	case ClassicOpOptionsChoice::rank: return "Rank";
-	case ClassicOpOptionsChoice::master_volume: return "Master Volume";
-	case ClassicOpOptionsChoice::window_mode: return "Window Mode";
-	case ClassicOpOptionsChoice::window_scale: return "Window Scale";
-	case ClassicOpOptionsChoice::aspect_ratio: return "Aspect Ratio";
-	case ClassicOpOptionsChoice::filtering: return "Filtering";
-	case ClassicOpOptionsChoice::bgm: return "Music";
-	case ClassicOpOptionsChoice::key_mode: return "Key Mode";
-	case ClassicOpOptionsChoice::quit: return "Return";
-	case ClassicOpOptionsChoice::sfx: return "SFX";
-	case ClassicOpOptionsChoice::mute_when_unfocused: return "Mute Unfocused";
-	case ClassicOpOptionsChoice::language: return "Language";
-	case ClassicOpOptionsChoice::photosensitivity: return "Flash FX";
-	case ClassicOpOptionsChoice::category_gameplay: return "Gameplay";
-	case ClassicOpOptionsChoice::category_audio: return "Audio";
-	case ClassicOpOptionsChoice::category_input: return "Input";
-	case ClassicOpOptionsChoice::category_video: return "Video";
-	case ClassicOpOptionsChoice::category_language: return "Language";
-	case ClassicOpOptionsChoice::category_system: return "System";
-	case ClassicOpOptionsChoice::key_config: return "KeyConfig";
-	case ClassicOpOptionsChoice::joy_config: return "JoyConfig";
-	case ClassicOpOptionsChoice::device_assignment: return "Device Assignment";
-	case ClassicOpOptionsChoice::input_test: return "Input Test";
-	case ClassicOpOptionsChoice::return_page: return "Return";
-	case ClassicOpOptionsChoice::switch_classic: return "Switch to Classic";
-	case ClassicOpOptionsChoice::confirm_switch_classic: return "Yes";
-	case ClassicOpOptionsChoice::cancel_switch_classic: return "No";
+	case ClassicOpOptionsChoice::rank: return NewClassicMessageId::option_rank;
+	case ClassicOpOptionsChoice::master_volume: return NewClassicMessageId::option_master_volume;
+	case ClassicOpOptionsChoice::window_mode: return NewClassicMessageId::option_window_mode;
+	case ClassicOpOptionsChoice::window_scale: return NewClassicMessageId::option_window_scale;
+	case ClassicOpOptionsChoice::aspect_ratio: return NewClassicMessageId::option_aspect_ratio;
+	case ClassicOpOptionsChoice::filtering: return NewClassicMessageId::option_filtering;
+	case ClassicOpOptionsChoice::bgm: return NewClassicMessageId::option_music;
+	case ClassicOpOptionsChoice::key_mode: return NewClassicMessageId::option_key_mode;
+	case ClassicOpOptionsChoice::quit: return NewClassicMessageId::option_return;
+	case ClassicOpOptionsChoice::sfx: return NewClassicMessageId::option_sfx;
+	case ClassicOpOptionsChoice::mute_when_unfocused:
+		return NewClassicMessageId::option_mute_unfocused;
+	case ClassicOpOptionsChoice::language: return NewClassicMessageId::option_language;
+	case ClassicOpOptionsChoice::photosensitivity: return NewClassicMessageId::option_flash_fx;
+	case ClassicOpOptionsChoice::category_gameplay:
+		return NewClassicMessageId::option_category_gameplay;
+	case ClassicOpOptionsChoice::category_audio: return NewClassicMessageId::option_category_audio;
+	case ClassicOpOptionsChoice::category_input: return NewClassicMessageId::option_category_input;
+	case ClassicOpOptionsChoice::category_video: return NewClassicMessageId::option_category_video;
+	case ClassicOpOptionsChoice::category_language:
+		return NewClassicMessageId::option_category_language;
+	case ClassicOpOptionsChoice::category_system: return NewClassicMessageId::option_category_system;
+	case ClassicOpOptionsChoice::key_config: return NewClassicMessageId::option_key_config;
+	case ClassicOpOptionsChoice::joy_config: return NewClassicMessageId::option_joy_config;
+	case ClassicOpOptionsChoice::device_assignment:
+		return NewClassicMessageId::option_device_assignment;
+	case ClassicOpOptionsChoice::input_test: return NewClassicMessageId::option_input_test;
+	case ClassicOpOptionsChoice::return_page: return NewClassicMessageId::option_return;
+	case ClassicOpOptionsChoice::switch_classic: return NewClassicMessageId::option_switch_classic;
+	case ClassicOpOptionsChoice::confirm_switch_classic: return NewClassicMessageId::option_yes;
+	case ClassicOpOptionsChoice::cancel_switch_classic: return NewClassicMessageId::option_no;
 	}
-	return {};
+	return NewClassicMessageId::count;
 }
 
 [[nodiscard]] ClassicOpError options_error(
@@ -793,10 +804,13 @@ ClassicOpOptionsScene::refresh_patch_language_background(
 		!blit(box_left + box_option_width, replay_patch_box_top,
 			present::graphics_width - (box_left + box_option_width), box_height) ||
 		!patch_assets_->menu_font.put_right(
-			raster_, 638, 0, "The PoDD Arrange Project", 0U
+			raster_, 638, 0, patch_assets_->messages().text(
+				NewClassicMessageId::credit_project
+			), 0U
 		) || !patch_assets_->menu_font.put_right(
-			raster_, 638, 16,
-			"Replay Patch v0.4.14 by Christian Azinn", 0U
+			raster_, 638, 16, patch_assets_->messages().text(
+				NewClassicMessageId::credit_patch
+			), 0U
 		)) {
 		return std::unexpected(options_error(ClassicOpErrorCode::draw_failed));
 	}
@@ -1010,8 +1024,14 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	}
 	const auto y = choice_top(replay_patch_box_top, *line);
 	const auto &font = patch_assets_->menu_font;
-	const auto label = patch_choice_label(choice);
-	if(label.empty()) {
+	const auto &messages = patch_assets_->messages(
+		config_.language == ClassicLanguage::english ?
+			NewClassicLanguageAssetProfile::english :
+			NewClassicLanguageAssetProfile::japanese
+	);
+	const auto message = patch_choice_message(choice);
+	const auto label = messages.text(message);
+	if(message == NewClassicMessageId::count || label.empty()) {
 		return false;
 	}
 	if(choice == ClassicOpOptionsChoice::quit ||
@@ -1039,33 +1059,24 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 		return false;
 	}
 	std::string_view value{};
-	std::array<char, 4U> percent_storage{};
-	const auto percent_value = [&](std::uint8_t percent) noexcept {
-		if(percent == 100U) {
-			percent_storage = {'1', '0', '0', '%'};
-			return std::string_view(
-				percent_storage.data(), percent_storage.size()
-			);
-		}
-		if(percent >= 10U) {
-			percent_storage = {
-				static_cast<char>('0' + (percent / 10U)),
-				static_cast<char>('0' + (percent % 10U)), '%', '\0',
-			};
-			return std::string_view(percent_storage.data(), 3U);
-		}
-		percent_storage = {
-			static_cast<char>('0' + percent), '%', '\0', '\0',
-		};
-		return std::string_view(percent_storage.data(), 2U);
+	std::string value_storage{};
+	const auto percent_value = [&](std::uint8_t percent) {
+		value_storage = messages.format_percent(
+			NewClassicMessageId::value_percent, percent
+		);
+		return std::string_view{value_storage};
 	};
 	switch(choice) {
 	case ClassicOpOptionsChoice::rank:
 		switch(config_.rank) {
-		case ClassicRank::easy: value = "Easy"; break;
-		case ClassicRank::normal: value = "Normal"; break;
-		case ClassicRank::hard: value = "Hard"; break;
-		case ClassicRank::lunatic: value = "Lunatic"; break;
+		case ClassicRank::easy:
+			value = messages.text(NewClassicMessageId::value_easy); break;
+		case ClassicRank::normal:
+			value = messages.text(NewClassicMessageId::value_normal); break;
+		case ClassicRank::hard:
+			value = messages.text(NewClassicMessageId::value_hard); break;
+		case ClassicRank::lunatic:
+			value = messages.text(NewClassicMessageId::value_lunatic); break;
 		}
 		break;
 	case ClassicOpOptionsChoice::master_volume:
@@ -1073,35 +1084,46 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 		break;
 	case ClassicOpOptionsChoice::window_mode:
 		value = window_presentation_.mode == NewClassicWindowMode::windowed ?
-			"Windowed" : "Borderless";
+			messages.text(NewClassicMessageId::value_windowed) :
+			messages.text(NewClassicMessageId::value_borderless);
 		break;
 	case ClassicOpOptionsChoice::window_scale:
 		switch(window_presentation_.scale) {
-		case NewClassicWindowScale::x1: value = "1x"; break;
-		case NewClassicWindowScale::x2: value = "2x"; break;
-		case NewClassicWindowScale::x3: value = "3x"; break;
-		case NewClassicWindowScale::automatic: value = "Auto"; break;
+		case NewClassicWindowScale::x1:
+			value = messages.text(NewClassicMessageId::value_scale_1x); break;
+		case NewClassicWindowScale::x2:
+			value = messages.text(NewClassicMessageId::value_scale_2x); break;
+		case NewClassicWindowScale::x3:
+			value = messages.text(NewClassicMessageId::value_scale_3x); break;
+		case NewClassicWindowScale::automatic:
+			value = messages.text(NewClassicMessageId::value_scale_auto); break;
 		}
 		break;
 	case ClassicOpOptionsChoice::aspect_ratio:
 		value = window_presentation_.aspect ==
-			NewClassicAspectRatio::pixels_8_5 ? "8:5 Pixels" : "4:3 Display";
+			NewClassicAspectRatio::pixels_8_5 ?
+			messages.text(NewClassicMessageId::value_aspect_8_5) :
+			messages.text(NewClassicMessageId::value_aspect_4_3);
 		break;
 	case ClassicOpOptionsChoice::filtering:
 		value = window_presentation_.filtering == NewClassicFiltering::nearest ?
-			"Nearest" : "Linear";
+			messages.text(NewClassicMessageId::value_nearest) :
+			messages.text(NewClassicMessageId::value_linear);
 		break;
 	case ClassicOpOptionsChoice::bgm:
 		value = patch_assets_ ? percent_value(music_volume_percent_) :
-			(config_.bgm_mode == ClassicBgmMode::off ? "Off" : "FM (86)");
+			(config_.bgm_mode == ClassicBgmMode::off ?
+				messages.text(NewClassicMessageId::value_off) :
+				messages.text(NewClassicMessageId::value_fm86));
 		break;
 	case ClassicOpOptionsChoice::sfx:
 		value = patch_assets_ ? percent_value(effect_volume_percent_) :
-			(config_.sfx_enabled ? "On" : "Off");
+			(config_.sfx_enabled ? messages.text(NewClassicMessageId::value_on) :
+				messages.text(NewClassicMessageId::value_off));
 		break;
 	case ClassicOpOptionsChoice::language:
 		if(config_.language == ClassicLanguage::english) {
-			value = "English";
+			value = messages.text(NewClassicMessageId::value_english);
 		} else {
 			return prepared_->japanese && present::graphics_text_put_8x16(
 				raster_, {box_option_value_center_x - 24, y},
@@ -1111,16 +1133,23 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 		break;
 	case ClassicOpOptionsChoice::key_mode:
 		switch(config_.key_mode) {
-		case ClassicKeyMode::key_key: value = "Key vs Key"; break;
-		case ClassicKeyMode::joy_key: value = "Joy vs Key"; break;
-		case ClassicKeyMode::key_joy: value = "Key vs Joy"; break;
+		case ClassicKeyMode::key_key:
+			value = messages.text(NewClassicMessageId::value_key_key); break;
+		case ClassicKeyMode::joy_key:
+			value = messages.text(NewClassicMessageId::value_joy_key); break;
+		case ClassicKeyMode::key_joy:
+			value = messages.text(NewClassicMessageId::value_key_joy); break;
 		}
 		break;
 	case ClassicOpOptionsChoice::photosensitivity:
-		value = config_.reduced_flash ? "Reduced" : "Full";
+		value = config_.reduced_flash ?
+			messages.text(NewClassicMessageId::value_reduced) :
+			messages.text(NewClassicMessageId::value_full);
 		break;
 	case ClassicOpOptionsChoice::mute_when_unfocused:
-		value = mute_when_unfocused_ ? "On" : "Off";
+		value = mute_when_unfocused_ ?
+			messages.text(NewClassicMessageId::value_on) :
+			messages.text(NewClassicMessageId::value_off);
 		break;
 	case ClassicOpOptionsChoice::category_gameplay:
 	case ClassicOpOptionsChoice::category_audio:
@@ -1249,7 +1278,9 @@ bool ClassicOpOptionsScene::draw_all_option_choices() noexcept
 		!patch_assets_->menu_font.put_centered(
 			raster_, box_option_center_x,
 			choice_top(replay_patch_box_top, 0U),
-			"Switch to Classic?", 15U
+			patch_assets_->messages().text(
+				NewClassicMessageId::prompt_switch_classic
+			), 15U
 		)) {
 		return false;
 	}
@@ -1276,7 +1307,7 @@ bool ClassicOpOptionsScene::draw_main_choices() noexcept
 				choice_top(
 					replay_patch_box_top, static_cast<std::uint8_t>(index)
 				),
-				patch_main_labels[index],
+				patch_assets_->messages().text(patch_main_labels[index]),
 				patch_main_choices[index] == ClassicOpMenuChoice::options ?
 					15U : 0U
 			)) {

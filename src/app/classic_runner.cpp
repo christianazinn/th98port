@@ -469,6 +469,38 @@ ClassicRunner::load(ClassicRunnerRequest request)
 				std::move(loaded_assets.error());
 			return std::unexpected(std::move(result));
 		}
+		if(!request.content.language_pack.empty()) {
+			const auto &fallback = new_classic_builtin_messages(
+				NewClassicLanguageAssetProfile::english
+			);
+			auto loaded_messages = load_new_classic_message_pack(
+				request.content.language_pack, loaded_assets->menu_font, &fallback
+			);
+			if(!loaded_messages) {
+				auto result = runner_error(
+					ClassicRunnerErrorCode::language_pack_failed,
+					ClassicContentFile::language_pack
+				);
+				result.language_pack_error = std::move(loaded_messages.error());
+				return std::unexpected(std::move(result));
+			}
+			if(loaded_messages->asset_profile() ==
+				NewClassicLanguageAssetProfile::english &&
+				request.content.language_overlay.empty()) {
+				auto result = runner_error(
+					ClassicRunnerErrorCode::language_pack_failed,
+					ClassicContentFile::language_pack
+				);
+				result.language_pack_error = NewClassicMessagePackError{
+					.code = NewClassicMessagePackErrorCode::asset_profile,
+				};
+				return std::unexpected(std::move(result));
+			}
+			loaded_assets->custom_messages =
+				std::make_shared<const NewClassicMessageCatalog>(
+					std::move(*loaded_messages)
+				);
+		}
 		patch_assets = std::make_shared<const NewClassicReplayPatchAssets>(
 			std::move(*loaded_assets)
 		);

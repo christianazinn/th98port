@@ -499,6 +499,7 @@ void print_usage()
 		<< "       [--config <YUME.CFG>] [--score <YUME.NEM>] "
 			"[--replay-root <REPLAY>] [--seed n] "
 			"[--language-overlay <TH3EN.DAT>] "
+			"[--language-pack <locale.t3lang>] "
 			"[--rhythm-rom <YM2608.ROM> | --rhythm-pcm <T98RHYTHM.PCM>] "
 			"[--tick-rate <ticks>/<seconds>] "
 			"[--smoke-ticks n] [--capture-replay <V13.RPY> "
@@ -554,6 +555,7 @@ const char *name(th03::app::ClassicRunnerErrorCode code) noexcept
 	case th03::app::ClassicRunnerErrorCode::file_read_failed: return "file-read-failed";
 	case th03::app::ClassicRunnerErrorCode::compiled_content_failed: return "compiled-content-failed";
 	case th03::app::ClassicRunnerErrorCode::replay_patch_assets_failed: return "replay-patch-assets-failed";
+	case th03::app::ClassicRunnerErrorCode::language_pack_failed: return "language-pack-failed";
 	case th03::app::ClassicRunnerErrorCode::session_failed: return "session-failed";
 	case th03::app::ClassicRunnerErrorCode::invalid_sample_order: return "invalid-sample-order";
 	case th03::app::ClassicRunnerErrorCode::runner_not_running: return "runner-not-running";
@@ -597,6 +599,7 @@ const char *name(th03::app::ClassicContentFile file) noexcept
 	case th03::app::ClassicContentFile::op_executable: return "op-executable";
 	case th03::app::ClassicContentFile::font_rom: return "font-rom";
 	case th03::app::ClassicContentFile::replay_patch_assets: return "azinn-dat";
+	case th03::app::ClassicContentFile::language_pack: return "language-pack";
 	}
 	return "unknown";
 }
@@ -634,6 +637,8 @@ const char *name(th03::app::ClassicCliOption option) noexcept
 	case th03::app::ClassicCliOption::font_rom: return "font";
 	case th03::app::ClassicCliOption::language_overlay:
 		return "language-overlay";
+	case th03::app::ClassicCliOption::language_pack:
+		return "language-pack";
 	case th03::app::ClassicCliOption::rhythm_rom: return "rhythm-rom";
 	case th03::app::ClassicCliOption::rhythm_pcm: return "rhythm-pcm";
 	case th03::app::ClassicCliOption::config: return "config";
@@ -983,6 +988,49 @@ const char *name(th03::app::StartupSequenceErrorCode code) noexcept
 	return "unknown";
 }
 
+const char *name(th03::app::NewClassicMessagePackErrorCode code) noexcept
+{
+	switch(code) {
+	case th03::app::NewClassicMessagePackErrorCode::invalid_path:
+		return "invalid-path";
+	case th03::app::NewClassicMessagePackErrorCode::source_status:
+		return "source-status";
+	case th03::app::NewClassicMessagePackErrorCode::source_not_regular:
+		return "source-not-regular";
+	case th03::app::NewClassicMessagePackErrorCode::source_size:
+		return "source-size";
+	case th03::app::NewClassicMessagePackErrorCode::source_open:
+		return "source-open";
+	case th03::app::NewClassicMessagePackErrorCode::source_read:
+		return "source-read";
+	case th03::app::NewClassicMessagePackErrorCode::header_shape:
+		return "header-shape";
+	case th03::app::NewClassicMessagePackErrorCode::schema_mismatch:
+		return "schema-mismatch";
+	case th03::app::NewClassicMessagePackErrorCode::body_digest_mismatch:
+		return "body-digest-mismatch";
+	case th03::app::NewClassicMessagePackErrorCode::locale_shape:
+		return "locale-shape";
+	case th03::app::NewClassicMessagePackErrorCode::asset_profile:
+		return "asset-profile";
+	case th03::app::NewClassicMessagePackErrorCode::directory_shape:
+		return "directory-shape";
+	case th03::app::NewClassicMessagePackErrorCode::message_shape:
+		return "message-shape";
+	case th03::app::NewClassicMessagePackErrorCode::fallback_missing:
+		return "fallback-missing";
+	case th03::app::NewClassicMessagePackErrorCode::placeholder_mismatch:
+		return "placeholder-mismatch";
+	case th03::app::NewClassicMessagePackErrorCode::glyph_coverage:
+		return "glyph-coverage";
+	case th03::app::NewClassicMessagePackErrorCode::width_exceeded:
+		return "width-exceeded";
+	case th03::app::NewClassicMessagePackErrorCode::allocation_failed:
+		return "allocation-failed";
+	}
+	return "unknown";
+}
+
 int fail(const char *stage, const th03::app::StartupSequenceError &error)
 {
 	std::cerr << "status=error\nstage=" << stage << "\ncode="
@@ -1086,6 +1134,18 @@ int fail(const char *stage, const th03::app::ClassicRunnerError &error)
 			std::cerr << "core-code=" << static_cast<unsigned int>(
 				error.process_error->core_error->code
 			) << '\n';
+		}
+	}
+	if(error.language_pack_error) {
+		std::cerr << "language-pack-code=" << name(
+			error.language_pack_error->code
+		) << "\nlanguage-pack-offset=" << error.language_pack_error->offset
+			<< "\nlanguage-pack-message=" << static_cast<unsigned int>(
+				error.language_pack_error->message
+			) << '\n';
+		if(error.language_pack_error->system) {
+			std::cerr << "language-pack-system="
+				<< error.language_pack_error->system.message() << '\n';
 		}
 	}
 	if(error.surface_error) {

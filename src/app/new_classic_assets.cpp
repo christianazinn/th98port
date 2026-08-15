@@ -267,6 +267,14 @@ parse_archive(std::span<const std::byte> bytes)
 
 } // namespace
 
+const NewClassicMessageCatalog &NewClassicReplayPatchAssets::messages(
+	NewClassicLanguageAssetProfile profile
+) const noexcept
+{
+	return custom_messages ? *custom_messages :
+		new_classic_builtin_messages(profile);
+}
+
 NewClassicPatchSurface::NewClassicPatchSurface() :
 	pixels_(present::graphics_page_pixels)
 {}

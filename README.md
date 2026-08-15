@@ -254,6 +254,14 @@ Music Room choices, two-line character titles/names, registration names, and
 five result labels move together. Without that exact profile the menu retains
 Japanese instead of claiming a partial translation. Classic is always
 Japanese.
+New Classic's source-styled title and hierarchical Option labels additionally
+use the versioned `T3LNG001` message boundary. Built-in Japanese/English
+catalogs preserve the accepted pixels. Translator and developer builds may
+pass `--language-pack <locale.t3lang>`; the loader rejects the package before
+startup unless its schema/body hashes, locale/fallback, placeholders,
+printable MNUFONT glyphs, and exact proportional row widths all validate.
+See `localization/README.md` for the UTF-8 authoring and deterministic compiler
+contract. Classic never opens a language pack.
 New Classic also owns the Replay Patch's versioned per-character HiScore file.
 Its viewer opens on `ALL CHARACTERS`, cycles through the unlocked character
 pages with Left/Right, appends the derived TOTAL row, and shows play time, 1CC,

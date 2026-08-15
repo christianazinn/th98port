@@ -109,6 +109,9 @@ constexpr std::size_t option_count =
 	if(text == "--language-overlay") {
 		return ClassicCliOption::language_overlay;
 	}
+	if(text == "--language-pack") {
+		return ClassicCliOption::language_pack;
+	}
 	if(text == "--rhythm-rom") {
 		return ClassicCliOption::rhythm_rom;
 	}
@@ -229,6 +232,9 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 			break;
 		case ClassicCliOption::language_overlay:
 			request.launch.content.language_overlay = std::filesystem::path(value);
+			break;
+		case ClassicCliOption::language_pack:
+			request.launch.content.language_pack = std::filesystem::path(value);
 			break;
 		case ClassicCliOption::rhythm_rom:
 			request.rhythm_rom = std::filesystem::path(value);

@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <expected>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -13,6 +14,7 @@
 #include <vector>
 
 #include "th03/assets/types.hpp"
+#include "th03/app/new_classic_messages.hpp"
 #include "th03/present/raster.hpp"
 #include "th03/present/source_surface.hpp"
 
@@ -124,6 +126,13 @@ struct NewClassicReplayPatchAssets final {
 	assets::PiImage key_config_background{};
 	NewClassicMenuFont menu_font{};
 	std::array<std::array<std::uint8_t, 32U>, 40U> pause_gaiji{};
+	// Optional developer/translator package. All production New Classic scenes
+	// otherwise use the frozen built-in profile selected below.
+	std::shared_ptr<const NewClassicMessageCatalog> custom_messages{};
+	[[nodiscard]] const NewClassicMessageCatalog &messages(
+		NewClassicLanguageAssetProfile profile =
+			NewClassicLanguageAssetProfile::english
+	) const noexcept;
 };
 
 // Graphics-page owner for Replay Patch-native full-screen UI. Unlike the

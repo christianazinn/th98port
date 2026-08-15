@@ -81,9 +81,14 @@ constexpr std::array<ClassicOpMenuChoice, 7U> replay_patch_menu_choices{
 	ClassicOpMenuChoice::quit,
 };
 
-constexpr std::array<std::string_view, 7U> replay_patch_menu_labels{
-	"Start", "VS Start", "Music room", "HiScore", "Replay", "Option",
-	"Quit",
+constexpr std::array<NewClassicMessageId, 7U> replay_patch_menu_labels{
+	NewClassicMessageId::title_start,
+	NewClassicMessageId::title_vs_start,
+	NewClassicMessageId::title_music_room,
+	NewClassicMessageId::title_hiscore,
+	NewClassicMessageId::title_replay,
+	NewClassicMessageId::title_option,
+	NewClassicMessageId::title_quit,
 };
 
 constexpr std::array<std::array<std::int8_t, 2U>, 4U> demo_pairings{{
@@ -844,7 +849,7 @@ bool ClassicOpTitleMenuScene::draw_choice(
 			raster_.blit(source, {box_left, top}) &&
 			patch_assets_->menu_font.put_centered(
 				raster_, box_main_center_x, top,
-				replay_patch_menu_labels[row],
+				patch_assets_->messages().text(replay_patch_menu_labels[row]),
 				attribute == present::tram_black ? 0U : 15U
 			);
 	}
@@ -961,9 +966,11 @@ bool ClassicOpTitleMenuScene::draw_title_credit() noexcept
 		return !patch_assets_;
 	}
 	return patch_assets_->menu_font.put_right(
-		raster_, 638, 0, "The PoDD Arrange Project", 0U
+		raster_, 638, 0,
+		patch_assets_->messages().text(NewClassicMessageId::credit_project), 0U
 	) && patch_assets_->menu_font.put_right(
-		raster_, 638, 16, "Replay Patch v0.4.14 by Christian Azinn", 0U
+		raster_, 638, 16,
+		patch_assets_->messages().text(NewClassicMessageId::credit_patch), 0U
 	);
 }
 

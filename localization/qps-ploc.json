@@ -1,0 +1,24 @@
+{
+  "format": "T3LANG-AUTHOR-1",
+  "locale": "qps-ploc",
+  "fallback": "en-US",
+  "asset_profile": "english",
+  "messages": {
+    "title.start": "[Start]",
+    "title.vs-start": "[VS Start]",
+    "title.music-room": "[Music room]",
+    "title.hiscore": "[HiScore]",
+    "title.replay": "[Replay]",
+    "title.option": "[Option]",
+    "title.quit": "[Quit]",
+    "option.category.gameplay": "[ Gameplay ]",
+    "option.device-assignment": "[ Device Assignment ]",
+    "option.switch-classic": "[ Switch to Classic ]",
+    "value.borderless": "[Borderless]",
+    "value.key-key": "[Key vs Key]",
+    "value.joy-key": "[Joy vs Key]",
+    "value.key-joy": "[Key vs Joy]",
+    "value.percent": "[{percent}%]",
+    "prompt.switch-classic": "[ Switch to Classic? ]"
+  }
+}

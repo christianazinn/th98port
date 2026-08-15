@@ -18,6 +18,7 @@
 #include "th03/app/new_classic_frontend.hpp"
 #include "th03/app/new_classic_key_config_store.hpp"
 #include "th03/app/new_classic_joy_config_store.hpp"
+#include "th03/app/new_classic_messages.hpp"
 #include "th03/app/new_classic_settings.hpp"
 #include "th03/app/pixel_oracle_identity.hpp"
 #include "th03/formats/replay.hpp"
@@ -43,6 +44,9 @@ struct ClassicContentPaths final {
 	// Optional authenticated Replay Patch 0.4.12 TH3EN.DAT. Classic ignores
 	// this profile; New Classic may select it through the persisted language.
 	std::filesystem::path language_overlay{};
+	// Optional T3LNG001 semantic UI package. New Classic validates it against
+	// the authenticated MNUFONT; Classic never opens it.
+	std::filesystem::path language_pack{};
 	// Complete authenticated Replay Patch 0.4.12 AZINN.DAT. Classic ignores
 	// this profile. An empty New Classic path derives AZINN.DAT under data_root.
 	std::filesystem::path replay_patch_assets{};
@@ -110,6 +114,7 @@ enum class ClassicContentFile : std::uint8_t {
 	op_executable,
 	font_rom,
 	replay_patch_assets,
+	language_pack,
 };
 
 enum class ClassicRunnerErrorCode : std::uint8_t {
@@ -122,6 +127,7 @@ enum class ClassicRunnerErrorCode : std::uint8_t {
 	file_read_failed,
 	compiled_content_failed,
 	replay_patch_assets_failed,
+	language_pack_failed,
 	session_failed,
 	invalid_sample_order,
 	runner_not_running,
@@ -141,6 +147,7 @@ struct ClassicRunnerError final {
 	std::optional<MainCompiledContentError> compiled_content_error{};
 	std::optional<MainProcessError> process_error{};
 	std::optional<NewClassicAssetsError> replay_patch_assets_error{};
+	std::optional<NewClassicMessagePackError> language_pack_error{};
 	std::optional<present::SourceSurfaceError> surface_error{};
 };
 

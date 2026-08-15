@@ -430,6 +430,15 @@ live Option changes are independently tested on GCC and MSVC.
 
 ### 7. Localization-pack pipeline
 
+Status: first source-constrained domain complete in session 186. Stable IDs,
+UTF-8 authoring files, the deterministic `T3LNG001` compiler/loader, exact
+fallback/placeholder/glyph/width validation, built-in Japanese/English
+catalogs, and a width-stressing pseudo-locale now own the New Classic title
+and hierarchical Option UI. Classic is unchanged. Replay browser/save,
+Practice, and input-screen semantic text remain subsequent domains; a future
+Unicode product-shell renderer remains separate from the authenticated ASCII
+MNUFONT contract.
+
 - Freeze message identifiers and text domains.
 - Build the translator-facing authoring, compilation, and validation tools.
 - Convert Japanese/English into the new pipeline without visual regressions.
