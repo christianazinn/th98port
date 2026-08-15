@@ -103,10 +103,10 @@ sprite/cel lifetimes, asset identities, page/palette/TRAM state, and private
 draw ordering.
 
 `th03_app_runtime` is a third, platform-neutral client boundary. It owns the
-rational tick/input accumulator, final RGBA/letterbox policy, outer product
-menu, and one-time source-derived startup sequence. The latter authenticates
+rational tick/input accumulator, final RGBA/letterbox policy, typed product
+lifecycle, and one-time source-derived startup sequence. The latter authenticates
 the original `TOUHOU.DAT` logo BFNT, reproduces the shared TH01-TH03 ZUN Soft
-opening before the product menu, and retains a following zero-duration slot
+opening before the direct New Classic title, and retains a following zero-duration slot
 for a future PoDD Port development-team credit animation. The caller provides
 the clock rate, timestamps, physical-event mapping, and output memory; the
 runtime neither sleeps nor creates a window. Archive validation/caching stays

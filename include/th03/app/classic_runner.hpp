@@ -10,7 +10,7 @@
 #include <span>
 
 #include "th03/app/classic_audio.hpp"
-#include "th03/app/experience_menu.hpp"
+#include "th03/app/experience_profile.hpp"
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/main_process.hpp"
 #include "th03/app/new_classic_assets.hpp"

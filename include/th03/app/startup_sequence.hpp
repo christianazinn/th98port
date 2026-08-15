@@ -12,7 +12,7 @@
 
 namespace th03::app {
 
-// Executed once, in this order, before the host product selector. The second
+// Executed once, in this order, before the New Classic product root. The second
 // slot intentionally has no presenter yet; it is the stable insertion point
 // for the later PoDD Port development-team credit animation.
 enum class StartupSlot : std::uint8_t {

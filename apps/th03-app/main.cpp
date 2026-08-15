@@ -29,7 +29,6 @@
 #include "th03/app/classic_runner.hpp"
 #include "th03/app/direct_vs_cli.hpp"
 #include "th03/app/direct_vs_launch.hpp"
-#include "th03/app/experience_menu.hpp"
 #include "th03/app/main_direct_vs_runner.hpp"
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/new_classic_frontend.hpp"
@@ -166,11 +165,6 @@ struct ExperienceRunResult final {
 	ExperienceRunDisposition disposition =
 		ExperienceRunDisposition::failed;
 	std::optional<th03::formats::ReplayDocument> replay{};
-};
-
-struct MenuRunResult final {
-	int exit_code = 0;
-	std::optional<th03::app::ExperienceMenuChoice> choice{};
 };
 
 struct StartupRunResult final {
@@ -495,8 +489,10 @@ void print_usage()
 		<< "P1: T/F/H/B, diagonals R/Y/V/N, Z shot, X bomb\n"
 		<< "P2: keypad 8/4/6/2, diagonals 7/9/1/3, Left shot, Right bomb\n"
 		<< "TH03 UI: arrows/keypad, Z/X/Space, Return OK, Escape Cancel\n"
-		<< "--shell opens the shared Classic/New Classic product menu. "
-			"Title Exit returns to it. In New Classic gameplay, Escape opens "
+		<< "--shell runs startup and boots directly into New Classic. "
+			"New Classic Quit exits; Option -> System can temporarily launch "
+			"sealed Classic, whose Quit returns to a fresh New Classic title. "
+			"In New Classic gameplay, Escape opens "
 			"Pause, R restarts, and Q exits without saving. During New Classic "
 			"replay playback, Escape aborts and held physical Z fast-forwards; "
 			"after a prior clear, physical Z also accelerates Staff. In --vs, "
@@ -515,7 +511,7 @@ void print_usage()
 		<< "New Classic enables its persistent English option only when the "
 			"authenticated Replay Patch 0.4.13 TH3EN.DAT is supplied with "
 			"--language-overlay. Classic remains Japanese.\n"
-		<< "The product shell also requires the original root TOUHOU.DAT "
+		<< "The normal product launch also requires the original root TOUHOU.DAT "
 			"ZUN Soft logo resource under --data.\n"
 		<< "Kotohime's source-uninitialized late Bomb local is deterministically "
 			"normalized from the adjacent Kana fade routine.\n";
@@ -1285,6 +1281,8 @@ ExperienceRunResult run_classic_session(
 {
 	const auto data_root = parsed.launch.content.data_root;
 	const auto config_path = parsed.launch.content.config;
+	const auto new_classic_settings_path =
+		parsed.launch.content.new_classic_settings;
 	const bool new_classic =
 		parsed.mode == th03::app::ClassicLaunchMode::new_classic;
 	if(parsed.rhythm_rom && parsed.rhythm_pcm) {
@@ -1350,7 +1348,7 @@ ExperienceRunResult run_classic_session(
 	th03::app::ClassicConfigOptions persisted_options{};
 	if(new_classic) {
 		auto persisted = th03::app::load_new_classic_settings_store(
-			parsed.launch.content.new_classic_settings, config_path
+			new_classic_settings_path, config_path
 		);
 		if(!persisted) {
 			return {.exit_code = fail("settings-load", persisted.error())};
@@ -1766,101 +1764,6 @@ ExperienceRunResult run_classic_session(
 		}
 	}
 	return {.disposition = ExperienceRunDisposition::return_to_menu};
-}
-
-MenuRunResult run_experience_menu(
-	th03::app::RationalTickRate tick_rate,
-	th03::platform::SdlPlatform &platform,
-	th03::platform::SdlInputMapper &mapper
-)
-{
-	constexpr std::uint16_t input_up = 0x0001U;
-	constexpr std::uint16_t input_down = 0x0002U;
-	constexpr std::uint16_t input_shot = 0x0020U;
-	constexpr std::uint16_t input_cancel = 0x1000U;
-	constexpr std::uint16_t input_ok = 0x2000U;
-	const auto pressed = [](std::uint16_t word, std::uint16_t bit) noexcept {
-		return (word & bit) != 0U;
-	};
-
-	th03::app::ExperienceMenu menu;
-	auto presented = platform.present(menu.surface());
-	if(!presented) {
-		return {.exit_code = fail("menu-present", presented.error())};
-	}
-	auto scheduler = th03::app::TickInputScheduler::create(
-		tick_rate,
-		th03::platform::sdl_ticks_now_ns(),
-		th03::app::TickInputCatchUpPolicy::discard_missed_deadlines
-	);
-	if(!scheduler) {
-		return {.exit_code = fail_tick(scheduler.error())};
-	}
-
-	bool retry_blocked_event = false;
-	while(menu.status() == th03::app::ExperienceMenuStatus::running) {
-		const auto cutoff = th03::platform::sdl_ticks_now_ns();
-		if(!retry_blocked_event) {
-			auto result = mapper.pump_events(*scheduler, false);
-			if(!result) {
-				return {.exit_code = fail("menu-input-pump", result.error())};
-			}
-			retry_blocked_event = result->queue_blocked;
-		}
-
-		bool presentation_pending = false;
-		for(;;) {
-			auto due = scheduler->pop_due(cutoff);
-			if(!due) {
-				return {.exit_code = fail_tick(due.error())};
-			}
-			if(!*due) {
-				break;
-			}
-			const auto word = (**due).input.system;
-			const auto consumed = menu.consume({
-				.up = pressed(word, input_up),
-				.down = pressed(word, input_down),
-				.confirm = pressed(word, input_shot) || pressed(word, input_ok),
-				.cancel = pressed(word, input_cancel),
-				.app_quit_requested = (**due).app_quit_requested,
-			});
-			presentation_pending =
-				presentation_pending || consumed.surface_changed;
-			if(retry_blocked_event) {
-				auto retried = mapper.pump_events(*scheduler, false);
-				if(!retried) {
-					return {
-						.exit_code = fail("menu-input-pump", retried.error())
-					};
-				}
-				retry_blocked_event = retried->queue_blocked;
-			}
-			if(consumed.status != th03::app::ExperienceMenuStatus::running) {
-				break;
-			}
-		}
-
-		if(presentation_pending) {
-			presented = platform.present(menu.surface());
-			if(!presented) {
-				return {.exit_code = fail("menu-present", presented.error())};
-			}
-		}
-		if(menu.status() == th03::app::ExperienceMenuStatus::quit_requested) {
-			return {};
-		}
-		if(menu.status() ==
-			th03::app::ExperienceMenuStatus::experience_selected) {
-			return {.choice = menu.choice()};
-		}
-		const auto deadline = scheduler->next_deadline_ns();
-		const auto now = th03::platform::sdl_ticks_now_ns();
-		if(deadline && *deadline > now) {
-			SDL_DelayPrecise(std::min(*deadline - now, maximum_idle_delay_ns));
-		}
-	}
-	return {};
 }
 
 StartupRunResult run_startup_sequence(
@@ -2382,8 +2285,8 @@ ExperienceRunResult run_new_classic_experience(
 	parsed.launch.new_classic_key_name = &sdl_scancode_name;
 	parsed.launch.initial_route = th03::app::ClassicRunnerInitialRoute::title;
 	// Replay, Practice, KeyConfig, Options, and replay playback are children of
-	// the patched OP session. Only its final Quit crosses back to the product
-	// selector; no Replay Patch screen is substituted by a host route.
+	// the patched OP session. Its title is the normal product root; no Replay
+	// Patch screen is substituted by a host route.
 	return run_classic_session(parsed, platform, mapper, patch_assets);
 }
 
@@ -2415,11 +2318,11 @@ int run_product_shell(th03::app::ClassicCliRequest parsed)
 	if(!product) {
 		return product.error();
 	}
-	// Automated packaging smoke retains the historical deterministic Classic
-	// entry and does not wait for a physical menu selection.
+	// Automated packaging smoke exercises the normal direct New Classic root
+	// without waiting for a physical title selection.
 	if(parsed.smoke_ticks) {
-		parsed.mode = th03::app::ClassicLaunchMode::classic;
-		return run_classic_session(
+		parsed.mode = th03::app::ClassicLaunchMode::new_classic;
+		return run_new_classic_experience(
 			std::move(parsed), *product->first, product->second
 		).exit_code;
 	}
@@ -2440,41 +2343,54 @@ int run_product_shell(th03::app::ClassicCliRequest parsed)
 	}
 
 	for(;;) {
-		if(auto restored = product->second.replace_bindings(
-			th03::app::detail::classic_direct_vs_bindings()
-		); !restored) {
-			return fail("menu-input-policy", restored.error());
-		}
-		const auto menu = run_experience_menu(
-			parsed.tick_rate, *product->first, product->second
-		);
-		if(menu.exit_code != 0 || !menu.choice) {
-			return menu.exit_code;
-		}
-		const bool new_classic = *menu.choice ==
-			th03::app::ExperienceMenuChoice::new_classic;
-		parsed.mode = new_classic ? th03::app::ClassicLaunchMode::new_classic :
-			th03::app::ClassicLaunchMode::classic;
-		auto experience = new_classic ? run_new_classic_experience(
+		parsed.mode = th03::app::ClassicLaunchMode::new_classic;
+		auto experience = run_new_classic_experience(
 			parsed, *product->first, product->second
-		) : run_classic_session(parsed, *product->first, product->second);
+		);
 		if(experience.exit_code != 0) {
 			return experience.exit_code;
 		}
-		if(experience.disposition ==
-			ExperienceRunDisposition::switch_to_classic) {
-			parsed.mode = th03::app::ClassicLaunchMode::classic;
-			experience = run_classic_session(
-				parsed, *product->first, product->second
+		const auto new_classic_transition =
+			th03::app::product_lifecycle_transition(
+				th03::app::ExperienceProfile::new_classic,
+				experience.disposition ==
+					ExperienceRunDisposition::switch_to_classic ?
+					th03::app::ProductLifecycleSignal::switch_to_classic :
+					(experience.disposition ==
+						ExperienceRunDisposition::application_quit ?
+						th03::app::ProductLifecycleSignal::application_quit :
+						th03::app::ProductLifecycleSignal::return_to_menu)
 			);
-			if(experience.exit_code != 0) {
-				return experience.exit_code;
-			}
-		}
-		if(experience.disposition !=
-			ExperienceRunDisposition::return_to_menu) {
+		if(new_classic_transition.exit_application) {
 			return 0;
 		}
+
+		if(auto restored = product->second.replace_bindings(
+			th03::app::detail::classic_direct_vs_bindings()
+		); !restored) {
+			return fail("classic-input-policy", restored.error());
+		}
+		parsed.mode = th03::app::ClassicLaunchMode::classic;
+		experience = run_classic_session(
+			parsed, *product->first, product->second
+		);
+		if(experience.exit_code != 0 || experience.disposition !=
+			ExperienceRunDisposition::return_to_menu) {
+			return experience.exit_code;
+		}
+		const auto classic_transition =
+			th03::app::product_lifecycle_transition(
+				th03::app::ExperienceProfile::classic,
+				th03::app::ProductLifecycleSignal::return_to_menu
+			);
+		if(classic_transition.exit_application || classic_transition.next !=
+			th03::app::ExperienceProfile::new_classic) {
+			std::cerr << "status=error\nstage=product-lifecycle\n"
+				"code=invalid-classic-return\n";
+			return 1;
+		}
+		// Classic's exact Quit has completed. Begin a fresh New Classic OP
+		// owner on the next iteration without replaying startup.
 	}
 }
 

@@ -341,6 +341,9 @@ Classic mutation tests, and unchanged V13/gameplay hashes.
 
 ### 3. Introduce the hierarchical Option owner
 
+Status: complete in session 175. New Classic owns the seven-category retained
+owner; Classic keeps its original four-row screen.
+
 - Replace New Classic's flat seven-row Option screen with the category screen.
 - Initially move only working controls: Rank; Music/SFX On/Off; Key Mode and
   KeyConfig; Flash FX; Japanese/English; Switch to Classic; Return.
@@ -353,6 +356,9 @@ and transition tests cover all category/child returns, and Classic Options are
 unchanged.
 
 ### 4. Remove the outer experience menu
+
+Status: complete in session 176. Startup boots New Classic directly; the
+confirmed System action temporarily enters sealed Classic.
 
 - Run the startup sequence once, then construct New Classic directly.
 - Route `System -> Switch to Classic` through a confirmation and a typed

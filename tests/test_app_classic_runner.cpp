@@ -579,6 +579,27 @@ std::unique_ptr<th03::app::ClassicRunner> make_fake_runner(
 
 void test_runner_sequence_audio_surface_and_failure()
 {
+	const auto new_classic_quit = th03::app::product_lifecycle_transition(
+		th03::app::ExperienceProfile::new_classic,
+		th03::app::ProductLifecycleSignal::return_to_menu
+	);
+	const auto switch_to_classic = th03::app::product_lifecycle_transition(
+		th03::app::ExperienceProfile::new_classic,
+		th03::app::ProductLifecycleSignal::switch_to_classic
+	);
+	const auto classic_quit = th03::app::product_lifecycle_transition(
+		th03::app::ExperienceProfile::classic,
+		th03::app::ProductLifecycleSignal::return_to_menu
+	);
+	expect(
+		new_classic_quit.exit_application &&
+		!switch_to_classic.exit_application &&
+		switch_to_classic.next == th03::app::ExperienceProfile::classic &&
+		!classic_quit.exit_application &&
+		classic_quit.next == th03::app::ExperienceProfile::new_classic,
+		"product lifecycle is direct New Classic -> temporary Classic -> fresh New Classic"
+	);
+
 	auto invalid = th03::app::ClassicRunnerTestAccess::create({}, {});
 	expect(
 		!invalid && invalid.error().code ==
@@ -719,6 +740,21 @@ void test_runner_sequence_audio_surface_and_failure()
 				th03::app::ClassicRunnerStatus::quit_requested &&
 				quit_backend->last_input.app_quit_requested,
 			"application quit stays separate and reaches the private owner once"
+		);
+	}
+
+	auto switch_backend = std::make_shared<FakeRunnerBackend>();
+	switch_backend->next_status =
+		th03::app::ClassicOpSessionStatus::switch_to_classic;
+	auto switch_runner = make_fake_runner(switch_backend);
+	if(switch_runner) {
+		const auto switched = switch_runner->consume({.tick_index = 0U});
+		expect(
+			switched && switched->status ==
+				th03::app::ClassicRunnerStatus::switch_to_classic &&
+				switch_runner->status() ==
+				th03::app::ClassicRunnerStatus::switch_to_classic,
+			"the typed System action crosses the runner without becoming Quit"
 		);
 	}
 

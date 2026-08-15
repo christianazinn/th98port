@@ -82,12 +82,13 @@ With the standard ignored workspace layout, the stable result is
 `out\standalone\PoDD-Port-Test.exe`. It can be copied elsewhere and launched
 by double-clicking; it needs no adjacent DLL/content tree, installed .NET
 runtime, or command-line arguments. Its NativeAOT launcher avoids carrying the
-ordinary .NET runtime bundle. It opens the shared Classic/New Classic
-menu; both entries run the complete shared Classic lifecycle, while New
-Classic additionally records/browses/plays V13 replays through the shared typed
-MAIN/MAINL scene owners and owns Replay Patch's four-choice gameplay
-pause/restart loop and two-page Practice setup.
-Exiting either title returns to this menu. Its first launch extracts a content-hash
+ordinary .NET runtime bundle. After the source-faithful startup it boots
+directly into New Classic, which records/browses/plays V13 replays through the
+shared typed MAIN/MAINL scene owners and owns Replay Patch's four-choice
+gameplay pause/restart loop and two-page Practice setup. New Classic's System
+Options can temporarily enter sealed Classic; Classic Quit returns to a fresh
+New Classic title, while New Classic Quit exits the application. Its first
+launch extracts a content-hash
 cache below `%LOCALAPPDATA%\PoDD Port`, while configuration,
 scores, and the last-run diagnostic log live in the separate `user` directory
 there and survive artifact updates. New Classic V13 files instead live in a
@@ -150,7 +151,7 @@ out\build\msvc-x64-sdl\Debug\th03-app.exe `
   --op X:\th03\OP.EXE --font X:\pc98\FONT.ROM `
   --rhythm-pcm X:\private\T98RHYTHM.PCM
 
-# Developer bypasses for one experience without the shared menu:
+# Developer bypasses for one experience without normal startup/product flow:
 # replace --shell with --classic or --new-classic.
 
 out\build\msvc-x64-sdl\Debug\th03-app.exe `
@@ -367,9 +368,9 @@ split comparisons. Original game data and replay captures remain external.
   API in `th03_core`; the core has no reciprocal dependency, and `th03rv`
   links neither presentation nor assets. Captured PC-98 pixel parity remains a
   separate external-data acceptance gate.
-- `th03_app_runtime` owns dependency-free host policy: the minimal
-  Classic/New Classic/Exit product menu, caller-selected rational
-  logical deadlines, timestamped two-player input accumulation, exact
+- `th03_app_runtime` owns dependency-free host policy: startup ownership,
+  caller-selected rational logical deadlines, timestamped two-player input
+  accumulation, exact
   SourceSurface-to-RGBA expansion into caller storage, and centered integer
   640x400 letterboxing. Its scheduler assumes no source cadence, SDL type, key binding,
   window, or replay UI; those remain application/platform decisions.

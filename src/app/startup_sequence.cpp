@@ -453,7 +453,7 @@ struct StartupSequence::Impl final {
 		compose();
 		// The reserved project-credit slot is deliberately empty today. Keeping
 		// it as an explicit transition avoids coupling its future cadence or
-		// assets to either the ZUN Soft scene or the product menu.
+		// assets to either the ZUN Soft scene or the New Classic title.
 		slot = StartupSlot::project_credits;
 		slot = StartupSlot::complete;
 		status = StartupSequenceStatus::complete;

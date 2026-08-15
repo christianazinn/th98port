@@ -412,7 +412,6 @@ target_link_libraries(th03_present PUBLIC th03_core)
 # events, clocks, and texture storage at this boundary; none enter core or
 # presentation state.
 add_library(th03_app_runtime STATIC
-	src/app/experience_menu.cpp
 	src/app/host_surface.cpp
 	src/app/new_classic_pause.cpp
 	src/app/startup_sequence.cpp
@@ -730,18 +729,6 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-host-surface-tests
 		COMMAND th03-app-host-surface-tests
-	)
-
-	add_executable(th03-app-experience-menu-tests
-		tests/test_app_experience_menu.cpp
-	)
-	target_link_libraries(
-		th03-app-experience-menu-tests PRIVATE th03_app_runtime
-	)
-	th03_set_warnings(th03-app-experience-menu-tests)
-	add_test(
-		NAME th03-app-experience-menu-tests
-		COMMAND th03-app-experience-menu-tests
 	)
 
 	add_executable(th03-app-startup-sequence-tests

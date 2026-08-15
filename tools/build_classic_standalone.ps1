@@ -340,7 +340,7 @@ try {
 			$env:SDL_VIDEODRIVER = "dummy"
 			$env:SDL_AUDIODRIVER = "dummy"
 			$nativeArguments = @(
-				"--classic", "--data", $contentRoot,
+				"--shell", "--data", $contentRoot,
 				"--main", (Join-Path $contentRoot "MAIN.EXE"),
 				"--mainl", (Join-Path $contentRoot "MAINL.EXE"),
 				"--op", (Join-Path $contentRoot "OP.EXE"),
