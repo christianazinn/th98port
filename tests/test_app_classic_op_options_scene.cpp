@@ -27,6 +27,7 @@ using th03::app::ClassicAudioCommandType;
 using th03::app::ClassicBgmMode;
 using th03::app::ClassicConfigOptions;
 using th03::app::ClassicKeyMode;
+using th03::app::ClassicLanguage;
 using th03::app::ClassicMusicCue;
 using th03::app::ClassicOpErrorCode;
 using th03::app::ClassicOpInput;
@@ -379,6 +380,270 @@ void enter_patch_options(ClassicOpOptionsScene &scene)
 		"hierarchical category page publishes");
 	expect(scene.advance().has_value(),
 		"hierarchical transition input releases");
+}
+
+constexpr std::int32_t patch_option_rows_left = 162;
+constexpr std::int32_t patch_option_rows_top = 272;
+constexpr std::int32_t patch_option_rows_right = 430;
+constexpr std::int32_t patch_option_rows_bottom = 384;
+
+bool page_zero_matches(
+	const th03::present::Raster &left,
+	const th03::present::Raster &right
+) noexcept
+{
+	const auto left_pixels = left.graphics(Page::zero);
+	const auto right_pixels = right.graphics(Page::zero);
+	if(left_pixels.size() != right_pixels.size()) {
+		return false;
+	}
+	std::size_t difference_count = 0U;
+	std::size_t first_difference = 0U;
+	for(std::size_t index = 0U; index < left_pixels.size(); ++index) {
+		if(left_pixels[index] != right_pixels[index]) {
+			if(difference_count == 0U) {
+				first_difference = index;
+			}
+			++difference_count;
+		}
+	}
+	if(difference_count != 0U) {
+		std::cerr << "page-diff count=" << difference_count
+			<< " x=" << (first_difference % th03::present::graphics_width)
+			<< " y=" << (first_difference / th03::present::graphics_width)
+			<< " left=" << static_cast<unsigned>(
+				left_pixels[first_difference]
+			) << " right=" << static_cast<unsigned>(
+				right_pixels[first_difference]
+			) << '\n';
+	}
+	return difference_count == 0U;
+}
+
+bool page_zero_matches_outside_option_rows(
+	const th03::present::Raster &left,
+	const th03::present::Raster &right
+) noexcept
+{
+	for(std::int32_t y = 0; y < th03::present::graphics_height; ++y) {
+		for(std::int32_t x = 0; x < th03::present::graphics_width; ++x) {
+			if(x >= patch_option_rows_left && x < patch_option_rows_right &&
+				y >= patch_option_rows_top && y < patch_option_rows_bottom) {
+				continue;
+			}
+			if(left.pixel(Page::zero, {x, y}) !=
+				right.pixel(Page::zero, {x, y})) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+void test_patch_option_reciprocal_shadow_if_assets_supplied()
+{
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4996)
+#endif
+	const auto *path = std::getenv("TH03_AZINN_DAT");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+	if(!path || *path == '\0') {
+		return;
+	}
+	auto loaded = th03::app::load_new_classic_replay_patch_assets(path);
+	expect(loaded.has_value(), "reciprocal Option shadow assets load");
+	if(!loaded) {
+		return;
+	}
+	auto assets = std::make_shared<const th03::app::NewClassicReplayPatchAssets>(
+		std::move(*loaded)
+	);
+	auto raster = main_menu_raster();
+	const auto background = menu_background();
+	expect(raster.set_access_page(Page::one) && raster.blit({
+		.pixels = background.image.indices,
+		.width = background.image.width,
+		.height = background.image.height,
+		.stride = background.image.width,
+	}, {0, 0}) && raster.set_access_page(Page::zero),
+		"reciprocal Option shadow fixture prepares its bare title page");
+	ClassicConfigOptions config{};
+	config.language = ClassicLanguage::english;
+	GameInit resident{};
+	resident.rank = static_cast<std::uint8_t>(config.rank);
+	EmptyAnk font{};
+	auto created = ClassicOpOptionsScene::create(
+		resident, config, true, std::move(raster), {}, menu_background(),
+		window_sheet(), assets, &font, true
+	);
+	expect(created.has_value(), "reciprocal Option shadow scene creates");
+	if(!created) {
+		return;
+	}
+	auto &scene = **created;
+	for(std::uint16_t frame = 0U; frame < 17U; ++frame) {
+		expect(scene.advance(
+			frame == 0U ? ClassicOpInput{.ok = true} : ClassicOpInput{}
+		).has_value(), "reciprocal Option shadow grow advances");
+	}
+	const auto clean_rows = scene.raster();
+	auto expected = clean_rows;
+	bool expected_drawn = expected.set_access_page(Page::zero);
+	const auto bare = expected.graphics(Page::one);
+	for(std::int32_t y = patch_option_rows_top;
+		y < patch_option_rows_bottom; ++y) {
+		for(std::int32_t x = patch_option_rows_left;
+			x < patch_option_rows_right; ++x) {
+			const auto offset = static_cast<std::size_t>(y) *
+				th03::present::graphics_width + static_cast<std::size_t>(x);
+			expected_drawn = expected_drawn &&
+				expected.plot({x, y}, bare[offset]);
+			if(((x + (y - 264)) & 1) == 0) {
+				expected_drawn = expected_drawn &&
+					expected.plot({x, y}, 3U);
+			}
+		}
+	}
+	constexpr std::array messages{
+		NewClassicMessageId::option_category_gameplay,
+		NewClassicMessageId::option_category_audio,
+		NewClassicMessageId::option_category_input,
+		NewClassicMessageId::option_category_video,
+		NewClassicMessageId::option_category_language,
+		NewClassicMessageId::option_category_system,
+		NewClassicMessageId::option_return,
+	};
+	const auto &catalog = assets->messages(
+		th03::app::NewClassicLanguageAssetProfile::english
+	);
+	for(std::size_t line = 0U; line < messages.size(); ++line) {
+		const auto center_color = static_cast<th03::present::Index4>(
+			line == 0U ? 15U : 0U
+		);
+		const auto shadow_color = static_cast<th03::present::Index4>(
+			line == 0U ? 0U : 15U
+		);
+		const auto y = patch_option_rows_top +
+			static_cast<std::int32_t>(line * 16U);
+		const auto text = catalog.text(messages[line]);
+		expected_drawn = expected_drawn &&
+			assets->menu_font.put_centered_clipped(
+				expected, 297, y + 1, text, shadow_color,
+				{162, y, 268U, 16U}
+			) && assets->menu_font.put_centered(
+				expected, 296, y, text, center_color
+			);
+	}
+	expect(expected_drawn,
+		"reciprocal Option shadow reference composes every category row");
+	expect(scene.advance().has_value(),
+		"reciprocal Option shadow category page publishes");
+	expect(page_zero_matches(scene.raster(), expected),
+		"every category row draws shadow at (+1,+1) before its exact center");
+	expect(page_zero_matches_outside_option_rows(clean_rows, scene.raster()),
+		"category shadows stay inside the existing restoration row domain");
+	bool selected_black_shadow = false;
+	bool unselected_white_shadow = false;
+	for(std::int32_t y = 272; y < 288; ++y) {
+		for(std::int32_t x = 162; x < 430; ++x) {
+			selected_black_shadow = selected_black_shadow ||
+				(scene.raster().pixel(Page::zero, {x, y}) == 0U &&
+				 clean_rows.pixel(Page::zero, {x, y}) != 0U);
+		}
+	}
+	for(std::int32_t y = 288; y < 304; ++y) {
+		for(std::int32_t x = 162; x < 430; ++x) {
+			unselected_white_shadow = unselected_white_shadow ||
+				(scene.raster().pixel(Page::zero, {x, y}) == 15U &&
+				 clean_rows.pixel(Page::zero, {x, y}) != 15U);
+		}
+	}
+	expect(selected_black_shadow,
+		"selected white Option text visibly introduces its black shadow");
+	expect(unselected_white_shadow,
+		"unselected black Option text visibly introduces its white shadow");
+}
+
+void test_patch_option_shadow_transitions_if_assets_supplied(bool localized)
+{
+	auto scene = make_patch_scene_if_assets_supplied(localized);
+	if(!scene) {
+		return;
+	}
+	for(std::uint16_t frame = 0U; frame < 17U; ++frame) {
+		expect(scene->advance(
+			frame == 0U ? ClassicOpInput{.ok = true} : ClassicOpInput{}
+		).has_value(), "shadow-transition Option grow advances");
+	}
+	const auto clean_rows = scene->raster();
+	expect(scene->advance().has_value(),
+		"shadow-transition category page publishes");
+	expect(page_zero_matches_outside_option_rows(clean_rows, scene->raster()),
+		localized ?
+			"maximum-width localized category shadows stay inside restored rows" :
+			"built-in category shadows stay inside restored rows");
+	expect(scene->advance().has_value(),
+		"shadow-transition category input releases");
+	struct Route final {
+		ClassicOpOptionsChoice category;
+		ClassicOpOptionsPage child;
+	};
+	constexpr std::array routes{
+		Route{ClassicOpOptionsChoice::category_gameplay,
+			ClassicOpOptionsPage::gameplay},
+		Route{ClassicOpOptionsChoice::category_audio,
+			ClassicOpOptionsPage::audio},
+		Route{ClassicOpOptionsChoice::category_input,
+			ClassicOpOptionsPage::input},
+		Route{ClassicOpOptionsChoice::category_video,
+			ClassicOpOptionsPage::video},
+		Route{ClassicOpOptionsChoice::category_language,
+			ClassicOpOptionsPage::language},
+		Route{ClassicOpOptionsChoice::category_system,
+			ClassicOpOptionsPage::system},
+	};
+	for(std::size_t index = 0U; index < routes.size(); ++index) {
+		if(index != 0U) {
+			expect(scene->advance({.down = true}).has_value() &&
+				scene->advance().has_value(),
+				"shadow-transition category navigation advances and releases");
+		}
+		expect(scene->selected_choice() == routes[index].category,
+			"shadow-transition reaches the expected category");
+		const auto parent = scene->raster();
+		expect(scene->advance({.ok = true}).has_value() &&
+			scene->page() == routes[index].child,
+			"shadow-transition opens the expected child page");
+		expect(page_zero_matches_outside_option_rows(clean_rows, scene->raster()),
+			localized ?
+				"localized child labels and values stay inside restored rows" :
+				"built-in child labels and values stay inside restored rows");
+		expect(scene->advance().has_value(),
+			"shadow-transition child input releases");
+		if(routes[index].child == ClassicOpOptionsPage::system) {
+			const auto system = scene->raster();
+			expect(scene->advance({.ok = true}).has_value() &&
+				scene->page() == ClassicOpOptionsPage::switch_confirmation,
+				"shadow-transition opens Switch-to-Classic confirmation");
+			expect(page_zero_matches_outside_option_rows(
+				clean_rows, scene->raster()
+			), "confirmation prompt and choices stay inside restored rows");
+			expect(scene->advance().has_value() &&
+				scene->advance({.cancel = true}).has_value() &&
+				page_zero_matches(system, scene->raster()),
+				"confirmation Cancel exactly restores the shadowed System page");
+			expect(scene->advance().has_value(),
+				"shadow-transition restored System input releases");
+		}
+		expect(scene->advance({.cancel = true}).has_value() &&
+			page_zero_matches(parent, scene->raster()),
+			"child Cancel exactly restores its shadowed parent category");
+		expect(scene->advance().has_value(),
+			"shadow-transition restored category input releases");
+	}
 }
 
 void test_replay_patch_option_hierarchy_if_assets_supplied()
@@ -1555,6 +1820,9 @@ int main(int argc, char **argv)
 {
 	test_replay_patch_option_unput_if_assets_supplied();
 	test_patch_option_label_widths_if_assets_supplied();
+	test_patch_option_reciprocal_shadow_if_assets_supplied();
+	test_patch_option_shadow_transitions_if_assets_supplied(false);
+	test_patch_option_shadow_transitions_if_assets_supplied(true);
 	test_replay_patch_option_hierarchy_if_assets_supplied();
 	test_localized_option_snapshot_if_assets_supplied();
 	test_exact_rows_and_transition_lock();

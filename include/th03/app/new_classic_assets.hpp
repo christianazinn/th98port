@@ -88,6 +88,14 @@ public:
 		std::string_view text,
 		present::Index4 color
 	) const noexcept;
+	[[nodiscard]] bool put_centered_clipped(
+		present::Raster &raster,
+		std::int32_t center_x,
+		std::int32_t top,
+		std::string_view text,
+		present::Index4 color,
+		present::Rect clip
+	) const noexcept;
 	[[nodiscard]] bool put_right(
 		present::Raster &raster,
 		std::int32_t right,
@@ -118,6 +126,15 @@ private:
 		std::array<std::uint8_t, glyph_bytes>, glyph_count
 	> bitmaps_{};
 	[[nodiscard]] static std::size_t glyph_index(std::uint8_t value) noexcept;
+	[[nodiscard]] bool put_n_clipped(
+		present::Raster &raster,
+		std::int32_t left,
+		std::int32_t top,
+		std::string_view text,
+		std::size_t count,
+		present::Index4 color,
+		present::Rect clip
+	) const noexcept;
 };
 
 struct NewClassicReplayPatchAssets final {

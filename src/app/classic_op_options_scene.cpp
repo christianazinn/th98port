@@ -325,6 +325,31 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 	return put_gaiji_run(tram, left, y, glyphs, attribute);
 }
 
+[[nodiscard]] bool put_patch_option_centered(
+	const NewClassicMenuFont &font,
+	present::Raster &raster,
+	std::int32_t center_x,
+	std::int32_t top,
+	std::string_view text,
+	present::Index4 color
+) noexcept
+{
+	if(color != 0U && color != 15U) {
+		return false;
+	}
+	const auto shadow = static_cast<present::Index4>(
+		color == 0U ? 15U : 0U
+	);
+	return font.put_centered_clipped(
+		raster, center_x + 1, top + 1, text, shadow,
+		{
+			box_left + 2, top,
+			static_cast<std::uint16_t>(box_option_width - 4),
+			present::gaiji_height,
+		}
+	) && font.put_centered(raster, center_x, top, text, color);
+}
+
 [[nodiscard]] constexpr std::uint8_t ring_step(
 	std::uint8_t value,
 	int direction,
@@ -1049,12 +1074,12 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 		choice == ClassicOpOptionsChoice::category_video ||
 		choice == ClassicOpOptionsChoice::category_language ||
 		choice == ClassicOpOptionsChoice::category_system) {
-		return font.put_centered(
-			raster_, box_option_center_x, y, label, color
+		return put_patch_option_centered(
+			font, raster_, box_option_center_x, y, label, color
 		);
 	}
-	if(!font.put_centered(
-		raster_, box_main_center_x, y, label, color
+	if(!put_patch_option_centered(
+		font, raster_, box_main_center_x, y, label, color
 	)) {
 		return false;
 	}
@@ -1168,8 +1193,8 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	case ClassicOpOptionsChoice::quit:
 		return false;
 	}
-	return font.put_centered(
-		raster_, box_option_value_center_x, y, value, color
+	return put_patch_option_centered(
+		font, raster_, box_option_value_center_x, y, value, color
 	);
 }
 
@@ -1275,8 +1300,8 @@ bool ClassicOpOptionsScene::draw_all_option_choices() noexcept
 {
 	if(patch_assets_ && page_ ==
 		ClassicOpOptionsPage::switch_confirmation &&
-		!patch_assets_->menu_font.put_centered(
-			raster_, box_option_center_x,
+		!put_patch_option_centered(
+			patch_assets_->menu_font, raster_, box_option_center_x,
 			choice_top(replay_patch_box_top, 0U),
 			patch_assets_->messages().text(
 				NewClassicMessageId::prompt_switch_classic

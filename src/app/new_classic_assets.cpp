@@ -470,10 +470,30 @@ bool NewClassicMenuFont::put_n(
 	present::Index4 color
 ) const noexcept
 {
+	return put_n_clipped(
+		raster, left, top, text, count, color,
+		{0, 0, present::graphics_width, present::graphics_height}
+	);
+}
+
+bool NewClassicMenuFont::put_n_clipped(
+	present::Raster &raster,
+	std::int32_t left,
+	std::int32_t top,
+	std::string_view text,
+	std::size_t count,
+	present::Index4 color,
+	present::Rect clip
+) const noexcept
+{
+	const auto clip_right = static_cast<std::int64_t>(clip.x) + clip.width;
+	const auto clip_bottom = static_cast<std::int64_t>(clip.y) + clip.height;
 	if(color > 0x0FU || top < 0 ||
 		top > static_cast<std::int32_t>(
 			present::graphics_height - glyph_height
-		)) {
+		) || clip.x < 0 || clip.y < 0 ||
+		clip_right > present::graphics_width ||
+		clip_bottom > present::graphics_height) {
 		return false;
 	}
 	const auto size = std::min(text.size(), count);
@@ -492,7 +512,9 @@ bool NewClassicMenuFont::put_n(
 						continue;
 					}
 					const auto x = left + column;
-					if(x >= 0 && x < present::graphics_width &&
+					const auto y = top + row;
+					if(x >= clip.x && x < clip_right &&
+						y >= clip.y && y < clip_bottom &&
 						!raster.plot({x, top + row}, color)) {
 						return false;
 					}
@@ -513,6 +535,21 @@ bool NewClassicMenuFont::put_centered(
 ) const noexcept
 {
 	return put(raster, center_x - (width(text) / 2), top, text, color);
+}
+
+bool NewClassicMenuFont::put_centered_clipped(
+	present::Raster &raster,
+	std::int32_t center_x,
+	std::int32_t top,
+	std::string_view text,
+	present::Index4 color,
+	present::Rect clip
+) const noexcept
+{
+	return put_n_clipped(
+		raster, center_x - (width(text) / 2), top, text, text.size(), color,
+		clip
+	);
 }
 
 bool NewClassicMenuFont::put_right(
