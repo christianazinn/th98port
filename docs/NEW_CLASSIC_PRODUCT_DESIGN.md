@@ -476,6 +476,10 @@ network transport, and nothing currently makes either future hub visible.
 
 ### 9. Server and sharing
 
+The current proposed trust model, Cloudflare mapping, structured verifier
+boundary, and product decisions are in `NEW_CLASSIC_ONLINE_SERVICE_DRAFT.md`.
+That draft is intentionally not a deployment authorization.
+
 - Deploy a queued, sandboxed `th03rv` verifier keyed by replay, content,
   ruleset, and verifier version.
 - Derive score/result/category server-side; enforce size, time, decompression,
@@ -493,6 +497,11 @@ Display-synchronized repeated presentation can precede interpolation. The
 fixed source scheduler and replay input boundary remain untouched. True
 interpolation requires a separate presentation specification and is not a
 prerequisite for any prior phase.
+
+`DISPLAY_REFRESH_DECOUPLING_DRAFT.md` proposes sample-and-hold output now,
+explicit blocked-presentation isolation, no inert FPS/refresh setting, and a
+future `Repeat / Smooth` boundary once interpolation creates real additional
+display frames.
 
 ## Release discipline
 
