@@ -293,6 +293,8 @@ add_library(th03_app_persistence STATIC
 	src/app/new_classic_device_store.cpp
 	src/app/new_classic_joy_config_store.cpp
 	src/app/new_classic_key_config_store.cpp
+	src/app/new_classic_online.cpp
+	src/app/new_classic_online_store.cpp
 	src/app/new_classic_settings.cpp
 	src/app/new_classic_settings_store.cpp
 	src/app/new_classic_score.cpp
@@ -756,6 +758,21 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-new-classic-score-store-tests
 		COMMAND th03-app-new-classic-score-store-tests
+	)
+
+	add_executable(th03-app-new-classic-online-tests
+		tests/test_app_new_classic_online.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-online-tests PRIVATE th03_app_persistence
+	)
+	target_compile_features(
+		th03-app-new-classic-online-tests PRIVATE cxx_std_23
+	)
+	th03_set_warnings(th03-app-new-classic-online-tests)
+	add_test(
+		NAME th03-app-new-classic-online-tests
+		COMMAND th03-app-new-classic-online-tests
 	)
 
 	add_executable(th03-app-classic-config-tests

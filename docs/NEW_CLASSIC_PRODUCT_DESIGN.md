@@ -454,6 +454,9 @@ deterministic package hashes, and representative screen snapshots.
 
 ### 8. HiScore/Replay hubs and online domain seam
 
+Status: domain/cache boundary complete in session 189; visible hubs remain
+deliberately deferred until a second real destination exists.
+
 - Define leaderboard/replay identifiers, category keys, provenance, and local
   cache documents without selecting a service vendor.
 - Add the HiScore hub when Personal Bests or a real online view exists.
@@ -463,6 +466,12 @@ deterministic package hashes, and representative screen snapshots.
 Gate: offline behavior, replay cross-links, legacy entries without fake replay
 IDs, cache corruption/recovery, and no network dependency below the client
 service boundary.
+
+The frozen client-side contract is documented in
+`NEW_CLASSIC_ONLINE_CACHE.md`. It contains typed content-digest identities,
+explicit replay-verified versus curated-legacy provenance, and a bounded
+atomic offline cache. It contains no endpoint, credential, provider name, or
+network transport, and nothing currently makes either future hub visible.
 
 ### 9. Server and sharing
 
