@@ -15,6 +15,8 @@
 #include "th03/formats/v13.hpp"
 #include "th03/replay/run.hpp"
 
+#include "service_protocol.hpp"
+
 namespace {
 
 std::vector<std::byte> read_file(const std::filesystem::path &path)
@@ -273,32 +275,65 @@ void print_v13_metadata(const th03::formats::ReplayDocument &document)
 
 int main(int argc, char **argv)
 {
-	const bool roundtrip_only = argc == 3 &&
-		std::string_view(argv[2]) == "--roundtrip-only";
-	if(argc != 2 && argc != 4 && !roundtrip_only) {
+	if(argc < 2) {
 		std::cerr << "usage: th03rv <replay> [--enedat <ENEDAT.DAT> | "
-			"--roundtrip-only]\n";
+			"--roundtrip-only] [--service-json]\n";
 		return 2;
 	}
+	bool roundtrip_only = false;
+	bool service_json = false;
 	const std::filesystem::path replay_path(argv[1]);
 	std::optional<std::filesystem::path> requested_enedat;
-	if(argc == 4) {
-		if(std::string_view(argv[2]) != "--enedat") {
-			std::cerr << "error=unknown option\n";
-			return 2;
+	for(int argument = 2; argument < argc; ++argument) {
+		const std::string_view option(argv[argument]);
+		if(option == "--roundtrip-only" && !roundtrip_only) {
+			roundtrip_only = true;
+			continue;
 		}
-		requested_enedat = std::filesystem::path(argv[3]);
+		if(option == "--service-json" && !service_json) {
+			service_json = true;
+			continue;
+		}
+		if(
+			option == "--enedat" && !requested_enedat &&
+			(argument + 1) < argc
+		) {
+			requested_enedat = std::filesystem::path(argv[++argument]);
+			continue;
+		}
+		if(service_json) {
+			std::cout << th03rv::service_error_json() << '\n';
+		} else {
+			std::cerr << "error=unknown option\n";
+		}
+		return 2;
+	}
+	if(roundtrip_only && (service_json || requested_enedat)) {
+		if(service_json) {
+			std::cout << th03rv::service_error_json() << '\n';
+		} else {
+			std::cerr << "error=roundtrip cannot be combined with other options\n";
+		}
+		return 2;
 	}
 
 	const auto replay_bytes = read_file(replay_path);
 	if(replay_bytes.empty()) {
-		std::cerr << "error=could not read a non-empty replay\n";
+		if(service_json) {
+			std::cout << th03rv::service_rejected_json("invalid_replay") << '\n';
+		} else {
+			std::cerr << "error=could not read a non-empty replay\n";
+		}
 		return 2;
 	}
 	auto document = th03::formats::parse_replay(replay_bytes);
 	if(!document) {
-		std::cerr << "error=" << document.error().message
-			<< "\noffset=" << document.error().offset << '\n';
+		if(service_json) {
+			std::cout << th03rv::service_rejected_json("invalid_replay") << '\n';
+		} else {
+			std::cerr << "error=" << document.error().message
+				<< "\noffset=" << document.error().offset << '\n';
+		}
 		return 2;
 	}
 	if(roundtrip_only) {
@@ -335,19 +370,31 @@ int main(int argc, char **argv)
 		requested_enedat, replay_path, std::filesystem::path(argv[0])
 	);
 	if(!enedat_path) {
-		std::cerr << "error=could not locate ENEDAT.DAT; pass --enedat or set "
-			"TH03_ENEDAT\n";
+		if(service_json) {
+			std::cout << th03rv::service_error_json() << '\n';
+		} else {
+			std::cerr << "error=could not locate ENEDAT.DAT; pass --enedat or set "
+				"TH03_ENEDAT\n";
+		}
 		return 2;
 	}
 	const auto enedat_bytes = read_file(*enedat_path);
 	if(enedat_bytes.empty()) {
-		std::cerr << "error=could not read a non-empty ENEDAT.DAT\n";
+		if(service_json) {
+			std::cout << th03rv::service_error_json() << '\n';
+		} else {
+			std::cerr << "error=could not read a non-empty ENEDAT.DAT\n";
+		}
 		return 2;
 	}
 	auto content = th03::formats::parse_enedat(enedat_bytes);
 	if(!content) {
-		std::cerr << "error=" << content.error().message
-			<< "\noffset=" << content.error().offset << '\n';
+		if(service_json) {
+			std::cout << th03rv::service_error_json() << '\n';
+		} else {
+			std::cerr << "error=" << content.error().message
+				<< "\noffset=" << content.error().offset << '\n';
+		}
 		return 2;
 	}
 	std::vector<th03::replay::RoundStartRecord> expected_round_starts;
@@ -372,20 +419,26 @@ int main(int argc, char **argv)
 		checkpoint_construction_index++;
 	}
 
-	std::cout << "replay_version=" << document->session.source_version << '\n'
-		<< "mode=" << (document->practice ? "practice" :
-			(document->session.init.game_mode == th03::game_mode::story
-				? "story" : "versus")) << '\n'
-		<< "samples=" << document->session.sample_count << '\n'
-		<< "checkpoints=" << document->checkpoints.size() << '\n'
-		<< "expected_splits=" << document->expected_round_splits.size() << '\n'
-		<< "enedat=" << enedat_path->string() << '\n';
-	print_v13_metadata(*document);
+	if(!service_json) {
+		std::cout << "replay_version=" << document->session.source_version << '\n'
+			<< "mode=" << (document->practice ? "practice" :
+				(document->session.init.game_mode == th03::game_mode::story
+					? "story" : "versus")) << '\n'
+			<< "samples=" << document->session.sample_count << '\n'
+			<< "checkpoints=" << document->checkpoints.size() << '\n'
+			<< "expected_splits=" << document->expected_round_splits.size() << '\n'
+			<< "enedat=" << enedat_path->string() << '\n';
+		print_v13_metadata(*document);
+	}
 
 	auto run = th03::replay::run_session(document->session, *content);
 	if(!run) {
-		std::cerr << "error=" << run.error().message
-			<< "\noffset=" << run.error().offset << '\n';
+		if(service_json) {
+			std::cout << th03rv::service_error_json() << '\n';
+		} else {
+			std::cerr << "error=" << run.error().message
+				<< "\noffset=" << run.error().offset << '\n';
+		}
 		return 3;
 	}
 	const auto checkpoint_mismatch = checkpoint_construction_error
@@ -393,7 +446,7 @@ int main(int argc, char **argv)
 		: th03::replay::first_round_start_mismatch(
 			expected_round_starts, run->round_starts
 		);
-	if(checkpoint_construction_error) {
+	if(checkpoint_construction_error && !service_json) {
 		const auto &checkpoint =
 			document->checkpoints[checkpoint_construction_index];
 		std::cout << "checkpoint_verification=mismatch"
@@ -401,7 +454,7 @@ int main(int argc, char **argv)
 			<< " sample=" << checkpoint.sample_index
 			<< " field=runtime.reconstruction"
 			<< " detail=" << checkpoint_construction_error->message << '\n';
-	} else if(checkpoint_mismatch) {
+	} else if(checkpoint_mismatch && !service_json) {
 		std::cout << "checkpoint_verification=mismatch"
 			<< " checkpoint=" << (checkpoint_mismatch->checkpoint_index + 1U)
 			<< " sample=" << checkpoint_mismatch->sample_index
@@ -411,7 +464,7 @@ int main(int argc, char **argv)
 				<< *checkpoint_mismatch->actual_sample_index;
 		}
 		std::cout << '\n';
-	} else {
+	} else if(!service_json) {
 		std::cout << "checkpoint_verification=match\n";
 	}
 	bool all_splits_match =
@@ -422,7 +475,9 @@ int main(int argc, char **argv)
 		);
 		const auto *expected = (index < document->expected_round_splits.size())
 			? &document->expected_round_splits[index] : nullptr;
-		print_split(index, actual, expected);
+		if(!service_json) {
+			print_split(index, actual, expected);
+		}
 		if(expected == nullptr || !th03::formats::round_splits_match(*expected, actual)) {
 			all_splits_match = false;
 		}
@@ -432,15 +487,34 @@ int main(int argc, char **argv)
 		index < document->expected_round_splits.size();
 		++index
 	) {
-		std::cout << "split=" << (index + 1U) << " missing=yes match=no\n";
+		if(!service_json) {
+			std::cout << "split=" << (index + 1U) << " missing=yes match=no\n";
+		}
 	}
 
-	std::cout << "run_status=" << run_status_name(run->status) << '\n'
-		<< "consumed_samples=" << run->consumed_samples << '\n';
 	const bool verified =
 		th03::formats::replay_can_be_verified(*document) &&
 		run->status == th03::replay::RunStatus::complete && all_splits_match &&
 		!checkpoint_construction_error && !checkpoint_mismatch;
-	std::cout << "verification=" << (verified ? "match" : "mismatch") << '\n';
+	if(service_json) {
+		if(!verified) {
+			std::cout << th03rv::service_rejected_json("split_mismatch") << '\n';
+			return 1;
+		} else if(const auto report = th03rv::make_service_accepted_report(
+			*document, *run, *content, all_splits_match,
+			!checkpoint_construction_error && !checkpoint_mismatch
+		)) {
+			std::cout << th03rv::service_accepted_json(*report) << '\n';
+			return 0;
+		} else {
+			std::cout << th03rv::service_rejected_json("unsupported_replay")
+				<< '\n';
+			return 1;
+		}
+	} else {
+		std::cout << "run_status=" << run_status_name(run->status) << '\n'
+			<< "consumed_samples=" << run->consumed_samples << '\n'
+			<< "verification=" << (verified ? "match" : "mismatch") << '\n';
+	}
 	return verified ? 0 : 1;
 }

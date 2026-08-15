@@ -498,6 +498,14 @@ target_compile_features(th03_app_content PUBLIC cxx_std_23)
 set_target_properties(th03_app_content PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_app_content)
 
+add_library(th03_app_story_route STATIC
+	src/app/new_classic_story_route.cpp
+)
+target_include_directories(th03_app_story_route PUBLIC include)
+target_compile_features(th03_app_story_route PUBLIC cxx_std_23)
+set_target_properties(th03_app_story_route PROPERTIES CXX_EXTENSIONS OFF)
+th03_set_warnings(th03_app_story_route)
+
 add_library(th03_replay STATIC
 	src/replay/run.cpp
 )
@@ -569,7 +577,7 @@ target_include_directories(th03_app_main PUBLIC include)
 target_link_libraries(
 	th03_app_main
 	PUBLIC th03_app_resources th03_app_content th03_app_persistence
-		th03_app_runtime th03_audio_pmd th03_formats
+		th03_app_runtime th03_app_story_route th03_audio_pmd th03_formats
 )
 target_compile_features(th03_app_main PUBLIC cxx_std_23)
 set_target_properties(th03_app_main PROPERTIES CXX_EXTENSIONS OFF)
@@ -583,8 +591,21 @@ add_executable(th03-replay-check apps/th03-replay-check/main.cpp)
 target_link_libraries(th03-replay-check PRIVATE th03_formats)
 th03_set_warnings(th03-replay-check)
 
+add_library(th03rv_service_protocol STATIC
+	apps/th03rv/service_protocol.cpp
+)
+target_include_directories(th03rv_service_protocol PUBLIC apps/th03rv)
+target_link_libraries(
+	th03rv_service_protocol PUBLIC th03_app_story_route th03_formats th03_replay
+)
+target_compile_features(th03rv_service_protocol PUBLIC cxx_std_23)
+set_target_properties(
+	th03rv_service_protocol PROPERTIES CXX_EXTENSIONS OFF
+)
+th03_set_warnings(th03rv_service_protocol)
+
 add_executable(th03rv apps/th03rv/main.cpp)
-target_link_libraries(th03rv PRIVATE th03_formats th03_replay)
+target_link_libraries(th03rv PRIVATE th03rv_service_protocol)
 th03_set_warnings(th03rv)
 
 if(TH03_ENABLE_SDL)
@@ -601,6 +622,18 @@ endif()
 
 if(BUILD_TESTING)
 	find_package(Python3 COMPONENTS Interpreter)
+
+	add_executable(th03rv-service-protocol-tests
+		tests/test_th03rv_service_protocol.cpp
+	)
+	target_link_libraries(
+		th03rv-service-protocol-tests PRIVATE th03rv_service_protocol
+	)
+	th03_set_warnings(th03rv-service-protocol-tests)
+	add_test(
+		NAME th03rv-service-protocol-tests
+		COMMAND th03rv-service-protocol-tests
+	)
 
 	add_executable(th03-audio-output-gain-tests
 		tests/test_audio_output_gain.cpp

@@ -45,6 +45,7 @@ struct RunResult {
 	std::vector<CompletedRound> completed_rounds;
 	std::vector<RoundStartRecord> round_starts;
 	std::optional<CanonicalState> terminal_state;
+	std::optional<SessionTransition> terminal_transition;
 };
 
 // Returns the first stored checkpoint whose sample key is missing or whose

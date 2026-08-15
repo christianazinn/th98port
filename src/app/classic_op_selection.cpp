@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "th03/app/classic_config.hpp"
+#include "th03/app/new_classic_story_route.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/exact/trig.hpp"
 #include "th03/present/cels.hpp"
@@ -335,27 +336,10 @@ template <typename Value, typename Decoder>
 	return static_cast<std::uint8_t>(signed_product / 256);
 }
 
-[[nodiscard]] std::uint16_t irand(std::uint32_t &seed) noexcept
-{
-	seed = (seed * 0x015A4E35U) + 1U;
-	return static_cast<std::uint16_t>((seed >> 16U) & 0x7FFFU);
-}
-
 } // namespace
 
 GameInit prepare_new_classic_story_restart(GameInit resident) noexcept
 {
-	constexpr std::array<MainCharacter, 9U> fixed_stage_six{
-		MainCharacter::mima,
-		MainCharacter::reimu,
-		MainCharacter::reimu,
-		MainCharacter::marisa,
-		MainCharacter::reimu,
-		MainCharacter::ellen,
-		MainCharacter::kana,
-		MainCharacter::kotohime,
-		MainCharacter::rikako,
-	};
 	resident.demo_number = 0U;
 	resident.winner = 0;
 	resident.story_stage = 0U;
@@ -365,34 +349,13 @@ GameInit prepare_new_classic_story_restart(GameInit resident) noexcept
 	resident.show_score_menu = 0U;
 	resident.paletted_character[1U] = -1;
 
-	const auto player_one = static_cast<std::uint8_t>(
-		resident.paletted_character[0U]
+	const auto opponents = new_classic_story_opponents(
+		resident.paletted_character[0U], resident.resident_rand
 	);
-	const auto player_base = static_cast<std::uint8_t>((player_one - 1U) / 2U);
-	const auto fixed = character_index(fixed_stage_six[player_base]);
-	std::array<bool, 7U> used{};
-	used[fixed] = true;
-	auto seed = std::bit_cast<std::uint32_t>(resident.resident_rand);
-	for(std::size_t stage = 0U; stage < 6U; ++stage) {
-		std::uint8_t candidate = 0U;
-		do {
-			candidate = static_cast<std::uint8_t>(irand(seed) % 7U);
-		} while(used[candidate]);
-		used[candidate] = true;
-		resident.story_opponents[stage] = static_cast<std::int8_t>(
-			paletted_value(candidate, MainPaletteVariant::first)
-		);
+	if(!opponents) {
+		return {};
 	}
-	resident.story_opponents[6U] = static_cast<std::int8_t>(
-		paletted_value(fixed, MainPaletteVariant::first)
-	);
-	resident.story_opponents[7U] = 15;
-	resident.story_opponents[8U] = 17;
-	for(auto &opponent : resident.story_opponents) {
-		if(opponent == resident.paletted_character[0U]) {
-			++opponent;
-		}
-	}
+	resident.story_opponents = *opponents;
 	resident.paletted_character[1U] = resident.story_opponents[0U];
 	resident.remaining_credits = 3U;
 	resident.fast_op_animation = 0U;

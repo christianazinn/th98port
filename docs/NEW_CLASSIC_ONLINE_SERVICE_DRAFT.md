@@ -1,6 +1,7 @@
 # New Classic online leaderboard and replay service
 
-Status: **accepted small-v1 direction; implementation pending**
+Status: **local foundation implemented; production adapter, deployment, and
+client projection pending**
 
 Decision date: 2026-08-15
 
@@ -46,8 +47,9 @@ does only what it can prove simply and deterministically:
 
 1. Strictly parse the uploaded V13 file.
 2. Run the complete input stream through the pinned stock verifier.
-3. Require every stored checkpoint/split/result checked by `th03rv` to match
-   the simulated result.
+3. Rebuild checkpoint zero from a snapshot-free stock Story launch, compare
+   its complete first-round observation, then require every stored checkpoint,
+   split, and terminal checked by `th03rv` to match simulation.
 4. Require the encoded slowdown to be at most 5%.
 5. Publish the server-derived row only after those checks pass.
 
@@ -151,7 +153,7 @@ created_at INTEGER NOT NULL
 ### `replays`
 
 ```text
-replay_id BLOB PRIMARY KEY       -- SHA-256 of exact accepted bytes
+replay_id TEXT PRIMARY KEY       -- uppercase SHA-256 of exact accepted bytes
 object_key TEXT UNIQUE NOT NULL
 byte_count INTEGER NOT NULL
 name TEXT NOT NULL               -- from replay metadata
@@ -165,20 +167,22 @@ accepted_at INTEGER NOT NULL
 ### `entries`
 
 ```text
-entry_id INTEGER PRIMARY KEY
+entry_id TEXT PRIMARY KEY        -- server-internal UUID in this foundation
+profile_key TEXT NOT NULL        -- user:<id> or stable history:<person>
 user_id TEXT NULL                -- NULL only for curated historical rows
-replay_id BLOB NULL              -- NULL only for historical rows
-source_kind INTEGER NOT NULL     -- replay or historical_video
+replay_id TEXT NULL              -- NULL only for historical rows
+source_kind TEXT NOT NULL        -- replay or historical
 display_name TEXT NOT NULL
 category fields
 score/result fields
 accepted_at INTEGER NOT NULL
 ```
 
-The main-board query partitions by `(user_id, category)` for normal records,
-chooses score descending then accepted time ascending, and unions curated
-historical rows into the same ordered result. Historical rows do not need a
-backend user ID and simply disable replay watch/download actions.
+The main-board query partitions every row by `(profile_key, category)`, chooses
+score descending then accepted time ascending within that profile, and orders
+those winners by the same score/oldest-tie rule. Historical rows use stable
+`history:<person>` keys, do not need a backend user ID, and disable replay
+watch/download actions.
 
 ## Replay bytes and local recording
 
@@ -191,9 +195,12 @@ data loss and its removal would not make memory or network submission harder to
 tamper with. An ordinary saved/downloaded replay remains a normal disk file and
 can be uploaded later from the Replay menu.
 
-R2 stores only accepted exact bytes under their digest. Rejected payloads are
-not retained. Before D1 publication, read back the accepted R2 object and
-confirm its size and SHA-256.
+R2 stores candidate accepted bytes under their digest. Payloads rejected before
+that put are not retained. Before D1 publication, read back the object and
+confirm its size and SHA-256. If D1 publication then fails, leave the
+content-addressed object as an unpublished orphan: inline deletion could race
+an accepted concurrent upload of the same digest. Garbage collection is a
+separate reachability pass against a consistent D1 snapshot.
 
 ## Required safety without product complexity
 
@@ -231,8 +238,9 @@ availability without inventing a host-styled surface.
 1. Add structured machine-readable output to `th03rv` with only
    `accepted/rejected/error`, server-derived score/category, exact split
    agreement, Autofire, and slowdown.
-2. Audit the existing V13 slowdown encoding and freeze `>5%` rejection with
-   the same rounding/display value used by the local replay viewer.
+2. Audit the existing V13 slowdown encoding and freeze literal `>5%`
+   rejection by exact cross multiplication while retaining the local replay
+   viewer's floored display integer.
 3. Inspect and extend `tools/azinn-site-v2`; bind local D1/R2/Container
    development without deploying production data first.
 4. Add the small D1 schema and fixed endpoints with a fake verifier, then swap
@@ -240,3 +248,37 @@ availability without inventing a host-styled surface.
 5. Add in-memory finalized replay upload and the online Replay-style views.
 6. Seed reviewed historical records directly into D1 and run one private beta
    before public upload.
+
+## Implemented local foundation (session 194-online)
+
+The canonical local foundation lives under `tools/azinn-site-v2/service`.
+It supplies the D1 schema, content-addressed R2 publication, opaque
+ID/salted-token
+authentication, five routes, best-per-profile query, historical profile rows,
+and fail-closed pinned verifier fetcher seam. It has no production IDs,
+credentials, or verifier bypass and has not been deployed.
+
+`th03rv --service-json` now supplies the typed `T3RV-SERVICE-1` inner report.
+An accepted report derives visible score (including TH03's trailing-zero score
+unit), terminal stage, clear/Game Over kind, and continues used from simulated
+or reconstructed state rather than trusting V13 header result fields. The
+future pinned Container wrapper adds only the exact replay SHA-256 and the
+fixed content/ruleset/verifier identities; the Worker requires all pins to
+match. See the service README for the exact adapter boundary.
+
+Slowdown eligibility is frozen to the literal ratio using overflow-safe exact
+cross multiplication: `slow_frames * 100 <= timed_frames * 5`. Zero timed
+frames are ineligible. The UI still displays
+`floor(100 * slow_frames / timed_frames)`; 5.00% is eligible and 5.01% is not.
+
+The Worker incrementally caps raw upload bodies at 1 MiB, incrementally caps
+verifier replies at 16 KiB, and aborts the verifier call after 15 seconds. The
+pinned Container wrapper must also kill its fixed native process within a
+shorter deadline.
+
+This foundation is not yet a client-ready projection for the frozen
+`T3ONL001` cache. That cache additionally requires digest entry/snapshot IDs,
+pinned identity and DOS-date fields, replay availability, and a revised
+curated-history invariant compatible with records that intentionally expose no
+evidence link. Freeze that response mapping before wiring the native client;
+do not treat the current server-internal UUID/JSON shape as `T3ONL001`.

@@ -256,6 +256,7 @@ struct Runner {
 		if(!transition) {
 			return std::unexpected(transition.error());
 		}
+		result.terminal_transition = *transition;
 		if(transition->action == SessionAction::start_gameplay) {
 			next_story_stage = transition->resident;
 		}
@@ -280,6 +281,7 @@ struct Runner {
 		if(!transition) {
 			return std::unexpected(transition.error());
 		}
+		result.terminal_transition = *transition;
 		if(transition->action == SessionAction::start_gameplay) {
 			next_story_stage = transition->resident;
 		}
@@ -430,6 +432,7 @@ std::expected<RunResult, Error> run_session(
 		runner.main_terminal = false;
 		runner.next_story_stage.reset();
 		runner.result.terminal_state.reset();
+		runner.result.terminal_transition.reset();
 	}
 
 	if(
