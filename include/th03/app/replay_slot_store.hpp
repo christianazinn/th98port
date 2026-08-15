@@ -6,6 +6,7 @@
 #include <expected>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <system_error>
 
 #include "th03/formats/replay.hpp"
@@ -75,6 +76,16 @@ load_replay_slot(
 	const std::filesystem::path &replay_root,
 	std::uint8_t slot,
 	const formats::ReplayDocument &document
+);
+
+// Publishes already-encoded, strictly valid V13 bytes without re-encoding
+// them. This preserves content-addressed optional tails while retaining the
+// slot store's exclusive temporary, flush, read-back, parse, and atomic
+// replacement contract.
+[[nodiscard]] std::expected<void, ReplaySlotStoreError>
+commit_exact_replay_file(
+	const std::filesystem::path &path,
+	std::span<const std::byte> bytes
 );
 
 // Builds before the memory-only recorder may have left TH3LAST behind. An

@@ -566,6 +566,7 @@ add_library(th03_app_main STATIC
 	src/app/new_classic_key_config_scene.cpp
 	src/app/new_classic_language.cpp
 	src/app/new_classic_messages.cpp
+	src/app/new_classic_online_client.cpp
 	src/app/new_classic_playback.cpp
 	src/app/new_classic_practice.cpp
 	src/app/new_classic_replay.cpp
@@ -808,6 +809,21 @@ if(BUILD_TESTING)
 		NAME th03-app-new-classic-online-tests
 		COMMAND th03-app-new-classic-online-tests
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/online_service_projection_t3onl2.hex
+	)
+
+	add_executable(th03-app-new-classic-online-client-tests
+		tests/test_app_new_classic_online_client.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-online-client-tests PRIVATE th03_app_main
+	)
+	target_compile_features(
+		th03-app-new-classic-online-client-tests PRIVATE cxx_std_23
+	)
+	th03_set_warnings(th03-app-new-classic-online-client-tests)
+	add_test(
+		NAME th03-app-new-classic-online-client-tests
+		COMMAND th03-app-new-classic-online-client-tests
 	)
 
 	add_executable(th03-app-classic-config-tests

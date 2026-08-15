@@ -505,7 +505,7 @@ struct MainCompiledContentImportAccess {
 	}
 };
 
-MainExecutableSha256 main_executable_sha256(
+AppSha256 app_sha256(
 	std::span<const std::byte> bytes
 ) noexcept {
 	std::array<std::uint32_t, 8U> state = {
@@ -540,7 +540,7 @@ MainExecutableSha256 main_executable_sha256(
 			final_blocks.data() + 64U, 64U
 		));
 	}
-	MainExecutableSha256 digest{};
+	AppSha256 digest{};
 	for(std::size_t index = 0U; index < state.size(); ++index) {
 		for(std::size_t byte = 0U; byte < 4U; ++byte) {
 			digest[(index * 4U) + byte] = static_cast<std::uint8_t>(
@@ -549,6 +549,12 @@ MainExecutableSha256 main_executable_sha256(
 		}
 	}
 	return digest;
+}
+
+MainExecutableSha256 main_executable_sha256(
+	std::span<const std::byte> bytes
+) noexcept {
+	return app_sha256(bytes);
 }
 
 MainExecutableProfile MainCompiledContent::profile() const noexcept {

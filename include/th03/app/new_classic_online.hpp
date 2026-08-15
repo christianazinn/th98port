@@ -20,6 +20,8 @@ inline constexpr std::size_t new_classic_online_title_bytes = 80U;
 inline constexpr std::size_t new_classic_online_entry_limit = 256U;
 inline constexpr std::size_t new_classic_online_replay_limit = 256U;
 inline constexpr std::size_t new_classic_online_cache_max_bytes = 256U * 1024U;
+inline constexpr std::size_t new_classic_online_replay_max_bytes =
+	1024U * 1024U;
 inline constexpr std::size_t new_classic_online_cache_header_bytes = 80U;
 inline constexpr std::size_t new_classic_online_cache_footer_bytes = 4U;
 

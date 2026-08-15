@@ -385,7 +385,6 @@ load_document(const std::filesystem::path &path)
 }
 
 [[nodiscard]] std::expected<void, ReplaySlotStoreError> write_document(
-	const std::filesystem::path &replay_root,
 	const std::filesystem::path &target,
 	const formats::ReplayDocument &document
 )
@@ -401,6 +400,30 @@ load_document(const std::filesystem::path &path)
 			ReplaySlotStoreErrorCode::source_too_large
 		));
 	}
+	return commit_exact_replay_file(target, *encoded);
+}
+
+} // namespace
+
+std::expected<void, ReplaySlotStoreError> commit_exact_replay_file(
+	const std::filesystem::path &target,
+	std::span<const std::byte> bytes
+)
+{
+	if(target.empty() || target.filename().empty()) {
+		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_root));
+	}
+	if(bytes.empty() || bytes.size() > maximum_replay_file_bytes) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::source_too_large
+		));
+	}
+	auto parsed_input = formats::parse_v13_replay(bytes);
+	if(!parsed_input) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::format, {}, parsed_input.error()
+		));
+	}
 	if(fail(ReplaySlotStoreFaultPoint::directory_create)) {
 		return std::unexpected(store_error(
 			ReplaySlotStoreErrorCode::directory_create,
@@ -408,7 +431,11 @@ load_document(const std::filesystem::path &path)
 		));
 	}
 	std::error_code system;
-	std::filesystem::create_directories(replay_root, system);
+	const auto parent = target.parent_path();
+	if(parent.empty()) {
+		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_root));
+	}
+	std::filesystem::create_directories(parent, system);
 	if(system) {
 		return std::unexpected(store_error(
 			ReplaySlotStoreErrorCode::directory_create, system
@@ -418,19 +445,19 @@ load_document(const std::filesystem::path &path)
 	if(!temporary) {
 		return std::unexpected(std::move(temporary.error()));
 	}
-	if(auto written = write_all(*temporary, *encoded); !written) {
+	if(auto written = write_all(*temporary, bytes); !written) {
 		return std::unexpected(std::move(written.error()));
 	}
 	if(auto flushed = flush_and_rewind(*temporary); !flushed) {
 		return std::unexpected(std::move(flushed.error()));
 	}
-	auto readback = read_back(*temporary, encoded->size());
+	auto readback = read_back(*temporary, bytes.size());
 	if(!readback) {
 		return std::unexpected(std::move(readback.error()));
 	}
 	auto parsed = formats::parse_v13_replay(*readback);
 	if(fail(ReplaySlotStoreFaultPoint::temporary_validation) ||
-		*readback != *encoded || !parsed) {
+		!std::ranges::equal(*readback, bytes) || !parsed) {
 		return std::unexpected(store_error(
 			ReplaySlotStoreErrorCode::temporary_validation, {},
 			parsed ? std::nullopt : std::optional<Error>{parsed.error()}
@@ -449,8 +476,6 @@ load_document(const std::filesystem::path &path)
 	}
 	return replace_target(*temporary, target);
 }
-
-} // namespace
 
 std::filesystem::path replay_slot_path(
 	const std::filesystem::path &replay_root,
@@ -505,7 +530,7 @@ std::expected<void, ReplaySlotStoreError> commit_replay_slot(
 		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_slot));
 	}
 	return write_document(
-		replay_root, replay_slot_path(replay_root, slot), document
+		replay_slot_path(replay_root, slot), document
 	);
 }
 

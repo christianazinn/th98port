@@ -12,7 +12,14 @@
 
 namespace th03::app {
 
-using MainExecutableSha256 = std::array<std::uint8_t, 32U>;
+using AppSha256 = std::array<std::uint8_t, 32U>;
+using MainExecutableSha256 = AppSha256;
+
+// Application-layer SHA-256 for authenticated external bytes. The gameplay
+// core never observes this digest or any host cryptography API.
+[[nodiscard]] AppSha256 app_sha256(
+	std::span<const std::byte> bytes
+) noexcept;
 
 // Kept public for profile diagnostics and known-vector tests. Profile
 // descriptors, accepted digests, and compiled-data offsets remain private to

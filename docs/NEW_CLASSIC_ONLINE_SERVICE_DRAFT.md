@@ -1,7 +1,8 @@
 # New Classic online leaderboard and replay service
 
-Status: **local foundation and strict client/cache projection implemented;
-production adapter, deployment, networking, and visible UI pending**
+Status: **local foundation, strict client/cache projection, and platform-neutral
+transactions implemented; production adapter, deployment, and visible UI
+pending**
 
 Decision date: 2026-08-15
 
@@ -283,6 +284,15 @@ remains an operator surface; `format=t3onl2` joins the pinned replay facts and
 returns the strict `T3ONL002` binary cache. It derives stable typed entry and
 snapshot SHA-256 identities, binds the response to one category, preserves DOS
 date/payload availability, and carries exact Autofire/timed/slow frames. A
-cross-language golden vector proves Worker/native byte compatibility. The
-remaining client work is bounded transport, per-category persistence,
-download/upload transactions, and the source-styled visible owner.
+cross-language golden vector proves Worker/native byte compatibility.
+
+Session 199 adds the platform-neutral transaction layer. It requests exactly
+one bounded binary board and commits it to a dedicated rank/character cache,
+preserving a local monotonic generation. Enrollment accepts only the service's
+two credential strings. Upload serializes the finalized V13 directly into
+request memory and never writes a candidate journal or temporary replay.
+Download verifies the content digest, V13 parse, and every available cached
+metadata field before atomically preserving the exact response bytes (including
+optional accelerator tails) under the online replay directory. The remaining
+client work is the Windows HTTPS/protected-credential adapter and source-styled
+asynchronous visible owner.

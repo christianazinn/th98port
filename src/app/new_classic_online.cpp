@@ -414,7 +414,9 @@ std::expected<void, NewClassicOnlineError> validate_new_classic_online_cache(
 			return std::unexpected(error(NewClassicOnlineErrorCode::result, index));
 		}
 		if(record.availability > NewClassicOnlineReplayAvailability::downloaded ||
-			record.payload_bytes == 0U || record.autofire > 3U ||
+			record.payload_bytes == 0U ||
+			record.payload_bytes > new_classic_online_replay_max_bytes ||
+			record.autofire > 3U ||
 			record.timed_frames == 0U ||
 			record.slow_frames > record.timed_frames ||
 			(static_cast<std::uint64_t>(record.slow_frames) * 100U) >
