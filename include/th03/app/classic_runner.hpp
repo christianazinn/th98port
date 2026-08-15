@@ -199,6 +199,8 @@ public:
 	void classify_pending_replay_frame(bool deadline_missed) noexcept;
 	[[nodiscard]] std::optional<NewClassicKeyConfig>
 	take_new_classic_key_config_update() noexcept;
+	[[nodiscard]] std::optional<std::uint8_t>
+	take_new_classic_master_volume_update() noexcept;
 	[[nodiscard]] std::shared_ptr<const NewClassicReplaySaveArt>
 	new_classic_replay_save_art() const noexcept;
 

@@ -38,6 +38,7 @@
 #include "th03/app/replay_slot_store.hpp"
 #include "th03/app/startup_sequence.hpp"
 #include "th03/app/tick_input.hpp"
+#include "th03/audio/output_gain.hpp"
 #include "th03/platform/sdl_input.hpp"
 #include "th03/platform/sdl_audio_device.hpp"
 #include "th03/platform/sdl_platform.hpp"
@@ -186,7 +187,30 @@ struct ReplaySaveAudioContext final {
 	th03::app::ClassicAudioSession *session = nullptr;
 	std::optional<th03::platform::SdlAudioDevice> *device = nullptr;
 	bool *started = nullptr;
+	const std::uint8_t *master_volume_percent = nullptr;
 };
+
+[[nodiscard]] std::expected<
+	std::span<const th03::audio::PmdCanonicalStereoSample>,
+	const char *
+> output_gain_frames(
+	std::span<const th03::audio::PmdCanonicalStereoSample> source,
+	std::uint8_t percent,
+	std::vector<th03::audio::PmdCanonicalStereoSample> &storage
+)
+{
+	if(!th03::audio::valid_output_gain_percent(percent)) {
+		return std::unexpected("invalid-master-volume");
+	}
+	if(percent == 100U) {
+		return source;
+	}
+	storage.assign(source.begin(), source.end());
+	if(!th03::audio::apply_output_gain(storage, percent)) {
+		return std::unexpected("master-volume-apply-failed");
+	}
+	return std::span<const th03::audio::PmdCanonicalStereoSample>(storage);
+}
 
 [[nodiscard]] std::uint16_t current_dos_date(void *) noexcept
 {
@@ -1112,6 +1136,12 @@ void warn_audio_device(
 	}
 }
 
+int fail_output_gain(const char *stage, const char *code)
+{
+	std::cerr << "status=error\nstage=" << stage << "\ncode=" << code << '\n';
+	return 1;
+}
+
 template <typename Error>
 int fail(const char *stage, const Error &error)
 {
@@ -1346,6 +1376,7 @@ ExperienceRunResult run_classic_session(
 	// persistence file. A misspelled/incomplete content root must remain a
 	// read-only startup failure rather than leaving a stray YUME.CFG behind.
 	th03::app::ClassicConfigOptions persisted_options{};
+	std::uint8_t master_volume_percent = 100U;
 	if(new_classic) {
 		auto persisted = th03::app::load_new_classic_settings_store(
 			new_classic_settings_path, config_path
@@ -1354,6 +1385,7 @@ ExperienceRunResult run_classic_session(
 			return {.exit_code = fail("settings-load", persisted.error())};
 		}
 		persisted_options = persisted->settings.options;
+		master_volume_percent = persisted->settings.master_volume_percent;
 	} else {
 		auto persisted = th03::app::load_classic_config_store(config_path);
 		if(!persisted) {
@@ -1467,6 +1499,7 @@ ExperienceRunResult run_classic_session(
 	}
 	bool audio_started = false;
 	std::vector<th03::audio::PmdCanonicalStereoSample> startup_silence{};
+	std::vector<th03::audio::PmdCanonicalStereoSample> gain_frames{};
 	auto scheduler = th03::app::TickInputScheduler::create(
 		parsed.tick_rate,
 		th03::platform::sdl_ticks_now_ns(),
@@ -1551,6 +1584,10 @@ ExperienceRunResult run_classic_session(
 				}
 				retry_blocked_event = false;
 			}
+			if(auto update =
+				(*runner)->take_new_classic_master_volume_update()) {
+				master_volume_percent = *update;
+			}
 			const bool clock_rebased_this_tick =
 				consumed->clock_rebase_requested;
 			const auto next_source_deadline = scheduler->next_deadline_ns();
@@ -1587,9 +1624,17 @@ ExperienceRunResult run_classic_session(
 				}
 			}
 			if(audio_device) {
-				const auto submitted = audio_device->submit(
-					audio_tick->canonical_frames
+				auto output = output_gain_frames(
+					audio_tick->canonical_frames,
+					new_classic ? master_volume_percent : std::uint8_t{100U},
+					gain_frames
 				);
+				if(!output) {
+					return {.exit_code = fail_output_gain(
+						"audio-output-gain", output.error()
+					)};
+				}
+				const auto submitted = audio_device->submit(*output);
 				if(!submitted) {
 					// Device loss is final-output state. Keep PMD and scene
 					// timelines advancing, but stop attempting delivery.
@@ -1682,6 +1727,7 @@ ExperienceRunResult run_classic_session(
 					.session = audio_session.get(),
 					.device = &audio_device,
 					.started = &audio_started,
+					.master_volume_percent = &master_volume_percent,
 				}
 			);
 			completed_replay.reset();
@@ -1912,6 +1958,7 @@ std::expected<void, int> run_host_ui(
 		return std::unexpected(fail_tick(scheduler.error()));
 	}
 	bool retry_blocked_event = false;
+	std::vector<th03::audio::PmdCanonicalStereoSample> gain_frames{};
 	for(;;) {
 		const auto cutoff = th03::platform::sdl_ticks_now_ns();
 		if(!retry_blocked_event) {
@@ -1947,9 +1994,17 @@ std::expected<void, int> run_host_ui(
 					));
 				}
 				if(audio.device && *audio.device) {
-					auto submitted = (*audio.device)->submit(
-						rendered->canonical_frames
+					const std::uint8_t percent = audio.master_volume_percent ?
+						*audio.master_volume_percent : std::uint8_t{100U};
+					auto output = output_gain_frames(
+						rendered->canonical_frames, percent, gain_frames
 					);
+					if(!output) {
+						return std::unexpected(fail_output_gain(
+							"replay-save-audio-output-gain", output.error()
+						));
+					}
+					auto submitted = (*audio.device)->submit(*output);
 					if(!submitted) {
 						warn_audio_device(
 							"replay-save-audio-submit", submitted.error()

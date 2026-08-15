@@ -871,6 +871,7 @@ struct ClassicOpSessionBackend final {
 	std::unique_ptr<NewClassicKeyConfigScene> key_config_scene{};
 	std::optional<NewClassicKeyConfig> pending_key_config_update{};
 	std::optional<bool> pending_reduced_flash_update{};
+	std::optional<std::uint8_t> pending_master_volume_update{};
 	std::optional<ClassicOpOptionsCompletion> key_config_return_options{};
 	std::unique_ptr<ClassicOpMusicRoomScene> music_room{};
 	std::optional<ClassicOpMusicRoomCompletion> music_completion{};
@@ -1467,7 +1468,9 @@ struct ClassicOpSessionBackend final {
 		}
 		auto created = ClassicOpOptionsScene::create_from_op(
 			*title_completion, config, fm_available, *resources,
-			patch_assets, font ? &*font : nullptr, !english_resources.empty()
+			patch_assets, font ? &*font : nullptr, !english_resources.empty(),
+			new_classic_settings ?
+				new_classic_settings->master_volume_percent : 100U
 		);
 		if(!created) {
 			return std::unexpected(title_error(std::move(created.error())));
@@ -1496,6 +1499,13 @@ struct ClassicOpSessionBackend final {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::audio_command_pending
 			));
+		}
+		if(new_classic_settings && new_classic_settings->master_volume_percent !=
+			options->master_volume_percent()) {
+			new_classic_settings->master_volume_percent =
+				options->master_volume_percent();
+			pending_master_volume_update =
+				new_classic_settings->master_volume_percent;
 		}
 		bool language_background_refreshed = false;
 		if(tick->phase == ClassicOpOptionsPhase::shrink_window &&
@@ -1540,9 +1550,23 @@ struct ClassicOpSessionBackend final {
 		}
 		config = options_completion->config();
 		pending_reduced_flash_update = config.reduced_flash;
+		if(new_classic_settings && new_classic_settings->master_volume_percent !=
+			options_completion->master_volume_percent()) {
+			new_classic_settings->master_volume_percent =
+				options_completion->master_volume_percent();
+			pending_master_volume_update =
+				new_classic_settings->master_volume_percent;
+		}
 		if(config.language != active_language) {
 			if(auto applied = apply_language_profile(config.language); !applied) {
 				return std::unexpected(std::move(applied.error()));
+			}
+		}
+		// Native New Classic settings commit when their retained Options owner
+		// closes. Classic keeps the original deferred YUME.CFG ownership.
+		if(new_classic_settings) {
+			if(auto committed = commit_config(); !committed) {
+				return std::unexpected(std::move(committed.error()));
 			}
 		}
 		if(options_completion->outcome() ==
@@ -1667,7 +1691,8 @@ struct ClassicOpSessionBackend final {
 		}
 		auto returned = ClassicOpOptionsScene::resume_after_key_config(
 			*key_config_return_options, fm_available, *resources, patch_assets,
-			&*font, !english_resources.empty()
+			&*font, !english_resources.empty(),
+			key_config_return_options->master_volume_percent()
 		);
 		if(!returned) {
 			return std::unexpected(title_error(std::move(returned.error())));
@@ -3296,6 +3321,12 @@ struct ClassicOpSessionBackend final {
 		return std::exchange(pending_reduced_flash_update, std::nullopt);
 	}
 
+	[[nodiscard]] std::optional<std::uint8_t>
+	take_master_volume_update() noexcept
+	{
+		return std::exchange(pending_master_volume_update, std::nullopt);
+	}
+
 	[[nodiscard]] std::expected<present::SourceSurface, ClassicOpSessionError>
 	compose(std::span<
 		present::ComposedPixel,
@@ -4195,6 +4226,17 @@ std::optional<bool> ClassicOpSession::take_reduced_flash_update() noexcept
 	return static_cast<ClassicOpSessionBackend *>(
 		impl_->operations.context
 	)->take_reduced_flash_update();
+}
+
+std::optional<std::uint8_t>
+ClassicOpSession::take_master_volume_update() noexcept
+{
+	if(!impl_ || !impl_->operations.context) {
+		return std::nullopt;
+	}
+	return static_cast<ClassicOpSessionBackend *>(
+		impl_->operations.context
+	)->take_master_volume_update();
 }
 
 std::shared_ptr<const NewClassicReplaySaveArt>

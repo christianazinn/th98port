@@ -75,6 +75,12 @@ consume_session(void *context, const ClassicOpSessionInput &input)
 	return static_cast<ClassicOpSession *>(context)->take_reduced_flash_update();
 }
 
+[[nodiscard]] std::optional<std::uint8_t>
+take_session_master_volume(void *context)
+{
+	return static_cast<ClassicOpSession *>(context)->take_master_volume_update();
+}
+
 [[nodiscard]] PixelOracleSourceIdentity pixel_oracle_session_identity(
 	void *context
 ) noexcept
@@ -325,6 +331,7 @@ struct ClassicRunner::Impl final {
 	std::unique_ptr<NewClassicReplayRecorder> replay_recorder{};
 	std::optional<ClassicRunnerError> failure{};
 	std::optional<NewClassicKeyConfig> latest_key_config{};
+	std::optional<std::uint8_t> latest_master_volume{};
 	PixelOracleIdentityTracker pixel_oracle_tracker{};
 	bool initial_replay = false;
 	std::uint64_t expected_tick_index = 0U;
@@ -468,6 +475,7 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		.take_audio_command = &take_session_audio,
 		.take_key_config_update = &take_session_key_config,
 		.take_reduced_flash_update = &take_session_reduced_flash,
+		.take_master_volume_update = &take_session_master_volume,
 		.pixel_oracle_source_identity = &pixel_oracle_session_identity,
 		.compose_shown_surface = &compose_session,
 	};
@@ -531,6 +539,13 @@ ClassicRunner::consume(
 			impl_->operations.context
 		)) {
 			impl_->reduced_flash = *update;
+		}
+	}
+	if(impl_->operations.take_master_volume_update) {
+		if(auto update = impl_->operations.take_master_volume_update(
+			impl_->operations.context
+		)) {
+			impl_->latest_master_volume = *update;
 		}
 	}
 
@@ -637,6 +652,13 @@ std::optional<NewClassicKeyConfig>
 ClassicRunner::take_new_classic_key_config_update() noexcept
 {
 	return impl_ ? std::exchange(impl_->latest_key_config, std::nullopt) :
+		std::nullopt;
+}
+
+std::optional<std::uint8_t>
+ClassicRunner::take_new_classic_master_volume_update() noexcept
+{
+	return impl_ ? std::exchange(impl_->latest_master_volume, std::nullopt) :
 		std::nullopt;
 }
 

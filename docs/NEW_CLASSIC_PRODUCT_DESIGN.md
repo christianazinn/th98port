@@ -126,6 +126,11 @@ Mute When Unfocused Off
 Return
 ```
 
+Implemented now: `Master Volume` in 5% steps, followed by the retained source
+`Music` and `SFX` On/Off controls and `Return`. The remaining percentage split
+and focus mute stay separate parcels because PMD currently exposes one mixed
+canonical stream.
+
 Percentages use 5% increments. Zero percent has the existing disabled
 semantics; raising a value above zero re-enables that category. At 100%, the
 current source-faithful PMD/OPNA sample stream must remain unchanged.

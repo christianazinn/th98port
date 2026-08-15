@@ -218,6 +218,7 @@ th03_silence_vendor_warnings(th03_vendor_ymfm)
 
 add_library(th03_audio_pmd STATIC
 	src/audio/fixed_resampler.cpp
+	src/audio/output_gain.cpp
 	src/audio/pmd_opna.cpp
 	src/audio/pmd_shim.c
 	src/audio/th03_pmd_service.cpp
@@ -552,6 +553,16 @@ endif()
 
 if(BUILD_TESTING)
 	find_package(Python3 COMPONENTS Interpreter)
+
+	add_executable(th03-audio-output-gain-tests
+		tests/test_audio_output_gain.cpp
+	)
+	target_link_libraries(th03-audio-output-gain-tests PRIVATE th03_audio_pmd)
+	th03_set_warnings(th03-audio-output-gain-tests)
+	add_test(
+		NAME th03-audio-output-gain-tests
+		COMMAND th03-audio-output-gain-tests
+	)
 	if(Python3_Interpreter_FOUND)
 		add_test(
 			NAME th03-pixel-frame-comparator-tests

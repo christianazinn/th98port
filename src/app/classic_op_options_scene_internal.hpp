@@ -22,6 +22,7 @@ namespace th03::app {
 
 enum class ClassicOpOptionsChoice : std::uint8_t {
 	rank,
+	master_volume,
 	bgm,
 	key_mode,
 	quit,
@@ -93,6 +94,7 @@ public:
 
 	[[nodiscard]] const GameInit &resident() const noexcept;
 	[[nodiscard]] ClassicConfigOptions config() const noexcept;
+	[[nodiscard]] std::uint8_t master_volume_percent() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 	[[nodiscard]] const present::Tram &tram() const noexcept;
 	[[nodiscard]] bool main_input_allowed() const noexcept;
@@ -103,6 +105,7 @@ private:
 	ClassicOpOptionsCompletion(
 		GameInit resident,
 		ClassicConfigOptions config,
+		std::uint8_t master_volume_percent,
 		present::Raster raster,
 		present::Tram tram,
 		bool main_input_allowed,
@@ -111,6 +114,7 @@ private:
 
 	GameInit resident_{};
 	ClassicConfigOptions config_{};
+	std::uint8_t master_volume_percent_ = 100U;
 	present::Raster raster_{};
 	present::Tram tram_{};
 	bool main_input_allowed_ = false;
@@ -132,7 +136,8 @@ public:
 		std::span<const LoadedMainResource> resources,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {},
 		const present::AnkGlyphProvider *font = nullptr,
-		bool language_available = false
+		bool language_available = false,
+		std::uint8_t master_volume_percent = 100U
 	);
 
 	[[nodiscard]] static std::expected<
@@ -144,7 +149,8 @@ public:
 		std::span<const LoadedMainResource> resources,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 		const present::AnkGlyphProvider *font,
-		bool language_available
+		bool language_available,
+		std::uint8_t master_volume_percent = 100U
 	);
 
 	[[nodiscard]] static std::expected<
@@ -160,7 +166,8 @@ public:
 		assets::BfntSheet window_sheet,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {},
 		const present::AnkGlyphProvider *font = nullptr,
-		bool language_available = false
+		bool language_available = false,
+		std::uint8_t master_volume_percent = 100U
 	);
 	[[nodiscard]] std::expected<void, ClassicOpError>
 	refresh_patch_language_background(
@@ -184,6 +191,7 @@ public:
 	[[nodiscard]] ClassicOpOptionsPage page() const noexcept;
 	[[nodiscard]] ClassicOpOptionsChoice selected_choice() const noexcept;
 	[[nodiscard]] ClassicConfigOptions config() const noexcept;
+	[[nodiscard]] std::uint8_t master_volume_percent() const noexcept;
 	[[nodiscard]] const GameInit &resident() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 	[[nodiscard]] const present::Tram &tram() const noexcept;
@@ -204,7 +212,8 @@ private:
 		present::Raster raster,
 		present::Tram tram,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
-		bool language_available
+		bool language_available,
+		std::uint8_t master_volume_percent
 	) noexcept;
 
 	[[nodiscard]] bool restore_menu_background(
@@ -262,6 +271,7 @@ private:
 	std::unique_ptr<Prepared> prepared_{};
 	GameInit resident_{};
 	ClassicConfigOptions config_{};
+	std::uint8_t master_volume_percent_ = 100U;
 	present::Raster raster_{};
 	present::Tram tram_{};
 	std::array<ClassicAudioCommand, 8U> audio_commands_{};

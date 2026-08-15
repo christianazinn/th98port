@@ -257,7 +257,7 @@ std::unique_ptr<ClassicOpOptionsScene> make_patch_scene_if_assets_supplied()
 	EmptyAnk font{};
 	auto created = ClassicOpOptionsScene::create(
 		resident, {}, true, std::move(raster), {}, menu_background(),
-		window_sheet(), std::move(assets), &font, true
+		window_sheet(), std::move(assets), &font, true, 35U
 	);
 	expect(created.has_value(), "hierarchical Options scene creates");
 	return created ? std::move(*created) : nullptr;
@@ -306,9 +306,17 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		scene->advance().has_value() &&
 		scene->advance({.ok = true}).has_value() &&
 		scene->page() == ClassicOpOptionsPage::audio &&
-		scene->selected_choice() == ClassicOpOptionsChoice::bgm,
+		scene->selected_choice() == ClassicOpOptionsChoice::master_volume,
 		"Audio opens from the category page");
 	expect(scene->advance().has_value(), "Audio entry releases");
+	expect(scene->advance({.right = true}).has_value() &&
+		scene->master_volume_percent() == 40U,
+		"Audio Master Volume advances in 5% steps");
+	expect(scene->advance().has_value() &&
+		scene->advance({.down = true}).has_value() &&
+		scene->advance().has_value() &&
+		scene->selected_choice() == ClassicOpOptionsChoice::bgm,
+		"Audio navigation reaches source Music below Master Volume");
 	expect(scene->advance({.right = true}).has_value() &&
 		scene->config().bgm_mode == ClassicBgmMode::off,
 		"Audio Music retains live On/Off behavior");
@@ -334,7 +342,8 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		"KeyConfig action completes the Options owner");
 	auto key_config = scene->take_completion();
 	expect(key_config && key_config->outcome() ==
-		ClassicOpOptionsOutcome::key_config,
+		ClassicOpOptionsOutcome::key_config &&
+		key_config->master_volume_percent() == 40U,
 		"KeyConfig retains its typed handoff outcome");
 
 	auto system = make_patch_scene_if_assets_supplied();

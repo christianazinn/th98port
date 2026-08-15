@@ -413,6 +413,7 @@ struct FakeRunnerBackend final {
 	bool clock_rebase_next = false;
 	std::optional<th03::app::ClassicAudioCommand> audio{};
 	std::optional<bool> reduced_flash_update{};
+	std::optional<std::uint8_t> master_volume_update{};
 	th03::app::PixelOracleSourceIdentity pixel_oracle_source_identity{
 		.process = th03::app::PixelOracleProcess::op,
 		.scene = th03::app::PixelOracleScene::title,
@@ -476,6 +477,10 @@ th03::app::ClassicRunnerOperations runner_operations(
 		.take_reduced_flash_update = [](void *context) {
 			auto &self = *static_cast<FakeRunnerBackend *>(context);
 			return std::exchange(self.reduced_flash_update, std::nullopt);
+		},
+		.take_master_volume_update = [](void *context) {
+			auto &self = *static_cast<FakeRunnerBackend *>(context);
+			return std::exchange(self.master_volume_update, std::nullopt);
 		},
 		.pixel_oracle_source_identity = [](void *context) {
 			return static_cast<FakeRunnerBackend *>(context)->
@@ -620,6 +625,7 @@ void test_runner_sequence_audio_surface_and_failure()
 	);
 	if(new_classic) {
 		profile_backend->reduced_flash_update = true;
+		profile_backend->master_volume_update = std::uint8_t{35U};
 		auto live_flash = (*new_classic)->consume({});
 		std::vector<th03::present::ComposedPixel> live_pixels(
 			th03::present::graphics_page_pixels
@@ -632,6 +638,11 @@ void test_runner_sequence_audio_surface_and_failure()
 		);
 		expect(live_flash && live_surface && live_surface->reduced_flash_applied,
 			"New Classic applies a live Flash FX option update in the retained runner");
+		expect(
+			(*new_classic)->take_new_classic_master_volume_update() == 35U &&
+			!(*new_classic)->take_new_classic_master_volume_update(),
+			"New Classic publishes each typed master-volume update once"
+		);
 	}
 	auto reduced = th03::app::ClassicRunnerTestAccess::create(
 		std::static_pointer_cast<void>(profile_backend),
