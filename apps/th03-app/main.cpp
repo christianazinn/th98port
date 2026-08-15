@@ -1069,6 +1069,17 @@ int fail(const char *stage, const th03::platform::SdlPlatformError &error)
 	return 1;
 }
 
+std::expected<void, int> refresh_host_presentability(
+	th03::platform::SdlPlatform &platform,
+	const char *stage
+)
+{
+	if(auto refreshed = platform.refresh_presentability(); !refreshed) {
+		return std::unexpected(fail(stage, refreshed.error()));
+	}
+	return {};
+}
+
 int fail(const char *stage, const th03::platform::SdlInputMapperError &error)
 {
 	std::cerr << "status=error\nstage=" << stage << "\ncode="
@@ -1372,6 +1383,13 @@ int run_direct_vs(th03::app::DirectVsCliRequest parsed)
 			}
 			presentation_pending = false;
 			presented_this_iteration = true;
+		}
+		if(!presentation_pending) {
+			if(auto refreshed = refresh_host_presentability(
+				**platform, "presentability-refresh"
+			); !refreshed) {
+				return refreshed.error();
+			}
 		}
 		if(session_complete) {
 			return 0;
@@ -1976,6 +1994,13 @@ ExperienceRunResult run_classic_session(
 			pending_publication_identity.reset();
 			presented_this_iteration = true;
 		}
+		if(!presentation_pending) {
+			if(auto refreshed = refresh_host_presentability(
+				platform, "presentability-refresh"
+			); !refreshed) {
+				return {.exit_code = refreshed.error()};
+			}
+		}
 		if(session_complete) {
 			return {.disposition = ExperienceRunDisposition::return_to_menu};
 		}
@@ -2068,6 +2093,11 @@ StartupRunResult run_startup_sequence(
 			if(!presented) {
 				return {.exit_code = fail("startup-present", presented.error())};
 			}
+		}
+		if(auto refreshed = refresh_host_presentability(
+			platform, "startup-presentability-refresh"
+		); !refreshed) {
+			return {.exit_code = refreshed.error()};
 		}
 		if(sequence.status() ==
 			th03::app::StartupSequenceStatus::quit_requested) {
@@ -2249,6 +2279,11 @@ std::expected<void, int> run_host_ui(
 					"new-classic-present", presented.error()
 				));
 			}
+		}
+		if(auto refreshed = refresh_host_presentability(
+			platform, "new-classic-presentability-refresh"
+		); !refreshed) {
+			return std::unexpected(refreshed.error());
 		}
 		if(done) {
 			return {};

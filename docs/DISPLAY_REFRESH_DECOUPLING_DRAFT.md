@@ -1,6 +1,6 @@
 # Display-refresh decoupling draft
 
-Status: **sample-and-hold direction accepted; implementation parcel pending;
+Status: **sample-and-hold and SDL presentability isolation implemented;
 interpolation explicitly deferred**
 
 Draft date: 2026-08-15
@@ -25,11 +25,13 @@ For non-interpolated output, use **sample and hold**:
    every source tick while host presentation keeps only the newest complete
    image.
 
-This is already the ordinary visible production behavior: the application
-submits changed source publications and the display holds the resident image.
-The remaining parcel is to freeze that behavior in cross-refresh tests and
-isolate simulation from a blocked present when the window is minimized or
-otherwise genuinely unpresentable. It is not a new per-refresh repeat loop.
+This is the ordinary visible production behavior: the application submits
+changed source publications and the display holds the resident image. The
+contract is frozen by 60/120/144 Hz platform-neutral tests. The SDL boundary
+now isolates simulation from a blocked present when the window is minimized,
+hidden, occluded, or has no output, retaining the newest complete texture and
+submitting it exactly once after restore. It is not a new per-refresh repeat
+loop.
 
 Repeatedly calling blocking
 `SDL_RenderPresent()` with the same texture would create no visual information,
@@ -87,16 +89,19 @@ commit each changed source boundary separately.
 
 ## Presentability and blocking isolation
 
-The first implementation parcel should add an explicit platform
-`presentable` state. While a window is genuinely minimized or occluded:
+The implemented platform mailbox owns an explicit `presentable` state. While a
+window is minimized, hidden, occluded, or has no drawable output:
 
 - do not call a potentially blocking host present;
 - continue source simulation, replay, input, and audio policy;
 - retain only the newest complete pending surface; and
 - submit it once immediately after restore/expose.
 
-Developer oracle/capture mode overrides suppression because its contract is to
-retain source publications even with a hidden native window.
+Developer oracle/capture remains tied to every source publication even while
+physical submission is suppressed. Conversion, T3PXH2, T3RGB1, and T3ALI1 do
+not become physical-scanout events; `destination=null`,
+`submitted_to_host=false`, and `retained_for_restore=true` intentionally report
+that split.
 
 Focus loss is not minimization and remains non-pausing. It timestamp-clears held
 input while retaining device presence; `Focus Mute` affects only final PCM
@@ -178,7 +183,7 @@ explicit rule.
 
 ## No-regret implementation order
 
-### D0 — freeze the contract
+### D0 — freeze the contract (complete)
 
 - Add platform-neutral tests proving 60/120/144 display schedules yield
   identical source inputs/state/results.
@@ -186,13 +191,14 @@ explicit rule.
 - Correct the stale `PC98_CADENCE.md` claim that production discards missed
   deadlines; production now deliberately preserves them.
 
-### D1 — isolate blocked presentation
+### D1 — isolate blocked presentation (complete)
 
-- Add minimized/occluded presentability at the SDL boundary.
-- Retain only the newest complete pending surface while not presentable.
-- Preserve oracle mode's one-source-publication-per-present behavior.
-- Add test-only counts for source ticks/publications, coalesced images, and
-  skipped-not-presentable submits; no release debug overlay.
+- The platform-neutral mailbox and SDL boundary cover minimized, hidden,
+  occluded, and zero-output presentability.
+- The persistent texture retains only the newest complete pending surface.
+- Oracle mode retains one T3PXH2/T3RGB1/T3ALI1 source row per publication.
+- Focused tests count source publications, host submits, and one-shot restore;
+  there is no release debug overlay.
 
 ### D2 — real-display validation
 

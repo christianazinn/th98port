@@ -92,13 +92,28 @@ struct SdlPlatformConfig {
 };
 
 struct SdlPresentResult {
-	// Destination in physical output pixels. A drawable smaller than 640x400
-	// is a successful black-only presentation rather than a stretched frame.
+	// Destination in physical output pixels for a submitted texture. A
+	// presentable drawable smaller than 640x400 is a successful black-only
+	// submission rather than a stretched frame; an unpresentable retained
+	// source also has no destination, distinguished by [submitted_to_host].
 	std::optional<app::IntegerLetterboxRect> destination{};
+	// False means the complete source image was retained in the persistent
+	// texture while the window was minimized, hidden, occluded, or had no
+	// drawable output. Source simulation and capture still completed.
+	bool submitted_to_host = false;
+	bool retained_for_restore = false;
 	// Shared successful T3PXH2/T3RGB1 ordinal when either developer oracle is
 	// active. This binds a separate app-layer identity sidecar without adding
 	// route semantics to SDL or changing either frozen manifest schema.
 	std::optional<std::uint64_t> oracle_publication{};
+};
+
+struct SdlPresentabilityRefreshResult {
+	bool presentable = false;
+	// True only for the one restore call that submitted a retained newest
+	// surface. Repeated presentable observations perform no additional work.
+	bool submitted_retained_surface = false;
+	std::optional<app::IntegerLetterboxRect> destination{};
 };
 
 struct SdlPresentationOracleIdentity {
@@ -110,7 +125,10 @@ struct SdlPresentationOracleIdentity {
 // window/renderer, and one persistent 640x400 streaming texture. Simulation
 // cadence is intentionally outside this class. Presentation requests strict
 // interval-one VSync to prevent mid-scanout replacement on native renderers;
-// waiting for a physical refresh never emits or drops a logical tick.
+// waiting for a physical refresh never emits or drops a logical tick. Hidden,
+// minimized, occluded, and zero-output states retain the newest complete
+// texture without blocking; the application polls refresh_presentability()
+// after event and source work to submit it once on restore.
 class SdlPlatform final {
 public:
 	[[nodiscard]] static std::expected<
@@ -128,6 +146,14 @@ public:
 		const present::SourceSurface &surface,
 		SdlPresentationOracleIdentity identity = {}
 	) noexcept;
+	// Polls SDL's current window/output state after event handling. This emits
+	// no source publication and records no oracle row. If source images arrived
+	// while unpresentable, the first restored call submits exactly the newest
+	// retained texture once.
+	[[nodiscard]] std::expected<
+		SdlPresentabilityRefreshResult,
+		SdlPlatformError
+	> refresh_presentability() noexcept;
 	[[nodiscard]] bool oracle_enabled() const noexcept;
 	// Applies a complete host-window policy. A failed transition restores the
 	// previous SDL mode and dimensions before returning an error. The renderer,

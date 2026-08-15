@@ -43,7 +43,18 @@ follow source-style `frame_delay(1)` behavior by rebasing missed retraces rather
 than simulating a growing catch-up backlog.
 
 Host VSync never defines the logical rate. It only paces publication of the
-newest completed 640x400 source surface.
+newest completed 640x400 source surface. Classic and New Classic preserve every
+overdue source deadline so simulation, PMD/audio, input, replay, and playtime
+remain on that rational timeline; only the developer direct-VS interactive
+path uses missed-retrace rebasing. A minimized, hidden, occluded, or zero-output
+SDL window suppresses physical host submission rather than source work. The
+newest complete texture is retained and submitted exactly once after restore.
+
+At 60, 120, or 144 Hz, the physical display sample-and-holds the most recently
+submitted complete source image. Repeated physical scanouts never run the
+runner, advance audio, consume replay input, or emit another source-pixel
+oracle publication. Developer T3PXH2/T3RGB1 capture remains source-publication
+aligned even when physical submission is suppressed.
 
 ## Remaining empirical gates
 

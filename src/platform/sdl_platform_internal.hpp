@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <optional>
 #include <string_view>
 
 #include "th03/platform/sdl_platform.hpp"
@@ -37,6 +38,9 @@ struct SdlPlatformMetrics {
 	std::int32_t texture_scale_mode = 0;
 	std::uint32_t texture_blend_mode = 0U;
 	std::int32_t renderer_vsync = 0;
+	std::uint64_t source_publications = 0U;
+	std::uint64_t host_submissions = 0U;
+	bool restore_submission_pending = false;
 	std::string_view video_driver{};
 	std::string_view renderer_name{};
 };
@@ -55,6 +59,12 @@ struct SdlPlatformTestAccess {
 		detail::SdlPlatformMetrics,
 		SdlPlatformError
 	> metrics(const SdlPlatform &platform) noexcept;
+	// Overrides the SDL window flags for deterministic hidden/dummy-backend
+	// presentability tests. nullopt restores the production query.
+	static void set_presentability_override(
+		SdlPlatform &platform,
+		std::optional<bool> presentable
+	) noexcept;
 };
 
 } // namespace th03::platform

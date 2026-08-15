@@ -3,6 +3,8 @@
 #include "sdl_platform_internal.hpp"
 #include "sdl_runtime_internal.hpp"
 
+#include "th03/app/display_presentability.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -127,6 +129,11 @@ void hash_palette(
 } // namespace
 
 struct SdlPlatform::Impl {
+	struct HostOutputState {
+		bool presentable = false;
+		std::optional<app::IntegerLetterboxRect> destination{};
+	};
+
 	struct PreparedRgbFrame {
 		std::filesystem::path temporary{};
 		std::filesystem::path final{};
@@ -145,6 +152,55 @@ struct SdlPlatform::Impl {
 	std::uint64_t oracle_rgb_publication = 0U;
 	bool oracle_hash_lease = false;
 	SdlWindowPresentation window_presentation{};
+	app::SourcePresentationMailbox presentation_mailbox{};
+	std::optional<bool> test_presentability_override{};
+
+	[[nodiscard]] std::expected<HostOutputState, SdlPlatformError>
+	host_output_state() const noexcept
+	{
+		const auto flags = SDL_GetWindowFlags(window);
+		const bool flag_presentable =
+			(flags & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED |
+				SDL_WINDOW_OCCLUDED)) == 0U;
+		if(!test_presentability_override.value_or(flag_presentable)) {
+			return HostOutputState{};
+		}
+		int output_width = 0;
+		int output_height = 0;
+		if(!SDL_GetRenderOutputSize(renderer, &output_width, &output_height) ||
+			output_width < 0 || output_height < 0) {
+			return std::unexpected(error_with_sdl_detail(
+				SdlPlatformErrorCode::render_output_failed
+			));
+		}
+		if(output_width == 0 || output_height == 0) {
+			return HostOutputState{};
+		}
+		return HostOutputState{
+			.presentable = true,
+			.destination = window_destination(
+				static_cast<std::size_t>(output_width),
+				static_cast<std::size_t>(output_height),
+				window_presentation.aspect
+			),
+		};
+	}
+
+	[[nodiscard]] std::expected<void, SdlPlatformError> submit_texture(
+		std::optional<app::IntegerLetterboxRect> destination
+	) noexcept
+	{
+		if(!SDL_SetRenderDrawColor(renderer, 0U, 0U, 0U, 0xFFU) ||
+			!SDL_RenderClear(renderer) ||
+			(destination && !SDL_RenderTexture(
+				renderer, texture, nullptr, nullptr
+			)) || !SDL_RenderPresent(renderer)) {
+			return std::unexpected(error_with_sdl_detail(
+				SdlPlatformErrorCode::render_failed
+			));
+		}
+		return {};
+	}
 
 	[[nodiscard]] std::optional<PreparedRgbFrame> prepare_rgb_frame(
 		const void *pixels,
@@ -613,40 +669,22 @@ std::expected<SdlPresentResult, SdlPlatformError> SdlPlatform::present(
 		}
 	};
 
-	int output_width = 0;
-	int output_height = 0;
-	if(!SDL_GetRenderOutputSize(
-		impl_->renderer, &output_width, &output_height
-	) || output_width < 0 || output_height < 0) {
+	const auto output = impl_->host_output_state();
+	if(!output) {
 		discard_rgb_frame();
-		return std::unexpected(error_with_sdl_detail(
-			SdlPlatformErrorCode::render_output_failed
-		));
+		return std::unexpected(output.error());
 	}
-	const auto destination = window_destination(
-		static_cast<std::size_t>(output_width),
-		static_cast<std::size_t>(output_height),
-		impl_->window_presentation.aspect
+	const auto requested = impl_->presentation_mailbox.publish_source(
+		output->presentable
 	);
-	if(!SDL_SetRenderDrawColor(impl_->renderer, 0U, 0U, 0U, 0xFFU) ||
-		!SDL_RenderClear(impl_->renderer)) {
-		discard_rgb_frame();
-		return std::unexpected(error_with_sdl_detail(
-			SdlPlatformErrorCode::render_failed
-		));
-	}
-	if(destination &&
-		!SDL_RenderTexture(impl_->renderer, impl_->texture, nullptr, nullptr)) {
-		discard_rgb_frame();
-		return std::unexpected(error_with_sdl_detail(
-			SdlPlatformErrorCode::render_failed
-		));
-	}
-	if(!SDL_RenderPresent(impl_->renderer)) {
-		discard_rgb_frame();
-		return std::unexpected(error_with_sdl_detail(
-			SdlPlatformErrorCode::render_failed
-		));
+	bool submitted_to_host = false;
+	if(requested) {
+		if(auto submitted = impl_->submit_texture(output->destination); !submitted) {
+			discard_rgb_frame();
+			return std::unexpected(submitted.error());
+		}
+		submitted_to_host = impl_->presentation_mailbox
+			.acknowledge_host_submission(*requested);
 	}
 	if(!impl_->record_oracle(surface, identity)) {
 		discard_rgb_frame();
@@ -660,8 +698,38 @@ std::expected<SdlPresentResult, SdlPlatformError> SdlPlatform::present(
 		});
 	}
 	return SdlPresentResult{
-		.destination = destination,
+		.destination = submitted_to_host ? output->destination : std::nullopt,
+		.submitted_to_host = submitted_to_host,
+		.retained_for_restore =
+			impl_->presentation_mailbox.submission_pending(),
 		.oracle_publication = publication,
+	};
+}
+
+std::expected<SdlPresentabilityRefreshResult, SdlPlatformError>
+SdlPlatform::refresh_presentability() noexcept
+{
+	const auto output = impl_->host_output_state();
+	if(!output) {
+		return std::unexpected(output.error());
+	}
+	const auto requested = impl_->presentation_mailbox.refresh_host(
+		output->presentable
+	);
+	if(!requested) {
+		return SdlPresentabilityRefreshResult{
+			.presentable = output->presentable,
+		};
+	}
+	if(auto submitted = impl_->submit_texture(output->destination); !submitted) {
+		return std::unexpected(submitted.error());
+	}
+	const bool acknowledged = impl_->presentation_mailbox
+		.acknowledge_host_submission(*requested);
+	return SdlPresentabilityRefreshResult{
+		.presentable = output->presentable,
+		.submitted_retained_surface = acknowledged,
+		.destination = acknowledged ? output->destination : std::nullopt,
 	};
 }
 
@@ -829,11 +897,25 @@ SdlPlatformTestAccess::metrics(const SdlPlatform &platform) noexcept
 		.texture_scale_mode = static_cast<std::int32_t>(scale_mode),
 		.texture_blend_mode = static_cast<std::uint32_t>(blend_mode),
 		.renderer_vsync = renderer_vsync,
+		.source_publications = platform.impl_->presentation_mailbox
+			.source_publication_count(),
+		.host_submissions = platform.impl_->presentation_mailbox
+			.host_submission_count(),
+		.restore_submission_pending = platform.impl_->presentation_mailbox
+			.submission_pending(),
 		.video_driver = (video == nullptr) ? std::string_view{} :
 			std::string_view{video},
 		.renderer_name = (renderer == nullptr) ? std::string_view{} :
 			std::string_view{renderer},
 	};
+}
+
+void SdlPlatformTestAccess::set_presentability_override(
+	SdlPlatform &platform,
+	std::optional<bool> presentable
+) noexcept
+{
+	platform.impl_->test_presentability_override = presentable;
 }
 
 } // namespace th03::platform

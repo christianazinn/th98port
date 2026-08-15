@@ -172,9 +172,12 @@ SDL presentation independently requires interval-one VSync so a complete
 source frame cannot be replaced mid-scanout on the native renderer. A host
 display whose refresh rate differs from 56.423 Hz can still repeat logical
 frames or skip intermediate catch-up frames, but that physical scheduling never
-changes the PC-98 gameplay/PMD timeline. The audio endpoint starts paused after
-the initial blocking present, receives a three-interval prefill, and only then
-resumes. The maintained T98-Next profile consumes ordinary FM key edges
+changes the PC-98 gameplay/PMD timeline. Hidden, minimized, occluded, and
+zero-output windows suppress only physical submission: the newest complete
+texture is retained and submitted once on restore, while simulation, input,
+replay, audio, and source-pixel capture continue. The audio endpoint starts
+paused after the initial blocking present, receives a three-interval prefill,
+and only then resumes. The maintained T98-Next profile consumes ordinary FM key edges
 immediately, matching FMGEN and preventing same-sample PMD key-off/key-on pairs
 from collapsing. Its SSG lane is bipolar and weighted by `725/2048`, and its FM
 lane is scaled by `5/2`, before the signed-16-scale mix is promoted to the

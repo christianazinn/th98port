@@ -261,6 +261,7 @@ void test_dummy_platform_lifecycle_and_present()
 			return;
 		}
 		auto &platform = **created;
+		SdlPlatformTestAccess::set_presentability_override(platform, true);
 		expect(platform.oracle_enabled(),
 			"state and RGB capture make publication-preserving oracle policy observable");
 		expect(platform.window_id() != 0U,
@@ -299,7 +300,8 @@ void test_dummy_platform_lifecycle_and_present()
 		expect(
 			first && first->destination == th03::app::IntegerLetterboxRect{
 				0U, 0U, 640U, 400U, 1U
-			} && first->oracle_publication == 0U,
+			} && first->submitted_to_host && !first->retained_for_restore &&
+				first->oracle_publication == 0U,
 			"native-size source surface uploads and presents at integer scale one"
 		);
 		const auto before_invalid = platform.window_presentation();
@@ -424,6 +426,51 @@ void test_dummy_platform_lifecycle_and_present()
 		};
 		expect(static_cast<bool>(platform.present(fixture.source())),
 			"platform recovers with a valid frame after a failed conversion");
+
+		const auto before_suppression = SdlPlatformTestAccess::metrics(platform);
+		SdlPlatformTestAccess::set_presentability_override(platform, false);
+		fixture.pixels[0U] = {ComposedPixelLayer::text, 5U};
+		const auto suppressed_first = platform.present(fixture.source(), {
+			.logical_tick = 90U,
+			.coalesced_ticks = 1U,
+		});
+		fixture.pixels[0U] = {ComposedPixelLayer::text, 6U};
+		const auto suppressed_newest = platform.present(fixture.source(), {
+			.logical_tick = 91U,
+			.coalesced_ticks = 1U,
+		});
+		const auto suppressed_metrics = SdlPlatformTestAccess::metrics(platform);
+		expect(
+			before_suppression && suppressed_first && suppressed_newest &&
+				!suppressed_first->submitted_to_host &&
+				suppressed_first->retained_for_restore &&
+				!suppressed_newest->submitted_to_host &&
+				suppressed_newest->retained_for_restore &&
+				suppressed_first->oracle_publication == 6U &&
+				suppressed_newest->oracle_publication == 7U &&
+				suppressed_metrics && suppressed_metrics->source_publications ==
+					before_suppression->source_publications + 2U &&
+				suppressed_metrics->host_submissions ==
+					before_suppression->host_submissions &&
+				suppressed_metrics->restore_submission_pending,
+			"minimized publications retain only the newest texture while every oracle source row remains complete"
+		);
+		const auto still_suppressed = platform.refresh_presentability();
+		SdlPlatformTestAccess::set_presentability_override(platform, true);
+		const auto restored = platform.refresh_presentability();
+		const auto restored_again = platform.refresh_presentability();
+		const auto restored_metrics = SdlPlatformTestAccess::metrics(platform);
+		expect(
+			still_suppressed && !still_suppressed->presentable &&
+				!still_suppressed->submitted_retained_surface && restored &&
+				restored->presentable && restored->submitted_retained_surface &&
+				restored_again && restored_again->presentable &&
+				!restored_again->submitted_retained_surface && restored_metrics &&
+				restored_metrics->host_submissions ==
+					before_suppression->host_submissions + 1U &&
+				!restored_metrics->restore_submission_pending,
+			"restore submits the newest retained texture exactly once without another source publication"
+		);
 	}
 	expect(SDL_WasInit(0U) == 0U,
 		"platform destruction releases all SDL subsystems it owns");
@@ -434,14 +481,17 @@ void test_dummy_platform_lifecycle_and_present()
 			rows.push_back(std::move(row));
 		}
 		expect(
-			rows.size() == 7U && rows[0U] ==
+			rows.size() == 9U && rows[0U] ==
 				"stream\tschema\tpublication\tlogical_tick\tcoalesced_ticks\t"
 				"overlay\treduced_flash\tsource_fnv64\traster_fnv64\t"
 				"tram_fnv64\tshown_page\traster_mode\tscroll_y\ttone" &&
 				rows[1U].starts_with("T3PXH\t2\t0\t17\t1\t0\t0\t") &&
 				rows[1U].find("\t1122334455667788\t8877665544332211\t") !=
-					std::string::npos && rows[6U].starts_with("T3PXH\t2\t5\tna\t0\t"),
-			"T3PXH2 records six successful publications with aligned schema, logical identity, and source fingerprints"
+					std::string::npos &&
+				rows[6U].starts_with("T3PXH\t2\t5\tna\t0\t") &&
+				rows[7U].starts_with("T3PXH\t2\t6\t90\t1\t") &&
+				rows[8U].starts_with("T3PXH\t2\t7\t91\t1\t"),
+			"T3PXH2 records every successful source publication independent of host presentability"
 		);
 	}
 	{
@@ -451,14 +501,16 @@ void test_dummy_platform_lifecycle_and_present()
 			rows.push_back(std::move(row));
 		}
 		expect(
-			rows.size() == 7U && rows[0U] ==
+			rows.size() == 9U && rows[0U] ==
 				"stream\tschema\tpublication\tlogical_tick\tcoalesced_ticks\t"
 				"overlay\treduced_flash\tsource_fnv64\traster_fnv64\t"
 				"tram_fnv64\tshown_page\traster_mode\tscroll_y\ttone\t"
 				"rgb_fnv64\tfile" &&
 				rows[1U].starts_with("T3RGB\t1\t0\t17\t1\t0\t0\t") &&
 				rows[1U].ends_with("\tframe-00000000.ppm") &&
-				rows[6U].starts_with("T3RGB\t1\t5\tna\t0\t"),
+				rows[6U].starts_with("T3RGB\t1\t5\tna\t0\t") &&
+				rows[7U].starts_with("T3RGB\t1\t6\t90\t1\t") &&
+				rows[8U].starts_with("T3RGB\t1\t7\t91\t1\t"),
 			"T3RGB1 records one exact frame identity for every successful publication"
 		);
 		std::ifstream first{
@@ -483,10 +535,10 @@ void test_dummy_platform_lifecycle_and_present()
 		expect(
 			std::filesystem::file_size(rgb_root / "frame-00000001.ppm") ==
 				bytes.size() &&
-				std::filesystem::file_size(rgb_root / "frame-00000005.ppm") ==
+				std::filesystem::file_size(rgb_root / "frame-00000007.ppm") ==
 					bytes.size() &&
-				!std::filesystem::exists(rgb_root / "frame-00000006.ppm") &&
-				!std::filesystem::exists(rgb_root / "frame-00000006.ppm.tmp"),
+				!std::filesystem::exists(rgb_root / "frame-00000008.ppm") &&
+				!std::filesystem::exists(rgb_root / "frame-00000008.ppm.tmp"),
 			"failed source conversion emits no raw frame and later publication stays contiguous"
 		);
 	}

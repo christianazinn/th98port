@@ -457,6 +457,7 @@ target_link_libraries(th03_present PUBLIC th03_core)
 # events, clocks, and texture storage at this boundary; none enter core or
 # presentation state.
 add_library(th03_app_runtime STATIC
+	src/app/display_presentability.cpp
 	src/app/host_surface.cpp
 	src/app/new_classic_pause.cpp
 	src/app/startup_sequence.cpp
@@ -841,6 +842,18 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-tick-input-tests
 		COMMAND th03-app-tick-input-tests
+	)
+
+	add_executable(th03-app-display-presentability-tests
+		tests/test_app_display_presentability.cpp
+	)
+	target_link_libraries(
+		th03-app-display-presentability-tests PRIVATE th03_app_runtime
+	)
+	th03_set_warnings(th03-app-display-presentability-tests)
+	add_test(
+		NAME th03-app-display-presentability-tests
+		COMMAND th03-app-display-presentability-tests
 	)
 
 	add_executable(th03-app-classic-mainl-win-tests
