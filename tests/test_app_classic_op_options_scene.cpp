@@ -31,6 +31,8 @@ using th03::app::ClassicMusicCue;
 using th03::app::ClassicOpErrorCode;
 using th03::app::ClassicOpInput;
 using th03::app::ClassicOpOptionsChoice;
+using th03::app::ClassicOpOptionsOutcome;
+using th03::app::ClassicOpOptionsPage;
 using th03::app::ClassicOpOptionsPhase;
 using th03::app::ClassicOpOptionsScene;
 using th03::app::ClassicRank;
@@ -218,6 +220,159 @@ void test_replay_patch_option_unput_if_assets_supplied()
 	}
 	expect(option_rows_clean,
 		"Option contraction removes all proportional labels before shrinking");
+}
+
+std::unique_ptr<ClassicOpOptionsScene> make_patch_scene_if_assets_supplied()
+{
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4996)
+#endif
+	const auto *path = std::getenv("TH03_AZINN_DAT");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+	if(!path || *path == '\0') {
+		return {};
+	}
+	auto loaded = th03::app::load_new_classic_replay_patch_assets(path);
+	expect(loaded.has_value(), "hierarchical Options assets load");
+	if(!loaded) {
+		return {};
+	}
+	auto assets = std::make_shared<const th03::app::NewClassicReplayPatchAssets>(
+		std::move(*loaded)
+	);
+	auto raster = main_menu_raster();
+	const auto background = menu_background();
+	expect(raster.set_access_page(Page::one) && raster.blit({
+		.pixels = background.image.indices,
+		.width = background.image.width,
+		.height = background.image.height,
+		.stride = background.image.width,
+	}, {0, 0}) && raster.set_access_page(Page::zero),
+		"hierarchical Options fixture prepares bare title page");
+	GameInit resident{};
+	resident.rank = static_cast<std::uint8_t>(ClassicRank::normal);
+	EmptyAnk font{};
+	auto created = ClassicOpOptionsScene::create(
+		resident, {}, true, std::move(raster), {}, menu_background(),
+		window_sheet(), std::move(assets), &font, true
+	);
+	expect(created.has_value(), "hierarchical Options scene creates");
+	return created ? std::move(*created) : nullptr;
+}
+
+void enter_patch_options(ClassicOpOptionsScene &scene)
+{
+	for(std::uint16_t frame = 0U; frame < 17U; ++frame) {
+		expect(scene.advance(
+			frame == 0U ? ClassicOpInput{.ok = true} : ClassicOpInput{}
+		).has_value(), "hierarchical Options grow advances");
+	}
+	expect(scene.advance().has_value(),
+		"hierarchical category page publishes");
+	expect(scene.advance().has_value(),
+		"hierarchical transition input releases");
+}
+
+void test_replay_patch_option_hierarchy_if_assets_supplied()
+{
+	auto scene = make_patch_scene_if_assets_supplied();
+	if(!scene) {
+		return;
+	}
+	enter_patch_options(*scene);
+	expect(scene->page() == ClassicOpOptionsPage::categories &&
+		scene->selected_choice() ==
+			ClassicOpOptionsChoice::category_gameplay,
+		"New Classic Options opens on Gameplay in the category page");
+	expect(scene->advance({.ok = true}).has_value() &&
+		scene->page() == ClassicOpOptionsPage::gameplay &&
+		scene->selected_choice() == ClassicOpOptionsChoice::rank,
+		"Gameplay opens as a retained child page");
+	expect(scene->advance().has_value(), "Gameplay entry releases");
+	expect(scene->advance({.right = true}).has_value() &&
+		scene->config().rank == ClassicRank::hard,
+		"Gameplay Rank retains its live ring behavior");
+	expect(scene->advance().has_value(), "Gameplay Rank releases");
+	expect(scene->advance({.cancel = true}).has_value() &&
+		scene->page() == ClassicOpOptionsPage::categories &&
+		scene->selected_choice() ==
+			ClassicOpOptionsChoice::category_gameplay,
+		"child Cancel restores the exact parent category");
+	expect(scene->advance().has_value(), "category return releases");
+	expect(scene->advance({.down = true}).has_value() &&
+		scene->advance().has_value() &&
+		scene->advance({.ok = true}).has_value() &&
+		scene->page() == ClassicOpOptionsPage::audio &&
+		scene->selected_choice() == ClassicOpOptionsChoice::bgm,
+		"Audio opens from the category page");
+	expect(scene->advance().has_value(), "Audio entry releases");
+	expect(scene->advance({.right = true}).has_value() &&
+		scene->config().bgm_mode == ClassicBgmMode::off,
+		"Audio Music retains live On/Off behavior");
+	expect(scene->take_audio_command().has_value() &&
+		scene->take_audio_command().has_value() &&
+		!scene->take_audio_command(),
+		"Audio Music preserves its exact two-command disable transaction");
+	expect(scene->advance().has_value(), "Audio toggle releases");
+	expect(scene->advance({.cancel = true}).has_value() &&
+		scene->advance().has_value() &&
+		scene->advance({.down = true}).has_value() &&
+		scene->advance().has_value() &&
+		scene->advance({.ok = true}).has_value() &&
+		scene->page() == ClassicOpOptionsPage::input &&
+		scene->selected_choice() == ClassicOpOptionsChoice::key_mode,
+		"Input opens with Key Mode separate from KeyConfig");
+	expect(scene->advance().has_value(), "Input entry releases");
+	expect(scene->advance({.down = true}).has_value() &&
+		scene->advance().has_value() &&
+		scene->selected_choice() == ClassicOpOptionsChoice::key_config,
+		"Input exposes a distinct KeyConfig action");
+	expect(scene->advance({.ok = true}).has_value(),
+		"KeyConfig action completes the Options owner");
+	auto key_config = scene->take_completion();
+	expect(key_config && key_config->outcome() ==
+		ClassicOpOptionsOutcome::key_config,
+		"KeyConfig retains its typed handoff outcome");
+
+	auto system = make_patch_scene_if_assets_supplied();
+	if(!system) {
+		return;
+	}
+	enter_patch_options(*system);
+	for(std::uint8_t row = 0U; row < 5U; ++row) {
+		expect(system->advance({.down = true}).has_value(),
+			"System category navigation advances");
+		expect(system->advance().has_value(),
+			"System category navigation releases");
+	}
+	expect(system->advance({.ok = true}).has_value() &&
+		system->page() == ClassicOpOptionsPage::system &&
+		system->selected_choice() == ClassicOpOptionsChoice::switch_classic,
+		"System exposes Switch to Classic as its working action");
+	expect(system->advance().has_value(), "System entry releases");
+	expect(system->advance({.ok = true}).has_value() &&
+		system->page() == ClassicOpOptionsPage::switch_confirmation &&
+		system->selected_choice() ==
+			ClassicOpOptionsChoice::confirm_switch_classic,
+		"Switch to Classic opens an explicit confirmation page");
+	expect(system->advance().has_value(),
+		"Switch-to-Classic confirmation releases");
+	expect(system->advance({.ok = true}).has_value() &&
+		system->phase() == ClassicOpOptionsPhase::shrink_window,
+		"confirmed Switch to Classic owns the normal source-style contraction");
+	for(std::uint16_t frame = 0U; frame < 18U; ++frame) {
+		expect(system->advance().has_value(),
+			"Switch to Classic contraction advances");
+	}
+	expect(system->advance().has_value(),
+		"Switch to Classic retained title boundary publishes");
+	auto switch_classic = system->take_completion();
+	expect(switch_classic && switch_classic->outcome() ==
+		ClassicOpOptionsOutcome::switch_classic,
+		"System publishes a typed Switch-to-Classic outcome");
 }
 
 void expect_gaiji(
@@ -928,7 +1083,7 @@ void local_replay_patch_return_gate(const std::filesystem::path &content_root)
 	}
 	expect((*title)->advance().has_value(),
 		"Replay Patch title main menu draws");
-	for(std::uint8_t row = 0U; row < 4U; ++row) {
+	for(std::uint8_t row = 0U; row < 5U; ++row) {
 		expect((*title)->advance({.down = true}).has_value(),
 			"Replay Patch title selection advances toward Option");
 		expect((*title)->advance().has_value(),
@@ -962,6 +1117,57 @@ void local_replay_patch_return_gate(const std::filesystem::path &content_root)
 		"Replay Patch Options labels draw");
 	expect((*options)->advance().has_value(),
 		"Replay Patch Options transition input releases");
+	for(std::uint8_t row = 0U; row < 2U; ++row) {
+		expect((*options)->advance({.down = true}).has_value(),
+			"Replay Patch Options advances toward Input");
+		expect((*options)->advance().has_value(),
+			"Replay Patch Options category movement releases");
+	}
+	expect((*options)->advance({.ok = true}).has_value() &&
+		(*options)->page() == ClassicOpOptionsPage::input,
+		"Replay Patch Options enters Input");
+	expect((*options)->advance().has_value(),
+		"Replay Patch Input entry releases");
+	expect((*options)->advance({.down = true}).has_value() &&
+		(*options)->selected_choice() == ClassicOpOptionsChoice::key_config,
+		"Replay Patch Input selects KeyConfig");
+	expect((*options)->advance().has_value(),
+		"Replay Patch KeyConfig selection releases");
+	expect((*options)->advance({.ok = true}).has_value(),
+		"Replay Patch Input hands off to KeyConfig");
+	auto key_config_completion = (*options)->take_completion();
+	expect(key_config_completion && key_config_completion->outcome() ==
+		ClassicOpOptionsOutcome::key_config,
+		"Replay Patch KeyConfig handoff is typed");
+	if(!key_config_completion) {
+		return;
+	}
+	auto resumed_options = ClassicOpOptionsScene::resume_after_key_config(
+		*key_config_completion, true, *closure, patch_assets, &font, true
+	);
+	expect(resumed_options &&
+		(*resumed_options)->page() == ClassicOpOptionsPage::input &&
+		(*resumed_options)->selected_choice() ==
+			ClassicOpOptionsChoice::key_config &&
+		!(*resumed_options)->input_allowed(),
+		"KeyConfig return restores the Input page, cursor, and release lock");
+	if(!resumed_options) {
+		return;
+	}
+	options = std::move(resumed_options);
+	const auto held_key_config = (*options)->advance({.ok = true});
+	expect(held_key_config && !held_key_config->surface_changed &&
+		(*options)->page() == ClassicOpOptionsPage::input,
+		"KeyConfig return ignores the held confirm boundary");
+	expect((*options)->advance().has_value(),
+		"KeyConfig return unlocks after release");
+	expect((*options)->advance({.cancel = true}).has_value() &&
+		(*options)->page() == ClassicOpOptionsPage::categories &&
+		(*options)->selected_choice() ==
+			ClassicOpOptionsChoice::category_input,
+		"KeyConfig return Cancel restores its exact Input parent");
+	expect((*options)->advance().has_value(),
+		"Replay Patch Input parent return releases");
 	expect((*options)->advance({.cancel = true}).has_value(),
 		"Replay Patch Options cancel starts its return");
 	for(std::uint16_t frame = 0U; frame < 18U; ++frame) {
@@ -1031,6 +1237,7 @@ void local_replay_patch_return_gate(const std::filesystem::path &content_root)
 int main(int argc, char **argv)
 {
 	test_replay_patch_option_unput_if_assets_supplied();
+	test_replay_patch_option_hierarchy_if_assets_supplied();
 	test_exact_rows_and_transition_lock();
 	test_config_audio_and_return_cadence();
 	test_bgm_modes_and_disabled_selection();

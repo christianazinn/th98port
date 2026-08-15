@@ -607,28 +607,36 @@ struct ClassicOpSession::Impl final {
 			}
 			break;
 		}
-		case ClassicOpSessionScene::options:
-			if(auto finished = operations.finish_options(operations.context);
-				!finished) {
+		case ClassicOpSessionScene::options: {
+			auto finished = operations.finish_options(operations.context);
+			if(!finished) {
 				return std::unexpected(std::move(finished.error()));
+			}
+			if(*finished) {
+				status = ClassicOpSessionStatus::switch_to_classic;
+				scene = ClassicOpSessionScene::complete;
+				break;
 			}
 			scene = operations.key_config_active &&
 				operations.key_config_active(operations.context) ?
 				ClassicOpSessionScene::key_config :
 				ClassicOpSessionScene::title_menu;
 			break;
-		case ClassicOpSessionScene::key_config:
+		}
+		case ClassicOpSessionScene::key_config: {
 			if(!operations.finish_key_config) {
 				return std::unexpected(session_error(
 					ClassicOpSessionErrorCode::backend_contract_failed
 				));
 			}
-			if(auto finished = operations.finish_key_config(operations.context);
-				!finished) {
+			auto finished = operations.finish_key_config(operations.context);
+			if(!finished) {
 				return std::unexpected(std::move(finished.error()));
 			}
-			scene = ClassicOpSessionScene::title_menu;
+			scene = *finished ? ClassicOpSessionScene::options :
+				ClassicOpSessionScene::title_menu;
 			break;
+		}
 		case ClassicOpSessionScene::replay_browser: {
 			if(!operations.finish_replay_browser) {
 				return std::unexpected(session_error(
@@ -863,7 +871,7 @@ struct ClassicOpSessionBackend final {
 	std::unique_ptr<NewClassicKeyConfigScene> key_config_scene{};
 	std::optional<NewClassicKeyConfig> pending_key_config_update{};
 	std::optional<bool> pending_reduced_flash_update{};
-	GameInit key_config_return_resident{};
+	std::optional<ClassicOpOptionsCompletion> key_config_return_options{};
 	std::unique_ptr<ClassicOpMusicRoomScene> music_room{};
 	std::optional<ClassicOpMusicRoomCompletion> music_completion{};
 	std::unique_ptr<ClassicRegistrationScene> high_scores{};
@@ -1515,7 +1523,7 @@ struct ClassicOpSessionBackend final {
 		};
 	}
 
-	[[nodiscard]] std::expected<void, ClassicOpSessionError> finish_options()
+	[[nodiscard]] std::expected<bool, ClassicOpSessionError> finish_options()
 	{
 		if(!options_completion) {
 			if(!options) {
@@ -1544,7 +1552,7 @@ struct ClassicOpSessionBackend final {
 					ClassicOpSessionErrorCode::backend_contract_failed
 				));
 			}
-			key_config_return_resident = options_completion->resident();
+			key_config_return_options.emplace(std::move(*options_completion));
 			auto scene = std::make_unique<NewClassicKeyConfigScene>(
 				*key_config, key_defaults, maximum_key, capture_cancel_key,
 				key_name, patch_assets, key_name_context
@@ -1557,7 +1565,13 @@ struct ClassicOpSessionBackend final {
 			key_config_scene = std::move(scene);
 			options.reset();
 			options_completion.reset();
-			return {};
+			return false;
+		}
+		if(options_completion->outcome() ==
+			ClassicOpOptionsOutcome::switch_classic) {
+			options.reset();
+			options_completion.reset();
+			return true;
 		}
 		auto resources = loader->load_op_title_menu();
 		if(!resources) {
@@ -1572,7 +1586,7 @@ struct ClassicOpSessionBackend final {
 		title = std::move(*resumed);
 		options.reset();
 		options_completion.reset();
-		return {};
+		return false;
 	}
 
 	[[nodiscard]] bool key_config_active() const noexcept
@@ -1638,10 +1652,11 @@ struct ClassicOpSessionBackend final {
 		};
 	}
 
-	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	[[nodiscard]] std::expected<bool, ClassicOpSessionError>
 	finish_key_config()
 	{
-		if(!key_config_scene) {
+		if(!key_config_scene || !key_config_return_options || !patch_assets ||
+			!font) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
@@ -1650,15 +1665,17 @@ struct ClassicOpSessionBackend final {
 		if(!resources) {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
-		auto returned = ClassicOpTitleMenuScene::return_from_other_screen(
-			key_config_return_resident, *resources, patch_assets, false
+		auto returned = ClassicOpOptionsScene::resume_after_key_config(
+			*key_config_return_options, fm_available, *resources, patch_assets,
+			&*font, !english_resources.empty()
 		);
 		if(!returned) {
 			return std::unexpected(title_error(std::move(returned.error())));
 		}
-		title = std::move(*returned);
+		options = std::move(*returned);
 		key_config_scene.reset();
-		return {};
+		key_config_return_options.reset();
+		return true;
 	}
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError> start_music_room()
@@ -3421,7 +3438,7 @@ Result backend_call(void *context, Method method, Args &&...args)
 			>>(context, &ClassicOpSessionBackend::advance_options, input);
 		},
 		.finish_options = [](void *context) {
-			return backend_call<std::expected<void, ClassicOpSessionError>>(
+			return backend_call<std::expected<bool, ClassicOpSessionError>>(
 				context, &ClassicOpSessionBackend::finish_options
 			);
 		},
@@ -3443,7 +3460,7 @@ Result backend_call(void *context, Method method, Args &&...args)
 			);
 		},
 		.finish_key_config = [](void *context) {
-			return backend_call<std::expected<void, ClassicOpSessionError>>(
+			return backend_call<std::expected<bool, ClassicOpSessionError>>(
 				context, &ClassicOpSessionBackend::finish_key_config
 			);
 		},

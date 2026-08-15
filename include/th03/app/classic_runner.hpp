@@ -139,6 +139,7 @@ enum class ClassicRunnerStatus : std::uint8_t {
 	running,
 	quit_requested,
 	session_complete,
+	switch_to_classic,
 	failed,
 };
 

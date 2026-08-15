@@ -58,6 +58,7 @@ enum class ClassicOpSessionScene : std::uint8_t {
 enum class ClassicOpSessionStatus : std::uint8_t {
 	running,
 	complete,
+	switch_to_classic,
 	quit_requested,
 	failed,
 };
@@ -199,13 +200,13 @@ struct ClassicOpSessionBackendOperations final {
 	std::expected<void, ClassicOpSessionError> (*start_options)(void *) = nullptr;
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
 	(*advance_options)(void *, ClassicOpInput) = nullptr;
-	std::expected<void, ClassicOpSessionError> (*finish_options)(void *) = nullptr;
+	std::expected<bool, ClassicOpSessionError> (*finish_options)(void *) = nullptr;
 	bool (*key_config_active)(void *) = nullptr;
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
 	(*advance_key_config)(
 		void *, NewClassicUiInput, std::optional<std::uint16_t>, bool
 	) = nullptr;
-	std::expected<void, ClassicOpSessionError>
+	std::expected<bool, ClassicOpSessionError>
 	(*finish_key_config)(void *) = nullptr;
 	std::expected<void, ClassicOpSessionError>
 	(*start_replay_browser)(void *) = nullptr;

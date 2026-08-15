@@ -154,6 +154,7 @@ pixel_oracle_identity_output(bool publication_oracle_enabled)
 
 enum class ExperienceRunDisposition : std::uint8_t {
 	return_to_menu,
+	switch_to_classic,
 	application_quit,
 	smoke_complete,
 	replay_completed,
@@ -1665,6 +1666,10 @@ ExperienceRunResult run_classic_session(
 			th03::app::ClassicRunnerStatus::quit_requested) {
 			return {.disposition = ExperienceRunDisposition::application_quit};
 		}
+		if((*runner)->status() ==
+			th03::app::ClassicRunnerStatus::switch_to_classic) {
+			return {.disposition = ExperienceRunDisposition::switch_to_classic};
+		}
 		const bool session_complete = (*runner)->status() ==
 			th03::app::ClassicRunnerStatus::session_complete;
 		// Replay Patch finalizes and offers the recording before constructing or
@@ -2390,10 +2395,17 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 	}
 	auto result = parsed.mode == th03::app::ClassicLaunchMode::new_classic ?
 		run_new_classic_experience(
-			std::move(parsed), *product->first, product->second
+			parsed, *product->first, product->second
 		) : run_classic_session(
+			parsed, *product->first, product->second
+		);
+	if(result.exit_code == 0 && result.disposition ==
+		ExperienceRunDisposition::switch_to_classic) {
+		parsed.mode = th03::app::ClassicLaunchMode::classic;
+		result = run_classic_session(
 			std::move(parsed), *product->first, product->second
 		);
+	}
 	return result.exit_code;
 }
 
@@ -2448,6 +2460,16 @@ int run_product_shell(th03::app::ClassicCliRequest parsed)
 		) : run_classic_session(parsed, *product->first, product->second);
 		if(experience.exit_code != 0) {
 			return experience.exit_code;
+		}
+		if(experience.disposition ==
+			ExperienceRunDisposition::switch_to_classic) {
+			parsed.mode = th03::app::ClassicLaunchMode::classic;
+			experience = run_classic_session(
+				parsed, *product->first, product->second
+			);
+			if(experience.exit_code != 0) {
+				return experience.exit_code;
+			}
 		}
 		if(experience.disposition !=
 			ExperienceRunDisposition::return_to_menu) {

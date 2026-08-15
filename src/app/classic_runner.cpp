@@ -554,6 +554,9 @@ ClassicRunner::consume(
 	case ClassicOpSessionStatus::complete:
 		impl_->status = ClassicRunnerStatus::session_complete;
 		break;
+	case ClassicOpSessionStatus::switch_to_classic:
+		impl_->status = ClassicRunnerStatus::switch_to_classic;
+		break;
 	case ClassicOpSessionStatus::quit_requested:
 		impl_->status = ClassicRunnerStatus::quit_requested;
 		break;

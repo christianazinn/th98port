@@ -90,17 +90,44 @@ constexpr std::array<std::uint8_t, 6U> value_key_joy{{
 	0x68U, 0x69U, 0x6CU, 0x6DU, 0x6AU, 0x6BU,
 }};
 
-constexpr std::array<std::string_view, 7U> patch_labels{{
-	"Rank", "Music", "SFX", "Language", "KeyConfig", "Flash FX", "Quit",
+constexpr std::array<ClassicOpOptionsChoice, 7U> category_choices{{
+	ClassicOpOptionsChoice::category_gameplay,
+	ClassicOpOptionsChoice::category_audio,
+	ClassicOpOptionsChoice::category_input,
+	ClassicOpOptionsChoice::category_video,
+	ClassicOpOptionsChoice::category_language,
+	ClassicOpOptionsChoice::category_system,
+	ClassicOpOptionsChoice::quit,
 }};
-constexpr std::array<ClassicOpOptionsChoice, 7U> patch_choices{{
+constexpr std::array<ClassicOpOptionsChoice, 2U> gameplay_choices{{
 	ClassicOpOptionsChoice::rank,
+	ClassicOpOptionsChoice::return_page,
+}};
+constexpr std::array<ClassicOpOptionsChoice, 3U> audio_choices{{
 	ClassicOpOptionsChoice::bgm,
 	ClassicOpOptionsChoice::sfx,
-	ClassicOpOptionsChoice::language,
+	ClassicOpOptionsChoice::return_page,
+}};
+constexpr std::array<ClassicOpOptionsChoice, 3U> input_choices{{
 	ClassicOpOptionsChoice::key_mode,
+	ClassicOpOptionsChoice::key_config,
+	ClassicOpOptionsChoice::return_page,
+}};
+constexpr std::array<ClassicOpOptionsChoice, 2U> video_choices{{
 	ClassicOpOptionsChoice::photosensitivity,
-	ClassicOpOptionsChoice::quit,
+	ClassicOpOptionsChoice::return_page,
+}};
+constexpr std::array<ClassicOpOptionsChoice, 2U> language_choices{{
+	ClassicOpOptionsChoice::language,
+	ClassicOpOptionsChoice::return_page,
+}};
+constexpr std::array<ClassicOpOptionsChoice, 2U> system_choices{{
+	ClassicOpOptionsChoice::switch_classic,
+	ClassicOpOptionsChoice::return_page,
+}};
+constexpr std::array<ClassicOpOptionsChoice, 2U> switch_confirmation_choices{{
+	ClassicOpOptionsChoice::confirm_switch_classic,
+	ClassicOpOptionsChoice::cancel_switch_classic,
 }};
 constexpr std::array<std::string_view, 7U> patch_main_labels{{
 	"Start", "VS Start", "Music room", "HiScore", "Replay", "Option", "Quit",
@@ -124,15 +151,31 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 		present::gaiji_height;
 }
 
-[[nodiscard]] std::optional<std::uint8_t> patch_choice_line(
+[[nodiscard]] constexpr std::string_view patch_choice_label(
 	ClassicOpOptionsChoice choice
 ) noexcept
 {
-	const auto found = std::find(patch_choices.begin(), patch_choices.end(), choice);
-	if(found == patch_choices.end()) {
-		return std::nullopt;
+	switch(choice) {
+	case ClassicOpOptionsChoice::rank: return "Rank";
+	case ClassicOpOptionsChoice::bgm: return "Music";
+	case ClassicOpOptionsChoice::key_mode: return "Key Mode";
+	case ClassicOpOptionsChoice::quit: return "Return";
+	case ClassicOpOptionsChoice::sfx: return "SFX";
+	case ClassicOpOptionsChoice::language: return "Language";
+	case ClassicOpOptionsChoice::photosensitivity: return "Flash FX";
+	case ClassicOpOptionsChoice::category_gameplay: return "Gameplay";
+	case ClassicOpOptionsChoice::category_audio: return "Audio";
+	case ClassicOpOptionsChoice::category_input: return "Input";
+	case ClassicOpOptionsChoice::category_video: return "Video";
+	case ClassicOpOptionsChoice::category_language: return "Language";
+	case ClassicOpOptionsChoice::category_system: return "System";
+	case ClassicOpOptionsChoice::key_config: return "KeyConfig";
+	case ClassicOpOptionsChoice::return_page: return "Return";
+	case ClassicOpOptionsChoice::switch_classic: return "Switch to Classic";
+	case ClassicOpOptionsChoice::confirm_switch_classic: return "Yes";
+	case ClassicOpOptionsChoice::cancel_switch_classic: return "No";
 	}
-	return static_cast<std::uint8_t>(found - patch_choices.begin());
+	return {};
 }
 
 [[nodiscard]] ClassicOpError options_error(
@@ -332,7 +375,11 @@ ClassicOpOptionsScene::ClassicOpOptionsScene(
 	fm_available_(fm_available),
 	language_available_(language_available),
 	patch_assets_(std::move(patch_assets))
-{}
+{
+	if(patch_assets_) {
+		selected_ = ClassicOpOptionsChoice::category_gameplay;
+	}
+}
 
 std::expected<std::unique_ptr<ClassicOpOptionsScene>, ClassicOpError>
 ClassicOpOptionsScene::create_from_op(
@@ -385,6 +432,74 @@ ClassicOpOptionsScene::create_from_op(
 		completion.tram(), std::move(*background), std::move(*window),
 		std::move(patch_assets), font, language_available
 	);
+}
+
+std::expected<std::unique_ptr<ClassicOpOptionsScene>, ClassicOpError>
+ClassicOpOptionsScene::resume_after_key_config(
+	const ClassicOpOptionsCompletion &completion,
+	bool fm_available,
+	std::span<const LoadedMainResource> resources,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	const present::AnkGlyphProvider *font,
+	bool language_available
+)
+{
+	if(completion.outcome() != ClassicOpOptionsOutcome::key_config ||
+		!patch_assets || !font) {
+		return std::unexpected(options_error(
+			ClassicOpErrorCode::invalid_state
+		));
+	}
+	if(const auto validated = validate_title_resources(resources); !validated) {
+		return std::unexpected(validated.error());
+	}
+	const auto *background_resource = find_resource(
+		resources, MainResourceRole::op_menu_background
+	);
+	const auto *window_resource = find_resource(
+		resources, MainResourceRole::op_window_sheet
+	);
+	if(!background_resource || !background_resource->bytes ||
+		!window_resource || !window_resource->bytes) {
+		return std::unexpected(options_error(
+			ClassicOpErrorCode::resource_set_mismatch
+		));
+	}
+	auto background = assets::decode_pi(*background_resource->bytes);
+	if(!background) {
+		return std::unexpected(decode_error(
+			background_resource->spec.key, std::move(background.error())
+		));
+	}
+	auto window = assets::decode_bfnt(
+		*window_resource->bytes,
+		assets::BfntConsumerPolicy::superimpose
+	);
+	if(!window) {
+		return std::unexpected(decode_error(
+			window_resource->spec.key, std::move(window.error())
+		));
+	}
+	auto created = create(
+		completion.resident(), completion.config(), fm_available,
+		completion.raster(), completion.tram(), std::move(*background),
+		std::move(*window), std::move(patch_assets), font,
+		language_available
+	);
+	if(!created) {
+		return std::unexpected(std::move(created.error()));
+	}
+	auto &scene = **created;
+	scene.phase_ = ClassicOpOptionsPhase::options_menu;
+	scene.page_ = ClassicOpOptionsPage::input;
+	scene.selected_ = ClassicOpOptionsChoice::key_config;
+	scene.menu_input_allowed_ = false;
+	scene.box_right_left_ = box_left + box_option_width - opwin_step_width;
+	if(!scene.restore_patch_rows(0U, 7U, box_left + box_option_width) ||
+		!scene.draw_all_option_choices()) {
+		return std::unexpected(options_error(ClassicOpErrorCode::draw_failed));
+	}
+	return created;
 }
 
 std::expected<std::unique_ptr<ClassicOpOptionsScene>, ClassicOpError>
@@ -578,6 +693,99 @@ bool ClassicOpOptionsScene::shrink_step() noexcept
 	return true;
 }
 
+std::span<const ClassicOpOptionsChoice>
+ClassicOpOptionsScene::active_choices() const noexcept
+{
+	if(!patch_assets_) {
+		static constexpr std::array classic_choices{
+			ClassicOpOptionsChoice::rank,
+			ClassicOpOptionsChoice::bgm,
+			ClassicOpOptionsChoice::key_mode,
+			ClassicOpOptionsChoice::quit,
+		};
+		return classic_choices;
+	}
+	switch(page_) {
+	case ClassicOpOptionsPage::categories: return category_choices;
+	case ClassicOpOptionsPage::gameplay: return gameplay_choices;
+	case ClassicOpOptionsPage::audio: return audio_choices;
+	case ClassicOpOptionsPage::input: return input_choices;
+	case ClassicOpOptionsPage::video: return video_choices;
+	case ClassicOpOptionsPage::language: return language_choices;
+	case ClassicOpOptionsPage::system: return system_choices;
+	case ClassicOpOptionsPage::switch_confirmation:
+		return switch_confirmation_choices;
+	}
+	return {};
+}
+
+std::optional<std::uint8_t> ClassicOpOptionsScene::choice_line(
+	ClassicOpOptionsChoice choice
+) const noexcept
+{
+	const auto choices = active_choices();
+	const auto found = std::find(choices.begin(), choices.end(), choice);
+	if(found == choices.end()) {
+		return std::nullopt;
+	}
+	const auto line = static_cast<std::uint8_t>(found - choices.begin());
+	return page_ == ClassicOpOptionsPage::switch_confirmation ?
+		static_cast<std::uint8_t>(line + 2U) : line;
+}
+
+bool ClassicOpOptionsScene::open_patch_page(
+	ClassicOpOptionsPage page
+) noexcept
+{
+	if(!patch_assets_ || page == ClassicOpOptionsPage::categories) {
+		return false;
+	}
+	page_ = page;
+	selected_ = active_choices().front();
+	menu_input_allowed_ = false;
+	return restore_patch_rows(0U, 7U, box_left + box_option_width) &&
+		draw_all_option_choices();
+}
+
+bool ClassicOpOptionsScene::return_to_patch_categories() noexcept
+{
+	if(!patch_assets_ || page_ == ClassicOpOptionsPage::categories) {
+		return false;
+	}
+	switch(page_) {
+	case ClassicOpOptionsPage::gameplay:
+		selected_ = ClassicOpOptionsChoice::category_gameplay;
+		break;
+	case ClassicOpOptionsPage::audio:
+		selected_ = ClassicOpOptionsChoice::category_audio;
+		break;
+	case ClassicOpOptionsPage::input:
+		selected_ = ClassicOpOptionsChoice::category_input;
+		break;
+	case ClassicOpOptionsPage::video:
+		selected_ = ClassicOpOptionsChoice::category_video;
+		break;
+	case ClassicOpOptionsPage::language:
+		selected_ = ClassicOpOptionsChoice::category_language;
+		break;
+	case ClassicOpOptionsPage::system:
+		selected_ = ClassicOpOptionsChoice::category_system;
+		break;
+	case ClassicOpOptionsPage::switch_confirmation:
+		page_ = ClassicOpOptionsPage::system;
+		selected_ = ClassicOpOptionsChoice::switch_classic;
+		menu_input_allowed_ = false;
+		return restore_patch_rows(0U, 7U, box_left + box_option_width) &&
+			draw_all_option_choices();
+	case ClassicOpOptionsPage::categories:
+		return false;
+	}
+	page_ = ClassicOpOptionsPage::categories;
+	menu_input_allowed_ = false;
+	return restore_patch_rows(0U, 7U, box_left + box_option_width) &&
+		draw_all_option_choices();
+}
+
 bool ClassicOpOptionsScene::restore_patch_rows(
 	std::uint8_t first,
 	std::uint8_t count,
@@ -585,7 +793,7 @@ bool ClassicOpOptionsScene::restore_patch_rows(
 ) noexcept
 {
 	if(!patch_assets_ || box_right <= (box_left + 4) ||
-		static_cast<std::uint16_t>(first) + count > patch_labels.size()) {
+		static_cast<std::uint16_t>(first) + count > 7U) {
 		return false;
 	}
 	const auto bare = raster_.graphics(present::Page::one);
@@ -620,7 +828,7 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	if(!patch_assets_) {
 		return false;
 	}
-	const auto line = patch_choice_line(choice);
+	const auto line = choice_line(choice);
 	if(!line || !restore_patch_rows(
 		*line, 1U, box_left + box_option_width
 	)) {
@@ -628,13 +836,28 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	}
 	const auto y = choice_top(replay_patch_box_top, *line);
 	const auto &font = patch_assets_->menu_font;
-	if(choice == ClassicOpOptionsChoice::quit) {
+	const auto label = patch_choice_label(choice);
+	if(label.empty()) {
+		return false;
+	}
+	if(choice == ClassicOpOptionsChoice::quit ||
+		choice == ClassicOpOptionsChoice::return_page ||
+		choice == ClassicOpOptionsChoice::key_config ||
+		choice == ClassicOpOptionsChoice::switch_classic ||
+		choice == ClassicOpOptionsChoice::confirm_switch_classic ||
+		choice == ClassicOpOptionsChoice::cancel_switch_classic ||
+		choice == ClassicOpOptionsChoice::category_gameplay ||
+		choice == ClassicOpOptionsChoice::category_audio ||
+		choice == ClassicOpOptionsChoice::category_input ||
+		choice == ClassicOpOptionsChoice::category_video ||
+		choice == ClassicOpOptionsChoice::category_language ||
+		choice == ClassicOpOptionsChoice::category_system) {
 		return font.put_centered(
-			raster_, box_option_center_x, y, patch_labels[*line], color
+			raster_, box_option_center_x, y, label, color
 		);
 	}
 	if(!font.put_centered(
-		raster_, box_main_center_x, y, patch_labels[*line], color
+		raster_, box_main_center_x, y, label, color
 	)) {
 		return false;
 	}
@@ -674,6 +897,17 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	case ClassicOpOptionsChoice::photosensitivity:
 		value = config_.reduced_flash ? "Reduced" : "Full";
 		break;
+	case ClassicOpOptionsChoice::category_gameplay:
+	case ClassicOpOptionsChoice::category_audio:
+	case ClassicOpOptionsChoice::category_input:
+	case ClassicOpOptionsChoice::category_video:
+	case ClassicOpOptionsChoice::category_language:
+	case ClassicOpOptionsChoice::category_system:
+	case ClassicOpOptionsChoice::key_config:
+	case ClassicOpOptionsChoice::return_page:
+	case ClassicOpOptionsChoice::switch_classic:
+	case ClassicOpOptionsChoice::confirm_switch_classic:
+	case ClassicOpOptionsChoice::cancel_switch_classic:
 	case ClassicOpOptionsChoice::quit:
 		return false;
 	}
@@ -751,6 +985,17 @@ bool ClassicOpOptionsScene::draw_option_choice(
 	case ClassicOpOptionsChoice::sfx:
 	case ClassicOpOptionsChoice::language:
 	case ClassicOpOptionsChoice::photosensitivity:
+	case ClassicOpOptionsChoice::category_gameplay:
+	case ClassicOpOptionsChoice::category_audio:
+	case ClassicOpOptionsChoice::category_input:
+	case ClassicOpOptionsChoice::category_video:
+	case ClassicOpOptionsChoice::category_language:
+	case ClassicOpOptionsChoice::category_system:
+	case ClassicOpOptionsChoice::key_config:
+	case ClassicOpOptionsChoice::return_page:
+	case ClassicOpOptionsChoice::switch_classic:
+	case ClassicOpOptionsChoice::confirm_switch_classic:
+	case ClassicOpOptionsChoice::cancel_switch_classic:
 		return false;
 	case ClassicOpOptionsChoice::quit:
 		return put_centered(
@@ -762,18 +1007,16 @@ bool ClassicOpOptionsScene::draw_option_choice(
 
 bool ClassicOpOptionsScene::draw_all_option_choices() noexcept
 {
-	const auto choices = patch_assets_ ?
-		std::span<const ClassicOpOptionsChoice>(patch_choices) :
-		std::span<const ClassicOpOptionsChoice>(patch_choices.data(), 2U);
-	constexpr std::array<ClassicOpOptionsChoice, 4U> classic_choices{{
-		ClassicOpOptionsChoice::rank,
-		ClassicOpOptionsChoice::bgm,
-		ClassicOpOptionsChoice::key_mode,
-		ClassicOpOptionsChoice::quit,
-	}};
-	const auto active = patch_assets_ ? choices :
-		std::span<const ClassicOpOptionsChoice>(classic_choices);
-	for(const auto choice : active) {
+	if(patch_assets_ && page_ ==
+		ClassicOpOptionsPage::switch_confirmation &&
+		!patch_assets_->menu_font.put_centered(
+			raster_, box_option_center_x,
+			choice_top(replay_patch_box_top, 0U),
+			"Switch to Classic?", 15U
+		)) {
+		return false;
+	}
+	for(const auto choice : active_choices()) {
 		if(!draw_option_choice(
 			choice,
 			(choice == selected_) ? present::tram_white : present::tram_black
@@ -833,15 +1076,7 @@ bool ClassicOpOptionsScene::update_selection(int direction) noexcept
 	if(!draw_option_choice(selected_, present::tram_black)) {
 		return false;
 	}
-	constexpr std::array<ClassicOpOptionsChoice, 4U> classic_choices{{
-		ClassicOpOptionsChoice::rank,
-		ClassicOpOptionsChoice::bgm,
-		ClassicOpOptionsChoice::key_mode,
-		ClassicOpOptionsChoice::quit,
-	}};
-	const auto choices = patch_assets_ ?
-		std::span<const ClassicOpOptionsChoice>(patch_choices) :
-		std::span<const ClassicOpOptionsChoice>(classic_choices);
+	const auto choices = active_choices();
 	const auto found = std::find(choices.begin(), choices.end(), selected_);
 	if(found == choices.end()) {
 		return false;
@@ -938,6 +1173,17 @@ bool ClassicOpOptionsScene::update_horizontal(
 			config_changed = true;
 		}
 		break;
+	case ClassicOpOptionsChoice::category_gameplay:
+	case ClassicOpOptionsChoice::category_audio:
+	case ClassicOpOptionsChoice::category_input:
+	case ClassicOpOptionsChoice::category_video:
+	case ClassicOpOptionsChoice::category_language:
+	case ClassicOpOptionsChoice::category_system:
+	case ClassicOpOptionsChoice::key_config:
+	case ClassicOpOptionsChoice::return_page:
+	case ClassicOpOptionsChoice::switch_classic:
+	case ClassicOpOptionsChoice::confirm_switch_classic:
+	case ClassicOpOptionsChoice::cancel_switch_classic:
 	case ClassicOpOptionsChoice::quit:
 		break;
 	}
@@ -1059,7 +1305,9 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 		bool selection_changed = false;
 		bool config_changed = false;
 		bool horizontal_processed = false;
+		bool page_changed = false;
 		bool key_config_requested = false;
+		bool switch_classic_requested = false;
 		if(!input.any()) {
 			menu_input_allowed_ = true;
 		}
@@ -1106,7 +1354,48 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 				horizontal_processed = true;
 			}
 			if(patch_assets_ && (input.ok || input.shot)) {
-				if(selected_ == ClassicOpOptionsChoice::language ||
+				ClassicOpOptionsPage child{};
+				bool opens_child = true;
+				switch(selected_) {
+				case ClassicOpOptionsChoice::category_gameplay:
+					child = ClassicOpOptionsPage::gameplay;
+					break;
+				case ClassicOpOptionsChoice::category_audio:
+					child = ClassicOpOptionsPage::audio;
+					break;
+				case ClassicOpOptionsChoice::category_input:
+					child = ClassicOpOptionsPage::input;
+					break;
+				case ClassicOpOptionsChoice::category_video:
+					child = ClassicOpOptionsPage::video;
+					break;
+				case ClassicOpOptionsChoice::category_language:
+					child = ClassicOpOptionsPage::language;
+					break;
+				case ClassicOpOptionsChoice::category_system:
+					child = ClassicOpOptionsPage::system;
+					break;
+				default:
+					opens_child = false;
+					break;
+				}
+				if(opens_child) {
+					if(!open_patch_page(child)) {
+						fail();
+						return std::unexpected(options_error(
+							ClassicOpErrorCode::draw_failed
+						));
+					}
+					page_changed = true;
+				} else if(selected_ == ClassicOpOptionsChoice::return_page) {
+					if(!return_to_patch_categories()) {
+						fail();
+						return std::unexpected(options_error(
+							ClassicOpErrorCode::draw_failed
+						));
+					}
+					page_changed = true;
+				} else if(selected_ == ClassicOpOptionsChoice::language ||
 					selected_ == ClassicOpOptionsChoice::photosensitivity) {
 					ClassicOpInput horizontal{};
 					horizontal.right = true;
@@ -1117,13 +1406,46 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 						));
 					}
 					horizontal_processed = true;
-				} else if(selected_ == ClassicOpOptionsChoice::key_mode) {
+				} else if(selected_ == ClassicOpOptionsChoice::key_config) {
 					key_config_requested = true;
+				} else if(selected_ == ClassicOpOptionsChoice::switch_classic) {
+					if(!open_patch_page(
+						ClassicOpOptionsPage::switch_confirmation
+					)) {
+						fail();
+						return std::unexpected(options_error(
+							ClassicOpErrorCode::draw_failed
+						));
+					}
+					page_changed = true;
+				} else if(selected_ ==
+					ClassicOpOptionsChoice::confirm_switch_classic) {
+					switch_classic_requested = true;
+				} else if(selected_ ==
+					ClassicOpOptionsChoice::cancel_switch_classic) {
+					if(!return_to_patch_categories()) {
+						fail();
+						return std::unexpected(options_error(
+							ClassicOpErrorCode::draw_failed
+						));
+					}
+					page_changed = true;
 				}
 			}
-			return_requested = input.cancel ||
-				((input.ok || input.shot) &&
-				 selected_ == ClassicOpOptionsChoice::quit);
+			if(input.cancel && patch_assets_ &&
+				page_ != ClassicOpOptionsPage::categories) {
+				if(!return_to_patch_categories()) {
+					fail();
+					return std::unexpected(options_error(
+						ClassicOpErrorCode::draw_failed
+					));
+				}
+				page_changed = true;
+			} else {
+				return_requested = input.cancel ||
+					((input.ok || input.shot) &&
+					 selected_ == ClassicOpOptionsChoice::quit);
+			}
 		}
 		if(input.any()) {
 			menu_input_allowed_ = false;
@@ -1136,7 +1458,10 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 				selection_changed, config_changed
 			);
 		}
-		if(return_requested) {
+		if(return_requested || switch_classic_requested) {
+			pending_outcome_ = switch_classic_requested ?
+				ClassicOpOptionsOutcome::switch_classic :
+				ClassicOpOptionsOutcome::return_main;
 			phase_ = ClassicOpOptionsPhase::shrink_window;
 			phase_frame_ = 0U;
 			box_right_left_ = box_left +
@@ -1146,7 +1471,7 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 		}
 		return tick(
 			ClassicOpBoundary::vsync, false,
-			selection_changed || horizontal_processed, true,
+			selection_changed || horizontal_processed || page_changed, true,
 			selection_changed, config_changed
 		);
 	}
@@ -1201,7 +1526,7 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 			menu_input_allowed_ = false;
 		}
 		++resident_.resident_rand;
-		finish();
+		finish(pending_outcome_);
 		return tick(ClassicOpBoundary::vsync, false, true);
 	case ClassicOpOptionsPhase::ready:
 	case ClassicOpOptionsPhase::consumed:
@@ -1240,6 +1565,11 @@ ClassicOpOptionsScene::take_completion() noexcept
 ClassicOpOptionsPhase ClassicOpOptionsScene::phase() const noexcept
 {
 	return phase_;
+}
+
+ClassicOpOptionsPage ClassicOpOptionsScene::page() const noexcept
+{
+	return page_;
 }
 
 ClassicOpOptionsChoice ClassicOpOptionsScene::selected_choice() const noexcept

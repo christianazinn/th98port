@@ -28,11 +28,34 @@ enum class ClassicOpOptionsChoice : std::uint8_t {
 	sfx,
 	language,
 	photosensitivity,
+	category_gameplay,
+	category_audio,
+	category_input,
+	category_video,
+	category_language,
+	category_system,
+	key_config,
+	return_page,
+	switch_classic,
+	confirm_switch_classic,
+	cancel_switch_classic,
+};
+
+enum class ClassicOpOptionsPage : std::uint8_t {
+	categories,
+	gameplay,
+	audio,
+	input,
+	video,
+	language,
+	system,
+	switch_confirmation,
 };
 
 enum class ClassicOpOptionsOutcome : std::uint8_t {
 	return_main,
 	key_config,
+	switch_classic,
 };
 
 enum class ClassicOpOptionsPhase : std::uint8_t {
@@ -115,6 +138,18 @@ public:
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpOptionsScene>,
 		ClassicOpError
+	> resume_after_key_config(
+		const ClassicOpOptionsCompletion &completion,
+		bool fm_available,
+		std::span<const LoadedMainResource> resources,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+		const present::AnkGlyphProvider *font,
+		bool language_available
+	);
+
+	[[nodiscard]] static std::expected<
+		std::unique_ptr<ClassicOpOptionsScene>,
+		ClassicOpError
 	> create(
 		GameInit resident,
 		ClassicConfigOptions config,
@@ -146,6 +181,7 @@ public:
 	take_completion() noexcept;
 
 	[[nodiscard]] ClassicOpOptionsPhase phase() const noexcept;
+	[[nodiscard]] ClassicOpOptionsPage page() const noexcept;
 	[[nodiscard]] ClassicOpOptionsChoice selected_choice() const noexcept;
 	[[nodiscard]] ClassicConfigOptions config() const noexcept;
 	[[nodiscard]] const GameInit &resident() const noexcept;
@@ -196,6 +232,12 @@ private:
 		ClassicOpOptionsChoice choice,
 		present::Index4 color
 	) noexcept;
+	[[nodiscard]] std::span<const ClassicOpOptionsChoice>
+	active_choices() const noexcept;
+	[[nodiscard]] std::optional<std::uint8_t>
+	choice_line(ClassicOpOptionsChoice choice) const noexcept;
+	[[nodiscard]] bool open_patch_page(ClassicOpOptionsPage page) noexcept;
+	[[nodiscard]] bool return_to_patch_categories() noexcept;
 	[[nodiscard]] bool update_selection(int direction) noexcept;
 	[[nodiscard]] bool update_horizontal(
 		ClassicOpInput input,
@@ -227,6 +269,9 @@ private:
 	std::size_t audio_count_ = 0U;
 	ClassicOpOptionsPhase phase_ = ClassicOpOptionsPhase::failed;
 	ClassicOpOptionsChoice selected_ = ClassicOpOptionsChoice::rank;
+	ClassicOpOptionsPage page_ = ClassicOpOptionsPage::categories;
+	ClassicOpOptionsOutcome pending_outcome_ =
+		ClassicOpOptionsOutcome::return_main;
 	ClassicOpInput transition_input_{};
 	std::uint16_t phase_frame_ = 0U;
 	std::int32_t box_right_left_ = 0;

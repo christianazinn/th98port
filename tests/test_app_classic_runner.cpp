@@ -1815,10 +1815,10 @@ bool authentic_gate(
 			return false;
 		};
 		const auto enter_language_row = [&]() {
-			for(std::size_t row = 0U; row < 3U; ++row) {
+			for(std::size_t row = 0U; row < 4U; ++row) {
 				if(!step(0x0002U) || !step()) { return false; }
 			}
-			return true;
+			return step(0x0020U) && step();
 		};
 		const auto sample_input = [&](std::uint16_t system) {
 			for(std::size_t frame = 0U; frame < 8U; ++frame) {
@@ -1835,6 +1835,12 @@ bool authentic_gate(
 				th03::app::ClassicOpSessionScene::options && last &&
 				last->input_sampled;
 		};
+		const auto leave_options = [&]() {
+			// First Cancel returns from the Language child to its retained
+			// category; release, then a fresh Cancel contracts Options.
+			return sample_input(0x1000U) && step() &&
+				sample_input(0x1000U);
+		};
 		for(std::size_t row = 0U; row < 5U; ++row) {
 			if(!step(0x0002U) || !step()) { return false; }
 		}
@@ -1842,7 +1848,7 @@ bool authentic_gate(
 		const bool ready_japanese = opened_japanese && settle_options();
 		const bool selected_language = ready_japanese && enter_language_row();
 		const bool toggled_japanese = selected_language && step(0x0020U) && step();
-		const bool canceled_japanese = toggled_japanese && sample_input(0x1000U);
+		const bool canceled_japanese = toggled_japanese && leave_options();
 		// The Cancel tick changes the scene's phase to shrink_window. The session
 		// observes that returned phase and publishes the reloaded Japanese TL02
 		// before the following tick can unput Option labels from page 1.
@@ -1892,7 +1898,7 @@ bool authentic_gate(
 		if(japanese_background == english_background ||
 			!step(0x0020U) || !settle_options() || !enter_language_row() ||
 			!step(0x0020U) || !step() ||
-			!sample_input(0x1000U) || !wait_for_scene_input(
+			!leave_options() || !wait_for_scene_input(
 				th03::app::ClassicOpSessionScene::title_menu, 256U
 			) || graphics_region_hash(0, 0, 160U, 400U) != english_background) {
 			std::cerr << "authentic-script-stage=language-english\n";

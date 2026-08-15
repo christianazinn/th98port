@@ -123,6 +123,7 @@ struct FakeBackend final {
 	bool audio_pending = false;
 	bool fail_title_advance = false;
 	bool fail_start_options = false;
+	bool switch_to_classic = false;
 	std::size_t title_advances = 0U;
 	std::size_t options_starts = 0U;
 	std::size_t options_finishes = 0U;
@@ -217,7 +218,9 @@ Result fake_call(void *context, Function function)
 			++backend.options_finishes;
 			backend.pixel_oracle_source_identity.scene =
 				th03::app::PixelOracleScene::title;
-			return std::expected<void, ClassicOpSessionError>{};
+			return std::expected<bool, ClassicOpSessionError>{
+				backend.switch_to_classic
+			};
 		},
 		.start_music_room = [](void *context) {
 			++static_cast<FakeBackend *>(context)->music_starts;
@@ -794,6 +797,21 @@ void test_terminal_routes_and_failures()
 			tick && tick->status == ClassicOpSessionStatus::quit_requested &&
 				host_backend->title_advances == 0U,
 			"host quit preempts every child without mutation"
+		);
+	}
+
+	auto switch_backend = std::make_shared<FakeBackend>();
+	switch_backend->title_result.route = ClassicOpRoute::options;
+	switch_backend->switch_to_classic = true;
+	auto switch_mode = make_session(switch_backend);
+	if(switch_mode) {
+		expect(switch_mode->consume({}).has_value(),
+			"System switch enters the typed Options owner");
+		const auto tick = switch_mode->consume({});
+		expect(tick && tick->status ==
+			ClassicOpSessionStatus::switch_to_classic &&
+			tick->scene == ClassicOpSessionScene::complete,
+			"typed Switch-to-Classic completion crosses the OP session boundary"
 		);
 	}
 
