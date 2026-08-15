@@ -32,6 +32,7 @@ enum class ClassicOpOptionsChoice : std::uint8_t {
 	key_mode,
 	quit,
 	sfx,
+	mute_when_unfocused,
 	language,
 	photosensitivity,
 	category_gameplay,
@@ -108,6 +109,7 @@ public:
 	[[nodiscard]] std::uint8_t master_volume_percent() const noexcept;
 	[[nodiscard]] std::uint8_t music_volume_percent() const noexcept;
 	[[nodiscard]] std::uint8_t effect_volume_percent() const noexcept;
+	[[nodiscard]] bool mute_when_unfocused() const noexcept;
 	[[nodiscard]] NewClassicWindowPresentation window_presentation() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 	[[nodiscard]] const present::Tram &tram() const noexcept;
@@ -123,6 +125,7 @@ private:
 		NewClassicWindowPresentation window_presentation,
 		std::uint8_t music_volume_percent,
 		std::uint8_t effect_volume_percent,
+		bool mute_when_unfocused,
 		present::Raster raster,
 		present::Tram tram,
 		bool main_input_allowed,
@@ -134,6 +137,7 @@ private:
 	std::uint8_t master_volume_percent_ = 100U;
 	std::uint8_t music_volume_percent_ = 100U;
 	std::uint8_t effect_volume_percent_ = 100U;
+	bool mute_when_unfocused_ = false;
 	NewClassicWindowPresentation window_presentation_{};
 	present::Raster raster_{};
 	present::Tram tram_{};
@@ -160,7 +164,8 @@ public:
 		std::uint8_t master_volume_percent = 100U,
 		NewClassicWindowPresentation window_presentation = {},
 		std::uint8_t music_volume_percent = 100U,
-		std::uint8_t effect_volume_percent = 100U
+		std::uint8_t effect_volume_percent = 100U,
+		bool mute_when_unfocused = false
 	);
 
 	[[nodiscard]] static std::expected<
@@ -176,7 +181,8 @@ public:
 		std::uint8_t master_volume_percent = 100U,
 		NewClassicWindowPresentation window_presentation = {},
 		std::uint8_t music_volume_percent = 100U,
-		std::uint8_t effect_volume_percent = 100U
+		std::uint8_t effect_volume_percent = 100U,
+		bool mute_when_unfocused = false
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpOptionsScene>,
@@ -191,7 +197,8 @@ public:
 		std::uint8_t master_volume_percent = 100U,
 		NewClassicWindowPresentation window_presentation = {},
 		std::uint8_t music_volume_percent = 100U,
-		std::uint8_t effect_volume_percent = 100U
+		std::uint8_t effect_volume_percent = 100U,
+		bool mute_when_unfocused = false
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpOptionsScene>,
@@ -206,7 +213,8 @@ public:
 		std::uint8_t master_volume_percent = 100U,
 		NewClassicWindowPresentation window_presentation = {},
 		std::uint8_t music_volume_percent = 100U,
-		std::uint8_t effect_volume_percent = 100U
+		std::uint8_t effect_volume_percent = 100U,
+		bool mute_when_unfocused = false
 	);
 
 	[[nodiscard]] static std::expected<
@@ -226,7 +234,8 @@ public:
 		std::uint8_t master_volume_percent = 100U,
 		NewClassicWindowPresentation window_presentation = {},
 		std::uint8_t music_volume_percent = 100U,
-		std::uint8_t effect_volume_percent = 100U
+		std::uint8_t effect_volume_percent = 100U,
+		bool mute_when_unfocused = false
 	);
 	[[nodiscard]] std::expected<void, ClassicOpError>
 	refresh_patch_language_background(
@@ -253,6 +262,7 @@ public:
 	[[nodiscard]] std::uint8_t master_volume_percent() const noexcept;
 	[[nodiscard]] std::uint8_t music_volume_percent() const noexcept;
 	[[nodiscard]] std::uint8_t effect_volume_percent() const noexcept;
+	[[nodiscard]] bool mute_when_unfocused() const noexcept;
 	[[nodiscard]] NewClassicWindowPresentation window_presentation() const noexcept;
 	[[nodiscard]] const GameInit &resident() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
@@ -278,7 +288,8 @@ private:
 		std::uint8_t master_volume_percent,
 		NewClassicWindowPresentation window_presentation,
 		std::uint8_t music_volume_percent,
-		std::uint8_t effect_volume_percent
+		std::uint8_t effect_volume_percent,
+		bool mute_when_unfocused
 	) noexcept;
 
 	[[nodiscard]] bool restore_menu_background(
@@ -339,6 +350,7 @@ private:
 	std::uint8_t master_volume_percent_ = 100U;
 	std::uint8_t music_volume_percent_ = 100U;
 	std::uint8_t effect_volume_percent_ = 100U;
+	bool mute_when_unfocused_ = false;
 	NewClassicWindowPresentation window_presentation_{};
 	present::Raster raster_{};
 	present::Tram tram_{};

@@ -103,10 +103,11 @@ constexpr std::array<ClassicOpOptionsChoice, 2U> gameplay_choices{{
 	ClassicOpOptionsChoice::rank,
 	ClassicOpOptionsChoice::return_page,
 }};
-constexpr std::array<ClassicOpOptionsChoice, 4U> audio_choices{{
+constexpr std::array<ClassicOpOptionsChoice, 5U> audio_choices{{
 	ClassicOpOptionsChoice::master_volume,
 	ClassicOpOptionsChoice::bgm,
 	ClassicOpOptionsChoice::sfx,
+	ClassicOpOptionsChoice::mute_when_unfocused,
 	ClassicOpOptionsChoice::return_page,
 }};
 constexpr std::array<ClassicOpOptionsChoice, 6U> input_choices{{
@@ -175,6 +176,7 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 	case ClassicOpOptionsChoice::key_mode: return "Key Mode";
 	case ClassicOpOptionsChoice::quit: return "Return";
 	case ClassicOpOptionsChoice::sfx: return "SFX";
+	case ClassicOpOptionsChoice::mute_when_unfocused: return "Mute Unfocused";
 	case ClassicOpOptionsChoice::language: return "Language";
 	case ClassicOpOptionsChoice::photosensitivity: return "Flash FX";
 	case ClassicOpOptionsChoice::category_gameplay: return "Gameplay";
@@ -333,6 +335,7 @@ ClassicOpOptionsCompletion::ClassicOpOptionsCompletion(
 	NewClassicWindowPresentation window_presentation,
 	std::uint8_t music_volume_percent,
 	std::uint8_t effect_volume_percent,
+	bool mute_when_unfocused,
 	present::Raster raster,
 	present::Tram tram,
 	bool main_input_allowed,
@@ -343,6 +346,7 @@ ClassicOpOptionsCompletion::ClassicOpOptionsCompletion(
 	master_volume_percent_(master_volume_percent),
 	music_volume_percent_(music_volume_percent),
 	effect_volume_percent_(effect_volume_percent),
+	mute_when_unfocused_(mute_when_unfocused),
 	window_presentation_(window_presentation),
 	raster_(std::move(raster)),
 	tram_(std::move(tram)),
@@ -373,6 +377,11 @@ std::uint8_t ClassicOpOptionsCompletion::music_volume_percent() const noexcept
 std::uint8_t ClassicOpOptionsCompletion::effect_volume_percent() const noexcept
 {
 	return effect_volume_percent_;
+}
+
+bool ClassicOpOptionsCompletion::mute_when_unfocused() const noexcept
+{
+	return mute_when_unfocused_;
 }
 
 NewClassicWindowPresentation
@@ -413,7 +422,8 @@ ClassicOpOptionsScene::ClassicOpOptionsScene(
 	std::uint8_t master_volume_percent,
 	NewClassicWindowPresentation window_presentation,
 	std::uint8_t music_volume_percent,
-	std::uint8_t effect_volume_percent
+	std::uint8_t effect_volume_percent,
+	bool mute_when_unfocused
 ) noexcept :
 	prepared_(std::move(prepared)),
 	resident_(std::move(resident)),
@@ -421,6 +431,7 @@ ClassicOpOptionsScene::ClassicOpOptionsScene(
 	master_volume_percent_(master_volume_percent),
 	music_volume_percent_(music_volume_percent),
 	effect_volume_percent_(effect_volume_percent),
+	mute_when_unfocused_(mute_when_unfocused),
 	window_presentation_(window_presentation),
 	raster_(std::move(raster)),
 	tram_(std::move(tram)),
@@ -447,7 +458,8 @@ ClassicOpOptionsScene::create_from_op(
 	std::uint8_t master_volume_percent,
 	NewClassicWindowPresentation window_presentation,
 	std::uint8_t music_volume_percent,
-	std::uint8_t effect_volume_percent
+	std::uint8_t effect_volume_percent,
+	bool mute_when_unfocused
 )
 {
 	if(completion.route() != ClassicOpRoute::options) {
@@ -490,7 +502,7 @@ ClassicOpOptionsScene::create_from_op(
 		completion.tram(), std::move(*background), std::move(*window),
 		std::move(patch_assets), font, language_available,
 		master_volume_percent, window_presentation, music_volume_percent,
-		effect_volume_percent
+		effect_volume_percent, mute_when_unfocused
 	);
 }
 
@@ -505,7 +517,8 @@ ClassicOpOptionsScene::resume_after_key_config(
 	std::uint8_t master_volume_percent,
 	NewClassicWindowPresentation window_presentation,
 	std::uint8_t music_volume_percent,
-	std::uint8_t effect_volume_percent
+	std::uint8_t effect_volume_percent,
+	bool mute_when_unfocused
 )
 {
 	if((completion.outcome() != ClassicOpOptionsOutcome::key_config &&
@@ -552,7 +565,7 @@ ClassicOpOptionsScene::resume_after_key_config(
 		completion.raster(), completion.tram(), std::move(*background),
 		std::move(*window), std::move(patch_assets), font,
 		language_available, master_volume_percent, window_presentation,
-		music_volume_percent, effect_volume_percent
+		music_volume_percent, effect_volume_percent, mute_when_unfocused
 	);
 	if(!created) {
 		return std::unexpected(std::move(created.error()));
@@ -599,7 +612,8 @@ ClassicOpOptionsScene::resume_after_joy_config(
 	std::uint8_t master_volume_percent,
 	NewClassicWindowPresentation window_presentation,
 	std::uint8_t music_volume_percent,
-	std::uint8_t effect_volume_percent
+	std::uint8_t effect_volume_percent,
+	bool mute_when_unfocused
 )
 {
 	if(completion.outcome() != ClassicOpOptionsOutcome::joy_config) {
@@ -608,7 +622,7 @@ ClassicOpOptionsScene::resume_after_joy_config(
 	return resume_after_key_config(
 		completion, fm_available, resources, std::move(patch_assets), font,
 		language_available, master_volume_percent, window_presentation,
-		music_volume_percent, effect_volume_percent
+		music_volume_percent, effect_volume_percent, mute_when_unfocused
 	);
 }
 
@@ -623,7 +637,8 @@ ClassicOpOptionsScene::resume_after_device_scene(
 	std::uint8_t master_volume_percent,
 	NewClassicWindowPresentation window_presentation,
 	std::uint8_t music_volume_percent,
-	std::uint8_t effect_volume_percent
+	std::uint8_t effect_volume_percent,
+	bool mute_when_unfocused
 )
 {
 	if(completion.outcome() != ClassicOpOptionsOutcome::device_assignment &&
@@ -633,7 +648,7 @@ ClassicOpOptionsScene::resume_after_device_scene(
 	return resume_after_key_config(
 		completion, fm_available, resources, std::move(patch_assets), font,
 		language_available, master_volume_percent, window_presentation,
-		music_volume_percent, effect_volume_percent
+		music_volume_percent, effect_volume_percent, mute_when_unfocused
 	);
 }
 
@@ -652,7 +667,8 @@ ClassicOpOptionsScene::create(
 	std::uint8_t master_volume_percent,
 	NewClassicWindowPresentation window_presentation,
 	std::uint8_t music_volume_percent,
-	std::uint8_t effect_volume_percent
+	std::uint8_t effect_volume_percent,
+	bool mute_when_unfocused
 )
 {
 	if(!classic_config_valid(config) || (patch_assets && !font) ||
@@ -720,7 +736,7 @@ ClassicOpOptionsScene::create(
 		std::move(prepared), std::move(resident), config, fm_available,
 		std::move(raster), std::move(tram), std::move(patch_assets),
 		language_available, master_volume_percent, window_presentation,
-		music_volume_percent, effect_volume_percent
+		music_volume_percent, effect_volume_percent, mute_when_unfocused
 	));
 }
 
@@ -1103,6 +1119,9 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	case ClassicOpOptionsChoice::photosensitivity:
 		value = config_.reduced_flash ? "Reduced" : "Full";
 		break;
+	case ClassicOpOptionsChoice::mute_when_unfocused:
+		value = mute_when_unfocused_ ? "On" : "Off";
+		break;
 	case ClassicOpOptionsChoice::category_gameplay:
 	case ClassicOpOptionsChoice::category_audio:
 	case ClassicOpOptionsChoice::category_input:
@@ -1192,6 +1211,7 @@ bool ClassicOpOptionsScene::draw_option_choice(
 		return false;
 	}
 	case ClassicOpOptionsChoice::sfx:
+	case ClassicOpOptionsChoice::mute_when_unfocused:
 	case ClassicOpOptionsChoice::master_volume:
 	case ClassicOpOptionsChoice::window_mode:
 	case ClassicOpOptionsChoice::window_scale:
@@ -1501,6 +1521,12 @@ bool ClassicOpOptionsScene::update_horizontal(
 			config_changed = true;
 		}
 		break;
+	case ClassicOpOptionsChoice::mute_when_unfocused:
+		if(patch_assets_) {
+			mute_when_unfocused_ = !mute_when_unfocused_;
+			config_changed = true;
+		}
+		break;
 	case ClassicOpOptionsChoice::category_gameplay:
 	case ClassicOpOptionsChoice::category_audio:
 	case ClassicOpOptionsChoice::category_input:
@@ -1539,6 +1565,7 @@ void ClassicOpOptionsScene::finish(ClassicOpOptionsOutcome outcome) noexcept
 	completion_ = ClassicOpOptionsCompletion(
 		std::move(resident_), config_, master_volume_percent_,
 		window_presentation_, music_volume_percent_, effect_volume_percent_,
+		mute_when_unfocused_,
 		std::move(raster_), std::move(tram_),
 		menu_input_allowed_, outcome
 	);
@@ -1958,6 +1985,11 @@ std::uint8_t ClassicOpOptionsScene::music_volume_percent() const noexcept
 std::uint8_t ClassicOpOptionsScene::effect_volume_percent() const noexcept
 {
 	return effect_volume_percent_;
+}
+
+bool ClassicOpOptionsScene::mute_when_unfocused() const noexcept
+{
+	return mute_when_unfocused_;
 }
 
 NewClassicWindowPresentation

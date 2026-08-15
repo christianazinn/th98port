@@ -26,6 +26,7 @@ struct ClassicRunnerOperations final {
 		(*take_device_assignment_update)(void *) = nullptr;
 	std::optional<bool> (*take_reduced_flash_update)(void *) = nullptr;
 	std::optional<std::uint8_t> (*take_master_volume_update)(void *) = nullptr;
+	std::optional<bool> (*take_mute_when_unfocused_update)(void *) = nullptr;
 	std::optional<NewClassicWindowPresentation>
 		(*take_window_presentation_update)(void *) = nullptr;
 	PixelOracleSourceIdentity (*pixel_oracle_source_identity)(void *) = nullptr;

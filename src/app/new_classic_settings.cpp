@@ -10,6 +10,10 @@
 namespace th03::app {
 namespace {
 
+constexpr std::array<std::byte, 8U> magic_v3{
+	std::byte{'T'}, std::byte{'3'}, std::byte{'N'}, std::byte{'S'},
+	std::byte{'E'}, std::byte{'T'}, std::byte{'0'}, std::byte{'3'},
+};
 constexpr std::array<std::byte, 8U> magic_v2{
 	std::byte{'T'}, std::byte{'3'}, std::byte{'N'}, std::byte{'S'},
 	std::byte{'E'}, std::byte{'T'}, std::byte{'0'}, std::byte{'2'},
@@ -170,8 +174,13 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 			NewClassicSettingsErrorCode::input_size, bytes.size()
 		));
 	}
-	const bool legacy = bytes.size() == new_classic_settings_v1_file_bytes;
-	const auto &expected_magic = legacy ? magic_v1 : magic_v2;
+	const bool legacy_v1 = bytes.size() == new_classic_settings_v1_file_bytes;
+	bool legacy_v2 = false;
+	if(!legacy_v1) {
+		legacy_v2 = std::equal(magic_v2.begin(), magic_v2.end(), bytes.begin());
+	}
+	const auto &expected_magic = legacy_v1 ? magic_v1 :
+		(legacy_v2 ? magic_v2 : magic_v3);
 	for(std::size_t index = 0U; index < expected_magic.size(); ++index) {
 		if(bytes[index] != expected_magic[index]) {
 			return std::unexpected(error(
@@ -179,8 +188,8 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 			));
 		}
 	}
-	const auto expected_version = static_cast<std::uint16_t>(legacy ? 1U :
-		new_classic_settings_format_version);
+	const auto expected_version = static_cast<std::uint16_t>(legacy_v1 ? 1U :
+		(legacy_v2 ? 2U : new_classic_settings_format_version));
 	if(u16(bytes, 8U) != expected_version) {
 		return std::unexpected(error(
 			NewClassicSettingsErrorCode::version, 8U
@@ -203,7 +212,8 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 		));
 	}
 	const auto digest_offset = bytes.size() - 4U;
-	if(!legacy && (byte(bytes[22U]) != 0U || byte(bytes[23U]) != 0U)) {
+	if(!legacy_v1 && ((legacy_v2 && byte(bytes[22U]) != 0U) ||
+		(!legacy_v2 && byte(bytes[22U]) > 1U) || byte(bytes[23U]) != 0U)) {
 		return std::unexpected(error(
 			NewClassicSettingsErrorCode::reserved_nonzero, 22U
 		));
@@ -225,11 +235,13 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 			.reduced_flash = (flags & 0x08U) != 0U,
 		},
 		.master_volume_percent = byte(bytes[16U]),
-		.music_volume_percent = static_cast<std::uint8_t>(legacy ?
+		.music_volume_percent = static_cast<std::uint8_t>(legacy_v1 ?
 			(byte(bytes[12U]) == static_cast<std::uint8_t>(ClassicBgmMode::off) ?
 				0U : 100U) : byte(bytes[20U])),
-		.effect_volume_percent = static_cast<std::uint8_t>(legacy ?
+		.effect_volume_percent = static_cast<std::uint8_t>(legacy_v1 ?
 			((flags & 0x01U) != 0U ? 100U : 0U) : byte(bytes[21U])),
+		.mute_when_unfocused = !legacy_v1 && !legacy_v2 &&
+			byte(bytes[22U]) != 0U,
 		.window = {
 			.mode = static_cast<NewClassicWindowMode>(byte(bytes[17U])),
 			.scale = static_cast<NewClassicWindowScale>(byte(bytes[18U])),
@@ -256,7 +268,7 @@ std::expected<
 		return std::unexpected(valid.error());
 	}
 	std::array<std::byte, new_classic_settings_file_bytes> bytes{};
-	std::copy(magic_v2.begin(), magic_v2.end(), bytes.begin());
+	std::copy(magic_v3.begin(), magic_v3.end(), bytes.begin());
 	put_u16(bytes, 8U, new_classic_settings_format_version);
 	put_u16(bytes, 10U, new_classic_settings_file_bytes);
 	bytes[12U] = static_cast<std::byte>(settings.options.bgm_mode);
@@ -277,6 +289,7 @@ std::expected<
 	);
 	bytes[20U] = static_cast<std::byte>(settings.music_volume_percent);
 	bytes[21U] = static_cast<std::byte>(settings.effect_volume_percent);
+	bytes[22U] = static_cast<std::byte>(settings.mute_when_unfocused ? 1U : 0U);
 	constexpr auto digest_offset = new_classic_settings_file_bytes - 4U;
 	put_u32(bytes, digest_offset, fnv1a32(
 		std::span<const std::byte>(bytes).first(digest_offset)

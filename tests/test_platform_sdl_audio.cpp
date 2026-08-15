@@ -175,11 +175,17 @@ void test_dummy_queue_and_lifetime()
 		"oversized replacement is a discontinuity");
 	queued = device.queued_frames();
 	expect(queued && *queued == 4U, "replacement fills the exact queue cap");
+	auto cleared = device.clear();
+	expect(cleared && *cleared == 4U,
+		"explicit final-output clear reports every discarded queued frame");
+	queued = device.queued_frames();
+	expect(queued && *queued == 0U,
+		"explicit final-output clear leaves no stale PCM for refocus");
 
 	const auto telemetry = device.telemetry();
 	expect(telemetry.frames_submitted == 9U, "submitted-frame telemetry accumulates");
-	expect(telemetry.frames_discarded == 7U, "discard telemetry accumulates");
-	expect(telemetry.discontinuities == 2U, "discontinuity telemetry accumulates");
+	expect(telemetry.frames_discarded == 11U, "discard telemetry accumulates");
+	expect(telemetry.discontinuities == 3U, "discontinuity telemetry accumulates");
 	expect(telemetry.failures == 0U, "successful path reports no failures");
 
 	expect(static_cast<bool>(device.resume()), "resume succeeds");

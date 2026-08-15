@@ -127,7 +127,7 @@ Return
 ```
 
 Implemented now: `Master Volume`, `Music Volume`, and `Sound FX Volume` in 5%
-steps, followed by `Return`. Focus mute remains a separate parcel.
+steps, `Mute Unfocused`, and `Return`.
 
 Percentages use 5% increments. Zero percent has the existing disabled
 semantics; raising a value above zero re-enables that category. At 100%, the
@@ -138,6 +138,11 @@ gain is implemented inside the shared PMD driver, before song parts and the
 external FM effect part converge on the one YM2608. This preserves source
 effect arbitration, FM6 takeover, and source fade volume. The 100% path bypasses
 scaling; 0% retains the prior disabled semantics.
+
+Focus mute is final host-delivery policy. Losing focus clears queued SDL PCM
+and suppresses new submissions while PMD, gameplay, replay, and retained-menu
+clocks continue. Refocus resumes from the current source state. Classic ignores
+this New Classic-only setting.
 
 ### Input
 
@@ -403,6 +408,8 @@ exist:
    and the retained source-styled live Input Test page.
 5. The existing Japanese/English selector moved to the Language page with the
    category hierarchy in session 175.
+6. Mute When Unfocused is complete in session 185. It applies only at the
+   final SDL output boundary and migrates existing settings with default Off.
 
 Each feature becomes visible only when its apply, persistence, rollback, and
 return-to-menu paths are complete.

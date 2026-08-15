@@ -231,6 +231,30 @@ SdlAudioDevice::submit(
 	return result;
 }
 
+std::expected<std::size_t, SdlAudioDeviceError>
+SdlAudioDevice::clear() noexcept
+{
+	if(impl_ == nullptr) {
+		return std::unexpected(SdlAudioDeviceError{
+			.code = SdlAudioDeviceErrorCode::runtime_unavailable,
+		});
+	}
+	auto queued = impl_->queued_frames();
+	if(!queued) {
+		return std::unexpected(queued.error());
+	}
+	if(!SDL_ClearAudioStream(impl_->stream)) {
+		return std::unexpected(impl_->failure(
+			SdlAudioDeviceErrorCode::queue_clear_failed
+		));
+	}
+	if(*queued != 0U) {
+		saturating_add(impl_->telemetry.frames_discarded, *queued);
+		saturating_increment(impl_->telemetry.discontinuities);
+	}
+	return *queued;
+}
+
 std::expected<void, SdlAudioDeviceError> SdlAudioDevice::pause() noexcept
 {
 	if(impl_ == nullptr) {

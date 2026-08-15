@@ -87,6 +87,10 @@ public:
 	> submit(
 		std::span<const audio::PmdCanonicalStereoSample> frames
 	) noexcept;
+	// Discards only final-output PCM. PMD and source timing remain owned by the
+	// caller and continue independently.
+	[[nodiscard]] std::expected<std::size_t, SdlAudioDeviceError>
+	clear() noexcept;
 	[[nodiscard]] std::expected<void, SdlAudioDeviceError> pause() noexcept;
 	[[nodiscard]] std::expected<void, SdlAudioDeviceError> resume() noexcept;
 	[[nodiscard]] std::expected<std::size_t, SdlAudioDeviceError>

@@ -188,6 +188,7 @@ struct ReplaySaveAudioContext final {
 	std::optional<th03::platform::SdlAudioDevice> *device = nullptr;
 	bool *started = nullptr;
 	const std::uint8_t *master_volume_percent = nullptr;
+	const bool *mute_when_unfocused = nullptr;
 };
 
 [[nodiscard]] std::expected<
@@ -1413,6 +1414,7 @@ ExperienceRunResult run_classic_session(
 	std::uint8_t master_volume_percent = 100U;
 	std::uint8_t music_volume_percent = 100U;
 	std::uint8_t effect_volume_percent = 100U;
+	bool mute_when_unfocused = false;
 	th03::app::NewClassicWindowPresentation window_presentation{};
 	if(new_classic) {
 		auto persisted = th03::app::load_new_classic_settings_store(
@@ -1425,6 +1427,7 @@ ExperienceRunResult run_classic_session(
 		master_volume_percent = persisted->settings.master_volume_percent;
 		music_volume_percent = persisted->settings.music_volume_percent;
 		effect_volume_percent = persisted->settings.effect_volume_percent;
+		mute_when_unfocused = persisted->settings.mute_when_unfocused;
 		window_presentation = persisted->settings.window;
 		if(auto applied = platform.apply_window_presentation(
 			platform_window_presentation(window_presentation)
@@ -1547,6 +1550,7 @@ ExperienceRunResult run_classic_session(
 		warn_audio_device("audio-device-create", created_device.error());
 	}
 	bool audio_started = false;
+	bool audio_focus_muted = false;
 	std::vector<th03::audio::PmdCanonicalStereoSample> startup_silence{};
 	std::vector<th03::audio::PmdCanonicalStereoSample> gain_frames{};
 	auto scheduler = th03::app::TickInputScheduler::create(
@@ -1573,6 +1577,17 @@ ExperienceRunResult run_classic_session(
 		pending_publication_identity{};
 	std::uint64_t logical_ticks = 0U;
 	std::optional<th03::formats::ReplayDocument> completed_replay{};
+	auto sync_audio_focus_mute = [&]() noexcept {
+		const bool desired = new_classic && mute_when_unfocused &&
+			!mapper.main_window_focused();
+		if(desired && !audio_focus_muted && audio_device) {
+			if(auto cleared = audio_device->clear(); !cleared) {
+				warn_audio_device("audio-device-focus-clear", cleared.error());
+				audio_device.reset();
+			}
+		}
+		audio_focus_muted = desired;
+	};
 	while((*runner)->status() == th03::app::ClassicRunnerStatus::running) {
 		const auto cutoff = th03::platform::sdl_ticks_now_ns();
 		if(!retry_blocked_event) {
@@ -1582,6 +1597,7 @@ ExperienceRunResult run_classic_session(
 			}
 			retry_blocked_event = result->queue_blocked;
 		}
+		sync_audio_focus_mute();
 
 		bool smoke_complete = false;
 		for(;;) {
@@ -1683,6 +1699,11 @@ ExperienceRunResult run_classic_session(
 				master_volume_percent = *update;
 			}
 			if(auto update =
+				(*runner)->take_new_classic_mute_when_unfocused_update()) {
+				mute_when_unfocused = *update;
+				sync_audio_focus_mute();
+			}
+			if(auto update =
 				(*runner)->take_new_classic_window_presentation_update()) {
 				if(auto applied = platform.apply_window_presentation(
 					platform_window_presentation(*update)
@@ -1704,12 +1725,13 @@ ExperienceRunResult run_classic_session(
 				std::cerr << "logical-tick=" << logical_ticks << '\n';
 				return {.exit_code = fail("audio-command", drained.error())};
 			}
+			sync_audio_focus_mute();
 			auto audio_tick = audio_session->advance_tick();
 			if(!audio_tick) {
 				std::cerr << "logical-tick=" << logical_ticks << '\n';
 				return {.exit_code = fail("audio-tick", audio_tick.error())};
 			}
-			if(audio_device) {
+			if(audio_device && !audio_focus_muted) {
 				if(!audio_started && !audio_tick->canonical_frames.empty() &&
 					audio_tick->canonical_frames.size() <=
 						audio_device->maximum_queued_frames() / 3U) {
@@ -1728,7 +1750,7 @@ ExperienceRunResult run_classic_session(
 					}
 				}
 			}
-			if(audio_device) {
+			if(audio_device && !audio_focus_muted) {
 				auto output = output_gain_frames(
 					audio_tick->canonical_frames,
 					new_classic ? master_volume_percent : std::uint8_t{100U},
@@ -1833,6 +1855,7 @@ ExperienceRunResult run_classic_session(
 					.device = &audio_device,
 					.started = &audio_started,
 					.master_volume_percent = &master_volume_percent,
+					.mute_when_unfocused = &mute_when_unfocused,
 				}
 			);
 			completed_replay.reset();
@@ -2063,7 +2086,21 @@ std::expected<void, int> run_host_ui(
 		return std::unexpected(fail_tick(scheduler.error()));
 	}
 	bool retry_blocked_event = false;
+	bool audio_focus_muted = false;
 	std::vector<th03::audio::PmdCanonicalStereoSample> gain_frames{};
+	auto sync_audio_focus_mute = [&]() noexcept {
+		const bool desired = audio.mute_when_unfocused &&
+			*audio.mute_when_unfocused && !mapper.main_window_focused();
+		if(desired && !audio_focus_muted && audio.device && *audio.device) {
+			if(auto cleared = (*audio.device)->clear(); !cleared) {
+				warn_audio_device(
+					"replay-save-audio-focus-clear", cleared.error()
+				);
+				audio.device->reset();
+			}
+		}
+		audio_focus_muted = desired;
+	};
 	for(;;) {
 		const auto cutoff = th03::platform::sdl_ticks_now_ns();
 		if(!retry_blocked_event) {
@@ -2075,6 +2112,7 @@ std::expected<void, int> run_host_ui(
 			}
 			retry_blocked_event = pumped->queue_blocked;
 		}
+		sync_audio_focus_mute();
 		bool presentation_pending = false;
 		bool done = false;
 		for(;;) {
@@ -2092,13 +2130,14 @@ std::expected<void, int> run_host_ui(
 			presentation_pending =
 				presentation_pending || step->surface_changed;
 			if(audio.session) {
+				sync_audio_focus_mute();
 				auto rendered = audio.session->advance_tick();
 				if(!rendered) {
 					return std::unexpected(fail(
 						"replay-save-audio-tick", rendered.error()
 					));
 				}
-				if(audio.device && *audio.device) {
+				if(audio.device && *audio.device && !audio_focus_muted) {
 					const std::uint8_t percent = audio.master_volume_percent ?
 						*audio.master_volume_percent : std::uint8_t{100U};
 					auto output = output_gain_frames(

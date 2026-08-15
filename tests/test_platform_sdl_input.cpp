@@ -411,6 +411,7 @@ void test_keyboard_snapshots_charge_and_timestamp_order()
 		return;
 	}
 	auto mapper = std::move(*made);
+	expect(mapper.main_window_focused(), "main window starts focused");
 	auto input = scheduler();
 
 	auto edge = expect_event(mapper, input, key_event(5U, SDL_SCANCODE_A, true),
@@ -877,6 +878,8 @@ void test_focus_keyboard_device_release_and_quit_separation()
 	(void)expect_event(mapper, input,
 		window_event(SDL_EVENT_WINDOW_FOCUS_LOST, 11U, main_window),
 		"main-window focus loss releases every source");
+	expect(!mapper.main_window_focused(),
+		"main-window focus loss is retained for output policy");
 	const auto released = expect_tick(input, 20U, "focus release is due");
 	expect(
 		released.input.p1 == 0U && released.input.p2 == 0U &&
@@ -888,6 +891,12 @@ void test_focus_keyboard_device_release_and_quit_separation()
 		released.physical_domains->first_joystick_present &&
 		released.physical_domains->first_joystick == 0U,
 		"focus loss retains neutral first-gamepad presence");
+	const auto gained = expect_event(mapper, input,
+		window_event(SDL_EVENT_WINDOW_FOCUS_GAINED, 20U, main_window),
+		"main-window focus gain is handled without an input edge");
+	expect(gained.handled && !gained.physical_event_queued &&
+		mapper.main_window_focused(),
+		"focus gain restores output policy without synthesizing gameplay input");
 
 	(void)expect_event(mapper, input, key_event(21U, SDL_SCANCODE_W, true),
 		"keyboard state can be held again after focus loss");

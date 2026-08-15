@@ -15,6 +15,7 @@ namespace th03::app {
 enum class NewClassicSettingsStoreDisposition : std::uint8_t {
 	loaded,
 	upgraded_v1,
+	upgraded_v2,
 	migrated_classic,
 	created_defaults,
 	recovered_defaults,

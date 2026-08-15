@@ -13,7 +13,7 @@ namespace th03::app {
 
 inline constexpr std::size_t new_classic_settings_file_bytes = 28U;
 inline constexpr std::size_t new_classic_settings_v1_file_bytes = 24U;
-inline constexpr std::uint16_t new_classic_settings_format_version = 2U;
+inline constexpr std::uint16_t new_classic_settings_format_version = 3U;
 
 enum class NewClassicWindowMode : std::uint8_t {
 	windowed,
@@ -54,6 +54,7 @@ struct NewClassicSettings final {
 	std::uint8_t master_volume_percent = 100U;
 	std::uint8_t music_volume_percent = 100U;
 	std::uint8_t effect_volume_percent = 100U;
+	bool mute_when_unfocused = false;
 	NewClassicWindowPresentation window{};
 
 	friend constexpr bool operator==(

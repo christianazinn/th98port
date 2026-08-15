@@ -438,6 +438,7 @@ SdlInputMapper::SdlInputMapper(SdlInputMapper &&other) noexcept :
 	gamepads_(std::move(other.gamepads_)),
 	connected_gamepad_count_(other.connected_gamepad_count_),
 	native_runtime_lease_(other.native_runtime_lease_),
+	main_window_focused_(other.main_window_focused_),
 	pending_event_(other.pending_event_),
 	has_pending_event_(other.has_pending_event_)
 {
@@ -1021,11 +1022,18 @@ SdlInputMapper::handle_event(
 			return std::unexpected(pushed.error());
 		}
 		clear_held_states();
+		main_window_focused_ = false;
 		return SdlInputEventResult{
 			.handled = true,
 			.physical_event_queued = true,
 		};
 	}
+	case SDL_EVENT_WINDOW_FOCUS_GAINED:
+		if(event.window.windowID != main_window_) {
+			return SdlInputEventResult{};
+		}
+		main_window_focused_ = true;
+		return SdlInputEventResult{.handled = true};
 	case SDL_EVENT_WINDOW_CLOSE_REQUESTED: {
 		if(event.window.windowID != main_window_) {
 			return SdlInputEventResult{};
@@ -1058,6 +1066,11 @@ SdlInputMapper::handle_event(
 	default:
 		return SdlInputEventResult{};
 	}
+}
+
+bool SdlInputMapper::main_window_focused() const noexcept
+{
+	return main_window_focused_;
 }
 
 std::expected<SdlInputPumpResult, SdlInputMapperError>

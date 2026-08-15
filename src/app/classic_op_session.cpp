@@ -885,6 +885,7 @@ struct ClassicOpSessionBackend final {
 		pending_device_assignment_update{};
 	std::optional<bool> pending_reduced_flash_update{};
 	std::optional<std::uint8_t> pending_master_volume_update{};
+	std::optional<bool> pending_mute_when_unfocused_update{};
 	std::optional<NewClassicWindowPresentation>
 		pending_window_presentation_update{};
 	std::optional<ClassicOpOptionsCompletion> key_config_return_options{};
@@ -1498,7 +1499,8 @@ struct ClassicOpSessionBackend final {
 			new_classic_settings ?
 				new_classic_settings->music_volume_percent : 100U,
 			new_classic_settings ?
-				new_classic_settings->effect_volume_percent : 100U
+				new_classic_settings->effect_volume_percent : 100U,
+			new_classic_settings && new_classic_settings->mute_when_unfocused
 		);
 		if(!created) {
 			return std::unexpected(title_error(std::move(created.error())));
@@ -1545,6 +1547,13 @@ struct ClassicOpSessionBackend final {
 				options->music_volume_percent();
 			new_classic_settings->effect_volume_percent =
 				options->effect_volume_percent();
+			if(new_classic_settings->mute_when_unfocused !=
+				options->mute_when_unfocused()) {
+				new_classic_settings->mute_when_unfocused =
+					options->mute_when_unfocused();
+				pending_mute_when_unfocused_update =
+					new_classic_settings->mute_when_unfocused;
+			}
 		}
 		bool language_background_refreshed = false;
 		if(tick->phase == ClassicOpOptionsPhase::shrink_window &&
@@ -1607,6 +1616,13 @@ struct ClassicOpSessionBackend final {
 				options_completion->music_volume_percent();
 			new_classic_settings->effect_volume_percent =
 				options_completion->effect_volume_percent();
+			if(new_classic_settings->mute_when_unfocused !=
+				options_completion->mute_when_unfocused()) {
+				new_classic_settings->mute_when_unfocused =
+					options_completion->mute_when_unfocused();
+				pending_mute_when_unfocused_update =
+					new_classic_settings->mute_when_unfocused;
+			}
 		}
 		if(config.language != active_language) {
 			if(auto applied = apply_language_profile(config.language); !applied) {
@@ -1871,7 +1887,8 @@ struct ClassicOpSessionBackend final {
 				key_config_return_options->master_volume_percent(),
 				key_config_return_options->window_presentation(),
 				key_config_return_options->music_volume_percent(),
-				key_config_return_options->effect_volume_percent()
+				key_config_return_options->effect_volume_percent(),
+				key_config_return_options->mute_when_unfocused()
 			) : joy_config_scene ?
 			ClassicOpOptionsScene::resume_after_joy_config(
 				*key_config_return_options, fm_available, *resources, patch_assets,
@@ -1879,14 +1896,16 @@ struct ClassicOpSessionBackend final {
 				key_config_return_options->master_volume_percent(),
 				key_config_return_options->window_presentation(),
 				key_config_return_options->music_volume_percent(),
-				key_config_return_options->effect_volume_percent()
+				key_config_return_options->effect_volume_percent(),
+				key_config_return_options->mute_when_unfocused()
 			) : ClassicOpOptionsScene::resume_after_key_config(
 				*key_config_return_options, fm_available, *resources, patch_assets,
 				&*font, !english_resources.empty(),
 				key_config_return_options->master_volume_percent(),
 				key_config_return_options->window_presentation(),
 				key_config_return_options->music_volume_percent(),
-				key_config_return_options->effect_volume_percent()
+				key_config_return_options->effect_volume_percent(),
+				key_config_return_options->mute_when_unfocused()
 			);
 		if(!returned) {
 			return std::unexpected(title_error(std::move(returned.error())));
@@ -3547,6 +3566,11 @@ struct ClassicOpSessionBackend final {
 		return std::exchange(pending_master_volume_update, std::nullopt);
 	}
 
+	[[nodiscard]] std::optional<bool> take_mute_when_unfocused_update() noexcept
+	{
+		return std::exchange(pending_mute_when_unfocused_update, std::nullopt);
+	}
+
 	[[nodiscard]] std::optional<NewClassicWindowPresentation>
 	take_window_presentation_update() noexcept
 	{
@@ -4495,6 +4519,17 @@ ClassicOpSession::take_master_volume_update() noexcept
 	return static_cast<ClassicOpSessionBackend *>(
 		impl_->operations.context
 	)->take_master_volume_update();
+}
+
+std::optional<bool>
+ClassicOpSession::take_mute_when_unfocused_update() noexcept
+{
+	if(!impl_ || !impl_->operations.context) {
+		return std::nullopt;
+	}
+	return static_cast<ClassicOpSessionBackend *>(
+		impl_->operations.context
+	)->take_mute_when_unfocused_update();
 }
 
 std::optional<NewClassicWindowPresentation>

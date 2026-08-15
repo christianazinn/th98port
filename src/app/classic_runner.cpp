@@ -95,6 +95,14 @@ take_session_master_volume(void *context)
 	return static_cast<ClassicOpSession *>(context)->take_master_volume_update();
 }
 
+[[nodiscard]] std::optional<bool> take_session_mute_when_unfocused(
+	void *context
+)
+{
+	return static_cast<ClassicOpSession *>(context)->
+		take_mute_when_unfocused_update();
+}
+
 [[nodiscard]] std::optional<NewClassicWindowPresentation>
 take_session_window_presentation(void *context)
 {
@@ -355,6 +363,7 @@ struct ClassicRunner::Impl final {
 	std::optional<NewClassicJoyConfig> latest_joy_config{};
 	std::optional<NewClassicDeviceAssignment> latest_device_assignment{};
 	std::optional<std::uint8_t> latest_master_volume{};
+	std::optional<bool> latest_mute_when_unfocused{};
 	std::optional<NewClassicWindowPresentation> latest_window_presentation{};
 	PixelOracleIdentityTracker pixel_oracle_tracker{};
 	bool initial_replay = false;
@@ -509,6 +518,7 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		.take_device_assignment_update = &take_session_device_assignment,
 		.take_reduced_flash_update = &take_session_reduced_flash,
 		.take_master_volume_update = &take_session_master_volume,
+		.take_mute_when_unfocused_update = &take_session_mute_when_unfocused,
 		.take_window_presentation_update = &take_session_window_presentation,
 		.pixel_oracle_source_identity = &pixel_oracle_session_identity,
 		.compose_shown_surface = &compose_session,
@@ -594,6 +604,13 @@ ClassicRunner::consume(
 			impl_->operations.context
 		)) {
 			impl_->latest_master_volume = *update;
+		}
+	}
+	if(impl_->operations.take_mute_when_unfocused_update) {
+		if(auto update = impl_->operations.take_mute_when_unfocused_update(
+			impl_->operations.context
+		)) {
+			impl_->latest_mute_when_unfocused = *update;
 		}
 	}
 	if(impl_->operations.take_window_presentation_update) {
@@ -730,6 +747,14 @@ ClassicRunner::take_new_classic_master_volume_update() noexcept
 {
 	return impl_ ? std::exchange(impl_->latest_master_volume, std::nullopt) :
 		std::nullopt;
+}
+
+std::optional<bool>
+ClassicRunner::take_new_classic_mute_when_unfocused_update() noexcept
+{
+	return impl_ ? std::exchange(
+		impl_->latest_mute_when_unfocused, std::nullopt
+	) : std::nullopt;
 }
 
 std::optional<NewClassicWindowPresentation>

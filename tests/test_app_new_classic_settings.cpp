@@ -81,6 +81,19 @@ v1_settings(bool music, bool effects)
 	return bytes;
 }
 
+[[nodiscard]] std::array<std::byte, new_classic_settings_file_bytes>
+v2_settings(const NewClassicSettings &settings)
+{
+	auto encoded = th03::app::encode_new_classic_settings(settings).value();
+	encoded[7U] = std::byte{'2'};
+	put_u16(encoded, 8U, 2U);
+	encoded[22U] = std::byte{0U};
+	put_u32(encoded, 24U, fnv1a32(
+		std::span<const std::byte>(encoded).first(24U)
+	));
+	return encoded;
+}
+
 void expect(bool condition, std::string_view message)
 {
 	++checks;
@@ -169,6 +182,7 @@ void test_codec()
 		.master_volume_percent = 65U,
 		.music_volume_percent = 35U,
 		.effect_volume_percent = 80U,
+		.mute_when_unfocused = true,
 		.window = {
 			.mode = NewClassicWindowMode::borderless_fullscreen,
 			.scale = NewClassicWindowScale::x3,
@@ -185,7 +199,7 @@ void test_codec()
 	expect(encoded && decoded && *decoded == settings,
 		"versioned New Classic settings round-trip every field");
 	expect(encoded && encoded->size() == new_classic_settings_file_bytes,
-		"New Classic settings have one frozen v2 size");
+		"New Classic settings retain the frozen 28-byte v3 size");
 
 	if(encoded) {
 		for(const auto mutation : std::array{
@@ -208,12 +222,19 @@ void test_codec()
 			NewClassicSettingsErrorCode::reserved_nonzero,
 			"nonzero v2 reserved bytes are rejected");
 		auto reserved_tail = *encoded;
-		reserved_tail[22U] = std::byte{1U};
+		reserved_tail[22U] = std::byte{2U};
 		const auto invalid_tail =
 			th03::app::decode_new_classic_settings(reserved_tail);
 		expect(!invalid_tail && invalid_tail.error().code ==
 			NewClassicSettingsErrorCode::reserved_nonzero,
-			"nonzero v2 extension-reserved bytes are rejected");
+			"out-of-range v3 focus policy values are rejected");
+		const auto legacy_v2 = v2_settings(settings);
+		const auto decoded_v2 =
+			th03::app::decode_new_classic_settings(legacy_v2);
+		expect(decoded_v2 && !decoded_v2->mute_when_unfocused &&
+			decoded_v2->music_volume_percent == settings.music_volume_percent &&
+			decoded_v2->effect_volume_percent == settings.effect_volume_percent,
+			"v2 documents preserve audio percentages and default focus mute Off");
 	}
 	const auto legacy_on = v1_settings(true, true);
 	const auto decoded_legacy_on =
@@ -366,7 +387,7 @@ void test_defaults_recovery_and_errors()
 			NewClassicSettingsErrorCode::input_size,
 		"present malformed settings recover defaults without migration");
 	expect(fs::file_size(settings_path) == new_classic_settings_file_bytes,
-		"recovery publishes the exact v2 document");
+		"recovery publishes the exact v3 document");
 
 	const auto legacy_path = temporary.path() / "LEGACY.CFG";
 	expect(write_bytes(legacy_path, v1_settings(true, false)),
@@ -379,7 +400,24 @@ void test_defaults_recovery_and_errors()
 		upgraded->settings.music_volume_percent == 100U &&
 		upgraded->settings.effect_volume_percent == 0U &&
 		fs::file_size(legacy_path) == new_classic_settings_file_bytes,
-		"v1 documents upgrade atomically to v2 category levels");
+		"v1 documents upgrade atomically to v3 category levels");
+
+	const auto v2_path = temporary.path() / "V2.CFG";
+	auto v2_fixture = NewClassicSettings{};
+	v2_fixture.music_volume_percent = 45U;
+	v2_fixture.effect_volume_percent = 70U;
+	expect(write_bytes(v2_path, v2_settings(v2_fixture)),
+		"v2 settings fixture writes");
+	const auto upgraded_v2 = th03::app::load_new_classic_settings_store(
+		v2_path, classic_path
+	);
+	expect(upgraded_v2 && upgraded_v2->disposition ==
+		NewClassicSettingsStoreDisposition::upgraded_v2 &&
+		upgraded_v2->settings.music_volume_percent == 45U &&
+		upgraded_v2->settings.effect_volume_percent == 70U &&
+		!upgraded_v2->settings.mute_when_unfocused &&
+		read_bytes(v2_path)[7U] == std::byte{'3'},
+		"v2 documents upgrade atomically with focus mute defaulted Off");
 
 	const auto malformed_classic = temporary.path() / "BROKEN.CFG";
 	const auto migrated_defaults = temporary.path() / "DEFAULT.CFG";

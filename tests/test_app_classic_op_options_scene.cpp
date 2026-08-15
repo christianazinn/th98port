@@ -379,7 +379,18 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 			effect_enable->type == ClassicAudioCommandType::set_effects_active &&
 			effect_enable->parameter == 1U && !scene->take_audio_command(),
 		"Audio SFX re-enable installs gain before restoring arbitration");
-	expect(scene->advance().has_value(), "Audio SFX releases");
+	expect(scene->advance().has_value() &&
+		scene->advance({.down = true}).has_value() &&
+		scene->advance().has_value() &&
+		scene->selected_choice() ==
+			ClassicOpOptionsChoice::mute_when_unfocused,
+		"Audio navigation reaches New Classic focus mute");
+	expect(scene->advance({.right = true}).has_value() &&
+		scene->mute_when_unfocused(),
+		"focus mute toggles live without emitting a source audio command");
+	expect(!scene->take_audio_command(),
+		"focus mute remains a final-output policy outside PMD");
+	expect(scene->advance().has_value(), "Audio focus mute releases");
 	expect(scene->advance({.cancel = true}).has_value() &&
 		scene->advance().has_value() &&
 		scene->advance({.down = true}).has_value() &&
@@ -400,7 +411,8 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		ClassicOpOptionsOutcome::key_config &&
 		key_config->master_volume_percent() == 40U &&
 		key_config->music_volume_percent() == 5U &&
-		key_config->effect_volume_percent() == 5U,
+		key_config->effect_volume_percent() == 5U &&
+		key_config->mute_when_unfocused(),
 		"KeyConfig retains its typed handoff outcome");
 
 	auto video = make_patch_scene_if_assets_supplied();

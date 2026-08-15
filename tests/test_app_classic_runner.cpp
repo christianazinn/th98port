@@ -418,6 +418,7 @@ struct FakeRunnerBackend final {
 		device_assignment_update{};
 	std::optional<bool> reduced_flash_update{};
 	std::optional<std::uint8_t> master_volume_update{};
+	std::optional<bool> mute_when_unfocused_update{};
 	std::optional<th03::app::NewClassicWindowPresentation>
 		window_presentation_update{};
 	th03::app::PixelOracleSourceIdentity pixel_oracle_source_identity{
@@ -501,6 +502,12 @@ th03::app::ClassicRunnerOperations runner_operations(
 		.take_master_volume_update = [](void *context) {
 			auto &self = *static_cast<FakeRunnerBackend *>(context);
 			return std::exchange(self.master_volume_update, std::nullopt);
+		},
+		.take_mute_when_unfocused_update = [](void *context) {
+			auto &self = *static_cast<FakeRunnerBackend *>(context);
+			return std::exchange(
+				self.mute_when_unfocused_update, std::nullopt
+			);
 		},
 		.take_window_presentation_update = [](void *context) {
 			auto &self = *static_cast<FakeRunnerBackend *>(context);
@@ -659,6 +666,7 @@ void test_runner_sequence_audio_surface_and_failure()
 			th03::app::NewClassicControllerAssignmentMode::disabled;
 		profile_backend->device_assignment_update = assignment;
 		profile_backend->master_volume_update = std::uint8_t{35U};
+		profile_backend->mute_when_unfocused_update = true;
 		profile_backend->window_presentation_update =
 			th03::app::NewClassicWindowPresentation{
 				.mode = th03::app::NewClassicWindowMode::borderless_fullscreen,
@@ -692,6 +700,11 @@ void test_runner_sequence_audio_surface_and_failure()
 			(*new_classic)->take_new_classic_master_volume_update() == 35U &&
 			!(*new_classic)->take_new_classic_master_volume_update(),
 			"New Classic publishes each typed master-volume update once"
+		);
+		expect(
+			(*new_classic)->take_new_classic_mute_when_unfocused_update() == true &&
+			!(*new_classic)->take_new_classic_mute_when_unfocused_update(),
+			"New Classic publishes each typed focus-mute update once"
 		);
 		expect(
 			(*new_classic)->take_new_classic_window_presentation_update() ==

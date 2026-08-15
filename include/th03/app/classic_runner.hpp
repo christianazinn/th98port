@@ -214,6 +214,8 @@ public:
 	take_new_classic_device_assignment_update() noexcept;
 	[[nodiscard]] std::optional<std::uint8_t>
 	take_new_classic_master_volume_update() noexcept;
+	[[nodiscard]] std::optional<bool>
+	take_new_classic_mute_when_unfocused_update() noexcept;
 	[[nodiscard]] std::optional<NewClassicWindowPresentation>
 	take_new_classic_window_presentation_update() noexcept;
 	[[nodiscard]] std::shared_ptr<const NewClassicReplaySaveArt>
