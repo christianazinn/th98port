@@ -212,17 +212,16 @@ the first clear cannot accelerate itself. Replay details expose the
 frozen V13 result/date/score, checkpoint splits, stage clear-bonus counters,
 slowdown, and Replay Patch `m:ss.cc` real-frame timers. Clears is read-only;
 Splits and Timers retain checkpoint launch.
-The active recording is crash-checkpointed as canonical V13
+The active recording is checkpointed as canonical V13
 `REPLAY\TH3LAST.RPY` after its first input, at process/checkpoint boundaries,
 periodically during MAIN, whenever Replay Pause opens, and on its navigation
 and Save choices. A normal save
 atomically publishes that exact artifact as `TH3Rxx.RPY`; explicit discard
-removes it, while an application quit or storage failure preserves it. If a
-valid fallback remains on the next launch, New Classic opens the source-style
-save transaction before OP so it can be named and published without starting a
-new recording over it. Matching Replay Patch, an unreadable fallback is treated
-as no pending save and removed so OP and a later fresh recording can proceed;
-other filesystem failures remain explicit.
+removes it, while an application quit or storage failure may leave it behind.
+`TH3LAST.RPY` is only a current-process durability journal: every ordinary
+fresh New Classic launch discards any leftover journal before the title rather
+than opening a cross-launch Save Replay transaction. Filesystem failures while
+discarding it remain explicit.
 New Classic Practice is entered through the patched title's VS Start route,
 1P-vs-CPU selector, and Replay Patch 0.4.12's main and Advanced setup pages.
 Its source defaults, exact-VS fallback, fixed-opponent stages, speed/rank/gauge

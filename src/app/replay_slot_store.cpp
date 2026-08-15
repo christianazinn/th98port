@@ -556,6 +556,13 @@ std::expected<void, ReplaySlotStoreError> remove_replay_fallback(
 	return {};
 }
 
+std::expected<void, ReplaySlotStoreError> discard_replay_fallback_on_startup(
+	const std::filesystem::path &replay_root
+)
+{
+	return remove_replay_fallback(replay_root);
+}
+
 std::expected<void, ReplaySlotStoreError> commit_replay_fallback_to_slot(
 	const std::filesystem::path &replay_root,
 	std::uint8_t slot,

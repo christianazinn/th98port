@@ -1553,42 +1553,13 @@ ExperienceRunResult run_classic_session(
 	if(auto drained = drain_audio(); !drained) {
 		return {.exit_code = fail("audio-command", drained.error())};
 	}
-	bool recovered_replay_modal = false;
 	if(new_classic && !parsed.capture_replay) {
-		auto fallback = th03::app::load_replay_fallback(parsed.replay_root);
-		if(!fallback) {
-			if(fallback.error().code !=
-				th03::app::ReplaySlotStoreErrorCode::format) {
-				return {
-					.exit_code = fail("replay-fallback-load", fallback.error())
-				};
-			}
-			// Replay Patch replay_save_pending() treats an unreadable TH3LAST as
-			// no pending save and lets the next recording replace it. Mirror that
-			// availability policy at startup; I/O and removal failures remain loud.
-			if(auto removed =
-				th03::app::remove_replay_fallback(parsed.replay_root); !removed) {
-				return {
-					.exit_code = fail("replay-fallback-remove", removed.error())
-				};
-			}
-			fallback = th03::app::ReplaySlotLoadResult{};
-		}
-		if(fallback->document) {
-			auto saved = run_replay_save(
-				std::move(*fallback->document), parsed.replay_root,
-				parsed.tick_rate, platform, mapper, patch_assets,
-				(*runner)->new_classic_replay_save_art()
-			);
-			if(saved.exit_code != 0) {
-				return {.exit_code = saved.exit_code};
-			}
-			if(saved.application_quit) {
-				return {
-					.disposition = ExperienceRunDisposition::application_quit
-				};
-			}
-			recovered_replay_modal = true;
+		if(auto discarded = th03::app::discard_replay_fallback_on_startup(
+			parsed.replay_root
+		); !discarded) {
+			return {
+				.exit_code = fail("replay-fallback-remove", discarded.error())
+			};
 		}
 	}
 
@@ -1639,14 +1610,6 @@ ExperienceRunResult run_classic_session(
 	if(!scheduler) {
 		return {.exit_code = fail_tick(scheduler.error())};
 	}
-	if(recovered_replay_modal) {
-		const auto resumed_at = th03::platform::sdl_ticks_now_ns();
-		if(auto reset = mapper.reset_after_modal(*scheduler, resumed_at);
-			!reset) {
-			return {.exit_code = fail("input-rebase", reset.error())};
-		}
-	}
-
 	bool retry_blocked_event = false;
 	bool presentation_pending = false;
 	std::optional<std::uint64_t> pending_publication_tick{};

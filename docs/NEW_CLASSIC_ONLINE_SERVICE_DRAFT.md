@@ -190,10 +190,12 @@ The live native recorder remains an in-memory document authority. Online
 submission can encode the finalized V13 document to a byte vector and send
 those bytes directly, avoiding a temporary numbered replay file.
 
-Keep the existing `TH3LAST.RPY` crash-recovery journal. It protects users from
-data loss and its removal would not make memory or network submission harder to
-tamper with. An ordinary saved/downloaded replay remains a normal disk file and
-can be uploaded later from the Replay menu.
+Keep the existing `TH3LAST.RPY` current-process journal. It protects the active
+recording transaction from intermediate storage failure and its removal would
+not make memory or network submission harder to tamper with. It is not a
+cross-launch recovery queue: a fresh application start discards an interrupted
+journal before the title. An ordinary saved/downloaded replay remains a normal
+disk file and can be uploaded later from the Replay menu.
 
 R2 stores candidate accepted bytes under their digest. Payloads rejected before
 that put are not retained. Before D1 publication, read back the object and

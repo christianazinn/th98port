@@ -233,6 +233,27 @@ void test_fallback_and_faults(
 		!std::filesystem::exists(th03::app::replay_fallback_path(root)),
 		"discard retry removes the fallback"
 	);
+
+	check(
+		th03::app::checkpoint_replay_fallback(root, base).has_value(),
+		"startup policy fixture creates a valid interrupted journal"
+	);
+	check(
+		th03::app::discard_replay_fallback_on_startup(root).has_value() &&
+		!std::filesystem::exists(th03::app::replay_fallback_path(root)),
+		"a fresh application launch discards even a valid interrupted journal"
+	);
+	check(
+		th03::app::discard_replay_fallback_on_startup(root).has_value(),
+		"startup discard is idempotent when no journal exists"
+	);
+
+	write_malformed(th03::app::replay_fallback_path(root));
+	check(
+		th03::app::discard_replay_fallback_on_startup(root).has_value() &&
+		!std::filesystem::exists(th03::app::replay_fallback_path(root)),
+		"startup discard removes malformed bytes without parsing them"
+	);
 	ReplaySlotStoreTestAccess::clear_failure();
 }
 

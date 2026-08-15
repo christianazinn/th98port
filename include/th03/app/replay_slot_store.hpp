@@ -91,6 +91,14 @@ checkpoint_replay_fallback(
 [[nodiscard]] std::expected<void, ReplaySlotStoreError>
 remove_replay_fallback(const std::filesystem::path &replay_root);
 
+// TH3LAST is a current-process durability journal, not a pending-save queue.
+// An ordinary fresh application launch discards any interrupted journal before
+// OP can be presented or a new recording can claim the path.
+[[nodiscard]] std::expected<void, ReplaySlotStoreError>
+discard_replay_fallback_on_startup(
+	const std::filesystem::path &replay_root
+);
+
 // Rewrites the fallback with the final menu-edited document, validates it, and
 // then atomically renames that exact artifact over the selected slot. A failed
 // publication preserves the old slot and leaves the fallback recoverable.
