@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <expected>
 #include <filesystem>
+#include <span>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -15,7 +16,9 @@ namespace th03::app {
 class NewClassicMenuFont;
 
 enum class NewClassicMessageId : std::uint16_t {
-#define TH03_NEW_CLASSIC_MESSAGE(name, identifier, width, placeholders) name,
+#define TH03_NEW_CLASSIC_MESSAGE( \
+	name, identifier, width, placeholders, width_values \
+) name,
 #include "th03/app/new_classic_message_ids.inc"
 #undef TH03_NEW_CLASSIC_MESSAGE
 	count,
@@ -33,6 +36,12 @@ struct NewClassicMessageSchemaEntry final {
 	std::string_view identifier{};
 	std::uint16_t maximum_width = 0U;
 	std::string_view placeholders{};
+	std::string_view width_values{};
+};
+
+struct NewClassicMessageArgument final {
+	std::string_view name{};
+	std::string_view value{};
 };
 
 enum class NewClassicMessagePackErrorCode : std::uint8_t {
@@ -70,6 +79,10 @@ public:
 	[[nodiscard]] std::string_view fallback_locale() const noexcept;
 	[[nodiscard]] NewClassicLanguageAssetProfile asset_profile() const noexcept;
 	[[nodiscard]] std::string_view text(NewClassicMessageId id) const noexcept;
+	[[nodiscard]] std::string format(
+		NewClassicMessageId id,
+		std::span<const NewClassicMessageArgument> arguments
+	) const;
 	[[nodiscard]] std::string format_percent(
 		NewClassicMessageId id,
 		std::uint8_t percent

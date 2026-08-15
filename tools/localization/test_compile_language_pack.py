@@ -78,6 +78,42 @@ class LanguagePackTests(unittest.TestCase):
                 (self.root / "src/app/new_classic_messages_generated.inc").read_bytes(),
             )
 
+    def test_placeholder_width_contract_fails_closed(self) -> None:
+        original = json.loads((self.root / "localization/schema.json").read_text())
+        target = next(
+            message for message in original["messages"]
+            if message["id"] == "replay.save.overwrite"
+        )
+        cases = []
+        missing_width = json.loads(json.dumps(original))
+        next(
+            message for message in missing_width["messages"]
+            if message["id"] == "replay.save.overwrite"
+        )["placeholders"] = [{"name": "slot"}]
+        cases.append(missing_width)
+        duplicate = json.loads(json.dumps(original))
+        next(
+            message for message in duplicate["messages"]
+            if message["id"] == "replay.save.overwrite"
+        )["placeholders"] = [
+            {"name": "slot", "width_value": "100"},
+            {"name": "slot", "width_value": "99"},
+        ]
+        cases.append(duplicate)
+        non_ascii = json.loads(json.dumps(original))
+        next(
+            message for message in non_ascii["messages"]
+            if message["id"] == "replay.save.overwrite"
+        )["placeholders"] = [{"name": "slot", "width_value": "１００"}]
+        cases.append(non_ascii)
+        self.assertEqual(target["placeholders"][0]["width_value"], "100")
+        with tempfile.TemporaryDirectory() as temporary:
+            for index, case in enumerate(cases):
+                path = Path(temporary) / f"schema-{index}.json"
+                path.write_text(json.dumps(case), encoding="utf-8")
+                with self.assertRaises(pack.PackError):
+                    pack.load_schema(path)
+
 
 if __name__ == "__main__":
     unittest.main()

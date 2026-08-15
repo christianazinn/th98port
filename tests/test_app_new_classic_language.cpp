@@ -253,6 +253,18 @@ void test_message_packs(const th03::app::NewClassicMenuFont *authentic_font)
 	if(!english) {
 		return;
 	}
+	const std::array practice_arguments{
+		th03::app::NewClassicMessageArgument{"plus", "+"},
+		th03::app::NewClassicMessageArgument{"round", "2"},
+		th03::app::NewClassicMessageArgument{"stage", "9"},
+	};
+	expect(
+		english->format(
+			th03::app::NewClassicMessageId::replay_practice_start,
+			practice_arguments
+		) == "Stage 9 Round 2+ Start",
+		"named Replay placeholders format deterministically independent of argument order"
+	);
 	auto japanese = th03::app::load_new_classic_message_pack(
 		root / "ja-JP.t3lang", font, &*english
 	);
@@ -284,6 +296,18 @@ void test_message_packs(const th03::app::NewClassicMenuFont *authentic_font)
 		th03::app::NewClassicMessageId::value_percent, 100U
 	) == "[100%]",
 		"width-stressing pseudo-locale resolves and retains placeholders");
+	if(width_test) {
+		const std::array overwrite_arguments{
+			th03::app::NewClassicMessageArgument{"slot", "100"},
+		};
+		expect(
+			width_test->format(
+				th03::app::NewClassicMessageId::replay_save_overwrite,
+				overwrite_arguments
+			) == "[Overwrite 100?]",
+			"pseudo-locale resolves dynamic Replay dialog placeholders"
+		);
+	}
 
 	auto tampered = read_file(root / "qps-ploc.t3lang");
 	const std::string_view needle = "[{percent}%]";

@@ -269,6 +269,24 @@ optional_patch_assets()
 	);
 }
 
+std::shared_ptr<const th03::app::NewClassicReplayPatchAssets>
+pseudo_localized_patch_assets(
+	const std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> &assets
+)
+{
+	if(!assets) {
+		return {};
+	}
+	auto localized = std::make_shared<th03::app::NewClassicReplayPatchAssets>(
+		*assets
+	);
+	localized->custom_messages =
+		std::make_shared<const th03::app::NewClassicMessageCatalog>(
+			th03::app::detail::new_classic_width_test_messages()
+		);
+	return localized;
+}
+
 void finish_entry_fade(th03::app::NewClassicReplayBrowser &browser)
 {
 	for(std::size_t boundary = 0U; boundary < 19U; ++boundary) {
@@ -458,6 +476,7 @@ void test_catalog_browser_and_save()
 
 	{
 		auto patch_browser = NewClassicReplayBrowser::load(root, patch_assets);
+		std::optional<th03::present::SourceSurface> baseline_list{};
 		expect(patch_browser.has_value(),
 			"patch-enabled browser loads through authenticated AZINN assets");
 		if(patch_browser) {
@@ -473,6 +492,7 @@ void test_catalog_browser_and_save()
 			for(std::size_t boundary = 0U; boundary < 19U; ++boundary) {
 				static_cast<void>((*patch_browser)->consume({}));
 			}
+			baseline_list = (*patch_browser)->surface();
 			expect((*patch_browser)->surface().palette_tone == 100,
 				"patch browser completes palette_black_in(1) before input");
 			expect(
@@ -490,6 +510,30 @@ void test_catalog_browser_and_save()
 					**patch_browser
 				) == 9U,
 				"patch Story detail publishes all nine source physical stage rows"
+			);
+		}
+		auto pseudo_assets = pseudo_localized_patch_assets(patch_assets);
+		auto pseudo_one = NewClassicReplayBrowser::load(root, pseudo_assets);
+		auto pseudo_two = NewClassicReplayBrowser::load(root, pseudo_assets);
+		expect(
+			baseline_list && pseudo_one.has_value() && pseudo_two.has_value(),
+			"pseudo-localized Replay browsers load through the same authenticated art"
+		);
+		if(baseline_list && pseudo_one && pseudo_two) {
+			finish_entry_fade(**pseudo_one);
+			finish_entry_fade(**pseudo_two);
+			const auto first = (*pseudo_one)->surface();
+			const auto second = (*pseudo_two)->surface();
+			expect(
+				surface_hash(first) == surface_hash(second) &&
+				surface_hash(first) != surface_hash(*baseline_list),
+				"pseudo-localized Replay list is deterministic and visibly replaces semantic text"
+			);
+			expect(
+				first.shown_page == baseline_list->shown_page &&
+				first.palette_tone == baseline_list->palette_tone &&
+				first.graphics_palette == baseline_list->graphics_palette,
+				"Replay localization preserves source page and palette ownership"
 			);
 		}
 
@@ -519,6 +563,30 @@ void test_catalog_browser_and_save()
 			patch_save.surface().graphics_palette.colors[12U] ==
 				th03::assets::Rgb4{15U, 15U, 0U},
 			"patch save slot list installs Replay Patch selected palette 12"
+		);
+
+		auto prompt_document = make_document();
+		prompt_document.metadata->end_reason =
+			th03::formats::ReplayEndReason::game_over;
+		NewClassicReplaySaveMenu baseline_prompt(prompt_document, patch_assets);
+		NewClassicReplaySaveMenu localized_prompt(
+			prompt_document, pseudo_localized_patch_assets(patch_assets)
+		);
+		finish_entry_fade(baseline_prompt, *catalog);
+		finish_entry_fade(localized_prompt, *catalog);
+		expect(
+			surface_hash(localized_prompt.surface()) !=
+				surface_hash(baseline_prompt.surface()),
+			"pseudo-localized Replay save prompt replaces the source-domain dialog copy"
+		);
+		expect(
+			localized_prompt.surface().shown_page ==
+				baseline_prompt.surface().shown_page &&
+			localized_prompt.surface().palette_tone ==
+				baseline_prompt.surface().palette_tone &&
+			localized_prompt.surface().graphics_palette ==
+				baseline_prompt.surface().graphics_palette,
+			"Replay save localization preserves dialog page and palette cadence"
 		);
 	}
 

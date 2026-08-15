@@ -269,18 +269,30 @@ std::string source_trimmed_name(const std::array<char, 8U> &name)
 }
 
 [[nodiscard]] std::string catalog_marker(
-	const ReplayCatalogSlot &slot
+	const ReplayCatalogSlot &slot,
+	const NewClassicMessageCatalog &messages
 )
 {
 	if(slot.practice) {
-		return "P" + std::to_string(slot.practice_stage + 1U) +
-			std::to_string(slot.practice_round + 1U);
+		const auto stage = std::to_string(slot.practice_stage + 1U);
+		const auto round = std::to_string(slot.practice_round + 1U);
+		const std::array arguments{
+			NewClassicMessageArgument{"stage", stage},
+			NewClassicMessageArgument{"round", round},
+		};
+		return messages.format(
+			NewClassicMessageId::replay_marker_practice, arguments
+		);
 	}
 	if(slot.game_mode != game_mode::story) {
-		return "VS";
+		return std::string{
+			messages.text(NewClassicMessageId::replay_marker_vs)
+		};
 	}
 	if(slot.end_reason == formats::ReplayEndReason::complete) {
-		return "ALL";
+		return std::string{
+			messages.text(NewClassicMessageId::replay_marker_all)
+		};
 	}
 	return slot.stage_reached == 0U ? "-" :
 		std::to_string(slot.stage_reached);
@@ -308,44 +320,66 @@ std::string source_trimmed_name(const std::array<char, 8U> &name)
 	return labels[static_cast<std::size_t>(paletted_character - 1) / 2U];
 }
 
-[[nodiscard]] constexpr std::string_view patch_rank_label(
-	std::uint8_t rank
+[[nodiscard]] std::string_view patch_rank_label(
+	std::uint8_t rank,
+	const NewClassicMessageCatalog &messages
 ) noexcept
 {
-	constexpr std::array<std::string_view, 4U> labels{
-		"Easy", "Normal", "Hard", "Lunatic",
+	constexpr std::array<NewClassicMessageId, 4U> labels{
+		NewClassicMessageId::value_easy,
+		NewClassicMessageId::value_normal,
+		NewClassicMessageId::value_hard,
+		NewClassicMessageId::value_lunatic,
 	};
-	return rank < labels.size() ? labels[rank] : "?";
+	return rank < labels.size() ? messages.text(labels[rank]) : "?";
 }
 
-[[nodiscard]] constexpr std::string_view patch_character_label(
-	std::int8_t paletted_character
+[[nodiscard]] std::string_view patch_character_label(
+	std::int8_t paletted_character,
+	const NewClassicMessageCatalog &messages
 ) noexcept
 {
-	constexpr std::array<std::string_view, 9U> labels{
-		"Reimu", "Mima", "Marisa", "Ellen", "Kotohime",
-		"Kana", "Rikako", "Chiyuri", "Yumemi",
+	constexpr std::array<NewClassicMessageId, 9U> labels{
+		NewClassicMessageId::replay_character_reimu,
+		NewClassicMessageId::replay_character_mima,
+		NewClassicMessageId::replay_character_marisa,
+		NewClassicMessageId::replay_character_ellen,
+		NewClassicMessageId::replay_character_kotohime,
+		NewClassicMessageId::replay_character_kana,
+		NewClassicMessageId::replay_character_rikako,
+		NewClassicMessageId::replay_character_chiyuri,
+		NewClassicMessageId::replay_character_yumemi,
 	};
 	if(paletted_character < 1 || paletted_character > 18) {
 		return "-";
 	}
-	return labels[static_cast<std::size_t>(paletted_character - 1) / 2U];
+	return messages.text(
+		labels[static_cast<std::size_t>(paletted_character - 1) / 2U]
+	);
 }
 
-[[nodiscard]] constexpr std::string_view patch_end_reason_label(
-	formats::ReplayEndReason reason
+[[nodiscard]] std::string_view patch_end_reason_label(
+	formats::ReplayEndReason reason,
+	const NewClassicMessageCatalog &messages
 ) noexcept
 {
 	switch(reason) {
-	case formats::ReplayEndReason::complete: return "Clear";
-	case formats::ReplayEndReason::game_over: return "Game Over";
-	case formats::ReplayEndReason::menu_return: return "Menu Return";
-	case formats::ReplayEndReason::input_end: return "Input End";
-	case formats::ReplayEndReason::partial: return "Partial";
-	case formats::ReplayEndReason::error: return "Error";
-	case formats::ReplayEndReason::none: return "None";
+	case formats::ReplayEndReason::complete:
+		return messages.text(NewClassicMessageId::replay_end_clear);
+	case formats::ReplayEndReason::game_over:
+		return messages.text(NewClassicMessageId::replay_end_game_over);
+	case formats::ReplayEndReason::menu_return:
+		return messages.text(NewClassicMessageId::replay_end_menu_return);
+	case formats::ReplayEndReason::input_end:
+		return messages.text(NewClassicMessageId::replay_end_input_end);
+	case formats::ReplayEndReason::partial:
+		return messages.text(NewClassicMessageId::replay_end_partial);
+	case formats::ReplayEndReason::error:
+		return messages.text(NewClassicMessageId::replay_end_error);
+	case formats::ReplayEndReason::none:
+		return messages.text(NewClassicMessageId::replay_end_none);
 	}
-	return "None";
+	return messages.text(NewClassicMessageId::replay_end_none);
 }
 
 [[nodiscard]] constexpr std::string_view end_reason_label(
@@ -783,6 +817,7 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 	static_cast<void>(raster.set_pending_palette_entry(12U, {15U, 15U, 0U}));
 	raster.apply_pending_palette();
 	const auto &font = patch_assets_->menu_font;
+	const auto &messages = patch_assets_->messages();
 	const auto put = [&](std::int32_t left, std::int32_t top,
 		std::string_view text, present::Index4 color) {
 		return font.put(raster, left, top, text, color);
@@ -792,11 +827,18 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 		return font.put_right(raster, right, top, text, color);
 	};
 	if(!detail_document_) {
-		bool drawn = put(64, 80, "Slot", 9U) &&
-			put(104, 80, "Name", 9U) &&
-			put_right(340, 80, "Score", 9U) &&
-			put(364, 80, "Character", 9U) &&
-			put(476, 80, "Rank", 9U) && put(560, 80, "Stg", 9U);
+		bool drawn = put(64, 80, messages.text(
+			NewClassicMessageId::replay_header_slot), 9U) &&
+			put(104, 80, messages.text(
+				NewClassicMessageId::replay_header_name), 9U) &&
+			put_right(340, 80, messages.text(
+				NewClassicMessageId::replay_header_score), 9U) &&
+			put(364, 80, messages.text(
+				NewClassicMessageId::replay_header_character), 9U) &&
+			put(476, 80, messages.text(
+				NewClassicMessageId::replay_header_rank), 9U) &&
+			put(560, 80, messages.text(
+				NewClassicMessageId::replay_header_stage), 9U);
 		for(std::size_t row = 0U; drawn && row < browser_rows; ++row) {
 			const auto slot = static_cast<std::size_t>(top_slot_) + row;
 			if(slot >= replay_slot_count) {
@@ -813,7 +855,8 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 				font, raster, 64, top, slot_number(slot), 12, color
 			);
 			if(entry.state != ReplayCatalogSlotState::ready) {
-				drawn = drawn && put(104, top, "none", color);
+				drawn = drawn && put(104, top, messages.text(
+					NewClassicMessageId::replay_none), color);
 				continue;
 			}
 			drawn = drawn && patch_put_fixed(
@@ -825,9 +868,11 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 				340 - static_cast<std::int32_t>(score.size() * 12U), top,
 				score, 12, color
 			) && put(364, top,
-				patch_character_label(entry.p1_paletted_character), color) &&
-				put(476, top, patch_rank_label(entry.rank), color) &&
-				patch_put_fixed(font, raster, 560, top, catalog_marker(entry), 12, color);
+				patch_character_label(entry.p1_paletted_character, messages), color) &&
+				put(476, top, patch_rank_label(entry.rank, messages), color) &&
+				patch_put_fixed(
+					font, raster, 560, top, catalog_marker(entry, messages), 12, color
+				);
 		}
 		static_cast<void>(drawn);
 		static_cast<void>(patch_surface_.publish(raster.access_page()));
@@ -839,40 +884,63 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 	const auto *metadata = document.metadata ? &*document.metadata : nullptr;
 	const auto trimmed_name = source_trimmed_name(entry.name);
 	static_cast<void>(put(48, 80, trimmed_name, 15U));
-	static_cast<void>(put_right(
-		304, 80, "Slot " + slot_number(selected_slot_), 9U
-	));
+	const auto slot = slot_number(selected_slot_);
+	const std::array slot_argument{NewClassicMessageArgument{"slot", slot}};
+	static_cast<void>(put_right(304, 80, messages.format(
+		NewClassicMessageId::replay_detail_slot, slot_argument
+	), 9U));
 	std::int32_t tab_left = 328;
 	auto tab = [&](std::string_view label, bool selected) {
 		const auto ok = put(tab_left, 80, label, selected ? 12U : 9U);
 		tab_left += font.width(label);
 		return ok;
 	};
-	static_cast<void>(tab("Splits", detail_page_ ==
+	static_cast<void>(tab(messages.text(
+		NewClassicMessageId::replay_tab_splits), detail_page_ ==
 		NewClassicReplayDetailPage::splits));
 	static_cast<void>(tab(" / ", false));
-	static_cast<void>(tab("Clears", detail_page_ ==
+	static_cast<void>(tab(messages.text(
+		NewClassicMessageId::replay_tab_clears), detail_page_ ==
 		NewClassicReplayDetailPage::clear_bonuses));
 	static_cast<void>(tab(" / ", false));
-	static_cast<void>(tab("Timers", detail_page_ ==
+	static_cast<void>(tab(messages.text(
+		NewClassicMessageId::replay_tab_timers), detail_page_ ==
 		NewClassicReplayDetailPage::timers));
 	if(metadata) {
 		const auto story = metadata->game_mode == game_mode::story &&
 			!document.practice;
 		const auto score_label = metadata->game_mode == game_mode::vs_1p_cpu ?
-			"P1 Score" : (story || document.practice) ?
-			"Final Score" : "Win Score";
+			messages.text(NewClassicMessageId::replay_label_p1_score) :
+			(story || document.practice) ? messages.text(
+				NewClassicMessageId::replay_label_final_score) : messages.text(
+					NewClassicMessageId::replay_label_win_score);
 		std::string mode;
 		if(document.practice) {
-			mode = "Practice Mode";
+			mode = messages.text(NewClassicMessageId::replay_mode_practice);
 		} else if(story) {
-			mode = "Story Mode - ";
-			mode += patch_end_reason_label(metadata->end_reason);
+			const auto reason = patch_end_reason_label(
+				metadata->end_reason, messages
+			);
+			const std::array arguments{
+				NewClassicMessageArgument{"reason", reason},
+			};
+			mode = messages.format(
+				NewClassicMessageId::replay_mode_story, arguments
+			);
 		} else {
-			mode = "Vs Mode ";
-			mode += metadata->game_mode == game_mode::vs_1p_cpu ? "1P-CPU" :
-				metadata->game_mode == game_mode::vs_1p_2p ? "1P-2P" :
-				"CPU-CPU";
+			const auto vs_mode = messages.text(
+				metadata->game_mode == game_mode::vs_1p_cpu ?
+					NewClassicMessageId::replay_mode_1p_cpu :
+				metadata->game_mode == game_mode::vs_1p_2p ?
+					NewClassicMessageId::replay_mode_1p_2p :
+					NewClassicMessageId::replay_mode_cpu_cpu
+			);
+			const std::array arguments{
+				NewClassicMessageArgument{"mode", vs_mode},
+			};
+			mode = messages.format(
+				NewClassicMessageId::replay_mode_vs, arguments
+			);
 		}
 		static_cast<void>(put(48, 96, mode, 9U));
 		static_cast<void>(put(48, 112, score_label, 15U));
@@ -881,38 +949,50 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 			font, raster, 304 - static_cast<std::int32_t>(score.size() * 12U),
 			112, score, 12, 15U
 		));
-		static_cast<void>(put(48, 128, "Date", 15U));
+		static_cast<void>(put(48, 128, messages.text(
+			NewClassicMessageId::replay_label_date), 15U));
 		static_cast<void>(put_right(304, 128,
 			dos_date_label(metadata->dos_date), 15U));
 		static_cast<void>(put(
 			48, 144,
-			std::string(patch_rank_label(metadata->rank)) + " " +
+			std::string(patch_rank_label(metadata->rank, messages)) + " " +
 			std::string(patch_character_label(
-				metadata->paletted_character[0U]
+				metadata->paletted_character[0U], messages
 			)) +
-			(story ? "" : " vs " + std::string(patch_character_label(
-					metadata->paletted_character[1U]
+			(story ? "" : std::string(messages.text(
+				NewClassicMessageId::replay_summary_vs)) +
+				std::string(patch_character_label(
+					metadata->paletted_character[1U], messages
 				))),
 			15U
 		));
 		std::string context;
 		if(document.practice && metadata->practice) {
-			context = "Stage " + std::to_string(
-				metadata->practice->stage + 1U
-			) + " Round " + std::to_string(
-				metadata->practice->round + 1U
-			) + (metadata->practice->round == 5U ? "+" : "") + " Start";
+			const auto stage = std::to_string(metadata->practice->stage + 1U);
+			const auto round = std::to_string(metadata->practice->round + 1U);
+			const auto plus = metadata->practice->round == 5U ? "+" : "";
+			const std::array arguments{
+				NewClassicMessageArgument{"stage", stage},
+				NewClassicMessageArgument{"round", round},
+				NewClassicMessageArgument{"plus", plus},
+			};
+			context = messages.format(
+				NewClassicMessageId::replay_practice_start, arguments
+			);
 		} else {
 			context = (metadata->autofire & 0x01U) ?
-				"AutofireOn" : "AutofireOff";
+				messages.text(NewClassicMessageId::replay_autofire_on) :
+				messages.text(NewClassicMessageId::replay_autofire_off);
 			if(!story) {
 				context += " ";
 				context += (metadata->autofire & 0x02U) ?
-					"AutofireOn" : "AutofireOff";
+					messages.text(NewClassicMessageId::replay_autofire_on) :
+					messages.text(NewClassicMessageId::replay_autofire_off);
 			}
 		}
 		static_cast<void>(put(48, 160, context, 15U));
-		static_cast<void>(put(48, 176, "Slowdown", 15U));
+		static_cast<void>(put(48, 176, messages.text(
+			NewClassicMessageId::replay_label_slowdown), 15U));
 		static_cast<void>(put_right(
 			304, 176, slowdown_label(document), 15U
 		));
@@ -921,7 +1001,9 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 				static_cast<void>(put(32, 192, ">", 12U));
 			}
 			static_cast<void>(put(
-				48, 192, "View Settings", checkpoint_focus_ ? 15U : 12U
+				48, 192, messages.text(
+					NewClassicMessageId::replay_label_view_settings
+				), checkpoint_focus_ ? 15U : 12U
 			));
 		}
 	}
@@ -929,44 +1011,86 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 		metadata->game_mode == game_mode::story && !document.practice;
 	if(detail_page_ == NewClassicReplayDetailPage::clear_bonuses ||
 		story_detail) {
-		static_cast<void>(put(344, 112, "St", 9U));
-		static_cast<void>(put(376, 112, "Opponent", 9U));
+		static_cast<void>(put(344, 112, messages.text(
+			NewClassicMessageId::replay_column_stage), 9U));
+		static_cast<void>(put(376, 112, messages.text(
+			NewClassicMessageId::replay_column_opponent), 9U));
 		static_cast<void>(put_right(
 			592, 112,
 			detail_page_ == NewClassicReplayDetailPage::clear_bonuses ?
-				"Bonus" : detail_page_ == NewClassicReplayDetailPage::timers ?
-					"Time" : "Score",
+				messages.text(NewClassicMessageId::replay_column_bonus) :
+				detail_page_ == NewClassicReplayDetailPage::timers ?
+					messages.text(NewClassicMessageId::replay_column_time) :
+					messages.text(NewClassicMessageId::replay_column_score),
 			9U
 		));
 	} else {
-		static_cast<void>(put(328, 112, "Rd", 9U));
+		static_cast<void>(put(328, 112, messages.text(
+			NewClassicMessageId::replay_column_round), 9U));
 		if(detail_page_ == NewClassicReplayDetailPage::timers) {
-			static_cast<void>(put_right(568, 112, "Time", 9U));
+			static_cast<void>(put_right(568, 112, messages.text(
+				NewClassicMessageId::replay_column_time), 9U));
 		} else {
-			static_cast<void>(put_right(452, 112, "P1 Score", 9U));
-			static_cast<void>(put_right(568, 112, "P2 Score", 9U));
-			static_cast<void>(put(584, 112, "W", 9U));
+			static_cast<void>(put_right(452, 112, messages.text(
+				NewClassicMessageId::replay_label_p1_score), 9U));
+			static_cast<void>(put_right(568, 112, messages.text(
+				NewClassicMessageId::replay_label_p2_score), 9U));
+			static_cast<void>(put(584, 112, messages.text(
+				NewClassicMessageId::replay_column_winner), 9U));
 		}
 	}
 	if(practice_settings_modal_ && metadata && metadata->practice) {
 		const auto &cfg = *metadata->practice;
 		static_cast<void>(raster.clear({72, 104, 496U, 192U}, 0U));
-		const auto timer = cfg.cpu_timer == 0U ? "VS Default" :
-			cfg.cpu_timer == 1U ? "Story Native" : "Infinite";
+		const auto timer = messages.text(cfg.cpu_timer == 0U ?
+			NewClassicMessageId::replay_timer_vs_default :
+			cfg.cpu_timer == 1U ?
+				NewClassicMessageId::replay_timer_story_native :
+				NewClassicMessageId::replay_timer_infinite);
+		const auto format_one = [&](NewClassicMessageId id,
+			std::string_view name, std::string_view value) {
+			const std::array arguments{NewClassicMessageArgument{name, value}};
+			return messages.format(id, arguments);
+		};
+		const auto format_two = [&](NewClassicMessageId id,
+			std::string_view first_name, std::string_view first_value,
+			std::string_view second_name, std::string_view second_value) {
+			const std::array arguments{
+				NewClassicMessageArgument{first_name, first_value},
+				NewClassicMessageArgument{second_name, second_value},
+			};
+			return messages.format(id, arguments);
+		};
+		const auto stock = std::to_string(cfg.stock);
+		const auto extends = std::to_string(cfg.extends_gained);
+		const auto safety = std::to_string(cfg.initial_cpu_safety_frames);
+		const auto round_speed = q4_label(cfg.round_speed);
+		const auto bullet_speed = q4_label(cfg.bullet_speed);
+		const auto p1_spell = std::to_string(cfg.p1_spell);
+		const auto cpu_spell = std::to_string(cfg.cpu_spell);
+		const auto p1_gauge = std::to_string(cfg.p1_gauge);
+		const auto cpu_gauge = std::to_string(cfg.cpu_gauge);
+		const auto boss_rank = std::to_string(cfg.boss_level + 1U);
+		const auto cpu_damage = std::to_string(cfg.cpu_damage);
 		std::array<std::string, 8U> rows{{
-			"Life Stock " + (cfg.stock == 0xFFU ? std::string{"VS Rules"} :
-				std::to_string(cfg.stock) + " (" +
-				std::to_string(cfg.extends_gained) + " Extends Gained)"),
-			"CPU Timer: " + std::string(timer),
-			"CPU Safety: " + std::to_string(cfg.initial_cpu_safety_frames),
-			"Speeds: " + q4_label(cfg.round_speed) + " / " +
-				q4_label(cfg.bullet_speed),
-			"Spell Rank: P1 " + std::to_string(cfg.p1_spell) + " / CPU " +
-				std::to_string(cfg.cpu_spell),
-			"Start Gauge: P1 " + std::to_string(cfg.p1_gauge) + " / CPU " +
-				std::to_string(cfg.cpu_gauge),
-			"Boss Rank: " + std::to_string(cfg.boss_level + 1U),
-			"CPU Damage: " + std::to_string(cfg.cpu_damage),
+			cfg.stock == 0xFFU ? std::string{messages.text(
+				NewClassicMessageId::replay_practice_life_vs)} : format_two(
+				NewClassicMessageId::replay_practice_life,
+				"stock", stock, "extends", extends),
+			format_one(NewClassicMessageId::replay_practice_cpu_timer,
+				"timer", timer),
+			format_one(NewClassicMessageId::replay_practice_cpu_safety,
+				"frames", safety),
+			format_two(NewClassicMessageId::replay_practice_speeds,
+				"round", round_speed, "bullet", bullet_speed),
+			format_two(NewClassicMessageId::replay_practice_spell_rank,
+				"p1", p1_spell, "cpu", cpu_spell),
+			format_two(NewClassicMessageId::replay_practice_start_gauge,
+				"p1", p1_gauge, "cpu", cpu_gauge),
+			format_one(NewClassicMessageId::replay_practice_boss_rank,
+				"rank", boss_rank),
+			format_one(NewClassicMessageId::replay_practice_cpu_damage,
+				"damage", cpu_damage),
 		}};
 		for(std::size_t row = 0U; row < rows.size(); ++row) {
 			static_cast<void>(put(
@@ -979,7 +1103,8 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 	if(detail_page_ == NewClassicReplayDetailPage::clear_bonuses) {
 		if(metadata && metadata->game_mode != game_mode::story &&
 			!document.practice) {
-			static_cast<void>(put(344, 128, "No stage clear bonuses.", 15U));
+			static_cast<void>(put(344, 128, messages.text(
+				NewClassicMessageId::replay_no_clear_bonuses), 15U));
 		} else {
 			const auto first_stage = document.practice && metadata &&
 				metadata->practice ? metadata->practice->stage : 0U;
@@ -999,7 +1124,7 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 					376, top,
 					reached ? patch_character_label(static_cast<std::int8_t>(
 						metadata->story->stage_opponents[stage]
-					)) : "-", 15U
+					), messages) : "-", 15U
 				));
 				const auto valid = document.stage_clear_bonuses &&
 					clear_bonus_valid((*document.stage_clear_bonuses)[stage]);
@@ -1039,8 +1164,14 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 			}
 			if(row.kind == ReplayDetailRowKind::round && row.checkpoint) {
 				const auto &checkpoint = document.checkpoints[*row.checkpoint];
+				const auto round = std::to_string(checkpoint.round + 1U);
+				const std::array arguments{
+					NewClassicMessageArgument{"round", round},
+				};
 				static_cast<void>(put(
-					400, top, "Round " + std::to_string(checkpoint.round + 1U),
+					400, top, messages.format(
+						NewClassicMessageId::replay_round, arguments
+					),
 					color
 				));
 				const auto *split = round_split(document, checkpoint);
@@ -1073,7 +1204,7 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 				376, top,
 				reached ? patch_character_label(static_cast<std::int8_t>(
 					metadata->story->stage_opponents[row.stage]
-				)) : "-",
+				), messages) : "-",
 				color
 			));
 			if(detail_page_ == NewClassicReplayDetailPage::timers) {
@@ -1539,6 +1670,7 @@ void NewClassicReplaySaveMenu::draw_patch(
 		raster.apply_pending_palette();
 	}
 	const auto &font = patch_assets_->menu_font;
+	const auto &messages = patch_assets_->messages();
 	const auto put = [&](std::int32_t left, std::int32_t top,
 		std::string_view text, present::Index4 color) {
 		return font.put(raster, left, top, text, color);
@@ -1608,12 +1740,24 @@ void NewClassicReplaySaveMenu::draw_patch(
 	};
 
 	const auto draw_slots = [&]() {
-		static_cast<void>(put(64, 80, "Slot", 9U));
-		static_cast<void>(put(104, 80, "Name", 9U));
-		static_cast<void>(put_right(340, 80, "Score", 9U));
-		static_cast<void>(put(364, 80, "Character", 9U));
-		static_cast<void>(put(476, 80, "Rank", 9U));
-		static_cast<void>(put(560, 80, "Stg", 9U));
+		static_cast<void>(put(64, 80, messages.text(
+			NewClassicMessageId::replay_header_slot
+		), 9U));
+		static_cast<void>(put(104, 80, messages.text(
+			NewClassicMessageId::replay_header_name
+		), 9U));
+		static_cast<void>(put_right(340, 80, messages.text(
+			NewClassicMessageId::replay_header_score
+		), 9U));
+		static_cast<void>(put(364, 80, messages.text(
+			NewClassicMessageId::replay_header_character
+		), 9U));
+		static_cast<void>(put(476, 80, messages.text(
+			NewClassicMessageId::replay_header_rank
+		), 9U));
+		static_cast<void>(put(560, 80, messages.text(
+			NewClassicMessageId::replay_header_stage
+		), 9U));
 		for(std::size_t row = 0U; row < browser_rows; ++row) {
 			const auto slot = static_cast<std::size_t>(top_slot_) + row;
 			if(slot >= replay_slot_count) {
@@ -1631,7 +1775,9 @@ void NewClassicReplaySaveMenu::draw_patch(
 				font, raster, 64, top, slot_number(slot), 12, color
 			));
 			if(entry.state != ReplayCatalogSlotState::ready) {
-				static_cast<void>(put(104, top, "none", color));
+				static_cast<void>(put(104, top, messages.text(
+					NewClassicMessageId::replay_none
+				), color));
 				continue;
 			}
 			static_cast<void>(patch_put_fixed(
@@ -1644,11 +1790,15 @@ void NewClassicReplaySaveMenu::draw_patch(
 				score, 12, color
 			));
 			static_cast<void>(put(
-				364, top, patch_character_label(entry.p1_paletted_character), color
+				364, top, patch_character_label(
+					entry.p1_paletted_character, messages
+				), color
 			));
-			static_cast<void>(put(476, top, patch_rank_label(entry.rank), color));
+			static_cast<void>(put(
+				476, top, patch_rank_label(entry.rank, messages), color
+			));
 			static_cast<void>(patch_put_fixed(
-				font, raster, 560, top, catalog_marker(entry), 12, color
+				font, raster, 560, top, catalog_marker(entry, messages), 12, color
 			));
 		}
 	};
@@ -1681,7 +1831,9 @@ void NewClassicReplaySaveMenu::draw_patch(
 					font, raster, 80, 160, date, 20, 15U
 				));
 			}
-			const auto rank = patch_rank_label(document_.metadata->rank);
+			const auto rank = patch_rank_label(
+				document_.metadata->rank, messages
+			);
 			const auto rank_initial = rank.empty() ? std::string{"?"} :
 				rank.substr(0U, 1U);
 			if(save_art_) {
@@ -1704,15 +1856,21 @@ void NewClassicReplaySaveMenu::draw_patch(
 				static_cast<void>(put(344, 160, rank_initial, 15U));
 				static_cast<void>(font.put_centered(
 					raster, 464, 168,
-					patch_character_label(document_.metadata->paletted_character[0U]),
+					patch_character_label(
+						document_.metadata->paletted_character[0U], messages
+					),
 					15U
 				));
 			}
 			std::string marker;
 			if(document_.metadata->practice) {
-				marker = "P";
+				marker = messages.text(
+					NewClassicMessageId::replay_marker_practice_short
+				);
 			} else if(document_.metadata->game_mode != game_mode::story) {
-				marker = "VS";
+				marker = messages.text(
+					NewClassicMessageId::replay_marker_vs
+				);
 			} else if(document_.metadata->end_reason ==
 				formats::ReplayEndReason::complete) {
 				if(save_art_) {
@@ -1764,7 +1922,9 @@ void NewClassicReplaySaveMenu::draw_patch(
 		draw_slots();
 		if(phase_ == Phase::saved_wait) {
 			static_cast<void>(font.put_centered(
-				raster, 320, 352, "Saved. Press any key.", 13U
+				raster, 320, 352, messages.text(
+					NewClassicMessageId::replay_save_saved
+				), 13U
 			));
 		}
 	}
@@ -1774,15 +1934,25 @@ void NewClassicReplaySaveMenu::draw_patch(
 		static_cast<void>(raster.clear({208, 160, 224U, 80U}, 0U));
 		std::string question;
 		if(phase_ == Phase::prompt) {
-			question = "Save Replay?";
+			question = messages.text(NewClassicMessageId::replay_save_prompt);
 		} else if(phase_ == Phase::overwrite) {
-			question = "Overwrite Slot " + slot_number(selected_slot_) + "?";
+			const auto slot = slot_number(selected_slot_);
+			const std::array arguments{
+				NewClassicMessageArgument{"slot", slot},
+			};
+			question = messages.format(
+				NewClassicMessageId::replay_save_overwrite, arguments
+			);
 		} else {
-			question = "Quit saving replay?";
+			question = messages.text(NewClassicMessageId::replay_save_quit);
 		}
 		static_cast<void>(font.put_centered(raster, 320, 176, question, 9U));
-		static_cast<void>(put(264, 208, "Yes", yes_ ? 12U : 15U));
-		static_cast<void>(put(360, 208, "No", yes_ ? 15U : 12U));
+		static_cast<void>(put(264, 208, messages.text(
+			NewClassicMessageId::replay_save_yes
+		), yes_ ? 12U : 15U));
+		static_cast<void>(put(360, 208, messages.text(
+			NewClassicMessageId::replay_save_no
+		), yes_ ? 15U : 12U));
 	}
 	static_cast<void>(patch_surface_.publish(raster.access_page()));
 	drawn_phase_ = phase_;

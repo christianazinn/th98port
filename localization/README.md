@@ -6,10 +6,14 @@ compiler emits deterministic `T3LNG001` packages; the native loader then
 revalidates the schema digest, completeness/fallback, placeholders, printable
 MNUFONT glyphs, and exact proportional pixel widths before accepting a locale.
 
-The initial complete domain is the New Classic title and hierarchical Option
-UI. It is deliberately limited to printable ASCII because it renders through
-the authenticated Replay Patch `MNUFONT.PF`. This is not the future
-Unicode-capable product-shell domain, and Classic never reads these files.
+The complete domains currently include the New Classic title, hierarchical
+Option UI, and authenticated Replay browser/save flow. Dynamic templates
+declare named placeholders together with conservative width-test values, so a
+translator cannot evade a row budget by leaving the runtime value unresolved.
+The format is deliberately limited to printable ASCII because these screens
+render through the authenticated Replay Patch `MNUFONT.PF`. This is not the
+future Unicode-capable product-shell domain, and Classic never reads these
+files.
 
 Generate the frozen C++ tables:
 

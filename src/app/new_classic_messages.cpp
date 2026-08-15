@@ -46,8 +46,9 @@ constexpr std::array<std::byte, 8U> magic{
 constexpr std::size_t message_count = new_classic_message_count;
 
 constexpr std::array<NewClassicMessageSchemaEntry, message_count> schema{{
-#define TH03_NEW_CLASSIC_MESSAGE(name, identifier, width, placeholders) \
-	{identifier, width, placeholders},
+#define TH03_NEW_CLASSIC_MESSAGE( \
+	name, identifier, width, placeholders, width_values \
+) {identifier, width, placeholders, width_values},
 #include "th03/app/new_classic_message_ids.inc"
 #undef TH03_NEW_CLASSIC_MESSAGE
 }};
@@ -180,6 +181,60 @@ constexpr std::array<NewClassicMessageSchemaEntry, message_count> schema{{
 	return result;
 }
 
+[[nodiscard]] std::vector<std::string_view> split_values(
+	std::string_view values,
+	char separator
+)
+{
+	std::vector<std::string_view> result{};
+	if(values.empty()) {
+		return result;
+	}
+	for(std::size_t first = 0U;;) {
+		const auto next = values.find(separator, first);
+		result.push_back(values.substr(first, next - first));
+		if(next == std::string_view::npos) {
+			return result;
+		}
+		first = next + 1U;
+	}
+}
+
+[[nodiscard]] std::string format_message(
+	std::string_view source,
+	std::span<const NewClassicMessageArgument> arguments
+)
+{
+	std::string result{};
+	std::vector<bool> used(arguments.size(), false);
+	for(std::size_t cursor = 0U; cursor < source.size();) {
+		if(source[cursor] != '{') {
+			result.push_back(source[cursor++]);
+			continue;
+		}
+		const auto close = source.find('}', cursor + 1U);
+		if(close == std::string_view::npos) {
+			return {};
+		}
+		const auto name = source.substr(cursor + 1U, close - cursor - 1U);
+		const auto found = std::ranges::find(
+			arguments, name, &NewClassicMessageArgument::name
+		);
+		if(found == arguments.end()) {
+			return {};
+		}
+		const auto index = static_cast<std::size_t>(found - arguments.begin());
+		if(used[index]) {
+			return {};
+		}
+		used[index] = true;
+		result.append(found->value);
+		cursor = close + 1U;
+	}
+	return std::ranges::all_of(used, [](bool value) { return value; }) ?
+		result : std::string{};
+}
+
 [[nodiscard]] std::expected<void, NewClassicMessagePackError>
 validate_message(
 	NewClassicMessageId id,
@@ -198,7 +253,21 @@ validate_message(
 			NewClassicMessagePackErrorCode::placeholder_mismatch, 0U, {}, id
 		));
 	}
-	if(font.width(text) > schema[index].maximum_width) {
+	const auto names = split_values(schema[index].placeholders, ',');
+	const auto values = split_values(schema[index].width_values, '|');
+	if(names.size() != values.size()) {
+		return std::unexpected(error(
+			NewClassicMessagePackErrorCode::placeholder_mismatch, 0U, {}, id
+		));
+	}
+	std::vector<NewClassicMessageArgument> arguments{};
+	arguments.reserve(names.size());
+	for(std::size_t argument = 0U; argument < names.size(); ++argument) {
+		arguments.push_back({names[argument], values[argument]});
+	}
+	const auto formatted = format_message(text, arguments);
+	if(formatted.empty() || !valid_glyphs(formatted) ||
+		font.width(formatted) > schema[index].maximum_width) {
 		return std::unexpected(error(
 			NewClassicMessagePackErrorCode::width_exceeded, 0U, {}, id
 		));
@@ -257,16 +326,22 @@ std::string NewClassicMessageCatalog::format_percent(
 	std::uint8_t percent
 ) const
 {
-	auto result = std::string{text(id)};
-	constexpr std::string_view placeholder = "{percent}";
-	const auto found = result.find(placeholder);
-	if(found == std::string::npos || result.find(
-		placeholder, found + placeholder.size()
-	) != std::string::npos) {
+	const auto value = std::to_string(percent);
+	const std::array arguments{NewClassicMessageArgument{"percent", value}};
+	return format(id, arguments);
+}
+
+std::string NewClassicMessageCatalog::format(
+	NewClassicMessageId id,
+	std::span<const NewClassicMessageArgument> arguments
+) const
+{
+	const auto index = static_cast<std::size_t>(id);
+	if(index >= messages_.size() ||
+		placeholder_set(messages_[index]) != schema[index].placeholders) {
 		return {};
 	}
-	result.replace(found, placeholder.size(), std::to_string(percent));
-	return result;
+	return format_message(messages_[index], arguments);
 }
 
 const NewClassicMessageSchemaEntry &new_classic_message_schema(

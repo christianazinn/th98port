@@ -19,6 +19,18 @@
     "value.joy-key": "[Joy vs Key]",
     "value.key-joy": "[Key vs Joy]",
     "value.percent": "[{percent}%]",
-    "prompt.switch-classic": "[ Switch to Classic? ]"
+    "prompt.switch-classic": "[ Switch to Classic? ]",
+    "replay.header.slot": "Slot",
+    "replay.header.name": "[Name]",
+    "replay.tab.splits": "[Splits]",
+    "replay.tab.clears": "[Clears]",
+    "replay.tab.timers": "[Timers]",
+    "replay.label.view-settings": "[ View Settings ]",
+    "replay.save.saved": "[ Saved. Press any key. ]",
+    "replay.save.prompt": "[ Save Replay? ]",
+    "replay.save.overwrite": "[Overwrite {slot}?]",
+    "replay.save.quit": "[Quit saving?]",
+    "replay.save.yes": "[Yes]",
+    "replay.save.no": "[No]"
   }
 }

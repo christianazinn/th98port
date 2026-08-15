@@ -28,11 +28,17 @@ class PackError(ValueError):
 
 
 @dataclass(frozen=True)
+class Placeholder:
+    name: str
+    width_value: str
+
+
+@dataclass(frozen=True)
 class Message:
     enum: str
     id: str
     max_width: int
-    placeholders: tuple[str, ...]
+    placeholders: tuple[Placeholder, ...]
 
 
 @dataclass(frozen=True)
@@ -91,18 +97,41 @@ def load_schema(path: Path) -> Schema:
             raise PackError(f"unsupported domain for {identifier}")
         if not isinstance(max_width, int) or not 1 <= max_width <= 640:
             raise PackError(f"invalid maximum width for {identifier}")
-        if (not isinstance(placeholders, list) or
-                any(not isinstance(item, str) or not ENUM_RE.fullmatch(item)
-                    for item in placeholders) or
-                len(set(placeholders)) != len(placeholders)):
+        if not isinstance(placeholders, list):
             raise PackError(f"invalid placeholders for {identifier}")
+        parsed_placeholders: list[Placeholder] = []
+        for placeholder in placeholders:
+            if not isinstance(placeholder, dict) or set(placeholder) != {
+                "name", "width_value"
+            }:
+                raise PackError(f"invalid placeholder for {identifier}")
+            name = placeholder.get("name")
+            width_value = placeholder.get("width_value")
+            if (not isinstance(name, str) or not ENUM_RE.fullmatch(name) or
+                    not isinstance(width_value, str) or not width_value or
+                    "|" in width_value):
+                raise PackError(f"invalid placeholder for {identifier}")
+            try:
+                encoded_width = width_value.encode("ascii")
+            except UnicodeEncodeError as error:
+                raise PackError(
+                    f"invalid placeholder width value for {identifier}"
+                ) from error
+            if any(value < 0x20 or value > 0x7E for value in encoded_width):
+                raise PackError(f"invalid placeholder for {identifier}")
+            parsed_placeholders.append(Placeholder(name, width_value))
+        parsed_placeholders.sort(key=lambda item: item.name)
+        if len({item.name for item in parsed_placeholders}) != len(
+            parsed_placeholders
+        ):
+            raise PackError(f"duplicate placeholder for {identifier}")
         enums.add(enum)
         identifiers.add(identifier)
         messages.append(Message(
             enum=enum,
             id=identifier,
             max_width=max_width,
-            placeholders=tuple(sorted(placeholders)),
+            placeholders=tuple(parsed_placeholders),
         ))
     canonical = canonical_json(raw)
     return Schema(tuple(messages), canonical, hashlib.sha256(canonical).digest())
@@ -134,7 +163,7 @@ def validate_message(message: Message, text: str) -> bytes:
         ) from error
     if not encoded or any(value < 0x20 or value > 0x7E for value in encoded):
         raise PackError(f"{message.id}: invalid menu-font glyph")
-    if placeholders(text) != message.placeholders:
+    if placeholders(text) != tuple(item.name for item in message.placeholders):
         raise PackError(f"{message.id}: placeholder set does not match schema")
     if len(encoded) > 0xFFFF:
         raise PackError(f"{message.id}: text is too long")
@@ -249,7 +278,9 @@ def generate_cpp(
         raise PackError("C++ generation requires en-US, ja-JP, and qps-ploc")
     ids = "".join(
         f'TH03_NEW_CLASSIC_MESSAGE({message.enum}, "{message.id}", '
-        f'{message.max_width}U, "{",".join(message.placeholders)}")\n'
+        f'{message.max_width}U, '
+        f'"{",".join(item.name for item in message.placeholders)}", '
+        f'"{"|".join(item.width_value for item in message.placeholders)}")\n'
         for message in schema.messages
     )
     resolved = {

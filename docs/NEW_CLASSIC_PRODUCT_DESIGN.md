@@ -430,12 +430,15 @@ live Option changes are independently tested on GCC and MSVC.
 
 ### 7. Localization-pack pipeline
 
-Status: first source-constrained domain complete in session 186. Stable IDs,
+Status: title/Option complete in session 186; authenticated Replay browser and
+save complete in session 187. Stable IDs,
 UTF-8 authoring files, the deterministic `T3LNG001` compiler/loader, exact
 fallback/placeholder/glyph/width validation, built-in Japanese/English
-catalogs, and a width-stressing pseudo-locale now own the New Classic title
-and hierarchical Option UI. Classic is unchanged. Replay browser/save,
-Practice, and input-screen semantic text remain subsequent domains; a future
+catalogs, and a width-stressing pseudo-locale now own the New Classic title,
+hierarchical Option UI, Replay browser, and save/name flow. Named Replay
+templates are load-time width-checked using their declared worst-case dynamic
+values without changing the donor page/palette machine. Classic is unchanged.
+Practice and input-screen semantic text remain subsequent domains; a future
 Unicode product-shell renderer remains separate from the authenticated ASCII
 MNUFONT contract.
 
