@@ -26,6 +26,8 @@ enum class ClassicOpOptionsChoice : std::uint8_t {
 	master_volume,
 	window_mode,
 	window_scale,
+	aspect_ratio,
+	filtering,
 	bgm,
 	key_mode,
 	quit,

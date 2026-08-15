@@ -40,10 +40,22 @@ enum class SdlWindowMode : std::uint8_t {
 	borderless_fullscreen,
 };
 
+enum class SdlAspectRatio : std::uint8_t {
+	pixels_8_5,
+	display_4_3,
+};
+
+enum class SdlFiltering : std::uint8_t {
+	nearest,
+	linear,
+};
+
 struct SdlWindowPresentation final {
 	SdlWindowMode mode = SdlWindowMode::windowed;
 	// Zero selects the largest 1x..3x window that fits the current display.
 	std::uint8_t integer_scale = 1U;
+	SdlAspectRatio aspect = SdlAspectRatio::pixels_8_5;
+	SdlFiltering filtering = SdlFiltering::nearest;
 
 	friend constexpr bool operator==(
 		const SdlWindowPresentation &,

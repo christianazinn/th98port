@@ -115,9 +115,11 @@ constexpr std::array<ClassicOpOptionsChoice, 3U> input_choices{{
 	ClassicOpOptionsChoice::return_page,
 }};
 
-constexpr std::array<ClassicOpOptionsChoice, 4U> video_choices{{
+constexpr std::array<ClassicOpOptionsChoice, 6U> video_choices{{
 	ClassicOpOptionsChoice::window_mode,
 	ClassicOpOptionsChoice::window_scale,
+	ClassicOpOptionsChoice::aspect_ratio,
+	ClassicOpOptionsChoice::filtering,
 	ClassicOpOptionsChoice::photosensitivity,
 	ClassicOpOptionsChoice::return_page,
 }};
@@ -164,6 +166,8 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 	case ClassicOpOptionsChoice::master_volume: return "Master Volume";
 	case ClassicOpOptionsChoice::window_mode: return "Window Mode";
 	case ClassicOpOptionsChoice::window_scale: return "Window Scale";
+	case ClassicOpOptionsChoice::aspect_ratio: return "Aspect Ratio";
+	case ClassicOpOptionsChoice::filtering: return "Filtering";
 	case ClassicOpOptionsChoice::bgm: return "Music";
 	case ClassicOpOptionsChoice::key_mode: return "Key Mode";
 	case ClassicOpOptionsChoice::quit: return "Return";
@@ -557,6 +561,10 @@ ClassicOpOptionsScene::create(
 			) ||
 		static_cast<std::uint8_t>(window_presentation.scale) >
 			static_cast<std::uint8_t>(NewClassicWindowScale::automatic) ||
+		static_cast<std::uint8_t>(window_presentation.aspect) >
+			static_cast<std::uint8_t>(NewClassicAspectRatio::display_4_3) ||
+		static_cast<std::uint8_t>(window_presentation.filtering) >
+			static_cast<std::uint8_t>(NewClassicFiltering::linear) ||
 		(!patch_assets && master_volume_percent != 100U) ||
 		(!patch_assets && window_presentation !=
 			NewClassicWindowPresentation{}) ||
@@ -947,6 +955,14 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 		case NewClassicWindowScale::automatic: value = "Auto"; break;
 		}
 		break;
+	case ClassicOpOptionsChoice::aspect_ratio:
+		value = window_presentation_.aspect ==
+			NewClassicAspectRatio::pixels_8_5 ? "8:5 Pixels" : "4:3 Display";
+		break;
+	case ClassicOpOptionsChoice::filtering:
+		value = window_presentation_.filtering == NewClassicFiltering::nearest ?
+			"Nearest" : "Linear";
+		break;
 	case ClassicOpOptionsChoice::bgm:
 		value = config_.bgm_mode == ClassicBgmMode::off ? "Off" : "FM (86)";
 		break;
@@ -1062,6 +1078,8 @@ bool ClassicOpOptionsScene::draw_option_choice(
 	case ClassicOpOptionsChoice::master_volume:
 	case ClassicOpOptionsChoice::window_mode:
 	case ClassicOpOptionsChoice::window_scale:
+	case ClassicOpOptionsChoice::aspect_ratio:
+	case ClassicOpOptionsChoice::filtering:
 	case ClassicOpOptionsChoice::language:
 	case ClassicOpOptionsChoice::photosensitivity:
 	case ClassicOpOptionsChoice::category_gameplay:
@@ -1212,6 +1230,19 @@ bool ClassicOpOptionsScene::update_horizontal(
 		config_changed = true;
 		break;
 	}
+	case ClassicOpOptionsChoice::aspect_ratio:
+		window_presentation_.aspect = window_presentation_.aspect ==
+			NewClassicAspectRatio::pixels_8_5 ?
+				NewClassicAspectRatio::display_4_3 :
+				NewClassicAspectRatio::pixels_8_5;
+		config_changed = true;
+		break;
+	case ClassicOpOptionsChoice::filtering:
+		window_presentation_.filtering = window_presentation_.filtering ==
+			NewClassicFiltering::nearest ? NewClassicFiltering::linear :
+			NewClassicFiltering::nearest;
+		config_changed = true;
+		break;
 	case ClassicOpOptionsChoice::bgm:
 		if(fm_available_) {
 			// ZUN quirk: Both directions toggle Off and FM, while a loaded
@@ -1505,6 +1536,8 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 				} else if(selected_ == ClassicOpOptionsChoice::language ||
 					selected_ == ClassicOpOptionsChoice::window_mode ||
 					selected_ == ClassicOpOptionsChoice::window_scale ||
+					selected_ == ClassicOpOptionsChoice::aspect_ratio ||
+					selected_ == ClassicOpOptionsChoice::filtering ||
 					selected_ == ClassicOpOptionsChoice::photosensitivity) {
 					ClassicOpInput horizontal{};
 					horizontal.right = true;

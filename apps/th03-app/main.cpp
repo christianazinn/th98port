@@ -1176,6 +1176,14 @@ platform_window_presentation(
 				th03::app::NewClassicWindowScale::automatic ? 0U :
 				static_cast<unsigned>(presentation.scale) + 1U
 		),
+		.aspect = presentation.aspect ==
+			th03::app::NewClassicAspectRatio::pixels_8_5 ?
+				th03::platform::SdlAspectRatio::pixels_8_5 :
+				th03::platform::SdlAspectRatio::display_4_3,
+		.filtering = presentation.filtering ==
+			th03::app::NewClassicFiltering::nearest ?
+				th03::platform::SdlFiltering::nearest :
+				th03::platform::SdlFiltering::linear,
 	};
 }
 

@@ -185,10 +185,13 @@ not change the canonical surface used by pixel and replay verification.
 
 Implemented now: `Window Mode` selects a resizable window or borderless
 desktop fullscreen. `Window Scale` selects 1x, 2x, 3x, or the largest of
-those presets that fits the current display. Changes apply live through an
-atomic SDL transition and persist in `PODD.CFG`; the renderer continues to
-publish the same nearest-scaled 640x400 texture and Classic exposes no such
-setting. Aspect, filtering, and frame-presentation policy remain later work.
+those presets that fits the current display. `Aspect Ratio` selects either
+the exact 640x400 `8:5 Pixels` grid or a `4:3 Display` presentation that
+stretches only the final host output to 640x480. `Filtering` selects Nearest
+or Linear sampling. Changes apply live through one atomic SDL transaction and
+persist in `PODD.CFG`; the renderer continues to upload the same exact
+640x400 texture and Classic exposes no such setting. Frame-presentation
+policy remains later work.
 
 Simulation remains at the source rational cadence. A display-synchronized mode
 may repeat the latest complete source frame at the monitor refresh rate. True
@@ -392,7 +395,8 @@ exist:
 
 1. Master volume in 5% increments with an exact unity path.
 2. Windowed/borderless state and integer scale presets.
-3. Nearest/optional linear filtering and aspect policy.
+3. Nearest/optional linear filtering and aspect policy. Complete in session
+   181 with zero-filled v1 settings retaining the prior 8:5/Nearest default.
 4. JoyConfig, device assignment, dead-zone calibration, and input test page.
 5. Move the existing Japanese/English selector to the Language page.
 

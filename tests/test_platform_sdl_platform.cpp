@@ -351,6 +351,32 @@ void test_dummy_platform_lifecycle_and_present()
 		);
 		expect(platform.apply_window_presentation({}).has_value(),
 			"explicit 1x restores the canonical default after automatic scale");
+		expect(
+			platform.apply_window_presentation({
+				.aspect = th03::platform::SdlAspectRatio::display_4_3,
+				.filtering = th03::platform::SdlFiltering::linear,
+			}).has_value(),
+			"4:3 display aspect and linear filtering apply as one live policy"
+		);
+		const auto display_aspect = SdlPlatformTestAccess::metrics(platform);
+		expect(
+			display_aspect && display_aspect->output_width == 640U &&
+				display_aspect->output_height == 480U &&
+				display_aspect->logical_width == 640.0F &&
+				display_aspect->logical_height == 480.0F &&
+				display_aspect->texture_width == 640.0F &&
+				display_aspect->texture_height == 400.0F &&
+				display_aspect->texture_scale_mode == SDL_SCALEMODE_LINEAR,
+			"display aspect changes only output geometry and texture sampling"
+		);
+		const auto aspect_frame = platform.present(fixture.source());
+		expect(
+			aspect_frame && aspect_frame->destination ==
+				th03::app::IntegerLetterboxRect{0U, 0U, 640U, 480U, 1U},
+			"4:3 display policy reports its exact physical destination"
+		);
+		expect(platform.apply_window_presentation({}).has_value(),
+			"default 8:5 nearest policy restores atomically");
 		fixture.pixels[0U] = {ComposedPixelLayer::text, 4U};
 		expect(static_cast<bool>(platform.present(fixture.source())),
 			"persistent texture accepts a distinct second complete frame");
@@ -408,14 +434,14 @@ void test_dummy_platform_lifecycle_and_present()
 			rows.push_back(std::move(row));
 		}
 		expect(
-			rows.size() == 6U && rows[0U] ==
+			rows.size() == 7U && rows[0U] ==
 				"stream\tschema\tpublication\tlogical_tick\tcoalesced_ticks\t"
 				"overlay\treduced_flash\tsource_fnv64\traster_fnv64\t"
 				"tram_fnv64\tshown_page\traster_mode\tscroll_y\ttone" &&
 				rows[1U].starts_with("T3PXH\t2\t0\t17\t1\t0\t0\t") &&
 				rows[1U].find("\t1122334455667788\t8877665544332211\t") !=
-					std::string::npos && rows[5U].starts_with("T3PXH\t2\t4\tna\t0\t"),
-			"T3PXH2 records five successful publications with aligned schema, logical identity, and source fingerprints"
+					std::string::npos && rows[6U].starts_with("T3PXH\t2\t5\tna\t0\t"),
+			"T3PXH2 records six successful publications with aligned schema, logical identity, and source fingerprints"
 		);
 	}
 	{
@@ -425,14 +451,14 @@ void test_dummy_platform_lifecycle_and_present()
 			rows.push_back(std::move(row));
 		}
 		expect(
-			rows.size() == 6U && rows[0U] ==
+			rows.size() == 7U && rows[0U] ==
 				"stream\tschema\tpublication\tlogical_tick\tcoalesced_ticks\t"
 				"overlay\treduced_flash\tsource_fnv64\traster_fnv64\t"
 				"tram_fnv64\tshown_page\traster_mode\tscroll_y\ttone\t"
 				"rgb_fnv64\tfile" &&
 				rows[1U].starts_with("T3RGB\t1\t0\t17\t1\t0\t0\t") &&
 				rows[1U].ends_with("\tframe-00000000.ppm") &&
-				rows[5U].starts_with("T3RGB\t1\t4\tna\t0\t"),
+				rows[6U].starts_with("T3RGB\t1\t5\tna\t0\t"),
 			"T3RGB1 records one exact frame identity for every successful publication"
 		);
 		std::ifstream first{
@@ -457,10 +483,10 @@ void test_dummy_platform_lifecycle_and_present()
 		expect(
 			std::filesystem::file_size(rgb_root / "frame-00000001.ppm") ==
 				bytes.size() &&
-				std::filesystem::file_size(rgb_root / "frame-00000004.ppm") ==
-				bytes.size() &&
-				!std::filesystem::exists(rgb_root / "frame-00000005.ppm") &&
-				!std::filesystem::exists(rgb_root / "frame-00000005.ppm.tmp"),
+				std::filesystem::file_size(rgb_root / "frame-00000005.ppm") ==
+					bytes.size() &&
+				!std::filesystem::exists(rgb_root / "frame-00000006.ppm") &&
+				!std::filesystem::exists(rgb_root / "frame-00000006.ppm.tmp"),
 			"failed source conversion emits no raw frame and later publication stays contiguous"
 		);
 	}

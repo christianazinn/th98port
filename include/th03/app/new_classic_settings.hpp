@@ -26,9 +26,21 @@ enum class NewClassicWindowScale : std::uint8_t {
 	automatic,
 };
 
+enum class NewClassicAspectRatio : std::uint8_t {
+	pixels_8_5,
+	display_4_3,
+};
+
+enum class NewClassicFiltering : std::uint8_t {
+	nearest,
+	linear,
+};
+
 struct NewClassicWindowPresentation final {
 	NewClassicWindowMode mode = NewClassicWindowMode::windowed;
 	NewClassicWindowScale scale = NewClassicWindowScale::x1;
+	NewClassicAspectRatio aspect = NewClassicAspectRatio::pixels_8_5;
+	NewClassicFiltering filtering = NewClassicFiltering::nearest;
 
 	friend constexpr bool operator==(
 		const NewClassicWindowPresentation &,
@@ -59,6 +71,8 @@ enum class NewClassicSettingsErrorCode : std::uint8_t {
 	invalid_master_volume,
 	invalid_window_mode,
 	invalid_window_scale,
+	invalid_aspect_ratio,
+	invalid_filtering,
 	reserved_nonzero,
 	digest,
 };

@@ -374,6 +374,22 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		video->advance({.right = true}).has_value() &&
 		video->window_presentation().scale == NewClassicWindowScale::x2,
 		"Window Scale advances through exact integer presets");
+	expect(video->advance().has_value() &&
+		video->advance({.down = true}).has_value() &&
+		video->advance().has_value() &&
+		video->selected_choice() == ClassicOpOptionsChoice::aspect_ratio &&
+		video->advance({.right = true}).has_value() &&
+		video->window_presentation().aspect ==
+			th03::app::NewClassicAspectRatio::display_4_3,
+		"Aspect Ratio switches the live host policy to 4:3 Display");
+	expect(video->advance().has_value() &&
+		video->advance({.down = true}).has_value() &&
+		video->advance().has_value() &&
+		video->selected_choice() == ClassicOpOptionsChoice::filtering &&
+		video->advance({.right = true}).has_value() &&
+		video->window_presentation().filtering ==
+			th03::app::NewClassicFiltering::linear,
+		"Filtering switches the live host policy to Linear");
 
 	auto system = make_patch_scene_if_assets_supplied();
 	if(!system) {

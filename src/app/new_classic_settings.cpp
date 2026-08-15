@@ -131,6 +131,18 @@ std::expected<void, NewClassicSettingsError> validate_new_classic_settings(
 			NewClassicSettingsErrorCode::invalid_window_scale, 18U
 		));
 	}
+	if(static_cast<std::uint8_t>(settings.window.aspect) >
+		static_cast<std::uint8_t>(NewClassicAspectRatio::display_4_3)) {
+		return std::unexpected(error(
+			NewClassicSettingsErrorCode::invalid_aspect_ratio, 19U
+		));
+	}
+	if(static_cast<std::uint8_t>(settings.window.filtering) >
+		static_cast<std::uint8_t>(NewClassicFiltering::linear)) {
+		return std::unexpected(error(
+			NewClassicSettingsErrorCode::invalid_filtering, 19U
+		));
+	}
 	return {};
 }
 
@@ -165,12 +177,10 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 			NewClassicSettingsErrorCode::invalid_flags, 15U
 		));
 	}
-	for(std::size_t index = 19U; index < digest_offset; ++index) {
-		if(bytes[index] != std::byte{0U}) {
-			return std::unexpected(error(
-				NewClassicSettingsErrorCode::reserved_nonzero, index
-			));
-		}
+	if((byte(bytes[19U]) & 0xF0U) != 0U) {
+		return std::unexpected(error(
+			NewClassicSettingsErrorCode::reserved_nonzero, 19U
+		));
 	}
 	if(u32(bytes, digest_offset) != fnv1a32(bytes.first(digest_offset))) {
 		return std::unexpected(error(
@@ -192,6 +202,12 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 		.window = {
 			.mode = static_cast<NewClassicWindowMode>(byte(bytes[17U])),
 			.scale = static_cast<NewClassicWindowScale>(byte(bytes[18U])),
+			.aspect = static_cast<NewClassicAspectRatio>(
+				byte(bytes[19U]) & 0x03U
+			),
+			.filtering = static_cast<NewClassicFiltering>(
+				(byte(bytes[19U]) >> 2U) & 0x03U
+			),
 		},
 	};
 	if(auto valid = validate_new_classic_settings(settings); !valid) {
@@ -224,6 +240,10 @@ std::expected<
 	bytes[16U] = static_cast<std::byte>(settings.master_volume_percent);
 	bytes[17U] = static_cast<std::byte>(settings.window.mode);
 	bytes[18U] = static_cast<std::byte>(settings.window.scale);
+	bytes[19U] = static_cast<std::byte>(
+		static_cast<std::uint8_t>(settings.window.aspect) |
+		(static_cast<std::uint8_t>(settings.window.filtering) << 2U)
+	);
 	put_u32(bytes, digest_offset, fnv1a32(
 		std::span<const std::byte>(bytes).first(digest_offset)
 	));

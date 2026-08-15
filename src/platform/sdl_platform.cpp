@@ -24,6 +24,7 @@ namespace {
 
 constexpr int source_width = static_cast<int>(present::graphics_width);
 constexpr int source_height = static_cast<int>(present::graphics_height);
+constexpr int display_4_3_height = 480;
 constexpr std::size_t rgba_row_bytes = present::graphics_width * 4U;
 constexpr std::uint64_t fnv_offset_basis = 14695981039346656037ULL;
 constexpr std::uint64_t fnv_prime = 1099511628211ULL;
@@ -62,6 +63,41 @@ std::size_t platform_runtime_leases = 0U;
 [[nodiscard]] bool valid_dimension(std::uint32_t value) noexcept
 {
 	return value <= static_cast<std::uint32_t>(std::numeric_limits<int>::max());
+}
+
+[[nodiscard]] constexpr int logical_height(
+	SdlAspectRatio aspect
+) noexcept
+{
+	return aspect == SdlAspectRatio::pixels_8_5 ? source_height :
+		display_4_3_height;
+}
+
+[[nodiscard]] std::optional<app::IntegerLetterboxRect> window_destination(
+	std::size_t drawable_width,
+	std::size_t drawable_height,
+	SdlAspectRatio aspect
+) noexcept
+{
+	if(aspect == SdlAspectRatio::pixels_8_5) {
+		return app::integer_letterbox_8x5(drawable_width, drawable_height);
+	}
+	const auto scale = std::min(
+		drawable_width / present::graphics_width,
+		drawable_height / static_cast<std::size_t>(display_4_3_height)
+	);
+	if(scale == 0U) {
+		return std::nullopt;
+	}
+	const auto width = scale * present::graphics_width;
+	const auto height = scale * static_cast<std::size_t>(display_4_3_height);
+	return app::IntegerLetterboxRect{
+		(drawable_width - width) / 2U,
+		(drawable_height - height) / 2U,
+		width,
+		height,
+		scale,
+	};
 }
 
 void hash_byte(std::uint64_t &hash, std::uint8_t value) noexcept
@@ -587,9 +623,10 @@ std::expected<SdlPresentResult, SdlPlatformError> SdlPlatform::present(
 			SdlPlatformErrorCode::render_output_failed
 		));
 	}
-	const auto destination = app::integer_letterbox_8x5(
+	const auto destination = window_destination(
 		static_cast<std::size_t>(output_width),
-		static_cast<std::size_t>(output_height)
+		static_cast<std::size_t>(output_height),
+		impl_->window_presentation.aspect
 	);
 	if(!SDL_SetRenderDrawColor(impl_->renderer, 0U, 0U, 0U, 0xFFU) ||
 		!SDL_RenderClear(impl_->renderer)) {
@@ -640,7 +677,11 @@ SdlPlatform::apply_window_presentation(
 {
 	if(!impl_ || presentation.integer_scale > 3U ||
 		static_cast<std::uint8_t>(presentation.mode) >
-			static_cast<std::uint8_t>(SdlWindowMode::borderless_fullscreen)) {
+			static_cast<std::uint8_t>(SdlWindowMode::borderless_fullscreen) ||
+		static_cast<std::uint8_t>(presentation.aspect) >
+			static_cast<std::uint8_t>(SdlAspectRatio::display_4_3) ||
+		static_cast<std::uint8_t>(presentation.filtering) >
+			static_cast<std::uint8_t>(SdlFiltering::linear)) {
 		return std::unexpected(SdlPlatformError{
 			.code = SdlPlatformErrorCode::invalid_config,
 		});
@@ -649,6 +690,18 @@ SdlPlatform::apply_window_presentation(
 		return {};
 	}
 	const auto apply = [this](SdlWindowPresentation value) noexcept {
+		const auto height = logical_height(value.aspect);
+		const auto filtering = value.filtering == SdlFiltering::nearest ?
+			SDL_SCALEMODE_NEAREST : SDL_SCALEMODE_LINEAR;
+		if(!SDL_SetTextureScaleMode(impl_->texture, filtering) ||
+			!SDL_SetRenderLogicalPresentation(
+				impl_->renderer,
+				source_width,
+				height,
+				SDL_LOGICAL_PRESENTATION_INTEGER_SCALE
+			)) {
+			return false;
+		}
 		if(value.mode == SdlWindowMode::borderless_fullscreen) {
 			return SDL_SetWindowFullscreenMode(impl_->window, nullptr) &&
 				SDL_SetWindowFullscreen(impl_->window, true) &&
@@ -659,18 +712,18 @@ SdlPlatform::apply_window_presentation(
 			SDL_Rect usable{};
 			const auto display = SDL_GetDisplayForWindow(impl_->window);
 			if(display == 0U || !SDL_GetDisplayUsableBounds(display, &usable) ||
-				usable.w < source_width || usable.h < source_height) {
+				usable.w < source_width || usable.h < height) {
 				return false;
 			}
 			scale = static_cast<std::uint8_t>(std::clamp(
-				std::min(usable.w / source_width, usable.h / source_height),
+				std::min(usable.w / source_width, usable.h / height),
 				1, 3
 			));
 		}
 		const auto width = static_cast<int>(present::graphics_width * scale);
-		const auto height = static_cast<int>(present::graphics_height * scale);
+		const auto window_height = height * scale;
 		return SDL_SetWindowFullscreen(impl_->window, false) &&
-			SDL_SetWindowSize(impl_->window, width, height) &&
+			SDL_SetWindowSize(impl_->window, width, window_height) &&
 			SDL_SetWindowPosition(
 				impl_->window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED
 			) && SDL_SyncWindow(impl_->window);

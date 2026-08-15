@@ -27,6 +27,8 @@ using th03::app::NewClassicSettings;
 using th03::app::NewClassicSettingsErrorCode;
 using th03::app::NewClassicSettingsStoreDisposition;
 using th03::app::NewClassicSettingsStoreErrorCode;
+using th03::app::NewClassicAspectRatio;
+using th03::app::NewClassicFiltering;
 using th03::app::NewClassicWindowMode;
 using th03::app::NewClassicWindowScale;
 using th03::app::new_classic_settings_file_bytes;
@@ -123,6 +125,8 @@ void test_codec()
 		.window = {
 			.mode = NewClassicWindowMode::borderless_fullscreen,
 			.scale = NewClassicWindowScale::x3,
+			.aspect = NewClassicAspectRatio::display_4_3,
+			.filtering = NewClassicFiltering::linear,
 		},
 	};
 	const auto encoded = th03::app::encode_new_classic_settings(settings);
@@ -150,7 +154,7 @@ void test_codec()
 				"header and digest mutations report their exact domain");
 		}
 		auto reserved = *encoded;
-		reserved[19U] = std::byte{1U};
+		reserved[19U] |= std::byte{0x10U};
 		const auto invalid_reserved =
 			th03::app::decode_new_classic_settings(reserved);
 		expect(!invalid_reserved && invalid_reserved.error().code ==
@@ -177,6 +181,19 @@ void test_codec()
 	expect(!invalid_scale && invalid_scale.error().code ==
 		NewClassicSettingsErrorCode::invalid_window_scale,
 		"window scale rejects values outside 1x through 3x and Auto");
+	invalid = settings;
+	invalid.window.aspect = static_cast<NewClassicAspectRatio>(2U);
+	const auto invalid_aspect = th03::app::encode_new_classic_settings(invalid);
+	expect(!invalid_aspect && invalid_aspect.error().code ==
+		NewClassicSettingsErrorCode::invalid_aspect_ratio,
+		"aspect ratio rejects values outside 8:5 Pixels and 4:3 Display");
+	invalid = settings;
+	invalid.window.filtering = static_cast<NewClassicFiltering>(2U);
+	const auto invalid_filtering =
+		th03::app::encode_new_classic_settings(invalid);
+	expect(!invalid_filtering && invalid_filtering.error().code ==
+		NewClassicSettingsErrorCode::invalid_filtering,
+		"filtering rejects values outside Nearest and Linear");
 }
 
 void test_absent_only_migration_and_isolation()
