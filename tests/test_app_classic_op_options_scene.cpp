@@ -36,6 +36,7 @@ using th03::app::ClassicOpOptionsPage;
 using th03::app::ClassicOpOptionsPhase;
 using th03::app::ClassicOpOptionsScene;
 using th03::app::ClassicRank;
+using th03::app::NewClassicMessageId;
 using th03::app::NewClassicWindowMode;
 using th03::app::NewClassicWindowScale;
 using th03::assets::BfntConsumerPolicy;
@@ -286,7 +287,67 @@ std::unique_ptr<ClassicOpOptionsScene> make_patch_scene_if_assets_supplied(
 	return created ? std::move(*created) : nullptr;
 }
 
+void test_patch_option_label_widths_if_assets_supplied()
+{
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4996)
+#endif
+	const auto *path = std::getenv("TH03_AZINN_DAT");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+	if(!path || *path == '\0') {
+		return;
+	}
+	auto loaded = th03::app::load_new_classic_replay_patch_assets(path);
+	expect(loaded.has_value(), "Option label-width assets load");
+	if(!loaded) {
+		return;
+	}
+	constexpr std::array labels{
+		NewClassicMessageId::option_rank,
+		NewClassicMessageId::option_master_volume,
+		NewClassicMessageId::option_window_mode,
+		NewClassicMessageId::option_window_scale,
+		NewClassicMessageId::option_aspect_ratio,
+		NewClassicMessageId::option_filtering,
+		NewClassicMessageId::option_music,
+		NewClassicMessageId::option_key_mode,
+		NewClassicMessageId::option_sfx,
+		NewClassicMessageId::option_mute_unfocused,
+		NewClassicMessageId::option_language,
+		NewClassicMessageId::option_flash_fx,
+	};
+	constexpr std::int32_t restored_left = 162;
+	constexpr std::int32_t label_center = 228;
+	constexpr std::int32_t label_width_budget =
+		(label_center - restored_left) * 2;
+	for(const auto label : labels) {
+		expect(
+			loaded->menu_font.width(loaded->messages().text(label)) <=
+				label_width_budget,
+			"every built-in Option label fits the restored left column"
+		);
+	}
+}
+
 void enter_patch_options(ClassicOpOptionsScene &scene);
+
+bool patch_option_left_exterior_matches_bare(
+	const ClassicOpOptionsScene &scene
+) noexcept
+{
+	for(std::int32_t y = 272; y < 384; ++y) {
+		for(std::int32_t x = 0; x < 160; ++x) {
+			if(scene.raster().pixel(Page::zero, {x, y}) !=
+				scene.raster().pixel(Page::one, {x, y})) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
 
 void test_localized_option_snapshot_if_assets_supplied()
 {
@@ -353,6 +414,8 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		scene->selected_choice() == ClassicOpOptionsChoice::master_volume,
 		"Audio opens from the category page");
 	expect(scene->advance().has_value(), "Audio entry releases");
+	expect(patch_option_left_exterior_matches_bare(*scene),
+		"Audio labels stay inside the retained Option window");
 	expect(scene->advance({.right = true}).has_value() &&
 		scene->master_volume_percent() == 40U,
 		"Audio Master Volume advances in 5% steps");
@@ -434,7 +497,11 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		"focus mute remains a final-output policy outside PMD");
 	expect(scene->advance().has_value(), "Audio focus mute releases");
 	expect(scene->advance({.cancel = true}).has_value() &&
-		scene->advance().has_value() &&
+		scene->page() == ClassicOpOptionsPage::categories,
+		"Audio Cancel restores the category page");
+	expect(patch_option_left_exterior_matches_bare(*scene),
+		"Audio return leaves no proportional text outside the restored rows");
+	expect(scene->advance().has_value() &&
 		scene->advance({.down = true}).has_value() &&
 		scene->advance().has_value() &&
 		scene->advance({.ok = true}).has_value() &&
@@ -1487,6 +1554,7 @@ void local_replay_patch_return_gate(const std::filesystem::path &content_root)
 int main(int argc, char **argv)
 {
 	test_replay_patch_option_unput_if_assets_supplied();
+	test_patch_option_label_widths_if_assets_supplied();
 	test_replay_patch_option_hierarchy_if_assets_supplied();
 	test_localized_option_snapshot_if_assets_supplied();
 	test_exact_rows_and_transition_lock();

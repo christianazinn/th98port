@@ -126,8 +126,9 @@ Mute When Unfocused Off
 Return
 ```
 
-Implemented now: `Master Volume`, `Music Volume`, and `Sound FX Volume` in 5%
-steps, `Mute Unfocused`, and `Return`.
+Implemented now: `Master Vol.`, `Music`, and `SFX` in 5% steps, `Focus Mute`,
+and `Return`. These compact on-screen labels preserve the concepts named in
+the target layout while fitting the existing proportional-font columns.
 
 Percentages use 5% increments. Zero percent has the existing disabled
 semantics; raising a value above zero re-enables that category. At 100%, the
