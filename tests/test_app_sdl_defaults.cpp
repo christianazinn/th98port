@@ -176,6 +176,67 @@ void test_classic_defaults()
 	}
 }
 
+void test_new_classic_joy_config()
+{
+	using namespace th03::app;
+	using namespace th03::platform;
+	const auto keys = detail::new_classic_default_key_config();
+	const auto joy = detail::new_classic_default_joy_config();
+	const auto defaults = detail::new_classic_bindings(keys, joy);
+	expect(defaults.gamepad_button_count == 15U &&
+		defaults.gamepad_axis_count == 8U,
+		"New Classic adds the configured Charge action to controller defaults");
+	expect(defaults.gamepad_buttons[8U].button == SDL_GAMEPAD_BUTTON_SOUTH &&
+		defaults.gamepad_buttons[8U].action == SdlLogicalAction::shot &&
+		defaults.gamepad_buttons[10U].button == SDL_GAMEPAD_BUTTON_EAST &&
+		defaults.gamepad_buttons[10U].action == SdlLogicalAction::bomb &&
+		defaults.gamepad_buttons[12U].button == SDL_GAMEPAD_BUTTON_WEST &&
+		defaults.gamepad_buttons[12U].action == SdlLogicalAction::charge,
+		"default Shot, Bomb, and Charge controller buttons are exact");
+	expect(defaults.axis_press_threshold == 16384 &&
+		defaults.axis_release_threshold == 12288,
+		"default controller dead zone preserves the existing hysteresis");
+
+	auto custom = joy;
+	custom.buttons = {
+		NewClassicJoyButton::north,
+		NewClassicJoyButton::left_shoulder,
+		NewClassicJoyButton::right_shoulder,
+		NewClassicJoyButton::misc,
+		NewClassicJoyButton::right_stick,
+	};
+	custom.horizontal_axis = NewClassicJoyAxis::right_x;
+	custom.vertical_axis = NewClassicJoyAxis::right_y;
+	custom.horizontal_reversed = true;
+	custom.vertical_reversed = true;
+	custom.dead_zone_percent = 25U;
+	const auto bindings = detail::new_classic_bindings(keys, custom);
+	expect(bindings.gamepad_buttons[8U].button == SDL_GAMEPAD_BUTTON_NORTH &&
+		bindings.gamepad_buttons[10U].button ==
+			SDL_GAMEPAD_BUTTON_LEFT_SHOULDER &&
+		bindings.gamepad_buttons[12U].button ==
+			SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER &&
+		bindings.gamepad_buttons[13U].button == SDL_GAMEPAD_BUTTON_MISC1 &&
+		bindings.gamepad_buttons[14U].button == SDL_GAMEPAD_BUTTON_RIGHT_STICK,
+		"custom controller action buttons convert at the SDL boundary");
+	expect(bindings.gamepad_axes[0U].axis == SDL_GAMEPAD_AXIS_RIGHTX &&
+		bindings.gamepad_axes[0U].action == SdlLogicalAction::right &&
+		bindings.gamepad_axes[2U].action == SdlLogicalAction::left &&
+		bindings.gamepad_axes[4U].axis == SDL_GAMEPAD_AXIS_RIGHTY &&
+		bindings.gamepad_axes[4U].action == SdlLogicalAction::down &&
+		bindings.gamepad_axes[6U].action == SdlLogicalAction::up,
+		"custom axes and reversals convert to exact logical directions");
+	expect(bindings.axis_press_threshold == 8192 &&
+		bindings.axis_release_threshold == 6144,
+		"custom dead zone derives deterministic three-quarter hysteresis");
+
+	custom.buttons[static_cast<std::size_t>(NewClassicJoyAction::charge)] =
+		NewClassicJoyButton::unbound;
+	const auto unbound = detail::new_classic_bindings(keys, custom);
+	expect(unbound.gamepad_button_count == 14U,
+		"an explicitly unbound controller action emits no SDL binding");
+}
+
 SDL_Gamepad *fake_open_gamepad(void *context, SDL_JoystickID) noexcept
 {
 	return static_cast<SDL_Gamepad *>(context);
@@ -259,6 +320,7 @@ void test_arrow_ui_channel_through_mapper()
 int main()
 {
 	test_classic_defaults();
+	test_new_classic_joy_config();
 	test_arrow_ui_channel_through_mapper();
 	if(failures != 0U) {
 		std::cerr << failures << " of " << checks

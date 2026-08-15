@@ -70,6 +70,13 @@ consume_session(void *context, const ClassicOpSessionInput &input)
 	return static_cast<ClassicOpSession *>(context)->take_key_config_update();
 }
 
+[[nodiscard]] std::optional<NewClassicJoyConfig> take_session_joy_config(
+	void *context
+)
+{
+	return static_cast<ClassicOpSession *>(context)->take_joy_config_update();
+}
+
 [[nodiscard]] std::optional<bool> take_session_reduced_flash(void *context)
 {
 	return static_cast<ClassicOpSession *>(context)->take_reduced_flash_update();
@@ -338,6 +345,7 @@ struct ClassicRunner::Impl final {
 	std::unique_ptr<NewClassicReplayRecorder> replay_recorder{};
 	std::optional<ClassicRunnerError> failure{};
 	std::optional<NewClassicKeyConfig> latest_key_config{};
+	std::optional<NewClassicJoyConfig> latest_joy_config{};
 	std::optional<std::uint8_t> latest_master_volume{};
 	std::optional<NewClassicWindowPresentation> latest_window_presentation{};
 	PixelOracleIdentityTracker pixel_oracle_tracker{};
@@ -482,6 +490,7 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		.consume = &consume_session,
 		.take_audio_command = &take_session_audio,
 		.take_key_config_update = &take_session_key_config,
+		.take_joy_config_update = &take_session_joy_config,
 		.take_reduced_flash_update = &take_session_reduced_flash,
 		.take_master_volume_update = &take_session_master_volume,
 		.take_window_presentation_update = &take_session_window_presentation,
@@ -541,6 +550,13 @@ ClassicRunner::consume(
 			impl_->operations.context
 		)) {
 			impl_->latest_key_config = std::move(*update);
+		}
+	}
+	if(impl_->operations.take_joy_config_update) {
+		if(auto update = impl_->operations.take_joy_config_update(
+			impl_->operations.context
+		)) {
+			impl_->latest_joy_config = std::move(*update);
 		}
 	}
 	if(impl_->operations.take_reduced_flash_update) {
@@ -668,6 +684,13 @@ std::optional<NewClassicKeyConfig>
 ClassicRunner::take_new_classic_key_config_update() noexcept
 {
 	return impl_ ? std::exchange(impl_->latest_key_config, std::nullopt) :
+		std::nullopt;
+}
+
+std::optional<NewClassicJoyConfig>
+ClassicRunner::take_new_classic_joy_config_update() noexcept
+{
+	return impl_ ? std::exchange(impl_->latest_joy_config, std::nullopt) :
 		std::nullopt;
 }
 

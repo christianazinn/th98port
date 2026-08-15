@@ -412,6 +412,8 @@ struct FakeRunnerBackend final {
 	bool fail_compose = false;
 	bool clock_rebase_next = false;
 	std::optional<th03::app::ClassicAudioCommand> audio{};
+	std::optional<th03::app::NewClassicKeyConfig> key_config_update{};
+	std::optional<th03::app::NewClassicJoyConfig> joy_config_update{};
 	std::optional<bool> reduced_flash_update{};
 	std::optional<std::uint8_t> master_volume_update{};
 	std::optional<th03::app::NewClassicWindowPresentation>
@@ -475,6 +477,14 @@ th03::app::ClassicRunnerOperations runner_operations(
 			auto command = self.audio;
 			self.audio.reset();
 			return command;
+		},
+		.take_key_config_update = [](void *context) {
+			auto &self = *static_cast<FakeRunnerBackend *>(context);
+			return std::exchange(self.key_config_update, std::nullopt);
+		},
+		.take_joy_config_update = [](void *context) {
+			auto &self = *static_cast<FakeRunnerBackend *>(context);
+			return std::exchange(self.joy_config_update, std::nullopt);
 		},
 		.take_reduced_flash_update = [](void *context) {
 			auto &self = *static_cast<FakeRunnerBackend *>(context);
@@ -633,6 +643,9 @@ void test_runner_sequence_audio_surface_and_failure()
 	);
 	if(new_classic) {
 		profile_backend->reduced_flash_update = true;
+		profile_backend->joy_config_update = th03::app::NewClassicJoyConfig{
+			.dead_zone_percent = 35U,
+		};
 		profile_backend->master_volume_update = std::uint8_t{35U};
 		profile_backend->window_presentation_update =
 			th03::app::NewClassicWindowPresentation{
@@ -651,6 +664,12 @@ void test_runner_sequence_audio_surface_and_failure()
 		);
 		expect(live_flash && live_surface && live_surface->reduced_flash_applied,
 			"New Classic applies a live Flash FX option update in the retained runner");
+		expect(
+			(*new_classic)->take_new_classic_joy_config_update() ==
+				th03::app::NewClassicJoyConfig{.dead_zone_percent = 35U} &&
+			!(*new_classic)->take_new_classic_joy_config_update(),
+			"New Classic publishes each typed JoyConfig update once"
+		);
 		expect(
 			(*new_classic)->take_new_classic_master_volume_update() == 35U &&
 			!(*new_classic)->take_new_classic_master_volume_update(),

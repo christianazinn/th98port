@@ -39,6 +39,86 @@ void add_dual(
 	add_key(bindings, scancode, player, single_action);
 }
 
+[[nodiscard]] constexpr SDL_GamepadButton sdl_button(
+	NewClassicJoyButton button
+) noexcept
+{
+	switch(button) {
+	case NewClassicJoyButton::south: return SDL_GAMEPAD_BUTTON_SOUTH;
+	case NewClassicJoyButton::east: return SDL_GAMEPAD_BUTTON_EAST;
+	case NewClassicJoyButton::west: return SDL_GAMEPAD_BUTTON_WEST;
+	case NewClassicJoyButton::north: return SDL_GAMEPAD_BUTTON_NORTH;
+	case NewClassicJoyButton::back: return SDL_GAMEPAD_BUTTON_BACK;
+	case NewClassicJoyButton::start: return SDL_GAMEPAD_BUTTON_START;
+	case NewClassicJoyButton::left_stick: return SDL_GAMEPAD_BUTTON_LEFT_STICK;
+	case NewClassicJoyButton::right_stick: return SDL_GAMEPAD_BUTTON_RIGHT_STICK;
+	case NewClassicJoyButton::left_shoulder:
+		return SDL_GAMEPAD_BUTTON_LEFT_SHOULDER;
+	case NewClassicJoyButton::right_shoulder:
+		return SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER;
+	case NewClassicJoyButton::dpad_up: return SDL_GAMEPAD_BUTTON_DPAD_UP;
+	case NewClassicJoyButton::dpad_down: return SDL_GAMEPAD_BUTTON_DPAD_DOWN;
+	case NewClassicJoyButton::dpad_left: return SDL_GAMEPAD_BUTTON_DPAD_LEFT;
+	case NewClassicJoyButton::dpad_right: return SDL_GAMEPAD_BUTTON_DPAD_RIGHT;
+	case NewClassicJoyButton::misc: return SDL_GAMEPAD_BUTTON_MISC1;
+	case NewClassicJoyButton::unbound: return SDL_GAMEPAD_BUTTON_INVALID;
+	}
+	return SDL_GAMEPAD_BUTTON_INVALID;
+}
+
+[[nodiscard]] constexpr SDL_GamepadAxis sdl_axis(
+	NewClassicJoyAxis axis
+) noexcept
+{
+	switch(axis) {
+	case NewClassicJoyAxis::left_x: return SDL_GAMEPAD_AXIS_LEFTX;
+	case NewClassicJoyAxis::left_y: return SDL_GAMEPAD_AXIS_LEFTY;
+	case NewClassicJoyAxis::right_x: return SDL_GAMEPAD_AXIS_RIGHTX;
+	case NewClassicJoyAxis::right_y: return SDL_GAMEPAD_AXIS_RIGHTY;
+	}
+	return SDL_GAMEPAD_AXIS_INVALID;
+}
+
+void add_gamepad_button(
+	SdlInputBindings &bindings,
+	NewClassicJoyButton button,
+	SdlLogicalAction action
+) noexcept
+{
+	if(button == NewClassicJoyButton::unbound) {
+		return;
+	}
+	bindings.gamepad_buttons[bindings.gamepad_button_count++] = {
+		.button = sdl_button(button),
+		.action = action,
+	};
+}
+
+void add_gamepad_dual(
+	SdlInputBindings &bindings,
+	NewClassicJoyButton button,
+	SdlLogicalAction player_action,
+	SdlLogicalAction single_action
+) noexcept
+{
+	add_gamepad_button(bindings, button, player_action);
+	add_gamepad_button(bindings, button, single_action);
+}
+
+void add_gamepad_axis(
+	SdlInputBindings &bindings,
+	NewClassicJoyAxis axis,
+	SdlAxisDirection direction,
+	SdlLogicalAction action
+) noexcept
+{
+	bindings.gamepad_axes[bindings.gamepad_axis_count++] = {
+		.axis = sdl_axis(axis),
+		.direction = direction,
+		.action = action,
+	};
+}
+
 } // namespace
 
 NewClassicKeyConfig new_classic_default_key_config() noexcept
@@ -73,7 +153,8 @@ NewClassicKeyConfig new_classic_default_key_config() noexcept
 }
 
 SdlInputBindings new_classic_bindings(
-	const NewClassicKeyConfig &config
+	const NewClassicKeyConfig &config,
+	const NewClassicJoyConfig &joy_config
 ) noexcept
 {
 	SdlInputBindings bindings{};
@@ -135,13 +216,96 @@ SdlInputBindings new_classic_bindings(
 	add_key(bindings, SDL_SCANCODE_Q, SdlInputPlayer::p1,
 		SdlLogicalAction::q);
 
-	const auto defaults = classic_direct_vs_bindings();
-	bindings.gamepad_buttons = defaults.gamepad_buttons;
-	bindings.gamepad_button_count = defaults.gamepad_button_count;
-	bindings.gamepad_axes = defaults.gamepad_axes;
-	bindings.gamepad_axis_count = defaults.gamepad_axis_count;
-	bindings.gamepad_players = defaults.gamepad_players;
+	add_gamepad_dual(bindings, NewClassicJoyButton::dpad_up,
+		SdlLogicalAction::up, SdlLogicalAction::single_up);
+	add_gamepad_dual(bindings, NewClassicJoyButton::dpad_down,
+		SdlLogicalAction::down, SdlLogicalAction::single_down);
+	add_gamepad_dual(bindings, NewClassicJoyButton::dpad_left,
+		SdlLogicalAction::left, SdlLogicalAction::single_left);
+	add_gamepad_dual(bindings, NewClassicJoyButton::dpad_right,
+		SdlLogicalAction::right, SdlLogicalAction::single_right);
+	add_gamepad_dual(bindings,
+		joy_config.buttons[static_cast<std::size_t>(NewClassicJoyAction::shot)],
+		SdlLogicalAction::shot, SdlLogicalAction::single_shot);
+	add_gamepad_dual(bindings,
+		joy_config.buttons[static_cast<std::size_t>(NewClassicJoyAction::bomb)],
+		SdlLogicalAction::bomb, SdlLogicalAction::single_bomb);
+	add_gamepad_button(bindings,
+		joy_config.buttons[static_cast<std::size_t>(NewClassicJoyAction::charge)],
+		SdlLogicalAction::charge);
+	add_gamepad_button(bindings,
+		joy_config.buttons[static_cast<std::size_t>(NewClassicJoyAction::cancel)],
+		SdlLogicalAction::cancel);
+	add_gamepad_button(bindings,
+		joy_config.buttons[static_cast<std::size_t>(NewClassicJoyAction::ok)],
+		SdlLogicalAction::ok);
+
+	const auto horizontal_negative = joy_config.horizontal_reversed ?
+		SdlLogicalAction::right : SdlLogicalAction::left;
+	const auto horizontal_positive = joy_config.horizontal_reversed ?
+		SdlLogicalAction::left : SdlLogicalAction::right;
+	const auto horizontal_single_negative = joy_config.horizontal_reversed ?
+		SdlLogicalAction::single_right : SdlLogicalAction::single_left;
+	const auto horizontal_single_positive = joy_config.horizontal_reversed ?
+		SdlLogicalAction::single_left : SdlLogicalAction::single_right;
+	add_gamepad_axis(bindings, joy_config.horizontal_axis,
+		SdlAxisDirection::negative, horizontal_negative);
+	add_gamepad_axis(bindings, joy_config.horizontal_axis,
+		SdlAxisDirection::negative, horizontal_single_negative);
+	add_gamepad_axis(bindings, joy_config.horizontal_axis,
+		SdlAxisDirection::positive, horizontal_positive);
+	add_gamepad_axis(bindings, joy_config.horizontal_axis,
+		SdlAxisDirection::positive, horizontal_single_positive);
+
+	const auto vertical_negative = joy_config.vertical_reversed ?
+		SdlLogicalAction::down : SdlLogicalAction::up;
+	const auto vertical_positive = joy_config.vertical_reversed ?
+		SdlLogicalAction::up : SdlLogicalAction::down;
+	const auto vertical_single_negative = joy_config.vertical_reversed ?
+		SdlLogicalAction::single_down : SdlLogicalAction::single_up;
+	const auto vertical_single_positive = joy_config.vertical_reversed ?
+		SdlLogicalAction::single_up : SdlLogicalAction::single_down;
+	add_gamepad_axis(bindings, joy_config.vertical_axis,
+		SdlAxisDirection::negative, vertical_negative);
+	add_gamepad_axis(bindings, joy_config.vertical_axis,
+		SdlAxisDirection::negative, vertical_single_negative);
+	add_gamepad_axis(bindings, joy_config.vertical_axis,
+		SdlAxisDirection::positive, vertical_positive);
+	add_gamepad_axis(bindings, joy_config.vertical_axis,
+		SdlAxisDirection::positive, vertical_single_positive);
+
+	for(std::size_t slot = 0U; slot < bindings.gamepad_players.size(); ++slot) {
+		bindings.gamepad_players[slot] = (slot % 2U == 0U) ?
+			SdlInputPlayer::p1 : SdlInputPlayer::p2;
+	}
+	const auto press = static_cast<std::int32_t>(
+		(32'768 * joy_config.dead_zone_percent) / 100U
+	);
+	bindings.axis_press_threshold = static_cast<std::int16_t>(press);
+	bindings.axis_release_threshold = static_cast<std::int16_t>(
+		(press * 3) / 4
+	);
 	return bindings;
+}
+
+NewClassicJoyConfig new_classic_default_joy_config() noexcept
+{
+	return {
+		.buttons = {
+			NewClassicJoyButton::south,
+			NewClassicJoyButton::east,
+			NewClassicJoyButton::west,
+			NewClassicJoyButton::back,
+			NewClassicJoyButton::start,
+		},
+	};
+}
+
+SdlInputBindings new_classic_bindings(
+	const NewClassicKeyConfig &key_config
+) noexcept
+{
+	return new_classic_bindings(key_config, new_classic_default_joy_config());
 }
 
 SdlInputBindings classic_direct_vs_bindings() noexcept

@@ -16,6 +16,7 @@
 #include "th03/app/new_classic_assets.hpp"
 #include "th03/app/new_classic_frontend.hpp"
 #include "th03/app/new_classic_key_config_store.hpp"
+#include "th03/app/new_classic_joy_config_store.hpp"
 #include "th03/app/new_classic_settings.hpp"
 #include "th03/app/pixel_oracle_identity.hpp"
 #include "th03/formats/replay.hpp"
@@ -85,6 +86,8 @@ struct ClassicRunnerRequest final {
 	bool reduced_flash = false;
 	std::optional<NewClassicKeyConfig> new_classic_key_config{};
 	NewClassicKeyConfig new_classic_key_defaults{};
+	std::optional<NewClassicJoyConfig> new_classic_joy_config{};
+	NewClassicJoyConfig new_classic_joy_defaults{};
 	std::uint16_t new_classic_maximum_key = 0U;
 	std::uint16_t new_classic_capture_cancel_key = 0U;
 	NewClassicHostKeyName new_classic_key_name = nullptr;
@@ -200,6 +203,8 @@ public:
 	void classify_pending_replay_frame(bool deadline_missed) noexcept;
 	[[nodiscard]] std::optional<NewClassicKeyConfig>
 	take_new_classic_key_config_update() noexcept;
+	[[nodiscard]] std::optional<NewClassicJoyConfig>
+	take_new_classic_joy_config_update() noexcept;
 	[[nodiscard]] std::optional<std::uint8_t>
 	take_new_classic_master_volume_update() noexcept;
 	[[nodiscard]] std::optional<NewClassicWindowPresentation>

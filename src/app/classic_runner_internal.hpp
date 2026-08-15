@@ -21,6 +21,7 @@ struct ClassicRunnerOperations final {
 	) = nullptr;
 	std::optional<ClassicAudioCommand> (*take_audio_command)(void *) = nullptr;
 	std::optional<NewClassicKeyConfig> (*take_key_config_update)(void *) = nullptr;
+	std::optional<NewClassicJoyConfig> (*take_joy_config_update)(void *) = nullptr;
 	std::optional<bool> (*take_reduced_flash_update)(void *) = nullptr;
 	std::optional<std::uint8_t> (*take_master_volume_update)(void *) = nullptr;
 	std::optional<NewClassicWindowPresentation>

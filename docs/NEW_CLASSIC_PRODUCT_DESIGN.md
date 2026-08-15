@@ -398,6 +398,10 @@ exist:
 3. Nearest/optional linear filtering and aspect policy. Complete in session
    181 with zero-filled v1 settings retaining the prior 8:5/Nearest default.
 4. JoyConfig, device assignment, dead-zone calibration, and input test page.
+   Host-neutral button/stick/direction/dead-zone persistence, the retained
+   source-styled JoyConfig screen, and live SDL mapper replacement are complete
+   in session 182. Stable hotplug-safe device assignment and the input-test
+   page remain the next input parcel.
 5. Move the existing Japanese/English selector to the Language page.
 
 Each feature becomes visible only when its apply, persistence, rollback, and

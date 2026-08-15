@@ -1389,6 +1389,8 @@ ExperienceRunResult run_classic_session(
 			.checkpoint_index = parsed.capture_checkpoint,
 		};
 	}
+	auto active_key_config = parsed.launch.new_classic_key_config;
+	auto active_joy_config = parsed.launch.new_classic_joy_config;
 	auto runner = th03::app::ClassicRunner::load(std::move(parsed.launch));
 	if(!runner) {
 		return {.exit_code = fail("th03-load", runner.error())};
@@ -1603,10 +1605,33 @@ ExperienceRunResult run_classic_session(
 				};
 			}
 			if(auto update = (*runner)->take_new_classic_key_config_update()) {
+				active_key_config = *update;
+				if(!active_joy_config) {
+					std::cerr << "status=error\nstage=key-config-apply\n"
+						"code=joy-config-missing\n";
+					return {.exit_code = 1};
+				}
 				if(auto replaced = mapper.replace_bindings(
-					th03::app::detail::new_classic_bindings(*update)
+					th03::app::detail::new_classic_bindings(
+						*active_key_config, *active_joy_config
+					)
 				); !replaced) {
 					return {.exit_code = fail("key-config-apply", replaced.error())};
+				}
+			}
+			if(auto update = (*runner)->take_new_classic_joy_config_update()) {
+				active_joy_config = *update;
+				if(!active_key_config) {
+					std::cerr << "status=error\nstage=joy-config-apply\n"
+						"code=key-config-missing\n";
+					return {.exit_code = 1};
+				}
+				if(auto replaced = mapper.replace_bindings(
+					th03::app::detail::new_classic_bindings(
+						*active_key_config, *active_joy_config
+					)
+				); !replaced) {
+					return {.exit_code = fail("joy-config-apply", replaced.error())};
 				}
 			}
 			if(consumed->clock_rebase_requested) {
@@ -2360,6 +2385,9 @@ ExperienceRunResult run_new_classic_experience(
 	}
 	const auto key_path = parsed.launch.content.config.parent_path() /
 		"TH3KEY.CFG";
+	const auto joy_defaults = th03::app::detail::new_classic_default_joy_config();
+	const auto joy_path = parsed.launch.content.config.parent_path() /
+		"TH3JOY.CFG";
 	auto loaded_keys = th03::app::load_new_classic_key_config(
 		key_path, key_defaults, maximum_key, config_options.legacy_autofire
 	);
@@ -2371,8 +2399,19 @@ ExperienceRunResult run_new_classic_experience(
 		std::cerr << "status=warning\nstage=key-config-load\n"
 			"code=recovered-defaults\n";
 	}
+	auto loaded_joy = th03::app::load_new_classic_joy_config(
+		joy_path, joy_defaults
+	);
+	if(!loaded_joy) {
+		return {.exit_code = fail("joy-config-load", loaded_joy.error())};
+	}
+	auto joy_config = loaded_joy->config;
+	if(loaded_joy->recovered_defaults) {
+		std::cerr << "status=warning\nstage=joy-config-load\n"
+			"code=recovered-defaults\n";
+	}
 	if(auto replaced = mapper.replace_bindings(
-		th03::app::detail::new_classic_bindings(key_config)
+		th03::app::detail::new_classic_bindings(key_config, joy_config)
 	); !replaced) {
 		return {.exit_code = fail("key-config-apply", replaced.error())};
 	}
@@ -2381,6 +2420,8 @@ ExperienceRunResult run_new_classic_experience(
 	parsed.launch.reduced_flash = config_options.reduced_flash;
 	parsed.launch.new_classic_key_config = key_config;
 	parsed.launch.new_classic_key_defaults = key_defaults;
+	parsed.launch.new_classic_joy_config = joy_config;
+	parsed.launch.new_classic_joy_defaults = joy_defaults;
 	parsed.launch.new_classic_maximum_key = maximum_key;
 	parsed.launch.new_classic_capture_cancel_key = static_cast<std::uint16_t>(
 		SDL_SCANCODE_ESCAPE

@@ -1215,6 +1215,35 @@ void local_replay_patch_return_gate(const std::filesystem::path &content_root)
 		"KeyConfig return ignores the held confirm boundary");
 	expect((*options)->advance().has_value(),
 		"KeyConfig return unlocks after release");
+	expect((*options)->advance({.down = true}).has_value() &&
+		(*options)->selected_choice() == ClassicOpOptionsChoice::joy_config,
+		"Replay Patch Input exposes JoyConfig below KeyConfig");
+	expect((*options)->advance().has_value(),
+		"Replay Patch JoyConfig selection releases");
+	expect((*options)->advance({.ok = true}).has_value(),
+		"Replay Patch Input hands off to JoyConfig");
+	auto joy_config_completion = (*options)->take_completion();
+	expect(joy_config_completion && joy_config_completion->outcome() ==
+		ClassicOpOptionsOutcome::joy_config,
+		"Replay Patch JoyConfig handoff is typed");
+	if(!joy_config_completion) {
+		return;
+	}
+	auto resumed_joy = ClassicOpOptionsScene::resume_after_joy_config(
+		*joy_config_completion, true, *closure, patch_assets, &font, true
+	);
+	expect(resumed_joy &&
+		(*resumed_joy)->page() == ClassicOpOptionsPage::input &&
+		(*resumed_joy)->selected_choice() ==
+			ClassicOpOptionsChoice::joy_config &&
+		!(*resumed_joy)->input_allowed(),
+		"JoyConfig return restores the Input page, cursor, and release lock");
+	if(!resumed_joy) {
+		return;
+	}
+	options = std::move(resumed_joy);
+	expect((*options)->advance().has_value(),
+		"JoyConfig return unlocks after release");
 	expect((*options)->advance({.cancel = true}).has_value() &&
 		(*options)->page() == ClassicOpOptionsPage::categories &&
 		(*options)->selected_choice() ==

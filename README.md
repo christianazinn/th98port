@@ -229,14 +229,20 @@ New Classic also renders the Replay Patch's complete unsigned-byte active
 combo count (100-255 adds a hundreds digit); Classic preserves the
 source-compatible 99-hit display cap. This presentation choice does not alter
 canonical replay hashes, combo timing, scoring, or checkpoint bytes.
-The patched title's Option row owns Replay Patch-style KeyConfig and Options.
-KeyConfig remaps 26 SDL scancodes across P1, P2, and Story pages, swaps
-duplicate assignments within a page, restores page-local defaults, and stores
-the result atomically in `TH3KEY.CFG` beside `PODD.CFG`. Story and 1P-vs-CPU
-use the dedicated Story movement bindings while retaining P1 actions; the P1
-and P2 Autofire selections feed the recorded logical input boundary. Options
-persists Rank, FM music, independently switchable SFX, KeyConfig, and the
-Replay Patch's exact MAIN warning-flash reduction. With
+The patched title's Option row owns Replay Patch-style KeyConfig and the
+source-styled New Classic Options hierarchy. KeyConfig remaps 26 SDL
+scancodes across P1, P2, and Story pages, swaps duplicate assignments within a
+page, restores page-local defaults, and stores the result atomically in
+`TH3KEY.CFG` beside `PODD.CFG`. JoyConfig similarly persists host-neutral
+controller button, stick-axis, direction, and 5%-step dead-zone choices in
+`TH3JOY.CFG`; SDL conversion and live mapper replacement remain outside the
+deterministic gameplay owner. D-pad movement remains available independently
+of the selected stick. Stable physical-device assignment and an input-test
+page remain later work. Story and 1P-vs-CPU use the dedicated Story movement
+bindings while retaining P1 actions; the P1 and P2 Autofire selections feed
+the recorded logical input boundary. Options persists Rank, audio levels,
+KeyConfig, JoyConfig, and the Replay Patch's exact MAIN warning-flash
+reduction. With
 `--language-overlay <TH3EN.DAT>`, the Language row selects the complete
 authenticated English profile: all 52 translated archive members,
 Music Room choices, two-line character titles/names, registration names, and

@@ -26,6 +26,7 @@
 #include "th03/app/new_classic_frontend.hpp"
 #include "th03/app/main_process.hpp"
 #include "th03/app/new_classic_language.hpp"
+#include "th03/app/new_classic_joy_config_store.hpp"
 #include "th03/app/new_classic_practice.hpp"
 #include "th03/app/new_classic_settings_store.hpp"
 #include "th03/app/pixel_oracle_identity.hpp"
@@ -337,6 +338,8 @@ public:
 	[[nodiscard]] std::optional<ClassicAudioCommand> take_audio_command();
 	[[nodiscard]] std::optional<NewClassicKeyConfig>
 	take_key_config_update() noexcept;
+	[[nodiscard]] std::optional<NewClassicJoyConfig>
+	take_joy_config_update() noexcept;
 	[[nodiscard]] std::optional<bool> take_reduced_flash_update() noexcept;
 	[[nodiscard]] std::optional<std::uint8_t>
 	take_master_volume_update() noexcept;
