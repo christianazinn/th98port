@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -40,6 +41,16 @@ void append(std::array<char, 64U> &storage, std::size_t &used,
 	std::copy_n(text.begin(), count, storage.begin() +
 		static_cast<std::ptrdiff_t>(used));
 	used += count;
+}
+
+[[nodiscard]] std::string_view store(
+	std::array<char, 64U> &storage,
+	std::string_view text
+) noexcept
+{
+	const auto count = std::min(text.size(), storage.size() - 1U);
+	std::copy_n(text.begin(), count, storage.begin());
+	return {storage.data(), count};
 }
 
 [[nodiscard]] std::string_view hex_word(
@@ -159,12 +170,13 @@ std::string_view NewClassicDeviceScene::assignment_value(
 	std::array<char, 64U> &storage
 ) const noexcept
 {
+	const auto &messages = patch_assets_->messages();
 	const auto mode = assignment_.mode[player];
 	if(mode == NewClassicControllerAssignmentMode::automatic) {
-		return "Automatic";
+		return messages.text(NewClassicMessageId::device_value_automatic);
 	}
 	if(mode == NewClassicControllerAssignmentMode::disabled) {
-		return "Disabled";
+		return messages.text(NewClassicMessageId::device_value_disabled);
 	}
 	for(std::size_t index = 0U; index < catalog_.count; ++index) {
 		if(catalog_.controllers[index].identity == assignment_.identity[player]) {
@@ -172,81 +184,112 @@ std::string_view NewClassicDeviceScene::assignment_value(
 				patch_assets_->menu_font, {},
 				controller_name(catalog_.controllers[index]), 280
 			);
-			const auto count = std::min(name.size(), storage.size() - 1U);
-			std::copy_n(name.begin(), count, storage.begin());
-			return {storage.data(), count};
+			return store(storage, name);
 		}
 	}
 	constexpr std::string_view digits = "0123456789ABCDEF";
-	std::size_t used = 0U;
-	append(storage, used, "Disconnected ");
+	std::array<char, 8U> identifier{};
 	for(std::size_t index = 0U; index < 4U; ++index) {
 		const auto value = assignment_.identity[player].bytes[index];
-		storage[used++] = digits[value >> 4U];
-		storage[used++] = digits[value & 0x0FU];
+		identifier[index * 2U] = digits[value >> 4U];
+		identifier[(index * 2U) + 1U] = digits[value & 0x0FU];
 	}
-	return {storage.data(), used};
+	const std::string_view id{identifier.data(), identifier.size()};
+	const std::array arguments{NewClassicMessageArgument{"id", id}};
+	return store(storage, messages.format(
+		NewClassicMessageId::device_value_disconnected, arguments
+	));
 }
 
 bool NewClassicDeviceScene::compose_assignment() noexcept
 {
+	const auto &messages = patch_assets_->messages();
 	for(std::size_t player = 0U; player < 2U; ++player) {
 		std::array<char, 64U> value{};
-		if(!draw_value(player == 0U ? "P1 Controller" : "P2 Controller",
+		if(!draw_value(messages.text(player == 0U ?
+				NewClassicMessageId::device_label_p1_controller :
+				NewClassicMessageId::device_label_p2_controller),
 			assignment_value(player, value),
 			rows_top + static_cast<std::int32_t>(player * 24U),
 			selected_ == player)) {
 			return false;
 		}
 	}
-	return draw_command("Restore Defaults", rows_top + 64,
+	return draw_command(messages.text(
+		NewClassicMessageId::input_command_restore_defaults
+	), rows_top + 64,
 		selected_ == defaults_row) &&
-		draw_command("Apply and return", rows_top + 88,
+		draw_command(messages.text(
+			NewClassicMessageId::input_command_apply_return
+		), rows_top + 88,
 			selected_ == apply_row) &&
-		draw_command("Cancel", rows_top + 112,
+		draw_command(messages.text(
+			NewClassicMessageId::input_command_cancel
+		), rows_top + 112,
 			selected_ == cancel_row);
 }
 
 bool NewClassicDeviceScene::compose_input_test() noexcept
 {
+	const auto &messages = patch_assets_->messages();
 	std::array<char, 64U> storage{};
-	if(!draw_value("P1 Logical", hex_word(logical_input_.p1, storage, ""),
+	if(!draw_value(messages.text(NewClassicMessageId::device_label_p1_logical),
+		hex_word(logical_input_.p1, storage, ""),
 		rows_top, false)) {
 		return false;
 	}
 	storage.fill('\0');
-	if(!draw_value("P2 Logical", hex_word(logical_input_.p2, storage, ""),
+	if(!draw_value(messages.text(NewClassicMessageId::device_label_p2_logical),
+		hex_word(logical_input_.p2, storage, ""),
 		rows_top + 20, false)) {
 		return false;
 	}
 	storage.fill('\0');
-	if(!draw_value("System", hex_word(logical_input_.system, storage, ""),
+	if(!draw_value(messages.text(NewClassicMessageId::device_label_system),
+		hex_word(logical_input_.system, storage, ""),
 		rows_top + 40, false)) {
 		return false;
 	}
 	const auto shown = std::min<std::size_t>(catalog_.count, 5U);
 	for(std::size_t index = 0U; index < shown; ++index) {
 		const auto &controller = catalog_.controllers[index];
-		std::array<char, 64U> label{};
-		std::size_t used = 0U;
-		append(label, used, controller.player == NewClassicControllerPlayer::p1 ?
-			"[P1] " : controller.player == NewClassicControllerPlayer::p2 ?
-			"[P2] " : "[--] ");
-		const std::string_view prefix{label.data(), used};
-		append(label, used, fit_controller_name(
+		const auto owner = messages.text(
+			controller.player == NewClassicControllerPlayer::p1 ?
+				NewClassicMessageId::device_owner_p1 :
+			controller.player == NewClassicControllerPlayer::p2 ?
+				NewClassicMessageId::device_owner_p2 :
+				NewClassicMessageId::device_owner_none
+		);
+		const std::array empty_arguments{
+			NewClassicMessageArgument{"owner", owner},
+			NewClassicMessageArgument{"name", ""},
+		};
+		const auto prefix = messages.format(
+			NewClassicMessageId::device_controller_row, empty_arguments
+		);
+		const auto name = fit_controller_name(
 			patch_assets_->menu_font, prefix, controller_name(controller), 184
-		));
+		);
+		const std::array arguments{
+			NewClassicMessageArgument{"owner", owner},
+			NewClassicMessageArgument{"name", name},
+		};
+		const auto label = messages.format(
+			NewClassicMessageId::device_controller_row, arguments
+		);
 		std::array<char, 64U> value{};
 		const auto bits = static_cast<std::uint16_t>(
 			controller.p1 | controller.p2 | controller.system
 		);
-		if(!draw_value({label.data(), used}, hex_word(bits, value, ""),
+		if(!draw_value(label, hex_word(bits, value, ""),
 			rows_top + 72 + static_cast<std::int32_t>(index * 20U), false)) {
 			return false;
 		}
 	}
 	if(catalog_.count == 0U) {
-		return draw_command("No controllers connected", rows_top + 88, false);
+		return draw_command(messages.text(
+			NewClassicMessageId::device_no_controllers
+		), rows_top + 88, false);
 	}
 	return true;
 }
@@ -258,20 +301,22 @@ bool NewClassicDeviceScene::compose() noexcept
 	}
 	const auto target = opposite(front_page_);
 	auto &raster = patch_surface_.raster();
+	const auto &messages = patch_assets_->messages();
 	if(!raster.set_access_page(target) || !present::pi_put_8(
 		raster, 0, 0, patch_assets_->key_config_background
 	) || !patch_assets_->menu_font.put_centered(
 		raster, center, header_top,
-		mode_ == NewClassicDeviceSceneMode::assignment ?
-			"CONTROLLER ASSIGNMENT" : "INPUT TEST",
+		messages.text(mode_ == NewClassicDeviceSceneMode::assignment ?
+			NewClassicMessageId::device_header_assignment :
+			NewClassicMessageId::device_header_input_test),
 		header_color
 	) || !(mode_ == NewClassicDeviceSceneMode::assignment ?
 		compose_assignment() : compose_input_test()) ||
 		!patch_assets_->menu_font.put_centered(
-			raster, center, footer_top,
-			mode_ == NewClassicDeviceSceneMode::assignment ?
-				"Up/Down: Select   Left/Right: Change   Z: OK   Esc: Cancel" :
-				"Press controls to test   Esc: Return",
+		raster, center, footer_top,
+			messages.text(mode_ == NewClassicDeviceSceneMode::assignment ?
+				NewClassicMessageId::device_footer_assignment :
+				NewClassicMessageId::device_footer_input_test),
 			header_color
 		) || !patch_surface_.publish(target) ||
 		!raster.set_access_page(target)) {
@@ -490,7 +535,9 @@ NewClassicDeviceSceneResult NewClassicDeviceScene::consume(
 			return result();
 		} else {
 			phase_ = Phase::discard;
-			if(!show_overlay("Discard changes?  Z: Yes  Esc: No")) {
+			if(!show_overlay(patch_assets_->messages().text(
+				NewClassicMessageId::input_prompt_discard
+			))) {
 				fail();
 			}
 			return result(true);
@@ -501,7 +548,9 @@ NewClassicDeviceSceneResult NewClassicDeviceScene::consume(
 			return result();
 		}
 		phase_ = Phase::discard;
-		if(!show_overlay("Discard changes?  Z: Yes  Esc: No")) {
+		if(!show_overlay(patch_assets_->messages().text(
+			NewClassicMessageId::input_prompt_discard
+		))) {
 			fail();
 		}
 		return result(true);
@@ -524,7 +573,9 @@ void NewClassicDeviceScene::report_commit(bool success) noexcept
 		begin_fade(NewClassicDeviceSceneStatus::applied);
 	} else {
 		status_ = NewClassicDeviceSceneStatus::running;
-		if(!show_overlay("Could not save TH3DEV.CFG")) {
+		if(!show_overlay(patch_assets_->messages().text(
+			NewClassicMessageId::device_error_save
+		))) {
 			fail();
 		}
 	}

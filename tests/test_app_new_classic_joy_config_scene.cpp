@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -187,12 +188,40 @@ void test_defaults_apply_discard_and_failure()
 		"discard confirmation restores the entry policy and returns");
 }
 
+void test_localized_surface_contract()
+{
+	auto base_assets = assets_fixture();
+	expect(static_cast<bool>(base_assets), "JoyConfig localization assets decode");
+	if(!base_assets) {
+		return;
+	}
+	auto localized_assets =
+		std::make_shared<th03::app::NewClassicReplayPatchAssets>(*base_assets);
+	localized_assets->custom_messages =
+		std::make_shared<const th03::app::NewClassicMessageCatalog>(
+			th03::app::detail::new_classic_width_test_messages()
+		);
+	Scene base({}, {}, base_assets);
+	Scene localized({}, {}, localized_assets);
+	expect(
+		!std::ranges::equal(base.surface().pixels, localized.surface().pixels),
+		"JoyConfig pseudo-locale changes catalog-owned semantic pixels"
+	);
+	expect(
+		base.surface().shown_page == localized.surface().shown_page &&
+		base.surface().palette_tone == localized.surface().palette_tone &&
+		base.surface().graphics_palette == localized.surface().graphics_palette,
+		"JoyConfig localization preserves page and palette cadence"
+	);
+}
+
 } // namespace
 
 int main()
 {
 	test_geometry_navigation_and_values();
 	test_defaults_apply_discard_and_failure();
+	test_localized_surface_contract();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }

@@ -430,17 +430,18 @@ live Option changes are independently tested on GCC and MSVC.
 
 ### 7. Localization-pack pipeline
 
-Status: title/Option complete in session 186; authenticated Replay browser and
-save complete in session 187. Stable IDs,
+Status: complete across title/Option in session 186, authenticated Replay
+browser/save in session 187, and Practice/input screens in session 188. Stable IDs,
 UTF-8 authoring files, the deterministic `T3LNG001` compiler/loader, exact
 fallback/placeholder/glyph/width validation, built-in Japanese/English
 catalogs, and a width-stressing pseudo-locale now own the New Classic title,
-hierarchical Option UI, Replay browser, and save/name flow. Named Replay
-templates are load-time width-checked using their declared worst-case dynamic
-values without changing the donor page/palette machine. Classic is unchanged.
-Practice and input-screen semantic text remain subsequent domains; a future
-Unicode product-shell renderer remains separate from the authenticated ASCII
-MNUFONT contract.
+hierarchical Option UI, Replay browser and save/name flow, Practice setup,
+KeyConfig, JoyConfig, controller assignment, and Input Test. Named dynamic
+templates are load-time width-checked using declared worst-case values; host
+key/controller names remain bounded platform data inside localized rows. The
+donor page/palette/input machines and Classic are unchanged. A future Unicode
+product-shell renderer remains separate from the authenticated ASCII MNUFONT
+contract.
 
 - Freeze message identifiers and text domains.
 - Build the translator-facing authoring, compilation, and validation tools.

@@ -31,6 +31,15 @@
     "replay.save.overwrite": "[Overwrite {slot}?]",
     "replay.save.quit": "[Quit saving?]",
     "replay.save.yes": "[Yes]",
-    "replay.save.no": "[No]"
+    "replay.save.no": "[No]",
+    "practice.header.vs-setup": "[VS SETUP]",
+    "practice.header.advanced": "[ADVANCED SETTINGS]",
+    "key.header.p1": "[KEY CONFIGURATION - P1]",
+    "key.header.p2": "[KEY CONFIGURATION - P2]",
+    "key.header.story": "[KEY CONFIGURATION - STORY]",
+    "joy.header.buttons": "[JOY CONFIGURATION - BUTTONS]",
+    "joy.header.axes": "[JOY CONFIGURATION - AXES]",
+    "device.header.assignment": "[CONTROLLER ASSIGNMENT]",
+    "device.header.input-test": "[INPUT TEST]"
   }
 }

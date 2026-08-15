@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -341,6 +342,34 @@ void test_authentic_assets_if_supplied()
 	);
 }
 
+void test_localized_surface_contract()
+{
+	auto base_assets = assets_fixture();
+	expect(static_cast<bool>(base_assets), "KeyConfig localization assets decode");
+	if(!base_assets) {
+		return;
+	}
+	auto localized_assets =
+		std::make_shared<th03::app::NewClassicReplayPatchAssets>(*base_assets);
+	localized_assets->custom_messages =
+		std::make_shared<const th03::app::NewClassicMessageCatalog>(
+			th03::app::detail::new_classic_width_test_messages()
+		);
+	auto config = config_fixture();
+	Scene base(config, config, 512U, 41U, key_name, base_assets);
+	Scene localized(config, config, 512U, 41U, key_name, localized_assets);
+	expect(
+		!std::ranges::equal(base.surface().pixels, localized.surface().pixels),
+		"KeyConfig pseudo-locale changes catalog-owned semantic pixels"
+	);
+	expect(
+		base.surface().shown_page == localized.surface().shown_page &&
+		base.surface().palette_tone == localized.surface().palette_tone &&
+		base.surface().graphics_palette == localized.surface().graphics_palette,
+		"KeyConfig localization preserves page and palette cadence"
+	);
+}
+
 } // namespace
 
 int main()
@@ -350,6 +379,7 @@ int main()
 	test_capture_release_barriers_and_swap();
 	test_discard_apply_and_save_failure();
 	test_authentic_assets_if_supplied();
+	test_localized_surface_contract();
 	if(failures != 0U) {
 		std::cerr << failures << " of " << checks << " checks failed\n";
 		return 1;

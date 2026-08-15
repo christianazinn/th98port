@@ -1,5 +1,6 @@
 #include "th03/app/new_classic_device_scene.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -186,12 +187,44 @@ void test_live_input_test_and_return()
 		"input test Cancel fades back without persisting anything");
 }
 
+void test_localized_surface_contract()
+{
+	auto base_assets = assets_fixture();
+	expect(static_cast<bool>(base_assets), "Device localization assets decode");
+	if(!base_assets) {
+		return;
+	}
+	auto localized_assets =
+		std::make_shared<th03::app::NewClassicReplayPatchAssets>(*base_assets);
+	localized_assets->custom_messages =
+		std::make_shared<const th03::app::NewClassicMessageCatalog>(
+			th03::app::detail::new_classic_width_test_messages()
+		);
+	Scene base(
+		th03::app::NewClassicDeviceSceneMode::assignment, {}, {}, base_assets
+	);
+	Scene localized(
+		th03::app::NewClassicDeviceSceneMode::assignment, {}, {}, localized_assets
+	);
+	expect(
+		!std::ranges::equal(base.surface().pixels, localized.surface().pixels),
+		"Device pseudo-locale changes catalog-owned semantic pixels"
+	);
+	expect(
+		base.surface().shown_page == localized.surface().shown_page &&
+		base.surface().palette_tone == localized.surface().palette_tone &&
+		base.surface().graphics_palette == localized.surface().graphics_palette,
+		"Device localization preserves page and palette cadence"
+	);
+}
+
 } // namespace
 
 int main()
 {
 	test_assignment_apply_and_duplicate_ownership();
 	test_live_input_test_and_return();
+	test_localized_surface_contract();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }

@@ -40,13 +40,27 @@ constexpr present::Rect full_screen{
 	0, 0, present::graphics_width, present::graphics_height,
 };
 
-constexpr std::array<std::string_view, 6U> main_labels{
-	"Mode", "Stage", "Round", "Advanced Settings", "Reset Defaults", "Start",
+constexpr std::array<NewClassicMessageId, 6U> main_labels{
+	NewClassicMessageId::practice_label_mode,
+	NewClassicMessageId::practice_label_stage,
+	NewClassicMessageId::practice_label_round,
+	NewClassicMessageId::practice_command_advanced,
+	NewClassicMessageId::practice_command_reset,
+	NewClassicMessageId::practice_command_start,
 };
-constexpr std::array<std::string_view, 12U> advanced_labels{
-	"CPU Timer", "Round Speed", "Bullet Bonus", "P1 Spell Rank",
-	"CPU Spell Rank", "P1 Start Gauge", "CPU Start Gauge", "Boss Rank",
-	"CPU Damage", "Stock", "Extends Gained", "Back",
+constexpr std::array<NewClassicMessageId, 12U> advanced_labels{
+	NewClassicMessageId::practice_label_cpu_timer,
+	NewClassicMessageId::practice_label_round_speed,
+	NewClassicMessageId::practice_label_bullet_bonus,
+	NewClassicMessageId::practice_label_p1_spell,
+	NewClassicMessageId::practice_label_cpu_spell,
+	NewClassicMessageId::practice_label_p1_gauge,
+	NewClassicMessageId::practice_label_cpu_gauge,
+	NewClassicMessageId::practice_label_boss_rank,
+	NewClassicMessageId::practice_label_cpu_damage,
+	NewClassicMessageId::practice_label_stock,
+	NewClassicMessageId::practice_label_extends,
+	NewClassicMessageId::practice_command_back,
 };
 constexpr std::array<std::uint8_t, 9U> stage_six_opponent{
 	1U, 0U, 0U, 2U, 0U, 3U, 5U, 4U, 6U,
@@ -625,48 +639,85 @@ bool NewClassicPracticeMenu::draw() noexcept
 		return false;
 	}
 	const auto &font = patch_assets_->menu_font;
+	const auto &messages = patch_assets_->messages();
 	if(!font.put_centered(
 		overlay_raster_, 320, practice_header_top,
-		page_ == Page::main ? "VS SETUP" : "ADVANCED SETTINGS",
+		messages.text(page_ == Page::main ?
+			NewClassicMessageId::practice_header_vs_setup :
+			NewClassicMessageId::practice_header_advanced),
 		practice_color_header
 	) || !font.put_centered(
 		overlay_raster_, 320, practice_footer_top,
-		"Arrows: Select / Change   Z: Confirm   Esc: Back",
+		messages.text(NewClassicMessageId::practice_footer),
 		practice_color_footer
 	)) {
 		return false;
 	}
 	const auto &labels = page_ == Page::main ?
-		std::span<const std::string_view>(main_labels) :
-		std::span<const std::string_view>(advanced_labels);
+		std::span<const NewClassicMessageId>(main_labels) :
+		std::span<const NewClassicMessageId>(advanced_labels);
 	const auto value = [&](std::size_t row) -> std::string {
 		if(page_ == Page::main) {
 			switch(row) {
-			case 0U: return config_.preset == preset_vs ? "VS" : "Practice";
+			case 0U: return std::string(messages.text(
+				config_.preset == preset_vs ?
+					NewClassicMessageId::practice_value_vs :
+					NewClassicMessageId::practice_value_practice
+			));
 			case 1U: return decimal(static_cast<std::uint16_t>(config_.stage + 1U));
-			case 2U: return decimal(static_cast<std::uint16_t>(config_.round + 1U)) +
-				(config_.round == 5U ? "+" : "");
+			case 2U: {
+				const auto round = decimal(static_cast<std::uint16_t>(
+					config_.round + 1U
+				));
+				const std::array arguments{
+					NewClassicMessageArgument{"round", round},
+					NewClassicMessageArgument{
+						"plus", config_.round == 5U ? "+" : ""
+					},
+				};
+				return messages.format(
+					NewClassicMessageId::practice_value_round, arguments
+				);
+			}
 			default: return {};
 			}
 		}
 		switch(row) {
-		case 0U: return config_.cpu_timer == 0U ? "VS Rules" :
-			config_.cpu_timer == 1U ? "Story" : "Infinite";
+		case 0U: return std::string(messages.text(
+			config_.cpu_timer == 0U ?
+				NewClassicMessageId::practice_value_vs_rules :
+			config_.cpu_timer == 1U ?
+				NewClassicMessageId::practice_value_story :
+				NewClassicMessageId::practice_value_infinite
+		));
 		case 1U: return q4(config_.round_speed);
 		case 2U: return q4(config_.bullet_speed);
 		case 3U: return decimal(config_.p1_spell);
 		case 4U: return decimal(config_.cpu_spell);
 		case 5U: return decimal(config_.p1_gauge);
 		case 6U: return decimal(config_.cpu_gauge);
-		case 7U:
-			return decimal(static_cast<std::uint16_t>(
+		case 7U: {
+			const auto display = decimal(static_cast<std::uint16_t>(
 				config_.boss_level >= 15U ? 16U : config_.boss_level + 1U
-			)) + "  raw " + decimal(config_.boss_level);
+			));
+			const auto raw = decimal(config_.boss_level);
+			const std::array arguments{
+				NewClassicMessageArgument{"display", display},
+				NewClassicMessageArgument{"raw", raw},
+			};
+			return messages.format(
+				NewClassicMessageId::practice_value_boss_rank, arguments
+			);
+		}
 		case 8U: return decimal(config_.cpu_damage);
-		case 9U: return config_.stock == stock_vs_rules ? "VS Rules" :
-			decimal(config_.stock);
-		case 10U: return config_.preset == preset_vs ? "VS Rules" :
-			decimal(config_.extends_gained);
+		case 9U: return config_.stock == stock_vs_rules ?
+			std::string(messages.text(
+				NewClassicMessageId::practice_value_vs_rules
+			)) : decimal(config_.stock);
+		case 10U: return config_.preset == preset_vs ?
+			std::string(messages.text(
+				NewClassicMessageId::practice_value_vs_rules
+			)) : decimal(config_.extends_gained);
 		default: return {};
 		}
 	};
@@ -683,7 +734,7 @@ bool NewClassicPracticeMenu::draw() noexcept
 				176 + static_cast<std::int32_t>((row - 4U) * 16U)) :
 			(row < 11U ? 64 + static_cast<std::int32_t>(row * 16U) : 256);
 		if(command) {
-			label_left = 320 - (font.width(labels[row]) / 2);
+			label_left = 320 - (font.width(messages.text(labels[row])) / 2);
 		}
 		const auto label_color = static_cast<present::Index4>(
 			selected ? practice_color_selected :
@@ -700,7 +751,7 @@ bool NewClassicPracticeMenu::draw() noexcept
 			return false;
 		}
 		if(!font.put(
-			overlay_raster_, label_left, top, labels[row], label_color
+			overlay_raster_, label_left, top, messages.text(labels[row]), label_color
 		)) {
 			return false;
 		}

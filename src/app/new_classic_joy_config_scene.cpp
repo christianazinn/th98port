@@ -31,13 +31,31 @@ constexpr std::uint8_t apply_row = 7U;
 constexpr std::uint8_t cancel_row = 8U;
 constexpr std::uint8_t fade_boundary_count = 19U;
 
-constexpr std::array<std::string_view, new_classic_joy_action_count>
-	action_labels{"Shot", "Bomb", "Charge", "Menu Back", "Menu OK"};
-constexpr std::array<std::string_view, 16U> button_labels{
-	"South", "East", "West", "North", "Back", "Start",
-	"Left Stick", "Right Stick", "Left Shoulder", "Right Shoulder",
-	"D-Pad Up", "D-Pad Down", "D-Pad Left", "D-Pad Right", "Misc",
-	"Unbound",
+constexpr std::array<NewClassicMessageId, new_classic_joy_action_count>
+	action_labels{
+		NewClassicMessageId::input_action_shot,
+		NewClassicMessageId::input_action_bomb,
+		NewClassicMessageId::input_action_charge,
+		NewClassicMessageId::input_action_menu_back,
+		NewClassicMessageId::input_action_menu_ok,
+	};
+constexpr std::array<NewClassicMessageId, 16U> button_labels{
+	NewClassicMessageId::joy_button_south,
+	NewClassicMessageId::joy_button_east,
+	NewClassicMessageId::joy_button_west,
+	NewClassicMessageId::joy_button_north,
+	NewClassicMessageId::joy_button_back,
+	NewClassicMessageId::joy_button_start,
+	NewClassicMessageId::joy_button_left_stick,
+	NewClassicMessageId::joy_button_right_stick,
+	NewClassicMessageId::joy_button_left_shoulder,
+	NewClassicMessageId::joy_button_right_shoulder,
+	NewClassicMessageId::joy_button_dpad_up,
+	NewClassicMessageId::joy_button_dpad_down,
+	NewClassicMessageId::joy_button_dpad_left,
+	NewClassicMessageId::joy_button_dpad_right,
+	NewClassicMessageId::joy_button_misc,
+	NewClassicMessageId::input_value_unbound,
 };
 
 [[nodiscard]] constexpr present::Page opposite(present::Page page) noexcept
@@ -142,52 +160,82 @@ bool NewClassicJoyConfigScene::draw_row(
 	bool selected
 ) noexcept
 {
+	const auto &messages = patch_assets_->messages();
 	const auto top = rows_top + (static_cast<std::int32_t>(row) * 16);
 	if(row == switch_page_row) {
 		return draw_command(
-			page_ == Page::buttons ? "Axis and Dead Zone" : "Button Mapping",
+			messages.text(page_ == Page::buttons ?
+				NewClassicMessageId::joy_command_axes :
+				NewClassicMessageId::joy_command_buttons),
 			top, selected
 		);
 	}
 	if(row == defaults_row) {
-		return draw_command("Restore Defaults", top, selected);
+		return draw_command(messages.text(
+			NewClassicMessageId::input_command_restore_defaults
+		), top, selected);
 	}
 	if(row == apply_row) {
-		return draw_command("Apply and return", top, selected);
+		return draw_command(messages.text(
+			NewClassicMessageId::input_command_apply_return
+		), top, selected);
 	}
 	if(row == cancel_row) {
-		return draw_command("Cancel", top, selected);
+		return draw_command(messages.text(
+			NewClassicMessageId::input_command_cancel
+		), top, selected);
 	}
 	if(page_ == Page::buttons) {
 		const auto button = config_.buttons[row];
 		return draw_value(
-			action_labels[row], button_labels[button_ordinal(button)], top, selected
+			messages.text(action_labels[row]),
+			messages.text(button_labels[button_ordinal(button)]), top, selected
 		);
 	}
 	if(row == 0U) {
-		return draw_value("Horizontal Axis",
+		return draw_value(messages.text(
+			NewClassicMessageId::joy_label_horizontal_axis
+		),
 			config_.horizontal_axis == NewClassicJoyAxis::left_x ?
-				"Left X" : "Right X", top, selected);
+				messages.text(NewClassicMessageId::joy_value_left_x) :
+				messages.text(NewClassicMessageId::joy_value_right_x), top, selected);
 	}
 	if(row == 1U) {
-		return draw_value("Vertical Axis",
+		return draw_value(messages.text(
+			NewClassicMessageId::joy_label_vertical_axis
+		),
 			config_.vertical_axis == NewClassicJoyAxis::left_y ?
-				"Left Y" : "Right Y", top, selected);
+				messages.text(NewClassicMessageId::joy_value_left_y) :
+				messages.text(NewClassicMessageId::joy_value_right_y), top, selected);
 	}
 	if(row == 2U) {
-		return draw_value("Horizontal Dir",
-			config_.horizontal_reversed ? "Reverse" : "Normal", top, selected);
+		return draw_value(messages.text(
+			NewClassicMessageId::joy_label_horizontal_dir
+		), messages.text(config_.horizontal_reversed ?
+			NewClassicMessageId::input_value_reverse :
+			NewClassicMessageId::value_normal), top, selected);
 	}
 	if(row == 3U) {
-		return draw_value("Vertical Dir",
-			config_.vertical_reversed ? "Reverse" : "Normal", top, selected);
+		return draw_value(messages.text(
+			NewClassicMessageId::joy_label_vertical_dir
+		), messages.text(config_.vertical_reversed ?
+			NewClassicMessageId::input_value_reverse :
+			NewClassicMessageId::value_normal), top, selected);
 	}
-	std::array<char, 3U> percent{
+	std::array<char, 2U> percent{
 		static_cast<char>('0' + (config_.dead_zone_percent / 10U)),
-		static_cast<char>('0' + (config_.dead_zone_percent % 10U)), '%',
+		static_cast<char>('0' + (config_.dead_zone_percent % 10U)),
 	};
-	return draw_value("Dead Zone",
-		std::string_view(percent.data(), percent.size()), top, selected);
+	const std::string_view percent_value{percent.data(), percent.size()};
+	const std::array arguments{
+		NewClassicMessageArgument{"percent", percent_value},
+	};
+	const auto formatted = messages.format(
+		NewClassicMessageId::value_percent, arguments
+	);
+	return draw_value(messages.text(
+		NewClassicMessageId::joy_label_dead_zone
+	), formatted, top, selected);
 }
 
 bool NewClassicJoyConfigScene::compose_screen() noexcept
@@ -202,9 +250,10 @@ bool NewClassicJoyConfigScene::compose_screen() noexcept
 	)) {
 		return false;
 	}
-	const auto header = page_ == Page::buttons ?
-		"JOY CONFIGURATION     [ BUTTONS ]" :
-		"JOY CONFIGURATION     [ AXES ]";
+	const auto &messages = patch_assets_->messages();
+	const auto header = messages.text(page_ == Page::buttons ?
+		NewClassicMessageId::joy_header_buttons :
+		NewClassicMessageId::joy_header_axes);
 	if(!patch_assets_->menu_font.put_centered(
 		raster, 320, header_top, header, color_header
 	)) {
@@ -217,7 +266,7 @@ bool NewClassicJoyConfigScene::compose_screen() noexcept
 	}
 	if(!patch_assets_->menu_font.put_centered(
 		raster, 320, footer_top,
-		"Up/Down: Select   Left/Right: Change   Z: OK   Esc: Cancel",
+		messages.text(NewClassicMessageId::joy_footer),
 		color_footer
 	) || !patch_surface_.publish(target) || !raster.set_access_page(target)) {
 		return false;
@@ -426,7 +475,9 @@ NewClassicJoyConfigSceneResult NewClassicJoyConfigScene::consume(
 			return result();
 		} else {
 			phase_ = Phase::discard;
-			if(!show_overlay("Discard changes?  Z: Yes  Esc: No")) {
+			if(!show_overlay(patch_assets_->messages().text(
+				NewClassicMessageId::input_prompt_discard
+			))) {
 				fail_surface();
 				return result();
 			}
@@ -438,7 +489,9 @@ NewClassicJoyConfigSceneResult NewClassicJoyConfigScene::consume(
 			return result();
 		}
 		phase_ = Phase::discard;
-		if(!show_overlay("Discard changes?  Z: Yes  Esc: No")) {
+		if(!show_overlay(patch_assets_->messages().text(
+			NewClassicMessageId::input_prompt_discard
+		))) {
 			fail_surface();
 			return result();
 		}
@@ -462,7 +515,9 @@ void NewClassicJoyConfigScene::report_commit(bool success) noexcept
 		return;
 	}
 	status_ = NewClassicJoyConfigSceneStatus::running;
-	if(!show_overlay("Could not save TH3JOY.CFG")) {
+	if(!show_overlay(patch_assets_->messages().text(
+		NewClassicMessageId::joy_error_save
+	))) {
 		fail_surface();
 	}
 }

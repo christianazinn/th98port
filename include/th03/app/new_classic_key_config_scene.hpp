@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <string>
 
 #include "th03/app/new_classic_assets.hpp"
 #include "th03/app/new_classic_frontend.hpp"
@@ -97,7 +98,7 @@ private:
 	[[nodiscard]] bool show_overlay(std::string_view text) noexcept;
 	[[nodiscard]] std::string_view key_label(
 		std::uint16_t key,
-		char (&fallback)[16U]
+		std::string &fallback
 	) const noexcept;
 	[[nodiscard]] NewClassicKeyConfigSceneResult advance_fade(
 		const NewClassicKeyConfigSceneInput &input

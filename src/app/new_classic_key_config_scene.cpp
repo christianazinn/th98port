@@ -1,9 +1,9 @@
 #include "th03/app/new_classic_key_config_scene.hpp"
 
 #include <array>
-#include <charconv>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -54,13 +54,27 @@ constexpr std::uint8_t story_defaults_row = 8U;
 constexpr std::uint8_t story_apply_row = 9U;
 constexpr std::uint8_t story_cancel_row = 10U;
 
-constexpr std::array<std::string_view, new_classic_player_action_count>
+constexpr std::array<NewClassicMessageId, new_classic_player_action_count>
 	player_action_labels{
-		"Up-Left", "Up", "Up-Right", "Left", "Right", "Down-Left",
-		"Down", "Down-Right", "Shot", "Bomb", "Charge",
+		NewClassicMessageId::input_action_up_left,
+		NewClassicMessageId::input_action_up,
+		NewClassicMessageId::input_action_up_right,
+		NewClassicMessageId::input_action_left,
+		NewClassicMessageId::input_action_right,
+		NewClassicMessageId::input_action_down_left,
+		NewClassicMessageId::input_action_down,
+		NewClassicMessageId::input_action_down_right,
+		NewClassicMessageId::input_action_shot,
+		NewClassicMessageId::input_action_bomb,
+		NewClassicMessageId::input_action_charge,
 	};
-constexpr std::array<std::string_view, new_classic_story_action_count>
-	story_action_labels{"Up", "Left", "Right", "Down"};
+constexpr std::array<NewClassicMessageId, new_classic_story_action_count>
+	story_action_labels{
+		NewClassicMessageId::input_action_up,
+		NewClassicMessageId::input_action_left,
+		NewClassicMessageId::input_action_right,
+		NewClassicMessageId::input_action_down,
+	};
 
 [[nodiscard]] constexpr present::Page opposite(present::Page page) noexcept
 {
@@ -161,11 +175,12 @@ bool NewClassicKeyConfigScene::draw_command(
 
 std::string_view NewClassicKeyConfigScene::key_label(
 	std::uint16_t key,
-	char (&fallback)[16U]
+	std::string &fallback
 ) const noexcept
 {
+	const auto &messages = patch_assets_->messages();
 	if(key == new_classic_host_key_unbound) {
-		return "Unbound";
+		return messages.text(NewClassicMessageId::input_value_unbound);
 	}
 	if(key_name_) {
 		const auto resolved = key_name_(key_name_context_, key);
@@ -173,15 +188,10 @@ std::string_view NewClassicKeyConfigScene::key_label(
 			return resolved;
 		}
 	}
-	fallback[0] = 'K';
-	fallback[1] = 'e';
-	fallback[2] = 'y';
-	fallback[3] = ' ';
-	auto converted = std::to_chars(&fallback[4], &fallback[15], key);
-	if(converted.ec != std::errc{}) {
-		return "Unbound";
-	}
-	return std::string_view(fallback, converted.ptr);
+	const auto value = std::to_string(key);
+	const std::array arguments{NewClassicMessageArgument{"key", value}};
+	fallback = messages.format(NewClassicMessageId::key_value_fallback, arguments);
+	return fallback;
 }
 
 bool NewClassicKeyConfigScene::draw_player_row(
@@ -190,29 +200,31 @@ bool NewClassicKeyConfigScene::draw_player_row(
 	bool selected
 ) noexcept
 {
+	const auto &messages = patch_assets_->messages();
 	if(row == player_autofire_row) {
 		return draw_row(
-			"Autofire",
-			(config_.autofire & (1U << player)) ? "On" : "Off",
+			messages.text(NewClassicMessageId::input_action_autofire),
+			messages.text((config_.autofire & (1U << player)) ?
+				NewClassicMessageId::value_on : NewClassicMessageId::value_off),
 			player_action_label_left, player_action_value_left,
 			player_action_top + (3 * 16), selected
 		);
 	}
 	if(row >= player_up_left_row && row <= player_charge_row) {
 		const auto action = static_cast<std::uint8_t>(row - player_up_left_row);
-		char fallback[16U]{};
+		std::string fallback{};
 		const auto value = key_label(
 			config_.bindings[player_binding(player, action)], fallback
 		);
 		if(row <= player_down_right_row) {
 			return draw_row(
-				player_action_labels[action], value,
+				messages.text(player_action_labels[action]), value,
 				player_movement_label_left, player_movement_value_left,
 				rows_top + (static_cast<std::int32_t>(action) * 16), selected
 			);
 		}
 		return draw_row(
-			player_action_labels[action], value,
+			messages.text(player_action_labels[action]), value,
 			player_action_label_left, player_action_value_left,
 			player_action_top +
 				(static_cast<std::int32_t>(row - player_shot_row) * 16),
@@ -222,12 +234,18 @@ bool NewClassicKeyConfigScene::draw_player_row(
 	const auto top = command_top +
 		(static_cast<std::int32_t>(row - player_defaults_row) * 16);
 	if(row == player_defaults_row) {
-		return draw_command("Defaults for this player", top, selected);
+		return draw_command(messages.text(
+			NewClassicMessageId::key_command_defaults_player
+		), top, selected);
 	}
 	if(row == player_apply_row) {
-		return draw_command("Apply and return", top, selected);
+		return draw_command(messages.text(
+			NewClassicMessageId::input_command_apply_return
+		), top, selected);
 	}
-	return draw_command("Cancel", top, selected);
+	return draw_command(messages.text(
+		NewClassicMessageId::input_command_cancel
+	), top, selected);
 }
 
 bool NewClassicKeyConfigScene::draw_story_row(
@@ -235,12 +253,14 @@ bool NewClassicKeyConfigScene::draw_story_row(
 	bool selected
 ) noexcept
 {
+	const auto &messages = patch_assets_->messages();
 	const auto top = rows_top + (static_cast<std::int32_t>(row) * 16);
 	if(row <= story_down_row) {
-		char fallback[16U]{};
+		std::string fallback{};
 		const auto index = (2U * new_classic_player_action_count) + row;
 		return draw_row(
-			story_action_labels[row], key_label(config_.bindings[index], fallback),
+			messages.text(story_action_labels[row]),
+			key_label(config_.bindings[index], fallback),
 			story_label_left, story_value_left, top, selected
 		);
 	}
@@ -248,26 +268,34 @@ bool NewClassicKeyConfigScene::draw_story_row(
 		const auto action = static_cast<std::size_t>(
 			NewClassicPlayerAction::shot
 		) + (row - story_shot_row);
-		char fallback[16U]{};
+		std::string fallback{};
 		return draw_row(
-			player_action_labels[action],
+			messages.text(player_action_labels[action]),
 			key_label(config_.bindings[action], fallback),
 			story_label_left, story_value_left, top, selected
 		);
 	}
 	if(row == story_autofire_row) {
 		return draw_row(
-			"Autofire", (config_.autofire & 1U) ? "On" : "Off",
+			messages.text(NewClassicMessageId::input_action_autofire),
+			messages.text((config_.autofire & 1U) ?
+				NewClassicMessageId::value_on : NewClassicMessageId::value_off),
 			story_label_left, story_value_left, top, selected
 		);
 	}
 	if(row == story_defaults_row) {
-		return draw_command("Defaults for Story", top, selected);
+		return draw_command(messages.text(
+			NewClassicMessageId::key_command_defaults_story
+		), top, selected);
 	}
 	if(row == story_apply_row) {
-		return draw_command("Apply and return", top, selected);
+		return draw_command(messages.text(
+			NewClassicMessageId::input_command_apply_return
+		), top, selected);
 	}
-	return draw_command("Cancel", top, selected);
+	return draw_command(messages.text(
+		NewClassicMessageId::input_command_cancel
+	), top, selected);
 }
 
 bool NewClassicKeyConfigScene::compose_screen() noexcept
@@ -283,10 +311,11 @@ bool NewClassicKeyConfigScene::compose_screen() noexcept
 		return false;
 	}
 	const auto &font = patch_assets_->menu_font;
-	const auto header = page_ == Page::p1 ?
-		"KEY CONFIGURATION     [ P1 ]" : page_ == Page::p2 ?
-		"KEY CONFIGURATION     [ P2 ]" :
-		"KEY CONFIGURATION     [ STORY ]";
+	const auto &messages = patch_assets_->messages();
+	const auto header = messages.text(page_ == Page::p1 ?
+		NewClassicMessageId::key_header_p1 : page_ == Page::p2 ?
+		NewClassicMessageId::key_header_p2 :
+		NewClassicMessageId::key_header_story);
 	if(!font.put_centered(raster, 320, header_top, header, color_header)) {
 		return false;
 	}
@@ -306,7 +335,7 @@ bool NewClassicKeyConfigScene::compose_screen() noexcept
 	}
 	if(!font.put_centered(
 		raster, 320, footer_top,
-		"Left/Right: Column/Page   Z/Return: Edit   Esc: Cancel",
+		messages.text(NewClassicMessageId::key_footer),
 		color_footer
 	) || !patch_surface_.publish(target) || !raster.set_access_page(target)) {
 		return false;
@@ -625,7 +654,9 @@ NewClassicKeyConfigSceneResult NewClassicKeyConfigScene::consume(
 		} else if(const auto binding = binding_index()) {
 			capture_binding_ = binding;
 			phase_ = Phase::capture_wait_release;
-			if(!show_overlay("Press a key. Esc cancels capture.")) {
+			if(!show_overlay(patch_assets_->messages().text(
+				NewClassicMessageId::key_prompt_capture
+			))) {
 				fail_surface();
 				return result();
 			}
@@ -644,7 +675,9 @@ NewClassicKeyConfigSceneResult NewClassicKeyConfigScene::consume(
 				return result();
 			}
 			phase_ = Phase::discard;
-			if(!show_overlay("Discard changes?  Z: Yes  Esc: No")) {
+			if(!show_overlay(patch_assets_->messages().text(
+				NewClassicMessageId::input_prompt_discard
+			))) {
 				fail_surface();
 				return result();
 			}
@@ -656,7 +689,9 @@ NewClassicKeyConfigSceneResult NewClassicKeyConfigScene::consume(
 			return result();
 		}
 		phase_ = Phase::discard;
-		if(!show_overlay("Discard changes?  Z: Yes  Esc: No")) {
+		if(!show_overlay(patch_assets_->messages().text(
+			NewClassicMessageId::input_prompt_discard
+		))) {
 			fail_surface();
 			return result();
 		}
@@ -681,7 +716,9 @@ void NewClassicKeyConfigScene::report_commit(bool success) noexcept
 		return;
 	}
 	status_ = NewClassicKeyConfigSceneStatus::running;
-	if(!show_overlay("Could not save TH3KEY.CFG")) {
+	if(!show_overlay(patch_assets_->messages().text(
+		NewClassicMessageId::key_error_save
+	))) {
 		fail_surface();
 	}
 }

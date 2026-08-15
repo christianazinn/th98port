@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -291,6 +292,38 @@ void test_exact_patch_surface()
 	);
 }
 
+void test_localized_patch_surface()
+{
+	auto base_assets = patch_assets();
+	check(static_cast<bool>(base_assets), "Practice localization font decodes");
+	if(!base_assets) {
+		return;
+	}
+	auto localized_assets =
+		std::make_shared<th03::app::NewClassicReplayPatchAssets>(*base_assets);
+	localized_assets->custom_messages =
+		std::make_shared<const th03::app::NewClassicMessageCatalog>(
+			th03::app::detail::new_classic_width_test_messages()
+		);
+	th03::app::NewClassicPracticeMenu base(selected(), base_assets);
+	th03::app::NewClassicPracticeMenu localized(selected(), localized_assets);
+	base.mark_background_published();
+	localized.mark_background_published();
+	RetainedSelection retained{};
+	const auto base_surface = base.compose_over(retained.surface(), true);
+	const auto localized_surface = localized.compose_over(retained.surface(), true);
+	check(
+		!std::ranges::equal(base_surface.pixels, localized_surface.pixels),
+		"Practice pseudo-locale changes catalog-owned semantic pixels"
+	);
+	check(
+		base_surface.shown_page == localized_surface.shown_page &&
+		base_surface.palette_tone == localized_surface.palette_tone &&
+		base_surface.graphics_palette == localized_surface.graphics_palette,
+		"Practice localization preserves retained page and palette ownership"
+	);
+}
+
 void test_input_priority_and_release_lock()
 {
 	th03::app::NewClassicPracticeMenu menu(selected(1, 5));
@@ -514,6 +547,7 @@ int main()
 {
 	test_source_menu();
 	test_exact_patch_surface();
+	test_localized_patch_surface();
 	test_input_priority_and_release_lock();
 	test_exact_exit_transitions();
 	test_exact_vs_default();
