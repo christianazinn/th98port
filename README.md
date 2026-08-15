@@ -231,7 +231,7 @@ canonical replay hashes, combo timing, scoring, or checkpoint bytes.
 The patched title's Option row owns Replay Patch-style KeyConfig and Options.
 KeyConfig remaps 26 SDL scancodes across P1, P2, and Story pages, swaps
 duplicate assignments within a page, restores page-local defaults, and stores
-the result atomically in `TH3KEY.CFG` beside `YUME.CFG`. Story and 1P-vs-CPU
+the result atomically in `TH3KEY.CFG` beside `PODD.CFG`. Story and 1P-vs-CPU
 use the dedicated Story movement bindings while retaining P1 actions; the P1
 and P2 Autofire selections feed the recorded logical input boundary. Options
 persists Rank, FM music, independently switchable SFX, KeyConfig, and the
@@ -277,10 +277,12 @@ differing pixel and bounding box, and accepts losslessly imported DOSBox-X
 provides the external comparator; source-boundary alignment with the planned
 devtools-only PC-98 producer remains required before claiming guest parity.
 Unless overridden with `--config`, `--score`, and `--replay-root`, Classic
-stores `YUME.CFG` and `YUME.NEM`; New Classic derives `YUME.NEW.NEM` beside
-the selected `--score` path and stores `TH3KEY.CFG` plus the `REPLAY`
-directory under the selected `--data` root. This avoids dependence on the
-launcher working directory; use explicit writable paths when the extracted
+stores its exact `YUME.CFG` and `YUME.NEM`. New Classic stores its versioned
+`PODD.CFG`, derives `YUME.NEW.NEM` beside the selected `--score` path, and
+stores `TH3KEY.CFG` plus the `REPLAY` directory under the selected `--data`
+root. An absent `PODD.CFG` imports valid Classic option values once by value;
+later New Classic changes never rewrite `YUME.CFG`. This avoids dependence on
+the launcher working directory; use explicit writable paths when the extracted
 content root is read-only.
 
 Validate an external frozen case without copying it into this repository:

@@ -311,6 +311,8 @@ existing oracle classification.
 
 ### 1. Reorder Replay and Option on the title
 
+Status: complete in session 173.
+
 This is the smallest player-visible parcel and can be implemented immediately.
 
 - Change the New Classic choice order and proportional labels to place Replay
@@ -324,6 +326,9 @@ returns from the correct owner; Classic title hashes and route tests are
 unchanged.
 
 ### 2. Split Classic and New Classic configuration
+
+Status: complete in session 174. New Classic owns versioned `PODD.CFG`;
+Classic remains the sole owner of `YUME.CFG`.
 
 - Add the versioned New Classic settings codec/store with atomic
   write/read-back validation.

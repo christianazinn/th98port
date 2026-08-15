@@ -22,6 +22,7 @@
 #include "th03/app/new_classic_key_config_scene.hpp"
 #include "th03/app/new_classic_playback.hpp"
 #include "th03/app/new_classic_replay.hpp"
+#include "th03/app/new_classic_settings_store.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/present/source_surface.hpp"
 
@@ -52,6 +53,17 @@ namespace {
 		ClassicOpSessionErrorCode::config_store_failed
 	);
 	result.config_store_error.emplace(std::move(error));
+	return result;
+}
+
+[[nodiscard]] ClassicOpSessionError new_settings_error(
+	NewClassicSettingsStoreError error
+)
+{
+	auto result = session_error(
+		ClassicOpSessionErrorCode::config_store_failed
+	);
+	result.new_settings_store_error.emplace(std::move(error));
 	return result;
 }
 
@@ -821,6 +833,7 @@ struct ClassicOpSessionBackend final {
 	std::filesystem::path score_path{};
 	std::filesystem::path new_classic_score_path{};
 	ClassicConfigOptions config{};
+	std::optional<NewClassicSettings> new_classic_settings{};
 	bool fm_available = true;
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
 	NewClassicReplayRecorder *replay_recorder = nullptr;
@@ -888,6 +901,7 @@ struct ClassicOpSessionBackend final {
 		std::filesystem::path config_path_,
 		std::filesystem::path score_path_,
 		ClassicConfigOptions config_,
+		std::optional<NewClassicSettings> new_classic_settings_,
 		bool fm_available_,
 		present::KotohimeBombFadeCompatibility compatibility,
 		NewClassicReplayRecorder *replay_recorder_,
@@ -908,6 +922,7 @@ struct ClassicOpSessionBackend final {
 		score_path(std::move(score_path_)),
 		new_classic_score_path(std::move(new_classic_score_path_)),
 		config(config_),
+		new_classic_settings(std::move(new_classic_settings_)),
 		fm_available(fm_available_),
 		kotohime_compatibility(compatibility),
 		replay_recorder(replay_recorder_),
@@ -1595,7 +1610,7 @@ struct ClassicOpSessionBackend final {
 			if(stored) {
 				config.legacy_autofire =
 					key_config_scene->config().autofire != 0U;
-				auto config_stored = commit_classic_config_store(config_path, config);
+				auto config_stored = commit_config();
 				stored = config_stored ?
 					std::expected<void, NewClassicKeyConfigStoreError>{} :
 					std::unexpected(NewClassicKeyConfigStoreError{
@@ -2007,6 +2022,18 @@ struct ClassicOpSessionBackend final {
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError> commit_config()
 	{
+		if(new_classic_settings) {
+			new_classic_settings->options = config;
+			auto committed = commit_new_classic_settings_store(
+				config_path, *new_classic_settings
+			);
+			if(!committed) {
+				return std::unexpected(new_settings_error(
+					std::move(committed.error())
+				));
+			}
+			return {};
+		}
 		auto committed = commit_classic_config_store(config_path, config);
 		if(!committed) {
 			return std::unexpected(config_error(std::move(committed.error())));
@@ -3727,11 +3754,34 @@ ClassicOpSession::create(
 			ClassicOpSessionErrorCode::invalid_config
 		));
 	}
-	auto loaded_config = load_classic_config_store(config_path);
-	if(!loaded_config) {
-		return std::unexpected(config_error(std::move(loaded_config.error())));
+	ClassicConfigOptions config{};
+	std::optional<NewClassicSettings> new_classic_settings{};
+	auto persistent_config_path = config_path;
+	if(replay_recorder) {
+		auto settings_path = runner_request ?
+			runner_request->content.new_classic_settings :
+			std::filesystem::path{};
+		if(settings_path.empty()) {
+			settings_path = config_path.parent_path() / "PODD.CFG";
+		}
+		auto loaded = load_new_classic_settings_store(
+			settings_path, config_path
+		);
+		if(!loaded) {
+			return std::unexpected(new_settings_error(
+				std::move(loaded.error())
+			));
+		}
+		new_classic_settings = loaded->settings;
+		config = new_classic_settings->options;
+		persistent_config_path = std::move(settings_path);
+	} else {
+		auto loaded = load_classic_config_store(config_path);
+		if(!loaded) {
+			return std::unexpected(config_error(std::move(loaded.error())));
+		}
+		config = loaded->options;
 	}
-	auto config = loaded_config->options;
 	if(!replay_recorder) {
 		config.language = ClassicLanguage::japanese;
 	}
@@ -3771,9 +3821,10 @@ ClassicOpSession::create(
 		std::move(imported->assets),
 		std::move(imported->staff),
 		std::move(*imported_op),
-		std::move(config_path),
+		std::move(persistent_config_path),
 		std::move(score_path),
 		config,
+		std::move(new_classic_settings),
 		fm_available,
 		kotohime_compatibility,
 		replay_recorder,

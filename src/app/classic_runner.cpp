@@ -433,6 +433,10 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		request.content.new_classic_score =
 			request.content.score.parent_path() / "YUME.NEW.NEM";
 	}
+	if(request.content.new_classic_settings.empty()) {
+		request.content.new_classic_settings =
+			request.content.config.parent_path() / "PODD.CFG";
+	}
 	auto replay_recorder = request.experience == ExperienceProfile::new_classic
 		? std::make_unique<NewClassicReplayRecorder>(
 			request.content.replay_root

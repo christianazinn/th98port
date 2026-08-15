@@ -27,6 +27,7 @@
 #include "th03/app/main_process.hpp"
 #include "th03/app/new_classic_language.hpp"
 #include "th03/app/new_classic_practice.hpp"
+#include "th03/app/new_classic_settings_store.hpp"
 #include "th03/app/pixel_oracle_identity.hpp"
 #include "th03/present/source_surface.hpp"
 
@@ -93,6 +94,7 @@ struct ClassicOpSessionError final {
 	ClassicOpSessionErrorCode code = ClassicOpSessionErrorCode::invalid_config;
 	std::optional<ResourceLoadError> resource_error{};
 	std::optional<ClassicConfigStoreError> config_store_error{};
+	std::optional<NewClassicSettingsStoreError> new_settings_store_error{};
 	std::optional<ClassicScoreStoreError> score_store_error{};
 	std::optional<NewClassicScoreStoreError> new_score_store_error{};
 	std::optional<MainlCompiledTextError> mainl_text_error{};

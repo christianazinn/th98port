@@ -47,6 +47,9 @@ struct ClassicContentPaths final {
 	// data_root when omitted; Classic never opens it.
 	std::filesystem::path replay_root{};
 	std::filesystem::path config{"YUME.CFG"};
+	// Native New Classic settings. An empty value derives PODD.CFG beside the
+	// selected Classic config without changing that source-compatible file.
+	std::filesystem::path new_classic_settings{};
 	std::filesystem::path score{"YUME.NEM"};
 	// New Classic's versioned per-character store. An empty value derives
 	// YUME.NEW.NEM beside [score], keeping Classic's 824-byte file untouched.

@@ -35,6 +35,7 @@
 #include "th03/app/new_classic_frontend.hpp"
 #include "th03/app/new_classic_language.hpp"
 #include "th03/app/new_classic_playback.hpp"
+#include "th03/app/new_classic_settings_store.hpp"
 #include "th03/app/replay_slot_store.hpp"
 #include "th03/app/startup_sequence.hpp"
 #include "th03/app/tick_input.hpp"
@@ -506,7 +507,8 @@ void print_usage()
 			"ADPCM-A image with --rhythm-rom, or an authenticated decoded T98 "
 			"profile with --rhythm-pcm; otherwise rhythm is deterministically "
 			"suppressed.\n"
-		<< "PoDD Port stores YUME.CFG, YUME.NEM, and New Classic's REPLAY "
+		<< "PoDD Port stores Classic YUME.CFG/YUME.NEM, New Classic PODD.CFG, "
+			"and New Classic's REPLAY "
 			"directory under --data by default; --config, --score, and "
 			"--replay-root override them for read-only installs.\n"
 		<< "New Classic enables its persistent English option only when the "
@@ -1344,18 +1346,28 @@ ExperienceRunResult run_classic_session(
 	// Authenticate the selected game corpus before creating or recovering a
 	// persistence file. A misspelled/incomplete content root must remain a
 	// read-only startup failure rather than leaving a stray YUME.CFG behind.
-	auto persisted = th03::app::load_classic_config_store(
-		config_path
-	);
-	if(!persisted) {
-		return {.exit_code = fail("config-load", persisted.error())};
+	th03::app::ClassicConfigOptions persisted_options{};
+	if(new_classic) {
+		auto persisted = th03::app::load_new_classic_settings_store(
+			parsed.launch.content.new_classic_settings, config_path
+		);
+		if(!persisted) {
+			return {.exit_code = fail("settings-load", persisted.error())};
+		}
+		persisted_options = persisted->settings.options;
+	} else {
+		auto persisted = th03::app::load_classic_config_store(config_path);
+		if(!persisted) {
+			return {.exit_code = fail("config-load", persisted.error())};
+		}
+		persisted_options = persisted->options;
 	}
 	auto created_session = th03::app::ClassicAudioSession::create({
 		.data_root = data_root,
 		.tick_rate = parsed.tick_rate,
-		.bgm_active = persisted->options.bgm_mode ==
+		.bgm_active = persisted_options.bgm_mode ==
 			th03::app::ClassicBgmMode::fm,
-		.effects_active = !new_classic || persisted->options.sfx_enabled,
+		.effects_active = !new_classic || persisted_options.sfx_enabled,
 		.effects_follow_bgm = !new_classic,
 		.rhythm_rom = std::span<const std::byte>(rhythm_rom),
 		.rhythm_pcm = rhythm_pcm.view(),
@@ -2294,13 +2306,15 @@ ExperienceRunResult run_new_classic_experience(
 		SDL_SCANCODE_COUNT
 	);
 	const auto key_defaults = th03::app::detail::new_classic_default_key_config();
-	auto loaded_options = th03::app::load_classic_config_store(
+	auto loaded_settings = th03::app::load_new_classic_settings_store(
+		parsed.launch.content.new_classic_settings,
 		parsed.launch.content.config
 	);
-	if(!loaded_options) {
-		return {.exit_code = fail("config-load", loaded_options.error())};
+	if(!loaded_settings) {
+		return {.exit_code = fail("settings-load", loaded_settings.error())};
 	}
-	auto config_options = loaded_options->options;
+	auto settings = loaded_settings->settings;
+	auto config_options = settings.options;
 	auto patch_asset_path = parsed.launch.content.replay_patch_assets;
 	if(patch_asset_path.empty()) {
 		patch_asset_path = parsed.launch.content.data_root / "AZINN.DAT";
@@ -2326,10 +2340,11 @@ ExperienceRunResult run_new_classic_experience(
 	if(!english_available &&
 		config_options.language == th03::app::ClassicLanguage::english) {
 		config_options.language = th03::app::ClassicLanguage::japanese;
-		if(auto stored = th03::app::commit_classic_config_store(
-			parsed.launch.content.config, config_options
+		settings.options = config_options;
+		if(auto stored = th03::app::commit_new_classic_settings_store(
+			parsed.launch.content.new_classic_settings, settings
 		); !stored) {
-			return {.exit_code = fail("config-language-fallback", stored.error())};
+			return {.exit_code = fail("settings-language-fallback", stored.error())};
 		}
 	}
 	const auto key_path = parsed.launch.content.config.parent_path() /

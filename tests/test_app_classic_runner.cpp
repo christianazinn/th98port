@@ -18,6 +18,7 @@
 #include "th03/app/classic_runner.hpp"
 #include "th03/app/classic_score_store.hpp"
 #include "th03/app/new_classic_language.hpp"
+#include "th03/app/new_classic_settings_store.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/formats/v13.hpp"
 
@@ -98,6 +99,8 @@ void test_cli()
 		parsed->launch.content.font_rom == "FONT.ROM" &&
 		parsed->launch.content.config ==
 			std::filesystem::path("data-root") / "YUME.CFG" &&
+		parsed->launch.content.new_classic_settings ==
+			std::filesystem::path("data-root") / "PODD.CFG" &&
 		parsed->launch.content.score ==
 			std::filesystem::path("data-root") / "YUME.NEM" &&
 		parsed->replay_root ==
@@ -131,6 +134,7 @@ void test_cli()
 		"--smoke-ticks", "7",
 	});
 	expect(complete && complete->launch.content.config == "c" &&
+		complete->launch.content.new_classic_settings == "PODD.CFG" &&
 		complete->launch.content.score == "s" &&
 		complete->replay_root == "r" &&
 		complete->launch.content.language_overlay == "TH3EN.DAT" &&
@@ -1458,14 +1462,22 @@ bool authentic_gate(
 )
 {
 	TemporaryDirectory temporary;
+	const auto classic_config_path = temporary.path() / "YUME.CFG";
+	const auto new_classic_settings_path = temporary.path() / "PODD.CFG";
+	std::vector<char> original_classic_config{};
 	if(!language_overlay.empty()) {
 		th03::app::ClassicConfigOptions options{};
 		options.language = th03::app::ClassicLanguage::english;
 		if(!th03::app::commit_classic_config_store(
-			temporary.path() / "YUME.CFG", options
+			classic_config_path, options
 		)) {
 			return false;
 		}
+		std::ifstream stream(classic_config_path, std::ios::binary);
+		original_classic_config.assign(
+			std::istreambuf_iterator<char>(stream),
+			std::istreambuf_iterator<char>()
+		);
 	}
 	auto loaded = th03::app::ClassicRunner::load({
 		.content = {
@@ -1476,7 +1488,8 @@ bool authentic_gate(
 			.font_rom = font_rom,
 			.language_overlay = language_overlay,
 			.replay_root = temporary.path() / "REPLAY",
-			.config = temporary.path() / "YUME.CFG",
+			.config = classic_config_path,
+			.new_classic_settings = new_classic_settings_path,
 			.score = temporary.path() / "YUME.NEM",
 		},
 		.seed = 1U,
@@ -1488,6 +1501,18 @@ bool authentic_gate(
 			<< static_cast<unsigned>(loaded.error().code)
 			<< " detail=" << static_cast<unsigned>(loaded.error().detail_code)
 			<< '\n';
+		return false;
+	}
+	const auto migrated_settings =
+		th03::app::load_new_classic_settings_store(
+			new_classic_settings_path, classic_config_path
+		);
+	if(!migrated_settings ||
+		migrated_settings->settings.options.language !=
+			(language_overlay.empty() ?
+				th03::app::ClassicLanguage::japanese :
+				th03::app::ClassicLanguage::english)) {
+		std::cerr << "authentic-script-stage=settings-migration\n";
 		return false;
 	}
 	auto &runner = **loaded;
@@ -1810,7 +1835,7 @@ bool authentic_gate(
 				th03::app::ClassicOpSessionScene::options && last &&
 				last->input_sampled;
 		};
-		for(std::size_t row = 0U; row < 4U; ++row) {
+		for(std::size_t row = 0U; row < 5U; ++row) {
 			if(!step(0x0002U) || !step()) { return false; }
 		}
 		const bool opened_japanese = step(0x0020U);
@@ -1837,7 +1862,30 @@ bool authentic_gate(
 				th03::app::ClassicOpSessionScene::title_menu, 256U
 			);
 		if(!exited_japanese) {
-			std::cerr << "authentic-script-stage=language-japanese\n";
+			std::cerr << "authentic-script-stage=language-japanese"
+				<< " open=" << opened_japanese
+				<< " ready=" << ready_japanese
+				<< " selected=" << selected_language
+				<< " toggled=" << toggled_japanese
+				<< " canceled=" << canceled_japanese
+				<< " refreshed=" << refreshed_before_shrink
+				<< " shrink=" << whole_shrink_uses_japanese << '\n';
+			return false;
+		}
+		const auto stored_before_commit =
+			th03::app::load_new_classic_settings_store(
+				new_classic_settings_path, classic_config_path
+			);
+		std::ifstream classic_stream(classic_config_path, std::ios::binary);
+		const std::vector<char> current_classic_config{
+			std::istreambuf_iterator<char>(classic_stream),
+			std::istreambuf_iterator<char>()
+		};
+		if(!stored_before_commit ||
+			stored_before_commit->settings.options.language !=
+				th03::app::ClassicLanguage::english ||
+			current_classic_config != original_classic_config) {
+			std::cerr << "authentic-script-stage=settings-precommit-isolation\n";
 			return false;
 		}
 		const auto japanese_background = graphics_region_hash(0, 0, 160U, 400U);
@@ -1850,7 +1898,7 @@ bool authentic_gate(
 			std::cerr << "authentic-script-stage=language-english\n";
 			return false;
 		}
-		for(std::size_t row = 0U; row < 4U; ++row) {
+		for(std::size_t row = 0U; row < 5U; ++row) {
 			if(!step(0x0001U) || !step()) { return false; }
 		}
 	}
@@ -1907,6 +1955,22 @@ bool authentic_gate(
 				)
 			) << '\n';
 		return false;
+	}
+	if(!language_overlay.empty()) {
+		const auto stored = th03::app::load_new_classic_settings_store(
+			new_classic_settings_path, classic_config_path
+		);
+		std::ifstream classic_stream(classic_config_path, std::ios::binary);
+		const std::vector<char> current_classic_config{
+			std::istreambuf_iterator<char>(classic_stream),
+			std::istreambuf_iterator<char>()
+		};
+		if(!stored || stored->settings.options.language !=
+			th03::app::ClassicLanguage::english ||
+			current_classic_config != original_classic_config) {
+			std::cerr << "authentic-script-stage=settings-commit-isolation\n";
+			return false;
+		}
 	}
 
 	// Drive the real MAINL splash into its input window, dismiss it, complete
