@@ -9,6 +9,8 @@
 
 namespace th03::app {
 
+enum class ClassicMainlStagePhase : std::uint8_t;
+
 enum class NewClassicPlaybackOwner : std::uint8_t {
 	main,
 	story_stage_splash,
@@ -55,6 +57,13 @@ struct NewClassicReplayPlaybackTestAccess final {
 		const NewClassicReplayPlayback &playback
 	) noexcept;
 	[[nodiscard]] static std::uint32_t preroll_sample_count(
+		const NewClassicReplayPlayback &playback
+	) noexcept;
+	[[nodiscard]] static std::optional<ClassicMainlStagePhase>
+	replay_entry_stage_phase(
+		const NewClassicReplayPlayback &playback
+	) noexcept;
+	[[nodiscard]] static std::uint32_t stage_splash_end_drain_ticks(
 		const NewClassicReplayPlayback &playback
 	) noexcept;
 	[[nodiscard]] static bool put_main_replay_overlay(

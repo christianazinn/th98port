@@ -231,6 +231,27 @@ std::expected<SessionTransition, MainProcessError> process_transition(
 	return registration ? live_interface_input : replay_input;
 }
 
+[[nodiscard]] std::optional<MainlStageResourceRequest> stage_request(
+	const GameInit &resident
+) noexcept
+{
+	const auto player_one = main_player_selection_from_paletted(
+		resident.paletted_character[0U]
+	);
+	const auto player_two = main_player_selection_from_paletted(
+		resident.paletted_character[1U]
+	);
+	if(!player_one || !player_two) {
+		return std::nullopt;
+	}
+	return MainlStageResourceRequest{
+		.player_one = *player_one,
+		.player_two = *player_two,
+		.game_mode = resident.game_mode,
+		.story_stage = resident.story_stage,
+	};
+}
+
 } // namespace
 
 struct NewClassicReplayPlayback::Impl final {
@@ -247,6 +268,7 @@ struct NewClassicReplayPlayback::Impl final {
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
 	std::unique_ptr<MainProcess> process{};
 	std::unique_ptr<MainProcessDriver> driver{};
+	std::unique_ptr<ClassicMainlStageTransition> replay_entry_stage{};
 	std::unique_ptr<ClassicStorySession> story{};
 	std::unique_ptr<ClassicMainlWinScene> vs_win{};
 	present::Tram blank_tram{};
@@ -262,6 +284,7 @@ struct NewClassicReplayPlayback::Impl final {
 	bool preroll_simulating = false;
 	bool suppress_preroll_presentation = true;
 	std::uint32_t preroll_sample_count = 0U;
+	std::uint32_t stage_splash_end_drain_ticks = 0U;
 	bool fast_forward = false;
 	bool reduced_flash = false;
 	NewClassicPlaybackStatus status = NewClassicPlaybackStatus::running;
@@ -280,13 +303,16 @@ struct NewClassicReplayPlayback::Impl final {
 	) const noexcept
 	{
 		PixelOracleSourceIdentity identity{
-			.process = in_mainl ? PixelOracleProcess::mainl :
+			.process = (in_mainl || replay_entry_stage) ?
+				PixelOracleProcess::mainl :
 				PixelOracleProcess::main,
 			.scene = PixelOracleScene::unknown,
 			.logical_sample = sample_index,
 			.replay_global_frame = sample_index,
 		};
-		if(pause_menu) {
+		if(replay_entry_stage) {
+			identity.scene = PixelOracleScene::stage_splash;
+		} else if(pause_menu) {
 			identity.scene = PixelOracleScene::pause;
 		} else if(story) {
 			identity.replay_global_frame = story->source_sample_count();
@@ -339,6 +365,78 @@ struct NewClassicReplayPlayback::Impl final {
 			identity.round_frame = state.round_frame;
 		}
 		return identity;
+	}
+
+	[[nodiscard]] std::expected<void, NewClassicPlaybackError>
+	start_replay_entry_stage(std::size_t checkpoint_index)
+	{
+		if(checkpoint_index >= document.checkpoints.size() || replay_entry_stage ||
+			story || vs_win) {
+			return std::unexpected(playback_error(
+				NewClassicPlaybackErrorCode::replay_contract_failed
+			));
+		}
+		auto resident = document.checkpoints[checkpoint_index].init;
+		resident.runtime_snapshot.reset();
+		resident.compact_runtime_snapshot.reset();
+		resident.round_start_snapshot.reset();
+		resident.practice_rules.reset();
+		const auto request = stage_request(resident);
+		if(!request) {
+			return std::unexpected(playback_error(
+				NewClassicPlaybackErrorCode::invalid_request
+			));
+		}
+		auto resources = loader->load_mainl_stage(*request);
+		if(!resources) {
+			auto error = playback_error(
+				NewClassicPlaybackErrorCode::resource_failed
+			);
+			error.resource = std::move(resources.error());
+			return std::unexpected(std::move(error));
+		}
+		const GameOptions game_options{
+			.input_protocol = InputProtocol::recorded_replay,
+			.three_digit_combos = true,
+		};
+		std::expected<
+			std::unique_ptr<ClassicMainlStageTransition>,
+			ClassicMainlStageError
+		> created = std::unexpected(ClassicMainlStageError{
+			.code = ClassicMainlStageErrorCode::invalid_config,
+		});
+		if(resident.game_mode == game_mode::story) {
+			created = ClassicMainlStageTransition::create(
+				{
+					.resident = resident,
+					.game_options = game_options,
+					.kotohime_compatibility = kotohime_compatibility,
+				},
+				*resources, stage_text, static_content->font()
+			);
+		} else if(resident.game_mode >= game_mode::vs_1p_cpu &&
+			resident.game_mode <= game_mode::vs_cpu_cpu) {
+			created = ClassicMainlStageTransition::create_from_restart(
+				resident, kotohime_compatibility, *resources, stage_text,
+				static_content->font(), game_options,
+				document.metadata ? document.metadata->practice : std::nullopt
+			);
+		}
+		if(!created) {
+			auto error = playback_error(
+				NewClassicPlaybackErrorCode::interstitial_failed
+			);
+			error.interstitial_detail = static_cast<std::uint8_t>(
+				created.error().code
+			);
+			return std::unexpected(std::move(error));
+		}
+		replay_entry_stage = std::move(*created);
+		// MAIN's source start only plays the song prepared by MAINL. The old
+		// direct-MAIN path had to synthesize that load itself; suppress it while
+		// the authentic entry stage owns stop/load/effect preparation.
+		load_song.reset();
+		return {};
 	}
 
 	[[nodiscard]] bool put_replay_overlay() noexcept
@@ -934,6 +1032,14 @@ NewClassicReplayPlayback::load_internal(
 			NewClassicPlaybackErrorCode::surface_failed
 		));
 	}
+	// OP always launches replay playback through MAINL. Even checkpoint zero
+	// first shows the selected character/stage splash; the replay cursor begins
+	// only after its mandatory 32-VSync hold and complete white transition.
+	if(auto started = result->impl_->start_replay_entry_stage(
+		request.checkpoint_index
+	); !started) {
+		return std::unexpected(std::move(started.error()));
+	}
 	return result;
 }
 
@@ -957,6 +1063,41 @@ NewClassicReplayPlayback::advance(
 	if(application_quit_requested) {
 		impl_->status = NewClassicPlaybackStatus::application_quit;
 		return NewClassicPlaybackTick{.status = impl_->status};
+	}
+	if(impl_->replay_entry_stage) {
+		if(abort_requested) {
+			if(!impl_->capture_abort_resident() || !impl_->queue_abort_stop()) {
+				return std::unexpected(playback_error(
+					NewClassicPlaybackErrorCode::replay_contract_failed
+				));
+			}
+			impl_->replay_entry_stage.reset();
+			impl_->status = NewClassicPlaybackStatus::aborted;
+			return NewClassicPlaybackTick{.status = impl_->status};
+		}
+		const bool mandatory_hold_complete =
+			impl_->replay_entry_stage->phase() ==
+				ClassicMainlStagePhase::waiting &&
+			impl_->replay_entry_stage->wait_count() >= 32U;
+		auto advanced = impl_->replay_entry_stage->advance(
+			mandatory_hold_complete
+		);
+		if(!advanced) {
+			auto error = playback_error(
+				NewClassicPlaybackErrorCode::interstitial_failed
+			);
+			error.interstitial_detail = static_cast<std::uint8_t>(
+				advanced.error().code
+			);
+			return std::unexpected(std::move(error));
+		}
+		if(advanced->handoff_ready) {
+			impl_->replay_entry_stage.reset();
+		}
+		return NewClassicPlaybackTick{
+			.surface_changed = true,
+			.status = impl_->status,
+		};
 	}
 	if(abort_requested && impl_->in_mainl &&
 		(impl_->story || impl_->vs_win)) {
@@ -1306,15 +1447,15 @@ NewClassicReplayPlayback::advance(
 		 impl_->story->scene() == ClassicStorySessionScene::game_over);
 	if(impl_->in_mainl && impl_->story && !registration_terminal_ready &&
 		impl_->story->status() ==
-		ClassicStorySessionStatus::running && !(
-			impl_->story->scene() == ClassicStorySessionScene::stage_splash &&
-			impl_->next_process_checkpoint().has_value()
-	)) {
+			ClassicStorySessionStatus::running) {
 		// MAINL_END closes the deterministic replay stream without disabling its
 		// replay-aware interface. Those owners keep receiving the last decoded
 		// sample until MR_DISABLED; only regist_menu() remains on live input.
 		const bool registration = impl_->story->scene() ==
 			ClassicStorySessionScene::high_score_registration;
+		const bool selected_stage_splash = impl_->story->scene() ==
+			ClassicStorySessionScene::stage_splash &&
+			impl_->next_process_checkpoint().has_value();
 		const auto source = mainl_end_input(
 			impl_->mainl_replay_input, live_interface_input, registration
 		);
@@ -1330,6 +1471,12 @@ NewClassicReplayPlayback::advance(
 					*impl_->story
 				).value_or(static_cast<std::uint8_t>(advanced.error().code));
 			return std::unexpected(std::move(error));
+		}
+		// The final recorded interstitial input dismisses the character screen.
+		// Count only the following no-input visual drain so the regression owns
+		// the exact 18 white-out + 18 white-in publication boundaries.
+		if(selected_stage_splash && !advanced->input_sampled) {
+			++impl_->stage_splash_end_drain_ticks;
 		}
 		return NewClassicPlaybackTick{
 			.surface_changed = advanced->surface_changed,
@@ -1408,12 +1555,9 @@ NewClassicReplayPlayback::advance(
 		));
 	}
 	const auto next = impl_->next_process_checkpoint();
-	const bool selected_stage_splash_skip = impl_->story &&
-		impl_->story->scene() == ClassicStorySessionScene::stage_splash &&
-		next.has_value();
 	if((impl_->story && impl_->story->status() !=
 			ClassicStorySessionStatus::complete &&
-			!selected_stage_splash_skip && !registration_terminal_ready) ||
+			!registration_terminal_ready) ||
 		(impl_->vs_win && impl_->vs_win->phase() !=
 			ClassicMainlWinPhase::ready) ||
 		(!impl_->story && !impl_->vs_win && !impl_->terminal_mainl_bypass)) {
@@ -1461,6 +1605,9 @@ NewClassicReplayPlayback::advance(
 std::optional<ClassicAudioCommand>
 NewClassicReplayPlayback::take_audio_command()
 {
+	if(impl_->replay_entry_stage) {
+		return impl_->replay_entry_stage->take_audio_command();
+	}
 	if(impl_->load_song) {
 		auto result = impl_->load_song;
 		impl_->load_song.reset();
@@ -1509,7 +1656,20 @@ NewClassicReplayPlayback::compose_shown_surface(
 		std::unexpected(playback_error(
 			NewClassicPlaybackErrorCode::surface_failed
 		));
-	if(impl_->story) {
+	if(impl_->replay_entry_stage) {
+		auto composed = present::compose_source_surface(
+			output, impl_->replay_entry_stage->raster(),
+			impl_->replay_entry_stage->tram(), impl_->static_content->font()
+		);
+		if(!composed) {
+			auto error = playback_error(
+				NewClassicPlaybackErrorCode::surface_failed
+			);
+			error.surface = std::move(composed.error());
+			return std::unexpected(std::move(error));
+		}
+		surface = *composed;
+	} else if(impl_->story) {
 		auto composed = impl_->story->compose_shown_surface(output);
 		if(!composed) {
 			auto error = playback_error(
@@ -1571,7 +1731,7 @@ bool NewClassicReplayPlayback::fast_forward() const noexcept
 
 std::size_t NewClassicReplayPlayback::fast_forward_step_count() const noexcept
 {
-	if(!impl_->fast_forward) {
+	if(!impl_->fast_forward || impl_->replay_entry_stage) {
 		return 1U;
 	}
 	if(!impl_->in_mainl) {
@@ -1591,6 +1751,9 @@ NewClassicPlaybackOwner NewClassicReplayPlaybackTestAccess::owner(
 ) noexcept
 {
 	const auto &impl = *playback.impl_;
+	if(impl.replay_entry_stage) {
+		return NewClassicPlaybackOwner::story_stage_splash;
+	}
 	if(impl.terminal_mainl_bypass) {
 		return NewClassicPlaybackOwner::terminal_mainl_bypass;
 	}
@@ -1701,6 +1864,24 @@ std::uint32_t NewClassicReplayPlaybackTestAccess::preroll_sample_count(
 ) noexcept
 {
 	return playback.impl_->preroll_sample_count;
+}
+
+std::optional<ClassicMainlStagePhase>
+NewClassicReplayPlaybackTestAccess::replay_entry_stage_phase(
+	const NewClassicReplayPlayback &playback
+) noexcept
+{
+	return playback.impl_->replay_entry_stage ?
+		std::optional{playback.impl_->replay_entry_stage->phase()} :
+		std::nullopt;
+}
+
+std::uint32_t
+NewClassicReplayPlaybackTestAccess::stage_splash_end_drain_ticks(
+	const NewClassicReplayPlayback &playback
+) noexcept
+{
+	return playback.impl_->stage_splash_end_drain_ticks;
 }
 
 bool NewClassicReplayPlaybackTestAccess::put_main_replay_overlay(

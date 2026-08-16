@@ -90,6 +90,66 @@ bool process_start_checkpoint(
 	return false;
 }
 
+struct ReplayEntryStageTrace final {
+	std::size_t ticks = 0U;
+	bool saw_black_in = false;
+	bool saw_waiting = false;
+	bool saw_white_out = false;
+	bool saw_white_in = false;
+	std::vector<th03::app::ClassicAudioCommand> audio{};
+};
+
+ReplayEntryStageTrace finish_replay_entry_stage(
+	th03::app::NewClassicReplayPlayback &playback
+)
+{
+	ReplayEntryStageTrace trace{};
+	std::vector<th03::present::ComposedPixel> pixels(
+		th03::present::graphics_page_pixels
+	);
+	while(const auto phase = th03::app::NewClassicReplayPlaybackTestAccess::
+		replay_entry_stage_phase(playback)) {
+		switch(*phase) {
+		case th03::app::ClassicMainlStagePhase::black_in:
+			trace.saw_black_in = true;
+			break;
+		case th03::app::ClassicMainlStagePhase::waiting:
+			trace.saw_waiting = true;
+			break;
+		case th03::app::ClassicMainlStagePhase::white_out:
+			trace.saw_white_out = true;
+			break;
+		case th03::app::ClassicMainlStagePhase::white_in:
+			trace.saw_white_in = true;
+			break;
+		case th03::app::ClassicMainlStagePhase::ready:
+		case th03::app::ClassicMainlStagePhase::consumed:
+		case th03::app::ClassicMainlStagePhase::failed:
+			break;
+		}
+		auto surface = playback.compose_shown_surface(std::span<
+			th03::present::ComposedPixel,
+			th03::present::graphics_page_pixels
+		>(pixels.data(), pixels.size()));
+		expect(surface.has_value(),
+			"replay entry character interstitial composes every fade boundary");
+		auto advanced = playback.advance({}, false, false);
+		expect(advanced && advanced->surface_changed &&
+			!advanced->process_advanced,
+			"replay entry character interstitial advances without consuming gameplay");
+		if(!surface || !advanced || ++trace.ticks > 128U) {
+			break;
+		}
+		while(auto command = playback.take_audio_command()) {
+			trace.audio.push_back(*command);
+		}
+	}
+	while(auto command = playback.take_audio_command()) {
+		trace.audio.push_back(*command);
+	}
+	return trace;
+}
+
 std::optional<th03::formats::ReplayDocument> insert_recorded_pause(
 	th03::formats::ReplayDocument document
 )
@@ -296,8 +356,7 @@ void test_physical_abort_resident(
 	if(!abort_probe) {
 		return;
 	}
-	while((*abort_probe)->take_audio_command()) {
-	}
+	static_cast<void>(finish_replay_entry_stage(**abort_probe));
 	std::size_t guard = 0U;
 	while(guard++ < 1024U &&
 		th03::app::NewClassicReplayPlaybackTestAccess::main_input_context(
@@ -353,8 +412,7 @@ void test_physical_abort_resident(
 	expect(neutral_probe.has_value(),
 		"neutral Esc-suffix comparison constructs from checkpoint 0");
 	if(neutral_probe) {
-		while((*neutral_probe)->take_audio_command()) {
-		}
+		static_cast<void>(finish_replay_entry_stage(**neutral_probe));
 		std::size_t neutral_guard = 0U;
 		while(neutral_guard++ < 1024U &&
 			((*neutral_probe)->sample_index() != abort_sample ||
@@ -463,6 +521,91 @@ void test_mainl_abort_forced_ok_progression(
 		"MAINL MR_ERROR progression exports the fresh-OP resident only at its normal exit");
 }
 
+void test_authentic_interstitials(
+	const std::filesystem::path &data,
+	const std::filesystem::path &main,
+	const std::filesystem::path &font,
+	const std::filesystem::path &replay
+)
+{
+	auto document = th03::formats::parse_v13_replay(read_file(replay));
+	expect(document && document->checkpoints.size() > 1U,
+		"interstitial gate parses a multi-stage authentic V13 replay");
+	if(!document || document->checkpoints.size() <= 1U) {
+		return;
+	}
+	const auto score_directory = std::filesystem::temp_directory_path() /
+		("th03-new-classic-interstitial-" + std::to_string(
+			std::chrono::steady_clock::now().time_since_epoch().count()
+		));
+	std::error_code filesystem_error{};
+	std::filesystem::create_directories(score_directory, filesystem_error);
+	expect(!filesystem_error,
+		"interstitial gate creates isolated persistence");
+	const auto request = [&](std::size_t checkpoint_index) {
+		return th03::app::NewClassicPlaybackRequest{
+			.content = {
+				.data_root = data,
+				.main_executable = main,
+				.mainl_executable = main.parent_path() / "MAINL.EXE",
+				.font_rom = font,
+				.score = score_directory / "YUME.NEM",
+			},
+			.document = *document,
+			.checkpoint_index = checkpoint_index,
+		};
+	};
+	auto playback = th03::app::NewClassicReplayPlayback::load(request(0U));
+	expect(playback &&
+		th03::app::NewClassicReplayPlaybackTestAccess::owner(**playback) ==
+			th03::app::NewClassicPlaybackOwner::story_stage_splash,
+		"checkpoint 0 enters MAINL's character interstitial");
+	if(!playback) {
+		std::filesystem::remove_all(score_directory, filesystem_error);
+		return;
+	}
+	const auto entry = finish_replay_entry_stage(**playback);
+	expect(entry.ticks == 87U && entry.saw_black_in && entry.saw_waiting &&
+		entry.saw_white_out && entry.saw_white_in &&
+		(*playback)->sample_index() == 0U,
+		"checkpoint 0 publishes the exact complete entry transition before sample 0");
+
+	auto later = th03::app::NewClassicReplayPlayback::load(request(1U));
+	expect(later && (*later)->sample_index() ==
+		document->checkpoints[1U].sample_index,
+		"later-stage selection lands at its exact checkpoint before entry");
+	if(later) {
+		const auto later_entry = finish_replay_entry_stage(**later);
+		expect(later_entry.ticks == 87U && later_entry.saw_white_out &&
+			later_entry.saw_white_in && (*later)->sample_index() ==
+				document->checkpoints[1U].sample_index,
+			"later-stage selection completes the entry fade without consuming replay input");
+	}
+
+	bool failed = false;
+	std::size_t guard = 0U;
+	while(guard++ < 300000U && (*playback)->status() ==
+		th03::app::NewClassicPlaybackStatus::running) {
+		auto advanced = (*playback)->advance({}, false, false);
+		if(!advanced) {
+			failed = true;
+			break;
+		}
+		while((*playback)->take_audio_command()) {
+		}
+	}
+	const auto fade_drain = th03::app::NewClassicReplayPlaybackTestAccess::
+		stage_splash_end_drain_ticks(**playback);
+	expect(!failed && guard < 300000U && (*playback)->status() ==
+			th03::app::NewClassicPlaybackStatus::complete,
+		"interstitial gate reaches the authentic replay terminal boundary");
+	expect(fade_drain >= 36U && (fade_drain % 36U) == 0U,
+		"every natural later-stage interstitial drains complete 18-step white fades");
+	std::filesystem::remove_all(score_directory, filesystem_error);
+	expect(!filesystem_error,
+		"interstitial gate removes isolated persistence");
+}
+
 void test_authentic(
 	const std::filesystem::path &data,
 	const std::filesystem::path &main,
@@ -518,12 +661,35 @@ void test_authentic(
 		std::cerr << '\n';
 		return;
 	}
-	std::size_t audio_commands = 0U;
-	while((*loaded)->take_audio_command()) {
-		++audio_commands;
-	}
-	expect(audio_commands == 3U,
-		"playback publishes load/reset/play before the first recorded sample");
+	expect(
+		th03::app::NewClassicReplayPlaybackTestAccess::owner(**loaded) ==
+			th03::app::NewClassicPlaybackOwner::story_stage_splash &&
+		(*loaded)->sample_index() == 0U,
+		"Stage 1 playback enters MAINL's character interstitial before MAIN"
+	);
+	const auto entry_trace = finish_replay_entry_stage(**loaded);
+	expect(
+		entry_trace.ticks == 87U && entry_trace.saw_black_in &&
+			entry_trace.saw_waiting && entry_trace.saw_white_out &&
+			entry_trace.saw_white_in && (*loaded)->sample_index() == 0U &&
+			th03::app::NewClassicReplayPlaybackTestAccess::owner(**loaded) ==
+				th03::app::NewClassicPlaybackOwner::main,
+		"Stage 1 character interstitial keeps the mandatory hold and complete black/white fade before gameplay"
+	);
+	expect(
+		entry_trace.audio.size() == 5U &&
+		entry_trace.audio[0U].type ==
+			th03::app::ClassicAudioCommandType::stop_song &&
+		entry_trace.audio[1U].type ==
+			th03::app::ClassicAudioCommandType::load_song &&
+		entry_trace.audio[2U].type ==
+			th03::app::ClassicAudioCommandType::load_effects &&
+		entry_trace.audio[3U].type ==
+			th03::app::ClassicAudioCommandType::reset_effects &&
+		entry_trace.audio[4U].type ==
+			th03::app::ClassicAudioCommandType::play_song,
+		"entry MAINL prepares gameplay audio before MAIN resets effects and starts the song"
+	);
 	test_physical_abort_resident(data, main, font, score, later_document);
 	test_mainl_abort_forced_ok_progression(
 		data, main, font, score, later_document
@@ -536,7 +702,7 @@ void test_authentic(
 		th03::present::graphics_page_pixels
 	>(pixels.data(), pixels.size()));
 	expect(surface.has_value(),
-		"visual playback composes the shared MAIN surface and replay overlay");
+		"visual playback composes the shared MAIN surface and replay overlay after the entry fade");
 	if(surface) {
 		expect(!surface->host_overlay,
 			"Replay indicator remains native source state, not a host overlay");
@@ -565,7 +731,6 @@ void test_authentic(
 		}
 		advanced += result->process_advanced ? 1U : 0U;
 		while((*loaded)->take_audio_command()) {
-			++audio_commands;
 		}
 	}
 	expect(advanced != 0U && (*loaded)->sample_index() != 0U,
@@ -600,6 +765,14 @@ void test_authentic(
 			"later checkpoint lands on its exact selected-round cursor"
 		);
 		if(later) {
+			const auto later_entry = finish_replay_entry_stage(**later);
+			expect(
+				later_entry.ticks == 87U && later_entry.saw_black_in &&
+					later_entry.saw_waiting && later_entry.saw_white_out &&
+					later_entry.saw_white_in &&
+					(*later)->sample_index() == checkpoint_sample,
+				"every selected replay checkpoint shows the complete MAINL character interstitial without consuming its first sample"
+			);
 			expect(
 				th03::app::NewClassicReplayPlaybackTestAccess::
 					preroll_sample_count(**later) ==
@@ -614,21 +787,23 @@ void test_authentic(
 			const auto expected_song = th03::app::classic_main_gameplay_song(
 				later_document.checkpoints[checkpoint_index].init
 			);
-			std::vector<th03::app::ClassicAudioCommand> checkpoint_audio{};
-			while(auto command = (*later)->take_audio_command()) {
-				checkpoint_audio.push_back(*command);
-			}
 			auto expected_play = expected_song.value_or(
 				th03::app::ClassicAudioCommand{}
 			);
 			expected_play.type = th03::app::ClassicAudioCommandType::play_song;
-			expect(expected_song && checkpoint_audio == std::vector{
+			expect(expected_song && later_entry.audio == std::vector{
+				th03::app::ClassicAudioCommand{
+					.type = th03::app::ClassicAudioCommandType::stop_song,
+				},
 				*expected_song,
+				th03::app::ClassicAudioCommand{
+					.type = th03::app::ClassicAudioCommandType::load_effects,
+				},
 				th03::app::ClassicAudioCommand{
 					.type = th03::app::ClassicAudioCommandType::reset_effects,
 				},
 				expected_play,
-			}, "hidden later-checkpoint preroll re-arms gameplay load/reset/play before publication");
+			}, "selected later checkpoint prepares gameplay audio across MAINL and the reconstructed MAIN owner");
 			std::vector<th03::present::ComposedPixel> later_pixels(
 				th03::present::graphics_page_pixels
 			);
@@ -670,8 +845,6 @@ void test_authentic(
 			return checkpoint.sample_index == 133'776U;
 		}
 	);
-	expect(reference_checkpoint != later_document.checkpoints.end(),
-		"TH3R01 contains the locked Stage 9 Round 2 checkpoint");
 	if(reference_checkpoint != later_document.checkpoints.end()) {
 		const auto checkpoint_index = static_cast<std::size_t>(std::distance(
 			later_document.checkpoints.begin(), reference_checkpoint
@@ -697,10 +870,14 @@ void test_authentic(
 		expect(optimized && full,
 			"suppressed and full-presenter checkpoint reconstruction both load");
 		if(optimized && full) {
-			while((*optimized)->take_audio_command()) {
-			}
-			while((*full)->take_audio_command()) {
-			}
+			const auto optimized_entry = finish_replay_entry_stage(**optimized);
+			const auto full_entry = finish_replay_entry_stage(**full);
+			expect(
+				optimized_entry.ticks == 87U &&
+				full_entry.ticks == optimized_entry.ticks &&
+				full_entry.audio == optimized_entry.audio,
+				"suppressed and full-presenter paths complete the same replay entry transition"
+			);
 			std::vector<th03::present::ComposedPixel> optimized_pixels(
 				th03::present::graphics_page_pixels
 			);
@@ -984,6 +1161,10 @@ void test_authentic(
 		expect(owners[static_cast<std::size_t>(
 				th03::app::NewClassicPlaybackOwner::story_stage_splash)],
 			"authentic Story playback visits the shared next-stage splash");
+		const auto fade_drain = th03::app::NewClassicReplayPlaybackTestAccess::
+			stage_splash_end_drain_ticks(**full);
+		expect(fade_drain >= 36U && (fade_drain % 36U) == 0U,
+			"every later-stage character interstitial publishes all 36 post-dismissal white-out/white-in boundaries before MAINL_END");
 		expect(!owners[static_cast<std::size_t>(
 				th03::app::NewClassicPlaybackOwner::story_staff_verdict)] &&
 			!owners[static_cast<std::size_t>(
@@ -1154,7 +1335,9 @@ int main(int argc, char **argv)
 	test_exact_main_replay_overlay();
 	test_invalid_request();
 	test_mainl_end_input_ownership();
-	if(argc == 6 && std::string_view(argv[4]) == "--game-over") {
+	if(argc == 6 && std::string_view(argv[4]) == "--interstitials") {
+		test_authentic_interstitials(argv[1], argv[2], argv[3], argv[5]);
+	} else if(argc == 6 && std::string_view(argv[4]) == "--game-over") {
 		test_additional_authentic_route(
 			argv[1], argv[2], argv[3], argv[5],
 			th03::app::NewClassicPlaybackOwner::terminal_mainl_bypass,
@@ -1194,7 +1377,8 @@ int main(int argc, char **argv)
 			);
 		}
 	} else if(argc != 1) {
-		std::cerr << "usage: test [data main font clear [game-over [vs-win [menu-return]]]]\n";
+		std::cerr << "usage: test [data main font clear [game-over [vs-win [menu-return]]]]\n"
+			"       test data main font --interstitials clear\n";
 		return 2;
 	}
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

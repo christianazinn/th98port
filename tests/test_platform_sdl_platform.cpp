@@ -248,6 +248,36 @@ void test_dummy_platform_lifecycle_and_present()
 
 	{
 		auto created = SdlPlatform::create(SdlPlatformConfig{
+			.title = "persisted startup presentation",
+			.initial_window_presentation = SdlWindowPresentation{
+				.mode = SdlWindowMode::windowed,
+				.integer_scale = 2U,
+				.filtering = th03::platform::SdlFiltering::linear,
+			},
+			.hidden = true,
+		});
+		expect(static_cast<bool>(created),
+			"persisted presentation applies during hidden window construction");
+		if(created) {
+			const auto metrics = SdlPlatformTestAccess::metrics(**created);
+			expect(
+				metrics && metrics->output_width == 1280U &&
+					metrics->output_height == 800U &&
+					metrics->texture_scale_mode == SDL_SCALEMODE_LINEAR &&
+					(*created)->window_presentation() == SdlWindowPresentation{
+						.mode = SdlWindowMode::windowed,
+						.integer_scale = 2U,
+						.filtering = th03::platform::SdlFiltering::linear,
+					},
+				"the first visible frame inherits saved size, aspect, and filtering"
+			);
+		}
+	}
+	expect(SDL_SetHint(SDL_HINT_RENDER_VSYNC, "0"),
+		"test restores the conflicting renderer VSync hint after startup-policy teardown");
+
+	{
+		auto created = SdlPlatform::create(SdlPlatformConfig{
 			.title = "th03 SDL dummy test",
 			.initial_width = 640U,
 			.initial_height = 400U,

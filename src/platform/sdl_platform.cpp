@@ -554,11 +554,6 @@ SdlPlatform::create(const SdlPlatformConfig &config)
 			SdlPlatformErrorCode::texture_failed
 		));
 	}
-	if(!config.hidden && !SDL_ShowWindow(impl->window)) {
-		return std::unexpected(error_with_sdl_detail(
-			SdlPlatformErrorCode::window_setup_failed
-		));
-	}
 	if(!config.oracle_log_path.empty()) {
 		const std::filesystem::path log_path{
 			std::string{config.oracle_log_path}
@@ -621,7 +616,22 @@ SdlPlatform::create(const SdlPlatformConfig &config)
 		impl->oracle_hash_lease = true;
 	}
 
-	return std::unique_ptr<SdlPlatform>{new SdlPlatform{std::move(impl)}};
+	auto platform = std::unique_ptr<SdlPlatform>{
+		new SdlPlatform{std::move(impl)}
+	};
+	if(config.initial_window_presentation) {
+		if(auto applied = platform->apply_window_presentation(
+			*config.initial_window_presentation
+		); !applied) {
+			return std::unexpected(std::move(applied.error()));
+		}
+	}
+	if(!config.hidden && !SDL_ShowWindow(platform->impl_->window)) {
+		return std::unexpected(error_with_sdl_detail(
+			SdlPlatformErrorCode::window_setup_failed
+		));
+	}
+	return platform;
 }
 
 std::expected<SdlPresentResult, SdlPlatformError> SdlPlatform::present(

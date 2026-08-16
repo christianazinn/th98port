@@ -2576,10 +2576,20 @@ std::expected<
 		th03::platform::SdlInputMapper
 	>,
 	int
-> create_product_platform(bool force_hidden = false)
+> create_product_platform(
+	bool force_hidden = false,
+	std::optional<th03::app::NewClassicWindowPresentation>
+		initial_presentation = std::nullopt
+)
 {
+	auto config = platform_config(force_hidden);
+	if(initial_presentation) {
+		config.initial_window_presentation = platform_window_presentation(
+			*initial_presentation
+		);
+	}
 	auto platform = th03::platform::SdlPlatform::create(
-		platform_config(force_hidden)
+		config
 	);
 	if(!platform) {
 		return std::unexpected(fail("platform-create", platform.error()));
@@ -2721,7 +2731,21 @@ ExperienceRunResult run_new_classic_experience(
 
 int run_classic(th03::app::ClassicCliRequest parsed)
 {
-	auto product = create_product_platform(parsed.capture_replay.has_value());
+	std::optional<th03::app::NewClassicWindowPresentation>
+		initial_presentation{};
+	if(parsed.mode == th03::app::ClassicLaunchMode::new_classic) {
+		auto settings = th03::app::load_new_classic_settings_store(
+			parsed.launch.content.new_classic_settings,
+			parsed.launch.content.config
+		);
+		if(!settings) {
+			return fail("settings-load", settings.error());
+		}
+		initial_presentation = settings->settings.window;
+	}
+	auto product = create_product_platform(
+		parsed.capture_replay.has_value(), initial_presentation
+	);
 	if(!product) {
 		return product.error();
 	}
@@ -2743,7 +2767,16 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 
 int run_product_shell(th03::app::ClassicCliRequest parsed)
 {
-	auto product = create_product_platform();
+	auto settings = th03::app::load_new_classic_settings_store(
+		parsed.launch.content.new_classic_settings,
+		parsed.launch.content.config
+	);
+	if(!settings) {
+		return fail("settings-load", settings.error());
+	}
+	auto product = create_product_platform(
+		false, settings->settings.window
+	);
 	if(!product) {
 		return product.error();
 	}

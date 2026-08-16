@@ -79,6 +79,10 @@ struct SdlPlatformConfig {
 	std::string_view title{th03_product_window_title};
 	std::uint32_t initial_width = 640U;
 	std::uint32_t initial_height = 400U;
+	// Applied while the SDL window is still hidden. This prevents the first
+	// visible source frame from briefly appearing at the default 640x400 size
+	// before a persisted presentation policy takes effect.
+	std::optional<SdlWindowPresentation> initial_window_presentation{};
 	bool hidden = false;
 	// Optional developer-only TSV path. Every successful publication records
 	// source-domain and complete host-input hashes for PC-98 visual-oracle
