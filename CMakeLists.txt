@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 project(th03_port VERSION 0.1.0 LANGUAGES C CXX)
 
 include(CTest)
+find_package(Threads REQUIRED)
 
 option(TH03_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 option(TH03_ENABLE_SDL "Build the optional SDL 3 platform adapter" OFF)
@@ -567,6 +568,7 @@ add_library(th03_app_main STATIC
 	src/app/new_classic_language.cpp
 	src/app/new_classic_messages.cpp
 	src/app/new_classic_online_client.cpp
+	src/app/new_classic_online_task.cpp
 	src/app/new_classic_playback.cpp
 	src/app/new_classic_practice.cpp
 	src/app/new_classic_replay.cpp
@@ -579,6 +581,7 @@ target_link_libraries(
 	th03_app_main
 	PUBLIC th03_app_resources th03_app_content th03_app_persistence
 		th03_app_runtime th03_app_story_route th03_audio_pmd th03_formats
+		Threads::Threads
 )
 target_compile_features(th03_app_main PUBLIC cxx_std_23)
 set_target_properties(th03_app_main PROPERTIES CXX_EXTENSIONS OFF)
@@ -630,6 +633,9 @@ if(TH03_ENABLE_SDL)
 		apps/th03-app/main.cpp
 	)
 	target_link_libraries(th03-app PRIVATE th03_app_main th03_platform_sdl)
+	if(WIN32)
+		target_link_libraries(th03-app PRIVATE th03_platform_windows_online)
+	endif()
 	target_include_directories(th03-app PRIVATE apps/th03-app)
 	th03_set_warnings(th03-app)
 	th03_stage_sdl3_runtime(th03-app)
@@ -828,6 +834,20 @@ if(BUILD_TESTING)
 
 	add_executable(th03-app-new-classic-online-client-tests
 		tests/test_app_new_classic_online_client.cpp
+	)
+	add_executable(th03-app-new-classic-online-task-tests
+		tests/test_app_new_classic_online_task.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-online-task-tests PRIVATE th03_app_main
+	)
+	target_compile_features(
+		th03-app-new-classic-online-task-tests PRIVATE cxx_std_23
+	)
+	th03_set_warnings(th03-app-new-classic-online-task-tests)
+	add_test(
+		NAME th03-app-new-classic-online-task-tests
+		COMMAND th03-app-new-classic-online-task-tests
 	)
 
 	if(WIN32)

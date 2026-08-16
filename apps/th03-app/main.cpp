@@ -35,6 +35,7 @@
 #include "th03/app/new_classic_language.hpp"
 #include "th03/app/new_classic_online_client.hpp"
 #include "th03/app/new_classic_online_store.hpp"
+#include "th03/app/new_classic_online_task.hpp"
 #include "th03/app/new_classic_playback.hpp"
 #include "th03/app/new_classic_settings_store.hpp"
 #include "th03/app/replay_slot_store.hpp"
@@ -44,6 +45,9 @@
 #include "th03/platform/sdl_input.hpp"
 #include "th03/platform/sdl_audio_device.hpp"
 #include "th03/platform/sdl_platform.hpp"
+#if defined(_WIN32)
+#include "th03/platform/windows_online.hpp"
+#endif
 
 namespace {
 
@@ -54,6 +58,7 @@ constexpr const char *pixel_oracle_identity_environment =
 	"TH03_PIXEL_ORACLE_IDENTITY_LOG";
 constexpr const char *pixel_oracle_fixture_environment =
 	"TH03_PIXEL_ORACLE_FIXTURE_SHA256";
+constexpr const char *online_origin_environment = "TH03_ONLINE_ORIGIN";
 
 struct PixelOracleIdentityOutput final {
 	std::ofstream stream{};
@@ -1474,9 +1479,15 @@ ExperienceRunResult run_classic_session(
 	auto active_joy_config = parsed.launch.new_classic_joy_config;
 	auto active_device_assignment =
 		parsed.launch.new_classic_device_assignment;
+	const auto online_root =
+		new_classic_settings_path.parent_path() / "ONLINE";
+#if defined(_WIN32)
+	std::optional<th03::platform::WindowsOnlineTransport> online_transport{};
+#endif
+	// The platform transport must outlive the worker that refers to it.
+	std::optional<th03::app::NewClassicOnlineBoardRefreshTask>
+		online_refresh_task{};
 	if(new_classic) {
-		const auto online_root =
-			new_classic_settings_path.parent_path() / "ONLINE";
 		for(std::uint8_t rank = 0U; rank < 4U; ++rank) {
 			for(std::uint8_t character = 0U; character < 9U; ++character) {
 				const th03::app::NewClassicOnlineCategory category{
@@ -1550,6 +1561,61 @@ ExperienceRunResult run_classic_session(
 			return {.exit_code = fail("config-load", persisted.error())};
 		}
 		persisted_options = persisted->options;
+	}
+	if(new_classic) {
+		if(const auto origin = environment_value(online_origin_environment)) {
+			if(platform.oracle_enabled() || parsed.capture_replay) {
+				std::cerr << "status=warning\nstage=online-refresh-start\n"
+					"code=disabled-during-capture\n";
+#if defined(_WIN32)
+			} else if(auto created =
+				th03::platform::create_windows_online_transport(*origin)) {
+				std::error_code directory_error{};
+				std::filesystem::create_directories(
+					online_root, directory_error
+				);
+				if(directory_error) {
+					std::cerr << "status=warning\nstage=online-refresh-start\n"
+						"code=cache-directory\nsystem="
+						<< directory_error.value() << '\n';
+				} else {
+					online_transport.emplace(std::move(*created));
+					std::vector<th03::app::NewClassicOnlineCategory> categories{};
+					categories.reserve(9U);
+					const auto rank = static_cast<std::uint8_t>(
+						persisted_options.rank
+					);
+					for(std::uint8_t character = 0U; character < 9U; ++character) {
+						categories.push_back({
+							.mode = th03::app::NewClassicOnlineMode::story,
+							.rank = rank,
+							.character = character,
+						});
+					}
+					auto started =
+						th03::app::start_new_classic_online_board_refresh(
+							std::move(categories), online_root,
+							online_transport->transport()
+						);
+					if(started) {
+						online_refresh_task.emplace(std::move(*started));
+					} else {
+						std::cerr << "status=warning\n"
+							"stage=online-refresh-start\ncode="
+							<< static_cast<unsigned>(started.error().code) << '\n';
+						online_transport.reset();
+					}
+				}
+			} else {
+				std::cerr << "status=warning\nstage=online-refresh-start\ncode="
+					<< static_cast<unsigned>(created.error().code) << '\n';
+#else
+			} else {
+				std::cerr << "status=warning\nstage=online-refresh-start\n"
+					"code=platform-unavailable\n";
+#endif
+			}
+		}
 	}
 	auto created_session = th03::app::ClassicAudioSession::create({
 		.data_root = data_root,
@@ -1662,6 +1728,38 @@ ExperienceRunResult run_classic_session(
 		audio_focus_muted = desired;
 	};
 	while((*runner)->status() == th03::app::ClassicRunnerStatus::running) {
+		if(online_refresh_task) {
+			while(auto refreshed = online_refresh_task->take_completed()) {
+				if(refreshed->error) {
+					std::cerr << "status=warning\nstage=online-refresh\nrank="
+						<< static_cast<unsigned>(refreshed->category.rank)
+						<< "\ncharacter="
+						<< static_cast<unsigned>(refreshed->category.character)
+						<< "\ncode="
+						<< static_cast<unsigned>(refreshed->error->code) << '\n';
+					continue;
+				}
+				if(!refreshed->document) {
+					std::cerr << "status=warning\nstage=online-refresh\n"
+						"code=missing-result\n";
+					continue;
+				}
+				if(auto merged = (*runner)->merge_new_classic_online_board(
+					std::move(*refreshed->document)
+				); !merged) {
+					std::cerr << "status=warning\nstage=online-refresh-merge\n"
+						"code=" << static_cast<unsigned>(merged.error().code)
+						<< '\n';
+				}
+			}
+			if(online_refresh_task->finished()) {
+				if(online_refresh_task->worker_failed()) {
+					std::cerr << "status=warning\nstage=online-refresh\n"
+						"code=worker-failed\n";
+				}
+				online_refresh_task.reset();
+			}
+		}
 		const auto cutoff = th03::platform::sdl_ticks_now_ns();
 		if(!retry_blocked_event) {
 			auto result = mapper.pump_events(*scheduler, false);

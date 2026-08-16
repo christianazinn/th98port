@@ -273,6 +273,8 @@ struct ClassicOpSessionBackendOperations final {
 	std::expected<void, ClassicOpSessionError> (*finish_vs_win)(void *) = nullptr;
 	std::expected<void, ClassicOpSessionError>
 	(*start_direct_vs_selection)(void *) = nullptr;
+	std::expected<void, ClassicOpSessionError>
+	(*merge_online_board)(void *, NewClassicOnlineCacheDocument) = nullptr;
 	bool (*audio_pending)(void *) = nullptr;
 	std::optional<ClassicAudioCommand> (*take_audio_command)(void *) = nullptr;
 	std::optional<PixelOracleSourceIdentity>
@@ -350,6 +352,8 @@ public:
 	[[nodiscard]] std::optional<bool> take_mute_when_unfocused_update() noexcept;
 	[[nodiscard]] std::optional<NewClassicWindowPresentation>
 	take_window_presentation_update() noexcept;
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	merge_online_board(NewClassicOnlineCacheDocument document);
 	[[nodiscard]] std::shared_ptr<const NewClassicReplaySaveArt>
 	replay_save_art() const noexcept;
 	[[nodiscard]] std::expected<

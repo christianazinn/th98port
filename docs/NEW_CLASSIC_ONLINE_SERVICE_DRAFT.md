@@ -1,8 +1,9 @@
 # New Classic online leaderboard and replay service
 
 Status: **local foundation, strict client/cache projection, platform-neutral
-transactions, disabled Windows adapter, and cached leaderboard UI implemented;
-production deployment and live client actions pending**
+transactions, disabled Windows adapter, cached leaderboard UI, and opt-in
+background board refresh implemented; production deployment and account/replay
+actions pending**
 
 Decision date: 2026-08-15
 
@@ -314,3 +315,19 @@ replay actions. Cache files are loaded before deterministic session ownership;
 the menu itself is immutable and never performs filesystem or network work.
 With no valid active-rank cache, the direct local HiScore route remains exactly
 as before.
+
+Session 202 adds the first asynchronous production transaction owner. No
+endpoint is compiled into the application: only an explicit
+`TH03_ONLINE_ORIGIN=https://...` enables refresh, and Classic, replay capture,
+and pixel-oracle runs never start it. The Windows worker sequentially refreshes
+the nine Story boards for the configured rank through the existing bounded
+HTTPS transport. Each response is validated and atomically cached off the
+source thread; complete immutable documents are merged only between host-loop
+iterations and become visible on the next HiScore entry. Network, cache, and
+allocator failures are warnings and cannot interrupt local play. The transport
+outlives and is joined after its worker, and unexpected worker exceptions fail
+closed instead of escaping the thread.
+
+This is deliberately a deployment seam rather than a hidden public endpoint.
+Enrollment, upload consent, `My Records`, replay download/watch actions, real
+Cloudflare resources, and the pinned Container adapter remain pending.

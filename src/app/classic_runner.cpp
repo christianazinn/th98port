@@ -795,6 +795,26 @@ ClassicRunner::take_new_classic_window_presentation_update() noexcept
 	) : std::nullopt;
 }
 
+std::expected<void, ClassicRunnerError>
+ClassicRunner::merge_new_classic_online_board(
+	NewClassicOnlineCacheDocument document
+)
+{
+	if(!impl_ || impl_->experience != ExperienceProfile::new_classic ||
+		impl_->operations.consume != &consume_session) {
+		return std::unexpected(runner_error(
+			ClassicRunnerErrorCode::invalid_request
+		));
+	}
+	auto merged = static_cast<ClassicOpSession *>(
+		impl_->operations.context
+	)->merge_online_board(std::move(document));
+	if(!merged) {
+		return std::unexpected(session_error(merged.error()));
+	}
+	return {};
+}
+
 std::shared_ptr<const NewClassicReplaySaveArt>
 ClassicRunner::new_classic_replay_save_art() const noexcept
 {

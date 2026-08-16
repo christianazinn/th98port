@@ -3647,6 +3647,29 @@ struct ClassicOpSessionBackend final {
 		return high_score_menu != nullptr;
 	}
 
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	merge_online_board(NewClassicOnlineCacheDocument document)
+	{
+		if(!document.board_category ||
+			!validate_new_classic_online_cache(document)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		const auto existing = std::ranges::find_if(
+			online_boards,
+			[&document](const NewClassicOnlineCacheDocument &candidate) {
+				return candidate.board_category == document.board_category;
+			}
+		);
+		if(existing == online_boards.end()) {
+			online_boards.push_back(std::move(document));
+		} else {
+			*existing = std::move(document);
+		}
+		return {};
+	}
+
 	[[nodiscard]] bool audio_pending() const noexcept
 	{
 		return audio_count != 0U;
@@ -4098,6 +4121,12 @@ Result backend_call(void *context, Method method, Args &&...args)
 		.start_direct_vs_selection = [](void *context) {
 			return backend_call<std::expected<void, ClassicOpSessionError>>(
 				context, &ClassicOpSessionBackend::start_direct_vs_selection
+			);
+		},
+		.merge_online_board = [](void *context, auto document) {
+			return backend_call<std::expected<void, ClassicOpSessionError>>(
+				context, &ClassicOpSessionBackend::merge_online_board,
+				std::move(document)
 			);
 		},
 		.audio_pending = [](void *context) {
@@ -4677,6 +4706,19 @@ ClassicOpSession::take_window_presentation_update() noexcept
 	return static_cast<ClassicOpSessionBackend *>(
 		impl_->operations.context
 	)->take_window_presentation_update();
+}
+
+std::expected<void, ClassicOpSessionError>
+ClassicOpSession::merge_online_board(NewClassicOnlineCacheDocument document)
+{
+	if(!impl_ || !impl_->operations.merge_online_board) {
+		return std::unexpected(session_error(
+			ClassicOpSessionErrorCode::backend_contract_failed
+		));
+	}
+	return impl_->operations.merge_online_board(
+		impl_->operations.context, std::move(document)
+	);
 }
 
 std::shared_ptr<const NewClassicReplaySaveArt>

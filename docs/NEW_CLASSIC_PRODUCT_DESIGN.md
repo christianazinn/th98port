@@ -461,9 +461,11 @@ deterministic package hashes, and representative screen snapshots.
 ### 8. HiScore/Replay hubs and online domain seam
 
 Status: domain/cache boundary complete in session 189. Session 201 adds the
-read-only HiScore hub and source-styled cached online board/detail view. The
-hub remains absent when no active-rank cache exists. Replay navigation and
-live network actions remain deferred.
+read-only HiScore hub and source-styled cached online board/detail view.
+Session 202 adds disabled-by-default asynchronous refresh of the active rank's
+nine Story boards. The hub remains absent when no active-rank cache exists.
+Replay navigation, account mutation, upload, and download actions remain
+deferred.
 
 - Define leaderboard/replay identifiers, category keys, provenance, and local
   cache documents without selecting a service vendor.
@@ -482,6 +484,14 @@ explicit replay-verified versus curated-legacy provenance, and a bounded
 atomic offline cache. It contains no endpoint, credential, provider name, or
 network transport. The HiScore owner consumes only already-validated snapshots;
 it performs no filesystem or network work on source-time ticks.
+
+The application may be given one explicit HTTPS origin through
+`TH03_ONLINE_ORIGIN`. With that opt-in, one bounded worker refreshes complete
+board snapshots outside source time and the runner adopts them only between
+host iterations. The currently visible HiScore owner remains immutable; fresh
+data appears after returning to and re-entering HiScore. Captures and Classic
+never enable this path, and an absent origin preserves the entirely offline
+product.
 
 ### 9. Server and sharing
 

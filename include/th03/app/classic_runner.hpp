@@ -230,6 +230,11 @@ public:
 	take_new_classic_mute_when_unfocused_update() noexcept;
 	[[nodiscard]] std::optional<NewClassicWindowPresentation>
 	take_new_classic_window_presentation_update() noexcept;
+	// Host-owned online work may complete between logical ticks. This replaces
+	// one validated immutable board for a later HiScore entry; it never mutates
+	// an already-visible menu and performs no filesystem or network work.
+	[[nodiscard]] std::expected<void, ClassicRunnerError>
+	merge_new_classic_online_board(NewClassicOnlineCacheDocument document);
 	[[nodiscard]] std::shared_ptr<const NewClassicReplaySaveArt>
 	new_classic_replay_save_art() const noexcept;
 

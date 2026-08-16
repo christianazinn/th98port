@@ -269,6 +269,14 @@ board by value, but New Classic then writes only `YUME.NEW.NEM`; Classic's
 824-byte `YUME.NEM` remains unchanged. Live Story time is checkpointed on
 registration, Continue, menu return, restart, and application exit, while
 Demo, Practice, and replay playback remain excluded.
+Validated cached Story leaderboards can add `Online Leaderboards` to the New
+Classic HiScore hub. A deployment or developer may set
+`TH03_ONLINE_ORIGIN=https://...` to refresh the configured rank's nine boards
+on one bounded background worker; no endpoint is built in, and an absent value
+keeps the product wholly offline. Cache and network work never run on a source
+tick, captures disable refresh, and complete results appear only after the
+player leaves and re-enters HiScore. Enrollment, replay upload/download, and
+production Cloudflare resources remain intentionally unavailable.
 The private `tools\th03-private-editor` utility provides direct migration:
 it accepts an original 824-byte PC-98 scorefile or Replay Patch 0.4.12's exact
 7,812-byte expanded file, validates it, backs up any current native score, and

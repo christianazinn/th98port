@@ -1108,6 +1108,19 @@ bool authentic_online_high_score_gate(
 		return false;
 	}
 	auto &runner = **loaded;
+	auto refreshed_board = online_high_score_board();
+	refreshed_board.generation = 2U;
+	refreshed_board.leaderboard_entries.front().player = "BETA";
+	if(!runner.merge_new_classic_online_board(std::move(refreshed_board))) {
+		std::cerr << "online HiScore board merge failed\n";
+		return false;
+	}
+	auto invalid_board = online_high_score_board();
+	invalid_board.board_category.reset();
+	if(runner.merge_new_classic_online_board(std::move(invalid_board))) {
+		std::cerr << "invalid online HiScore board merge was accepted\n";
+		return false;
+	}
 	std::array<
 		th03::present::ComposedPixel,
 		th03::present::graphics_page_pixels
