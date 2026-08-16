@@ -143,6 +143,8 @@ public:
 	void resume() noexcept;
 	void fade(std::int8_t speed) noexcept;
 	void set_volume(std::uint8_t volume) noexcept;
+	// Product category gains are linear-amplitude percentages in 5% steps.
+	// The driver translates them into each YM2608 lane's native level domain.
 	std::expected<void, PmdOpnaError> set_user_volumes(
 		std::uint8_t music_percent,
 		std::uint8_t effect_percent

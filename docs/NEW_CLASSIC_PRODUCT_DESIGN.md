@@ -140,6 +140,14 @@ Percentages use 5% increments. Zero percent has the existing disabled
 semantics; raising a value above zero re-enables that category. At 100%, the
 current source-faithful PMD/OPNA sample stream must remain unchanged.
 
+The displayed value is a linear audible-amplitude percentage. The final PCM
+Master gain and ADPCM-B lane can apply that value directly. FM and rhythm
+total-level codes and fixed SSG levels are logarithmic, so the PMD adapter
+converts each 5% step to the nearest native attenuation instead of multiplying
+the register code. In particular, 75% FM uses three 0.75 dB steps (about 77%
+amplitude), rather than the roughly 48 dB cut produced by the original
+incorrect register multiplication.
+
 Master volume remains a final native output gain. Independent Music and SFX
 gain is implemented inside the shared PMD driver, before song parts and the
 external FM effect part converge on the one YM2608. This preserves source
@@ -425,6 +433,10 @@ return-to-menu paths are complete.
 Status: complete in session 184. New Classic persists and applies independent
 5%-step Music and Sound FX levels; Classic remains on the exact 100% path and
 its original On/Off UI.
+
+Session 204 corrected the intermediate gain curve: percentages now express
+linear amplitude and are translated to each YM2608 lane's logarithmic level
+domain. Unity remains an exact control-flow bypass.
 
 The implementation places category gain at the shared PMD ownership seam
 without altering PMD fades, effect priority, channel takeover, pause/resume,

@@ -357,7 +357,8 @@ bool th03_pmd_set_user_volumes(
 )
 {
 	if(!handle || !handle->started || music_percent > 100U ||
-		effect_percent > 100U) {
+		effect_percent > 100U || (music_percent % 5U) != 0U ||
+		(effect_percent % 5U) != 0U) {
 		return false;
 	}
 	pmd_set_user_volumes(

@@ -868,7 +868,8 @@ std::expected<void, PmdOpnaError> PmdOpnaEngine::set_user_volumes(
 	std::uint8_t effect_percent
 ) noexcept
 {
-	if(music_percent > 100U || effect_percent > 100U) {
+	if(music_percent > 100U || effect_percent > 100U ||
+		(music_percent % 5U) != 0U || (effect_percent % 5U) != 0U) {
 		return std::unexpected(PmdOpnaError{
 			.code = PmdOpnaErrorCode::invalid_volume,
 			.supplied_size = std::max(music_percent, effect_percent),

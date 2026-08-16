@@ -45,6 +45,7 @@ enum {
 
 // 0790: PPZ8
 
+static uint8_t pmd_user_fm_level(uint8_t level, uint8_t percent);
 
 static uint8_t pmd_adpcm_freq2key(uint16_t freq) {
   if (!freq) return 0x00;
@@ -322,7 +323,7 @@ static void pmd_reset_opna(
   }
   work->opna_writereg(work, 0x11,
     pmd->user_music_percent < 100 ?
-      ((uint16_t)pmd->opnarhythm_tl * pmd->user_music_percent) / 100 :
+      pmd_user_fm_level(pmd->opnarhythm_tl, pmd->user_music_percent) :
       pmd->opnarhythm_tl);
   // 11a0
   // adpcm: set limit address to 0xffff
@@ -439,7 +440,7 @@ static void pmd_opnarhythm_tl_write(
     outvol = ((uint16_t)vol * (0x100-outvol)) >> 8;
   }
   if (pmd->user_music_percent < 100) {
-    outvol = ((uint16_t)outvol * pmd->user_music_percent) / 100;
+    outvol = pmd_user_fm_level(outvol, pmd->user_music_percent);
   }
   work->opna_writereg(work, 0x11, outvol);
 }
@@ -1531,6 +1532,36 @@ static void pmd_fm_vol_out_sub(
   }
 }
 
+/* TH03 extraction: the user-facing percentages describe audible amplitude,
+ * not the numeric value of a chip level register. FM total level and OPNA
+ * rhythm total level use approximately 0.75 dB per step. These nearest-step
+ * values therefore implement 5%-step linear-amplitude controls without the
+ * severe attenuation caused by multiplying PMD's pre-inversion volume byte.
+ * Zero remains an explicit mute, and 100 remains an exact no-op. */
+static uint8_t pmd_user_fm_level(uint8_t level, uint8_t percent) {
+  static const uint8_t attenuation[21] = {
+    0xff, 35, 27, 22, 19, 16, 14, 12, 11, 9, 8,
+    7, 6, 5, 4, 3, 3, 2, 1, 1, 0
+  };
+  if (!percent) return 0;
+  if (percent >= 100) return level;
+  uint8_t const steps = attenuation[percent / 5];
+  return level > steps ? level - steps : 0;
+}
+
+/* Fixed SSG levels are much coarser, at roughly 3 dB per step. Choose the
+ * nearest available level to the requested linear amplitude. */
+static uint8_t pmd_user_ssg_level(uint8_t level, uint8_t percent) {
+  static const uint8_t attenuation[21] = {
+    0xff, 9, 7, 6, 5, 4, 4, 3, 3, 2, 2,
+    2, 2, 1, 1, 1, 1, 1, 0, 0, 0
+  };
+  if (!percent) return 0;
+  if (percent >= 100) return level;
+  uint8_t const steps = attenuation[percent / 5];
+  return level > steps ? level - steps : 0;
+}
+
 // 2a38
 static void pmd_fm_vol_out(
   struct fmdriver_work *work,
@@ -1557,10 +1588,10 @@ static void pmd_fm_vol_out(
       vol = (vol * fadeout) >> 8;
     }
     if (pmd->user_music_percent < 100) {
-      vol = ((uint16_t)vol * pmd->user_music_percent) / 100;
+      vol = pmd_user_fm_level(vol, pmd->user_music_percent);
     }
   } else if (pmd->user_effect_percent < 100) {
-    vol = ((uint16_t)vol * pmd->user_effect_percent) / 100;
+    vol = pmd_user_fm_level(vol, pmd->user_effect_percent);
   }
   // 2a72
   // 4, 3, 2, 1
@@ -1671,7 +1702,7 @@ static void pmd_ssg_vol_out(
     }
   }
   if (pmd->user_music_percent < 100) {
-    vol = ((uint16_t)vol * pmd->user_music_percent) / 100;
+    vol = pmd_user_ssg_level(vol, pmd->user_music_percent);
   }
   // 2c0f
   work->opna_writereg(work, 0x07+pmd->proc_ch, vol);
@@ -2886,7 +2917,7 @@ static void pmd_cmde8_opnarhythm_tl(
   }
     work->opna_writereg(work, 0x11,
       pmd->user_music_percent < 100 ?
-        ((uint16_t)tl * pmd->user_music_percent) / 100 : tl);
+        pmd_user_fm_level(tl, pmd->user_music_percent) : tl);
 }
 
 // 23e7
@@ -2914,7 +2945,7 @@ static void pmd_cmde6_opnarhythm_tl_rel(
   }
   work->opna_writereg(work, 0x11,
     pmd->user_music_percent < 100 ?
-      ((uint16_t)tl * pmd->user_music_percent) / 100 : tl);
+      pmd_user_fm_level(tl, pmd->user_music_percent) : tl);
 }
 
 // 2695
@@ -5338,7 +5369,8 @@ void pmd_set_user_volumes(
   uint8_t const saved_ch = pmd->proc_ch;
   bool const music_changed = pmd->user_music_percent != music_percent;
   bool const effect_changed = pmd->user_effect_percent != effect_percent;
-  if (music_percent > 100 || effect_percent > 100) return;
+  if (music_percent > 100 || effect_percent > 100 ||
+      (music_percent % 5) || (effect_percent % 5)) return;
   if (!music_changed && !effect_changed) return;
   pmd->user_music_percent = music_percent;
   pmd->user_effect_percent = effect_percent;
@@ -5374,7 +5406,7 @@ void pmd_set_user_volumes(
         rhythm = ((uint16_t)rhythm * (0x100-pmd->fadeout_vol)) >> 8;
       }
       if (music_percent < 100) {
-        rhythm = ((uint16_t)rhythm * music_percent) / 100;
+        rhythm = pmd_user_fm_level(rhythm, music_percent);
       }
       work->opna_writereg(work, 0x11, rhythm);
       for (int c = 0; c < 8; c++) {

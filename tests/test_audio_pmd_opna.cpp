@@ -106,6 +106,34 @@ std::vector<std::byte> synthetic_song()
 	return bytes;
 }
 
+std::vector<std::byte> synthetic_ssg_song()
+{
+	constexpr std::size_t file_prefix = 1U;
+	constexpr std::size_t header_size = 0x18U;
+	std::vector<std::byte> bytes(file_prefix + header_size, std::byte{0U});
+
+	const auto emit = [&bytes](std::initializer_list<std::uint8_t> stream) {
+		const auto offset = static_cast<std::uint16_t>(bytes.size() - 1U);
+		for(const auto value : stream) {
+			append(bytes, value);
+		}
+		return offset;
+	};
+	const auto lane = emit({
+		0x40U, 0x18U, 0x43U, 0x18U, 0x4FU, 0x18U, 0x80U,
+	});
+	const auto empty = emit({0x80U});
+	const auto rhythm_table = emit({0x80U});
+	std::array<std::uint16_t, 11U> parts{};
+	parts.fill(empty);
+	parts[6U] = lane;
+	for(std::size_t part = 0U; part < parts.size(); ++part) {
+		set_le16(bytes, file_prefix + (part * 2U), parts[part]);
+	}
+	set_le16(bytes, file_prefix + 0x16U, rhythm_table);
+	return bytes;
+}
+
 std::vector<std::byte> synthetic_rhythm_song()
 {
 	constexpr std::size_t file_prefix = 1U;
@@ -264,6 +292,20 @@ std::uint32_t sample_hash(std::span<const PmdOpnaStereoSample> samples)
 		}
 	}
 	return hash;
+}
+
+std::uint64_t absolute_sample_sum(
+	std::span<const PmdOpnaStereoSample> samples
+) noexcept
+{
+	std::uint64_t sum = 0U;
+	for(const auto &sample : samples) {
+		for(const auto value : {sample.left, sample.right}) {
+			const auto wide = static_cast<std::int64_t>(value);
+			sum += static_cast<std::uint64_t>(wide < 0 ? -wide : wide);
+		}
+	}
+	return sum;
 }
 
 class Trace final : public PmdOpnaRegisterTraceSink {
@@ -677,6 +719,37 @@ void test_user_category_volumes_preserve_one_chip()
 {
 	const auto song = synthetic_song();
 	const auto bank = synthetic_effect_bank();
+	auto implicit_unity = engine();
+	auto explicit_unity = engine();
+	expect(
+		implicit_unity.load_song(song) && implicit_unity.play() &&
+			explicit_unity.set_user_volumes(100U, 100U) &&
+			explicit_unity.load_song(song) && explicit_unity.play(),
+		"implicit and explicit unity gains accept equal PMD setups"
+	);
+	std::vector<PmdOpnaStereoSample> implicit_unity_pcm(20'000U);
+	std::vector<PmdOpnaStereoSample> explicit_unity_pcm(
+		implicit_unity_pcm.size()
+	);
+	implicit_unity.render_native(implicit_unity_pcm);
+	explicit_unity.render_native(explicit_unity_pcm);
+	expect(
+		std::equal(
+			implicit_unity_pcm.begin(),
+			implicit_unity_pcm.end(),
+			explicit_unity_pcm.begin(),
+			explicit_unity_pcm.end(),
+			[](const auto &left, const auto &right) {
+				return (
+					(left.left == right.left) &&
+					(left.right == right.right)
+				);
+			}
+		) &&
+			implicit_unity.status().register_hash ==
+				explicit_unity.status().register_hash,
+		"100% category gain is an exact PCM and register-stream bypass"
+	);
 	auto muted_music = engine();
 	expect(
 		muted_music.set_user_volumes(0U, 100U) &&
@@ -700,6 +773,54 @@ void test_user_category_volumes_preserve_one_chip()
 			return sample.left != 0 || sample.right != 0;
 		}
 	), "independent SFX remains audible while music is 0%");
+
+	const auto effect_energy = [&](std::uint8_t percent) {
+		auto subject = engine();
+		expect(
+			subject.set_user_volumes(0U, percent) &&
+				subject.load_song(song) && subject.load_effect_bank(bank) &&
+				subject.play() && subject.play_effect(1U),
+			"calibrated effect gain accepts one isolated PMD setup"
+		);
+		std::vector<PmdOpnaStereoSample> pcm(20'000U);
+		subject.render_native(pcm);
+		return absolute_sample_sum(pcm);
+	};
+	const auto full_effect_energy = effect_energy(100U);
+	const auto three_quarter_effect_energy = effect_energy(75U);
+	const auto half_effect_energy = effect_energy(50U);
+	expect(
+		full_effect_energy != 0U &&
+			three_quarter_effect_energy * 100U >= full_effect_energy * 65U &&
+			three_quarter_effect_energy * 100U <= full_effect_energy * 85U,
+		"75% SFX retains approximately three quarters of audible FM amplitude"
+	);
+	expect(
+		half_effect_energy * 100U >= full_effect_energy * 40U &&
+			half_effect_energy * 100U <= full_effect_energy * 60U,
+		"50% SFX retains approximately half of audible FM amplitude"
+	);
+
+	const auto music_energy = [&](std::uint8_t percent) {
+		auto subject = engine();
+		const auto lane_song = synthetic_ssg_song();
+		expect(
+			subject.set_user_volumes(percent, 100U) &&
+				subject.load_song(lane_song) && subject.play(),
+			"calibrated music gain accepts one isolated PMD lane"
+		);
+		std::vector<PmdOpnaStereoSample> pcm(20'000U);
+		subject.render_native(pcm);
+		return absolute_sample_sum(pcm);
+	};
+	const auto full_ssg_energy = music_energy(100U);
+	const auto three_quarter_ssg_energy = music_energy(75U);
+	expect(
+		full_ssg_energy != 0U &&
+			three_quarter_ssg_energy * 100U >= full_ssg_energy * 60U &&
+			three_quarter_ssg_energy * 100U <= full_ssg_energy * 85U,
+		"75% Music chooses the nearest available SSG amplitude level"
+	);
 
 	auto baseline = engine();
 	auto muted_effect = engine();
@@ -729,6 +850,11 @@ void test_user_category_volumes_preserve_one_chip()
 	const auto invalid = muted_effect.set_user_volumes(105U, 100U);
 	expect(!invalid && invalid.error().code == PmdOpnaErrorCode::invalid_volume,
 		"category gain rejects values outside the percentage domain");
+	const auto invalid_step = muted_effect.set_user_volumes(100U, 42U);
+	expect(
+		!invalid_step && invalid_step.error().code == PmdOpnaErrorCode::invalid_volume,
+		"category gain rejects values outside the five-percent UI domain"
+	);
 }
 
 void test_load_is_chip_silent_and_play_is_traced()

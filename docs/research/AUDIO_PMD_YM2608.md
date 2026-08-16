@@ -527,6 +527,20 @@ builds behind a disabled sink, not reconstructed from logs or PCM.
 
 ### Shared chip, separate user gains
 
+The shipped New Classic implementation applies category ownership at PMD's
+existing song/effect boundary. Its public percentages are linear audible
+amplitude, not a percentage of the numeric chip register. FM and OPNA rhythm
+therefore translate each 5% step to the nearest 0.75 dB total-level
+attenuation, SSG uses its coarser approximately 3 dB steps, and genuinely
+linear ADPCM-B/PPZ paths retain integer multiplication. The 100% path bypasses
+all translation and remains register- and PCM-identical to the source path.
+
+The earlier implementation multiplied PMD's pre-inversion FM level byte. At a
+displayed 75%, a full-scale effect lost 64 total-level steps (about 48 dB),
+which explains why it sounded nearly muted. That operation is specifically
+forbidden by the current contract and is covered by isolated FM/SSG energy
+regressions.
+
 Do not implement BGM/SFX sliders by calling PMD `AH=19h`, changing fade speed,
 skipping sequencer ticks, suppressing effect events, or running two independent
 PMD drivers. All of those change PMD state or erase authentic channel stealing.
