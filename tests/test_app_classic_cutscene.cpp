@@ -375,6 +375,19 @@ void test_timed_presenter_operations()
 	expect(seeded.set_access_page(Page::zero) && seeded.clear(page, 7U) &&
 		seeded.set_access_page(Page::one) && seeded.clear(page, 9U),
 		"extra-ending fixture seeds both inherited pages");
+	auto interstage_seed = seeded;
+	scene = make_scene(
+		"\\$", MainlCutsceneKind::interstage_yumemi,
+		std::move(interstage_seed)
+	);
+	tick = advance(*scene);
+	expect(tick.ready &&
+		scene->raster().shown_page() == Page::zero &&
+		scene->raster().access_page() == Page::zero &&
+		scene->raster().pixel(Page::zero, Point{0, 0}) == 0U &&
+		scene->raster().pixel(Page::zero, Point{500, 360}) == 0U &&
+		scene->raster().pixel(Page::one, Point{0, 0}) == 9U,
+		"interstage entry clears only page 0 and preserves its black backing page");
 	scene = make_scene(
 		"\\$", MainlCutsceneKind::extra_ending, std::move(seeded)
 	);

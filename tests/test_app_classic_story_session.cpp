@@ -502,6 +502,28 @@ void test_story_input_mode_normalization()
 
 void test_mainl_surface_handoffs()
 {
+	const th03::app::ClassicCutsceneInput held{
+		.script = {.cancel_held = true, .any_key_held = true},
+		.shot_or_ok_held = true,
+		.audio = {.measure = 3U},
+	};
+	const th03::app::ClassicCutsceneInput next{
+		.script = {},
+		.shot_or_ok_held = false,
+		.audio = {.measure = 9U},
+	};
+	const auto reused = ClassicStorySessionTestAccess::replay_cutscene_input(
+		next, held, false
+	);
+	const auto sampled = ClassicStorySessionTestAccess::replay_cutscene_input(
+		next, held, true
+	);
+	expect(reused.script.cancel_held && reused.script.any_key_held &&
+		reused.shot_or_ok_held && reused.audio.measure == 9U &&
+		!sampled.script.cancel_held && !sampled.script.any_key_held &&
+		!sampled.shot_or_ok_held && sampled.audio.measure == 9U,
+		"New Classic reuses one recorded cutscene input throughout a VSync while PMD status remains live");
+
 	th03::present::Raster main;
 	expect(main.set_access_page(th03::present::Page::zero) &&
 		main.plot({17, 23}, 3U) &&

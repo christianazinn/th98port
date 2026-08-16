@@ -390,6 +390,19 @@ ClassicCutsceneScene::begin_prelude(bool &surface_changed)
 			));
 		}
 		surface_changed = true;
+	} else {
+		// MAINL's interstage entry selects and clears page 0 immediately before
+		// cutscene_animate(). Page 1 remains the black backing page inherited
+		// from win_animate_and_wait(); clearing only page 0 removes the winner
+		// logo without inventing a second page mutation.
+		if(!raster_.set_access_page(present::Page::zero) ||
+			!raster_.set_shown_page(present::Page::zero) ||
+			!raster_.clear(page, 0U)) {
+			return std::unexpected(cutscene_error(
+				ClassicCutsceneErrorCode::raster_failed
+			));
+		}
+		surface_changed = true;
 	}
 	if(prepared_->gaiji) {
 		prepared_->gaiji->install(tram_);
@@ -1129,6 +1142,11 @@ ClassicCutsceneScene::take_audio_command() noexcept
 	audio_head_ = (audio_head_ + 1U) % audio_commands_.size();
 	--audio_count_;
 	return command;
+}
+
+bool ClassicCutsceneScene::audio_command_pending() const noexcept
+{
+	return audio_count_ != 0U;
 }
 
 std::optional<ClassicCutsceneCompletion>

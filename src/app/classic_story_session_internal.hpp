@@ -351,6 +351,11 @@ struct ClassicStorySessionTestAccess final {
 	[[nodiscard]] static present::Raster normalize_main_cutscene_seed(
 		const present::Raster &raster
 	);
+	[[nodiscard]] static ClassicCutsceneInput replay_cutscene_input(
+		const ClassicCutsceneInput &current,
+		const ClassicCutsceneInput &latched,
+		bool input_due
+	) noexcept;
 	[[nodiscard]] static CoreInput story_main_input(
 		const ClassicMainInputSample &input,
 		InputContext context,

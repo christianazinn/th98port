@@ -331,6 +331,32 @@ For a standalone installation, pass `--enedat <file>` or set `TH03_ENEDAT`.
 It runs the neutral replay session at unbounded speed, prints every computed
 round split, and reports whether all embedded summaries match.
 
+Render a finalized V13 replay to a full-length Matroska video without opening
+a game window:
+
+```powershell
+out\build\msvc-x64-sdl\Release\th03-replay-video.exe `
+  --replay X:\replays\TH3R00.RPY `
+  --data X:\podd-content `
+  --output X:\video\TH3R00.mkv
+```
+
+The default is nearest-neighbor 1920x1200 4:4:4 output at TH03's exact nominal
+`526315/9328` Hz source cadence, with 48 kHz stereo FLAC audio. The exporter
+runs the native replay and PMD/OPNA engine unthrottled, shows progress and ETA
+for both deterministic passes, selects `h264_nvenc` when FFmpeg exposes it,
+does nearest-neighbor NVENC scaling on CUDA, and overlaps bounded palette
+expansion/frame delivery with the next exact simulation tick. It retries with
+`libx264` if automatic NVENC encoding fails. `--resolution`
+accepts any 8:5 size; `--encoder` also accepts `hevc_nvenc`, `av1_nvenc`, and
+`libx264`. `--help` lists checkpoint, language, flash, volume, rhythm-source,
+and diagnostic partial-render options. FFmpeg must be on `PATH` (or supplied
+through `--ffmpeg`). The only intermediate is a temporary
+lossless FLAC beside the requested output, removed on success or failure; raw
+video and PCM are streamed directly to FFmpeg.
+Use the Release executable for export; Debug intentionally retains expensive
+state validation and is not representative of rendering throughput.
+
 Run the complete externally stored converted V13 corpus, including its frozen
 size/SHA-256 lock, with:
 

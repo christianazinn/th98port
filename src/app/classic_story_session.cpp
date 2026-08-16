@@ -211,6 +211,21 @@ namespace {
 	return result;
 }
 
+[[nodiscard]] ClassicCutsceneInput replay_cutscene_input(
+	const ClassicCutsceneInput &current,
+	const ClassicCutsceneInput &latched,
+	bool input_due
+) noexcept
+{
+	if(input_due) {
+		return current;
+	}
+	auto result = latched;
+	// PMD advances independently of the once-per-VSync Replay input latch.
+	result.audio = current.audio;
+	return result;
+}
+
 [[nodiscard]] std::optional<MainlStageResourceRequest> stage_request(
 	const MainStoryConfig &config
 ) noexcept
@@ -411,6 +426,7 @@ struct ClassicStoryBackend final {
 	bool replay_playback = false;
 	bool replay_capture_closed = false;
 	bool cutscene_replay_input_due = true;
+	ClassicCutsceneInput cutscene_replay_input{};
 	std::optional<NewClassicScoreRun> score_run{};
 	std::uint8_t score_run_rank = 0U;
 	std::uint8_t score_run_character = 0U;
@@ -1204,6 +1220,7 @@ struct ClassicStoryBackend final {
 		}
 		cutscene = std::move(*created);
 		cutscene_replay_input_due = true;
+		cutscene_replay_input = {};
 		registration_completion.reset();
 		cutscene_handoff.reset();
 		return {};
@@ -1220,35 +1237,52 @@ struct ClassicStoryBackend final {
 		if(cutscene->phase() == ClassicCutscenePhase::ready) {
 			return ClassicStoryBackendTick{.ready = true};
 		}
-		auto advanced = cutscene->advance(input);
-		if(!advanced) {
-			return std::unexpected(cutscene_error(
-				std::move(advanced.error())
-			));
-		}
-		if(advanced->boundary != ClassicCutsceneBoundary::immediate) {
-			account_score_vsync();
-		}
-		bool input_sampled = advanced->input_sampled;
-		if(new_classic) {
-			// Replay Patch 0.4.11 records at most one interface sample per
-			// VSync even though cutscene_animate() can poll several times in
-			// one interpreter iteration.  Reuse the last sample for those
-			// immediate polls, then arm the next sample after time advances.
-			if(input_sampled) {
-				input_sampled = cutscene_replay_input_due;
-				cutscene_replay_input_due = false;
+		bool surface_changed = false;
+		bool input_sampled = false;
+		for(;;) {
+			const auto effective_input = new_classic ? replay_cutscene_input(
+				input, cutscene_replay_input, cutscene_replay_input_due
+			) : input;
+			if(new_classic && cutscene_replay_input_due) {
+				cutscene_replay_input = input;
 			}
-			if(advanced->boundary == ClassicCutsceneBoundary::vsync ||
-				advanced->boundary == ClassicCutsceneBoundary::audio_measure) {
-				cutscene_replay_input_due = true;
+			auto advanced = cutscene->advance(effective_input);
+			if(!advanced) {
+				return std::unexpected(cutscene_error(
+					std::move(advanced.error())
+				));
+			}
+			surface_changed = surface_changed || advanced->surface_changed;
+			if(advanced->boundary != ClassicCutsceneBoundary::immediate) {
+				account_score_vsync();
+			}
+			bool sampled_now = advanced->input_sampled;
+			if(new_classic) {
+				// Replay Patch records at most one interface sample per VSync,
+				// while cutscene_animate() keeps interpreting and polling inside
+				// that same VSync. Preserve the sampled word across those tight
+				// polls and execute them before returning to the host clock.
+				if(sampled_now) {
+					sampled_now = cutscene_replay_input_due;
+					cutscene_replay_input_due = false;
+				}
+				if(advanced->boundary == ClassicCutsceneBoundary::vsync ||
+					advanced->boundary == ClassicCutsceneBoundary::audio_measure) {
+					cutscene_replay_input_due = true;
+				}
+			}
+			input_sampled = input_sampled || sampled_now;
+			const bool source_boundary = advanced->boundary !=
+				ClassicCutsceneBoundary::immediate;
+			if(!new_classic || source_boundary || advanced->ready ||
+				cutscene->audio_command_pending()) {
+				return ClassicStoryBackendTick{
+					.surface_changed = surface_changed,
+					.input_sampled = input_sampled,
+					.ready = advanced->ready,
+				};
 			}
 		}
-		return ClassicStoryBackendTick{
-			.surface_changed = advanced->surface_changed,
-			.input_sampled = input_sampled,
-			.ready = advanced->ready,
-		};
 	}
 
 	std::expected<void, ClassicStorySessionError> finish_cutscene()
@@ -2714,6 +2748,15 @@ present::Raster ClassicStorySessionTestAccess::normalize_main_cutscene_seed(
 )
 {
 	return th03::app::normalize_main_cutscene_seed(raster);
+}
+
+ClassicCutsceneInput ClassicStorySessionTestAccess::replay_cutscene_input(
+	const ClassicCutsceneInput &current,
+	const ClassicCutsceneInput &latched,
+	bool input_due
+) noexcept
+{
+	return th03::app::replay_cutscene_input(current, latched, input_due);
 }
 
 CoreInput ClassicStorySessionTestAccess::story_main_input(

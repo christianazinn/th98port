@@ -116,6 +116,7 @@ public:
 	advance(const ClassicCutsceneInput &input);
 	[[nodiscard]] std::optional<ClassicAudioCommand>
 	take_audio_command() noexcept;
+	[[nodiscard]] bool audio_command_pending() const noexcept;
 	[[nodiscard]] std::optional<ClassicCutsceneCompletion>
 	take_completion() noexcept;
 

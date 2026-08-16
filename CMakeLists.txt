@@ -627,6 +627,11 @@ add_executable(th03rv apps/th03rv/main.cpp)
 target_link_libraries(th03rv PRIVATE th03rv_service_protocol)
 th03_set_warnings(th03rv)
 
+add_executable(th03-replay-video apps/th03-replay-video/main.cpp)
+target_link_libraries(th03-replay-video PRIVATE th03_app_main)
+th03_set_warnings(th03-replay-video)
+th03_stage_audio_licenses(th03-replay-video)
+
 if(TH03_ENABLE_SDL)
 	add_executable(th03-app
 		apps/th03-app/default_bindings.cpp
@@ -644,6 +649,7 @@ endif()
 
 if(BUILD_TESTING)
 	find_package(Python3 COMPONENTS Interpreter)
+	add_test(NAME th03-replay-video-help COMMAND th03-replay-video --help)
 
 	add_executable(th03rv-service-protocol-tests
 		tests/test_th03rv_service_protocol.cpp
