@@ -400,11 +400,13 @@ void MainHudResultPresenter::main_combo_state(const MainComboState &state) noexc
 				*tram_, {tram_left + 4, 2}, tram_assets_.combo_hit
 			) || !put_cells(
 				*tram_, {tram_left, 3}, tram_assets_.combo_bonus
-			) || (combo.hits_highest >= 100U && !tram_->put_gaiji(
+			) || !tram_->put_gaiji(
 				{tram_left - 2, 2},
-				static_cast<std::uint8_t>(gaiji_bold_digit_0 + hundreds),
+				(combo.hits_highest >= 100U) ?
+					static_cast<std::uint8_t>(gaiji_bold_digit_0 + hundreds) :
+					gaiji_space,
 				tram_white
-			)) || !tram_->put_gaiji(
+			) || !tram_->put_gaiji(
 				{tram_left, 2},
 				(combo.hits_highest >= 10U) ?
 					static_cast<std::uint8_t>(gaiji_bold_digit_0 + tens) : gaiji_space,
@@ -432,9 +434,9 @@ void MainHudResultPresenter::main_combo_state(const MainComboState &state) noexc
 			color,
 			true
 		) || (post_time == 0U &&
-			((combo.hits_highest >= 100U && !tram_->put_gaiji(
+			(!tram_->put_gaiji(
 				{tram_left - 2, 2}, gaiji_space, tram_white
-			)) || !put_cells(*tram_, {tram_left, 2}, tram_assets_.combo_erase) ||
+			) || !put_cells(*tram_, {tram_left, 2}, tram_assets_.combo_erase) ||
 			 !put_cells(*tram_, {tram_left, 3}, tram_assets_.combo_erase)))) {
 			status_ = MainHudResultStatus::draw_failed;
 			return;

@@ -577,14 +577,31 @@ void test_score_combo_and_dynamic_hud()
 			),
 		"Replay Patch combo display adds a hundreds digit left of the source field"
 	);
-	combo_state.players[0U].time = 1U;
+	combo_state.players[0U] = {80U, 12U, 12U};
+	three_digit.presenter->main_combo_state(combo_state);
+	expect(
+		three_digit.tram.cell({2, 2})->code ==
+			th03::present::gaiji_cell_code(
+				th03::present::gaiji_space, th03::present::GaijiHalf::left
+			) && three_digit.tram.cell({4, 2})->code ==
+			th03::present::gaiji_cell_code(
+				0xA1U, th03::present::GaijiHalf::left
+			) && three_digit.tram.cell({6, 2})->code ==
+			th03::present::gaiji_cell_code(
+				0xA2U, th03::present::GaijiHalf::left
+			),
+		"sub-100 combo redraw replaces a stale hundreds digit with a space"
+	);
+	combo_state.players[0U] = {80U, 113U, 12U};
+	three_digit.presenter->main_combo_state(combo_state);
+	combo_state.players[0U] = {1U, 12U, 12U};
 	three_digit.presenter->main_combo_state(combo_state);
 	expect(
 		three_digit.tram.cell({2, 2})->code ==
 			th03::present::gaiji_cell_code(
 				th03::present::gaiji_space, th03::present::GaijiHalf::left
 			),
-		"three-digit combo teardown erases the added hundreds cell"
+		"combo teardown erases the hundreds cell independently of the current value"
 	);
 
 	Fixture dynamic;
