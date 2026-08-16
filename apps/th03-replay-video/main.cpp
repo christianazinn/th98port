@@ -2,6 +2,7 @@
 #include "th03/app/host_surface.hpp"
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/new_classic_playback.hpp"
+#include "th03/app/new_classic_settings.hpp"
 #include "th03/audio/output_gain.hpp"
 #include "th03/formats/v13.hpp"
 
@@ -21,6 +22,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -62,12 +64,14 @@ struct Options final {
 	fs::path font{};
 	fs::path rhythm_pcm{};
 	fs::path rhythm_rom{};
+	fs::path settings{};
 	fs::path ffmpeg{"ffmpeg"};
 	std::uint32_t width = 1'920U;
 	std::uint32_t height = 1'200U;
 	std::size_t checkpoint = 0U;
 	std::optional<std::uint64_t> maximum_frames{};
 	std::string encoder{"auto"};
+	std::string encoder_preset{"p4"};
 	std::uint8_t master_volume = 100U;
 	std::uint8_t music_volume = 100U;
 	std::uint8_t effect_volume = 100U;
@@ -75,6 +79,12 @@ struct Options final {
 		th03::app::ClassicLanguage::japanese;
 	bool reduced_flash = false;
 	bool overwrite = false;
+	bool master_volume_overridden = false;
+	bool music_volume_overridden = false;
+	bool effect_volume_overridden = false;
+	bool language_overridden = false;
+	bool reduced_flash_overridden = false;
+	bool use_installed_settings = false;
 };
 
 struct LoadedRhythmPcm final {
@@ -115,10 +125,14 @@ void usage()
 		"  --resolution <WxH>       Output size (default 1920x1200)\n"
 		"  --encoder <name>         auto, h264_nvenc, hevc_nvenc, "
 		"av1_nvenc, or libx264\n"
+		"  --encoder-preset <p1..p7> NVENC speed/quality (default p4; p1 fastest)\n"
 		"  --ffmpeg <path>          FFmpeg executable (default: ffmpeg)\n"
 		"  --checkpoint <index>     Begin at a replay checkpoint (default 0)\n"
 		"  --language <ja|en>       Presentation language (default ja)\n"
 		"  --reduced-flash          Apply New Classic reduced flashes\n"
+		"  --full-flash             Override inherited reduced flashes\n"
+		"  --settings <PODD.CFG>    Inherit New Classic presentation/audio values\n"
+		"  --use-installed-settings Inherit the installed standalone's PODD.CFG\n"
 		"  --master-volume <0..100> Final gain in 5% steps\n"
 		"  --music-volume <0..100>  Music gain in 5% steps\n"
 		"  --sfx-volume <0..100>    Effect gain in 5% steps\n"
@@ -170,6 +184,16 @@ template<typename Integer>
 		}
 		if(key == "--reduced-flash") {
 			options.reduced_flash = true;
+			options.reduced_flash_overridden = true;
+			continue;
+		}
+		if(key == "--full-flash") {
+			options.reduced_flash = false;
+			options.reduced_flash_overridden = true;
+			continue;
+		}
+		if(key == "--use-installed-settings") {
+			options.use_installed_settings = true;
 			continue;
 		}
 		if(key == "--overwrite") {
@@ -188,8 +212,10 @@ template<typename Integer>
 		else if(key == "--font") options.font = value;
 		else if(key == "--rhythm-pcm") options.rhythm_pcm = value;
 		else if(key == "--rhythm-rom") options.rhythm_rom = value;
+		else if(key == "--settings") options.settings = value;
 		else if(key == "--ffmpeg") options.ffmpeg = value;
 		else if(key == "--encoder") options.encoder = value;
+		else if(key == "--encoder-preset") options.encoder_preset = value;
 		else if(key == "--checkpoint") {
 			if(!parse_integer(value, options.checkpoint)) {
 				return std::unexpected("invalid checkpoint index");
@@ -204,14 +230,17 @@ template<typename Integer>
 			if(!parse_volume(value, options.master_volume)) {
 				return std::unexpected("invalid master volume");
 			}
+			options.master_volume_overridden = true;
 		} else if(key == "--music-volume") {
 			if(!parse_volume(value, options.music_volume)) {
 				return std::unexpected("invalid music volume");
 			}
+			options.music_volume_overridden = true;
 		} else if(key == "--sfx-volume") {
 			if(!parse_volume(value, options.effect_volume)) {
 				return std::unexpected("invalid SFX volume");
 			}
+			options.effect_volume_overridden = true;
 		} else if(key == "--language") {
 			if(value == "ja") {
 				options.language = th03::app::ClassicLanguage::japanese;
@@ -220,6 +249,7 @@ template<typename Integer>
 			} else {
 				return std::unexpected("language must be ja or en");
 			}
+			options.language_overridden = true;
 		} else if(key == "--resolution") {
 			const auto separator = value.find_first_of("xX");
 			if(separator == std::string_view::npos ||
@@ -241,6 +271,43 @@ template<typename Integer>
 		options.output.extension() != ".MKV") {
 		return std::unexpected("output must use the .mkv extension");
 	}
+	if(options.use_installed_settings) {
+		if(!options.settings.empty()) {
+			return std::unexpected(
+				"--settings and --use-installed-settings are mutually exclusive"
+			);
+		}
+#if defined(_WIN32)
+#if defined(_MSC_VER)
+		char *local_app_data_raw = nullptr;
+		std::size_t local_app_data_size = 0U;
+		if(_dupenv_s(
+			&local_app_data_raw, &local_app_data_size, "LOCALAPPDATA"
+		) != 0) {
+			return std::unexpected("LOCALAPPDATA cannot be read");
+		}
+		const std::unique_ptr<char, decltype(&std::free)> local_app_data(
+			local_app_data_raw, &std::free
+		);
+		if(!local_app_data || local_app_data_size <= 1U) {
+			return std::unexpected("LOCALAPPDATA is unavailable");
+		}
+		options.settings = fs::path(local_app_data.get()) /
+			"PoDD Port" / "user" / "PODD.CFG";
+#else
+		const auto *local_app_data = std::getenv("LOCALAPPDATA");
+		if(local_app_data == nullptr || *local_app_data == '\0') {
+			return std::unexpected("LOCALAPPDATA is unavailable");
+		}
+		options.settings = fs::path(local_app_data) /
+			"PoDD Port" / "user" / "PODD.CFG";
+#endif
+#else
+		return std::unexpected(
+			"installed settings discovery is only available on Windows"
+		);
+#endif
+	}
 	if(options.main.empty()) options.main = options.data / "MAIN.EXE";
 	if(options.mainl.empty()) options.mainl = options.data / "MAINL.EXE";
 	if(options.font.empty()) options.font = options.data / "FONT.ROM";
@@ -256,6 +323,13 @@ template<typename Integer>
 	};
 	if(std::ranges::find(encoders, options.encoder) == encoders.end()) {
 		return std::unexpected("unsupported encoder");
+	}
+	constexpr std::array<std::string_view, 7U> encoder_presets{
+		"p1", "p2", "p3", "p4", "p5", "p6", "p7",
+	};
+	if(std::ranges::find(encoder_presets, options.encoder_preset) ==
+		encoder_presets.end()) {
+		return std::unexpected("encoder preset must be between p1 and p7");
 	}
 	return options;
 }
@@ -280,6 +354,42 @@ template<typename Integer>
 		return std::unexpected("cannot read " + path.string());
 	}
 	return bytes;
+}
+
+[[nodiscard]] std::expected<void, std::string> inherit_settings(
+	Options &options
+)
+{
+	if(options.settings.empty()) {
+		return {};
+	}
+	auto bytes = read_file(options.settings);
+	if(!bytes) {
+		return std::unexpected(bytes.error());
+	}
+	auto decoded = th03::app::decode_new_classic_settings(*bytes);
+	if(!decoded) {
+		return std::unexpected("cannot decode " + options.settings.string() +
+			" (code " + std::to_string(static_cast<unsigned>(
+				decoded.error().code
+			)) + ", offset " + std::to_string(decoded.error().offset) + ')');
+	}
+	if(!options.master_volume_overridden) {
+		options.master_volume = decoded->master_volume_percent;
+	}
+	if(!options.music_volume_overridden) {
+		options.music_volume = decoded->music_volume_percent;
+	}
+	if(!options.effect_volume_overridden) {
+		options.effect_volume = decoded->effect_volume_percent;
+	}
+	if(!options.language_overridden) {
+		options.language = decoded->options.language;
+	}
+	if(!options.reduced_flash_overridden) {
+		options.reduced_flash = decoded->options.reduced_flash;
+	}
+	return {};
 }
 
 [[nodiscard]] std::uint32_t read_le32(
@@ -823,13 +933,17 @@ private:
 	return std::system(command.c_str()) == 0;
 }
 
-[[nodiscard]] std::string encoder_arguments(std::string_view encoder)
+[[nodiscard]] std::string encoder_arguments(
+	std::string_view encoder,
+	std::string_view preset
+)
 {
 	if(encoder == "libx264") {
 		return "-c:v libx264 -preset medium -crf 18";
 	}
 	return "-c:v " + std::string(encoder) +
-		" -preset p6 -tune hq -rc vbr -cq 18 -b:v 0";
+		" -preset " + std::string(preset) +
+		" -tune hq -rc vbr -cq 18 -b:v 0";
 }
 
 [[nodiscard]] int run(const Options &options)
@@ -928,7 +1042,7 @@ private:
 			"rgba -video_size 640x400 -framerate 526315/9328 -i pipe:0 -i " +
 			*audio_output + " -vf " + scale_filter +
 			" -map 0:v:0 -map 1:a:0 " +
-			encoder_arguments(selected) +
+			encoder_arguments(selected, options.encoder_preset) +
 			" -c:a copy -shortest -f matroska " + *video_output;
 		SimulationResult result{};
 		auto exit = run_pipe_pass(
@@ -966,7 +1080,14 @@ private:
 	std::cout << "status=ok\noutput=" << options.output.string()
 		<< "\nencoder=" << encoder << "\nframes=" << video_result.frames
 		<< "\naudio-samples=" << audio_result.audio_samples << "\nduration="
-		<< std::fixed << std::setprecision(3) << seconds << "\n";
+		<< std::fixed << std::setprecision(3) << seconds
+		<< "\nlanguage=" << (options.language ==
+			th03::app::ClassicLanguage::english ? "en" : "ja")
+		<< "\nmaster-volume=" << static_cast<unsigned>(options.master_volume)
+		<< "\nmusic-volume=" << static_cast<unsigned>(options.music_volume)
+		<< "\nsfx-volume=" << static_cast<unsigned>(options.effect_volume)
+		<< "\nreduced-flash=" << (options.reduced_flash ? 1 : 0)
+		<< "\nencoder-preset=" << options.encoder_preset << "\n";
 	return 0;
 }
 
@@ -979,6 +1100,10 @@ int main(int argc, char **argv)
 		if(!options) {
 			std::cerr << "error: " << options.error() << "\n\n";
 			usage();
+			return 2;
+		}
+		if(auto inherited = inherit_settings(*options); !inherited) {
+			std::cerr << "error: " << inherited.error() << '\n';
 			return 2;
 		}
 		return run(*options);

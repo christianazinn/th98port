@@ -341,6 +341,23 @@ out\build\msvc-x64-sdl\Release\th03-replay-video.exe `
   --output X:\video\TH3R00.mkv
 ```
 
+To inherit the installed standalone's New Classic language, flash, and audio
+levels while explicitly requesting 85% SFX, use:
+
+```powershell
+out\build\msvc-x64-sdl\Release\th03-replay-video.exe `
+  --replay X:\replays\TH3R00.RPY `
+  --data X:\podd-content `
+  --output X:\video\TH3R00.mkv `
+  --use-installed-settings --sfx-volume 85
+```
+
+`--settings X:\path\PODD.CFG` reads another validated profile. Explicit
+`--language`, volume, `--reduced-flash`, and `--full-flash` flags override the
+profile field by field. Replay-affecting state remains replay-owned, and output
+resolution/codec remain export policy rather than being copied from the game
+window.
+
 The default is nearest-neighbor 1920x1200 4:4:4 output at TH03's exact nominal
 `526315/9328` Hz source cadence, with 48 kHz stereo FLAC audio. The exporter
 runs the native replay and PMD/OPNA engine unthrottled, shows progress and ETA
@@ -349,11 +366,15 @@ does nearest-neighbor NVENC scaling on CUDA, and overlaps bounded palette
 expansion/frame delivery with the next exact simulation tick. It retries with
 `libx264` if automatic NVENC encoding fails. `--resolution`
 accepts any 8:5 size; `--encoder` also accepts `hevc_nvenc`, `av1_nvenc`, and
-`libx264`. `--help` lists checkpoint, language, flash, volume, rhythm-source,
-and diagnostic partial-render options. FFmpeg must be on `PATH` (or supplied
-through `--ffmpeg`). The only intermediate is a temporary
-lossless FLAC beside the requested output, removed on success or failure; raw
-video and PCM are streamed directly to FFmpeg.
+`libx264`. NVENC defaults to the balanced `p4`; `--encoder-preset p1` trades
+compression efficiency for maximum throughput, while `p5` through `p7` spend
+progressively more encoder time. On the primary RTX 4090 measurement,
+`hevc_nvenc`/`p1` reached 10.4x during the video pass versus 4.6x for the old
+hard-coded H.264 `p6` profile. `--help` lists checkpoint, language, flash,
+volume, settings, rhythm-source, and diagnostic partial-render options.
+FFmpeg must be on `PATH` (or supplied through `--ffmpeg`). The only
+intermediate is a temporary lossless FLAC beside the requested output, removed
+on success or failure; raw video and PCM are streamed directly to FFmpeg.
 Use the Release executable for export; Debug intentionally retains expensive
 state validation and is not representative of rendering throughput.
 
