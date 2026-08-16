@@ -242,12 +242,13 @@ void test_measure_latch_and_audio_queue()
 		ClassicAudioCommandType::load_song,
 		ClassicAudioCommandType::play_song,
 	};
-	for(const auto type : expected_types) {
+	for(std::size_t index = 0U; index < expected_types.size(); ++index) {
 		const auto command = scene->take_audio_command();
 		expect(
-			command && command->type == type &&
-				command->cue == ClassicMusicCue::cutscene_one,
-			"load-and-play preserves stop/load/play order and typed cue"
+			command && command->type == expected_types[index] &&
+				command->cue == (index == 0U ? ClassicMusicCue::none :
+					ClassicMusicCue::cutscene_one),
+			"load-and-play stops the prior song before assigning the new cue"
 		);
 	}
 	expect(!scene->take_audio_command(), "audio queue drains exactly");

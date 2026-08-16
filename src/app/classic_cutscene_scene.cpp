@@ -988,10 +988,8 @@ ClassicCutsceneScene::execute_operation(
 						ClassicCutsceneErrorCode::unknown_music
 					));
 				}
-				loaded_music_ = *cue;
 				if(!push_audio_command({
 					.type = ClassicAudioCommandType::stop_song,
-					.cue = *cue,
 				}) || !push_audio_command({
 					.type = ClassicAudioCommandType::load_song,
 					.cue = *cue,
@@ -1003,6 +1001,7 @@ ClassicCutsceneScene::execute_operation(
 						ClassicCutsceneErrorCode::invalid_state
 					));
 				}
+				loaded_music_ = *cue;
 			}
 			return tick(
 				phase_, ClassicCutsceneBoundary::immediate, surface_changed

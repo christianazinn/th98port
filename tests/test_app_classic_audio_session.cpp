@@ -611,6 +611,31 @@ void test_commands_cadence_and_determinism(const fs::path &root)
 	}).has_value() && first.status().bgm_active &&
 		first.status().volume == 255U,
 		"Stop preserves driver availability and exposes quiet PMD volume");
+
+	expect(first.apply(load(ClassicMusicCue::gameplay, 8U)).has_value() &&
+		first.apply({
+			.type = ClassicAudioCommandType::play_song,
+			.cue = ClassicMusicCue::gameplay,
+			.parameter = 8U,
+		}).has_value(),
+		"replay gameplay song is active before its MAINL cutscene");
+	const auto mislabeled_cutscene_stop = first.apply({
+		.type = ClassicAudioCommandType::stop_song,
+		.cue = ClassicMusicCue::cutscene_two,
+	});
+	expect(!mislabeled_cutscene_stop &&
+		mislabeled_cutscene_stop.error().code ==
+			ClassicAudioSessionErrorCode::invalid_parameter,
+		"a future cutscene cue cannot identify the still-loaded gameplay song");
+	expect(first.apply({
+		.type = ClassicAudioCommandType::stop_song,
+	}).has_value() &&
+		first.apply(load(ClassicMusicCue::cutscene_two)).has_value() &&
+		first.apply({
+			.type = ClassicAudioCommandType::play_song,
+			.cue = ClassicMusicCue::cutscene_two,
+		}).has_value(),
+		"source Stop/Load/Play crosses from replay gameplay to cutscene music");
 }
 
 void test_music_off_disables_fresh_process_sfx(const fs::path &root)
