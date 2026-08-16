@@ -33,6 +33,8 @@
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/new_classic_frontend.hpp"
 #include "th03/app/new_classic_language.hpp"
+#include "th03/app/new_classic_online_client.hpp"
+#include "th03/app/new_classic_online_store.hpp"
 #include "th03/app/new_classic_playback.hpp"
 #include "th03/app/new_classic_settings_store.hpp"
 #include "th03/app/replay_slot_store.hpp"
@@ -1472,6 +1474,36 @@ ExperienceRunResult run_classic_session(
 	auto active_joy_config = parsed.launch.new_classic_joy_config;
 	auto active_device_assignment =
 		parsed.launch.new_classic_device_assignment;
+	if(new_classic) {
+		const auto online_root =
+			new_classic_settings_path.parent_path() / "ONLINE";
+		for(std::uint8_t rank = 0U; rank < 4U; ++rank) {
+			for(std::uint8_t character = 0U; character < 9U; ++character) {
+				const th03::app::NewClassicOnlineCategory category{
+					.mode = th03::app::NewClassicOnlineMode::story,
+					.rank = rank,
+					.character = character,
+				};
+				const auto path =
+					th03::app::new_classic_online_board_cache_path(
+						online_root, category
+					);
+				auto loaded = th03::app::load_new_classic_online_store(path);
+				if(!loaded) {
+					std::cerr << "status=warning\nstage=online-cache-load\n"
+						"rank=" << static_cast<unsigned>(rank) << "\ncharacter="
+						<< static_cast<unsigned>(character) << "\ncode="
+						<< static_cast<unsigned>(loaded.error().code) << '\n';
+					continue;
+				}
+				if(loaded->document.board_category) {
+					parsed.launch.new_classic_online_boards.push_back(
+						std::move(loaded->document)
+					);
+				}
+			}
+		}
+	}
 	auto runner = th03::app::ClassicRunner::load(std::move(parsed.launch));
 	if(!runner) {
 		return {.exit_code = fail("th03-load", runner.error())};

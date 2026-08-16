@@ -40,6 +40,10 @@
     "joy.header.buttons": "[JOY CONFIGURATION - BUTTONS]",
     "joy.header.axes": "[JOY CONFIGURATION - AXES]",
     "device.header.assignment": "[CONTROLLER ASSIGNMENT]",
-    "device.header.input-test": "[INPUT TEST]"
+    "device.header.input-test": "[INPUT TEST]",
+    "hiscore.command.local": "[ Local HiScores ]",
+    "hiscore.command.online": "[ Online Leaderboards ]",
+    "hiscore.command.return": "[ Return ]",
+    "hiscore.online.title": "[ Online - {rank} - {character} ]"
   }
 }

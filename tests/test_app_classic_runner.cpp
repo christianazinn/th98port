@@ -1033,6 +1033,196 @@ struct AuthenticRouteTraceEvent final {
 	std::size_t audio_command_count = 0U;
 };
 
+template<typename Identity>
+Identity online_identity(std::uint8_t seed)
+{
+	Identity result{};
+	for(std::size_t index = 0U; index < result.bytes.size(); ++index) {
+		result.bytes[index] = static_cast<std::uint8_t>(seed + index);
+	}
+	return result;
+}
+
+th03::app::NewClassicOnlineCacheDocument online_high_score_board()
+{
+	using namespace th03::app;
+	const NewClassicOnlineCategory category{
+		.mode = NewClassicOnlineMode::story,
+		.rank = 1U,
+		.character = 0U,
+	};
+	NewClassicOnlineCacheDocument document{};
+	document.generation = 1U;
+	document.snapshot_id = online_identity<NewClassicOnlineSnapshotId>(0x10U);
+	document.fetched_unix_seconds = 1'786'765'000ULL;
+	document.board_category = category;
+	document.leaderboard_entries.push_back({
+		.entry_id = online_identity<NewClassicOnlineEntryId>(0x30U),
+		.content_id = online_identity<NewClassicOnlineContentId>(0x50U),
+		.ruleset_id = online_identity<NewClassicOnlineRulesetId>(0x70U),
+		.category = category,
+		.result = {
+			.kind = NewClassicOnlineResultKind::clear,
+			.score = 123'456'780U,
+			.end_stage = 8U,
+		},
+		.provenance = NewClassicOnlineProvenance::curated_legacy,
+		.dos_date = 0x5D2FU,
+		.published_unix_seconds = 1'786'765'432ULL,
+		.player = "ALPHA",
+	});
+	return document;
+}
+
+bool authentic_online_high_score_gate(
+	const std::filesystem::path &data_root,
+	const std::filesystem::path &main_executable,
+	const std::filesystem::path &mainl_executable,
+	const std::filesystem::path &op_executable,
+	const std::filesystem::path &font_rom
+)
+{
+	using namespace th03::app;
+	TemporaryDirectory temporary;
+	ClassicRunnerRequest request{};
+	request.content = {
+		.data_root = data_root,
+		.main_executable = main_executable,
+		.mainl_executable = mainl_executable,
+		.op_executable = op_executable,
+		.font_rom = font_rom,
+		.replay_root = temporary.path() / "REPLAY",
+		.config = temporary.path() / "YUME.CFG",
+		.new_classic_settings = temporary.path() / "PODD.CFG",
+		.score = temporary.path() / "YUME.NEM",
+	};
+	request.seed = 1U;
+	request.fm_available = false;
+	request.experience = ExperienceProfile::new_classic;
+	request.new_classic_online_boards.push_back(online_high_score_board());
+	auto loaded = ClassicRunner::load(std::move(request));
+	if(!loaded) {
+		std::cerr << "online-hiscore-load code=" << static_cast<unsigned>(
+			loaded.error().code) << " detail=" << static_cast<unsigned>(
+			loaded.error().detail_code) << '\n';
+		return false;
+	}
+	auto &runner = **loaded;
+	std::array<
+		th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	> pixels{};
+	std::uint64_t tick_index = 0U;
+	std::optional<ClassicRunnerConsumeResult> last{};
+	const auto drain_audio = [&]() {
+		while(runner.take_audio_command()) {}
+	};
+	const auto step = [&](std::uint16_t system = 0U) {
+		th03::CoreInput input{};
+		input.system = system;
+		auto advanced = runner.consume({
+			.tick_index = tick_index,
+			.deadline_ns = tick_index * 10U,
+			.input = input,
+		});
+		++tick_index;
+		if(!advanced || advanced->status != ClassicRunnerStatus::running) {
+			return false;
+		}
+		last = *advanced;
+		drain_audio();
+		return !advanced->surface_changed ||
+			runner.compose_shown_surface(pixels).has_value();
+	};
+	const auto wait_for_input = [&](std::size_t limit) {
+		for(std::size_t frame = 0U; frame < limit; ++frame) {
+			if(!step()) {
+				return false;
+			}
+			if(last->input_sampled) {
+				return true;
+			}
+		}
+		return false;
+	};
+	drain_audio();
+	if(!wait_for_input(512U) || !step(0x0020U) ||
+		!wait_for_input(64U)) {
+		return false;
+	}
+	for(std::size_t row = 0U; row < 3U; ++row) {
+		if(!step(0x0002U) || !step()) {
+			return false;
+		}
+	}
+	if(!step(0x0020U)) {
+		return false;
+	}
+	for(std::size_t guard = 0U; guard < 96U &&
+		!ClassicRunnerTestAccess::online_high_score_menu(runner); ++guard) {
+		if(!step()) {
+			return false;
+		}
+	}
+	if(!ClassicRunnerTestAccess::online_high_score_menu(runner)) {
+		std::cerr << "online HiScore cache did not select the hub owner\n";
+		return false;
+	}
+	for(std::size_t boundary = 0U; boundary < 24U; ++boundary) {
+		if(!step()) {
+			return false;
+		}
+	}
+
+	// The default Local choice must retain a return edge to this hub rather
+	// than rebuilding the title directly.
+	if(!step(0x0020U) ||
+		ClassicRunnerTestAccess::online_high_score_menu(runner)) {
+		return false;
+	}
+	if(!wait_for_input(96U) || !step(0x0020U)) {
+		return false;
+	}
+	for(std::size_t guard = 0U; guard < 128U &&
+		!ClassicRunnerTestAccess::online_high_score_menu(runner); ++guard) {
+		if(!step()) {
+			return false;
+		}
+	}
+	if(!ClassicRunnerTestAccess::online_high_score_menu(runner)) {
+		std::cerr << "local HiScore viewer did not return to the cached hub"
+			<< " tick=" << tick_index << " scene=" << static_cast<unsigned>(
+				ClassicRunnerTestAccess::scene(runner).value_or(
+					ClassicOpSessionScene::failed)) << '\n';
+		return false;
+	}
+	for(std::size_t boundary = 0U; boundary < 24U; ++boundary) {
+		if(!step()) {
+			return false;
+		}
+	}
+
+	// Online opens as a second real destination. Cancel returns board -> hub,
+	// then hub -> the source title owner.
+	if(!step(0x0002U) || !step() || !step(0x0020U) || !step() ||
+		!ClassicRunnerTestAccess::online_high_score_menu(runner) ||
+		!step(0x1000U) || !step() ||
+		!ClassicRunnerTestAccess::online_high_score_menu(runner) ||
+		!step(0x1000U)) {
+		return false;
+	}
+	for(std::size_t guard = 0U; guard < 128U; ++guard) {
+		if(ClassicRunnerTestAccess::scene(runner) ==
+			ClassicOpSessionScene::title_menu) {
+			return true;
+		}
+		if(!step()) {
+			return false;
+		}
+	}
+	return false;
+}
+
 bool authentic_vs_gate(
 	const std::filesystem::path &data_root,
 	const std::filesystem::path &main_executable,
@@ -2657,12 +2847,20 @@ int main(int argc, char **argv)
 		), "supplied English overlay traverses the complete New Classic runner");
 	} else if(argc == 7 && (std::string_view(argv[1]) == "--authentic" ||
 		std::string_view(argv[1]) == "--authentic-vs" ||
-		std::string_view(argv[1]) == "--authentic-practice")) {
+		std::string_view(argv[1]) == "--authentic-practice" ||
+		std::string_view(argv[1]) == "--authentic-online")) {
 		if(std::string_view(argv[1]) == "--authentic") {
 			expect(authentic_gate(argv[2], argv[3], argv[4], argv[5], argv[6]),
 				"supplied originals construct and advance the complete Classic runner");
+			expect(authentic_online_high_score_gate(
+				argv[2], argv[3], argv[4], argv[5], argv[6]
+			), "validated cached board traverses the New Classic HiScore hub");
 		}
-		if(std::string_view(argv[1]) != "--authentic-practice") {
+		if(std::string_view(argv[1]) == "--authentic-online") {
+			expect(authentic_online_high_score_gate(
+				argv[2], argv[3], argv[4], argv[5], argv[6]
+			), "validated cached board traverses the New Classic HiScore hub");
+		} else if(std::string_view(argv[1]) != "--authentic-practice") {
 			expect(authentic_vs_gate(argv[2], argv[3], argv[4], argv[5], argv[6]),
 				"supplied originals traverse all three complete Classic VS modes");
 		} else {
@@ -2672,7 +2870,7 @@ int main(int argc, char **argv)
 		}
 	} else if(argc != 1) {
 		std::cerr << "usage: th03-app-classic-runner-tests "
-			"[--authentic|--authentic-vs|--authentic-practice "
+			"[--authentic|--authentic-vs|--authentic-practice|--authentic-online "
 			"<data-root> <MAIN.EXE> <MAINL.EXE> <OP.EXE> <FONT.ROM> | "
 			"--authentic-english <data-root> <MAIN.EXE> <MAINL.EXE> "
 			"<OP.EXE> <FONT.ROM> <TH3EN.DAT>]\n";

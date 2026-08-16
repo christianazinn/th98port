@@ -8,6 +8,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <vector>
 
 #include "th03/app/classic_audio.hpp"
 #include "th03/app/experience_profile.hpp"
@@ -101,6 +102,10 @@ struct ClassicRunnerRequest final {
 	std::uint16_t new_classic_capture_cancel_key = 0U;
 	NewClassicHostKeyName new_classic_key_name = nullptr;
 	void *new_classic_key_name_context = nullptr;
+	// Validated per-board snapshots loaded by the platform before session
+	// construction. The source-time owner treats them as immutable read-only
+	// input and never performs network or filesystem work while advancing.
+	std::vector<NewClassicOnlineCacheDocument> new_classic_online_boards{};
 	// New Classic may enter one Replay Patch-owned route without first exposing
 	// Classic's title. The shared authenticated session still owns every child.
 	ClassicRunnerInitialRoute initial_route = ClassicRunnerInitialRoute::title;

@@ -287,6 +287,74 @@ pseudo_localized_patch_assets(
 	return localized;
 }
 
+template<typename Identity>
+Identity online_identity(std::uint8_t seed)
+{
+	Identity result{};
+	for(std::size_t index = 0U; index < result.bytes.size(); ++index) {
+		result.bytes[index] = static_cast<std::uint8_t>(seed + index);
+	}
+	return result;
+}
+
+th03::app::NewClassicOnlineCacheDocument online_board(
+	std::uint8_t rank,
+	std::uint8_t character,
+	std::uint8_t seed
+)
+{
+	using namespace th03::app;
+	const NewClassicOnlineCategory category{
+		.mode = NewClassicOnlineMode::story,
+		.rank = rank,
+		.character = character,
+	};
+	const NewClassicOnlineResult result{
+		.kind = NewClassicOnlineResultKind::clear,
+		.score = 123456780ULL + static_cast<std::uint64_t>(seed) * 10U,
+		.end_stage = 8U,
+	};
+	NewClassicOnlineReplayRecord replay{
+		.replay_id = online_identity<NewClassicOnlineReplayId>(seed),
+		.content_id = online_identity<NewClassicOnlineContentId>(0x40U),
+		.ruleset_id = online_identity<NewClassicOnlineRulesetId>(0x60U),
+		.category = category,
+		.result = result,
+		.availability = NewClassicOnlineReplayAvailability::downloaded,
+		.dos_date = 0x5D2FU,
+		.payload_bytes = 213592U,
+		.autofire = 1U,
+		.timed_frames = 10'000U,
+		.slow_frames = 200U,
+		.title = "ALPHA",
+	};
+	NewClassicLeaderboardEntry entry{
+		.entry_id = online_identity<NewClassicOnlineEntryId>(
+			static_cast<std::uint8_t>(seed + 1U)
+		),
+		.content_id = replay.content_id,
+		.ruleset_id = replay.ruleset_id,
+		.replay_id = replay.replay_id,
+		.verifier_id = online_identity<NewClassicOnlineVerifierId>(0x80U),
+		.category = category,
+		.result = result,
+		.provenance = NewClassicOnlineProvenance::replay_verified,
+		.dos_date = replay.dos_date,
+		.published_unix_seconds = 1786765432ULL,
+		.player = "Alice",
+	};
+	NewClassicOnlineCacheDocument document{};
+	document.generation = 1U;
+	document.snapshot_id = online_identity<NewClassicOnlineSnapshotId>(
+		static_cast<std::uint8_t>(seed + 2U)
+	);
+	document.fetched_unix_seconds = 1786766000ULL;
+	document.board_category = category;
+	document.leaderboard_entries.push_back(std::move(entry));
+	document.replay_records.push_back(std::move(replay));
+	return document;
+}
+
 void finish_entry_fade(th03::app::NewClassicReplayBrowser &browser)
 {
 	for(std::size_t boundary = 0U; boundary < 19U; ++boundary) {
@@ -302,6 +370,78 @@ void finish_entry_fade(
 	for(std::size_t boundary = 0U; boundary < 19U; ++boundary) {
 		static_cast<void>(menu.consume({}, catalog));
 	}
+}
+
+void finish_entry_fade(th03::app::NewClassicHighScoreMenu &menu)
+{
+	for(std::size_t boundary = 0U; boundary < 19U; ++boundary) {
+		static_cast<void>(menu.consume({}));
+	}
+}
+
+void test_online_high_score_menu()
+{
+	using namespace th03::app;
+	const auto patch_assets = optional_patch_assets();
+	NewClassicHighScoreMenu unavailable(
+		{online_board(2U, 4U, 0x20U)}, 2U, {}
+	);
+	expect(!unavailable.valid(),
+		"online HiScore UI refuses to invent a non-patch fallback surface");
+	if(!patch_assets) {
+		return;
+	}
+	NewClassicHighScoreMenu wrong_rank(
+		{online_board(1U, 4U, 0x20U)}, 2U, patch_assets
+	);
+	expect(!wrong_rank.valid(),
+		"online HiScore hub remains hidden without a board for the active rank");
+
+	NewClassicHighScoreMenu local(
+		{online_board(2U, 4U, 0x20U)}, 2U, patch_assets
+	);
+	expect(local.valid() && local.surface().palette_tone == 0,
+		"validated online cache opens a source-styled black-in HiScore hub");
+	finish_entry_fade(local);
+	static_cast<void>(local.consume({}));
+	expect(local.consume({.confirm = true}).status ==
+		NewClassicHighScoreMenuStatus::local_selected,
+		"the hub defaults to the existing local HiScore destination");
+
+	NewClassicHighScoreMenu online(
+		{online_board(2U, 4U, 0x20U), online_board(2U, 5U, 0x30U)},
+		2U, patch_assets
+	);
+	finish_entry_fade(online);
+	static_cast<void>(online.consume({}));
+	static_cast<void>(online.consume({.down = true}));
+	static_cast<void>(online.consume({}));
+	auto opened = online.consume({.confirm = true});
+	expect(opened.surface_changed && online.viewing_online() &&
+		!online.viewing_detail() && online.selected_board() == 0U,
+		"Online Leaderboards opens the first cached character board");
+	static_cast<void>(online.consume({}));
+	static_cast<void>(online.consume({.right = true}));
+	expect(online.selected_board() == 1U,
+		"online board navigation wraps across cached character boards");
+	static_cast<void>(online.consume({}));
+	const auto list_hash = surface_hash(online.surface());
+	static_cast<void>(online.consume({.confirm = true}));
+	expect(online.viewing_detail() &&
+		surface_hash(online.surface()) != list_hash,
+		"a leaderboard row opens its replay telemetry detail surface");
+	static_cast<void>(online.consume({}));
+	static_cast<void>(online.consume({.cancel = true}));
+	expect(online.viewing_online() && !online.viewing_detail(),
+		"detail Cancel returns to the same online board");
+	static_cast<void>(online.consume({}));
+	static_cast<void>(online.consume({.cancel = true}));
+	expect(!online.viewing_online(),
+		"board Cancel returns to the HiScore hub");
+	static_cast<void>(online.consume({}));
+	expect(online.consume({.cancel = true}).status ==
+		NewClassicHighScoreMenuStatus::back,
+		"hub Cancel returns to the New Classic title");
 }
 
 void test_catalog_browser_and_save()
@@ -889,6 +1029,7 @@ void test_catalog_browser_and_save()
 
 int main()
 {
+	test_online_high_score_menu();
 	test_catalog_browser_and_save();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;

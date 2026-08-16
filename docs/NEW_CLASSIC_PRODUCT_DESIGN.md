@@ -266,7 +266,7 @@ configuration later observed by Classic.
 `HiScore` owns score-oriented views. `Replay` owns replay-oriented views. They
 share data and link to each other, but are not the same navigation concept.
 
-The eventual HiScore hub is:
+The HiScore hub is:
 
 ```text
 Local HiScores
@@ -285,9 +285,11 @@ My Uploads
 Return
 ```
 
-Do not add either hub while it would contain only one real destination; the
-current direct Local HiScore and Local Replay routes remain less frustrating
-until at least one additional view exists.
+The HiScore hub appears only when at least one validated cached online board
+exists for the active rank. With no such board, HiScore still opens the local
+viewer directly, so an offline or unconfigured installation gains no empty
+navigation layer. The Replay hub remains deferred until it has a second real
+destination.
 
 An ordinary online leaderboard entry is derived by a pinned, sandboxed,
 resource-limited server verifier from an uploaded V13 replay. The client never
@@ -458,12 +460,15 @@ deterministic package hashes, and representative screen snapshots.
 
 ### 8. HiScore/Replay hubs and online domain seam
 
-Status: domain/cache boundary complete in session 189; visible hubs remain
-deliberately deferred until a second real destination exists.
+Status: domain/cache boundary complete in session 189. Session 201 adds the
+read-only HiScore hub and source-styled cached online board/detail view. The
+hub remains absent when no active-rank cache exists. Replay navigation and
+live network actions remain deferred.
 
 - Define leaderboard/replay identifiers, category keys, provenance, and local
   cache documents without selecting a service vendor.
 - Add the HiScore hub when Personal Bests or a real online view exists.
+  Complete for cached online boards in session 201.
 - Add the Replay hub when an online/downloaded view exists.
 - Preserve direct Local views until then.
 
@@ -475,7 +480,8 @@ The frozen client-side contract is documented in
 `NEW_CLASSIC_ONLINE_CACHE.md`. It contains typed content-digest identities,
 explicit replay-verified versus curated-legacy provenance, and a bounded
 atomic offline cache. It contains no endpoint, credential, provider name, or
-network transport, and nothing currently makes either future hub visible.
+network transport. The HiScore owner consumes only already-validated snapshots;
+it performs no filesystem or network work on source-time ticks.
 
 ### 9. Server and sharing
 

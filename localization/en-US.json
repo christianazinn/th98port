@@ -250,6 +250,23 @@
     "device.owner.none": "[--]",
     "device.controller-row": "{owner} {name}",
     "device.no-controllers": "No controllers connected",
-    "device.error.save": "Could not save TH3DEV.CFG"
+    "device.error.save": "Could not save TH3DEV.CFG",
+
+    "hiscore.command.local": "Local HiScores",
+    "hiscore.command.online": "Online Leaderboards",
+    "hiscore.command.return": "Return",
+    "hiscore.online.title": "Online - {rank} - {character}",
+    "hiscore.online.footer": "Left/Right: Board   Z/Return: Details   Esc: Return",
+    "hiscore.online.detail-footer": "Esc: Return",
+    "hiscore.online.header.place": "No.",
+    "hiscore.online.label.player": "Player",
+    "hiscore.online.label.result": "Result",
+    "hiscore.online.label.replay": "Replay",
+    "hiscore.online.label.autofire": "Autofire",
+    "hiscore.online.result.clear": "Clear",
+    "hiscore.online.result.game-over": "Game Over",
+    "hiscore.online.replay.downloaded": "Downloaded",
+    "hiscore.online.replay.online": "Online",
+    "hiscore.online.replay.historical": "Historical"
   }
 }

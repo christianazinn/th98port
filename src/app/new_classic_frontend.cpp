@@ -1550,6 +1550,446 @@ std::size_t NewClassicReplayBrowserTestAccess::physical_row_count(
 	).size();
 }
 
+namespace {
+
+[[nodiscard]] std::string online_ascii(std::string_view text)
+{
+	std::string result;
+	result.reserve(text.size());
+	for(const auto value : text) {
+		const auto byte = static_cast<std::uint8_t>(value);
+		result.push_back(byte >= 0x20U && byte <= 0x7EU ? value : '?');
+	}
+	return result.empty() ? std::string{"-"} : result;
+}
+
+[[nodiscard]] std::string online_score(std::uint64_t score)
+{
+	return std::to_string(score);
+}
+
+[[nodiscard]] std::string online_place(std::size_t place)
+{
+	return std::to_string(place + 1U);
+}
+
+[[nodiscard]] std::string online_result(
+	const NewClassicLeaderboardEntry &entry,
+	const NewClassicMessageCatalog &messages
+)
+{
+	if(entry.result.kind == NewClassicOnlineResultKind::clear) {
+		return std::string(messages.text(
+			NewClassicMessageId::hiscore_online_result_clear
+		));
+	}
+	const auto label = messages.text(
+		NewClassicMessageId::hiscore_online_result_game_over
+	);
+	return std::string(label) + " " +
+		std::to_string(static_cast<unsigned>(entry.result.end_stage) + 1U);
+}
+
+[[nodiscard]] std::string online_slowdown(
+	const NewClassicOnlineReplayRecord &record
+)
+{
+	if(record.timed_frames == 0U) {
+		return "-";
+	}
+	const auto percent = std::min<std::uint64_t>(
+		100U,
+		(static_cast<std::uint64_t>(record.slow_frames) * 100U) /
+			record.timed_frames
+	);
+	return std::to_string(percent) + "%";
+}
+
+} // namespace
+
+NewClassicHighScoreMenu::NewClassicHighScoreMenu(
+	std::vector<NewClassicOnlineCacheDocument> boards,
+	std::uint8_t rank,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+) :
+	patch_assets_(std::move(patch_assets))
+{
+	for(auto &board : boards) {
+		if(board.board_category &&
+			board.board_category->mode == NewClassicOnlineMode::story &&
+			board.board_category->rank == rank &&
+			validate_new_classic_online_cache(board)) {
+			boards_.push_back(std::move(board));
+		}
+	}
+	std::ranges::sort(boards_, {}, [](const auto &board) {
+		return board.board_category->character;
+	});
+	const auto duplicate = std::adjacent_find(
+		boards_.begin(), boards_.end(), [](const auto &left, const auto &right) {
+			return left.board_category == right.board_category;
+		}
+	);
+	if(!patch_assets_ || boards_.empty() || duplicate != boards_.end()) {
+		return;
+	}
+	valid_ = true;
+	draw();
+	if(valid_) {
+		patch_surface_.raster().set_palette_tone(0);
+		patch_surface_.raster().apply_pending_palette();
+	}
+}
+
+bool NewClassicHighScoreMenu::valid() const noexcept
+{
+	return valid_;
+}
+
+void NewClassicHighScoreMenu::draw() noexcept
+{
+	if(!valid_ || !patch_assets_ ||
+		!patch_surface_.begin_hidden_frame(
+			patch_assets_->replay_list_background
+		)) {
+		valid_ = false;
+		return;
+	}
+	auto &raster = patch_surface_.raster();
+	static_cast<void>(raster.set_pending_palette_entry(12U, {15U, 15U, 0U}));
+	raster.apply_pending_palette();
+	switch(page_) {
+	case Page::hub: draw_hub(); break;
+	case Page::board: draw_board(); break;
+	case Page::detail: draw_detail(); break;
+	}
+	if(valid_ && !patch_surface_.publish(raster.access_page())) {
+		valid_ = false;
+	}
+}
+
+void NewClassicHighScoreMenu::draw_hub() noexcept
+{
+	const auto &font = patch_assets_->menu_font;
+	const auto &messages = patch_assets_->messages();
+	const std::array ids{
+		NewClassicMessageId::hiscore_command_local,
+		NewClassicMessageId::hiscore_command_online,
+		NewClassicMessageId::hiscore_command_return,
+	};
+	auto &raster = patch_surface_.raster();
+	valid_ = font.put_centered(
+		raster, 320, 96, messages.text(NewClassicMessageId::title_hiscore), 9U
+	);
+	for(std::size_t row = 0U; valid_ && row < ids.size(); ++row) {
+		const auto top = static_cast<std::int32_t>(160U + (row * 32U));
+		const auto color = static_cast<present::Index4>(
+			row == hub_selection_ ? 12U : 15U
+		);
+		valid_ = font.put_centered(
+			raster, 320, top, messages.text(ids[row]), color
+		);
+		if(valid_ && row == hub_selection_) {
+			valid_ = font.put(raster, 176, top, ">", 12U);
+		}
+	}
+}
+
+void NewClassicHighScoreMenu::draw_board() noexcept
+{
+	if(board_index_ >= boards_.size()) {
+		valid_ = false;
+		return;
+	}
+	const auto &board = boards_[board_index_];
+	const auto &category = *board.board_category;
+	const auto &font = patch_assets_->menu_font;
+	const auto &messages = patch_assets_->messages();
+	auto &raster = patch_surface_.raster();
+	const auto rank = patch_rank_label(category.rank, messages);
+	const auto character = patch_character_label(
+		static_cast<std::int8_t>((category.character * 2U) + 1U), messages
+	);
+	const std::array title_arguments{
+		NewClassicMessageArgument{"rank", rank},
+		NewClassicMessageArgument{"character", character},
+	};
+	valid_ = font.put_centered(raster, 320, 48, messages.format(
+		NewClassicMessageId::hiscore_online_title, title_arguments
+	), 9U) &&
+		font.put(raster, 48, 80, messages.text(
+			NewClassicMessageId::hiscore_online_header_place), 9U) &&
+		font.put(raster, 96, 80, messages.text(
+			NewClassicMessageId::hiscore_online_label_player), 9U) &&
+		font.put_right(raster, 340, 80, messages.text(
+			NewClassicMessageId::replay_header_score), 9U) &&
+		font.put(raster, 364, 80, messages.text(
+			NewClassicMessageId::replay_header_character), 9U) &&
+		font.put(raster, 476, 80, messages.text(
+			NewClassicMessageId::replay_header_rank), 9U) &&
+		font.put(raster, 560, 80, messages.text(
+			NewClassicMessageId::replay_header_stage), 9U);
+	if(board.leaderboard_entries.empty()) {
+		valid_ = valid_ && font.put(
+			raster, 96, 96, messages.text(NewClassicMessageId::replay_none), 15U
+		);
+	}
+	for(std::size_t row = 0U; valid_ && row < browser_rows; ++row) {
+		const auto entry_index = top_entry_ + row;
+		if(entry_index >= board.leaderboard_entries.size()) {
+			break;
+		}
+		const auto &entry = board.leaderboard_entries[entry_index];
+		const auto top = static_cast<std::int32_t>(96U + (row * 16U));
+		const auto color = static_cast<present::Index4>(
+			entry_index == selected_entry_ ? 12U : 15U
+		);
+		if(entry_index == selected_entry_) {
+			valid_ = font.put(raster, 32, top, ">", 12U);
+		}
+		auto player = online_ascii(entry.player);
+		if(player.size() > 13U) {
+			player.resize(13U);
+		}
+		const auto score = online_score(entry.result.score);
+		const auto stage = entry.result.kind ==
+			NewClassicOnlineResultKind::clear ?
+			std::string(messages.text(NewClassicMessageId::replay_marker_all)) :
+			std::to_string(static_cast<unsigned>(entry.result.end_stage) + 1U);
+		valid_ = valid_ &&
+			patch_put_fixed(font, raster, 48, top,
+				online_place(entry_index), 12, color) &&
+			patch_put_fixed(font, raster, 96, top, player, 13, color) &&
+			patch_put_fixed(font, raster,
+				340 - static_cast<std::int32_t>(score.size() * 12U), top,
+				score, 12, color) &&
+			font.put(raster, 364, top, character, color) &&
+			font.put(raster, 476, top, rank, color) &&
+			font.put(raster, 560, top, stage, color);
+	}
+	valid_ = valid_ && font.put_centered(raster, 320, 368, messages.text(
+		NewClassicMessageId::hiscore_online_footer
+	), 9U);
+}
+
+const NewClassicOnlineReplayRecord *
+NewClassicHighScoreMenu::selected_replay() const noexcept
+{
+	if(board_index_ >= boards_.size()) {
+		return nullptr;
+	}
+	const auto &board = boards_[board_index_];
+	if(selected_entry_ >= board.leaderboard_entries.size()) {
+		return nullptr;
+	}
+	const auto &entry = board.leaderboard_entries[selected_entry_];
+	if(!entry.replay_id) {
+		return nullptr;
+	}
+	const auto found = std::ranges::find_if(
+		board.replay_records, [&entry](const auto &record) {
+			return record.replay_id == *entry.replay_id;
+		}
+	);
+	return found == board.replay_records.end() ? nullptr : &*found;
+}
+
+void NewClassicHighScoreMenu::draw_detail() noexcept
+{
+	if(board_index_ >= boards_.size() || selected_entry_ >=
+		boards_[board_index_].leaderboard_entries.size()) {
+		valid_ = false;
+		return;
+	}
+	const auto &entry =
+		boards_[board_index_].leaderboard_entries[selected_entry_];
+	const auto &font = patch_assets_->menu_font;
+	const auto &messages = patch_assets_->messages();
+	auto &raster = patch_surface_.raster();
+	const auto put_row = [&](std::int32_t top, NewClassicMessageId label,
+		std::string_view value) {
+		return font.put(raster, 96, top, messages.text(label), 9U) &&
+			font.put(raster, 256, top, value, 15U);
+	};
+	auto player = online_ascii(entry.player);
+	if(player.size() > 24U) {
+		player.resize(24U);
+	}
+	const auto score = online_score(entry.result.score);
+	const auto result = online_result(entry, messages);
+	valid_ = font.put_centered(raster, 320, 64, messages.text(
+		NewClassicMessageId::hiscore_command_online
+	), 9U) &&
+		put_row(96, NewClassicMessageId::hiscore_online_label_player, player) &&
+		put_row(128, NewClassicMessageId::replay_header_score, score) &&
+		put_row(160, NewClassicMessageId::hiscore_online_label_result, result) &&
+		put_row(192, NewClassicMessageId::replay_label_date,
+			dos_date_label(entry.dos_date));
+	if(const auto *replay = selected_replay()) {
+		const auto autofire = messages.text((replay->autofire & 0x01U) ?
+			NewClassicMessageId::replay_autofire_on :
+			NewClassicMessageId::replay_autofire_off);
+		const auto replay_state = messages.text(
+			replay->availability == NewClassicOnlineReplayAvailability::downloaded ?
+				NewClassicMessageId::hiscore_online_replay_downloaded :
+				NewClassicMessageId::hiscore_online_replay_online
+		);
+		valid_ = valid_ &&
+			put_row(224, NewClassicMessageId::hiscore_online_label_autofire,
+				autofire) &&
+			put_row(240, NewClassicMessageId::replay_label_slowdown,
+				online_slowdown(*replay)) &&
+			put_row(272, NewClassicMessageId::hiscore_online_label_replay,
+				replay_state);
+	} else {
+		valid_ = valid_ && put_row(
+			272, NewClassicMessageId::hiscore_online_label_replay,
+			messages.text(NewClassicMessageId::hiscore_online_replay_historical)
+		);
+	}
+	valid_ = valid_ && font.put_centered(raster, 320, 352, messages.text(
+		NewClassicMessageId::hiscore_online_detail_footer
+	), 9U);
+}
+
+NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
+	NewClassicUiInput input
+) noexcept
+{
+	if(!valid_ || status_ != NewClassicHighScoreMenuStatus::running) {
+		return {.status = status_};
+	}
+	if(input.app_quit_requested) {
+		status_ = NewClassicHighScoreMenuStatus::application_quit;
+		return {.status = status_};
+	}
+	if(fade_in_active_) {
+		auto &raster = patch_surface_.raster();
+		bool changed = false;
+		if(fade_boundary_ != 0U && fade_boundary_ <= 17U) {
+			const auto pair = static_cast<std::int16_t>(fade_boundary_ - 1U);
+			raster.set_palette_tone(static_cast<std::int16_t>(pair * 6));
+			raster.apply_pending_palette();
+			changed = true;
+		}
+		++fade_boundary_;
+		if(fade_boundary_ >= palette_fade_boundary_count) {
+			raster.set_palette_tone(100);
+			raster.apply_pending_palette();
+			fade_in_active_ = false;
+			input_allowed_ = !any(input);
+			changed = true;
+		}
+		return {.surface_changed = changed, .status = status_};
+	}
+	if(!input_allowed_) {
+		if(!any(input)) {
+			input_allowed_ = true;
+		}
+		return {.status = status_};
+	}
+	if(!any(input)) {
+		return {.status = status_};
+	}
+	input_allowed_ = false;
+	if(page_ == Page::hub) {
+		if(input.cancel) {
+			status_ = NewClassicHighScoreMenuStatus::back;
+			return {.status = status_};
+		}
+		if(input.up) {
+			hub_selection_ = (hub_selection_ + 2U) % 3U;
+		} else if(input.down) {
+			hub_selection_ = (hub_selection_ + 1U) % 3U;
+		} else if(input.confirm) {
+			if(hub_selection_ == 0U) {
+				status_ = NewClassicHighScoreMenuStatus::local_selected;
+				return {.status = status_};
+			}
+			if(hub_selection_ == 1U) {
+				page_ = Page::board;
+				selected_entry_ = 0U;
+				top_entry_ = 0U;
+			} else {
+				status_ = NewClassicHighScoreMenuStatus::back;
+				return {.status = status_};
+			}
+		} else {
+			return {.status = status_};
+		}
+		draw();
+		return {.surface_changed = valid_, .status = status_};
+	}
+	if(page_ == Page::detail) {
+		if(input.cancel || input.bomb) {
+			page_ = Page::board;
+			draw();
+			return {.surface_changed = valid_, .status = status_};
+		}
+		return {.status = status_};
+	}
+	if(input.cancel || input.bomb) {
+		page_ = Page::hub;
+		draw();
+		return {.surface_changed = valid_, .status = status_};
+	}
+	if(input.left || input.right) {
+		board_index_ = input.left ?
+			(board_index_ + boards_.size() - 1U) % boards_.size() :
+			(board_index_ + 1U) % boards_.size();
+		selected_entry_ = 0U;
+		top_entry_ = 0U;
+	} else {
+		const auto count = boards_[board_index_].leaderboard_entries.size();
+		if(input.up && count != 0U) {
+			selected_entry_ = (selected_entry_ + count - 1U) % count;
+		} else if(input.down && count != 0U) {
+			selected_entry_ = (selected_entry_ + 1U) % count;
+		} else if(input.confirm && count != 0U) {
+			page_ = Page::detail;
+		} else {
+			return {.status = status_};
+		}
+		if(selected_entry_ < top_entry_) {
+			top_entry_ = selected_entry_;
+		} else if(selected_entry_ >= top_entry_ + browser_rows) {
+			top_entry_ = selected_entry_ - (browser_rows - 1U);
+		}
+	}
+	draw();
+	return {.surface_changed = valid_, .status = status_};
+}
+
+present::SourceSurface NewClassicHighScoreMenu::surface() const noexcept
+{
+	return patch_surface_.surface();
+}
+
+NewClassicHighScoreMenuStatus NewClassicHighScoreMenu::status() const noexcept
+{
+	return status_;
+}
+
+bool NewClassicHighScoreMenu::viewing_online() const noexcept
+{
+	return page_ != Page::hub;
+}
+
+bool NewClassicHighScoreMenu::viewing_detail() const noexcept
+{
+	return page_ == Page::detail;
+}
+
+std::size_t NewClassicHighScoreMenu::selected_board() const noexcept
+{
+	return board_index_;
+}
+
+std::size_t NewClassicHighScoreMenu::selected_entry() const noexcept
+{
+	return selected_entry_;
+}
+
 NewClassicReplaySaveMenu::NewClassicReplaySaveMenu(
 	formats::ReplayDocument document,
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,

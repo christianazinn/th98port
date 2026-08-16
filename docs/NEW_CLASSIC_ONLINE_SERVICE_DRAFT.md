@@ -1,8 +1,8 @@
 # New Classic online leaderboard and replay service
 
 Status: **local foundation, strict client/cache projection, platform-neutral
-transactions, and disabled Windows adapter implemented; production deployment
-and visible UI pending**
+transactions, disabled Windows adapter, and cached leaderboard UI implemented;
+production deployment and live client actions pending**
 
 Decision date: 2026-08-15
 
@@ -303,4 +303,14 @@ bounds connect/request time and reply bytes, and exposes no platform state to
 gameplay. DPAPI protects the opaque user ID and token together for the current
 Windows account through an atomic read-back-validated store. No production
 origin is compiled in or instantiated; therefore the remaining work is a
-configured deployment plus the source-styled asynchronous owner.
+configured deployment plus live asynchronous actions.
+
+Session 201 adds the first visible offline-first owner. If at least one valid
+T3ONL002 Story board exists for the active rank, HiScore opens a source-styled
+hub with the existing local viewer and a Replay-style cached online board. The
+board exposes player, score, character, rank, result, date, Autofire, slowdown,
+and replay availability, including ordinary historical entries without fake
+replay actions. Cache files are loaded before deterministic session ownership;
+the menu itself is immutable and never performs filesystem or network work.
+With no valid active-rank cache, the direct local HiScore route remains exactly
+as before.

@@ -989,6 +989,18 @@ std::optional<GameInit> ClassicRunnerTestAccess::vs_terminal_resident(
 	);
 }
 
+bool ClassicRunnerTestAccess::online_high_score_menu(
+	const ClassicRunner &runner
+) noexcept
+{
+	return runner.impl_->operations.consume == &consume_session &&
+		ClassicOpSessionTestAccess::online_high_score_menu(
+			*static_cast<const ClassicOpSession *>(
+				runner.impl_->operations.context
+			)
+		);
+}
+
 std::expected<std::vector<std::byte>, ClassicRunnerError>
 ClassicRunnerTestAccess::read_file(
 	const std::filesystem::path &path,

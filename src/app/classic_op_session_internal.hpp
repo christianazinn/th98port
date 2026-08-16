@@ -300,6 +300,7 @@ struct ClassicOpSessionTestHooks final {
 	(*force_vs_main_outcome)(void *, ClassicOpVsRouteTestOutcome) = nullptr;
 	std::optional<GameInit> (*vs_selection_resident)(void *) = nullptr;
 	std::optional<GameInit> (*vs_terminal_resident)(void *) = nullptr;
+	bool (*online_high_score_menu)(void *) = nullptr;
 };
 
 class ClassicOpSession final {
@@ -413,6 +414,9 @@ struct ClassicOpSessionTestAccess final {
 		const ClassicOpSession &session
 	) noexcept;
 	[[nodiscard]] static std::optional<GameInit> vs_terminal_resident(
+		const ClassicOpSession &session
+	) noexcept;
+	[[nodiscard]] static bool online_high_score_menu(
 		const ClassicOpSession &session
 	) noexcept;
 	[[nodiscard]] static CoreInput vs_cpu_main_input(

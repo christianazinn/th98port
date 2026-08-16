@@ -85,6 +85,9 @@ struct ClassicRunnerTestAccess final {
 	[[nodiscard]] static std::optional<GameInit> vs_terminal_resident(
 		const ClassicRunner &runner
 	) noexcept;
+	[[nodiscard]] static bool online_high_score_menu(
+		const ClassicRunner &runner
+	) noexcept;
 
 	[[nodiscard]] static std::expected<
 		std::vector<std::byte>,

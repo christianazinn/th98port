@@ -251,6 +251,23 @@
     {"enum": "device_owner_none", "id": "device.owner.none", "domain": "menu-font", "max_width": 48},
     {"enum": "device_controller_row", "id": "device.controller-row", "domain": "menu-font", "max_width": 184, "placeholders": [{"name": "name", "width_value": "WWWWWWWW"}, {"name": "owner", "width_value": "[--]"}]},
     {"enum": "device_no_controllers", "id": "device.no-controllers", "domain": "menu-font", "max_width": 400},
-    {"enum": "device_error_save", "id": "device.error.save", "domain": "menu-font", "max_width": 400}
+    {"enum": "device_error_save", "id": "device.error.save", "domain": "menu-font", "max_width": 400},
+
+    {"enum": "hiscore_command_local", "id": "hiscore.command.local", "domain": "menu-font", "max_width": 400},
+    {"enum": "hiscore_command_online", "id": "hiscore.command.online", "domain": "menu-font", "max_width": 400},
+    {"enum": "hiscore_command_return", "id": "hiscore.command.return", "domain": "menu-font", "max_width": 400},
+    {"enum": "hiscore_online_title", "id": "hiscore.online.title", "domain": "menu-font", "max_width": 560, "placeholders": [{"name": "character", "width_value": "Yumemi"}, {"name": "rank", "width_value": "Lunatic"}]},
+    {"enum": "hiscore_online_footer", "id": "hiscore.online.footer", "domain": "menu-font", "max_width": 560},
+    {"enum": "hiscore_online_detail_footer", "id": "hiscore.online.detail-footer", "domain": "menu-font", "max_width": 560},
+    {"enum": "hiscore_online_header_place", "id": "hiscore.online.header.place", "domain": "menu-font", "max_width": 48},
+    {"enum": "hiscore_online_label_player", "id": "hiscore.online.label.player", "domain": "menu-font", "max_width": 160},
+    {"enum": "hiscore_online_label_result", "id": "hiscore.online.label.result", "domain": "menu-font", "max_width": 160},
+    {"enum": "hiscore_online_label_replay", "id": "hiscore.online.label.replay", "domain": "menu-font", "max_width": 160},
+    {"enum": "hiscore_online_label_autofire", "id": "hiscore.online.label.autofire", "domain": "menu-font", "max_width": 160},
+    {"enum": "hiscore_online_result_clear", "id": "hiscore.online.result.clear", "domain": "menu-font", "max_width": 160},
+    {"enum": "hiscore_online_result_game_over", "id": "hiscore.online.result.game-over", "domain": "menu-font", "max_width": 160},
+    {"enum": "hiscore_online_replay_downloaded", "id": "hiscore.online.replay.downloaded", "domain": "menu-font", "max_width": 240},
+    {"enum": "hiscore_online_replay_online", "id": "hiscore.online.replay.online", "domain": "menu-font", "max_width": 240},
+    {"enum": "hiscore_online_replay_historical", "id": "hiscore.online.replay.historical", "domain": "menu-font", "max_width": 240}
   ]
 }

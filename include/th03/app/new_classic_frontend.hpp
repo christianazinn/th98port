@@ -11,12 +11,14 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "th03/app/authentic_text.hpp"
 #include "th03/app/classic_config.hpp"
 #include "th03/app/classic_score.hpp"
 #include "th03/app/new_classic_assets.hpp"
 #include "th03/app/new_classic_key_config_store.hpp"
+#include "th03/app/new_classic_online.hpp"
 #include "th03/app/replay_slot_store.hpp"
 #include "th03/formats/replay.hpp"
 #include "th03/present/graphics_text.hpp"
@@ -162,6 +164,68 @@ struct NewClassicReplayBrowserTestAccess final {
 	[[nodiscard]] static std::size_t physical_row_count(
 		const NewClassicReplayBrowser &browser
 	) noexcept;
+};
+
+enum class NewClassicHighScoreMenuStatus : std::uint8_t {
+	running,
+	local_selected,
+	back,
+	application_quit,
+};
+
+struct NewClassicHighScoreMenuResult final {
+	bool surface_changed = false;
+	NewClassicHighScoreMenuStatus status =
+		NewClassicHighScoreMenuStatus::running;
+};
+
+// New Classic-only source-styled hub for local and cached online score views.
+// Every online row was already validated by the T3ONL002 decoder; this owner
+// is deliberately read-only and never introduces network I/O into source-time
+// scene advancement. An empty board set is invalid so the existing direct
+// local HiScore route remains the only visible path while offline/unconfigured.
+class NewClassicHighScoreMenu final {
+public:
+	NewClassicHighScoreMenu(
+		std::vector<NewClassicOnlineCacheDocument> boards,
+		std::uint8_t rank,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	);
+
+	[[nodiscard]] bool valid() const noexcept;
+	[[nodiscard]] NewClassicHighScoreMenuResult consume(
+		NewClassicUiInput input
+	) noexcept;
+	[[nodiscard]] present::SourceSurface surface() const noexcept;
+	[[nodiscard]] NewClassicHighScoreMenuStatus status() const noexcept;
+	[[nodiscard]] bool viewing_online() const noexcept;
+	[[nodiscard]] bool viewing_detail() const noexcept;
+	[[nodiscard]] std::size_t selected_board() const noexcept;
+	[[nodiscard]] std::size_t selected_entry() const noexcept;
+
+private:
+	enum class Page : std::uint8_t { hub, board, detail };
+	void draw() noexcept;
+	void draw_hub() noexcept;
+	void draw_board() noexcept;
+	void draw_detail() noexcept;
+	[[nodiscard]] const NewClassicOnlineReplayRecord *selected_replay() const
+		noexcept;
+
+	std::vector<NewClassicOnlineCacheDocument> boards_{};
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
+	NewClassicPatchSurface patch_surface_{};
+	Page page_ = Page::hub;
+	NewClassicHighScoreMenuStatus status_ =
+		NewClassicHighScoreMenuStatus::running;
+	std::size_t hub_selection_ = 0U;
+	std::size_t board_index_ = 0U;
+	std::size_t selected_entry_ = 0U;
+	std::size_t top_entry_ = 0U;
+	bool valid_ = false;
+	bool fade_in_active_ = true;
+	std::uint8_t fade_boundary_ = 0U;
+	bool input_allowed_ = false;
 };
 
 enum class NewClassicReplaySaveStatus : std::uint8_t {

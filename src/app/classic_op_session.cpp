@@ -862,6 +862,7 @@ struct ClassicOpSessionBackend final {
 	std::uint16_t capture_cancel_key = 0U;
 	NewClassicHostKeyName key_name = nullptr;
 	void *key_name_context = nullptr;
+	std::vector<NewClassicOnlineCacheDocument> online_boards{};
 	std::unique_ptr<NewClassicReplayBrowser> replay_browser{};
 	std::optional<NewClassicReplayBrowserResult> replay_browser_result{};
 	std::optional<formats::ReplayDocument> replay_playback_document{};
@@ -893,6 +894,7 @@ struct ClassicOpSessionBackend final {
 	std::optional<ClassicOpMusicRoomCompletion> music_completion{};
 	std::unique_ptr<ClassicRegistrationScene> high_scores{};
 	std::optional<ClassicRegistrationCompletion> high_score_completion{};
+	std::unique_ptr<NewClassicHighScoreMenu> high_score_menu{};
 	std::unique_ptr<ClassicOpCharacterSelection> selection{};
 	std::optional<ClassicOpSelectionCompletion> selection_completion{};
 	std::unique_ptr<ClassicStorySession> story{};
@@ -971,6 +973,7 @@ struct ClassicOpSessionBackend final {
 			capture_cancel_key = runner_request->new_classic_capture_cancel_key;
 			key_name = runner_request->new_classic_key_name;
 			key_name_context = runner_request->new_classic_key_name_context;
+			online_boards = runner_request->new_classic_online_boards;
 		}
 		if(replay_recorder && new_classic_score_path.empty()) {
 			new_classic_score_path =
@@ -1367,7 +1370,8 @@ struct ClassicOpSessionBackend final {
 	{
 		if(title || options || key_config_scene || joy_config_scene || device_scene ||
 			replay_browser ||
-			replay_playback || music_room || high_scores || selection || story ||
+			replay_playback || music_room || high_scores || high_score_menu ||
+			selection || story ||
 			vs_stage || vs_process || vs_driver || vs_win) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
@@ -2018,9 +2022,9 @@ struct ClassicOpSessionBackend final {
 	}
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
-	start_high_scores()
+	start_local_high_scores(bool preserve_hub_return)
 	{
-		if(!title_completion || high_scores ||
+		if(!title_completion || high_scores || high_score_menu ||
 			title_completion->route() != ClassicOpRoute::high_scores ||
 			title_completion->selection_mode()) {
 			return std::unexpected(session_error(
@@ -2060,8 +2064,78 @@ struct ClassicOpSessionBackend final {
 		}
 		high_scores = std::move(*created);
 		title.reset();
-		title_completion.reset();
+		if(!preserve_hub_return) {
+			title_completion.reset();
+		}
 		return {};
+	}
+
+	[[nodiscard]] std::expected<bool, ClassicOpSessionError>
+	start_high_score_menu()
+	{
+		if(!title_completion || !replay_recorder || !patch_assets ||
+			online_boards.empty() || high_scores || high_score_menu) {
+			return false;
+		}
+		auto menu = std::make_unique<NewClassicHighScoreMenu>(
+			online_boards, title_completion->resident().rank, patch_assets
+		);
+		if(!menu->valid()) {
+			return false;
+		}
+		if(!push_audio({
+			.type = ClassicAudioCommandType::load_song,
+			.cue = ClassicMusicCue::high_score,
+		}) || !push_audio({
+			.type = ClassicAudioCommandType::play_song,
+			.cue = ClassicMusicCue::high_score,
+		})) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::audio_command_pending
+			));
+		}
+		high_score_menu = std::move(menu);
+		title.reset();
+		return true;
+	}
+
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	start_high_scores()
+	{
+		auto hub = start_high_score_menu();
+		if(!hub) {
+			return std::unexpected(std::move(hub.error()));
+		}
+		if(*hub) {
+			return {};
+		}
+		return start_local_high_scores(false);
+	}
+
+	[[nodiscard]] std::expected<bool, ClassicOpSessionError>
+	return_local_high_scores_to_menu()
+	{
+		if(!title_completion) {
+			return false;
+		}
+		high_score_completion = high_scores->take_completion();
+		if(!high_score_completion || high_score_completion->entered_place()) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		high_scores.reset();
+		high_score_completion.reset();
+		auto hub = start_high_score_menu();
+		if(!hub) {
+			return std::unexpected(std::move(hub.error()));
+		}
+		if(!*hub) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		return true;
 	}
 
 	[[nodiscard]] std::expected<ClassicOpSessionBackendTick,
@@ -2070,12 +2144,50 @@ struct ClassicOpSessionBackend final {
 		ClassicAudioStatus audio
 	)
 	{
+		if(high_score_menu) {
+			const auto result = high_score_menu->consume({
+				.up = input.up,
+				.down = input.down,
+				.left = input.left,
+				.right = input.right,
+				.confirm = input.ok || input.shot,
+				.bomb = input.bomb,
+				.cancel = input.cancel,
+			});
+			if(result.status == NewClassicHighScoreMenuStatus::local_selected) {
+				high_score_menu.reset();
+				if(auto started = start_local_high_scores(true); !started) {
+					return std::unexpected(std::move(started.error()));
+				}
+				return ClassicOpSessionBackendTick{
+					.surface_changed = true,
+					.input_sampled = true,
+				};
+			}
+			if(result.status == NewClassicHighScoreMenuStatus::back) {
+				return ClassicOpSessionBackendTick{
+					.input_sampled = true,
+					.ready = true,
+				};
+			}
+			return ClassicOpSessionBackendTick{
+				.surface_changed = result.surface_changed,
+				.input_sampled = input.any(),
+			};
+		}
 		if(!high_scores) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
 		if(high_scores->phase() == ClassicRegistrationPhase::ready) {
+			auto returned = return_local_high_scores_to_menu();
+			if(!returned) {
+				return std::unexpected(std::move(returned.error()));
+			}
+			if(*returned) {
+				return ClassicOpSessionBackendTick{.surface_changed = true};
+			}
 			return ClassicOpSessionBackendTick{.ready = true};
 		}
 		auto advanced = high_scores->advance(input, audio);
@@ -2089,6 +2201,18 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::audio_command_pending
 			));
 		}
+		if(advanced->ready) {
+			auto returned = return_local_high_scores_to_menu();
+			if(!returned) {
+				return std::unexpected(std::move(returned.error()));
+			}
+			if(*returned) {
+				return ClassicOpSessionBackendTick{
+					.surface_changed = true,
+					.input_sampled = advanced->input_sampled,
+				};
+			}
+		}
 		return ClassicOpSessionBackendTick{
 			.surface_changed = advanced->surface_changed,
 			.input_sampled = advanced->input_sampled,
@@ -2099,6 +2223,24 @@ struct ClassicOpSessionBackend final {
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
 	finish_high_scores()
 	{
+		if(high_score_menu) {
+			if(high_score_menu->status() !=
+				NewClassicHighScoreMenuStatus::back || !title_completion) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			auto returned = build_title(title_completion->resident());
+			if(!returned) {
+				return std::unexpected(std::move(returned.error()));
+			}
+			title = std::move(*returned);
+			high_score_menu.reset();
+			title_completion.reset();
+			music_carry = {};
+			selection_carry = {};
+			return {};
+		}
 		if(!high_score_completion) {
 			if(!high_scores) {
 				return std::unexpected(session_error(
@@ -3500,6 +3642,11 @@ struct ClassicOpSessionBackend final {
 		return vs_terminal->transition.resident;
 	}
 
+	[[nodiscard]] bool online_high_score_menu_for_route_test() const noexcept
+	{
+		return high_score_menu != nullptr;
+	}
+
 	[[nodiscard]] bool audio_pending() const noexcept
 	{
 		return audio_count != 0U;
@@ -3638,6 +3785,8 @@ struct ClassicOpSessionBackend final {
 			tram = &music_room->tram();
 		} else if(!raster && high_score_completion) {
 			raster = &high_score_completion->raster();
+		} else if(!raster && high_score_menu) {
+			return high_score_menu->surface();
 		} else if(!raster && high_scores) {
 			raster = &high_scores->raster();
 		} else if(!raster && practice_menu && selection) {
@@ -4007,6 +4156,10 @@ Result backend_call(void *context, Method method, Args &&...args)
 		.vs_terminal_resident = [](void *context) {
 			return static_cast<ClassicOpSessionBackend *>(context)->
 				vs_terminal_resident_for_route_test();
+		},
+		.online_high_score_menu = [](void *context) {
+			return static_cast<const ClassicOpSessionBackend *>(context)->
+				online_high_score_menu_for_route_test();
 		},
 	};
 }
@@ -4720,6 +4873,18 @@ std::optional<GameInit> ClassicOpSessionTestAccess::vs_terminal_resident(
 	return session.impl_->test_hooks.vs_terminal_resident(
 		session.impl_->test_hooks.context
 	);
+}
+
+bool ClassicOpSessionTestAccess::online_high_score_menu(
+	const ClassicOpSession &session
+) noexcept
+{
+	return session.impl_->scene == ClassicOpSessionScene::high_scores &&
+		session.impl_->test_hooks.context &&
+		session.impl_->test_hooks.online_high_score_menu &&
+		session.impl_->test_hooks.online_high_score_menu(
+			session.impl_->test_hooks.context
+		);
 }
 
 } // namespace th03::app
