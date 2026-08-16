@@ -13,11 +13,13 @@
 #include <string_view>
 #include <vector>
 
+#include "th03/app/classic_audio_session.hpp"
 #include "th03/app/classic_cli.hpp"
 #include "th03/app/classic_config_store.hpp"
 #include "th03/app/classic_runner.hpp"
 #include "th03/app/classic_score_store.hpp"
 #include "th03/app/new_classic_language.hpp"
+#include "th03/app/new_classic_score_store.hpp"
 #include "th03/app/new_classic_settings_store.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/formats/v13.hpp"
@@ -1228,6 +1230,166 @@ bool authentic_online_high_score_gate(
 		if(ClassicRunnerTestAccess::scene(runner) ==
 			ClassicOpSessionScene::title_menu) {
 			return true;
+		}
+		if(!step()) {
+			return false;
+		}
+	}
+	return false;
+}
+
+bool authentic_local_high_score_gate(
+	const std::filesystem::path &data_root,
+	const std::filesystem::path &main_executable,
+	const std::filesystem::path &mainl_executable,
+	const std::filesystem::path &op_executable,
+	const std::filesystem::path &font_rom
+)
+{
+	using namespace th03::app;
+	TemporaryDirectory temporary;
+	auto score = new_classic_score_empty();
+	score.generation = 7U;
+	score.last_run_id = 6U;
+	score.boards[3U][1U].stats.play_frames = 242U;
+	score.boards[3U][2U].stats.play_frames = 3'649U;
+	score.boards[3U][4U].stats.play_frames = 6'569U;
+	const auto score_path = temporary.path() / "YUME.NEW.NEM";
+	if(!commit_new_classic_score_store(score_path, score)) {
+		std::cerr << "stats-only HiScore fixture could not be committed\n";
+		return false;
+	}
+	auto settings = new_classic_settings_defaults();
+	settings.options.rank = ClassicRank::lunatic;
+	const auto language_overlay = data_root / "TH3EN.DAT";
+	settings.options.language = std::filesystem::is_regular_file(language_overlay) ?
+		ClassicLanguage::english : ClassicLanguage::japanese;
+	settings.master_volume_percent = 100U;
+	settings.music_volume_percent = 75U;
+	settings.effect_volume_percent = 85U;
+	if(!commit_new_classic_settings_store(
+		temporary.path() / "PODD.CFG", settings
+	)) {
+		std::cerr << "stats-only HiScore settings could not be committed\n";
+		return false;
+	}
+
+	ClassicRunnerRequest request{};
+	request.content = {
+		.data_root = data_root,
+		.main_executable = main_executable,
+		.mainl_executable = mainl_executable,
+		.op_executable = op_executable,
+		.font_rom = font_rom,
+		.language_overlay = settings.options.language == ClassicLanguage::english ?
+			language_overlay : std::filesystem::path{},
+		.replay_root = temporary.path() / "REPLAY",
+		.config = temporary.path() / "YUME.CFG",
+		.new_classic_settings = temporary.path() / "PODD.CFG",
+		.score = temporary.path() / "YUME.NEM",
+	};
+	request.seed = 1U;
+	request.fm_available = true;
+	request.experience = ExperienceProfile::new_classic;
+	auto loaded = ClassicRunner::load(std::move(request));
+	if(!loaded) {
+		std::cerr << "stats-only-hiscore-load code=" << static_cast<unsigned>(
+			loaded.error().code) << " detail=" << static_cast<unsigned>(
+			loaded.error().detail_code) << '\n';
+		return false;
+	}
+	auto &runner = **loaded;
+	auto audio = ClassicAudioSession::create({
+		.data_root = data_root,
+		.tick_rate = {.ticks = 56'423'132U, .seconds = 1'000'000U},
+		.music_volume_percent = 100U,
+		.effect_volume_percent = 85U,
+	});
+	if(!audio) {
+		std::cerr << "stats-only HiScore audio could not be created code="
+			<< static_cast<unsigned>(audio.error().code) << '\n';
+		return false;
+	}
+	std::array<
+		th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	> pixels{};
+	std::uint64_t tick_index = 0U;
+	std::optional<ClassicRunnerConsumeResult> last{};
+	const auto drain_audio = [&]() {
+		while(const auto command = runner.take_audio_command()) {
+			if(!(*audio)->apply(*command)) {
+				return false;
+			}
+		}
+		return true;
+	};
+	const auto step = [&](std::uint16_t system = 0U) {
+		th03::CoreInput input{};
+		input.system = system;
+		auto advanced = runner.consume({
+			.tick_index = tick_index,
+			.deadline_ns = tick_index * 10U,
+			.input = input,
+		});
+		++tick_index;
+		if(!advanced || advanced->status != ClassicRunnerStatus::running) {
+			std::cerr << "stats-only HiScore route stopped at tick "
+				<< tick_index << '\n';
+			return false;
+		}
+		last = *advanced;
+		if(!drain_audio() || !(*audio)->advance_tick()) {
+			return false;
+		}
+		return !advanced->surface_changed ||
+			runner.compose_shown_surface(pixels).has_value();
+	};
+	const auto wait_for_input = [&](std::size_t limit) {
+		for(std::size_t frame = 0U; frame < limit; ++frame) {
+			if(!step()) {
+				return false;
+			}
+			if(last->input_sampled) {
+				return true;
+			}
+		}
+		return false;
+	};
+	if(!drain_audio()) {
+		return false;
+	}
+	if(!wait_for_input(512U) || !step(0x0020U) || !wait_for_input(64U)) {
+		return false;
+	}
+	for(std::size_t row = 0U; row < 3U; ++row) {
+		if(!step(0x0002U) || !step()) {
+			return false;
+		}
+	}
+	if(!step(0x0020U)) {
+		return false;
+	}
+	for(std::size_t guard = 0U; guard < 96U; ++guard) {
+		if(ClassicRunnerTestAccess::scene(runner) ==
+			ClassicOpSessionScene::high_scores) {
+			break;
+		}
+		if(!step()) {
+			return false;
+		}
+	}
+	if(ClassicRunnerTestAccess::scene(runner) !=
+		ClassicOpSessionScene::high_scores ||
+		ClassicRunnerTestAccess::online_high_score_menu(runner) ||
+		!wait_for_input(96U) || !step(0x0020U)) {
+		std::cerr << "stats-only profile did not traverse direct local HiScore\n";
+		return false;
+	}
+	for(std::size_t guard = 0U; guard < 128U; ++guard) {
+		if(ClassicRunnerTestAccess::scene(runner) ==
+			ClassicOpSessionScene::title_menu) {
+			return runner.compose_shown_surface(pixels).has_value();
 		}
 		if(!step()) {
 			return false;
@@ -2859,17 +3021,24 @@ int main(int argc, char **argv)
 			argv[2], argv[3], argv[4], argv[5], argv[6], argv[7]
 		), "supplied English overlay traverses the complete New Classic runner");
 	} else if(argc == 7 && (std::string_view(argv[1]) == "--authentic" ||
+		std::string_view(argv[1]) == "--authentic-local-hiscore" ||
 		std::string_view(argv[1]) == "--authentic-vs" ||
 		std::string_view(argv[1]) == "--authentic-practice" ||
 		std::string_view(argv[1]) == "--authentic-online")) {
 		if(std::string_view(argv[1]) == "--authentic") {
 			expect(authentic_gate(argv[2], argv[3], argv[4], argv[5], argv[6]),
 				"supplied originals construct and advance the complete Classic runner");
+			expect(authentic_local_high_score_gate(
+				argv[2], argv[3], argv[4], argv[5], argv[6]
+			), "stats-only profile traverses the direct New Classic HiScore route");
 			expect(authentic_online_high_score_gate(
 				argv[2], argv[3], argv[4], argv[5], argv[6]
 			), "validated cached board traverses the New Classic HiScore hub");
-		}
-		if(std::string_view(argv[1]) == "--authentic-online") {
+		} else if(std::string_view(argv[1]) == "--authentic-local-hiscore") {
+			expect(authentic_local_high_score_gate(
+				argv[2], argv[3], argv[4], argv[5], argv[6]
+			), "stats-only profile traverses the direct New Classic HiScore route");
+		} else if(std::string_view(argv[1]) == "--authentic-online") {
 			expect(authentic_online_high_score_gate(
 				argv[2], argv[3], argv[4], argv[5], argv[6]
 			), "validated cached board traverses the New Classic HiScore hub");
@@ -2883,7 +3052,8 @@ int main(int argc, char **argv)
 		}
 	} else if(argc != 1) {
 		std::cerr << "usage: th03-app-classic-runner-tests "
-			"[--authentic|--authentic-vs|--authentic-practice|--authentic-online "
+			"[--authentic|--authentic-local-hiscore|--authentic-vs|"
+			"--authentic-practice|--authentic-online "
 			"<data-root> <MAIN.EXE> <MAINL.EXE> <OP.EXE> <FONT.ROM> | "
 			"--authentic-english <data-root> <MAIN.EXE> <MAINL.EXE> "
 			"<OP.EXE> <FONT.ROM> <TH3EN.DAT>]\n";
