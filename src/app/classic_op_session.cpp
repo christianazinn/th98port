@@ -1227,13 +1227,18 @@ struct ClassicOpSessionBackend final {
 			if(advanced->surface_changed) {
 				const auto identity_after =
 					replay_playback->pixel_oracle_source_identity();
+				const bool owner_replaced =
+					identity_before.process != identity_after.process ||
+					identity_before.scene != identity_after.scene;
 				// MAIN publishes after advancing its counters, but the frame still
 				// owns replay_frame_io()'s pre-sample identity. A process or scene
 				// replacement instead exposes the incoming owner's startup surface.
-				publication_identity =
-					(identity_before.process != identity_after.process ||
-					 identity_before.scene != identity_after.scene) ?
-						identity_after : identity_before;
+				publication_identity = owner_replaced ?
+					identity_after : identity_before;
+				if(owner_replaced) {
+					publication_identity->boundary =
+						PixelOracleBoundary::scene_enter;
+				}
 			}
 			surface_changed = surface_changed || advanced->surface_changed;
 			process_advanced = process_advanced || advanced->process_advanced;
@@ -4612,6 +4617,7 @@ ClassicOpSession::consume(const ClassicOpSessionInput &input)
 		// publication. Terminal routes retain the outgoing surface and therefore
 		// keep its identity.
 		publication_identity = pixel_oracle_source_identity();
+		publication_identity.boundary = PixelOracleBoundary::scene_enter;
 	}
 	return ClassicOpSessionTick{
 		.scene = impl_->scene,

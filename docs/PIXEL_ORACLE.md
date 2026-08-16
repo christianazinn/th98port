@@ -152,11 +152,12 @@ event cadences.
 
 Identity belongs to the source owner that produced the published surface.
 Ordinary MAIN advances retain the pre-sample replay identity, an in-consume
-transition that exposes an incoming startup surface uses the incoming owner,
-and terminal surfaces retain the outgoing owner. Fast-forward retains the last
-changed substep. Focused runner/session regressions freeze the first three
-page/identity pairs and a Title-to-Options ownership transition; the aligner
-also rejects bootstrap rows as gameplay source ticks.
+transition that exposes an incoming startup surface uses the incoming owner
+with a `scene_enter` boundary, and terminal surfaces retain the outgoing owner.
+Fast-forward retains the last changed substep. Focused runner/session
+regressions freeze the first three page/identity pairs and a Title-to-Options
+ownership transition; the aligner rejects bootstrap and scene-entry rows as
+gameplay source ticks and fails closed on ambiguity under the selected key.
 
 For a bounded unattended New Classic capture, pass an exact V13 artifact and
 optional checkpoint. The explicit smoke bound is mandatory:

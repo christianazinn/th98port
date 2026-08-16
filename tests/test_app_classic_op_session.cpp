@@ -576,7 +576,9 @@ void test_retained_children_and_audio_barrier()
 			tick->pixel_oracle_source_identity.process ==
 				th03::app::PixelOracleProcess::op &&
 			tick->pixel_oracle_source_identity.scene ==
-				th03::app::PixelOracleScene::options,
+				th03::app::PixelOracleScene::options &&
+			tick->pixel_oracle_source_identity.boundary ==
+				th03::app::PixelOracleBoundary::scene_enter,
 		"drained audio resumes the cached boundary without a second advance"
 	);
 	backend->queue_title_audio = false;

@@ -132,6 +132,7 @@ std::string_view pixel_oracle_boundary_name(
 {
 	switch(boundary) {
 	case PixelOracleBoundary::bootstrap: return "bootstrap";
+	case PixelOracleBoundary::scene_enter: return "scene_enter";
 	case PixelOracleBoundary::source_tick: return "source_tick";
 	}
 	return "unknown";

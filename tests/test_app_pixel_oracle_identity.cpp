@@ -35,6 +35,7 @@ void test_tracker_and_schema()
 	const auto options = tracker.consume({
 		.process = PixelOracleProcess::op,
 		.scene = PixelOracleScene::options,
+		.boundary = PixelOracleBoundary::scene_enter,
 	}, true);
 	const auto title_return = tracker.consume({
 		.process = PixelOracleProcess::op,
@@ -73,6 +74,9 @@ void test_tracker_and_schema()
 		"unchanged source boundary remains ordered and increments duplicate commit");
 	expect(options.scene_visit == 1U && title_return.scene_visit == 2U,
 		"every OP scene entry increments one invocation-wide scene ordinal");
+	expect(options.boundary == PixelOracleBoundary::scene_enter &&
+		pixel_oracle_boundary_name(options.boundary) == "scene_enter",
+		"an incoming owner surface is distinct from a consumed source tick");
 	expect(main.process_instance == 1U && main.commit == 0U &&
 		main.logical_sample == 12U && main.replay_global_frame == 19U &&
 		main.round_frame == 7U,

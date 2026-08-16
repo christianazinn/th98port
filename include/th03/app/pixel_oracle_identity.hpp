@@ -43,6 +43,7 @@ enum class PixelOracleScene : std::uint8_t {
 // T3RGB1; this first production slice covers the scheduler-visible source wait.
 enum class PixelOracleBoundary : std::uint8_t {
 	bootstrap,
+	scene_enter,
 	source_tick,
 };
 
