@@ -33,6 +33,7 @@
 #include "th03/app/new_classic_netplay_datagram.hpp"
 #include "th03/app/new_classic_netplay_main_session.hpp"
 #include "th03/app/new_classic_netplay_post_match.hpp"
+#include "th03/app/new_classic_netplay_replay_capture.hpp"
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/new_classic_frontend.hpp"
 #include "th03/app/new_classic_language.hpp"
@@ -45,6 +46,7 @@
 #include "th03/app/startup_sequence.hpp"
 #include "th03/app/tick_input.hpp"
 #include "th03/audio/output_gain.hpp"
+#include "th03/formats/v13.hpp"
 #include "th03/platform/sdl_input.hpp"
 #include "th03/platform/sdl_audio_device.hpp"
 #include "th03/platform/sdl_platform.hpp"
@@ -1425,7 +1427,14 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	if(!process) {
 		return fail_content(process.error());
 	}
-	const auto process_start = (*process)->round_start_observation().start;
+	const auto process_round_start = (*process)->round_start_observation();
+	const auto process_start = process_round_start.start;
+	auto created_replay_capture =
+		th03::app::NewClassicNetplayReplayCapture::create(process_round_start);
+	if(!created_replay_capture) {
+		return fail_netplay("netplay-replay", "capture-create-failed");
+	}
+	auto replay_capture = std::move(*created_replay_capture);
 	auto session = th03::app::NewClassicNetplayMainSession::create(
 		local_player, std::move(*process)
 	);
@@ -1607,8 +1616,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	std::optional<ConfirmedSimulationDigest> remote_runtime_digest{};
 	std::optional<ConfirmedSimulationDigest> remote_runtime_digest_ack{};
 	std::optional<ConfirmedSimulationDigest> verified_runtime_digest{};
-	std::vector<th03::app::NewClassicNetplayConfirmedInputFrame>
-		confirmed_transcript{};
+	std::vector<std::uint8_t> local_deadline_missed{};
 	std::unique_ptr<th03::app::NewClassicNetplayPostMatch> post_match{};
 	bool runtime_digest_peer_ack = false;
 	bool presentation_pending = false;
@@ -1751,13 +1759,41 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			if(!*frame) {
 				return {};
 			}
-			if((**frame).frame != confirmed_transcript.size()) {
+			if((**frame).frame != replay_capture.frame_count() ||
+				(**frame).frame >= local_deadline_missed.size()) {
 				return std::unexpected(fail_netplay(
 					"netplay-replay", "transcript-order-failed"
 				));
 			}
-			confirmed_transcript.push_back(std::move(**frame));
+			if(auto appended = replay_capture.append_confirmed_frame(
+				**frame,
+				local_deadline_missed[static_cast<std::size_t>(
+					(**frame).frame
+				)] != 0U
+			); !appended) {
+				return std::unexpected(fail_netplay(
+					"netplay-replay", "capture-append-failed"
+				));
+			}
 		}
+	};
+	const auto classify_local_frame = [&](
+		std::optional<std::uint64_t> frame
+	) -> std::expected<void, int> {
+		if(!frame) {
+			return {};
+		}
+		if(*frame != local_deadline_missed.size()) {
+			return std::unexpected(fail_netplay(
+				"netplay-replay", "deadline-order-failed"
+			));
+		}
+		const auto next_deadline = scheduler->next_deadline_ns();
+		local_deadline_missed.push_back(static_cast<std::uint8_t>(
+			next_deadline &&
+			th03::platform::sdl_ticks_now_ns() >= *next_deadline
+		));
+		return {};
 	};
 	const auto drain_post_match_audio = [&]() -> std::expected<void, int> {
 		while(post_match) {
@@ -1816,6 +1852,15 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			continued->surface_publishable;
 		if(const auto transcript = drain_confirmed_transcript(); !transcript) {
 			return std::unexpected(transcript.error());
+		}
+		if(*continued->boundary == th03::StepStatus::round_transition) {
+			if(auto started = replay_capture.round_started(
+				(*session)->process().round_start_observation()
+			); !started) {
+				return std::unexpected(fail_netplay(
+					"netplay-replay", "round-start-failed"
+				));
+			}
 		}
 		std::cout << "status=boundary-confirmed\nboundary=" <<
 			static_cast<unsigned>(*continued->boundary) << "\nframe=" <<
@@ -2124,6 +2169,10 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 					newest_local_frame = frame;
 					++local_frames;
 				}
+				if(const auto classified = classify_local_frame(advanced->frame);
+					!classified) {
+					return classified.error();
+				}
 				presentation_pending = presentation_pending ||
 					advanced->surface_publishable;
 				if(const auto transcript = drain_confirmed_transcript();
@@ -2174,6 +2223,10 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				}
 				presentation_pending = presentation_pending ||
 					advanced->surface_publishable;
+				if(const auto classified = classify_local_frame(advanced->frame);
+					!classified) {
+					return classified.error();
+				}
 				if(const auto transcript = drain_confirmed_transcript();
 					!transcript) {
 					return transcript.error();
@@ -2336,16 +2389,31 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		}
 		if(post_match && post_match->status() ==
 			NewClassicNetplayPostMatchStatus::complete) {
+			if(!(*session)->transition()) {
+				return fail_netplay("netplay-replay", "transition-missing");
+			}
+			auto completed = replay_capture.finish_mainl(
+				(*session)->transition()->resident
+			);
+			if(!completed) {
+				return fail_netplay("netplay-replay", "finalize-failed");
+			}
+			auto encoded = th03::formats::write_v13_replay(*completed);
+			if(!encoded) {
+				return fail_netplay("netplay-replay", "encode-failed");
+			}
 			std::cout << "status=match-complete\nframes=" <<
 				(*session)->confirmed_frame_count() << "\nreplay-frames=" <<
-				confirmed_transcript.size() << '\n';
+				replay_capture.frame_count() << "\nreplay-ready=1\nreplay-bytes=" <<
+				encoded->size() << '\n';
 			return 0;
 		}
 		if(parsed.smoke_ticks && local_frames >= *parsed.smoke_ticks &&
 			(*session)->confirmed_frame_count() >= *parsed.smoke_ticks &&
 			!runtime_proof_pending) {
 			std::cout << "status=smoke-complete\nframes=" << local_frames
-				<< "\nreplay-frames=" << confirmed_transcript.size() << '\n';
+				<< "\nreplay-frames=" << replay_capture.frame_count()
+				<< "\nreplay-ready=0\n";
 			return 0;
 		}
 

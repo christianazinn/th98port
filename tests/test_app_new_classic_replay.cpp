@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -5,6 +6,7 @@
 #include <string>
 #include <variant>
 
+#include "th03/app/new_classic_netplay_replay_capture.hpp"
 #include "th03/app/new_classic_replay.hpp"
 #include "th03/core/game.hpp"
 #include "th03/formats/replay.hpp"
@@ -477,6 +479,124 @@ void test_memory_only_lifecycle()
 	);
 }
 
+void test_netplay_confirmed_capture()
+{
+	constexpr auto mode = th03::game_mode::vs_1p_2p;
+	auto created = th03::app::NewClassicNetplayReplayCapture::create(
+		round_start(mode, 0U, 0U, 201U), 0x5D0CU
+	);
+	check(created.has_value(),
+		"netplay V13 capture starts from the source-fresh round observation");
+	if(!created) {
+		return;
+	}
+	auto &capture = *created;
+	check(
+		capture.append_confirmed_frame({
+			.frame = 0U,
+			.phase = th03::replay::InputPhase::gameplay,
+			.input = {.p1 = 0x20U, .p2 = 0x08U, .charge_mask = 1U},
+			.step_result = {
+				.status = th03::StepStatus::running,
+				.input_boundary_state = terminal(mode, 0U, 0U, 0U, 0),
+				.next_step_vsyncs = 3U,
+			},
+			.source_vsyncs = 3U,
+		}, true).has_value(),
+		"one corrected confirmed frame records input, source waits, and local slowdown"
+	);
+	check(
+		capture.append_confirmed_frame({
+			.frame = 1U,
+			.phase = th03::replay::InputPhase::gameplay,
+			.input = {.p1 = 0x04U, .p2 = 0x02U},
+			.step_result = {
+				.status = th03::StepStatus::round_transition,
+				.input_boundary_state = terminal(mode, 0U, 0U, 1U, 0),
+				.next_step_vsyncs = 2U,
+			},
+			.source_vsyncs = 2U,
+		}, false).has_value(),
+		"the confirmed repeat terminal appends its split before the next checkpoint"
+	);
+	check(
+		capture.round_started(round_start(mode, 0U, 1U, 203U)).has_value(),
+		"confirmed route-1 continuation starts the next V13 round"
+	);
+	check(
+		capture.append_confirmed_frame({
+			.frame = 2U,
+			.phase = th03::replay::InputPhase::gameplay,
+			.input = {.p1 = 0x01U, .p2 = 0x10U, .charge_mask = 2U},
+			.step_result = {
+				.status = th03::StepStatus::terminal,
+				.input_boundary_state = terminal(mode, 0U, 1U, 2U, 1),
+			},
+		}, true).has_value(),
+		"the confirmed match terminal records the last sample, split, and MAIN_END"
+	);
+	auto resident = round_start(mode, 0U, 1U, 203U).start;
+	auto document = capture.finish_mainl(resident);
+	check(document.has_value(),
+		"the completed winner MAINL owner finalizes one validated memory V13");
+	if(document) {
+		const auto main_controls = std::count_if(
+			document->session.records.begin(), document->session.records.end(),
+			[](const auto &record) {
+				const auto *boundary =
+					std::get_if<th03::replay::ProcessBoundary>(&record);
+				return boundary && boundary->completed_process ==
+					th03::replay::ProcessId::main;
+			}
+		);
+		const auto mainl_controls = std::count_if(
+			document->session.records.begin(), document->session.records.end(),
+			[](const auto &record) {
+				const auto *boundary =
+					std::get_if<th03::replay::ProcessBoundary>(&record);
+				return boundary && boundary->completed_process ==
+					th03::replay::ProcessId::mainl;
+			}
+		);
+		check(
+			document->session.sample_count == 3U &&
+			document->checkpoints.size() == 2U &&
+			document->checkpoints[1U].sample_index == 2U &&
+			document->expected_round_splits.size() == 2U &&
+			main_controls == 1 && mainl_controls == 1,
+			"confirmed capture preserves exact samples, repeat checkpoint, splits, and process controls"
+		);
+		check(
+			document->expected_round_splits[0U].real_frames == 4U &&
+			document->expected_round_splits[1U].real_frames == 2U &&
+			document->slowdown && document->slowdown->timed_frames == 3U &&
+			document->slowdown->slow_frames == 2U,
+			"netplay replay timing charges each source wait to the following frame and keeps first-execution deadlines"
+		);
+		check(
+			document->metadata &&
+			document->metadata->status == th03::formats::ReplayStatus::finalized &&
+			document->metadata->end_reason ==
+				th03::formats::ReplayEndReason::game_over &&
+			document->metadata->final_route == 2U &&
+			th03::formats::write_v13_replay(*document).has_value(),
+			"netplay memory capture publishes ordinary finalized V13 metadata and bytes"
+		);
+	}
+
+	auto invalid = th03::app::NewClassicNetplayReplayCapture::create(
+		round_start(mode, 0U, 0U, 211U)
+	);
+	check(invalid.has_value(), "invalid-order probe creates independently");
+	if(invalid) {
+		check(
+			!invalid->append_confirmed_frame({.frame = 1U}, false) &&
+			!invalid->finish_mainl(round_start(mode, 0U, 0U, 211U).start),
+			"out-of-order or incomplete netplay capture fails closed"
+		);
+	}
+}
+
 } // namespace
 
 int main()
@@ -486,6 +606,7 @@ int main()
 	test_timing_scope();
 	test_invalid_sequences();
 	test_memory_only_lifecycle();
+	test_netplay_confirmed_capture();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0 ? 0 : 1;
 }

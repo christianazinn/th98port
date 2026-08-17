@@ -3,7 +3,7 @@
 Status: cross-platform technical preview. This route runs a complete human
 VS MAIN match over direct IPv4 UDP. It is intentionally exposed by command
 line before the source-styled room/selection UI, WebRTC/TURN transport,
-negotiated pause, replay capture, and post-match report are integrated. A
+negotiated pause, replay save UI, and post-match report are integrated. A
 confirmed terminal match now continues through the ordinary winner-specific
 MAINL scene, including WIN music, dismissal, and the final black-out.
 
@@ -94,11 +94,15 @@ The latest periodic proof must be mutually acknowledged before either peer may
 report a clean finish or bounded smoke completion.
 An intentional local exit prints `status=left`; the other peer prints
 `status=peer-left` rather than waiting for the crash/connectivity timeout.
-The preview continuously builds a corrected input transcript in memory and
-prints its final `replay-frames` count. It does not create a working replay
-file. The full MAINL owner is now present; adapting the confirmed transcript
-into the existing in-memory V13 recorder and save UI is the next integration
-boundary.
+The preview feeds its corrected contiguous-confirmed input stream directly into
+the ordinary memory-only V13 recorder. Predicted or superseded frames never
+enter it, and each machine retains its own first-execution slowdown evidence.
+After the winner scene completes, a normal match prints `replay-ready=1`,
+`replay-frames`, and the validated `replay-bytes` size. It still creates no
+working replay file and the command-line preview has no slot-save UI; leaving,
+disconnecting, or closing the application simply destroys the in-memory owner.
+Numbered replay publication belongs to the later source-styled in-game room
+flow.
 
 For a bounded automated check, append the same `--smoke-ticks N` to both
 commands. This exits only after both peers have confirmed `N` gameplay input

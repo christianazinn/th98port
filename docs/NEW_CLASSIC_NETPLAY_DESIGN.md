@@ -719,8 +719,9 @@ an explicit N1 gate rather than a reason to alter the rollback image.
 5. Freeze prediction, delay, confirmation, digest, and replay-journal behavior.
    Prediction, delay, confirmation, confirmed audio, frame-zero identity, and
    mutually acknowledged 120-frame gameplay digests are frozen for the direct
-   preview. Explicit round/terminal digests and the confirmed replay journal
-   remain open.
+   preview. The corrected journal now feeds the existing memory-only V13
+   recorder with source waits, round/process controls, and local slowdown
+   evidence. Explicit round/terminal network digests remain open.
 6. Decide GGRS versus the single fallback backend using the objective spike
    gates; delete the rejected production path.
 
@@ -744,10 +745,10 @@ timeout. The following product transport remains open:
    barrier.
 2. Add negotiated pause, forfeit, disconnect, desync UI, and post-match report.
 3. Feed only confirmed history into the in-memory V13 recorder and existing save
-   UI. The corrected contiguous-confirmed transcript and product-memory owner
-   are implemented, and a confirmed terminal now runs the complete ordinary VS
-   winner MAINL owner. The remaining boundary is translating the transcript's
-   confirmed round/process facts into the existing recorder and save UI.
+   UI. The corrected contiguous-confirmed transcript now becomes an ordinary
+   validated V13 document only after the complete VS winner MAINL owner. The
+   direct preview intentionally publishes no file; attaching the completed
+   document to the numbered slot-save UI remains part of the in-game room flow.
 4. Keep every Classic construction and hash unchanged.
 
 ### N4: Cloudflare private-room beta

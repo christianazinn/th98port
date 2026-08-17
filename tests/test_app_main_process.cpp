@@ -2,6 +2,7 @@
 #include "th03/app/main_direct_vs_runner.hpp"
 #include "th03/app/main_rollback_coordinator.hpp"
 #include "th03/app/new_classic_netplay_main_session.hpp"
+#include "th03/app/new_classic_netplay_replay_capture.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1421,6 +1422,11 @@ void test_new_classic_netplay_main_session_convergence()
 	if(!one_process || !two_process || !reference_process) {
 		return;
 	}
+	auto replay_capture = th03::app::NewClassicNetplayReplayCapture::create(
+		(*one_process)->round_start_observation()
+	);
+	expect(replay_capture.has_value(),
+		"confirmed-journal V13 adapter accepts the same source-fresh MAIN start");
 	auto peer_one = NewClassicNetplayMainSession::create(
 		NewClassicNetplayPlayer::player_one, std::move(*one_process)
 	);
@@ -1627,6 +1633,13 @@ void test_new_classic_netplay_main_session_convergence()
 		expect(same_transcript(transcript_one) &&
 			same_transcript(transcript_two),
 			"confirmed replay transcript replaces speculative suffixes exactly");
+		expect(
+			replay_capture && transcript_one && *transcript_one &&
+			replay_capture->append_confirmed_frame(
+				**transcript_one, false
+			).has_value(),
+			"corrected contiguous-confirmed frame feeds the memory-only V13 adapter"
+		);
 	}
 	const auto audio_exhausted = (*peer_one)->take_confirmed_audio_frame();
 	expect(audio_exhausted && !*audio_exhausted,
@@ -1635,6 +1648,12 @@ void test_new_classic_netplay_main_session_convergence()
 		(*peer_one)->take_confirmed_input_frame();
 	expect(transcript_exhausted && !*transcript_exhausted,
 		"confirmed replay transcript ends exactly at contiguous confirmation");
+	expect(
+		replay_capture && replay_capture->frame_count() == frame_count &&
+		replay_capture->document() &&
+		replay_capture->document()->session.sample_count == frame_count,
+		"memory-only V13 prefix contains exactly the corrected confirmed timeline"
+	);
 	expect((*peer_one)->process().canonical_state().state_hash ==
 			(*peer_two)->process().canonical_state().state_hash &&
 		(*peer_one)->process().canonical_state().state_hash ==
