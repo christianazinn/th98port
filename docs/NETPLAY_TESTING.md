@@ -13,11 +13,13 @@ or leak a speculative sound. On a low-latency tailnet this normally adds only
 the actual peer-confirmation delay; the deterministic game and PMD clocks do
 not follow either machine's wall clock.
 
-The host owns logical P1 and the joiner owns logical P2. Both machines use
-their ordinary local-player controls: `T/F/H/B` for directions, `R/Y/V/N` for
-diagonals, `Z` for Shot, and `X` for Bomb. Escape requests a synchronized
-Pause. Closing the window (including Alt+F4) leaves the preview and sends an
-immediate departure to the other peer.
+The host owns logical P1 and the joiner owns logical P2, but each machine has
+only one local keyboard. Both therefore use the ordinary default Story
+controls: arrow keys for movement, `Z` for Shot, `X` for Bomb, and Left Shift
+for Charge. The negotiated role places this one local value into P1 or P2; the
+special local-VS `T/F/H/B` and numpad columns are not active. Escape requests a
+synchronized Pause. Closing the window (including Alt+F4) leaves the preview
+and sends an immediate departure to the other peer.
 The host supplies P1, rank, seed, and source cadence. The joiner supplies P2.
 The pre-MAIN lobby exchange combines those independently owned values and both
 sides then prove the complete initial simulation. Both machines must use the

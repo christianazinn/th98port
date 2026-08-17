@@ -482,4 +482,85 @@ SdlInputBindings classic_direct_vs_bindings() noexcept
 	return bindings;
 }
 
+SdlInputBindings new_classic_netplay_story_bindings() noexcept
+{
+	// A direct peer owns exactly one logical player. Reuse the ordinary New
+	// Classic Story defaults on that peer's keyboard, then let the negotiated
+	// netplay role place this local P1-shaped value into the P1 or P2 lane.
+	const auto keys = new_classic_default_key_config();
+	const auto joy = new_classic_default_joy_config();
+	SdlInputBindings bindings{};
+	constexpr std::array<SdlLogicalAction, new_classic_story_action_count>
+		story_actions{
+			SdlLogicalAction::up,
+			SdlLogicalAction::left,
+			SdlLogicalAction::right,
+			SdlLogicalAction::down,
+		};
+	constexpr auto story_offset = 2U * new_classic_player_action_count;
+	for(std::size_t action = 0U; action < story_actions.size(); ++action) {
+		add_key(bindings,
+			static_cast<SDL_Scancode>(keys.bindings[story_offset + action]),
+			SdlInputPlayer::p1, story_actions[action]);
+	}
+	constexpr std::array<std::size_t, 3U> shared_action_indexes{8U, 9U, 10U};
+	constexpr std::array<SdlLogicalAction, 3U> shared_actions{
+		SdlLogicalAction::shot,
+		SdlLogicalAction::bomb,
+		SdlLogicalAction::charge,
+	};
+	for(std::size_t action = 0U; action < shared_actions.size(); ++action) {
+		add_key(bindings,
+			static_cast<SDL_Scancode>(keys.bindings[shared_action_indexes[action]]),
+			SdlInputPlayer::p1, shared_actions[action]);
+	}
+	add_key(bindings, SDL_SCANCODE_ESCAPE, SdlInputPlayer::p1,
+		SdlLogicalAction::cancel);
+	add_key(bindings, SDL_SCANCODE_RETURN, SdlInputPlayer::p1,
+		SdlLogicalAction::ok);
+	add_key(bindings, SDL_SCANCODE_Q, SdlInputPlayer::p1,
+		SdlLogicalAction::q);
+
+	add_gamepad_button(bindings, NewClassicJoyButton::dpad_up,
+		SdlLogicalAction::up);
+	add_gamepad_button(bindings, NewClassicJoyButton::dpad_down,
+		SdlLogicalAction::down);
+	add_gamepad_button(bindings, NewClassicJoyButton::dpad_left,
+		SdlLogicalAction::left);
+	add_gamepad_button(bindings, NewClassicJoyButton::dpad_right,
+		SdlLogicalAction::right);
+	add_gamepad_button(bindings,
+		joy.buttons[static_cast<std::size_t>(NewClassicJoyAction::shot)],
+		SdlLogicalAction::shot);
+	add_gamepad_button(bindings,
+		joy.buttons[static_cast<std::size_t>(NewClassicJoyAction::bomb)],
+		SdlLogicalAction::bomb);
+	add_gamepad_button(bindings,
+		joy.buttons[static_cast<std::size_t>(NewClassicJoyAction::charge)],
+		SdlLogicalAction::charge);
+	add_gamepad_button(bindings,
+		joy.buttons[static_cast<std::size_t>(NewClassicJoyAction::cancel)],
+		SdlLogicalAction::cancel);
+	add_gamepad_button(bindings,
+		joy.buttons[static_cast<std::size_t>(NewClassicJoyAction::ok)],
+		SdlLogicalAction::ok);
+	add_gamepad_axis(bindings, joy.horizontal_axis, SdlAxisDirection::negative,
+		SdlLogicalAction::left);
+	add_gamepad_axis(bindings, joy.horizontal_axis, SdlAxisDirection::positive,
+		SdlLogicalAction::right);
+	add_gamepad_axis(bindings, joy.vertical_axis, SdlAxisDirection::negative,
+		SdlLogicalAction::up);
+	add_gamepad_axis(bindings, joy.vertical_axis, SdlAxisDirection::positive,
+		SdlLogicalAction::down);
+	bindings.gamepad_players.fill(SdlInputPlayer::p1);
+	const auto press = static_cast<std::int32_t>(
+		(32'768 * joy.dead_zone_percent) / 100U
+	);
+	bindings.axis_press_threshold = static_cast<std::int16_t>(press);
+	bindings.axis_release_threshold = static_cast<std::int16_t>(
+		(press * 3) / 4
+	);
+	return bindings;
+}
+
 } // namespace th03::app::detail

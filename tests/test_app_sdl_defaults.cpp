@@ -35,6 +35,24 @@ std::size_t key_matches(
 	return count;
 }
 
+std::size_t key_action_matches(
+	const th03::platform::SdlInputBindings &bindings,
+	SDL_Scancode scancode,
+	th03::platform::SdlInputPlayer player,
+	th03::platform::SdlLogicalAction action
+) noexcept
+{
+	std::size_t count = 0U;
+	for(std::size_t index = 0U; index < bindings.keyboard_count; ++index) {
+		if(bindings.keyboard[index].scancode == scancode &&
+			bindings.keyboard[index].player == player &&
+			bindings.keyboard[index].action == action) {
+			count++;
+		}
+	}
+	return count;
+}
+
 void test_classic_defaults()
 {
 	using th03::platform::SdlAxisDirection;
@@ -173,6 +191,53 @@ void test_classic_defaults()
 			? th03::platform::SdlInputPlayer::p1
 			: th03::platform::SdlInputPlayer::p2),
 			"first-free gamepad slots alternate P1/P2 deterministically");
+	}
+}
+
+void test_netplay_story_defaults()
+{
+	using th03::platform::SdlInputPlayer;
+	using th03::platform::SdlLogicalAction;
+	const auto bindings =
+		th03::app::detail::new_classic_netplay_story_bindings();
+	expect(bindings.keyboard_count == 10U,
+		"netplay exposes one Story keyboard rather than both VS columns");
+	expect(
+		key_action_matches(bindings, SDL_SCANCODE_UP, SdlInputPlayer::p1,
+			SdlLogicalAction::up) == 1U &&
+		key_action_matches(bindings, SDL_SCANCODE_DOWN, SdlInputPlayer::p1,
+			SdlLogicalAction::down) == 1U &&
+		key_action_matches(bindings, SDL_SCANCODE_LEFT, SdlInputPlayer::p1,
+			SdlLogicalAction::left) == 1U &&
+		key_action_matches(bindings, SDL_SCANCODE_RIGHT, SdlInputPlayer::p1,
+			SdlLogicalAction::right) == 1U,
+		"netplay maps the ordinary Story arrow directions into the local lane"
+	);
+	expect(
+		key_action_matches(bindings, SDL_SCANCODE_Z, SdlInputPlayer::p1,
+			SdlLogicalAction::shot) == 1U &&
+		key_action_matches(bindings, SDL_SCANCODE_X, SdlInputPlayer::p1,
+			SdlLogicalAction::bomb) == 1U &&
+		key_action_matches(bindings, SDL_SCANCODE_LSHIFT, SdlInputPlayer::p1,
+			SdlLogicalAction::charge) == 1U,
+		"netplay shares the Story P1 Shot Bomb and Charge defaults"
+	);
+	expect(
+		key_action_matches(bindings, SDL_SCANCODE_ESCAPE, SdlInputPlayer::p1,
+			SdlLogicalAction::cancel) == 1U,
+		"netplay keeps Escape in the source-global synchronized Pause domain"
+	);
+	expect(
+		key_matches(bindings, SDL_SCANCODE_T, SdlInputPlayer::p1) == 0U &&
+		key_matches(bindings, SDL_SCANCODE_KP_8, SdlInputPlayer::p2) == 0U,
+		"netplay does not expose the local VS P1 or P2 keyboard columns"
+	);
+	expect(bindings.gamepad_button_count == 9U &&
+		bindings.gamepad_axis_count == 4U,
+		"netplay exposes one local Story controller action set");
+	for(const auto player : bindings.gamepad_players) {
+		expect(player == SdlInputPlayer::p1,
+			"every local netplay controller slot feeds the negotiated local lane");
 	}
 }
 
@@ -329,6 +394,7 @@ void test_arrow_ui_channel_through_mapper()
 int main()
 {
 	test_classic_defaults();
+	test_netplay_story_defaults();
 	test_new_classic_joy_config();
 	test_arrow_ui_channel_through_mapper();
 	if(failures != 0U) {

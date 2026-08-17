@@ -540,6 +540,7 @@ void print_usage()
 			"chiyuri yumemi\n"
 		<< "P1: T/F/H/B, diagonals R/Y/V/N, Z shot, X bomb\n"
 		<< "P2: keypad 8/4/6/2, diagonals 7/9/1/3, Left shot, Right bomb\n"
+		<< "Netplay local player: arrows, Z shot, X bomb, Left Shift charge\n"
 		<< "TH03 UI: arrows/keypad, Z/X/Space, Return OK, Escape Cancel\n"
 		<< "--shell runs startup and boots directly into New Classic. "
 			"New Classic Quit exits; Option -> System can temporarily launch "
@@ -547,8 +548,9 @@ void print_usage()
 			"In New Classic gameplay, Escape opens "
 			"Pause, R restarts, and Q exits without saving. During New Classic "
 			"replay playback, Escape aborts and held physical Z fast-forwards; "
-			"after a prior clear, physical Z also accelerates Staff. In --vs, "
-			"Escape exits. In Classic, Escape remains source Cancel and "
+			"after a prior clear, physical Z also accelerates Staff. In local "
+			"--vs, Escape exits; in netplay it requests synchronized Pause. "
+			"In Classic, Escape remains source Cancel and "
 			"window close exits. The default cadence is nominal PC-9801 24 kHz "
 			"(526315/9328 Hz); --tick-rate overrides it.\n"
 		<< "PoDD Port synthesizes external PMD/EFC content and delivers canonical "
@@ -1817,7 +1819,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		}
 	}
 	auto mapper = th03::platform::SdlInputMapper::create(
-		th03::app::detail::classic_direct_vs_bindings(),
+		th03::app::detail::new_classic_netplay_story_bindings(),
 		static_cast<SDL_WindowID>((*platform)->window_id()),
 		th03::platform::native_sdl_gamepad_backend()
 	);
@@ -2352,7 +2354,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		}
 
 		if(!retry_blocked_event) {
-			auto events = mapper->pump_events(*scheduler, true);
+			// Escape is source-global Cancel in this route and therefore the
+			// synchronized Pause request. Only window close/SDL quit leaves.
+			auto events = mapper->pump_events(*scheduler, false);
 			if(!events) {
 				return fail("input-pump", events.error());
 			}
@@ -2805,7 +2809,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 					break;
 				}
 				if(retry_blocked_event) {
-					auto retried = mapper->pump_events(*scheduler, true);
+					auto retried = mapper->pump_events(*scheduler, false);
 					if(!retried) {
 						return fail("input-pump", retried.error());
 					}
