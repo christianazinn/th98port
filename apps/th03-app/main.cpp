@@ -40,6 +40,7 @@
 #include "th03/app/new_classic_netplay_main_session.hpp"
 #include "th03/app/new_classic_netplay_pause_barrier.hpp"
 #include "th03/app/new_classic_netplay_post_match.hpp"
+#include "th03/app/new_classic_netplay_report.hpp"
 #include "th03/app/new_classic_netplay_replay_capture.hpp"
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/new_classic_frontend.hpp"
@@ -1737,6 +1738,115 @@ negotiate_direct_netplay_lobby(
 		send_netplay_datagram(socket, peer, datagram);
 }
 
+[[nodiscard]] th03::app::NewClassicUiInput project_new_classic_ui(
+	const th03::app::LogicalTickInput &sample,
+	bool accept_player_words = false
+) noexcept
+{
+	constexpr std::uint16_t input_up = 0x0001U;
+	constexpr std::uint16_t input_down = 0x0002U;
+	constexpr std::uint16_t input_left = 0x0004U;
+	constexpr std::uint16_t input_right = 0x0008U;
+	constexpr std::uint16_t input_bomb = 0x0010U;
+	constexpr std::uint16_t input_shot = 0x0020U;
+	constexpr std::uint16_t input_cancel = 0x1000U;
+	constexpr std::uint16_t input_ok = 0x2000U;
+	const auto word = static_cast<std::uint16_t>(sample.input.system |
+		(accept_player_words ? sample.input.p1 | sample.input.p2 : 0U));
+	const auto pressed = [word](std::uint16_t bit) noexcept {
+		return (word & bit) != 0U;
+	};
+	return {
+		.up = pressed(input_up),
+		.down = pressed(input_down),
+		.left = pressed(input_left),
+		.right = pressed(input_right),
+		.confirm = pressed(input_shot) || pressed(input_ok),
+		.bomb = pressed(input_bomb),
+		.cancel = pressed(input_cancel),
+		.app_quit_requested = sample.app_quit_requested,
+	};
+}
+
+[[nodiscard]] int run_netplay_report_modal(
+	th03::app::RationalTickRate tick_rate,
+	th03::platform::SdlPlatform &platform,
+	th03::platform::SdlInputMapper &mapper,
+	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets,
+	th03::app::NewClassicNetplayReportKind kind,
+	th03::app::NewClassicNetplayReportMetrics metrics
+)
+{
+	th03::app::NewClassicNetplayReport report(
+		kind, metrics, std::move(patch_assets)
+	);
+	if(!report.valid()) {
+		return fail_netplay("netplay-report", "surface-create-failed");
+	}
+	auto scheduler = th03::app::TickInputScheduler::create(
+		tick_rate, th03::platform::sdl_ticks_now_ns(),
+		th03::app::TickInputCatchUpPolicy::discard_missed_deadlines
+	);
+	if(!scheduler) {
+		return fail_tick(scheduler.error());
+	}
+	const auto started_at = th03::platform::sdl_ticks_now_ns();
+	if(const auto reset = mapper.reset_after_modal(*scheduler, started_at);
+		!reset) {
+		return fail("netplay-report-input", reset.error());
+	}
+	if(const auto presented = platform.present(report.surface()); !presented) {
+		return fail("netplay-report-present", presented.error());
+	}
+
+	bool retry_blocked_event = false;
+	while(report.status() ==
+		th03::app::NewClassicNetplayReportStatus::running) {
+		const auto cutoff = th03::platform::sdl_ticks_now_ns();
+		if(!retry_blocked_event) {
+			auto pumped = mapper.pump_events(*scheduler, false);
+			if(!pumped) {
+				return fail("netplay-report-input", pumped.error());
+			}
+			retry_blocked_event = pumped->queue_blocked;
+		}
+		for(;;) {
+			auto due = scheduler->pop_due(cutoff);
+			if(!due) {
+				return fail_tick(due.error());
+			}
+			if(!*due) {
+				break;
+			}
+			const auto consumed = report.consume(project_new_classic_ui(
+				**due, true
+			));
+			if(retry_blocked_event) {
+				auto retried = mapper.pump_events(*scheduler, false);
+				if(!retried) {
+					return fail("netplay-report-input", retried.error());
+				}
+				retry_blocked_event = retried->queue_blocked;
+			}
+			if(consumed.status !=
+				th03::app::NewClassicNetplayReportStatus::running) {
+				break;
+			}
+		}
+		if(auto refreshed = refresh_host_presentability(
+			platform, "netplay-report-presentability"
+		); !refreshed) {
+			return refreshed.error();
+		}
+		const auto deadline = scheduler->next_deadline_ns();
+		const auto now = th03::platform::sdl_ticks_now_ns();
+		if(deadline && *deadline > now) {
+			SDL_DelayPrecise(std::min(*deadline - now, maximum_idle_delay_ns));
+		}
+	}
+	return 0;
+}
+
 int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 {
 	using th03::app::DirectVsNetplayMode;
@@ -1967,6 +2077,33 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	auto last_pause_signal_send_ns = start_ns - 250'000'000U;
 	std::cout << "status=match-locked\ncontract=" << contract_hash << '\n';
 	std::cout.flush();
+	const auto report_metrics = [&]() {
+		return th03::app::NewClassicNetplayReportMetrics{
+			.confirmed_frames = (*session)->confirmed_frame_count(),
+			.session = (*session)->stats(),
+			.missed_deadlines = static_cast<std::uint64_t>(std::count(
+				local_deadline_missed.begin(), local_deadline_missed.end(),
+				std::uint8_t{1U}
+			)),
+		};
+	};
+	const auto show_report = [&](
+		th03::app::NewClassicNetplayReportKind kind
+	) -> int {
+		return run_netplay_report_modal(
+			parsed.tick_rate, **platform, *mapper, pause_assets, kind,
+			report_metrics()
+		);
+	};
+	const auto fail_with_report = [&] (
+		const char *stage,
+		const char *code,
+		th03::app::NewClassicNetplayReportKind kind
+	) -> int {
+		const int failure = fail_netplay(stage, code);
+		const int report_failure = show_report(kind);
+		return report_failure == 0 ? failure : report_failure;
+	};
 	const auto send_simulation_digest = [&](
 		NewClassicNetplayDatagramType type,
 		std::uint64_t frame,
@@ -2021,11 +2158,14 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		std::cout << "status=left\n";
 		return 0;
 	};
-	const auto finish_forfeit = [&](const char *outcome) -> int {
+	const auto finish_forfeit = [&] (
+		const char *outcome,
+		th03::app::NewClassicNetplayReportKind kind
+	) -> int {
 		std::cout << "status=match-forfeited\nforfeit-outcome=" << outcome <<
 			"\nreplay-ready=0\nreplay-published=0\n";
 		std::cout.flush();
-		return 0;
+		return show_report(kind);
 	};
 	const auto match_runtime_digests = [&]() -> std::expected<void, int> {
 		if(!local_runtime_digest || !remote_runtime_digest) {
@@ -2039,8 +2179,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			));
 		}
 		if(local_runtime_digest->digest != remote_runtime_digest->digest) {
-			return std::unexpected(fail_netplay(
-				"netplay-identity", "runtime-simulation-mismatch"
+			return std::unexpected(fail_with_report(
+				"netplay-identity", "runtime-simulation-mismatch",
+				th03::app::NewClassicNetplayReportKind::desync
 			));
 		}
 		if(remote_runtime_digest_ack && !same_proof(
@@ -2387,7 +2528,10 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		}
 		if(established && !post_match &&
 			now_ns - last_receive_ns > 5'000'000'000ULL) {
-			return fail_netplay("netplay-peer", "peer-timeout");
+			return fail_with_report(
+				"netplay-peer", "peer-timeout",
+				th03::app::NewClassicNetplayReportKind::peer_timeout
+			);
 		}
 
 		if(!retry_blocked_event) {
@@ -2473,8 +2617,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				if(packet->simulation_digest_kind ==
 					th03::app::NewClassicNetplaySimulationDigestKind::initial) {
 					if(packet->simulation_digest != *initial_simulation_digest) {
-						return fail_netplay(
-							"netplay-identity", "initial-simulation-mismatch"
+						return fail_with_report(
+							"netplay-identity", "initial-simulation-mismatch",
+							th03::app::NewClassicNetplayReportKind::desync
 						);
 					}
 					if(!established) {
@@ -2508,8 +2653,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 					if(!same_proof(
 						received_digest, *verified_runtime_digest
 					)) {
-						return fail_netplay(
-							"netplay-identity", "runtime-simulation-mismatch"
+						return fail_with_report(
+							"netplay-identity", "runtime-simulation-mismatch",
+							th03::app::NewClassicNetplayReportKind::desync
 						);
 					}
 					if(!send_simulation_digest(
@@ -2587,8 +2733,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				if(verified_runtime_digest &&
 					received_ack.frame == verified_runtime_digest->frame) {
 					if(!same_proof(received_ack, *verified_runtime_digest)) {
-						return fail_netplay(
-							"netplay-identity", "runtime-simulation-mismatch"
+						return fail_with_report(
+							"netplay-identity", "runtime-simulation-mismatch",
+							th03::app::NewClassicNetplayReportKind::desync
 						);
 					}
 					const bool peer_was_already_acknowledged =
@@ -2626,8 +2773,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				remote_runtime_digest_ack = received_ack;
 				if(remote_runtime_digest &&
 					!same_proof(*remote_runtime_digest, received_ack)) {
-					return fail_netplay(
-						"netplay-identity", "runtime-simulation-mismatch"
+					return fail_with_report(
+						"netplay-identity", "runtime-simulation-mismatch",
+						th03::app::NewClassicNetplayReportKind::desync
 					);
 				}
 				remote_runtime_digest = received_ack;
@@ -2640,7 +2788,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				packet->sender == remote_player &&
 				packet->session_id == session_id) {
 				std::cout << "status=peer-left\n";
-				return 0;
+				return show_report(
+					th03::app::NewClassicNetplayReportKind::peer_left
+				);
 			}
 			if((packet->type ==
 					NewClassicNetplayDatagramType::pause_waiting ||
@@ -2690,10 +2840,18 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 							"netplay-forfeit", "ack-send-failed"
 						);
 					}
-					return finish_forfeit(mutual ? "mutual" : "win");
+					return finish_forfeit(
+						mutual ? "mutual" : "win",
+						mutual ?
+							th03::app::NewClassicNetplayReportKind::forfeit_mutual :
+							th03::app::NewClassicNetplayReportKind::forfeit_win
+					);
 				}
 				if(packet->type == NewClassicNetplayDatagramType::forfeit_ack) {
-					return finish_forfeit("loss");
+					return finish_forfeit(
+						"loss",
+						th03::app::NewClassicNetplayReportKind::forfeit_loss
+					);
 				}
 				if(const auto resumed = resume_pause_if_ready(now_ns); !resumed) {
 					return resumed.error();
@@ -3150,11 +3308,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				}
 				replay_published = saved.replay_published;
 			}
-			const auto netplay_stats = (*session)->stats();
-			const auto missed_deadlines = std::count(
-				local_deadline_missed.begin(), local_deadline_missed.end(),
-				std::uint8_t{1U}
-			);
+			const auto metrics = report_metrics();
+			const auto &netplay_stats = metrics.session;
+			const auto missed_deadlines = metrics.missed_deadlines;
 			std::cout << "status=match-complete\nframes=" <<
 				(*session)->confirmed_frame_count() << "\nreplay-frames=" <<
 				replay_capture.frame_count() << "\nreplay-ready=1\nreplay-bytes=" <<
@@ -3173,7 +3329,10 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				"\nnetplay-maximum-prediction=" << static_cast<unsigned>(
 					netplay_stats.maximum_prediction_depth
 				) << "\nnetplay-missed-deadlines=" << missed_deadlines << '\n';
-			return 0;
+			std::cout.flush();
+			return show_report(
+				th03::app::NewClassicNetplayReportKind::match_complete
+			);
 		}
 		if(parsed.smoke_ticks && local_frames >= *parsed.smoke_ticks &&
 			(*session)->confirmed_frame_count() >= *parsed.smoke_ticks &&
@@ -4391,34 +4550,6 @@ StartupRunResult run_startup_sequence(
 		}
 	}
 	return {};
-}
-
-[[nodiscard]] th03::app::NewClassicUiInput project_new_classic_ui(
-	const th03::app::LogicalTickInput &sample
-) noexcept
-{
-	constexpr std::uint16_t input_up = 0x0001U;
-	constexpr std::uint16_t input_down = 0x0002U;
-	constexpr std::uint16_t input_left = 0x0004U;
-	constexpr std::uint16_t input_right = 0x0008U;
-	constexpr std::uint16_t input_bomb = 0x0010U;
-	constexpr std::uint16_t input_shot = 0x0020U;
-	constexpr std::uint16_t input_cancel = 0x1000U;
-	constexpr std::uint16_t input_ok = 0x2000U;
-	const auto word = sample.input.system;
-	const auto pressed = [word](std::uint16_t bit) noexcept {
-		return (word & bit) != 0U;
-	};
-	return {
-		.up = pressed(input_up),
-		.down = pressed(input_down),
-		.left = pressed(input_left),
-		.right = pressed(input_right),
-		.confirm = pressed(input_shot) || pressed(input_ok),
-		.bomb = pressed(input_bomb),
-		.cancel = pressed(input_cancel),
-		.app_quit_requested = sample.app_quit_requested,
-	};
 }
 
 template <typename Surface, typename Consume>

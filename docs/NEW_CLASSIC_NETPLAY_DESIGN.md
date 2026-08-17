@@ -613,6 +613,14 @@ Exact pause timeout and disconnect grace values remain tuning constants until
 the induced-loss beta; their values are not part of gameplay rules and must be
 shown rather than silently deciding a winner.
 
+The direct preview now ends normal completion, either side of Forfeit, peer
+departure, peer inactivity, and deterministic proof mismatch on one
+authenticated `SLB1.PI` + `MNUFONT.PF` report. It shows bounded local prediction,
+rollback, resimulation, wait, and deadline counters only. Those observations
+are deliberately outside simulation, proof, and V13. The report requires an
+interface-word release followed by a fresh Z/Return/Esc; application close
+remains immediate.
+
 ## Security and privacy boundaries
 
 - DTLS protects Data Channel traffic in transit, but a peer is still an
@@ -762,8 +770,10 @@ timeout. The following product transport remains open:
    The direct preview now carries a rollback-correct Pause edge, confirmed
    boundary proof, release-before-Resume input, two-peer ready barrier, and
    authenticated PAUSED/Resume presentation. The synchronized Forfeit policy
-   and request/ack lifecycle are now complete in the direct preview;
-   disconnect/desync presentation and the report surface remain.
+   and request/ack lifecycle are now complete in the direct preview. Completed
+   matches, Forfeit, peer departure/timeout, and deterministic proof mismatch
+   now enter the authenticated local report. Product-room ownership of that
+   terminal remains with the fourth-row frontend.
 3. Feed only confirmed history into the in-memory V13 recorder and existing save
    UI. Complete in the direct preview: the corrected contiguous-confirmed
    transcript becomes an ordinary validated V13 only after the complete VS

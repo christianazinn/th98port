@@ -299,6 +299,25 @@
     {"enum": "hiscore_online_replay_historical", "id": "hiscore.online.replay.historical", "domain": "menu-font", "max_width": 240},
     {"enum": "hiscore_online_replay_downloading", "id": "hiscore.online.replay.downloading", "domain": "menu-font", "max_width": 240},
     {"enum": "hiscore_online_replay_failed", "id": "hiscore.online.replay.failed", "domain": "menu-font", "max_width": 240},
-    {"enum": "hiscore_online_replay_unavailable", "id": "hiscore.online.replay.unavailable", "domain": "menu-font", "max_width": 240}
+    {"enum": "hiscore_online_replay_unavailable", "id": "hiscore.online.replay.unavailable", "domain": "menu-font", "max_width": 240},
+
+    {"enum": "netplay_report_title", "id": "netplay.report.title", "domain": "menu-font", "max_width": 320},
+    {"enum": "netplay_report_match_complete", "id": "netplay.report.match-complete", "domain": "menu-font", "max_width": 320},
+    {"enum": "netplay_report_forfeit_loss", "id": "netplay.report.forfeit-loss", "domain": "menu-font", "max_width": 320},
+    {"enum": "netplay_report_forfeit_win", "id": "netplay.report.forfeit-win", "domain": "menu-font", "max_width": 320},
+    {"enum": "netplay_report_forfeit_mutual", "id": "netplay.report.forfeit-mutual", "domain": "menu-font", "max_width": 320},
+    {"enum": "netplay_report_peer_left", "id": "netplay.report.peer-left", "domain": "menu-font", "max_width": 320},
+    {"enum": "netplay_report_peer_timeout", "id": "netplay.report.peer-timeout", "domain": "menu-font", "max_width": 320},
+    {"enum": "netplay_report_desync", "id": "netplay.report.desync", "domain": "menu-font", "max_width": 320},
+    {"enum": "netplay_report_label_frames", "id": "netplay.report.label.frames", "domain": "menu-font", "max_width": 180},
+    {"enum": "netplay_report_label_predicted", "id": "netplay.report.label.predicted", "domain": "menu-font", "max_width": 180},
+    {"enum": "netplay_report_label_rollbacks", "id": "netplay.report.label.rollbacks", "domain": "menu-font", "max_width": 180},
+    {"enum": "netplay_report_label_rewinds", "id": "netplay.report.label.rewinds", "domain": "menu-font", "max_width": 180},
+    {"enum": "netplay_report_label_resimulated", "id": "netplay.report.label.resimulated", "domain": "menu-font", "max_width": 180},
+    {"enum": "netplay_report_label_stalls", "id": "netplay.report.label.stalls", "domain": "menu-font", "max_width": 180},
+    {"enum": "netplay_report_label_remote_waits", "id": "netplay.report.label.remote-waits", "domain": "menu-font", "max_width": 180},
+    {"enum": "netplay_report_label_max_prediction", "id": "netplay.report.label.max-prediction", "domain": "menu-font", "max_width": 180},
+    {"enum": "netplay_report_label_missed_deadlines", "id": "netplay.report.label.missed-deadlines", "domain": "menu-font", "max_width": 180},
+    {"enum": "netplay_report_footer", "id": "netplay.report.footer", "domain": "menu-font", "max_width": 500}
   ]
 }

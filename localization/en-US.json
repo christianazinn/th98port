@@ -297,6 +297,25 @@
     "hiscore.online.replay.historical": "Historical",
     "hiscore.online.replay.downloading": "Downloading...",
     "hiscore.online.replay.failed": "Download failed",
-    "hiscore.online.replay.unavailable": "Offline"
+    "hiscore.online.replay.unavailable": "Offline",
+
+    "netplay.report.title": "Netplay Report",
+    "netplay.report.match-complete": "Match Complete",
+    "netplay.report.forfeit-loss": "You Forfeited",
+    "netplay.report.forfeit-win": "Opponent Forfeited",
+    "netplay.report.forfeit-mutual": "Mutual Forfeit",
+    "netplay.report.peer-left": "Peer Left",
+    "netplay.report.peer-timeout": "Connection Timed Out",
+    "netplay.report.desync": "Simulation Desync",
+    "netplay.report.label.frames": "Confirmed Frames",
+    "netplay.report.label.predicted": "Predicted Frames",
+    "netplay.report.label.rollbacks": "Rollback Requests",
+    "netplay.report.label.rewinds": "Rewinds",
+    "netplay.report.label.resimulated": "Resimulated Frames",
+    "netplay.report.label.stalls": "Prediction Stalls",
+    "netplay.report.label.remote-waits": "Remote Waits",
+    "netplay.report.label.max-prediction": "Max Prediction",
+    "netplay.report.label.missed-deadlines": "Missed Deadlines",
+    "netplay.report.footer": "Press Z/Return/Esc to return"
   }
 }

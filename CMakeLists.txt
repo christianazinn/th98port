@@ -601,6 +601,7 @@ add_library(th03_app_main STATIC
 	src/app/new_classic_messages.cpp
 	src/app/new_classic_netplay_main_session.cpp
 	src/app/new_classic_netplay_post_match.cpp
+	src/app/new_classic_netplay_report.cpp
 	src/app/new_classic_netplay_replay_capture.cpp
 	src/app/new_classic_online_client.cpp
 	src/app/new_classic_online_task.cpp
@@ -1376,6 +1377,18 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-new-classic-device-scene-tests
 		COMMAND th03-app-new-classic-device-scene-tests
+	)
+
+	add_executable(th03-app-new-classic-netplay-report-tests
+		tests/test_app_new_classic_netplay_report.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-netplay-report-tests PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-new-classic-netplay-report-tests)
+	add_test(
+		NAME th03-app-new-classic-netplay-report-tests
+		COMMAND th03-app-new-classic-netplay-report-tests
 	)
 	target_link_libraries(
 		th03-app-new-classic-assets-tests PRIVATE th03_app_main
