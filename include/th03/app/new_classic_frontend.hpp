@@ -19,6 +19,7 @@
 #include "th03/app/new_classic_assets.hpp"
 #include "th03/app/new_classic_key_config_store.hpp"
 #include "th03/app/new_classic_online.hpp"
+#include "th03/app/new_classic_score.hpp"
 #include "th03/app/replay_slot_store.hpp"
 #include "th03/formats/replay.hpp"
 #include "th03/present/graphics_text.hpp"
@@ -253,7 +254,8 @@ public:
 		std::uint8_t rank,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 		NewClassicOnlineMenuMode mode =
-			NewClassicOnlineMenuMode::high_scores
+			NewClassicOnlineMenuMode::high_scores,
+		std::optional<NewClassicScoreDocument> personal_bests = std::nullopt
 	);
 
 	[[nodiscard]] bool valid() const noexcept;
@@ -264,6 +266,7 @@ public:
 	[[nodiscard]] NewClassicHighScoreMenuStatus status() const noexcept;
 	[[nodiscard]] bool viewing_online() const noexcept;
 	[[nodiscard]] bool viewing_detail() const noexcept;
+	[[nodiscard]] bool viewing_personal_bests() const noexcept;
 	[[nodiscard]] std::size_t selected_board() const noexcept;
 	[[nodiscard]] std::size_t selected_entry() const noexcept;
 	[[nodiscard]] NewClassicOnlineMenuMode mode() const noexcept;
@@ -284,7 +287,7 @@ public:
 	[[nodiscard]] bool prepare_playback_transition() noexcept;
 
 private:
-	enum class Page : std::uint8_t { hub, board, detail };
+	enum class Page : std::uint8_t { hub, board, detail, personal_bests };
 	enum class DownloadState : std::uint8_t {
 		idle,
 		pending,
@@ -300,13 +303,16 @@ private:
 	void draw_hub() noexcept;
 	void draw_board() noexcept;
 	void draw_detail() noexcept;
+	void draw_personal_bests() noexcept;
 	[[nodiscard]] const NewClassicOnlineReplayRecord *selected_replay() const
 		noexcept;
 
 	std::vector<NewClassicOnlineCacheDocument> boards_{};
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
+	std::optional<NewClassicScoreDocument> personal_bests_{};
 	NewClassicPatchSurface patch_surface_{};
 	NewClassicOnlineMenuMode mode_ = NewClassicOnlineMenuMode::high_scores;
+	std::uint8_t rank_ = 0U;
 	Page page_ = Page::hub;
 	NewClassicHighScoreMenuStatus status_ =
 		NewClassicHighScoreMenuStatus::running;

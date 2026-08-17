@@ -1747,10 +1747,13 @@ NewClassicHighScoreMenu::NewClassicHighScoreMenu(
 	std::vector<NewClassicOnlineCacheDocument> boards,
 	std::uint8_t rank,
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
-	NewClassicOnlineMenuMode mode
+	NewClassicOnlineMenuMode mode,
+	std::optional<NewClassicScoreDocument> personal_bests
 ) :
 	patch_assets_(std::move(patch_assets)),
-	mode_(mode)
+	personal_bests_(std::move(personal_bests)),
+	mode_(mode),
+	rank_(rank)
 {
 	for(auto &board : boards) {
 		if(board.board_category &&
@@ -1820,6 +1823,7 @@ void NewClassicHighScoreMenu::draw() noexcept
 	case Page::hub: draw_hub(); break;
 	case Page::board: draw_board(); break;
 	case Page::detail: draw_detail(); break;
+	case Page::personal_bests: draw_personal_bests(); break;
 	}
 	if(valid_ && !patch_surface_.publish(raster.access_page())) {
 		valid_ = false;
@@ -1833,6 +1837,7 @@ void NewClassicHighScoreMenu::draw_hub() noexcept
 	const std::array ids{
 		NewClassicMessageId::hiscore_command_local,
 		NewClassicMessageId::hiscore_command_online,
+		NewClassicMessageId::hiscore_command_personal,
 		NewClassicMessageId::hiscore_command_return,
 	};
 	auto &raster = patch_surface_.raster();
@@ -1851,6 +1856,84 @@ void NewClassicHighScoreMenu::draw_hub() noexcept
 			valid_ = font.put(raster, 176, top, ">", 12U);
 		}
 	}
+}
+
+void NewClassicHighScoreMenu::draw_personal_bests() noexcept
+{
+	if(rank_ >= new_classic_score_rank_count) {
+		valid_ = false;
+		return;
+	}
+	const auto &font = patch_assets_->menu_font;
+	const auto &messages = patch_assets_->messages();
+	auto &raster = patch_surface_.raster();
+	const auto rank = patch_rank_label(rank_, messages);
+	const std::array title_arguments{
+		NewClassicMessageArgument{"rank", rank},
+	};
+	valid_ = font.put_centered(raster, 320, 48, messages.format(
+		NewClassicMessageId::hiscore_personal_title, title_arguments
+	), 9U) &&
+		font.put(raster, 40, 80, messages.text(
+			NewClassicMessageId::replay_header_character), 9U) &&
+		font.put_right(raster, 316, 80, messages.text(
+			NewClassicMessageId::replay_header_score), 9U) &&
+		font.put(raster, 340, 80, messages.text(
+			NewClassicMessageId::replay_header_stage), 9U) &&
+		font.put(raster, 408, 80, messages.text(
+			NewClassicMessageId::hiscore_personal_header_one_cc), 9U) &&
+		font.put(raster, 488, 80, messages.text(
+			NewClassicMessageId::hiscore_personal_header_time), 9U);
+	const auto empty = new_classic_score_empty();
+	const auto &document = personal_bests_ ? *personal_bests_ : empty;
+	const auto character_count = document.extra_unlocked ?
+		new_classic_score_character_count : new_classic_score_locked_character_count;
+	const auto fixed = [](std::uint32_t value, std::size_t digits) {
+		std::string result(digits, '0');
+		while(digits != 0U) {
+			result[--digits] = static_cast<char>('0' + (value % 10U));
+			value /= 10U;
+		}
+		return result;
+	};
+	for(std::size_t character = 0U;
+		valid_ && character < character_count; ++character) {
+		const auto &board = document.boards[rank_][character];
+		const auto &entry = board.entries.front();
+		const auto top = static_cast<std::int32_t>(96U + (character * 24U));
+		std::string score{"-"};
+		std::string stage{"-"};
+		if(entry.valid) {
+			score.resize(entry.score.size());
+			for(std::size_t digit = 0U; digit < entry.score.size(); ++digit) {
+				score[entry.score.size() - digit - 1U] = static_cast<char>(
+					'0' + entry.score[digit]
+				);
+			}
+			stage = entry.stage == 99U ?
+				std::string(messages.text(NewClassicMessageId::replay_marker_all)) :
+				std::to_string(entry.stage);
+		}
+		const auto seconds = static_cast<std::uint32_t>(
+			(board.stats.play_frames / 282U) * 5U +
+			((board.stats.play_frames % 282U) * 5U) / 282U
+		);
+		const auto hours = std::min<std::uint32_t>(seconds / 3600U, 9999U);
+		const auto playtime = std::to_string(hours) + ":" +
+			fixed((seconds / 60U) % 60U, 2U) + ":" +
+			fixed(seconds % 60U, 2U);
+		valid_ = font.put(raster, 40, top, patch_character_label(
+			static_cast<std::int8_t>((character * 2U) + 1U), messages
+		), 15U) &&
+			font.put_right(raster, 316, top, score, 15U) &&
+			font.put(raster, 340, top, stage, 15U) &&
+			font.put_right(raster, 464, top,
+				std::to_string(board.stats.one_ccs), 15U) &&
+			font.put(raster, 488, top, playtime, 15U);
+	}
+	valid_ = valid_ && font.put_centered(raster, 320, 352, messages.text(
+		NewClassicMessageId::hiscore_online_detail_footer
+	), 9U);
 }
 
 void NewClassicHighScoreMenu::draw_board() noexcept
@@ -2137,9 +2220,9 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 			return {.status = status_};
 		}
 		if(input.up) {
-			hub_selection_ = (hub_selection_ + 2U) % 3U;
+			hub_selection_ = (hub_selection_ + 3U) % 4U;
 		} else if(input.down) {
-			hub_selection_ = (hub_selection_ + 1U) % 3U;
+			hub_selection_ = (hub_selection_ + 1U) % 4U;
 		} else if(input.confirm) {
 			if(hub_selection_ == 0U) {
 				status_ = NewClassicHighScoreMenuStatus::local_selected;
@@ -2149,6 +2232,8 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 				page_ = Page::board;
 				selected_entry_ = 0U;
 				top_entry_ = 0U;
+			} else if(hub_selection_ == 2U) {
+				page_ = Page::personal_bests;
 			} else {
 				status_ = NewClassicHighScoreMenuStatus::back;
 				return {.status = status_};
@@ -2158,6 +2243,14 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 		}
 		draw();
 		return {.surface_changed = valid_, .status = status_};
+	}
+	if(page_ == Page::personal_bests) {
+		if(input.cancel || input.bomb) {
+			page_ = Page::hub;
+			draw();
+			return {.surface_changed = valid_, .status = status_};
+		}
+		return {.status = status_};
 	}
 	if(page_ == Page::detail) {
 		if(input.cancel || input.bomb) {
@@ -2235,12 +2328,17 @@ NewClassicHighScoreMenuStatus NewClassicHighScoreMenu::status() const noexcept
 
 bool NewClassicHighScoreMenu::viewing_online() const noexcept
 {
-	return page_ != Page::hub;
+	return page_ == Page::board || page_ == Page::detail;
 }
 
 bool NewClassicHighScoreMenu::viewing_detail() const noexcept
 {
 	return page_ == Page::detail;
+}
+
+bool NewClassicHighScoreMenu::viewing_personal_bests() const noexcept
+{
+	return page_ == Page::personal_bests;
 }
 
 std::size_t NewClassicHighScoreMenu::selected_board() const noexcept

@@ -487,6 +487,53 @@ void test_online_high_score_menu()
 		NewClassicHighScoreMenuStatus::local_selected,
 		"the hub defaults to the existing local HiScore destination");
 
+	auto personal_document = new_classic_score_empty();
+	auto &reimu = personal_document.boards[2U][0U];
+	reimu.entries[0U].valid = true;
+	reimu.entries[0U].score = {{8U, 7U, 6U, 5U, 4U, 3U, 2U, 1U}};
+	reimu.entries[0U].stage = 99U;
+	reimu.stats.play_frames = 3'384U;
+	reimu.stats.one_ccs = 3U;
+	NewClassicHighScoreMenu personal(
+		{online_board(2U, 4U, 0x20U)}, 2U, patch_assets,
+		NewClassicOnlineMenuMode::high_scores, personal_document
+	);
+	finish_entry_fade(personal);
+	static_cast<void>(personal.consume({}));
+	static_cast<void>(personal.consume({.down = true}));
+	static_cast<void>(personal.consume({}));
+	static_cast<void>(personal.consume({.down = true}));
+	static_cast<void>(personal.consume({}));
+	const auto personal_opened = personal.consume({.confirm = true});
+	const auto locked_personal_hash = surface_hash(personal.surface());
+	expect(personal_opened.surface_changed &&
+		personal.viewing_personal_bests() && !personal.viewing_online(),
+		"Personal Bests opens a distinct retained local-score summary page");
+	static_cast<void>(personal.consume({}));
+	expect(personal.consume({.cancel = true}).surface_changed &&
+		!personal.viewing_personal_bests(),
+		"Personal Bests Cancel returns to the four-row HiScore hub");
+
+	auto unlocked_document = personal_document;
+	unlocked_document.extra_unlocked = true;
+	auto &yumemi = unlocked_document.boards[2U][8U];
+	yumemi.entries[0U].valid = true;
+	yumemi.entries[0U].score = {{9U, 9U, 9U, 9U, 9U, 9U, 9U, 9U}};
+	yumemi.entries[0U].stage = 8U;
+	NewClassicHighScoreMenu unlocked_personal(
+		{online_board(2U, 4U, 0x20U)}, 2U, patch_assets,
+		NewClassicOnlineMenuMode::high_scores, unlocked_document
+	);
+	finish_entry_fade(unlocked_personal);
+	static_cast<void>(unlocked_personal.consume({}));
+	static_cast<void>(unlocked_personal.consume({.down = true}));
+	static_cast<void>(unlocked_personal.consume({}));
+	static_cast<void>(unlocked_personal.consume({.down = true}));
+	static_cast<void>(unlocked_personal.consume({}));
+	static_cast<void>(unlocked_personal.consume({.confirm = true}));
+	expect(surface_hash(unlocked_personal.surface()) != locked_personal_hash,
+		"Personal Bests adds the two unlocked character rows only when available");
+
 	NewClassicHighScoreMenu online(
 		{online_board(2U, 4U, 0x20U), online_board(2U, 5U, 0x30U)},
 		2U, patch_assets

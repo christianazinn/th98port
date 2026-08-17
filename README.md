@@ -269,8 +269,12 @@ board by value, but New Classic then writes only `YUME.NEW.NEM`; Classic's
 824-byte `YUME.NEM` remains unchanged. Live Story time is checkpointed on
 registration, Continue, menu return, restart, and application exit, while
 Demo, Practice, and replay playback remain excluded.
-Validated cached Story leaderboards can add `Online Leaderboards` to the New
-Classic HiScore hub. A deployment or developer may set
+Validated cached Story leaderboards add the four-row `Local HiScores`, `Online
+Leaderboards`, `Personal Bests`, and `Return` New Classic HiScore hub. Personal
+Bests reads the already-validated expanded score document once at entry and
+summarizes every unlocked character's active-rank best score/stage plus local
+playtime and 1CC totals without storage work on a source tick. A deployment or
+developer may set
 `TH03_ONLINE_ORIGIN=https://...` to refresh the configured rank's nine boards
 on one bounded background worker; no endpoint is built in, and an absent value
 keeps the product wholly offline. Cache and network work never run on a source

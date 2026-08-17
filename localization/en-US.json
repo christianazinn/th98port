@@ -261,7 +261,11 @@
 
     "hiscore.command.local": "Local HiScores",
     "hiscore.command.online": "Online Leaderboards",
+    "hiscore.command.personal": "Personal Bests",
     "hiscore.command.return": "Return",
+    "hiscore.personal.title": "Personal Bests - {rank}",
+    "hiscore.personal.header.one-cc": "1CC",
+    "hiscore.personal.header.time": "Play Time",
     "hiscore.online.title": "Online - {rank} - {character}",
     "hiscore.online.footer": "Left/Right: Board   Z/Return: Details   Esc: Return",
     "hiscore.online.detail-footer": "Esc: Return",

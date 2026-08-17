@@ -2373,8 +2373,18 @@ struct ClassicOpSessionBackend final {
 			online_boards.empty() || high_scores || high_score_menu) {
 			return false;
 		}
+		auto personal_bests = load_new_classic_score_store_read_only(
+			new_classic_score_path, score_path
+		);
+		if(!personal_bests) {
+			return std::unexpected(new_score_error(
+				std::move(personal_bests.error())
+			));
+		}
 		auto menu = std::make_unique<NewClassicHighScoreMenu>(
-			online_boards, title_completion->resident().rank, patch_assets
+			online_boards, title_completion->resident().rank, patch_assets,
+			NewClassicOnlineMenuMode::high_scores,
+			std::move(personal_bests->document)
 		);
 		if(!menu->valid()) {
 			return false;

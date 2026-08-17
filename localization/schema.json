@@ -262,7 +262,11 @@
 
     {"enum": "hiscore_command_local", "id": "hiscore.command.local", "domain": "menu-font", "max_width": 400},
     {"enum": "hiscore_command_online", "id": "hiscore.command.online", "domain": "menu-font", "max_width": 400},
+    {"enum": "hiscore_command_personal", "id": "hiscore.command.personal", "domain": "menu-font", "max_width": 400},
     {"enum": "hiscore_command_return", "id": "hiscore.command.return", "domain": "menu-font", "max_width": 400},
+    {"enum": "hiscore_personal_title", "id": "hiscore.personal.title", "domain": "menu-font", "max_width": 560, "placeholders": [{"name": "rank", "width_value": "Lunatic"}]},
+    {"enum": "hiscore_personal_header_one_cc", "id": "hiscore.personal.header.one-cc", "domain": "menu-font", "max_width": 64},
+    {"enum": "hiscore_personal_header_time", "id": "hiscore.personal.header.time", "domain": "menu-font", "max_width": 144},
     {"enum": "hiscore_online_title", "id": "hiscore.online.title", "domain": "menu-font", "max_width": 560, "placeholders": [{"name": "character", "width_value": "Yumemi"}, {"name": "rank", "width_value": "Lunatic"}]},
     {"enum": "hiscore_online_footer", "id": "hiscore.online.footer", "domain": "menu-font", "max_width": 560},
     {"enum": "hiscore_online_detail_footer", "id": "hiscore.online.detail-footer", "domain": "menu-font", "max_width": 560},

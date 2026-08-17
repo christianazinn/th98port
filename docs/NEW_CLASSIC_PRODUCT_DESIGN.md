@@ -487,12 +487,16 @@ document back to OP, crosses a black/silent boundary, rebases the scheduler,
 and adopts the existing New Classic playback owner. Session 214 adds the
 source-styled Replay hub plus replay-only online and downloaded libraries;
 without an active-rank replay record, the direct local route remains. Account
-mutation, upload, My Uploads, and My Records remain deferred.
+mutation, upload, My Uploads, and My Records remain deferred. Session 215
+completes the four-row HiScore hub: Personal Bests summarizes active-rank local
+best score/stage, playtime, and 1CC totals for every unlocked character from a
+read-only expanded score snapshot.
 
 - Define leaderboard/replay identifiers, category keys, provenance, and local
   cache documents without selecting a service vendor.
 - Add the HiScore hub when Personal Bests or a real online view exists.
-  Complete for cached online boards in session 201.
+  Complete for cached online boards in session 201 and Personal Bests in
+  session 215.
 - Add the Replay hub when an online/downloaded view exists. Complete in
   session 214.
 - Preserve direct Local views until then.

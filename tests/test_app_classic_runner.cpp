@@ -1266,12 +1266,24 @@ bool authentic_online_high_score_gate(
 			return false;
 		}
 	}
+	// Personal Bests is a retained local-score page inside the same immutable
+	// HiScore owner. It returns to the hub without rebuilding OP or touching the
+	// score store during source-time input.
+	if(!step(0x0002U) || !step() || !step(0x0002U) || !step() ||
+		!step(0x0020U) || !step() ||
+		!ClassicRunnerTestAccess::online_high_score_menu(runner) ||
+		!step(0x1000U) || !step() ||
+		!ClassicRunnerTestAccess::online_high_score_menu(runner) ||
+		!step(0x0001U) || !step()) {
+		std::cerr << "Personal Bests did not retain the HiScore hub owner\n";
+		return false;
+	}
 
 	// Online opens as a second real destination. A replay-backed detail emits
 	// one host-owned request. A validated download becomes a Watch request; a
 	// stale local file is rejected and returns to the retryable detail without
 	// leaving source time. Cancel then returns detail -> board -> hub -> title.
-	if(!step(0x0002U) || !step() || !step(0x0020U) || !step() ||
+	if(!step(0x0020U) || !step() ||
 		!ClassicRunnerTestAccess::online_high_score_menu(runner) ||
 		!step(0x0020U) || !step() || !step(0x0020U)) {
 		return false;
