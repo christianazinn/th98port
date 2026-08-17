@@ -1187,6 +1187,66 @@ void test_main_shot_sheet_and_startup() {
 		th03::present::tram_white,
 		"repeat-round reset wipes and rewrites the static HUD"
 	);
+
+	Raster accelerator_raster;
+	Tram accelerator_tram;
+	MainStaticPresenter accelerator_presenter;
+	MainPaletteState accelerator_palette;
+	expect(
+		accelerator_presenter.round_startup(
+			accelerator_raster, accelerator_tram, hud, sheets,
+			accelerator_palette
+		),
+		"accelerator test startup succeeds"
+	);
+	expect(
+		accelerator_presenter.accelerator_publication_restore(
+			{Page::zero, Page::one}
+		),
+		"accelerator restores source BSS page roles"
+	);
+	expect(
+		accelerator_raster.set_shown_page(Page::zero) &&
+			accelerator_raster.set_access_page(Page::zero),
+		"accelerator keeps source hardware access on page zero"
+	);
+	expect(
+		accelerator_presenter.source_page_ready(accelerator_raster),
+		"crossed accelerator BSS roles accept hardware page zero"
+	);
+	expect(
+		accelerator_raster.clear({16, 0, 288U, 200U}, 6U) &&
+			accelerator_raster.clear({336, 0, 288U, 200U}, 7U),
+		"draw first accelerated frame into hardware page zero"
+	);
+	expect(
+		accelerator_presenter.end_frame_swap_and_clear(accelerator_raster),
+		"first accelerated publication rejoins ordinary page roles"
+	);
+	expect(
+		accelerator_raster.access_page() == Page::one &&
+			accelerator_raster.shown_page() == Page::zero &&
+			accelerator_presenter.page_roles() ==
+				th03::present::MainPageRoles{Page::one, Page::zero} &&
+			accelerator_presenter.source_page_ready(accelerator_raster),
+		"accelerated publication ends on the ordinary page invariant"
+	);
+	expect_pixel(
+		accelerator_raster, Page::zero, {16, 100}, 6U,
+		"first accelerated publication preserves page-zero P1 drawing"
+	);
+	expect_pixel(
+		accelerator_raster, Page::zero, {336, 100}, 7U,
+		"first accelerated publication preserves page-zero P2 drawing"
+	);
+	expect_pixel(
+		accelerator_raster, Page::one, {16, 100}, 0U,
+		"first accelerated publication clears next P1 drawing page"
+	);
+	expect_pixel(
+		accelerator_raster, Page::one, {336, 100}, 1U,
+		"first accelerated publication clears next P2 drawing page"
+	);
 }
 
 } // namespace

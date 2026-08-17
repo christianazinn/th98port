@@ -283,6 +283,81 @@ std::vector<std::byte> make_v13_two_checkpoints()
 	return bytes;
 }
 
+std::vector<std::byte> make_v13_repeat_checkpoint()
+{
+	auto bytes = make_v13_two_checkpoints();
+	constexpr std::size_t first_checkpoint = 622U;
+	constexpr std::size_t second_checkpoint =
+		first_checkpoint + th03::formats::replay_v13_checkpoint_size;
+	put_u8(bytes, 0x260U, 0x10U);
+	put_u8(bytes, 0x44U + 1U, 1U);
+	put_u8(bytes, first_checkpoint + 12U + 23U + 1U, 1U);
+	put_u8(bytes, second_checkpoint + 12U + 11U, 0U);
+	put_u8(bytes, second_checkpoint + 12U + 22U, 4U);
+	put_u8(bytes, second_checkpoint + 12U + 23U + 1U, 1U);
+	put_u8(bytes, second_checkpoint + 12U + 84U, 1U);
+	return bytes;
+}
+
+std::vector<std::byte> append_valid_accelerator(
+	std::vector<std::byte> bytes,
+	std::uint8_t checkpoint
+)
+{
+	constexpr std::size_t raw_size = 29'286U;
+	constexpr std::size_t shared_velocity_x_offset = 0x47F2U;
+	constexpr std::size_t background_offset = 0x1C38U;
+	constexpr std::size_t background_magnitude_offset = 0x2138U;
+	constexpr std::size_t page_front_offset = 0x47FBU;
+	std::vector<std::byte> raw(raw_size, std::byte{0});
+	raw[0U] = std::byte{0x11};
+	raw[1U] = std::byte{0x22};
+	raw[2U] = std::byte{0x33};
+	raw[3U] = std::byte{0x44};
+	raw[4U] = std::byte{0x55};
+	raw[5U] = std::byte{0x66};
+	raw[shared_velocity_x_offset] = std::byte{0xD0};
+	put_u16(raw, background_offset + 0U, 0xF123U);
+	put_u16(raw, background_offset + 2U, 0x0456U);
+	put_u16(raw, background_offset + 4U, 0xFF80U);
+	put_u16(raw, background_offset + 6U, 0x007FU);
+	raw[background_offset + 8U] = std::byte{0x82};
+	put_u16(raw, background_offset + 10U, 0x238EU);
+	raw[background_magnitude_offset] = std::byte{0x40};
+	raw[page_front_offset] = std::byte{1};
+	std::vector<std::byte> packed;
+	std::size_t output = 0U;
+	while(output < raw_size) {
+		const auto flags_offset = packed.size();
+		packed.push_back(std::byte{0xFF});
+		std::uint8_t flags = 0U;
+		for(std::uint8_t token = 0U; token < 8U && output < raw_size; ++token) {
+			flags |= static_cast<std::uint8_t>(1U << token);
+			packed.push_back(raw[output++]);
+		}
+		packed[flags_offset] = static_cast<std::byte>(flags);
+	}
+	std::uint32_t hash = 5381U;
+	for(const auto value : raw) {
+		hash = (hash * 33U) ^ std::to_integer<std::uint8_t>(value);
+	}
+	const auto packed_offset = bytes.size();
+	bytes.insert(bytes.end(), packed.begin(), packed.end());
+	const auto footer = bytes.size();
+	bytes.resize(footer + 80U, std::byte{0});
+	put_magic(bytes, footer, std::string_view("T3RACC1\0", 8U));
+	put_u16(bytes, footer + 8U, 1U);
+	put_u16(bytes, footer + 10U, 80U);
+	put_u8(bytes, footer + 12U, 1U);
+	put_u8(bytes, footer + 16U, checkpoint);
+	put_u8(bytes, footer + 17U, 1U);
+	put_u16(bytes, footer + 18U, static_cast<std::uint16_t>(raw_size));
+	put_u32(bytes, footer + 20U, static_cast<std::uint32_t>(packed_offset));
+	put_u32(bytes, footer + 24U, static_cast<std::uint32_t>(packed.size()));
+	put_u32(bytes, footer + 28U, hash);
+	return bytes;
+}
+
 std::vector<std::byte> make_v13_practice_two_checkpoints()
 {
 	auto bytes = make_v13(Scenario::practice);
@@ -485,6 +560,42 @@ void test_valid_scenarios()
 					->round_reset_seed == 0x76543210U;
 		}(),
 		"V13 accepts a later Story-stage checkpoint with its scenario opponent"
+	);
+	auto accelerated = append_valid_accelerator(
+		make_v13_repeat_checkpoint(), 1U
+	);
+	const auto accelerated_parsed = th03::formats::parse_v13_replay(accelerated);
+	check(
+		accelerated_parsed &&
+		accelerated_parsed->accelerators ==
+			std::vector<th03::formats::ReplayAcceleratorPresentation>{{
+				.checkpoint = 1U,
+				.page_back = 0U,
+				.page_front = 1U,
+				.palette = {{
+					{.r = 0x11U, .g = 0x22U, .b = 0x33U},
+					{.r = 0x44U, .g = 0x55U, .b = 0x66U},
+				}},
+				.shared_velocity_x_q4_4 = -48,
+				.background = {{
+					{
+						.x_q12_4 = -3'805,
+						.y_q12_4 = 0x0456,
+						.velocity_x_q12_4 = -128,
+						.velocity_y_q12_4 = 127,
+						.angle = 0x82U,
+						.sprite_variant = 1U,
+					},
+				}},
+				.background_magnitude = 0x40U,
+			}},
+		"V13 recognizes typed page, palette, velocity, and background state from a donor-valid T3RACC1 image"
+	);
+	put_u32(accelerated, accelerated.size() - 80U + 28U, 0U);
+	const auto corrupt_accelerator = th03::formats::parse_v13_replay(accelerated);
+	check(
+		corrupt_accelerator && corrupt_accelerator->accelerators.empty(),
+		"V13 ignores a corrupt optional T3RACC1 image like the donor fallback"
 	);
 	auto continued_story = make_v13_two_checkpoints();
 	put_u8(continued_story, 0x260U, 0x00U);

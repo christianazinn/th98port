@@ -119,9 +119,7 @@ void MainRoundPresenter::fail(MainRoundStatus status) noexcept
 
 bool MainRoundPresenter::source_page_ready() const noexcept
 {
-	const auto pages = static_->page_roles();
-	return raster_->access_page() == pages.back &&
-		raster_->shown_page() == pages.front;
+	return static_->source_page_ready(*raster_);
 }
 
 bool MainRoundPresenter::source_prefix_open() const noexcept
@@ -1028,7 +1026,8 @@ void MainRoundPresenter::observe(const PlayersBulletsView &view) noexcept
 		bullet_facts_,
 		bullet_trails_,
 		present_common_effects,
-		this
+		this,
+		static_->page_roles().back
 	)) {
 		if(ready()) {
 			fail(MainRoundStatus::players_bullets_failed);

@@ -168,6 +168,36 @@ void test_full_baseline_restore_and_tone_clamp()
 	expect(palette.dirty(), "immediate high-tone show retains dirty state");
 }
 
+void test_accelerator_palette_restore()
+{
+	Raster raster;
+	MainPaletteState palette;
+	expect(
+		raster.set_pending_palette_entry_rgb8(0U, {0xF0U, 0xF0U, 0xF0U}) &&
+			palette.capture_baseline(raster) &&
+			palette.set_entry_deferred(raster, 1U, {0xFFU, 0xFFU, 0xFFU}),
+		"prepare a dirty process palette before accelerator restore"
+	);
+	raster.set_palette_tone(37);
+	th03::present::Palette16Rgb8 restored{};
+	restored.colors[0U] = {0x22U, 0x44U, 0x66U};
+	restored.colors[15U] = {0x88U, 0xAAU, 0xCCU};
+	palette.restore_accelerator_palette(raster, restored);
+	expect(
+		raster.pending_palette() == restored && raster.palette_tone() == 100 &&
+			raster.applied_palette().colors[0U] == Rgb4{2U, 4U, 6U} &&
+			raster.applied_palette().colors[15U] == Rgb4{8U, 10U, 12U},
+		"accelerator restore replaces logical/applied RGB8 at source tone 100"
+	);
+	expect(!palette.dirty(), "accelerator restore clears the deferred latch");
+	expect(
+		palette.set_entry_deferred(raster, 0U, {}) &&
+			palette.restore_entry_deferred(raster, 0U) &&
+			raster.pending_palette().colors[0U] == restored.colors[0U],
+		"later palette effects restore the accelerator's baseline"
+	);
+}
+
 static_assert(
 	std::is_trivially_destructible_v<MainPaletteState>,
 	"MainPaletteState has no owning heap storage"
@@ -184,6 +214,7 @@ int main()
 	test_logical_rgb8_baseline_and_entry_restore();
 	test_immediate_show_keeps_dirty_latch();
 	test_full_baseline_restore_and_tone_clamp();
+	test_accelerator_palette_restore();
 	if(failures != 0U) {
 		std::fprintf(
 			stderr,

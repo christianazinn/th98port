@@ -1744,6 +1744,65 @@ void MainProcessReplayPresentationAccess::set_preroll_simulating(
 	process.impl_->background->set_rendering_enabled(!simulating);
 }
 
+MainProcessReplayPresentationAccess::AcceleratorAnchor
+MainProcessReplayPresentationAccess::accelerator_anchor(
+	const MainProcess &process
+)
+{
+	return {
+		.raster = process.impl_->raster,
+	};
+}
+
+bool MainProcessReplayPresentationAccess::restore_accelerator_publication(
+	MainProcess &process,
+	AcceleratorAnchor &&anchor,
+	const RoundStartObservation &anchor_round_start,
+	present::MainPageRoles source_pages,
+	const present::Palette16Rgb8 &palette,
+	std::int8_t shared_velocity_x_q4_4,
+	const std::array<
+		present::MainBackgroundRecordState,
+		present::main_background_record_count
+	> &background,
+	std::uint8_t background_magnitude
+) noexcept
+{
+	const auto hud = hud_state_from_round(anchor_round_start);
+	if(!hud) {
+		return false;
+	}
+	// T3RACC1 restores the target's BSS after the process anchor has already
+	// initialized VRAM. Replace the graphics pages with their anchor image and
+	// restore the source's saved/live palette before publishing the target.
+	process.impl_->raster.replace_graphics_pages(std::move(anchor.raster));
+	process.impl_->palette.restore_accelerator_palette(
+		process.impl_->raster, palette
+	);
+	// The accelerator restores the logical page_back/page_front BSS pair, but
+	// round_startup() has already left the PC-98 graphics access page at 0.
+	// Preserve that independent hardware selector for the first target frame.
+	if(source_pages.back == source_pages.front ||
+		!process.impl_->raster.set_shown_page(source_pages.back) ||
+		!process.impl_->raster.set_access_page(present::Page::zero) ||
+		!process.impl_->static_presenter.accelerator_publication_restore(
+			source_pages
+		)) {
+		return false;
+	}
+	process.impl_->players_bullets->accelerator_shared_velocity_restore(
+		shared_velocity_x_q4_4
+	);
+	if(!process.impl_->background->accelerator_restore(
+		background, background_magnitude,
+		process.impl_->game->canonical_state().round_id
+	)) {
+		return false;
+	}
+	present::main_hud_wipe(process.impl_->tram);
+	return present::main_hud_static_put(process.impl_->tram, *hud);
+}
+
 present::MainRoundStatus MainProcess::presentation_status() const noexcept
 {
 	return impl_->round->status();

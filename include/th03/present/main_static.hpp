@@ -157,7 +157,17 @@ public:
 	// to remove source-observable sprite trails behind the lower TRAM rows.
 	[[nodiscard]] bool end_frame_swap_and_clear(Raster &raster) noexcept;
 
+	// A Replay Patch accelerator restores page_back/page_front after repeat
+	// startup has already left hardware access on page 0. The BSS roles and the
+	// hardware selectors can therefore be crossed for exactly one frame.
+	// Preserve them separately until the next ordinary page transaction rejoins
+	// them.
+	[[nodiscard]] bool accelerator_publication_restore(
+		MainPageRoles source_pages
+	) noexcept;
+
 	[[nodiscard]] MainPageRoles page_roles() const noexcept;
+	[[nodiscard]] bool source_page_ready(const Raster &raster) const noexcept;
 	[[nodiscard]] const Sprite16Staging &sprite_staging() const noexcept;
 	[[nodiscard]] bool started() const noexcept;
 
@@ -165,6 +175,7 @@ private:
 	MainPageRoles pages_{};
 	Sprite16Staging sprite_staging_{};
 	bool started_ = false;
+	bool accelerator_roles_crossed_ = false;
 };
 
 } // namespace th03::present

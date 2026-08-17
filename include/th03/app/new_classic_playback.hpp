@@ -70,6 +70,7 @@ struct NewClassicPlaybackTick final {
 	bool surface_changed = false;
 	bool process_advanced = false;
 	NewClassicPlaybackStatus status = NewClassicPlaybackStatus::failed;
+	std::optional<PixelOracleSourceIdentity> pixel_oracle_source_identity{};
 };
 
 // Visual V13 player over the same authenticated MAIN and typed MAINL owners

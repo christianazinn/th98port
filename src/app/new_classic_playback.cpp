@@ -948,6 +948,51 @@ NewClassicReplayPlayback::load_internal(
 	);
 	const auto target_sample =
 		impl->document.checkpoints[request.checkpoint_index].sample_index;
+	const auto accelerator = std::find_if(
+		impl->document.accelerators.begin(), impl->document.accelerators.end(),
+		[checkpoint = request.checkpoint_index](
+			const formats::ReplayAcceleratorPresentation &candidate
+		) {
+			return candidate.checkpoint == checkpoint;
+		}
+	);
+	const auto accelerated_pages =
+		(accelerator == impl->document.accelerators.end())
+			? std::optional<present::MainPageRoles>{}
+			: std::optional{present::MainPageRoles{
+				.back = accelerator->page_back == 0U ?
+					present::Page::zero : present::Page::one,
+				.front = accelerator->page_front == 0U ?
+					present::Page::zero : present::Page::one,
+			}};
+	present::Palette16Rgb8 accelerated_palette{};
+	if(accelerator != impl->document.accelerators.end()) {
+		for(std::size_t color = 0U; color < accelerated_palette.colors.size(); ++color) {
+			const auto source = accelerator->palette[color];
+			accelerated_palette.colors[color] = {
+				.r = source.r,
+				.g = source.g,
+				.b = source.b,
+			};
+		}
+	}
+	std::array<
+		present::MainBackgroundRecordState,
+		present::main_background_record_count
+	> accelerated_background{};
+	if(accelerator != impl->document.accelerators.end()) {
+		for(std::size_t slot = 0U; slot < accelerated_background.size(); ++slot) {
+			const auto &source = accelerator->background[slot];
+			accelerated_background[slot] = {
+				.x_q12_4 = source.x_q12_4,
+				.y_q12_4 = source.y_q12_4,
+				.velocity_x_q12_4 = source.velocity_x_q12_4,
+				.velocity_y_q12_4 = source.velocity_y_q12_4,
+				.angle = source.angle,
+				.sprite_variant = source.sprite_variant,
+			};
+		}
+	}
 	std::size_t start_checkpoint = request.checkpoint_index;
 	while(start_checkpoint != 0U &&
 		!impl->process_start_checkpoint(start_checkpoint)) {
@@ -978,6 +1023,14 @@ NewClassicReplayPlayback::load_internal(
 	));
 	if(auto started = impl->start_checkpoint(start_checkpoint); !started) {
 		return std::unexpected(std::move(started.error()));
+	}
+	const auto anchor_round_start = impl->process->round_start_observation();
+	std::optional<MainProcessReplayPresentationAccess::AcceleratorAnchor>
+		accelerator_anchor;
+	if(accelerated_pages) {
+		accelerator_anchor.emplace(
+			MainProcessReplayPresentationAccess::accelerator_anchor(*impl->process)
+		);
 	}
 	auto result = std::unique_ptr<NewClassicReplayPlayback>(
 		new NewClassicReplayPlayback(std::move(impl))
@@ -1025,9 +1078,36 @@ NewClassicReplayPlayback::load_internal(
 			NewClassicPlaybackErrorCode::replay_contract_failed
 		));
 	}
+	if(accelerated_pages && (!accelerator_anchor || !result->impl_->process ||
+		!MainProcessReplayPresentationAccess::restore_accelerator_publication(
+			*result->impl_->process, std::move(*accelerator_anchor),
+			anchor_round_start,
+			*accelerated_pages,
+			accelerated_palette,
+			accelerator->shared_velocity_x_q4_4,
+			accelerated_background,
+			accelerator->background_magnitude
+		))) {
+		return std::unexpected(playback_error(
+			NewClassicPlaybackErrorCode::surface_failed
+		));
+	}
 	// Hidden checkpoint preroll owns no Replay Patch overlay. Install the
 	// native MAIN backing/TRAM only once the selected frame becomes public.
 	if(!result->impl_->put_replay_overlay()) {
+		return std::unexpected(playback_error(
+			NewClassicPlaybackErrorCode::surface_failed
+		));
+	}
+	// The overlay helper normally restores the following hidden draw page after
+	// a committed footer. Here it runs before the selected target's first frame,
+	// where the accelerator has restored BSS but round_startup() still owns
+	// hardware access page 0. Keep that one-frame selector exact; the normal
+	// post-frame overlay below will restore the next hidden page.
+	if(accelerated_pages &&
+		!MainProcessReplayPresentationAccess::raster(
+			*result->impl_->process
+		).set_access_page(present::Page::zero)) {
 		return std::unexpected(playback_error(
 			NewClassicPlaybackErrorCode::surface_failed
 		));
@@ -1093,6 +1173,16 @@ NewClassicReplayPlayback::advance(
 		}
 		if(advanced->handoff_ready) {
 			impl_->replay_entry_stage.reset();
+			const auto source_identity = impl_->pixel_oracle_source_identity();
+			auto first_frame = advance(audio, false, false, live_interface_input);
+			if(!first_frame) {
+				return std::unexpected(std::move(first_frame.error()));
+			}
+			first_frame->surface_changed = true;
+			first_frame->pixel_oracle_source_identity = source_identity;
+			first_frame->pixel_oracle_source_identity->boundary =
+				PixelOracleBoundary::scene_enter;
+			return first_frame;
 		}
 		return NewClassicPlaybackTick{
 			.surface_changed = true,

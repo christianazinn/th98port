@@ -1,5 +1,6 @@
 #include "th03/present/main_background.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -17,6 +18,7 @@ using th03::MainBackgroundRandomRead;
 using th03::present::Index4;
 using th03::present::MainBackgroundAtlasLayout;
 using th03::present::MainBackgroundPresenter;
+using th03::present::MainBackgroundRecordState;
 using th03::present::MainBackgroundStatus;
 using th03::present::Page;
 using th03::present::Point;
@@ -681,6 +683,76 @@ void test_complete_steady_schedule()
 	expect(presenter.ready(), "complete steady schedule remains valid");
 }
 
+void test_accelerator_restore_preserves_target_round_motion()
+{
+	Raster raster;
+	Sprite16Staging staging;
+	const auto layout = synthetic_layout();
+	commit_sources(raster, staging, layout);
+	MainBackgroundPresenter presenter(raster, staging, layout);
+	initialize(
+		presenter,
+		MainBackgroundKind::type_a,
+		[](std::size_t) noexcept {
+			return Placement{400U * 16U, 300U * 16U, 0U};
+		}
+	);
+	for(std::uint16_t frame = 0U; frame < 130U; ++frame) {
+		initial_frame(presenter, MainBackgroundKind::type_a, frame);
+	}
+
+	std::array<MainBackgroundRecordState, main_background_record_count> records{};
+	for(auto &record : records) {
+		record.x_q12_4 = 400 * 16;
+		record.y_q12_4 = 300 * 16;
+	}
+	records[0U] = {
+		.x_q12_4 = 100 * 16,
+		.y_q12_4 = 200 * 16,
+		.velocity_x_q12_4 = 0,
+		.velocity_y_q12_4 = 16,
+		.angle = 0x40U,
+	};
+	expect(
+		presenter.accelerator_restore(records, 0x55U, 7U),
+		"accelerator restores a complete typed background pool"
+	);
+	clear_visible(raster);
+	presenter.main_background_frame({
+		.round_id = 7U,
+		.round_or_result_frame = 0U,
+		.kind = MainBackgroundKind::type_a,
+		.phase = MainBackgroundPhase::steady,
+	});
+	expect_pixel(
+		raster, {100, 100}, 10U,
+		"target round identity prevents a duplicate repeat velocity reset"
+	);
+	expect_pixel(
+		raster, {100, 102}, 0U,
+		"accelerator velocity is not replaced by the angle-derived reset vector"
+	);
+
+	auto invalid = records;
+	invalid[0U].x_q12_4 = 200 * 16;
+	invalid.back().sprite_variant = 2U;
+	expect(
+		!presenter.accelerator_restore(invalid, 0x40U, 7U),
+		"accelerator rejects an invalid sprite variant"
+	);
+	clear_visible(raster);
+	presenter.main_background_frame({
+		.round_id = 7U,
+		.round_or_result_frame = 1U,
+		.kind = MainBackgroundKind::type_a,
+		.phase = MainBackgroundPhase::steady,
+	});
+	expect_pixel(
+		raster, {100, 101}, 10U,
+		"invalid accelerator restore leaves the prior pool mutation-atomic"
+	);
+}
+
 void test_sticky_validation_and_failure_atomicity()
 {
 	const auto layout = synthetic_layout();
@@ -806,6 +878,7 @@ int main()
 	test_type_a_initial_clip_then_steady_noclip();
 	test_steady_order_latch_schedule_and_repeat_reset();
 	test_complete_steady_schedule();
+	test_accelerator_restore_preserves_target_round_motion();
 	test_sticky_validation_and_failure_atomicity();
 
 	if(failures != 0U) {

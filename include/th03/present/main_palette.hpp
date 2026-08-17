@@ -36,6 +36,13 @@ public:
 	// Like the source palette_show() call, this deliberately does not clear an
 	// already-pending palette_changed latch.
 	[[nodiscard]] bool restore_baseline_and_show(Raster &raster) noexcept;
+	// T3RACC1 restores the saved MAIN palette snapshot together with the live
+	// logical palette. The selected publication always has Tone=100 and no
+	// deferred palette write.
+	void restore_accelerator_palette(
+		Raster &raster,
+		const Palette16Rgb8 &palette
+	) noexcept;
 	void set_tone_and_show_now(Raster &raster, std::int16_t tone) noexcept;
 	void show_now(Raster &raster) noexcept;
 

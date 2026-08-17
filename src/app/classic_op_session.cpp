@@ -1225,6 +1225,10 @@ struct ClassicOpSessionBackend final {
 				));
 			}
 			if(advanced->surface_changed) {
+				if(advanced->pixel_oracle_source_identity) {
+					publication_identity =
+						advanced->pixel_oracle_source_identity;
+				} else {
 				const auto identity_after =
 					replay_playback->pixel_oracle_source_identity();
 				const bool owner_replaced =
@@ -1238,6 +1242,7 @@ struct ClassicOpSessionBackend final {
 				if(owner_replaced) {
 					publication_identity->boundary =
 						PixelOracleBoundary::scene_enter;
+				}
 				}
 			}
 			surface_changed = surface_changed || advanced->surface_changed;

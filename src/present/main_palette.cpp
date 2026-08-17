@@ -67,6 +67,23 @@ bool MainPaletteState::restore_baseline_and_show(Raster &raster) noexcept
 	return true;
 }
 
+void MainPaletteState::restore_accelerator_palette(
+	Raster &raster,
+	const Palette16Rgb8 &palette
+) noexcept
+{
+	baseline_ = palette;
+	baseline_ready_ = true;
+	for(std::size_t index = 0U; index < palette.colors.size(); ++index) {
+		(void)raster.set_pending_palette_entry_rgb8(
+			static_cast<std::uint8_t>(index), palette.colors[index]
+		);
+	}
+	raster.set_palette_tone(100);
+	raster.apply_pending_palette();
+	dirty_ = false;
+}
+
 void MainPaletteState::set_tone_and_show_now(
 	Raster &raster,
 	std::int16_t tone

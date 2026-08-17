@@ -1,5 +1,6 @@
 #include "th03/formats/v13.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cstddef>
@@ -30,6 +31,23 @@ constexpr std::size_t timed_frames_offset = 0x256U;
 constexpr std::size_t slow_frames_offset = 0x25AU;
 constexpr std::size_t checkpoint_count_offset = 0x25EU;
 constexpr std::size_t checkpoint_directory_offset = 0x25FU;
+constexpr std::size_t accelerator_footer_size = 80U;
+constexpr std::size_t accelerator_descriptor_size = 16U;
+constexpr std::size_t accelerator_raw_size = 29'286U;
+constexpr std::uint32_t accelerator_packed_size_max = 0xFFF0U;
+// T3RACC1 stores release MAIN DGROUP bytes beginning at palette_1F2F4
+// (0x1D94). The first 48 bytes are the saved 16-entry RGB8 palette;
+// player_velocity.x and page_back/page_front are fixed at
+// 0x6586 and 0x658E/0x658F in that frozen process image, hence these
+// raw-image offsets.
+constexpr std::size_t accelerator_palette_offset = 0U;
+constexpr std::size_t accelerator_shared_velocity_x_offset = 0x47F2U;
+constexpr std::size_t accelerator_page_back_offset = 0x47FAU;
+constexpr std::size_t accelerator_page_front_offset = 0x47FBU;
+constexpr std::size_t accelerator_background_offset = 0x1C38U;
+constexpr std::size_t accelerator_background_record_size = 16U;
+constexpr std::size_t accelerator_background_magnitude_offset = 0x2138U;
+constexpr std::uint16_t accelerator_background_variant_one_offset = 0x238EU;
 constexpr std::uint16_t replay_flags_known = 0x0007U;
 constexpr std::uint16_t replay_flags_required = 0x0003U;
 constexpr std::uint16_t summary_flags_current = 0x007FU;
@@ -123,6 +141,171 @@ bool replay_name_byte_valid(std::uint8_t value) noexcept
 std::optional<std::uint8_t> optional_u8(std::uint8_t value) noexcept
 {
 	return (value == 0xFFU) ? std::nullopt : std::optional{value};
+}
+
+std::optional<std::vector<std::byte>> decompress_accelerator(
+	std::span<const std::byte> packed
+)
+{
+	std::vector<std::byte> raw(accelerator_raw_size);
+	std::size_t input = 0U;
+	std::size_t output = 0U;
+	while(output < raw.size()) {
+		if(input >= packed.size()) {
+			return std::nullopt;
+		}
+		const auto flags = std::to_integer<std::uint8_t>(packed[input++]);
+		for(std::uint8_t token = 0U; token < 8U && output < raw.size(); ++token) {
+			if((flags & static_cast<std::uint8_t>(1U << token)) != 0U) {
+				if(input >= packed.size()) {
+					return std::nullopt;
+				}
+				raw[output++] = packed[input++];
+				continue;
+			}
+			if((input + 1U) >= packed.size()) {
+				return std::nullopt;
+			}
+			const auto lo = std::to_integer<std::uint8_t>(packed[input++]);
+			const auto hi = std::to_integer<std::uint8_t>(packed[input++]);
+			const auto distance = static_cast<std::size_t>(
+				lo | ((static_cast<std::uint16_t>(hi) >> 4U) << 8U)
+			);
+			const auto length = static_cast<std::size_t>((hi & 0x0FU) + 3U);
+			if(distance == 0U || distance > output || length > (raw.size() - output)) {
+				return std::nullopt;
+			}
+			for(std::size_t copied = 0U; copied < length; ++copied) {
+				raw[output] = raw[output - distance];
+				++output;
+			}
+		}
+	}
+	if(input != packed.size()) {
+		return std::nullopt;
+	}
+	return raw;
+}
+
+std::uint32_t accelerator_hash(std::span<const std::byte> raw) noexcept
+{
+	std::uint32_t hash = 5381U;
+	for(const auto value : raw) {
+		hash = (hash * 33U) ^ std::to_integer<std::uint8_t>(value);
+	}
+	return hash;
+}
+
+std::vector<ReplayAcceleratorPresentation> parse_accelerators(
+	std::span<const std::byte> bytes,
+	std::uint32_t logical_end,
+	std::span<const std::uint8_t> checkpoint_directory
+)
+{
+	std::vector<ReplayAcceleratorPresentation> accepted;
+	if(bytes.size() < accelerator_footer_size) {
+		return accepted;
+	}
+	const auto footer = bytes.size() - accelerator_footer_size;
+	constexpr std::array<std::uint8_t, 8U> magic{
+		'T', '3', 'R', 'A', 'C', 'C', '1', 0U,
+	};
+	if(!detail::has_magic(bytes.subspan(footer), magic) ||
+		detail::u16(bytes, footer + 8U) != 1U ||
+		detail::u16(bytes, footer + 10U) != accelerator_footer_size) {
+		return accepted;
+	}
+	const auto count = detail::u8(bytes, footer + 12U);
+	if(count == 0U || count > 4U || detail::u8(bytes, footer + 13U) != 0U ||
+		detail::u8(bytes, footer + 14U) != 0U ||
+		detail::u8(bytes, footer + 15U) != 0U) {
+		return accepted;
+	}
+	accepted.reserve(count);
+	for(std::size_t index = 0U; index < count; ++index) {
+		const auto descriptor = footer + 16U + (index * accelerator_descriptor_size);
+		const auto checkpoint = detail::u8(bytes, descriptor);
+		const auto codec = detail::u8(bytes, descriptor + 1U);
+		const auto raw_size = detail::u16(bytes, descriptor + 2U);
+		const auto offset = detail::u32(bytes, descriptor + 4U);
+		const auto packed_size = detail::u32(bytes, descriptor + 8U);
+		const auto expected_hash = detail::u32(bytes, descriptor + 12U);
+		if(checkpoint >= checkpoint_directory.size() ||
+			(checkpoint_directory[checkpoint] >> 4U) == 0U || codec != 1U ||
+			raw_size != accelerator_raw_size || packed_size == 0U ||
+			packed_size > accelerator_packed_size_max || offset < logical_end ||
+			packed_size > footer || offset > (footer - packed_size) ||
+			std::find_if(
+				accepted.begin(), accepted.end(),
+				[checkpoint](const ReplayAcceleratorPresentation &candidate) {
+					return candidate.checkpoint == checkpoint;
+				}
+			) != accepted.end()) {
+			continue;
+		}
+		const auto packed = bytes.subspan(
+			static_cast<std::size_t>(offset), static_cast<std::size_t>(packed_size)
+		);
+		auto raw = decompress_accelerator(packed);
+		if(!raw || accelerator_hash(*raw) != expected_hash) {
+			continue;
+		}
+		const auto page_back = std::to_integer<std::uint8_t>(
+			(*raw)[accelerator_page_back_offset]
+		);
+		const auto page_front = std::to_integer<std::uint8_t>(
+			(*raw)[accelerator_page_front_offset]
+		);
+		if(page_back > 1U || page_front > 1U || page_back == page_front) {
+			continue;
+		}
+		ReplayAcceleratorPresentation presentation{
+			.checkpoint = checkpoint,
+			.page_back = page_back,
+			.page_front = page_front,
+			.shared_velocity_x_q4_4 = std::bit_cast<std::int8_t>(
+				std::to_integer<std::uint8_t>(
+					(*raw)[accelerator_shared_velocity_x_offset]
+				)
+			),
+			.background_magnitude = std::to_integer<std::uint8_t>(
+				(*raw)[accelerator_background_magnitude_offset]
+			),
+		};
+		for(std::size_t color = 0U; color < presentation.palette.size(); ++color) {
+			const auto base = accelerator_palette_offset + (color * 3U);
+			presentation.palette[color] = {
+				.r = detail::u8(*raw, base),
+				.g = detail::u8(*raw, base + 1U),
+				.b = detail::u8(*raw, base + 2U),
+			};
+		}
+		for(std::size_t slot = 0U; slot < presentation.background.size(); ++slot) {
+			const auto base = accelerator_background_offset +
+				(slot * accelerator_background_record_size);
+			presentation.background[slot] = {
+				.x_q12_4 = std::bit_cast<std::int16_t>(
+					detail::u16(*raw, base)
+				),
+				.y_q12_4 = std::bit_cast<std::int16_t>(
+					detail::u16(*raw, base + 2U)
+				),
+				.velocity_x_q12_4 = std::bit_cast<std::int16_t>(
+					detail::u16(*raw, base + 4U)
+				),
+				.velocity_y_q12_4 = std::bit_cast<std::int16_t>(
+					detail::u16(*raw, base + 6U)
+				),
+				.angle = detail::u8(*raw, base + 8U),
+				.sprite_variant = static_cast<std::uint8_t>(
+					detail::u16(*raw, base + 10U) ==
+						accelerator_background_variant_one_offset
+				),
+			};
+		}
+		accepted.push_back(std::move(presentation));
+	}
+	return accepted;
 }
 
 std::expected<ReplayPracticeConfig, Error> parse_practice_config(
@@ -910,6 +1093,11 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 			.init = std::move(checkpoint.init),
 		});
 	}
+	document.accelerators = parse_accelerators(
+		bytes,
+		static_cast<std::uint32_t>(input_offset + input_size),
+		checkpoint_directory
+	);
 	document.expected_round_splits = std::move(*round_splits);
 	document.stage_clear_bonuses = std::move(*bonuses);
 	document.slowdown = slowdown;

@@ -123,11 +123,63 @@ struct ReplayCheckpoint {
 	GameInit init{};
 };
 
+struct ReplayAcceleratorBackgroundRecord {
+	std::int16_t x_q12_4 = 0;
+	std::int16_t y_q12_4 = 0;
+	std::int16_t velocity_x_q12_4 = 0;
+	std::int16_t velocity_y_q12_4 = 0;
+	std::uint8_t angle = 0U;
+	std::uint8_t sprite_variant = 0U;
+
+	[[nodiscard]] friend constexpr bool operator==(
+		const ReplayAcceleratorBackgroundRecord &,
+		const ReplayAcceleratorBackgroundRecord &
+	) = default;
+};
+
+struct ReplayAcceleratorRgb8 {
+	std::uint8_t r = 0U;
+	std::uint8_t g = 0U;
+	std::uint8_t b = 0U;
+
+	[[nodiscard]] friend constexpr bool operator==(
+		const ReplayAcceleratorRgb8 &,
+		const ReplayAcceleratorRgb8 &
+	) = default;
+};
+
+// The optional T3RACC1 image is a cache, not replay authority. These are the
+// accelerator-private presentation facts needed by the native player: the
+// source's first publication shows [page_back] while drawing the following
+// frame into [page_front], player pose selection inherits the shared velocity
+// scratch when an update performs no new velocity write, and the animated
+// background pool continues from the selected round rather than the process
+// anchor used for portable semantic reconstruction.
+struct ReplayAcceleratorPresentation {
+	std::uint8_t checkpoint = 0U;
+	std::uint8_t page_back = 0U;
+	std::uint8_t page_front = 1U;
+	std::array<ReplayAcceleratorRgb8, 16U> palette{};
+	std::int8_t shared_velocity_x_q4_4 = 0;
+	std::array<ReplayAcceleratorBackgroundRecord, 50U> background{};
+	std::uint8_t background_magnitude = 0x40U;
+
+	[[nodiscard]] friend constexpr bool operator==(
+		const ReplayAcceleratorPresentation &,
+		const ReplayAcceleratorPresentation &
+	) = default;
+};
+
 struct ReplayDocument {
 	replay::ReplaySession session{};
 	bool practice = false;
 	std::optional<ReplayMetadata> metadata;
 	std::vector<ReplayCheckpoint> checkpoints;
+	// Donor-valid T3RACC1 process-state images with sane source page roles. The
+	// native player reconstructs gameplay from portable V13 state and imports
+	// only the typed presentation facts above, avoiding PC-98
+	// decompression/loading latency and native-layout snapshots.
+	std::vector<ReplayAcceleratorPresentation> accelerators;
 	std::vector<ReplayRoundSplit> expected_round_splits;
 	std::optional<std::array<ReplayStageClearBonus, 9>> stage_clear_bonuses;
 	std::optional<ReplaySlowdown> slowdown;

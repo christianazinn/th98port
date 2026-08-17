@@ -148,11 +148,31 @@ struct MainProcessDemoAccess final {
 // round presenters. Keep mutable Raster/TRAM access source-private so replay
 // UI cannot leak into the shared deterministic process API.
 struct MainProcessReplayPresentationAccess final {
+	struct AcceleratorAnchor final {
+		present::Raster raster{};
+	};
+
 	[[nodiscard]] static present::Raster &raster(MainProcess &process) noexcept;
 	[[nodiscard]] static present::Tram &tram(MainProcess &process) noexcept;
 	static void set_preroll_simulating(
 		MainProcess &process,
 		bool simulating
+	) noexcept;
+	[[nodiscard]] static AcceleratorAnchor accelerator_anchor(
+		const MainProcess &process
+	);
+	[[nodiscard]] static bool restore_accelerator_publication(
+		MainProcess &process,
+		AcceleratorAnchor &&anchor,
+		const RoundStartObservation &anchor_round_start,
+		present::MainPageRoles source_pages,
+		const present::Palette16Rgb8 &palette,
+		std::int8_t shared_velocity_x_q4_4,
+		const std::array<
+			present::MainBackgroundRecordState,
+			present::main_background_record_count
+		> &background,
+		std::uint8_t background_magnitude
 	) noexcept;
 };
 

@@ -494,6 +494,11 @@ bool Raster::copy_page(
 	return true;
 }
 
+void Raster::replace_graphics_pages(Raster &&source) noexcept
+{
+	pages_ = std::move(source.pages_);
+}
+
 bool Raster::set_pending_palette_entry(
 	std::uint8_t index,
 	assets::Rgb4 color

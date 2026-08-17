@@ -38,6 +38,15 @@ enum class MainBackgroundStatus : std::uint8_t {
 	draw_failed,
 };
 
+struct MainBackgroundRecordState {
+	std::int16_t x_q12_4 = 0;
+	std::int16_t y_q12_4 = 0;
+	std::int16_t velocity_x_q12_4 = 0;
+	std::int16_t velocity_y_q12_4 = 0;
+	std::uint8_t angle = 0U;
+	std::uint8_t sprite_variant = 0U;
+};
+
 // Process-scoped owner of byte_20F2C's live MAIN background prefix. The
 // source reserves 80 records, but its two callbacks address only the first 48
 // or 50; this fixed-capacity native pool therefore stores every observable
@@ -81,6 +90,12 @@ public:
 	// uses the same split: positions, velocities, phases, and RNG observations
 	// advance, but hidden frames do not touch the Raster.
 	void set_rendering_enabled(bool enabled) noexcept;
+	[[nodiscard]] bool accelerator_restore(
+		const std::array<MainBackgroundRecordState, main_background_record_count>
+			&records,
+		std::uint8_t magnitude,
+		std::uint8_t round_id
+	) noexcept;
 
 private:
 	struct Record {

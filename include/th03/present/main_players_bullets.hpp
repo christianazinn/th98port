@@ -132,6 +132,8 @@ public:
 	void player_pose_committed(const PlayerPoseCommitted &pose) noexcept override;
 	void player_defeat_step(const PlayerDefeatStep &step) noexcept override;
 	void observe(const PlayersBulletsView &view) noexcept override;
+	void accelerator_shared_velocity_restore(std::int8_t velocity_x_q4_4)
+		noexcept;
 
 	// Separating these fixed-capacity pass entry points retains the source's
 	// common-effect insertion slot between player overlays and Bullet16. Each
@@ -158,7 +160,8 @@ public:
 		const MainBulletFacts &bullets,
 		const MainBulletTrails &trails,
 		MainPlayersBulletsMiddlePass middle,
-		void *middle_context
+		void *middle_context,
+		std::optional<Page> source_page_back = std::nullopt
 	) noexcept;
 
 	[[nodiscard]] MainPlayersBulletsStatus status() const noexcept;
@@ -194,7 +197,8 @@ private:
 	) noexcept;
 	[[nodiscard]] bool draw_players(
 		const MainPhaseContext &context,
-		const MainPlayerFacts &players
+		const MainPlayerFacts &players,
+		std::optional<Page> source_page_back
 	) noexcept;
 	[[nodiscard]] bool draw_bullets(
 		const MainPhaseContext &context,

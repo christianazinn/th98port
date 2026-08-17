@@ -212,11 +212,11 @@ enum class GaugeRing : std::uint8_t {
 }
 
 [[nodiscard]] PlayerGlow player_glow(
-	const Raster &raster,
+	Page source_page_back,
 	const PlayerFact &player
 ) noexcept
 {
-	if(raster.access_page() == Page::zero) {
+	if(source_page_back == Page::zero) {
 		return PlayerGlow::none;
 	}
 	if(player.hyper_active != 0U) {
@@ -373,6 +373,13 @@ void MainPlayersBulletsPresenter::player_pose_committed(
 	}
 }
 
+void MainPlayersBulletsPresenter::accelerator_shared_velocity_restore(
+	std::int8_t velocity_x_q4_4
+) noexcept
+{
+	shared_velocity_x_q4_4_ = velocity_x_q4_4;
+}
+
 void MainPlayersBulletsPresenter::player_defeat_step(
 	const PlayerDefeatStep &step
 ) noexcept
@@ -473,9 +480,11 @@ bool MainPlayersBulletsPresenter::validate_players(
 
 bool MainPlayersBulletsPresenter::draw_players(
 	const MainPhaseContext &context,
-	const MainPlayerFacts &players
+	const MainPlayerFacts &players,
+	std::optional<Page> source_page_back
 ) noexcept
 {
+	const auto page_back = source_page_back.value_or(raster_->access_page());
 	auto draw_defeat_ring = [this, &context](std::size_t player) noexcept {
 		auto draw = [this, &context, player](
 			std::uint8_t angle_cos,
@@ -537,7 +546,7 @@ bool MainPlayersBulletsPresenter::draw_players(
 			}
 			continue;
 		}
-		if(player_glow(*raster_, fact) != PlayerGlow::none) {
+		if(player_glow(page_back, fact) != PlayerGlow::none) {
 			continue;
 		}
 		const auto pose = static_cast<std::size_t>(player_poses_[player]);
@@ -565,7 +574,7 @@ bool MainPlayersBulletsPresenter::draw_players(
 		const auto left = wrap_signed_word(
 			foreground_x(context, fact.center_x, player) - 16
 		);
-		const auto glow = player_glow(*raster_, fact);
+		const auto glow = player_glow(page_back, fact);
 		if(glow != PlayerGlow::none) {
 			const auto code = static_cast<std::uint16_t>(
 				(static_cast<std::size_t>(player_poses_[player]) * 3U) +
@@ -611,7 +620,7 @@ bool MainPlayersBulletsPresenter::present_players(
 		status_ = MainPlayersBulletsStatus::staging_not_committed;
 		return false;
 	}
-	if(!draw_players(context, players)) {
+	if(!draw_players(context, players, std::nullopt)) {
 		status_ = MainPlayersBulletsStatus::draw_failed;
 		return false;
 	}
@@ -661,7 +670,8 @@ bool MainPlayersBulletsPresenter::present_phase_with_middle(
 	const MainBulletFacts &bullets,
 	const MainBulletTrails &trails,
 	MainPlayersBulletsMiddlePass middle,
-	void *middle_context
+	void *middle_context,
+	std::optional<Page> source_page_back
 ) noexcept
 {
 	if(!ready()) {
@@ -678,7 +688,7 @@ bool MainPlayersBulletsPresenter::present_phase_with_middle(
 		status_ = MainPlayersBulletsStatus::staging_not_committed;
 		return false;
 	}
-	if(!draw_players(context, players)) {
+	if(!draw_players(context, players, source_page_back)) {
 		status_ = MainPlayersBulletsStatus::draw_failed;
 		return false;
 	}

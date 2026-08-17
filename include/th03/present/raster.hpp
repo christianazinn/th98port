@@ -151,6 +151,9 @@ public:
 		Page destination,
 		Point target
 	);
+	// Replaces only both graphics-page pixel arrays. Palette, tone, scrolling,
+	// raster mode, and access/show selectors remain owned by this Raster.
+	void replace_graphics_pages(Raster &&source) noexcept;
 
 	[[nodiscard]] bool set_pending_palette_entry(
 		std::uint8_t index,

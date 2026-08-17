@@ -613,4 +613,36 @@ void MainBackgroundPresenter::set_rendering_enabled(bool enabled) noexcept
 	rendering_enabled_ = enabled;
 }
 
+bool MainBackgroundPresenter::accelerator_restore(
+	const std::array<MainBackgroundRecordState, main_background_record_count>
+		&records,
+	std::uint8_t magnitude,
+	std::uint8_t round_id
+) noexcept
+{
+	if(!initialization_complete()) {
+		return false;
+	}
+	for(const auto &source : records) {
+		if(source.sprite_variant >= layout_.type_a_variants.size()) {
+			return false;
+		}
+	}
+	for(std::size_t slot = 0U; slot < records_.size(); ++slot) {
+		const auto &source = records[slot];
+		records_[slot] = {
+			.x_q12_4 = source.x_q12_4,
+			.y_q12_4 = source.y_q12_4,
+			.velocity_x_q12_4 = source.velocity_x_q12_4,
+			.velocity_y_q12_4 = source.velocity_y_q12_4,
+			.angle = source.angle,
+			.sprite_variant = source.sprite_variant,
+		};
+	}
+	magnitude_ = magnitude;
+	round_id_ = round_id;
+	have_round_id_ = true;
+	return true;
+}
+
 } // namespace th03::present

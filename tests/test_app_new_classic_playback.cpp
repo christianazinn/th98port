@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -55,20 +56,6 @@ std::vector<std::byte> read_file(const std::filesystem::path &path)
 		static_cast<std::streamsize>(result.size())
 	);
 	return input ? result : std::vector<std::byte>{};
-}
-
-std::uint64_t composed_surface_hash(
-	std::span<const th03::present::ComposedPixel> pixels
-) noexcept
-{
-	std::uint64_t hash = 1469598103934665603ULL;
-	for(const auto pixel : pixels) {
-		hash ^= static_cast<std::uint8_t>(pixel.layer);
-		hash *= 1099511628211ULL;
-		hash ^= pixel.value;
-		hash *= 1099511628211ULL;
-	}
-	return hash;
 }
 
 bool process_start_checkpoint(
@@ -134,9 +121,12 @@ ReplayEntryStageTrace finish_replay_entry_stage(
 		expect(surface.has_value(),
 			"replay entry character interstitial composes every fade boundary");
 		auto advanced = playback.advance({}, false, false);
+		const bool gameplay_published =
+			!th03::app::NewClassicReplayPlaybackTestAccess::
+				replay_entry_stage_phase(playback);
 		expect(advanced && advanced->surface_changed &&
-			!advanced->process_advanced,
-			"replay entry character interstitial advances without consuming gameplay");
+			(advanced->process_advanced == gameplay_published),
+			"replay entry advances only the handoff tick that publishes gameplay");
 		if(!surface || !advanced || ++trace.ticks > 128U) {
 			break;
 		}
@@ -567,8 +557,8 @@ void test_authentic_interstitials(
 	const auto entry = finish_replay_entry_stage(**playback);
 	expect(entry.ticks == 87U && entry.saw_black_in && entry.saw_waiting &&
 		entry.saw_white_out && entry.saw_white_in &&
-		(*playback)->sample_index() == 0U,
-		"checkpoint 0 publishes the exact complete entry transition before sample 0");
+		(*playback)->sample_index() == 1U,
+		"checkpoint 0 publishes the exact complete entry transition and first gameplay frame");
 
 	auto later = th03::app::NewClassicReplayPlayback::load(request(1U));
 	expect(later && (*later)->sample_index() ==
@@ -578,8 +568,8 @@ void test_authentic_interstitials(
 		const auto later_entry = finish_replay_entry_stage(**later);
 		expect(later_entry.ticks == 87U && later_entry.saw_white_out &&
 			later_entry.saw_white_in && (*later)->sample_index() ==
-				document->checkpoints[1U].sample_index,
-			"later-stage selection completes the entry fade without consuming replay input");
+				document->checkpoints[1U].sample_index + 1U,
+			"later-stage selection completes the entry fade and first gameplay frame");
 	}
 
 	bool failed = false;
@@ -618,6 +608,51 @@ void test_authentic(
 	expect(document.has_value(), "authentic V13 replay parses for visual playback");
 	if(!document) {
 		return;
+	}
+	struct AcceleratorExpectation {
+		std::uint8_t checkpoint;
+		std::uint8_t page_back;
+		std::uint8_t page_front;
+		std::int8_t shared_velocity_x;
+		std::int16_t background_x;
+		std::int16_t background_y;
+		std::int16_t background_velocity_y;
+		th03::formats::ReplayAcceleratorRgb8 palette_zero;
+	};
+	constexpr std::array accelerator_expectations{
+		AcceleratorExpectation{8U, 0U, 1U, 0, 3'614, 5'701, 86, {0x22U, 0x22U, 0U}},
+		AcceleratorExpectation{10U, 1U, 0U, 80, 7'821, 3'084, 82, {0x55U, 0U, 0U}},
+		AcceleratorExpectation{11U, 0U, 1U, 0, 6'269, 3'195, 82, {0x55U, 0U, 0U}},
+		AcceleratorExpectation{12U, 0U, 1U, 0, 5'569, 2'359, 82, {0x55U, 0U, 0U}},
+	};
+	expect(
+		document->accelerators.size() == accelerator_expectations.size(),
+		"authentic V13 exposes exactly the four donor-valid accelerators"
+	);
+	for(const auto &expected : accelerator_expectations) {
+		const auto accelerator = std::find_if(
+			document->accelerators.begin(), document->accelerators.end(),
+			[checkpoint = expected.checkpoint](const auto &candidate) {
+				return candidate.checkpoint == checkpoint;
+			}
+		);
+		expect(
+			accelerator != document->accelerators.end() &&
+			accelerator->page_back == expected.page_back &&
+			accelerator->page_front == expected.page_front &&
+			accelerator->shared_velocity_x_q4_4 == expected.shared_velocity_x &&
+			accelerator->palette[0U] == expected.palette_zero &&
+			accelerator->background_magnitude == 0x40U &&
+			accelerator->background[26U].x_q12_4 == expected.background_x &&
+			accelerator->background[26U].y_q12_4 == expected.background_y &&
+			accelerator->background[26U].velocity_x_q12_4 == 0 &&
+			accelerator->background[26U].velocity_y_q12_4 ==
+				expected.background_velocity_y &&
+			accelerator->background[26U].angle ==
+				static_cast<std::uint8_t>(expected.background_velocity_y) &&
+			accelerator->background[26U].sprite_variant == 0U,
+			"authentic V13 preserves accelerator palette, page, velocity, and background state"
+		);
 	}
 	const auto later_document = *document;
 	auto paused_document = insert_recorded_pause(*document);
@@ -671,13 +706,13 @@ void test_authentic(
 	expect(
 		entry_trace.ticks == 87U && entry_trace.saw_black_in &&
 			entry_trace.saw_waiting && entry_trace.saw_white_out &&
-			entry_trace.saw_white_in && (*loaded)->sample_index() == 0U &&
+			entry_trace.saw_white_in && (*loaded)->sample_index() == 1U &&
 			th03::app::NewClassicReplayPlaybackTestAccess::owner(**loaded) ==
 				th03::app::NewClassicPlaybackOwner::main,
-		"Stage 1 character interstitial keeps the mandatory hold and complete black/white fade before gameplay"
+		"Stage 1 character interstitial keeps the mandatory hold and complete black/white fade before publishing the first gameplay frame"
 	);
 	expect(
-		entry_trace.audio.size() == 5U &&
+		entry_trace.audio.size() >= 5U &&
 		entry_trace.audio[0U].type ==
 			th03::app::ClassicAudioCommandType::stop_song &&
 		entry_trace.audio[1U].type ==
@@ -688,7 +723,7 @@ void test_authentic(
 			th03::app::ClassicAudioCommandType::reset_effects &&
 		entry_trace.audio[4U].type ==
 			th03::app::ClassicAudioCommandType::play_song,
-		"entry MAINL prepares gameplay audio before MAIN resets effects and starts the song"
+		"entry MAINL prepares gameplay audio before MAIN resets effects, starts the song, and emits any first-frame feedback"
 	);
 	test_physical_abort_resident(data, main, font, score, later_document);
 	test_mainl_abort_forced_ok_progression(
@@ -770,8 +805,8 @@ void test_authentic(
 				later_entry.ticks == 87U && later_entry.saw_black_in &&
 					later_entry.saw_waiting && later_entry.saw_white_out &&
 					later_entry.saw_white_in &&
-					(*later)->sample_index() == checkpoint_sample,
-				"every selected replay checkpoint shows the complete MAINL character interstitial without consuming its first sample"
+					(*later)->sample_index() == checkpoint_sample + 1U,
+				"every selected replay checkpoint shows the complete MAINL character interstitial before publishing its first gameplay frame"
 			);
 			expect(
 				th03::app::NewClassicReplayPlaybackTestAccess::
@@ -781,8 +816,8 @@ void test_authentic(
 			);
 			expect(
 				th03::app::NewClassicReplayPlaybackTestAccess::
-					main_round_frame(**later) == 0U,
-				"later checkpoint is public before the selected round's first frame"
+					main_round_frame(**later) == 1U,
+				"later checkpoint first becomes public after the selected round's first frame"
 			);
 			const auto expected_song = th03::app::classic_main_gameplay_song(
 				later_document.checkpoints[checkpoint_index].init
@@ -791,7 +826,7 @@ void test_authentic(
 				th03::app::ClassicAudioCommand{}
 			);
 			expected_play.type = th03::app::ClassicAudioCommandType::play_song;
-			expect(expected_song && later_entry.audio == std::vector{
+			const std::vector expected_audio_prefix{
 				th03::app::ClassicAudioCommand{
 					.type = th03::app::ClassicAudioCommandType::stop_song,
 				},
@@ -803,38 +838,78 @@ void test_authentic(
 					.type = th03::app::ClassicAudioCommandType::reset_effects,
 				},
 				expected_play,
-			}, "selected later checkpoint prepares gameplay audio across MAINL and the reconstructed MAIN owner");
+			};
+			expect(
+				expected_song &&
+				later_entry.audio.size() >= expected_audio_prefix.size() &&
+				std::equal(
+					expected_audio_prefix.begin(), expected_audio_prefix.end(),
+					later_entry.audio.begin()
+				),
+				"selected later checkpoint prepares gameplay audio before any first-frame feedback"
+			);
 			std::vector<th03::present::ComposedPixel> later_pixels(
 				th03::present::graphics_page_pixels
 			);
+			th03::present::set_source_surface_oracle_hashes_enabled(true);
 			auto later_surface = (*later)->compose_shown_surface(std::span<
 					th03::present::ComposedPixel,
 					th03::present::graphics_page_pixels
 				>(later_pixels.data(), later_pixels.size()));
+			th03::present::set_source_surface_oracle_hashes_enabled(false);
+			const auto accelerator = std::find_if(
+				later_document.accelerators.begin(), later_document.accelerators.end(),
+				[checkpoint_index](
+					const th03::formats::ReplayAcceleratorPresentation &candidate
+				) {
+					return candidate.checkpoint == checkpoint_index;
+				}
+			);
+			const auto expected_page =
+				accelerator != later_document.accelerators.end() &&
+				accelerator->page_back != 0U
+					? th03::present::Page::one : th03::present::Page::zero;
 			expect(
-				later_surface && later_surface->shown_page == th03::present::Page::one,
-				"later checkpoint publishes the selected round-start page"
+				later_surface && later_surface->shown_page == expected_page,
+				"later checkpoint publishes the accelerator-selected source page"
 			);
 			constexpr std::array<std::pair<std::uint32_t, std::uint64_t>, 4U>
-				reference_surfaces{{
-					{76'175U, 0x9AA4BAA7E3AC9DBBULL},
-					{133'776U, 0x74068078AE1CAA23ULL},
-					{143'167U, 0x3FDB8049E8086ACBULL},
-					{153'036U, 0x89004C608E844743ULL},
+				donor_raster_hashes{{
+					{76'175U, 0x2E2787733E987193ULL},
+					{133'776U, 0xC1BAFD32B872E7EEULL},
+					{143'167U, 0x518E81F36E0CD7C8ULL},
+					{153'036U, 0xDD9CC3054A042367ULL},
 				}};
-			for(const auto &[sample, expected_hash] : reference_surfaces) {
+			constexpr std::array<std::pair<std::uint32_t, std::uint64_t>, 4U>
+				donor_tram_hashes{{
+					{76'175U, 0xEFAB2904C7124669ULL},
+					{133'776U, 0x4AF3820FA73BA41EULL},
+					{143'167U, 0x4AF3820FA73BA41EULL},
+					{153'036U, 0x4AF3820FA73BA41EULL},
+				}};
+			for(const auto &[sample, expected_hash] : donor_raster_hashes) {
 				if(checkpoint_sample == sample) {
 					expect(
-						composed_surface_hash(later_pixels) == expected_hash,
-						"TH3R01 later checkpoint matches the locked full-preroll surface"
+						later_surface && later_surface->oracle_hashes &&
+							later_surface->oracle_hashes->raster_display == expected_hash,
+						"accelerated checkpoint Raster matches captured 0.4.14 state"
+					);
+				}
+			}
+			for(const auto &[sample, expected_hash] : donor_tram_hashes) {
+				if(checkpoint_sample == sample) {
+					expect(
+						later_surface && later_surface->oracle_hashes &&
+						later_surface->oracle_hashes->tram_visible == expected_hash,
+						"accelerated checkpoint static HUD matches captured 0.4.14 TRAM"
 					);
 				}
 			}
 			auto first = (*later)->advance({}, false, false);
 			expect(
 				first && first->process_advanced &&
-					(*later)->sample_index() == checkpoint_sample + 1U,
-				"first visible advance consumes the selected round's first sample"
+					(*later)->sample_index() == checkpoint_sample + 2U,
+				"next visible advance consumes the selected round's second sample"
 			);
 		}
 	}

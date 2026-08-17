@@ -538,6 +538,7 @@ bool MainStaticPresenter::end_frame_swap_and_clear(Raster &raster) noexcept
 	}
 	pages_.front = old_back;
 	pages_.back = (old_back == Page::zero) ? Page::one : Page::zero;
+	accelerator_roles_crossed_ = false;
 	constexpr auto clear_height = static_cast<std::uint16_t>(
 		main_next_page_clear_bottom + 1U
 	);
@@ -550,9 +551,31 @@ bool MainStaticPresenter::end_frame_swap_and_clear(Raster &raster) noexcept
 	);
 }
 
+bool MainStaticPresenter::accelerator_publication_restore(
+	MainPageRoles source_pages
+) noexcept
+{
+	if(!started_ || source_pages.back == source_pages.front) {
+		return false;
+	}
+	pages_ = source_pages;
+	accelerator_roles_crossed_ = true;
+	return true;
+}
+
 MainPageRoles MainStaticPresenter::page_roles() const noexcept
 {
 	return pages_;
+}
+
+bool MainStaticPresenter::source_page_ready(const Raster &raster) const noexcept
+{
+	if(accelerator_roles_crossed_) {
+		return raster.access_page() == Page::zero &&
+			raster.shown_page() == pages_.back;
+	}
+	return raster.access_page() == pages_.back &&
+		raster.shown_page() == pages_.front;
 }
 
 const Sprite16Staging &MainStaticPresenter::sprite_staging() const noexcept

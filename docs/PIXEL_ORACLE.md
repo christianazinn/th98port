@@ -156,8 +156,12 @@ transition that exposes an incoming startup surface uses the incoming owner
 with a `scene_enter` boundary, and terminal surfaces retain the outgoing owner.
 Fast-forward retains the last changed substep. Focused runner/session
 regressions freeze the first three page/identity pairs and a Title-to-Options
-ownership transition; the aligner rejects bootstrap and scene-entry rows as
-gameplay source ticks and fails closed on ambiguity under the selected key.
+ownership transition. The aligner rejects bootstrap rows and normally rejects
+scene-entry rows as gameplay source ticks. An attested semantic nonzero
+checkpoint start instead joins Replay Patch's pre-input accelerator reveal to
+the incoming native MAIN `scene_enter`; exact-ordinal and checkpoint-zero
+captures remain source-tick-only. Every path fails closed on ambiguity under
+the selected key.
 
 For a bounded unattended New Classic capture, pass an exact V13 artifact and
 optional checkpoint. The explicit smoke bound is mandatory:
@@ -172,11 +176,13 @@ This starts the shared authenticated replay owner directly, without synthetic
 UI input, and creates SDL hidden so unattended capture cannot steal focus.
 T3PXH2 and T3RGB1 remain unchanged; T3ALI1's successful
 `publication` ordinal is the only join to those streams.
-Later-round capture reconstructs the exact selected round-start source surface,
-then rebases the host clock before the first visible replay sample. The locked
-TH3R01 corpus covers its accelerated Stage 8 and Stage 9 Round 2/3/4 entries;
-their initial full composed surfaces must match the independent, pre-optimization
-full-preroll baselines before they are admitted to the guest/native pixel corpus.
+Later-round capture reconstructs target semantics at host speed, restores the
+anchor MAIN Raster/palette and the T3RACC1 page roles in constant time, then
+rebases the host clock before the first visible replay sample. It deliberately
+does not reproduce PC-98 decompression latency. The locked TH3R06 corpus covers
+its accelerated Stage 8 and Stage 9 Round 2/3/4 entries; their selected reveal
+surfaces and following source ticks must pass the independent T3PIX2/T3ALI1
+gate before route coverage is claimed.
 
 ## Lossless emulator-video ingestion (`T3EMU1`)
 
