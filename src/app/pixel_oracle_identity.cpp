@@ -1,7 +1,10 @@
 #include "th03/app/pixel_oracle_identity.hpp"
 
 #include <algorithm>
+#include <array>
+#include <charconv>
 #include <ostream>
+#include <type_traits>
 
 namespace th03::app {
 namespace {
@@ -29,7 +32,131 @@ void write_optional(std::ostream &output, std::optional<T> value)
 	}
 }
 
+template<typename T>
+[[nodiscard]] std::optional<T> parse_unsigned(std::string_view text) noexcept
+{
+	static_assert(std::is_unsigned_v<T>);
+	T value = 0U;
+	const auto result = std::from_chars(
+		text.data(), text.data() + text.size(), value
+	);
+	if(text.empty() || result.ec != std::errc{} ||
+		result.ptr != text.data() + text.size()) {
+		return std::nullopt;
+	}
+	return value;
+}
+
+[[nodiscard]] std::expected<std::optional<std::uint32_t>, const char *>
+parse_optional_u32(std::string_view text) noexcept
+{
+	if(text == "na") {
+		return std::optional<std::uint32_t>{};
+	}
+	const auto value = parse_unsigned<std::uint32_t>(text);
+	if(!value) {
+		return std::unexpected("invalid-optional-identity");
+	}
+	return std::optional<std::uint32_t>{*value};
+}
+
+[[nodiscard]] std::optional<PixelOracleProcess> parse_process(
+	std::string_view text
+) noexcept
+{
+	if(text == "op") { return PixelOracleProcess::op; }
+	if(text == "main") { return PixelOracleProcess::main; }
+	if(text == "mainl") { return PixelOracleProcess::mainl; }
+	return std::nullopt;
+}
+
+[[nodiscard]] std::optional<PixelOracleScene> parse_scene(
+	std::string_view text
+) noexcept
+{
+	for(std::uint8_t value = static_cast<std::uint8_t>(PixelOracleScene::unknown);
+		value <= static_cast<std::uint8_t>(PixelOracleScene::game_over); ++value) {
+		const auto scene = static_cast<PixelOracleScene>(value);
+		if(pixel_oracle_scene_name(scene) == text) {
+			return scene;
+		}
+	}
+	return std::nullopt;
+}
+
+[[nodiscard]] std::optional<PixelOracleBoundary> parse_boundary(
+	std::string_view text
+) noexcept
+{
+	if(text == "bootstrap") { return PixelOracleBoundary::bootstrap; }
+	if(text == "scene_enter") { return PixelOracleBoundary::scene_enter; }
+	if(text == "source_tick") { return PixelOracleBoundary::source_tick; }
+	return std::nullopt;
+}
+
 } // namespace
+
+bool PixelOracleCaptureSelector::matches(
+	const PixelOracleIdentity &identity
+) const noexcept
+{
+	return identity.source_changed &&
+		identity.process_instance == process_instance &&
+		identity.process == process && identity.scene == scene &&
+		identity.scene_visit == scene_visit &&
+		identity.logical_sample == logical_sample &&
+		identity.replay_global_frame == replay_global_frame &&
+		identity.round_frame == round_frame && identity.commit == commit &&
+		identity.boundary == boundary;
+}
+
+std::expected<PixelOracleCaptureSelector, const char *>
+parse_pixel_oracle_capture_selector(std::string_view text) noexcept
+{
+	std::array<std::string_view, 9U> fields{};
+	for(std::size_t index = 0U; index < fields.size(); ++index) {
+		const auto separator = text.find('|');
+		if(index + 1U == fields.size()) {
+			if(separator != std::string_view::npos) {
+				return std::unexpected("invalid-selector-field-count");
+			}
+			fields[index] = text;
+			text = {};
+			continue;
+		}
+		if(separator == std::string_view::npos) {
+			return std::unexpected("invalid-selector-field-count");
+		}
+		fields[index] = text.substr(0U, separator);
+		text.remove_prefix(separator + 1U);
+	}
+
+	const auto process_instance = parse_unsigned<std::uint64_t>(fields[0U]);
+	const auto process = parse_process(fields[1U]);
+	const auto scene = parse_scene(fields[2U]);
+	const auto scene_visit = parse_unsigned<std::uint32_t>(fields[3U]);
+	const auto logical_sample = parse_optional_u32(fields[4U]);
+	const auto replay_global_frame = parse_optional_u32(fields[5U]);
+	const auto round_frame = parse_optional_u32(fields[6U]);
+	const auto commit = parse_unsigned<std::uint32_t>(fields[7U]);
+	const auto boundary = parse_boundary(fields[8U]);
+	if(!process_instance || !process || !scene || !scene_visit ||
+		!logical_sample || !replay_global_frame || !round_frame || !commit ||
+		!boundary) {
+		return std::unexpected("invalid-selector-field");
+	}
+	return PixelOracleCaptureSelector{
+		.process_instance = *process_instance,
+		.process = *process,
+		.scene = *scene,
+		.scene_visit = *scene_visit,
+		.logical_sample = *logical_sample,
+		.replay_global_frame = *replay_global_frame,
+		.round_frame = *round_frame,
+		.commit = *commit,
+		.boundary = *boundary,
+	};
+}
 
 PixelOracleIdentity PixelOracleIdentityTracker::bootstrap(
 	PixelOracleSourceIdentity source

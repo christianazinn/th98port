@@ -128,6 +128,28 @@ void test_tracker_and_schema()
 		"\t1\tmain\tgameplay\t0\t12\t19\t7\t0\tsource_tick\t1\t9\n";
 	expect(serialized.str() == expected,
 		"T3ALI1 freezes route, logical, boundary, and publication columns");
+
+	const auto selector = parse_pixel_oracle_capture_selector(
+		"1|main|gameplay|0|12|19|7|0|source_tick"
+	);
+	expect(selector && selector->matches(main) && !selector->matches(main_same),
+		"exact sparse selector accepts one changed duplicate commit only");
+	const auto absent_ids = parse_pixel_oracle_capture_selector(
+		"2|mainl|stage_splash|3|na|na|na|4|scene_enter"
+	);
+	expect(absent_ids && !absent_ids->logical_sample &&
+		!absent_ids->round_frame,
+		"sparse selector preserves absent source identity fields");
+	for(const auto invalid : {
+		"1|main|gameplay|0|12|19|7|0",
+		"1|bad|gameplay|0|12|19|7|0|source_tick",
+		"1|main|bad|0|12|19|7|0|source_tick",
+		"1|main|gameplay|0|no|19|7|0|source_tick",
+		"1|main|gameplay|0|12|19|7|0|bad",
+	}) {
+		expect(!parse_pixel_oracle_capture_selector(invalid),
+			"malformed sparse selector fails closed");
+	}
 }
 
 template<std::size_t Size>

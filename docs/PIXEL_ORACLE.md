@@ -128,8 +128,10 @@ so a long full-game capture belongs under ignored scratch storage.
 Set `TH03_PIXEL_ORACLE_IDENTITY_LOG` together with either host publication
 oracle and provide the authoritative 64-hex route digest in
 `TH03_PIXEL_ORACLE_FIXTURE_SHA256`. The sidecar records every native source
-boundary, including unchanged boundaries whose `publication` is `na`; a
-changed boundary is written only after the matching SDL publication succeeds.
+boundary, including unchanged boundaries whose `publication` is `na`. Ordinary
+changed boundaries are written only after the matching SDL publication
+succeeds; an exact sparse capture additionally records deliberately skipped
+changed boundaries with `publication=na`.
 The frozen columns are:
 
 ```text
@@ -183,6 +185,25 @@ does not reproduce PC-98 decompression latency. The locked TH3R06 corpus covers
 its accelerated Stage 8 and Stage 9 Round 2/3/4 entries; their selected reveal
 surfaces and following source ticks must pass the independent T3PIX2/T3ALI1
 gate before route coverage is claimed.
+
+Long replay routes can select one exact native publication without encoding
+every preceding RGB frame. Set `TH03_PIXEL_ORACLE_SELECTOR` to this fixed
+pipe-delimited identity:
+
+```text
+process_instance|process|scene|scene_visit|logical_sample|
+replay_global_frame|round_frame|commit|boundary
+```
+
+For example, checkpoint 10's first active frame is
+`2|main|gameplay|0|133777|133777|1|0|source_tick`. Optional numeric fields use
+the literal `na`. The selector is valid only with direct replay capture,
+T3ALI1, and a publication oracle. It runs deterministic replay simulation
+unthrottled, does not open or feed an audio device, records every skipped
+source boundary in T3ALI1 with `publication=na`, and emits exactly one
+T3PXH2/T3RGB1 publication before exiting. Malformed, stale, ambiguous, or
+unreached selectors fail closed. This changes capture cost, never guest/native
+source timing or the visible frame chosen for comparison.
 
 ## Lossless emulator-video ingestion (`T3EMU1`)
 

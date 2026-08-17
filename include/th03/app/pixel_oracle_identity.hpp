@@ -2,6 +2,7 @@
 #define TH03_APP_PIXEL_ORACLE_IDENTITY_HPP
 
 #include <cstdint>
+#include <expected>
 #include <iosfwd>
 #include <optional>
 #include <string_view>
@@ -77,6 +78,33 @@ struct PixelOracleIdentity final {
 	) = default;
 };
 
+// Exact source selector for a sparse developer capture. The grammar is a
+// fixed, pipe-delimited T3ALI identity without the route-wide event or host
+// publication columns:
+//
+// process_instance|process|scene|scene_visit|logical_sample|
+// replay_global_frame|round_frame|commit|boundary
+//
+// Optional numeric identities use the literal "na". Requiring every field,
+// including the duplicate commit ordinal, keeps repeated pause/MAINL source
+// boundaries unambiguous and makes stale selectors fail closed.
+struct PixelOracleCaptureSelector final {
+	std::uint64_t process_instance = 0U;
+	PixelOracleProcess process = PixelOracleProcess::op;
+	PixelOracleScene scene = PixelOracleScene::unknown;
+	std::uint32_t scene_visit = 0U;
+	std::optional<std::uint32_t> logical_sample{};
+	std::optional<std::uint32_t> replay_global_frame{};
+	std::optional<std::uint32_t> round_frame{};
+	std::uint32_t commit = 0U;
+	PixelOracleBoundary boundary = PixelOracleBoundary::source_tick;
+
+	[[nodiscard]] bool matches(const PixelOracleIdentity &identity) const noexcept;
+};
+
+[[nodiscard]] std::expected<PixelOracleCaptureSelector, const char *>
+parse_pixel_oracle_capture_selector(std::string_view text) noexcept;
+
 // Assigns route-wide identities deterministically. Every transition into a
 // different original executable domain receives a new process instance; a
 // direct replay capture seeds the omitted OP/MAINL prefix explicitly.
@@ -121,7 +149,8 @@ private:
 ) noexcept;
 
 // T3ALI1 is a cadence/identity sidecar. [publication] is absent for unchanged
-// boundaries and otherwise names the successfully committed T3PXH2/T3RGB1 row.
+// boundaries and for changed boundaries deliberately skipped by an exact
+// sparse capture; otherwise it names the committed T3PXH2/T3RGB1 row.
 [[nodiscard]] bool write_t3ali1_header(std::ostream &output);
 [[nodiscard]] bool write_t3ali1_event(
 	std::ostream &output,

@@ -58,6 +58,8 @@ constexpr const char *pixel_oracle_identity_environment =
 	"TH03_PIXEL_ORACLE_IDENTITY_LOG";
 constexpr const char *pixel_oracle_fixture_environment =
 	"TH03_PIXEL_ORACLE_FIXTURE_SHA256";
+constexpr const char *pixel_oracle_selector_environment =
+	"TH03_PIXEL_ORACLE_SELECTOR";
 constexpr const char *online_origin_environment = "TH03_ONLINE_ORIGIN";
 
 struct PixelOracleIdentityOutput final {
@@ -1528,6 +1530,25 @@ ExperienceRunResult run_classic_session(
 		return {.exit_code = 1};
 	}
 	auto identity_output = std::move(*identity_output_result);
+	std::optional<th03::app::PixelOracleCaptureSelector>
+		pixel_oracle_selector{};
+	if(const auto selector = environment_value(
+		pixel_oracle_selector_environment
+	)) {
+		if(!parsed.capture_replay || !identity_output.enabled()) {
+			std::cerr << "status=error\nstage=pixel-oracle-selector\n"
+				"code=selector-requires-replay-identity-capture\n";
+			return {.exit_code = 1};
+		}
+		auto parsed_selector =
+			th03::app::parse_pixel_oracle_capture_selector(*selector);
+		if(!parsed_selector) {
+			std::cerr << "status=error\nstage=pixel-oracle-selector\ncode="
+				<< parsed_selector.error() << '\n';
+			return {.exit_code = 1};
+		}
+		pixel_oracle_selector = *parsed_selector;
+	}
 	// Authenticate the selected game corpus before creating or recovering a
 	// persistence file. A misspelled/incomplete content root must remain a
 	// read-only startup failure rather than leaving a stray YUME.CFG behind.
@@ -1673,28 +1694,45 @@ ExperienceRunResult run_classic_session(
 		return {.exit_code = fail("compose", surface.error())};
 	}
 	const auto bootstrap_identity = (*runner)->pixel_oracle_bootstrap_identity();
-	auto presented = platform.present(*surface);
-	if(!presented) {
-		return {.exit_code = fail("present", presented.error())};
-	}
-	if(identity_output.enabled() &&
-		(!presented->oracle_publication || !th03::app::write_t3ali1_event(
+	const bool bootstrap_selected = !pixel_oracle_selector ||
+		pixel_oracle_selector->matches(bootstrap_identity);
+	if(bootstrap_selected) {
+		auto presented = platform.present(*surface);
+		if(!presented) {
+			return {.exit_code = fail("present", presented.error())};
+		}
+		if(identity_output.enabled() &&
+			(!presented->oracle_publication || !th03::app::write_t3ali1_event(
+				identity_output.stream, identity_output.fixture_sha256,
+				bootstrap_identity, presented->oracle_publication
+			))) {
+			std::cerr << "status=error\nstage=pixel-oracle-identity\n"
+				"code=identity-oracle-write-failed\n";
+			return {.exit_code = 1};
+		}
+		if(pixel_oracle_selector) {
+			return {.disposition = ExperienceRunDisposition::smoke_complete};
+		}
+	} else if(identity_output.enabled() &&
+		!th03::app::write_t3ali1_event(
 			identity_output.stream, identity_output.fixture_sha256,
-			bootstrap_identity, presented->oracle_publication
-		))) {
+			bootstrap_identity, std::nullopt
+		)) {
 		std::cerr << "status=error\nstage=pixel-oracle-identity\n"
 			"code=identity-oracle-write-failed\n";
 		return {.exit_code = 1};
 	}
 
 	std::optional<th03::platform::SdlAudioDevice> audio_device{};
-	auto created_device = th03::platform::SdlAudioDevice::create({
-		.start_paused = true,
-	});
-	if(created_device) {
-		audio_device.emplace(std::move(*created_device));
-	} else {
-		warn_audio_device("audio-device-create", created_device.error());
+	if(!pixel_oracle_selector) {
+		auto created_device = th03::platform::SdlAudioDevice::create({
+			.start_paused = true,
+		});
+		if(created_device) {
+			audio_device.emplace(std::move(*created_device));
+		} else {
+			warn_audio_device("audio-device-create", created_device.error());
+		}
 	}
 	bool audio_started = false;
 	bool audio_focus_muted = false;
@@ -1760,7 +1798,13 @@ ExperienceRunResult run_classic_session(
 				online_refresh_task.reset();
 			}
 		}
-		const auto cutoff = th03::platform::sdl_ticks_now_ns();
+		// Sparse replay evidence advances one exact source boundary per host loop
+		// without waiting for wall time. Replay samples still own all deterministic
+		// input; no audio is submitted and discarded surfaces are never composed.
+		const auto cutoff = pixel_oracle_selector ?
+			scheduler->next_deadline_ns().value_or(
+				th03::platform::sdl_ticks_now_ns()
+			) : th03::platform::sdl_ticks_now_ns();
 		if(!retry_blocked_event) {
 			auto result = mapper.pump_events(*scheduler, false);
 			if(!result) {
@@ -1950,17 +1994,33 @@ ExperienceRunResult run_classic_session(
 					}
 				}
 			}
-			presentation_pending =
-				presentation_pending || consumed->surface_changed;
 			if(consumed->surface_changed) {
-				if(identity_output.enabled() && pending_publication_identity) {
-					std::cerr << "status=error\nstage=pixel-oracle-identity\n"
-						"code=identity-oracle-coalesced-publication\n";
-					return {.exit_code = 1};
+				if(pixel_oracle_selector &&
+					!pixel_oracle_selector->matches(
+						consumed->pixel_oracle_identity
+					)) {
+					if(!th03::app::write_t3ali1_event(
+						identity_output.stream, identity_output.fixture_sha256,
+						consumed->pixel_oracle_identity, std::nullopt
+					)) {
+						std::cerr << "status=error\n"
+							"stage=pixel-oracle-identity\n"
+							"code=identity-oracle-write-failed\n";
+						return {.exit_code = 1};
+					}
+				} else {
+					presentation_pending = true;
+					if(identity_output.enabled() && pending_publication_identity) {
+						std::cerr << "status=error\n"
+							"stage=pixel-oracle-identity\n"
+							"code=identity-oracle-coalesced-publication\n";
+						return {.exit_code = 1};
+					}
+					pending_publication_tick = logical_ticks;
+					++pending_publication_ticks;
+					pending_publication_identity =
+						consumed->pixel_oracle_identity;
 				}
-				pending_publication_tick = logical_ticks;
-				++pending_publication_ticks;
-				pending_publication_identity = consumed->pixel_oracle_identity;
 			} else if(identity_output.enabled() &&
 				!th03::app::write_t3ali1_event(
 					identity_output.stream, identity_output.fixture_sha256,
@@ -2003,11 +2063,20 @@ ExperienceRunResult run_classic_session(
 			}
 		}
 
-		if((*runner)->status() ==
+		const bool selected_publication_pending =
+			pixel_oracle_selector && presentation_pending;
+		if(pixel_oracle_selector && !selected_publication_pending &&
+			(completed_replay || (*runner)->status() !=
+				th03::app::ClassicRunnerStatus::running)) {
+			std::cerr << "status=error\nstage=pixel-oracle-selector\n"
+				"code=selector-not-reached\n";
+			return {.exit_code = 1};
+		}
+		if(!selected_publication_pending && (*runner)->status() ==
 			th03::app::ClassicRunnerStatus::quit_requested) {
 			return {.disposition = ExperienceRunDisposition::application_quit};
 		}
-		if((*runner)->status() ==
+		if(!selected_publication_pending && (*runner)->status() ==
 			th03::app::ClassicRunnerStatus::switch_to_classic) {
 			return {.disposition = ExperienceRunDisposition::switch_to_classic};
 		}
@@ -2016,7 +2085,7 @@ ExperienceRunResult run_classic_session(
 		// Replay Patch finalizes and offers the recording before constructing or
 		// showing Continue. The typed owner may already have prepared that surface,
 		// so retain its pending publication across the host-owned save transaction.
-		if(completed_replay && new_classic) {
+		if(!selected_publication_pending && completed_replay && new_classic) {
 			auto saved = run_replay_save(
 				std::move(*completed_replay), parsed.replay_root,
 				parsed.tick_rate, platform, mapper, patch_assets,
@@ -2062,7 +2131,7 @@ ExperienceRunResult run_classic_session(
 			if(!surface) {
 				return {.exit_code = fail("compose", surface.error())};
 			}
-			presented = platform.present(*surface, {
+			auto presented = platform.present(*surface, {
 				.logical_tick = pending_publication_tick,
 				.coalesced_ticks = pending_publication_ticks,
 			});
@@ -2086,6 +2155,9 @@ ExperienceRunResult run_classic_session(
 			pending_publication_ticks = 0U;
 			pending_publication_identity.reset();
 			presented_this_iteration = true;
+			if(pixel_oracle_selector) {
+				return {.disposition = ExperienceRunDisposition::smoke_complete};
+			}
 		}
 		if(!presentation_pending) {
 			if(auto refreshed = refresh_host_presentability(
@@ -2104,6 +2176,11 @@ ExperienceRunResult run_classic_session(
 			};
 		}
 		if(smoke_complete) {
+			if(pixel_oracle_selector) {
+				std::cerr << "status=error\nstage=pixel-oracle-selector\n"
+					"code=selector-not-reached\n";
+				return {.exit_code = 1};
+			}
 			return {.disposition = ExperienceRunDisposition::smoke_complete};
 		}
 		if(presented_this_iteration) {
@@ -2111,7 +2188,7 @@ ExperienceRunResult run_classic_session(
 		}
 		const auto deadline = scheduler->next_deadline_ns();
 		const auto now = th03::platform::sdl_ticks_now_ns();
-		if(deadline && *deadline > now) {
+		if(!pixel_oracle_selector && deadline && *deadline > now) {
 			SDL_DelayPrecise(std::min(*deadline - now, maximum_idle_delay_ns));
 		}
 	}
