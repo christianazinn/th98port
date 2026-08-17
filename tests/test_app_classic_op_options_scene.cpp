@@ -896,6 +896,31 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		system->selected_choice() == ClassicOpOptionsChoice::credits,
 		"Credits Cancel restores its retained System selection");
 	expect(system->advance().has_value() &&
+		system->advance({.down = true}).has_value() &&
+		system->advance().has_value() &&
+		system->selected_choice() == ClassicOpOptionsChoice::diagnostics,
+		"System exposes the Diagnostics child");
+	expect(system->advance({.ok = true}).has_value() &&
+		system->page() == ClassicOpOptionsPage::diagnostics &&
+		system->selected_choice() == ClassicOpOptionsChoice::open_log_folder,
+		"Diagnostics opens on the log-folder action");
+	expect(system->advance().has_value(), "Diagnostics entry releases");
+	const auto open_log = system->advance({.ok = true});
+	expect(open_log && open_log->open_folder ==
+		ClassicOpOptionsOpenFolder::user_data &&
+		system->page() == ClassicOpOptionsPage::diagnostics,
+		"Open Log Folder emits the authoritative user-data directory intent");
+	expect(system->advance().has_value(), "Open Log Folder releases");
+	expect(system->advance({.down = true}).has_value() &&
+		system->advance().has_value() &&
+		system->selected_choice() == ClassicOpOptionsChoice::return_page &&
+		system->advance({.ok = true}).has_value() &&
+		system->page() == ClassicOpOptionsPage::system &&
+		system->selected_choice() == ClassicOpOptionsChoice::diagnostics,
+		"Diagnostics Return restores its retained System selection");
+	expect(system->advance().has_value() &&
+		system->advance({.up = true}).has_value() &&
+		system->advance().has_value() &&
 		system->advance({.up = true}).has_value() &&
 		system->advance().has_value() &&
 		system->advance({.up = true}).has_value() &&

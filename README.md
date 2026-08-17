@@ -87,7 +87,8 @@ directly into New Classic, which records/browses/plays V13 replays through the
 shared typed MAIN/MAINL scene owners and owns Replay Patch's four-choice
 gameplay pause/restart loop and two-page Practice setup. New Classic's System
 Options can temporarily enter sealed Classic, open the persistent user-data
-and active replay directories, or show factual project/source credits;
+and active replay directories, show factual project/source credits, or open
+the directory containing the last-run diagnostic log;
 Classic Quit returns to a fresh New Classic
 title, while New Classic Quit exits the application. Its first
 launch extracts a content-hash

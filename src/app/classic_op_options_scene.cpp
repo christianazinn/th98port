@@ -132,10 +132,11 @@ constexpr std::array<ClassicOpOptionsChoice, 2U> language_choices{{
 	ClassicOpOptionsChoice::language,
 	ClassicOpOptionsChoice::return_page,
 }};
-constexpr std::array<ClassicOpOptionsChoice, 4U> system_choices{{
+constexpr std::array<ClassicOpOptionsChoice, 5U> system_choices{{
 	ClassicOpOptionsChoice::switch_classic,
 	ClassicOpOptionsChoice::data_storage,
 	ClassicOpOptionsChoice::credits,
+	ClassicOpOptionsChoice::diagnostics,
 	ClassicOpOptionsChoice::return_page,
 }};
 constexpr std::array<ClassicOpOptionsChoice, 3U> data_storage_choices{{
@@ -144,6 +145,10 @@ constexpr std::array<ClassicOpOptionsChoice, 3U> data_storage_choices{{
 	ClassicOpOptionsChoice::return_page,
 }};
 constexpr std::array<ClassicOpOptionsChoice, 1U> credits_choices{{
+	ClassicOpOptionsChoice::return_page,
+}};
+constexpr std::array<ClassicOpOptionsChoice, 2U> diagnostics_choices{{
+	ClassicOpOptionsChoice::open_log_folder,
 	ClassicOpOptionsChoice::return_page,
 }};
 constexpr std::array<NewClassicMessageId, 6U> credit_messages{{
@@ -222,9 +227,12 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 	case ClassicOpOptionsChoice::switch_classic: return NewClassicMessageId::option_switch_classic;
 	case ClassicOpOptionsChoice::data_storage: return NewClassicMessageId::option_data_storage;
 	case ClassicOpOptionsChoice::credits: return NewClassicMessageId::option_credits;
+	case ClassicOpOptionsChoice::diagnostics: return NewClassicMessageId::option_diagnostics;
 	case ClassicOpOptionsChoice::open_user_data: return NewClassicMessageId::option_open_user_data;
 	case ClassicOpOptionsChoice::open_replay_folder:
 		return NewClassicMessageId::option_open_replay_folder;
+	case ClassicOpOptionsChoice::open_log_folder:
+		return NewClassicMessageId::option_open_log_folder;
 	case ClassicOpOptionsChoice::confirm_switch_classic: return NewClassicMessageId::option_yes;
 	case ClassicOpOptionsChoice::cancel_switch_classic: return NewClassicMessageId::option_no;
 	}
@@ -951,6 +959,7 @@ ClassicOpOptionsScene::active_choices() const noexcept
 	case ClassicOpOptionsPage::system: return system_choices;
 	case ClassicOpOptionsPage::data_storage: return data_storage_choices;
 	case ClassicOpOptionsPage::credits: return credits_choices;
+	case ClassicOpOptionsPage::diagnostics: return diagnostics_choices;
 	case ClassicOpOptionsPage::switch_confirmation:
 		return switch_confirmation_choices;
 	}
@@ -1024,6 +1033,12 @@ bool ClassicOpOptionsScene::return_to_patch_categories() noexcept
 	case ClassicOpOptionsPage::credits:
 		page_ = ClassicOpOptionsPage::system;
 		selected_ = ClassicOpOptionsChoice::credits;
+		menu_input_allowed_ = false;
+		return restore_patch_rows(0U, 7U, box_left + box_option_width) &&
+			draw_all_option_choices();
+	case ClassicOpOptionsPage::diagnostics:
+		page_ = ClassicOpOptionsPage::system;
+		selected_ = ClassicOpOptionsChoice::diagnostics;
 		menu_input_allowed_ = false;
 		return restore_patch_rows(0U, 7U, box_left + box_option_width) &&
 			draw_all_option_choices();
@@ -1111,8 +1126,10 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 		choice == ClassicOpOptionsChoice::switch_classic ||
 		choice == ClassicOpOptionsChoice::data_storage ||
 		choice == ClassicOpOptionsChoice::credits ||
+		choice == ClassicOpOptionsChoice::diagnostics ||
 		choice == ClassicOpOptionsChoice::open_user_data ||
 		choice == ClassicOpOptionsChoice::open_replay_folder ||
+		choice == ClassicOpOptionsChoice::open_log_folder ||
 		choice == ClassicOpOptionsChoice::confirm_switch_classic ||
 		choice == ClassicOpOptionsChoice::cancel_switch_classic ||
 		choice == ClassicOpOptionsChoice::category_gameplay ||
@@ -1237,8 +1254,10 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	case ClassicOpOptionsChoice::switch_classic:
 	case ClassicOpOptionsChoice::data_storage:
 	case ClassicOpOptionsChoice::credits:
+	case ClassicOpOptionsChoice::diagnostics:
 	case ClassicOpOptionsChoice::open_user_data:
 	case ClassicOpOptionsChoice::open_replay_folder:
+	case ClassicOpOptionsChoice::open_log_folder:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
 	case ClassicOpOptionsChoice::cancel_switch_classic:
 	case ClassicOpOptionsChoice::quit:
@@ -1362,8 +1381,10 @@ bool ClassicOpOptionsScene::draw_option_choice(
 	case ClassicOpOptionsChoice::switch_classic:
 	case ClassicOpOptionsChoice::data_storage:
 	case ClassicOpOptionsChoice::credits:
+	case ClassicOpOptionsChoice::diagnostics:
 	case ClassicOpOptionsChoice::open_user_data:
 	case ClassicOpOptionsChoice::open_replay_folder:
+	case ClassicOpOptionsChoice::open_log_folder:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
 	case ClassicOpOptionsChoice::cancel_switch_classic:
 		return false;
@@ -1676,8 +1697,10 @@ bool ClassicOpOptionsScene::update_horizontal(
 	case ClassicOpOptionsChoice::switch_classic:
 	case ClassicOpOptionsChoice::data_storage:
 	case ClassicOpOptionsChoice::credits:
+	case ClassicOpOptionsChoice::diagnostics:
 	case ClassicOpOptionsChoice::open_user_data:
 	case ClassicOpOptionsChoice::open_replay_folder:
+	case ClassicOpOptionsChoice::open_log_folder:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
 	case ClassicOpOptionsChoice::cancel_switch_classic:
 	case ClassicOpOptionsChoice::quit:
@@ -1886,6 +1909,9 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 				case ClassicOpOptionsChoice::credits:
 					child = ClassicOpOptionsPage::credits;
 					break;
+				case ClassicOpOptionsChoice::diagnostics:
+					child = ClassicOpOptionsPage::diagnostics;
+					break;
 				default:
 					opens_child = false;
 					break;
@@ -1945,6 +1971,9 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 				} else if(selected_ ==
 					ClassicOpOptionsChoice::open_replay_folder) {
 					open_folder = ClassicOpOptionsOpenFolder::replays;
+				} else if(selected_ ==
+					ClassicOpOptionsChoice::open_log_folder) {
+					open_folder = ClassicOpOptionsOpenFolder::user_data;
 				} else if(selected_ ==
 					ClassicOpOptionsChoice::confirm_switch_classic) {
 					switch_classic_requested = true;

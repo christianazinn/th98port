@@ -49,8 +49,10 @@ enum class ClassicOpOptionsChoice : std::uint8_t {
 	switch_classic,
 	data_storage,
 	credits,
+	diagnostics,
 	open_user_data,
 	open_replay_folder,
+	open_log_folder,
 	confirm_switch_classic,
 	cancel_switch_classic,
 };
@@ -65,6 +67,7 @@ enum class ClassicOpOptionsPage : std::uint8_t {
 	system,
 	data_storage,
 	credits,
+	diagnostics,
 	switch_confirmation,
 };
 
