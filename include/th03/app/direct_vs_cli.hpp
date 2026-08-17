@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <filesystem>
 #include <optional>
 #include <span>
 #include <string>
@@ -29,6 +30,7 @@ enum class DirectVsCliOption : std::uint8_t {
 	smoke_ticks,
 	netplay_host,
 	netplay_join,
+	netplay_replay_output,
 };
 
 enum class DirectVsNetplayMode : std::uint8_t {
@@ -48,6 +50,7 @@ enum class DirectVsCliErrorCode : std::uint8_t {
 	invalid_seed,
 	invalid_smoke_ticks,
 	invalid_netplay_endpoint,
+	invalid_replay_output,
 	conflicting_netplay_mode,
 };
 
@@ -65,6 +68,7 @@ struct DirectVsCliRequest {
 	DirectVsNetplayMode netplay_mode = DirectVsNetplayMode::none;
 	std::uint16_t netplay_host_port = 0U;
 	std::string netplay_join_endpoint{};
+	std::optional<std::filesystem::path> netplay_replay_output{};
 };
 
 // Parses arguments after argv[0]. Character names are the nine lowercase

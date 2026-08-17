@@ -525,7 +525,8 @@ void print_usage()
 			"[--p2 <character[:first|second]>] [--rank 0..3] [--seed n] "
 			"[--tick-rate <ticks>/<seconds>] "
 			"[--smoke-ticks n] [--netplay-host <port> | "
-			"--netplay-join <IPv4:port>]\n"
+			"--netplay-join <IPv4:port>] "
+			"[--netplay-replay-output <V13.RPY>]\n"
 		<< "characters: reimu mima marisa ellen kotohime kana rikako "
 			"chiyuri yumemi\n"
 		<< "P1: T/F/H/B, diagonals R/Y/V/N, Z shot, X bomb\n"
@@ -760,6 +761,7 @@ const char *name(th03::app::DirectVsCliErrorCode code) noexcept
 	case th03::app::DirectVsCliErrorCode::invalid_seed: return "invalid-seed";
 	case th03::app::DirectVsCliErrorCode::invalid_smoke_ticks: return "invalid-smoke-ticks";
 	case th03::app::DirectVsCliErrorCode::invalid_netplay_endpoint: return "invalid-netplay-endpoint";
+	case th03::app::DirectVsCliErrorCode::invalid_replay_output: return "invalid-replay-output";
 	case th03::app::DirectVsCliErrorCode::conflicting_netplay_mode: return "conflicting-netplay-mode";
 	}
 	return "unknown";
@@ -782,6 +784,7 @@ const char *name(th03::app::DirectVsCliOption option) noexcept
 	case th03::app::DirectVsCliOption::smoke_ticks: return "smoke-ticks";
 	case th03::app::DirectVsCliOption::netplay_host: return "netplay-host";
 	case th03::app::DirectVsCliOption::netplay_join: return "netplay-join";
+	case th03::app::DirectVsCliOption::netplay_replay_output: return "netplay-replay-output";
 	}
 	return "unknown";
 }
@@ -2402,10 +2405,23 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			if(!encoded) {
 				return fail_netplay("netplay-replay", "encode-failed");
 			}
+			if(parsed.netplay_replay_output) {
+				auto published = th03::app::commit_exact_replay_file(
+					*parsed.netplay_replay_output, *encoded
+				);
+				if(!published) {
+					std::cerr << "netplay-replay-store-code=" <<
+						static_cast<unsigned>(published.error().code) << '\n';
+					return fail_netplay(
+						"netplay-replay", "publish-failed"
+					);
+				}
+			}
 			std::cout << "status=match-complete\nframes=" <<
 				(*session)->confirmed_frame_count() << "\nreplay-frames=" <<
 				replay_capture.frame_count() << "\nreplay-ready=1\nreplay-bytes=" <<
-				encoded->size() << '\n';
+				encoded->size() << "\nreplay-published=" <<
+				(parsed.netplay_replay_output ? 1 : 0) << '\n';
 			return 0;
 		}
 		if(parsed.smoke_ticks && local_frames >= *parsed.smoke_ticks &&

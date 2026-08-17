@@ -28,7 +28,8 @@ Find the Windows Tailscale address and choose a UDP port:
 ```powershell
 tailscale ip -4
 .\PoDD-Port-Test.exe --netplay-host 31415 `
-  --p1 reimu --p2 mima --rank 1 --seed 34
+  --p1 reimu --p2 mima --rank 1 --seed 34 `
+  --netplay-replay-output .\REPLAY\NETPLAY-WINDOWS.RPY
 ```
 
 Allow `PoDD-Port-Test.exe` through Windows Firewall for the Tailscale/private
@@ -65,7 +66,8 @@ normal native run (the canonical ignored workspace layout calls it
   --main /path/to/originals/th03_full/MAIN.EXE \
   --font /path/to/FONT.ROM \
   --netplay-join WINDOWS_TAILSCALE_IP:31415 \
-  --p1 reimu --p2 mima --rank 1 --seed 34
+  --p1 reimu --p2 mima --rank 1 --seed 34 \
+  --netplay-replay-output ./NETPLAY-ARCH.RPY
 ```
 
 Tailscale ACLs and the host firewall must permit the selected UDP port. No
@@ -102,7 +104,10 @@ After the winner scene completes, a normal match prints `replay-ready=1`,
 working replay file and the command-line preview has no slot-save UI; leaving,
 disconnecting, or closing the application simply destroys the in-memory owner.
 Numbered replay publication belongs to the later source-styled in-game room
-flow.
+flow. The optional `--netplay-replay-output` developer argument publishes the
+validated final V13 only after that completed MAINL owner, using the same
+flush/read-back/reparse/atomic-replace transaction as numbered slots. It writes
+nothing on an incomplete match.
 
 For a bounded automated check, append the same `--smoke-ticks N` to both
 commands. This exits only after both peers have confirmed `N` gameplay input
