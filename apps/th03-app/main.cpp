@@ -5752,7 +5752,8 @@ ExperienceRunResult run_new_classic_experience(
 
 [[nodiscard]] std::expected<std::optional<RtcNetplayRequest>, int>
 product_rtc_netplay_request(
-	const th03::app::NewClassicNetplayRoomLaunch &launch
+	const th03::app::NewClassicNetplayRoomLaunch &launch,
+	const th03::app::ClassicContentPaths &content
 )
 {
 	if(launch.transport !=
@@ -5762,16 +5763,68 @@ product_rtc_netplay_request(
 	const auto origin = environment_value(online_origin_environment);
 	const auto user = environment_value(online_user_environment);
 	const auto token = environment_value(online_token_environment);
-	if(!origin || !user || !token || origin->empty() || user->empty() ||
-		token->empty()) {
+	if(!origin || origin->empty()) {
+		return std::unexpected(fail_netplay(
+			"netplay-room-account", "online-origin-missing"
+		));
+	}
+	std::optional<th03::app::NewClassicOnlineCredentials> credentials{};
+	if(user || token) {
+		if(!user || !token || !th03::app::validate_new_classic_online_credentials({
+			.user_id = *user,
+			.token = *token,
+		})) {
+			return std::unexpected(fail_netplay(
+				"netplay-room-account", "online-environment-invalid"
+			));
+		}
+		credentials = th03::app::NewClassicOnlineCredentials{*user, *token};
+	} else {
+#if defined(_WIN32)
+		auto settings_path = content.new_classic_settings;
+		if(settings_path.empty()) {
+			settings_path = content.config.parent_path() / "PODD.CFG";
+		}
+		const auto credential_root = settings_path.parent_path();
+		if(credential_root.empty()) {
+			return std::unexpected(fail_netplay(
+				"netplay-room-account", "credential-path-missing"
+			));
+		}
+		auto transport =
+			th03::platform::create_windows_online_transport(*origin);
+		if(!transport) {
+			return std::unexpected(fail_netplay(
+				"netplay-room-account", "online-origin-invalid"
+			));
+		}
+		auto acquired =
+			th03::platform::load_or_enroll_windows_online_credentials(
+				credential_root / "PODD.AUTH", transport->transport()
+			);
+		if(!acquired) {
+			return std::unexpected(fail_netplay(
+				"netplay-room-account",
+				acquired.error().code == th03::platform::
+					WindowsOnlineIdentityErrorCode::load ?
+						"credential-load-failed" :
+					(acquired.error().code == th03::platform::
+						WindowsOnlineIdentityErrorCode::enroll ?
+							"credential-enroll-failed" :
+							"credential-store-failed")
+			));
+		}
+		credentials = std::move(*acquired);
+#else
 		return std::unexpected(fail_netplay(
 			"netplay-room-account", "online-environment-missing"
 		));
+#endif
 	}
 	RtcNetplayRequest result{
 		.origin = *origin,
-		.user_id = *user,
-		.token = *token,
+		.user_id = credentials->user_id,
+		.token = credentials->token,
 		.room_code = launch.mode ==
 			th03::app::NewClassicNetplayRoomLaunchMode::join ?
 				launch.join_endpoint : std::string{},
@@ -5841,7 +5894,9 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 		if(!settings) {
 			return fail("settings-load", settings.error());
 		}
-		auto rtc = product_rtc_netplay_request(*result.netplay_launch);
+		auto rtc = product_rtc_netplay_request(
+			*result.netplay_launch, parsed.launch.content
+		);
 		if(!rtc) {
 			return rtc.error();
 		}
@@ -5916,7 +5971,7 @@ int run_product_shell(th03::app::ClassicCliRequest parsed)
 				return fail("settings-load", latest_settings.error());
 			}
 			auto rtc = product_rtc_netplay_request(
-				*experience.netplay_launch
+				*experience.netplay_launch, parsed.launch.content
 			);
 			if(!rtc) {
 				return rtc.error();

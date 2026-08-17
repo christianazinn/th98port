@@ -653,4 +653,38 @@ std::expected<void, WindowsOnlineError> remove_windows_online_credentials(
 	return {};
 }
 
+std::expected<
+	app::NewClassicOnlineCredentials,
+	WindowsOnlineIdentityError
+> load_or_enroll_windows_online_credentials(
+	const std::filesystem::path &path,
+	const app::NewClassicOnlineTransport &transport
+)
+{
+	auto loaded = load_windows_online_credentials(path);
+	if(!loaded) {
+		return std::unexpected(WindowsOnlineIdentityError{
+			.code = WindowsOnlineIdentityErrorCode::load,
+			.platform = std::move(loaded.error()),
+		});
+	}
+	if(*loaded) {
+		return std::move(**loaded);
+	}
+	auto enrolled = app::enroll_new_classic_online_user(transport);
+	if(!enrolled) {
+		return std::unexpected(WindowsOnlineIdentityError{
+			.code = WindowsOnlineIdentityErrorCode::enroll,
+			.client = std::move(enrolled.error()),
+		});
+	}
+	if(auto stored = store_windows_online_credentials(path, *enrolled); !stored) {
+		return std::unexpected(WindowsOnlineIdentityError{
+			.code = WindowsOnlineIdentityErrorCode::store,
+			.platform = std::move(stored.error()),
+		});
+	}
+	return std::move(*enrolled);
+}
+
 } // namespace th03::platform

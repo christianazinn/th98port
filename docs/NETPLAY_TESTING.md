@@ -29,19 +29,31 @@ each other's character or room-rule arguments.
 ## Room-code setup
 
 The room service is deliberately not deployed from this repository. A test
-deployment must expose the Worker in `tools/azinn-site-v2/service` and provision
-one user for each machine with `POST /api/th03/users`. Set these values before
-starting the standalone or native app:
+deployment must expose the Worker in `tools/azinn-site-v2/service`. Set its
+origin before starting the standalone or native app:
 
-This environment plumbing is temporary until automatic enrollment is connected
-to the existing encrypted identity store; the two peers must use different
-user IDs.
+```text
+TH03_ONLINE_ORIGIN=https://your-worker.example
+```
+
+On Windows, the first confirmed room launch automatically enrolls one opaque
+service identity and stores it as current-user DPAPI data in `PODD.AUTH` beside
+`PODD.CFG`. Later launches reuse that identity. It never enters the settings,
+replay, room code, deterministic state, or logs. Deleting `PODD.AUTH` is the
+current manual sign-out/reset operation.
+
+The Arch/Linux build does not yet have an approved native secret-store owner.
+For that machine, provision a distinct identity with `POST /api/th03/users` and
+set all three values before launch:
 
 ```text
 TH03_ONLINE_ORIGIN=https://your-worker.example
 TH03_ONLINE_USER_ID=<userId returned by POST /api/th03/users>
 TH03_ONLINE_TOKEN=<token returned by POST /api/th03/users>
 ```
+
+Setting both user/token variables on Windows remains an explicit developer
+override. Supplying only one, or malformed values, fails closed.
 
 `TH03_NETPLAY_ICE_SERVERS` is an optional semicolon-delimited list of
 `stun:`, `turn:`, or `turns:` URLs. It can remain unset for a same-tailnet test

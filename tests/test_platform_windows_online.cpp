@@ -131,12 +131,83 @@ void test_protected_credentials()
 		"explicit sign-out removes the protected credential file");
 }
 
+struct EnrollmentTransport final {
+	std::size_t calls = 0U;
+	bool fail = false;
+
+	static std::expected<
+		NewClassicOnlineHttpResponse,
+		NewClassicOnlineTransportError
+	> perform(void *context, const NewClassicOnlineHttpRequest &request)
+	{
+		auto &self = *static_cast<EnrollmentTransport *>(context);
+		++self.calls;
+		if(self.fail) {
+			return std::unexpected(NewClassicOnlineTransportError{
+				.code = NewClassicOnlineTransportErrorCode::request,
+			});
+		}
+		if(request.method != NewClassicOnlineHttpMethod::post ||
+			request.target != "/api/th03/users" || !request.body.empty()) {
+			return std::unexpected(NewClassicOnlineTransportError{
+				.code = NewClassicOnlineTransportErrorCode::request,
+			});
+		}
+		const std::string body =
+			"{\"userId\":\"12345678-1234-1234-1234-123456789abc\","
+			"\"token\":\"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef0123456789_-\"}";
+		const std::vector<std::byte> body_bytes(
+			reinterpret_cast<const std::byte *>(body.data()),
+			reinterpret_cast<const std::byte *>(body.data() + body.size())
+		);
+		return NewClassicOnlineHttpResponse{
+			.status = 201U,
+			.content_type = "application/json",
+			.body = body_bytes,
+		};
+	}
+
+	[[nodiscard]] NewClassicOnlineTransport seam() noexcept
+	{
+		return {this, &perform};
+	}
+};
+
+void test_load_or_enroll()
+{
+	TemporaryDirectory root;
+	const auto path = root.path() / "PODD.AUTH";
+	EnrollmentTransport transport{};
+	auto first = load_or_enroll_windows_online_credentials(
+		path, transport.seam()
+	);
+	expect(first.has_value() && transport.calls == 1U && fs::exists(path),
+		"missing identity enrolls once and is protected atomically");
+	auto second = load_or_enroll_windows_online_credentials(
+		path, transport.seam()
+	);
+	expect(second && first && *second == *first && transport.calls == 1U,
+		"existing protected identity is reused without another request");
+
+	expect(remove_windows_online_credentials(path).has_value(),
+		"enrollment test removes the first identity");
+	transport.fail = true;
+	auto failed = load_or_enroll_windows_online_credentials(
+		path, transport.seam()
+	);
+	expect(!failed && failed.error().code ==
+		WindowsOnlineIdentityErrorCode::enroll &&
+		failed.error().client.has_value() && !fs::exists(path),
+		"failed enrollment publishes no credential file");
+}
+
 } // namespace
 
 int main()
 {
 	test_origin_and_request_guards();
 	test_protected_credentials();
+	test_load_or_enroll();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }

@@ -32,6 +32,18 @@ struct WindowsOnlineError final {
 	std::error_code system{};
 };
 
+enum class WindowsOnlineIdentityErrorCode : std::uint8_t {
+	load,
+	enroll,
+	store,
+};
+
+struct WindowsOnlineIdentityError final {
+	WindowsOnlineIdentityErrorCode code = WindowsOnlineIdentityErrorCode::load;
+	std::optional<WindowsOnlineError> platform{};
+	std::optional<app::NewClassicOnlineClientError> client{};
+};
+
 class WindowsOnlineTransport final {
 public:
 	WindowsOnlineTransport(WindowsOnlineTransport &&) noexcept;
@@ -71,6 +83,17 @@ store_windows_online_credentials(
 
 [[nodiscard]] std::expected<void, WindowsOnlineError>
 remove_windows_online_credentials(const std::filesystem::path &path);
+
+// Loads one current-user protected identity or enrolls and atomically stores a
+// new opaque identity when the file is absent. Existing malformed/protected
+// files fail closed and are never replaced by silent re-enrollment.
+[[nodiscard]] std::expected<
+	app::NewClassicOnlineCredentials,
+	WindowsOnlineIdentityError
+> load_or_enroll_windows_online_credentials(
+	const std::filesystem::path &path,
+	const app::NewClassicOnlineTransport &transport
+);
 
 } // namespace th03::platform
 
