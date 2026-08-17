@@ -35,8 +35,9 @@ simulation proof are confirmed. The terminal prints `status=paused`.
 To resume, each player must release Esc and then press it again. The terminal
 prints `status=resume-ready-local` on each machine and resumes after both
 choices arrive. The wait does not advance the source clock, replay playtime,
-PMD, or slowdown. The frozen gameplay frame is retained in this technical
-preview; a source-styled network-pause overlay is a later UI parcel.
+PMD, or slowdown. Both machines retain the same confirmed gameplay frame and
+draw the authenticated PAUSED/Resume artwork over it. The live network menu
+does not advertise the ordinary local Restart/Save/Discard actions.
 
 ## Windows host from the standalone
 

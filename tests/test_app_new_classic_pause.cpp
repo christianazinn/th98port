@@ -210,6 +210,26 @@ void test_overlay_preserves_base_and_palette()
 		disabled_overlay.pixels[save_bit].value == 9U,
 		"disabled Save gaiji exposes Replay Patch blue backing"
 	);
+
+	NewClassicPauseMenu network(
+		false, synthetic_patch_assets(),
+		NewClassicPausePresentation::netplay_wait
+	);
+	release(network);
+	const auto network_overlay = network.compose_over(original);
+	expect(
+		network_overlay.pixels[resume_bit].layer ==
+			th03::present::ComposedPixelLayer::graphics &&
+		network_overlay.pixels[resume_bit].value == 12U,
+		"network Pause uses the authenticated selected Resume gaiji"
+	);
+	expect(
+		network_overlay.pixels[restart_bit] ==
+			th03::present::ComposedPixel{
+				th03::present::ComposedPixelLayer::text, 0U
+			},
+		"network Pause does not advertise unavailable ordinary menu actions"
+	);
 }
 
 void test_input_projection()

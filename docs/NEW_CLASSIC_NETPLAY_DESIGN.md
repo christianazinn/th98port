@@ -589,8 +589,9 @@ arbitrary twelve frames when the peer has already supplied the input.
 
 Esc during online gameplay sends a Pause Request instead of opening the local
 Replay Patch pause menu immediately. At the next mutually confirmed frame,
-both peers stop prediction and display an online source-styled menu with Resume
-and Forfeit. Save Replay and Restart are unavailable while the match is live.
+both peers stop prediction and display authenticated PAUSED/Resume artwork over
+the retained confirmed frame. Save Replay, Restart, and Discard are unavailable
+while the match is live. A synchronized Forfeit choice remains future work.
 
 Resume requires both peers to become ready, then starts after a short shared
 countdown. Focus loss never silently pauses a peer; the existing local
@@ -757,8 +758,9 @@ timeout. The following product transport remains open:
    presentation remain the product integration step.
 2. Add negotiated pause, forfeit, disconnect, desync UI, and post-match report.
    The direct preview now carries a rollback-correct Pause edge, confirmed
-   boundary proof, release-before-Resume input, and two-peer ready barrier.
-   Source-styled presentation, forfeit policy, and the report surface remain.
+   boundary proof, release-before-Resume input, two-peer ready barrier, and
+   authenticated PAUSED/Resume presentation. Forfeit policy, disconnect/desync
+   presentation, and the report surface remain.
 3. Feed only confirmed history into the in-memory V13 recorder and existing save
    UI. Complete in the direct preview: the corrected contiguous-confirmed
    transcript becomes an ordinary validated V13 only after the complete VS

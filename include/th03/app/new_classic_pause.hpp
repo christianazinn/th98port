@@ -29,6 +29,11 @@ enum class NewClassicPauseStatus : std::uint8_t {
 	application_quit,
 };
 
+enum class NewClassicPausePresentation : std::uint8_t {
+	replay_patch,
+	netplay_wait,
+};
+
 struct NewClassicPauseInput final {
 	bool up = false;
 	bool down = false;
@@ -53,7 +58,9 @@ class NewClassicPauseMenu final {
 public:
 	explicit NewClassicPauseMenu(
 		bool save_enabled,
-		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {}
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {},
+		NewClassicPausePresentation presentation =
+			NewClassicPausePresentation::replay_patch
 	) noexcept;
 
 	[[nodiscard]] NewClassicPauseStatus consume(
@@ -98,6 +105,8 @@ private:
 	bool visible_ = false;
 	bool rejected_save_effect_ = false;
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
+	NewClassicPausePresentation presentation_ =
+		NewClassicPausePresentation::replay_patch;
 	std::vector<present::ComposedPixel> pixels_{};
 };
 

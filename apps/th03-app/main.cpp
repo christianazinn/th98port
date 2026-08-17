@@ -47,6 +47,7 @@
 #include "th03/app/new_classic_online_client.hpp"
 #include "th03/app/new_classic_online_store.hpp"
 #include "th03/app/new_classic_online_task.hpp"
+#include "th03/app/new_classic_pause.hpp"
 #include "th03/app/new_classic_playback.hpp"
 #include "th03/app/new_classic_settings_store.hpp"
 #include "th03/app/replay_slot_store.hpp"
@@ -1778,6 +1779,15 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	const auto audio_data_root = parsed.launch.content.data_root;
 	const auto post_match_content = parsed.launch.content;
 	const auto replay_save_content = parsed.launch.content;
+	auto loaded_pause_assets = th03::app::load_new_classic_replay_patch_assets(
+		parsed.launch.content.data_root / "AZINN.DAT"
+	);
+	if(!loaded_pause_assets) {
+		return fail("netplay-pause-assets", loaded_pause_assets.error());
+	}
+	auto pause_assets = std::make_shared<
+		const th03::app::NewClassicReplayPatchAssets
+	>(std::move(*loaded_pause_assets));
 
 	auto process = th03::app::load_direct_vs_process(std::move(parsed.launch));
 	if(!process) {
@@ -1950,6 +1960,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	std::vector<std::uint8_t> local_deadline_missed{};
 	std::unique_ptr<th03::app::NewClassicNetplayPostMatch> post_match{};
 	std::optional<th03::app::NewClassicNetplayPauseBarrier> pause_barrier{};
+	std::optional<th03::app::NewClassicPauseMenu> pause_overlay{};
 	bool runtime_digest_peer_ack = false;
 	bool presentation_pending = false;
 	std::uint64_t local_frames = 0U;
@@ -2174,7 +2185,10 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		}
 		return {};
 	};
-	const auto resume_pause_if_ready = [&]() -> std::expected<void, int> {
+	const auto resume_pause_if_ready = [
+		&
+	](th03::app::TickTimestampNs loop_cutoff_ns)
+		-> std::expected<void, int> {
 		if(!pause_barrier || !pause_barrier->ready() ||
 			(*session)->status() !=
 				NewClassicNetplayMainSessionStatus::paused) {
@@ -2210,11 +2224,13 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				));
 			}
 		}
-		const auto resumed_at = th03::platform::sdl_ticks_now_ns();
-		if(auto rebased = scheduler->rebase_after_modal(resumed_at); !rebased) {
+		// Every scheduler observation in one host iteration must use its single
+		// captured cutoff. Sampling a newer clock here would make the remaining
+		// work in that iteration look like a timestamp regression.
+		if(auto rebased = scheduler->rebase_after_modal(loop_cutoff_ns); !rebased) {
 			return std::unexpected(fail_tick(rebased.error()));
 		}
-		if(auto reset = mapper->reset_after_modal(*scheduler, resumed_at);
+		if(auto reset = mapper->reset_after_modal(*scheduler, loop_cutoff_ns);
 			!reset) {
 			return std::unexpected(fail(
 				"netplay-pause-input", reset.error()
@@ -2222,6 +2238,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		}
 		retry_blocked_event = false;
 		stalled_input.reset();
+		pause_overlay.reset();
 		presentation_pending = true;
 		last_pause_signal_send_ns = 0U;
 		std::cout << "status=resumed\nframe=" << pause_barrier->frame() << '\n';
@@ -2250,7 +2267,10 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		}
 		return true;
 	};
-	const auto settle_confirmed_boundary = [&]() -> std::expected<void, int> {
+	const auto settle_confirmed_boundary = [
+		&
+	](th03::app::TickTimestampNs loop_cutoff_ns)
+		-> std::expected<void, int> {
 		if((*session)->status() !=
 			NewClassicNetplayMainSessionStatus::boundary_confirmed) {
 			return {};
@@ -2304,6 +2324,17 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				));
 			}
 			pause_barrier = std::move(*barrier);
+			pause_overlay.emplace(
+				false, pause_assets,
+				th03::app::NewClassicPausePresentation::netplay_wait
+			);
+			if(pause_overlay->consume({}) !=
+				th03::app::NewClassicPauseStatus::running) {
+				return std::unexpected(fail_netplay(
+					"netplay-pause", "overlay-state"
+				));
+			}
+			presentation_pending = true;
 			if(auto applied = audio_session->apply({
 				.type = th03::app::ClassicAudioCommandType::pause_song,
 			}); !applied) {
@@ -2311,11 +2342,11 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 					"netplay-pause-audio", applied.error()
 				));
 			}
-			const auto paused_at = th03::platform::sdl_ticks_now_ns();
-			if(auto rebased = scheduler->rebase_after_modal(paused_at); !rebased) {
+			if(auto rebased = scheduler->rebase_after_modal(loop_cutoff_ns);
+				!rebased) {
 				return std::unexpected(fail_tick(rebased.error()));
 			}
-			if(auto reset = mapper->reset_after_modal(*scheduler, paused_at);
+			if(auto reset = mapper->reset_after_modal(*scheduler, loop_cutoff_ns);
 				!reset) {
 				return std::unexpected(fail(
 					"netplay-pause-input", reset.error()
@@ -2624,7 +2655,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 					);
 				}
 				last_receive_ns = now_ns;
-				if(const auto resumed = resume_pause_if_ready(); !resumed) {
+				if(const auto resumed = resume_pause_if_ready(now_ns); !resumed) {
 					return resumed.error();
 				}
 				continue;
@@ -2645,7 +2676,8 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 								"netplay-pause", "peer-resume-order"
 							);
 						}
-						if(const auto resumed = resume_pause_if_ready(); !resumed) {
+						if(const auto resumed = resume_pause_if_ready(now_ns);
+							!resumed) {
 							return resumed.error();
 						}
 					}
@@ -2671,7 +2703,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				return digests.error();
 			}
 		}
-		if(const auto settled = settle_confirmed_boundary(); !settled) {
+		if(const auto settled = settle_confirmed_boundary(now_ns); !settled) {
 			return settled.error();
 		}
 		if(const auto published = publish_confirmed_audio(); !published) {
@@ -2735,7 +2767,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 					return transcript.error();
 				}
 			}
-			if(const auto settled = settle_confirmed_boundary(); !settled) {
+			if(const auto settled = settle_confirmed_boundary(now_ns); !settled) {
 				return settled.error();
 			}
 		}
@@ -2801,7 +2833,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				if(advanced->frame) {
 					++local_frames;
 				}
-				if(const auto settled = settle_confirmed_boundary(); !settled) {
+				if(const auto settled = settle_confirmed_boundary(now_ns); !settled) {
 					return settled.error();
 				}
 				if(advanced->status !=
@@ -2837,7 +2869,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 					std::cout << "status=resume-ready-local\n";
 					std::cout.flush();
 				}
-				if(const auto resumed = resume_pause_if_ready(); !resumed) {
+				if(const auto resumed = resume_pause_if_ready(now_ns); !resumed) {
 					return resumed.error();
 				}
 				if((*session)->status() !=
@@ -2989,6 +3021,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				surface = (*session)->compose_shown_surface(pixel_span);
 				if(!surface) {
 					return fail("compose", surface.error());
+				}
+				if(pause_overlay) {
+					*surface = pause_overlay->compose_over(*surface);
 				}
 			}
 			if(const auto presented = (*platform)->present(*surface); !presented) {

@@ -977,6 +977,47 @@ void test_modal_reset_releases_input_and_retains_devices()
 		"an unrelated edge cannot resurrect pre-modal confirm or bomb input");
 }
 
+void test_pause_reset_reuses_host_iteration_cutoff()
+{
+	FakeGamepads fake{};
+	auto made = SdlInputMapper::create(bindings(), main_window, fake.backend());
+	expect(static_cast<bool>(made), "Pause-reset mapper is created");
+	if(!made) {
+		return;
+	}
+	auto mapper = std::move(*made);
+	auto input = scheduler();
+	(void)expect_event(mapper, input,
+		key_event(5U, SDL_SCANCODE_D, true),
+		"opening Cancel is queued before the Pause boundary");
+	const auto opening = expect_tick(input, 10U, "opening Pause input is due");
+	expect(opening.input.system == input_cancel,
+		"the opening logical sample owns Cancel before modal reset");
+
+	constexpr std::uint64_t loop_cutoff = 15U;
+	expect(input.rebase_after_modal(loop_cutoff).has_value(),
+		"Pause entry rebases at the current host-iteration cutoff");
+	expect(mapper.reset_after_modal(input, loop_cutoff).has_value(),
+		"Pause entry resets mapper state at the same cutoff");
+	const auto released = input.pop_due(loop_cutoff);
+	expect(
+		released && *released && (**released).deadline_ns == loop_cutoff &&
+			(**released).input.system == 0U,
+		"the remainder of the same host iteration observes neutral Pause input "
+		"without a timestamp regression"
+	);
+
+	(void)expect_event(mapper, input,
+		key_event(16U, SDL_SCANCODE_D, false),
+		"physical opening Cancel is released after Pause entry");
+	(void)expect_event(mapper, input,
+		key_event(17U, SDL_SCANCODE_D, true),
+		"fresh Cancel is pressed for Resume");
+	const auto resumed = expect_tick(input, 25U, "fresh Resume input is due");
+	expect(resumed.input.system == input_cancel,
+		"only the fresh post-release Cancel reaches the Resume barrier");
+}
+
 void test_malformed_stale_and_capacity_events()
 {
 	FakeGamepads fake{};
@@ -1198,6 +1239,7 @@ int main()
 	test_stable_identity_assignment_and_catalog();
 	test_focus_keyboard_device_release_and_quit_separation();
 	test_modal_reset_releases_input_and_retains_devices();
+	test_pause_reset_reuses_host_iteration_cutoff();
 	test_malformed_stale_and_capacity_events();
 	test_raw_key_capture_and_binding_replacement();
 	test_queue_full_atomicity();

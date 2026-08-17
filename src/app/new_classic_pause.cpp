@@ -69,10 +69,12 @@ NewClassicPauseInput project_new_classic_pause_input(
 
 NewClassicPauseMenu::NewClassicPauseMenu(
 	bool save_enabled,
-	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	NewClassicPausePresentation presentation
 ) noexcept :
 	save_enabled_(save_enabled),
 	patch_assets_(std::move(patch_assets)),
+	presentation_(presentation),
 	pixels_(present::graphics_page_pixels)
 {}
 
@@ -187,6 +189,23 @@ void NewClassicPauseMenu::draw() noexcept
 		5U,
 		pause_vram_cyan
 	);
+	if(presentation_ == NewClassicPausePresentation::netplay_wait) {
+		put_gaiji(
+			pause_choice_mark_left,
+			pause_choice_first_row,
+			pause_gaiji_cursor,
+			1U,
+			pause_vram_yellow
+		);
+		put_gaiji(
+			pause_gaiji_text_left,
+			pause_choice_first_row,
+			pause_gaiji_resume,
+			5U,
+			pause_vram_yellow
+		);
+		return;
+	}
 
 	for(std::size_t index = 0U; index < 4U; ++index) {
 		const auto choice = static_cast<NewClassicPauseChoice>(index);
