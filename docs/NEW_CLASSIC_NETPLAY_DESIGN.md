@@ -785,7 +785,10 @@ timeout. The following product transport remains open:
 ### N4: Cloudflare private-room beta
 
 1. Add the room Durable Object and signaling routes beside the existing online
-   service without deploying until reviewed.
+   service without deploying until reviewed. The local service now has a
+   fail-closed `T3ROOM1` two-seat, ten-minute Durable Object plus authenticated
+   create/connect routes; production bindings and the native RTC/WebSocket
+   adapter remain absent.
 2. Add short-lived TURN credential issuance and operational redaction.
 3. Measure real direct and relayed RTT/jitter/rollback distributions.
 4. Run a bounded private beta and tune delay/stall/disconnect policy.
