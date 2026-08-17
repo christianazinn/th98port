@@ -729,8 +729,9 @@ an explicit N1 gate rather than a reason to alter the rollback image.
 The immediately testable direct-IPv4 UDP/Tailscale preview is complete on the
 app-owned transport: fixed handshake/history packets, bounded prediction,
 frame-zero and 120-frame simulation identity, full MAIN repeat/terminal
-lifecycle, confirmed audio, and Windows/POSIX socket tests. The following
-product transport remains open:
+lifecycle, confirmed audio, prompt intentional departure, and Windows/POSIX
+socket tests. A crash or connectivity loss still uses the bounded inactivity
+timeout. The following product transport remains open:
 
 1. Pin minimal libdatachannel and implement both Data Channels.
 2. Add a local test signaling server and two-process loopback.

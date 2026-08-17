@@ -1636,6 +1636,23 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			.simulation_digest = digest,
 		});
 	};
+	const auto leave_preview = [&]() -> int {
+		if(peer && session_id != 0U) {
+			const NewClassicNetplayDatagram departure{
+				.type = NewClassicNetplayDatagramType::disconnect,
+				.sender = local_player,
+				.session_id = session_id,
+				.contract_hash = contract_hash,
+			};
+			// UDP has no delivery acknowledgement. Three bounded copies make an
+			// intentional local leave prompt without turning shutdown into a wait.
+			for(std::uint8_t attempt = 0U; attempt < 3U; ++attempt) {
+				(void)send_netplay_datagram(**socket, *peer, departure);
+			}
+		}
+		std::cout << "status=left\n";
+		return 0;
+	};
 	const auto match_runtime_digests = [&]() -> std::expected<void, int> {
 		if(!local_runtime_digest || !remote_runtime_digest) {
 			return {};
@@ -1995,8 +2012,10 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				continue;
 			}
 			if(packet->type == NewClassicNetplayDatagramType::disconnect &&
+				packet->sender == remote_player &&
 				packet->session_id == session_id) {
-				return fail_netplay("netplay-peer", "peer-disconnected");
+				std::cout << "status=peer-left\n";
+				return 0;
 			}
 			if(established &&
 				packet->type == NewClassicNetplayDatagramType::input &&
@@ -2078,7 +2097,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				}
 				if((**due).app_quit_requested ||
 					(((**due).input.system & 0x1000U) != 0U)) {
-					return 0;
+					return leave_preview();
 				}
 				const auto input = netplay_owned_input((**due).input);
 				const auto frame = (*session)->next_frame();
@@ -2208,7 +2227,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				}
 				if((**due).app_quit_requested ||
 					(((**due).input.system & 0x1000U) != 0U)) {
-					return 0;
+					return leave_preview();
 				}
 			}
 		}

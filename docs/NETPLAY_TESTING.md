@@ -13,7 +13,9 @@ not follow either machine's wall clock.
 
 The host owns logical P1 and the joiner owns logical P2. Both machines use
 their ordinary local-player controls: `T/F/H/B` for directions, `R/Y/V/N` for
-diagonals, `Z` for Shot, and `X` for Bomb. Escape leaves the preview. The two
+diagonals, `Z` for Shot, and `X` for Bomb. Escape leaves the preview and sends
+an immediate departure to the other peer; closing the window does the same.
+The two
 commands must use the same characters, rank, seed, tick rate, executable
 revision, and authenticated game data.
 
@@ -87,6 +89,8 @@ lockstep and reopen rollback at the next valid boundary. Both peers print the
 same confirmed boundary frames and `status=match-complete` on a clean finish.
 The latest periodic proof must be mutually acknowledged before either peer may
 report a clean finish or bounded smoke completion.
+An intentional local exit prints `status=left`; the other peer prints
+`status=peer-left` rather than waiting for the crash/connectivity timeout.
 
 For a bounded automated check, append the same `--smoke-ticks N` to both
 commands. This exits only after both peers have confirmed `N` gameplay input

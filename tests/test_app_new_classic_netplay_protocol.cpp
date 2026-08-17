@@ -187,6 +187,28 @@ void test_datagram_contract()
 	expect(!bad_count && bad_count.error().code ==
 		NewClassicNetplayDatagramErrorCode::invalid_history,
 		"history above the fixed redundant window fails closed");
+	const NewClassicNetplayDatagram disconnect{
+		.type = NewClassicNetplayDatagramType::disconnect,
+		.sender = NewClassicNetplayPlayer::player_one,
+		.session_id = 0x0102030405060708ULL,
+		.contract_hash = 0x8877665544332211ULL,
+	};
+	const auto encoded_disconnect =
+		encode_new_classic_netplay_datagram(disconnect);
+	const auto decoded_disconnect = encoded_disconnect ?
+		decode_new_classic_netplay_datagram(*encoded_disconnect) :
+		std::expected<NewClassicNetplayDatagram,
+			NewClassicNetplayDatagramError>{
+				std::unexpected(NewClassicNetplayDatagramError{})
+			};
+	expect(encoded_disconnect && decoded_disconnect &&
+		decoded_disconnect->type ==
+			NewClassicNetplayDatagramType::disconnect &&
+		decoded_disconnect->sender == disconnect.sender &&
+		decoded_disconnect->session_id == disconnect.session_id &&
+		decoded_disconnect->latest_frame == 0U &&
+		decoded_disconnect->input_count == 0U,
+		"intentional departure is a bounded state-free session control");
 
 	NewClassicNetplayDatagram digest{
 		.type = NewClassicNetplayDatagramType::simulation_digest,
