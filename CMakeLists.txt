@@ -410,6 +410,7 @@ th03_set_warnings(th03_present)
 
 add_library(th03_core STATIC
 	src/core/game.cpp
+	src/core/rollback_snapshot.cpp
 	src/core/frame.cpp
 	src/core/frame/boss_common.inl
 	src/core/frame/bullets_core.inl

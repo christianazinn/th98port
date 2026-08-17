@@ -6,6 +6,7 @@
 #include <expected>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -505,6 +506,212 @@ void test_round_start_observation()
 		game->round_start_observation().start.global_frame == 17U,
 		"round-start observation remains the captured boundary after gameplay advances"
 	);
+}
+
+std::uint32_t rollback_fixture_hash(
+	const th03::RollbackSimulationSnapshot &snapshot
+)
+{
+	return th03::formats::fnv1a32(
+		std::span<const std::byte>(snapshot.bytes).first(snapshot.used_size)
+	);
+}
+
+std::unique_ptr<th03::RollbackSimulationSnapshot> capture_rollback(
+	const th03::Game &game,
+	const std::string &message
+)
+{
+	auto captured = game.capture_rollback_simulation();
+	check(captured.has_value(), message);
+	if(!captured) {
+		return {};
+	}
+	return std::make_unique<th03::RollbackSimulationSnapshot>(
+		std::move(*captured)
+	);
+}
+
+void test_rollback_simulation_snapshot()
+{
+	th03::GameInit init{};
+	init.global_frame = 17U;
+	init.resident_rand = 34;
+	init.random_seed = 34U;
+	init.game_mode = th03::game_mode::vs_1p_2p;
+	init.rank = 2U;
+	init.is_cpu = {0U, 0U};
+	init.paletted_character = {1, 18};
+	init.autofire_mask = 1U;
+	auto game = th03::Game::create(
+		init, th03::GameContent{}, th03::GameOptions{
+			.input_protocol = th03::InputProtocol::live,
+			.three_digit_combos = true,
+		}
+	);
+	check(game.has_value(), "rollback simulation fixture creates");
+	if(!game) {
+		return;
+	}
+
+	for(std::uint16_t frame = 0U; frame < 48U; ++frame) {
+		const auto result = game->step(th03::CoreInput{
+			.p1 = static_cast<std::uint16_t>((frame & 1U) ? 0x0041U : 0x0082U),
+			.p2 = static_cast<std::uint16_t>((frame % 3U) ? 0x0104U : 0x0208U),
+			.charge_mask = static_cast<std::uint8_t>(frame & 3U),
+		});
+		check(
+			result.status == th03::StepStatus::running,
+			"rollback warm-up advances one ordinary gameplay frame"
+		);
+	}
+	const auto boundary = capture_rollback(
+		*game, "arbitrary-frame simulation capture succeeds"
+	);
+	if(!boundary) {
+		return;
+	}
+	check(
+		boundary->used_size == 70'353U &&
+		rollback_fixture_hash(*boundary) == 3'718'020'633U,
+		"T3RBK001 has one frozen architecture-neutral fixture vector"
+	);
+
+	const auto run_suffix = [&]() {
+		for(std::uint16_t frame = 0U; frame < 64U; ++frame) {
+			const auto result = game->step(th03::CoreInput{
+				.p1 = static_cast<std::uint16_t>((frame % 5U) ? 0x0004U : 0x0010U),
+				.p2 = static_cast<std::uint16_t>((frame % 7U) ? 0x0008U : 0x0020U),
+				.charge_mask = static_cast<std::uint8_t>((frame >> 1U) & 3U),
+			});
+			if(result.status != th03::StepStatus::running) {
+				return false;
+			}
+		}
+		return true;
+	};
+	check(run_suffix(), "uninterrupted rollback suffix remains in gameplay");
+	const auto uninterrupted = capture_rollback(
+		*game, "uninterrupted suffix captures"
+	);
+
+	for(std::uint16_t frame = 0U; frame < 11U; ++frame) {
+		(void)game->step(th03::CoreInput{.p1 = 0x0033U, .p2 = 0x00CCU});
+	}
+	const auto divergent = capture_rollback(*game, "divergent suffix captures");
+	check(
+		divergent && uninterrupted && *divergent != *uninterrupted,
+		"a divergent speculative branch changes the complete simulation image"
+	);
+	check(
+		game->restore_rollback_simulation(*boundary).has_value(),
+		"arbitrary-frame simulation restore succeeds"
+	);
+	check(run_suffix(), "restored rollback suffix remains in gameplay");
+	const auto resimulated = capture_rollback(*game, "resimulated suffix captures");
+	check(
+		resimulated && uninterrupted && *resimulated == *uninterrupted,
+		"restore plus resimulation is byte-identical to uninterrupted execution"
+	);
+
+	auto damaged = std::make_unique<th03::RollbackSimulationSnapshot>(*boundary);
+	damaged->bytes[damaged->used_size - 1U] ^= std::byte{1U};
+	const auto before_reject = capture_rollback(*game, "pre-rejection state captures");
+	const auto rejected = game->restore_rollback_simulation(*damaged);
+	const auto after_reject = capture_rollback(*game, "post-rejection state captures");
+	check(
+		!rejected && rejected.error().code == th03::ErrorCode::checksum_mismatch &&
+		before_reject && after_reject && *before_reject == *after_reject,
+		"corrupt rollback restore is rejected transactionally"
+	);
+
+	init.rank = 3U;
+	auto incompatible = th03::Game::create(init);
+	const auto incompatible_restore = incompatible
+		? incompatible->restore_rollback_simulation(*boundary)
+		: std::expected<void, th03::Error>{};
+	check(
+		incompatible && !incompatible_restore &&
+		incompatible_restore.error().code ==
+			th03::ErrorCode::invalid_value,
+		"rollback image cannot cross immutable gameplay configurations"
+	);
+
+	init.rank = 2U;
+	auto recorded = th03::Game::create(
+		init, th03::GameContent{}, th03::GameOptions{
+			.input_protocol = th03::InputProtocol::recorded_replay,
+			.three_digit_combos = true,
+		}
+	);
+	check(recorded.has_value(), "recorded rollback-pause fixture creates");
+	if(recorded) {
+		const auto paused = recorded->step(th03::CoreInput{.system = 0x1000U});
+		const auto pending = capture_rollback(
+			*recorded, "recorded deferred frame captures"
+		);
+		const auto first_finish = recorded->finish_deferred_frame(
+			th03::DeferredFrameAction::resume
+		);
+		const auto finished = capture_rollback(
+			*recorded, "completed recorded frame captures"
+		);
+		const auto restored = pending
+			? recorded->restore_rollback_simulation(*pending)
+			: std::expected<void, th03::Error>{};
+		const auto second_finish = recorded->finish_deferred_frame(
+			th03::DeferredFrameAction::resume
+		);
+		const auto refinished = capture_rollback(
+			*recorded, "recompleted recorded frame captures"
+		);
+		check(
+			paused.status == th03::StepStatus::phase_transition && pending &&
+			first_finish && finished && restored &&
+			second_finish && refinished && *refinished == *finished,
+			"recorded deferred-frame latch restores and completes exactly once"
+		);
+	}
+
+	auto live = th03::Game::create(
+		init, th03::GameContent{}, th03::GameOptions{
+			.input_protocol = th03::InputProtocol::live,
+			.three_digit_combos = true,
+		}
+	);
+	check(live.has_value(), "live rollback-pause fixture creates");
+	if(live) {
+		const auto paused = live->step(th03::CoreInput{.system = 0x1000U});
+		const auto pause_boundary = capture_rollback(
+			*live, "live pause boundary captures"
+		);
+		const auto resume = [&]() {
+			(void)live->step(
+				th03::CoreInput{.system = 0x1000U}, th03::InputContext::pause
+			);
+			(void)live->step({}, th03::InputContext::pause);
+			(void)live->step(
+				th03::CoreInput{.system = 0x1000U}, th03::InputContext::pause
+			);
+			return live->step({}, th03::InputContext::pause);
+		};
+		const auto first_resume = resume();
+		const auto resumed = capture_rollback(*live, "resumed live frame captures");
+		const auto restored = pause_boundary
+			? live->restore_rollback_simulation(*pause_boundary)
+			: std::expected<void, th03::Error>{};
+		const auto second_resume = resume();
+		const auto reresumed = capture_rollback(
+			*live, "re-resumed live frame captures"
+		);
+		check(
+			paused.status == th03::StepStatus::paused && pause_boundary &&
+			first_resume.status == th03::StepStatus::running && resumed &&
+			restored && second_resume.status == th03::StepStatus::running &&
+			reresumed && *reresumed == *resumed,
+			"live pause phase and input-boundary latches restore exactly"
+		);
+	}
 }
 
 void test_story_score_initialization()
@@ -3261,6 +3468,7 @@ int main()
 	test_story_score_initialization();
 	test_round_start_snapshot_restoration();
 	test_round_start_observation();
+	test_rollback_simulation_snapshot();
 	test_score_most_significant_digit_is_not_bcd_normalized();
 	test_anniversary_combo_display_limit();
 	test_defeat_playfield_shake();

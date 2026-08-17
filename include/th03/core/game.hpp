@@ -2,6 +2,7 @@
 #define TH03_CORE_GAME_HPP
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <memory>
@@ -266,6 +267,27 @@ struct StepResult {
 	bool defeat_none_after_frame = true;
 };
 
+// Canonical arbitrary-frame simulation image for the first half of the N0
+// rollback proof. The active prefix is a field-wise little-endian T3RBK001
+// document; the fixed zero-filled tail keeps capture allocation-free and makes
+// a 16-boundary ring bounded independently of host object layout.
+inline constexpr std::size_t rollback_simulation_snapshot_capacity = 96U * 1024U;
+
+struct RollbackSimulationSnapshot final {
+	std::uint32_t used_size = 0U;
+	std::array<std::byte, rollback_simulation_snapshot_capacity> bytes{};
+
+	friend bool operator==(
+		const RollbackSimulationSnapshot &,
+		const RollbackSimulationSnapshot &
+	) = default;
+};
+
+static_assert(
+	sizeof(RollbackSimulationSnapshot) ==
+		sizeof(std::uint32_t) + rollback_simulation_snapshot_capacity
+);
+
 class Game {
 public:
 	Game(Game &&) noexcept;
@@ -305,6 +327,14 @@ public:
 	// resident restart handoff. This accessor exposes that source value without
 	// adding it to the canonical/oracle schema.
 	[[nodiscard]] std::uint32_t live_random_seed() const noexcept;
+	// Captures/restores only Game-owned deterministic simulation and control
+	// latches. MAIN driver, presenters, Raster/TRAM, and audio feedback are a
+	// separate N0 snapshot layer and are deliberately not implied by this API.
+	[[nodiscard]] std::expected<RollbackSimulationSnapshot, Error>
+		capture_rollback_simulation() const noexcept;
+	[[nodiscard]] std::expected<void, Error> restore_rollback_simulation(
+		const RollbackSimulationSnapshot &snapshot
+	) noexcept;
 	RoundStartObservation round_start_observation() const;
 	std::expected<void, Error> start_next_round();
 	std::expected<void, Error> finish_main_process();
