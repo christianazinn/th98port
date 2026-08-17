@@ -195,6 +195,42 @@ int main()
 			"a failed worker cannot publish a partial completion");
 	}
 
+	NewClassicOnlineReplayRecord replay{};
+	replay.replay_id = identity<NewClassicOnlineReplayTag>(0x90U);
+	replay.content_id = identity<NewClassicOnlineContentTag>(0x40U);
+	replay.ruleset_id = identity<NewClassicOnlineRulesetTag>(0x60U);
+	replay.category = {NewClassicOnlineMode::story, 2U, 0U, 0U, 0U};
+	replay.result = {
+		.kind = NewClassicOnlineResultKind::clear,
+		.score = 123'456'780U,
+		.end_stage = 8U,
+	};
+	replay.dos_date = 0x5D2FU;
+	replay.payload_bytes = 100U;
+	replay.timed_frames = 100U;
+	replay.title = "ALPHA";
+	auto download = start_new_classic_online_replay_download(
+		replay, root, fake.seam()
+	);
+	expect(download.has_value(),
+		"valid replay download starts without blocking the caller");
+	if(download) {
+		const auto download_deadline = std::chrono::steady_clock::now() +
+			std::chrono::seconds(5);
+		while(!download->finished() &&
+			std::chrono::steady_clock::now() < download_deadline) {
+			std::this_thread::yield();
+		}
+		auto result = download->take_completed();
+		expect(download->finished() && result && result->error &&
+			!result->path && result->replay_id == replay.replay_id,
+			"download worker publishes one complete typed failure result");
+		const std::scoped_lock lock(fake.targets_mutex);
+		expect(!fake.targets.empty() && fake.targets.back().starts_with(
+			"/api/th03/replays/"
+		), "download worker derives the service target from ReplayId");
+	}
+
 	std::error_code ignored{};
 	std::filesystem::remove_all(root, ignored);
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

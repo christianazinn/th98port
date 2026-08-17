@@ -1489,6 +1489,32 @@ ExperienceRunResult run_classic_session(
 	// The platform transport must outlive the worker that refers to it.
 	std::optional<th03::app::NewClassicOnlineBoardRefreshTask>
 		online_refresh_task{};
+	std::optional<th03::app::NewClassicOnlineReplayDownloadTask>
+		online_replay_download_task{};
+	std::optional<th03::app::NewClassicOnlineReplayId>
+		online_replay_download_id{};
+	const auto overlay_online_downloads = [&](auto &document) {
+		for(auto &record : document.replay_records) {
+			record.availability =
+				th03::app::NewClassicOnlineReplayAvailability::metadata_only;
+			auto downloaded =
+				th03::app::probe_new_classic_online_replay_download(
+					record, parsed.replay_root
+				);
+			if(downloaded && *downloaded) {
+				record.availability = th03::app::
+					NewClassicOnlineReplayAvailability::downloaded;
+			} else if(!downloaded) {
+				std::cerr << "status=warning\n"
+					"stage=online-replay-probe\nrank="
+					<< static_cast<unsigned>(record.category.rank)
+					<< "\ncharacter="
+					<< static_cast<unsigned>(record.category.character)
+					<< "\ncode="
+					<< static_cast<unsigned>(downloaded.error().code) << '\n';
+			}
+		}
+	};
 	if(new_classic) {
 		for(std::uint8_t rank = 0U; rank < 4U; ++rank) {
 			for(std::uint8_t character = 0U; character < 9U; ++character) {
@@ -1510,6 +1536,7 @@ ExperienceRunResult run_classic_session(
 					continue;
 				}
 				if(loaded->document.board_category) {
+					overlay_online_downloads(loaded->document);
 					parsed.launch.new_classic_online_boards.push_back(
 						std::move(loaded->document)
 					);
@@ -1782,6 +1809,7 @@ ExperienceRunResult run_classic_session(
 						"code=missing-result\n";
 					continue;
 				}
+				overlay_online_downloads(*refreshed->document);
 				if(auto merged = (*runner)->merge_new_classic_online_board(
 					std::move(*refreshed->document)
 				); !merged) {
@@ -1796,6 +1824,48 @@ ExperienceRunResult run_classic_session(
 						"code=worker-failed\n";
 				}
 				online_refresh_task.reset();
+			}
+		}
+		if(online_replay_download_task) {
+			bool completion_reported = false;
+			if(auto downloaded =
+				online_replay_download_task->take_completed()) {
+				const auto outcome = downloaded->path && !downloaded->error ?
+					th03::app::NewClassicOnlineReplayDownloadOutcome::downloaded :
+					th03::app::NewClassicOnlineReplayDownloadOutcome::failed;
+				if(auto reported =
+					(*runner)->report_new_classic_online_replay_download(
+						downloaded->replay_id, outcome
+					); !reported) {
+					return {.exit_code = fail(
+						"online-replay-download-report", reported.error()
+					)};
+				}
+				if(downloaded->error) {
+					std::cerr << "status=warning\n"
+						"stage=online-replay-download\ncode="
+						<< static_cast<unsigned>(downloaded->error->code)
+						<< '\n';
+				}
+				completion_reported = true;
+				online_replay_download_id.reset();
+			}
+			if(online_replay_download_task->finished()) {
+				if(!completion_reported && online_replay_download_id) {
+					if(auto reported =
+						(*runner)->report_new_classic_online_replay_download(
+							*online_replay_download_id,
+							th03::app::NewClassicOnlineReplayDownloadOutcome::failed
+						); !reported) {
+						return {.exit_code = fail(
+							"online-replay-download-report", reported.error()
+						)};
+					}
+					std::cerr << "status=warning\n"
+						"stage=online-replay-download\ncode=worker-failed\n";
+					online_replay_download_id.reset();
+				}
+				online_replay_download_task.reset();
 			}
 		}
 		// Sparse replay evidence advances one exact source boundary per host loop
@@ -1844,6 +1914,64 @@ ExperienceRunResult run_classic_session(
 				return {
 					.exit_code = fail("th03-runner", consumed.error())
 				};
+			}
+			if(auto request =
+				(*runner)->take_new_classic_online_replay_download_request()) {
+				auto report_immediate = [&](auto outcome) {
+					return (*runner)->report_new_classic_online_replay_download(
+						request->replay_id, outcome
+					);
+				};
+#if defined(_WIN32)
+				if(!online_transport) {
+					if(auto reported = report_immediate(
+						th03::app::NewClassicOnlineReplayDownloadOutcome::unavailable
+					); !reported) {
+						return {.exit_code = fail(
+							"online-replay-download-report", reported.error()
+						)};
+					}
+				} else if(online_replay_download_task ||
+					online_replay_download_id) {
+					if(auto reported = report_immediate(
+						th03::app::NewClassicOnlineReplayDownloadOutcome::failed
+					); !reported) {
+						return {.exit_code = fail(
+							"online-replay-download-report", reported.error()
+						)};
+					}
+				} else {
+					auto started =
+						th03::app::start_new_classic_online_replay_download(
+							*request, parsed.replay_root,
+							online_transport->transport()
+						);
+					if(!started) {
+						if(auto reported = report_immediate(
+							th03::app::NewClassicOnlineReplayDownloadOutcome::failed
+						); !reported) {
+							return {.exit_code = fail(
+								"online-replay-download-report", reported.error()
+							)};
+						}
+						std::cerr << "status=warning\n"
+							"stage=online-replay-download-start\ncode="
+							<< static_cast<unsigned>(started.error().code)
+							<< '\n';
+					} else {
+						online_replay_download_id = request->replay_id;
+						online_replay_download_task.emplace(std::move(*started));
+					}
+				}
+#else
+				if(auto reported = report_immediate(
+					th03::app::NewClassicOnlineReplayDownloadOutcome::unavailable
+				); !reported) {
+					return {.exit_code = fail(
+						"online-replay-download-report", reported.error()
+					)};
+				}
+#endif
 			}
 			if(auto update = (*runner)->take_new_classic_key_config_update()) {
 				active_key_config = *update;

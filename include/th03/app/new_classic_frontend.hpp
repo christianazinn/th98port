@@ -179,11 +179,18 @@ struct NewClassicHighScoreMenuResult final {
 		NewClassicHighScoreMenuStatus::running;
 };
 
+enum class NewClassicOnlineReplayDownloadOutcome : std::uint8_t {
+	downloaded,
+	failed,
+	unavailable,
+};
+
 // New Classic-only source-styled hub for local and cached online score views.
-// Every online row was already validated by the T3ONL002 decoder; this owner
-// is deliberately read-only and never introduces network I/O into source-time
-// scene advancement. An empty board set is invalid so the existing direct
-// local HiScore route remains the only visible path while offline/unconfigured.
+// Every online row was already validated by the T3ONL002 decoder. The owner
+// may emit one immutable replay-download intent, but never performs network or
+// filesystem I/O during source-time scene advancement. An empty board set is
+// invalid so the existing direct local HiScore route remains the only visible
+// path while offline/unconfigured.
 class NewClassicHighScoreMenu final {
 public:
 	NewClassicHighScoreMenu(
@@ -202,9 +209,21 @@ public:
 	[[nodiscard]] bool viewing_detail() const noexcept;
 	[[nodiscard]] std::size_t selected_board() const noexcept;
 	[[nodiscard]] std::size_t selected_entry() const noexcept;
+	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>
+	take_replay_download_request() noexcept;
+	[[nodiscard]] bool report_replay_download(
+		const NewClassicOnlineReplayId &replay_id,
+		NewClassicOnlineReplayDownloadOutcome outcome
+	) noexcept;
 
 private:
 	enum class Page : std::uint8_t { hub, board, detail };
+	enum class DownloadState : std::uint8_t {
+		idle,
+		pending,
+		failed,
+		unavailable,
+	};
 	void draw() noexcept;
 	void draw_hub() noexcept;
 	void draw_board() noexcept;
@@ -222,6 +241,10 @@ private:
 	std::size_t board_index_ = 0U;
 	std::size_t selected_entry_ = 0U;
 	std::size_t top_entry_ = 0U;
+	DownloadState download_state_ = DownloadState::idle;
+	std::optional<NewClassicOnlineReplayId> download_target_{};
+	std::optional<NewClassicOnlineReplayRecord> download_request_{};
+	bool redraw_pending_ = false;
 	bool valid_ = false;
 	bool fade_in_active_ = true;
 	std::uint8_t fade_boundary_ = 0U;

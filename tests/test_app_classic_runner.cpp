@@ -1058,20 +1058,39 @@ th03::app::NewClassicOnlineCacheDocument online_high_score_board()
 	document.snapshot_id = online_identity<NewClassicOnlineSnapshotId>(0x10U);
 	document.fetched_unix_seconds = 1'786'765'000ULL;
 	document.board_category = category;
+	const auto replay_id = online_identity<NewClassicOnlineReplayId>(0x20U);
+	const auto content_id = online_identity<NewClassicOnlineContentId>(0x50U);
+	const auto ruleset_id = online_identity<NewClassicOnlineRulesetId>(0x70U);
 	document.leaderboard_entries.push_back({
 		.entry_id = online_identity<NewClassicOnlineEntryId>(0x30U),
-		.content_id = online_identity<NewClassicOnlineContentId>(0x50U),
-		.ruleset_id = online_identity<NewClassicOnlineRulesetId>(0x70U),
+		.content_id = content_id,
+		.ruleset_id = ruleset_id,
+		.replay_id = replay_id,
+		.verifier_id = online_identity<NewClassicOnlineVerifierId>(0x90U),
 		.category = category,
 		.result = {
 			.kind = NewClassicOnlineResultKind::clear,
 			.score = 123'456'780U,
 			.end_stage = 8U,
 		},
-		.provenance = NewClassicOnlineProvenance::curated_legacy,
+		.provenance = NewClassicOnlineProvenance::replay_verified,
 		.dos_date = 0x5D2FU,
 		.published_unix_seconds = 1'786'765'432ULL,
 		.player = "ALPHA",
+	});
+	document.replay_records.push_back({
+		.replay_id = replay_id,
+		.content_id = content_id,
+		.ruleset_id = ruleset_id,
+		.category = category,
+		.result = document.leaderboard_entries.front().result,
+		.availability = NewClassicOnlineReplayAvailability::metadata_only,
+		.dos_date = 0x5D2FU,
+		.payload_bytes = 213'592U,
+		.autofire = 1U,
+		.timed_frames = 10'000U,
+		.slow_frames = 200U,
+		.title = "ALPHA",
 	});
 	return document;
 }
@@ -1217,9 +1236,25 @@ bool authentic_online_high_score_gate(
 		}
 	}
 
-	// Online opens as a second real destination. Cancel returns board -> hub,
-	// then hub -> the source title owner.
+	// Online opens as a second real destination. A replay-backed detail emits
+	// one host-owned request; reporting offline redraws it on the next source
+	// tick. Cancel then returns detail -> board -> hub -> title.
 	if(!step(0x0002U) || !step() || !step(0x0020U) || !step() ||
+		!ClassicRunnerTestAccess::online_high_score_menu(runner) ||
+		!step(0x0020U) || !step() || !step(0x0020U)) {
+		return false;
+	}
+	auto download = runner.take_new_classic_online_replay_download_request();
+	if(!download || download->replay_id !=
+		online_high_score_board().replay_records.front().replay_id ||
+		!runner.report_new_classic_online_replay_download(
+			download->replay_id,
+			NewClassicOnlineReplayDownloadOutcome::unavailable
+		)) {
+		std::cerr << "online replay download intent/report failed\n";
+		return false;
+	}
+	if(!step() || !step() || !step(0x1000U) || !step() ||
 		!ClassicRunnerTestAccess::online_high_score_menu(runner) ||
 		!step(0x1000U) || !step() ||
 		!ClassicRunnerTestAccess::online_high_score_menu(runner) ||

@@ -328,6 +328,15 @@ allocator failures are warnings and cannot interrupt local play. The transport
 outlives and is joined after its worker, and unexpected worker exceptions fail
 closed instead of escaping the thread.
 
+Session 212 adds the first explicit replay action. Confirm on a replay-backed
+online HiScore detail emits one immutable request through the OP session and
+runner; a separate one-shot worker performs the existing bounded download.
+Only exact digest, V13, cached metadata, and atomic content-addressed
+publication success changes the UI to `Downloaded`. Missing endpoints report
+`Offline`, other failures remain retryable, and neither path blocks a source
+tick. On later launches the same checks revalidate local bytes before restoring
+downloaded availability.
+
 This is deliberately a deployment seam rather than a hidden public endpoint.
-Enrollment, upload consent, `My Records`, replay download/watch actions, real
-Cloudflare resources, and the pinned Container adapter remain pending.
+Enrollment, upload consent, `My Records`, replay watch actions, real Cloudflare
+resources, and the pinned Container adapter remain pending.

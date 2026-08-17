@@ -275,8 +275,11 @@ Classic HiScore hub. A deployment or developer may set
 on one bounded background worker; no endpoint is built in, and an absent value
 keeps the product wholly offline. Cache and network work never run on a source
 tick, captures disable refresh, and complete results appear only after the
-player leaves and re-enters HiScore. Enrollment, replay upload/download, and
-production Cloudflare resources remain intentionally unavailable.
+player leaves and re-enters HiScore. A replay-backed detail can also download
+the exact V13 payload on a separate bounded worker. Digest, format, cached
+metadata, and atomic-publication checks must all pass before the UI reports it
+as downloaded; local downloads are revalidated on later launches. Enrollment,
+replay upload/watch, and production Cloudflare resources remain unavailable.
 The private `tools\th03-private-editor` utility provides direct migration:
 it accepts an original 824-byte PC-98 scorefile or Replay Patch 0.4.12's exact
 7,812-byte expanded file, validates it, backs up any current native score, and

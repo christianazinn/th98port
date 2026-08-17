@@ -258,6 +258,8 @@
     "hiscore.online.title": "Online - {rank} - {character}",
     "hiscore.online.footer": "Left/Right: Board   Z/Return: Details   Esc: Return",
     "hiscore.online.detail-footer": "Esc: Return",
+    "hiscore.online.download-footer": "Z/Return: Download   Esc: Return",
+    "hiscore.online.downloading-footer": "Downloading...   Esc: Return",
     "hiscore.online.header.place": "No.",
     "hiscore.online.label.player": "Player",
     "hiscore.online.label.result": "Result",
@@ -267,6 +269,9 @@
     "hiscore.online.result.game-over": "Game Over",
     "hiscore.online.replay.downloaded": "Downloaded",
     "hiscore.online.replay.online": "Online",
-    "hiscore.online.replay.historical": "Historical"
+    "hiscore.online.replay.historical": "Historical",
+    "hiscore.online.replay.downloading": "Downloading...",
+    "hiscore.online.replay.failed": "Download failed",
+    "hiscore.online.replay.unavailable": "Offline"
   }
 }

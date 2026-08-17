@@ -1829,11 +1829,29 @@ void NewClassicHighScoreMenu::draw_detail() noexcept
 		const auto autofire = messages.text((replay->autofire & 0x01U) ?
 			NewClassicMessageId::replay_autofire_on :
 			NewClassicMessageId::replay_autofire_off);
-		const auto replay_state = messages.text(
+		const bool target = download_target_ &&
+			*download_target_ == replay->replay_id;
+		auto replay_message =
 			replay->availability == NewClassicOnlineReplayAvailability::downloaded ?
 				NewClassicMessageId::hiscore_online_replay_downloaded :
-				NewClassicMessageId::hiscore_online_replay_online
-		);
+				NewClassicMessageId::hiscore_online_replay_online;
+		if(target) {
+			switch(download_state_) {
+			case DownloadState::idle: break;
+			case DownloadState::pending:
+				replay_message =
+					NewClassicMessageId::hiscore_online_replay_downloading;
+				break;
+			case DownloadState::failed:
+				replay_message = NewClassicMessageId::hiscore_online_replay_failed;
+				break;
+			case DownloadState::unavailable:
+				replay_message =
+					NewClassicMessageId::hiscore_online_replay_unavailable;
+				break;
+			}
+		}
+		const auto replay_state = messages.text(replay_message);
 		valid_ = valid_ &&
 			put_row(224, NewClassicMessageId::hiscore_online_label_autofire,
 				autofire) &&
@@ -1847,9 +1865,20 @@ void NewClassicHighScoreMenu::draw_detail() noexcept
 			messages.text(NewClassicMessageId::hiscore_online_replay_historical)
 		);
 	}
-	valid_ = valid_ && font.put_centered(raster, 320, 352, messages.text(
-		NewClassicMessageId::hiscore_online_detail_footer
-	), 9U);
+	NewClassicMessageId footer =
+		NewClassicMessageId::hiscore_online_detail_footer;
+	if(const auto *replay = selected_replay(); replay &&
+		replay->availability != NewClassicOnlineReplayAvailability::downloaded) {
+		const bool pending = download_target_ &&
+			*download_target_ == replay->replay_id &&
+			download_state_ == DownloadState::pending;
+		footer = pending ?
+			NewClassicMessageId::hiscore_online_downloading_footer :
+			NewClassicMessageId::hiscore_online_download_footer;
+	}
+	valid_ = valid_ && font.put_centered(
+		raster, 320, 352, messages.text(footer), 9U
+	);
 }
 
 NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
@@ -1862,6 +1891,11 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 	if(input.app_quit_requested) {
 		status_ = NewClassicHighScoreMenuStatus::application_quit;
 		return {.status = status_};
+	}
+	if(redraw_pending_) {
+		redraw_pending_ = false;
+		draw();
+		return {.surface_changed = valid_, .status = status_};
 	}
 	if(fade_in_active_) {
 		auto &raster = patch_surface_.raster();
@@ -1926,6 +1960,18 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 			draw();
 			return {.surface_changed = valid_, .status = status_};
 		}
+		if(input.confirm) {
+			const auto *replay = selected_replay();
+			if(replay && replay->availability ==
+				NewClassicOnlineReplayAvailability::metadata_only &&
+				download_state_ != DownloadState::pending) {
+				download_target_ = replay->replay_id;
+				download_state_ = DownloadState::pending;
+				download_request_ = *replay;
+				draw();
+				return {.surface_changed = valid_, .status = status_};
+			}
+		}
 		return {.status = status_};
 	}
 	if(input.cancel || input.bomb) {
@@ -1988,6 +2034,54 @@ std::size_t NewClassicHighScoreMenu::selected_board() const noexcept
 std::size_t NewClassicHighScoreMenu::selected_entry() const noexcept
 {
 	return selected_entry_;
+}
+
+std::optional<NewClassicOnlineReplayRecord>
+NewClassicHighScoreMenu::take_replay_download_request() noexcept
+{
+	return std::exchange(download_request_, std::nullopt);
+}
+
+bool NewClassicHighScoreMenu::report_replay_download(
+	const NewClassicOnlineReplayId &replay_id,
+	NewClassicOnlineReplayDownloadOutcome outcome
+) noexcept
+{
+	if(download_state_ != DownloadState::pending || !download_target_ ||
+		*download_target_ != replay_id) {
+		return false;
+	}
+	if(outcome == NewClassicOnlineReplayDownloadOutcome::downloaded) {
+		auto found = std::ranges::find_if(
+			boards_, [&replay_id](const NewClassicOnlineCacheDocument &board) {
+				return std::ranges::any_of(
+					board.replay_records, [&replay_id](const auto &record) {
+						return record.replay_id == replay_id;
+					}
+				);
+			}
+		);
+		if(found == boards_.end()) {
+			return false;
+		}
+		auto record = std::ranges::find(
+			found->replay_records, replay_id,
+			&NewClassicOnlineReplayRecord::replay_id
+		);
+		if(record == found->replay_records.end()) {
+			return false;
+		}
+		record->availability =
+			NewClassicOnlineReplayAvailability::downloaded;
+		download_state_ = DownloadState::idle;
+		download_target_.reset();
+	} else {
+		download_state_ = outcome ==
+			NewClassicOnlineReplayDownloadOutcome::unavailable ?
+			DownloadState::unavailable : DownloadState::failed;
+	}
+	redraw_pending_ = true;
+	return true;
 }
 
 NewClassicReplaySaveMenu::NewClassicReplaySaveMenu(

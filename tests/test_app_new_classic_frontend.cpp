@@ -300,7 +300,9 @@ Identity online_identity(std::uint8_t seed)
 th03::app::NewClassicOnlineCacheDocument online_board(
 	std::uint8_t rank,
 	std::uint8_t character,
-	std::uint8_t seed
+	std::uint8_t seed,
+	th03::app::NewClassicOnlineReplayAvailability availability =
+		th03::app::NewClassicOnlineReplayAvailability::downloaded
 )
 {
 	using namespace th03::app;
@@ -320,7 +322,7 @@ th03::app::NewClassicOnlineCacheDocument online_board(
 		.ruleset_id = online_identity<NewClassicOnlineRulesetId>(0x60U),
 		.category = category,
 		.result = result,
-		.availability = NewClassicOnlineReplayAvailability::downloaded,
+		.availability = availability,
 		.dos_date = 0x5D2FU,
 		.payload_bytes = 213592U,
 		.autofire = 1U,
@@ -442,6 +444,59 @@ void test_online_high_score_menu()
 	expect(online.consume({.cancel = true}).status ==
 		NewClassicHighScoreMenuStatus::back,
 		"hub Cancel returns to the New Classic title");
+
+	NewClassicHighScoreMenu download(
+		{online_board(
+			2U, 4U, 0x50U,
+			NewClassicOnlineReplayAvailability::metadata_only
+		)},
+		2U, patch_assets
+	);
+	finish_entry_fade(download);
+	static_cast<void>(download.consume({}));
+	static_cast<void>(download.consume({.down = true}));
+	static_cast<void>(download.consume({}));
+	static_cast<void>(download.consume({.confirm = true}));
+	static_cast<void>(download.consume({}));
+	static_cast<void>(download.consume({.confirm = true}));
+	static_cast<void>(download.consume({}));
+	auto requested = download.consume({.confirm = true});
+	auto request = download.take_replay_download_request();
+	expect(requested.surface_changed && request &&
+		request->availability ==
+			NewClassicOnlineReplayAvailability::metadata_only &&
+		!download.take_replay_download_request(),
+		"online replay detail emits exactly one immutable download request");
+	if(request) {
+		auto wrong = request->replay_id;
+		wrong.bytes[0U] ^= 0xFFU;
+		expect(!download.report_replay_download(
+			wrong, NewClassicOnlineReplayDownloadOutcome::downloaded
+		), "download completion rejects an unrelated replay identity");
+		expect(download.report_replay_download(
+			request->replay_id,
+			NewClassicOnlineReplayDownloadOutcome::failed
+		), "matching failed download result is accepted between source ticks");
+		expect(download.consume({}).surface_changed,
+			"failed result redraws through the next source-owned menu tick");
+		static_cast<void>(download.consume({}));
+		static_cast<void>(download.consume({.confirm = true}));
+		auto retry = download.take_replay_download_request();
+		expect(retry && retry->replay_id == request->replay_id,
+			"failed download can be retried after a fresh Confirm");
+		if(retry) {
+			expect(download.report_replay_download(
+				retry->replay_id,
+				NewClassicOnlineReplayDownloadOutcome::downloaded
+			), "validated download marks the matching cached replay available");
+			expect(download.consume({}).surface_changed,
+				"successful result redraws through the next menu tick");
+			static_cast<void>(download.consume({}));
+			static_cast<void>(download.consume({.confirm = true}));
+			expect(!download.take_replay_download_request(),
+				"an already-downloaded replay cannot be downloaded twice");
+		}
+	}
 }
 
 void test_catalog_browser_and_save()

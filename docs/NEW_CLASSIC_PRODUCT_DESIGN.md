@@ -475,9 +475,11 @@ deterministic package hashes, and representative screen snapshots.
 Status: domain/cache boundary complete in session 189. Session 201 adds the
 read-only HiScore hub and source-styled cached online board/detail view.
 Session 202 adds disabled-by-default asynchronous refresh of the active rank's
-nine Story boards. The hub remains absent when no active-rank cache exists.
-Replay navigation, account mutation, upload, and download actions remain
-deferred.
+nine Story boards. Session 212 adds the first detail action: a replay-backed
+entry emits one bounded background download and reports success only after
+digest, V13, metadata, and atomic-publication validation. The hub remains
+absent when no active-rank cache exists. Replay navigation, account mutation,
+upload, watch, and My Records remain deferred.
 
 - Define leaderboard/replay identifiers, category keys, provenance, and local
   cache documents without selecting a service vendor.

@@ -156,6 +156,15 @@ struct NewClassicOnlineClientError final {
 	const NewClassicOnlineTransport &transport
 );
 
+// Revalidates a content-addressed local download against the cached record.
+// Missing files are ordinary false; malformed or inaccessible existing files
+// are typed failures and are never advertised as downloaded.
+[[nodiscard]] std::expected<bool, NewClassicOnlineClientError>
+probe_new_classic_online_replay_download(
+	const NewClassicOnlineReplayRecord &record,
+	const std::filesystem::path &replay_root
+);
+
 } // namespace th03::app
 
 #endif

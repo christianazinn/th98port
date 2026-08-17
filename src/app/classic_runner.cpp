@@ -815,6 +815,39 @@ ClassicRunner::merge_new_classic_online_board(
 	return {};
 }
 
+std::optional<NewClassicOnlineReplayRecord>
+ClassicRunner::take_new_classic_online_replay_download_request() noexcept
+{
+	if(!impl_ || impl_->experience != ExperienceProfile::new_classic ||
+		impl_->operations.consume != &consume_session) {
+		return std::nullopt;
+	}
+	return static_cast<ClassicOpSession *>(
+		impl_->operations.context
+	)->take_online_replay_download_request();
+}
+
+std::expected<void, ClassicRunnerError>
+ClassicRunner::report_new_classic_online_replay_download(
+	const NewClassicOnlineReplayId &replay_id,
+	NewClassicOnlineReplayDownloadOutcome outcome
+)
+{
+	if(!impl_ || impl_->experience != ExperienceProfile::new_classic ||
+		impl_->operations.consume != &consume_session) {
+		return std::unexpected(runner_error(
+			ClassicRunnerErrorCode::invalid_request
+		));
+	}
+	auto reported = static_cast<ClassicOpSession *>(
+		impl_->operations.context
+	)->report_online_replay_download(replay_id, outcome);
+	if(!reported) {
+		return std::unexpected(session_error(reported.error()));
+	}
+	return {};
+}
+
 std::shared_ptr<const NewClassicReplaySaveArt>
 ClassicRunner::new_classic_replay_save_art() const noexcept
 {

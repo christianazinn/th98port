@@ -259,6 +259,8 @@
     {"enum": "hiscore_online_title", "id": "hiscore.online.title", "domain": "menu-font", "max_width": 560, "placeholders": [{"name": "character", "width_value": "Yumemi"}, {"name": "rank", "width_value": "Lunatic"}]},
     {"enum": "hiscore_online_footer", "id": "hiscore.online.footer", "domain": "menu-font", "max_width": 560},
     {"enum": "hiscore_online_detail_footer", "id": "hiscore.online.detail-footer", "domain": "menu-font", "max_width": 560},
+    {"enum": "hiscore_online_download_footer", "id": "hiscore.online.download-footer", "domain": "menu-font", "max_width": 560},
+    {"enum": "hiscore_online_downloading_footer", "id": "hiscore.online.downloading-footer", "domain": "menu-font", "max_width": 560},
     {"enum": "hiscore_online_header_place", "id": "hiscore.online.header.place", "domain": "menu-font", "max_width": 48},
     {"enum": "hiscore_online_label_player", "id": "hiscore.online.label.player", "domain": "menu-font", "max_width": 160},
     {"enum": "hiscore_online_label_result", "id": "hiscore.online.label.result", "domain": "menu-font", "max_width": 160},
@@ -268,6 +270,9 @@
     {"enum": "hiscore_online_result_game_over", "id": "hiscore.online.result.game-over", "domain": "menu-font", "max_width": 160},
     {"enum": "hiscore_online_replay_downloaded", "id": "hiscore.online.replay.downloaded", "domain": "menu-font", "max_width": 240},
     {"enum": "hiscore_online_replay_online", "id": "hiscore.online.replay.online", "domain": "menu-font", "max_width": 240},
-    {"enum": "hiscore_online_replay_historical", "id": "hiscore.online.replay.historical", "domain": "menu-font", "max_width": 240}
+    {"enum": "hiscore_online_replay_historical", "id": "hiscore.online.replay.historical", "domain": "menu-font", "max_width": 240},
+    {"enum": "hiscore_online_replay_downloading", "id": "hiscore.online.replay.downloading", "domain": "menu-font", "max_width": 240},
+    {"enum": "hiscore_online_replay_failed", "id": "hiscore.online.replay.failed", "domain": "menu-font", "max_width": 240},
+    {"enum": "hiscore_online_replay_unavailable", "id": "hiscore.online.replay.unavailable", "domain": "menu-font", "max_width": 240}
   ]
 }

@@ -354,6 +354,13 @@ public:
 	take_window_presentation_update() noexcept;
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
 	merge_online_board(NewClassicOnlineCacheDocument document);
+	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>
+	take_online_replay_download_request() noexcept;
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	report_online_replay_download(
+		const NewClassicOnlineReplayId &replay_id,
+		NewClassicOnlineReplayDownloadOutcome outcome
+	);
 	[[nodiscard]] std::shared_ptr<const NewClassicReplaySaveArt>
 	replay_save_art() const noexcept;
 	[[nodiscard]] std::expected<

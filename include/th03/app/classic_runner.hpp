@@ -235,6 +235,13 @@ public:
 	// an already-visible menu and performs no filesystem or network work.
 	[[nodiscard]] std::expected<void, ClassicRunnerError>
 	merge_new_classic_online_board(NewClassicOnlineCacheDocument document);
+	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>
+	take_new_classic_online_replay_download_request() noexcept;
+	[[nodiscard]] std::expected<void, ClassicRunnerError>
+	report_new_classic_online_replay_download(
+		const NewClassicOnlineReplayId &replay_id,
+		NewClassicOnlineReplayDownloadOutcome outcome
+	);
 	[[nodiscard]] std::shared_ptr<const NewClassicReplaySaveArt>
 	new_classic_replay_save_art() const noexcept;
 

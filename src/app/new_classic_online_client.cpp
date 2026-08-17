@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <expected>
 #include <filesystem>
+#include <fstream>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
@@ -290,6 +292,53 @@ void skip_space(std::string_view input, std::size_t &at) noexcept
 		*metadata.final_winner == 1;
 }
 
+[[nodiscard]] std::expected<void, NewClassicOnlineClientError>
+validate_replay_payload(
+	std::span<const std::byte> bytes,
+	const NewClassicOnlineReplayRecord &record,
+	std::uint16_t status = 0U
+)
+{
+	if(bytes.size() != record.payload_bytes) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::replay_metadata, status
+		));
+	}
+	const auto digest = app_sha256(bytes);
+	if(!std::ranges::equal(digest, record.replay_id.bytes)) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::replay_digest, status
+		));
+	}
+	auto parsed = formats::parse_v13_replay(bytes);
+	if(!parsed) {
+		auto result = client_error(
+			NewClassicOnlineClientErrorCode::replay_format, status
+		);
+		result.replay_format = parsed.error();
+		return std::unexpected(std::move(result));
+	}
+	if(!replay_metadata_matches(*parsed, record)) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::replay_metadata, status
+		));
+	}
+	return {};
+}
+
+[[nodiscard]] NewClassicOnlineClientError replay_file_error(
+	ReplaySlotStoreErrorCode code,
+	std::error_code system = {}
+)
+{
+	auto result = client_error(NewClassicOnlineClientErrorCode::replay_store);
+	result.replay_store = ReplaySlotStoreError{
+		.code = code,
+		.system = system,
+	};
+	return result;
+}
+
 } // namespace
 
 std::filesystem::path new_classic_online_board_cache_path(
@@ -539,29 +588,10 @@ download_new_classic_online_replay(
 			NewClassicOnlineClientErrorCode::content_type, response->status
 		));
 	}
-	if(response->body.size() != record.payload_bytes) {
-		return std::unexpected(client_error(
-			NewClassicOnlineClientErrorCode::replay_metadata, response->status
-		));
-	}
-	const auto digest = app_sha256(response->body);
-	if(!std::ranges::equal(digest, record.replay_id.bytes)) {
-		return std::unexpected(client_error(
-			NewClassicOnlineClientErrorCode::replay_digest, response->status
-		));
-	}
-	auto parsed = formats::parse_v13_replay(response->body);
-	if(!parsed) {
-		auto result = client_error(
-			NewClassicOnlineClientErrorCode::replay_format, response->status
-		);
-		result.replay_format = parsed.error();
-		return std::unexpected(std::move(result));
-	}
-	if(!replay_metadata_matches(*parsed, record)) {
-		return std::unexpected(client_error(
-			NewClassicOnlineClientErrorCode::replay_metadata, response->status
-		));
+	if(auto validated = validate_replay_payload(
+		response->body, record, response->status
+	); !validated) {
+		return std::unexpected(std::move(validated.error()));
 	}
 	const auto path = replay_root / "ONLINE" /
 		new_classic_online_replay_filename(record.replay_id);
@@ -571,6 +601,70 @@ download_new_classic_online_replay(
 		return std::unexpected(std::move(result));
 	}
 	return path;
+}
+
+std::expected<bool, NewClassicOnlineClientError>
+probe_new_classic_online_replay_download(
+	const NewClassicOnlineReplayRecord &record,
+	const std::filesystem::path &replay_root
+)
+{
+	if(replay_root.empty() || record.payload_bytes == 0U ||
+		record.payload_bytes > new_classic_online_replay_max_bytes) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::invalid_document
+		));
+	}
+	const auto path = replay_root / "ONLINE" /
+		new_classic_online_replay_filename(record.replay_id);
+	std::error_code system{};
+	const auto status = std::filesystem::status(path, system);
+	if(system == std::errc::no_such_file_or_directory) {
+		return false;
+	}
+	if(system) {
+		return std::unexpected(replay_file_error(
+			ReplaySlotStoreErrorCode::source_status, system
+		));
+	}
+	if(!std::filesystem::exists(status)) {
+		return false;
+	}
+	if(!std::filesystem::is_regular_file(status)) {
+		return std::unexpected(replay_file_error(
+			ReplaySlotStoreErrorCode::source_not_regular
+		));
+	}
+	const auto size = std::filesystem::file_size(path, system);
+	if(system || size != record.payload_bytes ||
+		size > new_classic_online_replay_max_bytes ||
+		size > static_cast<std::uintmax_t>(
+			std::numeric_limits<std::streamsize>::max()
+		)) {
+		return std::unexpected(replay_file_error(
+			ReplaySlotStoreErrorCode::source_size, system
+		));
+	}
+	std::ifstream input(path, std::ios::binary);
+	if(!input) {
+		return std::unexpected(replay_file_error(
+			ReplaySlotStoreErrorCode::source_open
+		));
+	}
+	std::vector<std::byte> bytes(static_cast<std::size_t>(size));
+	input.read(
+		reinterpret_cast<char *>(bytes.data()),
+		static_cast<std::streamsize>(bytes.size())
+	);
+	if(!input || input.peek() != std::ifstream::traits_type::eof()) {
+		return std::unexpected(replay_file_error(
+			ReplaySlotStoreErrorCode::source_read
+		));
+	}
+	if(auto validated = validate_replay_payload(bytes, record); !validated) {
+		return std::unexpected(std::move(validated.error()));
+	}
+	return true;
 }
 
 } // namespace th03::app

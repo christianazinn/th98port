@@ -394,6 +394,14 @@ void test_download()
 	expect(fake.target == "/api/th03/replays/" +
 		new_classic_online_replay_filename(record.replay_id).substr(0U, 64U),
 		"download target is derived only from the cached replay digest");
+	auto probed = probe_new_classic_online_replay_download(record, root.path());
+	expect(probed && *probed,
+		"a persisted download is revalidated and rediscovered after restart");
+	auto absent = record;
+	absent.replay_id.bytes[0U] ^= 0xFFU;
+	probed = probe_new_classic_online_replay_download(absent, root.path());
+	expect(probed && !*probed,
+		"a missing content-addressed download is an ordinary cache miss");
 
 	auto tampered = *encoded;
 	tampered.back() ^= std::byte{1U};
@@ -412,6 +420,10 @@ void test_download()
 	expect(!rejected && rejected.error().code ==
 		NewClassicOnlineClientErrorCode::replay_metadata,
 		"cached leaderboard metadata must agree with downloaded V13 metadata");
+	probed = probe_new_classic_online_replay_download(record, root.path());
+	expect(!probed && probed.error().code ==
+		NewClassicOnlineClientErrorCode::replay_metadata,
+		"restart probe rejects a local file under mismatched cached metadata");
 }
 
 } // namespace

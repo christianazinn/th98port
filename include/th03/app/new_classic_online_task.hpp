@@ -29,6 +29,12 @@ struct NewClassicOnlineBoardRefreshResult final {
 	std::optional<NewClassicOnlineClientError> error{};
 };
 
+struct NewClassicOnlineReplayDownloadResult final {
+	NewClassicOnlineReplayId replay_id{};
+	std::optional<std::filesystem::path> path{};
+	std::optional<NewClassicOnlineClientError> error{};
+};
+
 // Owns one sequential background worker. The supplied transport context must
 // outlive this object. Destruction requests cancellation between requests and
 // joins the worker; the platform transport's bounded request deadline owns the
@@ -76,6 +82,54 @@ private:
 > start_new_classic_online_board_refresh(
 	std::vector<NewClassicOnlineCategory> categories,
 	std::filesystem::path cache_root,
+	NewClassicOnlineTransport transport
+);
+
+// One host-owned replay download. Like the refresh task, the transport context
+// must outlive this object and owns the bounded request deadline in flight.
+class NewClassicOnlineReplayDownloadTask final {
+public:
+	NewClassicOnlineReplayDownloadTask(
+		NewClassicOnlineReplayDownloadTask &&
+	) noexcept;
+	NewClassicOnlineReplayDownloadTask &operator=(
+		NewClassicOnlineReplayDownloadTask &&
+	) noexcept;
+	~NewClassicOnlineReplayDownloadTask();
+
+	NewClassicOnlineReplayDownloadTask(
+		const NewClassicOnlineReplayDownloadTask &
+	) = delete;
+	NewClassicOnlineReplayDownloadTask &operator=(
+		const NewClassicOnlineReplayDownloadTask &
+	) = delete;
+
+	[[nodiscard]] std::optional<NewClassicOnlineReplayDownloadResult>
+	take_completed();
+	[[nodiscard]] bool finished() const noexcept;
+	[[nodiscard]] bool worker_failed() const noexcept;
+
+private:
+	struct Impl;
+	explicit NewClassicOnlineReplayDownloadTask(Impl *impl) noexcept;
+	Impl *impl_ = nullptr;
+
+	friend std::expected<
+		NewClassicOnlineReplayDownloadTask,
+		NewClassicOnlineTaskError
+	> start_new_classic_online_replay_download(
+		NewClassicOnlineReplayRecord,
+		std::filesystem::path,
+		NewClassicOnlineTransport
+	);
+};
+
+[[nodiscard]] std::expected<
+	NewClassicOnlineReplayDownloadTask,
+	NewClassicOnlineTaskError
+> start_new_classic_online_replay_download(
+	NewClassicOnlineReplayRecord record,
+	std::filesystem::path replay_root,
 	NewClassicOnlineTransport transport
 );
 
