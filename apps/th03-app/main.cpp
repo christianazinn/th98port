@@ -32,6 +32,7 @@
 #include "th03/app/main_direct_vs_runner.hpp"
 #include "th03/app/new_classic_netplay_datagram.hpp"
 #include "th03/app/new_classic_netplay_main_session.hpp"
+#include "th03/app/new_classic_netplay_post_match.hpp"
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/new_classic_frontend.hpp"
 #include "th03/app/new_classic_language.hpp"
@@ -1407,10 +1408,12 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	using th03::app::NewClassicNetplayDatagramType;
 	using th03::app::NewClassicNetplayMainSessionStatus;
 	using th03::app::NewClassicNetplayPlayer;
+	using th03::app::NewClassicNetplayPostMatchStatus;
 	parsed.launch.process.classic_audio_lifecycle = true;
 	const auto contract_hash = netplay_contract_hash(parsed);
 	const auto mode = parsed.netplay_mode;
 	const auto audio_data_root = parsed.launch.content.data_root;
+	const auto post_match_content = parsed.launch.content;
 	const auto local_player = mode == DirectVsNetplayMode::host ?
 		NewClassicNetplayPlayer::player_one :
 		NewClassicNetplayPlayer::player_two;
@@ -1422,6 +1425,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	if(!process) {
 		return fail_content(process.error());
 	}
+	const auto process_start = (*process)->round_start_observation().start;
 	auto session = th03::app::NewClassicNetplayMainSession::create(
 		local_player, std::move(*process)
 	);
@@ -1489,6 +1493,44 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	}
 	bool audio_started = false;
 	std::vector<th03::audio::PmdCanonicalStereoSample> startup_silence{};
+	const auto advance_audio_tick = [&]() -> std::expected<void, int> {
+		auto tick = audio_session->advance_tick();
+		if(!tick) {
+			return std::unexpected(fail(
+				"netplay-audio-tick", tick.error()
+			));
+		}
+		if(!audio_device) {
+			return {};
+		}
+		if(!audio_started && !tick->canonical_frames.empty() &&
+			tick->canonical_frames.size() <=
+				audio_device->maximum_queued_frames() / 3U) {
+			startup_silence.assign(
+				tick->canonical_frames.size() * 2U, {}
+			);
+			const auto prefilled = audio_device->submit(startup_silence);
+			if(!prefilled) {
+				warn_audio_device("netplay-audio-prefill", prefilled.error());
+				audio_device.reset();
+				return {};
+			}
+		}
+		const auto submitted = audio_device->submit(tick->canonical_frames);
+		if(!submitted) {
+			warn_audio_device("netplay-audio-submit", submitted.error());
+			audio_device.reset();
+		} else if(!audio_started && !tick->canonical_frames.empty()) {
+			const auto resumed = audio_device->resume();
+			if(!resumed) {
+				warn_audio_device("netplay-audio-resume", resumed.error());
+				audio_device.reset();
+			} else {
+				audio_started = true;
+			}
+		}
+		return {};
+	};
 	const auto publish_confirmed_audio = [&]() -> std::expected<void, int> {
 		for(;;) {
 			auto confirmed = (*session)->take_confirmed_audio_frame();
@@ -1513,48 +1555,8 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			}
 			for(std::uint8_t vsync = 0U;
 				vsync < (**confirmed).source_vsyncs; ++vsync) {
-				auto tick = audio_session->advance_tick();
-				if(!tick) {
-					return std::unexpected(fail(
-						"netplay-audio-tick", tick.error()
-					));
-				}
-				if(!audio_device) {
-					continue;
-				}
-				if(!audio_started && !tick->canonical_frames.empty() &&
-					tick->canonical_frames.size() <=
-						audio_device->maximum_queued_frames() / 3U) {
-					startup_silence.assign(
-						tick->canonical_frames.size() * 2U, {}
-					);
-					const auto prefilled = audio_device->submit(startup_silence);
-					if(!prefilled) {
-						warn_audio_device(
-							"netplay-audio-prefill", prefilled.error()
-						);
-						audio_device.reset();
-						continue;
-					}
-				}
-				const auto submitted = audio_device->submit(
-					tick->canonical_frames
-				);
-				if(!submitted) {
-					warn_audio_device(
-						"netplay-audio-submit", submitted.error()
-					);
-					audio_device.reset();
-				} else if(!audio_started && !tick->canonical_frames.empty()) {
-					const auto resumed = audio_device->resume();
-					if(!resumed) {
-						warn_audio_device(
-							"netplay-audio-resume", resumed.error()
-						);
-						audio_device.reset();
-					} else {
-						audio_started = true;
-					}
+				if(const auto advanced = advance_audio_tick(); !advanced) {
+					return std::unexpected(advanced.error());
 				}
 			}
 		}
@@ -1607,6 +1609,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	std::optional<ConfirmedSimulationDigest> verified_runtime_digest{};
 	std::vector<th03::app::NewClassicNetplayConfirmedInputFrame>
 		confirmed_transcript{};
+	std::unique_ptr<th03::app::NewClassicNetplayPostMatch> post_match{};
 	bool runtime_digest_peer_ack = false;
 	bool presentation_pending = false;
 	std::uint64_t local_frames = 0U;
@@ -1756,6 +1759,20 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			confirmed_transcript.push_back(std::move(**frame));
 		}
 	};
+	const auto drain_post_match_audio = [&]() -> std::expected<void, int> {
+		while(post_match) {
+			const auto command = post_match->take_audio_command();
+			if(!command) {
+				break;
+			}
+			if(auto applied = audio_session->apply(*command); !applied) {
+				return std::unexpected(fail(
+					"netplay-post-match-audio", applied.error()
+				));
+			}
+		}
+		return {};
+	};
 
 	const auto submit_input_datagram = [&](const NewClassicNetplayDatagram &packet)
 		-> bool {
@@ -1812,7 +1829,8 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		if(now_ns - start_ns > 30'000'000'000ULL && !established) {
 			return fail_netplay("netplay-handshake", "timeout");
 		}
-		if(established && now_ns - last_receive_ns > 5'000'000'000ULL) {
+		if(established && !post_match &&
+			now_ns - last_receive_ns > 5'000'000'000ULL) {
 			return fail_netplay("netplay-peer", "peer-timeout");
 		}
 
@@ -2186,8 +2204,45 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				}
 			}
 		}
+		if(post_match && post_match->status() ==
+			NewClassicNetplayPostMatchStatus::running) {
+			for(;;) {
+				const auto due = scheduler->pop_due(now_ns);
+				if(!due) {
+					return fail_tick(due.error());
+				}
+				if(!*due) {
+					break;
+				}
+				const bool dismiss_pressed = (**due).input.system != 0U ||
+					(**due).input.p1 != 0U || (**due).input.p2 != 0U;
+				auto advanced = post_match->advance(
+					audio_session->status(), dismiss_pressed,
+					(**due).app_quit_requested
+				);
+				if(!advanced) {
+					return fail("netplay-post-match", advanced.error());
+				}
+				if(const auto drained = drain_post_match_audio(); !drained) {
+					return drained.error();
+				}
+				if(const auto audio = advance_audio_tick(); !audio) {
+					return audio.error();
+				}
+				presentation_pending = presentation_pending ||
+					advanced->surface_changed;
+				if(advanced->status ==
+					NewClassicNetplayPostMatchStatus::quit_requested) {
+					return leave_preview();
+				}
+				if(advanced->status ==
+					NewClassicNetplayPostMatchStatus::complete) {
+					break;
+				}
+			}
+		}
 
-		if(established && newest_local_frame && peer &&
+		if(established && !post_match && newest_local_frame && peer &&
 			now_ns - last_send_ns >= 50'000'000U) {
 			if(!send_netplay_input_history(
 				**socket, *peer, **session, local_player, session_id,
@@ -2222,23 +2277,65 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		if(const auto published = publish_confirmed_audio(); !published) {
 			return published.error();
 		}
+		const bool runtime_proof_pending = local_runtime_digest ||
+			remote_runtime_digest || remote_runtime_digest_ack ||
+			(verified_runtime_digest && !runtime_digest_peer_ack);
+		if((*session)->status() ==
+				NewClassicNetplayMainSessionStatus::complete &&
+			!runtime_proof_pending && !post_match) {
+			if(!(*session)->transition()) {
+				return fail_netplay(
+					"netplay-post-match", "transition-missing"
+				);
+			}
+			auto created = th03::app::NewClassicNetplayPostMatch::create({
+				.content = post_match_content,
+				.process_start = process_start,
+				.terminal = (*session)->process().canonical_state(),
+				.transition = *(*session)->transition(),
+			});
+			if(!created) {
+				return fail("netplay-post-match-create", created.error());
+			}
+			post_match = std::move(*created);
+			if(const auto drained = drain_post_match_audio(); !drained) {
+				return drained.error();
+			}
+			const auto resumed_at = th03::platform::sdl_ticks_now_ns();
+			if(auto rebased = scheduler->rebase_after_modal(resumed_at);
+				!rebased) {
+				return fail_tick(rebased.error());
+			}
+			if(auto reset = mapper->reset_after_modal(*scheduler, resumed_at);
+				!reset) {
+				return fail("netplay-post-match-rebase", reset.error());
+			}
+			retry_blocked_event = false;
+			presentation_pending = true;
+			std::cout << "status=post-match\n";
+			std::cout.flush();
+		}
 
 		if(presentation_pending) {
-			surface = (*session)->compose_shown_surface(pixel_span);
-			if(!surface) {
-				return fail("compose", surface.error());
+			if(post_match) {
+				auto composed = post_match->compose_shown_surface(pixel_span);
+				if(!composed) {
+					return fail("netplay-post-match-compose", composed.error());
+				}
+				surface = *composed;
+			} else {
+				surface = (*session)->compose_shown_surface(pixel_span);
+				if(!surface) {
+					return fail("compose", surface.error());
+				}
 			}
 			if(const auto presented = (*platform)->present(*surface); !presented) {
 				return fail("present", presented.error());
 			}
 			presentation_pending = false;
 		}
-		const bool runtime_proof_pending = local_runtime_digest ||
-			remote_runtime_digest || remote_runtime_digest_ack ||
-			(verified_runtime_digest && !runtime_digest_peer_ack);
-		if((*session)->status() ==
-			NewClassicNetplayMainSessionStatus::complete &&
-			!runtime_proof_pending) {
+		if(post_match && post_match->status() ==
+			NewClassicNetplayPostMatchStatus::complete) {
 			std::cout << "status=match-complete\nframes=" <<
 				(*session)->confirmed_frame_count() << "\nreplay-frames=" <<
 				confirmed_transcript.size() << '\n';

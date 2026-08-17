@@ -1,4 +1,5 @@
 #include "../src/app/classic_mainl_win_internal.hpp"
+#include "../src/app/new_classic_netplay_post_match_internal.hpp"
 
 #include <algorithm>
 #include <array>
@@ -34,6 +35,10 @@ using th03::app::MainCharacter;
 using th03::app::MainPaletteVariant;
 using th03::app::MainResourceKey;
 using th03::app::MainResourceRole;
+using th03::app::NewClassicNetplayPostMatchErrorCode;
+using th03::app::NewClassicNetplayPostMatchRequest;
+using th03::app::NewClassicNetplayPostMatchStatus;
+using th03::app::NewClassicNetplayPostMatchTestAccess;
 using th03::app::ResourceBytes;
 using th03::present::AnkGlyph;
 using th03::present::AnkGlyphProvider;
@@ -131,7 +136,7 @@ public:
 		std::uint8_t
 	) const override
 	{
-		return std::nullopt;
+		return AnkGlyph{};
 	}
 
 	[[nodiscard]] std::optional<JisGlyph> jis_glyph(
@@ -549,6 +554,113 @@ void test_all_winners_and_message_blocks()
 	}
 }
 
+NewClassicNetplayPostMatchRequest post_match_request(std::int8_t winner)
+{
+	NewClassicNetplayPostMatchRequest request{};
+	request.process_start.game_mode = th03::game_mode::vs_1p_2p;
+	request.process_start.paletted_character = {1, 18};
+	request.terminal.game_mode = th03::game_mode::vs_1p_2p;
+	request.terminal.route = 2U;
+	request.terminal.winner = winner;
+	request.transition.action = th03::SessionAction::exit_to_operator;
+	request.transition.resident = request.process_start;
+	return request;
+}
+
+void test_netplay_post_match_owner()
+{
+	SyntheticFont font;
+	auto request = post_match_request(1);
+	auto resources = resources_for(18);
+	auto owner = NewClassicNetplayPostMatchTestAccess::create(
+		request, resources, font
+	);
+	expect(owner.has_value(),
+		"confirmed P2 match constructs the exact winner-specific MAINL owner");
+	if(!owner) {
+		return;
+	}
+	expect((*owner)->take_audio_command() == ClassicAudioCommand{
+		.type = ClassicAudioCommandType::load_song,
+		.cue = ClassicMusicCue::winner,
+	}, "netplay post-match loads the ordinary winner song");
+	expect((*owner)->take_audio_command() == ClassicAudioCommand{
+		.type = ClassicAudioCommandType::play_song,
+		.cue = ClassicMusicCue::winner,
+	}, "netplay post-match plays the ordinary winner song");
+	expect(!(*owner)->take_audio_command(),
+		"netplay post-match startup audio drains exactly");
+
+	std::vector<th03::present::ComposedPixel> pixels(
+		th03::present::graphics_page_pixels
+	);
+	auto composed = (*owner)->compose_shown_surface(std::span<
+		th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	>(pixels.data(), pixels.size()));
+	expect(composed.has_value(),
+		"netplay post-match publishes the source winner surface");
+
+	for(std::size_t frame = 0U; frame < 512U; ++frame) {
+		auto advanced = (*owner)->advance({}, false);
+		expect(advanced.has_value(),
+			"silent netplay post-match reaches its dismissal poll");
+		if(!advanced) {
+			return;
+		}
+	}
+	expect((*owner)->status() == NewClassicNetplayPostMatchStatus::running,
+		"winner scene waits indefinitely for a fresh dismissal");
+	bool completed = false;
+	bool stopped_song = false;
+	for(std::size_t frame = 0U; frame < 64U; ++frame) {
+		auto advanced = (*owner)->advance({}, true);
+		expect(advanced.has_value(),
+			"winner dismissal owns the complete final fade");
+		if(!advanced) {
+			return;
+		}
+		while(const auto command = (*owner)->take_audio_command()) {
+			stopped_song = stopped_song || *command == ClassicAudioCommand{
+				.type = ClassicAudioCommandType::stop_song,
+				.cue = ClassicMusicCue::winner,
+			};
+		}
+		if(advanced->status == NewClassicNetplayPostMatchStatus::complete) {
+			completed = true;
+			break;
+		}
+	}
+	expect(completed,
+		"confirmed netplay post-match completes after the source black-out");
+	expect(stopped_song,
+		"netplay post-match stops the winner song at its source boundary");
+	const auto after_complete = (*owner)->advance({}, false);
+	expect(!after_complete && after_complete.error().code ==
+		NewClassicNetplayPostMatchErrorCode::not_running,
+		"completed netplay post-match cannot advance twice");
+
+	auto quit_owner = NewClassicNetplayPostMatchTestAccess::create(
+		post_match_request(0), resources_for(1), font
+	);
+	expect(quit_owner.has_value(), "P1 winner owner constructs independently");
+	if(quit_owner) {
+		const auto quit = (*quit_owner)->advance({}, false, true);
+		expect(quit && quit->status ==
+			NewClassicNetplayPostMatchStatus::quit_requested,
+			"application quit bypasses the local winner timeline");
+	}
+
+	auto invalid = post_match_request(0);
+	invalid.terminal.route = 0U;
+	auto rejected = NewClassicNetplayPostMatchTestAccess::create(
+		invalid, resources_for(1), font
+	);
+	expect(!rejected && rejected.error().code ==
+		NewClassicNetplayPostMatchErrorCode::invalid_request,
+		"nonterminal netplay transition cannot enter MAINL win");
+}
+
 void local_original_gate(const std::filesystem::path &content_root)
 {
 	SyntheticFont font;
@@ -587,6 +699,7 @@ int main(int argc, char **argv)
 	test_active_audio_preload_and_completion();
 	test_silent_fallback_and_atomicity();
 	test_all_winners_and_message_blocks();
+	test_netplay_post_match_owner();
 	if(argc == 2) {
 		local_original_gate(argv[1]);
 	} else if(argc != 1) {

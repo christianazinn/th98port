@@ -745,7 +745,9 @@ timeout. The following product transport remains open:
 2. Add negotiated pause, forfeit, disconnect, desync UI, and post-match report.
 3. Feed only confirmed history into the in-memory V13 recorder and existing save
    UI. The corrected contiguous-confirmed transcript and product-memory owner
-   are implemented; V13 finalization waits for the full post-match MAINL owner.
+   are implemented, and a confirmed terminal now runs the complete ordinary VS
+   winner MAINL owner. The remaining boundary is translating the transcript's
+   confirmed round/process facts into the existing recorder and save UI.
 4. Keep every Classic construction and hash unchanged.
 
 ### N4: Cloudflare private-room beta
