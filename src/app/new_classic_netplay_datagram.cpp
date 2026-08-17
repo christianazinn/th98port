@@ -197,6 +197,20 @@ validate(const NewClassicNetplayDatagram &datagram) noexcept
 
 } // namespace
 
+NewClassicNetplayProofOrder new_classic_netplay_proof_order(
+	std::uint64_t verified_frame,
+	std::uint64_t received_frame
+) noexcept
+{
+	if(received_frame < verified_frame) {
+		return NewClassicNetplayProofOrder::stale;
+	}
+	if(received_frame == verified_frame) {
+		return NewClassicNetplayProofOrder::current;
+	}
+	return NewClassicNetplayProofOrder::future;
+}
+
 std::expected<
 	std::array<std::byte, new_classic_netplay_datagram_bytes>,
 	NewClassicNetplayDatagramError

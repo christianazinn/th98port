@@ -27,6 +27,19 @@ enum class NewClassicNetplayDatagramType : std::uint8_t {
 	resume_ready = 8U,
 };
 
+enum class NewClassicNetplayProofOrder : std::uint8_t {
+	stale,
+	current,
+	future,
+};
+
+// Classifies one runtime proof against the newest completely verified proof.
+// Both digest and acknowledgement receive paths must ignore stale UDP copies.
+[[nodiscard]] NewClassicNetplayProofOrder new_classic_netplay_proof_order(
+	std::uint64_t verified_frame,
+	std::uint64_t received_frame
+) noexcept;
+
 struct NewClassicNetplayDatagram final {
 	NewClassicNetplayDatagramType type =
 		NewClassicNetplayDatagramType::hello;

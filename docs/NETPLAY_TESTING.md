@@ -46,6 +46,12 @@ tailscale ip -4
   --p1 reimu --rank 1 --seed 34
 ```
 
+The host window appears immediately and waits without a pre-peer deadline, so
+it is safe to start the laptop afterward. Closing the window before a peer
+joins is a clean cancellation. Once a peer participates, an incomplete lobby
+exchange still fails after 30 seconds as `peer-handshake-timeout`; a joiner
+pointed at the wrong address has the same bounded deadline.
+
 Allow `PoDD-Port-Test.exe` through Windows Firewall for the Tailscale/private
 network if Windows prompts. The one-file launcher supplies its embedded
 authenticated `--data`, `--main`, and `--font` inputs to the native app.
@@ -123,6 +129,10 @@ frames, prediction stalls, reliable waits, maximum zero-based prediction
 depth, and missed source deadlines. These values never enter simulation, peer
 agreement, or V13 replay data. Preserve both terminals' output when reporting
 a test so asymmetric transport behavior remains visible.
+Delayed or duplicated UDP runtime-proof packets and acknowledgements older
+than the newest verified proof are ignored; current and future identities
+remain strict. A `peer-timeout` immediately after the other process reports a
+proof failure is a cascading symptom, not a second deterministic divergence.
 An intentional local exit prints `status=left`; the other peer prints
 `status=peer-left` rather than waiting for the crash/connectivity timeout.
 The preview feeds its corrected contiguous-confirmed input stream directly into

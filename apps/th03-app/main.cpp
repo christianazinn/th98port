@@ -23,6 +23,7 @@
 
 #include <SDL3/SDL_timer.h>
 #include <SDL3/SDL_keyboard.h>
+#include <SDL3/SDL_events.h>
 
 #include "default_bindings.hpp"
 
@@ -1538,9 +1539,25 @@ struct DirectNetplayLobbyResult final {
 	th03::app::NewClassicNetplayMatchContract contract{};
 };
 
+[[nodiscard]] bool direct_netplay_lobby_quit_requested(
+	SDL_WindowID main_window
+) noexcept
+{
+	SDL_Event event{};
+	while(SDL_PollEvent(&event)) {
+		if(event.type == SDL_EVENT_QUIT ||
+			(event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
+			 event.window.windowID == main_window)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 [[nodiscard]] std::expected<DirectNetplayLobbyResult, int>
 negotiate_direct_netplay_lobby(
-	const th03::app::DirectVsCliRequest &request
+	const th03::app::DirectVsCliRequest &request,
+	SDL_WindowID main_window
 )
 {
 	using th03::app::DirectVsNetplayMode;
@@ -1594,14 +1611,26 @@ negotiate_direct_netplay_lobby(
 	std::cout.flush();
 
 	const auto started = std::chrono::steady_clock::now();
+	auto timeout_anchor = started;
 	auto last_send = started - std::chrono::milliseconds(100);
 	std::array<std::byte, th03::app::new_classic_netplay_datagram_bytes>
 		receive_buffer{};
 	while(lobby.status() != NewClassicNetplayLobbyStatus::ready) {
 		const auto now = std::chrono::steady_clock::now();
-		if(now - started > std::chrono::seconds(30)) {
+		if(direct_netplay_lobby_quit_requested(main_window)) {
+			std::cout << "status=left\n";
+			return std::unexpected(0);
+		}
+		const auto elapsed_ms = static_cast<std::uint64_t>(
+			std::chrono::duration_cast<std::chrono::milliseconds>(
+				now - timeout_anchor
+			).count()
+		);
+		if(th03::app::new_classic_netplay_lobby_wait_expired(
+			lobby.role(), peer.has_value(), elapsed_ms
+		)) {
 			return std::unexpected(fail_netplay(
-				"netplay-lobby", "timeout"
+				"netplay-lobby", "peer-handshake-timeout"
 			));
 		}
 		for(;;) {
@@ -1636,6 +1665,7 @@ negotiate_direct_netplay_lobby(
 			}
 			if(!peer) {
 				peer = (*received)->sender;
+				timeout_anchor = now;
 			}
 			if(const auto outbound = lobby.outbound(); outbound &&
 				!send_netplay_lobby_datagram(**socket, *peer, *outbound)) {
@@ -1720,7 +1750,13 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	const auto remote_player = mode == DirectVsNetplayMode::host ?
 		NewClassicNetplayPlayer::player_two :
 		NewClassicNetplayPlayer::player_one;
-	auto negotiated = negotiate_direct_netplay_lobby(parsed);
+	auto platform = th03::platform::SdlPlatform::create(platform_config());
+	if(!platform) {
+		return fail("platform-create", platform.error());
+	}
+	auto negotiated = negotiate_direct_netplay_lobby(
+		parsed, static_cast<SDL_WindowID>((*platform)->window_id())
+	);
 	if(!negotiated) {
 		return negotiated.error();
 	}
@@ -1779,10 +1815,6 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		if(auto applied = audio_session->apply(*command); !applied) {
 			return fail("netplay-audio-command", applied.error());
 		}
-	}
-	auto platform = th03::platform::SdlPlatform::create(platform_config());
-	if(!platform) {
-		return fail("platform-create", platform.error());
 	}
 	auto mapper = th03::platform::SdlInputMapper::create(
 		th03::app::detail::classic_direct_vs_bindings(),
@@ -2505,6 +2537,12 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 					.boundary = packet->boundary_proof,
 					.digest = packet->simulation_digest,
 				};
+				if(verified_runtime_digest &&
+					th03::app::new_classic_netplay_proof_order(
+						verified_runtime_digest->frame, received_ack.frame
+					) == th03::app::NewClassicNetplayProofOrder::stale) {
+					continue;
+				}
 				if(verified_runtime_digest &&
 					received_ack.frame == verified_runtime_digest->frame) {
 					if(!same_proof(received_ack, *verified_runtime_digest)) {

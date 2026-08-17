@@ -118,6 +118,13 @@ void test_validation_and_composition()
 void test_datagram_contract()
 {
 	using namespace th03::app;
+	expect(new_classic_netplay_proof_order(240U, 120U) ==
+			NewClassicNetplayProofOrder::stale &&
+		new_classic_netplay_proof_order(240U, 240U) ==
+			NewClassicNetplayProofOrder::current &&
+		new_classic_netplay_proof_order(240U, 360U) ==
+			NewClassicNetplayProofOrder::future,
+		"runtime digests and ACKs share one stale/current/future ordering");
 	NewClassicNetplayDatagram input{
 		.type = NewClassicNetplayDatagramType::input,
 		.sender = NewClassicNetplayPlayer::player_two,
@@ -508,6 +515,19 @@ void test_match_contract()
 void test_lobby_negotiation()
 {
 	using namespace th03::app;
+	expect(!new_classic_netplay_lobby_wait_expired(
+			NewClassicNetplayLobbyRole::host, false, ~std::uint64_t{0U}
+		) && !new_classic_netplay_lobby_wait_expired(
+			NewClassicNetplayLobbyRole::join, true,
+			new_classic_netplay_lobby_timeout_ms
+		) && new_classic_netplay_lobby_wait_expired(
+			NewClassicNetplayLobbyRole::join, true,
+			new_classic_netplay_lobby_timeout_ms + 1U
+		) && new_classic_netplay_lobby_wait_expired(
+			NewClassicNetplayLobbyRole::host, true,
+			new_classic_netplay_lobby_timeout_ms + 1U
+		),
+		"host waits indefinitely before a peer but all started exchanges time out");
 	constexpr NewClassicNetplayHostLock host_lock{
 		.player_one = {.character = 1U, .palette = 1U},
 		.rank = 1U,

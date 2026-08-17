@@ -14,6 +14,7 @@ namespace th03::app {
 
 inline constexpr std::uint8_t new_classic_netplay_lobby_version = 1U;
 inline constexpr std::size_t new_classic_netplay_lobby_bytes = 64U;
+inline constexpr std::uint64_t new_classic_netplay_lobby_timeout_ms = 30'000U;
 
 enum class NewClassicNetplayLobbyDatagramType : std::uint8_t {
 	join_request = 1U,
@@ -71,6 +72,15 @@ enum class NewClassicNetplayLobbyStatus : std::uint8_t {
 	waiting,
 	ready,
 };
+
+// A host has no deadline before selecting its first valid peer. A joiner, or
+// a host completing an already-started exchange, retains a bounded failure
+// path. The caller owns the monotonic elapsed-time anchor.
+[[nodiscard]] bool new_classic_netplay_lobby_wait_expired(
+	NewClassicNetplayLobbyRole role,
+	bool peer_selected,
+	std::uint64_t elapsed_ms
+) noexcept;
 
 enum class NewClassicNetplayLobbyErrorCode : std::uint8_t {
 	invalid_host_lock,

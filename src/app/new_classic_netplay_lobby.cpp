@@ -192,6 +192,16 @@ validate(const NewClassicNetplayLobbyDatagram &datagram) noexcept
 
 } // namespace
 
+bool new_classic_netplay_lobby_wait_expired(
+	NewClassicNetplayLobbyRole role,
+	bool peer_selected,
+	std::uint64_t elapsed_ms
+) noexcept
+{
+	return (role == NewClassicNetplayLobbyRole::join || peer_selected) &&
+		elapsed_ms > new_classic_netplay_lobby_timeout_ms;
+}
+
 std::expected<
 	std::array<std::byte, new_classic_netplay_lobby_bytes>,
 	NewClassicNetplayLobbyDatagramError
