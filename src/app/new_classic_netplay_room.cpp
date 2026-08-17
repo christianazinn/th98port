@@ -1,9 +1,11 @@
 #include "th03/app/new_classic_netplay_room.hpp"
 
+#include <algorithm>
 #include <array>
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string_view>
 #include <system_error>
 #include <utility>
@@ -23,6 +25,23 @@ constexpr present::Index4 selected_color = 12U;
 constexpr present::Index4 normal_color = 15U;
 constexpr present::Index4 detail_color = 13U;
 constexpr std::size_t endpoint_limit = 47U;
+constexpr std::array character_messages{
+	NewClassicMessageId::replay_character_reimu,
+	NewClassicMessageId::replay_character_mima,
+	NewClassicMessageId::replay_character_marisa,
+	NewClassicMessageId::replay_character_ellen,
+	NewClassicMessageId::replay_character_kotohime,
+	NewClassicMessageId::replay_character_kana,
+	NewClassicMessageId::replay_character_rikako,
+	NewClassicMessageId::replay_character_chiyuri,
+	NewClassicMessageId::replay_character_yumemi,
+};
+constexpr std::array rank_messages{
+	NewClassicMessageId::value_easy,
+	NewClassicMessageId::value_normal,
+	NewClassicMessageId::value_hard,
+	NewClassicMessageId::value_lunatic,
+};
 
 [[nodiscard]] bool raw_any(NewClassicUiInput input) noexcept
 {
@@ -58,12 +77,14 @@ constexpr std::size_t endpoint_limit = 47U;
 
 NewClassicNetplayRoom::NewClassicNetplayRoom(
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
-	NewClassicLanguageAssetProfile language
+	NewClassicLanguageAssetProfile language,
+	std::uint8_t initial_rank
 ) :
 	patch_assets_(std::move(patch_assets)),
-	language_(language)
+	language_(language),
+	rank_(initial_rank)
 {
-	if(!patch_assets_ || !patch_surface_.reset(
+	if(rank_ > 3U || !patch_assets_ || !patch_surface_.reset(
 		patch_assets_->replay_list_background
 	) || !draw()) {
 		status_ = NewClassicNetplayRoomStatus::back;
@@ -103,6 +124,40 @@ bool NewClassicNetplayRoom::draw() noexcept
 			)) {
 				return false;
 			}
+		}
+	} else if(screen_ == Screen::player_setup) {
+		const auto setup_title = pending_mode_ ==
+			NewClassicNetplayRoomLaunchMode::host ?
+				NewClassicMessageId::netplay_room_player_one :
+				NewClassicMessageId::netplay_room_player_two;
+		if(!font.put_centered(raster, center_x, 96,
+			messages.text(setup_title), selected_color) ||
+			!font.put(raster, label_left, 136,
+				messages.text(NewClassicMessageId::netplay_room_character),
+				selection_ == 0U ? selected_color : normal_color) ||
+			!font.put_right(raster, value_right, 136,
+				messages.text(character_messages[character_ - 1U]), detail_color) ||
+			!font.put(raster, label_left, 168,
+				messages.text(NewClassicMessageId::netplay_room_palette),
+				selection_ == 1U ? selected_color : normal_color) ||
+			!font.put_right(raster, value_right, 168,
+				messages.text(palette_ == 1U ?
+					NewClassicMessageId::netplay_room_palette_first :
+					NewClassicMessageId::netplay_room_palette_second), detail_color) ||
+			!font.put(raster, label_left, 200,
+				messages.text(NewClassicMessageId::option_rank),
+				selection_ == 2U ? selected_color : normal_color) ||
+			!font.put_right(raster, value_right, 200,
+				messages.text(pending_mode_ ==
+					NewClassicNetplayRoomLaunchMode::host ? rank_messages[rank_] :
+					NewClassicMessageId::netplay_room_host_decides), detail_color) ||
+			!font.put_centered(raster, center_x, 248,
+				messages.text(NewClassicMessageId::netplay_room_continue),
+				selection_ == 3U ? selected_color : normal_color) ||
+			!font.put_centered(raster, center_x, 280,
+				messages.text(NewClassicMessageId::netplay_room_return),
+				selection_ == 4U ? selected_color : normal_color)) {
+			return false;
 		}
 	} else if(screen_ == Screen::host_confirmation) {
 		std::array<char, 8U> storage{};
@@ -229,8 +284,8 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 			return {.status = status_};
 		}
 		if(input.ui.cancel) {
-			screen_ = Screen::menu;
-			selection_ = 1U;
+			screen_ = Screen::player_setup;
+			selection_ = 3U;
 			endpoint_invalid_ = false;
 			require_release();
 			const bool drawn = draw();
@@ -242,6 +297,9 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 					.mode = NewClassicNetplayRoomLaunchMode::join,
 					.host_port = host_port_,
 					.join_endpoint = join_endpoint_,
+					.character = character_,
+					.palette = palette_,
+					.rank = rank_,
 				};
 				status_ = NewClassicNetplayRoomStatus::launch_requested;
 				return {.status = status_};
@@ -266,10 +324,14 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 			status_ = NewClassicNetplayRoomStatus::back;
 			return {.status = status_};
 		} else if(input.ui.confirm) {
-			if(selection_ == 0U) {
-				screen_ = Screen::host_confirmation;
-			} else if(selection_ == 1U) {
-				screen_ = Screen::join_entry;
+			if(selection_ == 0U || selection_ == 1U) {
+				pending_mode_ = selection_ == 0U ?
+					NewClassicNetplayRoomLaunchMode::host :
+					NewClassicNetplayRoomLaunchMode::join;
+				palette_ = pending_mode_ ==
+					NewClassicNetplayRoomLaunchMode::host ? 1U : 2U;
+				screen_ = Screen::player_setup;
+				selection_ = 0U;
 			} else if(selection_ == 2U) {
 				screen_ = Screen::settings;
 				selection_ = 0U;
@@ -280,16 +342,70 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 			changed = true;
 			require_release();
 		}
+	} else if(screen_ == Screen::player_setup) {
+		constexpr std::array<std::uint8_t, 5U> host_rows{0U, 1U, 2U, 3U, 4U};
+		constexpr std::array<std::uint8_t, 4U> join_rows{0U, 1U, 3U, 4U};
+		const auto rows = pending_mode_ == NewClassicNetplayRoomLaunchMode::host ?
+			std::span<const std::uint8_t>(host_rows) :
+			std::span<const std::uint8_t>(join_rows);
+		if(input.ui.up || input.ui.down) {
+			const auto found = std::find(rows.begin(), rows.end(), selection_);
+			if(found == rows.end()) {
+				status_ = NewClassicNetplayRoomStatus::back;
+				return {.status = status_};
+			}
+			auto next = static_cast<std::int32_t>(found - rows.begin()) +
+				(input.ui.up ? -1 : 1);
+			if(next < 0) {
+				next = static_cast<std::int32_t>(rows.size() - 1U);
+			} else if(next >= static_cast<std::int32_t>(rows.size())) {
+				next = 0;
+			}
+			selection_ = rows[static_cast<std::size_t>(next)];
+			changed = true;
+			require_release();
+		} else if((input.ui.left || input.ui.right) && selection_ < 3U) {
+			const int direction = input.ui.left ? -1 : 1;
+			if(selection_ == 0U) {
+				character_ = static_cast<std::uint8_t>(
+					((static_cast<int>(character_) - 1 + direction + 9) % 9) + 1
+				);
+			} else if(selection_ == 1U) {
+				palette_ = palette_ == 1U ? 2U : 1U;
+			} else if(pending_mode_ == NewClassicNetplayRoomLaunchMode::host) {
+				rank_ = static_cast<std::uint8_t>(
+					(static_cast<int>(rank_) + direction + 4) % 4
+				);
+			}
+			changed = true;
+			require_release();
+		} else if(input.ui.cancel ||
+			(input.ui.confirm && selection_ == 4U)) {
+			screen_ = Screen::menu;
+			selection_ = pending_mode_ ==
+				NewClassicNetplayRoomLaunchMode::host ? 0U : 1U;
+			changed = true;
+			require_release();
+		} else if(input.ui.confirm && selection_ == 3U) {
+			screen_ = pending_mode_ ==
+				NewClassicNetplayRoomLaunchMode::host ?
+					Screen::host_confirmation : Screen::join_entry;
+			changed = true;
+			require_release();
+		}
 	} else if(screen_ == Screen::host_confirmation) {
 		if(input.ui.cancel) {
-			screen_ = Screen::menu;
-			selection_ = 0U;
+			screen_ = Screen::player_setup;
+			selection_ = 3U;
 			changed = true;
 			require_release();
 		} else if(input.ui.confirm) {
 			launch_ = NewClassicNetplayRoomLaunch{
 				.mode = NewClassicNetplayRoomLaunchMode::host,
 				.host_port = host_port_,
+				.character = character_,
+				.palette = palette_,
+				.rank = rank_,
 			};
 			status_ = NewClassicNetplayRoomStatus::launch_requested;
 			return {.status = status_};
@@ -340,6 +456,119 @@ std::optional<NewClassicNetplayRoomLaunch>
 NewClassicNetplayRoom::take_launch() noexcept
 {
 	return std::exchange(launch_, std::nullopt);
+}
+
+NewClassicNetplayLobbyView::NewClassicNetplayLobbyView(
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	NewClassicLanguageAssetProfile language,
+	NewClassicNetplayLobbyViewRole role,
+	NewClassicNetplayCharacterLock local_lock,
+	std::uint8_t rank
+) :
+	patch_assets_(std::move(patch_assets)),
+	language_(language),
+	role_(role),
+	local_lock_(local_lock),
+	rank_(rank)
+{
+	if(!patch_assets_ || local_lock_.character < 1U ||
+		local_lock_.character > character_messages.size() ||
+		local_lock_.palette < 1U || local_lock_.palette > 2U || rank_ > 3U ||
+		!patch_surface_.reset(patch_assets_->replay_list_background) || !draw()) {
+		return;
+	}
+	valid_ = true;
+}
+
+bool NewClassicNetplayLobbyView::draw() noexcept
+{
+	if(!patch_assets_ || !patch_surface_.begin_hidden_frame(
+		patch_assets_->replay_list_background
+	)) {
+		return false;
+	}
+	const auto &font = patch_assets_->menu_font;
+	const auto &messages = patch_assets_->messages(language_);
+	auto &raster = patch_surface_.raster();
+	const auto ready = ready_contract_.has_value();
+	if(!font.put_centered(raster, center_x, title_top,
+		messages.text(NewClassicMessageId::netplay_room_title), title_color) ||
+		!font.put_centered(raster, center_x, 104,
+			messages.text(ready ? NewClassicMessageId::netplay_room_match_ready :
+				(role_ == NewClassicNetplayLobbyViewRole::host ?
+					NewClassicMessageId::netplay_room_waiting_player :
+					NewClassicMessageId::netplay_room_contacting_host)),
+			ready ? selected_color : detail_color)) {
+		return false;
+	}
+
+	const auto put_lock = [&](std::int32_t y, NewClassicMessageId label,
+		NewClassicNetplayCharacterLock lock) noexcept {
+		return font.put(raster, label_left, y, messages.text(label), normal_color) &&
+			font.put_right(raster, value_right, y,
+				messages.text(character_messages[lock.character - 1U]), detail_color) &&
+			font.put_right(raster, value_right, y + 20,
+				messages.text(lock.palette == 1U ?
+					NewClassicMessageId::netplay_room_palette_first :
+					NewClassicMessageId::netplay_room_palette_second), detail_color);
+	};
+	if(ready) {
+		if(!put_lock(144, NewClassicMessageId::netplay_room_player_one,
+			ready_contract_->player_one) ||
+			!put_lock(208, NewClassicMessageId::netplay_room_player_two,
+				ready_contract_->player_two) ||
+			!font.put(raster, label_left, 272,
+				messages.text(NewClassicMessageId::option_rank), normal_color) ||
+			!font.put_right(raster, value_right, 272,
+				messages.text(rank_messages[ready_contract_->rank]), detail_color)) {
+			return false;
+		}
+	} else {
+		const auto local_label = role_ == NewClassicNetplayLobbyViewRole::host ?
+			NewClassicMessageId::netplay_room_player_one :
+			NewClassicMessageId::netplay_room_player_two;
+		if(!put_lock(160, local_label, local_lock_) ||
+			!font.put(raster, label_left, 240,
+				messages.text(NewClassicMessageId::option_rank), normal_color) ||
+			!font.put_right(raster, value_right, 240,
+				messages.text(role_ == NewClassicNetplayLobbyViewRole::host ?
+					rank_messages[rank_] :
+					NewClassicMessageId::netplay_room_host_decides), detail_color)) {
+			return false;
+		}
+	}
+	return font.put_centered(raster, center_x, footer_top,
+		messages.text(ready ? NewClassicMessageId::netplay_room_starting :
+			NewClassicMessageId::netplay_room_cancel_wait), detail_color) &&
+		patch_surface_.publish(raster.access_page());
+}
+
+bool NewClassicNetplayLobbyView::valid() const noexcept
+{
+	return valid_;
+}
+
+bool NewClassicNetplayLobbyView::mark_ready(
+	const NewClassicNetplayMatchContract &contract
+) noexcept
+{
+	const auto validated = create_new_classic_netplay_match_contract({
+		.player_one = contract.player_one,
+		.rank = contract.rank,
+		.seed = contract.seed,
+		.cadence_ticks = contract.cadence_ticks,
+		.cadence_seconds = contract.cadence_seconds,
+	}, {.player_two = contract.player_two});
+	if(!validated || *validated != contract) {
+		return false;
+	}
+	ready_contract_ = contract;
+	return draw();
+}
+
+present::SourceSurface NewClassicNetplayLobbyView::surface() const noexcept
+{
+	return patch_surface_.surface();
 }
 
 } // namespace th03::app

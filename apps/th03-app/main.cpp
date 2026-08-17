@@ -1567,7 +1567,8 @@ struct DirectNetplayLobbyResult final {
 [[nodiscard]] std::expected<DirectNetplayLobbyResult, int>
 negotiate_direct_netplay_lobby(
 	const th03::app::DirectVsCliRequest &request,
-	SDL_WindowID main_window
+	th03::platform::SdlPlatform &platform,
+	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets
 )
 {
 	using th03::app::DirectVsNetplayMode;
@@ -1575,6 +1576,26 @@ negotiate_direct_netplay_lobby(
 	using th03::app::NewClassicNetplayLobbyDatagramType;
 	using th03::app::NewClassicNetplayLobbyStatus;
 	const auto mode = request.netplay_mode;
+	const auto local_lock = mode == DirectVsNetplayMode::host ?
+		netplay_host_lock(request).player_one :
+		netplay_join_lock(request).player_two;
+	th03::app::NewClassicNetplayLobbyView lobby_view(
+		std::move(patch_assets), request.presentation_language,
+		mode == DirectVsNetplayMode::host ?
+			th03::app::NewClassicNetplayLobbyViewRole::host :
+			th03::app::NewClassicNetplayLobbyViewRole::join,
+		local_lock, static_cast<std::uint8_t>(request.launch.process.rank)
+	);
+	if(!lobby_view.valid()) {
+		return std::unexpected(fail_netplay(
+			"netplay-lobby-view", "surface-create-failed"
+		));
+	}
+	if(const auto presented = platform.present(lobby_view.surface()); !presented) {
+		return std::unexpected(fail(
+			"netplay-lobby-present", presented.error()
+		));
+	}
 	auto socket = th03::platform::UdpSocket::bind(
 		mode == DirectVsNetplayMode::host ? request.netplay_host_port : 0U
 	);
@@ -1627,7 +1648,9 @@ negotiate_direct_netplay_lobby(
 		receive_buffer{};
 	while(lobby.status() != NewClassicNetplayLobbyStatus::ready) {
 		const auto now = std::chrono::steady_clock::now();
-		if(direct_netplay_lobby_quit_requested(main_window)) {
+		if(direct_netplay_lobby_quit_requested(
+			static_cast<SDL_WindowID>(platform.window_id())
+		)) {
 			std::cout << "status=left\n";
 			return std::unexpected(0);
 		}
@@ -1703,6 +1726,16 @@ negotiate_direct_netplay_lobby(
 	if(!peer || !contract || lobby.session_id() == 0U) {
 		return std::unexpected(fail_netplay(
 			"netplay-lobby", "incomplete-ready-state"
+		));
+	}
+	if(!lobby_view.mark_ready(*contract)) {
+		return std::unexpected(fail_netplay(
+			"netplay-lobby-view", "ready-surface-failed"
+		));
+	}
+	if(const auto presented = platform.present(lobby_view.surface()); !presented) {
+		return std::unexpected(fail(
+			"netplay-lobby-present", presented.error()
 		));
 	}
 	return DirectNetplayLobbyResult{
@@ -1891,11 +1924,12 @@ struct NetplayRoomRunResult final {
 	th03::platform::SdlPlatform &platform,
 	th03::platform::SdlInputMapper &mapper,
 	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets,
-	th03::app::NewClassicLanguageAssetProfile language
+	th03::app::NewClassicLanguageAssetProfile language,
+	std::uint8_t initial_rank
 )
 {
 	th03::app::NewClassicNetplayRoom room(
-		std::move(patch_assets), language
+		std::move(patch_assets), language, initial_rank
 	);
 	if(!room.valid()) {
 		return {.exit_code = fail_netplay(
@@ -2009,8 +2043,20 @@ int run_direct_netplay_on_platform(
 	const auto remote_player = mode == DirectVsNetplayMode::host ?
 		NewClassicNetplayPlayer::player_two :
 		NewClassicNetplayPlayer::player_one;
+	const auto audio_data_root = parsed.launch.content.data_root;
+	const auto post_match_content = parsed.launch.content;
+	const auto replay_save_content = parsed.launch.content;
+	auto loaded_pause_assets = th03::app::load_new_classic_replay_patch_assets(
+		parsed.launch.content.data_root / "AZINN.DAT"
+	);
+	if(!loaded_pause_assets) {
+		return fail("netplay-pause-assets", loaded_pause_assets.error());
+	}
+	auto pause_assets = std::make_shared<
+		const th03::app::NewClassicReplayPatchAssets
+	>(std::move(*loaded_pause_assets));
 	auto negotiated = negotiate_direct_netplay_lobby(
-		parsed, static_cast<SDL_WindowID>(platform.window_id())
+		parsed, platform, pause_assets
 	);
 	if(!negotiated) {
 		return negotiated.error();
@@ -2028,18 +2074,6 @@ int run_direct_netplay_on_platform(
 	std::optional<th03::platform::UdpIpv4Endpoint> peer{negotiated->peer};
 	auto lobby = std::move(negotiated->lobby);
 	std::uint64_t session_id = lobby.session_id();
-	const auto audio_data_root = parsed.launch.content.data_root;
-	const auto post_match_content = parsed.launch.content;
-	const auto replay_save_content = parsed.launch.content;
-	auto loaded_pause_assets = th03::app::load_new_classic_replay_patch_assets(
-		parsed.launch.content.data_root / "AZINN.DAT"
-	);
-	if(!loaded_pause_assets) {
-		return fail("netplay-pause-assets", loaded_pause_assets.error());
-	}
-	auto pause_assets = std::make_shared<
-		const th03::app::NewClassicReplayPatchAssets
-	>(std::move(*loaded_pause_assets));
 
 	auto process = th03::app::load_direct_vs_process(std::move(parsed.launch));
 	if(!process) {
@@ -5261,7 +5295,8 @@ ExperienceRunResult run_new_classic_experience(
 				th03::app::NewClassicLanguageAssetProfile::english :
 				th03::app::NewClassicLanguageAssetProfile::japanese);
 		auto room = run_netplay_room_modal(
-			parsed.tick_rate, platform, mapper, patch_assets, language
+			parsed.tick_rate, platform, mapper, patch_assets, language,
+			static_cast<std::uint8_t>(latest_settings->settings.options.rank)
 		);
 		if(room.exit_code != 0) {
 			return {.exit_code = room.exit_code};
@@ -5294,9 +5329,7 @@ ExperienceRunResult run_new_classic_experience(
 		.main_executable = product.launch.content.main_executable,
 		.font_rom = product.launch.content.font_rom,
 	};
-	result.launch.process.rank = static_cast<std::uint8_t>(
-		settings.options.rank
-	);
+	result.launch.process.rank = launch.rank;
 	const auto clock_seed = static_cast<std::uint64_t>(
 		std::chrono::steady_clock::now().time_since_epoch().count()
 	);
@@ -5311,12 +5344,24 @@ ExperienceRunResult run_new_classic_experience(
 	result.music_volume_percent = settings.music_volume_percent;
 	result.effect_volume_percent = settings.effect_volume_percent;
 	result.mute_when_unfocused = settings.mute_when_unfocused;
+	result.presentation_language = settings.options.language ==
+		th03::app::ClassicLanguage::english ?
+			th03::app::NewClassicLanguageAssetProfile::english :
+			th03::app::NewClassicLanguageAssetProfile::japanese;
 	if(launch.mode == th03::app::NewClassicNetplayRoomLaunchMode::host) {
 		result.netplay_mode = th03::app::DirectVsNetplayMode::host;
 		result.netplay_host_port = launch.host_port;
+		result.launch.process.player_one = {
+			.character = static_cast<th03::app::MainCharacter>(launch.character),
+			.palette = static_cast<th03::app::MainPaletteVariant>(launch.palette),
+		};
 	} else {
 		result.netplay_mode = th03::app::DirectVsNetplayMode::join;
 		result.netplay_join_endpoint = launch.join_endpoint;
+		result.launch.process.player_two = {
+			.character = static_cast<th03::app::MainCharacter>(launch.character),
+			.palette = static_cast<th03::app::MainPaletteVariant>(launch.palette),
+		};
 	}
 	return result;
 }

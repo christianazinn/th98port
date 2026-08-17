@@ -1,5 +1,6 @@
 #include "th03/app/new_classic_netplay_room.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -101,13 +102,29 @@ void test_host_intent_is_confirmation_gated()
 	release(room);
 	auto entered = room.consume({.ui = {.confirm = true}});
 	expect(entered.surface_changed && !room.take_launch(),
-		"Create Room first enters an offline confirmation owner");
+		"Create Room first enters an offline player-lock owner");
+	release(room);
+	static_cast<void>(room.consume({.ui = {.right = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.down = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.right = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.down = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.right = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.down = true}}));
+	release(room);
+	expect(room.consume({.ui = {.confirm = true}}).surface_changed,
+		"locked host character, palette, and rank enter confirmation");
 	release(room);
 	auto launched = room.consume({.ui = {.confirm = true}});
 	auto intent = room.take_launch();
 	expect(launched.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->mode == NewClassicNetplayRoomLaunchMode::host &&
-		intent->host_port == 31'415U && intent->join_endpoint.empty(),
+		intent->host_port == 31'415U && intent->join_endpoint.empty() &&
+		intent->character == 2U && intent->palette == 2U && intent->rank == 2U,
 		"fresh confirmation publishes the typed default-port host intent");
 	expect(!room.take_launch(), "launch intent is single-consumer");
 }
@@ -116,6 +133,12 @@ void test_join_entry_and_validation()
 {
 	using namespace th03::app;
 	NewClassicNetplayRoom room(assets_fixture());
+	release(room);
+	static_cast<void>(room.consume({.ui = {.down = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.down = true}}));
 	release(room);
 	static_cast<void>(room.consume({.ui = {.down = true}}));
 	release(room);
@@ -138,7 +161,8 @@ void test_join_entry_and_validation()
 	auto intent = room.take_launch();
 	expect(connected.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->mode == NewClassicNetplayRoomLaunchMode::join &&
-		intent->join_endpoint == endpoint,
+		intent->join_endpoint == endpoint && intent->character == 1U &&
+		intent->palette == 2U,
 		"validated Tailscale endpoint becomes one typed join intent");
 }
 
@@ -181,6 +205,43 @@ void test_missing_assets_fail_closed()
 		"room UI has no host-font fallback when authenticated art is absent");
 }
 
+void test_waiting_and_ready_lobby_views()
+{
+	using namespace th03::app;
+	NewClassicNetplayLobbyView view(
+		assets_fixture(), NewClassicLanguageAssetProfile::english,
+		NewClassicNetplayLobbyViewRole::host,
+		{.character = 2U, .palette = 1U}, 2U
+	);
+	expect(view.valid() && view.surface().pixels.size() == 256'000U &&
+		!view.surface().host_overlay,
+		"host handshake starts on an authenticated waiting surface");
+	const std::vector waiting_pixels(
+		view.surface().pixels.begin(), view.surface().pixels.end()
+	);
+	const NewClassicNetplayMatchContract contract{
+		.player_one = {.character = 2U, .palette = 1U},
+		.player_two = {.character = 7U, .palette = 2U},
+		.rank = 2U,
+		.seed = 0x1234'5678U,
+	};
+	expect(view.mark_ready(contract) && !std::equal(
+		waiting_pixels.begin(), waiting_pixels.end(), view.surface().pixels.begin()
+	), "the accepted synchronized contract redraws a distinct ready surface");
+	auto invalid = contract;
+	invalid.player_two.character = 0U;
+	expect(!view.mark_ready(invalid),
+		"ready presentation rejects an invalid peer character lock");
+
+	NewClassicNetplayLobbyView missing(
+		{}, NewClassicLanguageAssetProfile::english,
+		NewClassicNetplayLobbyViewRole::join,
+		{.character = 1U, .palette = 2U}, 1U
+	);
+	expect(!missing.valid(),
+		"waiting presentation has no unauthenticated host-font fallback");
+}
+
 } // namespace
 
 int main()
@@ -189,6 +250,7 @@ int main()
 	test_join_entry_and_validation();
 	test_settings_back_and_application_quit();
 	test_missing_assets_fail_closed();
+	test_waiting_and_ready_lobby_views();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }

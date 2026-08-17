@@ -11,6 +11,7 @@
 #include <string_view>
 
 #include "th03/app/direct_vs_launch.hpp"
+#include "th03/app/new_classic_assets.hpp"
 #include "th03/app/tick_input.hpp"
 
 namespace th03::app {
@@ -76,6 +77,8 @@ struct DirectVsCliRequest {
 	std::uint8_t music_volume_percent = 100U;
 	std::uint8_t effect_volume_percent = 100U;
 	bool mute_when_unfocused = false;
+	NewClassicLanguageAssetProfile presentation_language =
+		NewClassicLanguageAssetProfile::english;
 };
 
 // Parses arguments after argv[0]. Character names are the nine lowercase
