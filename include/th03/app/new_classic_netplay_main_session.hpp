@@ -21,6 +21,7 @@ enum class NewClassicNetplayMainSessionStatus : std::uint8_t {
 	remote_waiting,
 	boundary_waiting_confirmation,
 	boundary_confirmed,
+	paused,
 	complete,
 };
 
@@ -34,6 +35,7 @@ enum class NewClassicNetplayMainSessionErrorCode : std::uint8_t {
 	audio_journal_failed,
 	digest_journal_failed,
 	transcript_journal_failed,
+	pause_failed,
 };
 
 struct NewClassicNetplayMainSessionError final {
@@ -48,6 +50,7 @@ struct NewClassicNetplayMainSessionTick final {
 		NewClassicNetplayMainSessionStatus::running;
 	std::optional<std::uint64_t> frame{};
 	std::optional<StepStatus> boundary{};
+	std::optional<StepResult> pause_completion{};
 	std::uint64_t confirmed_frame_count = 0U;
 	std::uint8_t prediction_depth = 0U;
 	bool remote_predicted = false;
@@ -120,7 +123,7 @@ struct NewClassicNetplayConfirmedInputFrame final {
 	std::uint8_t source_vsyncs = 1U;
 };
 
-// Retained active-MAIN owner. Network values enter only through T3NET001's
+// Retained active-MAIN owner. Network values enter only through T3NET002's
 // player-local value. A late mismatch restores the complete T3RBM001 image,
 // recomputes the affected suffix synchronously, and publishes only the newest
 // corrected surface. A non-gameplay boundary remains private until the input
@@ -162,11 +165,18 @@ public:
 
 	// Applies one already-confirmed process boundary. Phase/result frames then
 	// run exact-input lockstep; the next gameplay domain reopens rollback only
-	// after its complete source startup transaction.
+	// after its complete source startup transaction. Pause retains the source
+	// live-pause owner until resume_pause().
 	[[nodiscard]] std::expected<
 		NewClassicNetplayMainSessionTick,
 		NewClassicNetplayMainSessionError
 	> continue_confirmed_boundary() noexcept;
+	// Completes one canonical release -> Resume -> release sequence. Arbitrary
+	// network waiting never enters Game, V13 timing, PMD, or slowdown.
+	[[nodiscard]] std::expected<
+		NewClassicNetplayMainSessionTick,
+		NewClassicNetplayMainSessionError
+	> resume_pause() noexcept;
 
 	[[nodiscard]] std::expected<
 		present::SourceSurface,

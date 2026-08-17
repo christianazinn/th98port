@@ -38,6 +38,10 @@ public:
 		const NewClassicNetplayConfirmedInputFrame &frame,
 		bool deadline_missed
 	);
+	// Commit the fixed three-poll source Pause -> Resume transaction after both
+	// peers leave the negotiated wait. No wall-clock network poll is recorded.
+	[[nodiscard]] std::expected<void, NewClassicNetplayReplayCaptureError>
+	pause_resumed(const StepResult &completed_frame);
 	[[nodiscard]] std::expected<void, NewClassicNetplayReplayCaptureError>
 	round_started(const RoundStartObservation &observation);
 	[[nodiscard]] std::expected<
@@ -58,6 +62,7 @@ private:
 	std::uint64_t next_frame_ = 0U;
 	std::uint8_t source_vsyncs_before_next_frame_ = 1U;
 	bool round_start_pending_ = false;
+	bool pause_pending_ = false;
 	bool main_complete_ = false;
 	bool failed_ = false;
 	bool finished_ = false;

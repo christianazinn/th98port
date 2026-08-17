@@ -1,5 +1,6 @@
 #include "th03/app/new_classic_netplay_replay_capture.hpp"
 
+#include <array>
 #include <utility>
 
 namespace th03::app {
@@ -51,9 +52,9 @@ NewClassicNetplayReplayCapture::append_confirmed_frame(
 	bool deadline_missed
 )
 {
-	if(failed_ || finished_ || round_start_pending_ || main_complete_ ||
+	if(failed_ || finished_ || round_start_pending_ || pause_pending_ ||
+		main_complete_ ||
 		frame.frame != next_frame_ || frame.source_vsyncs == 0U ||
-		frame.step_result.status == StepStatus::paused ||
 		frame.step_result.status == StepStatus::invalid_input_context ||
 		frame.step_result.status == StepStatus::simulation_not_implemented) {
 		failed_ = true;
@@ -69,7 +70,10 @@ NewClassicNetplayReplayCapture::append_confirmed_frame(
 		recorder_.source_vsync();
 	}
 	if(frame.phase == replay::InputPhase::gameplay) {
-		recorder_.frame_io(frame.step_result);
+		recorder_.frame_io(
+			frame.step_result,
+			frame.step_result.status != StepStatus::paused
+		);
 		recorder_.classify_pending_frame(deadline_missed);
 	}
 	if(auto sampled = recorder_.sample(frame.phase, frame.input); !sampled) {
@@ -77,7 +81,16 @@ NewClassicNetplayReplayCapture::append_confirmed_frame(
 		return std::unexpected(replay_error(std::move(sampled.error())));
 	}
 
-	if(frame.step_result.status == StepStatus::round_transition ||
+	if(frame.step_result.status == StepStatus::paused) {
+		if(frame.phase != replay::InputPhase::gameplay ||
+			(frame.input.system & 0x1000U) == 0U) {
+			failed_ = true;
+			return std::unexpected(capture_error(
+				NewClassicNetplayReplayCaptureErrorCode::invalid_sequence
+			));
+		}
+		pause_pending_ = true;
+	} else if(frame.step_result.status == StepStatus::round_transition ||
 		frame.step_result.status == StepStatus::terminal) {
 		if(auto split = recorder_.round_completed(
 			frame.step_result.input_boundary_state
@@ -105,11 +118,71 @@ NewClassicNetplayReplayCapture::append_confirmed_frame(
 }
 
 std::expected<void, NewClassicNetplayReplayCaptureError>
+NewClassicNetplayReplayCapture::pause_resumed(
+	const StepResult &completed_frame
+)
+{
+	if(failed_ || finished_ || round_start_pending_ || main_complete_ ||
+		!pause_pending_ || completed_frame.status == StepStatus::paused ||
+		completed_frame.status == StepStatus::invalid_input_context ||
+		completed_frame.status == StepStatus::simulation_not_implemented) {
+		failed_ = true;
+		return std::unexpected(capture_error(
+			NewClassicNetplayReplayCaptureErrorCode::invalid_sequence
+		));
+	}
+	constexpr std::array<CoreInput, 3U> canonical_resume{{
+		{},
+		{.system = 0x1000U},
+		{},
+	}};
+	for(const auto &input : canonical_resume) {
+		for(std::uint8_t vsync = 0U;
+			vsync < source_vsyncs_before_next_frame_; ++vsync) {
+			recorder_.source_vsync();
+		}
+		if(auto sampled = recorder_.sample(
+			replay::InputPhase::interstitial, input
+		); !sampled) {
+			failed_ = true;
+			return std::unexpected(replay_error(std::move(sampled.error())));
+		}
+		source_vsyncs_before_next_frame_ = 1U;
+	}
+	pause_pending_ = false;
+	source_vsyncs_before_next_frame_ = completed_frame.next_step_vsyncs;
+	if(completed_frame.status == StepStatus::round_transition ||
+		completed_frame.status == StepStatus::terminal) {
+		if(auto split = recorder_.round_completed(
+			completed_frame.input_boundary_state
+		); !split) {
+			failed_ = true;
+			return std::unexpected(replay_error(std::move(split.error())));
+		}
+		if(completed_frame.status == StepStatus::round_transition) {
+			round_start_pending_ = true;
+		} else {
+			if(auto boundary = recorder_.process_completed(
+				replay::ProcessId::main
+			); !boundary) {
+				failed_ = true;
+				return std::unexpected(replay_error(
+					std::move(boundary.error())
+				));
+			}
+			main_complete_ = true;
+		}
+	}
+	return {};
+}
+
+std::expected<void, NewClassicNetplayReplayCaptureError>
 NewClassicNetplayReplayCapture::round_started(
 	const RoundStartObservation &observation
 )
 {
-	if(failed_ || finished_ || main_complete_ || !round_start_pending_) {
+	if(failed_ || finished_ || main_complete_ || pause_pending_ ||
+		!round_start_pending_) {
 		failed_ = true;
 		return std::unexpected(capture_error(
 			NewClassicNetplayReplayCaptureErrorCode::invalid_sequence
@@ -126,7 +199,8 @@ NewClassicNetplayReplayCapture::round_started(
 std::expected<formats::ReplayDocument, NewClassicNetplayReplayCaptureError>
 NewClassicNetplayReplayCapture::finish_mainl(const GameInit &resident)
 {
-	if(failed_ || finished_ || round_start_pending_ || !main_complete_) {
+	if(failed_ || finished_ || round_start_pending_ || pause_pending_ ||
+		!main_complete_) {
 		failed_ = true;
 		return std::unexpected(capture_error(
 			NewClassicNetplayReplayCaptureErrorCode::invalid_sequence
@@ -170,6 +244,7 @@ void NewClassicNetplayReplayCapture::discard() noexcept
 	recorder_.discard();
 	source_vsyncs_before_next_frame_ = 1U;
 	round_start_pending_ = false;
+	pause_pending_ = false;
 	main_complete_ = false;
 	failed_ = true;
 	finished_ = false;

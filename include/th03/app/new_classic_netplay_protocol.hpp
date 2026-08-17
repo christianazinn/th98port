@@ -30,6 +30,7 @@ enum class NewClassicNetplayBoundaryProof : std::uint8_t {
 	phase_transition = 1U,
 	round_transition = 2U,
 	terminal = 3U,
+	pause = 4U,
 };
 
 [[nodiscard]] constexpr NewClassicNetplayBoundaryProof
@@ -42,8 +43,9 @@ new_classic_netplay_boundary_proof(StepStatus status) noexcept
 		return NewClassicNetplayBoundaryProof::round_transition;
 	case StepStatus::terminal:
 		return NewClassicNetplayBoundaryProof::terminal;
-	case StepStatus::running:
 	case StepStatus::paused:
+		return NewClassicNetplayBoundaryProof::pause;
+	case StepStatus::running:
 	case StepStatus::invalid_input_context:
 	case StepStatus::simulation_not_implemented:
 		return NewClassicNetplayBoundaryProof::none;
@@ -51,13 +53,20 @@ new_classic_netplay_boundary_proof(StepStatus status) noexcept
 	return NewClassicNetplayBoundaryProof::none;
 }
 
-// T3NET001 backend value. This is post-device/post-KeyConfig logical input for
+enum class NewClassicNetplayControl : std::uint8_t {
+	none = 0U,
+	pause_request = 1U,
+};
+
+// T3NET002 backend value. This is post-device/post-KeyConfig logical input for
 // exactly one owned player. It contains no player identity, system word, raw
-// scancode, application event, clock, or host-device information.
+// scancode, clock, or host-device information. A control marker is resolved by
+// the same corrected timeline but projected by the retained session rather
+// than granting either peer arbitrary CoreInput.system ownership.
 struct NewClassicNetplayOwnedInput final {
 	std::uint16_t word = 0U;
 	std::uint8_t charge = 0U;
-	std::uint8_t reserved_zero = 0U;
+	NewClassicNetplayControl control = NewClassicNetplayControl::none;
 
 	friend constexpr bool operator==(
 		const NewClassicNetplayOwnedInput &,
@@ -69,7 +78,7 @@ enum class NewClassicNetplayInputErrorCode : std::uint8_t {
 	invalid_wire_size,
 	invalid_player_word,
 	invalid_charge,
-	nonzero_reserved,
+	invalid_control,
 	invalid_player,
 };
 

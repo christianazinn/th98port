@@ -76,6 +76,10 @@ public:
 		MainRollbackCoordinatorTick,
 		MainRollbackCoordinatorError
 	> advance_reliable(CoreInput input, InputContext context) noexcept;
+	// Poll one source live-pause input without advancing the rollback/network
+	// frame index. Negotiated wall-clock waiting never enters this call.
+	[[nodiscard]] std::expected<StepResult, MainRollbackCoordinatorError>
+	advance_pause(CoreInput input) noexcept;
 	[[nodiscard]] std::expected<
 		MainRollbackCoordinatorTick,
 		MainRollbackCoordinatorError

@@ -135,6 +135,12 @@ MainRollbackCoordinator::advance_reliable(
 	};
 }
 
+std::expected<StepResult, MainRollbackCoordinatorError>
+MainRollbackCoordinator::advance_pause(CoreInput input) noexcept
+{
+	return impl_->step(input, InputContext::pause);
+}
+
 MainRollbackCoordinator::MainRollbackCoordinator(
 	std::unique_ptr<Impl> impl
 ) noexcept :

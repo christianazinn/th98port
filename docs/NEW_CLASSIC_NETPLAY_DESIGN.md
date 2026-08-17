@@ -310,22 +310,25 @@ one owned player. It contains:
 
 - one 16-bit TH03 player input word;
 - that player's one-bit Charge/Autofire contribution;
-- reserved zero bits for a future protocol revision.
+- one typed Pause-request edge.
 
 The C ABI value is exactly four bytes: little-endian `uint16 input_word`,
-`uint8 charge`, and `uint8 reserved_zero`. It has a golden wire vector and is
-copied into the GGRS input type without exposing C++ padding or Rust layout.
+`uint8 charge`, and `uint8 control`. It has a golden wire vector and can be
+copied into a rollback-backend input type without exposing C++ padding or Rust
+layout.
 
 P1 owns only `CoreInput.p1` and charge bit 0. P2 owns only `CoreInput.p2` and
-charge bit 1. Peers may not inject the other player's word, `CoreInput.system`,
-application quit, replay fast-forward, restart, raw scancodes, or host-device
-identity. The session combines the two owned values into one `CoreInput` after
-the rollback backend resolves them.
+charge bit 1. Peers may not inject the other player's word, arbitrary
+`CoreInput.system`, application quit, replay fast-forward, restart, raw
+scancodes, or host-device identity. The session combines the two owned values
+into one `CoreInput` after the rollback backend resolves them; only that owner
+may project a resolved Pause edge to source Cancel.
 
 The predictor repeats the last known remote input, including held movement and
 buttons. That matches TH03's level-triggered input semantics better than
-predicting neutral and avoids inventing button edges. The first prediction is
-neutral. Real input replacing a different prediction requests rollback.
+predicting neutral and avoids inventing button edges. The Pause edge is always
+predicted neutral. The first prediction is neutral. Real input replacing a
+different prediction requests rollback.
 
 System actions use reliable control messages:
 
@@ -464,8 +467,8 @@ messages, counts, and text have strict limits.
 
 ## Handshake and compatibility
 
-`T3NET001` is the application control protocol. Before character lock, both
-clients must agree on:
+`T3NET002` is the current owned-input/control-edge protocol. Before character
+lock, both clients must agree on:
 
 - protocol major/minor and exact rollback backend wire revision;
 - `ContentId`: canonical digest of gameplay-affecting content;
@@ -491,14 +494,15 @@ enters the contract.
 After agreement, both clients create source-fresh MAIN state and exchange the
 SHA-256 simulation digest at frame zero. Gameplay begins only if those digests
 match. The direct UDP preview implements this gate with a strict fixed-size
-`T3NP` v4 packet and keeps both source schedulers stopped until the proof
+`T3NP` v5 packet and keeps both source schedulers stopped until the proof
 succeeds.
 
 The backend-neutral owned-player gameplay value is now frozen as the exact
-four-byte little-endian schema in `T3NET001.md`. It contains only one player's
-post-KeyConfig logical word, binary Charge contribution, and a zero reserved
-byte. The match contract supplies player ownership; system/application input
-is never accepted through this stream.
+four-byte little-endian schema in `T3NET002.md`. It contains one player's
+post-KeyConfig logical word, binary Charge contribution, and one typed Pause
+edge. The match contract supplies player ownership; the retained MAIN owner is
+the only code that projects the marker to source Cancel, and arbitrary
+system/application input is never accepted through this stream.
 
 ## Desync handling and replay ownership
 
@@ -707,7 +711,8 @@ an explicit N1 gate rather than a reason to alter the rollback image.
 
 1. Freeze the backend-neutral owned-player input value. Complete as
    `T3NET001`: exact four-byte wire, strict validation, and independent P1/P2
-   composition.
+   composition. `T3NET002` assigns its reserved byte to a rollback-correct
+   Pause edge without expanding the value.
 2. Add a deterministic in-process latency/loss/reorder simulator and resolved
    input timeline around the existing local coordinator. The backend-neutral
    transport/timeline half is complete as `T3NTS001`: two peers converge

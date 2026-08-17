@@ -168,6 +168,47 @@ void test_prediction_correction_and_limit()
 	expect(!stalled && stalled.error().code ==
 		NewClassicNetplayTimelineErrorCode::prediction_limit,
 		"timeline caps the whole unconfirmed window despite a newer exact input");
+
+	auto pause = NewClassicNetplayInputTimeline::create(
+		NewClassicNetplayPlayer::player_one
+	);
+	expect(static_cast<bool>(pause),
+		"pause-marker correction fixture constructs");
+	if(pause) {
+		expect((*pause)->submit_local(0U, {}).has_value() &&
+			(*pause)->submit_remote(0U, {}).has_value() &&
+			(*pause)->resolve_next().has_value(),
+			"pause fixture confirms its neutral prefix");
+		expect((*pause)->submit_local(1U, {}).has_value() &&
+			(*pause)->resolve_next().has_value() &&
+			(*pause)->submit_local(2U, {.word = 0x0001U}).has_value() &&
+			(*pause)->resolve_next().has_value(),
+			"pause fixture predicts a two-frame neutral remote suffix");
+		const auto marker = (*pause)->submit_remote(1U, {
+			.control = NewClassicNetplayControl::pause_request,
+		});
+		expect(marker && marker->rollback_frame == 1U &&
+			(*pause)->confirmed_frame_count() == 1U,
+			"late Pause marker requests correction at its exact frame");
+		expect((*pause)->rewind_to_rollback().has_value(),
+			"late Pause marker rewinds the speculative suffix");
+		const auto corrected_pause = (*pause)->resolve_next();
+		expect(corrected_pause && corrected_pause->pause_requested &&
+			!corrected_pause->remote_predicted &&
+			corrected_pause->combined.system == 0U &&
+			(*pause)->confirmed_frame_count() == 2U,
+			"corrected Pause remains typed beside CoreInput until session projection");
+		expect((*pause)->discard_unconfirmed_suffix().has_value() &&
+			!(*pause)->local_input(2U),
+			"Pause correction discards inputs sampled after the frozen boundary");
+		expect((*pause)->submit_local(2U, {.word = 0x0004U}).has_value(),
+			"Resume opens a fresh local slot after the discarded suffix");
+		const auto after_resume = (*pause)->resolve_next();
+		expect(after_resume && after_resume->remote_predicted &&
+			!after_resume->pause_requested &&
+			after_resume->remote.control == NewClassicNetplayControl::none,
+			"prediction repeats held gameplay input but never repeats Pause");
+	}
 }
 
 struct DatagramOwner final {
@@ -273,7 +314,7 @@ void test_two_peer_convergence()
 				std::span(payload).first(metadata.payload_size)
 			);
 			if(!decoded) {
-				expect(false, "delivered T3NET001 value decodes");
+				expect(false, "delivered T3NET002 value decodes");
 				return;
 			}
 			const auto submitted = timeline.submit_remote(

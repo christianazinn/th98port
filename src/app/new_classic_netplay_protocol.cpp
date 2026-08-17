@@ -16,9 +16,10 @@ validate(NewClassicNetplayOwnedInput input) noexcept
 			.code = NewClassicNetplayInputErrorCode::invalid_charge,
 		});
 	}
-	if(input.reserved_zero != 0U) {
+	if(input.control != NewClassicNetplayControl::none &&
+		input.control != NewClassicNetplayControl::pause_request) {
 		return std::unexpected(NewClassicNetplayInputError{
-			.code = NewClassicNetplayInputErrorCode::nonzero_reserved,
+			.code = NewClassicNetplayInputErrorCode::invalid_control,
 		});
 	}
 	return {};
@@ -40,7 +41,7 @@ std::expected<
 		std::byte{static_cast<std::uint8_t>(input.word & 0x00FFU)},
 		std::byte{static_cast<std::uint8_t>(input.word >> 8U)},
 		std::byte{input.charge},
-		std::byte{0U},
+		std::byte{static_cast<std::uint8_t>(input.control)},
 	};
 }
 
@@ -60,7 +61,9 @@ decode_new_classic_netplay_input(std::span<const std::byte> wire) noexcept
 			) << 8U)
 		),
 		.charge = std::to_integer<std::uint8_t>(wire[2U]),
-		.reserved_zero = std::to_integer<std::uint8_t>(wire[3U]),
+		.control = static_cast<NewClassicNetplayControl>(
+			std::to_integer<std::uint8_t>(wire[3U])
+		),
 	};
 	if(const auto valid = validate(result); !valid) {
 		return std::unexpected(valid.error());

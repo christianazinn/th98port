@@ -51,6 +51,7 @@ struct NewClassicNetplayResolvedFrame final {
 	NewClassicNetplayOwnedInput local{};
 	NewClassicNetplayOwnedInput remote{};
 	CoreInput combined{};
+	bool pause_requested = false;
 	bool remote_predicted = false;
 	std::uint8_t prediction_depth = 0U;
 };
@@ -113,6 +114,10 @@ public:
 	// remote inputs remain retained; discarded predictions are recomputed.
 	[[nodiscard]] std::expected<void, NewClassicNetplayTimelineError>
 	rewind_to_rollback() noexcept;
+	// Inputs sampled after a corrected Pause marker belong to a discarded
+	// speculative suffix and must not survive into the resumed gameplay domain.
+	[[nodiscard]] std::expected<void, NewClassicNetplayTimelineError>
+	discard_unconfirmed_suffix() noexcept;
 
 	[[nodiscard]] std::optional<std::uint64_t>
 	rollback_frame() const noexcept;

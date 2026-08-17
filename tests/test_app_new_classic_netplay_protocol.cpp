@@ -30,17 +30,18 @@ void test_wire_vectors()
 	constexpr NewClassicNetplayOwnedInput input{
 		.word = 0x0F25U,
 		.charge = 1U,
+		.control = NewClassicNetplayControl::pause_request,
 	};
 	const auto encoded = encode_new_classic_netplay_input(input);
 	constexpr std::array<std::byte, 4U> golden{
 		std::byte{0x25U}, std::byte{0x0FU},
-		std::byte{0x01U}, std::byte{0x00U},
+		std::byte{0x01U}, std::byte{0x01U},
 	};
 	expect(encoded && *encoded == golden,
-		"T3NET001 owned input has exact four-byte little-endian vector");
+		"T3NET002 owned input has exact four-byte pause-marker vector");
 	const auto decoded = decode_new_classic_netplay_input(golden);
 	expect(decoded && *decoded == input,
-		"T3NET001 owned input golden vector round-trips exactly");
+		"T3NET002 owned input golden vector round-trips exactly");
 	const auto truncated = decode_new_classic_netplay_input(
 		std::span(golden).first<3U>()
 	);
@@ -84,8 +85,8 @@ void test_validation_and_composition()
 	const auto invalid_charge = encode_new_classic_netplay_input({
 		.charge = 2U,
 	});
-	const auto invalid_reserved = encode_new_classic_netplay_input({
-		.reserved_zero = 1U,
+	const auto invalid_control = encode_new_classic_netplay_input({
+		.control = static_cast<NewClassicNetplayControl>(2U),
 	});
 	expect(!invalid_word && invalid_word.error().code ==
 		NewClassicNetplayInputErrorCode::invalid_player_word,
@@ -93,16 +94,16 @@ void test_validation_and_composition()
 	expect(!invalid_charge && invalid_charge.error().code ==
 		NewClassicNetplayInputErrorCode::invalid_charge,
 		"owned input rejects non-binary Charge");
-	expect(!invalid_reserved && invalid_reserved.error().code ==
-		NewClassicNetplayInputErrorCode::nonzero_reserved,
-		"owned input reserves its fourth byte for a protocol revision");
+	expect(!invalid_control && invalid_control.error().code ==
+		NewClassicNetplayInputErrorCode::invalid_control,
+		"owned input rejects unknown control markers");
 
-	constexpr std::array<std::byte, 4U> malformed_reserved{
-		std::byte{0U}, std::byte{0U}, std::byte{0U}, std::byte{1U},
+	constexpr std::array<std::byte, 4U> malformed_control{
+		std::byte{0U}, std::byte{0U}, std::byte{0U}, std::byte{2U},
 	};
-	const auto malformed = decode_new_classic_netplay_input(malformed_reserved);
+	const auto malformed = decode_new_classic_netplay_input(malformed_control);
 	expect(!malformed && malformed.error().code ==
-		NewClassicNetplayInputErrorCode::nonzero_reserved,
+		NewClassicNetplayInputErrorCode::invalid_control,
 		"wire decoder applies the same fail-closed semantic validation");
 
 	const auto invalid_player = apply_new_classic_netplay_input(
@@ -125,7 +126,11 @@ void test_datagram_contract()
 		.latest_frame = 9U,
 		.confirmed_frame_count = 7U,
 	};
-	input.inputs[0U] = {.word = 0x0F25U, .charge = 1U};
+	input.inputs[0U] = {
+		.word = 0x0F25U,
+		.charge = 1U,
+		.control = NewClassicNetplayControl::pause_request,
+	};
 	input.inputs[1U] = {.word = 0x0012U};
 	const auto encoded = encode_new_classic_netplay_datagram(input);
 	expect(encoded && encoded->size() == 104U &&
@@ -133,12 +138,13 @@ void test_datagram_contract()
 		(*encoded)[1U] == std::byte{'3'} &&
 		(*encoded)[2U] == std::byte{'N'} &&
 		(*encoded)[3U] == std::byte{'P'} &&
-		(*encoded)[4U] == std::byte{4U} &&
+		(*encoded)[4U] == std::byte{5U} &&
 		(*encoded)[5U] == std::byte{3U} &&
 		(*encoded)[6U] == std::byte{1U} &&
 		(*encoded)[7U] == std::byte{2U} &&
 		(*encoded)[40U] == std::byte{0x25U} &&
-		(*encoded)[41U] == std::byte{0x0FU},
+		(*encoded)[41U] == std::byte{0x0FU} &&
+		(*encoded)[43U] == std::byte{0x01U},
 		"T3NP input datagram has frozen header and newest-first history bytes");
 	if(encoded) {
 		const auto decoded = decode_new_classic_netplay_datagram(*encoded);
@@ -159,12 +165,12 @@ void test_datagram_contract()
 			NewClassicNetplayDatagramErrorCode::invalid_magic,
 			"unknown UDP traffic cannot enter the netplay protocol");
 		corrupt = *encoded;
-		corrupt[43U] = std::byte{1U};
-		const auto bad_reserved = decode_new_classic_netplay_datagram(corrupt);
-		expect(!bad_reserved && bad_reserved.error().code ==
+		corrupt[43U] = std::byte{2U};
+		const auto bad_control = decode_new_classic_netplay_datagram(corrupt);
+		expect(!bad_control && bad_control.error().code ==
 			NewClassicNetplayDatagramErrorCode::invalid_input &&
-			bad_reserved.error().input_index == 0U,
-			"nested T3NET001 reserved bytes remain strict in UDP history");
+			bad_control.error().input_index == 0U,
+			"nested T3NET002 control bytes remain strict in UDP history");
 	} else {
 		expect(false, "valid datagram reaches decode checks");
 		expect(false, "valid datagram reaches corruption checks");
@@ -309,7 +315,9 @@ void test_datagram_contract()
 		) ==
 			NewClassicNetplayBoundaryProof::round_transition &&
 		new_classic_netplay_boundary_proof(th03::StepStatus::terminal) ==
-			NewClassicNetplayBoundaryProof::terminal,
+			NewClassicNetplayBoundaryProof::terminal &&
+		new_classic_netplay_boundary_proof(th03::StepStatus::paused) ==
+			NewClassicNetplayBoundaryProof::pause,
 		"wire boundary vocabulary is the exact MAIN lifecycle projection");
 	if(boundary_digest) {
 		auto corrupt = *boundary_digest;

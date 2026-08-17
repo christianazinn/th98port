@@ -1740,6 +1740,136 @@ void test_new_classic_netplay_main_session_convergence()
 	}
 }
 
+void test_new_classic_netplay_pause_boundary()
+{
+	const auto same_step = [](const th03::StepResult &a,
+		const th03::StepResult &b) noexcept {
+		return a.status == b.status &&
+			a.input_boundary_state.state_hash ==
+				b.input_boundary_state.state_hash &&
+			a.next_step_vsyncs == b.next_step_vsyncs &&
+			a.defeat_none_before_frame == b.defeat_none_before_frame &&
+			a.defeat_none_after_frame == b.defeat_none_after_frame;
+	};
+	MainDirectVsConfig config{};
+	config.classic_audio_lifecycle = true;
+	const auto resources = make_resources(config.player_one, config.player_two);
+	auto process = create_synthetic(config, resources);
+	auto reference = create_synthetic(config, resources);
+	expect(process && reference,
+		"netplay Pause session and uninterrupted reference construct");
+	if(!process || !reference) {
+		return;
+	}
+	auto capture = th03::app::NewClassicNetplayReplayCapture::create(
+		(*process)->round_start_observation()
+	);
+	auto session = NewClassicNetplayMainSession::create(
+		NewClassicNetplayPlayer::player_one, std::move(*process)
+	);
+	expect(session && capture,
+		"netplay Pause owns a rollback-safe MAIN and memory-only V13");
+	if(!session || !capture) {
+		return;
+	}
+	while((*session)->take_audio_command()) {}
+	while((*reference)->take_audio_command()) {}
+
+	const auto opened = (*session)->advance_local({
+		.control = th03::app::NewClassicNetplayControl::pause_request,
+	});
+	const auto reference_opened = (*reference)->step({.system = 0x1000U});
+	expect(opened && opened->boundary == th03::StepStatus::paused &&
+		opened->status == NewClassicNetplayMainSessionStatus::
+			boundary_waiting_confirmation &&
+		reference_opened && reference_opened->status == th03::StepStatus::paused,
+		"typed Pause marker projects to the ordinary source live-pause boundary");
+	const auto confirmed = (*session)->submit_remote(0U, {});
+	expect(confirmed && confirmed->status ==
+			NewClassicNetplayMainSessionStatus::boundary_confirmed &&
+		(*session)->confirmed_frame_count() == 1U,
+		"Pause remains frozen until its marker is contiguous-confirmed");
+	const auto proof = (*session)->take_confirmed_simulation_digest();
+	expect(proof && *proof && (**proof).frame == 1U &&
+		(**proof).kind ==
+			th03::app::NewClassicNetplaySimulationDigestKind::boundary &&
+		(**proof).boundary ==
+			th03::app::NewClassicNetplayBoundaryProof::pause,
+		"confirmed Pause emits a canonical post-prefix peer proof");
+	const auto settled = (*session)->continue_confirmed_boundary();
+	expect(settled && settled->status ==
+			NewClassicNetplayMainSessionStatus::paused &&
+		settled->boundary == th03::StepStatus::paused,
+		"confirmed Pause retains MAIN without completing the frame");
+	const auto recorded_open = (*session)->take_confirmed_input_frame();
+	expect(recorded_open && *recorded_open &&
+		(**recorded_open).step_result.status == th03::StepStatus::paused &&
+		((**recorded_open).input.system & 0x1000U) != 0U &&
+		capture->append_confirmed_frame(**recorded_open, false),
+		"V13 receives the corrected Pause-opening gameplay sample once");
+
+	const auto reference_release = (*reference)->step(
+		{}, th03::InputContext::pause
+	);
+	const auto reference_resume = (*reference)->step(
+		{.system = 0x1000U}, th03::InputContext::pause
+	);
+	const auto reference_complete = (*reference)->step(
+		{}, th03::InputContext::pause
+	);
+	const auto resumed = (*session)->resume_pause();
+	expect(reference_release && reference_resume && reference_complete &&
+		reference_release->status == th03::StepStatus::paused &&
+		reference_resume->status == th03::StepStatus::paused &&
+		reference_complete->status == th03::StepStatus::running &&
+		resumed && resumed->status ==
+			NewClassicNetplayMainSessionStatus::running &&
+		resumed->pause_completion &&
+		same_step(*reference_complete, *resumed->pause_completion) &&
+		(*session)->next_frame() == 1U,
+		"Resume completes the deferred suffix once without a network frame");
+	expect(resumed && resumed->pause_completion &&
+		capture->pause_resumed(*resumed->pause_completion) &&
+		capture->frame_count() == 1U && capture->document() &&
+		capture->document()->session.sample_count == 4U,
+		"V13 stores one fixed three-poll Pause transaction, not wall-clock waits");
+	expect((*session)->process().canonical_state().state_hash ==
+			(*reference)->canonical_state().state_hash,
+		"netplay Resume converges to uninterrupted source live-pause state");
+	const auto resume_effect = (*session)->take_audio_command();
+	expect(resume_effect && resume_effect->type ==
+			th03::app::ClassicAudioCommandType::dispatch_effect &&
+		resume_effect->parameter == 21U && !(*session)->take_audio_command(),
+		"confirmed Resume exposes the source-owned effect exactly once");
+
+	auto late_process = create_synthetic(config, resources);
+	auto late = late_process ? NewClassicNetplayMainSession::create(
+		NewClassicNetplayPlayer::player_one, std::move(*late_process)
+	) : std::expected<std::unique_ptr<NewClassicNetplayMainSession>,
+		th03::app::NewClassicNetplayMainSessionError>{
+			std::unexpected(th03::app::NewClassicNetplayMainSessionError{})
+		};
+	expect(static_cast<bool>(late),
+		"late Pause correction session constructs");
+	if(late) {
+		while((*late)->take_audio_command()) {}
+		expect((*late)->advance_local({}).has_value() &&
+			(*late)->submit_remote(0U, {}).has_value() &&
+			(*late)->advance_local({}).has_value() &&
+			(*late)->advance_local({.word = 0x0001U}).has_value(),
+			"late Pause fixture executes an unconfirmed predicted suffix");
+		const auto corrected = (*late)->submit_remote(1U, {
+			.control = th03::app::NewClassicNetplayControl::pause_request,
+		});
+		expect(corrected && corrected->rollback_frame == 1U &&
+			corrected->resimulated_frames == 1U &&
+			corrected->status ==
+				NewClassicNetplayMainSessionStatus::boundary_confirmed &&
+			(*late)->next_frame() == 2U && !(*late)->local_input(2U),
+			"late Pause rolls back to its prefix and discards the later local sample");
+	}
+}
+
 void test_new_classic_netplay_confirmed_digest_schedule()
 {
 	MainDirectVsConfig config{};
@@ -3846,6 +3976,7 @@ int main(int argc, char **argv)
 	test_main_process_rollback_transaction();
 	test_main_rollback_coordinator_every_frame();
 	test_new_classic_netplay_main_session_convergence();
+	test_new_classic_netplay_pause_boundary();
 	test_new_classic_netplay_confirmed_digest_schedule();
 	test_raw_bf2_shapes();
 	test_distinct_selection_first_frame();

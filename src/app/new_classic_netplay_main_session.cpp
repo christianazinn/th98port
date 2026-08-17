@@ -6,6 +6,8 @@
 namespace th03::app {
 namespace {
 
+constexpr std::uint16_t input_cancel = 0x1000U;
+
 [[nodiscard]] NewClassicNetplayMainSessionError session_error(
 	NewClassicNetplayMainSessionErrorCode code
 ) noexcept
@@ -66,6 +68,12 @@ struct NewClassicNetplayMainSession::Impl final {
 	> bootstrap_audio{};
 	std::uint8_t bootstrap_audio_head = 0U;
 	std::uint8_t bootstrap_audio_count = 0U;
+	std::array<
+		ClassicAudioCommand,
+		new_classic_netplay_audio_commands_per_frame
+	> pause_audio{};
+	std::uint8_t pause_audio_head = 0U;
+	std::uint8_t pause_audio_count = 0U;
 	std::uint64_t next_audio_frame = 0U;
 	std::uint64_t next_transcript_frame = 0U;
 	std::array<
@@ -226,10 +234,19 @@ struct NewClassicNetplayMainSession::Impl final {
 	> execute(const NewClassicNetplayResolvedFrame &resolved) noexcept
 	{
 		const bool gameplay_frame = input_context == InputContext::gameplay;
+		if(resolved.pause_requested && !gameplay_frame) {
+			return std::unexpected(session_error(
+				NewClassicNetplayMainSessionErrorCode::invalid_boundary
+			));
+		}
+		auto process_input = resolved.combined;
+		if(resolved.pause_requested) {
+			process_input.system |= input_cancel;
+		}
 		auto stepped = input_context == InputContext::gameplay &&
 			!gameplay_reliable_warmup ?
-			coordinator->advance_confirmed(resolved.combined) :
-			coordinator->advance_reliable(resolved.combined, input_context);
+			coordinator->advance_confirmed(process_input) :
+			coordinator->advance_reliable(process_input, input_context);
 		if(!stepped) {
 			return std::unexpected(rollback_error(stepped.error()));
 		}
@@ -289,7 +306,7 @@ struct NewClassicNetplayMainSession::Impl final {
 			.valid = true,
 			.gameplay = gameplay_frame,
 			.frame = resolved.frame,
-			.input = resolved.combined,
+			.input = process_input,
 			.step_result = stepped->step_result,
 			.source_vsyncs = stepped->step_result.next_step_vsyncs,
 		};
@@ -433,7 +450,8 @@ std::expected<
 	NewClassicNetplayOwnedInput input
 ) noexcept
 {
-	if(impl_->status ==
+	if(impl_->status == NewClassicNetplayMainSessionStatus::paused ||
+		impl_->status ==
 		NewClassicNetplayMainSessionStatus::boundary_confirmed ||
 		impl_->status == NewClassicNetplayMainSessionStatus::complete) {
 		return std::unexpected(session_error(
@@ -479,6 +497,14 @@ std::expected<
 				return std::unexpected(stepped.error());
 			}
 			++result.resimulated_frames;
+			if(impl_->boundary_frame && impl_->boundary == StepStatus::paused) {
+				const auto discarded =
+					impl_->timeline->discard_unconfirmed_suffix();
+				if(!discarded) {
+					return std::unexpected(timeline_error(discarded.error()));
+				}
+				break;
+			}
 			if(impl_->boundary_frame &&
 				impl_->timeline->next_frame() < target) {
 				return std::unexpected(session_error(
@@ -578,8 +604,15 @@ std::expected<
 		impl_->status = NewClassicNetplayMainSessionStatus::complete;
 		break;
 	}
-	case StepStatus::running:
 	case StepStatus::paused:
+		if(impl_->input_context != InputContext::gameplay) {
+			return std::unexpected(session_error(
+				NewClassicNetplayMainSessionErrorCode::invalid_boundary
+			));
+		}
+		impl_->status = NewClassicNetplayMainSessionStatus::paused;
+		break;
+	case StepStatus::running:
 	case StepStatus::invalid_input_context:
 	case StepStatus::simulation_not_implemented:
 		return std::unexpected(session_error(
@@ -604,6 +637,91 @@ std::expected<
 	};
 }
 
+std::expected<
+	NewClassicNetplayMainSessionTick,
+	NewClassicNetplayMainSessionError
+> NewClassicNetplayMainSession::resume_pause() noexcept
+{
+	if(impl_->status != NewClassicNetplayMainSessionStatus::paused ||
+		impl_->boundary_frame || impl_->boundary ||
+		impl_->input_context != InputContext::gameplay) {
+		return std::unexpected(session_error(
+			NewClassicNetplayMainSessionErrorCode::not_running
+		));
+	}
+	constexpr std::array<CoreInput, 3U> canonical_resume{{
+		{},
+		{.system = input_cancel},
+		{},
+	}};
+	StepResult completed{};
+	for(std::size_t index = 0U; index < canonical_resume.size(); ++index) {
+		auto stepped = impl_->coordinator->advance_pause(
+			canonical_resume[index]
+		);
+		if(!stepped) {
+			return std::unexpected(rollback_error(stepped.error()));
+		}
+		const bool final = index + 1U == canonical_resume.size();
+		if((!final && stepped->status != StepStatus::paused) ||
+			(final && stepped->status == StepStatus::paused)) {
+			return std::unexpected(session_error(
+				NewClassicNetplayMainSessionErrorCode::pause_failed
+			));
+		}
+		completed = *stepped;
+	}
+	impl_->pause_audio_head = 0U;
+	impl_->pause_audio_count = 0U;
+	if(!impl_->drain_audio(
+		impl_->pause_audio, impl_->pause_audio_count
+	)) {
+		return std::unexpected(session_error(
+			NewClassicNetplayMainSessionErrorCode::audio_journal_failed
+		));
+	}
+	const auto completed_frame = impl_->timeline->next_frame() - 1U;
+	if(completed.status == StepStatus::running) {
+		const auto reset = impl_->coordinator->try_reset_rollback_boundary();
+		if(!reset || !*reset) {
+			return std::unexpected(reset ? session_error(
+				NewClassicNetplayMainSessionErrorCode::pause_failed
+			) : rollback_error(reset.error()));
+		}
+		impl_->status = NewClassicNetplayMainSessionStatus::running;
+	} else {
+		const auto proof = new_classic_netplay_boundary_proof(completed.status);
+		if(proof == NewClassicNetplayBoundaryProof::none) {
+			return std::unexpected(session_error(
+				NewClassicNetplayMainSessionErrorCode::invalid_boundary
+			));
+		}
+		impl_->boundary_frame = completed_frame;
+		impl_->boundary = completed.status;
+		impl_->status =
+			NewClassicNetplayMainSessionStatus::boundary_waiting_confirmation;
+		if(const auto queued = impl_->enqueue_confirmed_digest(
+			impl_->timeline->next_frame(),
+			NewClassicNetplaySimulationDigestKind::boundary, proof
+		); !queued) {
+			return std::unexpected(queued.error());
+		}
+		impl_->update_boundary_confirmation();
+	}
+	impl_->hold_samples_remaining = completed.next_step_vsyncs > 1U ?
+		static_cast<std::uint8_t>(completed.next_step_vsyncs - 1U) : 0U;
+	impl_->pending_hold_samples = 0U;
+	return NewClassicNetplayMainSessionTick{
+		.status = impl_->status,
+		.frame = completed_frame,
+		.boundary = completed.status == StepStatus::running ?
+			std::nullopt : std::optional{completed.status},
+		.pause_completion = completed,
+		.confirmed_frame_count = impl_->timeline->confirmed_frame_count(),
+		.surface_publishable = true,
+	};
+}
+
 std::expected<present::SourceSurface, present::SourceSurfaceError>
 NewClassicNetplayMainSession::compose_shown_surface(
 	std::span<present::ComposedPixel, present::graphics_page_pixels> output
@@ -615,10 +733,13 @@ NewClassicNetplayMainSession::compose_shown_surface(
 std::optional<ClassicAudioCommand>
 NewClassicNetplayMainSession::take_audio_command() noexcept
 {
-	if(impl_->bootstrap_audio_head >= impl_->bootstrap_audio_count) {
-		return std::nullopt;
+	if(impl_->bootstrap_audio_head < impl_->bootstrap_audio_count) {
+		return impl_->bootstrap_audio[impl_->bootstrap_audio_head++];
 	}
-	return impl_->bootstrap_audio[impl_->bootstrap_audio_head++];
+	if(impl_->pause_audio_head < impl_->pause_audio_count) {
+		return impl_->pause_audio[impl_->pause_audio_head++];
+	}
+	return std::nullopt;
 }
 
 std::expected<

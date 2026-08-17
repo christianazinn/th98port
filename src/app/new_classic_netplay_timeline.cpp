@@ -257,6 +257,9 @@ std::expected<
 		const auto *previous = impl_->slot_if_retained(impl_->next_frame - 1U);
 		if(previous && previous->executed && previous->resolved_remote) {
 			remote = *previous->resolved_remote;
+			// Control markers are edges. Repeating one as a held-input
+			// prediction would invent another pause after Resume.
+			remote.control = NewClassicNetplayControl::none;
 		}
 	}
 	const auto combined = impl_->local_player ==
@@ -279,6 +282,10 @@ std::expected<
 		.local = *(*slot)->local,
 		.remote = remote,
 		.combined = *combined,
+		.pause_requested =
+			(*slot)->local->control ==
+				NewClassicNetplayControl::pause_request ||
+			remote.control == NewClassicNetplayControl::pause_request,
 		.remote_predicted = predicted,
 		.prediction_depth = static_cast<std::uint8_t>(depth),
 	};
@@ -347,6 +354,23 @@ NewClassicNetplayInputTimeline::rewind_to_rollback() noexcept
 	return {};
 }
 
+std::expected<void, NewClassicNetplayTimelineError>
+NewClassicNetplayInputTimeline::discard_unconfirmed_suffix() noexcept
+{
+	if(impl_->rollback_frame ||
+		impl_->confirmed_frame_count > impl_->next_frame) {
+		return std::unexpected(timeline_error(
+			NewClassicNetplayTimelineErrorCode::rollback_unavailable
+		));
+	}
+	for(auto &slot : impl_->slots) {
+		if(slot.valid && slot.frame >= impl_->next_frame) {
+			slot = Impl::Slot{};
+		}
+	}
+	return {};
+}
+
 std::optional<std::uint64_t>
 NewClassicNetplayInputTimeline::rollback_frame() const noexcept
 {
@@ -376,6 +400,10 @@ NewClassicNetplayInputTimeline::resolved_frame(std::uint64_t frame) const noexce
 		.local = *slot->local,
 		.remote = *slot->resolved_remote,
 		.combined = slot->combined,
+		.pause_requested = slot->local->control ==
+				NewClassicNetplayControl::pause_request ||
+			slot->resolved_remote->control ==
+				NewClassicNetplayControl::pause_request,
 		.remote_predicted = slot->remote_predicted,
 		.prediction_depth = slot->prediction_depth,
 	};

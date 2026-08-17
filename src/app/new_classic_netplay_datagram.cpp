@@ -76,7 +76,8 @@ void put_u64(std::span<std::byte> output, std::size_t offset,
 	return boundary == NewClassicNetplayBoundaryProof::none ||
 		boundary == NewClassicNetplayBoundaryProof::phase_transition ||
 		boundary == NewClassicNetplayBoundaryProof::round_transition ||
-		boundary == NewClassicNetplayBoundaryProof::terminal;
+		boundary == NewClassicNetplayBoundaryProof::terminal ||
+		boundary == NewClassicNetplayBoundaryProof::pause;
 }
 
 [[nodiscard]] std::expected<void, NewClassicNetplayDatagramError>
