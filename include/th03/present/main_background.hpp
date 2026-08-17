@@ -98,6 +98,7 @@ public:
 	) noexcept;
 
 private:
+	friend class MainPresenterRollbackAccess;
 	struct Record {
 		std::int16_t x_q12_4 = 0;
 		std::int16_t y_q12_4 = 0;

@@ -73,6 +73,7 @@ public:
 	[[nodiscard]] bool ready() const noexcept;
 
 private:
+	friend class MainPresenterRollbackAccess;
 	struct HitCircleState {
 		std::uint8_t age = 0U;
 		PlayerId player = PlayerId::p1;

@@ -99,6 +99,7 @@ public:
 	[[nodiscard]] bool ready() const noexcept;
 
 private:
+	friend class MainPresenterRollbackAccess;
 	struct HudBannerRecord {
 		std::int16_t x = 0;
 		std::int16_t y = 0;

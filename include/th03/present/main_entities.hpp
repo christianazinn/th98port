@@ -99,6 +99,7 @@ public:
 	[[nodiscard]] bool ready() const noexcept;
 
 private:
+	friend class MainPresenterRollbackAccess;
 	Raster *raster_;
 	const Sprite16Staging *staging_;
 	MainEntityAtlasLayout layout_{};

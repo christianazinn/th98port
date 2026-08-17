@@ -187,6 +187,7 @@ public:
 		const noexcept;
 
 private:
+	friend class MainPresenterRollbackAccess;
 	enum class Phase : std::uint8_t {
 		boss,
 		shots_enemies,

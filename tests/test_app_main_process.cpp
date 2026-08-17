@@ -14,6 +14,7 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -1022,6 +1023,92 @@ auto create_synthetic(
 		resources,
 		std::move(*compiled),
 		font_rom
+	);
+}
+
+void test_presenter_rollback_state()
+{
+	using th03::present::MainPresenterRollbackState;
+	static_assert(std::is_trivially_copyable_v<MainPresenterRollbackState>);
+
+	MainDirectVsConfig config{};
+	const auto resources = make_resources(config.player_one, config.player_two);
+	auto created = create_synthetic(config, resources);
+	expect(static_cast<bool>(created), "presenter rollback process creation");
+	if(!created) {
+		return;
+	}
+	auto &process = **created;
+	expect(
+		MainProcessTestAccess::presenter_rollback_ready(process),
+		"fresh MAIN publication is a rollback boundary"
+	);
+	MainPresenterRollbackState original{};
+	expect(
+		MainProcessTestAccess::capture_presenter_rollback(process, original),
+		"presenter rollback capture at completed frame"
+	);
+
+	auto changed = original;
+	changed.background[0].x_q12_4 ^= 0x1234;
+	changed.background[1].velocity_y_q12_4 ^= 0x2345;
+	changed.boss_ellen_phase ^= 0x5AU;
+	changed.entity_shot_cels[0] ^= 3U;
+	changed.hit_circles[0].left ^= 0x1234;
+	changed.common_effects[0].angle ^= 0x55U;
+	changed.kana_destination_cache[1][7] ^= 0xA5U;
+	changed.shared_velocity_x_q4_4 ^= 0x3F;
+	changed.player_poses[0] = 2U;
+	changed.defeat.radius ^= 0x2345;
+	changed.bullet16_styles[319].observed =
+		!changed.bullet16_styles[319].observed;
+	changed.bomb_activations[1].frame ^= 0x66U;
+	changed.reimu[1][15].x ^= 0x3456;
+	changed.mima[0][3].x ^= 0x4567;
+	changed.ellen[1][7].velocity_y ^= 0x5678;
+	changed.ellen_release_cursor ^= 0x77U;
+	changed.marisa_point.screen_y ^= 0x6789;
+	changed.rikako_radius ^= 0x1357;
+	changed.warning_ramp_value[0] ^= 0x88U;
+	changed.warning_boss_level ^= 0x44U;
+	changed.hud_banner[15].velocity ^= 0x2468;
+	changed.hud_particles[127].angle ^= 0x99U;
+	changed.result_initial_quotient ^= 0x369CU;
+	changed.transition_coordinates[7] ^= 0x147A;
+
+	MainProcessTestAccess::restore_presenter_rollback(process, changed);
+	MainPresenterRollbackState recaptured{};
+	expect(
+		MainProcessTestAccess::capture_presenter_rollback(process, recaptured),
+		"restored presenter state remains a completed-frame boundary"
+	);
+	expect(recaptured == changed,
+		"presenter rollback restores every typed mutable field");
+
+	MainProcessTestAccess::restore_presenter_rollback(process, original);
+	MainPresenterRollbackState round_trip{};
+	expect(
+		MainProcessTestAccess::capture_presenter_rollback(process, round_trip) &&
+			round_trip == original,
+		"presenter rollback restores the original state exactly"
+	);
+	const auto stepped = process.step({});
+	expect(
+		stepped && stepped->status == th03::StepStatus::running &&
+			MainProcessTestAccess::presenter_rollback_ready(process) &&
+			MainProcessTestAccess::capture_presenter_rollback(
+				process, round_trip
+			),
+		"completed gameplay frame returns to the rollback boundary"
+	);
+
+	MainProcessTestAccess::fail_presentation(process);
+	expect(
+		!MainProcessTestAccess::presenter_rollback_ready(process) &&
+			!MainProcessTestAccess::capture_presenter_rollback(
+				process, round_trip
+			),
+		"failed or partial presentation cannot be captured"
 	);
 }
 
@@ -2932,6 +3019,7 @@ bool run_local_authentic_gate(
 int main(int argc, char **argv)
 {
 	test_main_feedback_policy();
+	test_presenter_rollback_state();
 	test_raw_bf2_shapes();
 	test_distinct_selection_first_frame();
 	test_live_bomb_first_frame();

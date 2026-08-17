@@ -386,6 +386,7 @@ add_library(th03_present STATIC
 	src/present/main_palette.cpp
 	src/present/main_players.cpp
 	src/present/main_round.cpp
+	src/present/main_rollback.cpp
 	src/present/main_static.cpp
 	src/present/main_warning_gauge.cpp
 	src/present/mono.cpp

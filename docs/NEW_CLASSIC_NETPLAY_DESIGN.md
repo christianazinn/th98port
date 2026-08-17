@@ -651,13 +651,15 @@ does not silently broaden leaderboard acceptance.
 ### N0: rollback-state proof, no networking
 
 1. Enumerate complete mutable `Game`, MAIN driver, presenter, Raster, TRAM, and
-   feedback state. The `Game` simulation owner and shared Raster/TRAM visual
-   machines are complete; private presenters, process, and feedback remain open.
+   feedback state. The `Game` simulation owner, shared Raster/TRAM visual
+   machines, and private retained MAIN presenters are complete; process-driver
+   and semantic-audio feedback remain open.
 2. Add field-wise `T3RBK001` capture/restore and simulation/full digests. The
    architecture-neutral simulation image and shared visual image are now
-   implemented, transactionally restored, and measured; peer SHA-256 and the
-   private presenter/process section remain open. See `T3RBK001.md` and
-   `T3RBV001.md`.
+   implemented, transactionally restored, and measured. The fixed-capacity
+   presenter state is field-wise and measured; peer SHA-256, its enclosing
+   canonical process image, and process-driver/audio sections remain open. See
+   `T3RBK001.md`, `T3RBV001.md`, and `T3RBP001.md`.
 3. Add a local rollback owner and one-frame-every-frame sync test.
 4. Measure snapshot bytes, capture/restore time, resimulation time, and memory.
 

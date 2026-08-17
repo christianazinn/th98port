@@ -94,6 +94,7 @@ public:
 	[[nodiscard]] bool ready() const noexcept;
 
 private:
+	friend class MainPresenterRollbackAccess;
 	enum class Character : std::uint8_t {
 		reimu,
 		mima,

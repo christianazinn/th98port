@@ -13,6 +13,7 @@
 #include "th03/present/main_palette.hpp"
 #include "th03/present/main_players_bullets.hpp"
 #include "th03/present/main_round.hpp"
+#include "th03/present/main_rollback.hpp"
 #include "th03/present/main_static.hpp"
 #include "th03/present/main_warning_gauge.hpp"
 #include "th03/present/mono.hpp"

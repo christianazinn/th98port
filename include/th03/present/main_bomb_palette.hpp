@@ -58,6 +58,7 @@ public:
 	[[nodiscard]] MainBombPaletteStatus status() const noexcept;
 
 private:
+	friend class MainPresenterRollbackAccess;
 	Raster *raster_;
 	MainPaletteState *palette_;
 	KotohimeBombFadeCompatibility kotohime_compatibility_{};

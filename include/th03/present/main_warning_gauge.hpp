@@ -67,6 +67,7 @@ public:
 	[[nodiscard]] bool ready() const noexcept;
 
 private:
+	friend class MainPresenterRollbackAccess;
 	[[nodiscard]] bool fail(MainWarningGaugeStatus status) noexcept;
 	[[nodiscard]] bool put_warning_text(
 		std::size_t player,

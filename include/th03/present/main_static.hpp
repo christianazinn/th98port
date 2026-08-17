@@ -172,6 +172,7 @@ public:
 	[[nodiscard]] bool started() const noexcept;
 
 private:
+	friend class MainPresenterRollbackAccess;
 	MainPageRoles pages_{};
 	Sprite16Staging sprite_staging_{};
 	bool started_ = false;

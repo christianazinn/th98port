@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "th03/app/main_process.hpp"
+#include "th03/present/main_rollback.hpp"
 
 #include "classic_mainl_stage_internal.hpp"
 #include "main_process_static_content_internal.hpp"
@@ -70,6 +71,20 @@ struct MainProcessTestAccess final {
 
 	[[nodiscard]] static std::uint8_t continues_used_digit(
 		const MainProcess &process
+	) noexcept;
+
+	[[nodiscard]] static bool presenter_rollback_ready(
+		const MainProcess &process
+	) noexcept;
+
+	[[nodiscard]] static bool capture_presenter_rollback(
+		const MainProcess &process,
+		present::MainPresenterRollbackState &state
+	) noexcept;
+
+	static void restore_presenter_rollback(
+		MainProcess &process,
+		const present::MainPresenterRollbackState &state
 	) noexcept;
 
 	[[nodiscard]] static MainFeedbackPolicyFact feedback_policy(

@@ -52,6 +52,7 @@ public:
 	[[nodiscard]] bool dirty() const noexcept;
 
 private:
+	friend class MainPresenterRollbackAccess;
 	Palette16Rgb8 baseline_{};
 	bool baseline_ready_ = false;
 	bool dirty_ = false;

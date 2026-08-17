@@ -504,6 +504,75 @@ std::uint8_t MainProcessTestAccess::continues_used_digit(
 	return process.impl_->continues_used_digit;
 }
 
+bool MainProcessTestAccess::presenter_rollback_ready(
+	const MainProcess &process
+) noexcept
+{
+	const auto &impl = *process.impl_;
+	return present::MainPresenterRollbackAccess::boundary_ready(
+		impl.palette,
+		impl.static_presenter,
+		*impl.background,
+		*impl.bosses,
+		*impl.entities,
+		*impl.effects,
+		*impl.extra_charge,
+		*impl.players_bullets,
+		*impl.bombs,
+		*impl.warning_gauge,
+		*impl.hud_result,
+		*impl.round
+	);
+}
+
+bool MainProcessTestAccess::capture_presenter_rollback(
+	const MainProcess &process,
+	present::MainPresenterRollbackState &state
+) noexcept
+{
+	if(!presenter_rollback_ready(process)) {
+		return false;
+	}
+	const auto &impl = *process.impl_;
+	present::MainPresenterRollbackAccess::capture(
+		impl.palette,
+		impl.static_presenter,
+		*impl.background,
+		*impl.bosses,
+		*impl.entities,
+		*impl.effects,
+		*impl.extra_charge,
+		*impl.players_bullets,
+		*impl.bombs,
+		*impl.warning_gauge,
+		*impl.hud_result,
+		state
+	);
+	return true;
+}
+
+void MainProcessTestAccess::restore_presenter_rollback(
+	MainProcess &process,
+	const present::MainPresenterRollbackState &state
+) noexcept
+{
+	auto &impl = *process.impl_;
+	present::MainPresenterRollbackAccess::restore(
+		impl.palette,
+		impl.static_presenter,
+		*impl.background,
+		*impl.bosses,
+		*impl.entities,
+		*impl.effects,
+		*impl.extra_charge,
+		*impl.players_bullets,
+		*impl.bombs,
+		*impl.warning_gauge,
+		*impl.hud_result,
+		state
+	);
+}
+
 MainFeedbackPolicyFact MainProcessTestAccess::feedback_policy(
 	MainFeedbackCueSite site
 ) noexcept
