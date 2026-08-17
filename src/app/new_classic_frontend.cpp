@@ -1550,6 +1550,142 @@ std::size_t NewClassicReplayBrowserTestAccess::physical_row_count(
 	).size();
 }
 
+NewClassicReplayHub::NewClassicReplayHub(
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+) :
+	patch_assets_(std::move(patch_assets))
+{
+	valid_ = static_cast<bool>(patch_assets_);
+	draw();
+	if(valid_) {
+		patch_surface_.raster().set_palette_tone(0);
+		patch_surface_.raster().apply_pending_palette();
+	}
+}
+
+bool NewClassicReplayHub::valid() const noexcept
+{
+	return valid_;
+}
+
+void NewClassicReplayHub::draw() noexcept
+{
+	if(!valid_ || !patch_assets_ || !patch_surface_.begin_hidden_frame(
+		patch_assets_->replay_list_background
+	)) {
+		valid_ = false;
+		return;
+	}
+	auto &raster = patch_surface_.raster();
+	static_cast<void>(raster.set_pending_palette_entry(12U, {15U, 15U, 0U}));
+	raster.apply_pending_palette();
+	const auto &font = patch_assets_->menu_font;
+	const auto &messages = patch_assets_->messages();
+	const std::array ids{
+		NewClassicMessageId::replay_command_local,
+		NewClassicMessageId::replay_command_online,
+		NewClassicMessageId::replay_command_downloaded,
+		NewClassicMessageId::replay_command_return,
+	};
+	valid_ = font.put_centered(
+		raster, 320, 80, messages.text(NewClassicMessageId::title_replay), 9U
+	);
+	for(std::size_t row = 0U; valid_ && row < ids.size(); ++row) {
+		const auto top = static_cast<std::int32_t>(144U + (row * 32U));
+		const auto color = static_cast<present::Index4>(
+			row == selection_ ? 12U : 15U
+		);
+		valid_ = font.put_centered(
+			raster, 320, top, messages.text(ids[row]), color
+		);
+		if(valid_ && row == selection_) {
+			valid_ = font.put(raster, 160, top, ">", 12U);
+		}
+	}
+	if(valid_ && !patch_surface_.publish(raster.access_page())) {
+		valid_ = false;
+	}
+}
+
+NewClassicReplayHubResult NewClassicReplayHub::consume(
+	NewClassicUiInput input
+) noexcept
+{
+	if(!valid_ || status_ != NewClassicReplayHubStatus::running) {
+		return {.status = status_};
+	}
+	if(input.app_quit_requested) {
+		status_ = NewClassicReplayHubStatus::application_quit;
+		return {.status = status_};
+	}
+	if(fade_in_active_) {
+		auto &raster = patch_surface_.raster();
+		bool changed = false;
+		if(fade_boundary_ != 0U && fade_boundary_ <= 17U) {
+			const auto pair = static_cast<std::int16_t>(fade_boundary_ - 1U);
+			raster.set_palette_tone(static_cast<std::int16_t>(pair * 6));
+			raster.apply_pending_palette();
+			changed = true;
+		}
+		++fade_boundary_;
+		if(fade_boundary_ >= palette_fade_boundary_count) {
+			raster.set_palette_tone(100);
+			raster.apply_pending_palette();
+			fade_in_active_ = false;
+			input_allowed_ = !any(input);
+			changed = true;
+		}
+		return {.surface_changed = changed, .status = status_};
+	}
+	if(!input_allowed_) {
+		if(!any(input)) {
+			input_allowed_ = true;
+		}
+		return {.status = status_};
+	}
+	if(!any(input)) {
+		return {.status = status_};
+	}
+	input_allowed_ = false;
+	if(input.cancel || input.bomb) {
+		status_ = NewClassicReplayHubStatus::back;
+		return {.status = status_};
+	}
+	if(input.up) {
+		selection_ = (selection_ + 3U) % 4U;
+	} else if(input.down) {
+		selection_ = (selection_ + 1U) % 4U;
+	} else if(input.confirm) {
+		constexpr std::array outcomes{
+			NewClassicReplayHubStatus::local_selected,
+			NewClassicReplayHubStatus::online_selected,
+			NewClassicReplayHubStatus::downloaded_selected,
+			NewClassicReplayHubStatus::back,
+		};
+		status_ = outcomes[selection_];
+		return {.status = status_};
+	} else {
+		return {.status = status_};
+	}
+	draw();
+	return {.surface_changed = valid_, .status = status_};
+}
+
+present::SourceSurface NewClassicReplayHub::surface() const noexcept
+{
+	return patch_surface_.surface();
+}
+
+NewClassicReplayHubStatus NewClassicReplayHub::status() const noexcept
+{
+	return status_;
+}
+
+std::size_t NewClassicReplayHub::selection() const noexcept
+{
+	return selection_;
+}
+
 namespace {
 
 [[nodiscard]] std::string online_ascii(std::string_view text)
@@ -1610,15 +1746,34 @@ namespace {
 NewClassicHighScoreMenu::NewClassicHighScoreMenu(
 	std::vector<NewClassicOnlineCacheDocument> boards,
 	std::uint8_t rank,
-	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	NewClassicOnlineMenuMode mode
 ) :
-	patch_assets_(std::move(patch_assets))
+	patch_assets_(std::move(patch_assets)),
+	mode_(mode)
 {
 	for(auto &board : boards) {
 		if(board.board_category &&
 			board.board_category->mode == NewClassicOnlineMode::story &&
 			board.board_category->rank == rank &&
 			validate_new_classic_online_cache(board)) {
+			if(mode_ != NewClassicOnlineMenuMode::high_scores) {
+				std::erase_if(board.leaderboard_entries,
+					[&board, this](const auto &entry) {
+						if(!entry.replay_id) {
+							return true;
+						}
+						const auto replay = std::ranges::find(
+							board.replay_records, *entry.replay_id,
+							&NewClassicOnlineReplayRecord::replay_id
+						);
+						return replay == board.replay_records.end() ||
+							(mode_ == NewClassicOnlineMenuMode::downloaded_replays &&
+							 replay->availability !=
+								NewClassicOnlineReplayAvailability::downloaded);
+					}
+				);
+			}
 			boards_.push_back(std::move(board));
 		}
 	}
@@ -1632,6 +1787,9 @@ NewClassicHighScoreMenu::NewClassicHighScoreMenu(
 	);
 	if(!patch_assets_ || boards_.empty() || duplicate != boards_.end()) {
 		return;
+	}
+	if(mode_ != NewClassicOnlineMenuMode::high_scores) {
+		page_ = Page::board;
 	}
 	valid_ = true;
 	draw();
@@ -1714,13 +1872,27 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 		NewClassicMessageArgument{"rank", rank},
 		NewClassicMessageArgument{"character", character},
 	};
-	valid_ = font.put_centered(raster, 320, 48, messages.format(
+	const auto category_title = messages.format(
 		NewClassicMessageId::hiscore_online_title, title_arguments
-	), 9U) &&
+	);
+	if(mode_ == NewClassicOnlineMenuMode::high_scores) {
+		valid_ = font.put_centered(raster, 320, 48, category_title, 9U);
+	} else {
+		const auto title_id = mode_ ==
+			NewClassicOnlineMenuMode::downloaded_replays ?
+			NewClassicMessageId::replay_downloaded_title :
+			NewClassicMessageId::replay_online_title;
+		valid_ = font.put_centered(
+			raster, 320, 48, messages.text(title_id), 9U
+		) && font.put_centered(raster, 320, 64, category_title, 15U);
+	}
+	valid_ = valid_ &&
 		font.put(raster, 48, 80, messages.text(
 			NewClassicMessageId::hiscore_online_header_place), 9U) &&
-		font.put(raster, 96, 80, messages.text(
-			NewClassicMessageId::hiscore_online_label_player), 9U) &&
+		font.put(raster, 96, 80, messages.text(mode_ ==
+			NewClassicOnlineMenuMode::high_scores ?
+			NewClassicMessageId::hiscore_online_label_player :
+			NewClassicMessageId::replay_header_name), 9U) &&
 		font.put_right(raster, 340, 80, messages.text(
 			NewClassicMessageId::replay_header_score), 9U) &&
 		font.put(raster, 364, 80, messages.text(
@@ -1747,9 +1919,18 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 		if(entry_index == selected_entry_) {
 			valid_ = font.put(raster, 32, top, ">", 12U);
 		}
-		auto player = online_ascii(entry.player);
-		if(player.size() > 13U) {
-			player.resize(13U);
+		const auto replay_it = entry.replay_id ? std::ranges::find(
+			board.replay_records, *entry.replay_id,
+			&NewClassicOnlineReplayRecord::replay_id
+		) : board.replay_records.end();
+		const auto *replay = replay_it == board.replay_records.end() ?
+			nullptr : &*replay_it;
+		auto name = online_ascii(
+			mode_ == NewClassicOnlineMenuMode::high_scores || !replay ?
+				std::string_view{entry.player} : std::string_view{replay->title}
+		);
+		if(name.size() > 13U) {
+			name.resize(13U);
 		}
 		const auto score = online_score(entry.result.score);
 		const auto stage = entry.result.kind ==
@@ -1759,7 +1940,7 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 		valid_ = valid_ &&
 			patch_put_fixed(font, raster, 48, top,
 				online_place(entry_index), 12, color) &&
-			patch_put_fixed(font, raster, 96, top, player, 13, color) &&
+			patch_put_fixed(font, raster, 96, top, name, 13, color) &&
 			patch_put_fixed(font, raster,
 				340 - static_cast<std::int32_t>(score.size() * 12U), top,
 				score, 12, color) &&
@@ -1811,21 +1992,31 @@ void NewClassicHighScoreMenu::draw_detail() noexcept
 		return font.put(raster, 96, top, messages.text(label), 9U) &&
 			font.put(raster, 256, top, value, 15U);
 	};
-	auto player = online_ascii(entry.player);
-	if(player.size() > 24U) {
-		player.resize(24U);
+	const auto *replay = selected_replay();
+	auto name = online_ascii(
+		mode_ == NewClassicOnlineMenuMode::high_scores || !replay ?
+			std::string_view{entry.player} : std::string_view{replay->title}
+	);
+	if(name.size() > 24U) {
+		name.resize(24U);
 	}
 	const auto score = online_score(entry.result.score);
 	const auto result = online_result(entry, messages);
 	valid_ = font.put_centered(raster, 320, 64, messages.text(
-		NewClassicMessageId::hiscore_command_online
+		mode_ == NewClassicOnlineMenuMode::high_scores ?
+			NewClassicMessageId::hiscore_command_online :
+			(mode_ == NewClassicOnlineMenuMode::downloaded_replays ?
+				NewClassicMessageId::replay_downloaded_title :
+				NewClassicMessageId::replay_online_title)
 	), 9U) &&
-		put_row(96, NewClassicMessageId::hiscore_online_label_player, player) &&
+		put_row(96, mode_ == NewClassicOnlineMenuMode::high_scores ?
+			NewClassicMessageId::hiscore_online_label_player :
+			NewClassicMessageId::replay_header_name, name) &&
 		put_row(128, NewClassicMessageId::replay_header_score, score) &&
 		put_row(160, NewClassicMessageId::hiscore_online_label_result, result) &&
 		put_row(192, NewClassicMessageId::replay_label_date,
 			dos_date_label(entry.dos_date));
-	if(const auto *replay = selected_replay()) {
+	if(replay) {
 		const auto autofire = messages.text((replay->autofire & 0x01U) ?
 			NewClassicMessageId::replay_autofire_on :
 			NewClassicMessageId::replay_autofire_off);
@@ -1867,7 +2058,7 @@ void NewClassicHighScoreMenu::draw_detail() noexcept
 	}
 	NewClassicMessageId footer =
 		NewClassicMessageId::hiscore_online_detail_footer;
-	if(const auto *replay = selected_replay(); replay) {
+	if(replay) {
 		if(replay->availability ==
 			NewClassicOnlineReplayAvailability::downloaded) {
 			const bool pending = watch_target_ &&
@@ -1997,9 +2188,13 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 		return {.status = status_};
 	}
 	if(input.cancel || input.bomb) {
-		page_ = Page::hub;
-		draw();
-		return {.surface_changed = valid_, .status = status_};
+		if(mode_ == NewClassicOnlineMenuMode::high_scores) {
+			page_ = Page::hub;
+			draw();
+			return {.surface_changed = valid_, .status = status_};
+		}
+		status_ = NewClassicHighScoreMenuStatus::back;
+		return {.status = status_};
 	}
 	if(input.left || input.right) {
 		board_index_ = input.left ?
@@ -2056,6 +2251,11 @@ std::size_t NewClassicHighScoreMenu::selected_board() const noexcept
 std::size_t NewClassicHighScoreMenu::selected_entry() const noexcept
 {
 	return selected_entry_;
+}
+
+NewClassicOnlineMenuMode NewClassicHighScoreMenu::mode() const noexcept
+{
+	return mode_;
 }
 
 std::optional<NewClassicOnlineReplayRecord>

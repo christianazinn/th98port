@@ -164,6 +164,7 @@ struct ClassicOpSessionSelectionResult final {
 
 enum class ClassicOpSessionReplayResult : std::uint8_t {
 	back,
+	continue_browser,
 	preparing_playback,
 	play,
 	application_quit,

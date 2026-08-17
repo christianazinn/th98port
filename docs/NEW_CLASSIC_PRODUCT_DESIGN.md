@@ -283,21 +283,25 @@ Personal Bests
 Return
 ```
 
-The eventual Replay hub is:
+The current Replay hub is:
 
 ```text
 Local Replays
 Online Replay Library
 Downloaded Replays
-My Uploads
 Return
 ```
+
+`My Uploads` joins this list only when account enrollment and upload history
+are real product destinations; it is not shown as an inert placeholder.
 
 The HiScore hub appears only when at least one validated cached online board
 exists for the active rank. With no such board, HiScore still opens the local
 viewer directly, so an offline or unconfigured installation gains no empty
-navigation layer. The Replay hub remains deferred until it has a second real
-destination.
+navigation layer. The Replay hub appears only when the active-rank cache
+contains at least one replay record. Otherwise Replay still opens the local
+viewer directly, so an offline, curated-history-only, or unconfigured
+installation gains no empty navigation layer.
 
 An ordinary online leaderboard entry is derived by a pinned, sandboxed,
 resource-limited server verifier from an uploaded V13 replay. The client never
@@ -480,15 +484,17 @@ entry emits one bounded background download and reports success only after
 digest, V13, metadata, and atomic-publication validation. Session 213 adds
 Watch: the host revalidates local content-addressed bytes, hands the immutable
 document back to OP, crosses a black/silent boundary, rebases the scheduler,
-and adopts the existing New Classic playback owner. The hub remains absent
-when no active-rank cache exists. Replay navigation, account mutation, upload,
-and My Records remain deferred.
+and adopts the existing New Classic playback owner. Session 214 adds the
+source-styled Replay hub plus replay-only online and downloaded libraries;
+without an active-rank replay record, the direct local route remains. Account
+mutation, upload, My Uploads, and My Records remain deferred.
 
 - Define leaderboard/replay identifiers, category keys, provenance, and local
   cache documents without selecting a service vendor.
 - Add the HiScore hub when Personal Bests or a real online view exists.
   Complete for cached online boards in session 201.
-- Add the Replay hub when an online/downloaded view exists.
+- Add the Replay hub when an online/downloaded view exists. Complete in
+  session 214.
 - Preserve direct Local views until then.
 
 Gate: offline behavior, replay cross-links, legacy entries without fake replay

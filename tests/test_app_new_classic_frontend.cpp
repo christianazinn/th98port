@@ -381,6 +381,83 @@ void finish_entry_fade(th03::app::NewClassicHighScoreMenu &menu)
 	}
 }
 
+void finish_entry_fade(th03::app::NewClassicReplayHub &menu)
+{
+	for(std::size_t boundary = 0U; boundary < 19U; ++boundary) {
+		static_cast<void>(menu.consume({}));
+	}
+}
+
+void test_replay_hub_and_libraries()
+{
+	using namespace th03::app;
+	NewClassicReplayHub unavailable({});
+	expect(!unavailable.valid(),
+		"Replay hub refuses to invent a non-patch fallback surface");
+	const auto patch_assets = optional_patch_assets();
+	if(!patch_assets) {
+		return;
+	}
+	NewClassicReplayHub local(patch_assets);
+	expect(local.valid() && local.surface().palette_tone == 0 &&
+		local.selection() == 0U,
+		"Replay hub opens from black with Local Replays selected");
+	finish_entry_fade(local);
+	static_cast<void>(local.consume({}));
+	expect(local.consume({.confirm = true}).status ==
+		NewClassicReplayHubStatus::local_selected,
+		"Replay hub defaults to the existing local browser");
+
+	NewClassicReplayHub downloaded(patch_assets);
+	finish_entry_fade(downloaded);
+	static_cast<void>(downloaded.consume({}));
+	const auto first_hash = surface_hash(downloaded.surface());
+	static_cast<void>(downloaded.consume({.down = true}));
+	static_cast<void>(downloaded.consume({}));
+	static_cast<void>(downloaded.consume({.down = true}));
+	expect(downloaded.selection() == 2U &&
+		surface_hash(downloaded.surface()) != first_hash,
+		"Replay hub source-redraws the Downloaded Replays selection");
+	static_cast<void>(downloaded.consume({}));
+	expect(downloaded.consume({.confirm = true}).status ==
+		NewClassicReplayHubStatus::downloaded_selected,
+		"Replay hub exposes the downloaded replay library");
+
+	NewClassicHighScoreMenu online_library(
+		{online_board(
+			2U, 4U, 0x21U,
+			NewClassicOnlineReplayAvailability::metadata_only
+		)},
+		2U, patch_assets, NewClassicOnlineMenuMode::online_replays
+	);
+	expect(online_library.valid() && online_library.viewing_online() &&
+		online_library.mode() == NewClassicOnlineMenuMode::online_replays,
+		"online Replay library opens directly on replay-backed rows");
+	finish_entry_fade(online_library);
+	static_cast<void>(online_library.consume({}));
+	static_cast<void>(online_library.consume({.confirm = true}));
+	static_cast<void>(online_library.consume({}));
+	static_cast<void>(online_library.consume({.confirm = true}));
+	expect(online_library.take_replay_download_request().has_value(),
+		"online Replay library reuses the validated download transaction");
+
+	NewClassicHighScoreMenu downloaded_library(
+		{online_board(2U, 4U, 0x31U)}, 2U, patch_assets,
+		NewClassicOnlineMenuMode::downloaded_replays
+	);
+	expect(downloaded_library.valid() && downloaded_library.viewing_online() &&
+		downloaded_library.mode() ==
+			NewClassicOnlineMenuMode::downloaded_replays,
+		"downloaded Replay library opens directly on local records");
+	finish_entry_fade(downloaded_library);
+	static_cast<void>(downloaded_library.consume({}));
+	static_cast<void>(downloaded_library.consume({.confirm = true}));
+	static_cast<void>(downloaded_library.consume({}));
+	static_cast<void>(downloaded_library.consume({.confirm = true}));
+	expect(downloaded_library.take_replay_watch_request().has_value(),
+		"downloaded Replay library reuses the validated Watch transaction");
+}
+
 void test_online_high_score_menu()
 {
 	using namespace th03::app;
@@ -1124,6 +1201,7 @@ void test_catalog_browser_and_save()
 
 int main()
 {
+	test_replay_hub_and_libraries();
 	test_online_high_score_menu();
 	test_catalog_browser_and_save();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

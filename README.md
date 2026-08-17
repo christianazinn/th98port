@@ -281,8 +281,12 @@ metadata, and atomic-publication checks must all pass before the UI reports it
 as downloaded; local downloads are revalidated on later launches. Confirm on
 `Downloaded` validates the local file once more outside source time, then
 enters the ordinary New Classic replay player through a black/silent OP
-boundary. Enrollment, replay upload, and production Cloudflare resources
-remain unavailable.
+boundary. When an active-rank cache contains replay records, the title Replay
+route now opens a source-styled hub for Local Replays, the Online Replay
+Library, Downloaded Replays, and Return. The two online libraries reuse those
+same Download and Watch transactions; without replay-backed cache data, Replay
+still enters the authenticated local browser directly. Enrollment, replay
+upload, My Uploads, and production Cloudflare resources remain unavailable.
 The private `tools\th03-private-editor` utility provides direct migration:
 it accepts an original 824-byte PC-98 scorefile or Replay Patch 0.4.12's exact
 7,812-byte expanded file, validates it, backs up any current native score, and

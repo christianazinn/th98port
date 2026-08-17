@@ -79,6 +79,50 @@ enum class NewClassicReplayBrowserStatus : std::uint8_t {
 	application_quit,
 };
 
+enum class NewClassicReplayHubStatus : std::uint8_t {
+	running,
+	local_selected,
+	online_selected,
+	downloaded_selected,
+	back,
+	application_quit,
+};
+
+struct NewClassicReplayHubResult final {
+	bool surface_changed = false;
+	NewClassicReplayHubStatus status = NewClassicReplayHubStatus::running;
+};
+
+// New Classic-only source-styled navigation owner. It is instantiated only
+// when validated cached online replay data makes at least one non-local
+// destination real; offline installations retain the direct local browser.
+class NewClassicReplayHub final {
+public:
+	explicit NewClassicReplayHub(
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	);
+
+	[[nodiscard]] bool valid() const noexcept;
+	[[nodiscard]] NewClassicReplayHubResult consume(
+		NewClassicUiInput input
+	) noexcept;
+	[[nodiscard]] present::SourceSurface surface() const noexcept;
+	[[nodiscard]] NewClassicReplayHubStatus status() const noexcept;
+	[[nodiscard]] std::size_t selection() const noexcept;
+
+private:
+	void draw() noexcept;
+
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
+	NewClassicPatchSurface patch_surface_{};
+	NewClassicReplayHubStatus status_ = NewClassicReplayHubStatus::running;
+	std::size_t selection_ = 0U;
+	bool valid_ = false;
+	bool fade_in_active_ = true;
+	std::uint8_t fade_boundary_ = 0U;
+	bool input_allowed_ = false;
+};
+
 enum class NewClassicReplayDetailPage : std::uint8_t {
 	splits,
 	clear_bonuses,
@@ -190,6 +234,12 @@ enum class NewClassicOnlineReplayWatchOutcome : std::uint8_t {
 	failed,
 };
 
+enum class NewClassicOnlineMenuMode : std::uint8_t {
+	high_scores,
+	online_replays,
+	downloaded_replays,
+};
+
 // New Classic-only source-styled hub for local and cached online score views.
 // Every online row was already validated by the T3ONL002 decoder. The owner
 // may emit one immutable replay-download intent, but never performs network or
@@ -201,7 +251,9 @@ public:
 	NewClassicHighScoreMenu(
 		std::vector<NewClassicOnlineCacheDocument> boards,
 		std::uint8_t rank,
-		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+		NewClassicOnlineMenuMode mode =
+			NewClassicOnlineMenuMode::high_scores
 	);
 
 	[[nodiscard]] bool valid() const noexcept;
@@ -214,6 +266,7 @@ public:
 	[[nodiscard]] bool viewing_detail() const noexcept;
 	[[nodiscard]] std::size_t selected_board() const noexcept;
 	[[nodiscard]] std::size_t selected_entry() const noexcept;
+	[[nodiscard]] NewClassicOnlineMenuMode mode() const noexcept;
 	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>
 	take_replay_download_request() noexcept;
 	[[nodiscard]] bool report_replay_download(
@@ -253,6 +306,7 @@ private:
 	std::vector<NewClassicOnlineCacheDocument> boards_{};
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
 	NewClassicPatchSurface patch_surface_{};
+	NewClassicOnlineMenuMode mode_ = NewClassicOnlineMenuMode::high_scores;
 	Page page_ = Page::hub;
 	NewClassicHighScoreMenuStatus status_ =
 		NewClassicHighScoreMenuStatus::running;

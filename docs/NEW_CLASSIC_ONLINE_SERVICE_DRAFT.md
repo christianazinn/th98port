@@ -345,6 +345,15 @@ source boundary, adopts the existing checkpoint-zero playback owner, and asks
 the host scheduler to rebase before the first gameplay tick. A stale local file
 is demoted to a retryable download and never reaches playback.
 
+Session 214 exposes the replay-oriented side of the same immutable cache. If
+the active rank contains any replay records, title Replay opens a proportional
+four-row hub for Local Replays, Online Replay Library, Downloaded Replays, and
+Return. The two library modes contain replay-backed rows only, use replay names
+instead of account display names, and reuse the exact Download/Watch host
+transactions above. With no replay-backed cache, Replay still enters the local
+browser directly. `My Uploads` remains absent until enrollment and upload
+history exist.
+
 This is deliberately a deployment seam rather than a hidden public endpoint.
 Enrollment, upload consent, `My Records`, real Cloudflare resources, and the
 pinned Container adapter remain pending.

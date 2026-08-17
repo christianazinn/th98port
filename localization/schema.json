@@ -253,6 +253,13 @@
     {"enum": "device_no_controllers", "id": "device.no-controllers", "domain": "menu-font", "max_width": 400},
     {"enum": "device_error_save", "id": "device.error.save", "domain": "menu-font", "max_width": 400},
 
+    {"enum": "replay_command_local", "id": "replay.command.local", "domain": "menu-font", "max_width": 400},
+    {"enum": "replay_command_online", "id": "replay.command.online", "domain": "menu-font", "max_width": 400},
+    {"enum": "replay_command_downloaded", "id": "replay.command.downloaded", "domain": "menu-font", "max_width": 400},
+    {"enum": "replay_command_return", "id": "replay.command.return", "domain": "menu-font", "max_width": 400},
+    {"enum": "replay_online_title", "id": "replay.online.title", "domain": "menu-font", "max_width": 560},
+    {"enum": "replay_downloaded_title", "id": "replay.downloaded.title", "domain": "menu-font", "max_width": 560},
+
     {"enum": "hiscore_command_local", "id": "hiscore.command.local", "domain": "menu-font", "max_width": 400},
     {"enum": "hiscore_command_online", "id": "hiscore.command.online", "domain": "menu-font", "max_width": 400},
     {"enum": "hiscore_command_return", "id": "hiscore.command.return", "domain": "menu-font", "max_width": 400},

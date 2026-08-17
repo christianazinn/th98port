@@ -252,6 +252,13 @@
     "device.no-controllers": "No controllers connected",
     "device.error.save": "Could not save TH3DEV.CFG",
 
+    "replay.command.local": "Local Replays",
+    "replay.command.online": "Online Replay Library",
+    "replay.command.downloaded": "Downloaded Replays",
+    "replay.command.return": "Return",
+    "replay.online.title": "Online Replay Library",
+    "replay.downloaded.title": "Downloaded Replays",
+
     "hiscore.command.local": "Local HiScores",
     "hiscore.command.online": "Online Leaderboards",
     "hiscore.command.return": "Return",
