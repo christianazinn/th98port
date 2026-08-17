@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <chrono>
 #include <ctime>
 #include <expected>
 #include <filesystem>
@@ -15,6 +16,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -31,6 +33,7 @@
 #include "th03/app/direct_vs_launch.hpp"
 #include "th03/app/main_direct_vs_runner.hpp"
 #include "th03/app/new_classic_netplay_datagram.hpp"
+#include "th03/app/new_classic_netplay_lobby.hpp"
 #include "th03/app/new_classic_netplay_match_contract.hpp"
 #include "th03/app/new_classic_netplay_main_session.hpp"
 #include "th03/app/new_classic_netplay_post_match.hpp"
@@ -1288,49 +1291,72 @@ platform_window_presentation(
 
 namespace {
 
-[[nodiscard]] std::expected<
-	std::uint64_t,
-	th03::app::NewClassicNetplayMatchContractError
-> netplay_contract_hash(
+[[nodiscard]] th03::app::NewClassicNetplayHostLock netplay_host_lock(
 	const th03::app::DirectVsCliRequest &request
 ) noexcept
 {
-	if(!request.launch.process.game_options.three_digit_combos ||
-		request.launch.process.game_options.input_protocol !=
-			th03::InputProtocol::live) {
-		return std::unexpected(th03::app::NewClassicNetplayMatchContractError{
-			.code = th03::app::NewClassicNetplayMatchContractErrorCode::
-				invalid_host_lock,
-		});
-	}
-	const auto contract =
-		th03::app::create_new_classic_netplay_match_contract({
-			.player_one = {
-				.character = static_cast<std::uint8_t>(
-					request.launch.process.player_one.character
-				),
-				.palette = static_cast<std::uint8_t>(
-					request.launch.process.player_one.palette
-				),
-			},
-			.rank = request.launch.process.rank,
-			.seed = request.launch.process.seed,
-			.cadence_ticks = request.tick_rate.ticks,
-			.cadence_seconds = request.tick_rate.seconds,
-		}, {
-			.player_two = {
-				.character = static_cast<std::uint8_t>(
-					request.launch.process.player_two.character
-				),
-				.palette = static_cast<std::uint8_t>(
-					request.launch.process.player_two.palette
-				),
-			},
-		});
-	if(!contract) {
-		return std::unexpected(contract.error());
-	}
-	return th03::app::new_classic_netplay_match_contract_hash(*contract);
+	return {
+		.player_one = {
+			.character = static_cast<std::uint8_t>(
+				request.launch.process.player_one.character
+			),
+			.palette = static_cast<std::uint8_t>(
+				request.launch.process.player_one.palette
+			),
+		},
+		.rank = request.launch.process.rank,
+		.seed = request.launch.process.seed,
+		.cadence_ticks = request.tick_rate.ticks,
+		.cadence_seconds = request.tick_rate.seconds,
+	};
+}
+
+[[nodiscard]] th03::app::NewClassicNetplayJoinLock netplay_join_lock(
+	const th03::app::DirectVsCliRequest &request
+) noexcept
+{
+	return {
+		.player_two = {
+			.character = static_cast<std::uint8_t>(
+				request.launch.process.player_two.character
+			),
+			.palette = static_cast<std::uint8_t>(
+				request.launch.process.player_two.palette
+			),
+		},
+	};
+}
+
+void apply_netplay_contract(
+	th03::app::DirectVsCliRequest &request,
+	const th03::app::NewClassicNetplayMatchContract &contract
+) noexcept
+{
+	request.launch.process.player_one = {
+		.character = static_cast<th03::app::MainCharacter>(
+			contract.player_one.character
+		),
+		.palette = static_cast<th03::app::MainPaletteVariant>(
+			contract.player_one.palette
+		),
+	};
+	request.launch.process.player_two = {
+		.character = static_cast<th03::app::MainCharacter>(
+			contract.player_two.character
+		),
+		.palette = static_cast<th03::app::MainPaletteVariant>(
+			contract.player_two.palette
+		),
+	};
+	request.launch.process.rank = contract.rank;
+	request.launch.process.seed = contract.seed;
+	request.tick_rate = {
+		.ticks = contract.cadence_ticks,
+		.seconds = contract.cadence_seconds,
+	};
+	request.launch.process.game_options.input_protocol =
+		th03::InputProtocol::live;
+	request.launch.process.game_options.three_digit_combos = true;
 }
 
 [[nodiscard]] th03::app::NewClassicNetplayOwnedInput netplay_owned_input(
@@ -1386,6 +1412,159 @@ void log_netplay_session_error(
 	return encoded && socket.send(peer, *encoded).has_value();
 }
 
+[[nodiscard]] bool send_netplay_lobby_datagram(
+	th03::platform::UdpSocket &socket,
+	th03::platform::UdpIpv4Endpoint peer,
+	const th03::app::NewClassicNetplayLobbyDatagram &datagram
+)
+{
+	const auto encoded =
+		th03::app::encode_new_classic_netplay_lobby_datagram(datagram);
+	return encoded && socket.send(peer, *encoded).has_value();
+}
+
+struct DirectNetplayLobbyResult final {
+	std::unique_ptr<th03::platform::UdpSocket> socket{};
+	th03::platform::UdpIpv4Endpoint peer{};
+	th03::app::NewClassicNetplayLobby lobby{};
+	th03::app::NewClassicNetplayMatchContract contract{};
+};
+
+[[nodiscard]] std::expected<DirectNetplayLobbyResult, int>
+negotiate_direct_netplay_lobby(
+	const th03::app::DirectVsCliRequest &request
+)
+{
+	using th03::app::DirectVsNetplayMode;
+	using th03::app::NewClassicNetplayLobby;
+	using th03::app::NewClassicNetplayLobbyDatagramType;
+	using th03::app::NewClassicNetplayLobbyStatus;
+	const auto mode = request.netplay_mode;
+	auto socket = th03::platform::UdpSocket::bind(
+		mode == DirectVsNetplayMode::host ? request.netplay_host_port : 0U
+	);
+	if(!socket) {
+		return std::unexpected(fail_netplay("netplay-socket", "bind-failed"));
+	}
+	std::optional<th03::platform::UdpIpv4Endpoint> peer{};
+	if(mode == DirectVsNetplayMode::join) {
+		const auto endpoint = th03::platform::resolve_udp_ipv4_endpoint(
+			request.netplay_join_endpoint
+		);
+		if(!endpoint) {
+			return std::unexpected(fail_netplay(
+				"netplay-endpoint", "resolve-ipv4-endpoint"
+			));
+		}
+		peer = *endpoint;
+		std::cout << "resolved-peer=" <<
+			th03::platform::format_udp_ipv4_endpoint(*peer) << '\n';
+	}
+	const auto clock_seed = static_cast<std::uint64_t>(
+		std::chrono::steady_clock::now().time_since_epoch().count()
+	);
+	auto created_lobby = mode == DirectVsNetplayMode::host ?
+		NewClassicNetplayLobby::create_host(
+			netplay_host_lock(request),
+			(clock_seed ^ 0xA35C91D27B48E60FULL) == 0U ? 1U :
+				(clock_seed ^ 0xA35C91D27B48E60FULL)
+		) :
+		NewClassicNetplayLobby::create_join(netplay_join_lock(request));
+	if(!created_lobby) {
+		return std::unexpected(fail_netplay(
+			"netplay-lobby", "invalid-local-lock"
+		));
+	}
+	auto lobby = std::move(*created_lobby);
+	std::cout << "status=waiting\nrole=" <<
+		(mode == DirectVsNetplayMode::host ? "host-p1" : "join-p2") << '\n';
+	if(mode == DirectVsNetplayMode::host) {
+		std::cout << "listen-port=" << request.netplay_host_port << '\n';
+	} else {
+		std::cout << "peer=" << request.netplay_join_endpoint << '\n';
+	}
+	std::cout.flush();
+
+	const auto started = std::chrono::steady_clock::now();
+	auto last_send = started - std::chrono::milliseconds(100);
+	std::array<std::byte, th03::app::new_classic_netplay_datagram_bytes>
+		receive_buffer{};
+	while(lobby.status() != NewClassicNetplayLobbyStatus::ready) {
+		const auto now = std::chrono::steady_clock::now();
+		if(now - started > std::chrono::seconds(30)) {
+			return std::unexpected(fail_netplay(
+				"netplay-lobby", "timeout"
+			));
+		}
+		for(;;) {
+			const auto received = (*socket)->receive(receive_buffer);
+			if(!received) {
+				return std::unexpected(fail_netplay(
+					"netplay-lobby", "receive-failed"
+				));
+			}
+			if(!*received) {
+				break;
+			}
+			if((*received)->size !=
+				th03::app::new_classic_netplay_lobby_bytes) {
+				continue;
+			}
+			const auto packet =
+				th03::app::decode_new_classic_netplay_lobby_datagram(
+					std::span(receive_buffer).first((*received)->size)
+				);
+			if(!packet || (peer && *peer != (*received)->sender)) {
+				continue;
+			}
+			if(mode == DirectVsNetplayMode::host && !peer &&
+				packet->type != NewClassicNetplayLobbyDatagramType::join_request) {
+				continue;
+			}
+			if(const auto accepted = lobby.receive(*packet); !accepted) {
+				return std::unexpected(fail_netplay(
+					"netplay-lobby", "peer-lock-conflict"
+				));
+			}
+			if(!peer) {
+				peer = (*received)->sender;
+			}
+			if(const auto outbound = lobby.outbound(); outbound &&
+				!send_netplay_lobby_datagram(**socket, *peer, *outbound)) {
+				return std::unexpected(fail_netplay(
+					"netplay-lobby", "send-failed"
+				));
+			}
+			last_send = now;
+		}
+		if(lobby.status() == NewClassicNetplayLobbyStatus::ready) {
+			break;
+		}
+		if(peer && now - last_send >= std::chrono::milliseconds(100)) {
+			if(const auto outbound = lobby.outbound(); outbound &&
+				!send_netplay_lobby_datagram(**socket, *peer, *outbound)) {
+				return std::unexpected(fail_netplay(
+					"netplay-lobby", "send-failed"
+				));
+			}
+			last_send = now;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	const auto contract = lobby.contract();
+	if(!peer || !contract || lobby.session_id() == 0U) {
+		return std::unexpected(fail_netplay(
+			"netplay-lobby", "incomplete-ready-state"
+		));
+	}
+	return DirectNetplayLobbyResult{
+		.socket = std::move(*socket),
+		.peer = *peer,
+		.lobby = std::move(lobby),
+		.contract = *contract,
+	};
+}
+
 [[nodiscard]] bool send_netplay_input_history(
 	th03::platform::UdpSocket &socket,
 	th03::platform::UdpIpv4Endpoint peer,
@@ -1426,20 +1605,32 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	using th03::app::NewClassicNetplayPlayer;
 	using th03::app::NewClassicNetplayPostMatchStatus;
 	parsed.launch.process.classic_audio_lifecycle = true;
-	const auto created_contract_hash = netplay_contract_hash(parsed);
-	if(!created_contract_hash) {
-		return fail_netplay("netplay-contract", "invalid-match-lock");
-	}
-	const auto contract_hash = *created_contract_hash;
 	const auto mode = parsed.netplay_mode;
-	const auto audio_data_root = parsed.launch.content.data_root;
-	const auto post_match_content = parsed.launch.content;
 	const auto local_player = mode == DirectVsNetplayMode::host ?
 		NewClassicNetplayPlayer::player_one :
 		NewClassicNetplayPlayer::player_two;
 	const auto remote_player = mode == DirectVsNetplayMode::host ?
 		NewClassicNetplayPlayer::player_two :
 		NewClassicNetplayPlayer::player_one;
+	auto negotiated = negotiate_direct_netplay_lobby(parsed);
+	if(!negotiated) {
+		return negotiated.error();
+	}
+	apply_netplay_contract(parsed, negotiated->contract);
+	const auto created_contract_hash =
+		th03::app::new_classic_netplay_match_contract_hash(
+			negotiated->contract
+		);
+	if(!created_contract_hash) {
+		return fail_netplay("netplay-contract", "invalid-match-lock");
+	}
+	const auto contract_hash = *created_contract_hash;
+	auto socket = std::move(negotiated->socket);
+	std::optional<th03::platform::UdpIpv4Endpoint> peer{negotiated->peer};
+	auto lobby = std::move(negotiated->lobby);
+	std::uint64_t session_id = lobby.session_id();
+	const auto audio_data_root = parsed.launch.content.data_root;
+	const auto post_match_content = parsed.launch.content;
 
 	auto process = th03::app::load_direct_vs_process(std::move(parsed.launch));
 	if(!process) {
@@ -1480,25 +1671,6 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			return fail("netplay-audio-command", applied.error());
 		}
 	}
-	auto socket = th03::platform::UdpSocket::bind(
-		mode == DirectVsNetplayMode::host ? parsed.netplay_host_port : 0U
-	);
-	if(!socket) {
-		return fail_netplay("netplay-socket", "bind-failed");
-	}
-	std::optional<th03::platform::UdpIpv4Endpoint> peer{};
-	if(mode == DirectVsNetplayMode::join) {
-		const auto endpoint = th03::platform::resolve_udp_ipv4_endpoint(
-			parsed.netplay_join_endpoint
-		);
-		if(!endpoint) {
-			return fail_netplay("netplay-endpoint", "resolve-ipv4-endpoint");
-		}
-		peer = *endpoint;
-		std::cout << "resolved-peer=" <<
-			th03::platform::format_udp_ipv4_endpoint(*peer) << '\n';
-	}
-
 	auto platform = th03::platform::SdlPlatform::create(platform_config());
 	if(!platform) {
 		return fail("platform-create", platform.error());
@@ -1618,11 +1790,6 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	auto last_initial_digest_send_ns = start_ns - 250'000'000U;
 	auto last_runtime_digest_send_ns = start_ns - 250'000'000U;
 	auto last_receive_ns = start_ns;
-	std::uint64_t session_id = mode == DirectVsNetplayMode::host ?
-		(start_ns ^ contract_hash ^ 0xA35C91D27B48E60FULL) : 0U;
-	if(mode == DirectVsNetplayMode::host && session_id == 0U) {
-		session_id = 1U;
-	}
 	bool established = false;
 	bool peer_started_input = false;
 	bool retry_blocked_event = false;
@@ -1642,14 +1809,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	bool runtime_digest_peer_ack = false;
 	bool presentation_pending = false;
 	std::uint64_t local_frames = 0U;
-	std::cout << "status=waiting\nrole=" <<
-		(mode == DirectVsNetplayMode::host ? "host-p1" : "join-p2") <<
-		"\ncontract=" << contract_hash << '\n';
-	if(mode == DirectVsNetplayMode::host) {
-		std::cout << "listen-port=" << parsed.netplay_host_port << '\n';
-	} else {
-		std::cout << "peer=" << parsed.netplay_join_endpoint << '\n';
-	}
+	std::cout << "status=match-locked\ncontract=" << contract_hash << '\n';
 	std::cout.flush();
 	const auto send_simulation_digest = [&](
 		NewClassicNetplayDatagramType type,
@@ -1662,7 +1822,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		if(!peer || session_id == 0U) {
 			return false;
 		}
-		return send_netplay_datagram(**socket, *peer, {
+		return send_netplay_datagram(*socket, *peer, {
 			.type = type,
 			.sender = local_player,
 			.session_id = session_id,
@@ -1699,7 +1859,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			// UDP has no delivery acknowledgement. Three bounded copies make an
 			// intentional local leave prompt without turning shutdown into a wait.
 			for(std::uint8_t attempt = 0U; attempt < 3U; ++attempt) {
-				(void)send_netplay_datagram(**socket, *peer, departure);
+				(void)send_netplay_datagram(*socket, *peer, departure);
 			}
 		}
 		std::cout << "status=left\n";
@@ -1969,12 +2129,33 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		}
 
 		for(;;) {
-			const auto received = (*socket)->receive(receive_buffer);
+			const auto received = socket->receive(receive_buffer);
 			if(!received) {
 				return fail_netplay("netplay-receive", "socket-failed");
 			}
 			if(!*received) {
 				break;
+			}
+			if((*received)->size ==
+				th03::app::new_classic_netplay_lobby_bytes) {
+				const auto lobby_packet =
+					th03::app::decode_new_classic_netplay_lobby_datagram(
+						std::span(receive_buffer).first((*received)->size)
+					);
+				if(mode == DirectVsNetplayMode::host && lobby_packet && peer &&
+					*peer == (*received)->sender &&
+					(lobby_packet->type == th03::app::
+						NewClassicNetplayLobbyDatagramType::join_request ||
+					 lobby_packet->type == th03::app::
+						NewClassicNetplayLobbyDatagramType::join_ready) &&
+					lobby.receive(*lobby_packet)) {
+					if(const auto response = lobby.outbound(); response) {
+						(void)send_netplay_lobby_datagram(
+							*socket, *peer, *response
+						);
+					}
+				}
+				continue;
 			}
 			const auto packet = th03::app::decode_new_classic_netplay_datagram(
 				std::span(receive_buffer).first((*received)->size)
@@ -1993,7 +2174,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 					.session_id = session_id,
 					.contract_hash = contract_hash,
 				};
-				if(!send_netplay_datagram(**socket, *peer, accepted)) {
+				if(!send_netplay_datagram(*socket, *peer, accepted)) {
 					return fail_netplay("netplay-accept", "send-failed");
 				}
 				last_receive_ns = now_ns;
@@ -2214,7 +2395,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				.sender = local_player,
 				.contract_hash = contract_hash,
 			};
-			if(!send_netplay_datagram(**socket, *peer, hello)) {
+			if(!send_netplay_datagram(*socket, *peer, hello)) {
 				return fail_netplay("netplay-hello", "send-failed");
 			}
 			last_send_ns = now_ns;
@@ -2295,7 +2476,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				if(input_staged) {
 					newest_local_frame = frame;
 					if(!send_netplay_input_history(
-						**socket, *peer, **session, local_player, session_id,
+						*socket, *peer, **session, local_player, session_id,
 						contract_hash, frame
 					)) {
 						return fail_netplay("netplay-input", "send-failed");
@@ -2379,7 +2560,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		if(established && !post_match && newest_local_frame && peer &&
 			now_ns - last_send_ns >= 50'000'000U) {
 			if(!send_netplay_input_history(
-				**socket, *peer, **session, local_player, session_id,
+				*socket, *peer, **session, local_player, session_id,
 				contract_hash, *newest_local_frame
 			)) {
 				return fail_netplay("netplay-resend", "send-failed");

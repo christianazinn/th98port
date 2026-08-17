@@ -17,9 +17,11 @@ The host owns logical P1 and the joiner owns logical P2. Both machines use
 their ordinary local-player controls: `T/F/H/B` for directions, `R/Y/V/N` for
 diagonals, `Z` for Shot, and `X` for Bomb. Escape leaves the preview and sends
 an immediate departure to the other peer; closing the window does the same.
-The two
-commands must use the same characters, rank, seed, tick rate, executable
-revision, and authenticated game data.
+The host supplies P1, rank, seed, and source cadence. The joiner supplies P2.
+The pre-MAIN lobby exchange combines those independently owned values and both
+sides then prove the complete initial simulation. Both machines must use the
+same executable revision and authenticated game data; they no longer duplicate
+each other's character or room-rule arguments.
 
 ## Windows host from the standalone
 
@@ -28,7 +30,7 @@ Find the Windows Tailscale address and choose a UDP port:
 ```powershell
 tailscale ip -4
 .\PoDD-Port-Test.exe --netplay-host 31415 `
-  --p1 reimu --p2 mima --rank 1 --seed 34 `
+  --p1 reimu --rank 1 --seed 34 `
   --netplay-replay-output .\REPLAY\NETPLAY-WINDOWS.RPY
 ```
 
@@ -69,7 +71,7 @@ normal native run (the canonical ignored workspace layout calls it
   --main /path/to/originals/th03_full/MAIN.EXE \
   --font /path/to/FONT.ROM \
   --netplay-join WINDOWS_TAILSCALE_IP_OR_MAGICDNS_NAME:31415 \
-  --p1 reimu --p2 mima --rank 1 --seed 34 \
+  --p2 mima \
   --netplay-replay-output ./NETPLAY-ARCH.RPY
 ```
 
@@ -81,8 +83,10 @@ DNS never enters the deterministic simulation.
 
 ## Current diagnostics and failure policy
 
-The handshake rejects a different deterministic contract. Before either
-source scheduler starts, both peers also hash and exchange the canonical
+The retry-safe `T3NL001` lobby refuses ownership changes and does not construct
+MAIN until the host's P1/rules lock and the joiner's P2 lock form one exact
+`T3NLC001` contract. Before either source scheduler starts, both peers also
+hash and exchange the canonical
 frame-zero `T3RBK001` simulation state. A content, seed, state, or build
 disagreement therefore fails with `initial-simulation-mismatch` instead of
 beginning a divergent match. A successful connection prints
