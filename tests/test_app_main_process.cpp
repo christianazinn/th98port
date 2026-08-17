@@ -1,6 +1,7 @@
 #include "th03/app/main_process.hpp"
 #include "th03/app/main_direct_vs_runner.hpp"
 #include "th03/app/main_rollback_coordinator.hpp"
+#include "th03/app/new_classic_netplay_main_session.hpp"
 
 #include <algorithm>
 #include <array>
@@ -51,6 +52,10 @@ using th03::app::MainProcessDemoAccess;
 using th03::app::MainProcessErrorCode;
 using th03::app::MainRollbackCoordinator;
 using th03::app::MainRollbackCoordinatorErrorCode;
+using th03::app::NewClassicNetplayMainSession;
+using th03::app::NewClassicNetplayMainSessionStatus;
+using th03::app::NewClassicNetplayOwnedInput;
+using th03::app::NewClassicNetplayPlayer;
 using th03::app::MainProcessStoryAccess;
 using th03::app::MainProcessTestAccess;
 using th03::app::MainResourceKey;
@@ -1400,6 +1405,138 @@ void test_main_rollback_coordinator_every_frame()
 		coordinator.process().canonical_state().state_hash ==
 			reference.canonical_state().state_hash,
 		"ring restore and forward resimulation converge completely");
+}
+
+void test_new_classic_netplay_main_session_convergence()
+{
+	constexpr std::uint64_t frame_count = 48U;
+	MainDirectVsConfig config{};
+	const auto resources = make_resources(config.player_one, config.player_two);
+	auto one_process = create_synthetic(config, resources);
+	auto two_process = create_synthetic(config, resources);
+	auto reference_process = create_synthetic(config, resources);
+	expect(one_process && two_process && reference_process,
+		"netplay MAIN session peer/reference processes construct");
+	if(!one_process || !two_process || !reference_process) {
+		return;
+	}
+	auto peer_one = NewClassicNetplayMainSession::create(
+		NewClassicNetplayPlayer::player_one, std::move(*one_process)
+	);
+	auto peer_two = NewClassicNetplayMainSession::create(
+		NewClassicNetplayPlayer::player_two, std::move(*two_process)
+	);
+	expect(peer_one && peer_two,
+		"both retained MAIN netplay sessions accept a rollback-safe boundary");
+	if(!peer_one || !peer_two) {
+		return;
+	}
+	const auto input_one = [](std::uint64_t frame) {
+		return NewClassicNetplayOwnedInput{
+			.word = static_cast<std::uint16_t>(
+				(frame % 2U ? 0x0001U : 0x0004U) |
+				(frame % 5U == 0U ? 0x0020U : 0U)
+			),
+			.charge = static_cast<std::uint8_t>(frame % 3U == 0U),
+		};
+	};
+	const auto input_two = [](std::uint64_t frame) {
+		return NewClassicNetplayOwnedInput{
+			.word = static_cast<std::uint16_t>(
+				(frame % 3U ? 0x0002U : 0x0008U) |
+				(frame % 7U == 0U ? 0x0010U : 0U)
+			),
+			.charge = static_cast<std::uint8_t>(frame % 4U == 1U),
+		};
+	};
+	std::uint64_t corrections = 0U;
+	for(std::uint64_t host_frame = 0U;
+		host_frame < frame_count + 7U; ++host_frame) {
+		if(host_frame < frame_count) {
+			const auto one = (*peer_one)->advance_local(input_one(host_frame));
+			const auto two = (*peer_two)->advance_local(input_two(host_frame));
+			expect(one && two && one->frame == host_frame &&
+				two->frame == host_frame && one->surface_publishable &&
+				two->surface_publishable,
+				"both peers advance one privately predicted MAIN boundary");
+			const auto combined = th03::app::combine_new_classic_netplay_inputs(
+				input_one(host_frame), input_two(host_frame)
+			);
+			const auto reference = combined ?
+				(*reference_process)->step(*combined) :
+				std::expected<th03::StepResult, th03::app::MainProcessError>{
+					std::unexpected(th03::app::MainProcessError{})
+				};
+			expect(combined && reference &&
+				reference->status == th03::StepStatus::running,
+				"uninterrupted netplay reference advances exact combined input");
+		}
+		for(std::uint64_t frame = 0U; frame < frame_count; ++frame) {
+			const auto delay_one = 1U + ((frame * 5U) % 6U);
+			const auto delay_two = 1U + ((frame * 3U) % 7U);
+			// Reverse delivery order within a host frame by visiting newest first.
+			const auto candidate = frame_count - 1U - frame;
+			if(candidate + delay_one == host_frame) {
+				const auto result = (*peer_two)->submit_remote(
+					candidate, input_one(candidate)
+				);
+				expect(static_cast<bool>(result),
+					"peer two accepts delayed/reordered P1 input");
+				if(result) {
+					corrections += result->resimulated_frames;
+				}
+			}
+			if(candidate + delay_two == host_frame) {
+				const auto result = (*peer_one)->submit_remote(
+					candidate, input_two(candidate)
+				);
+				expect(static_cast<bool>(result),
+					"peer one accepts delayed/reordered P2 input");
+				if(result) {
+					corrections += result->resimulated_frames;
+				}
+			}
+		}
+	}
+	expect((*peer_one)->confirmed_frame_count() == frame_count &&
+		(*peer_two)->confirmed_frame_count() == frame_count &&
+		corrections > frame_count,
+		"both peers confirm all frames after exercising suffix resimulation");
+	expect((*peer_one)->process().canonical_state().state_hash ==
+			(*peer_two)->process().canonical_state().state_hash &&
+		(*peer_one)->process().canonical_state().state_hash ==
+			(*reference_process)->canonical_state().state_hash,
+		"both repaired peers converge to uninterrupted canonical state");
+	std::vector<th03::present::ComposedPixel> one_pixels(
+		th03::present::graphics_page_pixels
+	);
+	std::vector<th03::present::ComposedPixel> two_pixels(
+		th03::present::graphics_page_pixels
+	);
+	std::vector<th03::present::ComposedPixel> reference_pixels(
+		th03::present::graphics_page_pixels
+	);
+	const auto one_surface = (*peer_one)->compose_shown_surface(
+		std::span<th03::present::ComposedPixel,
+			th03::present::graphics_page_pixels>(one_pixels)
+	);
+	const auto two_surface = (*peer_two)->compose_shown_surface(
+		std::span<th03::present::ComposedPixel,
+			th03::present::graphics_page_pixels>(two_pixels)
+	);
+	const auto reference_surface = (*reference_process)->compose_shown_surface(
+		std::span<th03::present::ComposedPixel,
+			th03::present::graphics_page_pixels>(reference_pixels)
+	);
+	expect(one_surface && two_surface && reference_surface &&
+		one_pixels == two_pixels && one_pixels == reference_pixels &&
+		one_surface->shown_page == two_surface->shown_page &&
+		one_surface->shown_page == reference_surface->shown_page &&
+		one_surface->raster_mode == two_surface->raster_mode &&
+		one_surface->raster_mode == reference_surface->raster_mode &&
+		one_surface->graphics_palette == two_surface->graphics_palette &&
+		one_surface->graphics_palette == reference_surface->graphics_palette,
+		"two-peer suffix correction exposes the exact uninterrupted pixels");
 }
 
 int run_main_rollback_coordinator_benchmark()
@@ -3362,6 +3499,7 @@ int main(int argc, char **argv)
 	test_presenter_rollback_state();
 	test_main_process_rollback_transaction();
 	test_main_rollback_coordinator_every_frame();
+	test_new_classic_netplay_main_session_convergence();
 	test_raw_bf2_shapes();
 	test_distinct_selection_first_frame();
 	test_live_bomb_first_frame();

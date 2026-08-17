@@ -689,7 +689,9 @@ explicit N1 integration gates rather than reasons to alter the rollback image.
    input timeline around the existing local coordinator. The backend-neutral
    transport/timeline half is complete as `T3NTS001`: two peers converge
    through asymmetric delay, primary loss, duplication, reordering,
-   prediction, and rewind. MAIN coordinator/audio/replay integration remains.
+   prediction, and rewind. Its retained MAIN integration is complete as
+   `T3NMS001`: delayed corrections restore and resimulate the complete process,
+   suppress intermediate output, and keep speculative boundaries private.
 3. Build the pinned GGRS C ABI spike and custom queued `NonBlockingSocket`.
 4. Fulfill Save/Load/Advance requests from `MainProcess`.
 5. Freeze prediction, delay, confirmation, digest, and replay-journal behavior.

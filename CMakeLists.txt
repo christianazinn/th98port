@@ -584,6 +584,7 @@ add_library(th03_app_main STATIC
 	src/app/new_classic_key_config_scene.cpp
 	src/app/new_classic_language.cpp
 	src/app/new_classic_messages.cpp
+	src/app/new_classic_netplay_main_session.cpp
 	src/app/new_classic_online_client.cpp
 	src/app/new_classic_online_task.cpp
 	src/app/new_classic_playback.cpp

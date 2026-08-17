@@ -13,11 +13,6 @@ namespace {
 	return MainRollbackCoordinatorError{.code = code};
 }
 
-[[nodiscard]] bool ordinary_gameplay_step(const StepResult &step) noexcept
-{
-	return step.status == StepStatus::running;
-}
-
 } // namespace
 
 struct MainRollbackCoordinator::Impl final {
@@ -82,12 +77,6 @@ struct MainRollbackCoordinator::Impl final {
 			return std::unexpected(MainRollbackCoordinatorError{
 				.code = MainRollbackCoordinatorErrorCode::process_failed,
 				.process = std::move(stepped.error()),
-			});
-		}
-		if(!ordinary_gameplay_step(*stepped)) {
-			return std::unexpected(MainRollbackCoordinatorError{
-				.code = MainRollbackCoordinatorErrorCode::left_gameplay_domain,
-				.step_status = stepped->status,
 			});
 		}
 		return *stepped;
