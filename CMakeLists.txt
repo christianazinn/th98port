@@ -535,6 +535,19 @@ target_compile_features(th03_formats PUBLIC cxx_std_23)
 set_target_properties(th03_formats PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_formats)
 
+# Backend-neutral New Classic rollback/network protocol and deterministic test
+# scheduling. This target owns no game process, socket, platform, clock, or UI.
+add_library(th03_app_netplay STATIC
+	src/app/new_classic_netplay_protocol.cpp
+	src/app/new_classic_netplay_simulator.cpp
+	src/app/new_classic_netplay_timeline.cpp
+)
+target_include_directories(th03_app_netplay PUBLIC include)
+target_link_libraries(th03_app_netplay PUBLIC th03_core)
+target_compile_features(th03_app_netplay PUBLIC cxx_std_23)
+set_target_properties(th03_app_netplay PROPERTIES CXX_EXTENSIONS OFF)
+th03_set_warnings(th03_app_netplay)
+
 # Stable MAIN-process/application policy. It owns both the guarded direct-VS
 # process and the complete source-private Classic OP/MAINL/MAIN lifecycle;
 # platform code sees only the narrow public runners and composed surface.
@@ -571,7 +584,6 @@ add_library(th03_app_main STATIC
 	src/app/new_classic_key_config_scene.cpp
 	src/app/new_classic_language.cpp
 	src/app/new_classic_messages.cpp
-	src/app/new_classic_netplay_protocol.cpp
 	src/app/new_classic_online_client.cpp
 	src/app/new_classic_online_task.cpp
 	src/app/new_classic_playback.cpp
@@ -586,7 +598,7 @@ target_link_libraries(
 	th03_app_main
 	PUBLIC th03_app_resources th03_app_content th03_app_persistence
 		th03_app_runtime th03_app_story_route th03_audio_pmd th03_formats
-		Threads::Threads
+		th03_app_netplay Threads::Threads
 )
 target_compile_features(th03_app_main PUBLIC cxx_std_23)
 set_target_properties(th03_app_main PROPERTIES CXX_EXTENSIONS OFF)
@@ -1278,12 +1290,24 @@ if(BUILD_TESTING)
 		tests/test_app_new_classic_netplay_protocol.cpp
 	)
 	target_link_libraries(
-		th03-app-new-classic-netplay-protocol-tests PRIVATE th03_app_main
+		th03-app-new-classic-netplay-protocol-tests PRIVATE th03_app_netplay
 	)
 	th03_set_warnings(th03-app-new-classic-netplay-protocol-tests)
 	add_test(
 		NAME th03-app-new-classic-netplay-protocol-tests
 		COMMAND th03-app-new-classic-netplay-protocol-tests
+	)
+
+	add_executable(th03-app-new-classic-netplay-simulator-tests
+		tests/test_app_new_classic_netplay_simulator.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-netplay-simulator-tests PRIVATE th03_app_netplay
+	)
+	th03_set_warnings(th03-app-new-classic-netplay-simulator-tests)
+	add_test(
+		NAME th03-app-new-classic-netplay-simulator-tests
+		COMMAND th03-app-new-classic-netplay-simulator-tests
 	)
 
 	add_executable(th03-app-new-classic-key-config-scene-tests

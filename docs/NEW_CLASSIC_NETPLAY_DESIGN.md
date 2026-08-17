@@ -686,7 +686,10 @@ explicit N1 integration gates rather than reasons to alter the rollback image.
    `T3NET001`: exact four-byte wire, strict validation, and independent P1/P2
    composition.
 2. Add a deterministic in-process latency/loss/reorder simulator and resolved
-   input timeline around the existing local coordinator.
+   input timeline around the existing local coordinator. The backend-neutral
+   transport/timeline half is complete as `T3NTS001`: two peers converge
+   through asymmetric delay, primary loss, duplication, reordering,
+   prediction, and rewind. MAIN coordinator/audio/replay integration remains.
 3. Build the pinned GGRS C ABI spike and custom queued `NonBlockingSocket`.
 4. Fulfill Save/Load/Advance requests from `MainProcess`.
 5. Freeze prediction, delay, confirmation, digest, and replay-journal behavior.
