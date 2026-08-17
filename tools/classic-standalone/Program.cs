@@ -44,11 +44,11 @@ internal static class Program
     );
 
     [STAThread]
-    private static int Main()
+    private static int Main(string[] commandLine)
     {
         try
         {
-            return Run();
+            return Run(commandLine);
         }
         catch(Exception exception)
         {
@@ -66,7 +66,7 @@ internal static class Program
         }
     }
 
-    private static int Run()
+    private static int Run(IReadOnlyList<string> commandLine)
     {
         var localApplicationData = Environment.GetFolderPath(
             Environment.SpecialFolder.LocalApplicationData
@@ -139,32 +139,58 @@ internal static class Program
 
         var application = Path.Combine(installRoot, "app", "th03-app.exe");
         var content = Path.Combine(installRoot, "content");
-        var arguments = new List<string>
+        var directNetplay = commandLine.Any(argument =>
+            argument == "--netplay-host" || argument == "--netplay-join"
+        );
+        if(commandLine.Count != 0 && !directNetplay)
         {
-            "--shell",
-            "--data", content,
-            "--main", Path.Combine(content, "MAIN.EXE"),
-            "--mainl", Path.Combine(content, "MAINL.EXE"),
-            "--op", Path.Combine(content, "OP.EXE"),
-            "--font", Path.Combine(content, "FONT.ROM"),
-            "--config", Path.Combine(userRoot, "YUME.CFG"),
-            "--score", Path.Combine(userRoot, "YUME.NEM"),
-            "--replay-root", replayRoot,
-        };
+            throw new InvalidOperationException(
+                "Standalone command-line options currently require " +
+                "--netplay-host or --netplay-join."
+            );
+        }
+        if(directNetplay)
+        {
+            ValidateNetplayArguments(commandLine);
+        }
+        var arguments = directNetplay ?
+            new List<string>
+            {
+                "--vs",
+                "--data", content,
+                "--main", Path.Combine(content, "MAIN.EXE"),
+                "--font", Path.Combine(content, "FONT.ROM"),
+            } :
+            new List<string>
+            {
+                "--shell",
+                "--data", content,
+                "--main", Path.Combine(content, "MAIN.EXE"),
+                "--mainl", Path.Combine(content, "MAINL.EXE"),
+                "--op", Path.Combine(content, "OP.EXE"),
+                "--font", Path.Combine(content, "FONT.ROM"),
+                "--config", Path.Combine(userRoot, "YUME.CFG"),
+                "--score", Path.Combine(userRoot, "YUME.NEM"),
+                "--replay-root", replayRoot,
+            };
+        if(directNetplay)
+        {
+            arguments.AddRange(commandLine);
+        }
         var languageOverlay = Path.Combine(content, "TH3EN.DAT");
-        if(File.Exists(languageOverlay))
+        if(!directNetplay && File.Exists(languageOverlay))
         {
             arguments.Add("--language-overlay");
             arguments.Add(languageOverlay);
         }
         var rhythmRom = Path.Combine(content, "YM2608.ROM");
-        if(File.Exists(rhythmRom))
+        if(!directNetplay && File.Exists(rhythmRom))
         {
             arguments.Add("--rhythm-rom");
             arguments.Add(rhythmRom);
         }
         var rhythmPcm = Path.Combine(content, "T98RHYTHM.PCM");
-        if(File.Exists(rhythmPcm))
+        if(!directNetplay && File.Exists(rhythmPcm))
         {
             arguments.Add("--rhythm-pcm");
             arguments.Add(rhythmPcm);
@@ -172,7 +198,7 @@ internal static class Program
         var smokeTicks = Environment.GetEnvironmentVariable(
             SmokeTicksEnvironment
         );
-        if(!string.IsNullOrWhiteSpace(smokeTicks))
+        if(!directNetplay && !string.IsNullOrWhiteSpace(smokeTicks))
         {
             arguments.Add("--smoke-ticks");
             arguments.Add(smokeTicks);
@@ -229,6 +255,51 @@ internal static class Program
             }
         }
         return process.ExitCode;
+    }
+
+    private static void ValidateNetplayArguments(
+        IReadOnlyList<string> commandLine
+    )
+    {
+        var hostCount = 0;
+        var joinCount = 0;
+        var optionsWithValues = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "--netplay-host",
+            "--netplay-join",
+            "--p1",
+            "--p2",
+            "--rank",
+            "--seed",
+            "--tick-rate",
+            "--smoke-ticks",
+        };
+        for(var index = 0; index < commandLine.Count; index += 2)
+        {
+            var option = commandLine[index];
+            if(!optionsWithValues.Contains(option) ||
+                index + 1 >= commandLine.Count ||
+                string.IsNullOrWhiteSpace(commandLine[index + 1]))
+            {
+                throw new InvalidOperationException(
+                    $"Unsupported or incomplete netplay option: {option}"
+                );
+            }
+            if(option == "--netplay-host")
+            {
+                hostCount++;
+            }
+            else if(option == "--netplay-join")
+            {
+                joinCount++;
+            }
+        }
+        if(hostCount + joinCount != 1)
+        {
+            throw new InvalidOperationException(
+                "Specify exactly one --netplay-host or --netplay-join option."
+            );
+        }
     }
 
     private static bool IsSmokeMode() => !string.IsNullOrWhiteSpace(

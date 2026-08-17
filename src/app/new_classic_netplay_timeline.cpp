@@ -291,6 +291,33 @@ std::expected<
 	return result;
 }
 
+std::expected<
+	NewClassicNetplayResolvedFrame,
+	NewClassicNetplayTimelineError
+> NewClassicNetplayInputTimeline::resolve_next_exact() noexcept
+{
+	if(impl_->rollback_frame) {
+		return std::unexpected(timeline_error(
+			NewClassicNetplayTimelineErrorCode::rollback_required
+		));
+	}
+	auto slot = impl_->slot_for_write(impl_->next_frame);
+	if(!slot) {
+		return std::unexpected(slot.error());
+	}
+	if(!(*slot)->local) {
+		return std::unexpected(timeline_error(
+			NewClassicNetplayTimelineErrorCode::local_input_unavailable
+		));
+	}
+	if(!(*slot)->remote) {
+		return std::unexpected(timeline_error(
+			NewClassicNetplayTimelineErrorCode::remote_input_unavailable
+		));
+	}
+	return resolve_next();
+}
+
 std::expected<void, NewClassicNetplayTimelineError>
 NewClassicNetplayInputTimeline::rewind_to_rollback() noexcept
 {
@@ -352,6 +379,13 @@ NewClassicNetplayInputTimeline::resolved_frame(std::uint64_t frame) const noexce
 		.remote_predicted = slot->remote_predicted,
 		.prediction_depth = slot->prediction_depth,
 	};
+}
+
+std::optional<NewClassicNetplayOwnedInput>
+NewClassicNetplayInputTimeline::local_input(std::uint64_t frame) const noexcept
+{
+	const auto *slot = impl_->slot_if_retained(frame);
+	return slot ? slot->local : std::nullopt;
 }
 
 NewClassicNetplayTimelineStats

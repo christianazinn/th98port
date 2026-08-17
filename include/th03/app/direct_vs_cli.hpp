@@ -6,6 +6,7 @@
 #include <expected>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 
 #include "th03/app/direct_vs_launch.hpp"
@@ -26,6 +27,14 @@ enum class DirectVsCliOption : std::uint8_t {
 	rank,
 	seed,
 	smoke_ticks,
+	netplay_host,
+	netplay_join,
+};
+
+enum class DirectVsNetplayMode : std::uint8_t {
+	none,
+	host,
+	join,
 };
 
 enum class DirectVsCliErrorCode : std::uint8_t {
@@ -38,6 +47,8 @@ enum class DirectVsCliErrorCode : std::uint8_t {
 	invalid_rank,
 	invalid_seed,
 	invalid_smoke_ticks,
+	invalid_netplay_endpoint,
+	conflicting_netplay_mode,
 };
 
 struct DirectVsCliError {
@@ -51,6 +62,9 @@ struct DirectVsCliRequest {
 	DirectVsLaunchRequest launch{};
 	RationalTickRate tick_rate = pc98_24khz_nominal_tick_rate;
 	std::optional<std::uint64_t> smoke_ticks{};
+	DirectVsNetplayMode netplay_mode = DirectVsNetplayMode::none;
+	std::uint16_t netplay_host_port = 0U;
+	std::string netplay_join_endpoint{};
 };
 
 // Parses arguments after argv[0]. Character names are the nine lowercase

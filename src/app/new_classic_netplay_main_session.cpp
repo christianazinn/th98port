@@ -41,6 +41,12 @@ struct NewClassicNetplayMainSession::Impl final {
 		NewClassicNetplayMainSessionStatus::running;
 	std::optional<std::uint64_t> boundary_frame{};
 	std::optional<StepStatus> boundary{};
+	std::optional<SessionTransition> transition{};
+	InputContext input_context = InputContext::gameplay;
+	std::uint8_t warning_samples_remaining = 0U;
+	std::uint8_t hold_samples_remaining = 0U;
+	std::uint8_t pending_hold_samples = 0U;
+	bool gameplay_reliable_warmup = false;
 
 	void update_boundary_confirmation() noexcept
 	{
@@ -55,9 +61,28 @@ struct NewClassicNetplayMainSession::Impl final {
 		NewClassicNetplayMainSessionError
 	> execute(const NewClassicNetplayResolvedFrame &resolved) noexcept
 	{
-		auto stepped = coordinator->advance_confirmed(resolved.combined);
+		auto stepped = input_context == InputContext::gameplay &&
+			!gameplay_reliable_warmup ?
+			coordinator->advance_confirmed(resolved.combined) :
+			coordinator->advance_reliable(resolved.combined, input_context);
 		if(!stepped) {
 			return std::unexpected(rollback_error(stepped.error()));
+		}
+		if(input_context == InputContext::interstitial) {
+			const bool final_sample = warning_samples_remaining == 1U;
+			const bool valid_intermediate = !final_sample &&
+				stepped->step_result.status == StepStatus::running;
+			const bool valid_final = final_sample &&
+				(stepped->step_result.status == StepStatus::phase_transition ||
+				 stepped->step_result.status == StepStatus::round_transition ||
+				 stepped->step_result.status == StepStatus::terminal);
+			if(warning_samples_remaining == 0U ||
+				(!valid_intermediate && !valid_final)) {
+				return std::unexpected(session_error(
+					NewClassicNetplayMainSessionErrorCode::invalid_boundary
+				));
+			}
+			--warning_samples_remaining;
 		}
 		if(stepped->step_result.status != StepStatus::running) {
 			boundary_frame = resolved.frame;
@@ -67,6 +92,26 @@ struct NewClassicNetplayMainSession::Impl final {
 			update_boundary_confirmation();
 		} else {
 			status = NewClassicNetplayMainSessionStatus::running;
+		}
+		pending_hold_samples = stepped->step_result.next_step_vsyncs > 1U ?
+			static_cast<std::uint8_t>(
+				stepped->step_result.next_step_vsyncs - 1U
+			) : 0U;
+		if(stepped->step_result.status == StepStatus::running) {
+			hold_samples_remaining = pending_hold_samples;
+			pending_hold_samples = 0U;
+		}
+		if(gameplay_reliable_warmup &&
+			stepped->step_result.status == StepStatus::running) {
+			const auto reset = coordinator->try_reset_rollback_boundary();
+			if(!reset) {
+				return std::unexpected(rollback_error(reset.error()));
+			}
+			gameplay_reliable_warmup = !*reset;
+		} else if(input_context == InputContext::gameplay &&
+			stepped->step_result.status == StepStatus::running) {
+			gameplay_reliable_warmup =
+				!coordinator->rollback_boundary_available();
 		}
 		return *stepped;
 	}
@@ -116,22 +161,44 @@ std::expected<
 	NewClassicNetplayOwnedInput input
 ) noexcept
 {
-	if(impl_->boundary_frame) {
+	if(impl_->boundary_frame || impl_->status ==
+		NewClassicNetplayMainSessionStatus::complete) {
 		return std::unexpected(session_error(
 			NewClassicNetplayMainSessionErrorCode::not_running
 		));
+	}
+	if(impl_->hold_samples_remaining != 0U) {
+		--impl_->hold_samples_remaining;
+		return NewClassicNetplayMainSessionTick{
+			.status = impl_->status,
+			.confirmed_frame_count =
+				impl_->timeline->confirmed_frame_count(),
+		};
 	}
 	const auto frame = impl_->timeline->next_frame();
 	const auto submitted = impl_->timeline->submit_local(frame, input);
 	if(!submitted) {
 		return std::unexpected(timeline_error(submitted.error()));
 	}
-	const auto resolved = impl_->timeline->resolve_next();
+	const auto resolved = impl_->input_context == InputContext::gameplay &&
+		!impl_->gameplay_reliable_warmup ?
+		impl_->timeline->resolve_next() :
+		impl_->timeline->resolve_next_exact();
 	if(!resolved) {
 		if(resolved.error().code ==
 			NewClassicNetplayTimelineErrorCode::prediction_limit) {
 			impl_->status =
 				NewClassicNetplayMainSessionStatus::prediction_stalled;
+			return NewClassicNetplayMainSessionTick{
+				.status = impl_->status,
+				.confirmed_frame_count =
+					impl_->timeline->confirmed_frame_count(),
+			};
+		}
+		if(resolved.error().code ==
+			NewClassicNetplayTimelineErrorCode::remote_input_unavailable) {
+			impl_->status =
+				NewClassicNetplayMainSessionStatus::remote_waiting;
 			return NewClassicNetplayMainSessionTick{
 				.status = impl_->status,
 				.confirmed_frame_count =
@@ -165,7 +232,8 @@ std::expected<
 ) noexcept
 {
 	if(impl_->status ==
-		NewClassicNetplayMainSessionStatus::boundary_confirmed) {
+		NewClassicNetplayMainSessionStatus::boundary_confirmed ||
+		impl_->status == NewClassicNetplayMainSessionStatus::complete) {
 		return std::unexpected(session_error(
 			NewClassicNetplayMainSessionErrorCode::not_running
 		));
@@ -180,6 +248,11 @@ std::expected<
 		.confirmed_frame_count = submitted->confirmed_frame_count,
 	};
 	if(submitted->rollback_frame) {
+		if(impl_->input_context != InputContext::gameplay) {
+			return std::unexpected(session_error(
+				NewClassicNetplayMainSessionErrorCode::invalid_boundary
+			));
+		}
 		const auto target = impl_->timeline->next_frame();
 		const auto restored = impl_->coordinator->restore_saved_frame(
 			*submitted->rollback_frame
@@ -215,8 +288,10 @@ std::expected<
 		result.surface_publishable = result.resimulated_frames != 0U;
 	}
 	impl_->update_boundary_confirmation();
-	if(!impl_->boundary_frame && impl_->status ==
-		NewClassicNetplayMainSessionStatus::prediction_stalled) {
+	if(!impl_->boundary_frame &&
+		(impl_->status ==
+			NewClassicNetplayMainSessionStatus::prediction_stalled ||
+		 impl_->status == NewClassicNetplayMainSessionStatus::remote_waiting)) {
 		impl_->status = NewClassicNetplayMainSessionStatus::running;
 	}
 	result.status = impl_->status;
@@ -224,6 +299,98 @@ std::expected<
 	result.confirmed_frame_count =
 		impl_->timeline->confirmed_frame_count();
 	return result;
+}
+
+std::expected<
+	NewClassicNetplayMainSessionTick,
+	NewClassicNetplayMainSessionError
+> NewClassicNetplayMainSession::continue_confirmed_boundary() noexcept
+{
+	if(impl_->status !=
+		NewClassicNetplayMainSessionStatus::boundary_confirmed ||
+		!impl_->boundary || !impl_->boundary_frame) {
+		return std::unexpected(session_error(
+			NewClassicNetplayMainSessionErrorCode::invalid_boundary
+		));
+	}
+	const auto completed_frame = impl_->boundary_frame;
+	const auto completed = *impl_->boundary;
+	switch(completed) {
+	case StepStatus::phase_transition:
+		if(impl_->input_context == InputContext::gameplay) {
+			impl_->input_context = InputContext::interstitial;
+			impl_->warning_samples_remaining = 27U;
+		} else if(impl_->input_context == InputContext::interstitial) {
+			if(impl_->warning_samples_remaining != 0U) {
+				return std::unexpected(session_error(
+					NewClassicNetplayMainSessionErrorCode::invalid_boundary
+				));
+			}
+			impl_->input_context = InputContext::gameplay;
+			impl_->gameplay_reliable_warmup = true;
+		} else {
+			return std::unexpected(session_error(
+				NewClassicNetplayMainSessionErrorCode::invalid_boundary
+			));
+		}
+		impl_->status = NewClassicNetplayMainSessionStatus::running;
+		break;
+	case StepStatus::round_transition: {
+		if((impl_->input_context != InputContext::gameplay &&
+			impl_->input_context != InputContext::interstitial) ||
+			impl_->warning_samples_remaining != 0U) {
+			return std::unexpected(session_error(
+				NewClassicNetplayMainSessionErrorCode::invalid_boundary
+			));
+		}
+		const auto started = impl_->coordinator->start_next_round();
+		if(!started) {
+			return std::unexpected(rollback_error(started.error()));
+		}
+		impl_->input_context = InputContext::gameplay;
+		impl_->gameplay_reliable_warmup = true;
+		impl_->status = NewClassicNetplayMainSessionStatus::running;
+		break;
+	}
+	case StepStatus::terminal: {
+		if((impl_->input_context != InputContext::gameplay &&
+			impl_->input_context != InputContext::interstitial) ||
+			impl_->warning_samples_remaining != 0U) {
+			return std::unexpected(session_error(
+				NewClassicNetplayMainSessionErrorCode::invalid_boundary
+			));
+		}
+		const auto finished = impl_->coordinator->finish_main_process();
+		if(!finished) {
+			return std::unexpected(rollback_error(finished.error()));
+		}
+		auto transition = impl_->coordinator->session_transition();
+		if(!transition) {
+			return std::unexpected(rollback_error(transition.error()));
+		}
+		impl_->transition = std::move(*transition);
+		impl_->status = NewClassicNetplayMainSessionStatus::complete;
+		break;
+	}
+	case StepStatus::running:
+	case StepStatus::paused:
+	case StepStatus::invalid_input_context:
+	case StepStatus::simulation_not_implemented:
+		return std::unexpected(session_error(
+			NewClassicNetplayMainSessionErrorCode::invalid_boundary
+		));
+	}
+	impl_->boundary_frame.reset();
+	impl_->boundary.reset();
+	impl_->hold_samples_remaining = impl_->pending_hold_samples;
+	impl_->pending_hold_samples = 0U;
+	return NewClassicNetplayMainSessionTick{
+		.status = impl_->status,
+		.frame = completed_frame,
+		.boundary = completed,
+		.confirmed_frame_count = impl_->timeline->confirmed_frame_count(),
+		.surface_publishable = true,
+	};
 }
 
 std::expected<present::SourceSurface, present::SourceSurfaceError>
@@ -266,6 +433,23 @@ std::optional<StepStatus>
 NewClassicNetplayMainSession::boundary() const noexcept
 {
 	return impl_->boundary;
+}
+
+InputContext NewClassicNetplayMainSession::input_context() const noexcept
+{
+	return impl_->input_context;
+}
+
+const std::optional<SessionTransition> &
+NewClassicNetplayMainSession::transition() const noexcept
+{
+	return impl_->transition;
+}
+
+std::optional<NewClassicNetplayOwnedInput>
+NewClassicNetplayMainSession::local_input(std::uint64_t frame) const noexcept
+{
+	return impl_->timeline->local_input(frame);
 }
 
 } // namespace th03::app

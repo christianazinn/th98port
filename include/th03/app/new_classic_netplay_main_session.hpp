@@ -15,8 +15,10 @@ namespace th03::app {
 enum class NewClassicNetplayMainSessionStatus : std::uint8_t {
 	running,
 	prediction_stalled,
+	remote_waiting,
 	boundary_waiting_confirmation,
 	boundary_confirmed,
+	complete,
 };
 
 enum class NewClassicNetplayMainSessionErrorCode : std::uint8_t {
@@ -25,6 +27,7 @@ enum class NewClassicNetplayMainSessionErrorCode : std::uint8_t {
 	rollback_failed,
 	not_running,
 	resimulation_left_gameplay,
+	invalid_boundary,
 };
 
 struct NewClassicNetplayMainSessionError final {
@@ -95,6 +98,14 @@ public:
 		NewClassicNetplayOwnedInput input
 	) noexcept;
 
+	// Applies one already-confirmed process boundary. Phase/result frames then
+	// run exact-input lockstep; the next gameplay domain reopens rollback only
+	// after its complete source startup transaction.
+	[[nodiscard]] std::expected<
+		NewClassicNetplayMainSessionTick,
+		NewClassicNetplayMainSessionError
+	> continue_confirmed_boundary() noexcept;
+
 	[[nodiscard]] std::expected<
 		present::SourceSurface,
 		present::SourceSurfaceError
@@ -111,6 +122,11 @@ public:
 	[[nodiscard]] std::uint64_t confirmed_frame_count() const noexcept;
 	[[nodiscard]] NewClassicNetplayMainSessionStatus status() const noexcept;
 	[[nodiscard]] std::optional<StepStatus> boundary() const noexcept;
+	[[nodiscard]] InputContext input_context() const noexcept;
+	[[nodiscard]] const std::optional<SessionTransition> &transition()
+		const noexcept;
+	[[nodiscard]] std::optional<NewClassicNetplayOwnedInput>
+	local_input(std::uint64_t frame) const noexcept;
 
 private:
 	struct Impl;

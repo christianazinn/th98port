@@ -30,6 +30,8 @@
 #include "th03/app/direct_vs_cli.hpp"
 #include "th03/app/direct_vs_launch.hpp"
 #include "th03/app/main_direct_vs_runner.hpp"
+#include "th03/app/new_classic_netplay_datagram.hpp"
+#include "th03/app/new_classic_netplay_main_session.hpp"
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/new_classic_frontend.hpp"
 #include "th03/app/new_classic_language.hpp"
@@ -45,6 +47,7 @@
 #include "th03/platform/sdl_input.hpp"
 #include "th03/platform/sdl_audio_device.hpp"
 #include "th03/platform/sdl_platform.hpp"
+#include "th03/platform/udp_socket.hpp"
 #if defined(_WIN32)
 #include "th03/platform/windows_online.hpp"
 #endif
@@ -518,7 +521,8 @@ void print_usage()
 		<< "       [--p1 <character[:first|second]>] "
 			"[--p2 <character[:first|second]>] [--rank 0..3] [--seed n] "
 			"[--tick-rate <ticks>/<seconds>] "
-			"[--smoke-ticks n]\n"
+			"[--smoke-ticks n] [--netplay-host <port> | "
+			"--netplay-join <IPv4:port>]\n"
 		<< "characters: reimu mima marisa ellen kotohime kana rikako "
 			"chiyuri yumemi\n"
 		<< "P1: T/F/H/B, diagonals R/Y/V/N, Z shot, X bomb\n"
@@ -752,6 +756,8 @@ const char *name(th03::app::DirectVsCliErrorCode code) noexcept
 	case th03::app::DirectVsCliErrorCode::invalid_rank: return "invalid-rank";
 	case th03::app::DirectVsCliErrorCode::invalid_seed: return "invalid-seed";
 	case th03::app::DirectVsCliErrorCode::invalid_smoke_ticks: return "invalid-smoke-ticks";
+	case th03::app::DirectVsCliErrorCode::invalid_netplay_endpoint: return "invalid-netplay-endpoint";
+	case th03::app::DirectVsCliErrorCode::conflicting_netplay_mode: return "conflicting-netplay-mode";
 	}
 	return "unknown";
 }
@@ -771,6 +777,8 @@ const char *name(th03::app::DirectVsCliOption option) noexcept
 	case th03::app::DirectVsCliOption::rank: return "rank";
 	case th03::app::DirectVsCliOption::seed: return "seed";
 	case th03::app::DirectVsCliOption::smoke_ticks: return "smoke-ticks";
+	case th03::app::DirectVsCliOption::netplay_host: return "netplay-host";
+	case th03::app::DirectVsCliOption::netplay_join: return "netplay-join";
 	}
 	return "unknown";
 }
@@ -1273,8 +1281,523 @@ platform_window_presentation(
 
 namespace {
 
+[[nodiscard]] std::uint64_t netplay_contract_hash(
+	const th03::app::DirectVsCliRequest &request
+) noexcept
+{
+	std::uint64_t hash = 14695981039346656037ULL;
+	const auto append = [&hash](std::uint64_t value, std::size_t bytes) {
+		for(std::size_t index = 0U; index < bytes; ++index) {
+			hash ^= static_cast<std::uint8_t>(value >> (index * 8U));
+			hash *= 1099511628211ULL;
+		}
+	};
+	append(0x54334E5052455631ULL, 8U);
+	append(th03::app::new_classic_netplay_datagram_version, 1U);
+	append(request.tick_rate.ticks, 4U);
+	append(request.tick_rate.seconds, 4U);
+	append(request.launch.process.rank, 1U);
+	append(request.launch.process.seed, 4U);
+	append(static_cast<std::uint8_t>(
+		request.launch.process.player_one.character
+	), 1U);
+	append(static_cast<std::uint8_t>(
+		request.launch.process.player_one.palette
+	), 1U);
+	append(static_cast<std::uint8_t>(
+		request.launch.process.player_two.character
+	), 1U);
+	append(static_cast<std::uint8_t>(
+		request.launch.process.player_two.palette
+	), 1U);
+	return hash == 0U ? 1U : hash;
+}
+
+[[nodiscard]] th03::app::NewClassicNetplayOwnedInput netplay_owned_input(
+	const th03::CoreInput &input
+) noexcept
+{
+	// Each peer uses its ordinary local-player bindings. The negotiated role
+	// decides which logical lane receives this value; it must not force the
+	// joining player onto the local P2/numpad binding set.
+	return {
+		.word = input.p1,
+		.charge = static_cast<std::uint8_t>(input.charge_mask & 1U),
+	};
+}
+
+[[nodiscard]] int fail_netplay(const char *stage, const char *code)
+{
+	std::cerr << "status=error\nstage=" << stage << "\ncode=" << code
+		<< '\n';
+	return 1;
+}
+
+void log_netplay_session_error(
+	const th03::app::NewClassicNetplayMainSessionError &error
+)
+{
+	std::cerr << "netplay-session-code=" <<
+		static_cast<unsigned>(error.code) << '\n';
+	if(error.timeline) {
+		std::cerr << "netplay-timeline-code=" <<
+			static_cast<unsigned>(error.timeline->code) << '\n';
+	}
+	if(error.rollback) {
+		std::cerr << "netplay-rollback-code=" <<
+			static_cast<unsigned>(error.rollback->code) << '\n';
+		if(error.rollback->rollback) {
+			std::cerr << "netplay-snapshot-code=" << static_cast<unsigned>(
+				error.rollback->rollback->code
+			) << '\n';
+		}
+	}
+}
+
+[[nodiscard]] bool send_netplay_datagram(
+	th03::platform::UdpSocket &socket,
+	th03::platform::UdpIpv4Endpoint peer,
+	const th03::app::NewClassicNetplayDatagram &datagram
+)
+{
+	const auto encoded = th03::app::encode_new_classic_netplay_datagram(
+		datagram
+	);
+	return encoded && socket.send(peer, *encoded).has_value();
+}
+
+[[nodiscard]] bool send_netplay_input_history(
+	th03::platform::UdpSocket &socket,
+	th03::platform::UdpIpv4Endpoint peer,
+	const th03::app::NewClassicNetplayMainSession &session,
+	th03::app::NewClassicNetplayPlayer local_player,
+	std::uint64_t session_id,
+	std::uint64_t contract_hash,
+	std::uint64_t newest_frame
+)
+{
+	th03::app::NewClassicNetplayDatagram datagram{
+		.type = th03::app::NewClassicNetplayDatagramType::input,
+		.sender = local_player,
+		.session_id = session_id,
+		.contract_hash = contract_hash,
+		.latest_frame = newest_frame,
+		.confirmed_frame_count = session.confirmed_frame_count(),
+	};
+	for(std::size_t index = 0U;
+		index < datagram.inputs.size() && index <= newest_frame; ++index) {
+		const auto input = session.local_input(newest_frame - index);
+		if(!input) {
+			break;
+		}
+		datagram.inputs[index] = *input;
+		++datagram.input_count;
+	}
+	return datagram.input_count != 0U &&
+		send_netplay_datagram(socket, peer, datagram);
+}
+
+int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
+{
+	using th03::app::DirectVsNetplayMode;
+	using th03::app::NewClassicNetplayDatagram;
+	using th03::app::NewClassicNetplayDatagramType;
+	using th03::app::NewClassicNetplayMainSessionStatus;
+	using th03::app::NewClassicNetplayPlayer;
+	const auto contract_hash = netplay_contract_hash(parsed);
+	const auto mode = parsed.netplay_mode;
+	const auto local_player = mode == DirectVsNetplayMode::host ?
+		NewClassicNetplayPlayer::player_one :
+		NewClassicNetplayPlayer::player_two;
+	const auto remote_player = mode == DirectVsNetplayMode::host ?
+		NewClassicNetplayPlayer::player_two :
+		NewClassicNetplayPlayer::player_one;
+
+	auto process = th03::app::load_direct_vs_process(std::move(parsed.launch));
+	if(!process) {
+		return fail_content(process.error());
+	}
+	auto session = th03::app::NewClassicNetplayMainSession::create(
+		local_player, std::move(*process)
+	);
+	if(!session) {
+		return fail_netplay("netplay-session", "session-create-failed");
+	}
+	auto socket = th03::platform::UdpSocket::bind(
+		mode == DirectVsNetplayMode::host ? parsed.netplay_host_port : 0U
+	);
+	if(!socket) {
+		return fail_netplay("netplay-socket", "bind-failed");
+	}
+	std::optional<th03::platform::UdpIpv4Endpoint> peer{};
+	if(mode == DirectVsNetplayMode::join) {
+		const auto endpoint = th03::platform::parse_udp_ipv4_endpoint(
+			parsed.netplay_join_endpoint
+		);
+		if(!endpoint) {
+			return fail_netplay("netplay-endpoint", "invalid-ipv4-endpoint");
+		}
+		peer = *endpoint;
+	}
+
+	auto platform = th03::platform::SdlPlatform::create(platform_config());
+	if(!platform) {
+		return fail("platform-create", platform.error());
+	}
+	auto mapper = th03::platform::SdlInputMapper::create(
+		th03::app::detail::classic_direct_vs_bindings(),
+		static_cast<SDL_WindowID>((*platform)->window_id()),
+		th03::platform::native_sdl_gamepad_backend()
+	);
+	if(!mapper) {
+		return fail("input-create", mapper.error());
+	}
+	auto scheduler = th03::app::TickInputScheduler::create(
+		parsed.tick_rate,
+		th03::platform::sdl_ticks_now_ns(),
+		th03::app::TickInputCatchUpPolicy::preserve_all
+	);
+	if(!scheduler) {
+		return fail_tick(scheduler.error());
+	}
+	std::vector<th03::present::ComposedPixel> pixels(
+		th03::present::graphics_page_pixels
+	);
+	const auto pixel_span = std::span<
+		th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	>(pixels.data(), pixels.size());
+	auto surface = (*session)->compose_shown_surface(pixel_span);
+	if(!surface) {
+		return fail("compose", surface.error());
+	}
+	if(const auto presented = (*platform)->present(*surface); !presented) {
+		return fail("present", presented.error());
+	}
+
+	const auto start_ns = th03::platform::sdl_ticks_now_ns();
+	auto last_send_ns = start_ns - 250'000'000U;
+	auto last_receive_ns = start_ns;
+	std::uint64_t session_id = mode == DirectVsNetplayMode::host ?
+		(start_ns ^ contract_hash ^ 0xA35C91D27B48E60FULL) : 0U;
+	if(mode == DirectVsNetplayMode::host && session_id == 0U) {
+		session_id = 1U;
+	}
+	bool established = false;
+	bool retry_blocked_event = false;
+	std::array<std::byte,
+		th03::app::new_classic_netplay_datagram_bytes> receive_buffer{};
+	std::optional<th03::app::NewClassicNetplayOwnedInput> stalled_input{};
+	std::optional<std::uint64_t> newest_local_frame{};
+	bool presentation_pending = false;
+	std::uint64_t local_frames = 0U;
+	std::cout << "status=waiting\nrole=" <<
+		(mode == DirectVsNetplayMode::host ? "host-p1" : "join-p2") <<
+		"\ncontract=" << contract_hash << '\n';
+	if(mode == DirectVsNetplayMode::host) {
+		std::cout << "listen-port=" << parsed.netplay_host_port << '\n';
+	} else {
+		std::cout << "peer=" << parsed.netplay_join_endpoint << '\n';
+	}
+	std::cout.flush();
+
+	const auto submit_input_datagram = [&](const NewClassicNetplayDatagram &packet)
+		-> bool {
+		if(packet.type != NewClassicNetplayDatagramType::input ||
+			packet.sender != remote_player || packet.session_id != session_id ||
+			packet.contract_hash != contract_hash) {
+			return false;
+		}
+		for(std::size_t offset = packet.input_count; offset > 0U; --offset) {
+			const auto index = offset - 1U;
+			const auto frame = packet.latest_frame - index;
+			const auto submitted = (*session)->submit_remote(
+				frame, packet.inputs[index]
+			);
+			if(!submitted) {
+				return false;
+			}
+			presentation_pending = presentation_pending ||
+				submitted->surface_publishable;
+		}
+		return true;
+	};
+	const auto settle_confirmed_boundary = [&]() -> std::expected<void, int> {
+		if((*session)->status() !=
+			NewClassicNetplayMainSessionStatus::boundary_confirmed) {
+			return {};
+		}
+		const auto continued = (*session)->continue_confirmed_boundary();
+		if(!continued) {
+			std::cerr << "netplay-boundary-status=" <<
+				((*session)->boundary() ? static_cast<unsigned>(
+					*(*session)->boundary()
+				) : 255U) << " netplay-input-context=" <<
+				static_cast<unsigned>((*session)->input_context()) << '\n';
+			log_netplay_session_error(continued.error());
+			return std::unexpected(fail_netplay(
+				"netplay-boundary", "lifecycle-failed"
+			));
+		}
+		presentation_pending = presentation_pending ||
+			continued->surface_publishable;
+		std::cout << "status=boundary-confirmed\nboundary=" <<
+			static_cast<unsigned>(*continued->boundary) << "\nframe=" <<
+			*continued->frame << '\n';
+		std::cout.flush();
+		return {};
+	};
+
+	for(;;) {
+		const auto now_ns = th03::platform::sdl_ticks_now_ns();
+		if(now_ns - start_ns > 30'000'000'000ULL && !established) {
+			return fail_netplay("netplay-handshake", "timeout");
+		}
+		if(established && now_ns - last_receive_ns > 5'000'000'000ULL) {
+			return fail_netplay("netplay-peer", "peer-timeout");
+		}
+
+		if(!retry_blocked_event) {
+			auto events = mapper->pump_events(*scheduler, true);
+			if(!events) {
+				return fail("input-pump", events.error());
+			}
+			retry_blocked_event = events->queue_blocked;
+		}
+
+		for(;;) {
+			const auto received = (*socket)->receive(receive_buffer);
+			if(!received) {
+				return fail_netplay("netplay-receive", "socket-failed");
+			}
+			if(!*received) {
+				break;
+			}
+			const auto packet = th03::app::decode_new_classic_netplay_datagram(
+				std::span(receive_buffer).first((*received)->size)
+			);
+			if(!packet || packet->contract_hash != contract_hash) {
+				continue;
+			}
+			if(mode == DirectVsNetplayMode::host &&
+				packet->type == NewClassicNetplayDatagramType::hello &&
+				packet->sender == remote_player &&
+				(!peer || *peer == (*received)->sender)) {
+				peer = (*received)->sender;
+				const NewClassicNetplayDatagram accepted{
+					.type = NewClassicNetplayDatagramType::accept,
+					.sender = local_player,
+					.session_id = session_id,
+					.contract_hash = contract_hash,
+				};
+				if(!send_netplay_datagram(**socket, *peer, accepted)) {
+					return fail_netplay("netplay-accept", "send-failed");
+				}
+				last_receive_ns = now_ns;
+				continue;
+			}
+			if(!peer || *peer != (*received)->sender) {
+				continue;
+			}
+			if(mode == DirectVsNetplayMode::join && !established &&
+				packet->type == NewClassicNetplayDatagramType::accept &&
+				packet->sender == remote_player && packet->session_id != 0U) {
+				session_id = packet->session_id;
+				established = true;
+				last_receive_ns = now_ns;
+				if(const auto rebased = scheduler->rebase_after_modal(now_ns);
+					!rebased) {
+					return fail_tick(rebased.error());
+				}
+				std::cout << "status=connected\nsession=" << session_id << '\n';
+				std::cout.flush();
+				continue;
+			}
+			if(packet->type == NewClassicNetplayDatagramType::disconnect &&
+				packet->session_id == session_id) {
+				return fail_netplay("netplay-peer", "peer-disconnected");
+			}
+			if(packet->type == NewClassicNetplayDatagramType::input &&
+				submit_input_datagram(*packet)) {
+				last_receive_ns = now_ns;
+				if(mode == DirectVsNetplayMode::host && !established) {
+					established = true;
+					if(const auto rebased = scheduler->rebase_after_modal(now_ns);
+						!rebased) {
+						return fail_tick(rebased.error());
+					}
+					std::cout << "status=connected\nsession=" << session_id << '\n';
+					std::cout.flush();
+				}
+			}
+		}
+		if(const auto settled = settle_confirmed_boundary(); !settled) {
+			return settled.error();
+		}
+
+		if(!established && mode == DirectVsNetplayMode::join &&
+			now_ns - last_send_ns >= 100'000'000U) {
+			const NewClassicNetplayDatagram hello{
+				.type = NewClassicNetplayDatagramType::hello,
+				.sender = local_player,
+				.contract_hash = contract_hash,
+			};
+			if(!send_netplay_datagram(**socket, *peer, hello)) {
+				return fail_netplay("netplay-hello", "send-failed");
+			}
+			last_send_ns = now_ns;
+		}
+
+		if(established && stalled_input && (*session)->status() !=
+			NewClassicNetplayMainSessionStatus::complete) {
+			const auto frame = (*session)->next_frame();
+			const auto advanced = (*session)->advance_local(*stalled_input);
+			if(!advanced) {
+				log_netplay_session_error(advanced.error());
+				return fail_netplay("netplay-advance", "session-failed");
+			}
+			if(advanced->status !=
+					NewClassicNetplayMainSessionStatus::prediction_stalled &&
+				advanced->status !=
+					NewClassicNetplayMainSessionStatus::remote_waiting) {
+				stalled_input.reset();
+				if(advanced->frame) {
+					newest_local_frame = frame;
+					++local_frames;
+				}
+				presentation_pending = presentation_pending ||
+					advanced->surface_publishable;
+			}
+			if(const auto settled = settle_confirmed_boundary(); !settled) {
+				return settled.error();
+			}
+		}
+
+		if(established && !stalled_input && (*session)->status() !=
+			NewClassicNetplayMainSessionStatus::complete) {
+			for(;;) {
+				const auto due = scheduler->pop_due(now_ns);
+				if(!due) {
+					return fail_tick(due.error());
+				}
+				if(!*due) {
+					break;
+				}
+				if((**due).app_quit_requested ||
+					(((**due).input.system & 0x1000U) != 0U)) {
+					return 0;
+				}
+				const auto input = netplay_owned_input((**due).input);
+				const auto frame = (*session)->next_frame();
+				const auto advanced = (*session)->advance_local(input);
+				if(!advanced) {
+					log_netplay_session_error(advanced.error());
+					return fail_netplay("netplay-advance", "session-failed");
+				}
+				const bool input_staged = advanced->frame.has_value() ||
+					advanced->status ==
+						NewClassicNetplayMainSessionStatus::prediction_stalled ||
+					advanced->status ==
+						NewClassicNetplayMainSessionStatus::remote_waiting;
+				if(input_staged) {
+					newest_local_frame = frame;
+					if(!send_netplay_input_history(
+						**socket, *peer, **session, local_player, session_id,
+						contract_hash, frame
+					)) {
+						return fail_netplay("netplay-input", "send-failed");
+					}
+					last_send_ns = now_ns;
+				}
+				presentation_pending = presentation_pending ||
+					advanced->surface_publishable;
+				if(advanced->status ==
+						NewClassicNetplayMainSessionStatus::prediction_stalled ||
+					advanced->status ==
+						NewClassicNetplayMainSessionStatus::remote_waiting) {
+					stalled_input = input;
+					break;
+				}
+				if(advanced->frame) {
+					++local_frames;
+				}
+				if(const auto settled = settle_confirmed_boundary(); !settled) {
+					return settled.error();
+				}
+				if(advanced->status !=
+					NewClassicNetplayMainSessionStatus::running) {
+					break;
+				}
+				if(retry_blocked_event) {
+					auto retried = mapper->pump_events(*scheduler, true);
+					if(!retried) {
+						return fail("input-pump", retried.error());
+					}
+					retry_blocked_event = retried->queue_blocked;
+				}
+			}
+		}
+
+		if(established && newest_local_frame && peer &&
+			now_ns - last_send_ns >= 50'000'000U) {
+			if(!send_netplay_input_history(
+				**socket, *peer, **session, local_player, session_id,
+				contract_hash, *newest_local_frame
+			)) {
+				return fail_netplay("netplay-resend", "send-failed");
+			}
+			last_send_ns = now_ns;
+		}
+
+		if(presentation_pending) {
+			surface = (*session)->compose_shown_surface(pixel_span);
+			if(!surface) {
+				return fail("compose", surface.error());
+			}
+			if(const auto presented = (*platform)->present(*surface); !presented) {
+				return fail("present", presented.error());
+			}
+			presentation_pending = false;
+		}
+		if((*session)->status() ==
+			NewClassicNetplayMainSessionStatus::complete) {
+			std::cout << "status=match-complete\nframes=" <<
+				(*session)->confirmed_frame_count() << '\n';
+			return 0;
+		}
+		if(parsed.smoke_ticks && local_frames >= *parsed.smoke_ticks &&
+			(*session)->confirmed_frame_count() >= *parsed.smoke_ticks) {
+			std::cout << "status=smoke-complete\nframes=" << local_frames
+				<< '\n';
+			return 0;
+		}
+
+		if(!established) {
+			// Discard pre-match source deadlines while still applying/retaining
+			// physical state; the connected rebase starts frame zero cleanly.
+			for(;;) {
+				const auto due = scheduler->pop_due(now_ns);
+				if(!due) {
+					return fail_tick(due.error());
+				}
+				if(!*due) {
+					break;
+				}
+				if((**due).app_quit_requested ||
+					(((**due).input.system & 0x1000U) != 0U)) {
+					return 0;
+				}
+			}
+		}
+		SDL_DelayPrecise(500'000U);
+	}
+}
+
 int run_direct_vs(th03::app::DirectVsCliRequest parsed)
 {
+	if(parsed.netplay_mode != th03::app::DirectVsNetplayMode::none) {
+		return run_direct_netplay(std::move(parsed));
+	}
 	auto process = th03::app::load_direct_vs_process(std::move(parsed.launch));
 	if(!process) {
 		return fail_content(process.error());

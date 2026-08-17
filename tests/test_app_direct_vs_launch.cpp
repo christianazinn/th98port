@@ -79,6 +79,20 @@ void test_help_and_valid_defaults()
 	expect(overridden && overridden->tick_rate.ticks == 3U &&
 		overridden->tick_rate.seconds == 2U,
 		"direct-VS accepts an explicit cadence override");
+	auto host_arguments = valid_arguments();
+	host_arguments.insert(host_arguments.end(), {"--netplay-host", "31415"});
+	const auto host = th03::app::parse_direct_vs_cli(host_arguments);
+	auto join_arguments = valid_arguments();
+	join_arguments.insert(join_arguments.end(), {
+		"--netplay-join", "100.64.1.2:31415"
+	});
+	const auto join = th03::app::parse_direct_vs_cli(join_arguments);
+	expect(host && host->netplay_mode ==
+		th03::app::DirectVsNetplayMode::host &&
+		host->netplay_host_port == 31415U && join &&
+		join->netplay_mode == th03::app::DirectVsNetplayMode::join &&
+		join->netplay_join_endpoint == "100.64.1.2:31415",
+		"direct-VS freezes mutually exclusive host and join launch modes");
 }
 
 void test_all_character_palette_names()
@@ -153,6 +167,14 @@ void test_cli_rejections()
 		"--vs", "--data", "d", "--main", "m", "--font", "f",
 		"--tick-rate", "1/1", "--p1", "kotohime:first",
 	});
+	const auto bad_host = parse({
+		"--vs", "--data", "d", "--main", "m", "--font", "f",
+		"--netplay-host", "0",
+	});
+	const auto conflicting = parse({
+		"--vs", "--data", "d", "--main", "m", "--font", "f",
+		"--netplay-host", "31415", "--netplay-join", "1.2.3.4:31415",
+	});
 	expect(!unknown && unknown.error().code ==
 		th03::app::DirectVsCliErrorCode::unknown_option &&
 		unknown.error().argument_index == 0U,
@@ -189,6 +211,11 @@ void test_cli_rejections()
 	expect(kotohime && kotohime->launch.process.player_one.character ==
 		th03::app::MainCharacter::kotohime,
 		"Kotohime uses the deterministic release normalization by default");
+	expect(!bad_host && bad_host.error().code ==
+		th03::app::DirectVsCliErrorCode::invalid_netplay_endpoint &&
+		!conflicting && conflicting.error().code ==
+			th03::app::DirectVsCliErrorCode::conflicting_netplay_mode,
+		"invalid or conflicting netplay endpoints fail closed");
 }
 
 class TemporaryDirectory {

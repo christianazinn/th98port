@@ -9,7 +9,7 @@ namespace th03::app {
 namespace {
 
 constexpr std::size_t option_count =
-	static_cast<std::size_t>(DirectVsCliOption::smoke_ticks) + 1U;
+	static_cast<std::size_t>(DirectVsCliOption::netplay_join) + 1U;
 
 DirectVsCliError cli_error(
 	DirectVsCliErrorCode code,
@@ -153,6 +153,12 @@ std::optional<DirectVsCliOption> option_from_text(
 	if(text == "--smoke-ticks") {
 		return DirectVsCliOption::smoke_ticks;
 	}
+	if(text == "--netplay-host") {
+		return DirectVsCliOption::netplay_host;
+	}
+	if(text == "--netplay-join") {
+		return DirectVsCliOption::netplay_join;
+	}
 	return std::nullopt;
 }
 
@@ -291,11 +297,43 @@ std::expected<DirectVsCliRequest, DirectVsCliError> parse_direct_vs_cli(
 			request.smoke_ticks = *ticks;
 			break;
 		}
+		case DirectVsCliOption::netplay_host: {
+			const auto port = parse_u32(value);
+			if(!port || *port == 0U || *port > 65'535U) {
+				return std::unexpected(cli_error(
+					DirectVsCliErrorCode::invalid_netplay_endpoint,
+					*option,
+					value_index
+				));
+			}
+			request.netplay_mode = DirectVsNetplayMode::host;
+			request.netplay_host_port = static_cast<std::uint16_t>(*port);
+			break;
+		}
+		case DirectVsCliOption::netplay_join:
+			if(value.empty()) {
+				return std::unexpected(cli_error(
+					DirectVsCliErrorCode::invalid_netplay_endpoint,
+					*option,
+					value_index
+				));
+			}
+			request.netplay_mode = DirectVsNetplayMode::join;
+			request.netplay_join_endpoint = std::string(value);
+			break;
 		case DirectVsCliOption::none:
 		case DirectVsCliOption::help:
 		case DirectVsCliOption::vs:
 			break;
 		}
+	}
+	if(seen[static_cast<std::size_t>(DirectVsCliOption::netplay_host)] &&
+		seen[static_cast<std::size_t>(DirectVsCliOption::netplay_join)]) {
+		return std::unexpected(cli_error(
+			DirectVsCliErrorCode::conflicting_netplay_mode,
+			DirectVsCliOption::netplay_join,
+			arguments.size()
+		));
 	}
 
 	constexpr std::array required{

@@ -21,6 +21,7 @@ enum class NewClassicNetplayTimelineErrorCode : std::uint8_t {
 	frame_too_far,
 	conflicting_input,
 	local_input_unavailable,
+	remote_input_unavailable,
 	prediction_limit,
 	rollback_required,
 	rollback_unavailable,
@@ -103,6 +104,10 @@ public:
 		NewClassicNetplayResolvedFrame,
 		NewClassicNetplayTimelineError
 	> resolve_next() noexcept;
+	[[nodiscard]] std::expected<
+		NewClassicNetplayResolvedFrame,
+		NewClassicNetplayTimelineError
+	> resolve_next_exact() noexcept;
 
 	// Rewind exactly to the earliest requested correction. Actual local and
 	// remote inputs remain retained; discarded predictions are recomputed.
@@ -115,6 +120,8 @@ public:
 	[[nodiscard]] std::uint64_t confirmed_frame_count() const noexcept;
 	[[nodiscard]] std::optional<NewClassicNetplayResolvedFrame>
 	resolved_frame(std::uint64_t frame) const noexcept;
+	[[nodiscard]] std::optional<NewClassicNetplayOwnedInput>
+	local_input(std::uint64_t frame) const noexcept;
 	[[nodiscard]] NewClassicNetplayTimelineStats stats() const noexcept;
 
 private:

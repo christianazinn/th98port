@@ -1,0 +1,216 @@
+#include "th03/app/new_classic_netplay_datagram.hpp"
+
+#include <algorithm>
+
+namespace th03::app {
+namespace {
+
+constexpr std::array magic{
+	std::byte{'T'}, std::byte{'3'}, std::byte{'N'}, std::byte{'P'}
+};
+constexpr std::size_t input_offset = 40U;
+
+[[nodiscard]] NewClassicNetplayDatagramError error(
+	NewClassicNetplayDatagramErrorCode code
+) noexcept
+{
+	return NewClassicNetplayDatagramError{.code = code};
+}
+
+void put_u64(std::span<std::byte> output, std::size_t offset,
+	std::uint64_t value) noexcept
+{
+	for(std::size_t index = 0U; index < 8U; ++index) {
+		output[offset + index] = std::byte(
+			static_cast<std::uint8_t>(value >> (index * 8U))
+		);
+	}
+}
+
+[[nodiscard]] std::uint64_t get_u64(
+	std::span<const std::byte> input,
+	std::size_t offset
+) noexcept
+{
+	std::uint64_t value = 0U;
+	for(std::size_t index = 0U; index < 8U; ++index) {
+		value |= static_cast<std::uint64_t>(
+			std::to_integer<std::uint8_t>(input[offset + index])
+		) << (index * 8U);
+	}
+	return value;
+}
+
+[[nodiscard]] bool valid_type(NewClassicNetplayDatagramType type) noexcept
+{
+	return type == NewClassicNetplayDatagramType::hello ||
+		type == NewClassicNetplayDatagramType::accept ||
+		type == NewClassicNetplayDatagramType::input ||
+		type == NewClassicNetplayDatagramType::disconnect;
+}
+
+[[nodiscard]] bool valid_sender(NewClassicNetplayPlayer sender) noexcept
+{
+	return sender == NewClassicNetplayPlayer::player_one ||
+		sender == NewClassicNetplayPlayer::player_two;
+}
+
+[[nodiscard]] std::expected<void, NewClassicNetplayDatagramError>
+validate(const NewClassicNetplayDatagram &datagram) noexcept
+{
+	if(!valid_type(datagram.type)) {
+		return std::unexpected(error(
+			NewClassicNetplayDatagramErrorCode::invalid_type
+		));
+	}
+	if(!valid_sender(datagram.sender)) {
+		return std::unexpected(error(
+			NewClassicNetplayDatagramErrorCode::invalid_sender
+		));
+	}
+	if(datagram.contract_hash == 0U) {
+		return std::unexpected(error(
+			NewClassicNetplayDatagramErrorCode::invalid_contract
+		));
+	}
+	const bool hello = datagram.type ==
+		NewClassicNetplayDatagramType::hello;
+	if(hello != (datagram.session_id == 0U)) {
+		return std::unexpected(error(
+			NewClassicNetplayDatagramErrorCode::invalid_session
+		));
+	}
+	const bool input = datagram.type ==
+		NewClassicNetplayDatagramType::input;
+	if(input) {
+		if(datagram.input_count == 0U ||
+			datagram.input_count > datagram.inputs.size() ||
+			datagram.latest_frame + 1U < datagram.input_count) {
+			return std::unexpected(error(
+				NewClassicNetplayDatagramErrorCode::invalid_history
+			));
+		}
+	} else if(datagram.input_count != 0U || datagram.latest_frame != 0U ||
+		datagram.confirmed_frame_count != 0U) {
+		return std::unexpected(error(
+			NewClassicNetplayDatagramErrorCode::invalid_history
+		));
+	}
+	for(std::size_t index = 0U; index < datagram.input_count; ++index) {
+		const auto encoded = encode_new_classic_netplay_input(
+			datagram.inputs[index]
+		);
+		if(!encoded) {
+			return std::unexpected(NewClassicNetplayDatagramError{
+				.code = NewClassicNetplayDatagramErrorCode::invalid_input,
+				.input_index = index,
+				.input = encoded.error(),
+			});
+		}
+	}
+	return {};
+}
+
+} // namespace
+
+std::expected<
+	std::array<std::byte, new_classic_netplay_datagram_bytes>,
+	NewClassicNetplayDatagramError
+> encode_new_classic_netplay_datagram(
+	const NewClassicNetplayDatagram &datagram
+) noexcept
+{
+	if(const auto valid = validate(datagram); !valid) {
+		return std::unexpected(valid.error());
+	}
+	std::array<std::byte, new_classic_netplay_datagram_bytes> result{};
+	std::ranges::copy(magic, result.begin());
+	result[4U] = std::byte{new_classic_netplay_datagram_version};
+	result[5U] = std::byte(static_cast<std::uint8_t>(datagram.type));
+	result[6U] = std::byte(static_cast<std::uint8_t>(datagram.sender));
+	result[7U] = std::byte{datagram.input_count};
+	put_u64(result, 8U, datagram.session_id);
+	put_u64(result, 16U, datagram.contract_hash);
+	put_u64(result, 24U, datagram.latest_frame);
+	put_u64(result, 32U, datagram.confirmed_frame_count);
+	for(std::size_t index = 0U; index < datagram.input_count; ++index) {
+		const auto encoded = encode_new_classic_netplay_input(
+			datagram.inputs[index]
+		);
+		if(!encoded) {
+			return std::unexpected(NewClassicNetplayDatagramError{
+				.code = NewClassicNetplayDatagramErrorCode::invalid_input,
+				.input_index = index,
+				.input = encoded.error(),
+			});
+		}
+		std::ranges::copy(
+			*encoded,
+			result.begin() + static_cast<std::ptrdiff_t>(
+				input_offset + index * encoded->size()
+			)
+		);
+	}
+	return result;
+}
+
+std::expected<NewClassicNetplayDatagram, NewClassicNetplayDatagramError>
+decode_new_classic_netplay_datagram(
+	std::span<const std::byte> wire
+) noexcept
+{
+	if(wire.size() != new_classic_netplay_datagram_bytes) {
+		return std::unexpected(error(
+			NewClassicNetplayDatagramErrorCode::invalid_size
+		));
+	}
+	if(!std::ranges::equal(magic, wire.first(magic.size()))) {
+		return std::unexpected(error(
+			NewClassicNetplayDatagramErrorCode::invalid_magic
+		));
+	}
+	if(std::to_integer<std::uint8_t>(wire[4U]) !=
+		new_classic_netplay_datagram_version) {
+		return std::unexpected(error(
+			NewClassicNetplayDatagramErrorCode::unsupported_version
+		));
+	}
+	NewClassicNetplayDatagram result{
+		.type = static_cast<NewClassicNetplayDatagramType>(
+			std::to_integer<std::uint8_t>(wire[5U])
+		),
+		.sender = static_cast<NewClassicNetplayPlayer>(
+			std::to_integer<std::uint8_t>(wire[6U])
+		),
+		.input_count = std::to_integer<std::uint8_t>(wire[7U]),
+		.session_id = get_u64(wire, 8U),
+		.contract_hash = get_u64(wire, 16U),
+		.latest_frame = get_u64(wire, 24U),
+		.confirmed_frame_count = get_u64(wire, 32U),
+	};
+	if(result.input_count > result.inputs.size()) {
+		return std::unexpected(error(
+			NewClassicNetplayDatagramErrorCode::invalid_history
+		));
+	}
+	for(std::size_t index = 0U; index < result.input_count; ++index) {
+		const auto decoded = decode_new_classic_netplay_input(wire.subspan(
+			input_offset + index * new_classic_netplay_input_wire_bytes,
+			new_classic_netplay_input_wire_bytes
+		));
+		if(!decoded) {
+			return std::unexpected(NewClassicNetplayDatagramError{
+				.code = NewClassicNetplayDatagramErrorCode::invalid_input,
+				.input_index = index,
+				.input = decoded.error(),
+			});
+		}
+		result.inputs[index] = *decoded;
+	}
+	if(const auto valid = validate(result); !valid) {
+		return std::unexpected(valid.error());
+	}
+	return result;
+}
+
+} // namespace th03::app

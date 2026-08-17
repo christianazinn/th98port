@@ -70,6 +70,12 @@ public:
 		MainRollbackCoordinatorTick,
 		MainRollbackCoordinatorError
 	> advance_confirmed(CoreInput input) noexcept;
+	// Confirmed non-gameplay MAIN phases are never predicted. They still share
+	// the process/frame owner so both peers reach the same next rollback domain.
+	[[nodiscard]] std::expected<
+		MainRollbackCoordinatorTick,
+		MainRollbackCoordinatorError
+	> advance_reliable(CoreInput input, InputContext context) noexcept;
 	[[nodiscard]] std::expected<
 		MainRollbackCoordinatorTick,
 		MainRollbackCoordinatorError
@@ -82,6 +88,19 @@ public:
 	// This is a local trusted-frame lookup, never a peer-supplied state load.
 	[[nodiscard]] std::expected<void, MainRollbackCoordinatorError>
 	restore_saved_frame(std::uint64_t frame) noexcept;
+	// Drop history from the preceding gameplay domain and capture the current
+	// process image as the first boundary of the next rollback domain.
+	[[nodiscard]] std::expected<bool, MainRollbackCoordinatorError>
+	try_reset_rollback_boundary() noexcept;
+	[[nodiscard]] bool rollback_boundary_available() const noexcept;
+	[[nodiscard]] std::expected<void, MainRollbackCoordinatorError>
+	start_next_round() noexcept;
+	[[nodiscard]] std::expected<void, MainRollbackCoordinatorError>
+	finish_main_process() noexcept;
+	[[nodiscard]] std::expected<
+		SessionTransition,
+		MainRollbackCoordinatorError
+	> session_transition() const noexcept;
 
 	[[nodiscard]] std::expected<
 		present::SourceSurface,

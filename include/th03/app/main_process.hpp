@@ -263,6 +263,7 @@ public:
 	// N0 local rollback boundary. `recovery_scratch` is overwritten with the
 	// pre-restore state and guarantees all-or-nothing recovery without a frame-
 	// time allocation. Neither snapshot is accepted from a peer or user file.
+	[[nodiscard]] bool rollback_boundary_available() const noexcept;
 	[[nodiscard]] std::expected<void, MainProcessRollbackError>
 	capture_rollback(MainProcessRollbackSnapshot &snapshot) const noexcept;
 	[[nodiscard]] std::expected<void, MainProcessRollbackError>

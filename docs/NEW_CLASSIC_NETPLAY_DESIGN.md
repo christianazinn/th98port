@@ -1,6 +1,8 @@
 # New Classic netplay design
 
-Status: **durable proposal; phase N0 is green and phase N1 is active**
+Status: **durable proposal; local rollback and the direct-UDP/Tailscale
+technical preview are green, while product WebRTC/room integration remains
+future work**
 
 Proposal revision date: 2026-08-16
 

@@ -70,9 +70,9 @@ struct MainRollbackCoordinator::Impl final {
 	}
 
 	[[nodiscard]] std::expected<StepResult, MainRollbackCoordinatorError>
-	step(CoreInput input) noexcept
+	step(CoreInput input, InputContext context = InputContext::gameplay) noexcept
 	{
-		auto stepped = process->step(input, InputContext::gameplay);
+		auto stepped = process->step(input, context);
 		if(!stepped) {
 			return std::unexpected(MainRollbackCoordinatorError{
 				.code = MainRollbackCoordinatorErrorCode::process_failed,
@@ -105,6 +105,32 @@ std::expected<
 	return std::unique_ptr<MainRollbackCoordinator>(
 		new MainRollbackCoordinator(std::move(impl))
 	);
+}
+
+std::expected<MainRollbackCoordinatorTick, MainRollbackCoordinatorError>
+MainRollbackCoordinator::advance_reliable(
+	CoreInput input,
+	InputContext context
+) noexcept
+{
+	if(context == InputContext::pause) {
+		return std::unexpected(coordinator_error(
+			MainRollbackCoordinatorErrorCode::left_gameplay_domain
+		));
+	}
+	auto stepped = impl_->step(input, context);
+	if(!stepped) {
+		return std::unexpected(stepped.error());
+	}
+	const auto frame = impl_->next_frame++;
+	++impl_->stats.frames;
+	return MainRollbackCoordinatorTick{
+		.frame = frame,
+		.step_result = *stepped,
+		.process_executions = 1U,
+		.surface_publishable = true,
+		.audio_publishable = true,
+	};
 }
 
 MainRollbackCoordinator::MainRollbackCoordinator(
@@ -192,6 +218,68 @@ MainRollbackCoordinator::restore_saved_frame(std::uint64_t frame) noexcept
 	}
 	impl_->next_frame = frame;
 	return {};
+}
+
+std::expected<bool, MainRollbackCoordinatorError>
+MainRollbackCoordinator::try_reset_rollback_boundary() noexcept
+{
+	for(auto &slot : *impl_->ring) {
+		slot.valid = false;
+	}
+	const auto captured = impl_->capture_current();
+	if(!captured) {
+		if(captured.error().rollback &&
+			captured.error().rollback->code ==
+				MainProcessRollbackErrorCode::boundary_unavailable) {
+			return false;
+		}
+		return std::unexpected(captured.error());
+	}
+	return true;
+}
+
+bool MainRollbackCoordinator::rollback_boundary_available() const noexcept
+{
+	return impl_->process->rollback_boundary_available();
+}
+
+std::expected<void, MainRollbackCoordinatorError>
+MainRollbackCoordinator::start_next_round() noexcept
+{
+	const auto started = impl_->process->start_next_round();
+	if(!started) {
+		return std::unexpected(MainRollbackCoordinatorError{
+			.code = MainRollbackCoordinatorErrorCode::process_failed,
+			.process = std::move(started.error()),
+		});
+	}
+	return {};
+}
+
+std::expected<void, MainRollbackCoordinatorError>
+MainRollbackCoordinator::finish_main_process() noexcept
+{
+	const auto finished = impl_->process->finish_main_process();
+	if(!finished) {
+		return std::unexpected(MainRollbackCoordinatorError{
+			.code = MainRollbackCoordinatorErrorCode::process_failed,
+			.process = std::move(finished.error()),
+		});
+	}
+	return {};
+}
+
+std::expected<SessionTransition, MainRollbackCoordinatorError>
+MainRollbackCoordinator::session_transition() const noexcept
+{
+	const auto transition = impl_->process->session_transition();
+	if(!transition) {
+		return std::unexpected(MainRollbackCoordinatorError{
+			.code = MainRollbackCoordinatorErrorCode::process_failed,
+			.process = std::move(transition.error()),
+		});
+	}
+	return *transition;
 }
 
 std::expected<present::SourceSurface, present::SourceSurfaceError>

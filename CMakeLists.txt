@@ -538,6 +538,7 @@ th03_set_warnings(th03_formats)
 # Backend-neutral New Classic rollback/network protocol and deterministic test
 # scheduling. This target owns no game process, socket, platform, clock, or UI.
 add_library(th03_app_netplay STATIC
+	src/app/new_classic_netplay_datagram.cpp
 	src/app/new_classic_netplay_protocol.cpp
 	src/app/new_classic_netplay_simulator.cpp
 	src/app/new_classic_netplay_timeline.cpp
@@ -547,6 +548,17 @@ target_link_libraries(th03_app_netplay PUBLIC th03_core)
 target_compile_features(th03_app_netplay PUBLIC cxx_std_23)
 set_target_properties(th03_app_netplay PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_app_netplay)
+
+add_library(th03_platform_udp STATIC
+	src/platform/udp_socket.cpp
+)
+target_include_directories(th03_platform_udp PUBLIC include)
+target_compile_features(th03_platform_udp PUBLIC cxx_std_23)
+set_target_properties(th03_platform_udp PROPERTIES CXX_EXTENSIONS OFF)
+if(WIN32)
+	target_link_libraries(th03_platform_udp PUBLIC ws2_32)
+endif()
+th03_set_warnings(th03_platform_udp)
 
 # Stable MAIN-process/application policy. It owns both the guarded direct-VS
 # process and the complete source-private Classic OP/MAINL/MAIN lifecycle;
@@ -655,7 +667,9 @@ if(TH03_ENABLE_SDL)
 		apps/th03-app/default_bindings.cpp
 		apps/th03-app/main.cpp
 	)
-	target_link_libraries(th03-app PRIVATE th03_app_main th03_platform_sdl)
+	target_link_libraries(
+		th03-app PRIVATE th03_app_main th03_platform_sdl th03_platform_udp
+	)
 	if(WIN32)
 		target_link_libraries(th03-app PRIVATE th03_platform_windows_online)
 	endif()
@@ -1309,6 +1323,18 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-new-classic-netplay-simulator-tests
 		COMMAND th03-app-new-classic-netplay-simulator-tests
+	)
+
+	add_executable(th03-platform-udp-socket-tests
+		tests/test_platform_udp_socket.cpp
+	)
+	target_link_libraries(
+		th03-platform-udp-socket-tests PRIVATE th03_platform_udp
+	)
+	th03_set_warnings(th03-platform-udp-socket-tests)
+	add_test(
+		NAME th03-platform-udp-socket-tests
+		COMMAND th03-platform-udp-socket-tests
 	)
 
 	add_executable(th03-app-new-classic-key-config-scene-tests

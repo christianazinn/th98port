@@ -124,6 +124,27 @@ void test_prediction_correction_and_limit()
 		(*timeline)->confirmed_frame_count() == 1U,
 		"corrected execution advances the contiguous confirmation frontier");
 
+	auto exact = NewClassicNetplayInputTimeline::create(
+		NewClassicNetplayPlayer::player_one
+	);
+	expect(exact && (*exact)->submit_local(0U, {.word = 0x0002U}),
+		"reliable-phase fixture stages its local input");
+	if(exact) {
+		const auto waiting = (*exact)->resolve_next_exact();
+		expect(!waiting && waiting.error().code ==
+			NewClassicNetplayTimelineErrorCode::remote_input_unavailable &&
+			(*exact)->next_frame() == 0U,
+			"reliable resolution waits without predicting or consuming frame zero");
+		expect((*exact)->submit_remote(0U, {.word = 0x0008U}).has_value(),
+			"reliable fixture accepts the matching remote value");
+		const auto resolved = (*exact)->resolve_next_exact();
+		expect(resolved && !resolved->remote_predicted &&
+			resolved->combined.p1 == 0x0002U &&
+			resolved->combined.p2 == 0x0008U &&
+			(*exact)->confirmed_frame_count() == 1U,
+			"reliable resolution consumes only two real values and confirms them");
+	}
+
 	auto capped = NewClassicNetplayInputTimeline::create(
 		NewClassicNetplayPlayer::player_two
 	);

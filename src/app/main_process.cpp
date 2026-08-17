@@ -1712,15 +1712,11 @@ MainProcess::finish_main_process() noexcept
 	return {};
 }
 
-std::expected<void, MainProcessRollbackError>
-MainProcess::capture_rollback(
-	MainProcessRollbackSnapshot &snapshot
-) const noexcept
+bool MainProcess::rollback_boundary_available() const noexcept
 {
-	snapshot.version = 0U;
-	if(impl_->preroll_simulating || impl_->audio_feedback_failed ||
-		impl_->game->deferred_frame_pending() ||
-		!present::MainPresenterRollbackAccess::boundary_ready(
+	return !impl_->preroll_simulating && !impl_->audio_feedback_failed &&
+		!impl_->game->deferred_frame_pending() &&
+		present::MainPresenterRollbackAccess::boundary_ready(
 			impl_->palette,
 			impl_->static_presenter,
 			*impl_->background,
@@ -1733,7 +1729,16 @@ MainProcess::capture_rollback(
 			*impl_->warning_gauge,
 			*impl_->hud_result,
 			*impl_->round
-		)) {
+		);
+}
+
+std::expected<void, MainProcessRollbackError>
+MainProcess::capture_rollback(
+	MainProcessRollbackSnapshot &snapshot
+) const noexcept
+{
+	snapshot.version = 0U;
+	if(!rollback_boundary_available()) {
 		return std::unexpected(MainProcessRollbackError{
 			.code = MainProcessRollbackErrorCode::boundary_unavailable,
 		});
