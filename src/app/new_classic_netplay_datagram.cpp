@@ -51,7 +51,9 @@ void put_u64(std::span<std::byte> output, std::size_t offset,
 		type == NewClassicNetplayDatagramType::input ||
 		type == NewClassicNetplayDatagramType::disconnect ||
 		type == NewClassicNetplayDatagramType::simulation_digest ||
-		type == NewClassicNetplayDatagramType::simulation_digest_ack;
+		type == NewClassicNetplayDatagramType::simulation_digest_ack ||
+		type == NewClassicNetplayDatagramType::pause_waiting ||
+		type == NewClassicNetplayDatagramType::resume_ready;
 }
 
 [[nodiscard]] bool valid_sender(NewClassicNetplayPlayer sender) noexcept
@@ -113,6 +115,9 @@ validate(const NewClassicNetplayDatagram &datagram) noexcept
 			NewClassicNetplayDatagramType::simulation_digest_ack;
 	const bool digest_ack = datagram.type ==
 		NewClassicNetplayDatagramType::simulation_digest_ack;
+	const bool pause_signal = datagram.type ==
+			NewClassicNetplayDatagramType::pause_waiting ||
+		datagram.type == NewClassicNetplayDatagramType::resume_ready;
 	if(input) {
 		if(datagram.input_count == 0U ||
 			datagram.input_count > datagram.inputs.size() ||
@@ -150,6 +155,18 @@ validate(const NewClassicNetplayDatagram &datagram) noexcept
 				[](std::uint8_t byte) { return byte == 0U; })) {
 			return std::unexpected(error(
 				NewClassicNetplayDatagramErrorCode::invalid_digest
+			));
+		}
+	} else if(pause_signal) {
+		if(datagram.input_count != 0U || datagram.latest_frame == 0U ||
+			datagram.confirmed_frame_count == 0U ||
+			datagram.simulation_digest_kind !=
+				NewClassicNetplaySimulationDigestKind::initial ||
+			datagram.boundary_proof != NewClassicNetplayBoundaryProof::pause ||
+			std::ranges::any_of(datagram.simulation_digest,
+				[](std::uint8_t byte) { return byte != 0U; })) {
+			return std::unexpected(error(
+				NewClassicNetplayDatagramErrorCode::invalid_history
 			));
 		}
 	} else if(datagram.input_count != 0U || datagram.latest_frame != 0U ||
@@ -212,6 +229,12 @@ std::expected<
 		result[digest_kind_offset] = std::byte{
 			static_cast<std::uint8_t>(datagram.simulation_digest_kind)
 		};
+		result[boundary_proof_offset] = std::byte{
+			static_cast<std::uint8_t>(datagram.boundary_proof)
+		};
+	} else if(datagram.type ==
+			NewClassicNetplayDatagramType::pause_waiting ||
+		datagram.type == NewClassicNetplayDatagramType::resume_ready) {
 		result[boundary_proof_offset] = std::byte{
 			static_cast<std::uint8_t>(datagram.boundary_proof)
 		};
@@ -292,6 +315,23 @@ decode_new_classic_netplay_datagram(
 		)) {
 			return std::unexpected(error(
 				NewClassicNetplayDatagramErrorCode::invalid_digest
+			));
+		}
+	} else if(result.type ==
+			NewClassicNetplayDatagramType::pause_waiting ||
+		result.type == NewClassicNetplayDatagramType::resume_ready) {
+		result.boundary_proof = static_cast<NewClassicNetplayBoundaryProof>(
+			std::to_integer<std::uint8_t>(wire[boundary_proof_offset])
+		);
+		if(std::ranges::any_of(
+			wire.subspan(input_offset, boundary_proof_offset - input_offset),
+			[](std::byte byte) { return byte != std::byte{0U}; }
+		) || std::ranges::any_of(
+			wire.subspan(digest_reserved_offset),
+			[](std::byte byte) { return byte != std::byte{0U}; }
+		)) {
+			return std::unexpected(error(
+				NewClassicNetplayDatagramErrorCode::invalid_history
 			));
 		}
 	}

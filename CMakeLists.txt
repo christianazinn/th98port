@@ -541,6 +541,7 @@ add_library(th03_app_netplay STATIC
 	src/app/new_classic_netplay_datagram.cpp
 	src/app/new_classic_netplay_lobby.cpp
 	src/app/new_classic_netplay_match_contract.cpp
+	src/app/new_classic_netplay_pause_barrier.cpp
 	src/app/new_classic_netplay_protocol.cpp
 	src/app/new_classic_netplay_simulator.cpp
 	src/app/new_classic_netplay_timeline.cpp

@@ -37,6 +37,7 @@
 #include "th03/app/new_classic_netplay_lobby.hpp"
 #include "th03/app/new_classic_netplay_match_contract.hpp"
 #include "th03/app/new_classic_netplay_main_session.hpp"
+#include "th03/app/new_classic_netplay_pause_barrier.hpp"
 #include "th03/app/new_classic_netplay_post_match.hpp"
 #include "th03/app/new_classic_netplay_replay_capture.hpp"
 #include "th03/app/main_compiled_content.hpp"
@@ -1914,9 +1915,11 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	std::uint64_t verified_periodic_gameplay_frame = 0U;
 	std::vector<std::uint8_t> local_deadline_missed{};
 	std::unique_ptr<th03::app::NewClassicNetplayPostMatch> post_match{};
+	std::optional<th03::app::NewClassicNetplayPauseBarrier> pause_barrier{};
 	bool runtime_digest_peer_ack = false;
 	bool presentation_pending = false;
 	std::uint64_t local_frames = 0U;
+	auto last_pause_signal_send_ns = start_ns - 250'000'000U;
 	std::cout << "status=match-locked\ncontract=" << contract_hash << '\n';
 	std::cout.flush();
 	const auto send_simulation_digest = [&](
@@ -2137,6 +2140,60 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		}
 		return {};
 	};
+	const auto resume_pause_if_ready = [&]() -> std::expected<void, int> {
+		if(!pause_barrier || !pause_barrier->ready() ||
+			(*session)->status() !=
+				NewClassicNetplayMainSessionStatus::paused) {
+			return {};
+		}
+		if(auto applied = audio_session->apply({
+			.type = th03::app::ClassicAudioCommandType::resume_song,
+		}); !applied) {
+			return std::unexpected(fail(
+				"netplay-pause-audio", applied.error()
+			));
+		}
+		const auto resumed = (*session)->resume_pause();
+		if(!resumed || !resumed->pause_completion) {
+			if(!resumed) {
+				log_netplay_session_error(resumed.error());
+			}
+			return std::unexpected(fail_netplay(
+				"netplay-pause", "resume-failed"
+			));
+		}
+		if(auto recorded = replay_capture.pause_resumed(
+			*resumed->pause_completion
+		); !recorded) {
+			return std::unexpected(fail_netplay(
+				"netplay-replay", "pause-resume-capture-failed"
+			));
+		}
+		while(const auto command = (*session)->take_audio_command()) {
+			if(auto applied = audio_session->apply(*command); !applied) {
+				return std::unexpected(fail(
+					"netplay-pause-audio", applied.error()
+				));
+			}
+		}
+		const auto resumed_at = th03::platform::sdl_ticks_now_ns();
+		if(auto rebased = scheduler->rebase_after_modal(resumed_at); !rebased) {
+			return std::unexpected(fail_tick(rebased.error()));
+		}
+		if(auto reset = mapper->reset_after_modal(*scheduler, resumed_at);
+			!reset) {
+			return std::unexpected(fail(
+				"netplay-pause-input", reset.error()
+			));
+		}
+		retry_blocked_event = false;
+		stalled_input.reset();
+		presentation_pending = true;
+		last_pause_signal_send_ns = 0U;
+		std::cout << "status=resumed\nframe=" << pause_barrier->frame() << '\n';
+		std::cout.flush();
+		return {};
+	};
 
 	const auto submit_input_datagram = [&](const NewClassicNetplayDatagram &packet)
 		-> bool {
@@ -2202,7 +2259,41 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		if(const auto transcript = drain_confirmed_transcript(); !transcript) {
 			return std::unexpected(transcript.error());
 		}
-		if(*continued->boundary == th03::StepStatus::round_transition) {
+		if(*continued->boundary == th03::StepStatus::paused) {
+			auto barrier = th03::app::NewClassicNetplayPauseBarrier::create(
+				verified_runtime_digest->frame,
+				verified_runtime_digest->confirmed_gameplay_frame_count
+			);
+			if(!barrier) {
+				return std::unexpected(fail_netplay(
+					"netplay-pause", "boundary-identity"
+				));
+			}
+			pause_barrier = std::move(*barrier);
+			if(auto applied = audio_session->apply({
+				.type = th03::app::ClassicAudioCommandType::pause_song,
+			}); !applied) {
+				return std::unexpected(fail(
+					"netplay-pause-audio", applied.error()
+				));
+			}
+			const auto paused_at = th03::platform::sdl_ticks_now_ns();
+			if(auto rebased = scheduler->rebase_after_modal(paused_at); !rebased) {
+				return std::unexpected(fail_tick(rebased.error()));
+			}
+			if(auto reset = mapper->reset_after_modal(*scheduler, paused_at);
+				!reset) {
+				return std::unexpected(fail(
+					"netplay-pause-input", reset.error()
+				));
+			}
+			retry_blocked_event = false;
+			stalled_input.reset();
+			last_pause_signal_send_ns = 0U;
+			std::cout << "status=paused\n"
+				"resume=release-then-escape-on-both-peers\n";
+			std::cout.flush();
+		} else if(*continued->boundary == th03::StepStatus::round_transition) {
 			if(auto started = replay_capture.round_started(
 				(*session)->process().round_start_observation()
 			); !started) {
@@ -2472,9 +2563,59 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				std::cout << "status=peer-left\n";
 				return 0;
 			}
+			if((packet->type ==
+					NewClassicNetplayDatagramType::pause_waiting ||
+				 packet->type ==
+					NewClassicNetplayDatagramType::resume_ready) &&
+				packet->sender == remote_player &&
+				packet->session_id == session_id) {
+				if(!pause_barrier ||
+					packet->latest_frame < pause_barrier->frame()) {
+					continue;
+				}
+				if(const auto received_pause = pause_barrier->receive(
+					packet->type, packet->latest_frame,
+					packet->confirmed_frame_count
+				); !received_pause) {
+					return fail_netplay(
+						"netplay-pause", "signal-identity"
+					);
+				}
+				last_receive_ns = now_ns;
+				if(const auto resumed = resume_pause_if_ready(); !resumed) {
+					return resumed.error();
+				}
+				continue;
+			}
 			if(established &&
 				packet->type == NewClassicNetplayDatagramType::input &&
-				submit_input_datagram(*packet)) {
+				packet->sender == remote_player &&
+				packet->session_id == session_id) {
+				if(pause_barrier && packet->latest_frame >=
+					pause_barrier->frame()) {
+					if((*session)->status() ==
+						NewClassicNetplayMainSessionStatus::paused) {
+						if(const auto observed =
+							pause_barrier->observe_peer_gameplay(
+								packet->latest_frame
+							); !observed) {
+							return fail_netplay(
+								"netplay-pause", "peer-resume-order"
+							);
+						}
+						if(const auto resumed = resume_pause_if_ready(); !resumed) {
+							return resumed.error();
+						}
+					}
+				}
+				if(!submit_input_datagram(*packet)) {
+					continue;
+				}
+				if(pause_barrier && packet->latest_frame >=
+					pause_barrier->frame() && (*session)->status() !=
+						NewClassicNetplayMainSessionStatus::paused) {
+					pause_barrier.reset();
+				}
 				last_receive_ns = now_ns;
 				peer_started_input = true;
 				if(const auto transcript = drain_confirmed_transcript();
@@ -2523,7 +2664,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		}
 
 		if(established && stalled_input && (*session)->status() !=
-			NewClassicNetplayMainSessionStatus::complete) {
+			NewClassicNetplayMainSessionStatus::complete &&
+			(*session)->status() !=
+				NewClassicNetplayMainSessionStatus::paused) {
 			const auto frame = (*session)->next_frame();
 			const auto advanced = (*session)->advance_local(*stalled_input);
 			if(!advanced) {
@@ -2556,7 +2699,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		}
 
 		if(established && !stalled_input && (*session)->status() !=
-			NewClassicNetplayMainSessionStatus::complete) {
+			NewClassicNetplayMainSessionStatus::complete &&
+			(*session)->status() !=
+				NewClassicNetplayMainSessionStatus::paused) {
 			for(;;) {
 				const auto due = scheduler->pop_due(now_ns);
 				if(!due) {
@@ -2565,11 +2710,14 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				if(!*due) {
 					break;
 				}
-				if((**due).app_quit_requested ||
-					(((**due).input.system & 0x1000U) != 0U)) {
+				if((**due).app_quit_requested) {
 					return leave_preview();
 				}
-				const auto input = netplay_owned_input((**due).input);
+				auto input = netplay_owned_input((**due).input);
+				if(((**due).input.system & 0x1000U) != 0U) {
+					input.control = th03::app::
+						NewClassicNetplayControl::pause_request;
+				}
 				const auto frame = (*session)->next_frame();
 				const auto advanced = (*session)->advance_local(input);
 				if(!advanced) {
@@ -2627,6 +2775,35 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				}
 			}
 		}
+		if(established && pause_barrier && (*session)->status() ==
+			NewClassicNetplayMainSessionStatus::paused) {
+			for(;;) {
+				const auto due = scheduler->pop_due(now_ns);
+				if(!due) {
+					return fail_tick(due.error());
+				}
+				if(!*due) {
+					break;
+				}
+				if((**due).app_quit_requested) {
+					return leave_preview();
+				}
+				const bool was_ready = pause_barrier->local_ready();
+				pause_barrier->consume_local((**due).input);
+				if(!was_ready && pause_barrier->local_ready()) {
+					last_pause_signal_send_ns = 0U;
+					std::cout << "status=resume-ready-local\n";
+					std::cout.flush();
+				}
+				if(const auto resumed = resume_pause_if_ready(); !resumed) {
+					return resumed.error();
+				}
+				if((*session)->status() !=
+					NewClassicNetplayMainSessionStatus::paused) {
+					break;
+				}
+			}
+		}
 		if(post_match && post_match->status() ==
 			NewClassicNetplayPostMatchStatus::running) {
 			for(;;) {
@@ -2665,6 +2842,24 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			}
 		}
 
+		if(established && pause_barrier && peer &&
+			now_ns - last_pause_signal_send_ns >= 50'000'000U) {
+			const NewClassicNetplayDatagram pause_signal{
+				.type = pause_barrier->outbound_signal(),
+				.sender = local_player,
+				.session_id = session_id,
+				.contract_hash = contract_hash,
+				.latest_frame = pause_barrier->frame(),
+				.confirmed_frame_count =
+					pause_barrier->confirmed_gameplay_frame_count(),
+				.boundary_proof =
+					th03::app::NewClassicNetplayBoundaryProof::pause,
+			};
+			if(!send_netplay_datagram(*socket, *peer, pause_signal)) {
+				return fail_netplay("netplay-pause", "send-failed");
+			}
+			last_pause_signal_send_ns = now_ns;
+		}
 		if(established && !post_match && newest_local_frame && peer &&
 			now_ns - last_send_ns >= 50'000'000U) {
 			if(!send_netplay_input_history(

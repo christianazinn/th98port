@@ -3,7 +3,7 @@
 Status: cross-platform technical preview. This route runs a complete human
 VS MAIN match over direct IPv4 UDP. It is intentionally exposed by command
 line before the source-styled room/selection UI, WebRTC/TURN transport,
-negotiated pause, and post-match report are integrated. A
+and post-match report are integrated. A
 confirmed terminal match now continues through the ordinary winner-specific
 MAINL scene, including WIN music, dismissal, and the final black-out.
 
@@ -15,13 +15,26 @@ not follow either machine's wall clock.
 
 The host owns logical P1 and the joiner owns logical P2. Both machines use
 their ordinary local-player controls: `T/F/H/B` for directions, `R/Y/V/N` for
-diagonals, `Z` for Shot, and `X` for Bomb. Escape leaves the preview and sends
-an immediate departure to the other peer; closing the window does the same.
+diagonals, `Z` for Shot, and `X` for Bomb. Escape requests a synchronized
+Pause. Closing the window (including Alt+F4) leaves the preview and sends an
+immediate departure to the other peer.
 The host supplies P1, rank, seed, and source cadence. The joiner supplies P2.
 The pre-MAIN lobby exchange combines those independently owned values and both
 sides then prove the complete initial simulation. Both machines must use the
 same executable revision and authenticated game data; they no longer duplicate
 each other's character or room-rule arguments.
+
+### Pause and Resume
+
+Press Esc on either machine during active gameplay. The request is corrected
+like player input, so both machines freeze only after that exact frame and its
+simulation proof are confirmed. The terminal prints `status=paused`.
+
+To resume, each player must release Esc and then press it again. The terminal
+prints `status=resume-ready-local` on each machine and resumes after both
+choices arrive. The wait does not advance the source clock, replay playtime,
+PMD, or slowdown. The frozen gameplay frame is retained in this technical
+preview; a source-styled network-pause overlay is a later UI parcel.
 
 ## Windows host from the standalone
 

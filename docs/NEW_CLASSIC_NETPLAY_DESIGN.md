@@ -494,7 +494,7 @@ enters the contract.
 After agreement, both clients create source-fresh MAIN state and exchange the
 SHA-256 simulation digest at frame zero. Gameplay begins only if those digests
 match. The direct UDP preview implements this gate with a strict fixed-size
-`T3NP` v5 packet and keeps both source schedulers stopped until the proof
+`T3NP` v6 packet and keeps both source schedulers stopped until the proof
 succeeds.
 
 The backend-neutral owned-player gameplay value is now frozen as the exact
@@ -756,6 +756,9 @@ timeout. The following product transport remains open:
    gates MAIN in the direct UDP preview. The fourth row and source-styled room
    presentation remain the product integration step.
 2. Add negotiated pause, forfeit, disconnect, desync UI, and post-match report.
+   The direct preview now carries a rollback-correct Pause edge, confirmed
+   boundary proof, release-before-Resume input, and two-peer ready barrier.
+   Source-styled presentation, forfeit policy, and the report surface remain.
 3. Feed only confirmed history into the in-memory V13 recorder and existing save
    UI. Complete in the direct preview: the corrected contiguous-confirmed
    transcript becomes an ordinary validated V13 only after the complete VS

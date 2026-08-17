@@ -2,6 +2,7 @@
 #include "th03/app/new_classic_netplay_datagram.hpp"
 #include "th03/app/new_classic_netplay_lobby.hpp"
 #include "th03/app/new_classic_netplay_match_contract.hpp"
+#include "th03/app/new_classic_netplay_pause_barrier.hpp"
 
 #include <array>
 #include <cstddef>
@@ -138,7 +139,7 @@ void test_datagram_contract()
 		(*encoded)[1U] == std::byte{'3'} &&
 		(*encoded)[2U] == std::byte{'N'} &&
 		(*encoded)[3U] == std::byte{'P'} &&
-		(*encoded)[4U] == std::byte{5U} &&
+		(*encoded)[4U] == std::byte{6U} &&
 		(*encoded)[5U] == std::byte{3U} &&
 		(*encoded)[6U] == std::byte{1U} &&
 		(*encoded)[7U] == std::byte{2U} &&
@@ -326,6 +327,105 @@ void test_datagram_contract()
 		expect(!reserved && reserved.error().code ==
 			NewClassicNetplayDatagramErrorCode::invalid_digest,
 			"digest-only tail remains reserved and fails closed");
+	}
+}
+
+void test_pause_barrier()
+{
+	using namespace th03::app;
+	constexpr std::uint64_t frame = 123U;
+	constexpr std::uint64_t gameplay = 97U;
+	const NewClassicNetplayDatagram waiting{
+		.type = NewClassicNetplayDatagramType::pause_waiting,
+		.sender = NewClassicNetplayPlayer::player_one,
+		.session_id = 0x0102030405060708ULL,
+		.contract_hash = 0x8877665544332211ULL,
+		.latest_frame = frame,
+		.confirmed_frame_count = gameplay,
+		.boundary_proof = NewClassicNetplayBoundaryProof::pause,
+	};
+	const auto encoded = encode_new_classic_netplay_datagram(waiting);
+	const auto decoded = encoded ? decode_new_classic_netplay_datagram(*encoded) :
+		std::expected<NewClassicNetplayDatagram,
+			NewClassicNetplayDatagramError>{
+				std::unexpected(NewClassicNetplayDatagramError{})
+			};
+	expect(encoded && decoded && decoded->type == waiting.type &&
+		decoded->latest_frame == frame &&
+		decoded->confirmed_frame_count == gameplay &&
+		decoded->boundary_proof == NewClassicNetplayBoundaryProof::pause,
+		"Pause-waiting signal round-trips exact confirmed boundary identity");
+	if(encoded) {
+		auto corrupt = *encoded;
+		corrupt[40U] = std::byte{1U};
+		const auto payload = decode_new_classic_netplay_datagram(corrupt);
+		expect(!payload && payload.error().code ==
+			NewClassicNetplayDatagramErrorCode::invalid_history,
+			"Pause signals reject hidden payload bytes");
+		corrupt = *encoded;
+		corrupt[73U] = std::byte{0U};
+		const auto proof = decode_new_classic_netplay_datagram(corrupt);
+		expect(!proof && proof.error().code ==
+			NewClassicNetplayDatagramErrorCode::invalid_history,
+			"Pause signals require the typed Pause boundary proof");
+	}
+	auto invalid = NewClassicNetplayPauseBarrier::create(0U, gameplay);
+	expect(!invalid && invalid.error().code ==
+		NewClassicNetplayPauseBarrierErrorCode::invalid_identity,
+		"Pause ready barrier rejects the bootstrap identity");
+	auto barrier = NewClassicNetplayPauseBarrier::create(frame, gameplay);
+	expect(barrier && barrier->status() ==
+		NewClassicNetplayPauseBarrierStatus::waiting_release,
+		"Pause ready barrier starts behind the source release lock");
+	if(!barrier) {
+		return;
+	}
+	barrier->consume_local({.system = 0x1000U});
+	expect(barrier->status() ==
+		NewClassicNetplayPauseBarrierStatus::waiting_release,
+		"held opening Esc cannot become Resume");
+	barrier->consume_local({});
+	barrier->consume_local({.p1 = 0x0020U});
+	expect(barrier->status() ==
+		NewClassicNetplayPauseBarrierStatus::waiting_local_ready &&
+		barrier->outbound_signal() ==
+			NewClassicNetplayDatagramType::pause_waiting,
+		"non-Cancel input after release does not arm Resume");
+	barrier->consume_local({.system = 0x1000U});
+	expect(barrier->status() ==
+		NewClassicNetplayPauseBarrierStatus::waiting_remote_ready &&
+		barrier->outbound_signal() ==
+			NewClassicNetplayDatagramType::resume_ready,
+		"fresh Esc publishes Resume-ready without advancing source time");
+	const auto wrong = barrier->receive(
+		NewClassicNetplayDatagramType::resume_ready, frame + 1U, gameplay
+	);
+	expect(!wrong && wrong.error().code ==
+		NewClassicNetplayPauseBarrierErrorCode::invalid_identity,
+		"Resume-ready cannot cross Pause boundary identities");
+	expect(barrier->receive(
+		NewClassicNetplayDatagramType::pause_waiting, frame, gameplay
+	).has_value() && !barrier->ready(),
+		"peer waiting is a keepalive but not Resume consent");
+	expect(barrier->receive(
+		NewClassicNetplayDatagramType::resume_ready, frame, gameplay
+	).has_value() && barrier->ready(),
+		"two fresh Esc choices complete the ready barrier");
+
+	auto lost = NewClassicNetplayPauseBarrier::create(frame, gameplay);
+	if(lost) {
+		lost->consume_local({});
+		lost->consume_local({.system = 0x1000U});
+		expect(lost->observe_peer_gameplay(frame).has_value() && lost->ready(),
+			"first post-Resume gameplay closes a lost ready-beacon window");
+	}
+	auto premature = NewClassicNetplayPauseBarrier::create(frame, gameplay);
+	if(premature) {
+		const auto resumed = premature->observe_peer_gameplay(frame);
+		expect(!resumed && resumed.error().code ==
+			NewClassicNetplayPauseBarrierErrorCode::
+				peer_resumed_before_local_ready,
+			"peer gameplay cannot override the local Resume choice");
 	}
 }
 
@@ -559,6 +659,7 @@ int main()
 	test_wire_vectors();
 	test_validation_and_composition();
 	test_datagram_contract();
+	test_pause_barrier();
 	test_match_contract();
 	test_lobby_negotiation();
 	if(failures != 0U) {
