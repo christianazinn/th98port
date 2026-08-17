@@ -131,7 +131,7 @@ void test_datagram_contract()
 		(*encoded)[1U] == std::byte{'3'} &&
 		(*encoded)[2U] == std::byte{'N'} &&
 		(*encoded)[3U] == std::byte{'P'} &&
-		(*encoded)[4U] == std::byte{1U} &&
+		(*encoded)[4U] == std::byte{2U} &&
 		(*encoded)[5U] == std::byte{3U} &&
 		(*encoded)[6U] == std::byte{1U} &&
 		(*encoded)[7U] == std::byte{2U} &&
@@ -187,6 +187,39 @@ void test_datagram_contract()
 	expect(!bad_count && bad_count.error().code ==
 		NewClassicNetplayDatagramErrorCode::invalid_history,
 		"history above the fixed redundant window fails closed");
+
+	NewClassicNetplayDatagram digest{
+		.type = NewClassicNetplayDatagramType::simulation_digest,
+		.sender = NewClassicNetplayPlayer::player_one,
+		.session_id = 0x0102030405060708ULL,
+		.contract_hash = 0x8877665544332211ULL,
+		.latest_frame = 120U,
+	};
+	for(std::size_t index = 0U;
+		index < digest.simulation_digest.size(); ++index) {
+		digest.simulation_digest[index] = static_cast<std::uint8_t>(index + 1U);
+	}
+	const auto encoded_digest = encode_new_classic_netplay_datagram(digest);
+	expect(encoded_digest && (*encoded_digest)[5U] == std::byte{5U} &&
+		(*encoded_digest)[24U] == std::byte{120U} &&
+		(*encoded_digest)[40U] == std::byte{1U} &&
+		(*encoded_digest)[71U] == std::byte{32U},
+		"simulation digest reuses the bounded history payload exactly");
+	const auto decoded_digest = encoded_digest ?
+		decode_new_classic_netplay_datagram(*encoded_digest) :
+		std::expected<NewClassicNetplayDatagram,
+			NewClassicNetplayDatagramError>{
+				std::unexpected(NewClassicNetplayDatagramError{})
+			};
+	expect(decoded_digest && decoded_digest->type == digest.type &&
+		decoded_digest->latest_frame == 120U &&
+		decoded_digest->simulation_digest == digest.simulation_digest,
+		"simulation digest packet round-trips frame identity and SHA-256");
+	digest.simulation_digest = {};
+	const auto zero_digest = encode_new_classic_netplay_datagram(digest);
+	expect(!zero_digest && zero_digest.error().code ==
+		NewClassicNetplayDatagramErrorCode::invalid_digest,
+		"all-zero simulation identity fails closed");
 }
 
 } // namespace

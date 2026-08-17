@@ -25,6 +25,7 @@ struct MainRollbackCoordinator::Impl final {
 	std::unique_ptr<MainProcess> process{};
 	std::unique_ptr<std::array<Slot, main_rollback_ring_slots>> ring{};
 	std::unique_ptr<MainProcessRollbackSnapshot> recovery{};
+	std::unique_ptr<MainProcessRollbackSnapshot> digest_scratch{};
 	std::uint64_t next_frame = 0U;
 	MainRollbackCoordinatorStats stats{};
 
@@ -33,7 +34,8 @@ struct MainRollbackCoordinator::Impl final {
 		ring(std::make_unique<
 			std::array<Slot, main_rollback_ring_slots>
 		>()),
-		recovery(std::make_unique<MainProcessRollbackSnapshot>())
+		recovery(std::make_unique<MainProcessRollbackSnapshot>()),
+		digest_scratch(std::make_unique<MainProcessRollbackSnapshot>())
 	{}
 
 	[[nodiscard]] std::expected<Slot *, MainRollbackCoordinatorError>
@@ -280,6 +282,40 @@ MainRollbackCoordinator::session_transition() const noexcept
 		});
 	}
 	return *transition;
+}
+
+std::expected<AppSha256, MainRollbackCoordinatorError>
+MainRollbackCoordinator::simulation_digest(std::uint64_t frame) noexcept
+{
+	const MainProcessRollbackSnapshot *snapshot = nullptr;
+	const auto &slot = (*impl_->ring)[frame % impl_->ring->size()];
+	if(slot.valid && slot.frame == frame) {
+		snapshot = &slot.snapshot;
+	} else if(frame == impl_->next_frame) {
+		const auto captured = impl_->process->capture_rollback(
+			*impl_->digest_scratch
+		);
+		if(!captured) {
+			return std::unexpected(MainRollbackCoordinatorError{
+				.code = MainRollbackCoordinatorErrorCode::boundary_unavailable,
+				.rollback = captured.error(),
+			});
+		}
+		snapshot = impl_->digest_scratch.get();
+	} else {
+		return std::unexpected(coordinator_error(
+			MainRollbackCoordinatorErrorCode::frame_unavailable
+		));
+	}
+	if(snapshot->simulation.used_size == 0U ||
+		snapshot->simulation.used_size > snapshot->simulation.bytes.size()) {
+		return std::unexpected(coordinator_error(
+			MainRollbackCoordinatorErrorCode::frame_unavailable
+		));
+	}
+	return app_sha256(std::span<const std::byte>(
+		snapshot->simulation.bytes.data(), snapshot->simulation.used_size
+	));
 }
 
 std::expected<present::SourceSurface, present::SourceSurfaceError>

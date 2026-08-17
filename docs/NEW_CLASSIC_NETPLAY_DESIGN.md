@@ -1,10 +1,10 @@
 # New Classic netplay design
 
-Status: **durable proposal; local rollback and the audible direct-UDP/Tailscale
-technical preview are green, while product WebRTC/room integration remains
-future work**
+Status: **durable proposal; local rollback and the audible, frame-zero-verified
+direct-UDP/Tailscale technical preview are green, while product WebRTC/room
+integration remains future work**
 
-Proposal revision date: 2026-08-16
+Proposal revision date: 2026-08-17
 
 This document specifies portable rollback netplay for New Classic's human
 1P-vs-2P mode. It deliberately does not add networking, configuration, UI, or
@@ -490,7 +490,8 @@ enters the contract.
 
 After agreement, both clients create source-fresh MAIN state and exchange the
 SHA-256 simulation digest at frame zero. Gameplay begins only if those digests
-match.
+match. The direct UDP preview implements this gate with a strict `T3NP` v2
+packet and keeps both source schedulers stopped until the proof succeeds.
 
 The backend-neutral owned-player gameplay value is now frozen as the exact
 four-byte little-endian schema in `T3NET001.md`. It contains only one player's
@@ -687,9 +688,10 @@ does not silently broaden leaderboard acceptance.
    conservative optimized wrong/restore/correct/restore probe measures about
    2.75 ms per corrected frame on the development host. See `T3RBC001.md`.
 
-This highest-risk local proof is green. Peer simulation SHA-256, asynchronous
-confirmation/audio-event policy, and minimum-machine measurements remain
-explicit N1 integration gates rather than reasons to alter the rollback image.
+This highest-risk local proof is green. Canonical peer simulation SHA-256 and
+confirmed-frame audio publication are now integrated; periodic runtime digest
+exchange and minimum-machine measurements remain explicit N1 gates rather
+than reasons to alter the rollback image.
 
 ### N1: middleware and simulated transport
 
@@ -708,6 +710,9 @@ explicit N1 integration gates rather than reasons to alter the rollback image.
 3. Build the pinned GGRS C ABI spike and custom queued `NonBlockingSocket`.
 4. Fulfill Save/Load/Advance requests from `MainProcess`.
 5. Freeze prediction, delay, confirmation, digest, and replay-journal behavior.
+   Prediction, delay, confirmation, confirmed audio, and the frame-zero digest
+   are frozen for the direct preview. Periodic/round/terminal digests and the
+   confirmed replay journal remain open.
 6. Decide GGRS versus the single fallback backend using the objective spike
    gates; delete the rejected production path.
 
@@ -715,8 +720,9 @@ explicit N1 integration gates rather than reasons to alter the rollback image.
 
 The immediately testable direct-IPv4 UDP/Tailscale preview is complete on the
 app-owned transport: fixed handshake/history packets, bounded prediction,
-full MAIN repeat/terminal lifecycle, confirmed audio, and Windows/POSIX socket
-tests. The following product transport remains open:
+frame-zero simulation identity, full MAIN repeat/terminal lifecycle, confirmed
+audio, and Windows/POSIX socket tests. The following product transport remains
+open:
 
 1. Pin minimal libdatachannel and implement both Data Channels.
 2. Add a local test signaling server and two-process loopback.

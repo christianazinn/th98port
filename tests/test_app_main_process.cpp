@@ -1432,6 +1432,37 @@ void test_new_classic_netplay_main_session_convergence()
 	if(!peer_one || !peer_two) {
 		return;
 	}
+	const auto initial_digest_one = (*peer_one)->simulation_digest(0U);
+	const auto initial_digest_two = (*peer_two)->simulation_digest(0U);
+	expect(initial_digest_one && initial_digest_two &&
+		*initial_digest_one == *initial_digest_two &&
+		std::ranges::any_of(*initial_digest_one,
+			[](std::uint8_t byte) { return byte != 0U; }),
+		"source-fresh peers expose one identical nonzero T3RBK001 SHA-256");
+	auto divergent_config = config;
+	++divergent_config.seed;
+	auto divergent_process = create_synthetic(divergent_config, resources);
+	auto divergent_peer = divergent_process ?
+		NewClassicNetplayMainSession::create(
+			NewClassicNetplayPlayer::player_one,
+			std::move(*divergent_process)
+		) : std::expected<std::unique_ptr<NewClassicNetplayMainSession>,
+			th03::app::NewClassicNetplayMainSessionError>{
+				std::unexpected(
+					th03::app::NewClassicNetplayMainSessionError{}
+				)
+			};
+	const auto divergent_digest = divergent_peer ?
+		(*divergent_peer)->simulation_digest(0U) :
+		std::expected<th03::app::AppSha256,
+			th03::app::NewClassicNetplayMainSessionError>{
+				std::unexpected(
+					th03::app::NewClassicNetplayMainSessionError{}
+				)
+			};
+	expect(initial_digest_one && divergent_digest &&
+		*initial_digest_one != *divergent_digest,
+		"a source-fresh seed divergence changes the pre-frame identity");
 	const auto drain_session_bootstrap = [](
 		NewClassicNetplayMainSession &session
 	) {
@@ -1551,6 +1582,12 @@ void test_new_classic_netplay_main_session_convergence()
 		(*peer_two)->confirmed_frame_count() == frame_count &&
 		corrections > frame_count,
 		"both peers confirm all frames after exercising suffix resimulation");
+	const auto final_digest_one = (*peer_one)->simulation_digest(frame_count);
+	const auto final_digest_two = (*peer_two)->simulation_digest(frame_count);
+	expect(initial_digest_one && final_digest_one && final_digest_two &&
+		*final_digest_one == *final_digest_two &&
+		*final_digest_one != *initial_digest_one,
+		"corrected peers expose the same retained post-frame simulation digest");
 	for(std::uint64_t frame = 0U; frame < frame_count; ++frame) {
 		auto one = (*peer_one)->take_confirmed_audio_frame();
 		auto two = (*peer_two)->take_confirmed_audio_frame();

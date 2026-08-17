@@ -46,7 +46,8 @@ void put_u64(std::span<std::byte> output, std::size_t offset,
 	return type == NewClassicNetplayDatagramType::hello ||
 		type == NewClassicNetplayDatagramType::accept ||
 		type == NewClassicNetplayDatagramType::input ||
-		type == NewClassicNetplayDatagramType::disconnect;
+		type == NewClassicNetplayDatagramType::disconnect ||
+		type == NewClassicNetplayDatagramType::simulation_digest;
 }
 
 [[nodiscard]] bool valid_sender(NewClassicNetplayPlayer sender) noexcept
@@ -82,16 +83,31 @@ validate(const NewClassicNetplayDatagram &datagram) noexcept
 	}
 	const bool input = datagram.type ==
 		NewClassicNetplayDatagramType::input;
+	const bool digest = datagram.type ==
+		NewClassicNetplayDatagramType::simulation_digest;
 	if(input) {
 		if(datagram.input_count == 0U ||
 			datagram.input_count > datagram.inputs.size() ||
-			datagram.latest_frame + 1U < datagram.input_count) {
+			datagram.latest_frame + 1U < datagram.input_count ||
+			std::ranges::any_of(datagram.simulation_digest,
+				[](std::uint8_t byte) { return byte != 0U; })) {
 			return std::unexpected(error(
 				NewClassicNetplayDatagramErrorCode::invalid_history
 			));
 		}
+	} else if(digest) {
+		if(datagram.input_count != 0U ||
+			datagram.confirmed_frame_count != 0U ||
+			std::ranges::all_of(datagram.simulation_digest,
+				[](std::uint8_t byte) { return byte == 0U; })) {
+			return std::unexpected(error(
+				NewClassicNetplayDatagramErrorCode::invalid_digest
+			));
+		}
 	} else if(datagram.input_count != 0U || datagram.latest_frame != 0U ||
-		datagram.confirmed_frame_count != 0U) {
+		datagram.confirmed_frame_count != 0U ||
+		std::ranges::any_of(datagram.simulation_digest,
+			[](std::uint8_t byte) { return byte != 0U; })) {
 		return std::unexpected(error(
 			NewClassicNetplayDatagramErrorCode::invalid_history
 		));
@@ -133,6 +149,14 @@ std::expected<
 	put_u64(result, 16U, datagram.contract_hash);
 	put_u64(result, 24U, datagram.latest_frame);
 	put_u64(result, 32U, datagram.confirmed_frame_count);
+	if(datagram.type == NewClassicNetplayDatagramType::simulation_digest) {
+		for(std::size_t index = 0U;
+			index < datagram.simulation_digest.size(); ++index) {
+			result[input_offset + index] = std::byte{
+				datagram.simulation_digest[index]
+			};
+		}
+	}
 	for(std::size_t index = 0U; index < datagram.input_count; ++index) {
 		const auto encoded = encode_new_classic_netplay_input(
 			datagram.inputs[index]
@@ -188,6 +212,13 @@ decode_new_classic_netplay_datagram(
 		.latest_frame = get_u64(wire, 24U),
 		.confirmed_frame_count = get_u64(wire, 32U),
 	};
+	if(result.type == NewClassicNetplayDatagramType::simulation_digest) {
+		for(std::size_t index = 0U;
+			index < result.simulation_digest.size(); ++index) {
+			result.simulation_digest[index] =
+				std::to_integer<std::uint8_t>(wire[input_offset + index]);
+		}
+	}
 	if(result.input_count > result.inputs.size()) {
 		return std::unexpected(error(
 			NewClassicNetplayDatagramErrorCode::invalid_history

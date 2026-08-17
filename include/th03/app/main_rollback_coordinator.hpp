@@ -101,6 +101,11 @@ public:
 		SessionTransition,
 		MainRollbackCoordinatorError
 	> session_transition() const noexcept;
+	// SHA-256 of the active T3RBK001 simulation prefix at one retained
+	// pre-frame boundary. This never hashes C++ object bytes, pointers,
+	// presentation state, or host state and never accepts remote bytes.
+	[[nodiscard]] std::expected<AppSha256, MainRollbackCoordinatorError>
+	simulation_digest(std::uint64_t frame) noexcept;
 
 	[[nodiscard]] std::expected<
 		present::SourceSurface,

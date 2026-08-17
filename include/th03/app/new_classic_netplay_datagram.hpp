@@ -11,15 +11,17 @@
 
 namespace th03::app {
 
-inline constexpr std::uint8_t new_classic_netplay_datagram_version = 1U;
+inline constexpr std::uint8_t new_classic_netplay_datagram_version = 2U;
 inline constexpr std::size_t new_classic_netplay_history_values = 16U;
 inline constexpr std::size_t new_classic_netplay_datagram_bytes = 104U;
+inline constexpr std::size_t new_classic_netplay_simulation_digest_bytes = 32U;
 
 enum class NewClassicNetplayDatagramType : std::uint8_t {
 	hello = 1U,
 	accept = 2U,
 	input = 3U,
 	disconnect = 4U,
+	simulation_digest = 5U,
 };
 
 struct NewClassicNetplayDatagram final {
@@ -31,6 +33,13 @@ struct NewClassicNetplayDatagram final {
 	std::uint64_t contract_hash = 0U;
 	std::uint64_t latest_frame = 0U;
 	std::uint64_t confirmed_frame_count = 0U;
+	// Digest packets use latest_frame as their pre-frame identity. The current
+	// direct preview sends frame zero; the remaining header/history bytes stay
+	// zero and no peer state is accepted.
+	std::array<
+		std::uint8_t,
+		new_classic_netplay_simulation_digest_bytes
+	> simulation_digest{};
 	// Newest first. Element i owns latest_frame-i.
 	std::array<
 		NewClassicNetplayOwnedInput,
@@ -47,6 +56,7 @@ enum class NewClassicNetplayDatagramErrorCode : std::uint8_t {
 	invalid_session,
 	invalid_contract,
 	invalid_history,
+	invalid_digest,
 	invalid_input,
 };
 

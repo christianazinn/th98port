@@ -150,6 +150,8 @@ public:
 	[[nodiscard]] InputContext input_context() const noexcept;
 	[[nodiscard]] const std::optional<SessionTransition> &transition()
 		const noexcept;
+	[[nodiscard]] std::expected<AppSha256, NewClassicNetplayMainSessionError>
+	simulation_digest(std::uint64_t frame) noexcept;
 	[[nodiscard]] std::optional<NewClassicNetplayOwnedInput>
 	local_input(std::uint64_t frame) const noexcept;
 

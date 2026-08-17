@@ -70,7 +70,12 @@ literal IPv4 address in this preview, not a MagicDNS hostname.
 
 ## Current diagnostics and failure policy
 
-The handshake rejects a different deterministic contract. Once connected,
+The handshake rejects a different deterministic contract. Before either
+source scheduler starts, both peers also hash and exchange the canonical
+frame-zero `T3RBK001` simulation state. A content, seed, state, or build
+disagreement therefore fails with `initial-simulation-mismatch` instead of
+beginning a divergent match. A successful connection prints
+`identity-frame=0`. Once connected,
 each input datagram carries the newest 16 local values, so loss, duplication,
 and reordering do not require a reliable gameplay stream. A peer times out
 after five seconds without a valid packet. Prediction stops at 12 frames; MAIN

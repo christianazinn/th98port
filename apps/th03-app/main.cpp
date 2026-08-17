@@ -1428,6 +1428,11 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	if(!session) {
 		return fail_netplay("netplay-session", "session-create-failed");
 	}
+	const auto initial_simulation_digest = (*session)->simulation_digest(0U);
+	if(!initial_simulation_digest) {
+		log_netplay_session_error(initial_simulation_digest.error());
+		return fail_netplay("netplay-identity", "digest-create-failed");
+	}
 	auto created_audio = th03::app::ClassicAudioSession::create({
 		.data_root = audio_data_root,
 		.tick_rate = parsed.tick_rate,
@@ -1579,6 +1584,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 
 	const auto start_ns = th03::platform::sdl_ticks_now_ns();
 	auto last_send_ns = start_ns - 250'000'000U;
+	auto last_digest_send_ns = start_ns - 250'000'000U;
 	auto last_receive_ns = start_ns;
 	std::uint64_t session_id = mode == DirectVsNetplayMode::host ?
 		(start_ns ^ contract_hash ^ 0xA35C91D27B48E60FULL) : 0U;
@@ -1586,6 +1592,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		session_id = 1U;
 	}
 	bool established = false;
+	bool peer_started_input = false;
 	bool retry_blocked_event = false;
 	std::array<std::byte,
 		th03::app::new_classic_netplay_datagram_bytes> receive_buffer{};
@@ -1602,6 +1609,19 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		std::cout << "peer=" << parsed.netplay_join_endpoint << '\n';
 	}
 	std::cout.flush();
+	const auto send_initial_digest = [&]() -> bool {
+		if(!peer || session_id == 0U) {
+			return false;
+		}
+		return send_netplay_datagram(**socket, *peer, {
+			.type = NewClassicNetplayDatagramType::simulation_digest,
+			.sender = local_player,
+			.session_id = session_id,
+			.contract_hash = contract_hash,
+			.latest_frame = 0U,
+			.simulation_digest = *initial_simulation_digest,
+		});
+	};
 
 	const auto submit_input_datagram = [&](const NewClassicNetplayDatagram &packet)
 		-> bool {
@@ -1701,36 +1721,48 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			if(!peer || *peer != (*received)->sender) {
 				continue;
 			}
-			if(mode == DirectVsNetplayMode::join && !established &&
+			if(mode == DirectVsNetplayMode::join &&
 				packet->type == NewClassicNetplayDatagramType::accept &&
 				packet->sender == remote_player && packet->session_id != 0U) {
-				session_id = packet->session_id;
-				established = true;
-				last_receive_ns = now_ns;
-				if(const auto rebased = scheduler->rebase_after_modal(now_ns);
-					!rebased) {
-					return fail_tick(rebased.error());
+				if(session_id != 0U && session_id != packet->session_id) {
+					continue;
 				}
-				std::cout << "status=connected\nsession=" << session_id << '\n';
-				std::cout.flush();
+				session_id = packet->session_id;
+				last_receive_ns = now_ns;
+				continue;
+			}
+			if(packet->type ==
+					NewClassicNetplayDatagramType::simulation_digest &&
+				packet->sender == remote_player &&
+				packet->session_id == session_id) {
+				if(packet->latest_frame != 0U ||
+					packet->simulation_digest != *initial_simulation_digest) {
+					return fail_netplay(
+						"netplay-identity", "initial-simulation-mismatch"
+					);
+				}
+				last_receive_ns = now_ns;
+				if(!established) {
+					established = true;
+					if(const auto rebased = scheduler->rebase_after_modal(now_ns);
+						!rebased) {
+						return fail_tick(rebased.error());
+					}
+					std::cout << "status=connected\nsession=" << session_id <<
+						"\nidentity-frame=0\n";
+					std::cout.flush();
+				}
 				continue;
 			}
 			if(packet->type == NewClassicNetplayDatagramType::disconnect &&
 				packet->session_id == session_id) {
 				return fail_netplay("netplay-peer", "peer-disconnected");
 			}
-			if(packet->type == NewClassicNetplayDatagramType::input &&
+			if(established &&
+				packet->type == NewClassicNetplayDatagramType::input &&
 				submit_input_datagram(*packet)) {
 				last_receive_ns = now_ns;
-				if(mode == DirectVsNetplayMode::host && !established) {
-					established = true;
-					if(const auto rebased = scheduler->rebase_after_modal(now_ns);
-						!rebased) {
-						return fail_tick(rebased.error());
-					}
-					std::cout << "status=connected\nsession=" << session_id << '\n';
-					std::cout.flush();
-				}
+				peer_started_input = true;
 			}
 		}
 		if(const auto settled = settle_confirmed_boundary(); !settled) {
@@ -1741,6 +1773,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		}
 
 		if(!established && mode == DirectVsNetplayMode::join &&
+			session_id == 0U &&
 			now_ns - last_send_ns >= 100'000'000U) {
 			const NewClassicNetplayDatagram hello{
 				.type = NewClassicNetplayDatagramType::hello,
@@ -1751,6 +1784,13 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				return fail_netplay("netplay-hello", "send-failed");
 			}
 			last_send_ns = now_ns;
+		}
+		if(peer && session_id != 0U && !peer_started_input &&
+			now_ns - last_digest_send_ns >= 100'000'000U) {
+			if(!send_initial_digest()) {
+				return fail_netplay("netplay-identity", "send-failed");
+			}
+			last_digest_send_ns = now_ns;
 		}
 
 		if(established && stalled_input && (*session)->status() !=

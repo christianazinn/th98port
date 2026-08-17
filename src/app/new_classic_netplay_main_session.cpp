@@ -552,6 +552,16 @@ NewClassicNetplayMainSession::transition() const noexcept
 	return impl_->transition;
 }
 
+std::expected<AppSha256, NewClassicNetplayMainSessionError>
+NewClassicNetplayMainSession::simulation_digest(std::uint64_t frame) noexcept
+{
+	const auto digest = impl_->coordinator->simulation_digest(frame);
+	if(!digest) {
+		return std::unexpected(rollback_error(digest.error()));
+	}
+	return *digest;
+}
+
 std::optional<NewClassicNetplayOwnedInput>
 NewClassicNetplayMainSession::local_input(std::uint64_t frame) const noexcept
 {
