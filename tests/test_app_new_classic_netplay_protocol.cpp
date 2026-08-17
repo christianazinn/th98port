@@ -1,5 +1,6 @@
 #include "th03/app/new_classic_netplay_protocol.hpp"
 #include "th03/app/new_classic_netplay_datagram.hpp"
+#include "th03/app/new_classic_netplay_match_contract.hpp"
 
 #include <array>
 #include <cstddef>
@@ -319,6 +320,82 @@ void test_datagram_contract()
 	}
 }
 
+void test_match_contract()
+{
+	using namespace th03::app;
+	const auto contract = create_new_classic_netplay_match_contract({
+		.player_one = {.character = 1U, .palette = 1U},
+		.rank = 1U,
+		.seed = 34U,
+	}, {
+		.player_two = {.character = 2U, .palette = 2U},
+	});
+	const auto encoded = contract ?
+		encode_new_classic_netplay_match_contract(*contract) :
+		std::expected<
+			std::array<std::byte, new_classic_netplay_match_contract_bytes>,
+			NewClassicNetplayMatchContractError
+		>{std::unexpected(NewClassicNetplayMatchContractError{})};
+	constexpr std::array<std::byte, 32U> golden{
+		std::byte{0x54U}, std::byte{0x33U}, std::byte{0x4EU},
+		std::byte{0x43U}, std::byte{0x01U}, std::byte{0x01U},
+		std::byte{0x01U}, std::byte{0x01U}, std::byte{0x02U},
+		std::byte{0x02U}, std::byte{0x00U}, std::byte{0x00U},
+		std::byte{0x22U}, std::byte{0x00U}, std::byte{0x00U},
+		std::byte{0x00U}, std::byte{0xEBU}, std::byte{0x07U},
+		std::byte{0x08U}, std::byte{0x00U}, std::byte{0x70U},
+		std::byte{0x24U}, std::byte{0x00U}, std::byte{0x00U},
+		std::byte{0x01U}, std::byte{0x00U}, std::byte{0x00U},
+		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
+		std::byte{0x00U}, std::byte{0x00U},
+	};
+	const auto decoded = encoded ?
+		decode_new_classic_netplay_match_contract(*encoded) :
+		std::expected<NewClassicNetplayMatchContract,
+			NewClassicNetplayMatchContractError>{
+				std::unexpected(NewClassicNetplayMatchContractError{})
+			};
+	const auto hash = contract ?
+		new_classic_netplay_match_contract_hash(*contract) :
+		std::expected<std::uint64_t,
+			NewClassicNetplayMatchContractError>{
+				std::unexpected(NewClassicNetplayMatchContractError{})
+			};
+	expect(contract && encoded && *encoded == golden && decoded &&
+		*decoded == *contract && hash && *hash == 0x4154EA41F3912F3AULL,
+		"T3NLC001 freezes host rules plus independently locked P1/P2 choices");
+
+	const auto invalid_host = create_new_classic_netplay_match_contract({
+		.player_one = {.character = 0U, .palette = 1U},
+	}, {});
+	const auto invalid_join = create_new_classic_netplay_match_contract({}, {
+		.player_two = {.character = 1U, .palette = 0U},
+	});
+	expect(!invalid_host && invalid_host.error().code ==
+		NewClassicNetplayMatchContractErrorCode::invalid_host_lock &&
+		!invalid_join && invalid_join.error().code ==
+			NewClassicNetplayMatchContractErrorCode::invalid_join_lock,
+		"each peer's character lock fails in its own ownership domain");
+	if(encoded) {
+		auto corrupt = *encoded;
+		corrupt[4U] = std::byte{2U};
+		const auto version = decode_new_classic_netplay_match_contract(corrupt);
+		corrupt = *encoded;
+		corrupt[24U] = std::byte{2U};
+		const auto ruleset = decode_new_classic_netplay_match_contract(corrupt);
+		corrupt = *encoded;
+		corrupt[31U] = std::byte{1U};
+		const auto reserved = decode_new_classic_netplay_match_contract(corrupt);
+		expect(!version && version.error().code ==
+			NewClassicNetplayMatchContractErrorCode::unsupported_version &&
+			!ruleset && ruleset.error().code ==
+				NewClassicNetplayMatchContractErrorCode::unsupported_ruleset &&
+			!reserved && reserved.error().code ==
+				NewClassicNetplayMatchContractErrorCode::nonzero_reserved,
+			"match identity rejects unknown schema, ruleset, and reserved bytes");
+	}
+}
+
 } // namespace
 
 int main()
@@ -326,6 +403,7 @@ int main()
 	test_wire_vectors();
 	test_validation_and_composition();
 	test_datagram_contract();
+	test_match_contract();
 	if(failures != 0U) {
 		std::fprintf(stderr, "%zu of %zu checks failed\n", failures, checks);
 		return 1;

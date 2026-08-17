@@ -539,6 +539,7 @@ th03_set_warnings(th03_formats)
 # scheduling. This target owns no game process, socket, platform, clock, or UI.
 add_library(th03_app_netplay STATIC
 	src/app/new_classic_netplay_datagram.cpp
+	src/app/new_classic_netplay_match_contract.cpp
 	src/app/new_classic_netplay_protocol.cpp
 	src/app/new_classic_netplay_simulator.cpp
 	src/app/new_classic_netplay_timeline.cpp

@@ -357,6 +357,9 @@ std::expected<DirectVsCliRequest, DirectVsCliError> parse_direct_vs_cli(
 			arguments.size()
 		));
 	}
+	if(request.netplay_mode != DirectVsNetplayMode::none) {
+		request.launch.process.game_options.three_digit_combos = true;
+	}
 
 	constexpr std::array required{
 		DirectVsCliOption::vs,

@@ -31,6 +31,7 @@
 #include "th03/app/direct_vs_launch.hpp"
 #include "th03/app/main_direct_vs_runner.hpp"
 #include "th03/app/new_classic_netplay_datagram.hpp"
+#include "th03/app/new_classic_netplay_match_contract.hpp"
 #include "th03/app/new_classic_netplay_main_session.hpp"
 #include "th03/app/new_classic_netplay_post_match.hpp"
 #include "th03/app/new_classic_netplay_replay_capture.hpp"
@@ -1287,39 +1288,49 @@ platform_window_presentation(
 
 namespace {
 
-[[nodiscard]] std::uint64_t netplay_contract_hash(
+[[nodiscard]] std::expected<
+	std::uint64_t,
+	th03::app::NewClassicNetplayMatchContractError
+> netplay_contract_hash(
 	const th03::app::DirectVsCliRequest &request
 ) noexcept
 {
-	std::uint64_t hash = 14695981039346656037ULL;
-	const auto append = [&hash](std::uint64_t value, std::size_t bytes) {
-		for(std::size_t index = 0U; index < bytes; ++index) {
-			hash ^= static_cast<std::uint8_t>(value >> (index * 8U));
-			hash *= 1099511628211ULL;
-		}
-	};
-	append(0x54334E5052455631ULL, 8U);
-	append(th03::app::new_classic_netplay_datagram_version, 1U);
-	append(request.tick_rate.ticks, 4U);
-	append(request.tick_rate.seconds, 4U);
-	append(request.launch.process.rank, 1U);
-	append(request.launch.process.seed, 4U);
-	append(static_cast<std::uint8_t>(
-		request.launch.process.player_one.character
-	), 1U);
-	append(static_cast<std::uint8_t>(
-		request.launch.process.player_one.palette
-	), 1U);
-	append(static_cast<std::uint8_t>(
-		request.launch.process.player_two.character
-	), 1U);
-	append(static_cast<std::uint8_t>(
-		request.launch.process.player_two.palette
-	), 1U);
-	append(static_cast<std::uint8_t>(
-		request.launch.process.classic_audio_lifecycle
-	), 1U);
-	return hash == 0U ? 1U : hash;
+	if(!request.launch.process.game_options.three_digit_combos ||
+		request.launch.process.game_options.input_protocol !=
+			th03::InputProtocol::live) {
+		return std::unexpected(th03::app::NewClassicNetplayMatchContractError{
+			.code = th03::app::NewClassicNetplayMatchContractErrorCode::
+				invalid_host_lock,
+		});
+	}
+	const auto contract =
+		th03::app::create_new_classic_netplay_match_contract({
+			.player_one = {
+				.character = static_cast<std::uint8_t>(
+					request.launch.process.player_one.character
+				),
+				.palette = static_cast<std::uint8_t>(
+					request.launch.process.player_one.palette
+				),
+			},
+			.rank = request.launch.process.rank,
+			.seed = request.launch.process.seed,
+			.cadence_ticks = request.tick_rate.ticks,
+			.cadence_seconds = request.tick_rate.seconds,
+		}, {
+			.player_two = {
+				.character = static_cast<std::uint8_t>(
+					request.launch.process.player_two.character
+				),
+				.palette = static_cast<std::uint8_t>(
+					request.launch.process.player_two.palette
+				),
+			},
+		});
+	if(!contract) {
+		return std::unexpected(contract.error());
+	}
+	return th03::app::new_classic_netplay_match_contract_hash(*contract);
 }
 
 [[nodiscard]] th03::app::NewClassicNetplayOwnedInput netplay_owned_input(
@@ -1415,7 +1426,11 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	using th03::app::NewClassicNetplayPlayer;
 	using th03::app::NewClassicNetplayPostMatchStatus;
 	parsed.launch.process.classic_audio_lifecycle = true;
-	const auto contract_hash = netplay_contract_hash(parsed);
+	const auto created_contract_hash = netplay_contract_hash(parsed);
+	if(!created_contract_hash) {
+		return fail_netplay("netplay-contract", "invalid-match-lock");
+	}
+	const auto contract_hash = *created_contract_hash;
 	const auto mode = parsed.netplay_mode;
 	const auto audio_data_root = parsed.launch.content.data_root;
 	const auto post_match_content = parsed.launch.content;

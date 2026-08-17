@@ -93,11 +93,13 @@ void test_help_and_valid_defaults()
 	expect(host && host->netplay_mode ==
 		th03::app::DirectVsNetplayMode::host &&
 		host->netplay_host_port == 31415U &&
+		host->launch.process.game_options.three_digit_combos &&
 		host->netplay_replay_output ==
 			std::filesystem::path("output/NETPLAY.RPY") && join &&
 		join->netplay_mode == th03::app::DirectVsNetplayMode::join &&
+		join->launch.process.game_options.three_digit_combos &&
 		join->netplay_join_endpoint == "100.64.1.2:31415",
-		"direct-VS freezes mutually exclusive host and join launch modes");
+		"netplay launch locks New Classic rules with its exclusive peer role");
 }
 
 void test_all_character_palette_names()

@@ -745,7 +745,10 @@ timeout. The following product transport remains open:
 ### N3: product integration
 
 1. Add the fourth VS submenu row, room UI, character-lock control, and ready
-   barrier.
+   barrier. The backend-neutral 32-byte `T3NLC001` match value now freezes
+   host-owned P1/rank/seed/cadence, join-owned P2, and New Classic ruleset 1;
+   exchanging those independent locks before MAIN remains the UI/transport
+   integration step.
 2. Add negotiated pause, forfeit, disconnect, desync UI, and post-match report.
 3. Feed only confirmed history into the in-memory V13 recorder and existing save
    UI. The corrected contiguous-confirmed transcript now becomes an ordinary
