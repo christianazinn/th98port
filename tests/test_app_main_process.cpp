@@ -1792,6 +1792,10 @@ void test_new_classic_netplay_confirmed_digest_schedule()
 		(*delayed_peer)->take_confirmed_input_frame();
 	expect(closes_gap && closes_gap->confirmed_frame_count == 128U &&
 		delayed_digest && *delayed_digest &&
+		(**delayed_digest).kind ==
+			th03::app::NewClassicNetplaySimulationDigestKind::periodic &&
+		(**delayed_digest).boundary ==
+			th03::app::NewClassicNetplayBoundaryProof::none &&
 		(**delayed_digest).frame ==
 			th03::app::new_classic_netplay_simulation_digest_interval &&
 		(**delayed_digest).confirmed_gameplay_frame_count ==
@@ -1802,6 +1806,10 @@ void test_new_classic_netplay_confirmed_digest_schedule()
 			transcript_journal_failed,
 		"a transcript consumer beyond the bounded ring fails closed");
 	expect(digest_one && *digest_one && digest_two && *digest_two &&
+		(**digest_one).kind ==
+			th03::app::NewClassicNetplaySimulationDigestKind::periodic &&
+		(**digest_two).kind ==
+			th03::app::NewClassicNetplaySimulationDigestKind::periodic &&
 		(**digest_one).frame ==
 			th03::app::new_classic_netplay_simulation_digest_interval &&
 		(**digest_two).frame ==

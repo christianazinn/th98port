@@ -1619,6 +1619,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	std::optional<ConfirmedSimulationDigest> remote_runtime_digest{};
 	std::optional<ConfirmedSimulationDigest> remote_runtime_digest_ack{};
 	std::optional<ConfirmedSimulationDigest> verified_runtime_digest{};
+	std::uint64_t verified_periodic_gameplay_frame = 0U;
 	std::vector<std::uint8_t> local_deadline_missed{};
 	std::unique_ptr<th03::app::NewClassicNetplayPostMatch> post_match{};
 	bool runtime_digest_peer_ack = false;
@@ -1637,6 +1638,8 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		NewClassicNetplayDatagramType type,
 		std::uint64_t frame,
 		std::uint64_t confirmed_gameplay_frame_count,
+		th03::app::NewClassicNetplaySimulationDigestKind kind,
+		th03::app::NewClassicNetplayBoundaryProof boundary,
 		const th03::app::AppSha256 &digest
 	) -> bool {
 		if(!peer || session_id == 0U) {
@@ -1650,7 +1653,23 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			.latest_frame = frame,
 			.confirmed_frame_count = confirmed_gameplay_frame_count,
 			.simulation_digest = digest,
+			.simulation_digest_kind = kind,
+			.boundary_proof = boundary,
 		});
+	};
+	const auto same_proof_identity = [](
+		const ConfirmedSimulationDigest &left,
+		const ConfirmedSimulationDigest &right
+	) noexcept {
+		return left.frame == right.frame &&
+			left.confirmed_gameplay_frame_count ==
+				right.confirmed_gameplay_frame_count &&
+			left.kind == right.kind && left.boundary == right.boundary;
+	};
+	const auto same_proof = [&](const ConfirmedSimulationDigest &left,
+		const ConfirmedSimulationDigest &right) noexcept {
+		return same_proof_identity(left, right) &&
+			left.digest == right.digest;
 	};
 	const auto leave_preview = [&]() -> int {
 		if(peer && session_id != 0U) {
@@ -1673,9 +1692,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		if(!local_runtime_digest || !remote_runtime_digest) {
 			return {};
 		}
-		if(local_runtime_digest->frame != remote_runtime_digest->frame ||
-			local_runtime_digest->confirmed_gameplay_frame_count !=
-				remote_runtime_digest->confirmed_gameplay_frame_count) {
+		if(!same_proof_identity(
+			*local_runtime_digest, *remote_runtime_digest
+		)) {
 			return std::unexpected(fail_netplay(
 				"netplay-identity", "runtime-proof-order"
 			));
@@ -1685,11 +1704,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				"netplay-identity", "runtime-simulation-mismatch"
 			));
 		}
-		if(remote_runtime_digest_ack &&
-			(remote_runtime_digest_ack->frame != local_runtime_digest->frame ||
-			 remote_runtime_digest_ack->confirmed_gameplay_frame_count !=
-				local_runtime_digest->confirmed_gameplay_frame_count ||
-			 remote_runtime_digest_ack->digest != local_runtime_digest->digest)) {
+		if(remote_runtime_digest_ack && !same_proof(
+			*remote_runtime_digest_ack, *local_runtime_digest
+		)) {
 			return std::unexpected(fail_netplay(
 				"netplay-identity", "runtime-proof-order"
 			));
@@ -1698,6 +1715,8 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			NewClassicNetplayDatagramType::simulation_digest_ack,
 			local_runtime_digest->frame,
 			local_runtime_digest->confirmed_gameplay_frame_count,
+			local_runtime_digest->kind,
+			local_runtime_digest->boundary,
 			local_runtime_digest->digest
 		)) {
 			return std::unexpected(fail_netplay(
@@ -1705,6 +1724,12 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			));
 		}
 		verified_runtime_digest = *local_runtime_digest;
+		verified_periodic_gameplay_frame = std::max(
+			verified_periodic_gameplay_frame,
+			(verified_runtime_digest->confirmed_gameplay_frame_count /
+				th03::app::new_classic_netplay_simulation_digest_interval) *
+				th03::app::new_classic_netplay_simulation_digest_interval
+		);
 		runtime_digest_peer_ack = remote_runtime_digest_ack.has_value();
 		std::cout << "status=identity-confirmed\nidentity-frame=" <<
 			verified_runtime_digest->frame << '\n';
@@ -1715,6 +1740,10 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		return {};
 	};
 	const auto drain_local_runtime_digests = [&]() -> std::expected<void, int> {
+		if(local_runtime_digest ||
+			(verified_runtime_digest && !runtime_digest_peer_ack)) {
+			return match_runtime_digests();
+		}
 		for(;;) {
 			auto digest = (*session)->take_confirmed_simulation_digest();
 			if(!digest) {
@@ -1726,13 +1755,22 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			if(!*digest) {
 				return match_runtime_digests();
 			}
-			const auto expected_gameplay_frame = verified_runtime_digest ?
-				verified_runtime_digest->confirmed_gameplay_frame_count +
-					th03::app::new_classic_netplay_simulation_digest_interval :
+			const bool periodic = (**digest).kind ==
+				th03::app::NewClassicNetplaySimulationDigestKind::periodic;
+			const bool boundary = (**digest).kind ==
+				th03::app::NewClassicNetplaySimulationDigestKind::boundary;
+			const auto expected_periodic = verified_periodic_gameplay_frame +
 				th03::app::new_classic_netplay_simulation_digest_interval;
-			if(local_runtime_digest ||
-				(**digest).confirmed_gameplay_frame_count !=
-					expected_gameplay_frame) {
+			if((periodic && ((**digest).boundary !=
+					th03::app::NewClassicNetplayBoundaryProof::none ||
+				(**digest).confirmed_gameplay_frame_count != expected_periodic)) ||
+				(boundary && (**digest).boundary ==
+					th03::app::NewClassicNetplayBoundaryProof::none) ||
+				(!periodic && !boundary) ||
+				(verified_runtime_digest &&
+				 ((**digest).frame <= verified_runtime_digest->frame ||
+				  (**digest).confirmed_gameplay_frame_count <
+					verified_runtime_digest->confirmed_gameplay_frame_count))) {
 				return std::unexpected(fail_netplay(
 					"netplay-identity", "runtime-proof-lag"
 				));
@@ -1742,6 +1780,8 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				NewClassicNetplayDatagramType::simulation_digest,
 				local_runtime_digest->frame,
 				local_runtime_digest->confirmed_gameplay_frame_count,
+				local_runtime_digest->kind,
+				local_runtime_digest->boundary,
 				local_runtime_digest->digest
 			)) {
 				return std::unexpected(fail_netplay(
@@ -1838,6 +1878,27 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		if((*session)->status() !=
 			NewClassicNetplayMainSessionStatus::boundary_confirmed) {
 			return {};
+		}
+		if(const auto digests = drain_local_runtime_digests(); !digests) {
+			return digests;
+		}
+		const auto expected_boundary = (*session)->boundary() ?
+			th03::app::new_classic_netplay_boundary_proof(
+				*(*session)->boundary()
+			) :
+			th03::app::NewClassicNetplayBoundaryProof::none;
+		if(local_runtime_digest || remote_runtime_digest ||
+			remote_runtime_digest_ack || !verified_runtime_digest ||
+			!runtime_digest_peer_ack) {
+			return {};
+		}
+		if(verified_runtime_digest->kind !=
+				th03::app::NewClassicNetplaySimulationDigestKind::boundary ||
+			verified_runtime_digest->boundary != expected_boundary ||
+			verified_runtime_digest->frame != (*session)->next_frame()) {
+			return std::unexpected(fail_netplay(
+				"netplay-boundary", "identity-missing"
+			));
 		}
 		const auto continued = (*session)->continue_confirmed_boundary();
 		if(!continued) {
@@ -1939,7 +2000,8 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				packet->sender == remote_player &&
 				packet->session_id == session_id) {
 				last_receive_ns = now_ns;
-				if(packet->latest_frame == 0U) {
+				if(packet->simulation_digest_kind ==
+					th03::app::NewClassicNetplaySimulationDigestKind::initial) {
 					if(packet->simulation_digest != *initial_simulation_digest) {
 						return fail_netplay(
 							"netplay-identity", "initial-simulation-mismatch"
@@ -1958,10 +2020,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 					}
 					continue;
 				}
-				if(!established || packet->confirmed_frame_count == 0U ||
-					packet->confirmed_frame_count %
-						th03::app::new_classic_netplay_simulation_digest_interval !=
-						0U) {
+				if(!established) {
 					return fail_netplay(
 						"netplay-identity", "runtime-proof-order"
 					);
@@ -1970,13 +2029,15 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 					.frame = packet->latest_frame,
 					.confirmed_gameplay_frame_count =
 						packet->confirmed_frame_count,
+					.kind = packet->simulation_digest_kind,
+					.boundary = packet->boundary_proof,
 					.digest = packet->simulation_digest,
 				};
 				if(verified_runtime_digest &&
-					received_digest.confirmed_gameplay_frame_count ==
-						verified_runtime_digest->confirmed_gameplay_frame_count) {
-					if(received_digest.frame != verified_runtime_digest->frame ||
-						received_digest.digest != verified_runtime_digest->digest) {
+					received_digest.frame == verified_runtime_digest->frame) {
+					if(!same_proof(
+						received_digest, *verified_runtime_digest
+					)) {
 						return fail_netplay(
 							"netplay-identity", "runtime-simulation-mismatch"
 						);
@@ -1986,6 +2047,8 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 						verified_runtime_digest->frame,
 						verified_runtime_digest->
 							confirmed_gameplay_frame_count,
+						verified_runtime_digest->kind,
+						verified_runtime_digest->boundary,
 						verified_runtime_digest->digest
 					)) {
 						return fail_netplay(
@@ -1995,21 +2058,28 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 					continue;
 				}
 				if(verified_runtime_digest &&
-					received_digest.confirmed_gameplay_frame_count <
-						verified_runtime_digest->confirmed_gameplay_frame_count) {
+					received_digest.frame < verified_runtime_digest->frame) {
 					continue;
 				}
-				const auto expected_gameplay_frame = verified_runtime_digest ?
-					verified_runtime_digest->confirmed_gameplay_frame_count +
-						th03::app::new_classic_netplay_simulation_digest_interval :
+				const bool periodic = received_digest.kind ==
+					th03::app::NewClassicNetplaySimulationDigestKind::periodic;
+				const bool boundary = received_digest.kind ==
+					th03::app::NewClassicNetplaySimulationDigestKind::boundary;
+				const auto expected_periodic =
+					verified_periodic_gameplay_frame +
 					th03::app::new_classic_netplay_simulation_digest_interval;
-				if(received_digest.confirmed_gameplay_frame_count !=
-					expected_gameplay_frame ||
+				if((periodic && (received_digest.boundary !=
+						th03::app::NewClassicNetplayBoundaryProof::none ||
+					received_digest.confirmed_gameplay_frame_count !=
+						expected_periodic)) ||
+					(boundary && received_digest.boundary ==
+						th03::app::NewClassicNetplayBoundaryProof::none) ||
+					(!periodic && !boundary) ||
+					(verified_runtime_digest &&
+					 received_digest.confirmed_gameplay_frame_count <
+						verified_runtime_digest->confirmed_gameplay_frame_count) ||
 					(remote_runtime_digest &&
-					 (remote_runtime_digest->frame != received_digest.frame ||
-					  remote_runtime_digest->confirmed_gameplay_frame_count !=
-						received_digest.confirmed_gameplay_frame_count ||
-					  remote_runtime_digest->digest != received_digest.digest))) {
+					 !same_proof(*remote_runtime_digest, received_digest))) {
 					return fail_netplay(
 						"netplay-identity", "runtime-proof-order"
 					);
@@ -2025,11 +2095,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				packet->sender == remote_player &&
 				packet->session_id == session_id) {
 				last_receive_ns = now_ns;
-				if(!established || packet->latest_frame == 0U ||
-					packet->confirmed_frame_count == 0U ||
-					packet->confirmed_frame_count %
-						th03::app::new_classic_netplay_simulation_digest_interval !=
-						0U) {
+				if(!established) {
 					return fail_netplay(
 						"netplay-identity", "runtime-proof-order"
 					);
@@ -2038,13 +2104,13 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 					.frame = packet->latest_frame,
 					.confirmed_gameplay_frame_count =
 						packet->confirmed_frame_count,
+					.kind = packet->simulation_digest_kind,
+					.boundary = packet->boundary_proof,
 					.digest = packet->simulation_digest,
 				};
 				if(verified_runtime_digest &&
-					received_ack.confirmed_gameplay_frame_count ==
-						verified_runtime_digest->confirmed_gameplay_frame_count) {
-					if(received_ack.frame != verified_runtime_digest->frame ||
-						received_ack.digest != verified_runtime_digest->digest) {
+					received_ack.frame == verified_runtime_digest->frame) {
+					if(!same_proof(received_ack, *verified_runtime_digest)) {
 						return fail_netplay(
 							"netplay-identity", "runtime-simulation-mismatch"
 						);
@@ -2063,6 +2129,8 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 							verified_runtime_digest->frame,
 							verified_runtime_digest->
 								confirmed_gameplay_frame_count,
+							verified_runtime_digest->kind,
+							verified_runtime_digest->boundary,
 							verified_runtime_digest->digest
 						)) {
 						return fail_netplay(
@@ -2071,27 +2139,17 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 					}
 					continue;
 				}
-				if(!local_runtime_digest || received_ack.frame !=
-					local_runtime_digest->frame ||
-					received_ack.confirmed_gameplay_frame_count !=
-						local_runtime_digest->confirmed_gameplay_frame_count ||
-					received_ack.digest !=
-					local_runtime_digest->digest ||
+				if(!local_runtime_digest ||
+					!same_proof(received_ack, *local_runtime_digest) ||
 					(remote_runtime_digest_ack &&
-					 (remote_runtime_digest_ack->frame != received_ack.frame ||
-					  remote_runtime_digest_ack->confirmed_gameplay_frame_count !=
-						received_ack.confirmed_gameplay_frame_count ||
-					  remote_runtime_digest_ack->digest != received_ack.digest))) {
+					 !same_proof(*remote_runtime_digest_ack, received_ack))) {
 					return fail_netplay(
 						"netplay-identity", "runtime-proof-order"
 					);
 				}
 				remote_runtime_digest_ack = received_ack;
 				if(remote_runtime_digest &&
-					(remote_runtime_digest->frame != received_ack.frame ||
-					 remote_runtime_digest->confirmed_gameplay_frame_count !=
-						received_ack.confirmed_gameplay_frame_count ||
-					 remote_runtime_digest->digest != received_ack.digest)) {
+					!same_proof(*remote_runtime_digest, received_ack)) {
 					return fail_netplay(
 						"netplay-identity", "runtime-simulation-mismatch"
 					);
@@ -2148,7 +2206,10 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			now_ns - last_initial_digest_send_ns >= 100'000'000U) {
 			if(!send_simulation_digest(
 				NewClassicNetplayDatagramType::simulation_digest,
-				0U, 0U, *initial_simulation_digest
+				0U, 0U,
+				th03::app::NewClassicNetplaySimulationDigestKind::initial,
+				th03::app::NewClassicNetplayBoundaryProof::none,
+				*initial_simulation_digest
 			)) {
 				return fail_netplay("netplay-identity", "send-failed");
 			}
@@ -2323,6 +2384,8 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 						NewClassicNetplayDatagramType::simulation_digest_ack,
 					outbound_digest->frame,
 					outbound_digest->confirmed_gameplay_frame_count,
+					outbound_digest->kind,
+					outbound_digest->boundary,
 					outbound_digest->digest
 				)) {
 					return fail_netplay("netplay-identity", "send-failed");

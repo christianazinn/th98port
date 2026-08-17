@@ -19,6 +19,38 @@ enum class NewClassicNetplayPlayer : std::uint8_t {
 	player_two,
 };
 
+enum class NewClassicNetplaySimulationDigestKind : std::uint8_t {
+	initial = 0U,
+	periodic = 1U,
+	boundary = 2U,
+};
+
+enum class NewClassicNetplayBoundaryProof : std::uint8_t {
+	none = 0U,
+	phase_transition = 1U,
+	round_transition = 2U,
+	terminal = 3U,
+};
+
+[[nodiscard]] constexpr NewClassicNetplayBoundaryProof
+new_classic_netplay_boundary_proof(StepStatus status) noexcept
+{
+	switch(status) {
+	case StepStatus::phase_transition:
+		return NewClassicNetplayBoundaryProof::phase_transition;
+	case StepStatus::round_transition:
+		return NewClassicNetplayBoundaryProof::round_transition;
+	case StepStatus::terminal:
+		return NewClassicNetplayBoundaryProof::terminal;
+	case StepStatus::running:
+	case StepStatus::paused:
+	case StepStatus::invalid_input_context:
+	case StepStatus::simulation_not_implemented:
+		return NewClassicNetplayBoundaryProof::none;
+	}
+	return NewClassicNetplayBoundaryProof::none;
+}
+
 // T3NET001 backend value. This is post-device/post-KeyConfig logical input for
 // exactly one owned player. It contains no player identity, system word, raw
 // scancode, application event, clock, or host-device information.

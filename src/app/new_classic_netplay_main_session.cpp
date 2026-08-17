@@ -35,7 +35,7 @@ namespace {
 } // namespace
 
 struct NewClassicNetplayMainSession::Impl final {
-	static constexpr std::size_t digest_queue_size = 4U;
+	static constexpr std::size_t digest_queue_size = 8U;
 	struct FrameFact final {
 		bool valid = false;
 		bool gameplay = false;
@@ -81,8 +81,6 @@ struct NewClassicNetplayMainSession::Impl final {
 	std::uint64_t confirmed_gameplay_frames = 0U;
 	std::uint64_t next_digest_gameplay_frame =
 		new_classic_netplay_simulation_digest_interval;
-	std::optional<std::uint64_t> due_digest_frame{};
-	std::optional<std::uint64_t> due_digest_gameplay_frame{};
 	NewClassicNetplayMainSessionStatus status =
 		NewClassicNetplayMainSessionStatus::running;
 	std::optional<std::uint64_t> boundary_frame{};
@@ -138,6 +136,36 @@ struct NewClassicNetplayMainSession::Impl final {
 	}
 
 	[[nodiscard]] std::expected<void, NewClassicNetplayMainSessionError>
+	enqueue_confirmed_digest(
+		std::uint64_t frame,
+		NewClassicNetplaySimulationDigestKind kind,
+		NewClassicNetplayBoundaryProof boundary_proof
+	) noexcept
+	{
+		if(digest_count >= digest_queue.size()) {
+			return std::unexpected(session_error(
+				NewClassicNetplayMainSessionErrorCode::digest_journal_failed
+			));
+		}
+		const auto digest = coordinator->simulation_digest(frame);
+		if(!digest) {
+			return std::unexpected(rollback_error(digest.error()));
+		}
+		const auto index = static_cast<std::size_t>(
+			(digest_head + digest_count) % digest_queue.size()
+		);
+		digest_queue[index] = {
+			.frame = frame,
+			.confirmed_gameplay_frame_count = confirmed_gameplay_frames,
+			.kind = kind,
+			.boundary = boundary_proof,
+			.digest = *digest,
+		};
+		++digest_count;
+		return {};
+	}
+
+	[[nodiscard]] std::expected<void, NewClassicNetplayMainSessionError>
 	capture_confirmed_digests() noexcept
 	{
 		const auto confirmed = timeline->confirmed_frame_count();
@@ -151,54 +179,38 @@ struct NewClassicNetplayMainSession::Impl final {
 						digest_journal_failed
 				));
 			}
+			bool periodic_due = false;
 			if(fact.gameplay) {
 				++confirmed_gameplay_frames;
 				if(confirmed_gameplay_frames ==
 					next_digest_gameplay_frame) {
-					if(due_digest_frame || due_digest_gameplay_frame) {
-						return std::unexpected(session_error(
-							NewClassicNetplayMainSessionErrorCode::
-								digest_journal_failed
-						));
-					}
-					due_digest_frame = digest_scan_frame + 1U;
-					due_digest_gameplay_frame =
-						confirmed_gameplay_frames;
+					periodic_due = true;
 					next_digest_gameplay_frame +=
 						new_classic_netplay_simulation_digest_interval;
 				}
 			}
-			++digest_scan_frame;
-		}
-		if(due_digest_gameplay_frame) {
-			if(digest_count >= digest_queue.size()) {
-				return std::unexpected(session_error(
-					NewClassicNetplayMainSessionErrorCode::
-						digest_journal_failed
-				));
-			}
-			if(!due_digest_frame) {
-				return std::unexpected(session_error(
-					NewClassicNetplayMainSessionErrorCode::
-						digest_journal_failed
-				));
-			}
-			const auto digest = coordinator->simulation_digest(*due_digest_frame);
-			if(!digest) {
-				return std::unexpected(rollback_error(digest.error()));
-			}
-			const auto index = static_cast<std::size_t>(
-				(digest_head + digest_count) % digest_queue.size()
+			const auto post_frame = digest_scan_frame + 1U;
+			const auto boundary_proof = new_classic_netplay_boundary_proof(
+				fact.step_result.status
 			);
-			digest_queue[index] = {
-				.frame = *due_digest_frame,
-				.confirmed_gameplay_frame_count =
-					*due_digest_gameplay_frame,
-				.digest = *digest,
-			};
-			++digest_count;
-			due_digest_frame.reset();
-			due_digest_gameplay_frame.reset();
+			if(boundary_proof != NewClassicNetplayBoundaryProof::none) {
+				if(const auto queued = enqueue_confirmed_digest(
+					post_frame,
+					NewClassicNetplaySimulationDigestKind::boundary,
+					boundary_proof
+				); !queued) {
+					return queued;
+				}
+			} else if(periodic_due) {
+				if(const auto queued = enqueue_confirmed_digest(
+					post_frame,
+					NewClassicNetplaySimulationDigestKind::periodic,
+					NewClassicNetplayBoundaryProof::none
+				); !queued) {
+					return queued;
+				}
+			}
+			++digest_scan_frame;
 		}
 		return {};
 	}

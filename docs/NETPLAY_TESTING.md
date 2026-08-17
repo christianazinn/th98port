@@ -82,9 +82,11 @@ frame-zero `T3RBK001` simulation state. A content, seed, state, or build
 disagreement therefore fails with `initial-simulation-mismatch` instead of
 beginning a divergent match. A successful connection prints
 `identity-frame=0`. During play, both peers exchange and acknowledge another
-canonical proof every 120 contiguous-confirmed gameplay frames. Matching
-proofs print `status=identity-confirmed`; a mismatch ends the preview before a
-result can be accepted. Once connected,
+canonical proof every 120 contiguous-confirmed gameplay frames and at every
+phase, round, and terminal boundary. Matching proofs print
+`status=identity-confirmed`; a mismatch ends the preview before a result can be
+accepted, and neither peer enters the next lifecycle owner before the boundary
+proof is acknowledged. Once connected,
 each input datagram carries the newest 16 local values, so loss, duplication,
 and reordering do not require a reliable gameplay stream. A peer times out
 after five seconds without a valid packet. Prediction stops at 12 frames; MAIN
@@ -92,8 +94,8 @@ result/transition regions that are not rollback-safe switch to exact-input
 lockstep and reopen rollback at the next valid boundary. Both peers print the
 same confirmed boundary frames, enter `status=post-match`, and print
 `status=match-complete` only after their local winner scene has completed.
-The latest periodic proof must be mutually acknowledged before either peer may
-report a clean finish or bounded smoke completion.
+The latest periodic or boundary proof must be mutually acknowledged before
+either peer may report a clean finish or bounded smoke completion.
 An intentional local exit prints `status=left`; the other peer prints
 `status=peer-left` rather than waiting for the crash/connectivity timeout.
 The preview feeds its corrected contiguous-confirmed input stream directly into

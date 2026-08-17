@@ -491,7 +491,7 @@ enters the contract.
 After agreement, both clients create source-fresh MAIN state and exchange the
 SHA-256 simulation digest at frame zero. Gameplay begins only if those digests
 match. The direct UDP preview implements this gate with a strict fixed-size
-`T3NP` v3 packet and keeps both source schedulers stopped until the proof
+`T3NP` v4 packet and keeps both source schedulers stopped until the proof
 succeeds.
 
 The backend-neutral owned-player gameplay value is now frozen as the exact
@@ -515,11 +515,14 @@ or remote snapshot. There is no automatic state transfer or "host wins"
 repair; either would mask deterministic bugs and make one modified peer an
 authority over the other.
 
-The direct preview now implements mutually acknowledged 120-frame gameplay
-proofs in addition to frame zero. It retains a proof only after contiguous
-confirmation, retransmits bounded proof/ack packets, and will not report a
-clean result while its latest proof is unacknowledged. Explicit round-start
-and terminal proof identities remain part of the product-control phase work.
+The direct preview implements mutually acknowledged proofs at frame zero,
+every 120 contiguous-confirmed gameplay frames, and every confirmed phase,
+round, or terminal boundary. A periodic milestone coinciding with a lifecycle
+boundary emits one typed boundary proof and still advances the periodic
+schedule. Both peers remain stopped at that boundary until the exact post-frame
+digest, proof kind, boundary identity, and acknowledgement agree. The bounded
+proof/ack retransmission therefore cannot carry a latent mismatch into the next
+source lifecycle owner or report a divergent result as clean.
 
 Both peers maintain a frame-indexed replay journal outside rollback state.
 Predicted executions may overwrite an unconfirmed journal row. Only contiguous

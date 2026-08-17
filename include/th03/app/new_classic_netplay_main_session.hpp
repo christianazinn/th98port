@@ -81,12 +81,17 @@ struct NewClassicNetplayConfirmedAudioFrame final {
 	std::uint8_t source_vsyncs = 1U;
 };
 
-// Canonical corrected simulation state after `frame` contiguous gameplay
-// inputs. The digest is captured while that pre-frame rollback image is still
-// retained and is never derived from a predicted suffix.
+// Canonical corrected simulation state after `frame` contiguous source inputs.
+// Periodic proofs count gameplay inputs; lifecycle proofs additionally name
+// the phase, round, or terminal boundary whose post-frame state they freeze.
+// No proof is derived from a predicted suffix.
 struct NewClassicNetplayConfirmedSimulationDigest final {
 	std::uint64_t frame = 0U;
 	std::uint64_t confirmed_gameplay_frame_count = 0U;
+	NewClassicNetplaySimulationDigestKind kind =
+		NewClassicNetplaySimulationDigestKind::periodic;
+	NewClassicNetplayBoundaryProof boundary =
+		NewClassicNetplayBoundaryProof::none;
 	AppSha256 digest{};
 };
 

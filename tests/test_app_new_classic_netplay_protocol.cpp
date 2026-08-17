@@ -131,7 +131,7 @@ void test_datagram_contract()
 		(*encoded)[1U] == std::byte{'3'} &&
 		(*encoded)[2U] == std::byte{'N'} &&
 		(*encoded)[3U] == std::byte{'P'} &&
-		(*encoded)[4U] == std::byte{3U} &&
+		(*encoded)[4U] == std::byte{4U} &&
 		(*encoded)[5U] == std::byte{3U} &&
 		(*encoded)[6U] == std::byte{1U} &&
 		(*encoded)[7U] == std::byte{2U} &&
@@ -217,6 +217,8 @@ void test_datagram_contract()
 		.contract_hash = 0x8877665544332211ULL,
 		.latest_frame = 120U,
 		.confirmed_frame_count = 120U,
+		.simulation_digest_kind =
+			NewClassicNetplaySimulationDigestKind::periodic,
 	};
 	for(std::size_t index = 0U;
 		index < digest.simulation_digest.size(); ++index) {
@@ -227,7 +229,9 @@ void test_datagram_contract()
 		(*encoded_digest)[24U] == std::byte{120U} &&
 		(*encoded_digest)[32U] == std::byte{120U} &&
 		(*encoded_digest)[40U] == std::byte{1U} &&
-		(*encoded_digest)[71U] == std::byte{32U},
+		(*encoded_digest)[71U] == std::byte{32U} &&
+		(*encoded_digest)[72U] == std::byte{1U} &&
+		(*encoded_digest)[73U] == std::byte{0U},
 		"simulation digest reuses the bounded history payload exactly");
 	const auto decoded_digest = encoded_digest ?
 		decode_new_classic_netplay_datagram(*encoded_digest) :
@@ -260,6 +264,8 @@ void test_datagram_contract()
 		NewClassicNetplayDatagramErrorCode::invalid_digest,
 		"frame-zero proof acknowledgement is not a valid runtime message");
 	digest.type = NewClassicNetplayDatagramType::simulation_digest;
+	digest.simulation_digest_kind =
+		NewClassicNetplaySimulationDigestKind::initial;
 	const auto initial_digest = encode_new_classic_netplay_datagram(digest);
 	expect(static_cast<bool>(initial_digest),
 		"frame-zero digest keeps both proof identities zero");
@@ -268,6 +274,49 @@ void test_datagram_contract()
 	expect(!zero_digest && zero_digest.error().code ==
 		NewClassicNetplayDatagramErrorCode::invalid_digest,
 		"all-zero simulation identity fails closed");
+
+	digest.simulation_digest[0U] = 1U;
+	digest.latest_frame = 37U;
+	digest.confirmed_frame_count = 23U;
+	digest.simulation_digest_kind =
+		NewClassicNetplaySimulationDigestKind::boundary;
+	digest.boundary_proof = NewClassicNetplayBoundaryProof::round_transition;
+	const auto boundary_digest = encode_new_classic_netplay_datagram(digest);
+	const auto decoded_boundary = boundary_digest ?
+		decode_new_classic_netplay_datagram(*boundary_digest) :
+		std::expected<NewClassicNetplayDatagram,
+			NewClassicNetplayDatagramError>{
+				std::unexpected(NewClassicNetplayDatagramError{})
+			};
+	expect(boundary_digest && decoded_boundary &&
+		decoded_boundary->simulation_digest_kind ==
+			NewClassicNetplaySimulationDigestKind::boundary &&
+		decoded_boundary->boundary_proof ==
+			NewClassicNetplayBoundaryProof::round_transition &&
+		(*boundary_digest)[72U] == std::byte{2U} &&
+		(*boundary_digest)[73U] == std::byte{2U},
+		"lifecycle proof freezes explicit kind and source boundary identity");
+	expect(new_classic_netplay_boundary_proof(th03::StepStatus::running) ==
+			NewClassicNetplayBoundaryProof::none &&
+		new_classic_netplay_boundary_proof(
+			th03::StepStatus::phase_transition
+		) ==
+			NewClassicNetplayBoundaryProof::phase_transition &&
+		new_classic_netplay_boundary_proof(
+			th03::StepStatus::round_transition
+		) ==
+			NewClassicNetplayBoundaryProof::round_transition &&
+		new_classic_netplay_boundary_proof(th03::StepStatus::terminal) ==
+			NewClassicNetplayBoundaryProof::terminal,
+		"wire boundary vocabulary is the exact MAIN lifecycle projection");
+	if(boundary_digest) {
+		auto corrupt = *boundary_digest;
+		corrupt[74U] = std::byte{1U};
+		const auto reserved = decode_new_classic_netplay_datagram(corrupt);
+		expect(!reserved && reserved.error().code ==
+			NewClassicNetplayDatagramErrorCode::invalid_digest,
+			"digest-only tail remains reserved and fails closed");
+	}
 }
 
 } // namespace

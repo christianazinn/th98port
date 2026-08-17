@@ -11,7 +11,7 @@
 
 namespace th03::app {
 
-inline constexpr std::uint8_t new_classic_netplay_datagram_version = 3U;
+inline constexpr std::uint8_t new_classic_netplay_datagram_version = 4U;
 inline constexpr std::size_t new_classic_netplay_history_values = 16U;
 inline constexpr std::size_t new_classic_netplay_datagram_bytes = 104U;
 inline constexpr std::size_t new_classic_netplay_simulation_digest_bytes = 32U;
@@ -41,6 +41,10 @@ struct NewClassicNetplayDatagram final {
 		std::uint8_t,
 		new_classic_netplay_simulation_digest_bytes
 	> simulation_digest{};
+	NewClassicNetplaySimulationDigestKind simulation_digest_kind =
+		NewClassicNetplaySimulationDigestKind::initial;
+	NewClassicNetplayBoundaryProof boundary_proof =
+		NewClassicNetplayBoundaryProof::none;
 	// Newest first. Element i owns latest_frame-i.
 	std::array<
 		NewClassicNetplayOwnedInput,

@@ -9,6 +9,9 @@ constexpr std::array magic{
 	std::byte{'T'}, std::byte{'3'}, std::byte{'N'}, std::byte{'P'}
 };
 constexpr std::size_t input_offset = 40U;
+constexpr std::size_t digest_kind_offset = 72U;
+constexpr std::size_t boundary_proof_offset = 73U;
+constexpr std::size_t digest_reserved_offset = 74U;
 
 [[nodiscard]] NewClassicNetplayDatagramError error(
 	NewClassicNetplayDatagramErrorCode code
@@ -57,6 +60,25 @@ void put_u64(std::span<std::byte> output, std::size_t offset,
 		sender == NewClassicNetplayPlayer::player_two;
 }
 
+[[nodiscard]] bool valid_digest_kind(
+	NewClassicNetplaySimulationDigestKind kind
+) noexcept
+{
+	return kind == NewClassicNetplaySimulationDigestKind::initial ||
+		kind == NewClassicNetplaySimulationDigestKind::periodic ||
+		kind == NewClassicNetplaySimulationDigestKind::boundary;
+}
+
+[[nodiscard]] bool valid_boundary_proof(
+	NewClassicNetplayBoundaryProof boundary
+) noexcept
+{
+	return boundary == NewClassicNetplayBoundaryProof::none ||
+		boundary == NewClassicNetplayBoundaryProof::phase_transition ||
+		boundary == NewClassicNetplayBoundaryProof::round_transition ||
+		boundary == NewClassicNetplayBoundaryProof::terminal;
+}
+
 [[nodiscard]] std::expected<void, NewClassicNetplayDatagramError>
 validate(const NewClassicNetplayDatagram &datagram) noexcept
 {
@@ -101,10 +123,28 @@ validate(const NewClassicNetplayDatagram &datagram) noexcept
 			));
 		}
 	} else if(digest) {
+		const bool initial = datagram.simulation_digest_kind ==
+			NewClassicNetplaySimulationDigestKind::initial;
+		const bool periodic = datagram.simulation_digest_kind ==
+			NewClassicNetplaySimulationDigestKind::periodic;
+		const bool boundary = datagram.simulation_digest_kind ==
+			NewClassicNetplaySimulationDigestKind::boundary;
 		if(datagram.input_count != 0U ||
-			((datagram.latest_frame == 0U) !=
-			 (datagram.confirmed_frame_count == 0U)) ||
-			(digest_ack && datagram.latest_frame == 0U) ||
+			!valid_digest_kind(datagram.simulation_digest_kind) ||
+			!valid_boundary_proof(datagram.boundary_proof) ||
+			(initial != (datagram.latest_frame == 0U &&
+				datagram.confirmed_frame_count == 0U)) ||
+			(digest_ack && initial) ||
+			(periodic && (datagram.latest_frame == 0U ||
+				datagram.confirmed_frame_count == 0U ||
+				datagram.confirmed_frame_count % 120U != 0U ||
+				datagram.boundary_proof !=
+					NewClassicNetplayBoundaryProof::none)) ||
+			(boundary && (datagram.latest_frame == 0U ||
+				datagram.boundary_proof ==
+					NewClassicNetplayBoundaryProof::none)) ||
+			(initial && datagram.boundary_proof !=
+				NewClassicNetplayBoundaryProof::none) ||
 			std::ranges::all_of(datagram.simulation_digest,
 				[](std::uint8_t byte) { return byte == 0U; })) {
 			return std::unexpected(error(
@@ -113,6 +153,9 @@ validate(const NewClassicNetplayDatagram &datagram) noexcept
 		}
 	} else if(datagram.input_count != 0U || datagram.latest_frame != 0U ||
 		datagram.confirmed_frame_count != 0U ||
+		datagram.simulation_digest_kind !=
+			NewClassicNetplaySimulationDigestKind::initial ||
+		datagram.boundary_proof != NewClassicNetplayBoundaryProof::none ||
 		std::ranges::any_of(datagram.simulation_digest,
 			[](std::uint8_t byte) { return byte != 0U; })) {
 		return std::unexpected(error(
@@ -165,6 +208,12 @@ std::expected<
 				datagram.simulation_digest[index]
 			};
 		}
+		result[digest_kind_offset] = std::byte{
+			static_cast<std::uint8_t>(datagram.simulation_digest_kind)
+		};
+		result[boundary_proof_offset] = std::byte{
+			static_cast<std::uint8_t>(datagram.boundary_proof)
+		};
 	}
 	for(std::size_t index = 0U; index < datagram.input_count; ++index) {
 		const auto encoded = encode_new_classic_netplay_input(
@@ -228,6 +277,21 @@ decode_new_classic_netplay_datagram(
 			index < result.simulation_digest.size(); ++index) {
 			result.simulation_digest[index] =
 				std::to_integer<std::uint8_t>(wire[input_offset + index]);
+		}
+		result.simulation_digest_kind =
+			static_cast<NewClassicNetplaySimulationDigestKind>(
+				std::to_integer<std::uint8_t>(wire[digest_kind_offset])
+			);
+		result.boundary_proof = static_cast<NewClassicNetplayBoundaryProof>(
+			std::to_integer<std::uint8_t>(wire[boundary_proof_offset])
+		);
+		if(std::ranges::any_of(
+			wire.subspan(digest_reserved_offset),
+			[](std::byte byte) { return byte != std::byte{0U}; }
+		)) {
+			return std::unexpected(error(
+				NewClassicNetplayDatagramErrorCode::invalid_digest
+			));
 		}
 	}
 	if(result.input_count > result.inputs.size()) {
