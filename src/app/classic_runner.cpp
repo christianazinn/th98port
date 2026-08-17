@@ -396,7 +396,8 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		paths.font_rom.empty() || paths.config.empty() || paths.score.empty() ||
 		(request.autofire_mask > 3U) ||
 		(request.experience == ExperienceProfile::classic &&
-		 (request.autofire_mask != 0U || request.reduced_flash)) ||
+		 (request.autofire_mask != 0U || request.reduced_flash ||
+		  request.new_classic_online_identity_reset_available)) ||
 		(request.initial_route != ClassicRunnerInitialRoute::title &&
 		 request.experience != ExperienceProfile::new_classic) ||
 		(request.initial_route == ClassicRunnerInitialRoute::new_classic_replay) !=
@@ -808,6 +809,17 @@ ClassicRunner::take_new_classic_open_folder_request() noexcept
 	return static_cast<ClassicOpSession *>(
 		impl_->operations.context
 	)->take_open_folder_request();
+}
+
+bool ClassicRunner::take_new_classic_online_identity_reset_request() noexcept
+{
+	if(!impl_ || impl_->experience != ExperienceProfile::new_classic ||
+		impl_->operations.consume != &consume_session) {
+		return false;
+	}
+	return static_cast<ClassicOpSession *>(
+		impl_->operations.context
+	)->take_online_identity_reset_request();
 }
 
 std::expected<void, ClassicRunnerError>

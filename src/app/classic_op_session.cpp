@@ -897,6 +897,7 @@ struct ClassicOpSessionBackend final {
 	NewClassicHostKeyName key_name = nullptr;
 	void *key_name_context = nullptr;
 	std::vector<NewClassicOnlineCacheDocument> online_boards{};
+	bool online_identity_reset_available = false;
 	std::unique_ptr<NewClassicReplayHub> replay_hub{};
 	std::optional<NewClassicReplayHubResult> replay_hub_result{};
 	std::unique_ptr<NewClassicReplayBrowser> replay_browser{};
@@ -926,6 +927,7 @@ struct ClassicOpSessionBackend final {
 	std::optional<NewClassicWindowPresentation>
 		pending_window_presentation_update{};
 	std::optional<std::filesystem::path> pending_open_folder{};
+	bool pending_online_identity_reset = false;
 	std::optional<ClassicOpOptionsCompletion> key_config_return_options{};
 	std::unique_ptr<ClassicOpMusicRoomScene> music_room{};
 	std::optional<ClassicOpMusicRoomCompletion> music_completion{};
@@ -1019,6 +1021,8 @@ struct ClassicOpSessionBackend final {
 			key_name = runner_request->new_classic_key_name;
 			key_name_context = runner_request->new_classic_key_name_context;
 			online_boards = runner_request->new_classic_online_boards;
+			online_identity_reset_available =
+				runner_request->new_classic_online_identity_reset_available;
 		}
 		if(replay_recorder && new_classic_score_path.empty()) {
 			new_classic_score_path =
@@ -1814,7 +1818,8 @@ struct ClassicOpSessionBackend final {
 				new_classic_settings->music_volume_percent : 100U,
 			new_classic_settings ?
 				new_classic_settings->effect_volume_percent : 100U,
-			new_classic_settings && new_classic_settings->mute_when_unfocused
+			new_classic_settings && new_classic_settings->mute_when_unfocused,
+			online_identity_reset_available
 		);
 		if(!created) {
 			return std::unexpected(title_error(std::move(created.error())));
@@ -1866,6 +1871,15 @@ struct ClassicOpSessionBackend final {
 					ClassicOpSessionErrorCode::backend_contract_failed
 				));
 			}
+		}
+		if(tick->forget_online_identity) {
+			if(!online_identity_reset_available ||
+				pending_online_identity_reset) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			pending_online_identity_reset = true;
 		}
 		if(new_classic_settings && new_classic_settings->master_volume_percent !=
 			options->master_volume_percent()) {
@@ -2225,7 +2239,8 @@ struct ClassicOpSessionBackend final {
 				key_config_return_options->window_presentation(),
 				key_config_return_options->music_volume_percent(),
 				key_config_return_options->effect_volume_percent(),
-				key_config_return_options->mute_when_unfocused()
+				key_config_return_options->mute_when_unfocused(),
+				online_identity_reset_available
 			) : joy_config_scene ?
 			ClassicOpOptionsScene::resume_after_joy_config(
 				*key_config_return_options, fm_available, *resources, patch_assets,
@@ -2234,7 +2249,8 @@ struct ClassicOpSessionBackend final {
 				key_config_return_options->window_presentation(),
 				key_config_return_options->music_volume_percent(),
 				key_config_return_options->effect_volume_percent(),
-				key_config_return_options->mute_when_unfocused()
+				key_config_return_options->mute_when_unfocused(),
+				online_identity_reset_available
 			) : ClassicOpOptionsScene::resume_after_key_config(
 				*key_config_return_options, fm_available, *resources, patch_assets,
 				&*font, !english_resources.empty(),
@@ -2242,7 +2258,8 @@ struct ClassicOpSessionBackend final {
 				key_config_return_options->window_presentation(),
 				key_config_return_options->music_volume_percent(),
 				key_config_return_options->effect_volume_percent(),
-				key_config_return_options->mute_when_unfocused()
+				key_config_return_options->mute_when_unfocused(),
+				online_identity_reset_available
 			);
 		if(!returned) {
 			return std::unexpected(title_error(std::move(returned.error())));
@@ -4245,6 +4262,11 @@ struct ClassicOpSessionBackend final {
 		return std::exchange(pending_open_folder, std::nullopt);
 	}
 
+	[[nodiscard]] bool take_online_identity_reset_request() noexcept
+	{
+		return std::exchange(pending_online_identity_reset, false);
+	}
+
 	[[nodiscard]] std::expected<present::SourceSurface, ClassicOpSessionError>
 	compose(std::span<
 		present::ComposedPixel,
@@ -5240,6 +5262,16 @@ ClassicOpSession::take_open_folder_request() noexcept
 	return static_cast<ClassicOpSessionBackend *>(
 		impl_->operations.context
 	)->take_open_folder_request();
+}
+
+bool ClassicOpSession::take_online_identity_reset_request() noexcept
+{
+	if(!impl_ || !impl_->operations.context) {
+		return false;
+	}
+	return static_cast<ClassicOpSessionBackend *>(
+		impl_->operations.context
+	)->take_online_identity_reset_request();
 }
 
 std::expected<void, ClassicOpSessionError>

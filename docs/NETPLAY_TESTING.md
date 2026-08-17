@@ -40,7 +40,9 @@ On Windows, the first confirmed room launch automatically enrolls one opaque
 service identity and stores it as current-user DPAPI data in `PODD.AUTH` beside
 `PODD.CFG`. Later launches reuse that identity. It never enters the settings,
 replay, room code, deterministic state, or logs. Deleting `PODD.AUTH` is the
-current manual sign-out/reset operation.
+low-level manual reset operation. The product UI exposes the same bounded
+operation at `Option -> System -> Online & Privacy -> Forget Room Identity`,
+behind an explicit confirmation. It never displays the user ID or token.
 
 The Arch/Linux build does not yet have an approved native secret-store owner.
 For that machine, provision a distinct identity with `POST /api/th03/users` and

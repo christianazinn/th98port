@@ -228,7 +228,8 @@ void test_replay_patch_option_unput_if_assets_supplied()
 }
 
 std::unique_ptr<ClassicOpOptionsScene> make_patch_scene_if_assets_supplied(
-	bool localized = false
+	bool localized = false,
+	bool online_identity_reset_available = false
 )
 {
 #if defined(_MSC_VER)
@@ -283,7 +284,8 @@ std::unique_ptr<ClassicOpOptionsScene> make_patch_scene_if_assets_supplied(
 	EmptyAnk font{};
 	auto created = ClassicOpOptionsScene::create(
 		resident, {}, true, std::move(raster), {}, menu_background(),
-		window_sheet(), std::move(assets), &font, true, 35U
+		window_sheet(), std::move(assets), &font, true, 35U, {}, 100U,
+		100U, false, online_identity_reset_available
 	);
 	expect(created.has_value(), "hierarchical Options scene creates");
 	return created ? std::move(*created) : nullptr;
@@ -615,8 +617,8 @@ void test_patch_option_shadow_transitions_if_assets_supplied(bool localized)
 		expect(scene->selected_choice() == routes[index].category,
 			"shadow-transition reaches the expected category");
 		const auto parent = scene->raster();
-		expect(scene->advance({.ok = true}).has_value() &&
-			scene->page() == routes[index].child,
+		const auto opened = scene->advance({.ok = true});
+		expect(opened.has_value() && scene->page() == routes[index].child,
 			"shadow-transition opens the expected child page");
 		expect(page_zero_matches_outside_option_rows(clean_rows, scene->raster()),
 			localized ?
@@ -833,7 +835,7 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 			th03::app::NewClassicFiltering::linear,
 		"Filtering switches the live host policy to Linear");
 
-	auto system = make_patch_scene_if_assets_supplied();
+	auto system = make_patch_scene_if_assets_supplied(false, true);
 	if(!system) {
 		return;
 	}
@@ -884,6 +886,45 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 	expect(system->advance().has_value() &&
 		system->advance({.down = true}).has_value() &&
 		system->advance().has_value() &&
+		system->selected_choice() == ClassicOpOptionsChoice::online_privacy,
+		"System exposes the Online & Privacy child");
+	expect(system->advance({.ok = true}).has_value() &&
+		system->page() == ClassicOpOptionsPage::online_privacy &&
+		system->selected_choice() ==
+			ClassicOpOptionsChoice::forget_room_identity,
+		"protected identity page exposes its reset action");
+	expect(system->advance().has_value() &&
+		system->advance({.ok = true}).has_value() &&
+		system->page() ==
+			ClassicOpOptionsPage::forget_identity_confirmation,
+		"room identity reset requires explicit confirmation");
+	expect(system->advance().has_value() &&
+		system->advance({.down = true}).has_value() &&
+		system->advance().has_value() &&
+		system->selected_choice() ==
+			ClassicOpOptionsChoice::cancel_forget_room_identity &&
+		system->advance({.ok = true}).has_value() &&
+		system->page() == ClassicOpOptionsPage::online_privacy,
+		"reset No restores the retained Online & Privacy owner");
+	expect(system->advance().has_value() &&
+		system->advance({.ok = true}).has_value() &&
+		system->advance().has_value(),
+		"second reset confirmation opens and releases");
+	const auto forgotten = system->advance({.ok = true});
+	expect(forgotten && forgotten->forget_online_identity &&
+		system->page() == ClassicOpOptionsPage::online_privacy,
+		"reset Yes emits one typed host request and restores its parent");
+	expect(system->advance().has_value() &&
+		system->advance({.down = true}).has_value() &&
+		system->advance().has_value() &&
+		system->selected_choice() == ClassicOpOptionsChoice::return_page &&
+		system->advance({.ok = true}).has_value() &&
+		system->page() == ClassicOpOptionsPage::system &&
+		system->selected_choice() == ClassicOpOptionsChoice::online_privacy,
+		"Online & Privacy Return restores its retained System selection");
+	expect(system->advance().has_value() &&
+		system->advance({.down = true}).has_value() &&
+		system->advance().has_value() &&
 		system->selected_choice() == ClassicOpOptionsChoice::credits,
 		"System exposes the factual Credits child");
 	expect(system->advance({.ok = true}).has_value() &&
@@ -925,6 +966,8 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		system->advance().has_value() &&
 		system->advance({.up = true}).has_value() &&
 		system->advance().has_value() &&
+		system->advance({.up = true}).has_value() &&
+		system->advance().has_value() &&
 		system->selected_choice() == ClassicOpOptionsChoice::switch_classic,
 		"System navigation returns to Switch to Classic");
 	expect(system->advance({.ok = true}).has_value() &&
@@ -947,6 +990,37 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 	expect(switch_classic && switch_classic->outcome() ==
 		ClassicOpOptionsOutcome::switch_classic,
 		"System publishes a typed Switch-to-Classic outcome");
+}
+
+void test_environment_online_identity_if_assets_supplied()
+{
+	auto scene = make_patch_scene_if_assets_supplied(false, false);
+	if(!scene) {
+		return;
+	}
+	enter_patch_options(*scene);
+	for(std::uint8_t row = 0U; row < 5U; ++row) {
+		expect(scene->advance({.down = true}).has_value() &&
+			scene->advance().has_value(),
+			"environment identity test reaches System");
+	}
+	expect(scene->advance({.ok = true}).has_value() &&
+		scene->advance().has_value(),
+		"environment identity test enters and releases System");
+	for(std::uint8_t row = 0U; row < 2U; ++row) {
+		expect(scene->advance({.down = true}).has_value() &&
+			scene->advance().has_value(),
+			"environment identity test reaches Online & Privacy");
+	}
+	expect(scene->selected_choice() ==
+		ClassicOpOptionsChoice::online_privacy &&
+		scene->advance({.ok = true}).has_value() &&
+		scene->page() == ClassicOpOptionsPage::online_privacy &&
+		scene->selected_choice() == ClassicOpOptionsChoice::return_page,
+		"environment-owned identity exposes no misleading reset action");
+	const auto release_tick = scene->advance();
+	expect(release_tick && !release_tick->forget_online_identity,
+		"environment identity page emits no reset request");
 }
 
 void expect_gaiji(
@@ -1903,6 +1977,7 @@ int main(int argc, char **argv)
 	test_patch_option_shadow_transitions_if_assets_supplied(false);
 	test_patch_option_shadow_transitions_if_assets_supplied(true);
 	test_replay_patch_option_hierarchy_if_assets_supplied();
+	test_environment_online_identity_if_assets_supplied();
 	test_localized_option_snapshot_if_assets_supplied();
 	test_exact_rows_and_transition_lock();
 	test_config_audio_and_return_cadence();

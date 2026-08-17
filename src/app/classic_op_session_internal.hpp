@@ -356,6 +356,7 @@ public:
 	take_window_presentation_update() noexcept;
 	[[nodiscard]] std::optional<std::filesystem::path>
 	take_open_folder_request() noexcept;
+	[[nodiscard]] bool take_online_identity_reset_request() noexcept;
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
 	merge_online_board(NewClassicOnlineCacheDocument document);
 	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>

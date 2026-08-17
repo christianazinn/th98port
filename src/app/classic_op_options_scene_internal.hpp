@@ -48,13 +48,17 @@ enum class ClassicOpOptionsChoice : std::uint8_t {
 	return_page,
 	switch_classic,
 	data_storage,
+	online_privacy,
 	credits,
 	diagnostics,
 	open_user_data,
 	open_replay_folder,
 	open_log_folder,
+	forget_room_identity,
 	confirm_switch_classic,
 	cancel_switch_classic,
+	confirm_forget_room_identity,
+	cancel_forget_room_identity,
 };
 
 enum class ClassicOpOptionsPage : std::uint8_t {
@@ -66,9 +70,11 @@ enum class ClassicOpOptionsPage : std::uint8_t {
 	language,
 	system,
 	data_storage,
+	online_privacy,
 	credits,
 	diagnostics,
 	switch_confirmation,
+	forget_identity_confirmation,
 };
 
 enum class ClassicOpOptionsOpenFolder : std::uint8_t {
@@ -105,6 +111,7 @@ struct ClassicOpOptionsTick final {
 	bool selection_changed = false;
 	bool config_changed = false;
 	bool ready = false;
+	bool forget_online_identity = false;
 	std::optional<ClassicOpOptionsOpenFolder> open_folder{};
 };
 
@@ -180,7 +187,8 @@ public:
 		NewClassicWindowPresentation window_presentation = {},
 		std::uint8_t music_volume_percent = 100U,
 		std::uint8_t effect_volume_percent = 100U,
-		bool mute_when_unfocused = false
+		bool mute_when_unfocused = false,
+		bool online_identity_reset_available = false
 	);
 
 	[[nodiscard]] static std::expected<
@@ -197,7 +205,8 @@ public:
 		NewClassicWindowPresentation window_presentation = {},
 		std::uint8_t music_volume_percent = 100U,
 		std::uint8_t effect_volume_percent = 100U,
-		bool mute_when_unfocused = false
+		bool mute_when_unfocused = false,
+		bool online_identity_reset_available = false
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpOptionsScene>,
@@ -213,7 +222,8 @@ public:
 		NewClassicWindowPresentation window_presentation = {},
 		std::uint8_t music_volume_percent = 100U,
 		std::uint8_t effect_volume_percent = 100U,
-		bool mute_when_unfocused = false
+		bool mute_when_unfocused = false,
+		bool online_identity_reset_available = false
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpOptionsScene>,
@@ -229,7 +239,8 @@ public:
 		NewClassicWindowPresentation window_presentation = {},
 		std::uint8_t music_volume_percent = 100U,
 		std::uint8_t effect_volume_percent = 100U,
-		bool mute_when_unfocused = false
+		bool mute_when_unfocused = false,
+		bool online_identity_reset_available = false
 	);
 
 	[[nodiscard]] static std::expected<
@@ -250,7 +261,8 @@ public:
 		NewClassicWindowPresentation window_presentation = {},
 		std::uint8_t music_volume_percent = 100U,
 		std::uint8_t effect_volume_percent = 100U,
-		bool mute_when_unfocused = false
+		bool mute_when_unfocused = false,
+		bool online_identity_reset_available = false
 	);
 	[[nodiscard]] std::expected<void, ClassicOpError>
 	refresh_patch_language_background(
@@ -304,7 +316,8 @@ private:
 		NewClassicWindowPresentation window_presentation,
 		std::uint8_t music_volume_percent,
 		std::uint8_t effect_volume_percent,
-		bool mute_when_unfocused
+		bool mute_when_unfocused,
+		bool online_identity_reset_available
 	) noexcept;
 
 	[[nodiscard]] bool restore_menu_background(
@@ -333,6 +346,7 @@ private:
 		present::Index4 color
 	) noexcept;
 	[[nodiscard]] bool draw_patch_credits() noexcept;
+	[[nodiscard]] bool draw_patch_online_identity_status() noexcept;
 	[[nodiscard]] std::span<const ClassicOpOptionsChoice>
 	active_choices() const noexcept;
 	[[nodiscard]] std::optional<std::uint8_t>
@@ -358,6 +372,7 @@ private:
 		bool input_sampled = false,
 		bool selection_changed = false,
 		bool config_changed = false,
+		bool forget_online_identity = false,
 		std::optional<ClassicOpOptionsOpenFolder> open_folder = std::nullopt
 	) const noexcept;
 
@@ -368,6 +383,7 @@ private:
 	std::uint8_t music_volume_percent_ = 100U;
 	std::uint8_t effect_volume_percent_ = 100U;
 	bool mute_when_unfocused_ = false;
+	bool online_identity_reset_available_ = false;
 	NewClassicWindowPresentation window_presentation_{};
 	present::Raster raster_{};
 	present::Tram tram_{};

@@ -132,9 +132,10 @@ constexpr std::array<ClassicOpOptionsChoice, 2U> language_choices{{
 	ClassicOpOptionsChoice::language,
 	ClassicOpOptionsChoice::return_page,
 }};
-constexpr std::array<ClassicOpOptionsChoice, 5U> system_choices{{
+constexpr std::array<ClassicOpOptionsChoice, 6U> system_choices{{
 	ClassicOpOptionsChoice::switch_classic,
 	ClassicOpOptionsChoice::data_storage,
+	ClassicOpOptionsChoice::online_privacy,
 	ClassicOpOptionsChoice::credits,
 	ClassicOpOptionsChoice::diagnostics,
 	ClassicOpOptionsChoice::return_page,
@@ -144,6 +145,12 @@ constexpr std::array<ClassicOpOptionsChoice, 3U> data_storage_choices{{
 	ClassicOpOptionsChoice::open_replay_folder,
 	ClassicOpOptionsChoice::return_page,
 }};
+constexpr std::array<ClassicOpOptionsChoice, 2U> online_privacy_choices{{
+	ClassicOpOptionsChoice::forget_room_identity,
+	ClassicOpOptionsChoice::return_page,
+}};
+constexpr std::array<ClassicOpOptionsChoice, 1U>
+	online_privacy_environment_choices{{ClassicOpOptionsChoice::return_page}};
 constexpr std::array<ClassicOpOptionsChoice, 1U> credits_choices{{
 	ClassicOpOptionsChoice::return_page,
 }};
@@ -163,6 +170,11 @@ constexpr std::array<ClassicOpOptionsChoice, 2U> switch_confirmation_choices{{
 	ClassicOpOptionsChoice::confirm_switch_classic,
 	ClassicOpOptionsChoice::cancel_switch_classic,
 }};
+constexpr std::array<ClassicOpOptionsChoice, 2U>
+	forget_identity_confirmation_choices{{
+		ClassicOpOptionsChoice::confirm_forget_room_identity,
+		ClassicOpOptionsChoice::cancel_forget_room_identity,
+	}};
 constexpr std::array<NewClassicMessageId, 7U> patch_main_labels{{
 	NewClassicMessageId::title_start,
 	NewClassicMessageId::title_vs_start,
@@ -226,6 +238,7 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 	case ClassicOpOptionsChoice::return_page: return NewClassicMessageId::option_return;
 	case ClassicOpOptionsChoice::switch_classic: return NewClassicMessageId::option_switch_classic;
 	case ClassicOpOptionsChoice::data_storage: return NewClassicMessageId::option_data_storage;
+	case ClassicOpOptionsChoice::online_privacy: return NewClassicMessageId::option_online_privacy;
 	case ClassicOpOptionsChoice::credits: return NewClassicMessageId::option_credits;
 	case ClassicOpOptionsChoice::diagnostics: return NewClassicMessageId::option_diagnostics;
 	case ClassicOpOptionsChoice::open_user_data: return NewClassicMessageId::option_open_user_data;
@@ -233,8 +246,14 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 		return NewClassicMessageId::option_open_replay_folder;
 	case ClassicOpOptionsChoice::open_log_folder:
 		return NewClassicMessageId::option_open_log_folder;
+	case ClassicOpOptionsChoice::forget_room_identity:
+		return NewClassicMessageId::option_forget_room_identity;
 	case ClassicOpOptionsChoice::confirm_switch_classic: return NewClassicMessageId::option_yes;
 	case ClassicOpOptionsChoice::cancel_switch_classic: return NewClassicMessageId::option_no;
+	case ClassicOpOptionsChoice::confirm_forget_room_identity:
+		return NewClassicMessageId::option_yes;
+	case ClassicOpOptionsChoice::cancel_forget_room_identity:
+		return NewClassicMessageId::option_no;
 	}
 	return NewClassicMessageId::count;
 }
@@ -490,7 +509,8 @@ ClassicOpOptionsScene::ClassicOpOptionsScene(
 	NewClassicWindowPresentation window_presentation,
 	std::uint8_t music_volume_percent,
 	std::uint8_t effect_volume_percent,
-	bool mute_when_unfocused
+	bool mute_when_unfocused,
+	bool online_identity_reset_available
 ) noexcept :
 	prepared_(std::move(prepared)),
 	resident_(std::move(resident)),
@@ -499,6 +519,7 @@ ClassicOpOptionsScene::ClassicOpOptionsScene(
 	music_volume_percent_(music_volume_percent),
 	effect_volume_percent_(effect_volume_percent),
 	mute_when_unfocused_(mute_when_unfocused),
+	online_identity_reset_available_(online_identity_reset_available),
 	window_presentation_(window_presentation),
 	raster_(std::move(raster)),
 	tram_(std::move(tram)),
@@ -526,7 +547,8 @@ ClassicOpOptionsScene::create_from_op(
 	NewClassicWindowPresentation window_presentation,
 	std::uint8_t music_volume_percent,
 	std::uint8_t effect_volume_percent,
-	bool mute_when_unfocused
+	bool mute_when_unfocused,
+	bool online_identity_reset_available
 )
 {
 	if(completion.route() != ClassicOpRoute::options) {
@@ -569,7 +591,8 @@ ClassicOpOptionsScene::create_from_op(
 		completion.tram(), std::move(*background), std::move(*window),
 		std::move(patch_assets), font, language_available,
 		master_volume_percent, window_presentation, music_volume_percent,
-		effect_volume_percent, mute_when_unfocused
+		effect_volume_percent, mute_when_unfocused,
+		online_identity_reset_available
 	);
 }
 
@@ -585,7 +608,8 @@ ClassicOpOptionsScene::resume_after_key_config(
 	NewClassicWindowPresentation window_presentation,
 	std::uint8_t music_volume_percent,
 	std::uint8_t effect_volume_percent,
-	bool mute_when_unfocused
+	bool mute_when_unfocused,
+	bool online_identity_reset_available
 )
 {
 	if((completion.outcome() != ClassicOpOptionsOutcome::key_config &&
@@ -632,7 +656,8 @@ ClassicOpOptionsScene::resume_after_key_config(
 		completion.raster(), completion.tram(), std::move(*background),
 		std::move(*window), std::move(patch_assets), font,
 		language_available, master_volume_percent, window_presentation,
-		music_volume_percent, effect_volume_percent, mute_when_unfocused
+		music_volume_percent, effect_volume_percent, mute_when_unfocused,
+		online_identity_reset_available
 	);
 	if(!created) {
 		return std::unexpected(std::move(created.error()));
@@ -680,7 +705,8 @@ ClassicOpOptionsScene::resume_after_joy_config(
 	NewClassicWindowPresentation window_presentation,
 	std::uint8_t music_volume_percent,
 	std::uint8_t effect_volume_percent,
-	bool mute_when_unfocused
+	bool mute_when_unfocused,
+	bool online_identity_reset_available
 )
 {
 	if(completion.outcome() != ClassicOpOptionsOutcome::joy_config) {
@@ -689,7 +715,8 @@ ClassicOpOptionsScene::resume_after_joy_config(
 	return resume_after_key_config(
 		completion, fm_available, resources, std::move(patch_assets), font,
 		language_available, master_volume_percent, window_presentation,
-		music_volume_percent, effect_volume_percent, mute_when_unfocused
+		music_volume_percent, effect_volume_percent, mute_when_unfocused,
+		online_identity_reset_available
 	);
 }
 
@@ -705,7 +732,8 @@ ClassicOpOptionsScene::resume_after_device_scene(
 	NewClassicWindowPresentation window_presentation,
 	std::uint8_t music_volume_percent,
 	std::uint8_t effect_volume_percent,
-	bool mute_when_unfocused
+	bool mute_when_unfocused,
+	bool online_identity_reset_available
 )
 {
 	if(completion.outcome() != ClassicOpOptionsOutcome::device_assignment &&
@@ -715,7 +743,8 @@ ClassicOpOptionsScene::resume_after_device_scene(
 	return resume_after_key_config(
 		completion, fm_available, resources, std::move(patch_assets), font,
 		language_available, master_volume_percent, window_presentation,
-		music_volume_percent, effect_volume_percent, mute_when_unfocused
+		music_volume_percent, effect_volume_percent, mute_when_unfocused,
+		online_identity_reset_available
 	);
 }
 
@@ -735,7 +764,8 @@ ClassicOpOptionsScene::create(
 	NewClassicWindowPresentation window_presentation,
 	std::uint8_t music_volume_percent,
 	std::uint8_t effect_volume_percent,
-	bool mute_when_unfocused
+	bool mute_when_unfocused,
+	bool online_identity_reset_available
 )
 {
 	if(!classic_config_valid(config) || (patch_assets && !font) ||
@@ -803,7 +833,8 @@ ClassicOpOptionsScene::create(
 		std::move(prepared), std::move(resident), config, fm_available,
 		std::move(raster), std::move(tram), std::move(patch_assets),
 		language_available, master_volume_percent, window_presentation,
-		music_volume_percent, effect_volume_percent, mute_when_unfocused
+		music_volume_percent, effect_volume_percent, mute_when_unfocused,
+		online_identity_reset_available
 	));
 }
 
@@ -958,10 +989,18 @@ ClassicOpOptionsScene::active_choices() const noexcept
 	case ClassicOpOptionsPage::language: return language_choices;
 	case ClassicOpOptionsPage::system: return system_choices;
 	case ClassicOpOptionsPage::data_storage: return data_storage_choices;
+	case ClassicOpOptionsPage::online_privacy:
+		return online_identity_reset_available_ ?
+			std::span<const ClassicOpOptionsChoice>(online_privacy_choices) :
+			std::span<const ClassicOpOptionsChoice>(
+				online_privacy_environment_choices
+			);
 	case ClassicOpOptionsPage::credits: return credits_choices;
 	case ClassicOpOptionsPage::diagnostics: return diagnostics_choices;
 	case ClassicOpOptionsPage::switch_confirmation:
 		return switch_confirmation_choices;
+	case ClassicOpOptionsPage::forget_identity_confirmation:
+		return forget_identity_confirmation_choices;
 	}
 	return {};
 }
@@ -976,8 +1015,14 @@ std::optional<std::uint8_t> ClassicOpOptionsScene::choice_line(
 		return std::nullopt;
 	}
 	const auto line = static_cast<std::uint8_t>(found - choices.begin());
-	if(page_ == ClassicOpOptionsPage::switch_confirmation) {
+	if(page_ == ClassicOpOptionsPage::switch_confirmation ||
+		page_ == ClassicOpOptionsPage::forget_identity_confirmation) {
 		return static_cast<std::uint8_t>(line + 2U);
+	}
+	if(page_ == ClassicOpOptionsPage::online_privacy) {
+		return static_cast<std::uint8_t>(
+			line + (online_identity_reset_available_ ? 2U : 4U)
+		);
 	}
 	return page_ == ClassicOpOptionsPage::credits ?
 		static_cast<std::uint8_t>(6U) : line;
@@ -997,6 +1042,8 @@ bool ClassicOpOptionsScene::open_patch_page(
 		return false;
 	}
 	return (page_ != ClassicOpOptionsPage::credits || draw_patch_credits()) &&
+		(page_ != ClassicOpOptionsPage::online_privacy ||
+			draw_patch_online_identity_status()) &&
 		draw_all_option_choices();
 }
 
@@ -1030,6 +1077,12 @@ bool ClassicOpOptionsScene::return_to_patch_categories() noexcept
 		menu_input_allowed_ = false;
 		return restore_patch_rows(0U, 7U, box_left + box_option_width) &&
 			draw_all_option_choices();
+	case ClassicOpOptionsPage::online_privacy:
+		page_ = ClassicOpOptionsPage::system;
+		selected_ = ClassicOpOptionsChoice::online_privacy;
+		menu_input_allowed_ = false;
+		return restore_patch_rows(0U, 7U, box_left + box_option_width) &&
+			draw_all_option_choices();
 	case ClassicOpOptionsPage::credits:
 		page_ = ClassicOpOptionsPage::system;
 		selected_ = ClassicOpOptionsChoice::credits;
@@ -1048,6 +1101,14 @@ bool ClassicOpOptionsScene::return_to_patch_categories() noexcept
 		menu_input_allowed_ = false;
 		return restore_patch_rows(0U, 7U, box_left + box_option_width) &&
 			draw_all_option_choices();
+	case ClassicOpOptionsPage::forget_identity_confirmation:
+		page_ = ClassicOpOptionsPage::online_privacy;
+		selected_ = online_identity_reset_available_ ?
+			ClassicOpOptionsChoice::forget_room_identity :
+			ClassicOpOptionsChoice::return_page;
+		menu_input_allowed_ = false;
+		return restore_patch_rows(0U, 7U, box_left + box_option_width) &&
+			draw_patch_online_identity_status() && draw_all_option_choices();
 	case ClassicOpOptionsPage::categories:
 		return false;
 	}
@@ -1125,13 +1186,17 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 		choice == ClassicOpOptionsChoice::input_test ||
 		choice == ClassicOpOptionsChoice::switch_classic ||
 		choice == ClassicOpOptionsChoice::data_storage ||
+		choice == ClassicOpOptionsChoice::online_privacy ||
 		choice == ClassicOpOptionsChoice::credits ||
 		choice == ClassicOpOptionsChoice::diagnostics ||
 		choice == ClassicOpOptionsChoice::open_user_data ||
 		choice == ClassicOpOptionsChoice::open_replay_folder ||
 		choice == ClassicOpOptionsChoice::open_log_folder ||
+		choice == ClassicOpOptionsChoice::forget_room_identity ||
 		choice == ClassicOpOptionsChoice::confirm_switch_classic ||
 		choice == ClassicOpOptionsChoice::cancel_switch_classic ||
+		choice == ClassicOpOptionsChoice::confirm_forget_room_identity ||
+		choice == ClassicOpOptionsChoice::cancel_forget_room_identity ||
 		choice == ClassicOpOptionsChoice::category_gameplay ||
 		choice == ClassicOpOptionsChoice::category_audio ||
 		choice == ClassicOpOptionsChoice::category_input ||
@@ -1253,13 +1318,17 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	case ClassicOpOptionsChoice::return_page:
 	case ClassicOpOptionsChoice::switch_classic:
 	case ClassicOpOptionsChoice::data_storage:
+	case ClassicOpOptionsChoice::online_privacy:
 	case ClassicOpOptionsChoice::credits:
 	case ClassicOpOptionsChoice::diagnostics:
 	case ClassicOpOptionsChoice::open_user_data:
 	case ClassicOpOptionsChoice::open_replay_folder:
 	case ClassicOpOptionsChoice::open_log_folder:
+	case ClassicOpOptionsChoice::forget_room_identity:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
 	case ClassicOpOptionsChoice::cancel_switch_classic:
+	case ClassicOpOptionsChoice::confirm_forget_room_identity:
+	case ClassicOpOptionsChoice::cancel_forget_room_identity:
 	case ClassicOpOptionsChoice::quit:
 		return false;
 	}
@@ -1290,6 +1359,28 @@ bool ClassicOpOptionsScene::draw_patch_credits() noexcept
 		}
 	}
 	return true;
+}
+
+bool ClassicOpOptionsScene::draw_patch_online_identity_status() noexcept
+{
+	if(!patch_assets_ || page_ != ClassicOpOptionsPage::online_privacy) {
+		return false;
+	}
+	const auto &messages = patch_assets_->messages(
+		config_.language == ClassicLanguage::english ?
+			NewClassicLanguageAssetProfile::english :
+			NewClassicLanguageAssetProfile::japanese
+	);
+	const auto y = choice_top(replay_patch_box_top, 0U);
+	return put_patch_option_centered(
+		patch_assets_->menu_font, raster_, box_main_center_x, y,
+		messages.text(NewClassicMessageId::option_room_identity), 0U
+	) && put_patch_option_centered(
+		patch_assets_->menu_font, raster_, box_option_value_center_x, y,
+		messages.text(online_identity_reset_available_ ?
+			NewClassicMessageId::value_protected :
+			NewClassicMessageId::value_environment), 0U
+	);
 }
 
 bool ClassicOpOptionsScene::draw_option_choice(
@@ -1380,13 +1471,17 @@ bool ClassicOpOptionsScene::draw_option_choice(
 	case ClassicOpOptionsChoice::return_page:
 	case ClassicOpOptionsChoice::switch_classic:
 	case ClassicOpOptionsChoice::data_storage:
+	case ClassicOpOptionsChoice::online_privacy:
 	case ClassicOpOptionsChoice::credits:
 	case ClassicOpOptionsChoice::diagnostics:
 	case ClassicOpOptionsChoice::open_user_data:
 	case ClassicOpOptionsChoice::open_replay_folder:
 	case ClassicOpOptionsChoice::open_log_folder:
+	case ClassicOpOptionsChoice::forget_room_identity:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
 	case ClassicOpOptionsChoice::cancel_switch_classic:
+	case ClassicOpOptionsChoice::confirm_forget_room_identity:
+	case ClassicOpOptionsChoice::cancel_forget_room_identity:
 		return false;
 	case ClassicOpOptionsChoice::quit:
 		return put_centered(
@@ -1398,14 +1493,23 @@ bool ClassicOpOptionsScene::draw_option_choice(
 
 bool ClassicOpOptionsScene::draw_all_option_choices() noexcept
 {
-	if(patch_assets_ && page_ ==
-		ClassicOpOptionsPage::switch_confirmation &&
+	const auto &messages = patch_assets_ ? patch_assets_->messages(
+		config_.language == ClassicLanguage::english ?
+			NewClassicLanguageAssetProfile::english :
+			NewClassicLanguageAssetProfile::japanese
+	) : new_classic_builtin_messages(
+		NewClassicLanguageAssetProfile::english
+	);
+	if(patch_assets_ && (page_ ==
+		ClassicOpOptionsPage::switch_confirmation || page_ ==
+		ClassicOpOptionsPage::forget_identity_confirmation) &&
 		!put_patch_option_centered(
 			patch_assets_->menu_font, raster_, box_option_center_x,
 			choice_top(replay_patch_box_top, 0U),
-			patch_assets_->messages().text(
-				NewClassicMessageId::prompt_switch_classic
-			), 15U
+			messages.text(page_ ==
+				ClassicOpOptionsPage::switch_confirmation ?
+					NewClassicMessageId::prompt_switch_classic :
+					NewClassicMessageId::prompt_forget_room_identity), 15U
 		)) {
 		return false;
 	}
@@ -1696,13 +1800,17 @@ bool ClassicOpOptionsScene::update_horizontal(
 	case ClassicOpOptionsChoice::return_page:
 	case ClassicOpOptionsChoice::switch_classic:
 	case ClassicOpOptionsChoice::data_storage:
+	case ClassicOpOptionsChoice::online_privacy:
 	case ClassicOpOptionsChoice::credits:
 	case ClassicOpOptionsChoice::diagnostics:
 	case ClassicOpOptionsChoice::open_user_data:
 	case ClassicOpOptionsChoice::open_replay_folder:
 	case ClassicOpOptionsChoice::open_log_folder:
+	case ClassicOpOptionsChoice::forget_room_identity:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
 	case ClassicOpOptionsChoice::cancel_switch_classic:
+	case ClassicOpOptionsChoice::confirm_forget_room_identity:
+	case ClassicOpOptionsChoice::cancel_forget_room_identity:
 	case ClassicOpOptionsChoice::quit:
 		break;
 	}
@@ -1746,6 +1854,7 @@ ClassicOpOptionsTick ClassicOpOptionsScene::tick(
 	bool input_sampled,
 	bool selection_changed,
 	bool config_changed,
+	bool forget_online_identity,
 	std::optional<ClassicOpOptionsOpenFolder> open_folder
 ) const noexcept
 {
@@ -1758,6 +1867,7 @@ ClassicOpOptionsTick ClassicOpOptionsScene::tick(
 		.selection_changed = selection_changed,
 		.config_changed = config_changed,
 		.ready = phase_ == ClassicOpOptionsPhase::ready,
+		.forget_online_identity = forget_online_identity,
 		.open_folder = open_folder,
 	};
 }
@@ -1835,6 +1945,7 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 		bool device_assignment_requested = false;
 		bool input_test_requested = false;
 		bool switch_classic_requested = false;
+		bool forget_identity_requested = false;
 		std::optional<ClassicOpOptionsOpenFolder> open_folder{};
 		if(!input.any()) {
 			menu_input_allowed_ = true;
@@ -1906,6 +2017,9 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 				case ClassicOpOptionsChoice::data_storage:
 					child = ClassicOpOptionsPage::data_storage;
 					break;
+				case ClassicOpOptionsChoice::online_privacy:
+					child = ClassicOpOptionsPage::online_privacy;
+					break;
 				case ClassicOpOptionsChoice::credits:
 					child = ClassicOpOptionsPage::credits;
 					break;
@@ -1966,6 +2080,18 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 						));
 					}
 					page_changed = true;
+				} else if(selected_ ==
+					ClassicOpOptionsChoice::forget_room_identity &&
+					online_identity_reset_available_) {
+					if(!open_patch_page(
+						ClassicOpOptionsPage::forget_identity_confirmation
+					)) {
+						fail();
+						return std::unexpected(options_error(
+							ClassicOpErrorCode::draw_failed
+						));
+					}
+					page_changed = true;
 				} else if(selected_ == ClassicOpOptionsChoice::open_user_data) {
 					open_folder = ClassicOpOptionsOpenFolder::user_data;
 				} else if(selected_ ==
@@ -1979,6 +2105,25 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 					switch_classic_requested = true;
 				} else if(selected_ ==
 					ClassicOpOptionsChoice::cancel_switch_classic) {
+					if(!return_to_patch_categories()) {
+						fail();
+						return std::unexpected(options_error(
+							ClassicOpErrorCode::draw_failed
+						));
+					}
+					page_changed = true;
+				} else if(selected_ ==
+					ClassicOpOptionsChoice::confirm_forget_room_identity) {
+					forget_identity_requested = true;
+					if(!return_to_patch_categories()) {
+						fail();
+						return std::unexpected(options_error(
+							ClassicOpErrorCode::draw_failed
+						));
+					}
+					page_changed = true;
+				} else if(selected_ ==
+					ClassicOpOptionsChoice::cancel_forget_room_identity) {
 					if(!return_to_patch_categories()) {
 						fail();
 						return std::unexpected(options_error(
@@ -2044,7 +2189,8 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 		return tick(
 			ClassicOpBoundary::vsync, false,
 			selection_changed || horizontal_processed || page_changed, true,
-			selection_changed, config_changed, open_folder
+			selection_changed, config_changed, forget_identity_requested,
+			open_folder
 		);
 	}
 	case ClassicOpOptionsPhase::shrink_window: {

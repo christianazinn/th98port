@@ -245,8 +245,8 @@ Diagnostics
 Return
 ```
 
-Implemented now: `Switch to Classic`, `Data & Storage`, `Credits`,
-`Diagnostics`, and `Return`.
+Implemented now: `Switch to Classic`, `Data & Storage`, `Online & Privacy`,
+`Credits`, `Diagnostics`, and `Return`.
 `Data & Storage` opens the persistent user-data directory or the active replay
 directory through a typed host action after the deterministic menu tick. The
 retained owner performs no filesystem or shell work, and Classic exposes no
@@ -254,11 +254,16 @@ equivalent extension. `Credits` uses the authenticated proportional font and
 the same row-clipped reciprocal shadow as the rest of New Classic Options. It
 contains only factual, replaceable project/source acknowledgements; the
 separately reserved project-team startup animation remains untouched.
+`Online & Privacy` reports whether the room identity belongs to the Windows
+current-user protected store or the explicit environment fallback. On Windows,
+it also provides a confirmation-gated `Forget Room Identity` action. The
+retained menu never receives or renders credentials; it emits a typed host
+request that removes only `PODD.AUTH` after the deterministic menu tick. POSIX
+does not advertise a reset until it has an approved native secret-store owner.
 `Diagnostics` opens the authoritative user-data directory containing
 `last-run.log` and crash evidence through the same typed post-tick host action
-as Data & Storage. `Online & Privacy` and `Updates` remain future destinations;
-do not publish disabled placeholder choices merely to make the target shape
-visible.
+as Data & Storage. `Updates` remains a future destination; do not publish a
+disabled placeholder choice merely to make the target shape visible.
 
 ## Configuration ownership
 

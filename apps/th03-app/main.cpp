@@ -4152,6 +4152,9 @@ ExperienceRunResult run_classic_session(
 			th03::app::ExperienceProfile::new_classic :
 			th03::app::ExperienceProfile::classic;
 	parsed.launch.content.replay_root = parsed.replay_root;
+#if defined(_WIN32)
+	parsed.launch.new_classic_online_identity_reset_available = new_classic;
+#endif
 	if(parsed.capture_replay) {
 		auto replay = th03::app::load_replay_file(*parsed.capture_replay);
 		if(!replay) {
@@ -4620,6 +4623,25 @@ ExperienceRunResult run_classic_session(
 						"stage=open-folder\ncode="
 						<< static_cast<unsigned>(opened.error().code) << '\n';
 				}
+			}
+			if((*runner)->take_new_classic_online_identity_reset_request()) {
+#if defined(_WIN32)
+				const auto identity_root = new_classic_settings_path.empty() ?
+					config_path.parent_path() :
+					new_classic_settings_path.parent_path();
+				if(auto removed =
+					th03::platform::remove_windows_online_credentials(
+						identity_root / "PODD.AUTH"
+					); !removed) {
+					return {.exit_code = fail(
+						"online-identity-reset", removed.error()
+					)};
+				}
+#else
+				return {.exit_code = fail_netplay(
+					"online-identity-reset", "unsupported-platform"
+				)};
+#endif
 			}
 			if(auto request =
 				(*runner)->take_new_classic_online_replay_download_request()) {
