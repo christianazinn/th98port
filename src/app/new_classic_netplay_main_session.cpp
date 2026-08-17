@@ -1,5 +1,6 @@
 #include "th03/app/new_classic_netplay_main_session.hpp"
 
+#include <algorithm>
 #include <utility>
 
 namespace th03::app {
@@ -90,6 +91,10 @@ struct NewClassicNetplayMainSession::Impl final {
 	std::uint8_t warning_samples_remaining = 0U;
 	std::uint8_t hold_samples_remaining = 0U;
 	std::uint8_t pending_hold_samples = 0U;
+	std::uint64_t resimulated_frames = 0U;
+	std::uint64_t prediction_stall_events = 0U;
+	std::uint64_t remote_wait_events = 0U;
+	std::uint8_t maximum_prediction_depth = 0U;
 	bool gameplay_reliable_warmup = false;
 
 	[[nodiscard]] bool drain_audio(
@@ -362,6 +367,7 @@ std::expected<
 	if(!submitted) {
 		return std::unexpected(timeline_error(submitted.error()));
 	}
+	const auto prior_status = impl_->status;
 	const auto resolved = impl_->input_context == InputContext::gameplay &&
 		!impl_->gameplay_reliable_warmup ?
 		impl_->timeline->resolve_next() :
@@ -369,6 +375,10 @@ std::expected<
 	if(!resolved) {
 		if(resolved.error().code ==
 			NewClassicNetplayTimelineErrorCode::prediction_limit) {
+			if(prior_status !=
+				NewClassicNetplayMainSessionStatus::prediction_stalled) {
+				++impl_->prediction_stall_events;
+			}
 			impl_->status =
 				NewClassicNetplayMainSessionStatus::prediction_stalled;
 			return NewClassicNetplayMainSessionTick{
@@ -379,6 +389,10 @@ std::expected<
 		}
 		if(resolved.error().code ==
 			NewClassicNetplayTimelineErrorCode::remote_input_unavailable) {
+			if(prior_status !=
+				NewClassicNetplayMainSessionStatus::remote_waiting) {
+				++impl_->remote_wait_events;
+			}
 			impl_->status =
 				NewClassicNetplayMainSessionStatus::remote_waiting;
 			return NewClassicNetplayMainSessionTick{
@@ -396,6 +410,9 @@ std::expected<
 	if(const auto captured = impl_->capture_confirmed_digests(); !captured) {
 		return std::unexpected(captured.error());
 	}
+	impl_->maximum_prediction_depth = std::max(
+		impl_->maximum_prediction_depth, resolved->prediction_depth
+	);
 	return NewClassicNetplayMainSessionTick{
 		.status = impl_->status,
 		.frame = resolved->frame,
@@ -471,6 +488,7 @@ std::expected<
 			}
 		}
 		result.surface_publishable = result.resimulated_frames != 0U;
+		impl_->resimulated_frames += result.resimulated_frames;
 	}
 	impl_->update_boundary_confirmation();
 	if(!impl_->boundary_frame &&
@@ -697,6 +715,22 @@ std::uint64_t
 NewClassicNetplayMainSession::confirmed_frame_count() const noexcept
 {
 	return impl_->timeline->confirmed_frame_count();
+}
+
+NewClassicNetplayMainSessionStats
+NewClassicNetplayMainSession::stats() const noexcept
+{
+	const auto timeline = impl_->timeline->stats();
+	return {
+		.resolved_frames = timeline.resolved_frames,
+		.predicted_frames = timeline.predicted_frames,
+		.rollback_requests = timeline.rollback_requests,
+		.rewinds = timeline.rewinds,
+		.resimulated_frames = impl_->resimulated_frames,
+		.prediction_stall_events = impl_->prediction_stall_events,
+		.remote_wait_events = impl_->remote_wait_events,
+		.maximum_prediction_depth = impl_->maximum_prediction_depth,
+	};
 }
 
 NewClassicNetplayMainSessionStatus

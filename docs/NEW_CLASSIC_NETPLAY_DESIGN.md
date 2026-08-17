@@ -752,10 +752,11 @@ timeout. The following product transport remains open:
    presentation remain the product integration step.
 2. Add negotiated pause, forfeit, disconnect, desync UI, and post-match report.
 3. Feed only confirmed history into the in-memory V13 recorder and existing save
-   UI. The corrected contiguous-confirmed transcript now becomes an ordinary
-   validated V13 document only after the complete VS winner MAINL owner. The
-   direct preview intentionally publishes no file; attaching the completed
-   document to the numbered slot-save UI remains part of the in-game room flow.
+   UI. Complete in the direct preview: the corrected contiguous-confirmed
+   transcript becomes an ordinary validated V13 only after the complete VS
+   winner MAINL owner, then enters the authenticated numbered Save Replay
+   transaction. No working file exists during play and incomplete matches
+   publish nothing.
 4. Keep every Classic construction and hash unchanged.
 
 ### N4: Cloudflare private-room beta

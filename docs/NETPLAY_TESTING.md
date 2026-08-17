@@ -104,6 +104,12 @@ same confirmed boundary frames, enter `status=post-match`, and print
 `status=match-complete` only after their local winner scene has completed.
 The latest periodic or boundary proof must be mutually acknowledged before
 either peer may report a clean finish or bounded smoke completion.
+On clean completion, each peer also prints local observation counters for
+resolved/predicted executions, rollback requests and rewinds, resimulated
+frames, prediction stalls, reliable waits, maximum zero-based prediction
+depth, and missed source deadlines. These values never enter simulation, peer
+agreement, or V13 replay data. Preserve both terminals' output when reporting
+a test so asymmetric transport behavior remains visible.
 An intentional local exit prints `status=left`; the other peer prints
 `status=peer-left` rather than waiting for the crash/connectivity timeout.
 The preview feeds its corrected contiguous-confirmed input stream directly into

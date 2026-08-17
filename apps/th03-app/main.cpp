@@ -2817,11 +2817,29 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				}
 				replay_published = saved.replay_published;
 			}
+			const auto netplay_stats = (*session)->stats();
+			const auto missed_deadlines = std::count(
+				local_deadline_missed.begin(), local_deadline_missed.end(),
+				std::uint8_t{1U}
+			);
 			std::cout << "status=match-complete\nframes=" <<
 				(*session)->confirmed_frame_count() << "\nreplay-frames=" <<
 				replay_capture.frame_count() << "\nreplay-ready=1\nreplay-bytes=" <<
 				encoded->size() << "\nreplay-published=" <<
-				(replay_published ? 1 : 0) << '\n';
+				(replay_published ? 1 : 0) <<
+				"\nnetplay-resolved-frames=" << netplay_stats.resolved_frames <<
+				"\nnetplay-predicted-frames=" << netplay_stats.predicted_frames <<
+				"\nnetplay-rollback-requests=" << netplay_stats.rollback_requests <<
+				"\nnetplay-rewinds=" << netplay_stats.rewinds <<
+				"\nnetplay-resimulated-frames=" <<
+					netplay_stats.resimulated_frames <<
+				"\nnetplay-prediction-stalls=" <<
+					netplay_stats.prediction_stall_events <<
+				"\nnetplay-remote-waits=" <<
+					netplay_stats.remote_wait_events <<
+				"\nnetplay-maximum-prediction=" << static_cast<unsigned>(
+					netplay_stats.maximum_prediction_depth
+				) << "\nnetplay-missed-deadlines=" << missed_deadlines << '\n';
 			return 0;
 		}
 		if(parsed.smoke_ticks && local_frames >= *parsed.smoke_ticks &&

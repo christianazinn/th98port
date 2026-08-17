@@ -64,6 +64,20 @@ struct NewClassicNetplayMainRemoteResult final {
 	bool surface_publishable = false;
 };
 
+// Deterministic local observations for diagnostics and the later source-styled
+// post-match report. These counters never participate in simulation, replay
+// data, or peer agreement.
+struct NewClassicNetplayMainSessionStats final {
+	std::uint64_t resolved_frames = 0U;
+	std::uint64_t predicted_frames = 0U;
+	std::uint64_t rollback_requests = 0U;
+	std::uint64_t rewinds = 0U;
+	std::uint64_t resimulated_frames = 0U;
+	std::uint64_t prediction_stall_events = 0U;
+	std::uint64_t remote_wait_events = 0U;
+	std::uint8_t maximum_prediction_depth = 0U;
+};
+
 inline constexpr std::size_t new_classic_netplay_audio_commands_per_frame = 16U;
 inline constexpr std::uint64_t
 	new_classic_netplay_simulation_digest_interval = 120U;
@@ -183,6 +197,7 @@ public:
 	[[nodiscard]] const MainProcess &process() const noexcept;
 	[[nodiscard]] std::uint64_t next_frame() const noexcept;
 	[[nodiscard]] std::uint64_t confirmed_frame_count() const noexcept;
+	[[nodiscard]] NewClassicNetplayMainSessionStats stats() const noexcept;
 	[[nodiscard]] NewClassicNetplayMainSessionStatus status() const noexcept;
 	[[nodiscard]] std::optional<StepStatus> boundary() const noexcept;
 	[[nodiscard]] InputContext input_context() const noexcept;

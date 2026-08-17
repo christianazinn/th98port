@@ -1590,6 +1590,23 @@ void test_new_classic_netplay_main_session_convergence()
 		(*peer_two)->confirmed_frame_count() == frame_count &&
 		corrections > frame_count,
 		"both peers confirm all frames after exercising suffix resimulation");
+	const auto peer_one_stats = (*peer_one)->stats();
+	const auto peer_two_stats = (*peer_two)->stats();
+	expect(peer_one_stats.resolved_frames > frame_count &&
+		peer_two_stats.resolved_frames > frame_count &&
+		peer_one_stats.predicted_frames >= frame_count &&
+		peer_two_stats.predicted_frames >= frame_count &&
+		peer_one_stats.rollback_requests > 0U &&
+		peer_two_stats.rollback_requests > 0U &&
+		peer_one_stats.rewinds == peer_one_stats.rollback_requests &&
+		peer_two_stats.rewinds == peer_two_stats.rollback_requests &&
+		peer_one_stats.resimulated_frames > 0U &&
+		peer_two_stats.resimulated_frames > 0U &&
+		peer_one_stats.maximum_prediction_depth > 0U &&
+		peer_two_stats.maximum_prediction_depth > 0U &&
+		peer_one_stats.prediction_stall_events == 0U &&
+		peer_two_stats.prediction_stall_events == 0U,
+		"session telemetry exactly observes prediction and suffix correction");
 	const auto final_digest_one = (*peer_one)->simulation_digest(frame_count);
 	const auto final_digest_two = (*peer_two)->simulation_digest(frame_count);
 	expect(initial_digest_one && final_digest_one && final_digest_two &&
@@ -1689,6 +1706,38 @@ void test_new_classic_netplay_main_session_convergence()
 		one_surface->graphics_palette == two_surface->graphics_palette &&
 		one_surface->graphics_palette == reference_surface->graphics_palette,
 		"two-peer suffix correction exposes the exact uninterrupted pixels");
+
+	auto stalled_process = create_synthetic(config, resources);
+	auto stalled_peer = stalled_process ?
+		NewClassicNetplayMainSession::create(
+			NewClassicNetplayPlayer::player_one,
+			std::move(*stalled_process)
+		) : std::expected<std::unique_ptr<NewClassicNetplayMainSession>,
+			th03::app::NewClassicNetplayMainSessionError>{
+				std::unexpected(th03::app::NewClassicNetplayMainSessionError{})
+			};
+	expect(static_cast<bool>(stalled_peer),
+		"prediction-stall telemetry fixture constructs");
+	if(stalled_peer) {
+		while((*stalled_peer)->take_audio_command()) {}
+		for(std::uint64_t frame = 0U;
+			frame < th03::app::new_classic_netplay_max_prediction; ++frame) {
+			expect((*stalled_peer)->advance_local({}).has_value(),
+				"stall fixture advances within the prediction cap");
+		}
+		const auto first_stall = (*stalled_peer)->advance_local({});
+		const auto repeated_stall = (*stalled_peer)->advance_local({});
+		const auto stall_stats = (*stalled_peer)->stats();
+		expect(first_stall && repeated_stall &&
+			first_stall->status ==
+				NewClassicNetplayMainSessionStatus::prediction_stalled &&
+			repeated_stall->status ==
+				NewClassicNetplayMainSessionStatus::prediction_stalled &&
+			stall_stats.prediction_stall_events == 1U &&
+			stall_stats.maximum_prediction_depth ==
+				th03::app::new_classic_netplay_max_prediction - 1U,
+			"one sustained prediction limit reports one stall event");
+	}
 }
 
 void test_new_classic_netplay_confirmed_digest_schedule()
