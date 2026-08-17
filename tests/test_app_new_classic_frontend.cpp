@@ -495,8 +495,48 @@ void test_online_high_score_menu()
 			static_cast<void>(download.consume({.confirm = true}));
 			expect(!download.take_replay_download_request(),
 				"an already-downloaded replay cannot be downloaded twice");
+			auto watch = download.take_replay_watch_request();
+			expect(watch && watch->replay_id == retry->replay_id &&
+				!download.take_replay_watch_request(),
+				"downloaded detail emits exactly one immutable Watch request");
+			if(watch) {
+				auto wrong_watch = watch->replay_id;
+				wrong_watch.bytes[1U] ^= 0xFFU;
+				expect(!download.report_replay_watch(
+					wrong_watch, NewClassicOnlineReplayWatchOutcome::ready
+				), "Watch completion rejects an unrelated replay identity");
+				expect(download.report_replay_watch(
+					watch->replay_id,
+					NewClassicOnlineReplayWatchOutcome::ready
+				) && download.prepare_playback_transition() &&
+					download.surface().palette_tone == 0,
+					"validated Watch crosses a source-owned black transition");
+			}
 		}
 	}
+
+	NewClassicHighScoreMenu stale(
+		{online_board(2U, 4U, 0x70U)}, 2U, patch_assets
+	);
+	finish_entry_fade(stale);
+	static_cast<void>(stale.consume({}));
+	static_cast<void>(stale.consume({.down = true}));
+	static_cast<void>(stale.consume({}));
+	static_cast<void>(stale.consume({.confirm = true}));
+	static_cast<void>(stale.consume({}));
+	static_cast<void>(stale.consume({.confirm = true}));
+	static_cast<void>(stale.consume({}));
+	static_cast<void>(stale.consume({.confirm = true}));
+	auto stale_watch = stale.take_replay_watch_request();
+	expect(stale_watch && stale.report_replay_watch(
+		stale_watch->replay_id, NewClassicOnlineReplayWatchOutcome::failed
+	), "a stale local Watch failure is reported between source ticks");
+	expect(stale.consume({}).surface_changed,
+		"stale local replay failure redraws on the next source tick");
+	static_cast<void>(stale.consume({}));
+	static_cast<void>(stale.consume({.confirm = true}));
+	expect(stale.take_replay_download_request().has_value(),
+		"stale local replay becomes retryable through validated download");
 }
 
 void test_catalog_browser_and_save()

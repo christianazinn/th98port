@@ -292,7 +292,8 @@ void skip_space(std::string_view input, std::size_t &at) noexcept
 		*metadata.final_winner == 1;
 }
 
-[[nodiscard]] std::expected<void, NewClassicOnlineClientError>
+[[nodiscard]] std::expected<formats::ReplayDocument,
+	NewClassicOnlineClientError>
 validate_replay_payload(
 	std::span<const std::byte> bytes,
 	const NewClassicOnlineReplayRecord &record,
@@ -323,7 +324,7 @@ validate_replay_payload(
 			NewClassicOnlineClientErrorCode::replay_metadata, status
 		));
 	}
-	return {};
+	return std::move(*parsed);
 }
 
 [[nodiscard]] NewClassicOnlineClientError replay_file_error(
@@ -337,6 +338,68 @@ validate_replay_payload(
 		.system = system,
 	};
 	return result;
+}
+
+[[nodiscard]] std::expected<std::optional<std::vector<std::byte>>,
+	NewClassicOnlineClientError>
+read_local_replay_payload(
+	const NewClassicOnlineReplayRecord &record,
+	const std::filesystem::path &replay_root
+)
+{
+	if(replay_root.empty() || record.payload_bytes == 0U ||
+		record.payload_bytes > new_classic_online_replay_max_bytes) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::invalid_document
+		));
+	}
+	const auto path = replay_root / "ONLINE" /
+		new_classic_online_replay_filename(record.replay_id);
+	std::error_code system{};
+	const auto status = std::filesystem::status(path, system);
+	if(system == std::errc::no_such_file_or_directory) {
+		return std::optional<std::vector<std::byte>>{};
+	}
+	if(system) {
+		return std::unexpected(replay_file_error(
+			ReplaySlotStoreErrorCode::source_status, system
+		));
+	}
+	if(!std::filesystem::exists(status)) {
+		return std::optional<std::vector<std::byte>>{};
+	}
+	if(!std::filesystem::is_regular_file(status)) {
+		return std::unexpected(replay_file_error(
+			ReplaySlotStoreErrorCode::source_not_regular
+		));
+	}
+	const auto size = std::filesystem::file_size(path, system);
+	if(system || size != record.payload_bytes ||
+		size > new_classic_online_replay_max_bytes ||
+		size > static_cast<std::uintmax_t>(
+			std::numeric_limits<std::streamsize>::max()
+		)) {
+		return std::unexpected(replay_file_error(
+			ReplaySlotStoreErrorCode::source_size, system
+		));
+	}
+	std::ifstream input(path, std::ios::binary);
+	if(!input) {
+		return std::unexpected(replay_file_error(
+			ReplaySlotStoreErrorCode::source_open
+		));
+	}
+	std::vector<std::byte> bytes(static_cast<std::size_t>(size));
+	input.read(
+		reinterpret_cast<char *>(bytes.data()),
+		static_cast<std::streamsize>(bytes.size())
+	);
+	if(!input || input.peek() != std::ifstream::traits_type::eof()) {
+		return std::unexpected(replay_file_error(
+			ReplaySlotStoreErrorCode::source_read
+		));
+	}
+	return std::optional<std::vector<std::byte>>(std::move(bytes));
 }
 
 } // namespace
@@ -609,62 +672,36 @@ probe_new_classic_online_replay_download(
 	const std::filesystem::path &replay_root
 )
 {
-	if(replay_root.empty() || record.payload_bytes == 0U ||
-		record.payload_bytes > new_classic_online_replay_max_bytes) {
-		return std::unexpected(client_error(
-			NewClassicOnlineClientErrorCode::invalid_document
-		));
+	auto bytes = read_local_replay_payload(record, replay_root);
+	if(!bytes) {
+		return std::unexpected(std::move(bytes.error()));
 	}
-	const auto path = replay_root / "ONLINE" /
-		new_classic_online_replay_filename(record.replay_id);
-	std::error_code system{};
-	const auto status = std::filesystem::status(path, system);
-	if(system == std::errc::no_such_file_or_directory) {
+	if(!*bytes) {
 		return false;
 	}
-	if(system) {
-		return std::unexpected(replay_file_error(
-			ReplaySlotStoreErrorCode::source_status, system
-		));
-	}
-	if(!std::filesystem::exists(status)) {
-		return false;
-	}
-	if(!std::filesystem::is_regular_file(status)) {
-		return std::unexpected(replay_file_error(
-			ReplaySlotStoreErrorCode::source_not_regular
-		));
-	}
-	const auto size = std::filesystem::file_size(path, system);
-	if(system || size != record.payload_bytes ||
-		size > new_classic_online_replay_max_bytes ||
-		size > static_cast<std::uintmax_t>(
-			std::numeric_limits<std::streamsize>::max()
-		)) {
-		return std::unexpected(replay_file_error(
-			ReplaySlotStoreErrorCode::source_size, system
-		));
-	}
-	std::ifstream input(path, std::ios::binary);
-	if(!input) {
-		return std::unexpected(replay_file_error(
-			ReplaySlotStoreErrorCode::source_open
-		));
-	}
-	std::vector<std::byte> bytes(static_cast<std::size_t>(size));
-	input.read(
-		reinterpret_cast<char *>(bytes.data()),
-		static_cast<std::streamsize>(bytes.size())
-	);
-	if(!input || input.peek() != std::ifstream::traits_type::eof()) {
-		return std::unexpected(replay_file_error(
-			ReplaySlotStoreErrorCode::source_read
-		));
-	}
-	if(auto validated = validate_replay_payload(bytes, record); !validated) {
+	if(auto validated = validate_replay_payload(**bytes, record); !validated) {
 		return std::unexpected(std::move(validated.error()));
 	}
 	return true;
+}
+
+std::expected<formats::ReplayDocument, NewClassicOnlineClientError>
+load_new_classic_online_replay(
+	const NewClassicOnlineReplayRecord &record,
+	const std::filesystem::path &replay_root
+)
+{
+	auto bytes = read_local_replay_payload(record, replay_root);
+	if(!bytes) {
+		return std::unexpected(std::move(bytes.error()));
+	}
+	if(!*bytes) {
+		return std::unexpected(replay_file_error(
+			ReplaySlotStoreErrorCode::source_status,
+			std::make_error_code(std::errc::no_such_file_or_directory)
+		));
+	}
+	return validate_replay_payload(**bytes, record);
 }
 
 } // namespace th03::app

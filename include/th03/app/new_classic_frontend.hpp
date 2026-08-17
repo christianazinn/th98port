@@ -185,6 +185,11 @@ enum class NewClassicOnlineReplayDownloadOutcome : std::uint8_t {
 	unavailable,
 };
 
+enum class NewClassicOnlineReplayWatchOutcome : std::uint8_t {
+	ready,
+	failed,
+};
+
 // New Classic-only source-styled hub for local and cached online score views.
 // Every online row was already validated by the T3ONL002 decoder. The owner
 // may emit one immutable replay-download intent, but never performs network or
@@ -215,6 +220,15 @@ public:
 		const NewClassicOnlineReplayId &replay_id,
 		NewClassicOnlineReplayDownloadOutcome outcome
 	) noexcept;
+	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>
+	take_replay_watch_request() noexcept;
+	[[nodiscard]] bool report_replay_watch(
+		const NewClassicOnlineReplayId &replay_id,
+		NewClassicOnlineReplayWatchOutcome outcome
+	) noexcept;
+	// Converts a host-validated ready Watch request into the same black OP
+	// handoff used by the local Replay browser.
+	[[nodiscard]] bool prepare_playback_transition() noexcept;
 
 private:
 	enum class Page : std::uint8_t { hub, board, detail };
@@ -223,6 +237,11 @@ private:
 		pending,
 		failed,
 		unavailable,
+	};
+	enum class WatchState : std::uint8_t {
+		idle,
+		pending,
+		ready,
 	};
 	void draw() noexcept;
 	void draw_hub() noexcept;
@@ -244,6 +263,9 @@ private:
 	DownloadState download_state_ = DownloadState::idle;
 	std::optional<NewClassicOnlineReplayId> download_target_{};
 	std::optional<NewClassicOnlineReplayRecord> download_request_{};
+	WatchState watch_state_ = WatchState::idle;
+	std::optional<NewClassicOnlineReplayId> watch_target_{};
+	std::optional<NewClassicOnlineReplayRecord> watch_request_{};
 	bool redraw_pending_ = false;
 	bool valid_ = false;
 	bool fade_in_active_ = true;

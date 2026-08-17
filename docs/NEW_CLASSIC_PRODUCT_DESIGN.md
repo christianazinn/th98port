@@ -477,9 +477,12 @@ read-only HiScore hub and source-styled cached online board/detail view.
 Session 202 adds disabled-by-default asynchronous refresh of the active rank's
 nine Story boards. Session 212 adds the first detail action: a replay-backed
 entry emits one bounded background download and reports success only after
-digest, V13, metadata, and atomic-publication validation. The hub remains
-absent when no active-rank cache exists. Replay navigation, account mutation,
-upload, watch, and My Records remain deferred.
+digest, V13, metadata, and atomic-publication validation. Session 213 adds
+Watch: the host revalidates local content-addressed bytes, hands the immutable
+document back to OP, crosses a black/silent boundary, rebases the scheduler,
+and adopts the existing New Classic playback owner. The hub remains absent
+when no active-rank cache exists. Replay navigation, account mutation, upload,
+and My Records remain deferred.
 
 - Define leaderboard/replay identifiers, category keys, provenance, and local
   cache documents without selecting a service vendor.

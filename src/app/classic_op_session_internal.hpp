@@ -231,7 +231,7 @@ struct ClassicOpSessionBackendOperations final {
 	(*advance_high_scores)(
 		void *, ClassicRegistrationInput, ClassicAudioStatus
 	) = nullptr;
-	std::expected<void, ClassicOpSessionError>
+	std::expected<ClassicOpSessionReplayResult, ClassicOpSessionError>
 	(*finish_high_scores)(void *) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*start_selection)(
 		void *, ClassicOpSelectionMode
@@ -360,6 +360,13 @@ public:
 	report_online_replay_download(
 		const NewClassicOnlineReplayId &replay_id,
 		NewClassicOnlineReplayDownloadOutcome outcome
+	);
+	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>
+	take_online_replay_watch_request() noexcept;
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	report_online_replay_watch(
+		const NewClassicOnlineReplayId &replay_id,
+		std::optional<formats::ReplayDocument> document
 	);
 	[[nodiscard]] std::shared_ptr<const NewClassicReplaySaveArt>
 	replay_save_art() const noexcept;

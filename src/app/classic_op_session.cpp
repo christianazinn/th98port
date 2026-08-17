@@ -695,11 +695,25 @@ struct ClassicOpSession::Impl final {
 			scene = ClassicOpSessionScene::title_menu;
 			break;
 		case ClassicOpSessionScene::high_scores:
-			if(auto finished = operations.finish_high_scores(operations.context);
-				!finished) {
+			if(auto finished = operations.finish_high_scores(operations.context)) {
+				switch(*finished) {
+				case ClassicOpSessionReplayResult::back:
+					scene = ClassicOpSessionScene::title_menu;
+					break;
+				case ClassicOpSessionReplayResult::preparing_playback:
+					break;
+				case ClassicOpSessionReplayResult::play:
+					scene = ClassicOpSessionScene::replay_playback;
+					clock_rebase_requested = true;
+					break;
+				case ClassicOpSessionReplayResult::application_quit:
+					status = ClassicOpSessionStatus::quit_requested;
+					scene = ClassicOpSessionScene::complete;
+					break;
+				}
+			} else {
 				return std::unexpected(std::move(finished.error()));
 			}
-			scene = ClassicOpSessionScene::title_menu;
 			break;
 		case ClassicOpSessionScene::character_selection: {
 			auto result = operations.finish_selection(operations.context);
@@ -899,6 +913,11 @@ struct ClassicOpSessionBackend final {
 	std::optional<NewClassicOnlineReplayRecord>
 		pending_online_replay_download{};
 	std::optional<NewClassicOnlineReplayId> active_online_replay_download{};
+	std::optional<NewClassicOnlineReplayRecord> pending_online_replay_watch{};
+	std::optional<NewClassicOnlineReplayId> active_online_replay_watch{};
+	std::optional<formats::ReplayDocument> online_replay_playback_document{};
+	bool online_replay_playback_preparing = false;
+	bool online_replay_black_published = false;
 	std::unique_ptr<ClassicOpCharacterSelection> selection{};
 	std::optional<ClassicOpSelectionCompletion> selection_completion{};
 	std::unique_ptr<ClassicStorySession> story{};
@@ -2158,6 +2177,24 @@ struct ClassicOpSessionBackend final {
 		ClassicAudioStatus audio
 	)
 	{
+		if(online_replay_playback_preparing) {
+			return ClassicOpSessionBackendTick{.ready = true};
+		}
+		if(online_replay_playback_document) {
+			if(!high_score_menu ||
+				!high_score_menu->prepare_playback_transition() ||
+				!push_audio({.type = ClassicAudioCommandType::stop_song})) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::replay_playback_failed
+				));
+			}
+			online_replay_playback_preparing = true;
+			online_replay_black_published = false;
+			return ClassicOpSessionBackendTick{
+				.surface_changed = true,
+				.ready = true,
+			};
+		}
 		if(high_score_menu) {
 			const auto result = high_score_menu->consume({
 				.up = input.up,
@@ -2177,6 +2214,15 @@ struct ClassicOpSessionBackend final {
 				}
 				active_online_replay_download = request->replay_id;
 				pending_online_replay_download = std::move(*request);
+			}
+			if(auto request = high_score_menu->take_replay_watch_request()) {
+				if(pending_online_replay_watch || active_online_replay_watch) {
+					return std::unexpected(session_error(
+						ClassicOpSessionErrorCode::backend_contract_failed
+					));
+				}
+				active_online_replay_watch = request->replay_id;
+				pending_online_replay_watch = std::move(*request);
 			}
 			if(result.status == NewClassicHighScoreMenuStatus::local_selected) {
 				high_score_menu.reset();
@@ -2244,9 +2290,47 @@ struct ClassicOpSessionBackend final {
 		};
 	}
 
-	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	[[nodiscard]] std::expected<ClassicOpSessionReplayResult,
+		ClassicOpSessionError>
 	finish_high_scores()
 	{
+		if(online_replay_playback_preparing) {
+			if(!online_replay_black_published) {
+				online_replay_black_published = true;
+				return ClassicOpSessionReplayResult::preparing_playback;
+			}
+			if(!online_replay_playback_document || !content_paths) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			auto loaded = NewClassicReplayPlayback::load({
+				.content = *content_paths,
+				.document = *online_replay_playback_document,
+				.checkpoint_index = 0U,
+				.kotohime_compatibility = kotohime_compatibility,
+				.reduced_flash = config.reduced_flash,
+				.language = config.language,
+			});
+			if(!loaded) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::replay_playback_failed
+				));
+			}
+			replay_playback = std::move(*loaded);
+			if(!drain_audio(*replay_playback)) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::audio_command_pending
+				));
+			}
+			high_score_menu.reset();
+			title_completion.reset();
+			online_replay_playback_document.reset();
+			online_replay_playback_preparing = false;
+			online_replay_black_published = false;
+			active_online_replay_watch.reset();
+			return ClassicOpSessionReplayResult::play;
+		}
 		if(high_score_menu) {
 			if(high_score_menu->status() !=
 				NewClassicHighScoreMenuStatus::back || !title_completion) {
@@ -2263,7 +2347,7 @@ struct ClassicOpSessionBackend final {
 			title_completion.reset();
 			music_carry = {};
 			selection_carry = {};
-			return {};
+			return ClassicOpSessionReplayResult::back;
 		}
 		if(!high_score_completion) {
 			if(!high_scores) {
@@ -2287,7 +2371,7 @@ struct ClassicOpSessionBackend final {
 		high_score_completion.reset();
 		music_carry = {};
 		selection_carry = {};
-		return {};
+		return ClassicOpSessionReplayResult::back;
 	}
 
 	[[nodiscard]] std::expected<std::uint8_t, ClassicOpSessionError>
@@ -3733,6 +3817,52 @@ struct ClassicOpSessionBackend final {
 		return {};
 	}
 
+	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>
+	take_online_replay_watch_request() noexcept
+	{
+		return std::exchange(pending_online_replay_watch, std::nullopt);
+	}
+
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	report_online_replay_watch(
+		const NewClassicOnlineReplayId &replay_id,
+		std::optional<formats::ReplayDocument> document
+	)
+	{
+		if(!active_online_replay_watch ||
+			*active_online_replay_watch != replay_id ||
+			online_replay_playback_document ||
+			online_replay_playback_preparing) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		const auto outcome = document ?
+			NewClassicOnlineReplayWatchOutcome::ready :
+			NewClassicOnlineReplayWatchOutcome::failed;
+		if(!high_score_menu || !high_score_menu->report_replay_watch(
+			replay_id, outcome
+		)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		if(document) {
+			online_replay_playback_document = std::move(*document);
+		} else {
+			for(auto &board : online_boards) {
+				for(auto &record : board.replay_records) {
+					if(record.replay_id == replay_id) {
+						record.availability =
+							NewClassicOnlineReplayAvailability::metadata_only;
+					}
+				}
+			}
+			active_online_replay_watch.reset();
+		}
+		return {};
+	}
+
 	[[nodiscard]] bool audio_pending() const noexcept
 	{
 		return audio_count != 0U;
@@ -4042,7 +4172,9 @@ Result backend_call(void *context, Method method, Args &&...args)
 			);
 		},
 		.finish_high_scores = [](void *context) {
-			return backend_call<std::expected<void, ClassicOpSessionError>>(
+			return backend_call<std::expected<
+				ClassicOpSessionReplayResult, ClassicOpSessionError
+			>>(
 				context, &ClassicOpSessionBackend::finish_high_scores
 			);
 		},
@@ -4810,6 +4942,33 @@ ClassicOpSession::report_online_replay_download(
 	return static_cast<ClassicOpSessionBackend *>(
 		impl_->operations.context
 	)->report_online_replay_download(replay_id, outcome);
+}
+
+std::optional<NewClassicOnlineReplayRecord>
+ClassicOpSession::take_online_replay_watch_request() noexcept
+{
+	if(!impl_ || !impl_->operations.context) {
+		return std::nullopt;
+	}
+	return static_cast<ClassicOpSessionBackend *>(
+		impl_->operations.context
+	)->take_online_replay_watch_request();
+}
+
+std::expected<void, ClassicOpSessionError>
+ClassicOpSession::report_online_replay_watch(
+	const NewClassicOnlineReplayId &replay_id,
+	std::optional<formats::ReplayDocument> document
+)
+{
+	if(!impl_ || !impl_->operations.context) {
+		return std::unexpected(session_error(
+			ClassicOpSessionErrorCode::backend_contract_failed
+		));
+	}
+	return static_cast<ClassicOpSessionBackend *>(
+		impl_->operations.context
+	)->report_online_replay_watch(replay_id, std::move(document));
 }
 
 std::shared_ptr<const NewClassicReplaySaveArt>

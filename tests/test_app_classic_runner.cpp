@@ -40,6 +40,29 @@ void expect(bool condition, const char *message)
 	}
 }
 
+std::optional<std::vector<std::byte>> read_bytes(
+	const std::filesystem::path &path
+)
+{
+	std::ifstream input(path, std::ios::binary | std::ios::ate);
+	if(!input) {
+		return std::nullopt;
+	}
+	const auto end = input.tellg();
+	if(end < 0) {
+		return std::nullopt;
+	}
+	std::vector<std::byte> bytes(static_cast<std::size_t>(end));
+	input.seekg(0, std::ios::beg);
+	if(!bytes.empty() && !input.read(
+		reinterpret_cast<char *>(bytes.data()),
+		static_cast<std::streamsize>(bytes.size())
+	)) {
+		return std::nullopt;
+	}
+	return bytes;
+}
+
 bool valid_completed_replay(
 	std::optional<th03::formats::ReplayDocument> document,
 	th03::formats::ReplayEndReason reason,
@@ -1100,7 +1123,8 @@ bool authentic_online_high_score_gate(
 	const std::filesystem::path &main_executable,
 	const std::filesystem::path &mainl_executable,
 	const std::filesystem::path &op_executable,
-	const std::filesystem::path &font_rom
+	const std::filesystem::path &font_rom,
+	std::optional<th03::formats::ReplayDocument> watch_document = std::nullopt
 )
 {
 	using namespace th03::app;
@@ -1161,6 +1185,13 @@ bool authentic_online_high_score_gate(
 		});
 		++tick_index;
 		if(!advanced || advanced->status != ClassicRunnerStatus::running) {
+			if(!advanced) {
+				std::cerr << "online-hiscore-step-error code="
+					<< static_cast<unsigned>(advanced.error().code)
+					<< " detail="
+					<< static_cast<unsigned>(advanced.error().detail_code)
+					<< " tick=" << tick_index << '\n';
+			}
 			return false;
 		}
 		last = *advanced;
@@ -1237,8 +1268,9 @@ bool authentic_online_high_score_gate(
 	}
 
 	// Online opens as a second real destination. A replay-backed detail emits
-	// one host-owned request; reporting offline redraws it on the next source
-	// tick. Cancel then returns detail -> board -> hub -> title.
+	// one host-owned request. A validated download becomes a Watch request; a
+	// stale local file is rejected and returns to the retryable detail without
+	// leaving source time. Cancel then returns detail -> board -> hub -> title.
 	if(!step(0x0002U) || !step() || !step(0x0020U) || !step() ||
 		!ClassicRunnerTestAccess::online_high_score_menu(runner) ||
 		!step(0x0020U) || !step() || !step(0x0020U)) {
@@ -1249,10 +1281,46 @@ bool authentic_online_high_score_gate(
 		online_high_score_board().replay_records.front().replay_id ||
 		!runner.report_new_classic_online_replay_download(
 			download->replay_id,
-			NewClassicOnlineReplayDownloadOutcome::unavailable
+			NewClassicOnlineReplayDownloadOutcome::downloaded
 		)) {
 		std::cerr << "online replay download intent/report failed\n";
 		return false;
+	}
+	if(!step() || !step() || !step(0x0020U)) {
+		return false;
+	}
+	auto watch = runner.take_new_classic_online_replay_watch_request();
+	const bool watch_expected_playback = watch_document.has_value();
+	if(!watch || watch->replay_id != download->replay_id ||
+		!runner.report_new_classic_online_replay_watch(
+			watch->replay_id, std::move(watch_document)
+		)) {
+		std::cerr << "online replay Watch intent/report failed\n";
+		return false;
+	}
+	if(watch_expected_playback) {
+		if(!step() || ClassicRunnerTestAccess::scene(runner) !=
+			ClassicOpSessionScene::high_scores) {
+			std::cerr << "online Watch did not publish its black boundary\n";
+			return false;
+		}
+		if(!step() || ClassicRunnerTestAccess::scene(runner) !=
+			ClassicOpSessionScene::high_scores) {
+			std::cerr << "online Watch did not retain the stopped black boundary\n";
+			return false;
+		}
+		if(!step() || ClassicRunnerTestAccess::scene(runner) !=
+			ClassicOpSessionScene::replay_playback || !last ||
+			!last->clock_rebase_requested) {
+			std::cerr << "online Watch did not adopt playback scene="
+				<< static_cast<unsigned>(ClassicRunnerTestAccess::scene(
+					runner
+				).value_or(ClassicOpSessionScene::failed))
+				<< " rebase=" << (last && last->clock_rebase_requested)
+				<< '\n';
+			return false;
+		}
+		return true;
 	}
 	if(!step() || !step() || !step(0x1000U) || !step() ||
 		!ClassicRunnerTestAccess::online_high_score_menu(runner) ||
@@ -3051,7 +3119,19 @@ int main(int argc, char **argv)
 	test_pixel_oracle_publication_ownership();
 	test_runner_sequence_audio_surface_and_failure();
 	test_file_and_request_boundaries();
-	if(argc == 8 && std::string_view(argv[1]) == "--authentic-english") {
+	if(argc == 8 && std::string_view(argv[1]) == "--authentic-online-watch") {
+		auto bytes = read_bytes(argv[7]);
+		std::optional<th03::formats::ReplayDocument> document{};
+		if(bytes) {
+			if(auto parsed = th03::formats::parse_v13_replay(*bytes)) {
+				document = std::move(*parsed);
+			}
+		}
+		expect(document && authentic_online_high_score_gate(
+			argv[2], argv[3], argv[4], argv[5], argv[6],
+			std::move(document)
+		), "downloaded online replay crosses into New Classic playback");
+	} else if(argc == 8 && std::string_view(argv[1]) == "--authentic-english") {
 		expect(authentic_gate(
 			argv[2], argv[3], argv[4], argv[5], argv[6], argv[7]
 		), "supplied English overlay traverses the complete New Classic runner");
@@ -3091,7 +3171,9 @@ int main(int argc, char **argv)
 			"--authentic-practice|--authentic-online "
 			"<data-root> <MAIN.EXE> <MAINL.EXE> <OP.EXE> <FONT.ROM> | "
 			"--authentic-english <data-root> <MAIN.EXE> <MAINL.EXE> "
-			"<OP.EXE> <FONT.ROM> <TH3EN.DAT>]\n";
+			"<OP.EXE> <FONT.ROM> <TH3EN.DAT> | --authentic-online-watch "
+			"<data-root> <MAIN.EXE> <MAINL.EXE> <OP.EXE> <FONT.ROM> "
+			"<V13.RPY>]\n";
 		return 2;
 	}
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

@@ -33,6 +33,7 @@ using th03::app::ClassicOpSessionError;
 using th03::app::ClassicOpSessionErrorCode;
 using th03::app::ClassicOpSessionInput;
 using th03::app::ClassicOpSessionScene;
+using th03::app::ClassicOpSessionReplayResult;
 using th03::app::ClassicOpSessionSelectionResult;
 using th03::app::ClassicOpSessionStatus;
 using th03::app::ClassicOpSessionTestAccess;
@@ -131,6 +132,8 @@ struct FakeBackend final {
 	std::size_t music_finishes = 0U;
 	std::size_t high_score_starts = 0U;
 	std::size_t high_score_finishes = 0U;
+	ClassicOpSessionReplayResult high_score_result =
+		ClassicOpSessionReplayResult::back;
 	std::size_t selection_starts = 0U;
 	std::size_t selection_finishes = 0U;
 	std::size_t selection_returns = 0U;
@@ -247,8 +250,12 @@ Result fake_call(void *context, Function function)
 			};
 		},
 		.finish_high_scores = [](void *context) {
-			++static_cast<FakeBackend *>(context)->high_score_finishes;
-			return std::expected<void, ClassicOpSessionError>{};
+			auto &backend = *static_cast<FakeBackend *>(context);
+			++backend.high_score_finishes;
+			return std::expected<
+				ClassicOpSessionReplayResult,
+				ClassicOpSessionError
+			>{backend.high_score_result};
 		},
 		.start_selection = [](void *context, ClassicOpSelectionMode mode) {
 			auto &backend = *static_cast<FakeBackend *>(context);
@@ -751,6 +758,24 @@ void test_terminal_routes_and_failures()
 				scores_backend->high_score_finishes == 1U,
 			"completed HiScore viewer returns to a fresh OP title"
 		);
+	}
+
+	auto watch_backend = std::make_shared<FakeBackend>();
+	watch_backend->title_result.route = ClassicOpRoute::high_scores;
+	watch_backend->high_score_result =
+		ClassicOpSessionReplayResult::preparing_playback;
+	auto watch = make_session(watch_backend);
+	if(watch) {
+		static_cast<void>(watch->consume({}));
+		auto tick = watch->consume({});
+		expect(tick && tick->scene == ClassicOpSessionScene::high_scores &&
+			!tick->clock_rebase_requested,
+			"online Watch retains HiScore for its black transition boundary");
+		watch_backend->high_score_result = ClassicOpSessionReplayResult::play;
+		tick = watch->consume({});
+		expect(tick && tick->scene == ClassicOpSessionScene::replay_playback &&
+			tick->clock_rebase_requested,
+			"online Watch adopts playback and rebases after preparation");
 	}
 
 	auto demo_backend = std::make_shared<FakeBackend>();

@@ -848,6 +848,39 @@ ClassicRunner::report_new_classic_online_replay_download(
 	return {};
 }
 
+std::optional<NewClassicOnlineReplayRecord>
+ClassicRunner::take_new_classic_online_replay_watch_request() noexcept
+{
+	if(!impl_ || impl_->experience != ExperienceProfile::new_classic ||
+		impl_->operations.consume != &consume_session) {
+		return std::nullopt;
+	}
+	return static_cast<ClassicOpSession *>(
+		impl_->operations.context
+	)->take_online_replay_watch_request();
+}
+
+std::expected<void, ClassicRunnerError>
+ClassicRunner::report_new_classic_online_replay_watch(
+	const NewClassicOnlineReplayId &replay_id,
+	std::optional<formats::ReplayDocument> document
+)
+{
+	if(!impl_ || impl_->experience != ExperienceProfile::new_classic ||
+		impl_->operations.consume != &consume_session) {
+		return std::unexpected(runner_error(
+			ClassicRunnerErrorCode::invalid_request
+		));
+	}
+	auto reported = static_cast<ClassicOpSession *>(
+		impl_->operations.context
+	)->report_online_replay_watch(replay_id, std::move(document));
+	if(!reported) {
+		return std::unexpected(session_error(reported.error()));
+	}
+	return {};
+}
+
 std::shared_ptr<const NewClassicReplaySaveArt>
 ClassicRunner::new_classic_replay_save_art() const noexcept
 {

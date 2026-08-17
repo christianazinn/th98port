@@ -261,6 +261,8 @@
     {"enum": "hiscore_online_detail_footer", "id": "hiscore.online.detail-footer", "domain": "menu-font", "max_width": 560},
     {"enum": "hiscore_online_download_footer", "id": "hiscore.online.download-footer", "domain": "menu-font", "max_width": 560},
     {"enum": "hiscore_online_downloading_footer", "id": "hiscore.online.downloading-footer", "domain": "menu-font", "max_width": 560},
+    {"enum": "hiscore_online_watch_footer", "id": "hiscore.online.watch-footer", "domain": "menu-font", "max_width": 560},
+    {"enum": "hiscore_online_watching_footer", "id": "hiscore.online.watching-footer", "domain": "menu-font", "max_width": 560},
     {"enum": "hiscore_online_header_place", "id": "hiscore.online.header.place", "domain": "menu-font", "max_width": 48},
     {"enum": "hiscore_online_label_player", "id": "hiscore.online.label.player", "domain": "menu-font", "max_width": 160},
     {"enum": "hiscore_online_label_result", "id": "hiscore.online.label.result", "domain": "menu-font", "max_width": 160},

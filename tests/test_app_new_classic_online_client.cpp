@@ -397,6 +397,15 @@ void test_download()
 	auto probed = probe_new_classic_online_replay_download(record, root.path());
 	expect(probed && *probed,
 		"a persisted download is revalidated and rediscovered after restart");
+	auto playable = load_new_classic_online_replay(record, root.path());
+	std::optional<std::vector<std::byte>> playable_bytes{};
+	if(playable) {
+		if(auto reencoded = th03::formats::write_v13_replay(*playable)) {
+			playable_bytes = std::move(*reencoded);
+		}
+	}
+	expect(playable_bytes && *playable_bytes == *encoded,
+		"Watch re-reads the exact locally validated V13 document");
 	auto absent = record;
 	absent.replay_id.bytes[0U] ^= 0xFFU;
 	probed = probe_new_classic_online_replay_download(absent, root.path());
@@ -424,6 +433,10 @@ void test_download()
 	expect(!probed && probed.error().code ==
 		NewClassicOnlineClientErrorCode::replay_metadata,
 		"restart probe rejects a local file under mismatched cached metadata");
+	playable = load_new_classic_online_replay(record, root.path());
+	expect(!playable && playable.error().code ==
+		NewClassicOnlineClientErrorCode::replay_metadata,
+		"Watch repeats cached-metadata validation at the launch boundary");
 }
 
 } // namespace

@@ -1973,6 +1973,28 @@ ExperienceRunResult run_classic_session(
 				}
 #endif
 			}
+			if(auto request =
+				(*runner)->take_new_classic_online_replay_watch_request()) {
+				auto loaded = th03::app::load_new_classic_online_replay(
+					*request, parsed.replay_root
+				);
+				std::optional<th03::formats::ReplayDocument> document{};
+				if(loaded) {
+					document.emplace(std::move(*loaded));
+				} else {
+					std::cerr << "status=warning\n"
+						"stage=online-replay-watch-load\ncode="
+						<< static_cast<unsigned>(loaded.error().code) << '\n';
+				}
+				if(auto reported =
+					(*runner)->report_new_classic_online_replay_watch(
+						request->replay_id, std::move(document)
+					); !reported) {
+					return {.exit_code = fail(
+						"online-replay-watch-report", reported.error()
+					)};
+				}
+			}
 			if(auto update = (*runner)->take_new_classic_key_config_update()) {
 				active_key_config = *update;
 				if(!active_joy_config || !active_device_assignment) {

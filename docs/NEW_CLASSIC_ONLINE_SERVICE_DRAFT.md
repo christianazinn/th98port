@@ -337,6 +337,14 @@ publication success changes the UI to `Downloaded`. Missing endpoints report
 tick. On later launches the same checks revalidate local bytes before restoring
 downloaded availability.
 
+Session 213 completes the local Watch half of that action. Confirm on a
+downloaded replay emits a separate immutable intent; the host re-reads and
+validates ReplayId, V13 structure, and cached metadata before handing the
+document back to OP. The session stops HiScore music, publishes one black
+source boundary, adopts the existing checkpoint-zero playback owner, and asks
+the host scheduler to rebase before the first gameplay tick. A stale local file
+is demoted to a retryable download and never reaches playback.
+
 This is deliberately a deployment seam rather than a hidden public endpoint.
-Enrollment, upload consent, `My Records`, replay watch actions, real Cloudflare
-resources, and the pinned Container adapter remain pending.
+Enrollment, upload consent, `My Records`, real Cloudflare resources, and the
+pinned Container adapter remain pending.

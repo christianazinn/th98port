@@ -242,6 +242,13 @@ public:
 		const NewClassicOnlineReplayId &replay_id,
 		NewClassicOnlineReplayDownloadOutcome outcome
 	);
+	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>
+	take_new_classic_online_replay_watch_request() noexcept;
+	[[nodiscard]] std::expected<void, ClassicRunnerError>
+	report_new_classic_online_replay_watch(
+		const NewClassicOnlineReplayId &replay_id,
+		std::optional<formats::ReplayDocument> document
+	);
 	[[nodiscard]] std::shared_ptr<const NewClassicReplaySaveArt>
 	new_classic_replay_save_art() const noexcept;
 
