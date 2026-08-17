@@ -159,6 +159,9 @@ std::optional<DirectVsCliOption> option_from_text(
 	if(text == "--netplay-join") {
 		return DirectVsCliOption::netplay_join;
 	}
+	if(text == "--replay-root") {
+		return DirectVsCliOption::replay_root;
+	}
 	if(text == "--netplay-replay-output") {
 		return DirectVsCliOption::netplay_replay_output;
 	}
@@ -324,6 +327,16 @@ std::expected<DirectVsCliRequest, DirectVsCliError> parse_direct_vs_cli(
 			request.netplay_mode = DirectVsNetplayMode::join;
 			request.netplay_join_endpoint = std::string(value);
 			break;
+		case DirectVsCliOption::replay_root:
+			if(value.empty()) {
+				return std::unexpected(cli_error(
+					DirectVsCliErrorCode::invalid_replay_output,
+					*option,
+					value_index
+				));
+			}
+			request.replay_root = std::filesystem::path(value);
+			break;
 		case DirectVsCliOption::netplay_replay_output:
 			if(value.empty()) {
 				return std::unexpected(cli_error(
@@ -354,6 +367,14 @@ std::expected<DirectVsCliRequest, DirectVsCliError> parse_direct_vs_cli(
 		return std::unexpected(cli_error(
 			DirectVsCliErrorCode::conflicting_netplay_mode,
 			DirectVsCliOption::netplay_replay_output,
+			arguments.size()
+		));
+	}
+	if(seen[static_cast<std::size_t>(DirectVsCliOption::replay_root)] &&
+		request.netplay_mode == DirectVsNetplayMode::none) {
+		return std::unexpected(cli_error(
+			DirectVsCliErrorCode::conflicting_netplay_mode,
+			DirectVsCliOption::replay_root,
 			arguments.size()
 		));
 	}

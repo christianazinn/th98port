@@ -3,7 +3,7 @@
 Status: cross-platform technical preview. This route runs a complete human
 VS MAIN match over direct IPv4 UDP. It is intentionally exposed by command
 line before the source-styled room/selection UI, WebRTC/TURN transport,
-negotiated pause, replay save UI, and post-match report are integrated. A
+negotiated pause, and post-match report are integrated. A
 confirmed terminal match now continues through the ordinary winner-specific
 MAINL scene, including WIN music, dismissal, and the final black-out.
 
@@ -30,8 +30,7 @@ Find the Windows Tailscale address and choose a UDP port:
 ```powershell
 tailscale ip -4
 .\PoDD-Port-Test.exe --netplay-host 31415 `
-  --p1 reimu --rank 1 --seed 34 `
-  --netplay-replay-output .\REPLAY\NETPLAY-WINDOWS.RPY
+  --p1 reimu --rank 1 --seed 34
 ```
 
 Allow `PoDD-Port-Test.exe` through Windows Firewall for the Tailscale/private
@@ -72,7 +71,7 @@ normal native run (the canonical ignored workspace layout calls it
   --font /path/to/FONT.ROM \
   --netplay-join WINDOWS_TAILSCALE_IP_OR_MAGICDNS_NAME:31415 \
   --p2 mima \
-  --netplay-replay-output ./NETPLAY-ARCH.RPY
+  --replay-root ./REPLAY
 ```
 
 Tailscale ACLs and the host firewall must permit the selected UDP port. No
@@ -111,14 +110,16 @@ The preview feeds its corrected contiguous-confirmed input stream directly into
 the ordinary memory-only V13 recorder. Predicted or superseded frames never
 enter it, and each machine retains its own first-execution slowdown evidence.
 After the winner scene completes, a normal match prints `replay-ready=1`,
-`replay-frames`, and the validated `replay-bytes` size. It still creates no
-working replay file and the command-line preview has no slot-save UI; leaving,
-disconnecting, or closing the application simply destroys the in-memory owner.
-Numbered replay publication belongs to the later source-styled in-game room
-flow. The optional `--netplay-replay-output` developer argument publishes the
-validated final V13 only after that completed MAINL owner, using the same
-flush/read-back/reparse/atomic-replace transaction as numbered slots. It writes
-nothing on an incomplete match.
+`replay-frames`, and the validated `replay-bytes` size, then opens the ordinary
+authenticated New Classic Save Replay prompt/name/slot transaction. The replay
+remains entirely in memory until a numbered slot is confirmed. The standalone
+passes its selected persistent `REPLAY` directory automatically; a native
+command should pass `--replay-root <directory>` (or defaults to `REPLAY` under
+`--data`). Leaving, disconnecting, closing, or failing before the completed
+winner owner writes nothing. The optional `--netplay-replay-output` developer
+argument bypasses the menu and publishes the validated final V13 directly,
+using the same flush/read-back/reparse/atomic-replace transaction as numbered
+slots.
 
 For a bounded automated check, append the same `--smoke-ticks N` to both
 commands. This exits only after both peers have confirmed `N` gameplay input

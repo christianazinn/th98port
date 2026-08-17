@@ -82,6 +82,7 @@ void test_help_and_valid_defaults()
 	auto host_arguments = valid_arguments();
 	host_arguments.insert(host_arguments.end(), {"--netplay-host", "31415"});
 	host_arguments.insert(host_arguments.end(), {
+		"--replay-root", "replays",
 		"--netplay-replay-output", "output/NETPLAY.RPY"
 	});
 	const auto host = th03::app::parse_direct_vs_cli(host_arguments);
@@ -94,6 +95,7 @@ void test_help_and_valid_defaults()
 		th03::app::DirectVsNetplayMode::host &&
 		host->netplay_host_port == 31415U &&
 		host->launch.process.game_options.three_digit_combos &&
+		host->replay_root == std::filesystem::path("replays") &&
 		host->netplay_replay_output ==
 			std::filesystem::path("output/NETPLAY.RPY") && join &&
 		join->netplay_mode == th03::app::DirectVsNetplayMode::join &&
@@ -186,6 +188,10 @@ void test_cli_rejections()
 		"--vs", "--data", "d", "--main", "m", "--font", "f",
 		"--netplay-replay-output", "out.rpy",
 	});
+	const auto root_without_netplay = parse({
+		"--vs", "--data", "d", "--main", "m", "--font", "f",
+		"--replay-root", "replays",
+	});
 	const auto empty_output = parse({
 		"--vs", "--data", "d", "--main", "m", "--font", "f",
 		"--netplay-host", "31415", "--netplay-replay-output", "",
@@ -233,6 +239,8 @@ void test_cli_rejections()
 		"invalid or conflicting netplay endpoints fail closed");
 	expect(!output_without_netplay && output_without_netplay.error().code ==
 		th03::app::DirectVsCliErrorCode::conflicting_netplay_mode &&
+		!root_without_netplay && root_without_netplay.error().code ==
+			th03::app::DirectVsCliErrorCode::conflicting_netplay_mode &&
 		!empty_output && empty_output.error().code ==
 			th03::app::DirectVsCliErrorCode::invalid_replay_output,
 		"netplay replay output requires one active netplay role and a path");

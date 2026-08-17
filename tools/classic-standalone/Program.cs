@@ -160,6 +160,7 @@ internal static class Program
                 "--data", content,
                 "--main", Path.Combine(content, "MAIN.EXE"),
                 "--font", Path.Combine(content, "FONT.ROM"),
+                "--replay-root", replayRoot,
             } :
             new List<string>
             {
@@ -273,6 +274,7 @@ internal static class Program
             "--seed",
             "--tick-rate",
             "--smoke-ticks",
+            "--netplay-replay-output",
         };
         for(var index = 0; index < commandLine.Count; index += 2)
         {

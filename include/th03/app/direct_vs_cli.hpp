@@ -30,6 +30,7 @@ enum class DirectVsCliOption : std::uint8_t {
 	smoke_ticks,
 	netplay_host,
 	netplay_join,
+	replay_root,
 	netplay_replay_output,
 };
 
@@ -68,6 +69,7 @@ struct DirectVsCliRequest {
 	DirectVsNetplayMode netplay_mode = DirectVsNetplayMode::none;
 	std::uint16_t netplay_host_port = 0U;
 	std::string netplay_join_endpoint{};
+	std::filesystem::path replay_root{};
 	std::optional<std::filesystem::path> netplay_replay_output{};
 };
 

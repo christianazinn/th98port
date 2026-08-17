@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <new>
 #include <optional>
@@ -200,6 +201,7 @@ struct HostUiStep final {
 struct ReplaySaveRunResult final {
 	int exit_code = 0;
 	bool application_quit = false;
+	bool replay_published = false;
 };
 
 struct ReplaySaveAudioContext final {
@@ -530,6 +532,7 @@ void print_usage()
 			"[--tick-rate <ticks>/<seconds>] "
 			"[--smoke-ticks n] [--netplay-host <port> | "
 			"--netplay-join <IPv4-or-hostname:port>] "
+			"[--replay-root <directory>] "
 			"[--netplay-replay-output <V13.RPY>]\n"
 		<< "characters: reimu mima marisa ellen kotohime kana rikako "
 			"chiyuri yumemi\n"
@@ -788,6 +791,7 @@ const char *name(th03::app::DirectVsCliOption option) noexcept
 	case th03::app::DirectVsCliOption::smoke_ticks: return "smoke-ticks";
 	case th03::app::DirectVsCliOption::netplay_host: return "netplay-host";
 	case th03::app::DirectVsCliOption::netplay_join: return "netplay-join";
+	case th03::app::DirectVsCliOption::replay_root: return "replay-root";
 	case th03::app::DirectVsCliOption::netplay_replay_output: return "netplay-replay-output";
 	}
 	return "unknown";
@@ -1379,6 +1383,109 @@ void apply_netplay_contract(
 	return 1;
 }
 
+struct DirectNetplayReplaySaveResources final {
+	std::filesystem::path replay_root{};
+	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets>
+		patch_assets{};
+	std::shared_ptr<const th03::app::NewClassicReplaySaveArt> save_art{};
+};
+
+[[nodiscard]] std::expected<std::vector<std::byte>, int>
+read_direct_netplay_replay_save_file(
+	const std::filesystem::path &path,
+	const char *code
+)
+{
+	std::error_code system{};
+	const auto status = std::filesystem::status(path, system);
+	if(system || !std::filesystem::is_regular_file(status)) {
+		return std::unexpected(fail_netplay(
+			"netplay-replay-save-art", code
+		));
+	}
+	const auto size = std::filesystem::file_size(path, system);
+	if(system || size > static_cast<std::uintmax_t>(
+		std::numeric_limits<std::size_t>::max()
+	) || size > static_cast<std::uintmax_t>(
+		std::numeric_limits<std::streamsize>::max()
+	)) {
+		return std::unexpected(fail_netplay(
+			"netplay-replay-save-art", code
+		));
+	}
+	std::ifstream input(path, std::ios::binary);
+	if(!input) {
+		return std::unexpected(fail_netplay(
+			"netplay-replay-save-art", code
+		));
+	}
+	std::vector<std::byte> bytes(static_cast<std::size_t>(size));
+	if(!bytes.empty()) {
+		input.read(
+			reinterpret_cast<char *>(bytes.data()),
+			static_cast<std::streamsize>(bytes.size())
+		);
+	}
+	if(!input || input.peek() != std::ifstream::traits_type::eof()) {
+		return std::unexpected(fail_netplay(
+			"netplay-replay-save-art", code
+		));
+	}
+	return bytes;
+}
+
+[[nodiscard]] std::expected<DirectNetplayReplaySaveResources, int>
+prepare_direct_netplay_replay_save_resources(
+	const th03::app::DirectVsContentPaths &content
+)
+{
+	auto patch = th03::app::load_new_classic_replay_patch_assets(
+		content.data_root / "AZINN.DAT"
+	);
+	if(!patch) {
+		return std::unexpected(fail_netplay(
+			"netplay-replay-save-art", "patch-assets"
+		));
+	}
+	auto patch_assets = std::make_shared<
+		const th03::app::NewClassicReplayPatchAssets
+	>(std::move(*patch));
+
+	th03::app::MainResourceLoader loader(content.data_root);
+	auto normal = loader.load({
+		.role = th03::app::MainResourceRole::registration_normal_glyphs,
+	});
+	auto highlight = loader.load({
+		.role = th03::app::MainResourceRole::registration_highlight_glyphs,
+	});
+	if(!normal || !highlight) {
+		return std::unexpected(fail_netplay(
+			"netplay-replay-save-art", "registration-glyphs"
+		));
+	}
+	auto font = read_direct_netplay_replay_save_file(
+		content.font_rom, "font-rom"
+	);
+	if(!font) {
+		return std::unexpected(font.error());
+	}
+	auto save_art = th03::app::NewClassicReplaySaveArt::prepare(
+		std::span<const std::byte>{**normal},
+		std::span<const std::byte>{**highlight},
+		*font
+	);
+	if(!save_art) {
+		return std::unexpected(fail_netplay(
+			"netplay-replay-save-art", "prepare"
+		));
+	}
+	return DirectNetplayReplaySaveResources{
+		.replay_root = content.data_root / "REPLAY",
+		.patch_assets = std::move(patch_assets),
+		.save_art = std::move(*save_art),
+	};
+}
+
 void log_netplay_session_error(
 	const th03::app::NewClassicNetplayMainSessionError &error
 )
@@ -1631,6 +1738,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	std::uint64_t session_id = lobby.session_id();
 	const auto audio_data_root = parsed.launch.content.data_root;
 	const auto post_match_content = parsed.launch.content;
+	const auto replay_save_content = parsed.launch.content;
 
 	auto process = th03::app::load_direct_vs_process(std::move(parsed.launch));
 	if(!process) {
@@ -2666,6 +2774,7 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			if(!encoded) {
 				return fail_netplay("netplay-replay", "encode-failed");
 			}
+			bool replay_published = false;
 			if(parsed.netplay_replay_output) {
 				auto published = th03::app::commit_exact_replay_file(
 					*parsed.netplay_replay_output, *encoded
@@ -2677,12 +2786,42 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 						"netplay-replay", "publish-failed"
 					);
 				}
+				replay_published = true;
+			} else {
+				auto resources =
+					prepare_direct_netplay_replay_save_resources(
+						replay_save_content
+					);
+				if(!resources) {
+					return resources.error();
+				}
+				if(!parsed.replay_root.empty()) {
+					resources->replay_root = parsed.replay_root;
+				}
+				auto saved = run_replay_save(
+					std::move(*completed), resources->replay_root,
+					parsed.tick_rate, **platform, *mapper,
+					std::move(resources->patch_assets),
+					std::move(resources->save_art),
+					{
+						.session = audio_session.get(),
+						.device = &audio_device,
+						.started = &audio_started,
+					}
+				);
+				if(saved.exit_code != 0) {
+					return saved.exit_code;
+				}
+				if(saved.application_quit) {
+					return leave_preview();
+				}
+				replay_published = saved.replay_published;
 			}
 			std::cout << "status=match-complete\nframes=" <<
 				(*session)->confirmed_frame_count() << "\nreplay-frames=" <<
 				replay_capture.frame_count() << "\nreplay-ready=1\nreplay-bytes=" <<
 				encoded->size() << "\nreplay-published=" <<
-				(parsed.netplay_replay_output ? 1 : 0) << '\n';
+				(replay_published ? 1 : 0) << '\n';
 			return 0;
 		}
 		if(parsed.smoke_ticks && local_frames >= *parsed.smoke_ticks &&
@@ -4217,6 +4356,7 @@ ReplaySaveRunResult run_replay_save(
 		&current_dos_date
 	);
 	bool application_quit = false;
+	bool replay_published = false;
 	auto driven = run_host_ui(
 		tick_rate, platform, mapper,
 		[&]() { return menu.surface(); },
@@ -4229,6 +4369,7 @@ ReplaySaveRunResult run_replay_save(
 					replay_root, menu.selected_slot(), menu.document()
 				);
 				if(committed) {
+					replay_published = true;
 					auto refreshed = th03::app::scan_new_classic_replays(replay_root);
 					if(!refreshed) {
 						return std::unexpected(fail(
@@ -4254,7 +4395,10 @@ ReplaySaveRunResult run_replay_save(
 	if(!driven) {
 		return {.exit_code = driven.error()};
 	}
-	return {.application_quit = application_quit};
+	return {
+		.application_quit = application_quit,
+		.replay_published = replay_published,
+	};
 }
 
 std::expected<
