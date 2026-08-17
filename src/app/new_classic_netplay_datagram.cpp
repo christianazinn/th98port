@@ -53,7 +53,9 @@ void put_u64(std::span<std::byte> output, std::size_t offset,
 		type == NewClassicNetplayDatagramType::simulation_digest ||
 		type == NewClassicNetplayDatagramType::simulation_digest_ack ||
 		type == NewClassicNetplayDatagramType::pause_waiting ||
-		type == NewClassicNetplayDatagramType::resume_ready;
+		type == NewClassicNetplayDatagramType::resume_ready ||
+		type == NewClassicNetplayDatagramType::forfeit_request ||
+		type == NewClassicNetplayDatagramType::forfeit_ack;
 }
 
 [[nodiscard]] bool valid_sender(NewClassicNetplayPlayer sender) noexcept
@@ -117,7 +119,9 @@ validate(const NewClassicNetplayDatagram &datagram) noexcept
 		NewClassicNetplayDatagramType::simulation_digest_ack;
 	const bool pause_signal = datagram.type ==
 			NewClassicNetplayDatagramType::pause_waiting ||
-		datagram.type == NewClassicNetplayDatagramType::resume_ready;
+		datagram.type == NewClassicNetplayDatagramType::resume_ready ||
+		datagram.type == NewClassicNetplayDatagramType::forfeit_request ||
+		datagram.type == NewClassicNetplayDatagramType::forfeit_ack;
 	if(input) {
 		if(datagram.input_count == 0U ||
 			datagram.input_count > datagram.inputs.size() ||
@@ -248,7 +252,9 @@ std::expected<
 		};
 	} else if(datagram.type ==
 			NewClassicNetplayDatagramType::pause_waiting ||
-		datagram.type == NewClassicNetplayDatagramType::resume_ready) {
+		datagram.type == NewClassicNetplayDatagramType::resume_ready ||
+		datagram.type == NewClassicNetplayDatagramType::forfeit_request ||
+		datagram.type == NewClassicNetplayDatagramType::forfeit_ack) {
 		result[boundary_proof_offset] = std::byte{
 			static_cast<std::uint8_t>(datagram.boundary_proof)
 		};
@@ -333,7 +339,9 @@ decode_new_classic_netplay_datagram(
 		}
 	} else if(result.type ==
 			NewClassicNetplayDatagramType::pause_waiting ||
-		result.type == NewClassicNetplayDatagramType::resume_ready) {
+		result.type == NewClassicNetplayDatagramType::resume_ready ||
+		result.type == NewClassicNetplayDatagramType::forfeit_request ||
+		result.type == NewClassicNetplayDatagramType::forfeit_ack) {
 		result.boundary_proof = static_cast<NewClassicNetplayBoundaryProof>(
 			std::to_integer<std::uint8_t>(wire[boundary_proof_offset])
 		);

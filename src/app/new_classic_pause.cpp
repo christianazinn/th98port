@@ -1,6 +1,7 @@
 #include "th03/app/new_classic_pause.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <utility>
@@ -80,6 +81,12 @@ NewClassicPauseMenu::NewClassicPauseMenu(
 
 void NewClassicPauseMenu::move(int delta) noexcept
 {
+	if(presentation_ == NewClassicPausePresentation::netplay_wait) {
+		choice_ = choice_ == NewClassicPauseChoice::resume ?
+			NewClassicPauseChoice::discard_exit :
+			NewClassicPauseChoice::resume;
+		return;
+	}
 	auto next = static_cast<int>(index_of(choice_)) + delta;
 	if(next < 0) {
 		next = 3;
@@ -119,6 +126,31 @@ NewClassicPauseStatus NewClassicPauseMenu::consume(
 		if(!input.raw_any) {
 			status_ = NewClassicPauseStatus::resume;
 			visible_ = false;
+		}
+		return status_;
+	}
+	if(presentation_ == NewClassicPausePresentation::netplay_wait) {
+		if(input.quit) {
+			status_ = NewClassicPauseStatus::discard_exit;
+			return status_;
+		}
+		if(input.cancel) {
+			choice_ = NewClassicPauseChoice::resume;
+			phase_ = Phase::release_after_resume;
+			return status_;
+		}
+		if(input.up || input.down) {
+			move(input.up ? -1 : 1);
+			phase_ = Phase::release_before_choice;
+			return status_;
+		}
+		if(!input.confirm) {
+			return status_;
+		}
+		if(choice_ == NewClassicPauseChoice::resume) {
+			phase_ = Phase::release_after_resume;
+		} else {
+			status_ = NewClassicPauseStatus::discard_exit;
 		}
 		return status_;
 	}
@@ -190,20 +222,30 @@ void NewClassicPauseMenu::draw() noexcept
 		pause_vram_cyan
 	);
 	if(presentation_ == NewClassicPausePresentation::netplay_wait) {
-		put_gaiji(
-			pause_choice_mark_left,
-			pause_choice_first_row,
-			pause_gaiji_cursor,
-			1U,
-			pause_vram_yellow
-		);
-		put_gaiji(
-			pause_gaiji_text_left,
-			pause_choice_first_row,
-			pause_gaiji_resume,
-			5U,
-			pause_vram_yellow
-		);
+		const std::array choices{
+			NewClassicPauseChoice::resume,
+			NewClassicPauseChoice::discard_exit,
+		};
+		for(std::size_t index = 0U; index < choices.size(); ++index) {
+			const auto selected = choices[index] == choice_;
+			const auto color = selected ? pause_vram_yellow : pause_vram_white;
+			if(selected) {
+				put_gaiji(
+					pause_choice_mark_left,
+					pause_choice_first_row + index,
+					pause_gaiji_cursor,
+					1U,
+					color
+				);
+			}
+			put_gaiji(
+				pause_gaiji_text_left,
+				pause_choice_first_row + index,
+				index == 0U ? pause_gaiji_resume : pause_gaiji_discard_exit,
+				index == 0U ? 5U : 11U,
+				color
+			);
+		}
 		return;
 	}
 

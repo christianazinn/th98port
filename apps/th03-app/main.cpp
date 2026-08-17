@@ -2021,6 +2021,12 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		std::cout << "status=left\n";
 		return 0;
 	};
+	const auto finish_forfeit = [&](const char *outcome) -> int {
+		std::cout << "status=match-forfeited\nforfeit-outcome=" << outcome <<
+			"\nreplay-ready=0\nreplay-published=0\n";
+		std::cout.flush();
+		return 0;
+	};
 	const auto match_runtime_digests = [&]() -> std::expected<void, int> {
 		if(!local_runtime_digest || !remote_runtime_digest) {
 			return {};
@@ -2639,7 +2645,11 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			if((packet->type ==
 					NewClassicNetplayDatagramType::pause_waiting ||
 				 packet->type ==
-					NewClassicNetplayDatagramType::resume_ready) &&
+					NewClassicNetplayDatagramType::resume_ready ||
+				 packet->type ==
+					NewClassicNetplayDatagramType::forfeit_request ||
+				 packet->type ==
+					NewClassicNetplayDatagramType::forfeit_ack) &&
 				packet->sender == remote_player &&
 				packet->session_id == session_id) {
 				if(!pause_barrier ||
@@ -2655,6 +2665,36 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 					);
 				}
 				last_receive_ns = now_ns;
+				if(packet->type ==
+					NewClassicNetplayDatagramType::forfeit_request) {
+					const bool mutual = pause_barrier->local_forfeit();
+					const NewClassicNetplayDatagram acknowledgement{
+						.type = NewClassicNetplayDatagramType::forfeit_ack,
+						.sender = local_player,
+						.session_id = session_id,
+						.contract_hash = contract_hash,
+						.latest_frame = pause_barrier->frame(),
+						.confirmed_frame_count =
+							pause_barrier->confirmed_gameplay_frame_count(),
+						.boundary_proof =
+							th03::app::NewClassicNetplayBoundaryProof::pause,
+					};
+					bool sent = false;
+					for(std::uint8_t attempt = 0U; attempt < 3U; ++attempt) {
+						sent = send_netplay_datagram(
+							*socket, *peer, acknowledgement
+						) || sent;
+					}
+					if(!sent) {
+						return fail_netplay(
+							"netplay-forfeit", "ack-send-failed"
+						);
+					}
+					return finish_forfeit(mutual ? "mutual" : "win");
+				}
+				if(packet->type == NewClassicNetplayDatagramType::forfeit_ack) {
+					return finish_forfeit("loss");
+				}
 				if(const auto resumed = resume_pause_if_ready(now_ns); !resumed) {
 					return resumed.error();
 				}
@@ -2862,11 +2902,32 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				if((**due).app_quit_requested) {
 					return leave_preview();
 				}
-				const bool was_ready = pause_barrier->local_ready();
-				pause_barrier->consume_local((**due).input);
+				if(!pause_overlay) {
+					return fail_netplay("netplay-pause", "overlay-missing");
+				}
+				const auto was_ready = pause_barrier->local_ready();
+				const auto was_forfeit = pause_barrier->local_forfeit();
+				const auto pause_status = pause_overlay->consume(
+					th03::app::project_new_classic_pause_input((**due).input)
+				);
+				presentation_pending = true;
+				if(pause_status == th03::app::NewClassicPauseStatus::resume) {
+					pause_barrier->choose_local_resume();
+				} else if(pause_status ==
+					th03::app::NewClassicPauseStatus::discard_exit) {
+					pause_barrier->choose_local_forfeit();
+				} else if(pause_status !=
+					th03::app::NewClassicPauseStatus::running) {
+					return fail_netplay("netplay-pause", "invalid-choice");
+				}
 				if(!was_ready && pause_barrier->local_ready()) {
 					last_pause_signal_send_ns = 0U;
 					std::cout << "status=resume-ready-local\n";
+					std::cout.flush();
+				}
+				if(!was_forfeit && pause_barrier->local_forfeit()) {
+					last_pause_signal_send_ns = 0U;
+					std::cout << "status=forfeit-requested-local\n";
 					std::cout.flush();
 				}
 				if(const auto resumed = resume_pause_if_ready(now_ns); !resumed) {

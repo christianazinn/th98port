@@ -56,7 +56,9 @@ The MSVC preset uses Visual Studio 2022 x64. The GCC preset uses the standard
 
 The direct IPv4/Tailscale New Classic netplay technical preview, including
 Windows standalone-host and Arch Linux join commands, is documented in
-[`docs/NETPLAY_TESTING.md`](docs/NETPLAY_TESTING.md).
+[`docs/NETPLAY_TESTING.md`](docs/NETPLAY_TESTING.md). Its synchronized Pause
+offers Resume or Forfeit; Forfeit ends both previews without inventing a TH03
+winner or publishing the incomplete in-memory replay.
 
 ### Optional Classic and direct-VS application
 

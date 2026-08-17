@@ -45,8 +45,23 @@ void NewClassicNetplayPauseBarrier::consume_local(CoreInput input) noexcept
 		return;
 	}
 	if((input.system & input_cancel) != 0U) {
+		choose_local_resume();
+	}
+}
+
+void NewClassicNetplayPauseBarrier::choose_local_resume() noexcept
+{
+	if(!local_forfeit_ && !remote_forfeit_) {
+		released_ = true;
 		local_ready_ = true;
 	}
+}
+
+void NewClassicNetplayPauseBarrier::choose_local_forfeit() noexcept
+{
+	released_ = true;
+	local_forfeit_ = true;
+	local_ready_ = false;
 }
 
 std::expected<void, NewClassicNetplayPauseBarrierError>
@@ -63,6 +78,20 @@ NewClassicNetplayPauseBarrier::receive(
 		));
 	}
 	if(signal == NewClassicNetplayDatagramType::pause_waiting) {
+		return {};
+	}
+	if(signal == NewClassicNetplayDatagramType::forfeit_request) {
+		remote_forfeit_ = true;
+		remote_ready_ = false;
+		return {};
+	}
+	if(signal == NewClassicNetplayDatagramType::forfeit_ack) {
+		if(!local_forfeit_) {
+			return std::unexpected(barrier_error(
+				NewClassicNetplayPauseBarrierErrorCode::invalid_signal
+			));
+		}
+		forfeit_acknowledged_ = true;
 		return {};
 	}
 	if(signal != NewClassicNetplayDatagramType::resume_ready) {
@@ -82,6 +111,11 @@ NewClassicNetplayPauseBarrier::observe_peer_gameplay(
 	if(frame < frame_) {
 		return {};
 	}
+	if(local_forfeit_ || remote_forfeit_) {
+		return std::unexpected(barrier_error(
+			NewClassicNetplayPauseBarrierErrorCode::invalid_signal
+		));
+	}
 	if(!local_ready_) {
 		return std::unexpected(barrier_error(
 			NewClassicNetplayPauseBarrierErrorCode::
@@ -95,6 +129,12 @@ NewClassicNetplayPauseBarrier::observe_peer_gameplay(
 NewClassicNetplayDatagramType
 NewClassicNetplayPauseBarrier::outbound_signal() const noexcept
 {
+	if(local_forfeit_) {
+		return NewClassicNetplayDatagramType::forfeit_request;
+	}
+	if(remote_forfeit_) {
+		return NewClassicNetplayDatagramType::forfeit_ack;
+	}
 	return local_ready_ ? NewClassicNetplayDatagramType::resume_ready :
 		NewClassicNetplayDatagramType::pause_waiting;
 }
@@ -102,6 +142,19 @@ NewClassicNetplayPauseBarrier::outbound_signal() const noexcept
 NewClassicNetplayPauseBarrierStatus
 NewClassicNetplayPauseBarrier::status() const noexcept
 {
+	if(local_forfeit_ && remote_forfeit_) {
+		return NewClassicNetplayPauseBarrierStatus::mutual_forfeit;
+	}
+	if(local_forfeit_ && forfeit_acknowledged_) {
+		return NewClassicNetplayPauseBarrierStatus::
+			local_forfeit_acknowledged;
+	}
+	if(local_forfeit_) {
+		return NewClassicNetplayPauseBarrierStatus::local_forfeit_waiting;
+	}
+	if(remote_forfeit_) {
+		return NewClassicNetplayPauseBarrierStatus::remote_forfeit;
+	}
 	if(!released_) {
 		return NewClassicNetplayPauseBarrierStatus::waiting_release;
 	}
@@ -127,7 +180,7 @@ NewClassicNetplayPauseBarrier::confirmed_gameplay_frame_count() const noexcept
 
 bool NewClassicNetplayPauseBarrier::ready() const noexcept
 {
-	return local_ready_ && remote_ready_;
+	return !local_forfeit_ && !remote_forfeit_ && local_ready_ && remote_ready_;
 }
 
 bool NewClassicNetplayPauseBarrier::local_ready() const noexcept
@@ -138,6 +191,21 @@ bool NewClassicNetplayPauseBarrier::local_ready() const noexcept
 bool NewClassicNetplayPauseBarrier::remote_ready() const noexcept
 {
 	return remote_ready_;
+}
+
+bool NewClassicNetplayPauseBarrier::local_forfeit() const noexcept
+{
+	return local_forfeit_;
+}
+
+bool NewClassicNetplayPauseBarrier::remote_forfeit() const noexcept
+{
+	return remote_forfeit_;
+}
+
+bool NewClassicNetplayPauseBarrier::forfeit_acknowledged() const noexcept
+{
+	return forfeit_acknowledged_;
 }
 
 } // namespace th03::app

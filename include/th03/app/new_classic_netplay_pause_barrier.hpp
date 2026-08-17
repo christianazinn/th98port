@@ -14,6 +14,10 @@ enum class NewClassicNetplayPauseBarrierStatus : std::uint8_t {
 	waiting_local_ready,
 	waiting_remote_ready,
 	ready,
+	local_forfeit_waiting,
+	remote_forfeit,
+	mutual_forfeit,
+	local_forfeit_acknowledged,
 };
 
 enum class NewClassicNetplayPauseBarrierErrorCode : std::uint8_t {
@@ -41,6 +45,8 @@ public:
 	) noexcept;
 
 	void consume_local(CoreInput input) noexcept;
+	void choose_local_resume() noexcept;
+	void choose_local_forfeit() noexcept;
 	[[nodiscard]] std::expected<void, NewClassicNetplayPauseBarrierError>
 	receive(
 		NewClassicNetplayDatagramType signal,
@@ -60,6 +66,9 @@ public:
 	[[nodiscard]] bool ready() const noexcept;
 	[[nodiscard]] bool local_ready() const noexcept;
 	[[nodiscard]] bool remote_ready() const noexcept;
+	[[nodiscard]] bool local_forfeit() const noexcept;
+	[[nodiscard]] bool remote_forfeit() const noexcept;
+	[[nodiscard]] bool forfeit_acknowledged() const noexcept;
 
 private:
 	std::uint64_t frame_ = 0U;
@@ -67,6 +76,9 @@ private:
 	bool released_ = false;
 	bool local_ready_ = false;
 	bool remote_ready_ = false;
+	bool local_forfeit_ = false;
+	bool remote_forfeit_ = false;
+	bool forfeit_acknowledged_ = false;
 };
 
 } // namespace th03::app

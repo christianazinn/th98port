@@ -169,7 +169,7 @@ void test_overlay_preserves_base_and_palette()
 		(160U * th03::present::graphics_width) + 208U;
 	const auto resume_bit =
 		(160U * th03::present::graphics_width) + 224U;
-	const auto restart_bit =
+	const auto second_choice_bit =
 		(176U * th03::present::graphics_width) + 224U;
 	expect(
 		overlay.pixels[cursor_bit].layer ==
@@ -179,9 +179,9 @@ void test_overlay_preserves_base_and_palette()
 		"selected cursor and Resume gaiji expose bright-yellow backing"
 	);
 	expect(
-		overlay.pixels[restart_bit].layer ==
+		overlay.pixels[second_choice_bit].layer ==
 			th03::present::ComposedPixelLayer::graphics &&
-		overlay.pixels[restart_bit].value == 15U,
+		overlay.pixels[second_choice_bit].value == 15U,
 		"unselected Restart gaiji exposes white backing"
 	);
 	expect(
@@ -224,12 +224,32 @@ void test_overlay_preserves_base_and_palette()
 		"network Pause uses the authenticated selected Resume gaiji"
 	);
 	expect(
-		network_overlay.pixels[restart_bit] ==
+		network_overlay.pixels[second_choice_bit].layer ==
+			th03::present::ComposedPixelLayer::graphics &&
+		network_overlay.pixels[second_choice_bit].value == 15U,
+		"network Pause reuses the authenticated Discard and Exit row as Forfeit"
+	);
+	const auto unavailable_third_row =
+		(192U * th03::present::graphics_width) + 224U;
+	expect(
+		network_overlay.pixels[unavailable_third_row] ==
 			th03::present::ComposedPixel{
 				th03::present::ComposedPixelLayer::text, 0U
 			},
-		"network Pause does not advertise unavailable ordinary menu actions"
+		"network Pause does not advertise Restart or Save"
 	);
+	static_cast<void>(network.consume({.down = true, .raw_any = true}));
+	const auto selected_forfeit = network.compose_over(original);
+	const auto second_cursor_bit =
+		(176U * th03::present::graphics_width) + 208U;
+	expect(network.choice() == NewClassicPauseChoice::discard_exit &&
+		selected_forfeit.pixels[second_cursor_bit].value == 12U &&
+		selected_forfeit.pixels[second_choice_bit].value == 12U,
+		"network Pause navigation selects the visible Forfeit action");
+	release(network);
+	expect(network.consume({.confirm = true, .raw_any = true}) ==
+		NewClassicPauseStatus::discard_exit,
+		"network Pause confirms Forfeit without exposing local Save or Restart");
 }
 
 void test_input_projection()

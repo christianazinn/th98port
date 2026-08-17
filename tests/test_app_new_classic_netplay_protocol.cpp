@@ -146,7 +146,7 @@ void test_datagram_contract()
 		(*encoded)[1U] == std::byte{'3'} &&
 		(*encoded)[2U] == std::byte{'N'} &&
 		(*encoded)[3U] == std::byte{'P'} &&
-		(*encoded)[4U] == std::byte{6U} &&
+		(*encoded)[4U] == std::byte{7U} &&
 		(*encoded)[5U] == std::byte{3U} &&
 		(*encoded)[6U] == std::byte{1U} &&
 		(*encoded)[7U] == std::byte{2U} &&
@@ -184,7 +184,6 @@ void test_datagram_contract()
 		expect(false, "valid datagram reaches corruption checks");
 		expect(false, "valid datagram reaches nested input checks");
 	}
-
 	NewClassicNetplayDatagram hello{
 		.type = NewClassicNetplayDatagramType::hello,
 		.sender = NewClassicNetplayPlayer::player_two,
@@ -362,6 +361,24 @@ void test_pause_barrier()
 		decoded->confirmed_frame_count == gameplay &&
 		decoded->boundary_proof == NewClassicNetplayBoundaryProof::pause,
 		"Pause-waiting signal round-trips exact confirmed boundary identity");
+	for(const auto type : std::array{
+		NewClassicNetplayDatagramType::forfeit_request,
+		NewClassicNetplayDatagramType::forfeit_ack,
+	}) {
+		auto signal = waiting;
+		signal.type = type;
+		const auto wire = encode_new_classic_netplay_datagram(signal);
+		const auto round_trip = wire ?
+			decode_new_classic_netplay_datagram(*wire) :
+			std::expected<NewClassicNetplayDatagram,
+				NewClassicNetplayDatagramError>{
+					std::unexpected(NewClassicNetplayDatagramError{})
+				};
+		expect(round_trip && round_trip->type == type &&
+			round_trip->latest_frame == frame &&
+			round_trip->confirmed_frame_count == gameplay,
+			"Forfeit control round-trips the exact confirmed Pause identity");
+	}
 	if(encoded) {
 		auto corrupt = *encoded;
 		corrupt[40U] = std::byte{1U};
@@ -433,6 +450,52 @@ void test_pause_barrier()
 			NewClassicNetplayPauseBarrierErrorCode::
 				peer_resumed_before_local_ready,
 			"peer gameplay cannot override the local Resume choice");
+	}
+	auto local_forfeit = NewClassicNetplayPauseBarrier::create(frame, gameplay);
+	if(local_forfeit) {
+		local_forfeit->choose_local_forfeit();
+		expect(local_forfeit->status() ==
+				NewClassicNetplayPauseBarrierStatus::local_forfeit_waiting &&
+			local_forfeit->outbound_signal() ==
+				NewClassicNetplayDatagramType::forfeit_request &&
+			!local_forfeit->ready(),
+			"local Forfeit supersedes Resume and retries a typed request");
+		expect(local_forfeit->receive(
+			NewClassicNetplayDatagramType::forfeit_ack, frame, gameplay
+		).has_value() && local_forfeit->forfeit_acknowledged() &&
+			local_forfeit->status() ==
+				NewClassicNetplayPauseBarrierStatus::
+					local_forfeit_acknowledged,
+			"Forfeit acknowledgement completes the local losing route");
+	}
+	auto remote_forfeit = NewClassicNetplayPauseBarrier::create(frame, gameplay);
+	if(remote_forfeit) {
+		expect(remote_forfeit->receive(
+			NewClassicNetplayDatagramType::forfeit_request, frame, gameplay
+		).has_value() && remote_forfeit->remote_forfeit() &&
+			remote_forfeit->status() ==
+				NewClassicNetplayPauseBarrierStatus::remote_forfeit &&
+			remote_forfeit->outbound_signal() ==
+				NewClassicNetplayDatagramType::forfeit_ack,
+			"remote Forfeit selects the local winning acknowledgement route");
+	}
+	auto mutual = NewClassicNetplayPauseBarrier::create(frame, gameplay);
+	if(mutual) {
+		mutual->choose_local_forfeit();
+		expect(mutual->receive(
+			NewClassicNetplayDatagramType::forfeit_request, frame, gameplay
+		).has_value() && mutual->status() ==
+			NewClassicNetplayPauseBarrierStatus::mutual_forfeit,
+			"crossed Forfeit requests resolve to one mutual terminal state");
+	}
+	auto unsolicited_ack = NewClassicNetplayPauseBarrier::create(frame, gameplay);
+	if(unsolicited_ack) {
+		const auto ack = unsolicited_ack->receive(
+			NewClassicNetplayDatagramType::forfeit_ack, frame, gameplay
+		);
+		expect(!ack && ack.error().code ==
+			NewClassicNetplayPauseBarrierErrorCode::invalid_signal,
+			"Forfeit acknowledgement without a local request fails closed");
 	}
 }
 

@@ -36,8 +36,12 @@ To resume, each player must release Esc and then press it again. The terminal
 prints `status=resume-ready-local` on each machine and resumes after both
 choices arrive. The wait does not advance the source clock, replay playtime,
 PMD, or slowdown. Both machines retain the same confirmed gameplay frame and
-draw the authenticated PAUSED/Resume artwork over it. The live network menu
-does not advertise the ordinary local Restart/Save/Discard actions.
+draw the authenticated PAUSED artwork over it. Up/Down selects between Resume
+and the authenticated `Discard and Exit` row, which is the network Forfeit
+action; Z/Return confirms and Q forfeits directly. A confirmed Forfeit ends
+both previews with complementary `forfeit-outcome=loss`/`win` results (or
+`mutual` for crossed requests), writes no replay, and never invents a TH03
+winner. Restart and Save remain unavailable while the match is live.
 
 ## Windows host from the standalone
 
@@ -138,6 +142,9 @@ remain strict. A `peer-timeout` immediately after the other process reports a
 proof failure is a cascading symptom, not a second deterministic divergence.
 An intentional local exit prints `status=left`; the other peer prints
 `status=peer-left` rather than waiting for the crash/connectivity timeout.
+Forfeit is different from closing the application: it is bound to the exact
+confirmed Pause identity, retries a typed request/ack, and both sides print
+`status=match-forfeited` plus `replay-ready=0` and `replay-published=0`.
 The preview feeds its corrected contiguous-confirmed input stream directly into
 the ordinary memory-only V13 recorder. Predicted or superseded frames never
 enter it, and each machine retains its own first-execution slowdown evidence.
@@ -147,7 +154,7 @@ authenticated New Classic Save Replay prompt/name/slot transaction. The replay
 remains entirely in memory until a numbered slot is confirmed. The standalone
 passes its selected persistent `REPLAY` directory automatically; a native
 command should pass `--replay-root <directory>` (or defaults to `REPLAY` under
-`--data`). Leaving, disconnecting, closing, or failing before the completed
+`--data`). Leaving, forfeiting, disconnecting, closing, or failing before the completed
 winner owner writes nothing. The optional `--netplay-replay-output` developer
 argument bypasses the menu and publishes the validated final V13 directly,
 using the same flush/read-back/reparse/atomic-replace transaction as numbered

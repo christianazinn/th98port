@@ -11,7 +11,7 @@
 
 namespace th03::app {
 
-inline constexpr std::uint8_t new_classic_netplay_datagram_version = 6U;
+inline constexpr std::uint8_t new_classic_netplay_datagram_version = 7U;
 inline constexpr std::size_t new_classic_netplay_history_values = 16U;
 inline constexpr std::size_t new_classic_netplay_datagram_bytes = 104U;
 inline constexpr std::size_t new_classic_netplay_simulation_digest_bytes = 32U;
@@ -25,6 +25,8 @@ enum class NewClassicNetplayDatagramType : std::uint8_t {
 	simulation_digest_ack = 6U,
 	pause_waiting = 7U,
 	resume_ready = 8U,
+	forfeit_request = 9U,
+	forfeit_ack = 10U,
 };
 
 enum class NewClassicNetplayProofOrder : std::uint8_t {
