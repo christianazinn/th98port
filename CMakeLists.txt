@@ -571,6 +571,7 @@ add_library(th03_app_main STATIC
 	src/app/new_classic_key_config_scene.cpp
 	src/app/new_classic_language.cpp
 	src/app/new_classic_messages.cpp
+	src/app/new_classic_netplay_protocol.cpp
 	src/app/new_classic_online_client.cpp
 	src/app/new_classic_online_task.cpp
 	src/app/new_classic_playback.cpp
@@ -1271,6 +1272,18 @@ if(BUILD_TESTING)
 
 	add_executable(th03-app-new-classic-assets-tests
 		tests/test_app_new_classic_assets.cpp
+	)
+
+	add_executable(th03-app-new-classic-netplay-protocol-tests
+		tests/test_app_new_classic_netplay_protocol.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-netplay-protocol-tests PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-new-classic-netplay-protocol-tests)
+	add_test(
+		NAME th03-app-new-classic-netplay-protocol-tests
+		COMMAND th03-app-new-classic-netplay-protocol-tests
 	)
 
 	add_executable(th03-app-new-classic-key-config-scene-tests

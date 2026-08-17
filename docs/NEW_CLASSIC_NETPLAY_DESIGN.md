@@ -1,6 +1,6 @@
 # New Classic netplay design
 
-Status: **durable proposal; phase N0 local rollback implementation is active**
+Status: **durable proposal; phase N0 is green and phase N1 is active**
 
 Proposal revision date: 2026-08-16
 
@@ -490,6 +490,12 @@ After agreement, both clients create source-fresh MAIN state and exchange the
 SHA-256 simulation digest at frame zero. Gameplay begins only if those digests
 match.
 
+The backend-neutral owned-player gameplay value is now frozen as the exact
+four-byte little-endian schema in `T3NET001.md`. It contains only one player's
+post-KeyConfig logical word, binary Charge contribution, and a zero reserved
+byte. The match contract supplies player ownership; system/application input
+is never accepted through this stream.
+
 ## Desync handling and replay ownership
 
 Every confirmed round start, every 120 confirmed gameplay frames, and the
@@ -676,11 +682,15 @@ explicit N1 integration gates rather than reasons to alter the rollback image.
 
 ### N1: middleware and simulated transport
 
-1. Build the pinned GGRS C ABI spike and custom queued `NonBlockingSocket`.
-2. Fulfill Save/Load/Advance requests from `MainProcess`.
-3. Add a deterministic in-process latency/loss/reorder simulator.
-4. Freeze prediction, delay, confirmation, digest, and replay-journal behavior.
-5. Decide GGRS versus the single fallback backend using the objective spike
+1. Freeze the backend-neutral owned-player input value. Complete as
+   `T3NET001`: exact four-byte wire, strict validation, and independent P1/P2
+   composition.
+2. Add a deterministic in-process latency/loss/reorder simulator and resolved
+   input timeline around the existing local coordinator.
+3. Build the pinned GGRS C ABI spike and custom queued `NonBlockingSocket`.
+4. Fulfill Save/Load/Advance requests from `MainProcess`.
+5. Freeze prediction, delay, confirmation, digest, and replay-journal behavior.
+6. Decide GGRS versus the single fallback backend using the objective spike
    gates; delete the rejected production path.
 
 ### N2: portable peer transport and local signaling
