@@ -882,6 +882,22 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		system->selected_choice() == ClassicOpOptionsChoice::data_storage,
 		"Data & Storage Return restores the retained System selection");
 	expect(system->advance().has_value() &&
+		system->advance({.down = true}).has_value() &&
+		system->advance().has_value() &&
+		system->selected_choice() == ClassicOpOptionsChoice::credits,
+		"System exposes the factual Credits child");
+	expect(system->advance({.ok = true}).has_value() &&
+		system->page() == ClassicOpOptionsPage::credits &&
+		system->selected_choice() == ClassicOpOptionsChoice::return_page,
+		"Credits opens with a single retained Return action");
+	expect(system->advance().has_value(), "Credits entry releases");
+	expect(system->advance({.cancel = true}).has_value() &&
+		system->page() == ClassicOpOptionsPage::system &&
+		system->selected_choice() == ClassicOpOptionsChoice::credits,
+		"Credits Cancel restores its retained System selection");
+	expect(system->advance().has_value() &&
+		system->advance({.up = true}).has_value() &&
+		system->advance().has_value() &&
 		system->advance({.up = true}).has_value() &&
 		system->advance().has_value() &&
 		system->selected_choice() == ClassicOpOptionsChoice::switch_classic,

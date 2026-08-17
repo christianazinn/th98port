@@ -86,8 +86,9 @@ ordinary .NET runtime bundle. After the source-faithful startup it boots
 directly into New Classic, which records/browses/plays V13 replays through the
 shared typed MAIN/MAINL scene owners and owns Replay Patch's four-choice
 gameplay pause/restart loop and two-page Practice setup. New Classic's System
-Options can temporarily enter sealed Classic or open the persistent user-data
-and active replay directories; Classic Quit returns to a fresh New Classic
+Options can temporarily enter sealed Classic, open the persistent user-data
+and active replay directories, or show factual project/source credits;
+Classic Quit returns to a fresh New Classic
 title, while New Classic Quit exits the application. Its first
 launch extracts a content-hash
 cache below `%LOCALAPPDATA%\PoDD Port`, while configuration,

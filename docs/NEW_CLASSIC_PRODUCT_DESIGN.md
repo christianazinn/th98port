@@ -245,13 +245,18 @@ Diagnostics
 Return
 ```
 
-Implemented now: `Switch to Classic`, `Data & Storage`, and `Return`.
+Implemented now: `Switch to Classic`, `Data & Storage`, `Credits`, and
+`Return`.
 `Data & Storage` opens the persistent user-data directory or the active replay
 directory through a typed host action after the deterministic menu tick. The
 retained owner performs no filesystem or shell work, and Classic exposes no
-equivalent extension. `Credits`, `Online & Privacy`, `Updates`, and
-`Diagnostics` remain future destinations; do not publish disabled placeholder
-choices merely to make the target shape visible.
+equivalent extension. `Credits` uses the authenticated proportional font and
+the same row-clipped reciprocal shadow as the rest of New Classic Options. It
+contains only factual, replaceable project/source acknowledgements; the
+separately reserved project-team startup animation remains untouched.
+`Online & Privacy`, `Updates`, and `Diagnostics` remain future destinations;
+do not publish disabled placeholder choices merely to make the target shape
+visible.
 
 ## Configuration ownership
 

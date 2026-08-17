@@ -48,6 +48,7 @@ enum class ClassicOpOptionsChoice : std::uint8_t {
 	return_page,
 	switch_classic,
 	data_storage,
+	credits,
 	open_user_data,
 	open_replay_folder,
 	confirm_switch_classic,
@@ -63,6 +64,7 @@ enum class ClassicOpOptionsPage : std::uint8_t {
 	language,
 	system,
 	data_storage,
+	credits,
 	switch_confirmation,
 };
 
@@ -327,6 +329,7 @@ private:
 		ClassicOpOptionsChoice choice,
 		present::Index4 color
 	) noexcept;
+	[[nodiscard]] bool draw_patch_credits() noexcept;
 	[[nodiscard]] std::span<const ClassicOpOptionsChoice>
 	active_choices() const noexcept;
 	[[nodiscard]] std::optional<std::uint8_t>

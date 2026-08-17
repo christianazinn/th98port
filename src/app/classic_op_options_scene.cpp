@@ -132,15 +132,27 @@ constexpr std::array<ClassicOpOptionsChoice, 2U> language_choices{{
 	ClassicOpOptionsChoice::language,
 	ClassicOpOptionsChoice::return_page,
 }};
-constexpr std::array<ClassicOpOptionsChoice, 3U> system_choices{{
+constexpr std::array<ClassicOpOptionsChoice, 4U> system_choices{{
 	ClassicOpOptionsChoice::switch_classic,
 	ClassicOpOptionsChoice::data_storage,
+	ClassicOpOptionsChoice::credits,
 	ClassicOpOptionsChoice::return_page,
 }};
 constexpr std::array<ClassicOpOptionsChoice, 3U> data_storage_choices{{
 	ClassicOpOptionsChoice::open_user_data,
 	ClassicOpOptionsChoice::open_replay_folder,
 	ClassicOpOptionsChoice::return_page,
+}};
+constexpr std::array<ClassicOpOptionsChoice, 1U> credits_choices{{
+	ClassicOpOptionsChoice::return_page,
+}};
+constexpr std::array<NewClassicMessageId, 6U> credit_messages{{
+	NewClassicMessageId::credits_project,
+	NewClassicMessageId::credits_original,
+	NewClassicMessageId::credits_patch,
+	NewClassicMessageId::credits_patch_author,
+	NewClassicMessageId::credits_port,
+	NewClassicMessageId::credits_research,
 }};
 constexpr std::array<ClassicOpOptionsChoice, 2U> switch_confirmation_choices{{
 	ClassicOpOptionsChoice::confirm_switch_classic,
@@ -209,6 +221,7 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 	case ClassicOpOptionsChoice::return_page: return NewClassicMessageId::option_return;
 	case ClassicOpOptionsChoice::switch_classic: return NewClassicMessageId::option_switch_classic;
 	case ClassicOpOptionsChoice::data_storage: return NewClassicMessageId::option_data_storage;
+	case ClassicOpOptionsChoice::credits: return NewClassicMessageId::option_credits;
 	case ClassicOpOptionsChoice::open_user_data: return NewClassicMessageId::option_open_user_data;
 	case ClassicOpOptionsChoice::open_replay_folder:
 		return NewClassicMessageId::option_open_replay_folder;
@@ -937,6 +950,7 @@ ClassicOpOptionsScene::active_choices() const noexcept
 	case ClassicOpOptionsPage::language: return language_choices;
 	case ClassicOpOptionsPage::system: return system_choices;
 	case ClassicOpOptionsPage::data_storage: return data_storage_choices;
+	case ClassicOpOptionsPage::credits: return credits_choices;
 	case ClassicOpOptionsPage::switch_confirmation:
 		return switch_confirmation_choices;
 	}
@@ -953,8 +967,11 @@ std::optional<std::uint8_t> ClassicOpOptionsScene::choice_line(
 		return std::nullopt;
 	}
 	const auto line = static_cast<std::uint8_t>(found - choices.begin());
-	return page_ == ClassicOpOptionsPage::switch_confirmation ?
-		static_cast<std::uint8_t>(line + 2U) : line;
+	if(page_ == ClassicOpOptionsPage::switch_confirmation) {
+		return static_cast<std::uint8_t>(line + 2U);
+	}
+	return page_ == ClassicOpOptionsPage::credits ?
+		static_cast<std::uint8_t>(6U) : line;
 }
 
 bool ClassicOpOptionsScene::open_patch_page(
@@ -967,7 +984,10 @@ bool ClassicOpOptionsScene::open_patch_page(
 	page_ = page;
 	selected_ = active_choices().front();
 	menu_input_allowed_ = false;
-	return restore_patch_rows(0U, 7U, box_left + box_option_width) &&
+	if(!restore_patch_rows(0U, 7U, box_left + box_option_width)) {
+		return false;
+	}
+	return (page_ != ClassicOpOptionsPage::credits || draw_patch_credits()) &&
 		draw_all_option_choices();
 }
 
@@ -998,6 +1018,12 @@ bool ClassicOpOptionsScene::return_to_patch_categories() noexcept
 	case ClassicOpOptionsPage::data_storage:
 		page_ = ClassicOpOptionsPage::system;
 		selected_ = ClassicOpOptionsChoice::data_storage;
+		menu_input_allowed_ = false;
+		return restore_patch_rows(0U, 7U, box_left + box_option_width) &&
+			draw_all_option_choices();
+	case ClassicOpOptionsPage::credits:
+		page_ = ClassicOpOptionsPage::system;
+		selected_ = ClassicOpOptionsChoice::credits;
 		menu_input_allowed_ = false;
 		return restore_patch_rows(0U, 7U, box_left + box_option_width) &&
 			draw_all_option_choices();
@@ -1084,6 +1110,7 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 		choice == ClassicOpOptionsChoice::input_test ||
 		choice == ClassicOpOptionsChoice::switch_classic ||
 		choice == ClassicOpOptionsChoice::data_storage ||
+		choice == ClassicOpOptionsChoice::credits ||
 		choice == ClassicOpOptionsChoice::open_user_data ||
 		choice == ClassicOpOptionsChoice::open_replay_folder ||
 		choice == ClassicOpOptionsChoice::confirm_switch_classic ||
@@ -1209,6 +1236,7 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	case ClassicOpOptionsChoice::return_page:
 	case ClassicOpOptionsChoice::switch_classic:
 	case ClassicOpOptionsChoice::data_storage:
+	case ClassicOpOptionsChoice::credits:
 	case ClassicOpOptionsChoice::open_user_data:
 	case ClassicOpOptionsChoice::open_replay_folder:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
@@ -1219,6 +1247,30 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	return put_patch_option_centered(
 		font, raster_, box_option_value_center_x, y, value, color
 	);
+}
+
+bool ClassicOpOptionsScene::draw_patch_credits() noexcept
+{
+	if(!patch_assets_ || page_ != ClassicOpOptionsPage::credits) {
+		return false;
+	}
+	const auto &messages = patch_assets_->messages(
+		config_.language == ClassicLanguage::english ?
+			NewClassicLanguageAssetProfile::english :
+			NewClassicLanguageAssetProfile::japanese
+	);
+	for(std::size_t index = 0U; index < credit_messages.size(); ++index) {
+		const auto text = messages.text(credit_messages[index]);
+		if(text.empty() || !put_patch_option_centered(
+			patch_assets_->menu_font, raster_, box_option_center_x,
+			choice_top(
+				replay_patch_box_top, static_cast<std::uint8_t>(index)
+			), text, 0U
+		)) {
+			return false;
+		}
+	}
+	return true;
 }
 
 bool ClassicOpOptionsScene::draw_option_choice(
@@ -1309,6 +1361,7 @@ bool ClassicOpOptionsScene::draw_option_choice(
 	case ClassicOpOptionsChoice::return_page:
 	case ClassicOpOptionsChoice::switch_classic:
 	case ClassicOpOptionsChoice::data_storage:
+	case ClassicOpOptionsChoice::credits:
 	case ClassicOpOptionsChoice::open_user_data:
 	case ClassicOpOptionsChoice::open_replay_folder:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
@@ -1622,6 +1675,7 @@ bool ClassicOpOptionsScene::update_horizontal(
 	case ClassicOpOptionsChoice::return_page:
 	case ClassicOpOptionsChoice::switch_classic:
 	case ClassicOpOptionsChoice::data_storage:
+	case ClassicOpOptionsChoice::credits:
 	case ClassicOpOptionsChoice::open_user_data:
 	case ClassicOpOptionsChoice::open_replay_folder:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
@@ -1828,6 +1882,9 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 					break;
 				case ClassicOpOptionsChoice::data_storage:
 					child = ClassicOpOptionsPage::data_storage;
+					break;
+				case ClassicOpOptionsChoice::credits:
+					child = ClassicOpOptionsPage::credits;
 					break;
 				default:
 					opens_child = false;
