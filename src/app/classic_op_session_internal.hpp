@@ -61,6 +61,7 @@ enum class ClassicOpSessionStatus : std::uint8_t {
 	running,
 	complete,
 	switch_to_classic,
+	netplay_requested,
 	quit_requested,
 	failed,
 };

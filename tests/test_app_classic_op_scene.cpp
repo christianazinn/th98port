@@ -385,6 +385,43 @@ void test_replay_patch_title_if_assets_supplied()
 	expect(canceled && canceled->phase == ClassicOpPhase::vs_shrink_window &&
 		!canceled->surface_changed && !canceled->tram_changed,
 		"Replay Patch VS Cancel privately begins the retained-title contraction");
+
+	GameInit online_resident{};
+	online_resident.resident_rand = 40;
+	online_resident.fast_op_animation = 1U;
+	auto online_created = ClassicOpSceneTestAccess::create_with_predecoded_assets(
+		online_resident, ClassicOpTitleMode::fast_fade, fullscreen_pi(true),
+		fullscreen_pi(false), window_sheet(), gaiji_sheet(), assets
+	);
+	expect(online_created.has_value(),
+		"New Classic Online Match title route creates");
+	if(!online_created) {
+		return;
+	}
+	reach_main_menu(**online_created);
+	expect((*online_created)->advance({.down = true, .ok = true}).has_value(),
+		"New Classic enters its VS submenu");
+	for(std::uint16_t frame = 0U; frame < 13U; ++frame) {
+		expect((*online_created)->advance().has_value(),
+			"New Classic Online Match submenu expansion advances");
+	}
+	for(std::uint8_t row = 0U; row < 3U; ++row) {
+		expect((*online_created)->advance({.down = true}).has_value() &&
+			(*online_created)->advance().has_value(),
+			"New Classic Online Match navigation uses release edges");
+	}
+	expect(
+		(*online_created)->selected_vs_choice() ==
+			ClassicOpVsChoice::online_match,
+		"New Classic uses the fourth VS row for Online Match"
+	);
+	const auto online_selected = (*online_created)->advance({.ok = true});
+	auto online_completion = (*online_created)->take_completion();
+	expect(online_selected && online_selected->ready && online_completion &&
+		online_completion->route() == ClassicOpRoute::netplay &&
+		!online_completion->selection_mode(),
+		"Online Match publishes a typed non-selection route"
+	);
 }
 
 void test_story_seed_and_vs_cancel_return()

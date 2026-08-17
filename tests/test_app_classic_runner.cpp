@@ -870,6 +870,21 @@ void test_runner_sequence_audio_surface_and_failure()
 		);
 	}
 
+	auto netplay_backend = std::make_shared<FakeRunnerBackend>();
+	netplay_backend->next_status =
+		th03::app::ClassicOpSessionStatus::netplay_requested;
+	auto netplay_runner = make_fake_runner(netplay_backend);
+	if(netplay_runner) {
+		const auto requested = netplay_runner->consume({.tick_index = 0U});
+		expect(
+			requested && requested->status ==
+				th03::app::ClassicRunnerStatus::netplay_requested &&
+				netplay_runner->status() ==
+				th03::app::ClassicRunnerStatus::netplay_requested,
+			"Online Match crosses the runner without becoming Quit or Classic"
+		);
+	}
+
 	auto failed_backend = std::make_shared<FakeRunnerBackend>();
 	failed_backend->fail_consume = true;
 	auto failed_runner = make_fake_runner(failed_backend);

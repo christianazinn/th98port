@@ -81,6 +81,20 @@ constexpr std::array<ClassicOpMenuChoice, 7U> replay_patch_menu_choices{
 	ClassicOpMenuChoice::quit,
 };
 
+constexpr std::array<ClassicOpVsChoice, 4U> classic_vs_choices{
+	ClassicOpVsChoice::one_player_cpu,
+	ClassicOpVsChoice::one_player_two_player,
+	ClassicOpVsChoice::cpu_cpu,
+	ClassicOpVsChoice::quit,
+};
+
+constexpr std::array<ClassicOpVsChoice, 4U> new_classic_vs_choices{
+	ClassicOpVsChoice::one_player_cpu,
+	ClassicOpVsChoice::one_player_two_player,
+	ClassicOpVsChoice::cpu_cpu,
+	ClassicOpVsChoice::online_match,
+};
+
 constexpr std::array<NewClassicMessageId, 7U> replay_patch_menu_labels{
 	NewClassicMessageId::title_start,
 	NewClassicMessageId::title_vs_start,
@@ -1005,9 +1019,43 @@ bool ClassicOpTitleMenuScene::draw_vs_choice(
 		{{0x88U, 0x89U, 0x8AU, 0x8BU, 0x96U, 0x97U, 0x98U, 0x99U}},
 		{{0x92U, 0x93U, 0x94U, 0x95U, 0x8CU, 0x8DU, 0x8EU, 0x8FU}},
 	}};
+	const auto choices = patch_assets_ ?
+		std::span<const ClassicOpVsChoice>(new_classic_vs_choices) :
+		std::span<const ClassicOpVsChoice>(classic_vs_choices);
+	const auto found = std::find(choices.begin(), choices.end(), choice);
+	if(found == choices.end()) {
+		return false;
+	}
+	const auto row = static_cast<std::size_t>(found - choices.begin());
 	const auto raw = static_cast<std::size_t>(choice);
 	const auto tram_y = (box_top_value() / present::gaiji_height) + 1 +
-		static_cast<std::int32_t>(raw + (patch_assets_ ? 2U : 1U));
+		static_cast<std::int32_t>(row + (patch_assets_ ? 2U : 1U));
+	if(choice == ClassicOpVsChoice::online_match) {
+		const auto top = tram_y * present::gaiji_height;
+		const auto bare = raster_.graphics(present::Page::one);
+		if(!patch_assets_ || bare.size() != present::graphics_page_pixels ||
+			!raster_.set_access_page(present::Page::zero)) {
+			return false;
+		}
+		for(std::int32_t y = top; y < top + present::gaiji_height; ++y) {
+			for(std::int32_t x = box_left + 2;
+				x < box_left + box_submenu_width - 2; ++x) {
+				const auto offset = (static_cast<std::size_t>(y) *
+					present::graphics_width) + static_cast<std::size_t>(x);
+				if(!raster_.plot({x, y}, bare[offset]) ||
+					(((x + (y - replay_patch_box_top)) & 1) == 0 &&
+					!raster_.plot({x, y}, 3U))) {
+					return false;
+				}
+			}
+		}
+		return patch_assets_->menu_font.put_centered(
+			raster_, box_submenu_center_x, top,
+			patch_assets_->messages().text(
+				NewClassicMessageId::netplay_online_match
+			), attribute == present::tram_black ? 0U : 15U
+		);
+	}
 	if(choice == ClassicOpVsChoice::quit) {
 		if(patch_assets_) {
 			return false;
@@ -1043,11 +1091,10 @@ bool ClassicOpTitleMenuScene::draw_vs_choice(
 
 bool ClassicOpTitleMenuScene::draw_vs_choices() noexcept
 {
-	const auto last = patch_assets_ ? ClassicOpVsChoice::cpu_cpu :
-		ClassicOpVsChoice::quit;
-	for(std::uint8_t raw = 0U;
-		raw <= static_cast<std::uint8_t>(last); ++raw) {
-		const auto choice = static_cast<ClassicOpVsChoice>(raw);
+	const auto choices = patch_assets_ ?
+		std::span<const ClassicOpVsChoice>(new_classic_vs_choices) :
+		std::span<const ClassicOpVsChoice>(classic_vs_choices);
+	for(const auto choice : choices) {
 		if(!draw_vs_choice(
 			choice,
 			(choice == selected_vs_) ?
@@ -1063,15 +1110,20 @@ bool ClassicOpTitleMenuScene::draw_vs_choices() noexcept
 bool ClassicOpTitleMenuScene::update_vs_selection(int direction) noexcept
 {
 	const auto old = selected_vs_;
-	const auto last = patch_assets_ ? ClassicOpVsChoice::cpu_cpu :
-		ClassicOpVsChoice::quit;
-	auto next = static_cast<int>(selected_vs_) + direction;
+	const auto choices = patch_assets_ ?
+		std::span<const ClassicOpVsChoice>(new_classic_vs_choices) :
+		std::span<const ClassicOpVsChoice>(classic_vs_choices);
+	const auto found = std::find(choices.begin(), choices.end(), selected_vs_);
+	if(found == choices.end()) {
+		return false;
+	}
+	auto next = static_cast<int>(found - choices.begin()) + direction;
 	if(next < 0) {
-		next = static_cast<int>(last);
-	} else if(next > static_cast<int>(last)) {
+		next = static_cast<int>(choices.size() - 1U);
+	} else if(next >= static_cast<int>(choices.size())) {
 		next = 0;
 	}
-	selected_vs_ = static_cast<ClassicOpVsChoice>(next);
+	selected_vs_ = choices[static_cast<std::size_t>(next)];
 	return draw_vs_choice(old, present::tram_black) &&
 		draw_vs_choice(selected_vs_, present::tram_white);
 }
@@ -1536,10 +1588,14 @@ ClassicOpTitleMenuScene::advance(ClassicOpInput input)
 				// submenu private until the first contracted-window boundary.
 				tram_changed = false;
 			} else if(input.ok || input.shot) {
-				const auto mode = static_cast<ClassicOpSelectionMode>(
-					static_cast<std::uint8_t>(selected_vs_) + 1U
-				);
-				select_route(ClassicOpRoute::versus, mode);
+				if(selected_vs_ == ClassicOpVsChoice::online_match) {
+					select_route(ClassicOpRoute::netplay);
+				} else {
+					const auto mode = static_cast<ClassicOpSelectionMode>(
+						static_cast<std::uint8_t>(selected_vs_) + 1U
+					);
+					select_route(ClassicOpRoute::versus, mode);
+				}
 			}
 		}
 		if(input.any()) {

@@ -161,6 +161,7 @@ enum class ClassicRunnerStatus : std::uint8_t {
 	quit_requested,
 	session_complete,
 	switch_to_classic,
+	netplay_requested,
 	failed,
 };
 

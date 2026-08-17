@@ -71,6 +71,11 @@ struct DirectVsCliRequest {
 	std::string netplay_join_endpoint{};
 	std::filesystem::path replay_root{};
 	std::optional<std::filesystem::path> netplay_replay_output{};
+	// Local presentation only; never serialized into the match contract.
+	std::uint8_t master_volume_percent = 100U;
+	std::uint8_t music_volume_percent = 100U;
+	std::uint8_t effect_volume_percent = 100U;
+	bool mute_when_unfocused = false;
 };
 
 // Parses arguments after argv[0]. Character names are the nine lowercase

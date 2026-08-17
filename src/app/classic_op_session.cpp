@@ -550,6 +550,19 @@ struct ClassicOpSession::Impl final {
 				}
 				scene = ClassicOpSessionScene::character_selection;
 				break;
+			case ClassicOpRoute::netplay:
+				if(result->selection_mode) {
+					return std::unexpected(session_error(
+						ClassicOpSessionErrorCode::backend_contract_failed
+					));
+				}
+				if(auto committed = operations.commit_config(operations.context);
+					!committed) {
+					return std::unexpected(std::move(committed.error()));
+				}
+				status = ClassicOpSessionStatus::netplay_requested;
+				scene = ClassicOpSessionScene::complete;
+				break;
 			case ClassicOpRoute::options:
 				if(auto started = operations.start_options(operations.context);
 					!started) {

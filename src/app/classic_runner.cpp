@@ -674,6 +674,9 @@ ClassicRunner::consume(
 	case ClassicOpSessionStatus::switch_to_classic:
 		impl_->status = ClassicRunnerStatus::switch_to_classic;
 		break;
+	case ClassicOpSessionStatus::netplay_requested:
+		impl_->status = ClassicRunnerStatus::netplay_requested;
+		break;
 	case ClassicOpSessionStatus::quit_requested:
 		impl_->status = ClassicRunnerStatus::quit_requested;
 		break;

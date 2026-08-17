@@ -816,6 +816,20 @@ void test_terminal_routes_and_failures()
 		);
 	}
 
+	auto netplay_backend = std::make_shared<FakeBackend>();
+	netplay_backend->title_result.route = ClassicOpRoute::netplay;
+	auto netplay = make_session(netplay_backend);
+	if(netplay) {
+		const auto tick = netplay->consume({});
+		expect(
+			tick && tick->status ==
+				ClassicOpSessionStatus::netplay_requested &&
+				tick->scene == ClassicOpSessionScene::complete &&
+				netplay_backend->config_commits == 1U,
+			"Online Match commits config and crosses a distinct product boundary"
+		);
+	}
+
 	auto host_backend = std::make_shared<FakeBackend>();
 	auto host = make_session(host_backend);
 	if(host) {

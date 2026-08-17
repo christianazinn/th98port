@@ -65,6 +65,7 @@ enum class ClassicOpMenuChoice : std::uint8_t {
 enum class ClassicOpRoute : std::uint8_t {
 	story,
 	versus,
+	netplay,
 	music_room,
 	high_scores,
 	options,
@@ -78,6 +79,7 @@ enum class ClassicOpVsChoice : std::uint8_t {
 	one_player_two_player,
 	cpu_cpu,
 	quit,
+	online_match,
 };
 
 enum class ClassicOpPhase : std::uint8_t {
