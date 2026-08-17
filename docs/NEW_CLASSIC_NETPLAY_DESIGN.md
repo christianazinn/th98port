@@ -1,8 +1,8 @@
 # New Classic netplay design
 
-Status: **durable proposal; local rollback and the audible, frame-zero-verified
-direct-UDP/Tailscale technical preview are green, while product WebRTC/room
-integration remains future work**
+Status: **durable proposal; local rollback and the audible, periodically
+verified direct-UDP/Tailscale technical preview are green, while product
+WebRTC/room integration remains future work**
 
 Proposal revision date: 2026-08-17
 
@@ -490,8 +490,9 @@ enters the contract.
 
 After agreement, both clients create source-fresh MAIN state and exchange the
 SHA-256 simulation digest at frame zero. Gameplay begins only if those digests
-match. The direct UDP preview implements this gate with a strict `T3NP` v2
-packet and keeps both source schedulers stopped until the proof succeeds.
+match. The direct UDP preview implements this gate with a strict fixed-size
+`T3NP` v3 packet and keeps both source schedulers stopped until the proof
+succeeds.
 
 The backend-neutral owned-player gameplay value is now frozen as the exact
 four-byte little-endian schema in `T3NET001.md`. It contains only one player's
@@ -513,6 +514,12 @@ network metrics, and phase events. It contains no auth token, SDP, ICE address,
 or remote snapshot. There is no automatic state transfer or "host wins"
 repair; either would mask deterministic bugs and make one modified peer an
 authority over the other.
+
+The direct preview now implements mutually acknowledged 120-frame gameplay
+proofs in addition to frame zero. It retains a proof only after contiguous
+confirmation, retransmits bounded proof/ack packets, and will not report a
+clean result while its latest proof is unacknowledged. Explicit round-start
+and terminal proof identities remain part of the product-control phase work.
 
 Both peers maintain a frame-indexed replay journal outside rollback state.
 Predicted executions may overwrite an unconfirmed journal row. Only contiguous
@@ -688,10 +695,10 @@ does not silently broaden leaderboard acceptance.
    conservative optimized wrong/restore/correct/restore probe measures about
    2.75 ms per corrected frame on the development host. See `T3RBC001.md`.
 
-This highest-risk local proof is green. Canonical peer simulation SHA-256 and
-confirmed-frame audio publication are now integrated; periodic runtime digest
-exchange and minimum-machine measurements remain explicit N1 gates rather
-than reasons to alter the rollback image.
+This highest-risk local proof is green. Canonical peer simulation SHA-256,
+confirmed-frame audio publication, and mutually acknowledged 120-gameplay-
+frame runtime proofs are now integrated. Minimum-machine measurements remain
+an explicit N1 gate rather than a reason to alter the rollback image.
 
 ### N1: middleware and simulated transport
 
@@ -710,9 +717,10 @@ than reasons to alter the rollback image.
 3. Build the pinned GGRS C ABI spike and custom queued `NonBlockingSocket`.
 4. Fulfill Save/Load/Advance requests from `MainProcess`.
 5. Freeze prediction, delay, confirmation, digest, and replay-journal behavior.
-   Prediction, delay, confirmation, confirmed audio, and the frame-zero digest
-   are frozen for the direct preview. Periodic/round/terminal digests and the
-   confirmed replay journal remain open.
+   Prediction, delay, confirmation, confirmed audio, frame-zero identity, and
+   mutually acknowledged 120-frame gameplay digests are frozen for the direct
+   preview. Explicit round/terminal digests and the confirmed replay journal
+   remain open.
 6. Decide GGRS versus the single fallback backend using the objective spike
    gates; delete the rejected production path.
 
@@ -720,9 +728,9 @@ than reasons to alter the rollback image.
 
 The immediately testable direct-IPv4 UDP/Tailscale preview is complete on the
 app-owned transport: fixed handshake/history packets, bounded prediction,
-frame-zero simulation identity, full MAIN repeat/terminal lifecycle, confirmed
-audio, and Windows/POSIX socket tests. The following product transport remains
-open:
+frame-zero and 120-frame simulation identity, full MAIN repeat/terminal
+lifecycle, confirmed audio, and Windows/POSIX socket tests. The following
+product transport remains open:
 
 1. Pin minimal libdatachannel and implement both Data Channels.
 2. Add a local test signaling server and two-process loopback.

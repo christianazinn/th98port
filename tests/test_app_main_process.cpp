@@ -1644,6 +1644,133 @@ void test_new_classic_netplay_main_session_convergence()
 		"two-peer suffix correction exposes the exact uninterrupted pixels");
 }
 
+void test_new_classic_netplay_confirmed_digest_schedule()
+{
+	MainDirectVsConfig config{};
+	const auto resources = make_resources(config.player_one, config.player_two);
+	auto one_process = create_synthetic(config, resources);
+	auto two_process = create_synthetic(config, resources);
+	auto divergent_process = create_synthetic(config, resources);
+	auto delayed_process = create_synthetic(config, resources);
+	auto peer_one = one_process ? NewClassicNetplayMainSession::create(
+		NewClassicNetplayPlayer::player_one, std::move(*one_process)
+	) : std::expected<std::unique_ptr<NewClassicNetplayMainSession>,
+		th03::app::NewClassicNetplayMainSessionError>{
+			std::unexpected(th03::app::NewClassicNetplayMainSessionError{})
+		};
+	auto peer_two = two_process ? NewClassicNetplayMainSession::create(
+		NewClassicNetplayPlayer::player_two, std::move(*two_process)
+	) : std::expected<std::unique_ptr<NewClassicNetplayMainSession>,
+		th03::app::NewClassicNetplayMainSessionError>{
+			std::unexpected(th03::app::NewClassicNetplayMainSessionError{})
+		};
+	auto divergent_peer = divergent_process ?
+		NewClassicNetplayMainSession::create(
+			NewClassicNetplayPlayer::player_one,
+			std::move(*divergent_process)
+		) : std::expected<std::unique_ptr<NewClassicNetplayMainSession>,
+			th03::app::NewClassicNetplayMainSessionError>{
+				std::unexpected(th03::app::NewClassicNetplayMainSessionError{})
+			};
+	auto delayed_peer = delayed_process ?
+		NewClassicNetplayMainSession::create(
+			NewClassicNetplayPlayer::player_one,
+			std::move(*delayed_process)
+		) : std::expected<std::unique_ptr<NewClassicNetplayMainSession>,
+			th03::app::NewClassicNetplayMainSessionError>{
+				std::unexpected(th03::app::NewClassicNetplayMainSessionError{})
+			};
+	expect(peer_one && peer_two && divergent_peer && delayed_peer,
+		"periodic-digest peers construct at a source-fresh boundary");
+	if(!peer_one || !peer_two || !divergent_peer || !delayed_peer) {
+		return;
+	}
+	while((*peer_one)->take_audio_command()) {}
+	while((*peer_two)->take_audio_command()) {}
+	while((*divergent_peer)->take_audio_command()) {}
+	while((*delayed_peer)->take_audio_command()) {}
+	for(std::uint64_t frame = 0U;
+		frame < th03::app::new_classic_netplay_simulation_digest_interval;
+		++frame) {
+		const auto one = (*peer_one)->advance_local({});
+		const auto two = (*peer_two)->advance_local({});
+		const auto divergent = (*divergent_peer)->advance_local({
+			.word = static_cast<std::uint16_t>(frame == 60U ? 0x0020U : 0U),
+		});
+		const auto remote_one = (*peer_one)->submit_remote(frame, {});
+		const auto remote_two = (*peer_two)->submit_remote(frame, {});
+		const auto remote_divergent =
+			(*divergent_peer)->submit_remote(frame, {});
+		expect(one && two && divergent && remote_one && remote_two &&
+			remote_divergent,
+			"periodic-digest peers confirm one neutral gameplay frame");
+		const auto audio_one = (*peer_one)->take_confirmed_audio_frame();
+		const auto audio_two = (*peer_two)->take_confirmed_audio_frame();
+		const auto audio_divergent =
+			(*divergent_peer)->take_confirmed_audio_frame();
+		expect(audio_one && *audio_one && audio_two && *audio_two &&
+			audio_divergent && *audio_divergent &&
+			(**audio_one).frame == frame && (**audio_two).frame == frame &&
+			(**audio_divergent).frame == frame,
+			"periodic-digest test drains each confirmed audio journal slot");
+	}
+	const auto digest_one =
+		(*peer_one)->take_confirmed_simulation_digest();
+	const auto digest_two =
+		(*peer_two)->take_confirmed_simulation_digest();
+	const auto digest_divergent =
+		(*divergent_peer)->take_confirmed_simulation_digest();
+	for(std::uint64_t frame = 0U; frame < 128U; ++frame) {
+		const auto advanced = (*delayed_peer)->advance_local({});
+		expect(static_cast<bool>(advanced),
+			"delayed-proof peer advances one neutral gameplay frame");
+		if(frame < 119U) {
+			const auto confirmed = (*delayed_peer)->submit_remote(frame, {});
+			expect(static_cast<bool>(confirmed),
+				"delayed-proof peer confirms the retained prefix");
+			const auto audio = (*delayed_peer)->take_confirmed_audio_frame();
+			expect(audio && *audio && (**audio).frame == frame,
+				"delayed-proof peer drains its confirmed prefix audio");
+		}
+	}
+	for(std::uint64_t frame = 120U; frame < 128U; ++frame) {
+		const auto future = (*delayed_peer)->submit_remote(frame, {});
+		expect(future && future->confirmed_frame_count == 119U,
+			"out-of-order future input leaves the digest boundary unconfirmed");
+	}
+	const auto closes_gap = (*delayed_peer)->submit_remote(119U, {});
+	const auto delayed_digest =
+		(*delayed_peer)->take_confirmed_simulation_digest();
+	expect(closes_gap && closes_gap->confirmed_frame_count == 128U &&
+		delayed_digest && *delayed_digest &&
+		(**delayed_digest).frame ==
+			th03::app::new_classic_netplay_simulation_digest_interval &&
+		(**delayed_digest).confirmed_gameplay_frame_count ==
+			th03::app::new_classic_netplay_simulation_digest_interval,
+		"one reordered packet batch still journals the exact frame-120 proof");
+	expect(digest_one && *digest_one && digest_two && *digest_two &&
+		(**digest_one).frame ==
+			th03::app::new_classic_netplay_simulation_digest_interval &&
+		(**digest_two).frame ==
+			th03::app::new_classic_netplay_simulation_digest_interval &&
+		(**digest_one).confirmed_gameplay_frame_count ==
+			th03::app::new_classic_netplay_simulation_digest_interval &&
+		(**digest_two).confirmed_gameplay_frame_count ==
+			th03::app::new_classic_netplay_simulation_digest_interval &&
+		(**digest_one).digest == (**digest_two).digest,
+		"both peers journal one equal proof at confirmed frame 120");
+	expect(digest_one && *digest_one && delayed_digest && *delayed_digest &&
+		(**digest_one).digest == (**delayed_digest).digest,
+		"batched confirmation hashes the same canonical frame-120 state");
+	expect(digest_one && *digest_one && digest_divergent &&
+		*digest_divergent && (**digest_one).digest !=
+			(**digest_divergent).digest,
+		"one divergent confirmed input changes the frame-120 proof");
+	const auto exhausted = (*peer_one)->take_confirmed_simulation_digest();
+	expect(exhausted && !*exhausted,
+		"confirmed simulation proof stream has no duplicate boundary");
+}
+
 int run_main_rollback_coordinator_benchmark()
 {
 	constexpr std::uint64_t iterations = 500U;
@@ -2031,6 +2158,8 @@ void test_recorded_pause_deferred_frame()
 		th03::CoreInput{.system = 0x1000U},
 		th03::InputContext::gameplay
 	);
+	const bool pause_rollback_boundary = process.rollback_boundary_available();
+	const auto pause_simulation = process.capture_rollback_simulation();
 	const auto held = process.step(
 		th03::CoreInput{.system = 0x1000U},
 		th03::InputContext::interstitial
@@ -2040,12 +2169,14 @@ void test_recorded_pause_deferred_frame()
 		th03::DeferredFrameAction::resume
 	);
 	expect(opened && opened->status == th03::StepStatus::phase_transition &&
+		!pause_rollback_boundary && pause_simulation &&
+		pause_simulation->used_size != 0U &&
 		held && held->status == th03::StepStatus::running &&
 		released && released->status == th03::StepStatus::running &&
 		resumed && resumed->status == th03::StepStatus::running &&
 		process.presentation_status() == th03::present::MainRoundStatus::ready &&
 		process.canonical_state().round_frame == 1U,
-		"deferred replay-pause suffix resumes through the retained observer"
+		"simulation-only capture remains available while a deferred replay-pause excludes full presentation rollback"
 	);
 	const auto before_abort = process.canonical_state();
 	const auto start = process.round_start_observation().start;
@@ -3605,6 +3736,7 @@ int main(int argc, char **argv)
 	test_main_process_rollback_transaction();
 	test_main_rollback_coordinator_every_frame();
 	test_new_classic_netplay_main_session_convergence();
+	test_new_classic_netplay_confirmed_digest_schedule();
 	test_raw_bf2_shapes();
 	test_distinct_selection_first_frame();
 	test_live_bomb_first_frame();

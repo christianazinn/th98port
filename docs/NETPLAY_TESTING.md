@@ -75,13 +75,18 @@ source scheduler starts, both peers also hash and exchange the canonical
 frame-zero `T3RBK001` simulation state. A content, seed, state, or build
 disagreement therefore fails with `initial-simulation-mismatch` instead of
 beginning a divergent match. A successful connection prints
-`identity-frame=0`. Once connected,
+`identity-frame=0`. During play, both peers exchange and acknowledge another
+canonical proof every 120 contiguous-confirmed gameplay frames. Matching
+proofs print `status=identity-confirmed`; a mismatch ends the preview before a
+result can be accepted. Once connected,
 each input datagram carries the newest 16 local values, so loss, duplication,
 and reordering do not require a reliable gameplay stream. A peer times out
 after five seconds without a valid packet. Prediction stops at 12 frames; MAIN
 result/transition regions that are not rollback-safe switch to exact-input
 lockstep and reopen rollback at the next valid boundary. Both peers print the
 same confirmed boundary frames and `status=match-complete` on a clean finish.
+The latest periodic proof must be mutually acknowledged before either peer may
+report a clean finish or bounded smoke completion.
 
 For a bounded automated check, append the same `--smoke-ticks N` to both
 commands. This exits only after both peers have confirmed `N` gameplay input

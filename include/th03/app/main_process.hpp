@@ -267,6 +267,13 @@ public:
 	// pre-restore state and guarantees all-or-nothing recovery without a frame-
 	// time allocation. Neither snapshot is accepted from a peer or user file.
 	[[nodiscard]] bool rollback_boundary_available() const noexcept;
+	// Simulation-only capture is valid at every completed source-input
+	// boundary, including reliable phase/terminal ownership where presentation
+	// rollback is intentionally unavailable.
+	[[nodiscard]] std::expected<
+		RollbackSimulationSnapshot,
+		MainProcessRollbackError
+	> capture_rollback_simulation() const noexcept;
 	[[nodiscard]] std::expected<void, MainProcessRollbackError>
 	capture_rollback(MainProcessRollbackSnapshot &snapshot) const noexcept;
 	[[nodiscard]] std::expected<void, MainProcessRollbackError>

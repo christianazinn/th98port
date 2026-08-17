@@ -35,6 +35,13 @@ namespace {
 } // namespace
 
 struct NewClassicNetplayMainSession::Impl final {
+	static constexpr std::size_t digest_queue_size = 4U;
+	struct FrameFact final {
+		bool valid = false;
+		bool gameplay = false;
+		std::uint64_t frame = 0U;
+	};
+
 	struct AudioSlot final {
 		bool valid = false;
 		std::uint64_t frame = 0U;
@@ -56,6 +63,22 @@ struct NewClassicNetplayMainSession::Impl final {
 	std::uint8_t bootstrap_audio_head = 0U;
 	std::uint8_t bootstrap_audio_count = 0U;
 	std::uint64_t next_audio_frame = 0U;
+	std::array<
+		NewClassicNetplayConfirmedSimulationDigest,
+		digest_queue_size
+	> digest_queue{};
+	std::uint8_t digest_head = 0U;
+	std::uint8_t digest_count = 0U;
+	std::array<
+		FrameFact,
+		new_classic_netplay_timeline_slots
+	> frame_facts{};
+	std::uint64_t digest_scan_frame = 0U;
+	std::uint64_t confirmed_gameplay_frames = 0U;
+	std::uint64_t next_digest_gameplay_frame =
+		new_classic_netplay_simulation_digest_interval;
+	std::optional<std::uint64_t> due_digest_frame{};
+	std::optional<std::uint64_t> due_digest_gameplay_frame{};
 	NewClassicNetplayMainSessionStatus status =
 		NewClassicNetplayMainSessionStatus::running;
 	std::optional<std::uint64_t> boundary_frame{};
@@ -110,11 +133,78 @@ struct NewClassicNetplayMainSession::Impl final {
 		}
 	}
 
+	[[nodiscard]] std::expected<void, NewClassicNetplayMainSessionError>
+	capture_confirmed_digests() noexcept
+	{
+		const auto confirmed = timeline->confirmed_frame_count();
+		while(digest_scan_frame < confirmed) {
+			const auto &fact = frame_facts[
+				digest_scan_frame % frame_facts.size()
+			];
+			if(!fact.valid || fact.frame != digest_scan_frame) {
+				return std::unexpected(session_error(
+					NewClassicNetplayMainSessionErrorCode::
+						digest_journal_failed
+				));
+			}
+			if(fact.gameplay) {
+				++confirmed_gameplay_frames;
+				if(confirmed_gameplay_frames ==
+					next_digest_gameplay_frame) {
+					if(due_digest_frame || due_digest_gameplay_frame) {
+						return std::unexpected(session_error(
+							NewClassicNetplayMainSessionErrorCode::
+								digest_journal_failed
+						));
+					}
+					due_digest_frame = digest_scan_frame + 1U;
+					due_digest_gameplay_frame =
+						confirmed_gameplay_frames;
+					next_digest_gameplay_frame +=
+						new_classic_netplay_simulation_digest_interval;
+				}
+			}
+			++digest_scan_frame;
+		}
+		if(due_digest_gameplay_frame) {
+			if(digest_count >= digest_queue.size()) {
+				return std::unexpected(session_error(
+					NewClassicNetplayMainSessionErrorCode::
+						digest_journal_failed
+				));
+			}
+			if(!due_digest_frame) {
+				return std::unexpected(session_error(
+					NewClassicNetplayMainSessionErrorCode::
+						digest_journal_failed
+				));
+			}
+			const auto digest = coordinator->simulation_digest(*due_digest_frame);
+			if(!digest) {
+				return std::unexpected(rollback_error(digest.error()));
+			}
+			const auto index = static_cast<std::size_t>(
+				(digest_head + digest_count) % digest_queue.size()
+			);
+			digest_queue[index] = {
+				.frame = *due_digest_frame,
+				.confirmed_gameplay_frame_count =
+					*due_digest_gameplay_frame,
+				.digest = *digest,
+			};
+			++digest_count;
+			due_digest_frame.reset();
+			due_digest_gameplay_frame.reset();
+		}
+		return {};
+	}
+
 	[[nodiscard]] std::expected<
 		MainRollbackCoordinatorTick,
 		NewClassicNetplayMainSessionError
 	> execute(const NewClassicNetplayResolvedFrame &resolved) noexcept
 	{
+		const bool gameplay_frame = input_context == InputContext::gameplay;
 		auto stepped = input_context == InputContext::gameplay &&
 			!gameplay_reliable_warmup ?
 			coordinator->advance_confirmed(resolved.combined) :
@@ -174,6 +264,11 @@ struct NewClassicNetplayMainSession::Impl final {
 			gameplay_reliable_warmup =
 				!coordinator->rollback_boundary_available();
 		}
+		frame_facts[resolved.frame % frame_facts.size()] = {
+			.valid = true,
+			.gameplay = gameplay_frame,
+			.frame = resolved.frame,
+		};
 		return *stepped;
 	}
 };
@@ -279,6 +374,9 @@ std::expected<
 	if(!stepped) {
 		return std::unexpected(stepped.error());
 	}
+	if(const auto captured = impl_->capture_confirmed_digests(); !captured) {
+		return std::unexpected(captured.error());
+	}
 	return NewClassicNetplayMainSessionTick{
 		.status = impl_->status,
 		.frame = resolved->frame,
@@ -366,6 +464,9 @@ std::expected<
 	result.boundary = impl_->boundary;
 	result.confirmed_frame_count =
 		impl_->timeline->confirmed_frame_count();
+	if(const auto captured = impl_->capture_confirmed_digests(); !captured) {
+		return std::unexpected(captured.error());
+	}
 	return result;
 }
 
@@ -511,6 +612,24 @@ std::expected<
 	slot.valid = false;
 	++impl_->next_audio_frame;
 	return std::optional{frame};
+}
+
+std::expected<
+	std::optional<NewClassicNetplayConfirmedSimulationDigest>,
+	NewClassicNetplayMainSessionError
+> NewClassicNetplayMainSession::take_confirmed_simulation_digest() noexcept
+{
+	if(impl_->digest_count == 0U) {
+		return std::optional<
+			NewClassicNetplayConfirmedSimulationDigest
+		>{};
+	}
+	auto result = impl_->digest_queue[impl_->digest_head];
+	impl_->digest_head = static_cast<std::uint8_t>(
+		(impl_->digest_head + 1U) % impl_->digest_queue.size()
+	);
+	--impl_->digest_count;
+	return std::optional{result};
 }
 
 const MainProcess &NewClassicNetplayMainSession::process() const noexcept

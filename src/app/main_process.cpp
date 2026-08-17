@@ -1744,6 +1744,19 @@ bool MainProcess::rollback_boundary_available() const noexcept
 		);
 }
 
+std::expected<RollbackSimulationSnapshot, MainProcessRollbackError>
+MainProcess::capture_rollback_simulation() const noexcept
+{
+	auto simulation = impl_->game->capture_rollback_simulation();
+	if(!simulation) {
+		return std::unexpected(MainProcessRollbackError{
+			.code = MainProcessRollbackErrorCode::simulation_capture_failed,
+			.simulation = simulation.error(),
+		});
+	}
+	return *simulation;
+}
+
 std::expected<void, MainProcessRollbackError>
 MainProcess::capture_rollback(
 	MainProcessRollbackSnapshot &snapshot
@@ -1756,12 +1769,9 @@ MainProcess::capture_rollback(
 		});
 	}
 
-	auto simulation = impl_->game->capture_rollback_simulation();
+	auto simulation = capture_rollback_simulation();
 	if(!simulation) {
-		return std::unexpected(MainProcessRollbackError{
-			.code = MainProcessRollbackErrorCode::simulation_capture_failed,
-			.simulation = simulation.error(),
-		});
+		return std::unexpected(simulation.error());
 	}
 	snapshot.simulation = std::move(*simulation);
 	const auto visual = present::capture_rollback_visual(

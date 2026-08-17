@@ -131,7 +131,7 @@ void test_datagram_contract()
 		(*encoded)[1U] == std::byte{'3'} &&
 		(*encoded)[2U] == std::byte{'N'} &&
 		(*encoded)[3U] == std::byte{'P'} &&
-		(*encoded)[4U] == std::byte{2U} &&
+		(*encoded)[4U] == std::byte{3U} &&
 		(*encoded)[5U] == std::byte{3U} &&
 		(*encoded)[6U] == std::byte{1U} &&
 		(*encoded)[7U] == std::byte{2U} &&
@@ -194,6 +194,7 @@ void test_datagram_contract()
 		.session_id = 0x0102030405060708ULL,
 		.contract_hash = 0x8877665544332211ULL,
 		.latest_frame = 120U,
+		.confirmed_frame_count = 120U,
 	};
 	for(std::size_t index = 0U;
 		index < digest.simulation_digest.size(); ++index) {
@@ -202,6 +203,7 @@ void test_datagram_contract()
 	const auto encoded_digest = encode_new_classic_netplay_datagram(digest);
 	expect(encoded_digest && (*encoded_digest)[5U] == std::byte{5U} &&
 		(*encoded_digest)[24U] == std::byte{120U} &&
+		(*encoded_digest)[32U] == std::byte{120U} &&
 		(*encoded_digest)[40U] == std::byte{1U} &&
 		(*encoded_digest)[71U] == std::byte{32U},
 		"simulation digest reuses the bounded history payload exactly");
@@ -213,8 +215,32 @@ void test_datagram_contract()
 			};
 	expect(decoded_digest && decoded_digest->type == digest.type &&
 		decoded_digest->latest_frame == 120U &&
+		decoded_digest->confirmed_frame_count == 120U &&
 		decoded_digest->simulation_digest == digest.simulation_digest,
 		"simulation digest packet round-trips frame identity and SHA-256");
+	digest.type = NewClassicNetplayDatagramType::simulation_digest_ack;
+	const auto encoded_ack = encode_new_classic_netplay_datagram(digest);
+	const auto decoded_ack = encoded_ack ?
+		decode_new_classic_netplay_datagram(*encoded_ack) :
+		std::expected<NewClassicNetplayDatagram,
+			NewClassicNetplayDatagramError>{
+				std::unexpected(NewClassicNetplayDatagramError{})
+			};
+	expect(decoded_ack && decoded_ack->type ==
+		NewClassicNetplayDatagramType::simulation_digest_ack &&
+		decoded_ack->latest_frame == digest.latest_frame &&
+		decoded_ack->simulation_digest == digest.simulation_digest,
+		"digest acknowledgement freezes the same bounded proof payload");
+	digest.latest_frame = 0U;
+	digest.confirmed_frame_count = 0U;
+	const auto zero_frame_ack = encode_new_classic_netplay_datagram(digest);
+	expect(!zero_frame_ack && zero_frame_ack.error().code ==
+		NewClassicNetplayDatagramErrorCode::invalid_digest,
+		"frame-zero proof acknowledgement is not a valid runtime message");
+	digest.type = NewClassicNetplayDatagramType::simulation_digest;
+	const auto initial_digest = encode_new_classic_netplay_datagram(digest);
+	expect(static_cast<bool>(initial_digest),
+		"frame-zero digest keeps both proof identities zero");
 	digest.simulation_digest = {};
 	const auto zero_digest = encode_new_classic_netplay_datagram(digest);
 	expect(!zero_digest && zero_digest.error().code ==

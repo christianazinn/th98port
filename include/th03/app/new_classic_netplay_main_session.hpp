@@ -31,6 +31,7 @@ enum class NewClassicNetplayMainSessionErrorCode : std::uint8_t {
 	resimulation_left_gameplay,
 	invalid_boundary,
 	audio_journal_failed,
+	digest_journal_failed,
 };
 
 struct NewClassicNetplayMainSessionError final {
@@ -62,6 +63,8 @@ struct NewClassicNetplayMainRemoteResult final {
 };
 
 inline constexpr std::size_t new_classic_netplay_audio_commands_per_frame = 16U;
+inline constexpr std::uint64_t
+	new_classic_netplay_simulation_digest_interval = 120U;
 
 // One contiguous-confirmed source frame. Commands are the corrected semantic
 // MAIN transaction; `source_vsyncs` advances PMD through the frame's complete
@@ -74,6 +77,15 @@ struct NewClassicNetplayConfirmedAudioFrame final {
 	> commands{};
 	std::uint8_t command_count = 0U;
 	std::uint8_t source_vsyncs = 1U;
+};
+
+// Canonical corrected simulation state after `frame` contiguous gameplay
+// inputs. The digest is captured while that pre-frame rollback image is still
+// retained and is never derived from a predicted suffix.
+struct NewClassicNetplayConfirmedSimulationDigest final {
+	std::uint64_t frame = 0U;
+	std::uint64_t confirmed_gameplay_frame_count = 0U;
+	AppSha256 digest{};
 };
 
 // Retained active-MAIN owner. Network values enter only through T3NET001's
@@ -142,6 +154,10 @@ public:
 		std::optional<NewClassicNetplayConfirmedAudioFrame>,
 		NewClassicNetplayMainSessionError
 	> take_confirmed_audio_frame() noexcept;
+	[[nodiscard]] std::expected<
+		std::optional<NewClassicNetplayConfirmedSimulationDigest>,
+		NewClassicNetplayMainSessionError
+	> take_confirmed_simulation_digest() noexcept;
 	[[nodiscard]] const MainProcess &process() const noexcept;
 	[[nodiscard]] std::uint64_t next_frame() const noexcept;
 	[[nodiscard]] std::uint64_t confirmed_frame_count() const noexcept;
