@@ -1,6 +1,8 @@
 #ifndef TH03_APP_NEW_CLASSIC_NETPLAY_MAIN_SESSION_HPP
 #define TH03_APP_NEW_CLASSIC_NETPLAY_MAIN_SESSION_HPP
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <memory>
@@ -28,6 +30,7 @@ enum class NewClassicNetplayMainSessionErrorCode : std::uint8_t {
 	not_running,
 	resimulation_left_gameplay,
 	invalid_boundary,
+	audio_journal_failed,
 };
 
 struct NewClassicNetplayMainSessionError final {
@@ -56,6 +59,21 @@ struct NewClassicNetplayMainRemoteResult final {
 	std::uint64_t confirmed_frame_count = 0U;
 	std::uint64_t resimulated_frames = 0U;
 	bool surface_publishable = false;
+};
+
+inline constexpr std::size_t new_classic_netplay_audio_commands_per_frame = 16U;
+
+// One contiguous-confirmed source frame. Commands are the corrected semantic
+// MAIN transaction; `source_vsyncs` advances PMD through the frame's complete
+// wait without consulting wall time or the prediction clock.
+struct NewClassicNetplayConfirmedAudioFrame final {
+	std::uint64_t frame = 0U;
+	std::array<
+		ClassicAudioCommand,
+		new_classic_netplay_audio_commands_per_frame
+	> commands{};
+	std::uint8_t command_count = 0U;
+	std::uint8_t source_vsyncs = 1U;
 };
 
 // Retained active-MAIN owner. Network values enter only through T3NET001's
@@ -115,8 +133,15 @@ public:
 			present::graphics_page_pixels
 		> output
 	) const;
+	// Process-start commands are non-speculative and may be applied before the
+	// first input frame. Later commands are exposed only through confirmed
+	// audio frames and are replaced transactionally during rollback.
 	[[nodiscard]] std::optional<ClassicAudioCommand>
 	take_audio_command() noexcept;
+	[[nodiscard]] std::expected<
+		std::optional<NewClassicNetplayConfirmedAudioFrame>,
+		NewClassicNetplayMainSessionError
+	> take_confirmed_audio_frame() noexcept;
 	[[nodiscard]] const MainProcess &process() const noexcept;
 	[[nodiscard]] std::uint64_t next_frame() const noexcept;
 	[[nodiscard]] std::uint64_t confirmed_frame_count() const noexcept;

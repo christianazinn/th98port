@@ -1310,6 +1310,9 @@ namespace {
 	append(static_cast<std::uint8_t>(
 		request.launch.process.player_two.palette
 	), 1U);
+	append(static_cast<std::uint8_t>(
+		request.launch.process.classic_audio_lifecycle
+	), 1U);
 	return hash == 0U ? 1U : hash;
 }
 
@@ -1404,8 +1407,10 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	using th03::app::NewClassicNetplayDatagramType;
 	using th03::app::NewClassicNetplayMainSessionStatus;
 	using th03::app::NewClassicNetplayPlayer;
+	parsed.launch.process.classic_audio_lifecycle = true;
 	const auto contract_hash = netplay_contract_hash(parsed);
 	const auto mode = parsed.netplay_mode;
+	const auto audio_data_root = parsed.launch.content.data_root;
 	const auto local_player = mode == DirectVsNetplayMode::host ?
 		NewClassicNetplayPlayer::player_one :
 		NewClassicNetplayPlayer::player_two;
@@ -1422,6 +1427,22 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	);
 	if(!session) {
 		return fail_netplay("netplay-session", "session-create-failed");
+	}
+	auto created_audio = th03::app::ClassicAudioSession::create({
+		.data_root = audio_data_root,
+		.tick_rate = parsed.tick_rate,
+		.bgm_active = true,
+		.effects_active = true,
+		.effects_follow_bgm = false,
+	});
+	if(!created_audio) {
+		return fail("netplay-audio-create", created_audio.error());
+	}
+	auto audio_session = std::move(*created_audio);
+	while(const auto command = (*session)->take_audio_command()) {
+		if(auto applied = audio_session->apply(*command); !applied) {
+			return fail("netplay-audio-command", applied.error());
+		}
 	}
 	auto socket = th03::platform::UdpSocket::bind(
 		mode == DirectVsNetplayMode::host ? parsed.netplay_host_port : 0U
@@ -1452,6 +1473,87 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	if(!mapper) {
 		return fail("input-create", mapper.error());
 	}
+	std::optional<th03::platform::SdlAudioDevice> audio_device{};
+	auto created_device = th03::platform::SdlAudioDevice::create({
+		.start_paused = true,
+	});
+	if(created_device) {
+		audio_device.emplace(std::move(*created_device));
+	} else {
+		warn_audio_device("netplay-audio-device-create", created_device.error());
+	}
+	bool audio_started = false;
+	std::vector<th03::audio::PmdCanonicalStereoSample> startup_silence{};
+	const auto publish_confirmed_audio = [&]() -> std::expected<void, int> {
+		for(;;) {
+			auto confirmed = (*session)->take_confirmed_audio_frame();
+			if(!confirmed) {
+				log_netplay_session_error(confirmed.error());
+				return std::unexpected(fail_netplay(
+					"netplay-audio", "journal-failed"
+				));
+			}
+			if(!*confirmed) {
+				return {};
+			}
+			for(std::size_t index = 0U;
+				index < (**confirmed).command_count; ++index) {
+				if(auto applied = audio_session->apply(
+					(**confirmed).commands[index]
+				); !applied) {
+					return std::unexpected(fail(
+						"netplay-audio-command", applied.error()
+					));
+				}
+			}
+			for(std::uint8_t vsync = 0U;
+				vsync < (**confirmed).source_vsyncs; ++vsync) {
+				auto tick = audio_session->advance_tick();
+				if(!tick) {
+					return std::unexpected(fail(
+						"netplay-audio-tick", tick.error()
+					));
+				}
+				if(!audio_device) {
+					continue;
+				}
+				if(!audio_started && !tick->canonical_frames.empty() &&
+					tick->canonical_frames.size() <=
+						audio_device->maximum_queued_frames() / 3U) {
+					startup_silence.assign(
+						tick->canonical_frames.size() * 2U, {}
+					);
+					const auto prefilled = audio_device->submit(startup_silence);
+					if(!prefilled) {
+						warn_audio_device(
+							"netplay-audio-prefill", prefilled.error()
+						);
+						audio_device.reset();
+						continue;
+					}
+				}
+				const auto submitted = audio_device->submit(
+					tick->canonical_frames
+				);
+				if(!submitted) {
+					warn_audio_device(
+						"netplay-audio-submit", submitted.error()
+					);
+					audio_device.reset();
+				} else if(!audio_started && !tick->canonical_frames.empty()) {
+					const auto resumed = audio_device->resume();
+					if(!resumed) {
+						warn_audio_device(
+							"netplay-audio-resume", resumed.error()
+						);
+						audio_device.reset();
+					} else {
+						audio_started = true;
+					}
+				}
+			}
+		}
+	};
 	auto scheduler = th03::app::TickInputScheduler::create(
 		parsed.tick_rate,
 		th03::platform::sdl_ticks_now_ns(),
@@ -1634,6 +1736,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		if(const auto settled = settle_confirmed_boundary(); !settled) {
 			return settled.error();
 		}
+		if(const auto published = publish_confirmed_audio(); !published) {
+			return published.error();
+		}
 
 		if(!established && mode == DirectVsNetplayMode::join &&
 			now_ns - last_send_ns >= 100'000'000U) {
@@ -1747,6 +1852,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				return fail_netplay("netplay-resend", "send-failed");
 			}
 			last_send_ns = now_ns;
+		}
+		if(const auto published = publish_confirmed_audio(); !published) {
+			return published.error();
 		}
 
 		if(presentation_pending) {

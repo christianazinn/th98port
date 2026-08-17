@@ -35,8 +35,27 @@ namespace {
 } // namespace
 
 struct NewClassicNetplayMainSession::Impl final {
+	struct AudioSlot final {
+		bool valid = false;
+		std::uint64_t frame = 0U;
+		std::array<
+			ClassicAudioCommand,
+			new_classic_netplay_audio_commands_per_frame
+		> commands{};
+		std::uint8_t command_count = 0U;
+		std::uint8_t source_vsyncs = 1U;
+	};
+
 	std::unique_ptr<NewClassicNetplayInputTimeline> timeline{};
 	std::unique_ptr<MainRollbackCoordinator> coordinator{};
+	std::array<AudioSlot, new_classic_netplay_timeline_slots> audio_slots{};
+	std::array<
+		ClassicAudioCommand,
+		new_classic_netplay_audio_commands_per_frame
+	> bootstrap_audio{};
+	std::uint8_t bootstrap_audio_head = 0U;
+	std::uint8_t bootstrap_audio_count = 0U;
+	std::uint64_t next_audio_frame = 0U;
 	NewClassicNetplayMainSessionStatus status =
 		NewClassicNetplayMainSessionStatus::running;
 	std::optional<std::uint64_t> boundary_frame{};
@@ -47,6 +66,41 @@ struct NewClassicNetplayMainSession::Impl final {
 	std::uint8_t hold_samples_remaining = 0U;
 	std::uint8_t pending_hold_samples = 0U;
 	bool gameplay_reliable_warmup = false;
+
+	[[nodiscard]] bool drain_audio(
+		std::span<ClassicAudioCommand> destination,
+		std::uint8_t &count
+	) noexcept
+	{
+		while(const auto command = coordinator->take_audio_command()) {
+			if(count >= destination.size()) {
+				return false;
+			}
+			destination[count++] = *command;
+		}
+		return true;
+	}
+
+	[[nodiscard]] bool record_audio(
+		std::uint64_t frame,
+		std::uint8_t source_vsyncs
+	) noexcept
+	{
+		auto &slot = audio_slots[frame % audio_slots.size()];
+		slot = AudioSlot{
+			.valid = true,
+			.frame = frame,
+			.source_vsyncs = source_vsyncs,
+		};
+		return drain_audio(slot.commands, slot.command_count);
+	}
+
+	[[nodiscard]] bool append_audio(std::uint64_t frame) noexcept
+	{
+		auto &slot = audio_slots[frame % audio_slots.size()];
+		return slot.valid && slot.frame == frame &&
+			drain_audio(slot.commands, slot.command_count);
+	}
 
 	void update_boundary_confirmation() noexcept
 	{
@@ -67,6 +121,13 @@ struct NewClassicNetplayMainSession::Impl final {
 			coordinator->advance_reliable(resolved.combined, input_context);
 		if(!stepped) {
 			return std::unexpected(rollback_error(stepped.error()));
+		}
+		if(!record_audio(
+			resolved.frame, stepped->step_result.next_step_vsyncs
+		)) {
+			return std::unexpected(session_error(
+				NewClassicNetplayMainSessionErrorCode::audio_journal_failed
+			));
 		}
 		if(input_context == InputContext::interstitial) {
 			const bool final_sample = warning_samples_remaining == 1U;
@@ -141,6 +202,13 @@ std::expected<
 	auto impl = std::make_unique<Impl>();
 	impl->timeline = std::move(*timeline);
 	impl->coordinator = std::move(*coordinator);
+	if(!impl->drain_audio(
+		impl->bootstrap_audio, impl->bootstrap_audio_count
+	)) {
+		return std::unexpected(session_error(
+			NewClassicNetplayMainSessionErrorCode::audio_journal_failed
+		));
+	}
 	return std::unique_ptr<NewClassicNetplayMainSession>(
 		new NewClassicNetplayMainSession(std::move(impl))
 	);
@@ -380,6 +448,11 @@ std::expected<
 			NewClassicNetplayMainSessionErrorCode::invalid_boundary
 		));
 	}
+	if(!impl_->append_audio(*completed_frame)) {
+		return std::unexpected(session_error(
+			NewClassicNetplayMainSessionErrorCode::audio_journal_failed
+		));
+	}
 	impl_->boundary_frame.reset();
 	impl_->boundary.reset();
 	impl_->hold_samples_remaining = impl_->pending_hold_samples;
@@ -404,7 +477,40 @@ NewClassicNetplayMainSession::compose_shown_surface(
 std::optional<ClassicAudioCommand>
 NewClassicNetplayMainSession::take_audio_command() noexcept
 {
-	return impl_->coordinator->take_audio_command();
+	if(impl_->bootstrap_audio_head >= impl_->bootstrap_audio_count) {
+		return std::nullopt;
+	}
+	return impl_->bootstrap_audio[impl_->bootstrap_audio_head++];
+}
+
+std::expected<
+	std::optional<NewClassicNetplayConfirmedAudioFrame>,
+	NewClassicNetplayMainSessionError
+> NewClassicNetplayMainSession::take_confirmed_audio_frame() noexcept
+{
+	if(impl_->next_audio_frame >= impl_->timeline->confirmed_frame_count() ||
+		(impl_->boundary_frame &&
+		 impl_->next_audio_frame == *impl_->boundary_frame)) {
+		return std::optional<NewClassicNetplayConfirmedAudioFrame>{};
+	}
+	auto &slot = impl_->audio_slots[
+		impl_->next_audio_frame % impl_->audio_slots.size()
+	];
+	if(!slot.valid || slot.frame != impl_->next_audio_frame ||
+		slot.command_count > slot.commands.size() || slot.source_vsyncs == 0U) {
+		return std::unexpected(session_error(
+			NewClassicNetplayMainSessionErrorCode::audio_journal_failed
+		));
+	}
+	NewClassicNetplayConfirmedAudioFrame frame{
+		.frame = slot.frame,
+		.commands = slot.commands,
+		.command_count = slot.command_count,
+		.source_vsyncs = slot.source_vsyncs,
+	};
+	slot.valid = false;
+	++impl_->next_audio_frame;
+	return std::optional{frame};
 }
 
 const MainProcess &NewClassicNetplayMainSession::process() const noexcept

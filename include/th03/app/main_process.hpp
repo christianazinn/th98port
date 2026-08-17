@@ -44,6 +44,9 @@ struct MainDirectVsConfig {
 	std::uint8_t rank = 1U;
 	std::uint8_t key_mode = 0U;
 	GameOptions game_options{};
+	// Direct launch normally remains the silent developer seam. Netplay opts in
+	// so its rollback owner can journal the ordinary MAIN audio lifecycle.
+	bool classic_audio_lifecycle = false;
 	// Optional Kotohime research override. When supplied, the callback and its
 	// context must remain valid for this process's complete lifetime.
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
@@ -302,7 +305,8 @@ private:
 		std::span<const LoadedMainResource> resources,
 		std::shared_ptr<const MainProcessStaticContent> static_content,
 		std::uint8_t continues_used_digit,
-		std::optional<ClassicAudioCommand> gameplay_song
+		std::optional<ClassicAudioCommand> gameplay_song,
+		bool load_gameplay_song = false
 	);
 	void fail_presentation_for_test() noexcept;
 	[[nodiscard]] std::optional<MainProcessError>

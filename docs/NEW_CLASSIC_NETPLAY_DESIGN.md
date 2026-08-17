@@ -1,6 +1,6 @@
 # New Classic netplay design
 
-Status: **durable proposal; local rollback and the direct-UDP/Tailscale
+Status: **durable proposal; local rollback and the audible direct-UDP/Tailscale
 technical preview are green, while product WebRTC/room integration remains
 future work**
 
@@ -545,8 +545,15 @@ the pixel oracle. The final corrected source surface replaces the display
 mailbox's pending frame. Ordinary sample-and-hold presentation then applies.
 Local scaling, fullscreen, language, Flash FX, and volume remain independent.
 
-The audio device cannot be rewound. Semantic commands generated during active
-MAIN receive a local `(match frame, command ordinal, command)` event ID:
+The audio device cannot be rewound. The direct-UDP preview therefore journals
+each source frame's semantic command transaction beside its rollback slot,
+replaces that transaction during correction, and advances PMD only when the
+frame becomes contiguous-confirmed. Process-start music commands are
+non-speculative, and repeat/terminal audio is held until its boundary is
+confirmed. This safe first policy is implemented and tested on both peers.
+
+For later Internet play, semantic commands generated during active MAIN can
+receive a local `(match frame, command ordinal, command)` event ID:
 
 - BGM load/play/stop and other phase-changing commands execute only after their
   control/terminal boundary is confirmed.
@@ -557,9 +564,11 @@ MAIN receive a local `(match frame, command ordinal, command)` event ID:
   an accepted local presentation artifact, not gameplay state.
 - PMD/YM2608 synthesis itself is never part of the cross-peer rollback hash.
 
-This policy is preferable to delaying every SFX by the complete 12-frame
-prediction window. It requires focused tests for duplicate suppression and
-must not allow an audio queue to mutate deterministic gameplay.
+That responsive one-shot policy is preferable if measured Internet confirmation
+delay makes effects feel late. It remains future work and requires focused
+duplicate-suppression tests; it must not allow an audio queue to mutate
+deterministic gameplay. The current confirmed-only preview never waits an
+arbitrary twelve frames when the peer has already supplied the input.
 
 ## Pause, disconnect, and lifecycle
 
@@ -694,6 +703,8 @@ explicit N1 integration gates rather than reasons to alter the rollback image.
    prediction, and rewind. Its retained MAIN integration is complete as
    `T3NMS001`: delayed corrections restore and resimulate the complete process,
    suppress intermediate output, and keep speculative boundaries private.
+   Confirmed-frame audio journaling is also complete: corrected commands
+   replace speculative suffixes and both peers advance identical PMD VSyncs.
 3. Build the pinned GGRS C ABI spike and custom queued `NonBlockingSocket`.
 4. Fulfill Save/Load/Advance requests from `MainProcess`.
 5. Freeze prediction, delay, confirmation, digest, and replay-journal behavior.
@@ -701,6 +712,11 @@ explicit N1 integration gates rather than reasons to alter the rollback image.
    gates; delete the rejected production path.
 
 ### N2: portable peer transport and local signaling
+
+The immediately testable direct-IPv4 UDP/Tailscale preview is complete on the
+app-owned transport: fixed handshake/history packets, bounded prediction,
+full MAIN repeat/terminal lifecycle, confirmed audio, and Windows/POSIX socket
+tests. The following product transport remains open:
 
 1. Pin minimal libdatachannel and implement both Data Channels.
 2. Add a local test signaling server and two-process loopback.

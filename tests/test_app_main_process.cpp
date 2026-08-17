@@ -1411,6 +1411,7 @@ void test_new_classic_netplay_main_session_convergence()
 {
 	constexpr std::uint64_t frame_count = 48U;
 	MainDirectVsConfig config{};
+	config.classic_audio_lifecycle = true;
 	const auto resources = make_resources(config.player_one, config.player_two);
 	auto one_process = create_synthetic(config, resources);
 	auto two_process = create_synthetic(config, resources);
@@ -1431,6 +1432,39 @@ void test_new_classic_netplay_main_session_convergence()
 	if(!peer_one || !peer_two) {
 		return;
 	}
+	const auto drain_session_bootstrap = [](
+		NewClassicNetplayMainSession &session
+	) {
+		std::vector<th03::app::ClassicAudioCommand> commands{};
+		while(const auto command = session.take_audio_command()) {
+			commands.push_back(*command);
+		}
+		return commands;
+	};
+	const auto drain_reference = [](MainProcess &process) {
+		std::vector<th03::app::ClassicAudioCommand> commands{};
+		while(const auto command = process.take_audio_command()) {
+			commands.push_back(*command);
+		}
+		return commands;
+	};
+	const auto reference_bootstrap = drain_reference(**reference_process);
+	expect(drain_session_bootstrap(**peer_one) == reference_bootstrap &&
+		drain_session_bootstrap(**peer_two) == reference_bootstrap &&
+		reference_bootstrap == std::vector<th03::app::ClassicAudioCommand>{
+			{
+				.type = th03::app::ClassicAudioCommandType::load_song,
+				.cue = th03::app::ClassicMusicCue::gameplay,
+				.parameter = 0U,
+			},
+			{.type = th03::app::ClassicAudioCommandType::reset_effects},
+			{
+				.type = th03::app::ClassicAudioCommandType::play_song,
+				.cue = th03::app::ClassicMusicCue::gameplay,
+				.parameter = 0U,
+			},
+		},
+		"netplay MAIN owns one identical load/reset/play bootstrap transaction");
 	const auto input_one = [](std::uint64_t frame) {
 		return NewClassicNetplayOwnedInput{
 			.word = static_cast<std::uint16_t>(
@@ -1449,6 +1483,11 @@ void test_new_classic_netplay_main_session_convergence()
 			.charge = static_cast<std::uint8_t>(frame % 4U == 1U),
 		};
 	};
+	std::array<
+		std::vector<th03::app::ClassicAudioCommand>,
+		frame_count
+	> reference_audio{};
+	std::array<std::uint8_t, frame_count> reference_vsyncs{};
 	std::uint64_t corrections = 0U;
 	for(std::uint64_t host_frame = 0U;
 		host_frame < frame_count + 7U; ++host_frame) {
@@ -1459,6 +1498,12 @@ void test_new_classic_netplay_main_session_convergence()
 				two->frame == host_frame && one->surface_publishable &&
 				two->surface_publishable,
 				"both peers advance one privately predicted MAIN boundary");
+			if(host_frame == 0U) {
+				const auto private_audio =
+					(*peer_one)->take_confirmed_audio_frame();
+				expect(private_audio && !*private_audio,
+					"privately predicted audio remains inaudible");
+			}
 			const auto combined = th03::app::combine_new_classic_netplay_inputs(
 				input_one(host_frame), input_two(host_frame)
 			);
@@ -1470,6 +1515,10 @@ void test_new_classic_netplay_main_session_convergence()
 			expect(combined && reference &&
 				reference->status == th03::StepStatus::running,
 				"uninterrupted netplay reference advances exact combined input");
+			if(reference) {
+				reference_audio[host_frame] = drain_reference(**reference_process);
+				reference_vsyncs[host_frame] = reference->next_step_vsyncs;
+			}
 		}
 		for(std::uint64_t frame = 0U; frame < frame_count; ++frame) {
 			const auto delay_one = 1U + ((frame * 5U) % 6U);
@@ -1502,6 +1551,25 @@ void test_new_classic_netplay_main_session_convergence()
 		(*peer_two)->confirmed_frame_count() == frame_count &&
 		corrections > frame_count,
 		"both peers confirm all frames after exercising suffix resimulation");
+	for(std::uint64_t frame = 0U; frame < frame_count; ++frame) {
+		auto one = (*peer_one)->take_confirmed_audio_frame();
+		auto two = (*peer_two)->take_confirmed_audio_frame();
+		const auto same_audio = [&](const auto &candidate) {
+			return candidate && *candidate && (**candidate).frame == frame &&
+				(**candidate).source_vsyncs == reference_vsyncs[frame] &&
+				(**candidate).command_count == reference_audio[frame].size() &&
+				std::equal(
+					reference_audio[frame].begin(),
+					reference_audio[frame].end(),
+					(**candidate).commands.begin()
+				);
+		};
+		expect(same_audio(one) && same_audio(two),
+			"confirmed netplay audio replaces speculative suffixes exactly");
+	}
+	const auto audio_exhausted = (*peer_one)->take_confirmed_audio_frame();
+	expect(audio_exhausted && !*audio_exhausted,
+		"confirmed audio frame stream ends exactly at contiguous confirmation");
 	expect((*peer_one)->process().canonical_state().state_hash ==
 			(*peer_two)->process().canonical_state().state_hash &&
 		(*peer_one)->process().canonical_state().state_hash ==

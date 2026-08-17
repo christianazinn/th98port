@@ -2,8 +2,14 @@
 
 Status: cross-platform technical preview. This route runs a complete human
 VS MAIN match over direct IPv4 UDP. It is intentionally exposed by command
-line before the source-styled room/selection UI, WebRTC/TURN transport, audio,
-pause, replay capture, and post-match report are integrated.
+line before the source-styled room/selection UI, WebRTC/TURN transport,
+negotiated pause, replay capture, and post-match report are integrated.
+
+Gameplay music and sound effects are enabled. Audio advances only from
+contiguous-confirmed source frames, so a rollback correction cannot duplicate
+or leak a speculative sound. On a low-latency tailnet this normally adds only
+the actual peer-confirmation delay; the deterministic game and PMD clocks do
+not follow either machine's wall clock.
 
 The host owns logical P1 and the joiner owns logical P2. Both machines use
 their ordinary local-player controls: `T/F/H/B` for directions, `R/Y/V/N` for

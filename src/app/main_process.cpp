@@ -917,8 +917,17 @@ MainProcess::create_impl(
 	handoff_raster.set_palette_tone(100);
 	handoff_raster.apply_pending_palette();
 	const MainStageHandoff handoff(std::move(handoff_raster));
+	const auto init = direct_game_init(config);
+	const auto song = config.classic_audio_lifecycle ?
+		classic_main_gameplay_song(init) :
+		std::optional<ClassicAudioCommand>{};
+	if(config.classic_audio_lifecycle && !song) {
+		return std::unexpected(process_error(
+			MainProcessErrorCode::invalid_config
+		));
+	}
 	return create_common(
-		direct_game_init(config),
+		init,
 		config.game_options,
 		config.kotohime_compatibility,
 		selections,
@@ -926,7 +935,8 @@ MainProcess::create_impl(
 		resources,
 		*static_content,
 		0U,
-		std::nullopt
+		song,
+		config.classic_audio_lifecycle
 	);
 }
 
@@ -1295,7 +1305,8 @@ MainProcess::create_common(
 	std::span<const LoadedMainResource> resources,
 	std::shared_ptr<const MainProcessStaticContent> static_content,
 	std::uint8_t continues_used_digit,
-	std::optional<ClassicAudioCommand> gameplay_song
+	std::optional<ClassicAudioCommand> gameplay_song,
+	bool load_gameplay_song
 )
 {
 	if(!static_content || continues_used_digit > 3U ||
@@ -1518,7 +1529,8 @@ MainProcess::create_common(
 	if(gameplay_song) {
 		auto play = *gameplay_song;
 		play.type = ClassicAudioCommandType::play_song;
-		if(!impl->push_audio({
+		if((load_gameplay_song && !impl->push_audio(*gameplay_song)) ||
+			!impl->push_audio({
 			.type = ClassicAudioCommandType::reset_effects,
 		}) || !impl->push_audio(play)) {
 			return std::unexpected(process_error(
