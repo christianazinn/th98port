@@ -18,6 +18,7 @@
 #include "th03/present/mono.hpp"
 #include "th03/present/pi.hpp"
 #include "th03/present/raster.hpp"
+#include "th03/present/rollback_snapshot.hpp"
 #include "th03/present/sprite16.hpp"
 #include "th03/present/sprite_staging.hpp"
 #include "th03/present/staff_flakes.hpp"

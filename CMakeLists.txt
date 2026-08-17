@@ -392,6 +392,7 @@ add_library(th03_present STATIC
 	src/present/pi.cpp
 	src/present/planar.cpp
 	src/present/raster.cpp
+	src/present/rollback_snapshot.cpp
 	src/present/sprite16.cpp
 	src/present/sprite_staging.cpp
 	src/present/staff_flakes.cpp

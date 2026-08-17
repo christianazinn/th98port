@@ -10,6 +10,7 @@
 
 #include "th03/assets/types.hpp"
 #include "th03/present/planar.hpp"
+#include "th03/present/rollback_snapshot.hpp"
 
 namespace th03::present {
 
@@ -199,6 +200,17 @@ public:
 	[[nodiscard]] std::uint64_t display_state_hash() const noexcept;
 
 private:
+	friend std::expected<void, RollbackVisualError> capture_rollback_visual(
+		const Raster &,
+		const Tram &,
+		RollbackVisualSnapshot &
+	) noexcept;
+	friend std::expected<void, RollbackVisualError> restore_rollback_visual(
+		Raster &,
+		Tram &,
+		const RollbackVisualSnapshot &
+	) noexcept;
+
 	std::array<std::vector<Index4>, 2U> pages_{};
 	Page access_page_ = Page::zero;
 	Page shown_page_ = Page::zero;

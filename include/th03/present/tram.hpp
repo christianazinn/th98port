@@ -7,6 +7,8 @@
 #include <optional>
 #include <span>
 
+#include "th03/present/rollback_snapshot.hpp"
+
 namespace th03::present {
 
 inline constexpr std::uint8_t tram_width = 80U;
@@ -156,6 +158,17 @@ public:
 	[[nodiscard]] std::uint64_t visible_state_hash() const noexcept;
 
 private:
+	friend std::expected<void, RollbackVisualError> capture_rollback_visual(
+		const Raster &,
+		const Tram &,
+		RollbackVisualSnapshot &
+	) noexcept;
+	friend std::expected<void, RollbackVisualError> restore_rollback_visual(
+		Raster &,
+		Tram &,
+		const RollbackVisualSnapshot &
+	) noexcept;
+
 	std::array<TramCell, tram_cell_count> cells_{};
 	std::array<GaijiGlyph, gaiji_count> gaiji_{};
 	bool visible_ = true;

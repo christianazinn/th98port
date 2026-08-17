@@ -1,6 +1,8 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
+#include <span>
 #include <string_view>
 
 #include "th03/assets/types.hpp"
@@ -29,6 +31,8 @@ using th03::present::Raster;
 using th03::present::RasterMode;
 using th03::present::Rect;
 using th03::present::Rgb8;
+using th03::present::RollbackVisualErrorCode;
+using th03::present::RollbackVisualSnapshot;
 using th03::present::Tram;
 using th03::present::TramCell;
 using th03::assets::Rgb4;
@@ -83,6 +87,162 @@ void expect_gaiji(
 		{left.x + 1, left.y},
 		{th03::present::gaiji_cell_code(glyph_id, GaijiHalf::right), attribute},
 		message
+	);
+}
+
+std::uint32_t test_fnv1a32(std::span<const std::byte> bytes) {
+	std::uint32_t hash = 2166136261U;
+	for(const auto value : bytes) {
+		hash ^= std::to_integer<std::uint8_t>(value);
+		hash *= 16777619U;
+	}
+	return hash;
+}
+
+void test_write_u32(
+	std::array<std::byte, th03::present::rollback_visual_snapshot_capacity> &bytes,
+	std::size_t offset,
+	std::uint32_t value
+) {
+	bytes[offset] = static_cast<std::byte>(value & 0xFFU);
+	bytes[offset + 1U] = static_cast<std::byte>((value >> 8U) & 0xFFU);
+	bytes[offset + 2U] = static_cast<std::byte>((value >> 16U) & 0xFFU);
+	bytes[offset + 3U] = static_cast<std::byte>(value >> 24U);
+}
+
+void test_rollback_visual_snapshot() {
+	Raster raster;
+	Tram tram;
+	expect(
+		raster.set_access_page(Page::zero) &&
+			raster.clear({0, 0, 640U, 400U}, 2U) &&
+			raster.plot({17, 29}, 6U) &&
+			raster.set_access_page(Page::one) &&
+			raster.clear({0, 0, 640U, 400U}, 9U) &&
+			raster.plot({511, 301}, 14U),
+		"prepare distinct rollback graphics pages"
+	);
+	expect(
+		raster.set_pending_palette_entry_rgb8(4U, {0x12U, 0x34U, 0x56U}),
+		"prepare rollback pending palette"
+	);
+	raster.set_palette_tone(73);
+	raster.apply_pending_palette();
+	expect(
+		raster.set_pending_palette_entry_rgb8(4U, {0xA1U, 0xB2U, 0xC3U}),
+		"preserve unapplied rollback palette edit"
+	);
+	raster.set_palette_tone(-1234);
+	raster.set_scroll_y(0xBEEFU);
+	expect(
+		raster.set_raster_mode(RasterMode::zoomed_200_lower) &&
+			raster.set_access_page(Page::one) &&
+			raster.set_shown_page(Page::zero),
+		"prepare rollback Raster selectors"
+	);
+
+	tram.fill({'Q', th03::present::tram_magenta});
+	expect(
+		tram.put_gaiji({12, 7}, 19U, th03::present::tram_yellow),
+		"prepare referenced rollback gaiji"
+	);
+	std::array<std::uint8_t, th03::present::gaiji_glyph_bytes> referenced{};
+	std::array<std::uint8_t, th03::present::gaiji_glyph_bytes> unreferenced{};
+	for(std::size_t index = 0U; index < referenced.size(); ++index) {
+		referenced[index] = static_cast<std::uint8_t>((index * 7U) ^ 0xA5U);
+		unreferenced[index] = static_cast<std::uint8_t>((index * 11U) ^ 0x5AU);
+	}
+	expect(
+		tram.load_gaiji(19U, referenced) && tram.load_gaiji(201U, unreferenced),
+		"prepare complete rollback gaiji state"
+	);
+	tram.set_visible(false);
+
+	auto baseline = std::make_unique<RollbackVisualSnapshot>();
+	expect(
+		th03::present::capture_rollback_visual(raster, tram, *baseline).has_value(),
+		"capture rollback visual state"
+	);
+	expect(
+		baseline->used_size == 528328U,
+		"rollback visual active size is frozen"
+	);
+	expect(
+		test_fnv1a32(std::span<const std::byte>(baseline->bytes).subspan(
+			32U, baseline->used_size - 32U
+		)) == 1721220782U,
+		"rollback visual cross-compiler payload vector is frozen"
+	);
+
+	expect(
+		raster.set_access_page(Page::zero) &&
+			raster.clear({0, 0, 640U, 400U}, 15U) &&
+			raster.set_access_page(Page::one) &&
+			raster.clear({0, 0, 640U, 400U}, 1U) &&
+			raster.set_shown_page(Page::one) &&
+			raster.set_raster_mode(RasterMode::lines_400),
+		"diverge rollback Raster"
+	);
+	raster.set_palette_tone(200);
+	raster.set_scroll_y(0U);
+	tram.fill({'Z', th03::present::tram_blue});
+	tram.set_visible(true);
+	unreferenced.fill(0U);
+	expect(tram.load_gaiji(201U, unreferenced), "diverge rollback gaiji");
+	expect(
+		th03::present::restore_rollback_visual(raster, tram, *baseline).has_value(),
+		"restore rollback visual state"
+	);
+	expect(
+		raster.access_page() == Page::one &&
+			raster.shown_page() == Page::zero &&
+			raster.raster_mode() == RasterMode::zoomed_200_lower &&
+			raster.palette_tone() == -1234 && raster.scroll_y() == 0xBEEFU,
+		"restore Raster controls exactly"
+	);
+	expect_pixel(raster, Page::zero, {17, 29}, 6U, "restore page zero pixel");
+	expect_pixel(raster, Page::one, {511, 301}, 14U, "restore page one pixel");
+	expect(
+		raster.pending_palette().colors[4U] == Rgb8{0xA1U, 0xB2U, 0xC3U} &&
+			raster.applied_palette().colors[4U] == Rgb4{0U, 2U, 3U},
+		"restore pending and applied palettes independently"
+	);
+	expect(!tram.visible(), "restore hidden TRAM state");
+	expect_gaiji(
+		tram, {12, 7}, 19U, th03::present::tram_yellow,
+		"restore referenced gaiji cells"
+	);
+	expect(
+		tram.gaiji(19U).row_halves == referenced &&
+			tram.gaiji(201U).row_halves != unreferenced,
+		"restore referenced and unreferenced gaiji bytes"
+	);
+
+	auto roundtrip = std::make_unique<RollbackVisualSnapshot>();
+	expect(
+		th03::present::capture_rollback_visual(raster, tram, *roundtrip).has_value() &&
+			*roundtrip == *baseline,
+		"restored visual state recaptures byte-identically"
+	);
+	auto corrupt = std::make_unique<RollbackVisualSnapshot>(*baseline);
+	corrupt->bytes[32U] = std::byte{0x10U};
+	const auto payload = std::span<const std::byte>(corrupt->bytes).subspan(
+		32U, corrupt->used_size - 32U
+	);
+	test_write_u32(corrupt->bytes, 20U, test_fnv1a32(payload));
+	const auto rejected = th03::present::restore_rollback_visual(
+		raster, tram, *corrupt
+	);
+	expect(
+		!rejected.has_value() &&
+			rejected.error().code == RollbackVisualErrorCode::invalid_value,
+		"valid-checksum invalid visual value is rejected"
+	);
+	auto after_reject = std::make_unique<RollbackVisualSnapshot>();
+	expect(
+		th03::present::capture_rollback_visual(raster, tram, *after_reject).has_value() &&
+			*after_reject == *baseline,
+		"rejected visual restore is transactional"
 	);
 }
 
@@ -1252,6 +1412,7 @@ void test_main_shot_sheet_and_startup() {
 } // namespace
 
 int main() {
+	test_rollback_visual_snapshot();
 	test_selectors_and_clipping();
 	test_copy_page_overlap_and_selectors();
 	test_transparent_masked_and_malformed_blits();
