@@ -117,4 +117,31 @@ Th03SoundEffectSchedulerStatus Th03SoundEffectScheduler::status() const noexcept
 	};
 }
 
+std::expected<void, Th03PmdServiceError>
+Th03SoundEffectScheduler::restore(
+	Th03SoundEffectSchedulerStatus status
+) noexcept
+{
+	if(!status.pending_effect) {
+		if(status.pending_frame != 0U) {
+			return std::unexpected(Th03PmdServiceError{
+				.code = Th03PmdServiceErrorCode::invalid_scheduler_state,
+				.effect_id = 0U,
+			});
+		}
+	} else {
+		const auto rule = th03_sound_effect_rule(*status.pending_effect);
+		if(!rule || status.pending_frame > rule->hold_frames) {
+			return std::unexpected(rule ? Th03PmdServiceError{
+				.code = Th03PmdServiceErrorCode::invalid_scheduler_state,
+				.effect_id = *status.pending_effect,
+			} : rule.error());
+		}
+	}
+	active_ = status.active;
+	pending_ = status.pending_effect;
+	frame_ = status.pending_frame;
+	return {};
+}
+
 } // namespace th03::audio

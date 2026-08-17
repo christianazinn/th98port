@@ -4,6 +4,71 @@
 
 namespace th03::present {
 
+bool MainPresenterRollbackAccess::valid(
+	const MainPresenterRollbackState &state
+) noexcept
+{
+	const auto valid_page = [](Page page) {
+		return page == Page::zero || page == Page::one;
+	};
+	if(!state.palette_baseline_ready || state.palette_dirty ||
+		!state.static_started || !valid_page(state.page_roles.back) ||
+		!valid_page(state.page_roles.front) ||
+		state.page_roles.back == state.page_roles.front ||
+		static_cast<std::uint8_t>(state.background_kind) >
+			static_cast<std::uint8_t>(MainBackgroundKind::type_b) ||
+		state.background_read_stream != 0U ||
+		state.background_read_slot > main_background_record_count ||
+		!state.background_initialized ||
+		state.background_status != MainBackgroundStatus::ready ||
+		state.boss_activation.character > 8U ||
+		state.boss_status != MainBossStatus::ready ||
+		state.entities_status != MainEntitiesStatus::ready ||
+		state.effects_status != MainEffectsStatus::ready ||
+		state.extra_charge_status != MainExtraChargeStatus::ready ||
+		state.players_bullets_status != MainPlayersBulletsStatus::ready ||
+		state.bomb_palette_status != MainBombPaletteStatus::ready ||
+		state.bomb_pending.kind != 0U ||
+		state.bombs_status != MainBombsStatus::ready ||
+		state.warning_interstitial_active ||
+		state.warning_status != MainWarningGaugeStatus::ready ||
+		state.hud_particle_reads_pending ||
+		state.hud_completed_batch_waiting ||
+		state.hud_late_state_pending ||
+		state.hud_status != MainHudResultStatus::ready) {
+		return false;
+	}
+	for(const auto &effect : state.common_effects) {
+		if(effect.type > 2U) {
+			return false;
+		}
+	}
+	for(const auto pose : state.player_poses) {
+		if(pose > 2U) {
+			return false;
+		}
+	}
+	for(const auto &style : state.bullet16_styles) {
+		if(static_cast<std::uint8_t>(style.construction) >
+			static_cast<std::uint8_t>(
+				Bullet16ConstructionKind::kana_extra_attack
+			)) {
+			return false;
+		}
+	}
+	for(const auto &activation : state.bomb_activations) {
+		if(activation.character > 8U) {
+			return false;
+		}
+	}
+	for(const auto &read : state.reimu_reads) {
+		if(read.phase != 0U) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool MainPresenterRollbackAccess::boundary_ready(
 	const MainPaletteState &palette,
 	const MainStaticPresenter &static_presenter,

@@ -1112,6 +1112,114 @@ void test_presenter_rollback_state()
 	);
 }
 
+void test_main_process_rollback_transaction()
+{
+	using th03::app::ClassicAudioCommand;
+	using th03::app::MainProcessRollbackErrorCode;
+	using th03::app::MainProcessRollbackSnapshot;
+	MainDirectVsConfig config{};
+	const auto resources = make_resources(config.player_one, config.player_two);
+	auto left_created = create_synthetic(config, resources);
+	auto right_created = create_synthetic(config, resources);
+	expect(left_created && right_created,
+		"MAIN rollback twin process creation");
+	if(!left_created || !right_created) {
+		return;
+	}
+	auto &left = **left_created;
+	auto &right = **right_created;
+	const auto drain_audio = [](MainProcess &process) {
+		std::vector<ClassicAudioCommand> commands{};
+		while(const auto command = process.take_audio_command()) {
+			commands.push_back(*command);
+		}
+		return commands;
+	};
+	expect(drain_audio(left) == drain_audio(right),
+		"MAIN rollback twins begin with identical audio transactions");
+	const auto left_armed = left.step({.p1 = 0x0020U});
+	const auto right_armed = right.step({.p1 = 0x0020U});
+	const auto same_step = [](const th03::StepResult &a,
+		const th03::StepResult &b) noexcept {
+		return a.status == b.status &&
+			a.input_boundary_state.state_hash ==
+				b.input_boundary_state.state_hash &&
+			a.next_step_vsyncs == b.next_step_vsyncs &&
+			a.defeat_none_before_frame == b.defeat_none_before_frame &&
+			a.defeat_none_after_frame == b.defeat_none_after_frame;
+	};
+	expect(left_armed && right_armed && same_step(*left_armed, *right_armed),
+		"MAIN rollback twins arm identical presenter and effect history");
+
+	auto snapshot = std::make_unique<MainProcessRollbackSnapshot>();
+	auto recovery = std::make_unique<MainProcessRollbackSnapshot>();
+	expect(left.capture_rollback(*snapshot).has_value(),
+		"complete MAIN rollback snapshot captures at frame boundary");
+
+	const auto expected_step = right.step({});
+	std::vector<th03::present::ComposedPixel> expected_pixels(
+		th03::present::graphics_page_pixels
+	);
+	const auto expected_surface = right.compose_shown_surface(std::span<
+		th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	>(expected_pixels.data(), expected_pixels.size()));
+	const auto expected_audio = drain_audio(right);
+	expect(expected_step && expected_surface,
+		"uninterrupted rollback reference publishes its next frame");
+
+	for(std::uint8_t frame = 0U; frame < 5U; ++frame) {
+		const auto diverged = left.step({
+			.p1 = static_cast<std::uint16_t>(
+				(frame & 1U) ? 0x0010U : 0x0020U
+			),
+		});
+		expect(diverged.has_value(), "rollback divergence frame remains valid");
+	}
+	static_cast<void>(drain_audio(left));
+	expect(left.restore_rollback(*snapshot, *recovery).has_value(),
+		"MAIN rollback transaction restores all local sections");
+	const auto corrected_step = left.step({});
+	std::vector<th03::present::ComposedPixel> corrected_pixels(
+		th03::present::graphics_page_pixels
+	);
+	const auto corrected_surface = left.compose_shown_surface(std::span<
+		th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	>(corrected_pixels.data(), corrected_pixels.size()));
+	const auto corrected_audio = drain_audio(left);
+	expect(corrected_step && expected_step &&
+		same_step(*corrected_step, *expected_step) && corrected_surface &&
+		expected_surface && left.canonical_state().state_hash ==
+			right.canonical_state().state_hash,
+		"restored MAIN simulation produces the uninterrupted next state");
+	expect(corrected_pixels == expected_pixels,
+		"restored MAIN publishes the uninterrupted full next surface");
+	expect(corrected_audio == expected_audio,
+		"restored MAIN publishes the uninterrupted semantic audio commands");
+
+	auto corrected_snapshot = std::make_unique<MainProcessRollbackSnapshot>();
+	auto expected_snapshot = std::make_unique<MainProcessRollbackSnapshot>();
+	expect(left.capture_rollback(*corrected_snapshot).has_value() &&
+		right.capture_rollback(*expected_snapshot).has_value() &&
+		*corrected_snapshot == *expected_snapshot,
+		"corrected complete MAIN snapshot equals uninterrupted execution");
+
+	auto invalid = std::make_unique<MainProcessRollbackSnapshot>(*snapshot);
+	invalid->visual.bytes[32U] ^= std::byte{0x01U};
+	auto before_invalid = std::make_unique<MainProcessRollbackSnapshot>();
+	auto after_invalid = std::make_unique<MainProcessRollbackSnapshot>();
+	expect(left.capture_rollback(*before_invalid).has_value(),
+		"invalid-restore fixture captures current MAIN transaction");
+	const auto rejected = left.restore_rollback(*invalid, *recovery);
+	expect(!rejected && rejected.error().code ==
+		MainProcessRollbackErrorCode::visual_restore_failed,
+		"invalid visual section rejects after simulation pre-restore");
+	expect(left.capture_rollback(*after_invalid).has_value() &&
+		*after_invalid == *before_invalid,
+		"failed composite restore recovers every MAIN section atomically");
+}
+
 bool same_canonical(
 	const th03::CanonicalState &left,
 	const th03::CanonicalState &right
@@ -3020,6 +3128,7 @@ int main(int argc, char **argv)
 {
 	test_main_feedback_policy();
 	test_presenter_rollback_state();
+	test_main_process_rollback_transaction();
 	test_raw_bf2_shapes();
 	test_distinct_selection_first_frame();
 	test_live_bomb_first_frame();

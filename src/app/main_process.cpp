@@ -1712,6 +1712,236 @@ MainProcess::finish_main_process() noexcept
 	return {};
 }
 
+std::expected<void, MainProcessRollbackError>
+MainProcess::capture_rollback(
+	MainProcessRollbackSnapshot &snapshot
+) const noexcept
+{
+	snapshot.version = 0U;
+	if(impl_->preroll_simulating || impl_->audio_feedback_failed ||
+		impl_->game->deferred_frame_pending() ||
+		!present::MainPresenterRollbackAccess::boundary_ready(
+			impl_->palette,
+			impl_->static_presenter,
+			*impl_->background,
+			*impl_->bosses,
+			*impl_->entities,
+			*impl_->effects,
+			*impl_->extra_charge,
+			*impl_->players_bullets,
+			*impl_->bombs,
+			*impl_->warning_gauge,
+			*impl_->hud_result,
+			*impl_->round
+		)) {
+		return std::unexpected(MainProcessRollbackError{
+			.code = MainProcessRollbackErrorCode::boundary_unavailable,
+		});
+	}
+
+	auto simulation = impl_->game->capture_rollback_simulation();
+	if(!simulation) {
+		return std::unexpected(MainProcessRollbackError{
+			.code = MainProcessRollbackErrorCode::simulation_capture_failed,
+			.simulation = simulation.error(),
+		});
+	}
+	snapshot.simulation = std::move(*simulation);
+	const auto visual = present::capture_rollback_visual(
+		impl_->raster, impl_->tram, snapshot.visual
+	);
+	if(!visual) {
+		return std::unexpected(MainProcessRollbackError{
+			.code = MainProcessRollbackErrorCode::visual_capture_failed,
+			.visual = visual.error(),
+		});
+	}
+	present::MainPresenterRollbackAccess::capture(
+		impl_->palette,
+		impl_->static_presenter,
+		*impl_->background,
+		*impl_->bosses,
+		*impl_->entities,
+		*impl_->effects,
+		*impl_->extra_charge,
+		*impl_->players_bullets,
+		*impl_->bombs,
+		*impl_->warning_gauge,
+		*impl_->hud_result,
+		snapshot.presenters
+	);
+	snapshot.semantic = {
+		.input_protocol = impl_->input_protocol,
+		.continues_used_digit = impl_->continues_used_digit,
+		.audio_commands = impl_->audio_commands,
+		.audio_head = static_cast<std::uint8_t>(impl_->audio_head),
+		.audio_count = static_cast<std::uint8_t>(impl_->audio_count),
+		.classic_audio_lifecycle = impl_->classic_audio_lifecycle,
+		.audio_feedback_failed = impl_->audio_feedback_failed,
+		.feedback_scheduler = impl_->feedback_scheduler.status(),
+	};
+	snapshot.version = main_process_rollback_version;
+	return {};
+}
+
+std::expected<void, MainProcessRollbackError>
+MainProcess::restore_rollback(
+	const MainProcessRollbackSnapshot &snapshot,
+	MainProcessRollbackSnapshot &recovery_scratch
+) noexcept
+{
+	const auto valid_audio_command = [](ClassicAudioCommand command) {
+		if(static_cast<std::uint8_t>(command.type) >
+			static_cast<std::uint8_t>(
+				ClassicAudioCommandType::set_effect_volume
+			) || static_cast<std::uint8_t>(command.cue) >
+			static_cast<std::uint8_t>(ClassicMusicCue::cutscene_five)) {
+			return false;
+		}
+		switch(command.type) {
+		case ClassicAudioCommandType::dispatch_effect:
+		case ClassicAudioCommandType::play_effect:
+			return command.parameter >= audio::th03_sound_effect_first &&
+				command.parameter <= audio::th03_sound_effect_last;
+		case ClassicAudioCommandType::set_bgm_active:
+		case ClassicAudioCommandType::set_effects_active:
+			return command.parameter <= 1U;
+		case ClassicAudioCommandType::set_music_volume:
+		case ClassicAudioCommandType::set_effect_volume:
+			return command.parameter <= 100U;
+		default:
+			return true;
+		}
+	};
+	const auto &semantic = snapshot.semantic;
+	audio::Th03SoundEffectScheduler scheduler_validator{};
+	const auto scheduler_valid = scheduler_validator.restore(
+		semantic.feedback_scheduler
+	);
+	const auto commands_valid = std::all_of(
+		semantic.audio_commands.begin(), semantic.audio_commands.end(),
+		valid_audio_command
+	);
+	if(&snapshot == &recovery_scratch ||
+		snapshot.version != main_process_rollback_version ||
+		semantic.input_protocol != impl_->input_protocol ||
+		semantic.continues_used_digit != impl_->continues_used_digit ||
+		semantic.classic_audio_lifecycle != impl_->classic_audio_lifecycle ||
+		semantic.audio_feedback_failed ||
+		semantic.audio_head >= semantic.audio_commands.size() ||
+		semantic.audio_count > semantic.audio_commands.size() ||
+		!scheduler_valid || !commands_valid ||
+		!present::MainPresenterRollbackAccess::valid(snapshot.presenters)) {
+		return std::unexpected(MainProcessRollbackError{
+			.code = MainProcessRollbackErrorCode::invalid_snapshot,
+			.audio = scheduler_valid ? std::nullopt :
+				std::optional{scheduler_valid.error()},
+		});
+	}
+
+	const auto recovery = capture_rollback(recovery_scratch);
+	if(!recovery) {
+		return std::unexpected(recovery.error());
+	}
+	const auto simulation = impl_->game->restore_rollback_simulation(
+		snapshot.simulation
+	);
+	if(!simulation) {
+		return std::unexpected(MainProcessRollbackError{
+			.code = MainProcessRollbackErrorCode::simulation_restore_failed,
+			.simulation = simulation.error(),
+		});
+	}
+	if(impl_->game->deferred_frame_pending()) {
+		const auto recovered = impl_->game->restore_rollback_simulation(
+			recovery_scratch.simulation
+		);
+		return std::unexpected(MainProcessRollbackError{
+			.code = recovered ? MainProcessRollbackErrorCode::invalid_snapshot :
+				MainProcessRollbackErrorCode::recovery_failed,
+			.simulation = recovered ? std::nullopt :
+				std::optional{recovered.error()},
+		});
+	}
+	const auto visual = present::restore_rollback_visual(
+		impl_->raster, impl_->tram, snapshot.visual
+	);
+	if(!visual) {
+		const auto recovered = impl_->game->restore_rollback_simulation(
+			recovery_scratch.simulation
+		);
+		return std::unexpected(MainProcessRollbackError{
+			.code = recovered ?
+				MainProcessRollbackErrorCode::visual_restore_failed :
+				MainProcessRollbackErrorCode::recovery_failed,
+			.simulation = recovered ? std::nullopt :
+				std::optional{recovered.error()},
+			.visual = visual.error(),
+		});
+	}
+	present::MainPresenterRollbackAccess::restore(
+		impl_->palette,
+		impl_->static_presenter,
+		*impl_->background,
+		*impl_->bosses,
+		*impl_->entities,
+		*impl_->effects,
+		*impl_->extra_charge,
+		*impl_->players_bullets,
+		*impl_->bombs,
+		*impl_->warning_gauge,
+		*impl_->hud_result,
+		snapshot.presenters
+	);
+	impl_->audio_commands = semantic.audio_commands;
+	impl_->audio_head = semantic.audio_head;
+	impl_->audio_count = semantic.audio_count;
+	impl_->audio_feedback_failed = semantic.audio_feedback_failed;
+	const auto scheduler = impl_->feedback_scheduler.restore(
+		semantic.feedback_scheduler
+	);
+	if(!scheduler) {
+		// This status was validated above. Treat any future discrepancy as an
+		// internal recovery failure rather than publishing partial state.
+		const auto recovered_simulation =
+			impl_->game->restore_rollback_simulation(
+				recovery_scratch.simulation
+			);
+		const auto recovered_visual = present::restore_rollback_visual(
+			impl_->raster, impl_->tram, recovery_scratch.visual
+		);
+		present::MainPresenterRollbackAccess::restore(
+			impl_->palette,
+			impl_->static_presenter,
+			*impl_->background,
+			*impl_->bosses,
+			*impl_->entities,
+			*impl_->effects,
+			*impl_->extra_charge,
+			*impl_->players_bullets,
+			*impl_->bombs,
+			*impl_->warning_gauge,
+			*impl_->hud_result,
+			recovery_scratch.presenters
+		);
+		impl_->audio_commands = recovery_scratch.semantic.audio_commands;
+		impl_->audio_head = recovery_scratch.semantic.audio_head;
+		impl_->audio_count = recovery_scratch.semantic.audio_count;
+		impl_->audio_feedback_failed =
+			recovery_scratch.semantic.audio_feedback_failed;
+		static_cast<void>(impl_->feedback_scheduler.restore(
+			recovery_scratch.semantic.feedback_scheduler
+		));
+		return std::unexpected(MainProcessRollbackError{
+			.code = (recovered_simulation && recovered_visual) ?
+				MainProcessRollbackErrorCode::invalid_snapshot :
+				MainProcessRollbackErrorCode::recovery_failed,
+			.audio = scheduler.error(),
+		});
+	}
+	return {};
+}
+
 std::expected<SessionTransition, MainProcessError>
 MainProcess::session_transition(
 	std::optional<ContinueChoice> continue_choice

@@ -13,9 +13,12 @@
 #include "th03/app/classic_audio.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/assets/types.hpp"
+#include "th03/audio/th03_pmd_service.hpp"
 #include "th03/core/game.hpp"
 #include "th03/present/main_bomb_palette.hpp"
+#include "th03/present/main_rollback.hpp"
 #include "th03/present/main_round.hpp"
+#include "th03/present/rollback_snapshot.hpp"
 
 namespace th03::app {
 
@@ -125,6 +128,59 @@ struct MainProcessError {
 		present::MainRoundStatus::ready;
 };
 
+inline constexpr std::uint32_t main_process_rollback_version = 1U;
+
+struct MainProcessRollbackSemanticState final {
+	InputProtocol input_protocol = InputProtocol::live;
+	std::uint8_t continues_used_digit = 0U;
+	std::array<ClassicAudioCommand, 8U> audio_commands{};
+	std::uint8_t audio_head = 0U;
+	std::uint8_t audio_count = 0U;
+	bool classic_audio_lifecycle = false;
+	bool audio_feedback_failed = false;
+	audio::Th03SoundEffectSchedulerStatus feedback_scheduler{};
+
+	friend bool operator==(
+		const MainProcessRollbackSemanticState &,
+		const MainProcessRollbackSemanticState &
+	) = default;
+};
+
+// Caller-owned local rollback memory. Keep rings and recovery scratch on the
+// heap: the visual section intentionally contains both complete source pages.
+struct MainProcessRollbackSnapshot final {
+	// Zero marks an incomplete/failed capture. Only the exact current version
+	// can be restored.
+	std::uint32_t version = 0U;
+	RollbackSimulationSnapshot simulation{};
+	present::RollbackVisualSnapshot visual{};
+	present::MainPresenterRollbackState presenters{};
+	MainProcessRollbackSemanticState semantic{};
+
+	friend bool operator==(
+		const MainProcessRollbackSnapshot &,
+		const MainProcessRollbackSnapshot &
+	) = default;
+};
+
+enum class MainProcessRollbackErrorCode : std::uint8_t {
+	boundary_unavailable,
+	invalid_snapshot,
+	simulation_capture_failed,
+	visual_capture_failed,
+	simulation_restore_failed,
+	visual_restore_failed,
+	recovery_failed,
+};
+
+struct MainProcessRollbackError final {
+	MainProcessRollbackErrorCode code =
+		MainProcessRollbackErrorCode::invalid_snapshot;
+	std::optional<Error> simulation{};
+	std::optional<present::RollbackVisualError> visual{};
+	std::optional<audio::Th03PmdServiceError> audio{};
+};
+
 // Stable-address owner/coordinator for one complete MAIN process. The public
 // factory is the authenticated direct-VS entry; source-private Classic Story,
 // selected VS, and automatic-Demo factories supply an already completed MAINL
@@ -203,6 +259,17 @@ public:
 		const noexcept;
 	[[nodiscard]] std::optional<ClassicAudioCommand>
 	take_audio_command() noexcept;
+
+	// N0 local rollback boundary. `recovery_scratch` is overwritten with the
+	// pre-restore state and guarantees all-or-nothing recovery without a frame-
+	// time allocation. Neither snapshot is accepted from a peer or user file.
+	[[nodiscard]] std::expected<void, MainProcessRollbackError>
+	capture_rollback(MainProcessRollbackSnapshot &snapshot) const noexcept;
+	[[nodiscard]] std::expected<void, MainProcessRollbackError>
+	restore_rollback(
+		const MainProcessRollbackSnapshot &snapshot,
+		MainProcessRollbackSnapshot &recovery_scratch
+	) noexcept;
 
 private:
 	friend struct MainProcessTestAccess;

@@ -319,6 +319,10 @@ struct MainPresenterRollbackState final {
 
 class MainPresenterRollbackAccess final {
 public:
+	[[nodiscard]] static bool valid(
+		const MainPresenterRollbackState &state
+	) noexcept;
+
 	[[nodiscard]] static bool boundary_ready(
 		const MainPaletteState &palette,
 		const MainStaticPresenter &static_presenter,

@@ -31,6 +31,7 @@ struct Th03SoundEffectStart {
 
 enum class Th03PmdServiceErrorCode : std::uint8_t {
 	invalid_effect_id,
+	invalid_scheduler_state,
 };
 
 struct Th03PmdServiceError {
@@ -46,6 +47,11 @@ struct Th03SoundEffectSchedulerStatus {
 	bool active = true;
 	std::optional<std::uint8_t> pending_effect{};
 	std::uint8_t pending_frame = 0U;
+
+	friend bool operator==(
+		const Th03SoundEffectSchedulerStatus &,
+		const Th03SoundEffectSchedulerStatus &
+	) = default;
 };
 
 // Source-exact one-slot TH03 scheduler. update() returns the PMD effect ID that
@@ -72,6 +78,11 @@ public:
 	) noexcept;
 
 	[[nodiscard]] Th03SoundEffectSchedulerStatus status() const noexcept;
+	// Local rollback restores the semantic one-slot scheduler, never PMD or
+	// audio-device state. Invalid snapshots are rejected before mutation.
+	[[nodiscard]] std::expected<void, Th03PmdServiceError> restore(
+		Th03SoundEffectSchedulerStatus status
+	) noexcept;
 
 private:
 	bool active_ = true;

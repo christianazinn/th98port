@@ -18,6 +18,7 @@ using th03::audio::PmdOpnaStereoSample;
 using th03::audio::Th03PmdServiceErrorCode;
 using th03::audio::Th03SoundEffectRule;
 using th03::audio::Th03SoundEffectScheduler;
+using th03::audio::Th03SoundEffectSchedulerStatus;
 using th03::audio::Th03SoundEffectStart;
 
 std::size_t checks = 0U;
@@ -250,6 +251,32 @@ void test_effect_scheduler()
 		!subject.status().pending_effect && subject.status().pending_frame == 0U,
 		"explicit reset clears ID and frame"
 	);
+
+	const Th03SoundEffectSchedulerStatus restored{
+		.active = false,
+		.pending_effect = std::uint8_t{2U},
+		.pending_frame = 17U,
+	};
+	expect(subject.restore(restored).has_value() &&
+		subject.status().active == restored.active &&
+		subject.status().pending_effect == restored.pending_effect &&
+		subject.status().pending_frame == restored.pending_frame,
+		"semantic scheduler state restores exactly");
+	const auto before_invalid_restore = subject.status();
+	expect(!subject.restore({
+		.active = true,
+		.pending_effect = std::uint8_t{2U},
+		.pending_frame = 37U,
+	}).has_value() &&
+		subject.status().active == before_invalid_restore.active &&
+		subject.status().pending_effect ==
+			before_invalid_restore.pending_effect &&
+		subject.status().pending_frame == before_invalid_restore.pending_frame,
+		"invalid semantic scheduler restore is atomic");
+	expect(!subject.restore({
+		.active = true,
+		.pending_frame = 1U,
+	}).has_value(), "empty scheduler slot requires frame zero");
 }
 
 void test_effect_scheduler_exhaustive()

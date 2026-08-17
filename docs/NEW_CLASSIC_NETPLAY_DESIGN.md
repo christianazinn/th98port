@@ -1,6 +1,6 @@
 # New Classic netplay design
 
-Status: **durable proposal for iteration; implementation has not started**
+Status: **durable proposal; phase N0 local rollback implementation is active**
 
 Proposal revision date: 2026-08-16
 
@@ -652,14 +652,15 @@ does not silently broaden leaderboard acceptance.
 
 1. Enumerate complete mutable `Game`, MAIN driver, presenter, Raster, TRAM, and
    feedback state. The `Game` simulation owner, shared Raster/TRAM visual
-   machines, and private retained MAIN presenters are complete; process-driver
-   and semantic-audio feedback remain open.
+   machines, private retained MAIN presenters, and process semantic-audio state
+   are complete.
 2. Add field-wise `T3RBK001` capture/restore and simulation/full digests. The
    architecture-neutral simulation image and shared visual image are now
    implemented, transactionally restored, and measured. The fixed-capacity
-   presenter state is field-wise and measured; peer SHA-256, its enclosing
-   canonical process image, and process-driver/audio sections remain open. See
-   `T3RBK001.md`, `T3RBV001.md`, and `T3RBP001.md`.
+   presenter state is field-wise and measured, and `T3RBM001` composes the
+   complete local process image transactionally. Peer SHA-256 and the local
+   frame-ring coordinator remain open. See `T3RBK001.md`, `T3RBV001.md`,
+   `T3RBP001.md`, and `T3RBM001.md`.
 3. Add a local rollback owner and one-frame-every-frame sync test.
 4. Measure snapshot bytes, capture/restore time, resimulation time, and memory.
 
