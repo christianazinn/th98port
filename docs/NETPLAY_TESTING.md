@@ -1,9 +1,9 @@
-# New Classic direct netplay testing
+# New Classic netplay testing
 
-Status: cross-platform technical preview. This route runs a complete human
-VS MAIN match over direct IPv4 UDP. It is intentionally exposed by command
-line before the source-styled room/selection UI, WebRTC/TURN transport,
-and post-match report are integrated. A
+Status: cross-platform technical preview. The source-styled `Online Match`
+menu now defaults to a private six-character room over authenticated
+WebSocket signaling and WebRTC/DTLS data channels. Direct IPv4 UDP remains an
+explicit Network Settings fallback for LAN/Tailscale testing. A
 confirmed terminal match now continues through the ordinary winner-specific
 MAINL scene, including WIN music, dismissal, and the final black-out.
 
@@ -26,6 +26,51 @@ sides then prove the complete initial simulation. Both machines must use the
 same executable revision and authenticated game data; they no longer duplicate
 each other's character or room-rule arguments.
 
+## Room-code setup
+
+The room service is deliberately not deployed from this repository. A test
+deployment must expose the Worker in `tools/azinn-site-v2/service` and provision
+one user for each machine with `POST /api/th03/users`. Set these values before
+starting the standalone or native app:
+
+This environment plumbing is temporary until automatic enrollment is connected
+to the existing encrypted identity store; the two peers must use different
+user IDs.
+
+```text
+TH03_ONLINE_ORIGIN=https://your-worker.example
+TH03_ONLINE_USER_ID=<userId returned by POST /api/th03/users>
+TH03_ONLINE_TOKEN=<token returned by POST /api/th03/users>
+```
+
+`TH03_NETPLAY_ICE_SERVERS` is an optional semicolon-delimited list of
+`stun:`, `turn:`, or `turns:` URLs. It can remain unset for a same-tailnet test
+where host ICE candidates are mutually reachable. TURN credentials are not
+yet issued by the service, so Internet paths that cannot connect host
+candidates remain an explicit acceptance gate.
+
+Open `VS Start` -> `Online Match` on both machines. The creator selects
+`Create Room`; the assigned code appears on its waiting screen. The other
+player selects `Join Room` and types that code. Character/palette locks and
+rank are still exchanged and verified by `T3NL001` before MAIN is constructed.
+No direct listening socket is opened by this path, avoiding the Windows
+Firewall listener prompt. The same rollback, Pause, replay, and report owners
+below apply to both transports.
+
+The tracked SDL presets enable the RTC adapter. Before configuring a source
+build, authenticate SDL as documented elsewhere, clone libdatachannel v0.24.3
+recursively at commit `c6696d157b5612df2a741d9a03b192b47ab6cefb`, acquire
+the official Mbed TLS 3.6.7 archive, and run:
+
+```powershell
+pwsh th03-port/tools/bootstrap_rtc.ps1 `
+  -LibDataChannelSource C:\path\to\libdatachannel `
+  -MbedTlsArchive C:\path\to\mbedtls-3.6.7.tar.bz2
+```
+
+The bootstrap refuses unpinned/dirty source, validates every recursive
+submodule pin and the Mbed TLS SHA-256, and stages all required licenses.
+
 ### Pause and Resume
 
 Press Esc on either machine during active gameplay. The request is corrected
@@ -43,7 +88,7 @@ both previews with complementary `forfeit-outcome=loss`/`win` results (or
 `mutual` for crossed requests), writes no replay, and never invents a TH03
 winner. Restart and Save remain unavailable while the match is live.
 
-## Windows host from the standalone
+## Direct UDP fallback: Windows host from the standalone
 
 Find the Windows Tailscale address and choose a UDP port:
 

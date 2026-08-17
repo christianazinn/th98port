@@ -41,8 +41,12 @@
       "binaryDir": "${sourceDir}/out/build/msvc-x64-sdl",
       "cacheVariables": {
         "TH03_ENABLE_SDL": "ON",
+        "TH03_ENABLE_RTC": "ON",
         "TH03_SDL3_PROVIDER": "source",
-        "TH03_SDL3_SOURCE_DIR": "${sourceDir}/out/deps/SDL3-3.4.10"
+        "TH03_SDL3_SOURCE_DIR": "${sourceDir}/out/deps/SDL3-3.4.10",
+        "TH03_RTC_PROVIDER": "source",
+        "TH03_LIBDATACHANNEL_SOURCE_DIR": "${sourceDir}/out/deps/libdatachannel-0.24.3",
+        "TH03_MBEDTLS_SOURCE_DIR": "${sourceDir}/out/deps/mbedtls-3.6.7"
       }
     },
     {
@@ -52,8 +56,12 @@
       "binaryDir": "${sourceDir}/out/build/gcc-sdl",
       "cacheVariables": {
         "TH03_ENABLE_SDL": "ON",
+        "TH03_ENABLE_RTC": "ON",
         "TH03_SDL3_PROVIDER": "source",
-        "TH03_SDL3_SOURCE_DIR": "${sourceDir}/out/deps/SDL3-3.4.10"
+        "TH03_SDL3_SOURCE_DIR": "${sourceDir}/out/deps/SDL3-3.4.10",
+        "TH03_RTC_PROVIDER": "source",
+        "TH03_LIBDATACHANNEL_SOURCE_DIR": "${sourceDir}/out/deps/libdatachannel-0.24.3",
+        "TH03_MBEDTLS_SOURCE_DIR": "${sourceDir}/out/deps/mbedtls-3.6.7"
       }
     }
   ],

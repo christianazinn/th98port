@@ -17,9 +17,16 @@ enum class NewClassicNetplayRoomLaunchMode : std::uint8_t {
 	join,
 };
 
+enum class NewClassicNetplayRoomTransport : std::uint8_t {
+	online_service,
+	direct_udp,
+};
+
 struct NewClassicNetplayRoomLaunch final {
 	NewClassicNetplayRoomLaunchMode mode =
 		NewClassicNetplayRoomLaunchMode::host;
+	NewClassicNetplayRoomTransport transport =
+		NewClassicNetplayRoomTransport::online_service;
 	std::uint16_t host_port = 31'415U;
 	std::string join_endpoint{};
 	std::uint8_t character = 1U;
@@ -89,6 +96,8 @@ private:
 	std::uint8_t selection_ = 0U;
 	std::uint16_t host_port_ = 31'415U;
 	std::string join_endpoint_{};
+	NewClassicNetplayRoomTransport transport_ =
+		NewClassicNetplayRoomTransport::online_service;
 	NewClassicNetplayRoomLaunchMode pending_mode_ =
 		NewClassicNetplayRoomLaunchMode::host;
 	std::uint8_t character_ = 1U;
@@ -122,6 +131,7 @@ public:
 	[[nodiscard]] bool mark_ready(
 		const NewClassicNetplayMatchContract &contract
 	) noexcept;
+	[[nodiscard]] bool mark_room_code(std::string room_code) noexcept;
 	[[nodiscard]] present::SourceSurface surface() const noexcept;
 
 private:
@@ -135,6 +145,7 @@ private:
 	NewClassicNetplayCharacterLock local_lock_{};
 	std::uint8_t rank_ = 1U;
 	std::optional<NewClassicNetplayMatchContract> ready_contract_{};
+	std::string room_code_{};
 	NewClassicPatchSurface patch_surface_{};
 	bool valid_ = false;
 };

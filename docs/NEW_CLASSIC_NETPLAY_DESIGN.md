@@ -1,8 +1,9 @@
 # New Classic netplay design
 
-Status: **durable proposal; local rollback and the audible, periodically
-verified direct-UDP/Tailscale technical preview are green, while product
-WebRTC/room integration remains future work**
+Status: **local rollback, the direct-UDP/Tailscale fallback, the product room
+frontend, the private-room service, and the pinned native WebRTC transport are
+implemented. Production Cloudflare/TURN configuration and real cross-machine
+WebRTC acceptance remain deployment gates.**
 
 Proposal revision date: 2026-08-17
 
@@ -751,12 +752,21 @@ app-owned transport: fixed handshake/history packets, bounded prediction,
 frame-zero and 120-frame simulation identity, full MAIN repeat/terminal
 lifecycle, confirmed audio, prompt intentional departure, and Windows/POSIX
 socket tests. A crash or connectivity loss still uses the bounded inactivity
-timeout. The following product transport remains open:
+timeout. The room transport is now implemented as follows:
 
-1. Pin minimal libdatachannel and implement both Data Channels.
-2. Add a local test signaling server and two-process loopback.
-3. Add direct ICE, TURN fallback, Relay Only, and network metrics.
-4. Prove Windows/Linux/macOS packet and transcript interoperability.
+The product transport now pins libdatachannel 0.24.3 and Mbed TLS 3.6.7 behind
+an app-owned adapter. `T3NP07-gameplay` is unordered/unreliable with no
+retransmits; `T3NC01-control` is reliable and ordered. The maintained SDL
+presets build this adapter, while direct UDP remains a selectable fallback.
+
+Still open:
+
+1. Add a hermetic two-process loopback acceptance fixture that does not create
+   an unexpected public firewall listener.
+2. Issue short-lived TURN credentials, expose Relay Only policy, and surface
+   network metrics in the product UI.
+3. Prove Windows/Linux/macOS packet and transcript interoperability over real
+   direct ICE and relayed paths.
 
 ### N3: product integration
 
@@ -764,8 +774,9 @@ timeout. The following product transport remains open:
    barrier. The backend-neutral 32-byte `T3NLC001` match value now freezes
    host-owned P1/rank/seed/cadence, join-owned P2, and New Classic ruleset 1;
    the exact 64-byte `T3NL001` owner now exchanges those independent locks and
-   gates MAIN in the direct UDP preview. The fourth row and source-styled room
-   presentation remain the product integration step.
+   gates MAIN over both room service and direct UDP fallback. The fourth row,
+   source-styled room/code editor, synchronized lock, waiting, and ready
+   presentation are implemented without changing Classic.
 2. Add negotiated pause, forfeit, disconnect, desync UI, and post-match report.
    The direct preview now carries a rollback-correct Pause edge, confirmed
    boundary proof, release-before-Resume input, two-peer ready barrier, and
@@ -773,7 +784,7 @@ timeout. The following product transport remains open:
    and request/ack lifecycle are now complete in the direct preview. Completed
    matches, Forfeit, peer departure/timeout, and deterministic proof mismatch
    now enter the authenticated local report. Product-room ownership of that
-   terminal remains with the fourth-row frontend.
+   terminal is owned by the fourth-row frontend.
 3. Feed only confirmed history into the in-memory V13 recorder and existing save
    UI. Complete in the direct preview: the corrected contiguous-confirmed
    transcript becomes an ordinary validated V13 only after the complete VS
@@ -787,8 +798,8 @@ timeout. The following product transport remains open:
 1. Add the room Durable Object and signaling routes beside the existing online
    service without deploying until reviewed. The local service now has a
    fail-closed `T3ROOM1` two-seat, ten-minute Durable Object plus authenticated
-   create/connect routes; production bindings and the native RTC/WebSocket
-   adapter remain absent.
+   create/connect routes and the native RTC/WebSocket adapter. Production
+   bindings remain intentionally absent.
 2. Add short-lived TURN credential issuance and operational redaction.
 3. Measure real direct and relayed RTT/jitter/rollback distributions.
 4. Run a bounded private beta and tune delay/stall/disconnect policy.

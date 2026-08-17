@@ -123,6 +123,7 @@ void test_host_intent_is_confirmation_gated()
 	auto intent = room.take_launch();
 	expect(launched.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->mode == NewClassicNetplayRoomLaunchMode::host &&
+		intent->transport == NewClassicNetplayRoomTransport::online_service &&
 		intent->host_port == 31'415U && intent->join_endpoint.empty() &&
 		intent->character == 2U && intent->palette == 2U && intent->rank == 2U,
 		"fresh confirmation publishes the typed default-port host intent");
@@ -149,7 +150,7 @@ void test_join_entry_and_validation()
 		invalid.surface_changed && !room.take_launch(),
 		"empty Join endpoint is visibly rejected without networking");
 	release(room);
-	constexpr std::string_view endpoint = "100.64.0.2:31415";
+	constexpr std::string_view endpoint = "2ABCD5";
 	for(const char character : endpoint) {
 		const auto typed = room.consume({.text_character = character});
 		expect(typed.surface_changed,
@@ -161,9 +162,10 @@ void test_join_entry_and_validation()
 	auto intent = room.take_launch();
 	expect(connected.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->mode == NewClassicNetplayRoomLaunchMode::join &&
+		intent->transport == NewClassicNetplayRoomTransport::online_service &&
 		intent->join_endpoint == endpoint && intent->character == 1U &&
 		intent->palette == 2U,
-		"validated Tailscale endpoint becomes one typed join intent");
+		"validated room code becomes one typed join intent");
 }
 
 void test_settings_back_and_application_quit()
@@ -176,6 +178,10 @@ void test_settings_back_and_application_quit()
 		release(room);
 	}
 	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	release(room);
+	const auto transport = room.consume({.ui = {.right = true}});
+	expect(transport.surface_changed,
+		"Network Settings explicitly exposes the direct UDP fallback");
 	release(room);
 	static_cast<void>(room.consume({.ui = {.down = true}}));
 	release(room);
@@ -219,6 +225,11 @@ void test_waiting_and_ready_lobby_views()
 	const std::vector waiting_pixels(
 		view.surface().pixels.begin(), view.surface().pixels.end()
 	);
+	expect(view.mark_room_code("2ABCD5") && !std::equal(
+		waiting_pixels.begin(), waiting_pixels.end(), view.surface().pixels.begin()
+	), "the service-assigned room code is visible on the waiting surface");
+	expect(!view.mark_room_code("BAD0DE"),
+		"waiting presentation rejects an invalid room code");
 	const NewClassicNetplayMatchContract contract{
 		.player_one = {.character = 2U, .palette = 1U},
 		.player_two = {.character = 7U, .palette = 2U},

@@ -61,6 +61,9 @@
 #include "th03/platform/sdl_audio_device.hpp"
 #include "th03/platform/sdl_platform.hpp"
 #include "th03/platform/udp_socket.hpp"
+#if defined(TH03_ENABLE_RTC_TRANSPORT)
+#include "th03/platform/rtc_room.hpp"
+#endif
 #if defined(_WIN32)
 #include "th03/platform/windows_online.hpp"
 #endif
@@ -77,6 +80,9 @@ constexpr const char *pixel_oracle_fixture_environment =
 constexpr const char *pixel_oracle_selector_environment =
 	"TH03_PIXEL_ORACLE_SELECTOR";
 constexpr const char *online_origin_environment = "TH03_ONLINE_ORIGIN";
+constexpr const char *online_user_environment = "TH03_ONLINE_USER_ID";
+constexpr const char *online_token_environment = "TH03_ONLINE_TOKEN";
+constexpr const char *netplay_ice_environment = "TH03_NETPLAY_ICE_SERVERS";
 
 struct PixelOracleIdentityOutput final {
 	std::ofstream stream{};
@@ -1517,15 +1523,153 @@ void log_netplay_session_error(
 }
 
 [[nodiscard]] bool send_netplay_datagram(
-	th03::platform::UdpSocket &socket,
-	th03::platform::UdpIpv4Endpoint peer,
+	class NetplayWire &wire,
 	const th03::app::NewClassicNetplayDatagram &datagram
-)
+) noexcept;
+
+enum class NetplayWireChannel : std::uint8_t {
+	gameplay,
+	control,
+};
+
+struct NetplayWireMessage final {
+	NetplayWireChannel channel = NetplayWireChannel::control;
+	std::vector<std::byte> bytes{};
+};
+
+class NetplayWire final {
+public:
+	static NetplayWire udp(
+		std::unique_ptr<th03::platform::UdpSocket> socket,
+		th03::platform::UdpIpv4Endpoint peer
+	) noexcept
+	{
+		NetplayWire result{};
+		result.udp_socket_ = std::move(socket);
+		result.udp_peer_ = peer;
+		return result;
+	}
+
+#if defined(TH03_ENABLE_RTC_TRANSPORT)
+	static NetplayWire rtc(
+		std::unique_ptr<th03::platform::RtcRoom> room
+	) noexcept
+	{
+		NetplayWire result{};
+		result.rtc_room_ = std::move(room);
+		return result;
+	}
+#endif
+
+	NetplayWire(NetplayWire &&) noexcept = default;
+	NetplayWire &operator=(NetplayWire &&) noexcept = default;
+	NetplayWire(const NetplayWire &) = delete;
+	NetplayWire &operator=(const NetplayWire &) = delete;
+
+	[[nodiscard]] bool send(
+		NetplayWireChannel channel,
+		std::span<const std::byte> bytes
+	) noexcept
+	{
+		if(udp_socket_) {
+			return udp_peer_ && udp_socket_->send(*udp_peer_, bytes).has_value();
+		}
+#if defined(TH03_ENABLE_RTC_TRANSPORT)
+		if(rtc_room_) {
+			return rtc_room_->send(
+				channel == NetplayWireChannel::gameplay ?
+					th03::platform::RtcRoomChannel::gameplay :
+					th03::platform::RtcRoomChannel::control,
+				bytes
+			).has_value();
+		}
+#endif
+		return false;
+	}
+
+	[[nodiscard]] std::expected<
+		std::optional<NetplayWireMessage>,
+		const char *
+	> receive() noexcept
+	{
+		if(udp_socket_) {
+			std::array<std::byte,
+				th03::app::new_classic_netplay_datagram_bytes> buffer{};
+			for(;;) {
+				auto received = udp_socket_->receive(buffer);
+				if(!received) {
+					return std::unexpected("socket-failed");
+				}
+				if(!*received) {
+					return std::optional<NetplayWireMessage>{};
+				}
+				if(!udp_peer_ || (*received)->sender != *udp_peer_) {
+					continue;
+				}
+				std::vector<std::byte> bytes((*received)->size);
+				std::ranges::copy(
+					std::span(buffer).first((*received)->size), bytes.begin()
+				);
+				return std::optional<NetplayWireMessage>{NetplayWireMessage{
+					.channel = (*received)->size ==
+						th03::app::new_classic_netplay_lobby_bytes ?
+						NetplayWireChannel::control :
+						NetplayWireChannel::gameplay,
+					.bytes = std::move(bytes),
+				}};
+			}
+		}
+#if defined(TH03_ENABLE_RTC_TRANSPORT)
+		if(rtc_room_) {
+			auto received = rtc_room_->receive();
+			if(!received) {
+				return std::unexpected("rtc-failed");
+			}
+			if(!*received) {
+				return std::optional<NetplayWireMessage>{};
+			}
+			return std::optional<NetplayWireMessage>{NetplayWireMessage{
+				.channel = (**received).channel ==
+					th03::platform::RtcRoomChannel::gameplay ?
+					NetplayWireChannel::gameplay : NetplayWireChannel::control,
+				.bytes = std::move((**received).bytes),
+			}};
+		}
+#endif
+		return std::unexpected("wire-closed");
+	}
+
+	[[nodiscard]] bool rtc() const noexcept
+	{
+#if defined(TH03_ENABLE_RTC_TRANSPORT)
+		return rtc_room_ != nullptr;
+#else
+		return false;
+#endif
+	}
+
+private:
+	NetplayWire() = default;
+	std::unique_ptr<th03::platform::UdpSocket> udp_socket_{};
+	std::optional<th03::platform::UdpIpv4Endpoint> udp_peer_{};
+#if defined(TH03_ENABLE_RTC_TRANSPORT)
+	std::unique_ptr<th03::platform::RtcRoom> rtc_room_{};
+#endif
+};
+
+[[nodiscard]] bool send_netplay_datagram(
+	NetplayWire &wire,
+	const th03::app::NewClassicNetplayDatagram &datagram
+) noexcept
 {
 	const auto encoded = th03::app::encode_new_classic_netplay_datagram(
 		datagram
 	);
-	return encoded && socket.send(peer, *encoded).has_value();
+	return encoded && wire.send(
+		datagram.type == th03::app::NewClassicNetplayDatagramType::input ?
+			NetplayWireChannel::gameplay : NetplayWireChannel::control,
+		*encoded
+	);
 }
 
 [[nodiscard]] bool send_netplay_lobby_datagram(
@@ -1539,11 +1683,28 @@ void log_netplay_session_error(
 	return encoded && socket.send(peer, *encoded).has_value();
 }
 
+[[nodiscard]] bool send_netplay_lobby_wire(
+	NetplayWire &wire,
+	const th03::app::NewClassicNetplayLobbyDatagram &datagram
+) noexcept
+{
+	const auto encoded =
+		th03::app::encode_new_classic_netplay_lobby_datagram(datagram);
+	return encoded && wire.send(NetplayWireChannel::control, *encoded);
+}
+
 struct DirectNetplayLobbyResult final {
-	std::unique_ptr<th03::platform::UdpSocket> socket{};
-	th03::platform::UdpIpv4Endpoint peer{};
+	NetplayWire wire;
 	th03::app::NewClassicNetplayLobby lobby{};
 	th03::app::NewClassicNetplayMatchContract contract{};
+};
+
+struct RtcNetplayRequest final {
+	std::string origin{};
+	std::string user_id{};
+	std::string token{};
+	std::string room_code{};
+	std::vector<std::string> ice_servers{};
 };
 
 [[nodiscard]] bool direct_netplay_lobby_quit_requested(
@@ -1739,16 +1900,222 @@ negotiate_direct_netplay_lobby(
 		));
 	}
 	return DirectNetplayLobbyResult{
-		.socket = std::move(*socket),
-		.peer = *peer,
+		.wire = NetplayWire::udp(std::move(*socket), *peer),
 		.lobby = std::move(lobby),
 		.contract = *contract,
 	};
 }
 
+#if defined(TH03_ENABLE_RTC_TRANSPORT)
+[[nodiscard]] std::expected<DirectNetplayLobbyResult, int>
+negotiate_rtc_netplay_lobby(
+	const th03::app::DirectVsCliRequest &request,
+	const RtcNetplayRequest &rtc_request,
+	th03::platform::SdlPlatform &platform,
+	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets
+)
+{
+	using th03::app::DirectVsNetplayMode;
+	using th03::app::NewClassicNetplayLobby;
+	using th03::app::NewClassicNetplayLobbyStatus;
+	using th03::platform::RtcRoomState;
+	const auto mode = request.netplay_mode;
+	const auto local_lock = mode == DirectVsNetplayMode::host ?
+		netplay_host_lock(request).player_one :
+		netplay_join_lock(request).player_two;
+	th03::app::NewClassicNetplayLobbyView lobby_view(
+		std::move(patch_assets), request.presentation_language,
+		mode == DirectVsNetplayMode::host ?
+			th03::app::NewClassicNetplayLobbyViewRole::host :
+			th03::app::NewClassicNetplayLobbyViewRole::join,
+		local_lock, static_cast<std::uint8_t>(request.launch.process.rank)
+	);
+	if(!lobby_view.valid()) {
+		return std::unexpected(fail_netplay(
+			"netplay-room-view", "surface-create-failed"
+		));
+	}
+	if(const auto presented = platform.present(lobby_view.surface()); !presented) {
+		return std::unexpected(fail(
+			"netplay-room-present", presented.error()
+		));
+	}
+	auto opened = th03::platform::RtcRoom::open({
+		.mode = mode == DirectVsNetplayMode::host ?
+			th03::platform::RtcRoomMode::create :
+			th03::platform::RtcRoomMode::join,
+		.origin = rtc_request.origin,
+		.user_id = rtc_request.user_id,
+		.token = rtc_request.token,
+		.room_code = rtc_request.room_code,
+		.ice_servers = rtc_request.ice_servers,
+	});
+	if(!opened) {
+		return std::unexpected(fail_netplay(
+			"netplay-room-connect", "invalid-configuration"
+		));
+	}
+	auto room = std::move(*opened);
+	std::string displayed_code{};
+	const auto room_started = std::chrono::steady_clock::now();
+	for(;;) {
+		if(direct_netplay_lobby_quit_requested(
+			static_cast<SDL_WindowID>(platform.window_id())
+		)) {
+			std::cout << "status=left\n";
+			return std::unexpected(0);
+		}
+		const auto snapshot = room->snapshot();
+		if(!snapshot.room_code.empty() && snapshot.room_code != displayed_code) {
+			if(!lobby_view.mark_room_code(snapshot.room_code)) {
+				return std::unexpected(fail_netplay(
+					"netplay-room-view", "invalid-room-code"
+				));
+			}
+			displayed_code = snapshot.room_code;
+			std::cout << "room-code=" << displayed_code << '\n';
+			std::cout.flush();
+			if(const auto presented = platform.present(lobby_view.surface());
+				!presented) {
+				return std::unexpected(fail(
+					"netplay-room-present", presented.error()
+				));
+			}
+		}
+		if(snapshot.state == RtcRoomState::ready) {
+			break;
+		}
+		if(snapshot.state == RtcRoomState::failed ||
+			snapshot.state == RtcRoomState::closed ||
+			snapshot.state == RtcRoomState::peer_left) {
+			return std::unexpected(fail_netplay(
+				"netplay-room-connect", "transport-failed"
+			));
+		}
+		if(mode == DirectVsNetplayMode::join &&
+			std::chrono::steady_clock::now() - room_started >
+				std::chrono::seconds(30)) {
+			return std::unexpected(fail_netplay(
+				"netplay-room-connect", "peer-handshake-timeout"
+			));
+		}
+		if(auto refreshed = refresh_host_presentability(
+			platform, "netplay-room-presentability"
+		); !refreshed) {
+			return std::unexpected(refreshed.error());
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+
+	auto wire = NetplayWire::rtc(std::move(room));
+	const auto clock_seed = static_cast<std::uint64_t>(
+		std::chrono::steady_clock::now().time_since_epoch().count()
+	);
+	auto created_lobby = mode == DirectVsNetplayMode::host ?
+		NewClassicNetplayLobby::create_host(
+			netplay_host_lock(request),
+			(clock_seed ^ 0xA35C91D27B48E60FULL) == 0U ? 1U :
+				(clock_seed ^ 0xA35C91D27B48E60FULL)
+		) : NewClassicNetplayLobby::create_join(netplay_join_lock(request));
+	if(!created_lobby) {
+		return std::unexpected(fail_netplay(
+			"netplay-lobby", "invalid-local-lock"
+		));
+	}
+	auto lobby = std::move(*created_lobby);
+	auto last_send = std::chrono::steady_clock::now() -
+		std::chrono::milliseconds(100);
+	const auto lobby_started = std::chrono::steady_clock::now();
+	while(lobby.status() != NewClassicNetplayLobbyStatus::ready) {
+		if(direct_netplay_lobby_quit_requested(
+			static_cast<SDL_WindowID>(platform.window_id())
+		)) {
+			std::cout << "status=left\n";
+			return std::unexpected(0);
+		}
+		const auto now = std::chrono::steady_clock::now();
+		if(now - lobby_started > std::chrono::seconds(30)) {
+			return std::unexpected(fail_netplay(
+				"netplay-lobby", "peer-handshake-timeout"
+			));
+		}
+		for(;;) {
+			auto received = wire.receive();
+			if(!received) {
+				return std::unexpected(fail_netplay(
+					"netplay-lobby", received.error()
+				));
+			}
+			if(!*received) {
+				break;
+			}
+			if((**received).channel != NetplayWireChannel::control) {
+				return std::unexpected(fail_netplay(
+					"netplay-lobby", "unexpected-gameplay-data"
+				));
+			}
+			const auto packet =
+				th03::app::decode_new_classic_netplay_lobby_datagram(
+					(**received).bytes
+				);
+			if(!packet) {
+				return std::unexpected(fail_netplay(
+					"netplay-lobby", "invalid-peer-lock"
+				));
+			}
+			if(const auto accepted = lobby.receive(*packet); !accepted) {
+				return std::unexpected(fail_netplay(
+					"netplay-lobby", "peer-lock-conflict"
+				));
+			}
+			if(const auto outbound = lobby.outbound(); outbound &&
+				!send_netplay_lobby_wire(wire, *outbound)) {
+				return std::unexpected(fail_netplay(
+					"netplay-lobby", "send-failed"
+				));
+			}
+			last_send = now;
+		}
+		if(lobby.status() == NewClassicNetplayLobbyStatus::ready) {
+			break;
+		}
+		if(now - last_send >= std::chrono::milliseconds(100)) {
+			if(const auto outbound = lobby.outbound(); outbound &&
+				!send_netplay_lobby_wire(wire, *outbound)) {
+				return std::unexpected(fail_netplay(
+					"netplay-lobby", "send-failed"
+				));
+			}
+			last_send = now;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	const auto contract = lobby.contract();
+	if(!contract || lobby.session_id() == 0U) {
+		return std::unexpected(fail_netplay(
+			"netplay-lobby", "incomplete-ready-state"
+		));
+	}
+	if(!lobby_view.mark_ready(*contract)) {
+		return std::unexpected(fail_netplay(
+			"netplay-room-view", "ready-surface-failed"
+		));
+	}
+	if(const auto presented = platform.present(lobby_view.surface()); !presented) {
+		return std::unexpected(fail(
+			"netplay-room-present", presented.error()
+		));
+	}
+	return DirectNetplayLobbyResult{
+		.wire = std::move(wire),
+		.lobby = std::move(lobby),
+		.contract = *contract,
+	};
+}
+#endif
+
 [[nodiscard]] bool send_netplay_input_history(
-	th03::platform::UdpSocket &socket,
-	th03::platform::UdpIpv4Endpoint peer,
+	NetplayWire &wire,
 	const th03::app::NewClassicNetplayMainSession &session,
 	th03::app::NewClassicNetplayPlayer local_player,
 	std::uint64_t session_id,
@@ -1774,7 +2141,7 @@ negotiate_direct_netplay_lobby(
 		++datagram.input_count;
 	}
 	return datagram.input_count != 0U &&
-		send_netplay_datagram(socket, peer, datagram);
+		send_netplay_datagram(wire, datagram);
 }
 
 [[nodiscard]] th03::app::NewClassicUiInput project_new_classic_ui(
@@ -2026,7 +2393,8 @@ struct NetplayRoomRunResult final {
 int run_direct_netplay_on_platform(
 	th03::app::DirectVsCliRequest parsed,
 	th03::platform::SdlPlatform &platform,
-	th03::platform::SdlInputMapper &mapper
+	th03::platform::SdlInputMapper &mapper,
+	std::optional<RtcNetplayRequest> rtc_request = std::nullopt
 )
 {
 	using th03::app::DirectVsNetplayMode;
@@ -2055,9 +2423,24 @@ int run_direct_netplay_on_platform(
 	auto pause_assets = std::make_shared<
 		const th03::app::NewClassicReplayPatchAssets
 	>(std::move(*loaded_pause_assets));
-	auto negotiated = negotiate_direct_netplay_lobby(
-		parsed, platform, pause_assets
-	);
+	auto negotiated = [&]() -> std::expected<DirectNetplayLobbyResult, int> {
+#if defined(TH03_ENABLE_RTC_TRANSPORT)
+		if(rtc_request) {
+			return negotiate_rtc_netplay_lobby(
+				parsed, *rtc_request, platform, pause_assets
+			);
+		}
+#else
+		if(rtc_request) {
+			return std::unexpected(fail_netplay(
+				"netplay-transport", "rtc-not-built"
+			));
+		}
+#endif
+		return negotiate_direct_netplay_lobby(
+			parsed, platform, pause_assets
+		);
+	}();
 	if(!negotiated) {
 		return negotiated.error();
 	}
@@ -2070,8 +2453,7 @@ int run_direct_netplay_on_platform(
 		return fail_netplay("netplay-contract", "invalid-match-lock");
 	}
 	const auto contract_hash = *created_contract_hash;
-	auto socket = std::move(negotiated->socket);
-	std::optional<th03::platform::UdpIpv4Endpoint> peer{negotiated->peer};
+	auto wire = std::move(negotiated->wire);
 	auto lobby = std::move(negotiated->lobby);
 	std::uint64_t session_id = lobby.session_id();
 
@@ -2241,8 +2623,6 @@ int run_direct_netplay_on_platform(
 	bool established = false;
 	bool peer_started_input = false;
 	bool retry_blocked_event = false;
-	std::array<std::byte,
-		th03::app::new_classic_netplay_datagram_bytes> receive_buffer{};
 	std::optional<th03::app::NewClassicNetplayOwnedInput> stalled_input{};
 	std::optional<std::uint64_t> newest_local_frame{};
 	using ConfirmedSimulationDigest =
@@ -2297,10 +2677,10 @@ int run_direct_netplay_on_platform(
 		th03::app::NewClassicNetplayBoundaryProof boundary,
 		const th03::app::AppSha256 &digest
 	) -> bool {
-		if(!peer || session_id == 0U) {
+		if(session_id == 0U) {
 			return false;
 		}
-		return send_netplay_datagram(*socket, *peer, {
+		return send_netplay_datagram(wire, {
 			.type = type,
 			.sender = local_player,
 			.session_id = session_id,
@@ -2327,7 +2707,7 @@ int run_direct_netplay_on_platform(
 			left.digest == right.digest;
 	};
 	const auto leave_preview = [&]() -> int {
-		if(peer && session_id != 0U) {
+		if(session_id != 0U) {
 			const NewClassicNetplayDatagram departure{
 				.type = NewClassicNetplayDatagramType::disconnect,
 				.sender = local_player,
@@ -2337,7 +2717,7 @@ int run_direct_netplay_on_platform(
 			// UDP has no delivery acknowledgement. Three bounded copies make an
 			// intentional local leave prompt without turning shutdown into a wait.
 			for(std::uint8_t attempt = 0U; attempt < 3U; ++attempt) {
-				(void)send_netplay_datagram(*socket, *peer, departure);
+				(void)send_netplay_datagram(wire, departure);
 			}
 		}
 		std::cout << "status=left\n";
@@ -2739,58 +3119,62 @@ int run_direct_netplay_on_platform(
 		audio_focus_muted = desired_focus_mute;
 
 		for(;;) {
-			const auto received = socket->receive(receive_buffer);
+			const auto received = wire.receive();
 			if(!received) {
-				return fail_netplay("netplay-receive", "socket-failed");
+				return fail_netplay("netplay-receive", received.error());
 			}
 			if(!*received) {
 				break;
 			}
-			if((*received)->size ==
+			if((**received).channel == NetplayWireChannel::control &&
+				(**received).bytes.size() ==
 				th03::app::new_classic_netplay_lobby_bytes) {
 				const auto lobby_packet =
 					th03::app::decode_new_classic_netplay_lobby_datagram(
-						std::span(receive_buffer).first((*received)->size)
+						(**received).bytes
 					);
-				if(mode == DirectVsNetplayMode::host && lobby_packet && peer &&
-					*peer == (*received)->sender &&
+				if(mode == DirectVsNetplayMode::host && lobby_packet &&
 					(lobby_packet->type == th03::app::
 						NewClassicNetplayLobbyDatagramType::join_request ||
 					 lobby_packet->type == th03::app::
 						NewClassicNetplayLobbyDatagramType::join_ready) &&
 					lobby.receive(*lobby_packet)) {
 					if(const auto response = lobby.outbound(); response) {
-						(void)send_netplay_lobby_datagram(
-							*socket, *peer, *response
-						);
+						const auto encoded = th03::app::
+							encode_new_classic_netplay_lobby_datagram(*response);
+						if(encoded) {
+							(void)wire.send(NetplayWireChannel::control, *encoded);
+						}
 					}
 				}
 				continue;
 			}
 			const auto packet = th03::app::decode_new_classic_netplay_datagram(
-				std::span(receive_buffer).first((*received)->size)
+				(**received).bytes
 			);
 			if(!packet || packet->contract_hash != contract_hash) {
 				continue;
 			}
+			if(wire.rtc() &&
+				(((**received).channel == NetplayWireChannel::gameplay) !=
+				 (packet->type == NewClassicNetplayDatagramType::input))) {
+				return fail_netplay(
+					"netplay-receive", "channel-contract"
+				);
+			}
 			if(mode == DirectVsNetplayMode::host &&
 				packet->type == NewClassicNetplayDatagramType::hello &&
-				packet->sender == remote_player &&
-				(!peer || *peer == (*received)->sender)) {
-				peer = (*received)->sender;
+				packet->sender == remote_player) {
 				const NewClassicNetplayDatagram accepted{
 					.type = NewClassicNetplayDatagramType::accept,
 					.sender = local_player,
 					.session_id = session_id,
 					.contract_hash = contract_hash,
 				};
-				if(!send_netplay_datagram(*socket, *peer, accepted)) {
+				if(!send_netplay_datagram(wire, accepted)) {
 					return fail_netplay("netplay-accept", "send-failed");
 				}
 				last_receive_ns = now_ns;
-				continue;
-			}
-			if(!peer || *peer != (*received)->sender) {
 				continue;
 			}
 			if(mode == DirectVsNetplayMode::join &&
@@ -3026,7 +3410,7 @@ int run_direct_netplay_on_platform(
 					bool sent = false;
 					for(std::uint8_t attempt = 0U; attempt < 3U; ++attempt) {
 						sent = send_netplay_datagram(
-							*socket, *peer, acknowledgement
+							wire, acknowledgement
 						) || sent;
 					}
 					if(!sent) {
@@ -3110,12 +3494,12 @@ int run_direct_netplay_on_platform(
 				.sender = local_player,
 				.contract_hash = contract_hash,
 			};
-			if(!send_netplay_datagram(*socket, *peer, hello)) {
+			if(!send_netplay_datagram(wire, hello)) {
 				return fail_netplay("netplay-hello", "send-failed");
 			}
 			last_send_ns = now_ns;
 		}
-		if(peer && session_id != 0U && !peer_started_input &&
+		if(session_id != 0U && !peer_started_input &&
 			now_ns - last_initial_digest_send_ns >= 100'000'000U) {
 			if(!send_simulation_digest(
 				NewClassicNetplayDatagramType::simulation_digest,
@@ -3198,7 +3582,7 @@ int run_direct_netplay_on_platform(
 				if(input_staged) {
 					newest_local_frame = frame;
 					if(!send_netplay_input_history(
-						*socket, *peer, **session, local_player, session_id,
+						wire, **session, local_player, session_id,
 						contract_hash, frame
 					)) {
 						return fail_netplay("netplay-input", "send-failed");
@@ -3329,7 +3713,7 @@ int run_direct_netplay_on_platform(
 			}
 		}
 
-		if(established && pause_barrier && peer &&
+		if(established && pause_barrier &&
 			now_ns - last_pause_signal_send_ns >= 50'000'000U) {
 			const NewClassicNetplayDatagram pause_signal{
 				.type = pause_barrier->outbound_signal(),
@@ -3342,15 +3726,15 @@ int run_direct_netplay_on_platform(
 				.boundary_proof =
 					th03::app::NewClassicNetplayBoundaryProof::pause,
 			};
-			if(!send_netplay_datagram(*socket, *peer, pause_signal)) {
+			if(!send_netplay_datagram(wire, pause_signal)) {
 				return fail_netplay("netplay-pause", "send-failed");
 			}
 			last_pause_signal_send_ns = now_ns;
 		}
-		if(established && !post_match && newest_local_frame && peer &&
+		if(established && !post_match && newest_local_frame &&
 			now_ns - last_send_ns >= 50'000'000U) {
 			if(!send_netplay_input_history(
-				*socket, *peer, **session, local_player, session_id,
+				wire, **session, local_player, session_id,
 				contract_hash, *newest_local_frame
 			)) {
 				return fail_netplay("netplay-resend", "send-failed");
@@ -5366,6 +5750,55 @@ ExperienceRunResult run_new_classic_experience(
 	return result;
 }
 
+[[nodiscard]] std::expected<std::optional<RtcNetplayRequest>, int>
+product_rtc_netplay_request(
+	const th03::app::NewClassicNetplayRoomLaunch &launch
+)
+{
+	if(launch.transport !=
+		th03::app::NewClassicNetplayRoomTransport::online_service) {
+		return std::optional<RtcNetplayRequest>{};
+	}
+	const auto origin = environment_value(online_origin_environment);
+	const auto user = environment_value(online_user_environment);
+	const auto token = environment_value(online_token_environment);
+	if(!origin || !user || !token || origin->empty() || user->empty() ||
+		token->empty()) {
+		return std::unexpected(fail_netplay(
+			"netplay-room-account", "online-environment-missing"
+		));
+	}
+	RtcNetplayRequest result{
+		.origin = *origin,
+		.user_id = *user,
+		.token = *token,
+		.room_code = launch.mode ==
+			th03::app::NewClassicNetplayRoomLaunchMode::join ?
+				launch.join_endpoint : std::string{},
+	};
+	if(const auto ice = environment_value(netplay_ice_environment); ice) {
+		std::size_t start = 0U;
+		while(start <= ice->size()) {
+			const auto separator = ice->find(';', start);
+			const auto value = ice->substr(
+				start, separator == std::string::npos ? std::string::npos :
+					separator - start
+			);
+			if(value.empty()) {
+				return std::unexpected(fail_netplay(
+					"netplay-room-account", "invalid-ice-servers"
+				));
+			}
+			result.ice_servers.push_back(value);
+			if(separator == std::string::npos) {
+				break;
+			}
+			start = separator + 1U;
+		}
+	}
+	return std::optional<RtcNetplayRequest>{std::move(result)};
+}
+
 int run_classic(th03::app::ClassicCliRequest parsed)
 {
 	std::optional<th03::app::NewClassicWindowPresentation>
@@ -5408,10 +5841,14 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 		if(!settings) {
 			return fail("settings-load", settings.error());
 		}
+		auto rtc = product_rtc_netplay_request(*result.netplay_launch);
+		if(!rtc) {
+			return rtc.error();
+		}
 		return run_direct_netplay_on_platform(
 			product_netplay_request(
 				parsed, settings->settings, *result.netplay_launch
-			), *product->first, product->second
+			), *product->first, product->second, std::move(*rtc)
 		);
 	}
 	return result.exit_code;
@@ -5478,11 +5915,17 @@ int run_product_shell(th03::app::ClassicCliRequest parsed)
 			if(!latest_settings) {
 				return fail("settings-load", latest_settings.error());
 			}
+			auto rtc = product_rtc_netplay_request(
+				*experience.netplay_launch
+			);
+			if(!rtc) {
+				return rtc.error();
+			}
 			const int match = run_direct_netplay_on_platform(
 				product_netplay_request(
 					parsed, latest_settings->settings,
 					*experience.netplay_launch
-				), *product->first, product->second
+				), *product->first, product->second, std::move(*rtc)
 			);
 			if(match != 0) {
 				return match;

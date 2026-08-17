@@ -3,12 +3,15 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <span>
 #include <string_view>
 #include <system_error>
 #include <utility>
+
+#include "th03/app/new_classic_netplay_signaling.hpp"
 
 namespace th03::app {
 namespace {
@@ -161,35 +164,51 @@ bool NewClassicNetplayRoom::draw() noexcept
 		}
 	} else if(screen_ == Screen::host_confirmation) {
 		std::array<char, 8U> storage{};
+		const bool direct = transport_ ==
+			NewClassicNetplayRoomTransport::direct_udp;
 		if(!font.put_centered(raster, center_x, 112,
 			messages.text(NewClassicMessageId::netplay_room_create),
 			selected_color) ||
 			!font.put(raster, label_left, 160,
-				messages.text(NewClassicMessageId::netplay_room_host_port),
+				messages.text(direct ?
+					NewClassicMessageId::netplay_room_host_port :
+					NewClassicMessageId::netplay_room_code),
 				normal_color) ||
 			!font.put_right(raster, value_right, 160,
-				decimal(host_port_, storage), selected_color) ||
+				direct ? decimal(host_port_, storage) :
+					messages.text(NewClassicMessageId::netplay_room_code_empty),
+				selected_color) ||
 			!font.put_centered(raster, center_x, 224,
-				messages.text(NewClassicMessageId::netplay_room_socket_warning),
+				messages.text(direct ?
+					NewClassicMessageId::netplay_room_socket_warning :
+					NewClassicMessageId::netplay_room_code_hint),
 				detail_color)) {
 			return false;
 		}
 	} else if(screen_ == Screen::join_entry) {
+		const bool direct = transport_ ==
+			NewClassicNetplayRoomTransport::direct_udp;
 		const auto endpoint = join_endpoint_.empty() ?
-			messages.text(NewClassicMessageId::netplay_room_endpoint_empty) :
+			messages.text(direct ?
+				NewClassicMessageId::netplay_room_endpoint_empty :
+				NewClassicMessageId::netplay_room_code_empty) :
 			std::string_view(join_endpoint_);
 		if(!font.put_centered(raster, center_x, 112,
 			messages.text(NewClassicMessageId::netplay_room_join),
 			selected_color) ||
 			!font.put(raster, label_left, 160,
-				messages.text(NewClassicMessageId::netplay_room_endpoint),
+				messages.text(direct ?
+					NewClassicMessageId::netplay_room_endpoint :
+					NewClassicMessageId::netplay_room_code),
 				normal_color) ||
 			!font.put_right(raster, value_right, 160, endpoint,
 				endpoint_invalid_ ? 11U : selected_color) ||
 			!font.put_centered(raster, center_x, 224,
-				messages.text(endpoint_invalid_ ?
+				messages.text(endpoint_invalid_ ? (direct ?
 					NewClassicMessageId::netplay_room_endpoint_invalid :
-					NewClassicMessageId::netplay_room_endpoint_hint),
+					NewClassicMessageId::netplay_room_code_invalid) : (direct ?
+					NewClassicMessageId::netplay_room_endpoint_hint :
+					NewClassicMessageId::netplay_room_code_hint)),
 				detail_color)) {
 			return false;
 		}
@@ -202,7 +221,10 @@ bool NewClassicNetplayRoom::draw() noexcept
 				messages.text(NewClassicMessageId::netplay_room_transport),
 				selection_ == 0U ? selected_color : normal_color) ||
 			!font.put_right(raster, value_right, 160,
-				messages.text(NewClassicMessageId::netplay_room_direct_udp),
+				messages.text(transport_ ==
+					NewClassicNetplayRoomTransport::online_service ?
+					NewClassicMessageId::netplay_room_online_service :
+					NewClassicMessageId::netplay_room_direct_udp),
 				detail_color) ||
 			!font.put(raster, label_left, 192,
 				messages.text(NewClassicMessageId::netplay_room_host_port),
@@ -230,6 +252,9 @@ bool NewClassicNetplayRoom::valid() const noexcept
 
 bool NewClassicNetplayRoom::valid_join_endpoint() const noexcept
 {
+	if(transport_ == NewClassicNetplayRoomTransport::online_service) {
+		return valid_new_classic_netplay_room_code(join_endpoint_);
+	}
 	const auto separator = join_endpoint_.rfind(':');
 	if(separator == std::string::npos || separator == 0U ||
 		separator + 1U >= join_endpoint_.size()) {
@@ -274,10 +299,23 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 		}
 		if(input.text_character &&
 			allowed_endpoint_character(*input.text_character) &&
-			join_endpoint_.size() < endpoint_limit) {
-			join_endpoint_.push_back(*input.text_character);
+			join_endpoint_.size() < (transport_ ==
+				NewClassicNetplayRoomTransport::online_service ? 6U :
+				endpoint_limit)) {
+			const auto character = transport_ ==
+				NewClassicNetplayRoomTransport::online_service ?
+				static_cast<char>(std::toupper(
+					static_cast<unsigned char>(*input.text_character)
+				)) : *input.text_character;
+			const auto size_before = join_endpoint_.size();
+			if(transport_ == NewClassicNetplayRoomTransport::direct_udp ||
+				std::string_view("23456789ABCDEFGHJKLMNPQRSTUVWXYZ").find(
+					character
+				) != std::string_view::npos) {
+				join_endpoint_.push_back(character);
+			}
 			endpoint_invalid_ = false;
-			changed = true;
+			changed = join_endpoint_.size() != size_before;
 		}
 		if(changed && !draw()) {
 			status_ = NewClassicNetplayRoomStatus::back;
@@ -295,6 +333,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 			if(valid_join_endpoint()) {
 				launch_ = NewClassicNetplayRoomLaunch{
 					.mode = NewClassicNetplayRoomLaunchMode::join,
+					.transport = transport_,
 					.host_port = host_port_,
 					.join_endpoint = join_endpoint_,
 					.character = character_,
@@ -402,6 +441,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 		} else if(input.ui.confirm) {
 			launch_ = NewClassicNetplayRoomLaunch{
 				.mode = NewClassicNetplayRoomLaunchMode::host,
+				.transport = transport_,
 				.host_port = host_port_,
 				.character = character_,
 				.palette = palette_,
@@ -411,7 +451,17 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 			return {.status = status_};
 		}
 	} else {
-		if(input.ui.up || input.ui.down) {
+		if(selection_ == 0U && (input.ui.left || input.ui.right ||
+			input.ui.confirm)) {
+			transport_ = transport_ ==
+				NewClassicNetplayRoomTransport::online_service ?
+				NewClassicNetplayRoomTransport::direct_udp :
+				NewClassicNetplayRoomTransport::online_service;
+			join_endpoint_.clear();
+			endpoint_invalid_ = false;
+			changed = true;
+			require_release();
+		} else if(input.ui.up || input.ui.down) {
 			selection_ = static_cast<std::uint8_t>(
 				(selection_ + (input.ui.up ? 2U : 1U)) % 3U
 			);
@@ -527,13 +577,18 @@ bool NewClassicNetplayLobbyView::draw() noexcept
 		const auto local_label = role_ == NewClassicNetplayLobbyViewRole::host ?
 			NewClassicMessageId::netplay_room_player_one :
 			NewClassicMessageId::netplay_room_player_two;
-		if(!put_lock(160, local_label, local_lock_) ||
+		if(!put_lock(144, local_label, local_lock_) ||
 			!font.put(raster, label_left, 240,
 				messages.text(NewClassicMessageId::option_rank), normal_color) ||
 			!font.put_right(raster, value_right, 240,
 				messages.text(role_ == NewClassicNetplayLobbyViewRole::host ?
 					rank_messages[rank_] :
-					NewClassicMessageId::netplay_room_host_decides), detail_color)) {
+					NewClassicMessageId::netplay_room_host_decides), detail_color) ||
+			(!room_code_.empty() &&
+			 (!font.put(raster, label_left, 280,
+				messages.text(NewClassicMessageId::netplay_room_code), normal_color) ||
+			  !font.put_right(raster, value_right, 280, room_code_,
+				selected_color)))) {
 			return false;
 		}
 	}
@@ -541,6 +596,15 @@ bool NewClassicNetplayLobbyView::draw() noexcept
 		messages.text(ready ? NewClassicMessageId::netplay_room_starting :
 			NewClassicMessageId::netplay_room_cancel_wait), detail_color) &&
 		patch_surface_.publish(raster.access_page());
+}
+
+bool NewClassicNetplayLobbyView::mark_room_code(std::string room_code) noexcept
+{
+	if(!valid_new_classic_netplay_room_code(room_code)) {
+		return false;
+	}
+	room_code_ = std::move(room_code);
+	return draw();
 }
 
 bool NewClassicNetplayLobbyView::valid() const noexcept

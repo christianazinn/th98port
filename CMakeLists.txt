@@ -7,6 +7,7 @@ find_package(Threads REQUIRED)
 
 option(TH03_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 option(TH03_ENABLE_SDL "Build the optional SDL 3 platform adapter" OFF)
+option(TH03_ENABLE_RTC "Build the optional WebRTC netplay transport" OFF)
 
 set(
 	TH03_SDL3_PROVIDER "source" CACHE STRING
@@ -21,6 +22,26 @@ set(
 set(
 	TH03_SDL3_LICENSE_FILE "" CACHE FILEPATH
 	"SDL LICENSE.txt supplied by the package provider"
+)
+
+set(
+	TH03_RTC_PROVIDER "source" CACHE STRING
+	"libdatachannel provider for the optional RTC adapter (source or package)"
+)
+set_property(CACHE TH03_RTC_PROVIDER PROPERTY STRINGS source package)
+set(
+	TH03_LIBDATACHANNEL_SOURCE_DIR
+	"${CMAKE_CURRENT_SOURCE_DIR}/out/deps/libdatachannel-0.24.3" CACHE PATH
+	"Authenticated libdatachannel 0.24.3 source directory"
+)
+set(
+	TH03_MBEDTLS_SOURCE_DIR
+	"${CMAKE_CURRENT_SOURCE_DIR}/out/deps/mbedtls-3.6.7" CACHE PATH
+	"Authenticated Mbed TLS 3.6.7 source directory"
+)
+set(
+	TH03_RTC_LICENSE_ROOT "" CACHE PATH
+	"License tree for a package-provided RTC dependency set"
 )
 
 if(TH03_ENABLE_SDL)
@@ -161,6 +182,208 @@ if(TH03_ENABLE_SDL)
 				VERBATIM
 			)
 		endif()
+	endfunction()
+endif()
+
+if(TH03_ENABLE_RTC)
+	if(NOT TH03_ENABLE_SDL)
+		message(FATAL_ERROR "TH03_ENABLE_RTC requires TH03_ENABLE_SDL")
+	endif()
+
+	if(TH03_RTC_PROVIDER STREQUAL "source")
+		get_filename_component(
+			_th03_libdatachannel_source
+			"${TH03_LIBDATACHANNEL_SOURCE_DIR}" ABSOLUTE
+			BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
+		)
+		get_filename_component(
+			_th03_mbedtls_source "${TH03_MBEDTLS_SOURCE_DIR}" ABSOLUTE
+			BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
+		)
+		set(_th03_libdatachannel_manifest
+			"${_th03_libdatachannel_source}/.th03-source-manifest"
+		)
+		set(_th03_mbedtls_marker
+			"${_th03_mbedtls_source}/.th03-source-sha256"
+		)
+		foreach(_required_file IN ITEMS
+			"${_th03_libdatachannel_source}/CMakeLists.txt"
+			"${_th03_libdatachannel_source}/LICENSE"
+			"${_th03_libdatachannel_source}/include/rtc/rtc.hpp"
+			"${_th03_libdatachannel_manifest}"
+			"${_th03_mbedtls_source}/CMakeLists.txt"
+			"${_th03_mbedtls_source}/LICENSE"
+			"${_th03_mbedtls_source}/include/mbedtls/build_info.h"
+			"${_th03_mbedtls_marker}"
+		)
+			if(NOT EXISTS "${_required_file}" OR IS_DIRECTORY "${_required_file}")
+				message(FATAL_ERROR
+					"Authenticated RTC source is incomplete: ${_required_file}"
+				)
+			endif()
+		endforeach()
+
+		set(_th03_libdatachannel_expected_manifest
+"libdatachannel c6696d157b5612df2a741d9a03b192b47ab6cefb
+json 55f93686c01528224f448c19128836e7df245f72
+libjuice 22145ec3473c73d811417ac9a6aee0de530aaa3f
+libsrtp 24b3bf8f19b6f5ab4cd2bcceb4f4064efca86fd5
+plog 94899e0b926ac1b0f4750bfbd495167b4a6ae9ef
+usrsctp fec583d54493f879d2ae44a743423bf8a04371ab")
+		file(READ
+			"${_th03_libdatachannel_manifest}"
+			_th03_libdatachannel_manifest_value
+		)
+		string(STRIP
+			"${_th03_libdatachannel_manifest_value}"
+			_th03_libdatachannel_manifest_value
+		)
+		if(NOT _th03_libdatachannel_manifest_value STREQUAL
+			_th03_libdatachannel_expected_manifest
+		)
+			message(FATAL_ERROR
+				"libdatachannel source manifest does not match the pinned tree"
+			)
+		endif()
+
+		set(_th03_mbedtls_sha256
+			"a7e8bcbec0e6f761b4af24f25677626b35f762f68eef79c08677a363212d11f6"
+		)
+		file(READ "${_th03_mbedtls_marker}" _th03_mbedtls_marker_value)
+		string(STRIP
+			"${_th03_mbedtls_marker_value}" _th03_mbedtls_marker_value
+		)
+		if(NOT _th03_mbedtls_marker_value STREQUAL _th03_mbedtls_sha256)
+			message(FATAL_ERROR
+				"Mbed TLS source marker does not match the authenticated archive"
+			)
+		endif()
+		file(READ
+			"${_th03_mbedtls_source}/include/mbedtls/build_info.h"
+			_th03_mbedtls_version_text
+		)
+		foreach(_version_part IN ITEMS
+			"MBEDTLS_VERSION_MAJOR[ \\t]+3"
+			"MBEDTLS_VERSION_MINOR[ \\t]+6"
+			"MBEDTLS_VERSION_PATCH[ \\t]+7"
+		)
+			if(NOT _th03_mbedtls_version_text MATCHES
+				"#[ \\t]*define[ \\t]+${_version_part}([^0-9]|$)"
+			)
+				message(FATAL_ERROR
+					"Mbed TLS source is not exactly version 3.6.7"
+				)
+			endif()
+		endforeach()
+
+		set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
+		set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+		set(USE_STATIC_MBEDTLS_LIBRARY ON CACHE BOOL "" FORCE)
+		set(USE_SHARED_MBEDTLS_LIBRARY OFF CACHE BOOL "" FORCE)
+		set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+		set(MBEDTLS_USER_CONFIG_FILE
+			"${CMAKE_CURRENT_SOURCE_DIR}/cmake/rtc_mbedtls_user_config.h"
+			CACHE FILEPATH "" FORCE
+		)
+		add_subdirectory(
+			"${_th03_mbedtls_source}"
+			"${CMAKE_BINARY_DIR}/_deps/mbedtls-build"
+			EXCLUDE_FROM_ALL
+		)
+		if(NOT TARGET MbedTLS::mbedtls)
+			message(FATAL_ERROR
+				"Authenticated Mbed TLS source did not define MbedTLS::mbedtls"
+			)
+		endif()
+		# libdatachannel's source build accepts the package-style aggregate
+		# target name, while Mbed TLS's add_subdirectory() path exposes its
+		# concrete lowercase targets. Keep the compatibility owner local.
+		add_library(MbedTLS::MbedTLS INTERFACE IMPORTED GLOBAL)
+		set_property(
+			TARGET MbedTLS::MbedTLS PROPERTY
+			INTERFACE_LINK_LIBRARIES MbedTLS::mbedtls
+		)
+
+		set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+		set(BUILD_SHARED_DEPS_LIBS OFF CACHE BOOL "" FORCE)
+		set(USE_MBEDTLS ON CACHE BOOL "" FORCE)
+		set(USE_GNUTLS OFF CACHE BOOL "" FORCE)
+		set(USE_NICE OFF CACHE BOOL "" FORCE)
+		set(PREFER_SYSTEM_LIB OFF CACHE BOOL "" FORCE)
+		set(NO_WEBSOCKET OFF CACHE BOOL "" FORCE)
+		set(NO_MEDIA ON CACHE BOOL "" FORCE)
+		set(NO_EXAMPLES ON CACHE BOOL "" FORCE)
+		set(NO_TESTS ON CACHE BOOL "" FORCE)
+		set(WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
+		set(RTC_UPDATE_VERSION_HEADER OFF CACHE BOOL "" FORCE)
+		add_subdirectory(
+			"${_th03_libdatachannel_source}"
+			"${CMAKE_BINARY_DIR}/_deps/libdatachannel-build"
+			EXCLUDE_FROM_ALL
+		)
+		set(_th03_rtc_license_files
+			"libdatachannel|${_th03_libdatachannel_source}/LICENSE|LICENSE"
+			"MbedTLS|${_th03_mbedtls_source}/LICENSE|LICENSE"
+			"libjuice|${_th03_libdatachannel_source}/deps/libjuice/LICENSE|LICENSE"
+			"usrsctp|${_th03_libdatachannel_source}/deps/usrsctp/LICENSE.md|LICENSE.md"
+			"nlohmann-json|${_th03_libdatachannel_source}/deps/json/LICENSE.MIT|LICENSE.MIT"
+			"plog|${_th03_libdatachannel_source}/deps/plog/LICENSE|LICENSE"
+		)
+	elseif(TH03_RTC_PROVIDER STREQUAL "package")
+		find_package(LibDataChannel 0.24.3 EXACT CONFIG REQUIRED)
+		if(TH03_RTC_LICENSE_ROOT STREQUAL "")
+			message(FATAL_ERROR
+				"The RTC package provider requires TH03_RTC_LICENSE_ROOT"
+			)
+		endif()
+		get_filename_component(
+			_th03_rtc_license_root "${TH03_RTC_LICENSE_ROOT}" ABSOLUTE
+			BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
+		)
+		set(_th03_rtc_license_files
+			"libdatachannel|${_th03_rtc_license_root}/libdatachannel/LICENSE|LICENSE"
+			"MbedTLS|${_th03_rtc_license_root}/MbedTLS/LICENSE|LICENSE"
+			"libjuice|${_th03_rtc_license_root}/libjuice/LICENSE|LICENSE"
+			"usrsctp|${_th03_rtc_license_root}/usrsctp/LICENSE.md|LICENSE.md"
+			"nlohmann-json|${_th03_rtc_license_root}/nlohmann-json/LICENSE.MIT|LICENSE.MIT"
+			"plog|${_th03_rtc_license_root}/plog/LICENSE|LICENSE"
+		)
+	else()
+		message(FATAL_ERROR
+			"TH03_RTC_PROVIDER must be either 'source' or 'package'"
+		)
+	endif()
+	foreach(_license_record IN LISTS _th03_rtc_license_files)
+		string(REPLACE "|" ";" _license_fields "${_license_record}")
+		list(GET _license_fields 1 _license_source)
+		if(NOT EXISTS "${_license_source}" OR IS_DIRECTORY "${_license_source}")
+			message(FATAL_ERROR
+				"RTC dependency license is missing: ${_license_source}"
+			)
+		endif()
+	endforeach()
+
+	function(th03_stage_rtc_licenses target)
+		if(NOT TARGET ${target})
+			message(FATAL_ERROR
+				"th03_stage_rtc_licenses received an unknown target: ${target}"
+			)
+		endif()
+		foreach(_license_record IN LISTS _th03_rtc_license_files)
+			string(REPLACE "|" ";" _license_fields "${_license_record}")
+			list(GET _license_fields 0 _license_name)
+			list(GET _license_fields 1 _license_source)
+			list(GET _license_fields 2 _license_filename)
+			add_custom_command(
+				TARGET ${target} POST_BUILD
+				COMMAND "${CMAKE_COMMAND}" -E make_directory
+					"$<TARGET_FILE_DIR:${target}>/licenses/${_license_name}"
+				COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+					"${_license_source}"
+					"$<TARGET_FILE_DIR:${target}>/licenses/${_license_name}/${_license_filename}"
+				VERBATIM
+			)
+		endforeach()
 	endfunction()
 endif()
 
@@ -543,6 +766,7 @@ add_library(th03_app_netplay STATIC
 	src/app/new_classic_netplay_match_contract.cpp
 	src/app/new_classic_netplay_pause_barrier.cpp
 	src/app/new_classic_netplay_protocol.cpp
+	src/app/new_classic_netplay_signaling.cpp
 	src/app/new_classic_netplay_simulator.cpp
 	src/app/new_classic_netplay_timeline.cpp
 )
@@ -562,6 +786,20 @@ if(WIN32)
 	target_link_libraries(th03_platform_udp PUBLIC ws2_32)
 endif()
 th03_set_warnings(th03_platform_udp)
+
+if(TH03_ENABLE_RTC)
+	add_library(th03_platform_rtc STATIC
+		src/platform/rtc_room.cpp
+	)
+	target_include_directories(th03_platform_rtc PUBLIC include)
+	target_link_libraries(
+		th03_platform_rtc
+		PUBLIC th03_app_netplay LibDataChannel::LibDataChannelStatic
+	)
+	target_compile_features(th03_platform_rtc PUBLIC cxx_std_23)
+	set_target_properties(th03_platform_rtc PROPERTIES CXX_EXTENSIONS OFF)
+	th03_set_warnings(th03_platform_rtc)
+endif()
 
 # Stable MAIN-process/application policy. It owns both the guarded direct-VS
 # process and the complete source-private Classic OP/MAINL/MAIN lifecycle;
@@ -677,6 +915,12 @@ if(TH03_ENABLE_SDL)
 	target_link_libraries(
 		th03-app PRIVATE th03_app_main th03_platform_sdl th03_platform_udp
 	)
+	if(TH03_ENABLE_RTC)
+		target_link_libraries(th03-app PRIVATE th03_platform_rtc)
+		target_compile_definitions(
+			th03-app PRIVATE TH03_ENABLE_RTC_TRANSPORT=1
+		)
+	endif()
 	if(WIN32)
 		target_link_libraries(th03-app PRIVATE th03_platform_windows_online)
 	endif()
@@ -684,6 +928,9 @@ if(TH03_ENABLE_SDL)
 	th03_set_warnings(th03-app)
 	th03_stage_sdl3_runtime(th03-app)
 	th03_stage_audio_licenses(th03-app)
+	if(TH03_ENABLE_RTC)
+		th03_stage_rtc_licenses(th03-app)
+	endif()
 endif()
 
 if(BUILD_TESTING)
@@ -1319,6 +1566,17 @@ if(BUILD_TESTING)
 		NAME th03-app-new-classic-netplay-protocol-tests
 		COMMAND th03-app-new-classic-netplay-protocol-tests
 	)
+	add_executable(th03-app-new-classic-netplay-signaling-tests
+		tests/test_app_new_classic_netplay_signaling.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-netplay-signaling-tests PRIVATE th03_app_netplay
+	)
+	th03_set_warnings(th03-app-new-classic-netplay-signaling-tests)
+	add_test(
+		NAME th03-app-new-classic-netplay-signaling-tests
+		COMMAND th03-app-new-classic-netplay-signaling-tests
+	)
 
 	add_executable(th03-app-new-classic-netplay-simulator-tests
 		tests/test_app_new_classic_netplay_simulator.cpp
@@ -1343,6 +1601,19 @@ if(BUILD_TESTING)
 		NAME th03-platform-udp-socket-tests
 		COMMAND th03-platform-udp-socket-tests
 	)
+	if(TH03_ENABLE_RTC)
+		add_executable(th03-platform-rtc-room-tests
+			tests/test_platform_rtc_room.cpp
+		)
+		target_link_libraries(
+			th03-platform-rtc-room-tests PRIVATE th03_platform_rtc
+		)
+		th03_set_warnings(th03-platform-rtc-room-tests)
+		add_test(
+			NAME th03-platform-rtc-room-tests
+			COMMAND th03-platform-rtc-room-tests
+		)
+	endif()
 
 	add_executable(th03-app-new-classic-key-config-scene-tests
 		tests/test_app_new_classic_key_config_scene.cpp

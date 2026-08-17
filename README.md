@@ -54,8 +54,8 @@ ctest --preset gcc
 The MSVC preset uses Visual Studio 2022 x64. The GCC preset uses the standard
 `MinGW Makefiles` generator.
 
-The direct IPv4/Tailscale New Classic netplay technical preview, including
-Windows standalone-host and Arch Linux join commands, is documented in
+The room-code/WebRTC and direct IPv4/Tailscale New Classic netplay technical
+preview, including Windows/Arch setup and the direct fallback commands, is documented in
 [`docs/NETPLAY_TESTING.md`](docs/NETPLAY_TESTING.md). Its synchronized Pause
 offers Resume or Forfeit; Forfeit ends both previews without inventing a TH03
 winner or publishing the incomplete in-memory replay. Completed matches,
@@ -65,11 +65,16 @@ into console output.
 
 ### Optional Classic and direct-VS application
 
-The SDL target is off by default. Authenticate and extract the pinned SDL
-3.4.10 release archive once, then use either SDL preset:
+The SDL target is off by default. The maintained SDL presets also build the
+room-code WebRTC transport. Authenticate and extract the pinned SDL 3.4.10
+release archive, libdatachannel 0.24.3 recursive source, and Mbed TLS 3.6.7
+archive once, then use either SDL preset:
 
 ```powershell
 tools\bootstrap_sdl3.ps1 -Archive X:\downloads\SDL3-3.4.10.tar.gz
+tools\bootstrap_rtc.ps1 `
+  -LibDataChannelSource X:\src\libdatachannel `
+  -MbedTlsArchive X:\downloads\mbedtls-3.6.7.tar.bz2
 cmake --preset msvc-x64-sdl
 cmake --build --preset msvc-x64-sdl
 ctest --preset msvc-x64-sdl
