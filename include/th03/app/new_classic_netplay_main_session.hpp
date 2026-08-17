@@ -11,6 +11,7 @@
 
 #include "th03/app/main_rollback_coordinator.hpp"
 #include "th03/app/new_classic_netplay_timeline.hpp"
+#include "th03/replay/session.hpp"
 
 namespace th03::app {
 
@@ -32,6 +33,7 @@ enum class NewClassicNetplayMainSessionErrorCode : std::uint8_t {
 	invalid_boundary,
 	audio_journal_failed,
 	digest_journal_failed,
+	transcript_journal_failed,
 };
 
 struct NewClassicNetplayMainSessionError final {
@@ -86,6 +88,17 @@ struct NewClassicNetplayConfirmedSimulationDigest final {
 	std::uint64_t frame = 0U;
 	std::uint64_t confirmed_gameplay_frame_count = 0U;
 	AppSha256 digest{};
+};
+
+// One corrected frame suitable for the in-memory V13 recorder. It becomes
+// visible only after contiguous confirmation; a round/terminal sample remains
+// private until its source lifecycle transition has completed.
+struct NewClassicNetplayConfirmedInputFrame final {
+	std::uint64_t frame = 0U;
+	replay::InputPhase phase = replay::InputPhase::gameplay;
+	CoreInput input{};
+	StepResult step_result{};
+	std::uint8_t source_vsyncs = 1U;
 };
 
 // Retained active-MAIN owner. Network values enter only through T3NET001's
@@ -158,6 +171,10 @@ public:
 		std::optional<NewClassicNetplayConfirmedSimulationDigest>,
 		NewClassicNetplayMainSessionError
 	> take_confirmed_simulation_digest() noexcept;
+	[[nodiscard]] std::expected<
+		std::optional<NewClassicNetplayConfirmedInputFrame>,
+		NewClassicNetplayMainSessionError
+	> take_confirmed_input_frame() noexcept;
 	[[nodiscard]] const MainProcess &process() const noexcept;
 	[[nodiscard]] std::uint64_t next_frame() const noexcept;
 	[[nodiscard]] std::uint64_t confirmed_frame_count() const noexcept;

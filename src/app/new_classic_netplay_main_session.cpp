@@ -40,6 +40,9 @@ struct NewClassicNetplayMainSession::Impl final {
 		bool valid = false;
 		bool gameplay = false;
 		std::uint64_t frame = 0U;
+		CoreInput input{};
+		StepResult step_result{};
+		std::uint8_t source_vsyncs = 1U;
 	};
 
 	struct AudioSlot final {
@@ -63,6 +66,7 @@ struct NewClassicNetplayMainSession::Impl final {
 	std::uint8_t bootstrap_audio_head = 0U;
 	std::uint8_t bootstrap_audio_count = 0U;
 	std::uint64_t next_audio_frame = 0U;
+	std::uint64_t next_transcript_frame = 0U;
 	std::array<
 		NewClassicNetplayConfirmedSimulationDigest,
 		digest_queue_size
@@ -268,6 +272,9 @@ struct NewClassicNetplayMainSession::Impl final {
 			.valid = true,
 			.gameplay = gameplay_frame,
 			.frame = resolved.frame,
+			.input = resolved.combined,
+			.step_result = stepped->step_result,
+			.source_vsyncs = stepped->step_result.next_step_vsyncs,
 		};
 		return *stepped;
 	}
@@ -629,6 +636,38 @@ std::expected<
 		(impl_->digest_head + 1U) % impl_->digest_queue.size()
 	);
 	--impl_->digest_count;
+	return std::optional{result};
+}
+
+std::expected<
+	std::optional<NewClassicNetplayConfirmedInputFrame>,
+	NewClassicNetplayMainSessionError
+> NewClassicNetplayMainSession::take_confirmed_input_frame() noexcept
+{
+	if(impl_->next_transcript_frame >=
+		impl_->timeline->confirmed_frame_count() ||
+		(impl_->boundary_frame &&
+		 impl_->next_transcript_frame == *impl_->boundary_frame)) {
+		return std::optional<NewClassicNetplayConfirmedInputFrame>{};
+	}
+	const auto &fact = impl_->frame_facts[
+		impl_->next_transcript_frame % impl_->frame_facts.size()
+	];
+	if(!fact.valid || fact.frame != impl_->next_transcript_frame ||
+		fact.source_vsyncs == 0U) {
+		return std::unexpected(session_error(
+			NewClassicNetplayMainSessionErrorCode::transcript_journal_failed
+		));
+	}
+	NewClassicNetplayConfirmedInputFrame result{
+		.frame = fact.frame,
+		.phase = fact.gameplay ? replay::InputPhase::gameplay :
+			replay::InputPhase::interstitial,
+		.input = fact.input,
+		.step_result = fact.step_result,
+		.source_vsyncs = fact.source_vsyncs,
+	};
+	++impl_->next_transcript_frame;
 	return std::optional{result};
 }
 

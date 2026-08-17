@@ -1605,6 +1605,8 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	std::optional<ConfirmedSimulationDigest> remote_runtime_digest{};
 	std::optional<ConfirmedSimulationDigest> remote_runtime_digest_ack{};
 	std::optional<ConfirmedSimulationDigest> verified_runtime_digest{};
+	std::vector<th03::app::NewClassicNetplayConfirmedInputFrame>
+		confirmed_transcript{};
 	bool runtime_digest_peer_ack = false;
 	bool presentation_pending = false;
 	std::uint64_t local_frames = 0U;
@@ -1734,6 +1736,26 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			}
 		}
 	};
+	const auto drain_confirmed_transcript = [&]() -> std::expected<void, int> {
+		for(;;) {
+			auto frame = (*session)->take_confirmed_input_frame();
+			if(!frame) {
+				log_netplay_session_error(frame.error());
+				return std::unexpected(fail_netplay(
+					"netplay-replay", "transcript-journal-failed"
+				));
+			}
+			if(!*frame) {
+				return {};
+			}
+			if((**frame).frame != confirmed_transcript.size()) {
+				return std::unexpected(fail_netplay(
+					"netplay-replay", "transcript-order-failed"
+				));
+			}
+			confirmed_transcript.push_back(std::move(**frame));
+		}
+	};
 
 	const auto submit_input_datagram = [&](const NewClassicNetplayDatagram &packet)
 		-> bool {
@@ -1775,6 +1797,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		}
 		presentation_pending = presentation_pending ||
 			continued->surface_publishable;
+		if(const auto transcript = drain_confirmed_transcript(); !transcript) {
+			return std::unexpected(transcript.error());
+		}
 		std::cout << "status=boundary-confirmed\nboundary=" <<
 			static_cast<unsigned>(*continued->boundary) << "\nframe=" <<
 			*continued->frame << '\n';
@@ -2022,6 +2047,10 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				submit_input_datagram(*packet)) {
 				last_receive_ns = now_ns;
 				peer_started_input = true;
+				if(const auto transcript = drain_confirmed_transcript();
+					!transcript) {
+					return transcript.error();
+				}
 			}
 		}
 		if(established) {
@@ -2079,6 +2108,10 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				}
 				presentation_pending = presentation_pending ||
 					advanced->surface_publishable;
+				if(const auto transcript = drain_confirmed_transcript();
+					!transcript) {
+					return transcript.error();
+				}
 			}
 			if(const auto settled = settle_confirmed_boundary(); !settled) {
 				return settled.error();
@@ -2123,6 +2156,10 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 				}
 				presentation_pending = presentation_pending ||
 					advanced->surface_publishable;
+				if(const auto transcript = drain_confirmed_transcript();
+					!transcript) {
+					return transcript.error();
+				}
 				if(advanced->status ==
 						NewClassicNetplayMainSessionStatus::prediction_stalled ||
 					advanced->status ==
@@ -2203,14 +2240,15 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 			NewClassicNetplayMainSessionStatus::complete &&
 			!runtime_proof_pending) {
 			std::cout << "status=match-complete\nframes=" <<
-				(*session)->confirmed_frame_count() << '\n';
+				(*session)->confirmed_frame_count() << "\nreplay-frames=" <<
+				confirmed_transcript.size() << '\n';
 			return 0;
 		}
 		if(parsed.smoke_ticks && local_frames >= *parsed.smoke_ticks &&
 			(*session)->confirmed_frame_count() >= *parsed.smoke_ticks &&
 			!runtime_proof_pending) {
 			std::cout << "status=smoke-complete\nframes=" << local_frames
-				<< '\n';
+				<< "\nreplay-frames=" << confirmed_transcript.size() << '\n';
 			return 0;
 		}
 

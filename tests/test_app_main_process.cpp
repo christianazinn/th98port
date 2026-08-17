@@ -1519,6 +1519,7 @@ void test_new_classic_netplay_main_session_convergence()
 		frame_count
 	> reference_audio{};
 	std::array<std::uint8_t, frame_count> reference_vsyncs{};
+	std::array<th03::StepResult, frame_count> reference_results{};
 	std::uint64_t corrections = 0U;
 	for(std::uint64_t host_frame = 0U;
 		host_frame < frame_count + 7U; ++host_frame) {
@@ -1549,6 +1550,7 @@ void test_new_classic_netplay_main_session_convergence()
 			if(reference) {
 				reference_audio[host_frame] = drain_reference(**reference_process);
 				reference_vsyncs[host_frame] = reference->next_step_vsyncs;
+				reference_results[host_frame] = *reference;
 			}
 		}
 		for(std::uint64_t frame = 0U; frame < frame_count; ++frame) {
@@ -1603,10 +1605,36 @@ void test_new_classic_netplay_main_session_convergence()
 		};
 		expect(same_audio(one) && same_audio(two),
 			"confirmed netplay audio replaces speculative suffixes exactly");
+		auto transcript_one = (*peer_one)->take_confirmed_input_frame();
+		auto transcript_two = (*peer_two)->take_confirmed_input_frame();
+		const auto combined = th03::app::combine_new_classic_netplay_inputs(
+			input_one(frame), input_two(frame)
+		);
+		const auto same_transcript = [&](const auto &candidate) {
+			return candidate && *candidate && combined &&
+				(**candidate).frame == frame &&
+				(**candidate).phase == th03::replay::InputPhase::gameplay &&
+				(**candidate).input.system == combined->system &&
+				(**candidate).input.p1 == combined->p1 &&
+				(**candidate).input.p2 == combined->p2 &&
+				(**candidate).input.charge_mask == combined->charge_mask &&
+				(**candidate).source_vsyncs == reference_vsyncs[frame] &&
+				(**candidate).step_result.status ==
+					reference_results[frame].status &&
+				(**candidate).step_result.input_boundary_state.state_hash ==
+					reference_results[frame].input_boundary_state.state_hash;
+		};
+		expect(same_transcript(transcript_one) &&
+			same_transcript(transcript_two),
+			"confirmed replay transcript replaces speculative suffixes exactly");
 	}
 	const auto audio_exhausted = (*peer_one)->take_confirmed_audio_frame();
 	expect(audio_exhausted && !*audio_exhausted,
 		"confirmed audio frame stream ends exactly at contiguous confirmation");
+	const auto transcript_exhausted =
+		(*peer_one)->take_confirmed_input_frame();
+	expect(transcript_exhausted && !*transcript_exhausted,
+		"confirmed replay transcript ends exactly at contiguous confirmation");
 	expect((*peer_one)->process().canonical_state().state_hash ==
 			(*peer_two)->process().canonical_state().state_hash &&
 		(*peer_one)->process().canonical_state().state_hash ==
@@ -1741,6 +1769,8 @@ void test_new_classic_netplay_confirmed_digest_schedule()
 	const auto closes_gap = (*delayed_peer)->submit_remote(119U, {});
 	const auto delayed_digest =
 		(*delayed_peer)->take_confirmed_simulation_digest();
+	const auto stale_transcript =
+		(*delayed_peer)->take_confirmed_input_frame();
 	expect(closes_gap && closes_gap->confirmed_frame_count == 128U &&
 		delayed_digest && *delayed_digest &&
 		(**delayed_digest).frame ==
@@ -1748,6 +1778,10 @@ void test_new_classic_netplay_confirmed_digest_schedule()
 		(**delayed_digest).confirmed_gameplay_frame_count ==
 			th03::app::new_classic_netplay_simulation_digest_interval,
 		"one reordered packet batch still journals the exact frame-120 proof");
+	expect(!stale_transcript && stale_transcript.error().code ==
+		th03::app::NewClassicNetplayMainSessionErrorCode::
+			transcript_journal_failed,
+		"a transcript consumer beyond the bounded ring fails closed");
 	expect(digest_one && *digest_one && digest_two && *digest_two &&
 		(**digest_one).frame ==
 			th03::app::new_classic_netplay_simulation_digest_interval &&

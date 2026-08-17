@@ -91,6 +91,9 @@ The latest periodic proof must be mutually acknowledged before either peer may
 report a clean finish or bounded smoke completion.
 An intentional local exit prints `status=left`; the other peer prints
 `status=peer-left` rather than waiting for the crash/connectivity timeout.
+The preview continuously builds a corrected input transcript in memory and
+prints its final `replay-frames` count. It does not create a working replay
+file. V13 finalization/save follows the full post-match MAINL integration.
 
 For a bounded automated check, append the same `--smoke-ticks N` to both
 commands. This exits only after both peers have confirmed `N` gameplay input
