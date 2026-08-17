@@ -562,6 +562,7 @@ add_library(th03_app_main STATIC
 	src/app/mainl_compiled_text.cpp
 	src/app/main_process_driver.cpp
 	src/app/main_process.cpp
+	src/app/main_rollback_coordinator.cpp
 	src/app/main_process_static_content.cpp
 	src/app/new_classic_assets.cpp
 	src/app/new_classic_device_scene.cpp

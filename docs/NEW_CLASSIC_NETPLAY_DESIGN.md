@@ -661,11 +661,18 @@ does not silently broaden leaderboard acceptance.
    complete local process image transactionally. Peer SHA-256 and the local
    frame-ring coordinator remain open. See `T3RBK001.md`, `T3RBV001.md`,
    `T3RBP001.md`, and `T3RBM001.md`.
-3. Add a local rollback owner and one-frame-every-frame sync test.
+3. Add a local rollback owner and one-frame-every-frame sync test. Implemented
+   as the synchronous `T3RBC001` proof: 48 consecutive corrected frames match
+   uninterrupted state, pixels, and audio while private predicted output is
+   inaccessible.
 4. Measure snapshot bytes, capture/restore time, resimulation time, and memory.
+   The sixteen-slot ring plus recovery is 10,794,988 bytes on GCC x64. The
+   conservative optimized wrong/restore/correct/restore probe measures about
+   2.75 ms per corrected frame on the development host. See `T3RBC001.md`.
 
-This is the highest-risk parcel. Transport work does not begin until it is
-green.
+This highest-risk local proof is green. Peer simulation SHA-256, asynchronous
+confirmation/audio-event policy, and minimum-machine measurements remain
+explicit N1 integration gates rather than reasons to alter the rollback image.
 
 ### N1: middleware and simulated transport
 

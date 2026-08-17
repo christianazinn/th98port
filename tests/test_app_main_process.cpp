@@ -1,9 +1,11 @@
 #include "th03/app/main_process.hpp"
 #include "th03/app/main_direct_vs_runner.hpp"
+#include "th03/app/main_rollback_coordinator.hpp"
 
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -47,6 +49,8 @@ using th03::app::MainProcess;
 using th03::app::MainProcessClassicVsAccess;
 using th03::app::MainProcessDemoAccess;
 using th03::app::MainProcessErrorCode;
+using th03::app::MainRollbackCoordinator;
+using th03::app::MainRollbackCoordinatorErrorCode;
 using th03::app::MainProcessStoryAccess;
 using th03::app::MainProcessTestAccess;
 using th03::app::MainResourceKey;
@@ -1218,6 +1222,231 @@ void test_main_process_rollback_transaction()
 	expect(left.capture_rollback(*after_invalid).has_value() &&
 		*after_invalid == *before_invalid,
 		"failed composite restore recovers every MAIN section atomically");
+}
+
+void test_main_rollback_coordinator_every_frame()
+{
+	constexpr std::size_t frame_count = 48U;
+	MainDirectVsConfig config{};
+	const auto resources = make_resources(config.player_one, config.player_two);
+	auto coordinated_created = create_synthetic(config, resources);
+	auto reference_created = create_synthetic(config, resources);
+	expect(coordinated_created && reference_created,
+		"local rollback coordinator twin process creation");
+	if(!coordinated_created || !reference_created) {
+		return;
+	}
+	auto coordinator_created = MainRollbackCoordinator::create(
+		std::move(*coordinated_created)
+	);
+	expect(static_cast<bool>(coordinator_created),
+		"local rollback coordinator accepts a complete live MAIN boundary");
+	if(!coordinator_created) {
+		return;
+	}
+	auto &coordinator = **coordinator_created;
+	auto &reference = **reference_created;
+	const auto drain_process = [](MainProcess &process) {
+		std::vector<th03::app::ClassicAudioCommand> commands{};
+		while(const auto command = process.take_audio_command()) {
+			commands.push_back(*command);
+		}
+		return commands;
+	};
+	const auto drain_coordinator = [](MainRollbackCoordinator &subject) {
+		std::vector<th03::app::ClassicAudioCommand> commands{};
+		while(const auto command = subject.take_audio_command()) {
+			commands.push_back(*command);
+		}
+		return commands;
+	};
+	expect(drain_coordinator(coordinator) == drain_process(reference),
+		"coordinator transfers only the retained process's initial audio");
+
+	std::array<th03::CoreInput, frame_count> corrected_inputs{};
+	for(std::size_t frame = 0U; frame < frame_count; ++frame) {
+		corrected_inputs[frame].p1 = static_cast<std::uint16_t>(
+			((frame / 3U) & 1U) ? 0x0001U : 0x0002U
+		);
+		corrected_inputs[frame].p2 = static_cast<std::uint16_t>(
+			((frame / 5U) & 1U) ? 0x0001U : 0x0002U
+		);
+	}
+
+	auto reference_saved = std::make_unique<
+		th03::app::MainProcessRollbackSnapshot
+	>();
+	auto reference_recovery = std::make_unique<
+		th03::app::MainProcessRollbackSnapshot
+	>();
+	std::vector<th03::present::ComposedPixel> coordinated_pixels(
+		th03::present::graphics_page_pixels
+	);
+	std::vector<th03::present::ComposedPixel> reference_pixels(
+		th03::present::graphics_page_pixels
+	);
+	const auto coordinated_span = std::span<
+		th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	>(coordinated_pixels.data(), coordinated_pixels.size());
+	const auto reference_span = std::span<
+		th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	>(reference_pixels.data(), reference_pixels.size());
+	const auto same_step = [](const th03::StepResult &a,
+		const th03::StepResult &b) noexcept {
+		return a.status == b.status &&
+			a.input_boundary_state.state_hash ==
+				b.input_boundary_state.state_hash &&
+			a.next_step_vsyncs == b.next_step_vsyncs &&
+			a.defeat_none_before_frame == b.defeat_none_before_frame &&
+			a.defeat_none_after_frame == b.defeat_none_after_frame;
+	};
+	const auto same_surface = [](const th03::present::SourceSurface &a,
+		const th03::present::SourceSurface &b) noexcept {
+		return a.graphics_palette == b.graphics_palette &&
+			a.shown_page == b.shown_page &&
+			a.raster_mode == b.raster_mode &&
+			a.effective_scroll_y == b.effective_scroll_y &&
+			a.palette_tone == b.palette_tone &&
+			a.reduced_flash_palette == b.reduced_flash_palette &&
+			a.host_overlay == b.host_overlay &&
+			a.reduced_flash_applied == b.reduced_flash_applied;
+	};
+
+	for(std::size_t frame = 0U; frame < frame_count; ++frame) {
+		if(frame == frame_count - 2U) {
+			expect(reference.capture_rollback(*reference_saved).has_value(),
+				"reference retains the matching recent ring boundary");
+		}
+		auto predicted = corrected_inputs[frame];
+		predicted.p1 = static_cast<std::uint16_t>(predicted.p1 ^ 0x0003U);
+		predicted.p2 = static_cast<std::uint16_t>(predicted.p2 ^ 0x0003U);
+		if(frame == 0U) {
+			// A private shot prediction schedules semantic feedback. Correcting
+			// to movement must restore it before the caller can drain audio.
+			predicted.p1 = 0x0020U;
+		}
+		const auto uninterrupted = reference.step(corrected_inputs[frame]);
+		const auto corrected = coordinator.advance_predicted_then_corrected(
+			predicted, corrected_inputs[frame]
+		);
+		expect(uninterrupted && corrected &&
+			corrected->frame == frame &&
+			corrected->process_executions == 2U &&
+			corrected->surface_publishable && corrected->audio_publishable &&
+			same_step(*uninterrupted, corrected->step_result) &&
+			reference.canonical_state().state_hash ==
+				coordinator.process().canonical_state().state_hash,
+			"every private prediction restores into the uninterrupted frame");
+		const auto coordinated_surface =
+			coordinator.compose_shown_surface(coordinated_span);
+		const auto reference_surface =
+			reference.compose_shown_surface(reference_span);
+		expect(coordinated_surface && reference_surface &&
+			same_surface(*coordinated_surface, *reference_surface) &&
+			coordinated_pixels == reference_pixels,
+			"only the corrected complete source surface is observable");
+		expect(drain_coordinator(coordinator) == drain_process(reference),
+			"speculative semantic audio is restored before publication");
+	}
+
+	const auto stats = coordinator.stats();
+	expect(coordinator.next_frame() == frame_count &&
+		stats.frames == frame_count &&
+		stats.speculative_executions == frame_count &&
+		stats.restores == frame_count,
+		"coordinator accounts one private rollback on every logical frame");
+	auto coordinated_complete = std::make_unique<
+		th03::app::MainProcessRollbackSnapshot
+	>();
+	auto reference_complete = std::make_unique<
+		th03::app::MainProcessRollbackSnapshot
+	>();
+	expect(coordinator.process().capture_rollback(*coordinated_complete) &&
+		reference.capture_rollback(*reference_complete) &&
+		*coordinated_complete == *reference_complete,
+		"every-frame correction retains the uninterrupted complete process image");
+	const auto expired = coordinator.restore_saved_frame(0U);
+	expect(!expired && expired.error().code ==
+			MainRollbackCoordinatorErrorCode::frame_unavailable,
+		"sixteen-slot ring fails closed after an old frame is overwritten");
+	expect(reference.restore_rollback(
+		*reference_saved, *reference_recovery
+	).has_value() && coordinator.restore_saved_frame(frame_count - 2U),
+		"recent saved boundary restores from the fixed ring");
+	const auto abandoned = coordinator.restore_saved_frame(frame_count - 1U);
+	expect(!abandoned && abandoned.error().code ==
+		MainRollbackCoordinatorErrorCode::frame_unavailable,
+		"restoring an older boundary invalidates abandoned future history");
+	for(std::size_t frame = frame_count - 2U; frame < frame_count; ++frame) {
+		const auto uninterrupted = reference.step(corrected_inputs[frame]);
+		const auto resimulated = coordinator.advance_confirmed(
+			corrected_inputs[frame]
+		);
+		expect(uninterrupted && resimulated &&
+			resimulated->process_executions == 1U &&
+			same_step(*uninterrupted, resimulated->step_result),
+			"saved ring boundary advances through corrected history");
+		expect(drain_coordinator(coordinator) == drain_process(reference),
+			"saved-boundary resimulation preserves semantic audio order");
+	}
+	const auto coordinated_surface =
+		coordinator.compose_shown_surface(coordinated_span);
+	const auto reference_surface = reference.compose_shown_surface(reference_span);
+	expect(coordinated_surface && reference_surface &&
+		same_surface(*coordinated_surface, *reference_surface) &&
+		coordinated_pixels == reference_pixels &&
+		coordinator.process().canonical_state().state_hash ==
+			reference.canonical_state().state_hash,
+		"ring restore and forward resimulation converge completely");
+}
+
+int run_main_rollback_coordinator_benchmark()
+{
+	constexpr std::uint64_t iterations = 500U;
+	MainDirectVsConfig config{};
+	const auto resources = make_resources(config.player_one, config.player_two);
+	auto process = create_synthetic(config, resources);
+	if(!process) {
+		std::fprintf(stderr, "rollback benchmark process creation failed\n");
+		return 1;
+	}
+	auto created = MainRollbackCoordinator::create(std::move(*process));
+	if(!created) {
+		std::fprintf(stderr, "rollback benchmark coordinator creation failed\n");
+		return 1;
+	}
+	auto &coordinator = **created;
+	while(coordinator.take_audio_command()) {
+	}
+	const auto started = std::chrono::steady_clock::now();
+	for(std::uint64_t iteration = 0U; iteration < iterations; ++iteration) {
+		const auto advanced = coordinator.advance_predicted_then_corrected(
+			{.p1 = 0x0020U}, {.p1 = 0x0002U}
+		);
+		while(coordinator.take_audio_command()) {
+		}
+		if(!advanced || !coordinator.restore_saved_frame(0U)) {
+			std::fprintf(stderr,
+				"rollback benchmark failed at iteration %llu\n",
+				static_cast<unsigned long long>(iteration));
+			return 1;
+		}
+	}
+	const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+		std::chrono::steady_clock::now() - started
+	).count();
+	const auto per_iteration = static_cast<double>(elapsed) /
+		static_cast<double>(iterations);
+	std::printf(
+		"rollback_iterations=%llu total_ns=%lld ns_per_corrected_frame=%.1f "
+		"source_deadline_ns=17723226.6\n",
+		static_cast<unsigned long long>(iterations),
+		static_cast<long long>(elapsed),
+		per_iteration
+	);
+	return 0;
 }
 
 bool same_canonical(
@@ -3126,9 +3355,13 @@ bool run_local_authentic_gate(
 
 int main(int argc, char **argv)
 {
+	if(argc == 2 && std::string_view(argv[1]) == "--rollback-benchmark") {
+		return run_main_rollback_coordinator_benchmark();
+	}
 	test_main_feedback_policy();
 	test_presenter_rollback_state();
 	test_main_process_rollback_transaction();
+	test_main_rollback_coordinator_every_frame();
 	test_raw_bf2_shapes();
 	test_distinct_selection_first_frame();
 	test_live_bomb_first_frame();
