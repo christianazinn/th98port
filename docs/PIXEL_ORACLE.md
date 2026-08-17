@@ -146,7 +146,8 @@ configuration, language, score, and presentation-policy authorities; it is
 repeated on every row so unrelated captures cannot be joined accidentally.
 
 The current strict host join admits one raw-selected PC-98 `show-page/state`
-publication per stream and fails closed on duplicate source identities. It
+publication per stream, plus one narrowly typed MAINL stage-splash
+`fade-step/commit`, and fails closed on duplicate source identities. It
 joins fixture, process/scene ownership, scene visit, logical sample,
 replay-global frame, and round frame; transaction and commit ordinals are
 deliberately excluded because the two runtimes publish at different internal
