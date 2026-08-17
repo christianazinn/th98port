@@ -1,5 +1,6 @@
 #include "th03/platform/udp_socket.hpp"
 
+#include <algorithm>
 #include <charconv>
 #include <bit>
 #include <limits>
@@ -52,6 +53,67 @@ void close_socket(NativeSocket socket) noexcept { close(socket); }
 ) noexcept
 {
 	return UdpSocketError{.code = code, .native_code = native};
+}
+
+struct EndpointText final {
+	std::string_view host{};
+	std::uint16_t port = 0U;
+};
+
+[[nodiscard]] std::expected<EndpointText, UdpSocketError>
+parse_endpoint_text(std::string_view text) noexcept
+{
+	const auto colon = text.rfind(':');
+	if(colon == std::string_view::npos || colon == 0U ||
+		colon + 1U == text.size() || text.find(':') != colon) {
+		return std::unexpected(error(UdpSocketErrorCode::invalid_endpoint));
+	}
+	unsigned port = 0U;
+	const auto port_text = text.substr(colon + 1U);
+	const auto parsed = std::from_chars(
+		port_text.data(), port_text.data() + port_text.size(), port
+	);
+	if(parsed.ec != std::errc{} ||
+		parsed.ptr != port_text.data() + port_text.size() || port == 0U ||
+		port > std::numeric_limits<std::uint16_t>::max()) {
+		return std::unexpected(error(UdpSocketErrorCode::invalid_endpoint));
+	}
+	return EndpointText{
+		.host = text.substr(0U, colon),
+		.port = static_cast<std::uint16_t>(port),
+	};
+}
+
+[[nodiscard]] bool valid_hostname(std::string_view host) noexcept
+{
+	if(host.empty() || host.size() > 253U || host.front() == '.' ||
+		host.back() == '.') {
+		return false;
+	}
+	std::size_t label_size = 0U;
+	bool previous_hyphen = false;
+	for(const auto character : host) {
+		if(character == '.') {
+			if(label_size == 0U || previous_hyphen) {
+				return false;
+			}
+			label_size = 0U;
+			previous_hyphen = false;
+			continue;
+		}
+		const bool alphanumeric =
+			(character >= 'a' && character <= 'z') ||
+			(character >= 'A' && character <= 'Z') ||
+			(character >= '0' && character <= '9');
+		if(!alphanumeric && character != '-') {
+			return false;
+		}
+		if((label_size == 0U && character == '-') || ++label_size > 63U) {
+			return false;
+		}
+		previous_hyphen = character == '-';
+	}
+	return label_size != 0U && !previous_hyphen;
 }
 
 [[nodiscard]] sockaddr_in native_endpoint(UdpIpv4Endpoint endpoint) noexcept
@@ -109,13 +171,12 @@ struct UdpSocket::Impl final {
 std::expected<UdpIpv4Endpoint, UdpSocketError>
 parse_udp_ipv4_endpoint(std::string_view text) noexcept
 {
-	const auto colon = text.rfind(':');
-	if(colon == std::string_view::npos || colon == 0U ||
-		colon + 1U == text.size()) {
-		return std::unexpected(error(UdpSocketErrorCode::invalid_endpoint));
+	const auto endpoint_text = parse_endpoint_text(text);
+	if(!endpoint_text) {
+		return std::unexpected(endpoint_text.error());
 	}
 	UdpIpv4Endpoint result{};
-	auto address = text.substr(0U, colon);
+	auto address = endpoint_text->host;
 	for(std::size_t index = 0U; index < result.address.size(); ++index) {
 		const auto dot = address.find('.');
 		const auto part = index + 1U == result.address.size() ?
@@ -139,18 +200,70 @@ parse_udp_ipv4_endpoint(std::string_view text) noexcept
 	if(!address.empty()) {
 		return std::unexpected(error(UdpSocketErrorCode::invalid_endpoint));
 	}
-	unsigned port = 0U;
-	const auto port_text = text.substr(colon + 1U);
-	const auto parsed = std::from_chars(
-		port_text.data(), port_text.data() + port_text.size(), port
-	);
-	if(parsed.ec != std::errc{} ||
-		parsed.ptr != port_text.data() + port_text.size() ||
-		port == 0U || port > std::numeric_limits<std::uint16_t>::max()) {
+	result.port = endpoint_text->port;
+	return result;
+}
+
+std::expected<UdpIpv4Endpoint, UdpSocketError>
+resolve_udp_ipv4_endpoint(std::string_view text) noexcept
+{
+	if(const auto numeric = parse_udp_ipv4_endpoint(text); numeric) {
+		return numeric;
+	}
+	const auto endpoint_text = parse_endpoint_text(text);
+	if(!endpoint_text || !valid_hostname(endpoint_text->host)) {
 		return std::unexpected(error(UdpSocketErrorCode::invalid_endpoint));
 	}
-	result.port = static_cast<std::uint16_t>(port);
-	return result;
+
+#if defined(_WIN32)
+	WSADATA data{};
+	const auto startup = WSAStartup(MAKEWORD(2, 2), &data);
+	if(startup != 0) {
+		return std::unexpected(error(
+			UdpSocketErrorCode::platform_startup_failed, startup
+		));
+	}
+	struct WinsockCleanup final {
+		~WinsockCleanup() { WSACleanup(); }
+	} winsock_cleanup;
+#endif
+
+	std::array<char, 254U> hostname{};
+	std::copy(
+		endpoint_text->host.begin(), endpoint_text->host.end(), hostname.begin()
+	);
+	addrinfo hints{};
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_protocol = IPPROTO_UDP;
+	addrinfo *resolved = nullptr;
+	const auto result = getaddrinfo(hostname.data(), nullptr, &hints, &resolved);
+	if(result != 0 || resolved == nullptr) {
+		return std::unexpected(error(
+			UdpSocketErrorCode::resolution_failed, result
+		));
+	}
+	struct AddressCleanup final {
+		addrinfo *value = nullptr;
+		~AddressCleanup() { freeaddrinfo(value); }
+	} address_cleanup{.value = resolved};
+	for(auto *candidate = resolved; candidate != nullptr;
+		candidate = candidate->ai_next) {
+		if(candidate->ai_family != AF_INET || candidate->ai_addr == nullptr ||
+			static_cast<std::size_t>(candidate->ai_addrlen) <
+				sizeof(sockaddr_in)) {
+			continue;
+		}
+		const auto *address = reinterpret_cast<const sockaddr_in *>(
+			candidate->ai_addr
+		);
+		auto endpoint = endpoint_from_native(*address);
+		endpoint.port = endpoint_text->port;
+		return endpoint;
+	}
+	return std::unexpected(error(
+		UdpSocketErrorCode::resolution_failed, result
+	));
 }
 
 std::string format_udp_ipv4_endpoint(UdpIpv4Endpoint endpoint)

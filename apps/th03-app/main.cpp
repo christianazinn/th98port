@@ -525,7 +525,7 @@ void print_usage()
 			"[--p2 <character[:first|second]>] [--rank 0..3] [--seed n] "
 			"[--tick-rate <ticks>/<seconds>] "
 			"[--smoke-ticks n] [--netplay-host <port> | "
-			"--netplay-join <IPv4:port>] "
+			"--netplay-join <IPv4-or-hostname:port>] "
 			"[--netplay-replay-output <V13.RPY>]\n"
 		<< "characters: reimu mima marisa ellen kotohime kana rikako "
 			"chiyuri yumemi\n"
@@ -1473,13 +1473,15 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	}
 	std::optional<th03::platform::UdpIpv4Endpoint> peer{};
 	if(mode == DirectVsNetplayMode::join) {
-		const auto endpoint = th03::platform::parse_udp_ipv4_endpoint(
+		const auto endpoint = th03::platform::resolve_udp_ipv4_endpoint(
 			parsed.netplay_join_endpoint
 		);
 		if(!endpoint) {
-			return fail_netplay("netplay-endpoint", "invalid-ipv4-endpoint");
+			return fail_netplay("netplay-endpoint", "resolve-ipv4-endpoint");
 		}
 		peer = *endpoint;
+		std::cout << "resolved-peer=" <<
+			th03::platform::format_udp_ipv4_endpoint(*peer) << '\n';
 	}
 
 	auto platform = th03::platform::SdlPlatform::create(platform_config());

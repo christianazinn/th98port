@@ -25,6 +25,7 @@ struct UdpIpv4Endpoint final {
 
 enum class UdpSocketErrorCode : std::uint8_t {
 	invalid_endpoint,
+	resolution_failed,
 	platform_startup_failed,
 	socket_create_failed,
 	nonblocking_failed,
@@ -47,6 +48,8 @@ struct UdpReceivedDatagram final {
 
 [[nodiscard]] std::expected<UdpIpv4Endpoint, UdpSocketError>
 parse_udp_ipv4_endpoint(std::string_view text) noexcept;
+[[nodiscard]] std::expected<UdpIpv4Endpoint, UdpSocketError>
+resolve_udp_ipv4_endpoint(std::string_view text) noexcept;
 [[nodiscard]] std::string format_udp_ipv4_endpoint(
 	UdpIpv4Endpoint endpoint
 );

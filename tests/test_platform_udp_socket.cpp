@@ -32,13 +32,25 @@ void test_endpoint_and_loopback()
 		tailscale->port == 31415U &&
 		format_udp_ipv4_endpoint(*tailscale) == "100.64.12.34:31415",
 		"IPv4 endpoint parser round-trips a Tailscale address");
+	const auto numeric = resolve_udp_ipv4_endpoint("100.64.12.34:31415");
+	const auto localhost = resolve_udp_ipv4_endpoint("localhost:31415");
+	expect(numeric && tailscale && *numeric == *tailscale && localhost &&
+		localhost->address[0U] == 127U && localhost->port == 31415U,
+		"one-shot resolver accepts numeric and MagicDNS-shaped hostnames");
 	for(const auto invalid : {
-		std::string_view{""}, std::string_view{"localhost:3"},
+		std::string_view{""}, std::string_view{"localhost"},
 		std::string_view{"1.2.3:4"}, std::string_view{"1.2.3.999:4"},
 		std::string_view{"1.2.3.4:0"}, std::string_view{"1.2.3.4:65536"},
 	}) {
 		expect(!parse_udp_ipv4_endpoint(invalid),
 			"malformed or unusable endpoint fails closed");
+	}
+	for(const auto invalid : {
+		std::string_view{"bad host:31415"}, std::string_view{"-host:31415"},
+		std::string_view{"host-:31415"}, std::string_view{"host::31415"},
+	}) {
+		expect(!resolve_udp_ipv4_endpoint(invalid),
+			"resolver rejects non-hostname and IPv6 endpoint shapes");
 	}
 	auto receiver = UdpSocket::bind(0U);
 	auto sender = UdpSocket::bind(0U);

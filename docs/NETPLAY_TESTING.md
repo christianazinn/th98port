@@ -35,6 +35,9 @@ tailscale ip -4
 Allow `PoDD-Port-Test.exe` through Windows Firewall for the Tailscale/private
 network if Windows prompts. The one-file launcher supplies its embedded
 authenticated `--data`, `--main`, and `--font` inputs to the native app.
+This authorization belongs to the manual two-machine test. Automated
+verification must not launch a product listener (and must never click or
+pre-authorize the firewall prompt); it uses the bounded loopback unit owner.
 
 ## Arch Linux joiner
 
@@ -65,14 +68,16 @@ normal native run (the canonical ignored workspace layout calls it
   --data /path/to/originals/th03_process_root \
   --main /path/to/originals/th03_full/MAIN.EXE \
   --font /path/to/FONT.ROM \
-  --netplay-join WINDOWS_TAILSCALE_IP:31415 \
+  --netplay-join WINDOWS_TAILSCALE_IP_OR_MAGICDNS_NAME:31415 \
   --p1 reimu --p2 mima --rank 1 --seed 34 \
   --netplay-replay-output ./NETPLAY-ARCH.RPY
 ```
 
 Tailscale ACLs and the host firewall must permit the selected UDP port. No
-router port-forward is required inside one tailnet. The join command accepts a
-literal IPv4 address in this preview, not a MagicDNS hostname.
+router port-forward is required inside one tailnet. The join command accepts
+either the literal IPv4 address or an ordinary Tailscale MagicDNS hostname. It
+resolves the name once before gameplay and prints the numeric `resolved-peer`;
+DNS never enters the deterministic simulation.
 
 ## Current diagnostics and failure policy
 
