@@ -132,8 +132,14 @@ constexpr std::array<ClassicOpOptionsChoice, 2U> language_choices{{
 	ClassicOpOptionsChoice::language,
 	ClassicOpOptionsChoice::return_page,
 }};
-constexpr std::array<ClassicOpOptionsChoice, 2U> system_choices{{
+constexpr std::array<ClassicOpOptionsChoice, 3U> system_choices{{
 	ClassicOpOptionsChoice::switch_classic,
+	ClassicOpOptionsChoice::data_storage,
+	ClassicOpOptionsChoice::return_page,
+}};
+constexpr std::array<ClassicOpOptionsChoice, 3U> data_storage_choices{{
+	ClassicOpOptionsChoice::open_user_data,
+	ClassicOpOptionsChoice::open_replay_folder,
 	ClassicOpOptionsChoice::return_page,
 }};
 constexpr std::array<ClassicOpOptionsChoice, 2U> switch_confirmation_choices{{
@@ -202,6 +208,10 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 	case ClassicOpOptionsChoice::input_test: return NewClassicMessageId::option_input_test;
 	case ClassicOpOptionsChoice::return_page: return NewClassicMessageId::option_return;
 	case ClassicOpOptionsChoice::switch_classic: return NewClassicMessageId::option_switch_classic;
+	case ClassicOpOptionsChoice::data_storage: return NewClassicMessageId::option_data_storage;
+	case ClassicOpOptionsChoice::open_user_data: return NewClassicMessageId::option_open_user_data;
+	case ClassicOpOptionsChoice::open_replay_folder:
+		return NewClassicMessageId::option_open_replay_folder;
 	case ClassicOpOptionsChoice::confirm_switch_classic: return NewClassicMessageId::option_yes;
 	case ClassicOpOptionsChoice::cancel_switch_classic: return NewClassicMessageId::option_no;
 	}
@@ -926,6 +936,7 @@ ClassicOpOptionsScene::active_choices() const noexcept
 	case ClassicOpOptionsPage::video: return video_choices;
 	case ClassicOpOptionsPage::language: return language_choices;
 	case ClassicOpOptionsPage::system: return system_choices;
+	case ClassicOpOptionsPage::data_storage: return data_storage_choices;
 	case ClassicOpOptionsPage::switch_confirmation:
 		return switch_confirmation_choices;
 	}
@@ -984,6 +995,12 @@ bool ClassicOpOptionsScene::return_to_patch_categories() noexcept
 	case ClassicOpOptionsPage::system:
 		selected_ = ClassicOpOptionsChoice::category_system;
 		break;
+	case ClassicOpOptionsPage::data_storage:
+		page_ = ClassicOpOptionsPage::system;
+		selected_ = ClassicOpOptionsChoice::data_storage;
+		menu_input_allowed_ = false;
+		return restore_patch_rows(0U, 7U, box_left + box_option_width) &&
+			draw_all_option_choices();
 	case ClassicOpOptionsPage::switch_confirmation:
 		page_ = ClassicOpOptionsPage::system;
 		selected_ = ClassicOpOptionsChoice::switch_classic;
@@ -1066,6 +1083,9 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 		choice == ClassicOpOptionsChoice::device_assignment ||
 		choice == ClassicOpOptionsChoice::input_test ||
 		choice == ClassicOpOptionsChoice::switch_classic ||
+		choice == ClassicOpOptionsChoice::data_storage ||
+		choice == ClassicOpOptionsChoice::open_user_data ||
+		choice == ClassicOpOptionsChoice::open_replay_folder ||
 		choice == ClassicOpOptionsChoice::confirm_switch_classic ||
 		choice == ClassicOpOptionsChoice::cancel_switch_classic ||
 		choice == ClassicOpOptionsChoice::category_gameplay ||
@@ -1188,6 +1208,9 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	case ClassicOpOptionsChoice::input_test:
 	case ClassicOpOptionsChoice::return_page:
 	case ClassicOpOptionsChoice::switch_classic:
+	case ClassicOpOptionsChoice::data_storage:
+	case ClassicOpOptionsChoice::open_user_data:
+	case ClassicOpOptionsChoice::open_replay_folder:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
 	case ClassicOpOptionsChoice::cancel_switch_classic:
 	case ClassicOpOptionsChoice::quit:
@@ -1285,6 +1308,9 @@ bool ClassicOpOptionsScene::draw_option_choice(
 	case ClassicOpOptionsChoice::input_test:
 	case ClassicOpOptionsChoice::return_page:
 	case ClassicOpOptionsChoice::switch_classic:
+	case ClassicOpOptionsChoice::data_storage:
+	case ClassicOpOptionsChoice::open_user_data:
+	case ClassicOpOptionsChoice::open_replay_folder:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
 	case ClassicOpOptionsChoice::cancel_switch_classic:
 		return false;
@@ -1595,6 +1621,9 @@ bool ClassicOpOptionsScene::update_horizontal(
 	case ClassicOpOptionsChoice::input_test:
 	case ClassicOpOptionsChoice::return_page:
 	case ClassicOpOptionsChoice::switch_classic:
+	case ClassicOpOptionsChoice::data_storage:
+	case ClassicOpOptionsChoice::open_user_data:
+	case ClassicOpOptionsChoice::open_replay_folder:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
 	case ClassicOpOptionsChoice::cancel_switch_classic:
 	case ClassicOpOptionsChoice::quit:
@@ -1639,7 +1668,8 @@ ClassicOpOptionsTick ClassicOpOptionsScene::tick(
 	bool tram_changed,
 	bool input_sampled,
 	bool selection_changed,
-	bool config_changed
+	bool config_changed,
+	std::optional<ClassicOpOptionsOpenFolder> open_folder
 ) const noexcept
 {
 	return {
@@ -1651,6 +1681,7 @@ ClassicOpOptionsTick ClassicOpOptionsScene::tick(
 		.selection_changed = selection_changed,
 		.config_changed = config_changed,
 		.ready = phase_ == ClassicOpOptionsPhase::ready,
+		.open_folder = open_folder,
 	};
 }
 
@@ -1727,6 +1758,7 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 		bool device_assignment_requested = false;
 		bool input_test_requested = false;
 		bool switch_classic_requested = false;
+		std::optional<ClassicOpOptionsOpenFolder> open_folder{};
 		if(!input.any()) {
 			menu_input_allowed_ = true;
 		}
@@ -1794,6 +1826,9 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 				case ClassicOpOptionsChoice::category_system:
 					child = ClassicOpOptionsPage::system;
 					break;
+				case ClassicOpOptionsChoice::data_storage:
+					child = ClassicOpOptionsPage::data_storage;
+					break;
 				default:
 					opens_child = false;
 					break;
@@ -1848,6 +1883,11 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 						));
 					}
 					page_changed = true;
+				} else if(selected_ == ClassicOpOptionsChoice::open_user_data) {
+					open_folder = ClassicOpOptionsOpenFolder::user_data;
+				} else if(selected_ ==
+					ClassicOpOptionsChoice::open_replay_folder) {
+					open_folder = ClassicOpOptionsOpenFolder::replays;
 				} else if(selected_ ==
 					ClassicOpOptionsChoice::confirm_switch_classic) {
 					switch_classic_requested = true;
@@ -1918,7 +1958,7 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 		return tick(
 			ClassicOpBoundary::vsync, false,
 			selection_changed || horizontal_processed || page_changed, true,
-			selection_changed, config_changed
+			selection_changed, config_changed, open_folder
 		);
 	}
 	case ClassicOpOptionsPhase::shrink_window: {

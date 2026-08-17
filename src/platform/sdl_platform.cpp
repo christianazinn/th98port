@@ -18,6 +18,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 #include <SDL3/SDL.h>
 
@@ -634,6 +635,56 @@ SdlPlatform::create(const SdlPlatformConfig &config)
 	return platform;
 }
 
+[[nodiscard]] bool file_url_byte_unescaped(unsigned char value) noexcept
+{
+	return (value >= static_cast<unsigned char>('a') &&
+		value <= static_cast<unsigned char>('z')) ||
+		(value >= static_cast<unsigned char>('A') &&
+		value <= static_cast<unsigned char>('Z')) ||
+		(value >= static_cast<unsigned char>('0') &&
+		value <= static_cast<unsigned char>('9')) ||
+		value == static_cast<unsigned char>('-') ||
+		value == static_cast<unsigned char>('_') ||
+		value == static_cast<unsigned char>('.') ||
+		value == static_cast<unsigned char>('~') ||
+		value == static_cast<unsigned char>('/') ||
+		value == static_cast<unsigned char>(':');
+}
+
+[[nodiscard]] std::optional<std::string> build_folder_file_url(
+	const std::filesystem::path &path
+)
+{
+	if(path.empty()) {
+		return std::nullopt;
+	}
+	std::error_code error{};
+	const auto absolute = std::filesystem::absolute(path, error);
+	if(error || absolute.empty()) {
+		return std::nullopt;
+	}
+	const auto generic = absolute.generic_u8string();
+	std::string bytes{};
+	bytes.reserve(generic.size());
+	for(const auto value : generic) {
+		bytes.push_back(static_cast<char>(value));
+	}
+	std::string url = bytes.starts_with("//") ? "file:" :
+		(bytes.starts_with('/') ? "file://" : "file:///");
+	constexpr char hex[] = "0123456789ABCDEF";
+	for(const auto value : bytes) {
+		const auto byte = static_cast<unsigned char>(value);
+		if(file_url_byte_unescaped(byte)) {
+			url.push_back(value);
+		} else {
+			url.push_back('%');
+			url.push_back(hex[byte >> 4U]);
+			url.push_back(hex[byte & 0x0FU]);
+		}
+	}
+	return url;
+}
+
 std::expected<SdlPresentResult, SdlPlatformError> SdlPlatform::present(
 	const present::SourceSurface &surface,
 	SdlPresentationOracleIdentity identity
@@ -827,6 +878,25 @@ SdlWindowPresentation SdlPlatform::window_presentation() const noexcept
 	return impl_ ? impl_->window_presentation : SdlWindowPresentation{};
 }
 
+std::expected<void, SdlPlatformError> SdlPlatform::open_folder(
+	const std::filesystem::path &path
+) noexcept
+{
+	try {
+		const auto url = build_folder_file_url(path);
+		if(!url || !SDL_OpenURL(url->c_str())) {
+			return std::unexpected(error_with_sdl_detail(
+				SdlPlatformErrorCode::open_folder_failed
+			));
+		}
+	} catch(...) {
+		return std::unexpected(error_with_sdl_detail(
+			SdlPlatformErrorCode::open_folder_failed
+		));
+	}
+	return {};
+}
+
 std::uint32_t SdlPlatform::window_id() const noexcept
 {
 	return static_cast<std::uint32_t>(SDL_GetWindowID(impl_->window));
@@ -926,6 +996,17 @@ void SdlPlatformTestAccess::set_presentability_override(
 ) noexcept
 {
 	platform.impl_->test_presentability_override = presentable;
+}
+
+std::optional<std::string> SdlPlatformTestAccess::folder_file_url(
+	const std::filesystem::path &path
+)
+{
+	try {
+		return build_folder_file_url(path);
+	} catch(...) {
+		return std::nullopt;
+	}
 }
 
 } // namespace th03::platform

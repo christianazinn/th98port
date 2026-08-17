@@ -861,6 +861,7 @@ const char *name(th03::platform::SdlPlatformErrorCode code) noexcept
 	case th03::platform::SdlPlatformErrorCode::oracle_log_write_failed: return "oracle-log-write-failed";
 	case th03::platform::SdlPlatformErrorCode::oracle_rgb_open_failed: return "oracle-rgb-open-failed";
 	case th03::platform::SdlPlatformErrorCode::oracle_rgb_write_failed: return "oracle-rgb-write-failed";
+	case th03::platform::SdlPlatformErrorCode::open_folder_failed: return "open-folder-failed";
 	}
 	return "unknown";
 }
@@ -1914,6 +1915,20 @@ ExperienceRunResult run_classic_session(
 				return {
 					.exit_code = fail("th03-runner", consumed.error())
 				};
+			}
+			if(auto folder =
+				(*runner)->take_new_classic_open_folder_request()) {
+				std::error_code folder_error{};
+				std::filesystem::create_directories(*folder, folder_error);
+				if(folder_error) {
+					std::cerr << "status=warning\n"
+						"stage=open-folder-create\ncode="
+						<< folder_error.value() << '\n';
+				} else if(auto opened = platform.open_folder(*folder); !opened) {
+					std::cerr << "status=warning\n"
+						"stage=open-folder\ncode="
+						<< static_cast<unsigned>(opened.error().code) << '\n';
+				}
 			}
 			if(auto request =
 				(*runner)->take_new_classic_online_replay_download_request()) {

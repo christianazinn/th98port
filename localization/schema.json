@@ -36,6 +36,9 @@
     {"enum": "option_input_test", "id": "option.input-test", "domain": "menu-font", "max_width": 264},
     {"enum": "option_return", "id": "option.return", "domain": "menu-font", "max_width": 264},
     {"enum": "option_switch_classic", "id": "option.switch-classic", "domain": "menu-font", "max_width": 264},
+    {"enum": "option_data_storage", "id": "option.data-storage", "domain": "menu-font", "max_width": 264},
+    {"enum": "option_open_user_data", "id": "option.open-user-data", "domain": "menu-font", "max_width": 264},
+    {"enum": "option_open_replay_folder", "id": "option.open-replay-folder", "domain": "menu-font", "max_width": 264},
     {"enum": "option_yes", "id": "option.yes", "domain": "menu-font", "max_width": 264},
     {"enum": "option_no", "id": "option.no", "domain": "menu-font", "max_width": 264},
 

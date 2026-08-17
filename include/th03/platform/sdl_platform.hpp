@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <expected>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
@@ -33,6 +34,7 @@ enum class SdlPlatformErrorCode : std::uint8_t {
 	oracle_log_write_failed,
 	oracle_rgb_open_failed,
 	oracle_rgb_write_failed,
+	open_folder_failed,
 };
 
 enum class SdlWindowMode : std::uint8_t {
@@ -165,6 +167,10 @@ public:
 	[[nodiscard]] std::expected<void, SdlPlatformError>
 	apply_window_presentation(SdlWindowPresentation presentation) noexcept;
 	[[nodiscard]] SdlWindowPresentation window_presentation() const noexcept;
+	// Requests the host desktop to display an existing folder. Source state,
+	// input, and the SDL window remain owned by this process.
+	[[nodiscard]] std::expected<void, SdlPlatformError>
+	open_folder(const std::filesystem::path &path) noexcept;
 	// Stable for this platform's lifetime and accepted directly by
 	// SdlInputMapper::create(). Keeping the numeric type here leaves SDL types
 	// out of this opaque host header.

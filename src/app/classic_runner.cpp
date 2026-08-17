@@ -795,6 +795,18 @@ ClassicRunner::take_new_classic_window_presentation_update() noexcept
 	) : std::nullopt;
 }
 
+std::optional<std::filesystem::path>
+ClassicRunner::take_new_classic_open_folder_request() noexcept
+{
+	if(!impl_ || impl_->experience != ExperienceProfile::new_classic ||
+		impl_->operations.consume != &consume_session) {
+		return std::nullopt;
+	}
+	return static_cast<ClassicOpSession *>(
+		impl_->operations.context
+	)->take_open_folder_request();
+}
+
 std::expected<void, ClassicRunnerError>
 ClassicRunner::merge_new_classic_online_board(
 	NewClassicOnlineCacheDocument document

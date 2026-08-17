@@ -230,6 +230,8 @@ public:
 	take_new_classic_mute_when_unfocused_update() noexcept;
 	[[nodiscard]] std::optional<NewClassicWindowPresentation>
 	take_new_classic_window_presentation_update() noexcept;
+	[[nodiscard]] std::optional<std::filesystem::path>
+	take_new_classic_open_folder_request() noexcept;
 	// Host-owned online work may complete between logical ticks. This replaces
 	// one validated immutable board for a later HiScore entry; it never mutates
 	// an already-visible menu and performs no filesystem or network work.

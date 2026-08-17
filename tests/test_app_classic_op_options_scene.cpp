@@ -33,6 +33,7 @@ using th03::app::ClassicOpErrorCode;
 using th03::app::ClassicOpInput;
 using th03::app::ClassicOpOptionsChoice;
 using th03::app::ClassicOpOptionsOutcome;
+using th03::app::ClassicOpOptionsOpenFolder;
 using th03::app::ClassicOpOptionsPage;
 using th03::app::ClassicOpOptionsPhase;
 using th03::app::ClassicOpOptionsScene;
@@ -848,6 +849,43 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		system->selected_choice() == ClassicOpOptionsChoice::switch_classic,
 		"System exposes Switch to Classic as its working action");
 	expect(system->advance().has_value(), "System entry releases");
+	expect(system->advance({.down = true}).has_value() &&
+		system->advance().has_value() &&
+		system->selected_choice() == ClassicOpOptionsChoice::data_storage,
+		"System exposes the Data & Storage child");
+	expect(system->advance({.ok = true}).has_value() &&
+		system->page() == ClassicOpOptionsPage::data_storage &&
+		system->selected_choice() == ClassicOpOptionsChoice::open_user_data,
+		"Data & Storage opens on the user-data action");
+	expect(system->advance().has_value(), "Data & Storage entry releases");
+	const auto open_user_data = system->advance({.ok = true});
+	expect(open_user_data && open_user_data->open_folder ==
+		ClassicOpOptionsOpenFolder::user_data &&
+		system->page() == ClassicOpOptionsPage::data_storage,
+		"Open User Data emits a typed host intent without leaving Options");
+	expect(system->advance().has_value(), "Open User Data releases");
+	expect(system->advance({.down = true}).has_value() &&
+		system->advance().has_value() &&
+		system->selected_choice() ==
+			ClassicOpOptionsChoice::open_replay_folder,
+		"Data & Storage exposes the replay-folder action");
+	const auto open_replays = system->advance({.ok = true});
+	expect(open_replays && open_replays->open_folder ==
+		ClassicOpOptionsOpenFolder::replays,
+		"Open Replay Folder emits its distinct typed host intent");
+	expect(system->advance().has_value(), "Open Replay Folder releases");
+	expect(system->advance({.down = true}).has_value() &&
+		system->advance().has_value() &&
+		system->selected_choice() == ClassicOpOptionsChoice::return_page &&
+		system->advance({.ok = true}).has_value() &&
+		system->page() == ClassicOpOptionsPage::system &&
+		system->selected_choice() == ClassicOpOptionsChoice::data_storage,
+		"Data & Storage Return restores the retained System selection");
+	expect(system->advance().has_value() &&
+		system->advance({.up = true}).has_value() &&
+		system->advance().has_value() &&
+		system->selected_choice() == ClassicOpOptionsChoice::switch_classic,
+		"System navigation returns to Switch to Classic");
 	expect(system->advance({.ok = true}).has_value() &&
 		system->page() == ClassicOpOptionsPage::switch_confirmation &&
 		system->selected_choice() ==

@@ -47,6 +47,9 @@ enum class ClassicOpOptionsChoice : std::uint8_t {
 	input_test,
 	return_page,
 	switch_classic,
+	data_storage,
+	open_user_data,
+	open_replay_folder,
 	confirm_switch_classic,
 	cancel_switch_classic,
 };
@@ -59,7 +62,13 @@ enum class ClassicOpOptionsPage : std::uint8_t {
 	video,
 	language,
 	system,
+	data_storage,
 	switch_confirmation,
+};
+
+enum class ClassicOpOptionsOpenFolder : std::uint8_t {
+	user_data,
+	replays,
 };
 
 enum class ClassicOpOptionsOutcome : std::uint8_t {
@@ -91,6 +100,7 @@ struct ClassicOpOptionsTick final {
 	bool selection_changed = false;
 	bool config_changed = false;
 	bool ready = false;
+	std::optional<ClassicOpOptionsOpenFolder> open_folder{};
 };
 
 class ClassicOpOptionsCompletion final {
@@ -341,7 +351,8 @@ private:
 		bool tram_changed = false,
 		bool input_sampled = false,
 		bool selection_changed = false,
-		bool config_changed = false
+		bool config_changed = false,
+		std::optional<ClassicOpOptionsOpenFolder> open_folder = std::nullopt
 	) const noexcept;
 
 	std::unique_ptr<Prepared> prepared_{};

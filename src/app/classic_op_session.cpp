@@ -912,6 +912,7 @@ struct ClassicOpSessionBackend final {
 	std::optional<bool> pending_mute_when_unfocused_update{};
 	std::optional<NewClassicWindowPresentation>
 		pending_window_presentation_update{};
+	std::optional<std::filesystem::path> pending_open_folder{};
 	std::optional<ClassicOpOptionsCompletion> key_config_return_options{};
 	std::unique_ptr<ClassicOpMusicRoomScene> music_room{};
 	std::optional<ClassicOpMusicRoomCompletion> music_completion{};
@@ -1829,6 +1830,29 @@ struct ClassicOpSessionBackend final {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::audio_command_pending
 			));
+		}
+		if(tick->open_folder) {
+			if(pending_open_folder || !content_paths) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			switch(*tick->open_folder) {
+			case ClassicOpOptionsOpenFolder::user_data:
+				pending_open_folder = new_classic_score_path.parent_path();
+				if(pending_open_folder->empty()) {
+					*pending_open_folder = ".";
+				}
+				break;
+			case ClassicOpOptionsOpenFolder::replays:
+				pending_open_folder = content_paths->replay_root;
+				break;
+			}
+			if(pending_open_folder->empty()) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
 		}
 		if(new_classic_settings && new_classic_settings->master_volume_percent !=
 			options->master_volume_percent()) {
@@ -4202,6 +4226,12 @@ struct ClassicOpSessionBackend final {
 		);
 	}
 
+	[[nodiscard]] std::optional<std::filesystem::path>
+	take_open_folder_request() noexcept
+	{
+		return std::exchange(pending_open_folder, std::nullopt);
+	}
+
 	[[nodiscard]] std::expected<present::SourceSurface, ClassicOpSessionError>
 	compose(std::span<
 		present::ComposedPixel,
@@ -5186,6 +5216,17 @@ ClassicOpSession::take_window_presentation_update() noexcept
 	return static_cast<ClassicOpSessionBackend *>(
 		impl_->operations.context
 	)->take_window_presentation_update();
+}
+
+std::optional<std::filesystem::path>
+ClassicOpSession::take_open_folder_request() noexcept
+{
+	if(!impl_ || !impl_->operations.context) {
+		return std::nullopt;
+	}
+	return static_cast<ClassicOpSessionBackend *>(
+		impl_->operations.context
+	)->take_open_folder_request();
 }
 
 std::expected<void, ClassicOpSessionError>

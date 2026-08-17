@@ -65,6 +65,9 @@ struct SdlPlatformTestAccess {
 		SdlPlatform &platform,
 		std::optional<bool> presentable
 	) noexcept;
+	[[nodiscard]] static std::optional<std::string> folder_file_url(
+		const std::filesystem::path &path
+	);
 };
 
 } // namespace th03::platform

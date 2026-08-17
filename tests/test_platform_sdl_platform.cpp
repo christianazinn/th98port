@@ -102,6 +102,20 @@ struct SurfaceFixture {
 	return true;
 }
 
+void test_folder_url_projection()
+{
+	expect(!SdlPlatformTestAccess::folder_file_url({}),
+		"empty folder actions fail closed before reaching the desktop shell");
+	const auto encoded = SdlPlatformTestAccess::folder_file_url(
+		std::filesystem::current_path() / "Replay Folder#1"
+	);
+	expect(encoded && encoded->starts_with("file://") &&
+		encoded->find("Replay%20Folder%231") != std::string::npos &&
+		encoded->find(' ') == std::string::npos &&
+		encoded->find('#') == std::string::npos,
+		"folder actions produce an absolute escaped file URL");
+}
+
 void test_locked_texture_adapter()
 {
 	SurfaceFixture fixture;
@@ -807,6 +821,7 @@ void test_native_mapper_runtime_lease()
 
 int main()
 {
+	test_folder_url_projection();
 	test_locked_texture_adapter();
 	test_dummy_platform_lifecycle_and_present();
 	test_native_mapper_runtime_lease();
