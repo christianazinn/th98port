@@ -398,7 +398,9 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		(request.experience == ExperienceProfile::classic &&
 		 (request.autofire_mask != 0U || request.reduced_flash ||
 		  request.new_classic_online_identity_reset_available ||
-		  request.new_classic_online_upload_available)) ||
+		  request.new_classic_online_upload_available ||
+		  !request.new_classic_online_boards.empty() ||
+		  !request.new_classic_online_my_records.empty())) ||
 		(request.initial_route != ClassicRunnerInitialRoute::title &&
 		 request.experience != ExperienceProfile::new_classic) ||
 		(request.initial_route == ClassicRunnerInitialRoute::new_classic_replay) !=
@@ -840,6 +842,41 @@ ClassicRunner::merge_new_classic_online_board(
 	if(!merged) {
 		return std::unexpected(session_error(merged.error()));
 	}
+	return {};
+}
+
+std::expected<void, ClassicRunnerError>
+ClassicRunner::merge_new_classic_online_my_records(
+	NewClassicOnlineCacheDocument document
+)
+{
+	if(!impl_ || impl_->experience != ExperienceProfile::new_classic ||
+		impl_->operations.consume != &consume_session) {
+		return std::unexpected(runner_error(
+			ClassicRunnerErrorCode::invalid_request
+		));
+	}
+	auto merged = static_cast<ClassicOpSession *>(
+		impl_->operations.context
+	)->merge_online_my_records(std::move(document));
+	if(!merged) {
+		return std::unexpected(session_error(merged.error()));
+	}
+	return {};
+}
+
+std::expected<void, ClassicRunnerError>
+ClassicRunner::clear_new_classic_online_my_records()
+{
+	if(!impl_ || impl_->experience != ExperienceProfile::new_classic ||
+		impl_->operations.consume != &consume_session) {
+		return std::unexpected(runner_error(
+			ClassicRunnerErrorCode::invalid_request
+		));
+	}
+	static_cast<ClassicOpSession *>(
+		impl_->operations.context
+	)->clear_online_my_records();
 	return {};
 }
 

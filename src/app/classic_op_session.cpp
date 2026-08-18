@@ -897,6 +897,7 @@ struct ClassicOpSessionBackend final {
 	NewClassicHostKeyName key_name = nullptr;
 	void *key_name_context = nullptr;
 	std::vector<NewClassicOnlineCacheDocument> online_boards{};
+	std::vector<NewClassicOnlineCacheDocument> online_my_records{};
 	bool online_upload_available = false;
 	bool online_identity_reset_available = false;
 	std::unique_ptr<NewClassicReplayHub> replay_hub{};
@@ -1025,6 +1026,8 @@ struct ClassicOpSessionBackend final {
 			key_name = runner_request->new_classic_key_name;
 			key_name_context = runner_request->new_classic_key_name_context;
 			online_boards = runner_request->new_classic_online_boards;
+			online_my_records =
+				runner_request->new_classic_online_my_records;
 			online_upload_available =
 				runner_request->new_classic_online_upload_available;
 			online_identity_reset_available =
@@ -1110,9 +1113,23 @@ struct ClassicOpSessionBackend final {
 		);
 	}
 
+	[[nodiscard]] bool my_records_available() const noexcept
+	{
+		return std::ranges::any_of(
+			online_my_records, [this](const auto &board) {
+				return board.board_category &&
+					board.board_category->mode == NewClassicOnlineMode::story &&
+					board.board_category->rank == replay_return_resident.rank &&
+					!board.replay_records.empty() &&
+					!board.leaderboard_entries.empty();
+			}
+		);
+	}
+
 	[[nodiscard]] bool replay_hub_available() const noexcept
 	{
-		return online_upload_available || replay_library_available();
+		return online_upload_available || replay_library_available() ||
+			my_records_available();
 	}
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
@@ -1124,7 +1141,8 @@ struct ClassicOpSessionBackend final {
 			));
 		}
 		auto hub = std::make_unique<NewClassicReplayHub>(
-			patch_assets, replay_library_available(), online_upload_available
+			patch_assets, replay_library_available(), online_upload_available,
+			my_records_available()
 		);
 		if(!hub->valid()) {
 			return std::unexpected(session_error(
@@ -1139,14 +1157,16 @@ struct ClassicOpSessionBackend final {
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
 	start_replay_library(NewClassicOnlineMenuMode mode)
 	{
-		if(high_score_menu || !patch_assets || online_boards.empty() ||
+		const auto &source = mode == NewClassicOnlineMenuMode::my_records ?
+			online_my_records : online_boards;
+		if(high_score_menu || !patch_assets || source.empty() ||
 			mode == NewClassicOnlineMenuMode::high_scores) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
 		auto menu = std::make_unique<NewClassicHighScoreMenu>(
-			online_boards, replay_return_resident.rank, patch_assets, mode
+			source, replay_return_resident.rank, patch_assets, mode
 		);
 		if(!menu->valid()) {
 			return std::unexpected(session_error(
@@ -1274,6 +1294,18 @@ struct ClassicOpSessionBackend final {
 					.input_sampled = true,
 				};
 			}
+			case NewClassicReplayHubStatus::my_records_selected:
+				replay_hub.reset();
+				replay_hub_result.reset();
+				if(auto started = start_replay_library(
+					NewClassicOnlineMenuMode::my_records
+				); !started) {
+					return std::unexpected(std::move(started.error()));
+				}
+				return ClassicOpSessionBackendTick{
+					.surface_changed = true,
+					.input_sampled = true,
+				};
 			case NewClassicReplayHubStatus::back:
 			case NewClassicReplayHubStatus::application_quit:
 				return ClassicOpSessionBackendTick{
@@ -4150,6 +4182,34 @@ struct ClassicOpSessionBackend final {
 		return {};
 	}
 
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	merge_online_my_records(NewClassicOnlineCacheDocument document)
+	{
+		if(!document.board_category ||
+			!validate_new_classic_online_cache(document)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		const auto existing = std::ranges::find_if(
+			online_my_records,
+			[&document](const NewClassicOnlineCacheDocument &candidate) {
+				return candidate.board_category == document.board_category;
+			}
+		);
+		if(existing == online_my_records.end()) {
+			online_my_records.push_back(std::move(document));
+		} else {
+			*existing = std::move(document);
+		}
+		return {};
+	}
+
+	void clear_online_my_records() noexcept
+	{
+		online_my_records.clear();
+	}
+
 	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>
 	take_online_replay_download_request() noexcept
 	{
@@ -4169,11 +4229,13 @@ struct ClassicOpSessionBackend final {
 			));
 		}
 		if(outcome == NewClassicOnlineReplayDownloadOutcome::downloaded) {
-			for(auto &board : online_boards) {
-				for(auto &record : board.replay_records) {
-					if(record.replay_id == replay_id) {
-						record.availability =
-							NewClassicOnlineReplayAvailability::downloaded;
+			for(auto *library : {&online_boards, &online_my_records}) {
+				for(auto &board : *library) {
+					for(auto &record : board.replay_records) {
+						if(record.replay_id == replay_id) {
+							record.availability =
+								NewClassicOnlineReplayAvailability::downloaded;
+						}
 					}
 				}
 			}
@@ -4245,11 +4307,13 @@ struct ClassicOpSessionBackend final {
 		if(document) {
 			online_replay_playback_document = std::move(*document);
 		} else {
-			for(auto &board : online_boards) {
-				for(auto &record : board.replay_records) {
-					if(record.replay_id == replay_id) {
-						record.availability =
-							NewClassicOnlineReplayAvailability::metadata_only;
+			for(auto *library : {&online_boards, &online_my_records}) {
+				for(auto &board : *library) {
+					for(auto &record : board.replay_records) {
+						if(record.replay_id == replay_id) {
+							record.availability =
+								NewClassicOnlineReplayAvailability::metadata_only;
+						}
 					}
 				}
 			}
@@ -4732,6 +4796,16 @@ Result backend_call(void *context, Method method, Args &&...args)
 				context, &ClassicOpSessionBackend::merge_online_board,
 				std::move(document)
 			);
+		},
+		.merge_online_my_records = [](void *context, auto document) {
+			return backend_call<std::expected<void, ClassicOpSessionError>>(
+				context, &ClassicOpSessionBackend::merge_online_my_records,
+				std::move(document)
+			);
+		},
+		.clear_online_my_records = [](void *context) {
+			static_cast<ClassicOpSessionBackend *>(context)->
+				clear_online_my_records();
 		},
 		.audio_pending = [](void *context) {
 			return static_cast<ClassicOpSessionBackend *>(context)->audio_pending();
@@ -5345,6 +5419,28 @@ ClassicOpSession::merge_online_board(NewClassicOnlineCacheDocument document)
 	return impl_->operations.merge_online_board(
 		impl_->operations.context, std::move(document)
 	);
+}
+
+std::expected<void, ClassicOpSessionError>
+ClassicOpSession::merge_online_my_records(
+	NewClassicOnlineCacheDocument document
+)
+{
+	if(!impl_ || !impl_->operations.merge_online_my_records) {
+		return std::unexpected(session_error(
+			ClassicOpSessionErrorCode::backend_contract_failed
+		));
+	}
+	return impl_->operations.merge_online_my_records(
+		impl_->operations.context, std::move(document)
+	);
+}
+
+void ClassicOpSession::clear_online_my_records() noexcept
+{
+	if(impl_ && impl_->operations.clear_online_my_records) {
+		impl_->operations.clear_online_my_records(impl_->operations.context);
+	}
 }
 
 std::optional<NewClassicOnlineReplayRecord>

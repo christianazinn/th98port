@@ -351,8 +351,7 @@ four-row hub for Local Replays, Online Replay Library, Downloaded Replays, and
 Return. The two library modes contain replay-backed rows only, use replay names
 instead of account display names, and reuse the exact Download/Watch host
 transactions above. With no replay-backed cache, Replay still enters the local
-browser directly. `My Uploads` remains absent until enrollment and upload
-history exist.
+browser directly.
 
 Session 258 exposes explicit upload without changing the deterministic owner.
 On Windows, a configured origin adds one Upload Replay row even when no cached
@@ -361,10 +360,15 @@ parsed V13 document; a host worker loads or enrolls the DPAPI-protected opaque
 identity and passes the document to the existing in-memory upload transaction.
 The only replay bytes created are the bounded HTTPS request body. A result is
 latched into the retained screen on the next source boundary, while an absent
-origin or unsupported platform exposes no inert row. `My Uploads` remains
-pending because the service has no authenticated history projection yet.
+origin or unsupported platform exposes no inert row.
 
 This is deliberately a deployment seam rather than a hidden public endpoint.
-`My Records`, real Cloudflare resources, and the pinned Container adapter
+Session 259 adds `My Records`: the authenticated history route projects each
+exact Story category as the existing bounded T3ONL002 document. The native
+client acquires one existing identity off source time, keeps the private
+documents in memory, and reuses Replay Download/Watch. Startup never enrolls
+merely because an origin exists; the row appears only for nonempty accepted
+history loaded from an existing identity or refreshed after a successful
+explicit upload. Real Cloudflare resources and the pinned Container adapter
 remain pending. Selecting Upload Replay is the explicit upload consent action;
 first use may enroll the opaque identity automatically.

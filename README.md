@@ -309,11 +309,13 @@ also adds `Upload Replay`; its numbered-slot browser transfers one parsed
 finalized V13 document to a bounded worker, which loads or enrolls the protected
 opaque identity and posts canonical bytes directly from memory. No working
 upload file is created, and accepted/rejected/failure is latched back onto the
-retained UI at the next source boundary. The two online libraries reuse the
-same Download and Watch transactions. Without a replay-backed cache or
+retained UI at the next source boundary. An existing enrolled identity also
+refreshes all of its accepted active-rank submissions into memory and adds
+`My Records` only when nonempty; it never enrolls merely because the app
+started. My Records and the two public libraries reuse the same Download and
+Watch transactions. Without any replay-backed cache, accepted history, or
 configured upload capability, Replay still enters the authenticated local
-browser directly. `My Uploads` and production Cloudflare verifier resources
-remain unavailable.
+browser directly. Production Cloudflare verifier resources remain unavailable.
 The private `tools\th03-private-editor` utility provides direct migration:
 it accepts an original 824-byte PC-98 scorefile or Replay Patch 0.4.12's exact
 7,812-byte expanded file, validates it, backs up any current native score, and

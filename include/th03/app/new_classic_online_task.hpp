@@ -108,6 +108,56 @@ private:
 	NewClassicOnlineTransport transport
 );
 
+// Fetches all requested private accepted-submission views after acquiring the
+// existing platform-protected identity once. Results stay in memory.
+class NewClassicOnlineMyRecordsRefreshTask final {
+public:
+	NewClassicOnlineMyRecordsRefreshTask(
+		NewClassicOnlineMyRecordsRefreshTask &&
+	) noexcept;
+	NewClassicOnlineMyRecordsRefreshTask &operator=(
+		NewClassicOnlineMyRecordsRefreshTask &&
+	) noexcept;
+	~NewClassicOnlineMyRecordsRefreshTask();
+
+	NewClassicOnlineMyRecordsRefreshTask(
+		const NewClassicOnlineMyRecordsRefreshTask &
+	) = delete;
+	NewClassicOnlineMyRecordsRefreshTask &operator=(
+		const NewClassicOnlineMyRecordsRefreshTask &
+	) = delete;
+
+	[[nodiscard]] std::optional<NewClassicOnlineBoardRefreshResult>
+	take_completed();
+	[[nodiscard]] bool finished() const noexcept;
+	[[nodiscard]] bool worker_failed() const noexcept;
+	[[nodiscard]] std::optional<NewClassicOnlineCredentialAcquireError>
+	take_credential_error() noexcept;
+
+private:
+	struct Impl;
+	explicit NewClassicOnlineMyRecordsRefreshTask(Impl *impl) noexcept;
+	Impl *impl_ = nullptr;
+
+	friend std::expected<
+		NewClassicOnlineMyRecordsRefreshTask,
+		NewClassicOnlineTaskError
+	> start_new_classic_online_my_records_refresh(
+		std::vector<NewClassicOnlineCategory>,
+		NewClassicOnlineCredentialSource,
+		NewClassicOnlineTransport
+	);
+};
+
+[[nodiscard]] std::expected<
+	NewClassicOnlineMyRecordsRefreshTask,
+	NewClassicOnlineTaskError
+> start_new_classic_online_my_records_refresh(
+	std::vector<NewClassicOnlineCategory> categories,
+	NewClassicOnlineCredentialSource credential_source,
+	NewClassicOnlineTransport transport
+);
+
 // One host-owned replay download. Like the refresh task, the transport context
 // must outlive this object and owns the bounded request deadline in flight.
 class NewClassicOnlineReplayDownloadTask final {

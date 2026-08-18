@@ -18,6 +18,15 @@ struct NewClassicOnlineBoardRefreshTask::Impl final {
 	std::jthread worker{};
 };
 
+struct NewClassicOnlineMyRecordsRefreshTask::Impl final {
+	std::mutex mutex{};
+	std::deque<NewClassicOnlineBoardRefreshResult> completed{};
+	std::optional<NewClassicOnlineCredentialAcquireError> credential_error{};
+	std::atomic<bool> finished = false;
+	std::atomic<bool> worker_failed = false;
+	std::jthread worker{};
+};
+
 struct NewClassicOnlineReplayDownloadTask::Impl final {
 	std::mutex mutex{};
 	std::optional<NewClassicOnlineReplayDownloadResult> completed{};
@@ -153,6 +162,148 @@ start_new_classic_online_board_refresh(
 		});
 	}
 	return NewClassicOnlineBoardRefreshTask(impl.release());
+}
+
+NewClassicOnlineMyRecordsRefreshTask::NewClassicOnlineMyRecordsRefreshTask(
+	Impl *impl
+) noexcept : impl_(impl)
+{
+}
+
+NewClassicOnlineMyRecordsRefreshTask::NewClassicOnlineMyRecordsRefreshTask(
+	NewClassicOnlineMyRecordsRefreshTask &&other
+) noexcept : impl_(std::exchange(other.impl_, nullptr))
+{
+}
+
+NewClassicOnlineMyRecordsRefreshTask &
+NewClassicOnlineMyRecordsRefreshTask::operator=(
+	NewClassicOnlineMyRecordsRefreshTask &&other
+) noexcept
+{
+	if(this != &other) {
+		delete impl_;
+		impl_ = std::exchange(other.impl_, nullptr);
+	}
+	return *this;
+}
+
+NewClassicOnlineMyRecordsRefreshTask::~NewClassicOnlineMyRecordsRefreshTask()
+{
+	delete impl_;
+}
+
+std::optional<NewClassicOnlineBoardRefreshResult>
+NewClassicOnlineMyRecordsRefreshTask::take_completed()
+{
+	if(impl_ == nullptr) {
+		return std::nullopt;
+	}
+	const std::scoped_lock lock(impl_->mutex);
+	if(impl_->completed.empty()) {
+		return std::nullopt;
+	}
+	auto result = std::move(impl_->completed.front());
+	impl_->completed.pop_front();
+	return result;
+}
+
+bool NewClassicOnlineMyRecordsRefreshTask::finished() const noexcept
+{
+	return impl_ == nullptr || impl_->finished.load(std::memory_order_acquire);
+}
+
+bool NewClassicOnlineMyRecordsRefreshTask::worker_failed() const noexcept
+{
+	return impl_ != nullptr &&
+		impl_->worker_failed.load(std::memory_order_acquire);
+}
+
+std::optional<NewClassicOnlineCredentialAcquireError>
+NewClassicOnlineMyRecordsRefreshTask::take_credential_error() noexcept
+{
+	if(impl_ == nullptr) {
+		return std::nullopt;
+	}
+	const std::scoped_lock lock(impl_->mutex);
+	return std::exchange(impl_->credential_error, std::nullopt);
+}
+
+std::expected<NewClassicOnlineMyRecordsRefreshTask, NewClassicOnlineTaskError>
+start_new_classic_online_my_records_refresh(
+	std::vector<NewClassicOnlineCategory> categories,
+	NewClassicOnlineCredentialSource credential_source,
+	NewClassicOnlineTransport transport
+)
+{
+	if(transport.context == nullptr || transport.perform == nullptr) {
+		return std::unexpected(NewClassicOnlineTaskError{
+			.code = NewClassicOnlineTaskErrorCode::invalid_transport,
+		});
+	}
+	if(credential_source.context == nullptr ||
+		credential_source.acquire == nullptr) {
+		return std::unexpected(NewClassicOnlineTaskError{
+			.code = NewClassicOnlineTaskErrorCode::invalid_credential_source,
+		});
+	}
+	if(categories.empty()) {
+		return std::unexpected(NewClassicOnlineTaskError{
+			.code = NewClassicOnlineTaskErrorCode::empty_request,
+		});
+	}
+	auto impl = std::unique_ptr<NewClassicOnlineMyRecordsRefreshTask::Impl>(
+		new(std::nothrow) NewClassicOnlineMyRecordsRefreshTask::Impl()
+	);
+	if(!impl) {
+		return std::unexpected(NewClassicOnlineTaskError{
+			.code = NewClassicOnlineTaskErrorCode::worker_start,
+		});
+	}
+	try {
+		auto *context = impl.get();
+		impl->worker = std::jthread(
+			[context, categories = std::move(categories), credential_source,
+			 transport](std::stop_token stop) {
+				try {
+					auto credentials = credential_source.acquire(
+						credential_source.context
+					);
+					if(!credentials) {
+						const std::scoped_lock lock(context->mutex);
+						context->credential_error = credentials.error();
+					} else {
+						for(const auto &category : categories) {
+							if(stop.stop_requested()) {
+								break;
+							}
+							auto fetched = fetch_new_classic_online_records(
+								category, *credentials, transport
+							);
+							NewClassicOnlineBoardRefreshResult result{
+								.category = category,
+							};
+							if(fetched) {
+								result.document = std::move(*fetched);
+							} else {
+								result.error = std::move(fetched.error());
+							}
+							const std::scoped_lock lock(context->mutex);
+							context->completed.push_back(std::move(result));
+						}
+					}
+				} catch(...) {
+					context->worker_failed.store(true, std::memory_order_release);
+				}
+				context->finished.store(true, std::memory_order_release);
+			}
+		);
+	} catch(...) {
+		return std::unexpected(NewClassicOnlineTaskError{
+			.code = NewClassicOnlineTaskErrorCode::worker_start,
+		});
+	}
+	return NewClassicOnlineMyRecordsRefreshTask(impl.release());
 }
 
 NewClassicOnlineReplayDownloadTask::NewClassicOnlineReplayDownloadTask(

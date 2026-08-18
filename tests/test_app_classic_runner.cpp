@@ -1161,6 +1161,7 @@ bool authentic_online_high_score_gate(
 	request.fm_available = false;
 	request.experience = ExperienceProfile::new_classic;
 	request.new_classic_online_boards.push_back(online_high_score_board());
+	request.new_classic_online_my_records.push_back(online_high_score_board());
 	auto loaded = ClassicRunner::load(std::move(request));
 	if(!loaded) {
 		std::cerr << "online-hiscore-load code=" << static_cast<unsigned>(
@@ -1174,6 +1175,12 @@ bool authentic_online_high_score_gate(
 	refreshed_board.leaderboard_entries.front().player = "BETA";
 	if(!runner.merge_new_classic_online_board(std::move(refreshed_board))) {
 		std::cerr << "online HiScore board merge failed\n";
+		return false;
+	}
+	auto private_board = online_high_score_board();
+	private_board.leaderboard_entries.front().player = "OWNER";
+	if(!runner.merge_new_classic_online_my_records(std::move(private_board))) {
+		std::cerr << "online My Records merge failed\n";
 		return false;
 	}
 	auto invalid_board = online_high_score_board();

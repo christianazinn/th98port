@@ -310,6 +310,26 @@ void test_board_refresh()
 	expect(new_classic_online_board_cache_path(root.path(), {
 		NewClassicOnlineMode::practice, 0U, 0U, 0U, 0U
 	}).empty(), "v1 rejects non-Story board paths");
+
+	const NewClassicOnlineCredentials credentials{
+		"12345678-1234-1234-1234-123456789abc",
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef0123456789_-",
+	};
+	fake.response->body = *encoded;
+	auto records = fetch_new_classic_online_records(
+		category, credentials, fake.seam()
+	);
+	expect(records && records->generation == 0U &&
+		fake.target == "/api/th03/users/12345678-1234-1234-1234-"
+			"123456789abc/records?category=story:r2:c4&format=t3onl2",
+		"My Records fetch uses the exact authenticated binary route");
+	expect(std::ranges::any_of(fake.headers, [](const auto &header) {
+		return header.name == "authorization" &&
+			header.value ==
+				"Bearer ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef0123456789_-";
+	}), "My Records keeps the bearer token in the request header");
+	expect(!std::filesystem::exists(root.path() / "MY-RECORDS.T3ONL"),
+		"private accepted submissions remain memory-only");
 }
 
 void test_enrollment_and_upload()

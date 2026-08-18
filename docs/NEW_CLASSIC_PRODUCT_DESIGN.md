@@ -304,13 +304,14 @@ The Replay hub is capability-shaped. With cached replay rows it is:
 ```text
 Local Replays
 Upload Replay              (only with a configured upload service)
+My Records                 (only with accepted rows for this identity)
 Online Replay Library
 Downloaded Replays
 Return
 ```
 
-`My Uploads` joins this list only when account enrollment and upload history
-are real product destinations; it is not shown as an inert placeholder.
+`My Records` is the accepted-submission history and is not shown as an inert
+placeholder. It remains distinct from the public best-per-profile board.
 
 The HiScore hub appears only when at least one validated cached online board
 exists for the active rank. With no such board, HiScore still opens the local
@@ -505,7 +506,7 @@ document back to OP, crosses a black/silent boundary, rebases the scheduler,
 and adopts the existing New Classic playback owner. Session 214 adds the
 source-styled Replay hub plus replay-only online and downloaded libraries;
 without an active-rank replay record, the direct local route remains. Account
-mutation, My Uploads, and My Records remain deferred. Session 215
+mutation remains deferred. Session 215
 completes the four-row HiScore hub: Personal Bests summarizes active-rank local
 best score/stage, playtime, and 1CC totals for every unlocked character from a
 read-only expanded score snapshot.
@@ -517,13 +518,21 @@ canonical V13 encoding, and HTTPS all run on a bounded background worker. The
 encoder writes request memory only, and completion is presented on the next
 retained UI boundary. Offline and unsupported platforms expose no upload row.
 
+Session 259 adds authenticated `My Records`. The service returns the same
+bounded replay-backed category document as the public library, but with every
+accepted row owned by the hidden account. Native refresh is memory-only and
+starts only for an existing identity or after an accepted explicit upload;
+empty or unavailable history exposes no row. Download and Watch reuse the
+existing validated handoffs, and public ranking remains best-per-profile.
+
 - Define leaderboard/replay identifiers, category keys, provenance, and local
   cache documents without selecting a service vendor.
 - Add the HiScore hub when Personal Bests or a real online view exists.
   Complete for cached online boards in session 201 and Personal Bests in
   session 215.
 - Add the Replay hub when an online/downloaded view exists. Complete in
-  session 214; session 258 also admits the real upload capability.
+  session 214; session 258 also admits the real upload capability, and session
+  259 adds authenticated accepted-submission history.
 - Preserve direct Local views until then.
 
 Gate: offline behavior, replay cross-links, legacy entries without fake replay

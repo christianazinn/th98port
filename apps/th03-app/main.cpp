@@ -4236,12 +4236,19 @@ ExperienceRunResult run_classic_session(
 	};
 	std::optional<OnlineUploadCredentialContext>
 		online_upload_credential_context{};
+	std::optional<th03::app::NewClassicOnlineCredentialSource>
+		online_credential_source{};
+	std::optional<th03::app::NewClassicOnlineCredentialSource>
+		online_existing_credential_source{};
 #else
 	parsed.launch.new_classic_online_upload_available = false;
 #endif
 	// The platform transport must outlive the worker that refers to it.
 	std::optional<th03::app::NewClassicOnlineBoardRefreshTask>
 		online_refresh_task{};
+	std::optional<th03::app::NewClassicOnlineMyRecordsRefreshTask>
+		online_my_records_refresh_task{};
+	bool online_my_records_refresh_requested = false;
 	std::optional<th03::app::NewClassicOnlineReplayDownloadTask>
 		online_replay_download_task{};
 	std::optional<th03::app::NewClassicOnlineReplayId>
@@ -4420,6 +4427,86 @@ ExperienceRunResult run_classic_session(
 							.transport = &*online_transport,
 						}
 					);
+					online_credential_source =
+						th03::app::NewClassicOnlineCredentialSource{
+							.context = &*online_upload_credential_context,
+							.acquire = +[](void *opaque) -> std::expected<
+								th03::app::NewClassicOnlineCredentials,
+								th03::app::NewClassicOnlineCredentialAcquireError
+							> {
+								auto &context = *static_cast<
+									OnlineUploadCredentialContext *>(opaque);
+								if(context.configured_invalid ||
+									context.transport == nullptr) {
+									return std::unexpected(th03::app::
+										NewClassicOnlineCredentialAcquireError{1U});
+								}
+								if(context.configured) {
+									return *context.configured;
+								}
+								auto acquired = th03::platform::
+									load_or_enroll_windows_online_credentials(
+										context.path,
+										context.transport->transport()
+									);
+								if(!acquired) {
+									return std::unexpected(th03::app::
+										NewClassicOnlineCredentialAcquireError{
+											static_cast<std::uint8_t>(
+												static_cast<std::uint8_t>(
+													acquired.error().code
+												) + 2U
+											)
+										});
+								}
+								return std::move(*acquired);
+							},
+						};
+					online_existing_credential_source =
+						th03::app::NewClassicOnlineCredentialSource{
+							.context = &*online_upload_credential_context,
+							.acquire = +[](void *opaque) -> std::expected<
+								th03::app::NewClassicOnlineCredentials,
+								th03::app::NewClassicOnlineCredentialAcquireError
+							> {
+								auto &context = *static_cast<
+									OnlineUploadCredentialContext *>(opaque);
+								if(context.configured_invalid) {
+									return std::unexpected(th03::app::
+										NewClassicOnlineCredentialAcquireError{1U});
+								}
+								if(context.configured) {
+									return *context.configured;
+								}
+								auto loaded = th03::platform::
+									load_windows_online_credentials(context.path);
+								if(!loaded) {
+									return std::unexpected(th03::app::
+										NewClassicOnlineCredentialAcquireError{
+											static_cast<std::uint8_t>(
+												static_cast<std::uint8_t>(
+													loaded.error().code
+												) + 2U
+											)
+										});
+								}
+								if(!*loaded) {
+									return std::unexpected(th03::app::
+										NewClassicOnlineCredentialAcquireError{2U});
+								}
+								return std::move(**loaded);
+							},
+						};
+					std::error_code credential_status_error{};
+					const bool stored_identity = std::filesystem::is_regular_file(
+						online_upload_credential_context->path,
+						credential_status_error
+					);
+					online_my_records_refresh_requested =
+						!configured_credentials_invalid &&
+						(static_cast<bool>(
+							online_upload_credential_context->configured
+						) || (stored_identity && !credential_status_error));
 					std::vector<th03::app::NewClassicOnlineCategory> categories{};
 					categories.reserve(9U);
 					const auto rank = static_cast<std::uint8_t>(
@@ -4584,6 +4671,77 @@ ExperienceRunResult run_classic_session(
 		audio_focus_muted = desired;
 	};
 	while((*runner)->status() == th03::app::ClassicRunnerStatus::running) {
+#if defined(_WIN32)
+		if(online_my_records_refresh_requested &&
+			!online_my_records_refresh_task && online_transport &&
+			online_existing_credential_source) {
+			std::vector<th03::app::NewClassicOnlineCategory> categories{};
+			categories.reserve(9U);
+			const auto rank = static_cast<std::uint8_t>(persisted_options.rank);
+			for(std::uint8_t character = 0U; character < 9U; ++character) {
+				categories.push_back({
+					.mode = th03::app::NewClassicOnlineMode::story,
+					.rank = rank,
+					.character = character,
+				});
+			}
+			auto started =
+				th03::app::start_new_classic_online_my_records_refresh(
+					std::move(categories), *online_existing_credential_source,
+					online_transport->transport()
+				);
+			online_my_records_refresh_requested = false;
+			if(started) {
+				online_my_records_refresh_task.emplace(std::move(*started));
+			} else {
+				std::cerr << "status=warning\n"
+					"stage=online-my-records-start\ncode="
+					<< static_cast<unsigned>(started.error().code) << '\n';
+			}
+		}
+#endif
+		if(online_my_records_refresh_task) {
+			while(auto refreshed =
+				online_my_records_refresh_task->take_completed()) {
+				if(refreshed->error) {
+					std::cerr << "status=warning\nstage=online-my-records\nrank="
+						<< static_cast<unsigned>(refreshed->category.rank)
+						<< "\ncharacter="
+						<< static_cast<unsigned>(refreshed->category.character)
+						<< "\ncode="
+						<< static_cast<unsigned>(refreshed->error->code) << '\n';
+					continue;
+				}
+				if(!refreshed->document) {
+					std::cerr << "status=warning\nstage=online-my-records\n"
+						"code=missing-result\n";
+					continue;
+				}
+				overlay_online_downloads(*refreshed->document);
+				if(auto merged =
+					(*runner)->merge_new_classic_online_my_records(
+						std::move(*refreshed->document)
+					); !merged) {
+					std::cerr << "status=warning\n"
+						"stage=online-my-records-merge\ncode="
+						<< static_cast<unsigned>(merged.error().code) << '\n';
+				}
+			}
+			if(online_my_records_refresh_task->finished()) {
+				if(auto credential_error =
+					online_my_records_refresh_task->take_credential_error()) {
+					std::cerr << "status=warning\n"
+						"stage=online-my-records-identity\ncode="
+						<< static_cast<unsigned>(credential_error->detail_code)
+						<< '\n';
+				}
+				if(online_my_records_refresh_task->worker_failed()) {
+					std::cerr << "status=warning\nstage=online-my-records\n"
+						"code=worker-failed\n";
+				}
+				online_my_records_refresh_task.reset();
+			}
+		}
 		if(online_refresh_task) {
 			while(auto refreshed = online_refresh_task->take_completed()) {
 				if(refreshed->error) {
@@ -4681,6 +4839,10 @@ ExperienceRunResult run_classic_session(
 						"online-replay-upload-report", reported.error()
 					)};
 				}
+				if(outcome ==
+					th03::app::NewClassicReplayUploadOutcome::accepted) {
+					online_my_records_refresh_requested = true;
+				}
 				if(uploaded->error) {
 					std::cerr << "status=warning\n"
 						"stage=online-replay-upload\ncode="
@@ -4777,6 +4939,14 @@ ExperienceRunResult run_classic_session(
 			}
 			if((*runner)->take_new_classic_online_identity_reset_request()) {
 #if defined(_WIN32)
+				online_my_records_refresh_task.reset();
+				online_my_records_refresh_requested = false;
+				if(auto cleared =
+					(*runner)->clear_new_classic_online_my_records(); !cleared) {
+					return {.exit_code = fail(
+						"online-my-records-clear", cleared.error()
+					)};
+				}
 				const auto identity_root = new_classic_settings_path.empty() ?
 					config_path.parent_path() :
 					new_classic_settings_path.parent_path();
@@ -4860,7 +5030,7 @@ ExperienceRunResult run_classic_session(
 					);
 				};
 #if defined(_WIN32)
-				if(!online_transport || !online_upload_credential_context) {
+				if(!online_transport || !online_credential_source) {
 					if(auto reported = report_immediate(
 						th03::app::NewClassicReplayUploadOutcome::unavailable
 					); !reported) {
@@ -4878,39 +5048,10 @@ ExperienceRunResult run_classic_session(
 						)};
 					}
 				} else {
-					const th03::app::NewClassicOnlineCredentialSource source{
-						.context = &*online_upload_credential_context,
-						.acquire = +[](void *opaque) -> std::expected<
-							th03::app::NewClassicOnlineCredentials,
-							th03::app::NewClassicOnlineCredentialAcquireError
-						> {
-							auto &context = *static_cast<
-								OnlineUploadCredentialContext *>(opaque);
-							if(context.configured_invalid || context.transport == nullptr) {
-								return std::unexpected(th03::app::
-									NewClassicOnlineCredentialAcquireError{1U});
-							}
-							if(context.configured) {
-								return *context.configured;
-							}
-							auto acquired = th03::platform::
-								load_or_enroll_windows_online_credentials(
-									context.path, context.transport->transport()
-								);
-							if(!acquired) {
-								return std::unexpected(th03::app::
-									NewClassicOnlineCredentialAcquireError{
-										static_cast<std::uint8_t>(
-											static_cast<std::uint8_t>(acquired.error().code) + 2U
-										)
-									});
-							}
-							return std::move(*acquired);
-						},
-					};
 					auto started =
 						th03::app::start_new_classic_online_replay_upload(
-							std::move(request->document), request->slot, source,
+							std::move(request->document), request->slot,
+							*online_credential_source,
 							online_transport->transport()
 						);
 					if(!started) {

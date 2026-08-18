@@ -106,6 +106,10 @@ struct ClassicRunnerRequest final {
 	// construction. The source-time owner treats them as immutable read-only
 	// input and never performs network or filesystem work while advancing.
 	std::vector<NewClassicOnlineCacheDocument> new_classic_online_boards{};
+	// Authenticated accepted submissions for the current player. This private
+	// view is memory-only and is never merged into public best-per-profile rows.
+	std::vector<NewClassicOnlineCacheDocument>
+		new_classic_online_my_records{};
 	// Host capability only. When true, Replay exposes an explicit Upload
 	// destination whose immutable document request is completed outside source
 	// time. No endpoint or credential crosses into the retained owner.
@@ -247,6 +251,12 @@ public:
 	// an already-visible menu and performs no filesystem or network work.
 	[[nodiscard]] std::expected<void, ClassicRunnerError>
 	merge_new_classic_online_board(NewClassicOnlineCacheDocument document);
+	[[nodiscard]] std::expected<void, ClassicRunnerError>
+	merge_new_classic_online_my_records(
+		NewClassicOnlineCacheDocument document
+	);
+	[[nodiscard]] std::expected<void, ClassicRunnerError>
+	clear_new_classic_online_my_records();
 	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>
 	take_new_classic_online_replay_download_request() noexcept;
 	[[nodiscard]] std::expected<void, ClassicRunnerError>

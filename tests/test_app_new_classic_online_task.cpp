@@ -314,6 +314,41 @@ int main()
 		)
 	), "worker atomically publishes the second cache");
 
+	FakeCredentialSource my_records_credentials{};
+	auto my_records = start_new_classic_online_my_records_refresh(
+		{
+			{NewClassicOnlineMode::story, 2U, 0U, 0U, 0U},
+			{NewClassicOnlineMode::story, 2U, 1U, 0U, 0U},
+		},
+		my_records_credentials.seam(), fake.seam()
+	);
+	expect(my_records.has_value(), "My Records background refresh starts");
+	if(my_records) {
+		std::vector<NewClassicOnlineBoardRefreshResult> private_results{};
+		const auto private_deadline = std::chrono::steady_clock::now() +
+			std::chrono::seconds(5);
+		while(std::chrono::steady_clock::now() < private_deadline &&
+			(!my_records->finished() || private_results.size() < 2U)) {
+			while(auto result = my_records->take_completed()) {
+				private_results.push_back(std::move(*result));
+			}
+			std::this_thread::yield();
+		}
+		while(auto result = my_records->take_completed()) {
+			private_results.push_back(std::move(*result));
+		}
+		expect(my_records->finished() && private_results.size() == 2U &&
+			my_records_credentials.calls.load() == 1U &&
+			!my_records->take_credential_error(),
+			"My Records acquires identity once and returns every category");
+		const std::scoped_lock lock(fake.targets_mutex);
+		expect(fake.targets.size() >= 4U &&
+			fake.targets[fake.targets.size() - 2U].starts_with(
+				"/api/th03/users/12345678-1234-1234-1234-"
+				"123456789abc/records?category=story:"
+			), "My Records uses the authenticated per-user route");
+	}
+
 	FakeTransport throwing{};
 	throwing.throw_request.store(true, std::memory_order_release);
 	auto failed_task = start_new_classic_online_board_refresh(

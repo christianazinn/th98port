@@ -101,6 +101,7 @@ enum class NewClassicReplayHubStatus : std::uint8_t {
 	running,
 	local_selected,
 	upload_selected,
+	my_records_selected,
 	online_selected,
 	downloaded_selected,
 	back,
@@ -120,7 +121,8 @@ public:
 	explicit NewClassicReplayHub(
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 		bool libraries_available = true,
-		bool upload_available = false
+		bool upload_available = false,
+		bool my_records_available = false
 	);
 
 	[[nodiscard]] bool valid() const noexcept;
@@ -274,6 +276,7 @@ enum class NewClassicOnlineReplayWatchOutcome : std::uint8_t {
 
 enum class NewClassicOnlineMenuMode : std::uint8_t {
 	high_scores,
+	my_records,
 	online_replays,
 	downloaded_replays,
 };

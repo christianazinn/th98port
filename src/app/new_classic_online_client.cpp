@@ -486,6 +486,61 @@ refresh_new_classic_online_board(
 	return std::move(*decoded);
 }
 
+std::expected<NewClassicOnlineCacheDocument, NewClassicOnlineClientError>
+fetch_new_classic_online_records(
+	const NewClassicOnlineCategory &category,
+	const NewClassicOnlineCredentials &credentials,
+	const NewClassicOnlineTransport &transport
+)
+{
+	if(!story_category(category)) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::invalid_category
+		));
+	}
+	if(!credentials_valid(credentials)) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::invalid_credentials
+		));
+	}
+	const std::string target = "/api/th03/users/" + credentials.user_id +
+		"/records?category=" + category_key(category) + "&format=t3onl2";
+	auto response = perform(transport, {
+		.method = NewClassicOnlineHttpMethod::get,
+		.target = target,
+		.headers = {
+			{"authorization", "Bearer " + credentials.token},
+			{"x-th03-user-id", credentials.user_id},
+		},
+		.maximum_response_bytes = new_classic_online_cache_max_bytes,
+	});
+	if(!response) {
+		return std::unexpected(std::move(response.error()));
+	}
+	if(response->status != 200U) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::http_status, response->status
+		));
+	}
+	if(response->content_type != cache_content_type) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::content_type, response->status
+		));
+	}
+	auto decoded = decode_new_classic_online_cache(response->body);
+	if(!decoded) {
+		auto result = client_error(NewClassicOnlineClientErrorCode::cache_codec);
+		result.cache_codec = decoded.error();
+		return std::unexpected(std::move(result));
+	}
+	if(decoded->generation != 0U || decoded->board_category != category) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::cache_mismatch
+		));
+	}
+	return std::move(*decoded);
+}
+
 std::expected<NewClassicOnlineCredentials, NewClassicOnlineClientError>
 enroll_new_classic_online_user(const NewClassicOnlineTransport &transport)
 {

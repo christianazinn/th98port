@@ -277,6 +277,9 @@ struct ClassicOpSessionBackendOperations final {
 	(*start_direct_vs_selection)(void *) = nullptr;
 	std::expected<void, ClassicOpSessionError>
 	(*merge_online_board)(void *, NewClassicOnlineCacheDocument) = nullptr;
+	std::expected<void, ClassicOpSessionError>
+	(*merge_online_my_records)(void *, NewClassicOnlineCacheDocument) = nullptr;
+	void (*clear_online_my_records)(void *) = nullptr;
 	bool (*audio_pending)(void *) = nullptr;
 	std::optional<ClassicAudioCommand> (*take_audio_command)(void *) = nullptr;
 	std::optional<PixelOracleSourceIdentity>
@@ -359,6 +362,9 @@ public:
 	[[nodiscard]] bool take_online_identity_reset_request() noexcept;
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
 	merge_online_board(NewClassicOnlineCacheDocument document);
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	merge_online_my_records(NewClassicOnlineCacheDocument document);
+	void clear_online_my_records() noexcept;
 	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>
 	take_online_replay_download_request() noexcept;
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>

@@ -133,6 +133,18 @@ struct NewClassicOnlineClientError final {
 	const NewClassicOnlineTransport &transport
 );
 
+// Fetches one authenticated user's accepted submissions for an exact Story
+// category. Unlike public board snapshots, this private view is deliberately
+// memory-only and never replaces the offline leaderboard cache.
+[[nodiscard]] std::expected<
+	NewClassicOnlineCacheDocument,
+	NewClassicOnlineClientError
+> fetch_new_classic_online_records(
+	const NewClassicOnlineCategory &category,
+	const NewClassicOnlineCredentials &credentials,
+	const NewClassicOnlineTransport &transport
+);
+
 [[nodiscard]] std::expected<
 	NewClassicOnlineCredentials,
 	NewClassicOnlineClientError

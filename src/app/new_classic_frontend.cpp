@@ -1651,13 +1651,17 @@ std::size_t NewClassicReplayBrowserTestAccess::physical_row_count(
 NewClassicReplayHub::NewClassicReplayHub(
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 	bool libraries_available,
-	bool upload_available
+	bool upload_available,
+	bool my_records_available
 ) :
 	patch_assets_(std::move(patch_assets))
 {
 	rows_.push_back(NewClassicReplayHubStatus::local_selected);
 	if(upload_available) {
 		rows_.push_back(NewClassicReplayHubStatus::upload_selected);
+	}
+	if(my_records_available) {
+		rows_.push_back(NewClassicReplayHubStatus::my_records_selected);
 	}
 	if(libraries_available) {
 		rows_.push_back(NewClassicReplayHubStatus::online_selected);
@@ -1696,6 +1700,8 @@ void NewClassicReplayHub::draw() noexcept
 			return NewClassicMessageId::replay_command_local;
 		case NewClassicReplayHubStatus::upload_selected:
 			return NewClassicMessageId::replay_command_upload;
+		case NewClassicReplayHubStatus::my_records_selected:
+			return NewClassicMessageId::replay_command_my_records;
 		case NewClassicReplayHubStatus::online_selected:
 			return NewClassicMessageId::replay_command_online;
 		case NewClassicReplayHubStatus::downloaded_selected:
@@ -1892,6 +1898,10 @@ NewClassicHighScoreMenu::NewClassicHighScoreMenu(
 					}
 				);
 			}
+			if(mode_ == NewClassicOnlineMenuMode::my_records &&
+				board.leaderboard_entries.empty()) {
+				continue;
+			}
 			boards_.push_back(std::move(board));
 		}
 	}
@@ -2079,7 +2089,9 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 		const auto title_id = mode_ ==
 			NewClassicOnlineMenuMode::downloaded_replays ?
 			NewClassicMessageId::replay_downloaded_title :
-			NewClassicMessageId::replay_online_title;
+			(mode_ == NewClassicOnlineMenuMode::my_records ?
+				NewClassicMessageId::replay_my_records_title :
+				NewClassicMessageId::replay_online_title);
 		valid_ = font.put_centered(
 			raster, 320, 48, messages.text(title_id), 9U
 		) && font.put_centered(raster, 320, 64, category_title, 15U);
@@ -2205,7 +2217,9 @@ void NewClassicHighScoreMenu::draw_detail() noexcept
 			NewClassicMessageId::hiscore_command_online :
 			(mode_ == NewClassicOnlineMenuMode::downloaded_replays ?
 				NewClassicMessageId::replay_downloaded_title :
-				NewClassicMessageId::replay_online_title)
+				(mode_ == NewClassicOnlineMenuMode::my_records ?
+					NewClassicMessageId::replay_my_records_title :
+					NewClassicMessageId::replay_online_title))
 	), 9U) &&
 		put_row(96, mode_ == NewClassicOnlineMenuMode::high_scores ?
 			NewClassicMessageId::hiscore_online_label_player :

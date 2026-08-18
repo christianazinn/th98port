@@ -434,6 +434,15 @@ void test_replay_hub_and_libraries()
 		NewClassicReplayHubStatus::upload_selected,
 		"configured Replay hub exposes the explicit Upload Replay destination");
 
+	NewClassicReplayHub my_records_only(patch_assets, false, false, true);
+	finish_entry_fade(my_records_only);
+	static_cast<void>(my_records_only.consume({}));
+	static_cast<void>(my_records_only.consume({.down = true}));
+	static_cast<void>(my_records_only.consume({}));
+	expect(my_records_only.consume({.confirm = true}).status ==
+		NewClassicReplayHubStatus::my_records_selected,
+		"Replay hub exposes My Records only when accepted rows are available");
+
 	NewClassicHighScoreMenu online_library(
 		{online_board(
 			2U, 4U, 0x21U,
@@ -451,6 +460,14 @@ void test_replay_hub_and_libraries()
 	static_cast<void>(online_library.consume({.confirm = true}));
 	expect(online_library.take_replay_download_request().has_value(),
 		"online Replay library reuses the validated download transaction");
+
+	NewClassicHighScoreMenu my_records_library(
+		{online_board(2U, 4U, 0x41U)}, 2U, patch_assets,
+		NewClassicOnlineMenuMode::my_records
+	);
+	expect(my_records_library.valid() &&
+		my_records_library.mode() == NewClassicOnlineMenuMode::my_records,
+		"My Records reuses the source-styled replay library surface");
 
 	NewClassicHighScoreMenu downloaded_library(
 		{online_board(2U, 4U, 0x31U)}, 2U, patch_assets,
