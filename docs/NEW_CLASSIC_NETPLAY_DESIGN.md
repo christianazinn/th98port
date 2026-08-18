@@ -25,11 +25,11 @@ game.
 - Use peer-to-peer rollback during active `GM_VS_1P_2P` MAIN gameplay. Menus,
   character selection, result screens, and replay saving are synchronized
   control phases, not predicted rollback state.
-- Prefer GGRS as the rollback scheduler behind a versioned C ABI. It is not
-  allowed to own rendering, audio, game state, or product policy. An initial
-  build/performance spike must pass objective gates before the dependency is
-  frozen. The same interface permits an app-owned C++ backend if that spike
-  fails.
+- Use the implemented app-owned C++ rollback coordinator. It owns only bounded
+  prediction, confirmation, typed snapshots, restore/resimulation requests,
+  and diagnostics; rendering, audio publication, game state, transport, and
+  product policy retain their existing owners. GGRS remains a design reference
+  and is not a dependency or alternate production backend.
 - Use libdatachannel WebRTC Data Channels behind an app-owned transport
   interface. Gameplay uses a discrete unordered, unreliable channel; control
   uses a separate reliable, ordered channel. ICE tries direct peer-to-peer
@@ -45,9 +45,9 @@ game.
 - Record only the final resolved input history into the existing in-memory V13
   recorder. Predicted and superseded executions never enter the replay.
 
-The architecture is intentionally layered. GGRS, libdatachannel, Cloudflare,
-and the product UI can each be replaced without changing deterministic TH03
-gameplay or the rollback-state contract.
+The architecture is intentionally layered. The rollback coordinator,
+libdatachannel, Cloudflare, and the product UI can each be replaced without
+changing deterministic TH03 gameplay or the rollback-state contract.
 
 ## Product contract
 
@@ -150,7 +150,7 @@ platform RTC adapter (libdatachannel)
 portable netplay session owner
     |  rollback requests, phase policy, replay journal, diagnostics
     v
-rollback backend C ABI (preferred backend: GGRS)
+app-owned C++ rollback coordinator
     |  save / load / advance requests only
     v
 MainProcess rollback adapter
@@ -162,7 +162,7 @@ th03_core + th03_present
 The existing boundaries remain binding:
 
 - `th03_core` owns deterministic fixed-width state and logical input. It gains
-  typed state capture/restore but no socket, path, clock, SDL, WebRTC, GGRS, or
+  typed state capture/restore but no socket, path, clock, SDL, WebRTC, or
   Rust type.
 - `th03_present` owns PC-98 raster/TRAM and presenter state. It gains typed
   local capture/restore where required for visual rollback, but no network
@@ -174,8 +174,8 @@ The existing boundaries remain binding:
 - A new platform-neutral `th03_app_netplay` target owns match phases, logical
   player input, rollback requests, control-message validation, confirmed-frame
   replay journaling, and diagnostics.
-- A new `th03_netplay_ggrs` Rust `staticlib` exposes only a frozen C ABI and
-  owns GGRS allocations. No Rust panic or C++ exception may cross that ABI.
+- `th03_app_netplay` contains the sole production rollback coordinator. It uses
+  fixed-capacity typed owners and adds no Rust toolchain or foreign allocator.
 - A new `th03_platform_rtc` target owns libdatachannel callbacks, ICE/STUN/TURN,
   signaling WebSockets, and thread-safe packet queues. Network callbacks never
   step the game directly.
@@ -187,55 +187,35 @@ authentication, and operational tooling, but they are separate authority
 domains. Leaderboard verification may persist accepted V13 files. A room
 Durable Object stores no gameplay stream or mutable TH03 state.
 
-## Rollback middleware decision
+## Rollback backend decision
 
-### Preferred backend: GGRS behind a C ABI
+### Frozen backend: app-owned C++ coordinator
 
-GGRS is preferred over directly embedding the official GGPO repository because
-it already separates rollback scheduling from a custom `NonBlockingSocket`.
-Its request-driven API maps naturally to the port's retained owners: the app
-fulfills ordered Save, Load, and Advance requests rather than surrendering game
-ownership to callbacks. Its transport trait explicitly supports discrete,
-unordered, unreliable transports such as WebRTC Data Channels.
+The implemented `MainRollbackCoordinator` and `NewClassicNetplayMainSession`
+are the single production backend. They implement only the TH03-specific work
+the product needs: two-player repeat-last prediction, a sixteen-slot typed
+snapshot ring, correction restore/resimulation, contiguous confirmation,
+confirmed audio/replay publication, and explicit proof/boundary ownership.
+Packet reliability and signaling remain outside the coordinator.
 
-The adapter must not expose Rust or GGRS structures in C++ headers. Its public
-surface consists of opaque session handles, fixed-width input values, bounded
-byte spans, event codes, and ordered rollback requests. Rust owns every Rust
-allocation. C++ copies a canonical rollback snapshot into a supplied Rust-owned
-cell on Save and restores from a borrowed read-only cell on Load.
+This path has passed the gates originally assigned to a middleware spike:
 
-All exported functions use a non-unwinding C ABI and convert failure into an
-explicit status. The adapter catches unwind-capable panics at its outer edge;
-release builds also fail closed on a panic. C++ callbacks entering Rust are
-`noexcept`, and no C++ exception crosses the boundary.
+- exact scripted convergence under loss, duplication, reordering, and jitter;
+- one-frame-every-frame save/restore/correct sync testing;
+- no source-tick heap allocation after warm-up;
+- a 10,794,988-byte sixteen-slot ring plus recovery state;
+- about 2.75 ms for the conservative wrong/restore/correct/restore probe on the
+  development host, below the 17.723 ms source deadline;
+- GCC/MSVC builds, direct UDP and WebRTC transport integration, runtime and
+  boundary proofs, Pause/Resume/Forfeit, and confirmed in-memory V13 capture.
 
-The exact GGRS source revision, Cargo dependency graph, Rust toolchain, license,
-and archive digest must be pinned and vendored for offline builds. `latest` is
-not an authority. Windows/MSVC, Linux/GCC, macOS/Clang x64, and macOS/Clang
-arm64 must build the same C ABI and pass the same protocol vectors.
-GGRS is dual MIT/Apache-2.0; the chosen license and notices must ship with the
-binary. libdatachannel is MPL-2.0 and likewise requires a pinned license/source
-compliance review before distribution.
-
-### Required middleware spike
-
-GGRS becomes the frozen production backend only if the first milestone proves:
-
-- clean static-library integration in the supported CMake presets;
-- reproducible offline builds with an audited dependency and license bundle;
-- no panics, exceptions, allocator ownership, or borrowed-lifetime ambiguity
-  across the C ABI;
-- exact scripted behavior under loss, duplication, reordering, and jitter;
-- one-frame sync-test rollback on every source frame for a long VS corpus;
-- bounded snapshot memory with no source-tick heap allocation after warm-up;
-- snapshot/restore plus common rollback resimulation comfortably below one
-  17.723 ms source deadline on the minimum supported machine.
-
-If it fails, `th03_app_netplay` keeps the same interface and receives a small
-app-owned C++ rollback coordinator. That fallback implements only two-player
-input prediction, snapshot rings, confirmed-frame advancement, time sync, and
-desync checks. It does not port GGPO's bundled UDP stack. This is a fallback,
-not an invitation to maintain two production backends.
+Introducing GGRS now would duplicate the already-frozen prediction,
+confirmation, packet-history, proof, and lifecycle contracts, add a Rust/C ABI
+and allocator boundary, and retain the custom coordinator as an oracle during
+migration. It offers no remaining first-release capability. GGRS and GGPO stay
+useful behavioral references, but no GGRS spike, Rust target, or second backend
+is planned for this baseline. A future replacement must first demonstrate a
+specific missing capability and preserve every frozen wire and replay contract.
 
 The official GGPO code remains a behavioral and sync-test reference. Its
 developer guide is especially useful for the complete-state, single-frame,
@@ -420,15 +400,14 @@ Each peer connection opens two binary Data Channels:
 
 | Channel | Delivery | Owner |
 |---|---|---|
-| `th03-game/1` | unordered, unreliable, zero retransmits | Opaque GGRS packets |
+| `th03-game/1` | unordered, unreliable, zero retransmits | App-owned `T3NP07` gameplay datagrams |
 | `th03-control/1` | ordered, reliable | Handshake, selection, pause, result, diagnostics |
 
-GGRS already owns gameplay-packet reliability, ordering, prediction, and
-acknowledgement. The app must not layer a conflicting home-grown ACK protocol
-around those bytes. The custom `NonBlockingSocket` serializes GGRS messages in
-Rust and hands opaque bounded datagrams to the RTC adapter. Packets larger than
-the measured no-fragmentation budget are a test failure; the initial target is
-at most 1200 bytes.
+The app-owned input timeline owns prediction, history, acknowledgement, and
+bounded retransmission policy. The RTC layer must not add a conflicting stream
+around those bytes. Each validated gameplay datagram occupies one Data Channel
+message. Packets larger than the measured no-fragmentation budget are a test
+failure; the initial target is at most 1200 bytes.
 
 The reliable control channel carries small, versioned, explicitly bounded
 messages. It never carries a rollback snapshot or replay file. Large replay
@@ -748,7 +727,10 @@ an explicit N1 gate rather than a reason to alter the rollback image.
    suppress intermediate output, and keep speculative boundaries private.
    Confirmed-frame audio journaling is also complete: corrected commands
    replace speculative suffixes and both peers advance identical PMD VSyncs.
-3. Build the pinned GGRS C ABI spike and custom queued `NonBlockingSocket`.
+3. Freeze the implemented C++ rollback coordinator as the sole production
+   backend. Complete; a GGRS bridge was rejected as redundant after the local
+   coordinator passed the objective memory, timing, convergence, and lifecycle
+   gates.
 4. Fulfill Save/Load/Advance requests from `MainProcess`.
 5. Freeze prediction, delay, confirmation, digest, and replay-journal behavior.
    Prediction, delay, confirmation, confirmed audio, frame-zero identity, and
@@ -756,8 +738,8 @@ an explicit N1 gate rather than a reason to alter the rollback image.
    preview. The corrected journal now feeds the existing memory-only V13
    recorder with source waits, round/process controls, and local slowdown
    evidence. Explicit round/terminal network digests remain open.
-6. Decide GGRS versus the single fallback backend using the objective spike
-   gates; delete the rejected production path.
+6. Keep one backend. Complete: the C++ coordinator is frozen and no unused GGRS
+   path or Rust build dependency exists.
 
 ### N2: portable peer transport and local signaling
 
@@ -865,10 +847,9 @@ yet expose a truthful RTT measurement.
 - **Authoritative server simulation.** It adds permanent compute cost and an
   extra network leg, while deterministic two-player simulation already exists.
   It would still not prove human input.
-- **Permanent custom rollback before a middleware spike.** Snapshot ownership
-  is project-specific; prediction, time sync, packet reliability, and edge
-  behavior are not. Reimplement them only if the maintained backend fails a
-  measured integration gate.
+- **GGRS migration after the custom coordinator passed its gates.** Rejected
+  for the preliminary baseline. It would add a second scheduler/toolchain and
+  duplicate frozen behavior without adding a user-visible capability.
 - **Raw `memcpy` of C++ owners.** Object images contain pointers, padding,
   allocator state, and compiler-specific layout. They are neither portable nor
   complete contracts.
