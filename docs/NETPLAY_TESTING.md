@@ -71,6 +71,9 @@ then the supplied relay. Relay Only prevents direct candidates and fails
 closed if the service did not issue credentialed TURN. It may add latency but
 does not reveal a direct peer address. The Direct UDP fallback replaces this
 row with the host-port editor and does not use TURN.
+Connection, route policy, and the Direct UDP host port persist in `PODD.CFG`;
+Quick Match always uses the online service without changing a saved Direct UDP
+preference.
 
 Open `VS Start` -> `Online Match` on both machines. For casual pairing, both
 select `Quick Match`, choose their local character/palette and the same rank,

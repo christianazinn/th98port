@@ -2285,6 +2285,7 @@ struct NetplayRoomRunResult final {
 	int exit_code = 0;
 	bool application_quit = false;
 	std::optional<th03::app::NewClassicNetplayRoomLaunch> launch{};
+	std::optional<th03::app::NewClassicNetplayPreferences> preferences{};
 };
 
 [[nodiscard]] std::optional<char> netplay_endpoint_character(
@@ -2320,11 +2321,12 @@ struct NetplayRoomRunResult final {
 	th03::platform::SdlInputMapper &mapper,
 	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets,
 	th03::app::NewClassicLanguageAssetProfile language,
-	std::uint8_t initial_rank
+	std::uint8_t initial_rank,
+	th03::app::NewClassicNetplayPreferences preferences
 )
 {
 	th03::app::NewClassicNetplayRoom room(
-		std::move(patch_assets), language, initial_rank
+		std::move(patch_assets), language, initial_rank, preferences
 	);
 	if(!room.valid()) {
 		return {.exit_code = fail_netplay(
@@ -2409,13 +2411,19 @@ struct NetplayRoomRunResult final {
 	}
 	if(room.status() ==
 		th03::app::NewClassicNetplayRoomStatus::application_quit) {
-		return {.application_quit = true};
+		return {
+			.application_quit = true,
+			.preferences = room.preferences(),
+		};
 	}
 	if(room.status() ==
 		th03::app::NewClassicNetplayRoomStatus::launch_requested) {
-		return {.launch = room.take_launch()};
+		return {
+			.launch = room.take_launch(),
+			.preferences = room.preferences(),
+		};
 	}
-	return {};
+	return {.preferences = room.preferences()};
 }
 
 int run_direct_netplay_on_platform(
@@ -6081,10 +6089,21 @@ ExperienceRunResult run_new_classic_experience(
 				th03::app::NewClassicLanguageAssetProfile::japanese);
 		auto room = run_netplay_room_modal(
 			parsed.tick_rate, platform, mapper, patch_assets, language,
-			static_cast<std::uint8_t>(latest_settings->settings.options.rank)
+			static_cast<std::uint8_t>(latest_settings->settings.options.rank),
+			latest_settings->settings.netplay
 		);
 		if(room.exit_code != 0) {
 			return {.exit_code = room.exit_code};
+		}
+		if(room.preferences &&
+			*room.preferences != latest_settings->settings.netplay) {
+			latest_settings->settings.netplay = *room.preferences;
+			if(auto committed = th03::app::commit_new_classic_settings_store(
+				parsed.launch.content.new_classic_settings,
+				latest_settings->settings
+			); !committed) {
+				return {.exit_code = fail("settings-save", committed.error())};
+			}
 		}
 		if(room.application_quit) {
 			return {

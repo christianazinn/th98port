@@ -447,6 +447,9 @@ exist:
    category hierarchy in session 175.
 6. Mute When Unfocused is complete in session 185. It applies only at the
    final SDL output boundary and migrates existing settings with default Off.
+7. Online Match connection, relay policy, and Direct UDP host port persistence
+   is complete in session 260. `PODD.CFG` v4 upgrades all earlier documents;
+   the preferences remain local and never enter deterministic match state.
 
 Each feature becomes visible only when its apply, persistence, rollback, and
 return-to-menu paths are complete.

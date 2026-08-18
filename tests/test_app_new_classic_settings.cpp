@@ -30,10 +30,12 @@ using th03::app::NewClassicSettingsStoreDisposition;
 using th03::app::NewClassicSettingsStoreErrorCode;
 using th03::app::NewClassicAspectRatio;
 using th03::app::NewClassicFiltering;
+using th03::app::NewClassicNetplayConnection;
 using th03::app::NewClassicWindowMode;
 using th03::app::NewClassicWindowScale;
 using th03::app::new_classic_settings_file_bytes;
 using th03::app::new_classic_settings_v1_file_bytes;
+using th03::app::new_classic_settings_v2_v3_file_bytes;
 
 std::size_t checks = 0U;
 std::size_t failures = 0U;
@@ -81,13 +83,18 @@ v1_settings(bool music, bool effects)
 	return bytes;
 }
 
-[[nodiscard]] std::array<std::byte, new_classic_settings_file_bytes>
-v2_settings(const NewClassicSettings &settings)
+[[nodiscard]] std::array<std::byte, new_classic_settings_v2_v3_file_bytes>
+legacy_settings(const NewClassicSettings &settings, std::uint8_t version)
 {
-	auto encoded = th03::app::encode_new_classic_settings(settings).value();
-	encoded[7U] = std::byte{'2'};
-	put_u16(encoded, 8U, 2U);
-	encoded[22U] = std::byte{0U};
+	const auto current = th03::app::encode_new_classic_settings(settings).value();
+	std::array<std::byte, new_classic_settings_v2_v3_file_bytes> encoded{};
+	std::copy_n(current.begin(), 23U, encoded.begin());
+	encoded[7U] = static_cast<std::byte>('0' + version);
+	put_u16(encoded, 8U, version);
+	put_u16(encoded, 10U, new_classic_settings_v2_v3_file_bytes);
+	if(version == 2U) {
+		encoded[22U] = std::byte{0U};
+	}
 	put_u32(encoded, 24U, fnv1a32(
 		std::span<const std::byte>(encoded).first(24U)
 	));
@@ -189,6 +196,11 @@ void test_codec()
 			.aspect = NewClassicAspectRatio::display_4_3,
 			.filtering = NewClassicFiltering::linear,
 		},
+		.netplay = {
+			.connection = NewClassicNetplayConnection::direct_udp,
+			.relay_only = true,
+			.direct_udp_port = 42'424U,
+		},
 	};
 	const auto encoded = th03::app::encode_new_classic_settings(settings);
 	const auto decoded = encoded ?
@@ -199,14 +211,14 @@ void test_codec()
 	expect(encoded && decoded && *decoded == settings,
 		"versioned New Classic settings round-trip every field");
 	expect(encoded && encoded->size() == new_classic_settings_file_bytes,
-		"New Classic settings retain the frozen 28-byte v3 size");
+		"New Classic settings use the frozen 32-byte v4 size");
 
 	if(encoded) {
 		for(const auto mutation : std::array{
 			std::pair{0U, NewClassicSettingsErrorCode::magic},
 			std::pair{8U, NewClassicSettingsErrorCode::version},
 			std::pair{10U, NewClassicSettingsErrorCode::declared_size},
-			std::pair{24U, NewClassicSettingsErrorCode::digest},
+			std::pair{28U, NewClassicSettingsErrorCode::digest},
 		}) {
 			auto bytes = *encoded;
 			bytes[mutation.first] ^= std::byte{0xFFU};
@@ -228,13 +240,20 @@ void test_codec()
 		expect(!invalid_tail && invalid_tail.error().code ==
 			NewClassicSettingsErrorCode::reserved_nonzero,
 			"out-of-range v3 focus policy values are rejected");
-		const auto legacy_v2 = v2_settings(settings);
+		const auto legacy_v2 = legacy_settings(settings, 2U);
 		const auto decoded_v2 =
 			th03::app::decode_new_classic_settings(legacy_v2);
 		expect(decoded_v2 && !decoded_v2->mute_when_unfocused &&
 			decoded_v2->music_volume_percent == settings.music_volume_percent &&
-			decoded_v2->effect_volume_percent == settings.effect_volume_percent,
+			decoded_v2->effect_volume_percent == settings.effect_volume_percent &&
+			decoded_v2->netplay == th03::app::NewClassicNetplayPreferences{},
 			"v2 documents preserve audio percentages and default focus mute Off");
+		const auto legacy_v3 = legacy_settings(settings, 3U);
+		const auto decoded_v3 =
+			th03::app::decode_new_classic_settings(legacy_v3);
+		expect(decoded_v3 && decoded_v3->mute_when_unfocused &&
+			decoded_v3->netplay == th03::app::NewClassicNetplayPreferences{},
+			"v3 documents preserve focus mute and default netplay preferences");
 	}
 	const auto legacy_on = v1_settings(true, true);
 	const auto decoded_legacy_on =
@@ -295,6 +314,19 @@ void test_codec()
 	expect(!invalid_filtering && invalid_filtering.error().code ==
 		NewClassicSettingsErrorCode::invalid_filtering,
 		"filtering rejects values outside Nearest and Linear");
+	invalid = settings;
+	invalid.netplay.connection = static_cast<NewClassicNetplayConnection>(2U);
+	const auto invalid_connection =
+		th03::app::encode_new_classic_settings(invalid);
+	expect(!invalid_connection && invalid_connection.error().code ==
+		NewClassicSettingsErrorCode::invalid_netplay_connection,
+		"netplay connection rejects values outside Online and Direct UDP");
+	invalid = settings;
+	invalid.netplay.direct_udp_port = 0U;
+	const auto invalid_port = th03::app::encode_new_classic_settings(invalid);
+	expect(!invalid_port && invalid_port.error().code ==
+		NewClassicSettingsErrorCode::invalid_netplay_port,
+		"Direct UDP port rejects zero");
 }
 
 void test_absent_only_migration_and_isolation()
@@ -387,7 +419,7 @@ void test_defaults_recovery_and_errors()
 			NewClassicSettingsErrorCode::input_size,
 		"present malformed settings recover defaults without migration");
 	expect(fs::file_size(settings_path) == new_classic_settings_file_bytes,
-		"recovery publishes the exact v3 document");
+		"recovery publishes the exact current document");
 
 	const auto legacy_path = temporary.path() / "LEGACY.CFG";
 	expect(write_bytes(legacy_path, v1_settings(true, false)),
@@ -400,13 +432,13 @@ void test_defaults_recovery_and_errors()
 		upgraded->settings.music_volume_percent == 100U &&
 		upgraded->settings.effect_volume_percent == 0U &&
 		fs::file_size(legacy_path) == new_classic_settings_file_bytes,
-		"v1 documents upgrade atomically to v3 category levels");
+		"v1 documents upgrade atomically to current category levels");
 
 	const auto v2_path = temporary.path() / "V2.CFG";
 	auto v2_fixture = NewClassicSettings{};
 	v2_fixture.music_volume_percent = 45U;
 	v2_fixture.effect_volume_percent = 70U;
-	expect(write_bytes(v2_path, v2_settings(v2_fixture)),
+	expect(write_bytes(v2_path, legacy_settings(v2_fixture, 2U)),
 		"v2 settings fixture writes");
 	const auto upgraded_v2 = th03::app::load_new_classic_settings_store(
 		v2_path, classic_path
@@ -416,8 +448,24 @@ void test_defaults_recovery_and_errors()
 		upgraded_v2->settings.music_volume_percent == 45U &&
 		upgraded_v2->settings.effect_volume_percent == 70U &&
 		!upgraded_v2->settings.mute_when_unfocused &&
-		read_bytes(v2_path)[7U] == std::byte{'3'},
+		read_bytes(v2_path)[7U] == std::byte{'4'},
 		"v2 documents upgrade atomically with focus mute defaulted Off");
+
+	const auto v3_path = temporary.path() / "V3.CFG";
+	auto v3_fixture = NewClassicSettings{};
+	v3_fixture.mute_when_unfocused = true;
+	expect(write_bytes(v3_path, legacy_settings(v3_fixture, 3U)),
+		"v3 settings fixture writes");
+	const auto upgraded_v3 = th03::app::load_new_classic_settings_store(
+		v3_path, classic_path
+	);
+	expect(upgraded_v3 && upgraded_v3->disposition ==
+		NewClassicSettingsStoreDisposition::upgraded_v3 &&
+		upgraded_v3->settings.mute_when_unfocused &&
+		upgraded_v3->settings.netplay ==
+			th03::app::NewClassicNetplayPreferences{} &&
+		read_bytes(v3_path)[7U] == std::byte{'4'},
+		"v3 documents upgrade atomically with default netplay preferences");
 
 	const auto malformed_classic = temporary.path() / "BROKEN.CFG";
 	const auto migrated_defaults = temporary.path() / "DEFAULT.CFG";

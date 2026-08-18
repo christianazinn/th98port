@@ -352,6 +352,12 @@ later New Classic changes never rewrite `YUME.CFG`. This avoids dependence on
 the launcher working directory; use explicit writable paths when the extracted
 content root is read-only.
 
+`Online Match -> Network Settings` is also part of `PODD.CFG`. Its selected
+Room Code Service or Direct UDP connection, Automatic or Relay Only policy,
+and Direct UDP host port survive returning to the title and later launches.
+They are local product preferences only: they never enter the match contract,
+rollback state, peer packets, replays, or Classic.
+
 Validate an external frozen case without copying it into this repository:
 
 ```powershell

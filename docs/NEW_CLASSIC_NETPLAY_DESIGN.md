@@ -771,6 +771,11 @@ The product transport now pins libdatachannel 0.24.3 and Mbed TLS 3.6.7 behind
 an app-owned adapter. `T3NP07-gameplay` is unordered/unreliable with no
 retransmits; `T3NC01-control` is reliable and ordered. The maintained SDL
 presets build this adapter, while direct UDP remains a selectable fallback.
+Session 260 persists the local connection, relay policy, and Direct UDP port
+through the versioned New Classic settings transaction. Reopening the room
+frontend therefore retains its last network setup; Quick Match's mandatory
+online route does not overwrite a saved Direct UDP preference. These fields
+remain outside `T3NLC001` and all peer/replay state.
 
 Still open:
 

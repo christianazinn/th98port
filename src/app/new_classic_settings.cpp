@@ -10,6 +10,10 @@
 namespace th03::app {
 namespace {
 
+constexpr std::array<std::byte, 8U> magic_v4{
+	std::byte{'T'}, std::byte{'3'}, std::byte{'N'}, std::byte{'S'},
+	std::byte{'E'}, std::byte{'T'}, std::byte{'0'}, std::byte{'4'},
+};
 constexpr std::array<std::byte, 8U> magic_v3{
 	std::byte{'T'}, std::byte{'3'}, std::byte{'N'}, std::byte{'S'},
 	std::byte{'E'}, std::byte{'T'}, std::byte{'0'}, std::byte{'3'},
@@ -162,6 +166,17 @@ std::expected<void, NewClassicSettingsError> validate_new_classic_settings(
 			NewClassicSettingsErrorCode::invalid_filtering, 19U
 		));
 	}
+	if(static_cast<std::uint8_t>(settings.netplay.connection) >
+		static_cast<std::uint8_t>(NewClassicNetplayConnection::direct_udp)) {
+		return std::unexpected(error(
+			NewClassicSettingsErrorCode::invalid_netplay_connection, 23U
+		));
+	}
+	if(settings.netplay.direct_udp_port < 1'024U) {
+		return std::unexpected(error(
+			NewClassicSettingsErrorCode::invalid_netplay_port, 25U
+		));
+	}
 	return {};
 }
 
@@ -169,6 +184,7 @@ std::expected<NewClassicSettings, NewClassicSettingsError>
 decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 {
 	if(bytes.size() != new_classic_settings_file_bytes &&
+		bytes.size() != new_classic_settings_v2_v3_file_bytes &&
 		bytes.size() != new_classic_settings_v1_file_bytes) {
 		return std::unexpected(error(
 			NewClassicSettingsErrorCode::input_size, bytes.size()
@@ -176,11 +192,13 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 	}
 	const bool legacy_v1 = bytes.size() == new_classic_settings_v1_file_bytes;
 	bool legacy_v2 = false;
-	if(!legacy_v1) {
+	bool legacy_v3 = false;
+	if(bytes.size() == new_classic_settings_v2_v3_file_bytes) {
 		legacy_v2 = std::equal(magic_v2.begin(), magic_v2.end(), bytes.begin());
+		legacy_v3 = std::equal(magic_v3.begin(), magic_v3.end(), bytes.begin());
 	}
 	const auto &expected_magic = legacy_v1 ? magic_v1 :
-		(legacy_v2 ? magic_v2 : magic_v3);
+		(legacy_v2 ? magic_v2 : (legacy_v3 ? magic_v3 : magic_v4));
 	for(std::size_t index = 0U; index < expected_magic.size(); ++index) {
 		if(bytes[index] != expected_magic[index]) {
 			return std::unexpected(error(
@@ -189,7 +207,8 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 		}
 	}
 	const auto expected_version = static_cast<std::uint16_t>(legacy_v1 ? 1U :
-		(legacy_v2 ? 2U : new_classic_settings_format_version));
+		(legacy_v2 ? 2U : (legacy_v3 ? 3U :
+			new_classic_settings_format_version)));
 	if(u16(bytes, 8U) != expected_version) {
 		return std::unexpected(error(
 			NewClassicSettingsErrorCode::version, 8U
@@ -212,11 +231,32 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 		));
 	}
 	const auto digest_offset = bytes.size() - 4U;
-	if(!legacy_v1 && ((legacy_v2 && byte(bytes[22U]) != 0U) ||
-		(!legacy_v2 && byte(bytes[22U]) > 1U) || byte(bytes[23U]) != 0U)) {
+	if(!legacy_v1 && byte(bytes[22U]) > (legacy_v2 ? 0U : 1U)) {
 		return std::unexpected(error(
 			NewClassicSettingsErrorCode::reserved_nonzero, 22U
 		));
+	}
+	if((legacy_v2 || legacy_v3) && byte(bytes[23U]) != 0U) {
+		return std::unexpected(error(
+			NewClassicSettingsErrorCode::reserved_nonzero, 23U
+		));
+	}
+	if(!legacy_v1 && !legacy_v2 && !legacy_v3) {
+		if(byte(bytes[23U]) > 1U) {
+			return std::unexpected(error(
+				NewClassicSettingsErrorCode::invalid_netplay_connection, 23U
+			));
+		}
+		if(byte(bytes[24U]) > 1U) {
+			return std::unexpected(error(
+				NewClassicSettingsErrorCode::invalid_netplay_relay_policy, 24U
+			));
+		}
+		if(byte(bytes[27U]) != 0U) {
+			return std::unexpected(error(
+				NewClassicSettingsErrorCode::reserved_nonzero, 27U
+			));
+		}
 	}
 	if(u32(bytes, digest_offset) != fnv1a32(bytes.first(digest_offset))) {
 		return std::unexpected(error(
@@ -252,6 +292,14 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 				(byte(bytes[19U]) >> 2U) & 0x03U
 			),
 		},
+		.netplay = legacy_v1 || legacy_v2 || legacy_v3 ?
+			NewClassicNetplayPreferences{} : NewClassicNetplayPreferences{
+				.connection = static_cast<NewClassicNetplayConnection>(
+					byte(bytes[23U])
+				),
+				.relay_only = byte(bytes[24U]) != 0U,
+				.direct_udp_port = u16(bytes, 25U),
+			},
 	};
 	if(auto valid = validate_new_classic_settings(settings); !valid) {
 		return std::unexpected(valid.error());
@@ -268,7 +316,7 @@ std::expected<
 		return std::unexpected(valid.error());
 	}
 	std::array<std::byte, new_classic_settings_file_bytes> bytes{};
-	std::copy(magic_v3.begin(), magic_v3.end(), bytes.begin());
+	std::copy(magic_v4.begin(), magic_v4.end(), bytes.begin());
 	put_u16(bytes, 8U, new_classic_settings_format_version);
 	put_u16(bytes, 10U, new_classic_settings_file_bytes);
 	bytes[12U] = static_cast<std::byte>(settings.options.bgm_mode);
@@ -290,6 +338,9 @@ std::expected<
 	bytes[20U] = static_cast<std::byte>(settings.music_volume_percent);
 	bytes[21U] = static_cast<std::byte>(settings.effect_volume_percent);
 	bytes[22U] = static_cast<std::byte>(settings.mute_when_unfocused ? 1U : 0U);
+	bytes[23U] = static_cast<std::byte>(settings.netplay.connection);
+	bytes[24U] = static_cast<std::byte>(settings.netplay.relay_only ? 1U : 0U);
+	put_u16(bytes, 25U, settings.netplay.direct_udp_port);
 	constexpr auto digest_offset = new_classic_settings_file_bytes - 4U;
 	put_u32(bytes, digest_offset, fnv1a32(
 		std::span<const std::byte>(bytes).first(digest_offset)

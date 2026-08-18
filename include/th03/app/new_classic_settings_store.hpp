@@ -16,6 +16,7 @@ enum class NewClassicSettingsStoreDisposition : std::uint8_t {
 	loaded,
 	upgraded_v1,
 	upgraded_v2,
+	upgraded_v3,
 	migrated_classic,
 	created_defaults,
 	recovered_defaults,

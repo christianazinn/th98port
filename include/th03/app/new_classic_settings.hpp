@@ -11,9 +11,10 @@
 
 namespace th03::app {
 
-inline constexpr std::size_t new_classic_settings_file_bytes = 28U;
+inline constexpr std::size_t new_classic_settings_file_bytes = 32U;
+inline constexpr std::size_t new_classic_settings_v2_v3_file_bytes = 28U;
 inline constexpr std::size_t new_classic_settings_v1_file_bytes = 24U;
-inline constexpr std::uint16_t new_classic_settings_format_version = 3U;
+inline constexpr std::uint16_t new_classic_settings_format_version = 4U;
 
 enum class NewClassicWindowMode : std::uint8_t {
 	windowed,
@@ -49,6 +50,23 @@ struct NewClassicWindowPresentation final {
 	) = default;
 };
 
+enum class NewClassicNetplayConnection : std::uint8_t {
+	online_service,
+	direct_udp,
+};
+
+struct NewClassicNetplayPreferences final {
+	NewClassicNetplayConnection connection =
+		NewClassicNetplayConnection::online_service;
+	bool relay_only = false;
+	std::uint16_t direct_udp_port = 31'415U;
+
+	friend constexpr bool operator==(
+		const NewClassicNetplayPreferences &,
+		const NewClassicNetplayPreferences &
+	) = default;
+};
+
 struct NewClassicSettings final {
 	ClassicConfigOptions options{};
 	std::uint8_t master_volume_percent = 100U;
@@ -56,6 +74,7 @@ struct NewClassicSettings final {
 	std::uint8_t effect_volume_percent = 100U;
 	bool mute_when_unfocused = false;
 	NewClassicWindowPresentation window{};
+	NewClassicNetplayPreferences netplay{};
 
 	friend constexpr bool operator==(
 		const NewClassicSettings &,
@@ -79,6 +98,9 @@ enum class NewClassicSettingsErrorCode : std::uint8_t {
 	invalid_window_scale,
 	invalid_aspect_ratio,
 	invalid_filtering,
+	invalid_netplay_connection,
+	invalid_netplay_relay_policy,
+	invalid_netplay_port,
 	reserved_nonzero,
 	digest,
 };

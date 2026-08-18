@@ -232,6 +232,11 @@ void test_settings_back_and_application_quit()
 	const auto adjusted = room.consume({.ui = {.right = true}});
 	expect(adjusted.surface_changed,
 		"Network Settings adjusts the direct host port locally");
+	expect(room.preferences() == NewClassicNetplayPreferences{
+		.connection = NewClassicNetplayConnection::direct_udp,
+		.relay_only = false,
+		.direct_udp_port = 31'416U,
+	}, "Network Settings exposes its complete persistent preference value");
 	release(room);
 	static_cast<void>(room.consume({.ui = {.cancel = true}}));
 	release(room);
@@ -250,7 +255,16 @@ void test_settings_back_and_application_quit()
 void test_quick_match_intent()
 {
 	using namespace th03::app;
-	NewClassicNetplayRoom room(assets_fixture());
+	const NewClassicNetplayPreferences stored{
+		.connection = NewClassicNetplayConnection::direct_udp,
+		.relay_only = true,
+		.direct_udp_port = 42'424U,
+	};
+	NewClassicNetplayRoom room(
+		assets_fixture(), NewClassicLanguageAssetProfile::english, 1U, stored
+	);
+	expect(room.valid() && room.preferences() == stored,
+		"room frontend starts from every persisted network preference");
 	release(room);
 	static_cast<void>(room.consume({.ui = {.confirm = true}}));
 	release(room);
@@ -274,6 +288,8 @@ void test_quick_match_intent()
 		intent->join_endpoint.empty() && intent->character == 2U &&
 		intent->palette == 2U && intent->rank == 2U,
 		"Quick Match publishes one server-assigned online launch intent");
+	expect(room.preferences() == stored,
+		"Quick Match does not overwrite the player's Direct UDP preference");
 }
 
 void test_missing_assets_fail_closed()
@@ -282,6 +298,12 @@ void test_missing_assets_fail_closed()
 	expect(!room.valid() && room.status() ==
 		th03::app::NewClassicNetplayRoomStatus::back,
 		"room UI has no host-font fallback when authenticated art is absent");
+	th03::app::NewClassicNetplayRoom invalid(
+		assets_fixture(), th03::app::NewClassicLanguageAssetProfile::english, 1U,
+		{.direct_udp_port = 80U}
+	);
+	expect(!invalid.valid(),
+		"room UI rejects preferences outside the persisted port domain");
 }
 
 void test_waiting_and_ready_lobby_views()

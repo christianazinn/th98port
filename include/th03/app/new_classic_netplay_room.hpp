@@ -9,6 +9,7 @@
 #include "th03/app/new_classic_assets.hpp"
 #include "th03/app/new_classic_frontend.hpp"
 #include "th03/app/new_classic_netplay_match_contract.hpp"
+#include "th03/app/new_classic_settings.hpp"
 
 namespace th03::app {
 
@@ -63,7 +64,8 @@ public:
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 		NewClassicLanguageAssetProfile language =
 			NewClassicLanguageAssetProfile::english,
-		std::uint8_t initial_rank = 1U
+		std::uint8_t initial_rank = 1U,
+		NewClassicNetplayPreferences preferences = {}
 	);
 
 	[[nodiscard]] bool valid() const noexcept;
@@ -74,6 +76,7 @@ public:
 	[[nodiscard]] NewClassicNetplayRoomStatus status() const noexcept;
 	[[nodiscard]] std::optional<NewClassicNetplayRoomLaunch>
 		take_launch() noexcept;
+	[[nodiscard]] NewClassicNetplayPreferences preferences() const noexcept;
 
 private:
 	enum class Screen : std::uint8_t {

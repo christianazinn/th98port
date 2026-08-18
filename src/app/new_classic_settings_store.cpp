@@ -289,19 +289,35 @@ std::expected<
 		}
 		auto decoded = decode_new_classic_settings(*bytes);
 		if(decoded) {
-			const bool legacy_v2 = std::to_integer<std::uint8_t>((*bytes)[7U]) ==
-				static_cast<std::uint8_t>('2');
-			if(legacy_v2) {
-				if(auto committed = commit_new_classic_settings_store(path, *decoded);
-					!committed) {
-					return std::unexpected(std::move(committed.error()));
-				}
+			return NewClassicSettingsStoreLoadResult{
+				.settings = *decoded,
+				.disposition = NewClassicSettingsStoreDisposition::loaded,
+			};
+		}
+		malformed = decoded.error();
+	} else if(size == new_classic_settings_v2_v3_file_bytes) {
+		auto bytes = read_exact<new_classic_settings_v2_v3_file_bytes>(
+			path,
+			NewClassicSettingsStoreErrorCode::source_open,
+			NewClassicSettingsStoreErrorCode::source_read
+		);
+		if(!bytes) {
+			return std::unexpected(std::move(bytes.error()));
+		}
+		auto decoded = decode_new_classic_settings(*bytes);
+		if(decoded) {
+			if(auto committed = commit_new_classic_settings_store(path, *decoded);
+				!committed) {
+				return std::unexpected(std::move(committed.error()));
 			}
+			const bool legacy_v2 =
+				std::to_integer<std::uint8_t>((*bytes)[7U]) ==
+				static_cast<std::uint8_t>('2');
 			return NewClassicSettingsStoreLoadResult{
 				.settings = *decoded,
 				.disposition = legacy_v2 ?
 					NewClassicSettingsStoreDisposition::upgraded_v2 :
-					NewClassicSettingsStoreDisposition::loaded,
+					NewClassicSettingsStoreDisposition::upgraded_v3,
 			};
 		}
 		malformed = decoded.error();

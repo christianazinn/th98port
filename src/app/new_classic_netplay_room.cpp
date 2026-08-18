@@ -81,13 +81,22 @@ constexpr std::array rank_messages{
 NewClassicNetplayRoom::NewClassicNetplayRoom(
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 	NewClassicLanguageAssetProfile language,
-	std::uint8_t initial_rank
+	std::uint8_t initial_rank,
+	NewClassicNetplayPreferences preferences
 ) :
 	patch_assets_(std::move(patch_assets)),
 	language_(language),
+	host_port_(preferences.direct_udp_port),
+	transport_(preferences.connection ==
+		NewClassicNetplayConnection::online_service ?
+			NewClassicNetplayRoomTransport::online_service :
+			NewClassicNetplayRoomTransport::direct_udp),
+	relay_only_(preferences.relay_only),
 	rank_(initial_rank)
 {
-	if(rank_ > 3U || !patch_assets_ || !patch_surface_.reset(
+	if(rank_ > 3U || !validate_new_classic_settings(NewClassicSettings{
+		.netplay = preferences,
+	}) || !patch_assets_ || !patch_surface_.reset(
 		patch_assets_->replay_list_background
 	) || !draw()) {
 		status_ = NewClassicNetplayRoomStatus::back;
@@ -388,9 +397,6 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 					NewClassicNetplayRoomLaunchMode::quick_match :
 					(selection_ == 1U ? NewClassicNetplayRoomLaunchMode::host :
 						NewClassicNetplayRoomLaunchMode::join);
-				if(pending_mode_ == NewClassicNetplayRoomLaunchMode::quick_match) {
-					transport_ = NewClassicNetplayRoomTransport::online_service;
-				}
 				palette_ = pending_mode_ ==
 					NewClassicNetplayRoomLaunchMode::join ? 2U : 1U;
 				screen_ = Screen::player_setup;
@@ -548,6 +554,18 @@ std::optional<NewClassicNetplayRoomLaunch>
 NewClassicNetplayRoom::take_launch() noexcept
 {
 	return std::exchange(launch_, std::nullopt);
+}
+
+NewClassicNetplayPreferences NewClassicNetplayRoom::preferences() const noexcept
+{
+	return {
+		.connection = transport_ ==
+			NewClassicNetplayRoomTransport::online_service ?
+				NewClassicNetplayConnection::online_service :
+				NewClassicNetplayConnection::direct_udp,
+		.relay_only = relay_only_,
+		.direct_udp_port = host_port_,
+	};
 }
 
 NewClassicNetplayLobbyView::NewClassicNetplayLobbyView(
