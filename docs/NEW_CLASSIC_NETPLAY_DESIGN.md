@@ -696,7 +696,7 @@ does not silently broaden leaderboard acceptance.
    implemented, transactionally restored, and measured. The fixed-capacity
    presenter state is field-wise and measured, and `T3RBM001` composes the
    complete local process image transactionally. Peer SHA-256 and the local
-   frame-ring coordinator remain open. See `T3RBK001.md`, `T3RBV001.md`,
+   frame-ring coordinator are integrated. See `T3RBK001.md`, `T3RBV001.md`,
    `T3RBP001.md`, and `T3RBM001.md`.
 3. Add a local rollback owner and one-frame-every-frame sync test. Implemented
    as the synchronous `T3RBC001` proof: 48 consecutive corrected frames match
@@ -737,7 +737,8 @@ an explicit N1 gate rather than a reason to alter the rollback image.
    mutually acknowledged 120-frame gameplay digests are frozen for the direct
    preview. The corrected journal now feeds the existing memory-only V13
    recorder with source waits, round/process controls, and local slowdown
-   evidence. Explicit round/terminal network digests remain open.
+   evidence. Confirmed phase, round, Pause, and terminal boundaries each own an
+   acknowledged typed proof before lifecycle advancement.
 6. Keep one backend. Complete: the C++ coordinator is frozen and no unused GGRS
    path or Rust build dependency exists.
 
@@ -769,10 +770,16 @@ fixed ring so an old delayed suffix cannot cross a source boundary.
 
 Still open:
 
-1. Add a hermetic two-process loopback acceptance fixture that does not create
-   an unexpected public firewall listener.
-2. Prove Windows/Linux/macOS packet and transcript interoperability over real
+1. Prove Windows/Linux/macOS packet and transcript interoperability over real
    direct ICE and relayed paths.
+
+The local process-isolation gate is complete. Two independently launched native
+workers exchange the production lobby, gameplay-input, periodic-proof,
+Pause/Resume, Forfeit, terminal-proof, and disconnect wires through inherited
+stdin/stdout pipes. The worker links only `th03_app_netplay`; it has no socket
+backend and cannot create a listener or firewall prompt. The exact accepted
+transcript SHA-256 is
+`79AA0569321FD587A47DBBFF0319DE284F1D6674D41BA56D1E32D0EF57F5A290`.
 
 The completed local report now carries the latest bounded WebRTC round-trip
 sample alongside rollback, prediction, wait, and missed-deadline counters.

@@ -28,6 +28,19 @@ sides then prove the complete initial simulation. Both machines must use the
 same executable revision and authenticated game data; they no longer duplicate
 each other's character or room-rule arguments.
 
+## Socket-free automated acceptance
+
+`th03-netplay-two-process-tests` launches separate host and join native worker
+processes and relays only inherited stdin/stdout bytes. The workers link the
+production platform-neutral netplay library but no UDP or RTC adapter, so this
+test cannot bind a port or trigger a firewall prompt. It covers the exact lobby,
+input, periodic proof/ack, Pause/Resume, Forfeit/ack, terminal proof/ack, and
+disconnect wires. Its accepted transcript SHA-256 is
+`79AA0569321FD587A47DBBFF0319DE284F1D6674D41BA56D1E32D0EF57F5A290`.
+
+This is a local process/protocol gate, not evidence of ICE or TURN behavior.
+Real Windows/Linux direct and relayed acceptance remains a private-beta gate.
+
 ## Room-code setup
 
 The room service is deliberately not deployed from this repository. A test

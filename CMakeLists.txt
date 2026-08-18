@@ -1603,6 +1603,25 @@ if(BUILD_TESTING)
 		COMMAND th03-app-new-classic-netplay-input-delay-tests
 	)
 
+	add_executable(th03-netplay-process-peer
+		tests/netplay_process_peer.cpp
+	)
+	target_link_libraries(
+		th03-netplay-process-peer PRIVATE th03_app_netplay
+	)
+	th03_set_warnings(th03-netplay-process-peer)
+	if(Python3_Interpreter_FOUND)
+		add_test(
+			NAME th03-netplay-two-process-tests
+			COMMAND ${Python3_EXECUTABLE}
+				${CMAKE_CURRENT_SOURCE_DIR}/tests/test_netplay_two_process.py
+				$<TARGET_FILE:th03-netplay-process-peer>
+		)
+		set_tests_properties(
+			th03-netplay-two-process-tests PROPERTIES TIMEOUT 30
+		)
+	endif()
+
 	add_executable(th03-platform-udp-socket-tests
 		tests/test_platform_udp_socket.cpp
 	)
