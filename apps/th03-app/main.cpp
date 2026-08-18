@@ -1704,7 +1704,8 @@ struct RtcNetplayRequest final {
 	std::string user_id{};
 	std::string token{};
 	std::string room_code{};
-	std::vector<std::string> ice_servers{};
+	std::vector<th03::platform::RtcIceServer> ice_servers{};
+	bool relay_only = false;
 };
 
 [[nodiscard]] bool direct_netplay_lobby_quit_requested(
@@ -1949,6 +1950,7 @@ negotiate_rtc_netplay_lobby(
 		.token = rtc_request.token,
 		.room_code = rtc_request.room_code,
 		.ice_servers = rtc_request.ice_servers,
+		.relay_only = rtc_request.relay_only,
 	});
 	if(!opened) {
 		return std::unexpected(fail_netplay(
@@ -5850,6 +5852,7 @@ product_rtc_netplay_request(
 		.room_code = launch.mode ==
 			th03::app::NewClassicNetplayRoomLaunchMode::join ?
 				launch.join_endpoint : std::string{},
+		.relay_only = launch.relay_only,
 	};
 	if(const auto ice = environment_value(netplay_ice_environment); ice) {
 		std::size_t start = 0U;
@@ -5864,7 +5867,7 @@ product_rtc_netplay_request(
 					"netplay-room-account", "invalid-ice-servers"
 				));
 			}
-			result.ice_servers.push_back(value);
+			result.ice_servers.push_back({.url = value});
 			if(separator == std::string::npos) {
 				break;
 			}

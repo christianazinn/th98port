@@ -57,11 +57,19 @@ TH03_ONLINE_TOKEN=<token returned by POST /api/th03/users>
 Setting both user/token variables on Windows remains an explicit developer
 override. Supplying only one, or malformed values, fails closed.
 
-`TH03_NETPLAY_ICE_SERVERS` is an optional semicolon-delimited list of
-`stun:`, `turn:`, or `turns:` URLs. It can remain unset for a same-tailnet test
-where host ICE candidates are mutually reachable. TURN credentials are not
-yet issued by the service, so Internet paths that cannot connect host
-candidates remain an explicit acceptance gate.
+`TH03_NETPLAY_ICE_SERVERS` is an optional developer-only semicolon-delimited
+list of unauthenticated `stun:`, `turn:`, or `turns:` URLs. It can remain unset
+for a same-tailnet test where host ICE candidates are mutually reachable. A
+configured room service supplies bounded short-lived TURN URLs, username, and
+credential in its authenticated `T3ROOM2` welcome; these values remain outside
+replays, deterministic state, settings, and diagnostics.
+
+`Network Settings -> Connection` selects `Automatic` or `Relay Only` while the
+Room Code Service is active. Automatic attempts direct peer-to-peer ICE and
+then the supplied relay. Relay Only prevents direct candidates and fails
+closed if the service did not issue credentialed TURN. It may add latency but
+does not reveal a direct peer address. The Direct UDP fallback replaces this
+row with the host-port editor and does not use TURN.
 
 Open `VS Start` -> `Online Match` on both machines. The creator selects
 `Create Room`; the assigned code appears on its waiting screen. The other

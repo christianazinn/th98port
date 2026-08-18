@@ -28,6 +28,7 @@ namespace {
 constexpr std::size_t maximum_data_channel_message_bytes = 16U * 1024U;
 constexpr std::size_t maximum_received_messages = 256U;
 constexpr std::size_t maximum_received_bytes = 64U * 1024U;
+constexpr std::size_t maximum_ice_servers = 16U;
 constexpr std::chrono::milliseconds websocket_timeout{15'000};
 constexpr std::chrono::milliseconds websocket_ping_interval{15'000};
 
@@ -158,18 +159,31 @@ struct ParsedOrigin final {
 }
 
 [[nodiscard]] std::optional<rtc::IceServer> ice_server(
-	std::string_view text
+	const RtcIceServer &server
 )
 {
-	if(text.empty() || text.size() > 1024U ||
-		text.find_first_of("\r\n") != std::string_view::npos ||
-		text.find('\0') != std::string_view::npos ||
-		!(text.starts_with("stun:") || text.starts_with("turn:") ||
-			text.starts_with("turns:"))) {
+	if(server.url.empty() || server.url.size() > 1024U ||
+		server.url.find_first_of("\r\n") != std::string_view::npos ||
+		server.url.find('\0') != std::string_view::npos ||
+		!(server.url.starts_with("stun:") || server.url.starts_with("turn:") ||
+			server.url.starts_with("turns:")) ||
+		server.username.size() > 512U || server.credential.size() > 512U) {
 		return std::nullopt;
 	}
 	try {
-		return rtc::IceServer(std::string(text));
+		rtc::IceServer parsed(server.url);
+		if(parsed.type == rtc::IceServer::Type::Stun) {
+			if(!server.username.empty() || !server.credential.empty()) {
+				return std::nullopt;
+			}
+		} else {
+			if(server.username.empty() != server.credential.empty()) {
+				return std::nullopt;
+			}
+			parsed.username = server.username;
+			parsed.password = server.credential;
+		}
+		return parsed;
 	} catch(...) {
 		return std::nullopt;
 	}
@@ -583,9 +597,29 @@ struct RtcRoom::Impl final {
 			const auto expected_player = core->config.mode == RtcRoomMode::create ?
 				1U : 2U;
 			if(core->welcomed || welcome->player != expected_player ||
+				core->config.ice_servers.size() + welcome->ice_servers.size() >
+					maximum_ice_servers ||
 				(core->config.mode == RtcRoomMode::join &&
 				 welcome->code != core->config.room_code)) {
 				core->failure = error(RtcRoomErrorCode::signaling_invalid);
+				core->state = RtcRoomState::failed;
+				return;
+			}
+			for(const auto &server : welcome->ice_servers) {
+				core->config.ice_servers.push_back({
+					.url = server.url,
+					.username = server.username,
+					.credential = server.credential,
+				});
+			}
+			if(core->config.relay_only && !std::ranges::any_of(
+				core->config.ice_servers, [](const RtcIceServer &server) {
+					return (server.url.starts_with("turn:") ||
+						server.url.starts_with("turns:")) &&
+						!server.username.empty() && !server.credential.empty();
+				}
+			)) {
+				core->failure = error(RtcRoomErrorCode::invalid_ice_server);
 				core->state = RtcRoomState::failed;
 				return;
 			}
@@ -643,6 +677,9 @@ struct RtcRoom::Impl final {
 		);
 		if(!authentication) {
 			return std::unexpected(authentication.error());
+		}
+		if(config.ice_servers.size() > maximum_ice_servers) {
+			return std::unexpected(error(RtcRoomErrorCode::invalid_ice_server));
 		}
 		for(const auto &server : config.ice_servers) {
 			if(!ice_server(server)) {

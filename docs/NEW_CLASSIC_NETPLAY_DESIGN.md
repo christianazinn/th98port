@@ -2,8 +2,10 @@
 
 Status: **local rollback, the direct-UDP/Tailscale fallback, the product room
 frontend, the private-room service, and the pinned native WebRTC transport are
-implemented. Production Cloudflare/TURN configuration and real cross-machine
-WebRTC acceptance remain deployment gates.**
+implemented. The local service and native adapter now own bounded short-lived
+TURN credentials and Automatic/Relay Only policy; production Cloudflare
+configuration and real cross-machine WebRTC acceptance remain deployment
+gates.**
 
 Proposal revision date: 2026-08-17
 
@@ -454,13 +456,20 @@ gameplay channel. Once the peer connection's reliable control Data Channel is
 open, character selection, pause, result, and close messages move peer-to-peer;
 the Durable Object is not their per-frame intermediary.
 
-Suggested routes are:
+The implemented routes are:
 
 ```text
 POST /api/th03/netplay/rooms
+GET  /api/th03/netplay/rooms/new          (create + WebSocket upgrade)
 GET  /api/th03/netplay/rooms/{code}       (WebSocket upgrade)
-POST /api/th03/netplay/turn-credentials
 ```
+
+`T3ROOM2` includes the sanitized short-lived STUN/TURN configuration in the
+authenticated `welcome` message. Issuing it at the room upgrade avoids a
+second bearer-authenticated HTTP client in the native adapter and binds the
+credentials to the same short-lived room lifecycle. The Worker alone calls the
+provider credential API; its account token is never forwarded to the Durable
+Object or either peer.
 
 Room codes are lookup handles, not authorization secrets. The existing bearer
 credential authenticates the socket. All descriptions, candidates, control
@@ -763,8 +772,7 @@ Still open:
 
 1. Add a hermetic two-process loopback acceptance fixture that does not create
    an unexpected public firewall listener.
-2. Issue short-lived TURN credentials, expose Relay Only policy, and surface
-   network metrics in the product UI.
+2. Surface network metrics in the product UI.
 3. Prove Windows/Linux/macOS packet and transcript interoperability over real
    direct ICE and relayed paths.
 
@@ -797,10 +805,13 @@ Still open:
 
 1. Add the room Durable Object and signaling routes beside the existing online
    service without deploying until reviewed. The local service now has a
-   fail-closed `T3ROOM1` two-seat, ten-minute Durable Object plus authenticated
+   fail-closed `T3ROOM2` two-seat, ten-minute Durable Object plus authenticated
    create/connect routes and the native RTC/WebSocket adapter. Production
    bindings remain intentionally absent.
-2. Add short-lived TURN credential issuance and operational redaction.
+2. Short-lived TURN credential issuance and operational redaction are
+   implemented locally. Automatic tries direct ICE before relay; Relay Only
+   fails closed unless the authenticated welcome contains credentialed TURN.
+   Real provider resources and secrets remain deployment inputs.
 3. Measure real direct and relayed RTT/jitter/rollback distributions.
 4. Run a bounded private beta and tune delay/stall/disconnect policy.
 

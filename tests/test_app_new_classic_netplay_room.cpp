@@ -124,6 +124,7 @@ void test_host_intent_is_confirmation_gated()
 	expect(launched.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->mode == NewClassicNetplayRoomLaunchMode::host &&
 		intent->transport == NewClassicNetplayRoomTransport::online_service &&
+		!intent->relay_only &&
 		intent->host_port == 31'415U && intent->join_endpoint.empty() &&
 		intent->character == 2U && intent->palette == 2U && intent->rank == 2U,
 		"fresh confirmation publishes the typed default-port host intent");
@@ -163,9 +164,48 @@ void test_join_entry_and_validation()
 	expect(connected.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->mode == NewClassicNetplayRoomLaunchMode::join &&
 		intent->transport == NewClassicNetplayRoomTransport::online_service &&
+		!intent->relay_only &&
 		intent->join_endpoint == endpoint && intent->character == 1U &&
 		intent->palette == 2U,
 		"validated room code becomes one typed join intent");
+}
+
+void test_relay_only_launch_intent()
+{
+	using namespace th03::app;
+	NewClassicNetplayRoom room(assets_fixture());
+	release(room);
+	for(std::uint8_t step = 0U; step < 2U; ++step) {
+		static_cast<void>(room.consume({.ui = {.down = true}}));
+		release(room);
+	}
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.down = true}}));
+	release(room);
+	expect(room.consume({.ui = {.right = true}}).surface_changed,
+		"Online Connection toggles to Relay Only");
+	release(room);
+	static_cast<void>(room.consume({.ui = {.cancel = true}}));
+	release(room);
+	for(std::uint8_t step = 0U; step < 2U; ++step) {
+		static_cast<void>(room.consume({.ui = {.up = true}}));
+		release(room);
+	}
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	release(room);
+	for(std::uint8_t step = 0U; step < 3U; ++step) {
+		static_cast<void>(room.consume({.ui = {.down = true}}));
+		release(room);
+	}
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	release(room);
+	const auto launched = room.consume({.ui = {.confirm = true}});
+	const auto intent = room.take_launch();
+	expect(launched.status == NewClassicNetplayRoomStatus::launch_requested &&
+		intent && intent->transport ==
+			NewClassicNetplayRoomTransport::online_service && intent->relay_only,
+		"Relay Only survives confirmation into the typed network intent");
 }
 
 void test_settings_back_and_application_quit()
@@ -259,6 +299,7 @@ int main()
 {
 	test_host_intent_is_confirmation_gated();
 	test_join_entry_and_validation();
+	test_relay_only_launch_intent();
 	test_settings_back_and_application_quit();
 	test_missing_assets_fail_closed();
 	test_waiting_and_ready_lobby_views();

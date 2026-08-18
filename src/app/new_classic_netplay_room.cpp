@@ -227,10 +227,25 @@ bool NewClassicNetplayRoom::draw() noexcept
 					NewClassicMessageId::netplay_room_direct_udp),
 				detail_color) ||
 			!font.put(raster, label_left, 192,
-				messages.text(NewClassicMessageId::netplay_room_host_port),
+				messages.text(transport_ ==
+					NewClassicNetplayRoomTransport::online_service ?
+						NewClassicMessageId::netplay_room_route :
+						NewClassicMessageId::netplay_room_host_port),
 				selection_ == 1U ? selected_color : normal_color) ||
 			!font.put_right(raster, value_right, 192,
-				decimal(host_port_, storage), selected_color) ||
+				transport_ == NewClassicNetplayRoomTransport::online_service ?
+					messages.text(relay_only_ ?
+						NewClassicMessageId::netplay_room_relay_only :
+						NewClassicMessageId::netplay_room_automatic) :
+					decimal(host_port_, storage), detail_color) ||
+			!font.put_centered(raster, center_x, 224,
+				messages.text(transport_ ==
+					NewClassicNetplayRoomTransport::online_service ?
+						(relay_only_ ?
+							NewClassicMessageId::netplay_room_relay_hint :
+							NewClassicMessageId::netplay_room_automatic_hint) :
+						NewClassicMessageId::netplay_room_socket_warning),
+				detail_color) ||
 			!font.put_centered(raster, center_x, 256,
 				messages.text(NewClassicMessageId::netplay_room_return),
 				selection_ == 2U ? selected_color : normal_color)) {
@@ -339,6 +354,8 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 					.character = character_,
 					.palette = palette_,
 					.rank = rank_,
+					.relay_only = transport_ ==
+						NewClassicNetplayRoomTransport::online_service && relay_only_,
 				};
 				status_ = NewClassicNetplayRoomStatus::launch_requested;
 				return {.status = status_};
@@ -446,6 +463,8 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 				.character = character_,
 				.palette = palette_,
 				.rank = rank_,
+				.relay_only = transport_ ==
+					NewClassicNetplayRoomTransport::online_service && relay_only_,
 			};
 			status_ = NewClassicNetplayRoomStatus::launch_requested;
 			return {.status = status_};
@@ -467,8 +486,11 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 			);
 			changed = true;
 			require_release();
-		} else if(selection_ == 1U && (input.ui.left || input.ui.right)) {
-			if(input.ui.left) {
+		} else if(selection_ == 1U && (input.ui.left || input.ui.right ||
+			input.ui.confirm)) {
+			if(transport_ == NewClassicNetplayRoomTransport::online_service) {
+				relay_only_ = !relay_only_;
+			} else if(input.ui.left) {
 				host_port_ = host_port_ > 1'024U ?
 					static_cast<std::uint16_t>(host_port_ - 1U) : 65'535U;
 			} else {

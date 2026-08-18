@@ -6,11 +6,12 @@
 #include <string>
 #include <string_view>
 #include <variant>
+#include <vector>
 
 namespace th03::app {
 
 inline constexpr std::string_view new_classic_netplay_room_protocol =
-	"T3ROOM1";
+	"T3ROOM2";
 inline constexpr std::size_t new_classic_netplay_room_signal_max_bytes =
 	16U * 1024U;
 inline constexpr std::size_t new_classic_netplay_room_payload_max_bytes =
@@ -35,11 +36,23 @@ struct NewClassicNetplayRoomSignal final {
 	) = default;
 };
 
+struct NewClassicNetplayIceServer final {
+	std::string url{};
+	std::string username{};
+	std::string credential{};
+
+	friend bool operator==(
+		const NewClassicNetplayIceServer &,
+		const NewClassicNetplayIceServer &
+	) = default;
+};
+
 struct NewClassicNetplayRoomWelcome final {
 	std::string code{};
 	std::string room_id{};
 	std::uint8_t player = 0U;
 	std::uint64_t expires_at_unix_ms = 0U;
+	std::vector<NewClassicNetplayIceServer> ice_servers{};
 
 	friend bool operator==(
 		const NewClassicNetplayRoomWelcome &,
@@ -81,6 +94,7 @@ enum class NewClassicNetplayRoomMessageErrorCode : std::uint8_t {
 	invalid_room,
 	invalid_player,
 	invalid_expiration,
+	invalid_ice_server,
 };
 
 struct NewClassicNetplayRoomMessageError final {

@@ -44,24 +44,41 @@ int main()
 		"signal round trip");
 
 	const auto welcome = decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM1\",\"type\":\"welcome\","
+		"{\"protocol\":\"T3ROOM2\",\"type\":\"welcome\","
 		"\"code\":\"2ABCDE\","
 		"\"roomId\":\"01234567-89ab-cdef-0123-456789abcdef\","
-		"\"player\":1,\"expiresAtUnixMs\":9007199254740991}"
+		"\"player\":1,\"expiresAtUnixMs\":9007199254740991,"
+		"\"stunUrls\":\"stun:stun.example.test:3478\","
+		"\"turnUrls\":\"turn:turn.example.test:3478?transport=udp;"
+		"turns:turn.example.test:5349?transport=tcp\","
+		"\"turnUsername\":\"short-user\","
+		"\"turnCredential\":\"short-secret\"}"
 	);
 	check(welcome.has_value(), "welcome decodes");
 	check(welcome && std::get<NewClassicNetplayRoomWelcome>(*welcome).code ==
 		"2ABCDE", "welcome room code");
 	check(welcome && std::get<NewClassicNetplayRoomWelcome>(*welcome).player ==
 		1U, "welcome seat");
+	check(welcome && std::get<NewClassicNetplayRoomWelcome>(*welcome).
+		ice_servers.size() == 3U, "welcome ICE server count");
+	check(welcome && std::get<NewClassicNetplayRoomWelcome>(*welcome).
+		ice_servers[0] == NewClassicNetplayIceServer{
+			.url = "stun:stun.example.test:3478",
+		}, "welcome STUN server");
+	check(welcome && std::get<NewClassicNetplayRoomWelcome>(*welcome).
+		ice_servers[1] == NewClassicNetplayIceServer{
+			.url = "turn:turn.example.test:3478?transport=udp",
+			.username = "short-user",
+			.credential = "short-secret",
+		}, "welcome TURN credentials");
 
 	const auto paired = decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM1\",\"type\":\"paired\"}"
+		"{\"protocol\":\"T3ROOM2\",\"type\":\"paired\"}"
 	);
 	check(paired && std::holds_alternative<NewClassicNetplayRoomPaired>(*paired),
 		"paired decodes");
 	const auto departed = decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM1\",\"type\":\"peer-left\",\"player\":2}"
+		"{\"protocol\":\"T3ROOM2\",\"type\":\"peer-left\",\"player\":2}"
 	);
 	check(departed && std::get<NewClassicNetplayRoomPeerLeft>(*departed).player ==
 		2U, "peer-left decodes");
@@ -70,22 +87,30 @@ int main()
 	check(!valid_new_classic_netplay_room_code("1ABCDE"), "rejects one");
 	check(!valid_new_classic_netplay_room_code("OABCDE"), "rejects O");
 	check(!decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM1\",\"type\":\"paired\",\"extra\":0}"
+		"{\"protocol\":\"T3ROOM2\",\"type\":\"paired\",\"extra\":0}"
 	), "rejects extensions");
 	check(!decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM2\",\"type\":\"paired\"}"
+		"{\"protocol\":\"T3ROOM1\",\"type\":\"paired\"}"
 	), "rejects protocol mismatch");
 	check(!decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM1\",\"type\":\"ice\","
+		"{\"protocol\":\"T3ROOM2\",\"type\":\"ice\","
 		"\"sequence\":4294967296,\"payload\":\"x\"}"
 	), "rejects sequence overflow");
 	check(!decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM1\",\"type\":\"paired\","
-		"\"protocol\":\"T3ROOM1\"}"
+		"{\"protocol\":\"T3ROOM2\",\"type\":\"paired\","
+		"\"protocol\":\"T3ROOM2\"}"
 	), "rejects duplicate keys");
 	check(!decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM1\",\"type\":\"paired\"} trailing"
+		"{\"protocol\":\"T3ROOM2\",\"type\":\"paired\"} trailing"
 	), "rejects trailing bytes");
+	check(!decode_new_classic_netplay_room_message(
+		"{\"protocol\":\"T3ROOM2\",\"type\":\"welcome\","
+		"\"code\":\"2ABCDE\","
+		"\"roomId\":\"01234567-89ab-cdef-0123-456789abcdef\","
+		"\"player\":1,\"expiresAtUnixMs\":1,\"stunUrls\":\"\","
+		"\"turnUrls\":\"turn:turn.example.test:3478\","
+		"\"turnUsername\":\"user\",\"turnCredential\":\"\"}"
+	), "rejects incomplete TURN credentials");
 	check(!decode_new_classic_netplay_room_message(
 		std::string(new_classic_netplay_room_signal_max_bytes + 1U, 'x')
 	), "rejects oversized wire");

@@ -57,13 +57,19 @@ struct RtcRoomError final {
 	RtcRoomErrorCode code = RtcRoomErrorCode::websocket_failed;
 };
 
+struct RtcIceServer final {
+	std::string url{};
+	std::string username{};
+	std::string credential{};
+};
+
 struct RtcRoomConfig final {
 	RtcRoomMode mode = RtcRoomMode::create;
 	std::string origin{};
 	std::string user_id{};
 	std::string token{};
 	std::string room_code{};
-	std::vector<std::string> ice_servers{};
+	std::vector<RtcIceServer> ice_servers{};
 	bool relay_only = false;
 };
 
@@ -91,8 +97,9 @@ rtc_room_websocket_url(
 
 // The token travels in a WebSocket subprotocol because libdatachannel's
 // WebSocket client deliberately exposes no arbitrary-header surface. The
-// Worker selects only T3ROOM1 and strips the credential before entering the
-// Durable Object.
+// Worker selects only T3ROOM2 and strips the account credential before entering
+// the Durable Object. Short-lived TURN credentials arrive inside the bounded
+// authenticated welcome and never enter deterministic application state.
 [[nodiscard]] std::expected<std::string, RtcRoomError>
 rtc_room_authentication_protocol(
 	std::string_view user_id,
