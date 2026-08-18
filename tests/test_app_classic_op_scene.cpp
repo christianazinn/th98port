@@ -863,6 +863,15 @@ void local_original_gate(const std::filesystem::path &content_root)
 				th03::present::tram_black,
 		"local MIKOFT renders the Anniversary Classic Quit row"
 	);
+	auto retained = ClassicOpTitleMenuScene::return_from_other_screen(
+		scene.resident(), *closure, {}, false
+	);
+	expect(retained.has_value(),
+		"local fullscreen child return reconstructs the retained OP title");
+	if(retained) {
+		expect(!(*retained)->take_audio_command(),
+			"retained OP child return does not stop, load, or restart OP.M");
+	}
 }
 
 } // namespace

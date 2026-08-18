@@ -636,6 +636,31 @@ NewClassicNetplayRoom::take_launch() noexcept
 	return std::exchange(launch_, std::nullopt);
 }
 
+bool NewClassicNetplayRoom::resume_after_launch() noexcept
+{
+	if(status_ != NewClassicNetplayRoomStatus::launch_requested || launch_) {
+		return false;
+	}
+	status_ = NewClassicNetplayRoomStatus::running;
+	endpoint_invalid_ = false;
+	switch(pending_mode_) {
+	case NewClassicNetplayRoomLaunchMode::quick_match:
+		screen_ = Screen::player_setup;
+		selection_ = 3U;
+		break;
+	case NewClassicNetplayRoomLaunchMode::host:
+		screen_ = Screen::host_confirmation;
+		selection_ = 0U;
+		break;
+	case NewClassicNetplayRoomLaunchMode::join:
+		screen_ = Screen::join_entry;
+		selection_ = 0U;
+		break;
+	}
+	require_release();
+	return draw();
+}
+
 NewClassicNetplayPreferences NewClassicNetplayRoom::preferences() const noexcept
 {
 	return {

@@ -433,6 +433,7 @@ void test_fresh_resident_state()
 struct FakeRunnerBackend final {
 	std::size_t consume_count = 0U;
 	std::size_t compose_count = 0U;
+	std::size_t netplay_resume_count = 0U;
 	th03::app::ClassicOpSessionInput last_input{};
 	th03::app::ClassicOpSessionStatus next_status =
 		th03::app::ClassicOpSessionStatus::running;
@@ -502,6 +503,12 @@ th03::app::ClassicRunnerOperations runner_operations(
 				.clock_rebase_requested = clock_rebase,
 				.pixel_oracle_source_identity = publication_identity,
 			}};
+		},
+		.resume_from_netplay = [](void *context) {
+			auto &self = *static_cast<FakeRunnerBackend *>(context);
+			++self.netplay_resume_count;
+			self.next_status = th03::app::ClassicOpSessionStatus::running;
+			return std::expected<void, th03::app::ClassicOpSessionError>{};
 		},
 		.take_audio_command = [](void *context) {
 			auto &self = *static_cast<FakeRunnerBackend *>(context);
@@ -883,6 +890,14 @@ void test_runner_sequence_audio_surface_and_failure()
 				netplay_runner->status() ==
 				th03::app::ClassicRunnerStatus::netplay_requested,
 			"Online Match crosses the runner without becoming Quit or Classic"
+		);
+		const auto resumed = netplay_runner->resume_from_netplay();
+		const auto continued = netplay_runner->consume({.tick_index = 1U});
+		expect(
+			resumed && continued && continued->status ==
+				th03::app::ClassicRunnerStatus::running &&
+				netplay_backend->netplay_resume_count == 1U,
+			"retained Online Match returns the same runner to its OP title"
 		);
 	}
 

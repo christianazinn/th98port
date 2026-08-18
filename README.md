@@ -63,7 +63,10 @@ Forfeit, peer departure/timeout, and deterministic proof mismatches now end on
 an authenticated source-styled local report instead of disappearing directly
 into console output. Missing or unreachable online-service configuration is
 also a recoverable report; it cannot terminate the product from Quick Match,
-Create Room, or Join Room.
+Create Room, or Join Room. Online Match is a retained child of the current
+New Classic title: OP.M continues through setup, waiting, and connection-error
+screens, every nested Cancel returns one screen, and returning to the title
+does not stop or restart the song.
 
 ### Optional Classic and direct-VS application
 

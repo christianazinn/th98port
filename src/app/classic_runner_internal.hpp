@@ -19,6 +19,8 @@ struct ClassicRunnerOperations final {
 	std::expected<ClassicOpSessionTick, ClassicOpSessionError> (*consume)(
 		void *, const ClassicOpSessionInput &
 	) = nullptr;
+	std::expected<void, ClassicOpSessionError>
+	(*resume_from_netplay)(void *) = nullptr;
 	std::optional<ClassicAudioCommand> (*take_audio_command)(void *) = nullptr;
 	std::optional<NewClassicKeyConfig> (*take_key_config_update)(void *) = nullptr;
 	std::optional<NewClassicJoyConfig> (*take_joy_config_update)(void *) = nullptr;

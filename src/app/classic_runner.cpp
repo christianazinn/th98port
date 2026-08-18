@@ -46,6 +46,7 @@ namespace {
 ) noexcept
 {
 	return operations.context != nullptr && operations.consume != nullptr &&
+		operations.resume_from_netplay != nullptr &&
 		operations.take_audio_command != nullptr &&
 		operations.compose_shown_surface != nullptr;
 }
@@ -54,6 +55,12 @@ namespace {
 consume_session(void *context, const ClassicOpSessionInput &input)
 {
 	return static_cast<ClassicOpSession *>(context)->consume(input);
+}
+
+[[nodiscard]] std::expected<void, ClassicOpSessionError>
+resume_session_from_netplay(void *context)
+{
+	return static_cast<ClassicOpSession *>(context)->resume_from_netplay();
 }
 
 [[nodiscard]] std::optional<ClassicAudioCommand> take_session_audio(
@@ -546,6 +553,7 @@ ClassicRunner::load(ClassicRunnerRequest request)
 	const ClassicRunnerOperations operations{
 		.context = owner.get(),
 		.consume = &consume_session,
+		.resume_from_netplay = &resume_session_from_netplay,
 		.take_audio_command = &take_session_audio,
 		.take_key_config_update = &take_session_key_config,
 		.take_joy_config_update = &take_session_joy_config,
@@ -727,6 +735,27 @@ ClassicRunner::compose_shown_surface(
 ClassicRunnerStatus ClassicRunner::status() const noexcept
 {
 	return impl_->status;
+}
+
+std::expected<void, ClassicRunnerError> ClassicRunner::resume_from_netplay()
+{
+	if(impl_->failure) {
+		return std::unexpected(*impl_->failure);
+	}
+	if(impl_->status != ClassicRunnerStatus::netplay_requested) {
+		return std::unexpected(runner_error(
+			ClassicRunnerErrorCode::runner_not_running
+		));
+	}
+	if(auto resumed = impl_->operations.resume_from_netplay(
+		impl_->operations.context
+	); !resumed) {
+		impl_->failure = session_error(resumed.error());
+		impl_->status = ClassicRunnerStatus::failed;
+		return std::unexpected(*impl_->failure);
+	}
+	impl_->status = ClassicRunnerStatus::running;
+	return {};
 }
 
 PixelOracleIdentity ClassicRunner::pixel_oracle_bootstrap_identity()

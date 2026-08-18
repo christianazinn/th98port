@@ -9,6 +9,7 @@
 #include <expected>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -210,6 +211,7 @@ pixel_oracle_identity_output(bool publication_oracle_enabled)
 
 enum class ExperienceRunDisposition : std::uint8_t {
 	return_to_menu,
+	restart_new_classic,
 	switch_to_classic,
 	netplay_requested,
 	application_quit,
@@ -225,6 +227,28 @@ struct ExperienceRunResult final {
 	std::optional<th03::formats::ReplayDocument> replay{};
 	std::optional<th03::app::NewClassicNetplayRoomLaunch> netplay_launch{};
 };
+
+struct RetainedMenuAudio final {
+	std::function<std::expected<void, int>()> advance_tick{};
+	std::function<void()> suspend{};
+};
+
+enum class NetplayFrontendDisposition : std::uint8_t {
+	resume_title,
+	restart_new_classic,
+	application_quit,
+	failed,
+};
+
+struct NetplayFrontendResult final {
+	int exit_code = 0;
+	NetplayFrontendDisposition disposition =
+		NetplayFrontendDisposition::failed;
+};
+
+using NetplayFrontendHandler = std::function<NetplayFrontendResult(
+	const RetainedMenuAudio &
+)>;
 
 struct StartupRunResult final {
 	int exit_code = 0;
@@ -1759,7 +1783,13 @@ struct RtcNetplayRequest final {
 	bool relay_only = false;
 };
 
-[[nodiscard]] bool direct_netplay_lobby_quit_requested(
+enum class DirectNetplayLobbyExit : std::uint8_t {
+	none,
+	back,
+	application_quit,
+};
+
+[[nodiscard]] DirectNetplayLobbyExit direct_netplay_lobby_exit(
 	SDL_WindowID main_window
 ) noexcept
 {
@@ -1767,27 +1797,65 @@ struct RtcNetplayRequest final {
 	while(SDL_PollEvent(&event)) {
 		if(event.type == SDL_EVENT_QUIT ||
 			(event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
-			 event.window.windowID == main_window) ||
-			(event.type == SDL_EVENT_KEY_DOWN &&
+			 event.window.windowID == main_window)) {
+			return DirectNetplayLobbyExit::application_quit;
+		}
+		if(event.type == SDL_EVENT_KEY_DOWN &&
 			 event.key.windowID == main_window &&
-			 event.key.scancode == SDL_SCANCODE_ESCAPE)) {
-			return true;
+			 event.key.scancode == SDL_SCANCODE_ESCAPE) {
+			return DirectNetplayLobbyExit::back;
 		}
 	}
-	return false;
+	return DirectNetplayLobbyExit::none;
+}
+
+[[nodiscard]] std::expected<void, int> pump_retained_menu_audio(
+	th03::app::TickInputScheduler *scheduler,
+	const RetainedMenuAudio *retained_audio
+)
+{
+	if(!scheduler || !retained_audio) {
+		return {};
+	}
+	const auto cutoff = th03::platform::sdl_ticks_now_ns();
+	for(;;) {
+		auto due = scheduler->pop_due(cutoff);
+		if(!due) {
+			return std::unexpected(fail_tick(due.error()));
+		}
+		if(!*due) {
+			return {};
+		}
+		if(const auto advanced = retained_audio->advance_tick(); !advanced) {
+			return std::unexpected(advanced.error());
+		}
+	}
 }
 
 [[nodiscard]] std::expected<DirectNetplayLobbyResult, int>
 negotiate_direct_netplay_lobby(
 	const th03::app::DirectVsCliRequest &request,
 	th03::platform::SdlPlatform &platform,
-	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets
+	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets,
+	const RetainedMenuAudio *retained_audio = nullptr,
+	bool *application_quit = nullptr
 )
 {
 	using th03::app::DirectVsNetplayMode;
 	using th03::app::NewClassicNetplayLobby;
 	using th03::app::NewClassicNetplayLobbyDatagramType;
 	using th03::app::NewClassicNetplayLobbyStatus;
+	std::optional<th03::app::TickInputScheduler> retained_audio_scheduler{};
+	if(retained_audio) {
+		auto created = th03::app::TickInputScheduler::create(
+			request.tick_rate, th03::platform::sdl_ticks_now_ns(),
+			th03::app::TickInputCatchUpPolicy::discard_missed_deadlines
+		);
+		if(!created) {
+			return std::unexpected(fail_tick(created.error()));
+		}
+		retained_audio_scheduler.emplace(std::move(*created));
+	}
 	const auto mode = request.netplay_mode;
 	const auto local_lock = mode == DirectVsNetplayMode::host ?
 		netplay_host_lock(request).player_one :
@@ -1858,10 +1926,21 @@ negotiate_direct_netplay_lobby(
 	std::array<std::byte, th03::app::new_classic_netplay_datagram_bytes>
 		receive_buffer{};
 	while(lobby.status() != NewClassicNetplayLobbyStatus::ready) {
+		if(const auto pumped = pump_retained_menu_audio(
+			retained_audio_scheduler ? &*retained_audio_scheduler : nullptr,
+			retained_audio
+		); !pumped) {
+			return std::unexpected(pumped.error());
+		}
 		const auto now = std::chrono::steady_clock::now();
-		if(direct_netplay_lobby_quit_requested(
+		const auto exit = direct_netplay_lobby_exit(
 			static_cast<SDL_WindowID>(platform.window_id())
-		)) {
+		);
+		if(exit != DirectNetplayLobbyExit::none) {
+			if(application_quit &&
+				exit == DirectNetplayLobbyExit::application_quit) {
+				*application_quit = true;
+			}
 			std::cout << "status=left\n";
 			return std::unexpected(0);
 		}
@@ -1962,13 +2041,26 @@ negotiate_rtc_netplay_lobby(
 	const th03::app::DirectVsCliRequest &request,
 	const RtcNetplayRequest &rtc_request,
 	th03::platform::SdlPlatform &platform,
-	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets
+	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets,
+	const RetainedMenuAudio *retained_audio = nullptr,
+	bool *application_quit = nullptr
 )
 {
 	using th03::app::DirectVsNetplayMode;
 	using th03::app::NewClassicNetplayLobby;
 	using th03::app::NewClassicNetplayLobbyStatus;
 	using th03::platform::RtcRoomState;
+	std::optional<th03::app::TickInputScheduler> retained_audio_scheduler{};
+	if(retained_audio) {
+		auto created = th03::app::TickInputScheduler::create(
+			request.tick_rate, th03::platform::sdl_ticks_now_ns(),
+			th03::app::TickInputCatchUpPolicy::discard_missed_deadlines
+		);
+		if(!created) {
+			return std::unexpected(fail_tick(created.error()));
+		}
+		retained_audio_scheduler.emplace(std::move(*created));
+	}
 	const auto provisional_mode = request.netplay_mode;
 	const bool matchmaking =
 		rtc_request.mode == th03::platform::RtcRoomMode::matchmaking;
@@ -2013,9 +2105,20 @@ negotiate_rtc_netplay_lobby(
 	std::uint8_t assigned_player = 0U;
 	const auto room_started = std::chrono::steady_clock::now();
 	for(;;) {
-		if(direct_netplay_lobby_quit_requested(
+		if(const auto pumped = pump_retained_menu_audio(
+			retained_audio_scheduler ? &*retained_audio_scheduler : nullptr,
+			retained_audio
+		); !pumped) {
+			return std::unexpected(pumped.error());
+		}
+		const auto exit = direct_netplay_lobby_exit(
 			static_cast<SDL_WindowID>(platform.window_id())
-		)) {
+		);
+		if(exit != DirectNetplayLobbyExit::none) {
+			if(application_quit &&
+				exit == DirectNetplayLobbyExit::application_quit) {
+				*application_quit = true;
+			}
 			std::cout << "status=left\n";
 			return std::unexpected(0);
 		}
@@ -2085,9 +2188,20 @@ negotiate_rtc_netplay_lobby(
 		std::chrono::milliseconds(100);
 	const auto lobby_started = std::chrono::steady_clock::now();
 	while(lobby.status() != NewClassicNetplayLobbyStatus::ready) {
-		if(direct_netplay_lobby_quit_requested(
+		if(const auto pumped = pump_retained_menu_audio(
+			retained_audio_scheduler ? &*retained_audio_scheduler : nullptr,
+			retained_audio
+		); !pumped) {
+			return std::unexpected(pumped.error());
+		}
+		const auto exit = direct_netplay_lobby_exit(
 			static_cast<SDL_WindowID>(platform.window_id())
-		)) {
+		);
+		if(exit != DirectNetplayLobbyExit::none) {
+			if(application_quit &&
+				exit == DirectNetplayLobbyExit::application_quit) {
+				*application_quit = true;
+			}
 			std::cout << "status=left\n";
 			return std::unexpected(0);
 		}
@@ -2240,9 +2354,14 @@ negotiate_rtc_netplay_lobby(
 	th03::app::NewClassicNetplayReportKind kind,
 	th03::app::NewClassicNetplayReportMetrics metrics,
 	th03::app::NewClassicLanguageAssetProfile language =
-		th03::app::NewClassicLanguageAssetProfile::english
+		th03::app::NewClassicLanguageAssetProfile::english,
+	const RetainedMenuAudio *retained_audio = nullptr,
+	bool *application_quit = nullptr
 )
 {
+	if(application_quit) {
+		*application_quit = false;
+	}
 	th03::app::NewClassicNetplayReport report(
 		kind, metrics, std::move(patch_assets), language
 	);
@@ -2284,6 +2403,12 @@ negotiate_rtc_netplay_lobby(
 			if(!*due) {
 				break;
 			}
+			if(retained_audio) {
+				const auto advanced = retained_audio->advance_tick();
+				if(!advanced) {
+					return advanced.error();
+				}
+			}
 			const auto consumed = report.consume(project_new_classic_ui(
 				**due, true
 			));
@@ -2309,6 +2434,10 @@ negotiate_rtc_netplay_lobby(
 		if(deadline && *deadline > now) {
 			SDL_DelayPrecise(std::min(*deadline - now, maximum_idle_delay_ns));
 		}
+	}
+	if(application_quit && report.status() ==
+		th03::app::NewClassicNetplayReportStatus::application_quit) {
+		*application_quit = true;
 	}
 	return 0;
 }
@@ -2361,15 +2490,10 @@ private:
 	th03::app::RationalTickRate tick_rate,
 	th03::platform::SdlPlatform &platform,
 	th03::platform::SdlInputMapper &mapper,
-	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets,
-	th03::app::NewClassicLanguageAssetProfile language,
-	std::uint8_t initial_rank,
-	th03::app::NewClassicNetplayPreferences preferences
+	th03::app::NewClassicNetplayRoom &room,
+	const RetainedMenuAudio *retained_audio = nullptr
 )
 {
-	th03::app::NewClassicNetplayRoom room(
-		std::move(patch_assets), language, initial_rank, preferences
-	);
 	if(!room.valid()) {
 		return {.exit_code = fail_netplay(
 			"netplay-room", "surface-create-failed"
@@ -2419,6 +2543,12 @@ private:
 			}
 			if(!*due) {
 				break;
+			}
+			if(retained_audio) {
+				const auto advanced = retained_audio->advance_tick();
+				if(!advanced) {
+					return {.exit_code = advanced.error()};
+				}
 			}
 			while(const auto character = mapper.take_keyboard_text_character()) {
 				const auto typed = room.consume({.text_character = *character});
@@ -2495,7 +2625,10 @@ int run_direct_netplay_on_platform(
 	th03::app::DirectVsCliRequest parsed,
 	th03::platform::SdlPlatform &platform,
 	th03::platform::SdlInputMapper &mapper,
-	std::optional<RtcNetplayRequest> rtc_request = std::nullopt
+	std::optional<RtcNetplayRequest> rtc_request = std::nullopt,
+	const RetainedMenuAudio *retained_menu_audio = nullptr,
+	bool *gameplay_started = nullptr,
+	bool *application_quit = nullptr
 )
 {
 	using th03::app::DirectVsNetplayMode;
@@ -2504,6 +2637,12 @@ int run_direct_netplay_on_platform(
 	using th03::app::NewClassicNetplayMainSessionStatus;
 	using th03::app::NewClassicNetplayPlayer;
 	using th03::app::NewClassicNetplayPostMatchStatus;
+	if(gameplay_started) {
+		*gameplay_started = false;
+	}
+	if(application_quit) {
+		*application_quit = false;
+	}
 	parsed.launch.process.classic_audio_lifecycle = true;
 	const auto audio_data_root = parsed.launch.content.data_root;
 	const auto post_match_content = parsed.launch.content;
@@ -2521,7 +2660,8 @@ int run_direct_netplay_on_platform(
 #if defined(TH03_ENABLE_RTC_TRANSPORT)
 		if(rtc_request) {
 			return negotiate_rtc_netplay_lobby(
-				parsed, *rtc_request, platform, pause_assets
+				parsed, *rtc_request, platform, pause_assets,
+				retained_menu_audio, application_quit
 			);
 		}
 #else
@@ -2532,11 +2672,18 @@ int run_direct_netplay_on_platform(
 		}
 #endif
 		return negotiate_direct_netplay_lobby(
-			parsed, platform, pause_assets
+			parsed, platform, pause_assets, retained_menu_audio,
+			application_quit
 		);
 	}();
 	if(!negotiated) {
 		return negotiated.error();
+	}
+	if(gameplay_started) {
+		*gameplay_started = true;
+	}
+	if(retained_menu_audio) {
+		retained_menu_audio->suspend();
 	}
 	const auto mode = negotiated->lobby.role() ==
 		th03::app::NewClassicNetplayLobbyRole::host ?
@@ -2763,7 +2910,8 @@ int run_direct_netplay_on_platform(
 	) -> int {
 		return run_netplay_report_modal(
 			parsed.tick_rate, platform, mapper, pause_assets, kind,
-			report_metrics()
+			report_metrics(), parsed.presentation_language, nullptr,
+			application_quit
 		);
 	};
 	const auto fail_with_report = [&] (
@@ -4233,7 +4381,8 @@ ExperienceRunResult run_classic_session(
 	th03::platform::SdlPlatform &platform,
 	th03::platform::SdlInputMapper &mapper,
 	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets>
-		patch_assets = {}
+		patch_assets = {},
+	NetplayFrontendHandler *netplay_frontend = nullptr
 )
 {
 	const auto data_root = parsed.launch.content.data_root;
@@ -4742,6 +4891,68 @@ ExperienceRunResult run_classic_session(
 			}
 		}
 		audio_focus_muted = desired;
+	};
+	const auto advance_retained_audio_tick = [&]() -> std::expected<void, int> {
+		sync_audio_focus_mute();
+		auto audio_tick = audio_session->advance_tick();
+		if(!audio_tick) {
+			return std::unexpected(fail("audio-tick", audio_tick.error()));
+		}
+		if(audio_device && !audio_focus_muted && !audio_started &&
+			!audio_tick->canonical_frames.empty() &&
+			audio_tick->canonical_frames.size() <=
+				audio_device->maximum_queued_frames() / 3U) {
+			startup_silence.assign(
+				audio_tick->canonical_frames.size() * 2U, {}
+			);
+			const auto prefilled = audio_device->submit(startup_silence);
+			if(!prefilled) {
+				warn_audio_device("audio-device-prefill", prefilled.error());
+				audio_device.reset();
+			}
+		}
+		if(audio_device && !audio_focus_muted) {
+			auto output = output_gain_frames(
+				audio_tick->canonical_frames,
+				new_classic ? master_volume_percent : std::uint8_t{100U},
+				gain_frames
+			);
+			if(!output) {
+				return std::unexpected(fail_output_gain(
+					"audio-output-gain", output.error()
+				));
+			}
+			const auto submitted = audio_device->submit(*output);
+			if(!submitted) {
+				warn_audio_device("audio-device-submit", submitted.error());
+				audio_device.reset();
+			} else if(!audio_started && !audio_tick->canonical_frames.empty()) {
+				const auto resumed = audio_device->resume();
+				if(!resumed) {
+					warn_audio_device("audio-device-resume", resumed.error());
+					audio_device.reset();
+				} else {
+					audio_started = true;
+				}
+			}
+		}
+		return {};
+	};
+	const RetainedMenuAudio retained_menu_audio{
+		.advance_tick = advance_retained_audio_tick,
+		.suspend = [&]() noexcept {
+			if(!audio_device) {
+				return;
+			}
+			if(const auto cleared = audio_device->clear(); !cleared) {
+				warn_audio_device("audio-device-clear", cleared.error());
+			}
+			if(const auto paused = audio_device->pause(); !paused) {
+				warn_audio_device("audio-device-pause", paused.error());
+			}
+			audio_device.reset();
+			audio_started = false;
+		},
 	};
 	while((*runner)->status() == th03::app::ClassicRunnerStatus::running) {
 #if defined(_WIN32)
@@ -5270,59 +5481,9 @@ ExperienceRunResult run_classic_session(
 				std::cerr << "logical-tick=" << logical_ticks << '\n';
 				return {.exit_code = fail("audio-command", drained.error())};
 			}
-			sync_audio_focus_mute();
-			auto audio_tick = audio_session->advance_tick();
-			if(!audio_tick) {
+			if(const auto advanced = advance_retained_audio_tick(); !advanced) {
 				std::cerr << "logical-tick=" << logical_ticks << '\n';
-				return {.exit_code = fail("audio-tick", audio_tick.error())};
-			}
-			if(audio_device && !audio_focus_muted) {
-				if(!audio_started && !audio_tick->canonical_frames.empty() &&
-					audio_tick->canonical_frames.size() <=
-						audio_device->maximum_queued_frames() / 3U) {
-					// Two silent source intervals plus the first rendered interval
-					// keep a 50 Hz blocking present from starving the 56.4 Hz
-					// source clock before its first two-tick catch-up.
-					startup_silence.assign(
-						audio_tick->canonical_frames.size() * 2U, {}
-					);
-					const auto prefilled = audio_device->submit(startup_silence);
-					if(!prefilled) {
-						warn_audio_device(
-							"audio-device-prefill", prefilled.error()
-						);
-						audio_device.reset();
-					}
-				}
-			}
-			if(audio_device && !audio_focus_muted) {
-				auto output = output_gain_frames(
-					audio_tick->canonical_frames,
-					new_classic ? master_volume_percent : std::uint8_t{100U},
-					gain_frames
-				);
-				if(!output) {
-					return {.exit_code = fail_output_gain(
-						"audio-output-gain", output.error()
-					)};
-				}
-				const auto submitted = audio_device->submit(*output);
-				if(!submitted) {
-					// Device loss is final-output state. Keep PMD and scene
-					// timelines advancing, but stop attempting delivery.
-					warn_audio_device(
-						"audio-device-submit", submitted.error()
-					);
-					audio_device.reset();
-				} else if(!audio_started && !audio_tick->canonical_frames.empty()) {
-					const auto resumed = audio_device->resume();
-					if(!resumed) {
-						warn_audio_device("audio-device-resume", resumed.error());
-						audio_device.reset();
-					} else {
-						audio_started = true;
-					}
-				}
+				return {.exit_code = advanced.error()};
 			}
 			if(consumed->surface_changed) {
 				if(pixel_oracle_selector &&
@@ -5412,7 +5573,55 @@ ExperienceRunResult run_classic_session(
 		}
 		if(!selected_publication_pending && (*runner)->status() ==
 			th03::app::ClassicRunnerStatus::netplay_requested) {
-			return {.disposition = ExperienceRunDisposition::netplay_requested};
+			if(!netplay_frontend) {
+				return {
+					.disposition = ExperienceRunDisposition::netplay_requested
+				};
+			}
+			const auto handled = (*netplay_frontend)(retained_menu_audio);
+			if(handled.exit_code != 0 || handled.disposition ==
+				NetplayFrontendDisposition::failed) {
+				return {.exit_code = handled.exit_code == 0 ? 1 : handled.exit_code};
+			}
+			if(handled.disposition ==
+				NetplayFrontendDisposition::application_quit) {
+				return {
+					.disposition = ExperienceRunDisposition::application_quit
+				};
+			}
+			if(handled.disposition ==
+				NetplayFrontendDisposition::restart_new_classic) {
+				return {
+					.disposition = ExperienceRunDisposition::restart_new_classic
+				};
+			}
+			if(auto resumed = (*runner)->resume_from_netplay(); !resumed) {
+				return {.exit_code = fail("netplay-resume", resumed.error())};
+			}
+			if(auto drained = drain_audio(); !drained) {
+				return {.exit_code = fail("audio-command", drained.error())};
+			}
+			const auto resumed_at = th03::platform::sdl_ticks_now_ns();
+			if(auto rebased = scheduler->rebase_after_modal(resumed_at); !rebased) {
+				return {.exit_code = fail_tick(rebased.error())};
+			}
+			if(auto reset = mapper.reset_after_modal(*scheduler, resumed_at);
+				!reset) {
+				return {.exit_code = fail("input-rebase", reset.error())};
+			}
+			retry_blocked_event = false;
+			presentation_pending = false;
+			pending_publication_tick.reset();
+			pending_publication_ticks = 0U;
+			pending_publication_identity.reset();
+			surface = (*runner)->compose_shown_surface(pixel_span);
+			if(!surface) {
+				return {.exit_code = fail("compose", surface.error())};
+			}
+			if(const auto presented = platform.present(*surface); !presented) {
+				return {.exit_code = fail("present", presented.error())};
+			}
+			continue;
 		}
 		const bool session_complete = (*runner)->status() ==
 			th03::app::ClassicRunnerStatus::session_complete;
@@ -5993,6 +6202,18 @@ std::expected<
 	return std::pair{std::move(*platform), std::move(*mapper)};
 }
 
+[[nodiscard]] th03::app::DirectVsCliRequest product_netplay_request(
+	const th03::app::ClassicCliRequest &product,
+	const th03::app::NewClassicSettings &settings,
+	const th03::app::NewClassicNetplayRoomLaunch &launch
+);
+
+[[nodiscard]] std::expected<std::optional<RtcNetplayRequest>, int>
+product_rtc_netplay_request(
+	const th03::app::NewClassicNetplayRoomLaunch &launch,
+	const th03::app::ClassicContentPaths &content
+);
+
 ExperienceRunResult run_new_classic_experience(
 	th03::app::ClassicCliRequest parsed,
 	th03::platform::SdlPlatform &platform,
@@ -6129,22 +6350,15 @@ ExperienceRunResult run_new_classic_experience(
 	// Replay, Practice, KeyConfig, Options, and replay playback are children of
 	// the patched OP session. Its title is the normal product root; no Replay
 	// Patch screen is substituted by a host route.
-	for(;;) {
-		auto result = run_classic_session(
-			parsed, platform, mapper, patch_assets
-		);
-		if(result.exit_code != 0 || result.disposition !=
-			ExperienceRunDisposition::netplay_requested) {
-			return result;
-		}
+	NetplayFrontendHandler netplay_frontend = [&](const RetainedMenuAudio &audio) {
 		auto latest_settings = th03::app::load_new_classic_settings_store(
 			parsed.launch.content.new_classic_settings,
 			parsed.launch.content.config
 		);
 		if(!latest_settings) {
-			return {.exit_code = fail(
-				"settings-load", latest_settings.error()
-			)};
+			return NetplayFrontendResult{
+				.exit_code = fail("settings-load", latest_settings.error())
+			};
 		}
 		const auto language = patch_assets->custom_messages ?
 			patch_assets->custom_messages->asset_profile() :
@@ -6152,37 +6366,138 @@ ExperienceRunResult run_new_classic_experience(
 				th03::app::ClassicLanguage::english ?
 				th03::app::NewClassicLanguageAssetProfile::english :
 				th03::app::NewClassicLanguageAssetProfile::japanese);
-		auto room = run_netplay_room_modal(
-			parsed.tick_rate, platform, mapper, patch_assets, language,
+		th03::app::NewClassicNetplayRoom room(
+			patch_assets, language,
 			static_cast<std::uint8_t>(latest_settings->settings.options.rank),
 			latest_settings->settings.netplay
 		);
-		if(room.exit_code != 0) {
-			return {.exit_code = room.exit_code};
-		}
-		if(room.preferences &&
-			*room.preferences != latest_settings->settings.netplay) {
-			latest_settings->settings.netplay = *room.preferences;
-			if(auto committed = th03::app::commit_new_classic_settings_store(
-				parsed.launch.content.new_classic_settings,
-				latest_settings->settings
-			); !committed) {
-				return {.exit_code = fail("settings-save", committed.error())};
+		for(;;) {
+			auto room_run = run_netplay_room_modal(
+				parsed.tick_rate, platform, mapper, room, &audio
+			);
+			if(room_run.exit_code != 0) {
+				return NetplayFrontendResult{.exit_code = room_run.exit_code};
 			}
-		}
-		if(room.application_quit) {
-			return {
-				.disposition = ExperienceRunDisposition::application_quit,
+			if(room_run.preferences &&
+				*room_run.preferences != latest_settings->settings.netplay) {
+				latest_settings->settings.netplay = *room_run.preferences;
+				if(auto committed = th03::app::commit_new_classic_settings_store(
+					parsed.launch.content.new_classic_settings,
+					latest_settings->settings
+				); !committed) {
+					return NetplayFrontendResult{
+						.exit_code = fail("settings-save", committed.error())
+					};
+				}
+			}
+			if(room_run.application_quit) {
+				return NetplayFrontendResult{
+					.disposition = NetplayFrontendDisposition::application_quit
+				};
+			}
+			if(!room_run.launch) {
+				return NetplayFrontendResult{
+					.disposition = NetplayFrontendDisposition::resume_title
+				};
+			}
+			auto rtc = product_rtc_netplay_request(
+				*room_run.launch, parsed.launch.content
+			);
+			if(!rtc) {
+				bool quit = false;
+				const int report = run_netplay_report_modal(
+					parsed.tick_rate, platform, mapper, patch_assets,
+					th03::app::NewClassicNetplayReportKind::connection_failed,
+					{}, language, &audio, &quit
+				);
+				if(report != 0) {
+					return NetplayFrontendResult{.exit_code = report};
+				}
+				if(quit) {
+					return NetplayFrontendResult{
+						.disposition =
+							NetplayFrontendDisposition::application_quit
+					};
+				}
+				if(!room.resume_after_launch()) {
+					return NetplayFrontendResult{
+						.exit_code = fail_netplay(
+							"netplay-room", "resume-failed"
+						)
+					};
+				}
+				continue;
+			}
+			bool gameplay_started = false;
+			bool quit = false;
+			const int match = run_direct_netplay_on_platform(
+				product_netplay_request(
+					parsed, latest_settings->settings, *room_run.launch
+				),
+				platform, mapper, std::move(*rtc), &audio,
+				&gameplay_started, &quit
+			);
+			if(quit) {
+				return NetplayFrontendResult{
+					.disposition = NetplayFrontendDisposition::application_quit
+				};
+			}
+			if(!gameplay_started) {
+				if(match != 0) {
+					const int report = run_netplay_report_modal(
+						parsed.tick_rate, platform, mapper, patch_assets,
+						th03::app::NewClassicNetplayReportKind::connection_failed,
+						{}, language, &audio, &quit
+					);
+					if(report != 0) {
+						return NetplayFrontendResult{.exit_code = report};
+					}
+					if(quit) {
+						return NetplayFrontendResult{
+							.disposition =
+								NetplayFrontendDisposition::application_quit
+						};
+					}
+				}
+				if(!room.resume_after_launch()) {
+					return NetplayFrontendResult{
+						.exit_code = fail_netplay(
+							"netplay-room", "resume-failed"
+						)
+					};
+				}
+				continue;
+			}
+			if(match != 0) {
+				const int report = run_netplay_report_modal(
+					parsed.tick_rate, platform, mapper, patch_assets,
+					th03::app::NewClassicNetplayReportKind::connection_failed,
+					{}, language, nullptr, &quit
+				);
+				if(report != 0) {
+					return NetplayFrontendResult{.exit_code = report};
+				}
+				if(quit) {
+					return NetplayFrontendResult{
+						.disposition =
+							NetplayFrontendDisposition::application_quit
+					};
+				}
+			}
+			return NetplayFrontendResult{
+				.disposition = NetplayFrontendDisposition::restart_new_classic
 			};
 		}
-		if(room.launch) {
-			return {
-				.disposition = ExperienceRunDisposition::netplay_requested,
-				.netplay_launch = std::move(room.launch),
-			};
+	};
+	for(;;) {
+		auto result = run_classic_session(
+			parsed, platform, mapper, patch_assets, &netplay_frontend
+		);
+		if(result.exit_code == 0 && result.disposition ==
+			ExperienceRunDisposition::restart_new_classic) {
+			continue;
 		}
-		// Return constructs a fresh patched OP title without replaying the
-		// product startup animation. No network owner has existed yet.
+		return result;
 	}
 }
 
@@ -6351,31 +6666,6 @@ product_rtc_netplay_request(
 	return std::optional<RtcNetplayRequest>{std::move(result)};
 }
 
-[[nodiscard]] int run_product_netplay_connection_error(
-	const th03::app::ClassicCliRequest &product,
-	const th03::app::NewClassicSettings &settings,
-	th03::platform::SdlPlatform &platform,
-	th03::platform::SdlInputMapper &mapper
-)
-{
-	auto loaded = th03::app::load_new_classic_replay_patch_assets(
-		product.launch.content.data_root / "AZINN.DAT"
-	);
-	if(!loaded) {
-		return fail("netplay-report-assets", loaded.error());
-	}
-	return run_netplay_report_modal(
-		product.tick_rate, platform, mapper,
-		std::make_shared<const th03::app::NewClassicReplayPatchAssets>(
-			std::move(*loaded)
-		),
-		th03::app::NewClassicNetplayReportKind::connection_failed, {},
-		settings.options.language == th03::app::ClassicLanguage::english ?
-			th03::app::NewClassicLanguageAssetProfile::english :
-			th03::app::NewClassicLanguageAssetProfile::japanese
-	);
-}
-
 int run_classic(th03::app::ClassicCliRequest parsed)
 {
 	std::optional<th03::app::NewClassicWindowPresentation>
@@ -6410,27 +6700,10 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 		);
 	}
 	if(result.exit_code == 0 && result.disposition ==
-		ExperienceRunDisposition::netplay_requested && result.netplay_launch) {
-		auto settings = th03::app::load_new_classic_settings_store(
-			parsed.launch.content.new_classic_settings,
-			parsed.launch.content.config
-		);
-		if(!settings) {
-			return fail("settings-load", settings.error());
-		}
-		auto rtc = product_rtc_netplay_request(
-			*result.netplay_launch, parsed.launch.content
-		);
-		if(!rtc) {
-			return run_product_netplay_connection_error(
-				parsed, settings->settings, *product->first, product->second
-			);
-		}
-		return run_direct_netplay_on_platform(
-			product_netplay_request(
-				parsed, settings->settings, *result.netplay_launch
-			), *product->first, product->second, std::move(*rtc)
-		);
+		ExperienceRunDisposition::netplay_requested) {
+		std::cerr << "status=error\nstage=netplay-room\n"
+			"code=retained-frontend-missing\n";
+		return 1;
 	}
 	return result.exit_code;
 }
@@ -6484,49 +6757,9 @@ int run_product_shell(th03::app::ClassicCliRequest parsed)
 		}
 		if(experience.disposition ==
 			ExperienceRunDisposition::netplay_requested) {
-			if(!experience.netplay_launch) {
-				std::cerr << "status=error\nstage=netplay-room\n"
-					"code=missing-launch-intent\n";
-				return 1;
-			}
-			auto latest_settings = th03::app::load_new_classic_settings_store(
-				parsed.launch.content.new_classic_settings,
-				parsed.launch.content.config
-			);
-			if(!latest_settings) {
-				return fail("settings-load", latest_settings.error());
-			}
-			auto rtc = product_rtc_netplay_request(
-				*experience.netplay_launch, parsed.launch.content
-			);
-			if(!rtc) {
-				const int report = run_product_netplay_connection_error(
-					parsed, latest_settings->settings,
-					*product->first, product->second
-				);
-				if(report != 0) {
-					return report;
-				}
-				continue;
-			}
-			const int match = run_direct_netplay_on_platform(
-				product_netplay_request(
-					parsed, latest_settings->settings,
-					*experience.netplay_launch
-				), *product->first, product->second, std::move(*rtc)
-			);
-			if(match != 0) {
-				const int report = run_product_netplay_connection_error(
-					parsed, latest_settings->settings,
-					*product->first, product->second
-				);
-				if(report != 0) {
-					return report;
-				}
-				continue;
-			}
-			// A completed/left preview returns to a fresh New Classic title.
-			continue;
+			std::cerr << "status=error\nstage=netplay-room\n"
+				"code=retained-frontend-missing\n";
+			return 1;
 		}
 		const auto new_classic_transition =
 			th03::app::product_lifecycle_transition(

@@ -219,7 +219,8 @@ namespace {
 ) noexcept
 {
 	return operations.context != nullptr && operations.advance_title &&
-		operations.finish_title && operations.start_options &&
+		operations.finish_title && operations.resume_from_netplay &&
+		operations.start_options &&
 		operations.advance_options && operations.finish_options &&
 		operations.start_music_room && operations.advance_music_room &&
 		operations.finish_music_room && operations.start_high_scores &&
@@ -1863,6 +1864,29 @@ struct ClassicOpSessionBackend final {
 			.route = title_completion->route(),
 			.selection_mode = title_completion->selection_mode(),
 		};
+	}
+
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	resume_from_netplay()
+	{
+		if(!title_completion || title) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		auto resources = loader->load_op_title_menu();
+		if(!resources) {
+			return std::unexpected(resource_error(std::move(resources.error())));
+		}
+		auto returned = ClassicOpTitleMenuScene::return_from_other_screen(
+			title_completion->resident(), *resources, patch_assets, false
+		);
+		if(!returned) {
+			return std::unexpected(title_error(std::move(returned.error())));
+		}
+		title = std::move(*returned);
+		title_completion.reset();
+		return {};
 	}
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError> start_options()
@@ -4533,6 +4557,11 @@ Result backend_call(void *context, Method method, Args &&...args)
 				ClassicOpSessionTitleResult, ClassicOpSessionError
 			>>(context, &ClassicOpSessionBackend::finish_title);
 		},
+		.resume_from_netplay = [](void *context) {
+			return backend_call<std::expected<void, ClassicOpSessionError>>(
+				context, &ClassicOpSessionBackend::resume_from_netplay
+			);
+		},
 		.start_options = [](void *context) {
 			return backend_call<std::expected<void, ClassicOpSessionError>>(
 				context, &ClassicOpSessionBackend::start_options
@@ -5115,6 +5144,31 @@ ClassicOpSession::ClassicOpSession(std::unique_ptr<Impl> impl) noexcept :
 {}
 
 ClassicOpSession::~ClassicOpSession() = default;
+
+std::expected<void, ClassicOpSessionError>
+ClassicOpSession::resume_from_netplay()
+{
+	if(impl_->failure) {
+		return std::unexpected(*impl_->failure);
+	}
+	if(impl_->status != ClassicOpSessionStatus::netplay_requested ||
+		impl_->scene != ClassicOpSessionScene::complete) {
+		return std::unexpected(session_error(
+			ClassicOpSessionErrorCode::session_not_running
+		));
+	}
+	if(auto resumed = impl_->operations.resume_from_netplay(
+		impl_->operations.context
+	); !resumed) {
+		impl_->fail(resumed.error());
+		return std::unexpected(resumed.error());
+	}
+	impl_->status = ClassicOpSessionStatus::running;
+	impl_->scene = ClassicOpSessionScene::title_menu;
+	impl_->boundary_ready = false;
+	impl_->clock_rebase_requested = false;
+	return {};
+}
 
 std::expected<ClassicOpSessionTick, ClassicOpSessionError>
 ClassicOpSession::consume(const ClassicOpSessionInput &input)

@@ -122,6 +122,8 @@ void test_host_intent_is_confirmation_gated()
 		"locked host character, palette, and rank enter confirmation");
 	release(room);
 	auto launched = room.consume({.ui = {.confirm = true}});
+	expect(!room.resume_after_launch(),
+		"a launch owner cannot resume before its intent is consumed");
 	auto intent = room.take_launch();
 	expect(launched.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->mode == NewClassicNetplayRoomLaunchMode::host &&
@@ -132,6 +134,13 @@ void test_host_intent_is_confirmation_gated()
 		intent->input_delay_frames == 0U,
 		"fresh confirmation publishes the typed default-port host intent");
 	expect(!room.take_launch(), "launch intent is single-consumer");
+	expect(room.resume_after_launch() &&
+		room.status() == NewClassicNetplayRoomStatus::running,
+		"a canceled or failed Create Room connection restores its caller");
+	release(room);
+	const auto host_back = room.consume({.ui = {.cancel = true}});
+	expect(host_back.status == NewClassicNetplayRoomStatus::running,
+		"Cancel from restored Create Room returns one screen, not title");
 }
 
 void test_join_entry_and_validation()
@@ -178,6 +187,13 @@ void test_join_entry_and_validation()
 		intent->join_endpoint == endpoint && intent->character == 1U &&
 		intent->palette == 2U,
 		"validated room code becomes one typed join intent");
+	expect(room.resume_after_launch() &&
+		room.status() == NewClassicNetplayRoomStatus::running,
+		"a canceled or failed Join Room connection restores its editor");
+	release(room);
+	const auto join_back = room.consume({.ui = {.cancel = true}});
+	expect(join_back.status == NewClassicNetplayRoomStatus::running,
+		"Cancel from restored Join Room returns one screen, not title");
 }
 
 void test_relay_only_launch_intent()
@@ -374,6 +390,13 @@ void test_quick_match_intent()
 		"Quick Match publishes one server-assigned online launch intent");
 	expect(room.preferences() == stored,
 		"Quick Match does not overwrite the player's Direct UDP preference");
+	expect(room.resume_after_launch() &&
+		room.status() == NewClassicNetplayRoomStatus::running,
+		"a canceled or failed Quick Match restores player setup");
+	release(room);
+	const auto quick_back = room.consume({.ui = {.cancel = true}});
+	expect(quick_back.status == NewClassicNetplayRoomStatus::running,
+		"Cancel from restored Quick Match returns to its room root");
 }
 
 void test_missing_assets_fail_closed()

@@ -224,6 +224,10 @@ public:
 		std::span<present::ComposedPixel, present::graphics_page_pixels> output
 	) const;
 	[[nodiscard]] ClassicRunnerStatus status() const noexcept;
+	// Resume the retained patched OP owner after the host-owned Online Match
+	// root returns. This emits no title-song restart command.
+	[[nodiscard]] std::expected<void, ClassicRunnerError>
+	resume_from_netplay();
 	[[nodiscard]] PixelOracleIdentity pixel_oracle_bootstrap_identity();
 	// Present only for New Classic after a complete recorded route. Taking the
 	// document transfers it to the save/browser owner and enables a later run.

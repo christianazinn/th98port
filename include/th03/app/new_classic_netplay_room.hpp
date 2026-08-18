@@ -78,6 +78,10 @@ public:
 	[[nodiscard]] bool text_entry_active() const noexcept;
 	[[nodiscard]] std::optional<NewClassicNetplayRoomLaunch>
 		take_launch() noexcept;
+	// A failed or canceled platform connection is a child of the launch screen,
+	// not a terminal product route. Restore the exact caller and retain all
+	// entered values so the player can retry or back out one level.
+	[[nodiscard]] bool resume_after_launch() noexcept;
 	[[nodiscard]] NewClassicNetplayPreferences preferences() const noexcept;
 
 private:

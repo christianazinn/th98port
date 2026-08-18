@@ -113,8 +113,12 @@ by `T3NL001` before MAIN is constructed.
 Create Room never asks the host to invent a code: its confirmation states that
 the service assigns one. If the service origin, identity, signaling endpoint,
 ICE path, or peer connection is unavailable, the product displays a
-recoverable connection report and returns to a fresh New Classic title instead
-of terminating.
+recoverable connection report. Cancel from that report returns to the exact
+Quick Match, Create Room, or Join Room caller; Cancel from a waiting lobby does
+the same. Other nested Cancel actions unwind one Online Match screen, and only
+Cancel from the Online Match root returns to the New Classic title. The
+already-running OP.M session advances throughout these retained screens and
+continues without a Stop/Load/Play restart when the title is revealed again.
 No direct listening socket is opened by this path, avoiding the Windows
 Firewall listener prompt. The same rollback, Pause, replay, and report owners
 below apply to both transports.

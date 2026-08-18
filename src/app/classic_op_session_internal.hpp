@@ -201,6 +201,8 @@ struct ClassicOpSessionBackendOperations final {
 	(*advance_title)(void *, ClassicOpInput) = nullptr;
 	std::expected<ClassicOpSessionTitleResult, ClassicOpSessionError>
 	(*finish_title)(void *) = nullptr;
+	std::expected<void, ClassicOpSessionError>
+	(*resume_from_netplay)(void *) = nullptr;
 	std::expected<void, ClassicOpSessionError> (*start_options)(void *) = nullptr;
 	std::expected<ClassicOpSessionBackendTick, ClassicOpSessionError>
 	(*advance_options)(void *, ClassicOpInput) = nullptr;
@@ -344,6 +346,8 @@ public:
 		ClassicOpSessionTick,
 		ClassicOpSessionError
 	> consume(const ClassicOpSessionInput &input);
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	resume_from_netplay();
 	[[nodiscard]] std::optional<ClassicAudioCommand> take_audio_command();
 	[[nodiscard]] std::optional<NewClassicKeyConfig>
 	take_key_config_update() noexcept;

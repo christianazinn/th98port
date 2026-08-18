@@ -126,6 +126,7 @@ struct FakeBackend final {
 	bool fail_start_options = false;
 	bool switch_to_classic = false;
 	std::size_t title_advances = 0U;
+	std::size_t netplay_resumes = 0U;
 	std::size_t options_starts = 0U;
 	std::size_t options_finishes = 0U;
 	std::size_t music_starts = 0U;
@@ -196,6 +197,13 @@ Result fake_call(void *context, Function function)
 				ClassicOpSessionError>{
 				static_cast<FakeBackend *>(context)->title_result
 			};
+		},
+		.resume_from_netplay = [](void *context) {
+			auto &backend = *static_cast<FakeBackend *>(context);
+			++backend.netplay_resumes;
+			backend.pixel_oracle_source_identity.scene =
+				th03::app::PixelOracleScene::title;
+			return std::expected<void, ClassicOpSessionError>{};
 		},
 		.start_options = [](void *context) {
 			auto &backend = *static_cast<FakeBackend *>(context);
@@ -827,6 +835,14 @@ void test_terminal_routes_and_failures()
 				tick->scene == ClassicOpSessionScene::complete &&
 				netplay_backend->config_commits == 1U,
 			"Online Match commits config and crosses a distinct product boundary"
+		);
+		const auto resumed = netplay->resume_from_netplay();
+		expect(
+			resumed && netplay->status() == ClassicOpSessionStatus::running &&
+				netplay->scene() == ClassicOpSessionScene::title_menu &&
+				netplay_backend->netplay_resumes == 1U &&
+				!netplay->take_audio_command(),
+			"returning from Online Match resumes retained OP without audio commands"
 		);
 	}
 
