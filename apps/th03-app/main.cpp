@@ -79,6 +79,7 @@ constexpr const char *pixel_oracle_fixture_environment =
 constexpr const char *pixel_oracle_selector_environment =
 	"TH03_PIXEL_ORACLE_SELECTOR";
 constexpr const char *online_origin_environment = "TH03_ONLINE_ORIGIN";
+constexpr const char *official_online_origin = "https://azinn.dev";
 constexpr const char *online_user_environment = "TH03_ONLINE_USER_ID";
 constexpr const char *online_token_environment = "TH03_ONLINE_TOKEN";
 
@@ -1382,6 +1383,15 @@ namespace {
 		.cadence_seconds = request.tick_rate.seconds,
 		.input_delay_frames = request.netplay_input_delay_frames,
 	};
+}
+
+[[nodiscard]] std::optional<std::string> product_online_origin()
+{
+	auto configured = environment_value(online_origin_environment);
+	if(configured) {
+		return configured;
+	}
+	return std::string{official_online_origin};
 }
 
 [[nodiscard]] th03::app::NewClassicNetplayJoinLock netplay_join_lock(
@@ -4444,10 +4454,13 @@ ExperienceRunResult run_classic_session(
 		parsed.launch.new_classic_device_assignment;
 	const auto online_root =
 		new_classic_settings_path.parent_path() / "ONLINE";
-	const auto online_origin = environment_value(online_origin_environment);
+	const auto configured_online_origin =
+		environment_value(online_origin_environment);
+	const auto online_origin = product_online_origin();
 #if defined(_WIN32)
 	parsed.launch.new_classic_online_upload_available = new_classic &&
-		online_origin && !online_origin->empty() && !parsed.capture_replay &&
+		configured_online_origin && !configured_online_origin->empty() &&
+		!parsed.capture_replay &&
 		!platform.oracle_enabled();
 	std::optional<th03::platform::WindowsOnlineTransport> online_transport{};
 	struct OnlineUploadCredentialContext final {
@@ -6566,7 +6579,7 @@ product_rtc_netplay_request(
 		th03::app::NewClassicNetplayRoomTransport::online_service) {
 		return std::optional<RtcNetplayRequest>{};
 	}
-	const auto origin = environment_value(online_origin_environment);
+	const auto origin = product_online_origin();
 	const auto user = environment_value(online_user_environment);
 	const auto token = environment_value(online_token_environment);
 	if(!origin || origin->empty()) {

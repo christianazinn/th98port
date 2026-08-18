@@ -295,12 +295,12 @@ Validated cached Story leaderboards add the four-row `Local HiScores`, `Online
 Leaderboards`, `Personal Bests`, and `Return` New Classic HiScore hub. Personal
 Bests reads the already-validated expanded score document once at entry and
 summarizes every unlocked character's active-rank best score/stage plus local
-playtime and 1CC totals without storage work on a source tick. A deployment or
-developer may set
-`TH03_ONLINE_ORIGIN=https://...` to refresh the configured rank's nine boards
-on one bounded background worker; no endpoint is built in, and an absent value
-keeps the product wholly offline. Cache and network work never run on a source
-tick, captures disable refresh, and complete results appear only after the
+playtime and 1CC totals without storage work on a source tick. The official
+build uses `https://azinn.dev` for bounded background refresh and Online Match.
+`TH03_ONLINE_ORIGIN=https://...` overrides that endpoint for staging, while an
+explicitly empty value keeps the product wholly offline. Cache and network
+work never run on a source tick, captures disable refresh, and complete results
+appear only after the
 player leaves and re-enters HiScore. A replay-backed detail can also download
 the exact V13 payload on a separate bounded worker. Digest, format, cached
 metadata, and atomic-publication checks must all pass before the UI reports it

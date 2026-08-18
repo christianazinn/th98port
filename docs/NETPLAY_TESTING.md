@@ -46,12 +46,13 @@ Real Windows/Linux direct and relayed acceptance remains a private-beta gate.
 
 ## Room-code setup
 
-The room service is deliberately not deployed from this repository. A test
-deployment must expose the Worker in `tools/azinn-site-v2/service`. Set its
-origin before starting the standalone or native app:
+The reviewed room service is deployed with the existing site Worker at
+`https://azinn.dev`. Current product builds use that origin automatically.
+`TH03_ONLINE_ORIGIN` remains an explicit staging/developer override; setting
+it to an empty value disables online-service access:
 
 ```text
-TH03_ONLINE_ORIGIN=https://your-worker.example
+TH03_ONLINE_ORIGIN=https://staging-worker.example
 ```
 
 On Windows, the first confirmed room launch automatically enrolls one opaque
@@ -67,7 +68,7 @@ For that machine, provision a distinct identity with `POST /api/th03/users` and
 set all three values before launch:
 
 ```text
-TH03_ONLINE_ORIGIN=https://your-worker.example
+TH03_ONLINE_ORIGIN=https://azinn.dev
 TH03_ONLINE_USER_ID=<userId returned by POST /api/th03/users>
 TH03_ONLINE_TOKEN=<token returned by POST /api/th03/users>
 ```
