@@ -81,6 +81,7 @@ void test_help_and_valid_defaults()
 		"direct-VS accepts an explicit cadence override");
 	auto host_arguments = valid_arguments();
 	host_arguments.insert(host_arguments.end(), {"--netplay-host", "31415"});
+	host_arguments.insert(host_arguments.end(), {"--netplay-input-delay", "5"});
 	host_arguments.insert(host_arguments.end(), {
 		"--replay-root", "replays",
 		"--netplay-replay-output", "output/NETPLAY.RPY"
@@ -94,6 +95,7 @@ void test_help_and_valid_defaults()
 	expect(host && host->netplay_mode ==
 		th03::app::DirectVsNetplayMode::host &&
 		host->netplay_host_port == 31415U &&
+		host->netplay_input_delay_frames == 5U &&
 		host->launch.process.game_options.three_digit_combos &&
 		host->replay_root == std::filesystem::path("replays") &&
 		host->netplay_replay_output ==
@@ -196,6 +198,10 @@ void test_cli_rejections()
 		"--vs", "--data", "d", "--main", "m", "--font", "f",
 		"--netplay-host", "31415", "--netplay-replay-output", "",
 	});
+	const auto bad_delay = parse({
+		"--vs", "--data", "d", "--main", "m", "--font", "f",
+		"--netplay-host", "31415", "--netplay-input-delay", "7",
+	});
 	expect(!unknown && unknown.error().code ==
 		th03::app::DirectVsCliErrorCode::unknown_option &&
 		unknown.error().argument_index == 0U,
@@ -229,6 +235,9 @@ void test_cli_rejections()
 	expect(!bad_smoke && bad_smoke.error().code ==
 		th03::app::DirectVsCliErrorCode::invalid_smoke_ticks,
 		"developer smoke bound must consume at least one process sample");
+	expect(!bad_delay && bad_delay.error().code ==
+		th03::app::DirectVsCliErrorCode::invalid_netplay_input_delay,
+		"netplay input delay remains within the negotiated zero-to-six range");
 	expect(kotohime && kotohime->launch.process.player_one.character ==
 		th03::app::MainCharacter::kotohime,
 		"Kotohime uses the deterministic release normalization by default");

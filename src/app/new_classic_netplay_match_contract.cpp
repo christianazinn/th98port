@@ -30,7 +30,8 @@ constexpr std::array magic{
 {
 	return valid_character_lock(contract.player_one) &&
 		valid_character_lock(contract.player_two) && contract.rank <= 3U &&
-		contract.cadence_ticks != 0U && contract.cadence_seconds != 0U;
+		contract.cadence_ticks != 0U && contract.cadence_seconds != 0U &&
+		contract.input_delay_frames <= 6U;
 }
 
 void put_u32(std::span<std::byte> output, std::size_t offset,
@@ -73,6 +74,11 @@ std::expected<
 			NewClassicNetplayMatchContractErrorCode::invalid_host_lock
 		));
 	}
+	if(host.input_delay_frames > 6U) {
+		return std::unexpected(error(
+			NewClassicNetplayMatchContractErrorCode::invalid_input_delay
+		));
+	}
 	if(!valid_character_lock(join.player_two)) {
 		return std::unexpected(error(
 			NewClassicNetplayMatchContractErrorCode::invalid_join_lock
@@ -85,6 +91,7 @@ std::expected<
 		.seed = host.seed,
 		.cadence_ticks = host.cadence_ticks,
 		.cadence_seconds = host.cadence_seconds,
+		.input_delay_frames = host.input_delay_frames,
 	};
 }
 
@@ -108,6 +115,7 @@ std::expected<
 	result[7U] = std::byte{contract.player_one.palette};
 	result[8U] = std::byte{contract.player_two.character};
 	result[9U] = std::byte{contract.player_two.palette};
+	result[10U] = std::byte{contract.input_delay_frames};
 	put_u32(result, 12U, contract.seed);
 	put_u32(result, 16U, contract.cadence_ticks);
 	put_u32(result, 20U, contract.cadence_seconds);
@@ -143,7 +151,7 @@ std::expected<
 			NewClassicNetplayMatchContractErrorCode::unsupported_ruleset
 		));
 	}
-	if(wire[10U] != std::byte{0U} || wire[11U] != std::byte{0U} ||
+	if(wire[11U] != std::byte{0U} ||
 		std::ranges::any_of(wire.subspan(28U), [](std::byte value) {
 			return value != std::byte{0U};
 		})) {
@@ -160,6 +168,7 @@ std::expected<
 		.seed = get_u32(wire, 12U),
 		.cadence_ticks = get_u32(wire, 16U),
 		.cadence_seconds = get_u32(wire, 20U),
+		.input_delay_frames = std::to_integer<std::uint8_t>(wire[10U]),
 	};
 	const NewClassicNetplayJoinLock join{
 		.player_two = {

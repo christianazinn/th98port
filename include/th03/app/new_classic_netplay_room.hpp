@@ -35,6 +35,7 @@ struct NewClassicNetplayRoomLaunch final {
 	std::uint8_t palette = 1U;
 	std::uint8_t rank = 1U;
 	bool relay_only = false;
+	std::uint8_t input_delay_frames = 0U;
 };
 
 struct NewClassicNetplayRoomInput final {
@@ -104,6 +105,7 @@ private:
 	NewClassicNetplayRoomTransport transport_ =
 		NewClassicNetplayRoomTransport::online_service;
 	bool relay_only_ = false;
+	std::uint8_t input_delay_frames_ = 0U;
 	NewClassicNetplayRoomLaunchMode pending_mode_ =
 		NewClassicNetplayRoomLaunchMode::host;
 	std::uint8_t character_ = 1U;

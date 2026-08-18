@@ -335,6 +335,12 @@ void test_message_packs(const th03::app::NewClassicMenuFont *authentic_font)
 		auto rejected = th03::app::load_new_classic_message_pack(
 			temporary, font, &*english
 		);
+		if(rejected || rejected.error().code !=
+			th03::app::NewClassicMessagePackErrorCode::placeholder_mismatch) {
+			std::cerr << "placeholder-pack-error=" << (rejected ? 255U :
+				static_cast<unsigned>(rejected.error().code)) << " message=" <<
+				(rejected ? 0U : static_cast<unsigned>(rejected.error().message)) << '\n';
+		}
 		std::error_code ignored;
 		std::filesystem::remove(temporary, ignored);
 			expect(!rejected && rejected.error().code ==

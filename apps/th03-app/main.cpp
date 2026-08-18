@@ -60,10 +60,8 @@
 #include "th03/platform/sdl_input.hpp"
 #include "th03/platform/sdl_audio_device.hpp"
 #include "th03/platform/sdl_platform.hpp"
-#include "th03/platform/udp_socket.hpp"
-#if defined(TH03_ENABLE_RTC_TRANSPORT)
 #include "th03/platform/rtc_room.hpp"
-#endif
+#include "th03/platform/udp_socket.hpp"
 #if defined(_WIN32)
 #include "th03/platform/windows_online.hpp"
 #endif
@@ -545,6 +543,7 @@ void print_usage()
 			"[--tick-rate <ticks>/<seconds>] "
 			"[--smoke-ticks n] [--netplay-host <port> | "
 			"--netplay-join <IPv4-or-hostname:port>] "
+			"[--netplay-input-delay <0..6>] "
 			"[--replay-root <directory>] "
 			"[--netplay-replay-output <V13.RPY>]\n"
 		<< "characters: reimu mima marisa ellen kotohime kana rikako "
@@ -783,6 +782,7 @@ const char *name(th03::app::DirectVsCliErrorCode code) noexcept
 	case th03::app::DirectVsCliErrorCode::invalid_seed: return "invalid-seed";
 	case th03::app::DirectVsCliErrorCode::invalid_smoke_ticks: return "invalid-smoke-ticks";
 	case th03::app::DirectVsCliErrorCode::invalid_netplay_endpoint: return "invalid-netplay-endpoint";
+	case th03::app::DirectVsCliErrorCode::invalid_netplay_input_delay: return "invalid-netplay-input-delay";
 	case th03::app::DirectVsCliErrorCode::invalid_replay_output: return "invalid-replay-output";
 	case th03::app::DirectVsCliErrorCode::conflicting_netplay_mode: return "conflicting-netplay-mode";
 	}
@@ -806,6 +806,8 @@ const char *name(th03::app::DirectVsCliOption option) noexcept
 	case th03::app::DirectVsCliOption::smoke_ticks: return "smoke-ticks";
 	case th03::app::DirectVsCliOption::netplay_host: return "netplay-host";
 	case th03::app::DirectVsCliOption::netplay_join: return "netplay-join";
+	case th03::app::DirectVsCliOption::netplay_input_delay:
+		return "netplay-input-delay";
 	case th03::app::DirectVsCliOption::replay_root: return "replay-root";
 	case th03::app::DirectVsCliOption::netplay_replay_output: return "netplay-replay-output";
 	}
@@ -1327,6 +1329,7 @@ namespace {
 		.seed = request.launch.process.seed,
 		.cadence_ticks = request.tick_rate.ticks,
 		.cadence_seconds = request.tick_rate.seconds,
+		.input_delay_frames = request.netplay_input_delay_frames,
 	};
 }
 
@@ -1373,6 +1376,7 @@ void apply_netplay_contract(
 		.ticks = contract.cadence_ticks,
 		.seconds = contract.cadence_seconds,
 	};
+	request.netplay_input_delay_frames = contract.input_delay_frames;
 	request.launch.process.game_options.input_protocol =
 		th03::InputProtocol::live;
 	request.launch.process.game_options.three_digit_combos = true;
@@ -1571,6 +1575,9 @@ public:
 		std::span<const std::byte> bytes
 	) noexcept
 	{
+#if !defined(TH03_ENABLE_RTC_TRANSPORT)
+		static_cast<void>(channel);
+#endif
 		if(udp_socket_) {
 			return udp_peer_ && udp_socket_->send(*udp_peer_, bytes).has_value();
 		}
@@ -1696,6 +1703,7 @@ private:
 	return encoded && socket.send(peer, *encoded).has_value();
 }
 
+#if defined(TH03_ENABLE_RTC_TRANSPORT)
 [[nodiscard]] bool send_netplay_lobby_wire(
 	NetplayWire &wire,
 	const th03::app::NewClassicNetplayLobbyDatagram &datagram
@@ -1705,6 +1713,7 @@ private:
 		th03::app::encode_new_classic_netplay_lobby_datagram(datagram);
 	return encoded && wire.send(NetplayWireChannel::control, *encoded);
 }
+#endif
 
 struct DirectNetplayLobbyResult final {
 	NetplayWire wire;
@@ -2508,7 +2517,7 @@ int run_direct_netplay_on_platform(
 	}
 	auto replay_capture = std::move(*created_replay_capture);
 	auto session = th03::app::NewClassicNetplayMainSession::create(
-		local_player, std::move(*process)
+		local_player, std::move(*process), negotiated->contract.input_delay_frames
 	);
 	if(!session) {
 		return fail_netplay("netplay-session", "session-create-failed");
@@ -6144,6 +6153,7 @@ ExperienceRunResult run_new_classic_experience(
 	result.launch.process.game_options.three_digit_combos = true;
 	result.tick_rate = product.tick_rate;
 	result.replay_root = product.replay_root;
+	result.netplay_input_delay_frames = launch.input_delay_frames;
 	result.master_volume_percent = settings.master_volume_percent;
 	result.music_volume_percent = settings.music_volume_percent;
 	result.effect_volume_percent = settings.effect_volume_percent;

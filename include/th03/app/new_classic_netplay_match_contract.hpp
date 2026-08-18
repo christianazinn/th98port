@@ -9,7 +9,7 @@
 
 namespace th03::app {
 
-inline constexpr std::uint8_t new_classic_netplay_match_contract_version = 1U;
+inline constexpr std::uint8_t new_classic_netplay_match_contract_version = 2U;
 inline constexpr std::uint32_t new_classic_netplay_ruleset_version = 1U;
 inline constexpr std::size_t new_classic_netplay_match_contract_bytes = 32U;
 
@@ -30,6 +30,7 @@ struct NewClassicNetplayHostLock final {
 	std::uint32_t seed = 0U;
 	std::uint32_t cadence_ticks = 526'315U;
 	std::uint32_t cadence_seconds = 9'328U;
+	std::uint8_t input_delay_frames = 0U;
 };
 
 struct NewClassicNetplayJoinLock final {
@@ -49,6 +50,7 @@ struct NewClassicNetplayMatchContract final {
 	std::uint32_t seed = 0U;
 	std::uint32_t cadence_ticks = 526'315U;
 	std::uint32_t cadence_seconds = 9'328U;
+	std::uint8_t input_delay_frames = 0U;
 
 	[[nodiscard]] friend constexpr bool operator==(
 		const NewClassicNetplayMatchContract &,
@@ -59,6 +61,7 @@ struct NewClassicNetplayMatchContract final {
 enum class NewClassicNetplayMatchContractErrorCode : std::uint8_t {
 	invalid_host_lock,
 	invalid_join_lock,
+	invalid_input_delay,
 	invalid_size,
 	invalid_magic,
 	unsupported_version,

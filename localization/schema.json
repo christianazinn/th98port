@@ -20,6 +20,7 @@
     {"enum": "netplay_room_direct_udp", "id": "netplay.room.direct-udp", "domain": "menu-font", "max_width": 240},
     {"enum": "netplay_room_online_service", "id": "netplay.room.online-service", "domain": "menu-font", "max_width": 240},
     {"enum": "netplay_room_route", "id": "netplay.room.route", "domain": "menu-font", "max_width": 240},
+    {"enum": "netplay_room_input_delay", "id": "netplay.room.input-delay", "domain": "menu-font", "max_width": 240},
     {"enum": "netplay_room_automatic", "id": "netplay.room.automatic", "domain": "menu-font", "max_width": 240},
     {"enum": "netplay_room_relay_only", "id": "netplay.room.relay-only", "domain": "menu-font", "max_width": 240},
     {"enum": "netplay_room_automatic_hint", "id": "netplay.room.automatic-hint", "domain": "menu-font", "max_width": 500},

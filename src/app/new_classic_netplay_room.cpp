@@ -92,6 +92,7 @@ NewClassicNetplayRoom::NewClassicNetplayRoom(
 			NewClassicNetplayRoomTransport::online_service :
 			NewClassicNetplayRoomTransport::direct_udp),
 	relay_only_(preferences.relay_only),
+	input_delay_frames_(preferences.input_delay_frames),
 	rank_(initial_rank)
 {
 	if(rank_ > 3U || !validate_new_classic_settings(NewClassicSettings{
@@ -226,31 +227,36 @@ bool NewClassicNetplayRoom::draw() noexcept
 		}
 	} else {
 		std::array<char, 8U> storage{};
-		if(!font.put_centered(raster, center_x, 112,
+		if(!font.put_centered(raster, center_x, 96,
 			messages.text(NewClassicMessageId::netplay_room_settings),
 			selected_color) ||
-			!font.put(raster, label_left, 160,
+			!font.put(raster, label_left, 144,
 				messages.text(NewClassicMessageId::netplay_room_transport),
 				selection_ == 0U ? selected_color : normal_color) ||
-			!font.put_right(raster, value_right, 160,
+			!font.put_right(raster, value_right, 144,
 				messages.text(transport_ ==
 					NewClassicNetplayRoomTransport::online_service ?
 					NewClassicMessageId::netplay_room_online_service :
 					NewClassicMessageId::netplay_room_direct_udp),
 				detail_color) ||
-			!font.put(raster, label_left, 192,
+			!font.put(raster, label_left, 176,
 				messages.text(transport_ ==
 					NewClassicNetplayRoomTransport::online_service ?
 						NewClassicMessageId::netplay_room_route :
 						NewClassicMessageId::netplay_room_host_port),
 				selection_ == 1U ? selected_color : normal_color) ||
-			!font.put_right(raster, value_right, 192,
+			!font.put_right(raster, value_right, 176,
 				transport_ == NewClassicNetplayRoomTransport::online_service ?
 					messages.text(relay_only_ ?
 						NewClassicMessageId::netplay_room_relay_only :
 						NewClassicMessageId::netplay_room_automatic) :
 					decimal(host_port_, storage), detail_color) ||
-			!font.put_centered(raster, center_x, 224,
+			!font.put(raster, label_left, 208,
+				messages.text(NewClassicMessageId::netplay_room_input_delay),
+				selection_ == 2U ? selected_color : normal_color) ||
+			!font.put_right(raster, value_right, 208,
+				decimal(input_delay_frames_, storage), detail_color) ||
+			!font.put_centered(raster, center_x, 240,
 				messages.text(transport_ ==
 					NewClassicNetplayRoomTransport::online_service ?
 						(relay_only_ ?
@@ -258,9 +264,9 @@ bool NewClassicNetplayRoom::draw() noexcept
 							NewClassicMessageId::netplay_room_automatic_hint) :
 						NewClassicMessageId::netplay_room_socket_warning),
 				detail_color) ||
-			!font.put_centered(raster, center_x, 256,
+			!font.put_centered(raster, center_x, 272,
 				messages.text(NewClassicMessageId::netplay_room_return),
-				selection_ == 2U ? selected_color : normal_color)) {
+				selection_ == 3U ? selected_color : normal_color)) {
 			return false;
 		}
 	}
@@ -368,6 +374,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 					.rank = rank_,
 					.relay_only = transport_ ==
 						NewClassicNetplayRoomTransport::online_service && relay_only_,
+					.input_delay_frames = input_delay_frames_,
 				};
 				status_ = NewClassicNetplayRoomStatus::launch_requested;
 				return {.status = status_};
@@ -466,6 +473,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 					.palette = palette_,
 					.rank = rank_,
 					.relay_only = relay_only_,
+					.input_delay_frames = input_delay_frames_,
 				};
 				status_ = NewClassicNetplayRoomStatus::launch_requested;
 				return {.status = status_};
@@ -491,6 +499,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 				.rank = rank_,
 				.relay_only = transport_ ==
 					NewClassicNetplayRoomTransport::online_service && relay_only_,
+				.input_delay_frames = input_delay_frames_,
 			};
 			status_ = NewClassicNetplayRoomStatus::launch_requested;
 			return {.status = status_};
@@ -508,7 +517,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 			require_release();
 		} else if(input.ui.up || input.ui.down) {
 			selection_ = static_cast<std::uint8_t>(
-				(selection_ + (input.ui.up ? 2U : 1U)) % 3U
+				(selection_ + (input.ui.up ? 3U : 1U)) % 4U
 			);
 			changed = true;
 			require_release();
@@ -525,8 +534,16 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 			}
 			changed = true;
 			require_release();
+		} else if(selection_ == 2U && (input.ui.left || input.ui.right ||
+			input.ui.confirm)) {
+			const auto delta = input.ui.left ? 6U : 1U;
+			input_delay_frames_ = static_cast<std::uint8_t>(
+				(input_delay_frames_ + delta) % 7U
+			);
+			changed = true;
+			require_release();
 		} else if(input.ui.cancel ||
-			(input.ui.confirm && selection_ == 2U)) {
+			(input.ui.confirm && selection_ == 3U)) {
 			screen_ = Screen::menu;
 			selection_ = 3U;
 			changed = true;
@@ -565,6 +582,7 @@ NewClassicNetplayPreferences NewClassicNetplayRoom::preferences() const noexcept
 				NewClassicNetplayConnection::direct_udp,
 		.relay_only = relay_only_,
 		.direct_udp_port = host_port_,
+		.input_delay_frames = input_delay_frames_,
 	};
 }
 
@@ -600,6 +618,7 @@ bool NewClassicNetplayLobbyView::draw() noexcept
 	const auto &font = patch_assets_->menu_font;
 	const auto &messages = patch_assets_->messages(language_);
 	auto &raster = patch_surface_.raster();
+	std::array<char, 8U> storage{};
 	const auto ready = ready_contract_.has_value();
 	if(!font.put_centered(raster, center_x, title_top,
 		messages.text(NewClassicMessageId::netplay_room_title), title_color) ||
@@ -632,7 +651,12 @@ bool NewClassicNetplayLobbyView::draw() noexcept
 			!font.put(raster, label_left, 272,
 				messages.text(NewClassicMessageId::option_rank), normal_color) ||
 			!font.put_right(raster, value_right, 272,
-				messages.text(rank_messages[ready_contract_->rank]), detail_color)) {
+				messages.text(rank_messages[ready_contract_->rank]), detail_color) ||
+			!font.put(raster, label_left, 304,
+				messages.text(NewClassicMessageId::netplay_room_input_delay),
+				normal_color) ||
+			!font.put_right(raster, value_right, 304,
+				decimal(ready_contract_->input_delay_frames, storage), detail_color)) {
 			return false;
 		}
 	} else {
@@ -687,6 +711,7 @@ bool NewClassicNetplayLobbyView::mark_ready(
 		.seed = contract.seed,
 		.cadence_ticks = contract.cadence_ticks,
 		.cadence_seconds = contract.cadence_seconds,
+		.input_delay_frames = contract.input_delay_frames,
 	}, {.player_two = contract.player_two});
 	if(!validated || *validated != contract) {
 		return false;

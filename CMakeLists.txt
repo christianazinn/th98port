@@ -762,6 +762,7 @@ th03_set_warnings(th03_formats)
 # scheduling. This target owns no game process, socket, platform, clock, or UI.
 add_library(th03_app_netplay STATIC
 	src/app/new_classic_netplay_datagram.cpp
+	src/app/new_classic_netplay_input_delay.cpp
 	src/app/new_classic_netplay_lobby.cpp
 	src/app/new_classic_netplay_match_contract.cpp
 	src/app/new_classic_netplay_pause_barrier.cpp
@@ -1588,6 +1589,18 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-new-classic-netplay-simulator-tests
 		COMMAND th03-app-new-classic-netplay-simulator-tests
+	)
+
+	add_executable(th03-app-new-classic-netplay-input-delay-tests
+		tests/test_app_new_classic_netplay_input_delay.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-netplay-input-delay-tests PRIVATE th03_app_netplay
+	)
+	th03_set_warnings(th03-app-new-classic-netplay-input-delay-tests)
+	add_test(
+		NAME th03-app-new-classic-netplay-input-delay-tests
+		COMMAND th03-app-new-classic-netplay-input-delay-tests
 	)
 
 	add_executable(th03-platform-udp-socket-tests

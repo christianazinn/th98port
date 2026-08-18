@@ -157,7 +157,8 @@ validate(const NewClassicNetplayLobbyDatagram &datagram) noexcept
 	return left.player_one == right.player_one && left.rank == right.rank &&
 		left.seed == right.seed &&
 		left.cadence_ticks == right.cadence_ticks &&
-		left.cadence_seconds == right.cadence_seconds;
+		left.cadence_seconds == right.cadence_seconds &&
+		left.input_delay_frames == right.input_delay_frames;
 }
 
 [[nodiscard]] bool equal_join_lock(
@@ -221,6 +222,7 @@ std::expected<
 		result[16U] = std::byte{datagram.host->player_one.character};
 		result[17U] = std::byte{datagram.host->player_one.palette};
 		result[18U] = std::byte{datagram.host->rank};
+		result[19U] = std::byte{datagram.host->input_delay_frames};
 		put_u32(result, 20U, datagram.host->seed);
 		put_u32(result, 24U, datagram.host->cadence_ticks);
 		put_u32(result, 28U, datagram.host->cadence_seconds);
@@ -259,7 +261,6 @@ decode_new_classic_netplay_lobby_datagram(
 		std::to_integer<std::uint8_t>(wire[5U])
 	);
 	if(wire[6U] != std::byte{0U} || wire[7U] != std::byte{0U} ||
-		wire[19U] != std::byte{0U} ||
 		std::ranges::any_of(wire.subspan(34U, 6U), [](std::byte value) {
 			return value != std::byte{0U};
 		}) || std::ranges::any_of(wire.subspan(48U), [](std::byte value) {
@@ -276,6 +277,7 @@ decode_new_classic_netplay_lobby_datagram(
 	};
 	const bool host_present = wire[16U] != std::byte{0U} ||
 		wire[17U] != std::byte{0U} || wire[18U] != std::byte{0U} ||
+		wire[19U] != std::byte{0U} ||
 		get_u32(wire, 20U) != 0U || get_u32(wire, 24U) != 0U ||
 		get_u32(wire, 28U) != 0U;
 	if(host_present) {
@@ -288,6 +290,7 @@ decode_new_classic_netplay_lobby_datagram(
 			.seed = get_u32(wire, 20U),
 			.cadence_ticks = get_u32(wire, 24U),
 			.cadence_seconds = get_u32(wire, 28U),
+			.input_delay_frames = std::to_integer<std::uint8_t>(wire[19U]),
 		};
 	}
 	const bool join_present = wire[32U] != std::byte{0U} ||

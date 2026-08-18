@@ -35,6 +35,16 @@ constexpr std::uint16_t input_cancel = 0x1000U;
 	};
 }
 
+[[nodiscard]] NewClassicNetplayMainSessionError input_delay_error(
+	NewClassicNetplayInputDelayError error
+) noexcept
+{
+	return NewClassicNetplayMainSessionError{
+		.code = NewClassicNetplayMainSessionErrorCode::input_delay_failed,
+		.input_delay = error,
+	};
+}
+
 } // namespace
 
 struct NewClassicNetplayMainSession::Impl final {
@@ -60,6 +70,7 @@ struct NewClassicNetplayMainSession::Impl final {
 	};
 
 	std::unique_ptr<NewClassicNetplayInputTimeline> timeline{};
+	std::optional<NewClassicNetplayInputDelay> input_delay{};
 	std::unique_ptr<MainRollbackCoordinator> coordinator{};
 	std::array<AudioSlot, new_classic_netplay_timeline_slots> audio_slots{};
 	std::array<
@@ -319,7 +330,8 @@ std::expected<
 	NewClassicNetplayMainSessionError
 > NewClassicNetplayMainSession::create(
 	NewClassicNetplayPlayer local_player,
-	std::unique_ptr<MainProcess> process
+	std::unique_ptr<MainProcess> process,
+	std::uint8_t input_delay_frames
 )
 {
 	if(!process) {
@@ -331,12 +343,17 @@ std::expected<
 	if(!timeline) {
 		return std::unexpected(timeline_error(timeline.error()));
 	}
+	auto input_delay = NewClassicNetplayInputDelay::create(input_delay_frames);
+	if(!input_delay) {
+		return std::unexpected(input_delay_error(input_delay.error()));
+	}
 	auto coordinator = MainRollbackCoordinator::create(std::move(process));
 	if(!coordinator) {
 		return std::unexpected(rollback_error(coordinator.error()));
 	}
 	auto impl = std::make_unique<Impl>();
 	impl->timeline = std::move(*timeline);
+	impl->input_delay = std::move(*input_delay);
 	impl->coordinator = std::move(*coordinator);
 	if(!impl->drain_audio(
 		impl->bootstrap_audio, impl->bootstrap_audio_count
@@ -380,7 +397,20 @@ std::expected<
 		};
 	}
 	const auto frame = impl_->timeline->next_frame();
-	const auto submitted = impl_->timeline->submit_local(frame, input);
+	auto effective = input;
+	if(impl_->input_context == InputContext::gameplay) {
+		if(!impl_->input_delay) {
+			return std::unexpected(input_delay_error(
+				NewClassicNetplayInputDelayError::invalid_delay
+			));
+		}
+		const auto delayed = impl_->input_delay->stage(frame, input);
+		if(!delayed) {
+			return std::unexpected(input_delay_error(delayed.error()));
+		}
+		effective = *delayed;
+	}
+	const auto submitted = impl_->timeline->submit_local(frame, effective);
 	if(!submitted) {
 		return std::unexpected(timeline_error(submitted.error()));
 	}
@@ -550,6 +580,7 @@ std::expected<
 	switch(completed) {
 	case StepStatus::phase_transition:
 		if(impl_->input_context == InputContext::gameplay) {
+			impl_->input_delay->reset();
 			impl_->input_context = InputContext::interstitial;
 			impl_->warning_samples_remaining = 27U;
 		} else if(impl_->input_context == InputContext::interstitial) {
@@ -559,6 +590,7 @@ std::expected<
 				));
 			}
 			impl_->input_context = InputContext::gameplay;
+			impl_->input_delay->reset();
 			impl_->gameplay_reliable_warmup = true;
 		} else {
 			return std::unexpected(session_error(
@@ -580,6 +612,7 @@ std::expected<
 			return std::unexpected(rollback_error(started.error()));
 		}
 		impl_->input_context = InputContext::gameplay;
+		impl_->input_delay->reset();
 		impl_->gameplay_reliable_warmup = true;
 		impl_->status = NewClassicNetplayMainSessionStatus::running;
 		break;
@@ -611,6 +644,7 @@ std::expected<
 			));
 		}
 		impl_->status = NewClassicNetplayMainSessionStatus::paused;
+		impl_->input_delay->reset();
 		break;
 	case StepStatus::running:
 	case StepStatus::invalid_input_context:
@@ -649,6 +683,7 @@ std::expected<
 			NewClassicNetplayMainSessionErrorCode::not_running
 		));
 	}
+	impl_->input_delay->reset();
 	constexpr std::array<CoreInput, 3U> canonical_resume{{
 		{},
 		{.system = input_cancel},

@@ -354,9 +354,10 @@ content root is read-only.
 
 `Online Match -> Network Settings` is also part of `PODD.CFG`. Its selected
 Room Code Service or Direct UDP connection, Automatic or Relay Only policy,
-and Direct UDP host port survive returning to the title and later launches.
-They are local product preferences only: they never enter the match contract,
-rollback state, peer packets, replays, or Classic.
+Direct UDP host port, and manual 0..6-frame gameplay input delay survive
+returning to the title and later launches. Transport and port fields are local
+product preferences only. The host's delay is explicitly negotiated and shown
+to both peers, but remains outside rollback state, replays, and Classic.
 
 Validate an external frozen case without copying it into this repository:
 

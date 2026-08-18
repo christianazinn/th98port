@@ -268,6 +268,7 @@ internal static class Program
         {
             "--netplay-host",
             "--netplay-join",
+            "--netplay-input-delay",
             "--p1",
             "--p2",
             "--rank",

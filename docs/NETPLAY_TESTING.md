@@ -21,7 +21,8 @@ for Charge. The negotiated role places this one local value into P1 or P2; the
 special local-VS `T/F/H/B` and numpad columns are not active. Escape requests a
 synchronized Pause. Closing the window (including Alt+F4) leaves the preview
 and sends an immediate departure to the other peer.
-The host supplies P1, rank, seed, and source cadence. The joiner supplies P2.
+The host supplies P1, rank, seed, source cadence, and the common 0..6-frame
+gameplay input delay. The joiner supplies P2.
 The pre-MAIN lobby exchange combines those independently owned values and both
 sides then prove the complete initial simulation. Both machines must use the
 same executable revision and authenticated game data; they no longer duplicate
@@ -74,6 +75,11 @@ row with the host-port editor and does not use TURN.
 Connection, route policy, and the Direct UDP host port persist in `PODD.CFG`;
 Quick Match always uses the online service without changing a saved Direct UDP
 preference.
+`Input Delay (frames)` is also persisted. The host's selected value is shown to
+both peers and frozen into the ready contract. It delays only active rollback
+gameplay; menus, interstitials, synchronized Pause, and terminal scenes retain
+their exact source input timing. Automatic RTT-based tuning remains deferred
+until private-beta measurements exist.
 
 Open `VS Start` -> `Online Match` on both machines. For casual pairing, both
 select `Quick Match`, choose their local character/palette and the same rank,
@@ -171,6 +177,7 @@ normal native run (the canonical ignored workspace layout calls it
   --font /path/to/FONT.ROM \
   --netplay-join WINDOWS_TAILSCALE_IP_OR_MAGICDNS_NAME:31415 \
   --p2 mima \
+  --netplay-input-delay 2 \
   --replay-root ./REPLAY
 ```
 

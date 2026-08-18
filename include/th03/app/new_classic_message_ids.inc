@@ -17,6 +17,7 @@ TH03_NEW_CLASSIC_MESSAGE(netplay_room_transport, "netplay.room.transport", 240U,
 TH03_NEW_CLASSIC_MESSAGE(netplay_room_direct_udp, "netplay.room.direct-udp", 240U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(netplay_room_online_service, "netplay.room.online-service", 240U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(netplay_room_route, "netplay.room.route", 240U, "", "")
+TH03_NEW_CLASSIC_MESSAGE(netplay_room_input_delay, "netplay.room.input-delay", 240U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(netplay_room_automatic, "netplay.room.automatic", 240U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(netplay_room_relay_only, "netplay.room.relay-only", 240U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(netplay_room_automatic_hint, "netplay.room.automatic-hint", 500U, "", "")

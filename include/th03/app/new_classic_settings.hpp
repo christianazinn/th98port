@@ -14,7 +14,7 @@ namespace th03::app {
 inline constexpr std::size_t new_classic_settings_file_bytes = 32U;
 inline constexpr std::size_t new_classic_settings_v2_v3_file_bytes = 28U;
 inline constexpr std::size_t new_classic_settings_v1_file_bytes = 24U;
-inline constexpr std::uint16_t new_classic_settings_format_version = 4U;
+inline constexpr std::uint16_t new_classic_settings_format_version = 5U;
 
 enum class NewClassicWindowMode : std::uint8_t {
 	windowed,
@@ -60,6 +60,7 @@ struct NewClassicNetplayPreferences final {
 		NewClassicNetplayConnection::online_service;
 	bool relay_only = false;
 	std::uint16_t direct_udp_port = 31'415U;
+	std::uint8_t input_delay_frames = 0U;
 
 	friend constexpr bool operator==(
 		const NewClassicNetplayPreferences &,
@@ -101,6 +102,7 @@ enum class NewClassicSettingsErrorCode : std::uint8_t {
 	invalid_netplay_connection,
 	invalid_netplay_relay_policy,
 	invalid_netplay_port,
+	invalid_netplay_input_delay,
 	reserved_nonzero,
 	digest,
 };

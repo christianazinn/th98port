@@ -10,6 +10,7 @@
 #include <span>
 
 #include "th03/app/main_rollback_coordinator.hpp"
+#include "th03/app/new_classic_netplay_input_delay.hpp"
 #include "th03/app/new_classic_netplay_timeline.hpp"
 #include "th03/replay/session.hpp"
 
@@ -36,6 +37,7 @@ enum class NewClassicNetplayMainSessionErrorCode : std::uint8_t {
 	digest_journal_failed,
 	transcript_journal_failed,
 	pause_failed,
+	input_delay_failed,
 };
 
 struct NewClassicNetplayMainSessionError final {
@@ -43,6 +45,7 @@ struct NewClassicNetplayMainSessionError final {
 		NewClassicNetplayMainSessionErrorCode::invalid_process;
 	std::optional<NewClassicNetplayTimelineError> timeline{};
 	std::optional<MainRollbackCoordinatorError> rollback{};
+	std::optional<NewClassicNetplayInputDelayError> input_delay{};
 };
 
 struct NewClassicNetplayMainSessionTick final {
@@ -135,7 +138,8 @@ public:
 		NewClassicNetplayMainSessionError
 	> create(
 		NewClassicNetplayPlayer local_player,
-		std::unique_ptr<MainProcess> process
+		std::unique_ptr<MainProcess> process,
+		std::uint8_t input_delay_frames = 0U
 	);
 
 	~NewClassicNetplayMainSession();

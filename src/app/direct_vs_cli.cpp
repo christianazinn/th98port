@@ -9,7 +9,7 @@ namespace th03::app {
 namespace {
 
 constexpr std::size_t option_count =
-	static_cast<std::size_t>(DirectVsCliOption::netplay_replay_output) + 1U;
+	static_cast<std::size_t>(DirectVsCliOption::netplay_input_delay) + 1U;
 
 DirectVsCliError cli_error(
 	DirectVsCliErrorCode code,
@@ -164,6 +164,9 @@ std::optional<DirectVsCliOption> option_from_text(
 	}
 	if(text == "--netplay-replay-output") {
 		return DirectVsCliOption::netplay_replay_output;
+	}
+	if(text == "--netplay-input-delay") {
+		return DirectVsCliOption::netplay_input_delay;
 	}
 	return std::nullopt;
 }
@@ -347,6 +350,19 @@ std::expected<DirectVsCliRequest, DirectVsCliError> parse_direct_vs_cli(
 			}
 			request.netplay_replay_output = std::filesystem::path(value);
 			break;
+		case DirectVsCliOption::netplay_input_delay: {
+			const auto delay = parse_u32(value);
+			if(!delay || *delay > 6U) {
+				return std::unexpected(cli_error(
+					DirectVsCliErrorCode::invalid_netplay_input_delay,
+					*option,
+					value_index
+				));
+			}
+			request.netplay_input_delay_frames =
+				static_cast<std::uint8_t>(*delay);
+			break;
+		}
 		case DirectVsCliOption::none:
 		case DirectVsCliOption::help:
 		case DirectVsCliOption::vs:

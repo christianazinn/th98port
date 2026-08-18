@@ -370,8 +370,9 @@ Before character lock, peers exchange timestamped probes for at least three
 seconds. `Auto` estimates one-way transit as half the p95 RTT, adds observed
 jitter margin, converts the result upward to source frames, and clamps the
 common delay to 1..6. Both players see the agreed delay and current ping.
-Manual 0..6 selection can be added to Network Settings for testing and expert
-use; hidden asymmetric delay is not allowed in v1.
+Manual 0..6 selection is implemented in Network Settings for testing and
+expert use. It is host-owned, displayed to both peers, and applied only to
+active gameplay; hidden asymmetric delay is not allowed in v1.
 
 The initial deterministic recommendation is:
 
@@ -776,6 +777,13 @@ through the versioned New Classic settings transaction. Reopening the room
 frontend therefore retains its last network setup; Quick Match's mandatory
 online route does not overwrite a saved Direct UDP preference. These fields
 remain outside `T3NLC001` and all peer/replay state.
+
+Session 261 adds the manual 0..6-frame delay without changing source cadence.
+It is persisted locally, but unlike the transport fields the host's value is
+frozen into schema-2 `T3NLC001`/`T3NL001`, displayed on the ready surface, and
+applied symmetrically at the retained MAIN gameplay-input boundary. Every
+non-gameplay owner bypasses it, and each gameplay-domain transition resets its
+fixed ring so an old delayed suffix cannot cross a source boundary.
 
 Still open:
 

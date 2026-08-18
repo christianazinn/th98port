@@ -33,6 +33,7 @@ enum class DirectVsCliOption : std::uint8_t {
 	netplay_join,
 	replay_root,
 	netplay_replay_output,
+	netplay_input_delay,
 };
 
 enum class DirectVsNetplayMode : std::uint8_t {
@@ -53,6 +54,7 @@ enum class DirectVsCliErrorCode : std::uint8_t {
 	invalid_smoke_ticks,
 	invalid_netplay_endpoint,
 	invalid_replay_output,
+	invalid_netplay_input_delay,
 	conflicting_netplay_mode,
 };
 
@@ -72,6 +74,7 @@ struct DirectVsCliRequest {
 	std::string netplay_join_endpoint{};
 	std::filesystem::path replay_root{};
 	std::optional<std::filesystem::path> netplay_replay_output{};
+	std::uint8_t netplay_input_delay_frames = 0U;
 	// Local presentation only; never serialized into the match contract.
 	std::uint8_t master_volume_percent = 100U;
 	std::uint8_t music_volume_percent = 100U;

@@ -12,7 +12,7 @@
 
 namespace th03::app {
 
-inline constexpr std::uint8_t new_classic_netplay_lobby_version = 1U;
+inline constexpr std::uint8_t new_classic_netplay_lobby_version = 2U;
 inline constexpr std::size_t new_classic_netplay_lobby_bytes = 64U;
 inline constexpr std::uint64_t new_classic_netplay_lobby_timeout_ms = 30'000U;
 

@@ -1740,6 +1740,47 @@ void test_new_classic_netplay_main_session_convergence()
 	}
 }
 
+void test_new_classic_netplay_main_session_input_delay()
+{
+	MainDirectVsConfig config{};
+	const auto resources = make_resources(config.player_one, config.player_two);
+	auto process = create_synthetic(config, resources);
+	auto invalid_process = create_synthetic(config, resources);
+	expect(process && invalid_process,
+		"input-delay MAIN fixtures construct");
+	if(!process || !invalid_process) {
+		return;
+	}
+	const auto invalid = NewClassicNetplayMainSession::create(
+		NewClassicNetplayPlayer::player_one, std::move(*invalid_process), 7U
+	);
+	expect(!invalid && invalid.error().code ==
+		th03::app::NewClassicNetplayMainSessionErrorCode::input_delay_failed &&
+		invalid.error().input_delay ==
+			th03::app::NewClassicNetplayInputDelayError::invalid_delay,
+		"MAIN session rejects an unnegotiated delay above six frames");
+	auto session = NewClassicNetplayMainSession::create(
+		NewClassicNetplayPlayer::player_one, std::move(*process), 2U
+	);
+	expect(static_cast<bool>(session),
+		"MAIN session accepts the negotiated two-frame delay");
+	if(!session) {
+		return;
+	}
+	while((*session)->take_audio_command()) {}
+	const NewClassicNetplayOwnedInput first{.word = 0x0020U, .charge = 1U};
+	const NewClassicNetplayOwnedInput second{.word = 0x0004U};
+	const NewClassicNetplayOwnedInput third{.word = 0x0001U};
+	const auto frame_zero = (*session)->advance_local(first);
+	const auto frame_one = (*session)->advance_local(second);
+	const auto frame_two = (*session)->advance_local(third);
+	expect(frame_zero && frame_one && frame_two &&
+		(*session)->local_input(0U) == NewClassicNetplayOwnedInput{} &&
+		(*session)->local_input(1U) == NewClassicNetplayOwnedInput{} &&
+		(*session)->local_input(2U) == first,
+		"MAIN timeline receives two neutral frames then the exact sampled input");
+}
+
 void test_new_classic_netplay_pause_boundary()
 {
 	const auto same_step = [](const th03::StepResult &a,
@@ -3975,6 +4016,7 @@ int main(int argc, char **argv)
 	test_presenter_rollback_state();
 	test_main_process_rollback_transaction();
 	test_main_rollback_coordinator_every_frame();
+	test_new_classic_netplay_main_session_input_delay();
 	test_new_classic_netplay_main_session_convergence();
 	test_new_classic_netplay_pause_boundary();
 	test_new_classic_netplay_confirmed_digest_schedule();

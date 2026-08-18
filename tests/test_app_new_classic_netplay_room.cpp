@@ -128,7 +128,8 @@ void test_host_intent_is_confirmation_gated()
 		intent->transport == NewClassicNetplayRoomTransport::online_service &&
 		!intent->relay_only &&
 		intent->host_port == 31'415U && intent->join_endpoint.empty() &&
-		intent->character == 2U && intent->palette == 2U && intent->rank == 2U,
+		intent->character == 2U && intent->palette == 2U && intent->rank == 2U &&
+		intent->input_delay_frames == 0U,
 		"fresh confirmation publishes the typed default-port host intent");
 	expect(!room.take_launch(), "launch intent is single-consumer");
 }
@@ -232,10 +233,17 @@ void test_settings_back_and_application_quit()
 	const auto adjusted = room.consume({.ui = {.right = true}});
 	expect(adjusted.surface_changed,
 		"Network Settings adjusts the direct host port locally");
+	release(room);
+	static_cast<void>(room.consume({.ui = {.down = true}}));
+	release(room);
+	const auto delayed = room.consume({.ui = {.right = true}});
+	expect(delayed.surface_changed,
+		"Network Settings adjusts the symmetric gameplay delay locally");
 	expect(room.preferences() == NewClassicNetplayPreferences{
 		.connection = NewClassicNetplayConnection::direct_udp,
 		.relay_only = false,
 		.direct_udp_port = 31'416U,
+		.input_delay_frames = 1U,
 	}, "Network Settings exposes its complete persistent preference value");
 	release(room);
 	static_cast<void>(room.consume({.ui = {.cancel = true}}));
@@ -259,6 +267,7 @@ void test_quick_match_intent()
 		.connection = NewClassicNetplayConnection::direct_udp,
 		.relay_only = true,
 		.direct_udp_port = 42'424U,
+		.input_delay_frames = 4U,
 	};
 	NewClassicNetplayRoom room(
 		assets_fixture(), NewClassicLanguageAssetProfile::english, 1U, stored
@@ -286,7 +295,8 @@ void test_quick_match_intent()
 		intent && intent->mode == NewClassicNetplayRoomLaunchMode::quick_match &&
 		intent->transport == NewClassicNetplayRoomTransport::online_service &&
 		intent->join_endpoint.empty() && intent->character == 2U &&
-		intent->palette == 2U && intent->rank == 2U,
+		intent->palette == 2U && intent->rank == 2U &&
+		intent->input_delay_frames == 4U,
 		"Quick Match publishes one server-assigned online launch intent");
 	expect(room.preferences() == stored,
 		"Quick Match does not overwrite the player's Direct UDP preference");
@@ -330,6 +340,7 @@ void test_waiting_and_ready_lobby_views()
 		.player_two = {.character = 7U, .palette = 2U},
 		.rank = 2U,
 		.seed = 0x1234'5678U,
+		.input_delay_frames = 3U,
 	};
 	expect(view.mark_ready(contract) && !std::equal(
 		waiting_pixels.begin(), waiting_pixels.end(), view.surface().pixels.begin()

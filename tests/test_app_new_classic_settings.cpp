@@ -101,6 +101,20 @@ legacy_settings(const NewClassicSettings &settings, std::uint8_t version)
 	return encoded;
 }
 
+[[nodiscard]] std::array<std::byte, new_classic_settings_file_bytes>
+v4_settings(NewClassicSettings settings)
+{
+	settings.netplay.input_delay_frames = 0U;
+	auto encoded = th03::app::encode_new_classic_settings(settings).value();
+	encoded[7U] = std::byte{'4'};
+	put_u16(encoded, 8U, 4U);
+	encoded[27U] = std::byte{0U};
+	put_u32(encoded, 28U, fnv1a32(
+		std::span<const std::byte>(encoded).first(28U)
+	));
+	return encoded;
+}
+
 void expect(bool condition, std::string_view message)
 {
 	++checks;
@@ -200,6 +214,7 @@ void test_codec()
 			.connection = NewClassicNetplayConnection::direct_udp,
 			.relay_only = true,
 			.direct_udp_port = 42'424U,
+			.input_delay_frames = 5U,
 		},
 	};
 	const auto encoded = th03::app::encode_new_classic_settings(settings);
@@ -211,7 +226,7 @@ void test_codec()
 	expect(encoded && decoded && *decoded == settings,
 		"versioned New Classic settings round-trip every field");
 	expect(encoded && encoded->size() == new_classic_settings_file_bytes,
-		"New Classic settings use the frozen 32-byte v4 size");
+		"New Classic settings retain the frozen 32-byte size in v5");
 
 	if(encoded) {
 		for(const auto mutation : std::array{
@@ -327,6 +342,12 @@ void test_codec()
 	expect(!invalid_port && invalid_port.error().code ==
 		NewClassicSettingsErrorCode::invalid_netplay_port,
 		"Direct UDP port rejects zero");
+	invalid = settings;
+	invalid.netplay.input_delay_frames = 7U;
+	const auto invalid_delay = th03::app::encode_new_classic_settings(invalid);
+	expect(!invalid_delay && invalid_delay.error().code ==
+		NewClassicSettingsErrorCode::invalid_netplay_input_delay,
+		"netplay input delay rejects values above six frames");
 }
 
 void test_absent_only_migration_and_isolation()
@@ -448,7 +469,7 @@ void test_defaults_recovery_and_errors()
 		upgraded_v2->settings.music_volume_percent == 45U &&
 		upgraded_v2->settings.effect_volume_percent == 70U &&
 		!upgraded_v2->settings.mute_when_unfocused &&
-		read_bytes(v2_path)[7U] == std::byte{'4'},
+		read_bytes(v2_path)[7U] == std::byte{'5'},
 		"v2 documents upgrade atomically with focus mute defaulted Off");
 
 	const auto v3_path = temporary.path() / "V3.CFG";
@@ -464,8 +485,28 @@ void test_defaults_recovery_and_errors()
 		upgraded_v3->settings.mute_when_unfocused &&
 		upgraded_v3->settings.netplay ==
 			th03::app::NewClassicNetplayPreferences{} &&
-		read_bytes(v3_path)[7U] == std::byte{'4'},
+		read_bytes(v3_path)[7U] == std::byte{'5'},
 		"v3 documents upgrade atomically with default netplay preferences");
+
+	const auto v4_path = temporary.path() / "V4.CFG";
+	auto v4_fixture = NewClassicSettings{};
+	v4_fixture.netplay.connection = NewClassicNetplayConnection::direct_udp;
+	v4_fixture.netplay.relay_only = true;
+	v4_fixture.netplay.direct_udp_port = 42'424U;
+	expect(write_bytes(v4_path, v4_settings(v4_fixture)),
+		"v4 settings fixture writes");
+	const auto upgraded_v4 = th03::app::load_new_classic_settings_store(
+		v4_path, classic_path
+	);
+	expect(upgraded_v4 && upgraded_v4->disposition ==
+		NewClassicSettingsStoreDisposition::upgraded_v4 &&
+		upgraded_v4->settings.netplay.connection ==
+			NewClassicNetplayConnection::direct_udp &&
+		upgraded_v4->settings.netplay.relay_only &&
+		upgraded_v4->settings.netplay.direct_udp_port == 42'424U &&
+		upgraded_v4->settings.netplay.input_delay_frames == 0U &&
+		read_bytes(v4_path)[7U] == std::byte{'5'},
+		"v4 documents upgrade atomically with zero input delay");
 
 	const auto malformed_classic = temporary.path() / "BROKEN.CFG";
 	const auto migrated_defaults = temporary.path() / "DEFAULT.CFG";

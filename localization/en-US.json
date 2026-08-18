@@ -23,6 +23,7 @@
     "netplay.room.direct-udp": "Direct UDP Preview",
     "netplay.room.online-service": "Room Code Service",
     "netplay.room.route": "Connection",
+    "netplay.room.input-delay": "Input Delay (frames)",
     "netplay.room.automatic": "Automatic",
     "netplay.room.relay-only": "Relay Only",
     "netplay.room.automatic-hint": "Direct play can reveal peer IP addresses",
