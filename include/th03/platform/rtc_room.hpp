@@ -15,6 +15,7 @@
 namespace th03::platform {
 
 enum class RtcRoomMode : std::uint8_t {
+	matchmaking,
 	create,
 	join,
 };
@@ -69,6 +70,7 @@ struct RtcRoomConfig final {
 	std::string user_id{};
 	std::string token{};
 	std::string room_code{};
+	std::uint8_t rank = 1U;
 	std::vector<RtcIceServer> ice_servers{};
 	bool relay_only = false;
 };
@@ -92,7 +94,8 @@ struct RtcRoomMessage final {
 rtc_room_websocket_url(
 	std::string_view origin,
 	RtcRoomMode mode,
-	std::string_view room_code
+	std::string_view room_code,
+	std::uint8_t rank = 0U
 );
 
 // The token travels in a WebSocket subprotocol because libdatachannel's

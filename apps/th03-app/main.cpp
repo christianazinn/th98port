@@ -1713,10 +1713,12 @@ struct DirectNetplayLobbyResult final {
 };
 
 struct RtcNetplayRequest final {
+	th03::platform::RtcRoomMode mode = th03::platform::RtcRoomMode::create;
 	std::string origin{};
 	std::string user_id{};
 	std::string token{};
 	std::string room_code{};
+	std::uint8_t rank = 1U;
 	std::vector<th03::platform::RtcIceServer> ice_servers{};
 	bool relay_only = false;
 };
@@ -1933,15 +1935,18 @@ negotiate_rtc_netplay_lobby(
 	using th03::app::NewClassicNetplayLobby;
 	using th03::app::NewClassicNetplayLobbyStatus;
 	using th03::platform::RtcRoomState;
-	const auto mode = request.netplay_mode;
-	const auto local_lock = mode == DirectVsNetplayMode::host ?
+	const auto provisional_mode = request.netplay_mode;
+	const bool matchmaking =
+		rtc_request.mode == th03::platform::RtcRoomMode::matchmaking;
+	const auto local_lock = provisional_mode == DirectVsNetplayMode::host ?
 		netplay_host_lock(request).player_one :
 		netplay_join_lock(request).player_two;
 	th03::app::NewClassicNetplayLobbyView lobby_view(
 		std::move(patch_assets), request.presentation_language,
-		mode == DirectVsNetplayMode::host ?
-			th03::app::NewClassicNetplayLobbyViewRole::host :
-			th03::app::NewClassicNetplayLobbyViewRole::join,
+		matchmaking ? th03::app::NewClassicNetplayLobbyViewRole::matchmaking :
+			(provisional_mode == DirectVsNetplayMode::host ?
+				th03::app::NewClassicNetplayLobbyViewRole::host :
+				th03::app::NewClassicNetplayLobbyViewRole::join),
 		local_lock, static_cast<std::uint8_t>(request.launch.process.rank)
 	);
 	if(!lobby_view.valid()) {
@@ -1955,13 +1960,12 @@ negotiate_rtc_netplay_lobby(
 		));
 	}
 	auto opened = th03::platform::RtcRoom::open({
-		.mode = mode == DirectVsNetplayMode::host ?
-			th03::platform::RtcRoomMode::create :
-			th03::platform::RtcRoomMode::join,
+		.mode = rtc_request.mode,
 		.origin = rtc_request.origin,
 		.user_id = rtc_request.user_id,
 		.token = rtc_request.token,
 		.room_code = rtc_request.room_code,
+		.rank = rtc_request.rank,
 		.ice_servers = rtc_request.ice_servers,
 		.relay_only = rtc_request.relay_only,
 	});
@@ -1972,6 +1976,7 @@ negotiate_rtc_netplay_lobby(
 	}
 	auto room = std::move(*opened);
 	std::string displayed_code{};
+	std::uint8_t assigned_player = 0U;
 	const auto room_started = std::chrono::steady_clock::now();
 	for(;;) {
 		if(direct_netplay_lobby_quit_requested(
@@ -1998,6 +2003,7 @@ negotiate_rtc_netplay_lobby(
 			}
 		}
 		if(snapshot.state == RtcRoomState::ready) {
+			assigned_player = snapshot.player;
 			break;
 		}
 		if(snapshot.state == RtcRoomState::failed ||
@@ -2007,7 +2013,7 @@ negotiate_rtc_netplay_lobby(
 				"netplay-room-connect", "transport-failed"
 			));
 		}
-		if(mode == DirectVsNetplayMode::join &&
+		if(!matchmaking && provisional_mode == DirectVsNetplayMode::join &&
 			std::chrono::steady_clock::now() - room_started >
 				std::chrono::seconds(30)) {
 			return std::unexpected(fail_netplay(
@@ -2021,6 +2027,13 @@ negotiate_rtc_netplay_lobby(
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
+	if(assigned_player != 1U && assigned_player != 2U) {
+		return std::unexpected(fail_netplay(
+			"netplay-room-connect", "invalid-player-assignment"
+		));
+	}
+	const auto mode = assigned_player == 1U ?
+		DirectVsNetplayMode::host : DirectVsNetplayMode::join;
 
 	auto wire = NetplayWire::rtc(std::move(room));
 	const auto clock_seed = static_cast<std::uint64_t>(
@@ -2419,13 +2432,6 @@ int run_direct_netplay_on_platform(
 	using th03::app::NewClassicNetplayPlayer;
 	using th03::app::NewClassicNetplayPostMatchStatus;
 	parsed.launch.process.classic_audio_lifecycle = true;
-	const auto mode = parsed.netplay_mode;
-	const auto local_player = mode == DirectVsNetplayMode::host ?
-		NewClassicNetplayPlayer::player_one :
-		NewClassicNetplayPlayer::player_two;
-	const auto remote_player = mode == DirectVsNetplayMode::host ?
-		NewClassicNetplayPlayer::player_two :
-		NewClassicNetplayPlayer::player_one;
 	const auto audio_data_root = parsed.launch.content.data_root;
 	const auto post_match_content = parsed.launch.content;
 	const auto replay_save_content = parsed.launch.content;
@@ -2459,6 +2465,15 @@ int run_direct_netplay_on_platform(
 	if(!negotiated) {
 		return negotiated.error();
 	}
+	const auto mode = negotiated->lobby.role() ==
+		th03::app::NewClassicNetplayLobbyRole::host ?
+			DirectVsNetplayMode::host : DirectVsNetplayMode::join;
+	const auto local_player = mode == DirectVsNetplayMode::host ?
+		NewClassicNetplayPlayer::player_one :
+		NewClassicNetplayPlayer::player_two;
+	const auto remote_player = mode == DirectVsNetplayMode::host ?
+			NewClassicNetplayPlayer::player_two :
+			NewClassicNetplayPlayer::player_one;
 	apply_netplay_contract(parsed, negotiated->contract);
 	const auto created_contract_hash =
 		th03::app::new_classic_netplay_match_contract_hash(
@@ -5790,13 +5805,23 @@ ExperienceRunResult run_new_classic_experience(
 			.character = static_cast<th03::app::MainCharacter>(launch.character),
 			.palette = static_cast<th03::app::MainPaletteVariant>(launch.palette),
 		};
-	} else {
+	} else if(launch.mode ==
+		th03::app::NewClassicNetplayRoomLaunchMode::join) {
 		result.netplay_mode = th03::app::DirectVsNetplayMode::join;
 		result.netplay_join_endpoint = launch.join_endpoint;
 		result.launch.process.player_two = {
 			.character = static_cast<th03::app::MainCharacter>(launch.character),
 			.palette = static_cast<th03::app::MainPaletteVariant>(launch.palette),
 		};
+	} else {
+		// Matchmaking assigns the network role after signaling. Both local lock
+		// projections therefore carry the one selection made on this keyboard.
+		result.netplay_mode = th03::app::DirectVsNetplayMode::host;
+		result.launch.process.player_one = {
+			.character = static_cast<th03::app::MainCharacter>(launch.character),
+			.palette = static_cast<th03::app::MainPaletteVariant>(launch.palette),
+		};
+		result.launch.process.player_two = result.launch.process.player_one;
 	}
 	return result;
 }
@@ -5873,12 +5898,19 @@ product_rtc_netplay_request(
 #endif
 	}
 	RtcNetplayRequest result{
+		.mode = launch.mode ==
+			th03::app::NewClassicNetplayRoomLaunchMode::quick_match ?
+				th03::platform::RtcRoomMode::matchmaking :
+			(launch.mode == th03::app::NewClassicNetplayRoomLaunchMode::join ?
+				th03::platform::RtcRoomMode::join :
+				th03::platform::RtcRoomMode::create),
 		.origin = *origin,
 		.user_id = credentials->user_id,
 		.token = credentials->token,
 		.room_code = launch.mode ==
 			th03::app::NewClassicNetplayRoomLaunchMode::join ?
 				launch.join_endpoint : std::string{},
+		.rank = launch.rank,
 		.relay_only = launch.relay_only,
 	};
 	if(const auto ice = environment_value(netplay_ice_environment); ice) {

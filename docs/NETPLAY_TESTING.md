@@ -1,9 +1,10 @@
 # New Classic netplay testing
 
 Status: cross-platform technical preview. The source-styled `Online Match`
-menu now defaults to a private six-character room over authenticated
-WebSocket signaling and WebRTC/DTLS data channels. Direct IPv4 UDP remains an
-explicit Network Settings fallback for LAN/Tailscale testing. A
+menu now defaults to casual Quick Match and also supports private six-character
+rooms over authenticated WebSocket signaling and WebRTC/DTLS data channels.
+Direct IPv4 UDP remains an explicit Network Settings fallback for
+LAN/Tailscale testing. A
 confirmed terminal match now continues through the ordinary winner-specific
 MAINL scene, including WIN music, dismissal, and the final black-out.
 
@@ -71,10 +72,13 @@ closed if the service did not issue credentialed TURN. It may add latency but
 does not reveal a direct peer address. The Direct UDP fallback replaces this
 row with the host-port editor and does not use TURN.
 
-Open `VS Start` -> `Online Match` on both machines. The creator selects
-`Create Room`; the assigned code appears on its waiting screen. The other
-player selects `Join Room` and types that code. Character/palette locks and
-rank are still exchanged and verified by `T3NL001` before MAIN is constructed.
+Open `VS Start` -> `Online Match` on both machines. For casual pairing, both
+select `Quick Match`, choose their local character/palette and the same rank,
+then wait; the service pairs two distinct users and randomly assigns sides.
+For a private match, the creator selects `Create Room`; the assigned code
+appears on its waiting screen. The other player selects `Join Room` and types
+that code. Character/palette locks and rank are still exchanged and verified
+by `T3NL001` before MAIN is constructed.
 No direct listening socket is opened by this path, avoiding the Windows
 Firewall listener prompt. The same rollback, Pause, replay, and report owners
 below apply to both transports.

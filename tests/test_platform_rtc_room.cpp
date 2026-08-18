@@ -33,6 +33,15 @@ int main()
 	check(joined && *joined ==
 		"wss://podd.example:8443/api/th03/netplay/rooms/2ABCDE",
 		"join URL");
+	const auto matched = rtc_room_websocket_url(
+		"https://podd.example", RtcRoomMode::matchmaking, "", 3U
+	);
+	check(matched && *matched ==
+		"wss://podd.example/api/th03/netplay/matchmaking?rank=3",
+		"Quick Match URL binds selected rank");
+	check(!rtc_room_websocket_url(
+		"https://podd.example", RtcRoomMode::matchmaking, "", 4U
+	), "rejects Quick Match rank outside source range");
 	const auto local = rtc_room_websocket_url(
 		"http://127.0.0.1:8787", RtcRoomMode::create, ""
 	);

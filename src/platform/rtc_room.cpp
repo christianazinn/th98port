@@ -595,8 +595,9 @@ struct RtcRoom::Impl final {
 			app::NewClassicNetplayRoomWelcome>(&*decoded)) {
 			std::scoped_lock lock(core->mutex);
 			const auto expected_player = core->config.mode == RtcRoomMode::create ?
-				1U : 2U;
-			if(core->welcomed || welcome->player != expected_player ||
+				1U : (core->config.mode == RtcRoomMode::join ? 2U : 0U);
+			if(core->welcomed ||
+				(expected_player != 0U && welcome->player != expected_player) ||
 				core->config.ice_servers.size() + welcome->ice_servers.size() >
 					maximum_ice_servers ||
 				(core->config.mode == RtcRoomMode::join &&
@@ -667,7 +668,7 @@ struct RtcRoom::Impl final {
 	) noexcept
 	{
 		const auto url = rtc_room_websocket_url(
-			config.origin, config.mode, config.room_code
+			config.origin, config.mode, config.room_code, config.rank
 		);
 		if(!url) {
 			return std::unexpected(url.error());
@@ -790,12 +791,17 @@ struct RtcRoom::Impl final {
 std::expected<std::string, RtcRoomError> rtc_room_websocket_url(
 	std::string_view origin,
 	RtcRoomMode mode,
-	std::string_view room_code
+	std::string_view room_code,
+	std::uint8_t rank
 )
 {
 	const auto parsed = parse_origin(origin);
 	if(!parsed) {
 		return std::unexpected(error(RtcRoomErrorCode::invalid_origin));
+	}
+	if(mode == RtcRoomMode::matchmaking &&
+		(!room_code.empty() || rank > 3U)) {
+		return std::unexpected(error(RtcRoomErrorCode::invalid_room_code));
 	}
 	if(mode == RtcRoomMode::join &&
 		!app::valid_new_classic_netplay_room_code(room_code)) {
@@ -803,6 +809,11 @@ std::expected<std::string, RtcRoomError> rtc_room_websocket_url(
 	}
 	if(mode == RtcRoomMode::create && !room_code.empty()) {
 		return std::unexpected(error(RtcRoomErrorCode::invalid_room_code));
+	}
+	if(mode == RtcRoomMode::matchmaking) {
+		return std::string(parsed->secure ? "wss://" : "ws://") +
+			parsed->authority + "/api/th03/netplay/matchmaking?rank=" +
+			std::to_string(static_cast<unsigned>(rank));
 	}
 	return std::string(parsed->secure ? "wss://" : "ws://") +
 		parsed->authority + "/api/th03/netplay/rooms/" +

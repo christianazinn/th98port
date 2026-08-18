@@ -1,11 +1,11 @@
 # New Classic netplay design
 
 Status: **local rollback, the direct-UDP/Tailscale fallback, the product room
-frontend, the private-room service, and the pinned native WebRTC transport are
-implemented. The local service and native adapter now own bounded short-lived
-TURN credentials and Automatic/Relay Only policy; production Cloudflare
-configuration and real cross-machine WebRTC acceptance remain deployment
-gates.**
+frontend, private rooms, casual Quick Match, and the pinned native WebRTC
+transport are implemented. The local service and native adapter own bounded
+short-lived TURN credentials and Automatic/Relay Only policy; production
+Cloudflare configuration and real cross-machine Quick Match acceptance remain
+deployment gates.**
 
 Proposal revision date: 2026-08-17
 
@@ -19,8 +19,9 @@ game.
 - Add `Online Match` as the fourth New Classic-only row under `VS Start`. This
   reuses the row occupied by `Quit` in the Classic four-row VS submenu, so the
   source-sized window does not need to grow. Cancel still returns to the title.
-- Ship private room codes first. Public quick match, spectators, live
-  reconnect, and ranked online VS boards are later products.
+- Keep private room codes and add a deliberately simple, rank-separated casual
+  Quick Match queue. Spectators, live reconnect, ratings, and ranked online VS
+  boards remain later products.
 - Use peer-to-peer rollback during active `GM_VS_1P_2P` MAIN gameplay. Menus,
   character selection, result screens, and replay saving are synchronized
   control phases, not predicted rollback state.
@@ -61,6 +62,7 @@ The New Classic title retains its existing rows. `VS Start` becomes:
 
 `Online Match` opens a source-styled screen with:
 
+- Quick Match
 - Create Room
 - Join Room
 - Network Settings
@@ -71,14 +73,16 @@ name-entry visual language for that code. The existing opaque online user ID
 and token authenticate room creation and joining; enrollment can remain
 automatic and does not become a public account system.
 
-The first release has no public queue. This keeps matchmaking policy,
-moderation, skill rating, and region selection out of the first transport and
-rollback milestone. A later `Quick Match` row can use the same room and match
-contracts.
+Quick Match asks only for the local character, palette, and rank. One
+authenticated hibernating Durable Object per rank pairs the oldest two
+different users and randomly assigns P1/P2. It then reuses private-room
+`T3ROOM2` signaling, TURN, immutable match contract, rollback, replay, and
+report owners. There is no rating, region selection, persistent ticket,
+gameplay relay, or server-declared winner.
 
 After connection, both peers see the same P1-left/P2-right selection layout.
-The room creator is P1 in private rooms. Future quick match assigns sides with
-a server coin flip. Each local cursor responds immediately; reliable control
+The room creator is P1 in private rooms. Quick Match assigns sides with a
+server coin flip. Each local cursor responds immediately; reliable control
 messages replicate cursor and lock state. Character selection itself is not
 rolled back. Once both players lock, both clients construct the same immutable
 match contract and enter a ready barrier before MAIN starts.
@@ -87,7 +91,7 @@ match contract and enter a ready barrier before MAIN starts.
 
 - New Classic `game_mode::vs_1p_2p` only.
 - Two human peers, one locally owned player per peer.
-- Private room code connection.
+- Quick Match or private room-code connection.
 - Direct ICE path with TURN fallback and an optional Relay Only privacy mode.
 - Source-styled character selection, stage splash, active match, result, and
   return flow.
@@ -101,7 +105,7 @@ match contract and enter a ready barrier before MAIN starts.
 
 - Classic netplay.
 - 1P-vs-CPU or CPU-vs-CPU online modes.
-- Public quick match, ratings, tournaments, or an online VS leaderboard.
+- Ratings, tournaments, or an online VS leaderboard.
 - Spectators and mid-match join.
 - State-transfer reconnect or migration to a new peer.
 - More than two players.

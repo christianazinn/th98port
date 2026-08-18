@@ -100,6 +100,8 @@ void test_host_intent_is_confirmation_gated()
 		!room.take_launch(),
 		"held VS confirmation cannot create a network launch intent");
 	release(room);
+	static_cast<void>(room.consume({.ui = {.down = true}}));
+	release(room);
 	auto entered = room.consume({.ui = {.confirm = true}});
 	expect(entered.surface_changed && !room.take_launch(),
 		"Create Room first enters an offline player-lock owner");
@@ -136,8 +138,10 @@ void test_join_entry_and_validation()
 	using namespace th03::app;
 	NewClassicNetplayRoom room(assets_fixture());
 	release(room);
-	static_cast<void>(room.consume({.ui = {.down = true}}));
-	release(room);
+	for(std::uint8_t step = 0U; step < 2U; ++step) {
+		static_cast<void>(room.consume({.ui = {.down = true}}));
+		release(room);
+	}
 	static_cast<void>(room.consume({.ui = {.confirm = true}}));
 	release(room);
 	static_cast<void>(room.consume({.ui = {.down = true}}));
@@ -175,7 +179,7 @@ void test_relay_only_launch_intent()
 	using namespace th03::app;
 	NewClassicNetplayRoom room(assets_fixture());
 	release(room);
-	for(std::uint8_t step = 0U; step < 2U; ++step) {
+	for(std::uint8_t step = 0U; step < 3U; ++step) {
 		static_cast<void>(room.consume({.ui = {.down = true}}));
 		release(room);
 	}
@@ -213,7 +217,7 @@ void test_settings_back_and_application_quit()
 	using namespace th03::app;
 	NewClassicNetplayRoom room(assets_fixture());
 	release(room);
-	for(std::uint8_t step = 0U; step < 2U; ++step) {
+	for(std::uint8_t step = 0U; step < 3U; ++step) {
 		static_cast<void>(room.consume({.ui = {.down = true}}));
 		release(room);
 	}
@@ -241,6 +245,35 @@ void test_settings_back_and_application_quit()
 	});
 	expect(quit.status == NewClassicNetplayRoomStatus::application_quit,
 		"application quit remains unconditional in every room phase");
+}
+
+void test_quick_match_intent()
+{
+	using namespace th03::app;
+	NewClassicNetplayRoom room(assets_fixture());
+	release(room);
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.right = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.down = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.right = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.down = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.right = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.down = true}}));
+	release(room);
+	const auto launched = room.consume({.ui = {.confirm = true}});
+	const auto intent = room.take_launch();
+	expect(launched.status == NewClassicNetplayRoomStatus::launch_requested &&
+		intent && intent->mode == NewClassicNetplayRoomLaunchMode::quick_match &&
+		intent->transport == NewClassicNetplayRoomTransport::online_service &&
+		intent->join_endpoint.empty() && intent->character == 2U &&
+		intent->palette == 2U && intent->rank == 2U,
+		"Quick Match publishes one server-assigned online launch intent");
 }
 
 void test_missing_assets_fail_closed()
@@ -291,6 +324,14 @@ void test_waiting_and_ready_lobby_views()
 	);
 	expect(!missing.valid(),
 		"waiting presentation has no unauthenticated host-font fallback");
+
+	NewClassicNetplayLobbyView matching(
+		assets_fixture(), NewClassicLanguageAssetProfile::english,
+		NewClassicNetplayLobbyViewRole::matchmaking,
+		{.character = 4U, .palette = 2U}, 3U
+	);
+	expect(matching.valid() && matching.mark_room_code("2ABCDE"),
+		"Quick Match waiting view accepts the server-assigned display code");
 }
 
 } // namespace
@@ -301,6 +342,7 @@ int main()
 	test_join_entry_and_validation();
 	test_relay_only_launch_intent();
 	test_settings_back_and_application_quit();
+	test_quick_match_intent();
 	test_missing_assets_fail_closed();
 	test_waiting_and_ready_lobby_views();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

@@ -13,6 +13,7 @@
 namespace th03::app {
 
 enum class NewClassicNetplayRoomLaunchMode : std::uint8_t {
+	quick_match,
 	host,
 	join,
 };
@@ -112,6 +113,7 @@ private:
 };
 
 enum class NewClassicNetplayLobbyViewRole : std::uint8_t {
+	matchmaking,
 	host,
 	join,
 };

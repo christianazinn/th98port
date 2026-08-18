@@ -10,6 +10,7 @@
     {"enum": "title_quit", "id": "title.quit", "domain": "menu-font", "max_width": 128},
     {"enum": "netplay_online_match", "id": "netplay.online-match", "domain": "menu-font", "max_width": 240},
     {"enum": "netplay_room_title", "id": "netplay.room.title", "domain": "menu-font", "max_width": 320},
+    {"enum": "netplay_room_quick_match", "id": "netplay.room.quick-match", "domain": "menu-font", "max_width": 320},
     {"enum": "netplay_room_create", "id": "netplay.room.create", "domain": "menu-font", "max_width": 320},
     {"enum": "netplay_room_join", "id": "netplay.room.join", "domain": "menu-font", "max_width": 320},
     {"enum": "netplay_room_settings", "id": "netplay.room.settings", "domain": "menu-font", "max_width": 320},
@@ -47,6 +48,7 @@
     {"enum": "netplay_room_match_ready", "id": "netplay.room.match-ready", "domain": "menu-font", "max_width": 400},
     {"enum": "netplay_room_cancel_wait", "id": "netplay.room.cancel-wait", "domain": "menu-font", "max_width": 400},
     {"enum": "netplay_room_starting", "id": "netplay.room.starting", "domain": "menu-font", "max_width": 400},
+    {"enum": "netplay_room_finding_opponent", "id": "netplay.room.finding-opponent", "domain": "menu-font", "max_width": 400},
     {"enum": "credit_project", "id": "credit.project", "domain": "menu-font", "max_width": 400},
     {"enum": "credit_patch", "id": "credit.patch", "domain": "menu-font", "max_width": 400},
 

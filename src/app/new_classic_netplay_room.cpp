@@ -113,6 +113,7 @@ bool NewClassicNetplayRoom::draw() noexcept
 
 	if(screen_ == Screen::menu) {
 		constexpr std::array rows{
+			NewClassicMessageId::netplay_room_quick_match,
 			NewClassicMessageId::netplay_room_create,
 			NewClassicMessageId::netplay_room_join,
 			NewClassicMessageId::netplay_room_settings,
@@ -130,9 +131,11 @@ bool NewClassicNetplayRoom::draw() noexcept
 		}
 	} else if(screen_ == Screen::player_setup) {
 		const auto setup_title = pending_mode_ ==
-			NewClassicNetplayRoomLaunchMode::host ?
+			NewClassicNetplayRoomLaunchMode::quick_match ?
+				NewClassicMessageId::netplay_room_quick_match :
+			(pending_mode_ == NewClassicNetplayRoomLaunchMode::host ?
 				NewClassicMessageId::netplay_room_player_one :
-				NewClassicMessageId::netplay_room_player_two;
+				NewClassicMessageId::netplay_room_player_two);
 		if(!font.put_centered(raster, center_x, 96,
 			messages.text(setup_title), selected_color) ||
 			!font.put(raster, label_left, 136,
@@ -151,8 +154,8 @@ bool NewClassicNetplayRoom::draw() noexcept
 				messages.text(NewClassicMessageId::option_rank),
 				selection_ == 2U ? selected_color : normal_color) ||
 			!font.put_right(raster, value_right, 200,
-				messages.text(pending_mode_ ==
-					NewClassicNetplayRoomLaunchMode::host ? rank_messages[rank_] :
+				messages.text(pending_mode_ !=
+					NewClassicNetplayRoomLaunchMode::join ? rank_messages[rank_] :
 					NewClassicMessageId::netplay_room_host_decides), detail_color) ||
 			!font.put_centered(raster, center_x, 248,
 				messages.text(NewClassicMessageId::netplay_room_continue),
@@ -372,7 +375,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 	if(screen_ == Screen::menu) {
 		if(input.ui.up || input.ui.down) {
 			selection_ = static_cast<std::uint8_t>(
-				(selection_ + (input.ui.up ? 3U : 1U)) % 4U
+				(selection_ + (input.ui.up ? 4U : 1U)) % 5U
 			);
 			changed = true;
 			require_release();
@@ -380,15 +383,19 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 			status_ = NewClassicNetplayRoomStatus::back;
 			return {.status = status_};
 		} else if(input.ui.confirm) {
-			if(selection_ == 0U || selection_ == 1U) {
+			if(selection_ <= 2U) {
 				pending_mode_ = selection_ == 0U ?
-					NewClassicNetplayRoomLaunchMode::host :
-					NewClassicNetplayRoomLaunchMode::join;
+					NewClassicNetplayRoomLaunchMode::quick_match :
+					(selection_ == 1U ? NewClassicNetplayRoomLaunchMode::host :
+						NewClassicNetplayRoomLaunchMode::join);
+				if(pending_mode_ == NewClassicNetplayRoomLaunchMode::quick_match) {
+					transport_ = NewClassicNetplayRoomTransport::online_service;
+				}
 				palette_ = pending_mode_ ==
-					NewClassicNetplayRoomLaunchMode::host ? 1U : 2U;
+					NewClassicNetplayRoomLaunchMode::join ? 2U : 1U;
 				screen_ = Screen::player_setup;
 				selection_ = 0U;
-			} else if(selection_ == 2U) {
+			} else if(selection_ == 3U) {
 				screen_ = Screen::settings;
 				selection_ = 0U;
 			} else {
@@ -401,7 +408,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 	} else if(screen_ == Screen::player_setup) {
 		constexpr std::array<std::uint8_t, 5U> host_rows{0U, 1U, 2U, 3U, 4U};
 		constexpr std::array<std::uint8_t, 4U> join_rows{0U, 1U, 3U, 4U};
-		const auto rows = pending_mode_ == NewClassicNetplayRoomLaunchMode::host ?
+		const auto rows = pending_mode_ != NewClassicNetplayRoomLaunchMode::join ?
 			std::span<const std::uint8_t>(host_rows) :
 			std::span<const std::uint8_t>(join_rows);
 		if(input.ui.up || input.ui.down) {
@@ -428,7 +435,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 				);
 			} else if(selection_ == 1U) {
 				palette_ = palette_ == 1U ? 2U : 1U;
-			} else if(pending_mode_ == NewClassicNetplayRoomLaunchMode::host) {
+			} else if(pending_mode_ != NewClassicNetplayRoomLaunchMode::join) {
 				rank_ = static_cast<std::uint8_t>(
 					(static_cast<int>(rank_) + direction + 4) % 4
 				);
@@ -439,13 +446,26 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 			(input.ui.confirm && selection_ == 4U)) {
 			screen_ = Screen::menu;
 			selection_ = pending_mode_ ==
-				NewClassicNetplayRoomLaunchMode::host ? 0U : 1U;
+				NewClassicNetplayRoomLaunchMode::quick_match ? 0U :
+				(pending_mode_ == NewClassicNetplayRoomLaunchMode::host ? 1U : 2U);
 			changed = true;
 			require_release();
 		} else if(input.ui.confirm && selection_ == 3U) {
-			screen_ = pending_mode_ ==
-				NewClassicNetplayRoomLaunchMode::host ?
-					Screen::host_confirmation : Screen::join_entry;
+			if(pending_mode_ == NewClassicNetplayRoomLaunchMode::quick_match) {
+				launch_ = NewClassicNetplayRoomLaunch{
+					.mode = NewClassicNetplayRoomLaunchMode::quick_match,
+					.transport = NewClassicNetplayRoomTransport::online_service,
+					.host_port = host_port_,
+					.character = character_,
+					.palette = palette_,
+					.rank = rank_,
+					.relay_only = relay_only_,
+				};
+				status_ = NewClassicNetplayRoomStatus::launch_requested;
+				return {.status = status_};
+			}
+			screen_ = pending_mode_ == NewClassicNetplayRoomLaunchMode::host ?
+				Screen::host_confirmation : Screen::join_entry;
 			changed = true;
 			require_release();
 		}
@@ -502,7 +522,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 		} else if(input.ui.cancel ||
 			(input.ui.confirm && selection_ == 2U)) {
 			screen_ = Screen::menu;
-			selection_ = 2U;
+			selection_ = 3U;
 			changed = true;
 			require_release();
 		}
@@ -566,10 +586,12 @@ bool NewClassicNetplayLobbyView::draw() noexcept
 	if(!font.put_centered(raster, center_x, title_top,
 		messages.text(NewClassicMessageId::netplay_room_title), title_color) ||
 		!font.put_centered(raster, center_x, 104,
-			messages.text(ready ? NewClassicMessageId::netplay_room_match_ready :
+		messages.text(ready ? NewClassicMessageId::netplay_room_match_ready :
+			(role_ == NewClassicNetplayLobbyViewRole::matchmaking ?
+				NewClassicMessageId::netplay_room_finding_opponent :
 				(role_ == NewClassicNetplayLobbyViewRole::host ?
 					NewClassicMessageId::netplay_room_waiting_player :
-					NewClassicMessageId::netplay_room_contacting_host)),
+					NewClassicMessageId::netplay_room_contacting_host))),
 			ready ? selected_color : detail_color)) {
 		return false;
 	}
@@ -596,14 +618,17 @@ bool NewClassicNetplayLobbyView::draw() noexcept
 			return false;
 		}
 	} else {
-		const auto local_label = role_ == NewClassicNetplayLobbyViewRole::host ?
-			NewClassicMessageId::netplay_room_player_one :
-			NewClassicMessageId::netplay_room_player_two;
+		const auto local_label = role_ ==
+			NewClassicNetplayLobbyViewRole::matchmaking ?
+				NewClassicMessageId::netplay_room_character :
+			(role_ == NewClassicNetplayLobbyViewRole::host ?
+				NewClassicMessageId::netplay_room_player_one :
+				NewClassicMessageId::netplay_room_player_two);
 		if(!put_lock(144, local_label, local_lock_) ||
 			!font.put(raster, label_left, 240,
 				messages.text(NewClassicMessageId::option_rank), normal_color) ||
 			!font.put_right(raster, value_right, 240,
-				messages.text(role_ == NewClassicNetplayLobbyViewRole::host ?
+				messages.text(role_ != NewClassicNetplayLobbyViewRole::join ?
 					rank_messages[rank_] :
 					NewClassicMessageId::netplay_room_host_decides), detail_color) ||
 			(!room_code_.empty() &&
