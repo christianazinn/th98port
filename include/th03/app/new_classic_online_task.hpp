@@ -14,6 +14,7 @@ namespace th03::app {
 
 enum class NewClassicOnlineTaskErrorCode : std::uint8_t {
 	invalid_transport,
+	invalid_credential_source,
 	empty_request,
 	worker_start,
 };
@@ -33,6 +34,28 @@ struct NewClassicOnlineReplayDownloadResult final {
 	NewClassicOnlineReplayId replay_id{};
 	std::optional<std::filesystem::path> path{};
 	std::optional<NewClassicOnlineClientError> error{};
+};
+
+struct NewClassicOnlineCredentialAcquireError final {
+	std::uint8_t detail_code = 0U;
+};
+
+// The platform owns credential persistence and protection. The worker invokes
+// this seam off the logical thread before uploading; its context must outlive
+// the task, just like the transport context.
+struct NewClassicOnlineCredentialSource final {
+	void *context = nullptr;
+	std::expected<
+		NewClassicOnlineCredentials,
+		NewClassicOnlineCredentialAcquireError
+	> (*acquire)(void *) = nullptr;
+};
+
+struct NewClassicOnlineReplayUploadResult final {
+	std::uint8_t slot = 0U;
+	std::optional<NewClassicOnlineUploadResult> upload{};
+	std::optional<NewClassicOnlineClientError> error{};
+	std::optional<NewClassicOnlineCredentialAcquireError> credential_error{};
 };
 
 // Owns one sequential background worker. The supplied transport context must
@@ -130,6 +153,56 @@ private:
 > start_new_classic_online_replay_download(
 	NewClassicOnlineReplayRecord record,
 	std::filesystem::path replay_root,
+	NewClassicOnlineTransport transport
+);
+
+// One explicit upload of an immutable finalized replay. Canonical V13 encoding
+// stays in memory; this owner never creates an upload candidate on disk.
+class NewClassicOnlineReplayUploadTask final {
+public:
+	NewClassicOnlineReplayUploadTask(
+		NewClassicOnlineReplayUploadTask &&
+	) noexcept;
+	NewClassicOnlineReplayUploadTask &operator=(
+		NewClassicOnlineReplayUploadTask &&
+	) noexcept;
+	~NewClassicOnlineReplayUploadTask();
+
+	NewClassicOnlineReplayUploadTask(
+		const NewClassicOnlineReplayUploadTask &
+	) = delete;
+	NewClassicOnlineReplayUploadTask &operator=(
+		const NewClassicOnlineReplayUploadTask &
+	) = delete;
+
+	[[nodiscard]] std::optional<NewClassicOnlineReplayUploadResult>
+	take_completed();
+	[[nodiscard]] bool finished() const noexcept;
+	[[nodiscard]] bool worker_failed() const noexcept;
+
+private:
+	struct Impl;
+	explicit NewClassicOnlineReplayUploadTask(Impl *impl) noexcept;
+	Impl *impl_ = nullptr;
+
+	friend std::expected<
+		NewClassicOnlineReplayUploadTask,
+		NewClassicOnlineTaskError
+	> start_new_classic_online_replay_upload(
+		formats::ReplayDocument,
+		std::uint8_t,
+		NewClassicOnlineCredentialSource,
+		NewClassicOnlineTransport
+	);
+};
+
+[[nodiscard]] std::expected<
+	NewClassicOnlineReplayUploadTask,
+	NewClassicOnlineTaskError
+> start_new_classic_online_replay_upload(
+	formats::ReplayDocument document,
+	std::uint8_t slot,
+	NewClassicOnlineCredentialSource credential_source,
 	NewClassicOnlineTransport transport
 );
 

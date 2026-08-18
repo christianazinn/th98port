@@ -397,7 +397,8 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		(request.autofire_mask > 3U) ||
 		(request.experience == ExperienceProfile::classic &&
 		 (request.autofire_mask != 0U || request.reduced_flash ||
-		  request.new_classic_online_identity_reset_available)) ||
+		  request.new_classic_online_identity_reset_available ||
+		  request.new_classic_online_upload_available)) ||
 		(request.initial_route != ClassicRunnerInitialRoute::title &&
 		 request.experience != ExperienceProfile::new_classic) ||
 		(request.initial_route == ClassicRunnerInitialRoute::new_classic_replay) !=
@@ -869,6 +870,39 @@ ClassicRunner::report_new_classic_online_replay_download(
 	auto reported = static_cast<ClassicOpSession *>(
 		impl_->operations.context
 	)->report_online_replay_download(replay_id, outcome);
+	if(!reported) {
+		return std::unexpected(session_error(reported.error()));
+	}
+	return {};
+}
+
+std::optional<NewClassicReplayUploadRequest>
+ClassicRunner::take_new_classic_online_replay_upload_request() noexcept
+{
+	if(!impl_ || impl_->experience != ExperienceProfile::new_classic ||
+		impl_->operations.consume != &consume_session) {
+		return std::nullopt;
+	}
+	return static_cast<ClassicOpSession *>(
+		impl_->operations.context
+	)->take_online_replay_upload_request();
+}
+
+std::expected<void, ClassicRunnerError>
+ClassicRunner::report_new_classic_online_replay_upload(
+	std::uint8_t slot,
+	NewClassicReplayUploadOutcome outcome
+)
+{
+	if(!impl_ || impl_->experience != ExperienceProfile::new_classic ||
+		impl_->operations.consume != &consume_session) {
+		return std::unexpected(runner_error(
+			ClassicRunnerErrorCode::invalid_request
+		));
+	}
+	auto reported = static_cast<ClassicOpSession *>(
+		impl_->operations.context
+	)->report_online_replay_upload(slot, outcome);
 	if(!reported) {
 		return std::unexpected(session_error(reported.error()));
 	}

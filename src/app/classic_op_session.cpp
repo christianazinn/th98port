@@ -897,6 +897,7 @@ struct ClassicOpSessionBackend final {
 	NewClassicHostKeyName key_name = nullptr;
 	void *key_name_context = nullptr;
 	std::vector<NewClassicOnlineCacheDocument> online_boards{};
+	bool online_upload_available = false;
 	bool online_identity_reset_available = false;
 	std::unique_ptr<NewClassicReplayHub> replay_hub{};
 	std::optional<NewClassicReplayHubResult> replay_hub_result{};
@@ -937,6 +938,9 @@ struct ClassicOpSessionBackend final {
 	std::optional<NewClassicOnlineReplayRecord>
 		pending_online_replay_download{};
 	std::optional<NewClassicOnlineReplayId> active_online_replay_download{};
+	std::optional<NewClassicReplayUploadRequest>
+		pending_online_replay_upload{};
+	std::optional<std::uint8_t> active_online_replay_upload{};
 	std::optional<NewClassicOnlineReplayRecord> pending_online_replay_watch{};
 	std::optional<NewClassicOnlineReplayId> active_online_replay_watch{};
 	std::optional<formats::ReplayDocument> online_replay_playback_document{};
@@ -1021,6 +1025,8 @@ struct ClassicOpSessionBackend final {
 			key_name = runner_request->new_classic_key_name;
 			key_name_context = runner_request->new_classic_key_name_context;
 			online_boards = runner_request->new_classic_online_boards;
+			online_upload_available =
+				runner_request->new_classic_online_upload_available;
 			online_identity_reset_available =
 				runner_request->new_classic_online_identity_reset_available;
 		}
@@ -1068,7 +1074,10 @@ struct ClassicOpSessionBackend final {
 	}
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
-	start_local_replay_browser()
+	start_local_replay_browser(
+		NewClassicReplayBrowserMode mode =
+			NewClassicReplayBrowserMode::playback
+	)
 	{
 		if(replay_browser || !patch_assets || !content_paths ||
 			content_paths->replay_root.empty()) {
@@ -1077,7 +1086,7 @@ struct ClassicOpSessionBackend final {
 			));
 		}
 		auto loaded = NewClassicReplayBrowser::load(
-			content_paths->replay_root, patch_assets
+			content_paths->replay_root, patch_assets, mode
 		);
 		if(!loaded) {
 			return std::unexpected(session_error(
@@ -1089,7 +1098,7 @@ struct ClassicOpSessionBackend final {
 		return {};
 	}
 
-	[[nodiscard]] bool replay_hub_available() const noexcept
+	[[nodiscard]] bool replay_library_available() const noexcept
 	{
 		return std::ranges::any_of(
 			online_boards, [this](const auto &board) {
@@ -1101,6 +1110,11 @@ struct ClassicOpSessionBackend final {
 		);
 	}
 
+	[[nodiscard]] bool replay_hub_available() const noexcept
+	{
+		return online_upload_available || replay_library_available();
+	}
+
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
 	start_replay_hub()
 	{
@@ -1109,7 +1123,9 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
-		auto hub = std::make_unique<NewClassicReplayHub>(patch_assets);
+		auto hub = std::make_unique<NewClassicReplayHub>(
+			patch_assets, replay_library_available(), online_upload_available
+		);
 		if(!hub->valid()) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::replay_browser_failed
@@ -1230,6 +1246,18 @@ struct ClassicOpSessionBackend final {
 					.surface_changed = true,
 					.input_sampled = true,
 				};
+			case NewClassicReplayHubStatus::upload_selected:
+				replay_hub.reset();
+				replay_hub_result.reset();
+				if(auto started = start_local_replay_browser(
+					NewClassicReplayBrowserMode::upload
+				); !started) {
+					return std::unexpected(std::move(started.error()));
+				}
+				return ClassicOpSessionBackendTick{
+					.surface_changed = true,
+					.input_sampled = true,
+				};
 			case NewClassicReplayHubStatus::online_selected:
 			case NewClassicReplayHubStatus::downloaded_selected: {
 				const auto mode = result.status ==
@@ -1303,6 +1331,15 @@ struct ClassicOpSessionBackend final {
 			));
 		}
 		replay_browser_result = *advanced;
+		if(auto request = replay_browser->take_upload_request()) {
+			if(pending_online_replay_upload || active_online_replay_upload) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
+			active_online_replay_upload = request->slot;
+			pending_online_replay_upload = std::move(*request);
+		}
 		return ClassicOpSessionBackendTick{
 			.surface_changed = advanced->surface_changed,
 			.input_sampled = true,
@@ -4152,6 +4189,29 @@ struct ClassicOpSessionBackend final {
 		return {};
 	}
 
+	[[nodiscard]] std::optional<NewClassicReplayUploadRequest>
+	take_online_replay_upload_request() noexcept
+	{
+		return std::exchange(pending_online_replay_upload, std::nullopt);
+	}
+
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	report_online_replay_upload(
+		std::uint8_t slot,
+		NewClassicReplayUploadOutcome outcome
+	)
+	{
+		if(!active_online_replay_upload ||
+			*active_online_replay_upload != slot || !replay_browser ||
+			!replay_browser->report_upload(slot, outcome)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		active_online_replay_upload.reset();
+		return {};
+	}
+
 	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>
 	take_online_replay_watch_request() noexcept
 	{
@@ -5312,6 +5372,33 @@ ClassicOpSession::report_online_replay_download(
 	return static_cast<ClassicOpSessionBackend *>(
 		impl_->operations.context
 	)->report_online_replay_download(replay_id, outcome);
+}
+
+std::optional<NewClassicReplayUploadRequest>
+ClassicOpSession::take_online_replay_upload_request() noexcept
+{
+	if(!impl_ || !impl_->operations.context) {
+		return std::nullopt;
+	}
+	return static_cast<ClassicOpSessionBackend *>(
+		impl_->operations.context
+	)->take_online_replay_upload_request();
+}
+
+std::expected<void, ClassicOpSessionError>
+ClassicOpSession::report_online_replay_upload(
+	std::uint8_t slot,
+	NewClassicReplayUploadOutcome outcome
+)
+{
+	if(!impl_ || !impl_->operations.context) {
+		return std::unexpected(session_error(
+			ClassicOpSessionErrorCode::backend_contract_failed
+		));
+	}
+	return static_cast<ClassicOpSessionBackend *>(
+		impl_->operations.context
+	)->report_online_replay_upload(slot, outcome);
 }
 
 std::optional<NewClassicOnlineReplayRecord>

@@ -423,6 +423,17 @@ void test_replay_hub_and_libraries()
 		NewClassicReplayHubStatus::downloaded_selected,
 		"Replay hub exposes the downloaded replay library");
 
+	NewClassicReplayHub upload_only(patch_assets, false, true);
+	finish_entry_fade(upload_only);
+	static_cast<void>(upload_only.consume({}));
+	static_cast<void>(upload_only.consume({.down = true}));
+	expect(upload_only.selection() == 1U,
+		"upload-only Replay hub omits inert online library rows");
+	static_cast<void>(upload_only.consume({}));
+	expect(upload_only.consume({.confirm = true}).status ==
+		NewClassicReplayHubStatus::upload_selected,
+		"configured Replay hub exposes the explicit Upload Replay destination");
+
 	NewClassicHighScoreMenu online_library(
 		{online_board(
 			2U, 4U, 0x21U,
@@ -777,6 +788,42 @@ void test_catalog_browser_and_save()
 			}),
 			"playback transition publishes black page 0 before synchronous preroll"
 		);
+	}
+	auto upload_browser = NewClassicReplayBrowser::load(
+		root, patch_assets, NewClassicReplayBrowserMode::upload
+	);
+	expect(upload_browser.has_value(),
+		"upload browser reuses the authenticated numbered replay catalog");
+	if(upload_browser) {
+		finish_entry_fade(**upload_browser);
+		static_cast<void>((*upload_browser)->consume({}));
+		const auto list_hash = surface_hash((*upload_browser)->surface());
+		auto selected = (*upload_browser)->consume({.confirm = true});
+		auto request = (*upload_browser)->take_upload_request();
+		expect(selected && selected->surface_changed && request &&
+			request->slot == 0U &&
+			request->document.metadata && document.metadata &&
+			request->document.metadata->name == document.metadata->name &&
+			request->document.session.sample_count ==
+				document.session.sample_count &&
+			surface_hash((*upload_browser)->surface()) != list_hash,
+			"upload selection emits one immutable in-memory V13 document and busy modal");
+		expect(!(*upload_browser)->take_upload_request(),
+			"upload request transfers exactly once to the host owner");
+		expect(!(*upload_browser)->report_upload(
+			1U, NewClassicReplayUploadOutcome::accepted
+		), "completion for another slot cannot satisfy an active upload");
+		expect((*upload_browser)->report_upload(
+			0U, NewClassicReplayUploadOutcome::accepted
+		), "matching host completion redraws the retained upload result");
+		const auto accepted_hash = surface_hash((*upload_browser)->surface());
+		expect((*upload_browser)->consume({})->surface_changed,
+			"host completion publishes on the next deterministic UI boundary");
+		static_cast<void>((*upload_browser)->consume({}));
+		auto dismissed = (*upload_browser)->consume({.confirm = true});
+		expect(dismissed && dismissed->surface_changed &&
+			surface_hash((*upload_browser)->surface()) != accepted_hash,
+			"upload acknowledgement requires release and returns to the same catalog");
 	}
 	auto multi_round_document = make_multi_round_story_document();
 	auto multi_round_encoded = th03::formats::write_v13_replay(

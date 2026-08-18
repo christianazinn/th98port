@@ -4222,8 +4222,22 @@ ExperienceRunResult run_classic_session(
 		parsed.launch.new_classic_device_assignment;
 	const auto online_root =
 		new_classic_settings_path.parent_path() / "ONLINE";
+	const auto online_origin = environment_value(online_origin_environment);
 #if defined(_WIN32)
+	parsed.launch.new_classic_online_upload_available = new_classic &&
+		online_origin && !online_origin->empty() && !parsed.capture_replay &&
+		!platform.oracle_enabled();
 	std::optional<th03::platform::WindowsOnlineTransport> online_transport{};
+	struct OnlineUploadCredentialContext final {
+		std::filesystem::path path{};
+		std::optional<th03::app::NewClassicOnlineCredentials> configured{};
+		bool configured_invalid = false;
+		th03::platform::WindowsOnlineTransport *transport = nullptr;
+	};
+	std::optional<OnlineUploadCredentialContext>
+		online_upload_credential_context{};
+#else
+	parsed.launch.new_classic_online_upload_available = false;
 #endif
 	// The platform transport must outlive the worker that refers to it.
 	std::optional<th03::app::NewClassicOnlineBoardRefreshTask>
@@ -4232,6 +4246,9 @@ ExperienceRunResult run_classic_session(
 		online_replay_download_task{};
 	std::optional<th03::app::NewClassicOnlineReplayId>
 		online_replay_download_id{};
+	std::optional<th03::app::NewClassicOnlineReplayUploadTask>
+		online_replay_upload_task{};
+	std::optional<std::uint8_t> online_replay_upload_slot{};
 	const auto overlay_online_downloads = [&](auto &document) {
 		for(auto &record : document.replay_records) {
 			record.availability =
@@ -4350,13 +4367,13 @@ ExperienceRunResult run_classic_session(
 		persisted_options = persisted->options;
 	}
 	if(new_classic) {
-		if(const auto origin = environment_value(online_origin_environment)) {
+		if(online_origin) {
 			if(platform.oracle_enabled() || parsed.capture_replay) {
 				std::cerr << "status=warning\nstage=online-refresh-start\n"
 					"code=disabled-during-capture\n";
 #if defined(_WIN32)
 			} else if(auto created =
-				th03::platform::create_windows_online_transport(*origin)) {
+				th03::platform::create_windows_online_transport(*online_origin)) {
 				std::error_code directory_error{};
 				std::filesystem::create_directories(
 					online_root, directory_error
@@ -4367,6 +4384,42 @@ ExperienceRunResult run_classic_session(
 						<< directory_error.value() << '\n';
 				} else {
 					online_transport.emplace(std::move(*created));
+					auto credential_path = new_classic_settings_path.empty() ?
+						config_path.parent_path() / "PODD.AUTH" :
+						new_classic_settings_path.parent_path() / "PODD.AUTH";
+					std::optional<th03::app::NewClassicOnlineCredentials>
+						configured_credentials{};
+					bool configured_credentials_invalid = false;
+					const auto configured_user = environment_value(
+						online_user_environment
+					);
+					const auto configured_token = environment_value(
+						online_token_environment
+					);
+					if(configured_user || configured_token) {
+						const th03::app::NewClassicOnlineCredentials candidate{
+							configured_user.value_or(std::string{}),
+							configured_token.value_or(std::string{}),
+						};
+						if(th03::app::validate_new_classic_online_credentials(
+							candidate
+						)) {
+							configured_credentials = candidate;
+						} else {
+							configured_credentials_invalid = true;
+							std::cerr << "status=warning\n"
+								"stage=online-upload-identity\n"
+								"code=environment-invalid\n";
+						}
+					}
+					online_upload_credential_context.emplace(
+						OnlineUploadCredentialContext{
+							.path = std::move(credential_path),
+							.configured = std::move(configured_credentials),
+							.configured_invalid = configured_credentials_invalid,
+							.transport = &*online_transport,
+						}
+					);
 					std::vector<th03::app::NewClassicOnlineCategory> categories{};
 					categories.reserve(9U);
 					const auto rank = static_cast<std::uint8_t>(
@@ -4390,7 +4443,6 @@ ExperienceRunResult run_classic_session(
 						std::cerr << "status=warning\n"
 							"stage=online-refresh-start\ncode="
 							<< static_cast<unsigned>(started.error().code) << '\n';
-						online_transport.reset();
 					}
 				}
 			} else {
@@ -4607,6 +4659,61 @@ ExperienceRunResult run_classic_session(
 				online_replay_download_task.reset();
 			}
 		}
+		if(online_replay_upload_task) {
+			bool completion_reported = false;
+			if(auto uploaded = online_replay_upload_task->take_completed()) {
+				auto outcome =
+					th03::app::NewClassicReplayUploadOutcome::failed;
+				if(uploaded->upload) {
+					outcome = uploaded->upload->status ==
+						th03::app::NewClassicOnlineUploadStatus::accepted ?
+							th03::app::NewClassicReplayUploadOutcome::accepted :
+							th03::app::NewClassicReplayUploadOutcome::rejected;
+				} else if(uploaded->error && uploaded->error->code ==
+					th03::app::NewClassicOnlineClientErrorCode::invalid_document) {
+					outcome = th03::app::NewClassicReplayUploadOutcome::rejected;
+				}
+				if(auto reported =
+					(*runner)->report_new_classic_online_replay_upload(
+						uploaded->slot, outcome
+					); !reported) {
+					return {.exit_code = fail(
+						"online-replay-upload-report", reported.error()
+					)};
+				}
+				if(uploaded->error) {
+					std::cerr << "status=warning\n"
+						"stage=online-replay-upload\ncode="
+						<< static_cast<unsigned>(uploaded->error->code) << '\n';
+				}
+				if(uploaded->credential_error) {
+					std::cerr << "status=warning\n"
+						"stage=online-replay-upload-identity\ncode="
+						<< static_cast<unsigned>(
+							uploaded->credential_error->detail_code
+						) << '\n';
+				}
+				completion_reported = true;
+				online_replay_upload_slot.reset();
+			}
+			if(online_replay_upload_task->finished()) {
+				if(!completion_reported && online_replay_upload_slot) {
+					if(auto reported =
+						(*runner)->report_new_classic_online_replay_upload(
+							*online_replay_upload_slot,
+							th03::app::NewClassicReplayUploadOutcome::failed
+						); !reported) {
+						return {.exit_code = fail(
+							"online-replay-upload-report", reported.error()
+						)};
+					}
+					std::cerr << "status=warning\n"
+						"stage=online-replay-upload\ncode=worker-failed\n";
+					online_replay_upload_slot.reset();
+				}
+				online_replay_upload_task.reset();
+			}
+		}
 		// Sparse replay evidence advances one exact source boundary per host loop
 		// without waiting for wall time. Replay samples still own all deterministic
 		// input; no audio is submitted and discarded surfaces are never composed.
@@ -4741,6 +4848,93 @@ ExperienceRunResult run_classic_session(
 				); !reported) {
 					return {.exit_code = fail(
 						"online-replay-download-report", reported.error()
+					)};
+				}
+#endif
+			}
+			if(auto request =
+				(*runner)->take_new_classic_online_replay_upload_request()) {
+				auto report_immediate = [&](auto outcome) {
+					return (*runner)->report_new_classic_online_replay_upload(
+						request->slot, outcome
+					);
+				};
+#if defined(_WIN32)
+				if(!online_transport || !online_upload_credential_context) {
+					if(auto reported = report_immediate(
+						th03::app::NewClassicReplayUploadOutcome::unavailable
+					); !reported) {
+						return {.exit_code = fail(
+							"online-replay-upload-report", reported.error()
+						)};
+					}
+				} else if(online_replay_upload_task ||
+					online_replay_upload_slot) {
+					if(auto reported = report_immediate(
+						th03::app::NewClassicReplayUploadOutcome::failed
+					); !reported) {
+						return {.exit_code = fail(
+							"online-replay-upload-report", reported.error()
+						)};
+					}
+				} else {
+					const th03::app::NewClassicOnlineCredentialSource source{
+						.context = &*online_upload_credential_context,
+						.acquire = +[](void *opaque) -> std::expected<
+							th03::app::NewClassicOnlineCredentials,
+							th03::app::NewClassicOnlineCredentialAcquireError
+						> {
+							auto &context = *static_cast<
+								OnlineUploadCredentialContext *>(opaque);
+							if(context.configured_invalid || context.transport == nullptr) {
+								return std::unexpected(th03::app::
+									NewClassicOnlineCredentialAcquireError{1U});
+							}
+							if(context.configured) {
+								return *context.configured;
+							}
+							auto acquired = th03::platform::
+								load_or_enroll_windows_online_credentials(
+									context.path, context.transport->transport()
+								);
+							if(!acquired) {
+								return std::unexpected(th03::app::
+									NewClassicOnlineCredentialAcquireError{
+										static_cast<std::uint8_t>(
+											static_cast<std::uint8_t>(acquired.error().code) + 2U
+										)
+									});
+							}
+							return std::move(*acquired);
+						},
+					};
+					auto started =
+						th03::app::start_new_classic_online_replay_upload(
+							std::move(request->document), request->slot, source,
+							online_transport->transport()
+						);
+					if(!started) {
+						if(auto reported = report_immediate(
+							th03::app::NewClassicReplayUploadOutcome::failed
+						); !reported) {
+							return {.exit_code = fail(
+								"online-replay-upload-report", reported.error()
+							)};
+						}
+						std::cerr << "status=warning\n"
+							"stage=online-replay-upload-start\ncode="
+							<< static_cast<unsigned>(started.error().code) << '\n';
+					} else {
+						online_replay_upload_slot = request->slot;
+						online_replay_upload_task.emplace(std::move(*started));
+					}
+				}
+#else
+				if(auto reported = report_immediate(
+					th03::app::NewClassicReplayUploadOutcome::unavailable
+				); !reported) {
+					return {.exit_code = fail(
+						"online-replay-upload-report", reported.error()
 					)};
 				}
 #endif

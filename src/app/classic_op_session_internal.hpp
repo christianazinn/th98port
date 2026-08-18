@@ -366,6 +366,13 @@ public:
 		const NewClassicOnlineReplayId &replay_id,
 		NewClassicOnlineReplayDownloadOutcome outcome
 	);
+	[[nodiscard]] std::optional<NewClassicReplayUploadRequest>
+	take_online_replay_upload_request() noexcept;
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	report_online_replay_upload(
+		std::uint8_t slot,
+		NewClassicReplayUploadOutcome outcome
+	);
 	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>
 	take_online_replay_watch_request() noexcept;
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>

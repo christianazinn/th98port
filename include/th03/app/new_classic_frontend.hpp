@@ -80,9 +80,27 @@ enum class NewClassicReplayBrowserStatus : std::uint8_t {
 	application_quit,
 };
 
+enum class NewClassicReplayBrowserMode : std::uint8_t {
+	playback,
+	upload,
+};
+
+enum class NewClassicReplayUploadOutcome : std::uint8_t {
+	accepted,
+	rejected,
+	failed,
+	unavailable,
+};
+
+struct NewClassicReplayUploadRequest final {
+	std::uint8_t slot = 0U;
+	formats::ReplayDocument document{};
+};
+
 enum class NewClassicReplayHubStatus : std::uint8_t {
 	running,
 	local_selected,
+	upload_selected,
 	online_selected,
 	downloaded_selected,
 	back,
@@ -100,7 +118,9 @@ struct NewClassicReplayHubResult final {
 class NewClassicReplayHub final {
 public:
 	explicit NewClassicReplayHub(
-		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+		bool libraries_available = true,
+		bool upload_available = false
 	);
 
 	[[nodiscard]] bool valid() const noexcept;
@@ -118,6 +138,7 @@ private:
 	NewClassicPatchSurface patch_surface_{};
 	NewClassicReplayHubStatus status_ = NewClassicReplayHubStatus::running;
 	std::size_t selection_ = 0U;
+	std::vector<NewClassicReplayHubStatus> rows_{};
 	bool valid_ = false;
 	bool fade_in_active_ = true;
 	std::uint8_t fade_boundary_ = 0U;
@@ -151,7 +172,9 @@ public:
 		ReplaySlotStoreError
 	> load(
 		std::filesystem::path replay_root,
-		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+		NewClassicReplayBrowserMode mode =
+			NewClassicReplayBrowserMode::playback
 	);
 
 	[[nodiscard]] std::expected<
@@ -167,13 +190,20 @@ public:
 	[[nodiscard]] bool prepare_playback_transition() noexcept;
 	[[nodiscard]] std::optional<formats::ReplayDocument>
 	take_selected_document();
+	[[nodiscard]] std::optional<NewClassicReplayUploadRequest>
+	take_upload_request() noexcept;
+	[[nodiscard]] bool report_upload(
+		std::uint8_t slot,
+		NewClassicReplayUploadOutcome outcome
+	) noexcept;
 
 private:
 	friend struct NewClassicReplayBrowserTestAccess;
 	explicit NewClassicReplayBrowser(
 		std::filesystem::path replay_root,
 		NewClassicReplayCatalog catalog,
-		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+		NewClassicReplayBrowserMode mode
 	);
 	void draw() noexcept;
 	void draw_patch() noexcept;
@@ -182,6 +212,8 @@ private:
 
 	std::filesystem::path replay_root_{};
 	NewClassicReplayCatalog catalog_{};
+	NewClassicReplayBrowserMode mode_ =
+		NewClassicReplayBrowserMode::playback;
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
 	NewClassicPatchSurface patch_surface_{};
 	std::uint8_t selected_slot_ = 0U;
@@ -192,6 +224,11 @@ private:
 	std::optional<formats::ReplayDocument> detail_document_{};
 	bool checkpoint_focus_ = true;
 	bool practice_settings_modal_ = false;
+	std::optional<NewClassicReplayUploadRequest> upload_request_{};
+	std::optional<std::uint8_t> active_upload_slot_{};
+	std::optional<NewClassicReplayUploadOutcome> upload_feedback_{};
+	bool upload_pending_ = false;
+	bool host_surface_changed_ = false;
 	bool fade_in_active_ = false;
 	std::uint8_t fade_boundary_ = 0U;
 	NewClassicReplayBrowserStatus status_ =

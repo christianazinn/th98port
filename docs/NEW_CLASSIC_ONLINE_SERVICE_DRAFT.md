@@ -354,6 +354,17 @@ transactions above. With no replay-backed cache, Replay still enters the local
 browser directly. `My Uploads` remains absent until enrollment and upload
 history exist.
 
+Session 258 exposes explicit upload without changing the deterministic owner.
+On Windows, a configured origin adds one Upload Replay row even when no cached
+board contains records. Confirming a numbered local slot emits one immutable
+parsed V13 document; a host worker loads or enrolls the DPAPI-protected opaque
+identity and passes the document to the existing in-memory upload transaction.
+The only replay bytes created are the bounded HTTPS request body. A result is
+latched into the retained screen on the next source boundary, while an absent
+origin or unsupported platform exposes no inert row. `My Uploads` remains
+pending because the service has no authenticated history projection yet.
+
 This is deliberately a deployment seam rather than a hidden public endpoint.
-Enrollment, upload consent, `My Records`, real Cloudflare resources, and the
-pinned Container adapter remain pending.
+`My Records`, real Cloudflare resources, and the pinned Container adapter
+remain pending. Selecting Upload Replay is the explicit upload consent action;
+first use may enroll the opaque identity automatically.

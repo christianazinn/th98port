@@ -758,7 +758,8 @@ scan_new_classic_replays(const std::filesystem::path &replay_root)
 std::expected<std::unique_ptr<NewClassicReplayBrowser>, ReplaySlotStoreError>
 NewClassicReplayBrowser::load(
 	std::filesystem::path replay_root,
-	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	NewClassicReplayBrowserMode mode
 )
 {
 	auto catalog = scan_new_classic_replays(replay_root);
@@ -767,7 +768,8 @@ NewClassicReplayBrowser::load(
 	}
 	return std::unique_ptr<NewClassicReplayBrowser>(
 		new NewClassicReplayBrowser(
-			std::move(replay_root), std::move(*catalog), std::move(patch_assets)
+			std::move(replay_root), std::move(*catalog), std::move(patch_assets),
+			mode
 		)
 	);
 }
@@ -775,10 +777,12 @@ NewClassicReplayBrowser::load(
 NewClassicReplayBrowser::NewClassicReplayBrowser(
 	std::filesystem::path replay_root,
 	NewClassicReplayCatalog catalog,
-	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	NewClassicReplayBrowserMode mode
 ) :
 	replay_root_(std::move(replay_root)),
 	catalog_(std::move(catalog)),
+	mode_(mode),
 	patch_assets_(std::move(patch_assets))
 {
 	const auto first = std::find_if(
@@ -827,7 +831,14 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 		return font.put_right(raster, right, top, text, color);
 	};
 	if(!detail_document_) {
-		bool drawn = put(64, 80, messages.text(
+		bool drawn = true;
+		if(mode_ == NewClassicReplayBrowserMode::upload) {
+			drawn = font.put_centered(
+				raster, 320, 48,
+				messages.text(NewClassicMessageId::replay_upload_title), 9U
+			);
+		}
+		drawn = drawn && put(64, 80, messages.text(
 			NewClassicMessageId::replay_header_slot), 9U) &&
 			put(104, 80, messages.text(
 				NewClassicMessageId::replay_header_name), 9U) &&
@@ -873,6 +884,28 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 				patch_put_fixed(
 					font, raster, 560, top, catalog_marker(entry, messages), 12, color
 				);
+		}
+		if(drawn && (upload_pending_ || upload_feedback_)) {
+			drawn = raster.clear({160, 144, 320U, 96U}, 0U);
+			const auto message = upload_pending_ ?
+				NewClassicMessageId::replay_upload_pending :
+				*upload_feedback_ == NewClassicReplayUploadOutcome::accepted ?
+					NewClassicMessageId::replay_upload_accepted :
+				*upload_feedback_ == NewClassicReplayUploadOutcome::rejected ?
+					NewClassicMessageId::replay_upload_rejected :
+				*upload_feedback_ == NewClassicReplayUploadOutcome::unavailable ?
+					NewClassicMessageId::replay_upload_unavailable :
+					NewClassicMessageId::replay_upload_failed;
+			drawn = drawn && font.put_centered(
+				raster, 320, 176, messages.text(message),
+				upload_pending_ ? 9U : 13U
+			);
+			if(!upload_pending_) {
+				drawn = drawn && font.put_centered(
+					raster, 320, 208,
+					messages.text(NewClassicMessageId::replay_upload_dismiss), 15U
+				);
+			}
 		}
 		static_cast<void>(drawn);
 		static_cast<void>(patch_surface_.publish(raster.access_page()));
@@ -1313,6 +1346,13 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 		status_ = NewClassicReplayBrowserStatus::application_quit;
 		return NewClassicReplayBrowserResult{.status = status_};
 	}
+	if(host_surface_changed_) {
+		host_surface_changed_ = false;
+		return NewClassicReplayBrowserResult{
+			.surface_changed = true,
+			.status = status_,
+		};
+	}
 	if(fade_in_active_) {
 		auto &raster = patch_surface_.raster();
 		bool changed = false;
@@ -1335,6 +1375,9 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 			.status = status_,
 		};
 	}
+	if(upload_pending_) {
+		return NewClassicReplayBrowserResult{.status = status_};
+	}
 	if(!input_allowed_) {
 		if(!any(input)) {
 			input_allowed_ = true;
@@ -1345,6 +1388,14 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 		return NewClassicReplayBrowserResult{.status = status_};
 	}
 	input_allowed_ = false;
+	if(upload_feedback_) {
+		upload_feedback_.reset();
+		active_upload_slot_.reset();
+		draw();
+		return NewClassicReplayBrowserResult{
+			.surface_changed = true, .status = status_
+		};
+	}
 	if(practice_settings_modal_) {
 		practice_settings_modal_ = false;
 		draw();
@@ -1455,6 +1506,29 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 		);
 	} else if(input.confirm &&
 		catalog_.slots[selected_slot_].state == ReplayCatalogSlotState::ready) {
+		if(mode_ == NewClassicReplayBrowserMode::upload) {
+			auto loaded = load_replay_slot(replay_root_, selected_slot_);
+			if(!loaded) {
+				return std::unexpected(std::move(loaded.error()));
+			}
+			if(!loaded->document) {
+				catalog_.slots[selected_slot_] = {};
+				draw();
+				return NewClassicReplayBrowserResult{
+					.surface_changed = true, .status = status_
+				};
+			}
+			upload_request_ = NewClassicReplayUploadRequest{
+				.slot = selected_slot_,
+				.document = std::move(*loaded->document),
+			};
+			active_upload_slot_ = selected_slot_;
+			upload_pending_ = true;
+			draw();
+			return NewClassicReplayBrowserResult{
+				.surface_changed = true, .status = status_
+			};
+		}
 		if(auto opened = open_selected(); !opened) {
 			return std::unexpected(std::move(opened.error()));
 		}
@@ -1521,6 +1595,30 @@ NewClassicReplayBrowser::take_selected_document()
 	return std::move(detail_document_);
 }
 
+std::optional<NewClassicReplayUploadRequest>
+NewClassicReplayBrowser::take_upload_request() noexcept
+{
+	return std::exchange(upload_request_, std::nullopt);
+}
+
+bool NewClassicReplayBrowser::report_upload(
+	std::uint8_t slot,
+	NewClassicReplayUploadOutcome outcome
+) noexcept
+{
+	if(mode_ != NewClassicReplayBrowserMode::upload || !upload_pending_ ||
+		!active_upload_slot_ || *active_upload_slot_ != slot ||
+		upload_request_) {
+		return false;
+	}
+	upload_pending_ = false;
+	upload_feedback_ = outcome;
+	input_allowed_ = false;
+	draw();
+	host_surface_changed_ = true;
+	return true;
+}
+
 bool NewClassicReplayBrowserTestAccess::checkpoint_focus(
 	const NewClassicReplayBrowser &browser
 ) noexcept
@@ -1551,10 +1649,21 @@ std::size_t NewClassicReplayBrowserTestAccess::physical_row_count(
 }
 
 NewClassicReplayHub::NewClassicReplayHub(
-	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	bool libraries_available,
+	bool upload_available
 ) :
 	patch_assets_(std::move(patch_assets))
 {
+	rows_.push_back(NewClassicReplayHubStatus::local_selected);
+	if(upload_available) {
+		rows_.push_back(NewClassicReplayHubStatus::upload_selected);
+	}
+	if(libraries_available) {
+		rows_.push_back(NewClassicReplayHubStatus::online_selected);
+		rows_.push_back(NewClassicReplayHubStatus::downloaded_selected);
+	}
+	rows_.push_back(NewClassicReplayHubStatus::back);
 	valid_ = static_cast<bool>(patch_assets_);
 	draw();
 	if(valid_) {
@@ -1581,22 +1690,34 @@ void NewClassicReplayHub::draw() noexcept
 	raster.apply_pending_palette();
 	const auto &font = patch_assets_->menu_font;
 	const auto &messages = patch_assets_->messages();
-	const std::array ids{
-		NewClassicMessageId::replay_command_local,
-		NewClassicMessageId::replay_command_online,
-		NewClassicMessageId::replay_command_downloaded,
-		NewClassicMessageId::replay_command_return,
+	const auto message = [](NewClassicReplayHubStatus row) noexcept {
+		switch(row) {
+		case NewClassicReplayHubStatus::local_selected:
+			return NewClassicMessageId::replay_command_local;
+		case NewClassicReplayHubStatus::upload_selected:
+			return NewClassicMessageId::replay_command_upload;
+		case NewClassicReplayHubStatus::online_selected:
+			return NewClassicMessageId::replay_command_online;
+		case NewClassicReplayHubStatus::downloaded_selected:
+			return NewClassicMessageId::replay_command_downloaded;
+		case NewClassicReplayHubStatus::back:
+			return NewClassicMessageId::replay_command_return;
+		case NewClassicReplayHubStatus::running:
+		case NewClassicReplayHubStatus::application_quit:
+			break;
+		}
+		return NewClassicMessageId::replay_command_return;
 	};
 	valid_ = font.put_centered(
 		raster, 320, 80, messages.text(NewClassicMessageId::title_replay), 9U
 	);
-	for(std::size_t row = 0U; valid_ && row < ids.size(); ++row) {
+	for(std::size_t row = 0U; valid_ && row < rows_.size(); ++row) {
 		const auto top = static_cast<std::int32_t>(144U + (row * 32U));
 		const auto color = static_cast<present::Index4>(
 			row == selection_ ? 12U : 15U
 		);
 		valid_ = font.put_centered(
-			raster, 320, top, messages.text(ids[row]), color
+			raster, 320, top, messages.text(message(rows_[row])), color
 		);
 		if(valid_ && row == selection_) {
 			valid_ = font.put(raster, 160, top, ">", 12U);
@@ -1652,17 +1773,11 @@ NewClassicReplayHubResult NewClassicReplayHub::consume(
 		return {.status = status_};
 	}
 	if(input.up) {
-		selection_ = (selection_ + 3U) % 4U;
+		selection_ = (selection_ + rows_.size() - 1U) % rows_.size();
 	} else if(input.down) {
-		selection_ = (selection_ + 1U) % 4U;
+		selection_ = (selection_ + 1U) % rows_.size();
 	} else if(input.confirm) {
-		constexpr std::array outcomes{
-			NewClassicReplayHubStatus::local_selected,
-			NewClassicReplayHubStatus::online_selected,
-			NewClassicReplayHubStatus::downloaded_selected,
-			NewClassicReplayHubStatus::back,
-		};
-		status_ = outcomes[selection_];
+		status_ = rows_[selection_];
 		return {.status = status_};
 	} else {
 		return {.status = status_};

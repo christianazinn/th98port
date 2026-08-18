@@ -21,6 +21,7 @@
 #include "th03/app/new_classic_language.hpp"
 #include "th03/app/new_classic_score_store.hpp"
 #include "th03/app/new_classic_settings_store.hpp"
+#include "th03/app/replay_slot_store.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/formats/v13.hpp"
 
@@ -1395,6 +1396,15 @@ bool authentic_replay_hub_gate(
 	request.fm_available = false;
 	request.experience = ExperienceProfile::new_classic;
 	request.new_classic_online_boards.push_back(online_high_score_board());
+	const bool upload_expected = watch_document.has_value();
+	if(upload_expected) {
+		if(!commit_replay_slot(
+			request.content.replay_root, 0U, *watch_document
+		)) {
+			return false;
+		}
+		request.new_classic_online_upload_available = true;
+	}
 	auto loaded = ClassicRunner::load(std::move(request));
 	if(!loaded) {
 		return false;
@@ -1463,10 +1473,36 @@ bool authentic_replay_hub_gate(
 			ClassicOpSessionScene::replay_browser || !settle_patch_menu()) {
 		return false;
 	}
+	if(upload_expected) {
+		// Upload Replay is capability-gated between Local and Online. The
+		// retained owner emits one immutable document and redraws only after the
+		// host reports the matching slot.
+		if(!step(0x0002U) || !step() || !step(0x0020U) ||
+			!settle_patch_menu() || !step(0x0020U)) {
+			return false;
+		}
+		auto upload =
+			runner.take_new_classic_online_replay_upload_request();
+		if(!upload || upload->slot != 0U ||
+			!runner.report_new_classic_online_replay_upload(
+				upload->slot, NewClassicReplayUploadOutcome::accepted
+			) || !step() || !last || !last->surface_changed || !step() ||
+			!step(0x0020U) || !step() || !step(0x1000U) ||
+			!settle_patch_menu()) {
+			return false;
+		}
+	}
 
-	// Online Replay Library is the second row. Its detail owns the same bounded
+	// Online Replay Library follows Local (and the capability-gated Upload row).
+	// Its detail owns the same bounded
 	// Download and Watch requests as the score-oriented cross-link.
-	if(!step(0x0002U) || !step() || !step(0x0020U) ||
+	const auto online_downs = upload_expected ? 2U : 1U;
+	for(std::size_t row = 0U; row < online_downs; ++row) {
+		if(!step(0x0002U) || !step()) {
+			return false;
+		}
+	}
+	if(!step(0x0020U) ||
 		!settle_patch_menu() || !step(0x0020U) || !step() ||
 		!step(0x0020U)) {
 		return false;

@@ -299,10 +299,11 @@ Personal Bests
 Return
 ```
 
-The current Replay hub is:
+The Replay hub is capability-shaped. With cached replay rows it is:
 
 ```text
 Local Replays
+Upload Replay              (only with a configured upload service)
 Online Replay Library
 Downloaded Replays
 Return
@@ -315,9 +316,10 @@ The HiScore hub appears only when at least one validated cached online board
 exists for the active rank. With no such board, HiScore still opens the local
 viewer directly, so an offline or unconfigured installation gains no empty
 navigation layer. The Replay hub appears only when the active-rank cache
-contains at least one replay record. Otherwise Replay still opens the local
-viewer directly, so an offline, curated-history-only, or unconfigured
-installation gains no empty navigation layer.
+contains at least one replay record or an actual upload origin is configured.
+Unsupported rows are omitted rather than disabled. Otherwise Replay still
+opens the local viewer directly, so an offline, curated-history-only, or
+unconfigured installation gains no empty navigation layer.
 
 An ordinary online leaderboard entry is derived by a pinned, sandboxed,
 resource-limited server verifier from an uploaded V13 replay. The client never
@@ -503,10 +505,17 @@ document back to OP, crosses a black/silent boundary, rebases the scheduler,
 and adopts the existing New Classic playback owner. Session 214 adds the
 source-styled Replay hub plus replay-only online and downloaded libraries;
 without an active-rank replay record, the direct local route remains. Account
-mutation, upload, My Uploads, and My Records remain deferred. Session 215
+mutation, My Uploads, and My Records remain deferred. Session 215
 completes the four-row HiScore hub: Personal Bests summarizes active-rank local
 best score/stage, playtime, and 1CC totals for every unlocked character from a
 read-only expanded score snapshot.
+
+Session 258 adds explicit local replay upload. A configured Windows origin adds
+one Upload Replay row and a retained numbered-slot owner. The selected parsed
+document crosses a typed boundary once; DPAPI identity acquisition/enrollment,
+canonical V13 encoding, and HTTPS all run on a bounded background worker. The
+encoder writes request memory only, and completion is presented on the next
+retained UI boundary. Offline and unsupported platforms expose no upload row.
 
 - Define leaderboard/replay identifiers, category keys, provenance, and local
   cache documents without selecting a service vendor.
@@ -514,7 +523,7 @@ read-only expanded score snapshot.
   Complete for cached online boards in session 201 and Personal Bests in
   session 215.
 - Add the Replay hub when an online/downloaded view exists. Complete in
-  session 214.
+  session 214; session 258 also admits the real upload capability.
 - Preserve direct Local views until then.
 
 Gate: offline behavior, replay cross-links, legacy entries without fake replay

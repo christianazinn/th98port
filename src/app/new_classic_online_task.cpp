@@ -26,6 +26,14 @@ struct NewClassicOnlineReplayDownloadTask::Impl final {
 	std::jthread worker{};
 };
 
+struct NewClassicOnlineReplayUploadTask::Impl final {
+	std::mutex mutex{};
+	std::optional<NewClassicOnlineReplayUploadResult> completed{};
+	std::atomic<bool> finished = false;
+	std::atomic<bool> worker_failed = false;
+	std::jthread worker{};
+};
+
 NewClassicOnlineBoardRefreshTask::NewClassicOnlineBoardRefreshTask(
 	Impl *impl
 ) noexcept : impl_(impl)
@@ -256,6 +264,128 @@ start_new_classic_online_replay_download(
 		});
 	}
 	return NewClassicOnlineReplayDownloadTask(impl.release());
+}
+
+NewClassicOnlineReplayUploadTask::NewClassicOnlineReplayUploadTask(
+	Impl *impl
+) noexcept : impl_(impl)
+{
+}
+
+NewClassicOnlineReplayUploadTask::NewClassicOnlineReplayUploadTask(
+	NewClassicOnlineReplayUploadTask &&other
+) noexcept : impl_(std::exchange(other.impl_, nullptr))
+{
+}
+
+NewClassicOnlineReplayUploadTask &
+NewClassicOnlineReplayUploadTask::operator=(
+	NewClassicOnlineReplayUploadTask &&other
+) noexcept
+{
+	if(this != &other) {
+		delete impl_;
+		impl_ = std::exchange(other.impl_, nullptr);
+	}
+	return *this;
+}
+
+NewClassicOnlineReplayUploadTask::~NewClassicOnlineReplayUploadTask()
+{
+	delete impl_;
+}
+
+std::optional<NewClassicOnlineReplayUploadResult>
+NewClassicOnlineReplayUploadTask::take_completed()
+{
+	if(impl_ == nullptr) {
+		return std::nullopt;
+	}
+	const std::scoped_lock lock(impl_->mutex);
+	return std::exchange(impl_->completed, std::nullopt);
+}
+
+bool NewClassicOnlineReplayUploadTask::finished() const noexcept
+{
+	return impl_ == nullptr || impl_->finished.load(std::memory_order_acquire);
+}
+
+bool NewClassicOnlineReplayUploadTask::worker_failed() const noexcept
+{
+	return impl_ != nullptr &&
+		impl_->worker_failed.load(std::memory_order_acquire);
+}
+
+std::expected<NewClassicOnlineReplayUploadTask, NewClassicOnlineTaskError>
+start_new_classic_online_replay_upload(
+	formats::ReplayDocument document,
+	std::uint8_t slot,
+	NewClassicOnlineCredentialSource credential_source,
+	NewClassicOnlineTransport transport
+)
+{
+	if(transport.context == nullptr || transport.perform == nullptr) {
+		return std::unexpected(NewClassicOnlineTaskError{
+			.code = NewClassicOnlineTaskErrorCode::invalid_transport,
+		});
+	}
+	if(credential_source.context == nullptr ||
+		credential_source.acquire == nullptr) {
+		return std::unexpected(NewClassicOnlineTaskError{
+			.code = NewClassicOnlineTaskErrorCode::invalid_credential_source,
+		});
+	}
+	if(slot >= replay_slot_count || !document.metadata) {
+		return std::unexpected(NewClassicOnlineTaskError{
+			.code = NewClassicOnlineTaskErrorCode::empty_request,
+		});
+	}
+	auto impl = std::unique_ptr<NewClassicOnlineReplayUploadTask::Impl>(
+		new(std::nothrow) NewClassicOnlineReplayUploadTask::Impl()
+	);
+	if(!impl) {
+		return std::unexpected(NewClassicOnlineTaskError{
+			.code = NewClassicOnlineTaskErrorCode::worker_start,
+		});
+	}
+	try {
+		auto *context = impl.get();
+		impl->worker = std::jthread(
+			[context, document = std::move(document), slot,
+			 credential_source, transport](std::stop_token stop) {
+				try {
+					NewClassicOnlineReplayUploadResult result{.slot = slot};
+					if(!stop.stop_requested()) {
+						auto credentials = credential_source.acquire(
+							credential_source.context
+						);
+						if(!credentials) {
+							result.credential_error = credentials.error();
+						} else if(!stop.stop_requested()) {
+							auto uploaded = upload_new_classic_online_replay(
+								document, *credentials, transport
+							);
+							if(uploaded) {
+								result.upload = std::move(*uploaded);
+							} else {
+								result.error = std::move(uploaded.error());
+							}
+						}
+						const std::scoped_lock lock(context->mutex);
+						context->completed = std::move(result);
+					}
+				} catch(...) {
+					context->worker_failed.store(true, std::memory_order_release);
+				}
+				context->finished.store(true, std::memory_order_release);
+			}
+		);
+	} catch(...) {
+		return std::unexpected(NewClassicOnlineTaskError{
+			.code = NewClassicOnlineTaskErrorCode::worker_start,
+		});
+	}
+	return NewClassicOnlineReplayUploadTask(impl.release());
 }
 
 } // namespace th03::app

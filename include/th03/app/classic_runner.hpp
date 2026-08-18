@@ -106,6 +106,10 @@ struct ClassicRunnerRequest final {
 	// construction. The source-time owner treats them as immutable read-only
 	// input and never performs network or filesystem work while advancing.
 	std::vector<NewClassicOnlineCacheDocument> new_classic_online_boards{};
+	// Host capability only. When true, Replay exposes an explicit Upload
+	// destination whose immutable document request is completed outside source
+	// time. No endpoint or credential crosses into the retained owner.
+	bool new_classic_online_upload_available = false;
 	// Immutable host capability only. The retained Options owner never reads a
 	// credential; it may merely emit one confirmed reset request when true.
 	bool new_classic_online_identity_reset_available = false;
@@ -249,6 +253,13 @@ public:
 	report_new_classic_online_replay_download(
 		const NewClassicOnlineReplayId &replay_id,
 		NewClassicOnlineReplayDownloadOutcome outcome
+	);
+	[[nodiscard]] std::optional<NewClassicReplayUploadRequest>
+	take_new_classic_online_replay_upload_request() noexcept;
+	[[nodiscard]] std::expected<void, ClassicRunnerError>
+	report_new_classic_online_replay_upload(
+		std::uint8_t slot,
+		NewClassicReplayUploadOutcome outcome
 	);
 	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>
 	take_new_classic_online_replay_watch_request() noexcept;
