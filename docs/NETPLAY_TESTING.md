@@ -23,6 +23,9 @@ synchronized Pause. Closing the window (including Alt+F4) leaves the preview
 and sends an immediate departure to the other peer.
 The host supplies P1, rank, seed, source cadence, and the common 0..6-frame
 gameplay input delay. The joiner supplies P2.
+Each product host launch generates a fresh nonzero match seed. If both players
+select the same character and palette, P1 keeps the selected palette and the
+negotiated contract moves P2 to the opposite palette.
 The pre-MAIN lobby exchange combines those independently owned values and both
 sides then prove the complete initial simulation. Both machines must use the
 same executable revision and authenticated game data; they no longer duplicate
@@ -88,6 +91,12 @@ row with the host-port editor and does not use TURN.
 Connection, route policy, and the Direct UDP host port persist in `PODD.CFG`;
 Quick Match always uses the online service without changing a saved Direct UDP
 preference.
+The Direct UDP host port is edited as a five-digit numeric field and accepts
+only the unprivileged range 1024..65535. The host waiting surface displays that
+port and tells the joining player to combine it with the host's LAN or
+Tailscale address. Direct Join uses SDL's physical text input, so keyboard
+layout and Shift produce punctuation such as `:` normally; letters, including
+`X`, are text rather than gameplay Bomb/Backspace while the editor owns focus.
 `Input Delay (frames)` is also persisted. The host's selected value is shown to
 both peers and frozen into the ready contract. It delays only active rollback
 gameplay; menus, interstitials, synchronized Pause, and terminal scenes retain
@@ -101,6 +110,11 @@ For a private match, the creator selects `Create Room`; the assigned code
 appears on its waiting screen. The other player selects `Join Room` and types
 that code. Character/palette locks and rank are still exchanged and verified
 by `T3NL001` before MAIN is constructed.
+Create Room never asks the host to invent a code: its confirmation states that
+the service assigns one. If the service origin, identity, signaling endpoint,
+ICE path, or peer connection is unavailable, the product displays a
+recoverable connection report and returns to a fresh New Classic title instead
+of terminating.
 No direct listening socket is opened by this path, avoiding the Windows
 Firewall listener prompt. The same rollback, Pause, replay, and report owners
 below apply to both transports.

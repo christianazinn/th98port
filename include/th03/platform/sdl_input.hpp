@@ -215,6 +215,7 @@ public:
 	[[nodiscard]] bool any_keyboard_scancode_held() const noexcept;
 	[[nodiscard]] std::optional<SDL_Scancode>
 	take_keyboard_scancode_press() noexcept;
+	[[nodiscard]] std::optional<char> take_keyboard_text_character() noexcept;
 	[[nodiscard]] bool main_window_focused() const noexcept;
 	// Product menus replace keyboard policy only between fresh schedulers and
 	// after a complete release. Connected controller slots remain assigned.
@@ -277,6 +278,8 @@ private:
 	std::array<bool, static_cast<std::size_t>(SDL_SCANCODE_COUNT)>
 		raw_keyboard_held_{};
 	std::optional<SDL_Scancode> last_scancode_press_{};
+	std::array<char, 64U> keyboard_text_{};
+	std::size_t keyboard_text_count_ = 0U;
 	std::array<GamepadState, sdl_gamepad_capacity> gamepads_{};
 	std::size_t connected_gamepad_count_ = 0U;
 	bool native_runtime_lease_ = false;

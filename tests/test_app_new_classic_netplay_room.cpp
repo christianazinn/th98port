@@ -156,9 +156,14 @@ void test_join_entry_and_validation()
 		invalid.surface_changed && !room.take_launch(),
 		"empty Join endpoint is visibly rejected without networking");
 	release(room);
-	constexpr std::string_view endpoint = "2ABCD5";
+	expect(room.text_entry_active(),
+		"Join Room enables physical SDL text input only inside its editor");
+	constexpr std::string_view endpoint = "2AXCD5";
 	for(const char character : endpoint) {
-		const auto typed = room.consume({.text_character = character});
+		const auto typed = room.consume({
+			.ui = {.bomb = character == 'X'},
+			.text_character = character,
+		});
 		expect(typed.surface_changed,
 			"each accepted endpoint character redraws the local editor");
 	}
@@ -213,6 +218,46 @@ void test_relay_only_launch_intent()
 		"Relay Only survives confirmation into the typed network intent");
 }
 
+void test_direct_endpoint_uses_physical_text()
+{
+	using namespace th03::app;
+	NewClassicNetplayRoom room(assets_fixture());
+	release(room);
+	for(std::uint8_t step = 0U; step < 3U; ++step) {
+		static_cast<void>(room.consume({.ui = {.down = true}}));
+		release(room);
+	}
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.right = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.cancel = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.up = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	release(room);
+	for(std::uint8_t step = 0U; step < 2U; ++step) {
+		static_cast<void>(room.consume({.ui = {.down = true}}));
+		release(room);
+	}
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	release(room);
+	expect(room.text_entry_active(),
+		"Direct Join enters the same physical text-input owner");
+	constexpr std::string_view endpoint = "myxhost:31415";
+	for(const char character : endpoint) {
+		static_cast<void>(room.consume({.text_character = character}));
+	}
+	static_cast<void>(room.consume({.text_character = ';'}));
+	const auto connected = room.consume({.ui = {.confirm = true}});
+	const auto intent = room.take_launch();
+	expect(connected.status == NewClassicNetplayRoomStatus::launch_requested &&
+		intent && intent->transport == NewClassicNetplayRoomTransport::direct_udp &&
+		intent->join_endpoint == endpoint,
+		"X and shifted colon survive Direct Join while semicolon is rejected");
+}
+
 void test_settings_back_and_application_quit()
 {
 	using namespace th03::app;
@@ -230,9 +275,38 @@ void test_settings_back_and_application_quit()
 	release(room);
 	static_cast<void>(room.consume({.ui = {.down = true}}));
 	release(room);
-	const auto adjusted = room.consume({.ui = {.right = true}});
-	expect(adjusted.surface_changed,
-		"Network Settings adjusts the direct host port locally");
+	const auto ignored = room.consume({.ui = {.right = true}});
+	expect(!ignored.surface_changed && room.preferences().direct_udp_port ==
+		31'415U,
+		"Direct host port ignores impractical left/right adjustment");
+	const auto editing = room.consume({.ui = {.confirm = true}});
+	expect(editing.surface_changed && room.text_entry_active(),
+		"Direct host port opens a bounded numeric editor");
+	release(room);
+	for(std::uint8_t digit = 0U; digit < 5U; ++digit) {
+		static_cast<void>(room.consume({.erase = true}));
+	}
+	static_cast<void>(room.consume({.text_character = 'X'}));
+	for(const char digit : std::string_view{"80"}) {
+		static_cast<void>(room.consume({.text_character = digit}));
+	}
+	const auto invalid_port = room.consume({.ui = {.confirm = true}});
+	expect(invalid_port.surface_changed && room.text_entry_active() &&
+		room.preferences().direct_udp_port == 31'415U,
+		"letters are ignored and a privileged direct port is visibly rejected");
+	release(room);
+	expect(!room.consume({.text_character = 'X'}).surface_changed,
+		"invalid letters cannot clear or redraw the numeric-port error state");
+	for(std::uint8_t digit = 0U; digit < 2U; ++digit) {
+		static_cast<void>(room.consume({.erase = true}));
+	}
+	for(const char digit : std::string_view{"42424"}) {
+		static_cast<void>(room.consume({.text_character = digit}));
+	}
+	const auto accepted_port = room.consume({.ui = {.confirm = true}});
+	expect(accepted_port.surface_changed && !room.text_entry_active() &&
+		room.preferences().direct_udp_port == 42'424U,
+		"valid numeric direct host port commits without thousands of key presses");
 	release(room);
 	static_cast<void>(room.consume({.ui = {.down = true}}));
 	release(room);
@@ -242,7 +316,7 @@ void test_settings_back_and_application_quit()
 	expect(room.preferences() == NewClassicNetplayPreferences{
 		.connection = NewClassicNetplayConnection::direct_udp,
 		.relay_only = false,
-		.direct_udp_port = 31'416U,
+		.direct_udp_port = 42'424U,
 		.input_delay_frames = 1U,
 	}, "Network Settings exposes its complete persistent preference value");
 	release(room);
@@ -365,6 +439,24 @@ void test_waiting_and_ready_lobby_views()
 	);
 	expect(matching.valid() && matching.mark_room_code("2ABCDE"),
 		"Quick Match waiting view accepts the server-assigned display code");
+
+	NewClassicNetplayLobbyView direct(
+		assets_fixture(), NewClassicLanguageAssetProfile::english,
+		NewClassicNetplayLobbyViewRole::host,
+		{.character = 1U, .palette = 1U}, 1U,
+		static_cast<std::uint16_t>(42'424U)
+	);
+	expect(direct.valid() && !std::equal(
+		waiting_pixels.begin(), waiting_pixels.end(), direct.surface().pixels.begin()
+	), "Direct host waiting surface displays the join port and instructions");
+	NewClassicNetplayLobbyView invalid_port(
+		assets_fixture(), NewClassicLanguageAssetProfile::english,
+		NewClassicNetplayLobbyViewRole::host,
+		{.character = 1U, .palette = 1U}, 1U,
+		static_cast<std::uint16_t>(80U)
+	);
+	expect(!invalid_port.valid(),
+		"Direct waiting surface rejects a port outside the public editor domain");
 }
 
 } // namespace
@@ -374,6 +466,7 @@ int main()
 	test_host_intent_is_confirmation_gated();
 	test_join_entry_and_validation();
 	test_relay_only_launch_intent();
+	test_direct_endpoint_uses_physical_text();
 	test_settings_back_and_application_quit();
 	test_quick_match_intent();
 	test_missing_assets_fail_closed();

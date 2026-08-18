@@ -561,6 +561,17 @@ void test_match_contract()
 		!invalid_delay && invalid_delay.error().code ==
 			NewClassicNetplayMatchContractErrorCode::invalid_input_delay,
 		"each peer's character lock fails in its own ownership domain");
+	const auto palette_collision = create_new_classic_netplay_match_contract({
+		.player_one = {.character = 4U, .palette = 2U},
+	}, {
+		.player_two = {.character = 4U, .palette = 2U},
+	});
+	expect(palette_collision &&
+		palette_collision->player_one == NewClassicNetplayCharacterLock{
+			.character = 4U, .palette = 2U
+		} && palette_collision->player_two == NewClassicNetplayCharacterLock{
+			.character = 4U, .palette = 1U
+		}, "same-character collision gives P1 priority and flips P2's palette");
 	if(encoded) {
 		auto corrupt = *encoded;
 		corrupt[4U] = std::byte{3U};

@@ -111,6 +111,7 @@ void test_kinds_and_source_surface()
 		th03::app::NewClassicNetplayReportKind::peer_left,
 		th03::app::NewClassicNetplayReportKind::peer_timeout,
 		th03::app::NewClassicNetplayReportKind::desync,
+		th03::app::NewClassicNetplayReportKind::connection_failed,
 	}) {
 		th03::app::NewClassicNetplayReport report(kind, metrics(), assets);
 		expect(report.valid(), "every report kind composes");

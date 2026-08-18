@@ -19,6 +19,7 @@ enum class NewClassicNetplayReportKind : std::uint8_t {
 	peer_left,
 	peer_timeout,
 	desync,
+	connection_failed,
 };
 
 struct NewClassicNetplayReportMetrics final {

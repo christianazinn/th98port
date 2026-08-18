@@ -61,7 +61,9 @@ offers Resume or Forfeit; Forfeit ends both previews without inventing a TH03
 winner or publishing the incomplete in-memory replay. Completed matches,
 Forfeit, peer departure/timeout, and deterministic proof mismatches now end on
 an authenticated source-styled local report instead of disappearing directly
-into console output.
+into console output. Missing or unreachable online-service configuration is
+also a recoverable report; it cannot terminate the product from Quick Match,
+Create Room, or Join Room.
 
 ### Optional Classic and direct-VS application
 

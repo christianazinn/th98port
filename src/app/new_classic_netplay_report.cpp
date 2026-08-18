@@ -44,6 +44,8 @@ constexpr present::Index4 footer_color = 13U;
 		return NewClassicMessageId::netplay_report_peer_timeout;
 	case NewClassicNetplayReportKind::desync:
 		return NewClassicMessageId::netplay_report_desync;
+	case NewClassicNetplayReportKind::connection_failed:
+		return NewClassicMessageId::netplay_room_connection_failed;
 	}
 	return NewClassicMessageId::netplay_report_desync;
 }
@@ -107,6 +109,14 @@ bool NewClassicNetplayReport::draw() noexcept
 		!font.put_centered(raster, center_x, outcome_top,
 			messages.text(outcome_message(kind_)), outcome_color)) {
 		return false;
+	}
+	if(kind_ == NewClassicNetplayReportKind::connection_failed) {
+		return font.put_centered(raster, center_x, 160,
+			messages.text(NewClassicMessageId::netplay_room_connection_retry),
+			label_color) &&
+			font.put_centered(raster, center_x, footer_top,
+				messages.text(NewClassicMessageId::netplay_report_footer), footer_color) &&
+			patch_surface_.publish(raster.access_page());
 	}
 
 	const std::array labels{

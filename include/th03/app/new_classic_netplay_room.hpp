@@ -75,6 +75,7 @@ public:
 	) noexcept;
 	[[nodiscard]] present::SourceSurface surface() const noexcept;
 	[[nodiscard]] NewClassicNetplayRoomStatus status() const noexcept;
+	[[nodiscard]] bool text_entry_active() const noexcept;
 	[[nodiscard]] std::optional<NewClassicNetplayRoomLaunch>
 		take_launch() noexcept;
 	[[nodiscard]] NewClassicNetplayPreferences preferences() const noexcept;
@@ -85,6 +86,7 @@ private:
 		player_setup,
 		host_confirmation,
 		join_entry,
+		port_entry,
 		settings,
 	};
 
@@ -101,6 +103,7 @@ private:
 	Screen screen_ = Screen::menu;
 	std::uint8_t selection_ = 0U;
 	std::uint16_t host_port_ = 31'415U;
+	std::string port_entry_{};
 	std::string join_endpoint_{};
 	NewClassicNetplayRoomTransport transport_ =
 		NewClassicNetplayRoomTransport::online_service;
@@ -133,7 +136,8 @@ public:
 		NewClassicLanguageAssetProfile language,
 		NewClassicNetplayLobbyViewRole role,
 		NewClassicNetplayCharacterLock local_lock,
-		std::uint8_t rank
+		std::uint8_t rank,
+		std::optional<std::uint16_t> direct_host_port = std::nullopt
 	);
 
 	[[nodiscard]] bool valid() const noexcept;
@@ -153,6 +157,7 @@ private:
 		NewClassicNetplayLobbyViewRole::host;
 	NewClassicNetplayCharacterLock local_lock_{};
 	std::uint8_t rank_ = 1U;
+	std::optional<std::uint16_t> direct_host_port_{};
 	std::optional<NewClassicNetplayMatchContract> ready_contract_{};
 	std::string room_code_{};
 	NewClassicPatchSurface patch_surface_{};

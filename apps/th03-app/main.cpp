@@ -80,6 +80,33 @@ constexpr const char *pixel_oracle_selector_environment =
 constexpr const char *online_origin_environment = "TH03_ONLINE_ORIGIN";
 constexpr const char *online_user_environment = "TH03_ONLINE_USER_ID";
 constexpr const char *online_token_environment = "TH03_ONLINE_TOKEN";
+
+[[nodiscard]] std::uint64_t fresh_netplay_nonce() noexcept
+{
+	static std::uint64_t sequence = 0U;
+	auto value = static_cast<std::uint64_t>(
+		std::chrono::steady_clock::now().time_since_epoch().count()
+	) + (++sequence * 0x9E37'79B9'7F4A'7C15ULL);
+	value = (value ^ (value >> 30U)) * 0xBF58'476D'1CE4'E5B9ULL;
+	value = (value ^ (value >> 27U)) * 0x94D0'49BB'1331'11EBULL;
+	value ^= value >> 31U;
+	return value == 0U ? sequence : value;
+}
+
+[[nodiscard]] std::uint32_t fresh_netplay_seed() noexcept
+{
+	static std::uint32_t previous = 0U;
+	const auto nonce = fresh_netplay_nonce();
+	auto result = static_cast<std::uint32_t>(nonce ^ (nonce >> 32U));
+	if(result == 0U || result == previous) {
+		++result;
+		if(result == 0U) {
+			result = 1U;
+		}
+	}
+	previous = result;
+	return result;
+}
 constexpr const char *netplay_ice_environment = "TH03_NETPLAY_ICE_SERVERS";
 
 struct PixelOracleIdentityOutput final {
@@ -1770,7 +1797,9 @@ negotiate_direct_netplay_lobby(
 		mode == DirectVsNetplayMode::host ?
 			th03::app::NewClassicNetplayLobbyViewRole::host :
 			th03::app::NewClassicNetplayLobbyViewRole::join,
-		local_lock, static_cast<std::uint8_t>(request.launch.process.rank)
+		local_lock, static_cast<std::uint8_t>(request.launch.process.rank),
+		mode == DirectVsNetplayMode::host ?
+			std::optional<std::uint16_t>{request.netplay_host_port} : std::nullopt
 	);
 	if(!lobby_view.valid()) {
 		return std::unexpected(fail_netplay(
@@ -1802,14 +1831,10 @@ negotiate_direct_netplay_lobby(
 		std::cout << "resolved-peer=" <<
 			th03::platform::format_udp_ipv4_endpoint(*peer) << '\n';
 	}
-	const auto clock_seed = static_cast<std::uint64_t>(
-		std::chrono::steady_clock::now().time_since_epoch().count()
-	);
 	auto created_lobby = mode == DirectVsNetplayMode::host ?
 		NewClassicNetplayLobby::create_host(
 			netplay_host_lock(request),
-			(clock_seed ^ 0xA35C91D27B48E60FULL) == 0U ? 1U :
-				(clock_seed ^ 0xA35C91D27B48E60FULL)
+			fresh_netplay_nonce()
 		) :
 		NewClassicNetplayLobby::create_join(netplay_join_lock(request));
 	if(!created_lobby) {
@@ -2045,14 +2070,10 @@ negotiate_rtc_netplay_lobby(
 		DirectVsNetplayMode::host : DirectVsNetplayMode::join;
 
 	auto wire = NetplayWire::rtc(std::move(room));
-	const auto clock_seed = static_cast<std::uint64_t>(
-		std::chrono::steady_clock::now().time_since_epoch().count()
-	);
 	auto created_lobby = mode == DirectVsNetplayMode::host ?
 		NewClassicNetplayLobby::create_host(
 			netplay_host_lock(request),
-			(clock_seed ^ 0xA35C91D27B48E60FULL) == 0U ? 1U :
-				(clock_seed ^ 0xA35C91D27B48E60FULL)
+			fresh_netplay_nonce()
 		) : NewClassicNetplayLobby::create_join(netplay_join_lock(request));
 	if(!created_lobby) {
 		return std::unexpected(fail_netplay(
@@ -2217,11 +2238,13 @@ negotiate_rtc_netplay_lobby(
 	th03::platform::SdlInputMapper &mapper,
 	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets,
 	th03::app::NewClassicNetplayReportKind kind,
-	th03::app::NewClassicNetplayReportMetrics metrics
+	th03::app::NewClassicNetplayReportMetrics metrics,
+	th03::app::NewClassicLanguageAssetProfile language =
+		th03::app::NewClassicLanguageAssetProfile::english
 )
 {
 	th03::app::NewClassicNetplayReport report(
-		kind, metrics, std::move(patch_assets)
+		kind, metrics, std::move(patch_assets), language
 	);
 	if(!report.valid()) {
 		return fail_netplay("netplay-report", "surface-create-failed");
@@ -2297,32 +2320,42 @@ struct NetplayRoomRunResult final {
 	std::optional<th03::app::NewClassicNetplayPreferences> preferences{};
 };
 
-[[nodiscard]] std::optional<char> netplay_endpoint_character(
-	SDL_Scancode scancode
-) noexcept
-{
-	if(scancode >= SDL_SCANCODE_A && scancode <= SDL_SCANCODE_Z) {
-		return static_cast<char>('a' + (scancode - SDL_SCANCODE_A));
+class NetplayTextInputOwner final {
+public:
+	explicit NetplayTextInputOwner(SDL_WindowID window_id) noexcept :
+		window_(SDL_GetWindowFromID(window_id))
+	{
 	}
-	switch(scancode) {
-	case SDL_SCANCODE_1: return '1';
-	case SDL_SCANCODE_2: return '2';
-	case SDL_SCANCODE_3: return '3';
-	case SDL_SCANCODE_4: return '4';
-	case SDL_SCANCODE_5: return '5';
-	case SDL_SCANCODE_6: return '6';
-	case SDL_SCANCODE_7: return '7';
-	case SDL_SCANCODE_8: return '8';
-	case SDL_SCANCODE_9: return '9';
-	case SDL_SCANCODE_0: return '0';
-	case SDL_SCANCODE_PERIOD:
-	case SDL_SCANCODE_KP_DECIMAL: return '.';
-	case SDL_SCANCODE_SEMICOLON: return ':';
-	case SDL_SCANCODE_MINUS:
-	case SDL_SCANCODE_KP_MINUS: return '-';
-	default: return std::nullopt;
+
+	~NetplayTextInputOwner()
+	{
+		if(active_ && window_ != nullptr) {
+			static_cast<void>(SDL_StopTextInput(window_));
+		}
 	}
-}
+
+	[[nodiscard]] bool valid() const noexcept { return window_ != nullptr; }
+
+	[[nodiscard]] bool set_active(bool active) noexcept
+	{
+		if(window_ == nullptr) {
+			return false;
+		}
+		if(active == active_) {
+			return true;
+		}
+		const bool changed = active ? SDL_StartTextInput(window_) :
+			SDL_StopTextInput(window_);
+		if(changed) {
+			active_ = active;
+		}
+		return changed;
+	}
+
+private:
+	SDL_Window *window_ = nullptr;
+	bool active_ = false;
+};
 
 [[nodiscard]] NetplayRoomRunResult run_netplay_room_modal(
 	th03::app::RationalTickRate tick_rate,
@@ -2357,6 +2390,14 @@ struct NetplayRoomRunResult final {
 	if(const auto presented = platform.present(room.surface()); !presented) {
 		return {.exit_code = fail("netplay-room-present", presented.error())};
 	}
+	NetplayTextInputOwner text_input(
+		static_cast<SDL_WindowID>(platform.window_id())
+	);
+	if(!text_input.valid()) {
+		return {.exit_code = fail_netplay(
+			"netplay-room-input", "window-missing"
+		)};
+	}
 
 	bool retry_blocked_event = false;
 	while(room.status() == th03::app::NewClassicNetplayRoomStatus::running) {
@@ -2379,13 +2420,28 @@ struct NetplayRoomRunResult final {
 			if(!*due) {
 				break;
 			}
+			while(const auto character = mapper.take_keyboard_text_character()) {
+				const auto typed = room.consume({.text_character = *character});
+				surface_changed = surface_changed || typed.surface_changed;
+				if(typed.status !=
+					th03::app::NewClassicNetplayRoomStatus::running) {
+					break;
+				}
+			}
 			const auto scancode = mapper.take_keyboard_scancode_press();
 			const auto consumed = room.consume({
 				.ui = project_new_classic_ui(**due, true),
-				.text_character = scancode ?
-					netplay_endpoint_character(*scancode) : std::nullopt,
 				.erase = scancode && *scancode == SDL_SCANCODE_BACKSPACE,
 			});
+			if(!text_input.set_active(room.text_entry_active())) {
+				return {.exit_code = fail_netplay(
+					"netplay-room-input", "text-input-state"
+				)};
+			}
+			if(!room.text_entry_active()) {
+				while(mapper.take_keyboard_text_character()) {
+				}
+			}
 			surface_changed = surface_changed || consumed.surface_changed;
 			if(retry_blocked_event) {
 				auto retried = mapper.pump_events(*scheduler, false);
@@ -6143,12 +6199,7 @@ ExperienceRunResult run_new_classic_experience(
 		.font_rom = product.launch.content.font_rom,
 	};
 	result.launch.process.rank = launch.rank;
-	const auto clock_seed = static_cast<std::uint64_t>(
-		std::chrono::steady_clock::now().time_since_epoch().count()
-	);
-	result.launch.process.seed = static_cast<std::uint32_t>(
-		clock_seed ^ (clock_seed >> 32U)
-	);
+	result.launch.process.seed = fresh_netplay_seed();
 	result.launch.process.game_options.input_protocol = th03::InputProtocol::live;
 	result.launch.process.game_options.three_digit_combos = true;
 	result.tick_rate = product.tick_rate;
@@ -6300,6 +6351,31 @@ product_rtc_netplay_request(
 	return std::optional<RtcNetplayRequest>{std::move(result)};
 }
 
+[[nodiscard]] int run_product_netplay_connection_error(
+	const th03::app::ClassicCliRequest &product,
+	const th03::app::NewClassicSettings &settings,
+	th03::platform::SdlPlatform &platform,
+	th03::platform::SdlInputMapper &mapper
+)
+{
+	auto loaded = th03::app::load_new_classic_replay_patch_assets(
+		product.launch.content.data_root / "AZINN.DAT"
+	);
+	if(!loaded) {
+		return fail("netplay-report-assets", loaded.error());
+	}
+	return run_netplay_report_modal(
+		product.tick_rate, platform, mapper,
+		std::make_shared<const th03::app::NewClassicReplayPatchAssets>(
+			std::move(*loaded)
+		),
+		th03::app::NewClassicNetplayReportKind::connection_failed, {},
+		settings.options.language == th03::app::ClassicLanguage::english ?
+			th03::app::NewClassicLanguageAssetProfile::english :
+			th03::app::NewClassicLanguageAssetProfile::japanese
+	);
+}
+
 int run_classic(th03::app::ClassicCliRequest parsed)
 {
 	std::optional<th03::app::NewClassicWindowPresentation>
@@ -6346,7 +6422,9 @@ int run_classic(th03::app::ClassicCliRequest parsed)
 			*result.netplay_launch, parsed.launch.content
 		);
 		if(!rtc) {
-			return rtc.error();
+			return run_product_netplay_connection_error(
+				parsed, settings->settings, *product->first, product->second
+			);
 		}
 		return run_direct_netplay_on_platform(
 			product_netplay_request(
@@ -6422,7 +6500,14 @@ int run_product_shell(th03::app::ClassicCliRequest parsed)
 				*experience.netplay_launch, parsed.launch.content
 			);
 			if(!rtc) {
-				return rtc.error();
+				const int report = run_product_netplay_connection_error(
+					parsed, latest_settings->settings,
+					*product->first, product->second
+				);
+				if(report != 0) {
+					return report;
+				}
+				continue;
 			}
 			const int match = run_direct_netplay_on_platform(
 				product_netplay_request(
@@ -6431,7 +6516,14 @@ int run_product_shell(th03::app::ClassicCliRequest parsed)
 				), *product->first, product->second, std::move(*rtc)
 			);
 			if(match != 0) {
-				return match;
+				const int report = run_product_netplay_connection_error(
+					parsed, latest_settings->settings,
+					*product->first, product->second
+				);
+				if(report != 0) {
+					return report;
+				}
+				continue;
 			}
 			// A completed/left preview returns to a fresh New Classic title.
 			continue;

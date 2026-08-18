@@ -248,6 +248,20 @@ struct FakeGamepads {
 	return event;
 }
 
+[[nodiscard]] SDL_Event text_event(
+	std::uint64_t timestamp,
+	const char *text,
+	SDL_WindowID window = main_window
+)
+{
+	SDL_Event event{};
+	event.type = SDL_EVENT_TEXT_INPUT;
+	event.text.timestamp = timestamp;
+	event.text.windowID = window;
+	event.text.text = text;
+	return event;
+}
+
 [[nodiscard]] SDL_Event keyboard_removed(std::uint64_t timestamp)
 {
 	SDL_Event event{};
@@ -1142,6 +1156,45 @@ void test_raw_key_capture_and_binding_replacement()
 		"binding replacement takes effect without rebuilding the mapper");
 }
 
+void test_physical_text_input_queue()
+{
+	FakeGamepads fake{};
+	auto made = SdlInputMapper::create(bindings(), main_window, fake.backend());
+	expect(static_cast<bool>(made), "text-input mapper is created");
+	if(!made) {
+		return;
+	}
+	auto mapper = std::move(*made);
+	auto input = scheduler(100U);
+	const auto typed = expect_event(
+		mapper, input, text_event(1U, "X:7"),
+		"SDL text composition accepts uppercase and shifted punctuation"
+	);
+	expect(typed.handled && !typed.physical_event_queued &&
+		mapper.take_keyboard_text_character() == 'X' &&
+		mapper.take_keyboard_text_character() == ':' &&
+		mapper.take_keyboard_text_character() == '7' &&
+		!mapper.take_keyboard_text_character() &&
+		input.pending_event_count() == 0U,
+		"text characters are retained in order without becoming gameplay input");
+	const auto foreign = expect_event(
+		mapper, input, text_event(2U, "BAD", main_window + 1U),
+		"foreign-window text is ignored"
+	);
+	expect(!foreign.handled && !mapper.take_keyboard_text_character(),
+		"only the game window can populate the editor queue");
+	(void)expect_event(
+		mapper, input, text_event(3U, "pending"),
+		"modal-reset text is staged"
+	);
+	(void)expect_event(
+		mapper, input, keyboard_removed(4U),
+		"keyboard removal clears text composition"
+	);
+	expect(!mapper.take_keyboard_text_character(),
+		"device loss cannot leak stale text into a later editor");
+}
+
 void test_queue_full_atomicity()
 {
 	FakeGamepads fake{};
@@ -1242,6 +1295,7 @@ int main()
 	test_pause_reset_reuses_host_iteration_cutoff();
 	test_malformed_stale_and_capacity_events();
 	test_raw_key_capture_and_binding_replacement();
+	test_physical_text_input_queue();
 	test_queue_full_atomicity();
 
 	if(failures != 0U) {

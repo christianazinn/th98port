@@ -435,6 +435,8 @@ SdlInputMapper::SdlInputMapper(SdlInputMapper &&other) noexcept :
 	keyboard_(std::move(other.keyboard_)),
 	raw_keyboard_held_(std::move(other.raw_keyboard_held_)),
 	last_scancode_press_(other.last_scancode_press_),
+	keyboard_text_(other.keyboard_text_),
+	keyboard_text_count_(other.keyboard_text_count_),
 	gamepads_(std::move(other.gamepads_)),
 	connected_gamepad_count_(other.connected_gamepad_count_),
 	native_runtime_lease_(other.native_runtime_lease_),
@@ -452,6 +454,7 @@ SdlInputMapper::SdlInputMapper(SdlInputMapper &&other) noexcept :
 	other.has_pending_event_ = false;
 	other.raw_keyboard_held_.fill(false);
 	other.last_scancode_press_.reset();
+	other.keyboard_text_count_ = 0U;
 }
 
 app::PhysicalInputSourceState SdlInputMapper::keyboard_contribution(
@@ -543,6 +546,7 @@ void SdlInputMapper::clear_held_states() noexcept
 	keyboard_.contribution = {};
 	raw_keyboard_held_.fill(false);
 	last_scancode_press_.reset();
+	keyboard_text_count_ = 0U;
 	for(auto &gamepad : gamepads_) {
 		gamepad.button_held.fill(false);
 		gamepad.axis_held.fill(false);
@@ -638,6 +642,21 @@ SdlInputMapper::take_keyboard_scancode_press() noexcept
 	return std::exchange(last_scancode_press_, std::nullopt);
 }
 
+std::optional<char> SdlInputMapper::take_keyboard_text_character() noexcept
+{
+	if(keyboard_text_count_ == 0U) {
+		return std::nullopt;
+	}
+	const char result = keyboard_text_[0U];
+	std::move(
+		keyboard_text_.begin() + 1,
+		keyboard_text_.begin() + static_cast<std::ptrdiff_t>(keyboard_text_count_),
+		keyboard_text_.begin()
+	);
+	--keyboard_text_count_;
+	return result;
+}
+
 std::expected<void, SdlInputMapperError> SdlInputMapper::replace_bindings(
 	SdlInputBindings bindings
 ) noexcept
@@ -698,6 +717,24 @@ SdlInputMapper::handle_event(
 {
 	const auto timestamp = sdl_event_timestamp_ns(event);
 	switch(event.type) {
+	case SDL_EVENT_TEXT_INPUT: {
+		if(event.text.windowID != main_window_) {
+			return SdlInputEventResult{};
+		}
+		if(event.text.text == nullptr) {
+			return std::unexpected(mapper_error(
+				SdlInputMapperErrorCode::malformed_event
+			));
+		}
+		for(const auto *next = reinterpret_cast<const unsigned char *>(
+			event.text.text
+		); *next != 0U && keyboard_text_count_ < keyboard_text_.size(); ++next) {
+			if(*next >= 0x20U && *next <= 0x7EU) {
+				keyboard_text_[keyboard_text_count_++] = static_cast<char>(*next);
+			}
+		}
+		return SdlInputEventResult{.handled = true};
+	}
 	case SDL_EVENT_KEY_DOWN:
 	case SDL_EVENT_KEY_UP: {
 		const auto down = event.type == SDL_EVENT_KEY_DOWN;
@@ -780,6 +817,7 @@ SdlInputMapper::handle_event(
 		keyboard_ = {};
 		raw_keyboard_held_.fill(false);
 		last_scancode_press_.reset();
+		keyboard_text_count_ = 0U;
 		return SdlInputEventResult{
 			.handled = true,
 			.physical_event_queued = true,

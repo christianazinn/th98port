@@ -31,7 +31,9 @@ constexpr std::array magic{
 	return valid_character_lock(contract.player_one) &&
 		valid_character_lock(contract.player_two) && contract.rank <= 3U &&
 		contract.cadence_ticks != 0U && contract.cadence_seconds != 0U &&
-		contract.input_delay_frames <= 6U;
+		contract.input_delay_frames <= 6U &&
+		(contract.player_one.character != contract.player_two.character ||
+			contract.player_one.palette != contract.player_two.palette);
 }
 
 void put_u32(std::span<std::byte> output, std::size_t offset,
@@ -83,6 +85,9 @@ std::expected<
 		return std::unexpected(error(
 			NewClassicNetplayMatchContractErrorCode::invalid_join_lock
 		));
+	}
+	if(host.player_one == join.player_two) {
+		join.player_two.palette = join.player_two.palette == 1U ? 2U : 1U;
 	}
 	return NewClassicNetplayMatchContract{
 		.player_one = host.player_one,
