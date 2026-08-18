@@ -96,6 +96,7 @@ th03::app::NewClassicNetplayReportMetrics metrics()
 			.maximum_prediction_depth = 8U,
 		},
 		.missed_deadlines = 3U,
+		.round_trip_time_ms = 47U,
 	};
 }
 
@@ -116,6 +117,8 @@ void test_kinds_and_source_surface()
 		expect(report.kind() == kind, "report retains its typed outcome");
 		expect(report.metrics().confirmed_frames == 1'234U,
 			"report retains local-only counters");
+		expect(report.metrics().round_trip_time_ms == 47U,
+			"report retains advisory transport round-trip time");
 		expect(report.surface().pixels.size() == 256'000U &&
 			!report.surface().host_overlay && report.surface().shown_page ==
 				th03::present::Page::one,
@@ -146,6 +149,20 @@ void test_release_and_application_quit()
 		"application quit remains unconditional");
 }
 
+void test_missing_round_trip_is_explicitly_unavailable()
+{
+	const auto assets = assets_fixture();
+	auto unavailable = metrics();
+	unavailable.round_trip_time_ms.reset();
+	th03::app::NewClassicNetplayReport report(
+		th03::app::NewClassicNetplayReportKind::match_complete,
+		unavailable,
+		assets
+	);
+	expect(report.valid() && !report.metrics().round_trip_time_ms,
+		"transport without RTT composes an explicitly unavailable report value");
+}
+
 void test_invalid_assets_fail_closed()
 {
 	th03::app::NewClassicNetplayReport report(
@@ -162,6 +179,7 @@ int main()
 {
 	test_kinds_and_source_surface();
 	test_release_and_application_quit();
+	test_missing_round_trip_is_explicitly_unavailable();
 	test_invalid_assets_fail_closed();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;

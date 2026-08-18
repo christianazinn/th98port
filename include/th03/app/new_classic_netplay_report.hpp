@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 #include "th03/app/new_classic_assets.hpp"
 #include "th03/app/new_classic_frontend.hpp"
@@ -24,6 +25,7 @@ struct NewClassicNetplayReportMetrics final {
 	std::uint64_t confirmed_frames = 0U;
 	NewClassicNetplayMainSessionStats session{};
 	std::uint64_t missed_deadlines = 0U;
+	std::optional<std::uint64_t> round_trip_time_ms{};
 };
 
 enum class NewClassicNetplayReportStatus : std::uint8_t {

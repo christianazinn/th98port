@@ -772,9 +772,15 @@ Still open:
 
 1. Add a hermetic two-process loopback acceptance fixture that does not create
    an unexpected public firewall listener.
-2. Surface network metrics in the product UI.
-3. Prove Windows/Linux/macOS packet and transcript interoperability over real
+2. Prove Windows/Linux/macOS packet and transcript interoperability over real
    direct ICE and relayed paths.
+
+The completed local report now carries the latest bounded WebRTC round-trip
+sample alongside rollback, prediction, wait, and missed-deadline counters.
+The value is sampled at a low host-side cadence and remains advisory: it never
+enters deterministic state, proof hashes, replay data, or peer authority.
+Direct UDP reports the value as unavailable because that transport does not
+yet expose a truthful RTT measurement.
 
 ### N3: product integration
 
@@ -812,7 +818,9 @@ Still open:
    implemented locally. Automatic tries direct ICE before relay; Relay Only
    fails closed unless the authenticated welcome contains credentialed TURN.
    Real provider resources and secrets remain deployment inputs.
-3. Measure real direct and relayed RTT/jitter/rollback distributions.
+3. Measure real direct and relayed RTT/jitter/rollback distributions. The
+   product report now exposes bounded WebRTC RTT; jitter and distribution
+   collection remain external private-beta evidence rather than game state.
 4. Run a bounded private beta and tune delay/stall/disconnect policy.
 
 ### Later product decisions

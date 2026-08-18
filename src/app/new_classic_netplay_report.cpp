@@ -119,8 +119,9 @@ bool NewClassicNetplayReport::draw() noexcept
 		NewClassicMessageId::netplay_report_label_remote_waits,
 		NewClassicMessageId::netplay_report_label_max_prediction,
 		NewClassicMessageId::netplay_report_label_missed_deadlines,
+		NewClassicMessageId::netplay_report_label_round_trip,
 	};
-	const std::array<std::uint64_t, labels.size()> values{
+	const std::array<std::optional<std::uint64_t>, labels.size()> values{
 		metrics_.confirmed_frames,
 		metrics_.session.predicted_frames,
 		metrics_.session.rollback_requests,
@@ -130,15 +131,16 @@ bool NewClassicNetplayReport::draw() noexcept
 		metrics_.session.remote_wait_events,
 		metrics_.session.maximum_prediction_depth,
 		metrics_.missed_deadlines,
+		metrics_.round_trip_time_ms,
 	};
 	for(std::size_t index = 0U; index < labels.size(); ++index) {
 		std::array<char, 32U> storage{};
 		const auto top = rows_top +
 			static_cast<std::int32_t>(index) * row_height;
+		const auto value = values[index] ? decimal(*values[index], storage) : "--";
 		if(!font.put(raster, label_left, top, messages.text(labels[index]),
 				label_color) ||
-			!font.put_right(raster, value_right, top,
-				decimal(values[index], storage), value_color)) {
+			!font.put_right(raster, value_right, top, value, value_color)) {
 			return false;
 		}
 	}

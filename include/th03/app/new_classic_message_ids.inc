@@ -346,4 +346,5 @@ TH03_NEW_CLASSIC_MESSAGE(netplay_report_label_stalls, "netplay.report.label.stal
 TH03_NEW_CLASSIC_MESSAGE(netplay_report_label_remote_waits, "netplay.report.label.remote-waits", 180U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(netplay_report_label_max_prediction, "netplay.report.label.max-prediction", 180U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(netplay_report_label_missed_deadlines, "netplay.report.label.missed-deadlines", 180U, "", "")
+TH03_NEW_CLASSIC_MESSAGE(netplay_report_label_round_trip, "netplay.report.label.round-trip", 180U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(netplay_report_footer, "netplay.report.footer", 500U, "", "")

@@ -1648,6 +1648,19 @@ public:
 #endif
 	}
 
+	[[nodiscard]] std::optional<std::uint64_t> round_trip_time_ms() const noexcept
+	{
+#if defined(TH03_ENABLE_RTC_TRANSPORT)
+		if(rtc_room_) {
+			const auto observed = rtc_room_->snapshot().round_trip_time;
+			if(observed && observed->count() >= 0 && observed->count() <= 60'000) {
+				return static_cast<std::uint64_t>(observed->count());
+			}
+		}
+#endif
+		return std::nullopt;
+	}
+
 private:
 	NetplayWire() = default;
 	std::unique_ptr<th03::platform::UdpSocket> udp_socket_{};
@@ -2642,6 +2655,8 @@ int run_direct_netplay_on_platform(
 	bool presentation_pending = false;
 	std::uint64_t local_frames = 0U;
 	auto last_pause_signal_send_ns = start_ns - 250'000'000U;
+	auto last_network_metric_sample_ns = start_ns - 250'000'000U;
+	std::optional<std::uint64_t> latest_round_trip_time_ms{};
 	std::cout << "status=match-locked\ncontract=" << contract_hash << '\n';
 	std::cout.flush();
 	const auto report_metrics = [&]() {
@@ -2652,6 +2667,7 @@ int run_direct_netplay_on_platform(
 				local_deadline_missed.begin(), local_deadline_missed.end(),
 				std::uint8_t{1U}
 			)),
+			.round_trip_time_ms = latest_round_trip_time_ms,
 		};
 	};
 	const auto show_report = [&](
@@ -3090,6 +3106,12 @@ int run_direct_netplay_on_platform(
 
 	for(;;) {
 		const auto now_ns = th03::platform::sdl_ticks_now_ns();
+		if(now_ns - last_network_metric_sample_ns >= 250'000'000U) {
+			if(const auto round_trip = wire.round_trip_time_ms()) {
+				latest_round_trip_time_ms = *round_trip;
+			}
+			last_network_metric_sample_ns = now_ns;
+		}
 		if(now_ns - start_ns > 30'000'000'000ULL && !established) {
 			return fail_netplay("netplay-handshake", "timeout");
 		}
@@ -3908,7 +3930,12 @@ int run_direct_netplay_on_platform(
 					netplay_stats.remote_wait_events <<
 				"\nnetplay-maximum-prediction=" << static_cast<unsigned>(
 					netplay_stats.maximum_prediction_depth
-				) << "\nnetplay-missed-deadlines=" << missed_deadlines << '\n';
+				) << "\nnetplay-missed-deadlines=" << missed_deadlines;
+			if(metrics.round_trip_time_ms) {
+				std::cout << "\nnetplay-round-trip-ms=" <<
+					*metrics.round_trip_time_ms;
+			}
+			std::cout << '\n';
 			std::cout.flush();
 			return show_report(
 				th03::app::NewClassicNetplayReportKind::match_complete

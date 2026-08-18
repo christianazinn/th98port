@@ -361,6 +361,7 @@
     "netplay.report.label.remote-waits": "Remote Waits",
     "netplay.report.label.max-prediction": "Max Prediction",
     "netplay.report.label.missed-deadlines": "Missed Deadlines",
+    "netplay.report.label.round-trip": "Round Trip (ms)",
     "netplay.report.footer": "Press Z/Return/Esc to return"
   }
 }

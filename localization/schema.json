@@ -363,6 +363,7 @@
     {"enum": "netplay_report_label_remote_waits", "id": "netplay.report.label.remote-waits", "domain": "menu-font", "max_width": 180},
     {"enum": "netplay_report_label_max_prediction", "id": "netplay.report.label.max-prediction", "domain": "menu-font", "max_width": 180},
     {"enum": "netplay_report_label_missed_deadlines", "id": "netplay.report.label.missed-deadlines", "domain": "menu-font", "max_width": 180},
+    {"enum": "netplay_report_label_round_trip", "id": "netplay.report.label.round-trip", "domain": "menu-font", "max_width": 180},
     {"enum": "netplay_report_footer", "id": "netplay.report.footer", "domain": "menu-font", "max_width": 500}
   ]
 }

@@ -200,9 +200,12 @@ either peer may report a clean finish or bounded smoke completion.
 On clean completion, each peer also prints local observation counters for
 resolved/predicted executions, rollback requests and rewinds, resimulated
 frames, prediction stalls, reliable waits, maximum zero-based prediction
-depth, and missed source deadlines. These values never enter simulation, peer
-agreement, or V13 replay data. Preserve both terminals' output when reporting
-a test so asymmetric transport behavior remains visible.
+depth, missed source deadlines, and—when WebRTC supplies one—the latest
+bounded round-trip sample in milliseconds. The authenticated report displays
+the same sample as `Round Trip (ms)`; direct UDP displays `--` because it has
+no equivalent truthful measurement. These values never enter simulation,
+peer agreement, or V13 replay data. Preserve both terminals' output when
+reporting a test so asymmetric transport behavior remains visible.
 Delayed or duplicated UDP runtime-proof packets and acknowledgements older
 than the newest verified proof are ignored; current and future identities
 remain strict. A `peer-timeout` immediately after the other process reports a
