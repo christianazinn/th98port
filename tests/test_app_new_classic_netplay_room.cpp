@@ -534,15 +534,52 @@ void test_waiting_and_ready_lobby_views()
 		"Direct waiting surface rejects a port outside the public editor domain");
 }
 
-void test_match_ready_hold_contract()
+void test_match_ready_audio_contract()
 {
 	using namespace th03::app;
-	expect(!new_classic_netplay_match_ready_hold_complete(0U) &&
-		!new_classic_netplay_match_ready_hold_complete(
-			new_classic_netplay_match_ready_hold_ns - 1U
-		) && new_classic_netplay_match_ready_hold_complete(
-			new_classic_netplay_match_ready_hold_ns
-		), "match-ready presentation owns exactly five seconds");
+	expect(new_classic_netplay_match_ready_audio_commands ==
+		std::array<ClassicAudioCommand, 3U>{{
+			{
+				.type = ClassicAudioCommandType::stop_song,
+				.cue = ClassicMusicCue::menu_main,
+			},
+			{
+				.type = ClassicAudioCommandType::load_song,
+				.cue = ClassicMusicCue::winner,
+			},
+			{
+				.type = ClassicAudioCommandType::play_song,
+				.cue = ClassicMusicCue::winner,
+			},
+		}}, "match-ready audio immediately replaces OP.M with WIN.M");
+	expect(new_classic_netplay_menu_audio_restore_commands ==
+		std::array<ClassicAudioCommand, 3U>{{
+			{
+				.type = ClassicAudioCommandType::stop_song,
+			},
+			{
+				.type = ClassicAudioCommandType::load_song,
+				.cue = ClassicMusicCue::menu_main,
+			},
+			{
+				.type = ClassicAudioCommandType::play_song,
+				.cue = ClassicMusicCue::menu_main,
+			},
+		}}, "canceled match-ready audio restores the title cue from a typed stop");
+	NewClassicNetplayMatchReadyAudioGate gate{};
+	gate.advance({.bgm_active = true, .song_playing = false});
+	expect(!gate.complete && !gate.observed_jingle,
+		"match-ready cannot finish before the jingle starts");
+	gate.advance({.bgm_active = true, .song_playing = true});
+	expect(!gate.complete && gate.observed_jingle,
+		"match-ready latches actual PMD playback");
+	gate.advance({.bgm_active = true, .song_playing = false});
+	expect(gate.complete,
+		"match-ready finishes only after the observed jingle stops");
+	NewClassicNetplayMatchReadyAudioGate silent{};
+	silent.advance({.bgm_active = false});
+	expect(silent.complete,
+		"Music Off cannot strand the match-ready transition");
 }
 
 } // namespace
@@ -558,7 +595,7 @@ int main()
 	test_quick_match_intent();
 	test_missing_assets_fail_closed();
 	test_waiting_and_ready_lobby_views();
-	test_match_ready_hold_contract();
+	test_match_ready_audio_contract();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }

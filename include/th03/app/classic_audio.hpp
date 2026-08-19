@@ -77,6 +77,10 @@ struct ClassicAudioCommand final {
 // snd_delay_until_measure() rather than changing policy halfway through it.
 struct ClassicAudioStatus final {
 	bool bgm_active = false;
+	// Unlike bgm_active, this reflects the PMD driver's current Play/Stop
+	// state. Host-owned transitions can therefore wait for a non-looping cue
+	// to end without inventing a wall-clock duration.
+	bool song_playing = false;
 	std::uint16_t measure = 0U;
 	std::uint8_t volume = 0U;
 };

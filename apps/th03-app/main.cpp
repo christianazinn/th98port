@@ -232,8 +232,11 @@ struct ExperienceRunResult final {
 
 struct RetainedMenuAudio final {
 	std::function<std::expected<void, int>()> advance_tick{};
+	std::function<std::expected<void, int>()> begin_match_ready{};
+	std::function<std::expected<bool, int>()> match_ready_complete{};
+	std::function<std::expected<void, int>()> cancel_match_ready{};
 	std::function<void()> suspend{};
-	std::function<void()> resume{};
+	std::function<std::expected<void, int>()> resume{};
 };
 
 enum class NetplayFrontendDisposition : std::uint8_t {
@@ -1863,20 +1866,35 @@ template <typename NetworkPump>
 	NetworkPump &&pump_network
 )
 {
-	const auto started = th03::platform::sdl_ticks_now_ns();
-	std::cout << "status=match-found\nstarting-in-seconds=5\n";
+	if(!retained_audio) {
+		return {};
+	}
+	if(const auto started = retained_audio->begin_match_ready(); !started) {
+		return std::unexpected(started.error());
+	}
+	const auto cancel_audio = [&]() -> std::expected<void, int> {
+		return retained_audio->cancel_match_ready();
+	};
+	const auto fail_after_cancel = [&](int failure) -> std::expected<void, int> {
+		if(const auto canceled = cancel_audio(); !canceled) {
+			return std::unexpected(canceled.error());
+		}
+		return std::unexpected(failure);
+	};
+	std::cout << "status=match-found\nwaiting-for-round-clear-jingle=true\n";
 	std::cout.flush();
 	for(;;) {
-		const auto now = th03::platform::sdl_ticks_now_ns();
-		if(th03::app::new_classic_netplay_match_ready_hold_complete(
-			now - started
-		)) {
-			return {};
-		}
 		if(const auto pumped = pump_retained_menu_audio(
 			retained_audio_scheduler, retained_audio
 		); !pumped) {
-			return std::unexpected(pumped.error());
+			return fail_after_cancel(pumped.error());
+		}
+		auto complete = retained_audio->match_ready_complete();
+		if(!complete) {
+			return fail_after_cancel(complete.error());
+		}
+		if(*complete) {
+			return {};
 		}
 		const auto exit = direct_netplay_lobby_exit(
 			static_cast<SDL_WindowID>(platform.window_id())
@@ -1887,15 +1905,18 @@ template <typename NetworkPump>
 				*application_quit = true;
 			}
 			std::cout << "status=left\n";
+			if(const auto canceled = cancel_audio(); !canceled) {
+				return std::unexpected(canceled.error());
+			}
 			return std::unexpected(0);
 		}
 		if(const auto network = pump_network(); !network) {
-			return std::unexpected(network.error());
+			return fail_after_cancel(network.error());
 		}
 		if(auto refreshed = refresh_host_presentability(
 			platform, "netplay-ready-presentability"
 		); !refreshed) {
-			return std::unexpected(refreshed.error());
+			return fail_after_cancel(refreshed.error());
 		}
 		SDL_DelayPrecise(maximum_idle_delay_ns);
 	}
@@ -5272,6 +5293,8 @@ ExperienceRunResult run_classic_session(
 		pending_publication_identity{};
 	std::uint64_t logical_ticks = 0U;
 	std::optional<th03::formats::ReplayDocument> completed_replay{};
+	std::optional<th03::app::NewClassicNetplayMatchReadyAudioGate>
+		netplay_match_ready_audio{};
 	auto sync_audio_focus_mute = [&]() noexcept {
 		const bool desired = new_classic && mute_when_unfocused &&
 			!mapper.main_window_focused();
@@ -5283,7 +5306,31 @@ ExperienceRunResult run_classic_session(
 		}
 		audio_focus_muted = desired;
 	};
+	const auto restore_retained_menu_song = [&]() -> std::expected<void, int> {
+		if(!netplay_match_ready_audio) {
+			return {};
+		}
+		if(audio_device) {
+			if(const auto cleared = audio_device->clear(); !cleared) {
+				warn_audio_device(
+					"netplay-match-audio-cancel-clear", cleared.error()
+				);
+			}
+		}
+		for(const auto command : th03::app::
+			new_classic_netplay_menu_audio_restore_commands) {
+			if(auto applied = audio_session->apply(command); !applied) {
+				return std::unexpected(fail("audio-command", applied.error()));
+			}
+		}
+		netplay_match_ready_audio.reset();
+		return {};
+	};
 	const auto advance_retained_audio_tick = [&]() -> std::expected<void, int> {
+		if(netplay_match_ready_audio &&
+			netplay_match_ready_audio->complete) {
+			return {};
+		}
 		sync_audio_focus_mute();
 		auto audio_tick = audio_session->advance_tick();
 		if(!audio_tick) {
@@ -5327,10 +5374,53 @@ ExperienceRunResult run_classic_session(
 				}
 			}
 		}
+		if(netplay_match_ready_audio) {
+			netplay_match_ready_audio->advance(audio_tick->status);
+		}
 		return {};
 	};
 	const RetainedMenuAudio retained_menu_audio{
 		.advance_tick = advance_retained_audio_tick,
+		.begin_match_ready = [&]() -> std::expected<void, int> {
+			if(netplay_match_ready_audio) {
+				return std::unexpected(fail_netplay(
+					"netplay-match-audio", "already-started"
+				));
+			}
+			netplay_match_ready_audio.emplace();
+			for(const auto command : th03::app::
+				new_classic_netplay_match_ready_audio_commands) {
+				if(auto applied = audio_session->apply(command); !applied) {
+					static_cast<void>(restore_retained_menu_song());
+					return std::unexpected(fail(
+						"netplay-match-audio", applied.error()
+					));
+				}
+			}
+			return {};
+		},
+		.match_ready_complete = [&]() -> std::expected<bool, int> {
+			if(!netplay_match_ready_audio) {
+				return std::unexpected(fail_netplay(
+					"netplay-match-audio", "not-started"
+				));
+			}
+			if(!netplay_match_ready_audio->complete || !audio_device ||
+				audio_focus_muted) {
+				return netplay_match_ready_audio->complete;
+			}
+			auto queued = audio_device->queued_frames();
+			if(!queued) {
+				warn_audio_device(
+					"netplay-match-audio-queue", queued.error()
+				);
+				return std::unexpected(fail_netplay(
+					"netplay-match-audio", "queue-query-failed"
+				));
+			}
+			return *queued == 0U;
+		},
+		.cancel_match_ready = restore_retained_menu_song,
 		.suspend = [&]() noexcept {
 			if(!audio_device) {
 				return;
@@ -5344,9 +5434,12 @@ ExperienceRunResult run_classic_session(
 			audio_device.reset();
 			audio_started = false;
 		},
-		.resume = [&]() noexcept {
+		.resume = [&]() -> std::expected<void, int> {
+			if(const auto restored = restore_retained_menu_song(); !restored) {
+				return restored;
+			}
 			if(pixel_oracle_selector || audio_device) {
-				return;
+				return {};
 			}
 			auto created_device = th03::platform::SdlAudioDevice::create({
 				.start_paused = true,
@@ -5359,6 +5452,7 @@ ExperienceRunResult run_classic_session(
 				);
 			}
 			audio_started = false;
+			return {};
 		},
 	};
 	while((*runner)->status() == th03::app::ClassicRunnerStatus::running) {
@@ -6855,7 +6949,11 @@ ExperienceRunResult run_new_classic_experience(
 				continue;
 			}
 			if(match != 0) {
-				audio.resume();
+				if(const auto resumed = audio.resume(); !resumed) {
+					return NetplayFrontendResult{
+						.exit_code = resumed.error()
+					};
+				}
 				if(auto restored = mapper.replace_bindings(
 					th03::app::detail::new_classic_bindings(
 						key_config, joy_config, device_assignment

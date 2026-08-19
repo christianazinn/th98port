@@ -1,11 +1,13 @@
 #ifndef TH03_APP_NEW_CLASSIC_NETPLAY_ROOM_HPP
 #define TH03_APP_NEW_CLASSIC_NETPLAY_ROOM_HPP
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 
+#include "th03/app/classic_audio.hpp"
 #include "th03/app/new_classic_assets.hpp"
 #include "th03/app/new_classic_frontend.hpp"
 #include "th03/app/new_classic_netplay_match_contract.hpp"
@@ -13,15 +15,57 @@
 
 namespace th03::app {
 
-inline constexpr std::uint64_t new_classic_netplay_match_ready_hold_ns =
-	5'000'000'000ULL;
+inline constexpr std::array<ClassicAudioCommand, 3U>
+	new_classic_netplay_match_ready_audio_commands{{
+		{
+			.type = ClassicAudioCommandType::stop_song,
+			.cue = ClassicMusicCue::menu_main,
+		},
+		{
+			.type = ClassicAudioCommandType::load_song,
+			.cue = ClassicMusicCue::winner,
+		},
+		{
+			.type = ClassicAudioCommandType::play_song,
+			.cue = ClassicMusicCue::winner,
+		},
+	}};
 
-[[nodiscard]] constexpr bool new_classic_netplay_match_ready_hold_complete(
-	std::uint64_t elapsed_ns
-) noexcept
-{
-	return elapsed_ns >= new_classic_netplay_match_ready_hold_ns;
-}
+inline constexpr std::array<ClassicAudioCommand, 3U>
+	new_classic_netplay_menu_audio_restore_commands{{
+		{
+			.type = ClassicAudioCommandType::stop_song,
+		},
+		{
+			.type = ClassicAudioCommandType::load_song,
+			.cue = ClassicMusicCue::menu_main,
+		},
+		{
+			.type = ClassicAudioCommandType::play_song,
+			.cue = ClassicMusicCue::menu_main,
+		},
+	}};
+
+struct NewClassicNetplayMatchReadyAudioGate final {
+	bool observed_jingle = false;
+	bool complete = false;
+
+	constexpr void advance(ClassicAudioStatus audio) noexcept
+	{
+		if(complete) {
+			return;
+		}
+		if(!audio.bgm_active) {
+			complete = true;
+			return;
+		}
+		if(audio.song_playing) {
+			observed_jingle = true;
+		} else if(observed_jingle) {
+			complete = true;
+		}
+	}
+};
 
 enum class NewClassicNetplayRoomLaunchMode : std::uint8_t {
 	quick_match,

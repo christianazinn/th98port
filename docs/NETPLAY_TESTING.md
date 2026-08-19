@@ -143,6 +143,13 @@ No direct listening socket is opened by this path, avoiding the Windows
 Firewall listener prompt. The same rollback, Pause, replay, and report owners
 below apply to both transports.
 
+After both character locks are accepted, the matched surface immediately
+stops OP.M and plays the short `WIN.M` round-clear cue. The character-versus
+MAINL screen must not appear until the cue reaches its natural end; there is no
+fixed five-second countdown. Both peers must keep responding to Cancel and
+network traffic during the cue. Cancel or a connection failure before gameplay
+restores title music and returns to the calling room screen.
+
 The tracked SDL presets enable the RTC adapter. Before configuring a source
 build, authenticate SDL as documented elsewhere, clone libdatachannel v0.24.3
 recursively at commit `c6696d157b5612df2a741d9a03b192b47ab6cefb`, acquire

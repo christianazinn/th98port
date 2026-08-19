@@ -1,4 +1,6 @@
 #include "th03/app/new_classic_netplay_match_intro.hpp"
+#include "th03/app/classic_audio_session.hpp"
+#include "th03/app/new_classic_netplay_room.hpp"
 
 #include <array>
 #include <bit>
@@ -131,12 +133,56 @@ void test_authentic_intro(int argc, char **argv)
 		"VS intro finishes on the ordinary MAIN handoff palette");
 }
 
+void test_authentic_match_ready_jingle(int argc, char **argv)
+{
+	if(argc != 5) {
+		return;
+	}
+	using namespace th03::app;
+	auto created = ClassicAudioSession::create({
+		.data_root = std::filesystem::path(argv[1]),
+		.tick_rate = {.ticks = 526'315U, .seconds = 9'328U},
+	});
+	expect(created.has_value(),
+		"authenticated content constructs the match-ready audio session");
+	if(!created) {
+		return;
+	}
+	expect((*created)->apply({
+		.type = ClassicAudioCommandType::load_song,
+		.cue = ClassicMusicCue::menu_main,
+	}).has_value() && (*created)->apply({
+		.type = ClassicAudioCommandType::play_song,
+		.cue = ClassicMusicCue::menu_main,
+	}).has_value(), "match-ready fixture begins with the retained title song");
+	for(const auto command : new_classic_netplay_match_ready_audio_commands) {
+		expect((*created)->apply(command).has_value(),
+			"match-ready command is accepted by the authentic PMD session");
+	}
+	NewClassicNetplayMatchReadyAudioGate gate{};
+	std::size_t ticks = 0U;
+	while(!gate.complete && ticks < 5'000U) {
+		auto advanced = (*created)->advance_tick();
+		expect(advanced.has_value(),
+			"match-ready jingle renders one authentic audio tick");
+		if(!advanced) {
+			return;
+		}
+		gate.advance(advanced->status);
+		++ticks;
+	}
+	expect(gate.observed_jingle && gate.complete && ticks == 428U,
+		"WIN.M reaches its deterministic natural PMD stop before the match intro");
+	std::cout << "match_ready_jingle_ticks=" << ticks << '\n';
+}
+
 } // namespace
 
 int main(int argc, char **argv)
 {
 	test_direct_resident_projection();
 	test_invalid_request_fails_closed();
+	test_authentic_match_ready_jingle(argc, argv);
 	test_authentic_intro(argc, argv);
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;

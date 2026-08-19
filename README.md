@@ -68,8 +68,9 @@ Create Room, or Join Room. Online Match is a retained child of the current
 New Classic title: OP.M continues through setup, waiting, and connection-error
 screens, every nested Cancel returns one screen, and returning to the title
 does not stop or restart the song. Once both character locks are accepted, the
-authenticated match-ready surface remains visible for five seconds with OP.M
-still advancing. The ordinary VS MAINL character/stage splash then runs its
+authenticated match-ready surface stops OP.M immediately, plays the source
+WIN.M round-clear jingle to its actual PMD end, and drains its submitted audio
+tail. Only then does the ordinary VS MAINL character/stage splash run its
 source fade/wait cadence before either peer constructs synchronized gameplay
 frame zero.
 

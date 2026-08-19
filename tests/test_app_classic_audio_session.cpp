@@ -370,7 +370,8 @@ void test_commands_cadence_and_determinism(const fs::path &root)
 	}
 	auto &first = **first_result;
 	auto &second = **second_result;
-	expect(first.status().bgm_active && !first.loaded_song(),
+	expect(first.status().bgm_active && !first.status().song_playing &&
+		!first.loaded_song(),
 		"created session reports the resident BGM driver before any song loads");
 
 	const ClassicAudioCommand premature{
@@ -472,8 +473,9 @@ void test_commands_cadence_and_determinism(const fs::path &root)
 			session->apply(play).has_value(),
 			"equal sessions load and start the menu song");
 	}
-	expect(first.status().bgm_active && first.status().volume == 0U,
-		"fresh Play exposes source-active BGM and loudest PMD volume");
+	expect(first.status().bgm_active && first.status().song_playing &&
+		first.status().volume == 0U,
+		"fresh Play exposes the distinct driver-active and PMD-playing states");
 
 	std::uint64_t native_total = 0U;
 	std::uint64_t canonical_total = 0U;
@@ -609,8 +611,8 @@ void test_commands_cadence_and_determinism(const fs::path &root)
 	expect(first.apply({
 		.type = ClassicAudioCommandType::stop_song,
 	}).has_value() && first.status().bgm_active &&
-		first.status().volume == 255U,
-		"Stop preserves driver availability and exposes quiet PMD volume");
+		!first.status().song_playing && first.status().volume == 255U,
+		"Stop preserves driver availability while exposing PMD Stop and silence");
 
 	expect(first.apply(load(ClassicMusicCue::gameplay, 8U)).has_value() &&
 		first.apply({

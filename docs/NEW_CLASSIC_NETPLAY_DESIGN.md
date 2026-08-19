@@ -87,6 +87,17 @@ messages replicate cursor and lock state. Character selection itself is not
 rolled back. Once both players lock, both clients construct the same immutable
 match contract and enter a ready barrier before MAIN starts.
 
+The ready barrier keeps the authenticated matched surface visible while local
+presentation audio performs a typed Stop of the retained title song, Load and
+Play of `WIN.M`, and waits for the PMD driver's natural Stop state. The host
+also drains the submitted PCM tail before constructing MAINL, so neither a
+wall-clock countdown nor an audio-device queue can truncate the jingle. Music
+Off completes this local presentation gate immediately. Network control keeps
+pumping throughout the cue; cancellation or a pre-game transport failure
+restores the title-song owner before returning to the calling room screen.
+After the cue, the ordinary MAINL character-versus transition owns its full
+source fade/wait cadence before synchronized gameplay frame zero.
+
 ### Supported first release
 
 - New Classic `game_mode::vs_1p_2p` only.

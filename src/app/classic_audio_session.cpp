@@ -686,6 +686,7 @@ ClassicAudioStatus ClassicAudioSession::status() const noexcept
 	return {
 		// snd_bgm_active() reports snd_active, not Play/Stop state.
 		.bgm_active = impl_->bgm_active,
+		.song_playing = status.playing,
 		.measure = status.measure,
 		.volume = status.fade_volume,
 	};
