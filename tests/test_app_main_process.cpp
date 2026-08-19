@@ -1783,6 +1783,23 @@ void test_new_classic_netplay_main_session_input_delay()
 
 void test_new_classic_netplay_pause_boundary()
 {
+	using th03::app::new_classic_netplay_main_session_accepts_local_input;
+	expect(new_classic_netplay_main_session_accepts_local_input(
+			NewClassicNetplayMainSessionStatus::running) &&
+		new_classic_netplay_main_session_accepts_local_input(
+			NewClassicNetplayMainSessionStatus::prediction_stalled) &&
+		new_classic_netplay_main_session_accepts_local_input(
+			NewClassicNetplayMainSessionStatus::remote_waiting) &&
+		!new_classic_netplay_main_session_accepts_local_input(
+			NewClassicNetplayMainSessionStatus::
+				boundary_waiting_confirmation) &&
+		!new_classic_netplay_main_session_accepts_local_input(
+			NewClassicNetplayMainSessionStatus::boundary_confirmed) &&
+		!new_classic_netplay_main_session_accepts_local_input(
+			NewClassicNetplayMainSessionStatus::paused) &&
+		!new_classic_netplay_main_session_accepts_local_input(
+			NewClassicNetplayMainSessionStatus::complete),
+		"only source-input-owning netplay states accept a local frame");
 	const auto same_step = [](const th03::StepResult &a,
 		const th03::StepResult &b) noexcept {
 		return a.status == b.status &&

@@ -232,6 +232,7 @@ struct ExperienceRunResult final {
 struct RetainedMenuAudio final {
 	std::function<std::expected<void, int>()> advance_tick{};
 	std::function<void()> suspend{};
+	std::function<void()> resume{};
 };
 
 enum class NetplayFrontendDisposition : std::uint8_t {
@@ -2935,6 +2936,12 @@ int run_direct_netplay_on_platform(
 		th03::app::NewClassicNetplayReportKind kind
 	) -> int {
 		const int failure = fail_netplay(stage, code);
+		// The retained room owns its own source-styled failure child and caller
+		// stack. Let that owner present the failure after it has restored title
+		// audio and menu bindings; the standalone CLI has no such owner.
+		if(retained_menu_audio) {
+			return failure;
+		}
 		const int report_failure = show_report(kind);
 		return report_failure == 0 ? failure : report_failure;
 	};
@@ -3788,10 +3795,10 @@ int run_direct_netplay_on_platform(
 			last_initial_digest_send_ns = now_ns;
 		}
 
-		if(established && stalled_input && (*session)->status() !=
-			NewClassicNetplayMainSessionStatus::complete &&
-			(*session)->status() !=
-				NewClassicNetplayMainSessionStatus::paused) {
+		if(established && stalled_input &&
+			th03::app::new_classic_netplay_main_session_accepts_local_input(
+				(*session)->status()
+			)) {
 			const auto frame = (*session)->next_frame();
 			const auto advanced = (*session)->advance_local(*stalled_input);
 			if(!advanced) {
@@ -3823,10 +3830,10 @@ int run_direct_netplay_on_platform(
 			}
 		}
 
-		if(established && !stalled_input && (*session)->status() !=
-			NewClassicNetplayMainSessionStatus::complete &&
-			(*session)->status() !=
-				NewClassicNetplayMainSessionStatus::paused) {
+		if(established && !stalled_input &&
+			th03::app::new_classic_netplay_main_session_accepts_local_input(
+				(*session)->status()
+			)) {
 			for(;;) {
 				const auto due = scheduler->pop_due(now_ns);
 				if(!due) {
@@ -4969,6 +4976,22 @@ ExperienceRunResult run_classic_session(
 				warn_audio_device("audio-device-pause", paused.error());
 			}
 			audio_device.reset();
+			audio_started = false;
+		},
+		.resume = [&]() noexcept {
+			if(pixel_oracle_selector || audio_device) {
+				return;
+			}
+			auto created_device = th03::platform::SdlAudioDevice::create({
+				.start_paused = true,
+			});
+			if(created_device) {
+				audio_device.emplace(std::move(*created_device));
+			} else {
+				warn_audio_device(
+					"audio-device-retained-resume", created_device.error()
+				);
+			}
 			audio_started = false;
 		},
 	};
@@ -6466,20 +6489,26 @@ ExperienceRunResult run_new_classic_experience(
 				continue;
 			}
 			if(match != 0) {
-				const int report = run_netplay_report_modal(
-					parsed.tick_rate, platform, mapper, patch_assets,
-					th03::app::NewClassicNetplayReportKind::connection_failed,
-					{}, language, nullptr, &quit
-				);
-				if(report != 0) {
-					return NetplayFrontendResult{.exit_code = report};
-				}
-				if(quit) {
+				audio.resume();
+				if(auto restored = mapper.replace_bindings(
+					th03::app::detail::new_classic_bindings(
+						key_config, joy_config, device_assignment
+					)
+				); !restored) {
 					return NetplayFrontendResult{
-						.disposition =
-							NetplayFrontendDisposition::application_quit
+						.exit_code = fail(
+							"netplay-room-input-restore", restored.error()
+						)
 					};
 				}
+				if(!room.show_launch_failure()) {
+					return NetplayFrontendResult{
+						.exit_code = fail_netplay(
+							"netplay-room", "failure-screen-failed"
+						)
+					};
+				}
+				continue;
 			}
 			return NetplayFrontendResult{
 				.disposition = NetplayFrontendDisposition::restart_new_classic

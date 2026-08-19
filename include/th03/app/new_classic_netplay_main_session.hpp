@@ -26,6 +26,19 @@ enum class NewClassicNetplayMainSessionStatus : std::uint8_t {
 	complete,
 };
 
+// Only these states own the next source input. A confirmed lifecycle boundary
+// owns the source clock until its peer proof is settled; attempting to feed a
+// later input during that wait is a caller error, not an idle session tick.
+[[nodiscard]] constexpr bool
+new_classic_netplay_main_session_accepts_local_input(
+	NewClassicNetplayMainSessionStatus status
+) noexcept
+{
+	return status == NewClassicNetplayMainSessionStatus::running ||
+		status == NewClassicNetplayMainSessionStatus::prediction_stalled ||
+		status == NewClassicNetplayMainSessionStatus::remote_waiting;
+}
+
 enum class NewClassicNetplayMainSessionErrorCode : std::uint8_t {
 	invalid_process,
 	timeline_failed,
