@@ -279,6 +279,16 @@ void test_input_projection()
 	);
 	expect(!app::project_new_classic_pause_input({}).raw_any,
 		"empty interface input projects to an exact release boundary");
+	const auto netplay = app::project_new_classic_netplay_pause_input({
+		.p1 = 0x0023U,
+	});
+	expect(netplay.up && netplay.down && netplay.confirm && netplay.raw_any,
+		"netplay Pause projects ordinary local Story movement and Shot");
+	const auto netplay_system = app::project_new_classic_netplay_pause_input({
+		.system = 0x5000U,
+	});
+	expect(netplay_system.cancel && netplay_system.quit,
+		"netplay Pause retains source-global Esc and Q");
 }
 
 } // namespace

@@ -198,14 +198,22 @@ the package's actual license path with `pacman -Ql sdl3 | grep LICENSE`, then:
 cmake -S th03-port -B th03-port/out/build/linux-sdl -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DTH03_ENABLE_SDL=ON \
+  -DTH03_ENABLE_RTC=ON \
   -DTH03_SDL3_PROVIDER=package \
-  -DTH03_SDL3_LICENSE_FILE=/usr/share/licenses/sdl3/LICENSE.txt
+  -DTH03_SDL3_LICENSE_FILE=/usr/share/licenses/sdl3/LICENSE.txt \
+  -DTH03_RTC_PROVIDER=source \
+  -DTH03_LIBDATACHANNEL_SOURCE_DIR="$PWD/th03-port/out/deps/libdatachannel-0.24.3" \
+  -DTH03_MBEDTLS_SOURCE_DIR="$PWD/th03-port/out/deps/mbedtls-3.6.7"
 cmake --build th03-port/out/build/linux-sdl -j"$(nproc)"
 ```
 
 If the local SDL package uses a different license filename, substitute the
 path printed by `pacman -Ql`. The already-authenticated SDL source provider is
 also valid when the laptop has the repository's `out/deps/SDL3-3.4.10` tree.
+The maintained Mbed TLS WebSocket build verifies `wss://` signaling against
+the POSIX system CA bundle. It honors `SSL_CERT_FILE` when set, then checks the
+standard Arch/Debian/Fedora/macOS bundle locations; a missing or invalid bundle
+fails closed as `tls-ca-unavailable` rather than disabling verification.
 
 Point `--data` at the same extracted TH03 process-data directory used by a
 normal native run (the canonical ignored workspace layout calls it

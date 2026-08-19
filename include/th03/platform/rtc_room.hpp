@@ -52,6 +52,9 @@ enum class RtcRoomErrorCode : std::uint8_t {
 	queue_limit,
 	send_failed,
 	closed,
+	tls_ca_unavailable,
+	tls_failed,
+	websocket_timeout,
 };
 
 struct RtcRoomError final {
@@ -108,6 +111,23 @@ rtc_room_authentication_protocol(
 	std::string_view user_id,
 	std::string_view token
 );
+
+// Stable diagnostic vocabulary for product logs. These names are not part of
+// the deterministic netplay wire or replay format.
+[[nodiscard]] const char *rtc_room_error_code_name(
+	RtcRoomErrorCode code
+) noexcept;
+
+// libdatachannel reports `false` when SCTP accepted a message into its bounded
+// send queue rather than writing it immediately. That is successful transport
+// ownership while the channel remains open, not a packet failure.
+[[nodiscard]] constexpr bool rtc_room_data_channel_send_accepted(
+	bool sent_immediately,
+	bool channel_open_after_send
+) noexcept
+{
+	return sent_immediately || channel_open_after_send;
+}
 
 class RtcRoom final {
 public:

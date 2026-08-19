@@ -68,6 +68,19 @@ int main()
 		"rejects bad user");
 	check(!rtc_room_authentication_protocol(user, "bad"),
 		"rejects bad token");
+	check(std::string(rtc_room_error_code_name(
+		RtcRoomErrorCode::tls_ca_unavailable
+	)) == "tls-ca-unavailable", "stable missing CA diagnostic");
+	check(std::string(rtc_room_error_code_name(
+		RtcRoomErrorCode::tls_failed
+	)) == "tls-failed", "stable TLS failure diagnostic");
+	check(std::string(rtc_room_error_code_name(
+		RtcRoomErrorCode::peer_failed
+	)) == "peer-failed", "stable peer failure diagnostic");
+	check(rtc_room_data_channel_send_accepted(true, true) &&
+		rtc_room_data_channel_send_accepted(false, true) &&
+		!rtc_room_data_channel_send_accepted(false, false),
+		"SCTP buffered send is accepted while the channel remains open");
 
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0 ? 0 : 1;

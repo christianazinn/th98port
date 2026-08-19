@@ -57,7 +57,8 @@ The MSVC preset uses Visual Studio 2022 x64. The GCC preset uses the standard
 The room-code/WebRTC and direct IPv4/Tailscale New Classic netplay technical
 preview, including Windows/Arch setup and the direct fallback commands, is documented in
 [`docs/NETPLAY_TESTING.md`](docs/NETPLAY_TESTING.md). Its synchronized Pause
-offers Resume or Forfeit; Forfeit ends both previews without inventing a TH03
+uses each peer's ordinary Story controls and offers Resume or Forfeit; Forfeit
+ends both previews without inventing a TH03
 winner or publishing the incomplete in-memory replay. Completed matches,
 Forfeit, peer departure/timeout, and deterministic proof mismatches now end on
 an authenticated source-styled local report instead of disappearing directly

@@ -68,6 +68,20 @@ NewClassicPauseInput project_new_classic_pause_input(
 	};
 }
 
+NewClassicPauseInput project_new_classic_netplay_pause_input(
+	CoreInput input,
+	bool application_quit_requested
+) noexcept
+{
+	auto result = project_new_classic_pause_input(
+		input, false, application_quit_requested
+	);
+	result.up = result.up || pressed(input.p1, 0x0001U);
+	result.down = result.down || pressed(input.p1, 0x0002U);
+	result.confirm = result.confirm || pressed(input.p1, 0x0020U);
+	return result;
+}
+
 NewClassicPauseMenu::NewClassicPauseMenu(
 	bool save_enabled,
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,

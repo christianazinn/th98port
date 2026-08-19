@@ -51,6 +51,13 @@ struct NewClassicPauseInput final {
 	bool application_quit_requested = false
 ) noexcept;
 
+// Netplay intentionally gives each machine its ordinary local Story controls
+// in P1 while Esc/Q remain source-global system actions.
+[[nodiscard]] NewClassicPauseInput project_new_classic_netplay_pause_input(
+	CoreInput input,
+	bool application_quit_requested = false
+) noexcept;
+
 // Application owner for the Replay Patch pause loop. The deterministic MAIN
 // frame remains deferred while this state machine consumes interstitial
 // samples; callers complete that frame exactly once after a terminal result.
