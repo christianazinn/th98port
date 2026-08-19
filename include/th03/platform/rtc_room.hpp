@@ -118,6 +118,17 @@ rtc_room_authentication_protocol(
 	RtcRoomErrorCode code
 ) noexcept;
 
+// libdatachannel reports `false` when SCTP accepted a message into its bounded
+// send queue rather than writing it immediately. That is successful transport
+// ownership while the channel remains open, not a packet failure.
+[[nodiscard]] constexpr bool rtc_room_data_channel_send_accepted(
+	bool sent_immediately,
+	bool channel_open_after_send
+) noexcept
+{
+	return sent_immediately || channel_open_after_send;
+}
+
 class RtcRoom final {
 public:
 	[[nodiscard]] static std::expected<

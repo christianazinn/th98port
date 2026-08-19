@@ -1645,12 +1645,18 @@ public:
 		}
 #if defined(TH03_ENABLE_RTC_TRANSPORT)
 		if(rtc_room_) {
-			return rtc_room_->send(
+			const auto sent = rtc_room_->send(
 				channel == NetplayWireChannel::gameplay ?
 					th03::platform::RtcRoomChannel::gameplay :
 					th03::platform::RtcRoomChannel::control,
 				bytes
-			).has_value();
+			);
+			if(!sent) {
+				std::cerr << "netplay-rtc-send-code=" <<
+					th03::platform::rtc_room_error_code_name(sent.error().code)
+					<< '\n';
+			}
+			return sent.has_value();
 		}
 #endif
 		return false;
@@ -1692,7 +1698,11 @@ public:
 		if(rtc_room_) {
 			auto received = rtc_room_->receive();
 			if(!received) {
-				return std::unexpected("rtc-failed");
+				return std::unexpected(
+					th03::platform::rtc_room_error_code_name(
+						received.error().code
+					)
+				);
 			}
 			if(!*received) {
 				return std::optional<NetplayWireMessage>{};
@@ -3926,7 +3936,9 @@ int run_direct_netplay_on_platform(
 				const auto was_ready = pause_barrier->local_ready();
 				const auto was_forfeit = pause_barrier->local_forfeit();
 				const auto pause_status = pause_overlay->consume(
-					th03::app::project_new_classic_pause_input((**due).input)
+					th03::app::project_new_classic_netplay_pause_input(
+						(**due).input
+					)
 				);
 				presentation_pending = true;
 				if(pause_status == th03::app::NewClassicPauseStatus::resume) {

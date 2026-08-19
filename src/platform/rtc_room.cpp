@@ -31,6 +31,7 @@ namespace {
 constexpr std::size_t maximum_data_channel_message_bytes = 16U * 1024U;
 constexpr std::size_t maximum_received_messages = 256U;
 constexpr std::size_t maximum_received_bytes = 64U * 1024U;
+constexpr std::size_t maximum_buffered_send_bytes = 64U * 1024U;
 constexpr std::size_t maximum_ice_servers = 16U;
 constexpr std::chrono::milliseconds websocket_timeout{15'000};
 constexpr std::chrono::milliseconds websocket_ping_interval{15'000};
@@ -1025,8 +1026,15 @@ std::expected<void, RtcRoomError> RtcRoom::send(
 		return std::unexpected(error(RtcRoomErrorCode::data_channel));
 	}
 	try {
+		if(data_channel->bufferedAmount() >
+			maximum_buffered_send_bytes - bytes.size()) {
+			return std::unexpected(error(RtcRoomErrorCode::queue_limit));
+		}
 		const auto *data = reinterpret_cast<const rtc::byte *>(bytes.data());
-		if(!data_channel->send(data, bytes.size())) {
+		const bool sent_immediately = data_channel->send(data, bytes.size());
+		if(!rtc_room_data_channel_send_accepted(
+			sent_immediately, data_channel->isOpen()
+		)) {
 			return std::unexpected(error(RtcRoomErrorCode::send_failed));
 		}
 	} catch(...) {

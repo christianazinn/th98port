@@ -77,6 +77,10 @@ int main()
 	check(std::string(rtc_room_error_code_name(
 		RtcRoomErrorCode::peer_failed
 	)) == "peer-failed", "stable peer failure diagnostic");
+	check(rtc_room_data_channel_send_accepted(true, true) &&
+		rtc_room_data_channel_send_accepted(false, true) &&
+		!rtc_room_data_channel_send_accepted(false, false),
+		"SCTP buffered send is accepted while the channel remains open");
 
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0 ? 0 : 1;
