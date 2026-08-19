@@ -3,12 +3,15 @@
 #include <rtc/rtc.hpp>
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <deque>
 #include <expected>
+#include <filesystem>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -35,6 +38,67 @@ constexpr std::chrono::milliseconds websocket_ping_interval{15'000};
 [[nodiscard]] RtcRoomError error(RtcRoomErrorCode code) noexcept
 {
 	return {.code = code};
+}
+
+[[nodiscard]] std::expected<std::string, RtcRoomError>
+system_ca_certificate_file() noexcept
+{
+#if defined(_WIN32)
+	// Pinned libdatachannel 0.24.3 does not consume caCertificatePemFile on
+	// Windows. Preserve that existing adapter boundary in this POSIX fix.
+	return std::string{};
+#else
+	try {
+		auto regular_file = [](std::string_view candidate) noexcept {
+			if(candidate.empty() || candidate.size() > 4'096U) {
+				return false;
+			}
+			std::error_code status_error{};
+			return std::filesystem::is_regular_file(
+				std::filesystem::path(candidate), status_error
+			) && !status_error;
+		};
+		if(const char *const configured = std::getenv("SSL_CERT_FILE");
+			configured != nullptr && configured[0] != '\0') {
+			const std::string_view candidate(configured);
+			if(!regular_file(candidate)) {
+				return std::unexpected(error(
+					RtcRoomErrorCode::tls_ca_unavailable
+				));
+			}
+			return std::string(candidate);
+		}
+		constexpr std::array<std::string_view, 5U> candidates{
+			"/etc/ssl/certs/ca-certificates.crt",
+			"/etc/pki/tls/certs/ca-bundle.crt",
+			"/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+			"/etc/ssl/ca-bundle.pem",
+			"/etc/ssl/cert.pem",
+		};
+		for(const auto candidate : candidates) {
+			if(regular_file(candidate)) {
+				return std::string(candidate);
+			}
+		}
+	} catch(...) {
+		// This adapter is noexcept. Allocation and path conversion failures
+		// must remain a typed, fail-closed connection result.
+	}
+	return std::unexpected(error(RtcRoomErrorCode::tls_ca_unavailable));
+#endif
+}
+
+[[nodiscard]] RtcRoomErrorCode websocket_error_code(
+	std::string_view message
+) noexcept
+{
+	if(message == "TLS connection failed") {
+		return RtcRoomErrorCode::tls_failed;
+	}
+	if(message == "Connection timed out") {
+		return RtcRoomErrorCode::websocket_timeout;
+	}
+	return RtcRoomErrorCode::websocket_failed;
 }
 
 [[nodiscard]] bool valid_host(std::string_view host) noexcept
@@ -689,6 +753,14 @@ struct RtcRoom::Impl final {
 				));
 			}
 		}
+		std::string ca_certificate{};
+		if(url->starts_with("wss://")) {
+			const auto found = system_ca_certificate_file();
+			if(!found) {
+				return std::unexpected(found.error());
+			}
+			ca_certificate = *found;
+		}
 		try {
 			auto core = std::make_shared<Core>();
 			core->config = std::move(config);
@@ -702,16 +774,17 @@ struct RtcRoom::Impl final {
 			websocket_config.maxOutstandingPings = 2;
 			websocket_config.maxMessageSize =
 				app::new_classic_netplay_room_signal_max_bytes;
+			if(!ca_certificate.empty()) {
+				websocket_config.caCertificatePemFile = ca_certificate;
+			}
 			auto websocket = std::make_shared<rtc::WebSocket>(websocket_config);
 			const std::weak_ptr<Core> weak = core;
-			websocket->onError([weak](std::string) {
+			websocket->onError([weak](std::string message) {
 				if(const auto state = weak.lock()) {
 					std::scoped_lock lock(state->mutex);
 					if(state->state != RtcRoomState::ready && !state->closing &&
 						!final_state(state->state)) {
-						state->failure = error(
-							RtcRoomErrorCode::websocket_failed
-						);
+						state->failure = error(websocket_error_code(message));
 						state->state = RtcRoomState::failed;
 					}
 				}
@@ -721,7 +794,10 @@ struct RtcRoom::Impl final {
 					std::scoped_lock lock(state->mutex);
 					if(state->state != RtcRoomState::ready && !state->closing &&
 						!final_state(state->state)) {
-						state->state = RtcRoomState::peer_left;
+						state->failure = error(
+							RtcRoomErrorCode::websocket_failed
+						);
+						state->state = RtcRoomState::failed;
 					}
 				}
 			});
@@ -830,6 +906,51 @@ std::expected<std::string, RtcRoomError> rtc_room_authentication_protocol(
 		return std::unexpected(error(RtcRoomErrorCode::invalid_credentials));
 	}
 	return "t3auth." + std::string(user_id) + "." + std::string(token);
+}
+
+const char *rtc_room_error_code_name(RtcRoomErrorCode code) noexcept
+{
+	switch(code) {
+	case RtcRoomErrorCode::invalid_origin:
+		return "invalid-origin";
+	case RtcRoomErrorCode::invalid_credentials:
+		return "invalid-credentials";
+	case RtcRoomErrorCode::invalid_room_code:
+		return "invalid-room-code";
+	case RtcRoomErrorCode::invalid_ice_server:
+		return "invalid-ice-server";
+	case RtcRoomErrorCode::websocket_create:
+		return "websocket-create";
+	case RtcRoomErrorCode::websocket_failed:
+		return "websocket-failed";
+	case RtcRoomErrorCode::websocket_protocol:
+		return "websocket-protocol";
+	case RtcRoomErrorCode::signaling_invalid:
+		return "signaling-invalid";
+	case RtcRoomErrorCode::signaling_order:
+		return "signaling-order";
+	case RtcRoomErrorCode::peer_create:
+		return "peer-create";
+	case RtcRoomErrorCode::peer_failed:
+		return "peer-failed";
+	case RtcRoomErrorCode::data_channel:
+		return "data-channel";
+	case RtcRoomErrorCode::message_limit:
+		return "message-limit";
+	case RtcRoomErrorCode::queue_limit:
+		return "queue-limit";
+	case RtcRoomErrorCode::send_failed:
+		return "send-failed";
+	case RtcRoomErrorCode::closed:
+		return "closed";
+	case RtcRoomErrorCode::tls_ca_unavailable:
+		return "tls-ca-unavailable";
+	case RtcRoomErrorCode::tls_failed:
+		return "tls-failed";
+	case RtcRoomErrorCode::websocket_timeout:
+		return "websocket-timeout";
+	}
+	return "unknown";
 }
 
 RtcRoom::RtcRoom(std::unique_ptr<Impl> impl) noexcept : impl_(std::move(impl)) {}

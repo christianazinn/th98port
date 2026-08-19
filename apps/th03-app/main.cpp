@@ -2107,7 +2107,8 @@ negotiate_rtc_netplay_lobby(
 	});
 	if(!opened) {
 		return std::unexpected(fail_netplay(
-			"netplay-room-connect", "invalid-configuration"
+			"netplay-room-connect",
+			th03::platform::rtc_room_error_code_name(opened.error().code)
 		));
 	}
 	auto room = std::move(*opened);
@@ -2156,8 +2157,12 @@ negotiate_rtc_netplay_lobby(
 		if(snapshot.state == RtcRoomState::failed ||
 			snapshot.state == RtcRoomState::closed ||
 			snapshot.state == RtcRoomState::peer_left) {
+			const auto code = snapshot.error ?
+				th03::platform::rtc_room_error_code_name(snapshot.error->code) :
+				(snapshot.state == RtcRoomState::peer_left ?
+					"peer-left" : "transport-failed");
 			return std::unexpected(fail_netplay(
-				"netplay-room-connect", "transport-failed"
+				"netplay-room-connect", code
 			));
 		}
 		if(!matchmaking && provisional_mode == DirectVsNetplayMode::join &&
