@@ -97,6 +97,9 @@ struct SdlInputBindings {
 		gamepad_axes{};
 	std::size_t gamepad_axis_count = 0U;
 	std::array<SdlInputPlayer, sdl_gamepad_capacity> gamepad_players{};
+	// Charge contributes Shot, so it must be suppressed before input latching
+	// for every player whose Replay Autofire option is disabled.
+	std::uint8_t charge_enabled_players = 0x03U;
 	bool identity_assignment_enabled = false;
 	app::NewClassicDeviceAssignment device_assignment{};
 	std::int16_t axis_press_threshold = 16384;

@@ -200,7 +200,9 @@ void test_netplay_story_defaults()
 	using th03::platform::SdlLogicalAction;
 	const auto bindings =
 		th03::app::detail::new_classic_netplay_story_bindings();
-	expect(bindings.keyboard_count == 10U,
+	expect(bindings.charge_enabled_players == 0U,
+		"netplay disables unnegotiated Charge for keyboard and controllers");
+	expect(bindings.keyboard_count == 9U,
 		"netplay exposes one Story keyboard rather than both VS columns");
 	expect(
 		key_action_matches(bindings, SDL_SCANCODE_UP, SdlInputPlayer::p1,
@@ -218,9 +220,8 @@ void test_netplay_story_defaults()
 			SdlLogicalAction::shot) == 1U &&
 		key_action_matches(bindings, SDL_SCANCODE_X, SdlInputPlayer::p1,
 			SdlLogicalAction::bomb) == 1U &&
-		key_action_matches(bindings, SDL_SCANCODE_LSHIFT, SdlInputPlayer::p1,
-			SdlLogicalAction::charge) == 1U,
-		"netplay shares the Story P1 Shot Bomb and Charge defaults"
+		key_matches(bindings, SDL_SCANCODE_LSHIFT, SdlInputPlayer::p1) == 0U,
+		"netplay shares Story Shot and Bomb without an unnegotiated Autofire key"
 	);
 	expect(
 		key_action_matches(bindings, SDL_SCANCODE_ESCAPE, SdlInputPlayer::p1,
@@ -232,7 +233,7 @@ void test_netplay_story_defaults()
 		key_matches(bindings, SDL_SCANCODE_KP_8, SdlInputPlayer::p2) == 0U,
 		"netplay does not expose the local VS P1 or P2 keyboard columns"
 	);
-	expect(bindings.gamepad_button_count == 9U &&
+	expect(bindings.gamepad_button_count == 8U &&
 		bindings.gamepad_axis_count == 4U,
 		"netplay exposes one local Story controller action set");
 	for(const auto player : bindings.gamepad_players) {
@@ -248,15 +249,32 @@ void test_new_classic_joy_config()
 	const auto keys = detail::new_classic_default_key_config();
 	const auto joy = detail::new_classic_default_joy_config();
 	const auto defaults = detail::new_classic_bindings(keys, joy);
-	expect(defaults.gamepad_button_count == 15U &&
+	expect(defaults.charge_enabled_players == 0U,
+		"Autofire Off suppresses Charge before controller input latching");
+	expect(defaults.gamepad_button_count == 14U &&
 		defaults.gamepad_axis_count == 8U,
-		"New Classic adds the configured Charge action to controller defaults");
-	expect(defaults.gamepad_buttons[8U].button == SDL_GAMEPAD_BUTTON_SOUTH &&
-		defaults.gamepad_buttons[8U].action == SdlLogicalAction::shot &&
-		defaults.gamepad_buttons[10U].button == SDL_GAMEPAD_BUTTON_EAST &&
-		defaults.gamepad_buttons[10U].action == SdlLogicalAction::bomb &&
-		defaults.gamepad_buttons[12U].button == SDL_GAMEPAD_BUTTON_WEST &&
-		defaults.gamepad_buttons[12U].action == SdlLogicalAction::charge,
+		"New Classic omits Charge while Autofire is disabled");
+	expect(key_matches(defaults, SDL_SCANCODE_LSHIFT, SdlInputPlayer::p1) == 0U,
+		"Shift is completely unbound while P1 Autofire is disabled");
+	auto autofire_keys = keys;
+	autofire_keys.autofire = 3U;
+	const auto autofire_defaults = detail::new_classic_bindings(
+		autofire_keys, joy
+	);
+	expect(autofire_defaults.charge_enabled_players == 3U,
+		"per-player Autofire mask crosses the SDL controller boundary");
+	expect(autofire_defaults.gamepad_button_count == 15U &&
+		key_action_matches(
+			autofire_defaults, SDL_SCANCODE_LSHIFT, SdlInputPlayer::p1,
+			SdlLogicalAction::charge
+		) == 1U,
+		"enabled Autofire restores the configured Charge inputs");
+	expect(autofire_defaults.gamepad_buttons[8U].button == SDL_GAMEPAD_BUTTON_SOUTH &&
+		autofire_defaults.gamepad_buttons[8U].action == SdlLogicalAction::shot &&
+		autofire_defaults.gamepad_buttons[10U].button == SDL_GAMEPAD_BUTTON_EAST &&
+		autofire_defaults.gamepad_buttons[10U].action == SdlLogicalAction::bomb &&
+		autofire_defaults.gamepad_buttons[12U].button == SDL_GAMEPAD_BUTTON_WEST &&
+		autofire_defaults.gamepad_buttons[12U].action == SdlLogicalAction::charge,
 		"default Shot, Bomb, and Charge controller buttons are exact");
 	expect(defaults.axis_press_threshold == 16384 &&
 		defaults.axis_release_threshold == 12288,
@@ -278,7 +296,7 @@ void test_new_classic_joy_config()
 	custom.horizontal_reversed = true;
 	custom.vertical_reversed = true;
 	custom.dead_zone_percent = 25U;
-	const auto bindings = detail::new_classic_bindings(keys, custom);
+	const auto bindings = detail::new_classic_bindings(autofire_keys, custom);
 	expect(bindings.gamepad_buttons[8U].button == SDL_GAMEPAD_BUTTON_NORTH &&
 		bindings.gamepad_buttons[10U].button ==
 			SDL_GAMEPAD_BUTTON_LEFT_SHOULDER &&
@@ -300,12 +318,14 @@ void test_new_classic_joy_config()
 
 	custom.buttons[static_cast<std::size_t>(NewClassicJoyAction::charge)] =
 		NewClassicJoyButton::unbound;
-	const auto unbound = detail::new_classic_bindings(keys, custom);
+	const auto unbound = detail::new_classic_bindings(autofire_keys, custom);
 	expect(unbound.gamepad_button_count == 14U,
 		"an explicitly unbound controller action emits no SDL binding");
 	NewClassicDeviceAssignment assignment{};
 	assignment.mode[0] = NewClassicControllerAssignmentMode::disabled;
-	const auto assigned = detail::new_classic_bindings(keys, custom, assignment);
+	const auto assigned = detail::new_classic_bindings(
+		autofire_keys, custom, assignment
+	);
 	expect(assigned.identity_assignment_enabled &&
 		assigned.device_assignment == assignment,
 		"device assignment crosses only the SDL binding boundary");

@@ -6,12 +6,14 @@
 #include <array>
 #include <charconv>
 #include <chrono>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <deque>
 #include <expected>
 #include <filesystem>
+#include <fstream>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -35,6 +37,9 @@ constexpr std::size_t maximum_buffered_send_bytes = 64U * 1024U;
 constexpr std::size_t maximum_ice_servers = 16U;
 constexpr std::chrono::milliseconds websocket_timeout{15'000};
 constexpr std::chrono::milliseconds websocket_ping_interval{15'000};
+constexpr std::string_view identity_protocol = "T3IDENT1";
+constexpr std::string_view identity_file_magic = "T3AUTH01";
+constexpr std::size_t maximum_identity_file_bytes = 512U;
 
 [[nodiscard]] RtcRoomError error(RtcRoomErrorCode code) noexcept
 {
@@ -221,6 +226,293 @@ struct ParsedOrigin final {
 				(character >= '0' && character <= '9') ||
 				character == '-' || character == '_';
 		});
+}
+
+[[nodiscard]] RtcOnlineIdentityError identity_error(
+	RtcOnlineIdentityErrorCode code,
+	std::error_code system = {}
+) noexcept
+{
+	return {.code = code, .system = system};
+}
+
+[[nodiscard]] std::optional<RtcOnlineCredentials> decode_identity(
+	std::string_view text,
+	std::string_view magic
+) noexcept
+{
+	if(text.size() > maximum_identity_file_bytes ||
+		!text.starts_with(magic) || text.size() <= magic.size() ||
+		text[magic.size()] != '\n') {
+		return std::nullopt;
+	}
+	const auto user_begin = magic.size() + 1U;
+	const auto user_end = text.find('\n', user_begin);
+	if(user_end == std::string_view::npos) {
+		return std::nullopt;
+	}
+	const auto token_begin = user_end + 1U;
+	const auto token_end = text.find('\n', token_begin);
+	if(token_end == std::string_view::npos || token_end + 1U != text.size()) {
+		return std::nullopt;
+	}
+	const auto user = text.substr(user_begin, user_end - user_begin);
+	const auto token = text.substr(token_begin, token_end - token_begin);
+	if(!uuid_shape(user) || !token_shape(token)) {
+		return std::nullopt;
+	}
+	return RtcOnlineCredentials{
+		.user_id = std::string(user),
+		.token = std::string(token),
+	};
+}
+
+[[nodiscard]] std::expected<
+	std::optional<RtcOnlineCredentials>,
+	RtcOnlineIdentityError
+> load_identity_file(const std::filesystem::path &path) noexcept
+{
+	try {
+		if(path.empty() || path.filename().empty()) {
+			return std::unexpected(identity_error(
+				RtcOnlineIdentityErrorCode::invalid_path
+			));
+		}
+		std::error_code status_error{};
+		const auto status = std::filesystem::status(path, status_error);
+		if(status_error) {
+			if(status_error == std::errc::no_such_file_or_directory) {
+				return std::optional<RtcOnlineCredentials>{};
+			}
+			return std::unexpected(identity_error(
+				RtcOnlineIdentityErrorCode::status, status_error
+			));
+		}
+		if(!std::filesystem::exists(status)) {
+			return std::optional<RtcOnlineCredentials>{};
+		}
+		if(!std::filesystem::is_regular_file(status)) {
+			return std::unexpected(identity_error(
+				RtcOnlineIdentityErrorCode::status
+			));
+		}
+		const auto bytes = std::filesystem::file_size(path, status_error);
+		if(status_error || bytes == 0U || bytes > maximum_identity_file_bytes) {
+			return std::unexpected(identity_error(
+				RtcOnlineIdentityErrorCode::format, status_error
+			));
+		}
+		std::ifstream input(path, std::ios::binary);
+		if(!input) {
+			return std::unexpected(identity_error(
+				RtcOnlineIdentityErrorCode::open
+			));
+		}
+		std::string text(static_cast<std::size_t>(bytes), '\0');
+		input.read(text.data(), static_cast<std::streamsize>(text.size()));
+		if(!input || input.peek() != std::char_traits<char>::eof()) {
+			return std::unexpected(identity_error(
+				RtcOnlineIdentityErrorCode::read
+			));
+		}
+		auto decoded = decode_identity(text, identity_file_magic);
+		if(!decoded) {
+			return std::unexpected(identity_error(
+				RtcOnlineIdentityErrorCode::format
+			));
+		}
+		return std::optional<RtcOnlineCredentials>{std::move(*decoded)};
+	} catch(...) {
+		return std::unexpected(identity_error(
+			RtcOnlineIdentityErrorCode::read
+		));
+	}
+}
+
+[[nodiscard]] std::expected<void, RtcOnlineIdentityError>
+store_identity_file(
+	const std::filesystem::path &path,
+	const RtcOnlineCredentials &credentials
+) noexcept
+{
+	try {
+		if(path.empty() || path.filename().empty() ||
+			!uuid_shape(credentials.user_id) ||
+			!token_shape(credentials.token)) {
+			return std::unexpected(identity_error(
+				RtcOnlineIdentityErrorCode::invalid_path
+			));
+		}
+		const auto text = std::string(identity_file_magic) + "\n" +
+			credentials.user_id + "\n" + credentials.token + "\n";
+		const auto temporary = path.string() + ".tmp";
+		std::error_code status_error{};
+		if(std::filesystem::exists(temporary, status_error) || status_error) {
+			return std::unexpected(identity_error(
+				RtcOnlineIdentityErrorCode::status, status_error
+			));
+		}
+		{
+			std::ofstream output(
+				temporary, std::ios::binary | std::ios::out | std::ios::trunc
+			);
+			if(!output) {
+				return std::unexpected(identity_error(
+					RtcOnlineIdentityErrorCode::open
+				));
+			}
+			output.write(text.data(), static_cast<std::streamsize>(text.size()));
+			if(!output) {
+				return std::unexpected(identity_error(
+					RtcOnlineIdentityErrorCode::write
+				));
+			}
+			output.flush();
+			if(!output) {
+				return std::unexpected(identity_error(
+					RtcOnlineIdentityErrorCode::flush
+				));
+			}
+		}
+#if !defined(_WIN32)
+		std::filesystem::permissions(
+			temporary,
+			std::filesystem::perms::owner_read |
+				std::filesystem::perms::owner_write,
+			std::filesystem::perm_options::replace,
+			status_error
+		);
+		if(status_error) {
+			std::filesystem::remove(temporary, status_error);
+			return std::unexpected(identity_error(
+				RtcOnlineIdentityErrorCode::write, status_error
+			));
+		}
+#endif
+		std::filesystem::rename(temporary, path, status_error);
+		if(status_error) {
+			std::error_code ignored{};
+			std::filesystem::remove(temporary, ignored);
+			return std::unexpected(identity_error(
+				RtcOnlineIdentityErrorCode::publish, status_error
+			));
+		}
+		auto readback = load_identity_file(path);
+		if(!readback || !*readback || **readback != credentials) {
+			return std::unexpected(identity_error(
+				RtcOnlineIdentityErrorCode::readback
+			));
+		}
+		return {};
+	} catch(...) {
+		return std::unexpected(identity_error(
+			RtcOnlineIdentityErrorCode::write
+		));
+	}
+}
+
+[[nodiscard]] std::expected<RtcOnlineCredentials, RtcOnlineIdentityError>
+enroll_identity(std::string_view origin) noexcept
+{
+	const auto parsed = parse_origin(origin);
+	if(!parsed) {
+		return std::unexpected(identity_error(
+			RtcOnlineIdentityErrorCode::invalid_origin
+		));
+	}
+	std::string ca_certificate{};
+	if(parsed->secure) {
+		const auto found = system_ca_certificate_file();
+		if(!found) {
+			return std::unexpected(identity_error(
+				RtcOnlineIdentityErrorCode::tls_ca_unavailable
+			));
+		}
+		ca_certificate = *found;
+	}
+	struct State final {
+		std::mutex mutex{};
+		std::condition_variable changed{};
+		std::optional<RtcOnlineCredentials> credentials{};
+		RtcOnlineIdentityErrorCode failure =
+			RtcOnlineIdentityErrorCode::websocket_failed;
+		bool done = false;
+	};
+	try {
+		auto state = std::make_shared<State>();
+		rtc::WebSocket::Configuration config{};
+		config.protocols = {std::string(identity_protocol)};
+		config.connectionTimeout = websocket_timeout;
+		config.pingInterval = websocket_ping_interval;
+		config.maxOutstandingPings = 2;
+		config.maxMessageSize = maximum_identity_file_bytes;
+		if(!ca_certificate.empty()) {
+			config.caCertificatePemFile = ca_certificate;
+		}
+		auto socket = std::make_shared<rtc::WebSocket>(config);
+		const std::weak_ptr<State> weak = state;
+		const auto fail = [weak](RtcOnlineIdentityErrorCode code) {
+			if(const auto locked = weak.lock()) {
+				std::scoped_lock guard(locked->mutex);
+				if(!locked->done) {
+					locked->failure = code;
+					locked->done = true;
+					locked->changed.notify_all();
+				}
+			}
+		};
+		socket->onError([fail](std::string message) {
+			fail(message == "Connection timed out" ?
+				RtcOnlineIdentityErrorCode::websocket_timeout :
+				RtcOnlineIdentityErrorCode::websocket_failed);
+		});
+		socket->onClosed([fail]() {
+			fail(RtcOnlineIdentityErrorCode::websocket_failed);
+		});
+		socket->onMessage(
+			[fail](rtc::binary) {
+				fail(RtcOnlineIdentityErrorCode::format);
+			},
+			[weak](std::string message) {
+				if(const auto locked = weak.lock()) {
+					auto decoded = decode_identity(message, identity_protocol);
+					std::scoped_lock guard(locked->mutex);
+					if(!locked->done) {
+						if(decoded) {
+							locked->credentials = std::move(*decoded);
+						} else {
+							locked->failure =
+								RtcOnlineIdentityErrorCode::format;
+						}
+						locked->done = true;
+						locked->changed.notify_all();
+					}
+				}
+			}
+		);
+		const auto url = std::string(parsed->secure ? "wss://" : "ws://") +
+			parsed->authority + "/api/th03/netplay/enroll";
+		socket->open(url);
+		{
+			std::unique_lock lock(state->mutex);
+			if(!state->changed.wait_for(lock, websocket_timeout, [&] {
+				return state->done;
+			})) {
+				state->failure = RtcOnlineIdentityErrorCode::websocket_timeout;
+				state->done = true;
+			}
+		}
+		socket->resetCallbacks();
+		socket->close();
+		if(!state->credentials) {
+			return std::unexpected(identity_error(state->failure));
+		}
+		return std::move(*state->credentials);
+	} catch(...) {
+		return std::unexpected(identity_error(
+			RtcOnlineIdentityErrorCode::websocket_create
+		));
+	}
 }
 
 [[nodiscard]] std::optional<rtc::IceServer> ice_server(
@@ -907,6 +1199,29 @@ std::expected<std::string, RtcRoomError> rtc_room_authentication_protocol(
 		return std::unexpected(error(RtcRoomErrorCode::invalid_credentials));
 	}
 	return "t3auth." + std::string(user_id) + "." + std::string(token);
+}
+
+std::expected<RtcOnlineCredentials, RtcOnlineIdentityError>
+load_or_enroll_rtc_online_credentials(
+	const std::filesystem::path &path,
+	std::string_view origin
+) noexcept
+{
+	auto loaded = load_identity_file(path);
+	if(!loaded) {
+		return std::unexpected(loaded.error());
+	}
+	if(*loaded) {
+		return std::move(**loaded);
+	}
+	auto enrolled = enroll_identity(origin);
+	if(!enrolled) {
+		return std::unexpected(enrolled.error());
+	}
+	if(auto stored = store_identity_file(path, *enrolled); !stored) {
+		return std::unexpected(stored.error());
+	}
+	return std::move(*enrolled);
 }
 
 const char *rtc_room_error_code_name(RtcRoomErrorCode code) noexcept

@@ -800,7 +800,8 @@ yet expose a truthful RTT measurement.
 2. Add negotiated pause, forfeit, disconnect, desync UI, and post-match report.
    The direct preview now carries a rollback-correct Pause edge, confirmed
    boundary proof, release-before-Resume input, two-peer ready barrier, and
-   authenticated PAUSED/Resume presentation. The synchronized Forfeit policy
+   authenticated PAUSED/Resume presentation, visible synchronized three-second
+   countdown, and explicit `Forfeit` label. The synchronized Forfeit policy
    and request/ack lifecycle are now complete in the direct preview. Completed
    matches, Forfeit, peer departure/timeout, and deterministic proof mismatch
    now enter the authenticated local report. Product-room ownership of that
@@ -828,12 +829,22 @@ yet expose a truthful RTT measurement.
    product report now exposes bounded WebRTC RTT; jitter and distribution
    collection remain external private-beta evidence rather than game state.
 4. Run a bounded private beta and tune delay/stall/disconnect policy.
+5. Treat an IP address only as an abuse/rate-limit signal, never an account.
+   Windows keeps its DPAPI credential owner. POSIX private-beta builds enroll
+   an opaque identity in-app and persist an owner-only `PODD.AUTH`; a future
+   desktop secret-store abstraction may replace that storage without changing
+   room or replay identity.
 
 ### Later product decisions
 
 - Quick Match region/rating policy.
 - Spectator architecture and replay-delayed spectating.
-- Whether any VS results belong on an online board.
+- Netplay replay product support is the next high-priority lifecycle extension:
+  expose completed local V13 records as netplay records, preserve match metadata
+  outside deterministic samples, and define watch/upload UX without making a
+  peer or signaling service authoritative.
+- VS boards, rating/Elo, match history, seasons, and moderation are long-term
+  features after replay-backed beta evidence exists.
 - Reconnect through explicit trusted state transfer, if its complexity and
   authority tradeoff become worthwhile.
 - Whether a future replay format should embed a netplay transcript ID. V13 does

@@ -1,9 +1,11 @@
 #ifndef TH03_APP_NEW_CLASSIC_PAUSE_HPP
 #define TH03_APP_NEW_CLASSIC_PAUSE_HPP
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "th03/core/game.hpp"
@@ -12,6 +14,33 @@
 namespace th03::app {
 
 struct NewClassicReplayPatchAssets;
+
+struct NewClassicPauseNetplayText final {
+	static constexpr std::size_t width = 256U;
+	static constexpr std::size_t height = 16U;
+	using Mask = std::array<std::uint8_t, width * height>;
+	Mask forfeit{};
+	std::array<Mask, 3U> resume_countdown{};
+};
+
+inline constexpr std::uint64_t new_classic_netplay_resume_countdown_second_ns =
+	1'000'000'000U;
+inline constexpr std::uint8_t new_classic_netplay_resume_countdown_seconds = 3U;
+
+[[nodiscard]] constexpr std::optional<std::uint8_t>
+new_classic_netplay_resume_countdown_remaining(
+	std::uint64_t elapsed_ns
+) noexcept
+{
+	const auto elapsed_seconds =
+		elapsed_ns / new_classic_netplay_resume_countdown_second_ns;
+	if(elapsed_seconds >= new_classic_netplay_resume_countdown_seconds) {
+		return std::nullopt;
+	}
+	return static_cast<std::uint8_t>(
+		new_classic_netplay_resume_countdown_seconds - elapsed_seconds
+	);
+}
 
 enum class NewClassicPauseChoice : std::uint8_t {
 	resume,
@@ -67,7 +96,8 @@ public:
 		bool save_enabled,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {},
 		NewClassicPausePresentation presentation =
-			NewClassicPausePresentation::replay_patch
+			NewClassicPausePresentation::replay_patch,
+		std::shared_ptr<const NewClassicPauseNetplayText> netplay_text = {}
 	) noexcept;
 
 	[[nodiscard]] NewClassicPauseStatus consume(
@@ -80,6 +110,9 @@ public:
 	[[nodiscard]] NewClassicPauseChoice choice() const noexcept;
 	[[nodiscard]] bool save_enabled() const noexcept;
 	[[nodiscard]] bool take_rejected_save_effect() noexcept;
+	void set_resume_countdown(std::optional<std::uint8_t> seconds) noexcept;
+	[[nodiscard]] std::optional<std::uint8_t>
+	resume_countdown() const noexcept;
 
 private:
 	friend struct NewClassicPauseTestAccess;
@@ -104,6 +137,11 @@ private:
 		std::size_t count,
 		present::Index4 graphics_color
 	) noexcept;
+	void put_menu_text_mask(
+		std::int32_t top,
+		const NewClassicPauseNetplayText::Mask &mask,
+		present::Index4 graphics_color
+	) noexcept;
 
 	bool save_enabled_ = false;
 	NewClassicPauseChoice choice_ = NewClassicPauseChoice::resume;
@@ -114,6 +152,8 @@ private:
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
 	NewClassicPausePresentation presentation_ =
 		NewClassicPausePresentation::replay_patch;
+	std::shared_ptr<const NewClassicPauseNetplayText> netplay_text_{};
+	std::optional<std::uint8_t> resume_countdown_{};
 	std::vector<present::ComposedPixel> pixels_{};
 };
 

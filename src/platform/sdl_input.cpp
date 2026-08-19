@@ -81,6 +81,7 @@ constexpr std::uint16_t input_q = 0x4000U;
 		bindings.keyboard_count > bindings.keyboard.size() ||
 		bindings.gamepad_button_count > bindings.gamepad_buttons.size() ||
 		bindings.gamepad_axis_count > bindings.gamepad_axes.size() ||
+		(bindings.charge_enabled_players & 0xFCU) != 0U ||
 		bindings.axis_release_threshold <= 0 ||
 		bindings.axis_press_threshold <= bindings.axis_release_threshold) {
 		return false;
@@ -128,7 +129,8 @@ constexpr std::uint16_t input_q = 0x4000U;
 void apply_action(
 	app::PhysicalInputSourceState &state,
 	SdlInputPlayer player,
-	SdlLogicalAction action
+	SdlLogicalAction action,
+	std::uint8_t charge_enabled_players
 ) noexcept
 {
 	std::uint16_t *player_bits = nullptr;
@@ -215,6 +217,12 @@ void apply_action(
 		state.system = static_cast<std::uint16_t>(state.system | input_q);
 		break;
 	case SdlLogicalAction::charge:
+		if((player == SdlInputPlayer::p1 &&
+			(charge_enabled_players & 0x01U) == 0U) ||
+			(player == SdlInputPlayer::p2 &&
+			(charge_enabled_players & 0x02U) == 0U)) {
+			break;
+		}
 		apply_player_bit(input_shot);
 		if(player == SdlInputPlayer::p1 || player == SdlInputPlayer::p2) {
 			state.charge_mask = static_cast<std::uint8_t>(
@@ -465,7 +473,10 @@ app::PhysicalInputSourceState SdlInputMapper::keyboard_contribution(
 	for(std::size_t index = 0U; index < bindings_.keyboard_count; ++index) {
 		if(held[index]) {
 			const auto &binding = bindings_.keyboard[index];
-			apply_action(state, binding.player, binding.action);
+			apply_action(
+				state, binding.player, binding.action,
+				bindings_.charge_enabled_players
+			);
 		}
 	}
 	return state;
@@ -483,14 +494,20 @@ app::PhysicalInputSourceState SdlInputMapper::gamepad_contribution(
 		index < bindings_.gamepad_button_count;
 		++index) {
 		if(buttons[index]) {
-			apply_action(state, player, bindings_.gamepad_buttons[index].action);
+			apply_action(
+				state, player, bindings_.gamepad_buttons[index].action,
+				bindings_.charge_enabled_players
+			);
 		}
 	}
 	for(std::size_t index = 0U;
 		index < bindings_.gamepad_axis_count;
 		++index) {
 		if(axes[index]) {
-			apply_action(state, player, bindings_.gamepad_axes[index].action);
+			apply_action(
+				state, player, bindings_.gamepad_axes[index].action,
+				bindings_.charge_enabled_players
+			);
 		}
 	}
 	return state;

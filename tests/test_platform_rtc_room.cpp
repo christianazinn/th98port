@@ -1,5 +1,9 @@
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
+#include <string_view>
 
 #include "th03/platform/rtc_room.hpp"
 
@@ -19,9 +23,22 @@ void check(bool condition, const char *message)
 
 } // namespace
 
-int main()
+int main(int argc, char **argv)
 {
 	using namespace th03::platform;
+	if(argc == 4 && std::string_view(argv[1]) == "--enroll") {
+		const auto enrolled = load_or_enroll_rtc_online_credentials(
+			argv[2], argv[3]
+		);
+		if(!enrolled) {
+			std::cerr << "identity-error=" <<
+				static_cast<unsigned>(enrolled.error().code) << '\n';
+			return 1;
+		}
+		std::cout << "identity-user-shape=" << enrolled->user_id.size() <<
+			" token-shape=" << enrolled->token.size() << '\n';
+		return 0;
+	}
 	const auto created = rtc_room_websocket_url(
 		"https://podd.example", RtcRoomMode::create, ""
 	);
@@ -81,6 +98,37 @@ int main()
 		rtc_room_data_channel_send_accepted(false, true) &&
 		!rtc_room_data_channel_send_accepted(false, false),
 		"SCTP buffered send is accepted while the channel remains open");
+
+	const auto scratch = std::filesystem::temp_directory_path() /
+		("th03-rtc-identity-" + std::to_string(
+			std::chrono::steady_clock::now().time_since_epoch().count()
+		));
+	std::error_code filesystem_error{};
+	std::filesystem::create_directory(scratch, filesystem_error);
+	check(!filesystem_error, "identity scratch directory");
+	const auto identity_path = scratch / "PODD.AUTH";
+	{
+		std::ofstream identity(identity_path, std::ios::binary);
+		identity << "T3AUTH01\n" << user << '\n' << token << '\n';
+	}
+	const auto loaded_identity = load_or_enroll_rtc_online_credentials(
+		identity_path, "not-an-origin"
+	);
+	check(loaded_identity && loaded_identity->user_id == user &&
+		loaded_identity->token == token,
+		"durable identity loads without contacting the service");
+	{
+		std::ofstream malformed(identity_path, std::ios::binary | std::ios::trunc);
+		malformed << "not credentials\n";
+	}
+	const auto malformed_identity = load_or_enroll_rtc_online_credentials(
+		identity_path, "not-an-origin"
+	);
+	check(!malformed_identity && malformed_identity.error().code ==
+		RtcOnlineIdentityErrorCode::format,
+		"malformed durable identity fails closed");
+	std::filesystem::remove_all(scratch, filesystem_error);
+	check(!filesystem_error, "identity scratch cleanup");
 
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0 ? 0 : 1;

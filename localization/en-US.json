@@ -363,6 +363,8 @@
     "hiscore.online.replay.failed": "Download failed",
     "hiscore.online.replay.unavailable": "Offline",
 
+    "netplay.pause.forfeit": "Forfeit",
+    "netplay.pause.resume-in": "Resume in",
     "netplay.report.title": "Netplay Report",
     "netplay.report.match-complete": "Match Complete",
     "netplay.report.forfeit-loss": "You Forfeited",

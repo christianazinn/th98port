@@ -159,6 +159,7 @@ SdlInputBindings new_classic_bindings(
 ) noexcept
 {
 	SdlInputBindings bindings{};
+	bindings.charge_enabled_players = config.autofire;
 	constexpr std::array<SdlLogicalAction, new_classic_player_action_count>
 		actions{
 			SdlLogicalAction::up_left, SdlLogicalAction::up,
@@ -175,6 +176,11 @@ SdlInputBindings new_classic_bindings(
 		};
 	for(std::size_t player = 0U; player < 2U; ++player) {
 		for(std::size_t action = 0U; action < actions.size(); ++action) {
+			if(action == static_cast<std::size_t>(
+				NewClassicPlayerAction::charge
+			) && (config.autofire & (1U << player)) == 0U) {
+				continue;
+			}
 			const auto key = config.bindings[
 				(player * new_classic_player_action_count) + action
 			];
@@ -231,9 +237,13 @@ SdlInputBindings new_classic_bindings(
 	add_gamepad_dual(bindings,
 		joy_config.buttons[static_cast<std::size_t>(NewClassicJoyAction::bomb)],
 		SdlLogicalAction::bomb, SdlLogicalAction::single_bomb);
-	add_gamepad_button(bindings,
-		joy_config.buttons[static_cast<std::size_t>(NewClassicJoyAction::charge)],
-		SdlLogicalAction::charge);
+	if(config.autofire != 0U) {
+		add_gamepad_button(bindings,
+			joy_config.buttons[static_cast<std::size_t>(
+				NewClassicJoyAction::charge
+			)],
+			SdlLogicalAction::charge);
+	}
 	add_gamepad_button(bindings,
 		joy_config.buttons[static_cast<std::size_t>(NewClassicJoyAction::cancel)],
 		SdlLogicalAction::cancel);
@@ -490,6 +500,7 @@ SdlInputBindings new_classic_netplay_story_bindings() noexcept
 	const auto keys = new_classic_default_key_config();
 	const auto joy = new_classic_default_joy_config();
 	SdlInputBindings bindings{};
+	bindings.charge_enabled_players = 0U;
 	constexpr std::array<SdlLogicalAction, new_classic_story_action_count>
 		story_actions{
 			SdlLogicalAction::up,
@@ -503,11 +514,10 @@ SdlInputBindings new_classic_netplay_story_bindings() noexcept
 			static_cast<SDL_Scancode>(keys.bindings[story_offset + action]),
 			SdlInputPlayer::p1, story_actions[action]);
 	}
-	constexpr std::array<std::size_t, 3U> shared_action_indexes{8U, 9U, 10U};
-	constexpr std::array<SdlLogicalAction, 3U> shared_actions{
+	constexpr std::array<std::size_t, 2U> shared_action_indexes{8U, 9U};
+	constexpr std::array<SdlLogicalAction, 2U> shared_actions{
 		SdlLogicalAction::shot,
 		SdlLogicalAction::bomb,
-		SdlLogicalAction::charge,
 	};
 	for(std::size_t action = 0U; action < shared_actions.size(); ++action) {
 		add_key(bindings,
@@ -535,9 +545,6 @@ SdlInputBindings new_classic_netplay_story_bindings() noexcept
 	add_gamepad_button(bindings,
 		joy.buttons[static_cast<std::size_t>(NewClassicJoyAction::bomb)],
 		SdlLogicalAction::bomb);
-	add_gamepad_button(bindings,
-		joy.buttons[static_cast<std::size_t>(NewClassicJoyAction::charge)],
-		SdlLogicalAction::charge);
 	add_gamepad_button(bindings,
 		joy.buttons[static_cast<std::size_t>(NewClassicJoyAction::cancel)],
 		SdlLogicalAction::cancel);

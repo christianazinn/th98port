@@ -559,6 +559,44 @@ void test_complete_source_global_and_legacy_diagonal_domain()
 	);
 }
 
+void test_charge_enable_mask_precedes_shot_contribution()
+{
+	FakeGamepads fake{};
+	auto configured = bindings();
+	configured.charge_enabled_players = 0x02U;
+	auto made = SdlInputMapper::create(configured, main_window, fake.backend());
+	expect(static_cast<bool>(made), "charge-mask mapper is created");
+	if(!made) {
+		return;
+	}
+	auto mapper = std::move(*made);
+	auto input = scheduler();
+	(void)expect_event(mapper, input,
+		key_event(1U, SDL_SCANCODE_C, true),
+		"disabled P1 Charge key is held");
+	auto tick = expect_tick(input, 10U, "disabled P1 Charge is due");
+	expect(tick.input.p1 == 0U && tick.input.charge_mask == 0U,
+		"disabled Charge contributes neither Shot nor charge intent");
+	(void)expect_event(mapper, input,
+		gamepad_device_event(SDL_EVENT_GAMEPAD_ADDED, 11U, 11U),
+		"P1 controller is connected for Charge mask");
+	(void)expect_event(mapper, input,
+		gamepad_button_event(12U, 11U, SDL_GAMEPAD_BUTTON_NORTH, true),
+		"disabled P1 controller Charge is held");
+	tick = expect_tick(input, 20U, "disabled controller Charge is due");
+	expect(tick.input.p1 == 0U && tick.input.charge_mask == 0U,
+		"controller Charge obeys the assigned player's enable bit");
+	(void)expect_event(mapper, input,
+		gamepad_device_event(SDL_EVENT_GAMEPAD_ADDED, 21U, 12U),
+		"P2 controller is connected for Charge mask");
+	(void)expect_event(mapper, input,
+		gamepad_button_event(22U, 12U, SDL_GAMEPAD_BUTTON_NORTH, true),
+		"enabled P2 controller Charge is held");
+	tick = expect_tick(input, 30U, "enabled P2 controller Charge is due");
+	expect(tick.input.p2 == input_shot && tick.input.charge_mask == 0x02U,
+		"enabled Charge contributes Shot and intent only to its assigned player");
+}
+
 void test_equal_and_regressed_event_order()
 {
 	FakeGamepads fake{};
@@ -1286,6 +1324,7 @@ int main()
 	test_binding_validation();
 	test_keyboard_snapshots_charge_and_timestamp_order();
 	test_complete_source_global_and_legacy_diagonal_domain();
+	test_charge_enable_mask_precedes_shot_contribution();
 	test_equal_and_regressed_event_order();
 	test_keyboard_window_scope();
 	test_gamepad_buttons_axes_and_lifecycle();

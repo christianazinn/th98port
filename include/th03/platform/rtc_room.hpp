@@ -5,11 +5,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 namespace th03::platform {
@@ -67,6 +69,39 @@ struct RtcIceServer final {
 	std::string credential{};
 };
 
+struct RtcOnlineCredentials final {
+	std::string user_id{};
+	std::string token{};
+
+	friend bool operator==(
+		const RtcOnlineCredentials &,
+		const RtcOnlineCredentials &
+	) = default;
+};
+
+enum class RtcOnlineIdentityErrorCode : std::uint8_t {
+	invalid_origin,
+	invalid_path,
+	status,
+	open,
+	read,
+	format,
+	write,
+	flush,
+	publish,
+	readback,
+	tls_ca_unavailable,
+	websocket_create,
+	websocket_failed,
+	websocket_timeout,
+};
+
+struct RtcOnlineIdentityError final {
+	RtcOnlineIdentityErrorCode code =
+		RtcOnlineIdentityErrorCode::invalid_origin;
+	std::error_code system{};
+};
+
 struct RtcRoomConfig final {
 	RtcRoomMode mode = RtcRoomMode::create;
 	std::string origin{};
@@ -111,6 +146,15 @@ rtc_room_authentication_protocol(
 	std::string_view user_id,
 	std::string_view token
 );
+
+// Loads one owner-only POSIX credential file or enrolls an opaque account over
+// the RTC dependency's authenticated WebSocket stack. Existing malformed files
+// fail closed and are never silently replaced. Windows uses its DPAPI owner.
+[[nodiscard]] std::expected<RtcOnlineCredentials, RtcOnlineIdentityError>
+load_or_enroll_rtc_online_credentials(
+	const std::filesystem::path &path,
+	std::string_view origin
+) noexcept;
 
 // Stable diagnostic vocabulary for product logs. These names are not part of
 // the deterministic netplay wire or replay format.

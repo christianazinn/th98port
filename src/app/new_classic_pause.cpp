@@ -85,11 +85,13 @@ NewClassicPauseInput project_new_classic_netplay_pause_input(
 NewClassicPauseMenu::NewClassicPauseMenu(
 	bool save_enabled,
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
-	NewClassicPausePresentation presentation
+	NewClassicPausePresentation presentation,
+	std::shared_ptr<const NewClassicPauseNetplayText> netplay_text
 ) noexcept :
 	save_enabled_(save_enabled),
 	patch_assets_(std::move(patch_assets)),
 	presentation_(presentation),
+	netplay_text_(std::move(netplay_text)),
 	pixels_(present::graphics_page_pixels)
 {}
 
@@ -252,13 +254,35 @@ void NewClassicPauseMenu::draw() noexcept
 					color
 				);
 			}
-			put_gaiji(
-				pause_gaiji_text_left,
-				pause_choice_first_row + index,
-				index == 0U ? pause_gaiji_resume : pause_gaiji_discard_exit,
-				index == 0U ? 5U : 11U,
-				color
-			);
+			if(index == 0U) {
+				put_gaiji(
+					pause_gaiji_text_left,
+					pause_choice_first_row,
+					pause_gaiji_resume,
+					5U,
+					color
+				);
+			} else if(netplay_text_) {
+				put_menu_text_mask(
+					static_cast<std::int32_t>(
+						(pause_choice_first_row + index) * present::ank_height
+					),
+					netplay_text_->forfeit,
+					color
+				);
+			}
+		}
+		if(resume_countdown_ && *resume_countdown_ >= 1U &&
+			*resume_countdown_ <= 3U && netplay_text_) {
+				put_menu_text_mask(
+					static_cast<std::int32_t>(
+						(pause_choice_first_row + 2U) * present::ank_height
+					),
+					netplay_text_->resume_countdown[
+						3U - *resume_countdown_
+					],
+					pause_vram_cyan
+				);
 		}
 		return;
 	}
@@ -303,6 +327,35 @@ void NewClassicPauseMenu::draw() noexcept
 			count,
 			color
 		);
+	}
+}
+
+void NewClassicPauseMenu::put_menu_text_mask(
+	std::int32_t top,
+	const NewClassicPauseNetplayText::Mask &mask,
+	present::Index4 graphics_color
+) noexcept
+{
+	constexpr std::int32_t left = 192;
+	if(top < 0 || top + static_cast<std::int32_t>(
+		NewClassicPauseNetplayText::height
+	) > present::graphics_height) {
+		return;
+	}
+	for(std::size_t y = 0U; y < NewClassicPauseNetplayText::height; ++y) {
+		for(std::size_t x = 0U; x < NewClassicPauseNetplayText::width; ++x) {
+			if(mask[(y * NewClassicPauseNetplayText::width) + x] == 0U) {
+				continue;
+			}
+			const auto destination =
+				((static_cast<std::size_t>(top) + y) *
+					present::graphics_width) +
+				static_cast<std::size_t>(left) + x;
+			pixels_[destination] = {
+				present::ComposedPixelLayer::graphics,
+				graphics_color,
+			};
+		}
 	}
 }
 
@@ -404,6 +457,19 @@ bool NewClassicPauseMenu::take_rejected_save_effect() noexcept
 	const bool result = rejected_save_effect_;
 	rejected_save_effect_ = false;
 	return result;
+}
+
+void NewClassicPauseMenu::set_resume_countdown(
+	std::optional<std::uint8_t> seconds
+) noexcept
+{
+	resume_countdown_ = seconds;
+}
+
+std::optional<std::uint8_t>
+NewClassicPauseMenu::resume_countdown() const noexcept
+{
+	return resume_countdown_;
 }
 
 } // namespace th03::app

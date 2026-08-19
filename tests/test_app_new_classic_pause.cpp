@@ -224,11 +224,15 @@ void test_overlay_preserves_base_and_palette()
 		"network Pause uses the authenticated selected Resume gaiji"
 	);
 	expect(
-		network_overlay.pixels[second_choice_bit].layer ==
-			th03::present::ComposedPixelLayer::graphics &&
-		network_overlay.pixels[second_choice_bit].value == 15U,
-		"network Pause reuses the authenticated Discard and Exit row as Forfeit"
+		network_overlay.pixels[second_choice_bit] ==
+			th03::present::ComposedPixel{
+				th03::present::ComposedPixelLayer::text, 0U
+			},
+		"network Pause removes the donor Discard and Exit gaiji before drawing Forfeit"
 	);
+	network.set_resume_countdown(std::uint8_t{3U});
+	expect(network.resume_countdown() == std::uint8_t{3U},
+		"network Pause retains the visible synchronized resume countdown");
 	const auto unavailable_third_row =
 		(192U * th03::present::graphics_width) + 224U;
 	expect(
@@ -244,12 +248,22 @@ void test_overlay_preserves_base_and_palette()
 		(176U * th03::present::graphics_width) + 208U;
 	expect(network.choice() == NewClassicPauseChoice::discard_exit &&
 		selected_forfeit.pixels[second_cursor_bit].value == 12U &&
-		selected_forfeit.pixels[second_choice_bit].value == 12U,
+		selected_forfeit.pixels[second_choice_bit].value == 0U,
 		"network Pause navigation selects the visible Forfeit action");
 	release(network);
 	expect(network.consume({.confirm = true, .raw_any = true}) ==
 		NewClassicPauseStatus::discard_exit,
 		"network Pause confirms Forfeit without exposing local Save or Restart");
+	expect(new_classic_netplay_resume_countdown_remaining(0U) ==
+			std::uint8_t{3U} &&
+		new_classic_netplay_resume_countdown_remaining(999'999'999U) ==
+			std::uint8_t{3U} &&
+		new_classic_netplay_resume_countdown_remaining(1'000'000'000U) ==
+			std::uint8_t{2U} &&
+		new_classic_netplay_resume_countdown_remaining(2'999'999'999U) ==
+			std::uint8_t{1U} &&
+		!new_classic_netplay_resume_countdown_remaining(3'000'000'000U),
+		"network Pause countdown has exact three-second boundaries");
 }
 
 void test_input_projection()

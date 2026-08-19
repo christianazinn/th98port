@@ -586,6 +586,22 @@ explicit blocked-presentation isolation, no inert FPS/refresh setting, and a
 future `Repeat / Smooth` boundary once interpolation creates real additional
 display frames.
 
+### 11. Packaging, updates, and netplay follow-ons
+
+The maintained standalone/package flow needs an authenticated, rollback-safe
+autoupdater before broad distribution. Its manifest, signatures, atomic replace,
+failed-update recovery, user-data preservation, and opt-out UI are release
+infrastructure; they must not run inside source-time gameplay or silently alter
+Classic/New Classic content identities.
+
+Completed netplay matches already produce an in-memory, source-compatible V13
+document and enter the ordinary Save Replay transaction. Product-level netplay
+replay browsing, metadata, upload, and watch flows are the next relatively
+high-priority netplay parcel after private-beta lifecycle closure. VS
+leaderboards, ratings/Elo, match history, seasons, and tournament policy remain
+long-term features after replay-backed evidence and operational moderation are
+established.
+
 ## Release discipline
 
 Every test-worthy phase ends with:

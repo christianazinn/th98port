@@ -17,7 +17,9 @@ not follow either machine's wall clock.
 The host owns logical P1 and the joiner owns logical P2, but each machine has
 only one local keyboard. Both therefore use the ordinary default Story
 controls: arrow keys for movement, `Z` for Shot, `X` for Bomb, and Left Shift
-for Charge. The negotiated role places this one local value into P1 or P2; the
+for Charge only when the local Autofire option is enabled. The current netplay
+contract does not negotiate Autofire, so Left Shift is deliberately unbound
+during online matches. The negotiated role places this one local value into P1 or P2; the
 special local-VS `T/F/H/B` and numpad columns are not active. Escape requests a
 synchronized Pause. Closing the window (including Alt+F4) leaves the preview
 and sends an immediate departure to the other peer.
@@ -63,9 +65,16 @@ low-level manual reset operation. The product UI exposes the same bounded
 operation at `Option -> System -> Online & Privacy -> Forget Room Identity`,
 behind an explicit confirmation. It never displays the user ID or token.
 
-The Arch/Linux build does not yet have an approved native secret-store owner.
-For that machine, install `curl` and `jq`, provision a distinct identity once,
-and store its one-time token in a user-readable file:
+On Arch/Linux, the first confirmed room launch enrolls the same opaque service
+identity over the authenticated WebSocket stack and atomically stores
+`PODD.AUTH` with owner-only `0600` permissions beside `PODD.CFG`. The token is
+never shown or logged. This is a deliberately small private-beta credential
+owner until an approved desktop secret-store abstraction exists. One public IP
+is not an identity: NAT can place several players behind it, addresses change,
+and IPv6 addresses are privacy-sensitive.
+
+The following environment flow remains available as a developer recovery and
+automation override:
 
 ```bash
 umask 077
@@ -78,8 +87,7 @@ source ~/.config/podd-port/online.env
 unset TH03_ONLINE_ORIGIN
 ```
 
-Source that file in every terminal used to launch the game, or source it from
-the user's shell profile. Current builds default to `https://azinn.dev`; an
+Current builds default to `https://azinn.dev`; an
 `online-origin-missing` diagnostic specifically means
 `TH03_ONLINE_ORIGIN` is present but empty, so remove it with `unset` rather
 than exporting an empty value. Never share the token or commit `online.env`.
@@ -156,12 +164,14 @@ like player input, so both machines freeze only after that exact frame and its
 simulation proof are confirmed. The terminal prints `status=paused`.
 
 To resume, each player must release Esc and then press it again. The terminal
-prints `status=resume-ready-local` on each machine and resumes after both
-choices arrive. The wait does not advance the source clock, replay playtime,
+prints `status=resume-ready-local` on each machine. Once both choices arrive,
+both clients display the same visible `Resume in 3`, `2`, `1` countdown and
+resume only after its full three wall-clock seconds. The wait and countdown do
+not advance the source clock, replay playtime,
 PMD, or slowdown. Both machines retain the same confirmed gameplay frame and
 draw the authenticated PAUSED artwork over it. Up/Down selects between Resume
-and the authenticated `Discard and Exit` row, which is the network Forfeit
-action; Z/Return confirms and Q forfeits directly. A confirmed Forfeit ends
+and a source-styled `Forfeit` row; Z/Return confirms and Q forfeits directly.
+A confirmed Forfeit ends
 both previews with complementary `forfeit-outcome=loss`/`win` results (or
 `mutual` for crossed requests), writes no replay, and never invents a TH03
 winner. Restart and Save remain unavailable while the match is live.

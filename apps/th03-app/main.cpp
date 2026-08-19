@@ -2780,6 +2780,62 @@ private:
 	return {.preferences = room.preferences()};
 }
 
+[[nodiscard]] std::shared_ptr<const th03::app::NewClassicPauseNetplayText>
+prepare_netplay_pause_text(
+	const th03::app::NewClassicReplayPatchAssets &assets,
+	th03::app::NewClassicLanguageAssetProfile language
+)
+{
+	auto result = std::make_shared<th03::app::NewClassicPauseNetplayText>();
+	const auto &messages = assets.messages(language);
+	const auto render = [&](
+		std::string_view text,
+		th03::app::NewClassicPauseNetplayText::Mask &mask
+	) {
+		th03::present::Raster raster{};
+		if(!assets.menu_font.put_centered(raster, 320, 0, text, 15U)) {
+			return false;
+		}
+		const auto pixels = raster.graphics(th03::present::Page::zero);
+		for(std::size_t y = 0U;
+			y < th03::app::NewClassicPauseNetplayText::height; ++y) {
+			for(std::size_t x = 0U;
+				x < th03::app::NewClassicPauseNetplayText::width; ++x) {
+				const auto source = (y * th03::present::graphics_width) +
+					192U + x;
+				mask[(y * th03::app::NewClassicPauseNetplayText::width) + x] =
+					static_cast<std::uint8_t>(pixels[source] != 0U);
+			}
+		}
+		return true;
+	};
+	if(!render(
+		messages.text(th03::app::NewClassicMessageId::netplay_pause_forfeit),
+		result->forfeit
+	)) {
+		return {};
+	}
+	const auto prefix = messages.text(
+		th03::app::NewClassicMessageId::netplay_pause_resume_in
+	);
+	if(prefix.size() + 2U > 64U) {
+		return {};
+	}
+	for(std::uint8_t second = 3U; second >= 1U; --second) {
+		std::array<char, 64U> text{};
+		std::copy(prefix.begin(), prefix.end(), text.begin());
+		text[prefix.size()] = ' ';
+		text[prefix.size() + 1U] = static_cast<char>('0' + second);
+		if(!render(
+			std::string_view(text.data(), prefix.size() + 2U),
+			result->resume_countdown[3U - second]
+		)) {
+			return {};
+		}
+	}
+	return result;
+}
+
 int run_direct_netplay_on_platform(
 	th03::app::DirectVsCliRequest parsed,
 	th03::platform::SdlPlatform &platform,
@@ -2815,6 +2871,12 @@ int run_direct_netplay_on_platform(
 	auto pause_assets = std::make_shared<
 		const th03::app::NewClassicReplayPatchAssets
 	>(std::move(*loaded_pause_assets));
+	auto pause_text = prepare_netplay_pause_text(
+		*pause_assets, parsed.presentation_language
+	);
+	if(!pause_text) {
+		return fail_netplay("netplay-pause-assets", "text-render-failed");
+	}
 	auto negotiated = [&]() -> std::expected<DirectNetplayLobbyResult, int> {
 #if defined(TH03_ENABLE_RTC_TRANSPORT)
 		if(rtc_request) {
@@ -3161,6 +3223,8 @@ int run_direct_netplay_on_platform(
 	std::unique_ptr<th03::app::NewClassicNetplayPostMatch> post_match{};
 	std::optional<th03::app::NewClassicNetplayPauseBarrier> pause_barrier{};
 	std::optional<th03::app::NewClassicPauseMenu> pause_overlay{};
+	std::optional<th03::app::TickTimestampNs> resume_countdown_started_ns{};
+	std::optional<std::uint8_t> resume_countdown_seconds{};
 	bool runtime_digest_peer_ack = false;
 	bool presentation_pending = false;
 	std::uint64_t local_frames = 0U;
@@ -3441,6 +3505,35 @@ int run_direct_netplay_on_platform(
 				NewClassicNetplayMainSessionStatus::paused) {
 			return {};
 		}
+		if(!resume_countdown_started_ns) {
+			resume_countdown_started_ns = loop_cutoff_ns;
+			resume_countdown_seconds =
+				th03::app::new_classic_netplay_resume_countdown_seconds;
+			if(pause_overlay) {
+				pause_overlay->set_resume_countdown(resume_countdown_seconds);
+			}
+			presentation_pending = true;
+			std::cout << "status=resume-countdown\nseconds=" <<
+				static_cast<unsigned>(
+					th03::app::new_classic_netplay_resume_countdown_seconds
+				) << '\n';
+			std::cout.flush();
+			return {};
+		}
+		const auto elapsed = loop_cutoff_ns >= *resume_countdown_started_ns ?
+			loop_cutoff_ns - *resume_countdown_started_ns : 0U;
+		const auto remaining =
+			th03::app::new_classic_netplay_resume_countdown_remaining(elapsed);
+		if(remaining) {
+			if(resume_countdown_seconds != remaining) {
+				resume_countdown_seconds = remaining;
+				if(pause_overlay) {
+					pause_overlay->set_resume_countdown(*remaining);
+				}
+				presentation_pending = true;
+			}
+			return {};
+		}
 		if(auto applied = audio_session->apply({
 			.type = th03::app::ClassicAudioCommandType::resume_song,
 		}); !applied) {
@@ -3486,6 +3579,8 @@ int run_direct_netplay_on_platform(
 		retry_blocked_event = false;
 		stalled_input.reset();
 		pause_overlay.reset();
+		resume_countdown_started_ns.reset();
+		resume_countdown_seconds.reset();
 		presentation_pending = true;
 		last_pause_signal_send_ns = 0U;
 		std::cout << "status=resumed\nframe=" << pause_barrier->frame() << '\n';
@@ -3573,8 +3668,11 @@ int run_direct_netplay_on_platform(
 			pause_barrier = std::move(*barrier);
 			pause_overlay.emplace(
 				false, pause_assets,
-				th03::app::NewClassicPausePresentation::netplay_wait
+				th03::app::NewClassicPausePresentation::netplay_wait,
+				pause_text
 			);
+			resume_countdown_started_ns.reset();
+			resume_countdown_seconds.reset();
 			if(pause_overlay->consume({}) !=
 				th03::app::NewClassicPauseStatus::running) {
 				return std::unexpected(fail_netplay(
@@ -6200,7 +6298,7 @@ std::expected<void, int> run_host_ui(
 			if(!*due) {
 				break;
 			}
-			auto step = consume(project_new_classic_ui(**due));
+			auto step = consume(project_new_classic_ui(**due, true));
 			if(!step) {
 				return std::unexpected(step.error());
 			}
@@ -6771,6 +6869,17 @@ ExperienceRunResult run_new_classic_experience(
 				}
 				continue;
 			}
+			if(auto restored = mapper.replace_bindings(
+				th03::app::detail::new_classic_bindings(
+					key_config, joy_config, device_assignment
+				)
+			); !restored) {
+				return NetplayFrontendResult{
+					.exit_code = fail(
+						"netplay-room-input-restore", restored.error()
+					)
+				};
+			}
 			return NetplayFrontendResult{
 				.disposition = NetplayFrontendDisposition::restart_new_classic
 			};
@@ -6911,9 +7020,37 @@ product_rtc_netplay_request(
 		}
 		credentials = std::move(*acquired);
 #else
+#if defined(TH03_ENABLE_RTC_TRANSPORT)
+		auto settings_path = content.new_classic_settings;
+		if(settings_path.empty()) {
+			settings_path = content.config.parent_path() / "PODD.CFG";
+		}
+		const auto credential_root = settings_path.parent_path();
+		if(credential_root.empty()) {
+			return std::unexpected(fail_netplay(
+				"netplay-room-account", "credential-path-missing"
+			));
+		}
+		auto acquired =
+			th03::platform::load_or_enroll_rtc_online_credentials(
+				credential_root / "PODD.AUTH", *origin
+			);
+		if(!acquired) {
+			std::cerr << "netplay-identity-code=" <<
+				static_cast<unsigned>(acquired.error().code) << '\n';
+			return std::unexpected(fail_netplay(
+				"netplay-room-account", "credential-enroll-failed"
+			));
+		}
+		credentials = th03::app::NewClassicOnlineCredentials{
+			.user_id = std::move(acquired->user_id),
+			.token = std::move(acquired->token),
+		};
+#else
 		return std::unexpected(fail_netplay(
-			"netplay-room-account", "online-environment-missing"
+			"netplay-room-account", "rtc-not-built"
 		));
+#endif
 #endif
 	}
 	RtcNetplayRequest result{
