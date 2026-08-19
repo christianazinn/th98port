@@ -88,7 +88,7 @@ void release(th03::app::NewClassicNetplayRoom &room)
 	static_cast<void>(room.consume({}));
 }
 
-void test_host_intent_is_confirmation_gated()
+void test_host_intent_is_player_lock_gated()
 {
 	using namespace th03::app;
 	NewClassicNetplayRoom room(assets_fixture());
@@ -118,9 +118,6 @@ void test_host_intent_is_confirmation_gated()
 	release(room);
 	static_cast<void>(room.consume({.ui = {.down = true}}));
 	release(room);
-	expect(room.consume({.ui = {.confirm = true}}).surface_changed,
-		"locked host character, palette, and rank enter confirmation");
-	release(room);
 	auto launched = room.consume({.ui = {.confirm = true}});
 	expect(!room.resume_after_launch(),
 		"a launch owner cannot resume before its intent is consumed");
@@ -132,11 +129,26 @@ void test_host_intent_is_confirmation_gated()
 		intent->host_port == 31'415U && intent->join_endpoint.empty() &&
 		intent->character == 2U && intent->palette == 2U && intent->rank == 2U &&
 		intent->input_delay_frames == 0U,
-		"fresh confirmation publishes the typed default-port host intent");
+		"online Create publishes directly after the player lock");
 	expect(!room.take_launch(), "launch intent is single-consumer");
+	expect(room.show_launch_failure() &&
+		room.status() == NewClassicNetplayRoomStatus::running,
+		"a pre-game host failure stays inside the retained room owner");
+	release(room);
+	const auto dismissed = room.consume({.ui = {.bomb = true}});
+	expect(dismissed.surface_changed && dismissed.status ==
+		NewClassicNetplayRoomStatus::running,
+		"any fresh failure-screen input restores host player setup");
+	release(room);
+	const auto retry = room.consume({.ui = {.confirm = true}});
+	const auto retry_intent = room.take_launch();
+	expect(retry.status == NewClassicNetplayRoomStatus::launch_requested &&
+		retry_intent && retry_intent->mode ==
+			NewClassicNetplayRoomLaunchMode::host,
+		"the restored Continue row retries without a redundant code page");
 	expect(room.resume_after_launch() &&
 		room.status() == NewClassicNetplayRoomStatus::running,
-		"a canceled or failed Create Room connection restores its caller");
+		"a canceled Create Room connection restores its caller");
 	release(room);
 	const auto host_back = room.consume({.ui = {.cancel = true}});
 	expect(host_back.status == NewClassicNetplayRoomStatus::running,
@@ -187,9 +199,22 @@ void test_join_entry_and_validation()
 		intent->join_endpoint == endpoint && intent->character == 1U &&
 		intent->palette == 2U,
 		"validated room code becomes one typed join intent");
-	expect(room.resume_after_launch() &&
+	expect(room.show_launch_failure() &&
 		room.status() == NewClassicNetplayRoomStatus::running,
-		"a canceled or failed Join Room connection restores its editor");
+		"a pre-game Join failure stays inside the retained room owner");
+	release(room);
+	const auto dismissed = room.consume({.ui = {.confirm = true}});
+	expect(dismissed.surface_changed && room.text_entry_active(),
+		"dismissing Join failure restores the populated room-code editor");
+	release(room);
+	const auto retried = room.consume({.ui = {.confirm = true}});
+	const auto retry_intent = room.take_launch();
+	expect(retried.status == NewClassicNetplayRoomStatus::launch_requested &&
+		retry_intent && retry_intent->join_endpoint == endpoint,
+		"the preserved room code can be retried without re-entry");
+	expect(room.resume_after_launch() && room.status() ==
+		NewClassicNetplayRoomStatus::running,
+		"a canceled Join Room connection restores its editor");
 	release(room);
 	const auto join_back = room.consume({.ui = {.cancel = true}});
 	expect(join_back.status == NewClassicNetplayRoomStatus::running,
@@ -224,8 +249,6 @@ void test_relay_only_launch_intent()
 		static_cast<void>(room.consume({.ui = {.down = true}}));
 		release(room);
 	}
-	static_cast<void>(room.consume({.ui = {.confirm = true}}));
-	release(room);
 	const auto launched = room.consume({.ui = {.confirm = true}});
 	const auto intent = room.take_launch();
 	expect(launched.status == NewClassicNetplayRoomStatus::launch_requested &&
@@ -272,6 +295,35 @@ void test_direct_endpoint_uses_physical_text()
 		intent && intent->transport == NewClassicNetplayRoomTransport::direct_udp &&
 		intent->join_endpoint == endpoint,
 		"X and shifted colon survive Direct Join while semicolon is rejected");
+}
+
+void test_direct_host_keeps_socket_confirmation()
+{
+	using namespace th03::app;
+	NewClassicNetplayRoom room(
+		assets_fixture(), NewClassicLanguageAssetProfile::english, 1U,
+		{.connection = NewClassicNetplayConnection::direct_udp}
+	);
+	release(room);
+	static_cast<void>(room.consume({.ui = {.down = true}}));
+	release(room);
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	release(room);
+	for(std::uint8_t step = 0U; step < 3U; ++step) {
+		static_cast<void>(room.consume({.ui = {.down = true}}));
+		release(room);
+	}
+	const auto confirmation = room.consume({.ui = {.confirm = true}});
+	expect(confirmation.surface_changed && confirmation.status ==
+		NewClassicNetplayRoomStatus::running && !room.take_launch(),
+		"Direct UDP Create retains its explicit socket confirmation");
+	release(room);
+	const auto launched = room.consume({.ui = {.confirm = true}});
+	const auto intent = room.take_launch();
+	expect(launched.status == NewClassicNetplayRoomStatus::launch_requested &&
+		intent && intent->mode == NewClassicNetplayRoomLaunchMode::host &&
+		intent->transport == NewClassicNetplayRoomTransport::direct_udp,
+		"Direct UDP confirmation publishes the explicit host intent");
 }
 
 void test_settings_back_and_application_quit()
@@ -486,10 +538,11 @@ void test_waiting_and_ready_lobby_views()
 
 int main()
 {
-	test_host_intent_is_confirmation_gated();
+	test_host_intent_is_player_lock_gated();
 	test_join_entry_and_validation();
 	test_relay_only_launch_intent();
 	test_direct_endpoint_uses_physical_text();
+	test_direct_host_keeps_socket_confirmation();
 	test_settings_back_and_application_quit();
 	test_quick_match_intent();
 	test_missing_assets_fail_closed();

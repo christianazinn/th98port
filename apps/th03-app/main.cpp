@@ -6417,25 +6417,10 @@ ExperienceRunResult run_new_classic_experience(
 				*room_run.launch, parsed.launch.content
 			);
 			if(!rtc) {
-				bool quit = false;
-				const int report = run_netplay_report_modal(
-					parsed.tick_rate, platform, mapper, patch_assets,
-					th03::app::NewClassicNetplayReportKind::connection_failed,
-					{}, language, &audio, &quit
-				);
-				if(report != 0) {
-					return NetplayFrontendResult{.exit_code = report};
-				}
-				if(quit) {
-					return NetplayFrontendResult{
-						.disposition =
-							NetplayFrontendDisposition::application_quit
-					};
-				}
-				if(!room.resume_after_launch()) {
+				if(!room.show_launch_failure()) {
 					return NetplayFrontendResult{
 						.exit_code = fail_netplay(
-							"netplay-room", "resume-failed"
+							"netplay-room", "failure-screen-failed"
 						)
 					};
 				}
@@ -6457,20 +6442,14 @@ ExperienceRunResult run_new_classic_experience(
 			}
 			if(!gameplay_started) {
 				if(match != 0) {
-					const int report = run_netplay_report_modal(
-						parsed.tick_rate, platform, mapper, patch_assets,
-						th03::app::NewClassicNetplayReportKind::connection_failed,
-						{}, language, &audio, &quit
-					);
-					if(report != 0) {
-						return NetplayFrontendResult{.exit_code = report};
-					}
-					if(quit) {
+					if(!room.show_launch_failure()) {
 						return NetplayFrontendResult{
-							.disposition =
-								NetplayFrontendDisposition::application_quit
+							.exit_code = fail_netplay(
+								"netplay-room", "failure-screen-failed"
+							)
 						};
 					}
+					continue;
 				}
 				if(!room.resume_after_launch()) {
 					return NetplayFrontendResult{

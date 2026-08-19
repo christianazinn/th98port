@@ -78,9 +78,12 @@ public:
 	[[nodiscard]] bool text_entry_active() const noexcept;
 	[[nodiscard]] std::optional<NewClassicNetplayRoomLaunch>
 		take_launch() noexcept;
-	// A failed or canceled platform connection is a child of the launch screen,
-	// not a terminal product route. Restore the exact caller and retain all
-	// entered values so the player can retry or back out one level.
+	// A failed pre-game connection stays inside this retained owner. The next
+	// fresh interface input returns to the launch caller with its values intact.
+	[[nodiscard]] bool show_launch_failure() noexcept;
+	// A canceled platform connection is a child of the launch screen, not a
+	// terminal product route. Restore the exact caller and retain all entered
+	// values so the player can retry or back out one level.
 	[[nodiscard]] bool resume_after_launch() noexcept;
 	[[nodiscard]] NewClassicNetplayPreferences preferences() const noexcept;
 
@@ -91,11 +94,13 @@ private:
 		host_confirmation,
 		join_entry,
 		port_entry,
+		connection_failed,
 		settings,
 	};
 
 	[[nodiscard]] bool draw() noexcept;
 	[[nodiscard]] bool valid_join_endpoint() const noexcept;
+	void restore_launch_caller() noexcept;
 	void require_release() noexcept;
 
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};

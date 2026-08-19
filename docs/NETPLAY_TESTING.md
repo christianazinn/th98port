@@ -64,14 +64,25 @@ operation at `Option -> System -> Online & Privacy -> Forget Room Identity`,
 behind an explicit confirmation. It never displays the user ID or token.
 
 The Arch/Linux build does not yet have an approved native secret-store owner.
-For that machine, provision a distinct identity with `POST /api/th03/users` and
-set all three values before launch:
+For that machine, install `curl` and `jq`, provision a distinct identity once,
+and store its one-time token in a user-readable file:
 
-```text
-TH03_ONLINE_ORIGIN=https://azinn.dev
-TH03_ONLINE_USER_ID=<userId returned by POST /api/th03/users>
-TH03_ONLINE_TOKEN=<token returned by POST /api/th03/users>
+```bash
+umask 077
+mkdir -p ~/.config/podd-port
+curl -fsS -X POST https://azinn.dev/api/th03/users | jq -r \
+  '"export TH03_ONLINE_USER_ID=" + (.userId|@sh) + "\n" +
+   "export TH03_ONLINE_TOKEN=" + (.token|@sh)' \
+  > ~/.config/podd-port/online.env
+source ~/.config/podd-port/online.env
+unset TH03_ONLINE_ORIGIN
 ```
+
+Source that file in every terminal used to launch the game, or source it from
+the user's shell profile. Current builds default to `https://azinn.dev`; an
+`online-origin-missing` diagnostic specifically means
+`TH03_ONLINE_ORIGIN` is present but empty, so remove it with `unset` rather
+than exporting an empty value. Never share the token or commit `online.env`.
 
 Setting both user/token variables on Windows remains an explicit developer
 override. Supplying only one, or malformed values, fails closed.

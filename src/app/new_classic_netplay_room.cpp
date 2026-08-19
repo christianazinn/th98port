@@ -262,6 +262,17 @@ bool NewClassicNetplayRoom::draw() noexcept
 					NewClassicMessageId::netplay_room_port_hint), detail_color)) {
 			return false;
 		}
+	} else if(screen_ == Screen::connection_failed) {
+		if(!font.put_centered(raster, center_x, 96,
+			messages.text(NewClassicMessageId::netplay_room_title), title_color) ||
+			!font.put_centered(raster, center_x, 144,
+				messages.text(NewClassicMessageId::netplay_room_connection_failed),
+				selected_color) ||
+			!font.put_centered(raster, center_x, 176,
+				messages.text(NewClassicMessageId::netplay_room_connection_retry),
+				detail_color)) {
+			return false;
+		}
 	} else {
 		std::array<char, 8U> storage{};
 		if(!font.put_centered(raster, center_x, 96,
@@ -308,11 +319,13 @@ bool NewClassicNetplayRoom::draw() noexcept
 		}
 	}
 
-	return font.put_centered(raster, center_x, footer_top,
-		messages.text((screen_ == Screen::join_entry ||
-			screen_ == Screen::port_entry) ?
+	const auto footer = screen_ == Screen::connection_failed ?
+		NewClassicMessageId::netplay_report_footer :
+		((screen_ == Screen::join_entry || screen_ == Screen::port_entry) ?
 			NewClassicMessageId::netplay_room_footer_edit :
-			NewClassicMessageId::netplay_room_footer), detail_color) &&
+			NewClassicMessageId::netplay_room_footer);
+	return font.put_centered(raster, center_x, footer_top,
+		messages.text(footer), detail_color) &&
 		patch_surface_.publish(raster.access_page());
 }
 
@@ -344,6 +357,25 @@ void NewClassicNetplayRoom::require_release() noexcept
 	release_required_ = true;
 }
 
+void NewClassicNetplayRoom::restore_launch_caller() noexcept
+{
+	switch(pending_mode_) {
+	case NewClassicNetplayRoomLaunchMode::quick_match:
+		screen_ = Screen::player_setup;
+		selection_ = 3U;
+		break;
+	case NewClassicNetplayRoomLaunchMode::host:
+		screen_ = transport_ == NewClassicNetplayRoomTransport::online_service ?
+			Screen::player_setup : Screen::host_confirmation;
+		selection_ = screen_ == Screen::player_setup ? 3U : 0U;
+		break;
+	case NewClassicNetplayRoomLaunchMode::join:
+		screen_ = Screen::join_entry;
+		selection_ = 0U;
+		break;
+	}
+}
+
 NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 	NewClassicNetplayRoomInput input
 ) noexcept
@@ -358,6 +390,15 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 	if(release_required_) {
 		if(!raw_any(input.ui)) {
 			release_required_ = false;
+		}
+		return {.status = status_};
+	}
+	if(screen_ == Screen::connection_failed) {
+		if(raw_any(input.ui)) {
+			restore_launch_caller();
+			require_release();
+			const bool drawn = draw();
+			return {.surface_changed = drawn, .status = status_};
 		}
 		return {.status = status_};
 	}
@@ -520,9 +561,12 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 			changed = true;
 			require_release();
 		} else if(input.ui.confirm && selection_ == 3U) {
-			if(pending_mode_ == NewClassicNetplayRoomLaunchMode::quick_match) {
+			if(pending_mode_ == NewClassicNetplayRoomLaunchMode::quick_match ||
+				(pending_mode_ == NewClassicNetplayRoomLaunchMode::host &&
+					transport_ ==
+						NewClassicNetplayRoomTransport::online_service)) {
 				launch_ = NewClassicNetplayRoomLaunch{
-					.mode = NewClassicNetplayRoomLaunchMode::quick_match,
+					.mode = pending_mode_,
 					.transport = NewClassicNetplayRoomTransport::online_service,
 					.host_port = host_port_,
 					.character = character_,
@@ -636,6 +680,19 @@ NewClassicNetplayRoom::take_launch() noexcept
 	return std::exchange(launch_, std::nullopt);
 }
 
+bool NewClassicNetplayRoom::show_launch_failure() noexcept
+{
+	if(status_ != NewClassicNetplayRoomStatus::launch_requested || launch_) {
+		return false;
+	}
+	status_ = NewClassicNetplayRoomStatus::running;
+	screen_ = Screen::connection_failed;
+	selection_ = 0U;
+	endpoint_invalid_ = false;
+	require_release();
+	return draw();
+}
+
 bool NewClassicNetplayRoom::resume_after_launch() noexcept
 {
 	if(status_ != NewClassicNetplayRoomStatus::launch_requested || launch_) {
@@ -643,20 +700,7 @@ bool NewClassicNetplayRoom::resume_after_launch() noexcept
 	}
 	status_ = NewClassicNetplayRoomStatus::running;
 	endpoint_invalid_ = false;
-	switch(pending_mode_) {
-	case NewClassicNetplayRoomLaunchMode::quick_match:
-		screen_ = Screen::player_setup;
-		selection_ = 3U;
-		break;
-	case NewClassicNetplayRoomLaunchMode::host:
-		screen_ = Screen::host_confirmation;
-		selection_ = 0U;
-		break;
-	case NewClassicNetplayRoomLaunchMode::join:
-		screen_ = Screen::join_entry;
-		selection_ = 0U;
-		break;
-	}
+	restore_launch_caller();
 	require_release();
 	return draw();
 }
