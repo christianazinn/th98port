@@ -492,7 +492,9 @@ SdlInputBindings classic_direct_vs_bindings() noexcept
 	return bindings;
 }
 
-SdlInputBindings new_classic_netplay_story_bindings() noexcept
+SdlInputBindings new_classic_netplay_story_bindings(
+	bool autofire_enabled
+) noexcept
 {
 	// A direct peer owns exactly one logical player. Reuse the ordinary New
 	// Classic Story defaults on that peer's keyboard, then let the negotiated
@@ -500,7 +502,7 @@ SdlInputBindings new_classic_netplay_story_bindings() noexcept
 	const auto keys = new_classic_default_key_config();
 	const auto joy = new_classic_default_joy_config();
 	SdlInputBindings bindings{};
-	bindings.charge_enabled_players = 0U;
+	bindings.charge_enabled_players = autofire_enabled ? 0x01U : 0U;
 	constexpr std::array<SdlLogicalAction, new_classic_story_action_count>
 		story_actions{
 			SdlLogicalAction::up,
@@ -524,6 +526,13 @@ SdlInputBindings new_classic_netplay_story_bindings() noexcept
 			static_cast<SDL_Scancode>(keys.bindings[shared_action_indexes[action]]),
 			SdlInputPlayer::p1, shared_actions[action]);
 	}
+	if(autofire_enabled) {
+		add_key(bindings,
+			static_cast<SDL_Scancode>(keys.bindings[
+				static_cast<std::size_t>(NewClassicPlayerAction::charge)
+			]),
+			SdlInputPlayer::p1, SdlLogicalAction::charge);
+	}
 	add_key(bindings, SDL_SCANCODE_ESCAPE, SdlInputPlayer::p1,
 		SdlLogicalAction::cancel);
 	add_key(bindings, SDL_SCANCODE_RETURN, SdlInputPlayer::p1,
@@ -545,6 +554,11 @@ SdlInputBindings new_classic_netplay_story_bindings() noexcept
 	add_gamepad_button(bindings,
 		joy.buttons[static_cast<std::size_t>(NewClassicJoyAction::bomb)],
 		SdlLogicalAction::bomb);
+	if(autofire_enabled) {
+		add_gamepad_button(bindings,
+			joy.buttons[static_cast<std::size_t>(NewClassicJoyAction::charge)],
+			SdlLogicalAction::charge);
+	}
 	add_gamepad_button(bindings,
 		joy.buttons[static_cast<std::size_t>(NewClassicJoyAction::cancel)],
 		SdlLogicalAction::cancel);

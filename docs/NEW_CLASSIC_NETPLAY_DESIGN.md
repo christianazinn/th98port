@@ -611,6 +611,12 @@ transaction, not as every wall-clock poll of the network waiting screen. A V13
 playback can therefore preserve the gameplay boundary without needing to know
 room state or reproduce an arbitrary Internet wait.
 
+A corrected remote Pause can discard a locally predicted suffix. On entering
+the retained Pause owner, the host rewinds its local deadline and newest-frame
+cursors to that confirmed prefix. Unreliable gameplay-history retransmission
+stops while Pause owns the source clock; the reliable Pause ready barrier alone
+remains live until the countdown completes.
+
 Temporary packet loss stalls after the 12-frame prediction limit. A lost peer
 gets a bounded grace period before the match becomes disconnected. V1 does not
 accept a new connection or remote state transfer after that point. A player may

@@ -199,9 +199,11 @@ void test_netplay_story_defaults()
 	using th03::platform::SdlInputPlayer;
 	using th03::platform::SdlLogicalAction;
 	const auto bindings =
-		th03::app::detail::new_classic_netplay_story_bindings();
+		th03::app::detail::new_classic_netplay_story_bindings(false);
+	const auto autofire_bindings =
+		th03::app::detail::new_classic_netplay_story_bindings(true);
 	expect(bindings.charge_enabled_players == 0U,
-		"netplay disables unnegotiated Charge for keyboard and controllers");
+		"netplay disables Charge when the local Story profile disables Autofire");
 	expect(bindings.keyboard_count == 9U,
 		"netplay exposes one Story keyboard rather than both VS columns");
 	expect(
@@ -223,6 +225,14 @@ void test_netplay_story_defaults()
 		key_matches(bindings, SDL_SCANCODE_LSHIFT, SdlInputPlayer::p1) == 0U,
 		"netplay shares Story Shot and Bomb without an unnegotiated Autofire key"
 	);
+	expect(autofire_bindings.charge_enabled_players == 0x01U &&
+		autofire_bindings.keyboard_count == 10U &&
+		key_action_matches(autofire_bindings, SDL_SCANCODE_LSHIFT,
+			SdlInputPlayer::p1, SdlLogicalAction::charge) == 1U &&
+		autofire_bindings.gamepad_button_count == 9U &&
+		autofire_bindings.gamepad_buttons[6U].action ==
+			SdlLogicalAction::charge,
+		"netplay enables ordinary local Charge/Shot only with agreed Autofire");
 	expect(
 		key_action_matches(bindings, SDL_SCANCODE_ESCAPE, SdlInputPlayer::p1,
 			SdlLogicalAction::cancel) == 1U,

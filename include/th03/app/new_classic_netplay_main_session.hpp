@@ -39,6 +39,19 @@ new_classic_netplay_main_session_accepts_local_input(
 		status == NewClassicNetplayMainSessionStatus::remote_waiting;
 }
 
+// A boundary-producing input remains eligible for loss recovery until its
+// lifecycle proof settles. Once Pause owns the source clock, only its reliable
+// ready barrier is live; replaying a stale speculative gameplay suffix would
+// be both unnecessary and invalid after Pause correction discarded it.
+[[nodiscard]] constexpr bool
+new_classic_netplay_main_session_resends_input_history(
+	NewClassicNetplayMainSessionStatus status
+) noexcept
+{
+	return status != NewClassicNetplayMainSessionStatus::paused &&
+		status != NewClassicNetplayMainSessionStatus::complete;
+}
+
 enum class NewClassicNetplayMainSessionErrorCode : std::uint8_t {
 	invalid_process,
 	timeline_failed,

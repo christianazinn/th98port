@@ -3199,7 +3199,11 @@ int run_direct_netplay_on_platform(
 		}
 	}
 	if(auto replaced = mapper.replace_bindings(
-		th03::app::detail::new_classic_netplay_story_bindings()
+		th03::app::detail::new_classic_netplay_story_bindings(
+			(negotiated->contract.autofire_mask &
+				(local_player == NewClassicNetplayPlayer::player_one ? 1U : 2U)) !=
+				0U
+		)
 	); !replaced) {
 		return fail("input-bindings", replaced.error());
 	}
@@ -3695,6 +3699,22 @@ int run_direct_netplay_on_platform(
 			return std::unexpected(transcript.error());
 		}
 		if(*continued->boundary == th03::StepStatus::paused) {
+			const auto retained_frame_count = (*session)->next_frame();
+			if(!continued->frame || retained_frame_count == 0U ||
+				*continued->frame + 1U != retained_frame_count ||
+				local_deadline_missed.size() < retained_frame_count) {
+				return std::unexpected(fail_netplay(
+					"netplay-pause", "host-timeline-order"
+				));
+			}
+			// A remote Pause edge can roll back and discard a locally predicted
+			// suffix. Keep every host-side cursor on the retained confirmed prefix
+			// so Resume cannot resend or classify one of those discarded frames.
+			local_deadline_missed.resize(static_cast<std::size_t>(
+				retained_frame_count
+			));
+			local_frames = std::min(local_frames, retained_frame_count);
+			newest_local_frame = *continued->frame;
 			auto barrier = th03::app::NewClassicNetplayPauseBarrier::create(
 				verified_runtime_digest->frame,
 				verified_runtime_digest->confirmed_gameplay_frame_count
@@ -4417,6 +4437,9 @@ int run_direct_netplay_on_platform(
 			last_pause_signal_send_ns = now_ns;
 		}
 		if(established && !post_match && newest_local_frame &&
+			th03::app::new_classic_netplay_main_session_resends_input_history(
+				(*session)->status()
+			) &&
 			now_ns - last_send_ns >= 50'000'000U) {
 			if(!send_netplay_input_history(
 				wire, **session, local_player, session_id,
@@ -4639,7 +4662,9 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 		return fail("platform-create", platform.error());
 	}
 	auto mapper = th03::platform::SdlInputMapper::create(
-		th03::app::detail::new_classic_netplay_story_bindings(),
+		th03::app::detail::new_classic_netplay_story_bindings(
+			parsed.netplay_local_autofire
+		),
 		static_cast<SDL_WindowID>((*platform)->window_id()),
 		th03::platform::native_sdl_gamepad_backend()
 	);

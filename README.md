@@ -74,7 +74,8 @@ tail. Only then does the ordinary VS MAINL character/stage splash run its
 source fade/wait cadence before either peer constructs synchronized gameplay
 frame zero.
 Each peer's Story Autofire choice follows that peer into its negotiated P1/P2
-lane. During Pause, the first ready peer retains the modal with cyan `Waiting
+lane; Left Shift contributes both Charge and Shot only when that local choice
+is enabled. During Pause, the first ready peer retains the modal with cyan `Waiting
 for Opponent`; both peers then see the synchronized cyan 3/2/1 countdown.
 
 ### Optional Classic and direct-VS application

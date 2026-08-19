@@ -1784,6 +1784,7 @@ void test_new_classic_netplay_main_session_input_delay()
 void test_new_classic_netplay_pause_boundary()
 {
 	using th03::app::new_classic_netplay_main_session_accepts_local_input;
+	using th03::app::new_classic_netplay_main_session_resends_input_history;
 	expect(new_classic_netplay_main_session_accepts_local_input(
 			NewClassicNetplayMainSessionStatus::running) &&
 		new_classic_netplay_main_session_accepts_local_input(
@@ -1800,6 +1801,18 @@ void test_new_classic_netplay_pause_boundary()
 		!new_classic_netplay_main_session_accepts_local_input(
 			NewClassicNetplayMainSessionStatus::complete),
 		"only source-input-owning netplay states accept a local frame");
+	expect(new_classic_netplay_main_session_resends_input_history(
+			NewClassicNetplayMainSessionStatus::running) &&
+		new_classic_netplay_main_session_resends_input_history(
+			NewClassicNetplayMainSessionStatus::
+				boundary_waiting_confirmation) &&
+		new_classic_netplay_main_session_resends_input_history(
+			NewClassicNetplayMainSessionStatus::boundary_confirmed) &&
+		!new_classic_netplay_main_session_resends_input_history(
+			NewClassicNetplayMainSessionStatus::paused) &&
+		!new_classic_netplay_main_session_resends_input_history(
+			NewClassicNetplayMainSessionStatus::complete),
+		"gameplay loss recovery stops throughout retained Pause and completion");
 	const auto same_step = [](const th03::StepResult &a,
 		const th03::StepResult &b) noexcept {
 		return a.status == b.status &&
@@ -1923,7 +1936,8 @@ void test_new_classic_netplay_pause_boundary()
 			corrected->resimulated_frames == 1U &&
 			corrected->status ==
 				NewClassicNetplayMainSessionStatus::boundary_confirmed &&
-			(*late)->next_frame() == 2U && !(*late)->local_input(2U),
+			(*late)->next_frame() == 2U && (*late)->local_input(1U) &&
+			!(*late)->local_input(2U),
 			"late Pause rolls back to its prefix and discards the later local sample");
 	}
 }
