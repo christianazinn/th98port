@@ -838,6 +838,7 @@ add_library(th03_app_main STATIC
 	src/app/new_classic_key_config_scene.cpp
 	src/app/new_classic_language.cpp
 	src/app/new_classic_messages.cpp
+	src/app/new_classic_netplay_match_intro.cpp
 	src/app/new_classic_netplay_main_session.cpp
 	src/app/new_classic_netplay_post_match.cpp
 	src/app/new_classic_netplay_report.cpp
@@ -1705,6 +1706,18 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-new-classic-netplay-room-tests
 		COMMAND th03-app-new-classic-netplay-room-tests
+	)
+
+	add_executable(th03-app-new-classic-netplay-match-intro-tests
+		tests/test_app_new_classic_netplay_match_intro.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-netplay-match-intro-tests PRIVATE th03_app_main
+	)
+	th03_set_warnings(th03-app-new-classic-netplay-match-intro-tests)
+	add_test(
+		NAME th03-app-new-classic-netplay-match-intro-tests
+		COMMAND th03-app-new-classic-netplay-match-intro-tests
 	)
 	target_link_libraries(
 		th03-app-new-classic-assets-tests PRIVATE th03_app_main

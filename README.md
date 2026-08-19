@@ -66,7 +66,11 @@ also a recoverable report; it cannot terminate the product from Quick Match,
 Create Room, or Join Room. Online Match is a retained child of the current
 New Classic title: OP.M continues through setup, waiting, and connection-error
 screens, every nested Cancel returns one screen, and returning to the title
-does not stop or restart the song.
+does not stop or restart the song. Once both character locks are accepted, the
+authenticated match-ready surface remains visible for five seconds with OP.M
+still advancing. The ordinary VS MAINL character/stage splash then runs its
+source fade/wait cadence before either peer constructs synchronized gameplay
+frame zero.
 
 ### Optional Classic and direct-VS application
 

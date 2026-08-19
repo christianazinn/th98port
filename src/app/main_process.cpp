@@ -330,24 +330,6 @@ template <typename Value, typename Decoder>
 	return hud;
 }
 
-[[nodiscard]] GameInit direct_game_init(
-	const MainDirectVsConfig &config
-) noexcept
-{
-	GameInit init{};
-	init.resident_rand = std::bit_cast<std::int32_t>(config.seed);
-	init.random_seed = config.seed;
-	init.game_mode = game_mode::vs_1p_2p;
-	init.rank = config.rank;
-	init.key_mode = config.key_mode;
-	init.remaining_credits = 3U;
-	init.paletted_character = {
-		*main_paletted_character(config.player_one),
-		*main_paletted_character(config.player_two),
-	};
-	return init;
-}
-
 } // namespace
 
 struct MainProcess::Impl {
@@ -631,6 +613,22 @@ bool valid_main_direct_vs_config(const MainDirectVsConfig &config) noexcept
 		config.key_mode <= 2U &&
 		(config.game_options.input_protocol == InputProtocol::live ||
 		 config.game_options.input_protocol == InputProtocol::recorded_replay);
+}
+
+GameInit main_direct_vs_game_init(const MainDirectVsConfig &config) noexcept
+{
+	GameInit init{};
+	init.resident_rand = std::bit_cast<std::int32_t>(config.seed);
+	init.random_seed = config.seed;
+	init.game_mode = game_mode::vs_1p_2p;
+	init.rank = config.rank;
+	init.key_mode = config.key_mode;
+	init.remaining_credits = 3U;
+	init.paletted_character = {
+		*main_paletted_character(config.player_one),
+		*main_paletted_character(config.player_two),
+	};
+	return init;
 }
 
 std::optional<MainPlayerSelection> main_player_selection_from_paletted(
@@ -917,7 +915,7 @@ MainProcess::create_impl(
 	handoff_raster.set_palette_tone(100);
 	handoff_raster.apply_pending_palette();
 	const MainStageHandoff handoff(std::move(handoff_raster));
-	const auto init = direct_game_init(config);
+	const auto init = main_direct_vs_game_init(config);
 	const auto song = config.classic_audio_lifecycle ?
 		classic_main_gameplay_song(init) :
 		std::optional<ClassicAudioCommand>{};

@@ -100,6 +100,13 @@ struct MainReplayConfig final {
 	const MainDirectVsConfig &config
 ) noexcept;
 
+// Exact resident projection shared by direct MAIN and the source-derived
+// netplay MAINL pre-round owner. Callers must preflight with
+// valid_main_direct_vs_config().
+[[nodiscard]] GameInit main_direct_vs_game_init(
+	const MainDirectVsConfig &config
+) noexcept;
+
 enum class MainProcessErrorCode : std::uint8_t {
 	invalid_config,
 	invalid_runtime_argument,

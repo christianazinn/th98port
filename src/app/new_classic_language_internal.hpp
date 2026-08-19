@@ -16,6 +16,7 @@ void apply_new_classic_english_text(
 	MainlStageTextAssets &stage,
 	OpMusicRoomTextImport &music
 );
+void apply_new_classic_english_stage_text(MainlStageTextAssets &stage);
 
 namespace detail {
 

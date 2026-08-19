@@ -13,6 +13,16 @@
 
 namespace th03::app {
 
+inline constexpr std::uint64_t new_classic_netplay_match_ready_hold_ns =
+	5'000'000'000ULL;
+
+[[nodiscard]] constexpr bool new_classic_netplay_match_ready_hold_complete(
+	std::uint64_t elapsed_ns
+) noexcept
+{
+	return elapsed_ns >= new_classic_netplay_match_ready_hold_ns;
+}
+
 enum class NewClassicNetplayRoomLaunchMode : std::uint8_t {
 	quick_match,
 	host,

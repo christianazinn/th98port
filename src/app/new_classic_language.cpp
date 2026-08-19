@@ -346,7 +346,12 @@ void apply_new_classic_english_text(
 	for(std::size_t index = 0U; index < music_choices.size(); ++index) {
 		assign_text(music.choices[index], music_choices[index]);
 	}
+	apply_new_classic_english_stage_text(stage);
+	compiled.apply_new_classic_english_results();
+}
 
+void apply_new_classic_english_stage_text(MainlStageTextAssets &stage)
+{
 	constexpr std::array<std::string_view, 9U> title_one{
 		"   Miko Who Protects Dream  ", "  Spirit Who Leaves Fate to ",
 		"   A Being Made of Magic    ", "   Hardworking Witch Who    ",
@@ -385,7 +390,6 @@ void apply_new_classic_english_text(
 	for(std::size_t index = 0U; index < registration.size(); ++index) {
 		assign_text(stage.registration_playchars[index], registration[index]);
 	}
-	compiled.apply_new_classic_english_results();
 }
 
 namespace detail {

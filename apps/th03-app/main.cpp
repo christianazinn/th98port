@@ -38,6 +38,7 @@
 #include "th03/app/new_classic_netplay_datagram.hpp"
 #include "th03/app/new_classic_netplay_lobby.hpp"
 #include "th03/app/new_classic_netplay_match_contract.hpp"
+#include "th03/app/new_classic_netplay_match_intro.hpp"
 #include "th03/app/new_classic_netplay_main_session.hpp"
 #include "th03/app/new_classic_netplay_pause_barrier.hpp"
 #include "th03/app/new_classic_netplay_post_match.hpp"
@@ -1842,6 +1843,53 @@ enum class DirectNetplayLobbyExit : std::uint8_t {
 	}
 }
 
+template <typename NetworkPump>
+[[nodiscard]] std::expected<void, int> hold_netplay_match_ready(
+	th03::platform::SdlPlatform &platform,
+	th03::app::TickInputScheduler *retained_audio_scheduler,
+	const RetainedMenuAudio *retained_audio,
+	bool *application_quit,
+	NetworkPump &&pump_network
+)
+{
+	const auto started = th03::platform::sdl_ticks_now_ns();
+	std::cout << "status=match-found\nstarting-in-seconds=5\n";
+	std::cout.flush();
+	for(;;) {
+		const auto now = th03::platform::sdl_ticks_now_ns();
+		if(th03::app::new_classic_netplay_match_ready_hold_complete(
+			now - started
+		)) {
+			return {};
+		}
+		if(const auto pumped = pump_retained_menu_audio(
+			retained_audio_scheduler, retained_audio
+		); !pumped) {
+			return std::unexpected(pumped.error());
+		}
+		const auto exit = direct_netplay_lobby_exit(
+			static_cast<SDL_WindowID>(platform.window_id())
+		);
+		if(exit != DirectNetplayLobbyExit::none) {
+			if(application_quit &&
+				exit == DirectNetplayLobbyExit::application_quit) {
+				*application_quit = true;
+			}
+			std::cout << "status=left\n";
+			return std::unexpected(0);
+		}
+		if(const auto network = pump_network(); !network) {
+			return std::unexpected(network.error());
+		}
+		if(auto refreshed = refresh_host_presentability(
+			platform, "netplay-ready-presentability"
+		); !refreshed) {
+			return std::unexpected(refreshed.error());
+		}
+		SDL_DelayPrecise(maximum_idle_delay_ns);
+	}
+}
+
 [[nodiscard]] std::expected<DirectNetplayLobbyResult, int>
 negotiate_direct_netplay_lobby(
 	const th03::app::DirectVsCliRequest &request,
@@ -2037,6 +2085,49 @@ negotiate_direct_netplay_lobby(
 		return std::unexpected(fail(
 			"netplay-lobby-present", presented.error()
 		));
+	}
+	const auto held = hold_netplay_match_ready(
+		platform,
+		retained_audio_scheduler ? &*retained_audio_scheduler : nullptr,
+		retained_audio, application_quit,
+		[&]() -> std::expected<void, int> {
+			const auto now = std::chrono::steady_clock::now();
+			for(;;) {
+				const auto received = (*socket)->receive(receive_buffer);
+				if(!received) {
+					return std::unexpected(fail_netplay(
+						"netplay-lobby", "receive-failed"
+					));
+				}
+				if(!*received) {
+					break;
+				}
+				if((*received)->sender != *peer || (*received)->size !=
+					th03::app::new_classic_netplay_lobby_bytes) {
+					continue;
+				}
+				const auto packet =
+					th03::app::decode_new_classic_netplay_lobby_datagram(
+						std::span(receive_buffer).first((*received)->size)
+					);
+				if(packet) {
+					static_cast<void>(lobby.receive(*packet));
+				}
+			}
+			if(now - last_send >= std::chrono::milliseconds(100)) {
+				if(const auto outbound = lobby.outbound(); outbound &&
+					!send_netplay_lobby_datagram(**socket, *peer, *outbound)) {
+					return std::unexpected(fail_netplay(
+						"netplay-lobby", "send-failed"
+					));
+				}
+				last_send = now;
+			}
+			return {};
+		}
+	);
+	if(!held) {
+		return std::unexpected(held.error());
 	}
 	return DirectNetplayLobbyResult{
 		.wire = NetplayWire::udp(std::move(*socket), *peer),
@@ -2287,6 +2378,48 @@ negotiate_rtc_netplay_lobby(
 		return std::unexpected(fail(
 			"netplay-room-present", presented.error()
 		));
+	}
+	const auto held = hold_netplay_match_ready(
+		platform,
+		retained_audio_scheduler ? &*retained_audio_scheduler : nullptr,
+		retained_audio, application_quit,
+		[&]() -> std::expected<void, int> {
+			const auto now = std::chrono::steady_clock::now();
+			for(;;) {
+				auto received = wire.receive();
+				if(!received) {
+					return std::unexpected(fail_netplay(
+						"netplay-lobby", received.error()
+					));
+				}
+				if(!*received) {
+					break;
+				}
+				if((**received).channel != NetplayWireChannel::control) {
+					continue;
+				}
+				const auto packet =
+					th03::app::decode_new_classic_netplay_lobby_datagram(
+						(**received).bytes
+					);
+				if(packet) {
+					static_cast<void>(lobby.receive(*packet));
+				}
+			}
+			if(now - last_send >= std::chrono::milliseconds(100)) {
+				if(const auto outbound = lobby.outbound(); outbound &&
+					!send_netplay_lobby_wire(wire, *outbound)) {
+					return std::unexpected(fail_netplay(
+						"netplay-lobby", "send-failed"
+					));
+				}
+				last_send = now;
+			}
+			return {};
+		}
+	);
+	if(!held) {
+		return std::unexpected(held.error());
 	}
 	return DirectNetplayLobbyResult{
 		.wire = std::move(wire),
@@ -2717,29 +2850,6 @@ int run_direct_netplay_on_platform(
 	auto lobby = std::move(negotiated->lobby);
 	std::uint64_t session_id = lobby.session_id();
 
-	auto process = th03::app::load_direct_vs_process(std::move(parsed.launch));
-	if(!process) {
-		return fail_content(process.error());
-	}
-	const auto process_round_start = (*process)->round_start_observation();
-	const auto process_start = process_round_start.start;
-	auto created_replay_capture =
-		th03::app::NewClassicNetplayReplayCapture::create(process_round_start);
-	if(!created_replay_capture) {
-		return fail_netplay("netplay-replay", "capture-create-failed");
-	}
-	auto replay_capture = std::move(*created_replay_capture);
-	auto session = th03::app::NewClassicNetplayMainSession::create(
-		local_player, std::move(*process), negotiated->contract.input_delay_frames
-	);
-	if(!session) {
-		return fail_netplay("netplay-session", "session-create-failed");
-	}
-	const auto initial_simulation_digest = (*session)->simulation_digest(0U);
-	if(!initial_simulation_digest) {
-		log_netplay_session_error(initial_simulation_digest.error());
-		return fail_netplay("netplay-identity", "digest-create-failed");
-	}
 	auto created_audio = th03::app::ClassicAudioSession::create({
 		.data_root = audio_data_root,
 		.tick_rate = parsed.tick_rate,
@@ -2753,16 +2863,6 @@ int run_direct_netplay_on_platform(
 		return fail("netplay-audio-create", created_audio.error());
 	}
 	auto audio_session = std::move(*created_audio);
-	while(const auto command = (*session)->take_audio_command()) {
-		if(auto applied = audio_session->apply(*command); !applied) {
-			return fail("netplay-audio-command", applied.error());
-		}
-	}
-	if(auto replaced = mapper.replace_bindings(
-		th03::app::detail::new_classic_netplay_story_bindings()
-	); !replaced) {
-		return fail("input-bindings", replaced.error());
-	}
 	std::optional<th03::platform::SdlAudioDevice> audio_device{};
 	auto created_device = th03::platform::SdlAudioDevice::create({
 		.start_paused = true,
@@ -2822,6 +2922,170 @@ int run_direct_netplay_on_platform(
 		}
 		return {};
 	};
+	auto scheduler = th03::app::TickInputScheduler::create(
+		parsed.tick_rate,
+		th03::platform::sdl_ticks_now_ns(),
+		th03::app::TickInputCatchUpPolicy::preserve_all
+	);
+	if(!scheduler) {
+		return fail_tick(scheduler.error());
+	}
+	std::vector<th03::present::ComposedPixel> pixels(
+		th03::present::graphics_page_pixels
+	);
+	const auto pixel_span = std::span<
+		th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	>(pixels.data(), pixels.size());
+
+	if(!parsed.launch.content.mainl_executable.empty()) {
+		auto intro = th03::app::NewClassicNetplayMatchIntro::create({
+			.content = parsed.launch.content,
+			.process = parsed.launch.process,
+			.language = parsed.presentation_language,
+		});
+		if(!intro) {
+			return fail("netplay-match-intro", intro.error());
+		}
+		auto intro_surface = (*intro)->compose_shown_surface(pixel_span);
+		if(!intro_surface) {
+			return fail("netplay-match-intro-compose", intro_surface.error());
+		}
+		if(const auto presented = platform.present(*intro_surface); !presented) {
+			return fail("netplay-match-intro-present", presented.error());
+		}
+		bool intro_queue_blocked = false;
+		while((*intro)->status() ==
+			th03::app::NewClassicNetplayMatchIntroStatus::running) {
+			if(!intro_queue_blocked) {
+				auto events = mapper.pump_events(*scheduler, false);
+				if(!events) {
+					return fail("netplay-match-intro-input", events.error());
+				}
+				intro_queue_blocked = events->queue_blocked;
+			}
+			const auto now = th03::platform::sdl_ticks_now_ns();
+			bool surface_changed = false;
+			for(;;) {
+				auto due = scheduler->pop_due(now);
+				if(!due) {
+					return fail_tick(due.error());
+				}
+				if(!*due) {
+					break;
+				}
+				if((**due).app_quit_requested) {
+					if(application_quit) {
+						*application_quit = true;
+					}
+					return 0;
+				}
+				const bool dismiss_pressed = (**due).input.system != 0U ||
+					(**due).input.p1 != 0U || (**due).input.p2 != 0U;
+				auto advanced = (*intro)->advance(dismiss_pressed);
+				if(!advanced) {
+					return fail("netplay-match-intro", advanced.error());
+				}
+				while(const auto command = (*intro)->take_audio_command()) {
+					if(auto applied = audio_session->apply(*command); !applied) {
+						return fail("netplay-match-intro-audio", applied.error());
+					}
+				}
+				const bool desired_focus_mute = parsed.mute_when_unfocused &&
+					!mapper.main_window_focused();
+				if(desired_focus_mute && !audio_focus_muted && audio_device) {
+					if(auto cleared = audio_device->clear(); !cleared) {
+						warn_audio_device(
+							"netplay-match-intro-focus-clear", cleared.error()
+						);
+						audio_device.reset();
+					}
+				}
+				audio_focus_muted = desired_focus_mute;
+				if(const auto audio = advance_audio_tick(); !audio) {
+					return audio.error();
+				}
+				surface_changed = surface_changed || advanced->surface_changed;
+				if(intro_queue_blocked) {
+					auto retried = mapper.pump_events(*scheduler, false);
+					if(!retried) {
+						return fail(
+							"netplay-match-intro-input", retried.error()
+						);
+					}
+					intro_queue_blocked = retried->queue_blocked;
+				}
+				if((*intro)->status() ==
+					th03::app::NewClassicNetplayMatchIntroStatus::ready) {
+					break;
+				}
+			}
+			if(surface_changed) {
+				intro_surface = (*intro)->compose_shown_surface(pixel_span);
+				if(!intro_surface) {
+					return fail(
+						"netplay-match-intro-compose", intro_surface.error()
+					);
+				}
+				if(const auto presented = platform.present(*intro_surface);
+					!presented) {
+					return fail(
+						"netplay-match-intro-present", presented.error()
+					);
+				}
+			} else if(auto refreshed = refresh_host_presentability(
+				platform, "netplay-match-intro-presentability"
+			); !refreshed) {
+				return refreshed.error();
+			}
+			const auto deadline = scheduler->next_deadline_ns();
+			const auto after = th03::platform::sdl_ticks_now_ns();
+			if(deadline && *deadline > after) {
+				SDL_DelayPrecise(std::min(
+					*deadline - after, maximum_idle_delay_ns
+				));
+			}
+		}
+		if(auto rebased = scheduler->rebase_after_modal(
+			th03::platform::sdl_ticks_now_ns()
+		); !rebased) {
+			return fail_tick(rebased.error());
+		}
+	}
+
+	auto process = th03::app::load_direct_vs_process(std::move(parsed.launch));
+	if(!process) {
+		return fail_content(process.error());
+	}
+	const auto process_round_start = (*process)->round_start_observation();
+	const auto process_start = process_round_start.start;
+	auto created_replay_capture =
+		th03::app::NewClassicNetplayReplayCapture::create(process_round_start);
+	if(!created_replay_capture) {
+		return fail_netplay("netplay-replay", "capture-create-failed");
+	}
+	auto replay_capture = std::move(*created_replay_capture);
+	auto session = th03::app::NewClassicNetplayMainSession::create(
+		local_player, std::move(*process), negotiated->contract.input_delay_frames
+	);
+	if(!session) {
+		return fail_netplay("netplay-session", "session-create-failed");
+	}
+	const auto initial_simulation_digest = (*session)->simulation_digest(0U);
+	if(!initial_simulation_digest) {
+		log_netplay_session_error(initial_simulation_digest.error());
+		return fail_netplay("netplay-identity", "digest-create-failed");
+	}
+	while(const auto command = (*session)->take_audio_command()) {
+		if(auto applied = audio_session->apply(*command); !applied) {
+			return fail("netplay-audio-command", applied.error());
+		}
+	}
+	if(auto replaced = mapper.replace_bindings(
+		th03::app::detail::new_classic_netplay_story_bindings()
+	); !replaced) {
+		return fail("input-bindings", replaced.error());
+	}
 	const auto publish_confirmed_audio = [&]() -> std::expected<void, int> {
 		for(;;) {
 			auto confirmed = (*session)->take_confirmed_audio_frame();
@@ -2852,21 +3116,6 @@ int run_direct_netplay_on_platform(
 			}
 		}
 	};
-	auto scheduler = th03::app::TickInputScheduler::create(
-		parsed.tick_rate,
-		th03::platform::sdl_ticks_now_ns(),
-		th03::app::TickInputCatchUpPolicy::preserve_all
-	);
-	if(!scheduler) {
-		return fail_tick(scheduler.error());
-	}
-	std::vector<th03::present::ComposedPixel> pixels(
-		th03::present::graphics_page_pixels
-	);
-	const auto pixel_span = std::span<
-		th03::present::ComposedPixel,
-		th03::present::graphics_page_pixels
-	>(pixels.data(), pixels.size());
 	auto surface = (*session)->compose_shown_surface(pixel_span);
 	if(!surface) {
 		return fail("compose", surface.error());
@@ -6503,7 +6752,9 @@ ExperienceRunResult run_new_classic_experience(
 	result.launch.content = {
 		.data_root = product.launch.content.data_root,
 		.main_executable = product.launch.content.main_executable,
+		.mainl_executable = product.launch.content.mainl_executable,
 		.font_rom = product.launch.content.font_rom,
+		.language_overlay = product.launch.content.language_overlay,
 	};
 	result.launch.process.rank = launch.rank;
 	result.launch.process.seed = fresh_netplay_seed();

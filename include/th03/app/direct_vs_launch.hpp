@@ -14,7 +14,9 @@ namespace th03::app {
 struct DirectVsContentPaths {
 	std::filesystem::path data_root{};
 	std::filesystem::path main_executable{};
+	std::filesystem::path mainl_executable{};
 	std::filesystem::path font_rom{};
+	std::filesystem::path language_overlay{};
 };
 
 struct DirectVsLaunchRequest {

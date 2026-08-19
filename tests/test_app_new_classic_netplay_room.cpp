@@ -534,6 +534,17 @@ void test_waiting_and_ready_lobby_views()
 		"Direct waiting surface rejects a port outside the public editor domain");
 }
 
+void test_match_ready_hold_contract()
+{
+	using namespace th03::app;
+	expect(!new_classic_netplay_match_ready_hold_complete(0U) &&
+		!new_classic_netplay_match_ready_hold_complete(
+			new_classic_netplay_match_ready_hold_ns - 1U
+		) && new_classic_netplay_match_ready_hold_complete(
+			new_classic_netplay_match_ready_hold_ns
+		), "match-ready presentation owns exactly five seconds");
+}
+
 } // namespace
 
 int main()
@@ -547,6 +558,7 @@ int main()
 	test_quick_match_intent();
 	test_missing_assets_fail_closed();
 	test_waiting_and_ready_lobby_views();
+	test_match_ready_hold_contract();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }
