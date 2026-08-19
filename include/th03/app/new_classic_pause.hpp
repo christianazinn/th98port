@@ -23,6 +23,7 @@ struct NewClassicPauseNetplayText final {
 	static constexpr std::size_t choice_text_left = 32U;
 	using Mask = std::array<std::uint8_t, width * height>;
 	Mask forfeit{};
+	Mask waiting_for_opponent{};
 	std::array<Mask, 3U> resume_countdown{};
 };
 
@@ -116,6 +117,8 @@ public:
 	void set_resume_countdown(std::optional<std::uint8_t> seconds) noexcept;
 	[[nodiscard]] std::optional<std::uint8_t>
 	resume_countdown() const noexcept;
+	void set_waiting_for_opponent(bool waiting) noexcept;
+	[[nodiscard]] bool waiting_for_opponent() const noexcept;
 
 private:
 	friend struct NewClassicPauseTestAccess;
@@ -157,6 +160,7 @@ private:
 		NewClassicPausePresentation::replay_patch;
 	std::shared_ptr<const NewClassicPauseNetplayText> netplay_text_{};
 	std::optional<std::uint8_t> resume_countdown_{};
+	bool waiting_for_opponent_ = false;
 	std::vector<present::ComposedPixel> pixels_{};
 };
 

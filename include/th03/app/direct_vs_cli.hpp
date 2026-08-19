@@ -75,6 +75,9 @@ struct DirectVsCliRequest {
 	std::filesystem::path replay_root{};
 	std::optional<std::filesystem::path> netplay_replay_output{};
 	std::uint8_t netplay_input_delay_frames = 0U;
+	// Each netplay peer contributes its ordinary local Story Autofire choice;
+	// the negotiated role projects it into the deterministic P1/P2 mask.
+	bool netplay_local_autofire = false;
 	// Local presentation only; never serialized into the match contract.
 	std::uint8_t master_volume_percent = 100U;
 	std::uint8_t music_volume_percent = 100U;

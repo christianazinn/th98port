@@ -31,7 +31,7 @@ constexpr std::array magic{
 	return valid_character_lock(contract.player_one) &&
 		valid_character_lock(contract.player_two) && contract.rank <= 3U &&
 		contract.cadence_ticks != 0U && contract.cadence_seconds != 0U &&
-		contract.input_delay_frames <= 6U &&
+		contract.input_delay_frames <= 6U && contract.autofire_mask <= 3U &&
 		(contract.player_one.character != contract.player_two.character ||
 			contract.player_one.palette != contract.player_two.palette);
 }
@@ -97,6 +97,10 @@ std::expected<
 		.cadence_ticks = host.cadence_ticks,
 		.cadence_seconds = host.cadence_seconds,
 		.input_delay_frames = host.input_delay_frames,
+		.autofire_mask = static_cast<std::uint8_t>(
+			(host.player_one_autofire ? 1U : 0U) |
+			(join.player_two_autofire ? 2U : 0U)
+		),
 	};
 }
 
@@ -121,6 +125,7 @@ std::expected<
 	result[8U] = std::byte{contract.player_two.character};
 	result[9U] = std::byte{contract.player_two.palette};
 	result[10U] = std::byte{contract.input_delay_frames};
+	result[11U] = std::byte{contract.autofire_mask};
 	put_u32(result, 12U, contract.seed);
 	put_u32(result, 16U, contract.cadence_ticks);
 	put_u32(result, 20U, contract.cadence_seconds);
@@ -156,7 +161,7 @@ std::expected<
 			NewClassicNetplayMatchContractErrorCode::unsupported_ruleset
 		));
 	}
-	if(wire[11U] != std::byte{0U} ||
+	if(std::to_integer<std::uint8_t>(wire[11U]) > 3U ||
 		std::ranges::any_of(wire.subspan(28U), [](std::byte value) {
 			return value != std::byte{0U};
 		})) {
@@ -169,6 +174,8 @@ std::expected<
 			.character = std::to_integer<std::uint8_t>(wire[6U]),
 			.palette = std::to_integer<std::uint8_t>(wire[7U]),
 		},
+		.player_one_autofire =
+			(std::to_integer<std::uint8_t>(wire[11U]) & 1U) != 0U,
 		.rank = std::to_integer<std::uint8_t>(wire[5U]),
 		.seed = get_u32(wire, 12U),
 		.cadence_ticks = get_u32(wire, 16U),
@@ -180,6 +187,8 @@ std::expected<
 			.character = std::to_integer<std::uint8_t>(wire[8U]),
 			.palette = std::to_integer<std::uint8_t>(wire[9U]),
 		},
+		.player_two_autofire =
+			(std::to_integer<std::uint8_t>(wire[11U]) & 2U) != 0U,
 	};
 	return create_new_classic_netplay_match_contract(host, join);
 }

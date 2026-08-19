@@ -264,6 +264,7 @@ void test_overlay_preserves_base_and_palette()
 		[] {
 			auto text = std::make_shared<NewClassicPauseNetplayText>();
 			text->resume_countdown[0U][80U] = 1U;
+			text->waiting_for_opponent[88U] = 1U;
 			return text;
 		}()
 	);
@@ -272,11 +273,22 @@ void test_overlay_preserves_base_and_palette()
 		NewClassicPauseStatus::running && countdown.consume({}) ==
 		NewClassicPauseStatus::resume,
 		"local Resume reaches its terminal state before peer synchronization");
+	countdown.set_waiting_for_opponent(true);
+	const auto waiting_overlay = countdown.compose_over(original);
+	const auto waiting_bit =
+		(192U * th03::present::graphics_width) + 280U;
+	expect(countdown.waiting_for_opponent() &&
+		waiting_overlay.pixels[waiting_bit] ==
+			th03::present::ComposedPixel{
+				th03::present::ComposedPixelLayer::graphics, 10U
+			},
+		"first ready peer retains Pause with a cyan waiting message");
 	countdown.set_resume_countdown(std::uint8_t{3U});
 	const auto countdown_overlay = countdown.compose_over(original);
 	const auto countdown_bit =
 		(192U * th03::present::graphics_width) + 272U;
-	expect(countdown.resume_countdown() == std::uint8_t{3U} &&
+	expect(!countdown.waiting_for_opponent() &&
+		countdown.resume_countdown() == std::uint8_t{3U} &&
 		countdown_overlay.pixels[countdown_bit] ==
 			th03::present::ComposedPixel{
 				th03::present::ComposedPixelLayer::graphics, 10U

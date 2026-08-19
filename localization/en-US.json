@@ -364,6 +364,7 @@
     "hiscore.online.replay.unavailable": "Offline",
 
     "netplay.pause.forfeit": "Forfeit",
+    "netplay.pause.waiting-for-opponent": "Waiting for Opponent",
     "netplay.pause.resume-in": "Resume in",
     "netplay.report.title": "Netplay Report",
     "netplay.report.match-complete": "Match Complete",

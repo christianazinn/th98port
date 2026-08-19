@@ -158,7 +158,8 @@ validate(const NewClassicNetplayLobbyDatagram &datagram) noexcept
 		left.seed == right.seed &&
 		left.cadence_ticks == right.cadence_ticks &&
 		left.cadence_seconds == right.cadence_seconds &&
-		left.input_delay_frames == right.input_delay_frames;
+		left.input_delay_frames == right.input_delay_frames &&
+		left.player_one_autofire == right.player_one_autofire;
 }
 
 [[nodiscard]] bool equal_join_lock(
@@ -166,7 +167,8 @@ validate(const NewClassicNetplayLobbyDatagram &datagram) noexcept
 	const NewClassicNetplayJoinLock &right
 ) noexcept
 {
-	return left.player_two == right.player_two;
+	return left.player_two == right.player_two &&
+		left.player_two_autofire == right.player_two_autofire;
 }
 
 [[nodiscard]] std::optional<NewClassicNetplayMatchContract> derive(
@@ -226,10 +228,16 @@ std::expected<
 		put_u32(result, 20U, datagram.host->seed);
 		put_u32(result, 24U, datagram.host->cadence_ticks);
 		put_u32(result, 28U, datagram.host->cadence_seconds);
+		result[34U] = std::byte{static_cast<std::uint8_t>(
+			datagram.host->player_one_autofire ? 1U : 0U
+		)};
 	}
 	if(datagram.join) {
 		result[32U] = std::byte{datagram.join->player_two.character};
 		result[33U] = std::byte{datagram.join->player_two.palette};
+		result[35U] = std::byte{static_cast<std::uint8_t>(
+			datagram.join->player_two_autofire ? 1U : 0U
+		)};
 	}
 	put_u64(result, 40U, datagram.contract_hash);
 	return result;
@@ -261,7 +269,9 @@ decode_new_classic_netplay_lobby_datagram(
 		std::to_integer<std::uint8_t>(wire[5U])
 	);
 	if(wire[6U] != std::byte{0U} || wire[7U] != std::byte{0U} ||
-		std::ranges::any_of(wire.subspan(34U, 6U), [](std::byte value) {
+		std::to_integer<std::uint8_t>(wire[34U]) > 1U ||
+		std::to_integer<std::uint8_t>(wire[35U]) > 1U ||
+		std::ranges::any_of(wire.subspan(36U, 4U), [](std::byte value) {
 			return value != std::byte{0U};
 		}) || std::ranges::any_of(wire.subspan(48U), [](std::byte value) {
 			return value != std::byte{0U};
@@ -279,13 +289,14 @@ decode_new_classic_netplay_lobby_datagram(
 		wire[17U] != std::byte{0U} || wire[18U] != std::byte{0U} ||
 		wire[19U] != std::byte{0U} ||
 		get_u32(wire, 20U) != 0U || get_u32(wire, 24U) != 0U ||
-		get_u32(wire, 28U) != 0U;
+		get_u32(wire, 28U) != 0U || wire[34U] != std::byte{0U};
 	if(host_present) {
 		result.host = NewClassicNetplayHostLock{
 			.player_one = {
 				.character = std::to_integer<std::uint8_t>(wire[16U]),
 				.palette = std::to_integer<std::uint8_t>(wire[17U]),
 			},
+			.player_one_autofire = wire[34U] != std::byte{0U},
 			.rank = std::to_integer<std::uint8_t>(wire[18U]),
 			.seed = get_u32(wire, 20U),
 			.cadence_ticks = get_u32(wire, 24U),
@@ -294,13 +305,14 @@ decode_new_classic_netplay_lobby_datagram(
 		};
 	}
 	const bool join_present = wire[32U] != std::byte{0U} ||
-		wire[33U] != std::byte{0U};
+		wire[33U] != std::byte{0U} || wire[35U] != std::byte{0U};
 	if(join_present) {
 		result.join = NewClassicNetplayJoinLock{
 			.player_two = {
 				.character = std::to_integer<std::uint8_t>(wire[32U]),
 				.palette = std::to_integer<std::uint8_t>(wire[33U]),
 			},
+			.player_two_autofire = wire[35U] != std::byte{0U},
 		};
 	}
 	if(const auto valid = validate(result); !valid) {

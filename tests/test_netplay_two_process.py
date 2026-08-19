@@ -136,7 +136,7 @@ def main() -> int:
         expect(join, f"RECEIVE {disconnect}", "TYPE 4 FRAME 0 WORD 0 STATUS 5")
 
         digest = hashlib.sha256(b"".join(transcript)).hexdigest().upper()
-        expected_digest = "79AA0569321FD587A47DBBFF0319DE284F1D6674D41BA56D1E32D0EF57F5A290"
+        expected_digest = "2C1CCBCC8BFA2F106E16B53A6AD54FAD258758FD1D711CBBCD260AD11C443E5C"
         assert digest == expected_digest, digest
     finally:
         host.close()

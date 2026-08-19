@@ -349,6 +349,7 @@ TH03_NEW_CLASSIC_MESSAGE(hiscore_online_replay_downloading, "hiscore.online.repl
 TH03_NEW_CLASSIC_MESSAGE(hiscore_online_replay_failed, "hiscore.online.replay.failed", 240U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(hiscore_online_replay_unavailable, "hiscore.online.replay.unavailable", 240U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(netplay_pause_forfeit, "netplay.pause.forfeit", 160U, "", "")
+TH03_NEW_CLASSIC_MESSAGE(netplay_pause_waiting_for_opponent, "netplay.pause.waiting-for-opponent", 240U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(netplay_pause_resume_in, "netplay.pause.resume-in", 160U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(netplay_report_title, "netplay.report.title", 320U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(netplay_report_match_complete, "netplay.report.match-complete", 320U, "", "")

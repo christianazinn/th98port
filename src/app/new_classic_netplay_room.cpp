@@ -850,12 +850,16 @@ bool NewClassicNetplayLobbyView::mark_ready(
 {
 	const auto validated = create_new_classic_netplay_match_contract({
 		.player_one = contract.player_one,
+		.player_one_autofire = (contract.autofire_mask & 1U) != 0U,
 		.rank = contract.rank,
 		.seed = contract.seed,
 		.cadence_ticks = contract.cadence_ticks,
 		.cadence_seconds = contract.cadence_seconds,
 		.input_delay_frames = contract.input_delay_frames,
-	}, {.player_two = contract.player_two});
+	}, {
+		.player_two = contract.player_two,
+		.player_two_autofire = (contract.autofire_mask & 2U) != 0U,
+	});
 	if(!validated || *validated != contract) {
 		return false;
 	}

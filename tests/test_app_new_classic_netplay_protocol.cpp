@@ -504,6 +504,7 @@ void test_match_contract()
 	using namespace th03::app;
 	const auto contract = create_new_classic_netplay_match_contract({
 		.player_one = {.character = 1U, .palette = 1U},
+		.player_one_autofire = true,
 		.rank = 1U,
 		.seed = 34U,
 		.input_delay_frames = 4U,
@@ -518,14 +519,14 @@ void test_match_contract()
 		>{std::unexpected(NewClassicNetplayMatchContractError{})};
 	constexpr std::array<std::byte, 32U> golden{
 		std::byte{0x54U}, std::byte{0x33U}, std::byte{0x4EU},
-		std::byte{0x43U}, std::byte{0x02U}, std::byte{0x01U},
+		std::byte{0x43U}, std::byte{0x03U}, std::byte{0x01U},
 		std::byte{0x01U}, std::byte{0x01U}, std::byte{0x02U},
-		std::byte{0x02U}, std::byte{0x04U}, std::byte{0x00U},
+		std::byte{0x02U}, std::byte{0x04U}, std::byte{0x01U},
 		std::byte{0x22U}, std::byte{0x00U}, std::byte{0x00U},
 		std::byte{0x00U}, std::byte{0xEBU}, std::byte{0x07U},
 		std::byte{0x08U}, std::byte{0x00U}, std::byte{0x70U},
 		std::byte{0x24U}, std::byte{0x00U}, std::byte{0x00U},
-		std::byte{0x01U}, std::byte{0x00U}, std::byte{0x00U},
+		std::byte{0x02U}, std::byte{0x00U}, std::byte{0x00U},
 		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
 		std::byte{0x00U}, std::byte{0x00U},
 	};
@@ -541,9 +542,17 @@ void test_match_contract()
 			NewClassicNetplayMatchContractError>{
 				std::unexpected(NewClassicNetplayMatchContractError{})
 			};
-	expect(contract && encoded && *encoded == golden && decoded &&
-		*decoded == *contract && hash && *hash == 0xFDC7731AEC2C6535ULL,
-		"T3NLC001 freezes host rules plus independently locked P1/P2 choices");
+	expect(contract && contract->autofire_mask == 1U && encoded &&
+		*encoded == golden && decoded && *decoded == *contract && hash &&
+		*hash == 0x02F4FA7D44C7B5C8ULL,
+		"T3NLC001 freezes host rules, choices, and asymmetric Autofire");
+	const auto join_autofire = create_new_classic_netplay_match_contract({
+		.player_one_autofire = false,
+	}, {
+		.player_two_autofire = true,
+	});
+	expect(join_autofire && join_autofire->autofire_mask == 2U,
+		"the joining peer's Story Autofire maps only to the P2 lane");
 
 	const auto invalid_host = create_new_classic_netplay_match_contract({
 		.player_one = {.character = 0U, .palette = 1U},
@@ -574,10 +583,10 @@ void test_match_contract()
 		}, "same-character collision gives P1 priority and flips P2's palette");
 	if(encoded) {
 		auto corrupt = *encoded;
-		corrupt[4U] = std::byte{3U};
+		corrupt[4U] = std::byte{4U};
 		const auto version = decode_new_classic_netplay_match_contract(corrupt);
 		corrupt = *encoded;
-		corrupt[24U] = std::byte{2U};
+		corrupt[24U] = std::byte{3U};
 		const auto ruleset = decode_new_classic_netplay_match_contract(corrupt);
 		corrupt = *encoded;
 		corrupt[31U] = std::byte{1U};
@@ -610,6 +619,7 @@ void test_lobby_negotiation()
 		"host waits indefinitely before a peer but all started exchanges time out");
 	constexpr NewClassicNetplayHostLock host_lock{
 		.player_one = {.character = 1U, .palette = 1U},
+		.player_one_autofire = true,
 		.rank = 1U,
 		.seed = 34U,
 		.input_delay_frames = 4U,
@@ -634,7 +644,7 @@ void test_lobby_negotiation()
 		>{std::unexpected(NewClassicNetplayLobbyDatagramError{})};
 	expect(encoded_request && (*encoded_request)[0U] == std::byte{'T'} &&
 		(*encoded_request)[3U] == std::byte{'L'} &&
-		(*encoded_request)[4U] == std::byte{2U} &&
+		(*encoded_request)[4U] == std::byte{3U} &&
 		(*encoded_request)[5U] == std::byte{1U} &&
 		(*encoded_request)[32U] == std::byte{2U} &&
 		(*encoded_request)[33U] == std::byte{2U},
@@ -651,28 +661,22 @@ void test_lobby_negotiation()
 			NewClassicNetplayLobbyDatagramError
 		>{std::unexpected(NewClassicNetplayLobbyDatagramError{})};
 	constexpr std::array<std::byte, 64U> offer_golden{
-		std::byte{0x54U}, std::byte{0x33U}, std::byte{0x4EU},
-		std::byte{0x4CU}, std::byte{0x02U}, std::byte{0x02U},
-		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x08U},
-		std::byte{0x07U}, std::byte{0x06U}, std::byte{0x05U},
-		std::byte{0x04U}, std::byte{0x03U}, std::byte{0x02U},
-		std::byte{0x01U}, std::byte{0x01U}, std::byte{0x01U},
-		std::byte{0x01U}, std::byte{0x04U}, std::byte{0x22U},
-		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
-		std::byte{0xEBU}, std::byte{0x07U}, std::byte{0x08U},
-		std::byte{0x00U}, std::byte{0x70U}, std::byte{0x24U},
-		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x02U},
-		std::byte{0x02U}, std::byte{0x00U}, std::byte{0x00U},
-		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
-		std::byte{0x00U}, std::byte{0x35U}, std::byte{0x65U},
-		std::byte{0x2CU}, std::byte{0xECU}, std::byte{0x1AU},
-		std::byte{0x73U}, std::byte{0xC7U}, std::byte{0xFDU},
-		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
-		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
-		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
-		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
-		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
-		std::byte{0x00U},
+		std::byte{0x54U}, std::byte{0x33U}, std::byte{0x4EU}, std::byte{0x4CU},
+		std::byte{0x03U}, std::byte{0x02U}, std::byte{0x00U}, std::byte{0x00U},
+		std::byte{0x08U}, std::byte{0x07U}, std::byte{0x06U}, std::byte{0x05U},
+		std::byte{0x04U}, std::byte{0x03U}, std::byte{0x02U}, std::byte{0x01U},
+		std::byte{0x01U}, std::byte{0x01U}, std::byte{0x01U}, std::byte{0x04U},
+		std::byte{0x22U}, std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
+		std::byte{0xEBU}, std::byte{0x07U}, std::byte{0x08U}, std::byte{0x00U},
+		std::byte{0x70U}, std::byte{0x24U}, std::byte{0x00U}, std::byte{0x00U},
+		std::byte{0x02U}, std::byte{0x02U}, std::byte{0x01U}, std::byte{0x00U},
+		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
+		std::byte{0xC8U}, std::byte{0xB5U}, std::byte{0xC7U}, std::byte{0x44U},
+		std::byte{0x7DU}, std::byte{0xFAU}, std::byte{0xF4U}, std::byte{0x02U},
+		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
+		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
+		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
+		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
 	};
 	const auto decoded_offer = encoded_offer ?
 		decode_new_classic_netplay_lobby_datagram(*encoded_offer) :
@@ -681,7 +685,9 @@ void test_lobby_negotiation()
 				std::unexpected(NewClassicNetplayLobbyDatagramError{})
 			};
 	expect(encoded_offer && *encoded_offer == offer_golden && decoded_offer &&
-		decoded_offer->contract_hash == 0xFDC7731AEC2C6535ULL,
+		decoded_offer->contract_hash == 0x02F4FA7D44C7B5C8ULL &&
+		decoded_offer->host->player_one_autofire &&
+		!decoded_offer->join->player_two_autofire,
 		"T3NL offer freezes the full independently owned match vector");
 
 	if(join && decoded_offer) {

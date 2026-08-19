@@ -17,10 +17,10 @@ not follow either machine's wall clock.
 The host owns logical P1 and the joiner owns logical P2, but each machine has
 only one local keyboard. Both therefore use the ordinary default Story
 controls: arrow keys for movement, `Z` for Shot, `X` for Bomb, and Left Shift
-for Charge only when the local Autofire option is enabled. The current netplay
-contract does not negotiate Autofire, so Left Shift is deliberately unbound
-during online matches. The negotiated role places this one local value into P1 or P2; the
-special local-VS `T/F/H/B` and numpad columns are not active. Escape requests a
+for Charge only when the local Story Autofire option is enabled. Each peer's
+Story Autofire choice is frozen into the match contract and projected onto
+that peer's negotiated P1 or P2 lane. The special local-VS `T/F/H/B` and
+numpad columns are not active. Escape requests a
 synchronized Pause. Closing the window (including Alt+F4) leaves the preview
 and sends an immediate departure to the other peer.
 The host supplies P1, rank, seed, source cadence, and the common 0..6-frame
@@ -41,7 +41,7 @@ production platform-neutral netplay library but no UDP or RTC adapter, so this
 test cannot bind a port or trigger a firewall prompt. It covers the exact lobby,
 input, periodic proof/ack, Pause/Resume, Forfeit/ack, terminal proof/ack, and
 disconnect wires. Its accepted transcript SHA-256 is
-`79AA0569321FD587A47DBBFF0319DE284F1D6674D41BA56D1E32D0EF57F5A290`.
+`2C1CCBCC8BFA2F106E16B53A6AD54FAD258758FD1D711CBBCD260AD11C443E5C`.
 
 This is a local process/protocol gate, not evidence of ICE or TURN behavior.
 Real Windows/Linux direct and relayed acceptance remains a private-beta gate.
@@ -171,8 +171,10 @@ like player input, so both machines freeze only after that exact frame and its
 simulation proof are confirmed. The terminal prints `status=paused`.
 
 To resume, each player must release Esc and then press it again. The terminal
-prints `status=resume-ready-local` on each machine. Once both choices arrive,
-both clients display the same visible `Resume in 3`, `2`, `1` countdown and
+prints `status=resume-ready-local` on each machine. The first ready peer keeps
+the authenticated Pause modal visible with cyan `Waiting for Opponent` text.
+Once both choices arrive, both clients replace it with the same visible cyan
+`Resume in 3`, `2`, `1` countdown and
 resume only after its full three wall-clock seconds. The wait and countdown do
 not advance the source clock, replay playtime,
 PMD, or slowdown. Both machines retain the same confirmed gameplay frame and

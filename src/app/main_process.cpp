@@ -610,7 +610,7 @@ bool valid_main_direct_vs_config(const MainDirectVsConfig &config) noexcept
 {
 	return valid_selection(config.player_one) &&
 		valid_selection(config.player_two) && config.rank <= 3U &&
-		config.key_mode <= 2U &&
+		config.key_mode <= 2U && config.autofire_mask <= 3U &&
 		(config.game_options.input_protocol == InputProtocol::live ||
 		 config.game_options.input_protocol == InputProtocol::recorded_replay);
 }
@@ -623,6 +623,7 @@ GameInit main_direct_vs_game_init(const MainDirectVsConfig &config) noexcept
 	init.game_mode = game_mode::vs_1p_2p;
 	init.rank = config.rank;
 	init.key_mode = config.key_mode;
+	init.autofire_mask = config.autofire_mask;
 	init.remaining_credits = 3U;
 	init.paletted_character = {
 		*main_paletted_character(config.player_one),

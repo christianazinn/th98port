@@ -9,8 +9,8 @@
 
 namespace th03::app {
 
-inline constexpr std::uint8_t new_classic_netplay_match_contract_version = 2U;
-inline constexpr std::uint32_t new_classic_netplay_ruleset_version = 1U;
+inline constexpr std::uint8_t new_classic_netplay_match_contract_version = 3U;
+inline constexpr std::uint32_t new_classic_netplay_ruleset_version = 2U;
 inline constexpr std::size_t new_classic_netplay_match_contract_bytes = 32U;
 
 struct NewClassicNetplayCharacterLock final {
@@ -26,6 +26,7 @@ struct NewClassicNetplayCharacterLock final {
 
 struct NewClassicNetplayHostLock final {
 	NewClassicNetplayCharacterLock player_one{};
+	bool player_one_autofire = false;
 	std::uint8_t rank = 1U;
 	std::uint32_t seed = 0U;
 	std::uint32_t cadence_ticks = 526'315U;
@@ -38,6 +39,7 @@ struct NewClassicNetplayJoinLock final {
 		.character = 1U,
 		.palette = 2U,
 	};
+	bool player_two_autofire = false;
 };
 
 struct NewClassicNetplayMatchContract final {
@@ -51,6 +53,7 @@ struct NewClassicNetplayMatchContract final {
 	std::uint32_t cadence_ticks = 526'315U;
 	std::uint32_t cadence_seconds = 9'328U;
 	std::uint8_t input_delay_frames = 0U;
+	std::uint8_t autofire_mask = 0U;
 
 	[[nodiscard]] friend constexpr bool operator==(
 		const NewClassicNetplayMatchContract &,

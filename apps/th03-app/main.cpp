@@ -1382,6 +1382,7 @@ namespace {
 				request.launch.process.player_one.palette
 			),
 		},
+		.player_one_autofire = request.netplay_local_autofire,
 		.rank = request.launch.process.rank,
 		.seed = request.launch.process.seed,
 		.cadence_ticks = request.tick_rate.ticks,
@@ -1412,6 +1413,7 @@ namespace {
 				request.launch.process.player_two.palette
 			),
 		},
+		.player_two_autofire = request.netplay_local_autofire,
 	};
 }
 
@@ -1443,6 +1445,7 @@ void apply_netplay_contract(
 		.seconds = contract.cadence_seconds,
 	};
 	request.netplay_input_delay_frames = contract.input_delay_frames;
+	request.launch.process.autofire_mask = contract.autofire_mask;
 	request.launch.process.game_options.input_protocol =
 		th03::InputProtocol::live;
 	request.launch.process.game_options.three_digit_combos = true;
@@ -2840,6 +2843,14 @@ prepare_netplay_pause_text(
 		static_cast<std::int32_t>(
 			192U + th03::app::NewClassicPauseNetplayText::choice_text_left
 		)
+	)) {
+		return {};
+	}
+	if(!render(
+		messages.text(
+			th03::app::NewClassicMessageId::netplay_pause_waiting_for_opponent
+		),
+		result->waiting_for_opponent, std::nullopt
 	)) {
 		return {};
 	}
@@ -4326,6 +4337,11 @@ int run_direct_netplay_on_platform(
 					return fail_netplay("netplay-pause", "invalid-choice");
 				}
 				if(!was_ready && pause_barrier->local_ready()) {
+					if(pause_overlay) {
+						pause_overlay->set_waiting_for_opponent(
+							!pause_barrier->ready()
+						);
+					}
 					last_pause_signal_send_ns = 0U;
 					std::cout << "status=resume-ready-local\n";
 					std::cout.flush();
@@ -7023,6 +7039,7 @@ ExperienceRunResult run_new_classic_experience(
 	result.tick_rate = product.tick_rate;
 	result.replay_root = product.replay_root;
 	result.netplay_input_delay_frames = launch.input_delay_frames;
+	result.netplay_local_autofire = (product.launch.autofire_mask & 1U) != 0U;
 	result.master_volume_percent = settings.master_volume_percent;
 	result.music_volume_percent = settings.music_volume_percent;
 	result.effect_volume_percent = settings.effect_volume_percent;

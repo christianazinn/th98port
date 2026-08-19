@@ -43,6 +43,7 @@ struct MainDirectVsConfig {
 	// Source rank values are Easy=0, Normal=1, Hard=2, Lunatic=3.
 	std::uint8_t rank = 1U;
 	std::uint8_t key_mode = 0U;
+	std::uint8_t autofire_mask = 0U;
 	GameOptions game_options{};
 	// Direct launch normally remains the silent developer seam. Netplay opts in
 	// so its rollback owner can journal the ordinary MAIN audio lifecycle.

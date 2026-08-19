@@ -283,6 +283,14 @@ void NewClassicPauseMenu::draw() noexcept
 					],
 					pause_vram_cyan
 				);
+		} else if(waiting_for_opponent_ && netplay_text_) {
+			put_menu_text_mask(
+				static_cast<std::int32_t>(
+					(pause_choice_first_row + 2U) * present::ank_height
+				),
+				netplay_text_->waiting_for_opponent,
+				pause_vram_cyan
+			);
 		}
 		return;
 	}
@@ -468,6 +476,7 @@ void NewClassicPauseMenu::set_resume_countdown(
 	// countdown. Keep the frozen pause owner visible until the synchronized
 	// resume actually releases it.
 	if(presentation_ == NewClassicPausePresentation::netplay_wait && seconds) {
+		waiting_for_opponent_ = false;
 		visible_ = true;
 	}
 }
@@ -476,6 +485,20 @@ std::optional<std::uint8_t>
 NewClassicPauseMenu::resume_countdown() const noexcept
 {
 	return resume_countdown_;
+}
+
+void NewClassicPauseMenu::set_waiting_for_opponent(bool waiting) noexcept
+{
+	waiting_for_opponent_ = waiting;
+	if(presentation_ == NewClassicPausePresentation::netplay_wait && waiting) {
+		resume_countdown_.reset();
+		visible_ = true;
+	}
+}
+
+bool NewClassicPauseMenu::waiting_for_opponent() const noexcept
+{
+	return waiting_for_opponent_;
 }
 
 } // namespace th03::app

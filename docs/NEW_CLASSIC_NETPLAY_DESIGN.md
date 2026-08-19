@@ -601,7 +601,10 @@ it exchanges a typed request/ack bound to that Pause identity, discards the
 incomplete memory-only replay, and exits without forging a gameplay winner.
 
 Resume requires both peers to become ready, then starts after a short shared
-countdown. Focus loss never silently pauses a peer; the existing local
+countdown. A locally ready peer retains the Pause modal and displays cyan
+`Waiting for Opponent` until the remote ready signal arrives; the shared
+countdown then replaces that message on both peers. Focus loss never silently
+pauses a peer; the existing local
 mute-unfocused option still applies. The pause is represented once in the
 confirmed replay journal as a canonical source-compatible Pause -> Resume
 transaction, not as every wall-clock poll of the network waiting screen. A V13
@@ -774,7 +777,7 @@ remain outside `T3NLC001` and all peer/replay state.
 
 Session 261 adds the manual 0..6-frame delay without changing source cadence.
 It is persisted locally, but unlike the transport fields the host's value is
-frozen into schema-2 `T3NLC001`/`T3NL001`, displayed on the ready surface, and
+frozen into schema-3 `T3NLC001`/`T3NL001`, displayed on the ready surface, and
 applied symmetrically at the retained MAIN gameplay-input boundary. Every
 non-gameplay owner bypasses it, and each gameplay-domain transition resets its
 fixed ring so an old delayed suffix cannot cross a source boundary.
@@ -790,7 +793,7 @@ Pause/Resume, Forfeit, terminal-proof, and disconnect wires through inherited
 stdin/stdout pipes. The worker links only `th03_app_netplay`; it has no socket
 backend and cannot create a listener or firewall prompt. The exact accepted
 transcript SHA-256 is
-`79AA0569321FD587A47DBBFF0319DE284F1D6674D41BA56D1E32D0EF57F5A290`.
+`2C1CCBCC8BFA2F106E16B53A6AD54FAD258758FD1D711CBBCD260AD11C443E5C`.
 
 The completed local report now carries the latest bounded WebRTC round-trip
 sample alongside rollback, prediction, wait, and missed-deadline counters.
@@ -803,7 +806,8 @@ yet expose a truthful RTT measurement.
 
 1. Add the fourth VS submenu row, room UI, character-lock control, and ready
    barrier. The backend-neutral 32-byte `T3NLC001` match value now freezes
-   host-owned P1/rank/seed/cadence, join-owned P2, and New Classic ruleset 1;
+   host-owned P1/rank/seed/cadence, join-owned P2, both per-peer Story
+   Autofire choices, and New Classic ruleset 2;
    the exact 64-byte `T3NL001` owner now exchanges those independent locks and
    gates MAIN over both room service and direct UDP fallback. The fourth row,
    source-styled room/code editor, synchronized lock, waiting, and ready

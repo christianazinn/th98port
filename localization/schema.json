@@ -366,6 +366,7 @@
     {"enum": "hiscore_online_replay_unavailable", "id": "hiscore.online.replay.unavailable", "domain": "menu-font", "max_width": 240},
 
     {"enum": "netplay_pause_forfeit", "id": "netplay.pause.forfeit", "domain": "menu-font", "max_width": 160},
+    {"enum": "netplay_pause_waiting_for_opponent", "id": "netplay.pause.waiting-for-opponent", "domain": "menu-font", "max_width": 240},
     {"enum": "netplay_pause_resume_in", "id": "netplay.pause.resume-in", "domain": "menu-font", "max_width": 160},
     {"enum": "netplay_report_title", "id": "netplay.report.title", "domain": "menu-font", "max_width": 320},
     {"enum": "netplay_report_match_complete", "id": "netplay.report.match-complete", "domain": "menu-font", "max_width": 320},

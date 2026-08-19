@@ -39,6 +39,7 @@ void test_direct_resident_projection()
 		.seed = 0x1234'5678U,
 		.rank = 3U,
 		.key_mode = 2U,
+		.autofire_mask = 3U,
 	};
 	expect(valid_main_direct_vs_config(config),
 		"resident projection fixture is a valid direct match");
@@ -47,9 +48,14 @@ void test_direct_resident_projection()
 		init.random_seed == config.seed &&
 		std::bit_cast<std::uint32_t>(init.resident_rand) == config.seed &&
 		init.rank == config.rank && init.key_mode == config.key_mode &&
+		init.autofire_mask == config.autofire_mask &&
 		init.remaining_credits == 3U &&
 		init.paletted_character == std::array<std::int8_t, 2U>{6, 13},
 		"MAINL intro and direct MAIN share the exact resident projection");
+	auto invalid = config;
+	invalid.autofire_mask = 4U;
+	expect(!valid_main_direct_vs_config(invalid),
+		"direct match projection rejects Autofire bits outside P1/P2");
 }
 
 void test_invalid_request_fails_closed()
