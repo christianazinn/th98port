@@ -2788,12 +2788,16 @@ prepare_netplay_pause_text(
 {
 	auto result = std::make_shared<th03::app::NewClassicPauseNetplayText>();
 	const auto &messages = assets.messages(language);
-	const auto render = [&](
+	const auto render = [&assets](
 		std::string_view text,
-		th03::app::NewClassicPauseNetplayText::Mask &mask
+		th03::app::NewClassicPauseNetplayText::Mask &mask,
+		std::optional<std::int32_t> left
 	) {
 		th03::present::Raster raster{};
-		if(!assets.menu_font.put_centered(raster, 320, 0, text, 15U)) {
+		const bool put = left ? assets.menu_font.put(
+			raster, *left, 0, text, 15U
+		) : assets.menu_font.put_centered(raster, 320, 0, text, 15U);
+		if(!put) {
 			return false;
 		}
 		const auto pixels = raster.graphics(th03::present::Page::zero);
@@ -2811,7 +2815,10 @@ prepare_netplay_pause_text(
 	};
 	if(!render(
 		messages.text(th03::app::NewClassicMessageId::netplay_pause_forfeit),
-		result->forfeit
+		result->forfeit,
+		static_cast<std::int32_t>(
+			192U + th03::app::NewClassicPauseNetplayText::choice_text_left
+		)
 	)) {
 		return {};
 	}
@@ -2828,7 +2835,7 @@ prepare_netplay_pause_text(
 		text[prefix.size() + 1U] = static_cast<char>('0' + second);
 		if(!render(
 			std::string_view(text.data(), prefix.size() + 2U),
-			result->resume_countdown[3U - second]
+			result->resume_countdown[3U - second], std::nullopt
 		)) {
 			return {};
 		}

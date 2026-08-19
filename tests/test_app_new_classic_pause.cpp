@@ -213,7 +213,13 @@ void test_overlay_preserves_base_and_palette()
 
 	NewClassicPauseMenu network(
 		false, synthetic_patch_assets(),
-		NewClassicPausePresentation::netplay_wait
+		NewClassicPausePresentation::netplay_wait,
+		[] {
+			auto text = std::make_shared<NewClassicPauseNetplayText>();
+			text->forfeit[NewClassicPauseNetplayText::choice_text_left] = 1U;
+			text->resume_countdown[0U][80U] = 1U;
+			return text;
+		}()
 	);
 	release(network);
 	const auto network_overlay = network.compose_over(original);
@@ -226,13 +232,10 @@ void test_overlay_preserves_base_and_palette()
 	expect(
 		network_overlay.pixels[second_choice_bit] ==
 			th03::present::ComposedPixel{
-				th03::present::ComposedPixelLayer::text, 0U
+				th03::present::ComposedPixelLayer::graphics, 15U
 			},
-		"network Pause removes the donor Discard and Exit gaiji before drawing Forfeit"
+		"network Pause left-aligns Forfeit with Resume at exact x=224"
 	);
-	network.set_resume_countdown(std::uint8_t{3U});
-	expect(network.resume_countdown() == std::uint8_t{3U},
-		"network Pause retains the visible synchronized resume countdown");
 	const auto unavailable_third_row =
 		(192U * th03::present::graphics_width) + 224U;
 	expect(
@@ -248,12 +251,38 @@ void test_overlay_preserves_base_and_palette()
 		(176U * th03::present::graphics_width) + 208U;
 	expect(network.choice() == NewClassicPauseChoice::discard_exit &&
 		selected_forfeit.pixels[second_cursor_bit].value == 12U &&
-		selected_forfeit.pixels[second_choice_bit].value == 0U,
+		selected_forfeit.pixels[second_choice_bit].value == 12U,
 		"network Pause navigation selects the visible Forfeit action");
 	release(network);
 	expect(network.consume({.confirm = true, .raw_any = true}) ==
 		NewClassicPauseStatus::discard_exit,
 		"network Pause confirms Forfeit without exposing local Save or Restart");
+
+	NewClassicPauseMenu countdown(
+		false, synthetic_patch_assets(),
+		NewClassicPausePresentation::netplay_wait,
+		[] {
+			auto text = std::make_shared<NewClassicPauseNetplayText>();
+			text->resume_countdown[0U][80U] = 1U;
+			return text;
+		}()
+	);
+	release(countdown);
+	expect(countdown.consume({.cancel = true, .raw_any = true}) ==
+		NewClassicPauseStatus::running && countdown.consume({}) ==
+		NewClassicPauseStatus::resume,
+		"local Resume reaches its terminal state before peer synchronization");
+	countdown.set_resume_countdown(std::uint8_t{3U});
+	const auto countdown_overlay = countdown.compose_over(original);
+	const auto countdown_bit =
+		(192U * th03::present::graphics_width) + 272U;
+	expect(countdown.resume_countdown() == std::uint8_t{3U} &&
+		countdown_overlay.pixels[countdown_bit] ==
+			th03::present::ComposedPixel{
+				th03::present::ComposedPixelLayer::graphics, 10U
+			},
+		"peer-ready countdown reopens the retained Pause overlay in cyan"
+	);
 	expect(new_classic_netplay_resume_countdown_remaining(0U) ==
 			std::uint8_t{3U} &&
 		new_classic_netplay_resume_countdown_remaining(999'999'999U) ==

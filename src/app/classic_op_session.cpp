@@ -1860,10 +1860,17 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
-		return ClassicOpSessionTitleResult{
+		const ClassicOpSessionTitleResult result{
 			.route = title_completion->route(),
 			.selection_mode = title_completion->selection_mode(),
 		};
+		// Every ordinary title route transfers ownership in start_*(). Online
+		// Match is the sole product-boundary route without a child scene, so it
+		// must suspend the completed title here before resume_from_netplay().
+		if(result.route == ClassicOpRoute::netplay) {
+			title.reset();
+		}
+		return result;
 	}
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>

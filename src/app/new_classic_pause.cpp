@@ -464,6 +464,12 @@ void NewClassicPauseMenu::set_resume_countdown(
 ) noexcept
 {
 	resume_countdown_ = seconds;
+	// Local Resume completes before the peer barrier can start its shared
+	// countdown. Keep the frozen pause owner visible until the synchronized
+	// resume actually releases it.
+	if(presentation_ == NewClassicPausePresentation::netplay_wait && seconds) {
+		visible_ = true;
+	}
 }
 
 std::optional<std::uint8_t>

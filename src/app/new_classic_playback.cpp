@@ -1579,8 +1579,14 @@ NewClassicReplayPlayback::advance(
 		const auto source = mainl_end_input(
 			impl_->mainl_replay_input, live_interface_input, false
 		);
+		// Native netplay V13s end at MAINL_END without storing host-side winner
+		// screen samples. Preserve every visual/audio wait, then provide the one
+		// dismissal edge that lets the terminal owner reach its recorded process
+		// boundary instead of rejecting the valid replay.
+		const bool terminal_dismiss = impl_->vs_win->phase() ==
+			ClassicMainlWinPhase::waiting_for_input;
 		auto advanced = impl_->vs_win->advance(
-			audio, source.system != 0U
+			audio, source.system != 0U || terminal_dismiss
 		);
 		if(!advanced) {
 			auto error = playback_error(
@@ -1591,7 +1597,7 @@ NewClassicReplayPlayback::advance(
 			);
 			return std::unexpected(std::move(error));
 		}
-		if(advanced->input_sampled) {
+		if(advanced->input_sampled && !terminal_dismiss) {
 			return std::unexpected(playback_error(
 				NewClassicPlaybackErrorCode::replay_contract_failed
 			));

@@ -18,6 +18,9 @@ struct NewClassicReplayPatchAssets;
 struct NewClassicPauseNetplayText final {
 	static constexpr std::size_t width = 256U;
 	static constexpr std::size_t height = 16U;
+	// The mask starts at the modal's x=192. Replay Patch pause choices start
+	// at cell 28 (x=224), leaving this exact 32-pixel inset after the cursor.
+	static constexpr std::size_t choice_text_left = 32U;
 	using Mask = std::array<std::uint8_t, width * height>;
 	Mask forfeit{};
 	std::array<Mask, 3U> resume_countdown{};

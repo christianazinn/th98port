@@ -1741,6 +1741,110 @@ bool authentic_vs_gate(
 	const std::filesystem::path &font_rom
 )
 {
+	// Exercise the production title backend rather than the fake session seam:
+	// Online Match has no child scene to consume the completed title owner.
+	{
+		TemporaryDirectory temporary;
+		const auto fail_netplay_return = [](const char *stage) {
+			std::cerr << "authentic-netplay-return-stage=" << stage << '\n';
+			return false;
+		};
+		auto loaded = th03::app::ClassicRunner::load({
+			.content = {
+				.data_root = data_root,
+				.main_executable = main_executable,
+				.mainl_executable = mainl_executable,
+				.op_executable = op_executable,
+				.font_rom = font_rom,
+				.replay_root = temporary.path() / "REPLAY",
+				.config = temporary.path() / "YUME.CFG",
+				.new_classic_settings = temporary.path() / "PODD.CFG",
+				.score = temporary.path() / "YUME.NEM",
+			},
+			.seed = 9U,
+			.fm_available = false,
+			.experience = th03::app::ExperienceProfile::new_classic,
+		});
+		if(!loaded) {
+			return fail_netplay_return("load");
+		}
+		auto &runner = **loaded;
+		std::array<th03::present::ComposedPixel,
+			th03::present::graphics_page_pixels> pixels{};
+		if(!runner.compose_shown_surface(pixels)) {
+			return fail_netplay_return("initial-surface");
+		}
+		while(runner.take_audio_command()) {
+		}
+		std::uint64_t tick = 0U;
+		std::optional<th03::app::ClassicRunnerConsumeResult> last{};
+		const auto step = [&](std::uint16_t system = 0U) {
+			th03::CoreInput input{};
+			input.system = system;
+			auto advanced = runner.consume({
+				.tick_index = tick,
+				.deadline_ns = tick * 10U,
+				.input = input,
+			});
+			++tick;
+			if(!advanced) {
+				return false;
+			}
+			last = *advanced;
+			while(runner.take_audio_command()) {
+			}
+			return !advanced->surface_changed ||
+				runner.compose_shown_surface(pixels).has_value();
+		};
+		const auto wait_for_input = [&](std::size_t limit) {
+			for(std::size_t frame = 0U; frame < limit; ++frame) {
+				if(!step()) { return false; }
+				if(last && last->input_sampled) { return true; }
+			}
+			return false;
+		};
+		if(!wait_for_input(300U) || !step(0x0020U) ||
+			!wait_for_input(64U) || !step(0x0002U) || !step() ||
+			!step(0x0020U)) {
+			return fail_netplay_return("open-vs");
+		}
+		bool saw_submenu_wait = false;
+		bool submenu_ready = false;
+		for(std::size_t frame = 0U; frame < 64U && !submenu_ready; ++frame) {
+			if(!step()) {
+				return fail_netplay_return("open-vs-wait");
+			}
+			saw_submenu_wait = saw_submenu_wait || !last->input_sampled;
+			submenu_ready = saw_submenu_wait && last->input_sampled;
+		}
+		if(!submenu_ready) {
+			return fail_netplay_return("open-vs-ready");
+		}
+		for(std::size_t row = 0U; row < 3U; ++row) {
+			if(!step(0x0002U) || !step()) {
+				return fail_netplay_return("select-online");
+			}
+		}
+		if(!step(0x0020U)) {
+			return fail_netplay_return("confirm-online");
+		}
+		for(std::size_t guard = 0U; guard < 64U && runner.status() ==
+			th03::app::ClassicRunnerStatus::running; ++guard) {
+			if(!step()) {
+				return fail_netplay_return("finish-online");
+			}
+		}
+		if(runner.status() !=
+				th03::app::ClassicRunnerStatus::netplay_requested ||
+			!runner.resume_from_netplay() || runner.status() !=
+				th03::app::ClassicRunnerStatus::running ||
+			th03::app::ClassicRunnerTestAccess::scene(runner) !=
+				th03::app::ClassicOpSessionScene::title_menu ||
+			!runner.compose_shown_surface(pixels) || runner.take_audio_command()) {
+			return fail_netplay_return("resume-title");
+		}
+	}
+
 	for(std::uint8_t mode_index = 0U; mode_index < 3U; ++mode_index) {
 		TemporaryDirectory temporary;
 		auto loaded = th03::app::ClassicRunner::load({
