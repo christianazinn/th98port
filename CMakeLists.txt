@@ -1113,8 +1113,25 @@ add_executable(th03rv apps/th03rv/main.cpp)
 target_link_libraries(th03rv PRIVATE th03rv_service_protocol)
 th03_set_warnings(th03rv)
 
+add_library(th03_replay_video_progress STATIC
+	apps/th03-replay-video/progress_protocol.cpp
+)
+target_include_directories(
+	th03_replay_video_progress PUBLIC apps/th03-replay-video
+)
+target_compile_features(th03_replay_video_progress PUBLIC cxx_std_23)
+set_target_properties(
+	th03_replay_video_progress PROPERTIES CXX_EXTENSIONS OFF
+)
+th03_set_warnings(th03_replay_video_progress)
+
 add_executable(th03-replay-video apps/th03-replay-video/main.cpp)
-target_link_libraries(th03-replay-video PRIVATE th03_app_main)
+target_link_libraries(
+	th03-replay-video PRIVATE th03_app_main th03_replay_video_progress
+)
+if(WIN32)
+	target_link_libraries(th03-replay-video PRIVATE shell32)
+endif()
 th03_set_warnings(th03-replay-video)
 th03_stage_audio_licenses(th03-replay-video)
 
@@ -1239,6 +1256,17 @@ endif()
 if(BUILD_TESTING)
 	find_package(Python3 COMPONENTS Interpreter)
 	add_test(NAME th03-replay-video-help COMMAND th03-replay-video --help)
+	add_executable(th03-replay-video-progress-tests
+		tests/test_replay_video_progress_protocol.cpp
+	)
+	target_link_libraries(
+		th03-replay-video-progress-tests PRIVATE th03_replay_video_progress
+	)
+	th03_set_warnings(th03-replay-video-progress-tests)
+	add_test(
+		NAME th03-replay-video-progress-tests
+		COMMAND th03-replay-video-progress-tests
+	)
 
 	add_executable(th03rv-service-protocol-tests
 		tests/test_th03rv_service_protocol.cpp
@@ -1262,6 +1290,17 @@ if(BUILD_TESTING)
 		COMMAND th03-audio-output-gain-tests
 	)
 	if(Python3_Interpreter_FOUND)
+		add_test(
+			NAME th03-replay-video-gui-tests
+			COMMAND ${Python3_EXECUTABLE} -m unittest discover
+				-s ${CMAKE_CURRENT_SOURCE_DIR}/tools/th03-replay-video-gui/tests
+				-v
+		)
+		set_tests_properties(
+			th03-replay-video-gui-tests PROPERTIES
+			ENVIRONMENT
+				"PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/tools/th03-replay-video-gui/src"
+		)
 		add_test(
 			NAME th03-pixel-frame-comparator-tests
 			COMMAND ${Python3_EXECUTABLE}

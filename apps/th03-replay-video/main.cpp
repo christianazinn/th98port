@@ -6,6 +6,8 @@
 #include "th03/audio/output_gain.hpp"
 #include "th03/formats/v13.hpp"
 
+#include "progress_protocol.hpp"
+
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -32,6 +34,14 @@
 #include <thread>
 #include <tuple>
 #include <vector>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <shellapi.h>
+#endif
 
 namespace {
 
@@ -66,6 +76,7 @@ struct Options final {
 	fs::path rhythm_rom{};
 	fs::path settings{};
 	fs::path game_text_pack{};
+	fs::path staging_output{};
 	fs::path ffmpeg{"ffmpeg"};
 	std::uint32_t width = 1'920U;
 	std::uint32_t height = 1'200U;
@@ -86,6 +97,7 @@ struct Options final {
 	bool language_overridden = false;
 	bool reduced_flash_overridden = false;
 	bool use_installed_settings = false;
+	bool machine_progress = false;
 };
 
 struct LoadedRhythmPcm final {
@@ -109,6 +121,87 @@ struct SimulationResult final {
 	std::uint64_t audio_samples = 0U;
 	bool replay_complete = false;
 };
+
+#if defined(_WIN32)
+using CommandString = std::wstring;
+
+[[nodiscard]] std::wstring wide_from_utf8(std::string_view value)
+{
+	if(value.empty()) {
+		return {};
+	}
+	const auto count = MultiByteToWideChar(
+		CP_UTF8, MB_ERR_INVALID_CHARS, value.data(),
+		static_cast<int>(value.size()), nullptr, 0
+	);
+	if(count <= 0) {
+		return {};
+	}
+	std::wstring result(static_cast<std::size_t>(count), L'\0');
+	if(MultiByteToWideChar(
+		CP_UTF8, MB_ERR_INVALID_CHARS, value.data(),
+		static_cast<int>(value.size()), result.data(), count
+	) != count) {
+		return {};
+	}
+	return result;
+}
+
+[[nodiscard]] std::string utf8_from_wide(std::wstring_view value)
+{
+	if(value.empty()) {
+		return {};
+	}
+	const auto count = WideCharToMultiByte(
+		CP_UTF8, WC_ERR_INVALID_CHARS, value.data(),
+		static_cast<int>(value.size()), nullptr, 0, nullptr, nullptr
+	);
+	if(count <= 0) {
+		return {};
+	}
+	std::string result(static_cast<std::size_t>(count), '\0');
+	if(WideCharToMultiByte(
+		CP_UTF8, WC_ERR_INVALID_CHARS, value.data(),
+		static_cast<int>(value.size()), result.data(), count, nullptr, nullptr
+	) != count) {
+		return {};
+	}
+	return result;
+}
+
+[[nodiscard]] fs::path path_argument(std::string_view value)
+{
+	return fs::path{wide_from_utf8(value)};
+}
+
+[[nodiscard]] CommandString command_text(std::string_view value)
+{
+	return wide_from_utf8(value);
+}
+
+[[nodiscard]] std::string path_text(const fs::path &value)
+{
+	return utf8_from_wide(value.native());
+}
+#else
+using CommandString = std::string;
+
+[[nodiscard]] fs::path path_argument(std::string_view value)
+{
+	return fs::path{value};
+}
+
+[[nodiscard]] CommandString command_text(std::string_view value)
+{
+	return std::string(value);
+}
+
+
+[[nodiscard]] std::string path_text(const fs::path &value)
+{
+	return value.string();
+}
+#endif
 
 enum class PassKind : std::uint8_t {
 	audio,
@@ -142,6 +235,8 @@ void usage()
 		"  --rhythm-pcm <path>      T98RHYTHM.PCM (auto-detected under data)\n"
 		"  --rhythm-rom <path>      8 KiB YM2608 rhythm ROM instead\n"
 		"  --max-frames <count>     Diagnostic partial render\n"
+		"  --machine-progress       Emit newline-delimited T3RVP001 progress\n"
+		"  --staging-output <path>  GUI-owned temporary MKV for cancellation\n"
 		"  --overwrite              Replace an existing output\n";
 }
 
@@ -202,21 +297,30 @@ template<typename Integer>
 			options.overwrite = true;
 			continue;
 		}
+		if(key == "--machine-progress") {
+			options.machine_progress = true;
+			continue;
+		}
 		if(index + 1 >= argc) {
 			return std::unexpected("missing value after " + std::string(key));
 		}
 		const std::string_view value{argv[++index]};
-		if(key == "--replay") options.replay = value;
-		else if(key == "--output") options.output = value;
-		else if(key == "--data") options.data = value;
-		else if(key == "--main") options.main = value;
-		else if(key == "--mainl") options.mainl = value;
-		else if(key == "--font") options.font = value;
-		else if(key == "--rhythm-pcm") options.rhythm_pcm = value;
-		else if(key == "--rhythm-rom") options.rhythm_rom = value;
-		else if(key == "--settings") options.settings = value;
-		else if(key == "--game-text-pack") options.game_text_pack = value;
-		else if(key == "--ffmpeg") options.ffmpeg = value;
+		if(key == "--replay") options.replay = path_argument(value);
+		else if(key == "--output") options.output = path_argument(value);
+		else if(key == "--data") options.data = path_argument(value);
+		else if(key == "--main") options.main = path_argument(value);
+		else if(key == "--mainl") options.mainl = path_argument(value);
+		else if(key == "--font") options.font = path_argument(value);
+		else if(key == "--rhythm-pcm") options.rhythm_pcm = path_argument(value);
+		else if(key == "--rhythm-rom") options.rhythm_rom = path_argument(value);
+		else if(key == "--settings") options.settings = path_argument(value);
+		else if(key == "--game-text-pack") {
+			options.game_text_pack = path_argument(value);
+		}
+		else if(key == "--staging-output") {
+			options.staging_output = path_argument(value);
+		}
+		else if(key == "--ffmpeg") options.ffmpeg = path_argument(value);
 		else if(key == "--encoder") options.encoder = value;
 		else if(key == "--encoder-preset") options.encoder_preset = value;
 		else if(key == "--checkpoint") {
@@ -344,17 +448,17 @@ template<typename Integer>
 	std::error_code error{};
 	const auto size = fs::file_size(path, error);
 	if(error || size > std::numeric_limits<std::size_t>::max()) {
-		return std::unexpected("cannot size " + path.string());
+		return std::unexpected("cannot size " + path_text(path));
 	}
 	std::vector<std::byte> bytes(static_cast<std::size_t>(size));
 	std::ifstream input(path, std::ios::binary);
 	if(!input.is_open()) {
-		return std::unexpected("cannot open " + path.string());
+		return std::unexpected("cannot open " + path_text(path));
 	}
 	input.read(reinterpret_cast<char *>(bytes.data()),
 		static_cast<std::streamsize>(bytes.size()));
 	if(!input || input.gcount() != static_cast<std::streamsize>(bytes.size())) {
-		return std::unexpected("cannot read " + path.string());
+		return std::unexpected("cannot read " + path_text(path));
 	}
 	return bytes;
 }
@@ -372,7 +476,7 @@ template<typename Integer>
 	}
 	auto decoded = th03::app::decode_new_classic_settings(*bytes);
 	if(!decoded) {
-		return std::unexpected("cannot decode " + options.settings.string() +
+		return std::unexpected("cannot decode " + path_text(options.settings) +
 			" (code " + std::to_string(static_cast<unsigned>(
 				decoded.error().code
 			)) + ", offset " + std::to_string(decoded.error().offset) + ')');
@@ -465,22 +569,37 @@ load_rhythm_rom(const fs::path &path)
 	return loaded;
 }
 
-[[nodiscard]] std::optional<std::string> quote(const fs::path &path)
-{
-	const auto value = path.string();
-	if(value.find_first_of("\"\r\n&|<>^%();!`") != std::string::npos) {
-		return std::nullopt;
-	}
-	if(value.find_first_of(" \t") == std::string::npos) {
-		return value;
-	}
-	return '"' + value + '"';
-}
-
-[[nodiscard]] std::FILE *open_pipe(const std::string &command)
+[[nodiscard]] std::optional<CommandString> quote(const fs::path &path)
 {
 #if defined(_WIN32)
-	return _popen(command.c_str(), "wb");
+	const auto value = path.native();
+	constexpr std::wstring_view rejected = L"\"\r\n&|<>^%();!`";
+	constexpr std::wstring_view whitespace = L" \t";
+#else
+	const auto value = path.native();
+	constexpr std::string_view rejected = "\"\r\n&|<>^%();!`";
+	constexpr std::string_view whitespace = " \t";
+#endif
+	if(value.find_first_of(rejected) != CommandString::npos) {
+		return std::nullopt;
+	}
+	if(value.find_first_of(whitespace) == CommandString::npos) {
+		return value;
+	}
+#if defined(_WIN32)
+	return L'"' + value + L'"';
+#else
+	return '"' + value + '"';
+#endif
+}
+
+[[nodiscard]] std::FILE *open_pipe(const CommandString &command)
+{
+#if defined(_WIN32)
+	// cmd.exe strips the first quote from a command that begins with a quoted
+	// executable unless the complete command is wrapped in a second pair.
+	const auto wrapped = L'"' + command + L'"';
+	return _wpopen(wrapped.c_str(), L"wb");
 #else
 	return popen(command.c_str(), "w");
 #endif
@@ -500,10 +619,15 @@ public:
 	Progress(
 		std::string label,
 		std::uint32_t first_sample,
-		std::uint32_t total_samples
+		std::uint32_t total_samples,
+		bool machine,
+		std::string pass,
+		std::uint8_t pass_index
 	) :
 		label_(std::move(label)), first_sample_(first_sample),
-		total_samples_(std::max(first_sample, total_samples)), started_(Clock::now())
+		total_samples_(std::max(first_sample, total_samples)),
+		machine_(machine), pass_(std::move(pass)), pass_index_(pass_index),
+		started_(Clock::now())
 	{
 		update(0U, 0U, true);
 	}
@@ -533,6 +657,41 @@ public:
 		const double speed = elapsed > 0.0 ? source_seconds / elapsed : 0.0;
 		const double eta = ratio > 0.0 && ratio < 1.0 ?
 			elapsed * (1.0 - ratio) / ratio : 0.0;
+		if(machine_) {
+			const auto elapsed_ms = static_cast<std::uint64_t>(
+				std::chrono::duration_cast<std::chrono::milliseconds>(
+					now - started_
+				).count()
+			);
+			const auto completed_permyriad = remaining_samples == 0U ? 0U :
+				static_cast<std::uint32_t>(std::min<std::uint64_t>(
+					10'000U,
+					(static_cast<std::uint64_t>(completed_samples) * 10'000U) /
+						remaining_samples
+				));
+			const auto source_ms = (frames * source_rate_denominator * 1'000U) /
+				source_rate_numerator;
+			const auto speed_milli = elapsed_ms == 0U ? 0U :
+				(source_ms * 1'000U) / elapsed_ms;
+			const auto eta_ms = completed_samples == 0U ? 0U :
+				(elapsed_ms * (remaining_samples - std::min<std::uint32_t>(
+					completed_samples, remaining_samples
+				))) / completed_samples;
+			std::cerr << th03::replay_video::progress_event_json({
+				.kind = th03::replay_video::ProgressEventKind::progress,
+				.pass = pass_,
+				.pass_index = pass_index_,
+				.completed_permyriad = completed_permyriad,
+				.sample = sample,
+				.first_sample = first_sample_,
+				.total_samples = total_samples_,
+				.frames = frames,
+				.elapsed_milliseconds = elapsed_ms,
+				.eta_milliseconds = eta_ms,
+				.speed_milli = speed_milli,
+			}) << '\n' << std::flush;
+			return;
+		}
 		std::cerr << '\r' << label_ << " [";
 		for(std::size_t index = 0U; index < 30U; ++index) {
 			std::cerr << (index < filled ? '#' : '-');
@@ -549,13 +708,29 @@ public:
 	void finish(std::uint32_t sample, std::uint64_t frames)
 	{
 		update(sample, frames, true);
-		std::cerr << '\n';
+		if(machine_) {
+			std::cerr << th03::replay_video::progress_event_json({
+				.kind = th03::replay_video::ProgressEventKind::pass_complete,
+				.pass = pass_,
+				.pass_index = pass_index_,
+				.completed_permyriad = 10'000U,
+				.sample = sample,
+				.first_sample = first_sample_,
+				.total_samples = total_samples_,
+				.frames = frames,
+			}) << '\n' << std::flush;
+		} else {
+			std::cerr << '\n';
+		}
 	}
 
 private:
 	std::string label_{};
 	std::uint32_t first_sample_ = 0U;
 	std::uint32_t total_samples_ = 0U;
+	bool machine_ = false;
+	std::string pass_{};
+	std::uint8_t pass_index_ = 0U;
 	Clock::time_point started_{};
 	Clock::time_point last_{};
 };
@@ -804,7 +979,10 @@ private:
 	Progress progress(
 		std::move(progress_label),
 		document.checkpoints[options.checkpoint].sample_index,
-		document.session.sample_count
+		document.session.sample_count,
+		options.machine_progress,
+		pass == PassKind::audio ? "audio" : "video",
+		pass == PassKind::audio ? 1U : 2U
 	);
 	SimulationResult result{};
 	while((*playback)->status() == th03::app::NewClassicPlaybackStatus::running &&
@@ -892,7 +1070,7 @@ private:
 }
 
 [[nodiscard]] std::expected<int, std::string> run_pipe_pass(
-	const std::string &command,
+	const CommandString &command,
 	const Options &options,
 	const th03::formats::ReplayDocument &document,
 	const LoadedRhythmPcm *rhythm_pcm,
@@ -928,26 +1106,104 @@ private:
 	const auto executable = quote(ffmpeg);
 	if(!executable) return false;
 #if defined(_WIN32)
-	const std::string sink = " >NUL 2>NUL";
+	const auto sink = command_text(" >NUL 2>NUL");
 #else
-	const std::string sink = " >/dev/null 2>/dev/null";
+	const auto sink = command_text(" >/dev/null 2>/dev/null");
 #endif
-	const std::string command = *executable + " -hide_banner -loglevel error "
-		"-h encoder=" + std::string(encoder) + sink;
+	const auto command = *executable + command_text(
+		" -hide_banner -loglevel error -h encoder="
+	) + command_text(encoder) + sink;
+#if defined(_WIN32)
+	const auto wrapped = L'"' + command + L'"';
+	return _wsystem(wrapped.c_str()) == 0;
+#else
 	return std::system(command.c_str()) == 0;
+#endif
 }
 
-[[nodiscard]] std::string encoder_arguments(
+[[nodiscard]] CommandString encoder_arguments(
 	std::string_view encoder,
 	std::string_view preset
 )
 {
 	if(encoder == "libx264") {
-		return "-c:v libx264 -preset medium -crf 18";
+		return command_text("-c:v libx264 -preset medium -crf 18");
 	}
-	return "-c:v " + std::string(encoder) +
-		" -preset " + std::string(preset) +
-		" -tune hq -rc vbr -cq 18 -b:v 0";
+	return command_text("-c:v ") + command_text(encoder) +
+		command_text(" -preset ") + command_text(preset) +
+		command_text(" -tune hq -rc vbr -cq 18 -b:v 0");
+}
+
+struct TemporaryRenderFiles final {
+	fs::path audio{};
+	fs::path video{};
+	bool video_published = false;
+
+	~TemporaryRenderFiles()
+	{
+		std::error_code ignored{};
+		fs::remove(audio, ignored);
+		if(!video_published) {
+			fs::remove(video, ignored);
+		}
+	}
+};
+
+[[nodiscard]] std::expected<fs::path, std::string>
+staging_output_path(const fs::path &output)
+{
+	const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+	for(std::uint32_t attempt = 0U; attempt < 100U; ++attempt) {
+#if defined(_WIN32)
+		auto filename = L'.' + output.filename().native() + L".th03-rendering-" +
+			std::to_wstring(nonce) + L'-' + std::to_wstring(attempt) + L".mkv";
+#else
+		auto filename = '.' + output.filename().native() + ".th03-rendering-" +
+			std::to_string(nonce) + '-' + std::to_string(attempt) + ".mkv";
+#endif
+		auto candidate = output.parent_path() / filename;
+		std::error_code error{};
+		if(!fs::exists(candidate, error) && !error) {
+			return candidate;
+		}
+	}
+	return std::unexpected("cannot reserve a temporary output name");
+}
+
+[[nodiscard]] std::expected<void, std::string> publish_output(
+	const fs::path &staging,
+	const fs::path &output,
+	bool overwrite
+)
+{
+	std::error_code error{};
+	const bool exists = fs::exists(output, error);
+	if(error) {
+		return std::unexpected("cannot inspect the destination before publication");
+	}
+	if(exists && !overwrite) {
+		return std::unexpected("output appeared during rendering; it was preserved");
+	}
+#if defined(_WIN32)
+	const BOOL published = exists ?
+		ReplaceFileW(
+			output.c_str(), staging.c_str(), nullptr,
+			REPLACEFILE_WRITE_THROUGH, nullptr, nullptr
+		) :
+		MoveFileExW(staging.c_str(), output.c_str(), MOVEFILE_WRITE_THROUGH);
+	if(published == 0) {
+		return std::unexpected(
+			"cannot publish completed output (Windows error " +
+			std::to_string(GetLastError()) + ')'
+		);
+	}
+#else
+	fs::rename(staging, output, error);
+	if(error) {
+		return std::unexpected("cannot publish completed output: " + error.message());
+	}
+#endif
+	return {};
 }
 
 [[nodiscard]] int run(const Options &options)
@@ -997,20 +1253,40 @@ private:
 		std::cerr << "warning: no rhythm PCM/ROM; drums will be silent\n";
 	}
 	const auto executable = quote(options.ffmpeg);
-	const fs::path audio_path = options.output.string() + ".th03-audio.flac";
-	const auto audio_output = quote(audio_path);
-	const auto video_output = quote(options.output);
-	if(!executable || !audio_output || !video_output ||
-		options.ffmpeg.string().find_first_of(" \t") != std::string::npos) {
-		std::cerr << "error: shell metacharacters are unsupported in output "
-			"paths, and the FFmpeg executable path must not contain whitespace "
-			"(put it on PATH instead)\n";
+	auto staging_path = options.staging_output.empty() ?
+		staging_output_path(options.output) :
+		std::expected<fs::path, std::string>{options.staging_output};
+	if(!staging_path) {
+		std::cerr << "error: " << staging_path.error() << '\n';
 		return 2;
 	}
-	fs::remove(audio_path, filesystem_error);
-	const std::string audio_command = *executable +
+	if(staging_path->lexically_normal() == options.output.lexically_normal() ||
+		staging_path->parent_path().lexically_normal() !=
+			options.output.parent_path().lexically_normal()) {
+		std::cerr << "error: staging output must be a distinct file beside output\n";
+		return 2;
+	}
+	filesystem_error.clear();
+	if(fs::exists(*staging_path, filesystem_error) || filesystem_error) {
+		std::cerr << "error: staging output already exists or cannot be inspected\n";
+		return 2;
+	}
+	TemporaryRenderFiles temporary{};
+	temporary.audio = options.output;
+	temporary.audio += ".th03-audio.flac";
+	temporary.video = std::move(*staging_path);
+	const auto audio_output = quote(temporary.audio);
+	const auto video_output = quote(temporary.video);
+	if(!executable || !audio_output || !video_output) {
+		std::cerr << "error: shell metacharacters are unsupported in output "
+			"or FFmpeg paths\n";
+		return 2;
+	}
+	fs::remove(temporary.audio, filesystem_error);
+	const auto audio_command = *executable + command_text(
 		" -hide_banner -loglevel error -nostdin -y -f s32le -ar 48000 -ac 2 "
-		"-i pipe:0 -c:a flac " + *audio_output;
+		"-i pipe:0 -c:a flac "
+	) + *audio_output;
 	SimulationResult audio_result{};
 	std::vector<th03::app::ClassicAudioStatus> audio_status_timeline{};
 	auto audio_exit = run_pipe_pass(
@@ -1019,7 +1295,6 @@ private:
 		PassKind::audio, "Audio 1/2", audio_result, &audio_status_timeline
 	);
 	if(!audio_exit || *audio_exit != 0) {
-		fs::remove(audio_path, filesystem_error);
 		std::cerr << "error: " << (audio_exit ? "FFmpeg audio pass failed" :
 			audio_exit.error()) << '\n';
 		return 1;
@@ -1041,13 +1316,13 @@ private:
 			("scale=" + std::to_string(options.width) + ':' +
 				std::to_string(options.height) +
 				":flags=neighbor,format=yuv444p");
-		const std::string command = *executable +
+		const auto command = *executable + command_text(
 			" -hide_banner -loglevel error -nostdin -y -f rawvideo -pix_fmt "
-			"rgba -video_size 640x400 -framerate 526315/9328 -i pipe:0 -i " +
-			*audio_output + " -vf " + scale_filter +
-			" -map 0:v:0 -map 1:a:0 " +
+			"rgba -video_size 640x400 -framerate 526315/9328 -i pipe:0 -i "
+		) + *audio_output + command_text(" -vf ") + command_text(scale_filter) +
+			command_text(" -map 0:v:0 -map 1:a:0 ") +
 			encoder_arguments(selected, options.encoder_preset) +
-			" -c:a copy -shortest -f matroska " + *video_output;
+			command_text(" -c:a copy -shortest -f matroska ") + *video_output;
 		SimulationResult result{};
 		auto exit = run_pipe_pass(
 			command, options, *document,
@@ -1060,11 +1335,10 @@ private:
 	auto [video_exit, video_result] = render_video(encoder);
 	if((!video_exit || *video_exit != 0) && automatic && encoder != "libx264") {
 		std::cerr << "NVENC failed; retrying with libx264\n";
-		fs::remove(options.output, filesystem_error);
+		fs::remove(temporary.video, filesystem_error);
 		std::tie(video_exit, video_result) = render_video("libx264");
 		encoder = "libx264";
 	}
-	fs::remove(audio_path, filesystem_error);
 	if(!video_exit || *video_exit != 0) {
 		std::cerr << "error: " << (video_exit ? "FFmpeg video pass failed" :
 			video_exit.error()) << '\n';
@@ -1079,9 +1353,16 @@ private:
 		std::cerr << "error: replay did not reach its terminal boundary\n";
 		return 1;
 	}
+	if(auto published = publish_output(
+		temporary.video, options.output, options.overwrite
+	); !published) {
+		std::cerr << "error: " << published.error() << '\n';
+		return 1;
+	}
+	temporary.video_published = true;
 	const double seconds = static_cast<double>(video_result.frames) *
 		source_rate_denominator / source_rate_numerator;
-	std::cout << "status=ok\noutput=" << options.output.string()
+	std::cout << "status=ok\noutput=" << path_text(options.output)
 		<< "\nencoder=" << encoder << "\nframes=" << video_result.frames
 		<< "\naudio-samples=" << audio_result.audio_samples << "\nduration="
 		<< std::fixed << std::setprecision(3) << seconds
@@ -1100,6 +1381,26 @@ private:
 int main(int argc, char **argv)
 {
 	try {
+#if defined(_WIN32)
+		int wide_count = 0;
+		auto **wide_arguments = CommandLineToArgvW(GetCommandLineW(), &wide_count);
+		if(wide_arguments == nullptr || wide_count <= 0) {
+			return 2;
+		}
+		std::vector<std::string> utf8_arguments{};
+		std::vector<char *> argument_views{};
+		utf8_arguments.reserve(static_cast<std::size_t>(wide_count));
+		argument_views.reserve(static_cast<std::size_t>(wide_count));
+		for(int index = 0; index < wide_count; ++index) {
+			utf8_arguments.push_back(utf8_from_wide(wide_arguments[index]));
+		}
+		LocalFree(wide_arguments);
+		for(auto &argument : utf8_arguments) {
+			argument_views.push_back(argument.data());
+		}
+		argc = wide_count;
+		argv = argument_views.data();
+#endif
 		auto options = parse_options(argc, argv);
 		if(!options) {
 			std::cerr << "error: " << options.error() << "\n\n";

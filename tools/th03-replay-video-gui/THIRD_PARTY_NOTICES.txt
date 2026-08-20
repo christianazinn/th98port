@@ -1,0 +1,10 @@
+TH03 Replay Renderer embeds the libth03 replay renderer, which incorporates
+98fmplayer and ymfm under their respective licenses. Package builds include
+those license texts.
+
+The GUI uses Python, Tcl/Tk, PyInstaller, tkinterdnd2, and TkDND. The package
+builder copies their applicable license texts into the licenses directory.
+
+FFmpeg is not included by default. If a distributor supplies an FFmpeg binary
+to build.ps1, they must also supply the matching license text; both become
+part of that package and the distributor remains responsible for compliance.

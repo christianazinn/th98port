@@ -37,6 +37,12 @@ Before the nice-to-have sequence continues:
 Both fixes require enter/return/focus, empty-capability, offline, and corrupt-
 cache regressions before the next UI parcel.
 
+Status: closed in libth03 `6d13451`. The retained title completion is now
+return-only while an active HiScore owner is composed; signed-in history adds a
+literal `My Replays` route for both empty and nonempty validated snapshots, and
+an already-open Replay hub adopts a completed refresh on its next source tick.
+Rebuild distributed standalones before treating an older report as current.
+
 ### 1. Source-constrained in-game text
 
 The existing `T3LNG001` catalog owns New Classic menu text rendered with
@@ -113,6 +119,13 @@ Gates: quoted/non-ASCII paths, cancellation and child cleanup, missing content
 and FFmpeg errors, NVIDIA/software encoder selection, progress monotonicity,
 output overwrite confirmation, and a PyInstaller package smoke next to the
 maintained standalone.
+
+Status: implemented. `T3RVP001` provides strict integral JSON-line progress;
+the packaged Windows frontend owns the renderer/FFmpeg process tree, preserves
+existing destinations through failure or cancellation, supports Unicode and
+space-containing paths, exposes the exact equivalent command, and is included
+by the manual Windows beta workflow. Human visual/usefulness testing remains a
+release gate, not an implementation dependency.
 
 ### 3. Dopamine Arrange prototype
 

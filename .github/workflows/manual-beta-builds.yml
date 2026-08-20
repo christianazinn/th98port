@@ -121,6 +121,19 @@ jobs:
           & (Join-Path $root "th03-replay-video$extension") --help
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Build Windows Replay Renderer GUI
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tool = "out/ci-replay-renderer"
+          ./tools/th03-replay-video-gui/build.ps1 `
+            -RendererPath "out/ci-build/Release/th03-replay-video.exe" `
+            -OutputDirectory $tool
+          $destination = `
+            "out/ci-package/${{ matrix.artifact }}/tools/replay-renderer"
+          New-Item -ItemType Directory -Force -Path $destination | Out-Null
+          Copy-Item -Path "$tool/*" -Destination $destination -Recurse
+
       - name: Write build manifest
         shell: pwsh
         env:

@@ -483,11 +483,19 @@ progressively more encoder time. On the primary RTX 4090 measurement,
 `hevc_nvenc`/`p1` reached 10.4x during the video pass versus 4.6x for the old
 hard-coded H.264 `p6` profile. `--help` lists checkpoint, language, flash,
 volume, settings, rhythm-source, and diagnostic partial-render options.
-FFmpeg must be on `PATH` (or supplied through `--ffmpeg`). The only
-intermediate is a temporary lossless FLAC beside the requested output, removed
-on success or failure; raw video and PCM are streamed directly to FFmpeg.
+FFmpeg must be on `PATH` (or supplied through `--ffmpeg`). A temporary lossless
+FLAC and same-directory MKV staging file are removed on success or failure;
+only a fully validated two-pass result atomically replaces the requested
+output. Raw video and PCM are streamed directly to FFmpeg.
 Use the Release executable for export; Debug intentionally retains expensive
 state validation and is not representative of rendering throughput.
+
+Windows users can build the Data Manager-style desktop wrapper with
+`tools\th03-replay-video-gui\build.ps1`. It bundles the maintained renderer,
+projects the same language/flash/audio/encoder options, exposes the exact CLI,
+and reports two-pass progress, speed, and ETA. FFmpeg remains an explicit
+side-by-side/PATH dependency unless its binary and matching license are both
+supplied to the packager. Manual Windows beta builds include this utility.
 
 Run the complete externally stored converted V13 corpus, including its frozen
 size/SHA-256 lock, with:
