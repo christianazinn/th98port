@@ -270,8 +270,10 @@ transaction plus strict WinHTTP/libcurl adapters now implement manifest-first
 authentication, exact signed-artifact response bounds, no redirects, and
 failure-preserving inert staging on every beta platform. `T3PKG001` adds a
 portable traversal-proof package and complete inert generation materializer.
-Production key pins/rotation, activation/recovery, and visible opt-in policy
-remain open,
+`T3ACT001` now freezes the active/pending/previous identity transaction,
+epoch-bound trial acknowledgement, interrupted-trial rollback, and alternating
+durable state store. Production key pins/rotation, the bootstrap launcher,
+generation cleanup, and visible opt-in policy remain open,
 so do not publish a disabled placeholder choice merely to make the target shape
 visible.
 
@@ -605,15 +607,18 @@ platform/channel-specific signed metadata and sole monotonic release sequence;
 self-verifies it from an offline P-256 key. The runtime authentication owner
 now reparses the exact bytes and verifies a unique caller-pinned P-256 SPKI
 through authenticated Mbed TLS 3.6.7. Production pin material/rotation,
-product replacement, failed-update recovery, user-data preservation, and
+the bootstrap process handoff, generation cleanup, user-data preservation, and
 opt-out UI remain release infrastructure. Windows now has a fail-closed
 WinHTTP absolute-HTTPS adapter, Linux and macOS have the equivalent bounded
 libcurl adapter, and the shared manifest-first transaction authenticates and
 selects before requesting the exact signed artifact. Authenticated inert
-staging now binds the platform/channel/sequence and exact artifact bytes
-through an atomic, non-overwriting `.stage` transaction. These owners must not run
+materialization now binds the platform/channel/sequence and exact artifact
+bytes into an atomic, member-verified immutable generation. `T3ACT001` retains
+active/pending/previous identities and proves trial health or rollback through
+a crash-recoverable alternating store. These owners must not run
 inside source-time gameplay or silently alter Classic/New Classic content
-identities. See `UPDATE_MANIFEST.md`.
+identities. See `UPDATE_MANIFEST.md`, `UPDATE_PACKAGE.md`, and
+`UPDATE_ACTIVATION.md`.
 
 Completed netplay matches already produce an in-memory, source-compatible V13
 document and enter the ordinary Save Replay transaction. Product-level netplay

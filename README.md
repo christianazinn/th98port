@@ -169,7 +169,8 @@ HTTPS update acquisition; macOS jobs use the SDK-provided libcurl, and Windows
 uses WinHTTP. These adapters only download authenticated update inputs. The
 current beta package still does not replace or execute itself.
 Each job also emits an inert `T3PKG001` update package beside the ordinary ZIP
-or tarball. See [the package contract](docs/UPDATE_PACKAGE.md).
+or tarball. See [the package contract](docs/UPDATE_PACKAGE.md) and the
+[pending/trial/health rollback state](docs/UPDATE_ACTIVATION.md).
 
 The workflow never fetches or packages original TH03 content and never signs,
 notarizes, deploys, or creates a GitHub Release. Its artifacts are therefore

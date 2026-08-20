@@ -1,4 +1,5 @@
 #include "th03/app/update_package_materialization.hpp"
+#include "th03/app/update_activation.hpp"
 
 #include <mbedtls/sha256.h>
 
@@ -125,20 +126,6 @@ namespace fs = std::filesystem;
 		return std::nullopt;
 	}
 	return digest;
-}
-
-[[nodiscard]] std::string generation_filename(
-	const UpdateManifest &manifest
-)
-{
-	constexpr char hex[] = "0123456789abcdef";
-	std::string digest;
-	digest.reserve(16U);
-	for(std::size_t index = 0U; index < 8U; ++index) {
-		digest.push_back(hex[manifest.artifact_sha256[index] >> 4U]);
-		digest.push_back(hex[manifest.artifact_sha256[index] & 0x0FU]);
-	}
-	return "PODD-GEN-" + std::to_string(manifest.sequence) + "-" + digest;
 }
 
 class TemporaryGeneration final {
@@ -513,7 +500,12 @@ materialize_authenticated_update_package(
 			UpdateMaterializationErrorCode::invalid_directory, system
 		));
 	}
-	const auto target = generation_root / generation_filename(*authenticated);
+	const UpdateGenerationIdentity identity{
+		.sequence = authenticated->sequence,
+		.artifact_sha256 = authenticated->artifact_sha256,
+	};
+	const auto target = generation_root /
+		update_generation_directory_name(identity);
 	if(fs::exists(target, system)) {
 		if(system || !validate_generation(target, *package, system)) {
 			return std::unexpected(materialization_error(

@@ -65,7 +65,8 @@ part of the package.
 This boundary is deliberately inert. It does not select an active generation,
 launch a process, acknowledge health, roll back, clean generations, or replace
 the executable currently running. Those policies require a separate startup
-transaction.
+transaction. `UPDATE_ACTIVATION.md` defines the platform-neutral durable state
+for that transaction without yet adding a bootstrap launcher.
 
 `tools/release/write_update_package.ps1` deterministically authors the format
 from one installed package root. Manual beta jobs retain their ordinary ZIP or
