@@ -607,15 +607,18 @@ platform/channel-specific signed metadata and sole monotonic release sequence;
 self-verifies it from an offline P-256 key. The runtime authentication owner
 now reparses the exact bytes and verifies a unique caller-pinned P-256 SPKI
 through authenticated Mbed TLS 3.6.7. Production pin material/rotation,
-the bootstrap process handoff, generation cleanup, user-data preservation, and
-opt-out UI remain release infrastructure. Windows now has a fail-closed
+user-data preservation, and opt-out UI remain release infrastructure. Windows
+now has a fail-closed
 WinHTTP absolute-HTTPS adapter, Linux and macOS have the equivalent bounded
 libcurl adapter, and the shared manifest-first transaction authenticates and
 selects before requesting the exact signed artifact. Authenticated inert
 materialization now binds the platform/channel/sequence and exact artifact
 bytes into an atomic, member-verified immutable generation. `T3ACT001` retains
 active/pending/previous identities and proves trial health or rollback through
-a crash-recoverable alternating store. These owners must not run
+a crash-recoverable alternating store. The packaged bootstrap now owns the
+child lifetime, acknowledges health inside `th03-app`, and conservatively
+prunes only atomically marked generations outside the activation keep set.
+These owners must not run
 inside source-time gameplay or silently alter Classic/New Classic content
 identities. See `UPDATE_MANIFEST.md`, `UPDATE_PACKAGE.md`, and
 `UPDATE_ACTIVATION.md`.

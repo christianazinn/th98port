@@ -99,5 +99,15 @@ int main(int argc, char **argv)
 		}
 		return fail(code(result.error().code), detail);
 	}
+	if(result->cleanup_warning) {
+		std::cerr << "status=warning\nstage=update-generation-cleanup\n";
+		if(result->cleanup_warning->activation) {
+			std::cerr << "code=activation-state\n";
+		} else if(result->cleanup_warning->cleanup) {
+			std::cerr << "code=filesystem\n";
+		} else {
+			std::cerr << "code=unknown\n";
+		}
+	}
 	return result->exit_code;
 }

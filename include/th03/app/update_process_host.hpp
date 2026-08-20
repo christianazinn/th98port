@@ -2,7 +2,10 @@
 #define TH03_APP_UPDATE_PROCESS_HOST_HPP
 
 #include "th03/app/update_bootstrap.hpp"
+#include "th03/app/update_activation_store.hpp"
+#include "th03/app/update_generation_cleanup.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <filesystem>
@@ -40,12 +43,19 @@ struct UpdateProcessHostConfig final {
 	std::filesystem::path working_directory{};
 	std::filesystem::path generation_executable{};
 	std::vector<std::string> application_arguments{};
+	std::size_t retain_unreferenced_generations = 2U;
+};
+
+struct UpdateProcessHostCleanupWarning final {
+	std::optional<UpdateActivationStoreError> activation{};
+	std::optional<UpdateGenerationCleanupError> cleanup{};
 };
 
 struct UpdateProcessHostResult final {
 	int exit_code = 0;
 	UpdateLaunchSource source = UpdateLaunchSource::legacy_install;
 	bool recovered = false;
+	std::optional<UpdateProcessHostCleanupWarning> cleanup_warning{};
 };
 
 enum class UpdateProcessHostErrorCode : std::uint8_t {

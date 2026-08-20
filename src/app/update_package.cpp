@@ -1,4 +1,5 @@
 #include "th03/app/update_package.hpp"
+#include "th03/app/update_generation.hpp"
 
 #include <algorithm>
 #include <array>
@@ -242,12 +243,18 @@ std::expected<UpdatePackage, UpdatePackageError> parse_update_package(
 				UpdatePackageErrorCode::invalid_path, path_offset
 			));
 		}
+		const auto key = path_key(entry.path);
+		if(key == "podd.gen") {
+			return std::unexpected(error(
+				UpdatePackageErrorCode::invalid_path, path_offset
+			));
+		}
 		if(!previous_path.empty() && previous_path >= entry.path) {
 			return std::unexpected(error(
 				UpdatePackageErrorCode::unsorted_path, path_offset
 			));
 		}
-		auto [unused, inserted] = path_keys.insert(path_key(entry.path));
+		auto [unused, inserted] = path_keys.insert(key);
 		(void)unused;
 		if(!inserted) {
 			return std::unexpected(error(

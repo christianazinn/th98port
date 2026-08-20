@@ -1,4 +1,5 @@
 #include "th03/app/update_package_materialization.hpp"
+#include "th03/app/update_generation.hpp"
 
 #include <array>
 #include <chrono>
@@ -132,7 +133,18 @@ int main(int argc, char **argv)
 					entry.executable;
 #endif
 		}
+		const auto marker_bytes = read_bytes(
+			*generation / fs::path(update_generation_marker_filename)
+		);
+		const UpdateGenerationIdentity expected_identity{
+			.sequence = parsed_manifest->sequence,
+			.artifact_sha256 = parsed_manifest->artifact_sha256,
+		};
+		exact = exact &&
+			decode_update_generation_marker(marker_bytes) == expected_identity;
 		expect(exact, "every member and executable bit matches the package");
+		expect(marker_bytes.size() == update_generation_marker_bytes,
+			"published generation carries its exact atomic ownership marker");
 	}
 	expect(no_temporary(root), "successful publication leaves no temporary");
 	const auto repeated = materialize(root);

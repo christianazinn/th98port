@@ -273,10 +273,31 @@ run_update_process_host(
 				}
 			}
 		}
+		std::optional<UpdateProcessHostCleanupWarning> cleanup_warning;
+		auto cleanup_state = load_update_activation_state(
+			config.activation_state
+		);
+		if(!cleanup_state) {
+			cleanup_warning = UpdateProcessHostCleanupWarning{
+				.activation = cleanup_state.error(),
+			};
+		} else {
+			auto cleanup = cleanup_update_generations(
+				cleanup_state->state,
+				config.generation_root,
+				config.retain_unreferenced_generations
+			);
+			if(!cleanup) {
+				cleanup_warning = UpdateProcessHostCleanupWarning{
+					.cleanup = cleanup.error(),
+				};
+			}
+		}
 		return UpdateProcessHostResult{
 			.exit_code = *executed,
 			.source = plan->source,
 			.recovered = recovered,
+			.cleanup_warning = std::move(cleanup_warning),
 		};
 	}
 	return std::unexpected(host_error(

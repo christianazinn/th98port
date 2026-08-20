@@ -1,6 +1,7 @@
 #include "th03/app/update_activation.hpp"
 #include "th03/app/update_activation_store.hpp"
 #include "th03/app/update_bootstrap.hpp"
+#include "th03/app/update_generation.hpp"
 #include "th03/app/update_process_host.hpp"
 
 #include <chrono>
@@ -69,6 +70,41 @@ void touch(const fs::path &path)
 	fs::create_directories(path.parent_path());
 	std::ofstream output(path, std::ios::binary | std::ios::trunc);
 	output << "test";
+}
+
+[[nodiscard]] fs::path write_owned_generation(
+	const fs::path &root,
+	const UpdateGenerationIdentity &generation
+)
+{
+	const auto directory = root / update_generation_directory_name(generation);
+	fs::create_directories(directory);
+	const auto marker = encode_update_generation_marker(generation);
+	if(!marker) {
+		return {};
+	}
+	const auto marker_path = directory /
+		fs::path(update_generation_marker_filename);
+	std::ofstream output(marker_path, std::ios::binary);
+	output.write(
+		reinterpret_cast<const char *>(marker->data()),
+		static_cast<std::streamsize>(marker->size())
+	);
+	output.close();
+#if !defined(_WIN32)
+	fs::permissions(
+		directory,
+		fs::perms::owner_read | fs::perms::owner_write |
+			fs::perms::owner_exec,
+		fs::perm_options::replace
+	);
+	fs::permissions(
+		marker_path,
+		fs::perms::owner_read | fs::perms::owner_write,
+		fs::perm_options::replace
+	);
+#endif
+	return directory;
 }
 
 [[nodiscard]] UpdateActivationState load_state(const fs::path &path)
@@ -178,14 +214,17 @@ int main()
 
 	{
 		auto request = config(root, root / "legacy-state" / "PODD.UPDATE");
+		request.retain_unreferenced_generations = 0U;
+		const auto stale = write_owned_generation(request.generation_root, first);
 		FakeExecutor fake{{FakeAction::launch}, {}, 7};
 		auto result = run_update_process_host(request, fake.seam());
 		expect(result && result->exit_code == 7 &&
 			result->source == UpdateLaunchSource::legacy_install &&
 			fake.invocations.size() == 1U &&
-			!fake.invocations.front().trial_token &&
+			!fake.invocations.front().trial_token && !result->cleanup_warning &&
+			!fs::exists(stale) &&
 			fake.invocations.front().arguments == request.application_arguments,
-			"empty activation state launches legacy with exact arguments and no trial environment");
+			"legacy launch cleans unreferenced owned generations under the retained lifetime lease");
 	}
 
 	{

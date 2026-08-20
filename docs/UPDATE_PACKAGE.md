@@ -41,7 +41,8 @@ control/non-ASCII, trailing-dot/space, Windows-forbidden punctuation, and
 Windows device-name components are rejected. The format represents regular
 files only. Directories are implied by member paths, so links, alternate data
 streams, devices, empty directories, and platform-specific path aliases cannot
-enter a generation.
+enter a generation. Root member name `PODD.GEN` is reserved for the
+materializer's ownership marker and cannot occur in a package.
 
 The author marks `.exe` files executable on Windows-built packages and reads
 the owner-execute bit on Linux/macOS. The materializer ignores this bit on
@@ -56,17 +57,20 @@ parsing. It then hashes every in-memory member before creating the generation
 root.
 
 Members are written to an exclusive same-root temporary directory, flushed,
-re-read, and re-hashed. The complete directory is published with a platform
-no-replace rename as `PODD-GEN-<sequence>-<digest-prefix>`. An existing exact
-tree is idempotent; a missing, changed, linked, permission-mismatched, or extra
-member is a conflict and is never replaced. The caller's user-data tree is not
-part of the package.
+re-read, and re-hashed. The materializer adds a fixed 96-byte `PODD.GEN`
+marker binding the complete signed sequence and artifact SHA-256 before the
+directory is published with a platform no-replace rename as
+`PODD-GEN-<sequence>-<digest-prefix>`. The marker therefore becomes visible
+atomically with the complete tree. An existing exact marked tree is
+idempotent; a missing, changed, linked, permission-mismatched, unmarked, or
+extra member is a conflict and is never replaced. The caller's user-data tree
+is not part of the package.
 
 This boundary is deliberately inert. It does not select an active generation,
-launch a process, acknowledge health, roll back, clean generations, or replace
-the executable currently running. Those policies require a separate startup
-transaction. `UPDATE_ACTIVATION.md` defines the platform-neutral durable state
-for that transaction without yet adding a bootstrap launcher.
+launch a process, acknowledge health, roll back, or replace the executable
+currently running. The bootstrap owns those operations. Its cleanup pass uses
+the marker as the minimum proof of an updater-owned complete tree; unmarked
+legacy beta generations remain untouched.
 
 `tools/release/write_update_package.ps1` deterministically authors the format
 from one installed package root. Manual beta jobs retain their ordinary ZIP or

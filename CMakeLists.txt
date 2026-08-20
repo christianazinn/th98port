@@ -558,6 +558,8 @@ if(TH03_ENABLE_RTC)
 		src/app/update_activation.cpp
 		src/app/update_activation_store.cpp
 		src/app/update_bootstrap.cpp
+		src/app/update_generation.cpp
+		src/app/update_generation_cleanup.cpp
 		src/app/update_process_host.cpp
 	)
 	target_include_directories(th03_app_update_authentication PUBLIC include)
@@ -1435,6 +1437,9 @@ if(BUILD_TESTING)
 		add_executable(th03-app-update-process-host-tests
 			tests/test_app_update_process_host.cpp
 		)
+		add_executable(th03-app-update-generation-cleanup-tests
+			tests/test_app_update_generation_cleanup.cpp
+		)
 		target_link_libraries(
 			th03-app-update-manifest-authentication-tests
 			PRIVATE th03_app_update_authentication
@@ -1459,12 +1464,17 @@ if(BUILD_TESTING)
 			th03-app-update-process-host-tests
 			PRIVATE th03_app_update_authentication
 		)
+		target_link_libraries(
+			th03-app-update-generation-cleanup-tests
+			PRIVATE th03_app_update_authentication
+		)
 		th03_set_warnings(th03-app-update-manifest-authentication-tests)
 		th03_set_warnings(th03-app-update-acquisition-tests)
 		th03_set_warnings(th03-app-update-package-materialization-tests)
 		th03_set_warnings(th03-app-update-activation-tests)
 		th03_set_warnings(th03-app-update-bootstrap-tests)
 		th03_set_warnings(th03-app-update-process-host-tests)
+		th03_set_warnings(th03-app-update-generation-cleanup-tests)
 		add_test(
 			NAME th03-app-update-activation-tests
 			COMMAND th03-app-update-activation-tests
@@ -1476,6 +1486,10 @@ if(BUILD_TESTING)
 		add_test(
 			NAME th03-app-update-process-host-tests
 			COMMAND th03-app-update-process-host-tests
+		)
+		add_test(
+			NAME th03-app-update-generation-cleanup-tests
+			COMMAND th03-app-update-generation-cleanup-tests
 		)
 	endif()
 	find_program(TH03_PWSH_EXECUTABLE pwsh)

@@ -123,9 +123,20 @@ local VS, and direct netplay launch paths. The standalone always starts the
 embedded bootstrap; absent activation state therefore remains exactly the
 legacy embedded launch.
 
+## Generation cleanup
+
+The process host runs conservative generation cleanup only after its child has
+exited and while it still owns the bootstrap lifetime lease. Cleanup preserves
+the full `active`, `pending`, `previous`, and `last_failed` identities, then
+the two newest unreferenced complete generations. A directory is eligible only
+when it has canonical `PODD-GEN-<sequence>-<digest-prefix>` spelling and a
+valid atomic `PODD.GEN` marker binding the same full identity. Links, temporary
+trees, malformed names, mismatched markers, unrelated entries, and legacy
+unmarked beta generations are ignored. Failure is reported as a warning and
+never prevents the already-run application from returning its exit status.
+
 ## Deliberately deferred
 
-Production signing pins, generation retention/cleanup, and visible opt-in
-update UI remain separate release gates. The executable host performs no
-network request, does not nominate a generation, and cannot activate an inert
-package by itself.
+Production signing pins and visible opt-in update UI remain separate release
+gates. The executable host performs no network request, does not nominate a
+generation, and cannot activate an inert package by itself.

@@ -136,6 +136,8 @@ int main()
 	auto changed = valid;
 	changed[0U] = std::byte{'X'};
 	expect_error(changed, invalid_magic, "wrong magic is rejected");
+	expect_error(package({member("PODD.GEN", "reserved")}), invalid_path,
+		"materializer ownership marker path is reserved");
 	changed = valid;
 	changed[8U] = std::byte{2U};
 	expect_error(changed, unsupported_version, "wrong version is rejected");

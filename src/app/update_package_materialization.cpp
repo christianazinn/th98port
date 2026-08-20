@@ -1,5 +1,6 @@
 #include "th03/app/update_package_materialization.hpp"
 #include "th03/app/update_activation.hpp"
+#include "th03/app/update_generation.hpp"
 
 #include <mbedtls/sha256.h>
 
@@ -316,6 +317,7 @@ create_temporary_generation(const fs::path &root)
 [[nodiscard]] bool validate_generation(
 	const fs::path &target,
 	const UpdatePackage &package,
+	const UpdateGenerationIdentity &identity,
 	std::error_code &system
 )
 {
@@ -323,7 +325,35 @@ create_temporary_generation(const fs::path &root)
 	if(system || !fs::is_directory(target_status)) {
 		return false;
 	}
-	std::set<std::string> expected_files;
+	const auto marker_path = target / fs::path(
+		update_generation_marker_filename
+	);
+	const auto marker_status = fs::symlink_status(marker_path, system);
+	if(system || !fs::is_regular_file(marker_status) ||
+		fs::file_size(marker_path, system) != update_generation_marker_bytes ||
+		system) {
+		return false;
+	}
+	std::ifstream marker_input(marker_path, std::ios::binary);
+	std::array<std::byte, update_generation_marker_bytes> marker_bytes{};
+	marker_input.read(
+		reinterpret_cast<char *>(marker_bytes.data()),
+		static_cast<std::streamsize>(marker_bytes.size())
+	);
+	const auto marker = decode_update_generation_marker(marker_bytes);
+	if(!marker_input || marker_input.peek() !=
+		std::ifstream::traits_type::eof() || !marker || *marker != identity) {
+		return false;
+	}
+#if !defined(_WIN32)
+	if((marker_status.permissions() & fs::perms::mask) !=
+		(fs::perms::owner_read | fs::perms::owner_write)) {
+		return false;
+	}
+#endif
+	std::set<std::string> expected_files{
+		std::string(update_generation_marker_filename)
+	};
 	for(const auto &entry : package.entries) {
 		expected_files.insert(entry.path);
 		const auto member_path = target / fs::path(entry.path);
@@ -507,7 +537,7 @@ materialize_authenticated_update_package(
 	const auto target = generation_root /
 		update_generation_directory_name(identity);
 	if(fs::exists(target, system)) {
-		if(system || !validate_generation(target, *package, system)) {
+		if(system || !validate_generation(target, *package, identity, system)) {
 			return std::unexpected(materialization_error(
 				UpdateMaterializationErrorCode::target_conflict, system
 			));
@@ -556,6 +586,18 @@ materialize_authenticated_update_package(
 			));
 		}
 	}
+	const auto marker = encode_update_generation_marker(identity);
+	if(!marker) {
+		return std::unexpected(materialization_error(
+			UpdateMaterializationErrorCode::file_validation
+		));
+	}
+	if(auto written = write_member(
+		temporary->path() / fs::path(update_generation_marker_filename),
+		*marker, false, package->entries.size()
+	); !written) {
+		return std::unexpected(std::move(written.error()));
+	}
 	const auto directories = expected_directories(*package);
 #if !defined(_WIN32)
 	for(const auto &directory : directories) {
@@ -586,7 +628,7 @@ materialize_authenticated_update_package(
 	if(!publish_generation(temporary->path(), target, system)) {
 		if((system == std::errc::file_exists ||
 			system == std::errc::directory_not_empty) &&
-			validate_generation(target, *package, system)) {
+			validate_generation(target, *package, identity, system)) {
 			return target;
 		}
 		return std::unexpected(materialization_error(
