@@ -118,6 +118,22 @@ std::expected<
 	}
 
 	MainResourceLoader loader(request.content.data_root);
+	std::optional<NewClassicGameTextCatalog> custom_game_text{};
+	const NewClassicGameTextCatalog *game_text =
+		&new_classic_builtin_english_game_text();
+	if(!request.content.game_text_pack.empty()) {
+		auto loaded = load_new_classic_game_text_pack(
+			request.content.game_text_pack, game_text
+		);
+		if(!loaded) {
+			return std::unexpected(NewClassicNetplayMatchIntroError{
+				.code = NewClassicNetplayMatchIntroErrorCode::game_text_pack_failed,
+				.game_text_pack_error = std::move(loaded.error()),
+			});
+		}
+		custom_game_text.emplace(std::move(*loaded));
+		game_text = &*custom_game_text;
+	}
 	if(request.language == NewClassicLanguageAssetProfile::english) {
 		if(request.content.language_overlay.empty()) {
 			return std::unexpected(intro_error(
@@ -141,7 +157,9 @@ std::expected<
 				NewClassicNetplayMatchIntroErrorCode::language_overlay_failed
 			));
 		}
-		apply_new_classic_english_stage_text(imported->assets);
+		apply_new_classic_english_stage_text(
+			imported->assets, *game_text
+		);
 	}
 
 	const auto init = main_direct_vs_game_init(request.process);

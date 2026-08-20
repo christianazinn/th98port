@@ -513,6 +513,46 @@ ClassicRunner::load(ClassicRunnerRequest request)
 					std::move(*loaded_messages)
 				);
 		}
+		if(!request.content.game_text_pack.empty()) {
+			if(request.content.language_overlay.empty()) {
+				auto result = runner_error(
+					ClassicRunnerErrorCode::game_text_pack_failed,
+					ClassicContentFile::game_text_pack
+				);
+				result.game_text_pack_error = NewClassicGameTextPackError{
+					.code = NewClassicGameTextPackErrorCode::fallback_missing,
+				};
+				return std::unexpected(std::move(result));
+			}
+			const auto &fallback = new_classic_builtin_english_game_text();
+			auto loaded_game_text = load_new_classic_game_text_pack(
+				request.content.game_text_pack, &fallback
+			);
+			if(!loaded_game_text) {
+				auto result = runner_error(
+					ClassicRunnerErrorCode::game_text_pack_failed,
+					ClassicContentFile::game_text_pack
+				);
+				result.game_text_pack_error = std::move(loaded_game_text.error());
+				return std::unexpected(std::move(result));
+			}
+			if(loaded_assets->custom_messages &&
+				loaded_assets->custom_messages->locale() !=
+					loaded_game_text->locale()) {
+				auto result = runner_error(
+					ClassicRunnerErrorCode::game_text_pack_failed,
+					ClassicContentFile::game_text_pack
+				);
+				result.game_text_pack_error = NewClassicGameTextPackError{
+					.code = NewClassicGameTextPackErrorCode::locale_shape,
+				};
+				return std::unexpected(std::move(result));
+			}
+			loaded_assets->custom_game_text =
+				std::make_shared<const NewClassicGameTextCatalog>(
+					std::move(*loaded_game_text)
+				);
+		}
 		patch_assets = std::make_shared<const NewClassicReplayPatchAssets>(
 			std::move(*loaded_assets)
 		);

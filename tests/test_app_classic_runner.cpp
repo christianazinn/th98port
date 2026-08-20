@@ -155,6 +155,7 @@ void test_cli()
 		"--op", "o", "--font", "f", "--tick-rate", "3/2",
 		"--language-overlay", "TH3EN.DAT",
 		"--language-pack", "locale.t3lang",
+		"--game-text-pack", "locale.t3gtl",
 		"--rhythm-rom", "ym2608.rom",
 		"--config", "c", "--score", "s", "--replay-root", "r",
 		"--seed", "4294967295",
@@ -166,6 +167,7 @@ void test_cli()
 		complete->replay_root == "r" &&
 		complete->launch.content.language_overlay == "TH3EN.DAT" &&
 		complete->launch.content.language_pack == "locale.t3lang" &&
+		complete->launch.content.game_text_pack == "locale.t3gtl" &&
 		complete->rhythm_rom == std::filesystem::path("ym2608.rom") &&
 		complete->launch.seed == 0xFFFF'FFFFU &&
 		complete->tick_rate.ticks == 3U && complete->tick_rate.seconds == 2U &&

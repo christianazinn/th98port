@@ -15,6 +15,7 @@
 
 #include "th03/assets/types.hpp"
 #include "th03/app/new_classic_messages.hpp"
+#include "th03/app/new_classic_game_text.hpp"
 #include "th03/present/raster.hpp"
 #include "th03/present/source_surface.hpp"
 
@@ -146,6 +147,9 @@ struct NewClassicReplayPatchAssets final {
 	// Optional developer/translator package. All production New Classic scenes
 	// otherwise use the frozen built-in profile selected below.
 	std::shared_ptr<const NewClassicMessageCatalog> custom_messages{};
+	// Optional source-constrained T3GTL001 catalog. This owns only New Classic
+	// graphics text; Classic and authenticated Japanese source text ignore it.
+	std::shared_ptr<const NewClassicGameTextCatalog> custom_game_text{};
 	[[nodiscard]] const NewClassicMessageCatalog &messages(
 		NewClassicLanguageAssetProfile profile =
 			NewClassicLanguageAssetProfile::english

@@ -12,6 +12,7 @@
 
 #include "new_classic_language_internal.hpp"
 #include "th03/app/new_classic_assets.hpp"
+#include "th03/app/new_classic_game_text.hpp"
 #include "th03/app/new_classic_messages.hpp"
 
 namespace {
@@ -184,7 +185,8 @@ bool authentic_text_gate(
 		)].end(),
 	};
 	th03::app::apply_new_classic_english_text(
-		*compiled, mainl->assets, *op
+		*compiled, mainl->assets, *op,
+		th03::app::new_classic_builtin_english_game_text()
 	);
 	const auto english_results = compiled->hud_result_tram_assets();
 	const auto music_first = std::string{
@@ -388,12 +390,95 @@ void test_message_packs(const th03::app::NewClassicMenuFont *authentic_font)
 	}
 }
 
+void test_game_text_packs()
+{
+	const auto path = localization_root() / "game-text-en-US.t3gtl";
+	auto english = th03::app::load_new_classic_game_text_pack(path);
+	expect(english && english->locale() == "en-US" &&
+		english->fallback_locale().empty() &&
+		english->bytes(th03::app::NewClassicGameTextId::music_track_01).size() ==
+			32U &&
+		std::ranges::equal(
+			english->bytes(th03::app::NewClassicGameTextId::music_track_01),
+			std::string_view{"NO.1 Dream Transcending Space..."},
+			{}, [](std::uint8_t value) { return static_cast<char>(value); },
+			[](char value) { return value; }
+		),
+		"complete deterministic T3GTL001 English catalog loads exact CP932 rows");
+	if(!english) {
+		return;
+	}
+	expect(std::ranges::equal(
+		english->bytes(th03::app::NewClassicGameTextId::stage_name_00),
+		th03::app::new_classic_builtin_english_game_text().bytes(
+			th03::app::NewClassicGameTextId::stage_name_00
+		)
+	), "compiled and generated built-in game text are byte-identical");
+	auto pseudo = th03::app::load_new_classic_game_text_pack(
+		localization_root() / "game-text-qps-ploc.t3gtl", &*english
+	);
+	expect(pseudo && pseudo->locale() == "qps-ploc" &&
+		pseudo->fallback_locale() == "en-US" &&
+		std::ranges::equal(
+			pseudo->bytes(th03::app::NewClassicGameTextId::stage_title_first_00),
+			std::string_view{"[[Miko Protects Dream]]     "},
+			{}, [](std::uint8_t value) { return static_cast<char>(value); },
+			[](char value) { return value; }
+		) && std::ranges::equal(
+			pseudo->bytes(th03::app::NewClassicGameTextId::music_track_01),
+			english->bytes(th03::app::NewClassicGameTextId::music_track_01)
+		), "partial game-text catalog resolves only through its exact fallback");
+	auto missing_fallback = th03::app::load_new_classic_game_text_pack(
+		localization_root() / "game-text-qps-ploc.t3gtl"
+	);
+	expect(!missing_fallback && missing_fallback.error().code ==
+		th03::app::NewClassicGameTextPackErrorCode::fallback_missing,
+		"partial game-text catalog fails closed without its declared fallback");
+
+	auto bad_digest = read_file(path);
+	bad_digest.back() ^= std::byte{1U};
+	auto temporary = std::filesystem::temp_directory_path() /
+		"th03-invalid-game-text-digest.t3gtl";
+	write_file(temporary, bad_digest);
+	auto rejected_digest = th03::app::load_new_classic_game_text_pack(temporary);
+	expect(!rejected_digest && rejected_digest.error().code ==
+		th03::app::NewClassicGameTextPackErrorCode::body_digest_mismatch,
+		"game-text runtime authenticates the complete package body");
+
+	auto malformed = read_file(path);
+	constexpr std::size_t payload = 96U + 5U + (61U * 8U);
+	malformed[payload] = std::byte{0x81U};
+	malformed[payload + 1U] = std::byte{0x20U};
+	const auto malformed_digest = th03::app::app_sha256(
+		std::span<const std::byte>{malformed}.subspan(96U)
+	);
+	for(std::size_t index = 0U; index < malformed_digest.size(); ++index) {
+		malformed[64U + index] = static_cast<std::byte>(malformed_digest[index]);
+	}
+	temporary = std::filesystem::temp_directory_path() /
+		"th03-invalid-game-text-encoding.t3gtl";
+	write_file(temporary, malformed);
+	auto rejected_encoding = th03::app::load_new_classic_game_text_pack(temporary);
+	expect(!rejected_encoding && rejected_encoding.error().code ==
+		th03::app::NewClassicGameTextPackErrorCode::malformed_shift_jis &&
+		rejected_encoding.error().message ==
+			th03::app::NewClassicGameTextId::music_track_01,
+		"correctly hashed game-text packages still reject malformed CP932");
+	std::error_code ignored;
+	std::filesystem::remove(temporary, ignored);
+	std::filesystem::remove(
+		std::filesystem::temp_directory_path() /
+			"th03-invalid-game-text-digest.t3gtl", ignored
+	);
+}
+
 } // namespace
 
 int main(int argc, char **argv)
 {
 	test_bounded_archive();
 	test_message_packs(nullptr);
+	test_game_text_packs();
 	if(argc == 7 && std::string_view(argv[1]) == "--authentic") {
 		expect(authentic_text_gate(argv[2], argv[3], argv[4], argv[5]),
 			"authenticated overlay applies every compiled English text family");

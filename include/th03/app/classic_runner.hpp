@@ -49,6 +49,9 @@ struct ClassicContentPaths final {
 	// Optional T3LNG001 semantic UI package. New Classic validates it against
 	// the authenticated MNUFONT; Classic never opens it.
 	std::filesystem::path language_pack{};
+	// Optional T3GTL001 source-constrained graphics-text catalog. It is applied
+	// only with New Classic's authenticated English asset profile.
+	std::filesystem::path game_text_pack{};
 	// Complete authenticated Replay Patch 0.4.12 AZINN.DAT. Classic ignores
 	// this profile. An empty New Classic path derives AZINN.DAT under data_root.
 	std::filesystem::path replay_patch_assets{};
@@ -136,6 +139,7 @@ enum class ClassicContentFile : std::uint8_t {
 	font_rom,
 	replay_patch_assets,
 	language_pack,
+	game_text_pack,
 };
 
 enum class ClassicRunnerErrorCode : std::uint8_t {
@@ -149,6 +153,7 @@ enum class ClassicRunnerErrorCode : std::uint8_t {
 	compiled_content_failed,
 	replay_patch_assets_failed,
 	language_pack_failed,
+	game_text_pack_failed,
 	session_failed,
 	invalid_sample_order,
 	runner_not_running,
@@ -169,6 +174,7 @@ struct ClassicRunnerError final {
 	std::optional<MainProcessError> process_error{};
 	std::optional<NewClassicAssetsError> replay_patch_assets_error{};
 	std::optional<NewClassicMessagePackError> language_pack_error{};
+	std::optional<NewClassicGameTextPackError> game_text_pack_error{};
 	std::optional<present::SourceSurfaceError> surface_error{};
 };
 

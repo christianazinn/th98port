@@ -7,6 +7,7 @@
 #include "mainl_compiled_text_internal.hpp"
 #include "op_compiled_text_internal.hpp"
 #include "th03/app/main_compiled_content.hpp"
+#include "th03/app/new_classic_game_text.hpp"
 #include "th03/app/new_classic_language.hpp"
 
 namespace th03::app {
@@ -14,9 +15,13 @@ namespace th03::app {
 void apply_new_classic_english_text(
 	MainCompiledContent &compiled,
 	MainlStageTextAssets &stage,
-	OpMusicRoomTextImport &music
+	OpMusicRoomTextImport &music,
+	const NewClassicGameTextCatalog &text
 );
-void apply_new_classic_english_stage_text(MainlStageTextAssets &stage);
+void apply_new_classic_english_stage_text(
+	MainlStageTextAssets &stage,
+	const NewClassicGameTextCatalog &text
+);
 
 namespace detail {
 

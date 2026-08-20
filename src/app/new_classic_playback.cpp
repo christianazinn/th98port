@@ -880,6 +880,32 @@ NewClassicReplayPlayback::load_internal(
 	auto loader = std::make_shared<MainResourceLoader>(
 		request.content.data_root
 	);
+	std::optional<NewClassicGameTextCatalog> custom_game_text{};
+	const NewClassicGameTextCatalog *game_text =
+		&new_classic_builtin_english_game_text();
+	if(!request.content.game_text_pack.empty()) {
+		if(request.content.language_overlay.empty()) {
+			auto error = playback_error(
+				NewClassicPlaybackErrorCode::game_text_pack_failed
+			);
+			error.game_text_pack = NewClassicGameTextPackError{
+				.code = NewClassicGameTextPackErrorCode::fallback_missing,
+			};
+			return std::unexpected(std::move(error));
+		}
+		auto loaded = load_new_classic_game_text_pack(
+			request.content.game_text_pack, game_text
+		);
+		if(!loaded) {
+			auto error = playback_error(
+				NewClassicPlaybackErrorCode::game_text_pack_failed
+			);
+			error.game_text_pack = std::move(loaded.error());
+			return std::unexpected(std::move(error));
+		}
+		custom_game_text.emplace(std::move(*loaded));
+		game_text = &*custom_game_text;
+	}
 	if(request.language == ClassicLanguage::english) {
 		auto overlay = load_new_classic_language_overlay(
 			request.content.language_overlay
@@ -900,7 +926,8 @@ NewClassicReplayPlayback::load_internal(
 		}
 		OpMusicRoomTextImport unused_music{};
 		apply_new_classic_english_text(
-			*compiled, mainl_text->assets, unused_music
+			*compiled, mainl_text->assets, unused_music,
+			*game_text
 		);
 	}
 	auto static_resources = loader->load_main_static();
@@ -934,6 +961,12 @@ NewClassicReplayPlayback::load_internal(
 			std::move(loaded_patch_assets.error())
 		);
 		return std::unexpected(std::move(error));
+	}
+	if(custom_game_text) {
+		loaded_patch_assets->custom_game_text =
+			std::make_shared<const NewClassicGameTextCatalog>(
+				std::move(*custom_game_text)
+			);
 	}
 	auto patch_assets = std::make_shared<const NewClassicReplayPatchAssets>(
 		std::move(*loaded_patch_assets)

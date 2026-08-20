@@ -20,6 +20,22 @@ Arrange experiment expose better boundaries.
 
 ## Ordered parcels
 
+### Immediate product regressions
+
+Before the nice-to-have sequence continues:
+
+- `HiScore` must always publish and enter either the local viewer or the
+  capability-shaped hub. Selecting it must never leave a non-interactive frame
+  that only Escape can unwind.
+- The Replay hub must expose the signed-in player's accepted online submissions
+  as `My Replays` whenever that validated account-history snapshot is nonempty.
+  This is the user-facing name for the backend/cache dataset previously called
+  `My Records`; it remains distinct from the public best-per-profile board and
+  from arbitrary downloaded replays.
+
+Both fixes require enter/return/focus, empty-capability, offline, and corrupt-
+cache regressions before the next UI parcel.
+
 ### 1. Source-constrained in-game text
 
 The existing `T3LNG001` catalog owns New Classic menu text rendered with

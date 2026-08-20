@@ -1084,7 +1084,10 @@ struct ClassicOpSessionBackend final {
 		op_music_labels = *japanese_op_music_labels;
 		if(language == ClassicLanguage::english) {
 			apply_new_classic_english_text(
-				compiled, stage_text, op_music_labels
+				compiled, stage_text, op_music_labels,
+				patch_assets && patch_assets->custom_game_text ?
+					*patch_assets->custom_game_text :
+					new_classic_builtin_english_game_text()
 			);
 		}
 		static_content.reset();

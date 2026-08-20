@@ -12,6 +12,8 @@
 
 namespace th03::app {
 
+class NewClassicGameTextCatalog;
+
 using AppSha256 = std::array<std::uint8_t, 32U>;
 using MainExecutableSha256 = AppSha256;
 
@@ -82,7 +84,9 @@ public:
 		hud_result_tram_assets() const noexcept;
 	// Replay Patch's English profile replaces only five source result labels;
 	// score glyphs, combo gaiji, and all gameplay data remain authenticated MAIN.
-	void apply_new_classic_english_results() noexcept;
+	void apply_new_classic_english_results(
+		const NewClassicGameTextCatalog &text
+	) noexcept;
 
 private:
 	friend struct MainCompiledContentImportAccess;

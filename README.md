@@ -327,6 +327,15 @@ startup unless its schema/body hashes, locale/fallback, placeholders,
 printable MNUFONT glyphs, and exact proportional row widths all validate.
 See `localization/README.md` for the UTF-8 authoring and deterministic compiler
 contract. Classic never opens a language pack.
+Source-constrained New Classic text that was historically compiled into
+`MAIN.EXE` and `MAINL.EXE` uses the separate `T3GTL001` catalog. The first
+catalog covers Music Room titles, character titles and names, registration
+names, and result labels. `localization/game-text-en-US.json` is the UTF-8
+source, `compile_game_text_pack.py` validates and compiles it, and
+`--game-text-pack <locale.t3gtl>` supplies a custom catalog to the game or
+replay renderer. A catalog is accepted only with the full English overlay;
+Japanese and sealed Classic continue using authenticated source assets.
+See `localization/GAME_TEXT_README.md` for the format and translator workflow.
 New Classic also owns the Replay Patch's versioned per-character HiScore file.
 Its viewer opens on `ALL CHARACTERS`, cycles through the unlocked character
 pages with Left/Right, appends the derived TOTAL row, and shows play time, 1CC,

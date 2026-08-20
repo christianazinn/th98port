@@ -65,6 +65,7 @@ struct Options final {
 	fs::path rhythm_pcm{};
 	fs::path rhythm_rom{};
 	fs::path settings{};
+	fs::path game_text_pack{};
 	fs::path ffmpeg{"ffmpeg"};
 	std::uint32_t width = 1'920U;
 	std::uint32_t height = 1'200U;
@@ -129,6 +130,7 @@ void usage()
 		"  --ffmpeg <path>          FFmpeg executable (default: ffmpeg)\n"
 		"  --checkpoint <index>     Begin at a replay checkpoint (default 0)\n"
 		"  --language <ja|en>       Presentation language (default ja)\n"
+		"  --game-text-pack <path>  Compiled T3GTL001 in-game localization\n"
 		"  --reduced-flash          Apply New Classic reduced flashes\n"
 		"  --full-flash             Override inherited reduced flashes\n"
 		"  --settings <PODD.CFG>    Inherit New Classic presentation/audio values\n"
@@ -213,6 +215,7 @@ template<typename Integer>
 		else if(key == "--rhythm-pcm") options.rhythm_pcm = value;
 		else if(key == "--rhythm-rom") options.rhythm_rom = value;
 		else if(key == "--settings") options.settings = value;
+		else if(key == "--game-text-pack") options.game_text_pack = value;
 		else if(key == "--ffmpeg") options.ffmpeg = value;
 		else if(key == "--encoder") options.encoder = value;
 		else if(key == "--encoder-preset") options.encoder_preset = value;
@@ -718,6 +721,7 @@ private:
 			.mainl_executable = options.mainl,
 			.font_rom = options.font,
 			.language_overlay = options.data / "TH3EN.DAT",
+			.game_text_pack = options.game_text_pack,
 			.score = score_root / "YUME.NEM",
 		},
 		.document = document,

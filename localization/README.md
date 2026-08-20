@@ -40,3 +40,7 @@ python tools/localization/compile_language_pack.py compile `
 An authoring file may omit messages only when it names a fallback locale. The
 runtime must be supplied that exact accepted fallback catalog; it never guesses
 or silently substitutes a different language.
+
+Source-constrained in-game graphics text uses the separate `T3GTL001` format
+documented in `GAME_TEXT_README.md`. Keeping the domains separate prevents a
+menu-font pack from claiming CP932/gaiji coverage it cannot render.

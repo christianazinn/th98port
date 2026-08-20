@@ -230,15 +230,12 @@ constexpr std::array<std::string_view, 52U> required_members{
 	return result;
 }
 
-void assign_text(std::vector<std::uint8_t> &destination, std::string_view text)
+void assign_text(
+	std::vector<std::uint8_t> &destination,
+	std::span<const std::uint8_t> text
+)
 {
-	destination.clear();
-	destination.reserve(text.size());
-	for(const auto value : text) {
-		destination.push_back(static_cast<std::uint8_t>(
-			static_cast<unsigned char>(value)
-		));
-	}
+	destination.assign(text.begin(), text.end());
 }
 
 } // namespace
@@ -328,67 +325,45 @@ load_new_classic_language_overlay(const std::filesystem::path &path)
 void apply_new_classic_english_text(
 	MainCompiledContent &compiled,
 	MainlStageTextAssets &stage,
-	OpMusicRoomTextImport &music
+	OpMusicRoomTextImport &music,
+	const NewClassicGameTextCatalog &text
 )
 {
-	constexpr std::array<std::string_view, 19U> music_choices{
-		"NO.1 Dream Transcending Space...", "NO.2       Selection            ",
-		"NO.3 Eastern Mystical Love C... ", "NO.4       Reincarnation        ",
-		"NO.5         Dim. Dream         ", "NO.6 Tabula Rasa ~ The Empty G. ",
-		"NO.7      Maniacal Princess     ", "NO.8 Vanishing Dream ~ Lost...  ",
-		"NO.9 Visionary Game ~ Dream War ", "NO.10   Decisive Magic Battle!  ",
-		"NO.11      Sailor of Time       ", "NO.12    Strawberry Crisis!!    ",
-		"NO.13 Non-Unified Magic World...", "NO.14   Love of Magical Chimes  ",
-		"NO.15     Dream of Eternity     ", "NO.16      Eastern Blue Sky     ",
-		"NO.17     Eternal Full Moon     ", "NO.18       Maple Dream...      ",
-		"NO.19 Ghostly Person's Holiday  ",
-	};
-	for(std::size_t index = 0U; index < music_choices.size(); ++index) {
-		assign_text(music.choices[index], music_choices[index]);
+	for(std::size_t index = 0U; index < 19U; ++index) {
+		assign_text(music.choices[index], text.bytes(
+			static_cast<NewClassicGameTextId>(
+				static_cast<std::size_t>(NewClassicGameTextId::music_track_01) + index
+			)
+		));
 	}
-	apply_new_classic_english_stage_text(stage);
-	compiled.apply_new_classic_english_results();
+	apply_new_classic_english_stage_text(stage, text);
+	compiled.apply_new_classic_english_results(text);
 }
 
-void apply_new_classic_english_stage_text(MainlStageTextAssets &stage)
+void apply_new_classic_english_stage_text(
+	MainlStageTextAssets &stage,
+	const NewClassicGameTextCatalog &text
+)
 {
-	constexpr std::array<std::string_view, 9U> title_one{
-		"   Miko Who Protects Dream  ", "  Spirit Who Leaves Fate to ",
-		"   A Being Made of Magic    ", "   Hardworking Witch Who    ",
-		"    Princess Dreaming of    ", " Poltergeist Maiden Who Has ",
-		"     Scientist Searching    ", "  Resident of Fantasy Who   ",
-		"       Fantasy Legend       ",
-	};
-	constexpr std::array<std::string_view, 9U> title_two{
-		"        and Tradition       ", "    the Dream of Eternity   ",
-		"       and Red Dreams       ", "       Dreams of Love       ",
-		"      Beauty in Danmaku     ", "       Lost Her Dreams      ",
-		"         For Dreams         ", "     Runs Through Time      ",
-		"                            ",
-	};
-	constexpr std::array<std::string_view, 9U> names{
-		"     \x81\x5C Reimu Hakurei \x81\x5C    ",
-		"         \x81\x5C Mima \x81\x5C         ",
-		"    \x81\x5C Marisa Kirisame \x81\x5C   ",
-		"        \x81\x5C Ellen \x81\x5C         ",
-		"       \x81\x5C Kotohime \x81\x5C       ",
-		"     \x81\x5C Kana Anaberal \x81\x5C    ",
-		"    \x81\x5C Rikako Asakura \x81\x5C    ",
-		" \x81\x5C Chiyuri Kitashirakawa \x81\x5C",
-		"    \x81\x5C Yumemi Okazaki \x81\x5C    ",
-	};
 	for(std::size_t index = 0U; index < stage.characters.size(); ++index) {
-		assign_text(stage.characters[index].title, title_one[index]);
-		assign_text(stage.characters[index].title_second, title_two[index]);
-		assign_text(stage.characters[index].name, names[index]);
+		const auto id = [index](NewClassicGameTextId first) {
+			return static_cast<NewClassicGameTextId>(
+				static_cast<std::size_t>(first) + index
+			);
+		};
+		assign_text(stage.characters[index].title,
+			text.bytes(id(NewClassicGameTextId::stage_title_first_00)));
+		assign_text(stage.characters[index].title_second,
+			text.bytes(id(NewClassicGameTextId::stage_title_second_00)));
+		assign_text(stage.characters[index].name,
+			text.bytes(id(NewClassicGameTextId::stage_name_00)));
 	}
-	constexpr std::array<std::string_view, 10U> registration{
-		"  No Entry! ", "  Reimu     ", "  Mima      ", "  Marisa    ",
-		"  Ellen     ", "  Kotohime  ", "  Kana      ", "  Rikako    ",
-		"  Chiyuri   ", "  Yumemi    ",
-	};
-	for(std::size_t index = 0U; index < registration.size(); ++index) {
-		assign_text(stage.registration_playchars[index], registration[index]);
+	for(std::size_t index = 0U; index < stage.registration_playchars.size(); ++index) {
+		assign_text(stage.registration_playchars[index], text.bytes(
+			static_cast<NewClassicGameTextId>(
+				static_cast<std::size_t>(NewClassicGameTextId::registration_00) + index
+			)
+		));
 	}
 }
 

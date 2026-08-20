@@ -17,6 +17,7 @@ struct DirectVsContentPaths {
 	std::filesystem::path mainl_executable{};
 	std::filesystem::path font_rom{};
 	std::filesystem::path language_overlay{};
+	std::filesystem::path game_text_pack{};
 };
 
 struct DirectVsLaunchRequest {

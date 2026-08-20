@@ -994,6 +994,7 @@ add_library(th03_app_main STATIC
 	src/app/new_classic_assets.cpp
 	src/app/new_classic_device_scene.cpp
 	src/app/new_classic_frontend.cpp
+	src/app/new_classic_game_text.cpp
 	src/app/new_classic_joy_config_scene.cpp
 	src/app/new_classic_key_config_scene.cpp
 	src/app/new_classic_language.cpp
@@ -1271,6 +1272,11 @@ if(BUILD_TESTING)
 			NAME th03-new-classic-language-compiler-tests
 			COMMAND ${Python3_EXECUTABLE}
 				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_compile_language_pack.py
+		)
+		add_test(
+			NAME th03-new-classic-game-text-compiler-tests
+			COMMAND ${Python3_EXECUTABLE}
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_compile_game_text_pack.py
 		)
 	endif()
 	find_program(TH03_PWSH_EXECUTABLE NAMES pwsh)

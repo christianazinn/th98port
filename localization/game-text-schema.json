@@ -1,0 +1,57 @@
+{
+  "format": "T3GTL-SCHEMA-1",
+  "groups": [
+    {
+      "enum_prefix": "music_track_",
+      "id_prefix": "music.track.",
+      "first": 1,
+      "count": 19,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 32
+    },
+    {
+      "enum_prefix": "stage_title_first_",
+      "id_prefix": "stage.title-first.",
+      "first": 0,
+      "count": 9,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 28
+    },
+    {
+      "enum_prefix": "stage_title_second_",
+      "id_prefix": "stage.title-second.",
+      "first": 0,
+      "count": 9,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 28
+    },
+    {
+      "enum_prefix": "stage_name_",
+      "id_prefix": "stage.name.",
+      "first": 0,
+      "count": 9,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 28
+    },
+    {
+      "enum_prefix": "registration_",
+      "id_prefix": "registration.character.",
+      "first": 0,
+      "count": 10,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 12
+    }
+  ],
+  "messages": [
+    {"enum": "result_gauge_attack", "id": "result.gauge-attack", "encoding": "cp932", "exact_bytes": 26},
+    {"enum": "result_boss_attack", "id": "result.boss-attack", "encoding": "cp932", "exact_bytes": 26},
+    {"enum": "result_boss_flip", "id": "result.boss-flip", "encoding": "cp932", "exact_bytes": 26},
+    {"enum": "result_boss_panic", "id": "result.boss-panic", "encoding": "cp932", "exact_bytes": 26},
+    {"enum": "result_lives_left", "id": "result.lives-left", "encoding": "cp932", "exact_bytes": 26}
+  ]
+}
