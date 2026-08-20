@@ -58,7 +58,8 @@ jobs:
             libxss-dev libxkbcommon-dev libdrm-dev libgbm-dev \
             libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
             libdbus-1-dev libibus-1.0-dev libudev-dev \
-            libpipewire-0.3-dev libwayland-dev libdecor-0-dev
+            libpipewire-0.3-dev libwayland-dev libdecor-0-dev \
+            libcurl4-openssl-dev
 
       - name: Install macOS build prerequisites
         if: runner.os == 'macOS'

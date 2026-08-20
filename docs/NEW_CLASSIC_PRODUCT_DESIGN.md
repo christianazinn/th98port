@@ -603,14 +603,14 @@ platform/channel-specific signed metadata and sole monotonic release sequence;
 `tools/release/write_update_manifest.ps1` deterministically authors and
 self-verifies it from an offline P-256 key. The runtime authentication owner
 now reparses the exact bytes and verifies a unique caller-pinned P-256 SPKI
-through authenticated Mbed TLS 3.6.7. Production pin material/rotation, HTTPS
-download on Linux/macOS, product replacement, failed-update recovery,
-user-data preservation, and opt-out UI remain release infrastructure. Windows
-now has a fail-closed absolute-HTTPS adapter, and the shared manifest-first
-transaction authenticates and selects before requesting the exact signed
-artifact. Authenticated inert staging now
-binds the platform/channel/sequence and exact artifact bytes through an atomic,
-non-overwriting `.stage` transaction. These owners must not run
+through authenticated Mbed TLS 3.6.7. Production pin material/rotation,
+product replacement, failed-update recovery, user-data preservation, and
+opt-out UI remain release infrastructure. Windows now has a fail-closed
+WinHTTP absolute-HTTPS adapter, Linux and macOS have the equivalent bounded
+libcurl adapter, and the shared manifest-first transaction authenticates and
+selects before requesting the exact signed artifact. Authenticated inert
+staging now binds the platform/channel/sequence and exact artifact bytes
+through an atomic, non-overwriting `.stage` transaction. These owners must not run
 inside source-time gameplay or silently alter Classic/New Classic content
 identities. See `UPDATE_MANIFEST.md`.
 

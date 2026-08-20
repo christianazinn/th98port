@@ -164,6 +164,11 @@ Linux x86-64, macOS Apple Silicon, and macOS Intel. Every job uploads one
 archive with the product executable, replay tools, runtime libraries,
 dependency licenses, and a SHA-256 build manifest.
 
+Linux jobs use the distribution's OpenSSL-backed libcurl package for bounded
+HTTPS update acquisition; macOS jobs use the SDK-provided libcurl, and Windows
+uses WinHTTP. These adapters only download authenticated update inputs. The
+current beta package still does not replace or execute itself.
+
 The workflow never fetches or packages original TH03 content and never signs,
 notarizes, deploys, or creates a GitHub Release. Its artifacts are therefore
 development builds that still require the caller-owned inputs described below.

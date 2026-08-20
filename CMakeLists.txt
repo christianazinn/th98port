@@ -933,6 +933,23 @@ if(WIN32)
 	th03_set_warnings(th03_platform_windows_online)
 endif()
 
+if(NOT WIN32 AND TH03_ENABLE_RTC)
+	find_package(CURL REQUIRED)
+	add_library(th03_platform_curl_update STATIC
+		src/platform/curl_update.cpp
+	)
+	target_include_directories(th03_platform_curl_update PUBLIC include)
+	target_link_libraries(
+		th03_platform_curl_update
+		PUBLIC th03_app_update_authentication CURL::libcurl
+	)
+	target_compile_features(th03_platform_curl_update PUBLIC cxx_std_23)
+	set_target_properties(
+		th03_platform_curl_update PROPERTIES CXX_EXTENSIONS OFF
+	)
+	th03_set_warnings(th03_platform_curl_update)
+endif()
+
 add_executable(th03-headless apps/th03-headless/main.cpp)
 target_link_libraries(th03-headless PRIVATE th03_formats)
 th03_set_warnings(th03-headless)
@@ -982,6 +999,9 @@ if(TH03_ENABLE_SDL)
 		if(TH03_ENABLE_RTC)
 			target_link_libraries(th03-app PRIVATE th03_platform_windows_update)
 		endif()
+	endif()
+	if(NOT WIN32 AND TH03_ENABLE_RTC)
+		target_link_libraries(th03-app PRIVATE th03_platform_curl_update)
 	endif()
 	target_include_directories(th03-app PRIVATE apps/th03-app)
 	th03_set_warnings(th03-app)
@@ -1277,6 +1297,23 @@ if(BUILD_TESTING)
 		add_test(
 			NAME th03-platform-windows-update-tests
 			COMMAND th03-platform-windows-update-tests
+		)
+	endif()
+
+	if(NOT WIN32 AND TH03_ENABLE_RTC)
+		add_executable(th03-platform-curl-update-tests
+			tests/test_platform_curl_update.cpp
+		)
+		target_link_libraries(
+			th03-platform-curl-update-tests PRIVATE th03_platform_curl_update
+		)
+		target_compile_features(
+			th03-platform-curl-update-tests PRIVATE cxx_std_23
+		)
+		th03_set_warnings(th03-platform-curl-update-tests)
+		add_test(
+			NAME th03-platform-curl-update-tests
+			COMMAND th03-platform-curl-update-tests
 		)
 	endif()
 

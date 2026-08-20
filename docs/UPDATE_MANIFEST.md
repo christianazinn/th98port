@@ -74,15 +74,25 @@ runtime acquisition ceiling is 256 MiB even though the format can describe a
 larger future package. Network, status, selection, length, digest, and staging
 failures leave the product and user-data trees unchanged.
 
-`windows_update_transport()` supplies the first platform adapter. WinHTTP
+`windows_update_transport()` supplies the Windows platform adapter. WinHTTP
 accepts absolute ASCII HTTPS URLs only, uses the system proxy and certificate
 policy, forbids credentials, fragments, backslashes, and redirects, applies
 connect/request timeouts, and enforces the body limit while reading. The
 adapter is synchronous by design and must be called by a host worker; no
-source-time owner calls it. Linux and macOS adapters remain packaging work.
+source-time owner calls it.
+
+`curl_update_transport()` supplies the equivalent Linux and macOS boundary.
+It accepts the same restricted absolute-HTTPS vocabulary, pins libcurl to the
+HTTPS protocol even if a future caller enables redirects, keeps redirects
+disabled, requires ordinary certificate and host verification, applies the
+same connect/request timeouts, and aborts while receiving if the signed bound
+would be exceeded. Linux beta builds install the distribution's OpenSSL-backed
+libcurl development package; macOS packages use the SDK-provided libcurl. The
+adapter owns acquisition only. It does not authorize, apply, or execute an
+update.
 
 `tools/release/write_update_manifest.ps1` authors the format from a
 caller-owned PEM private key. Private keys and original content are never
 repository inputs. Key generation, offline custody, production public-key pin
-selection/rotation, Linux/macOS HTTPS adapters, atomic replacement, recovery,
-and visible opt-in policy remain separate release-infrastructure gates.
+selection/rotation, atomic replacement, recovery, and visible opt-in policy
+remain separate release-infrastructure gates.
