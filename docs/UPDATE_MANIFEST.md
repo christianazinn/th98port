@@ -82,12 +82,30 @@ artifact-digest verification before filesystem mutation.
 
 `install_update_for_next_launch()` joins the bounded acquisition result to
 `T3PKG001` materialization and the alternating activation store. It loads the
-current monotonic sequence before making a request, publishes only the exact
-marked immutable generation, then nominates that same full sequence/SHA-256
-identity as `pending`. Activation commits retry only a stale revision; an
-unrelated busy transition or newer release wins, leaving at most an inert
-generation for the conservative cleanup pass. It never replaces or relaunches
-the running application.
+activation sequence before making a request and takes the maximum of that
+value and the caller's compiled installed-release sequence. This prevents a
+fresh legacy install with no `PODD.UPDATE` state from accepting a correctly
+signed downgrade. It publishes only the exact marked immutable generation,
+then nominates that same full sequence/SHA-256 identity as `pending`.
+Activation commits retry only a stale revision; an unrelated busy transition
+or newer release wins, leaving at most an inert generation for the conservative
+cleanup pass. It never replaces or relaunches the running application.
+
+The release trust boundary is default-off. A configured build must explicitly
+supply all five CMake inputs:
+
+- `TH03_UPDATE_MANIFEST_URL`, a credential-free absolute HTTPS URL;
+- `TH03_UPDATE_PLATFORM`, one exact `T3UPD001` platform;
+- `TH03_UPDATE_CHANNEL`, `stable` or `beta`;
+- `TH03_UPDATE_CURRENT_SEQUENCE`, the nonzero monotonic sequence compiled into
+  that release; and
+- `TH03_UPDATE_PUBLIC_KEY_FILE`, a DER P-256 SubjectPublicKeyInfo whose bytes
+  and SHA-256-derived key ID are compiled into the executable.
+
+Supplying only some inputs is a configure error. Supplying none produces no
+compiled release configuration and therefore no update capability. Runtime
+files, settings, command-line arguments, and environment variables cannot
+replace the compiled trust root.
 
 The authenticated artifact is a `T3PKG001` product tree rather than a ZIP or
 tar archive. Its strict member/path/digest format and inert generation

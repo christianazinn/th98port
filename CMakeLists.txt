@@ -13,6 +13,113 @@ option(
 	"Install redistributable beta binaries and dependency licenses"
 	OFF
 )
+set(TH03_UPDATE_MANIFEST_URL "" CACHE STRING
+	"Compiled absolute HTTPS update-manifest URL (empty disables updates)")
+set(TH03_UPDATE_PLATFORM "" CACHE STRING
+	"Compiled update platform when updates are enabled")
+set_property(CACHE TH03_UPDATE_PLATFORM PROPERTY STRINGS
+	"" windows-standalone windows-x64 linux-x64 macos-x64 macos-arm64)
+set(TH03_UPDATE_CHANNEL "" CACHE STRING
+	"Compiled update channel when updates are enabled")
+set_property(CACHE TH03_UPDATE_CHANNEL PROPERTY STRINGS "" stable beta)
+set(TH03_UPDATE_CURRENT_SEQUENCE "" CACHE STRING
+	"Monotonic sequence of the compiled release when updates are enabled")
+set(TH03_UPDATE_PUBLIC_KEY_FILE "" CACHE FILEPATH
+	"DER P-256 SubjectPublicKeyInfo compiled as the update trust root")
+
+set(_th03_update_input_count 0)
+foreach(_input IN ITEMS
+	TH03_UPDATE_MANIFEST_URL TH03_UPDATE_PLATFORM TH03_UPDATE_CHANNEL
+	TH03_UPDATE_CURRENT_SEQUENCE TH03_UPDATE_PUBLIC_KEY_FILE
+)
+	if(NOT "${${_input}}" STREQUAL "")
+		math(EXPR _th03_update_input_count "${_th03_update_input_count} + 1")
+	endif()
+endforeach()
+
+set(TH03_UPDATE_RELEASE_CONFIGURED 0)
+set(TH03_UPDATE_PLATFORM_VALUE 1)
+set(TH03_UPDATE_CHANNEL_VALUE 2)
+set(TH03_UPDATE_KEY_ID_BYTES "")
+set(TH03_UPDATE_SPKI_BYTES "")
+set(TH03_UPDATE_SPKI_SIZE 0)
+if(NOT _th03_update_input_count EQUAL 0)
+	if(NOT _th03_update_input_count EQUAL 5)
+		message(FATAL_ERROR
+			"Update release configuration is all-or-nothing: URL, platform, "
+			"channel, current sequence, and public key file are required")
+	endif()
+	if(NOT TH03_UPDATE_MANIFEST_URL MATCHES
+		"^https://[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]+)?(/[A-Za-z0-9._~:/?%&=+,-]*)?$")
+		message(FATAL_ERROR
+			"TH03_UPDATE_MANIFEST_URL must be a credential-free absolute HTTPS URL")
+	endif()
+	if(NOT TH03_UPDATE_CURRENT_SEQUENCE MATCHES "^[1-9][0-9]*$")
+		message(FATAL_ERROR
+			"TH03_UPDATE_CURRENT_SEQUENCE must be a positive decimal integer")
+	endif()
+	string(LENGTH "${TH03_UPDATE_CURRENT_SEQUENCE}" _th03_sequence_length)
+	if(_th03_sequence_length GREATER 20 OR
+		(_th03_sequence_length EQUAL 20 AND
+		 "${TH03_UPDATE_CURRENT_SEQUENCE}" STRGREATER "18446744073709551615"))
+		message(FATAL_ERROR "TH03_UPDATE_CURRENT_SEQUENCE exceeds uint64")
+	endif()
+
+	if(TH03_UPDATE_PLATFORM STREQUAL "windows-standalone")
+		set(TH03_UPDATE_PLATFORM_VALUE 1)
+	elseif(TH03_UPDATE_PLATFORM STREQUAL "windows-x64")
+		set(TH03_UPDATE_PLATFORM_VALUE 2)
+	elseif(TH03_UPDATE_PLATFORM STREQUAL "linux-x64")
+		set(TH03_UPDATE_PLATFORM_VALUE 3)
+	elseif(TH03_UPDATE_PLATFORM STREQUAL "macos-x64")
+		set(TH03_UPDATE_PLATFORM_VALUE 4)
+	elseif(TH03_UPDATE_PLATFORM STREQUAL "macos-arm64")
+		set(TH03_UPDATE_PLATFORM_VALUE 5)
+	else()
+		message(FATAL_ERROR "Unsupported TH03_UPDATE_PLATFORM")
+	endif()
+	if(TH03_UPDATE_CHANNEL STREQUAL "stable")
+		set(TH03_UPDATE_CHANNEL_VALUE 1)
+	elseif(TH03_UPDATE_CHANNEL STREQUAL "beta")
+		set(TH03_UPDATE_CHANNEL_VALUE 2)
+	else()
+		message(FATAL_ERROR "Unsupported TH03_UPDATE_CHANNEL")
+	endif()
+
+	get_filename_component(_th03_update_public_key
+		"${TH03_UPDATE_PUBLIC_KEY_FILE}" ABSOLUTE
+		BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+	if(NOT EXISTS "${_th03_update_public_key}" OR
+		IS_DIRECTORY "${_th03_update_public_key}")
+		message(FATAL_ERROR "Update public-key file does not exist")
+	endif()
+	file(SIZE "${_th03_update_public_key}" TH03_UPDATE_SPKI_SIZE)
+	if(TH03_UPDATE_SPKI_SIZE LESS 1 OR TH03_UPDATE_SPKI_SIZE GREATER 4096)
+		message(FATAL_ERROR "Update public-key DER size is outside 1..4096 bytes")
+	endif()
+	file(READ "${_th03_update_public_key}" _th03_update_spki_hex HEX)
+	file(SHA256 "${_th03_update_public_key}" _th03_update_key_sha256)
+	string(SUBSTRING "${_th03_update_key_sha256}" 0 32 _th03_update_key_id_hex)
+	string(REGEX MATCHALL ".." _th03_update_spki_pairs
+		"${_th03_update_spki_hex}")
+	foreach(_pair IN LISTS _th03_update_spki_pairs)
+		string(APPEND TH03_UPDATE_SPKI_BYTES "std::byte{0x${_pair}U},")
+	endforeach()
+	string(REGEX MATCHALL ".." _th03_update_key_id_pairs
+		"${_th03_update_key_id_hex}")
+	foreach(_pair IN LISTS _th03_update_key_id_pairs)
+		string(APPEND TH03_UPDATE_KEY_ID_BYTES "0x${_pair}U,")
+	endforeach()
+	set(TH03_UPDATE_RELEASE_CONFIGURED 1)
+endif()
+
+set(_th03_generated_include_root "${CMAKE_CURRENT_BINARY_DIR}/generated")
+file(MAKE_DIRECTORY "${_th03_generated_include_root}/th03/app")
+configure_file(
+	cmake/update_release_config_generated.hpp.in
+	"${_th03_generated_include_root}/th03/app/update_release_config_generated.hpp"
+	@ONLY
+)
 if(TH03_PACKAGE_BETA AND MSVC)
 	# The manual tester package must not require a separately installed VC
 	# redistributable. Keep ordinary developer builds on CMake's default.
@@ -561,9 +668,13 @@ if(TH03_ENABLE_RTC)
 		src/app/update_generation.cpp
 		src/app/update_generation_cleanup.cpp
 		src/app/update_install.cpp
+		src/app/update_release_config.cpp
 		src/app/update_process_host.cpp
 	)
-	target_include_directories(th03_app_update_authentication PUBLIC include)
+	target_include_directories(th03_app_update_authentication
+		PUBLIC include
+		PRIVATE "${_th03_generated_include_root}"
+	)
 	target_link_libraries(
 		th03_app_update_authentication
 		PUBLIC th03_app_persistence
@@ -1419,6 +1530,13 @@ if(BUILD_TESTING)
 		NAME th03-app-update-package-tests
 		COMMAND th03-app-update-package-tests
 	)
+	add_test(
+		NAME th03-update-release-configuration-tests
+		COMMAND "${CMAKE_COMMAND}"
+			-DTH03_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+			-DTH03_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/update-partial-config-test
+			-P ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_update_release_configuration.cmake
+	)
 	if(TH03_ENABLE_RTC)
 		add_executable(th03-app-update-manifest-authentication-tests
 			tests/test_app_update_manifest_authentication.cpp
@@ -1443,6 +1561,9 @@ if(BUILD_TESTING)
 		)
 		add_executable(th03-app-update-install-tests
 			tests/test_app_update_install.cpp
+		)
+		add_executable(th03-app-update-release-config-tests
+			tests/test_app_update_release_config.cpp
 		)
 		target_link_libraries(
 			th03-app-update-manifest-authentication-tests
@@ -1476,6 +1597,10 @@ if(BUILD_TESTING)
 			th03-app-update-install-tests
 			PRIVATE th03_app_update_authentication
 		)
+		target_link_libraries(
+			th03-app-update-release-config-tests
+			PRIVATE th03_app_update_authentication
+		)
 		th03_set_warnings(th03-app-update-manifest-authentication-tests)
 		th03_set_warnings(th03-app-update-acquisition-tests)
 		th03_set_warnings(th03-app-update-package-materialization-tests)
@@ -1484,6 +1609,7 @@ if(BUILD_TESTING)
 		th03_set_warnings(th03-app-update-process-host-tests)
 		th03_set_warnings(th03-app-update-generation-cleanup-tests)
 		th03_set_warnings(th03-app-update-install-tests)
+		th03_set_warnings(th03-app-update-release-config-tests)
 		add_test(
 			NAME th03-app-update-activation-tests
 			COMMAND th03-app-update-activation-tests
@@ -1499,6 +1625,10 @@ if(BUILD_TESTING)
 		add_test(
 			NAME th03-app-update-generation-cleanup-tests
 			COMMAND th03-app-update-generation-cleanup-tests
+		)
+		add_test(
+			NAME th03-app-update-release-config-tests
+			COMMAND th03-app-update-release-config-tests
 		)
 	endif()
 	find_program(TH03_PWSH_EXECUTABLE pwsh)

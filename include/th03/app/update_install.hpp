@@ -55,6 +55,7 @@ install_update_for_next_launch(
 	std::span<const UpdatePinnedKey> pinned_keys,
 	UpdatePlatform platform,
 	UpdateChannel channel,
+	std::uint64_t installed_sequence,
 	const std::filesystem::path &activation_state,
 	const std::filesystem::path &generation_root,
 	const UpdateTransport &transport

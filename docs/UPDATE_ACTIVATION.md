@@ -137,8 +137,9 @@ never prevents the already-run application from returning its exit status.
 
 ## Deliberately deferred
 
-Production signing pins and visible opt-in update UI remain separate release
-gates. The executable host performs no network request and cannot activate an
-inert package by itself. The separate host-owned install transaction can
-download, materialize, and nominate only when a future caller supplies an
-explicit origin and authenticated pin set.
+Production signing material and visible opt-in update UI remain separate
+release gates. Default builds contain no update configuration. A release build
+may compile an explicit origin, platform/channel, installed-sequence floor, and
+P-256 public-key pin; only then can the separate host-owned install transaction
+download, materialize, and nominate a generation. The executable host still
+performs no request until a future visible policy invokes that transaction.

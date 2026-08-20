@@ -117,7 +117,7 @@ int main(int argc, char **argv)
 	FakeTransport transport{manifest, package};
 	const auto installed = install_update_for_next_launch(
 		manifest_url, pins, UpdatePlatform::windows_x64, UpdateChannel::beta,
-		state_path, generation_root, transport.seam()
+		parsed->sequence - 1U, state_path, generation_root, transport.seam()
 	);
 	const UpdateGenerationIdentity expected_identity{
 		.sequence = parsed->sequence,
@@ -144,7 +144,7 @@ int main(int argc, char **argv)
 	FakeTransport repeated{manifest, package};
 	const auto current = install_update_for_next_launch(
 		manifest_url, pins, UpdatePlatform::windows_x64, UpdateChannel::beta,
-		state_path, generation_root, repeated.seam()
+		parsed->sequence - 1U, state_path, generation_root, repeated.seam()
 	);
 	expect(!current && current.error().code ==
 		UpdateInstallErrorCode::acquisition && current.error().acquisition &&
@@ -159,7 +159,8 @@ int main(int argc, char **argv)
 	corrupted.artifact[0U] ^= std::byte{1U};
 	const auto wrong_digest = install_update_for_next_launch(
 		manifest_url, pins, UpdatePlatform::windows_x64, UpdateChannel::beta,
-		corrupt_state, corrupt_root, corrupted.seam()
+		parsed->sequence - 1U, corrupt_state, corrupt_root,
+		corrupted.seam()
 	);
 	const auto corrupt_loaded = load_update_activation_state(corrupt_state);
 	expect(!wrong_digest && wrong_digest.error().code ==
@@ -177,6 +178,7 @@ int main(int argc, char **argv)
 	FakeTransport bad_root_transport{manifest, package};
 	const auto bad_root = install_update_for_next_launch(
 		manifest_url, pins, UpdatePlatform::windows_x64, UpdateChannel::beta,
+		parsed->sequence - 1U,
 		temporary.path() / "bad-root-state" / "PODD.UPDATE", root_file,
 		bad_root_transport.seam()
 	);
@@ -186,6 +188,22 @@ int main(int argc, char **argv)
 		bad_root.error().materialization->code ==
 		UpdateMaterializationErrorCode::invalid_directory,
 		"invalid generation root fails before activation mutation");
+
+	const auto floor_state = temporary.path() / "floor" / "PODD.UPDATE";
+	const auto floor_root = temporary.path() / "floor" / "generations";
+	FakeTransport floor_transport{manifest, package};
+	const auto installed_floor = install_update_for_next_launch(
+		manifest_url, pins, UpdatePlatform::windows_x64, UpdateChannel::beta,
+		parsed->sequence, floor_state, floor_root, floor_transport.seam()
+	);
+	expect(!installed_floor && installed_floor.error().code ==
+		UpdateInstallErrorCode::acquisition &&
+		installed_floor.error().acquisition &&
+		installed_floor.error().acquisition->code ==
+		UpdateAcquisitionErrorCode::current_or_older &&
+		floor_transport.requests.size() == 1U &&
+		!fs::exists(floor_state) && !fs::exists(floor_root),
+		"installed release sequence rejects a signed downgrade without state");
 
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;

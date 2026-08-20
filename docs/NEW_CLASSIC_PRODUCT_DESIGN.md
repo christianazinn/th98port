@@ -621,8 +621,11 @@ prunes only atomically marked generations outside the activation keep set.
 The host install transaction now joins bounded acquisition directly to marked
 generation materialization and durable pending nomination for the next
 bootstrap launch; it neither replaces nor relaunches the running process.
-Production origin, signing pins/rotation, and the visible opt-in Updates flow
-remain release-owned gates. These owners must not run
+The release trust seam is default-off and accepts only an all-or-nothing set of
+compiled origin, exact platform/channel, installed-sequence floor, and P-256
+SPKI pin; runtime settings and environment variables cannot replace it.
+Production values, signing-key custody/rotation, and the visible opt-in Updates
+flow remain release-owned gates. These owners must not run
 inside source-time gameplay or silently alter Classic/New Classic content
 identities. See `UPDATE_MANIFEST.md`, `UPDATE_PACKAGE.md`, and
 `UPDATE_ACTIVATION.md`.

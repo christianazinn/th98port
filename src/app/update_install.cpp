@@ -2,6 +2,7 @@
 
 #include "th03/app/update_activation.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <expected>
 #include <filesystem>
@@ -44,6 +45,7 @@ install_update_for_next_launch(
 	std::span<const UpdatePinnedKey> pinned_keys,
 	UpdatePlatform platform,
 	UpdateChannel channel,
+	std::uint64_t installed_sequence,
 	const std::filesystem::path &activation_state,
 	const std::filesystem::path &generation_root,
 	const UpdateTransport &transport
@@ -56,7 +58,9 @@ install_update_for_next_launch(
 			.activation = initial.error(),
 		});
 	}
-	const auto current_sequence = initial->state.highest_sequence;
+	const auto current_sequence = std::max(
+		initial->state.highest_sequence, installed_sequence
+	);
 	auto acquired = acquire_update_payload(
 		std::move(manifest_url), pinned_keys, platform, channel,
 		current_sequence, transport

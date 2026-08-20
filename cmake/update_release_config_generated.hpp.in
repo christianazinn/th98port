@@ -1,0 +1,35 @@
+#ifndef TH03_APP_UPDATE_RELEASE_CONFIG_GENERATED_HPP
+#define TH03_APP_UPDATE_RELEASE_CONFIG_GENERATED_HPP
+
+#include "th03/app/update_manifest.hpp"
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
+
+#define TH03_UPDATE_RELEASE_CONFIGURED @TH03_UPDATE_RELEASE_CONFIGURED@
+
+namespace th03::app::generated {
+
+#if TH03_UPDATE_RELEASE_CONFIGURED
+inline constexpr std::string_view update_release_manifest_url =
+	"@TH03_UPDATE_MANIFEST_URL@";
+inline constexpr UpdatePlatform update_release_platform =
+	static_cast<UpdatePlatform>(@TH03_UPDATE_PLATFORM_VALUE@U);
+inline constexpr UpdateChannel update_release_channel =
+	static_cast<UpdateChannel>(@TH03_UPDATE_CHANNEL_VALUE@U);
+inline constexpr std::uint64_t update_release_sequence =
+	@TH03_UPDATE_CURRENT_SEQUENCE@ULL;
+inline constexpr std::array<std::uint8_t, 16U> update_release_key_id{{
+	@TH03_UPDATE_KEY_ID_BYTES@
+}};
+inline constexpr std::array<std::byte, @TH03_UPDATE_SPKI_SIZE@U>
+	update_release_spki{{
+		@TH03_UPDATE_SPKI_BYTES@
+	}};
+#endif
+
+} // namespace th03::app::generated
+
+#endif
