@@ -496,11 +496,22 @@ SdlInputBindings new_classic_netplay_story_bindings(
 	bool autofire_enabled
 ) noexcept
 {
+	return new_classic_netplay_story_bindings(
+		new_classic_default_key_config(), new_classic_default_joy_config(),
+		NewClassicDeviceAssignment{}, autofire_enabled
+	);
+}
+
+SdlInputBindings new_classic_netplay_story_bindings(
+	const NewClassicKeyConfig &keys,
+	const NewClassicJoyConfig &joy,
+	const NewClassicDeviceAssignment &device_assignment,
+	bool autofire_enabled
+) noexcept
+{
 	// A direct peer owns exactly one logical player. Reuse the ordinary New
-	// Classic Story defaults on that peer's keyboard, then let the negotiated
+	// Classic Story controls on that peer's keyboard, then let the negotiated
 	// netplay role place this local P1-shaped value into the P1 or P2 lane.
-	const auto keys = new_classic_default_key_config();
-	const auto joy = new_classic_default_joy_config();
 	SdlInputBindings bindings{};
 	bindings.charge_enabled_players = autofire_enabled ? 0x01U : 0U;
 	constexpr std::array<SdlLogicalAction, new_classic_story_action_count>
@@ -574,6 +585,8 @@ SdlInputBindings new_classic_netplay_story_bindings(
 	add_gamepad_axis(bindings, joy.vertical_axis, SdlAxisDirection::positive,
 		SdlLogicalAction::down);
 	bindings.gamepad_players.fill(SdlInputPlayer::p1);
+	bindings.identity_assignment_enabled = true;
+	bindings.device_assignment = device_assignment;
 	const auto press = static_cast<std::int32_t>(
 		(32'768 * joy.dead_zone_percent) / 100U
 	);

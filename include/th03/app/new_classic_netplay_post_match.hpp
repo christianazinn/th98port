@@ -68,6 +68,16 @@ struct NewClassicNetplayPostMatchTick final {
 	bool input_sampled = false;
 };
 
+// The terminal simulation proof is mutually acknowledged before this owner is
+// constructed. From that point onward, peer departure is transport cleanup,
+// not a failed match: the local winner scene and in-memory replay transaction
+// must remain usable at either player's pace.
+[[nodiscard]] constexpr bool
+new_classic_netplay_peer_departure_is_fatal(bool post_match_owned) noexcept
+{
+	return !post_match_owned;
+}
+
 // Source-faithful VS MAINL winner owner for a mutually confirmed direct match.
 // Networking and rollback end before construction; this owner advances only
 // the ordinary local WIN scene and publishes completion after its final fade.

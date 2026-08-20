@@ -250,6 +250,35 @@ void test_netplay_story_defaults()
 		expect(player == SdlInputPlayer::p1,
 			"every local netplay controller slot feeds the negotiated local lane");
 	}
+	auto custom_keys = th03::app::detail::new_classic_default_key_config();
+	auto custom_joy = th03::app::detail::new_classic_default_joy_config();
+	custom_keys.bindings[2U * th03::app::new_classic_player_action_count] =
+		static_cast<std::uint16_t>(SDL_SCANCODE_W);
+	custom_keys.bindings[static_cast<std::size_t>(
+		th03::app::NewClassicPlayerAction::shot
+	)] = static_cast<std::uint16_t>(SDL_SCANCODE_A);
+	custom_joy.buttons[static_cast<std::size_t>(
+		th03::app::NewClassicJoyAction::shot
+	)] = th03::app::NewClassicJoyButton::north;
+	const th03::app::NewClassicDeviceAssignment custom_device{
+		.mode = {
+			th03::app::NewClassicControllerAssignmentMode::automatic,
+			th03::app::NewClassicControllerAssignmentMode::disabled,
+		},
+	};
+	const auto custom = th03::app::detail::new_classic_netplay_story_bindings(
+		custom_keys, custom_joy, custom_device, true
+	);
+	expect(
+		key_action_matches(custom, SDL_SCANCODE_W, SdlInputPlayer::p1,
+			SdlLogicalAction::up) == 1U &&
+		key_action_matches(custom, SDL_SCANCODE_A, SdlInputPlayer::p1,
+			SdlLogicalAction::shot) == 1U,
+		"netplay projects the saved Story movement and shared action keys"
+	);
+	expect(custom.identity_assignment_enabled &&
+		custom.device_assignment == custom_device,
+		"netplay preserves the saved controller identity assignment");
 }
 
 void test_new_classic_joy_config()

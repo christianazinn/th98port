@@ -2882,7 +2882,10 @@ int run_direct_netplay_on_platform(
 	std::optional<RtcNetplayRequest> rtc_request = std::nullopt,
 	const RetainedMenuAudio *retained_menu_audio = nullptr,
 	bool *gameplay_started = nullptr,
-	bool *application_quit = nullptr
+	bool *application_quit = nullptr,
+	const th03::app::NewClassicKeyConfig *key_config = nullptr,
+	const th03::app::NewClassicJoyConfig *joy_config = nullptr,
+	const th03::app::NewClassicDeviceAssignment *device_assignment = nullptr
 )
 {
 	using th03::app::DirectVsNetplayMode;
@@ -3198,13 +3201,13 @@ int run_direct_netplay_on_platform(
 			return fail("netplay-audio-command", applied.error());
 		}
 	}
-	if(auto replaced = mapper.replace_bindings(
+	const auto local_autofire = (negotiated->contract.autofire_mask &
+		(local_player == NewClassicNetplayPlayer::player_one ? 1U : 2U)) != 0U;
+	const auto netplay_bindings = key_config && joy_config && device_assignment ?
 		th03::app::detail::new_classic_netplay_story_bindings(
-			(negotiated->contract.autofire_mask &
-				(local_player == NewClassicNetplayPlayer::player_one ? 1U : 2U)) !=
-				0U
-		)
-	); !replaced) {
+			*key_config, *joy_config, *device_assignment, local_autofire
+		) : th03::app::detail::new_classic_netplay_story_bindings(local_autofire);
+	if(auto replaced = mapper.replace_bindings(netplay_bindings); !replaced) {
 		return fail("input-bindings", replaced.error());
 	}
 	const auto publish_confirmed_audio = [&]() -> std::expected<void, int> {
@@ -3269,6 +3272,7 @@ int run_direct_netplay_on_platform(
 	std::optional<th03::app::TickTimestampNs> resume_countdown_started_ns{};
 	std::optional<std::uint8_t> resume_countdown_seconds{};
 	bool runtime_digest_peer_ack = false;
+	bool transport_detached = false;
 	bool presentation_pending = false;
 	std::uint64_t local_frames = 0U;
 	auto last_pause_signal_send_ns = start_ns - 250'000'000U;
@@ -3780,7 +3784,8 @@ int run_direct_netplay_on_platform(
 
 	for(;;) {
 		const auto now_ns = th03::platform::sdl_ticks_now_ns();
-		if(now_ns - last_network_metric_sample_ns >= 250'000'000U) {
+		if(!transport_detached &&
+			now_ns - last_network_metric_sample_ns >= 250'000'000U) {
 			if(const auto round_trip = wire.round_trip_time_ms()) {
 				latest_round_trip_time_ms = *round_trip;
 			}
@@ -3816,9 +3821,17 @@ int run_direct_netplay_on_platform(
 		}
 		audio_focus_muted = desired_focus_mute;
 
-		for(;;) {
+		for(; !transport_detached;) {
 			const auto received = wire.receive();
 			if(!received) {
+				if(!th03::app::new_classic_netplay_peer_departure_is_fatal(
+					static_cast<bool>(post_match)
+				)) {
+					transport_detached = true;
+					std::cout << "status=post-match-peer-detached\n";
+					std::cout.flush();
+					break;
+				}
 				return fail_netplay("netplay-receive", received.error());
 			}
 			if(!*received) {
@@ -4063,6 +4076,14 @@ int run_direct_netplay_on_platform(
 			if(packet->type == NewClassicNetplayDatagramType::disconnect &&
 				packet->sender == remote_player &&
 				packet->session_id == session_id) {
+				if(!th03::app::new_classic_netplay_peer_departure_is_fatal(
+					static_cast<bool>(post_match)
+				)) {
+					transport_detached = true;
+					std::cout << "status=post-match-peer-detached\n";
+					std::cout.flush();
+					break;
+				}
 				std::cout << "status=peer-left\n";
 				return show_report(
 					th03::app::NewClassicNetplayReportKind::peer_left
@@ -4172,7 +4193,7 @@ int run_direct_netplay_on_platform(
 				}
 			}
 		}
-		if(established) {
+		if(established && !transport_detached) {
 			if(const auto digests = drain_local_runtime_digests(); !digests) {
 				return digests.error();
 			}
@@ -4418,7 +4439,7 @@ int run_direct_netplay_on_platform(
 			}
 		}
 
-		if(established && pause_barrier &&
+		if(established && !transport_detached && pause_barrier &&
 			now_ns - last_pause_signal_send_ns >= 50'000'000U) {
 			const NewClassicNetplayDatagram pause_signal{
 				.type = pause_barrier->outbound_signal(),
@@ -4436,7 +4457,8 @@ int run_direct_netplay_on_platform(
 			}
 			last_pause_signal_send_ns = now_ns;
 		}
-		if(established && !post_match && newest_local_frame &&
+		if(established && !transport_detached && !post_match &&
+			newest_local_frame &&
 			th03::app::new_classic_netplay_main_session_resends_input_history(
 				(*session)->status()
 			) &&
@@ -4449,7 +4471,7 @@ int run_direct_netplay_on_platform(
 			}
 			last_send_ns = now_ns;
 		}
-		if(established) {
+		if(established && !transport_detached) {
 			if(const auto digests = drain_local_runtime_digests(); !digests) {
 				return digests.error();
 			}
@@ -6902,6 +6924,49 @@ ExperienceRunResult run_new_classic_experience(
 				.exit_code = fail("settings-load", latest_settings.error())
 			};
 		}
+		auto latest_keys = th03::app::load_new_classic_key_config(
+			key_path, key_defaults, maximum_key,
+			latest_settings->settings.options.legacy_autofire
+		);
+		if(!latest_keys) {
+			return NetplayFrontendResult{
+				.exit_code = fail("key-config-load", latest_keys.error())
+			};
+		}
+		auto latest_joy = th03::app::load_new_classic_joy_config(
+			joy_path, joy_defaults
+		);
+		if(!latest_joy) {
+			return NetplayFrontendResult{
+				.exit_code = fail("joy-config-load", latest_joy.error())
+			};
+		}
+		auto latest_device = th03::app::load_new_classic_device_assignment(
+			device_path, device_defaults
+		);
+		if(!latest_device) {
+			return NetplayFrontendResult{
+				.exit_code = fail(
+					"device-assignment-load", latest_device.error()
+				)
+			};
+		}
+		key_config = latest_keys->config;
+		joy_config = latest_joy->config;
+		device_assignment = latest_device->assignment;
+		parsed.launch.autofire_mask = key_config.autofire;
+		parsed.launch.new_classic_key_config = key_config;
+		parsed.launch.new_classic_joy_config = joy_config;
+		parsed.launch.new_classic_device_assignment = device_assignment;
+		if(auto replaced = mapper.replace_bindings(
+			th03::app::detail::new_classic_bindings(
+				key_config, joy_config, device_assignment
+			)
+		); !replaced) {
+			return NetplayFrontendResult{
+				.exit_code = fail("key-config-apply", replaced.error())
+			};
+		}
 		const auto language = patch_assets->custom_messages ?
 			patch_assets->custom_messages->asset_profile() :
 			(latest_settings->settings.options.language ==
@@ -6962,7 +7027,8 @@ ExperienceRunResult run_new_classic_experience(
 					parsed, latest_settings->settings, *room_run.launch
 				),
 				platform, mapper, std::move(*rtc), &audio,
-				&gameplay_started, &quit
+				&gameplay_started, &quit,
+				&key_config, &joy_config, &device_assignment
 			);
 			if(quit) {
 				return NetplayFrontendResult{

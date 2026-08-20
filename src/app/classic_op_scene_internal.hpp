@@ -198,7 +198,8 @@ public:
 	> resume_from_options(
 		const ClassicOpOptionsCompletion &completion,
 		std::span<const LoadedMainResource> resources,
-		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+		std::optional<GameInit> resident_override = std::nullopt
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpTitleMenuScene>,

@@ -449,7 +449,8 @@ std::expected<std::unique_ptr<ClassicOpTitleMenuScene>, ClassicOpError>
 ClassicOpTitleMenuScene::resume_from_options(
 	const ClassicOpOptionsCompletion &completion,
 	std::span<const LoadedMainResource> resources,
-	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	std::optional<GameInit> resident_override
 )
 {
 	if(completion.raster().raster_mode() != present::RasterMode::lines_400 ||
@@ -463,7 +464,8 @@ ClassicOpTitleMenuScene::resume_from_options(
 	}
 	auto result = std::unique_ptr<ClassicOpTitleMenuScene>(
 		new ClassicOpTitleMenuScene(
-			std::move(*prepared), completion.resident(), completion.raster(),
+			std::move(*prepared), resident_override.value_or(completion.resident()),
+			completion.raster(),
 			completion.tram(), completion.main_input_allowed(),
 			std::move(patch_assets)
 		)

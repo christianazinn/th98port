@@ -423,6 +423,10 @@ private:
 };
 
 struct ClassicOpSessionTestAccess final {
+	[[nodiscard]] static GameInit apply_key_config_autofire(
+		GameInit resident,
+		const std::optional<NewClassicKeyConfig> &key_config
+	) noexcept;
 	[[nodiscard]] static ClassicOpVsSurfaceSource vs_surface_source(
 		bool win,
 		bool win_completion,

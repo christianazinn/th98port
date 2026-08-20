@@ -569,6 +569,9 @@ NewClassicNetplayPostMatchRequest post_match_request(std::int8_t winner)
 
 void test_netplay_post_match_owner()
 {
+	expect(th03::app::new_classic_netplay_peer_departure_is_fatal(false) &&
+		!th03::app::new_classic_netplay_peer_departure_is_fatal(true),
+		"peer departure becomes local-only after the proven post-match owner exists");
 	SyntheticFont font;
 	auto request = post_match_request(1);
 	auto resources = resources_for(18);

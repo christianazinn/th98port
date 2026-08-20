@@ -11,6 +11,12 @@ namespace th03::app::detail {
 [[nodiscard]] platform::SdlInputBindings classic_direct_vs_bindings() noexcept;
 [[nodiscard]] platform::SdlInputBindings
 new_classic_netplay_story_bindings(bool autofire_enabled) noexcept;
+[[nodiscard]] platform::SdlInputBindings new_classic_netplay_story_bindings(
+	const NewClassicKeyConfig &key_config,
+	const NewClassicJoyConfig &joy_config,
+	const NewClassicDeviceAssignment &device_assignment,
+	bool autofire_enabled
+) noexcept;
 [[nodiscard]] NewClassicKeyConfig new_classic_default_key_config() noexcept;
 [[nodiscard]] NewClassicJoyConfig new_classic_default_joy_config() noexcept;
 [[nodiscard]] platform::SdlInputBindings new_classic_bindings(

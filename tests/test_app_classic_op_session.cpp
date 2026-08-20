@@ -419,6 +419,21 @@ Result fake_call(void *context, Function function)
 
 void test_vs_cpu_input_modes()
 {
+	th03::GameInit autofire_resident{};
+	autofire_resident.autofire_mask = 2U;
+	const auto unchanged = ClassicOpSessionTestAccess::apply_key_config_autofire(
+		autofire_resident, std::nullopt
+	);
+	const auto enabled = ClassicOpSessionTestAccess::apply_key_config_autofire(
+		autofire_resident, th03::app::NewClassicKeyConfig{.autofire = 1U}
+	);
+	const auto disabled = ClassicOpSessionTestAccess::apply_key_config_autofire(
+		autofire_resident, th03::app::NewClassicKeyConfig{.autofire = 0U}
+	);
+	expect(unchanged.autofire_mask == 2U && enabled.autofire_mask == 1U &&
+		disabled.autofire_mask == 0U,
+		"each rebuilt New Classic title projects the latest KeyConfig Autofire mask");
+
 	const th03::CoreInput physical{
 		.p1 = 0x0104U,
 		.p2 = 0x0208U,

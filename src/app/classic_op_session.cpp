@@ -92,6 +92,16 @@ namespace {
 	return result;
 }
 
+void apply_key_config_autofire(
+	GameInit &resident,
+	const std::optional<NewClassicKeyConfig> &key_config
+) noexcept
+{
+	if(key_config) {
+		resident.autofire_mask = key_config->autofire;
+	}
+}
+
 [[nodiscard]] ClassicOpSessionError font_error(AuthenticTextError error)
 {
 	auto result = session_error(ClassicOpSessionErrorCode::font_failed);
@@ -1727,6 +1737,7 @@ struct ClassicOpSessionBackend final {
 	{
 		resident.rank = static_cast<std::uint8_t>(config.rank);
 		resident.key_mode = static_cast<std::uint8_t>(config.key_mode);
+		apply_key_config_autofire(resident, key_config);
 		auto resources = loader->load_op_title_menu();
 		if(!resources) {
 			return std::unexpected(resource_error(std::move(resources.error())));
@@ -2168,8 +2179,10 @@ struct ClassicOpSessionBackend final {
 		if(!resources) {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
+		auto resident = options_completion->resident();
+		apply_key_config_autofire(resident, key_config);
 		auto resumed = ClassicOpTitleMenuScene::resume_from_options(
-			*options_completion, *resources, patch_assets
+			*options_completion, *resources, patch_assets, std::move(resident)
 		);
 		if(!resumed) {
 			return std::unexpected(title_error(std::move(resumed.error())));
@@ -5642,6 +5655,15 @@ ClassicOpVsSurfaceSource ClassicOpSessionTestAccess::vs_surface_source(
 ) noexcept
 {
 	return th03::app::vs_surface_source(win, win_completion, main_process);
+}
+
+GameInit ClassicOpSessionTestAccess::apply_key_config_autofire(
+	GameInit resident,
+	const std::optional<NewClassicKeyConfig> &key_config
+) noexcept
+{
+	th03::app::apply_key_config_autofire(resident, key_config);
+	return resident;
 }
 
 CoreInput ClassicOpSessionTestAccess::vs_cpu_main_input(
