@@ -162,8 +162,9 @@ regressions freeze the first three page/identity pairs and a Title-to-Options
 ownership transition. The aligner rejects bootstrap rows and normally rejects
 scene-entry rows as gameplay source ticks. An attested semantic nonzero
 checkpoint start instead joins Replay Patch's pre-input accelerator reveal to
-the incoming native MAIN `scene_enter`; exact-ordinal and checkpoint-zero
-captures remain source-tick-only. Every path fails closed on ambiguity under
+the incoming native MAIN `scene_enter`. The exact checkpoint-zero
+process-start reveal at sample/global/round 0 also joins `scene_enter`; later
+exact-ordinal captures remain source-tick-only. Every path fails closed on ambiguity under
 the selected key.
 
 For a bounded unattended New Classic capture, pass an exact V13 artifact and
