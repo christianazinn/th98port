@@ -105,6 +105,24 @@ struct FakeTransport final {
 
 int main(int argc, char **argv)
 {
+	bool automatic_attempted = false;
+	expect(!claim_new_classic_automatic_update_attempt(
+		false, true, automatic_attempted
+	) && !automatic_attempted,
+		"unavailable automatic checks do not consume the process latch");
+	expect(!claim_new_classic_automatic_update_attempt(
+		true, false, automatic_attempted
+	) && !automatic_attempted,
+		"disabled automatic checks do not consume the process latch");
+	expect(claim_new_classic_automatic_update_attempt(
+		true, true, automatic_attempted
+	) && automatic_attempted,
+		"first enabled capable automatic check claims the process latch");
+	expect(!claim_new_classic_automatic_update_attempt(
+		true, true, automatic_attempted
+	) && automatic_attempted,
+		"later automatic checks in the same process are suppressed");
+
 	const auto absent_runtime = parse_update_runtime_context({}, {});
 	expect(absent_runtime && !*absent_runtime,
 		"ordinary direct launch has no update runtime context");

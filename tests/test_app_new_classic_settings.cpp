@@ -89,6 +89,7 @@ legacy_settings(const NewClassicSettings &settings, std::uint8_t version)
 	const auto current = th03::app::encode_new_classic_settings(settings).value();
 	std::array<std::byte, new_classic_settings_v2_v3_file_bytes> encoded{};
 	std::copy_n(current.begin(), 23U, encoded.begin());
+	encoded[15U] &= std::byte{0x0FU};
 	encoded[7U] = static_cast<std::byte>('0' + version);
 	put_u16(encoded, 8U, version);
 	put_u16(encoded, 10U, new_classic_settings_v2_v3_file_bytes);
@@ -106,9 +107,23 @@ v4_settings(NewClassicSettings settings)
 {
 	settings.netplay.input_delay_frames = 0U;
 	auto encoded = th03::app::encode_new_classic_settings(settings).value();
+	encoded[15U] &= std::byte{0x0FU};
 	encoded[7U] = std::byte{'4'};
 	put_u16(encoded, 8U, 4U);
 	encoded[27U] = std::byte{0U};
+	put_u32(encoded, 28U, fnv1a32(
+		std::span<const std::byte>(encoded).first(28U)
+	));
+	return encoded;
+}
+
+[[nodiscard]] std::array<std::byte, new_classic_settings_file_bytes>
+v5_settings(NewClassicSettings settings)
+{
+	auto encoded = th03::app::encode_new_classic_settings(settings).value();
+	encoded[7U] = std::byte{'5'};
+	put_u16(encoded, 8U, 5U);
+	encoded[15U] &= std::byte{0x0FU};
 	put_u32(encoded, 28U, fnv1a32(
 		std::span<const std::byte>(encoded).first(28U)
 	));
@@ -204,6 +219,7 @@ void test_codec()
 		.music_volume_percent = 35U,
 		.effect_volume_percent = 80U,
 		.mute_when_unfocused = true,
+		.automatic_updates = false,
 		.window = {
 			.mode = NewClassicWindowMode::borderless_fullscreen,
 			.scale = NewClassicWindowScale::x3,
@@ -226,7 +242,7 @@ void test_codec()
 	expect(encoded && decoded && *decoded == settings,
 		"versioned New Classic settings round-trip every field");
 	expect(encoded && encoded->size() == new_classic_settings_file_bytes,
-		"New Classic settings retain the frozen 32-byte size in v5");
+		"New Classic settings retain the frozen 32-byte size in v6");
 
 	if(encoded) {
 		for(const auto mutation : std::array{
@@ -275,7 +291,8 @@ void test_codec()
 		th03::app::decode_new_classic_settings(legacy_on);
 	expect(decoded_legacy_on &&
 		decoded_legacy_on->music_volume_percent == 100U &&
-		decoded_legacy_on->effect_volume_percent == 100U,
+		decoded_legacy_on->effect_volume_percent == 100U &&
+		decoded_legacy_on->automatic_updates,
 		"v1 On flags migrate to full category levels");
 	const auto legacy_off = v1_settings(false, false);
 	const auto decoded_legacy_off =
@@ -469,7 +486,8 @@ void test_defaults_recovery_and_errors()
 		upgraded_v2->settings.music_volume_percent == 45U &&
 		upgraded_v2->settings.effect_volume_percent == 70U &&
 		!upgraded_v2->settings.mute_when_unfocused &&
-		read_bytes(v2_path)[7U] == std::byte{'5'},
+		upgraded_v2->settings.automatic_updates &&
+		read_bytes(v2_path)[7U] == std::byte{'6'},
 		"v2 documents upgrade atomically with focus mute defaulted Off");
 
 	const auto v3_path = temporary.path() / "V3.CFG";
@@ -485,7 +503,8 @@ void test_defaults_recovery_and_errors()
 		upgraded_v3->settings.mute_when_unfocused &&
 		upgraded_v3->settings.netplay ==
 			th03::app::NewClassicNetplayPreferences{} &&
-		read_bytes(v3_path)[7U] == std::byte{'5'},
+		upgraded_v3->settings.automatic_updates &&
+		read_bytes(v3_path)[7U] == std::byte{'6'},
 		"v3 documents upgrade atomically with default netplay preferences");
 
 	const auto v4_path = temporary.path() / "V4.CFG";
@@ -505,8 +524,26 @@ void test_defaults_recovery_and_errors()
 		upgraded_v4->settings.netplay.relay_only &&
 		upgraded_v4->settings.netplay.direct_udp_port == 42'424U &&
 		upgraded_v4->settings.netplay.input_delay_frames == 0U &&
-		read_bytes(v4_path)[7U] == std::byte{'5'},
+		upgraded_v4->settings.automatic_updates &&
+		read_bytes(v4_path)[7U] == std::byte{'6'},
 		"v4 documents upgrade atomically with zero input delay");
+
+	const auto v5_path = temporary.path() / "V5.CFG";
+	auto v5_fixture = NewClassicSettings{};
+	v5_fixture.mute_when_unfocused = true;
+	v5_fixture.netplay.input_delay_frames = 4U;
+	expect(write_bytes(v5_path, v5_settings(v5_fixture)),
+		"v5 settings fixture writes");
+	const auto upgraded_v5 = th03::app::load_new_classic_settings_store(
+		v5_path, classic_path
+	);
+	expect(upgraded_v5 && upgraded_v5->disposition ==
+		NewClassicSettingsStoreDisposition::upgraded_v5 &&
+		upgraded_v5->settings.mute_when_unfocused &&
+		upgraded_v5->settings.netplay.input_delay_frames == 4U &&
+		upgraded_v5->settings.automatic_updates &&
+		read_bytes(v5_path)[7U] == std::byte{'6'},
+		"v5 documents upgrade atomically with automatic updates enabled");
 
 	const auto malformed_classic = temporary.path() / "BROKEN.CFG";
 	const auto migrated_defaults = temporary.path() / "DEFAULT.CFG";

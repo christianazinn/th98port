@@ -84,6 +84,7 @@ TH03_NEW_CLASSIC_MESSAGE(option_online_privacy, "option.online-privacy", 264U, "
 TH03_NEW_CLASSIC_MESSAGE(option_credits, "option.credits", 264U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(option_diagnostics, "option.diagnostics", 264U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(option_updates, "option.updates", 264U, "", "")
+TH03_NEW_CLASSIC_MESSAGE(option_automatic_updates, "option.automatic-updates", 132U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(option_check_updates, "option.check-updates", 264U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(option_update_checking, "option.update-checking", 264U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(option_update_up_to_date, "option.update-up-to-date", 264U, "", "")

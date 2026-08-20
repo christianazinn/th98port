@@ -943,6 +943,8 @@ struct ClassicOpSessionBackend final {
 	std::optional<std::filesystem::path> pending_open_folder{};
 	bool pending_online_identity_reset = false;
 	bool pending_update_check = false;
+	bool update_check_in_progress = false;
+	std::optional<NewClassicUpdateCheckOutcome> update_check_outcome{};
 	std::optional<ClassicOpOptionsCompletion> key_config_return_options{};
 	std::unique_ptr<ClassicOpMusicRoomScene> music_room{};
 	std::optional<ClassicOpMusicRoomCompletion> music_completion{};
@@ -1939,7 +1941,13 @@ struct ClassicOpSessionBackend final {
 			new_classic_settings ?
 				new_classic_settings->effect_volume_percent : 100U,
 			new_classic_settings && new_classic_settings->mute_when_unfocused,
-			online_identity_reset_available, update_available
+			online_identity_reset_available, NewClassicUpdateUiState{
+				.available = update_available,
+				.automatic = new_classic_settings ?
+					new_classic_settings->automatic_updates : true,
+				.check_in_progress = update_check_in_progress,
+				.outcome = update_check_outcome,
+			}
 		);
 		if(!created) {
 			return std::unexpected(title_error(std::move(created.error())));
@@ -2002,12 +2010,15 @@ struct ClassicOpSessionBackend final {
 			pending_online_identity_reset = true;
 		}
 		if(tick->check_for_updates) {
-			if(!update_available || pending_update_check) {
+			if(!update_available || pending_update_check ||
+				update_check_in_progress) {
 				return std::unexpected(session_error(
 					ClassicOpSessionErrorCode::backend_contract_failed
 				));
 			}
 			pending_update_check = true;
+			update_check_in_progress = true;
+			update_check_outcome.reset();
 		}
 		if(new_classic_settings && new_classic_settings->master_volume_percent !=
 			options->master_volume_percent()) {
@@ -2026,6 +2037,8 @@ struct ClassicOpSessionBackend final {
 				options->music_volume_percent();
 			new_classic_settings->effect_volume_percent =
 				options->effect_volume_percent();
+			new_classic_settings->automatic_updates =
+				options->automatic_updates();
 			if(new_classic_settings->mute_when_unfocused !=
 				options->mute_when_unfocused()) {
 				new_classic_settings->mute_when_unfocused =
@@ -2370,7 +2383,13 @@ struct ClassicOpSessionBackend final {
 				key_config_return_options->music_volume_percent(),
 				key_config_return_options->effect_volume_percent(),
 				key_config_return_options->mute_when_unfocused(),
-				online_identity_reset_available, update_available
+				online_identity_reset_available, NewClassicUpdateUiState{
+					.available = update_available,
+					.automatic = new_classic_settings ?
+						new_classic_settings->automatic_updates : true,
+					.check_in_progress = update_check_in_progress,
+					.outcome = update_check_outcome,
+				}
 			) : joy_config_scene ?
 			ClassicOpOptionsScene::resume_after_joy_config(
 				*key_config_return_options, fm_available, *resources, patch_assets,
@@ -2380,7 +2399,13 @@ struct ClassicOpSessionBackend final {
 				key_config_return_options->music_volume_percent(),
 				key_config_return_options->effect_volume_percent(),
 				key_config_return_options->mute_when_unfocused(),
-				online_identity_reset_available, update_available
+				online_identity_reset_available, NewClassicUpdateUiState{
+					.available = update_available,
+					.automatic = new_classic_settings ?
+						new_classic_settings->automatic_updates : true,
+					.check_in_progress = update_check_in_progress,
+					.outcome = update_check_outcome,
+				}
 			) : ClassicOpOptionsScene::resume_after_key_config(
 				*key_config_return_options, fm_available, *resources, patch_assets,
 				&*font, !english_resources.empty(),
@@ -2389,7 +2414,13 @@ struct ClassicOpSessionBackend final {
 				key_config_return_options->music_volume_percent(),
 				key_config_return_options->effect_volume_percent(),
 				key_config_return_options->mute_when_unfocused(),
-				online_identity_reset_available, update_available
+				online_identity_reset_available, NewClassicUpdateUiState{
+					.available = update_available,
+					.automatic = new_classic_settings ?
+						new_classic_settings->automatic_updates : true,
+					.check_in_progress = update_check_in_progress,
+					.outcome = update_check_outcome,
+				}
 			);
 		if(!returned) {
 			return std::unexpected(title_error(std::move(returned.error())));
@@ -4458,18 +4489,42 @@ struct ClassicOpSessionBackend final {
 	}
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
-	report_update_check(NewClassicUpdateCheckOutcome outcome)
+	begin_update_check()
 	{
-		if(!options) {
+		if(!update_available || update_check_in_progress) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
-		if(auto reported = options->report_update_check(outcome); !reported) {
-			auto error = title_error(std::move(reported.error()));
-			error.code = ClassicOpSessionErrorCode::options_failed;
-			return std::unexpected(std::move(error));
+		if(options) {
+			if(auto begun = options->begin_update_check(); !begun) {
+				auto error = title_error(std::move(begun.error()));
+				error.code = ClassicOpSessionErrorCode::options_failed;
+				return std::unexpected(std::move(error));
+			}
 		}
+		update_check_in_progress = true;
+		update_check_outcome.reset();
+		return {};
+	}
+
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	report_update_check(NewClassicUpdateCheckOutcome outcome)
+	{
+		if(!update_available || !update_check_in_progress) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
+		if(options) {
+			if(auto reported = options->report_update_check(outcome); !reported) {
+				auto error = title_error(std::move(reported.error()));
+				error.code = ClassicOpSessionErrorCode::options_failed;
+				return std::unexpected(std::move(error));
+			}
+		}
+		update_check_in_progress = false;
+		update_check_outcome = outcome;
 		return {};
 	}
 
@@ -5528,6 +5583,19 @@ bool ClassicOpSession::take_update_check_request() noexcept
 	return static_cast<ClassicOpSessionBackend *>(
 		impl_->operations.context
 	)->take_update_check_request();
+}
+
+std::expected<void, ClassicOpSessionError>
+ClassicOpSession::begin_update_check()
+{
+	if(!impl_ || !impl_->operations.context) {
+		return std::unexpected(session_error(
+			ClassicOpSessionErrorCode::backend_contract_failed
+		));
+	}
+	return static_cast<ClassicOpSessionBackend *>(
+		impl_->operations.context
+	)->begin_update_check();
 }
 
 std::expected<void, ClassicOpSessionError>

@@ -867,6 +867,23 @@ bool ClassicRunner::take_new_classic_update_check_request() noexcept
 }
 
 std::expected<void, ClassicRunnerError>
+ClassicRunner::begin_new_classic_update_check()
+{
+	if(!impl_ || impl_->experience != ExperienceProfile::new_classic ||
+		impl_->operations.consume != &consume_session) {
+		return std::unexpected(runner_error(
+			ClassicRunnerErrorCode::invalid_request
+		));
+	}
+	if(auto begun = static_cast<ClassicOpSession *>(
+		impl_->operations.context
+	)->begin_update_check(); !begun) {
+		return std::unexpected(session_error(begun.error()));
+	}
+	return {};
+}
+
+std::expected<void, ClassicRunnerError>
 ClassicRunner::report_new_classic_update_check(
 	NewClassicUpdateCheckOutcome outcome
 )

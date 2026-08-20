@@ -21,6 +21,15 @@ struct UpdateRuntimeContext final {
 	const UpdateRuntimeContext &context
 ) noexcept;
 
+// Claims the sole process-lifetime automatic attempt. Unsupported/disabled
+// policy never consumes the latch, so a later capable New Classic launch in
+// the same process may still claim it.
+[[nodiscard]] bool claim_new_classic_automatic_update_attempt(
+	bool available,
+	bool enabled,
+	bool &attempted
+) noexcept;
+
 enum class UpdateRuntimeContextError : std::uint8_t {
 	incomplete,
 };

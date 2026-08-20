@@ -292,7 +292,10 @@ std::expected<
 			const bool legacy_v4 =
 				std::to_integer<std::uint8_t>((*bytes)[7U]) ==
 					static_cast<std::uint8_t>('4');
-			if(legacy_v4) {
+			const bool legacy_v5 =
+				std::to_integer<std::uint8_t>((*bytes)[7U]) ==
+					static_cast<std::uint8_t>('5');
+			if(legacy_v4 || legacy_v5) {
 				if(auto committed = commit_new_classic_settings_store(path, *decoded);
 					!committed) {
 					return std::unexpected(std::move(committed.error()));
@@ -302,7 +305,9 @@ std::expected<
 				.settings = *decoded,
 				.disposition = legacy_v4 ?
 					NewClassicSettingsStoreDisposition::upgraded_v4 :
-					NewClassicSettingsStoreDisposition::loaded,
+					(legacy_v5 ?
+						NewClassicSettingsStoreDisposition::upgraded_v5 :
+						NewClassicSettingsStoreDisposition::loaded),
 			};
 		}
 		malformed = decoded.error();

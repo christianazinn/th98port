@@ -288,7 +288,9 @@ std::unique_ptr<ClassicOpOptionsScene> make_patch_scene_if_assets_supplied(
 	auto created = ClassicOpOptionsScene::create(
 		resident, {}, true, std::move(raster), {}, menu_background(),
 		window_sheet(), std::move(assets), &font, true, 35U, {}, 100U,
-		100U, false, online_identity_reset_available, update_available
+		100U, false, online_identity_reset_available, {
+			.available = update_available,
+		}
 	);
 	expect(created.has_value(), "hierarchical Options scene creates");
 	return created ? std::move(*created) : nullptr;
@@ -319,9 +321,22 @@ void test_update_page_if_assets_supplied()
 		"update-capable System inserts Updates before Return");
 	expect(scene->advance({.ok = true}).has_value() &&
 		scene->page() == ClassicOpOptionsPage::updates &&
-		scene->selected_choice() == ClassicOpOptionsChoice::check_for_updates,
-		"Updates opens on its explicit check action");
+		scene->selected_choice() == ClassicOpOptionsChoice::automatic_updates &&
+		scene->automatic_updates(),
+		"Updates opens on its enabled automatic policy");
 	expect(scene->advance().has_value(), "Updates entry releases");
+	expect(scene->advance({.ok = true}).has_value() &&
+		!scene->automatic_updates(),
+		"Automatic toggles off through the ordinary Option input contract");
+	expect(scene->advance().has_value() &&
+		scene->advance({.right = true}).has_value() &&
+		scene->automatic_updates(),
+		"Automatic toggles on through horizontal Option input");
+	expect(scene->advance().has_value() &&
+		scene->advance({.down = true}).has_value() &&
+		scene->selected_choice() == ClassicOpOptionsChoice::check_for_updates,
+		"Updates retains a separate explicit check action");
+	expect(scene->advance().has_value(), "explicit check selection releases");
 	const auto requested = scene->advance({.ok = true});
 	expect(requested && requested->check_for_updates,
 		"Check for Updates emits one typed host request");
@@ -338,9 +353,11 @@ void test_update_page_if_assets_supplied()
 	expect(!scene->report_update_check(
 		th03::app::NewClassicUpdateCheckOutcome::failed
 	).has_value(), "an update result cannot complete twice");
-	expect(scene->advance({.ok = true}).has_value(),
-		"a completed update check can be requested again");
-	expect(scene->advance().has_value(), "second update request releases");
+	expect(scene->begin_update_check().has_value(),
+		"a host-owned automatic check can begin on the retained page");
+	const auto automatic_published = scene->advance();
+	expect(automatic_published && automatic_published->surface_changed,
+		"automatic checking status owns one source presentation boundary");
 	expect(scene->report_update_check(
 		th03::app::NewClassicUpdateCheckOutcome::restart_to_apply
 	).has_value(), "host reports the next-launch activation outcome");

@@ -111,6 +111,19 @@ bool new_classic_update_available(
 		transport.perform != nullptr;
 }
 
+bool claim_new_classic_automatic_update_attempt(
+	bool available,
+	bool enabled,
+	bool &attempted
+) noexcept
+{
+	if(!available || !enabled || attempted) {
+		return false;
+	}
+	attempted = true;
+	return true;
+}
+
 UpdateInstallTask::UpdateInstallTask(Impl *impl) noexcept : impl_(impl)
 {
 }

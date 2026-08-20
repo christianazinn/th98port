@@ -53,6 +53,7 @@ enum class ClassicOpOptionsChoice : std::uint8_t {
 	credits,
 	diagnostics,
 	updates,
+	automatic_updates,
 	open_user_data,
 	open_replay_folder,
 	open_log_folder,
@@ -194,7 +195,7 @@ public:
 		std::uint8_t effect_volume_percent = 100U,
 		bool mute_when_unfocused = false,
 		bool online_identity_reset_available = false,
-		bool update_available = false
+		NewClassicUpdateUiState update = {}
 	);
 
 	[[nodiscard]] static std::expected<
@@ -213,7 +214,7 @@ public:
 		std::uint8_t effect_volume_percent = 100U,
 		bool mute_when_unfocused = false,
 		bool online_identity_reset_available = false,
-		bool update_available = false
+		NewClassicUpdateUiState update = {}
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpOptionsScene>,
@@ -231,7 +232,7 @@ public:
 		std::uint8_t effect_volume_percent = 100U,
 		bool mute_when_unfocused = false,
 		bool online_identity_reset_available = false,
-		bool update_available = false
+		NewClassicUpdateUiState update = {}
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpOptionsScene>,
@@ -249,7 +250,7 @@ public:
 		std::uint8_t effect_volume_percent = 100U,
 		bool mute_when_unfocused = false,
 		bool online_identity_reset_available = false,
-		bool update_available = false
+		NewClassicUpdateUiState update = {}
 	);
 
 	[[nodiscard]] static std::expected<
@@ -272,8 +273,10 @@ public:
 		std::uint8_t effect_volume_percent = 100U,
 		bool mute_when_unfocused = false,
 		bool online_identity_reset_available = false,
-		bool update_available = false
+		NewClassicUpdateUiState update = {}
 	);
+	[[nodiscard]] std::expected<void, ClassicOpError>
+	begin_update_check();
 	[[nodiscard]] std::expected<void, ClassicOpError>
 	report_update_check(NewClassicUpdateCheckOutcome outcome);
 	[[nodiscard]] std::expected<void, ClassicOpError>
@@ -302,6 +305,7 @@ public:
 	[[nodiscard]] std::uint8_t music_volume_percent() const noexcept;
 	[[nodiscard]] std::uint8_t effect_volume_percent() const noexcept;
 	[[nodiscard]] bool mute_when_unfocused() const noexcept;
+	[[nodiscard]] bool automatic_updates() const noexcept;
 	[[nodiscard]] NewClassicWindowPresentation window_presentation() const noexcept;
 	[[nodiscard]] const GameInit &resident() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
@@ -330,7 +334,7 @@ private:
 		std::uint8_t effect_volume_percent,
 		bool mute_when_unfocused,
 		bool online_identity_reset_available,
-		bool update_available
+		NewClassicUpdateUiState update
 	) noexcept;
 
 	[[nodiscard]] bool restore_menu_background(
@@ -399,9 +403,7 @@ private:
 	std::uint8_t effect_volume_percent_ = 100U;
 	bool mute_when_unfocused_ = false;
 	bool online_identity_reset_available_ = false;
-	bool update_available_ = false;
-	bool update_check_in_progress_ = false;
-	std::optional<NewClassicUpdateCheckOutcome> update_check_outcome_{};
+	NewClassicUpdateUiState update_{};
 	bool external_surface_changed_ = false;
 	NewClassicWindowPresentation window_presentation_{};
 	present::Raster raster_{};

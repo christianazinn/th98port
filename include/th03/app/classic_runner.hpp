@@ -257,6 +257,8 @@ public:
 	take_new_classic_online_identity_reset_request() noexcept;
 	[[nodiscard]] bool take_new_classic_update_check_request() noexcept;
 	[[nodiscard]] std::expected<void, ClassicRunnerError>
+	begin_new_classic_update_check();
+	[[nodiscard]] std::expected<void, ClassicRunnerError>
 	report_new_classic_update_check(NewClassicUpdateCheckOutcome outcome);
 	// Host-owned online work may complete between logical ticks. This replaces
 	// one validated immutable board for a later HiScore entry; it never mutates

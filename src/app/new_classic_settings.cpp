@@ -10,6 +10,10 @@
 namespace th03::app {
 namespace {
 
+constexpr std::array<std::byte, 8U> magic_v6{
+	std::byte{'T'}, std::byte{'3'}, std::byte{'N'}, std::byte{'S'},
+	std::byte{'E'}, std::byte{'T'}, std::byte{'0'}, std::byte{'6'},
+};
 constexpr std::array<std::byte, 8U> magic_v5{
 	std::byte{'T'}, std::byte{'3'}, std::byte{'N'}, std::byte{'S'},
 	std::byte{'E'}, std::byte{'T'}, std::byte{'0'}, std::byte{'5'},
@@ -30,7 +34,8 @@ constexpr std::array<std::byte, 8U> magic_v1{
 	std::byte{'T'}, std::byte{'3'}, std::byte{'N'}, std::byte{'S'},
 	std::byte{'E'}, std::byte{'T'}, std::byte{'0'}, std::byte{'1'},
 };
-constexpr std::uint8_t known_flags = 0x0FU;
+constexpr std::uint8_t legacy_known_flags = 0x0FU;
+constexpr std::uint8_t known_flags = 0x1FU;
 
 [[nodiscard]] constexpr NewClassicSettingsError error(
 	NewClassicSettingsErrorCode code,
@@ -203,15 +208,17 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 	bool legacy_v2 = false;
 	bool legacy_v3 = false;
 	bool legacy_v4 = false;
+	bool legacy_v5 = false;
 	if(bytes.size() == new_classic_settings_v2_v3_file_bytes) {
 		legacy_v2 = std::equal(magic_v2.begin(), magic_v2.end(), bytes.begin());
 		legacy_v3 = std::equal(magic_v3.begin(), magic_v3.end(), bytes.begin());
 	} else if(bytes.size() == new_classic_settings_file_bytes) {
 		legacy_v4 = std::equal(magic_v4.begin(), magic_v4.end(), bytes.begin());
+		legacy_v5 = std::equal(magic_v5.begin(), magic_v5.end(), bytes.begin());
 	}
 	const auto &expected_magic = legacy_v1 ? magic_v1 :
 		(legacy_v2 ? magic_v2 : (legacy_v3 ? magic_v3 :
-			(legacy_v4 ? magic_v4 : magic_v5)));
+			(legacy_v4 ? magic_v4 : (legacy_v5 ? magic_v5 : magic_v6))));
 	for(std::size_t index = 0U; index < expected_magic.size(); ++index) {
 		if(bytes[index] != expected_magic[index]) {
 			return std::unexpected(error(
@@ -221,7 +228,7 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 	}
 	const auto expected_version = static_cast<std::uint16_t>(legacy_v1 ? 1U :
 		(legacy_v2 ? 2U : (legacy_v3 ? 3U : (legacy_v4 ? 4U :
-			new_classic_settings_format_version))));
+			(legacy_v5 ? 5U : new_classic_settings_format_version)))));
 	if(u16(bytes, 8U) != expected_version) {
 		return std::unexpected(error(
 			NewClassicSettingsErrorCode::version, 8U
@@ -233,7 +240,9 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 		));
 	}
 	const auto flags = byte(bytes[15U]);
-	if((flags & static_cast<std::uint8_t>(~known_flags)) != 0U) {
+	const auto allowed_flags = legacy_v1 || legacy_v2 || legacy_v3 ||
+		legacy_v4 || legacy_v5 ? legacy_known_flags : known_flags;
+	if((flags & static_cast<std::uint8_t>(~allowed_flags)) != 0U) {
 		return std::unexpected(error(
 			NewClassicSettingsErrorCode::invalid_flags, 15U
 		));
@@ -298,6 +307,8 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 			((flags & 0x01U) != 0U ? 100U : 0U) : byte(bytes[21U])),
 		.mute_when_unfocused = !legacy_v1 && !legacy_v2 &&
 			byte(bytes[22U]) != 0U,
+		.automatic_updates = legacy_v1 || legacy_v2 || legacy_v3 ||
+			legacy_v4 || legacy_v5 || (flags & 0x10U) != 0U,
 		.window = {
 			.mode = static_cast<NewClassicWindowMode>(byte(bytes[17U])),
 			.scale = static_cast<NewClassicWindowScale>(byte(bytes[18U])),
@@ -334,7 +345,7 @@ std::expected<
 		return std::unexpected(valid.error());
 	}
 	std::array<std::byte, new_classic_settings_file_bytes> bytes{};
-	std::copy(magic_v5.begin(), magic_v5.end(), bytes.begin());
+	std::copy(magic_v6.begin(), magic_v6.end(), bytes.begin());
 	put_u16(bytes, 8U, new_classic_settings_format_version);
 	put_u16(bytes, 10U, new_classic_settings_file_bytes);
 	bytes[12U] = static_cast<std::byte>(settings.options.bgm_mode);
@@ -344,7 +355,8 @@ std::expected<
 		(settings.options.sfx_enabled ? 0x01U : 0U) |
 		(settings.options.legacy_autofire ? 0x02U : 0U) |
 		(settings.options.language == ClassicLanguage::english ? 0x04U : 0U) |
-		(settings.options.reduced_flash ? 0x08U : 0U)
+		(settings.options.reduced_flash ? 0x08U : 0U) |
+		(settings.automatic_updates ? 0x10U : 0U)
 	);
 	bytes[16U] = static_cast<std::byte>(settings.master_volume_percent);
 	bytes[17U] = static_cast<std::byte>(settings.window.mode);

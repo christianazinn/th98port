@@ -5164,6 +5164,7 @@ ExperienceRunResult run_classic_session(
 	std::uint8_t music_volume_percent = 100U;
 	std::uint8_t effect_volume_percent = 100U;
 	bool mute_when_unfocused = false;
+	[[maybe_unused]] bool automatic_updates = true;
 	th03::app::NewClassicWindowPresentation window_presentation{};
 	if(new_classic) {
 		auto persisted = th03::app::load_new_classic_settings_store(
@@ -5177,6 +5178,7 @@ ExperienceRunResult run_classic_session(
 		music_volume_percent = persisted->settings.music_volume_percent;
 		effect_volume_percent = persisted->settings.effect_volume_percent;
 		mute_when_unfocused = persisted->settings.mute_when_unfocused;
+		automatic_updates = persisted->settings.automatic_updates;
 		window_presentation = persisted->settings.window;
 		if(auto applied = platform.apply_window_presentation(
 			platform_window_presentation(window_presentation)
@@ -5190,6 +5192,42 @@ ExperienceRunResult run_classic_session(
 		}
 		persisted_options = persisted->options;
 	}
+#if defined(TH03_ENABLE_UPDATE_HOST)
+	static bool automatic_update_attempted = false;
+	if(th03::app::claim_new_classic_automatic_update_attempt(
+		update_available, automatic_updates, automatic_update_attempted
+	)) {
+		if(auto begun = (*runner)->begin_new_classic_update_check(); !begun) {
+			return {.exit_code = fail("update-check-begin", begun.error())};
+		}
+		if(!update_release || !update_runtime_context) {
+			if(auto reported = (*runner)->report_new_classic_update_check(
+				th03::app::NewClassicUpdateCheckOutcome::failed
+			); !reported) {
+				return {.exit_code = fail(
+					"update-check-report", reported.error()
+				)};
+			}
+		} else {
+			auto started = th03::app::start_update_install_task(
+				*update_release, *update_runtime_context, update_transport
+			);
+			if(started) {
+				update_install_task.emplace(std::move(*started));
+			} else {
+				std::cerr << "status=warning\nstage=update-check-start\ncode="
+					<< static_cast<unsigned>(started.error().code) << '\n';
+				if(auto reported = (*runner)->report_new_classic_update_check(
+					th03::app::NewClassicUpdateCheckOutcome::failed
+				); !reported) {
+					return {.exit_code = fail(
+						"update-check-report", reported.error()
+					)};
+				}
+			}
+		}
+	}
+#endif
 	if(new_classic) {
 		if(online_origin) {
 			if(platform.oracle_enabled() || parsed.capture_replay) {
@@ -5676,9 +5714,6 @@ ExperienceRunResult run_classic_session(
 			}
 			if(auto reported =
 				(*runner)->report_new_classic_update_check(outcome); !reported) {
-				// The user may leave Options while the bounded host task runs.
-				// Installation remains valid; there is simply no retained status
-				// row left to update.
 				std::cerr << "status=warning\nstage=update-check-report\ncode="
 					<< static_cast<unsigned>(reported.error().code) << '\n';
 			}

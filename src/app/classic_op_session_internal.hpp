@@ -366,6 +366,8 @@ public:
 	[[nodiscard]] bool take_online_identity_reset_request() noexcept;
 	[[nodiscard]] bool take_update_check_request() noexcept;
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
+	begin_update_check();
+	[[nodiscard]] std::expected<void, ClassicOpSessionError>
 	report_update_check(NewClassicUpdateCheckOutcome outcome);
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
 	merge_online_board(NewClassicOnlineCacheDocument document);

@@ -273,8 +273,9 @@ portable traversal-proof package and complete inert generation materializer.
 `T3ACT001` now freezes the active/pending/previous identity transaction,
 epoch-bound trial acknowledgement, interrupted-trial rollback, and alternating
 durable state store. The packaged bootstrap, conservative generation cleanup,
-compiled trust record, background next-launch install task, and retained
-explicit `Check for Updates` flow are complete. The row exists only when the
+compiled trust record, background next-launch install task, retained explicit
+`Check for Updates` flow, and persisted automatic-check policy are complete.
+The row exists only when the
 running New Classic build has all three real capabilities: a compiled trust
 root, bootstrap-provided storage roots, and its platform HTTPS adapter. The
 source owner emits one typed request, remains responsive while the bounded host
@@ -282,6 +283,10 @@ worker runs, and renders only fixed localized `Checking`, `Up to date`,
 `Restart to apply`, or `Check failed` states. It never renders remote text or
 replaces/relaunches the running process. Default, direct, Classic,
 replay-capture, and pixel-oracle builds expose no row or disabled placeholder.
+Capable packages default to one automatic background attempt per process; the
+Updates child can disable future automatic attempts while retaining the manual
+check. Existing `PODD.CFG` documents migrate atomically with that default
+enabled.
 Production origin/pin values and signing-key custody/rotation remain release
 inputs.
 
@@ -468,8 +473,9 @@ exist:
 6. Mute When Unfocused is complete in session 185. It applies only at the
    final SDL output boundary and migrates existing settings with default Off.
 7. Online Match connection, relay policy, and Direct UDP host port persistence
-   is complete in session 260. `PODD.CFG` v4 upgrades all earlier documents;
-   the preferences remain local and never enter deterministic match state.
+   is complete in session 260. `PODD.CFG` v6 upgrades all earlier documents;
+   the preferences and automatic-update policy remain local and never enter
+   deterministic match state.
 
 Each feature becomes visible only when its apply, persistence, rollback, and
 return-to-menu paths are complete.
@@ -635,8 +641,10 @@ SPKI pin; runtime settings and environment variables cannot replace it.
 The bootstrap now passes its update storage context to every child independently
 from a trial-health token, and the background install task deep-copies the
 compiled trust record before doing bounded host-time work. A capability-shaped
-retained Updates child now starts that worker explicitly and nominates a valid
-generation for the next launch. Production values and signing-key
+retained Updates child now starts that worker explicitly or once automatically
+per capable process and nominates a valid generation for the next launch. Its
+persisted opt-out affects future processes without disabling manual checks.
+Production values and signing-key
 custody/rotation remain release-owned gates. These owners must not run
 inside source-time gameplay or silently alter Classic/New Classic content
 identities. See `UPDATE_MANIFEST.md`, `UPDATE_PACKAGE.md`, and

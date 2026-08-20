@@ -89,6 +89,7 @@
     {"enum": "option_credits", "id": "option.credits", "domain": "menu-font", "max_width": 264},
     {"enum": "option_diagnostics", "id": "option.diagnostics", "domain": "menu-font", "max_width": 264},
     {"enum": "option_updates", "id": "option.updates", "domain": "menu-font", "max_width": 264},
+    {"enum": "option_automatic_updates", "id": "option.automatic-updates", "domain": "menu-font", "max_width": 132},
     {"enum": "option_check_updates", "id": "option.check-updates", "domain": "menu-font", "max_width": 264},
     {"enum": "option_update_checking", "id": "option.update-checking", "domain": "menu-font", "max_width": 264},
     {"enum": "option_update_up_to_date", "id": "option.update-up-to-date", "domain": "menu-font", "max_width": 264},
