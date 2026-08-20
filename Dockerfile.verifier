@@ -1,0 +1,39 @@
+FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS build
+
+RUN apt-get update && apt-get install --yes --no-install-recommends \
+    ca-certificates cmake g++ ninja-build \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY . .
+RUN cmake -S . -B /build -G Ninja \
+      -DBUILD_TESTING=OFF \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DTH03_ENABLE_SDL=OFF \
+      -DTH03_ENABLE_RTC=OFF \
+    && cmake --build /build --target th03rv --parallel 2
+
+FROM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03
+
+RUN groupadd --system th03 && useradd --system --gid th03 --home /nonexistent th03
+WORKDIR /opt/th03
+COPY --from=build /build/th03rv /opt/th03/th03rv
+COPY tools/verifier-adapter/server.mjs /opt/th03/server.mjs
+COPY tools/verifier-adapter/identity.mjs /opt/th03/identity.mjs
+COPY tools/verifier-adapter/ruleset-v1.txt /opt/th03/ruleset-v1.txt
+COPY tools/verifier-adapter/runtime-v1.txt /opt/th03/runtime-v1.txt
+COPY verifier-private/ENEDAT.DAT /opt/th03/ENEDAT.DAT
+RUN chown -R root:root /opt/th03 \
+    && chmod 0555 /opt/th03/th03rv /opt/th03/server.mjs /opt/th03/identity.mjs \
+    && chmod 0444 /opt/th03/ENEDAT.DAT /opt/th03/ruleset-v1.txt /opt/th03/runtime-v1.txt
+USER th03:th03
+ENV NODE_ENV=production \
+    PORT=8080 \
+    TH03_VERIFIER_PATH=/opt/th03/th03rv \
+    TH03_ENEDAT_PATH=/opt/th03/ENEDAT.DAT \
+    TH03_ADAPTER_PATH=/opt/th03/server.mjs \
+    TH03_IDENTITY_PATH=/opt/th03/identity.mjs \
+    TH03_RULESET_PATH=/opt/th03/ruleset-v1.txt \
+    TH03_RUNTIME_CONTRACT_PATH=/opt/th03/runtime-v1.txt \
+    TH03_VERIFIER_TIMEOUT_MS=10000
+EXPOSE 8080
+CMD ["node", "/opt/th03/server.mjs"]

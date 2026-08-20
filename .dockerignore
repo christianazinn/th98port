@@ -1,0 +1,7 @@
+.git
+.scratch*
+out
+verifier-private/*
+!verifier-private/ENEDAT.DAT
+YUME.CFG
+YUME.NEM
