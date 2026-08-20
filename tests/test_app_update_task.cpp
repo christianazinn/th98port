@@ -9,6 +9,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <optional>
 #include <span>
 #include <string>
 #include <thread>
@@ -149,6 +150,25 @@ int main(int argc, char **argv)
 	};
 
 	FakeTransport transport{manifest, package};
+	const std::optional<UpdateReleaseConfiguration> configured{configuration};
+	const std::optional<UpdateRuntimeContext> runtime_available{runtime};
+	expect(new_classic_update_available(
+		true, false, false, configured, runtime_available, transport.seam()
+	), "complete New Classic update capability is advertised");
+	expect(!new_classic_update_available(
+		false, false, false, configured, runtime_available, transport.seam()
+	) && !new_classic_update_available(
+		true, true, false, configured, runtime_available, transport.seam()
+	) && !new_classic_update_available(
+		true, false, true, configured, runtime_available, transport.seam()
+	), "Classic and source-capture routes never advertise Updates");
+	expect(!new_classic_update_available(
+		true, false, false, {}, runtime_available, transport.seam()
+	) && !new_classic_update_available(
+		true, false, false, configured, {}, transport.seam()
+	) && !new_classic_update_available(
+		true, false, false, configured, runtime_available, {}
+	), "partial host update capability omits the row completely");
 	auto task = start_update_install_task(
 		configuration, runtime, transport.seam()
 	);

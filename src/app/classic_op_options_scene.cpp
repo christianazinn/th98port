@@ -140,6 +140,15 @@ constexpr std::array<ClassicOpOptionsChoice, 6U> system_choices{{
 	ClassicOpOptionsChoice::diagnostics,
 	ClassicOpOptionsChoice::return_page,
 }};
+constexpr std::array<ClassicOpOptionsChoice, 7U> system_update_choices{{
+	ClassicOpOptionsChoice::switch_classic,
+	ClassicOpOptionsChoice::data_storage,
+	ClassicOpOptionsChoice::online_privacy,
+	ClassicOpOptionsChoice::credits,
+	ClassicOpOptionsChoice::diagnostics,
+	ClassicOpOptionsChoice::updates,
+	ClassicOpOptionsChoice::return_page,
+}};
 constexpr std::array<ClassicOpOptionsChoice, 3U> data_storage_choices{{
 	ClassicOpOptionsChoice::open_user_data,
 	ClassicOpOptionsChoice::open_replay_folder,
@@ -156,6 +165,10 @@ constexpr std::array<ClassicOpOptionsChoice, 1U> credits_choices{{
 }};
 constexpr std::array<ClassicOpOptionsChoice, 2U> diagnostics_choices{{
 	ClassicOpOptionsChoice::open_log_folder,
+	ClassicOpOptionsChoice::return_page,
+}};
+constexpr std::array<ClassicOpOptionsChoice, 2U> updates_choices{{
+	ClassicOpOptionsChoice::check_for_updates,
 	ClassicOpOptionsChoice::return_page,
 }};
 constexpr std::array<NewClassicMessageId, 6U> credit_messages{{
@@ -241,6 +254,7 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 	case ClassicOpOptionsChoice::online_privacy: return NewClassicMessageId::option_online_privacy;
 	case ClassicOpOptionsChoice::credits: return NewClassicMessageId::option_credits;
 	case ClassicOpOptionsChoice::diagnostics: return NewClassicMessageId::option_diagnostics;
+	case ClassicOpOptionsChoice::updates: return NewClassicMessageId::option_updates;
 	case ClassicOpOptionsChoice::open_user_data: return NewClassicMessageId::option_open_user_data;
 	case ClassicOpOptionsChoice::open_replay_folder:
 		return NewClassicMessageId::option_open_replay_folder;
@@ -248,6 +262,8 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 		return NewClassicMessageId::option_open_log_folder;
 	case ClassicOpOptionsChoice::forget_room_identity:
 		return NewClassicMessageId::option_forget_room_identity;
+	case ClassicOpOptionsChoice::check_for_updates:
+		return NewClassicMessageId::option_check_updates;
 	case ClassicOpOptionsChoice::confirm_switch_classic: return NewClassicMessageId::option_yes;
 	case ClassicOpOptionsChoice::cancel_switch_classic: return NewClassicMessageId::option_no;
 	case ClassicOpOptionsChoice::confirm_forget_room_identity:
@@ -510,7 +526,8 @@ ClassicOpOptionsScene::ClassicOpOptionsScene(
 	std::uint8_t music_volume_percent,
 	std::uint8_t effect_volume_percent,
 	bool mute_when_unfocused,
-	bool online_identity_reset_available
+	bool online_identity_reset_available,
+	bool update_available
 ) noexcept :
 	prepared_(std::move(prepared)),
 	resident_(std::move(resident)),
@@ -520,6 +537,7 @@ ClassicOpOptionsScene::ClassicOpOptionsScene(
 	effect_volume_percent_(effect_volume_percent),
 	mute_when_unfocused_(mute_when_unfocused),
 	online_identity_reset_available_(online_identity_reset_available),
+	update_available_(update_available),
 	window_presentation_(window_presentation),
 	raster_(std::move(raster)),
 	tram_(std::move(tram)),
@@ -548,7 +566,8 @@ ClassicOpOptionsScene::create_from_op(
 	std::uint8_t music_volume_percent,
 	std::uint8_t effect_volume_percent,
 	bool mute_when_unfocused,
-	bool online_identity_reset_available
+	bool online_identity_reset_available,
+	bool update_available
 )
 {
 	if(completion.route() != ClassicOpRoute::options) {
@@ -592,7 +611,7 @@ ClassicOpOptionsScene::create_from_op(
 		std::move(patch_assets), font, language_available,
 		master_volume_percent, window_presentation, music_volume_percent,
 		effect_volume_percent, mute_when_unfocused,
-		online_identity_reset_available
+		online_identity_reset_available, update_available
 	);
 }
 
@@ -609,7 +628,8 @@ ClassicOpOptionsScene::resume_after_key_config(
 	std::uint8_t music_volume_percent,
 	std::uint8_t effect_volume_percent,
 	bool mute_when_unfocused,
-	bool online_identity_reset_available
+	bool online_identity_reset_available,
+	bool update_available
 )
 {
 	if((completion.outcome() != ClassicOpOptionsOutcome::key_config &&
@@ -657,7 +677,7 @@ ClassicOpOptionsScene::resume_after_key_config(
 		std::move(*window), std::move(patch_assets), font,
 		language_available, master_volume_percent, window_presentation,
 		music_volume_percent, effect_volume_percent, mute_when_unfocused,
-		online_identity_reset_available
+		online_identity_reset_available, update_available
 	);
 	if(!created) {
 		return std::unexpected(std::move(created.error()));
@@ -706,7 +726,8 @@ ClassicOpOptionsScene::resume_after_joy_config(
 	std::uint8_t music_volume_percent,
 	std::uint8_t effect_volume_percent,
 	bool mute_when_unfocused,
-	bool online_identity_reset_available
+	bool online_identity_reset_available,
+	bool update_available
 )
 {
 	if(completion.outcome() != ClassicOpOptionsOutcome::joy_config) {
@@ -716,7 +737,7 @@ ClassicOpOptionsScene::resume_after_joy_config(
 		completion, fm_available, resources, std::move(patch_assets), font,
 		language_available, master_volume_percent, window_presentation,
 		music_volume_percent, effect_volume_percent, mute_when_unfocused,
-		online_identity_reset_available
+		online_identity_reset_available, update_available
 	);
 }
 
@@ -733,7 +754,8 @@ ClassicOpOptionsScene::resume_after_device_scene(
 	std::uint8_t music_volume_percent,
 	std::uint8_t effect_volume_percent,
 	bool mute_when_unfocused,
-	bool online_identity_reset_available
+	bool online_identity_reset_available,
+	bool update_available
 )
 {
 	if(completion.outcome() != ClassicOpOptionsOutcome::device_assignment &&
@@ -744,7 +766,7 @@ ClassicOpOptionsScene::resume_after_device_scene(
 		completion, fm_available, resources, std::move(patch_assets), font,
 		language_available, master_volume_percent, window_presentation,
 		music_volume_percent, effect_volume_percent, mute_when_unfocused,
-		online_identity_reset_available
+		online_identity_reset_available, update_available
 	);
 }
 
@@ -765,7 +787,8 @@ ClassicOpOptionsScene::create(
 	std::uint8_t music_volume_percent,
 	std::uint8_t effect_volume_percent,
 	bool mute_when_unfocused,
-	bool online_identity_reset_available
+	bool online_identity_reset_available,
+	bool update_available
 )
 {
 	if(!classic_config_valid(config) || (patch_assets && !font) ||
@@ -787,6 +810,7 @@ ClassicOpOptionsScene::create(
 			effect_volume_percent != 100U)) ||
 		(!patch_assets && window_presentation !=
 			NewClassicWindowPresentation{}) ||
+		(!patch_assets && update_available) ||
 		resident.rank != static_cast<std::uint8_t>(config.rank) ||
 		resident.key_mode != static_cast<std::uint8_t>(config.key_mode) ||
 		(!fm_available && config.bgm_mode != ClassicBgmMode::off) ||
@@ -834,8 +858,26 @@ ClassicOpOptionsScene::create(
 		std::move(raster), std::move(tram), std::move(patch_assets),
 		language_available, master_volume_percent, window_presentation,
 		music_volume_percent, effect_volume_percent, mute_when_unfocused,
-		online_identity_reset_available
+		online_identity_reset_available, update_available
 	));
+}
+
+std::expected<void, ClassicOpError>
+ClassicOpOptionsScene::report_update_check(
+	NewClassicUpdateCheckOutcome outcome
+)
+{
+	if(!update_available_ || !update_check_in_progress_) {
+		return std::unexpected(options_error(ClassicOpErrorCode::invalid_state));
+	}
+	update_check_in_progress_ = false;
+	update_check_outcome_ = outcome;
+	if(page_ == ClassicOpOptionsPage::updates &&
+		!draw_patch_update_status()) {
+		return std::unexpected(options_error(ClassicOpErrorCode::draw_failed));
+	}
+	external_surface_changed_ = page_ == ClassicOpOptionsPage::updates;
+	return {};
 }
 
 std::expected<void, ClassicOpError>
@@ -987,7 +1029,10 @@ ClassicOpOptionsScene::active_choices() const noexcept
 	case ClassicOpOptionsPage::input: return input_choices;
 	case ClassicOpOptionsPage::video: return video_choices;
 	case ClassicOpOptionsPage::language: return language_choices;
-	case ClassicOpOptionsPage::system: return system_choices;
+	case ClassicOpOptionsPage::system:
+		return update_available_ ?
+			std::span<const ClassicOpOptionsChoice>(system_update_choices) :
+			std::span<const ClassicOpOptionsChoice>(system_choices);
 	case ClassicOpOptionsPage::data_storage: return data_storage_choices;
 	case ClassicOpOptionsPage::online_privacy:
 		return online_identity_reset_available_ ?
@@ -997,6 +1042,7 @@ ClassicOpOptionsScene::active_choices() const noexcept
 			);
 	case ClassicOpOptionsPage::credits: return credits_choices;
 	case ClassicOpOptionsPage::diagnostics: return diagnostics_choices;
+	case ClassicOpOptionsPage::updates: return updates_choices;
 	case ClassicOpOptionsPage::switch_confirmation:
 		return switch_confirmation_choices;
 	case ClassicOpOptionsPage::forget_identity_confirmation:
@@ -1044,6 +1090,8 @@ bool ClassicOpOptionsScene::open_patch_page(
 	return (page_ != ClassicOpOptionsPage::credits || draw_patch_credits()) &&
 		(page_ != ClassicOpOptionsPage::online_privacy ||
 			draw_patch_online_identity_status()) &&
+		(page_ != ClassicOpOptionsPage::updates ||
+			draw_patch_update_status()) &&
 		draw_all_option_choices();
 }
 
@@ -1092,6 +1140,12 @@ bool ClassicOpOptionsScene::return_to_patch_categories() noexcept
 	case ClassicOpOptionsPage::diagnostics:
 		page_ = ClassicOpOptionsPage::system;
 		selected_ = ClassicOpOptionsChoice::diagnostics;
+		menu_input_allowed_ = false;
+		return restore_patch_rows(0U, 7U, box_left + box_option_width) &&
+			draw_all_option_choices();
+	case ClassicOpOptionsPage::updates:
+		page_ = ClassicOpOptionsPage::system;
+		selected_ = ClassicOpOptionsChoice::updates;
 		menu_input_allowed_ = false;
 		return restore_patch_rows(0U, 7U, box_left + box_option_width) &&
 			draw_all_option_choices();
@@ -1189,10 +1243,12 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 		choice == ClassicOpOptionsChoice::online_privacy ||
 		choice == ClassicOpOptionsChoice::credits ||
 		choice == ClassicOpOptionsChoice::diagnostics ||
+		choice == ClassicOpOptionsChoice::updates ||
 		choice == ClassicOpOptionsChoice::open_user_data ||
 		choice == ClassicOpOptionsChoice::open_replay_folder ||
 		choice == ClassicOpOptionsChoice::open_log_folder ||
 		choice == ClassicOpOptionsChoice::forget_room_identity ||
+		choice == ClassicOpOptionsChoice::check_for_updates ||
 		choice == ClassicOpOptionsChoice::confirm_switch_classic ||
 		choice == ClassicOpOptionsChoice::cancel_switch_classic ||
 		choice == ClassicOpOptionsChoice::confirm_forget_room_identity ||
@@ -1321,10 +1377,12 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	case ClassicOpOptionsChoice::online_privacy:
 	case ClassicOpOptionsChoice::credits:
 	case ClassicOpOptionsChoice::diagnostics:
+	case ClassicOpOptionsChoice::updates:
 	case ClassicOpOptionsChoice::open_user_data:
 	case ClassicOpOptionsChoice::open_replay_folder:
 	case ClassicOpOptionsChoice::open_log_folder:
 	case ClassicOpOptionsChoice::forget_room_identity:
+	case ClassicOpOptionsChoice::check_for_updates:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
 	case ClassicOpOptionsChoice::cancel_switch_classic:
 	case ClassicOpOptionsChoice::confirm_forget_room_identity:
@@ -1380,6 +1438,40 @@ bool ClassicOpOptionsScene::draw_patch_online_identity_status() noexcept
 		messages.text(online_identity_reset_available_ ?
 			NewClassicMessageId::value_protected :
 			NewClassicMessageId::value_environment), 0U
+	);
+}
+
+bool ClassicOpOptionsScene::draw_patch_update_status() noexcept
+{
+	if(!patch_assets_ || page_ != ClassicOpOptionsPage::updates ||
+		!restore_patch_rows(3U, 1U, box_left + box_option_width)) {
+		return false;
+	}
+	if(!update_check_in_progress_ && !update_check_outcome_) {
+		return true;
+	}
+	NewClassicMessageId message = NewClassicMessageId::option_update_checking;
+	if(!update_check_in_progress_) {
+		switch(*update_check_outcome_) {
+		case NewClassicUpdateCheckOutcome::up_to_date:
+			message = NewClassicMessageId::option_update_up_to_date;
+			break;
+		case NewClassicUpdateCheckOutcome::restart_to_apply:
+			message = NewClassicMessageId::option_update_restart;
+			break;
+		case NewClassicUpdateCheckOutcome::failed:
+			message = NewClassicMessageId::option_update_failed;
+			break;
+		}
+	}
+	const auto &messages = patch_assets_->messages(
+		config_.language == ClassicLanguage::english ?
+			NewClassicLanguageAssetProfile::english :
+			NewClassicLanguageAssetProfile::japanese
+	);
+	return put_patch_option_centered(
+		patch_assets_->menu_font, raster_, box_option_center_x,
+		choice_top(replay_patch_box_top, 3U), messages.text(message), 0U
 	);
 }
 
@@ -1474,10 +1566,12 @@ bool ClassicOpOptionsScene::draw_option_choice(
 	case ClassicOpOptionsChoice::online_privacy:
 	case ClassicOpOptionsChoice::credits:
 	case ClassicOpOptionsChoice::diagnostics:
+	case ClassicOpOptionsChoice::updates:
 	case ClassicOpOptionsChoice::open_user_data:
 	case ClassicOpOptionsChoice::open_replay_folder:
 	case ClassicOpOptionsChoice::open_log_folder:
 	case ClassicOpOptionsChoice::forget_room_identity:
+	case ClassicOpOptionsChoice::check_for_updates:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
 	case ClassicOpOptionsChoice::cancel_switch_classic:
 	case ClassicOpOptionsChoice::confirm_forget_room_identity:
@@ -1803,10 +1897,12 @@ bool ClassicOpOptionsScene::update_horizontal(
 	case ClassicOpOptionsChoice::online_privacy:
 	case ClassicOpOptionsChoice::credits:
 	case ClassicOpOptionsChoice::diagnostics:
+	case ClassicOpOptionsChoice::updates:
 	case ClassicOpOptionsChoice::open_user_data:
 	case ClassicOpOptionsChoice::open_replay_folder:
 	case ClassicOpOptionsChoice::open_log_folder:
 	case ClassicOpOptionsChoice::forget_room_identity:
+	case ClassicOpOptionsChoice::check_for_updates:
 	case ClassicOpOptionsChoice::confirm_switch_classic:
 	case ClassicOpOptionsChoice::cancel_switch_classic:
 	case ClassicOpOptionsChoice::confirm_forget_room_identity:
@@ -1855,6 +1951,7 @@ ClassicOpOptionsTick ClassicOpOptionsScene::tick(
 	bool selection_changed,
 	bool config_changed,
 	bool forget_online_identity,
+	bool check_for_updates,
 	std::optional<ClassicOpOptionsOpenFolder> open_folder
 ) const noexcept
 {
@@ -1868,6 +1965,7 @@ ClassicOpOptionsTick ClassicOpOptionsScene::tick(
 		.config_changed = config_changed,
 		.ready = phase_ == ClassicOpOptionsPhase::ready,
 		.forget_online_identity = forget_online_identity,
+		.check_for_updates = check_for_updates,
 		.open_folder = open_folder,
 	};
 }
@@ -1936,6 +2034,9 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 		phase_ = ClassicOpOptionsPhase::options_menu;
 		return tick(ClassicOpBoundary::vsync, false, true);
 	case ClassicOpOptionsPhase::options_menu: {
+		const bool external_surface_changed = std::exchange(
+			external_surface_changed_, false
+		);
 		bool selection_changed = false;
 		bool config_changed = false;
 		bool horizontal_processed = false;
@@ -1946,6 +2047,7 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 		bool input_test_requested = false;
 		bool switch_classic_requested = false;
 		bool forget_identity_requested = false;
+		bool update_check_requested = false;
 		std::optional<ClassicOpOptionsOpenFolder> open_folder{};
 		if(!input.any()) {
 			menu_input_allowed_ = true;
@@ -2026,6 +2128,9 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 				case ClassicOpOptionsChoice::diagnostics:
 					child = ClassicOpOptionsPage::diagnostics;
 					break;
+				case ClassicOpOptionsChoice::updates:
+					child = ClassicOpOptionsPage::updates;
+					break;
 				default:
 					opens_child = false;
 					break;
@@ -2092,6 +2197,18 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 						));
 					}
 					page_changed = true;
+				} else if(selected_ ==
+					ClassicOpOptionsChoice::check_for_updates &&
+					update_available_ && !update_check_in_progress_) {
+					update_check_in_progress_ = true;
+					update_check_outcome_.reset();
+					if(!draw_patch_update_status()) {
+						fail();
+						return std::unexpected(options_error(
+							ClassicOpErrorCode::draw_failed
+						));
+					}
+					update_check_requested = true;
 				} else if(selected_ == ClassicOpOptionsChoice::open_user_data) {
 					open_folder = ClassicOpOptionsOpenFolder::user_data;
 				} else if(selected_ ==
@@ -2187,10 +2304,11 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 			transition_input_latched_ = false;
 		}
 		return tick(
-			ClassicOpBoundary::vsync, false,
-			selection_changed || horizontal_processed || page_changed, true,
+			ClassicOpBoundary::vsync, external_surface_changed,
+			selection_changed || horizontal_processed || page_changed ||
+				update_check_requested, true,
 			selection_changed, config_changed, forget_identity_requested,
-			open_folder
+			update_check_requested, open_folder
 		);
 	}
 	case ClassicOpOptionsPhase::shrink_window: {

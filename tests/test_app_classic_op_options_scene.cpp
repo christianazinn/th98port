@@ -227,9 +227,12 @@ void test_replay_patch_option_unput_if_assets_supplied()
 		"Option contraction removes all proportional labels before shrinking");
 }
 
+void enter_patch_options(ClassicOpOptionsScene &scene);
+
 std::unique_ptr<ClassicOpOptionsScene> make_patch_scene_if_assets_supplied(
 	bool localized = false,
-	bool online_identity_reset_available = false
+	bool online_identity_reset_available = false,
+	bool update_available = false
 )
 {
 #if defined(_MSC_VER)
@@ -285,10 +288,86 @@ std::unique_ptr<ClassicOpOptionsScene> make_patch_scene_if_assets_supplied(
 	auto created = ClassicOpOptionsScene::create(
 		resident, {}, true, std::move(raster), {}, menu_background(),
 		window_sheet(), std::move(assets), &font, true, 35U, {}, 100U,
-		100U, false, online_identity_reset_available
+		100U, false, online_identity_reset_available, update_available
 	);
 	expect(created.has_value(), "hierarchical Options scene creates");
 	return created ? std::move(*created) : nullptr;
+}
+
+void test_update_page_if_assets_supplied()
+{
+	auto scene = make_patch_scene_if_assets_supplied(false, false, true);
+	if(!scene) {
+		return;
+	}
+	enter_patch_options(*scene);
+	for(std::uint8_t row = 0U; row < 5U; ++row) {
+		expect(scene->advance({.down = true}).has_value() &&
+			scene->advance().has_value(),
+			"update test reaches the System category");
+	}
+	expect(scene->advance({.ok = true}).has_value() &&
+		scene->page() == ClassicOpOptionsPage::system,
+		"update-capable System page opens");
+	expect(scene->advance().has_value(), "System page releases for update test");
+	for(std::uint8_t row = 0U; row < 5U; ++row) {
+		expect(scene->advance({.down = true}).has_value() &&
+			scene->advance().has_value(),
+			"update test advances through System actions");
+	}
+	expect(scene->selected_choice() == ClassicOpOptionsChoice::updates,
+		"update-capable System inserts Updates before Return");
+	expect(scene->advance({.ok = true}).has_value() &&
+		scene->page() == ClassicOpOptionsPage::updates &&
+		scene->selected_choice() == ClassicOpOptionsChoice::check_for_updates,
+		"Updates opens on its explicit check action");
+	expect(scene->advance().has_value(), "Updates entry releases");
+	const auto requested = scene->advance({.ok = true});
+	expect(requested && requested->check_for_updates,
+		"Check for Updates emits one typed host request");
+	expect(scene->advance().has_value(), "update request releases");
+	const auto duplicate = scene->advance({.ok = true});
+	expect(duplicate && !duplicate->check_for_updates,
+		"an in-flight update check cannot be duplicated");
+	expect(scene->report_update_check(
+		th03::app::NewClassicUpdateCheckOutcome::up_to_date
+	).has_value(), "host reports a fixed up-to-date outcome");
+	const auto published = scene->advance();
+	expect(published && published->surface_changed,
+		"host update completion owns one source presentation boundary");
+	expect(!scene->report_update_check(
+		th03::app::NewClassicUpdateCheckOutcome::failed
+	).has_value(), "an update result cannot complete twice");
+	expect(scene->advance({.ok = true}).has_value(),
+		"a completed update check can be requested again");
+	expect(scene->advance().has_value(), "second update request releases");
+	expect(scene->report_update_check(
+		th03::app::NewClassicUpdateCheckOutcome::restart_to_apply
+	).has_value(), "host reports the next-launch activation outcome");
+	expect(scene->advance({.cancel = true}).has_value() &&
+		scene->page() == ClassicOpOptionsPage::system &&
+		scene->selected_choice() == ClassicOpOptionsChoice::updates,
+		"Updates Cancel restores its retained System selection");
+
+	auto hidden = make_patch_scene_if_assets_supplied(false, false, false);
+	if(!hidden) {
+		return;
+	}
+	enter_patch_options(*hidden);
+	for(std::uint8_t row = 0U; row < 5U; ++row) {
+		expect(hidden->advance({.down = true}).has_value() &&
+			hidden->advance().has_value(),
+			"default-capability test reaches System");
+	}
+	expect(hidden->advance({.ok = true}).has_value() &&
+		hidden->advance().has_value(), "default System opens and releases");
+	for(std::uint8_t row = 0U; row < 5U; ++row) {
+		expect(hidden->advance({.down = true}).has_value() &&
+			hidden->advance().has_value(),
+			"default System navigation remains compact");
+	}
+	expect(hidden->selected_choice() == ClassicOpOptionsChoice::return_page,
+		"a build without updater capability exposes no placeholder row");
 }
 
 void test_patch_option_label_widths_if_assets_supplied()
@@ -1977,6 +2056,7 @@ int main(int argc, char **argv)
 	test_patch_option_shadow_transitions_if_assets_supplied(false);
 	test_patch_option_shadow_transitions_if_assets_supplied(true);
 	test_replay_patch_option_hierarchy_if_assets_supplied();
+	test_update_page_if_assets_supplied();
 	test_environment_online_identity_if_assets_supplied();
 	test_localized_option_snapshot_if_assets_supplied();
 	test_exact_rows_and_transition_lock();

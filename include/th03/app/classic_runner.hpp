@@ -25,6 +25,7 @@
 #include "th03/formats/replay.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/app/tick_input.hpp"
+#include "th03/app/update_ui.hpp"
 #include "th03/present/main_bomb_palette.hpp"
 #include "th03/present/source_surface.hpp"
 
@@ -117,6 +118,10 @@ struct ClassicRunnerRequest final {
 	// Immutable host capability only. The retained Options owner never reads a
 	// credential; it may merely emit one confirmed reset request when true.
 	bool new_classic_online_identity_reset_available = false;
+	// Immutable host capability. The retained Options owner only exposes a
+	// typed check request; trust, network, storage, and installation remain
+	// outside source time.
+	bool new_classic_update_available = false;
 	// New Classic may enter one Replay Patch-owned route without first exposing
 	// Classic's title. The shared authenticated session still owns every child.
 	ClassicRunnerInitialRoute initial_route = ClassicRunnerInitialRoute::title;
@@ -250,6 +255,9 @@ public:
 	take_new_classic_open_folder_request() noexcept;
 	[[nodiscard]] bool
 	take_new_classic_online_identity_reset_request() noexcept;
+	[[nodiscard]] bool take_new_classic_update_check_request() noexcept;
+	[[nodiscard]] std::expected<void, ClassicRunnerError>
+	report_new_classic_update_check(NewClassicUpdateCheckOutcome outcome);
 	// Host-owned online work may complete between logical ticks. This replaces
 	// one validated immutable board for a later HiScore entry; it never mutates
 	// an already-visible menu and performs no filesystem or network work.

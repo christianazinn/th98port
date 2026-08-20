@@ -405,6 +405,7 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		(request.experience == ExperienceProfile::classic &&
 		 (request.autofire_mask != 0U || request.reduced_flash ||
 		  request.new_classic_online_identity_reset_available ||
+		  request.new_classic_update_available ||
 		  request.new_classic_online_upload_available ||
 		  !request.new_classic_online_boards.empty() ||
 		  !request.new_classic_online_my_records.empty())) ||
@@ -852,6 +853,36 @@ bool ClassicRunner::take_new_classic_online_identity_reset_request() noexcept
 	return static_cast<ClassicOpSession *>(
 		impl_->operations.context
 	)->take_online_identity_reset_request();
+}
+
+bool ClassicRunner::take_new_classic_update_check_request() noexcept
+{
+	if(!impl_ || impl_->experience != ExperienceProfile::new_classic ||
+		impl_->operations.consume != &consume_session) {
+		return false;
+	}
+	return static_cast<ClassicOpSession *>(
+		impl_->operations.context
+	)->take_update_check_request();
+}
+
+std::expected<void, ClassicRunnerError>
+ClassicRunner::report_new_classic_update_check(
+	NewClassicUpdateCheckOutcome outcome
+)
+{
+	if(!impl_ || impl_->experience != ExperienceProfile::new_classic ||
+		impl_->operations.consume != &consume_session) {
+		return std::unexpected(runner_error(
+			ClassicRunnerErrorCode::invalid_request
+		));
+	}
+	if(auto reported = static_cast<ClassicOpSession *>(
+		impl_->operations.context
+	)->report_update_check(outcome); !reported) {
+		return std::unexpected(session_error(reported.error()));
+	}
+	return {};
 }
 
 std::expected<void, ClassicRunnerError>

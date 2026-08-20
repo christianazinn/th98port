@@ -68,6 +68,11 @@
 #include "th03/app/update_bootstrap.hpp"
 #include "th03/app/update_task.hpp"
 #include "th03/platform/sdl_update_process.hpp"
+#if defined(_WIN32)
+#include "th03/platform/windows_update.hpp"
+#else
+#include "th03/platform/curl_update.hpp"
+#endif
 #endif
 #if defined(_WIN32)
 #include "th03/platform/windows_online.hpp"
@@ -5039,6 +5044,22 @@ ExperienceRunResult run_classic_session(
 #else
 	parsed.launch.new_classic_online_upload_available = false;
 #endif
+#if defined(TH03_ENABLE_UPDATE_HOST)
+	const auto &update_release =
+		th03::app::compiled_update_release_configuration();
+#if defined(_WIN32)
+	const auto update_transport = th03::platform::windows_update_transport();
+#else
+	const auto update_transport = th03::platform::curl_update_transport();
+#endif
+	const bool update_available = th03::app::new_classic_update_available(
+		new_classic, static_cast<bool>(parsed.capture_replay),
+		platform.oracle_enabled(), update_release, update_runtime_context,
+		update_transport
+	);
+	parsed.launch.new_classic_update_available = update_available;
+	std::optional<th03::app::UpdateInstallTask> update_install_task{};
+#endif
 	// The platform transport must outlive the worker that refers to it.
 	std::optional<th03::app::NewClassicOnlineBoardRefreshTask>
 		online_refresh_task{};
@@ -5618,6 +5639,52 @@ ExperienceRunResult run_classic_session(
 		},
 	};
 	while((*runner)->status() == th03::app::ClassicRunnerStatus::running) {
+#if defined(TH03_ENABLE_UPDATE_HOST)
+		if(update_install_task && update_install_task->finished()) {
+			auto outcome =
+				th03::app::NewClassicUpdateCheckOutcome::failed;
+			if(auto completed = update_install_task->take_completed()) {
+				if(*completed) {
+					switch((*completed)->status) {
+					case th03::app::UpdateInstallStatus::nominated:
+					case th03::app::UpdateInstallStatus::already_nominated:
+						outcome = th03::app::NewClassicUpdateCheckOutcome::
+							restart_to_apply;
+						break;
+					case th03::app::UpdateInstallStatus::already_active:
+						outcome = th03::app::NewClassicUpdateCheckOutcome::
+							up_to_date;
+						break;
+					}
+				} else {
+					const auto &error = completed->error();
+					if(error.code ==
+						th03::app::UpdateInstallErrorCode::acquisition &&
+						error.acquisition && error.acquisition->code ==
+						th03::app::UpdateAcquisitionErrorCode::current_or_older) {
+						outcome = th03::app::NewClassicUpdateCheckOutcome::
+							up_to_date;
+					} else {
+						std::cerr << "status=warning\nstage=update-check\ncode="
+							<< static_cast<unsigned>(error.code) << '\n';
+					}
+				}
+			} else {
+				std::cerr << "status=warning\nstage=update-check\ncode="
+					<< (update_install_task->worker_failed() ?
+						"worker-failed" : "missing-result") << '\n';
+			}
+			if(auto reported =
+				(*runner)->report_new_classic_update_check(outcome); !reported) {
+				// The user may leave Options while the bounded host task runs.
+				// Installation remains valid; there is simply no retained status
+				// row left to update.
+				std::cerr << "status=warning\nstage=update-check-report\ncode="
+					<< static_cast<unsigned>(reported.error().code) << '\n';
+			}
+			update_install_task.reset();
+		}
+#endif
 #if defined(_WIN32)
 		if(online_my_records_refresh_requested &&
 			!online_my_records_refresh_task && online_transport &&
@@ -5884,6 +5951,41 @@ ExperienceRunResult run_classic_session(
 						<< static_cast<unsigned>(opened.error().code) << '\n';
 				}
 			}
+#if defined(TH03_ENABLE_UPDATE_HOST)
+			if((*runner)->take_new_classic_update_check_request()) {
+				if(!update_available || update_install_task || !update_release ||
+					!update_runtime_context) {
+					if(auto reported =
+						(*runner)->report_new_classic_update_check(
+							th03::app::NewClassicUpdateCheckOutcome::failed
+						); !reported) {
+						return {.exit_code = fail(
+							"update-check-report", reported.error()
+						)};
+					}
+				} else {
+					auto started = th03::app::start_update_install_task(
+						*update_release, *update_runtime_context, update_transport
+					);
+					if(started) {
+						update_install_task.emplace(std::move(*started));
+					} else {
+						std::cerr << "status=warning\nstage=update-check-start\n"
+							"code=" << static_cast<unsigned>(
+								started.error().code
+							) << '\n';
+						if(auto reported =
+							(*runner)->report_new_classic_update_check(
+								th03::app::NewClassicUpdateCheckOutcome::failed
+							); !reported) {
+							return {.exit_code = fail(
+								"update-check-report", reported.error()
+							)};
+						}
+					}
+				}
+			}
+#endif
 			if((*runner)->take_new_classic_online_identity_reset_request()) {
 #if defined(_WIN32)
 				online_my_records_refresh_task.reset();

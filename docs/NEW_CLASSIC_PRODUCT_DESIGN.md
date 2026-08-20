@@ -246,7 +246,7 @@ Return
 ```
 
 Implemented now: `Switch to Classic`, `Data & Storage`, `Online & Privacy`,
-`Credits`, `Diagnostics`, and `Return`.
+capability-gated `Updates`, `Credits`, `Diagnostics`, and `Return`.
 `Data & Storage` opens the persistent user-data directory or the active replay
 directory through a typed host action after the deterministic menu tick. The
 retained owner performs no filesystem or shell work, and Classic exposes no
@@ -273,11 +273,17 @@ portable traversal-proof package and complete inert generation materializer.
 `T3ACT001` now freezes the active/pending/previous identity transaction,
 epoch-bound trial acknowledgement, interrupted-trial rollback, and alternating
 durable state store. The packaged bootstrap, conservative generation cleanup,
-compiled trust record, and background next-launch install task are complete.
-Production origin/pin values, signing-key custody/rotation, and visible opt-in
-policy remain open,
-so do not publish a disabled placeholder choice merely to make the target shape
-visible.
+compiled trust record, background next-launch install task, and retained
+explicit `Check for Updates` flow are complete. The row exists only when the
+running New Classic build has all three real capabilities: a compiled trust
+root, bootstrap-provided storage roots, and its platform HTTPS adapter. The
+source owner emits one typed request, remains responsive while the bounded host
+worker runs, and renders only fixed localized `Checking`, `Up to date`,
+`Restart to apply`, or `Check failed` states. It never renders remote text or
+replaces/relaunches the running process. Default, direct, Classic,
+replay-capture, and pixel-oracle builds expose no row or disabled placeholder.
+Production origin/pin values and signing-key custody/rotation remain release
+inputs.
 
 ## Configuration ownership
 
@@ -628,9 +634,10 @@ compiled origin, exact platform/channel, installed-sequence floor, and P-256
 SPKI pin; runtime settings and environment variables cannot replace it.
 The bootstrap now passes its update storage context to every child independently
 from a trial-health token, and the background install task deep-copies the
-compiled trust record before doing bounded host-time work. Production values,
-signing-key custody/rotation, and the visible opt-in Updates flow remain
-release-owned gates. These owners must not run
+compiled trust record before doing bounded host-time work. A capability-shaped
+retained Updates child now starts that worker explicitly and nominates a valid
+generation for the next launch. Production values and signing-key
+custody/rotation remain release-owned gates. These owners must not run
 inside source-time gameplay or silently alter Classic/New Classic content
 identities. See `UPDATE_MANIFEST.md`, `UPDATE_PACKAGE.md`, and
 `UPDATE_ACTIVATION.md`.

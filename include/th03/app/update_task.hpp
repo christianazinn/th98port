@@ -33,6 +33,18 @@ enum class UpdateRuntimeContextError : std::uint8_t {
 	std::optional<std::string_view> generation_root
 );
 
+// One capability test shared by the host and focused tests. A source capture,
+// direct/default build, partial runtime handoff, missing trust record, or
+// missing HTTPS adapter must omit the Updates row completely.
+[[nodiscard]] bool new_classic_update_available(
+	bool new_classic,
+	bool source_capture,
+	bool publication_oracle,
+	const std::optional<UpdateReleaseConfiguration> &configuration,
+	const std::optional<UpdateRuntimeContext> &runtime,
+	UpdateTransport transport
+) noexcept;
+
 enum class UpdateTaskStartErrorCode : std::uint8_t {
 	invalid_configuration,
 	invalid_runtime_context,

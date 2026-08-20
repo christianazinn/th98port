@@ -96,6 +96,21 @@ parse_update_runtime_context(
 	}};
 }
 
+bool new_classic_update_available(
+	bool new_classic,
+	bool source_capture,
+	bool publication_oracle,
+	const std::optional<UpdateReleaseConfiguration> &configuration,
+	const std::optional<UpdateRuntimeContext> &runtime,
+	UpdateTransport transport
+) noexcept
+{
+	return new_classic && !source_capture && !publication_oracle &&
+		configuration && valid_update_release_configuration(*configuration) &&
+		runtime && valid_update_runtime_context(*runtime) &&
+		transport.perform != nullptr;
+}
+
 UpdateInstallTask::UpdateInstallTask(Impl *impl) noexcept : impl_(impl)
 {
 }
