@@ -671,6 +671,20 @@ leaderboards, ratings/Elo, match history, seasons, and tournament policy remain
 long-term features after replay-backed evidence and operational moderation are
 established.
 
+### 12. Localized game content, replay-export UI, and Arrange experiments
+
+The next nice-to-have sequence is frozen in
+`NEW_CLASSIC_NICE_TO_HAVE_ROADMAP.md`. In-game graphics text and scripted
+dialogue receive a source-constrained companion to the existing MNUFONT menu
+catalog; a desktop replay-export GUI wraps the existing deterministic renderer;
+and the first Dopamine Arrange experiment enters through one explicit versioned
+rules contract. Account nametags and replay identity are intentionally last and
+remain decision-gated.
+
+Background-integrated menu headings may eventually become runtime-localized,
+but only after clean background reconstruction is available. Classic consumes
+none of these extensions.
+
 ## Release discipline
 
 Every test-worthy phase ends with:
