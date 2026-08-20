@@ -20,6 +20,8 @@ constexpr std::size_t pause_gaiji_text_left = pause_cell_left + 4U;
 constexpr std::size_t pause_title_left = pause_cell_left + 11U;
 constexpr std::size_t pause_title_row = pause_cell_top + 1U;
 constexpr std::size_t pause_choice_first_row = pause_cell_top + 2U;
+constexpr std::size_t pause_graphics_cell_height = 8U;
+constexpr std::size_t pause_choice_color_width = 29U;
 
 constexpr std::size_t pause_gaiji_title = 0U;
 constexpr std::size_t pause_gaiji_resume = 5U;
@@ -46,6 +48,53 @@ constexpr present::Index4 pause_vram_white = 15U;
 ) noexcept
 {
 	return static_cast<std::size_t>(choice);
+}
+
+[[nodiscard]] constexpr std::uint8_t pause_gaiji_id(
+	std::size_t tile
+) noexcept
+{
+	return static_cast<std::uint8_t>(
+		(tile < 32U) ? (0x30U + tile) : (0xD3U + (tile - 32U))
+	);
+}
+
+[[nodiscard]] bool put_source_color_backing(
+	present::Raster &raster,
+	std::size_t left,
+	std::size_t top,
+	std::size_t width,
+	present::Index4 color
+) noexcept
+{
+	return raster.clear({
+		.x = static_cast<std::int32_t>(left * present::ank_width),
+		.y = static_cast<std::int32_t>(top * pause_graphics_cell_height),
+		.width = static_cast<std::uint16_t>(width * present::ank_width),
+		.height = static_cast<std::uint16_t>(pause_graphics_cell_height),
+	}, color);
+}
+
+[[nodiscard]] bool put_source_gaiji(
+	present::Tram &tram,
+	std::size_t left,
+	std::size_t top,
+	std::size_t tile,
+	std::size_t count
+) noexcept
+{
+	constexpr auto attribute = static_cast<present::TramAttribute>(
+		present::tram_black | present::tram_reverse
+	);
+	for(std::size_t index = 0U; index < count; ++index) {
+		if(!tram.put_gaiji({
+			static_cast<std::int32_t>(left + (index * 2U)),
+			static_cast<std::int32_t>(top),
+		}, pause_gaiji_id(tile + index), attribute)) {
+			return false;
+		}
+	}
+	return true;
 }
 
 } // namespace
@@ -450,6 +499,123 @@ present::SourceSurface NewClassicPauseMenu::compose_over(
 	};
 }
 
+std::expected<present::SourceSurface, present::SourceSurfaceError>
+NewClassicPauseMenu::compose_source_over(
+	std::span<present::ComposedPixel, present::graphics_page_pixels> output,
+	const present::Raster &base_raster,
+	const present::Tram &base_tram,
+	const present::AnkGlyphProvider &ank
+) const
+{
+	if(!visible_ || !patch_assets_) {
+		return present::compose_source_surface(
+			output, base_raster, base_tram, ank
+		);
+	}
+	auto raster = base_raster;
+	auto tram = base_tram;
+	if(!raster.set_access_page(raster.shown_page()) ||
+		!put_source_color_backing(
+			raster,
+			pause_cell_left,
+			pause_cell_top,
+			pause_cell_width,
+			pause_vram_white
+		)) {
+		return std::unexpected(present::SourceSurfaceError{
+			present::SourceSurfaceErrorCode::invalid_raster_mode,
+		});
+	}
+	constexpr auto reverse_black = static_cast<present::TramAttribute>(
+		present::tram_black | present::tram_reverse
+	);
+	for(std::size_t y = 0U; y < pause_cell_height; ++y) {
+		for(std::size_t x = 0U; x < pause_cell_width; ++x) {
+			if(!tram.put_cell({
+				static_cast<std::int32_t>(pause_cell_left + x),
+				static_cast<std::int32_t>(pause_cell_top + y),
+			}, {' ', reverse_black})) {
+				return std::unexpected(present::SourceSurfaceError{
+					present::SourceSurfaceErrorCode::text_composition,
+				});
+			}
+		}
+	}
+	for(std::size_t tile = 0U; tile < patch_assets_->pause_gaiji.size(); ++tile) {
+		if(!tram.load_gaiji(
+			pause_gaiji_id(tile), patch_assets_->pause_gaiji[tile]
+		)) {
+			return std::unexpected(present::SourceSurfaceError{
+				present::SourceSurfaceErrorCode::text_composition,
+			});
+		}
+	}
+	if(!put_source_color_backing(
+		raster, pause_title_left, pause_title_row, 10U, pause_vram_cyan
+	) || !put_source_gaiji(
+		tram, pause_title_left, pause_title_row, pause_gaiji_title, 5U
+	)) {
+		return std::unexpected(present::SourceSurfaceError{
+			present::SourceSurfaceErrorCode::text_composition,
+		});
+	}
+	for(std::size_t index = 0U; index < 4U; ++index) {
+		const auto choice = static_cast<NewClassicPauseChoice>(index);
+		const auto color = static_cast<present::Index4>(
+			(index == 2U && !save_enabled_) ? pause_vram_blue :
+			(choice == choice_) ? pause_vram_yellow : pause_vram_white
+		);
+		const auto row = pause_choice_first_row + index;
+		if(!put_source_color_backing(
+			raster,
+			pause_choice_mark_left,
+			row,
+			pause_choice_color_width,
+			color
+		)) {
+			return std::unexpected(present::SourceSurfaceError{
+				present::SourceSurfaceErrorCode::invalid_raster_mode,
+			});
+		}
+		if(choice == choice_ && !put_source_gaiji(
+			tram,
+			pause_choice_mark_left,
+			row,
+			pause_gaiji_cursor,
+			1U
+		)) {
+			return std::unexpected(present::SourceSurfaceError{
+				present::SourceSurfaceErrorCode::text_composition,
+			});
+		}
+		std::size_t tile = pause_gaiji_resume;
+		std::size_t count = 5U;
+		switch(choice) {
+		case NewClassicPauseChoice::resume:
+			break;
+		case NewClassicPauseChoice::restart:
+			tile = pause_gaiji_restart;
+			break;
+		case NewClassicPauseChoice::save_exit:
+			tile = pause_gaiji_save_exit;
+			count = 13U;
+			break;
+		case NewClassicPauseChoice::discard_exit:
+			tile = pause_gaiji_discard_exit;
+			count = 11U;
+			break;
+		}
+		if(!put_source_gaiji(
+			tram, pause_gaiji_text_left, row, tile, count
+		)) {
+			return std::unexpected(present::SourceSurfaceError{
+				present::SourceSurfaceErrorCode::text_composition,
+			});
+		}
+	}
+	return present::compose_source_surface(output, raster, tram, ank);
+}
+
 NewClassicPauseChoice NewClassicPauseMenu::choice() const noexcept
 {
 	return choice_;
@@ -458,6 +624,11 @@ NewClassicPauseChoice NewClassicPauseMenu::choice() const noexcept
 bool NewClassicPauseMenu::save_enabled() const noexcept
 {
 	return save_enabled_;
+}
+
+bool NewClassicPauseMenu::visible() const noexcept
+{
+	return visible_;
 }
 
 bool NewClassicPauseMenu::take_rejected_save_effect() noexcept

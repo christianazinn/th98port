@@ -1048,8 +1048,40 @@ void test_authentic(
 			expect(saw_pause_beep,
 				"playback queues the source pause beep after pausing BGM");
 			const auto pause_cursor = (*paused)->sample_index();
+			auto visible_pause = (*paused)->advance({}, false, false);
+			expect(visible_pause && visible_pause->surface_changed &&
+				visible_pause->process_advanced,
+				"recorded long Pause transaction publishes its complete menu once");
+			const auto pause_identity =
+				(*paused)->pixel_oracle_source_identity();
+			expect(
+				visible_pause->pixel_oracle_source_identity.has_value() &&
+				visible_pause->pixel_oracle_source_identity->process ==
+					th03::app::PixelOracleProcess::main &&
+				visible_pause->pixel_oracle_source_identity->scene ==
+					th03::app::PixelOracleScene::pause &&
+				visible_pause->pixel_oracle_source_identity->logical_sample ==
+					pause_cursor + 1U &&
+				visible_pause->pixel_oracle_source_identity->replay_global_frame ==
+					pause_cursor + 1U,
+				"Pause mutation tick owns its post-release source identity"
+			);
+			expect(
+				pause_identity.process ==
+					th03::app::PixelOracleProcess::main &&
+				pause_identity.scene == th03::app::PixelOracleScene::pause &&
+				pause_identity.logical_sample == pause_cursor + 1U &&
+				pause_identity.replay_global_frame == pause_cursor + 1U &&
+				pause_identity.round_frame.has_value(),
+				"published Pause identity carries the menu-draw cursor and deferred frame"
+			);
+			expect(
+				(*paused)->sample_index() == pause_cursor + 1U,
+				"recorded Pause publishes immediately after its opening release"
+			);
 			auto resumed = (*paused)->advance({}, false, false);
-			expect(resumed.has_value(),
+			expect(resumed && resumed->surface_changed &&
+				resumed->process_advanced,
 				"recorded long Pause transaction preserves the playback contract");
 			bool saw_resume = false;
 			bool saw_resume_beep = false;

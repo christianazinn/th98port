@@ -110,9 +110,22 @@ public:
 	[[nodiscard]] present::SourceSurface compose_over(
 		present::SourceSurface base
 	) noexcept;
+	[[nodiscard]] std::expected<
+		present::SourceSurface,
+		present::SourceSurfaceError
+	> compose_source_over(
+		std::span<
+			present::ComposedPixel,
+			present::graphics_page_pixels
+		> output,
+		const present::Raster &base_raster,
+		const present::Tram &base_tram,
+		const present::AnkGlyphProvider &ank
+	) const;
 
 	[[nodiscard]] NewClassicPauseChoice choice() const noexcept;
 	[[nodiscard]] bool save_enabled() const noexcept;
+	[[nodiscard]] bool visible() const noexcept;
 	[[nodiscard]] bool take_rejected_save_effect() noexcept;
 	void set_resume_countdown(std::optional<std::uint8_t> seconds) noexcept;
 	[[nodiscard]] std::optional<std::uint8_t>

@@ -2,12 +2,30 @@
 #include <cstddef>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "th03/app/new_classic_assets.hpp"
 #include "th03/app/new_classic_pause.hpp"
 
 namespace {
+
+class BlankAnk final : public th03::present::AnkGlyphProvider {
+public:
+	[[nodiscard]] std::optional<th03::present::AnkGlyph> glyph(
+		std::uint8_t
+	) const override
+	{
+		return th03::present::AnkGlyph{};
+	}
+
+	[[nodiscard]] std::optional<th03::present::JisGlyph> jis_glyph(
+		std::uint16_t
+	) const override
+	{
+		return std::nullopt;
+	}
+};
 
 std::size_t checks = 0U;
 std::size_t failures = 0U;
@@ -193,6 +211,46 @@ void test_overlay_preserves_base_and_palette()
 		!overlay.oracle_hashes.has_value(),
 		"pause overlay retains guest selectors but drops stale frozen fingerprints"
 	);
+
+	th03::present::Raster source_raster{};
+	th03::present::Tram source_tram{};
+	source_tram.fill({' ', th03::present::tram_white});
+	expect(source_raster.set_access_page(th03::present::Page::one) &&
+		source_raster.clear({0, 0, 640U, 400U}, 3U) &&
+		source_raster.set_raster_mode(
+			th03::present::RasterMode::zoomed_200_upper
+		) && source_raster.set_shown_page(th03::present::Page::one) &&
+		source_raster.set_access_page(th03::present::Page::zero),
+		"source Pause fixture establishes independent shown/access pages");
+	std::vector<th03::present::ComposedPixel> source_pixels(
+		th03::present::graphics_page_pixels
+	);
+	const auto frozen_raster_hash = source_raster.display_state_hash();
+	th03::present::set_source_surface_oracle_hashes_enabled(true);
+	const auto source_overlay = menu.compose_source_over(
+		std::span<th03::present::ComposedPixel,
+			th03::present::graphics_page_pixels>(
+			source_pixels.data(), source_pixels.size()
+		),
+		source_raster, source_tram, BlankAnk{}
+	);
+	th03::present::set_source_surface_oracle_hashes_enabled(false);
+	expect(source_overlay.has_value(),
+		"source Pause composition succeeds");
+	if(source_overlay) {
+		expect(source_overlay->oracle_hashes.has_value() &&
+			source_overlay->oracle_hashes->raster_display != frozen_raster_hash,
+			"source Pause composition hashes its Raster modal");
+		expect(source_raster.display_state_hash() == frozen_raster_hash,
+			"source Pause composition leaves its caller frozen");
+		expect(source_overlay->shown_page == th03::present::Page::one,
+			"source Pause composition retains the shown page");
+		expect(source_overlay->pixels[modal_top_left] ==
+			th03::present::ComposedPixel{
+				th03::present::ComposedPixelLayer::text, 0U
+			},
+			"source Pause composition resolves the reverse-black modal");
+	}
 
 	NewClassicPauseMenu unavailable(true);
 	release(unavailable);

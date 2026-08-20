@@ -361,7 +361,9 @@ struct NewClassicReplayPlayback::Impl final {
 		}
 		if(process && identity.process == PixelOracleProcess::main) {
 			const auto state = process->canonical_state();
-			identity.replay_global_frame = state.global_frame;
+			if(identity.scene != PixelOracleScene::pause) {
+				identity.replay_global_frame = state.global_frame;
+			}
 			identity.round_frame = state.round_frame;
 		}
 		return identity;
@@ -1295,9 +1297,10 @@ NewClassicReplayPlayback::advance(
 	}
 	if(impl_->pause_menu) {
 		// Replay Patch 0.4.6-rc8 removed the VSync wait from replay-owned
-		// Pause samples. Consume the complete recorded menu transaction in
-		// order at this one host boundary; physical Esc/application quit were
-		// already honored above, and PMD remains paused until the final action.
+		// Pause samples. Publish the complete menu after its opening release,
+		// then consume the rest of the recorded transaction in order at the
+		// next host boundary. Physical Esc/application quit were already honored
+		// above, and PMD remains paused until the final action.
 		NewClassicPlaybackTick result{
 			.surface_changed = false,
 			.process_advanced = false,
@@ -1320,6 +1323,7 @@ NewClassicReplayPlayback::advance(
 					NewClassicPlaybackErrorCode::replay_contract_failed
 				));
 			}
+			const bool was_visible = impl_->pause_menu->visible();
 			const auto pause_status = impl_->pause_menu->consume(
 				project_new_classic_pause_input(sample->input)
 			);
@@ -1336,6 +1340,15 @@ NewClassicReplayPlayback::advance(
 			if(pause_status == NewClassicPauseStatus::running) {
 				++impl_->record_index;
 				++impl_->sample_index;
+				// PC-98 draws the complete menu in place after the opening input
+				// release. Give that source-visible mutation one host publication,
+				// then consume every remaining recorded Pause sample at the next
+				// boundary. Long neutral stretches therefore remain accelerated.
+				if(!was_visible && impl_->pause_menu->visible()) {
+					result.pixel_oracle_source_identity =
+						impl_->pixel_oracle_source_identity();
+					return result;
+				}
 				continue;
 			}
 			const bool resume = pause_status == NewClassicPauseStatus::resume;
@@ -1805,6 +1818,22 @@ NewClassicReplayPlayback::compose_shown_surface(
 		return std::unexpected(std::move(surface.error()));
 	}
 	if(impl_->pause_menu) {
+		if(present::source_surface_oracle_hashes_enabled() && impl_->process) {
+			auto composed = impl_->pause_menu->compose_source_over(
+				output,
+				impl_->process->raster(),
+				impl_->process->tram(),
+				impl_->static_content->font()
+			);
+			if(!composed) {
+				auto error = playback_error(
+					NewClassicPlaybackErrorCode::surface_failed
+				);
+				error.surface = std::move(composed.error());
+				return std::unexpected(std::move(error));
+			}
+			return *composed;
+		}
 		return impl_->pause_menu->compose_over(*surface);
 	}
 	auto result = *surface;
