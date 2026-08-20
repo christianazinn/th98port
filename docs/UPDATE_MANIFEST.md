@@ -42,8 +42,17 @@ signed old artifact from replacing a newer installation. A downloader must
 also require the requested platform/channel, exact artifact length/SHA-256,
 and a locally pinned key ID before making a staged artifact executable.
 
+`authenticate_update_manifest()` is the runtime authentication boundary in
+SDL/RTC product builds. It reparses the complete document, requires exactly one
+caller-pinned key ID, recomputes the first 16 bytes of SHA-256 over that pin's
+complete DER SubjectPublicKeyInfo, rejects every non-ECDSA or non-P-256 key,
+and verifies the P1363 signature over the exact parsed prefix through the
+authenticated Mbed TLS 3.6.7 provider. The dependency-free parser remains
+available to headless/core builds, but structural parsing alone is never an
+authorization decision.
+
 `tools/release/write_update_manifest.ps1` authors the format from a
 caller-owned PEM private key. Private keys and original content are never
-repository inputs. Key generation, offline custody, public-key rotation,
-download, atomic replacement, recovery, and visible opt-in policy remain
-separate release-infrastructure gates.
+repository inputs. Key generation, offline custody, production public-key pin
+selection/rotation, download, atomic replacement, recovery, and visible opt-in
+policy remain separate release-infrastructure gates.

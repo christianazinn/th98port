@@ -4,11 +4,23 @@ param(
 	[Parameter(Mandatory = $true)]
 	[string]$Signer,
 	[Parameter(Mandatory = $true)]
-	[string]$Artifact
+	[string]$Artifact,
+	[string]$Verifier = ""
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+
+function Write-ReboundManifest(
+	[byte[]]$Source,
+	[byte[]]$PublicKey,
+	[string]$Path
+) {
+	[byte[]]$rebound = $Source.Clone()
+	$keyDigest = [Security.Cryptography.SHA256]::HashData($PublicKey)
+	[Array]::Copy($keyDigest, 0, $rebound, 80, 16)
+	[IO.File]::WriteAllBytes($Path, $rebound)
+}
 
 $temporary = [IO.Directory]::CreateTempSubdirectory("th03-update-manifest-")
 try {
@@ -52,11 +64,13 @@ try {
 		Where-Object { $_.StartsWith("spki-base64=", [StringComparison]::Ordinal) }
 	if($null -eq $spkiLine) { throw "Public-key output lacks SPKI" }
 	$spki = [Convert]::FromBase64String($spkiLine.Substring(12))
-	$verifier = [Security.Cryptography.ECDsa]::Create()
+	$publicDer = Join-Path $temporary.FullName "public.der"
+	[IO.File]::WriteAllBytes($publicDer, $spki)
+	$signatureVerifier = [Security.Cryptography.ECDsa]::Create()
 	try {
 		$bytesRead = 0
-		$verifier.ImportSubjectPublicKeyInfo($spki, [ref]$bytesRead)
-		if($bytesRead -ne $spki.Length -or -not $verifier.VerifyData(
+		$signatureVerifier.ImportSubjectPublicKeyInfo($spki, [ref]$bytesRead)
+		if($bytesRead -ne $spki.Length -or -not $signatureVerifier.VerifyData(
 			$prefix,
 			$signature,
 			[Security.Cryptography.HashAlgorithmName]::SHA256,
@@ -65,7 +79,7 @@ try {
 			throw "Independent signature verification failed"
 		}
 	} finally {
-		$verifier.Dispose()
+		$signatureVerifier.Dispose()
 	}
 
 	$artifactDigest = [Convert]::FromHexString(
@@ -74,6 +88,45 @@ try {
 	for($index = 0; $index -lt $artifactDigest.Length; ++$index) {
 		if($bytes[48 + $index] -ne $artifactDigest[$index]) {
 			throw "Generated manifest artifact digest is wrong"
+		}
+	}
+	if(-not [string]::IsNullOrWhiteSpace($Verifier)) {
+		$wrongCurveKey = [Security.Cryptography.ECDsa]::Create(
+			[Security.Cryptography.ECCurve]::CreateFromFriendlyName("nistP384")
+		)
+		try {
+			$wrongCurveSpki = $wrongCurveKey.ExportSubjectPublicKeyInfo()
+		} finally {
+			$wrongCurveKey.Dispose()
+		}
+		$wrongCurvePublic = Join-Path $temporary.FullName "wrong-curve.der"
+		$wrongCurveManifest = Join-Path $temporary.FullName "wrong-curve.t3upd"
+		[IO.File]::WriteAllBytes($wrongCurvePublic, $wrongCurveSpki)
+		Write-ReboundManifest $bytes $wrongCurveSpki $wrongCurveManifest
+
+		$wrongTypeKey = [Security.Cryptography.RSA]::Create(2048)
+		try {
+			$wrongTypeSpki = $wrongTypeKey.ExportSubjectPublicKeyInfo()
+		} finally {
+			$wrongTypeKey.Dispose()
+		}
+		$wrongTypePublic = Join-Path $temporary.FullName "wrong-type.der"
+		$wrongTypeManifest = Join-Path $temporary.FullName "wrong-type.t3upd"
+		[IO.File]::WriteAllBytes($wrongTypePublic, $wrongTypeSpki)
+		Write-ReboundManifest $bytes $wrongTypeSpki $wrongTypeManifest
+
+		[byte[]]$invalidSpki = 1, 2, 3, 4, 5, 6, 7, 8
+		$invalidPublic = Join-Path $temporary.FullName "invalid.der"
+		$invalidManifest = Join-Path $temporary.FullName "invalid.t3upd"
+		[IO.File]::WriteAllBytes($invalidPublic, $invalidSpki)
+		Write-ReboundManifest $bytes $invalidSpki $invalidManifest
+
+		& $Verifier $manifest $publicDer `
+			$wrongCurveManifest $wrongCurvePublic `
+			$wrongTypeManifest $wrongTypePublic `
+			$invalidManifest $invalidPublic
+		if($LASTEXITCODE -ne 0) {
+			throw "Native update authentication test failed with $LASTEXITCODE"
 		}
 	}
 	Write-Output "update-manifest-authoring-test=passed bytes=$($bytes.Length)"

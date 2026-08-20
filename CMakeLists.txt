@@ -544,6 +544,28 @@ target_compile_features(th03_app_persistence PUBLIC cxx_std_23)
 set_target_properties(th03_app_persistence PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_app_persistence)
 
+if(TH03_ENABLE_RTC)
+	if(NOT TARGET MbedTLS::mbedcrypto)
+		message(FATAL_ERROR
+			"The RTC crypto provider did not define MbedTLS::mbedcrypto"
+		)
+	endif()
+	add_library(th03_app_update_authentication STATIC
+		src/app/update_manifest_authentication.cpp
+	)
+	target_include_directories(th03_app_update_authentication PUBLIC include)
+	target_link_libraries(
+		th03_app_update_authentication
+		PUBLIC th03_app_persistence
+		PRIVATE MbedTLS::mbedcrypto
+	)
+	target_compile_features(th03_app_update_authentication PUBLIC cxx_std_23)
+	set_target_properties(
+		th03_app_update_authentication PROPERTIES CXX_EXTENSIONS OFF
+	)
+	th03_set_warnings(th03_app_update_authentication)
+endif()
+
 add_executable(
 	th03-app-new-classic-key-config-store-tests
 	tests/test_app_new_classic_key_config_store.cpp
@@ -1284,8 +1306,25 @@ if(BUILD_TESTING)
 		NAME th03-app-update-manifest-tests
 		COMMAND th03-app-update-manifest-tests
 	)
+	if(TH03_ENABLE_RTC)
+		add_executable(th03-app-update-manifest-authentication-tests
+			tests/test_app_update_manifest_authentication.cpp
+		)
+		target_link_libraries(
+			th03-app-update-manifest-authentication-tests
+			PRIVATE th03_app_update_authentication
+		)
+		th03_set_warnings(th03-app-update-manifest-authentication-tests)
+	endif()
 	find_program(TH03_PWSH_EXECUTABLE pwsh)
 	if(TH03_PWSH_EXECUTABLE)
+		set(_th03_update_authentication_test_arguments)
+		if(TH03_ENABLE_RTC)
+			list(APPEND _th03_update_authentication_test_arguments
+				-Verifier
+				$<TARGET_FILE:th03-app-update-manifest-authentication-tests>
+			)
+		endif()
 		add_test(
 			NAME th03-update-manifest-authoring-tests
 			COMMAND
@@ -1293,7 +1332,9 @@ if(BUILD_TESTING)
 				-File ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_write_update_manifest.ps1
 				-Signer ${CMAKE_CURRENT_SOURCE_DIR}/tools/release/write_update_manifest.ps1
 				-Artifact $<TARGET_FILE:th03-app-update-manifest-tests>
+				${_th03_update_authentication_test_arguments}
 		)
+		unset(_th03_update_authentication_test_arguments)
 	endif()
 
 	add_executable(th03-app-host-surface-tests

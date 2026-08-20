@@ -263,10 +263,11 @@ does not advertise a reset until it has an approved native secret-store owner.
 `Diagnostics` opens the authoritative user-data directory containing
 `last-run.log` and crash evidence through the same typed post-tick host action
 as Data & Storage. The strict `T3UPD001` signed-manifest parser, monotonic
-release selection rule, and offline authoring tool now form the first Updates
-infrastructure boundary. Pinned-key verification, HTTPS retrieval, staged
-replacement/rollback, and visible opt-in policy remain open, so do not publish
-a disabled placeholder choice merely to make the target shape visible.
+release selection rule, offline authoring tool, and provider-backed pinned-key
+P-256 authenticator now form the first Updates infrastructure boundary.
+Production key pins/rotation, HTTPS retrieval, staged replacement/rollback,
+and visible opt-in policy remain open, so do not publish a disabled placeholder
+choice merely to make the target shape visible.
 
 ## Configuration ownership
 
@@ -595,9 +596,11 @@ The maintained standalone/package flow needs an authenticated, rollback-safe
 autoupdater before broad distribution. `T3UPD001` now freezes the bounded,
 platform/channel-specific signed metadata and sole monotonic release sequence;
 `tools/release/write_update_manifest.ps1` deterministically authors and
-self-verifies it from an offline P-256 key. Runtime pinned-key verification,
-HTTPS download, atomic replacement, failed-update recovery, user-data
-preservation, and opt-out UI remain release infrastructure. They must not run
+self-verifies it from an offline P-256 key. The runtime authentication owner
+now reparses the exact bytes and verifies a unique caller-pinned P-256 SPKI
+through authenticated Mbed TLS 3.6.7. Production pin material/rotation, HTTPS
+download, atomic replacement, failed-update recovery, user-data preservation,
+and opt-out UI remain release infrastructure. They must not run
 inside source-time gameplay or silently alter Classic/New Classic content
 identities. See `UPDATE_MANIFEST.md`.
 

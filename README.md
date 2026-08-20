@@ -631,7 +631,7 @@ local VS build and then the remaining source scenes.
 hierarchy, sealed Classic boundary, and ordered New Classic
 menu/settings/services plan.
 `docs/UPDATE_MANIFEST.md` freezes the authenticated, monotonic release-metadata
-boundary and its offline signing tool without yet enabling network download or
-self-replacement.
+boundary, offline signing tool, and provider-backed pinned-key verification
+without yet enabling network download or self-replacement.
 `docs/research/README.md` indexes the presentation, asset, and audio research
 contracts prepared for those later layers.
