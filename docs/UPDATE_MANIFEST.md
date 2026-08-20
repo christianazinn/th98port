@@ -74,6 +74,21 @@ runtime acquisition ceiling is 256 MiB even though the format can describe a
 larger future package. Network, status, selection, length, digest, and staging
 failures leave the product and user-data trees unchanged.
 
+`acquire_update_payload()` exposes that same manifest-first bounded transaction
+to later host owners without staging a duplicate artifact file. Its returned
+bytes remain inert: both staging and generation materialization independently
+repeat signature, platform/channel/sequence, exact length, and complete
+artifact-digest verification before filesystem mutation.
+
+`install_update_for_next_launch()` joins the bounded acquisition result to
+`T3PKG001` materialization and the alternating activation store. It loads the
+current monotonic sequence before making a request, publishes only the exact
+marked immutable generation, then nominates that same full sequence/SHA-256
+identity as `pending`. Activation commits retry only a stale revision; an
+unrelated busy transition or newer release wins, leaving at most an inert
+generation for the conservative cleanup pass. It never replaces or relaunches
+the running application.
+
 The authenticated artifact is a `T3PKG001` product tree rather than a ZIP or
 tar archive. Its strict member/path/digest format and inert generation
 materialization boundary are specified in `UPDATE_PACKAGE.md`.
@@ -98,5 +113,5 @@ update.
 `tools/release/write_update_manifest.ps1` authors the format from a
 caller-owned PEM private key. Private keys and original content are never
 repository inputs. Key generation, offline custody, production public-key pin
-selection/rotation, atomic replacement, recovery, and visible opt-in policy
-remain separate release-infrastructure gates.
+selection/rotation, origin provisioning, and visible opt-in policy remain
+separate release-infrastructure gates.

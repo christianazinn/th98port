@@ -27,6 +27,12 @@ struct UpdateHttpResponse final {
 	std::vector<std::byte> body{};
 };
 
+struct UpdateAcquiredPayload final {
+	UpdateManifest manifest{};
+	std::vector<std::byte> manifest_bytes{};
+	std::vector<std::byte> artifact_bytes{};
+};
+
 enum class UpdateTransportErrorCode : std::uint8_t {
 	invalid_url,
 	unavailable,
@@ -72,6 +78,21 @@ struct UpdateAcquisitionError final {
 	std::optional<UpdateAuthenticationError> authentication{};
 	std::optional<UpdateStagingError> staging{};
 };
+
+// Fetches and authenticates one manifest before requesting exactly its bounded
+// signed artifact. The returned bytes remain inert; a caller must pass them to
+// stage_authenticated_update() or
+// materialize_authenticated_update_package(), both of which repeat all
+// authorization and artifact-digest checks before filesystem mutation.
+[[nodiscard]] std::expected<UpdateAcquiredPayload, UpdateAcquisitionError>
+acquire_update_payload(
+	std::string manifest_url,
+	std::span<const UpdatePinnedKey> pinned_keys,
+	UpdatePlatform platform,
+	UpdateChannel channel,
+	std::uint64_t current_sequence,
+	const UpdateTransport &transport
+);
 
 // Fetches and authenticates one manifest before requesting its signed artifact
 // URL, bounds that response by the authenticated size, and enters the existing

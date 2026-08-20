@@ -28,14 +28,13 @@ namespace {
 
 } // namespace
 
-std::expected<std::filesystem::path, UpdateAcquisitionError>
-acquire_and_stage_update(
+std::expected<UpdateAcquiredPayload, UpdateAcquisitionError>
+acquire_update_payload(
 	std::string manifest_url,
 	std::span<const UpdatePinnedKey> pinned_keys,
 	UpdatePlatform platform,
 	UpdateChannel channel,
 	std::uint64_t current_sequence,
-	const std::filesystem::path &staging_directory,
 	const UpdateTransport &transport
 )
 {
@@ -119,9 +118,34 @@ acquire_and_stage_update(
 			UpdateAcquisitionErrorCode::artifact_size
 		));
 	}
+	return UpdateAcquiredPayload{
+		.manifest = std::move(*authenticated),
+		.manifest_bytes = std::move(manifest_response->body),
+		.artifact_bytes = std::move(artifact_response->body),
+	};
+}
+
+std::expected<std::filesystem::path, UpdateAcquisitionError>
+acquire_and_stage_update(
+	std::string manifest_url,
+	std::span<const UpdatePinnedKey> pinned_keys,
+	UpdatePlatform platform,
+	UpdateChannel channel,
+	std::uint64_t current_sequence,
+	const std::filesystem::path &staging_directory,
+	const UpdateTransport &transport
+)
+{
+	auto acquired = acquire_update_payload(
+		std::move(manifest_url), pinned_keys, platform, channel,
+		current_sequence, transport
+	);
+	if(!acquired) {
+		return std::unexpected(std::move(acquired.error()));
+	}
 	auto staged = stage_authenticated_update(
-		manifest_response->body, pinned_keys, platform, channel,
-		current_sequence, artifact_response->body, staging_directory
+		acquired->manifest_bytes, pinned_keys, platform, channel,
+		current_sequence, acquired->artifact_bytes, staging_directory
 	);
 	if(!staged) {
 		return std::unexpected(UpdateAcquisitionError{

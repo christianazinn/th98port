@@ -138,5 +138,7 @@ never prevents the already-run application from returning its exit status.
 ## Deliberately deferred
 
 Production signing pins and visible opt-in update UI remain separate release
-gates. The executable host performs no network request, does not nominate a
-generation, and cannot activate an inert package by itself.
+gates. The executable host performs no network request and cannot activate an
+inert package by itself. The separate host-owned install transaction can
+download, materialize, and nominate only when a future caller supplies an
+explicit origin and authenticated pin set.
