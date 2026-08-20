@@ -538,6 +538,7 @@ add_library(th03_app_persistence STATIC
 	src/app/new_classic_score.cpp
 	src/app/new_classic_score_store.cpp
 	src/app/update_manifest.cpp
+	src/app/update_package.cpp
 )
 target_include_directories(th03_app_persistence PUBLIC include)
 target_compile_features(th03_app_persistence PUBLIC cxx_std_23)
@@ -553,6 +554,7 @@ if(TH03_ENABLE_RTC)
 	add_library(th03_app_update_authentication STATIC
 		src/app/update_manifest_authentication.cpp
 		src/app/update_acquisition.cpp
+		src/app/update_package_materialization.cpp
 	)
 	target_include_directories(th03_app_update_authentication PUBLIC include)
 	target_link_libraries(
@@ -1372,13 +1374,24 @@ if(BUILD_TESTING)
 	add_executable(th03-app-update-manifest-tests
 		tests/test_app_update_manifest.cpp
 	)
+	add_executable(th03-app-update-package-tests
+		tests/test_app_update_package.cpp
+	)
 	target_link_libraries(
 		th03-app-update-manifest-tests PRIVATE th03_app_persistence
 	)
+	target_link_libraries(
+		th03-app-update-package-tests PRIVATE th03_app_persistence
+	)
 	th03_set_warnings(th03-app-update-manifest-tests)
+	th03_set_warnings(th03-app-update-package-tests)
 	add_test(
 		NAME th03-app-update-manifest-tests
 		COMMAND th03-app-update-manifest-tests
+	)
+	add_test(
+		NAME th03-app-update-package-tests
+		COMMAND th03-app-update-package-tests
 	)
 	if(TH03_ENABLE_RTC)
 		add_executable(th03-app-update-manifest-authentication-tests
@@ -1386,6 +1399,9 @@ if(BUILD_TESTING)
 		)
 		add_executable(th03-app-update-acquisition-tests
 			tests/test_app_update_acquisition.cpp
+		)
+		add_executable(th03-app-update-package-materialization-tests
+			tests/test_app_update_package_materialization.cpp
 		)
 		target_link_libraries(
 			th03-app-update-manifest-authentication-tests
@@ -1395,8 +1411,13 @@ if(BUILD_TESTING)
 			th03-app-update-acquisition-tests
 			PRIVATE th03_app_update_authentication
 		)
+		target_link_libraries(
+			th03-app-update-package-materialization-tests
+			PRIVATE th03_app_update_authentication
+		)
 		th03_set_warnings(th03-app-update-manifest-authentication-tests)
 		th03_set_warnings(th03-app-update-acquisition-tests)
+		th03_set_warnings(th03-app-update-package-materialization-tests)
 	endif()
 	find_program(TH03_PWSH_EXECUTABLE pwsh)
 	if(TH03_PWSH_EXECUTABLE)
@@ -1407,6 +1428,10 @@ if(BUILD_TESTING)
 				$<TARGET_FILE:th03-app-update-manifest-authentication-tests>
 				-AcquisitionVerifier
 				$<TARGET_FILE:th03-app-update-acquisition-tests>
+				-PackageAuthor
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/release/write_update_package.ps1
+				-PackageVerifier
+				$<TARGET_FILE:th03-app-update-package-materialization-tests>
 			)
 		endif()
 		add_test(

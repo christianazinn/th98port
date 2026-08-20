@@ -74,6 +74,10 @@ runtime acquisition ceiling is 256 MiB even though the format can describe a
 larger future package. Network, status, selection, length, digest, and staging
 failures leave the product and user-data trees unchanged.
 
+The authenticated artifact is a `T3PKG001` product tree rather than a ZIP or
+tar archive. Its strict member/path/digest format and inert generation
+materialization boundary are specified in `UPDATE_PACKAGE.md`.
+
 `windows_update_transport()` supplies the Windows platform adapter. WinHTTP
 accepts absolute ASCII HTTPS URLs only, uses the system proxy and certificate
 policy, forbids credentials, fragments, backslashes, and redirects, applies

@@ -132,6 +132,13 @@ jobs:
             -Revision "${{ github.sha }}" `
             -Label $env:TH03_BETA_LABEL
 
+      - name: Write inert update package
+        shell: pwsh
+        run: >-
+          ./tools/release/write_update_package.ps1
+          -Root "out/ci-package/${{ matrix.artifact }}"
+          -Output "out/ci-package/${{ matrix.artifact }}.t3pkg"
+
       - name: Archive Windows package
         if: runner.os == 'Windows'
         shell: pwsh
@@ -152,7 +159,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.artifact }}
-          path: out/ci-package/${{ matrix.artifact }}.zip
+          path: |
+            out/ci-package/${{ matrix.artifact }}.zip
+            out/ci-package/${{ matrix.artifact }}.t3pkg
           if-no-files-found: error
           retention-days: 14
 
@@ -161,6 +170,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.artifact }}
-          path: out/ci-package/${{ matrix.artifact }}.tar.gz
+          path: |
+            out/ci-package/${{ matrix.artifact }}.tar.gz
+            out/ci-package/${{ matrix.artifact }}.t3pkg
           if-no-files-found: error
           retention-days: 14

@@ -13,6 +13,10 @@ included as command-line tools. Consult the repository documentation or use
 `BUILD-MANIFEST.txt` records the exact source revision and SHA-256 of every
 packaged file. Dependency license texts are under `licenses/`.
 
+Manual hosted builds also emit a sibling `.t3pkg`. This is the uncompressed,
+strictly validated inert updater input specified by `UPDATE_PACKAGE.md`; it is
+not the tester-facing archive and does not activate itself.
+
 The macOS builds are neither code-signed nor notarized. Testers must approve
 the downloaded build through the normal macOS security UI. The Linux build
 targets a current x86-64 Ubuntu userspace. The Windows build targets x86-64.

@@ -266,11 +266,12 @@ as Data & Storage. The strict `T3UPD001` signed-manifest parser, monotonic
 release selection rule, offline authoring tool, provider-backed pinned-key
 P-256 authenticator, and inert read-back-verified package staging now form the
 first Updates infrastructure boundary. The platform-neutral acquisition
-transaction and strict WinHTTP adapter now implement manifest-first
+transaction plus strict WinHTTP/libcurl adapters now implement manifest-first
 authentication, exact signed-artifact response bounds, no redirects, and
-failure-preserving inert staging. Production key pins/rotation, Linux/macOS
-HTTPS adapters, product replacement/rollback, and visible opt-in policy remain
-open,
+failure-preserving inert staging on every beta platform. `T3PKG001` adds a
+portable traversal-proof package and complete inert generation materializer.
+Production key pins/rotation, activation/recovery, and visible opt-in policy
+remain open,
 so do not publish a disabled placeholder choice merely to make the target shape
 visible.
 

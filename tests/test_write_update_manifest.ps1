@@ -6,7 +6,9 @@ param(
 	[Parameter(Mandatory = $true)]
 	[string]$Artifact,
 	[string]$Verifier = "",
-	[string]$AcquisitionVerifier = ""
+	[string]$AcquisitionVerifier = "",
+	[string]$PackageAuthor = "",
+	[string]$PackageVerifier = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -133,6 +135,76 @@ try {
 			& $AcquisitionVerifier $manifest $publicDer $Artifact
 			if($LASTEXITCODE -ne 0) {
 				throw "Native update acquisition test failed with $LASTEXITCODE"
+			}
+		}
+		if($PackageAuthor -and $PackageVerifier) {
+			$packageRoot = Join-Path $temporary.FullName "package-root"
+			[IO.Directory]::CreateDirectory((Join-Path $packageRoot "bin")) |
+				Out-Null
+			[IO.Directory]::CreateDirectory((Join-Path $packageRoot "notices")) |
+				Out-Null
+			Copy-Item -LiteralPath $Artifact -Destination (
+				Join-Path $packageRoot "bin/test-tool.exe"
+			)
+			[IO.File]::WriteAllText(
+				(Join-Path $packageRoot "notices/NOTICE.txt"),
+				"independent package fixture`n",
+				[Text.UTF8Encoding]::new($false)
+			)
+			$package = Join-Path $temporary.FullName "test.t3pkg"
+			& $PackageAuthor -Root $packageRoot -Output $package | Out-Null
+			if($LASTEXITCODE -ne 0) {
+				throw "Update package author failed with $LASTEXITCODE"
+			}
+			$packageRepeat = Join-Path $temporary.FullName "test-repeat.t3pkg"
+			& $PackageAuthor -Root $packageRoot -Output $packageRepeat | Out-Null
+			if(-not [Linq.Enumerable]::SequenceEqual(
+				[IO.File]::ReadAllBytes($package),
+				[IO.File]::ReadAllBytes($packageRepeat)
+			)) {
+				throw "Repeated update package authoring is not byte-identical"
+			}
+			if(-not $IsWindows) {
+				$linkedRoot = Join-Path $temporary.FullName "linked-root"
+				[IO.Directory]::CreateDirectory($linkedRoot) | Out-Null
+				$link = Join-Path $linkedRoot "linked-file"
+				[IO.File]::CreateSymbolicLink($link, $Artifact) | Out-Null
+				$linkRejected = $false
+				try {
+					& $PackageAuthor -Root $linkedRoot -Output (
+						Join-Path $temporary.FullName "linked.t3pkg"
+					) | Out-Null
+				} catch {
+					$linkRejected = $true
+				}
+				if(-not $linkRejected) {
+					throw "Update package author followed a symbolic link"
+				}
+			}
+			$packageManifest = Join-Path $temporary.FullName "package.t3upd"
+			& $Signer -Artifact $package -Output $packageManifest `
+				-PrivateKey $privateKey -Platform windows-x64 -Channel beta `
+				-Sequence 5001 -Version "0.5.0-beta.1" `
+				-ArtifactUrl "https://azinn.dev/th03/beta/test.t3pkg" `
+				-ReleaseNotesUrl "https://azinn.dev/th03/releases/0.5.0" `
+				-PublishedUnix 1787000000 -PublicKeyOutput $public | Out-Null
+
+			$badPackage = Join-Path $temporary.FullName "bad-member.t3pkg"
+			$badPackageBytes = [IO.File]::ReadAllBytes($package)
+			# The first entry digest begins at header 32 + entry field offset 16.
+			$badPackageBytes[48] = $badPackageBytes[48] -bxor 1
+			[IO.File]::WriteAllBytes($badPackage, $badPackageBytes)
+			$badManifest = Join-Path $temporary.FullName "bad-member.t3upd"
+			& $Signer -Artifact $badPackage -Output $badManifest `
+				-PrivateKey $privateKey -Platform windows-x64 -Channel beta `
+				-Sequence 5001 -Version "0.5.0-beta.1" `
+				-ArtifactUrl "https://azinn.dev/th03/beta/bad.t3pkg" `
+				-ReleaseNotesUrl "https://azinn.dev/th03/releases/0.5.0" `
+				-PublishedUnix 1787000000 -PublicKeyOutput $public | Out-Null
+			& $PackageVerifier $packageManifest $publicDer $package `
+				$badManifest $badPackage
+			if($LASTEXITCODE -ne 0) {
+				throw "Native update package test failed with $LASTEXITCODE"
 			}
 		}
 	}
