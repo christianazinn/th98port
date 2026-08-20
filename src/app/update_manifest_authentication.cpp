@@ -8,10 +8,29 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <filesystem>
+#include <fstream>
+#include <limits>
 #include <span>
+#include <string>
+#include <system_error>
+#include <utility>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <cerrno>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <unistd.h>
+#endif
 
 namespace th03::app {
 namespace {
@@ -74,6 +93,294 @@ struct Integer final {
 	Integer(const Integer &) = delete;
 	Integer &operator=(const Integer &) = delete;
 };
+
+[[nodiscard]] UpdateStagingError staging_error(
+	UpdateStagingErrorCode code,
+	std::error_code system = {}
+) noexcept
+{
+	return {.code = code, .system = system};
+}
+
+[[nodiscard]] std::error_code last_system_error() noexcept
+{
+#if defined(_WIN32)
+	return {static_cast<int>(GetLastError()), std::system_category()};
+#else
+	return {errno, std::generic_category()};
+#endif
+}
+
+[[nodiscard]] std::uint64_t process_id() noexcept
+{
+#if defined(_WIN32)
+	return static_cast<std::uint64_t>(GetCurrentProcessId());
+#else
+	return static_cast<std::uint64_t>(::getpid());
+#endif
+}
+
+class TemporaryStage final {
+public:
+#if defined(_WIN32)
+	using Handle = HANDLE;
+	static constexpr Handle invalid_handle = nullptr;
+#else
+	using Handle = int;
+	static constexpr Handle invalid_handle = -1;
+#endif
+
+	TemporaryStage() = default;
+	TemporaryStage(std::filesystem::path path, Handle handle) noexcept
+		: path_(std::move(path)), handle_(handle)
+	{
+	}
+	TemporaryStage(const TemporaryStage &) = delete;
+	TemporaryStage &operator=(const TemporaryStage &) = delete;
+	TemporaryStage(TemporaryStage &&other) noexcept
+		: path_(std::move(other.path_)),
+		  handle_(std::exchange(other.handle_, invalid_handle))
+	{
+	}
+	TemporaryStage &operator=(TemporaryStage &&) = delete;
+	~TemporaryStage()
+	{
+		close_ignoring_error();
+		if(!path_.empty()) {
+			std::error_code ignored;
+			std::filesystem::remove(path_, ignored);
+		}
+	}
+
+	[[nodiscard]] Handle handle() const noexcept { return handle_; }
+	[[nodiscard]] const std::filesystem::path &path() const noexcept
+	{
+		return path_;
+	}
+	[[nodiscard]] bool close() noexcept
+	{
+		if(handle_ == invalid_handle) {
+			return true;
+		}
+#if defined(_WIN32)
+		const bool closed = CloseHandle(handle_) != 0;
+#else
+		const bool closed = ::close(handle_) == 0;
+#endif
+		handle_ = invalid_handle;
+		return closed;
+	}
+	void mark_published() noexcept { path_.clear(); }
+
+private:
+	void close_ignoring_error() noexcept
+	{
+		if(handle_ == invalid_handle) {
+			return;
+		}
+#if defined(_WIN32)
+		(void)CloseHandle(handle_);
+#else
+		(void)::close(handle_);
+#endif
+		handle_ = invalid_handle;
+	}
+
+	std::filesystem::path path_{};
+	Handle handle_ = invalid_handle;
+};
+
+[[nodiscard]] std::expected<TemporaryStage, UpdateStagingError>
+create_temporary_stage(const std::filesystem::path &target)
+{
+	static std::atomic<std::uint64_t> next_sequence{0U};
+	for(std::size_t attempt = 0U; attempt < 128U; ++attempt) {
+		auto candidate = target;
+		candidate += std::filesystem::path(
+			".tmp-" + std::to_string(process_id()) + "-" +
+			std::to_string(next_sequence.fetch_add(
+				1U, std::memory_order_relaxed
+			))
+		).native();
+#if defined(_WIN32)
+		const auto handle = CreateFileW(
+			candidate.c_str(), GENERIC_WRITE, 0U, nullptr, CREATE_NEW,
+			FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, nullptr
+		);
+		if(handle != INVALID_HANDLE_VALUE) {
+			return TemporaryStage(candidate, handle);
+		}
+		const auto system = last_system_error();
+		if(system.value() != ERROR_FILE_EXISTS &&
+			system.value() != ERROR_ALREADY_EXISTS) {
+			return std::unexpected(staging_error(
+				UpdateStagingErrorCode::temporary_create, system
+			));
+		}
+#else
+		const auto handle = ::open(
+			candidate.c_str(), O_CREAT | O_EXCL | O_WRONLY, 0600
+		);
+		if(handle >= 0) {
+			return TemporaryStage(candidate, handle);
+		}
+		const auto system = last_system_error();
+		if(system.value() != EEXIST) {
+			return std::unexpected(staging_error(
+				UpdateStagingErrorCode::temporary_create, system
+			));
+		}
+#endif
+	}
+	return std::unexpected(staging_error(
+		UpdateStagingErrorCode::temporary_create,
+		std::make_error_code(std::errc::file_exists)
+	));
+}
+
+[[nodiscard]] std::expected<void, UpdateStagingError> write_stage(
+	TemporaryStage &file,
+	std::span<const std::byte> bytes
+)
+{
+	std::size_t written = 0U;
+	while(written < bytes.size()) {
+#if defined(_WIN32)
+		DWORD chunk = 0U;
+		const auto remaining = static_cast<DWORD>(std::min<std::size_t>(
+			bytes.size() - written,
+			static_cast<std::size_t>(std::numeric_limits<DWORD>::max())
+		));
+		if(WriteFile(
+			file.handle(), bytes.data() + written, remaining, &chunk, nullptr
+		) == 0 || chunk == 0U) {
+			return std::unexpected(staging_error(
+				UpdateStagingErrorCode::temporary_write, last_system_error()
+			));
+		}
+		written += static_cast<std::size_t>(chunk);
+#else
+		const auto count = ::write(
+			file.handle(), bytes.data() + written, bytes.size() - written
+		);
+		if(count <= 0) {
+			return std::unexpected(staging_error(
+				UpdateStagingErrorCode::temporary_write, last_system_error()
+			));
+		}
+		written += static_cast<std::size_t>(count);
+#endif
+	}
+#if defined(_WIN32)
+	if(FlushFileBuffers(file.handle()) == 0) {
+#else
+	if(::fsync(file.handle()) != 0) {
+#endif
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::temporary_flush, last_system_error()
+		));
+	}
+	if(!file.close()) {
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::temporary_flush, last_system_error()
+		));
+	}
+	return {};
+}
+
+[[nodiscard]] std::expected<std::array<std::uint8_t, 32U>, UpdateStagingError>
+file_digest(const std::filesystem::path &path, std::uint64_t expected_size)
+{
+	std::error_code system;
+	const auto size = std::filesystem::file_size(path, system);
+	if(system || size != expected_size) {
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::temporary_validation, system
+		));
+	}
+	std::ifstream input(path, std::ios::binary);
+	if(!input) {
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::temporary_validation,
+			std::make_error_code(std::errc::io_error)
+		));
+	}
+	mbedtls_sha256_context context;
+	mbedtls_sha256_init(&context);
+	int result = mbedtls_sha256_starts(&context, 0);
+	std::array<char, 64U * 1024U> buffer{};
+	while(result == 0 && input) {
+		input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+		const auto count = input.gcount();
+		if(count > 0) {
+			result = mbedtls_sha256_update(
+				&context,
+				reinterpret_cast<const unsigned char *>(buffer.data()),
+				static_cast<std::size_t>(count)
+			);
+		}
+	}
+	if(input.bad()) {
+		mbedtls_sha256_free(&context);
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::temporary_validation,
+			std::make_error_code(std::errc::io_error)
+		));
+	}
+	std::array<std::uint8_t, 32U> digest{};
+	if(result == 0) {
+		result = mbedtls_sha256_finish(&context, digest.data());
+	}
+	mbedtls_sha256_free(&context);
+	if(result != 0) {
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::temporary_validation
+		));
+	}
+	return digest;
+}
+
+[[nodiscard]] std::string staging_filename(const UpdateManifest &manifest)
+{
+	constexpr char hex[] = "0123456789abcdef";
+	std::string digest;
+	digest.reserve(16U);
+	for(std::size_t index = 0U; index < 8U; ++index) {
+		digest.push_back(hex[manifest.artifact_sha256[index] >> 4U]);
+		digest.push_back(hex[manifest.artifact_sha256[index] & 0x0FU]);
+	}
+	return "PODD-UPDATE-" +
+		std::to_string(static_cast<unsigned>(manifest.platform)) + "-" +
+		std::to_string(static_cast<unsigned>(manifest.channel)) + "-" +
+		std::to_string(manifest.sequence) + "-" + digest + ".stage";
+}
+
+[[nodiscard]] bool publish_stage(
+	TemporaryStage &temporary,
+	const std::filesystem::path &target,
+	std::error_code &system
+) noexcept
+{
+#if defined(_WIN32)
+	if(MoveFileExW(
+		temporary.path().c_str(), target.c_str(), MOVEFILE_WRITE_THROUGH
+	) == 0) {
+		system = last_system_error();
+		return false;
+	}
+#else
+	if(::link(temporary.path().c_str(), target.c_str()) != 0) {
+		system = last_system_error();
+		return false;
+	}
+	if(::unlink(temporary.path().c_str()) != 0) {
+		system = last_system_error();
+		return false;
+	}
+#endif
+	temporary.mark_published();
+	return true;
+}
 
 } // namespace
 
@@ -204,6 +511,128 @@ authenticate_update_manifest(
 		));
 	}
 	return *parsed;
+}
+
+std::expected<std::filesystem::path, UpdateStagingError>
+stage_authenticated_update(
+	std::span<const std::byte> manifest_bytes,
+	std::span<const UpdatePinnedKey> pinned_keys,
+	UpdatePlatform platform,
+	UpdateChannel channel,
+	std::uint64_t current_sequence,
+	std::span<const std::byte> artifact_bytes,
+	const std::filesystem::path &staging_directory
+)
+{
+	auto authenticated = authenticate_update_manifest(
+		manifest_bytes, pinned_keys
+	);
+	if(!authenticated) {
+		return std::unexpected(UpdateStagingError{
+			.code = UpdateStagingErrorCode::authentication,
+			.authentication = std::move(authenticated.error()),
+		});
+	}
+	const auto disposition = update_disposition(
+		*authenticated, platform, channel, current_sequence
+	);
+	if(disposition == UpdateDisposition::wrong_platform) {
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::wrong_platform
+		));
+	}
+	if(disposition == UpdateDisposition::wrong_channel) {
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::wrong_channel
+		));
+	}
+	if(disposition == UpdateDisposition::current_or_older) {
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::current_or_older
+		));
+	}
+	if(authenticated->artifact_size != artifact_bytes.size()) {
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::artifact_size
+		));
+	}
+	std::array<std::uint8_t, 32U> artifact_digest{};
+	const auto artifact = unsigned_bytes(artifact_bytes);
+	const auto digest_result = mbedtls_sha256(
+		artifact.data(), artifact.size(), artifact_digest.data(), 0
+	);
+	if(digest_result != 0) {
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::temporary_validation
+		));
+	}
+	if(artifact_digest != authenticated->artifact_sha256) {
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::artifact_digest
+		));
+	}
+	if(staging_directory.empty()) {
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::invalid_directory
+		));
+	}
+	std::error_code system;
+	std::filesystem::create_directories(staging_directory, system);
+	if(system || !std::filesystem::is_directory(staging_directory, system) ||
+		system) {
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::invalid_directory, system
+		));
+	}
+	const auto target = staging_directory / staging_filename(*authenticated);
+	if(std::filesystem::exists(target, system)) {
+		if(system) {
+			return std::unexpected(staging_error(
+				UpdateStagingErrorCode::target_conflict, system
+			));
+		}
+		auto digest = file_digest(target, authenticated->artifact_size);
+		if(digest && *digest == authenticated->artifact_sha256) {
+			return target;
+		}
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::target_conflict,
+			digest ? std::error_code{} : digest.error().system
+		));
+	}
+	if(system) {
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::target_conflict, system
+		));
+	}
+	auto temporary = create_temporary_stage(target);
+	if(!temporary) {
+		return std::unexpected(std::move(temporary.error()));
+	}
+	if(auto written = write_stage(*temporary, artifact_bytes); !written) {
+		return std::unexpected(std::move(written.error()));
+	}
+	auto readback = file_digest(
+		temporary->path(), authenticated->artifact_size
+	);
+	if(!readback || *readback != authenticated->artifact_sha256) {
+		return std::unexpected(staging_error(
+			UpdateStagingErrorCode::temporary_validation,
+			readback ? std::error_code{} : readback.error().system
+		));
+	}
+	if(publish_stage(*temporary, target, system)) {
+		return target;
+	}
+	// A concurrent identical transaction may have won publication. Preserve
+	// that target and accept it only after complete size/digest revalidation.
+	readback = file_digest(target, authenticated->artifact_size);
+	if(readback && *readback == authenticated->artifact_sha256) {
+		return target;
+	}
+	return std::unexpected(staging_error(
+		UpdateStagingErrorCode::publish, system
+	));
 }
 
 } // namespace th03::app

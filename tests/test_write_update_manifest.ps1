@@ -121,7 +121,7 @@ try {
 		[IO.File]::WriteAllBytes($invalidPublic, $invalidSpki)
 		Write-ReboundManifest $bytes $invalidSpki $invalidManifest
 
-		& $Verifier $manifest $publicDer `
+		& $Verifier $manifest $publicDer $Artifact `
 			$wrongCurveManifest $wrongCurvePublic `
 			$wrongTypeManifest $wrongTypePublic `
 			$invalidManifest $invalidPublic

@@ -7,7 +7,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <filesystem>
+#include <optional>
 #include <span>
+#include <system_error>
 
 namespace th03::app {
 
@@ -47,6 +50,44 @@ struct UpdateAuthenticationError final {
 authenticate_update_manifest(
 	std::span<const std::byte> bytes,
 	std::span<const UpdatePinnedKey> pinned_keys
+);
+
+enum class UpdateStagingErrorCode : std::uint8_t {
+	authentication,
+	wrong_platform,
+	wrong_channel,
+	current_or_older,
+	artifact_size,
+	artifact_digest,
+	invalid_directory,
+	target_conflict,
+	temporary_create,
+	temporary_write,
+	temporary_flush,
+	temporary_validation,
+	publish,
+};
+
+struct UpdateStagingError final {
+	UpdateStagingErrorCode code = UpdateStagingErrorCode::authentication;
+	std::optional<UpdateAuthenticationError> authentication{};
+	std::error_code system{};
+};
+
+// Authenticates the manifest again, enforces exact platform/channel/sequence
+// selection, verifies the complete in-memory artifact, and publishes it as an
+// inert locally named `.stage` file. It never derives a path from either URL,
+// replaces an existing different target, executes content, or mutates product
+// and user-data files.
+[[nodiscard]] std::expected<std::filesystem::path, UpdateStagingError>
+stage_authenticated_update(
+	std::span<const std::byte> manifest_bytes,
+	std::span<const UpdatePinnedKey> pinned_keys,
+	UpdatePlatform platform,
+	UpdateChannel channel,
+	std::uint64_t current_sequence,
+	std::span<const std::byte> artifact_bytes,
+	const std::filesystem::path &staging_directory
 );
 
 } // namespace th03::app

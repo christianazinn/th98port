@@ -51,6 +51,18 @@ authenticated Mbed TLS 3.6.7 provider. The dependency-free parser remains
 available to headless/core builds, but structural parsing alone is never an
 authorization decision.
 
+`stage_authenticated_update()` extends that boundary without making the
+artifact executable. It authenticates the manifest again, requires the exact
+requested platform/channel and a strictly higher release sequence, hashes the
+complete artifact, and compares both byte length and SHA-256 before touching
+the filesystem. It generates a local `.stage` filename from authenticated
+numeric fields and a digest prefix rather than either URL, creates an exclusive
+same-directory temporary with non-executable owner-only permissions on POSIX,
+flushes it, re-reads and re-hashes it, and publishes without replacing an
+existing different target. Concurrent or repeated identical staging is
+idempotent after complete target revalidation. This still performs no network
+I/O, product replacement, or execution.
+
 `tools/release/write_update_manifest.ps1` authors the format from a
 caller-owned PEM private key. Private keys and original content are never
 repository inputs. Key generation, offline custody, production public-key pin
