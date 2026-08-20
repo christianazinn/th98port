@@ -630,5 +630,8 @@ local VS build and then the remaining source scenes.
 `docs/NEW_CLASSIC_PRODUCT_DESIGN.md` records the accepted working product
 hierarchy, sealed Classic boundary, and ordered New Classic
 menu/settings/services plan.
+`docs/UPDATE_MANIFEST.md` freezes the authenticated, monotonic release-metadata
+boundary and its offline signing tool without yet enabling network download or
+self-replacement.
 `docs/research/README.md` indexes the presentation, asset, and audio research
 contracts prepared for those later layers.

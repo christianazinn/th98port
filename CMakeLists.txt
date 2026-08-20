@@ -537,6 +537,7 @@ add_library(th03_app_persistence STATIC
 	src/app/new_classic_settings_store.cpp
 	src/app/new_classic_score.cpp
 	src/app/new_classic_score_store.cpp
+	src/app/update_manifest.cpp
 )
 target_include_directories(th03_app_persistence PUBLIC include)
 target_compile_features(th03_app_persistence PUBLIC cxx_std_23)
@@ -1271,6 +1272,29 @@ if(BUILD_TESTING)
 		NAME th03-app-new-classic-settings-tests
 		COMMAND th03-app-new-classic-settings-tests
 	)
+
+	add_executable(th03-app-update-manifest-tests
+		tests/test_app_update_manifest.cpp
+	)
+	target_link_libraries(
+		th03-app-update-manifest-tests PRIVATE th03_app_persistence
+	)
+	th03_set_warnings(th03-app-update-manifest-tests)
+	add_test(
+		NAME th03-app-update-manifest-tests
+		COMMAND th03-app-update-manifest-tests
+	)
+	find_program(TH03_PWSH_EXECUTABLE pwsh)
+	if(TH03_PWSH_EXECUTABLE)
+		add_test(
+			NAME th03-update-manifest-authoring-tests
+			COMMAND
+				${TH03_PWSH_EXECUTABLE} -NoProfile
+				-File ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_write_update_manifest.ps1
+				-Signer ${CMAKE_CURRENT_SOURCE_DIR}/tools/release/write_update_manifest.ps1
+				-Artifact $<TARGET_FILE:th03-app-update-manifest-tests>
+		)
+	endif()
 
 	add_executable(th03-app-host-surface-tests
 		tests/test_app_host_surface.cpp
