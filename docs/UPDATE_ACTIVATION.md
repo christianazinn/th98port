@@ -138,14 +138,25 @@ trees, malformed names, mismatched markers, unrelated entries, and legacy
 unmarked beta generations are ignored. Failure is reported as a warning and
 never prevents the already-run application from returning its exit status.
 
-## Deliberately deferred
+## Joined lifecycle acceptance
 
-Production signing material and visible opt-in update UI remain separate
-release gates. Default builds contain no update configuration. A release build
-may compile an explicit origin, platform/channel, installed-sequence floor, and
-P-256 public-key pin. A host-owned `UpdateInstallTask` deep-copies that trust
-record and performs the existing bounded install transaction on one joined
-background worker against the bootstrap-owned storage paths. Destruction can
-cancel before the transaction starts; an in-flight request remains bounded by
-the platform transport. The executable host still performs no request until a
-future visible policy explicitly starts that task.
+The authoring gate now runs two consecutive manifests over one exact package
+through the real install and process-host owners. It proves signed acquisition,
+immutable materialization, pending nomination, trial-token health
+acknowledgement, stable relaunch, a newer pre-process failure, immediate
+rollback to the last healthy generation, and the following stable relaunch on
+both GCC and MSVC. This is one transaction-level claim rather than a collection
+of component-only tests; its transport and child process are deterministic
+fakes, while package, filesystem, state-store, lease, token, and cleanup owners
+are production code.
+
+## Release-owned inputs
+
+Default builds contain no update configuration. A release build must compile
+an explicit origin, platform/channel, installed-sequence floor, and P-256
+public-key pin. The retained Updates page can start the bounded task explicitly
+and stores its automatic opt-out; a capable process attempts at most once
+automatically. Destruction can cancel before the transaction starts, and an
+in-flight request remains bounded by the platform transport. Production
+origin/pin values and offline signing-key custody/rotation remain outside the
+repository and are required before a public release can update itself.

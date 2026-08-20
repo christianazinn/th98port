@@ -10,7 +10,8 @@ param(
 	[string]$PackageAuthor = "",
 	[string]$PackageVerifier = "",
 	[string]$InstallVerifier = "",
-	[string]$TaskVerifier = ""
+	[string]$TaskVerifier = "",
+	[string]$EndToEndVerifier = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -141,12 +142,10 @@ try {
 		}
 		if($PackageAuthor -and $PackageVerifier) {
 			$packageRoot = Join-Path $temporary.FullName "package-root"
-			[IO.Directory]::CreateDirectory((Join-Path $packageRoot "bin")) |
-				Out-Null
 			[IO.Directory]::CreateDirectory((Join-Path $packageRoot "notices")) |
 				Out-Null
 			Copy-Item -LiteralPath $Artifact -Destination (
-				Join-Path $packageRoot "bin/test-tool.exe"
+				Join-Path $packageRoot "th03-app.exe"
 			)
 			[IO.File]::WriteAllText(
 				(Join-Path $packageRoot "notices/NOTICE.txt"),
@@ -190,6 +189,15 @@ try {
 				-ArtifactUrl "https://azinn.dev/th03/beta/test.t3pkg" `
 				-ReleaseNotesUrl "https://azinn.dev/th03/releases/0.5.0" `
 				-PublishedUnix 1787000000 -PublicKeyOutput $public | Out-Null
+			$packageManifestSecond = Join-Path $temporary.FullName (
+				"package-second.t3upd"
+			)
+			& $Signer -Artifact $package -Output $packageManifestSecond `
+				-PrivateKey $privateKey -Platform windows-x64 -Channel beta `
+				-Sequence 5002 -Version "0.5.0-beta.2" `
+				-ArtifactUrl "https://azinn.dev/th03/beta/test-2.t3pkg" `
+				-ReleaseNotesUrl "https://azinn.dev/th03/releases/0.5.0" `
+				-PublishedUnix 1787000001 -PublicKeyOutput $public | Out-Null
 
 			$badPackage = Join-Path $temporary.FullName "bad-member.t3pkg"
 			$badPackageBytes = [IO.File]::ReadAllBytes($package)
@@ -218,6 +226,13 @@ try {
 				& $TaskVerifier $packageManifest $publicDer $package
 				if($LASTEXITCODE -ne 0) {
 					throw "Native update task test failed with $LASTEXITCODE"
+				}
+			}
+			if($EndToEndVerifier) {
+				& $EndToEndVerifier $packageManifest $packageManifestSecond `
+					$publicDer $package
+				if($LASTEXITCODE -ne 0) {
+					throw "Native update end-to-end test failed with $LASTEXITCODE"
 				}
 			}
 		}

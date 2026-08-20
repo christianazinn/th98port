@@ -166,8 +166,10 @@ dependency licenses, and a SHA-256 build manifest.
 
 Linux jobs use the distribution's OpenSSL-backed libcurl package for bounded
 HTTPS update acquisition; macOS jobs use the SDK-provided libcurl, and Windows
-uses WinHTTP. These adapters only download authenticated update inputs. The
-current beta package still does not replace or execute itself.
+uses WinHTTP. These adapters only download authenticated update inputs. A
+configured release can materialize and nominate an authenticated generation
+for the next bootstrap launch; it never replaces or relaunches the running
+process.
 Each job also emits an inert `T3PKG001` update package beside the ordinary ZIP
 or tarball. See [the package contract](docs/UPDATE_PACKAGE.md) and the
 [pending/trial/health rollback state](docs/UPDATE_ACTIVATION.md).
@@ -175,9 +177,10 @@ or tarball. See [the package contract](docs/UPDATE_PACKAGE.md) and the
 The stable bootstrap passes its activation-state and generation locations to
 every child while reserving the trial token strictly for health
 acknowledgement. A host-time background task can run the authenticated install
-transaction against those locations. Default builds still compile no update
-origin or key and never start the task; the visible opt-in owner is a separate
-release gate.
+transaction against those locations. The capability-shaped Updates page owns
+the explicit check and persisted automatic opt-out, and capable builds attempt
+at most one automatic check per process. Default builds still compile no
+update origin or key, expose no placeholder, and never start the task.
 
 The workflow never fetches or packages original TH03 content and never signs,
 notarizes, deploys, or creates a GitHub Release. Its artifacts are therefore
@@ -648,7 +651,9 @@ menu/settings/services plan.
 `docs/UPDATE_MANIFEST.md` freezes the authenticated, monotonic release-metadata
 boundary, offline signing tool, provider-backed pinned-key verification, inert
 exact-artifact staging, and the manifest-first bounded acquisition transaction.
-Windows supplies the first strict HTTPS adapter; production keys,
-Linux/macOS adapters, polling/UI, and self-replacement remain disabled.
+Windows, Linux, and macOS supply strict HTTPS adapters, and the retained manual
+and automatic next-launch policy is complete. Production origin, installed
+sequence, SPKI pins, and signing-key custody remain release inputs; default
+builds stay offline.
 `docs/research/README.md` indexes the presentation, asset, and audio research
 contracts prepared for those later layers.

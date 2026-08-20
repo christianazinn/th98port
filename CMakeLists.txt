@@ -1569,6 +1569,9 @@ if(BUILD_TESTING)
 		add_executable(th03-app-update-task-tests
 			tests/test_app_update_task.cpp
 		)
+		add_executable(th03-app-update-e2e-tests
+			tests/test_app_update_e2e.cpp
+		)
 		target_link_libraries(
 			th03-app-update-manifest-authentication-tests
 			PRIVATE th03_app_update_authentication
@@ -1609,6 +1612,10 @@ if(BUILD_TESTING)
 			th03-app-update-task-tests
 			PRIVATE th03_app_update_authentication
 		)
+		target_link_libraries(
+			th03-app-update-e2e-tests
+			PRIVATE th03_app_update_authentication
+		)
 		th03_set_warnings(th03-app-update-manifest-authentication-tests)
 		th03_set_warnings(th03-app-update-acquisition-tests)
 		th03_set_warnings(th03-app-update-package-materialization-tests)
@@ -1619,6 +1626,7 @@ if(BUILD_TESTING)
 		th03_set_warnings(th03-app-update-install-tests)
 		th03_set_warnings(th03-app-update-release-config-tests)
 		th03_set_warnings(th03-app-update-task-tests)
+		th03_set_warnings(th03-app-update-e2e-tests)
 		add_test(
 			NAME th03-app-update-activation-tests
 			COMMAND th03-app-update-activation-tests
@@ -1657,6 +1665,8 @@ if(BUILD_TESTING)
 				$<TARGET_FILE:th03-app-update-install-tests>
 				-TaskVerifier
 				$<TARGET_FILE:th03-app-update-task-tests>
+				-EndToEndVerifier
+				$<TARGET_FILE:th03-app-update-e2e-tests>
 			)
 		endif()
 		add_test(
