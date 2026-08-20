@@ -254,12 +254,13 @@ equivalent extension. `Credits` uses the authenticated proportional font and
 the same row-clipped reciprocal shadow as the rest of New Classic Options. It
 contains only factual, replaceable project/source acknowledgements; the
 separately reserved project-team startup animation remains untouched.
-`Online & Privacy` reports whether the room identity belongs to the Windows
-current-user protected store or the explicit environment fallback. On Windows,
-it also provides a confirmation-gated `Forget Room Identity` action. The
+`Online & Privacy` reports whether the room identity belongs to the platform
+store or the explicit environment fallback. It provides a confirmation-gated
+`Forget Room Identity` action on Windows, Linux, and macOS. The
 retained menu never receives or renders credentials; it emits a typed host
-request that removes only `PODD.AUTH` after the deterministic menu tick. POSIX
-does not advertise a reset until it has an approved native secret-store owner.
+request that removes only `PODD.AUTH` after the deterministic menu tick.
+Windows protects the opaque credential with current-user DPAPI; POSIX publishes
+the compatible `T3AUTH01` record atomically with owner-only `0600` permissions.
 `Diagnostics` opens the authoritative user-data directory containing
 `last-run.log` and crash evidence through the same typed post-tick host action
 as Data & Storage. The strict `T3UPD001` signed-manifest parser, monotonic
@@ -328,7 +329,7 @@ The Replay hub is capability-shaped. With cached replay rows it is:
 
 ```text
 Local Replays
-Upload Replay              (official Windows service or configured override)
+Upload Replay              (official desktop service or configured override)
 My Records                 (only with accepted rows for this identity)
 Online Replay Library
 Downloaded Replays
@@ -524,7 +525,8 @@ deterministic package hashes, and representative screen snapshots.
 
 ### 8. HiScore/Replay hubs and online domain seam
 
-Status: production Story leaderboard/replay path complete on Windows. The
+Status: production Story leaderboard/replay path complete on Windows, Linux,
+and macOS. The
 domain/cache boundary was completed in session 189. Session 201 adds the
 read-only HiScore hub and source-styled cached online board/detail view.
 Session 202 adds asynchronous refresh of the active rank's
@@ -559,10 +561,12 @@ Session 302 deploys the private pinned verifier plus the public D1/R2 Worker
 and proves the complete production transaction with genuine WR `TH3R06.RPY`:
 native verification, accepted publication, `T3ONL002` public and My Records
 projection, exact R2 download, and the existing client Download/Watch input.
-The official Windows build exposes upload against `https://azinn.dev` without
+The official desktop builds expose upload against `https://azinn.dev` without
 requiring an environment variable. An explicitly empty override remains the
-offline switch. Reviewed historical-row data and non-Windows account mutation
-are separate follow-ups.
+offline switch. Session 303 adds the equivalent bounded libcurl transport and
+owner-only atomic identity to Linux and macOS, enabling the same refresh,
+upload, My Records, download, Watch, and Forget flows. Reviewed historical-row
+data remains a separate follow-up.
 
 - Define leaderboard/replay identifiers, category keys, provenance, and local
   cache documents without selecting a service vendor.
@@ -603,8 +607,7 @@ and product decisions are in `NEW_CLASSIC_ONLINE_SERVICE_DRAFT.md`.
   requires it.
 - Derive score/result/category server-side; enforce size, time, decompression,
   and rate limits.
-- Seed the reviewed historical records and extend account mutation to other
-  platforms without weakening offline behavior.
+- Seed the reviewed historical records without weakening offline behavior.
 
 Gate: hostile corpus, reproducible verification, idempotent submission,
 versioned categories, replay download integrity, and service-offline client

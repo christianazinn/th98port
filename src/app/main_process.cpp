@@ -5,6 +5,7 @@
 #include "main_process_static_content_internal.hpp"
 #include "main_stage_handoff_internal.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cstddef>

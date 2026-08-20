@@ -76,6 +76,8 @@
 #endif
 #if defined(_WIN32)
 #include "th03/platform/windows_online.hpp"
+#elif defined(TH03_ENABLE_CURL_ONLINE)
+#include "th03/platform/curl_online.hpp"
 #endif
 
 namespace {
@@ -1421,6 +1423,97 @@ namespace {
 	}
 	return std::string{official_online_origin};
 }
+
+#if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
+struct ProductOnlineError final {
+	std::uint8_t code = 0U;
+};
+
+#if defined(_WIN32)
+using ProductOnlineTransport = th03::platform::WindowsOnlineTransport;
+#else
+using ProductOnlineTransport = th03::platform::CurlOnlineTransport;
+#endif
+
+[[nodiscard]] std::expected<ProductOnlineTransport, ProductOnlineError>
+create_product_online_transport(std::string origin)
+{
+#if defined(_WIN32)
+	auto created = th03::platform::create_windows_online_transport(
+		std::move(origin)
+	);
+#else
+	auto created = th03::platform::create_curl_online_transport(
+		std::move(origin)
+	);
+#endif
+	if(!created) {
+		return std::unexpected(ProductOnlineError{
+			static_cast<std::uint8_t>(created.error().code)
+		});
+	}
+	return std::move(*created);
+}
+
+[[nodiscard]] std::expected<
+	std::optional<th03::app::NewClassicOnlineCredentials>,
+	ProductOnlineError
+> load_product_online_credentials(const std::filesystem::path &path)
+{
+#if defined(_WIN32)
+	auto loaded = th03::platform::load_windows_online_credentials(path);
+#else
+	auto loaded = th03::platform::load_posix_online_credentials(path);
+#endif
+	if(!loaded) {
+		return std::unexpected(ProductOnlineError{
+			static_cast<std::uint8_t>(loaded.error().code)
+		});
+	}
+	return std::move(*loaded);
+}
+
+[[nodiscard]] std::expected<
+	th03::app::NewClassicOnlineCredentials,
+	ProductOnlineError
+> load_or_enroll_product_online_credentials(
+	const std::filesystem::path &path,
+	const th03::app::NewClassicOnlineTransport &transport
+)
+{
+#if defined(_WIN32)
+	auto acquired = th03::platform::load_or_enroll_windows_online_credentials(
+		path, transport
+	);
+#else
+	auto acquired = th03::platform::load_or_enroll_posix_online_credentials(
+		path, transport
+	);
+#endif
+	if(!acquired) {
+		return std::unexpected(ProductOnlineError{
+			static_cast<std::uint8_t>(acquired.error().code)
+		});
+	}
+	return std::move(*acquired);
+}
+
+[[nodiscard]] std::expected<void, ProductOnlineError>
+remove_product_online_credentials(const std::filesystem::path &path)
+{
+#if defined(_WIN32)
+	auto removed = th03::platform::remove_windows_online_credentials(path);
+#else
+	auto removed = th03::platform::remove_posix_online_credentials(path);
+#endif
+	if(!removed) {
+		return std::unexpected(ProductOnlineError{
+			static_cast<std::uint8_t>(removed.error().code)
+		});
+	}
+	return {};
+}
+#endif
 
 [[nodiscard]] th03::app::NewClassicNetplayJoinLock netplay_join_lock(
 	const th03::app::DirectVsCliRequest &request
@@ -4994,7 +5087,7 @@ ExperienceRunResult run_classic_session(
 			th03::app::ExperienceProfile::new_classic :
 			th03::app::ExperienceProfile::classic;
 	parsed.launch.content.replay_root = parsed.replay_root;
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
 	parsed.launch.new_classic_online_identity_reset_available = new_classic;
 #endif
 	if(parsed.capture_replay) {
@@ -5021,17 +5114,18 @@ ExperienceRunResult run_classic_session(
 	const auto online_root =
 		new_classic_settings_path.parent_path() / "ONLINE";
 	const auto online_origin = product_online_origin();
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
 	parsed.launch.new_classic_online_upload_available = new_classic &&
 		online_origin &&
 		!parsed.capture_replay &&
 		!platform.oracle_enabled();
-	std::optional<th03::platform::WindowsOnlineTransport> online_transport{};
+	std::optional<ProductOnlineTransport> online_transport_owner{};
+	std::optional<th03::app::NewClassicOnlineTransport> online_transport{};
 	struct OnlineUploadCredentialContext final {
 		std::filesystem::path path{};
 		std::optional<th03::app::NewClassicOnlineCredentials> configured{};
 		bool configured_invalid = false;
-		th03::platform::WindowsOnlineTransport *transport = nullptr;
+		th03::app::NewClassicOnlineTransport transport{};
 	};
 	std::optional<OnlineUploadCredentialContext>
 		online_upload_credential_context{};
@@ -5231,9 +5325,9 @@ ExperienceRunResult run_classic_session(
 			if(platform.oracle_enabled() || parsed.capture_replay) {
 				std::cerr << "status=warning\nstage=online-refresh-start\n"
 					"code=disabled-during-capture\n";
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
 			} else if(auto created =
-				th03::platform::create_windows_online_transport(*online_origin)) {
+				create_product_online_transport(*online_origin)) {
 				std::error_code directory_error{};
 				std::filesystem::create_directories(
 					online_root, directory_error
@@ -5243,7 +5337,10 @@ ExperienceRunResult run_classic_session(
 						"code=cache-directory\nsystem="
 						<< directory_error.value() << '\n';
 				} else {
-					online_transport.emplace(std::move(*created));
+					online_transport_owner.emplace(std::move(*created));
+					online_transport.emplace(
+						online_transport_owner->transport()
+					);
 					auto credential_path = new_classic_settings_path.empty() ?
 						config_path.parent_path() / "PODD.AUTH" :
 						new_classic_settings_path.parent_path() / "PODD.AUTH";
@@ -5277,7 +5374,7 @@ ExperienceRunResult run_classic_session(
 							.path = std::move(credential_path),
 							.configured = std::move(configured_credentials),
 							.configured_invalid = configured_credentials_invalid,
-							.transport = &*online_transport,
+							.transport = *online_transport,
 						}
 					);
 					online_credential_source =
@@ -5290,26 +5387,23 @@ ExperienceRunResult run_classic_session(
 								auto &context = *static_cast<
 									OnlineUploadCredentialContext *>(opaque);
 								if(context.configured_invalid ||
-									context.transport == nullptr) {
+									context.transport.perform == nullptr) {
 									return std::unexpected(th03::app::
 										NewClassicOnlineCredentialAcquireError{1U});
 								}
 								if(context.configured) {
 									return *context.configured;
 								}
-								auto acquired = th03::platform::
-									load_or_enroll_windows_online_credentials(
-										context.path,
-										context.transport->transport()
+								auto acquired =
+									load_or_enroll_product_online_credentials(
+										context.path, context.transport
 									);
 								if(!acquired) {
 									return std::unexpected(th03::app::
-										NewClassicOnlineCredentialAcquireError{
-											static_cast<std::uint8_t>(
-												static_cast<std::uint8_t>(
-													acquired.error().code
-												) + 2U
-											)
+									NewClassicOnlineCredentialAcquireError{
+										static_cast<std::uint8_t>(
+											acquired.error().code + 2U
+										)
 										});
 								}
 								return std::move(*acquired);
@@ -5331,16 +5425,14 @@ ExperienceRunResult run_classic_session(
 								if(context.configured) {
 									return *context.configured;
 								}
-								auto loaded = th03::platform::
-									load_windows_online_credentials(context.path);
+								auto loaded =
+									load_product_online_credentials(context.path);
 								if(!loaded) {
 									return std::unexpected(th03::app::
-										NewClassicOnlineCredentialAcquireError{
-											static_cast<std::uint8_t>(
-												static_cast<std::uint8_t>(
-													loaded.error().code
-												) + 2U
-											)
+									NewClassicOnlineCredentialAcquireError{
+										static_cast<std::uint8_t>(
+											loaded.error().code + 2U
+										)
 										});
 								}
 								if(!*loaded) {
@@ -5375,7 +5467,7 @@ ExperienceRunResult run_classic_session(
 					auto started =
 						th03::app::start_new_classic_online_board_refresh(
 							std::move(categories), online_root,
-							online_transport->transport()
+							*online_transport
 						);
 					if(started) {
 						online_refresh_task.emplace(std::move(*started));
@@ -5718,7 +5810,7 @@ ExperienceRunResult run_classic_session(
 			update_install_task.reset();
 		}
 #endif
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
 		if(online_my_records_refresh_requested &&
 			!online_my_records_refresh_task && online_transport &&
 			online_existing_credential_source) {
@@ -5735,7 +5827,7 @@ ExperienceRunResult run_classic_session(
 			auto started =
 				th03::app::start_new_classic_online_my_records_refresh(
 					std::move(categories), *online_existing_credential_source,
-					online_transport->transport()
+					*online_transport
 				);
 			online_my_records_refresh_requested = false;
 			if(started) {
@@ -6020,7 +6112,7 @@ ExperienceRunResult run_classic_session(
 			}
 #endif
 			if((*runner)->take_new_classic_online_identity_reset_request()) {
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
 				online_my_records_refresh_task.reset();
 				online_my_records_refresh_requested = false;
 				if(auto cleared =
@@ -6032,10 +6124,9 @@ ExperienceRunResult run_classic_session(
 				const auto identity_root = new_classic_settings_path.empty() ?
 					config_path.parent_path() :
 					new_classic_settings_path.parent_path();
-				if(auto removed =
-					th03::platform::remove_windows_online_credentials(
-						identity_root / "PODD.AUTH"
-					); !removed) {
+				if(auto removed = remove_product_online_credentials(
+					identity_root / "PODD.AUTH"
+				); !removed) {
 					return {.exit_code = fail(
 						"online-identity-reset", removed.error()
 					)};
@@ -6053,7 +6144,7 @@ ExperienceRunResult run_classic_session(
 						request->replay_id, outcome
 					);
 				};
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
 				if(!online_transport) {
 					if(auto reported = report_immediate(
 						th03::app::NewClassicOnlineReplayDownloadOutcome::unavailable
@@ -6075,7 +6166,7 @@ ExperienceRunResult run_classic_session(
 					auto started =
 						th03::app::start_new_classic_online_replay_download(
 							*request, parsed.replay_root,
-							online_transport->transport()
+							*online_transport
 						);
 					if(!started) {
 						if(auto reported = report_immediate(
@@ -6111,7 +6202,7 @@ ExperienceRunResult run_classic_session(
 						request->slot, outcome
 					);
 				};
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
 				if(!online_transport || !online_credential_source) {
 					if(auto reported = report_immediate(
 						th03::app::NewClassicReplayUploadOutcome::unavailable
@@ -6134,7 +6225,7 @@ ExperienceRunResult run_classic_session(
 						th03::app::start_new_classic_online_replay_upload(
 							std::move(request->document), request->slot,
 							*online_credential_source,
-							online_transport->transport()
+							*online_transport
 						);
 					if(!started) {
 						if(auto reported = report_immediate(
@@ -7413,6 +7504,9 @@ product_rtc_netplay_request(
 	const th03::app::ClassicContentPaths &content
 )
 {
+#if !defined(_WIN32) && !defined(TH03_ENABLE_RTC_TRANSPORT)
+	(void)content;
+#endif
 	if(launch.transport !=
 		th03::app::NewClassicNetplayRoomTransport::online_service) {
 		return std::optional<RtcNetplayRequest>{};

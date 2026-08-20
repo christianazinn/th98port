@@ -1,9 +1,8 @@
 # New Classic online leaderboard and replay service
 
 Status: **production Cloudflare verifier/storage/read path live; official
-Windows client supports background boards, in-memory replay upload, My Records,
-download, and Watch; reviewed historical seeding and non-Windows account
-mutation remain**
+Windows, Linux, and macOS clients support background boards, in-memory replay
+upload, My Records, download, and Watch; reviewed historical seeding remains**
 
 Decision date: 2026-08-15
 
@@ -383,3 +382,13 @@ removed a false equality between the pre-initialization resident seed and the
 recorder's post-initialization live seed; snapshot-free stock reconstruction,
 the full first-round observation, checkpoints, splits, terminal state, and the
 literal slowdown threshold remain enforced.
+
+Session 303 extends the same client transactions to Linux and macOS. A single
+fixed-origin libcurl owner enforces HTTPS, certificate validation, no redirects,
+bounded bodies, bounded connect/request time, and the existing fixed relative
+API targets. It shares one process-wide libcurl lifetime with the updater but
+does not share request policy. The opaque `T3AUTH01` identity is atomically
+published and read back as an owner-only `0600` `PODD.AUTH`; it is neither
+replay metadata nor `PODD.CFG`, and explicit Forget removes only that file.
+The real Linux adapter fetched the production CZZ board as valid `T3ONL002`.
+Classic, capture, pixel-oracle, and explicit-empty-origin routes remain offline.

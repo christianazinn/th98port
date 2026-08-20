@@ -14,21 +14,14 @@
 #include <utility>
 #include <vector>
 
+#include "curl_runtime_internal.hpp"
+
 namespace th03::platform {
 namespace {
 
 constexpr long connect_timeout_ms = 5'000L;
 constexpr long request_timeout_ms = 120'000L;
 constexpr std::size_t maximum_url_bytes = 2048U;
-
-class CurlRuntime final {
-public:
-	CurlRuntime() noexcept : ready_(curl_global_init(CURL_GLOBAL_DEFAULT) == CURLE_OK) {}
-	~CurlRuntime() { if(ready_) { curl_global_cleanup(); } }
-	[[nodiscard]] bool ready() const noexcept { return ready_; }
-private:
-	bool ready_ = false;
-};
 
 class EasyHandle final {
 public:
@@ -123,8 +116,7 @@ perform(void *, const app::UpdateHttpRequest &request)
 			app::UpdateTransportErrorCode::invalid_url
 		});
 	}
-	static CurlRuntime runtime;
-	if(!runtime.ready()) {
+	if(!detail::curl_runtime_ready()) {
 		return std::unexpected(app::UpdateTransportError{
 			app::UpdateTransportErrorCode::unavailable
 		});

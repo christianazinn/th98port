@@ -165,8 +165,9 @@ archive with the product executable, replay tools, runtime libraries,
 dependency licenses, and a SHA-256 build manifest.
 
 Linux jobs use the distribution's OpenSSL-backed libcurl package for bounded
-HTTPS update acquisition; macOS jobs use the SDK-provided libcurl, and Windows
-uses WinHTTP. These adapters only download authenticated update inputs. A
+HTTPS update and online-service transactions; macOS jobs use the SDK-provided
+libcurl, and Windows uses WinHTTP. Update downloads remain separate from the
+fixed-origin leaderboard/replay client. A
 configured release can materialize and nominate an authenticated generation
 for the next bootstrap launch; it never replaces or relaunches the running
 process.
@@ -353,7 +354,7 @@ as downloaded; local downloads are revalidated on later launches. Confirm on
 enters the ordinary New Classic replay player through a black/silent OP
 boundary. When an active-rank cache contains replay records, the title Replay
 route opens a source-styled hub for Local Replays, the Online Replay Library,
-Downloaded Replays, and Return. The official Windows online origin also adds
+Downloaded Replays, and Return. The official desktop online origin also adds
 `Upload Replay`; its numbered-slot browser transfers one parsed
 finalized V13 document to a bounded worker, which loads or enrolls the protected
 opaque identity and posts canonical bytes directly from memory. No working
@@ -366,8 +367,10 @@ Watch transactions. Without any replay-backed cache, accepted history, or
 available upload capability, Replay still enters the authenticated local
 browser directly. The production Cloudflare verifier, D1, and R2 path is live
 and has accepted, projected, and returned a genuine complete Story V13
-byte-for-byte. Unsupported platforms continue to hide mutation rows rather
-than exposing inert actions.
+byte-for-byte. Windows protects the opaque account with current-user DPAPI;
+Linux and macOS use an atomic owner-only `PODD.AUTH` file compatible with the
+existing netplay identity. Explicitly offline and unsupported builds continue
+to hide mutation rows rather than exposing inert actions.
 The private `tools\th03-private-editor` utility provides direct migration:
 it accepts an original 824-byte PC-98 scorefile or Replay Patch 0.4.12's exact
 7,812-byte expanded file, validates it, backs up any current native score, and
