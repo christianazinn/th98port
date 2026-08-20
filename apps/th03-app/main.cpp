@@ -1417,7 +1417,7 @@ namespace {
 {
 	auto configured = environment_value(online_origin_environment);
 	if(configured) {
-		return configured;
+		return configured->empty() ? std::nullopt : std::move(configured);
 	}
 	return std::string{official_online_origin};
 }
@@ -5020,12 +5020,10 @@ ExperienceRunResult run_classic_session(
 		parsed.launch.new_classic_device_assignment;
 	const auto online_root =
 		new_classic_settings_path.parent_path() / "ONLINE";
-	const auto configured_online_origin =
-		environment_value(online_origin_environment);
 	const auto online_origin = product_online_origin();
 #if defined(_WIN32)
 	parsed.launch.new_classic_online_upload_available = new_classic &&
-		configured_online_origin && !configured_online_origin->empty() &&
+		online_origin &&
 		!parsed.capture_replay &&
 		!platform.oracle_enabled();
 	std::optional<th03::platform::WindowsOnlineTransport> online_transport{};

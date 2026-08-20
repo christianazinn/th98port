@@ -339,7 +339,8 @@ Leaderboards`, `Personal Bests`, and `Return` New Classic HiScore hub. Personal
 Bests reads the already-validated expanded score document once at entry and
 summarizes every unlocked character's active-rank best score/stage plus local
 playtime and 1CC totals without storage work on a source tick. The official
-build uses `https://azinn.dev` for bounded background refresh and Online Match.
+build uses `https://azinn.dev` for bounded background refresh, replay upload,
+and Online Match.
 `TH03_ONLINE_ORIGIN=https://...` overrides that endpoint for staging, while an
 explicitly empty value keeps the product wholly offline. Cache and network
 work never run on a source tick, captures disable refresh, and complete results
@@ -352,8 +353,8 @@ as downloaded; local downloads are revalidated on later launches. Confirm on
 enters the ordinary New Classic replay player through a black/silent OP
 boundary. When an active-rank cache contains replay records, the title Replay
 route opens a source-styled hub for Local Replays, the Online Replay Library,
-Downloaded Replays, and Return. An explicitly configured Windows online origin
-also adds `Upload Replay`; its numbered-slot browser transfers one parsed
+Downloaded Replays, and Return. The official Windows online origin also adds
+`Upload Replay`; its numbered-slot browser transfers one parsed
 finalized V13 document to a bounded worker, which loads or enrolls the protected
 opaque identity and posts canonical bytes directly from memory. No working
 upload file is created, and accepted/rejected/failure is latched back onto the
@@ -362,8 +363,11 @@ refreshes all of its accepted active-rank submissions into memory and adds
 `My Records` only when nonempty; it never enrolls merely because the app
 started. My Records and the two public libraries reuse the same Download and
 Watch transactions. Without any replay-backed cache, accepted history, or
-configured upload capability, Replay still enters the authenticated local
-browser directly. Production Cloudflare verifier resources remain unavailable.
+available upload capability, Replay still enters the authenticated local
+browser directly. The production Cloudflare verifier, D1, and R2 path is live
+and has accepted, projected, and returned a genuine complete Story V13
+byte-for-byte. Unsupported platforms continue to hide mutation rows rather
+than exposing inert actions.
 The private `tools\th03-private-editor` utility provides direct migration:
 it accepts an original 824-byte PC-98 scorefile or Replay Patch 0.4.12's exact
 7,812-byte expanded file, validates it, backs up any current native score, and

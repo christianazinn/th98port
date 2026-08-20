@@ -1,9 +1,9 @@
 # New Classic online leaderboard and replay service
 
-Status: **local foundation, strict client/cache projection, platform-neutral
-transactions, disabled Windows adapter, cached leaderboard UI, and opt-in
-background board refresh implemented; production deployment and account/replay
-actions pending**
+Status: **production Cloudflare verifier/storage/read path live; official
+Windows client supports background boards, in-memory replay upload, My Records,
+download, and Watch; reviewed historical seeding and non-Windows account
+mutation remain**
 
 Decision date: 2026-08-15
 
@@ -69,9 +69,9 @@ native client
   -> leaderboard/replay read endpoints
 ```
 
-The existing site is deployed with `npx wrangler deploy` from
-`tools/azinn-site-v2` in the retained replay-validation worktree. The service
-should extend that Worker project rather than create an unrelated deployment.
+The existing site is deployed with `npx wrangler deploy` from the canonical
+`tools/azinn-site-v2` checkout. The service extends that Worker rather than
+creating an unrelated deployment.
 
 Recommended bindings:
 
@@ -250,17 +250,18 @@ availability without inventing a host-styled surface.
 4. Add the small D1 schema and fixed endpoints with a fake verifier, then swap
    in the pinned native verifier.
 5. Add in-memory finalized replay upload and the online Replay-style views.
-6. Seed reviewed historical records directly into D1 and run one private beta
-   before public upload.
+6. Seed reviewed historical records directly into D1 after the reviewed record
+   dataset is supplied. Public replay upload is already live.
 
-## Implemented local foundation (session 194-online)
+## Implemented service and client path
 
-The canonical local foundation lives under `tools/azinn-site-v2/service`.
+The canonical service foundation lives under `tools/azinn-site-v2/service`.
 It supplies the D1 schema, content-addressed R2 publication, opaque
 ID/salted-token
 authentication, five routes, best-per-profile query, historical profile rows,
-and fail-closed pinned verifier fetcher seam. It has no production IDs,
-credentials, or verifier bypass and has not been deployed.
+and a fail-closed pinned verifier fetcher seam. Production identities remain
+deployment configuration rather than source defaults; there is no verifier
+bypass.
 
 `th03rv --service-json` now supplies the typed `T3RV-SERVICE-1` inner report.
 An accepted report derives visible score (including TH03's trailing-zero score
@@ -294,17 +295,16 @@ two credential strings. Upload serializes the finalized V13 directly into
 request memory and never writes a candidate journal or temporary replay.
 Download verifies the content digest, V13 parse, and every available cached
 metadata field before atomically preserving the exact response bytes (including
-optional accelerator tails) under the online replay directory. The remaining
-client work is the source-styled asynchronous visible owner and configured
-production deployment.
+optional accelerator tails) under the online replay directory. Later sessions
+add the visible owner, host tasks, official origin, and production deployment.
 
-Session 200 supplies that disabled Windows boundary. WinHTTP is fixed to one
+Session 200 supplies the Windows boundary. WinHTTP is fixed to one
 explicit HTTPS origin, rejects redirects and cross-origin/absolute targets,
 bounds connect/request time and reply bytes, and exposes no platform state to
 gameplay. DPAPI protects the opaque user ID and token together for the current
-Windows account through an atomic read-back-validated store. No production
-origin is compiled in or instantiated; therefore the remaining work is a
-configured deployment plus live asynchronous actions.
+Windows account through an atomic read-back-validated store. Official builds
+use `https://azinn.dev`; `TH03_ONLINE_ORIGIN` can override it for staging or
+disable online work when explicitly empty.
 
 Session 201 adds the first visible offline-first owner. If at least one valid
 T3ONL002 Story board exists for the active rank, HiScore opens a source-styled
@@ -316,10 +316,9 @@ the menu itself is immutable and never performs filesystem or network work.
 With no valid active-rank cache, the direct local HiScore route remains exactly
 as before.
 
-Session 202 adds the first asynchronous production transaction owner. No
-endpoint is compiled into the application: only an explicit
-`TH03_ONLINE_ORIGIN=https://...` enables refresh, and Classic, replay capture,
-and pixel-oracle runs never start it. The Windows worker sequentially refreshes
+Session 202 adds the first asynchronous production transaction owner. The
+official origin enables refresh by default, while Classic, replay capture, and
+pixel-oracle runs never start it. The Windows worker sequentially refreshes
 the nine Story boards for the configured rank through the existing bounded
 HTTPS transport. Each response is validated and atomically cached off the
 source thread; complete immutable documents are merged only between host-loop
@@ -354,7 +353,7 @@ transactions above. With no replay-backed cache, Replay still enters the local
 browser directly.
 
 Session 258 exposes explicit upload without changing the deterministic owner.
-On Windows, a configured origin adds one Upload Replay row even when no cached
+On Windows, the official or overridden origin adds one Upload Replay row even when no cached
 board contains records. Confirming a numbered local slot emits one immutable
 parsed V13 document; a host worker loads or enrolls the DPAPI-protected opaque
 identity and passes the document to the existing in-memory upload transaction.
@@ -362,13 +361,25 @@ The only replay bytes created are the bounded HTTPS request body. A result is
 latched into the retained screen on the next source boundary, while an absent
 origin or unsupported platform exposes no inert row.
 
-This is deliberately a deployment seam rather than a hidden public endpoint.
 Session 259 adds `My Records`: the authenticated history route projects each
 exact Story category as the existing bounded T3ONL002 document. The native
 client acquires one existing identity off source time, keeps the private
 documents in memory, and reuses Replay Download/Watch. Startup never enrolls
 merely because an origin exists; the row appears only for nonempty accepted
 history loaded from an existing identity or refreshed after a successful
-explicit upload. Real Cloudflare resources and the pinned Container adapter
-remain pending. Selecting Upload Replay is the explicit upload consent action;
+explicit upload. Selecting Upload Replay is the explicit upload consent action;
 first use may enroll the opaque identity automatically.
+
+Session 302 closes production acceptance. The private `podd-th03-verifier`
+Container runs the pinned native verifier and the public Worker pins its exact
+content, ruleset, and verifier identities. The supplied genuine WR
+`TH3R06.RPY` (SHA-256
+`464BE1B6FB68AF04C598C1B5E9B55D033ACF8FB6660C6978118E2DF9ADCF99D3`)
+was accepted at `https://azinn.dev`, projected into `T3ONL002`, returned through
+My Records, and downloaded from R2 with all 213,592 bytes unchanged. The
+service-derived row is CZZ / Mima / Lunatic / 152,255,320 / Clear, with
+Autofire and 730 slowdown frames out of 140,197 timed frames. The verifier fix
+removed a false equality between the pre-initialization resident seed and the
+recorder's post-initialization live seed; snapshot-free stock reconstruction,
+the full first-round observation, checkpoints, splits, terminal state, and the
+literal slowdown threshold remain enforced.

@@ -328,7 +328,7 @@ The Replay hub is capability-shaped. With cached replay rows it is:
 
 ```text
 Local Replays
-Upload Replay              (only with a configured upload service)
+Upload Replay              (official Windows service or configured override)
 My Records                 (only with accepted rows for this identity)
 Online Replay Library
 Downloaded Replays
@@ -342,7 +342,7 @@ The HiScore hub appears only when at least one validated cached online board
 exists for the active rank. With no such board, HiScore still opens the local
 viewer directly, so an offline or unconfigured installation gains no empty
 navigation layer. The Replay hub appears only when the active-rank cache
-contains at least one replay record or an actual upload origin is configured.
+contains at least one replay record or upload is available.
 Unsupported rows are omitted rather than disabled. Otherwise Replay still
 opens the local viewer directly, so an offline, curated-history-only, or
 unconfigured installation gains no empty navigation layer.
@@ -524,9 +524,10 @@ deterministic package hashes, and representative screen snapshots.
 
 ### 8. HiScore/Replay hubs and online domain seam
 
-Status: domain/cache boundary complete in session 189. Session 201 adds the
+Status: production Story leaderboard/replay path complete on Windows. The
+domain/cache boundary was completed in session 189. Session 201 adds the
 read-only HiScore hub and source-styled cached online board/detail view.
-Session 202 adds disabled-by-default asynchronous refresh of the active rank's
+Session 202 adds asynchronous refresh of the active rank's
 nine Story boards. Session 212 adds the first detail action: a replay-backed
 entry emits one bounded background download and reports success only after
 digest, V13, metadata, and atomic-publication validation. Session 213 adds
@@ -534,13 +535,13 @@ Watch: the host revalidates local content-addressed bytes, hands the immutable
 document back to OP, crosses a black/silent boundary, rebases the scheduler,
 and adopts the existing New Classic playback owner. Session 214 adds the
 source-styled Replay hub plus replay-only online and downloaded libraries;
-without an active-rank replay record, the direct local route remains. Account
-mutation remains deferred. Session 215
+without an active-rank replay record, the direct local route remains. Session
+215
 completes the four-row HiScore hub: Personal Bests summarizes active-rank local
 best score/stage, playtime, and 1CC totals for every unlocked character from a
 read-only expanded score snapshot.
 
-Session 258 adds explicit local replay upload. A configured Windows origin adds
+Session 258 adds explicit local replay upload. The official Windows origin adds
 one Upload Replay row and a retained numbered-slot owner. The selected parsed
 document crosses a typed boundary once; DPAPI identity acquisition/enrollment,
 canonical V13 encoding, and HTTPS all run on a bounded background worker. The
@@ -553,6 +554,15 @@ accepted row owned by the hidden account. Native refresh is memory-only and
 starts only for an existing identity or after an accepted explicit upload;
 empty or unavailable history exposes no row. Download and Watch reuse the
 existing validated handoffs, and public ranking remains best-per-profile.
+
+Session 302 deploys the private pinned verifier plus the public D1/R2 Worker
+and proves the complete production transaction with genuine WR `TH3R06.RPY`:
+native verification, accepted publication, `T3ONL002` public and My Records
+projection, exact R2 download, and the existing client Download/Watch input.
+The official Windows build exposes upload against `https://azinn.dev` without
+requiring an environment variable. An explicitly empty override remains the
+offline switch. Reviewed historical-row data and non-Windows account mutation
+are separate follow-ups.
 
 - Define leaderboard/replay identifiers, category keys, provenance, and local
   cache documents without selecting a service vendor.
@@ -575,26 +585,26 @@ atomic offline cache. It contains no endpoint, credential, provider name, or
 network transport. The HiScore owner consumes only already-validated snapshots;
 it performs no filesystem or network work on source-time ticks.
 
-The application may be given one explicit HTTPS origin through
-`TH03_ONLINE_ORIGIN`. With that opt-in, one bounded worker refreshes complete
-board snapshots outside source time and the runner adopts them only between
+The official application uses `https://azinn.dev`. `TH03_ONLINE_ORIGIN` may
+override that HTTPS origin for staging or disable online work when explicitly
+empty. One bounded worker refreshes complete board snapshots outside source
+time and the runner adopts them only between
 host iterations. The currently visible HiScore owner remains immutable; fresh
 data appears after returning to and re-entering HiScore. Captures and Classic
-never enable this path, and an absent origin preserves the entirely offline
-product.
+never enable this path.
 
 ### 9. Server and sharing
 
-The current proposed trust model, Cloudflare mapping, structured verifier
-boundary, and product decisions are in `NEW_CLASSIC_ONLINE_SERVICE_DRAFT.md`.
-That draft is intentionally not a deployment authorization.
+The deployed trust model, Cloudflare mapping, structured verifier boundary,
+and product decisions are in `NEW_CLASSIC_ONLINE_SERVICE_DRAFT.md`.
 
-- Deploy a queued, sandboxed `th03rv` verifier keyed by replay, content,
-  ruleset, and verifier version.
+- Operate the synchronous bounded private `th03rv` verifier keyed by replay,
+  content, ruleset, and verifier version; add a queue only if measured load
+  requires it.
 - Derive score/result/category server-side; enforce size, time, decompression,
   and rate limits.
-- Add upload consent, authentication, moderation, and privacy only after the
-  trust model and operational owner are settled.
+- Seed the reviewed historical records and extend account mutation to other
+  platforms without weakening offline behavior.
 
 Gate: hostile corpus, reproducible verification, idempotent submission,
 versioned categories, replay download integrity, and service-offline client
