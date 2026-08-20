@@ -65,6 +65,20 @@ constexpr std::size_t launch_attempts = 4U;
 	return status.type() == fs::file_type::regular;
 }
 
+[[nodiscard]] std::expected<fs::path, UpdateProcessHostError> absolute_path(
+	const fs::path &path
+)
+{
+	std::error_code system;
+	auto result = fs::absolute(path, system);
+	if(system) {
+		return std::unexpected(host_error(
+			UpdateProcessHostErrorCode::filesystem, path, system
+		));
+	}
+	return result.lexically_normal();
+}
+
 [[nodiscard]] std::expected<void, UpdateProcessHostError>
 rollback_active(
 	const fs::path &state_path,
@@ -157,6 +171,14 @@ run_update_process_host(
 			UpdateProcessHostErrorCode::invalid_config
 		));
 	}
+	const auto child_activation_state = absolute_path(config.activation_state);
+	if(!child_activation_state) {
+		return std::unexpected(child_activation_state.error());
+	}
+	const auto child_generation_root = absolute_path(config.generation_root);
+	if(!child_generation_root) {
+		return std::unexpected(child_generation_root.error());
+	}
 	auto lease = acquire_update_bootstrap_lease(config.activation_state);
 	if(!lease) {
 		return std::unexpected(host_error(
@@ -212,6 +234,8 @@ run_update_process_host(
 			.executable = executable,
 			.working_directory = config.working_directory,
 			.arguments = config.application_arguments,
+			.activation_state = *child_activation_state,
+			.generation_root = *child_generation_root,
 		};
 		if(plan->trial_token) {
 			auto text = encode_update_trial_token(*plan->trial_token);
@@ -221,7 +245,6 @@ run_update_process_host(
 					config.activation_state
 				));
 			}
-			invocation.activation_state = config.activation_state;
 			invocation.trial_token = std::move(*text);
 		}
 		auto executed = executor.execute(executor.context, invocation);

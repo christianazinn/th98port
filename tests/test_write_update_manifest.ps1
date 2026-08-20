@@ -9,7 +9,8 @@ param(
 	[string]$AcquisitionVerifier = "",
 	[string]$PackageAuthor = "",
 	[string]$PackageVerifier = "",
-	[string]$InstallVerifier = ""
+	[string]$InstallVerifier = "",
+	[string]$TaskVerifier = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -211,6 +212,12 @@ try {
 				& $InstallVerifier $packageManifest $publicDer $package
 				if($LASTEXITCODE -ne 0) {
 					throw "Native update install test failed with $LASTEXITCODE"
+				}
+			}
+			if($TaskVerifier) {
+				& $TaskVerifier $packageManifest $publicDer $package
+				if($LASTEXITCODE -ne 0) {
+					throw "Native update task test failed with $LASTEXITCODE"
 				}
 			}
 		}

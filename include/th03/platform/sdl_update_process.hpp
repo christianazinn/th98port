@@ -7,6 +7,8 @@ namespace th03::platform {
 
 inline constexpr char update_activation_state_environment[] =
 	"TH03_UPDATE_STATE";
+inline constexpr char update_generation_root_environment[] =
+	"TH03_UPDATE_GENERATIONS";
 inline constexpr char update_trial_token_environment[] =
 	"TH03_UPDATE_TRIAL_TOKEN";
 

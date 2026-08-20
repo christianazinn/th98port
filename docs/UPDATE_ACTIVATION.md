@@ -106,9 +106,12 @@ ownership.
 `podd-bootstrap` is the synchronous cross-platform process owner. It resolves
 generation executables only beneath the identity-derived immutable directory,
 inherits the child's console streams, and retains the lifetime lease until the
-child exits. It supplies `TH03_UPDATE_STATE` and `TH03_UPDATE_TRIAL_TOKEN` only
-for a trial; ordinary active and legacy children receive neither even if the
-parent environment was stale.
+child exits. Every child receives the bootstrap-owned absolute
+`TH03_UPDATE_STATE` and `TH03_UPDATE_GENERATIONS` locations. A trial child
+additionally receives the
+exact `TH03_UPDATE_TRIAL_TOKEN`; ordinary active and legacy children have that
+token explicitly removed even if the parent environment was stale. Runtime
+storage discovery is therefore independent from health acknowledgement.
 
 Missing files or process-creation failures occur before a child UI can exist,
 so a trial is failed or an active generation is rolled back and the recovered
@@ -140,6 +143,9 @@ never prevents the already-run application from returning its exit status.
 Production signing material and visible opt-in update UI remain separate
 release gates. Default builds contain no update configuration. A release build
 may compile an explicit origin, platform/channel, installed-sequence floor, and
-P-256 public-key pin; only then can the separate host-owned install transaction
-download, materialize, and nominate a generation. The executable host still
-performs no request until a future visible policy invokes that transaction.
+P-256 public-key pin. A host-owned `UpdateInstallTask` deep-copies that trust
+record and performs the existing bounded install transaction on one joined
+background worker against the bootstrap-owned storage paths. Destruction can
+cancel before the transaction starts; an in-flight request remains bounded by
+the platform transport. The executable host still performs no request until a
+future visible policy explicitly starts that task.

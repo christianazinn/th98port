@@ -20,7 +20,8 @@ struct UpdateChildInvocation final {
 	std::filesystem::path executable{};
 	std::filesystem::path working_directory{};
 	std::vector<std::string> arguments{};
-	std::optional<std::filesystem::path> activation_state{};
+	std::filesystem::path activation_state{};
+	std::filesystem::path generation_root{};
 	std::optional<std::string> trial_token{};
 };
 

@@ -66,6 +66,7 @@
 #include "th03/platform/udp_socket.hpp"
 #if defined(TH03_ENABLE_UPDATE_HOST)
 #include "th03/app/update_bootstrap.hpp"
+#include "th03/app/update_task.hpp"
 #include "th03/platform/sdl_update_process.hpp"
 #endif
 #if defined(_WIN32)
@@ -123,6 +124,7 @@ struct UpdateHealthRequest final {
 };
 
 std::optional<UpdateHealthRequest> update_health_request{};
+std::optional<th03::app::UpdateRuntimeContext> update_runtime_context{};
 bool update_health_acknowledged = false;
 #endif
 
@@ -2820,19 +2822,40 @@ private:
 }
 
 #if defined(TH03_ENABLE_UPDATE_HOST)
-[[nodiscard]] std::expected<std::optional<UpdateHealthRequest>, const char *>
-load_update_health_request()
+[[nodiscard]] std::expected<
+	std::optional<th03::app::UpdateRuntimeContext>,
+	const char *
+> load_update_runtime_context()
 {
 	const auto state = environment_value(
 		th03::platform::update_activation_state_environment
 	);
+	const auto generations = environment_value(
+		th03::platform::update_generation_root_environment
+	);
+	const auto parsed = th03::app::parse_update_runtime_context(
+		state ? std::optional<std::string_view>(*state) : std::nullopt,
+		generations ? std::optional<std::string_view>(*generations) : std::nullopt
+	);
+	if(!parsed) {
+		return std::unexpected("incomplete-environment");
+	}
+	return *parsed;
+}
+
+[[nodiscard]] std::expected<std::optional<UpdateHealthRequest>, const char *>
+load_update_health_request()
+{
 	const auto token = environment_value(
 		th03::platform::update_trial_token_environment
 	);
-	if(!state && !token) {
+	if(!token) {
 		return std::optional<UpdateHealthRequest>{};
 	}
-	if(!state || !token || state->empty() || token->empty()) {
+	const auto state = environment_value(
+		th03::platform::update_activation_state_environment
+	);
+	if(!state || state->empty() || token->empty()) {
 		return std::unexpected("incomplete-environment");
 	}
 	auto decoded = th03::app::decode_update_trial_token(*token);
@@ -7531,6 +7554,13 @@ int run_product_shell(th03::app::ClassicCliRequest parsed)
 int main(int argc, char **argv)
 {
 #if defined(TH03_ENABLE_UPDATE_HOST)
+	auto runtime = load_update_runtime_context();
+	if(!runtime) {
+		std::cerr << "status=error\nstage=update-runtime\ncode=" <<
+			runtime.error() << '\n';
+		return 1;
+	}
+	update_runtime_context = std::move(*runtime);
 	auto health = load_update_health_request();
 	if(!health) {
 		std::cerr << "status=error\nstage=update-health\ncode=" <<

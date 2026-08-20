@@ -272,8 +272,10 @@ failure-preserving inert staging on every beta platform. `T3PKG001` adds a
 portable traversal-proof package and complete inert generation materializer.
 `T3ACT001` now freezes the active/pending/previous identity transaction,
 epoch-bound trial acknowledgement, interrupted-trial rollback, and alternating
-durable state store. Production key pins/rotation, the bootstrap launcher,
-generation cleanup, and visible opt-in policy remain open,
+durable state store. The packaged bootstrap, conservative generation cleanup,
+compiled trust record, and background next-launch install task are complete.
+Production origin/pin values, signing-key custody/rotation, and visible opt-in
+policy remain open,
 so do not publish a disabled placeholder choice merely to make the target shape
 visible.
 
@@ -624,8 +626,11 @@ bootstrap launch; it neither replaces nor relaunches the running process.
 The release trust seam is default-off and accepts only an all-or-nothing set of
 compiled origin, exact platform/channel, installed-sequence floor, and P-256
 SPKI pin; runtime settings and environment variables cannot replace it.
-Production values, signing-key custody/rotation, and the visible opt-in Updates
-flow remain release-owned gates. These owners must not run
+The bootstrap now passes its update storage context to every child independently
+from a trial-health token, and the background install task deep-copies the
+compiled trust record before doing bounded host-time work. Production values,
+signing-key custody/rotation, and the visible opt-in Updates flow remain
+release-owned gates. These owners must not run
 inside source-time gameplay or silently alter Classic/New Classic content
 identities. See `UPDATE_MANIFEST.md`, `UPDATE_PACKAGE.md`, and
 `UPDATE_ACTIVATION.md`.

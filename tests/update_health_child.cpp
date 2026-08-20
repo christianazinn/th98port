@@ -41,7 +41,16 @@ int main(int argc, char **argv)
 	const auto text = environment_value(
 		th03::platform::update_trial_token_environment
 	);
-	if(!state || !text) {
+	const auto generations = environment_value(
+		th03::platform::update_generation_root_environment
+	);
+	if(!state || !generations || generations->empty()) {
+		return 91;
+	}
+	if(std::string_view(argv[1]) == "runtime-only") {
+		return text ? 94 : 24;
+	}
+	if(!text) {
 		return 91;
 	}
 	auto token = th03::app::decode_update_trial_token(*text);

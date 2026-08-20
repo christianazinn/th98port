@@ -168,12 +168,13 @@ struct FakeExecutor final {
 			return std::unexpected(UpdateChildProcessError{"create failed"});
 		}
 		if(action == FakeAction::launch_and_acknowledge) {
-			if(!invocation.activation_state || !invocation.trial_token) {
+			if(invocation.activation_state.empty() ||
+				invocation.generation_root.empty() || !invocation.trial_token) {
 				return std::unexpected(UpdateChildProcessError{"missing trial"});
 			}
 			auto token = decode_update_trial_token(*invocation.trial_token);
 			if(!token || !acknowledge_update_launch(
-				*invocation.activation_state, *token
+				invocation.activation_state, *token
 			)) {
 				return std::unexpected(UpdateChildProcessError{"ack failed"});
 			}
@@ -222,6 +223,10 @@ int main()
 			result->source == UpdateLaunchSource::legacy_install &&
 			fake.invocations.size() == 1U &&
 			!fake.invocations.front().trial_token && !result->cleanup_warning &&
+			fake.invocations.front().activation_state ==
+				fs::absolute(request.activation_state).lexically_normal() &&
+			fake.invocations.front().generation_root ==
+				fs::absolute(request.generation_root).lexically_normal() &&
 			!fs::exists(stale) &&
 			fake.invocations.front().arguments == request.application_arguments,
 			"legacy launch cleans unreferenced owned generations under the retained lifetime lease");
@@ -242,7 +247,10 @@ int main()
 			UpdateLaunchSource::trial_generation &&
 			fake.invocations.size() == 1U &&
 			fake.invocations.front().executable == generation_executable &&
-			fake.invocations.front().activation_state == state_path &&
+			fake.invocations.front().activation_state ==
+				fs::absolute(state_path).lexically_normal() &&
+			fake.invocations.front().generation_root ==
+				fs::absolute(request.generation_root).lexically_normal() &&
 			fake.invocations.front().trial_token &&
 			load_state(state_path).active == first,
 			"trial child receives exact state/token and health acknowledgement activates it");

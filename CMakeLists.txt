@@ -668,6 +668,7 @@ if(TH03_ENABLE_RTC)
 		src/app/update_generation.cpp
 		src/app/update_generation_cleanup.cpp
 		src/app/update_install.cpp
+		src/app/update_task.cpp
 		src/app/update_release_config.cpp
 		src/app/update_process_host.cpp
 	)
@@ -678,7 +679,7 @@ if(TH03_ENABLE_RTC)
 	target_link_libraries(
 		th03_app_update_authentication
 		PUBLIC th03_app_persistence
-		PRIVATE MbedTLS::mbedcrypto
+		PRIVATE MbedTLS::mbedcrypto Threads::Threads
 	)
 	target_compile_features(th03_app_update_authentication PUBLIC cxx_std_23)
 	set_target_properties(
@@ -1565,6 +1566,9 @@ if(BUILD_TESTING)
 		add_executable(th03-app-update-release-config-tests
 			tests/test_app_update_release_config.cpp
 		)
+		add_executable(th03-app-update-task-tests
+			tests/test_app_update_task.cpp
+		)
 		target_link_libraries(
 			th03-app-update-manifest-authentication-tests
 			PRIVATE th03_app_update_authentication
@@ -1601,6 +1605,10 @@ if(BUILD_TESTING)
 			th03-app-update-release-config-tests
 			PRIVATE th03_app_update_authentication
 		)
+		target_link_libraries(
+			th03-app-update-task-tests
+			PRIVATE th03_app_update_authentication
+		)
 		th03_set_warnings(th03-app-update-manifest-authentication-tests)
 		th03_set_warnings(th03-app-update-acquisition-tests)
 		th03_set_warnings(th03-app-update-package-materialization-tests)
@@ -1610,6 +1618,7 @@ if(BUILD_TESTING)
 		th03_set_warnings(th03-app-update-generation-cleanup-tests)
 		th03_set_warnings(th03-app-update-install-tests)
 		th03_set_warnings(th03-app-update-release-config-tests)
+		th03_set_warnings(th03-app-update-task-tests)
 		add_test(
 			NAME th03-app-update-activation-tests
 			COMMAND th03-app-update-activation-tests
@@ -1646,6 +1655,8 @@ if(BUILD_TESTING)
 				$<TARGET_FILE:th03-app-update-package-materialization-tests>
 				-InstallVerifier
 				$<TARGET_FILE:th03-app-update-install-tests>
+				-TaskVerifier
+				$<TARGET_FILE:th03-app-update-task-tests>
 			)
 		endif()
 		add_test(

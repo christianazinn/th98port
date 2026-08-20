@@ -48,19 +48,20 @@ namespace {
 	const auto destroy_environment = [&]() {
 		SDL_DestroyEnvironment(environment);
 	};
-	bool environment_ready = false;
-	if(invocation.activation_state && invocation.trial_token) {
-		const auto state = utf8(*invocation.activation_state);
+	const auto state = utf8(invocation.activation_state);
+	const auto generations = utf8(invocation.generation_root);
+	bool environment_ready = SDL_SetEnvironmentVariable(
+		environment, update_activation_state_environment, state.c_str(), true
+	) && SDL_SetEnvironmentVariable(
+		environment, update_generation_root_environment, generations.c_str(), true
+	);
+	if(environment_ready && invocation.trial_token) {
 		environment_ready = SDL_SetEnvironmentVariable(
-			environment, update_activation_state_environment, state.c_str(), true
-		) && SDL_SetEnvironmentVariable(
 			environment, update_trial_token_environment,
 			invocation.trial_token->c_str(), true
 		);
-	} else {
+	} else if(environment_ready) {
 		environment_ready = SDL_UnsetEnvironmentVariable(
-			environment, update_activation_state_environment
-		) && SDL_UnsetEnvironmentVariable(
 			environment, update_trial_token_environment
 		);
 	}

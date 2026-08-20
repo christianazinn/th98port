@@ -172,6 +172,13 @@ Each job also emits an inert `T3PKG001` update package beside the ordinary ZIP
 or tarball. See [the package contract](docs/UPDATE_PACKAGE.md) and the
 [pending/trial/health rollback state](docs/UPDATE_ACTIVATION.md).
 
+The stable bootstrap passes its activation-state and generation locations to
+every child while reserving the trial token strictly for health
+acknowledgement. A host-time background task can run the authenticated install
+transaction against those locations. Default builds still compile no update
+origin or key and never start the task; the visible opt-in owner is a separate
+release gate.
+
 The workflow never fetches or packages original TH03 content and never signs,
 notarizes, deploys, or creates a GitHub Release. Its artifacts are therefore
 development builds that still require the caller-owned inputs described below.

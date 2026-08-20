@@ -68,7 +68,7 @@ int main(int argc, char **argv)
 	if(!pending || !commit_update_activation_state(state_path, *pending)) {
 		return 3;
 	}
-	const UpdateProcessHostConfig config{
+	UpdateProcessHostConfig config{
 		.activation_state = state_path,
 		.generation_root = root / "generations",
 		.legacy_executable = argv[1],
@@ -80,11 +80,17 @@ int main(int argc, char **argv)
 		config, th03::platform::sdl_update_process_executor()
 	);
 	const auto loaded = load_update_activation_state(state_path);
-	const bool passed = result && result->exit_code == 23 &&
+	bool passed = result && result->exit_code == 23 &&
 		result->source == UpdateLaunchSource::trial_generation && loaded &&
 		loaded->state.phase == UpdateActivationPhase::stable &&
 		loaded->state.active == generation;
+	config.application_arguments = {"runtime-only"};
+	const auto stable_result = run_update_process_host(
+		config, th03::platform::sdl_update_process_executor()
+	);
+	passed = passed && stable_result && stable_result->exit_code == 24 &&
+		stable_result->source == UpdateLaunchSource::active_generation;
 	fs::remove_all(root, system);
-	std::cout << "checks=1 failures=" << (passed ? 0 : 1) << '\n';
+	std::cout << "checks=2 failures=" << (passed ? 0 : 1) << '\n';
 	return passed ? 0 : 1;
 }
