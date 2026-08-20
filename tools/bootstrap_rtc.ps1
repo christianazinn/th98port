@@ -36,21 +36,23 @@ $submodules = [ordered]@{
 $mbedVersion = "3.6.7"
 $mbedSha256 =
 	"a7e8bcbec0e6f761b4af24f25677626b35f762f68eef79c08677a363212d11f6"
+$gitCommand = (Get-Command git -ErrorAction Stop).Source
+$tarCommand = (Get-Command tar -ErrorAction Stop).Source
 
 $libSource = [IO.Path]::GetFullPath($LibDataChannelSource)
 if (-not (Test-Path -LiteralPath $libSource -PathType Container)) {
 	throw "libdatachannel source directory does not exist: $libSource"
 }
-$head = (& git.exe -C $libSource rev-parse HEAD).Trim()
+$head = (& $gitCommand -C $libSource rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $head -ne $libCommit) {
 	throw "libdatachannel source is not the pinned v$libVersion commit"
 }
-$dirty = @(& git.exe -C $libSource status --porcelain --ignore-submodules=none)
+$dirty = @(& $gitCommand -C $libSource status --porcelain --ignore-submodules=none)
 if ($LASTEXITCODE -ne 0 -or $dirty.Count -ne 0) {
 	throw "libdatachannel source and recursive submodules must be clean"
 }
 foreach ($entry in $submodules.GetEnumerator()) {
-	$actual = (& git.exe -C $libSource -C $entry.Key rev-parse HEAD).Trim()
+	$actual = (& $gitCommand -C $libSource -C $entry.Key rev-parse HEAD).Trim()
 	if ($LASTEXITCODE -ne 0 -or $actual -ne $entry.Value) {
 		throw "libdatachannel submodule pin mismatch: $($entry.Key)"
 	}
@@ -73,7 +75,7 @@ if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant
 	$mbedSha256) {
 	throw "Mbed TLS archive SHA-256 mismatch"
 }
-$archiveEntries = @(& tar.exe -tf $archive)
+$archiveEntries = @(& $tarCommand -tf $archive)
 if ($LASTEXITCODE -ne 0 -or $archiveEntries.Count -eq 0) {
 	throw "Mbed TLS archive inspection failed"
 }
@@ -133,7 +135,7 @@ try {
 		[Text.UTF8Encoding]::new($false)
 	)
 
-	& tar.exe -xf $archive -C $staging
+	& $tarCommand -xf $archive -C $staging
 	if ($LASTEXITCODE -ne 0) {
 		throw "Mbed TLS archive extraction failed"
 	}

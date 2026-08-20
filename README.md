@@ -154,6 +154,21 @@ generated executable does, so it remains
 ignored and is strictly a private testing artifact pending the asset/license
 and public-package work.
 
+### Manual cross-platform beta builds
+
+The repository's **Manual beta builds** GitHub Actions workflow is a deliberate
+button, not per-commit CI. Run it from the Actions tab when a tester build is
+needed. It builds and tests source-authenticated SDL 3.4.10,
+libdatachannel 0.24.3, and Mbed TLS 3.6.7 configurations for Windows x86-64,
+Linux x86-64, macOS Apple Silicon, and macOS Intel. Every job uploads one
+archive with the product executable, replay tools, runtime libraries,
+dependency licenses, and a SHA-256 build manifest.
+
+The workflow never fetches or packages original TH03 content and never signs,
+notarizes, deploys, or creates a GitHub Release. Its artifacts are therefore
+development builds that still require the caller-owned inputs described below.
+See [the packaged beta notes](docs/BETA_PACKAGE.md) before distributing one.
+
 `th03-app` reads an external structured extraction containing `YUME1.DAT/`
 and `YUME2.DAT/`, a supported Japanese `MAIN.EXE` compiled-content profile,
 the untouched stock DIET-packed or authenticated unpacked Japanese

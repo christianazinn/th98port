@@ -8,6 +8,20 @@ find_package(Threads REQUIRED)
 option(TH03_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 option(TH03_ENABLE_SDL "Build the optional SDL 3 platform adapter" OFF)
 option(TH03_ENABLE_RTC "Build the optional WebRTC netplay transport" OFF)
+option(
+	TH03_PACKAGE_BETA
+	"Install redistributable beta binaries and dependency licenses"
+	OFF
+)
+if(TH03_PACKAGE_BETA AND MSVC)
+	# The manual tester package must not require a separately installed VC
+	# redistributable. Keep ordinary developer builds on CMake's default.
+	set(
+		CMAKE_MSVC_RUNTIME_LIBRARY
+		"MultiThreaded$<$<CONFIG:Debug>:Debug>"
+		CACHE STRING "" FORCE
+	)
+endif()
 
 set(
 	TH03_SDL3_PROVIDER "source" CACHE STRING
@@ -933,6 +947,68 @@ if(TH03_ENABLE_SDL)
 	if(TH03_ENABLE_RTC)
 		th03_stage_rtc_licenses(th03-app)
 	endif()
+endif()
+
+if(TH03_PACKAGE_BETA)
+	if(NOT TH03_ENABLE_SDL OR NOT TH03_ENABLE_RTC)
+		message(FATAL_ERROR
+			"TH03_PACKAGE_BETA requires the SDL and RTC product adapters"
+		)
+	endif()
+
+	if(APPLE)
+		set_target_properties(th03-app PROPERTIES INSTALL_RPATH "@loader_path")
+	elseif(UNIX)
+		set_target_properties(th03-app PROPERTIES INSTALL_RPATH "\$ORIGIN")
+	endif()
+
+	install(
+		TARGETS
+			th03-app
+			th03-replay-video
+			th03rv
+			th03-replay-check
+			th03-headless
+		RUNTIME DESTINATION .
+	)
+	install(
+		FILES "$<TARGET_FILE:SDL3::SDL3-shared>"
+		DESTINATION .
+	)
+	if(UNIX AND NOT APPLE)
+		install(
+			FILES "$<TARGET_SONAME_FILE:SDL3::SDL3-shared>"
+			DESTINATION .
+		)
+	endif()
+	install(
+		FILES "${CMAKE_CURRENT_SOURCE_DIR}/docs/BETA_PACKAGE.md"
+		DESTINATION .
+		RENAME README.md
+	)
+	install(
+		FILES "${_th03_sdl3_license_file}"
+		DESTINATION licenses/SDL3
+		RENAME LICENSE.txt
+	)
+	foreach(_dependency IN ITEMS 98fmplayer ymfm)
+		install(
+			FILES
+				"${CMAKE_CURRENT_SOURCE_DIR}/third_party/${_dependency}/LICENSE"
+			DESTINATION "licenses/${_dependency}"
+		)
+	endforeach()
+	foreach(_license_record IN LISTS _th03_rtc_license_files)
+		string(REPLACE "|" ";" _license_fields "${_license_record}")
+		list(GET _license_fields 0 _license_name)
+		list(GET _license_fields 1 _license_source)
+		list(GET _license_fields 2 _license_filename)
+		install(
+			FILES "${_license_source}"
+			DESTINATION "licenses/${_license_name}"
+			RENAME "${_license_filename}"
+		)
+	endforeach()
 endif()
 
 if(BUILD_TESTING)

@@ -13,6 +13,7 @@ $expectedSha256 =
 	"12b34280415ec8418c864408b93d008a20a6530687ee613d60bfbd20411f2785"
 $publishedUrl =
 	"https://github.com/libsdl-org/SDL/releases/download/release-$version/$archiveName"
+$tarCommand = (Get-Command tar -ErrorAction Stop).Source
 $sourceRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $allowedRoot = [IO.Path]::GetFullPath((Join-Path $sourceRoot "out"))
 if ([string]::IsNullOrWhiteSpace($DestinationRoot)) {
@@ -45,7 +46,7 @@ if ($actualSha256 -ne $expectedSha256) {
 	throw "SDL archive SHA-256 mismatch"
 }
 
-$archiveEntries = @(& tar.exe -tzf $archive)
+$archiveEntries = @(& $tarCommand -tzf $archive)
 if ($LASTEXITCODE -ne 0 -or $archiveEntries.Count -eq 0) {
 	throw "SDL archive inspection failed"
 }
@@ -151,7 +152,7 @@ if (-not $resolvedStaging.StartsWith(
 $published = $false
 try {
 	New-Item -ItemType Directory -Path $resolvedStaging | Out-Null
-	& tar.exe -xzf $archive -C $resolvedStaging --strip-components=1
+	& $tarCommand -xzf $archive -C $resolvedStaging --strip-components=1
 	if ($LASTEXITCODE -ne 0) {
 		throw "SDL archive extraction failed"
 	}

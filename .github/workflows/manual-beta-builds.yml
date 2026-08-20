@@ -1,0 +1,165 @@
+name: Manual beta builds
+
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        description: Optional label recorded in each build manifest
+        required: false
+        default: beta
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-beta-builds-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.display }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - display: Windows x86-64
+            runner: windows-2025
+            artifact: podd-port-beta-windows-x64
+            platform: windows-x64
+          - display: Linux x86-64
+            runner: ubuntu-24.04
+            artifact: podd-port-beta-linux-x64
+            platform: linux-x64
+          - display: macOS Apple Silicon
+            runner: macos-15
+            artifact: podd-port-beta-macos-arm64
+            platform: macos-arm64
+          - display: macOS Intel
+            runner: macos-15-intel
+            artifact: podd-port-beta-macos-x64
+            platform: macos-x64
+
+    steps:
+      - name: Check out libth03
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Linux build prerequisites
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            ninja-build \
+            libasound2-dev libpulse-dev libx11-dev libxext-dev \
+            libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev \
+            libxss-dev libxkbcommon-dev libdrm-dev libgbm-dev \
+            libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
+            libdbus-1-dev libibus-1.0-dev libudev-dev \
+            libpipewire-0.3-dev libwayland-dev libdecor-0-dev
+
+      - name: Install macOS build prerequisites
+        if: runner.os == 'macOS'
+        shell: bash
+        run: brew install ninja
+
+      - name: Authenticate and stage dependencies
+        shell: pwsh
+        run: ./tools/ci/bootstrap_beta_dependencies.ps1
+
+      - name: Configure Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >-
+          cmake -S . -B out/ci-build -A x64
+          -DBUILD_TESTING=ON
+          -DTH03_ENABLE_SDL=ON
+          -DTH03_ENABLE_RTC=ON
+          -DTH03_PACKAGE_BETA=ON
+          -DTH03_SDL3_PROVIDER=source
+          -DTH03_RTC_PROVIDER=source
+
+      - name: Configure Linux and macOS
+        if: runner.os != 'Windows'
+        shell: bash
+        run: >-
+          cmake -S . -B out/ci-build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=ON
+          -DTH03_ENABLE_SDL=ON
+          -DTH03_ENABLE_RTC=ON
+          -DTH03_PACKAGE_BETA=ON
+          -DTH03_SDL3_PROVIDER=source
+          -DTH03_RTC_PROVIDER=source
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build out/ci-build --config Release --parallel
+
+      - name: Test
+        shell: pwsh
+        run: >-
+          ctest --test-dir out/ci-build -C Release
+          --output-on-failure --parallel 2
+
+      - name: Install package
+        shell: pwsh
+        run: >-
+          cmake --install out/ci-build --config Release
+          --prefix "out/ci-package/${{ matrix.artifact }}"
+
+      - name: Smoke installed runtime
+        shell: pwsh
+        run: |
+          $root = "out/ci-package/${{ matrix.artifact }}"
+          $extension = if ($IsWindows) { ".exe" } else { "" }
+          & (Join-Path $root "th03-app$extension") --help
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & (Join-Path $root "th03-replay-video$extension") --help
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Write build manifest
+        shell: pwsh
+        env:
+          TH03_BETA_LABEL: ${{ inputs.label }}
+        run: |
+          ./tools/ci/write_beta_manifest.ps1 `
+            -PackageRoot "out/ci-package/${{ matrix.artifact }}" `
+            -Platform "${{ matrix.platform }}" `
+            -Revision "${{ github.sha }}" `
+            -Label $env:TH03_BETA_LABEL
+
+      - name: Archive Windows package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Push-Location "out/ci-package/${{ matrix.artifact }}"
+          cmake -E tar cf "../${{ matrix.artifact }}.zip" --format=zip .
+          Pop-Location
+
+      - name: Archive Unix package
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cd "out/ci-package/${{ matrix.artifact }}"
+          tar -czf "../${{ matrix.artifact }}.tar.gz" .
+
+      - name: Upload Windows package
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.artifact }}
+          path: out/ci-package/${{ matrix.artifact }}.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Unix package
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.artifact }}
+          path: out/ci-package/${{ matrix.artifact }}.tar.gz
+          if-no-files-found: error
+          retention-days: 14
