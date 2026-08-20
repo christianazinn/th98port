@@ -161,6 +161,7 @@
     {"enum": "replay_mode_vs", "id": "replay.mode.vs", "domain": "menu-font", "max_width": 256, "placeholders": [{"name": "mode", "width_value": "WWWWWWW"}]},
     {"enum": "replay_mode_1p_cpu", "id": "replay.mode.1p-cpu", "domain": "menu-font", "max_width": 96},
     {"enum": "replay_mode_1p_2p", "id": "replay.mode.1p-2p", "domain": "menu-font", "max_width": 96},
+    {"enum": "replay_mode_netplay", "id": "replay.mode.netplay", "domain": "menu-font", "max_width": 96},
     {"enum": "replay_mode_cpu_cpu", "id": "replay.mode.cpu-cpu", "domain": "menu-font", "max_width": 96},
     {"enum": "replay_summary_vs", "id": "replay.summary.vs", "domain": "menu-font", "max_width": 48},
     {"enum": "replay_practice_start", "id": "replay.practice.start", "domain": "menu-font", "max_width": 256, "placeholders": [{"name": "plus", "width_value": "+"}, {"name": "round", "width_value": "6"}, {"name": "stage", "width_value": "9"}]},

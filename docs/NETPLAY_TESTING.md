@@ -314,6 +314,18 @@ argument bypasses the menu and publishes the validated final V13 directly,
 using the same flush/read-back/reparse/atomic-replace transaction as numbered
 slots.
 
+V13 remains the portable replay artifact and keeps canonical P1/P2 character,
+score, winner, and input ordering. A numbered netplay save also writes a
+48-byte installation-local `TH3RNN.PODD` view beside `TH3RNN.RPY`. Its
+`PODDRIX1` record stores only whether this installation was P1 or P2 and binds
+that projection to the exact replay SHA-256. The Replay list and save summary
+therefore show the local peer's character and final score, and the detail page
+labels the match `Vs Mode Netplay`. Missing, malformed, copied without the
+replay, or digest-stale sidecars are ignored; the valid V13 falls back to the
+ordinary local-VS presentation. V13 already identifies the canonical player
+roles, but does not contain online user names or account identities. Adding
+those is a future replay-format decision rather than a reserved-byte shortcut.
+
 For a bounded automated check, append the same `--smoke-ticks N` to both
 commands. This exits only after both peers have confirmed `N` gameplay input
 frames. Do not change `--tick-rate` for human play.

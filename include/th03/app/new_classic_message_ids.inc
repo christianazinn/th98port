@@ -152,6 +152,7 @@ TH03_NEW_CLASSIC_MESSAGE(replay_mode_story, "replay.mode.story", 256U, "reason",
 TH03_NEW_CLASSIC_MESSAGE(replay_mode_vs, "replay.mode.vs", 256U, "mode", "WWWWWWW")
 TH03_NEW_CLASSIC_MESSAGE(replay_mode_1p_cpu, "replay.mode.1p-cpu", 96U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(replay_mode_1p_2p, "replay.mode.1p-2p", 96U, "", "")
+TH03_NEW_CLASSIC_MESSAGE(replay_mode_netplay, "replay.mode.netplay", 96U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(replay_mode_cpu_cpu, "replay.mode.cpu-cpu", 96U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(replay_summary_vs, "replay.summary.vs", 48U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(replay_practice_start, "replay.practice.start", 256U, "plus,round,stage", "+|6|9")

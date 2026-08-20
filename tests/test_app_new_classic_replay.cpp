@@ -512,7 +512,9 @@ void test_netplay_confirmed_capture()
 			.input = {.p1 = 0x04U, .p2 = 0x02U},
 			.step_result = {
 				.status = th03::StepStatus::round_transition,
-				.input_boundary_state = terminal(mode, 0U, 0U, 1U, 0),
+				// The netplay journal carries the pre-handoff route; capture must
+				// derive route 1 from the confirmed lifecycle status.
+				.input_boundary_state = terminal(mode, 0U, 0U, 0U, 0),
 				.next_step_vsyncs = 2U,
 			},
 			.source_vsyncs = 2U,
@@ -530,7 +532,7 @@ void test_netplay_confirmed_capture()
 			.input = {.p1 = 0x01U, .p2 = 0x10U, .charge_mask = 2U},
 			.step_result = {
 				.status = th03::StepStatus::terminal,
-				.input_boundary_state = terminal(mode, 0U, 1U, 2U, 1),
+				.input_boundary_state = terminal(mode, 0U, 1U, 0U, 1),
 			},
 		}, true).has_value(),
 		"the confirmed match terminal records the last sample, split, and MAIN_END"
@@ -569,6 +571,8 @@ void test_netplay_confirmed_capture()
 		check(
 			document->expected_round_splits[0U].real_frames == 4U &&
 			document->expected_round_splits[1U].real_frames == 2U &&
+			document->expected_round_splits[0U].route == 1U &&
+			document->expected_round_splits[1U].route == 2U &&
 			document->slowdown && document->slowdown->timed_frames == 3U &&
 			document->slowdown->slow_frames == 2U,
 			"netplay replay timing charges each source wait to the following frame and keeps first-execution deadlines"

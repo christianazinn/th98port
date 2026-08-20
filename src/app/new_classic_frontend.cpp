@@ -236,7 +236,8 @@ std::string source_trimmed_name(const std::array<char, 8U> &name)
 }
 
 [[nodiscard]] std::array<std::uint8_t, 4U> replay_list_score(
-	const formats::ReplayDocument &document
+	const formats::ReplayDocument &document,
+	std::optional<std::uint8_t> local_player = std::nullopt
 ) noexcept
 {
 	if(!document.metadata || document.practice ||
@@ -253,6 +254,10 @@ std::string source_trimmed_name(const std::array<char, 8U> &name)
 	);
 	if(found == document.expected_round_splits.rend()) {
 		return document.metadata->final_score;
+	}
+	if(local_player && document.metadata->game_mode == game_mode::vs_1p_2p &&
+		*local_player <= 1U) {
+		return *local_player == 0U ? found->p1_score : found->p2_score;
 	}
 	if(document.metadata->game_mode == game_mode::vs_1p_cpu) {
 		return found->p1_score;
@@ -586,7 +591,8 @@ struct ReplayDetailRow final {
 }
 
 [[nodiscard]] ReplayCatalogSlot catalog_slot(
-	const formats::ReplayDocument &document
+	const formats::ReplayDocument &document,
+	std::optional<ReplaySlotLocalView> local_view
 ) noexcept
 {
 	ReplayCatalogSlot slot{
@@ -596,13 +602,22 @@ struct ReplayDetailRow final {
 		)),
 	};
 	slot.practice = document.practice;
-	slot.p1_paletted_character = document.session.init.paletted_character[0U];
+	slot.netplay = local_view &&
+		local_view->origin == ReplaySlotLocalOrigin::netplay;
+	slot.local_player = slot.netplay ? local_view->local_player : 0U;
+	slot.display_paletted_character = document.session.init.paletted_character[
+		slot.local_player
+	];
 	if(document.metadata) {
 		slot.name = document.metadata->name;
 		slot.game_mode = document.metadata->game_mode;
 		slot.rank = document.metadata->rank;
 		slot.stage_reached = document.metadata->stage_reached_count;
-		slot.final_score = replay_list_score(document);
+		slot.final_score = replay_list_score(
+			document,
+			slot.netplay ? std::optional<std::uint8_t>{slot.local_player} :
+				std::nullopt
+		);
 		slot.end_reason = document.metadata->end_reason;
 		if(document.metadata->practice) {
 			slot.practice_stage = document.metadata->practice->stage;
@@ -749,7 +764,9 @@ scan_new_classic_replays(const std::filesystem::path &replay_root)
 			continue;
 		}
 		if(loaded->document) {
-			result.slots[slot] = catalog_slot(*loaded->document);
+			result.slots[slot] = catalog_slot(
+				*loaded->document, loaded->local_view
+			);
 		}
 	}
 	return result;
@@ -879,7 +896,9 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 				340 - static_cast<std::int32_t>(score.size() * 12U), top,
 				score, 12, color
 			) && put(364, top,
-				patch_character_label(entry.p1_paletted_character, messages), color) &&
+				patch_character_label(
+					entry.display_paletted_character, messages
+				), color) &&
 				put(476, top, patch_rank_label(entry.rank, messages), color) &&
 				patch_put_fixed(
 					font, raster, 560, top, catalog_marker(entry, messages), 12, color
@@ -944,7 +963,7 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 			!document.practice;
 		const auto score_label = metadata->game_mode == game_mode::vs_1p_cpu ?
 			messages.text(NewClassicMessageId::replay_label_p1_score) :
-			(story || document.practice) ? messages.text(
+			(story || document.practice || entry.netplay) ? messages.text(
 				NewClassicMessageId::replay_label_final_score) : messages.text(
 					NewClassicMessageId::replay_label_win_score);
 		std::string mode;
@@ -962,6 +981,7 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 			);
 		} else {
 			const auto vs_mode = messages.text(
+				entry.netplay ? NewClassicMessageId::replay_mode_netplay :
 				metadata->game_mode == game_mode::vs_1p_cpu ?
 					NewClassicMessageId::replay_mode_1p_cpu :
 				metadata->game_mode == game_mode::vs_1p_2p ?
@@ -2581,13 +2601,15 @@ NewClassicReplaySaveMenu::NewClassicReplaySaveMenu(
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 	std::shared_ptr<const NewClassicReplaySaveArt> save_art,
 	NewClassicDosDateProvider date_provider,
-	void *date_provider_context
+	void *date_provider_context,
+	std::optional<ReplaySlotLocalView> local_view
 ) :
 	document_(std::move(document)),
 	patch_assets_(std::move(patch_assets)),
 	save_art_(std::move(save_art)),
 	date_provider_(date_provider),
-	date_provider_context_(date_provider_context)
+	date_provider_context_(date_provider_context),
+	local_view_(local_view)
 {
 	if(document_.metadata && document_.metadata->end_reason ==
 		formats::ReplayEndReason::menu_return) {
@@ -2817,7 +2839,7 @@ void NewClassicReplaySaveMenu::draw_patch(
 			));
 			static_cast<void>(put(
 				364, top, patch_character_label(
-					entry.p1_paletted_character, messages
+					entry.display_paletted_character, messages
 				), color
 			));
 			static_cast<void>(put(
@@ -2831,7 +2853,10 @@ void NewClassicReplaySaveMenu::draw_patch(
 
 	if(phase_ == Phase::name) {
 		const auto fixed_name = source_fixed_name(name_);
-		const auto score = decimal_score(replay_list_score(document_));
+		const auto score = decimal_score(replay_list_score(
+			document_, local_view_ ?
+				std::optional<std::uint8_t>{local_view_->local_player} : std::nullopt
+		));
 		if(save_art_) {
 			static_cast<void>(put_regi_text(80, 96, fixed_name, 24));
 			static_cast<void>(put_regi_text(
@@ -2862,9 +2887,10 @@ void NewClassicReplaySaveMenu::draw_patch(
 			);
 			const auto rank_initial = rank.empty() ? std::string{"?"} :
 				rank.substr(0U, 1U);
+			const auto player = local_view_ ? local_view_->local_player : 0U;
 			if(save_art_) {
 				static_cast<void>(put_regi_text(344, 160, rank_initial, 24));
-				const auto paletted = document_.metadata->paletted_character[0U];
+				const auto paletted = document_.metadata->paletted_character[player];
 				const auto character = paletted >= 1 && paletted <= 18 ?
 					static_cast<std::size_t>((paletted - 1) / 2) : 9U;
 				if(save_art_->character_names_[character]) {
@@ -2883,7 +2909,7 @@ void NewClassicReplaySaveMenu::draw_patch(
 				static_cast<void>(font.put_centered(
 					raster, 464, 168,
 					patch_character_label(
-						document_.metadata->paletted_character[0U], messages
+						document_.metadata->paletted_character[player], messages
 					),
 					15U
 				));

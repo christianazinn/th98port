@@ -1573,6 +1573,84 @@ bool authentic_replay_hub_gate(
 	return false;
 }
 
+bool authentic_replay_fast_forward_terminal_gate(
+	const std::filesystem::path &data_root,
+	const std::filesystem::path &main_executable,
+	const std::filesystem::path &mainl_executable,
+	const std::filesystem::path &op_executable,
+	const std::filesystem::path &font_rom,
+	th03::formats::ReplayDocument document
+)
+{
+	using namespace th03::app;
+	TemporaryDirectory temporary;
+	ClassicRunnerRequest request{};
+	request.content = {
+		.data_root = data_root,
+		.main_executable = main_executable,
+		.mainl_executable = mainl_executable,
+		.op_executable = op_executable,
+		.font_rom = font_rom,
+		.replay_root = temporary.path() / "REPLAY",
+		.config = temporary.path() / "YUME.CFG",
+		.new_classic_settings = temporary.path() / "PODD.CFG",
+		.score = temporary.path() / "YUME.NEM",
+	};
+	request.seed = 1U;
+	request.fm_available = false;
+	request.experience = ExperienceProfile::new_classic;
+	request.initial_route = ClassicRunnerInitialRoute::new_classic_replay;
+	request.initial_replay = ClassicRunnerInitialReplay{
+		.document = std::move(document),
+		.checkpoint_index = 0U,
+	};
+	auto loaded = ClassicRunner::load(std::move(request));
+	if(!loaded) {
+		std::cerr << "fast-forward terminal load code=" <<
+			static_cast<unsigned>(loaded.error().code) << '\n';
+		return false;
+	}
+	auto &runner = **loaded;
+	std::array<
+		th03::present::ComposedPixel,
+		th03::present::graphics_page_pixels
+	> pixels{};
+	while(runner.take_audio_command()) {}
+	bool saw_playback = false;
+	for(std::uint64_t tick = 0U; tick < 100'000U; ++tick) {
+		auto advanced = runner.consume({
+			.tick_index = tick,
+			.deadline_ns = tick * 10U,
+			.fast_forward_requested = true,
+		});
+		if(!advanced || advanced->status != ClassicRunnerStatus::running) {
+			std::cerr << "fast-forward terminal consume tick=" << tick;
+			if(!advanced) {
+				std::cerr << " code=" << static_cast<unsigned>(
+					advanced.error().code
+				) << " detail=" << advanced.error().detail_code;
+			}
+			std::cerr << '\n';
+			return false;
+		}
+		while(runner.take_audio_command()) {}
+		if(advanced->surface_changed &&
+			!runner.compose_shown_surface(pixels)) {
+			std::cerr << "fast-forward terminal composed dead owner tick=" <<
+				tick << '\n';
+			return false;
+		}
+		const auto scene = ClassicRunnerTestAccess::scene(runner);
+		saw_playback = saw_playback || scene ==
+			ClassicOpSessionScene::replay_playback;
+		if(saw_playback && scene == ClassicOpSessionScene::title_menu) {
+			return true;
+		}
+	}
+	std::cerr << "fast-forward terminal did not return to title\n";
+	return false;
+}
+
 bool authentic_local_high_score_gate(
 	const std::filesystem::path &data_root,
 	const std::filesystem::path &main_executable,
@@ -3455,7 +3533,19 @@ int main(int argc, char **argv)
 	test_pixel_oracle_publication_ownership();
 	test_runner_sequence_audio_surface_and_failure();
 	test_file_and_request_boundaries();
-	if(argc == 8 && std::string_view(argv[1]) == "--authentic-online-watch") {
+	if(argc == 8 && std::string_view(argv[1]) ==
+		"--authentic-replay-fast-forward") {
+		auto bytes = read_bytes(argv[7]);
+		std::optional<th03::formats::ReplayDocument> document{};
+		if(bytes) {
+			if(auto parsed = th03::formats::parse_v13_replay(*bytes)) {
+				document = std::move(*parsed);
+			}
+		}
+		expect(document && authentic_replay_fast_forward_terminal_gate(
+			argv[2], argv[3], argv[4], argv[5], argv[6], std::move(*document)
+		), "held-Z replay terminal never publishes a destroyed playback owner");
+	} else if(argc == 8 && std::string_view(argv[1]) == "--authentic-online-watch") {
 		auto bytes = read_bytes(argv[7]);
 		std::optional<th03::formats::ReplayDocument> document{};
 		if(bytes) {
@@ -3520,7 +3610,8 @@ int main(int argc, char **argv)
 			"--authentic-english <data-root> <MAIN.EXE> <MAINL.EXE> "
 			"<OP.EXE> <FONT.ROM> <TH3EN.DAT> | --authentic-online-watch "
 			"<data-root> <MAIN.EXE> <MAINL.EXE> <OP.EXE> <FONT.ROM> "
-			"<V13.RPY>]\n";
+			"<V13.RPY> | --authentic-replay-fast-forward <data-root> "
+			"<MAIN.EXE> <MAINL.EXE> <OP.EXE> <FONT.ROM> <V13.RPY>]\n";
 		return 2;
 	}
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

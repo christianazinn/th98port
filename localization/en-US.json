@@ -159,6 +159,7 @@
     "replay.mode.vs": "Vs Mode {mode}",
     "replay.mode.1p-cpu": "1P-CPU",
     "replay.mode.1p-2p": "1P-2P",
+    "replay.mode.netplay": "Netplay",
     "replay.mode.cpu-cpu": "CPU-CPU",
     "replay.summary.vs": " vs ",
     "replay.practice.start": "Stage {stage} Round {round}{plus} Start",

@@ -332,7 +332,8 @@ ReplaySaveRunResult run_replay_save(
 	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets>
 		patch_assets = {},
 	std::shared_ptr<const th03::app::NewClassicReplaySaveArt> save_art = {},
-	ReplaySaveAudioContext audio = {}
+	ReplaySaveAudioContext audio = {},
+	std::optional<th03::app::ReplaySlotLocalView> local_view = std::nullopt
 );
 
 enum class RhythmRomLoadErrorCode : std::uint8_t {
@@ -4606,6 +4607,13 @@ int run_direct_netplay_on_platform(
 						.session = audio_session.get(),
 						.device = &audio_device,
 						.started = &audio_started,
+					},
+					th03::app::ReplaySlotLocalView{
+						.origin = th03::app::ReplaySlotLocalOrigin::netplay,
+						.local_player = static_cast<std::uint8_t>(
+							local_player == NewClassicNetplayPlayer::player_one ?
+								0U : 1U
+						),
 					}
 				);
 				if(saved.exit_code != 0) {
@@ -6674,7 +6682,8 @@ ReplaySaveRunResult run_replay_save(
 	th03::platform::SdlInputMapper &mapper,
 	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets,
 	std::shared_ptr<const th03::app::NewClassicReplaySaveArt> save_art,
-	ReplaySaveAudioContext audio
+	ReplaySaveAudioContext audio,
+	std::optional<th03::app::ReplaySlotLocalView> local_view
 )
 {
 	auto catalog = th03::app::scan_new_classic_replays(replay_root);
@@ -6683,7 +6692,7 @@ ReplaySaveRunResult run_replay_save(
 	}
 	th03::app::NewClassicReplaySaveMenu menu(
 		std::move(document), std::move(patch_assets), std::move(save_art),
-		&current_dos_date
+		&current_dos_date, nullptr, local_view
 	);
 	bool application_quit = false;
 	bool replay_published = false;
@@ -6696,7 +6705,7 @@ ReplaySaveRunResult run_replay_save(
 			if(result.status ==
 				th03::app::NewClassicReplaySaveStatus::save_requested) {
 				auto committed = th03::app::commit_replay_slot(
-					replay_root, menu.selected_slot(), menu.document()
+					replay_root, menu.selected_slot(), menu.document(), local_view
 				);
 				if(committed) {
 					replay_published = true;

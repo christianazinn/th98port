@@ -1640,13 +1640,19 @@ struct ClassicOpSessionBackend final {
 				break;
 			}
 		}
+		const bool ready = replay_playback->status() !=
+			NewClassicPlaybackStatus::running;
 		return ClassicOpSessionBackendTick{
-			.surface_changed = surface_changed,
+			// A fast-forward batch can publish on an early substep and destroy its
+			// final drawable owner on a later terminal substep. The fresh OP title
+			// owns the next publication; never ask the runner to compose the now-
+			// terminal playback object while pending audio delays that transition.
+			.surface_changed = !ready && surface_changed,
 			.input_sampled = process_advanced,
-			.ready = replay_playback->status() !=
-				NewClassicPlaybackStatus::running,
+			.ready = ready,
 			.process_advanced = process_advanced,
-			.pixel_oracle_source_identity = publication_identity,
+			.pixel_oracle_source_identity = ready ? std::nullopt :
+				publication_identity,
 		};
 	}
 

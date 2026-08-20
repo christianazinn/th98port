@@ -224,6 +224,90 @@ void test_atomic_slot_faults_and_legacy_cleanup(
 	ReplaySlotStoreTestAccess::clear_failure();
 }
 
+void test_local_netplay_view(
+	const std::filesystem::path &root,
+	const th03::formats::ReplayDocument &document
+)
+{
+	using th03::app::ReplaySlotLocalOrigin;
+	using th03::app::ReplaySlotLocalView;
+	constexpr std::uint8_t slot = 10U;
+	const ReplaySlotLocalView player_two{
+		.origin = ReplaySlotLocalOrigin::netplay,
+		.local_player = 1U,
+	};
+	check(
+		th03::app::replay_slot_local_view_path(root, slot).filename() ==
+			"TH3R10.PODD",
+		"the local replay view uses the numbered slot basename"
+	);
+	check(
+		th03::app::commit_replay_slot(root, slot, document, player_two).has_value(),
+		"a netplay slot publishes its digest-bound local-player view"
+	);
+	const auto canonical = th03::formats::write_v13_replay(document);
+	check(
+		canonical && read_file(th03::app::replay_slot_path(root, slot)) ==
+			*canonical,
+		"local presentation metadata does not alter the canonical V13 bytes"
+	);
+	const auto loaded = th03::app::load_replay_slot(root, slot);
+	check(
+		loaded && loaded->document && loaded->local_view == player_two,
+		"the matching sidecar restores the installation-local P2 role"
+	);
+
+	auto replacement = document;
+	replacement.metadata->name = {'D', 'I', 'G', 'E', 'S', 'T', '!', '!'};
+	const auto replacement_bytes = th03::formats::write_v13_replay(replacement);
+	check(
+		replacement_bytes && th03::app::commit_exact_replay_file(
+			th03::app::replay_slot_path(root, slot), *replacement_bytes
+		).has_value(),
+		"the stale-sidecar fixture replaces only the exact replay bytes"
+	);
+	const auto stale = th03::app::load_replay_slot(root, slot);
+	check(
+		stale && stale->document && !stale->local_view,
+		"a sidecar bound to different replay bytes is ignored"
+	);
+
+	check(
+		th03::app::commit_replay_slot(root, slot, document, player_two).has_value(),
+		"the local view can be restored after an exact-file replacement"
+	);
+	write_malformed(th03::app::replay_slot_local_view_path(root, slot));
+	const auto malformed = th03::app::load_replay_slot(root, slot);
+	check(
+		malformed && malformed->document && !malformed->local_view,
+		"malformed local metadata never invalidates a valid replay"
+	);
+
+	check(
+		th03::app::commit_replay_slot(root, slot, document).has_value(),
+		"an ordinary overwrite replaces a prior netplay presentation view"
+	);
+	const auto ordinary = th03::app::load_replay_slot(root, slot);
+	check(
+		ordinary && ordinary->document && !ordinary->local_view,
+		"an ordinary slot never inherits stale local-player metadata"
+	);
+	const auto before_invalid = read_file(th03::app::replay_slot_path(root, slot));
+	const auto invalid = th03::app::commit_replay_slot(
+		root, slot, document,
+		ReplaySlotLocalView{
+			.origin = ReplaySlotLocalOrigin::netplay,
+			.local_player = 2U,
+		}
+	);
+	check(
+		!invalid && invalid.error().code ==
+			th03::app::ReplaySlotStoreErrorCode::invalid_local_view &&
+			read_file(th03::app::replay_slot_path(root, slot)) == before_invalid,
+		"an invalid local role is rejected before replacing the replay"
+	);
+}
+
 } // namespace
 
 int main()
@@ -254,6 +338,7 @@ int main()
 		"slot indices outside 00..99 are rejected"
 	);
 	test_atomic_slot_faults_and_legacy_cleanup(root, document);
+	test_local_netplay_view(root, document);
 
 	check(
 		th03::app::commit_replay_slot(root, 7U, document).has_value(),

@@ -1,6 +1,7 @@
 #include "th03/app/replay_slot_store.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -13,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "th03/app/main_compiled_content.hpp"
 #include "th03/formats/v13.hpp"
 
 #if defined(_WIN32)
@@ -29,6 +31,11 @@
 
 namespace th03::app {
 namespace {
+
+constexpr std::size_t local_view_size = 48U;
+constexpr std::array<std::uint8_t, 8U> local_view_magic{
+	'P', 'O', 'D', 'D', 'R', 'I', 'X', '1',
+};
 
 std::atomic<ReplaySlotStoreFaultPoint> fault_point{
 	ReplaySlotStoreFaultPoint::none
@@ -332,8 +339,61 @@ read_back(NativeTemporaryFile &file, std::size_t size)
 	return {};
 }
 
+[[nodiscard]] std::optional<ReplaySlotLocalView> load_local_view(
+	const std::filesystem::path &path,
+	std::span<const std::byte> replay_bytes
+)
+{
+	std::error_code system;
+	if(!std::filesystem::is_regular_file(path, system) || system ||
+		std::filesystem::file_size(path, system) != local_view_size || system) {
+		return std::nullopt;
+	}
+	std::array<std::byte, local_view_size> bytes{};
+	std::ifstream input(path, std::ios::binary);
+	input.read(
+		reinterpret_cast<char *>(bytes.data()),
+		static_cast<std::streamsize>(bytes.size())
+	);
+	if(!input || input.peek() != std::ifstream::traits_type::eof()) {
+		return std::nullopt;
+	}
+	for(std::size_t index = 0U; index < local_view_magic.size(); ++index) {
+		if(bytes[index] != std::byte{local_view_magic[index]}) {
+			return std::nullopt;
+		}
+	}
+	const auto origin = static_cast<std::uint8_t>(bytes[8U]);
+	const auto player = static_cast<std::uint8_t>(bytes[9U]);
+	if(origin > static_cast<std::uint8_t>(ReplaySlotLocalOrigin::netplay) ||
+		(origin == static_cast<std::uint8_t>(ReplaySlotLocalOrigin::ordinary)
+			? player != 0xFFU : player > 1U) ||
+		!std::ranges::all_of(
+			bytes.begin() + 10, bytes.begin() + 16,
+			[](std::byte value) { return value == std::byte{0U}; }
+		)) {
+		return std::nullopt;
+	}
+	const auto digest = app_sha256(replay_bytes);
+	for(std::size_t index = 0U; index < digest.size(); ++index) {
+		if(bytes[16U + index] != std::byte{digest[index]}) {
+			return std::nullopt;
+		}
+	}
+	if(origin == static_cast<std::uint8_t>(ReplaySlotLocalOrigin::ordinary)) {
+		return std::nullopt;
+	}
+	return ReplaySlotLocalView{
+		.origin = ReplaySlotLocalOrigin::netplay,
+		.local_player = player,
+	};
+}
+
 [[nodiscard]] std::expected<ReplaySlotLoadResult, ReplaySlotStoreError>
-load_document(const std::filesystem::path &path)
+load_document(
+	const std::filesystem::path &path,
+	std::optional<std::filesystem::path> local_view_path = std::nullopt
+)
 {
 	std::error_code system;
 	const auto status = std::filesystem::status(path, system);
@@ -381,26 +441,71 @@ load_document(const std::filesystem::path &path)
 			ReplaySlotStoreErrorCode::format, {}, parsed.error()
 		));
 	}
-	return ReplaySlotLoadResult{.document = std::move(*parsed)};
+	return ReplaySlotLoadResult{
+		.document = std::move(*parsed),
+		.local_view = local_view_path ?
+			load_local_view(*local_view_path, bytes) : std::nullopt,
+	};
 }
 
-[[nodiscard]] std::expected<void, ReplaySlotStoreError> write_document(
+[[nodiscard]] std::expected<void, ReplaySlotStoreError> write_local_view(
 	const std::filesystem::path &target,
-	const formats::ReplayDocument &document
+	std::span<const std::byte> replay_bytes,
+	std::optional<ReplaySlotLocalView> view
 )
 {
-	auto encoded = formats::write_v13_replay(document);
-	if(!encoded) {
+	if(view && (view->origin != ReplaySlotLocalOrigin::netplay ||
+		view->local_player > 1U)) {
 		return std::unexpected(store_error(
-			ReplaySlotStoreErrorCode::format, {}, encoded.error()
+			ReplaySlotStoreErrorCode::invalid_local_view
 		));
 	}
-	if(encoded->size() > maximum_replay_file_bytes) {
+	std::array<std::byte, local_view_size> bytes{};
+	for(std::size_t index = 0U; index < local_view_magic.size(); ++index) {
+		bytes[index] = std::byte{local_view_magic[index]};
+	}
+	bytes[8U] = std::byte{static_cast<std::uint8_t>(
+		view ? ReplaySlotLocalOrigin::netplay : ReplaySlotLocalOrigin::ordinary
+	)};
+	bytes[9U] = std::byte{static_cast<std::uint8_t>(
+		view ? view->local_player : 0xFFU
+	)};
+	const auto digest = app_sha256(replay_bytes);
+	for(std::size_t index = 0U; index < digest.size(); ++index) {
+		bytes[16U + index] = std::byte{digest[index]};
+	}
+	auto temporary = create_temporary(target);
+	if(!temporary) {
+		return std::unexpected(std::move(temporary.error()));
+	}
+	if(auto written = write_all(*temporary, bytes); !written) {
+		return std::unexpected(std::move(written.error()));
+	}
+	if(auto flushed = flush_and_rewind(*temporary); !flushed) {
+		return std::unexpected(std::move(flushed.error()));
+	}
+	auto readback = read_back(*temporary, bytes.size());
+	if(!readback) {
+		return std::unexpected(std::move(readback.error()));
+	}
+	if(fail(ReplaySlotStoreFaultPoint::temporary_validation) ||
+		!std::ranges::equal(*readback, bytes)) {
 		return std::unexpected(store_error(
-			ReplaySlotStoreErrorCode::source_too_large
+			ReplaySlotStoreErrorCode::temporary_validation
 		));
 	}
-	return commit_exact_replay_file(target, *encoded);
+	if(fail(ReplaySlotStoreFaultPoint::temporary_close)) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::temporary_close,
+			std::make_error_code(std::errc::io_error)
+		));
+	}
+	if(!temporary->close()) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::temporary_close, last_system_error()
+		));
+	}
+	return replace_target(*temporary, target);
 }
 
 } // namespace
@@ -490,6 +595,16 @@ std::filesystem::path replay_slot_path(
 	return replay_root / filename;
 }
 
+std::filesystem::path replay_slot_local_view_path(
+	const std::filesystem::path &replay_root,
+	std::uint8_t slot
+)
+{
+	auto path = replay_slot_path(replay_root, slot);
+	path.replace_extension(".PODD");
+	return path;
+}
+
 std::filesystem::path replay_fallback_path(
 	const std::filesystem::path &replay_root
 )
@@ -514,13 +629,17 @@ std::expected<ReplaySlotLoadResult, ReplaySlotStoreError> load_replay_slot(
 	if(slot >= replay_slot_count) {
 		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_slot));
 	}
-	return load_document(replay_slot_path(replay_root, slot));
+	return load_document(
+		replay_slot_path(replay_root, slot),
+		replay_slot_local_view_path(replay_root, slot)
+	);
 }
 
 std::expected<void, ReplaySlotStoreError> commit_replay_slot(
 	const std::filesystem::path &replay_root,
 	std::uint8_t slot,
-	const formats::ReplayDocument &document
+	const formats::ReplayDocument &document,
+	std::optional<ReplaySlotLocalView> local_view
 )
 {
 	if(replay_root.empty()) {
@@ -529,8 +648,30 @@ std::expected<void, ReplaySlotStoreError> commit_replay_slot(
 	if(slot >= replay_slot_count) {
 		return std::unexpected(store_error(ReplaySlotStoreErrorCode::invalid_slot));
 	}
-	return write_document(
-		replay_slot_path(replay_root, slot), document
+	if(local_view && (local_view->origin != ReplaySlotLocalOrigin::netplay ||
+		local_view->local_player > 1U)) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::invalid_local_view
+		));
+	}
+	auto encoded = formats::write_v13_replay(document);
+	if(!encoded) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::format, {}, encoded.error()
+		));
+	}
+	if(encoded->size() > maximum_replay_file_bytes) {
+		return std::unexpected(store_error(
+			ReplaySlotStoreErrorCode::source_too_large
+		));
+	}
+	if(auto committed = commit_exact_replay_file(
+		replay_slot_path(replay_root, slot), *encoded
+	); !committed) {
+		return committed;
+	}
+	return write_local_view(
+		replay_slot_local_view_path(replay_root, slot), *encoded, local_view
 	);
 }
 

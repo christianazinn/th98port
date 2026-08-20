@@ -57,7 +57,9 @@ struct ReplayCatalogSlot final {
 	std::uint8_t stage_reached = 0U;
 	std::uint8_t checkpoint_count = 0U;
 	bool practice = false;
-	std::int8_t p1_paletted_character = 0;
+	bool netplay = false;
+	std::uint8_t local_player = 0U;
+	std::int8_t display_paletted_character = 0;
 	formats::ReplayEndReason end_reason = formats::ReplayEndReason::none;
 	std::uint8_t practice_stage = 0U;
 	std::uint8_t practice_round = 0U;
@@ -451,7 +453,8 @@ public:
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 		std::shared_ptr<const NewClassicReplaySaveArt> save_art = {},
 		NewClassicDosDateProvider date_provider = nullptr,
-		void *date_provider_context = nullptr
+		void *date_provider_context = nullptr,
+		std::optional<ReplaySlotLocalView> local_view = std::nullopt
 	);
 
 	[[nodiscard]] NewClassicReplaySaveResult consume(
@@ -489,6 +492,7 @@ private:
 	std::shared_ptr<const NewClassicReplaySaveArt> save_art_{};
 	NewClassicDosDateProvider date_provider_ = nullptr;
 	void *date_provider_context_ = nullptr;
+	std::optional<ReplaySlotLocalView> local_view_{};
 	NewClassicPatchSurface patch_surface_{};
 	Phase phase_ = Phase::prompt;
 	NewClassicReplaySaveStatus status_ = NewClassicReplaySaveStatus::running;

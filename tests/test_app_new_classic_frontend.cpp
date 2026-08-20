@@ -144,6 +144,22 @@ th03::formats::ReplayDocument make_story_document()
 	return document;
 }
 
+th03::formats::ReplayDocument make_netplay_document()
+{
+	auto document = make_document();
+	document.session.init.game_mode = th03::game_mode::vs_1p_2p;
+	document.session.init.is_cpu = {0U, 0U};
+	document.session.init.paletted_character = {1, 18};
+	document.checkpoints[0U].init = document.session.init;
+	auto &metadata = *document.metadata;
+	metadata.game_mode = th03::game_mode::vs_1p_2p;
+	metadata.final_game_mode = th03::game_mode::vs_1p_2p;
+	metadata.is_cpu = {0U, 0U};
+	metadata.paletted_character = {1, 18};
+	metadata.final_winner = std::int8_t{0};
+	return document;
+}
+
 th03::formats::ReplayDocument make_multi_round_story_document()
 {
 	auto document = make_story_document();
@@ -715,6 +731,19 @@ void test_catalog_browser_and_save()
 		practice_commit.has_value(),
 		"Practice telemetry fixture commits through the real V13 store"
 	);
+	auto netplay_document = make_netplay_document();
+	const ReplaySlotLocalView player_two{
+		.origin = ReplaySlotLocalOrigin::netplay,
+		.local_player = 1U,
+	};
+	expect(
+		commit_replay_slot(root, 10U, netplay_document, player_two).has_value(),
+		"netplay fixture commits with the local P2 catalog view"
+	);
+	expect(
+		commit_replay_slot(root, 11U, netplay_document).has_value(),
+		"the same canonical replay can retain the ordinary local view"
+	);
 	std::filesystem::create_directories(root);
 	{
 		std::ofstream malformed(root / "TH3R01.RPY", std::ios::binary);
@@ -733,6 +762,21 @@ void test_catalog_browser_and_save()
 		catalog->slots[3U].state == ReplayCatalogSlotState::ready &&
 		catalog->slots[4U].state == ReplayCatalogSlotState::empty,
 		"catalog distinguishes ready, invalid, and empty slots"
+	);
+	expect(
+		catalog->slots[10U].netplay &&
+		catalog->slots[10U].local_player == 1U &&
+		catalog->slots[10U].display_paletted_character == 18 &&
+		catalog->slots[10U].final_score ==
+			netplay_document.expected_round_splits.back().p2_score,
+		"netplay catalog summary uses this installation's P2 character and score"
+	);
+	expect(
+		!catalog->slots[11U].netplay &&
+		catalog->slots[11U].display_paletted_character == 1 &&
+		catalog->slots[11U].final_score ==
+			netplay_document.expected_round_splits.back().p1_score,
+		"ordinary V13 presentation remains P1-character and winner-score compatible"
 	);
 	expect(
 		new_classic_replay_timer_label(0U) == "0:00.00" &&
@@ -986,6 +1030,26 @@ void test_catalog_browser_and_save()
 			patch_save.surface().graphics_palette.colors[12U] ==
 				th03::assets::Rgb4{15U, 15U, 0U},
 			"patch save slot list installs Replay Patch selected palette 12"
+		);
+
+		NewClassicReplaySaveMenu local_p1_save(
+			netplay_document, patch_assets
+		);
+		NewClassicReplaySaveMenu local_p2_save(
+			netplay_document, patch_assets, {}, nullptr, nullptr, player_two
+		);
+		finish_entry_fade(local_p1_save, *catalog);
+		finish_entry_fade(local_p2_save, *catalog);
+		expect(
+			surface_hash(local_p1_save.surface()) !=
+				surface_hash(local_p2_save.surface()),
+			"netplay name entry visibly uses the local player's character and score"
+		);
+		expect(
+			patch_assets->messages().text(
+				NewClassicMessageId::replay_mode_netplay
+			) == "Netplay",
+			"netplay replay detail has the exact Vs Mode Netplay mode label"
 		);
 
 		auto prompt_document = make_document();

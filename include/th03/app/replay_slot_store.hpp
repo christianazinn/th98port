@@ -19,6 +19,7 @@ inline constexpr std::uintmax_t maximum_replay_file_bytes = 64U * 1024U * 1024U;
 enum class ReplaySlotStoreErrorCode : std::uint8_t {
 	invalid_root,
 	invalid_slot,
+	invalid_local_view,
 	directory_create,
 	source_status,
 	source_not_regular,
@@ -44,11 +45,35 @@ struct ReplaySlotStoreError final {
 	std::optional<Error> format{};
 };
 
+enum class ReplaySlotLocalOrigin : std::uint8_t {
+	ordinary,
+	netplay,
+};
+
+// Installation-local catalog presentation. This is deliberately stored
+// beside, never inside, the frozen V13 replay. A digest in the sidecar binds
+// the view to the exact slot bytes, so an interrupted replacement or a replay
+// copied without its local metadata safely falls back to the ordinary view.
+struct ReplaySlotLocalView final {
+	ReplaySlotLocalOrigin origin = ReplaySlotLocalOrigin::ordinary;
+	std::uint8_t local_player = 0U;
+
+	[[nodiscard]] friend constexpr bool operator==(
+		const ReplaySlotLocalView &,
+		const ReplaySlotLocalView &
+	) = default;
+};
+
 struct ReplaySlotLoadResult final {
 	std::optional<formats::ReplayDocument> document{};
+	std::optional<ReplaySlotLocalView> local_view{};
 };
 
 [[nodiscard]] std::filesystem::path replay_slot_path(
+	const std::filesystem::path &replay_root,
+	std::uint8_t slot
+);
+[[nodiscard]] std::filesystem::path replay_slot_local_view_path(
 	const std::filesystem::path &replay_root,
 	std::uint8_t slot
 );
@@ -71,11 +96,13 @@ load_replay_slot(
 
 // Encodes through the canonical V13 writer, writes a same-directory exclusive
 // temporary, flushes and reads it back, reparses it, then atomically replaces
-// the selected slot. Every pre-replacement failure preserves the old slot.
+// the selected slot. A digest-bound installation-local presentation sidecar is
+// published afterward; it never alters the canonical V13 bytes.
 [[nodiscard]] std::expected<void, ReplaySlotStoreError> commit_replay_slot(
 	const std::filesystem::path &replay_root,
 	std::uint8_t slot,
-	const formats::ReplayDocument &document
+	const formats::ReplayDocument &document,
+	std::optional<ReplaySlotLocalView> local_view = std::nullopt
 );
 
 // Publishes already-encoded, strictly valid V13 bytes without re-encoding
