@@ -64,6 +64,10 @@
 #include "th03/platform/sdl_platform.hpp"
 #include "th03/platform/rtc_room.hpp"
 #include "th03/platform/udp_socket.hpp"
+#if defined(TH03_ENABLE_UPDATE_HOST)
+#include "th03/app/update_bootstrap.hpp"
+#include "th03/platform/sdl_update_process.hpp"
+#endif
 #if defined(_WIN32)
 #include "th03/platform/windows_online.hpp"
 #endif
@@ -111,6 +115,16 @@ constexpr const char *online_token_environment = "TH03_ONLINE_TOKEN";
 	return result;
 }
 constexpr const char *netplay_ice_environment = "TH03_NETPLAY_ICE_SERVERS";
+
+#if defined(TH03_ENABLE_UPDATE_HOST)
+struct UpdateHealthRequest final {
+	std::filesystem::path state{};
+	th03::app::UpdateTrialToken token{};
+};
+
+std::optional<UpdateHealthRequest> update_health_request{};
+bool update_health_acknowledged = false;
+#endif
 
 struct PixelOracleIdentityOutput final {
 	std::ofstream stream{};
@@ -2805,6 +2819,50 @@ private:
 	return {.preferences = room.preferences()};
 }
 
+#if defined(TH03_ENABLE_UPDATE_HOST)
+[[nodiscard]] std::expected<std::optional<UpdateHealthRequest>, const char *>
+load_update_health_request()
+{
+	const auto state = environment_value(
+		th03::platform::update_activation_state_environment
+	);
+	const auto token = environment_value(
+		th03::platform::update_trial_token_environment
+	);
+	if(!state && !token) {
+		return std::optional<UpdateHealthRequest>{};
+	}
+	if(!state || !token || state->empty() || token->empty()) {
+		return std::unexpected("incomplete-environment");
+	}
+	auto decoded = th03::app::decode_update_trial_token(*token);
+	if(!decoded) {
+		return std::unexpected("invalid-token");
+	}
+	return std::optional<UpdateHealthRequest>{UpdateHealthRequest{
+		.state = *state,
+		.token = *decoded,
+	}};
+}
+
+[[nodiscard]] std::expected<void, int> acknowledge_update_health()
+{
+	if(!update_health_request || update_health_acknowledged) {
+		return {};
+	}
+	auto acknowledged = th03::app::acknowledge_update_launch(
+		update_health_request->state, update_health_request->token
+	);
+	if(!acknowledged) {
+		std::cerr << "status=error\nstage=update-health\n"
+			"code=acknowledge-failed\n";
+		return std::unexpected(1);
+	}
+	update_health_acknowledged = true;
+	return {};
+}
+#endif
+
 [[nodiscard]] std::shared_ptr<const th03::app::NewClassicPauseNetplayText>
 prepare_netplay_pause_text(
 	const th03::app::NewClassicReplayPatchAssets &assets,
@@ -4701,6 +4759,11 @@ int run_direct_netplay(th03::app::DirectVsCliRequest parsed)
 	if(!mapper) {
 		return fail("input-create", mapper.error());
 	}
+#if defined(TH03_ENABLE_UPDATE_HOST)
+	if(auto acknowledged = acknowledge_update_health(); !acknowledged) {
+		return acknowledged.error();
+	}
+#endif
 	return run_direct_netplay_on_platform(
 		std::move(parsed), **platform, *mapper
 	);
@@ -4732,6 +4795,11 @@ int run_direct_vs(th03::app::DirectVsCliRequest parsed)
 	if(!mapper) {
 		return fail("input-create", mapper.error());
 	}
+#if defined(TH03_ENABLE_UPDATE_HOST)
+	if(auto acknowledged = acknowledge_update_health(); !acknowledged) {
+		return acknowledged.error();
+	}
+#endif
 	auto scheduler = th03::app::TickInputScheduler::create(
 		parsed.tick_rate,
 		th03::platform::sdl_ticks_now_ns(),
@@ -6772,6 +6840,11 @@ std::expected<
 	if(!mapper) {
 		return std::unexpected(fail("input-create", mapper.error()));
 	}
+#if defined(TH03_ENABLE_UPDATE_HOST)
+	if(auto acknowledged = acknowledge_update_health(); !acknowledged) {
+		return std::unexpected(acknowledged.error());
+	}
+#endif
 	return std::pair{std::move(*platform), std::move(*mapper)};
 }
 
@@ -7457,6 +7530,15 @@ int run_product_shell(th03::app::ClassicCliRequest parsed)
 
 int main(int argc, char **argv)
 {
+#if defined(TH03_ENABLE_UPDATE_HOST)
+	auto health = load_update_health_request();
+	if(!health) {
+		std::cerr << "status=error\nstage=update-health\ncode=" <<
+			health.error() << '\n';
+		return 1;
+	}
+	update_health_request = std::move(*health);
+#endif
 	std::vector<std::string_view> arguments;
 	arguments.reserve(static_cast<std::size_t>(std::max(argc - 1, 0)));
 	for(int index = 1; index < argc; index++) {

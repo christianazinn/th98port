@@ -187,6 +187,31 @@ int main()
 		final_accept->active == second && final_accept->previous == first &&
 		!final_accept->pending && !final_accept->last_failed,
 		"successful retry retains the prior active generation for rollback");
+	const auto rolled_back = final_accept ?
+		rollback_unlaunchable_active_generation(*final_accept, second) :
+		std::expected<UpdateActivationState, UpdateActivationTransitionError>{
+			std::unexpected(UpdateActivationTransitionError::invalid_state)
+		};
+	expect(rolled_back && rolled_back->revision == 13U &&
+		rolled_back->active == first && !rolled_back->previous &&
+		rolled_back->last_failed == second &&
+		rolled_back->failed_trials == 3U,
+		"unlaunchable active generation rolls back to retained previous");
+	if(rolled_back) {
+		const auto legacy = rollback_unlaunchable_active_generation(
+			*rolled_back, first
+		);
+		expect(legacy && !legacy->active && !legacy->previous &&
+			legacy->last_failed == second && legacy->highest_sequence == 11U &&
+			legacy->failed_trials == 4U,
+			"second unlaunchable active rolls back to legacy without losing the newer failure identity");
+		const auto stale = rollback_unlaunchable_active_generation(
+			*rolled_back, second
+		);
+		expect(!stale && stale.error() ==
+			UpdateActivationTransitionError::stale_token,
+			"rollback rejects an obsolete active-generation identity");
+	}
 	if(recovered) {
 		const auto reused = nominate_update_generation(
 			*recovered, replacement_same_sequence

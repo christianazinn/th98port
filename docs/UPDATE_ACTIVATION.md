@@ -27,6 +27,13 @@ records the exact failed candidate, increments the bounded failure count, and
 returns to stable. A merely pending update is not considered failed after a
 restart because no launch was attempted.
 
+A stable active generation that is missing or cannot create a process can be
+rolled back only by naming its exact identity. The transition records that
+generation as failed, restores `previous` (or the legacy install), and clears
+`previous`. If a newer failed candidate already owns `last_failed`, it remains
+there so the monotonic sequence history cannot be discarded by a second,
+older fallback.
+
 ## Fixed file
 
 Each state is exactly 256 bytes:
@@ -94,10 +101,31 @@ The lifetime lease and activation-family commit lock are deliberately
 different: the child may acknowledge health while its parent retains launch
 ownership.
 
+## Executable host
+
+`podd-bootstrap` is the synchronous cross-platform process owner. It resolves
+generation executables only beneath the identity-derived immutable directory,
+inherits the child's console streams, and retains the lifetime lease until the
+child exits. It supplies `TH03_UPDATE_STATE` and `TH03_UPDATE_TRIAL_TOKEN` only
+for a trial; ordinary active and legacy children receive neither even if the
+parent environment was stale.
+
+Missing files or process-creation failures occur before a child UI can exist,
+so a trial is failed or an active generation is rolled back and the recovered
+target is launched immediately. Once process creation succeeds, no second UI
+is opened during that startup. A trial child that exits without acknowledging
+is durably failed for the next launch.
+
+`th03-app` parses the pair as one fail-closed request and acknowledges it only
+after settings/content routing has reached a usable SDL platform and input
+mapper. This boundary covers the product shell, direct Classic/New Classic,
+local VS, and direct netplay launch paths. The standalone always starts the
+embedded bootstrap; absent activation state therefore remains exactly the
+legacy embedded launch.
+
 ## Deliberately deferred
 
-An executable host still needs to resolve the selected identity beneath its
-generation root, launch the child, transport the canonical token, define the
-early application health boundary, and retain or clean immutable generations.
-Production signing pins and visible opt-in update UI also remain separate
-release gates.
+Production signing pins, generation retention/cleanup, and visible opt-in
+update UI remain separate release gates. The executable host performs no
+network request, does not nominate a generation, and cannot activate an inert
+package by itself.

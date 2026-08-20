@@ -173,7 +173,7 @@ if(-not $SkipNativeBuild) {
 	Push-Location $sourceRoot
 	try {
 		& cmake --build --preset $BuildPreset --config $Configuration `
-			--target th03-app
+			--target th03-app podd-bootstrap
 		$nativeBuildExit = $LASTEXITCODE
 	} finally {
 		Pop-Location
@@ -193,6 +193,17 @@ if(-not $nativeApp) {
 	throw "The $BuildPreset build did not produce th03-app.exe."
 }
 $nativeApp = [IO.Path]::GetFullPath($nativeApp)
+$bootstrapCandidates = @(
+	(Join-Path $buildRoot "$Configuration\podd-bootstrap.exe"),
+	(Join-Path $buildRoot "podd-bootstrap.exe")
+)
+$nativeBootstrap = $bootstrapCandidates |
+	Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+	Select-Object -First 1
+if(-not $nativeBootstrap) {
+	throw "The $BuildPreset build did not produce podd-bootstrap.exe."
+}
+$nativeBootstrap = [IO.Path]::GetFullPath($nativeBootstrap)
 $sdlRuntime = Resolve-RequiredFile (
 	Join-Path (Split-Path -Parent $nativeApp) "SDL3.dll"
 ) "SDL3 runtime"
@@ -242,6 +253,7 @@ try {
 	[IO.Directory]::CreateDirectory($publishRoot) | Out-Null
 
 	Copy-Item -LiteralPath $nativeApp -Destination $appRoot
+	Copy-Item -LiteralPath $nativeBootstrap -Destination $appRoot
 	Copy-Item -LiteralPath $sdlRuntime -Destination $appRoot
 	$licenseRoot = Join-Path (Split-Path -Parent $nativeApp) "licenses"
 	if(Test-Path -LiteralPath $licenseRoot -PathType Container) {

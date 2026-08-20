@@ -10,6 +10,11 @@ Run `th03-app` with the same external `--data`, `--main`, `--mainl`, `--op`, and
 included as command-line tools. Consult the repository documentation or use
 `--help` where the tool supports it.
 
+`podd-bootstrap` is the data-free, stable launch owner used by the standalone
+and future installed updater. With no local activation state it launches the
+packaged `th03-app` unchanged; it never contacts a network or activates a
+package by itself.
+
 `BUILD-MANIFEST.txt` records the exact source revision and SHA-256 of every
 packaged file. Dependency license texts are under `licenses/`.
 

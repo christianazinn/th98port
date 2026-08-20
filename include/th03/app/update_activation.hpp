@@ -85,6 +85,7 @@ enum class UpdateActivationTransitionError : std::uint8_t {
 	current_or_older,
 	sequence_reused,
 	no_pending,
+	no_active,
 	not_trial,
 	stale_token,
 	revision_exhausted,
@@ -149,6 +150,18 @@ enum class UpdateActivationTransitionError : std::uint8_t {
 	UpdateActivationTransitionError
 > recover_interrupted_update_trial(
 	const UpdateActivationState &state
+) noexcept;
+
+// Records an active generation that the bootstrap could not launch and
+// restores the retained previous generation (or the legacy install). The
+// expected identity prevents an obsolete bootstrap owner from rolling back a
+// newer state.
+[[nodiscard]] std::expected<
+	UpdateActivationState,
+	UpdateActivationTransitionError
+> rollback_unlaunchable_active_generation(
+	const UpdateActivationState &state,
+	const UpdateGenerationIdentity &expected_active
 ) noexcept;
 
 } // namespace th03::app

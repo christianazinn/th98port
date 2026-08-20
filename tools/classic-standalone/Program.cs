@@ -138,6 +138,15 @@ internal static class Program
         PruneCache(cacheRoot, installRoot);
 
         var application = Path.Combine(installRoot, "app", "th03-app.exe");
+        var bootstrap = Path.Combine(
+            installRoot,
+            "app",
+            "podd-bootstrap.exe"
+        );
+        var updateRoot = Path.Combine(productRoot, "update");
+        var updateState = Path.Combine(updateRoot, "PODD.UPDATE");
+        var updateGenerations = Path.Combine(updateRoot, "generations");
+        Directory.CreateDirectory(updateGenerations);
         var content = Path.Combine(installRoot, "content");
         var directNetplay = commandLine.Any(argument =>
             argument == "--netplay-host" || argument == "--netplay-join"
@@ -213,13 +222,22 @@ internal static class Program
 
         var start = new ProcessStartInfo
         {
-            FileName = application,
+            FileName = bootstrap,
             WorkingDirectory = installRoot,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
+        start.ArgumentList.Add("--state");
+        start.ArgumentList.Add(updateState);
+        start.ArgumentList.Add("--generations");
+        start.ArgumentList.Add(updateGenerations);
+        start.ArgumentList.Add("--legacy");
+        start.ArgumentList.Add(application);
+        start.ArgumentList.Add("--working-directory");
+        start.ArgumentList.Add(installRoot);
+        start.ArgumentList.Add("--");
         foreach(var argument in arguments)
         {
             start.ArgumentList.Add(argument);
@@ -540,6 +558,11 @@ internal static class Program
                 File.ReadAllText(marker, Encoding.ASCII) == payloadHash &&
                 File.Exists(Path.Combine(
                     Path.GetDirectoryName(marker)!, "app", "th03-app.exe"
+                )) &&
+                File.Exists(Path.Combine(
+                    Path.GetDirectoryName(marker)!,
+                    "app",
+                    "podd-bootstrap.exe"
                 )) &&
                 File.Exists(Path.Combine(
                     Path.GetDirectoryName(marker)!, "content", "TOUHOU.DAT"

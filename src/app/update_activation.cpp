@@ -555,4 +555,43 @@ recover_interrupted_update_trial(const UpdateActivationState &state) noexcept
 	return failed_state(state);
 }
 
+std::expected<UpdateActivationState, UpdateActivationTransitionError>
+rollback_unlaunchable_active_generation(
+	const UpdateActivationState &state,
+	const UpdateGenerationIdentity &expected_active
+) noexcept
+{
+	if(!valid_update_activation_state(state)) {
+		return std::unexpected(UpdateActivationTransitionError::invalid_state);
+	}
+	if(state.phase != UpdateActivationPhase::stable || !state.active) {
+		return std::unexpected(UpdateActivationTransitionError::no_active);
+	}
+	if(*state.active != expected_active) {
+		return std::unexpected(UpdateActivationTransitionError::stale_token);
+	}
+	if(state.failed_trials == std::numeric_limits<std::uint32_t>::max()) {
+		return std::unexpected(
+			UpdateActivationTransitionError::failure_count_exhausted
+		);
+	}
+	auto revision = next_revision(state);
+	if(!revision) {
+		return std::unexpected(revision.error());
+	}
+	auto result = state;
+	result.revision = *revision;
+	++result.failed_trials;
+	if(!result.last_failed ||
+		result.last_failed->sequence < result.active->sequence) {
+		result.last_failed = result.active;
+	}
+	result.active = result.previous;
+	result.previous.reset();
+	if(!valid_update_activation_state(result)) {
+		return std::unexpected(UpdateActivationTransitionError::invalid_state);
+	}
+	return result;
+}
+
 } // namespace th03::app

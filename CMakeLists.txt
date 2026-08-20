@@ -558,6 +558,7 @@ if(TH03_ENABLE_RTC)
 		src/app/update_activation.cpp
 		src/app/update_activation_store.cpp
 		src/app/update_bootstrap.cpp
+		src/app/update_process_host.cpp
 	)
 	target_include_directories(th03_app_update_authentication PUBLIC include)
 	target_link_libraries(
@@ -744,6 +745,7 @@ if(TH03_ENABLE_SDL)
 		src/platform/sdl_audio_device.cpp
 		src/platform/sdl_input.cpp
 		src/platform/sdl_platform.cpp
+		src/platform/sdl_update_process.cpp
 	)
 	target_include_directories(th03_platform_sdl PUBLIC include)
 	target_link_libraries(
@@ -994,9 +996,13 @@ if(TH03_ENABLE_SDL)
 		th03-app PRIVATE th03_app_main th03_platform_sdl th03_platform_udp
 	)
 	if(TH03_ENABLE_RTC)
-		target_link_libraries(th03-app PRIVATE th03_platform_rtc)
+		target_link_libraries(
+			th03-app PRIVATE
+			th03_platform_rtc th03_app_update_authentication
+		)
 		target_compile_definitions(
-			th03-app PRIVATE TH03_ENABLE_RTC_TRANSPORT=1
+			th03-app PRIVATE
+			TH03_ENABLE_RTC_TRANSPORT=1 TH03_ENABLE_UPDATE_HOST=1
 		)
 	endif()
 	if(WIN32)
@@ -1004,6 +1010,15 @@ if(TH03_ENABLE_SDL)
 		if(TH03_ENABLE_RTC)
 			target_link_libraries(th03-app PRIVATE th03_platform_windows_update)
 		endif()
+	endif()
+	if(TH03_ENABLE_RTC)
+		add_executable(podd-bootstrap apps/podd-bootstrap/main.cpp)
+		target_link_libraries(
+			podd-bootstrap PRIVATE
+			th03_app_update_authentication th03_platform_sdl
+		)
+		th03_set_warnings(podd-bootstrap)
+		th03_stage_sdl3_runtime(podd-bootstrap)
 	endif()
 	if(NOT WIN32 AND TH03_ENABLE_RTC)
 		target_link_libraries(th03-app PRIVATE th03_platform_curl_update)
@@ -1025,13 +1040,18 @@ if(TH03_PACKAGE_BETA)
 	endif()
 
 	if(APPLE)
-		set_target_properties(th03-app PROPERTIES INSTALL_RPATH "@loader_path")
+		set_target_properties(
+			th03-app podd-bootstrap PROPERTIES INSTALL_RPATH "@loader_path"
+		)
 	elseif(UNIX)
-		set_target_properties(th03-app PROPERTIES INSTALL_RPATH "\$ORIGIN")
+		set_target_properties(
+			th03-app podd-bootstrap PROPERTIES INSTALL_RPATH "\$ORIGIN"
+		)
 	endif()
 
 	install(
 		TARGETS
+			podd-bootstrap
 			th03-app
 			th03-replay-video
 			th03rv
@@ -1412,6 +1432,9 @@ if(BUILD_TESTING)
 		add_executable(th03-app-update-bootstrap-tests
 			tests/test_app_update_bootstrap.cpp
 		)
+		add_executable(th03-app-update-process-host-tests
+			tests/test_app_update_process_host.cpp
+		)
 		target_link_libraries(
 			th03-app-update-manifest-authentication-tests
 			PRIVATE th03_app_update_authentication
@@ -1432,11 +1455,16 @@ if(BUILD_TESTING)
 			th03-app-update-bootstrap-tests
 			PRIVATE th03_app_update_authentication
 		)
+		target_link_libraries(
+			th03-app-update-process-host-tests
+			PRIVATE th03_app_update_authentication
+		)
 		th03_set_warnings(th03-app-update-manifest-authentication-tests)
 		th03_set_warnings(th03-app-update-acquisition-tests)
 		th03_set_warnings(th03-app-update-package-materialization-tests)
 		th03_set_warnings(th03-app-update-activation-tests)
 		th03_set_warnings(th03-app-update-bootstrap-tests)
+		th03_set_warnings(th03-app-update-process-host-tests)
 		add_test(
 			NAME th03-app-update-activation-tests
 			COMMAND th03-app-update-activation-tests
@@ -1444,6 +1472,10 @@ if(BUILD_TESTING)
 		add_test(
 			NAME th03-app-update-bootstrap-tests
 			COMMAND th03-app-update-bootstrap-tests
+		)
+		add_test(
+			NAME th03-app-update-process-host-tests
+			COMMAND th03-app-update-process-host-tests
 		)
 	endif()
 	find_program(TH03_PWSH_EXECUTABLE pwsh)
@@ -1773,6 +1805,30 @@ if(BUILD_TESTING)
 			NAME th03-platform-sdl-audio-tests
 			COMMAND th03-platform-sdl-audio-tests
 		)
+		if(TH03_ENABLE_RTC)
+			add_executable(th03-update-health-child
+				tests/update_health_child.cpp
+			)
+			target_link_libraries(
+				th03-update-health-child PRIVATE
+				th03_app_update_authentication
+			)
+			th03_set_warnings(th03-update-health-child)
+			add_executable(th03-platform-sdl-update-process-tests
+				tests/test_platform_sdl_update_process.cpp
+			)
+			target_link_libraries(
+				th03-platform-sdl-update-process-tests PRIVATE
+				th03_app_update_authentication th03_platform_sdl
+			)
+			th03_set_warnings(th03-platform-sdl-update-process-tests)
+			th03_stage_sdl3_runtime(th03-platform-sdl-update-process-tests)
+			add_test(
+				NAME th03-platform-sdl-update-process-tests
+				COMMAND th03-platform-sdl-update-process-tests
+					$<TARGET_FILE:th03-update-health-child>
+			)
+		endif()
 
 		set_tests_properties(
 			th03-platform-sdl-input-tests
