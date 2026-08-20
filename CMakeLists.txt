@@ -552,6 +552,7 @@ if(TH03_ENABLE_RTC)
 	endif()
 	add_library(th03_app_update_authentication STATIC
 		src/app/update_manifest_authentication.cpp
+		src/app/update_acquisition.cpp
 	)
 	target_include_directories(th03_app_update_authentication PUBLIC include)
 	target_link_libraries(
@@ -902,6 +903,22 @@ set_target_properties(th03_app_main PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_app_main)
 
 if(WIN32)
+	if(TH03_ENABLE_RTC)
+		add_library(th03_platform_windows_update STATIC
+			src/platform/windows_update.cpp
+		)
+		target_include_directories(th03_platform_windows_update PUBLIC include)
+		target_link_libraries(
+			th03_platform_windows_update
+			PUBLIC th03_app_update_authentication winhttp
+		)
+		target_compile_features(th03_platform_windows_update PUBLIC cxx_std_23)
+		set_target_properties(
+			th03_platform_windows_update PROPERTIES CXX_EXTENSIONS OFF
+		)
+		th03_set_warnings(th03_platform_windows_update)
+	endif()
+
 	add_library(th03_platform_windows_online STATIC
 		src/platform/windows_online.cpp
 	)
@@ -962,6 +979,9 @@ if(TH03_ENABLE_SDL)
 	endif()
 	if(WIN32)
 		target_link_libraries(th03-app PRIVATE th03_platform_windows_online)
+		if(TH03_ENABLE_RTC)
+			target_link_libraries(th03-app PRIVATE th03_platform_windows_update)
+		endif()
 	endif()
 	target_include_directories(th03-app PRIVATE apps/th03-app)
 	th03_set_warnings(th03-app)
@@ -1243,6 +1263,23 @@ if(BUILD_TESTING)
 		COMMAND th03-app-new-classic-online-task-tests
 	)
 
+	if(WIN32 AND TH03_ENABLE_RTC)
+		add_executable(th03-platform-windows-update-tests
+			tests/test_platform_windows_update.cpp
+		)
+		target_link_libraries(
+			th03-platform-windows-update-tests PRIVATE th03_platform_windows_update
+		)
+		target_compile_features(
+			th03-platform-windows-update-tests PRIVATE cxx_std_23
+		)
+		th03_set_warnings(th03-platform-windows-update-tests)
+		add_test(
+			NAME th03-platform-windows-update-tests
+			COMMAND th03-platform-windows-update-tests
+		)
+	endif()
+
 	if(WIN32)
 		add_executable(th03-platform-windows-online-tests
 			tests/test_platform_windows_online.cpp
@@ -1310,11 +1347,19 @@ if(BUILD_TESTING)
 		add_executable(th03-app-update-manifest-authentication-tests
 			tests/test_app_update_manifest_authentication.cpp
 		)
+		add_executable(th03-app-update-acquisition-tests
+			tests/test_app_update_acquisition.cpp
+		)
 		target_link_libraries(
 			th03-app-update-manifest-authentication-tests
 			PRIVATE th03_app_update_authentication
 		)
+		target_link_libraries(
+			th03-app-update-acquisition-tests
+			PRIVATE th03_app_update_authentication
+		)
 		th03_set_warnings(th03-app-update-manifest-authentication-tests)
+		th03_set_warnings(th03-app-update-acquisition-tests)
 	endif()
 	find_program(TH03_PWSH_EXECUTABLE pwsh)
 	if(TH03_PWSH_EXECUTABLE)
@@ -1323,6 +1368,8 @@ if(BUILD_TESTING)
 			list(APPEND _th03_update_authentication_test_arguments
 				-Verifier
 				$<TARGET_FILE:th03-app-update-manifest-authentication-tests>
+				-AcquisitionVerifier
+				$<TARGET_FILE:th03-app-update-acquisition-tests>
 			)
 		endif()
 		add_test(

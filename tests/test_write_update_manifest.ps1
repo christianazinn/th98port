@@ -5,7 +5,8 @@ param(
 	[string]$Signer,
 	[Parameter(Mandatory = $true)]
 	[string]$Artifact,
-	[string]$Verifier = ""
+	[string]$Verifier = "",
+	[string]$AcquisitionVerifier = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -127,6 +128,12 @@ try {
 			$invalidManifest $invalidPublic
 		if($LASTEXITCODE -ne 0) {
 			throw "Native update authentication test failed with $LASTEXITCODE"
+		}
+		if($AcquisitionVerifier) {
+			& $AcquisitionVerifier $manifest $publicDer $Artifact
+			if($LASTEXITCODE -ne 0) {
+				throw "Native update acquisition test failed with $LASTEXITCODE"
+			}
 		}
 	}
 	Write-Output "update-manifest-authoring-test=passed bytes=$($bytes.Length)"

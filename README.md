@@ -631,8 +631,9 @@ local VS build and then the remaining source scenes.
 hierarchy, sealed Classic boundary, and ordered New Classic
 menu/settings/services plan.
 `docs/UPDATE_MANIFEST.md` freezes the authenticated, monotonic release-metadata
-boundary, offline signing tool, and provider-backed pinned-key verification
-plus inert exact-artifact staging without yet enabling network download or
-self-replacement.
+boundary, offline signing tool, provider-backed pinned-key verification, inert
+exact-artifact staging, and the manifest-first bounded acquisition transaction.
+Windows supplies the first strict HTTPS adapter; production keys,
+Linux/macOS adapters, polling/UI, and self-replacement remain disabled.
 `docs/research/README.md` indexes the presentation, asset, and audio research
 contracts prepared for those later layers.

@@ -63,8 +63,26 @@ existing different target. Concurrent or repeated identical staging is
 idempotent after complete target revalidation. This still performs no network
 I/O, product replacement, or execution.
 
+`acquire_and_stage_update()` owns the next host-side boundary. It first asks a
+bounded transport for at most 2,048 manifest bytes, authenticates those exact
+bytes, and rejects the wrong platform, channel, or a non-newer sequence before
+it makes any artifact request. Only then does it request the authenticated
+artifact URL with the authenticated byte length as the response ceiling. A
+200 response of exactly that length enters `stage_authenticated_update()`,
+which independently repeats signature, size, and SHA-256 verification. The
+runtime acquisition ceiling is 256 MiB even though the format can describe a
+larger future package. Network, status, selection, length, digest, and staging
+failures leave the product and user-data trees unchanged.
+
+`windows_update_transport()` supplies the first platform adapter. WinHTTP
+accepts absolute ASCII HTTPS URLs only, uses the system proxy and certificate
+policy, forbids credentials, fragments, backslashes, and redirects, applies
+connect/request timeouts, and enforces the body limit while reading. The
+adapter is synchronous by design and must be called by a host worker; no
+source-time owner calls it. Linux and macOS adapters remain packaging work.
+
 `tools/release/write_update_manifest.ps1` authors the format from a
 caller-owned PEM private key. Private keys and original content are never
 repository inputs. Key generation, offline custody, production public-key pin
-selection/rotation, download, atomic replacement, recovery, and visible opt-in
-policy remain separate release-infrastructure gates.
+selection/rotation, Linux/macOS HTTPS adapters, atomic replacement, recovery,
+and visible opt-in policy remain separate release-infrastructure gates.
