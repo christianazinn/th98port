@@ -1178,6 +1178,12 @@ bool authentic_online_high_score_gate(
 	request.fm_available = false;
 	request.experience = ExperienceProfile::new_classic;
 	request.new_classic_online_boards.push_back(online_high_score_board());
+	auto empty_my_replays = online_high_score_board();
+	empty_my_replays.leaderboard_entries.clear();
+	empty_my_replays.replay_records.clear();
+	request.new_classic_online_my_records.push_back(
+		std::move(empty_my_replays)
+	);
 	request.new_classic_online_my_records.push_back(online_high_score_board());
 	auto loaded = ClassicRunner::load(std::move(request));
 	if(!loaded) {
@@ -1212,6 +1218,7 @@ bool authentic_online_high_score_gate(
 	> pixels{};
 	std::uint64_t tick_index = 0U;
 	std::optional<ClassicRunnerConsumeResult> last{};
+	std::optional<std::int16_t> last_surface_tone{};
 	const auto drain_audio = [&]() {
 		while(runner.take_audio_command()) {}
 	};
@@ -1236,8 +1243,15 @@ bool authentic_online_high_score_gate(
 		}
 		last = *advanced;
 		drain_audio();
-		return !advanced->surface_changed ||
-			runner.compose_shown_surface(pixels).has_value();
+		if(!advanced->surface_changed) {
+			return true;
+		}
+		auto surface = runner.compose_shown_surface(pixels);
+		if(!surface) {
+			return false;
+		}
+		last_surface_tone = surface->palette_tone;
+		return true;
 	};
 	const auto wait_for_input = [&](std::size_t limit) {
 		for(std::size_t frame = 0U; frame < limit; ++frame) {
@@ -1277,6 +1291,10 @@ bool authentic_online_high_score_gate(
 		if(!step()) {
 			return false;
 		}
+	}
+	if(last_surface_tone != 100) {
+		std::cerr << "online HiScore retained the completed black title surface\n";
+		return false;
 	}
 
 	// The default Local choice must retain a return edge to this hub rather
@@ -1490,6 +1508,15 @@ bool authentic_replay_hub_gate(
 		ClassicOpSessionScene::replay_browser || !settle_patch_menu()) {
 		return false;
 	}
+	auto empty_my_replays = online_high_score_board();
+	empty_my_replays.leaderboard_entries.clear();
+	empty_my_replays.replay_records.clear();
+	if(!runner.merge_new_classic_online_my_records(
+		std::move(empty_my_replays)
+	) || !step() || !last || !last->surface_changed) {
+		std::cerr << "Replay hub did not publish newly available My Replays\n";
+		return false;
+	}
 
 	// Local Replays remains the default and returns to the retained Replay hub.
 	if(!step(0x0020U) || !settle_patch_menu() || !step(0x1000U) ||
@@ -1517,10 +1544,25 @@ bool authentic_replay_hub_gate(
 		}
 	}
 
-	// Online Replay Library follows Local (and the capability-gated Upload row).
+	// A successful authenticated history response is itself the My Replays
+	// capability. An account with no accepted rows keeps a real empty library
+	// rather than making its destination disappear.
+	const auto my_replays_downs = upload_expected ? 2U : 1U;
+	for(std::size_t row = 0U; row < my_replays_downs; ++row) {
+		if(!step(0x0002U) || !step()) {
+			return false;
+		}
+	}
+	if(!step(0x0020U) || !settle_patch_menu() ||
+		!step(0x1000U) || !settle_patch_menu()) {
+		return false;
+	}
+
+	// Online Replay Library follows My Replays (and the capability-gated Upload
+	// row).
 	// Its detail owns the same bounded
 	// Download and Watch requests as the score-oriented cross-link.
-	const auto online_downs = upload_expected ? 2U : 1U;
+	const auto online_downs = upload_expected ? 3U : 2U;
 	for(std::size_t row = 0U; row < online_downs; ++row) {
 		if(!step(0x0002U) || !step()) {
 			return false;

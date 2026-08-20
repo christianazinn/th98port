@@ -330,14 +330,15 @@ The Replay hub is capability-shaped. With cached replay rows it is:
 ```text
 Local Replays
 Upload Replay              (official desktop service or configured override)
-My Replays                 (only with accepted rows for this identity)
+My Replays                 (when signed-in history is available; may be empty)
 Online Replay Library
 Downloaded Replays
 Return
 ```
 
 `My Replays` is the accepted-submission history (the service/cache may retain
-the internal `My Records` name) and is not shown as an inert
+the internal `My Records` name). It may show an honest empty library once the
+signed-in history capability is known; it is not shown as an inert
 placeholder. It remains distinct from the public best-per-profile board.
 
 The HiScore hub appears only when at least one validated cached online board

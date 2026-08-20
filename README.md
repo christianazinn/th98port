@@ -370,8 +370,9 @@ opaque identity and posts canonical bytes directly from memory. No working
 upload file is created, and accepted/rejected/failure is latched back onto the
 retained UI at the next source boundary. An existing enrolled identity also
 refreshes all of its accepted active-rank submissions into memory and adds
-`My Records` only when nonempty; it never enrolls merely because the app
-started. My Records and the two public libraries reuse the same Download and
+`My Replays` once the existing account history is available, including an
+honest empty view; it never enrolls merely because the app started. My Replays
+and the two public libraries reuse the same Download and
 Watch transactions. Without any replay-backed cache, accepted history, or
 available upload capability, Replay still enters the authenticated local
 browser directly. The production Cloudflare verifier, D1, and R2 path is live

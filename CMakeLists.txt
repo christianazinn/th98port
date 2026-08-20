@@ -878,6 +878,7 @@ endif()
 add_library(th03_app_content STATIC
 	src/app/authentic_text.cpp
 	src/app/main_compiled_content.cpp
+	src/app/new_classic_game_text.cpp
 )
 target_include_directories(th03_app_content PUBLIC include)
 target_link_libraries(th03_app_content PUBLIC th03_present)
@@ -994,7 +995,6 @@ add_library(th03_app_main STATIC
 	src/app/new_classic_assets.cpp
 	src/app/new_classic_device_scene.cpp
 	src/app/new_classic_frontend.cpp
-	src/app/new_classic_game_text.cpp
 	src/app/new_classic_joy_config_scene.cpp
 	src/app/new_classic_key_config_scene.cpp
 	src/app/new_classic_language.cpp

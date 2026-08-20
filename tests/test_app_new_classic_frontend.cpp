@@ -450,6 +450,20 @@ void test_replay_hub_and_libraries()
 		NewClassicReplayHubStatus::upload_selected,
 		"configured Replay hub exposes the explicit Upload Replay destination");
 
+	NewClassicReplayHub refreshed(patch_assets, true, false, false);
+	finish_entry_fade(refreshed);
+	static_cast<void>(refreshed.consume({}));
+	static_cast<void>(refreshed.consume({.down = true}));
+	static_cast<void>(refreshed.consume({}));
+	expect(refreshed.refresh_capabilities(true, false, true) &&
+		refreshed.selection() == 2U &&
+		!refreshed.refresh_capabilities(true, false, true),
+		"Replay hub inserts a newly available My Replays row while retaining"
+		" the selected destination");
+	expect(refreshed.consume({.confirm = true}).status ==
+		NewClassicReplayHubStatus::online_selected,
+		"live capability refresh retains the selected row by identity");
+
 	NewClassicReplayHub my_records_only(patch_assets, false, false, true);
 	finish_entry_fade(my_records_only);
 	static_cast<void>(my_records_only.consume({}));
@@ -457,7 +471,7 @@ void test_replay_hub_and_libraries()
 	static_cast<void>(my_records_only.consume({}));
 	expect(my_records_only.consume({.confirm = true}).status ==
 		NewClassicReplayHubStatus::my_records_selected,
-		"Replay hub exposes My Records only when accepted rows are available");
+		"Replay hub exposes My Replays when account history is available");
 
 	NewClassicHighScoreMenu online_library(
 		{online_board(
@@ -483,7 +497,17 @@ void test_replay_hub_and_libraries()
 	);
 	expect(my_records_library.valid() &&
 		my_records_library.mode() == NewClassicOnlineMenuMode::my_records,
-		"My Records reuses the source-styled replay library surface");
+		"My Replays reuses the source-styled replay library surface");
+	auto empty_records = online_board(2U, 4U, 0x42U);
+	empty_records.leaderboard_entries.clear();
+	empty_records.replay_records.clear();
+	NewClassicHighScoreMenu empty_records_library(
+		{std::move(empty_records)}, 2U, patch_assets,
+		NewClassicOnlineMenuMode::my_records
+	);
+	expect(empty_records_library.valid() &&
+		empty_records_library.viewing_online(),
+		"My Replays keeps an honest empty account-history destination");
 
 	NewClassicHighScoreMenu downloaded_library(
 		{online_board(2U, 4U, 0x31U)}, 2U, patch_assets,

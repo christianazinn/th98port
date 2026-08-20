@@ -131,6 +131,13 @@ public:
 	[[nodiscard]] NewClassicReplayHubResult consume(
 		NewClassicUiInput input
 	) noexcept;
+	// Host-owned online refreshes are merged between source ticks. Rebuild the
+	// capability-shaped row set without restarting the retained menu or fade.
+	[[nodiscard]] bool refresh_capabilities(
+		bool libraries_available,
+		bool upload_available,
+		bool my_records_available
+	) noexcept;
 	[[nodiscard]] present::SourceSurface surface() const noexcept;
 	[[nodiscard]] NewClassicReplayHubStatus status() const noexcept;
 	[[nodiscard]] std::size_t selection() const noexcept;
@@ -286,9 +293,9 @@ enum class NewClassicOnlineMenuMode : std::uint8_t {
 // New Classic-only source-styled hub for local and cached online score views.
 // Every online row was already validated by the T3ONL002 decoder. The owner
 // may emit one immutable replay-download intent, but never performs network or
-// filesystem I/O during source-time scene advancement. An empty board set is
-// invalid so the existing direct local HiScore route remains the only visible
-// path while offline/unconfigured.
+// filesystem I/O during source-time scene advancement. A validated category
+// snapshot may honestly contain zero rows; absence of every snapshot remains
+// invalid so offline/unconfigured routes keep their direct local behavior.
 class NewClassicHighScoreMenu final {
 public:
 	NewClassicHighScoreMenu(

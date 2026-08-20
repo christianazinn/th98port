@@ -914,6 +914,7 @@ struct ClassicOpSessionBackend final {
 	bool update_available = false;
 	std::unique_ptr<NewClassicReplayHub> replay_hub{};
 	std::optional<NewClassicReplayHubResult> replay_hub_result{};
+	bool replay_hub_refresh_pending = false;
 	std::unique_ptr<NewClassicReplayBrowser> replay_browser{};
 	std::optional<NewClassicReplayBrowserResult> replay_browser_result{};
 	std::optional<formats::ReplayDocument> replay_playback_document{};
@@ -1138,9 +1139,7 @@ struct ClassicOpSessionBackend final {
 			online_my_records, [this](const auto &board) {
 				return board.board_category &&
 					board.board_category->mode == NewClassicOnlineMode::story &&
-					board.board_category->rank == replay_return_resident.rank &&
-					!board.replay_records.empty() &&
-					!board.leaderboard_entries.empty();
+					board.board_category->rank == replay_return_resident.rank;
 			}
 		);
 	}
@@ -1272,6 +1271,12 @@ struct ClassicOpSessionBackend final {
 			};
 		}
 		if(replay_hub) {
+			const bool refreshed = std::exchange(
+				replay_hub_refresh_pending, false
+			) && replay_hub->refresh_capabilities(
+				replay_library_available(), online_upload_available,
+				my_records_available()
+			);
 			const auto result = replay_hub->consume(input);
 			replay_hub_result = result;
 			switch(result.status) {
@@ -1333,7 +1338,7 @@ struct ClassicOpSessionBackend final {
 				};
 			case NewClassicReplayHubStatus::running:
 				return ClassicOpSessionBackendTick{
-					.surface_changed = result.surface_changed,
+					.surface_changed = refreshed || result.surface_changed,
 					.input_sampled = input.up || input.down || input.left ||
 						input.right || input.confirm || input.bomb || input.cancel,
 				};
@@ -4274,6 +4279,7 @@ struct ClassicOpSessionBackend final {
 		} else {
 			*existing = std::move(document);
 		}
+		replay_hub_refresh_pending = replay_hub != nullptr;
 		return {};
 	}
 
@@ -4297,12 +4303,14 @@ struct ClassicOpSessionBackend final {
 		} else {
 			*existing = std::move(document);
 		}
+		replay_hub_refresh_pending = replay_hub != nullptr;
 		return {};
 	}
 
 	void clear_online_my_records() noexcept
 	{
 		online_my_records.clear();
+		replay_hub_refresh_pending = replay_hub != nullptr;
 	}
 
 	[[nodiscard]] std::optional<NewClassicOnlineReplayRecord>
@@ -4594,7 +4602,17 @@ struct ClassicOpSessionBackend final {
 			break;
 		}
 
-		if(!raster && title_completion) {
+		// HiScore retains [title_completion] as its return capability while the
+		// hub and the nested local viewer are live. These active owners must win
+		// composition; otherwise the completed title fade (normally black) hides
+		// the entire HiScore route until Cancel rebuilds OP.
+		if(!raster && high_score_completion) {
+			raster = &high_score_completion->raster();
+		} else if(!raster && high_score_menu) {
+			return high_score_menu->surface();
+		} else if(!raster && high_scores) {
+			raster = &high_scores->raster();
+		} else if(!raster && title_completion) {
 			raster = &title_completion->raster();
 			tram = &title_completion->tram();
 		} else if(!raster && title) {
@@ -4612,12 +4630,6 @@ struct ClassicOpSessionBackend final {
 		} else if(!raster && music_room) {
 			raster = &music_room->raster();
 			tram = &music_room->tram();
-		} else if(!raster && high_score_completion) {
-			raster = &high_score_completion->raster();
-		} else if(!raster && high_score_menu) {
-			return high_score_menu->surface();
-		} else if(!raster && high_scores) {
-			raster = &high_scores->raster();
 		} else if(!raster && practice_menu && selection) {
 			raster = &selection->raster();
 			tram = &selection->tram();

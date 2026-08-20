@@ -28,7 +28,8 @@ Before the nice-to-have sequence continues:
   capability-shaped hub. Selecting it must never leave a non-interactive frame
   that only Escape can unwind.
 - The Replay hub must expose the signed-in player's accepted online submissions
-  as `My Replays` whenever that validated account-history snapshot is nonempty.
+  as `My Replays` whenever a validated account-history snapshot is available,
+  including an honest empty library.
   This is the user-facing name for the backend/cache dataset previously called
   `My Records`; it remains distinct from the public best-per-profile board and
   from arbitrary downloaded replays.

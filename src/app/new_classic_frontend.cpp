@@ -1676,20 +1676,10 @@ NewClassicReplayHub::NewClassicReplayHub(
 ) :
 	patch_assets_(std::move(patch_assets))
 {
-	rows_.push_back(NewClassicReplayHubStatus::local_selected);
-	if(upload_available) {
-		rows_.push_back(NewClassicReplayHubStatus::upload_selected);
-	}
-	if(my_records_available) {
-		rows_.push_back(NewClassicReplayHubStatus::my_records_selected);
-	}
-	if(libraries_available) {
-		rows_.push_back(NewClassicReplayHubStatus::online_selected);
-		rows_.push_back(NewClassicReplayHubStatus::downloaded_selected);
-	}
-	rows_.push_back(NewClassicReplayHubStatus::back);
 	valid_ = static_cast<bool>(patch_assets_);
-	draw();
+	static_cast<void>(refresh_capabilities(
+		libraries_available, upload_available, my_records_available
+	));
 	if(valid_) {
 		patch_surface_.raster().set_palette_tone(0);
 		patch_surface_.raster().apply_pending_palette();
@@ -1812,6 +1802,43 @@ NewClassicReplayHubResult NewClassicReplayHub::consume(
 	return {.surface_changed = valid_, .status = status_};
 }
 
+bool NewClassicReplayHub::refresh_capabilities(
+	bool libraries_available,
+	bool upload_available,
+	bool my_records_available
+) noexcept
+{
+	if(!valid_ || status_ != NewClassicReplayHubStatus::running) {
+		return false;
+	}
+	std::vector<NewClassicReplayHubStatus> rows{
+		NewClassicReplayHubStatus::local_selected,
+	};
+	if(upload_available) {
+		rows.push_back(NewClassicReplayHubStatus::upload_selected);
+	}
+	if(my_records_available) {
+		rows.push_back(NewClassicReplayHubStatus::my_records_selected);
+	}
+	if(libraries_available) {
+		rows.push_back(NewClassicReplayHubStatus::online_selected);
+		rows.push_back(NewClassicReplayHubStatus::downloaded_selected);
+	}
+	rows.push_back(NewClassicReplayHubStatus::back);
+	if(rows == rows_) {
+		return false;
+	}
+	const auto selected = selection_ < rows_.size() ?
+		rows_[selection_] : NewClassicReplayHubStatus::local_selected;
+	rows_ = std::move(rows);
+	const auto retained = std::ranges::find(rows_, selected);
+	selection_ = retained == rows_.end() ?
+		std::min(selection_, rows_.size() - 1U) :
+		static_cast<std::size_t>(retained - rows_.begin());
+	draw();
+	return valid_;
+}
+
 present::SourceSurface NewClassicReplayHub::surface() const noexcept
 {
 	return patch_surface_.surface();
@@ -1917,10 +1944,6 @@ NewClassicHighScoreMenu::NewClassicHighScoreMenu(
 								NewClassicOnlineReplayAvailability::downloaded);
 					}
 				);
-			}
-			if(mode_ == NewClassicOnlineMenuMode::my_records &&
-				board.leaderboard_entries.empty()) {
-				continue;
 			}
 			boards_.push_back(std::move(board));
 		}
