@@ -66,10 +66,38 @@ flushes the containing directory where supported, and validates the published
 file again. The older valid sibling is retained. Exact repeated commits are
 idempotent; stale or skipped revisions cannot overwrite newer state.
 
+## Bootstrap transaction
+
+`update_bootstrap` turns the state machine into a launch decision without
+adding process or network policy. A bootstrap first acquires the nonblocking
+cross-process lifetime lease for the logical `PODD.UPDATE` family and retains
+it until its child exits. This distinguishes a durable `trial` left by a dead
+bootstrap from one whose child is merely still starting; a second bootstrap
+cannot overlap it.
+
+Launch preparation then has exactly three results:
+
+- absent active state selects the legacy installed application;
+- stable active state selects its identity-derived immutable generation;
+- pending state is committed as `trial` before the candidate generation and
+  its exact token are returned.
+
+If preparation finds `trial` after acquiring the lifetime lease, it records
+that trial as failed and selects the prior active or legacy target. The failed
+candidate is never retried implicitly during the same startup.
+
+The child receives the 107-byte canonical lowercase token text
+`T3TRL001:<revision>:<sequence>:<full-artifact-sha256>`. Only an exact token
+can acknowledge or fail the durable trial. Exact acknowledgement/failure
+retries are idempotent, while a stale child cannot approve a later state.
+The lifetime lease and activation-family commit lock are deliberately
+different: the child may acknowledge health while its parent retains launch
+ownership.
+
 ## Deliberately deferred
 
-A bootstrap executable still needs to choose a generation, durably begin a
-trial immediately before launch, pass the token to the child, observe early
-health acknowledgement, recover an unacknowledged trial, and retain or clean
-immutable generations. Production signing pins and visible opt-in update UI
-also remain separate release gates.
+An executable host still needs to resolve the selected identity beneath its
+generation root, launch the child, transport the canonical token, define the
+early application health boundary, and retain or clean immutable generations.
+Production signing pins and visible opt-in update UI also remain separate
+release gates.

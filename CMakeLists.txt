@@ -557,6 +557,7 @@ if(TH03_ENABLE_RTC)
 		src/app/update_package_materialization.cpp
 		src/app/update_activation.cpp
 		src/app/update_activation_store.cpp
+		src/app/update_bootstrap.cpp
 	)
 	target_include_directories(th03_app_update_authentication PUBLIC include)
 	target_link_libraries(
@@ -1408,6 +1409,9 @@ if(BUILD_TESTING)
 		add_executable(th03-app-update-activation-tests
 			tests/test_app_update_activation.cpp
 		)
+		add_executable(th03-app-update-bootstrap-tests
+			tests/test_app_update_bootstrap.cpp
+		)
 		target_link_libraries(
 			th03-app-update-manifest-authentication-tests
 			PRIVATE th03_app_update_authentication
@@ -1424,13 +1428,22 @@ if(BUILD_TESTING)
 			th03-app-update-activation-tests
 			PRIVATE th03_app_update_authentication
 		)
+		target_link_libraries(
+			th03-app-update-bootstrap-tests
+			PRIVATE th03_app_update_authentication
+		)
 		th03_set_warnings(th03-app-update-manifest-authentication-tests)
 		th03_set_warnings(th03-app-update-acquisition-tests)
 		th03_set_warnings(th03-app-update-package-materialization-tests)
 		th03_set_warnings(th03-app-update-activation-tests)
+		th03_set_warnings(th03-app-update-bootstrap-tests)
 		add_test(
 			NAME th03-app-update-activation-tests
 			COMMAND th03-app-update-activation-tests
+		)
+		add_test(
+			NAME th03-app-update-bootstrap-tests
+			COMMAND th03-app-update-bootstrap-tests
 		)
 	endif()
 	find_program(TH03_PWSH_EXECUTABLE pwsh)
