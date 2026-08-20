@@ -89,7 +89,8 @@ std::optional<th03::replay::RoundStartRecord> round_start(
 
 int main()
 {
-	const th03::GameContent content{};
+	th03::GameContent content{};
+	content.enemy_formations.resize(2U);
 	auto document = stock_document();
 	const auto initial = round_start(document.session.init, content);
 	if(!require(initial.has_value(), "stock Story first round constructs")) {
@@ -142,6 +143,69 @@ int main()
 	) || !require(
 		json.find("\"protocol\":\"T3RV-SERVICE-1\"") != std::string::npos,
 		"protocol is explicit"
+	)) {
+		return EXIT_FAILURE;
+	}
+
+	// The recorder stores the live post-initialization seed at the top level of
+	// checkpoint zero as well as in its compact recipe. It is therefore normally
+	// different from resident_rand even though the complete reconstructed start
+	// is stock. This is the shape written by genuine V13 recordings.
+	auto recorded = document;
+	auto recorded_init = initial->observation.start;
+	recorded_init.compact_runtime_snapshot = th03::CompactRuntimeSnapshot{
+		.round_reset_seed = initial->observation.effective_reset_seed,
+		.random_seed = initial->observation.runtime.random_seed,
+		.first_formation =
+			initial->observation.runtime.formation_type_ring[0U],
+		.players = initial->observation.runtime.players,
+	};
+	recorded_init.round_start_snapshot = initial->observation.round;
+	recorded.session.init = recorded_init;
+	recorded.checkpoints.front().init = recorded_init;
+	const auto recorded_start = round_start(recorded_init, content);
+	if(!require(
+		recorded_init.random_seed !=
+			std::bit_cast<std::uint32_t>(recorded_init.resident_rand),
+		"recorded checkpoint carries a distinct live random seed"
+	) || !require(
+		recorded_start.has_value(),
+		"recorded compact checkpoint reconstructs"
+	)) {
+		return EXIT_FAILURE;
+	}
+	auto recorded_run = run;
+	recorded_run.round_starts = {*recorded_start};
+	if(!require(
+		th03rv::make_service_accepted_report(
+			recorded, recorded_run, content, true, true
+		).has_value(),
+		"genuine recorder-shaped stock checkpoint is accepted"
+	)) {
+		return EXIT_FAILURE;
+	}
+	auto tampered_live_seed = recorded;
+	tampered_live_seed.session.init.random_seed ^= 0x01000000U;
+	tampered_live_seed.session.init.compact_runtime_snapshot->random_seed =
+		tampered_live_seed.session.init.random_seed;
+	tampered_live_seed.checkpoints.front().init =
+		tampered_live_seed.session.init;
+	const auto tampered_live_start = round_start(
+		tampered_live_seed.session.init, content
+	);
+	if(!require(
+		tampered_live_start.has_value(),
+		"tampered live-seed checkpoint constructs"
+	)) {
+		return EXIT_FAILURE;
+	}
+	auto tampered_live_run = recorded_run;
+	tampered_live_run.round_starts = {*tampered_live_start};
+	if(!require(
+		!th03rv::make_service_accepted_report(
+			tampered_live_seed, tampered_live_run, content, true, true
+		),
+		"stock reconstruction still rejects a forged live seed"
 	)) {
 		return EXIT_FAILURE;
 	}

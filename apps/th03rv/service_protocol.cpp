@@ -117,16 +117,18 @@ bool stock_story_anchor(
 		init.paletted_character[1U] != init.story_opponents[0U] ||
 		init.winner != 0 || init.show_score_menu != 0U ||
 		init.fast_op_animation != 0U || !zero_scores(init.last_score) ||
-		init.random_seed != std::bit_cast<std::uint32_t>(init.resident_rand) ||
 		init.practice_rules
 	) {
 		return false;
 	}
 
-	// V13 checkpoint zero legitimately carries compact/runtime recipes. Rebuild
-	// the same launch without any recipe, then compare the complete effective
-	// first-round observation. This prevents a crafted snapshot from injecting
-	// score, gauges, carry state, RNG tables, or other non-stock state.
+	// V13 checkpoint zero legitimately carries compact/runtime recipes, and its
+	// top-level random_seed is the post-initialization live seed rather than the
+	// pre-initialization resident seed. Rebuild the same launch without any
+	// recipe, then compare the complete effective first-round observation. This
+	// proves the live seed together with every ring and prevents a crafted
+	// snapshot from injecting score, gauges, carry state, RNG tables, or other
+	// non-stock state.
 	auto stock = init;
 	stock.runtime_snapshot.reset();
 	stock.compact_runtime_snapshot.reset();
