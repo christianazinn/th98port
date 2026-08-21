@@ -444,11 +444,11 @@ void test_replay_hub_and_libraries()
 	static_cast<void>(upload_only.consume({}));
 	static_cast<void>(upload_only.consume({.down = true}));
 	expect(upload_only.selection() == 1U,
-		"upload-only Replay hub omits inert online library rows");
+		"upload-only Replay hub keeps upload inside Local Replay details");
 	static_cast<void>(upload_only.consume({}));
 	expect(upload_only.consume({.confirm = true}).status ==
-		NewClassicReplayHubStatus::upload_selected,
-		"configured Replay hub exposes the explicit Upload Replay destination");
+		NewClassicReplayHubStatus::back,
+		"upload-only Replay hub has no redundant Upload Replay destination");
 
 	NewClassicReplayHub refreshed(patch_assets, true, false, false);
 	finish_entry_fade(refreshed);
@@ -488,6 +488,8 @@ void test_replay_hub_and_libraries()
 	static_cast<void>(online_library.consume({.confirm = true}));
 	static_cast<void>(online_library.consume({}));
 	static_cast<void>(online_library.consume({.confirm = true}));
+	static_cast<void>(online_library.consume({}));
+	static_cast<void>(online_library.consume({.confirm = true}));
 	expect(online_library.take_replay_download_request().has_value(),
 		"online Replay library reuses the validated download transaction");
 
@@ -510,7 +512,8 @@ void test_replay_hub_and_libraries()
 		"My Replays keeps an honest empty account-history destination");
 
 	NewClassicHighScoreMenu downloaded_library(
-		{online_board(2U, 4U, 0x31U)}, 2U, patch_assets,
+		{online_board(2U, 4U, 0x31U), online_board(3U, 5U, 0x32U)},
+		2U, patch_assets,
 		NewClassicOnlineMenuMode::downloaded_replays
 	);
 	expect(downloaded_library.valid() && downloaded_library.viewing_online() &&
@@ -518,6 +521,11 @@ void test_replay_hub_and_libraries()
 			NewClassicOnlineMenuMode::downloaded_replays,
 		"downloaded Replay library opens directly on local records");
 	finish_entry_fade(downloaded_library);
+	static_cast<void>(downloaded_library.consume({}));
+	const auto first_downloaded_board = downloaded_library.selected_board();
+	static_cast<void>(downloaded_library.consume({.down = true}));
+	expect(downloaded_library.selected_board() != first_downloaded_board,
+		"Downloaded Replays is one flat cross-rank, cross-character list");
 	static_cast<void>(downloaded_library.consume({}));
 	static_cast<void>(downloaded_library.consume({.confirm = true}));
 	static_cast<void>(downloaded_library.consume({}));
@@ -547,9 +555,11 @@ void test_online_high_score_menu()
 	static_cast<void>(wrong_rank.consume({}));
 	static_cast<void>(wrong_rank.consume({.down = true}));
 	static_cast<void>(wrong_rank.consume({}));
+	static_cast<void>(wrong_rank.consume({.down = true}));
+	static_cast<void>(wrong_rank.consume({}));
 	expect(wrong_rank.consume({.confirm = true}).surface_changed &&
 		wrong_rank.viewing_personal_bests(),
-		"an unavailable Online row is skipped while Personal Bests remains reachable");
+		"other-rank Online data remains browsable while Personal Bests is reachable");
 
 	for(std::uint8_t rank = 0U; rank < 4U; ++rank) {
 		NewClassicHighScoreMenu rank_hub(
@@ -619,7 +629,8 @@ void test_online_high_score_menu()
 		"Personal Bests adds the two unlocked character rows only when available");
 
 	NewClassicHighScoreMenu online(
-		{online_board(2U, 4U, 0x20U), online_board(2U, 5U, 0x30U)},
+		{online_board(2U, 4U, 0x20U), online_board(2U, 5U, 0x30U),
+			online_board(3U, 5U, 0x40U)},
 		2U, patch_assets
 	);
 	finish_entry_fade(online);
@@ -648,7 +659,17 @@ void test_online_high_score_menu()
 	expect(online.selected_board() == 1U,
 		"online board navigation wraps across cached character boards");
 	static_cast<void>(online.consume({}));
+	static_cast<void>(online.consume({.down = true}));
+	expect(online.selected_board() == 2U,
+		"online board Down advances difficulty while retaining character");
+	static_cast<void>(online.consume({}));
+	static_cast<void>(online.consume({.up = true}));
+	expect(online.selected_board() == 1U,
+		"online board Up wraps difficulty while retaining character");
+	static_cast<void>(online.consume({}));
 	const auto list_hash = surface_hash(online.surface());
+	static_cast<void>(online.consume({.confirm = true}));
+	static_cast<void>(online.consume({}));
 	static_cast<void>(online.consume({.confirm = true}));
 	expect(online.viewing_detail() &&
 		surface_hash(online.surface()) != list_hash,
@@ -657,6 +678,8 @@ void test_online_high_score_menu()
 	static_cast<void>(online.consume({.cancel = true}));
 	expect(online.viewing_online() && !online.viewing_detail(),
 		"detail Cancel returns to the same online board");
+	static_cast<void>(online.consume({}));
+	static_cast<void>(online.consume({.cancel = true}));
 	static_cast<void>(online.consume({}));
 	static_cast<void>(online.consume({.cancel = true}));
 	expect(!online.viewing_online(),
@@ -679,7 +702,12 @@ void test_online_high_score_menu()
 	static_cast<void>(download.consume({}));
 	static_cast<void>(download.consume({.confirm = true}));
 	static_cast<void>(download.consume({}));
+	expect(download.valid(), "online board remains valid after category focus");
 	static_cast<void>(download.consume({.confirm = true}));
+	static_cast<void>(download.consume({}));
+	static_cast<void>(download.consume({.confirm = true}));
+	expect(download.viewing_detail(),
+		"online board category and row focus reach replay detail");
 	static_cast<void>(download.consume({}));
 	auto requested = download.consume({.confirm = true});
 	auto request = download.take_replay_download_request();
@@ -748,6 +776,8 @@ void test_online_high_score_menu()
 	static_cast<void>(stale.consume({.confirm = true}));
 	static_cast<void>(stale.consume({}));
 	static_cast<void>(stale.consume({.confirm = true}));
+	static_cast<void>(stale.consume({}));
+	static_cast<void>(stale.consume({.confirm = true}));
 	auto stale_watch = stale.take_replay_watch_request();
 	expect(stale_watch && stale.report_replay_watch(
 		stale_watch->replay_id, NewClassicOnlineReplayWatchOutcome::failed
@@ -774,7 +804,9 @@ void test_catalog_browser_and_save()
 		base_commit.has_value(),
 		"fixture commits through the real atomic V13 store"
 	);
-	auto story_commit = commit_replay_slot(root, 2U, make_story_document());
+	auto story_document = make_story_document();
+	story_document.slowdown->slow_frames = 5U;
+	auto story_commit = commit_replay_slot(root, 2U, story_document);
 	expect(
 		story_commit.has_value(),
 		"Story telemetry fixture commits through the real V13 store"
@@ -911,24 +943,34 @@ void test_catalog_browser_and_save()
 	if(upload_browser) {
 		finish_entry_fade(**upload_browser);
 		static_cast<void>((*upload_browser)->consume({}));
+		for(std::uint8_t row = 0U; row < 2U; ++row) {
+			static_cast<void>((*upload_browser)->consume({.down = true}));
+			static_cast<void>((*upload_browser)->consume({}));
+		}
 		const auto list_hash = surface_hash((*upload_browser)->surface());
 		auto selected = (*upload_browser)->consume({.confirm = true});
+		static_cast<void>((*upload_browser)->consume({}));
+		auto focused = (*upload_browser)->consume({.left = true});
+		static_cast<void>((*upload_browser)->consume({}));
+		auto requested = (*upload_browser)->consume({.confirm = true});
 		auto request = (*upload_browser)->take_upload_request();
-		expect(selected && selected->surface_changed && request &&
-			request->slot == 0U &&
-			request->document.metadata && document.metadata &&
-			request->document.metadata->name == document.metadata->name &&
+		expect(selected && selected->surface_changed && focused &&
+			focused->surface_changed && requested && requested->surface_changed &&
+			request &&
+			request->slot == 2U &&
+			request->document.metadata && story_document.metadata &&
+			request->document.metadata->name == story_document.metadata->name &&
 			request->document.session.sample_count ==
-				document.session.sample_count &&
+				story_document.session.sample_count &&
 			surface_hash((*upload_browser)->surface()) != list_hash,
-			"upload selection emits one immutable in-memory V13 document and busy modal");
+			"replay detail Upload emits one immutable in-memory V13 document and busy modal");
 		expect(!(*upload_browser)->take_upload_request(),
 			"upload request transfers exactly once to the host owner");
 		expect(!(*upload_browser)->report_upload(
 			1U, NewClassicReplayUploadOutcome::accepted
 		), "completion for another slot cannot satisfy an active upload");
 		expect((*upload_browser)->report_upload(
-			0U, NewClassicReplayUploadOutcome::accepted
+			2U, NewClassicReplayUploadOutcome::accepted
 		), "matching host completion redraws the retained upload result");
 		const auto accepted_hash = surface_hash((*upload_browser)->surface());
 		expect((*upload_browser)->consume({})->surface_changed,
@@ -937,7 +979,7 @@ void test_catalog_browser_and_save()
 		auto dismissed = (*upload_browser)->consume({.confirm = true});
 		expect(dismissed && dismissed->surface_changed &&
 			surface_hash((*upload_browser)->surface()) != accepted_hash,
-			"upload acknowledgement requires release and returns to the same catalog");
+			"upload acknowledgement requires release and returns to the same detail");
 	}
 	auto multi_round_document = make_multi_round_story_document();
 	auto multi_round_encoded = th03::formats::write_v13_replay(

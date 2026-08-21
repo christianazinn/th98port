@@ -115,7 +115,7 @@ NewClassicNetplayRoom::NewClassicNetplayRoom(
 	if(rank_ > 3U || !validate_new_classic_settings(NewClassicSettings{
 		.netplay = preferences,
 	}) || !patch_assets_ || !patch_surface_.reset(
-		patch_assets_->replay_list_background
+		patch_assets_->new_menu_background
 	) || !draw()) {
 		status_ = NewClassicNetplayRoomStatus::back;
 		return;
@@ -126,7 +126,7 @@ NewClassicNetplayRoom::NewClassicNetplayRoom(
 bool NewClassicNetplayRoom::draw() noexcept
 {
 	if(!patch_assets_ || !patch_surface_.begin_hidden_frame(
-		patch_assets_->replay_list_background
+		patch_assets_->new_menu_background
 	)) {
 		return false;
 	}
@@ -774,7 +774,7 @@ NewClassicNetplayLobbyView::NewClassicNetplayLobbyView(
 		local_lock_.character > character_messages.size() ||
 		local_lock_.palette < 1U || local_lock_.palette > 2U || rank_ > 3U ||
 		(direct_host_port_ && *direct_host_port_ < 1'024U) ||
-		!patch_surface_.reset(patch_assets_->replay_list_background) || !draw()) {
+		!patch_surface_.reset(patch_assets_->new_menu_background) || !draw()) {
 		return;
 	}
 	valid_ = true;
@@ -783,7 +783,7 @@ NewClassicNetplayLobbyView::NewClassicNetplayLobbyView(
 bool NewClassicNetplayLobbyView::draw() noexcept
 {
 	if(!patch_assets_ || !patch_surface_.begin_hidden_frame(
-		patch_assets_->replay_list_background
+		patch_assets_->new_menu_background
 	)) {
 		return false;
 	}

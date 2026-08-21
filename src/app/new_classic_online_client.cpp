@@ -1058,7 +1058,8 @@ upload_new_classic_online_replay(
 	auto fields = flat_json(response->body);
 	const auto *status = fields ? field(*fields, "status") : nullptr;
 	if(status != nullptr && *status == "rejected" &&
-		(response->status == 401U || response->status == 422U)) {
+		(response->status == 401U || response->status == 409U ||
+			response->status == 422U)) {
 		const auto *reason = field(*fields, "reason");
 		if(reason == nullptr || fields->size() != 2U) {
 			return std::unexpected(client_error(

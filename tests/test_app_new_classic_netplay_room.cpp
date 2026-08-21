@@ -69,7 +69,7 @@ std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> assets_fixture()
 	}
 	auto assets = std::make_shared<th03::app::NewClassicReplayPatchAssets>();
 	assets->menu_font = std::move(*decoded);
-	auto &background = assets->replay_list_background;
+	auto &background = assets->new_menu_background;
 	background.palette.emplace();
 	for(std::size_t index = 0U; index < 16U; ++index) {
 		background.palette->colors[index] = {
@@ -591,6 +591,10 @@ void test_online_profile_scene()
 	);
 	expect(first_use.valid() && first_use.text_entry_active(),
 		"a profile without a nametag opens directly in first-use text entry");
+	expect(std::ranges::any_of(first_use.surface().pixels, [](auto pixel) {
+		return pixel.layer == th03::present::ComposedPixelLayer::text ||
+			pixel.value != 2U;
+	}), "first-use profile publishes visible title, prompt, and entry text");
 	static_cast<void>(first_use.consume({}));
 	for(const auto character : std::string_view{
 		"Resident of Fantasy Who Runs Through Time"

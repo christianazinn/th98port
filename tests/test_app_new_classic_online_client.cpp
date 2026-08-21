@@ -383,6 +383,15 @@ void test_enrollment_and_upload()
 	expect(upload && upload->status == NewClassicOnlineUploadStatus::rejected &&
 		upload->reason == "slowdown",
 		"server rejection remains a normal two-state upload result");
+	fake.response = NewClassicOnlineHttpResponse{
+		.status = 409U,
+		.content_type = "application/json",
+		.body = bytes("{\"status\":\"rejected\",\"reason\":\"duplicate\"}"),
+	};
+	upload = upload_new_classic_online_replay(document, *credentials, fake.seam());
+	expect(upload && upload->status == NewClassicOnlineUploadStatus::rejected &&
+		upload->reason == "duplicate",
+		"a content-addressed duplicate is an informative normal rejection");
 
 	const auto calls = fake.calls;
 	document.slowdown->slow_frames = 6U;

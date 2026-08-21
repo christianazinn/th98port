@@ -66,7 +66,7 @@ std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> assets_fixture()
 	}
 	auto assets = std::make_shared<th03::app::NewClassicReplayPatchAssets>();
 	assets->menu_font = std::move(*decoded);
-	auto &background = assets->replay_list_background;
+	auto &background = assets->new_menu_background;
 	background.palette.emplace();
 	for(std::size_t index = 0U; index < 16U; ++index) {
 		background.palette->colors[index] = {

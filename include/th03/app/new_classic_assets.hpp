@@ -142,6 +142,7 @@ private:
 struct NewClassicReplayPatchAssets final {
 	assets::PiImage replay_list_background{};
 	assets::PiImage replay_name_background{};
+	assets::PiImage new_menu_background{};
 	assets::PiImage key_config_background{};
 	NewClassicMenuFont menu_font{};
 	std::array<std::array<std::uint8_t, 32U>, 40U> pause_gaiji{};

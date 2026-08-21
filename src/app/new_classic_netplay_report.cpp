@@ -86,7 +86,7 @@ NewClassicNetplayReport::NewClassicNetplayReport(
 	language_(language)
 {
 	if(!patch_assets_ || !patch_surface_.reset(
-		patch_assets_->replay_list_background
+		patch_assets_->new_menu_background
 	) || !draw()) {
 		status_ = NewClassicNetplayReportStatus::complete;
 		return;
@@ -97,7 +97,7 @@ NewClassicNetplayReport::NewClassicNetplayReport(
 bool NewClassicNetplayReport::draw() noexcept
 {
 	if(!patch_assets_ || !patch_surface_.begin_hidden_frame(
-		patch_assets_->replay_list_background
+		patch_assets_->new_menu_background
 	)) {
 		return false;
 	}

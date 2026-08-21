@@ -267,6 +267,10 @@ struct StepResult {
 	// have different eligibility despite belonging to one gameplay step API.
 	bool defeat_none_before_frame = true;
 	bool defeat_none_after_frame = true;
+	// Exact state after the suffix that completed a round. Replay recording
+	// must use this instead of the pre-frame input boundary, whose route still
+	// describes the prior running frame.
+	std::optional<CanonicalState> completed_round_state{};
 };
 
 // Canonical arbitrary-frame simulation image for the first half of the N0

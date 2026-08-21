@@ -373,13 +373,13 @@ void test_replay_patch_title_if_assets_supplied()
 			"Replay Patch VS submenu expansion advances");
 	}
 	expect(
-		(*vs_created)->tram().cell({28, 19})->attribute ==
+		(*vs_created)->tram().cell({28, 18})->attribute ==
 			th03::present::tram_white &&
-		(*vs_created)->tram().cell({28, 20})->attribute ==
+		(*vs_created)->tram().cell({28, 19})->attribute ==
 			th03::present::tram_black &&
-		(*vs_created)->tram().cell({28, 21})->attribute ==
+		(*vs_created)->tram().cell({28, 20})->attribute ==
 			th03::present::tram_black,
-		"Replay Patch VS submenu uses the exact three-row shifted geometry"
+		"New Classic VS choices are shifted one complete text row upward"
 	);
 	const auto canceled = (*vs_created)->advance({.cancel = true});
 	expect(canceled && canceled->phase == ClassicOpPhase::vs_shrink_window &&

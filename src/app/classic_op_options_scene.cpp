@@ -1457,10 +1457,7 @@ bool ClassicOpOptionsScene::draw_patch_online_identity_status() noexcept
 	);
 	const auto y = choice_top(replay_patch_box_top, 0U);
 	return put_patch_option_centered(
-		patch_assets_->menu_font, raster_, box_main_center_x, y,
-		messages.text(NewClassicMessageId::option_room_identity), 0U
-	) && put_patch_option_centered(
-		patch_assets_->menu_font, raster_, box_option_value_center_x, y,
+		patch_assets_->menu_font, raster_, box_option_center_x, y,
 		messages.text(online_identity_reset_available_ ?
 			NewClassicMessageId::value_protected :
 			NewClassicMessageId::value_environment), 0U
@@ -2266,6 +2263,7 @@ ClassicOpOptionsScene::advance(ClassicOpInput input)
 				} else if(selected_ ==
 					ClassicOpOptionsChoice::confirm_forget_room_identity) {
 					forget_identity_requested = true;
+					online_identity_reset_available_ = false;
 					if(!return_to_patch_categories()) {
 						fail();
 						return std::unexpected(options_error(

@@ -20,6 +20,9 @@ StepResult gameplay_step_result(
 	StepResult result{status, input_boundary};
 	result.defeat_none_before_frame = defeat_none_before_frame;
 	result.defeat_none_after_frame = state.defeat_flag == DefeatFlag::none;
+	if(status == StepStatus::round_transition || status == StepStatus::terminal) {
+		result.completed_round_state = canonical_state(state);
+	}
 	if(defeat_wait_before_frame) {
 		// defeat.cpp raises the MAIN loop's VSync wait during the update that
 		// begins with lose_anim_time 0x30..1. The fatal collision only arms
@@ -490,12 +493,14 @@ StepResult Game::step(
 )
 {
 	if(impl_->state.round_complete) {
-		return StepResult{
+		auto result = StepResult{
 			(impl_->state.route == 1U)
 				? StepStatus::round_transition
 				: StepStatus::terminal,
 			detail::canonical_state(impl_->state),
 		};
+		result.completed_round_state = detail::canonical_state(impl_->state);
+		return result;
 	}
 	if(context == InputContext::pause) {
 		return step_live_pause(*impl_, input, observer);

@@ -34,17 +34,17 @@ struct NewClassicAssetsAccess final {
 
 namespace {
 
-constexpr std::size_t archive_file_bytes = 157'532U;
+constexpr std::size_t archive_file_bytes = 196'269U;
 constexpr MainExecutableSha256 archive_sha256{
-	0xECU, 0xD0U, 0xA3U, 0x76U, 0x5FU, 0xE7U, 0xA0U, 0xC8U,
-	0xA9U, 0x17U, 0x6FU, 0xF5U, 0x1FU, 0xC1U, 0x10U, 0xB4U,
-	0x66U, 0xEAU, 0x61U, 0x8FU, 0x93U, 0x38U, 0x5FU, 0xBEU,
-	0x4BU, 0x65U, 0x1FU, 0x30U, 0x5FU, 0x11U, 0x56U, 0x06U,
+	0xD4U, 0x31U, 0x33U, 0x95U, 0xC4U, 0xFEU, 0x69U, 0xB3U,
+	0xD2U, 0xC3U, 0xFFU, 0x33U, 0xD0U, 0x19U, 0xF3U, 0xADU,
+	0x7CU, 0xE8U, 0xB1U, 0x09U, 0xA5U, 0x9AU, 0xA4U, 0xBFU,
+	0x3BU, 0xD1U, 0xBCU, 0xE3U, 0x75U, 0xD9U, 0x9DU, 0xD7U,
 };
 constexpr std::size_t archive_header_bytes = 16U;
 constexpr std::size_t directory_entry_bytes = 32U;
-constexpr std::array<std::string_view, 5U> required_members{
-	"SLB1.PI", "SLB1B.PI", "MNUFONT.PF", "PAUSE.GFT", "BG1.PI",
+constexpr std::array<std::string_view, 6U> required_members{
+	"SLB1.PI", "SLB1B.PI", "MNUFONT.PF", "PAUSE.GFT", "BG1.PI", "BG2.PI",
 };
 constexpr std::size_t menu_font_file_bytes = 3'168U;
 constexpr std::size_t menu_font_header_bytes = 32U;
@@ -801,9 +801,11 @@ load_new_classic_replay_patch_assets(const std::filesystem::path &path)
 		auto list = decode_pi(*members, "SLB1.PI");
 		auto name = decode_pi(*members, "SLB1B.PI");
 		auto key = decode_pi(*members, "BG1.PI");
+		auto menu = decode_pi(*members, "BG2.PI");
 		if(!list) return std::unexpected(std::move(list.error()));
 		if(!name) return std::unexpected(std::move(name.error()));
 		if(!key) return std::unexpected(std::move(key.error()));
+		if(!menu) return std::unexpected(std::move(menu.error()));
 		auto font = detail::decode_new_classic_menu_font(
 			members->at("MNUFONT.PF")
 		);
@@ -815,6 +817,7 @@ load_new_classic_replay_patch_assets(const std::filesystem::path &path)
 		result.replay_list_background = std::move(*list);
 		result.replay_name_background = std::move(*name);
 		result.key_config_background = std::move(*key);
+		result.new_menu_background = std::move(*menu);
 		result.menu_font = std::move(*font);
 		result.pause_gaiji = std::move(*pause);
 		return result;

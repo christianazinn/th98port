@@ -771,9 +771,12 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 			ClassicOpOptionsChoice::category_gameplay,
 		"child Cancel restores the exact parent category");
 	expect(scene->advance().has_value(), "category return releases");
-	expect(scene->advance({.down = true}).has_value() &&
-		scene->advance().has_value() &&
-		scene->advance({.ok = true}).has_value() &&
+	for(std::uint8_t row = 0U; row < 3U; ++row) {
+		expect(scene->advance({.down = true}).has_value() &&
+			scene->advance().has_value(),
+			"Audio category navigation advances and releases");
+	}
+	expect(scene->advance({.ok = true}).has_value() &&
 		scene->page() == ClassicOpOptionsPage::audio &&
 		scene->selected_choice() == ClassicOpOptionsChoice::master_volume,
 		"Audio opens from the category page");
@@ -865,10 +868,13 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		"Audio Cancel restores the category page");
 	expect(patch_option_left_exterior_matches_bare(*scene),
 		"Audio return leaves no proportional text outside the restored rows");
-	expect(scene->advance().has_value() &&
-		scene->advance({.down = true}).has_value() &&
-		scene->advance().has_value() &&
-		scene->advance({.ok = true}).has_value() &&
+	expect(scene->advance().has_value(), "Audio return input releases");
+	for(std::uint8_t row = 0U; row < 2U; ++row) {
+		expect(scene->advance({.up = true}).has_value() &&
+			scene->advance().has_value(),
+			"Input category navigation advances and releases");
+	}
+	expect(scene->advance({.ok = true}).has_value() &&
 		scene->page() == ClassicOpOptionsPage::input &&
 		scene->selected_choice() == ClassicOpOptionsChoice::key_mode,
 		"Input opens with Key Mode separate from KeyConfig");
@@ -893,7 +899,7 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		return;
 	}
 	enter_patch_options(*video);
-	for(std::uint8_t row = 0U; row < 3U; ++row) {
+	for(std::uint8_t row = 0U; row < 2U; ++row) {
 		expect(video->advance({.down = true}).has_value() &&
 			video->advance().has_value(),
 			"Video category navigation advances and releases");

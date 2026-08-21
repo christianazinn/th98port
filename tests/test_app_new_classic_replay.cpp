@@ -530,10 +530,9 @@ void test_netplay_confirmed_capture()
 			.input = {.p1 = 0x04U, .p2 = 0x02U},
 			.step_result = {
 				.status = th03::StepStatus::round_transition,
-				// The netplay journal carries the pre-handoff route; capture must
-				// derive route 1 from the confirmed lifecycle status.
 				.input_boundary_state = terminal(mode, 0U, 0U, 0U, 0),
 				.next_step_vsyncs = 2U,
+				.completed_round_state = terminal(mode, 0U, 0U, 1U, 0),
 			},
 			.source_vsyncs = 2U,
 		}, false).has_value(),
@@ -551,6 +550,7 @@ void test_netplay_confirmed_capture()
 			.step_result = {
 				.status = th03::StepStatus::terminal,
 				.input_boundary_state = terminal(mode, 0U, 1U, 0U, 1),
+				.completed_round_state = terminal(mode, 0U, 1U, 2U, 1),
 			},
 		}, true).has_value(),
 		"the confirmed match terminal records the last sample, split, and MAIN_END"

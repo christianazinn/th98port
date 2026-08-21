@@ -92,14 +92,16 @@ NewClassicNetplayReplayCapture::append_confirmed_frame(
 		pause_pending_ = true;
 	} else if(frame.step_result.status == StepStatus::round_transition ||
 		frame.step_result.status == StepStatus::terminal) {
-		auto terminal = frame.step_result.input_boundary_state;
-		// The rollback journal freezes the canonical state before the app-layer
-		// boundary handoff projects MAIN's route. Its typed status is already
-		// confirmed, so restore the exact VS route that ordinary recording sees.
-		terminal.route = frame.step_result.status == StepStatus::round_transition ?
-			1U : 2U;
+		if(!frame.step_result.completed_round_state) {
+			failed_ = true;
+			return std::unexpected(replay_error(
+				NewClassicReplayError{
+					.code = NewClassicReplayErrorCode::invalid_sequence,
+				}
+			));
+		}
 		if(auto split = recorder_.round_completed(
-			terminal
+			*frame.step_result.completed_round_state
 		); !split) {
 			failed_ = true;
 			return std::unexpected(replay_error(std::move(split.error())));
@@ -159,11 +161,16 @@ NewClassicNetplayReplayCapture::pause_resumed(
 	source_vsyncs_before_next_frame_ = completed_frame.next_step_vsyncs;
 	if(completed_frame.status == StepStatus::round_transition ||
 		completed_frame.status == StepStatus::terminal) {
-		auto terminal = completed_frame.input_boundary_state;
-		terminal.route = completed_frame.status == StepStatus::round_transition ?
-			1U : 2U;
+		if(!completed_frame.completed_round_state) {
+			failed_ = true;
+			return std::unexpected(replay_error(
+				NewClassicReplayError{
+					.code = NewClassicReplayErrorCode::invalid_sequence,
+				}
+			));
+		}
 		if(auto split = recorder_.round_completed(
-			terminal
+			*completed_frame.completed_round_state
 		); !split) {
 			failed_ = true;
 			return std::unexpected(replay_error(std::move(split.error())));

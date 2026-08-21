@@ -5623,7 +5623,20 @@ ExperienceRunResult run_classic_session(
 			th03::app::ExperienceProfile::classic;
 	parsed.launch.content.replay_root = parsed.replay_root;
 #if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
-	parsed.launch.new_classic_online_identity_reset_available = new_classic;
+	{
+		const auto credential_root = new_classic_settings_path.empty() ?
+			config_path.parent_path() : new_classic_settings_path.parent_path();
+		std::error_code credential_error{};
+		const bool saved_identity = std::filesystem::is_regular_file(
+			credential_root / "PODD.AUTH", credential_error
+		);
+		const bool environment_identity =
+			environment_value(online_user_environment).has_value() ||
+			environment_value(online_token_environment).has_value();
+		parsed.launch.new_classic_online_identity_reset_available =
+			new_classic && saved_identity && !credential_error &&
+			!environment_identity;
+	}
 #endif
 	if(parsed.capture_replay) {
 		auto replay = th03::app::load_replay_file(*parsed.capture_replay);
@@ -6350,14 +6363,15 @@ ExperienceRunResult run_classic_session(
 			!online_my_records_refresh_task && online_transport &&
 			online_existing_credential_source) {
 			std::vector<th03::app::NewClassicOnlineCategory> categories{};
-			categories.reserve(9U);
-			const auto rank = static_cast<std::uint8_t>(persisted_options.rank);
-			for(std::uint8_t character = 0U; character < 9U; ++character) {
-				categories.push_back({
-					.mode = th03::app::NewClassicOnlineMode::story,
-					.rank = rank,
-					.character = character,
-				});
+			categories.reserve(36U);
+			for(std::uint8_t rank = 0U; rank < 4U; ++rank) {
+				for(std::uint8_t character = 0U; character < 9U; ++character) {
+					categories.push_back({
+						.mode = th03::app::NewClassicOnlineMode::story,
+						.rank = rank,
+						.character = character,
+					});
+				}
 			}
 			auto started =
 				th03::app::start_new_classic_online_my_records_refresh(
@@ -6497,13 +6511,22 @@ ExperienceRunResult run_classic_session(
 				auto outcome =
 					th03::app::NewClassicReplayUploadOutcome::failed;
 				if(uploaded->upload) {
-					outcome = uploaded->upload->status ==
-						th03::app::NewClassicOnlineUploadStatus::accepted ?
-							th03::app::NewClassicReplayUploadOutcome::accepted :
-							th03::app::NewClassicReplayUploadOutcome::rejected;
+					if(uploaded->upload->status ==
+						th03::app::NewClassicOnlineUploadStatus::accepted) {
+						outcome = th03::app::NewClassicReplayUploadOutcome::accepted;
+					} else if(uploaded->upload->reason == "duplicate") {
+						outcome = th03::app::NewClassicReplayUploadOutcome::duplicate;
+					} else if(uploaded->upload->reason == "slowdown") {
+						outcome = th03::app::NewClassicReplayUploadOutcome::slowdown;
+					} else if(uploaded->upload->reason == "split_mismatch") {
+						outcome = th03::app::
+							NewClassicReplayUploadOutcome::verification_failed;
+					} else {
+						outcome = th03::app::NewClassicReplayUploadOutcome::ineligible;
+					}
 				} else if(uploaded->error && uploaded->error->code ==
 					th03::app::NewClassicOnlineClientErrorCode::invalid_document) {
-					outcome = th03::app::NewClassicReplayUploadOutcome::rejected;
+					outcome = th03::app::NewClassicReplayUploadOutcome::ineligible;
 				}
 				if(auto reported =
 					(*runner)->report_new_classic_online_replay_upload(

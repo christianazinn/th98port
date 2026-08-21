@@ -117,12 +117,15 @@ void test_authentic_archive_if_supplied()
 	);
 	expect(loaded.has_value(), "authenticated Replay Patch AZINN profile loads");
 	if(!loaded) {
+		std::cerr << "asset error code=" << static_cast<int>(loaded.error().code)
+			<< " offset=" << loaded.error().offset << '\n';
 		return;
 	}
 	expect(loaded->replay_list_background.image.width == 640U &&
 		loaded->replay_name_background.image.height == 400U &&
+		loaded->new_menu_background.image.indices.size() == 256'000U &&
 		loaded->key_config_background.image.indices.size() == 256'000U,
-		"all three exact full-screen PI members decode");
+		"all four full-screen PI members decode");
 	expect(loaded->menu_font.width("The PoDD Arrange Project") > 0,
 		"authentic proportional title credit has measurable ink");
 }

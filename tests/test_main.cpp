@@ -2294,8 +2294,11 @@ void test_demo_and_cpu_vs_cpu_route_zero()
 		);
 		check(
 			result.status == th03::StepStatus::terminal &&
+			result.completed_round_state &&
+			result.completed_round_state->route ==
+				public_demo->canonical_state().route &&
 			public_demo->canonical_state().resident_rand == -123,
-			"terminal route remains observable before MAIN persists round time"
+			"terminal result retains the exact post-frame route before MAIN persists round time"
 		);
 		const auto outgoing_round_frame =
 			public_demo->canonical_state().round_frame;

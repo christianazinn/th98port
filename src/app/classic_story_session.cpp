@@ -945,8 +945,13 @@ struct ClassicStoryBackend final {
 			}
 			if(advanced->step_result.status == StepStatus::round_transition ||
 				advanced->step_result.status == StepStatus::terminal) {
+				if(!advanced->step_result.completed_round_state) {
+					return std::unexpected(session_error(
+						ClassicStorySessionErrorCode::backend_contract_failed
+					));
+				}
 				if(auto split = replay_recorder->round_completed(
-					advanced->step_result.input_boundary_state, std::nullopt,
+					*advanced->step_result.completed_round_state, std::nullopt,
 					process->last_result_state()
 				); !split) {
 					return std::unexpected(replay_capture_error());

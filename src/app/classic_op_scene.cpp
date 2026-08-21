@@ -888,8 +888,21 @@ bool ClassicOpTitleMenuScene::draw_choice(
 			!choice_available(resident_, choice) ? 8U :
 			(attribute == present::tram_black ? 0U : 15U)
 		);
+		const auto clip = present::Rect{
+			box_left + 2, top,
+			static_cast<std::uint16_t>(box_main_width - 4),
+			present::gaiji_height,
+		};
+		const auto shadow = static_cast<present::Index4>(
+			color == 0U ? 15U : 0U
+		);
 		return raster_.set_access_page(present::Page::zero) &&
 			raster_.blit(source, {box_left, top}) &&
+			patch_assets_->menu_font.put_centered_clipped(
+				raster_, box_main_center_x + 1, top + 1,
+				patch_assets_->messages().text(replay_patch_menu_labels[row]),
+				shadow, clip
+			) &&
 			patch_assets_->menu_font.put_centered(
 				raster_, box_main_center_x, top,
 				patch_assets_->messages().text(replay_patch_menu_labels[row]),
@@ -1068,7 +1081,7 @@ bool ClassicOpTitleMenuScene::draw_vs_choice(
 	const auto row = static_cast<std::size_t>(found - choices.begin());
 	const auto raw = static_cast<std::size_t>(choice);
 	const auto tram_y = (box_top_value() / present::gaiji_height) + 1 +
-		static_cast<std::int32_t>(row + (patch_assets_ ? 2U : 1U));
+		static_cast<std::int32_t>(row + 1U);
 	if(choice == ClassicOpVsChoice::online_match) {
 		const auto top = tram_y * present::gaiji_height;
 		const auto bare = raster_.graphics(present::Page::one);
@@ -1092,11 +1105,25 @@ bool ClassicOpTitleMenuScene::draw_vs_choice(
 			!vs_choice_available(resident_, choice) ? 8U :
 			(attribute == present::tram_black ? 0U : 15U)
 		);
+		const auto center = box_submenu_center_x + 4;
+		const auto text = patch_assets_->messages().text(
+			NewClassicMessageId::netplay_online_match
+		);
+		const auto shadow = static_cast<present::Index4>(
+			color == 0U ? 15U : 0U
+		);
+		if(!patch_assets_->menu_font.put_centered_clipped(
+			raster_, center + 1, top + 1, text, shadow,
+			{
+				box_left + 2, top,
+				static_cast<std::uint16_t>(box_submenu_width - 4),
+				present::gaiji_height,
+			}
+		)) {
+			return false;
+		}
 		return patch_assets_->menu_font.put_centered(
-			raster_, box_submenu_center_x, top,
-			patch_assets_->messages().text(
-				NewClassicMessageId::netplay_online_match
-			), color
+			raster_, center, top, text, color
 		);
 	}
 	if(choice == ClassicOpVsChoice::quit) {

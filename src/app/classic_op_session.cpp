@@ -1331,18 +1331,9 @@ struct ClassicOpSessionBackend final {
 			case NewClassicReplayHubStatus::local_selected:
 				replay_hub.reset();
 				replay_hub_result.reset();
-				if(auto started = start_local_replay_browser(); !started) {
-					return std::unexpected(std::move(started.error()));
-				}
-				return ClassicOpSessionBackendTick{
-					.surface_changed = true,
-					.input_sampled = true,
-				};
-			case NewClassicReplayHubStatus::upload_selected:
-				replay_hub.reset();
-				replay_hub_result.reset();
 				if(auto started = start_local_replay_browser(
-					NewClassicReplayBrowserMode::upload
+					online_upload_available ? NewClassicReplayBrowserMode::upload :
+						NewClassicReplayBrowserMode::playback
 				); !started) {
 					return std::unexpected(std::move(started.error()));
 				}
@@ -1350,6 +1341,10 @@ struct ClassicOpSessionBackend final {
 					.surface_changed = true,
 					.input_sampled = true,
 				};
+			case NewClassicReplayHubStatus::upload_selected:
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
 			case NewClassicReplayHubStatus::online_selected:
 			case NewClassicReplayHubStatus::downloaded_selected: {
 				const auto mode = result.status ==
@@ -2065,6 +2060,7 @@ struct ClassicOpSessionBackend final {
 				));
 			}
 			pending_online_identity_reset = true;
+			online_identity_reset_available = false;
 		}
 		if(tick->check_for_updates) {
 			if(!update_available || pending_update_check ||
@@ -3907,8 +3903,13 @@ struct ClassicOpSessionBackend final {
 			}
 			if(tick->step_result.status == StepStatus::round_transition ||
 				tick->step_result.status == StepStatus::terminal) {
+				if(!tick->step_result.completed_round_state) {
+					return std::unexpected(session_error(
+						ClassicOpSessionErrorCode::backend_contract_failed
+					));
+				}
 				if(auto split = replay_recorder->round_completed(
-					tick->step_result.input_boundary_state, std::nullopt,
+					*tick->step_result.completed_round_state, std::nullopt,
 					vs_process->last_result_state()
 				); !split) {
 					return std::unexpected(replay_capture_error());

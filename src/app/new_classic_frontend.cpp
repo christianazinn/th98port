@@ -387,6 +387,15 @@ std::string source_trimmed_name(const std::array<char, 8U> &name)
 	return messages.text(NewClassicMessageId::replay_end_none);
 }
 
+[[nodiscard]] bool replay_upload_supported(
+	const formats::ReplayDocument &document
+) noexcept
+{
+	return document.metadata && !document.practice &&
+		document.metadata->status == formats::ReplayStatus::finalized &&
+		document.metadata->game_mode == game_mode::story;
+}
+
 [[nodiscard]] constexpr std::string_view end_reason_label(
 	formats::ReplayEndReason reason
 ) noexcept
@@ -847,14 +856,49 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 		std::string_view text, present::Index4 color) {
 		return font.put_right(raster, right, top, text, color);
 	};
-	if(!detail_document_) {
-		bool drawn = true;
-		if(mode_ == NewClassicReplayBrowserMode::upload) {
-			drawn = font.put_centered(
-				raster, 320, 48,
-				messages.text(NewClassicMessageId::replay_upload_title), 9U
+	if(upload_pending_ || upload_feedback_) {
+		bool drawn = raster.clear({104, 144, 432U, 96U}, 0U);
+		NewClassicMessageId message = NewClassicMessageId::replay_upload_pending;
+		if(upload_feedback_) {
+			switch(*upload_feedback_) {
+			case NewClassicReplayUploadOutcome::accepted:
+				message = NewClassicMessageId::replay_upload_accepted;
+				break;
+			case NewClassicReplayUploadOutcome::duplicate:
+				message = NewClassicMessageId::replay_upload_duplicate;
+				break;
+			case NewClassicReplayUploadOutcome::slowdown:
+				message = NewClassicMessageId::replay_upload_slowdown;
+				break;
+			case NewClassicReplayUploadOutcome::verification_failed:
+				message = NewClassicMessageId::replay_upload_verification_failed;
+				break;
+			case NewClassicReplayUploadOutcome::ineligible:
+				message = NewClassicMessageId::replay_upload_ineligible;
+				break;
+			case NewClassicReplayUploadOutcome::failed:
+				message = NewClassicMessageId::replay_upload_failed;
+				break;
+			case NewClassicReplayUploadOutcome::unavailable:
+				message = NewClassicMessageId::replay_upload_unavailable;
+				break;
+			}
+		}
+		drawn = drawn && font.put_centered(
+			raster, 320, 176, messages.text(message), upload_pending_ ? 9U : 13U
+		);
+		if(!upload_pending_) {
+			drawn = drawn && font.put_centered(
+				raster, 320, 208,
+				messages.text(NewClassicMessageId::replay_upload_dismiss), 15U
 			);
 		}
+		static_cast<void>(drawn);
+		static_cast<void>(patch_surface_.publish(raster.access_page()));
+		return;
+	}
+	if(!detail_document_) {
+		bool drawn = true;
 		drawn = drawn && put(64, 80, messages.text(
 			NewClassicMessageId::replay_header_slot), 9U) &&
 			put(104, 80, messages.text(
@@ -903,28 +947,6 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 				patch_put_fixed(
 					font, raster, 560, top, catalog_marker(entry, messages), 12, color
 				);
-		}
-		if(drawn && (upload_pending_ || upload_feedback_)) {
-			drawn = raster.clear({160, 144, 320U, 96U}, 0U);
-			const auto message = upload_pending_ ?
-				NewClassicMessageId::replay_upload_pending :
-				*upload_feedback_ == NewClassicReplayUploadOutcome::accepted ?
-					NewClassicMessageId::replay_upload_accepted :
-				*upload_feedback_ == NewClassicReplayUploadOutcome::rejected ?
-					NewClassicMessageId::replay_upload_rejected :
-				*upload_feedback_ == NewClassicReplayUploadOutcome::unavailable ?
-					NewClassicMessageId::replay_upload_unavailable :
-					NewClassicMessageId::replay_upload_failed;
-			drawn = drawn && font.put_centered(
-				raster, 320, 176, messages.text(message),
-				upload_pending_ ? 9U : 13U
-			);
-			if(!upload_pending_) {
-				drawn = drawn && font.put_centered(
-					raster, 320, 208,
-					messages.text(NewClassicMessageId::replay_upload_dismiss), 15U
-				);
-			}
 		}
 		static_cast<void>(drawn);
 		static_cast<void>(patch_surface_.publish(raster.access_page()));
@@ -1057,6 +1079,17 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 				48, 192, messages.text(
 					NewClassicMessageId::replay_label_view_settings
 				), checkpoint_focus_ ? 15U : 12U
+			));
+		}
+		if(mode_ == NewClassicReplayBrowserMode::upload &&
+			replay_upload_supported(document)) {
+			if(upload_action_focus_) {
+				static_cast<void>(put(32, 208, ">", 12U));
+			}
+			static_cast<void>(put(
+				48, 208,
+				messages.text(NewClassicMessageId::replay_upload_title),
+				upload_action_focus_ ? 12U : 15U
 			));
 		}
 	}
@@ -1352,6 +1385,7 @@ NewClassicReplayBrowser::open_selected()
 	detail_page_ = NewClassicReplayDetailPage::splits;
 	checkpoint_focus_ = true;
 	practice_settings_modal_ = false;
+	upload_action_focus_ = false;
 	draw();
 	return {};
 }
@@ -1429,6 +1463,7 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 			selected_checkpoint_ = 0U;
 			detail_page_ = NewClassicReplayDetailPage::splits;
 			checkpoint_focus_ = true;
+			upload_action_focus_ = false;
 			draw();
 			return NewClassicReplayBrowserResult{
 				.surface_changed = true, .status = status_
@@ -1442,6 +1477,17 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 	if(detail_document_) {
 		const auto count = detail_document_->checkpoints.size();
 		if(input.left) {
+			if(mode_ == NewClassicReplayBrowserMode::upload &&
+				replay_upload_supported(*detail_document_) &&
+				detail_page_ == NewClassicReplayDetailPage::splits &&
+				checkpoint_focus_) {
+				upload_action_focus_ = true;
+				checkpoint_focus_ = false;
+				draw();
+				return NewClassicReplayBrowserResult{
+					.surface_changed = true, .status = status_
+				};
+			}
 			if(detail_document_->practice && !checkpoint_focus_) {
 				return NewClassicReplayBrowserResult{.status = status_};
 			}
@@ -1465,6 +1511,14 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 			return NewClassicReplayBrowserResult{.status = status_};
 		}
 		if(input.right) {
+			if(upload_action_focus_) {
+				upload_action_focus_ = false;
+				checkpoint_focus_ = true;
+				draw();
+				return NewClassicReplayBrowserResult{
+					.surface_changed = true, .status = status_
+				};
+			}
 			if(detail_document_->practice && !checkpoint_focus_) {
 				checkpoint_focus_ = true;
 				detail_page_ = NewClassicReplayDetailPage::splits;
@@ -1501,6 +1555,28 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 				.surface_changed = true, .status = status_
 			};
 		}
+		if(input.confirm && upload_action_focus_) {
+			if(!detail_document_->slowdown ||
+				detail_document_->slowdown->timed_frames == 0U) {
+				upload_feedback_ = NewClassicReplayUploadOutcome::ineligible;
+			} else if((static_cast<std::uint64_t>(
+				detail_document_->slowdown->slow_frames) * 100U) >
+				(static_cast<std::uint64_t>(
+					detail_document_->slowdown->timed_frames) * 5U)) {
+				upload_feedback_ = NewClassicReplayUploadOutcome::slowdown;
+			} else {
+				upload_request_ = NewClassicReplayUploadRequest{
+					.slot = selected_slot_,
+					.document = *detail_document_,
+				};
+				active_upload_slot_ = selected_slot_;
+				upload_pending_ = true;
+			}
+			draw();
+			return NewClassicReplayBrowserResult{
+				.surface_changed = true, .status = status_
+			};
+		}
 		if(input.confirm && checkpoint_focus_ && count != 0U &&
 			detail_page_ != NewClassicReplayDetailPage::clear_bonuses) {
 			status_ = NewClassicReplayBrowserStatus::play_selected;
@@ -1526,29 +1602,6 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 		);
 	} else if(input.confirm &&
 		catalog_.slots[selected_slot_].state == ReplayCatalogSlotState::ready) {
-		if(mode_ == NewClassicReplayBrowserMode::upload) {
-			auto loaded = load_replay_slot(replay_root_, selected_slot_);
-			if(!loaded) {
-				return std::unexpected(std::move(loaded.error()));
-			}
-			if(!loaded->document) {
-				catalog_.slots[selected_slot_] = {};
-				draw();
-				return NewClassicReplayBrowserResult{
-					.surface_changed = true, .status = status_
-				};
-			}
-			upload_request_ = NewClassicReplayUploadRequest{
-				.slot = selected_slot_,
-				.document = std::move(*loaded->document),
-			};
-			active_upload_slot_ = selected_slot_;
-			upload_pending_ = true;
-			draw();
-			return NewClassicReplayBrowserResult{
-				.surface_changed = true, .status = status_
-			};
-		}
 		if(auto opened = open_selected(); !opened) {
 			return std::unexpected(std::move(opened.error()));
 		}
@@ -1626,8 +1679,7 @@ bool NewClassicReplayBrowser::report_upload(
 	NewClassicReplayUploadOutcome outcome
 ) noexcept
 {
-	if(mode_ != NewClassicReplayBrowserMode::upload || !upload_pending_ ||
-		!active_upload_slot_ || *active_upload_slot_ != slot ||
+	if(!upload_pending_ || !active_upload_slot_ || *active_upload_slot_ != slot ||
 		upload_request_) {
 		return false;
 	}
@@ -1694,7 +1746,7 @@ bool NewClassicReplayHub::valid() const noexcept
 void NewClassicReplayHub::draw() noexcept
 {
 	if(!valid_ || !patch_assets_ || !patch_surface_.begin_hidden_frame(
-		patch_assets_->replay_list_background
+		patch_assets_->new_menu_background
 	)) {
 		valid_ = false;
 		return;
@@ -1802,6 +1854,21 @@ NewClassicReplayHubResult NewClassicReplayHub::consume(
 	return {.surface_changed = valid_, .status = status_};
 }
 
+[[nodiscard]] std::string dos_date_short_label(std::uint16_t packed)
+{
+	if(packed == 0U) {
+		return "-";
+	}
+	char buffer[9U]{};
+	static_cast<void>(std::snprintf(
+		buffer, sizeof(buffer), "%02u-%02u-%02u",
+		static_cast<unsigned>((packed >> 5U) & 0x0FU),
+		static_cast<unsigned>(packed & 0x1FU),
+		static_cast<unsigned>((1980U + (packed >> 9U)) % 100U)
+	));
+	return buffer;
+}
+
 bool NewClassicReplayHub::refresh_capabilities(
 	bool libraries_available,
 	bool upload_available,
@@ -1814,9 +1881,7 @@ bool NewClassicReplayHub::refresh_capabilities(
 	std::vector<NewClassicReplayHubStatus> rows{
 		NewClassicReplayHubStatus::local_selected,
 	};
-	if(upload_available) {
-		rows.push_back(NewClassicReplayHubStatus::upload_selected);
-	}
+	static_cast<void>(upload_available);
 	if(my_records_available) {
 		rows.push_back(NewClassicReplayHubStatus::my_records_selected);
 	}
@@ -1926,7 +1991,6 @@ NewClassicHighScoreMenu::NewClassicHighScoreMenu(
 	for(auto &board : boards) {
 		if(board.board_category &&
 			board.board_category->mode == NewClassicOnlineMode::story &&
-			board.board_category->rank == rank &&
 			validate_new_classic_online_cache(board)) {
 			if(mode_ != NewClassicOnlineMenuMode::high_scores) {
 				std::erase_if(board.leaderboard_entries,
@@ -1949,16 +2013,41 @@ NewClassicHighScoreMenu::NewClassicHighScoreMenu(
 		}
 	}
 	std::ranges::sort(boards_, {}, [](const auto &board) {
-		return board.board_category->character;
+		return (static_cast<std::uint16_t>(board.board_category->rank) << 8U) |
+			board.board_category->character;
 	});
 	const auto duplicate = std::adjacent_find(
 		boards_.begin(), boards_.end(), [](const auto &left, const auto &right) {
 			return left.board_category == right.board_category;
 		}
 	);
-	if(!patch_assets_ || duplicate != boards_.end() ||
+	if(!patch_assets_ || rank_ >= 4U || duplicate != boards_.end() ||
 		(mode_ != NewClassicOnlineMenuMode::high_scores && boards_.empty())) {
 		return;
+	}
+	const auto initial = std::ranges::find_if(boards_, [this](const auto &board) {
+		return board.board_category->rank == rank_;
+	});
+	if(initial != boards_.end()) {
+		board_index_ = static_cast<std::size_t>(initial - boards_.begin());
+	}
+	if(mode_ == NewClassicOnlineMenuMode::my_records ||
+		mode_ == NewClassicOnlineMenuMode::downloaded_replays) {
+		board_category_focus_ = false;
+		for(std::size_t board = 0U; board < boards_.size(); ++board) {
+			for(std::size_t entry = 0U;
+				entry < boards_[board].leaderboard_entries.size(); ++entry) {
+				flat_entries_.emplace_back(board, entry);
+			}
+		}
+		std::ranges::stable_sort(flat_entries_, [this](const auto &left,
+			const auto &right) {
+			const auto &left_entry =
+				boards_[left.first].leaderboard_entries[left.second];
+			const auto &right_entry =
+				boards_[right.first].leaderboard_entries[right.second];
+			return left_entry.dos_date > right_entry.dos_date;
+		});
 	}
 	if(mode_ != NewClassicOnlineMenuMode::high_scores) {
 		page_ = Page::board;
@@ -1980,7 +2069,7 @@ void NewClassicHighScoreMenu::draw() noexcept
 {
 	if(!valid_ || !patch_assets_ ||
 		!patch_surface_.begin_hidden_frame(
-			patch_assets_->replay_list_background
+			patch_assets_->new_menu_background
 		)) {
 		valid_ = false;
 		return;
@@ -2117,6 +2206,8 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 	const auto &font = patch_assets_->menu_font;
 	const auto &messages = patch_assets_->messages();
 	auto &raster = patch_surface_.raster();
+	const bool flat = mode_ == NewClassicOnlineMenuMode::my_records ||
+		mode_ == NewClassicOnlineMenuMode::downloaded_replays;
 	const auto rank = patch_rank_label(category.rank, messages);
 	const auto character = patch_character_label(
 		static_cast<std::int8_t>((category.character * 2U) + 1U), messages
@@ -2130,6 +2221,14 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 	);
 	if(mode_ == NewClassicOnlineMenuMode::high_scores) {
 		valid_ = font.put_centered(raster, 320, 48, category_title, 9U);
+	} else if(flat) {
+		const auto title_id = mode_ ==
+			NewClassicOnlineMenuMode::downloaded_replays ?
+			NewClassicMessageId::replay_downloaded_title :
+			NewClassicMessageId::replay_my_records_title;
+		valid_ = font.put_centered(
+			raster, 320, 48, messages.text(title_id), 9U
+		);
 	} else {
 		const auto title_id = mode_ ==
 			NewClassicOnlineMenuMode::downloaded_replays ?
@@ -2140,6 +2239,13 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 		valid_ = font.put_centered(
 			raster, 320, 48, messages.text(title_id), 9U
 		) && font.put_centered(raster, 320, 64, category_title, 15U);
+	}
+	if(valid_ && !flat && board_category_focus_) {
+		const auto top = mode_ == NewClassicOnlineMenuMode::high_scores ? 48 : 64;
+		valid_ = font.put(raster, 24, top, "<", 12U) &&
+			font.put_right(raster, 616, top, ">", 12U) &&
+			font.put(raster, 8, top - 16, "^", 12U) &&
+			font.put(raster, 8, top + 16, "v", 12U);
 	}
 	valid_ = valid_ &&
 		font.put(raster, 48, 80, messages.text(
@@ -2152,33 +2258,44 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 			NewClassicMessageId::replay_header_score), 9U) &&
 		font.put(raster, 364, 80, messages.text(
 			NewClassicMessageId::replay_header_character), 9U) &&
-		font.put(raster, 456, 80, messages.text(
-			NewClassicMessageId::replay_label_date), 9U) &&
-		font.put(raster, 584, 80, messages.text(
+		font.put(raster, 480, 80, messages.text(
+			flat ? NewClassicMessageId::replay_header_rank :
+				NewClassicMessageId::replay_label_date), 9U) &&
+		font.put(raster, 592, 80, messages.text(
 			NewClassicMessageId::replay_header_stage), 9U);
-	if(board.leaderboard_entries.empty()) {
+	if((flat && flat_entries_.empty()) ||
+		(!flat && board.leaderboard_entries.empty())) {
 		valid_ = valid_ && font.put(
 			raster, 96, 96, messages.text(NewClassicMessageId::replay_none), 15U
 		);
 	}
 	for(std::size_t row = 0U; valid_ && row < browser_rows; ++row) {
-		const auto entry_index = top_entry_ + row;
-		if(entry_index >= board.leaderboard_entries.size()) {
+		const auto list_index = (flat ? flat_top_ : top_entry_) + row;
+		const auto list_size = flat ? flat_entries_.size() :
+			board.leaderboard_entries.size();
+		if(list_index >= list_size) {
 			break;
 		}
-		const auto &entry = board.leaderboard_entries[entry_index];
+		const auto location = flat ? flat_entries_[list_index] :
+			std::pair<std::size_t, std::size_t>{board_index_, list_index};
+		const auto &row_board = boards_[location.first];
+		const auto &entry = row_board.leaderboard_entries[location.second];
+		const auto &row_category = *row_board.board_category;
 		const auto top = static_cast<std::int32_t>(96U + (row * 16U));
+		const auto selected = list_index ==
+			(flat ? flat_selection_ : selected_entry_) &&
+			(flat || !board_category_focus_);
 		const auto color = static_cast<present::Index4>(
-			entry_index == selected_entry_ ? 12U : 15U
+			selected ? 12U : 15U
 		);
-		if(entry_index == selected_entry_) {
+		if(selected) {
 			valid_ = font.put(raster, 32, top, ">", 12U);
 		}
 		const auto replay_it = entry.replay_id ? std::ranges::find(
-			board.replay_records, *entry.replay_id,
+			row_board.replay_records, *entry.replay_id,
 			&NewClassicOnlineReplayRecord::replay_id
-		) : board.replay_records.end();
-		const auto *replay = replay_it == board.replay_records.end() ?
+		) : row_board.replay_records.end();
+		const auto *replay = replay_it == row_board.replay_records.end() ?
 			nullptr : &*replay_it;
 		auto name = online_ascii(
 			mode_ == NewClassicOnlineMenuMode::high_scores || !replay ?
@@ -2192,17 +2309,23 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 			NewClassicOnlineResultKind::clear ?
 			std::string(messages.text(NewClassicMessageId::replay_marker_all)) :
 			std::to_string(static_cast<unsigned>(entry.result.end_stage) + 1U);
-		const auto date = dos_date_label(entry.dos_date);
+		const auto category_value = flat ? std::string(patch_rank_label(
+			row_category.rank, messages
+		)) : dos_date_short_label(entry.dos_date);
+		const auto row_character = patch_character_label(
+			static_cast<std::int8_t>((row_category.character * 2U) + 1U), messages
+		);
 		valid_ = valid_ &&
 			patch_put_fixed(font, raster, 48, top,
-				online_place(entry_index), 12, color) &&
+				online_place(list_index), 12, color) &&
 			patch_put_fixed(font, raster, 96, top, name, 13, color) &&
 			patch_put_fixed(font, raster,
 				340 - static_cast<std::int32_t>(score.size() * 12U), top,
 				score, 12, color) &&
-			font.put(raster, 364, top, character, color) &&
-			patch_put_fixed(font, raster, 456, top, date, 10, color) &&
-			font.put(raster, 584, top, stage, color);
+			font.put(raster, 364, top, row_character, color) &&
+			patch_put_fixed(font, raster, 480, top, category_value,
+				flat ? 12 : 11, color) &&
+			font.put(raster, 592, top, stage, color);
 	}
 	valid_ = valid_ && font.put_centered(raster, 320, 368, messages.text(
 		NewClassicMessageId::hiscore_online_footer
@@ -2416,6 +2539,7 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 			}
 			if(hub_selection_ == 1U && !boards_.empty()) {
 				page_ = Page::board;
+				board_category_focus_ = true;
 				selected_entry_ = 0U;
 				top_entry_ = 0U;
 			} else if(hub_selection_ == 2U) {
@@ -2466,6 +2590,13 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 		}
 		return {.status = status_};
 	}
+	const bool flat = mode_ == NewClassicOnlineMenuMode::my_records ||
+		mode_ == NewClassicOnlineMenuMode::downloaded_replays;
+	if(!flat && !board_category_focus_ && (input.cancel || input.bomb)) {
+		board_category_focus_ = true;
+		draw();
+		return {.surface_changed = valid_, .status = status_};
+	}
 	if(input.cancel || input.bomb) {
 		if(mode_ == NewClassicOnlineMenuMode::high_scores) {
 			page_ = Page::hub;
@@ -2475,13 +2606,68 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 		status_ = NewClassicHighScoreMenuStatus::back;
 		return {.status = status_};
 	}
-	if(input.left || input.right) {
-		board_index_ = input.left ?
-			(board_index_ + boards_.size() - 1U) % boards_.size() :
-			(board_index_ + 1U) % boards_.size();
+	if(flat) {
+		const auto count = flat_entries_.size();
+		if(input.up && count != 0U) {
+			flat_selection_ = (flat_selection_ + count - 1U) % count;
+		} else if(input.down && count != 0U) {
+			flat_selection_ = (flat_selection_ + 1U) % count;
+		} else if(input.confirm && count != 0U) {
+			const auto location = flat_entries_[flat_selection_];
+			board_index_ = location.first;
+			selected_entry_ = location.second;
+			page_ = Page::detail;
+		} else {
+			return {.status = status_};
+		}
+		if(flat_selection_ < flat_top_) {
+			flat_top_ = flat_selection_;
+		} else if(flat_selection_ >= flat_top_ + browser_rows) {
+			flat_top_ = flat_selection_ - (browser_rows - 1U);
+		}
+		draw();
+		return {.surface_changed = valid_, .status = status_};
+	}
+	if(board_category_focus_ && (input.left || input.right)) {
+		const auto &current = *boards_[board_index_].board_category;
+		const auto target_character = static_cast<std::uint8_t>(
+			(current.character + (input.left ? 8U : 1U)) % 9U
+		);
+		const auto found = std::ranges::find_if(
+			boards_, [&](const auto &candidate) {
+				return candidate.board_category->rank == current.rank &&
+					candidate.board_category->character == target_character;
+			}
+		);
+		if(found == boards_.end()) {
+			return {.status = status_};
+		}
+		board_index_ = static_cast<std::size_t>(found - boards_.begin());
 		selected_entry_ = 0U;
 		top_entry_ = 0U;
-	} else {
+	} else if(board_category_focus_ && (input.up || input.down)) {
+		const auto &current = *boards_[board_index_].board_category;
+		const auto target_rank = static_cast<std::uint8_t>(
+			(current.rank + (input.up ? 3U : 1U)) % 4U
+		);
+		const auto found = std::ranges::find_if(
+			boards_, [&](const auto &candidate) {
+				return candidate.board_category->rank == target_rank &&
+					candidate.board_category->character == current.character;
+			}
+		);
+		if(found == boards_.end()) {
+			return {.status = status_};
+		}
+		board_index_ = static_cast<std::size_t>(found - boards_.begin());
+		selected_entry_ = 0U;
+		top_entry_ = 0U;
+	} else if(board_category_focus_ && input.confirm) {
+		if(boards_[board_index_].leaderboard_entries.empty()) {
+			return {.status = status_};
+		}
+		board_category_focus_ = false;
+	} else if(!board_category_focus_) {
 		const auto count = boards_[board_index_].leaderboard_entries.size();
 		if(input.up && count != 0U) {
 			selected_entry_ = (selected_entry_ + count - 1U) % count;
@@ -2529,11 +2715,21 @@ bool NewClassicHighScoreMenu::viewing_personal_bests() const noexcept
 
 std::size_t NewClassicHighScoreMenu::selected_board() const noexcept
 {
+	if((mode_ == NewClassicOnlineMenuMode::my_records ||
+		mode_ == NewClassicOnlineMenuMode::downloaded_replays) &&
+		page_ == Page::board && flat_selection_ < flat_entries_.size()) {
+		return flat_entries_[flat_selection_].first;
+	}
 	return board_index_;
 }
 
 std::size_t NewClassicHighScoreMenu::selected_entry() const noexcept
 {
+	if((mode_ == NewClassicOnlineMenuMode::my_records ||
+		mode_ == NewClassicOnlineMenuMode::downloaded_replays) &&
+		page_ == Page::board) {
+		return flat_selection_;
+	}
 	return selected_entry_;
 }
 

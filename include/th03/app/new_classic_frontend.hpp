@@ -11,6 +11,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "th03/app/authentic_text.hpp"
@@ -89,7 +90,10 @@ enum class NewClassicReplayBrowserMode : std::uint8_t {
 
 enum class NewClassicReplayUploadOutcome : std::uint8_t {
 	accepted,
-	rejected,
+	duplicate,
+	slowdown,
+	verification_failed,
+	ineligible,
 	failed,
 	unavailable,
 };
@@ -239,6 +243,7 @@ private:
 	std::optional<std::uint8_t> active_upload_slot_{};
 	std::optional<NewClassicReplayUploadOutcome> upload_feedback_{};
 	bool upload_pending_ = false;
+	bool upload_action_focus_ = false;
 	bool host_surface_changed_ = false;
 	bool fade_in_active_ = false;
 	std::uint8_t fade_boundary_ = 0U;
@@ -370,6 +375,10 @@ private:
 	std::size_t board_index_ = 0U;
 	std::size_t selected_entry_ = 0U;
 	std::size_t top_entry_ = 0U;
+	bool board_category_focus_ = true;
+	std::vector<std::pair<std::size_t, std::size_t>> flat_entries_{};
+	std::size_t flat_selection_ = 0U;
+	std::size_t flat_top_ = 0U;
 	DownloadState download_state_ = DownloadState::idle;
 	std::optional<NewClassicOnlineReplayId> download_target_{};
 	std::optional<NewClassicOnlineReplayRecord> download_request_{};
