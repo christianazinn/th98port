@@ -27,6 +27,7 @@
 #include <SDL3/SDL_timer.h>
 #include <SDL3/SDL_keyboard.h>
 #include <SDL3/SDL_events.h>
+#include <SDL3/SDL_filesystem.h>
 
 #include "default_bindings.hpp"
 
@@ -1773,7 +1774,7 @@ prepare_direct_netplay_replay_save_resources(
 )
 {
 	auto patch = th03::app::load_new_classic_replay_patch_assets(
-		content.data_root / "AZINN.DAT"
+		content.data_root / "AZINN.DAT", content.new_classic_menu_assets
 	);
 	if(!patch) {
 		return std::unexpected(fail_netplay(
@@ -3616,7 +3617,8 @@ int run_direct_netplay_on_platform(
 	const auto post_match_content = parsed.launch.content;
 	const auto replay_save_content = parsed.launch.content;
 	auto loaded_pause_assets = th03::app::load_new_classic_replay_patch_assets(
-		parsed.launch.content.data_root / "AZINN.DAT"
+		parsed.launch.content.data_root / "AZINN.DAT",
+		parsed.launch.content.new_classic_menu_assets
 	);
 	if(!loaded_pause_assets) {
 		return fail("netplay-pause-assets", loaded_pause_assets.error());
@@ -7698,7 +7700,9 @@ ExperienceRunResult run_new_classic_experience(
 		patch_asset_path = parsed.launch.content.data_root / "AZINN.DAT";
 	}
 	auto loaded_patch_assets =
-		th03::app::load_new_classic_replay_patch_assets(patch_asset_path);
+		th03::app::load_new_classic_replay_patch_assets(
+			patch_asset_path, parsed.launch.content.new_classic_menu_assets
+		);
 	if(!loaded_patch_assets) {
 		return {.exit_code = fail("replay-patch-assets", loaded_patch_assets.error())};
 	}
@@ -8229,6 +8233,8 @@ ExperienceRunResult run_new_classic_experience(
 		.font_rom = product.launch.content.font_rom,
 		.language_overlay = product.launch.content.language_overlay,
 		.game_text_pack = product.launch.content.game_text_pack,
+		.new_classic_menu_assets =
+			product.launch.content.new_classic_menu_assets,
 	};
 	result.launch.process.rank = launch.rank;
 	result.launch.process.seed = fresh_netplay_seed();
@@ -8554,6 +8560,19 @@ int run_product_shell(th03::app::ClassicCliRequest parsed)
 	}
 }
 
+template <typename ContentPaths>
+void bind_packaged_menu_assets(ContentPaths &content)
+{
+	if(!content.new_classic_menu_assets.empty()) {
+		return;
+	}
+	const auto *base_path = SDL_GetBasePath();
+	if(base_path && *base_path != '\0') {
+		content.new_classic_menu_assets =
+			std::filesystem::path(base_path) / "PODDUI";
+	}
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -8593,6 +8612,7 @@ int main(int argc, char **argv)
 			print_usage();
 			return 0;
 		}
+		bind_packaged_menu_assets(parsed->launch.content);
 		if(parsed->mode == th03::app::ClassicLaunchMode::shell) {
 			return run_product_shell(std::move(*parsed));
 		}
@@ -8607,5 +8627,6 @@ int main(int argc, char **argv)
 		print_usage();
 		return 0;
 	}
+	bind_packaged_menu_assets(parsed->launch.content);
 	return run_direct_vs(std::move(*parsed));
 }

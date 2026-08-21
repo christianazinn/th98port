@@ -58,6 +58,9 @@ struct ClassicContentPaths final {
 	// Complete authenticated Replay Patch 0.4.12 AZINN.DAT. Classic ignores
 	// this profile. An empty New Classic path derives AZINN.DAT under data_root.
 	std::filesystem::path replay_patch_assets{};
+	// Repo-owned retained-menu artwork. The SDL product derives this as PODDUI
+	// below its executable/install root, independent of the launch directory.
+	std::filesystem::path new_classic_menu_assets{};
 	// Replay Patch's native REPLAY/ directory. New Classic derives this under
 	// data_root when omitted; Classic never opens it.
 	std::filesystem::path replay_root{};

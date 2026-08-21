@@ -940,7 +940,10 @@ decode_new_classic_menu_background(
 } // namespace detail
 
 std::expected<NewClassicReplayPatchAssets, NewClassicAssetsError>
-load_new_classic_replay_patch_assets(const std::filesystem::path &path)
+load_new_classic_replay_patch_assets(
+	const std::filesystem::path &path,
+	const std::filesystem::path &menu_background_root
+)
 {
 	if(path.empty()) {
 		return std::unexpected(error(NewClassicAssetsErrorCode::invalid_path));
@@ -1003,9 +1006,11 @@ load_new_classic_replay_patch_assets(const std::filesystem::path &path)
 		result.replay_name_background = std::move(*name);
 		result.key_config_background = std::move(*key);
 		std::optional<std::filesystem::path> loose_background_root{};
-		std::vector<std::filesystem::path> candidates{
-			path.parent_path() / "PODDUI",
-		};
+		std::vector<std::filesystem::path> candidates{};
+		if(!menu_background_root.empty()) {
+			candidates.push_back(menu_background_root);
+		}
+		candidates.push_back(path.parent_path() / "PODDUI");
 		auto current = std::filesystem::current_path(system);
 		if(!system) {
 			candidates.push_back(current / "PODDUI");

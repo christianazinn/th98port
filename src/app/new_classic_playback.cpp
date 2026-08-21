@@ -1029,7 +1029,8 @@ NewClassicReplayPlayback::load_internal(
 			request.content.data_root / "AZINN.DAT";
 	}
 	auto loaded_patch_assets = load_new_classic_replay_patch_assets(
-		request.content.replay_patch_assets
+		request.content.replay_patch_assets,
+		request.content.new_classic_menu_assets
 	);
 	if(!loaded_patch_assets) {
 		auto error = playback_error(

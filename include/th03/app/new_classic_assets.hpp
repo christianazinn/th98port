@@ -231,7 +231,10 @@ private:
 [[nodiscard]] std::expected<
 	NewClassicReplayPatchAssets,
 	NewClassicAssetsError
-> load_new_classic_replay_patch_assets(const std::filesystem::path &path);
+> load_new_classic_replay_patch_assets(
+	const std::filesystem::path &path,
+	const std::filesystem::path &menu_background_root = {}
+);
 
 namespace detail {
 

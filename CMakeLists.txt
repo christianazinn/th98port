@@ -1212,6 +1212,15 @@ if(TH03_ENABLE_SDL)
 	target_include_directories(th03-app PRIVATE apps/th03-app)
 	th03_set_warnings(th03-app)
 	th03_stage_sdl3_runtime(th03-app)
+	add_custom_command(
+		TARGET th03-app POST_BUILD
+		COMMAND "${CMAKE_COMMAND}" -E rm -rf
+			"$<TARGET_FILE_DIR:th03-app>/PODDUI"
+		COMMAND "${CMAKE_COMMAND}" -E copy_directory
+			"${TH03_NEW_CLASSIC_MENU_ASSET_SOURCE}"
+			"$<TARGET_FILE_DIR:th03-app>/PODDUI"
+		VERBATIM
+	)
 	th03_stage_audio_licenses(th03-app)
 	if(TH03_ENABLE_RTC)
 		th03_stage_rtc_licenses(th03-app)

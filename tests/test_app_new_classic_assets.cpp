@@ -209,6 +209,7 @@ void test_authentic_archive_if_supplied()
 #pragma warning(disable: 4996)
 #endif
 	const auto *path = std::getenv("TH03_AZINN_DAT");
+	const auto *menu_root = std::getenv("TH03_PODDUI_DIR");
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
@@ -216,7 +217,9 @@ void test_authentic_archive_if_supplied()
 		return;
 	}
 	auto loaded = th03::app::load_new_classic_replay_patch_assets(
-		std::filesystem::path(path)
+		std::filesystem::path(path),
+		menu_root && *menu_root != '\0' ? std::filesystem::path(menu_root) :
+			std::filesystem::path{}
 	);
 	expect(loaded.has_value(), "authenticated Replay Patch AZINN profile loads");
 	if(!loaded) {

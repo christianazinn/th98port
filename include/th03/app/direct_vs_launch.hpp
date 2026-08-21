@@ -18,6 +18,7 @@ struct DirectVsContentPaths {
 	std::filesystem::path font_rom{};
 	std::filesystem::path language_overlay{};
 	std::filesystem::path game_text_pack{};
+	std::filesystem::path new_classic_menu_assets{};
 };
 
 struct DirectVsLaunchRequest {
