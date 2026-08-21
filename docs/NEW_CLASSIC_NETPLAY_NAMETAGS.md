@@ -1,7 +1,7 @@
 # New Classic netplay nametags and replay identity
 
-Status: proposed product contract, 2026-08-20. Implementation is deliberately
-blocked on the small set of product decisions at the end of this document.
+Status: approved product contract, 2026-08-20. The portable layout validator
+and account-profile service are the first implementation parcel.
 
 ## Current facts
 
@@ -40,19 +40,21 @@ Use one public **account nametag**, not an independently editable per-match
 alias. This keeps matchmaking, future match history, and moderation coherent,
 and avoids an impersonation surface that adds no useful game behavior.
 
-The first version should use 1..24 printable ASCII characters. Trim leading and
-trailing spaces, reject control bytes and repeated/ambiguous whitespace, and
-preserve case for display. Nametags need not be globally unique: the immutable
-account UUID is the identity, while two players may legitimately choose the
-same visible name. A small reserved-name/moderation list is sufficient for the
-first beta; a generalized Unicode moderation system is not.
+The first version uses printable ASCII with exact geometry validation. Reject
+leading, trailing, and repeated spaces rather than silently normalizing them;
+reject controls; preserve case for display. Deterministically wrap at word
+boundaries into at most two 28-cell rows and reject any word wider than 28
+cells or any name requiring a third row. Nametags need not be globally unique:
+the immutable account UUID is the identity, while two players may legitimately
+choose the same visible name.
 
-Twenty-four fixed-width PC-98 cells occupy 192 pixels and fit independently in
-both 224-pixel player columns. This is materially longer than V13's eight-byte
-replay name without requiring a new font. Full Unicode should wait until the
-localized font pipeline has a distributable glyph/fallback owner; silently
-replacing unsupported characters with `?` would make two distinct accounts
-look identical.
+Each 224-pixel player column contains 28 fixed-width 8-pixel cells. Two full
+rows display 56 cells; because one source space becomes the line break, the
+theoretical largest accepted input is 57 bytes (`28 + space + 28`). This is a
+geometric maximum, not a promise that every 57-byte sequence fits: validation
+is the deterministic wrap itself. Full Unicode should wait until the localized
+font pipeline has a distributable glyph/fallback owner; silently replacing
+unsupported characters with `?` would make distinct accounts look identical.
 
 On first use of account-backed Online Match, require the player to choose a
 nametag after automatic credential enrollment and before entering matchmaking.
@@ -67,13 +69,12 @@ nametag as authority. Direct UDP has no account authority, so it may use each
 side's locally configured nametag and must mark both identities as local/
 unverified.
 
-Render the nametag as a centered fourth 8x16 row beneath the source character
-title/name block, using one bounded accent color shared by both sides. Keep the
-character portrait, title, and localized character name intact. Do not replace
-source character text with account text. The exact y coordinate and color
-should be chosen from authenticated comparison images before implementation;
-the candidate row is y=328..343, which remains above `Next Dream` in the
-current splash composition.
+Replace the two localized character-title rows with the centered wrapped
+nametag and retain the source `- Character -` line unchanged beneath it. The
+portrait and character identity therefore remain unambiguous while the more
+prominent title area identifies the remote player. Ordinary Story/VS and
+account-free direct play retain the source titles unless a later local-alias
+policy explicitly opts in.
 
 ## Network contract
 
@@ -82,7 +83,7 @@ input packets. A proposed `T3NID001` value contains:
 
 - identity kind (`account` or `local`);
 - both 16-byte UUID values, zero for local/direct identities;
-- both length-prefixed 24-byte ASCII nametag slots;
+- both length-prefixed 57-byte ASCII nametag slots;
 - the exact room/match identity needed to prevent reuse across a different
   pairing; and
 - a digest over the complete value.
@@ -136,6 +137,12 @@ token hashes, IP-derived abuse signals, and transport addresses never enter a
 match contract or replay. Deleting/resetting local credentials does not rewrite
 old replays.
 
+One UUID may own multiple device credentials. Linking uses a short-lived,
+single-use code created by an already authenticated device; redeeming it issues
+a new random bearer token for the same UUID. Tokens are never copied between
+machines. Secondary credentials are independently listable/revocable, while
+renaming the profile leaves every credential and the UUID stable.
+
 ## Implementation order
 
 1. Add the profile column/migration, strict validation, authenticated read and
@@ -150,20 +157,11 @@ old replays.
 6. Add the optional V13 tail, byte-preserving replay/download behavior, detail
    display, replay-renderer support, and old-reader compatibility tests.
 
-## Blocking product decisions
+## Approved decisions
 
-The recommended defaults are deliberately concrete. Implementation needs only
-these confirmations:
-
-1. Use one account nametag (recommended), or allow a separate per-match alias?
-2. Accept the 1..24 printable-ASCII first version (recommended), or block until
-   the project has a broader distributable Unicode font?
-3. Allow duplicate case-preserving names tied to unique UUIDs (recommended),
-   or require globally unique case-insensitive names?
-4. Permit public replay files to expose both opaque account UUIDs (recommended
-   for future match history), or store only match-time names until a later
-   replay version?
-
-The V13-tail approach, direct-IP unverified policy, snapshot-on-rename behavior,
-and preservation of source character text do not require further decisions
-unless one of the four answers changes their premise.
+- One changeable account nametag; no per-match alias.
+- Printable ASCII now, validated against two 28-cell rows without word splits.
+- Duplicate case-preserving names; the UUID is the stable identity.
+- Public typed V13 tails may expose both opaque account UUIDs.
+- Character names remain unchanged; nametags replace the two title rows.
+- Multiple devices receive separate revocable credentials for the same UUID.

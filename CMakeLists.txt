@@ -932,6 +932,7 @@ add_library(th03_app_netplay STATIC
 	src/app/new_classic_netplay_signaling.cpp
 	src/app/new_classic_netplay_simulator.cpp
 	src/app/new_classic_netplay_timeline.cpp
+	src/app/new_classic_nametag.cpp
 )
 target_include_directories(th03_app_netplay PUBLIC include)
 target_link_libraries(th03_app_netplay PUBLIC th03_core)
@@ -2223,6 +2224,17 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-new-classic-netplay-protocol-tests
 		COMMAND th03-app-new-classic-netplay-protocol-tests
+	)
+	add_executable(th03-app-new-classic-nametag-tests
+		tests/test_app_new_classic_nametag.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-nametag-tests PRIVATE th03_app_netplay
+	)
+	th03_set_warnings(th03-app-new-classic-nametag-tests)
+	add_test(
+		NAME th03-app-new-classic-nametag-tests
+		COMMAND th03-app-new-classic-nametag-tests
 	)
 	add_executable(th03-app-new-classic-netplay-signaling-tests
 		tests/test_app_new_classic_netplay_signaling.cpp
