@@ -189,6 +189,13 @@ These can proceed alongside the content migrations:
 These tools should consume the same decoders and schemas as production rather
 than inventing shadow interpretations.
 
+Status: in progress. `th03-game-text-preview` now renders all 61 `T3GTL001`
+messages into deterministic 640x400 contact sheets plus a machine-readable
+`T3GTP001` bounds index through the production PC-98 font and graphics-text
+path. The remaining work in this parcel is the per-scene authenticated-content
+dependency audit, localized scene snapshots, and release-level content
+manifests.
+
 ### 5. Account nametags and VS presentation
 
 This is deliberately last. Before implementation, decide:
@@ -213,8 +220,9 @@ display, not silently substitute a later account rename.
 2. ~~Add external pack loading and the cutscene text-run extractor/compiler.~~
 3. Build the replay renderer's machine progress protocol and GUI package.
 4. Add the explicit ruleset seam and Dopamine Arrange developer prototype.
-5. Continue the remaining text/image decoupling and preview/audit tools.
-6. Stop for the nametag product decisions above.
+5. ~~Add the static graphics-text contact-sheet preview tool.~~
+6. Continue the remaining text/image decoupling and audit/snapshot tools.
+7. Stop for the nametag product decisions above.
 
 Pixel-oracle expansion is useful after these functional seams settle, not
 before every localized or Arrange screen is still moving. Stock routes keep

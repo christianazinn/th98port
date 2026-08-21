@@ -29,6 +29,20 @@ python tools/localization/compile_game_text_pack.py compile `
   --output game-text-my-locale.t3gtl
 ```
 
+Render all 61 compiled messages through the production PC-98 font and
+graphics-text path without launching the game:
+
+```powershell
+out/build/gcc/th03-game-text-preview.exe `
+  --font path/to/FONT.ROM `
+  --output out/game-text-preview `
+  --game-text-pack game-text-my-locale.t3gtl
+```
+
+The three 640x400 PPM contact sheets and deterministic `preview.json` make
+glyph coverage, exact row widths, and placement reviewable in one pass. See
+`docs/NEW_CLASSIC_GAME_TEXT_PREVIEW.md` for the output contract.
+
 An authoring file may omit entries only when it names an already validated
 fallback locale. The current runtime renderer is CP932-constrained; future
 Unicode font work can add another explicit domain without reinterpreting these

@@ -116,12 +116,14 @@ constexpr std::array<NewClassicMessageSchemaEntry, message_count> schema{{
 		return false;
 	}
 	std::size_t component = 0U;
+	bool first_component = true;
 	for(const auto character : locale) {
 		if(character == '-') {
-			if(component == 0U || component > 8U) {
+			if(component < (first_component ? 2U : 1U) || component > 8U) {
 				return false;
 			}
 			component = 0U;
+			first_component = false;
 			continue;
 		}
 		const auto value = static_cast<unsigned char>(character);
@@ -132,7 +134,7 @@ constexpr std::array<NewClassicMessageSchemaEntry, message_count> schema{{
 		}
 		++component;
 	}
-	return component >= 1U && component <= 8U;
+	return component >= (first_component ? 2U : 1U) && component <= 8U;
 }
 
 [[nodiscard]] bool valid_glyphs(std::string_view text) noexcept

@@ -255,6 +255,36 @@ void test_message_packs(const th03::app::NewClassicMenuFont *authentic_font)
 	if(!english) {
 		return;
 	}
+	auto short_primary_locale = read_file(root / "en-US.t3lang");
+	constexpr std::string_view invalid_locale = "a-bcd";
+	std::copy(
+		reinterpret_cast<const std::byte *>(invalid_locale.data()),
+		reinterpret_cast<const std::byte *>(
+			invalid_locale.data() + invalid_locale.size()
+		),
+		short_primary_locale.begin() + 96
+	);
+	const auto short_locale_body =
+		std::span<const std::byte>{short_primary_locale}.subspan(96U);
+	const auto short_locale_digest =
+		th03::app::main_executable_sha256(short_locale_body);
+	for(std::size_t index = 0U; index < short_locale_digest.size(); ++index) {
+		short_primary_locale[64U + index] =
+			static_cast<std::byte>(short_locale_digest[index]);
+	}
+	auto temporary = std::filesystem::temp_directory_path() /
+		"th03-invalid-short-primary-locale.t3lang";
+	write_file(temporary, short_primary_locale);
+	auto rejected_locale = th03::app::load_new_classic_message_pack(
+		temporary, font
+	);
+	expect(!rejected_locale && rejected_locale.error().code ==
+		th03::app::NewClassicMessagePackErrorCode::locale_shape,
+		"message-pack runtime matches the compiler's two-character primary locale");
+	{
+		std::error_code ignored;
+		std::filesystem::remove(temporary, ignored);
+	}
 	const std::array practice_arguments{
 		th03::app::NewClassicMessageArgument{"plus", "+"},
 		th03::app::NewClassicMessageArgument{"round", "2"},
@@ -331,7 +361,7 @@ void test_message_packs(const th03::app::NewClassicMenuFont *authentic_font)
 		for(std::size_t index = 0U; index < digest.size(); ++index) {
 			tampered[64U + index] = static_cast<std::byte>(digest[index]);
 		}
-		const auto temporary = std::filesystem::temp_directory_path() /
+		temporary = std::filesystem::temp_directory_path() /
 			"th03-invalid-placeholder.t3lang";
 		write_file(temporary, tampered);
 		auto rejected = th03::app::load_new_classic_message_pack(
@@ -375,14 +405,14 @@ void test_message_packs(const th03::app::NewClassicMenuFont *authentic_font)
 			for(std::size_t index = 0U; index < digest.size(); ++index) {
 				too_wide[64U + index] = static_cast<std::byte>(digest[index]);
 			}
-			const auto temporary = std::filesystem::temp_directory_path() /
+			const auto width_temporary = std::filesystem::temp_directory_path() /
 				"th03-invalid-width.t3lang";
-			write_file(temporary, too_wide);
+			write_file(width_temporary, too_wide);
 			auto rejected = th03::app::load_new_classic_message_pack(
-				temporary, font, &*english
+				width_temporary, font, &*english
 			);
 			std::error_code ignored;
-			std::filesystem::remove(temporary, ignored);
+			std::filesystem::remove(width_temporary, ignored);
 			expect(!rejected && rejected.error().code ==
 				th03::app::NewClassicMessagePackErrorCode::width_exceeded,
 				"runtime rejects a correctly hashed pack wider than its source row");
@@ -407,6 +437,33 @@ void test_game_text_packs()
 		"complete deterministic T3GTL001 English catalog loads exact CP932 rows");
 	if(!english) {
 		return;
+	}
+	auto short_primary_locale = read_file(path);
+	constexpr std::string_view invalid_locale = "a-bcd";
+	std::copy(
+		reinterpret_cast<const std::byte *>(invalid_locale.data()),
+		reinterpret_cast<const std::byte *>(
+			invalid_locale.data() + invalid_locale.size()
+		),
+		short_primary_locale.begin() + 96
+	);
+	const auto short_locale_body =
+		std::span<const std::byte>{short_primary_locale}.subspan(96U);
+	const auto short_locale_digest = th03::app::app_sha256(short_locale_body);
+	for(std::size_t index = 0U; index < short_locale_digest.size(); ++index) {
+		short_primary_locale[64U + index] =
+			static_cast<std::byte>(short_locale_digest[index]);
+	}
+	auto temporary = std::filesystem::temp_directory_path() /
+		"th03-invalid-short-primary-locale.t3gtl";
+	write_file(temporary, short_primary_locale);
+	auto rejected_locale = th03::app::load_new_classic_game_text_pack(temporary);
+	expect(!rejected_locale && rejected_locale.error().code ==
+		th03::app::NewClassicGameTextPackErrorCode::locale_shape,
+		"game-text runtime matches the compiler's two-character primary locale");
+	{
+		std::error_code ignored;
+		std::filesystem::remove(temporary, ignored);
 	}
 	expect(std::ranges::equal(
 		english->bytes(th03::app::NewClassicGameTextId::stage_name_00),
@@ -437,7 +494,7 @@ void test_game_text_packs()
 
 	auto bad_digest = read_file(path);
 	bad_digest.back() ^= std::byte{1U};
-	auto temporary = std::filesystem::temp_directory_path() /
+	temporary = std::filesystem::temp_directory_path() /
 		"th03-invalid-game-text-digest.t3gtl";
 	write_file(temporary, bad_digest);
 	auto rejected_digest = th03::app::load_new_classic_game_text_pack(temporary);

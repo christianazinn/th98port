@@ -1103,6 +1103,14 @@ target_link_libraries(
 )
 th03_set_warnings(th03-cutscene-text)
 
+add_executable(
+	th03-game-text-preview apps/th03-game-text-preview/main.cpp
+)
+target_link_libraries(
+	th03-game-text-preview PRIVATE th03_app_main
+)
+th03_set_warnings(th03-game-text-preview)
+
 add_library(th03rv_service_protocol STATIC
 	apps/th03rv/service_protocol.cpp
 )
@@ -1336,6 +1344,19 @@ if(BUILD_TESTING)
 		)
 	endif()
 	add_test(NAME th03-cutscene-text-help COMMAND th03-cutscene-text --help)
+	add_test(
+		NAME th03-game-text-preview-help
+		COMMAND th03-game-text-preview --help
+	)
+	if(Python3_Interpreter_FOUND)
+		add_test(
+			NAME th03-game-text-preview-tests
+			COMMAND ${Python3_EXECUTABLE}
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_game_text_preview.py
+				--tool $<TARGET_FILE:th03-game-text-preview>
+				--source-root ${CMAKE_CURRENT_SOURCE_DIR}
+		)
+	endif()
 	find_program(TH03_PWSH_EXECUTABLE NAMES pwsh)
 	if(TH03_PWSH_EXECUTABLE)
 		add_test(
