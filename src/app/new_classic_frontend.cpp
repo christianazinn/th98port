@@ -1956,7 +1956,8 @@ NewClassicHighScoreMenu::NewClassicHighScoreMenu(
 			return left.board_category == right.board_category;
 		}
 	);
-	if(!patch_assets_ || boards_.empty() || duplicate != boards_.end()) {
+	if(!patch_assets_ || duplicate != boards_.end() ||
+		(mode_ != NewClassicOnlineMenuMode::high_scores && boards_.empty())) {
 		return;
 	}
 	if(mode_ != NewClassicOnlineMenuMode::high_scores) {
@@ -2014,8 +2015,9 @@ void NewClassicHighScoreMenu::draw_hub() noexcept
 	);
 	for(std::size_t row = 0U; valid_ && row < ids.size(); ++row) {
 		const auto top = static_cast<std::int32_t>(160U + (row * 32U));
+		const bool enabled = row != 1U || !boards_.empty();
 		const auto color = static_cast<present::Index4>(
-			row == hub_selection_ ? 12U : 15U
+			!enabled ? 8U : (row == hub_selection_ ? 12U : 15U)
 		);
 		valid_ = font.put_centered(
 			raster, 320, top, messages.text(ids[row]), color
@@ -2391,16 +2393,18 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 			status_ = NewClassicHighScoreMenuStatus::back;
 			return {.status = status_};
 		}
-		if(input.up) {
-			hub_selection_ = (hub_selection_ + 3U) % 4U;
-		} else if(input.down) {
-			hub_selection_ = (hub_selection_ + 1U) % 4U;
+		if(input.up || input.down) {
+			do {
+				hub_selection_ = input.up ?
+					(hub_selection_ + 3U) % 4U :
+					(hub_selection_ + 1U) % 4U;
+			} while(hub_selection_ == 1U && boards_.empty());
 		} else if(input.confirm) {
 			if(hub_selection_ == 0U) {
 				status_ = NewClassicHighScoreMenuStatus::local_selected;
 				return {.status = status_};
 			}
-			if(hub_selection_ == 1U) {
+			if(hub_selection_ == 1U && !boards_.empty()) {
 				page_ = Page::board;
 				selected_entry_ = 0U;
 				top_entry_ = 0U;

@@ -2642,7 +2642,7 @@ struct ClassicOpSessionBackend final {
 	start_high_score_menu()
 	{
 		if(!title_completion || !replay_recorder || !patch_assets ||
-			online_boards.empty() || high_scores || high_score_menu) {
+			high_scores || high_score_menu) {
 			return false;
 		}
 		auto personal_bests = load_new_classic_score_store_read_only(

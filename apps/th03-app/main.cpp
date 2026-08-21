@@ -5560,16 +5560,15 @@ ExperienceRunResult run_classic_session(
 							online_upload_credential_context->configured
 						) || (stored_identity && !credential_status_error));
 					std::vector<th03::app::NewClassicOnlineCategory> categories{};
-					categories.reserve(9U);
-					const auto rank = static_cast<std::uint8_t>(
-						persisted_options.rank
-					);
-					for(std::uint8_t character = 0U; character < 9U; ++character) {
-						categories.push_back({
-							.mode = th03::app::NewClassicOnlineMode::story,
-							.rank = rank,
-							.character = character,
-						});
+					categories.reserve(36U);
+					for(std::uint8_t rank = 0U; rank < 4U; ++rank) {
+						for(std::uint8_t character = 0U; character < 9U; ++character) {
+							categories.push_back({
+								.mode = th03::app::NewClassicOnlineMode::story,
+								.rank = rank,
+								.character = character,
+							});
+						}
 					}
 					auto started =
 						th03::app::start_new_classic_online_board_refresh(

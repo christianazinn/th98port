@@ -541,8 +541,24 @@ void test_online_high_score_menu()
 	NewClassicHighScoreMenu wrong_rank(
 		{online_board(1U, 4U, 0x20U)}, 2U, patch_assets
 	);
-	expect(!wrong_rank.valid(),
-		"online HiScore hub remains hidden without a board for the active rank");
+	expect(wrong_rank.valid(),
+		"HiScore hub remains available without an online board for the active rank");
+	finish_entry_fade(wrong_rank);
+	static_cast<void>(wrong_rank.consume({}));
+	static_cast<void>(wrong_rank.consume({.down = true}));
+	static_cast<void>(wrong_rank.consume({}));
+	expect(wrong_rank.consume({.confirm = true}).surface_changed &&
+		wrong_rank.viewing_personal_bests(),
+		"an unavailable Online row is skipped while Personal Bests remains reachable");
+
+	for(std::uint8_t rank = 0U; rank < 4U; ++rank) {
+		NewClassicHighScoreMenu rank_hub(
+			{}, rank, patch_assets, NewClassicOnlineMenuMode::high_scores,
+			new_classic_score_empty()
+		);
+		expect(rank_hub.valid(),
+			"Local HiScores hub is valid on every rank without cached online data");
+	}
 
 	NewClassicHighScoreMenu local(
 		{online_board(2U, 4U, 0x20U)}, 2U, patch_assets

@@ -294,8 +294,9 @@ enum class NewClassicOnlineMenuMode : std::uint8_t {
 // Every online row was already validated by the T3ONL002 decoder. The owner
 // may emit one immutable replay-download intent, but never performs network or
 // filesystem I/O during source-time scene advancement. A validated category
-// snapshot may honestly contain zero rows; absence of every snapshot remains
-// invalid so offline/unconfigured routes keep their direct local behavior.
+// snapshot may honestly contain zero rows. The HiScore hub remains valid with
+// no category for the active rank because Local HiScores and Personal Bests
+// are independent destinations; replay-library modes still require a board.
 class NewClassicHighScoreMenu final {
 public:
 	NewClassicHighScoreMenu(
