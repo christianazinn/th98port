@@ -217,6 +217,16 @@ contract snapshots it, and the MAINL VS intro renders bounded names without
 changing deterministic gameplay. Replays should preserve the match-time
 display, not silently substitute a later account rename.
 
+Status: source and format scope complete; product decisions pending. The
+recommended design is in `NEW_CLASSIC_NETPLAY_NAMETAGS.md`. There are no safe
+V13 header bytes to reuse, but a fixed typed identity block can live after the
+declared logical input stream and before an optional final `T3RACC1` payload.
+Existing V13 readers ignore that tail, so this presentation metadata does not
+require V14. The current recommendation is one non-unique, case-preserving
+1..24 printable-ASCII account nametag, server-snapshotted for account rooms,
+local/unverified for direct UDP, and rendered as a fourth row without replacing
+the localized character title or name.
+
 ## Suggested immediate execution order
 
 1. Freeze `T3GTL001` and migrate static in-game English text out of C++ tables.
