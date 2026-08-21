@@ -88,9 +88,9 @@ The first Option screen is a seven-row category menu:
 
 ```text
 Gameplay
-Audio
 Input
 Video
+Audio
 Language
 System
 Return
@@ -132,7 +132,7 @@ Mute When Unfocused Off
 Return
 ```
 
-Implemented now: `Master Vol.`, `Music`, and `SFX` in 5% steps, `Focus Mute`,
+Implemented now: `Master Vol.`, `Music`, and `SFX` in 5% steps, `Mute Away`,
 and `Return`. These compact on-screen labels preserve the concepts named in
 the target layout while fitting the existing proportional-font columns.
 

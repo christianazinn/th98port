@@ -104,7 +104,7 @@ not become physical-scanout events; `destination=null`,
 that split.
 
 Focus loss is not minimization and remains non-pausing. It timestamp-clears held
-input while retaining device presence; `Focus Mute` affects only final PCM
+input while retaining device presence; `Mute Away` affects only final PCM
 delivery. An explicit OS suspend/resume event may rebase the live scheduler and
 clear held input/audio so a laptop does not execute hours of catch-up. Do not
 infer suspend from a large elapsed-time heuristic.

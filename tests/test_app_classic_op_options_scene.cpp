@@ -608,9 +608,9 @@ void test_patch_option_reciprocal_shadow_if_assets_supplied()
 	}
 	constexpr std::array messages{
 		NewClassicMessageId::option_category_gameplay,
-		NewClassicMessageId::option_category_audio,
 		NewClassicMessageId::option_category_input,
 		NewClassicMessageId::option_category_video,
+		NewClassicMessageId::option_category_audio,
 		NewClassicMessageId::option_category_language,
 		NewClassicMessageId::option_category_system,
 		NewClassicMessageId::option_return,
@@ -693,12 +693,12 @@ void test_patch_option_shadow_transitions_if_assets_supplied(bool localized)
 	constexpr std::array routes{
 		Route{ClassicOpOptionsChoice::category_gameplay,
 			ClassicOpOptionsPage::gameplay},
-		Route{ClassicOpOptionsChoice::category_audio,
-			ClassicOpOptionsPage::audio},
 		Route{ClassicOpOptionsChoice::category_input,
 			ClassicOpOptionsPage::input},
 		Route{ClassicOpOptionsChoice::category_video,
 			ClassicOpOptionsPage::video},
+		Route{ClassicOpOptionsChoice::category_audio,
+			ClassicOpOptionsPage::audio},
 		Route{ClassicOpOptionsChoice::category_language,
 			ClassicOpOptionsPage::language},
 		Route{ClassicOpOptionsChoice::category_system,

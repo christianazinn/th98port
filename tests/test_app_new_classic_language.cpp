@@ -192,6 +192,14 @@ bool authentic_text_gate(
 	const auto music_first = std::string{
 		op->choices[0U].begin(), op->choices[0U].end()
 	};
+	const auto &music_wave = op->choices[5U];
+	constexpr std::array<std::uint8_t, 2U> music_wave_bytes{{0x81U, 0x60U}};
+	const bool visible_wave = std::search(
+		music_wave.begin(), music_wave.end(),
+		music_wave_bytes.begin(), music_wave_bytes.end()
+	) != music_wave.end() &&
+		std::ranges::find(music_wave, static_cast<std::uint8_t>('~')) ==
+			music_wave.end();
 	const auto title_second = std::string{
 		mainl->assets.characters[0U].title_second.begin(),
 		mainl->assets.characters[0U].title_second.end()
@@ -200,7 +208,7 @@ bool authentic_text_gate(
 		mainl->assets.registration_playchars[0U].begin(),
 		mainl->assets.registration_playchars[0U].end()
 	};
-	return music_first == "NO.1 Dream Transcending Space..." &&
+	return music_first == "NO.1 Dream Transcending Space..." && visible_wave &&
 		title_second == "        and Tradition       " &&
 		registration == "  No Entry! " &&
 		std::ranges::equal(

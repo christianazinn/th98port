@@ -46,7 +46,7 @@ Run these first on every candidate:
   and contraction animations.
 - Test Music and SFX independently at 0%, 5%, 50%, 85%, and 100%. The values
   are linear audible-amplitude controls; 85% must sound close to full volume,
-  not close to silence. Test Mute Unfocused.
+  not close to silence. Test Mute Away.
 - With Story Autofire Off, Left Shift must do nothing. With Autofire On, Left
   Shift must provide Charge and Shot. Verify keyboard, controller assignment,
   Input Test, KeyConfig, and JoyConfig survive restart.

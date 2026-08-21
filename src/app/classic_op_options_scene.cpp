@@ -93,9 +93,9 @@ constexpr std::array<std::uint8_t, 6U> value_key_joy{{
 
 constexpr std::array<ClassicOpOptionsChoice, 7U> category_choices{{
 	ClassicOpOptionsChoice::category_gameplay,
-	ClassicOpOptionsChoice::category_audio,
 	ClassicOpOptionsChoice::category_input,
 	ClassicOpOptionsChoice::category_video,
+	ClassicOpOptionsChoice::category_audio,
 	ClassicOpOptionsChoice::category_language,
 	ClassicOpOptionsChoice::category_system,
 	ClassicOpOptionsChoice::quit,
