@@ -72,6 +72,15 @@ constexpr present::Index4 footer_color = 13U;
 		input.confirm || input.bomb || input.cancel;
 }
 
+[[nodiscard]] constexpr NewClassicMenuBackground report_background(
+	NewClassicNetplayReportKind kind
+) noexcept
+{
+	return kind == NewClassicNetplayReportKind::match_complete ?
+		NewClassicMenuBackground::report_success :
+		NewClassicMenuBackground::report_failure;
+}
+
 } // namespace
 
 NewClassicNetplayReport::NewClassicNetplayReport(
@@ -86,7 +95,7 @@ NewClassicNetplayReport::NewClassicNetplayReport(
 	language_(language)
 {
 	if(!patch_assets_ || !patch_surface_.reset(
-		patch_assets_->new_menu_background
+		patch_assets_->menu_background(report_background(kind_))
 	) || !draw()) {
 		status_ = NewClassicNetplayReportStatus::complete;
 		return;
@@ -97,7 +106,7 @@ NewClassicNetplayReport::NewClassicNetplayReport(
 bool NewClassicNetplayReport::draw() noexcept
 {
 	if(!patch_assets_ || !patch_surface_.begin_hidden_frame(
-		patch_assets_->new_menu_background
+		patch_assets_->menu_background(report_background(kind_))
 	)) {
 		return false;
 	}

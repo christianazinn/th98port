@@ -260,13 +260,16 @@ std::uint64_t surface_hash(th03::present::SourceSurface surface)
 	return hash;
 }
 
-void dump_bg2_preview_if_requested(th03::present::SourceSurface surface)
+void dump_menu_preview_if_requested(
+	th03::present::SourceSurface surface,
+	const char *environment
+)
 {
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable: 4996)
 #endif
-	const auto *path = std::getenv("TH03_BG2_PREVIEW_PPM");
+	const auto *path = std::getenv(environment);
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
@@ -457,7 +460,9 @@ void test_replay_hub_and_libraries()
 		local.selection() == 0U,
 		"Replay hub opens from black with Local Replays selected");
 	finish_entry_fade(local);
-	dump_bg2_preview_if_requested(local.surface());
+	dump_menu_preview_if_requested(
+		local.surface(), "TH03_REPLAY_MENU_PREVIEW_PPM"
+	);
 	static_cast<void>(local.consume({}));
 	expect(local.consume({.confirm = true}).status ==
 		NewClassicReplayHubStatus::local_selected,
@@ -615,6 +620,9 @@ void test_online_high_score_menu()
 	expect(local.valid() && local.surface().palette_tone == 0,
 		"validated online cache opens a source-styled black-in HiScore hub");
 	finish_entry_fade(local);
+	dump_menu_preview_if_requested(
+		local.surface(), "TH03_HISCORE_MENU_PREVIEW_PPM"
+	);
 	static_cast<void>(local.consume({}));
 	expect(local.consume({.confirm = true}).status ==
 		NewClassicHighScoreMenuStatus::local_selected,

@@ -34,18 +34,21 @@ struct NewClassicAssetsAccess final {
 
 namespace {
 
-constexpr std::size_t archive_file_bytes = 285'832U;
+constexpr std::size_t archive_file_bytes = 1'055'632U;
 constexpr MainExecutableSha256 archive_sha256{
-	0x43U, 0x01U, 0x92U, 0x59U, 0xD4U, 0xD4U, 0xEDU, 0xFFU,
-	0xBAU, 0x19U, 0x04U, 0x04U, 0xF1U, 0x2AU, 0x9EU, 0x12U,
-	0xBAU, 0xC9U, 0xC0U, 0xB4U, 0xA6U, 0xA8U, 0x2DU, 0x99U,
-	0xDDU, 0xC5U, 0x4DU, 0x1EU, 0xFBU, 0x24U, 0x05U, 0x8EU,
+	0x83U, 0xBFU, 0xD4U, 0xCAU, 0x80U, 0xCAU, 0xB4U, 0xD3U,
+	0xE1U, 0xC8U, 0xB9U, 0x44U, 0xC4U, 0x95U, 0xC4U, 0xF3U,
+	0x80U, 0x7DU, 0xF2U, 0x4CU, 0xE1U, 0x4CU, 0xC7U, 0x4BU,
+	0xADU, 0xAAU, 0x6CU, 0x16U, 0xD0U, 0x8BU, 0x43U, 0x83U,
 };
 constexpr std::size_t archive_header_bytes = 16U;
 constexpr std::size_t directory_entry_bytes = 32U;
-constexpr std::array<std::string_view, 7U> required_members{
+constexpr std::array<std::string_view, 19U> required_members{
 	"SLB1.PI", "SLB1B.PI", "MNUFONT.PF", "PAUSE.GFT", "BG1.PI",
-	"BG2A.BMP", "BG2B.BMP",
+	"BG2A.BMP", "BG2B.BMP", "M001A.BMP", "M001B.BMP",
+	"M002A.BMP", "M002B.BMP", "M003A.BMP", "M003B.BMP",
+	"M005A.BMP", "M005B.BMP", "M006A.BMP", "M006B.BMP",
+	"M007A.BMP", "M007B.BMP",
 };
 constexpr std::size_t menu_font_file_bytes = 3'168U;
 constexpr std::size_t menu_font_header_bytes = 32U;
@@ -861,7 +864,14 @@ decode_new_classic_menu_background(
 			index = 0U;
 		}
 	}
+	// Retained-menu artwork and text share one PC-98 palette. These slots are
+	// fixed across every screen so navigation never changes title, status, or
+	// selection colors. New artwork is authored without these indices.
+	result.palette->colors[8U] = {12U, 3U, 14U};
+	result.palette->colors[9U] = {13U, 8U, 15U};
+	result.palette->colors[11U] = {15U, 10U, 15U};
 	result.palette->colors[12U] = {15U, 15U, 0U};
+	result.palette->colors[13U] = {15U, 12U, 15U};
 	result.palette->colors[15U] = {15U, 15U, 15U};
 	return result;
 }
@@ -916,13 +926,9 @@ load_new_classic_replay_patch_assets(const std::filesystem::path &path)
 		auto list = decode_pi(*members, "SLB1.PI");
 		auto name = decode_pi(*members, "SLB1B.PI");
 		auto key = decode_pi(*members, "BG1.PI");
-		auto menu = detail::decode_new_classic_menu_background(
-			members->at("BG2A.BMP"), members->at("BG2B.BMP")
-		);
 		if(!list) return std::unexpected(std::move(list.error()));
 		if(!name) return std::unexpected(std::move(name.error()));
 		if(!key) return std::unexpected(std::move(key.error()));
-		if(!menu) return std::unexpected(std::move(menu.error()));
 		auto font = detail::decode_new_classic_menu_font(
 			members->at("MNUFONT.PF")
 		);
@@ -934,7 +940,25 @@ load_new_classic_replay_patch_assets(const std::filesystem::path &path)
 		result.replay_list_background = std::move(*list);
 		result.replay_name_background = std::move(*name);
 		result.key_config_background = std::move(*key);
-		result.new_menu_background = std::move(*menu);
+		constexpr std::array background_members{
+			std::pair{"BG2A.BMP", "BG2B.BMP"},
+			std::pair{"M001A.BMP", "M001B.BMP"},
+			std::pair{"M002A.BMP", "M002B.BMP"},
+			std::pair{"M003A.BMP", "M003B.BMP"},
+			std::pair{"M005A.BMP", "M005B.BMP"},
+			std::pair{"M006A.BMP", "M006B.BMP"},
+			std::pair{"M007A.BMP", "M007B.BMP"},
+		};
+		for(std::size_t index = 0U; index < background_members.size(); ++index) {
+			auto background = detail::decode_new_classic_menu_background(
+				members->at(background_members[index].first),
+				members->at(background_members[index].second)
+			);
+			if(!background) {
+				return std::unexpected(std::move(background.error()));
+			}
+			result.new_menu_backgrounds[index] = std::move(*background);
+		}
 		result.menu_font = std::move(*font);
 		result.pause_gaiji = std::move(*pause);
 		return result;

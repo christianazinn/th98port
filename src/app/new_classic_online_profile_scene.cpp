@@ -47,7 +47,7 @@ NewClassicOnlineProfileScene::NewClassicOnlineProfileScene(
 {
 	if((nametag_ && !layout_new_classic_nametag(*nametag_)) ||
 		!patch_assets_ || !patch_surface_.reset(
-			patch_assets_->new_menu_background
+			patch_assets_->menu_background(NewClassicMenuBackground::online_profile)
 		)) {
 		return;
 	}
@@ -60,7 +60,7 @@ NewClassicOnlineProfileScene::NewClassicOnlineProfileScene(
 bool NewClassicOnlineProfileScene::draw() noexcept
 {
 	if(!patch_assets_ || !patch_surface_.begin_hidden_frame(
-		patch_assets_->new_menu_background
+		patch_assets_->menu_background(NewClassicMenuBackground::online_profile)
 	)) {
 		return false;
 	}

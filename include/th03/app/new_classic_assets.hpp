@@ -140,10 +140,24 @@ private:
 	) const noexcept;
 };
 
+enum class NewClassicMenuBackground : std::uint8_t {
+	neutral,
+	replay,
+	high_score,
+	online_profile,
+	netplay,
+	report_success,
+	report_failure,
+	count,
+};
+
 struct NewClassicReplayPatchAssets final {
 	assets::PiImage replay_list_background{};
 	assets::PiImage replay_name_background{};
-	assets::PiImage new_menu_background{};
+	std::array<
+		assets::PiImage,
+		static_cast<std::size_t>(NewClassicMenuBackground::count)
+	> new_menu_backgrounds{};
 	assets::PiImage key_config_background{};
 	NewClassicMenuFont menu_font{};
 	std::array<std::array<std::uint8_t, 32U>, 40U> pause_gaiji{};
@@ -160,6 +174,12 @@ struct NewClassicReplayPatchAssets final {
 		NewClassicLanguageAssetProfile profile =
 			NewClassicLanguageAssetProfile::english
 	) const noexcept;
+	[[nodiscard]] const assets::PiImage &menu_background(
+		NewClassicMenuBackground background
+	) const noexcept
+	{
+		return new_menu_backgrounds[static_cast<std::size_t>(background)];
+	}
 };
 
 // Graphics-page owner for Replay Patch-native full-screen UI. Unlike the

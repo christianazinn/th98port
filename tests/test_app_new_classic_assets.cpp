@@ -179,9 +179,13 @@ void test_menu_background_decode()
 		decoded->image.indices.end() &&
 		std::ranges::find(decoded->image.indices, 15U) ==
 		decoded->image.indices.end() && decoded->palette &&
+		decoded->palette->colors[8U] == th03::assets::Rgb4{12U, 3U, 14U} &&
+		decoded->palette->colors[9U] == th03::assets::Rgb4{13U, 8U, 15U} &&
+		decoded->palette->colors[11U] == th03::assets::Rgb4{15U, 10U, 15U} &&
 		decoded->palette->colors[12U] == th03::assets::Rgb4{15U, 15U, 0U} &&
+		decoded->palette->colors[13U] == th03::assets::Rgb4{15U, 12U, 15U} &&
 		decoded->palette->colors[15U] == th03::assets::Rgb4{15U, 15U, 15U},
-		"background never aliases selected-yellow or normal-white text slots");
+		"background preserves every fixed retained-menu text palette slot");
 
 	top[0U] = std::byte{'X'};
 	const auto malformed =
@@ -213,23 +217,47 @@ void test_authentic_archive_if_supplied()
 			<< " offset=" << loaded.error().offset << '\n';
 		return;
 	}
+	const auto &neutral = loaded->menu_background(
+		th03::app::NewClassicMenuBackground::neutral
+	);
 	expect(loaded->replay_list_background.image.width == 640U &&
 		loaded->replay_name_background.image.height == 400U &&
-		loaded->new_menu_background.image.indices.size() == 256'000U &&
+		neutral.image.indices.size() == 256'000U &&
 		loaded->key_config_background.image.indices.size() == 256'000U,
-		"all four authenticated full-screen backgrounds decode");
+		"source and neutral authenticated full-screen backgrounds decode");
 	expect(std::ranges::find(
-		loaded->new_menu_background.image.indices, 12U
-	) == loaded->new_menu_background.image.indices.end() &&
+		neutral.image.indices, 12U
+	) == neutral.image.indices.end() &&
 		std::ranges::find(
-			loaded->new_menu_background.image.indices, 15U
-		) == loaded->new_menu_background.image.indices.end() &&
-		loaded->new_menu_background.palette &&
-		loaded->new_menu_background.palette->colors[12U] ==
+			neutral.image.indices, 15U
+		) == neutral.image.indices.end() && neutral.palette &&
+		neutral.palette->colors[9U] ==
+			th03::assets::Rgb4{13U, 8U, 15U} &&
+		neutral.palette->colors[12U] ==
 			th03::assets::Rgb4{15U, 15U, 0U} &&
-		loaded->new_menu_background.palette->colors[15U] ==
+		neutral.palette->colors[15U] ==
 			th03::assets::Rgb4{15U, 15U, 15U},
-		"authenticated background reserves yellow and white for menu text only");
+		"neutral background retains lavender, yellow, and white menu colors");
+	constexpr std::array<std::uint8_t, 6U> reserved{
+		8U, 9U, 11U, 12U, 13U, 15U
+	};
+	for(std::uint8_t value = static_cast<std::uint8_t>(
+		th03::app::NewClassicMenuBackground::replay
+	); value < static_cast<std::uint8_t>(
+		th03::app::NewClassicMenuBackground::count
+	); ++value) {
+		const auto &background = loaded->menu_background(
+			static_cast<th03::app::NewClassicMenuBackground>(value)
+		);
+		expect(background.image.indices.size() == 256'000U &&
+			background.palette && std::ranges::all_of(reserved,
+				[&background](std::uint8_t index) {
+					return std::ranges::find(background.image.indices, index) ==
+						background.image.indices.end();
+				}) && background.palette->colors[9U] ==
+				th03::assets::Rgb4{13U, 8U, 15U},
+			"sample background excludes all reserved pixels and keeps lavender");
+	}
 	expect(loaded->menu_font.width("The PoDD Arrange Project") > 0,
 		"authentic proportional title credit has measurable ink");
 }

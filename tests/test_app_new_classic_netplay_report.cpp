@@ -66,18 +66,19 @@ std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> assets_fixture()
 	}
 	auto assets = std::make_shared<th03::app::NewClassicReplayPatchAssets>();
 	assets->menu_font = std::move(*decoded);
-	auto &background = assets->new_menu_background;
-	background.palette.emplace();
-	for(std::size_t index = 0U; index < 16U; ++index) {
-		background.palette->colors[index] = {
-			static_cast<std::uint8_t>(index),
-			static_cast<std::uint8_t>(index),
-			static_cast<std::uint8_t>(index),
-		};
+	for(auto &background : assets->new_menu_backgrounds) {
+		background.palette.emplace();
+		for(std::size_t index = 0U; index < 16U; ++index) {
+			background.palette->colors[index] = {
+				static_cast<std::uint8_t>(index),
+				static_cast<std::uint8_t>(index),
+				static_cast<std::uint8_t>(index),
+			};
+		}
+		background.image.width = 640U;
+		background.image.height = 400U;
+		background.image.indices.assign(256'000U, 2U);
 	}
-	background.image.width = 640U;
-	background.image.height = 400U;
-	background.image.indices.assign(256'000U, 2U);
 	return assets;
 }
 
