@@ -417,6 +417,22 @@ void test_input_flip_and_polygon_cadence()
 
 void test_track_audio_exit_and_completion()
 {
+	auto title_track = make_scene();
+	if(title_track) {
+		release_to_controls(*title_track);
+		expect(title_track->advance({.controls = {.shot = true}}).has_value(),
+			"Music Room can explicitly select the title track");
+		const auto stop = title_track->take_audio_command();
+		const auto load = title_track->take_audio_command();
+		const auto play = title_track->take_audio_command();
+		expect(stop && stop->type == ClassicAudioCommandType::stop_song &&
+			load && load->type == ClassicAudioCommandType::load_song &&
+			load->cue == ClassicMusicCue::menu_main && load->parameter == 0U &&
+			play && play->type == ClassicAudioCommandType::play_song &&
+			play->cue == ClassicMusicCue::menu_main && play->parameter == 0U,
+			"Music Room track zero retains the canonical title-song identity");
+	}
+
 	auto changed_exit = make_scene();
 	if(changed_exit) {
 		release_to_controls(*changed_exit);
@@ -755,6 +771,29 @@ void local_original_gate(
 	if(!music) {
 		return;
 	}
+	auto unchanged_music = ClassicOpMusicRoomScene::create_from_imported_text(
+		*title_completion, {}, *music_resources, *imported_labels, *font
+	);
+	expect(unchanged_music.has_value(),
+		"authenticated unchanged-title-track Music Room constructs");
+	if(unchanged_music) {
+		release_to_controls(**unchanged_music);
+		expect((*unchanged_music)->advance({.controls = {.cancel = true}}).has_value() &&
+			(*unchanged_music)->advance().has_value(),
+			"unchanged-title-track Music Room exits normally");
+		auto unchanged_completion = (*unchanged_music)->take_completion();
+		expect(unchanged_completion.has_value(),
+			"unchanged-title-track Music Room publishes completion");
+		if(unchanged_completion) {
+			auto unchanged_return =
+				th03::app::ClassicOpTitleMenuScene::return_from_music_room(
+					*unchanged_completion, *title_resources, {}
+				);
+			expect(unchanged_return && (*unchanged_return)->advance().has_value() &&
+				!(*unchanged_return)->take_audio_command(),
+				"return preserves an already-playing title track without restart");
+		}
+	}
 	const auto has_ink = [&music](
 		Page page,
 		th03::present::Rect rect,
@@ -829,6 +868,18 @@ void local_original_gate(
 			!(*returned)->take_audio_command(),
 		"Music Room return starts the ordinary fast title without toggling state"
 	);
+	if(returned) {
+		expect((*returned)->advance().has_value(),
+			"non-title Music Room return reaches the fast black boundary");
+		const auto stop_title = (*returned)->take_audio_command();
+		const auto load_title = (*returned)->take_audio_command();
+		expect(stop_title && stop_title->type ==
+				ClassicAudioCommandType::stop_song &&
+			load_title && load_title->type ==
+				ClassicAudioCommandType::load_song &&
+			load_title->cue == ClassicMusicCue::menu_main,
+			"non-title Music Room track restarts title BGM on return");
+	}
 }
 
 } // namespace

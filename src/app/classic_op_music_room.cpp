@@ -920,16 +920,20 @@ ClassicOpMusicRoomScene::advance(const ClassicOpMusicRoomInput &input)
 		}
 		if(input.controls.ok || input.controls.shot) {
 			if(selection_ != choice_quit) {
+				const auto cue = selection_ == 0U ?
+					ClassicMusicCue::menu_main :
+					ClassicMusicCue::music_room_track;
+				const std::uint16_t parameter = selection_ == 0U ? 0U : selection_;
 				if(!push_audio_command({
 					.type = ClassicAudioCommandType::stop_song,
 				}) || !push_audio_command({
 					.type = ClassicAudioCommandType::load_song,
-					.cue = ClassicMusicCue::music_room_track,
-					.parameter = selection_,
+					.cue = cue,
+					.parameter = parameter,
 				}) || !push_audio_command({
 					.type = ClassicAudioCommandType::play_song,
-					.cue = ClassicMusicCue::music_room_track,
-					.parameter = selection_,
+					.cue = cue,
+					.parameter = parameter,
 				}) || !draw_comment(selection_) ||
 					!snapshot_comment_blue()) {
 					fail();

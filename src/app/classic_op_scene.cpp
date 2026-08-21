@@ -512,7 +512,8 @@ ClassicOpTitleMenuScene::return_from_music_room(
 	auto result = std::unique_ptr<ClassicOpTitleMenuScene>(
 		new ClassicOpTitleMenuScene(
 			std::move(*prepared), completion.resident(),
-			EntryPolicy::fullscreen_return, std::move(patch_assets)
+			EntryPolicy::fullscreen_return, std::move(patch_assets),
+			completion.carry().track_playing != 0U
 		)
 	);
 	if(result->phase_ == ClassicOpPhase::failed) {

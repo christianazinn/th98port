@@ -2891,9 +2891,20 @@ struct ClassicOpSessionBackend final {
 					ClassicOpSessionErrorCode::backend_contract_failed
 				));
 			}
-			auto returned = build_title(title_completion->resident());
+			auto resources = loader->load_op_title_menu();
+			if(!resources) {
+				return std::unexpected(resource_error(std::move(resources.error())));
+			}
+			auto returned = ClassicOpTitleMenuScene::return_from_other_screen(
+				title_completion->resident(), *resources, patch_assets, true
+			);
 			if(!returned) {
-				return std::unexpected(std::move(returned.error()));
+				return std::unexpected(title_error(std::move(returned.error())));
+			}
+			if(!drain_audio(**returned)) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::audio_command_pending
+				));
 			}
 			title = std::move(*returned);
 			high_score_menu.reset();
@@ -2915,9 +2926,20 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
-		auto returned = build_title(high_score_completion->resident());
+		auto resources = loader->load_op_title_menu();
+		if(!resources) {
+			return std::unexpected(resource_error(std::move(resources.error())));
+		}
+		auto returned = ClassicOpTitleMenuScene::return_from_other_screen(
+			high_score_completion->resident(), *resources, patch_assets, true
+		);
 		if(!returned) {
-			return std::unexpected(std::move(returned.error()));
+			return std::unexpected(title_error(std::move(returned.error())));
+		}
+		if(!drain_audio(**returned)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::audio_command_pending
+			));
 		}
 		title = std::move(*returned);
 		high_scores.reset();

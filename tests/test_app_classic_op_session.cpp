@@ -1186,6 +1186,26 @@ void test_surface_forwarding()
 		std::cerr << "local HiScore viewer did not publish the fresh title\n";
 		return false;
 	}
+	std::vector<ClassicAudioCommand> return_audio{};
+	for(std::size_t boundary = 0U; boundary < 2U; ++boundary) {
+		advanced = session.consume({});
+		if(!advanced || advanced->scene != ClassicOpSessionScene::title_menu) {
+			std::cerr << "local HiScore return did not retain the fast title\n";
+			return false;
+		}
+		while(auto command = session.take_audio_command()) {
+			return_audio.push_back(*command);
+		}
+	}
+	if(return_audio.size() != 3U ||
+		return_audio[0U].type != ClassicAudioCommandType::stop_song ||
+		return_audio[1U].type != ClassicAudioCommandType::load_song ||
+		return_audio[1U].cue != ClassicMusicCue::menu_main ||
+		return_audio[2U].type != ClassicAudioCommandType::play_song ||
+		return_audio[2U].cue != ClassicMusicCue::menu_main) {
+		std::cerr << "local HiScore return did not perform one retained title restart\n";
+		return false;
+	}
 
 	// The fresh title must own the automatic attract route rather than expose
 	// it to the launcher. Let its exact idle counter expire, run the ordinary
