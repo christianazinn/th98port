@@ -15,10 +15,29 @@ LOCALE_RE = re.compile(r"^[A-Za-z0-9]{2,8}(?:-[A-Za-z0-9]{1,8})*$")
 RUN_ID_RE = re.compile(
     r"^cutscene\.[a-z0-9]+(?:[.-][a-z0-9]+)*\.run\.[0-9]{3}$"
 )
+SOURCE_PROFILE_RE = re.compile(r"^th03-(?:original|english-overlay)-28$")
 
 
 class AuthorError(ValueError):
     pass
+
+
+def decode_vm_cells(encoded: bytes) -> str:
+    normalized = bytearray()
+    for offset in range(0, len(encoded), 2):
+        cell = encoded[offset:offset + 2]
+        if len(cell) != 2:
+            raise UnicodeDecodeError("cp932", encoded, offset, len(encoded), "odd VM cell")
+        first, second = cell
+        double = (
+            ((0x81 <= first <= 0x9F) or (0xE0 <= first <= 0xFC))
+            and ((0x40 <= second <= 0x7E) or (0x80 <= second <= 0xFC))
+        )
+        if double:
+            normalized.extend(cell)
+        else:
+            normalized.extend(0x20 if value == 0xA0 else value for value in cell)
+    return bytes(normalized).decode("cp932")
 
 
 def load_inventory(path: Path) -> dict[str, object]:
@@ -32,7 +51,8 @@ def load_inventory(path: Path) -> dict[str, object]:
         raise AuthorError("inventory fields do not match T3CTR001")
     if value.get("format") != INVENTORY_FORMAT:
         raise AuthorError("unsupported inventory format")
-    if value.get("source_profile") != "th03-original-28":
+    profile_name = value.get("source_profile")
+    if not isinstance(profile_name, str) or not SOURCE_PROFILE_RE.fullmatch(profile_name):
         raise AuthorError("unsupported source profile")
     profile = value.get("source_profile_fnv1a64")
     if not isinstance(profile, str) or not HEX64_RE.fullmatch(profile):
@@ -109,7 +129,13 @@ def make_author(
                 raise AuthorError(f"invalid run contract {script_id}/{ordinal}")
             try:
                 encoded = bytes.fromhex(encoded_hex)
-                text = encoded.decode("cp932")
+                # The authenticated English overlay uses 0xA0 as an 8-pixel
+                # blank. The renderer deliberately maps this otherwise
+                # undefined single byte to its blank glyph; Python exposes it
+                # as an unencodable private-use code point. Present translators
+                # with an ordinary space, which has identical runtime width and
+                # pixels and compiles back into the same two-byte VM cell shape.
+                text = decode_vm_cells(encoded)
             except (ValueError, UnicodeDecodeError) as error:
                 raise AuthorError(
                     f"invalid CP932 text {script_id}/{ordinal}: {error}"

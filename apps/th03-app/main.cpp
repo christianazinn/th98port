@@ -614,6 +614,7 @@ void print_usage()
 			"[--language-overlay <TH3EN.DAT>] "
 			"[--language-pack <locale.t3lang>] "
 			"[--game-text-pack <locale.t3gtl>] "
+			"[--cutscene-text-pack <locale.t3ctp>] "
 			"[--rhythm-rom <YM2608.ROM> | --rhythm-pcm <T98RHYTHM.PCM>] "
 			"[--tick-rate <ticks>/<seconds>] "
 			"[--smoke-ticks n] [--capture-replay <V13.RPY> "
@@ -677,6 +678,7 @@ const char *name(th03::app::ClassicRunnerErrorCode code) noexcept
 	case th03::app::ClassicRunnerErrorCode::replay_patch_assets_failed: return "replay-patch-assets-failed";
 	case th03::app::ClassicRunnerErrorCode::language_pack_failed: return "language-pack-failed";
 	case th03::app::ClassicRunnerErrorCode::game_text_pack_failed: return "game-text-pack-failed";
+	case th03::app::ClassicRunnerErrorCode::cutscene_text_pack_failed: return "cutscene-text-pack-failed";
 	case th03::app::ClassicRunnerErrorCode::session_failed: return "session-failed";
 	case th03::app::ClassicRunnerErrorCode::invalid_sample_order: return "invalid-sample-order";
 	case th03::app::ClassicRunnerErrorCode::runner_not_running: return "runner-not-running";
@@ -722,6 +724,8 @@ const char *name(th03::app::ClassicContentFile file) noexcept
 	case th03::app::ClassicContentFile::replay_patch_assets: return "azinn-dat";
 	case th03::app::ClassicContentFile::language_pack: return "language-pack";
 	case th03::app::ClassicContentFile::game_text_pack: return "game-text-pack";
+	case th03::app::ClassicContentFile::cutscene_text_pack:
+		return "cutscene-text-pack";
 	}
 	return "unknown";
 }
@@ -766,6 +770,8 @@ const char *name(th03::app::ClassicCliOption option) noexcept
 		return "language-pack";
 	case th03::app::ClassicCliOption::game_text_pack:
 		return "game-text-pack";
+	case th03::app::ClassicCliOption::cutscene_text_pack:
+		return "cutscene-text-pack";
 	case th03::app::ClassicCliOption::rhythm_rom: return "rhythm-rom";
 	case th03::app::ClassicCliOption::rhythm_pcm: return "rhythm-pcm";
 	case th03::app::ClassicCliOption::config: return "config";
@@ -1193,6 +1199,45 @@ const char *name(th03::app::NewClassicGameTextPackErrorCode code) noexcept
 	return "unknown";
 }
 
+const char *name(th03::app::NewClassicCutsceneTextPackErrorCode code) noexcept
+{
+	switch(code) {
+	case th03::app::NewClassicCutsceneTextPackErrorCode::invalid_path:
+		return "invalid-path";
+	case th03::app::NewClassicCutsceneTextPackErrorCode::source_status:
+		return "source-status";
+	case th03::app::NewClassicCutsceneTextPackErrorCode::source_not_regular:
+		return "source-not-regular";
+	case th03::app::NewClassicCutsceneTextPackErrorCode::source_size:
+		return "source-size";
+	case th03::app::NewClassicCutsceneTextPackErrorCode::source_open:
+		return "source-open";
+	case th03::app::NewClassicCutsceneTextPackErrorCode::source_read:
+		return "source-read";
+	case th03::app::NewClassicCutsceneTextPackErrorCode::header_shape:
+		return "header-shape";
+	case th03::app::NewClassicCutsceneTextPackErrorCode::body_digest_mismatch:
+		return "body-digest-mismatch";
+	case th03::app::NewClassicCutsceneTextPackErrorCode::locale_shape:
+		return "locale-shape";
+	case th03::app::NewClassicCutsceneTextPackErrorCode::directory_shape:
+		return "directory-shape";
+	case th03::app::NewClassicCutsceneTextPackErrorCode::message_shape:
+		return "message-shape";
+	case th03::app::NewClassicCutsceneTextPackErrorCode::malformed_shift_jis:
+		return "malformed-shift-jis";
+	case th03::app::NewClassicCutsceneTextPackErrorCode::source_profile_mismatch:
+		return "source-profile-mismatch";
+	case th03::app::NewClassicCutsceneTextPackErrorCode::script_mismatch:
+		return "script-mismatch";
+	case th03::app::NewClassicCutsceneTextPackErrorCode::run_mismatch:
+		return "run-mismatch";
+	case th03::app::NewClassicCutsceneTextPackErrorCode::allocation_failed:
+		return "allocation-failed";
+	}
+	return "unknown";
+}
+
 int fail(const char *stage, const th03::app::StartupSequenceError &error)
 {
 	std::cerr << "status=error\nstage=" << stage << "\ncode="
@@ -1331,6 +1376,20 @@ int fail(const char *stage, const th03::app::ClassicRunnerError &error)
 		if(error.game_text_pack_error->system) {
 			std::cerr << "game-text-pack-system="
 				<< error.game_text_pack_error->system.message() << '\n';
+		}
+	}
+	if(error.cutscene_text_pack_error) {
+		std::cerr << "cutscene-text-pack-code=" << name(
+			error.cutscene_text_pack_error->code
+		) << "\ncutscene-text-pack-offset="
+			<< error.cutscene_text_pack_error->offset
+			<< "\ncutscene-text-pack-script="
+			<< error.cutscene_text_pack_error->script_index
+			<< "\ncutscene-text-pack-run="
+			<< error.cutscene_text_pack_error->run_index << '\n';
+		if(error.cutscene_text_pack_error->system) {
+			std::cerr << "cutscene-text-pack-system="
+				<< error.cutscene_text_pack_error->system.message() << '\n';
 		}
 	}
 	if(error.surface_error) {
@@ -7224,6 +7283,39 @@ ExperienceRunResult run_new_classic_experience(
 		loaded_patch_assets->custom_game_text = std::make_shared<
 			const th03::app::NewClassicGameTextCatalog
 		>(std::move(*loaded_game_text));
+	}
+	if(!parsed.launch.content.cutscene_text_pack.empty()) {
+		if(parsed.launch.content.language_overlay.empty()) {
+			return {.exit_code = fail_output_gain(
+				"cutscene-text-pack", "english-overlay-required"
+			)};
+		}
+		auto loaded_cutscene_text =
+			th03::app::load_new_classic_cutscene_text_pack(
+				parsed.launch.content.cutscene_text_pack
+			);
+		if(!loaded_cutscene_text) {
+			std::cerr << "status=error\nstage=cutscene-text-pack\ncode="
+				<< name(loaded_cutscene_text.error().code)
+				<< "\noffset=" << loaded_cutscene_text.error().offset
+				<< "\nscript=" << loaded_cutscene_text.error().script_index
+				<< "\nrun=" << loaded_cutscene_text.error().run_index << '\n';
+			return {.exit_code = 1};
+		}
+		const auto expected_locale = loaded_patch_assets->custom_game_text ?
+			loaded_patch_assets->custom_game_text->locale() :
+			th03::app::new_classic_builtin_english_game_text().locale();
+		if(loaded_cutscene_text->locale() != expected_locale ||
+			(loaded_patch_assets->custom_messages &&
+				loaded_patch_assets->custom_messages->locale() !=
+					loaded_cutscene_text->locale())) {
+			return {.exit_code = fail_output_gain(
+				"cutscene-text-pack", "locale-mismatch"
+			)};
+		}
+		loaded_patch_assets->custom_cutscene_text = std::make_shared<
+			const th03::app::NewClassicCutsceneTextCatalog
+		>(std::move(*loaded_cutscene_text));
 	}
 	auto patch_assets = std::make_shared<
 		const th03::app::NewClassicReplayPatchAssets

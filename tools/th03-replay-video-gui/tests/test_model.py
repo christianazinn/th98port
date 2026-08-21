@@ -15,6 +15,10 @@ class RenderJobTests(unittest.TestCase):
         self.renderer.write_bytes(b"fixture")
         self.replay = self.root / "世界 record 06.rpy"
         self.replay.write_bytes(b"T3RPLY13")
+        self.game_text = self.root / "game text.t3gtl"
+        self.game_text.write_bytes(b"T3GTL001")
+        self.cutscene_text = self.root / "cutscene text.t3ctp"
+        self.cutscene_text.write_bytes(b"T3CTP001")
         self.data = self.root / "content files"
         self.data.mkdir()
         for name in ("MAIN.EXE", "MAINL.EXE", "FONT.ROM"):
@@ -40,6 +44,8 @@ class RenderJobTests(unittest.TestCase):
             music_volume=90, sfx_volume=85, encoder_label="HEVC NVIDIA NVENC",
             encoder_preset="p1", overwrite=True,
             staging_output=self.root / ".世界 partial.mkv",
+            game_text_pack=self.game_text,
+            cutscene_text_pack=self.cutscene_text,
         )
         command = job.command()
         self.assertEqual(command[0], str(self.renderer))
@@ -48,6 +54,10 @@ class RenderJobTests(unittest.TestCase):
         self.assertIn("--use-installed-settings", command)
         self.assertEqual(command[command.index("--encoder") + 1], "hevc_nvenc")
         self.assertEqual(command[command.index("--sfx-volume") + 1], "85")
+        self.assertEqual(
+            command[command.index("--cutscene-text-pack") + 1],
+            str(self.cutscene_text),
+        )
         self.assertEqual(
             command[command.index("--staging-output") + 1],
             str(self.root / ".世界 partial.mkv"),

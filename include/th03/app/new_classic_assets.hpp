@@ -16,6 +16,7 @@
 #include "th03/assets/types.hpp"
 #include "th03/app/new_classic_messages.hpp"
 #include "th03/app/new_classic_game_text.hpp"
+#include "th03/app/new_classic_cutscene_text.hpp"
 #include "th03/present/raster.hpp"
 #include "th03/present/source_surface.hpp"
 
@@ -150,6 +151,9 @@ struct NewClassicReplayPatchAssets final {
 	// Optional source-constrained T3GTL001 catalog. This owns only New Classic
 	// graphics text; Classic and authenticated Japanese source text ignore it.
 	std::shared_ptr<const NewClassicGameTextCatalog> custom_game_text{};
+	// Optional complete T3CTP001 scripted-dialogue catalog. The story owner
+	// validates all selected source scripts before publishing a localized run.
+	std::shared_ptr<const NewClassicCutsceneTextCatalog> custom_cutscene_text{};
 	[[nodiscard]] const NewClassicMessageCatalog &messages(
 		NewClassicLanguageAssetProfile profile =
 			NewClassicLanguageAssetProfile::english

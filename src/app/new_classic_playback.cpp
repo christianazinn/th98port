@@ -671,7 +671,9 @@ struct NewClassicReplayPlayback::Impl final {
 					.kotohime_compatibility = kotohime_compatibility,
 				},
 				loader, static_content, stage_text, staff_compiled, score_path,
-				legacy_score_path, std::move(process), std::move(driver)
+				legacy_score_path, std::move(process), std::move(driver),
+				patch_assets,
+				patch_assets ? patch_assets->custom_cutscene_text : nullptr
 			);
 			if(!created) {
 				auto error = playback_error(
@@ -881,6 +883,7 @@ NewClassicReplayPlayback::load_internal(
 		request.content.data_root
 	);
 	std::optional<NewClassicGameTextCatalog> custom_game_text{};
+	std::optional<NewClassicCutsceneTextCatalog> custom_cutscene_text{};
 	const NewClassicGameTextCatalog *game_text =
 		&new_classic_builtin_english_game_text();
 	if(!request.content.game_text_pack.empty()) {
@@ -906,6 +909,38 @@ NewClassicReplayPlayback::load_internal(
 		custom_game_text.emplace(std::move(*loaded));
 		game_text = &*custom_game_text;
 	}
+	if(!request.content.cutscene_text_pack.empty()) {
+		if(request.language != ClassicLanguage::english ||
+			request.content.language_overlay.empty()) {
+			auto error = playback_error(
+				NewClassicPlaybackErrorCode::cutscene_text_pack_failed
+			);
+			error.cutscene_text_pack = NewClassicCutsceneTextPackError{
+				.code = NewClassicCutsceneTextPackErrorCode::source_profile_mismatch,
+			};
+			return std::unexpected(std::move(error));
+		}
+		auto loaded = load_new_classic_cutscene_text_pack(
+			request.content.cutscene_text_pack
+		);
+		if(!loaded) {
+			auto error = playback_error(
+				NewClassicPlaybackErrorCode::cutscene_text_pack_failed
+			);
+			error.cutscene_text_pack = std::move(loaded.error());
+			return std::unexpected(std::move(error));
+		}
+		if(loaded->locale() != game_text->locale()) {
+			auto error = playback_error(
+				NewClassicPlaybackErrorCode::cutscene_text_pack_failed
+			);
+			error.cutscene_text_pack = NewClassicCutsceneTextPackError{
+				.code = NewClassicCutsceneTextPackErrorCode::locale_shape,
+			};
+			return std::unexpected(std::move(error));
+		}
+		custom_cutscene_text.emplace(std::move(*loaded));
+	}
 	if(request.language == ClassicLanguage::english) {
 		auto overlay = load_new_classic_language_overlay(
 			request.content.language_overlay
@@ -929,6 +964,49 @@ NewClassicReplayPlayback::load_internal(
 			*compiled, mainl_text->assets, unused_music,
 			*game_text
 		);
+	}
+	if(custom_cutscene_text) {
+		auto profile = std::uint64_t{14695981039346656037ULL};
+		for(std::size_t index = 0U;
+			index < new_classic_cutscene_script_count; ++index) {
+			auto loaded = loader->load({
+				.role = MainResourceRole::cutscene_script,
+				.cutscene_script = static_cast<MainCutsceneScript>(index + 1U),
+			});
+			if(!loaded) {
+				auto error = playback_error(
+					NewClassicPlaybackErrorCode::resource_failed
+				);
+				error.resource = std::move(loaded.error());
+				return std::unexpected(std::move(error));
+			}
+			const auto bytes = std::span<const std::byte>{**loaded};
+			const auto source = std::span<const std::uint8_t>{
+				reinterpret_cast<const std::uint8_t *>(bytes.data()), bytes.size()
+			};
+			for(const auto value : source) {
+				profile ^= value;
+				profile *= 1099511628211ULL;
+			}
+			if(auto replacements =
+				custom_cutscene_text->replacement_glyphs(index, source);
+				!replacements) {
+				auto error = playback_error(
+					NewClassicPlaybackErrorCode::cutscene_text_pack_failed
+				);
+				error.cutscene_text_pack = std::move(replacements.error());
+				return std::unexpected(std::move(error));
+			}
+		}
+		if(profile != custom_cutscene_text->source_profile_fnv1a64()) {
+			auto error = playback_error(
+				NewClassicPlaybackErrorCode::cutscene_text_pack_failed
+			);
+			error.cutscene_text_pack = NewClassicCutsceneTextPackError{
+				.code = NewClassicCutsceneTextPackErrorCode::source_profile_mismatch,
+			};
+			return std::unexpected(std::move(error));
+		}
 	}
 	auto static_resources = loader->load_main_static();
 	if(!static_resources) {
@@ -966,6 +1044,12 @@ NewClassicReplayPlayback::load_internal(
 		loaded_patch_assets->custom_game_text =
 			std::make_shared<const NewClassicGameTextCatalog>(
 				std::move(*custom_game_text)
+			);
+	}
+	if(custom_cutscene_text) {
+		loaded_patch_assets->custom_cutscene_text =
+			std::make_shared<const NewClassicCutsceneTextCatalog>(
+				std::move(*custom_cutscene_text)
 			);
 	}
 	auto patch_assets = std::make_shared<const NewClassicReplayPatchAssets>(

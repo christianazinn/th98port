@@ -349,8 +349,12 @@ Scripted cutscene and ending dialogue is inventoried separately by
 authenticated scripts and emits deterministic `T3CTR001` run identities;
 `tools/localization/make_cutscene_text_author.py` turns that local inventory
 into a UTF-8 translator scaffold without copying or rewriting source control
-streams. See `docs/NEW_CLASSIC_CUTSCENE_TEXT.md`. Runtime replacement is the
-next source-constrained localization parcel.
+streams. `compile_cutscene_text_pack.py` compiles the complete catalog into
+deterministic `T3CTP001`; `--cutscene-text-pack <locale.t3ctp>` applies it in
+the game and replay renderer only after all 28 selected source scripts validate.
+Replacement occurs on decoded glyph operations, never in the script byte
+stream, so translated punctuation cannot become a command. See
+`docs/NEW_CLASSIC_CUTSCENE_TEXT.md`.
 The developer-only Dopamine Arrange prototype is selected with
 `--new-classic --arrange dopamine-test-v1`, or by launching the maintained
 standalone as `PoDD-Port-Test.exe --arrange dopamine-test-v1`. Its title is

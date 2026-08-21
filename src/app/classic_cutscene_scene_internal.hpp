@@ -8,10 +8,12 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <vector>
 
 #include "th03/app/authentic_text.hpp"
 #include "th03/app/classic_audio.hpp"
 #include "th03/app/resources.hpp"
+#include "th03/app/new_classic_cutscene_text.hpp"
 #include "th03/assets/types.hpp"
 #include "th03/present/cutscene_raster.hpp"
 #include "th03/present/cutscene_script.hpp"
@@ -43,6 +45,7 @@ enum class ClassicCutsceneErrorCode : std::uint8_t {
 	invalid_asset_geometry,
 	font_prepare_failed,
 	script_failed,
+	localized_script_failed,
 	raster_failed,
 	unknown_picture,
 	unknown_music,
@@ -55,6 +58,7 @@ struct ClassicCutsceneError final {
 	std::optional<MainResourceKey> resource{};
 	std::optional<assets::AssetError> asset_error{};
 	std::optional<present::CutsceneScriptError> script_error{};
+	std::optional<NewClassicCutsceneTextPackError> cutscene_text_error{};
 	std::optional<present::CutsceneRasterError> raster_error{};
 };
 
@@ -103,7 +107,8 @@ public:
 		MainlCutsceneResourceRequest request,
 		std::span<const LoadedMainResource> resources,
 		const present::AnkGlyphProvider &font,
-		present::Raster initial_raster
+		present::Raster initial_raster,
+		const NewClassicCutsceneTextCatalog *localized_text = nullptr
 	);
 	~ClassicCutsceneScene();
 
@@ -145,6 +150,8 @@ private:
 		MainlCutsceneResourceRequest request{};
 		std::optional<PreparedGameftGaiji> gaiji{};
 		std::optional<present::CutsceneScriptVm> vm{};
+		std::vector<std::array<std::uint8_t, 2U>> localized_glyphs{};
+		std::size_t localized_script_index = new_classic_cutscene_script_count;
 		std::array<assets::PiImage, 24U> pictures{};
 	};
 
@@ -161,7 +168,8 @@ private:
 		std::span<const LoadedMainResource> resources,
 		const present::AnkGlyphProvider &font,
 		present::Raster initial_raster,
-		bool authenticate_resource_bytes
+		bool authenticate_resource_bytes,
+		const NewClassicCutsceneTextCatalog *localized_text
 	);
 
 	[[nodiscard]] std::expected<void, ClassicCutsceneError>
@@ -196,6 +204,7 @@ private:
 	std::optional<present::CutsceneRasterPresenter> presenter_{};
 	present::CutsceneScriptBatch batch_{};
 	std::uint8_t batch_index_ = 0U;
+	std::size_t localized_glyph_index_ = 0U;
 	bool batch_active_ = false;
 	bool began_vm_ = false;
 	bool prelude_started_ = false;
@@ -226,11 +235,13 @@ struct ClassicCutsceneSceneTestAccess final {
 		MainlCutsceneResourceRequest request,
 		std::span<const LoadedMainResource> resources,
 		const present::AnkGlyphProvider &font,
-		present::Raster initial_raster
+		present::Raster initial_raster,
+		const NewClassicCutsceneTextCatalog *localized_text = nullptr
 	)
 	{
 		return ClassicCutsceneScene::create_impl(
-			request, resources, font, std::move(initial_raster), false
+			request, resources, font, std::move(initial_raster), false,
+			localized_text
 		);
 	}
 

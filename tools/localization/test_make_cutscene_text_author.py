@@ -82,6 +82,16 @@ class CutsceneAuthorTests(unittest.TestCase):
                 with self.assertRaises(cutscene_author.AuthorError):
                     cutscene_author.make_author(invalid, "ja-JP", "")
 
+    def test_english_overlay_blank_is_author_friendly(self) -> None:
+        source = inventory()
+        source["source_profile"] = "th03-english-overlay-28"
+        source["scripts"][0]["runs"][0]["cp932_hex"] = "A0A04142"
+        author = cutscene_author.make_author(source, "en-US", "")
+        self.assertEqual(
+            author["messages"]["cutscene.dm0.reimu.run.000"]["text"],
+            "  AB",
+        )
+
     def test_locale_contract(self) -> None:
         source = inventory()
         with self.assertRaises(cutscene_author.AuthorError):

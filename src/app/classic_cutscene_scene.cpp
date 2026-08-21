@@ -237,11 +237,13 @@ ClassicCutsceneScene::create(
 	MainlCutsceneResourceRequest request,
 	std::span<const LoadedMainResource> resources,
 	const present::AnkGlyphProvider &font,
-	present::Raster initial_raster
+	present::Raster initial_raster,
+	const NewClassicCutsceneTextCatalog *localized_text
 )
 {
 	return create_impl(
-		request, resources, font, std::move(initial_raster), true
+		request, resources, font, std::move(initial_raster), true,
+		localized_text
 	);
 }
 
@@ -251,7 +253,8 @@ ClassicCutsceneScene::create_impl(
 	std::span<const LoadedMainResource> resources,
 	const present::AnkGlyphProvider &font,
 	present::Raster initial_raster,
-	bool authenticate_resource_bytes
+	bool authenticate_resource_bytes,
+	const NewClassicCutsceneTextCatalog *localized_text
 )
 {
 	if(initial_raster.raster_mode() != present::RasterMode::lines_400) {
@@ -310,6 +313,29 @@ ClassicCutsceneScene::create_impl(
 		reinterpret_cast<const std::uint8_t *>(script_bytes.data()),
 		script_bytes.size(),
 	};
+	if(localized_text) {
+		const auto script_value = static_cast<std::size_t>(
+			script_key.cutscene_script
+		);
+		if(script_value == 0U ||
+			script_value > new_classic_cutscene_script_count) {
+			return std::unexpected(cutscene_error(
+				ClassicCutsceneErrorCode::invalid_request, script_key
+			));
+		}
+		auto replacements = localized_text->replacement_glyphs(
+			script_value - 1U, script
+		);
+		if(!replacements) {
+			auto result = cutscene_error(
+				ClassicCutsceneErrorCode::localized_script_failed, script_key
+			);
+			result.cutscene_text_error.emplace(std::move(replacements.error()));
+			return std::unexpected(std::move(result));
+		}
+		prepared->localized_glyphs = std::move(*replacements);
+		prepared->localized_script_index = script_value - 1U;
+	}
 	auto vm = present::CutsceneScriptVm::create(script);
 	if(!vm) {
 		return std::unexpected(script_error(vm.error()));
@@ -765,6 +791,37 @@ ClassicCutsceneScene::load_next_batch(
 	input_sampled = true;
 	if(!batch) {
 		return std::unexpected(script_error(batch.error()));
+	}
+	const auto localized_error = [&]() {
+		auto result = cutscene_error(
+			ClassicCutsceneErrorCode::localized_script_failed
+		);
+		result.cutscene_text_error.emplace(NewClassicCutsceneTextPackError{
+			.code = NewClassicCutsceneTextPackErrorCode::run_mismatch,
+			.offset = prepared_->vm->byte_offset(),
+			.script_index = prepared_->localized_script_index,
+			.run_index = localized_glyph_index_,
+		});
+		return result;
+	};
+	for(std::size_t index = 0U; index < batch->count; ++index) {
+		if(auto *glyph = std::get_if<present::CutsceneDrawGlyph>(
+			&batch->storage[index]
+		)) {
+			if(!prepared_->localized_glyphs.empty()) {
+				if(localized_glyph_index_ >= prepared_->localized_glyphs.size()) {
+					return std::unexpected(localized_error());
+				}
+				glyph->shift_jis =
+					prepared_->localized_glyphs[localized_glyph_index_++];
+			}
+		}
+		if(std::holds_alternative<present::CutsceneFinish>(
+			batch->storage[index]
+		) && !prepared_->localized_glyphs.empty() &&
+			localized_glyph_index_ != prepared_->localized_glyphs.size()) {
+			return std::unexpected(localized_error());
+		}
 	}
 	batch_ = std::move(*batch);
 	batch_index_ = 0U;

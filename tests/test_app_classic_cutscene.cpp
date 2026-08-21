@@ -1,5 +1,7 @@
 #include "../src/app/classic_cutscene_scene_internal.hpp"
 
+#include "th03/app/new_classic_language.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -429,9 +431,31 @@ void test_timed_presenter_operations()
 	return result;
 }
 
-void test_local_original_scripts(const std::filesystem::path &content_root)
+void test_local_scripts(
+	const std::filesystem::path &content_root,
+	const std::filesystem::path &language_overlay = {},
+	const std::filesystem::path &cutscene_text_pack = {}
+)
 {
 	MainResourceLoader loader(content_root);
+	std::optional<NewClassicCutsceneTextCatalog> catalog{};
+	if(!language_overlay.empty()) {
+		auto overlay = load_new_classic_language_overlay(language_overlay);
+		expect(overlay.has_value(), "local language overlay authenticates");
+		if(!overlay || !loader.install_authenticated_overrides(
+			std::move(*overlay).release_members()
+		)) {
+			return;
+		}
+	}
+	if(!cutscene_text_pack.empty()) {
+		auto loaded = load_new_classic_cutscene_text_pack(cutscene_text_pack);
+		expect(loaded.has_value(), "local cutscene text pack authenticates");
+		if(!loaded) {
+			return;
+		}
+		catalog.emplace(std::move(*loaded));
+	}
 	const TestFont font{};
 	for(const auto request : stock_requests()) {
 		auto resources = loader.load_mainl_cutscene(request);
@@ -440,7 +464,8 @@ void test_local_original_scripts(const std::filesystem::path &content_root)
 			continue;
 		}
 		auto created = ClassicCutsceneScene::create(
-			request, *resources, font, Raster{}
+			request, *resources, font, Raster{},
+			catalog ? &*catalog : nullptr
 		);
 		expect(created.has_value(), "local stock scene constructs atomically");
 		if(!created) {
@@ -462,6 +487,24 @@ void test_local_original_scripts(const std::filesystem::path &content_root)
 			});
 			expect(advanced.has_value(), "local stock scene step succeeds");
 			if(!advanced) {
+				std::cerr << "cutscene request kind="
+					<< static_cast<unsigned int>(request.kind)
+					<< " character="
+					<< static_cast<unsigned int>(request.character)
+					<< " error="
+					<< static_cast<unsigned int>(advanced.error().code);
+				if(advanced.error().raster_error) {
+					std::cerr << " raster=" << static_cast<unsigned int>(
+						advanced.error().raster_error->code
+					);
+					if(advanced.error().raster_error->text_error) {
+						std::cerr << " text=" << static_cast<unsigned int>(
+							advanced.error().raster_error->text_error->code
+						) << " text-offset="
+							<< advanced.error().raster_error->text_error->byte_offset;
+					}
+				}
+				std::cerr << '\n';
 				break;
 			}
 		}
@@ -481,9 +524,15 @@ int main(int argc, char **argv)
 	test_measure_latch_and_audio_queue();
 	test_timed_presenter_operations();
 	if(argc == 2) {
-		test_local_original_scripts(std::filesystem::path(argv[1]));
+		test_local_scripts(std::filesystem::path(argv[1]));
+	} else if(argc == 4) {
+		test_local_scripts(
+			std::filesystem::path(argv[1]), std::filesystem::path(argv[2]),
+			std::filesystem::path(argv[3])
+		);
 	} else {
-		expect(argc == 1, "optional local gate accepts one content root");
+		expect(argc == 1,
+			"optional local gate accepts a root or root/overlay/text-pack triple");
 	}
 
 	if(failures != 0U) {

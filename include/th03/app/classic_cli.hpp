@@ -28,6 +28,7 @@ enum class ClassicCliOption : std::uint8_t {
 	language_overlay,
 	language_pack,
 	game_text_pack,
+	cutscene_text_pack,
 	rhythm_rom,
 	rhythm_pcm,
 	config,

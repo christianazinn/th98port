@@ -65,6 +65,7 @@ enum class ClassicStorySessionErrorCode : std::uint8_t {
 	mainl_text_failed,
 	win_failed,
 	cutscene_failed,
+	cutscene_text_failed,
 	staff_failed,
 	registration_failed,
 	score_store_failed,
@@ -86,6 +87,7 @@ struct ClassicStorySessionError final {
 	std::optional<ClassicMainlStageError> stage_error{};
 	std::optional<ClassicMainlWinError> win_error{};
 	std::optional<ClassicCutsceneError> cutscene_error{};
+	std::optional<NewClassicCutsceneTextPackError> cutscene_text_error{};
 	std::optional<ClassicStaffError> staff_error{};
 	std::optional<ClassicRegistrationError> registration_error{};
 	std::optional<NewClassicScoreStoreError> new_score_store_error{};
@@ -267,7 +269,9 @@ public:
 		std::filesystem::path score_path,
 		std::filesystem::path legacy_score_path,
 		std::unique_ptr<MainProcess> process,
-		std::unique_ptr<MainProcessDriver> driver
+		std::unique_ptr<MainProcessDriver> driver,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {},
+		std::shared_ptr<const NewClassicCutsceneTextCatalog> cutscene_text = {}
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicStorySession>,
@@ -341,7 +345,8 @@ private:
 		std::filesystem::path score_path,
 		NewClassicReplayRecorder *replay_recorder,
 		std::filesystem::path legacy_score_path = {},
-		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {}
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {},
+		std::shared_ptr<const NewClassicCutsceneTextCatalog> cutscene_text = {}
 	);
 
 	std::unique_ptr<Impl> impl_;

@@ -37,6 +37,7 @@ enum class NewClassicPlaybackErrorCode : std::uint8_t {
 	mainl_content_failed,
 	language_overlay_failed,
 	game_text_pack_failed,
+	cutscene_text_pack_failed,
 	replay_patch_assets_failed,
 	static_content_failed,
 	resource_failed,
@@ -53,6 +54,7 @@ struct NewClassicPlaybackError final {
 	std::optional<MainCompiledContentError> compiled_content{};
 	std::optional<NewClassicLanguageOverlayError> language_overlay{};
 	std::optional<NewClassicGameTextPackError> game_text_pack{};
+	std::optional<NewClassicCutsceneTextPackError> cutscene_text_pack{};
 	std::optional<NewClassicAssetsError> replay_patch_assets{};
 	std::optional<ResourceLoadError> resource{};
 	std::optional<MainProcessError> process{};

@@ -78,13 +78,17 @@ external cutscene/interstitial scripts. A localized catalog replaces glyph
 runs while the authenticated source script retains commands, waits, page
 changes, and audio timing. Translators never edit binary control streams.
 
-Status: the inventory/authoring half is implemented. `th03-cutscene-text`
+Status: implemented. `th03-cutscene-text`
 drives the production VM over all 28 authenticated scripts and emits stable
 `T3CTR001` run identity, geometry, CP932, and source-digest metadata;
 `make_cutscene_text_author.py` validates it and writes the deterministic UTF-8
-`T3CTR-AUTHOR-1` scaffold. The authenticated corpus produces 1,533 runs and
-25,849 glyphs with a 39-glyph maximum run. Runtime compilation/substitution is
-the next parcel and must preserve the source command and timing stream.
+`T3CTR-AUTHOR-1` scaffold. `compile_cutscene_text_pack.py` freezes a complete,
+source-bound `T3CTP001` catalog, and the game plus replay renderer substitute
+only semantic glyph operations after the authenticated VM parses them. The
+authenticated Japanese corpus produces 1,533 runs and 25,849 glyphs with a
+39-glyph maximum run; the English overlay produces 1,732 runs and 32,847
+source glyph cells. Both complete profiles validate. Commands and timing are
+never sourced from translated bytes.
 
 Character-select name bitmaps and other text baked into otherwise reusable
 images follow after the text renderer can reproduce their layout. Menu headings
@@ -206,7 +210,7 @@ display, not silently substitute a later account rename.
 ## Suggested immediate execution order
 
 1. Freeze `T3GTL001` and migrate static in-game English text out of C++ tables.
-2. Add external pack loading and the cutscene text-run extractor/compiler.
+2. ~~Add external pack loading and the cutscene text-run extractor/compiler.~~
 3. Build the replay renderer's machine progress protocol and GUI package.
 4. Add the explicit ruleset seam and Dopamine Arrange developer prototype.
 5. Continue the remaining text/image decoupling and preview/audit tools.

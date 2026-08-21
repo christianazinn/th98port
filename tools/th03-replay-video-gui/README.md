@@ -9,7 +9,9 @@ The initial interface selects a finalized V13 replay, extracted game-data
 directory, MKV destination, 8:5 resolution, NVENC/software encoder, quality
 preset, language, flash policy, and independent 5%-step audio levels. Installed
 `PODD.CFG` values are inherited by default and explicit GUI values override
-them field by field.
+them field by field. Advanced inputs accept compiled `T3GTL001` in-game text
+and `T3CTP001` scripted-dialogue packs; the frontend passes both through to the
+same authenticated renderer path used by the game.
 
 The game-data directory is the same complete external content root accepted by
 the CLI: it contains at least `MAIN.EXE`, `MAINL.EXE`, and `FONT.ROM`, plus the

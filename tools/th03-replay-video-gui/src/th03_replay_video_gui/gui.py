@@ -30,7 +30,8 @@ from .protocol import ProgressEvent, ProgressTracker, parse_progress_line
 APP_NAME = "TH03 Replay Renderer"
 REPLAY_FILTER = (("TH03 V13 replay", "*.rpy"), ("All files", "*.*"))
 VIDEO_FILTER = (("Matroska video", "*.mkv"),)
-PACK_FILTER = (("Compiled T3GTL001 language", "*.t3lang"), ("All files", "*.*"))
+GAME_TEXT_FILTER = (("Compiled T3GTL001 game text", "*.t3gtl"), ("All files", "*.*"))
+CUTSCENE_TEXT_FILTER = (("Compiled T3CTP001 cutscene text", "*.t3ctp"), ("All files", "*.*"))
 
 
 def _preferences_path() -> Path:
@@ -82,6 +83,7 @@ class ReplayRendererApp:
         self.music = tk.StringVar(value=preferences.get("music", "Installed"))
         self.sfx = tk.StringVar(value=preferences.get("sfx", "Installed"))
         self.game_text_pack = tk.StringVar()
+        self.cutscene_text_pack = tk.StringVar()
         self.status = tk.StringVar(value="Ready")
         self.phase = tk.StringVar(value="Choose a replay and output file.")
         self.timing = tk.StringVar(value="")
@@ -167,6 +169,15 @@ class ReplayRendererApp:
         ttk.Button(advanced, text="Browse...", command=self._choose_game_text).grid(
             row=1, column=2, pady=(7, 0)
         )
+        ttk.Label(advanced, text="Cutscene text pack").grid(
+            row=2, column=0, sticky="w", pady=(7, 0)
+        )
+        ttk.Entry(advanced, textvariable=self.cutscene_text_pack).grid(
+            row=2, column=1, sticky="ew", padx=(10, 6), pady=(7, 0)
+        )
+        ttk.Button(advanced, text="Browse...", command=self._choose_cutscene_text).grid(
+            row=2, column=2, pady=(7, 0)
+        )
 
         ttk.Separator(outer).pack(fill="x", pady=14)
         progress = ttk.Frame(outer)
@@ -239,7 +250,7 @@ class ReplayRendererApp:
         for variable in (
             self.replay, self.output, self.data, self.ffmpeg, self.resolution,
             self.encoder, self.preset, self.language, self.flash, self.master,
-            self.music, self.sfx, self.game_text_pack,
+            self.music, self.sfx, self.game_text_pack, self.cutscene_text_pack,
         ):
             variable.trace_add("write", lambda *_args: self._update_command_preview())
         self.installed_settings.trace_add(
@@ -288,9 +299,18 @@ class ReplayRendererApp:
             self.ffmpeg.set(selected)
 
     def _choose_game_text(self) -> None:
-        selected = filedialog.askopenfilename(title="Choose Game Text Pack", filetypes=PACK_FILTER)
+        selected = filedialog.askopenfilename(
+            title="Choose Game Text Pack", filetypes=GAME_TEXT_FILTER
+        )
         if selected:
             self.game_text_pack.set(selected)
+
+    def _choose_cutscene_text(self) -> None:
+        selected = filedialog.askopenfilename(
+            title="Choose Cutscene Text Pack", filetypes=CUTSCENE_TEXT_FILTER
+        )
+        if selected:
+            self.cutscene_text_pack.set(selected)
 
     def _job(
         self, overwrite: bool = False, staging_output: Path | None = None,
@@ -304,6 +324,9 @@ class ReplayRendererApp:
             self.flash.get()
         ]
         pack = Path(self.game_text_pack.get()) if self.game_text_pack.get() else None
+        cutscene_pack = (
+            Path(self.cutscene_text_pack.get()) if self.cutscene_text_pack.get() else None
+        )
         return RenderJob(
             renderer=self.renderer,
             replay=Path(self.replay.get()),
@@ -320,6 +343,7 @@ class ReplayRendererApp:
             music_volume=_volume_from_text(self.music.get()),
             sfx_volume=_volume_from_text(self.sfx.get()),
             game_text_pack=pack,
+            cutscene_text_pack=cutscene_pack,
             staging_output=staging_output,
             overwrite=overwrite,
         )

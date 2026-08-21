@@ -878,6 +878,7 @@ endif()
 add_library(th03_app_content STATIC
 	src/app/authentic_text.cpp
 	src/app/main_compiled_content.cpp
+	src/app/new_classic_cutscene_text.cpp
 	src/app/new_classic_game_text.cpp
 )
 target_include_directories(th03_app_content PUBLIC include)
@@ -1098,7 +1099,7 @@ th03_set_warnings(th03-replay-check)
 
 add_executable(th03-cutscene-text apps/th03-cutscene-text/main.cpp)
 target_link_libraries(
-	th03-cutscene-text PRIVATE th03_app_resources th03_present
+	th03-cutscene-text PRIVATE th03_app_main
 )
 th03_set_warnings(th03-cutscene-text)
 
@@ -1327,6 +1328,11 @@ if(BUILD_TESTING)
 			NAME th03-cutscene-text-author-tests
 			COMMAND ${Python3_EXECUTABLE}
 				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_make_cutscene_text_author.py
+		)
+		add_test(
+			NAME th03-cutscene-text-compiler-tests
+			COMMAND ${Python3_EXECUTABLE}
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_compile_cutscene_text_pack.py
 		)
 	endif()
 	add_test(NAME th03-cutscene-text-help COMMAND th03-cutscene-text --help)
@@ -2142,6 +2148,18 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-main-compiled-content-tests
 		COMMAND th03-app-main-compiled-content-tests
+	)
+
+	add_executable(th03-app-new-classic-cutscene-text-tests
+		tests/test_app_new_classic_cutscene_text.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-cutscene-text-tests PRIVATE th03_app_content
+	)
+	th03_set_warnings(th03-app-new-classic-cutscene-text-tests)
+	add_test(
+		NAME th03-app-new-classic-cutscene-text-tests
+		COMMAND th03-app-new-classic-cutscene-text-tests
 	)
 
 	add_executable(th03-app-main-process-tests

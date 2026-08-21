@@ -5,12 +5,16 @@
 #include <iomanip>
 #include <iostream>
 #include <new>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "th03/app/resources.hpp"
+#include "th03/app/new_classic_language.hpp"
+#include "th03/app/new_classic_cutscene_text.hpp"
 #include "th03/present/cutscene_script.hpp"
 
 namespace {
@@ -71,6 +75,8 @@ void usage()
 {
 	std::cout
 		<< "usage: th03-cutscene-text --data <extracted-content-root>\n"
+		<< "       [--language-overlay <authenticated-TH3EN.DAT>]\n"
+		<< "       [--cutscene-text-pack <compiled-T3CTP001>]\n"
 		<< "\n"
 		<< "Emits one deterministic T3CTR001 JSON inventory to stdout. The\n"
 		<< "source text is CP932 hex in the external report; do not commit an\n"
@@ -91,14 +97,54 @@ int main(int argc, char **argv)
 		usage();
 		return 0;
 	}
-	if(argc != 3 || std::string_view(argv[1]) != "--data" ||
+	if((argc < 3 || argc > 7 || (argc & 1) == 0) ||
+		std::string_view(argv[1]) != "--data" ||
 		std::string_view(argv[2]).empty()) {
 		usage();
 		return 2;
 	}
+	std::optional<fs::path> language_overlay{};
+	std::optional<fs::path> cutscene_text_pack{};
+	for(int index = 3; index < argc; index += 2) {
+		const auto option = std::string_view(argv[index]);
+		if(std::string_view(argv[index + 1]).empty() ||
+			(option == "--language-overlay" && language_overlay) ||
+			(option == "--cutscene-text-pack" && cutscene_text_pack)) {
+			usage();
+			return 2;
+		}
+		if(option == "--language-overlay") {
+			language_overlay.emplace(argv[index + 1]);
+		} else if(option == "--cutscene-text-pack") {
+			cutscene_text_pack.emplace(argv[index + 1]);
+		} else {
+			usage();
+			return 2;
+		}
+	}
 
 	try {
 		th03::app::MainResourceLoader loader{fs::path(argv[2])};
+		if(language_overlay) {
+			auto overlay = th03::app::load_new_classic_language_overlay(
+				*language_overlay
+			);
+			if(!overlay || !loader.install_authenticated_overrides(
+				std::move(*overlay).release_members()
+			)) {
+				return fail("language-overlay");
+			}
+		}
+		std::optional<th03::app::NewClassicCutsceneTextCatalog> catalog{};
+		if(cutscene_text_pack) {
+			auto loaded = th03::app::load_new_classic_cutscene_text_pack(
+				*cutscene_text_pack
+			);
+			if(!loaded) {
+				return fail("cutscene-text-pack", loaded.error().offset);
+			}
+			catalog.emplace(std::move(*loaded));
+		}
 		std::vector<ScriptReport> reports{};
 		reports.reserve(script_identifiers.size());
 		auto profile_fnv1a64 = fnv_offset;
@@ -134,6 +180,12 @@ int main(int argc, char **argv)
 			if(runs->empty()) {
 				return fail("script-empty", index);
 			}
+			if(catalog) {
+				auto replacements = catalog->replacement_glyphs(index, source);
+				if(!replacements) {
+					return fail("cutscene-text-materialize", index);
+				}
+			}
 			reports.push_back(ScriptReport{
 				.identifier = script_identifiers[index],
 				.filename = std::string(spec->filename),
@@ -142,9 +194,15 @@ int main(int argc, char **argv)
 				.runs = std::move(*runs),
 			});
 		}
+		if(catalog &&
+			catalog->source_profile_fnv1a64() != profile_fnv1a64) {
+			return fail("cutscene-text-profile");
+		}
 
 		std::cout << "{\n  \"format\": \"T3CTR001\",\n"
-			<< "  \"source_profile\": \"th03-original-28\",\n"
+			<< "  \"source_profile\": \"th03-"
+			<< (language_overlay ? "english-overlay" : "original")
+			<< "-28\",\n"
 			<< "  \"source_profile_fnv1a64\": \"";
 		print_hex_u64(profile_fnv1a64);
 		std::cout << "\",\n  \"scripts\": [\n";

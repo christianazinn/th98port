@@ -1080,6 +1080,54 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
+		if(language == ClassicLanguage::english && patch_assets &&
+			patch_assets->custom_cutscene_text) {
+			auto profile = std::uint64_t{14695981039346656037ULL};
+			for(std::size_t index = 0U;
+				index < new_classic_cutscene_script_count; ++index) {
+				auto loaded = loader->load({
+					.role = MainResourceRole::cutscene_script,
+					.cutscene_script = static_cast<MainCutsceneScript>(index + 1U),
+				});
+				if(!loaded) {
+					return std::unexpected(resource_error(
+						std::move(loaded.error())
+					));
+				}
+				const auto bytes = std::span<const std::byte>{**loaded};
+				const auto source = std::span<const std::uint8_t>{
+					reinterpret_cast<const std::uint8_t *>(bytes.data()),
+					bytes.size(),
+				};
+				for(const auto value : source) {
+					profile ^= value;
+					profile *= 1099511628211ULL;
+				}
+				if(auto replacements =
+					patch_assets->custom_cutscene_text->replacement_glyphs(index, source);
+					!replacements) {
+					ClassicStorySessionError nested{
+						.code = ClassicStorySessionErrorCode::cutscene_text_failed,
+					};
+					nested.cutscene_text_error.emplace(
+						std::move(replacements.error())
+					);
+					return std::unexpected(story_error(std::move(nested)));
+				}
+			}
+			if(profile !=
+				patch_assets->custom_cutscene_text->source_profile_fnv1a64()) {
+				ClassicStorySessionError nested{
+					.code = ClassicStorySessionErrorCode::cutscene_text_failed,
+				};
+				nested.cutscene_text_error.emplace(
+					NewClassicCutsceneTextPackError{
+						.code = NewClassicCutsceneTextPackErrorCode::source_profile_mismatch,
+					}
+				);
+				return std::unexpected(story_error(std::move(nested)));
+			}
+		}
 		compiled = *japanese_compiled;
 		stage_text = *japanese_stage_text;
 		op_music_labels = *japanese_op_music_labels;
@@ -3092,7 +3140,9 @@ struct ClassicOpSessionBackend final {
 			story_config, loader, static_content, stage_text, staff_compiled,
 			replay_recorder ? new_classic_score_path : score_path,
 			replay_recorder, replay_recorder ? score_path : std::filesystem::path{},
-			patch_assets
+			patch_assets,
+			(config.language == ClassicLanguage::english && patch_assets) ?
+				patch_assets->custom_cutscene_text : nullptr
 		);
 		if(!created) {
 			return std::unexpected(story_error(std::move(created.error())));
@@ -3158,7 +3208,9 @@ struct ClassicOpSessionBackend final {
 				replay_recorder ? new_classic_score_path : score_path,
 				replay_recorder,
 				replay_recorder ? score_path : std::filesystem::path{},
-				patch_assets
+				patch_assets,
+				(config.language == ClassicLanguage::english && patch_assets) ?
+					patch_assets->custom_cutscene_text : nullptr
 			);
 			if(!created) {
 				return std::unexpected(story_error(std::move(created.error())));

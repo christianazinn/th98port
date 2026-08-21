@@ -70,6 +70,17 @@ namespace {
 	return result;
 }
 
+[[nodiscard]] ClassicStorySessionError cutscene_text_error(
+	NewClassicCutsceneTextPackError error
+)
+{
+	auto result = session_error(
+		ClassicStorySessionErrorCode::cutscene_text_failed
+	);
+	result.cutscene_text_error.emplace(std::move(error));
+	return result;
+}
+
 [[nodiscard]] ClassicStorySessionError staff_error(ClassicStaffError error)
 {
 	auto result = session_error(ClassicStorySessionErrorCode::staff_failed);
@@ -422,6 +433,7 @@ struct ClassicStoryBackend final {
 	bool restart_requested = false;
 	NewClassicReplayRecorder *replay_recorder = nullptr;
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets{};
+	std::shared_ptr<const NewClassicCutsceneTextCatalog> cutscene_text{};
 	bool new_classic = false;
 	bool replay_playback = false;
 	bool replay_capture_closed = false;
@@ -441,7 +453,8 @@ struct ClassicStoryBackend final {
 		std::filesystem::path legacy_score_path_,
 		bool new_classic_ = false,
 		bool replay_playback_ = false,
-		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_ = {}
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_ = {},
+		std::shared_ptr<const NewClassicCutsceneTextCatalog> cutscene_text_ = {}
 	) :
 		loader(std::move(loader_)),
 		static_content(std::move(static_content_)),
@@ -451,12 +464,52 @@ struct ClassicStoryBackend final {
 		legacy_score_path(std::move(legacy_score_path_)),
 		replay_recorder(replay_recorder_),
 		patch_assets(std::move(patch_assets_)),
+		cutscene_text(std::move(cutscene_text_)),
 		new_classic(new_classic_),
 		replay_playback(replay_playback_)
 	{
 		blank_tram.fill({
 			' ', static_cast<present::TramAttribute>(present::tram_black)
 		});
+	}
+
+	std::expected<void, ClassicStorySessionError>
+	validate_cutscene_text_profile()
+	{
+		if(!cutscene_text) {
+			return {};
+		}
+		auto profile = std::uint64_t{14695981039346656037ULL};
+		for(std::size_t index = 0U;
+			index < new_classic_cutscene_script_count; ++index) {
+			auto loaded = loader->load({
+				.role = MainResourceRole::cutscene_script,
+				.cutscene_script = static_cast<MainCutsceneScript>(index + 1U),
+			});
+			if(!loaded) {
+				return std::unexpected(resource_error(std::move(loaded.error())));
+			}
+			const auto bytes = std::span<const std::byte>{**loaded};
+			const auto source = std::span<const std::uint8_t>{
+				reinterpret_cast<const std::uint8_t *>(bytes.data()), bytes.size()
+			};
+			for(const auto value : source) {
+				profile ^= value;
+				profile *= 1099511628211ULL;
+			}
+			if(auto replacements = cutscene_text->replacement_glyphs(index, source);
+				!replacements) {
+				return std::unexpected(cutscene_text_error(
+					std::move(replacements.error())
+				));
+			}
+		}
+		if(profile != cutscene_text->source_profile_fnv1a64()) {
+			return std::unexpected(cutscene_text_error({
+				.code = NewClassicCutsceneTextPackErrorCode::source_profile_mismatch,
+			}));
+		}
+		return {};
 	}
 
 	std::expected<void, ClassicStorySessionError> adopt_replay_terminal(
@@ -1216,7 +1269,8 @@ struct ClassicStoryBackend final {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
 		auto created = ClassicCutsceneScene::create(
-			request, *resources, static_content->font(), std::move(*initial)
+			request, *resources, static_content->font(), std::move(*initial),
+			cutscene_text.get()
 		);
 		if(!created) {
 			return std::unexpected(cutscene_error(std::move(created.error())));
@@ -2292,7 +2346,8 @@ ClassicStorySession::create_with_prepared_content(
 	std::filesystem::path score_path,
 	NewClassicReplayRecorder *replay_recorder,
 	std::filesystem::path legacy_score_path,
-	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	std::shared_ptr<const NewClassicCutsceneTextCatalog> cutscene_text
 )
 {
 	if(!loader || !static_content) {
@@ -2304,8 +2359,11 @@ ClassicStorySession::create_with_prepared_content(
 		std::move(loader), std::move(static_content), std::move(stage_text),
 		std::move(staff_compiled), std::move(score_path), replay_recorder,
 		std::move(legacy_score_path), replay_recorder != nullptr, false,
-		std::move(patch_assets)
+		std::move(patch_assets), std::move(cutscene_text)
 	);
+	if(auto valid = backend->validate_cutscene_text_profile(); !valid) {
+		return std::unexpected(std::move(valid.error()));
+	}
 	return create_with_backend(
 		config, std::static_pointer_cast<void>(backend),
 		backend_operations(*backend), backend_test_hooks(*backend), replay_recorder
@@ -2358,7 +2416,9 @@ ClassicStorySession::create_replay_interstitial(
 	std::filesystem::path score_path,
 	std::filesystem::path legacy_score_path,
 	std::unique_ptr<MainProcess> process,
-	std::unique_ptr<MainProcessDriver> driver
+	std::unique_ptr<MainProcessDriver> driver,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	std::shared_ptr<const NewClassicCutsceneTextCatalog> cutscene_text
 )
 {
 	if(!valid_main_story_config(process_config) || !loader || !static_content ||
@@ -2379,8 +2439,12 @@ ClassicStorySession::create_replay_interstitial(
 	auto backend = std::make_shared<ClassicStoryBackend>(
 		std::move(loader), std::move(static_content), std::move(stage_text),
 		std::move(staff_compiled), std::move(score_path), nullptr,
-		std::move(legacy_score_path), true, true
+		std::move(legacy_score_path), true, true, std::move(patch_assets),
+		std::move(cutscene_text)
 	);
+	if(auto valid = backend->validate_cutscene_text_profile(); !valid) {
+		return std::unexpected(std::move(valid.error()));
+	}
 	if(auto adopted = backend->adopt_replay_terminal(
 		process_config.resident, std::move(process), std::move(driver)
 	); !adopted) {

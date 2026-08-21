@@ -565,6 +565,52 @@ ClassicRunner::load(ClassicRunnerRequest request)
 					std::move(*loaded_game_text)
 				);
 		}
+		if(!request.content.cutscene_text_pack.empty()) {
+			if(request.content.language_overlay.empty()) {
+				auto result = runner_error(
+					ClassicRunnerErrorCode::cutscene_text_pack_failed,
+					ClassicContentFile::cutscene_text_pack
+				);
+				result.cutscene_text_pack_error =
+					NewClassicCutsceneTextPackError{
+						.code = NewClassicCutsceneTextPackErrorCode::source_profile_mismatch,
+					};
+				return std::unexpected(std::move(result));
+			}
+			auto loaded_cutscene_text = load_new_classic_cutscene_text_pack(
+				request.content.cutscene_text_pack
+			);
+			if(!loaded_cutscene_text) {
+				auto result = runner_error(
+					ClassicRunnerErrorCode::cutscene_text_pack_failed,
+					ClassicContentFile::cutscene_text_pack
+				);
+				result.cutscene_text_pack_error =
+					std::move(loaded_cutscene_text.error());
+				return std::unexpected(std::move(result));
+			}
+			const auto expected_locale = loaded_assets->custom_game_text ?
+				loaded_assets->custom_game_text->locale() :
+				new_classic_builtin_english_game_text().locale();
+			if(loaded_cutscene_text->locale() != expected_locale ||
+				(loaded_assets->custom_messages &&
+					loaded_assets->custom_messages->locale() !=
+						loaded_cutscene_text->locale())) {
+				auto result = runner_error(
+					ClassicRunnerErrorCode::cutscene_text_pack_failed,
+					ClassicContentFile::cutscene_text_pack
+				);
+				result.cutscene_text_pack_error =
+					NewClassicCutsceneTextPackError{
+						.code = NewClassicCutsceneTextPackErrorCode::locale_shape,
+					};
+				return std::unexpected(std::move(result));
+			}
+			loaded_assets->custom_cutscene_text =
+				std::make_shared<const NewClassicCutsceneTextCatalog>(
+					std::move(*loaded_cutscene_text)
+				);
+		}
 		patch_assets = std::make_shared<const NewClassicReplayPatchAssets>(
 			std::move(*loaded_assets)
 		);

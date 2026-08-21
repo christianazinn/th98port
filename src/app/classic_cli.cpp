@@ -118,6 +118,9 @@ constexpr std::size_t option_count =
 	if(text == "--game-text-pack") {
 		return ClassicCliOption::game_text_pack;
 	}
+	if(text == "--cutscene-text-pack") {
+		return ClassicCliOption::cutscene_text_pack;
+	}
 	if(text == "--rhythm-rom") {
 		return ClassicCliOption::rhythm_rom;
 	}
@@ -244,6 +247,9 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 			break;
 		case ClassicCliOption::game_text_pack:
 			request.launch.content.game_text_pack = std::filesystem::path(value);
+			break;
+		case ClassicCliOption::cutscene_text_pack:
+			request.launch.content.cutscene_text_pack = std::filesystem::path(value);
 			break;
 		case ClassicCliOption::rhythm_rom:
 			request.rhythm_rom = std::filesystem::path(value);
