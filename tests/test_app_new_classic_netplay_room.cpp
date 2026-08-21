@@ -7,8 +7,12 @@
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
+
+#include "new_classic_menu_preview.hpp"
 
 namespace {
 
@@ -666,6 +670,48 @@ void test_room_profile_child()
 		"closing Online Profile returns to its exact room-menu row");
 }
 
+void test_authentic_menu_previews_if_requested()
+{
+	if(!th03::test::environment("TH03_MENU_PREVIEW_DIR")) {
+		return;
+	}
+	using namespace th03::app;
+	const auto assets = th03::test::authentic_menu_assets();
+	expect(static_cast<bool>(assets),
+		"requested menu previews load the authenticated archive");
+	if(!assets) {
+		return;
+	}
+	NewClassicNetplayRoom assigned(assets);
+	expect(assigned.valid(), "assigned Online Match preview composes");
+	th03::test::dump_menu_preview(
+		assigned.surface(), "005-online-match.ppm"
+	);
+
+	auto alternate_assets =
+		std::make_shared<NewClassicReplayPatchAssets>(*assets);
+	const auto sample = alternate_assets->menu_background(
+		NewClassicMenuBackground::sample_004
+	);
+	alternate_assets->new_menu_backgrounds[static_cast<std::size_t>(
+		NewClassicMenuBackground::netplay
+	)] = sample;
+	NewClassicNetplayRoom alternate(alternate_assets);
+	expect(alternate.valid(), "corrected 004 Online Match preview composes");
+	th03::test::dump_menu_preview(
+		alternate.surface(), "004-online-match-candidate.ppm"
+	);
+
+	NewClassicOnlineProfileScene profile(
+		assets, NewClassicLanguageAssetProfile::english,
+		std::optional<std::string>{"Resident of Fantasy Who Runs Through Time"}
+	);
+	expect(profile.valid(), "Online Profile preview composes");
+	th03::test::dump_menu_preview(
+		profile.surface(), "003-online-profile.ppm"
+	);
+}
+
 } // namespace
 
 int main()
@@ -682,6 +728,7 @@ int main()
 	test_match_ready_audio_contract();
 	test_online_profile_scene();
 	test_room_profile_child();
+	test_authentic_menu_previews_if_requested();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }

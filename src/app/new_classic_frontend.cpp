@@ -2067,10 +2067,14 @@ bool NewClassicHighScoreMenu::valid() const noexcept
 
 void NewClassicHighScoreMenu::draw() noexcept
 {
-	if(!valid_ || !patch_assets_ ||
-		!patch_surface_.begin_hidden_frame(
-			patch_assets_->menu_background(NewClassicMenuBackground::high_score)
-		)) {
+	if(!valid_ || !patch_assets_) {
+		valid_ = false;
+		return;
+	}
+	const auto &background = mode_ == NewClassicOnlineMenuMode::high_scores ?
+		patch_assets_->menu_background(NewClassicMenuBackground::high_score) :
+		patch_assets_->replay_list_background;
+	if(!patch_surface_.begin_hidden_frame(background)) {
 		valid_ = false;
 		return;
 	}

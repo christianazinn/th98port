@@ -7,6 +7,8 @@
 #include <memory>
 #include <vector>
 
+#include "new_classic_menu_preview.hpp"
+
 namespace {
 
 std::size_t checks = 0U;
@@ -175,6 +177,40 @@ void test_invalid_assets_fail_closed()
 		"missing authenticated assets fail closed without a host fallback");
 }
 
+void test_authentic_menu_previews_if_requested()
+{
+	if(!th03::test::environment("TH03_MENU_PREVIEW_DIR")) {
+		return;
+	}
+	using namespace th03::app;
+	const auto assets = th03::test::authentic_menu_assets();
+	expect(static_cast<bool>(assets),
+		"requested report previews load the authenticated archive");
+	if(!assets) {
+		return;
+	}
+	NewClassicNetplayReport success(
+		NewClassicNetplayReportKind::match_complete, metrics(), assets
+	);
+	NewClassicNetplayReport forfeit(
+		NewClassicNetplayReportKind::forfeit_loss, metrics(), assets
+	);
+	NewClassicNetplayReport failure(
+		NewClassicNetplayReportKind::connection_failed, metrics(), assets
+	);
+	expect(success.valid() && forfeit.valid() && failure.valid(),
+		"success, forfeit, and connection-failure previews compose");
+	th03::test::dump_menu_preview(
+		success.surface(), "006-match-success.ppm"
+	);
+	th03::test::dump_menu_preview(
+		forfeit.surface(), "007-forfeit-loss.ppm"
+	);
+	th03::test::dump_menu_preview(
+		failure.surface(), "007-connection-failure.ppm"
+	);
+}
+
 } // namespace
 
 int main()
@@ -183,6 +219,7 @@ int main()
 	test_release_and_application_quit();
 	test_missing_round_trip_is_explicitly_unavailable();
 	test_invalid_assets_fail_closed();
+	test_authentic_menu_previews_if_requested();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }

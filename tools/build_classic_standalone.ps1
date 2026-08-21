@@ -68,6 +68,7 @@ if(-not $LanguageOverlay) {
 }
 if(-not $ReplayPatchAssets) {
 	$assetCandidates = @(
+		(Join-Path $worktreeRoot ".scratch\assets\th03-replay-ui\AZINN.DAT"),
 		(Join-Path $originalRoot "th03_full\AZINN.DAT"),
 		(Join-Path (Split-Path -Parent $worktreeRoot) (
 			"replays-and-validation-17ptz\.scratch\assets\th03-replay-ui\AZINN.DAT"

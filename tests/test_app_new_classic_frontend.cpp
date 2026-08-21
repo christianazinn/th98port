@@ -14,6 +14,8 @@
 #include "th03/app/new_classic_frontend.hpp"
 #include "th03/formats/v13.hpp"
 
+#include "new_classic_menu_preview.hpp"
+
 namespace {
 
 std::size_t checks = 0U;
@@ -260,6 +262,29 @@ std::uint64_t surface_hash(th03::present::SourceSurface surface)
 	return hash;
 }
 
+std::size_t background_matches(
+	th03::present::SourceSurface surface,
+	const th03::assets::PiImage &background
+)
+{
+	if(!background.palette ||
+		background.image.indices.size() != surface.pixels.size()) {
+		return 0U;
+	}
+	std::size_t matches = 0U;
+	for(std::size_t index = 0U; index < surface.pixels.size(); ++index) {
+		const auto pixel = surface.pixels[index];
+		const auto expected = background.image.indices[index];
+		if(pixel.layer == th03::present::ComposedPixelLayer::graphics &&
+			pixel.value == expected &&
+			surface.graphics_palette.colors[pixel.value] ==
+				background.palette->colors[expected]) {
+			++matches;
+		}
+	}
+	return matches;
+}
+
 void dump_menu_preview_if_requested(
 	th03::present::SourceSurface surface,
 	const char *environment
@@ -276,29 +301,7 @@ void dump_menu_preview_if_requested(
 	if(!path || *path == '\0') {
 		return;
 	}
-	std::ofstream output(path, std::ios::binary | std::ios::trunc);
-	output << "P6\n640 400\n255\n";
-	for(const auto pixel : surface.pixels) {
-		std::array<std::uint8_t, 3U> rgb{};
-		if(pixel.layer == th03::present::ComposedPixelLayer::graphics) {
-			const auto color = surface.graphics_palette.colors[pixel.value];
-			rgb = {
-				static_cast<std::uint8_t>(color.r * 17U),
-				static_cast<std::uint8_t>(color.g * 17U),
-				static_cast<std::uint8_t>(color.b * 17U),
-			};
-		} else {
-			rgb = {
-				((pixel.value & 0x02U) != 0U) ?
-					std::uint8_t{255U} : std::uint8_t{0U},
-				((pixel.value & 0x04U) != 0U) ?
-					std::uint8_t{255U} : std::uint8_t{0U},
-				((pixel.value & 0x01U) != 0U) ?
-					std::uint8_t{255U} : std::uint8_t{0U},
-			};
-		}
-		output.write(reinterpret_cast<const char *>(rgb.data()), 3);
-	}
+	th03::test::write_menu_preview(surface, path);
 }
 
 std::shared_ptr<const th03::app::NewClassicReplayPatchAssets>
@@ -463,6 +466,7 @@ void test_replay_hub_and_libraries()
 	dump_menu_preview_if_requested(
 		local.surface(), "TH03_REPLAY_MENU_PREVIEW_PPM"
 	);
+	th03::test::dump_menu_preview(local.surface(), "001-replay-hub.ppm");
 	static_cast<void>(local.consume({}));
 	expect(local.consume({.confirm = true}).status ==
 		NewClassicReplayHubStatus::local_selected,
@@ -528,6 +532,19 @@ void test_replay_hub_and_libraries()
 		online_library.mode() == NewClassicOnlineMenuMode::online_replays,
 		"online Replay library opens directly on replay-backed rows");
 	finish_entry_fade(online_library);
+	const auto replay_matches = background_matches(
+		online_library.surface(), patch_assets->replay_list_background
+	);
+	const auto generic_matches = background_matches(
+		online_library.surface(), patch_assets->menu_background(
+			NewClassicMenuBackground::high_score
+		)
+	);
+	expect(replay_matches > 200'000U && replay_matches > generic_matches,
+		"every replay-list owner retains the dedicated Replay background");
+	th03::test::dump_menu_preview(
+		online_library.surface(), "replay-list-dedicated.ppm"
+	);
 	static_cast<void>(online_library.consume({}));
 	static_cast<void>(online_library.consume({.confirm = true}));
 	static_cast<void>(online_library.consume({}));
@@ -623,6 +640,7 @@ void test_online_high_score_menu()
 	dump_menu_preview_if_requested(
 		local.surface(), "TH03_HISCORE_MENU_PREVIEW_PPM"
 	);
+	th03::test::dump_menu_preview(local.surface(), "002-hiscore-hub.ppm");
 	static_cast<void>(local.consume({}));
 	expect(local.consume({.confirm = true}).status ==
 		NewClassicHighScoreMenuStatus::local_selected,

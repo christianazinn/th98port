@@ -34,19 +34,20 @@ struct NewClassicAssetsAccess final {
 
 namespace {
 
-constexpr std::size_t archive_file_bytes = 1'055'632U;
+constexpr std::size_t archive_file_bytes = 1'183'932U;
 constexpr MainExecutableSha256 archive_sha256{
-	0x83U, 0xBFU, 0xD4U, 0xCAU, 0x80U, 0xCAU, 0xB4U, 0xD3U,
-	0xE1U, 0xC8U, 0xB9U, 0x44U, 0xC4U, 0x95U, 0xC4U, 0xF3U,
-	0x80U, 0x7DU, 0xF2U, 0x4CU, 0xE1U, 0x4CU, 0xC7U, 0x4BU,
-	0xADU, 0xAAU, 0x6CU, 0x16U, 0xD0U, 0x8BU, 0x43U, 0x83U,
+	0xDEU, 0x06U, 0xDCU, 0x9BU, 0x02U, 0x74U, 0xC7U, 0xCEU,
+	0x6AU, 0x6EU, 0xC8U, 0x3DU, 0x66U, 0x95U, 0xCBU, 0x6DU,
+	0x05U, 0x09U, 0xF4U, 0xC0U, 0xFCU, 0xD9U, 0x06U, 0x40U,
+	0xA9U, 0x51U, 0xF1U, 0xC9U, 0x47U, 0xEBU, 0x5CU, 0x44U,
 };
 constexpr std::size_t archive_header_bytes = 16U;
 constexpr std::size_t directory_entry_bytes = 32U;
-constexpr std::array<std::string_view, 19U> required_members{
+constexpr std::array<std::string_view, 21U> required_members{
 	"SLB1.PI", "SLB1B.PI", "MNUFONT.PF", "PAUSE.GFT", "BG1.PI",
 	"BG2A.BMP", "BG2B.BMP", "M001A.BMP", "M001B.BMP",
 	"M002A.BMP", "M002B.BMP", "M003A.BMP", "M003B.BMP",
+	"M004A.BMP", "M004B.BMP",
 	"M005A.BMP", "M005B.BMP", "M006A.BMP", "M006B.BMP",
 	"M007A.BMP", "M007B.BMP",
 };
@@ -945,6 +946,7 @@ load_new_classic_replay_patch_assets(const std::filesystem::path &path)
 			std::pair{"M001A.BMP", "M001B.BMP"},
 			std::pair{"M002A.BMP", "M002B.BMP"},
 			std::pair{"M003A.BMP", "M003B.BMP"},
+			std::pair{"M004A.BMP", "M004B.BMP"},
 			std::pair{"M005A.BMP", "M005B.BMP"},
 			std::pair{"M006A.BMP", "M006B.BMP"},
 			std::pair{"M007A.BMP", "M007B.BMP"},

@@ -145,6 +145,7 @@ enum class NewClassicMenuBackground : std::uint8_t {
 	replay,
 	high_score,
 	online_profile,
+	sample_004,
 	netplay,
 	report_success,
 	report_failure,
