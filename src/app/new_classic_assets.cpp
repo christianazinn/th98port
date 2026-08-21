@@ -34,17 +34,18 @@ struct NewClassicAssetsAccess final {
 
 namespace {
 
-constexpr std::size_t archive_file_bytes = 196'269U;
+constexpr std::size_t archive_file_bytes = 285'832U;
 constexpr MainExecutableSha256 archive_sha256{
-	0xD4U, 0x31U, 0x33U, 0x95U, 0xC4U, 0xFEU, 0x69U, 0xB3U,
-	0xD2U, 0xC3U, 0xFFU, 0x33U, 0xD0U, 0x19U, 0xF3U, 0xADU,
-	0x7CU, 0xE8U, 0xB1U, 0x09U, 0xA5U, 0x9AU, 0xA4U, 0xBFU,
-	0x3BU, 0xD1U, 0xBCU, 0xE3U, 0x75U, 0xD9U, 0x9DU, 0xD7U,
+	0x43U, 0x01U, 0x92U, 0x59U, 0xD4U, 0xD4U, 0xEDU, 0xFFU,
+	0xBAU, 0x19U, 0x04U, 0x04U, 0xF1U, 0x2AU, 0x9EU, 0x12U,
+	0xBAU, 0xC9U, 0xC0U, 0xB4U, 0xA6U, 0xA8U, 0x2DU, 0x99U,
+	0xDDU, 0xC5U, 0x4DU, 0x1EU, 0xFBU, 0x24U, 0x05U, 0x8EU,
 };
 constexpr std::size_t archive_header_bytes = 16U;
 constexpr std::size_t directory_entry_bytes = 32U;
-constexpr std::array<std::string_view, 6U> required_members{
-	"SLB1.PI", "SLB1B.PI", "MNUFONT.PF", "PAUSE.GFT", "BG1.PI", "BG2.PI",
+constexpr std::array<std::string_view, 7U> required_members{
+	"SLB1.PI", "SLB1B.PI", "MNUFONT.PF", "PAUSE.GFT", "BG1.PI",
+	"BG2A.BMP", "BG2B.BMP",
 };
 constexpr std::size_t menu_font_file_bytes = 3'168U;
 constexpr std::size_t menu_font_header_bytes = 32U;
@@ -751,6 +752,120 @@ std::expected<
 	return result;
 }
 
+std::expected<assets::PiImage, NewClassicAssetsError>
+decode_new_classic_menu_background(
+	std::span<const std::byte> top,
+	std::span<const std::byte> bottom
+)
+{
+	constexpr std::size_t file_header_bytes = 14U;
+	constexpr std::size_t dib_header_bytes = 40U;
+	constexpr std::size_t palette_bytes = 64U;
+	constexpr std::size_t pixel_offset =
+		file_header_bytes + dib_header_bytes + palette_bytes;
+	constexpr std::uint16_t width = present::graphics_width;
+	constexpr std::uint16_t half_height = present::graphics_height / 2U;
+	constexpr std::size_t packed_row_bytes = width / 2U;
+	constexpr std::size_t packed_pixels = packed_row_bytes * half_height;
+	constexpr std::size_t file_bytes = pixel_offset + packed_pixels;
+	const auto le16 = [](std::span<const std::byte> bytes,
+		std::size_t offset) noexcept {
+		return static_cast<std::uint16_t>(
+			std::to_integer<std::uint8_t>(bytes[offset]) |
+			(static_cast<std::uint16_t>(
+				std::to_integer<std::uint8_t>(bytes[offset + 1U])
+			) << 8U)
+		);
+	};
+	const auto le32 = [](std::span<const std::byte> bytes,
+		std::size_t offset) noexcept {
+		return std::to_integer<std::uint8_t>(bytes[offset]) |
+			(static_cast<std::uint32_t>(
+				std::to_integer<std::uint8_t>(bytes[offset + 1U])
+			) << 8U) |
+			(static_cast<std::uint32_t>(
+				std::to_integer<std::uint8_t>(bytes[offset + 2U])
+			) << 16U) |
+			(static_cast<std::uint32_t>(
+				std::to_integer<std::uint8_t>(bytes[offset + 3U])
+			) << 24U);
+	};
+	const auto valid_half = [&](std::span<const std::byte> bytes) noexcept {
+		return bytes.size() == file_bytes &&
+			bytes[0U] == std::byte{'B'} && bytes[1U] == std::byte{'M'} &&
+			le32(bytes, 2U) == file_bytes && le32(bytes, 10U) == pixel_offset &&
+			le32(bytes, 14U) == dib_header_bytes && le32(bytes, 18U) == width &&
+			le32(bytes, 22U) == half_height && le16(bytes, 26U) == 1U &&
+			le16(bytes, 28U) == 4U && le32(bytes, 30U) == 0U &&
+			le32(bytes, 34U) == packed_pixels && le32(bytes, 46U) == 16U &&
+			le32(bytes, 50U) == 16U;
+	};
+	if(!valid_half(top) || !valid_half(bottom) ||
+		!std::ranges::equal(
+			top.subspan(file_header_bytes + dib_header_bytes, palette_bytes),
+			bottom.subspan(file_header_bytes + dib_header_bytes, palette_bytes)
+		)) {
+		return std::unexpected(error(
+			NewClassicAssetsErrorCode::menu_background_shape
+		));
+	}
+
+	assets::PiImage result{};
+	result.plane_count = 4U;
+	result.image.width = width;
+	result.image.height = present::graphics_height;
+	result.image.indices.resize(present::graphics_page_pixels);
+	assets::Palette16Rgb4 palette{};
+	for(std::size_t index = 0U; index < palette.colors.size(); ++index) {
+		const auto at = file_header_bytes + dib_header_bytes + (index * 4U);
+		palette.colors[index] = {
+			static_cast<std::uint8_t>(
+				std::to_integer<std::uint8_t>(top[at + 2U]) >> 4U
+			),
+			static_cast<std::uint8_t>(
+				std::to_integer<std::uint8_t>(top[at + 1U]) >> 4U
+			),
+			static_cast<std::uint8_t>(
+				std::to_integer<std::uint8_t>(top[at]) >> 4U
+			),
+		};
+	}
+	result.palette = palette;
+	const auto unpack_half = [&](std::span<const std::byte> bytes,
+		std::size_t output_top) noexcept {
+		for(std::size_t y = 0U; y < half_height; ++y) {
+			const auto source = pixel_offset +
+				((half_height - y - 1U) * packed_row_bytes);
+			const auto destination = (output_top + y) * width;
+			for(std::size_t packed = 0U; packed < packed_row_bytes; ++packed) {
+				const auto value = std::to_integer<std::uint8_t>(
+					bytes[source + packed]
+				);
+				result.image.indices[destination + (packed * 2U)] =
+					static_cast<std::uint8_t>(value >> 4U);
+				result.image.indices[destination + (packed * 2U) + 1U] =
+					static_cast<std::uint8_t>(value & 0x0FU);
+			}
+		}
+	};
+	unpack_half(top, 0U);
+	unpack_half(bottom, half_height);
+
+	// These two original colors are represented nearly identically by another
+	// background entry. Reserving their indices prevents the yellow/white menu
+	// palette overrides from recoloring thousands of background pixels.
+	for(auto &index : result.image.indices) {
+		if(index == 12U) {
+			index = 10U;
+		} else if(index == 15U) {
+			index = 0U;
+		}
+	}
+	result.palette->colors[12U] = {15U, 15U, 0U};
+	result.palette->colors[15U] = {15U, 15U, 15U};
+	return result;
+}
+
 } // namespace detail
 
 std::expected<NewClassicReplayPatchAssets, NewClassicAssetsError>
@@ -801,7 +916,9 @@ load_new_classic_replay_patch_assets(const std::filesystem::path &path)
 		auto list = decode_pi(*members, "SLB1.PI");
 		auto name = decode_pi(*members, "SLB1B.PI");
 		auto key = decode_pi(*members, "BG1.PI");
-		auto menu = decode_pi(*members, "BG2.PI");
+		auto menu = detail::decode_new_classic_menu_background(
+			members->at("BG2A.BMP"), members->at("BG2B.BMP")
+		);
 		if(!list) return std::unexpected(std::move(list.error()));
 		if(!name) return std::unexpected(std::move(name.error()));
 		if(!key) return std::unexpected(std::move(key.error()));

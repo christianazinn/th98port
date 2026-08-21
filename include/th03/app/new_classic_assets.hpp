@@ -38,6 +38,7 @@ enum class NewClassicAssetsErrorCode : std::uint8_t {
 	font_checksum,
 	pause_gaiji_shape,
 	pause_gaiji_checksum,
+	menu_background_shape,
 	pi_decode,
 	pi_geometry,
 	allocation_failed,
@@ -208,6 +209,17 @@ decode_new_classic_menu_font(std::span<const std::byte> bytes);
 	std::array<std::array<std::uint8_t, 32U>, 40U>,
 	NewClassicAssetsError
 > decode_new_classic_pause_gaiji(std::span<const std::byte> bytes);
+
+// BG2 is host-only artwork, so it deliberately bypasses the source PI
+// compressor and its legacy 16-bit archive-member ceiling. The two supplied
+// 640x200, 4-bpp BMP halves are joined without resampling. Palette indices 12
+// and 15 are removed from background pixels and reserved for yellow selected
+// text and white normal text respectively.
+[[nodiscard]] std::expected<assets::PiImage, NewClassicAssetsError>
+decode_new_classic_menu_background(
+	std::span<const std::byte> top,
+	std::span<const std::byte> bottom
+);
 
 } // namespace detail
 } // namespace th03::app

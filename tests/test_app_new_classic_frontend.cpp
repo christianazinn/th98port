@@ -260,6 +260,44 @@ std::uint64_t surface_hash(th03::present::SourceSurface surface)
 	return hash;
 }
 
+void dump_bg2_preview_if_requested(th03::present::SourceSurface surface)
+{
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4996)
+#endif
+	const auto *path = std::getenv("TH03_BG2_PREVIEW_PPM");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+	if(!path || *path == '\0') {
+		return;
+	}
+	std::ofstream output(path, std::ios::binary | std::ios::trunc);
+	output << "P6\n640 400\n255\n";
+	for(const auto pixel : surface.pixels) {
+		std::array<std::uint8_t, 3U> rgb{};
+		if(pixel.layer == th03::present::ComposedPixelLayer::graphics) {
+			const auto color = surface.graphics_palette.colors[pixel.value];
+			rgb = {
+				static_cast<std::uint8_t>(color.r * 17U),
+				static_cast<std::uint8_t>(color.g * 17U),
+				static_cast<std::uint8_t>(color.b * 17U),
+			};
+		} else {
+			rgb = {
+				((pixel.value & 0x02U) != 0U) ?
+					std::uint8_t{255U} : std::uint8_t{0U},
+				((pixel.value & 0x04U) != 0U) ?
+					std::uint8_t{255U} : std::uint8_t{0U},
+				((pixel.value & 0x01U) != 0U) ?
+					std::uint8_t{255U} : std::uint8_t{0U},
+			};
+		}
+		output.write(reinterpret_cast<const char *>(rgb.data()), 3);
+	}
+}
+
 std::shared_ptr<const th03::app::NewClassicReplayPatchAssets>
 optional_patch_assets()
 {
@@ -419,6 +457,7 @@ void test_replay_hub_and_libraries()
 		local.selection() == 0U,
 		"Replay hub opens from black with Local Replays selected");
 	finish_entry_fade(local);
+	dump_bg2_preview_if_requested(local.surface());
 	static_cast<void>(local.consume({}));
 	expect(local.consume({.confirm = true}).status ==
 		NewClassicReplayHubStatus::local_selected,

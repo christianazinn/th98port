@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -26,6 +27,61 @@ void put_u16(std::vector<std::byte> &bytes, std::size_t at, std::uint16_t value)
 {
 	bytes[at] = static_cast<std::byte>(value & 0xFFU);
 	bytes[at + 1U] = static_cast<std::byte>(value >> 8U);
+}
+
+void put_u32(std::vector<std::byte> &bytes, std::size_t at, std::uint32_t value)
+{
+	bytes[at] = static_cast<std::byte>(value & 0xFFU);
+	bytes[at + 1U] = static_cast<std::byte>((value >> 8U) & 0xFFU);
+	bytes[at + 2U] = static_cast<std::byte>((value >> 16U) & 0xFFU);
+	bytes[at + 3U] = static_cast<std::byte>(value >> 24U);
+}
+
+std::vector<std::byte> menu_background_half(
+	std::uint8_t first_row,
+	std::uint8_t second_row,
+	std::uint8_t remaining
+)
+{
+	constexpr std::size_t pixel_offset = 118U;
+	constexpr std::size_t row_bytes = 320U;
+	constexpr std::size_t height = 200U;
+	std::vector<std::byte> bytes(pixel_offset + (row_bytes * height));
+	bytes[0U] = std::byte{'B'};
+	bytes[1U] = std::byte{'M'};
+	put_u32(bytes, 2U, static_cast<std::uint32_t>(bytes.size()));
+	put_u32(bytes, 10U, pixel_offset);
+	put_u32(bytes, 14U, 40U);
+	put_u32(bytes, 18U, 640U);
+	put_u32(bytes, 22U, height);
+	put_u16(bytes, 26U, 1U);
+	put_u16(bytes, 28U, 4U);
+	put_u32(bytes, 34U, row_bytes * height);
+	put_u32(bytes, 38U, 4'000U);
+	put_u32(bytes, 42U, 4'000U);
+	put_u32(bytes, 46U, 16U);
+	put_u32(bytes, 50U, 16U);
+	for(std::size_t index = 0U; index < 16U; ++index) {
+		const auto at = 54U + (index * 4U);
+		bytes[at] = static_cast<std::byte>(index << 4U);
+		bytes[at + 1U] = static_cast<std::byte>((15U - index) << 4U);
+		bytes[at + 2U] = static_cast<std::byte>((index ^ 5U) << 4U);
+	}
+	const auto fill_row = [&](std::size_t logical_y, std::uint8_t color) {
+		const auto packed = static_cast<std::byte>((color << 4U) | color);
+		const auto stored_y = height - logical_y - 1U;
+		std::fill_n(
+			bytes.begin() + static_cast<std::ptrdiff_t>(
+				pixel_offset + (stored_y * row_bytes)
+			),
+			row_bytes,
+			packed
+		);
+	};
+	for(std::size_t y = 0U; y < height; ++y) {
+		fill_row(y, y == 0U ? first_row : (y == 1U ? second_row : remaining));
+	}
+	return bytes;
 }
 
 std::vector<std::byte> font_fixture()
@@ -99,6 +155,42 @@ void test_font_decode_and_raster()
 		"font checksum mismatch rejects before rendering");
 }
 
+void test_menu_background_decode()
+{
+	auto top = menu_background_half(12U, 15U, 5U);
+	auto bottom = menu_background_half(7U, 8U, 9U);
+	auto decoded = th03::app::detail::decode_new_classic_menu_background(
+		top, bottom
+	);
+	expect(decoded.has_value(), "split 4-bpp menu BMP decodes");
+	if(!decoded) {
+		return;
+	}
+	expect(decoded->image.width == 640U && decoded->image.height == 400U &&
+		decoded->image.indices.size() == 256'000U,
+		"split menu BMP joins to one exact full-screen image");
+	expect(decoded->image.indices[0U] == 10U &&
+		decoded->image.indices[640U] == 0U &&
+		decoded->image.indices[1'280U] == 5U &&
+		decoded->image.indices[128'000U] == 7U &&
+		decoded->image.indices[128'640U] == 8U,
+		"BMP rows are top-down after joining and overlay indices are remapped");
+	expect(std::ranges::find(decoded->image.indices, 12U) ==
+		decoded->image.indices.end() &&
+		std::ranges::find(decoded->image.indices, 15U) ==
+		decoded->image.indices.end() && decoded->palette &&
+		decoded->palette->colors[12U] == th03::assets::Rgb4{15U, 15U, 0U} &&
+		decoded->palette->colors[15U] == th03::assets::Rgb4{15U, 15U, 15U},
+		"background never aliases selected-yellow or normal-white text slots");
+
+	top[0U] = std::byte{'X'};
+	const auto malformed =
+		th03::app::detail::decode_new_classic_menu_background(top, bottom);
+	expect(!malformed && malformed.error().code ==
+		th03::app::NewClassicAssetsErrorCode::menu_background_shape,
+		"malformed split BMP is rejected before pixel access");
+}
+
 void test_authentic_archive_if_supplied()
 {
 #if defined(_MSC_VER)
@@ -125,7 +217,19 @@ void test_authentic_archive_if_supplied()
 		loaded->replay_name_background.image.height == 400U &&
 		loaded->new_menu_background.image.indices.size() == 256'000U &&
 		loaded->key_config_background.image.indices.size() == 256'000U,
-		"all four full-screen PI members decode");
+		"all four authenticated full-screen backgrounds decode");
+	expect(std::ranges::find(
+		loaded->new_menu_background.image.indices, 12U
+	) == loaded->new_menu_background.image.indices.end() &&
+		std::ranges::find(
+			loaded->new_menu_background.image.indices, 15U
+		) == loaded->new_menu_background.image.indices.end() &&
+		loaded->new_menu_background.palette &&
+		loaded->new_menu_background.palette->colors[12U] ==
+			th03::assets::Rgb4{15U, 15U, 0U} &&
+		loaded->new_menu_background.palette->colors[15U] ==
+			th03::assets::Rgb4{15U, 15U, 15U},
+		"authenticated background reserves yellow and white for menu text only");
 	expect(loaded->menu_font.width("The PoDD Arrange Project") > 0,
 		"authentic proportional title credit has measurable ink");
 }
@@ -135,6 +239,7 @@ void test_authentic_archive_if_supplied()
 int main()
 {
 	test_font_decode_and_raster();
+	test_menu_background_decode();
 	test_authentic_archive_if_supplied();
 	if(failures != 0) {
 		std::cerr << failures << " test(s) failed\n";
