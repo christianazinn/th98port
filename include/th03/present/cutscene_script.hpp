@@ -343,6 +343,23 @@ struct CutsceneScriptError {
 	) = default;
 };
 
+// One maximal sequence of source glyph iterations. Commands, separators,
+// explicit line changes, gaiji, and automatic full-box restoration terminate a
+// run. The source bytes are retained only in caller-owned memory so tooling can
+// produce translator scaffolds without reimplementing the script parser.
+struct CutsceneTextRun final {
+	std::size_t ordinal = 0U;
+	std::size_t source_offset = 0U;
+	CutsceneCursor first_position{};
+	CutsceneCursor last_position{};
+	std::vector<std::uint8_t> shift_jis{};
+
+	[[nodiscard]] friend bool operator==(
+		const CutsceneTextRun &,
+		const CutsceneTextRun &
+	) = default;
+};
+
 // Source-exact TH03 plaintext cutscene interpreter. The VM owns its bytes and
 // performs no I/O. A caller must execute each returned semantic batch in order
 // before requesting the next top-level source iteration.
@@ -437,6 +454,13 @@ private:
 	bool started_ = false;
 	bool finished_ = false;
 };
+
+// Drives the exact VM with source fast-forward enabled and observes only its
+// semantic glyph operations. This is the canonical extraction boundary for
+// localization/audit tools; consumers must not parse TH03 script commands a
+// second time.
+[[nodiscard]] std::expected<std::vector<CutsceneTextRun>, CutsceneScriptError>
+extract_cutscene_text_runs(std::span<const std::uint8_t> script);
 
 } // namespace th03::present
 

@@ -901,6 +901,61 @@ void test_malformed_atomicity_unknown_and_boundary_default()
 	);
 }
 
+void test_text_run_extraction()
+{
+	const std::vector<std::uint8_t> script{
+		0x82U, 0xA0U, 0x82U, 0xA2U,
+		static_cast<std::uint8_t>('\\'), static_cast<std::uint8_t>('n'),
+		0x82U, 0xA4U,
+		static_cast<std::uint8_t>('\\'), static_cast<std::uint8_t>('g'),
+		static_cast<std::uint8_t>('a'), static_cast<std::uint8_t>('3'),
+		0x82U, 0xA6U,
+		static_cast<std::uint8_t>('\\'), static_cast<std::uint8_t>('$'),
+	};
+	auto runs = extract_cutscene_text_runs(script);
+	expect(runs.has_value(), "text-run extraction accepts a valid script");
+	if(runs) {
+		expect(
+			runs->size() == 3U && (*runs)[0U].ordinal == 0U &&
+				(*runs)[0U].source_offset == 0U &&
+				(*runs)[0U].first_position == CutsceneCursor{80, 320} &&
+				(*runs)[0U].last_position == CutsceneCursor{96, 320} &&
+				(*runs)[0U].shift_jis ==
+					std::vector<std::uint8_t>{0x82U, 0xA0U, 0x82U, 0xA2U},
+			"text-run extraction groups adjacent source glyph iterations"
+		);
+		expect(
+			(*runs)[1U].ordinal == 1U &&
+				(*runs)[1U].source_offset == 6U &&
+				(*runs)[1U].first_position == CutsceneCursor{80, 336} &&
+				(*runs)[1U].shift_jis ==
+					std::vector<std::uint8_t>{0x82U, 0xA4U} &&
+				(*runs)[2U].source_offset == 12U &&
+				(*runs)[2U].first_position == CutsceneCursor{112, 336},
+			"commands and gaiji terminate source text runs without moving text"
+		);
+	}
+
+	auto wrapped_script = glyph_script(109U);
+	runs = extract_cutscene_text_runs(wrapped_script);
+	expect(
+		runs && runs->size() == 2U &&
+			(*runs)[0U].shift_jis.size() == 216U &&
+			(*runs)[1U].shift_jis.size() == 2U &&
+			(*runs)[1U].first_position == CutsceneCursor{80, 320},
+		"automatic full-box restoration terminates an otherwise adjacent run"
+	);
+
+	const std::array<std::uint8_t, 1U> malformed{0x82U};
+	auto rejected = extract_cutscene_text_runs(malformed);
+	expect(
+		!rejected && rejected.error().code ==
+			CutsceneScriptErrorCode::unexpected_end &&
+			rejected.error().byte_offset == 1U,
+		"text-run extraction preserves canonical VM parse errors"
+	);
+}
+
 void test_local_original_scripts(const std::filesystem::path &directory)
 {
 	constexpr std::array names{
@@ -967,6 +1022,11 @@ void test_local_original_scripts(const std::filesystem::path &directory)
 			}
 		}
 		expect(vm.finished(), "local script reaches its source terminator");
+		auto runs = extract_cutscene_text_runs(script);
+		expect(
+			runs && !runs->empty(),
+			"local script exposes at least one canonical text run"
+		);
 	}
 }
 
@@ -983,6 +1043,7 @@ int main(int argc, char **argv)
 	test_picture_resource_audio_gaiji_and_shake();
 	test_every_default_path_and_unconsumed_subcommands();
 	test_malformed_atomicity_unknown_and_boundary_default();
+	test_text_run_extraction();
 	if(argc == 2) {
 		test_local_original_scripts(std::filesystem::path(argv[1]));
 	} else {

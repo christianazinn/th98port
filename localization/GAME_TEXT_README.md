@@ -32,5 +32,12 @@ python tools/localization/compile_game_text_pack.py compile `
 An authoring file may omit entries only when it names an already validated
 fallback locale. The current runtime renderer is CP932-constrained; future
 Unicode font work can add another explicit domain without reinterpreting these
-bytes. Scripted dialogue remains a follow-up because its text-run IDs must be
-derived without altering authenticated command and timing streams.
+bytes.
+
+Scripted dialogue uses a separate run inventory because its authenticated
+scripts also contain control, timing, picture, page, and audio commands. Build
+`th03-cutscene-text`, run it against a legal content installation, and pass its
+`T3CTR001` output to `make_cutscene_text_author.py` to create a UTF-8
+`T3CTR-AUTHOR-1` scaffold. Both tools use the production script VM rather than
+a shadow parser. See `docs/NEW_CLASSIC_CUTSCENE_TEXT.md` for the complete
+workflow and current runtime-substitution boundary.

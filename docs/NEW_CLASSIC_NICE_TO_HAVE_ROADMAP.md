@@ -78,6 +78,14 @@ external cutscene/interstitial scripts. A localized catalog replaces glyph
 runs while the authenticated source script retains commands, waits, page
 changes, and audio timing. Translators never edit binary control streams.
 
+Status: the inventory/authoring half is implemented. `th03-cutscene-text`
+drives the production VM over all 28 authenticated scripts and emits stable
+`T3CTR001` run identity, geometry, CP932, and source-digest metadata;
+`make_cutscene_text_author.py` validates it and writes the deterministic UTF-8
+`T3CTR-AUTHOR-1` scaffold. The authenticated corpus produces 1,533 runs and
+25,849 glyphs with a 39-glyph maximum run. Runtime compilation/substitution is
+the next parcel and must preserve the source command and timing stream.
+
 Character-select name bitmaps and other text baked into otherwise reusable
 images follow after the text renderer can reproduce their layout. Menu headings
 baked into TL02 and related backgrounds are explicitly later work: removing

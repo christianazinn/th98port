@@ -1096,6 +1096,12 @@ add_executable(th03-replay-check apps/th03-replay-check/main.cpp)
 target_link_libraries(th03-replay-check PRIVATE th03_formats)
 th03_set_warnings(th03-replay-check)
 
+add_executable(th03-cutscene-text apps/th03-cutscene-text/main.cpp)
+target_link_libraries(
+	th03-cutscene-text PRIVATE th03_app_resources th03_present
+)
+th03_set_warnings(th03-cutscene-text)
+
 add_library(th03rv_service_protocol STATIC
 	apps/th03rv/service_protocol.cpp
 )
@@ -1317,7 +1323,13 @@ if(BUILD_TESTING)
 			COMMAND ${Python3_EXECUTABLE}
 				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_compile_game_text_pack.py
 		)
+		add_test(
+			NAME th03-cutscene-text-author-tests
+			COMMAND ${Python3_EXECUTABLE}
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_make_cutscene_text_author.py
+		)
 	endif()
+	add_test(NAME th03-cutscene-text-help COMMAND th03-cutscene-text --help)
 	find_program(TH03_PWSH_EXECUTABLE NAMES pwsh)
 	if(TH03_PWSH_EXECUTABLE)
 		add_test(

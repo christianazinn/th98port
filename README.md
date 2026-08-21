@@ -344,6 +344,13 @@ source, `compile_game_text_pack.py` validates and compiles it, and
 replay renderer. A catalog is accepted only with the full English overlay;
 Japanese and sealed Classic continue using authenticated source assets.
 See `localization/GAME_TEXT_README.md` for the format and translator workflow.
+Scripted cutscene and ending dialogue is inventoried separately by
+`th03-cutscene-text`. It drives the production cutscene VM across all 28
+authenticated scripts and emits deterministic `T3CTR001` run identities;
+`tools/localization/make_cutscene_text_author.py` turns that local inventory
+into a UTF-8 translator scaffold without copying or rewriting source control
+streams. See `docs/NEW_CLASSIC_CUTSCENE_TEXT.md`. Runtime replacement is the
+next source-constrained localization parcel.
 The developer-only Dopamine Arrange prototype is selected with
 `--new-classic --arrange dopamine-test-v1`, or by launching the maintained
 standalone as `PoDD-Port-Test.exe --arrange dopamine-test-v1`. Its title is

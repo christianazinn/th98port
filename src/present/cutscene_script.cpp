@@ -793,4 +793,69 @@ bool CutsceneScriptVm::finished() const noexcept
 	return finished_;
 }
 
+std::expected<std::vector<CutsceneTextRun>, CutsceneScriptError>
+extract_cutscene_text_runs(std::span<const std::uint8_t> script)
+{
+	auto created = CutsceneScriptVm::create(script);
+	if(!created) {
+		return std::unexpected(created.error());
+	}
+	auto vm = std::move(*created);
+	auto begun = vm.begin();
+	if(!begun) {
+		return std::unexpected(begun.error());
+	}
+
+	std::vector<CutsceneTextRun> runs{};
+	bool source_glyph_sequence_active = false;
+	for(std::size_t iteration = 0U;
+		iteration <= script.size() && !vm.finished();
+		++iteration) {
+		const auto source_offset = vm.byte_offset();
+		auto stepped = vm.step({
+			.cancel_held = true,
+			.any_key_held = true,
+		});
+		if(!stepped) {
+			return std::unexpected(stepped.error());
+		}
+
+		const CutsceneDrawGlyph *glyph = nullptr;
+		bool restored_box = false;
+		for(const auto &operation : stepped->operations()) {
+			if(const auto *draw = std::get_if<CutsceneDrawGlyph>(&operation)) {
+				glyph = draw;
+			}
+			restored_box = restored_box ||
+				std::holds_alternative<CutsceneRestoreBox>(operation);
+		}
+		if(!glyph) {
+			source_glyph_sequence_active = false;
+			continue;
+		}
+
+		if(!source_glyph_sequence_active) {
+			runs.push_back({
+				.ordinal = runs.size(),
+				.source_offset = source_offset,
+				.first_position = glyph->position,
+				.last_position = glyph->position,
+			});
+		}
+		auto &run = runs.back();
+		run.last_position = glyph->position;
+		run.shift_jis.insert(
+			run.shift_jis.end(), glyph->shift_jis.begin(), glyph->shift_jis.end()
+		);
+		source_glyph_sequence_active = !restored_box;
+	}
+	if(!vm.finished()) {
+		return std::unexpected(CutsceneScriptError{
+			CutsceneScriptErrorCode::unexpected_end,
+			vm.byte_offset(),
+		});
+	}
+	return runs;
+}
+
 } // namespace th03::present
