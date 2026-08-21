@@ -134,6 +134,45 @@ std::vector<std::byte> synthetic_ssg_song()
 	return bytes;
 }
 
+std::vector<std::byte> synthetic_fm6_tone_song()
+{
+	constexpr std::size_t file_prefix = 1U;
+	constexpr std::size_t header_size = 0x1AU;
+	std::vector<std::byte> bytes(file_prefix + header_size, std::byte{0U});
+	const auto emit = [&bytes](std::initializer_list<std::uint8_t> stream) {
+		const auto offset = static_cast<std::uint16_t>(bytes.size() - 1U);
+		for(const auto value : stream) {
+			append(bytes, value);
+		}
+		return offset;
+	};
+	const auto empty = emit({0x80U});
+	const auto fm6 = emit({0xFFU, 0x00U, 0x40U, 0x60U, 0x80U});
+	const auto rhythm_table = emit({0x80U});
+	std::array<std::uint16_t, 11U> parts{};
+	parts.fill(empty);
+	parts[5U] = fm6;
+	for(std::size_t part = 0U; part < parts.size(); ++part) {
+		set_le16(bytes, file_prefix + (part * 2U), parts[part]);
+	}
+	set_le16(bytes, file_prefix + 0x16U, rhythm_table);
+	const auto tone = static_cast<std::uint16_t>(bytes.size() - 1U);
+	set_le16(bytes, file_prefix + 0x18U, tone);
+	for(const auto value : {
+		0x00U,
+		0x01U, 0x01U, 0x01U, 0x01U,
+		0x00U, 0x00U, 0x00U, 0x00U,
+		0x1FU, 0x1FU, 0x1FU, 0x1FU,
+		0x00U, 0x00U, 0x00U, 0x00U,
+		0x00U, 0x00U, 0x00U, 0x00U,
+		0x0FU, 0x0FU, 0x0FU, 0x0FU,
+		0x21U,
+	}) {
+		append(bytes, static_cast<std::uint8_t>(value));
+	}
+	return bytes;
+}
+
 std::vector<std::byte> synthetic_rhythm_song()
 {
 	constexpr std::size_t file_prefix = 1U;
@@ -353,6 +392,18 @@ public:
 
 	std::size_t fm3_key_ons = 0U;
 	std::size_t fm3_key_offs = 0U;
+};
+
+class Fm6ToneTrace final : public PmdOpnaRegisterTraceSink {
+public:
+	void register_written(const PmdOpnaRegisterWrite &write) noexcept override
+	{
+		if(write.address == 0x1B2U) {
+			algorithms.push_back(write.value);
+		}
+	}
+
+	std::vector<std::uint8_t> algorithms{};
 };
 
 void test_config_and_load_validation()
@@ -676,6 +727,35 @@ void test_effect_transport_and_timer_a_ownership()
 		"tie, transpose, and portamento commands finish after song Stop"
 	);
 	expect(bank == caller_bank, "EFC repeat counters never mutate caller bytes");
+}
+
+void test_effect_end_restores_fm6_tone_immediately()
+{
+	auto subject = engine();
+	const auto song = synthetic_fm6_tone_song();
+	const auto bank = synthetic_effect_bank();
+	expect(
+		subject.load_song(song) && subject.load_effect_bank(bank) &&
+			subject.play(),
+		"FM6 restoration fixture starts"
+	);
+	Fm6ToneTrace trace;
+	subject.set_register_trace_sink(&trace);
+	expect(static_cast<bool>(subject.play_effect(1U)),
+		"FM6 restoration effect starts");
+	const auto deadline = subject.status().samples_rendered + 200'000U;
+	std::array<PmdOpnaStereoSample, 2'048U> scratch{};
+	while(subject.status().active_effect &&
+		subject.status().samples_rendered < deadline) {
+		subject.render_native(scratch);
+	}
+	expect(!subject.status().active_effect,
+		"FM6 restoration effect reaches its Timer-A end");
+	expect(
+		trace.algorithms.size() >= 2U && trace.algorithms.front() == 0x07U &&
+			trace.algorithms.back() == 0x21U,
+		"effect end immediately restores the interrupted FM6 music tone"
+	);
 }
 
 void test_effect_pcm_and_registers_are_deterministic()
@@ -1522,6 +1602,7 @@ int main(int argc, char **argv)
 	test_config_and_load_validation();
 	test_effect_bank_validation_is_transactional();
 	test_effect_transport_and_timer_a_ownership();
+	test_effect_end_restores_fm6_tone_immediately();
 	test_effect_pcm_and_registers_are_deterministic();
 	test_user_category_volumes_preserve_one_chip();
 	test_load_is_chip_silent_and_play_is_traced();

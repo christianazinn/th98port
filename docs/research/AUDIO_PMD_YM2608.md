@@ -299,10 +299,16 @@ repeat targets, and 26-byte uniquely keyed FM tone records. It copies the bank,
 relocates all internal words into each fresh mutable song image, advances the
 effect from Timer A on FM6, and masks/releases the ordinary FM6 part. Generated
 tests cover malformed-bank atomicity, replacement, pause/Stop independence,
-repeat relocation, and caller lifetime. The byte-silent external gate starts
-and naturally terminates all 22 authored `YUME.EFC` entries on GCC and MSVC.
-Shipped-TSR register parity remains a fidelity gate for exact start/tick/end
-ordering; it is not needed to make the native player functionally bounded.
+repeat relocation, caller lifetime, and PMDB2's immediate restoration of the
+interrupted FM6 music tone at the Timer-A effect-end boundary. A bounded,
+silent/Turbo PMDB2.COM register trace exposed that restoration requirement;
+without it, the effect tone could remain installed until a later authored FM6
+tone command and make the music lane sound absent. The byte-silent external
+gate starts and naturally terminates all 22 authored `YUME.EFC` entries on GCC
+and MSVC. The trace also shows a source/native instrument-register write-order
+difference that reaches the same state before key-on. Full shipped-TSR parity
+remains a fidelity gate for every effect's exact start/tick ordering; it is not
+needed to make the native player functionally bounded.
 
 ### `ymfm` — recommended synthesis backend
 
@@ -729,9 +735,10 @@ register divergence before a waveform metric.
 2. **PMD dependency provenance:** resolved for the imported BSD-2 98fmplayer
    files; retain the exact pin, source delta, and binary notices.
 3. **`.EFC` trace parity:** the bounded format, shipped opcode subset, FM6
-   ownership, replacement, and natural termination are implemented. Normalize
-   a shipped-TSR register trace to prove exact start/tick/end/restoration order,
-   including the unused empty effect-ID-zero behavior.
+   ownership, replacement, natural termination, and immediate PMDB2 music-tone
+   restoration are implemented. Normalize the remaining shipped-TSR trace to
+   prove every effect's exact start/tick register ordering, including the unused
+   empty effect-ID-zero behavior.
 4. **Actual song feature subset:** corpus structure and the native byte-silent
    gate resolve rhythm (20/21) and ordinary ADPCM/PCM (unused). Shipped-TSR
    register comparison remains necessary for exact sequencing fidelity.

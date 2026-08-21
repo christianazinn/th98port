@@ -5271,6 +5271,13 @@ static void pmd_fmeff_finish(
   pmd->fmeff_num = 0xff;
   music->mask.effect = false;
   music->proc_masked = pmd_part_masked(music);
+  if (!music->proc_masked) {
+    /* PMDB2 restores the interrupted FM6 part's instrument immediately at
+     * the Timer-A effect-end boundary. Leaving the chip on the effect tone
+     * until the next authored FM6 tone command can make that music lane
+     * disappear for an arbitrarily long note span. */
+    pmd_part_fm_unmask(work, pmd, music);
+  }
 }
 
 static void pmd_fmeff_advance(
