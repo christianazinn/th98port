@@ -99,7 +99,7 @@ override. Supplying only one, or malformed values, fails closed.
 list of unauthenticated `stun:`, `turn:`, or `turns:` URLs. It can remain unset
 for a same-tailnet test where host ICE candidates are mutually reachable. A
 configured room service supplies bounded short-lived TURN URLs, username, and
-credential in its authenticated `T3ROOM2` welcome; these values remain outside
+credential in its authenticated `T3ROOM3` welcome; these values remain outside
 replays, deterministic state, settings, and diagnostics.
 
 `Network Settings -> Connection` selects `Automatic` or `Relay Only` while the

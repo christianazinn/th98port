@@ -13,6 +13,7 @@
 #include "th03/app/new_classic_language.hpp"
 #include "th03/app/new_classic_game_text.hpp"
 #include "th03/app/new_classic_messages.hpp"
+#include "th03/app/new_classic_netplay_signaling.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/present/source_surface.hpp"
 
@@ -56,6 +57,7 @@ struct NewClassicNetplayMatchIntroRequest final {
 	MainDirectVsConfig process{};
 	NewClassicLanguageAssetProfile language =
 		NewClassicLanguageAssetProfile::english;
+	std::optional<NewClassicNetplayRoomPaired> profiles{};
 };
 
 struct NewClassicNetplayMatchIntroTick final {

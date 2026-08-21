@@ -515,7 +515,8 @@ std::expected<
 	MainlStageTextAssets text,
 	const present::AnkGlyphProvider &font,
 	GameOptions game_options,
-	std::optional<formats::ReplayPracticeConfig> practice
+	std::optional<formats::ReplayPracticeConfig> practice,
+	std::optional<std::array<MainlStageCharacterText, 2U>> player_text_override
 )
 {
 	if(resident.game_mode < game_mode::vs_1p_cpu ||
@@ -531,6 +532,7 @@ std::expected<
 			.kotohime_compatibility = kotohime_compatibility,
 			.policy = EntryPolicy::classic_vs,
 			.practice = std::move(practice),
+			.player_text_override = std::move(player_text_override),
 		},
 		resources,
 		std::move(text),
@@ -888,13 +890,15 @@ std::expected<
 			}
 		}
 	}
-	prepared->english_text = std::ranges::all_of(
-		text.characters,
-		[](const MainlStageCharacterText &character) {
-			return !character.title_second.empty();
-		}
-	);
-	if(!prepared->english_text && std::ranges::any_of(
+	prepared->english_text = prepared->entry.player_text_override.has_value() ||
+		std::ranges::all_of(
+			text.characters,
+			[](const MainlStageCharacterText &character) {
+				return !character.title_second.empty();
+			}
+		);
+	if(!prepared->entry.player_text_override && !prepared->english_text &&
+		std::ranges::any_of(
 		text.characters,
 		[](const MainlStageCharacterText &character) {
 			return !character.title_second.empty();
@@ -904,8 +908,20 @@ std::expected<
 			ClassicMainlStageErrorCode::invalid_config
 		));
 	}
-	const auto &first = text.characters[character_index(player_one->character)];
-	const auto &second = text.characters[character_index(player_two->character)];
+	const auto &first = prepared->entry.player_text_override ?
+		(*prepared->entry.player_text_override)[0U] :
+		text.characters[character_index(player_one->character)];
+	const auto &second = prepared->entry.player_text_override ?
+		(*prepared->entry.player_text_override)[1U] :
+		text.characters[character_index(player_two->character)];
+	if(prepared->entry.player_text_override &&
+		(first.title.empty() || first.title_second.empty() || first.name.empty() ||
+		 second.title.empty() || second.title_second.empty() ||
+		 second.name.empty())) {
+		return std::unexpected(stage_error(
+			ClassicMainlStageErrorCode::invalid_config
+		));
+	}
 	const std::array<const std::vector<std::uint8_t> *, 6U> selected_text =
 		prepared->english_text ? std::array{
 			&first.title, &first.title_second, &first.name,

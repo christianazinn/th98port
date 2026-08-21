@@ -386,7 +386,9 @@ encode_new_classic_netplay_room_signal(
 			NewClassicNetplayRoomMessageErrorCode::invalid_payload
 		));
 	}
-	std::string result{"{\"protocol\":\"T3ROOM2\",\"type\":"};
+	std::string result{"{\"protocol\":"};
+	append_json_string(result, new_classic_netplay_room_protocol);
+	result += ",\"type\":";
 	append_json_string(result, type);
 	result += ",\"sequence\":" + std::to_string(signal.sequence) +
 		",\"payload\":";
@@ -427,12 +429,43 @@ decode_new_classic_netplay_room_message(std::string_view wire)
 		));
 	}
 	if(*type == "paired") {
-		if(fields->size() != 2U) {
+		const auto *player_one_user_id =
+			string_value(field(*fields, "p1UserId"));
+		const auto *player_one_nametag =
+			string_value(field(*fields, "p1Nametag"));
+		const auto *player_two_user_id =
+			string_value(field(*fields, "p2UserId"));
+		const auto *player_two_nametag =
+			string_value(field(*fields, "p2Nametag"));
+		if(fields->size() != 6U || player_one_user_id == nullptr ||
+			player_one_nametag == nullptr || player_two_user_id == nullptr ||
+			player_two_nametag == nullptr ||
+			!uuid_shape(*player_one_user_id) ||
+			!uuid_shape(*player_two_user_id) ||
+			*player_one_user_id == *player_two_user_id) {
 			return std::unexpected(error(
-				NewClassicNetplayRoomMessageErrorCode::invalid_shape
+				NewClassicNetplayRoomMessageErrorCode::invalid_identity
 			));
 		}
-		return NewClassicNetplayRoomPaired{};
+		auto player_one_layout =
+			layout_new_classic_nametag(*player_one_nametag);
+		auto player_two_layout =
+			layout_new_classic_nametag(*player_two_nametag);
+		if(!player_one_layout || !player_two_layout) {
+			return std::unexpected(error(
+				NewClassicNetplayRoomMessageErrorCode::invalid_identity
+			));
+		}
+		return NewClassicNetplayRoomPaired{
+			.player_one = {
+				.user_id = *player_one_user_id,
+				.nametag = std::move(*player_one_layout),
+			},
+			.player_two = {
+				.user_id = *player_two_user_id,
+				.nametag = std::move(*player_two_layout),
+			},
+		};
 	}
 	if(*type == "peer-left") {
 		const auto *player = unsigned_value(field(*fields, "player"));

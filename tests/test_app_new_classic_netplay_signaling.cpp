@@ -44,7 +44,7 @@ int main()
 		"signal round trip");
 
 	const auto welcome = decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM2\",\"type\":\"welcome\","
+		"{\"protocol\":\"T3ROOM3\",\"type\":\"welcome\","
 		"\"code\":\"2ABCDE\","
 		"\"roomId\":\"01234567-89ab-cdef-0123-456789abcdef\","
 		"\"player\":1,\"expiresAtUnixMs\":9007199254740991,"
@@ -73,12 +73,23 @@ int main()
 		}, "welcome TURN credentials");
 
 	const auto paired = decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM2\",\"type\":\"paired\"}"
+		"{\"protocol\":\"T3ROOM3\",\"type\":\"paired\","
+		"\"p1UserId\":\"01234567-89ab-cdef-0123-456789abcdef\","
+		"\"p1Nametag\":\"Resident of Fantasy Who Runs Through Time\","
+		"\"p2UserId\":\"fedcba98-7654-3210-fedc-ba9876543210\","
+		"\"p2Nametag\":\"Second Player\"}"
 	);
 	check(paired && std::holds_alternative<NewClassicNetplayRoomPaired>(*paired),
 		"paired decodes");
+	check(paired && std::get<NewClassicNetplayRoomPaired>(*paired).
+		player_one.nametag.lines == std::array<std::string, 2U>{
+			"Resident of Fantasy Who Runs", "Through Time",
+		}, "paired profile uses the exact title-row layout");
+	check(paired && std::get<NewClassicNetplayRoomPaired>(*paired).
+		player_two.user_id == "fedcba98-7654-3210-fedc-ba9876543210",
+		"paired profile preserves the stable P2 UUID");
 	const auto departed = decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM2\",\"type\":\"peer-left\",\"player\":2}"
+		"{\"protocol\":\"T3ROOM3\",\"type\":\"peer-left\",\"player\":2}"
 	);
 	check(departed && std::get<NewClassicNetplayRoomPeerLeft>(*departed).player ==
 		2U, "peer-left decodes");
@@ -87,30 +98,44 @@ int main()
 	check(!valid_new_classic_netplay_room_code("1ABCDE"), "rejects one");
 	check(!valid_new_classic_netplay_room_code("OABCDE"), "rejects O");
 	check(!decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM2\",\"type\":\"paired\",\"extra\":0}"
+		"{\"protocol\":\"T3ROOM3\",\"type\":\"paired\",\"extra\":0}"
 	), "rejects extensions");
 	check(!decode_new_classic_netplay_room_message(
 		"{\"protocol\":\"T3ROOM1\",\"type\":\"paired\"}"
 	), "rejects protocol mismatch");
 	check(!decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM2\",\"type\":\"ice\","
+		"{\"protocol\":\"T3ROOM3\",\"type\":\"ice\","
 		"\"sequence\":4294967296,\"payload\":\"x\"}"
 	), "rejects sequence overflow");
 	check(!decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM2\",\"type\":\"paired\","
-		"\"protocol\":\"T3ROOM2\"}"
+		"{\"protocol\":\"T3ROOM3\",\"type\":\"paired\","
+		"\"protocol\":\"T3ROOM3\"}"
 	), "rejects duplicate keys");
 	check(!decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM2\",\"type\":\"paired\"} trailing"
+		"{\"protocol\":\"T3ROOM3\",\"type\":\"paired\"} trailing"
 	), "rejects trailing bytes");
 	check(!decode_new_classic_netplay_room_message(
-		"{\"protocol\":\"T3ROOM2\",\"type\":\"welcome\","
+		"{\"protocol\":\"T3ROOM3\",\"type\":\"welcome\","
 		"\"code\":\"2ABCDE\","
 		"\"roomId\":\"01234567-89ab-cdef-0123-456789abcdef\","
 		"\"player\":1,\"expiresAtUnixMs\":1,\"stunUrls\":\"\","
 		"\"turnUrls\":\"turn:turn.example.test:3478\","
 		"\"turnUsername\":\"user\",\"turnCredential\":\"\"}"
 	), "rejects incomplete TURN credentials");
+	check(!decode_new_classic_netplay_room_message(
+		"{\"protocol\":\"T3ROOM3\",\"type\":\"paired\","
+		"\"p1UserId\":\"01234567-89ab-cdef-0123-456789abcdef\","
+		"\"p1Nametag\":\"One\","
+		"\"p2UserId\":\"01234567-89ab-cdef-0123-456789abcdef\","
+		"\"p2Nametag\":\"Two\"}"
+	), "rejects one account occupying both paired seats");
+	check(!decode_new_classic_netplay_room_message(
+		"{\"protocol\":\"T3ROOM3\",\"type\":\"paired\","
+		"\"p1UserId\":\"01234567-89ab-cdef-0123-456789abcdef\","
+		"\"p1Nametag\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAA\","
+		"\"p2UserId\":\"fedcba98-7654-3210-fedc-ba9876543210\","
+		"\"p2Nametag\":\"Two\"}"
+	), "rejects a paired nametag outside the title geometry");
 	check(!decode_new_classic_netplay_room_message(
 		std::string(new_classic_netplay_room_signal_max_bytes + 1U, 'x')
 	), "rejects oversized wire");

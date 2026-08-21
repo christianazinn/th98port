@@ -8,10 +8,12 @@
 #include <variant>
 #include <vector>
 
+#include "th03/app/new_classic_nametag.hpp"
+
 namespace th03::app {
 
 inline constexpr std::string_view new_classic_netplay_room_protocol =
-	"T3ROOM2";
+	"T3ROOM3";
 inline constexpr std::size_t new_classic_netplay_room_signal_max_bytes =
 	16U * 1024U;
 inline constexpr std::size_t new_classic_netplay_room_payload_max_bytes =
@@ -60,7 +62,20 @@ struct NewClassicNetplayRoomWelcome final {
 	) = default;
 };
 
+struct NewClassicNetplayRoomIdentity final {
+	std::string user_id{};
+	NewClassicNametagLayout nametag{};
+
+	friend bool operator==(
+		const NewClassicNetplayRoomIdentity &,
+		const NewClassicNetplayRoomIdentity &
+	) = default;
+};
+
 struct NewClassicNetplayRoomPaired final {
+	NewClassicNetplayRoomIdentity player_one{};
+	NewClassicNetplayRoomIdentity player_two{};
+
 	friend bool operator==(
 		const NewClassicNetplayRoomPaired &,
 		const NewClassicNetplayRoomPaired &
@@ -95,6 +110,7 @@ enum class NewClassicNetplayRoomMessageErrorCode : std::uint8_t {
 	invalid_player,
 	invalid_expiration,
 	invalid_ice_server,
+	invalid_identity,
 };
 
 struct NewClassicNetplayRoomMessageError final {

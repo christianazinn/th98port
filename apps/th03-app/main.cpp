@@ -2016,6 +2016,7 @@ struct DirectNetplayLobbyResult final {
 	NetplayWire wire;
 	th03::app::NewClassicNetplayLobby lobby{};
 	th03::app::NewClassicNetplayMatchContract contract{};
+	std::optional<th03::app::NewClassicNetplayRoomPaired> profiles{};
 };
 
 struct RtcNetplayRequest final {
@@ -2458,6 +2459,7 @@ negotiate_rtc_netplay_lobby(
 	auto room = std::move(*opened);
 	std::string displayed_code{};
 	std::uint8_t assigned_player = 0U;
+	std::optional<th03::app::NewClassicNetplayRoomPaired> profiles{};
 	const auto room_started = std::chrono::steady_clock::now();
 	for(;;) {
 		if(const auto pumped = pump_retained_menu_audio(
@@ -2496,6 +2498,38 @@ negotiate_rtc_netplay_lobby(
 		}
 		if(snapshot.state == RtcRoomState::ready) {
 			assigned_player = snapshot.player;
+			if(!snapshot.identities) {
+				return std::unexpected(fail_netplay(
+					"netplay-room-connect", "paired-profile-missing"
+				));
+			}
+			auto player_one_nametag =
+				th03::app::layout_new_classic_nametag(
+					snapshot.identities->player_one.nametag
+				);
+			auto player_two_nametag =
+				th03::app::layout_new_classic_nametag(
+					snapshot.identities->player_two.nametag
+				);
+			const auto &local_identity = assigned_player == 1U ?
+				snapshot.identities->player_one :
+				snapshot.identities->player_two;
+			if(!player_one_nametag || !player_two_nametag ||
+				local_identity.user_id != rtc_request.user_id) {
+				return std::unexpected(fail_netplay(
+					"netplay-room-connect", "paired-profile-invalid"
+				));
+			}
+			profiles = th03::app::NewClassicNetplayRoomPaired{
+				.player_one = {
+					.user_id = snapshot.identities->player_one.user_id,
+					.nametag = std::move(*player_one_nametag),
+				},
+				.player_two = {
+					.user_id = snapshot.identities->player_two.user_id,
+					.nametag = std::move(*player_two_nametag),
+				},
+			};
 			break;
 		}
 		if(snapshot.state == RtcRoomState::failed ||
@@ -2683,6 +2717,7 @@ negotiate_rtc_netplay_lobby(
 		.wire = std::move(wire),
 		.lobby = std::move(lobby),
 		.contract = *contract,
+		.profiles = std::move(profiles),
 	};
 }
 #endif
@@ -3346,6 +3381,7 @@ int run_direct_netplay_on_platform(
 			.content = parsed.launch.content,
 			.process = parsed.launch.process,
 			.language = parsed.presentation_language,
+			.profiles = negotiated->profiles,
 		});
 		if(!intro) {
 			return fail("netplay-match-intro", intro.error());

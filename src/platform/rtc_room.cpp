@@ -566,6 +566,7 @@ struct RtcRoom::Impl final {
 		std::optional<RtcRoomError> failure{};
 		std::string room_code{};
 		std::uint8_t player = 0U;
+		std::optional<RtcRoomIdentitySnapshot> identities{};
 		std::uint32_t outbound_sequence = 0U;
 		std::uint32_t inbound_sequence = 0U;
 		bool welcomed = false;
@@ -987,7 +988,8 @@ struct RtcRoom::Impl final {
 			core->state = RtcRoomState::waiting_peer;
 			return;
 		}
-		if(std::holds_alternative<app::NewClassicNetplayRoomPaired>(*decoded)) {
+		if(const auto *paired = std::get_if<
+			app::NewClassicNetplayRoomPaired>(&*decoded)) {
 			bool offerer = false;
 			{
 				std::scoped_lock lock(core->mutex);
@@ -997,6 +999,16 @@ struct RtcRoom::Impl final {
 					return;
 				}
 				core->paired = true;
+				core->identities = RtcRoomIdentitySnapshot{
+					.player_one = {
+						.user_id = paired->player_one.user_id,
+						.nametag = paired->player_one.nametag.source,
+					},
+					.player_two = {
+						.user_id = paired->player_two.user_id,
+						.nametag = paired->player_two.nametag.source,
+					},
+				};
 				core->state = RtcRoomState::negotiating;
 				offerer = core->player == 1U;
 			}
@@ -1303,6 +1315,7 @@ RtcRoomSnapshot RtcRoom::snapshot() const noexcept
 		result.error = impl_->core->failure;
 		result.room_code = impl_->core->room_code;
 		result.player = impl_->core->player;
+		result.identities = impl_->core->identities;
 		peer = impl_->core->peer;
 	}
 	if(peer) {

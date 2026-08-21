@@ -124,7 +124,9 @@ public:
 		MainlStageTextAssets text,
 		const present::AnkGlyphProvider &font,
 		GameOptions game_options,
-		std::optional<formats::ReplayPracticeConfig> practice = std::nullopt
+		std::optional<formats::ReplayPracticeConfig> practice = std::nullopt,
+		std::optional<std::array<MainlStageCharacterText, 2U>>
+			player_text_override = std::nullopt
 	);
 	// Automatic Demo follows OP -> MAINL -> MAIN without a character selector.
 	// The private OP completion proves the exact built-in pairing/RNG recipe.
@@ -182,6 +184,8 @@ private:
 		present::KotohimeBombFadeCompatibility kotohime_compatibility{};
 		EntryPolicy policy = EntryPolicy::story;
 		std::optional<formats::ReplayPracticeConfig> practice{};
+		std::optional<std::array<MainlStageCharacterText, 2U>>
+			player_text_override{};
 	};
 
 	struct Prepared final {

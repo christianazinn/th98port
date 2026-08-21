@@ -1,7 +1,8 @@
 # New Classic netplay nametags and replay identity
 
-Status: approved product contract, 2026-08-20. The portable layout validator
-and account-profile service are the first implementation parcel.
+Status: approved product contract, 2026-08-20. The portable layout validator,
+account-profile service, strict paired snapshot, and VS-title substitution are
+implemented. In-app profile editing and production deployment remain pending.
 
 ## Current facts
 
@@ -11,8 +12,8 @@ or display-name field. Replay and leaderboard rows currently display the
 eight-character name saved inside each V13 replay; that is replay metadata,
 not an account name.
 
-The room service authenticates each peer's UUID, but passes only seat and ICE
-signaling facts to the clients. The schema-3 `T3NLC001` match contract is 32
+The room service authenticates each peer's UUID and T3ROOM3 now freezes both
+UUID/nametag pairs before peer negotiation. The schema-3 `T3NLC001` match contract is 32
 bytes and rejects its final four reserved bytes unless they are zero. It has no
 player identity or presentation text.
 

@@ -113,11 +113,32 @@ struct RtcRoomConfig final {
 	bool relay_only = false;
 };
 
+struct RtcRoomIdentity final {
+	std::string user_id{};
+	std::string nametag{};
+
+	friend bool operator==(
+		const RtcRoomIdentity &,
+		const RtcRoomIdentity &
+	) = default;
+};
+
+struct RtcRoomIdentitySnapshot final {
+	RtcRoomIdentity player_one{};
+	RtcRoomIdentity player_two{};
+
+	friend bool operator==(
+		const RtcRoomIdentitySnapshot &,
+		const RtcRoomIdentitySnapshot &
+	) = default;
+};
+
 struct RtcRoomSnapshot final {
 	RtcRoomState state = RtcRoomState::connecting;
 	std::optional<RtcRoomError> error{};
 	std::string room_code{};
 	std::uint8_t player = 0U;
+	std::optional<RtcRoomIdentitySnapshot> identities{};
 	std::optional<std::chrono::milliseconds> round_trip_time{};
 };
 
@@ -138,7 +159,7 @@ rtc_room_websocket_url(
 
 // The token travels in a WebSocket subprotocol because libdatachannel's
 // WebSocket client deliberately exposes no arbitrary-header surface. The
-// Worker selects only T3ROOM2 and strips the account credential before entering
+// Worker selects only T3ROOM3 and strips the account credential before entering
 // the Durable Object. Short-lived TURN credentials arrive inside the bounded
 // authenticated welcome and never enter deterministic application state.
 [[nodiscard]] std::expected<std::string, RtcRoomError>

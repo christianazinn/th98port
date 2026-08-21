@@ -4,6 +4,8 @@
 #include "mainl_compiled_text_internal.hpp"
 #include "new_classic_language_internal.hpp"
 
+#include <algorithm>
+#include <array>
 #include <fstream>
 #include <limits>
 #include <utility>
@@ -11,6 +13,38 @@
 
 namespace th03::app {
 namespace {
+
+[[nodiscard]] std::size_t character_index(MainCharacter character) noexcept
+{
+	return static_cast<std::size_t>(
+		static_cast<std::uint8_t>(character) - 1U
+	);
+}
+
+[[nodiscard]] std::vector<std::uint8_t> graphics_text_bytes(
+	std::string_view text
+)
+{
+	std::vector<std::uint8_t> result(text.size());
+	std::ranges::transform(text, result.begin(), [](char byte) {
+		return static_cast<std::uint8_t>(byte);
+	});
+	return result;
+}
+
+[[nodiscard]] MainlStageCharacterText profile_text(
+	const NewClassicNetplayRoomIdentity &profile,
+	const MainlStageCharacterText &source
+)
+{
+	return {
+		.title = graphics_text_bytes(profile.nametag.lines[0U]),
+		.title_second = profile.nametag.line_count == 2U ?
+			graphics_text_bytes(profile.nametag.lines[1U]) :
+			std::vector<std::uint8_t>{static_cast<std::uint8_t>(' ')},
+		.name = source.name,
+	};
+}
 
 [[nodiscard]] NewClassicNetplayMatchIntroError intro_error(
 	NewClassicNetplayMatchIntroErrorCode code
@@ -162,6 +196,41 @@ std::expected<
 		);
 	}
 
+	std::optional<std::array<MainlStageCharacterText, 2U>> player_text{};
+	if(request.profiles) {
+		const auto player_one_layout = layout_new_classic_nametag(
+			request.profiles->player_one.nametag.source
+		);
+		const auto player_two_layout = layout_new_classic_nametag(
+			request.profiles->player_two.nametag.source
+		);
+		if(request.profiles->player_one.user_id.empty() ||
+			request.profiles->player_two.user_id.empty() ||
+			request.profiles->player_one.user_id ==
+				request.profiles->player_two.user_id ||
+			!player_one_layout || !player_two_layout ||
+			*player_one_layout != request.profiles->player_one.nametag ||
+			*player_two_layout != request.profiles->player_two.nametag) {
+			return std::unexpected(intro_error(
+				NewClassicNetplayMatchIntroErrorCode::invalid_request
+			));
+		}
+		player_text = std::array{
+			profile_text(
+				request.profiles->player_one,
+				imported->assets.characters[
+					character_index(request.process.player_one.character)
+				]
+			),
+			profile_text(
+				request.profiles->player_two,
+				imported->assets.characters[
+					character_index(request.process.player_two.character)
+				]
+			),
+		};
+	}
+
 	const auto init = main_direct_vs_game_init(request.process);
 	auto resources = loader.load_mainl_stage({
 		.player_one = request.process.player_one,
@@ -188,7 +257,8 @@ std::expected<
 	impl->font.emplace(std::move(*font));
 	auto scene = ClassicMainlStageTransition::create_from_restart(
 		init, request.process.kotohime_compatibility, *resources,
-		std::move(imported->assets), *impl->font, request.process.game_options
+		std::move(imported->assets), *impl->font, request.process.game_options,
+		std::nullopt, std::move(player_text)
 	);
 	if(!scene) {
 		return std::unexpected(intro_error(

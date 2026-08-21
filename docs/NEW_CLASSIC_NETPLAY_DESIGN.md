@@ -76,7 +76,7 @@ automatic and does not become a public account system.
 Quick Match asks only for the local character, palette, and rank. One
 authenticated hibernating Durable Object per rank pairs the oldest two
 different users and randomly assigns P1/P2. It then reuses private-room
-`T3ROOM2` signaling, TURN, immutable match contract, rollback, replay, and
+`T3ROOM3` signaling, paired account snapshots, TURN, immutable match contract, rollback, replay, and
 report owners. There is no rating, region selection, persistent ticket,
 gameplay relay, or server-declared winner.
 
@@ -459,7 +459,7 @@ GET  /api/th03/netplay/rooms/new          (create + WebSocket upgrade)
 GET  /api/th03/netplay/rooms/{code}       (WebSocket upgrade)
 ```
 
-`T3ROOM2` includes the sanitized short-lived STUN/TURN configuration in the
+`T3ROOM3` includes the immutable paired UUID/nametag snapshot and sanitized short-lived STUN/TURN configuration in the
 authenticated `welcome` message. Issuing it at the room upgrade avoids a
 second bearer-authenticated HTTP client in the native adapter and binds the
 credentials to the same short-lived room lifecycle. The Worker alone calls the
@@ -839,7 +839,7 @@ yet expose a truthful RTT measurement.
 
 1. Add the room Durable Object and signaling routes beside the existing online
    service without deploying until reviewed. The local service now has a
-   fail-closed `T3ROOM2` two-seat, ten-minute Durable Object plus authenticated
+   fail-closed `T3ROOM3` two-seat, ten-minute Durable Object plus authenticated
    create/connect routes and the native RTC/WebSocket adapter. Production
    bindings remain intentionally absent.
 2. Short-lived TURN credential issuance and operational redaction are
