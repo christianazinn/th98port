@@ -320,6 +320,9 @@ bool NewClassicNetplayRoom::draw() noexcept
 		}
 	}
 
+	if(screen_ == Screen::menu) {
+		return patch_surface_.publish(raster.access_page());
+	}
 	const auto footer = screen_ == Screen::connection_failed ?
 		NewClassicMessageId::netplay_report_footer :
 		((screen_ == Screen::join_entry || screen_ == Screen::port_entry) ?

@@ -285,6 +285,31 @@ std::size_t background_matches(
 	return matches;
 }
 
+bool region_matches_background(
+	th03::present::SourceSurface surface,
+	const th03::assets::PiImage &background,
+	std::int32_t left,
+	std::int32_t top,
+	std::int32_t right,
+	std::int32_t bottom
+)
+{
+	if(background.image.indices.size() != surface.pixels.size()) {
+		return false;
+	}
+	for(auto y = top; y < bottom; ++y) {
+		for(auto x = left; x < right; ++x) {
+			const auto index = static_cast<std::size_t>(y * 640 + x);
+			if(surface.pixels[index].layer !=
+				th03::present::ComposedPixelLayer::graphics ||
+				surface.pixels[index].value != background.image.indices[index]) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 void dump_menu_preview_if_requested(
 	th03::present::SourceSurface surface,
 	const char *environment
@@ -532,8 +557,27 @@ void test_replay_hub_and_libraries()
 		online_library.mode() == NewClassicOnlineMenuMode::online_replays,
 		"online Replay library opens directly on replay-backed rows");
 	finish_entry_fade(online_library);
+	const auto selected_surface = online_library.surface();
+	const auto &replay_background = patch_assets->replay_list_background;
+	const bool selected_row_is_yellow = [&] {
+		for(std::int32_t y = 112; y < 128; ++y) {
+			for(std::int32_t x = 24; x < 608; ++x) {
+				const auto index = static_cast<std::size_t>(y * 640 + x);
+				if(selected_surface.pixels[index].value == 12U &&
+					replay_background.image.indices[index] != 12U) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}();
+	expect(selected_row_is_yellow,
+		"online Replay selection stays yellow while category navigation is active");
+	expect(region_matches_background(
+		selected_surface, replay_background, 24, 368, 616, 384
+	), "online Replay list removes the redundant bottom instructions");
 	const auto replay_matches = background_matches(
-		online_library.surface(), patch_assets->replay_list_background
+		online_library.surface(), replay_background
 	);
 	const auto generic_matches = background_matches(
 		online_library.surface(), patch_assets->menu_background(
@@ -853,6 +897,102 @@ void test_online_high_score_menu()
 	static_cast<void>(stale.consume({.confirm = true}));
 	expect(stale.take_replay_download_request().has_value(),
 		"stale local replay becomes retryable through validated download");
+}
+
+void test_authentic_online_menu_previews_if_requested()
+{
+	if(!th03::test::environment("TH03_MENU_PREVIEW_DIR")) {
+		return;
+	}
+	using namespace th03::app;
+	const auto assets = th03::test::authentic_menu_assets();
+	expect(static_cast<bool>(assets),
+		"requested online menu previews load the authenticated archive");
+	if(!assets) {
+		return;
+	}
+	const auto board = online_board(2U, 4U, 0x91U,
+		NewClassicOnlineReplayAvailability::metadata_only);
+
+	NewClassicHighScoreMenu replay_library(
+		{board}, 2U, assets, NewClassicOnlineMenuMode::online_replays
+	);
+	finish_entry_fade(replay_library);
+	th03::test::dump_menu_preview(
+		replay_library.surface(), "008-online-replay-library.ppm"
+	);
+	static_cast<void>(replay_library.consume({}));
+	static_cast<void>(replay_library.consume({.confirm = true}));
+	static_cast<void>(replay_library.consume({}));
+	static_cast<void>(replay_library.consume({.confirm = true}));
+	th03::test::dump_menu_preview(
+		replay_library.surface(), "009-online-replay-detail.ppm"
+	);
+
+	NewClassicHighScoreMenu my_replays(
+		{board}, 2U, assets, NewClassicOnlineMenuMode::my_records
+	);
+	finish_entry_fade(my_replays);
+	th03::test::dump_menu_preview(
+		my_replays.surface(), "010-my-replays.ppm"
+	);
+	static_cast<void>(my_replays.consume({}));
+	static_cast<void>(my_replays.consume({.confirm = true}));
+	th03::test::dump_menu_preview(
+		my_replays.surface(), "011-my-replays-detail.ppm"
+	);
+
+	auto downloaded_board = board;
+	downloaded_board.replay_records.front().availability =
+		NewClassicOnlineReplayAvailability::downloaded;
+	NewClassicHighScoreMenu downloaded(
+		{downloaded_board}, 2U, assets,
+		NewClassicOnlineMenuMode::downloaded_replays
+	);
+	finish_entry_fade(downloaded);
+	th03::test::dump_menu_preview(
+		downloaded.surface(), "012-downloaded-replays.ppm"
+	);
+	static_cast<void>(downloaded.consume({}));
+	static_cast<void>(downloaded.consume({.confirm = true}));
+	th03::test::dump_menu_preview(
+		downloaded.surface(), "013-downloaded-replay-detail.ppm"
+	);
+
+	NewClassicHighScoreMenu high_scores(
+		{downloaded_board}, 2U, assets, NewClassicOnlineMenuMode::high_scores,
+		new_classic_score_empty()
+	);
+	finish_entry_fade(high_scores);
+	static_cast<void>(high_scores.consume({}));
+	static_cast<void>(high_scores.consume({.down = true}));
+	static_cast<void>(high_scores.consume({}));
+	static_cast<void>(high_scores.consume({.confirm = true}));
+	th03::test::dump_menu_preview(
+		high_scores.surface(), "014-online-leaderboard.ppm"
+	);
+	static_cast<void>(high_scores.consume({}));
+	static_cast<void>(high_scores.consume({.confirm = true}));
+	static_cast<void>(high_scores.consume({}));
+	static_cast<void>(high_scores.consume({.confirm = true}));
+	th03::test::dump_menu_preview(
+		high_scores.surface(), "015-online-leaderboard-detail.ppm"
+	);
+
+	NewClassicHighScoreMenu personal(
+		{downloaded_board}, 2U, assets, NewClassicOnlineMenuMode::high_scores,
+		new_classic_score_empty()
+	);
+	finish_entry_fade(personal);
+	static_cast<void>(personal.consume({}));
+	static_cast<void>(personal.consume({.down = true}));
+	static_cast<void>(personal.consume({}));
+	static_cast<void>(personal.consume({.down = true}));
+	static_cast<void>(personal.consume({}));
+	static_cast<void>(personal.consume({.confirm = true}));
+	th03::test::dump_menu_preview(
+		personal.surface(), "016-personal-bests.ppm"
+	);
 }
 
 void test_catalog_browser_and_save()
@@ -1538,6 +1678,7 @@ int main()
 {
 	test_replay_hub_and_libraries();
 	test_online_high_score_menu();
+	test_authentic_online_menu_previews_if_requested();
 	test_catalog_browser_and_save();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;

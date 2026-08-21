@@ -370,6 +370,7 @@
     {"enum": "hiscore_personal_header_one_cc", "id": "hiscore.personal.header.one-cc", "domain": "menu-font", "max_width": 64},
     {"enum": "hiscore_personal_header_time", "id": "hiscore.personal.header.time", "domain": "menu-font", "max_width": 144},
     {"enum": "hiscore_online_title", "id": "hiscore.online.title", "domain": "menu-font", "max_width": 560, "placeholders": [{"name": "character", "width_value": "Yumemi"}, {"name": "rank", "width_value": "Lunatic"}]},
+    {"enum": "hiscore_online_scope", "id": "hiscore.online.scope", "domain": "menu-font", "max_width": 120},
     {"enum": "hiscore_online_footer", "id": "hiscore.online.footer", "domain": "menu-font", "max_width": 560},
     {"enum": "hiscore_online_detail_footer", "id": "hiscore.online.detail-footer", "domain": "menu-font", "max_width": 560},
     {"enum": "hiscore_online_download_footer", "id": "hiscore.online.download-footer", "domain": "menu-font", "max_width": 560},

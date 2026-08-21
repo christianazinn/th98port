@@ -97,10 +97,18 @@ void release(th03::app::NewClassicNetplayRoom &room)
 void test_host_intent_is_player_lock_gated()
 {
 	using namespace th03::app;
-	NewClassicNetplayRoom room(assets_fixture());
+	const auto assets = assets_fixture();
+	NewClassicNetplayRoom room(assets);
 	expect(room.valid() && room.surface().pixels.size() == 256'000U &&
 		!room.surface().host_overlay,
 		"room menu is an authenticated source-domain surface");
+	const auto footer = assets->messages().text(
+		NewClassicMessageId::netplay_room_footer
+	);
+	const auto footer_left = 320 - (assets->menu_font.width(footer) / 2);
+	expect(room.surface().pixels[
+		(336U * 640U) + static_cast<std::size_t>(footer_left)
+	].value == 2U, "top-level Online Match omits redundant input instructions");
 	auto held = room.consume({.ui = {.confirm = true}});
 	expect(held.status == NewClassicNetplayRoomStatus::running &&
 		!room.take_launch(),
@@ -591,8 +599,9 @@ void test_match_ready_audio_contract()
 void test_online_profile_scene()
 {
 	using namespace th03::app;
+	const auto assets = assets_fixture();
 	NewClassicOnlineProfileScene first_use(
-		assets_fixture(), NewClassicLanguageAssetProfile::english, std::nullopt
+		assets, NewClassicLanguageAssetProfile::english, std::nullopt
 	);
 	expect(first_use.valid() && first_use.text_entry_active(),
 		"a profile without a nametag opens directly in first-use text entry");
@@ -616,6 +625,11 @@ void test_online_profile_scene()
 		.user_id = "12345678-1234-1234-1234-123456789abc",
 		.nametag = action ? std::optional{action->text} : std::nullopt,
 	}), "accepted profile returns to the retained account menu");
+	const auto label = assets->messages().text(NewClassicMessageId::profile_current);
+	const auto label_left = 320 - (assets->menu_font.width(label) / 2);
+	expect(first_use.surface().pixels[
+		(112U * 640U) + static_cast<std::size_t>(label_left)
+	].value == 15U, "Online Profile centers the Nametag label over its value");
 	static_cast<void>(first_use.consume({}));
 	static_cast<void>(first_use.consume({.ui = {.down = true}}));
 	static_cast<void>(first_use.consume({}));

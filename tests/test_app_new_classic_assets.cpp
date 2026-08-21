@@ -107,6 +107,8 @@ std::vector<std::byte> font_fixture()
 	const auto a = 128U + (static_cast<std::size_t>('A' - 0x20) * 32U);
 	bytes[a] = std::byte{0x80U};
 	bytes[a + 2U] = std::byte{0x40U};
+	const auto v = 128U + (static_cast<std::size_t>('v' - 0x20) * 32U);
+	bytes[v + 4U] = std::byte{0x40U};
 	std::uint16_t checksum = 0U;
 	for(std::size_t index = 32U; index < bytes.size(); ++index) {
 		checksum = static_cast<std::uint16_t>(
@@ -147,6 +149,11 @@ void test_font_decode_and_raster()
 	expect(raster.pixel(th03::present::Page::zero, {10, 20}) == 3U &&
 		raster.pixel(th03::present::Page::zero, {0, 20}) == 3U,
 		"restore follows source sixteen-pixel EGC granularity");
+	expect(decoded->put_vertical_flipped(raster, 20, 30, 'v', 12U),
+		"vertical mirror draws a source-font navigation glyph");
+	expect(raster.pixel(th03::present::Page::zero, {21, 43}) == 12U &&
+		raster.pixel(th03::present::Page::zero, {21, 32}) == 2U,
+		"up caret is the exact lowercase v bitmap mirrored by rows");
 
 	bytes[24U] ^= std::byte{1U};
 	auto corrupt = th03::app::detail::decode_new_classic_menu_font(bytes);

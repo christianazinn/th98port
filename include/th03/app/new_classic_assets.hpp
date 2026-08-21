@@ -106,6 +106,16 @@ public:
 		std::string_view text,
 		present::Index4 color
 	) const noexcept;
+	// Draws one source-font glyph with its bitmap rows mirrored vertically.
+	// Navigation uses this to derive an up caret from the exact lowercase v,
+	// keeping both directions identical in width and visual weight.
+	[[nodiscard]] bool put_vertical_flipped(
+		present::Raster &raster,
+		std::int32_t left,
+		std::int32_t top,
+		char character,
+		present::Index4 color
+	) const noexcept;
 	[[nodiscard]] bool put_cells(
 		present::Raster &raster,
 		std::int32_t cell_left,

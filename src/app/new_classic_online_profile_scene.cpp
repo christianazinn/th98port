@@ -73,7 +73,7 @@ bool NewClassicOnlineProfileScene::draw() noexcept
 	}
 
 	if(screen_ == Screen::menu) {
-		if(!font.put(raster, 104, 112,
+		if(!font.put_centered(raster, center_x, 112,
 			messages.text(NewClassicMessageId::profile_current), normal_color)) {
 			return false;
 		}

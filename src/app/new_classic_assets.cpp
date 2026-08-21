@@ -568,6 +568,39 @@ bool NewClassicMenuFont::put_right(
 	return put(raster, right - width(text), top, text, color);
 }
 
+bool NewClassicMenuFont::put_vertical_flipped(
+	present::Raster &raster,
+	std::int32_t left,
+	std::int32_t top,
+	char character,
+	present::Index4 color
+) const noexcept
+{
+	if(color > 0x0FU || left < 0 ||
+		left > static_cast<std::int32_t>(present::graphics_width - glyph_width) ||
+		top < 0 || top > static_cast<std::int32_t>(
+			present::graphics_height - glyph_height
+		)) {
+		return false;
+	}
+	const auto index = glyph_index(static_cast<std::uint8_t>(character));
+	const auto &glyph = bitmaps_[index];
+	for(std::int32_t row = 0; row < glyph_height; ++row) {
+		const auto source_row = static_cast<std::int32_t>(glyph_height) - row - 1;
+		for(std::int32_t column = 0; column < glyph_width; ++column) {
+			const auto byte = glyph[
+				(static_cast<std::size_t>(source_row) * 2U) +
+				(static_cast<std::size_t>(column) / 8U)
+			];
+			if((byte & (0x80U >> (column & 7))) != 0U &&
+				!raster.plot({left + column, top + row}, color)) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 bool NewClassicMenuFont::put_cells(
 	present::Raster &raster,
 	std::int32_t cell_left,

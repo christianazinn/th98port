@@ -368,6 +368,7 @@
     "hiscore.personal.header.one-cc": "1CC",
     "hiscore.personal.header.time": "Play Time",
     "hiscore.online.title": "Online - {rank} - {character}",
+    "hiscore.online.scope": "Online",
     "hiscore.online.footer": "< Character >   ^ Difficulty v   Z: Details",
     "hiscore.online.detail-footer": "Esc: Return",
     "hiscore.online.download-footer": "Z/Return: Download   Esc: Return",
@@ -409,6 +410,6 @@
     "netplay.report.label.max-prediction": "Max Prediction",
     "netplay.report.label.missed-deadlines": "Missed Deadlines",
     "netplay.report.label.round-trip": "Round Trip (ms)",
-    "netplay.report.footer": "Press Z/Return/Esc to return"
+    "netplay.report.footer": "Press Z to continue"
   }
 }
