@@ -25,4 +25,3 @@ Each image is an unscaled 640x400 binary PPM. The tool creates no outputs if
 the font or localization package fails validation. The preview is an authoring
 aid, not an alternate renderer: layout changes still belong in the production
 owner and therefore change this output through the shared path.
-
