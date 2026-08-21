@@ -19,6 +19,7 @@ enum class ClassicCliOption : std::uint8_t {
 	classic,
 	new_classic,
 	shell,
+	arrange,
 	data,
 	main_executable,
 	mainl_executable,
@@ -55,6 +56,7 @@ enum class ClassicCliErrorCode : std::uint8_t {
 	invalid_smoke_ticks,
 	invalid_capture_checkpoint,
 	invalid_capture_route,
+	invalid_arrange,
 };
 
 struct ClassicCliError final {

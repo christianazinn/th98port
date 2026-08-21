@@ -220,6 +220,14 @@ out\build\msvc-x64-sdl\Debug\th03-app.exe `
 # Developer bypasses for one experience without normal startup/product flow:
 # replace --shell with --classic or --new-classic.
 
+# Experimental New Classic Arrange ruleset. The maintained standalone accepts
+# the same final two arguments directly after its executable name.
+out\build\msvc-x64-sdl\Debug\th03-app.exe `
+  --new-classic --arrange dopamine-test-v1 `
+  --data X:\th03-extracted `
+  --main X:\th03\MAIN.EXE --mainl X:\th03\MAINL.EXE `
+  --op X:\th03\OP.EXE --font X:\pc98\FONT.ROM
+
 out\build\msvc-x64-sdl\Debug\th03-app.exe `
   --vs --data X:\th03-extracted --main X:\th03\MAIN.EXE `
   --font X:\pc98\FONT.ROM `
@@ -336,6 +344,15 @@ source, `compile_game_text_pack.py` validates and compiles it, and
 replay renderer. A catalog is accepted only with the full English overlay;
 Japanese and sealed Classic continue using authenticated source assets.
 See `localization/GAME_TEXT_README.md` for the format and translator workflow.
+The developer-only Dopamine Arrange prototype is selected with
+`--new-classic --arrange dopamine-test-v1`, or by launching the maintained
+standalone as `PoDD-Port-Test.exe --arrange dopamine-test-v1`. Its title is
+visibly marked, every formation is the downward-pointing triangle, CPU gauge
+attacks stop at level 2, and spell cut-ins do not suspend gameplay. It keeps
+New Classic input, Pause, audio, language, and presentation settings, but
+recording, replay playback, online submission, netplay, Practice, automatic
+demos, and score persistence fail closed until a future format binds a ruleset
+identity. Sealed Classic and ordinary New Classic remain stock.
 New Classic also owns the Replay Patch's versioned per-character HiScore file.
 Its viewer opens on `ALL CHARACTERS`, cycles through the unlocked character
 pages with Left/Right, appends the derived TOTAL row, and shows play time, 1CC,

@@ -479,6 +479,24 @@ void test_memory_only_lifecycle()
 	);
 }
 
+void test_capture_disabled_owner()
+{
+	th03::app::NewClassicReplayRecorder recorder(std::uint16_t{0U}, false);
+	check(!recorder.capture_enabled() && !recorder.recording() &&
+		recorder.document() == nullptr && !recorder.take_completed(),
+		"a disabled New Classic recorder preserves identity without capture state");
+	check(!recorder.round_started(
+		round_start(th03::game_mode::story, 0U, 0U, 29U)
+	).has_value(), "disabled capture rejects an accidental recording start");
+	check(recorder.configure_practice(std::nullopt).has_value() &&
+		!recorder.configure_practice(th03::formats::ReplayPracticeConfig{}),
+		"disabled capture accepts only the neutral Practice configuration");
+	recorder.source_vsync();
+	recorder.discard();
+	check(!recorder.recording() && !recorder.take_completed(),
+		"disabled capture remains empty across ordinary lifecycle cleanup");
+}
+
 void test_netplay_confirmed_capture()
 {
 	constexpr auto mode = th03::game_mode::vs_1p_2p;
@@ -610,6 +628,7 @@ int main()
 	test_timing_scope();
 	test_invalid_sequences();
 	test_memory_only_lifecycle();
+	test_capture_disabled_owner();
 	test_netplay_confirmed_capture();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0 ? 0 : 1;

@@ -3459,6 +3459,89 @@ void test_live_pause_frame_boundary()
 	);
 }
 
+void test_dopamine_arrange_ruleset()
+{
+	th03::GameInit stock{};
+	stock.resident_rand = 34;
+	stock.game_mode = th03::game_mode::vs_1p_cpu;
+	stock.is_cpu = {0U, 1U};
+	stock.paletted_character = {1, 3};
+	const auto stock_state = th03::detail::initialize_first_round(stock, 11U);
+	auto arrange = stock;
+	arrange.gameplay_ruleset = th03::dopamine_test_v1_ruleset;
+	auto arrange_state = th03::detail::initialize_first_round(arrange, 11U);
+	check(
+		arrange_state.random_seed == stock_state.random_seed &&
+		arrange_state.randring == stock_state.randring &&
+		arrange_state.formation_position_ring ==
+			stock_state.formation_position_ring &&
+		std::ranges::all_of(
+			arrange_state.formation_type_ring,
+			[](std::uint8_t formation) { return formation == 10U; }
+		),
+		"Dopamine Arrange consumes stock formation RNG before locking every wave to the downward triangle"
+	);
+	auto arrange_repeat = arrange_state;
+	arrange_repeat.random_seed = 0x13579BDFU;
+	th03::detail::initialize_repeat_round(arrange_repeat, arrange, 11U);
+	check(
+		std::ranges::all_of(
+			arrange_repeat.formation_type_ring,
+			[](std::uint8_t formation) { return formation == 10U; }
+		),
+		"Dopamine Arrange reapplies the locked formation on every repeat-round restart"
+	);
+
+	arrange_state.players[1U].gauge_avail = 192U << 4U;
+	arrange_state.players[1U].gauge_charged = 192U << 4U;
+	(void)th03::detail::gameplay_frame_suffix_through_feedback_boundary(
+		arrange_state, nullptr, arrange.gameplay_ruleset
+	);
+	check(
+		arrange_state.gba_flag_next[1U] ==
+			th03::detail::GaugeBossAttackFlag::gauge_bullet_init &&
+		arrange_state.players[1U].gauge_attacks_fired == 1U &&
+		arrange_state.players[1U].boss_attacks_fired == 0U &&
+		arrange_state.players[1U].gauge_charged == 0U,
+		"Dopamine Arrange CPU releases exactly a level-2 gauge attack at 192 charge"
+	);
+
+	arrange.runtime_snapshot = th03::RuntimeSnapshot{};
+	arrange.runtime_snapshot->players[0U].gauge_charged = 128U << 4U;
+	arrange.runtime_snapshot->players[0U].gauge_avail = 128U << 4U;
+	arrange.round_start_snapshot = th03::RoundStartSnapshot{};
+	arrange.round_start_snapshot->carry.spell_ready_frames[0U] = 127U;
+	th03::GameContent content{};
+	content.enemy_formations.resize(11U);
+	for(auto &formation : content.enemy_formations) {
+		formation.enemy_scripts.push_back({0U});
+	}
+	auto game = th03::Game::create(arrange, std::move(content));
+	check(game.has_value(), "Dopamine Arrange creates from its named ruleset");
+	if(game) {
+		const auto queued = game->step({});
+		const auto no_hold = game->step({});
+		const auto rejected = game->step({}, th03::InputContext::interstitial);
+		check(
+			queued.status == th03::StepStatus::running &&
+			no_hold.status == th03::StepStatus::running &&
+			no_hold.input_boundary_state.global_frame == 2U &&
+			game->canonical_state().round_frame == 2U &&
+			rejected.status == th03::StepStatus::invalid_input_context,
+			"Dopamine Arrange keeps the warning/cut-in transition but removes all 27 held gameplay samples"
+		);
+	}
+
+	auto invalid = arrange;
+	invalid.gameplay_ruleset.locked_formation = 11U;
+	th03::GameContent invalid_content{};
+	invalid_content.enemy_formations.resize(11U);
+	check(
+		!th03::Game::create(invalid, std::move(invalid_content)),
+		"an unsupported or unavailable Arrange contract fails closed"
+	);
+}
+
 } // namespace
 
 int main()
@@ -3509,6 +3592,7 @@ int main()
 	test_enedat();
 	test_recorded_pause_frame_boundary();
 	test_live_pause_frame_boundary();
+	test_dopamine_arrange_ruleset();
 	test_t3split();
 	test_practice_retry_policy();
 	test_version_neutral_replay_runner();

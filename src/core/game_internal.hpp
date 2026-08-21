@@ -648,15 +648,18 @@ void gameplay_input_latch(
 ) noexcept;
 bool gameplay_frame_suffix_before_interstitial(
 	DeterministicState &state,
-	GameplayObserver *observer = nullptr
+	GameplayObserver *observer = nullptr,
+	const GameplayRuleset &ruleset = stock_gameplay_ruleset
 ) noexcept;
 bool gameplay_frame_suffix_through_feedback_boundary(
 	DeterministicState &state,
-	GameplayObserver *observer = nullptr
+	GameplayObserver *observer = nullptr,
+	const GameplayRuleset &ruleset = stock_gameplay_ruleset
 ) noexcept;
 bool warning_interstitial_begin(
 	DeterministicState &state,
-	GameplayObserver *observer = nullptr
+	GameplayObserver *observer = nullptr,
+	const GameplayRuleset &ruleset = stock_gameplay_ruleset
 ) noexcept;
 void interstitial_input_latch(
 	DeterministicState &state,

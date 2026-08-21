@@ -149,6 +149,18 @@ Gates: stock rules byte/state identity, one rules object at construction,
 targeted tests for all three deltas, deterministic restart behavior, and clear
 rejection at every stock replay/online/netplay boundary.
 
+Status: implemented as the developer-only `dopamine-test-v1` rules contract.
+The core consumes stock formation RNG before substituting formation 10,
+reapplies the lock on repeat rounds, limits CPU gauge release to level 2, and
+publishes the cut-in transition without the 27-sample hold. New Classic remains
+the owner of input/Pause/configuration/presentation while its recorder is
+explicitly memory-disabled; Replay and Online rows remain visible but disabled
+and are skipped by navigation, automatic demos and Practice are unavailable,
+and score mutation is suppressed. The authenticated title carries a third
+`DOPAMINE ARRANGE` credit line. Both the ordinary executable and maintained
+standalone accept `--arrange dopamine-test-v1`; this is not yet a polished
+in-game mode selector.
+
 ### 4. Asset-decoupling support tools
 
 These can proceed alongside the content migrations:

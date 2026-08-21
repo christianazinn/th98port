@@ -483,7 +483,8 @@ struct ClassicStoryBackend final {
 		const GameInit &resident
 	)
 	{
-		if(!new_classic || replay_playback || score_run) {
+		if(!new_classic || replay_playback || score_run ||
+			!stock_gameplay_rules(resident.gameplay_ruleset)) {
 			return {};
 		}
 		const auto player = main_player_selection_from_paletted(
@@ -514,7 +515,8 @@ struct ClassicStoryBackend final {
 		const GameInit &resident
 	)
 	{
-		if(!new_classic || replay_playback) {
+		if(!new_classic || replay_playback ||
+			!stock_gameplay_rules(resident.gameplay_ruleset)) {
 			return {};
 		}
 		if(!score_run) {
@@ -741,7 +743,8 @@ struct ClassicStoryBackend final {
 			));
 		}
 		driver = std::move(*created_driver);
-		if(replay_recorder && !replay_capture_closed) {
+		if(replay_recorder && replay_recorder->capture_enabled() &&
+			!replay_capture_closed) {
 			if(replay_recorder->recording()) {
 				if(auto boundary = replay_recorder->process_completed(
 					replay::ProcessId::mainl
@@ -1410,7 +1413,9 @@ struct ClassicStoryBackend final {
 		const auto score_player = main_player_selection_from_paletted(
 			resident.paletted_character[0U]
 		);
-		if(new_classic && !replay_playback && (!score_run || !score_player ||
+		const bool stock_score = stock_gameplay_rules(resident.gameplay_ruleset);
+		if(new_classic && !replay_playback && stock_score &&
+			(!score_run || !score_player ||
 			score_run_rank != resident.rank ||
 			score_run_character != static_cast<std::uint8_t>(
 				score_player->character
@@ -1426,7 +1431,7 @@ struct ClassicStoryBackend final {
 		if(!resources) {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
-		auto created = new_classic ? (replay_playback ?
+		auto created = new_classic ? ((replay_playback || !stock_score) ?
 			ClassicRegistrationScene::create_new_classic_playback(
 				resident, score_path, legacy_score_path, *resources,
 				stage_text, static_content->font(), *cutscene_handoff

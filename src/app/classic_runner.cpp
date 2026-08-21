@@ -348,9 +348,13 @@ read_external_file(
 	};
 }
 
-[[nodiscard]] GameInit initial_resident(std::uint32_t seed) noexcept
+[[nodiscard]] GameInit initial_resident(
+	std::uint32_t seed,
+	GameplayRuleset gameplay_ruleset = stock_gameplay_ruleset
+) noexcept
 {
 	GameInit resident{};
+	resident.gameplay_ruleset = gameplay_ruleset;
 	resident.resident_rand = std::bit_cast<std::int32_t>(seed);
 	resident.random_seed = seed;
 	return resident;
@@ -402,6 +406,14 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		paths.mainl_executable.empty() || paths.op_executable.empty() ||
 		paths.font_rom.empty() || paths.config.empty() || paths.score.empty() ||
 		(request.autofire_mask > 3U) ||
+		!valid_gameplay_ruleset(request.gameplay_ruleset) ||
+		(request.experience == ExperienceProfile::classic &&
+		 !stock_gameplay_rules(request.gameplay_ruleset)) ||
+		(!stock_gameplay_rules(request.gameplay_ruleset) &&
+		 (request.experience != ExperienceProfile::new_classic ||
+		  request.initial_route != ClassicRunnerInitialRoute::title ||
+		  request.initial_replay ||
+		  request.new_classic_online_upload_available)) ||
 		(request.experience == ExperienceProfile::classic &&
 		 (request.autofire_mask != 0U || request.reduced_flash ||
 		  request.new_classic_online_identity_reset_available ||
@@ -558,7 +570,7 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		);
 	}
 
-	auto resident = initial_resident(request.seed);
+	auto resident = initial_resident(request.seed, request.gameplay_ruleset);
 	resident.autofire_mask = request.autofire_mask;
 	if(request.content.new_classic_score.empty()) {
 		request.content.new_classic_score =
@@ -569,7 +581,9 @@ ClassicRunner::load(ClassicRunnerRequest request)
 			request.content.config.parent_path() / "PODD.CFG";
 	}
 	auto replay_recorder = request.experience == ExperienceProfile::new_classic
-		? std::make_unique<NewClassicReplayRecorder>() : nullptr;
+		? std::make_unique<NewClassicReplayRecorder>(
+			std::uint16_t{0U}, stock_gameplay_rules(request.gameplay_ruleset)
+		) : nullptr;
 	auto session = ClassicOpSession::create(
 		std::move(resident),
 		std::make_unique<MainResourceLoader>(paths.data_root),

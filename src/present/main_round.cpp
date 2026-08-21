@@ -364,7 +364,8 @@ void MainRoundPresenter::warning_interstitial_started(
 		phase_ != Phase::boss || warning_interstitial_active_ ||
 		warning_suffix_pending_ || warning_lifecycle_seen_ ||
 		!hud_start_step_seen_ || hud_start_reads_remaining_ != 0U ||
-		(!started.flashing_players[0U] && !started.flashing_players[1U])
+		(!started.flashing_players[0U] && !started.flashing_players[1U]) ||
+		(started.sample_count != 0U && started.sample_count != 27U)
 	) {
 		fail(MainRoundStatus::invalid_observation);
 		return;
@@ -377,7 +378,8 @@ void MainRoundPresenter::warning_interstitial_started(
 	main_feedback_cue_requested(MainFeedbackCueRequested{
 		.site = MainFeedbackCueSite::warning_interstitial_started,
 	});
-	warning_interstitial_active_ = true;
+	warning_interstitial_active_ = started.sample_count != 0U;
+	warning_suffix_pending_ = started.sample_count == 0U;
 	next_warning_sample_ = 0U;
 }
 

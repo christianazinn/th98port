@@ -422,6 +422,49 @@ void test_replay_patch_title_if_assets_supplied()
 		!online_completion->selection_mode(),
 		"Online Match publishes a typed non-selection route"
 	);
+
+	GameInit arrange_resident{};
+	arrange_resident.gameplay_ruleset = th03::dopamine_test_v1_ruleset;
+	arrange_resident.resident_rand = 40;
+	arrange_resident.fast_op_animation = 1U;
+	auto arrange_created = ClassicOpSceneTestAccess::create_with_predecoded_assets(
+		arrange_resident, ClassicOpTitleMode::fast_fade, fullscreen_pi(true),
+		fullscreen_pi(false), window_sheet(), gaiji_sheet(), assets
+	);
+	expect(arrange_created.has_value(), "Dopamine Arrange title creates");
+	if(arrange_created) {
+		reach_main_menu(**arrange_created);
+		for(std::uint8_t row = 0U; row < 4U; ++row) {
+			expect((*arrange_created)->advance({.down = true}).has_value() &&
+				(*arrange_created)->advance().has_value(),
+				"Arrange title navigation advances on release edges");
+		}
+		expect(
+			(*arrange_created)->selected_choice() == ClassicOpMenuChoice::options,
+			"Arrange skips its visible but unavailable Replay row"
+		);
+		for(std::uint8_t row = 0U; row < 3U; ++row) {
+			expect((*arrange_created)->advance({.up = true}).has_value() &&
+				(*arrange_created)->advance().has_value(),
+				"Arrange title can navigate back to VS Start");
+		}
+		expect((*arrange_created)->advance({.ok = true}).has_value(),
+			"Arrange enters local VS Start");
+		for(std::uint16_t frame = 0U; frame < 13U; ++frame) {
+			expect((*arrange_created)->advance().has_value(),
+				"Arrange VS submenu expansion advances");
+		}
+		for(std::uint8_t row = 0U; row < 3U; ++row) {
+			expect((*arrange_created)->advance({.down = true}).has_value() &&
+				(*arrange_created)->advance().has_value(),
+				"Arrange local VS navigation advances");
+		}
+		expect(
+			(*arrange_created)->selected_vs_choice() ==
+				ClassicOpVsChoice::one_player_cpu,
+			"Arrange skips its visible but unavailable Online Match row"
+		);
+	}
 }
 
 void test_story_seed_and_vs_cancel_return()

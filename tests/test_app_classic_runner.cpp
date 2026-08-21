@@ -150,6 +150,34 @@ void test_cli()
 		shell->mode == th03::app::ClassicLaunchMode::shell,
 		"New Classic and the shared shell are explicit launch identities"
 	);
+	const auto arrange = parse({
+		"--new-classic", "--arrange", "dopamine-test-v1",
+		"--data", "d", "--main", "m", "--mainl", "l",
+		"--op", "o", "--font", "f",
+	});
+	expect(
+		arrange &&
+		arrange->launch.gameplay_ruleset == th03::dopamine_test_v1_ruleset,
+		"Dopamine Arrange is an explicit versioned New Classic CLI contract"
+	);
+	const auto arrange_classic = parse({
+		"--classic", "--arrange", "dopamine-test-v1",
+		"--data", "d", "--main", "m", "--mainl", "l",
+		"--op", "o", "--font", "f",
+	});
+	const auto arrange_unknown = parse({
+		"--new-classic", "--arrange", "dopamine-test-v2",
+		"--data", "d", "--main", "m", "--mainl", "l",
+		"--op", "o", "--font", "f",
+	});
+	expect(
+		!arrange_classic && !arrange_unknown &&
+		arrange_classic.error().code ==
+			th03::app::ClassicCliErrorCode::invalid_arrange &&
+		arrange_unknown.error().code ==
+			th03::app::ClassicCliErrorCode::invalid_arrange,
+		"Arrange rejects sealed Classic and unknown ruleset versions"
+	);
 	const auto complete = parse({
 		"--classic", "--data", "d", "--main", "m", "--mainl", "l",
 		"--op", "o", "--font", "f", "--tick-rate", "3/2",
@@ -1040,6 +1068,22 @@ void test_file_and_request_boundaries()
 		.experience = th03::app::ExperienceProfile::new_classic,
 		.new_classic_device_assignment = invalid_device,
 	});
+	const auto arrange_classic = th03::app::ClassicRunner::load({
+		.content = placeholder,
+		.gameplay_ruleset = th03::dopamine_test_v1_ruleset,
+	});
+	const auto arrange_replay = th03::app::ClassicRunner::load({
+		.content = placeholder,
+		.experience = th03::app::ExperienceProfile::new_classic,
+		.gameplay_ruleset = th03::dopamine_test_v1_ruleset,
+		.initial_replay = th03::app::ClassicRunnerInitialReplay{},
+	});
+	const auto arrange_online = th03::app::ClassicRunner::load({
+		.content = placeholder,
+		.experience = th03::app::ExperienceProfile::new_classic,
+		.gameplay_ruleset = th03::dopamine_test_v1_ruleset,
+		.new_classic_online_upload_available = true,
+	});
 	expect(!classic_autofire && !invalid_autofire &&
 		classic_autofire.error().code ==
 			th03::app::ClassicRunnerErrorCode::invalid_request &&
@@ -1049,6 +1093,16 @@ void test_file_and_request_boundaries()
 	expect(!invalid_assignment && invalid_assignment.error().code ==
 		th03::app::ClassicRunnerErrorCode::invalid_request,
 		"invalid stable device identities fail before external content I/O");
+	expect(
+		!arrange_classic && !arrange_replay && !arrange_online &&
+		arrange_classic.error().code ==
+			th03::app::ClassicRunnerErrorCode::invalid_request &&
+		arrange_replay.error().code ==
+			th03::app::ClassicRunnerErrorCode::invalid_request &&
+		arrange_online.error().code ==
+			th03::app::ClassicRunnerErrorCode::invalid_request,
+		"Arrange fails closed at sealed Classic, stock V13 playback, and online-upload boundaries"
+	);
 }
 
 [[nodiscard]] std::uint64_t surface_digest(

@@ -172,6 +172,11 @@ NewClassicReplayRecorder::configure_practice(
 	std::optional<formats::ReplayPracticeConfig> config
 ) noexcept
 {
+	if(!capture_enabled_) {
+		return config ? std::unexpected(replay_error(
+			NewClassicReplayErrorCode::invalid_sequence
+		)) : std::expected<void, NewClassicReplayError>{};
+	}
 	if(document_ || completed_ || (config && !valid_practice_config(*config))) {
 		return std::unexpected(replay_error(
 			NewClassicReplayErrorCode::invalid_sequence
@@ -187,6 +192,11 @@ NewClassicReplayRecorder::round_started(
 	std::uint16_t dos_date
 )
 {
+	if(!capture_enabled_) {
+		return std::unexpected(replay_error(
+			NewClassicReplayErrorCode::invalid_sequence
+		));
+	}
 	const bool practice = practice_config_.has_value();
 	if(completed_ || !replay_game_mode(observation.start.game_mode) ||
 		observation.start.paletted_character[0U] < 1 ||

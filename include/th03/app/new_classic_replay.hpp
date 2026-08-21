@@ -36,8 +36,12 @@ void preserve_new_classic_restart_random_seed(
 // identity nor storage/UI policy crosses into deterministic gameplay.
 class NewClassicReplayRecorder final {
 public:
-	explicit NewClassicReplayRecorder(std::uint16_t recording_date = 0U) noexcept :
-		recording_date_(recording_date)
+	explicit NewClassicReplayRecorder(
+		std::uint16_t recording_date = 0U,
+		bool capture_enabled = true
+	) noexcept :
+		recording_date_(recording_date),
+		capture_enabled_(capture_enabled)
 	{}
 	[[nodiscard]] std::expected<void, NewClassicReplayError> round_started(
 		const RoundStartObservation &observation,
@@ -74,6 +78,10 @@ public:
 	);
 
 	[[nodiscard]] bool recording() const noexcept;
+	[[nodiscard]] bool capture_enabled() const noexcept
+	{
+		return capture_enabled_;
+	}
 	[[nodiscard]] const formats::ReplayDocument *document() const noexcept;
 	[[nodiscard]] const CanonicalState *last_terminal() const noexcept;
 	[[nodiscard]] std::optional<formats::ReplayDocument> take_completed();
@@ -93,6 +101,7 @@ private:
 	std::uint32_t round_timed_frames_ = 0U;
 	bool round_timer_active_ = false;
 	bool slow_sample_pending_ = false;
+	bool capture_enabled_ = true;
 };
 
 } // namespace th03::app

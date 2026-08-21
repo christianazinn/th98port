@@ -417,6 +417,42 @@ void test_invalid_gauge_is_atomic()
 	);
 }
 
+void test_zero_sample_arrange_warning_continues_immediately()
+{
+	Raster raster;
+	Tram tram;
+	Sprite16Staging staging;
+	MainPaletteState palette;
+	prepare_raster(raster, staging);
+	prepare_palette(raster, palette);
+	auto p1 = make_mrs(1U, MrsOrientation::as_stored);
+	auto p2 = make_mrs(2U, MrsOrientation::horizontally_flipped);
+	MainWarningGaugePresenter presenter(
+		raster, tram, staging, palette, {{{&p1, &p2}}}
+	);
+	presenter.warning_interstitial_started({
+		.flashing_players = {true, false},
+		.next_attacks = {
+			GaugeBossAttackKind::gauge_bullet,
+			GaugeBossAttackKind::none,
+		},
+		.gauge_levels = {3U, 7U},
+		.boss_level = 9U,
+		.sample_count = 0U,
+	});
+	auto lifecycle = idle_lifecycle();
+	lifecycle.players[0U] = {
+		3U, 4U, GaugeBossAttackKind::gauge_bullet, GaugeBossAttackKind::none,
+	};
+	lifecycle.gauge_levels = {3U, 7U};
+	lifecycle.boss_level = 9U;
+	presenter.warning_frame_lifecycle(lifecycle);
+	expect(
+		presenter.ready(),
+		"zero-sample Arrange warning draws the cut-in and accepts the same-frame warning lifecycle"
+	);
+}
+
 } // namespace
 
 int main()
@@ -425,6 +461,7 @@ int main()
 	test_warning_text_tones_transitions_and_ramp();
 	test_completion_portraits_and_gauge();
 	test_invalid_gauge_is_atomic();
+	test_zero_sample_arrange_warning_continues_immediately();
 	if(failures != 0U) {
 		std::fprintf(stderr, "%zu of %zu checks failed\n", failures, checks);
 		return 1;

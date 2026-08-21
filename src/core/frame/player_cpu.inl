@@ -166,7 +166,8 @@ bool cpu_safe_move(
 void player_update_cpu(
 	DeterministicState &state,
 	std::uint8_t player_id,
-	GameplayObserver *observer
+	GameplayObserver *observer,
+	const GameplayRuleset &ruleset
 ) noexcept
 {
 	auto &player = state.players[player_id];
@@ -245,6 +246,17 @@ void player_update_cpu(
 		player.is_hit = false;
 		state.autofire_shot_gate[player_id] = 4U;
 		live_input = 0U;
+	} else if(
+		ruleset.cpu_gauge_attacks == CpuGaugeAttackPolicy::level_two_only
+	) {
+		if(player.gauge_avail >= gauge_192) {
+			state.autofire_shot_gate[player_id] = 0U;
+			live_input = input_shot;
+			if(player.gauge_charged >= gauge_192) {
+				state.autofire_shot_gate[player_id] = 4U;
+				live_input = 0U;
+			}
+		}
 	} else if(!(
 		player.bombs == 0U &&
 		static_cast<std::int8_t>(player.halfhearts) <= 3

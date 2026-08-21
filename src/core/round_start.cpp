@@ -172,6 +172,16 @@ void initialize_runtime_rings(
 	state.enemies_alive = {};
 }
 
+void apply_formation_ruleset(
+	DeterministicState &state,
+	const GameplayRuleset &ruleset
+) noexcept
+{
+	if(ruleset.formations == FormationSelectionPolicy::locked) {
+		state.formation_type_ring.fill(ruleset.locked_formation);
+	}
+}
+
 std::uint16_t practice_story_safety_frames(
 	std::uint8_t rank,
 	std::uint8_t stage,
@@ -586,6 +596,7 @@ DeterministicState initialize_first_round(
 	if(init.round_start_snapshot) {
 		apply_round_start_snapshot(state, *init.round_start_snapshot);
 	}
+	apply_formation_ruleset(state, init.gameplay_ruleset);
 	return state;
 }
 
@@ -738,6 +749,7 @@ void initialize_repeat_round(
 			);
 		}
 	}
+	apply_formation_ruleset(state, init.gameplay_ruleset);
 	state.formation_cursor = {};
 
 	// sub_A21F() carries the opening transition's closing callback into the

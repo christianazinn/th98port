@@ -601,6 +601,9 @@ struct WarningInterstitialStarted {
 	std::array<GaugeBossAttackKind, 2> next_attacks{};
 	std::array<std::uint8_t, 2> gauge_levels{};
 	std::uint8_t boss_level = 0;
+	// Stock owns 27 held-input/tone samples. A versioned Arrange ruleset may
+	// retain the portrait/warning transition while removing that gameplay hold.
+	std::uint8_t sample_count = 27U;
 
 	friend bool operator==(
 		const WarningInterstitialStarted &,

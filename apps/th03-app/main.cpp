@@ -617,7 +617,7 @@ void print_usage()
 			"[--rhythm-rom <YM2608.ROM> | --rhythm-pcm <T98RHYTHM.PCM>] "
 			"[--tick-rate <ticks>/<seconds>] "
 			"[--smoke-ticks n] [--capture-replay <V13.RPY> "
-			"[--capture-checkpoint n]]\n"
+			"[--capture-checkpoint n]] [--arrange dopamine-test-v1]\n"
 		<< "   or: th03-app --vs --data <root> --main <MAIN.EXE> "
 			"--font <FONT.ROM>\n"
 		<< "       [--p1 <character[:first|second]>] "
@@ -740,6 +740,8 @@ const char *name(th03::app::ClassicCliErrorCode code) noexcept
 		return "invalid-capture-checkpoint";
 	case th03::app::ClassicCliErrorCode::invalid_capture_route:
 		return "invalid-capture-route";
+	case th03::app::ClassicCliErrorCode::invalid_arrange:
+		return "invalid-arrange";
 	}
 	return "unknown";
 }
@@ -752,6 +754,7 @@ const char *name(th03::app::ClassicCliOption option) noexcept
 	case th03::app::ClassicCliOption::classic: return "classic";
 	case th03::app::ClassicCliOption::new_classic: return "new-classic";
 	case th03::app::ClassicCliOption::shell: return "shell";
+	case th03::app::ClassicCliOption::arrange: return "arrange";
 	case th03::app::ClassicCliOption::data: return "data";
 	case th03::app::ClassicCliOption::main_executable: return "main";
 	case th03::app::ClassicCliOption::mainl_executable: return "mainl";
@@ -5101,6 +5104,9 @@ ExperienceRunResult run_classic_session(
 		parsed.launch.content.new_classic_settings;
 	const bool new_classic =
 		parsed.mode == th03::app::ClassicLaunchMode::new_classic;
+	const bool stock_rules = th03::stock_gameplay_rules(
+		parsed.launch.gameplay_ruleset
+	);
 	if(parsed.rhythm_rom && parsed.rhythm_pcm) {
 		std::cerr << "status=error\nstage=audio-profile\n"
 			"code=conflicting-rhythm-profiles\n";
@@ -5157,6 +5163,7 @@ ExperienceRunResult run_classic_session(
 	const auto online_origin = product_online_origin();
 #if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
 	parsed.launch.new_classic_online_upload_available = new_classic &&
+		stock_rules &&
 		online_origin &&
 		!parsed.capture_replay &&
 		!platform.oracle_enabled();
@@ -5361,7 +5368,7 @@ ExperienceRunResult run_classic_session(
 		}
 	}
 #endif
-	if(new_classic) {
+	if(new_classic && stock_rules) {
 		if(online_origin) {
 			if(platform.oracle_enabled() || parsed.capture_replay) {
 				std::cerr << "status=warning\nstage=online-refresh-start\n"

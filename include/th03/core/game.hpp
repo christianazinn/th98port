@@ -9,6 +9,7 @@
 #include <optional>
 #include <vector>
 
+#include "th03/core/gameplay_ruleset.hpp"
 #include "th03/core/numeric.hpp"
 #include "th03/core/observer.hpp"
 #include "th03/error.hpp"
@@ -164,6 +165,7 @@ struct PracticeRules {
 };
 
 struct GameInit {
+	GameplayRuleset gameplay_ruleset = stock_gameplay_ruleset;
 	std::uint32_t global_frame = 0;
 	std::int32_t resident_rand = 0;
 	std::uint32_t random_seed = 0;

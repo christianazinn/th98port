@@ -90,6 +90,10 @@ struct ClassicRunnerRequest final {
 	// Host/application policy only. Deterministic gameplay never receives this
 	// identity; New Classic adapters apply recorded transforms at the boundary.
 	ExperienceProfile experience = ExperienceProfile::classic;
+	// Named deterministic mechanics contract. Classic accepts only stock; the
+	// initial Arrange prototype is New Classic-only and deliberately cannot
+	// enter replay, online-upload, or netplay routes.
+	GameplayRuleset gameplay_ruleset = stock_gameplay_ruleset;
 	// Replay Patch Autofire selection. Classic must leave this at zero.
 	std::uint8_t autofire_mask = 0U;
 	// Replay Patch's MAIN-only warning-flash reduction (tone 150 -> 100).

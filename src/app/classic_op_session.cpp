@@ -1812,7 +1812,8 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
-		if(replay_recorder && title->phase_ == ClassicOpPhase::main_menu &&
+		if(replay_recorder && replay_recorder->capture_enabled() &&
+			title->phase_ == ClassicOpPhase::main_menu &&
 			title->menu_input_allowed_ && input.raw_any) {
 			const bool expected = (title_extra_unlock_step & 1U) != 0U ?
 				input.right : input.left;
@@ -2926,7 +2927,8 @@ struct ClassicOpSessionBackend final {
 		);
 		auto created = ClassicOpCharacterSelection::create_from_op(
 			*title_completion, mode, *available, selection_carry, *resources,
-			replay_recorder && mode == ClassicOpSelectionMode::vs_1p_cpu
+			replay_recorder && replay_recorder->capture_enabled() &&
+				mode == ClassicOpSelectionMode::vs_1p_cpu
 		);
 		if(!created) {
 			return std::unexpected(selection_error(std::move(created.error())));
@@ -3391,7 +3393,8 @@ struct ClassicOpSessionBackend final {
 			));
 		}
 		if(new_classic_practice_route ||
-			(replay_recorder && selection_completion->resident().game_mode ==
+			(replay_recorder && replay_recorder->capture_enabled() &&
+			 selection_completion->resident().game_mode ==
 				game_mode::vs_1p_cpu)) {
 			practice_menu.emplace(
 				selection_completion->resident(), patch_assets
@@ -3403,7 +3406,7 @@ struct ClassicOpSessionBackend final {
 			return std::unexpected(std::move(prepared.error()));
 		}
 		const auto request = stage_request(selection_completion->resident());
-		const bool record_this_route = replay_recorder &&
+		const bool new_classic_input = replay_recorder &&
 			selection_completion->resident().game_mode != game_mode::vs_cpu_cpu;
 		auto resources = loader->load_mainl_stage(request);
 		if(!resources) {
@@ -3412,7 +3415,7 @@ struct ClassicOpSessionBackend final {
 		auto created = ClassicMainlStageTransition::create_from_selection(
 			*selection_completion, kotohime_compatibility, *resources,
 			stage_text, *font, {
-				.input_protocol = record_this_route ?
+				.input_protocol = new_classic_input ?
 					InputProtocol::recorded_replay : InputProtocol::live,
 				.three_digit_combos = replay_recorder != nullptr,
 			}
@@ -3662,7 +3665,8 @@ struct ClassicOpSessionBackend final {
 		vs_terminal.reset();
 		vs_pause_menu.reset();
 		vs_restart_requested = false;
-		if(replay_recorder && current_main_resident.game_mode !=
+		if(replay_recorder && replay_recorder->capture_enabled() &&
+			current_main_resident.game_mode !=
 			game_mode::vs_cpu_cpu) {
 			if(auto checkpoint = replay_recorder->round_started(
 				vs_process->round_start_observation()

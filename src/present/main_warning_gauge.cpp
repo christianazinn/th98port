@@ -395,7 +395,8 @@ void MainWarningGaugePresenter::warning_interstitial_started(
 	}
 	if(interstitial_active_ ||
 		(!started.flashing_players[0U] && !started.flashing_players[1U]) ||
-		started.boss_level > main_boss_level_max) {
+		started.boss_level > main_boss_level_max ||
+		(started.sample_count != 0U && started.sample_count != 27U)) {
 		(void)fail(MainWarningGaugeStatus::invalid_observation);
 		return;
 	}
@@ -436,7 +437,7 @@ void MainWarningGaugePresenter::warning_interstitial_started(
 			return;
 		}
 	}
-	interstitial_active_ = true;
+	interstitial_active_ = started.sample_count != 0U;
 	next_interstitial_sample_ = 0U;
 }
 

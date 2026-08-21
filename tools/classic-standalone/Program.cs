@@ -151,11 +151,15 @@ internal static class Program
         var directNetplay = commandLine.Any(argument =>
             argument == "--netplay-host" || argument == "--netplay-join"
         );
-        if(commandLine.Count != 0 && !directNetplay)
+        var dopamineArrange = commandLine.Count == 2 &&
+            commandLine[0] == "--arrange" &&
+            commandLine[1] == "dopamine-test-v1";
+        if(commandLine.Count != 0 && !directNetplay && !dopamineArrange)
         {
             throw new InvalidOperationException(
                 "Standalone command-line options currently require " +
-                "--netplay-host or --netplay-join."
+                "--netplay-host, --netplay-join, or " +
+                "--arrange dopamine-test-v1."
             );
         }
         if(directNetplay)
@@ -173,7 +177,7 @@ internal static class Program
             } :
             new List<string>
             {
-                "--shell",
+                dopamineArrange ? "--new-classic" : "--shell",
                 "--data", content,
                 "--main", Path.Combine(content, "MAIN.EXE"),
                 "--mainl", Path.Combine(content, "MAINL.EXE"),
@@ -183,7 +187,7 @@ internal static class Program
                 "--score", Path.Combine(userRoot, "YUME.NEM"),
                 "--replay-root", replayRoot,
             };
-        if(directNetplay)
+        if(directNetplay || dopamineArrange)
         {
             arguments.AddRange(commandLine);
         }

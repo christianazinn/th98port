@@ -64,7 +64,9 @@ StepResult finish_gameplay_frame_after_control(
 	GameplayObserver *observer
 )
 {
-	if(detail::warning_interstitial_begin(impl.state, observer)) {
+	if(detail::warning_interstitial_begin(
+		impl.state, observer, impl.initial_init.gameplay_ruleset
+	)) {
 		impl.warning_interstitial_samples_remaining = 27U;
 		return detail::gameplay_step_result(
 			StepStatus::phase_transition, input_boundary,
@@ -94,7 +96,7 @@ StepResult finish_gameplay_frame(auto &impl, GameplayObserver *observer)
 	const auto input_boundary = detail::canonical_state(impl.state);
 	const auto live_pause_requested =
 		detail::gameplay_frame_suffix_through_feedback_boundary(
-			impl.state, observer
+			impl.state, observer, impl.initial_init.gameplay_ruleset
 		);
 	if(!impl.replay_pause_adapter && live_pause_requested) {
 		impl.live_pause_phase = LivePausePhase::release_before_choice;
@@ -284,6 +286,30 @@ std::expected<Game, Error> Game::create(
 	GameplayObserver *observer
 )
 {
+	if(!valid_gameplay_ruleset(init.gameplay_ruleset)) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"gameplay ruleset is unsupported",
+		});
+	}
+	if(
+		init.gameplay_ruleset.formations == FormationSelectionPolicy::locked &&
+		init.gameplay_ruleset.locked_formation >= content.enemy_formations.size()
+	) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"gameplay ruleset formation is unavailable",
+		});
+	}
+	if(
+		!stock_gameplay_rules(init.gameplay_ruleset) &&
+		(init.game_mode == detail::game_mode_demo || init.practice_rules)
+	) {
+		return std::unexpected(Error{
+			ErrorCode::invalid_value,
+			"gameplay ruleset does not support Demo or Practice",
+		});
+	}
 	if((init.autofire_mask & 0xFCU) != 0U) {
 		return std::unexpected(Error{
 			ErrorCode::invalid_value,

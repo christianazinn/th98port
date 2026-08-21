@@ -1864,6 +1864,34 @@ void test_warning_interstitial_order_is_strict()
 	}
 }
 
+void test_zero_sample_arrange_warning_uses_one_ordinary_footer()
+{
+	Fixture fixture;
+	auto state = fixture.state();
+	const auto shown = fixture.raster.shown_page();
+	fixture.hud_start_prefix(state);
+	auto started = Fixture::warning_start();
+	started.next_attacks[0U] = GaugeBossAttackKind::gauge_bullet;
+	started.sample_count = 0U;
+	fixture.round->warning_interstitial_started(started);
+	auto lifecycle = Fixture::idle_warning();
+	lifecycle.players[0U] = {
+		3U, 4U, GaugeBossAttackKind::gauge_bullet, GaugeBossAttackKind::none,
+	};
+	lifecycle.gauge_levels = started.gauge_levels;
+	lifecycle.boss_level = started.boss_level;
+	fixture.round->warning_frame_lifecycle(lifecycle);
+	fixture.background_frame(state);
+	fixture.render_phases(state);
+	fixture.round->main_gauge_state(Fixture::gauge_state(state));
+	fixture.finish_after_gauge(state);
+	fixture.round->main_frame_footer_reached({});
+	expect(
+		fixture.round->ready() && fixture.raster.shown_page() != shown,
+		"zero-sample Arrange cut-in continues through the resumed suffix and one ordinary publication"
+	);
+}
+
 void test_malformed_late_bullet_is_whole_phase_atomic()
 {
 	Fixture fixture;
@@ -2191,6 +2219,7 @@ int main()
 	test_warning_gauge_child_failure_is_sticky();
 	test_warning_interstitial_tones_without_footer();
 	test_warning_interstitial_order_is_strict();
+	test_zero_sample_arrange_warning_uses_one_ordinary_footer();
 	test_malformed_late_bullet_is_whole_phase_atomic();
 	test_players_common_bullets_insertion_order();
 	test_defeat_palette_is_immediate();

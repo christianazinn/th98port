@@ -91,6 +91,9 @@ constexpr std::size_t option_count =
 	if(text == "--shell") {
 		return ClassicCliOption::shell;
 	}
+	if(text == "--arrange") {
+		return ClassicCliOption::arrange;
+	}
 	if(text == "--data") {
 		return ClassicCliOption::data;
 	}
@@ -313,6 +316,14 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 		case ClassicCliOption::new_classic:
 		case ClassicCliOption::shell:
 			break;
+		case ClassicCliOption::arrange:
+			if(value != gameplay_ruleset_name(dopamine_test_v1_ruleset)) {
+				return std::unexpected(cli_error(
+					ClassicCliErrorCode::invalid_arrange, *option, value_index
+				));
+			}
+			request.launch.gameplay_ruleset = dopamine_test_v1_ruleset;
+			break;
 		}
 	}
 	if(request.show_help) {
@@ -323,6 +334,16 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 		return std::unexpected(cli_error(
 			ClassicCliErrorCode::missing_required_option,
 			ClassicCliOption::classic,
+			arguments.size()
+		));
+	}
+	if(
+		!stock_gameplay_rules(request.launch.gameplay_ruleset) &&
+		(request.mode != ClassicLaunchMode::new_classic || request.capture_replay)
+	) {
+		return std::unexpected(cli_error(
+			ClassicCliErrorCode::invalid_arrange,
+			ClassicCliOption::arrange,
 			arguments.size()
 		));
 	}

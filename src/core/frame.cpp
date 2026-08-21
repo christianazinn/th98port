@@ -574,7 +574,8 @@ void gameplay_input_latch(
 
 bool warning_interstitial_begin(
 	DeterministicState &state,
-	GameplayObserver *observer
+	GameplayObserver *observer,
+	const GameplayRuleset &ruleset
 ) noexcept
 {
 	if(
@@ -595,6 +596,9 @@ bool warning_interstitial_begin(
 			},
 			.gauge_levels = state.gba_gauge_level,
 			.boss_level = state.gba_boss_level,
+			.sample_count = static_cast<std::uint8_t>(
+				ruleset.spell_cutins == SpellCutinPolicy::no_hold ? 0U : 27U
+			),
 		});
 	}
 	for(auto &flag : state.warning_flag) {
@@ -602,7 +606,7 @@ bool warning_interstitial_begin(
 			flag = WarningFlag::flash_red;
 		}
 	}
-	return true;
+	return ruleset.spell_cutins == SpellCutinPolicy::stock_hold;
 }
 
 void warning_frame_update(
@@ -646,12 +650,13 @@ void warning_portrait_update(
 
 bool gameplay_frame_suffix_through_feedback_boundary(
 	DeterministicState &state,
-	GameplayObserver *observer
+	GameplayObserver *observer,
+	const GameplayRuleset &ruleset
 ) noexcept
 {
 	for(std::uint8_t player_id = 0U; player_id < player_count; ++player_id) {
 		if(state.players[player_id].is_cpu != 0U) {
-			player_update_cpu(state, player_id, observer);
+			player_update_cpu(state, player_id, observer, ruleset);
 		} else {
 			player_update_human(
 				state, player_id, state.input_player[player_id], observer
@@ -673,11 +678,14 @@ bool gameplay_frame_suffix_through_feedback_boundary(
 
 bool gameplay_frame_suffix_before_interstitial(
 	DeterministicState &state,
-	GameplayObserver *observer
+	GameplayObserver *observer,
+	const GameplayRuleset &ruleset
 ) noexcept
 {
-	(void)gameplay_frame_suffix_through_feedback_boundary(state, observer);
-	return warning_interstitial_begin(state, observer);
+	(void)gameplay_frame_suffix_through_feedback_boundary(
+		state, observer, ruleset
+	);
+	return warning_interstitial_begin(state, observer, ruleset);
 }
 
 void interstitial_input_latch(
