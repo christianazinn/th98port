@@ -1111,6 +1111,10 @@ target_link_libraries(
 )
 th03_set_warnings(th03-game-text-preview)
 
+add_executable(th03-content-audit apps/th03-content-audit/main.cpp)
+target_link_libraries(th03-content-audit PRIVATE th03_app_main)
+th03_set_warnings(th03-content-audit)
+
 add_library(th03rv_service_protocol STATIC
 	apps/th03rv/service_protocol.cpp
 )
@@ -1344,6 +1348,15 @@ if(BUILD_TESTING)
 		)
 	endif()
 	add_test(NAME th03-cutscene-text-help COMMAND th03-cutscene-text --help)
+	add_test(NAME th03-content-audit-help COMMAND th03-content-audit --help)
+	if(Python3_Interpreter_FOUND)
+		add_test(
+			NAME th03-content-audit-tests
+			COMMAND ${Python3_EXECUTABLE}
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_content_audit.py
+				--tool $<TARGET_FILE:th03-content-audit>
+		)
+	endif()
 	add_test(
 		NAME th03-game-text-preview-help
 		COMMAND th03-game-text-preview --help

@@ -192,9 +192,12 @@ than inventing shadow interpretations.
 Status: in progress. `th03-game-text-preview` now renders all 61 `T3GTL001`
 messages into deterministic 640x400 contact sheets plus a machine-readable
 `T3GTP001` bounds index through the production PC-98 font and graphics-text
-path. The remaining work in this parcel is the per-scene authenticated-content
-dependency audit, localized scene snapshots, and release-level content
-manifests.
+path. `th03-content-audit` now emits or validates the shared production
+271-resource manifest scene by scene, distinguishes 52 authenticated English
+override members from original extraction dependencies, and records every
+localized semantic surface without claiming that its source backing vanished.
+The remaining work in this parcel is localized scene snapshots and
+release-level content manifests.
 
 ### 5. Account nametags and VS presentation
 
@@ -221,8 +224,9 @@ display, not silently substitute a later account rename.
 3. Build the replay renderer's machine progress protocol and GUI package.
 4. Add the explicit ruleset seam and Dopamine Arrange developer prototype.
 5. ~~Add the static graphics-text contact-sheet preview tool.~~
-6. Continue the remaining text/image decoupling and audit/snapshot tools.
-7. Stop for the nametag product decisions above.
+6. ~~Add the per-scene authenticated-content dependency audit.~~
+7. Continue the remaining text/image decoupling and snapshot/manifest tools.
+8. Stop for the nametag product decisions above.
 
 Pixel-oracle expansion is useful after these functional seams settle, not
 before every localized or Arrange screen is still moving. Stock routes keep

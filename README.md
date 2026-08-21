@@ -347,6 +347,10 @@ See `localization/GAME_TEXT_README.md` for the format and translator workflow.
 `th03-game-text-preview` renders all 61 compiled rows as deterministic
 640x400 contact sheets through the production `FONT.ROM` and graphics-text
 path; see `docs/NEW_CLASSIC_GAME_TEXT_PREVIEW.md`.
+`th03-content-audit` emits the production 271-resource manifest or validates
+an extracted installation scene by scene, including authenticated TH3EN
+override ownership and the remaining source-backing boundary; see
+`docs/NEW_CLASSIC_CONTENT_AUDIT.md`.
 Scripted cutscene and ending dialogue is inventoried separately by
 `th03-cutscene-text`. It drives the production cutscene VM across all 28
 authenticated scripts and emits deterministic `T3CTR001` run identities;
