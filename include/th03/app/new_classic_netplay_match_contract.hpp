@@ -7,11 +7,13 @@
 #include <expected>
 #include <span>
 
+#include "th03/app/main_compiled_content.hpp"
+
 namespace th03::app {
 
-inline constexpr std::uint8_t new_classic_netplay_match_contract_version = 3U;
+inline constexpr std::uint8_t new_classic_netplay_match_contract_version = 4U;
 inline constexpr std::uint32_t new_classic_netplay_ruleset_version = 2U;
-inline constexpr std::size_t new_classic_netplay_match_contract_bytes = 32U;
+inline constexpr std::size_t new_classic_netplay_match_contract_bytes = 64U;
 
 struct NewClassicNetplayCharacterLock final {
 	// Source base character IDs are 1..9; palettes are 1..2.
@@ -32,6 +34,7 @@ struct NewClassicNetplayHostLock final {
 	std::uint32_t cadence_ticks = 526'315U;
 	std::uint32_t cadence_seconds = 9'328U;
 	std::uint8_t input_delay_frames = 0U;
+	AppSha256 identity_digest{};
 };
 
 struct NewClassicNetplayJoinLock final {
@@ -40,6 +43,7 @@ struct NewClassicNetplayJoinLock final {
 		.palette = 2U,
 	};
 	bool player_two_autofire = false;
+	AppSha256 identity_digest{};
 };
 
 struct NewClassicNetplayMatchContract final {
@@ -54,6 +58,7 @@ struct NewClassicNetplayMatchContract final {
 	std::uint32_t cadence_seconds = 9'328U;
 	std::uint8_t input_delay_frames = 0U;
 	std::uint8_t autofire_mask = 0U;
+	AppSha256 identity_digest{};
 
 	[[nodiscard]] friend constexpr bool operator==(
 		const NewClassicNetplayMatchContract &,
@@ -65,6 +70,7 @@ enum class NewClassicNetplayMatchContractErrorCode : std::uint8_t {
 	invalid_host_lock,
 	invalid_join_lock,
 	invalid_input_delay,
+	identity_mismatch,
 	invalid_size,
 	invalid_magic,
 	unsupported_version,

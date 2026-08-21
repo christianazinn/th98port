@@ -86,6 +86,11 @@ std::expected<
 			NewClassicNetplayMatchContractErrorCode::invalid_join_lock
 		));
 	}
+	if(host.identity_digest != join.identity_digest) {
+		return std::unexpected(error(
+			NewClassicNetplayMatchContractErrorCode::identity_mismatch
+		));
+	}
 	if(host.player_one == join.player_two) {
 		join.player_two.palette = join.player_two.palette == 1U ? 2U : 1U;
 	}
@@ -101,6 +106,7 @@ std::expected<
 			(host.player_one_autofire ? 1U : 0U) |
 			(join.player_two_autofire ? 2U : 0U)
 		),
+		.identity_digest = host.identity_digest,
 	};
 }
 
@@ -130,6 +136,11 @@ std::expected<
 	put_u32(result, 16U, contract.cadence_ticks);
 	put_u32(result, 20U, contract.cadence_seconds);
 	put_u32(result, 24U, new_classic_netplay_ruleset_version);
+	std::transform(
+		contract.identity_digest.begin(), contract.identity_digest.end(),
+		result.begin() + 28U,
+		[](std::uint8_t value) { return std::byte{value}; }
+	);
 	return result;
 }
 
@@ -162,13 +173,18 @@ std::expected<
 		));
 	}
 	if(std::to_integer<std::uint8_t>(wire[11U]) > 3U ||
-		std::ranges::any_of(wire.subspan(28U), [](std::byte value) {
+		std::ranges::any_of(wire.subspan(60U), [](std::byte value) {
 			return value != std::byte{0U};
 		})) {
 		return std::unexpected(error(
 			NewClassicNetplayMatchContractErrorCode::nonzero_reserved
 		));
 	}
+	AppSha256 identity_digest{};
+	std::transform(
+		wire.begin() + 28U, wire.begin() + 60U, identity_digest.begin(),
+		[](std::byte value) { return std::to_integer<std::uint8_t>(value); }
+	);
 	const NewClassicNetplayHostLock host{
 		.player_one = {
 			.character = std::to_integer<std::uint8_t>(wire[6U]),
@@ -181,6 +197,7 @@ std::expected<
 		.cadence_ticks = get_u32(wire, 16U),
 		.cadence_seconds = get_u32(wire, 20U),
 		.input_delay_frames = std::to_integer<std::uint8_t>(wire[10U]),
+		.identity_digest = identity_digest,
 	};
 	const NewClassicNetplayJoinLock join{
 		.player_two = {
@@ -189,6 +206,7 @@ std::expected<
 		},
 		.player_two_autofire =
 			(std::to_integer<std::uint8_t>(wire[11U]) & 2U) != 0U,
+		.identity_digest = identity_digest,
 	};
 	return create_new_classic_netplay_match_contract(host, join);
 }

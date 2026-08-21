@@ -36,6 +36,7 @@
 #include "th03/app/direct_vs_launch.hpp"
 #include "th03/app/main_direct_vs_runner.hpp"
 #include "th03/app/new_classic_netplay_datagram.hpp"
+#include "th03/app/new_classic_netplay_identity.hpp"
 #include "th03/app/new_classic_netplay_lobby.hpp"
 #include "th03/app/new_classic_netplay_match_contract.hpp"
 #include "th03/app/new_classic_netplay_match_intro.hpp"
@@ -2460,6 +2461,7 @@ negotiate_rtc_netplay_lobby(
 	std::string displayed_code{};
 	std::uint8_t assigned_player = 0U;
 	std::optional<th03::app::NewClassicNetplayRoomPaired> profiles{};
+	std::optional<th03::app::AppSha256> identity_digest{};
 	const auto room_started = std::chrono::steady_clock::now();
 	for(;;) {
 		if(const auto pumped = pump_retained_menu_audio(
@@ -2530,6 +2532,17 @@ negotiate_rtc_netplay_lobby(
 					.nametag = std::move(*player_two_nametag),
 				},
 			};
+			const auto paired_digest =
+				th03::app::new_classic_netplay_identity_digest({
+					.room_id = snapshot.room_id,
+					.profiles = *profiles,
+				});
+			if(!paired_digest) {
+				return std::unexpected(fail_netplay(
+					"netplay-room-connect", "paired-profile-invalid"
+				));
+			}
+			identity_digest = *paired_digest;
 			break;
 		}
 		if(snapshot.state == RtcRoomState::failed ||
@@ -2557,7 +2570,8 @@ negotiate_rtc_netplay_lobby(
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
-	if(assigned_player != 1U && assigned_player != 2U) {
+	if((assigned_player != 1U && assigned_player != 2U) ||
+		!identity_digest) {
 		return std::unexpected(fail_netplay(
 			"netplay-room-connect", "invalid-player-assignment"
 		));
@@ -2566,11 +2580,15 @@ negotiate_rtc_netplay_lobby(
 		DirectVsNetplayMode::host : DirectVsNetplayMode::join;
 
 	auto wire = NetplayWire::rtc(std::move(room));
+	auto host_lock = netplay_host_lock(request);
+	host_lock.identity_digest = *identity_digest;
+	auto join_lock = netplay_join_lock(request);
+	join_lock.identity_digest = *identity_digest;
 	auto created_lobby = mode == DirectVsNetplayMode::host ?
 		NewClassicNetplayLobby::create_host(
-			netplay_host_lock(request),
+			host_lock,
 			fresh_netplay_nonce()
-		) : NewClassicNetplayLobby::create_join(netplay_join_lock(request));
+		) : NewClassicNetplayLobby::create_join(join_lock);
 	if(!created_lobby) {
 		return std::unexpected(fail_netplay(
 			"netplay-lobby", "invalid-local-lock"

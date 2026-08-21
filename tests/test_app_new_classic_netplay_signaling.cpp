@@ -1,8 +1,10 @@
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <string>
 #include <variant>
 
+#include "th03/app/new_classic_netplay_identity.hpp"
 #include "th03/app/new_classic_netplay_signaling.hpp"
 
 namespace {
@@ -88,6 +90,38 @@ int main()
 	check(paired && std::get<NewClassicNetplayRoomPaired>(*paired).
 		player_two.user_id == "fedcba98-7654-3210-fedc-ba9876543210",
 		"paired profile preserves the stable P2 UUID");
+	const auto identity = paired ? encode_new_classic_netplay_identity({
+		.room_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+		.profiles = std::get<NewClassicNetplayRoomPaired>(*paired),
+	}) : std::expected<
+		std::array<std::byte, new_classic_netplay_identity_bytes>,
+		NewClassicNetplayIdentityError
+	>{std::unexpected(NewClassicNetplayIdentityError::invalid_profile)};
+	const auto identity_digest = paired ? new_classic_netplay_identity_digest({
+		.room_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+		.profiles = std::get<NewClassicNetplayRoomPaired>(*paired),
+	}) : std::expected<AppSha256, NewClassicNetplayIdentityError>{
+		std::unexpected(NewClassicNetplayIdentityError::invalid_profile)
+	};
+	check(identity && (*identity)[0U] == std::byte{'T'} &&
+		(*identity)[7U] == std::byte{'1'} && (*identity)[8U] == std::byte{1U} &&
+		(*identity)[9U] == std::byte{41U} &&
+		(*identity)[10U] == std::byte{13U},
+		"T3NID001 freezes the account kind and exact nametag lengths");
+	check(identity && identity_digest && std::equal(
+		identity->begin() + 192U, identity->end(), identity_digest->begin(),
+		[](std::byte left, std::uint8_t right) {
+			return std::to_integer<std::uint8_t>(left) == right;
+		}
+	), "T3NID001 carries the complete-body SHA-256 used by peer agreement");
+	if(paired && identity_digest) {
+		const auto other_room = new_classic_netplay_identity_digest({
+			.room_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeef",
+			.profiles = std::get<NewClassicNetplayRoomPaired>(*paired),
+		});
+		check(other_room && *other_room != *identity_digest,
+			"the same profiles cannot reuse identity proof across rooms");
+	}
 	const auto departed = decode_new_classic_netplay_room_message(
 		"{\"protocol\":\"T3ROOM3\",\"type\":\"peer-left\",\"player\":2}"
 	);

@@ -1,8 +1,9 @@
 # New Classic netplay nametags and replay identity
 
 Status: approved product contract, 2026-08-20. The portable layout validator,
-account-profile service, strict paired snapshot, and VS-title substitution are
-implemented. In-app profile editing and production deployment remain pending.
+account-profile service, strict paired snapshot, T3NID001 peer agreement, and
+VS-title substitution are implemented. In-app profile editing and production
+deployment remain pending.
 
 ## Current facts
 
@@ -13,9 +14,9 @@ eight-character name saved inside each V13 replay; that is replay metadata,
 not an account name.
 
 The room service authenticates each peer's UUID and T3ROOM3 now freezes both
-UUID/nametag pairs before peer negotiation. The schema-3 `T3NLC001` match contract is 32
-bytes and rejects its final four reserved bytes unless they are zero. It has no
-player identity or presentation text.
+UUID/nametag pairs before peer negotiation. Schema-4 `T3NLC001` carries the
+SHA-256 of the fixed T3NID001 value; it carries no raw presentation text and
+adds nothing to per-frame traffic.
 
 The netplay VS splash reuses the ordinary MAINL stage owner. Its English layout
 draws each character's two-line title and name at x=80/336 and y=276, 292, and
@@ -79,8 +80,8 @@ policy explicitly opts in.
 
 ## Network contract
 
-Add a distinct fixed, bounded identity snapshot rather than inflating gameplay
-input packets. A proposed `T3NID001` value contains:
+The distinct fixed, bounded identity snapshot does not inflate gameplay input
+packets. `T3NID001` contains:
 
 - identity kind (`account` or `local`);
 - both 16-byte UUID values, zero for local/direct identities;
@@ -152,7 +153,7 @@ renaming the profile leaves every credential and the UUID stable.
 3. Have room/Quick Match snapshot and deliver both authenticated profiles;
    define the local/direct fallback.
 4. Freeze `T3NID001`, bind its digest into the pre-game agreement, and add
-   malformed/cross-room/cross-account tests.
+   malformed/cross-room/cross-account tests. **Complete.**
 5. Render comparison images, select the accepted placement/color, and attach
    the bounded row only to the New Classic netplay intro.
 6. Add the optional V13 tail, byte-preserving replay/download behavior, detail

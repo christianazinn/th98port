@@ -565,6 +565,7 @@ struct RtcRoom::Impl final {
 		RtcRoomState state = RtcRoomState::connecting;
 		std::optional<RtcRoomError> failure{};
 		std::string room_code{};
+		std::string room_id{};
 		std::uint8_t player = 0U;
 		std::optional<RtcRoomIdentitySnapshot> identities{};
 		std::uint32_t outbound_sequence = 0U;
@@ -985,6 +986,7 @@ struct RtcRoom::Impl final {
 			core->welcomed = true;
 			core->player = welcome->player;
 			core->room_code = welcome->code;
+			core->room_id = welcome->room_id;
 			core->state = RtcRoomState::waiting_peer;
 			return;
 		}
@@ -1314,6 +1316,7 @@ RtcRoomSnapshot RtcRoom::snapshot() const noexcept
 		result.state = impl_->core->state;
 		result.error = impl_->core->failure;
 		result.room_code = impl_->core->room_code;
+		result.room_id = impl_->core->room_id;
 		result.player = impl_->core->player;
 		result.identities = impl_->core->identities;
 		peer = impl_->core->peer;

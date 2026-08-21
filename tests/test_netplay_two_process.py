@@ -86,13 +86,13 @@ def main() -> int:
     transcript: list[bytes] = []
     try:
         expect(host, "OUTBOUND", "NONE")
-        request = wire(join.query("OUTBOUND"), 64, transcript)
+        request = wire(join.query("OUTBOUND"), 96, transcript)
         expect(host, f"RECEIVE {request}", "LOBBY 1")
-        offer = wire(host.query("OUTBOUND"), 64, transcript)
+        offer = wire(host.query("OUTBOUND"), 96, transcript)
         expect(join, f"RECEIVE {offer}", "LOBBY 2")
-        ready = wire(join.query("OUTBOUND"), 64, transcript)
+        ready = wire(join.query("OUTBOUND"), 96, transcript)
         expect(host, f"RECEIVE {ready}", "LOBBY 3")
-        accepted = wire(host.query("OUTBOUND"), 64, transcript)
+        accepted = wire(host.query("OUTBOUND"), 96, transcript)
         expect(join, f"RECEIVE {accepted}", "LOBBY 4")
 
         host_contract = host.query("CONTRACT")
@@ -136,7 +136,7 @@ def main() -> int:
         expect(join, f"RECEIVE {disconnect}", "TYPE 4 FRAME 0 WORD 0 STATUS 5")
 
         digest = hashlib.sha256(b"".join(transcript)).hexdigest().upper()
-        expected_digest = "2C1CCBCC8BFA2F106E16B53A6AD54FAD258758FD1D711CBBCD260AD11C443E5C"
+        expected_digest = "2121E37C96EE1B59A47F5C517E41D64FE740949F4E38C35A37A7BC8206158127"
         assert digest == expected_digest, digest
     finally:
         host.close()

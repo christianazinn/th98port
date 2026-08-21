@@ -924,6 +924,7 @@ th03_set_warnings(th03_formats)
 # scheduling. This target owns no game process, socket, platform, clock, or UI.
 add_library(th03_app_netplay STATIC
 	src/app/new_classic_netplay_datagram.cpp
+	src/app/new_classic_netplay_identity.cpp
 	src/app/new_classic_netplay_input_delay.cpp
 	src/app/new_classic_netplay_lobby.cpp
 	src/app/new_classic_netplay_match_contract.cpp
@@ -935,7 +936,7 @@ add_library(th03_app_netplay STATIC
 	src/app/new_classic_nametag.cpp
 )
 target_include_directories(th03_app_netplay PUBLIC include)
-target_link_libraries(th03_app_netplay PUBLIC th03_core)
+target_link_libraries(th03_app_netplay PUBLIC th03_app_content th03_core)
 target_compile_features(th03_app_netplay PUBLIC cxx_std_23)
 set_target_properties(th03_app_netplay PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_app_netplay)

@@ -12,8 +12,8 @@
 
 namespace th03::app {
 
-inline constexpr std::uint8_t new_classic_netplay_lobby_version = 3U;
-inline constexpr std::size_t new_classic_netplay_lobby_bytes = 64U;
+inline constexpr std::uint8_t new_classic_netplay_lobby_version = 4U;
+inline constexpr std::size_t new_classic_netplay_lobby_bytes = 96U;
 inline constexpr std::uint64_t new_classic_netplay_lobby_timeout_ms = 30'000U;
 
 enum class NewClassicNetplayLobbyDatagramType : std::uint8_t {

@@ -517,9 +517,9 @@ void test_match_contract()
 			std::array<std::byte, new_classic_netplay_match_contract_bytes>,
 			NewClassicNetplayMatchContractError
 		>{std::unexpected(NewClassicNetplayMatchContractError{})};
-	constexpr std::array<std::byte, 32U> golden{
+	constexpr std::array<std::byte, 64U> golden{
 		std::byte{0x54U}, std::byte{0x33U}, std::byte{0x4EU},
-		std::byte{0x43U}, std::byte{0x03U}, std::byte{0x01U},
+		std::byte{0x43U}, std::byte{0x04U}, std::byte{0x01U},
 		std::byte{0x01U}, std::byte{0x01U}, std::byte{0x02U},
 		std::byte{0x02U}, std::byte{0x04U}, std::byte{0x01U},
 		std::byte{0x22U}, std::byte{0x00U}, std::byte{0x00U},
@@ -544,7 +544,7 @@ void test_match_contract()
 			};
 	expect(contract && contract->autofire_mask == 1U && encoded &&
 		*encoded == golden && decoded && *decoded == *contract && hash &&
-		*hash == 0x02F4FA7D44C7B5C8ULL,
+		*hash == 0xBCD25407931220AFULL,
 		"T3NLC001 freezes host rules, choices, and asymmetric Autofire");
 	const auto join_autofire = create_new_classic_netplay_match_contract({
 		.player_one_autofire = false,
@@ -563,12 +563,19 @@ void test_match_contract()
 	const auto invalid_delay = create_new_classic_netplay_match_contract({
 		.input_delay_frames = 7U,
 	}, {});
+	AppSha256 different_identity{};
+	different_identity.front() = 1U;
+	const auto identity_mismatch = create_new_classic_netplay_match_contract({
+		.identity_digest = different_identity,
+	}, {});
 	expect(!invalid_host && invalid_host.error().code ==
 		NewClassicNetplayMatchContractErrorCode::invalid_host_lock &&
 		!invalid_join && invalid_join.error().code ==
 			NewClassicNetplayMatchContractErrorCode::invalid_join_lock &&
 		!invalid_delay && invalid_delay.error().code ==
-			NewClassicNetplayMatchContractErrorCode::invalid_input_delay,
+			NewClassicNetplayMatchContractErrorCode::invalid_input_delay &&
+		!identity_mismatch && identity_mismatch.error().code ==
+			NewClassicNetplayMatchContractErrorCode::identity_mismatch,
 		"each peer's character lock fails in its own ownership domain");
 	const auto palette_collision = create_new_classic_netplay_match_contract({
 		.player_one = {.character = 4U, .palette = 2U},
@@ -583,13 +590,13 @@ void test_match_contract()
 		}, "same-character collision gives P1 priority and flips P2's palette");
 	if(encoded) {
 		auto corrupt = *encoded;
-		corrupt[4U] = std::byte{4U};
+		corrupt[4U] = std::byte{5U};
 		const auto version = decode_new_classic_netplay_match_contract(corrupt);
 		corrupt = *encoded;
 		corrupt[24U] = std::byte{3U};
 		const auto ruleset = decode_new_classic_netplay_match_contract(corrupt);
 		corrupt = *encoded;
-		corrupt[31U] = std::byte{1U};
+		corrupt[63U] = std::byte{1U};
 		const auto reserved = decode_new_classic_netplay_match_contract(corrupt);
 		expect(!version && version.error().code ==
 			NewClassicNetplayMatchContractErrorCode::unsupported_version &&
@@ -644,7 +651,7 @@ void test_lobby_negotiation()
 		>{std::unexpected(NewClassicNetplayLobbyDatagramError{})};
 	expect(encoded_request && (*encoded_request)[0U] == std::byte{'T'} &&
 		(*encoded_request)[3U] == std::byte{'L'} &&
-		(*encoded_request)[4U] == std::byte{3U} &&
+		(*encoded_request)[4U] == std::byte{4U} &&
 		(*encoded_request)[5U] == std::byte{1U} &&
 		(*encoded_request)[32U] == std::byte{2U} &&
 		(*encoded_request)[33U] == std::byte{2U},
@@ -660,9 +667,9 @@ void test_lobby_negotiation()
 			std::array<std::byte, new_classic_netplay_lobby_bytes>,
 			NewClassicNetplayLobbyDatagramError
 		>{std::unexpected(NewClassicNetplayLobbyDatagramError{})};
-	constexpr std::array<std::byte, 64U> offer_golden{
+	constexpr std::array<std::byte, 96U> offer_golden{
 		std::byte{0x54U}, std::byte{0x33U}, std::byte{0x4EU}, std::byte{0x4CU},
-		std::byte{0x03U}, std::byte{0x02U}, std::byte{0x00U}, std::byte{0x00U},
+		std::byte{0x04U}, std::byte{0x02U}, std::byte{0x00U}, std::byte{0x00U},
 		std::byte{0x08U}, std::byte{0x07U}, std::byte{0x06U}, std::byte{0x05U},
 		std::byte{0x04U}, std::byte{0x03U}, std::byte{0x02U}, std::byte{0x01U},
 		std::byte{0x01U}, std::byte{0x01U}, std::byte{0x01U}, std::byte{0x04U},
@@ -671,8 +678,8 @@ void test_lobby_negotiation()
 		std::byte{0x70U}, std::byte{0x24U}, std::byte{0x00U}, std::byte{0x00U},
 		std::byte{0x02U}, std::byte{0x02U}, std::byte{0x01U}, std::byte{0x00U},
 		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
-		std::byte{0xC8U}, std::byte{0xB5U}, std::byte{0xC7U}, std::byte{0x44U},
-		std::byte{0x7DU}, std::byte{0xFAU}, std::byte{0xF4U}, std::byte{0x02U},
+		std::byte{0xAFU}, std::byte{0x20U}, std::byte{0x12U}, std::byte{0x93U},
+		std::byte{0x07U}, std::byte{0x54U}, std::byte{0xD2U}, std::byte{0xBCU},
 		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
 		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
 		std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U}, std::byte{0x00U},
@@ -685,7 +692,7 @@ void test_lobby_negotiation()
 				std::unexpected(NewClassicNetplayLobbyDatagramError{})
 			};
 	expect(encoded_offer && *encoded_offer == offer_golden && decoded_offer &&
-		decoded_offer->contract_hash == 0x02F4FA7D44C7B5C8ULL &&
+		decoded_offer->contract_hash == 0xBCD25407931220AFULL &&
 		decoded_offer->host->player_one_autofire &&
 		!decoded_offer->join->player_two_autofire,
 		"T3NL offer freezes the full independently owned match vector");
@@ -745,7 +752,7 @@ void test_lobby_negotiation()
 	}
 	if(encoded_offer) {
 		auto corrupt = *encoded_offer;
-		corrupt[48U] = std::byte{1U};
+		corrupt[80U] = std::byte{1U};
 		const auto reserved = decode_new_classic_netplay_lobby_datagram(corrupt);
 		expect(!reserved && reserved.error().code ==
 			NewClassicNetplayLobbyDatagramErrorCode::nonzero_reserved,
@@ -757,6 +764,46 @@ void test_lobby_negotiation()
 			NewClassicNetplayLobbyDatagramErrorCode::invalid_contract,
 			"lobby wire binds the full contract rather than trusting a hash field");
 	}
+
+	AppSha256 account_identity{};
+	account_identity.front() = 0xA5U;
+	account_identity.back() = 0x5AU;
+	auto bound_host_lock = host_lock;
+	bound_host_lock.identity_digest = account_identity;
+	auto bound_join_lock = join_lock;
+	bound_join_lock.identity_digest = account_identity;
+	auto bound_host = NewClassicNetplayLobby::create_host(
+		bound_host_lock, session
+	);
+	auto bound_join = NewClassicNetplayLobby::create_join(bound_join_lock);
+	const auto bound_request = bound_join ? bound_join->outbound() : std::nullopt;
+	if(bound_host && bound_join && bound_request) {
+		expect(bound_host->receive(*bound_request).has_value(),
+			"host accepts the same authenticated identity digest");
+		const auto bound_offer = bound_host->outbound();
+		const auto bound_wire = bound_offer ?
+			encode_new_classic_netplay_lobby_datagram(*bound_offer) :
+			std::expected<
+				std::array<std::byte, new_classic_netplay_lobby_bytes>,
+				NewClassicNetplayLobbyDatagramError
+			>{std::unexpected(NewClassicNetplayLobbyDatagramError{})};
+		expect(bound_offer && bound_wire && (*bound_wire)[48U] ==
+			std::byte{0xA5U} && (*bound_wire)[79U] == std::byte{0x5AU} &&
+			bound_join->receive(*bound_offer).has_value(),
+			"T3NL carries and agrees on the complete T3NID001 digest");
+	}
+	auto wrong_join_lock = bound_join_lock;
+	wrong_join_lock.identity_digest.front() ^= 1U;
+	auto wrong_join = NewClassicNetplayLobby::create_join(wrong_join_lock);
+	auto rejecting_host = NewClassicNetplayLobby::create_host(
+		bound_host_lock, session
+	);
+	const auto wrong_request = wrong_join ? wrong_join->outbound() : std::nullopt;
+	const auto mismatch = rejecting_host && wrong_request ?
+		rejecting_host->receive(*wrong_request) :
+		std::expected<void, NewClassicNetplayLobbyError>{};
+	expect(rejecting_host && wrong_request && !mismatch,
+		"different room or account snapshots fail before contract acceptance");
 }
 
 } // namespace

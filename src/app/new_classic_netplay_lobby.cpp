@@ -128,7 +128,9 @@ validate(const NewClassicNetplayLobbyDatagram &datagram) noexcept
 			));
 		}
 		const auto probe = create_new_classic_netplay_match_contract(
-			NewClassicNetplayHostLock{}, *datagram.join
+			NewClassicNetplayHostLock{
+				.identity_digest = datagram.join->identity_digest,
+			}, *datagram.join
 		);
 		if(!probe) {
 			return std::unexpected(NewClassicNetplayLobbyDatagramError{
@@ -159,7 +161,8 @@ validate(const NewClassicNetplayLobbyDatagram &datagram) noexcept
 		left.cadence_ticks == right.cadence_ticks &&
 		left.cadence_seconds == right.cadence_seconds &&
 		left.input_delay_frames == right.input_delay_frames &&
-		left.player_one_autofire == right.player_one_autofire;
+		left.player_one_autofire == right.player_one_autofire &&
+		left.identity_digest == right.identity_digest;
 }
 
 [[nodiscard]] bool equal_join_lock(
@@ -168,7 +171,8 @@ validate(const NewClassicNetplayLobbyDatagram &datagram) noexcept
 ) noexcept
 {
 	return left.player_two == right.player_two &&
-		left.player_two_autofire == right.player_two_autofire;
+		left.player_two_autofire == right.player_two_autofire &&
+		left.identity_digest == right.identity_digest;
 }
 
 [[nodiscard]] std::optional<NewClassicNetplayMatchContract> derive(
@@ -240,6 +244,12 @@ std::expected<
 		)};
 	}
 	put_u64(result, 40U, datagram.contract_hash);
+	const auto &identity_digest = datagram.host ?
+		datagram.host->identity_digest : datagram.join->identity_digest;
+	std::transform(
+		identity_digest.begin(), identity_digest.end(), result.begin() + 48U,
+		[](std::uint8_t value) { return std::byte{value}; }
+	);
 	return result;
 }
 
@@ -273,7 +283,7 @@ decode_new_classic_netplay_lobby_datagram(
 		std::to_integer<std::uint8_t>(wire[35U]) > 1U ||
 		std::ranges::any_of(wire.subspan(36U, 4U), [](std::byte value) {
 			return value != std::byte{0U};
-		}) || std::ranges::any_of(wire.subspan(48U), [](std::byte value) {
+		}) || std::ranges::any_of(wire.subspan(80U), [](std::byte value) {
 			return value != std::byte{0U};
 		})) {
 		return std::unexpected(datagram_error(
@@ -285,6 +295,11 @@ decode_new_classic_netplay_lobby_datagram(
 		.session_id = get_u64(wire, 8U),
 		.contract_hash = get_u64(wire, 40U),
 	};
+	AppSha256 identity_digest{};
+	std::transform(
+		wire.begin() + 48U, wire.begin() + 80U, identity_digest.begin(),
+		[](std::byte value) { return std::to_integer<std::uint8_t>(value); }
+	);
 	const bool host_present = wire[16U] != std::byte{0U} ||
 		wire[17U] != std::byte{0U} || wire[18U] != std::byte{0U} ||
 		wire[19U] != std::byte{0U} ||
@@ -302,6 +317,7 @@ decode_new_classic_netplay_lobby_datagram(
 			.cadence_ticks = get_u32(wire, 24U),
 			.cadence_seconds = get_u32(wire, 28U),
 			.input_delay_frames = std::to_integer<std::uint8_t>(wire[19U]),
+			.identity_digest = identity_digest,
 		};
 	}
 	const bool join_present = wire[32U] != std::byte{0U} ||
@@ -313,6 +329,7 @@ decode_new_classic_netplay_lobby_datagram(
 				.palette = std::to_integer<std::uint8_t>(wire[33U]),
 			},
 			.player_two_autofire = wire[35U] != std::byte{0U},
+			.identity_digest = identity_digest,
 		};
 	}
 	if(const auto valid = validate(result); !valid) {
@@ -333,7 +350,9 @@ NewClassicNetplayLobby::create_host(
 		));
 	}
 	if(!create_new_classic_netplay_match_contract(
-		lock, NewClassicNetplayJoinLock{}
+		lock, NewClassicNetplayJoinLock{
+			.identity_digest = lock.identity_digest,
+		}
 	)) {
 		return std::unexpected(lobby_error(
 			NewClassicNetplayLobbyErrorCode::invalid_host_lock
@@ -350,7 +369,9 @@ std::expected<NewClassicNetplayLobby, NewClassicNetplayLobbyError>
 NewClassicNetplayLobby::create_join(NewClassicNetplayJoinLock lock) noexcept
 {
 	if(!create_new_classic_netplay_match_contract(
-		NewClassicNetplayHostLock{}, lock
+		NewClassicNetplayHostLock{
+			.identity_digest = lock.identity_digest,
+		}, lock
 	)) {
 		return std::unexpected(lobby_error(
 			NewClassicNetplayLobbyErrorCode::invalid_join_lock

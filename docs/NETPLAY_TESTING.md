@@ -41,7 +41,7 @@ production platform-neutral netplay library but no UDP or RTC adapter, so this
 test cannot bind a port or trigger a firewall prompt. It covers the exact lobby,
 input, periodic proof/ack, Pause/Resume, Forfeit/ack, terminal proof/ack, and
 disconnect wires. Its accepted transcript SHA-256 is
-`2C1CCBCC8BFA2F106E16B53A6AD54FAD258758FD1D711CBBCD260AD11C443E5C`.
+`2121E37C96EE1B59A47F5C517E41D64FE740949F4E38C35A37A7BC8206158127`.
 
 This is a local process/protocol gate, not evidence of ICE or TURN behavior.
 Real Windows/Linux direct and relayed acceptance remains a private-beta gate.
@@ -261,7 +261,9 @@ DNS never enters the deterministic simulation.
 
 The retry-safe `T3NL001` lobby refuses ownership changes and does not construct
 MAIN until the host's P1/rules lock and the joiner's P2 lock form one exact
-`T3NLC001` contract. Before either source scheduler starts, both peers also
+`T3NLC001` contract. Account-backed rooms bind the complete server-authenticated
+room/UUID/nametag `T3NID001` digest into that contract; direct UDP uses the
+explicit all-zero identity digest. Before either source scheduler starts, both peers also
 hash and exchange the canonical
 frame-zero `T3RBK001` simulation state. A content, seed, state, or build
 disagreement therefore fails with `initial-simulation-mismatch` instead of

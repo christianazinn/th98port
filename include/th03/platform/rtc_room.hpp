@@ -137,6 +137,7 @@ struct RtcRoomSnapshot final {
 	RtcRoomState state = RtcRoomState::connecting;
 	std::optional<RtcRoomError> error{};
 	std::string room_code{};
+	std::string room_id{};
 	std::uint8_t player = 0U;
 	std::optional<RtcRoomIdentitySnapshot> identities{};
 	std::optional<std::chrono::milliseconds> round_trip_time{};
