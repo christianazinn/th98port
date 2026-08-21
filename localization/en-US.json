@@ -375,6 +375,7 @@
     "hiscore.online.downloading-footer": "Downloading...   Esc: Return",
     "hiscore.online.watch-footer": "Z/Return: Watch   Esc: Return",
     "hiscore.online.watching-footer": "Loading replay...",
+    "hiscore.online.download-action": "Download",
     "hiscore.online.header.place": "No.",
     "hiscore.online.label.player": "Player",
     "hiscore.online.label.result": "Result",

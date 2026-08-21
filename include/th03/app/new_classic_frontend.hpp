@@ -191,6 +191,13 @@ public:
 		NewClassicReplayBrowserMode mode =
 			NewClassicReplayBrowserMode::playback
 	);
+	// Opens one already-validated replay directly on the same telemetry pages
+	// as the local catalog. Online libraries use this after the host has
+	// downloaded and revalidated the immutable V13 document.
+	[[nodiscard]] static std::unique_ptr<NewClassicReplayBrowser> detail(
+		formats::ReplayDocument document,
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	);
 
 	[[nodiscard]] std::expected<
 		NewClassicReplayBrowserResult,
@@ -247,6 +254,7 @@ private:
 	bool host_surface_changed_ = false;
 	bool fade_in_active_ = false;
 	std::uint8_t fade_boundary_ = 0U;
+	bool detail_only_ = false;
 	NewClassicReplayBrowserStatus status_ =
 		NewClassicReplayBrowserStatus::running;
 	bool input_allowed_ = false;
@@ -283,16 +291,16 @@ enum class NewClassicOnlineReplayDownloadOutcome : std::uint8_t {
 	unavailable,
 };
 
-enum class NewClassicOnlineReplayWatchOutcome : std::uint8_t {
-	ready,
-	failed,
-};
-
 enum class NewClassicOnlineMenuMode : std::uint8_t {
 	high_scores,
 	my_records,
 	online_replays,
 	downloaded_replays,
+};
+
+struct NewClassicOnlineReplayPlaybackRequest final {
+	formats::ReplayDocument document{};
+	std::size_t checkpoint_index = 0U;
 };
 
 // New Classic-only source-styled hub for local and cached online score views.
@@ -335,8 +343,10 @@ public:
 	take_replay_watch_request() noexcept;
 	[[nodiscard]] bool report_replay_watch(
 		const NewClassicOnlineReplayId &replay_id,
-		NewClassicOnlineReplayWatchOutcome outcome
+		std::optional<formats::ReplayDocument> document
 	) noexcept;
+	[[nodiscard]] std::optional<NewClassicOnlineReplayPlaybackRequest>
+	take_replay_playback_request() noexcept;
 	// Converts a host-validated ready Watch request into the same black OP
 	// handoff used by the local Replay browser.
 	[[nodiscard]] bool prepare_playback_transition() noexcept;
@@ -352,7 +362,6 @@ private:
 	enum class WatchState : std::uint8_t {
 		idle,
 		pending,
-		ready,
 	};
 	void draw() noexcept;
 	void draw_hub() noexcept;
@@ -361,6 +370,7 @@ private:
 	void draw_personal_bests() noexcept;
 	[[nodiscard]] const NewClassicOnlineReplayRecord *selected_replay() const
 		noexcept;
+	void request_replay_load() noexcept;
 
 	std::vector<NewClassicOnlineCacheDocument> boards_{};
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
@@ -385,6 +395,8 @@ private:
 	WatchState watch_state_ = WatchState::idle;
 	std::optional<NewClassicOnlineReplayId> watch_target_{};
 	std::optional<NewClassicOnlineReplayRecord> watch_request_{};
+	std::unique_ptr<NewClassicReplayBrowser> replay_detail_browser_{};
+	std::optional<NewClassicOnlineReplayPlaybackRequest> playback_request_{};
 	bool redraw_pending_ = false;
 	bool valid_ = false;
 	bool fade_in_active_ = true;

@@ -8,6 +8,7 @@
 #include <expected>
 #include <filesystem>
 #include <memory>
+#include <new>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -369,7 +370,8 @@ std::string source_trimmed_name(const std::array<char, 8U> &name)
 	const NewClassicMessageCatalog &messages,
 	std::uint8_t rank,
 	std::uint8_t character,
-	std::int32_t top
+	std::int32_t top,
+	present::Index4 navigation_color = 12U
 ) noexcept
 {
 	if(rank >= 4U || character >= 9U) {
@@ -416,7 +418,7 @@ std::string source_trimmed_name(const std::array<char, 8U> &name)
 		return std::nullopt;
 	}
 	left += font.width(separator);
-	if(!font.put(raster, left, top, "<", 12U)) {
+	if(!font.put(raster, left, top, "<", navigation_color)) {
 		return std::nullopt;
 	}
 	left += font.width("<") + font.width(spacing);
@@ -429,7 +431,7 @@ std::string source_trimmed_name(const std::array<char, 8U> &name)
 		return std::nullopt;
 	}
 	left += character_width + font.width(spacing);
-	if(!font.put(raster, left, top, ">", 12U)) {
+	if(!font.put(raster, left, top, ">", navigation_color)) {
 		return std::nullopt;
 	}
 	return rank_center;
@@ -870,6 +872,34 @@ NewClassicReplayBrowser::load(
 			mode
 		)
 	);
+}
+
+std::unique_ptr<NewClassicReplayBrowser> NewClassicReplayBrowser::detail(
+	formats::ReplayDocument document,
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+)
+{
+	auto browser = std::unique_ptr<NewClassicReplayBrowser>(
+		new NewClassicReplayBrowser(
+			{}, NewClassicReplayCatalog{}, std::move(patch_assets),
+			NewClassicReplayBrowserMode::playback
+		)
+	);
+	browser->catalog_.slots[0U] = catalog_slot(document, std::nullopt);
+	browser->selected_slot_ = 0U;
+	browser->top_slot_ = 0U;
+	browser->selected_checkpoint_ = 0U;
+	browser->detail_page_ = NewClassicReplayDetailPage::splits;
+	browser->detail_document_ = std::move(document);
+	browser->checkpoint_focus_ = true;
+	browser->fade_in_active_ = false;
+	browser->fade_boundary_ = 0U;
+	browser->detail_only_ = true;
+	browser->input_allowed_ = true;
+	browser->draw();
+	browser->patch_surface_.raster().set_palette_tone(100);
+	browser->patch_surface_.raster().apply_pending_palette();
+	return browser;
 }
 
 NewClassicReplayBrowser::NewClassicReplayBrowser(
@@ -1530,6 +1560,10 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 		};
 	}
 	if(detail_document_ && (input.cancel || input.bomb)) {
+		if(detail_only_) {
+			status_ = NewClassicReplayBrowserStatus::back;
+			return NewClassicReplayBrowserResult{.status = status_};
+		}
 		if(detail_document_) {
 			detail_document_.reset();
 			selected_checkpoint_ = 0U;
@@ -2300,20 +2334,23 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 		);
 	} else {
 		rank_center = patch_put_online_category(
-			font, raster, messages, category.rank, category.character, 64
+			font, raster, messages, category.rank, category.character, 80, 9U
 		);
 		valid_ = rank_center.has_value();
 	}
 	if(valid_ && rank_center && board_category_focus_) {
-		const auto top = mode_ == NewClassicOnlineMenuMode::high_scores ? 48 : 64;
+		const auto top = mode_ == NewClassicOnlineMenuMode::high_scores ? 48 : 80;
+		const auto navigation_color = static_cast<present::Index4>(mode_ ==
+			NewClassicOnlineMenuMode::online_replays ? 9U : 12U);
 		const auto caret_left = *rank_center - (font.width("v") / 2);
 		valid_ = font.put_vertical_flipped(
-			raster, caret_left, top - 16, 'v', 12U
-		) && font.put(raster, caret_left, top + 16, "v", 12U);
+			raster, caret_left, top - 16, 'v', navigation_color
+		) && font.put(
+			raster, caret_left, top + 16, "v", navigation_color
+		);
 	}
-	const bool spaced_replay_board =
-		mode_ != NewClassicOnlineMenuMode::high_scores;
-	const auto header_top = spaced_replay_board ? 96 : 80;
+	const auto header_top = mode_ == NewClassicOnlineMenuMode::online_replays ?
+		112 : mode_ == NewClassicOnlineMenuMode::high_scores ? 80 : 96;
 	const auto rows_top = header_top + 16;
 	valid_ = valid_ &&
 		font.put(raster, 32, header_top, messages.text(
@@ -2419,6 +2456,19 @@ NewClassicHighScoreMenu::selected_replay() const noexcept
 	return found == board.replay_records.end() ? nullptr : &*found;
 }
 
+void NewClassicHighScoreMenu::request_replay_load() noexcept
+{
+	const auto *replay = selected_replay();
+	if(!replay || replay->availability !=
+		NewClassicOnlineReplayAvailability::downloaded ||
+		watch_state_ != WatchState::idle) {
+		return;
+	}
+	watch_target_ = replay->replay_id;
+	watch_state_ = WatchState::pending;
+	watch_request_ = *replay;
+}
+
 void NewClassicHighScoreMenu::draw_detail() noexcept
 {
 	if(board_index_ >= boards_.size() || selected_entry_ >=
@@ -2510,30 +2560,30 @@ void NewClassicHighScoreMenu::draw_detail() noexcept
 			font.put(raster, 344, 128, messages.text(
 				NewClassicMessageId::hiscore_online_replay_historical), 15U);
 	}
-	NewClassicMessageId footer =
-		NewClassicMessageId::hiscore_online_detail_footer;
-	if(replay) {
-		if(replay->availability ==
-			NewClassicOnlineReplayAvailability::downloaded) {
-			const bool pending = watch_target_ &&
-				*watch_target_ == replay->replay_id &&
-				(watch_state_ == WatchState::pending ||
-				 watch_state_ == WatchState::ready);
-			footer = pending ?
-				NewClassicMessageId::hiscore_online_watching_footer :
-				NewClassicMessageId::hiscore_online_watch_footer;
+	if(replay && watch_state_ == WatchState::pending) {
+		valid_ = valid_ && font.put_centered(
+			raster, 320, 208, messages.text(
+				NewClassicMessageId::hiscore_online_watching_footer
+			), 9U
+		);
+	} else if(replay && replay->availability ==
+		NewClassicOnlineReplayAvailability::metadata_only) {
+		const bool pending = download_target_ &&
+			*download_target_ == replay->replay_id &&
+			download_state_ == DownloadState::pending;
+		if(pending) {
+			valid_ = valid_ && font.put(
+				raster, 48, 208, messages.text(
+					NewClassicMessageId::hiscore_online_downloading_footer
+				), 9U
+			);
 		} else {
-			const bool pending = download_target_ &&
-				*download_target_ == replay->replay_id &&
-				download_state_ == DownloadState::pending;
-			footer = pending ?
-				NewClassicMessageId::hiscore_online_downloading_footer :
-				NewClassicMessageId::hiscore_online_download_footer;
+			valid_ = valid_ && font.put(raster, 32, 208, ">", 12U) &&
+				font.put(raster, 48, 208, messages.text(
+					NewClassicMessageId::hiscore_online_download_action
+				), 12U);
 		}
 	}
-	valid_ = valid_ && font.put_centered(
-		raster, 320, 352, messages.text(footer), 9U
-	);
 }
 
 NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
@@ -2571,14 +2621,46 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 		}
 		return {.surface_changed = changed, .status = status_};
 	}
+	if(page_ == Page::detail && replay_detail_browser_) {
+		auto result = replay_detail_browser_->consume(input);
+		if(!result) {
+			valid_ = false;
+			return {.status = status_};
+		}
+		if(result->status == NewClassicReplayBrowserStatus::application_quit) {
+			status_ = NewClassicHighScoreMenuStatus::application_quit;
+			return {.status = status_};
+		}
+		if(result->status == NewClassicReplayBrowserStatus::back) {
+			replay_detail_browser_.reset();
+			page_ = Page::board;
+			draw();
+			return {.surface_changed = valid_, .status = status_};
+		}
+		if(result->status == NewClassicReplayBrowserStatus::play_selected) {
+			auto document = replay_detail_browser_->take_selected_document();
+			if(!document) {
+				valid_ = false;
+				return {.status = status_};
+			}
+			playback_request_ = NewClassicOnlineReplayPlaybackRequest{
+				.document = std::move(*document),
+				.checkpoint_index =
+					replay_detail_browser_->selected_checkpoint(),
+			};
+		}
+		return {
+			.surface_changed = result->surface_changed,
+			.status = status_,
+		};
+	}
 	if(!input_allowed_) {
 		if(!any(input)) {
 			input_allowed_ = true;
 		}
 		return {.status = status_};
 	}
-	if(watch_state_ == WatchState::pending ||
-		watch_state_ == WatchState::ready) {
+	if(watch_state_ == WatchState::pending) {
 		return {.status = status_};
 	}
 	if(!any(input)) {
@@ -2628,6 +2710,9 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 	}
 	if(page_ == Page::detail) {
 		if(input.cancel || input.bomb) {
+			replay_detail_browser_.reset();
+			watch_state_ = WatchState::idle;
+			watch_target_.reset();
 			page_ = Page::board;
 			draw();
 			return {.surface_changed = valid_, .status = status_};
@@ -2640,14 +2725,6 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 				download_target_ = replay->replay_id;
 				download_state_ = DownloadState::pending;
 				download_request_ = *replay;
-				draw();
-				return {.surface_changed = valid_, .status = status_};
-			}
-			if(replay && replay->availability ==
-				NewClassicOnlineReplayAvailability::downloaded) {
-				watch_target_ = replay->replay_id;
-				watch_state_ = WatchState::pending;
-				watch_request_ = *replay;
 				draw();
 				return {.surface_changed = valid_, .status = status_};
 			}
@@ -2681,6 +2758,7 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 			board_index_ = location.first;
 			selected_entry_ = location.second;
 			page_ = Page::detail;
+			request_replay_load();
 		} else {
 			return {.status = status_};
 		}
@@ -2739,6 +2817,7 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 			selected_entry_ = (selected_entry_ + 1U) % count;
 		} else if(input.confirm && count != 0U) {
 			page_ = Page::detail;
+			request_replay_load();
 		} else {
 			return {.status = status_};
 		}
@@ -2754,6 +2833,9 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 
 present::SourceSurface NewClassicHighScoreMenu::surface() const noexcept
 {
+	if(page_ == Page::detail && replay_detail_browser_) {
+		return replay_detail_browser_->surface();
+	}
 	return patch_surface_.surface();
 }
 
@@ -2841,6 +2923,7 @@ bool NewClassicHighScoreMenu::report_replay_download(
 			NewClassicOnlineReplayAvailability::downloaded;
 		download_state_ = DownloadState::idle;
 		download_target_.reset();
+		request_replay_load();
 	} else {
 		download_state_ = outcome ==
 			NewClassicOnlineReplayDownloadOutcome::unavailable ?
@@ -2858,15 +2941,24 @@ NewClassicHighScoreMenu::take_replay_watch_request() noexcept
 
 bool NewClassicHighScoreMenu::report_replay_watch(
 	const NewClassicOnlineReplayId &replay_id,
-	NewClassicOnlineReplayWatchOutcome outcome
+	std::optional<formats::ReplayDocument> document
 ) noexcept
 {
 	if(watch_state_ != WatchState::pending || !watch_target_ ||
 		*watch_target_ != replay_id) {
 		return false;
 	}
-	if(outcome == NewClassicOnlineReplayWatchOutcome::ready) {
-		watch_state_ = WatchState::ready;
+	if(document) {
+		try {
+			replay_detail_browser_ = NewClassicReplayBrowser::detail(
+				std::move(*document), patch_assets_
+			);
+		} catch(const std::bad_alloc &) {
+			return false;
+		}
+		watch_state_ = WatchState::idle;
+		watch_target_.reset();
+		redraw_pending_ = true;
 		return true;
 	}
 	for(auto &board : boards_) {
@@ -2887,10 +2979,16 @@ bool NewClassicHighScoreMenu::report_replay_watch(
 	return true;
 }
 
+std::optional<NewClassicOnlineReplayPlaybackRequest>
+NewClassicHighScoreMenu::take_replay_playback_request() noexcept
+{
+	return std::exchange(playback_request_, std::nullopt);
+}
+
 bool NewClassicHighScoreMenu::prepare_playback_transition() noexcept
 {
-	return page_ == Page::detail && watch_state_ == WatchState::ready &&
-		patch_surface_.terminal_black_clear();
+	return page_ == Page::detail && replay_detail_browser_ &&
+		replay_detail_browser_->prepare_playback_transition();
 }
 
 NewClassicReplaySaveMenu::NewClassicReplaySaveMenu(

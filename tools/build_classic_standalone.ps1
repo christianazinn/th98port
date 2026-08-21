@@ -276,6 +276,20 @@ try {
 		-Destination (Join-Path $contentRoot "TOUHOU.DAT")
 	Copy-Item -LiteralPath $ReplayPatchAssets `
 		-Destination (Join-Path $contentRoot "AZINN.DAT")
+	$menuAssetSource = Join-Path $sourceRoot (
+		"assets\new-classic\menu-backgrounds"
+	)
+	$menuAssetFiles = Get-ChildItem -LiteralPath $menuAssetSource `
+		-Filter "*.BMP" -File
+	if($menuAssetFiles.Count -ne 16) {
+		throw "Expected exactly 16 repo-owned New Classic menu background halves."
+	}
+	$menuAssetDestination = Join-Path $contentRoot "PODDUI"
+	[IO.Directory]::CreateDirectory($menuAssetDestination) | Out-Null
+	foreach($menuAsset in $menuAssetFiles) {
+		Copy-Item -LiteralPath $menuAsset.FullName `
+			-Destination $menuAssetDestination
+	}
 	if($LanguageOverlay) {
 		Copy-Item -LiteralPath $LanguageOverlay `
 			-Destination (Join-Path $contentRoot "TH3EN.DAT")

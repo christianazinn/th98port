@@ -361,6 +361,7 @@ TH03_NEW_CLASSIC_MESSAGE(hiscore_online_download_footer, "hiscore.online.downloa
 TH03_NEW_CLASSIC_MESSAGE(hiscore_online_downloading_footer, "hiscore.online.downloading-footer", 560U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(hiscore_online_watch_footer, "hiscore.online.watch-footer", 560U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(hiscore_online_watching_footer, "hiscore.online.watching-footer", 560U, "", "")
+TH03_NEW_CLASSIC_MESSAGE(hiscore_online_download_action, "hiscore.online.download-action", 160U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(hiscore_online_header_place, "hiscore.online.header.place", 48U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(hiscore_online_label_player, "hiscore.online.label.player", 160U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(hiscore_online_label_result, "hiscore.online.label.result", 160U, "", "")

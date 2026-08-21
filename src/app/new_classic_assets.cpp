@@ -34,16 +34,26 @@ struct NewClassicAssetsAccess final {
 
 namespace {
 
-constexpr std::size_t archive_file_bytes = 1'183'932U;
-constexpr MainExecutableSha256 archive_sha256{
+constexpr std::size_t extended_archive_file_bytes = 1'183'932U;
+constexpr MainExecutableSha256 extended_archive_sha256{
 	0xDEU, 0x06U, 0xDCU, 0x9BU, 0x02U, 0x74U, 0xC7U, 0xCEU,
 	0x6AU, 0x6EU, 0xC8U, 0x3DU, 0x66U, 0x95U, 0xCBU, 0x6DU,
 	0x05U, 0x09U, 0xF4U, 0xC0U, 0xFCU, 0xD9U, 0x06U, 0x40U,
 	0xA9U, 0x51U, 0xF1U, 0xC9U, 0x47U, 0xEBU, 0x5CU, 0x44U,
 };
+constexpr std::size_t source_archive_file_bytes = 157'532U;
+constexpr MainExecutableSha256 source_archive_sha256{
+	0xECU, 0xD0U, 0xA3U, 0x76U, 0x5FU, 0xE7U, 0xA0U, 0xC8U,
+	0xA9U, 0x17U, 0x6FU, 0xF5U, 0x1FU, 0xC1U, 0x10U, 0xB4U,
+	0x66U, 0xEAU, 0x61U, 0x8FU, 0x93U, 0x38U, 0x5FU, 0xBEU,
+	0x4BU, 0x65U, 0x1FU, 0x30U, 0x5FU, 0x11U, 0x56U, 0x06U,
+};
 constexpr std::size_t archive_header_bytes = 16U;
 constexpr std::size_t directory_entry_bytes = 32U;
-constexpr std::array<std::string_view, 21U> required_members{
+constexpr std::array<std::string_view, 5U> source_required_members{
+	"SLB1.PI", "SLB1B.PI", "MNUFONT.PF", "PAUSE.GFT", "BG1.PI",
+};
+constexpr std::array<std::string_view, 21U> extended_required_members{
 	"SLB1.PI", "SLB1B.PI", "MNUFONT.PF", "PAUSE.GFT", "BG1.PI",
 	"BG2A.BMP", "BG2B.BMP", "M001A.BMP", "M001B.BMP",
 	"M002A.BMP", "M002B.BMP", "M003A.BMP", "M003B.BMP",
@@ -57,6 +67,17 @@ constexpr std::size_t menu_font_advances_offset = 32U;
 constexpr std::size_t menu_font_bitmap_offset = 128U;
 constexpr std::size_t pause_gaiji_file_bytes = 1'312U;
 constexpr std::size_t pause_gaiji_header_bytes = 32U;
+constexpr std::size_t menu_background_half_file_bytes = 64'118U;
+constexpr std::array background_members{
+	std::pair{"BG2A.BMP", "BG2B.BMP"},
+	std::pair{"M001A.BMP", "M001B.BMP"},
+	std::pair{"M002A.BMP", "M002B.BMP"},
+	std::pair{"M003A.BMP", "M003B.BMP"},
+	std::pair{"M004A.BMP", "M004B.BMP"},
+	std::pair{"M005A.BMP", "M005B.BMP"},
+	std::pair{"M006A.BMP", "M006B.BMP"},
+	std::pair{"M007A.BMP", "M007B.BMP"},
+};
 
 using ArchiveMembers = std::map<std::string, std::vector<std::byte>>;
 
@@ -135,8 +156,14 @@ using ArchiveMembers = std::map<std::string, std::vector<std::byte>>;
 [[nodiscard]] std::expected<ArchiveMembers, NewClassicAssetsError>
 parse_archive(std::span<const std::byte> bytes)
 {
-	if(bytes.size() != archive_file_bytes ||
-		main_executable_sha256(bytes) != archive_sha256) {
+	std::span<const std::string_view> required_members{};
+	if(bytes.size() == extended_archive_file_bytes &&
+		main_executable_sha256(bytes) == extended_archive_sha256) {
+		required_members = extended_required_members;
+	} else if(bytes.size() == source_archive_file_bytes &&
+		main_executable_sha256(bytes) == source_archive_sha256) {
+		required_members = source_required_members;
+	} else {
 		return std::unexpected(error(
 			NewClassicAssetsErrorCode::digest_mismatch
 		));
@@ -936,7 +963,8 @@ load_new_classic_replay_patch_assets(const std::filesystem::path &path)
 			NewClassicAssetsErrorCode::source_size, 0U, system
 		));
 	}
-	if(size != archive_file_bytes) {
+	if(size != extended_archive_file_bytes &&
+		size != source_archive_file_bytes) {
 		return std::unexpected(error(NewClassicAssetsErrorCode::source_size));
 	}
 	try {
@@ -944,7 +972,7 @@ load_new_classic_replay_patch_assets(const std::filesystem::path &path)
 		if(!input) {
 			return std::unexpected(error(NewClassicAssetsErrorCode::source_open));
 		}
-		std::vector<std::byte> bytes(archive_file_bytes);
+		std::vector<std::byte> bytes(static_cast<std::size_t>(size));
 		input.read(
 			reinterpret_cast<char *>(bytes.data()),
 			static_cast<std::streamsize>(bytes.size())
@@ -974,20 +1002,75 @@ load_new_classic_replay_patch_assets(const std::filesystem::path &path)
 		result.replay_list_background = std::move(*list);
 		result.replay_name_background = std::move(*name);
 		result.key_config_background = std::move(*key);
-		constexpr std::array background_members{
-			std::pair{"BG2A.BMP", "BG2B.BMP"},
-			std::pair{"M001A.BMP", "M001B.BMP"},
-			std::pair{"M002A.BMP", "M002B.BMP"},
-			std::pair{"M003A.BMP", "M003B.BMP"},
-			std::pair{"M004A.BMP", "M004B.BMP"},
-			std::pair{"M005A.BMP", "M005B.BMP"},
-			std::pair{"M006A.BMP", "M006B.BMP"},
-			std::pair{"M007A.BMP", "M007B.BMP"},
+		std::optional<std::filesystem::path> loose_background_root{};
+		std::vector<std::filesystem::path> candidates{
+			path.parent_path() / "PODDUI",
+		};
+		auto current = std::filesystem::current_path(system);
+		if(!system) {
+			candidates.push_back(current / "PODDUI");
+			candidates.push_back(
+				current / "assets" / "new-classic" / "menu-backgrounds"
+			);
+		}
+		for(const auto &candidate : candidates) {
+			const auto complete = std::ranges::all_of(
+				background_members, [&](const auto &pair) {
+					for(const auto *name : {pair.first, pair.second}) {
+						std::error_code candidate_error;
+						const auto file = candidate / name;
+						if(!std::filesystem::is_regular_file(
+							file, candidate_error
+						) || candidate_error || std::filesystem::file_size(
+							file, candidate_error
+						) != menu_background_half_file_bytes || candidate_error) {
+							return false;
+						}
+					}
+					return true;
+				}
+			);
+			if(complete) {
+				loose_background_root = candidate;
+				break;
+			}
+		}
+		const auto read_background_half = [&](const char *member)
+			-> std::expected<std::vector<std::byte>, NewClassicAssetsError> {
+			if(loose_background_root) {
+				std::ifstream file(*loose_background_root / member,
+					std::ios::binary);
+				if(!file) {
+					return std::unexpected(error(
+						NewClassicAssetsErrorCode::source_open
+					));
+				}
+				std::vector<std::byte> result(menu_background_half_file_bytes);
+				file.read(reinterpret_cast<char *>(result.data()),
+					static_cast<std::streamsize>(result.size()));
+				if(!file || file.gcount() !=
+					static_cast<std::streamsize>(result.size())) {
+					return std::unexpected(error(
+						NewClassicAssetsErrorCode::source_read
+					));
+				}
+				return result;
+			}
+			const auto found = members->find(member);
+			if(found == members->end()) {
+				return std::unexpected(error(
+					NewClassicAssetsErrorCode::archive_member_set
+				));
+			}
+			return found->second;
 		};
 		for(std::size_t index = 0U; index < background_members.size(); ++index) {
+			auto top = read_background_half(background_members[index].first);
+			auto bottom = read_background_half(background_members[index].second);
+			if(!top) return std::unexpected(std::move(top.error()));
+			if(!bottom) return std::unexpected(std::move(bottom.error()));
 			auto background = detail::decode_new_classic_menu_background(
-				members->at(background_members[index].first),
-				members->at(background_members[index].second)
+				*top, *bottom
 			);
 			if(!background) {
 				return std::unexpected(std::move(background.error()));

@@ -4,6 +4,9 @@ This package is an unsigned development build of the native TH03 port. It is
 intended for private beta testing, not as a finished installer.
 
 The package contains no original game, font, music, graphics, or replay data.
+It does include `PODDUI/`, the independently generated, repo-owned New Classic
+menu artwork. Keep that directory beside the installed executables; standalone
+content instead stages the same files beside `AZINN.DAT` as `content/PODDUI`.
 Run `th03-app` with the same external `--data`, `--main`, `--mainl`, `--op`, and
 `--font` inputs documented in the repository README and NETPLAY_TESTING guide.
 `th03-replay-video`, `th03rv`, `th03-replay-check`, and `th03-headless` are

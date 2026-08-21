@@ -223,9 +223,11 @@ private:
 	bool initialized_ = false;
 };
 
-// Accepts only the complete Replay Patch 0.4.12 AZINN.DAT profile. The whole
-// archive is authenticated before its encrypted directory or any member is
-// parsed. Original-derived payload bytes remain caller-owned external data.
+// Accepts the authenticated Replay Patch source archive or the legacy
+// extended development archive. Original-derived members always remain in
+// caller-owned AZINN.DAT. Repo-owned custom menu backgrounds are preferentially
+// loaded from a sibling PODDUI directory, with embedded extended-archive copies
+// retained only for compatibility with older standalone builds.
 [[nodiscard]] std::expected<
 	NewClassicReplayPatchAssets,
 	NewClassicAssetsError

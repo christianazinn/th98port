@@ -961,6 +961,7 @@ struct ClassicOpSessionBackend final {
 	std::optional<NewClassicOnlineReplayRecord> pending_online_replay_watch{};
 	std::optional<NewClassicOnlineReplayId> active_online_replay_watch{};
 	std::optional<formats::ReplayDocument> online_replay_playback_document{};
+	std::size_t online_replay_playback_checkpoint = 0U;
 	bool online_replay_playback_preparing = false;
 	bool online_replay_black_published = false;
 	std::unique_ptr<ClassicOpCharacterSelection> selection{};
@@ -1409,6 +1410,17 @@ struct ClassicOpSessionBackend final {
 				active_online_replay_watch = request->replay_id;
 				pending_online_replay_watch = std::move(*request);
 			}
+			if(auto request =
+				high_score_menu->take_replay_playback_request()) {
+				if(online_replay_playback_document ||
+					online_replay_playback_preparing) {
+					return std::unexpected(session_error(
+						ClassicOpSessionErrorCode::backend_contract_failed
+					));
+				}
+				online_replay_playback_checkpoint = request->checkpoint_index;
+				online_replay_playback_document = std::move(request->document);
+			}
 			return ClassicOpSessionBackendTick{
 				.surface_changed = result.surface_changed,
 				.input_sampled = input.up || input.down || input.left ||
@@ -1462,7 +1474,7 @@ struct ClassicOpSessionBackend final {
 			auto loaded = NewClassicReplayPlayback::load({
 				.content = *content_paths,
 				.document = *online_replay_playback_document,
-				.checkpoint_index = 0U,
+				.checkpoint_index = online_replay_playback_checkpoint,
 				.kotohime_compatibility = kotohime_compatibility,
 				.reduced_flash = config.reduced_flash,
 				.language = config.language,
@@ -1480,6 +1492,7 @@ struct ClassicOpSessionBackend final {
 			}
 			high_score_menu.reset();
 			online_replay_playback_document.reset();
+			online_replay_playback_checkpoint = 0U;
 			online_replay_playback_preparing = false;
 			online_replay_black_published = false;
 			active_online_replay_watch.reset();
@@ -2765,6 +2778,17 @@ struct ClassicOpSessionBackend final {
 				active_online_replay_watch = request->replay_id;
 				pending_online_replay_watch = std::move(*request);
 			}
+			if(auto request =
+				high_score_menu->take_replay_playback_request()) {
+				if(online_replay_playback_document ||
+					online_replay_playback_preparing) {
+					return std::unexpected(session_error(
+						ClassicOpSessionErrorCode::backend_contract_failed
+					));
+				}
+				online_replay_playback_checkpoint = request->checkpoint_index;
+				online_replay_playback_document = std::move(request->document);
+			}
 			if(result.status == NewClassicHighScoreMenuStatus::local_selected) {
 				high_score_menu.reset();
 				if(auto started = start_local_high_scores(true); !started) {
@@ -2852,7 +2876,7 @@ struct ClassicOpSessionBackend final {
 			auto loaded = NewClassicReplayPlayback::load({
 				.content = *content_paths,
 				.document = *online_replay_playback_document,
-				.checkpoint_index = 0U,
+				.checkpoint_index = online_replay_playback_checkpoint,
 				.kotohime_compatibility = kotohime_compatibility,
 				.reduced_flash = config.reduced_flash,
 				.language = config.language,
@@ -2871,6 +2895,7 @@ struct ClassicOpSessionBackend final {
 			high_score_menu.reset();
 			title_completion.reset();
 			online_replay_playback_document.reset();
+			online_replay_playback_checkpoint = 0U;
 			online_replay_playback_preparing = false;
 			online_replay_black_published = false;
 			active_online_replay_watch.reset();
@@ -4476,19 +4501,15 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
-		const auto outcome = document ?
-			NewClassicOnlineReplayWatchOutcome::ready :
-			NewClassicOnlineReplayWatchOutcome::failed;
+		const bool ready = document.has_value();
 		if(!high_score_menu || !high_score_menu->report_replay_watch(
-			replay_id, outcome
+			replay_id, std::move(document)
 		)) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
 		}
-		if(document) {
-			online_replay_playback_document = std::move(*document);
-		} else {
+		if(!ready) {
 			for(auto *library : {&online_boards, &online_my_records}) {
 				for(auto &board : *library) {
 					for(auto &record : board.replay_records) {
@@ -4499,8 +4520,8 @@ struct ClassicOpSessionBackend final {
 					}
 				}
 			}
-			active_online_replay_watch.reset();
 		}
+		active_online_replay_watch.reset();
 		return {};
 	}
 

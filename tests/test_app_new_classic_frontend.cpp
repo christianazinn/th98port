@@ -560,7 +560,7 @@ void test_replay_hub_and_libraries()
 	const auto selected_surface = online_library.surface();
 	const auto &replay_background = patch_assets->replay_list_background;
 	const bool selected_row_is_yellow = [&] {
-		for(std::int32_t y = 112; y < 128; ++y) {
+		for(std::int32_t y = 128; y < 144; ++y) {
 			for(std::int32_t x = 24; x < 608; ++x) {
 				const auto index = static_cast<std::size_t>(y * 640 + x);
 				if(selected_surface.pixels[index].value == 12U &&
@@ -573,6 +573,23 @@ void test_replay_hub_and_libraries()
 	}();
 	expect(selected_row_is_yellow,
 		"online Replay selection stays yellow while category navigation is active");
+	const bool category_uses_lavender = [&] {
+		bool lavender = false;
+		for(std::int32_t y = 64; y < 112; ++y) {
+			for(std::int32_t x = 0; x < 640; ++x) {
+				const auto index = static_cast<std::size_t>(y * 640 + x);
+				lavender = lavender || (selected_surface.pixels[index].value == 9U &&
+					replay_background.image.indices[index] != 9U);
+				if(selected_surface.pixels[index].value == 12U &&
+					replay_background.image.indices[index] != 12U) {
+					return false;
+				}
+			}
+		}
+		return lavender;
+	}();
+	expect(category_uses_lavender,
+		"online Replay category arrows use header lavender, not selection yellow");
 	expect(region_matches_background(
 		selected_surface, replay_background, 24, 368, 616, 384
 	), "online Replay list removes the redundant bottom instructions");
@@ -783,6 +800,12 @@ void test_online_high_score_menu()
 	expect(online.viewing_detail() &&
 		surface_hash(online.surface()) != list_hash,
 		"a leaderboard row opens its replay telemetry detail surface");
+	auto online_watch = online.take_replay_watch_request();
+	expect(online_watch && online.report_replay_watch(
+		online_watch->replay_id, make_story_document()
+	), "downloaded leaderboard detail loads the validated V13 telemetry");
+	expect(online.consume({}).surface_changed,
+		"online leaderboard telemetry publishes on its source boundary");
 	static_cast<void>(online.consume({}));
 	static_cast<void>(online.consume({.cancel = true}));
 	expect(online.viewing_online() && !online.viewing_detail(),
@@ -861,14 +884,22 @@ void test_online_high_score_menu()
 				auto wrong_watch = watch->replay_id;
 				wrong_watch.bytes[1U] ^= 0xFFU;
 				expect(!download.report_replay_watch(
-					wrong_watch, NewClassicOnlineReplayWatchOutcome::ready
+					wrong_watch, make_story_document()
 				), "Watch completion rejects an unrelated replay identity");
 				expect(download.report_replay_watch(
-					watch->replay_id,
-					NewClassicOnlineReplayWatchOutcome::ready
-				) && download.prepare_playback_transition() &&
+					watch->replay_id, make_multi_round_story_document()
+				), "validated download opens the local telemetry owner");
+				expect(download.consume({}).surface_changed,
+					"loaded telemetry publishes on the next source boundary");
+				static_cast<void>(download.consume({}));
+				static_cast<void>(download.consume({.down = true}));
+				static_cast<void>(download.consume({}));
+				static_cast<void>(download.consume({.confirm = true}));
+				auto playback = download.take_replay_playback_request();
+				expect(playback && playback->checkpoint_index == 1U &&
+					download.prepare_playback_transition() &&
 					download.surface().palette_tone == 0,
-					"validated Watch crosses a source-owned black transition");
+					"telemetry preserves the selected online checkpoint across the source-owned black transition");
 			}
 		}
 	}
@@ -889,7 +920,7 @@ void test_online_high_score_menu()
 	static_cast<void>(stale.consume({.confirm = true}));
 	auto stale_watch = stale.take_replay_watch_request();
 	expect(stale_watch && stale.report_replay_watch(
-		stale_watch->replay_id, NewClassicOnlineReplayWatchOutcome::failed
+		stale_watch->replay_id, std::nullopt
 	), "a stale local Watch failure is reported between source ticks");
 	expect(stale.consume({}).surface_changed,
 		"stale local replay failure redraws on the next source tick");
@@ -958,6 +989,25 @@ void test_authentic_online_menu_previews_if_requested()
 	th03::test::dump_menu_preview(
 		downloaded.surface(), "013-downloaded-replay-detail.ppm"
 	);
+	auto downloaded_watch = downloaded.take_replay_watch_request();
+	if(downloaded_watch && downloaded.report_replay_watch(
+		downloaded_watch->replay_id, make_story_document()
+	)) {
+		static_cast<void>(downloaded.consume({}));
+		th03::test::dump_menu_preview(
+			downloaded.surface(), "017-online-replay-splits.ppm"
+		);
+		static_cast<void>(downloaded.consume({}));
+		static_cast<void>(downloaded.consume({.right = true}));
+		th03::test::dump_menu_preview(
+			downloaded.surface(), "018-online-replay-clears.ppm"
+		);
+		static_cast<void>(downloaded.consume({}));
+		static_cast<void>(downloaded.consume({.right = true}));
+		th03::test::dump_menu_preview(
+			downloaded.surface(), "019-online-replay-timers.ppm"
+		);
+	}
 
 	NewClassicHighScoreMenu high_scores(
 		{downloaded_board}, 2U, assets, NewClassicOnlineMenuMode::high_scores,
@@ -975,6 +1025,13 @@ void test_authentic_online_menu_previews_if_requested()
 	static_cast<void>(high_scores.consume({.confirm = true}));
 	static_cast<void>(high_scores.consume({}));
 	static_cast<void>(high_scores.consume({.confirm = true}));
+	auto high_score_watch = high_scores.take_replay_watch_request();
+	if(high_score_watch) {
+		static_cast<void>(high_scores.report_replay_watch(
+			high_score_watch->replay_id, make_story_document()
+		));
+		static_cast<void>(high_scores.consume({}));
+	}
 	th03::test::dump_menu_preview(
 		high_scores.surface(), "015-online-leaderboard-detail.ppm"
 	);
