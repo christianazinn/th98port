@@ -126,6 +126,32 @@ struct LogicalTickInput {
 	bool any_scancode_held = false;
 };
 
+// The donor's single-player interface owner is keyboard System + keyboard P1
+// + the first joystick. P2 remains a distinct gameplay domain even when one
+// physical key happens to be bound in both keyboard maps. Retained host menus
+// must use this projection instead of OR-ing the aggregate P1/P2 words, which
+// would turn default Right Arrow into both Right and the P2 Bomb action.
+[[nodiscard]] inline std::uint16_t new_classic_interface_input_word(
+	const LogicalTickInput &sample
+) noexcept
+{
+	if(!sample.physical_domains) {
+		return static_cast<std::uint16_t>(
+			sample.input.system | sample.input.p1
+		);
+	}
+	const auto &physical = *sample.physical_domains;
+	auto result = static_cast<std::uint16_t>(
+		physical.keyboard.system | physical.keyboard.p1
+	);
+	if(physical.first_joystick_present) {
+		result = static_cast<std::uint16_t>(
+			result | physical.first_joystick
+		);
+	}
+	return result;
+}
+
 // Fixed-capacity event history plus a rational fake-clock-friendly scheduler.
 // pop_due() returns at most one logical tick; callers loop until nullopt. This
 // makes every overdue deadline visible without allocating, dropping, or

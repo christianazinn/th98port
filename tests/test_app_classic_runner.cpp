@@ -387,6 +387,27 @@ void test_input_projection()
 		live.main.physical_domains.has_value() &&
 		live.story.main.physical_domains.has_value(),
 		"live MAIN projections retain aggregate replay input beside physical domains");
+	expect(
+		th03::app::new_classic_interface_input_word({
+			.input = {.p1 = 0x0008U, .p2 = 0x0010U},
+		}) == 0x0008U,
+		"retained menu input cannot turn P1 Right into a P2 Bomb/backspace"
+	);
+	expect(
+		th03::app::new_classic_interface_input_word({
+			.input = {.p1 = 0x003FU, .p2 = 0x0010U, .system = 0x2000U},
+			.physical_domains = th03::app::PhysicalInputDomains{
+				.keyboard = {
+					.p1 = 0x0008U,
+					.p2 = 0x0010U,
+					.system = 0x2000U,
+				},
+				.first_joystick = 0x0001U,
+				.first_joystick_present = true,
+			},
+		}) == 0x2009U,
+		"retained menu input uses keyboard System/P1 and joystick zero only"
+	);
 }
 
 void test_classic_catch_up_policy()

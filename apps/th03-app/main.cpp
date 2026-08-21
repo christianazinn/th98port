@@ -2902,8 +2902,9 @@ negotiate_rtc_netplay_lobby(
 	constexpr std::uint16_t input_shot = 0x0020U;
 	constexpr std::uint16_t input_cancel = 0x1000U;
 	constexpr std::uint16_t input_ok = 0x2000U;
-	const auto word = static_cast<std::uint16_t>(sample.input.system |
-		(accept_player_words ? sample.input.p1 | sample.input.p2 : 0U));
+	const auto word = accept_player_words ?
+		th03::app::new_classic_interface_input_word(sample) :
+		sample.input.system;
 	const auto pressed = [word](std::uint16_t bit) noexcept {
 		return (word & bit) != 0U;
 	};
@@ -6519,7 +6520,14 @@ ExperienceRunResult run_classic_session(
 				if(uploaded->error) {
 					std::cerr << "status=warning\n"
 						"stage=online-replay-upload\ncode="
-						<< static_cast<unsigned>(uploaded->error->code) << '\n';
+						<< static_cast<unsigned>(uploaded->error->code)
+						<< "\nhttp=" << uploaded->error->http_status;
+					if(uploaded->error->transport) {
+						std::cerr << "\ntransport=" << static_cast<unsigned>(
+							uploaded->error->transport->code
+						);
+					}
+					std::cerr << '\n';
 				}
 				if(uploaded->credential_error) {
 					std::cerr << "status=warning\n"
@@ -8014,10 +8022,10 @@ ExperienceRunResult run_new_classic_experience(
 				}
 				if(!profile) {
 					if(room_run.profile_requested) {
-						if(!room.resume_after_profile()) {
+						if(!room.show_profile_failure()) {
 							return NetplayFrontendResult{
 								.exit_code = fail_netplay(
-									"online-profile", "resume-failed"
+									"online-profile", "failure-screen-failed"
 								)
 							};
 						}

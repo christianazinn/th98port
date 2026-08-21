@@ -1,4 +1,5 @@
 #include "th03/platform/windows_online.hpp"
+#include "th03/formats/v13.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -54,6 +55,19 @@ private:
 	return {
 		std::istreambuf_iterator<char>{input},
 		std::istreambuf_iterator<char>{},
+	};
+}
+
+[[nodiscard]] std::vector<std::byte> read_bytes(const fs::path &path)
+{
+	std::ifstream input(path, std::ios::binary);
+	const std::vector<char> source{
+		std::istreambuf_iterator<char>{input},
+		std::istreambuf_iterator<char>{},
+	};
+	return {
+		reinterpret_cast<const std::byte *>(source.data()),
+		reinterpret_cast<const std::byte *>(source.data() + source.size()),
 	};
 }
 
@@ -201,13 +215,60 @@ void test_load_or_enroll()
 		"failed enrollment publishes no credential file");
 }
 
+void test_live_upload(
+	std::string origin,
+	const fs::path &credential_path,
+	const fs::path &replay_path
+)
+{
+	auto adapter = create_windows_online_transport(std::move(origin));
+	expect(adapter.has_value(), "live Windows online origin creates");
+	if(!adapter) {
+		return;
+	}
+	auto credentials = load_windows_online_credentials(credential_path);
+	expect(credentials && *credentials,
+		"live current-user credentials load without disclosure");
+	const auto bytes = read_bytes(replay_path);
+	auto replay = th03::formats::parse_v13_replay(bytes);
+	expect(replay.has_value(), "live upload fixture is valid V13");
+	if(!credentials || !*credentials || !replay) {
+		return;
+	}
+	auto profile = fetch_new_classic_online_profile(
+		**credentials, adapter->transport()
+	);
+	expect(profile.has_value() && profile->user_id == (**credentials).user_id,
+		"live Windows adapter fetches the authenticated profile");
+	auto uploaded = upload_new_classic_online_replay(
+		*replay, **credentials, adapter->transport()
+	);
+	if(!uploaded) {
+		std::cerr << "LIVE UPLOAD ERROR client="
+			<< static_cast<unsigned>(uploaded.error().code)
+			<< " http=" << uploaded.error().http_status;
+		if(uploaded.error().transport) {
+			std::cerr << " transport=" << static_cast<unsigned>(
+				uploaded.error().transport->code
+			);
+		}
+		std::cerr << '\n';
+	}
+	expect(uploaded.has_value() && uploaded->status ==
+		NewClassicOnlineUploadStatus::accepted,
+		"live Windows adapter uploads the exact V13 fixture");
+}
+
 } // namespace
 
-int main()
+int main(int argc, char **argv)
 {
 	test_origin_and_request_guards();
 	test_protected_credentials();
 	test_load_or_enroll();
+	if(argc == 4) {
+		test_live_upload(argv[1], argv[2], argv[3]);
+	}
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }

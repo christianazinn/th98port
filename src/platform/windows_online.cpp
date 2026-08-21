@@ -87,7 +87,8 @@ constexpr int request_timeout_ms = 15'000;
 		return false;
 	}
 	return std::ranges::all_of(header.name, [](char character) {
-		return (character >= 'a' && character <= 'z') || character == '-';
+		return (character >= 'a' && character <= 'z') ||
+			(character >= '0' && character <= '9') || character == '-';
 	}) && std::ranges::all_of(header.value, [](char character) {
 		const auto value = static_cast<unsigned char>(character);
 		return value >= 0x20U && value <= 0x7EU;

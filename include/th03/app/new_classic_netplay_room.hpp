@@ -136,6 +136,7 @@ public:
 	// A failed pre-game connection stays inside this retained owner. The next
 	// fresh interface input returns to the launch caller with its values intact.
 	[[nodiscard]] bool show_launch_failure() noexcept;
+	[[nodiscard]] bool show_profile_failure() noexcept;
 	// A canceled platform connection is a child of the launch screen, not a
 	// terminal product route. Restore the exact caller and retain all entered
 	// values so the player can retry or back out one level.
@@ -182,6 +183,7 @@ private:
 	std::optional<NewClassicNetplayRoomLaunch> launch_{};
 	bool release_required_ = true;
 	bool endpoint_invalid_ = false;
+	bool profile_failure_ = false;
 	bool valid_ = false;
 };
 

@@ -202,19 +202,11 @@ read_external_file(
 	const LogicalTickInput &sample
 ) noexcept
 {
-	if(!sample.physical_domains) {
-		return sample.input.system;
-	}
-	const auto &physical = *sample.physical_domains;
-	auto result = static_cast<std::uint16_t>(
-		physical.keyboard.system | physical.keyboard.p1
-	);
-	if(physical.first_joystick_present) {
-		result = static_cast<std::uint16_t>(
-			result | physical.first_joystick
-		);
-	}
-	return result;
+	// Scripted/replay samples already carry their source-owned interface word
+	// in [system]. Live host samples retain the physical domains needed by the
+	// shared retained-menu projection.
+	return sample.physical_domains ?
+		new_classic_interface_input_word(sample) : sample.input.system;
 }
 
 [[nodiscard]] ClassicOpInput project_op_input(

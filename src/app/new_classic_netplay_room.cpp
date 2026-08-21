@@ -396,7 +396,13 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 	}
 	if(screen_ == Screen::connection_failed) {
 		if(raw_any(input.ui)) {
-			restore_launch_caller();
+			if(profile_failure_) {
+				screen_ = Screen::menu;
+				selection_ = 4U;
+				profile_failure_ = false;
+			} else {
+				restore_launch_caller();
+			}
 			require_release();
 			const bool drawn = draw();
 			return {.surface_changed = drawn, .status = status_};
@@ -692,6 +698,7 @@ bool NewClassicNetplayRoom::show_launch_failure() noexcept
 	status_ = NewClassicNetplayRoomStatus::running;
 	screen_ = Screen::connection_failed;
 	selection_ = 0U;
+	profile_failure_ = false;
 	endpoint_invalid_ = false;
 	require_release();
 	return draw();
@@ -717,6 +724,20 @@ bool NewClassicNetplayRoom::resume_after_profile() noexcept
 	status_ = NewClassicNetplayRoomStatus::running;
 	screen_ = Screen::menu;
 	selection_ = 4U;
+	require_release();
+	return draw();
+}
+
+bool NewClassicNetplayRoom::show_profile_failure() noexcept
+{
+	if(status_ != NewClassicNetplayRoomStatus::profile_requested || launch_) {
+		return false;
+	}
+	status_ = NewClassicNetplayRoomStatus::running;
+	screen_ = Screen::connection_failed;
+	selection_ = 0U;
+	profile_failure_ = true;
+	endpoint_invalid_ = false;
 	require_release();
 	return draw();
 }
