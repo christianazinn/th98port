@@ -2152,9 +2152,9 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 			NewClassicMessageId::replay_header_score), 9U) &&
 		font.put(raster, 364, 80, messages.text(
 			NewClassicMessageId::replay_header_character), 9U) &&
-		font.put(raster, 476, 80, messages.text(
-			NewClassicMessageId::replay_header_rank), 9U) &&
-		font.put(raster, 560, 80, messages.text(
+		font.put(raster, 456, 80, messages.text(
+			NewClassicMessageId::replay_label_date), 9U) &&
+		font.put(raster, 584, 80, messages.text(
 			NewClassicMessageId::replay_header_stage), 9U);
 	if(board.leaderboard_entries.empty()) {
 		valid_ = valid_ && font.put(
@@ -2192,6 +2192,7 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 			NewClassicOnlineResultKind::clear ?
 			std::string(messages.text(NewClassicMessageId::replay_marker_all)) :
 			std::to_string(static_cast<unsigned>(entry.result.end_stage) + 1U);
+		const auto date = dos_date_label(entry.dos_date);
 		valid_ = valid_ &&
 			patch_put_fixed(font, raster, 48, top,
 				online_place(entry_index), 12, color) &&
@@ -2200,8 +2201,8 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 				340 - static_cast<std::int32_t>(score.size() * 12U), top,
 				score, 12, color) &&
 			font.put(raster, 364, top, character, color) &&
-			font.put(raster, 476, top, rank, color) &&
-			font.put(raster, 560, top, stage, color);
+			patch_put_fixed(font, raster, 456, top, date, 10, color) &&
+			font.put(raster, 584, top, stage, color);
 	}
 	valid_ = valid_ && font.put_centered(raster, 320, 368, messages.text(
 		NewClassicMessageId::hiscore_online_footer
@@ -2244,8 +2245,8 @@ void NewClassicHighScoreMenu::draw_detail() noexcept
 	auto &raster = patch_surface_.raster();
 	const auto put_row = [&](std::int32_t top, NewClassicMessageId label,
 		std::string_view value) {
-		return font.put(raster, 96, top, messages.text(label), 9U) &&
-			font.put(raster, 256, top, value, 15U);
+		return font.put(raster, 48, top, messages.text(label), 15U) &&
+			font.put_right(raster, 304, top, value, 15U);
 	};
 	const auto *replay = selected_replay();
 	auto name = online_ascii(
@@ -2255,24 +2256,32 @@ void NewClassicHighScoreMenu::draw_detail() noexcept
 	if(name.size() > 24U) {
 		name.resize(24U);
 	}
+	while(!name.empty() && font.width(name) > 244) {
+		name.pop_back();
+	}
 	const auto score = online_score(entry.result.score);
 	const auto result = online_result(entry, messages);
-	valid_ = font.put_centered(raster, 320, 64, messages.text(
-		mode_ == NewClassicOnlineMenuMode::high_scores ?
-			NewClassicMessageId::hiscore_command_online :
-			(mode_ == NewClassicOnlineMenuMode::downloaded_replays ?
-				NewClassicMessageId::replay_downloaded_title :
-				(mode_ == NewClassicOnlineMenuMode::my_records ?
-					NewClassicMessageId::replay_my_records_title :
-					NewClassicMessageId::replay_online_title))
-	), 9U) &&
-		put_row(96, mode_ == NewClassicOnlineMenuMode::high_scores ?
-			NewClassicMessageId::hiscore_online_label_player :
-			NewClassicMessageId::replay_header_name, name) &&
-		put_row(128, NewClassicMessageId::replay_header_score, score) &&
-		put_row(160, NewClassicMessageId::hiscore_online_label_result, result) &&
-		put_row(192, NewClassicMessageId::replay_label_date,
-			dos_date_label(entry.dos_date));
+	const auto &category = *boards_[board_index_].board_category;
+	const auto rank = patch_rank_label(category.rank, messages);
+	const auto character = patch_character_label(
+		static_cast<std::int8_t>((category.character * 2U) + 1U), messages
+	);
+	valid_ = font.put(raster, 48, 80, name, 15U) &&
+		font.put_right(raster, 304, 80, messages.text(
+			mode_ == NewClassicOnlineMenuMode::high_scores ?
+				NewClassicMessageId::hiscore_command_online :
+				(mode_ == NewClassicOnlineMenuMode::downloaded_replays ?
+					NewClassicMessageId::replay_downloaded_title :
+					(mode_ == NewClassicOnlineMenuMode::my_records ?
+						NewClassicMessageId::replay_my_records_title :
+						NewClassicMessageId::replay_online_title))
+		), 9U) &&
+		font.put(raster, 48, 96, result, 9U) &&
+		put_row(112, NewClassicMessageId::replay_header_score, score) &&
+		put_row(128, NewClassicMessageId::replay_label_date,
+			dos_date_label(entry.dos_date)) &&
+		font.put(raster, 48, 144,
+			std::string(rank) + " " + std::string(character), 15U);
 	if(replay) {
 		const auto autofire = messages.text((replay->autofire & 0x01U) ?
 			NewClassicMessageId::replay_autofire_on :
@@ -2301,17 +2310,18 @@ void NewClassicHighScoreMenu::draw_detail() noexcept
 		}
 		const auto replay_state = messages.text(replay_message);
 		valid_ = valid_ &&
-			put_row(224, NewClassicMessageId::hiscore_online_label_autofire,
-				autofire) &&
-			put_row(240, NewClassicMessageId::replay_label_slowdown,
+			font.put(raster, 48, 160, autofire, 15U) &&
+			put_row(176, NewClassicMessageId::replay_label_slowdown,
 				online_slowdown(*replay)) &&
-			put_row(272, NewClassicMessageId::hiscore_online_label_replay,
-				replay_state);
+			font.put(raster, 344, 112, messages.text(
+				NewClassicMessageId::hiscore_online_label_replay), 9U) &&
+			font.put(raster, 344, 128, replay_state, 15U);
 	} else {
-		valid_ = valid_ && put_row(
-			272, NewClassicMessageId::hiscore_online_label_replay,
-			messages.text(NewClassicMessageId::hiscore_online_replay_historical)
-		);
+		valid_ = valid_ &&
+			font.put(raster, 344, 112, messages.text(
+				NewClassicMessageId::hiscore_online_label_replay), 9U) &&
+			font.put(raster, 344, 128, messages.text(
+				NewClassicMessageId::hiscore_online_replay_historical), 15U);
 	}
 	NewClassicMessageId footer =
 		NewClassicMessageId::hiscore_online_detail_footer;

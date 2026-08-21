@@ -630,6 +630,19 @@ void test_online_high_score_menu()
 	expect(opened.surface_changed && online.viewing_online() &&
 		!online.viewing_detail() && online.selected_board() == 0U,
 		"Online Leaderboards opens the first cached character board");
+	auto different_date_board = online_board(2U, 4U, 0x20U);
+	different_date_board.leaderboard_entries.front().dos_date = 0x5B01U;
+	different_date_board.replay_records.front().dos_date = 0x5B01U;
+	NewClassicHighScoreMenu different_date(
+		{std::move(different_date_board)}, 2U, patch_assets
+	);
+	finish_entry_fade(different_date);
+	static_cast<void>(different_date.consume({}));
+	static_cast<void>(different_date.consume({.down = true}));
+	static_cast<void>(different_date.consume({}));
+	static_cast<void>(different_date.consume({.confirm = true}));
+	expect(surface_hash(different_date.surface()) != surface_hash(online.surface()),
+		"online leaderboard rows visibly render replay Date instead of redundant Rank");
 	static_cast<void>(online.consume({}));
 	static_cast<void>(online.consume({.right = true}));
 	expect(online.selected_board() == 1U,
