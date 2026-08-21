@@ -392,6 +392,91 @@ void test_enrollment_and_upload()
 		"greater-than-five-percent slowdown is rejected before any network call");
 }
 
+void test_profile_and_device_link()
+{
+	const NewClassicOnlineCredentials credentials{
+		"12345678-1234-1234-1234-123456789abc",
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef0123456789_-",
+	};
+	FakeTransport fake{};
+	fake.response = NewClassicOnlineHttpResponse{
+		.status = 200U,
+		.content_type = "application/json",
+		.body = bytes(
+			"{\"status\":\"accepted\",\"userId\":\"12345678-1234-1234-"
+			"1234-123456789abc\",\"nametag\":null,\"lines\":[],"
+			"\"updatedAtUnixMs\":null}"
+		),
+	};
+	auto profile = fetch_new_classic_online_profile(credentials, fake.seam());
+	expect(profile && profile->user_id == credentials.user_id &&
+		!profile->nametag && fake.method == NewClassicOnlineHttpMethod::get &&
+		fake.target.ends_with("/profile"),
+		"a newly enrolled stable UUID has an explicit empty profile");
+
+	fake.response->body = bytes(
+		"{\"status\":\"accepted\",\"userId\":\"12345678-1234-1234-"
+		"1234-123456789abc\",\"nametag\":\"Resident of Fantasy Who Runs "
+		"Through Time\",\"lines\":[\"Resident of Fantasy Who\","
+		"\"Runs Through Time\"],\"updatedAtUnixMs\":1787000000000}"
+	);
+	profile = update_new_classic_online_profile(
+		"Resident of Fantasy Who Runs Through Time", credentials, fake.seam()
+	);
+	expect(profile && profile->nametag ==
+		"Resident of Fantasy Who Runs Through Time" &&
+		fake.method == NewClassicOnlineHttpMethod::put &&
+		std::string(reinterpret_cast<const char *>(fake.body.data()),
+			fake.body.size()).find("Resident of Fantasy") != std::string::npos,
+		"rename preserves the UUID and uses the two-line nametag contract");
+
+	fake.response->body = bytes(
+		R"json({"status":"accepted","userId":"12345678-1234-1234-1234-123456789abc","nametag":"Mima \"Backslash \\","lines":["Mima \"Backslash \\"],"updatedAtUnixMs":1787000000001})json"
+	);
+	profile = update_new_classic_online_profile(
+		"Mima \"Backslash \\", credentials, fake.seam()
+	);
+	const std::string escaped_body(
+		reinterpret_cast<const char *>(fake.body.data()), fake.body.size()
+	);
+	expect(profile && profile->nametag == "Mima \"Backslash \\" &&
+		escaped_body == R"json({"nametag":"Mima \"Backslash \\"})json",
+		"printable quote and backslash names use an exact JSON round trip");
+	const auto calls = fake.calls;
+	auto invalid = update_new_classic_online_profile(
+		std::string(29U, 'A'), credentials, fake.seam()
+	);
+	expect(!invalid && invalid.error().code ==
+		NewClassicOnlineClientErrorCode::invalid_document && fake.calls == calls,
+		"an unwrappable nametag is rejected before HTTPS");
+
+	fake.response = NewClassicOnlineHttpResponse{
+		.status = 201U,
+		.content_type = "application/json",
+		.body = bytes(
+			"{\"status\":\"accepted\",\"code\":\"23456789AB\","
+			"\"expiresAtUnixMs\":1787000600000}"
+		),
+	};
+	auto link = create_new_classic_online_link_code(credentials, fake.seam());
+	expect(link && link->code == "23456789AB" &&
+		fake.target.ends_with("/link-codes"),
+		"an authenticated device receives one bounded one-time link code");
+
+	fake.response->body = bytes(
+		"{\"userId\":\"12345678-1234-1234-1234-123456789abc\","
+		"\"token\":\"zyxwvutsrqponmlkjihgfedcba9876543210_-ABCD\","
+		"\"credentialId\":\"abcdef12-1234-1234-1234-123456789abc\"}"
+	);
+	auto linked = redeem_new_classic_online_link_code(
+		"23456789AB", fake.seam()
+	);
+	expect(linked && linked->user_id == credentials.user_id &&
+		linked->token != credentials.token &&
+		fake.target == "/api/th03/users/link",
+		"another device receives a distinct credential for the same UUID");
+}
+
 void test_download()
 {
 	TemporaryDirectory root;
@@ -465,6 +550,7 @@ int main()
 {
 	test_board_refresh();
 	test_enrollment_and_upload();
+	test_profile_and_device_link();
 	test_download();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;

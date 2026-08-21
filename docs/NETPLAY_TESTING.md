@@ -95,6 +95,20 @@ than exporting an empty value. Never share the token or commit `online.env`.
 Setting both user/token variables on Windows remains an explicit developer
 override. Supplying only one, or malformed values, fails closed.
 
+Account-backed Online Match also requires a public nametag. First use opens
+the retained editor before matchmaking. `Online Match -> Online Profile`
+renames the same stable UUID, creates a single-use ten-minute `Link Another
+Device` code, or redeems that code through `Link This Device`. Redemption
+issues a distinct local bearer credential for the existing UUID; no token is
+copied between machines. The visible name may change, but an already-paired
+match retains the server-snapshotted names that both peers agreed on.
+
+The old 24-character draft limit was merely a conservative one-line budget.
+The implemented maximum follows the actual VS title geometry: two 28-cell
+rows. Input is accepted only when whole words fit those rows, with an absolute
+57-byte maximum (`28 + one source space + 28`). The character-name row remains
+unchanged beneath the centered account name.
+
 `TH03_NETPLAY_ICE_SERVERS` is an optional developer-only semicolon-delimited
 list of unauthenticated `stun:`, `turn:`, or `turns:` URLs. It can remain unset
 for a same-tailnet test where host ICE candidates are mutually reachable. A

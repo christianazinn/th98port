@@ -1,4 +1,5 @@
 #include "th03/app/new_classic_netplay_room.hpp"
+#include "th03/app/new_classic_online_profile_scene.hpp"
 
 #include <algorithm>
 #include <array>
@@ -582,6 +583,76 @@ void test_match_ready_audio_contract()
 		"Music Off cannot strand the match-ready transition");
 }
 
+void test_online_profile_scene()
+{
+	using namespace th03::app;
+	NewClassicOnlineProfileScene first_use(
+		assets_fixture(), NewClassicLanguageAssetProfile::english, std::nullopt
+	);
+	expect(first_use.valid() && first_use.text_entry_active(),
+		"a profile without a nametag opens directly in first-use text entry");
+	static_cast<void>(first_use.consume({}));
+	for(const auto character : std::string_view{
+		"Resident of Fantasy Who Runs Through Time"
+	}) {
+		static_cast<void>(first_use.consume({.text_character = character}));
+	}
+	static_cast<void>(first_use.consume({.ui = {.confirm = true}}));
+	auto action = first_use.take_action();
+	expect(action && action->type ==
+		NewClassicOnlineProfileActionType::update_nametag &&
+		action->text == "Resident of Fantasy Who Runs Through Time",
+		"first use submits the exact whole-word two-line nametag");
+	expect(first_use.report_profile({
+		.user_id = "12345678-1234-1234-1234-123456789abc",
+		.nametag = action ? std::optional{action->text} : std::nullopt,
+	}), "accepted profile returns to the retained account menu");
+	static_cast<void>(first_use.consume({}));
+	static_cast<void>(first_use.consume({.ui = {.down = true}}));
+	static_cast<void>(first_use.consume({}));
+	static_cast<void>(first_use.consume({.ui = {.confirm = true}}));
+	action = first_use.take_action();
+	expect(action && action->type ==
+		NewClassicOnlineProfileActionType::create_link_code,
+		"Link Another Device requests a service-generated one-time code");
+	expect(first_use.report_link_code("23456789AB"),
+		"the exact ten-character code is displayed without mutation");
+	static_cast<void>(first_use.consume({}));
+	static_cast<void>(first_use.consume({.ui = {.confirm = true}}));
+	static_cast<void>(first_use.consume({}));
+	static_cast<void>(first_use.consume({.ui = {.down = true}}));
+	static_cast<void>(first_use.consume({}));
+	static_cast<void>(first_use.consume({.ui = {.confirm = true}}));
+	static_cast<void>(first_use.consume({}));
+	for(const auto character : std::string_view{"23456789AB"}) {
+		static_cast<void>(first_use.consume({.text_character = character}));
+	}
+	static_cast<void>(first_use.consume({.ui = {.confirm = true}}));
+	action = first_use.take_action();
+	expect(action && action->type ==
+		NewClassicOnlineProfileActionType::redeem_link_code &&
+		action->text == "23456789AB",
+		"Link This Device submits only the canonical link-code alphabet");
+}
+
+void test_room_profile_child()
+{
+	using namespace th03::app;
+	NewClassicNetplayRoom room(assets_fixture());
+	release(room);
+	for(std::uint8_t row = 0U; row < 4U; ++row) {
+		static_cast<void>(room.consume({.ui = {.down = true}}));
+		release(room);
+	}
+	const auto opened = room.consume({.ui = {.confirm = true}});
+	expect(opened.status == NewClassicNetplayRoomStatus::profile_requested &&
+		!room.take_launch(),
+		"Online Profile is a retained child with no socket side effect");
+	expect(room.resume_after_profile() &&
+		room.status() == NewClassicNetplayRoomStatus::running,
+		"closing Online Profile returns to its exact room-menu row");
+}
+
 } // namespace
 
 int main()
@@ -596,6 +667,8 @@ int main()
 	test_missing_assets_fail_closed();
 	test_waiting_and_ready_lobby_views();
 	test_match_ready_audio_contract();
+	test_online_profile_scene();
+	test_room_profile_child();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }

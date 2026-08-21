@@ -201,31 +201,34 @@ release-level content manifests.
 
 ### 5. Account nametags and VS presentation
 
-This is deliberately last. Before implementation, decide:
+The product decisions and first account-backed implementation are complete:
 
-1. whether the public account display name or a per-match nametag is shown;
-2. Unicode normalization, uniqueness/case-folding, moderation, and edit policy;
-3. maximum graphemes and UTF-8 bytes, plus source-font fallback/truncation;
-4. whether both players' immutable account IDs and display-name snapshots are
-   stored in replays;
-5. whether a backward-compatible authenticated V13 extension is acceptable or
-   the change waits for V14; and
-6. offline/direct-IP behavior and privacy expectations.
+1. one mutable public account nametag, with the opaque UUID as stable identity;
+2. printable ASCII and duplicate names for the first version;
+3. exact whole-word wrapping across two 28-cell title rows;
+4. immutable server snapshots for account rooms and local/unverified identity
+   for direct UDP;
+5. separate revocable device credentials joined by a short-lived code; and
+6. a backward-compatible typed V13 tail for later replay identity rather than
+   a forced V14.
 
-Once decided, the server provides authenticated identity metadata, the match
-contract snapshots it, and the MAINL VS intro renders bounded names without
-changing deterministic gameplay. Replays should preserve the match-time
-display, not silently substitute a later account rename.
+The server provides authenticated identity metadata, the match contract
+snapshots it, and the MAINL VS intro renders bounded names without changing
+deterministic gameplay. Replays will preserve the match-time display rather
+than silently substituting a later account rename.
 
-Status: source and format scope complete; product decisions pending. The
-recommended design is in `NEW_CLASSIC_NETPLAY_NAMETAGS.md`. There are no safe
-V13 header bytes to reuse, but a fixed typed identity block can live after the
-declared logical input stream and before an optional final `T3RACC1` payload.
-Existing V13 readers ignore that tail, so this presentation metadata does not
-require V14. The current recommendation is one non-unique, case-preserving
-1..24 printable-ASCII account nametag, server-snapshotted for account rooms,
-local/unverified for direct UDP, and rendered as a fourth row without replacing
-the localized character title or name.
+Status: account profile, two-line layout, separately credentialed device
+linking, authenticated room snapshot, peer agreement, VS-title rendering, and
+the retained first-use/edit UI are complete. The approved design is in
+`NEW_CLASSIC_NETPLAY_NAMETAGS.md`. The original 24-byte suggestion was a
+conservative single-line placeholder, not a source limit. The real title area
+has two 28-cell rows, so validation accepts at most 57 printable-ASCII source
+bytes (`28 + space + 28`) only when whole-word wrapping actually fits. The
+source character-name row remains unchanged. There are no safe V13 header
+bytes to reuse, but a fixed typed identity block can live after the declared
+logical input stream and before an optional final `T3RACC1` payload. Existing
+V13 readers ignore that tail, so this presentation metadata does not require
+V14. That replay-tail/preservation work remains next.
 
 ## Suggested immediate execution order
 
@@ -236,7 +239,9 @@ the localized character title or name.
 5. ~~Add the static graphics-text contact-sheet preview tool.~~
 6. ~~Add the per-scene authenticated-content dependency audit.~~
 7. Continue the remaining text/image decoupling and snapshot/manifest tools.
-8. Stop for the nametag product decisions above.
+8. ~~Stop for the nametag product decisions above.~~
+9. Add the backward-compatible V13 identity tail and surface match-time names
+   in replay details/export without changing deterministic replay authority.
 
 Pixel-oracle expansion is useful after these functional seams settle, not
 before every localized or Arrange screen is still moving. Stock routes keep

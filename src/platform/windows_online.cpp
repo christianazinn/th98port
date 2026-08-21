@@ -355,7 +355,7 @@ struct WindowsOnlineTransport::Impl final {
 	{
 		auto &self = *static_cast<Impl *>(context);
 		if(!safe_target(request.target) ||
-			request.method > app::NewClassicOnlineHttpMethod::post ||
+			request.method > app::NewClassicOnlineHttpMethod::delete_ ||
 			request.maximum_response_bytes == 0U ||
 			request.maximum_response_bytes > app::new_classic_online_replay_max_bytes ||
 			request.body.size() > app::new_classic_online_replay_max_bytes ||
@@ -392,8 +392,10 @@ struct WindowsOnlineTransport::Impl final {
 		if(!connection) {
 			return std::unexpected(transport_error(GetLastError()));
 		}
-		const auto *verb = request.method == app::NewClassicOnlineHttpMethod::get
-			? L"GET" : L"POST";
+		const auto *verb = request.method == app::NewClassicOnlineHttpMethod::get ?
+			L"GET" : (request.method == app::NewClassicOnlineHttpMethod::post ?
+				L"POST" : (request.method == app::NewClassicOnlineHttpMethod::put ?
+					L"PUT" : L"DELETE"));
 		InternetHandle query(WinHttpOpenRequest(
 			connection.get(), verb, target->c_str(), nullptr,
 			WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,

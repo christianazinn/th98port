@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "th03/app/main_compiled_content.hpp"
+#include "th03/app/new_classic_nametag.hpp"
 #include "th03/formats/v13.hpp"
 
 namespace th03::app {
@@ -117,6 +118,18 @@ struct JsonField final {
 	std::string value{};
 };
 
+enum class JsonScalarKind : std::uint8_t {
+	string,
+	null,
+	other,
+};
+
+struct JsonScalarField final {
+	std::string key{};
+	JsonScalarKind kind = JsonScalarKind::other;
+	std::string value{};
+};
+
 void skip_space(std::string_view input, std::size_t &at) noexcept
 {
 	while(at < input.size() && std::isspace(
@@ -140,9 +153,16 @@ void skip_space(std::string_view input, std::size_t &at) noexcept
 		if(character == '"') {
 			return result;
 		}
-		if(static_cast<unsigned char>(character) < 0x20U || character == '\\') {
-			// All current protocol values use an escape-free ASCII vocabulary.
+		if(static_cast<unsigned char>(character) < 0x20U) {
 			return std::nullopt;
+		}
+		if(character == '\\') {
+			if(at >= input.size() || (input[at] != '"' &&
+				input[at] != '\\' && input[at] != '/')) {
+				return std::nullopt;
+			}
+			result.push_back(input[at++]);
+			continue;
 		}
 		result.push_back(character);
 	}
@@ -204,6 +224,191 @@ void skip_space(std::string_view input, std::size_t &at) noexcept
 {
 	const auto found = std::ranges::find(fields, key, &JsonField::key);
 	return found == fields.end() ? nullptr : &found->value;
+}
+
+[[nodiscard]] bool skip_json_value(
+	std::string_view input,
+	std::size_t &at,
+	std::uint8_t depth = 0U
+);
+
+[[nodiscard]] bool skip_json_sequence(
+	std::string_view input,
+	std::size_t &at,
+	char close,
+	std::uint8_t depth
+)
+{
+	if(depth > 8U) {
+		return false;
+	}
+	skip_space(input, at);
+	if(at < input.size() && input[at] == close) {
+		++at;
+		return true;
+	}
+	for(;;) {
+		if(close == '}' && !json_string(input, at)) {
+			return false;
+		}
+		if(close == '}') {
+			skip_space(input, at);
+			if(at >= input.size() || input[at++] != ':') {
+				return false;
+			}
+		}
+		if(!skip_json_value(input, at, static_cast<std::uint8_t>(depth + 1U))) {
+			return false;
+		}
+		skip_space(input, at);
+		if(at >= input.size()) {
+			return false;
+		}
+		if(input[at++] == close) {
+			return true;
+		}
+		if(input[at - 1U] != ',') {
+			return false;
+		}
+		skip_space(input, at);
+	}
+}
+
+[[nodiscard]] bool skip_json_value(
+	std::string_view input,
+	std::size_t &at,
+	std::uint8_t depth
+)
+{
+	skip_space(input, at);
+	if(at >= input.size()) {
+		return false;
+	}
+	if(input[at] == '"') {
+		return json_string(input, at).has_value();
+	}
+	if(input[at] == '[' || input[at] == '{') {
+		const auto close = input[at++] == '[' ? ']' : '}';
+		return skip_json_sequence(input, at, close, depth);
+	}
+	for(const auto literal : {std::string_view{"true"},
+		std::string_view{"false"}, std::string_view{"null"}}) {
+		if(input.substr(at, literal.size()) == literal) {
+			at += literal.size();
+			return true;
+		}
+	}
+	const auto begin = at;
+	if(input[at] == '-') {
+		++at;
+	}
+	while(at < input.size() && input[at] >= '0' && input[at] <= '9') {
+		++at;
+	}
+	if(at < input.size() && input[at] == '.') {
+		++at;
+		while(at < input.size() && input[at] >= '0' && input[at] <= '9') {
+			++at;
+		}
+	}
+	return at != begin && !(at == begin + 1U && input[begin] == '-');
+}
+
+[[nodiscard]] std::optional<std::vector<JsonScalarField>> scalar_json(
+	std::span<const std::byte> bytes
+)
+{
+	const std::string_view input{
+		reinterpret_cast<const char *>(bytes.data()), bytes.size()
+	};
+	std::size_t at = 0U;
+	skip_space(input, at);
+	if(at >= input.size() || input[at++] != '{') {
+		return std::nullopt;
+	}
+	std::vector<JsonScalarField> result;
+	skip_space(input, at);
+	if(at < input.size() && input[at] == '}') {
+		++at;
+	} else {
+		for(;;) {
+			auto key = json_string(input, at);
+			skip_space(input, at);
+			if(!key || at >= input.size() || input[at++] != ':' ||
+				std::ranges::any_of(result, [&](const JsonScalarField &entry) {
+					return entry.key == *key;
+				})) {
+				return std::nullopt;
+			}
+			skip_space(input, at);
+			JsonScalarField entry{.key = std::move(*key)};
+			if(at < input.size() && input[at] == '"') {
+				auto value = json_string(input, at);
+				if(!value) {
+					return std::nullopt;
+				}
+				entry.kind = JsonScalarKind::string;
+				entry.value = std::move(*value);
+			} else if(input.substr(at, 4U) == "null") {
+				at += 4U;
+				entry.kind = JsonScalarKind::null;
+			} else if(!skip_json_value(input, at)) {
+				return std::nullopt;
+			}
+			result.push_back(std::move(entry));
+			skip_space(input, at);
+			if(at >= input.size()) {
+				return std::nullopt;
+			}
+			if(input[at++] == '}') {
+				break;
+			}
+			if(input[at - 1U] != ',') {
+				return std::nullopt;
+			}
+			skip_space(input, at);
+		}
+	}
+	skip_space(input, at);
+	return at == input.size() ? std::optional{std::move(result)} : std::nullopt;
+}
+
+[[nodiscard]] const JsonScalarField *scalar_field(
+	const std::vector<JsonScalarField> &fields,
+	std::string_view key
+) noexcept
+{
+	const auto found = std::ranges::find(fields, key, &JsonScalarField::key);
+	return found == fields.end() ? nullptr : &*found;
+}
+
+[[nodiscard]] std::vector<NewClassicOnlineHttpHeader> auth_headers(
+	const NewClassicOnlineCredentials &credentials,
+	bool json_body = false
+)
+{
+	std::vector<NewClassicOnlineHttpHeader> result{
+		{"authorization", "Bearer " + credentials.token},
+		{"x-th03-user-id", credentials.user_id},
+	};
+	if(json_body) {
+		result.push_back({"content-type", std::string(json_content_type)});
+	}
+	return result;
+}
+
+[[nodiscard]] std::string json_string_literal(std::string_view value)
+{
+	std::string result{"\""};
+	result.reserve(value.size() + 2U);
+	for(const auto character : value) {
+		if(character == '\\' || character == '"') {
+			result.push_back('\\');
+		}
+		result.push_back(character);
+	}
+	result.push_back('"');
+	return result;
 }
 
 [[nodiscard]] std::expected<
@@ -579,6 +784,224 @@ enroll_new_classic_online_user(const NewClassicOnlineTransport &transport)
 		));
 	}
 	return credentials;
+}
+
+std::expected<NewClassicOnlineProfile, NewClassicOnlineClientError>
+fetch_new_classic_online_profile(
+	const NewClassicOnlineCredentials &credentials,
+	const NewClassicOnlineTransport &transport
+)
+{
+	if(!credentials_valid(credentials)) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::invalid_credentials
+		));
+	}
+	auto response = perform(transport, {
+		.method = NewClassicOnlineHttpMethod::get,
+		.target = "/api/th03/users/" + credentials.user_id + "/profile",
+		.headers = auth_headers(credentials),
+		.maximum_response_bytes = json_response_limit,
+	});
+	if(!response) {
+		return std::unexpected(std::move(response.error()));
+	}
+	if(response->status != 200U) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::http_status, response->status
+		));
+	}
+	if(response->content_type != json_content_type) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::content_type, response->status
+		));
+	}
+	auto fields = scalar_json(response->body);
+	const auto *status = fields ? scalar_field(*fields, "status") : nullptr;
+	const auto *user_id = fields ? scalar_field(*fields, "userId") : nullptr;
+	const auto *nametag = fields ? scalar_field(*fields, "nametag") : nullptr;
+	if(!fields || fields->size() != 5U || status == nullptr ||
+		status->kind != JsonScalarKind::string || status->value != "accepted" ||
+		user_id == nullptr || user_id->kind != JsonScalarKind::string ||
+		user_id->value != credentials.user_id || nametag == nullptr ||
+		(nametag->kind != JsonScalarKind::string &&
+		 nametag->kind != JsonScalarKind::null)) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::response_shape, response->status
+		));
+	}
+	NewClassicOnlineProfile result{.user_id = user_id->value};
+	if(nametag->kind == JsonScalarKind::string) {
+		if(!layout_new_classic_nametag(nametag->value)) {
+			return std::unexpected(client_error(
+				NewClassicOnlineClientErrorCode::response_shape, response->status
+			));
+		}
+		result.nametag = nametag->value;
+	}
+	return result;
+}
+
+std::expected<NewClassicOnlineProfile, NewClassicOnlineClientError>
+update_new_classic_online_profile(
+	std::string_view nametag,
+	const NewClassicOnlineCredentials &credentials,
+	const NewClassicOnlineTransport &transport
+)
+{
+	if(!credentials_valid(credentials)) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::invalid_credentials
+		));
+	}
+	const auto layout = layout_new_classic_nametag(nametag);
+	if(!layout) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::invalid_document
+		));
+	}
+	const auto body = std::string{"{\"nametag\":"} +
+		json_string_literal(layout->source) + "}";
+	auto response = perform(transport, {
+		.method = NewClassicOnlineHttpMethod::put,
+		.target = "/api/th03/users/" + credentials.user_id + "/profile",
+		.headers = auth_headers(credentials, true),
+		.body = std::as_bytes(std::span{body}),
+		.maximum_response_bytes = json_response_limit,
+	});
+	if(!response) {
+		return std::unexpected(std::move(response.error()));
+	}
+	if(response->status != 200U) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::http_status, response->status
+		));
+	}
+	if(response->content_type != json_content_type) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::content_type, response->status
+		));
+	}
+	auto fields = scalar_json(response->body);
+	const auto *status = fields ? scalar_field(*fields, "status") : nullptr;
+	const auto *user_id = fields ? scalar_field(*fields, "userId") : nullptr;
+	const auto *updated = fields ? scalar_field(*fields, "nametag") : nullptr;
+	if(!fields || fields->size() != 5U || status == nullptr ||
+		status->kind != JsonScalarKind::string || status->value != "accepted" ||
+		user_id == nullptr || user_id->kind != JsonScalarKind::string ||
+		user_id->value != credentials.user_id || updated == nullptr ||
+		updated->kind != JsonScalarKind::string || updated->value != layout->source) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::response_shape, response->status
+		));
+	}
+	return NewClassicOnlineProfile{
+		.user_id = user_id->value,
+		.nametag = updated->value,
+	};
+}
+
+std::expected<NewClassicOnlineLinkCode, NewClassicOnlineClientError>
+create_new_classic_online_link_code(
+	const NewClassicOnlineCredentials &credentials,
+	const NewClassicOnlineTransport &transport
+)
+{
+	if(!credentials_valid(credentials)) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::invalid_credentials
+		));
+	}
+	auto response = perform(transport, {
+		.method = NewClassicOnlineHttpMethod::post,
+		.target = "/api/th03/users/" + credentials.user_id + "/link-codes",
+		.headers = auth_headers(credentials),
+		.maximum_response_bytes = json_response_limit,
+	});
+	if(!response) {
+		return std::unexpected(std::move(response.error()));
+	}
+	if(response->status != 201U) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::http_status, response->status
+		));
+	}
+	if(response->content_type != json_content_type) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::content_type, response->status
+		));
+	}
+	auto fields = scalar_json(response->body);
+	const auto *status = fields ? scalar_field(*fields, "status") : nullptr;
+	const auto *code = fields ? scalar_field(*fields, "code") : nullptr;
+	if(!fields || fields->size() != 3U || status == nullptr ||
+		status->kind != JsonScalarKind::string || status->value != "accepted" ||
+		code == nullptr || code->kind != JsonScalarKind::string ||
+		code->value.size() != 10U || !std::ranges::all_of(code->value,
+			[](const char character) {
+				return (character >= '2' && character <= '9') ||
+					(character >= 'A' && character <= 'H') ||
+					(character >= 'J' && character <= 'N') ||
+					(character >= 'P' && character <= 'Z');
+			})) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::response_shape, response->status
+		));
+	}
+	return NewClassicOnlineLinkCode{.code = code->value};
+}
+
+std::expected<NewClassicOnlineCredentials, NewClassicOnlineClientError>
+redeem_new_classic_online_link_code(
+	std::string_view code,
+	const NewClassicOnlineTransport &transport
+)
+{
+	if(code.size() != 10U) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::invalid_document
+		));
+	}
+	const auto body = std::string{"{\"code\":"} +
+		json_string_literal(code) + "}";
+	auto response = perform(transport, {
+		.method = NewClassicOnlineHttpMethod::post,
+		.target = "/api/th03/users/link",
+		.headers = {{"content-type", std::string(json_content_type)}},
+		.body = std::as_bytes(std::span{body}),
+		.maximum_response_bytes = json_response_limit,
+	});
+	if(!response) {
+		return std::unexpected(std::move(response.error()));
+	}
+	if(response->status != 201U) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::http_status, response->status
+		));
+	}
+	if(response->content_type != json_content_type) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::content_type, response->status
+		));
+	}
+	auto fields = flat_json(response->body);
+	if(!fields || fields->size() != 3U || field(*fields, "userId") == nullptr ||
+		field(*fields, "token") == nullptr ||
+		field(*fields, "credentialId") == nullptr) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::response_shape, response->status
+		));
+	}
+	NewClassicOnlineCredentials result{
+		.user_id = *field(*fields, "userId"),
+		.token = *field(*fields, "token"),
+	};
+	if(!credentials_valid(result) || !uuid_shape(*field(*fields, "credentialId"))) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::response_shape, response->status
+		));
+	}
+	return result;
 }
 
 std::expected<NewClassicOnlineUploadResult, NewClassicOnlineClientError>

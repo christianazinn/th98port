@@ -8,6 +8,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "th03/app/new_classic_online.hpp"
@@ -20,6 +21,8 @@ namespace th03::app {
 enum class NewClassicOnlineHttpMethod : std::uint8_t {
 	get,
 	post,
+	put,
+	delete_,
 };
 
 struct NewClassicOnlineHttpHeader final {
@@ -71,6 +74,25 @@ struct NewClassicOnlineCredentials final {
 	friend bool operator==(
 		const NewClassicOnlineCredentials &,
 		const NewClassicOnlineCredentials &
+	) = default;
+};
+
+struct NewClassicOnlineProfile final {
+	std::string user_id{};
+	std::optional<std::string> nametag{};
+
+	friend bool operator==(
+		const NewClassicOnlineProfile &,
+		const NewClassicOnlineProfile &
+	) = default;
+};
+
+struct NewClassicOnlineLinkCode final {
+	std::string code{};
+
+	friend bool operator==(
+		const NewClassicOnlineLinkCode &,
+		const NewClassicOnlineLinkCode &
 	) = default;
 };
 
@@ -149,6 +171,39 @@ struct NewClassicOnlineClientError final {
 	NewClassicOnlineCredentials,
 	NewClassicOnlineClientError
 > enroll_new_classic_online_user(const NewClassicOnlineTransport &transport);
+
+[[nodiscard]] std::expected<
+	NewClassicOnlineProfile,
+	NewClassicOnlineClientError
+> fetch_new_classic_online_profile(
+	const NewClassicOnlineCredentials &credentials,
+	const NewClassicOnlineTransport &transport
+);
+
+[[nodiscard]] std::expected<
+	NewClassicOnlineProfile,
+	NewClassicOnlineClientError
+> update_new_classic_online_profile(
+	std::string_view nametag,
+	const NewClassicOnlineCredentials &credentials,
+	const NewClassicOnlineTransport &transport
+);
+
+[[nodiscard]] std::expected<
+	NewClassicOnlineLinkCode,
+	NewClassicOnlineClientError
+> create_new_classic_online_link_code(
+	const NewClassicOnlineCredentials &credentials,
+	const NewClassicOnlineTransport &transport
+);
+
+[[nodiscard]] std::expected<
+	NewClassicOnlineCredentials,
+	NewClassicOnlineClientError
+> redeem_new_classic_online_link_code(
+	std::string_view code,
+	const NewClassicOnlineTransport &transport
+);
 
 [[nodiscard]] std::expected<
 	NewClassicOnlineUploadResult,

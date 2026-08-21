@@ -77,6 +77,11 @@ Each peer's Story Autofire choice follows that peer into its negotiated P1/P2
 lane; Left Shift contributes both Charge and Shot only when that local choice
 is enabled. During Pause, the first ready peer retains the modal with cyan `Waiting
 for Opponent`; both peers then see the synchronized cyan 3/2/1 countdown.
+Account-backed play requires a changeable public nametag tied to the stable
+opaque UUID. `Online Match -> Online Profile` owns first-use naming, rename,
+and a single-use link-code flow for adding another device with its own local
+credential. The two-line 28-cell-per-row layout replaces only the VS title;
+the source character-name row stays intact.
 
 ### Optional Classic and direct-VS application
 

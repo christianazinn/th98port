@@ -1007,6 +1007,7 @@ add_library(th03_app_main STATIC
 	src/app/new_classic_netplay_post_match.cpp
 	src/app/new_classic_netplay_report.cpp
 	src/app/new_classic_netplay_room.cpp
+	src/app/new_classic_online_profile_scene.cpp
 	src/app/new_classic_netplay_replay_capture.cpp
 	src/app/new_classic_online_client.cpp
 	src/app/new_classic_online_task.cpp

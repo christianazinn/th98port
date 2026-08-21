@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -19,6 +20,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -50,6 +52,7 @@
 #include "th03/app/new_classic_frontend.hpp"
 #include "th03/app/new_classic_language.hpp"
 #include "th03/app/new_classic_online_client.hpp"
+#include "th03/app/new_classic_online_profile_scene.hpp"
 #include "th03/app/new_classic_online_store.hpp"
 #include "th03/app/new_classic_online_task.hpp"
 #include "th03/app/new_classic_pause.hpp"
@@ -1617,6 +1620,29 @@ remove_product_online_credentials(const std::filesystem::path &path)
 	}
 	return {};
 }
+
+[[nodiscard]] std::expected<void, ProductOnlineError>
+store_product_online_credentials(
+	const std::filesystem::path &path,
+	const th03::app::NewClassicOnlineCredentials &credentials
+)
+{
+#if defined(_WIN32)
+	auto stored = th03::platform::store_windows_online_credentials(
+		path, credentials
+	);
+#else
+	auto stored = th03::platform::store_posix_online_credentials(
+		path, credentials
+	);
+#endif
+	if(!stored) {
+		return std::unexpected(ProductOnlineError{
+			static_cast<std::uint8_t>(stored.error().code)
+		});
+	}
+	return {};
+}
 #endif
 
 [[nodiscard]] th03::app::NewClassicNetplayJoinLock netplay_join_lock(
@@ -2077,6 +2103,99 @@ enum class DirectNetplayLobbyExit : std::uint8_t {
 		if(const auto advanced = retained_audio->advance_tick(); !advanced) {
 			return std::unexpected(advanced.error());
 		}
+	}
+}
+
+[[nodiscard]] th03::app::NewClassicUiInput project_new_classic_ui(
+	const th03::app::LogicalTickInput &sample,
+	bool accept_player_words
+) noexcept;
+
+template <typename Work>
+[[nodiscard]] std::expected<std::invoke_result_t<Work>, int>
+run_retained_menu_network_job(
+	th03::app::RationalTickRate tick_rate,
+	th03::platform::SdlPlatform &platform,
+	th03::platform::SdlInputMapper &mapper,
+	const RetainedMenuAudio &retained_audio,
+	bool &application_quit,
+	Work work
+)
+{
+	auto scheduler = th03::app::TickInputScheduler::create(
+		tick_rate, th03::platform::sdl_ticks_now_ns(),
+		th03::app::TickInputCatchUpPolicy::discard_missed_deadlines
+	);
+	if(!scheduler) {
+		return std::unexpected(fail_tick(scheduler.error()));
+	}
+	if(const auto reset = mapper.reset_after_modal(
+		*scheduler, th03::platform::sdl_ticks_now_ns()
+	); !reset) {
+		return std::unexpected(fail("online-profile-input", reset.error()));
+	}
+
+	std::future<std::invoke_result_t<Work>> future;
+	try {
+		future = std::async(std::launch::async, std::move(work));
+	} catch(...) {
+		return std::unexpected(fail_netplay(
+			"online-profile", "worker-start"
+		));
+	}
+	bool retry_blocked_event = false;
+	while(future.wait_for(std::chrono::nanoseconds::zero()) !=
+		std::future_status::ready) {
+		const auto cutoff = th03::platform::sdl_ticks_now_ns();
+		if(!retry_blocked_event) {
+			auto pumped = mapper.pump_events(*scheduler, false);
+			if(!pumped) {
+				return std::unexpected(fail(
+					"online-profile-input", pumped.error()
+				));
+			}
+			retry_blocked_event = pumped->queue_blocked;
+		}
+		for(;;) {
+			auto due = scheduler->pop_due(cutoff);
+			if(!due) {
+				return std::unexpected(fail_tick(due.error()));
+			}
+			if(!*due) {
+				break;
+			}
+			if(const auto advanced = retained_audio.advance_tick(); !advanced) {
+				return std::unexpected(advanced.error());
+			}
+			application_quit = application_quit ||
+				project_new_classic_ui(**due, true).app_quit_requested;
+			if(retry_blocked_event) {
+				auto retried = mapper.pump_events(*scheduler, false);
+				if(!retried) {
+					return std::unexpected(fail(
+						"online-profile-input", retried.error()
+					));
+				}
+				retry_blocked_event = retried->queue_blocked;
+			}
+		}
+		if(auto refreshed = refresh_host_presentability(
+			platform, "online-profile-presentability"
+		); !refreshed) {
+			return std::unexpected(refreshed.error());
+		}
+		const auto deadline = scheduler->next_deadline_ns();
+		const auto now = th03::platform::sdl_ticks_now_ns();
+		if(deadline && *deadline > now) {
+			SDL_DelayPrecise(std::min(*deadline - now, maximum_idle_delay_ns));
+		}
+	}
+	try {
+		return future.get();
+	} catch(...) {
+		return std::unexpected(fail_netplay(
+			"online-profile", "worker-failed"
+		));
 	}
 }
 
@@ -2899,6 +3018,7 @@ negotiate_rtc_netplay_lobby(
 struct NetplayRoomRunResult final {
 	int exit_code = 0;
 	bool application_quit = false;
+	bool profile_requested = false;
 	std::optional<th03::app::NewClassicNetplayRoomLaunch> launch{};
 	std::optional<th03::app::NewClassicNetplayPreferences> preferences{};
 };
@@ -3072,8 +3192,262 @@ private:
 			.preferences = room.preferences(),
 		};
 	}
+	if(room.status() ==
+		th03::app::NewClassicNetplayRoomStatus::profile_requested) {
+		return {
+			.profile_requested = true,
+			.preferences = room.preferences(),
+		};
+	}
 	return {.preferences = room.preferences()};
 }
+
+#if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
+struct OnlineProfileRunResult final {
+	int exit_code = 0;
+	bool application_quit = false;
+	std::optional<th03::app::NewClassicOnlineProfile> profile{};
+};
+
+[[nodiscard]] OnlineProfileRunResult run_online_profile_modal(
+	th03::app::RationalTickRate tick_rate,
+	th03::platform::SdlPlatform &platform,
+	th03::platform::SdlInputMapper &mapper,
+	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets,
+	th03::app::NewClassicLanguageAssetProfile language,
+	const std::filesystem::path &credential_path,
+	ProductOnlineTransport &online_transport,
+	th03::app::NewClassicOnlineCredentials &credentials,
+	th03::app::NewClassicOnlineProfile profile,
+	const RetainedMenuAudio *retained_audio = nullptr
+)
+{
+	th03::app::NewClassicOnlineProfileScene scene(
+		std::move(patch_assets), language, profile.nametag
+	);
+	if(!scene.valid()) {
+		return {.exit_code = fail_netplay(
+			"online-profile", "surface-create-failed"
+		)};
+	}
+	auto scheduler = th03::app::TickInputScheduler::create(
+		tick_rate, th03::platform::sdl_ticks_now_ns(),
+		th03::app::TickInputCatchUpPolicy::discard_missed_deadlines
+	);
+	if(!scheduler) {
+		return {.exit_code = fail_tick(scheduler.error())};
+	}
+	if(const auto reset = mapper.reset_after_modal(
+		*scheduler, th03::platform::sdl_ticks_now_ns()
+	); !reset) {
+		return {.exit_code = fail("online-profile-input", reset.error())};
+	}
+	if(const auto presented = platform.present(scene.surface()); !presented) {
+		return {.exit_code = fail("online-profile-present", presented.error())};
+	}
+	NetplayTextInputOwner text_input(
+		static_cast<SDL_WindowID>(platform.window_id())
+	);
+	if(!text_input.valid()) {
+		return {.exit_code = fail_netplay(
+			"online-profile-input", "window-missing"
+		)};
+	}
+
+	bool retry_blocked_event = false;
+	for(;;) {
+		const auto cutoff = th03::platform::sdl_ticks_now_ns();
+		if(!retry_blocked_event) {
+			auto pumped = mapper.pump_events(*scheduler, false);
+			if(!pumped) {
+				return {.exit_code = fail(
+					"online-profile-input", pumped.error()
+				)};
+			}
+			retry_blocked_event = pumped->queue_blocked;
+		}
+		bool surface_changed = false;
+		for(;;) {
+			auto due = scheduler->pop_due(cutoff);
+			if(!due) {
+				return {.exit_code = fail_tick(due.error())};
+			}
+			if(!*due) {
+				break;
+			}
+			if(retained_audio) {
+				const auto advanced = retained_audio->advance_tick();
+				if(!advanced) {
+					return {.exit_code = advanced.error()};
+				}
+			}
+			while(const auto character = mapper.take_keyboard_text_character()) {
+				surface_changed = scene.consume({.text_character = *character}) ||
+					surface_changed;
+			}
+			const auto scancode = mapper.take_keyboard_scancode_press();
+			surface_changed = scene.consume({
+				.ui = project_new_classic_ui(**due, true),
+				.erase = scancode && *scancode == SDL_SCANCODE_BACKSPACE,
+			}) || surface_changed;
+			if(!text_input.set_active(scene.text_entry_active())) {
+				return {.exit_code = fail_netplay(
+					"online-profile-input", "text-input-state"
+				)};
+			}
+			if(!scene.text_entry_active()) {
+				while(mapper.take_keyboard_text_character()) {
+				}
+			}
+			if(auto action = scene.take_action()) {
+				using Action = th03::app::NewClassicOnlineProfileActionType;
+				if(action->type == Action::back) {
+					return {.profile = std::move(profile)};
+				}
+				if(action->type == Action::application_quit) {
+					return {.application_quit = true};
+				}
+				bool request_quit = false;
+				const auto run_request = [&]<typename Work>(Work work) ->
+					std::expected<std::invoke_result_t<Work>, int> {
+					if(retained_audio) {
+						return run_retained_menu_network_job(
+							tick_rate, platform, mapper, *retained_audio,
+							request_quit, std::move(work)
+						);
+					}
+					try {
+						return std::invoke(std::move(work));
+					} catch(...) {
+						return std::unexpected(fail_netplay(
+							"online-profile", "request-failed"
+						));
+					}
+				};
+				bool reported = false;
+				if(action->type == Action::update_nametag) {
+					auto request = run_request([
+						text = action->text, credentials,
+						transport = online_transport.transport()
+					]() {
+						return th03::app::update_new_classic_online_profile(
+							text, credentials, transport
+						);
+					});
+					if(!request) {
+						return {.exit_code = request.error()};
+					}
+					if(request_quit) {
+						return {.application_quit = true};
+					}
+					if(*request) {
+						profile = **request;
+						reported = scene.report_profile(std::move(**request));
+					}
+				} else if(action->type == Action::create_link_code) {
+					auto request = run_request([
+						credentials, transport = online_transport.transport()
+					]() {
+						return th03::app::create_new_classic_online_link_code(
+							credentials, transport
+						);
+					});
+					if(!request) {
+						return {.exit_code = request.error()};
+					}
+					if(request_quit) {
+						return {.application_quit = true};
+					}
+					if(*request) {
+						reported = scene.report_link_code(
+							std::move((*request)->code)
+						);
+					}
+				} else {
+					auto request = run_request([
+						code = action->text,
+						transport = online_transport.transport()
+					]() {
+						return th03::app::redeem_new_classic_online_link_code(
+							code, transport
+						);
+					});
+					if(!request) {
+						return {.exit_code = request.error()};
+					}
+					if(request_quit) {
+						return {.application_quit = true};
+					}
+					if(*request && store_product_online_credentials(
+						credential_path, **request
+					)) {
+						credentials = std::move(**request);
+						auto loaded_request = run_request([
+							credentials,
+							transport = online_transport.transport()
+						]() {
+							return th03::app::fetch_new_classic_online_profile(
+								credentials, transport
+							);
+						});
+						if(!loaded_request) {
+							return {.exit_code = loaded_request.error()};
+						}
+						if(request_quit) {
+							return {.application_quit = true};
+						}
+						if(*loaded_request) {
+							profile = **loaded_request;
+							reported = scene.report_linked(
+								std::move(**loaded_request)
+							);
+						}
+					}
+				}
+				if(!reported && !scene.report_failure()) {
+					return {.exit_code = fail_netplay(
+						"online-profile", "request-report-failed"
+					)};
+				}
+				surface_changed = true;
+				if(const auto reset = mapper.reset_after_modal(
+					*scheduler, th03::platform::sdl_ticks_now_ns()
+				); !reset) {
+					return {.exit_code = fail(
+						"online-profile-input", reset.error()
+					)};
+				}
+				retry_blocked_event = false;
+			}
+			if(retry_blocked_event) {
+				auto retried = mapper.pump_events(*scheduler, false);
+				if(!retried) {
+					return {.exit_code = fail(
+						"online-profile-input", retried.error()
+					)};
+				}
+				retry_blocked_event = retried->queue_blocked;
+			}
+		}
+		if(surface_changed) {
+			if(const auto presented = platform.present(scene.surface()); !presented) {
+				return {.exit_code = fail(
+					"online-profile-present", presented.error()
+				)};
+			}
+		} else if(auto refreshed = refresh_host_presentability(
+			platform, "online-profile-presentability"
+		); !refreshed) {
+			return {.exit_code = refreshed.error()};
+		}
+		const auto deadline = scheduler->next_deadline_ns();
+		const auto now = th03::platform::sdl_ticks_now_ns();
+		if(deadline && *deadline > now) {
+			SDL_DelayPrecise(std::min(*deadline - now, maximum_idle_delay_ns));
+		}
+	}
+}
+#endif
 
 #if defined(TH03_ENABLE_UPDATE_HOST)
 [[nodiscard]] std::expected<
@@ -7550,6 +7924,158 @@ ExperienceRunResult run_new_classic_experience(
 				return NetplayFrontendResult{
 					.disposition = NetplayFrontendDisposition::application_quit
 				};
+			}
+			const bool account_requested = room_run.profile_requested ||
+				(room_run.launch && room_run.launch->transport ==
+					th03::app::NewClassicNetplayRoomTransport::online_service);
+			if(account_requested) {
+#if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
+				const auto origin = product_online_origin();
+				auto settings_path = parsed.launch.content.new_classic_settings;
+				if(settings_path.empty()) {
+					settings_path = parsed.launch.content.config.parent_path() /
+						"PODD.CFG";
+				}
+				const auto credential_path = settings_path.parent_path() /
+					"PODD.AUTH";
+				auto online_transport = origin ?
+					create_product_online_transport(*origin) :
+					std::expected<ProductOnlineTransport, ProductOnlineError>{
+						std::unexpected(ProductOnlineError{})
+					};
+				std::expected<
+					th03::app::NewClassicOnlineCredentials,
+					ProductOnlineError
+				> credentials = std::unexpected(ProductOnlineError{});
+				bool account_application_quit = false;
+				const auto environment_user = environment_value(
+					online_user_environment
+				);
+				const auto environment_token = environment_value(
+					online_token_environment
+				);
+				if(environment_user && environment_token &&
+					th03::app::validate_new_classic_online_credentials({
+						.user_id = *environment_user,
+						.token = *environment_token,
+					})) {
+					credentials = th03::app::NewClassicOnlineCredentials{
+						*environment_user, *environment_token
+					};
+				} else if(online_transport) {
+					auto acquired = run_retained_menu_network_job(
+						parsed.tick_rate, platform, mapper, audio,
+						account_application_quit,
+						[credential_path,
+						 transport = online_transport->transport()]() {
+							return load_or_enroll_product_online_credentials(
+								credential_path, transport
+							);
+						}
+					);
+					if(!acquired) {
+						return NetplayFrontendResult{.exit_code = acquired.error()};
+					}
+					if(account_application_quit) {
+						return NetplayFrontendResult{
+							.disposition =
+								NetplayFrontendDisposition::application_quit
+						};
+					}
+					credentials = std::move(*acquired);
+				}
+				std::expected<
+					th03::app::NewClassicOnlineProfile,
+					th03::app::NewClassicOnlineClientError
+				> profile = std::unexpected(
+					th03::app::NewClassicOnlineClientError{}
+				);
+				if(credentials && online_transport) {
+					auto fetched = run_retained_menu_network_job(
+						parsed.tick_rate, platform, mapper, audio,
+						account_application_quit,
+						[credentials = *credentials,
+						 transport = online_transport->transport()]() {
+							return th03::app::fetch_new_classic_online_profile(
+								credentials, transport
+							);
+						}
+					);
+					if(!fetched) {
+						return NetplayFrontendResult{.exit_code = fetched.error()};
+					}
+					if(account_application_quit) {
+						return NetplayFrontendResult{
+							.disposition =
+								NetplayFrontendDisposition::application_quit
+						};
+					}
+					profile = std::move(*fetched);
+				}
+				if(!profile) {
+					if(room_run.profile_requested) {
+						if(!room.resume_after_profile()) {
+							return NetplayFrontendResult{
+								.exit_code = fail_netplay(
+									"online-profile", "resume-failed"
+								)
+							};
+						}
+					} else if(!room.show_launch_failure()) {
+						return NetplayFrontendResult{
+							.exit_code = fail_netplay(
+								"online-profile", "failure-screen-failed"
+							)
+						};
+					}
+					continue;
+				}
+				if(room_run.profile_requested || !profile->nametag) {
+					auto edited = run_online_profile_modal(
+						parsed.tick_rate, platform, mapper, patch_assets, language,
+						credential_path, *online_transport, *credentials,
+						std::move(*profile), &audio
+					);
+					if(edited.exit_code != 0) {
+						return NetplayFrontendResult{.exit_code = edited.exit_code};
+					}
+					if(edited.application_quit) {
+						return NetplayFrontendResult{
+							.disposition =
+								NetplayFrontendDisposition::application_quit
+						};
+					}
+					if(room_run.profile_requested) {
+						if(!room.resume_after_profile()) {
+							return NetplayFrontendResult{
+								.exit_code = fail_netplay(
+									"online-profile", "resume-failed"
+								)
+							};
+						}
+						continue;
+					}
+					if(!edited.profile || !edited.profile->nametag) {
+						if(!room.resume_after_launch()) {
+							return NetplayFrontendResult{
+								.exit_code = fail_netplay(
+									"online-profile", "cancel-resume-failed"
+								)
+							};
+						}
+						continue;
+					}
+				}
+#else
+				if(room_run.profile_requested) {
+					if(!room.resume_after_profile()) {
+						return NetplayFrontendResult{.exit_code = fail_netplay(
+							"online-profile", "platform-unavailable"
+						)};
+					}
+					continue;
+				}
+#endif
 			}
 			if(!room_run.launch) {
 				return NetplayFrontendResult{

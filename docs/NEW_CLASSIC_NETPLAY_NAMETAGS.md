@@ -2,16 +2,18 @@
 
 Status: approved product contract, 2026-08-20. The portable layout validator,
 account-profile service, strict paired snapshot, T3NID001 peer agreement, and
-VS-title substitution are implemented. In-app profile editing and production
-deployment remain pending.
+VS-title substitution are implemented. The retained Online Profile owner now
+enforces first-use naming, later rename, and separate-device link-code flows.
+Production deployment of the profile migration/routes remains the final
+service gate.
 
 ## Current facts
 
-The existing online identity is deliberately opaque. The service `users` table
-stores a UUID, a salted token hash, and creation time. It has no public profile
-or display-name field. Replay and leaderboard rows currently display the
-eight-character name saved inside each V13 replay; that is replay metadata,
-not an account name.
+The account identity is deliberately opaque. The service `users` table stores
+a UUID, mutable public nametag, salted credential hashes, and timestamps.
+Every linked device receives a separate credential for the same UUID. Replay
+and leaderboard rows still display the eight-character name saved inside each
+V13 replay; that is replay metadata, not yet the account-name snapshot.
 
 The room service authenticates each peer's UUID and T3ROOM3 now freezes both
 UUID/nametag pairs before peer negotiation. Schema-4 `T3NLC001` carries the
@@ -60,9 +62,10 @@ unsupported characters with `?` would make distinct accounts look identical.
 
 On first use of account-backed Online Match, require the player to choose a
 nametag after automatic credential enrollment and before entering matchmaking.
-Expose later edits under `Option -> Online & Privacy`. The server is
-authoritative for account-backed rooms; a cached local copy only avoids a blank
-UI while a refresh is in flight.
+Expose later edits at `Online Match -> Online Profile`; an eventual
+`Option -> Online & Privacy` alias may open the same retained owner. The server
+is authoritative for account-backed rooms; a cached local copy only avoids a
+blank UI while a refresh is in flight.
 
 The Worker should snapshot both authenticated profiles when it pairs a room
 and send the pair to both clients over the authenticated room WebSocket. The
@@ -147,15 +150,16 @@ renaming the profile leaves every credential and the UUID stable.
 
 ## Implementation order
 
-1. Add the profile column/migration, strict validation, authenticated read and
-   update routes, and account-creation default state.
-2. Add in-app first-use/edit UI and the platform-neutral profile cache.
-3. Have room/Quick Match snapshot and deliver both authenticated profiles;
-   define the local/direct fallback.
+1. ~~Add the profile column/migration, strict validation, authenticated read and
+   update routes, and account-creation default state.~~
+2. Add in-app first-use/edit UI. **Complete.** A persistent profile cache is
+   intentionally deferred; account-backed launch fetches server authority.
+3. ~~Have room/Quick Match snapshot and deliver both authenticated profiles;
+   define the local/direct fallback.~~
 4. Freeze `T3NID001`, bind its digest into the pre-game agreement, and add
    malformed/cross-room/cross-account tests. **Complete.**
-5. Render comparison images, select the accepted placement/color, and attach
-   the bounded row only to the New Classic netplay intro.
+5. ~~Render comparison images, select the accepted placement/color, and attach
+   the bounded rows only to the New Classic netplay intro.~~
 6. Add the optional V13 tail, byte-preserving replay/download behavior, detail
    display, replay-renderer support, and old-reader compatibility tests.
 

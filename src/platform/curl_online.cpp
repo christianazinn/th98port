@@ -310,7 +310,7 @@ std::expected<
 {
 	auto &self = *static_cast<CurlOnlineTransport *>(context);
 	if(!safe_target(request.target) ||
-		request.method > app::NewClassicOnlineHttpMethod::post ||
+		request.method > app::NewClassicOnlineHttpMethod::delete_ ||
 		request.maximum_response_bytes == 0U ||
 		request.maximum_response_bytes > app::new_classic_online_replay_max_bytes ||
 		request.body.size() > app::new_classic_online_replay_max_bytes ||
@@ -372,13 +372,26 @@ std::expected<
 			app::NewClassicOnlineTransportErrorCode::unavailable
 		});
 	}
-	if(request.method == app::NewClassicOnlineHttpMethod::post &&
+	if((request.method == app::NewClassicOnlineHttpMethod::post ||
+		request.method == app::NewClassicOnlineHttpMethod::put) &&
 		(!set(CURLOPT_POST, 1L) ||
 		 !set(CURLOPT_POSTFIELDS, request.body.empty() ?
 			static_cast<const void *>("") :
 			static_cast<const void *>(request.body.data())) ||
 		 !set(CURLOPT_POSTFIELDSIZE_LARGE,
 			static_cast<curl_off_t>(request.body.size())))) {
+		return std::unexpected(app::NewClassicOnlineTransportError{
+			app::NewClassicOnlineTransportErrorCode::unavailable
+		});
+	}
+	if(request.method == app::NewClassicOnlineHttpMethod::put &&
+		!set(CURLOPT_CUSTOMREQUEST, "PUT")) {
+		return std::unexpected(app::NewClassicOnlineTransportError{
+			app::NewClassicOnlineTransportErrorCode::unavailable
+		});
+	}
+	if(request.method == app::NewClassicOnlineHttpMethod::delete_ &&
+		!set(CURLOPT_CUSTOMREQUEST, "DELETE")) {
 		return std::unexpected(app::NewClassicOnlineTransportError{
 			app::NewClassicOnlineTransportErrorCode::unavailable
 		});

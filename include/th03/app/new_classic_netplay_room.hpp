@@ -101,6 +101,7 @@ struct NewClassicNetplayRoomInput final {
 enum class NewClassicNetplayRoomStatus : std::uint8_t {
 	running,
 	back,
+	profile_requested,
 	launch_requested,
 	application_quit,
 };
@@ -139,6 +140,7 @@ public:
 	// terminal product route. Restore the exact caller and retain all entered
 	// values so the player can retry or back out one level.
 	[[nodiscard]] bool resume_after_launch() noexcept;
+	[[nodiscard]] bool resume_after_profile() noexcept;
 	[[nodiscard]] NewClassicNetplayPreferences preferences() const noexcept;
 
 private:

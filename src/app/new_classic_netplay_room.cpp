@@ -144,6 +144,7 @@ bool NewClassicNetplayRoom::draw() noexcept
 			NewClassicMessageId::netplay_room_create,
 			NewClassicMessageId::netplay_room_join,
 			NewClassicMessageId::netplay_room_settings,
+			NewClassicMessageId::netplay_room_profile,
 			NewClassicMessageId::netplay_room_return,
 		};
 		for(std::size_t row = 0U; row < rows.size(); ++row) {
@@ -488,7 +489,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 	if(screen_ == Screen::menu) {
 		if(input.ui.up || input.ui.down) {
 			selection_ = static_cast<std::uint8_t>(
-				(selection_ + (input.ui.up ? 4U : 1U)) % 5U
+				(selection_ + (input.ui.up ? 5U : 1U)) % 6U
 			);
 			changed = true;
 			require_release();
@@ -508,6 +509,9 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 			} else if(selection_ == 3U) {
 				screen_ = Screen::settings;
 				selection_ = 0U;
+			} else if(selection_ == 4U) {
+				status_ = NewClassicNetplayRoomStatus::profile_requested;
+				return {.status = status_};
 			} else {
 				status_ = NewClassicNetplayRoomStatus::back;
 				return {.status = status_};
@@ -705,6 +709,18 @@ bool NewClassicNetplayRoom::resume_after_launch() noexcept
 	return draw();
 }
 
+bool NewClassicNetplayRoom::resume_after_profile() noexcept
+{
+	if(status_ != NewClassicNetplayRoomStatus::profile_requested || launch_) {
+		return false;
+	}
+	status_ = NewClassicNetplayRoomStatus::running;
+	screen_ = Screen::menu;
+	selection_ = 4U;
+	require_release();
+	return draw();
+}
+
 NewClassicNetplayPreferences NewClassicNetplayRoom::preferences() const noexcept
 {
 	return {
@@ -856,9 +872,11 @@ bool NewClassicNetplayLobbyView::mark_ready(
 		.cadence_ticks = contract.cadence_ticks,
 		.cadence_seconds = contract.cadence_seconds,
 		.input_delay_frames = contract.input_delay_frames,
+		.identity_digest = contract.identity_digest,
 	}, {
 		.player_two = contract.player_two,
 		.player_two_autofire = (contract.autofire_mask & 2U) != 0U,
+		.identity_digest = contract.identity_digest,
 	});
 	if(!validated || *validated != contract) {
 		return false;
