@@ -149,7 +149,7 @@ int main(int argc, char **argv)
 			<< "\noffset=" << content.error().offset << '\n';
 		return 2;
 	}
-	auto hydrated = th03::tools::hydrate_v13_replay(replay_bytes, *content);
+	auto hydrated = th03::tools::hydrate_v14_replay(replay_bytes, *content);
 	if(!hydrated) {
 		std::cerr << "error=" << hydrated.error().message
 			<< "\noffset=" << hydrated.error().offset << '\n';

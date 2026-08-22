@@ -26,11 +26,11 @@ struct HydratedReplay {
 	ReplayHydrationReport report{};
 };
 
-// Reconstructs V13 reporting metadata by replaying the complete input stream.
-// Existing nonzero metadata and every byte outside V13's fixed telemetry fields
+// Reconstructs V14 reporting metadata by replaying the complete input stream.
+// Existing nonzero metadata and every byte outside V14's fixed telemetry fields
 // are preserved. Gameplay summaries and round-start checkpoints must validate
 // before any output is returned.
-std::expected<HydratedReplay, Error> hydrate_v13_replay(
+std::expected<HydratedReplay, Error> hydrate_v14_replay(
 	std::span<const std::byte> bytes,
 	const GameContent &content
 );

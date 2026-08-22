@@ -12,7 +12,7 @@
 
 #include "../formats/bytes.hpp"
 #include "th03/formats/replay.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 #include "th03/replay/run.hpp"
 
 namespace th03::tools {
@@ -111,7 +111,7 @@ std::expected<void, Error> validate_run(
 	}
 	if(run.completed_rounds.size() != document.expected_round_splits.size()) {
 		return std::unexpected(hydration_error(
-			"reconstructed round count does not match the V13 summary"
+			"reconstructed round count does not match the V14 summary"
 		));
 	}
 	for(std::size_t index = 0U; index < run.completed_rounds.size(); ++index) {
@@ -122,7 +122,7 @@ std::expected<void, Error> validate_run(
 			document.expected_round_splits[index], actual
 		)) {
 			return std::unexpected(hydration_error(
-				"reconstructed round does not match the V13 summary", index
+				"reconstructed round does not match the V14 summary", index
 			));
 		}
 	}
@@ -137,7 +137,7 @@ std::expected<void, Error> validate_run(
 		auto game = Game::create(checkpoint.init, content, options);
 		if(!game) {
 			return std::unexpected(hydration_error(
-				"could not reconstruct a V13 checkpoint", index
+				"could not reconstruct a V14 checkpoint", index
 			));
 		}
 		expected.push_back(replay::RoundStartRecord{
@@ -159,18 +159,18 @@ std::expected<void, Error> validate_run(
 
 } // namespace
 
-std::expected<HydratedReplay, Error> hydrate_v13_replay(
+std::expected<HydratedReplay, Error> hydrate_v14_replay(
 	std::span<const std::byte> bytes,
 	const GameContent &content
 )
 {
-	auto document = formats::parse_v13_replay(bytes);
+	auto document = formats::parse_v14_replay(bytes);
 	if(!document) {
 		return std::unexpected(document.error());
 	}
 	if(!formats::replay_can_be_verified(*document)) {
 		return std::unexpected(hydration_error(
-			"only finalized V13 replays can be hydrated"
+			"only finalized V14 replays can be hydrated"
 		));
 	}
 	auto run = replay::run_session(document->session, content);
@@ -239,7 +239,7 @@ std::expected<HydratedReplay, Error> hydrate_v13_replay(
 	hydrated.report.changed = !std::equal(
 		hydrated.bytes.begin(), hydrated.bytes.end(), bytes.begin(), bytes.end()
 	);
-	if(auto reparsed = formats::parse_v13_replay(hydrated.bytes); !reparsed) {
+	if(auto reparsed = formats::parse_v14_replay(hydrated.bytes); !reparsed) {
 		return std::unexpected(reparsed.error());
 	}
 	return hydrated;
