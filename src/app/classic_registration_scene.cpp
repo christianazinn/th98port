@@ -778,7 +778,12 @@ ClassicRegistrationScene::create_predecoded(
 	auto normal_prepared = present::prepare_superimpose_sheet(normal);
 	auto highlight_prepared = present::prepare_superimpose_sheet(highlight);
 	if(!normal_prepared || !highlight_prepared ||
-		!valid_sheet(*normal_prepared) || !valid_sheet(*highlight_prepared)) {
+		!valid_sheet(*normal_prepared) || !valid_sheet(*highlight_prepared) ||
+		!present::superimpose_remap_color_preserve_opacity(
+			*normal_prepared, 10U, 15U
+		) || !present::superimpose_remap_color_preserve_opacity(
+			*highlight_prepared, 15U, 10U
+		)) {
 		return std::unexpected(registration_error(
 			ClassicRegistrationErrorCode::invalid_asset_geometry
 		));

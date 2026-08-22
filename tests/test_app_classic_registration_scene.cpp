@@ -1390,6 +1390,30 @@ void local_original_gate(
 			}
 			return pixels;
 		};
+		const auto normal_a = capture(0U, 32U, 24U);
+		expect(
+			std::ranges::count(normal_a, std::uint8_t{15U}) != 0 &&
+				std::ranges::count(normal_a, std::uint8_t{10U}) == 0,
+			"authentic REGI2 ordinary glyph center is white rather than yellow"
+		);
+		expect(
+			ClassicRegistrationSceneTestAccess::draw_alphabet_glyph(
+				**created, ClassicRegistrationGlyph::a, true
+			),
+			"authentic REGI1 selected glyph draws"
+		);
+		const auto selected_a = capture(0U, 32U, 24U);
+		expect(
+			std::ranges::count(selected_a, std::uint8_t{10U}) != 0 &&
+				std::ranges::count(selected_a, std::uint8_t{15U}) == 0,
+			"authentic REGI1 selected glyph center is yellow rather than white"
+		);
+		expect(
+			ClassicRegistrationSceneTestAccess::draw_alphabet_glyph(
+				**created, ClassicRegistrationGlyph::a, false
+			),
+			"authentic REGI2 ordinary glyph redraws after color assertion"
+		);
 		for(std::uint8_t raw = 0U; raw <= 45U; ++raw) {
 			if(raw == 13U || raw == 14U || raw == 15U || raw == 29U ||
 				raw == 30U || raw == 31U) {
