@@ -10,9 +10,54 @@
 #include <utility>
 #include <variant>
 
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 
 namespace th03::app {
+
+std::optional<formats::ReplayAccountUuid>
+parse_new_classic_replay_account_uuid(std::string_view text) noexcept
+{
+	if(text.size() != 36U || text[8U] != '-' || text[13U] != '-' ||
+		text[18U] != '-' || text[23U] != '-') {
+		return std::nullopt;
+	}
+	formats::ReplayAccountUuid uuid{};
+	std::size_t output = 0U;
+	std::uint8_t high = 0U;
+	bool have_high = false;
+	for(const char character : text) {
+		if(character == '-') {
+			continue;
+		}
+		const auto nibble = [&]() -> std::optional<std::uint8_t> {
+			if(character >= '0' && character <= '9') {
+				return static_cast<std::uint8_t>(character - '0');
+			}
+			if(character >= 'a' && character <= 'f') {
+				return static_cast<std::uint8_t>(character - 'a' + 10);
+			}
+			if(character >= 'A' && character <= 'F') {
+				return static_cast<std::uint8_t>(character - 'A' + 10);
+			}
+			return std::nullopt;
+		}();
+		if(!nibble) {
+			return std::nullopt;
+		}
+		if(!have_high) {
+			high = *nibble;
+			have_high = true;
+		} else {
+			if(output >= uuid.size()) {
+				return std::nullopt;
+			}
+			uuid[output++] = static_cast<std::uint8_t>((high << 4U) | *nibble);
+			have_high = false;
+		}
+	}
+	return (output == uuid.size() && !have_high) ?
+		std::optional{uuid} : std::nullopt;
+}
 
 void preserve_new_classic_restart_random_seed(
 	GameInit &resident,
@@ -134,7 +179,8 @@ namespace {
 
 [[nodiscard]] formats::ReplayMetadata initial_metadata(
 	const GameInit &init,
-	std::uint16_t dos_date
+	std::uint16_t dos_date,
+	const NewClassicReplayIdentity &identity
 )
 {
 	formats::ReplayMetadata metadata{};
@@ -153,6 +199,12 @@ namespace {
 	metadata.final_story_lives = init.story_lives;
 	metadata.autofire = init.autofire_mask;
 	metadata.dos_date = dos_date;
+	metadata.ruleset = identity.ruleset;
+	metadata.recording_flags = identity.recording_flags;
+	metadata.recorder_role = identity.recorder_role;
+	metadata.recorder_source = identity.recorder_source;
+	metadata.player_uuid = identity.player_uuid;
+	metadata.match_id = identity.match_id;
 	if(init.game_mode == game_mode::story) {
 		formats::ReplayStorySummary story{};
 		for(std::size_t stage = 0U; stage < story.stage_opponents.size(); ++stage) {
@@ -166,6 +218,26 @@ namespace {
 }
 
 } // namespace
+
+bool NewClassicReplayRecorder::set_identity(
+	NewClassicReplayIdentity identity
+) noexcept
+{
+	if(completed_) {
+		return false;
+	}
+	identity_ = identity;
+	if(document_ && document_->metadata) {
+		auto &metadata = *document_->metadata;
+		metadata.ruleset = identity.ruleset;
+		metadata.recording_flags = identity.recording_flags;
+		metadata.recorder_role = identity.recorder_role;
+		metadata.recorder_source = identity.recorder_source;
+		metadata.player_uuid = identity.player_uuid;
+		metadata.match_id = identity.match_id;
+	}
+	return true;
+}
 
 std::expected<void, NewClassicReplayError>
 NewClassicReplayRecorder::configure_practice(
@@ -212,11 +284,12 @@ NewClassicReplayRecorder::round_started(
 	}
 	if(!document_) {
 		formats::ReplayDocument document{};
-		document.session.source_version = formats::replay_v13_version;
+		document.session.source_version = formats::replay_v14_version;
 		document.session.init = checkpoint_init(observation, practice);
 		document.metadata = initial_metadata(
 			document.session.init,
-			dos_date != 0U ? dos_date : recording_date_
+			dos_date != 0U ? dos_date : recording_date_,
+			identity_
 		);
 		document.stage_clear_bonuses =
 			std::array<formats::ReplayStageClearBonus, 9U>{};
@@ -438,14 +511,14 @@ std::expected<void, NewClassicReplayError> NewClassicReplayRecorder::finish(
 		);
 		metadata.final_score = split.p1_score;
 	}
-	auto encoded = formats::write_v13_replay(candidate);
+	auto encoded = formats::write_v14_replay(candidate);
 	if(!encoded) {
 		return std::unexpected(replay_error(
 			NewClassicReplayErrorCode::document_invalid,
 			std::move(encoded.error())
 		));
 	}
-	auto parsed = formats::parse_v13_replay(*encoded);
+	auto parsed = formats::parse_v14_replay(*encoded);
 	if(!parsed) {
 		return std::unexpected(replay_error(
 			NewClassicReplayErrorCode::document_invalid,

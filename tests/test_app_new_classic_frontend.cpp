@@ -12,7 +12,7 @@
 #include <string>
 
 #include "th03/app/new_classic_frontend.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 
 #include "new_classic_menu_preview.hpp"
 
@@ -79,7 +79,7 @@ th03::formats::ReplayDocument make_document()
 	metadata.final_score = {1U, 2U, 3U, 4U};
 
 	th03::formats::ReplayDocument document{};
-	document.session.source_version = th03::formats::replay_v13_version;
+	document.session.source_version = th03::formats::replay_v14_version;
 	document.session.init = init;
 	document.session.records = {
 		th03::replay::InputSample{
@@ -871,7 +871,7 @@ void test_online_high_score_menu()
 	auto online_watch = online.take_replay_watch_request();
 	expect(online_watch && online.report_replay_watch(
 		online_watch->replay_id, make_story_document()
-	), "downloaded leaderboard detail loads the validated V13 telemetry");
+	), "downloaded leaderboard detail loads the validated V14 telemetry");
 	expect(online.consume({}).surface_changed,
 		"online leaderboard telemetry publishes on its source boundary");
 	static_cast<void>(online.consume({}));
@@ -1130,19 +1130,19 @@ void test_catalog_browser_and_save()
 	auto base_commit = commit_replay_slot(root, 0U, document);
 	expect(
 		base_commit.has_value(),
-		"fixture commits through the real atomic V13 store"
+		"fixture commits through the real atomic V14 store"
 	);
 	auto story_document = make_story_document();
 	story_document.slowdown->slow_frames = 5U;
 	auto story_commit = commit_replay_slot(root, 2U, story_document);
 	expect(
 		story_commit.has_value(),
-		"Story telemetry fixture commits through the real V13 store"
+		"Story telemetry fixture commits through the real V14 store"
 	);
 	auto practice_commit = commit_replay_slot(root, 3U, make_practice_document());
 	expect(
 		practice_commit.has_value(),
-		"Practice telemetry fixture commits through the real V13 store"
+		"Practice telemetry fixture commits through the real V14 store"
 	);
 	auto netplay_document = make_netplay_document();
 	const ReplaySlotLocalView player_two{
@@ -1189,7 +1189,7 @@ void test_catalog_browser_and_save()
 		catalog->slots[11U].display_paletted_character == 1 &&
 		catalog->slots[11U].final_score ==
 			netplay_document.expected_round_splits.back().p1_score,
-		"ordinary V13 presentation remains P1-character and winner-score compatible"
+		"ordinary V14 presentation remains P1-character and winner-score compatible"
 	);
 	expect(
 		new_classic_replay_timer_label(0U) == "0:00.00" &&
@@ -1291,7 +1291,7 @@ void test_catalog_browser_and_save()
 			request->document.session.sample_count ==
 				story_document.session.sample_count &&
 			surface_hash((*upload_browser)->surface()) != list_hash,
-			"replay detail Upload emits one immutable in-memory V13 document and busy modal");
+			"replay detail Upload emits one immutable in-memory V14 document and busy modal");
 		expect(!(*upload_browser)->take_upload_request(),
 			"upload request transfers exactly once to the host owner");
 		expect(!(*upload_browser)->report_upload(
@@ -1310,7 +1310,7 @@ void test_catalog_browser_and_save()
 			"upload acknowledgement requires release and returns to the same detail");
 	}
 	auto multi_round_document = make_multi_round_story_document();
-	auto multi_round_encoded = th03::formats::write_v13_replay(
+	auto multi_round_encoded = th03::formats::write_v14_replay(
 		multi_round_document
 	);
 	if(!multi_round_encoded) {
@@ -1318,13 +1318,13 @@ void test_catalog_browser_and_save()
 			multi_round_encoded.error().message << '\n';
 	}
 	expect(multi_round_encoded.has_value(),
-		"multi-round Story fixture encodes as strict V13");
+		"multi-round Story fixture encodes as strict V14");
 	auto multi_round_commit = commit_replay_slot(
 		root, 4U, multi_round_document
 	);
 	expect(
 		multi_round_commit.has_value(),
-		"multi-round Story fixture commits through the real V13 store"
+		"multi-round Story fixture commits through the real V14 store"
 	);
 	if(multi_round_commit) {
 		auto multi_round = NewClassicReplayBrowser::load(root, patch_assets);

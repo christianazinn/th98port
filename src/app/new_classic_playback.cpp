@@ -1740,7 +1740,7 @@ NewClassicReplayPlayback::advance(
 		const auto source = mainl_end_input(
 			impl_->mainl_replay_input, live_interface_input, false
 		);
-		// Native netplay V13s end at MAINL_END without storing host-side winner
+		// Native netplay V14s end at MAINL_END without storing host-side winner
 		// screen samples. Preserve every visual/audio wait, then provide the one
 		// dismissal edge that lets the terminal owner reach its recorded process
 		// boundary instead of rejecting the valid replay.

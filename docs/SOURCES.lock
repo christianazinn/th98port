@@ -27,7 +27,7 @@ Behavior precedence:
   Replay Patch 0.4.14 defines New Classic replay/QoL semantics, never a second
   gameplay core.
   Frozen oracle output defines executable native acceptance.
-  The finalized V13 specification will define future user replay documents.
+  The finalized V14 specification will define future user replay documents.
 
 Native audio dependencies (2026-08-11):
   98fmplayer PMD sequencer:

@@ -2,10 +2,10 @@
 
 `libth03` is the architecture-neutral deterministic gameplay core for a
 faithful native TH03 port. Phase 2's complete TH3R03 round remains a permanent
-gate, and Phase 3 now verifies 19 locked V13 conversions across Story,
+gate, and Phase 3 now verifies 19 locked V14 conversions across Story,
 Practice, and ordinary VS, plus a separate title-Demo gate, on top of the Phase
 1 format/session runway. A
-strict V13 span adapter and the first stdlib-only asset/indexed-raster
+strict V14 span adapter and the first stdlib-only asset/indexed-raster
 foundations now sit beside that core. An optional SDL 3 application now opens a
 shared host menu for the authenticated Classic lifecycle and the faithful
 Replay Patch 0.4.14-derived New Classic experience, alongside the earlier
@@ -21,7 +21,7 @@ sample. Initial or later device unavailability drops only final delivery while
 the deterministic PMD session keeps advancing.
 Gameplay-stage music, source-ordered ordinary MAIN SFX emission, and stock
 blocking live pause/resume with effect 21 are integrated. New Classic's host
-identity/lifecycle, complete shared-owner V13 MAIN/MAINL
+identity/lifecycle, complete shared-owner V14 MAIN/MAINL
 recording/browser/playback/save flow and final Splits/Clears/Timers telemetry,
 source-rendered pause/restart, Practice setup, three-page KeyConfig, expanded
 Options, title Extra unlock, and the complete authenticated Replay Patch
@@ -117,7 +117,7 @@ With the standard ignored workspace layout, the stable result is
 by double-clicking; it needs no adjacent DLL/content tree, installed .NET
 runtime, or command-line arguments. Its NativeAOT launcher avoids carrying the
 ordinary .NET runtime bundle. After the source-faithful startup it boots
-directly into New Classic, which records/browses/plays V13 replays through the
+directly into New Classic, which records/browses/plays V14 replays through the
 shared typed MAIN/MAINL scene owners and owns Replay Patch's four-choice
 gameplay pause/restart loop and two-page Practice setup. New Classic's System
 Options can temporarily enter sealed Classic, open the persistent user-data
@@ -128,7 +128,7 @@ title, while New Classic Quit exits the application. Its first
 launch extracts a content-hash
 cache below `%LOCALAPPDATA%\PoDD Port`, while configuration,
 scores, and the last-run diagnostic log live in the separate `user` directory
-there and survive artifact updates. New Classic V13 files instead live in a
+there and survive artifact updates. New Classic V14 files instead live in a
 visible `REPLAY` directory beside the executable. A read-only installation
 falls back to `user\REPLAY`; `last-run.log` records the selected install and
 replay roots. The launcher retains only the current and one previous payload
@@ -288,7 +288,7 @@ playback reconstructs recorded pause input; live Escape aborts playback and
 held physical keyboard `Z` enables fourfold host-paced fast-forward. After a
 prior Story clear, holding physical `Z` also accelerates the Staff roll fourfold;
 the first clear cannot accelerate itself. Replay details expose the
-frozen V13 result/date/score, checkpoint splits, stage clear-bonus counters,
+frozen V14 result/date/score, checkpoint splits, stage clear-bonus counters,
 slowdown, and Replay Patch `m:ss.cc` real-frame timers. Clears is read-only;
 Splits and Timers retain checkpoint launch.
 The active recording lives entirely in memory from its first round through
@@ -301,7 +301,7 @@ builds before the title; the current recorder never creates that file.
 New Classic Practice is entered through the patched title's VS Start route,
 1P-vs-CPU selector, and Replay Patch 0.4.12's main and Advanced setup pages.
 Its source defaults, exact-VS fallback, fixed-opponent stages, speed/rank/gauge
-controls, retry policy, pause/restart behavior, and V13 Practice metadata are
+controls, retry policy, pause/restart behavior, and V14 Practice metadata are
 all carried into the shared MAIN runtime.
 New Classic also renders the Replay Patch's complete unsigned-byte active
 combo count (100-255 adds a hundreds digit); Classic preserves the
@@ -400,7 +400,7 @@ explicitly empty value keeps the product wholly offline. Cache and network
 work never run on a source tick, captures disable refresh, and complete results
 appear only after the
 player leaves and re-enters HiScore. A replay-backed detail can also download
-the exact V13 payload on a separate bounded worker. Digest, format, cached
+the exact V14 payload on a separate bounded worker. Digest, format, cached
 metadata, and atomic-publication checks must all pass before the UI reports it
 as downloaded; local downloads are revalidated on later launches. Confirm on
 `Downloaded` validates the local file once more outside source time, then
@@ -409,7 +409,7 @@ boundary. When an active-rank cache contains replay records, the title Replay
 route opens a source-styled hub for Local Replays, the Online Replay Library,
 Downloaded Replays, and Return. The official desktop online origin also adds
 `Upload Replay`; its numbered-slot browser transfers one parsed
-finalized V13 document to a bounded worker, which loads or enrolls the protected
+finalized V14 document to a bounded worker, which loads or enrolls the protected
 opaque identity and posts canonical bytes directly from memory. No working
 upload file is created, and accepted/rejected/failure is latched back onto the
 retained UI at the next source boundary. An existing enrolled identity also
@@ -420,7 +420,7 @@ and the two public libraries reuse the same Download and
 Watch transactions. Without any replay-backed cache, accepted history, or
 available upload capability, Replay still enters the authenticated local
 browser directly. The production Cloudflare verifier, D1, and R2 path is live
-and has accepted, projected, and returned a genuine complete Story V13
+and has accepted, projected, and returned a genuine complete Story V14
 byte-for-byte. Windows protects the opaque account with current-user DPAPI;
 Linux and macOS use an atomic owner-only `PODD.AUTH` file compatible with the
 existing netplay identity. Explicitly offline and unsupported builds continue
@@ -475,7 +475,7 @@ out\build\msvc-x64\Debug\th03-replay-check.exe --case X:\path\TH3R03.T3C
 out\build\msvc-x64\Debug\th03-headless.exe --case X:\path\TH3R03.T3C
 ```
 
-Verify a V13 replay directly against its embedded round summaries:
+Verify a V14 replay directly against its embedded round summaries:
 
 ```powershell
 out\build\msvc-x64\Debug\th03rv.exe X:\path\TH3R00.RPY
@@ -486,7 +486,7 @@ For a standalone installation, pass `--enedat <file>` or set `TH03_ENEDAT`.
 It runs the neutral replay session at unbounded speed, prints every computed
 round split, and reports whether all embedded summaries match.
 
-Render a finalized V13 replay to a full-length Matroska video without opening
+Render a finalized V14 replay to a full-length Matroska video without opening
 a game window:
 
 ```powershell
@@ -541,16 +541,16 @@ and reports two-pass progress, speed, and ETA. FFmpeg remains an explicit
 side-by-side/PATH dependency unless its binary and matching license are both
 supplied to the packager. Manual Windows beta builds include this utility.
 
-Run the complete externally stored converted V13 corpus, including its frozen
+Run the complete externally stored converted V14 corpus, including its frozen
 size/SHA-256 lock, with:
 
 ```powershell
 tools\verify_replay_corpus_external.ps1 `
   -EvidenceRoot X:\path\to\rec98-harness `
-  -V13CorpusRoot X:\path\to\converted-v13
+  -V14CorpusRoot X:\path\to\converted-v14
 ```
 
-The current V13 lock contains 19 files converted by TH03 Data Manager 0.4.2
+The current V14 lock contains 19 files converted by TH03 Data Manager 0.4.2
 from the frozen six-file V11 and thirteen-file V12 inputs. It contains 173
 embedded round summaries and 152 preserved checkpoints across Classic Story,
 Replay Patch Practice, and ordinary VS. All 19 complete at unbounded speed and
@@ -637,7 +637,7 @@ split comparisons. Original game data and replay captures remain external.
   fresh-title return, and real Quit, plus all three VS modes through Win,
   reselection, route 0, and Cancel, while composing every changed surface and
   draining every audio command on GCC and MSVC. Each scripted terminal is
-  substituted only after one real MAIN frame; the locked V13 corpus separately
+  substituted only after one real MAIN frame; the locked V14 corpus separately
   validates complete deterministic gameplay through natural terminal
   boundaries. A human full Story clear and two-controller VS match remain
   release QA rather than claims made by this automated route gate.
@@ -694,9 +694,9 @@ split comparisons. Original game data and replay captures remain external.
   deterministic state; `th03rv` uses the null path.
 - `th03-headless`, `th03-replay-check`, and `th03rv` are independent
   filesystem/CLI clients of those libraries.
-- V13 produces the same neutral document/session types without changing the
+- V14 produces the same neutral document/session types without changing the
   core or runner. Its structural tests and converted 19-file corpus gate are
-  green on both compilers. Later compact checkpoints and their raw V13 reset
+  green on both compilers. Later compact checkpoints and their raw V14 reset
   recipes are preserved, selected, and simulated behind the source-black
   transition. The source masks an already-running PMD song during that hidden
   preroll; native playback instead re-arms the correct cue at the selected
@@ -708,7 +708,7 @@ See `docs/ARCHITECTURE.md`, `docs/PARITY_SOURCE_COVERAGE.md`,
 `docs/SOURCES.lock` before expanding corpus and mode coverage.
 `docs/FRAME_PARTITIONS.md` describes the behavior-free implementation split
 inside the gameplay frame translation unit.
-`docs/V13_INTEGRATION.md` records V13 authority and the historical-format
+`docs/V14_INTEGRATION.md` records V14 authority and the historical-format
 retirement gate. `docs/POST_CORE_ROADMAP.md` records the active-tip branch
 workflow and the asset, presentation, audio, platform, and application layers
 that follow the deterministic gameplay core. `docs/PLAYABLE_PORT_ROADMAP.md`

@@ -223,7 +223,7 @@ GameInit parse_compact_snapshot(
 	init.autofire_mask = u8(bytes, offset + 48U);
 
 	CompactRuntimeSnapshot runtime{};
-	// V13 records the actual pre-reset seed. Historical V12 compatibility
+	// V14 records the actual pre-reset seed. Historical V12 compatibility
 	// normalization belongs in its one-way converter, not this frozen reader.
 	runtime.round_reset_seed = u32(bytes, offset + 79U);
 	runtime.random_seed = init.random_seed;

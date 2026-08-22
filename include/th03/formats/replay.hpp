@@ -43,6 +43,31 @@ enum class ReplayEndReason : std::uint8_t {
 	game_over = 6,
 };
 
+enum class ReplayRuleset : std::uint8_t {
+	stock = 0,
+	dopamine_test_v1 = 1,
+};
+
+inline constexpr std::uint8_t replay_recording_flag_netplay = 0x01U;
+inline constexpr std::uint8_t replay_recording_flags_known =
+	replay_recording_flag_netplay;
+
+enum class ReplayRecorderRole : std::uint8_t {
+	unknown = 0,
+	player_one = 1,
+	player_two = 2,
+};
+
+enum class ReplayRecorderSource : std::uint8_t {
+	unknown = 0,
+	pc98 = 1,
+	native = 2,
+	imported = 3,
+};
+
+using ReplayAccountUuid = std::array<std::uint8_t, 16U>;
+using ReplayMatchId = std::array<std::uint8_t, 16U>;
+
 struct ReplayStorySummary {
 	std::array<std::uint8_t, 9> stage_opponents{};
 	std::array<std::array<std::uint8_t, 4>, 9> stage_scores{};
@@ -95,6 +120,12 @@ struct ReplayMetadata {
 	std::uint8_t autofire = 0U;
 	std::uint16_t dos_date = 0U;
 	std::array<char, 8> name{};
+	ReplayRuleset ruleset = ReplayRuleset::stock;
+	std::uint8_t recording_flags = 0U;
+	ReplayRecorderRole recorder_role = ReplayRecorderRole::unknown;
+	ReplayRecorderSource recorder_source = ReplayRecorderSource::unknown;
+	std::array<ReplayAccountUuid, 2U> player_uuid{};
+	ReplayMatchId match_id{};
 };
 
 struct ReplayStageClearBonus {
@@ -176,7 +207,7 @@ struct ReplayDocument {
 	std::optional<ReplayMetadata> metadata;
 	std::vector<ReplayCheckpoint> checkpoints;
 	// Donor-valid T3RACC1 process-state images with sane source page roles. The
-	// native player reconstructs gameplay from portable V13 state and imports
+	// native player reconstructs gameplay from portable V14 state and imports
 	// only the typed presentation facts above, avoiding PC-98
 	// decompression/loading latency and native-layout snapshots.
 	std::vector<ReplayAcceleratorPresentation> accelerators;
@@ -194,11 +225,11 @@ bool round_splits_match(
 	const ReplayRoundSplit &actual
 ) noexcept;
 
-// Adapters without status metadata are finalized reference documents. V13
+// Adapters without status metadata are finalized reference documents. V14
 // preserves its status and must be finalized before an oracle reports success.
 bool replay_can_be_verified(const ReplayDocument &document) noexcept;
 
-// Version-neutral adapter for player-facing V13. Historical V11/V12 inputs
+// Version-neutral adapter for player-facing V14. Historical V11/V12 inputs
 // are converted externally; format changes do not cross into the deterministic
 // core or replay runner.
 std::expected<ReplayDocument, Error> parse_replay(

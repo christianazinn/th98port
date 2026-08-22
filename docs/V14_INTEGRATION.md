@@ -1,11 +1,11 @@
-# V13 native integration contract
+# V14 native integration contract
 
 Status: parser implementation authority and migration gate for the frozen
-Replay Patch 0.4.8 V13 contract.
+Replay Patch 0.4.8 V14 contract.
 
 ## Authority
 
-V13 has two complementary authorities:
+V14 has two complementary authorities:
 
 1. The canonical semantic and byte-layout schema is
    `tools/replay/FORMAT.md` in the replay-validation harness at outer commit
@@ -27,20 +27,20 @@ unexplained conflict between them is a stop condition, not permission to guess.
 
 ## Native ownership
 
-- `th03_formats` parses a caller-owned byte span and adapts V13 to the existing
+- `th03_formats` parses a caller-owned byte span and adapts V14 to the existing
   version-neutral `ReplayDocument` and `ReplaySession`.
-- `th03_replay` executes that neutral session and owns no V13 byte layout.
+- `th03_replay` executes that neutral session and owns no V14 byte layout.
 - `th03rv` owns file I/O and reporting.
-- `th03_core` knows neither V13 nor any replay container.
+- `th03_core` knows neither V14 nor any replay container.
 
 The parser must not open files, serialize native structs, depend on Turbo C++
 padding, or expose PC-98 pointers and process memory. Optional broad retry
 accelerators are non-authoritative caches after the logical replay end. A
 reader may ignore them and execute the portable checkpoint/input path.
 
-## Current V13 layout
+## Current V14 layout
 
-- Magic `T3RPLY13`, version 13, fixed 622-byte header.
+- Magic `T3RPLY14`, version 13, fixed 622-byte header.
 - Packed 128-byte base header followed by a 494-byte summary extension.
 - The extension contains 27 14-byte round splits, nine 10-byte stage-clear
   bonus records, run-wide timed/slow frame counters, and the reached-checkpoint
@@ -49,14 +49,14 @@ reader may ignore them and execute the portable checkpoint/input path.
   5. Every checkpoint is the existing 289-byte compact deterministic record.
 - Every reached checkpoint is preserved in the neutral `ReplayDocument`,
   including its stage/round identity, sample/global/input cursors, complete
-  `GameInit` recipe, and the raw V13 pre-reset seed. Historical V12 seed
+  `GameInit` recipe, and the raw V14 pre-reset seed. Historical V12 seed
   normalization belongs to the external one-way converter.
 - `snapshot_offset` equals 622. `input_offset` is the header plus the complete
   scenario checkpoint reservation: 4,957 for Story, 1,489 for ordinary VS,
   and 2,067 for Practice.
 - The packet-RLE input/control stream is unchanged: gameplay, interstitial,
   and explicit MAIN/MAINL controls all feed the neutral session model.
-- V13 requires the complete `0x007F` summary capability set in both the base
+- V14 requires the complete `0x007F` summary capability set in both the base
   summary flags and extension flags.
 
 Header summaries and telemetry are comparison/reporting data. They must never
@@ -65,7 +65,7 @@ scenario/start/checkpoint fields already defined by the format.
 
 ### Authority correction pending upstream
 
-The prose tables in the current `FORMAT.md` snapshot list the three V13 input
+The prose tables in the current `FORMAT.md` snapshot list the three V14 input
 offsets as 4,949, 1,481, and 2,059. Those values are each eight bytes too small.
 The document's explicit 622-byte header schema and the authoritative
 `replay_user_input_offset()` calculation both yield 622 + (capacity * 289),
@@ -93,7 +93,7 @@ Synthetic tests cover:
 These tests establish that the adapter implements the written format. Data
 Manager 0.4.2 converted the complete locked six-file V11 and thirteen-file V12
 corpus. The converted sizes and SHA-256 identities are frozen in
-`REPLAY_V13_CORPUS_LOCK.tsv`; the semantic gate reproduces all 173 embedded
+`REPLAY_V14_CORPUS_LOCK.tsv`; the semantic gate reproduces all 173 embedded
 summaries, all 152 stored checkpoints, and terminal results. The externally
 preserved 0.4.2 Windows converter used for regeneration is 13,214,558 bytes,
 SHA-256 `2924fbfbbf792ac18ff548bf2f287ad10377d87e3273ab3132076e2727043ae8`;
@@ -123,7 +123,7 @@ could not, plus one deliberate legacy-compatibility boundary:
   lossless structural conversion cannot invent retry-round checkpoint state.
   The verifier therefore validates every preserved checkpoint exactly while
   accepting additional sequential retry starts that have no directory entry.
-  This is a narrow legacy-conversion policy: native V13 writers still record
+  This is a narrow legacy-conversion policy: native V14 writers still record
   every reached round, and no stored checkpoint may be missing from the run or
   differ semantically.
 - Early V12 recorders could overwrite a round-0 checkpoint's reset-seed field.
@@ -131,7 +131,7 @@ could not, plus one deliberate legacy-compatibility boundary:
   stored round_reset_seed`. Data Manager 0.4.0 copied these fields unchanged,
   making later checkpoints in converted V12 TH3R07, TH3R11, and TH3R12
   unreconstructable.
-- The native V13 adapter initially attached the validated Practice retry policy
+- The native V14 adapter initially attached the validated Practice retry policy
   only to checkpoint 0. It now attaches that same neutral policy to every
   Practice checkpoint; focused tests and TH3R10/TH3R13 pass this part of the
   semantic gate.
@@ -149,11 +149,11 @@ was:
 
 1. Convert every file in the locked 19-file V11/V12 corpus without modifying
    the originals.
-2. Freeze the converted V13 size and SHA-256 identities externally.
-3. Run every converted file through the V13-only `th03rv` path on GCC and MSVC.
+2. Freeze the converted V14 size and SHA-256 identities externally.
+3. Run every converted file through the V14-only `th03rv` path on GCC and MSVC.
 4. Reproduce all 173 embedded round summaries and every existing terminal
    result.
-5. Add malformed/corruption coverage at the V13 boundary.
+5. Add malformed/corruption coverage at the V14 boundary.
 
 The summary/terminal portion of that gate is green. Native V11/V12 headers,
 parsers, dispatch, and direct
@@ -161,7 +161,7 @@ format tests are removed; old files must pass through the external Data Manager
 converter. T3CASE and T3SPLIT remain independent PC-98 oracle formats and are
 not retired by this migration.
 
-## V13 gate result
+## V14 gate result
 
 The observation and stored-checkpoint comparison implementation are complete.
 The Data Manager 0.4.2 corpus passes 19/19 finalized runs, 173/173 summaries,

@@ -10,7 +10,7 @@ import { pathToFileURL } from "node:url";
 import { computeRuntimeIdentities } from "./identity.mjs";
 
 const protocol = "T3RV-SERVICE-1";
-const replayContentType = "application/vnd.th03.v13-replay";
+const replayContentType = "application/vnd.th03.v14-replay";
 const identityPattern = /^[0-9A-F]{64}$/;
 const rejectedReasons = new Set([
   "invalid_replay",

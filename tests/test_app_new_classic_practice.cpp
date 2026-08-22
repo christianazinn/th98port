@@ -12,7 +12,7 @@
 #include "th03/app/new_classic_assets.hpp"
 #include "th03/app/new_classic_practice.hpp"
 #include "th03/app/new_classic_replay.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 
 namespace {
 
@@ -510,7 +510,7 @@ void test_checkpoint_and_recording()
 		recorder.finish(
 			th03::formats::ReplayEndReason::menu_return, *prepared
 		).has_value(),
-		"Practice terminal finalizes through V13"
+		"Practice terminal finalizes through V14"
 	);
 	auto document = recorder.take_completed();
 	check(
@@ -518,8 +518,8 @@ void test_checkpoint_and_recording()
 		document->metadata->flags == 0x0007U &&
 		document->checkpoints[0U].stage == config.stage &&
 		document->expected_round_splits[0U].story_stage == config.stage &&
-		th03::formats::write_v13_replay(*document).has_value(),
-		"Practice V13 retains flag, header, checkpoint stage, and split identity"
+		th03::formats::write_v14_replay(*document).has_value(),
+		"Practice V14 retains flag, header, checkpoint stage, and split identity"
 	);
 
 	auto bad = config;

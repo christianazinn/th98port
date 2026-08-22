@@ -375,7 +375,7 @@ std::expected<EncodedRpyInput, Error> encode_rpy_input(
 			pending->input.charge_mask > 3U) {
 			return std::unexpected(error(
 				ErrorCode::invalid_value, format_name,
-				"input run is not representable in V13 RLE"
+				"input run is not representable in V14 RLE"
 			));
 		}
 		const auto phase = static_cast<std::uint8_t>(pending->phase);
@@ -428,7 +428,7 @@ std::expected<EncodedRpyInput, Error> encode_rpy_input(
 		if(result.bytes.size() > std::numeric_limits<std::uint32_t>::max()) {
 			return std::unexpected(error(
 				ErrorCode::invalid_value, format_name,
-				"compressed input cursor exceeds V13"
+				"compressed input cursor exceeds V14"
 			));
 		}
 		result.checkpoints[next_checkpoint] = {

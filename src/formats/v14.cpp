@@ -1,4 +1,4 @@
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 
 #include <algorithm>
 #include <array>
@@ -12,6 +12,8 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+
+#include "th03/core/gameplay_ruleset.hpp"
 
 #include "bytes.hpp"
 #include "rpy_checkpoint.hpp"
@@ -31,6 +33,14 @@ constexpr std::size_t timed_frames_offset = 0x256U;
 constexpr std::size_t slow_frames_offset = 0x25AU;
 constexpr std::size_t checkpoint_count_offset = 0x25EU;
 constexpr std::size_t checkpoint_directory_offset = 0x25FU;
+constexpr std::size_t ruleset_offset = 0x26EU;
+constexpr std::size_t recording_flags_offset = 0x26FU;
+constexpr std::size_t recorder_role_offset = 0x270U;
+constexpr std::size_t recorder_source_offset = 0x271U;
+constexpr std::size_t player_one_uuid_offset = 0x272U;
+constexpr std::size_t player_two_uuid_offset = 0x282U;
+constexpr std::size_t match_id_offset = 0x292U;
+constexpr std::size_t reserved_extension_offset = 0x2A2U;
 constexpr std::size_t accelerator_footer_size = 80U;
 constexpr std::size_t accelerator_descriptor_size = 16U;
 constexpr std::size_t accelerator_raw_size = 29'286U;
@@ -333,7 +343,7 @@ std::expected<ReplayPracticeConfig, Error> parse_practice_config(
 		if(detail::u8(bytes, offset) != 0U) {
 			return std::unexpected(error(
 				ErrorCode::invalid_value,
-				"V13 Practice reserved byte is nonzero",
+				"V14 Practice reserved byte is nonzero",
 				offset
 			));
 		}
@@ -358,7 +368,7 @@ std::expected<ReplayPracticeConfig, Error> parse_practice_config(
 	if(!base_valid || !scenario_valid) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 Practice configuration is invalid",
+			"V14 Practice configuration is invalid",
 			0x44U
 		));
 	}
@@ -375,7 +385,7 @@ std::expected<ReplayMetadata, Error> parse_metadata(
 	const auto mode = detail::u8(bytes, 0x12U);
 	if(status > static_cast<std::uint8_t>(ReplayStatus::error)) {
 		return std::unexpected(error(
-			ErrorCode::invalid_value, "V13 replay status is invalid", 0x10U
+			ErrorCode::invalid_value, "V14 replay status is invalid", 0x10U
 		));
 	}
 	if(
@@ -384,28 +394,28 @@ std::expected<ReplayMetadata, Error> parse_metadata(
 	) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 status does not describe a written replay artifact",
+			"V14 status does not describe a written replay artifact",
 			0x10U
 		));
 	}
 	if(end_reason > static_cast<std::uint8_t>(ReplayEndReason::game_over)) {
 		return std::unexpected(error(
-			ErrorCode::invalid_value, "V13 replay end reason is invalid", 0x11U
+			ErrorCode::invalid_value, "V14 replay end reason is invalid", 0x11U
 		));
 	}
 	if(!game_mode_valid(mode)) {
 		return std::unexpected(error(
-			ErrorCode::invalid_value, "V13 game mode is not Story or VS", 0x12U
+			ErrorCode::invalid_value, "V14 game mode is not Story or VS", 0x12U
 		));
 	}
 	if(detail::u8(bytes, 0x13U) > 3U) {
 		return std::unexpected(error(
-			ErrorCode::invalid_value, "V13 rank is outside 0..3", 0x13U
+			ErrorCode::invalid_value, "V14 rank is outside 0..3", 0x13U
 		));
 	}
 	if(detail::u8(bytes, 0x14U) > 2U) {
 		return std::unexpected(error(
-			ErrorCode::invalid_value, "V13 key mode is outside 0..2", 0x14U
+			ErrorCode::invalid_value, "V14 key mode is outside 0..2", 0x14U
 		));
 	}
 	for(std::size_t player = 0U; player < 2U; ++player) {
@@ -413,14 +423,14 @@ std::expected<ReplayMetadata, Error> parse_metadata(
 		if(character < 1U || character > 18U) {
 			return std::unexpected(error(
 				ErrorCode::invalid_value,
-				"V13 paletted character is outside 1..18",
+				"V14 paletted character is outside 1..18",
 				0x15U + player
 			));
 		}
 		if(detail::u8(bytes, 0x18U + player) > 1U) {
 			return std::unexpected(error(
 				ErrorCode::invalid_value,
-				"V13 CPU flag is not Boolean",
+				"V14 CPU flag is not Boolean",
 				0x18U + player
 			));
 		}
@@ -437,82 +447,82 @@ std::expected<ReplayMetadata, Error> parse_metadata(
 	) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 CPU flags disagree with the game mode",
+			"V14 CPU flags disagree with the game mode",
 			0x18U
 		));
 	}
 	if(practice && mode != game_mode::vs_1p_cpu) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 Practice must use GM_VS_1P_CPU",
+			"V14 Practice must use GM_VS_1P_CPU",
 			0x12U
 		));
 	}
 	if((mode == game_mode::story || practice) && detail::u8(bytes, 0x17U) >= 9U) {
 		return std::unexpected(error(
-			ErrorCode::invalid_value, "V13 initial stage is outside 0..8", 0x17U
+			ErrorCode::invalid_value, "V14 initial stage is outside 0..8", 0x17U
 		));
 	}
 	const auto stage_reached_count = detail::u8(bytes, 0x43U);
 	if(stage_reached_count > 9U || (mode != game_mode::story && stage_reached_count != 0U)) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 stage-reached count is inconsistent with its scenario",
+			"V14 stage-reached count is inconsistent with its scenario",
 			0x43U
 		));
 	}
 	const auto summary_flags = detail::u16(bytes, 0x3AU);
-	// V13 is a frozen pre-1.0 contract. New capability bits require a new
+	// V14 is a frozen pre-1.0 contract. New capability bits require a new
 	// magic/version rather than silently changing the meaning of this layout.
 	if(summary_flags != summary_flags_current) {
 		return std::unexpected(error(
 			ErrorCode::unsupported_version,
-			"V13 lacks the finalized summary capabilities",
+			"V14 lacks the finalized summary capabilities",
 			0x3AU
 		));
 	}
 	const auto final_route_raw = detail::u8(bytes, 0x3CU);
 	if(final_route_raw != 0xFFU && final_route_raw > 2U) {
 		return std::unexpected(error(
-			ErrorCode::invalid_value, "V13 final route is invalid", 0x3CU
+			ErrorCode::invalid_value, "V14 final route is invalid", 0x3CU
 		));
 	}
 	const auto final_mode_raw = detail::u8(bytes, 0x3DU);
 	if(final_mode_raw != 0xFFU && !game_mode_valid(final_mode_raw)) {
 		return std::unexpected(error(
-			ErrorCode::invalid_value, "V13 final game mode is invalid", 0x3DU
+			ErrorCode::invalid_value, "V14 final game mode is invalid", 0x3DU
 		));
 	}
 	const auto final_stage_raw = detail::u8(bytes, 0x3EU);
 	if(final_stage_raw != 0xFFU && final_stage_raw > 9U) {
 		return std::unexpected(error(
-			ErrorCode::invalid_value, "V13 final Story stage is invalid", 0x3EU
+			ErrorCode::invalid_value, "V14 final Story stage is invalid", 0x3EU
 		));
 	}
 	const auto final_winner_raw = detail::u8(bytes, 0x40U);
 	if(final_winner_raw != 0xFFU && final_winner_raw > 1U) {
 		return std::unexpected(error(
-			ErrorCode::invalid_value, "V13 final winner is invalid", 0x40U
+			ErrorCode::invalid_value, "V14 final winner is invalid", 0x40U
 		));
 	}
 	const auto final_score = read_packed_score(bytes, 0x71U);
 	if(!packed_score_valid(final_score)) {
 		return std::unexpected(error(
-			ErrorCode::invalid_value, "V13 final score is not packed decimal", 0x71U
+			ErrorCode::invalid_value, "V14 final score is not packed decimal", 0x71U
 		));
 	}
 	const auto autofire = detail::u8(bytes, 0x75U);
 	if(autofire > 3U) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 Autofire mask contains undefined bits",
+			"V14 Autofire mask contains undefined bits",
 			0x75U
 		));
 	}
 	const auto dos_date = detail::u16(bytes, 0x76U);
 	if(!dos_date_valid(dos_date)) {
 		return std::unexpected(error(
-			ErrorCode::invalid_value, "V13 recording date is invalid", 0x76U
+			ErrorCode::invalid_value, "V14 recording date is invalid", 0x76U
 		));
 	}
 
@@ -552,7 +562,69 @@ std::expected<ReplayMetadata, Error> parse_metadata(
 	for(std::size_t index = 0U; index < metadata.name.size(); ++index) {
 		const auto value = detail::u8(bytes, 0x78U + index);
 		name_is_unset = name_is_unset && value == 0U;
-		metadata.name[index] = static_cast<char>(value);
+	metadata.name[index] = static_cast<char>(value);
+	}
+	const auto ruleset = detail::u8(bytes, ruleset_offset);
+	if(ruleset > static_cast<std::uint8_t>(ReplayRuleset::dopamine_test_v1)) {
+		return std::unexpected(error(
+			ErrorCode::invalid_value, "V14 ruleset is unknown", ruleset_offset
+		));
+	}
+	const auto recording_flags = detail::u8(bytes, recording_flags_offset);
+	if((recording_flags & static_cast<std::uint8_t>(
+		~replay_recording_flags_known
+	)) != 0U) {
+		return std::unexpected(error(
+			ErrorCode::invalid_value,
+			"V14 recording flags contain undefined bits",
+			recording_flags_offset
+		));
+	}
+	const auto recorder_role = detail::u8(bytes, recorder_role_offset);
+	const auto recorder_source = detail::u8(bytes, recorder_source_offset);
+	if(recorder_role > static_cast<std::uint8_t>(ReplayRecorderRole::player_two)) {
+		return std::unexpected(error(
+			ErrorCode::invalid_value, "V14 recorder role is invalid",
+			recorder_role_offset
+		));
+	}
+	if(recorder_source > static_cast<std::uint8_t>(ReplayRecorderSource::imported)) {
+		return std::unexpected(error(
+			ErrorCode::invalid_value, "V14 recorder source is invalid",
+			recorder_source_offset
+		));
+	}
+	const bool netplay = (recording_flags & replay_recording_flag_netplay) != 0U;
+	if(netplay != (recorder_role !=
+		static_cast<std::uint8_t>(ReplayRecorderRole::unknown)) ||
+		(netplay && mode != game_mode::vs_1p_2p)) {
+		return std::unexpected(error(
+			ErrorCode::invalid_value,
+			"V14 netplay flag, recorder role, and game mode disagree",
+			recording_flags_offset
+		));
+	}
+	for(std::size_t offset = reserved_extension_offset;
+		offset < replay_v14_header_size; ++offset) {
+		if(detail::u8(bytes, offset) != 0U) {
+			return std::unexpected(error(
+				ErrorCode::invalid_value,
+				"V14 reserved extension byte is nonzero", offset
+			));
+		}
+	}
+	metadata.ruleset = static_cast<ReplayRuleset>(ruleset);
+	metadata.recording_flags = recording_flags;
+	metadata.recorder_role = static_cast<ReplayRecorderRole>(recorder_role);
+	metadata.recorder_source = static_cast<ReplayRecorderSource>(recorder_source);
+	for(std::size_t index = 0U; index < metadata.player_uuid[0U].size(); ++index) {
+		metadata.player_uuid[0U][index] = detail::u8(
+			bytes, player_one_uuid_offset + index
+		);
+		metadata.player_uuid[1U][index] = detail::u8(
+			bytes, player_two_uuid_offset + index
+		);
+		metadata.match_id[index] = detail::u8(bytes, match_id_offset + index);
 	}
 	if(!name_is_unset) {
 		for(std::size_t index = 0U; index < metadata.name.size(); ++index) {
@@ -561,7 +633,7 @@ std::expected<ReplayMetadata, Error> parse_metadata(
 			)) {
 				return std::unexpected(error(
 					ErrorCode::invalid_value,
-					"V13 replay name is neither unset nor space-padded ASCII",
+					"V14 replay name is neither unset nor space-padded ASCII",
 					0x78U + index
 				));
 			}
@@ -584,7 +656,7 @@ std::expected<ReplayMetadata, Error> parse_metadata(
 			) {
 				return std::unexpected(error(
 					ErrorCode::invalid_value,
-					"V13 Story opponent is outside the paletted-character domain",
+					"V14 Story opponent is outside the paletted-character domain",
 					0x44U + stage
 				));
 			}
@@ -594,7 +666,7 @@ std::expected<ReplayMetadata, Error> parse_metadata(
 			if(!packed_score_valid(story.stage_scores[stage])) {
 				return std::unexpected(error(
 					ErrorCode::invalid_value,
-					"V13 Story stage score is not packed decimal",
+					"V14 Story stage score is not packed decimal",
 					0x4DU + (stage * 4U)
 				));
 			}
@@ -605,7 +677,7 @@ std::expected<ReplayMetadata, Error> parse_metadata(
 		) {
 			return std::unexpected(error(
 				ErrorCode::invalid_value,
-				"V13 initial Story opponent disagrees with P2",
+				"V14 initial Story opponent disagrees with P2",
 				0x16U
 			));
 		}
@@ -623,7 +695,7 @@ std::expected<std::vector<ReplayRoundSplit>, Error> parse_round_splits(
 	if(detail::u8(bytes, 0x80U) != summary_flags_current) {
 		return std::unexpected(error(
 			ErrorCode::unsupported_version,
-			"V13 round summary lacks the finalized capabilities",
+			"V14 round summary lacks the finalized capabilities",
 			0x80U
 		));
 	}
@@ -631,7 +703,7 @@ std::expected<std::vector<ReplayRoundSplit>, Error> parse_round_splits(
 	if(count > round_split_count) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 round-split count exceeds 27",
+			"V14 round-split count exceeds 27",
 			0x81U
 		));
 	}
@@ -661,7 +733,7 @@ std::expected<std::vector<ReplayRoundSplit>, Error> parse_round_splits(
 		) {
 			return std::unexpected(error(
 				ErrorCode::invalid_value,
-				"V13 contains an invalid round split",
+				"V14 contains an invalid round split",
 				offset
 			));
 		}
@@ -688,14 +760,14 @@ std::expected<std::array<ReplayStageClearBonus, 9>, Error> parse_bonuses(
 		if(!packed_score_valid(bonus.total)) {
 			return std::unexpected(error(
 				ErrorCode::invalid_value,
-				"V13 clear-bonus total is not packed decimal",
+				"V14 clear-bonus total is not packed decimal",
 				offset
 			));
 		}
 		if(stage != 8U && bonus.remaining_lives != 0U) {
 			return std::unexpected(error(
 				ErrorCode::invalid_value,
-				"V13 non-final clear bonus contains remaining lives",
+				"V14 non-final clear bonus contains remaining lives",
 				offset + 9U
 			));
 		}
@@ -709,7 +781,7 @@ std::expected<std::array<ReplayStageClearBonus, 9>, Error> parse_bonuses(
 		if(bonus.total != pack_decimal(total)) {
 			return std::unexpected(error(
 				ErrorCode::invalid_value,
-				"V13 clear-bonus total disagrees with its components",
+				"V14 clear-bonus total disagrees with its components",
 				offset
 			));
 		}
@@ -747,7 +819,7 @@ std::expected<PracticeRules, Error> validate_practice_anchor(
 	) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 Practice configuration disagrees with checkpoint 0",
+			"V14 Practice configuration disagrees with checkpoint 0",
 			0x44U
 		));
 	}
@@ -775,7 +847,7 @@ std::expected<void, Error> validate_checkpoint_identity(
 	if(!stage_valid || (practice && stage != metadata.practice->stage)) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 checkpoint directory contains an invalid stage",
+			"V14 checkpoint directory contains an invalid stage",
 			offset
 		));
 	}
@@ -787,7 +859,7 @@ std::expected<void, Error> validate_checkpoint_identity(
 	) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 checkpoint identity disagrees with the header or directory",
+			"V14 checkpoint identity disagrees with the header or directory",
 			offset
 		));
 	}
@@ -800,7 +872,7 @@ std::expected<void, Error> validate_checkpoint_identity(
 	) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 checkpoint characters disagree with the scenario",
+			"V14 checkpoint characters disagree with the scenario",
 			offset
 		));
 	}
@@ -810,7 +882,7 @@ std::expected<void, Error> validate_checkpoint_identity(
 	) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 checkpoint stage disagrees with its directory",
+			"V14 checkpoint stage disagrees with its directory",
 			offset
 		));
 	}
@@ -822,7 +894,7 @@ std::expected<void, Error> validate_checkpoint_identity(
 			) {
 				return std::unexpected(error(
 					ErrorCode::invalid_value,
-					"V13 checkpoint Story opponents disagree with the header",
+					"V14 checkpoint Story opponents disagree with the header",
 					offset
 				));
 			}
@@ -833,38 +905,38 @@ std::expected<void, Error> validate_checkpoint_identity(
 
 } // namespace
 
-std::expected<ReplayDocument, Error> parse_v13_replay(
+std::expected<ReplayDocument, Error> parse_v14_replay(
 	std::span<const std::byte> bytes
 )
 {
 	constexpr std::array<std::uint8_t, 8> magic{
-		'T', '3', 'R', 'P', 'L', 'Y', '1', '3',
+		'T', '3', 'R', 'P', 'L', 'Y', '1', '4',
 	};
-	if(bytes.size() < replay_v13_header_size) {
+	if(bytes.size() < replay_v14_header_size) {
 		return std::unexpected(error(
 			ErrorCode::truncated,
-			"V13 replay is shorter than its 622-byte header"
+			"V14 replay is shorter than its 768-byte header"
 		));
 	}
 	if(!detail::has_magic(bytes, magic)) {
 		return std::unexpected(error(
-			ErrorCode::bad_magic, "replay magic is not T3RPLY13"
+			ErrorCode::bad_magic, "replay magic is not T3RPLY14"
 		));
 	}
-	if(detail::u16(bytes, 0x08U) != replay_v13_version) {
+	if(detail::u16(bytes, 0x08U) != replay_v14_version) {
 		return std::unexpected(error(
 			ErrorCode::unsupported_version,
-			"V13 magic/version mismatch",
+			"V14 magic/version mismatch",
 			0x08U
 		));
 	}
 	if(
-		detail::u16(bytes, 0x0AU) != replay_v13_header_size ||
+		detail::u16(bytes, 0x0AU) != replay_v14_header_size ||
 		detail::u16(bytes, 0x0CU) != 0U
 	) {
 		return std::unexpected(error(
 			ErrorCode::unsupported_layout,
-			"unsupported V13 header or sample layout",
+			"unsupported V14 header or sample layout",
 			0x0AU
 		));
 	}
@@ -875,7 +947,7 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 	) {
 		return std::unexpected(error(
 			ErrorCode::unsupported_layout,
-			"V13 flags do not describe the finalized RLE/Charge layout",
+			"V14 flags do not describe the finalized RLE/Charge layout",
 			0x0EU
 		));
 	}
@@ -887,7 +959,7 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 	if(metadata->sample_count == 0U) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 replay has no logical input samples",
+			"V14 replay has no logical input samples",
 			0x1AU
 		));
 	}
@@ -897,29 +969,29 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 	const auto capacity = checkpoint_capacity(metadata->game_mode, practice);
 	const auto input_offset = detail::u32(bytes, 0x2AU);
 	const auto input_size = detail::u32(bytes, 0x2EU);
-	const auto expected_input_offset = replay_v13_header_size +
-		(capacity * replay_v13_checkpoint_size);
+	const auto expected_input_offset = replay_v14_header_size +
+		(capacity * replay_v14_checkpoint_size);
 	if(
-		snapshot_offset != replay_v13_header_size ||
-		snapshot_size != replay_v13_checkpoint_size
+		snapshot_offset != replay_v14_header_size ||
+		snapshot_size != replay_v14_checkpoint_size
 	) {
 		return std::unexpected(error(
 			ErrorCode::unsupported_layout,
-			"V13 checkpoint layout is not 622/289",
+			"V14 checkpoint layout is not 768/289",
 			0x32U
 		));
 	}
 	if(input_offset != expected_input_offset) {
 		return std::unexpected(error(
 			ErrorCode::unsupported_layout,
-			"V13 input offset disagrees with its scenario reservation",
+			"V14 input offset disagrees with its scenario reservation",
 			0x2AU
 		));
 	}
 	if(!detail::range_fits(input_offset, input_size, bytes.size())) {
 		return std::unexpected(error(
 			ErrorCode::truncated,
-			"V13 input stream extends past end of file",
+			"V14 input stream extends past end of file",
 			input_offset
 		));
 	}
@@ -939,7 +1011,7 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 	if(slowdown.slow_frames > slowdown.timed_frames) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 slowdown frames exceed timed frames",
+			"V14 slowdown frames exceed timed frames",
 			slow_frames_offset
 		));
 	}
@@ -948,7 +1020,7 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 	if(reached_count == 0U || reached_count > capacity) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 reached-checkpoint count is invalid",
+			"V14 reached-checkpoint count is invalid",
 			checkpoint_count_offset
 		));
 	}
@@ -962,9 +1034,9 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 		const auto directory_offset = checkpoint_directory_offset + index;
 		const auto stage_round = detail::u8(bytes, directory_offset);
 		const auto offset = static_cast<std::size_t>(snapshot_offset) +
-			(index * replay_v13_checkpoint_size);
+			(index * replay_v14_checkpoint_size);
 		auto checkpoint = detail::parse_compact_checkpoint(
-			bytes, offset, "V13"
+			bytes, offset, "V14"
 		);
 		if(!checkpoint) {
 			return std::unexpected(checkpoint.error());
@@ -976,7 +1048,7 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 		) {
 			return std::unexpected(error(
 				ErrorCode::invalid_value,
-				"V13 checkpoint cursor exceeds the finalized replay",
+				"V14 checkpoint cursor exceeds the finalized replay",
 				offset
 			));
 		}
@@ -987,7 +1059,7 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 			) {
 				return std::unexpected(error(
 					ErrorCode::invalid_value,
-					"V13 process anchor does not begin at cursor zero",
+					"V14 process anchor does not begin at cursor zero",
 					offset
 				));
 			}
@@ -1000,7 +1072,7 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 			) {
 				return std::unexpected(error(
 					ErrorCode::invalid_value,
-					"V13 checkpoint cursors are not strictly increasing",
+					"V14 checkpoint cursors are not strictly increasing",
 					offset
 				));
 			}
@@ -1028,7 +1100,7 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 	) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 header and checkpoint 0 deterministic state disagree",
+			"V14 header and checkpoint 0 deterministic state disagree",
 			snapshot_offset + detail::compact_checkpoint_prefix_size
 		));
 	}
@@ -1043,7 +1115,7 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 	} else if(anchor.round_start_snapshot->state.round_id != 0U) {
 		return std::unexpected(error(
 			ErrorCode::invalid_value,
-			"V13 Story/VS process anchor must begin at round 0",
+			"V14 Story/VS process anchor must begin at round 0",
 			snapshot_offset + detail::compact_checkpoint_prefix_size +
 				detail::compact_snapshot_size
 		));
@@ -1054,7 +1126,7 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 		static_cast<std::size_t>(input_offset),
 		static_cast<std::size_t>(input_size),
 		metadata->sample_count,
-		"V13",
+		"V14",
 		(metadata->status == ReplayStatus::recording)
 			? detail::RpyInputTermination::allow_input_packet
 			: detail::RpyInputTermination::require_process_control
@@ -1067,19 +1139,23 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 		static_cast<std::size_t>(input_offset),
 		static_cast<std::size_t>(input_size),
 		cursors,
-		"V13"
+		"V14"
 	);
 	if(!cursor_validation) {
 		return std::unexpected(cursor_validation.error());
 	}
 
 	ReplayDocument document{};
-	document.session.source_version = replay_v13_version;
+	document.session.source_version = replay_v14_version;
 	document.session.init = checkpoints.front().init;
 	document.session.records = std::move(*records);
 	document.session.sample_count = metadata->sample_count;
 	document.practice = practice;
 	document.metadata = std::move(*metadata);
+	const auto gameplay_ruleset =
+		document.metadata->ruleset == ReplayRuleset::dopamine_test_v1 ?
+			dopamine_test_v1_ruleset : stock_gameplay_ruleset;
+	document.session.init.gameplay_ruleset = gameplay_ruleset;
 	document.checkpoints.reserve(checkpoints.size());
 	for(std::size_t index = 0U; index < checkpoints.size(); ++index) {
 		const auto stage_round = checkpoint_directory[index];
@@ -1092,6 +1168,7 @@ std::expected<ReplayDocument, Error> parse_v13_replay(
 			.input_byte_cursor = checkpoint.input_size,
 			.init = std::move(checkpoint.init),
 		});
+		document.checkpoints.back().init.gameplay_ruleset = gameplay_ruleset;
 	}
 	document.accelerators = parse_accelerators(
 		bytes,

@@ -25,7 +25,7 @@ struct NewClassicPlaybackRequest final {
 	std::size_t checkpoint_index = 0U;
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
 	bool reduced_flash = false;
-	// Presentation-only viewer choice. It is deliberately not read from V13.
+	// Presentation-only viewer choice. It is deliberately not read from V14.
 	ClassicLanguage language = ClassicLanguage::japanese;
 };
 
@@ -77,7 +77,7 @@ struct NewClassicPlaybackTick final {
 	std::optional<PixelOracleSourceIdentity> pixel_oracle_source_identity{};
 };
 
-// Visual V13 player over the same authenticated MAIN and typed MAINL owners
+// Visual V14 player over the same authenticated MAIN and typed MAINL owners
 // used by live Classic. Later checkpoint starts reconstruct directly from the
 // stored compact snapshot; host abort/fast-forward state never enters the
 // replay. Ordinary clear/interstitial owners retain their donor input domains;

@@ -603,7 +603,7 @@ uses it, the following tests must pass.
 
 ### Core neutrality
 
-1. Run every existing unit/oracle case and all 19 locked V13 corpus replays
+1. Run every existing unit/oracle case and all 19 locked V14 corpus replays
    with no observer, a discard observer, and a recording observer. At every
    input boundary compare `StepStatus`, canonical state, state hash, checkpoint
    result, round summary, final route, RNG seed/ring/cursor state, and the

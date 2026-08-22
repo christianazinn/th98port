@@ -14,7 +14,7 @@
 #include <vector>
 
 #include "th03/app/new_classic_playback.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 #include "../src/app/classic_mainl_stage_internal.hpp"
 #include "../src/app/new_classic_playback_internal.hpp"
 
@@ -518,9 +518,9 @@ void test_authentic_interstitials(
 	const std::filesystem::path &replay
 )
 {
-	auto document = th03::formats::parse_v13_replay(read_file(replay));
+	auto document = th03::formats::parse_v14_replay(read_file(replay));
 	expect(document && document->checkpoints.size() > 1U,
-		"interstitial gate parses a multi-stage authentic V13 replay");
+		"interstitial gate parses a multi-stage authentic V14 replay");
 	if(!document || document->checkpoints.size() <= 1U) {
 		return;
 	}
@@ -604,8 +604,8 @@ void test_authentic(
 )
 {
 	auto bytes = read_file(replay);
-	auto document = th03::formats::parse_v13_replay(bytes);
-	expect(document.has_value(), "authentic V13 replay parses for visual playback");
+	auto document = th03::formats::parse_v14_replay(bytes);
+	expect(document.has_value(), "authentic V14 replay parses for visual playback");
 	if(!document) {
 		return;
 	}
@@ -627,7 +627,7 @@ void test_authentic(
 	};
 	expect(
 		document->accelerators.size() == accelerator_expectations.size(),
-		"authentic V13 exposes exactly the four donor-valid accelerators"
+		"authentic V14 exposes exactly the four donor-valid accelerators"
 	);
 	for(const auto &expected : accelerator_expectations) {
 		const auto accelerator = std::find_if(
@@ -651,7 +651,7 @@ void test_authentic(
 			accelerator->background[26U].angle ==
 				static_cast<std::uint8_t>(expected.background_velocity_y) &&
 			accelerator->background[26U].sprite_variant == 0U,
-			"authentic V13 preserves accelerator palette, page, velocity, and background state"
+			"authentic V14 preserves accelerator palette, page, velocity, and background state"
 		);
 	}
 	const auto later_document = *document;
@@ -1298,9 +1298,9 @@ void test_additional_authentic_route(
 	const char *owner_message
 )
 {
-	auto document = th03::formats::parse_v13_replay(read_file(replay));
+	auto document = th03::formats::parse_v14_replay(read_file(replay));
 	expect(document.has_value(),
-		"additional authentic V13 route parses for typed playback");
+		"additional authentic V14 route parses for typed playback");
 	if(!document) {
 		return;
 	}
@@ -1326,7 +1326,7 @@ void test_additional_authentic_route(
 		.checkpoint_index = 0U,
 	});
 	expect(loaded.has_value(),
-		"additional authentic V13 route constructs its shared owners");
+		"additional authentic V14 route constructs its shared owners");
 	if(!loaded) {
 		std::filesystem::remove_all(score_directory, filesystem_error);
 		return;

@@ -34,7 +34,7 @@ The donor for scene behaviour is the clean, pinned Anniversary tree at oracle_an
 As of 2026-08-11, the direct-VS and audio-enabled Classic paths have these durable
 foundations:
 
-- Deterministic gameplay, V13 parsing/playback, and the frozen 19-file corpus
+- Deterministic gameplay, V14 parsing/playback, and the frozen 19-file corpus
   are green on GCC and MSVC.
 - `th03_assets` has strict span-only RGB, PI, CDG/CD2, BFNT, and MRS
   decoders; supplied bytes remain external.
@@ -185,7 +185,7 @@ The existing dependency direction is already appropriate:
 - th03_platform_sdl owns the host window/device event adapter,
   monotonic clock source, and final upload.
 - th03_present owns PC-98 raster/TRAM/compositing and observer consumers, and depends on th03_assets and th03_core.
-- th03_formats and th03_replay provide V13 bytes and replay sessions when the app needs them.
+- th03_formats and th03_replay provide V14 bytes and replay sessions when the app needs them.
 - th03_audio_pmd owns byte-fed PMD sequencing, source-style stop/play/fade,
   measure/volume/pause/part-mask state, the exact one-slot TH03 SFX scheduler,
   bounded external EFC parsing and Timer-A/FM6 playback, supplied rhythm-ROM or
@@ -201,7 +201,7 @@ The existing dependency direction is already appropriate:
   source-format queue, final-output overrun telemetry, and a subordinate shared
   SDL lifetime lease. It cannot advance or backpressure simulation.
 
-th03_core is the deterministic runner. It owns game state, fixed-point rules, RNG, and neutral borrowed observer calls; it must never gain a window, a renderer, filesystem access, an SDL type, audio-device state, or an asset pathname. th03_replay owns replay input-session semantics; th03_formats owns V13 parsing/serialization and byte spans, not file I/O. The app must use V13 rather than invent a private recording format.
+th03_core is the deterministic runner. It owns game state, fixed-point rules, RNG, and neutral borrowed observer calls; it must never gain a window, a renderer, filesystem access, an SDL type, audio-device state, or an asset pathname. th03_replay owns replay input-session semantics; th03_formats owns V14 parsing/serialization and byte spans, not file I/O. The app must use V14 rather than invent a private recording format.
 
 th03_assets remains a collection of pure decoders for supplied byte spans (RGB, PI, CDG/CD2, BFNT, and MRS). It does not know an install directory, DAT filename, cache, or scene. th03_present owns PC-98-flavoured data and drawing state: Raster, palette state, TRAM, planar/GRCG operations, cel/BFNT staging, and presentation-side observer state. It is the right home for a MainRoundPresenter composition object; it is not a host windowing library.
 
@@ -269,7 +269,7 @@ Its implementation must be driven by the donor's actual order, rather than a con
 
 This is a hard blocker, not an opportunity to add a retained-mode scene graph. Every missing source visual route is an explicit task with a donor location, asset role, and frame-trace test. Character constants and source conditions must be named from established semantics, never left as unexplained character or phase literals.
 
-Acceptance gate VS-1: focused present tests cover startup, every MAIN footer/deferral class, both page handoffs, palette-before-page ordering, and a representative frame from every character/Boss/Extra/Charge/HUD family. They run with synthetic legal assets on GCC and MSVC. The existing core observer null/discard/record invariance and frozen cross-compiler V13 corpus remain green; attaching MainRoundPresenter cannot change a canonical outcome.
+Acceptance gate VS-1: focused present tests cover startup, every MAIN footer/deferral class, both page handoffs, palette-before-page ordering, and a representative frame from every character/Boss/Extra/Charge/HUD family. They run with synthetic legal assets on GCC and MSVC. The existing core observer null/discard/record invariance and frozen cross-compiler V14 corpus remain green; attaching MainRoundPresenter cannot change a canonical outcome.
 
 ### 3. Add the thin host adapter and direct launcher
 
@@ -317,7 +317,7 @@ Acceptance gate VS-3: create an external PC-98 visual trace for a small set of f
 | Fixed tick plus input-latch boundary | Integrated, telemetry open | SDL nanosecond events feed the rational scheduler; nominal PC-9801 24 kHz cadence and immediate first phase are the application default, deterministic callers preserve overdue boundaries, and interactive callers use source-style rebasing. Add persistent-overload developer reporting without changing this API. |
 | Final Raster/TRAM-to-source-surface compositor | Integrated | The allocation-free shown-page compositor is complete; the host must consume it rather than redraw approximate HUD/text. |
 | SDL window/upload/input adapter | Integrated | Pinned optional builds, dummy/software tests, input mapping, window lifetime, integer upload, and byte-silent public startup are green on GCC/MSVC. |
-| V13 conversion, replay browser, and recording UI | Integrated in New Classic | The app records canonical V13, owns bounded slot storage/browser/save/name/checkpoint UI, exposes final Splits/Clears/Timers metadata, and plays through the shared MAIN/MAINL owners. Classic remains free of replay UI. |
+| V14 conversion, replay browser, and recording UI | Integrated in New Classic | The app records canonical V14, owns bounded slot storage/browser/save/name/checkpoint UI, exposes final Splits/Clears/Timers metadata, and plays through the shared MAIN/MAINL owners. Classic remains free of replay UI. |
 | OP menus, Story, MAINL, cutscenes, staff | Integrated | The source-private OP owner binds title, retained Options/Music Room, read-only HiScore, Story/all-VS selection, Story, MAINL/MAIN VS, winner return, both interstages, primary and conditional extra endings, staff/verdict, score persistence, registration, and the exact four-recipe automatic Demo loop. No external OP route or replay UI is required. |
 | Audio | Engine, TH03 transport/SFX/EFC service, fixed resampler, Classic session, and SDL endpoint integrated | The launcher applies source-semantic scene commands, advances one deterministic audio interval per logical sample, and treats device loss as delivery-only. MAINL selects and loads the exact character/decisive song and effect bank; fresh/repeat/terminal MAIN publishes source Reset/Play/Stop lifecycle commands. All 61 ordinary live-MAIN donor SFX rows feed the source `snd_se_update()` boundary, including forced warning effect 19, and live pause/resume emits effect 21. Authenticated gates cover all 40 semantic cue identities, 22 effects, all 21 songs, and independent FM1-6/SSG1-2/rhythm stems. Exact-size `--rhythm-rom` and authenticated decoded `--rhythm-pcm` paths reach the engine; replacement-data packaging, aligned reference capture, shipped-TSR traces, and physical-device QA remain release work. |
 | Persistent score/configuration UI and localization/QoL | Original UI plus New Classic score/statistics, KeyConfig, Options, Extra unlock, and authenticated English integrated | Classic retains the exact original score/config codecs and UI. New Classic owns the Replay Patch's versioned 4-rank x 9-character score store, legacy-by-value migration, aggregate/TOTAL and character pages, live play-time/1CC/continue accounting, bounded 26-scancode store, Story movement override, per-player Autofire, independent SFX, exact warning-flash reduction, title Extra unlock, and all-or-nothing 52-member `TH3EN.DAT` English profile. |
@@ -372,7 +372,7 @@ Once VS-3 holds, add scenes in donor order rather than building a broad launcher
    and return-route comparison; conveniences such as rewind and a text log
    remain later profile work. Replay Patch's language selection and exact
    translated resource/compiled-text profile are integrated.
-4. Profile and replay UX. New Classic now records and plays only V13 at the app
+4. Profile and replay UX. New Classic now records and plays only V14 at the app
    input boundary, owns its browser/save/pause/Practice routes, and persists a
    versioned bounded SDL-scancode profile without extending a historical save
    block. Playback drives the shared typed MAIN/MAINL owners, including
@@ -442,7 +442,7 @@ Preserve the 640x400 indexed/palette-oriented source model until the final host 
 A branch may describe a playable visual VS build only when all of the following are true:
 
 - VS-0 through VS-3 have passed on the pinned external-data/source-trace set.
-- All existing core, format, replay, asset, and presentation tests still pass in strict GCC and MSVC configurations; the frozen V13 corpus still agrees across compilers.
+- All existing core, format, replay, asset, and presentation tests still pass in strict GCC and MSVC configurations; the frozen V14 corpus still agrees across compilers.
 - The app has no private gameplay simulation, the core has no platform/render state, and th03_assets has no filesystem API.
 - The presentation footer applies palette/page state exactly at the source boundary and deferral/terminal frames remain silent where the donor is silent.
 - The build ships no original game art, music, or data, and produces a clear missing-content diagnostic.

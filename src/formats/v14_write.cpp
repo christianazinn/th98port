@@ -1,4 +1,4 @@
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 
 #include <array>
 #include <bit>
@@ -27,6 +27,13 @@ constexpr std::size_t timed_frames_offset = 0x256U;
 constexpr std::size_t slow_frames_offset = 0x25AU;
 constexpr std::size_t checkpoint_count_offset = 0x25EU;
 constexpr std::size_t checkpoint_directory_offset = 0x25FU;
+constexpr std::size_t ruleset_offset = 0x26EU;
+constexpr std::size_t recording_flags_offset = 0x26FU;
+constexpr std::size_t recorder_role_offset = 0x270U;
+constexpr std::size_t recorder_source_offset = 0x271U;
+constexpr std::size_t player_one_uuid_offset = 0x272U;
+constexpr std::size_t player_two_uuid_offset = 0x282U;
+constexpr std::size_t match_id_offset = 0x292U;
 constexpr std::uint8_t summary_flags_current = 0x7FU;
 
 Error writer_error(std::string message)
@@ -132,25 +139,56 @@ void write_metadata(
 			static_cast<std::uint8_t>(metadata.name[index])
 		);
 	}
+	detail::put_u8(bytes, ruleset_offset,
+		static_cast<std::uint8_t>(metadata.ruleset));
+	detail::put_u8(bytes, recording_flags_offset, metadata.recording_flags);
+	detail::put_u8(bytes, recorder_role_offset,
+		static_cast<std::uint8_t>(metadata.recorder_role));
+	detail::put_u8(bytes, recorder_source_offset,
+		static_cast<std::uint8_t>(metadata.recorder_source));
+	for(std::size_t index = 0U; index < metadata.player_uuid[0U].size(); ++index) {
+		detail::put_u8(bytes, player_one_uuid_offset + index,
+			metadata.player_uuid[0U][index]);
+		detail::put_u8(bytes, player_two_uuid_offset + index,
+			metadata.player_uuid[1U][index]);
+		detail::put_u8(bytes, match_id_offset + index, metadata.match_id[index]);
+	}
 }
 
 } // namespace
 
-std::expected<std::vector<std::byte>, Error> write_v13_replay(
+std::expected<std::vector<std::byte>, Error> write_v14_replay(
 	const ReplayDocument &document
 )
 {
 	if(!document.metadata) {
 		return std::unexpected(writer_error(
-			"V13 writer requires metadata"
+			"V14 writer requires metadata"
 		));
 	}
 	const auto &metadata = *document.metadata;
+	const auto ruleset = static_cast<std::uint8_t>(metadata.ruleset);
+	const auto recorder_role = static_cast<std::uint8_t>(metadata.recorder_role);
+	const auto recorder_source = static_cast<std::uint8_t>(metadata.recorder_source);
+	const bool netplay =
+		(metadata.recording_flags & replay_recording_flag_netplay) != 0U;
+	if(ruleset > static_cast<std::uint8_t>(ReplayRuleset::dopamine_test_v1) ||
+		(metadata.recording_flags & static_cast<std::uint8_t>(
+			~replay_recording_flags_known
+		)) != 0U ||
+		recorder_role > static_cast<std::uint8_t>(ReplayRecorderRole::player_two) ||
+		recorder_source > static_cast<std::uint8_t>(ReplayRecorderSource::imported) ||
+		netplay != (metadata.recorder_role != ReplayRecorderRole::unknown) ||
+		(netplay && metadata.game_mode != game_mode::vs_1p_2p)) {
+		return std::unexpected(writer_error(
+			"V14 writer identity metadata is invalid"
+		));
+	}
 	const auto capacity = checkpoint_capacity(metadata.game_mode, document.practice);
 	if(document.checkpoints.empty() || document.checkpoints.size() > capacity ||
 		document.expected_round_splits.size() > round_split_count) {
 		return std::unexpected(writer_error(
-			"V13 writer checkpoint or round-summary count is invalid"
+			"V14 writer checkpoint or round-summary count is invalid"
 		));
 	}
 	std::vector<std::uint32_t> checkpoint_samples;
@@ -162,22 +200,22 @@ std::expected<std::vector<std::byte>, Error> write_v13_replay(
 		document.session.records,
 		document.session.sample_count,
 		checkpoint_samples,
-		"V13 writer"
+		"V14 writer"
 	);
 	if(!encoded_input) {
 		return std::unexpected(encoded_input.error());
 	}
 	if(encoded_input->bytes.size() > std::numeric_limits<std::uint32_t>::max()) {
 		return std::unexpected(writer_error(
-			"V13 writer input stream exceeds 32-bit size"
+			"V14 writer input stream exceeds 32-bit size"
 		));
 	}
-	const auto input_offset = replay_v13_header_size +
-		(capacity * replay_v13_checkpoint_size);
+	const auto input_offset = replay_v14_header_size +
+		(capacity * replay_v14_checkpoint_size);
 	if(encoded_input->bytes.size() >
 		std::numeric_limits<std::size_t>::max() - input_offset) {
 		return std::unexpected(writer_error(
-			"V13 writer output size overflows"
+			"V14 writer output size overflows"
 		));
 	}
 	std::vector<std::byte> bytes(
@@ -185,21 +223,21 @@ std::expected<std::vector<std::byte>, Error> write_v13_replay(
 	);
 	const auto output = std::span<std::byte>(bytes);
 	constexpr std::array<std::uint8_t, 8U> magic{
-		'T', '3', 'R', 'P', 'L', 'Y', '1', '3',
+		'T', '3', 'R', 'P', 'L', 'Y', '1', '4',
 	};
 	for(std::size_t index = 0U; index < magic.size(); ++index) {
 		detail::put_u8(output, index, magic[index]);
 	}
-	detail::put_u16(output, 0x08U, replay_v13_version);
-	detail::put_u16(output, 0x0AU, replay_v13_header_size);
+	detail::put_u16(output, 0x08U, replay_v14_version);
+	detail::put_u16(output, 0x0AU, replay_v14_header_size);
 	detail::put_u16(output, 0x0CU, 0U);
 	write_metadata(output, metadata, document.practice);
 	detail::put_u32(output, 0x2AU, static_cast<std::uint32_t>(input_offset));
 	detail::put_u32(
 		output, 0x2EU, static_cast<std::uint32_t>(encoded_input->bytes.size())
 	);
-	detail::put_u32(output, 0x32U, replay_v13_header_size);
-	detail::put_u32(output, 0x36U, replay_v13_checkpoint_size);
+	detail::put_u32(output, 0x32U, replay_v14_header_size);
+	detail::put_u32(output, 0x36U, replay_v14_checkpoint_size);
 
 	detail::put_u8(output, 0x80U, summary_flags_current);
 	detail::put_u8(
@@ -254,10 +292,10 @@ std::expected<std::vector<std::byte>, Error> write_v13_replay(
 			.input_size = encoded_input->checkpoints[index].input_size,
 			.init = checkpoint.init,
 		};
-		const auto offset = replay_v13_header_size +
-			(index * replay_v13_checkpoint_size);
+		const auto offset = replay_v14_header_size +
+			(index * replay_v14_checkpoint_size);
 		if(auto written = detail::write_compact_checkpoint(
-			output, offset, compact, "V13 writer"
+			output, offset, compact, "V14 writer"
 		); !written) {
 			return std::unexpected(written.error());
 		}
@@ -266,7 +304,7 @@ std::expected<std::vector<std::byte>, Error> write_v13_replay(
 		encoded_input->bytes.begin(), encoded_input->bytes.end(),
 		bytes.begin() + static_cast<std::ptrdiff_t>(input_offset)
 	);
-	if(auto validated = parse_v13_replay(bytes); !validated) {
+	if(auto validated = parse_v14_replay(bytes); !validated) {
 		return std::unexpected(validated.error());
 	}
 	return bytes;

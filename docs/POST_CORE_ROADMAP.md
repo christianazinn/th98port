@@ -16,7 +16,7 @@ therefore offered as an explicit ruleset.
 The current dependency boundary remains:
 
 ```text
-              V13 reader
+              V14 reader
                  |
         version-neutral replay model
                  |
@@ -57,7 +57,7 @@ In particular:
   eventual Arrange mode is a separate rules/content selection, not a gradual
   contamination of Classic behavior.
 
-## Replay Patch and V13 integration
+## Replay Patch and V14 integration
 
 ### Branch and worktree layout
 
@@ -69,34 +69,34 @@ single-use branches:
    work may use an isolated worktree, but accepted work is folded promptly into
    those tips so there is one branch strictly ahead of obsolete development
    heads.
-2. Native work continues from the current libth03 branch. V13 belongs in
+2. Native work continues from the current libth03 branch. V14 belongs in
    `th03_formats` and the replay clients; neither `th03_core` nor the neutral
    runner changes merely because the container version changed.
 3. The Replay/harness and native histories remain separate repositories and
    are advanced independently. Never rebase either accepted history underneath
    the other or publish the enclosing harness as the standalone port.
 
-The canonical V13 schema is `tools/replay/FORMAT.md`. Exact packed
+The canonical V14 schema is `tools/replay/FORMAT.md`. Exact packed
 structures, constants, and accepted game-side combinations come from ReC98's
 `th03/replay_format.hpp` and its MAIN/MAINL/OP readers. The authority snapshot,
 native ownership, arithmetic correction, and retirement gates are frozen in
-`V13_INTEGRATION.md`.
+`V14_INTEGRATION.md`.
 
 ### Format contract
 
-V13 is the finalized player-facing replay format. Its 622-byte header retains
+V14 is the finalized player-facing replay format. Its 622-byte header retains
 the portable V12 compact checkpoint and RLE-input contract while adding
 14-byte round rows, stage-clear bonus records, real-time/Slowdown telemetry,
 and the complete validated summary capability set. Optional data after the
 logical input end remains an ignorable accelerator cache.
 
-TH03 Data Manager 0.4.2 now owns the one-way V11/V12-to-V13 converter in the
-Replay/harness work. It converted all 19 locked historical inputs, whose V13
-identities are frozen in `REPLAY_V13_CORPUS_LOCK.tsv`; all 173 summaries, all
-152 stored checkpoints, and terminal results reproduce through V13 on GCC and
+TH03 Data Manager 0.4.2 now owns the one-way V11/V12-to-V14 converter in the
+Replay/harness work. It converted all 19 locked historical inputs, whose V14
+identities are frozen in `REPLAY_V14_CORPUS_LOCK.tsv`; all 173 summaries, all
+152 stored checkpoints, and terminal results reproduce through V14 on GCC and
 MSVC. Native V11/V12 parsers are therefore retired. Historical inputs remain
 external regression sources for the converter rather than formats accepted by
-libth03. V13 tests cover pause/process transitions, Story, Practice, ordinary
+libth03. V14 tests cover pause/process transitions, Story, Practice, ordinary
 VS, checkpoint boundaries, pending streams, and corruption. T3CASE/T3SPLIT
 remain independent oracle formats.
 
@@ -109,10 +109,10 @@ as a gameplay input is a replay landmine.
 
 ### Host tools and Data Manager
 
-For the accepted V13 package:
+For the accepted V14 package:
 
-- keep V13 in the version-neutral parser and `th03rv` dispatch;
-- keep the V11/V12-to-V13 converter in the Replay/harness Data Manager, never
+- keep V14 in the version-neutral parser and `th03rv` dispatch;
+- keep the V11/V12-to-V14 converter in the Replay/harness Data Manager, never
   core logic;
 - update `tools/replay/FORMAT.md`, exporters, validators, frozen fixtures, and
   SHA/size locks together;
@@ -120,7 +120,7 @@ For the accepted V13 package:
   `src/th03_data_manager/patch_manifest.json` through the repository's normal
   packaging script;
 - update `src/th03_data_manager/formats.py` and the Data Manager replay labels
-  for V13 when the converter/package lands;
+  for V14 when the converter/package lands;
 - refresh patch README/package hashes and verify both fresh installation and
   upgrade from the last accepted replay package.
 
@@ -301,7 +301,7 @@ References:
 After exact presentation and audio foundations:
 
 - map host inputs into the existing logical input contract;
-- add deterministic recording at that boundary, targeting V13;
+- add deterministic recording at that boundary, targeting V14;
 - implement window/fullscreen/scaling/audio/key configuration outside core;
 - keep save data, scores, replay files, and configuration versioned and
   atomically written;
@@ -315,7 +315,7 @@ constructed by tests and headless clients.
 ### Online leaderboards
 
 Leaderboards are a later service/client feature. Define the trust model before
-writing network code. A useful submission should include the V13 replay,
+writing network code. A useful submission should include the V14 replay,
 rules/content/build identity, final summary, and verifier result; the server
 should re-simulate accepted submissions with a pinned verifier rather than
 trust client scores. Local gameplay must never wait on or depend on the
@@ -346,7 +346,7 @@ shell.
 1. Preserve the sealed source-wide gameplay parity audit while expanding replay
    coverage. The mechanical `frame.cpp` partition is complete; every later
    core change still reruns both compilers and the full corpus.
-2. Keep the V13-only adapter and locked converted historical corpus green on
+2. Keep the V14-only adapter and locked converted historical corpus green on
    both compilers. Later-checkpoint application selection remains a separate
    anchor/preroll product gate; do not reintroduce historical-format parsers.
 3. Continue `th03_assets` decoders and `th03_present` source-grounded
@@ -370,7 +370,7 @@ shell.
    rhythm-data questions are resolved.
 7. Add configuration, persistence, replay browser/recording, and packaging.
 8. Add enhanced presentation or Arrange features as separate profiles.
-9. Design and deploy leaderboard verification only after V13 and reproducible
+9. Design and deploy leaderboard verification only after V14 and reproducible
    native builds are stable.
 
 The first two unresolved product choices are therefore the Windows support

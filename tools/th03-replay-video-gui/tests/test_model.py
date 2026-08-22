@@ -14,7 +14,7 @@ class RenderJobTests(unittest.TestCase):
         self.renderer = self.root / "renderer with spaces.exe"
         self.renderer.write_bytes(b"fixture")
         self.replay = self.root / "世界 record 06.rpy"
-        self.replay.write_bytes(b"T3RPLY13")
+        self.replay.write_bytes(b"T3RPLY14")
         self.game_text = self.root / "game text.t3gtl"
         self.game_text.write_bytes(b"T3GTL001")
         self.cutscene_text = self.root / "cutscene text.t3ctp"

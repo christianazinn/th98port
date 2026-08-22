@@ -67,7 +67,7 @@ New Classic uses four fidelity tiers:
 | Tier | Policy |
 |---|---|
 | Deterministic gameplay, RNG, scoring, and rules | Exact against the maintained donor/oracles |
-| V13 recording, playback, checkpoints, summaries, and verification | Exact and mutually compatible |
+| V14 recording, playback, checkpoints, summaries, and verification | Exact and mutually compatible |
 | Ordinary gameplay presentation and audio | Source-faithful at default settings; explicit native presentation options may change the final output only |
 | Title submenus, settings, storage tools, and online services | Native extensions in the Replay Patch visual language |
 
@@ -351,7 +351,7 @@ opens the local viewer directly, so an offline, curated-history-only, or
 unconfigured installation gains no empty navigation layer.
 
 An ordinary online leaderboard entry is derived by a pinned, sandboxed,
-resource-limited server verifier from an uploaded V13 replay. The client never
+resource-limited server verifier from an uploaded V14 replay. The client never
 supplies an authoritative score. The entry links to the replay and exposes
 watch, download, and split-detail actions.
 
@@ -420,7 +420,7 @@ Classic remains the sole owner of `YUME.CFG`.
   typed settings; Classic continues to consume only its own configuration.
 
 Gate: migration/corruption/fault-injection tests, independent Classic/New
-Classic mutation tests, and unchanged V13/gameplay hashes.
+Classic mutation tests, and unchanged V14/gameplay hashes.
 
 ### 3. Introduce the hierarchical Option owner
 
@@ -542,7 +542,7 @@ read-only HiScore hub and source-styled cached online board/detail view.
 Session 202 adds asynchronous refresh of the active rank's
 nine Story boards. Session 212 adds the first detail action: a replay-backed
 entry emits one bounded background download and reports success only after
-digest, V13, metadata, and atomic-publication validation. Session 213 adds
+digest, V14, metadata, and atomic-publication validation. Session 213 adds
 Watch: the host revalidates local content-addressed bytes, hands the immutable
 document back to OP, crosses a black/silent boundary, rebases the scheduler,
 and adopts the existing New Classic playback owner. Session 214 adds the
@@ -556,7 +556,7 @@ read-only expanded score snapshot.
 Session 258 adds explicit local replay upload. The official Windows origin adds
 one Upload Replay row and a retained numbered-slot owner. The selected parsed
 document crosses a typed boundary once; DPAPI identity acquisition/enrollment,
-canonical V13 encoding, and HTTPS all run on a bounded background worker. The
+canonical V14 encoding, and HTTPS all run on a bounded background worker. The
 encoder writes request memory only, and completion is presented on the next
 retained UI boundary. Offline and unsupported platforms expose no upload row.
 
@@ -673,7 +673,7 @@ inside source-time gameplay or silently alter Classic/New Classic content
 identities. See `UPDATE_MANIFEST.md`, `UPDATE_PACKAGE.md`, and
 `UPDATE_ACTIVATION.md`.
 
-Completed netplay matches already produce an in-memory, source-compatible V13
+Completed netplay matches already produce an in-memory, source-compatible V14
 document and enter the ordinary Save Replay transaction. Product-level netplay
 replay browsing, metadata, upload, and watch flows are the next relatively
 high-priority netplay parcel after private-beta lifecycle closure. VS
@@ -701,7 +701,7 @@ Every test-worthy phase ends with:
 
 - focused tests for the changed owner;
 - full GCC and MSVC native/SDL matrices;
-- the complete V13 corpus and pause/slowdown gates;
+- the complete V14 corpus and pause/slowdown gates;
 - Classic non-regression routes;
 - relevant pixel/audio gates with intentional-divergence classification;
 - `git diff --check`; and

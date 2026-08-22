@@ -13,7 +13,7 @@
 #include "th03/core/game.hpp"
 #include "th03/error.hpp"
 #include "th03/formats/replay.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 
 namespace {
 
@@ -91,11 +91,11 @@ std::size_t expected_input_offset(Scenario scenario)
 {
 	const auto capacity = (scenario == Scenario::story)
 		? 15U : (scenario == Scenario::practice ? 5U : 3U);
-	return th03::formats::replay_v13_header_size +
-		(capacity * th03::formats::replay_v13_checkpoint_size);
+	return th03::formats::replay_v14_header_size +
+		(capacity * th03::formats::replay_v14_checkpoint_size);
 }
 
-std::vector<std::byte> make_v13(Scenario scenario)
+std::vector<std::byte> make_v14(Scenario scenario)
 {
 	const bool story = scenario == Scenario::story;
 	const bool practice = scenario == Scenario::practice;
@@ -104,9 +104,9 @@ std::vector<std::byte> make_v13(Scenario scenario)
 	const auto input_offset = expected_input_offset(scenario);
 	constexpr std::size_t input_size = 11U;
 	std::vector<std::byte> bytes(input_offset + input_size, std::byte{0});
-	put_magic(bytes, 0U, "T3RPLY13");
-	put_u16(bytes, 0x08U, 13U);
-	put_u16(bytes, 0x0AU, 622U);
+	put_magic(bytes, 0U, "T3RPLY14");
+	put_u16(bytes, 0x08U, th03::formats::replay_v14_version);
+	put_u16(bytes, 0x0AU, th03::formats::replay_v14_header_size);
 	put_u16(bytes, 0x0CU, 0U);
 	put_u16(bytes, 0x0EU, practice ? 0x0007U : 0x0003U);
 	put_u8(bytes, 0x10U, 2U);
@@ -125,7 +125,7 @@ std::vector<std::byte> make_v13(Scenario scenario)
 	put_u32(bytes, 0x26U, 0x89ABCDEFU);
 	put_u32(bytes, 0x2AU, static_cast<std::uint32_t>(input_offset));
 	put_u32(bytes, 0x2EU, static_cast<std::uint32_t>(input_size));
-	put_u32(bytes, 0x32U, 622U);
+	put_u32(bytes, 0x32U, th03::formats::replay_v14_header_size);
 	put_u32(bytes, 0x36U, 289U);
 	put_u16(bytes, 0x3AU, 0x007FU);
 	put_u8(bytes, 0x3CU, 2U);
@@ -187,7 +187,7 @@ std::vector<std::byte> make_v13(Scenario scenario)
 	put_u8(bytes, 0x25EU, 1U);
 	put_u8(bytes, 0x25FU, stage_round);
 
-	constexpr std::size_t checkpoint = 622U;
+	constexpr std::size_t checkpoint = th03::formats::replay_v14_header_size;
 	constexpr std::size_t compact = checkpoint + 12U;
 	put_u32(bytes, compact + 0U, 29U);
 	put_u32(bytes, compact + 4U, 0x89ABCDEFU);
@@ -237,9 +237,9 @@ std::vector<std::byte> make_v13(Scenario scenario)
 	return bytes;
 }
 
-std::vector<std::byte> make_v13_two_checkpoints()
+std::vector<std::byte> make_v14_two_checkpoints()
 {
-	auto bytes = make_v13(Scenario::story);
+	auto bytes = make_v14(Scenario::story);
 	const auto input = expected_input_offset(Scenario::story);
 	bytes.resize(input + 20U, std::byte{0});
 	put_u32(bytes, 0x2EU, 20U);
@@ -258,12 +258,12 @@ std::vector<std::byte> make_v13_two_checkpoints()
 	put_u8(bytes, input + 18U, 0x80U);
 	put_u8(bytes, input + 19U, 0xA5U);
 
-	constexpr std::size_t first_checkpoint = 622U;
+	constexpr std::size_t first_checkpoint = th03::formats::replay_v14_header_size;
 	constexpr std::size_t second_checkpoint =
-		first_checkpoint + th03::formats::replay_v13_checkpoint_size;
+		first_checkpoint + th03::formats::replay_v14_checkpoint_size;
 	std::copy_n(
 		bytes.begin() + static_cast<std::ptrdiff_t>(first_checkpoint),
-		th03::formats::replay_v13_checkpoint_size,
+		th03::formats::replay_v14_checkpoint_size,
 		bytes.begin() + static_cast<std::ptrdiff_t>(second_checkpoint)
 	);
 	put_u32(bytes, second_checkpoint + 0U, 1U);
@@ -283,12 +283,12 @@ std::vector<std::byte> make_v13_two_checkpoints()
 	return bytes;
 }
 
-std::vector<std::byte> make_v13_repeat_checkpoint()
+std::vector<std::byte> make_v14_repeat_checkpoint()
 {
-	auto bytes = make_v13_two_checkpoints();
-	constexpr std::size_t first_checkpoint = 622U;
+	auto bytes = make_v14_two_checkpoints();
+	constexpr std::size_t first_checkpoint = th03::formats::replay_v14_header_size;
 	constexpr std::size_t second_checkpoint =
-		first_checkpoint + th03::formats::replay_v13_checkpoint_size;
+		first_checkpoint + th03::formats::replay_v14_checkpoint_size;
 	put_u8(bytes, 0x260U, 0x10U);
 	put_u8(bytes, 0x44U + 1U, 1U);
 	put_u8(bytes, first_checkpoint + 12U + 23U + 1U, 1U);
@@ -358,9 +358,9 @@ std::vector<std::byte> append_valid_accelerator(
 	return bytes;
 }
 
-std::vector<std::byte> make_v13_practice_two_checkpoints()
+std::vector<std::byte> make_v14_practice_two_checkpoints()
 {
-	auto bytes = make_v13(Scenario::practice);
+	auto bytes = make_v14(Scenario::practice);
 	const auto input = expected_input_offset(Scenario::practice);
 	bytes.resize(input + 20U, std::byte{0});
 	put_u32(bytes, 0x2EU, 20U);
@@ -375,12 +375,12 @@ std::vector<std::byte> make_v13_practice_two_checkpoints()
 	put_u8(bytes, input + 18U, 0x80U);
 	put_u8(bytes, input + 19U, 0xA5U);
 
-	constexpr std::size_t first_checkpoint = 622U;
+	constexpr std::size_t first_checkpoint = th03::formats::replay_v14_header_size;
 	constexpr std::size_t second_checkpoint =
-		first_checkpoint + th03::formats::replay_v13_checkpoint_size;
+		first_checkpoint + th03::formats::replay_v14_checkpoint_size;
 	std::copy_n(
 		bytes.begin() + static_cast<std::ptrdiff_t>(first_checkpoint),
-		th03::formats::replay_v13_checkpoint_size,
+		th03::formats::replay_v14_checkpoint_size,
 		bytes.begin() + static_cast<std::ptrdiff_t>(second_checkpoint)
 	);
 	put_u32(bytes, second_checkpoint + 0U, 1U);
@@ -407,9 +407,9 @@ void put_full_input_packet(
 	put_u8(bytes, offset + 8U, 0U);
 }
 
-std::vector<std::byte> make_v13_process_sequence()
+std::vector<std::byte> make_v14_process_sequence()
 {
-	auto bytes = make_v13(Scenario::story);
+	auto bytes = make_v14(Scenario::story);
 	const auto input = expected_input_offset(Scenario::story);
 	bytes.resize(input + 33U, std::byte{0});
 	put_u32(bytes, 0x1AU, 3U);
@@ -427,9 +427,9 @@ std::vector<std::byte> make_v13_process_sequence()
 	return bytes;
 }
 
-std::vector<std::byte> make_v13_pending(Scenario scenario)
+std::vector<std::byte> make_v14_pending(Scenario scenario)
 {
-	auto bytes = make_v13(scenario);
+	auto bytes = make_v14(scenario);
 	const auto input = expected_input_offset(scenario);
 	// A periodic flush seals and commits the current RLE packet, but does not
 	// emit a process-boundary control for the process that is still running.
@@ -448,13 +448,13 @@ void set_versus_mode(std::vector<std::byte> &bytes, std::uint8_t mode)
 {
 	put_u8(bytes, 0x12U, mode);
 	put_u8(bytes, 0x3DU, mode);
-	put_u8(bytes, 622U + 12U + 10U, mode);
+	put_u8(bytes, th03::formats::replay_v14_header_size + 12U + 10U, mode);
 	const auto p1_cpu = mode == th03::game_mode::vs_cpu_cpu ? 1U : 0U;
 	const auto p2_cpu = mode == th03::game_mode::vs_1p_2p ? 0U : 1U;
 	put_u8(bytes, 0x18U, static_cast<std::uint8_t>(p1_cpu));
 	put_u8(bytes, 0x19U, static_cast<std::uint8_t>(p2_cpu));
-	put_u8(bytes, 622U + 12U + 19U, static_cast<std::uint8_t>(p1_cpu));
-	put_u8(bytes, 622U + 12U + 20U, static_cast<std::uint8_t>(p2_cpu));
+	put_u8(bytes, th03::formats::replay_v14_header_size + 12U + 19U, static_cast<std::uint8_t>(p1_cpu));
+	put_u8(bytes, th03::formats::replay_v14_header_size + 12U + 20U, static_cast<std::uint8_t>(p2_cpu));
 }
 
 void expect_rejected(
@@ -463,7 +463,7 @@ void expect_rejected(
 	std::optional<th03::ErrorCode> code = std::nullopt
 )
 {
-	const auto parsed = th03::formats::parse_v13_replay(bytes);
+	const auto parsed = th03::formats::parse_v14_replay(bytes);
 	check(!parsed, std::string(message));
 	if(!parsed && code) {
 		check(parsed.error().code == *code, std::string(message) + " error code");
@@ -476,18 +476,18 @@ void test_valid_scenarios()
 		th03::formats::replay_can_be_verified(th03::formats::ReplayDocument{}),
 		"a version-neutral document without status metadata remains verifiable"
 	);
-	auto story = make_v13(Scenario::story);
+	auto story = make_v14(Scenario::story);
 	check(
-		get_u32(story, 0x2AU) == 4'957U,
-		"V13 Story uses source-backed input offset 622 + 15*289 = 4957"
+		get_u32(story, 0x2AU) == 5'103U,
+		"V14 Story uses input offset 768 + 15*289 = 5103"
 	);
-	auto parsed = th03::formats::parse_v13_replay(story);
-	check(parsed.has_value(), "synthetic V13 Story replay parses");
+	auto parsed = th03::formats::parse_v14_replay(story);
+	check(parsed.has_value(), "synthetic V14 Story replay parses");
 	if(parsed) {
 		check(
-			parsed->session.source_version == 13U &&
+			parsed->session.source_version == 14U &&
 			parsed->session.sample_count == 2U && parsed->session.records.size() == 3U,
-			"V13 Story produces a neutral replay session"
+			"V14 Story produces a neutral replay session"
 		);
 		check(
 			parsed->metadata &&
@@ -496,22 +496,22 @@ void test_valid_scenarios()
 				th03::formats::ReplayEndReason::menu_return &&
 			parsed->metadata->story.has_value() &&
 			!parsed->metadata->practice.has_value(),
-			"V13 preserves base Story metadata outside GameInit"
+			"V14 preserves base Story metadata outside GameInit"
 		);
 		check(
 			parsed->expected_round_splits.size() == 1U &&
 			parsed->expected_round_splits[0].real_frames == 1'234U,
-			"V13 preserves per-round real-frame telemetry"
+			"V14 preserves per-round real-frame telemetry"
 		);
 		auto unavailable_timer = story;
 		put_u32(unavailable_timer, 0x8CU, 0U);
-		const auto unavailable = th03::formats::parse_v13_replay(
+		const auto unavailable = th03::formats::parse_v14_replay(
 			unavailable_timer
 		);
 		check(
 			unavailable && unavailable->expected_round_splits.size() == 1U &&
 			unavailable->expected_round_splits[0].real_frames == 0U,
-			"V13 raw real_frames zero remains the valid zero-duration timer value"
+			"V14 raw real_frames zero remains the valid zero-duration timer value"
 		);
 		if(!parsed->expected_round_splits.empty()) {
 			auto simulated = parsed->expected_round_splits[0];
@@ -529,25 +529,25 @@ void test_valid_scenarios()
 			(*parsed->stage_clear_bonuses)[0].gauge_attacks == 1U &&
 			parsed->slowdown && parsed->slowdown->timed_frames == 100U &&
 			parsed->slowdown->slow_frames == 25U,
-			"V13 preserves clear-bonus and slowdown telemetry"
+			"V14 preserves clear-bonus and slowdown telemetry"
 		);
 	}
 	const auto dispatched = th03::formats::parse_replay(story);
 	check(
-		dispatched && dispatched->session.source_version == 13U &&
+		dispatched && dispatched->session.source_version == 14U &&
 		th03::formats::replay_can_be_verified(*dispatched),
-		"version-neutral replay dispatch accepts T3RPLY13"
+		"version-neutral replay dispatch accepts T3RPLY14"
 	);
 	auto with_tail = story;
 	with_tail.insert(with_tail.end(), 17U, std::byte{0x5A});
 	check(
-		th03::formats::parse_v13_replay(with_tail).has_value(),
-		"V13 ignores optional bytes appended after the logical input end"
+		th03::formats::parse_v14_replay(with_tail).has_value(),
+		"V14 ignores optional bytes appended after the logical input end"
 	);
 	check(
 		[&]() {
-			const auto two = th03::formats::parse_v13_replay(
-				make_v13_two_checkpoints()
+			const auto two = th03::formats::parse_v14_replay(
+				make_v14_two_checkpoints()
 			);
 			return two && two->checkpoints.size() == 2U &&
 				two->checkpoints[1].stage == 1U &&
@@ -559,12 +559,12 @@ void test_valid_scenarios()
 				two->checkpoints[1].init.compact_runtime_snapshot
 					->round_reset_seed == 0x76543210U;
 		}(),
-		"V13 accepts a later Story-stage checkpoint with its scenario opponent"
+		"V14 accepts a later Story-stage checkpoint with its scenario opponent"
 	);
 	auto accelerated = append_valid_accelerator(
-		make_v13_repeat_checkpoint(), 1U
+		make_v14_repeat_checkpoint(), 1U
 	);
-	const auto accelerated_parsed = th03::formats::parse_v13_replay(accelerated);
+	const auto accelerated_parsed = th03::formats::parse_v14_replay(accelerated);
 	check(
 		accelerated_parsed &&
 		accelerated_parsed->accelerators ==
@@ -589,42 +589,42 @@ void test_valid_scenarios()
 				}},
 				.background_magnitude = 0x40U,
 			}},
-		"V13 recognizes typed page, palette, velocity, and background state from a donor-valid T3RACC1 image"
+		"V14 recognizes typed page, palette, velocity, and background state from a donor-valid T3RACC1 image"
 	);
 	put_u32(accelerated, accelerated.size() - 80U + 28U, 0U);
-	const auto corrupt_accelerator = th03::formats::parse_v13_replay(accelerated);
+	const auto corrupt_accelerator = th03::formats::parse_v14_replay(accelerated);
 	check(
 		corrupt_accelerator && corrupt_accelerator->accelerators.empty(),
-		"V13 ignores a corrupt optional T3RACC1 image like the donor fallback"
+		"V14 ignores a corrupt optional T3RACC1 image like the donor fallback"
 	);
-	auto continued_story = make_v13_two_checkpoints();
+	auto continued_story = make_v14_two_checkpoints();
 	put_u8(continued_story, 0x260U, 0x00U);
 	put_u8(
 		continued_story,
-		622U + th03::formats::replay_v13_checkpoint_size + 12U + 11U,
+		th03::formats::replay_v14_header_size + th03::formats::replay_v14_checkpoint_size + 12U + 11U,
 		0U
 	);
 	put_u8(
 		continued_story,
-		622U + th03::formats::replay_v13_checkpoint_size + 12U + 22U,
+		th03::formats::replay_v14_header_size + th03::formats::replay_v14_checkpoint_size + 12U + 22U,
 		4U
 	);
 	check(
-		th03::formats::parse_v13_replay(continued_story).has_value(),
-		"V13 accepts a later Continue checkpoint with repeated stage/round identity"
+		th03::formats::parse_v14_replay(continued_story).has_value(),
+		"V14 accepts a later Continue checkpoint with repeated stage/round identity"
 	);
 
-	auto versus = make_v13(Scenario::versus);
+	auto versus = make_v14(Scenario::versus);
 	check(
-		get_u32(versus, 0x2AU) == 1'489U,
-		"V13 VS uses source-backed input offset 622 + 3*289 = 1489"
+		get_u32(versus, 0x2AU) == 1'635U,
+		"V14 VS uses input offset 768 + 3*289 = 1635"
 	);
-	parsed = th03::formats::parse_v13_replay(versus);
+	parsed = th03::formats::parse_v14_replay(versus);
 	check(
 		parsed && !parsed->practice && parsed->metadata &&
 		!parsed->metadata->story && !parsed->metadata->practice &&
 		parsed->expected_round_splits[0].story_stage == 0x0FU,
-		"V13 ordinary VS preserves no scenario-union interpretation"
+		"V14 ordinary VS preserves no scenario-union interpretation"
 	);
 	for(const auto mode : {
 		th03::game_mode::vs_1p_2p,
@@ -632,26 +632,26 @@ void test_valid_scenarios()
 	}) {
 		auto variant = versus;
 		set_versus_mode(variant, mode);
-		const auto variant_parsed = th03::formats::parse_v13_replay(variant);
+		const auto variant_parsed = th03::formats::parse_v14_replay(variant);
 		check(
-			variant_parsed && get_u32(variant, 0x2AU) == 1'489U,
-			"every ordinary V13 VS mode uses the three-checkpoint reservation"
+			variant_parsed && get_u32(variant, 0x2AU) == 1'635U,
+			"every ordinary V14 VS mode uses the three-checkpoint reservation"
 		);
 	}
 
-	auto practice = make_v13(Scenario::practice);
+	auto practice = make_v14(Scenario::practice);
 	check(
-		get_u32(practice, 0x2AU) == 2'067U,
-		"V13 Practice uses source-backed input offset 622 + 5*289 = 2067"
+		get_u32(practice, 0x2AU) == 2'213U,
+		"V14 Practice uses input offset 768 + 5*289 = 2213"
 	);
-	parsed = th03::formats::parse_v13_replay(practice);
+	parsed = th03::formats::parse_v14_replay(practice);
 	check(
 		parsed && parsed->practice && parsed->metadata &&
 		parsed->metadata->practice &&
 		parsed->metadata->practice->p1_gauge == 64U &&
 		parsed->metadata->practice->cpu_gauge == 80U &&
 		parsed->session.init.practice_rules.has_value(),
-		"V13 Practice metadata becomes a neutral retry policy"
+		"V14 Practice metadata becomes a neutral retry policy"
 	);
 	if(parsed && parsed->session.init.compact_runtime_snapshot) {
 		check(
@@ -659,11 +659,11 @@ void test_valid_scenarios()
 				1'024U &&
 			parsed->session.init.compact_runtime_snapshot->players[1].gauge_avail ==
 				1'280U,
-			"V13 Practice gauges agree with checkpoint 0"
+			"V14 Practice gauges agree with checkpoint 0"
 		);
 	}
-	const auto practice_two = th03::formats::parse_v13_replay(
-		make_v13_practice_two_checkpoints()
+	const auto practice_two = th03::formats::parse_v14_replay(
+		make_v14_practice_two_checkpoints()
 	);
 	check(
 		practice_two && practice_two->checkpoints.size() == 2U &&
@@ -672,19 +672,19 @@ void test_valid_scenarios()
 		practice_two->checkpoints[1].init.practice_rules->uses_stock &&
 		practice_two->checkpoints[1].init.practice_rules->retry_cpu_timer ==
 			th03::CpuTimerPolicy::story_native,
-		"V13 attaches the validated Practice retry policy to every checkpoint"
+		"V14 attaches the validated Practice retry policy to every checkpoint"
 	);
 
 	const auto process_sequence = th03::formats::parse_replay(
-		make_v13_process_sequence()
+		make_v14_process_sequence()
 	);
 	check(
 		process_sequence && process_sequence->session.records.size() == 6U &&
 		process_sequence->session.sample_count == 3U,
-		"V13 dispatch decodes MAIN-to-MAINL-to-MAIN controls and interstitial input"
+		"V14 dispatch decodes MAIN-to-MAINL-to-MAIN controls and interstitial input"
 	);
 
-	auto pending = make_v13_pending(Scenario::story);
+	auto pending = make_v14_pending(Scenario::story);
 	const auto pending_parsed = th03::formats::parse_replay(pending);
 	check(
 		pending_parsed && pending_parsed->metadata &&
@@ -692,27 +692,27 @@ void test_valid_scenarios()
 			th03::formats::ReplayStatus::recording &&
 		pending_parsed->session.records.size() == 2U &&
 		!th03::formats::replay_can_be_verified(*pending_parsed),
-		"V13 accepts but cannot verify a periodically flushed recording without a terminal control"
+		"V14 accepts but cannot verify a periodically flushed recording without a terminal control"
 	);
-	auto recording_with_control = make_v13(Scenario::story);
+	auto recording_with_control = make_v14(Scenario::story);
 	put_u8(recording_with_control, 0x10U, static_cast<std::uint8_t>(
 		th03::formats::ReplayStatus::recording
 	));
 	const auto recording_with_control_parsed =
-		th03::formats::parse_v13_replay(recording_with_control);
+		th03::formats::parse_v14_replay(recording_with_control);
 	check(
 		recording_with_control_parsed &&
 		!th03::formats::replay_can_be_verified(*recording_with_control_parsed),
-		"a control-terminated V13 recording still cannot report verification success"
+		"a control-terminated V14 recording still cannot report verification success"
 	);
 	put_u8(pending, 0x10U, static_cast<std::uint8_t>(
 		th03::formats::ReplayStatus::partial
 	));
 	expect_rejected(
 		pending,
-		"V13 partial replay requires a terminal process control"
+		"V14 partial replay requires a terminal process control"
 	);
-	auto partial_with_control = make_v13(Scenario::story);
+	auto partial_with_control = make_v14(Scenario::story);
 	put_u8(partial_with_control, 0x10U, static_cast<std::uint8_t>(
 		th03::formats::ReplayStatus::partial
 	));
@@ -720,8 +720,8 @@ void test_valid_scenarios()
 		th03::formats::ReplayEndReason::partial
 	));
 	check(
-		th03::formats::parse_v13_replay(partial_with_control).has_value(),
-		"V13 accepts a control-terminated partial replay"
+		th03::formats::parse_v14_replay(partial_with_control).has_value(),
+		"V14 accepts a control-terminated partial replay"
 	);
 	put_u8(pending, 0x10U, static_cast<std::uint8_t>(
 		th03::formats::ReplayStatus::finalized
@@ -731,203 +731,203 @@ void test_valid_scenarios()
 	));
 	expect_rejected(
 		std::move(pending),
-		"V13 finalized replay still requires a terminal process control"
+		"V14 finalized replay still requires a terminal process control"
 	);
 }
 
 void test_header_and_metadata_corruption()
 {
-	auto bytes = make_v13(Scenario::story);
-	bytes.resize(621U);
-	expect_rejected(std::move(bytes), "V13 rejects a truncated fixed header", th03::ErrorCode::truncated);
+	auto bytes = make_v14(Scenario::story);
+	bytes.resize(th03::formats::replay_v14_header_size - 1U);
+	expect_rejected(std::move(bytes), "V14 rejects a truncated fixed header", th03::ErrorCode::truncated);
 
-	bytes = make_v13(Scenario::story);
+	bytes = make_v14(Scenario::story);
 	put_u16(bytes, 0x08U, 12U);
-	expect_rejected(std::move(bytes), "V13 rejects a magic/version mismatch");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects a magic/version mismatch");
+	bytes = make_v14(Scenario::story);
 	put_u16(bytes, 0x0AU, 614U);
-	expect_rejected(std::move(bytes), "V13 rejects a non-622-byte header");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects a non-768-byte header");
+	bytes = make_v14(Scenario::story);
 	put_u16(bytes, 0x0EU, 0x000BU);
-	expect_rejected(std::move(bytes), "V13 rejects unknown replay flag bits");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects unknown replay flag bits");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x10U, static_cast<std::uint8_t>(
 		th03::formats::ReplayStatus::empty
 	));
-	expect_rejected(std::move(bytes), "V13 rejects an empty index-only status");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects an empty index-only status");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x10U, static_cast<std::uint8_t>(
 		th03::formats::ReplayStatus::error
 	));
-	expect_rejected(std::move(bytes), "V13 rejects an error index-only status");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects an error index-only status");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x10U, 5U);
-	expect_rejected(std::move(bytes), "V13 rejects an unknown status");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects an unknown status");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x11U, 7U);
-	expect_rejected(std::move(bytes), "V13 rejects an unknown end reason");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects an unknown end reason");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x12U, th03::game_mode::demo);
-	expect_rejected(std::move(bytes), "V13 rejects Demo mode");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects Demo mode");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x13U, 4U);
-	expect_rejected(std::move(bytes), "V13 rejects rank outside 0..3");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects rank outside 0..3");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x14U, 3U);
-	expect_rejected(std::move(bytes), "V13 rejects key mode outside 0..2");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects key mode outside 0..2");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x15U, 0U);
-	expect_rejected(std::move(bytes), "V13 rejects an invalid paletted character");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects an invalid paletted character");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x16U, 5U);
 	expect_rejected(
 		std::move(bytes),
-		"V13 rejects a base Story P2 differing from the initial stage opponent"
+		"V14 rejects a base Story P2 differing from the initial stage opponent"
 	);
-	bytes = make_v13(Scenario::story);
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x18U, 2U);
-	expect_rejected(std::move(bytes), "V13 rejects a non-Boolean CPU flag");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects a non-Boolean CPU flag");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x18U, 1U);
-	expect_rejected(std::move(bytes), "V13 Story rejects a CPU-controlled P1");
-	bytes = make_v13(Scenario::versus);
+	expect_rejected(std::move(bytes), "V14 Story rejects a CPU-controlled P1");
+	bytes = make_v14(Scenario::versus);
 	put_u8(bytes, 0x19U, 0U);
-	expect_rejected(std::move(bytes), "V13 1P-vs-CPU rejects a human P2");
-	bytes = make_v13(Scenario::versus);
+	expect_rejected(std::move(bytes), "V14 1P-vs-CPU rejects a human P2");
+	bytes = make_v14(Scenario::versus);
 	set_versus_mode(bytes, th03::game_mode::vs_1p_2p);
 	put_u8(bytes, 0x19U, 1U);
-	expect_rejected(std::move(bytes), "V13 1P-vs-2P rejects a CPU P2");
-	bytes = make_v13(Scenario::versus);
+	expect_rejected(std::move(bytes), "V14 1P-vs-2P rejects a CPU P2");
+	bytes = make_v14(Scenario::versus);
 	set_versus_mode(bytes, th03::game_mode::vs_cpu_cpu);
 	put_u8(bytes, 0x18U, 0U);
-	expect_rejected(std::move(bytes), "V13 CPU-vs-CPU rejects a human P1");
-	bytes = make_v13(Scenario::practice);
+	expect_rejected(std::move(bytes), "V14 CPU-vs-CPU rejects a human P1");
+	bytes = make_v14(Scenario::practice);
 	put_u8(bytes, 0x19U, 0U);
-	expect_rejected(std::move(bytes), "V13 Practice rejects a human P2");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 Practice rejects a human P2");
+	bytes = make_v14(Scenario::story);
 	put_u16(bytes, 0x3AU, 0x003FU);
-	expect_rejected(std::move(bytes), "V13 rejects missing base capability bits");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects missing base capability bits");
+	bytes = make_v14(Scenario::story);
 	put_u16(bytes, 0x3AU, 0x017FU);
-	expect_rejected(std::move(bytes), "frozen V13 rejects unversioned future capability bits");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "frozen V14 rejects unversioned future capability bits");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x3CU, 3U);
-	expect_rejected(std::move(bytes), "V13 rejects an invalid final route");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects an invalid final route");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x71U, 0xFAU);
-	expect_rejected(std::move(bytes), "V13 rejects an invalid final packed score");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects an invalid final packed score");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x75U, 4U);
-	expect_rejected(std::move(bytes), "V13 rejects an invalid Autofire mask");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects an invalid Autofire mask");
+	bytes = make_v14(Scenario::story);
 	put_u16(bytes, 0x76U, static_cast<std::uint16_t>((46U << 9U) | (13U << 5U) | 1U));
-	expect_rejected(std::move(bytes), "V13 rejects an invalid DOS date");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects an invalid DOS date");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x78U, static_cast<std::uint8_t>('a'));
-	expect_rejected(std::move(bytes), "V13 rejects unsupported saved-name characters");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects unsupported saved-name characters");
+	bytes = make_v14(Scenario::story);
 	for(std::size_t index = 0U; index < 8U; ++index) {
 		put_u8(bytes, 0x78U + index, 0U);
 	}
 	check(
-		th03::formats::parse_v13_replay(bytes).has_value(),
-		"V13 accepts the all-zero pending-save TH3LAST name"
+		th03::formats::parse_v14_replay(bytes).has_value(),
+		"V14 accepts the all-zero pending-save TH3LAST name"
 	);
 }
 
 void test_summary_and_checkpoint_corruption()
 {
-	auto bytes = make_v13(Scenario::story);
+	auto bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x80U, 0x3FU);
-	expect_rejected(std::move(bytes), "V13 rejects missing round-summary capabilities");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects missing round-summary capabilities");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x81U, 28U);
-	expect_rejected(std::move(bytes), "V13 rejects more than 27 round splits");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects more than 27 round splits");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x82U, 0x0FU);
-	expect_rejected(std::move(bytes), "V13 rejects a VS-tagged Story round split");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects a VS-tagged Story round split");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x83U, 0x30U);
-	expect_rejected(std::move(bytes), "V13 rejects a round route outside 0..2");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects a round route outside 0..2");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x83U, 0x22U);
-	expect_rejected(std::move(bytes), "V13 rejects an invalid round winner");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects an invalid round winner");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x84U, 0xFAU);
-	expect_rejected(std::move(bytes), "V13 rejects an invalid round packed score");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects an invalid round packed score");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x1FCU, 0x01U);
-	expect_rejected(std::move(bytes), "V13 rejects a clear-bonus total mismatch");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects a clear-bonus total mismatch");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x1FCU + 10U + 9U, 1U);
-	expect_rejected(std::move(bytes), "V13 rejects lives in a non-final clear bonus");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects lives in a non-final clear bonus");
+	bytes = make_v14(Scenario::story);
 	put_u32(bytes, 0x25AU, 101U);
-	expect_rejected(std::move(bytes), "V13 rejects slowdown frames above timed frames");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects slowdown frames above timed frames");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x25EU, 0U);
-	expect_rejected(std::move(bytes), "V13 rejects an empty checkpoint directory");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects an empty checkpoint directory");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x25EU, 16U);
-	expect_rejected(std::move(bytes), "V13 rejects a checkpoint count above Story capacity");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects a checkpoint count above Story capacity");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x25FU, 0x0FU);
-	expect_rejected(std::move(bytes), "V13 rejects a VS-tagged Story checkpoint");
-	bytes = make_v13(Scenario::story);
-	put_u8(bytes, 622U + 12U + 10U, th03::game_mode::vs_1p_cpu);
-	expect_rejected(std::move(bytes), "V13 rejects checkpoint/header mode disagreement");
-	bytes = make_v13(Scenario::story);
-	put_u8(bytes, 622U + 12U + 84U, 1U);
-	expect_rejected(std::move(bytes), "V13 rejects checkpoint/directory round disagreement");
-	bytes = make_v13(Scenario::story);
-	put_u8(bytes, 622U + 12U + 84U + 30U + 21U, 3U);
-	expect_rejected(std::move(bytes), "V13 rejects an invalid checkpoint background phase");
-	bytes = make_v13(Scenario::story);
-	put_u32(bytes, 622U, 1U);
-	expect_rejected(std::move(bytes), "V13 rejects a nonzero process-anchor cursor");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects a VS-tagged Story checkpoint");
+	bytes = make_v14(Scenario::story);
+	put_u8(bytes, th03::formats::replay_v14_header_size + 12U + 10U, th03::game_mode::vs_1p_cpu);
+	expect_rejected(std::move(bytes), "V14 rejects checkpoint/header mode disagreement");
+	bytes = make_v14(Scenario::story);
+	put_u8(bytes, th03::formats::replay_v14_header_size + 12U + 84U, 1U);
+	expect_rejected(std::move(bytes), "V14 rejects checkpoint/directory round disagreement");
+	bytes = make_v14(Scenario::story);
+	put_u8(bytes, th03::formats::replay_v14_header_size + 12U + 84U + 30U + 21U, 3U);
+	expect_rejected(std::move(bytes), "V14 rejects an invalid checkpoint background phase");
+	bytes = make_v14(Scenario::story);
+	put_u32(bytes, th03::formats::replay_v14_header_size, 1U);
+	expect_rejected(std::move(bytes), "V14 rejects a nonzero process-anchor cursor");
+	bytes = make_v14(Scenario::story);
 	put_u32(bytes, 0x2AU, 4'949U);
-	expect_rejected(std::move(bytes), "V13 rejects the documented prose's erroneous -8 Story offset");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects the documented prose's erroneous -8 Story offset");
+	bytes = make_v14(Scenario::story);
 	put_u32(bytes, 0x2EU, 12U);
-	expect_rejected(std::move(bytes), "V13 rejects an input span beyond EOF");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects an input span beyond EOF");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, expected_input_offset(Scenario::story) + 1U, 0x07U);
-	expect_rejected(std::move(bytes), "V13 rejects a missing process-start Charge keyframe");
-	bytes = make_v13(Scenario::story);
+	expect_rejected(std::move(bytes), "V14 rejects a missing process-start Charge keyframe");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, expected_input_offset(Scenario::story) + 10U, 0U);
-	expect_rejected(std::move(bytes), "V13 rejects an invalid terminal process marker");
-	bytes = make_v13_two_checkpoints();
-	put_u32(bytes, 622U + 289U + 8U, 8U);
-	expect_rejected(std::move(bytes), "V13 rejects a checkpoint byte cursor inside a packet");
-	bytes = make_v13_two_checkpoints();
-	put_u8(bytes, 622U + 289U + 12U + 22U, 4U);
+	expect_rejected(std::move(bytes), "V14 rejects an invalid terminal process marker");
+	bytes = make_v14_two_checkpoints();
+	put_u32(bytes, th03::formats::replay_v14_header_size + 289U + 8U, 8U);
+	expect_rejected(std::move(bytes), "V14 rejects a checkpoint byte cursor inside a packet");
+	bytes = make_v14_two_checkpoints();
+	put_u8(bytes, th03::formats::replay_v14_header_size + 289U + 12U + 22U, 4U);
 	expect_rejected(
 		std::move(bytes),
-		"V13 rejects a later Story checkpoint with the initial P2 character"
+		"V14 rejects a later Story checkpoint with the initial P2 character"
 	);
-	bytes = make_v13_two_checkpoints();
-	put_u32(bytes, 622U + 289U + 0U, 2U);
-	expect_rejected(std::move(bytes), "V13 rejects a checkpoint sample/byte cursor mismatch");
-	bytes = make_v13_two_checkpoints();
+	bytes = make_v14_two_checkpoints();
+	put_u32(bytes, th03::formats::replay_v14_header_size + 289U + 0U, 2U);
+	expect_rejected(std::move(bytes), "V14 rejects a checkpoint sample/byte cursor mismatch");
+	bytes = make_v14_two_checkpoints();
 	put_u8(bytes, expected_input_offset(Scenario::story) + 10U, 0x07U);
-	expect_rejected(std::move(bytes), "V13 requires a full keyframe after each checkpoint cursor");
+	expect_rejected(std::move(bytes), "V14 requires a full keyframe after each checkpoint cursor");
 }
 
 void test_practice_corruption()
 {
-	auto bytes = make_v13(Scenario::practice);
+	auto bytes = make_v14(Scenario::practice);
 	put_u8(bytes, 0x52U, 63U);
-	expect_rejected(std::move(bytes), "V13 Practice rejects a gauge below 64");
-	bytes = make_v13(Scenario::practice);
+	expect_rejected(std::move(bytes), "V14 Practice rejects a gauge below 64");
+	bytes = make_v14(Scenario::practice);
 	put_u8(bytes, 0x54U, 1U);
-	expect_rejected(std::move(bytes), "V13 Practice rejects nonzero reserved bytes");
-	bytes = make_v13(Scenario::practice);
+	expect_rejected(std::move(bytes), "V14 Practice rejects nonzero reserved bytes");
+	bytes = make_v14(Scenario::practice);
 	put_u8(bytes, 0x45U, 5U);
-	expect_rejected(std::move(bytes), "V13 Practice rejects header/checkpoint stage disagreement");
-	bytes = make_v13(Scenario::practice);
-	put_u16(bytes, 622U + 12U + 67U, 1'023U);
-	expect_rejected(std::move(bytes), "V13 Practice rejects checkpoint gauge disagreement");
+	expect_rejected(std::move(bytes), "V14 Practice rejects header/checkpoint stage disagreement");
+	bytes = make_v14(Scenario::practice);
+	put_u16(bytes, th03::formats::replay_v14_header_size + 12U + 67U, 1'023U);
+	expect_rejected(std::move(bytes), "V14 Practice rejects checkpoint gauge disagreement");
 }
 
 void test_canonical_writer()
@@ -935,51 +935,98 @@ void test_canonical_writer()
 	for(const auto scenario : {
 		Scenario::story, Scenario::versus, Scenario::practice,
 	}) {
-		const auto source = make_v13(scenario);
-		const auto parsed = th03::formats::parse_v13_replay(source);
+		const auto source = make_v14(scenario);
+		const auto parsed = th03::formats::parse_v14_replay(source);
 		const auto written = parsed ?
-			th03::formats::write_v13_replay(*parsed) :
+			th03::formats::write_v14_replay(*parsed) :
 			std::expected<std::vector<std::byte>, th03::Error>{
 				std::unexpected(parsed.error())
 			};
 		check(
 			written && *written == source,
-			"V13 writer is the byte-exact inverse for each canonical scenario"
+			"V14 writer is the byte-exact inverse for each canonical scenario"
 		);
 	}
 
-	const auto two_source = make_v13_two_checkpoints();
-	const auto two_parsed = th03::formats::parse_v13_replay(two_source);
+	const auto two_source = make_v14_two_checkpoints();
+	const auto two_parsed = th03::formats::parse_v14_replay(two_source);
 	const auto two_written = two_parsed ?
-		th03::formats::write_v13_replay(*two_parsed) :
+		th03::formats::write_v14_replay(*two_parsed) :
 		std::expected<std::vector<std::byte>, th03::Error>{
 			std::unexpected(two_parsed.error())
 		};
 	check(
 		two_written && *two_written == two_source,
-		"V13 writer preserves checkpoint-sealed keyframes and cursors exactly"
+		"V14 writer preserves checkpoint-sealed keyframes and cursors exactly"
 	);
 
 	if(two_parsed) {
 		auto missing_metadata = *two_parsed;
 		missing_metadata.metadata.reset();
 		check(
-			!th03::formats::write_v13_replay(missing_metadata),
-			"V13 writer rejects a neutral document without V13 metadata"
+			!th03::formats::write_v14_replay(missing_metadata),
+			"V14 writer rejects a neutral document without V14 metadata"
 		);
 		auto bad_samples = *two_parsed;
 		++bad_samples.session.sample_count;
 		check(
-			!th03::formats::write_v13_replay(bad_samples),
-			"V13 writer rejects a session whose expanded sample count disagrees"
+			!th03::formats::write_v14_replay(bad_samples),
+			"V14 writer rejects a session whose expanded sample count disagrees"
 		);
 		auto missing_snapshot = *two_parsed;
 		missing_snapshot.checkpoints[0].init.round_start_snapshot.reset();
 		check(
-			!th03::formats::write_v13_replay(missing_snapshot),
-			"V13 writer rejects a checkpoint without compact round state"
+			!th03::formats::write_v14_replay(missing_snapshot),
+			"V14 writer rejects a checkpoint without compact round state"
 		);
 	}
+
+	auto netplay_source = make_v14(Scenario::versus);
+	set_versus_mode(netplay_source, th03::game_mode::vs_1p_2p);
+	auto netplay = th03::formats::parse_v14_replay(netplay_source);
+	if(netplay && netplay->metadata) {
+		netplay->metadata->recording_flags =
+			th03::formats::replay_recording_flag_netplay;
+		netplay->metadata->recorder_role =
+			th03::formats::ReplayRecorderRole::player_two;
+		netplay->metadata->recorder_source =
+			th03::formats::ReplayRecorderSource::native;
+		for(std::size_t index = 0U; index < 16U; ++index) {
+			netplay->metadata->player_uuid[0U][index] =
+				static_cast<std::uint8_t>(index + 1U);
+			netplay->metadata->player_uuid[1U][index] =
+				static_cast<std::uint8_t>(0x20U + index);
+			netplay->metadata->match_id[index] =
+				static_cast<std::uint8_t>(0x80U + index);
+		}
+		const auto encoded = th03::formats::write_v14_replay(*netplay);
+		const auto decoded = encoded ?
+			th03::formats::parse_v14_replay(*encoded) :
+			std::expected<th03::formats::ReplayDocument, th03::Error>{
+				std::unexpected(encoded.error())
+			};
+		check(
+			decoded && decoded->metadata &&
+			decoded->metadata->recording_flags ==
+				th03::formats::replay_recording_flag_netplay &&
+			decoded->metadata->recorder_role ==
+				th03::formats::ReplayRecorderRole::player_two &&
+			decoded->metadata->recorder_source ==
+				th03::formats::ReplayRecorderSource::native &&
+			decoded->metadata->player_uuid == netplay->metadata->player_uuid &&
+			decoded->metadata->match_id == netplay->metadata->match_id,
+			"V14 round-trips netplay role, account UUIDs, and match identity"
+		);
+	}
+
+	auto legacy = make_v14(Scenario::story);
+	put_magic(legacy, 0U, "T3RPLY13");
+	put_u16(legacy, 0x08U, 13U);
+	put_u16(legacy, 0x0AU, 622U);
+	check(
+		!th03::formats::parse_replay(legacy),
+		"the live replay adapter rejects V13"
+	);
 }
 
 } // namespace

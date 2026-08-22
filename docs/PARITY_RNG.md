@@ -174,7 +174,7 @@ A `RuntimeSnapshot` intentionally bypasses all fresh-round draws. This is
 correct only for a snapshot taken after Anniversary's startup initialization,
 as V11/T3CASE snapshots are. The snapshot's restored `random_seed`, ring,
 cursor, CPU rings, and formation rings then define the boundary. This
-precondition should remain explicit in any V13 format API.
+precondition should remain explicit in any V14 format API.
 
 ### Route-1 repeat
 

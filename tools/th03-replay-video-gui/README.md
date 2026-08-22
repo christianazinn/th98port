@@ -5,7 +5,7 @@ TH03 Replay Renderer is a small Windows desktop frontend for the authoritative
 itself: every job exposes the exact CLI command and consumes the renderer's
 newline-delimited `T3RVP001` progress stream.
 
-The initial interface selects a finalized V13 replay, extracted game-data
+The initial interface selects a finalized V14 replay, extracted game-data
 directory, MKV destination, 8:5 resolution, NVENC/software encoder, quality
 preset, language, flash policy, and independent 5%-step audio levels. Installed
 `PODD.CFG` values are inherited by default and explicit GUI values override

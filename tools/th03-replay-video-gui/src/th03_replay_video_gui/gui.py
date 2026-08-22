@@ -28,7 +28,7 @@ from .protocol import ProgressEvent, ProgressTracker, parse_progress_line
 
 
 APP_NAME = "TH03 Replay Renderer"
-REPLAY_FILTER = (("TH03 V13 replay", "*.rpy"), ("All files", "*.*"))
+REPLAY_FILTER = (("TH03 V14 replay", "*.rpy"), ("All files", "*.*"))
 VIDEO_FILTER = (("Matroska video", "*.mkv"),)
 GAME_TEXT_FILTER = (("Compiled T3GTL001 game text", "*.t3gtl"), ("All files", "*.*"))
 CUTSCENE_TEXT_FILTER = (("Compiled T3CTP001 cutscene text", "*.t3ctp"), ("All files", "*.*"))

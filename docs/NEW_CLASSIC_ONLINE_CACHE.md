@@ -29,7 +29,7 @@ mixed at the C++ API boundary.
 
 | Type | Canonical digest input |
 |---|---|
-| Replay | Exact validated V13 file bytes |
+| Replay | Exact validated V14 file bytes |
 | Content | Versioned manifest of gameplay-affecting content |
 | Ruleset | Versioned category/rule manifest |
 | Verifier | Reproducible verifier build/authority manifest |
@@ -124,7 +124,7 @@ A present but wholly corrupt family returns an error rather than being silently
 reinterpreted as online data.
 
 Downloaded payloads use `<64 uppercase replay-id hex digits>.RPY`. The cache
-only records metadata and availability; V13 validation remains the replay
+only records metadata and availability; V14 validation remains the replay
 reader's responsibility when a future client actually stores or opens one.
 
 ## Worker projection

@@ -28,7 +28,7 @@ inline constexpr std::size_t new_classic_online_cache_footer_bytes = 4U;
 template<typename Tag>
 struct NewClassicOnlineIdentity final {
 	// Every ID is the SHA-256 digest of a type-specific canonical document:
-	// exact V13 bytes for ReplayId, pinned manifests for content/ruleset/verifier,
+	// exact V14 bytes for ReplayId, pinned manifests for content/ruleset/verifier,
 	// and canonical entry/snapshot payloads for their respective IDs. The tag
 	// prevents unrelated 32-byte identities from being mixed by the client.
 	std::array<std::uint8_t, new_classic_online_identity_bytes> bytes{};

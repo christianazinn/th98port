@@ -42,7 +42,7 @@ struct NewClassicNetplayReportResult final {
 };
 
 // New Classic's local-only netplay terminal. The report observes diagnostics
-// after peer agreement has ended; it never feeds simulation, proof, or V13.
+// after peer agreement has ended; it never feeds simulation, proof, or V14.
 class NewClassicNetplayReport final {
 public:
 	NewClassicNetplayReport(

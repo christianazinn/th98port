@@ -241,7 +241,7 @@ probe_new_classic_online_replay_download(
 
 // Re-reads and revalidates a content-addressed local download for immediate
 // playback. Callers own this filesystem work outside deterministic source
-// ticks; the returned document contains the exact stored V13 bytes.
+// ticks; the returned document contains the exact stored V14 bytes.
 [[nodiscard]] std::expected<formats::ReplayDocument, NewClassicOnlineClientError>
 load_new_classic_online_replay(
 	const NewClassicOnlineReplayRecord &record,

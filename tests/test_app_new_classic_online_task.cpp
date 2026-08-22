@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "th03/app/main_compiled_content.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 
 namespace {
 
@@ -193,7 +193,7 @@ struct FakeCredentialSource final {
 	metadata.name = {{'A','L','P','H','A',' ',' ',' '}};
 
 	th03::formats::ReplayDocument document{};
-	document.session.source_version = th03::formats::replay_v13_version;
+	document.session.source_version = th03::formats::replay_v14_version;
 	document.session.init = init;
 	document.session.records = {
 		th03::replay::InputSample{
@@ -428,7 +428,7 @@ int main()
 		const std::scoped_lock lock(fake.targets_mutex);
 		expect(!fake.targets.empty() && fake.targets.back() ==
 			"/api/th03/replays",
-			"upload worker sends canonical V13 directly to the replay endpoint");
+			"upload worker sends canonical V14 directly to the replay endpoint");
 	}
 
 	FakeCredentialSource rejected_credentials{};

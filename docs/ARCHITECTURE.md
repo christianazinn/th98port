@@ -5,7 +5,7 @@ and its validation clients. No playable application is designed or scaffolded
 in Phase 1.
 
 ```text
-                         V13 reader
+                         V14 reader
                          |
                  version-neutral ReplayDocument
                                 |
@@ -35,7 +35,7 @@ In particular it stores no framebuffer/page/palette/TRAM state, asset IDs,
 sprite/cel state, draw commands, or persistent presentation event queue.
 `th03_formats` receives
 `std::span<const std::byte>` and likewise has no filesystem dependency. Clients
-own paths and process exit codes. V13 compact snapshots
+own paths and process exit codes. V14 compact snapshots
 become format-neutral reconstruction/round-start contracts; replay layouts
 never enter the core.
 
@@ -159,7 +159,7 @@ complete Classic gameplay and process phases. Application work remains later.
 Phase 2 is complete: the TH3R03 first-round trace matches all 46 canonical
 Anniversary rows through its natural route-2 terminal. Phase 3 preserves that
 gate and has completed the source-backed Classic gameplay backend. The locked
-integration corpus now covers 19 frozen V13 conversions and 173 embedded round
+integration corpus now covers 19 frozen V14 conversions and 173 embedded round
 summaries across Story, Practice, and ordinary VS; all match. Historical
 V11/V12 inputs are converted externally and are no longer native parser
 formats. The whole-source

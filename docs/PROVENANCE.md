@@ -7,9 +7,9 @@
 | `present/raster.cpp` | bounded two-page indexed Raster and source-surface model from `research/PRESENTATION_CONTRACT.md`, including the stock-used TRAM, GRCG, palette, and page operations required by the Classic scenes; captured PC-98 pixel parity remains an external gate |
 | `formats/t3case.cpp` | `state/port/T3CASE1_FORMAT.md`, `tools/port/t3case.psm1`, and oracle `th03/t3case.hpp` |
 | `formats/t3split.cpp` | Replay `th03/replay_format.hpp`, `tools/replay/export_splits.ps1`, and `tools/port/compare_th03_oracle_splits.ps1` |
-| `formats/v13.cpp`, `rpy_checkpoint.cpp`, and `rpy_input.cpp` | frozen Replay Patch 0.4.8 `th03/replay_format.hpp`, its MAIN/MAINL/OP readers, and canonical harness `tools/replay/FORMAT.md`; compact checkpoints are reconstructed as format-neutral recipes after ENEDAT content is loaded |
+| `formats/v14.cpp`, `rpy_checkpoint.cpp`, and `rpy_input.cpp` | frozen Replay Patch 0.4.8 `th03/replay_format.hpp`, its MAIN/MAINL/OP readers, and canonical harness `tools/replay/FORMAT.md`; compact checkpoints are reconstructed as format-neutral recipes after ENEDAT content is loaded |
 | `replay/run.cpp` | Replay Patch process-control, warning, pause, retry-preroll, and MAIN/MAINL semantics adapted to the version-neutral replay model |
-| `replay/session.hpp` | audited T3CASE/V13 input and process-boundary semantics; deliberately independent of either document layout |
+| `replay/session.hpp` | audited T3CASE/V14 input and process-boundary semantics; deliberately independent of either document layout |
 | `core/game.cpp`, `core/frame.cpp`, and `core/frame/{,characters/}*.inl` | Anniversary `th03/main/rndloop.cpp:sub_9778()` update order and the complete stock-used gameplay callback inventory documented by the `PARITY_*` ledgers; `FRAME_PARTITIONS.md` records the behavior-free source split |
 | `core/state_hash.cpp` and private deterministic state | Anniversary `th03/main/t3case.cpp:t3case_state_hash()` schema 3 plus the semantic structures named in `TH3R03_ROUND_DOSSIER.md` |
 | round startup/frame sequencing | Anniversary `th03/main/{rstart.cpp,resscore.cpp,rndloop.cpp,roundcb.cpp}` at `3e2381d4` |

@@ -311,9 +311,9 @@ Classic adapter because their pause hooks surround `player_update()`
 differently. Excluding phase-1 checkpoints is what makes their gameplay
 boundaries comparable. The native coordinator must retain that rule.
 
-For V13, use semantically distinct input kinds such as `gameplay`,
+For V14, use semantically distinct input kinds such as `gameplay`,
 `warning_wait`, and `pause_menu` rather than carrying forward ambiguous phase
-1. A V11/V12-to-V13 converter can parse pause sequences after a phase-0 Cancel;
+1. A V11/V12-to-V14 converter can parse pause sequences after a phase-0 Cancel;
 warning samples remain driven by the core's explicit warning request. Raw
 T3CASE/V11 parsing should continue to preserve the original phase bit until
 that contextual classification pass.

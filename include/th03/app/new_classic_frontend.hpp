@@ -193,7 +193,7 @@ public:
 	);
 	// Opens one already-validated replay directly on the same telemetry pages
 	// as the local catalog. Online libraries use this after the host has
-	// downloaded and revalidated the immutable V13 document.
+	// downloaded and revalidated the immutable V14 document.
 	[[nodiscard]] static std::unique_ptr<NewClassicReplayBrowser> detail(
 		formats::ReplayDocument document,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets

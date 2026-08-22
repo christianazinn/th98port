@@ -1,5 +1,5 @@
 #include "th03/platform/windows_online.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -230,8 +230,8 @@ void test_live_upload(
 	expect(credentials && *credentials,
 		"live current-user credentials load without disclosure");
 	const auto bytes = read_bytes(replay_path);
-	auto replay = th03::formats::parse_v13_replay(bytes);
-	expect(replay.has_value(), "live upload fixture is valid V13");
+	auto replay = th03::formats::parse_v14_replay(bytes);
+	expect(replay.has_value(), "live upload fixture is valid V14");
 	if(!credentials || !*credentials || !replay) {
 		return;
 	}
@@ -256,7 +256,7 @@ void test_live_upload(
 	}
 	expect(uploaded.has_value() && uploaded->status ==
 		NewClassicOnlineUploadStatus::accepted,
-		"live Windows adapter uploads the exact V13 fixture");
+		"live Windows adapter uploads the exact V14 fixture");
 }
 
 } // namespace

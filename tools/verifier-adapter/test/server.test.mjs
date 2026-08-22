@@ -26,7 +26,7 @@ const configuration = Object.freeze({
   verifierId: identity("C"),
   timeoutMs: 100,
 });
-const replay = Buffer.from("T3RPLY13 deterministic fixture");
+const replay = Buffer.from("T3RPLY14 deterministic fixture");
 const replayId = createHash("sha256").update(replay).digest("hex").toUpperCase();
 
 function nativeResult(value, exitCode = 0, stderr = "") {
@@ -224,7 +224,7 @@ test("HTTP boundary accepts only the fixed route, method, type, digest, and boun
   const port = server.address().port;
   const headers = {
     "content-length": replay.byteLength,
-    "content-type": "application/vnd.th03.v13-replay",
+    "content-type": "application/vnd.th03.v14-replay",
     "x-th03-replay-sha256": replayId,
   };
   assert.equal((await send(port, { headers })).status, 200);
@@ -270,7 +270,7 @@ test("one lite Container admits only one native verifier process at a time", asy
   const port = server.address().port;
   const headers = {
     "content-length": replay.byteLength,
-    "content-type": "application/vnd.th03.v13-replay",
+    "content-type": "application/vnd.th03.v14-replay",
     "x-th03-replay-sha256": replayId,
   };
   const first = send(port, { headers });

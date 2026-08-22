@@ -22,7 +22,7 @@ The requested gameplay/replay boundary is complete as of 2026-08-09:
 - the tested MSVC Release `th03rv.exe` is 227,328 bytes with SHA-256
   `97D3BBAE08F2184B22CA94A68FA110CC89DFE4DCD73A3F0FABB28D36CAE67E4D`;
   it uses the normal MSVC/UCRT runtime dependencies; and
-- `POST_CORE_ROADMAP.md` records the V13, Replay Patch, resource-manager,
+- `POST_CORE_ROADMAP.md` records the V14, Replay Patch, resource-manager,
   asset, presentation, audio, application, leaderboard, and Arrange-mode
   recommendations.
 
@@ -64,7 +64,7 @@ Before returning to the user:
 - rebuild and smoke the Release `th03rv.exe` deliverable;
 - commit and push the harness branch and the port-only standalone subtree;
 - report exact corpus coverage, limitations, executable identity, and commands;
-- recommend the next Replay Patch and V13 workflow, including the correct
+- recommend the next Replay Patch and V14 workflow, including the correct
   harness/ReC98 worktrees and branches, merge order, normalizer/resource-manager
   changes, and the stable replay-format boundary in libth03;
 - remind the user to apply Anniversary's deterministic formation-previous

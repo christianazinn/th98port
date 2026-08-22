@@ -42,7 +42,7 @@ game.
   predicts inputs, never time. Host catch-up may execute several complete
   source ticks without presenting intermediate frames, but it may not change
   a tick's rules or duration.
-- Record only the final resolved input history into the existing in-memory V13
+- Record only the final resolved input history into the existing in-memory V14
   recorder. Predicted and superseded executions never enter the replay.
 
 The architecture is intentionally layered. The rollback coordinator,
@@ -106,7 +106,7 @@ source fade/wait cadence before synchronized gameplay frame zero.
 - Direct ICE path with TURN fallback and an optional Relay Only privacy mode.
 - Source-styled character selection, stage splash, active match, result, and
   return flow.
-- Automatic in-memory V13 capture of the resolved match.
+- Automatic in-memory V14 capture of the resolved match.
 - A negotiated network pause, forfeit, disconnect handling, desync detection,
   and a local post-match network report.
 - Windows, Linux, and macOS as protocol/build targets. A platform that does not
@@ -178,7 +178,7 @@ The existing boundaries remain binding:
 - `th03_present` owns PC-98 raster/TRAM and presenter state. It gains typed
   local capture/restore where required for visual rollback, but no network
   policy.
-- `th03_formats` remains the V13 byte adapter. It is not the rollback snapshot
+- `th03_formats` remains the V14 byte adapter. It is not the rollback snapshot
   format.
 - `th03_replay` remains a sequential input/process coordinator. Predicted
   frames are resolved before they reach it.
@@ -195,7 +195,7 @@ The existing boundaries remain binding:
 
 The leaderboard Worker and the room signaling service may share deployment,
 authentication, and operational tooling, but they are separate authority
-domains. Leaderboard verification may persist accepted V13 files. A room
+domains. Leaderboard verification may persist accepted V14 files. A room
 Durable Object stores no gameplay stream or mutable TH03 state.
 
 ## Rollback backend decision
@@ -218,7 +218,7 @@ This path has passed the gates originally assigned to a middleware spike:
 - about 2.75 ms for the conservative wrong/restore/correct/restore probe on the
   development host, below the 17.723 ms source deadline;
 - GCC/MSVC builds, direct UDP and WebRTC transport integration, runtime and
-  boundary proofs, Pause/Resume/Forfeit, and confirmed in-memory V13 capture.
+  boundary proofs, Pause/Resume/Forfeit, and confirmed in-memory V14 capture.
 
 Introducing GGRS now would duplicate the already-frozen prediction,
 confirmation, packet-history, proof, and lifecycle contracts, add a Rust/C ABI
@@ -250,7 +250,7 @@ input can affect gameplay.
 
 ### Why current snapshots are insufficient
 
-Current V13 `RuntimeSnapshot`, `CompactRuntimeSnapshot`, and
+Current V14 `RuntimeSnapshot`, `CompactRuntimeSnapshot`, and
 `RoundStartSnapshot` values are portable round-start recipes. They do not
 capture an arbitrary gameplay frame. `CanonicalState` is a compact diagnostic
 view and hash, not restorable state. `Game` and `MainProcess` are intentionally
@@ -546,9 +546,9 @@ because wall-clock time passed without a source tick. Actual missed deadlines
 while the local session was allowed to advance remain local slowdown evidence;
 the two peers' report-only slowdown metadata may therefore differ.
 
-V13 already accepts `GM_VS_1P_2P`, so the resolved match remains an ordinary
+V14 already accepts `GM_VS_1P_2P`, so the resolved match remains an ordinary
 portable replay. No network packet or rollback snapshot is embedded. User
-name/date fields may make two locally saved V13 byte streams differ, so peers
+name/date fields may make two locally saved V14 byte streams differ, so peers
 compare a separate `T3NTR001` transcript digest over the match contract,
 resolved inputs, confirmed boundaries, splits, and terminal state. Matching
 transcript digests prove that both peers agreed on the simulated match.
@@ -607,7 +607,7 @@ countdown then replaces that message on both peers. Focus loss never silently
 pauses a peer; the existing local
 mute-unfocused option still applies. The pause is represented once in the
 confirmed replay journal as a canonical source-compatible Pause -> Resume
-transaction, not as every wall-clock poll of the network waiting screen. A V13
+transaction, not as every wall-clock poll of the network waiting screen. A V14
 playback can therefore preserve the gameplay boundary without needing to know
 room state or reproduce an arbitrary Internet wait.
 
@@ -631,7 +631,7 @@ The direct preview now ends normal completion, either side of Forfeit, peer
 departure, peer inactivity, and deterministic proof mismatch on one
 authenticated `SLB1.PI` + `MNUFONT.PF` report. It shows bounded local prediction,
 rollback, resimulation, wait, and deadline counters only. Those observations
-are deliberately outside simulation, proof, and V13. The report requires an
+are deliberately outside simulation, proof, and V14. The report requires an
 interface-word release followed by a fresh Z/Return/Esc; application close
 remains immediate.
 
@@ -663,7 +663,7 @@ does not silently broaden leaderboard acceptance.
 - Capture -> mutate -> restore reproduces every field and the exact next
   simulation/presentation output.
 - One-frame rollback on every frame for long source-fresh VS sessions produces
-  the same simulation digest, surfaces, terminal transition, and V13 transcript
+  the same simulation digest, surfaces, terminal transition, and V14 transcript
   as a no-rollback run.
 - Forced rollback across every frame phase, pause boundary, route-1 repeat, and
   terminal boundary has no stale state.
@@ -687,9 +687,9 @@ does not silently broaden leaderboard acceptance.
 - Corrected final pixels equal a no-rollback execution from the same resolved
   inputs, including both Raster pages and TRAM/gaiji state.
 - SFX event IDs prevent duplicates; confirmed BGM transitions occur once.
-- Both peers produce the same `T3NTR001` digest and independently verified V13
+- Both peers produce the same `T3NTR001` digest and independently verified V14
   gameplay for completed matches.
-- Predicted inputs and discarded branches never appear in V13.
+- Predicted inputs and discarded branches never appear in V14.
 - A desync, forfeit, or disconnect cannot be uploaded as a completed result.
 
 ### Transport and platform
@@ -755,7 +755,7 @@ an explicit N1 gate rather than a reason to alter the rollback image.
 5. Freeze prediction, delay, confirmation, digest, and replay-journal behavior.
    Prediction, delay, confirmation, confirmed audio, frame-zero identity, and
    mutually acknowledged 120-frame gameplay digests are frozen for the direct
-   preview. The corrected journal now feeds the existing memory-only V13
+   preview. The corrected journal now feeds the existing memory-only V14
    recorder with source waits, round/process controls, and local slowdown
    evidence. Confirmed phase, round, Pause, and terminal boundaries each own an
    acknowledged typed proof before lifecycle advancement.
@@ -827,9 +827,9 @@ yet expose a truthful RTT measurement.
    matches, Forfeit, peer departure/timeout, and deterministic proof mismatch
    now enter the authenticated local report. Product-room ownership of that
    terminal is owned by the fourth-row frontend.
-3. Feed only confirmed history into the in-memory V13 recorder and existing save
+3. Feed only confirmed history into the in-memory V14 recorder and existing save
    UI. Complete in the direct preview: the corrected contiguous-confirmed
-   transcript becomes an ordinary validated V13 only after the complete VS
+   transcript becomes an ordinary validated V14 only after the complete VS
    winner MAINL owner, then enters the authenticated numbered Save Replay
    transaction. No working file exists during play and incomplete matches
    publish nothing.
@@ -861,14 +861,14 @@ yet expose a truthful RTT measurement.
 - Quick Match region/rating policy.
 - Spectator architecture and replay-delayed spectating.
 - Netplay replay product support is the next high-priority lifecycle extension:
-  expose completed local V13 records as netplay records, preserve match metadata
+  expose completed local V14 records as netplay records, preserve match metadata
   outside deterministic samples, and define watch/upload UX without making a
   peer or signaling service authoritative.
 - VS boards, rating/Elo, match history, seasons, and moderation are long-term
   features after replay-backed beta evidence exists.
 - Reconnect through explicit trusted state transfer, if its complexity and
   authority tradeoff become worthwhile.
-- Whether a future replay format should embed a netplay transcript ID. V13 does
+- Whether a future replay format should embed a netplay transcript ID. V14 does
   not need to change for the first release.
 
 ## Rejected approaches
@@ -892,7 +892,7 @@ yet expose a truthful RTT measurement.
 - **Raw `memcpy` of C++ owners.** Object images contain pointers, padding,
   allocator state, and compiler-specific layout. They are neither portable nor
   complete contracts.
-- **Use V13 checkpoints as rollback saves.** They are round-start recipes, not
+- **Use V14 checkpoints as rollback saves.** They are round-start recipes, not
   arbitrary-frame process images.
 - **Rollback the complete OP/MAINL application.** Remote gameplay input cannot
   affect most of those scenes; reliable phase barriers are smaller and safer.
@@ -933,12 +933,12 @@ yet expose a truthful RTT measurement.
   non-copyable `Game` owner.
 - `include/th03/app/main_process.hpp` exposes one guarded source-fresh human VS
   `MainProcess` and no arbitrary-frame save/load API.
-- `docs/REPLAY_VERIFICATION.md` documents why V13 checkpoints are portable
+- `docs/REPLAY_VERIFICATION.md` documents why V14 checkpoints are portable
   recipes rather than native process images.
 - `docs/PLAYABLE_PORT_ROADMAP.md` freezes core/present/platform dependency
   direction and the exact `526315/9328` Hz input scheduler.
-- `src/formats/v13.cpp` and `src/app/new_classic_replay.cpp` already accept and
+- `src/formats/v14.cpp` and `src/app/new_classic_replay.cpp` already accept and
   record `game_mode::vs_1p_2p`.
 - `docs/NEW_CLASSIC_ONLINE_SERVICE_DRAFT.md` owns the existing user credential,
-  Cloudflare deployment, V13 upload, and leaderboard trust boundaries that the
+  Cloudflare deployment, V14 upload, and leaderboard trust boundaries that the
   room service must not silently broaden.

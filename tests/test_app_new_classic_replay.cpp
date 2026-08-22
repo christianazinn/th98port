@@ -10,7 +10,7 @@
 #include "th03/app/new_classic_replay.hpp"
 #include "th03/core/game.hpp"
 #include "th03/formats/replay.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 #include "th03/replay/session.hpp"
 
 namespace {
@@ -121,7 +121,7 @@ void test_vs_capture()
 	check(
 		recorder.finish(th03::formats::ReplayEndReason::game_over, resident)
 			.has_value(),
-		"the completed VS route finalizes through the frozen V13 writer"
+		"the completed VS route finalizes through the frozen V14 writer"
 	);
 	check(!recorder.recording(), "finalization closes the active capture");
 	auto document = recorder.take_completed();
@@ -164,7 +164,7 @@ void test_vs_capture()
 		"VS stream contains MAIN_END and terminal MAINL_END controls"
 	);
 	check(
-		th03::formats::write_v13_replay(*document).has_value(),
+		th03::formats::write_v14_replay(*document).has_value(),
 		"the completed VS document remains serializable"
 	);
 	check(
@@ -265,7 +265,7 @@ void test_story_capture()
 		"Story terminal metadata retains the last gameplay result"
 	);
 	check(
-		th03::formats::write_v13_replay(*document).has_value(),
+		th03::formats::write_v14_replay(*document).has_value(),
 		"the completed Story document remains serializable"
 	);
 }
@@ -441,7 +441,7 @@ void test_memory_only_lifecycle()
 			th03::formats::ReplayEndReason::game_over &&
 		finalized->session.sample_count == 3U &&
 		!recorder.recording() &&
-		th03::formats::write_v13_replay(*finalized).has_value(),
+		th03::formats::write_v14_replay(*finalized).has_value(),
 		"post-run Save receives one complete serializable in-memory document"
 	);
 	check(!recorder.take_completed(), "the completed replay can only be taken once");
@@ -504,7 +504,7 @@ void test_netplay_confirmed_capture()
 		round_start(mode, 0U, 0U, 201U), 0x5D0CU
 	);
 	check(created.has_value(),
-		"netplay V13 capture starts from the source-fresh round observation");
+		"netplay V14 capture starts from the source-fresh round observation");
 	if(!created) {
 		return;
 	}
@@ -540,7 +540,7 @@ void test_netplay_confirmed_capture()
 	);
 	check(
 		capture.round_started(round_start(mode, 0U, 1U, 203U)).has_value(),
-		"confirmed route-1 continuation starts the next V13 round"
+		"confirmed route-1 continuation starts the next V14 round"
 	);
 	check(
 		capture.append_confirmed_frame({
@@ -558,7 +558,7 @@ void test_netplay_confirmed_capture()
 	auto resident = round_start(mode, 0U, 1U, 203U).start;
 	auto document = capture.finish_mainl(resident);
 	check(document.has_value(),
-		"the completed winner MAINL owner finalizes one validated memory V13");
+		"the completed winner MAINL owner finalizes one validated memory V14");
 	if(document) {
 		const auto main_controls = std::count_if(
 			document->session.records.begin(), document->session.records.end(),
@@ -601,8 +601,8 @@ void test_netplay_confirmed_capture()
 			document->metadata->end_reason ==
 				th03::formats::ReplayEndReason::game_over &&
 			document->metadata->final_route == 2U &&
-			th03::formats::write_v13_replay(*document).has_value(),
-			"netplay memory capture publishes ordinary finalized V13 metadata and bytes"
+			th03::formats::write_v14_replay(*document).has_value(),
+			"netplay memory capture publishes ordinary finalized V14 metadata and bytes"
 		);
 	}
 

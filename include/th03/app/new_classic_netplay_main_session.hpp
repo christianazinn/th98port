@@ -141,7 +141,7 @@ struct NewClassicNetplayConfirmedSimulationDigest final {
 	AppSha256 digest{};
 };
 
-// One corrected frame suitable for the in-memory V13 recorder. It becomes
+// One corrected frame suitable for the in-memory V14 recorder. It becomes
 // visible only after contiguous confirmation; a round/terminal sample remains
 // private until its source lifecycle transition has completed.
 struct NewClassicNetplayConfirmedInputFrame final {
@@ -202,7 +202,7 @@ public:
 		NewClassicNetplayMainSessionError
 	> continue_confirmed_boundary() noexcept;
 	// Completes one canonical release -> Resume -> release sequence. Arbitrary
-	// network waiting never enters Game, V13 timing, PMD, or slowdown.
+	// network waiting never enters Game, V14 timing, PMD, or slowdown.
 	[[nodiscard]] std::expected<
 		NewClassicNetplayMainSessionTick,
 		NewClassicNetplayMainSessionError

@@ -9,7 +9,7 @@
 
 #include "service_protocol.hpp"
 #include "th03/app/new_classic_story_route.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 
 namespace {
 
@@ -24,7 +24,7 @@ bool require(bool condition, const char *message)
 th03::formats::ReplayDocument stock_document()
 {
 	th03::formats::ReplayDocument document{};
-	document.session.source_version = th03::formats::replay_v13_version;
+	document.session.source_version = th03::formats::replay_v14_version;
 	auto &init = document.session.init;
 	init.global_frame = 0U;
 	init.resident_rand = 34;
@@ -150,7 +150,7 @@ int main()
 	// The recorder stores the live post-initialization seed at the top level of
 	// checkpoint zero as well as in its compact recipe. It is therefore normally
 	// different from resident_rand even though the complete reconstructed start
-	// is stock. This is the shape written by genuine V13 recordings.
+	// is stock. This is the shape written by genuine V14 recordings.
 	auto recorded = document;
 	auto recorded_init = initial->observation.start;
 	recorded_init.compact_runtime_snapshot = th03::CompactRuntimeSnapshot{

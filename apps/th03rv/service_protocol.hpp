@@ -30,7 +30,7 @@ struct ServiceAcceptedReport final {
 // This projection accepts only a complete verified stock Story run. Score and
 // terminal stage come from simulated state, never ReplayMetadata::final_score
 // or its optional terminal fields. The remaining display/report values are
-// non-gameplay V13 metadata or reconstructed startup/category fields.
+// non-gameplay V14 metadata or reconstructed startup/category fields.
 [[nodiscard]] std::optional<ServiceAcceptedReport>
 make_service_accepted_report(
 	const th03::formats::ReplayDocument &document,

@@ -5,7 +5,7 @@
 #include <cstdint>
 
 #include "bytes.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 
 namespace th03::formats {
 
@@ -68,15 +68,15 @@ std::expected<ReplayDocument, Error> parse_replay(
 			ErrorCode::truncated, "replay is shorter than its magic", 0U
 		});
 	}
-	constexpr std::array<std::uint8_t, 8> v13_magic{
-		'T', '3', 'R', 'P', 'L', 'Y', '1', '3',
+	constexpr std::array<std::uint8_t, 8> v14_magic{
+		'T', '3', 'R', 'P', 'L', 'Y', '1', '4',
 	};
-	if(!detail::has_magic(bytes, v13_magic)) {
+	if(!detail::has_magic(bytes, v14_magic)) {
 		return std::unexpected(Error{
-			ErrorCode::bad_magic, "replay magic is not T3RPLY13", 0U
+			ErrorCode::bad_magic, "replay magic is not T3RPLY14", 0U
 		});
 	}
-	return parse_v13_replay(bytes);
+	return parse_v14_replay(bytes);
 }
 
 } // namespace th03::formats

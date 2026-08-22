@@ -12,7 +12,7 @@
 #include "th03/app/replay_slot_store.hpp"
 #include "th03/core/game.hpp"
 #include "th03/formats/replay.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 #include "th03/replay/session.hpp"
 
 namespace {
@@ -63,7 +63,7 @@ th03::formats::ReplayDocument make_document()
 	metadata.final_winner = std::int8_t{0};
 
 	th03::formats::ReplayDocument document{};
-	document.session.source_version = th03::formats::replay_v13_version;
+	document.session.source_version = th03::formats::replay_v14_version;
 	document.session.init = init;
 	document.session.records = {
 		th03::replay::InputSample{
@@ -139,7 +139,7 @@ void test_atomic_slot_faults_and_legacy_cleanup(
 	const auto base_bytes = read_file(th03::app::replay_slot_path(root, 6U));
 	check(
 		!base_bytes.empty(),
-		"the direct slot contains canonical V13 bytes"
+		"the direct slot contains canonical V14 bytes"
 	);
 
 	auto replacement = base;
@@ -236,56 +236,53 @@ void test_local_netplay_view(
 		.origin = ReplaySlotLocalOrigin::netplay,
 		.local_player = 1U,
 	};
+	auto netplay_document = document;
+	netplay_document.session.init.game_mode = th03::game_mode::vs_1p_2p;
+	netplay_document.session.init.is_cpu = {0U, 0U};
+	netplay_document.checkpoints[0U].init = netplay_document.session.init;
+	netplay_document.metadata->game_mode = th03::game_mode::vs_1p_2p;
+	netplay_document.metadata->final_game_mode = th03::game_mode::vs_1p_2p;
+	netplay_document.metadata->is_cpu = {0U, 0U};
 	check(
-		th03::app::replay_slot_local_view_path(root, slot).filename() ==
-			"TH3R10.PODD",
-		"the local replay view uses the numbered slot basename"
+		th03::app::commit_replay_slot(
+			root, slot, netplay_document, player_two
+		).has_value(),
+		"a netplay slot publishes its local-player role in the replay"
 	);
-	check(
-		th03::app::commit_replay_slot(root, slot, document, player_two).has_value(),
-		"a netplay slot publishes its digest-bound local-player view"
-	);
-	const auto canonical = th03::formats::write_v13_replay(document);
+	netplay_document.metadata->recording_flags |=
+		th03::formats::replay_recording_flag_netplay;
+	netplay_document.metadata->recorder_role =
+		th03::formats::ReplayRecorderRole::player_two;
+	const auto canonical = th03::formats::write_v14_replay(netplay_document);
 	check(
 		canonical && read_file(th03::app::replay_slot_path(root, slot)) ==
 			*canonical,
-		"local presentation metadata does not alter the canonical V13 bytes"
+		"local presentation metadata is self-contained in canonical V14 bytes"
 	);
 	const auto loaded = th03::app::load_replay_slot(root, slot);
 	check(
 		loaded && loaded->document && loaded->local_view == player_two,
-		"the matching sidecar restores the installation-local P2 role"
+		"the V14 header restores the recording machine's P2 role"
 	);
 
 	auto replacement = document;
 	replacement.metadata->name = {'D', 'I', 'G', 'E', 'S', 'T', '!', '!'};
-	const auto replacement_bytes = th03::formats::write_v13_replay(replacement);
+	const auto replacement_bytes = th03::formats::write_v14_replay(replacement);
 	check(
 		replacement_bytes && th03::app::commit_exact_replay_file(
 			th03::app::replay_slot_path(root, slot), *replacement_bytes
 		).has_value(),
-		"the stale-sidecar fixture replaces only the exact replay bytes"
+		"an exact ordinary replay can replace the netplay replay"
 	);
 	const auto stale = th03::app::load_replay_slot(root, slot);
 	check(
 		stale && stale->document && !stale->local_view,
-		"a sidecar bound to different replay bytes is ignored"
-	);
-
-	check(
-		th03::app::commit_replay_slot(root, slot, document, player_two).has_value(),
-		"the local view can be restored after an exact-file replacement"
-	);
-	write_malformed(th03::app::replay_slot_local_view_path(root, slot));
-	const auto malformed = th03::app::load_replay_slot(root, slot);
-	check(
-		malformed && malformed->document && !malformed->local_view,
-		"malformed local metadata never invalidates a valid replay"
+		"catalog ownership follows the replacement replay itself"
 	);
 
 	check(
 		th03::app::commit_replay_slot(root, slot, document).has_value(),
-		"an ordinary overwrite replaces a prior netplay presentation view"
+		"an ordinary overwrite replaces prior netplay ownership"
 	);
 	const auto ordinary = th03::app::load_replay_slot(root, slot);
 	check(
@@ -320,8 +317,8 @@ int main()
 
 	auto document = make_document();
 	check(
-		th03::formats::write_v13_replay(document).has_value(),
-		"storage fixture is a valid canonical V13 document"
+		th03::formats::write_v14_replay(document).has_value(),
+		"storage fixture is a valid canonical V14 document"
 	);
 	check(
 		th03::app::replay_slot_path(root, 7U).filename() == "TH3R07.RPY",
@@ -348,7 +345,7 @@ int main()
 	check(
 		first && first->document &&
 		first->document->metadata->random_seed == 0x12345678U,
-		"a committed slot reads back as validated V13"
+		"a committed slot reads back as validated V14"
 	);
 	const auto first_bytes = read_file(th03::app::replay_slot_path(root, 7U));
 	check(!first_bytes.empty(), "the committed slot contains replay bytes");

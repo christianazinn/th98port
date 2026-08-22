@@ -50,7 +50,7 @@ class RenderJob:
         if not self.renderer.is_file():
             raise JobError("The bundled replay renderer is missing.")
         if not self.replay.is_file():
-            raise JobError("Choose an existing finalized V13 replay.")
+            raise JobError("Choose an existing finalized V14 replay.")
         if not self.data.is_dir():
             raise JobError("Choose the extracted game-data directory.")
         for filename in ("MAIN.EXE", "MAINL.EXE", "FONT.ROM"):

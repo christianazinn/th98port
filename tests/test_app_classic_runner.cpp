@@ -23,7 +23,7 @@
 #include "th03/app/new_classic_settings_store.hpp"
 #include "th03/app/replay_slot_store.hpp"
 #include "th03/assets/decode.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 
 #include "classic_runner_internal.hpp"
 
@@ -80,8 +80,8 @@ bool valid_completed_replay(
 		document->expected_round_splits.empty()) {
 		return false;
 	}
-	auto encoded = th03::formats::write_v13_replay(*document);
-	return encoded && th03::formats::parse_v13_replay(*encoded).has_value();
+	auto encoded = th03::formats::write_v14_replay(*document);
+	return encoded && th03::formats::parse_v14_replay(*encoded).has_value();
 }
 
 std::expected<th03::app::ClassicCliRequest, th03::app::ClassicCliError>
@@ -1124,7 +1124,7 @@ void test_file_and_request_boundaries()
 			th03::app::ClassicRunnerErrorCode::invalid_request &&
 		arrange_online.error().code ==
 			th03::app::ClassicRunnerErrorCode::invalid_request,
-		"Arrange fails closed at sealed Classic, stock V13 playback, and online-upload boundaries"
+		"Arrange fails closed at sealed Classic, stock V14 playback, and online-upload boundaries"
 	);
 }
 
@@ -2574,7 +2574,7 @@ bool authentic_practice_gate(
 		replay->expected_round_splits.empty() ||
 		replay->expected_round_splits[0U].story_stage !=
 			replay->metadata->practice->stage ||
-		!th03::formats::write_v13_replay(*replay)) {
+		!th03::formats::write_v14_replay(*replay)) {
 		return fail_stage("practice-replay");
 	}
 	// Route 0 recreates the selector; Cancel from this dedicated product entry
@@ -3659,7 +3659,7 @@ int main(int argc, char **argv)
 		auto bytes = read_bytes(argv[7]);
 		std::optional<th03::formats::ReplayDocument> document{};
 		if(bytes) {
-			if(auto parsed = th03::formats::parse_v13_replay(*bytes)) {
+			if(auto parsed = th03::formats::parse_v14_replay(*bytes)) {
 				document = std::move(*parsed);
 			}
 		}
@@ -3670,7 +3670,7 @@ int main(int argc, char **argv)
 		auto bytes = read_bytes(argv[7]);
 		std::optional<th03::formats::ReplayDocument> document{};
 		if(bytes) {
-			if(auto parsed = th03::formats::parse_v13_replay(*bytes)) {
+			if(auto parsed = th03::formats::parse_v14_replay(*bytes)) {
 				document = std::move(*parsed);
 			}
 		}
@@ -3731,8 +3731,8 @@ int main(int argc, char **argv)
 			"--authentic-english <data-root> <MAIN.EXE> <MAINL.EXE> "
 			"<OP.EXE> <FONT.ROM> <TH3EN.DAT> | --authentic-online-watch "
 			"<data-root> <MAIN.EXE> <MAINL.EXE> <OP.EXE> <FONT.ROM> "
-			"<V13.RPY> | --authentic-replay-fast-forward <data-root> "
-			"<MAIN.EXE> <MAINL.EXE> <OP.EXE> <FONT.ROM> <V13.RPY>]\n";
+			"<V14.RPY> | --authentic-replay-fast-forward <data-root> "
+			"<MAIN.EXE> <MAINL.EXE> <OP.EXE> <FONT.ROM> <V14.RPY>]\n";
 		return 2;
 	}
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';

@@ -127,7 +127,7 @@ repaid as gameplay ticks.
 
 ## Replay, slowdown, and pixel-oracle invariants
 
-- V13 samples, checkpoints, RNG, score, and verification are independent of
+- V14 samples, checkpoints, RNG, score, and verification are independent of
   physical refresh.
 - A replay at 60, 120, or 144 Hz consumes identical source samples and reaches
   identical canonical results.
@@ -204,7 +204,7 @@ explicit rule.
 
 - Run windowed/borderless checks at 50/60/120/144 Hz and with VRR on/off.
 - Exercise Alt-Tab, minimize/restore, display moves, and refresh changes.
-- Re-run V13, pause/slowdown, audio, Classic, and exact source-pixel gates.
+- Re-run V14, pause/slowdown, audio, Classic, and exact source-pixel gates.
 
 ### I0 — interpolation design
 

@@ -14,7 +14,7 @@
 #include <vector>
 
 #include "th03/app/main_compiled_content.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 
 namespace {
 
@@ -154,7 +154,7 @@ struct FakeTransport final {
 	metadata.name = {{'A','L','P','H','A',' ',' ',' '}};
 
 	th03::formats::ReplayDocument document{};
-	document.session.source_version = th03::formats::replay_v13_version;
+	document.session.source_version = th03::formats::replay_v14_version;
 	document.session.init = init;
 	document.session.records = {
 		th03::replay::InputSample{
@@ -349,8 +349,8 @@ void test_enrollment_and_upload()
 		"enrollment accepts only the bounded service credential document");
 
 	auto document = story_document();
-	auto encoded = th03::formats::write_v13_replay(document);
-	expect(encoded.has_value(), "upload fixture is canonical V13");
+	auto encoded = th03::formats::write_v14_replay(document);
+	expect(encoded.has_value(), "upload fixture is canonical V14");
 	NewClassicOnlineReplayId upload_id{};
 	upload_id.bytes = app_sha256(*encoded);
 	const auto upload_name = new_classic_online_replay_filename(upload_id);
@@ -368,7 +368,7 @@ void test_enrollment_and_upload()
 	);
 	expect(upload && upload->status == NewClassicOnlineUploadStatus::accepted &&
 		fake.target == "/api/th03/replays" && fake.body == *encoded,
-		"upload sends the canonical V13 body directly from memory");
+		"upload sends the canonical V14 body directly from memory");
 	expect(std::any_of(fake.headers.begin(), fake.headers.end(), [](const auto &header) {
 		return header.name == "authorization" &&
 			header.value.starts_with("Bearer ");
@@ -490,13 +490,13 @@ void test_download()
 {
 	TemporaryDirectory root;
 	auto document = story_document();
-	auto encoded = th03::formats::write_v13_replay(document);
-	expect(encoded.has_value(), "download fixture is canonical V13");
+	auto encoded = th03::formats::write_v14_replay(document);
+	expect(encoded.has_value(), "download fixture is canonical V14");
 	auto record = replay_record(*encoded, document);
 	FakeTransport fake{};
 	fake.response = NewClassicOnlineHttpResponse{
 		.status = 200U,
-		.content_type = "application/vnd.th03.v13-replay",
+		.content_type = "application/vnd.th03.v14-replay",
 		.body = *encoded,
 	};
 	auto downloaded = download_new_classic_online_replay(
@@ -514,12 +514,12 @@ void test_download()
 	auto playable = load_new_classic_online_replay(record, root.path());
 	std::optional<std::vector<std::byte>> playable_bytes{};
 	if(playable) {
-		if(auto reencoded = th03::formats::write_v13_replay(*playable)) {
+		if(auto reencoded = th03::formats::write_v14_replay(*playable)) {
 			playable_bytes = std::move(*reencoded);
 		}
 	}
 	expect(playable_bytes && *playable_bytes == *encoded,
-		"Watch re-reads the exact locally validated V13 document");
+		"Watch re-reads the exact locally validated V14 document");
 	auto absent = record;
 	absent.replay_id.bytes[0U] ^= 0xFFU;
 	probed = probe_new_classic_online_replay_download(absent, root.path());
@@ -542,7 +542,7 @@ void test_download()
 	rejected = download_new_classic_online_replay(record, root.path(), fake.seam());
 	expect(!rejected && rejected.error().code ==
 		NewClassicOnlineClientErrorCode::replay_metadata,
-		"cached leaderboard metadata must agree with downloaded V13 metadata");
+		"cached leaderboard metadata must agree with downloaded V14 metadata");
 	probed = probe_new_classic_online_replay_download(record, root.path());
 	expect(!probed && probed.error().code ==
 		NewClassicOnlineClientErrorCode::replay_metadata,

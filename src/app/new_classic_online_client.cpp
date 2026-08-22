@@ -18,7 +18,7 @@
 
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/new_classic_nametag.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 
 namespace th03::app {
 namespace {
@@ -26,7 +26,7 @@ namespace {
 constexpr std::string_view cache_content_type =
 	"application/vnd.th03.online-cache";
 constexpr std::string_view replay_content_type =
-	"application/vnd.th03.v13-replay";
+	"application/vnd.th03.v14-replay";
 constexpr std::string_view json_content_type = "application/json";
 constexpr std::size_t json_response_limit = 16U * 1024U;
 
@@ -516,7 +516,7 @@ validate_replay_payload(
 			NewClassicOnlineClientErrorCode::replay_digest, status
 		));
 	}
-	auto parsed = formats::parse_v13_replay(bytes);
+	auto parsed = formats::parse_v14_replay(bytes);
 	if(!parsed) {
 		auto result = client_error(
 			NewClassicOnlineClientErrorCode::replay_format, status
@@ -1035,7 +1035,7 @@ upload_new_classic_online_replay(
 			NewClassicOnlineClientErrorCode::invalid_document
 		));
 	}
-	auto bytes = formats::write_v13_replay(document);
+	auto bytes = formats::write_v14_replay(document);
 	if(!bytes || bytes->empty() ||
 		bytes->size() > new_classic_online_replay_max_bytes) {
 		auto result = client_error(NewClassicOnlineClientErrorCode::invalid_document);

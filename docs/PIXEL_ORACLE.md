@@ -167,7 +167,7 @@ process-start reveal at sample/global/round 0 also joins `scene_enter`; later
 exact-ordinal captures remain source-tick-only. Every path fails closed on ambiguity under
 the selected key.
 
-For a bounded unattended New Classic capture, pass an exact V13 artifact and
+For a bounded unattended New Classic capture, pass an exact V14 artifact and
 optional checkpoint. The explicit smoke bound is mandatory:
 
 ```powershell

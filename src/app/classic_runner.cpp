@@ -639,9 +639,14 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		request.content.new_classic_settings =
 			request.content.config.parent_path() / "PODD.CFG";
 	}
+	request.new_classic_replay_identity.ruleset =
+		stock_gameplay_rules(request.gameplay_ruleset) ?
+			formats::ReplayRuleset::stock :
+			formats::ReplayRuleset::dopamine_test_v1;
 	auto replay_recorder = request.experience == ExperienceProfile::new_classic
 		? std::make_unique<NewClassicReplayRecorder>(
-			std::uint16_t{0U}, stock_gameplay_rules(request.gameplay_ruleset)
+			std::uint16_t{0U}, stock_gameplay_rules(request.gameplay_ruleset),
+			request.new_classic_replay_identity
 		) : nullptr;
 	auto session = ClassicOpSession::create(
 		std::move(resident),

@@ -256,7 +256,7 @@ public:
 	);
 	// Replay-only continuation from a completed retained MAIN owner. The
 	// session runs the exact typed MAINL plan but stops before constructing the
-	// next MAIN, whose state must come from the next V13 checkpoint.
+	// next MAIN, whose state must come from the next V14 checkpoint.
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicStorySession>,
 		ClassicStorySessionError

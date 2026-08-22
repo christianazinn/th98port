@@ -71,7 +71,7 @@ struct MainStoryConfig {
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
 };
 
-// One explicitly recorded V13 checkpoint. This is the only public late-entry
+// One explicitly recorded V14 checkpoint. This is the only public late-entry
 // presentation path: the checkpoint must carry the replay format's complete
 // compact round/runtime snapshots and is always run under recorded input.
 struct MainReplayConfig final {

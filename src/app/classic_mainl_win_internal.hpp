@@ -122,7 +122,7 @@ private:
 // Fixed-storage, source-ordered MAINL win_animate_and_wait() equivalent. The
 // caller must drain the initial load/play commands before the first advance.
 // advance() represents one application presentation tick; it never consumes a
-// gameplay/V13 input sample.
+// gameplay/V14 input sample.
 class ClassicMainlWinScene final {
 public:
 	[[nodiscard]] static std::expected<

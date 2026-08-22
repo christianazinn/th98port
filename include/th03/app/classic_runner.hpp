@@ -20,6 +20,7 @@
 #include "th03/app/new_classic_key_config_store.hpp"
 #include "th03/app/new_classic_joy_config_store.hpp"
 #include "th03/app/new_classic_messages.hpp"
+#include "th03/app/new_classic_replay.hpp"
 #include "th03/app/new_classic_settings.hpp"
 #include "th03/app/pixel_oracle_identity.hpp"
 #include "th03/formats/replay.hpp"
@@ -102,6 +103,9 @@ struct ClassicRunnerRequest final {
 	GameplayRuleset gameplay_ruleset = stock_gameplay_ruleset;
 	// Replay Patch Autofire selection. Classic must leave this at zero.
 	std::uint8_t autofire_mask = 0U;
+	// Existing local account identity for newly recorded V14 files. An empty
+	// UUID preserves fully offline recording without creating an account.
+	NewClassicReplayIdentity new_classic_replay_identity{};
 	// Replay Patch's MAIN-only warning-flash reduction (tone 150 -> 100).
 	bool reduced_flash = false;
 	std::optional<NewClassicKeyConfig> new_classic_key_config{};

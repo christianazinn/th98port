@@ -13,7 +13,7 @@ The account identity is deliberately opaque. The service `users` table stores
 a UUID, mutable public nametag, salted credential hashes, and timestamps.
 Every linked device receives a separate credential for the same UUID. Replay
 and leaderboard rows still display the eight-character name saved inside each
-V13 replay; that is replay metadata, not yet the account-name snapshot.
+V14 replay; that is replay metadata, not yet the account-name snapshot.
 
 The room service authenticates each peer's UUID and T3ROOM3 now freezes both
 UUID/nametag pairs before peer negotiation. Schema-4 `T3NLC001` carries the
@@ -27,13 +27,13 @@ network proof, so an added nametag is presentation metadata: it must agree on
 both peers, but it does not belong to simulation, rollback, input, slowdown, or
 audio identity.
 
-V13 has no spare header bytes that can be safely reused. Its fixed 622-byte
+V14 has no spare header bytes that can be safely reused. Its fixed 622-byte
 header, summary, checkpoint reservations, flags, and zero-reserved fields are
 already validated by existing readers. Installation-local `.PODD` sidecars
 currently remember only that a replay was netplay and which player was local;
 they are digest-bound but do not travel with a copied or downloaded replay.
 
-V13 does, however, explicitly permit data after the declared logical input
+V14 does, however, explicitly permit data after the declared logical input
 stream. Existing readers ignore an unrecognized tail, and Replay Patch's
 optional `T3RACC1` accelerator already lives in that domain. Therefore account
 identity does not require V14.
@@ -101,7 +101,7 @@ ruleset version.
 
 ## Replay compatibility
 
-Add one fixed, versioned `T3NID001` block immediately after V13's declared
+Add one fixed, versioned `T3NID001` block immediately after V14's declared
 logical input stream. If `T3RACC1` is also present, its packed records and final
 footer remain after the identity block so old accelerator readers continue to
 find their footer at end-of-file.
@@ -112,16 +112,16 @@ The block snapshots:
 - P1 and P2 match-time nametags;
 - account/local flags;
 - the final netplay transcript digest; and
-- a digest binding the extension to the canonical logical V13 bytes.
+- a digest binding the extension to the canonical logical V14 bytes.
 
 This extension is descriptive evidence, not deterministic replay authority.
-The ordinary V13 parser and verifier continue to derive gameplay and scores
-solely from the frozen V13 stream. A malformed identity block invalidates only
+The ordinary V14 parser and verifier continue to derive gameplay and scores
+solely from the frozen V14 stream. A malformed identity block invalidates only
 the enhanced identity view; it must not reinterpret gameplay. Online services
 may impose a stricter policy when accepting a future VS submission.
 
-The V13 writer must learn to preserve/emit recognized typed tails before this
-ships. Today it writes only the logical V13 document, and its neutral document
+The V14 writer must learn to preserve/emit recognized typed tails before this
+ships. Today it writes only the logical V14 document, and its neutral document
 retains only parsed accelerator presentation facts. Exact downloads already
 use the byte-preserving store path; edited/local saves need the new typed
 extension owner.
@@ -160,7 +160,7 @@ renaming the profile leaves every credential and the UUID stable.
    malformed/cross-room/cross-account tests. **Complete.**
 5. ~~Render comparison images, select the accepted placement/color, and attach
    the bounded rows only to the New Classic netplay intro.~~
-6. Add the optional V13 tail, byte-preserving replay/download behavior, detail
+6. Add the optional V14 tail, byte-preserving replay/download behavior, detail
    display, replay-renderer support, and old-reader compatibility tests.
 
 ## Approved decisions
@@ -168,6 +168,6 @@ renaming the profile leaves every credential and the UUID stable.
 - One changeable account nametag; no per-match alias.
 - Printable ASCII now, validated against two 28-cell rows without word splits.
 - Duplicate case-preserving names; the UUID is the stable identity.
-- Public typed V13 tails may expose both opaque account UUIDs.
+- Public typed V14 tails may expose both opaque account UUIDs.
 - Character names remain unchanged; nametags replace the two title rows.
 - Multiple devices receive separate revocable credentials for the same UUID.

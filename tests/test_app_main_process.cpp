@@ -1426,7 +1426,7 @@ void test_new_classic_netplay_main_session_convergence()
 		(*one_process)->round_start_observation()
 	);
 	expect(replay_capture.has_value(),
-		"confirmed-journal V13 adapter accepts the same source-fresh MAIN start");
+		"confirmed-journal V14 adapter accepts the same source-fresh MAIN start");
 	auto peer_one = NewClassicNetplayMainSession::create(
 		NewClassicNetplayPlayer::player_one, std::move(*one_process)
 	);
@@ -1655,7 +1655,7 @@ void test_new_classic_netplay_main_session_convergence()
 			replay_capture->append_confirmed_frame(
 				**transcript_one, false
 			).has_value(),
-			"corrected contiguous-confirmed frame feeds the memory-only V13 adapter"
+			"corrected contiguous-confirmed frame feeds the memory-only V14 adapter"
 		);
 	}
 	const auto audio_exhausted = (*peer_one)->take_confirmed_audio_frame();
@@ -1669,7 +1669,7 @@ void test_new_classic_netplay_main_session_convergence()
 		replay_capture && replay_capture->frame_count() == frame_count &&
 		replay_capture->document() &&
 		replay_capture->document()->session.sample_count == frame_count,
-		"memory-only V13 prefix contains exactly the corrected confirmed timeline"
+		"memory-only V14 prefix contains exactly the corrected confirmed timeline"
 	);
 	expect((*peer_one)->process().canonical_state().state_hash ==
 			(*peer_two)->process().canonical_state().state_hash &&
@@ -1839,7 +1839,7 @@ void test_new_classic_netplay_pause_boundary()
 		NewClassicNetplayPlayer::player_one, std::move(*process)
 	);
 	expect(session && capture,
-		"netplay Pause owns a rollback-safe MAIN and memory-only V13");
+		"netplay Pause owns a rollback-safe MAIN and memory-only V14");
 	if(!session || !capture) {
 		return;
 	}
@@ -1877,7 +1877,7 @@ void test_new_classic_netplay_pause_boundary()
 		(**recorded_open).step_result.status == th03::StepStatus::paused &&
 		((**recorded_open).input.system & 0x1000U) != 0U &&
 		capture->append_confirmed_frame(**recorded_open, false),
-		"V13 receives the corrected Pause-opening gameplay sample once");
+		"V14 receives the corrected Pause-opening gameplay sample once");
 
 	const auto reference_release = (*reference)->step(
 		{}, th03::InputContext::pause
@@ -1903,7 +1903,7 @@ void test_new_classic_netplay_pause_boundary()
 		capture->pause_resumed(*resumed->pause_completion) &&
 		capture->frame_count() == 1U && capture->document() &&
 		capture->document()->session.sample_count == 4U,
-		"V13 stores one fixed three-poll Pause transaction, not wall-clock waits");
+		"V14 stores one fixed three-poll Pause transaction, not wall-clock waits");
 	expect((*session)->process().canonical_state().state_hash ==
 			(*reference)->canonical_state().state_hash,
 		"netplay Resume converges to uninterrupted source live-pause state");

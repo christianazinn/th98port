@@ -4,7 +4,7 @@
 #include "th03/app/new_classic_playback.hpp"
 #include "th03/app/new_classic_settings.hpp"
 #include "th03/audio/output_gain.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 
 #include "progress_protocol.hpp"
 
@@ -1233,10 +1233,10 @@ staging_output_path(const fs::path &output)
 		std::cerr << "error: " << replay_bytes.error() << '\n';
 		return 2;
 	}
-	auto document = th03::formats::parse_v13_replay(*replay_bytes);
+	auto document = th03::formats::parse_v14_replay(*replay_bytes);
 	if(!document || !th03::formats::replay_can_be_verified(*document) ||
 		options.checkpoint >= document->checkpoints.size()) {
-		std::cerr << "error: replay is not a finalized selectable V13 document\n";
+		std::cerr << "error: replay is not a finalized selectable V14 document\n";
 		return 2;
 	}
 	std::optional<LoadedRhythmPcm> rhythm_pcm{};

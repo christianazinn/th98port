@@ -23,7 +23,7 @@ Run these first on every candidate:
 4. Play Stage 1 Story for a few seconds, pause, Resume, pause again, Restart,
    then quit without saving. Relaunch and confirm no interrupted-replay Save
    prompt appears.
-5. Play one saved V13 from Stage 1 and one later checkpoint. The Stage 1
+5. Play one saved V14 from Stage 1 and one later checkpoint. The Stage 1
    character interstitial and every later stage interstitial must appear with
    both fade halves; the selected round must begin at its start without a
    long black scheduler catch-up.
@@ -82,8 +82,8 @@ Run these first on every candidate:
   catch-up.
 - `TH3R06.RPY`: browse, inspect all detail pages, play from Stage 1 and at
   least one later checkpoint, and finish the replay. This is the known genuine
-  V13 WR fixture.
-- Confirm V12 files remain unselectable by the V13-only Replay Patch browser.
+  V14 WR fixture.
+- Confirm V12 files remain unselectable by the V14-only Replay Patch browser.
 - During replay gameplay hold Shot for 4x progression; keep holding it through
   interstitials/cutscenes and confirm recorded wait/cancel input is consumed at
   source cadence without leaving the playback stranded.

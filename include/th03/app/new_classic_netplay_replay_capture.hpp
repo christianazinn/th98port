@@ -22,7 +22,7 @@ struct NewClassicNetplayReplayCaptureError final {
 };
 
 // App-layer adapter from the corrected contiguous-confirmed netplay journal to
-// the ordinary in-memory V13 recorder. It owns no path or storage policy.
+// the ordinary in-memory V14 recorder. It owns no path or storage policy.
 class NewClassicNetplayReplayCapture final {
 public:
 	[[nodiscard]] static std::expected<
@@ -30,7 +30,8 @@ public:
 		NewClassicNetplayReplayCaptureError
 	> create(
 		const RoundStartObservation &initial_round,
-		std::uint16_t dos_date = 0U
+		std::uint16_t dos_date = 0U,
+		NewClassicReplayIdentity identity = {}
 	);
 
 	[[nodiscard]] std::expected<void, NewClassicNetplayReplayCaptureError>

@@ -5,7 +5,7 @@
 #include <bit>
 #include <sstream>
 
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 #include "th03/app/new_classic_story_route.hpp"
 
 namespace th03rv {
@@ -122,7 +122,7 @@ bool stock_story_anchor(
 		return false;
 	}
 
-	// V13 checkpoint zero legitimately carries compact/runtime recipes, and its
+	// V14 checkpoint zero legitimately carries compact/runtime recipes, and its
 	// top-level random_seed is the post-initialization live seed rather than the
 	// pre-initialization resident seed. Rebuild the same launch without any
 	// recipe, then compare the complete effective first-round observation. This
@@ -163,7 +163,8 @@ std::optional<ServiceAcceptedReport> make_service_accepted_report(
 	if(
 		!document.metadata || !document.slowdown || !splits_match ||
 		!checkpoints_match ||
-		document.session.source_version != th03::formats::replay_v13_version ||
+		document.session.source_version != th03::formats::replay_v14_version ||
+		document.metadata->ruleset != th03::formats::ReplayRuleset::stock ||
 		document.metadata->status != th03::formats::ReplayStatus::finalized ||
 		document.session.init.game_mode != th03::game_mode::story ||
 		document.practice || run.status != th03::replay::RunStatus::complete ||

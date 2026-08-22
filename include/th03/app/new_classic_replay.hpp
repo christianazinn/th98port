@@ -4,12 +4,27 @@
 #include <cstdint>
 #include <expected>
 #include <optional>
+#include <string_view>
 
 #include "th03/core/game.hpp"
 #include "th03/formats/replay.hpp"
 #include "th03/replay/session.hpp"
 
 namespace th03::app {
+
+struct NewClassicReplayIdentity final {
+	formats::ReplayRuleset ruleset = formats::ReplayRuleset::stock;
+	std::uint8_t recording_flags = 0U;
+	formats::ReplayRecorderRole recorder_role =
+		formats::ReplayRecorderRole::unknown;
+	formats::ReplayRecorderSource recorder_source =
+		formats::ReplayRecorderSource::native;
+	std::array<formats::ReplayAccountUuid, 2U> player_uuid{};
+	formats::ReplayMatchId match_id{};
+};
+
+[[nodiscard]] std::optional<formats::ReplayAccountUuid>
+parse_new_classic_replay_account_uuid(std::string_view text) noexcept;
 
 enum class NewClassicReplayErrorCode : std::uint8_t {
 	invalid_round_start,
@@ -38,11 +53,14 @@ class NewClassicReplayRecorder final {
 public:
 	explicit NewClassicReplayRecorder(
 		std::uint16_t recording_date = 0U,
-		bool capture_enabled = true
+		bool capture_enabled = true,
+		NewClassicReplayIdentity identity = {}
 	) noexcept :
 		recording_date_(recording_date),
-		capture_enabled_(capture_enabled)
+		capture_enabled_(capture_enabled),
+		identity_(identity)
 	{}
+	[[nodiscard]] bool set_identity(NewClassicReplayIdentity identity) noexcept;
 	[[nodiscard]] std::expected<void, NewClassicReplayError> round_started(
 		const RoundStartObservation &observation,
 		std::uint16_t dos_date = 0U
@@ -112,6 +130,7 @@ private:
 	bool round_timer_active_ = false;
 	bool slow_sample_pending_ = false;
 	bool capture_enabled_ = true;
+	NewClassicReplayIdentity identity_{};
 };
 
 } // namespace th03::app

@@ -10,7 +10,7 @@ Arrange experiment expose better boundaries.
 - Classic remains a sealed port of the original game. It consumes none of the
   localization, Arrange, account-name, or enhanced menu configuration below.
 - New Classic may deliberately diverge from Replay Patch presentation and UI,
-  but deterministic stock gameplay and V13 replay behavior remain the default.
+  but deterministic stock gameplay and V14 replay behavior remain the default.
 - Original game assets and extracted original text remain external inputs.
   Tracked files may contain schemas, compilers, synthetic fixtures, and
   translations the project is authorized to distribute.
@@ -117,7 +117,7 @@ Gates:
 - synthetic non-ASCII and width-stress fixtures;
 - Japanese/English visual regressions for every migrated owner;
 - cutscene command/timing identity with only glyph output substituted; and
-- no change to Classic or stock-language V13 simulation.
+- no change to Classic or stock-language V14 simulation.
 
 ### 2. Replay renderer desktop GUI
 
@@ -167,7 +167,7 @@ non-stock. Its rules enter deterministic initialization and any future replay,
 verification, online, or netplay identity as one `RulesetId`.
 
 Until a replay format or authenticated extension binds that identity, Arrange
-recording, stock V13 playback, online upload, and netplay are disabled rather
+recording, stock V14 playback, online upload, and netplay are disabled rather
 than mislabeled as stock. The test selector lives at
 `Option -> Gameplay -> Arrange` and persists the complete named ruleset in
 `PODD.CFG`; the command-line switch remains for deterministic tooling.
@@ -234,7 +234,7 @@ The product decisions and first account-backed implementation are complete:
 4. immutable server snapshots for account rooms and local/unverified identity
    for direct UDP;
 5. separate revocable device credentials joined by a short-lived code; and
-6. a backward-compatible typed V13 tail for later replay identity rather than
+6. a backward-compatible typed V14 tail for later replay identity rather than
    a forced V14.
 
 The server provides authenticated identity metadata, the match contract
@@ -249,10 +249,10 @@ the retained first-use/edit UI are complete. The approved design is in
 conservative single-line placeholder, not a source limit. The real title area
 has two 28-cell rows, so validation accepts at most 57 printable-ASCII source
 bytes (`28 + space + 28`) only when whole-word wrapping actually fits. The
-source character-name row remains unchanged. There are no safe V13 header
+source character-name row remains unchanged. There are no safe V14 header
 bytes to reuse, but a fixed typed identity block can live after the declared
 logical input stream and before an optional final `T3RACC1` payload. Existing
-V13 readers ignore that tail, so this presentation metadata does not require
+V14 readers ignore that tail, so this presentation metadata does not require
 V14. That replay-tail/preservation work remains next.
 
 ## Current execution order
@@ -260,7 +260,7 @@ V14. That replay-tail/preservation work remains next.
 The original source-text, renderer-GUI, Arrange, content-audit, and live
 nametag parcels above are implemented. The remaining product/tooling work is:
 
-1. Add the backward-compatible V13 identity tail and surface match-time names
+1. Add the backward-compatible V14 identity tail and surface match-time names
    in replay details/export without changing deterministic replay authority.
 2. Finish localization convenience tooling: one locale-bundle build/check
    command, deterministic Japanese/English scene snapshots, translator contact

@@ -38,7 +38,7 @@ std::expected<std::vector<replay::SessionRecord>, Error> decode_rpy_input(
 		RpyInputTermination::require_process_control
 );
 
-// V13 seals the current RLE packet before capturing a checkpoint. Each stored
+// V14 seals the current RLE packet before capturing a checkpoint. Each stored
 // byte cursor must therefore land at a packet boundary whose expanded sample
 // cursor agrees exactly, with a full keyframe following when input remains.
 std::expected<void, Error> validate_rpy_checkpoint_cursors(

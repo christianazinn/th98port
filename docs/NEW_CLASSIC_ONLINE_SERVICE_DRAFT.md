@@ -7,7 +7,7 @@ upload, My Records, download, and Watch; reviewed historical seeding remains**
 Decision date: 2026-08-15
 
 The first service should be deliberately small. A client identifies itself,
-uploads one V13 replay, the server runs one pinned `th03rv` verification, and
+uploads one V14 replay, the server runs one pinned `th03rv` verification, and
 an accepted result becomes an online leaderboard/replay row. The online screen
 should look and behave like the existing Replay browser, with score ordering
 and online ownership added rather than a separate web-style UI language.
@@ -46,7 +46,7 @@ temporary files, but it is not an anti-cheat boundary. A modified Windows
 client can alter memory, code, or the request body. The v1 server therefore
 does only what it can prove simply and deterministically:
 
-1. Strictly parse the uploaded V13 file.
+1. Strictly parse the uploaded V14 file.
 2. Run the complete input stream through the pinned stock verifier.
 3. Rebuild checkpoint zero from a snapshot-free stock Story launch, compare
    its complete first-round observation, then require every stored checkpoint,
@@ -78,7 +78,7 @@ Recommended bindings:
 |---|---|
 | Worker | user enrollment, authenticated upload, fixed validation gate, read API |
 | Cloudflare Container | pinned native `th03rv` invocation if current account support and limits are suitable |
-| R2 | exact accepted V13 bytes keyed by replay SHA-256 |
+| R2 | exact accepted V14 bytes keyed by replay SHA-256 |
 | D1 | users, accepted entries, historical entries, and best-per-profile queries |
 
 No Queue is required for v1. Verification should run synchronously behind one
@@ -188,10 +188,10 @@ watch/download actions.
 ## Replay bytes and local recording
 
 The live native recorder remains an in-memory document authority. Online
-submission can encode the finalized V13 document to a byte vector and send
+submission can encode the finalized V14 document to a byte vector and send
 those bytes directly, avoiding a temporary numbered replay file.
 
-Active native recording is memory-only. Finalization produces a canonical V13
+Active native recording is memory-only. Finalization produces a canonical V14
 byte vector in memory, which can be submitted directly without creating a
 temporary replay file. A local save begins disk I/O only after a numbered slot
 is confirmed and atomically publishes `TH3Rxx.RPY`; saved and downloaded files
@@ -209,7 +209,7 @@ separate reachability pass against a consistent D1 snapshot.
 
 These are fixed parser boundaries, not a quota product:
 
-- accept raw V13 bytes only;
+- accept raw V14 bytes only;
 - enforce one conservative maximum byte count and verifier wall-time;
 - never accept client paths, URLs, archives, content files, or executables;
 - use prepared D1 statements and bounded strings;
@@ -241,7 +241,7 @@ availability without inventing a host-styled surface.
 1. Add structured machine-readable output to `th03rv` with only
    `accepted/rejected/error`, server-derived score/category, exact split
    agreement, Autofire, and slowdown.
-2. Audit the existing V13 slowdown encoding and freeze literal `>5%`
+2. Audit the existing V14 slowdown encoding and freeze literal `>5%`
    rejection by exact cross multiplication while retaining the local replay
    viewer's floored display integer.
 3. Inspect and extend `tools/azinn-site-v2`; bind local D1/R2/Container
@@ -265,7 +265,7 @@ bypass.
 `th03rv --service-json` now supplies the typed `T3RV-SERVICE-1` inner report.
 An accepted report derives visible score (including TH03's trailing-zero score
 unit), terminal stage, clear/Game Over kind, and continues used from simulated
-or reconstructed state rather than trusting V13 header result fields. The
+or reconstructed state rather than trusting V14 header result fields. The
 future pinned Container wrapper adds only the exact replay SHA-256 and the
 fixed content/ruleset/verifier identities; the Worker requires all pins to
 match. See the service README for the exact adapter boundary.
@@ -290,9 +290,9 @@ cross-language golden vector proves Worker/native byte compatibility.
 Session 199 adds the platform-neutral transaction layer. It requests exactly
 one bounded binary board and commits it to a dedicated rank/character cache,
 preserving a local monotonic generation. Enrollment accepts only the service's
-two credential strings. Upload serializes the finalized V13 directly into
+two credential strings. Upload serializes the finalized V14 directly into
 request memory and never writes a candidate journal or temporary replay.
-Download verifies the content digest, V13 parse, and every available cached
+Download verifies the content digest, V14 parse, and every available cached
 metadata field before atomically preserving the exact response bytes (including
 optional accelerator tails) under the online replay directory. Later sessions
 add the visible owner, host tasks, official origin, and production deployment.
@@ -329,7 +329,7 @@ closed instead of escaping the thread.
 Session 212 adds the first explicit replay action. Confirm on a replay-backed
 online HiScore detail emits one immutable request through the OP session and
 runner; a separate one-shot worker performs the existing bounded download.
-Only exact digest, V13, cached metadata, and atomic content-addressed
+Only exact digest, V14, cached metadata, and atomic content-addressed
 publication success changes the UI to `Downloaded`. Missing endpoints report
 `Offline`, other failures remain retryable, and neither path blocks a source
 tick. On later launches the same checks revalidate local bytes before restoring
@@ -337,7 +337,7 @@ downloaded availability.
 
 Session 213 completes the local Watch half of that action. Confirm on a
 downloaded replay emits a separate immutable intent; the host re-reads and
-validates ReplayId, V13 structure, and cached metadata before handing the
+validates ReplayId, V14 structure, and cached metadata before handing the
 document back to OP. The session stops HiScore music, publishes one black
 source boundary, adopts the existing checkpoint-zero playback owner, and asks
 the host scheduler to rebase before the first gameplay tick. A stale local file
@@ -354,7 +354,7 @@ browser directly.
 Session 258 exposes explicit upload without changing the deterministic owner.
 On Windows, the official or overridden origin adds one Upload Replay row even when no cached
 board contains records. Confirming a numbered local slot emits one immutable
-parsed V13 document; a host worker loads or enrolls the DPAPI-protected opaque
+parsed V14 document; a host worker loads or enrolls the DPAPI-protected opaque
 identity and passes the document to the existing in-memory upload transaction.
 The only replay bytes created are the bounded HTTPS request body. A result is
 latched into the retained screen on the next source boundary, while an absent

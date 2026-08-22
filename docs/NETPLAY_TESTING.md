@@ -304,7 +304,7 @@ depth, missed source deadlines, and—when WebRTC supplies one—the latest
 bounded round-trip sample in milliseconds. The authenticated report displays
 the same sample as `Round Trip (ms)`; direct UDP displays `--` because it has
 no equivalent truthful measurement. These values never enter simulation,
-peer agreement, or V13 replay data. Preserve both terminals' output when
+peer agreement, or V14 replay data. Preserve both terminals' output when
 reporting a test so asymmetric transport behavior remains visible.
 Delayed or duplicated UDP runtime-proof packets and acknowledgements older
 than the newest verified proof are ignored; current and future identities
@@ -316,7 +316,7 @@ Forfeit is different from closing the application: it is bound to the exact
 confirmed Pause identity, retries a typed request/ack, and both sides print
 `status=match-forfeited` plus `replay-ready=0` and `replay-published=0`.
 The preview feeds its corrected contiguous-confirmed input stream directly into
-the ordinary memory-only V13 recorder. Predicted or superseded frames never
+the ordinary memory-only V14 recorder. Predicted or superseded frames never
 enter it, and each machine retains its own first-execution slowdown evidence.
 After the winner scene completes, a normal match prints `replay-ready=1`,
 `replay-frames`, and the validated `replay-bytes` size, then opens the ordinary
@@ -326,21 +326,17 @@ passes its selected persistent `REPLAY` directory automatically; a native
 command should pass `--replay-root <directory>` (or defaults to `REPLAY` under
 `--data`). Leaving, forfeiting, disconnecting, closing, or failing before the completed
 winner owner writes nothing. The optional `--netplay-replay-output` developer
-argument bypasses the menu and publishes the validated final V13 directly,
+argument bypasses the menu and publishes the validated final V14 directly,
 using the same flush/read-back/reparse/atomic-replace transaction as numbered
 slots.
 
-V13 remains the portable replay artifact and keeps canonical P1/P2 character,
-score, winner, and input ordering. A numbered netplay save also writes a
-48-byte installation-local `TH3RNN.PODD` view beside `TH3RNN.RPY`. Its
-`PODDRIX1` record stores only whether this installation was P1 or P2 and binds
-that projection to the exact replay SHA-256. The Replay list and save summary
+V14 remains the portable replay artifact and keeps canonical P1/P2 character,
+score, winner, input ordering, account identities, and the recording machine's
+P1/P2 role in one self-contained file. The Replay list and save summary
 therefore show the local peer's character and final score, and the detail page
-labels the match `Vs Mode Netplay`. Missing, malformed, copied without the
-replay, or digest-stale sidecars are ignored; the valid V13 falls back to the
-ordinary local-VS presentation. V13 already identifies the canonical player
-roles, but does not contain online user names or account identities. Adding
-those is a future replay-format decision rather than a reserved-byte shortcut.
+labels the match `Vs Mode Netplay`. No installation-local replay sidecar is
+needed. V14 deliberately stores opaque account UUIDs rather than nametags;
+online UI resolves the current public nametag for each UUID.
 
 For a bounded automated check, append the same `--smoke-ticks N` to both
 commands. This exits only after both peers have confirmed `N` gameplay input

@@ -63,7 +63,7 @@
 #include "th03/app/startup_sequence.hpp"
 #include "th03/app/tick_input.hpp"
 #include "th03/audio/output_gain.hpp"
-#include "th03/formats/v13.hpp"
+#include "th03/formats/v14.hpp"
 #include "th03/platform/sdl_input.hpp"
 #include "th03/platform/sdl_audio_device.hpp"
 #include "th03/platform/sdl_platform.hpp"
@@ -622,7 +622,7 @@ void print_usage()
 			"[--cutscene-text-pack <locale.t3ctp>] "
 			"[--rhythm-rom <YM2608.ROM> | --rhythm-pcm <T98RHYTHM.PCM>] "
 			"[--tick-rate <ticks>/<seconds>] "
-			"[--smoke-ticks n] [--capture-replay <V13.RPY> "
+			"[--smoke-ticks n] [--capture-replay <V14.RPY> "
 			"[--capture-checkpoint n]] [--arrange dopamine-test-v1]\n"
 		<< "   or: th03-app --vs --data <root> --main <MAIN.EXE> "
 			"--font <FONT.ROM>\n"
@@ -633,7 +633,7 @@ void print_usage()
 			"--netplay-join <IPv4-or-hostname:port>] "
 			"[--netplay-input-delay <0..6>] "
 			"[--replay-root <directory>] "
-			"[--netplay-replay-output <V13.RPY>]\n"
+			"[--netplay-replay-output <V14.RPY>]\n"
 		<< "characters: reimu mima marisa ellen kotohime kana rikako "
 			"chiyuri yumemi\n"
 		<< "P1: T/F/H/B, diagonals R/Y/V/N, Z shot, X bomb\n"
@@ -3908,8 +3908,34 @@ int run_direct_netplay_on_platform(
 	}
 	const auto process_round_start = (*process)->round_start_observation();
 	const auto process_start = process_round_start.start;
+	th03::app::NewClassicReplayIdentity replay_identity{
+		.ruleset = th03::formats::ReplayRuleset::stock,
+		.recording_flags = th03::formats::replay_recording_flag_netplay,
+		.recorder_role = local_player == NewClassicNetplayPlayer::player_one ?
+			th03::formats::ReplayRecorderRole::player_one :
+			th03::formats::ReplayRecorderRole::player_two,
+		.recorder_source = th03::formats::ReplayRecorderSource::native,
+	};
+	if(negotiated->profiles) {
+		const auto player_one = th03::app::parse_new_classic_replay_account_uuid(
+			negotiated->profiles->player_one.user_id
+		);
+		const auto player_two = th03::app::parse_new_classic_replay_account_uuid(
+			negotiated->profiles->player_two.user_id
+		);
+		if(!player_one || !player_two) {
+			return fail_netplay("netplay-replay", "profile-uuid-invalid");
+		}
+		replay_identity.player_uuid = {*player_one, *player_two};
+	}
+	std::copy_n(
+		negotiated->contract.identity_digest.begin(),
+		replay_identity.match_id.size(), replay_identity.match_id.begin()
+	);
 	auto created_replay_capture =
-		th03::app::NewClassicNetplayReplayCapture::create(process_round_start);
+		th03::app::NewClassicNetplayReplayCapture::create(
+			process_round_start, 0U, replay_identity
+		);
 	if(!created_replay_capture) {
 		return fail_netplay("netplay-replay", "capture-create-failed");
 	}
@@ -5298,7 +5324,7 @@ int run_direct_netplay_on_platform(
 			if(!completed) {
 				return fail_netplay("netplay-replay", "finalize-failed");
 			}
-			auto encoded = th03::formats::write_v13_replay(*completed);
+			auto encoded = th03::formats::write_v14_replay(*completed);
 			if(!encoded) {
 				return fail_netplay("netplay-replay", "encode-failed");
 			}
@@ -5643,9 +5669,10 @@ ExperienceRunResult run_classic_session(
 	{
 		const auto credential_root = new_classic_settings_path.empty() ?
 			config_path.parent_path() : new_classic_settings_path.parent_path();
+		const auto credential_path = credential_root / "PODD.AUTH";
 		std::error_code credential_error{};
 		const bool saved_identity = std::filesystem::is_regular_file(
-			credential_root / "PODD.AUTH", credential_error
+			credential_path, credential_error
 		);
 		const bool environment_identity =
 			environment_value(online_user_environment).has_value() ||
@@ -5653,6 +5680,22 @@ ExperienceRunResult run_classic_session(
 		parsed.launch.new_classic_online_identity_reset_available =
 			new_classic && saved_identity && !credential_error &&
 			!environment_identity;
+		std::optional<std::string> replay_user = environment_value(
+			online_user_environment
+		);
+		if(!replay_user && saved_identity && !credential_error) {
+			if(const auto loaded = load_product_online_credentials(credential_path);
+				loaded && *loaded) {
+				replay_user = (**loaded).user_id;
+			}
+		}
+		if(replay_user) {
+			if(const auto uuid = th03::app::parse_new_classic_replay_account_uuid(
+				*replay_user
+			)) {
+				parsed.launch.new_classic_replay_identity.player_uuid[0U] = *uuid;
+			}
+		}
 	}
 #endif
 	if(parsed.capture_replay) {

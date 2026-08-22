@@ -206,7 +206,7 @@ private:
 	NewClassicOnlineTransport transport
 );
 
-// One explicit upload of an immutable finalized replay. Canonical V13 encoding
+// One explicit upload of an immutable finalized replay. Canonical V14 encoding
 // stays in memory; this owner never creates an upload candidate on disk.
 class NewClassicOnlineReplayUploadTask final {
 public:

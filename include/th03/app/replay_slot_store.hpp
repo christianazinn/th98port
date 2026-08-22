@@ -50,10 +50,9 @@ enum class ReplaySlotLocalOrigin : std::uint8_t {
 	netplay,
 };
 
-// Installation-local catalog presentation. This is deliberately stored
-// beside, never inside, the frozen V13 replay. A digest in the sidecar binds
-// the view to the exact slot bytes, so an interrupted replacement or a replay
-// copied without its local metadata safely falls back to the ordinary view.
+// Catalog presentation derived from the self-contained V14 recorder role.
+// The transient type remains useful to the save UI, but it is never persisted
+// separately from the replay.
 struct ReplaySlotLocalView final {
 	ReplaySlotLocalOrigin origin = ReplaySlotLocalOrigin::ordinary;
 	std::uint8_t local_player = 0U;
@@ -73,31 +72,27 @@ struct ReplaySlotLoadResult final {
 	const std::filesystem::path &replay_root,
 	std::uint8_t slot
 );
-[[nodiscard]] std::filesystem::path replay_slot_local_view_path(
-	const std::filesystem::path &replay_root,
-	std::uint8_t slot
-);
 [[nodiscard]] std::filesystem::path replay_fallback_path(
 	const std::filesystem::path &replay_root
 );
 
-// Developer tools may name an exact V13 artifact without projecting it into a
+// Developer tools may name an exact V14 artifact without projecting it into a
 // player-facing slot. A missing path is reported as an empty result.
 [[nodiscard]] std::expected<ReplaySlotLoadResult, ReplaySlotStoreError>
 load_replay_file(const std::filesystem::path &path);
 
 // Missing slots are ordinary empty results. Existing bytes must be bounded,
-// regular, and accepted by the frozen V13 reader.
+// regular, and accepted by the frozen V14 reader.
 [[nodiscard]] std::expected<ReplaySlotLoadResult, ReplaySlotStoreError>
 load_replay_slot(
 	const std::filesystem::path &replay_root,
 	std::uint8_t slot
 );
 
-// Encodes through the canonical V13 writer, writes a same-directory exclusive
+// Encodes through the canonical V14 writer, writes a same-directory exclusive
 // temporary, flushes and reads it back, reparses it, then atomically replaces
-// the selected slot. A digest-bound installation-local presentation sidecar is
-// published afterward; it never alters the canonical V13 bytes.
+// the selected slot. Netplay presentation ownership is encoded in the V14
+// header itself; no installation-local sidecar is created.
 [[nodiscard]] std::expected<void, ReplaySlotStoreError> commit_replay_slot(
 	const std::filesystem::path &replay_root,
 	std::uint8_t slot,
@@ -105,7 +100,7 @@ load_replay_slot(
 	std::optional<ReplaySlotLocalView> local_view = std::nullopt
 );
 
-// Publishes already-encoded, strictly valid V13 bytes without re-encoding
+// Publishes already-encoded, strictly valid V14 bytes without re-encoding
 // them. This preserves content-addressed optional tails while retaining the
 // slot store's exclusive temporary, flush, read-back, parse, and atomic
 // replacement contract.
