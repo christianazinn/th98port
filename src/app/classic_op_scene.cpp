@@ -1082,10 +1082,10 @@ bool ClassicOpTitleMenuScene::draw_vs_choice(
 	const auto raw = static_cast<std::size_t>(choice);
 	const auto tram_y = (box_top_value() / present::gaiji_height) + 1 +
 		static_cast<std::int32_t>(row + 1U);
-	if(choice == ClassicOpVsChoice::online_match) {
-		const auto top = tram_y * present::gaiji_height;
+	const auto top = tram_y * present::gaiji_height;
+	if(patch_assets_) {
 		const auto bare = raster_.graphics(present::Page::one);
-		if(!patch_assets_ || bare.size() != present::graphics_page_pixels ||
+		if(bare.size() != present::graphics_page_pixels ||
 			!raster_.set_access_page(present::Page::zero)) {
 			return false;
 		}
@@ -1101,11 +1101,13 @@ bool ClassicOpTitleMenuScene::draw_vs_choice(
 				}
 			}
 		}
+	}
+	if(choice == ClassicOpVsChoice::online_match) {
 		const auto color = static_cast<present::Index4>(
 			!vs_choice_available(resident_, choice) ? 8U :
 			(attribute == present::tram_black ? 0U : 15U)
 		);
-		const auto center = box_submenu_center_x + 4;
+		const auto center = box_submenu_center_x - 4;
 		const auto text = patch_assets_->messages().text(
 			NewClassicMessageId::netplay_online_match
 		);
@@ -1148,6 +1150,33 @@ bool ClassicOpTitleMenuScene::draw_vs_choice(
 		return false;
 	}
 	const std::int32_t tram_left = patch_assets_ ? 28 : 27;
+	if(patch_assets_) {
+		const auto shadow = static_cast<present::Index4>(
+			attribute == present::tram_black ? 15U : 0U
+		);
+		for(std::size_t glyph = 0U; glyph < labels[raw].size(); ++glyph) {
+			const auto &bitmap = tram_.gaiji(labels[raw][glyph]);
+			const auto glyph_left = (tram_left * 8) +
+				static_cast<std::int32_t>(glyph * present::gaiji_width) + 1;
+			for(std::int32_t glyph_y = 0;
+				glyph_y + 1 < present::gaiji_height; ++glyph_y) {
+				for(std::int32_t glyph_x = 0;
+					glyph_x < present::gaiji_width; ++glyph_x) {
+					const auto half = static_cast<std::size_t>(glyph_x / 8);
+					const auto bits = bitmap.row_halves[
+						(static_cast<std::size_t>(glyph_y) * 2U) + half
+					];
+					if((bits & static_cast<std::uint8_t>(
+						0x80U >> (glyph_x & 7)
+					)) != 0U && !raster_.plot({
+						glyph_left + glyph_x, top + glyph_y + 1,
+					}, shadow)) {
+						return false;
+					}
+				}
+			}
+		}
+	}
 	for(std::size_t glyph = 0U; glyph < labels[raw].size(); ++glyph) {
 		if(!tram_.put_gaiji(
 			{tram_left + (static_cast<std::int32_t>(glyph) * 2), tram_y},
@@ -1524,7 +1553,15 @@ ClassicOpTitleMenuScene::advance(ClassicOpInput input)
 				++resident_.resident_rand;
 				increment_rand_after_box_ = false;
 			}
-			phase_frame_ = 0U;
+			if(!draw_main_choices()) {
+				fail();
+				return std::unexpected(op_error(
+					ClassicOpErrorCode::draw_failed
+				));
+			}
+			// Publish the shadowed proportional labels on the final opening frame;
+			// never expose the embedded, unshadowed TL02 labels for an idle tick.
+			phase_frame_ = 1U;
 			phase_ = ClassicOpPhase::main_menu;
 		}
 		return tick(ClassicOpBoundary::vsync, true);

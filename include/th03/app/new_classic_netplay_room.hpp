@@ -145,6 +145,12 @@ public:
 	[[nodiscard]] NewClassicNetplayPreferences preferences() const noexcept;
 
 private:
+	enum class Phase : std::uint8_t {
+		fade_in,
+		menu,
+		fade_out,
+	};
+
 	enum class Screen : std::uint8_t {
 		menu,
 		player_setup,
@@ -156,6 +162,8 @@ private:
 	};
 
 	[[nodiscard]] bool draw() noexcept;
+	[[nodiscard]] NewClassicNetplayRoomResult consume_fade() noexcept;
+	void begin_fade_out(NewClassicNetplayRoomStatus terminal) noexcept;
 	[[nodiscard]] bool valid_join_endpoint() const noexcept;
 	void restore_launch_caller() noexcept;
 	void require_release() noexcept;
@@ -167,6 +175,10 @@ private:
 	NewClassicNetplayRoomStatus status_ =
 		NewClassicNetplayRoomStatus::running;
 	Screen screen_ = Screen::menu;
+	Phase phase_ = Phase::fade_in;
+	NewClassicNetplayRoomStatus fade_terminal_ =
+		NewClassicNetplayRoomStatus::back;
+	std::uint8_t fade_boundary_ = 0U;
 	std::uint8_t selection_ = 0U;
 	std::uint16_t host_port_ = 31'415U;
 	std::string port_entry_{};

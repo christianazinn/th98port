@@ -3136,7 +3136,9 @@ private:
 			}
 			const auto scancode = mapper.take_keyboard_scancode_press();
 			const auto consumed = room.consume({
-				.ui = project_new_classic_ui(**due, true),
+				.ui = project_new_classic_ui(
+					**due, !room.text_entry_active()
+				),
 				.erase = scancode && *scancode == SDL_SCANCODE_BACKSPACE,
 			});
 			if(!text_input.set_active(room.text_entry_active())) {
@@ -3289,7 +3291,9 @@ struct OnlineProfileRunResult final {
 			}
 			const auto scancode = mapper.take_keyboard_scancode_press();
 			surface_changed = scene.consume({
-				.ui = project_new_classic_ui(**due, true),
+				.ui = project_new_classic_ui(
+					**due, !scene.text_entry_active()
+				),
 				.erase = scancode && *scancode == SDL_SCANCODE_BACKSPACE,
 			}) || surface_changed;
 			if(!text_input.set_active(scene.text_entry_active())) {
@@ -3302,6 +3306,15 @@ struct OnlineProfileRunResult final {
 				}
 			}
 			if(auto action = scene.take_action()) {
+				if(surface_changed) {
+					if(const auto presented = platform.present(scene.surface());
+						!presented) {
+						return {.exit_code = fail(
+							"online-profile-present", presented.error()
+						)};
+					}
+					surface_changed = false;
+				}
 				using Action = th03::app::NewClassicOnlineProfileActionType;
 				if(action->type == Action::back) {
 					return {.profile = std::move(profile)};

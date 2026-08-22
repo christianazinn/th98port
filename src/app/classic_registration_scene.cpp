@@ -37,6 +37,7 @@ constexpr std::int32_t alphabet_row_spacing = 24;
 constexpr std::uint8_t alphabet_columns = 16U;
 constexpr std::uint8_t alphabet_glyphs = 48U;
 constexpr std::uint8_t fade_boundary_count = 35U;
+constexpr std::uint8_t new_classic_view_fade_boundary_count = 19U;
 
 constexpr std::array<std::string_view, new_classic_score_character_count + 1U>
 new_classic_page_names{{
@@ -1147,7 +1148,20 @@ bool ClassicRegistrationScene::draw_new_classic_overlay() noexcept
 		return false;
 	}
 	const auto &menu_font = patch_assets_->menu_font;
-	if(!menu_font.put(raster_, 24, 320, new_classic_overlay_[0U], 15U)) {
+	std::int32_t maximum_name_width = 0;
+	for(const auto name : new_classic_page_names) {
+		maximum_name_width = std::max(maximum_name_width, menu_font.width(name));
+	}
+	const auto prefix_width = menu_font.width("< ");
+	const auto suffix_width = menu_font.width(" >");
+	const auto heading_left = (present::graphics_width - prefix_width -
+		maximum_name_width - suffix_width) / 2;
+	const auto name_left = heading_left + prefix_width +
+		((maximum_name_width - menu_font.width(new_classic_overlay_[0U])) / 2);
+	if(!menu_font.put(raster_, heading_left, 320, "<", 15U) ||
+		!menu_font.put(raster_, name_left, 320, new_classic_overlay_[0U], 15U) ||
+		!menu_font.put(raster_, heading_left + prefix_width + maximum_name_width +
+			menu_font.width(" "), 320, ">", 15U)) {
 		return false;
 	}
 	std::int32_t left = 24;
@@ -1392,7 +1406,17 @@ std::expected<ClassicRegistrationTick, ClassicRegistrationError>
 ClassicRegistrationScene::fade_tick(bool black_in)
 {
 	bool changed = false;
-	if(fade_boundary_ != 0U && (fade_boundary_ % 2U) == 1U) {
+	const bool new_classic_view = view_only_ && new_classic_document_.has_value();
+	if(new_classic_view && fade_boundary_ != 0U && fade_boundary_ <= 17U) {
+		const auto pair = static_cast<std::uint8_t>(fade_boundary_ - 1U);
+		const auto tone = black_in ?
+			static_cast<std::int16_t>(pair * 6U) :
+			static_cast<std::int16_t>(100 - pair * 6U);
+		raster_.set_palette_tone(tone);
+		raster_.apply_pending_palette();
+		changed = true;
+	} else if(!new_classic_view && fade_boundary_ != 0U &&
+		(fade_boundary_ % 2U) == 1U) {
 		const auto pair = static_cast<std::uint8_t>(
 			(fade_boundary_ - 1U) / 2U
 		);
@@ -1404,7 +1428,9 @@ ClassicRegistrationScene::fade_tick(bool black_in)
 		changed = true;
 	}
 	++fade_boundary_;
-	if(fade_boundary_ < fade_boundary_count) {
+	const auto boundary_count = new_classic_view ?
+		new_classic_view_fade_boundary_count : fade_boundary_count;
+	if(fade_boundary_ < boundary_count) {
 		return tick(ClassicRegistrationBoundary::vsync, changed);
 	}
 

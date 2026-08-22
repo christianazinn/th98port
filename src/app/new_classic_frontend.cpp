@@ -371,7 +371,7 @@ std::string source_trimmed_name(const std::array<char, 8U> &name)
 	std::uint8_t rank,
 	std::uint8_t character,
 	std::int32_t top,
-	present::Index4 navigation_color = 12U
+	present::Index4 navigation_color = 9U
 ) noexcept
 {
 	if(rank >= 4U || character >= 9U) {
@@ -1186,12 +1186,12 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 		if(mode_ == NewClassicReplayBrowserMode::upload &&
 			replay_upload_supported(document)) {
 			if(upload_action_focus_) {
-				static_cast<void>(put(32, 208, ">", 12U));
+				static_cast<void>(put(32, 208, ">", 9U));
 			}
 			static_cast<void>(put(
 				48, 208,
 				messages.text(NewClassicMessageId::replay_upload_title),
-				upload_action_focus_ ? 12U : 15U
+				9U
 			));
 		}
 	}
@@ -2340,8 +2340,7 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 	}
 	if(valid_ && rank_center && board_category_focus_) {
 		const auto top = mode_ == NewClassicOnlineMenuMode::high_scores ? 48 : 80;
-		const auto navigation_color = static_cast<present::Index4>(mode_ ==
-			NewClassicOnlineMenuMode::online_replays ? 9U : 12U);
+		constexpr present::Index4 navigation_color = 9U;
 		const auto caret_left = *rank_center - (font.width("v") / 2);
 		valid_ = font.put_vertical_flipped(
 			raster, caret_left, top - 16, 'v', navigation_color
@@ -2350,7 +2349,7 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 		);
 	}
 	const auto header_top = mode_ == NewClassicOnlineMenuMode::online_replays ?
-		112 : mode_ == NewClassicOnlineMenuMode::high_scores ? 80 : 96;
+		128 : 96;
 	const auto rows_top = header_top + 16;
 	valid_ = valid_ &&
 		font.put(raster, 32, header_top, messages.text(
@@ -2428,8 +2427,8 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 				324 - static_cast<std::int32_t>(score.size() * 12U), top,
 				score, 12, color) &&
 			font.put(raster, 348, top, row_character, color) &&
-			patch_put_fixed(font, raster, 464, top, category_value,
-				flat ? 12 : 11, color) &&
+			(flat ? font.put(raster, 464, top, category_value, color) :
+				patch_put_fixed(font, raster, 464, top, category_value, 11, color)) &&
 			font.put(raster, 576, top, stage, color);
 	}
 }

@@ -19,6 +19,7 @@ constexpr present::Index4 selected_color = 12U;
 constexpr present::Index4 normal_color = 15U;
 constexpr present::Index4 detail_color = 13U;
 constexpr present::Index4 error_color = 11U;
+constexpr std::uint8_t fade_boundary_count = 19U;
 
 [[nodiscard]] bool raw_any(NewClassicUiInput input) noexcept
 {
@@ -55,6 +56,9 @@ NewClassicOnlineProfileScene::NewClassicOnlineProfileScene(
 		screen_ = Screen::name_entry;
 	}
 	valid_ = draw();
+	if(valid_) {
+		patch_surface_.raster().set_palette_tone(0);
+	}
 }
 
 bool NewClassicOnlineProfileScene::draw() noexcept
@@ -169,18 +173,49 @@ void NewClassicOnlineProfileScene::require_release() noexcept
 	release_required_ = true;
 }
 
+void NewClassicOnlineProfileScene::begin_fade_out(
+	NewClassicOnlineProfileAction action
+) noexcept
+{
+	phase_ = Phase::fade_out;
+	fade_boundary_ = 0U;
+	fade_out_action_ = std::move(action);
+}
+
+bool NewClassicOnlineProfileScene::consume_fade() noexcept
+{
+	const bool black_in = phase_ == Phase::fade_in;
+	auto &raster = patch_surface_.raster();
+	bool changed = false;
+	if(fade_boundary_ != 0U && fade_boundary_ <= 17U) {
+		const auto pair = static_cast<std::int16_t>(fade_boundary_ - 1U);
+		raster.set_palette_tone(static_cast<std::int16_t>(
+			black_in ? (pair * 6) : (100 - (pair * 6))
+		));
+		raster.apply_pending_palette();
+		changed = true;
+	}
+	++fade_boundary_;
+	if(fade_boundary_ < fade_boundary_count) {
+		return changed;
+	}
+	raster.set_palette_tone(black_in ? 100 : 0);
+	raster.apply_pending_palette();
+	fade_boundary_ = 0U;
+	if(black_in) {
+		phase_ = Phase::menu;
+		require_release();
+	} else {
+		action_ = std::move(fade_out_action_);
+	}
+	return true;
+}
+
 bool NewClassicOnlineProfileScene::consume(
 	NewClassicOnlineProfileInput input
 ) noexcept
 {
 	if(!valid_ || action_ || request_pending_) {
-		return false;
-	}
-	const bool any = raw_any(input.ui) || input.text_character || input.erase;
-	if(release_required_) {
-		if(!any) {
-			release_required_ = false;
-		}
 		return false;
 	}
 	if(input.ui.app_quit_requested) {
@@ -189,7 +224,16 @@ bool NewClassicOnlineProfileScene::consume(
 		};
 		return false;
 	}
-
+	if(phase_ != Phase::menu) {
+		return consume_fade();
+	}
+	const bool any = raw_any(input.ui) || input.text_character || input.erase;
+	if(release_required_) {
+		if(!any) {
+			release_required_ = false;
+		}
+		return false;
+	}
 	if(screen_ == Screen::menu) {
 		if(input.ui.up || input.ui.down) {
 			selection_ = static_cast<std::uint8_t>((selection_ +
@@ -198,9 +242,9 @@ bool NewClassicOnlineProfileScene::consume(
 			return draw();
 		}
 		if(input.ui.cancel || (input.ui.confirm && selection_ == 3U)) {
-			action_ = NewClassicOnlineProfileAction{
+			begin_fade_out(NewClassicOnlineProfileAction{
 				NewClassicOnlineProfileActionType::back, {}
-			};
+			});
 			return false;
 		}
 		if(input.ui.confirm) {
@@ -247,9 +291,9 @@ bool NewClassicOnlineProfileScene::consume(
 		}
 		if(input.ui.cancel) {
 			if(!nametag_) {
-				action_ = NewClassicOnlineProfileAction{
+				begin_fade_out(NewClassicOnlineProfileAction{
 					NewClassicOnlineProfileActionType::back, {}
-				};
+				});
 				return false;
 			}
 			screen_ = Screen::menu;

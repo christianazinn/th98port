@@ -55,6 +55,12 @@ public:
 	[[nodiscard]] bool report_failure() noexcept;
 
 private:
+	enum class Phase : std::uint8_t {
+		fade_in,
+		menu,
+		fade_out,
+	};
+
 	enum class Screen : std::uint8_t {
 		menu,
 		name_entry,
@@ -65,12 +71,17 @@ private:
 	};
 
 	[[nodiscard]] bool draw() noexcept;
+	[[nodiscard]] bool consume_fade() noexcept;
+	void begin_fade_out(NewClassicOnlineProfileAction action) noexcept;
 	void require_release() noexcept;
 
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
 	NewClassicLanguageAssetProfile language_ =
 		NewClassicLanguageAssetProfile::english;
 	NewClassicPatchSurface patch_surface_{};
+	Phase phase_ = Phase::fade_in;
+	std::uint8_t fade_boundary_ = 0U;
+	NewClassicOnlineProfileAction fade_out_action_{};
 	Screen screen_ = Screen::menu;
 	std::uint8_t selection_ = 0U;
 	std::optional<std::string> nametag_{};

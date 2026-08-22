@@ -416,10 +416,11 @@ void drain_initial_audio(ClassicRegistrationScene &scene)
 
 bool advance_fade(
 	ClassicRegistrationScene &scene,
-	ClassicRegistrationPhase final_phase
+	ClassicRegistrationPhase final_phase,
+	std::uint8_t boundary_count = 35U
 )
 {
-	for(std::uint8_t boundary = 0U; boundary < 35U; ++boundary) {
+	for(std::uint8_t boundary = 0U; boundary < boundary_count; ++boundary) {
 		const auto tick = scene.advance({});
 		expect(
 			tick && tick->boundary == ClassicRegistrationBoundary::vsync,
@@ -429,21 +430,22 @@ bool advance_fade(
 			return false;
 		}
 		const bool source_palette_show = boundary != 0U &&
-			((boundary % 2U) == 1U || boundary == 34U);
+			(boundary_count == 19U ? true :
+				((boundary % 2U) == 1U || boundary == 34U));
 		expect(
 			tick->surface_changed == source_palette_show,
 			"speed-2 fade reports only source palette-show boundaries"
 		);
-		if(boundary < 34U) {
+		if(boundary + 1U < boundary_count) {
 			expect(
 				tick->phase != final_phase,
-				"palette fade does not finish before boundary 35"
+				"palette fade does not finish before its final boundary"
 			);
 		}
 	}
 	expect(
 		scene.phase() == final_phase,
-		"palette fade finishes on the exact 35th VSync boundary"
+		"palette fade finishes on the exact configured VSync boundary"
 	);
 	return scene.phase() == final_phase;
 }
@@ -1009,9 +1011,10 @@ void test_new_classic_registration_and_paged_viewer()
 		(*viewer)->raster().shown_page() == Page::zero &&
 		(*viewer)->raster().access_page() == Page::one,
 		"New Classic first ALL frame is complete on hidden page 1 before publication");
-	expect((*viewer)->raster().pixel(Page::zero, {24, 320}) == 1U &&
-		(*viewer)->raster().pixel(Page::one, {24, 320}) == 15U,
-		"MNUFONT ALL CHARACTERS ink exists only on the first hidden page");
+	expect((*viewer)->raster().pixel(Page::zero, {248, 320}) == 1U &&
+		(*viewer)->raster().pixel(Page::one, {248, 320}) == 15U &&
+		(*viewer)->raster().pixel(Page::one, {264, 320}) == 15U,
+		"MNUFONT centered page heading and left caret exist only on the first hidden page");
 	const auto first_page = (*viewer)->advance({});
 	expect(first_page && first_page->boundary == ClassicRegistrationBoundary::vsync &&
 		first_page->surface_changed &&
@@ -1023,7 +1026,9 @@ void test_new_classic_registration_and_paged_viewer()
 		(*viewer)->raster().pixel(Page::one, {194, 340}) == 15U &&
 		(*viewer)->raster().pixel(Page::one, {24, 360}) == 15U,
 		"MNUFONT overlay uses proportional lines and the exact +2 inset for digit 1");
-	if(!advance_fade(**viewer, ClassicRegistrationPhase::wait_release)) {
+	if(!advance_fade(
+		**viewer, ClassicRegistrationPhase::wait_release, 19U
+	)) {
 		return;
 	}
 	const auto release_all = (*viewer)->advance({});
@@ -1062,7 +1067,7 @@ void test_new_classic_registration_and_paged_viewer()
 	expect(static_cast<bool>((*viewer)->advance({})) &&
 		static_cast<bool>((*viewer)->advance({.ok = true})),
 		"New Classic paged viewer dismisses after an exact release");
-	if(!advance_fade(**viewer, ClassicRegistrationPhase::ready)) {
+	if(!advance_fade(**viewer, ClassicRegistrationPhase::ready, 19U)) {
 		return;
 	}
 	const auto after_view = th03::app::load_new_classic_score_store(score_path);

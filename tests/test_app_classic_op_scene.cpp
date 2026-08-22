@@ -312,6 +312,14 @@ void test_replay_patch_title_if_assets_supplied()
 	}
 	auto &scene = **created;
 	reach_main_menu(scene);
+	const auto final_open_frame = scene.raster().graphics(Page::zero);
+	const std::vector final_open_pixels(
+		final_open_frame.begin(), final_open_frame.end()
+	);
+	expect(scene.advance().has_value() && std::equal(
+		final_open_pixels.begin(), final_open_pixels.end(),
+		scene.raster().graphics(Page::zero).begin()
+	), "the final title-window opening boundary already contains every contrast-shadowed row");
 	expect(
 		scene.raster().pixel(Page::zero, {160, 264}) == 1U &&
 		scene.raster().pixel(Page::zero, {288, 264}) == 2U,
@@ -372,6 +380,18 @@ void test_replay_patch_title_if_assets_supplied()
 		expect((*vs_created)->advance().has_value(),
 			"Replay Patch VS submenu expansion advances");
 	}
+	const auto row_has_raster_color = [&vs_created](
+		std::int32_t tram_row, std::uint8_t color
+	) {
+		for(std::int32_t y = tram_row * 16; y < (tram_row + 1) * 16; ++y) {
+			for(std::int32_t x = 224; x < 416; ++x) {
+				if((*vs_created)->raster().pixel(Page::zero, {x, y}) == color) {
+					return true;
+				}
+			}
+		}
+		return false;
+	};
 	expect(
 		(*vs_created)->tram().cell({28, 18})->attribute ==
 			th03::present::tram_white &&
@@ -381,6 +401,9 @@ void test_replay_patch_title_if_assets_supplied()
 			th03::present::tram_black,
 		"New Classic VS choices are shifted one complete text row upward"
 	);
+	expect(row_has_raster_color(18, 0U) &&
+		row_has_raster_color(19, 15U) && row_has_raster_color(20, 15U),
+		"all hardcoded-gaiji VS rows receive reciprocal clipped raster shadows");
 	const auto canceled = (*vs_created)->advance({.cancel = true});
 	expect(canceled && canceled->phase == ClassicOpPhase::vs_shrink_window &&
 		!canceled->surface_changed && !canceled->tram_changed,

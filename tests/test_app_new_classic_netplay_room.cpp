@@ -91,7 +91,35 @@ std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> assets_fixture()
 
 void release(th03::app::NewClassicNetplayRoom &room)
 {
+	for(std::uint8_t boundary = 0U;
+		boundary < 20U && room.status() ==
+			th03::app::NewClassicNetplayRoomStatus::running &&
+			room.surface().palette_tone < 100;
+		++boundary) {
+		static_cast<void>(room.consume({}));
+	}
 	static_cast<void>(room.consume({}));
+}
+
+th03::app::NewClassicNetplayRoomResult finish_fade_out(
+	th03::app::NewClassicNetplayRoom &room
+)
+{
+	th03::app::NewClassicNetplayRoomResult result{};
+	for(std::uint8_t boundary = 0U; boundary < 19U; ++boundary) {
+		result = room.consume({});
+	}
+	return result;
+}
+
+void release(th03::app::NewClassicOnlineProfileScene &scene)
+{
+	for(std::uint8_t boundary = 0U;
+		boundary < 20U && scene.surface().palette_tone < 100;
+		++boundary) {
+		static_cast<void>(scene.consume({}));
+	}
+	static_cast<void>(scene.consume({}));
 }
 
 void test_host_intent_is_player_lock_gated()
@@ -132,7 +160,10 @@ void test_host_intent_is_player_lock_gated()
 	release(room);
 	static_cast<void>(room.consume({.ui = {.down = true}}));
 	release(room);
-	auto launched = room.consume({.ui = {.confirm = true}});
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	expect(!room.take_launch(),
+		"Create keeps its launch private until the background is black");
+	auto launched = finish_fade_out(room);
 	expect(!room.resume_after_launch(),
 		"a launch owner cannot resume before its intent is consumed");
 	auto intent = room.take_launch();
@@ -154,7 +185,8 @@ void test_host_intent_is_player_lock_gated()
 		NewClassicNetplayRoomStatus::running,
 		"any fresh failure-screen input restores host player setup");
 	release(room);
-	const auto retry = room.consume({.ui = {.confirm = true}});
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	const auto retry = finish_fade_out(room);
 	const auto retry_intent = room.take_launch();
 	expect(retry.status == NewClassicNetplayRoomStatus::launch_requested &&
 		retry_intent && retry_intent->mode ==
@@ -204,7 +236,8 @@ void test_join_entry_and_validation()
 	}
 	static_cast<void>(room.consume({.erase = true}));
 	static_cast<void>(room.consume({.text_character = '5'}));
-	const auto connected = room.consume({.ui = {.confirm = true}});
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	const auto connected = finish_fade_out(room);
 	auto intent = room.take_launch();
 	expect(connected.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->mode == NewClassicNetplayRoomLaunchMode::join &&
@@ -221,7 +254,8 @@ void test_join_entry_and_validation()
 	expect(dismissed.surface_changed && room.text_entry_active(),
 		"dismissing Join failure restores the populated room-code editor");
 	release(room);
-	const auto retried = room.consume({.ui = {.confirm = true}});
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	const auto retried = finish_fade_out(room);
 	const auto retry_intent = room.take_launch();
 	expect(retried.status == NewClassicNetplayRoomStatus::launch_requested &&
 		retry_intent && retry_intent->join_endpoint == endpoint,
@@ -263,7 +297,8 @@ void test_relay_only_launch_intent()
 		static_cast<void>(room.consume({.ui = {.down = true}}));
 		release(room);
 	}
-	const auto launched = room.consume({.ui = {.confirm = true}});
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	const auto launched = finish_fade_out(room);
 	const auto intent = room.take_launch();
 	expect(launched.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->transport ==
@@ -303,7 +338,8 @@ void test_direct_endpoint_uses_physical_text()
 		static_cast<void>(room.consume({.text_character = character}));
 	}
 	static_cast<void>(room.consume({.text_character = ';'}));
-	const auto connected = room.consume({.ui = {.confirm = true}});
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	const auto connected = finish_fade_out(room);
 	const auto intent = room.take_launch();
 	expect(connected.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->transport == NewClassicNetplayRoomTransport::direct_udp &&
@@ -332,7 +368,8 @@ void test_direct_host_keeps_socket_confirmation()
 		NewClassicNetplayRoomStatus::running && !room.take_launch(),
 		"Direct UDP Create retains its explicit socket confirmation");
 	release(room);
-	const auto launched = room.consume({.ui = {.confirm = true}});
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	const auto launched = finish_fade_out(room);
 	const auto intent = room.take_launch();
 	expect(launched.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->mode == NewClassicNetplayRoomLaunchMode::host &&
@@ -404,7 +441,8 @@ void test_settings_back_and_application_quit()
 	release(room);
 	static_cast<void>(room.consume({.ui = {.cancel = true}}));
 	release(room);
-	const auto back = room.consume({.ui = {.cancel = true}});
+	static_cast<void>(room.consume({.ui = {.cancel = true}}));
+	const auto back = finish_fade_out(room);
 	expect(back.status == NewClassicNetplayRoomStatus::back,
 		"room menu Cancel returns to New Classic without a socket");
 
@@ -445,7 +483,8 @@ void test_quick_match_intent()
 	release(room);
 	static_cast<void>(room.consume({.ui = {.down = true}}));
 	release(room);
-	const auto launched = room.consume({.ui = {.confirm = true}});
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	const auto launched = finish_fade_out(room);
 	const auto intent = room.take_launch();
 	expect(launched.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->mode == NewClassicNetplayRoomLaunchMode::quick_match &&
@@ -609,7 +648,7 @@ void test_online_profile_scene()
 		return pixel.layer == th03::present::ComposedPixelLayer::text ||
 			pixel.value != 2U;
 	}), "first-use profile publishes visible title, prompt, and entry text");
-	static_cast<void>(first_use.consume({}));
+	release(first_use);
 	for(const auto character : std::string_view{
 		"Resident of Fantasy Who Runs Through Time"
 	}) {
@@ -667,7 +706,8 @@ void test_room_profile_child()
 		static_cast<void>(room.consume({.ui = {.down = true}}));
 		release(room);
 	}
-	auto opened = room.consume({.ui = {.confirm = true}});
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	auto opened = finish_fade_out(room);
 	expect(opened.status == NewClassicNetplayRoomStatus::profile_requested &&
 		!room.take_launch(),
 		"Online Profile is a retained child with no socket side effect");
@@ -676,7 +716,8 @@ void test_room_profile_child()
 	release(room);
 	static_cast<void>(room.consume({.ui = {.confirm = true}}));
 	release(room);
-	opened = room.consume({.ui = {.confirm = true}});
+	static_cast<void>(room.consume({.ui = {.confirm = true}}));
+	opened = finish_fade_out(room);
 	expect(opened.status == NewClassicNetplayRoomStatus::profile_requested,
 		"profile failure dismissal returns to the exact Online Profile row");
 	expect(room.resume_after_profile() &&
@@ -700,6 +741,38 @@ void test_authentic_menu_previews_if_requested()
 	expect(assigned.valid(), "assigned Online Match preview composes");
 	th03::test::dump_menu_preview(
 		assigned.surface(), "005-online-match.ppm"
+	);
+	release(assigned);
+	static_cast<void>(assigned.consume({.ui = {.confirm = true}}));
+	th03::test::dump_menu_preview(
+		assigned.surface(), "005a-online-quick-match.ppm"
+	);
+	release(assigned);
+	static_cast<void>(assigned.consume({.ui = {.cancel = true}}));
+	release(assigned);
+	static_cast<void>(assigned.consume({.ui = {.down = true}}));
+	release(assigned);
+	static_cast<void>(assigned.consume({.ui = {.confirm = true}}));
+	th03::test::dump_menu_preview(
+		assigned.surface(), "005b-online-player-one-lock.ppm"
+	);
+	release(assigned);
+	static_cast<void>(assigned.consume({.ui = {.cancel = true}}));
+	release(assigned);
+	static_cast<void>(assigned.consume({.ui = {.down = true}}));
+	release(assigned);
+	static_cast<void>(assigned.consume({.ui = {.confirm = true}}));
+	th03::test::dump_menu_preview(
+		assigned.surface(), "005c-online-player-two-lock.ppm"
+	);
+	release(assigned);
+	static_cast<void>(assigned.consume({.ui = {.cancel = true}}));
+	release(assigned);
+	static_cast<void>(assigned.consume({.ui = {.down = true}}));
+	release(assigned);
+	static_cast<void>(assigned.consume({.ui = {.confirm = true}}));
+	th03::test::dump_menu_preview(
+		assigned.surface(), "005d-online-network-settings.ppm"
 	);
 
 	auto alternate_assets =

@@ -27,6 +27,7 @@ constexpr present::Index4 title_color = 9U;
 constexpr present::Index4 selected_color = 12U;
 constexpr present::Index4 normal_color = 15U;
 constexpr present::Index4 detail_color = 13U;
+constexpr std::uint8_t fade_boundary_count = 19U;
 constexpr std::size_t endpoint_limit = 47U;
 constexpr std::size_t port_limit = 5U;
 constexpr std::array character_messages{
@@ -120,6 +121,7 @@ NewClassicNetplayRoom::NewClassicNetplayRoom(
 		status_ = NewClassicNetplayRoomStatus::back;
 		return;
 	}
+	patch_surface_.raster().set_palette_tone(0);
 	valid_ = true;
 }
 
@@ -148,6 +150,13 @@ bool NewClassicNetplayRoom::draw() noexcept
 			NewClassicMessageId::netplay_room_return,
 		};
 		for(std::size_t row = 0U; row < rows.size(); ++row) {
+			if(row == selection_ && !font.put(
+				raster, 176,
+				rows_top + static_cast<std::int32_t>(row) * row_height,
+				">", selected_color
+			)) {
+				return false;
+			}
 			if(!font.put_centered(
 				raster, center_x,
 				rows_top + static_cast<std::int32_t>(row) * row_height,
@@ -165,26 +174,29 @@ bool NewClassicNetplayRoom::draw() noexcept
 				NewClassicMessageId::netplay_room_player_one :
 				NewClassicMessageId::netplay_room_player_two);
 		if(!font.put_centered(raster, center_x, 96,
-			messages.text(setup_title), selected_color) ||
+			messages.text(setup_title), detail_color) ||
 			!font.put(raster, label_left, 136,
 				messages.text(NewClassicMessageId::netplay_room_character),
 				selection_ == 0U ? selected_color : normal_color) ||
 			!font.put_right(raster, value_right, 136,
-				messages.text(character_messages[character_ - 1U]), detail_color) ||
+				messages.text(character_messages[character_ - 1U]),
+				selection_ == 0U ? selected_color : detail_color) ||
 			!font.put(raster, label_left, 168,
 				messages.text(NewClassicMessageId::netplay_room_palette),
 				selection_ == 1U ? selected_color : normal_color) ||
 			!font.put_right(raster, value_right, 168,
 				messages.text(palette_ == 1U ?
 					NewClassicMessageId::netplay_room_palette_first :
-					NewClassicMessageId::netplay_room_palette_second), detail_color) ||
+					NewClassicMessageId::netplay_room_palette_second),
+				selection_ == 1U ? selected_color : detail_color) ||
 			!font.put(raster, label_left, 200,
 				messages.text(NewClassicMessageId::option_rank),
 				selection_ == 2U ? selected_color : normal_color) ||
 			!font.put_right(raster, value_right, 200,
 				messages.text(pending_mode_ !=
 					NewClassicNetplayRoomLaunchMode::join ? rank_messages[rank_] :
-					NewClassicMessageId::netplay_room_host_decides), detail_color) ||
+					NewClassicMessageId::netplay_room_host_decides),
+				selection_ == 2U ? selected_color : detail_color) ||
 			!font.put_centered(raster, center_x, 248,
 				messages.text(NewClassicMessageId::netplay_room_continue),
 				selection_ == 3U ? selected_color : normal_color) ||
@@ -199,7 +211,7 @@ bool NewClassicNetplayRoom::draw() noexcept
 			NewClassicNetplayRoomTransport::direct_udp;
 		if(!font.put_centered(raster, center_x, 112,
 			messages.text(NewClassicMessageId::netplay_room_create),
-			selected_color) || (direct &&
+			detail_color) || (direct &&
 			(!font.put(raster, label_left, 160,
 				messages.text(direct ?
 					NewClassicMessageId::netplay_room_host_port :
@@ -229,12 +241,12 @@ bool NewClassicNetplayRoom::draw() noexcept
 			std::string_view(join_endpoint_);
 		if(!font.put_centered(raster, center_x, 112,
 			messages.text(NewClassicMessageId::netplay_room_join),
-			selected_color) ||
+			detail_color) ||
 			!font.put(raster, label_left, 160,
 				messages.text(direct ?
 					NewClassicMessageId::netplay_room_endpoint :
 					NewClassicMessageId::netplay_room_code),
-				normal_color) ||
+				selected_color) ||
 			!font.put_right(raster, value_right, 160, endpoint,
 				endpoint_invalid_ ? 11U : selected_color) ||
 			!font.put_centered(raster, center_x, 224,
@@ -251,10 +263,10 @@ bool NewClassicNetplayRoom::draw() noexcept
 			std::string_view{port_entry_};
 		if(!font.put_centered(raster, center_x, 112,
 			messages.text(NewClassicMessageId::netplay_room_settings),
-			selected_color) ||
+			detail_color) ||
 			!font.put(raster, label_left, 160,
 				messages.text(NewClassicMessageId::netplay_room_host_port),
-				normal_color) ||
+				selected_color) ||
 			!font.put_right(raster, value_right, 160, value,
 				endpoint_invalid_ ? 11U : selected_color) ||
 			!font.put_centered(raster, center_x, 224,
@@ -278,7 +290,7 @@ bool NewClassicNetplayRoom::draw() noexcept
 		std::array<char, 8U> storage{};
 		if(!font.put_centered(raster, center_x, 96,
 			messages.text(NewClassicMessageId::netplay_room_settings),
-			selected_color) ||
+			detail_color) ||
 			!font.put(raster, label_left, 144,
 				messages.text(NewClassicMessageId::netplay_room_transport),
 				selection_ == 0U ? selected_color : normal_color) ||
@@ -287,7 +299,7 @@ bool NewClassicNetplayRoom::draw() noexcept
 					NewClassicNetplayRoomTransport::online_service ?
 					NewClassicMessageId::netplay_room_online_service :
 					NewClassicMessageId::netplay_room_direct_udp),
-				detail_color) ||
+				selection_ == 0U ? selected_color : detail_color) ||
 			!font.put(raster, label_left, 176,
 				messages.text(transport_ ==
 					NewClassicNetplayRoomTransport::online_service ?
@@ -299,12 +311,14 @@ bool NewClassicNetplayRoom::draw() noexcept
 					messages.text(relay_only_ ?
 						NewClassicMessageId::netplay_room_relay_only :
 						NewClassicMessageId::netplay_room_automatic) :
-					decimal(host_port_, storage), detail_color) ||
+					decimal(host_port_, storage),
+				selection_ == 1U ? selected_color : detail_color) ||
 			!font.put(raster, label_left, 208,
 				messages.text(NewClassicMessageId::netplay_room_input_delay),
 				selection_ == 2U ? selected_color : normal_color) ||
 			!font.put_right(raster, value_right, 208,
-				decimal(input_delay_frames_, storage), detail_color) ||
+				decimal(input_delay_frames_, storage),
+				selection_ == 2U ? selected_color : detail_color) ||
 			!font.put_centered(raster, center_x, 240,
 				messages.text(transport_ ==
 					NewClassicNetplayRoomTransport::online_service ?
@@ -320,16 +334,11 @@ bool NewClassicNetplayRoom::draw() noexcept
 		}
 	}
 
-	if(screen_ == Screen::menu) {
+	if(screen_ != Screen::connection_failed) {
 		return patch_surface_.publish(raster.access_page());
 	}
-	const auto footer = screen_ == Screen::connection_failed ?
-		NewClassicMessageId::netplay_report_footer :
-		((screen_ == Screen::join_entry || screen_ == Screen::port_entry) ?
-			NewClassicMessageId::netplay_room_footer_edit :
-			NewClassicMessageId::netplay_room_footer);
 	return font.put_centered(raster, center_x, footer_top,
-		messages.text(footer), detail_color) &&
+		messages.text(NewClassicMessageId::netplay_report_footer), detail_color) &&
 		patch_surface_.publish(raster.access_page());
 }
 
@@ -361,6 +370,45 @@ void NewClassicNetplayRoom::require_release() noexcept
 	release_required_ = true;
 }
 
+void NewClassicNetplayRoom::begin_fade_out(
+	NewClassicNetplayRoomStatus terminal
+) noexcept
+{
+	phase_ = Phase::fade_out;
+	fade_boundary_ = 0U;
+	fade_terminal_ = terminal;
+	status_ = NewClassicNetplayRoomStatus::running;
+}
+
+NewClassicNetplayRoomResult NewClassicNetplayRoom::consume_fade() noexcept
+{
+	const bool black_in = phase_ == Phase::fade_in;
+	auto &raster = patch_surface_.raster();
+	bool changed = false;
+	if(fade_boundary_ != 0U && fade_boundary_ <= 17U) {
+		const auto pair = static_cast<std::int16_t>(fade_boundary_ - 1U);
+		raster.set_palette_tone(static_cast<std::int16_t>(
+			black_in ? (pair * 6) : (100 - (pair * 6))
+		));
+		raster.apply_pending_palette();
+		changed = true;
+	}
+	++fade_boundary_;
+	if(fade_boundary_ < fade_boundary_count) {
+		return {.surface_changed = changed, .status = status_};
+	}
+	raster.set_palette_tone(black_in ? 100 : 0);
+	raster.apply_pending_palette();
+	fade_boundary_ = 0U;
+	if(black_in) {
+		phase_ = Phase::menu;
+		require_release();
+	} else {
+		status_ = fade_terminal_;
+	}
+	return {.surface_changed = true, .status = status_};
+}
+
 void NewClassicNetplayRoom::restore_launch_caller() noexcept
 {
 	switch(pending_mode_) {
@@ -390,6 +438,9 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 	if(input.ui.app_quit_requested) {
 		status_ = NewClassicNetplayRoomStatus::application_quit;
 		return {.status = status_};
+	}
+	if(phase_ != Phase::menu) {
+		return consume_fade();
 	}
 	if(release_required_) {
 		if(!raw_any(input.ui)) {
@@ -483,7 +534,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 						NewClassicNetplayRoomTransport::online_service && relay_only_,
 					.input_delay_frames = input_delay_frames_,
 				};
-				status_ = NewClassicNetplayRoomStatus::launch_requested;
+				begin_fade_out(NewClassicNetplayRoomStatus::launch_requested);
 				return {.status = status_};
 			}
 			endpoint_invalid_ = true;
@@ -503,7 +554,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 			changed = true;
 			require_release();
 		} else if(input.ui.cancel) {
-			status_ = NewClassicNetplayRoomStatus::back;
+			begin_fade_out(NewClassicNetplayRoomStatus::back);
 			return {.status = status_};
 		} else if(input.ui.confirm) {
 			if(selection_ <= 2U) {
@@ -519,10 +570,10 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 				screen_ = Screen::settings;
 				selection_ = 0U;
 			} else if(selection_ == 4U) {
-				status_ = NewClassicNetplayRoomStatus::profile_requested;
+				begin_fade_out(NewClassicNetplayRoomStatus::profile_requested);
 				return {.status = status_};
 			} else {
-				status_ = NewClassicNetplayRoomStatus::back;
+				begin_fade_out(NewClassicNetplayRoomStatus::back);
 				return {.status = status_};
 			}
 			changed = true;
@@ -588,7 +639,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 					.relay_only = relay_only_,
 					.input_delay_frames = input_delay_frames_,
 				};
-				status_ = NewClassicNetplayRoomStatus::launch_requested;
+				begin_fade_out(NewClassicNetplayRoomStatus::launch_requested);
 				return {.status = status_};
 			}
 			screen_ = pending_mode_ == NewClassicNetplayRoomLaunchMode::host ?
@@ -614,7 +665,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 					NewClassicNetplayRoomTransport::online_service && relay_only_,
 				.input_delay_frames = input_delay_frames_,
 			};
-			status_ = NewClassicNetplayRoomStatus::launch_requested;
+			begin_fade_out(NewClassicNetplayRoomStatus::launch_requested);
 			return {.status = status_};
 		}
 	} else {
@@ -690,6 +741,9 @@ bool NewClassicNetplayRoom::text_entry_active() const noexcept
 std::optional<NewClassicNetplayRoomLaunch>
 NewClassicNetplayRoom::take_launch() noexcept
 {
+	if(status_ != NewClassicNetplayRoomStatus::launch_requested) {
+		return std::nullopt;
+	}
 	return std::exchange(launch_, std::nullopt);
 }
 
@@ -703,8 +757,12 @@ bool NewClassicNetplayRoom::show_launch_failure() noexcept
 	selection_ = 0U;
 	profile_failure_ = false;
 	endpoint_invalid_ = false;
+	phase_ = Phase::fade_in;
+	fade_boundary_ = 0U;
 	require_release();
-	return draw();
+	const bool drawn = draw();
+	patch_surface_.raster().set_palette_tone(0);
+	return drawn;
 }
 
 bool NewClassicNetplayRoom::resume_after_launch() noexcept
@@ -715,8 +773,12 @@ bool NewClassicNetplayRoom::resume_after_launch() noexcept
 	status_ = NewClassicNetplayRoomStatus::running;
 	endpoint_invalid_ = false;
 	restore_launch_caller();
+	phase_ = Phase::fade_in;
+	fade_boundary_ = 0U;
 	require_release();
-	return draw();
+	const bool drawn = draw();
+	patch_surface_.raster().set_palette_tone(0);
+	return drawn;
 }
 
 bool NewClassicNetplayRoom::resume_after_profile() noexcept
@@ -727,8 +789,12 @@ bool NewClassicNetplayRoom::resume_after_profile() noexcept
 	status_ = NewClassicNetplayRoomStatus::running;
 	screen_ = Screen::menu;
 	selection_ = 4U;
+	phase_ = Phase::fade_in;
+	fade_boundary_ = 0U;
 	require_release();
-	return draw();
+	const bool drawn = draw();
+	patch_surface_.raster().set_palette_tone(0);
+	return drawn;
 }
 
 bool NewClassicNetplayRoom::show_profile_failure() noexcept
@@ -741,8 +807,12 @@ bool NewClassicNetplayRoom::show_profile_failure() noexcept
 	selection_ = 0U;
 	profile_failure_ = true;
 	endpoint_invalid_ = false;
+	phase_ = Phase::fade_in;
+	fade_boundary_ = 0U;
 	require_release();
-	return draw();
+	const bool drawn = draw();
+	patch_surface_.raster().set_palette_tone(0);
+	return drawn;
 }
 
 NewClassicNetplayPreferences NewClassicNetplayRoom::preferences() const noexcept

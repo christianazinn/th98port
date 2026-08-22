@@ -560,7 +560,7 @@ void test_replay_hub_and_libraries()
 	const auto selected_surface = online_library.surface();
 	const auto &replay_background = patch_assets->replay_list_background;
 	const bool selected_row_is_yellow = [&] {
-		for(std::int32_t y = 128; y < 144; ++y) {
+		for(std::int32_t y = 144; y < 160; ++y) {
 			for(std::int32_t x = 24; x < 608; ++x) {
 				const auto index = static_cast<std::size_t>(y * 640 + x);
 				if(selected_surface.pixels[index].value == 12U &&
@@ -590,6 +590,9 @@ void test_replay_hub_and_libraries()
 	}();
 	expect(category_uses_lavender,
 		"online Replay category arrows use header lavender, not selection yellow");
+	expect(region_matches_background(
+		selected_surface, replay_background, 24, 112, 616, 128
+	), "online Replay category leaves one complete row between its down-caret and headers");
 	expect(region_matches_background(
 		selected_surface, replay_background, 24, 368, 616, 384
 	), "online Replay list removes the redundant bottom instructions");
