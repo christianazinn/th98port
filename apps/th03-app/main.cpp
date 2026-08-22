@@ -661,7 +661,7 @@ void print_usage()
 			"directory under --data by default; --config, --score, and "
 			"--replay-root override them for read-only installs.\n"
 		<< "New Classic enables its persistent English option only when the "
-			"authenticated Replay Patch 0.4.14 TH3EN.DAT is supplied with "
+			"authenticated Replay Patch 0.4.15 TH3EN.DAT is supplied with "
 			"--language-overlay. Classic remains Japanese.\n"
 		<< "The normal product launch also requires the original root TOUHOU.DAT "
 			"ZUN Soft logo resource under --data.\n"
