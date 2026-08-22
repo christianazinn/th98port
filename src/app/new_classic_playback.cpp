@@ -890,7 +890,8 @@ NewClassicReplayPlayback::load_internal(
 	std::optional<NewClassicCutsceneTextCatalog> custom_cutscene_text{};
 	const NewClassicGameTextCatalog *game_text =
 		request.language == ClassicLanguage::english ?
-			&new_classic_builtin_english_game_text() : nullptr;
+			&new_classic_builtin_english_game_text() :
+			&new_classic_builtin_japanese_game_text();
 	if(!request.content.game_text_pack.empty()) {
 		if(request.language == ClassicLanguage::english &&
 			request.content.language_overlay.empty()) {
@@ -981,6 +982,11 @@ NewClassicReplayPlayback::load_internal(
 			*compiled, mainl_text->assets, unused_music,
 			*game_text
 		);
+	} else {
+		OpMusicRoomTextImport unused_music{};
+		apply_new_classic_english_text(
+			*compiled, mainl_text->assets, unused_music, *game_text
+		);
 	}
 	if(custom_cutscene_text) {
 		auto profile = std::uint64_t{14695981039346656037ULL};
@@ -1047,7 +1053,8 @@ NewClassicReplayPlayback::load_internal(
 	}
 	auto loaded_patch_assets = load_new_classic_replay_patch_assets(
 		request.content.replay_patch_assets,
-		request.content.new_classic_menu_assets
+		request.content.new_classic_menu_assets,
+		request.content.font_rom
 	);
 	if(!loaded_patch_assets) {
 		auto error = playback_error(
@@ -1077,7 +1084,7 @@ NewClassicReplayPlayback::load_internal(
 		(patch_assets->custom_game_text ? patch_assets->custom_game_text.get() :
 			&new_classic_builtin_english_game_text()) :
 		(patch_assets->custom_game_text ? patch_assets->custom_game_text.get() :
-			nullptr);
+			&new_classic_builtin_japanese_game_text());
 	const auto legacy_score_path = request.content.score;
 	const auto score_path = legacy_score_path.parent_path() / "YUME.NEW.NEM";
 	auto impl = std::make_unique<Impl>(

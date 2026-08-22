@@ -1,6 +1,6 @@
 # New Classic content and tooling roadmap
 
-Status: provisional product direction, 2026-08-20. This document orders the
+Status: provisional product direction, updated 2026-08-22. This document orders the
 next non-critical parcels after the playable port, netplay beta, online replay
 service, and updater foundations. It may change as the authoring tools and
 Arrange experiment expose better boundaries.
@@ -96,6 +96,18 @@ Character-select name bitmaps and other text baked into otherwise reusable
 images follow after the text renderer can reproduce their layout. Menu headings
 baked into TL02 and related backgrounds are explicitly later work: removing
 them requires clean background reconstruction as well as localized rendering.
+
+The source-text part of this parcel is now complete in both shipped languages.
+`T3LNG001` contains 402 explicit English and Japanese New Classic messages;
+Japanese rows are CP932 and combine authenticated proportional `MNUFONT.PF`
+Latin with exact `FONT.ROM` Japanese glyphs. `T3GTL001` contains all 738
+graphics-text rows in explicit English and Japanese catalogs, including every
+win quote and Music Room comment. The Japanese author is regenerated from
+authenticated Japanese OP/MAIN/MAINL executables and DAT assets rather than
+from the English translation. `T3CTP001` already contains complete English and
+Japanese catalogs for all 28 scripted dialogue/cutscene/ending programs. A
+missing translated row can therefore no longer silently fall back in either
+shipped locale.
 
 Gates:
 
@@ -204,8 +216,13 @@ validates the shared production
 271-resource manifest scene by scene, distinguishes 52 authenticated English
 override members from original extraction dependencies, and records every
 localized semantic surface without claiming that its source backing vanished.
-The remaining work in this parcel is localized scene snapshots and
-release-level content manifests.
+The remaining work in this parcel is localized scene snapshots, a unified
+locale-bundle authoring command, and release-level content manifests. The
+unified command should compile and validate `T3LNG001`, `T3GTL001`, and
+`T3CTP001` together, emit completeness/font/bounds reports, and generate
+translator contact sheets without launching gameplay. General Unicode locales
+also need a distributable font and layout contract; the current production
+renderer deliberately covers source-era ASCII and CP932 Japanese only.
 
 ### 5. Account nametags and VS presentation
 
@@ -238,18 +255,40 @@ logical input stream and before an optional final `T3RACC1` payload. Existing
 V13 readers ignore that tail, so this presentation metadata does not require
 V14. That replay-tail/preservation work remains next.
 
-## Suggested immediate execution order
+## Current execution order
 
-1. Freeze `T3GTL001` and migrate static in-game English text out of C++ tables.
-2. ~~Add external pack loading and the cutscene text-run extractor/compiler.~~
-3. Build the replay renderer's machine progress protocol and GUI package.
-4. Add the explicit ruleset seam and Dopamine Arrange developer prototype.
-5. ~~Add the static graphics-text contact-sheet preview tool.~~
-6. ~~Add the per-scene authenticated-content dependency audit.~~
-7. Continue the remaining text/image decoupling and snapshot/manifest tools.
-8. ~~Stop for the nametag product decisions above.~~
-9. Add the backward-compatible V13 identity tail and surface match-time names
+The original source-text, renderer-GUI, Arrange, content-audit, and live
+nametag parcels above are implemented. The remaining product/tooling work is:
+
+1. Add the backward-compatible V13 identity tail and surface match-time names
    in replay details/export without changing deterministic replay authority.
+2. Finish localization convenience tooling: one locale-bundle build/check
+   command, deterministic Japanese/English scene snapshots, translator contact
+   sheets for menu and scripted text, and release manifests.
+3. Decouple text baked into images, starting with character-select names/titles
+   and reusable menu headings. This requires clean background reconstruction;
+   it is not a missing string-catalog problem.
+4. Finish production update release inputs: origin, platform packages, signing
+   key custody/rotation, and hosted CI artifact validation. The updater engine
+   itself is already implemented and default-off without those inputs.
+5. Continue online operations and UX: reviewed historical-score import,
+   operational verifier/service monitoring, and any remaining public-account
+   recovery flows. The replay-backed Story leaderboard/upload/download/watch
+   path is already live.
+6. Improve PMD/YM2608 audio fidelity where channel balance and simultaneous
+   SFX layering still differ audibly from PC-98 output.
+7. Expand Arrange only after choosing a shippable ruleset and a replay/content
+   identity for it. `dopamine-test-v1` remains an intentionally non-stock test.
+8. Design optional `Smooth` display interpolation behind the existing exact
+   source scheduler; `Repeat` sample-and-hold remains the authentic default.
+9. Resume broad pixel/audio-oracle coverage after these moving functional and
+   localized surfaces settle. Stock deterministic/replay gates remain active
+   throughout.
+
+Longer-term work remains VS match history, netplay replay evidence on services,
+ratings/Elo/seasons/tournament policy, and runtime-localized image-heavy title
+art. None is required to call the English/Japanese source-text coverage
+complete.
 
 Pixel-oracle expansion is useful after these functional seams settle, not
 before every localized or Arrange screen is still moving. Stock routes keep

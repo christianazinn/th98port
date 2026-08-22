@@ -28,8 +28,10 @@ class GameTextPackTests(unittest.TestCase):
     def setUp(self) -> None:
         self.schema_path = ROOT / "localization/game-text-schema.json"
         self.author_path = ROOT / "localization/game-text-en-US.json"
+        self.japanese_path = ROOT / "localization/game-text-ja-JP.json"
         self.schema = PACK.load_schema(self.schema_path)
         self.author = PACK.load_author(self.author_path, self.schema)
+        self.japanese = PACK.load_author(self.japanese_path, self.schema)
 
     def write_author(self, root: Path, raw: dict[str, object]) -> Path:
         path = root / "author.json"
@@ -51,6 +53,10 @@ class GameTextPackTests(unittest.TestCase):
             compiled,
             (ROOT / "localization/game-text-en-US.t3gtl").read_bytes(),
         )
+        self.assertEqual(
+            PACK.compile_pack(self.schema, self.japanese),
+            (ROOT / "localization/game-text-ja-JP.t3gtl").read_bytes(),
+        )
         pseudo_path = ROOT / "localization/game-text-qps-ploc.json"
         pseudo = PACK.load_author(pseudo_path, self.schema)
         self.assertEqual(
@@ -61,7 +67,9 @@ class GameTextPackTests(unittest.TestCase):
             root = Path(temporary)
             ids = root / "ids.inc"
             data = root / "data.inc"
-            PACK.generate_cpp(self.schema, [self.author], ids, data)
+            PACK.generate_cpp(
+                self.schema, [self.author, self.japanese], ids, data
+            )
             self.assertEqual(
                 ids.read_bytes(),
                 (ROOT / "include/th03/app/new_classic_game_text_ids.inc").read_bytes(),

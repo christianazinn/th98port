@@ -1774,7 +1774,8 @@ prepare_direct_netplay_replay_save_resources(
 )
 {
 	auto patch = th03::app::load_new_classic_replay_patch_assets(
-		content.data_root / "AZINN.DAT", content.new_classic_menu_assets
+		content.data_root / "AZINN.DAT", content.new_classic_menu_assets,
+		content.font_rom
 	);
 	if(!patch) {
 		return std::unexpected(fail_netplay(
@@ -3631,7 +3632,8 @@ int run_direct_netplay_on_platform(
 	const auto replay_save_content = parsed.launch.content;
 	auto loaded_pause_assets = th03::app::load_new_classic_replay_patch_assets(
 		parsed.launch.content.data_root / "AZINN.DAT",
-		parsed.launch.content.new_classic_menu_assets
+		parsed.launch.content.new_classic_menu_assets,
+		parsed.launch.content.font_rom
 	);
 	if(!loaded_pause_assets) {
 		return fail("netplay-pause-assets", loaded_pause_assets.error());
@@ -7719,7 +7721,8 @@ ExperienceRunResult run_new_classic_experience(
 	}
 	auto loaded_patch_assets =
 		th03::app::load_new_classic_replay_patch_assets(
-			patch_asset_path, parsed.launch.content.new_classic_menu_assets
+			patch_asset_path, parsed.launch.content.new_classic_menu_assets,
+			parsed.launch.content.font_rom
 		);
 	if(!loaded_patch_assets) {
 		return {.exit_code = fail("replay-patch-assets", loaded_patch_assets.error())};
@@ -7740,18 +7743,26 @@ ExperienceRunResult run_new_classic_experience(
 		>(std::move(*loaded_messages));
 	}
 	if(!parsed.launch.content.game_text_pack.empty()) {
-		if(parsed.launch.content.language_overlay.empty()) {
+		const bool english =
+			config_options.language == th03::app::ClassicLanguage::english;
+		if(english && parsed.launch.content.language_overlay.empty()) {
 			return {.exit_code = fail_output_gain(
 				"game-text-pack", "english-overlay-required"
 			)};
 		}
-		const auto &fallback =
-			th03::app::new_classic_builtin_english_game_text();
+		const auto &fallback = english ?
+			th03::app::new_classic_builtin_english_game_text() :
+			th03::app::new_classic_builtin_japanese_game_text();
 		auto loaded_game_text = th03::app::load_new_classic_game_text_pack(
 			parsed.launch.content.game_text_pack, &fallback
 		);
 		if(!loaded_game_text) {
 			return {.exit_code = fail("game-text-pack", loaded_game_text.error())};
+		}
+		if((loaded_game_text->locale() == "ja-JP") == english) {
+			return {.exit_code = fail_output_gain(
+				"game-text-pack", "locale-mismatch"
+			)};
 		}
 		if(loaded_patch_assets->custom_messages &&
 			loaded_patch_assets->custom_messages->locale() !=

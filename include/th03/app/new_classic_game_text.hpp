@@ -119,6 +119,9 @@ new_classic_game_text_schema(NewClassicGameTextId id) noexcept;
 [[nodiscard]] const NewClassicGameTextCatalog &
 new_classic_builtin_english_game_text() noexcept;
 
+[[nodiscard]] const NewClassicGameTextCatalog &
+new_classic_builtin_japanese_game_text() noexcept;
+
 // T3GTL001 entries contain exact CP932 bytes for source-constrained graphics
 // text. An omitted entry is legal only when [fallback] names the supplied,
 // already validated catalog exactly.

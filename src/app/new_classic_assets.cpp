@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "th03/app/main_compiled_content.hpp"
+#include "th03/app/authentic_text.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/present/pi.hpp"
 
@@ -33,6 +34,42 @@ struct NewClassicAssetsAccess final {
 };
 
 namespace {
+
+constexpr std::size_t machine_ank_offset = 0x800U;
+constexpr std::size_t machine_jis_offset = 0x1800U;
+constexpr std::size_t machine_jis_columns = 96U;
+constexpr std::size_t machine_jis_glyph_bytes = 32U;
+
+[[nodiscard]] constexpr bool shift_jis_lead(std::uint8_t value) noexcept
+{
+	return (value >= 0x81U && value <= 0x9FU) ||
+		(value >= 0xE0U && value <= 0xFCU);
+}
+
+[[nodiscard]] constexpr bool shift_jis_trail(std::uint8_t value) noexcept
+{
+	return (value >= 0x40U && value <= 0x7EU) ||
+		(value >= 0x80U && value <= 0xFCU);
+}
+
+[[nodiscard]] constexpr std::uint16_t canonical_jis(
+	std::uint8_t lead,
+	std::uint8_t trail
+) noexcept {
+	auto first = static_cast<std::uint16_t>(
+		((lead <= 0x9FU) ? (lead - 0x81U) : (lead - 0xC1U)) * 2U + 0x21U
+	);
+	std::uint16_t second = 0U;
+	if(trail >= 0x9FU) {
+		++first;
+		second = static_cast<std::uint16_t>(trail - 0x7EU);
+	} else {
+		second = static_cast<std::uint16_t>(
+			trail - ((trail >= 0x80U) ? 0x20U : 0x1FU)
+		);
+	}
+	return static_cast<std::uint16_t>((first << 8U) | second);
+}
 
 constexpr std::size_t extended_archive_file_bytes = 1'183'932U;
 constexpr MainExecutableSha256 extended_archive_sha256{
@@ -303,8 +340,8 @@ const NewClassicMessageCatalog &NewClassicReplayPatchAssets::messages(
 	NewClassicLanguageAssetProfile profile
 ) const noexcept
 {
-	return custom_messages ? *custom_messages :
-		new_classic_builtin_messages(profile);
+	return custom_messages && custom_messages->asset_profile() == profile ?
+		*custom_messages : new_classic_builtin_messages(profile);
 }
 
 NewClassicPatchSurface::NewClassicPatchSurface() :
@@ -476,8 +513,20 @@ std::int32_t NewClassicMenuFont::width_n(
 {
 	std::int32_t result = 0;
 	const auto size = std::min(text.size(), count);
-	for(std::size_t index = 0U; index < size; ++index) {
-		result += advances_[glyph_index(static_cast<std::uint8_t>(text[index]))];
+	for(std::size_t index = 0U; index < size;) {
+		const auto value = static_cast<std::uint8_t>(text[index]);
+		if(shift_jis_lead(value) && index + 1U < size && shift_jis_trail(
+			static_cast<std::uint8_t>(text[index + 1U])
+		)) {
+			result += 16;
+			index += 2U;
+		} else if(value >= 0xA1U && value <= 0xDFU) {
+			result += 8;
+			++index;
+		} else {
+			result += advances_[glyph_index(value)];
+			++index;
+		}
 	}
 	return result;
 }
@@ -528,34 +577,130 @@ bool NewClassicMenuFont::put_n_clipped(
 		clip_bottom > present::graphics_height) {
 		return false;
 	}
-	const auto size = std::min(text.size(), count);
-	for(std::size_t character = 0U; character < size; ++character) {
-		const auto value = static_cast<std::uint8_t>(text[character]);
-		const auto index = glyph_index(value);
-		if(value != ' ' && left >= 0 && left < present::graphics_width) {
-			const auto &glyph = bitmaps_[index];
-			for(std::int32_t row = 0; row < glyph_height; ++row) {
-				for(std::int32_t column = 0; column < glyph_width; ++column) {
-					const auto byte = glyph[
-						(static_cast<std::size_t>(row) * 2U) +
-						(static_cast<std::size_t>(column) / 8U)
-					];
-					if((byte & (0x80U >> (column & 7))) == 0U) {
-						continue;
-					}
-					const auto x = left + column;
-					const auto y = top + row;
-					if(x >= clip.x && x < clip_right &&
-						y >= clip.y && y < clip_bottom &&
-						!raster.plot({x, top + row}, color)) {
-						return false;
-					}
+	const auto plot_glyph = [&](std::span<const std::uint8_t> rows,
+		std::int32_t width, bool split_halves) noexcept {
+		for(std::int32_t row = 0; row < glyph_height; ++row) {
+			for(std::int32_t column = 0; column < width; ++column) {
+				const auto byte_index = split_halves ?
+					(static_cast<std::size_t>(column) / 8U) * glyph_height +
+					static_cast<std::size_t>(row) :
+					static_cast<std::size_t>(row) * 2U +
+					(static_cast<std::size_t>(column) / 8U);
+				if((rows[byte_index] & (0x80U >> (column & 7))) == 0U) {
+					continue;
+				}
+				const auto x = left + column;
+				const auto y = top + row;
+				if(x >= clip.x && x < clip_right && y >= clip.y &&
+					y < clip_bottom && !raster.plot({x, y}, color)) {
+					return false;
 				}
 			}
 		}
+		return true;
+	};
+	const auto draw_fallback = [&]() noexcept {
+		const auto index = glyph_index(fallback_character);
+		return plot_glyph(bitmaps_[index], glyph_width, false);
+	};
+	const auto size = std::min(text.size(), count);
+	for(std::size_t character = 0U; character < size;) {
+		const auto value = static_cast<std::uint8_t>(text[character]);
+		if(shift_jis_lead(value) && character + 1U < size &&
+			shift_jis_trail(static_cast<std::uint8_t>(text[character + 1U]))) {
+			const auto jis = canonical_jis(
+				value, static_cast<std::uint8_t>(text[character + 1U])
+			);
+			const auto first = static_cast<std::uint8_t>(jis >> 8U);
+			const auto second = static_cast<std::uint8_t>(jis & 0xFFU);
+			if(left >= 0 && left < present::graphics_width) {
+				if(has_machine_font() && first >= 0x21U && first <= 0x7CU &&
+					second >= 0x20U && second <= 0x7FU) {
+					const auto offset = machine_jis_offset +
+						(static_cast<std::size_t>(first - 0x21U) *
+							machine_jis_columns * machine_jis_glyph_bytes) +
+						(static_cast<std::size_t>(second - 0x20U) *
+							machine_jis_glyph_bytes);
+					for(std::int32_t row = 0; row < glyph_height; ++row) {
+						for(std::int32_t column = 0; column < 16; ++column) {
+							const auto half = static_cast<std::size_t>(column / 8);
+							const auto bits = std::to_integer<std::uint8_t>(
+								machine_font_[offset + half * glyph_height +
+									static_cast<std::size_t>(row)]
+							);
+							const auto x = left + column;
+							const auto y = top + row;
+							if((bits & (0x80U >> (column & 7))) != 0U &&
+								x >= clip.x && x < clip_right && y >= clip.y &&
+								y < clip_bottom && !raster.plot({x, y}, color)) {
+								return false;
+							}
+						}
+					}
+				} else if(!draw_fallback()) {
+					return false;
+				}
+			}
+			left += 16;
+			character += 2U;
+			continue;
+		}
+		if(value >= 0xA1U && value <= 0xDFU) {
+			if(left >= 0 && left < present::graphics_width) {
+				if(has_machine_font()) {
+					const auto offset = machine_ank_offset +
+						(static_cast<std::size_t>(value) * glyph_height);
+					for(std::int32_t row = 0; row < glyph_height; ++row) {
+						const auto bits = std::to_integer<std::uint8_t>(
+							machine_font_[offset + static_cast<std::size_t>(row)]
+						);
+						for(std::int32_t column = 0; column < 8; ++column) {
+							const auto x = left + column;
+							const auto y = top + row;
+							if((bits & (0x80U >> column)) != 0U && x >= clip.x &&
+								x < clip_right && y >= clip.y && y < clip_bottom &&
+								!raster.plot({x, y}, color)) {
+								return false;
+							}
+						}
+					}
+				} else if(!draw_fallback()) {
+					return false;
+				}
+			}
+			left += 8;
+			++character;
+			continue;
+		}
+		const auto index = glyph_index(value);
+		if(value != ' ' && left >= 0 && left < present::graphics_width &&
+			!plot_glyph(bitmaps_[index], glyph_width, false)) {
+			return false;
+		}
 		left += advances_[index];
+		++character;
 	}
 	return true;
+}
+
+bool NewClassicMenuFont::install_machine_font(
+	std::span<const std::byte> font_rom
+)
+{
+	if(!Pc98FontRomProvider::from_exact_font_rom(font_rom)) {
+		return false;
+	}
+	try {
+		machine_font_.assign(font_rom.begin(), font_rom.end());
+		return true;
+	} catch(const std::bad_alloc &) {
+		return false;
+	}
+}
+
+bool NewClassicMenuFont::has_machine_font() const noexcept
+{
+	return machine_font_.size() == Pc98FontRomProvider::font_rom_size;
 }
 
 bool NewClassicMenuFont::put_centered(
@@ -942,7 +1087,8 @@ decode_new_classic_menu_background(
 std::expected<NewClassicReplayPatchAssets, NewClassicAssetsError>
 load_new_classic_replay_patch_assets(
 	const std::filesystem::path &path,
-	const std::filesystem::path &menu_background_root
+	const std::filesystem::path &menu_background_root,
+	const std::filesystem::path &font_rom
 )
 {
 	if(path.empty()) {
@@ -1083,6 +1229,28 @@ load_new_classic_replay_patch_assets(
 			result.new_menu_backgrounds[index] = std::move(*background);
 		}
 		result.menu_font = std::move(*font);
+		if(!font_rom.empty()) {
+			std::ifstream machine_font(font_rom, std::ios::binary);
+			if(!machine_font) {
+				return std::unexpected(error(
+					NewClassicAssetsErrorCode::source_open
+				));
+			}
+			std::vector<std::byte> machine_font_bytes(
+				Pc98FontRomProvider::font_rom_size
+			);
+			machine_font.read(
+				reinterpret_cast<char *>(machine_font_bytes.data()),
+				static_cast<std::streamsize>(machine_font_bytes.size())
+			);
+			if(!machine_font ||
+				machine_font.peek() != std::ifstream::traits_type::eof() ||
+				!result.menu_font.install_machine_font(machine_font_bytes)) {
+				return std::unexpected(error(
+					NewClassicAssetsErrorCode::font_shape
+				));
+			}
+		}
 		result.pause_gaiji = std::move(*pause);
 		return result;
 	} catch(const std::bad_alloc &) {

@@ -24,12 +24,14 @@ struct NewClassicMessageCatalogAccess final {
 		std::string locale,
 		std::string fallback,
 		NewClassicLanguageAssetProfile profile,
+		NewClassicMessageEncoding encoding,
 		std::array<std::string, new_classic_message_count> messages
 	)
 	{
 		catalog.locale_ = std::move(locale);
 		catalog.fallback_locale_ = std::move(fallback);
 		catalog.asset_profile_ = profile;
+		catalog.encoding_ = encoding;
 		catalog.messages_ = std::move(messages);
 	}
 };
@@ -137,19 +139,74 @@ constexpr std::array<NewClassicMessageSchemaEntry, message_count> schema{{
 	return component >= (first_component ? 2U : 1U) && component <= 8U;
 }
 
-[[nodiscard]] bool valid_glyphs(std::string_view text) noexcept
+[[nodiscard]] bool valid_glyphs(
+	std::string_view text,
+	NewClassicMessageEncoding encoding,
+	const NewClassicMenuFont &font
+) noexcept
 {
-	return !text.empty() && std::ranges::all_of(text, [](char character) {
-		const auto value = static_cast<unsigned char>(character);
-		return value >= NewClassicMenuFont::first_character &&
-			value <= NewClassicMenuFont::last_character;
-	});
+	if(text.empty()) {
+		return false;
+	}
+	for(std::size_t offset = 0U; offset < text.size();) {
+		const auto value = static_cast<std::uint8_t>(text[offset]);
+		if(value >= NewClassicMenuFont::first_character &&
+			value <= NewClassicMenuFont::last_character) {
+			++offset;
+			continue;
+		}
+		if(encoding != NewClassicMessageEncoding::cp932_mixed ||
+			!font.has_machine_font()) {
+			return false;
+		}
+		if(value >= 0xA1U && value <= 0xDFU) {
+			++offset;
+			continue;
+		}
+		const auto lead = (value >= 0x81U && value <= 0x9FU) ||
+			(value >= 0xE0U && value <= 0xFCU);
+		if(!lead || offset + 1U >= text.size()) {
+			return false;
+		}
+		const auto trail = static_cast<std::uint8_t>(text[offset + 1U]);
+		if(!((trail >= 0x40U && trail <= 0x7EU) ||
+			(trail >= 0x80U && trail <= 0xFCU))) {
+			return false;
+		}
+		offset += 2U;
+	}
+	return true;
 }
 
-[[nodiscard]] std::string placeholder_set(std::string_view text)
+[[nodiscard]] bool cp932_pair_at(
+	std::string_view text,
+	std::size_t offset,
+	NewClassicMessageEncoding encoding
+) noexcept
+{
+	if(encoding != NewClassicMessageEncoding::cp932_mixed ||
+		offset + 1U >= text.size()) {
+		return false;
+	}
+	const auto lead = static_cast<std::uint8_t>(text[offset]);
+	const auto trail = static_cast<std::uint8_t>(text[offset + 1U]);
+	return ((lead >= 0x81U && lead <= 0x9FU) ||
+		(lead >= 0xE0U && lead <= 0xFCU)) &&
+		((trail >= 0x40U && trail <= 0x7EU) ||
+		 (trail >= 0x80U && trail <= 0xFCU));
+}
+
+[[nodiscard]] std::string placeholder_set(
+	std::string_view text,
+	NewClassicMessageEncoding encoding
+)
 {
 	std::vector<std::string> names{};
 	for(std::size_t cursor = 0U; cursor < text.size();) {
+		if(cp932_pair_at(text, cursor, encoding)) {
+			cursor += 2U;
+			continue;
+		}
 		if(text[cursor] == '}') {
 			return "!";
 		}
@@ -204,12 +261,18 @@ constexpr std::array<NewClassicMessageSchemaEntry, message_count> schema{{
 
 [[nodiscard]] std::string format_message(
 	std::string_view source,
-	std::span<const NewClassicMessageArgument> arguments
+	std::span<const NewClassicMessageArgument> arguments,
+	NewClassicMessageEncoding encoding
 )
 {
 	std::string result{};
 	std::vector<bool> used(arguments.size(), false);
 	for(std::size_t cursor = 0U; cursor < source.size();) {
+		if(cp932_pair_at(source, cursor, encoding)) {
+			result.push_back(source[cursor++]);
+			result.push_back(source[cursor++]);
+			continue;
+		}
 		if(source[cursor] != '{') {
 			result.push_back(source[cursor++]);
 			continue;
@@ -241,16 +304,17 @@ constexpr std::array<NewClassicMessageSchemaEntry, message_count> schema{{
 validate_message(
 	NewClassicMessageId id,
 	std::string_view text,
-	const NewClassicMenuFont &font
+	const NewClassicMenuFont &font,
+	NewClassicMessageEncoding encoding
 )
 {
 	const auto index = static_cast<std::size_t>(id);
-	if(index >= schema.size() || !valid_glyphs(text)) {
+	if(index >= schema.size() || !valid_glyphs(text, encoding, font)) {
 		return std::unexpected(error(
 			NewClassicMessagePackErrorCode::glyph_coverage, 0U, {}, id
 		));
 	}
-	if(placeholder_set(text) != schema[index].placeholders) {
+	if(placeholder_set(text, encoding) != schema[index].placeholders) {
 		return std::unexpected(error(
 			NewClassicMessagePackErrorCode::placeholder_mismatch, 0U, {}, id
 		));
@@ -267,8 +331,8 @@ validate_message(
 	for(std::size_t argument = 0U; argument < names.size(); ++argument) {
 		arguments.push_back({names[argument], values[argument]});
 	}
-	const auto formatted = format_message(text, arguments);
-	if(formatted.empty() || !valid_glyphs(formatted) ||
+	const auto formatted = format_message(text, arguments, encoding);
+	if(formatted.empty() || !valid_glyphs(formatted, encoding, font) ||
 		font.width(formatted) > schema[index].maximum_width) {
 		return std::unexpected(error(
 			NewClassicMessagePackErrorCode::width_exceeded, 0U, {}, id
@@ -281,6 +345,7 @@ validate_message(
 	std::string locale,
 	std::string fallback,
 	NewClassicLanguageAssetProfile profile,
+	NewClassicMessageEncoding encoding,
 	const std::array<std::string_view, message_count> &values
 )
 {
@@ -290,7 +355,7 @@ validate_message(
 	}
 	NewClassicMessageCatalog result{};
 	NewClassicMessageCatalogAccess::assign(
-		result, std::move(locale), std::move(fallback), profile,
+		result, std::move(locale), std::move(fallback), profile, encoding,
 		std::move(messages)
 	);
 	return result;
@@ -312,6 +377,11 @@ NewClassicLanguageAssetProfile
 NewClassicMessageCatalog::asset_profile() const noexcept
 {
 	return asset_profile_;
+}
+
+NewClassicMessageEncoding NewClassicMessageCatalog::encoding() const noexcept
+{
+	return encoding_;
 }
 
 std::string_view NewClassicMessageCatalog::text(
@@ -340,10 +410,10 @@ std::string NewClassicMessageCatalog::format(
 {
 	const auto index = static_cast<std::size_t>(id);
 	if(index >= messages_.size() ||
-		placeholder_set(messages_[index]) != schema[index].placeholders) {
+		placeholder_set(messages_[index], encoding_) != schema[index].placeholders) {
 		return {};
 	}
-	return format_message(messages_[index], arguments);
+	return format_message(messages_[index], arguments, encoding_);
 }
 
 const NewClassicMessageSchemaEntry &new_classic_message_schema(
@@ -360,10 +430,12 @@ const NewClassicMessageCatalog &new_classic_builtin_messages(
 {
 	static const auto japanese = builtin(
 		"ja-JP", "en-US", NewClassicLanguageAssetProfile::japanese,
+		NewClassicMessageEncoding::cp932_mixed,
 		builtin_japanese
 	);
 	static const auto english = builtin(
 		"en-US", "", NewClassicLanguageAssetProfile::english,
+		NewClassicMessageEncoding::menu_font_ascii,
 		builtin_english
 	);
 	return profile == NewClassicLanguageAssetProfile::english ? english : japanese;
@@ -421,18 +493,27 @@ load_new_classic_message_pack(
 		}
 		if(!std::ranges::equal(magic, std::span<const std::byte>{bytes}.first(8U)) ||
 			u16(bytes, 8U) != 1U || u16(bytes, 10U) != header_bytes ||
-		u16(bytes, 12U) != message_count || !zero_range(bytes, 17U, 20U) ||
+			u16(bytes, 12U) != message_count || !zero_range(bytes, 18U, 20U) ||
 			!zero_range(bytes, 28U, 32U)) {
 			return std::unexpected(error(
 				NewClassicMessagePackErrorCode::header_shape
 			));
 		}
 		const auto profile_value = std::to_integer<std::uint8_t>(bytes[14U]);
+		const auto encoding_value = std::to_integer<std::uint8_t>(bytes[17U]);
 		if(profile_value > 1U) {
 			return std::unexpected(error(
 				NewClassicMessagePackErrorCode::asset_profile, 14U
 			));
 		}
+		if(encoding_value > 1U || encoding_value != (profile_value == 0U ? 1U : 0U)) {
+			return std::unexpected(error(
+				NewClassicMessagePackErrorCode::glyph_coverage, 17U
+			));
+		}
+		const auto encoding = static_cast<NewClassicMessageEncoding>(
+			encoding_value
+		);
 		if(!std::ranges::equal(
 			message_schema_sha256,
 			std::span<const std::byte>{bytes}.subspan(32U, 32U),
@@ -522,7 +603,9 @@ load_new_classic_message_pack(
 				);
 				expected_payload_offset += length;
 			}
-			if(auto valid = validate_message(id, messages[index], font); !valid) {
+			if(auto valid = validate_message(
+				id, messages[index], font, encoding
+			); !valid) {
 				auto result = valid.error();
 				result.offset = entry;
 				return std::unexpected(std::move(result));
@@ -537,6 +620,7 @@ load_new_classic_message_pack(
 		NewClassicMessageCatalogAccess::assign(
 			result, locale, fallback_locale,
 			static_cast<NewClassicLanguageAssetProfile>(profile_value),
+			encoding,
 			std::move(messages)
 		);
 		return result;
@@ -553,6 +637,7 @@ const NewClassicMessageCatalog &new_classic_width_test_messages() noexcept
 {
 	static const auto result = builtin(
 		"qps-ploc", "en-US", NewClassicLanguageAssetProfile::english,
+		NewClassicMessageEncoding::menu_font_ascii,
 		builtin_width_test
 	);
 	return result;

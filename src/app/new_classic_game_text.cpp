@@ -186,16 +186,19 @@ validate_message(
 	return {};
 }
 
-[[nodiscard]] NewClassicGameTextCatalog builtin_english()
+[[nodiscard]] NewClassicGameTextCatalog builtin(
+	std::string locale,
+	const std::array<std::string_view, game_text_count> &source
+)
 {
 	std::array<std::vector<std::uint8_t>, game_text_count> messages{};
 	for(std::size_t index = 0U; index < messages.size(); ++index) {
-		const auto value = builtin_english_game_text[index];
+		const auto value = source[index];
 		messages[index].assign(value.begin(), value.end());
 	}
 	NewClassicGameTextCatalog result{};
 	NewClassicGameTextCatalogAccess::assign(
-		result, "en-US", "", std::move(messages)
+		result, std::move(locale), "", std::move(messages)
 	);
 	return result;
 }
@@ -232,7 +235,13 @@ const NewClassicGameTextSchemaEntry &new_classic_game_text_schema(
 
 const NewClassicGameTextCatalog &new_classic_builtin_english_game_text() noexcept
 {
-	static const auto catalog = builtin_english();
+	static const auto catalog = builtin("en-US", builtin_english_game_text);
+	return catalog;
+}
+
+const NewClassicGameTextCatalog &new_classic_builtin_japanese_game_text() noexcept
+{
+	static const auto catalog = builtin("ja-JP", builtin_japanese_game_text);
 	return catalog;
 }
 

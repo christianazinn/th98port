@@ -353,8 +353,12 @@ void apply_new_classic_english_stage_text(
 		};
 		assign_text(stage.characters[index].title,
 			text.bytes(id(NewClassicGameTextId::stage_title_first_00)));
-		assign_text(stage.characters[index].title_second,
-			text.bytes(id(NewClassicGameTextId::stage_title_second_00)));
+		if(text.locale() == "ja-JP") {
+			stage.characters[index].title_second.clear();
+		} else {
+			assign_text(stage.characters[index].title_second,
+				text.bytes(id(NewClassicGameTextId::stage_title_second_00)));
+		}
 		assign_text(stage.characters[index].name,
 			text.bytes(id(NewClassicGameTextId::stage_name_00)));
 	}

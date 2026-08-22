@@ -53,6 +53,7 @@ class Author:
     locale: str
     fallback: str
     asset_profile: int
+    encoding: int
     messages: dict[str, str]
 
 
@@ -154,15 +155,31 @@ def placeholders(text: str) -> tuple[str, ...]:
     return found
 
 
-def validate_message(message: Message, text: str) -> bytes:
+def validate_message(message: Message, text: str, encoding: int) -> bytes:
     try:
-        encoded = text.encode("ascii")
+        encoded = text.encode("ascii" if encoding == 0 else "cp932")
     except UnicodeEncodeError as error:
         raise PackError(
-            f"{message.id}: menu-font text must use printable ASCII"
+            f"{message.id}: text is not representable by its selected font encoding"
         ) from error
-    if not encoded or any(value < 0x20 or value > 0x7E for value in encoded):
-        raise PackError(f"{message.id}: invalid menu-font glyph")
+    if not encoded:
+        raise PackError(f"{message.id}: empty menu-font text")
+    offset = 0
+    while offset < len(encoded):
+        value = encoded[offset]
+        if 0x20 <= value <= 0x7E:
+            offset += 1
+            continue
+        if encoding == 1 and 0xA1 <= value <= 0xDF:
+            offset += 1
+            continue
+        lead = encoding == 1 and (0x81 <= value <= 0x9F or 0xE0 <= value <= 0xFC)
+        if not lead or offset + 1 >= len(encoded):
+            raise PackError(f"{message.id}: invalid CP932 glyph")
+        trail = encoded[offset + 1]
+        if not (0x40 <= trail <= 0x7E or 0x80 <= trail <= 0xFC):
+            raise PackError(f"{message.id}: invalid CP932 glyph")
+        offset += 2
     if placeholders(text) != tuple(item.name for item in message.placeholders):
         raise PackError(f"{message.id}: placeholder set does not match schema")
     if len(encoded) > 0xFFFF:
@@ -201,11 +218,14 @@ def load_author(path: Path, schema: Schema) -> Author:
             raise PackError(f"{path}: missing required message {missing[0]}")
     for message in schema.messages:
         if message.id in authored:
-            validate_message(message, authored[message.id])
+            validate_message(
+                message, authored[message.id], 0 if profile == "english" else 1
+            )
     return Author(
         locale=locale,
         fallback=fallback,
         asset_profile=0 if profile == "japanese" else 1,
+        encoding=1 if profile == "japanese" else 0,
         messages=dict(authored),
     )
 
@@ -233,7 +253,7 @@ def resolve_author(
             if fallback_values is None:
                 raise PackError(f"missing required message {message.id}")
             value = fallback_values[index]
-        validate_message(message, value)
+        validate_message(message, value, author.encoding)
         values.append(value)
     return tuple(values)
 
@@ -248,7 +268,7 @@ def compile_pack(schema: Schema, author: Author) -> bytes:
         if text is None:
             directory.extend(struct.pack("<IHH", 0, 0, 0))
             continue
-        encoded = validate_message(message, text)
+        encoded = validate_message(message, text, author.encoding)
         directory.extend(struct.pack("<IHH", len(payload), len(encoded), 0))
         payload.extend(encoded)
     body = bytes(locale + fallback + directory + payload)
@@ -256,7 +276,7 @@ def compile_pack(schema: Schema, author: Author) -> bytes:
     header[0:8] = MAGIC
     struct.pack_into("<HHHBBBBxxII", header, 8,
                      1, HEADER_SIZE, len(schema.messages), author.asset_profile,
-                     len(locale), len(fallback), 0,
+                     len(locale), len(fallback), author.encoding,
                      len(directory), len(payload))
     header[32:64] = schema.digest
     header[64:96] = hashlib.sha256(body).digest()
@@ -265,6 +285,12 @@ def compile_pack(schema: Schema, author: Author) -> bytes:
 
 def cpp_byte_array(values: bytes) -> str:
     return ", ".join(f"0x{value:02X}U" for value in values)
+
+
+def cpp_string_view(value: str, encoding: int) -> str:
+    encoded = value.encode("ascii" if encoding == 0 else "cp932")
+    escaped = "".join(f"\\x{byte:02X}" for byte in encoded)
+    return f'std::string_view{{"{escaped}", {len(encoded)}U}}'
 
 
 def generate_cpp(
@@ -284,7 +310,10 @@ def generate_cpp(
         for message in schema.messages
     )
     resolved = {
-        locale: resolve_author(author_map[locale], author_map, schema)
+        locale: (
+            resolve_author(author_map[locale], author_map, schema),
+            author_map[locale].encoding,
+        )
         for locale in ("en-US", "ja-JP", "qps-ploc")
     }
     lines = [
@@ -297,8 +326,9 @@ def generate_cpp(
         lines.append(
             f"constexpr std::array<std::string_view, message_count> {symbol}{{{{\n"
         )
-        for value in resolved[locale]:
-            lines.append(f"\t{json.dumps(value)},\n")
+        values, encoding = resolved[locale]
+        for value in values:
+            lines.append(f"\t{cpp_string_view(value, encoding)},\n")
         lines.append("}};\n")
     ids_output.write_text(ids, encoding="utf-8", newline="\n")
     data_output.write_text("".join(lines), encoding="utf-8", newline="\n")

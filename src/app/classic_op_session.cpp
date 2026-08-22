@@ -1087,7 +1087,8 @@ struct ClassicOpSessionBackend final {
 			}
 		}
 		return language == ClassicLanguage::english ?
-			&new_classic_builtin_english_game_text() : nullptr;
+			&new_classic_builtin_english_game_text() :
+			&new_classic_builtin_japanese_game_text();
 	}
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>

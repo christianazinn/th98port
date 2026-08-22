@@ -36,10 +36,8 @@ class LanguagePackTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(first).hexdigest(),
                          hashlib.sha256(second).hexdigest())
         authors = {author.locale: author for author in (english, japanese)}
-        self.assertEqual(
-            pack.resolve_author(japanese, authors, self.schema),
-            pack.resolve_author(english, authors, self.schema),
-        )
+        self.assertEqual(first[17], 0)
+        self.assertEqual(pack.compile_pack(self.schema, japanese)[17], 1)
 
     def test_unknown_missing_placeholder_and_glyph_fail_closed(self) -> None:
         original = json.loads((self.root / "localization/en-US.json").read_text())
@@ -54,8 +52,14 @@ class LanguagePackTests(unittest.TestCase):
         placeholder["messages"]["value.percent"] = "percent"
         cases.append(placeholder)
         glyph = json.loads(json.dumps(original))
-        glyph["messages"]["title.start"] = "Stärt"
+        glyph["messages"]["title.start"] = "開始"
         cases.append(glyph)
+
+        japanese = json.loads(
+            (self.root / "localization/ja-JP.json").read_text(encoding="utf-8")
+        )
+        japanese["messages"]["title.start"] = "😀"
+        cases.append(japanese)
         with tempfile.TemporaryDirectory() as temporary:
             for index, case in enumerate(cases):
                 path = Path(temporary) / f"case-{index}.json"

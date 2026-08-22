@@ -32,6 +32,11 @@ enum class NewClassicLanguageAssetProfile : std::uint8_t {
 	english,
 };
 
+enum class NewClassicMessageEncoding : std::uint8_t {
+	menu_font_ascii,
+	cp932_mixed,
+};
+
 struct NewClassicMessageSchemaEntry final {
 	std::string_view identifier{};
 	std::uint16_t maximum_width = 0U;
@@ -78,6 +83,7 @@ public:
 	[[nodiscard]] std::string_view locale() const noexcept;
 	[[nodiscard]] std::string_view fallback_locale() const noexcept;
 	[[nodiscard]] NewClassicLanguageAssetProfile asset_profile() const noexcept;
+	[[nodiscard]] NewClassicMessageEncoding encoding() const noexcept;
 	[[nodiscard]] std::string_view text(NewClassicMessageId id) const noexcept;
 	[[nodiscard]] std::string format(
 		NewClassicMessageId id,
@@ -94,6 +100,8 @@ private:
 	std::string fallback_locale_{};
 	NewClassicLanguageAssetProfile asset_profile_ =
 		NewClassicLanguageAssetProfile::japanese;
+	NewClassicMessageEncoding encoding_ =
+		NewClassicMessageEncoding::menu_font_ascii;
 	std::array<std::string, new_classic_message_count> messages_{};
 };
 

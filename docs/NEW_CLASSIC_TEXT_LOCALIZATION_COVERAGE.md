@@ -1,6 +1,6 @@
 # New Classic playable-text localization coverage
 
-Status: implementation inventory, 2026-08-21.
+Status: implementation inventory, 2026-08-22.
 
 The localization objective is every player-visible word in New Classic. It is
 split by the source renderer rather than forced into one unsafe file format.
@@ -11,17 +11,17 @@ any of these packages.
 
 | Domain | Current coverage | Author/runtime artifacts |
 |---|---|---|
-| New Classic menus and product UI | Title, Option hierarchy, Replay browser/save/viewer, HiScore/online views, Practice, Input/Key/Joy/Device configuration, netplay rooms/profile/status, and bounded dynamic templates | UTF-8 `T3LNG-AUTHOR-1` to `T3LNG001`; `localization/{en-US,ja-JP,qps-ploc}.json` |
-| Executable-resident game text | 61 stage titles/names, Music Room selection titles, registration names, and result labels | UTF-8 `T3GTL-AUTHOR-1` to CP932 `T3GTL001`; `localization/game-text-en-US.json` |
+| New Classic menus and product UI | Title, Option hierarchy, Replay browser/save/viewer, HiScore/online views, Practice, Input/Key/Joy/Device configuration, netplay rooms/profile/status, and bounded dynamic templates | Complete 402-message English and Japanese UTF-8 authors to `T3LNG001`; Japanese compiles to CP932 and mixes real PC-98 machine glyphs with proportional MNUFONT Latin text |
+| Executable-resident game text | 61 stage titles/names, Music Room selection titles, registration names, and result labels | Complete English and Japanese UTF-8 `T3GTL-AUTHOR-1` catalogs to CP932 `T3GTL001` |
 | Win quotes | All nine character tables, 11 opponent/route blocks per character, three rows per block: 297 exact 58-byte rows | Same `T3GTL001` domain; English rows are merged into the complete catalog and Japanese source rows are in `game-fixed-text-ja-JP.json` |
 | Music Room comments | All 19 tracks, one title plus 19 comment rows per track: 380 exact 40-byte rows | Same `T3GTL001` domain and Japanese source catalog |
 | Pre/post-round dialogue, Stage 8 dialogue, endings, and extra ending | Every text run in all 28 DM0/DM1/ED scripts, while retaining the source command stream for timing, pictures, palette, and audio | UTF-8 `T3CTP-AUTHOR-1` to `T3CTP001`; complete English and Japanese catalogs and source-free schemas |
 
 The complete compiled game-text catalog therefore contains 738 messages: 61
-executable rows + 297 win rows + 380 Music Room rows. The standalone ships the
-English runtime packages; Japanese remains source-authentic by default and the
-tracked Japanese catalogs let translators start from readable UTF-8 without
-extracting the DAT archives themselves.
+executable rows + 297 win rows + 380 Music Room rows. Both English and Japanese
+fixed catalogs are generated into the executable. The Japanese catalog is
+byte-for-byte sourced from the authenticated original executables and DAT rows,
+while its readable UTF-8 author file can be rebuilt without transcription.
 
 Normal Story, VS, replay playback, Music Room, and netplay post-match use the
 same selected locale catalog. Source bytes are still authenticated and parsed
@@ -57,6 +57,9 @@ labels and formatting templates are included in the menu domain.
 
 - `make_fixed_game_text_author.py` extracts and validates the Japanese or
   English fixed DAT tables and can merge them into a full author catalog.
+- `make_japanese_game_text_author.py` authenticates original Japanese
+  OP/MAINL/MAIN, extracts their remaining 61 records, and produces the complete
+  source-ordered 738-message Japanese author catalog.
 - `make_cutscene_text_author.py` extracts every script text run without
   rewriting its command stream.
 - `th03-game-text-preview` renders all 738 fixed game-text messages through

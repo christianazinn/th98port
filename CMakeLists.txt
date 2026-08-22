@@ -1374,6 +1374,11 @@ if(BUILD_TESTING)
 				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_make_fixed_game_text_author.py
 		)
 		add_test(
+			NAME th03-japanese-game-text-author-tests
+			COMMAND ${Python3_EXECUTABLE}
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_make_japanese_game_text_author.py
+		)
+		add_test(
 			NAME th03-cutscene-text-compiler-tests
 			COMMAND ${Python3_EXECUTABLE}
 				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_compile_cutscene_text_pack.py

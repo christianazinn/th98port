@@ -239,8 +239,13 @@ void write_file(const std::filesystem::path &path, std::span<const std::byte> by
 
 void test_message_packs(const th03::app::NewClassicMenuFont *authentic_font)
 {
-	const th03::app::NewClassicMenuFont empty_font{};
-	const auto &font = authentic_font ? *authentic_font : empty_font;
+	auto font = authentic_font ? *authentic_font :
+		th03::app::NewClassicMenuFont{};
+	std::vector<std::byte> machine_font(
+		th03::app::Pc98FontRomProvider::font_rom_size, std::byte{0xFFU}
+	);
+	expect(font.install_machine_font(machine_font),
+		"message-pack test installs a complete machine-font domain");
 	const auto root = localization_root();
 	auto english = th03::app::load_new_classic_message_pack(
 		root / "en-US.t3lang", font
@@ -306,20 +311,35 @@ void test_message_packs(const th03::app::NewClassicMenuFont *authentic_font)
 		"named Replay placeholders format deterministically independent of argument order"
 	);
 	auto japanese = th03::app::load_new_classic_message_pack(
-		root / "ja-JP.t3lang", font, &*english
-	);
-	expect(japanese && japanese->locale() == "ja-JP" &&
-		japanese->fallback_locale() == "en-US" &&
-		japanese->asset_profile() ==
-			th03::app::NewClassicLanguageAssetProfile::japanese &&
-		japanese->text(th03::app::NewClassicMessageId::title_start) == "Start",
-		"partial Japanese pack resolves only through its exact English fallback");
-	auto missing_fallback = th03::app::load_new_classic_message_pack(
 		root / "ja-JP.t3lang", font
 	);
-	expect(!missing_fallback && missing_fallback.error().code ==
-		th03::app::NewClassicMessagePackErrorCode::fallback_missing,
-		"partial pack fails closed without its declared fallback");
+	if(!japanese) {
+		std::cerr << "japanese-language-pack-error=" << static_cast<unsigned>(
+			japanese.error().code
+		) << " offset=" << japanese.error().offset << " message=" <<
+			static_cast<unsigned>(japanese.error().message) << '\n';
+	}
+	expect(japanese && japanese->locale() == "ja-JP" &&
+		japanese->fallback_locale().empty() &&
+		japanese->asset_profile() ==
+			th03::app::NewClassicLanguageAssetProfile::japanese &&
+		japanese->encoding() ==
+			th03::app::NewClassicMessageEncoding::cp932_mixed &&
+		japanese->text(th03::app::NewClassicMessageId::title_start) ==
+			std::string_view{"\x8A\x4A\x8E\x6E", 4U},
+		"complete Japanese pack carries exact CP932 menu text without fallback");
+	if(japanese) {
+		th03::present::Raster raster{};
+		expect(font.width(japanese->text(
+			th03::app::NewClassicMessageId::title_start
+		)) == 32 && raster.clear({0, 0, 640U, 400U}, 0U) && font.put(
+			raster, 10, 20, japanese->text(
+				th03::app::NewClassicMessageId::title_start
+			), 15U
+		) && raster.pixel(th03::present::Page::zero, {10, 20}) == 15U &&
+			raster.pixel(th03::present::Page::zero, {41, 35}) == 15U,
+			"mixed menu renderer draws both exact-width Japanese FONT.ROM glyphs");
+	}
 	auto width_test = th03::app::load_new_classic_message_pack(
 		root / "qps-ploc.t3lang", font, &*english
 	);
@@ -460,6 +480,19 @@ void test_game_text_packs()
 	if(!english) {
 		return;
 	}
+	auto japanese = th03::app::load_new_classic_game_text_pack(
+		localization_root() / "game-text-ja-JP.t3gtl"
+	);
+	expect(japanese && japanese->locale() == "ja-JP" &&
+		japanese->fallback_locale().empty() &&
+		std::ranges::equal(japanese->bytes(
+			th03::app::NewClassicGameTextId::music_track_01
+		), th03::app::new_classic_builtin_japanese_game_text().bytes(
+			th03::app::NewClassicGameTextId::music_track_01
+		)) && japanese->bytes(
+			th03::app::NewClassicGameTextId::win_quote_08_32
+		).size() == 58U,
+		"complete Japanese T3GTL catalog matches its generated built-in");
 	auto short_primary_locale = read_file(path);
 	constexpr std::string_view invalid_locale = "a-bcd";
 	std::copy(

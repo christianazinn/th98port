@@ -475,7 +475,8 @@ ClassicRunner::load(ClassicRunnerRequest request)
 		}
 		auto loaded_assets = load_new_classic_replay_patch_assets(
 			request.content.replay_patch_assets,
-			request.content.new_classic_menu_assets
+			request.content.new_classic_menu_assets,
+			request.content.font_rom
 		);
 		if(!loaded_assets) {
 			auto result = runner_error(

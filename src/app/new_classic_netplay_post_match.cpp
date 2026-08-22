@@ -137,7 +137,8 @@ std::expected<
 	std::optional<NewClassicGameTextCatalog> custom_game_text{};
 	const bool english = !request.content.language_overlay.empty();
 	const NewClassicGameTextCatalog *fallback = english ?
-		&new_classic_builtin_english_game_text() : nullptr;
+		&new_classic_builtin_english_game_text() :
+		&new_classic_builtin_japanese_game_text();
 	if(!request.content.game_text_pack.empty()) {
 		auto loaded = load_new_classic_game_text_pack(
 			request.content.game_text_pack, fallback
@@ -236,7 +237,8 @@ std::expected<
 	impl->game_text = std::move(owned_game_text);
 	const auto *localized_text = impl->game_text ? &*impl->game_text :
 		(use_builtin_english_text ?
-			&new_classic_builtin_english_game_text() : nullptr);
+			&new_classic_builtin_english_game_text() :
+			&new_classic_builtin_japanese_game_text());
 	auto scene = authenticate_resources ?
 		ClassicMainlWinScene::create(
 			context, resources, font, localized_text

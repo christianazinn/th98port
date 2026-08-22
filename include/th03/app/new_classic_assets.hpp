@@ -131,6 +131,13 @@ public:
 		std::uint16_t width,
 		std::uint16_t height
 	) const;
+	// Installs the same exact PC-98 FONT.ROM already authenticated by the
+	// gameplay owners. Japanese T3LNG text is CP932 and uses these machine
+	// glyphs; printable ASCII continues to use proportional MNUFONT.PF.
+	[[nodiscard]] bool install_machine_font(
+		std::span<const std::byte> font_rom
+	);
+	[[nodiscard]] bool has_machine_font() const noexcept;
 
 private:
 	friend struct NewClassicAssetsAccess;
@@ -138,6 +145,7 @@ private:
 	std::array<
 		std::array<std::uint8_t, glyph_bytes>, glyph_count
 	> bitmaps_{};
+	std::vector<std::byte> machine_font_{};
 	[[nodiscard]] static std::size_t glyph_index(std::uint8_t value) noexcept;
 	[[nodiscard]] bool put_n_clipped(
 		present::Raster &raster,
@@ -233,7 +241,8 @@ private:
 	NewClassicAssetsError
 > load_new_classic_replay_patch_assets(
 	const std::filesystem::path &path,
-	const std::filesystem::path &menu_background_root = {}
+	const std::filesystem::path &menu_background_root = {},
+	const std::filesystem::path &font_rom = {}
 );
 
 namespace detail {

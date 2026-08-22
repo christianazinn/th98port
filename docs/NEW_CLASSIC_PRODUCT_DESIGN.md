@@ -507,17 +507,22 @@ live Option changes are independently tested on GCC and MSVC.
 ### 7. Localization-pack pipeline
 
 Status: complete across title/Option in session 186, authenticated Replay
-browser/save in session 187, and Practice/input screens in session 188. Stable IDs,
-UTF-8 authoring files, the deterministic `T3LNG001` compiler/loader, exact
-fallback/placeholder/glyph/width validation, built-in Japanese/English
-catalogs, and a width-stressing pseudo-locale now own the New Classic title,
+browser/save in session 187, Practice/input screens in session 188, and the
+complete Japanese menu domain in session 342. Stable IDs, UTF-8 authoring
+files, the deterministic `T3LNG001` compiler/loader, exact fallback,
+placeholder, glyph, and width validation, explicit Japanese/English catalogs,
+and a width-stressing pseudo-locale now own the New Classic title,
 hierarchical Option UI, Replay browser and save/name flow, Practice setup,
 KeyConfig, JoyConfig, controller assignment, and Input Test. Named dynamic
 templates are load-time width-checked using declared worst-case values; host
-key/controller names remain bounded platform data inside localized rows. The
-donor page/palette/input machines and Classic are unchanged. A future Unicode
-product-shell renderer remains separate from the authenticated ASCII MNUFONT
-contract.
+key/controller names remain bounded platform data inside localized rows.
+English and Latin fragments use authenticated proportional `MNUFONT.PF`;
+Japanese is compiled as CP932 and uses the exact authenticated PC-98
+`FONT.ROM`. The separate `T3GTL001` and `T3CTP001` domains now also contain
+complete explicit English and Japanese source text for all 738 graphics-text
+rows and all 28 scripted dialogue/cutscene/ending programs. The donor
+page/palette/input machines and Classic are unchanged. A future general-Unicode
+product-shell renderer remains separate from this exact ASCII/CP932 contract.
 
 - Freeze message identifiers and text domains.
 - Build the translator-facing authoring, compilation, and validation tools.
