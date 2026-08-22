@@ -1040,6 +1040,11 @@ void test_new_classic_registration_and_paged_viewer()
 		(*viewer)->raster().access_page() == Page::zero &&
 		ClassicRegistrationSceneTestAccess::new_classic_page(**viewer) == 0U,
 		"Right redraws Reimu on hidden page 0 and publishes only at VSync");
+	expect((*viewer)->raster().pixel(Page::zero, {24, 320}) == 15U &&
+		(*viewer)->raster().pixel(Page::zero, {40, 320}) == 1U &&
+		(*viewer)->raster().pixel(Page::zero, {76, 320}) == 15U &&
+		(*viewer)->raster().pixel(Page::zero, {160, 320}) == 15U,
+		"Local HiScore keeps one left-anchored fixed-width selector and centers the shorter character name inside it");
 	const auto release_reimu = (*viewer)->advance({});
 	const auto show_all = (*viewer)->advance({.left = true});
 	expect(release_reimu && show_all &&

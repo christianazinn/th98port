@@ -440,7 +440,7 @@ void test_zero_sample_arrange_warning_continues_immediately()
 		.boss_level = 9U,
 		.sample_count = 0U,
 	});
-	for(std::uint8_t frame = 0U; frame < 27U; ++frame) {
+	for(std::uint8_t frame = 0U; frame < 5U; ++frame) {
 		expect(presenter.compose_nonblocking_interstitial_frame(),
 			"zero-hold Arrange cut-in composes over a live gameplay frame");
 		expect(raster.palette_tone() ==
@@ -449,7 +449,7 @@ void test_zero_sample_arrange_warning_continues_immediately()
 	}
 	expect(presenter.compose_nonblocking_interstitial_frame() &&
 		raster.palette_tone() == 100,
-		"zero-hold Arrange cut-in ends after exactly 27 visual frames");
+		"zero-hold Arrange cut-in ends after exactly five visual frames");
 	auto lifecycle = idle_lifecycle();
 	lifecycle.players[0U] = {
 		3U, 4U, GaugeBossAttackKind::gauge_bullet, GaugeBossAttackKind::none,

@@ -1149,12 +1149,19 @@ bool ClassicRegistrationScene::draw_new_classic_overlay() noexcept
 	}
 	const auto &menu_font = patch_assets_->menu_font;
 	const auto prefix_width = menu_font.width("< ");
-	const auto name_left = 24 + prefix_width;
+	std::int32_t name_field_width = 0;
+	for(const auto page_name : new_classic_page_names) {
+		name_field_width = std::max(name_field_width, menu_font.width(page_name));
+	}
+	const auto name_width = menu_font.width(new_classic_overlay_[0U]);
+	const auto name_field_left = 24 + prefix_width;
+	const auto name_left = name_field_left +
+		((name_field_width - name_width) / 2);
+	const auto suffix_left = name_field_left + name_field_width +
+		menu_font.width(" ");
 	if(!menu_font.put(raster_, 24, 320, "<", 15U) ||
 		!menu_font.put(raster_, name_left, 320, new_classic_overlay_[0U], 15U) ||
-		!menu_font.put(raster_, name_left +
-			menu_font.width(new_classic_overlay_[0U]) + menu_font.width(" "),
-			320, ">", 15U)) {
+		!menu_font.put(raster_, suffix_left, 320, ">", 15U)) {
 		return false;
 	}
 	std::int32_t left = 24;

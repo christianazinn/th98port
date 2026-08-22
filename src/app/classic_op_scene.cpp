@@ -1113,7 +1113,7 @@ bool ClassicOpTitleMenuScene::draw_vs_choice(
 			!vs_choice_available(resident_, choice) ? 8U :
 			(attribute == present::tram_black ? 0U : 15U)
 		);
-		const auto center = box_submenu_center_x;
+		const auto center = box_submenu_center_x + 1;
 		const auto text = patch_assets_->messages().text(
 			NewClassicMessageId::netplay_online_match
 		);

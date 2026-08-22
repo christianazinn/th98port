@@ -33,6 +33,7 @@ constexpr std::int32_t gauge_bar_top = 194;
 constexpr std::uint16_t gauge_background_width = 288U;
 constexpr std::uint16_t gauge_background_height = 8U;
 constexpr std::uint16_t gauge_bar_height = 4U;
+constexpr std::uint8_t arrange_cutin_visual_frames = 5U;
 
 constexpr std::array<std::uint8_t, 16U> warning_row_one{
 	0x50U, 0x51U, 0x52U, 0x53U, 0x54U, 0x55U, 0x56U, 0x57U,
@@ -438,7 +439,8 @@ void MainWarningGaugePresenter::warning_interstitial_started(
 		}
 	}
 	interstitial_active_ = started.sample_count != 0U;
-	nonblocking_interstitial_frames_ = started.sample_count == 0U ? 27U : 0U;
+	nonblocking_interstitial_frames_ = started.sample_count == 0U ?
+		arrange_cutin_visual_frames : 0U;
 	nonblocking_interstitial_player_mask_ = 0U;
 	if(started.sample_count == 0U) {
 		for(std::size_t player = 0U;
@@ -473,7 +475,7 @@ bool MainWarningGaugePresenter::compose_nonblocking_interstitial_frame() noexcep
 		}
 	}
 	const auto ordinal = static_cast<std::uint8_t>(
-		27U - nonblocking_interstitial_frames_
+		arrange_cutin_visual_frames - nonblocking_interstitial_frames_
 	);
 	palette_->set_tone_and_show_now(
 		*raster_, static_cast<std::int16_t>(100 + (50 * (ordinal & 1U)))
