@@ -385,7 +385,6 @@ private:
 	std::size_t board_index_ = 0U;
 	std::size_t selected_entry_ = 0U;
 	std::size_t top_entry_ = 0U;
-	bool board_category_focus_ = true;
 	std::vector<std::pair<std::size_t, std::size_t>> flat_entries_{};
 	std::size_t flat_selection_ = 0U;
 	std::size_t flat_top_ = 0U;

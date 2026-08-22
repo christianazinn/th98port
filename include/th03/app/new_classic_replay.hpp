@@ -82,6 +82,16 @@ public:
 	{
 		return capture_enabled_;
 	}
+	// Options can select a named Arrange ruleset only while OP owns no active
+	// recording. Arrange runs deliberately have no stock replay/save contract.
+	[[nodiscard]] bool set_capture_enabled(bool enabled) noexcept
+	{
+		if(recording()) {
+			return false;
+		}
+		capture_enabled_ = enabled;
+		return true;
+	}
 	[[nodiscard]] const formats::ReplayDocument *document() const noexcept;
 	[[nodiscard]] const CanonicalState *last_terminal() const noexcept;
 	[[nodiscard]] std::optional<formats::ReplayDocument> take_completed();

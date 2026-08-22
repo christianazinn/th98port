@@ -312,13 +312,12 @@ bool NewClassicDeviceScene::compose() noexcept
 		header_color
 	) || !(mode_ == NewClassicDeviceSceneMode::assignment ?
 		compose_assignment() : compose_input_test()) ||
+		(mode_ == NewClassicDeviceSceneMode::input_test &&
 		!patch_assets_->menu_font.put_centered(
 		raster, center, footer_top,
-			messages.text(mode_ == NewClassicDeviceSceneMode::assignment ?
-				NewClassicMessageId::device_footer_assignment :
-				NewClassicMessageId::device_footer_input_test),
+			messages.text(NewClassicMessageId::device_footer_input_test),
 			header_color
-		) || !patch_surface_.publish(target) ||
+		)) || !patch_surface_.publish(target) ||
 		!raster.set_access_page(target)) {
 		return false;
 	}

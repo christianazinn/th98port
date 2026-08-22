@@ -2139,7 +2139,6 @@ NewClassicHighScoreMenu::NewClassicHighScoreMenu(
 	}
 	if(mode_ == NewClassicOnlineMenuMode::my_records ||
 		mode_ == NewClassicOnlineMenuMode::downloaded_replays) {
-		board_category_focus_ = false;
 		for(std::size_t board = 0U; board < boards_.size(); ++board) {
 			for(std::size_t entry = 0U;
 				entry < boards_[board].leaderboard_entries.size(); ++entry) {
@@ -2337,16 +2336,6 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 			font, raster, messages, category.rank, category.character, 80, 9U
 		);
 		valid_ = rank_center.has_value();
-	}
-	if(valid_ && rank_center && board_category_focus_) {
-		const auto top = mode_ == NewClassicOnlineMenuMode::high_scores ? 48 : 80;
-		constexpr present::Index4 navigation_color = 9U;
-		const auto caret_left = *rank_center - (font.width("v") / 2);
-		valid_ = font.put_vertical_flipped(
-			raster, caret_left, top - 16, 'v', navigation_color
-		) && font.put(
-			raster, caret_left, top + 16, "v", navigation_color
-		);
 	}
 	const auto header_top = mode_ == NewClassicOnlineMenuMode::online_replays ?
 		128 : 96;
@@ -2684,7 +2673,6 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 			}
 			if(hub_selection_ == 1U && !boards_.empty()) {
 				page_ = Page::board;
-				board_category_focus_ = true;
 				selected_entry_ = 0U;
 				top_entry_ = 0U;
 			} else if(hub_selection_ == 2U) {
@@ -2732,11 +2720,6 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 	}
 	const bool flat = mode_ == NewClassicOnlineMenuMode::my_records ||
 		mode_ == NewClassicOnlineMenuMode::downloaded_replays;
-	if(!flat && !board_category_focus_ && (input.cancel || input.bomb)) {
-		board_category_focus_ = true;
-		draw();
-		return {.surface_changed = valid_, .status = status_};
-	}
 	if(input.cancel || input.bomb) {
 		if(mode_ == NewClassicOnlineMenuMode::high_scores) {
 			page_ = Page::hub;
@@ -2769,7 +2752,7 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 		draw();
 		return {.surface_changed = valid_, .status = status_};
 	}
-	if(board_category_focus_ && (input.left || input.right)) {
+	if(input.left || input.right) {
 		const auto &current = *boards_[board_index_].board_category;
 		const auto target_character = static_cast<std::uint8_t>(
 			(current.character + (input.left ? 8U : 1U)) % 9U
@@ -2786,29 +2769,7 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 		board_index_ = static_cast<std::size_t>(found - boards_.begin());
 		selected_entry_ = 0U;
 		top_entry_ = 0U;
-	} else if(board_category_focus_ && (input.up || input.down)) {
-		const auto &current = *boards_[board_index_].board_category;
-		const auto target_rank = static_cast<std::uint8_t>(
-			(current.rank + (input.up ? 3U : 1U)) % 4U
-		);
-		const auto found = std::ranges::find_if(
-			boards_, [&](const auto &candidate) {
-				return candidate.board_category->rank == target_rank &&
-					candidate.board_category->character == current.character;
-			}
-		);
-		if(found == boards_.end()) {
-			return {.status = status_};
-		}
-		board_index_ = static_cast<std::size_t>(found - boards_.begin());
-		selected_entry_ = 0U;
-		top_entry_ = 0U;
-	} else if(board_category_focus_ && input.confirm) {
-		if(boards_[board_index_].leaderboard_entries.empty()) {
-			return {.status = status_};
-		}
-		board_category_focus_ = false;
-	} else if(!board_category_focus_) {
+	} else {
 		const auto count = boards_[board_index_].leaderboard_entries.size();
 		if(input.up && count != 0U) {
 			selected_entry_ = (selected_entry_ + count - 1U) % count;

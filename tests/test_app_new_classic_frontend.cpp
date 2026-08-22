@@ -789,12 +789,12 @@ void test_online_high_score_menu()
 		"online board navigation wraps across cached character boards");
 	static_cast<void>(online.consume({}));
 	static_cast<void>(online.consume({.down = true}));
-	expect(online.selected_board() == 2U,
-		"online board Down advances difficulty while retaining character");
+	expect(online.selected_board() == 1U,
+		"online board Down navigates entries without changing difficulty");
 	static_cast<void>(online.consume({}));
 	static_cast<void>(online.consume({.up = true}));
 	expect(online.selected_board() == 1U,
-		"online board Up wraps difficulty while retaining character");
+		"online board Up navigates entries without changing difficulty");
 	static_cast<void>(online.consume({}));
 	const auto list_hash = surface_hash(online.surface());
 	static_cast<void>(online.consume({.confirm = true}));
@@ -837,12 +837,10 @@ void test_online_high_score_menu()
 	static_cast<void>(download.consume({}));
 	static_cast<void>(download.consume({.confirm = true}));
 	static_cast<void>(download.consume({}));
-	expect(download.valid(), "online board remains valid after category focus");
-	static_cast<void>(download.consume({.confirm = true}));
-	static_cast<void>(download.consume({}));
+	expect(download.valid(), "online board remains valid after opening");
 	static_cast<void>(download.consume({.confirm = true}));
 	expect(download.viewing_detail(),
-		"online board category and row focus reach replay detail");
+		"online board row opens replay detail without a category-input layer");
 	static_cast<void>(download.consume({}));
 	auto requested = download.consume({.confirm = true});
 	auto request = download.take_replay_download_request();

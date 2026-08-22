@@ -137,6 +137,9 @@ public:
 	// fresh interface input returns to the launch caller with its values intact.
 	[[nodiscard]] bool show_launch_failure() noexcept;
 	[[nodiscard]] bool show_profile_failure() noexcept;
+	// A device with no saved account enters first-use profile onboarding before
+	// the room menu is presented.
+	[[nodiscard]] bool request_profile() noexcept;
 	// A canceled platform connection is a child of the launch screen, not a
 	// terminal product route. Restore the exact caller and retain all entered
 	// values so the player can retry or back out one level.

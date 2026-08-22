@@ -86,6 +86,8 @@ void test_navigation_and_actions()
 	expect(direct.consume({.restart = true}) ==
 		NewClassicPauseStatus::restart,
 		"held physical R is polled separately after the interface-word release");
+	expect(new_classic_pause_terminal(NewClassicPauseStatus::restart),
+		"Esc+R Restart is a valid terminal action for Story and Practice owners");
 	NewClassicPauseMenu quit(true);
 	expect(quit.consume({.quit = true, .raw_any = true}) ==
 		NewClassicPauseStatus::running,

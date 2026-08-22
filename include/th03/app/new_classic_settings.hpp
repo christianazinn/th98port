@@ -8,13 +8,14 @@
 #include <span>
 
 #include "th03/app/classic_config.hpp"
+#include "th03/core/gameplay_ruleset.hpp"
 
 namespace th03::app {
 
 inline constexpr std::size_t new_classic_settings_file_bytes = 32U;
 inline constexpr std::size_t new_classic_settings_v2_v3_file_bytes = 28U;
 inline constexpr std::size_t new_classic_settings_v1_file_bytes = 24U;
-inline constexpr std::uint16_t new_classic_settings_format_version = 6U;
+inline constexpr std::uint16_t new_classic_settings_format_version = 7U;
 
 enum class NewClassicWindowMode : std::uint8_t {
 	windowed,
@@ -70,6 +71,7 @@ struct NewClassicNetplayPreferences final {
 
 struct NewClassicSettings final {
 	ClassicConfigOptions options{};
+	GameplayRuleset gameplay_ruleset = stock_gameplay_ruleset;
 	std::uint8_t master_volume_percent = 100U;
 	std::uint8_t music_volume_percent = 100U;
 	std::uint8_t effect_volume_percent = 100U;
@@ -92,6 +94,7 @@ enum class NewClassicSettingsErrorCode : std::uint8_t {
 	invalid_bgm_mode,
 	invalid_key_mode,
 	invalid_rank,
+	invalid_gameplay_ruleset,
 	invalid_flags,
 	invalid_master_volume,
 	invalid_music_volume,

@@ -2170,6 +2170,15 @@ struct ClassicOpSessionBackend final {
 			pending_window_presentation_update = new_classic_settings->window;
 		}
 		if(new_classic_settings) {
+			new_classic_settings->gameplay_ruleset =
+				options_completion->resident().gameplay_ruleset;
+			if(!replay_recorder || !replay_recorder->set_capture_enabled(
+				stock_gameplay_rules(new_classic_settings->gameplay_ruleset)
+			)) {
+				return std::unexpected(session_error(
+					ClassicOpSessionErrorCode::backend_contract_failed
+				));
+			}
 			new_classic_settings->music_volume_percent =
 				options_completion->music_volume_percent();
 			new_classic_settings->effect_volume_percent =
@@ -3839,8 +3848,7 @@ struct ClassicOpSessionBackend final {
 			}
 			const bool resume = status == NewClassicPauseStatus::resume;
 			const bool restart = status == NewClassicPauseStatus::restart;
-			if(!resume && status != NewClassicPauseStatus::save_exit &&
-				status != NewClassicPauseStatus::discard_exit) {
+			if(!new_classic_pause_terminal(status)) {
 				return std::unexpected(session_error(
 					ClassicOpSessionErrorCode::backend_contract_failed
 				));
@@ -5177,6 +5185,18 @@ ClassicOpSession::create(
 		}
 		new_classic_settings = loaded->settings;
 		config = new_classic_settings->options;
+		if(runner_request && runner_request->initial_route ==
+			ClassicRunnerInitialRoute::title &&
+			stock_gameplay_rules(runner_request->gameplay_ruleset)) {
+			resident.gameplay_ruleset = new_classic_settings->gameplay_ruleset;
+		}
+		if(!replay_recorder->set_capture_enabled(
+			stock_gameplay_rules(resident.gameplay_ruleset)
+		)) {
+			return std::unexpected(session_error(
+				ClassicOpSessionErrorCode::backend_contract_failed
+			));
+		}
 		persistent_config_path = std::move(settings_path);
 	} else {
 		auto loaded = load_classic_config_store(config_path);

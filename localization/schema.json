@@ -74,6 +74,7 @@
     {"enum": "credit_patch", "id": "credit.patch", "domain": "menu-font", "max_width": 400},
 
     {"enum": "option_rank", "id": "option.rank", "domain": "menu-font", "max_width": 132},
+    {"enum": "option_arrange", "id": "option.arrange", "domain": "menu-font", "max_width": 132},
     {"enum": "option_master_volume", "id": "option.master-volume", "domain": "menu-font", "max_width": 132},
     {"enum": "option_window_mode", "id": "option.window-mode", "domain": "menu-font", "max_width": 132},
     {"enum": "option_window_scale", "id": "option.window-scale", "domain": "menu-font", "max_width": 132},
@@ -128,6 +129,8 @@
     {"enum": "value_normal", "id": "value.normal", "domain": "menu-font", "max_width": 144},
     {"enum": "value_hard", "id": "value.hard", "domain": "menu-font", "max_width": 144},
     {"enum": "value_lunatic", "id": "value.lunatic", "domain": "menu-font", "max_width": 144},
+    {"enum": "value_stock", "id": "value.stock", "domain": "menu-font", "max_width": 144},
+    {"enum": "value_dopamine", "id": "value.dopamine", "domain": "menu-font", "max_width": 144},
     {"enum": "value_windowed", "id": "value.windowed", "domain": "menu-font", "max_width": 144},
     {"enum": "value_borderless", "id": "value.borderless", "domain": "menu-font", "max_width": 144},
     {"enum": "value_scale_1x", "id": "value.scale-1x", "domain": "menu-font", "max_width": 144},

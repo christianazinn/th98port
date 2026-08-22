@@ -67,6 +67,16 @@ enum class NewClassicPausePresentation : std::uint8_t {
 	netplay_wait,
 };
 
+[[nodiscard]] constexpr bool new_classic_pause_terminal(
+	NewClassicPauseStatus status
+) noexcept
+{
+	return status == NewClassicPauseStatus::resume ||
+		status == NewClassicPauseStatus::restart ||
+		status == NewClassicPauseStatus::save_exit ||
+		status == NewClassicPauseStatus::discard_exit;
+}
+
 struct NewClassicPauseInput final {
 	bool up = false;
 	bool down = false;

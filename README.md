@@ -367,9 +367,10 @@ the game and replay renderer only after all 28 selected source scripts validate.
 Replacement occurs on decoded glyph operations, never in the script byte
 stream, so translated punctuation cannot become a command. See
 `docs/NEW_CLASSIC_CUTSCENE_TEXT.md`.
-The developer-only Dopamine Arrange prototype is selected with
-`--new-classic --arrange dopamine-test-v1`, or by launching the maintained
-standalone as `PoDD-Port-Test.exe --arrange dopamine-test-v1`. Its title is
+The developer-only Dopamine Arrange prototype is selected in New Classic at
+`Option -> Gameplay -> Arrange -> Dopamine`. The selection is persisted in
+`PODD.CFG`; `--new-classic --arrange dopamine-test-v1` remains available for
+deterministic developer launches and explicit command-line overrides. Its title is
 visibly marked, every formation is the downward-pointing triangle, CPU gauge
 attacks stop at level 2, and spell cut-ins do not suspend gameplay. It keeps
 New Classic input, Pause, audio, language, and presentation settings, but

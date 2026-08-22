@@ -24,6 +24,7 @@ namespace th03::app {
 
 enum class ClassicOpOptionsChoice : std::uint8_t {
 	rank,
+	arrange,
 	master_volume,
 	window_mode,
 	window_scale,

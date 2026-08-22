@@ -875,8 +875,7 @@ struct ClassicStoryBackend final {
 			}
 			const bool resume = status == NewClassicPauseStatus::resume;
 			const bool restart = status == NewClassicPauseStatus::restart;
-			if(!resume && status != NewClassicPauseStatus::save_exit &&
-				status != NewClassicPauseStatus::discard_exit) {
+			if(!new_classic_pause_terminal(status)) {
 				return std::unexpected(session_error(
 					ClassicStorySessionErrorCode::backend_contract_failed
 				));

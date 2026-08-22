@@ -765,6 +765,15 @@ bool NewClassicNetplayRoom::show_launch_failure() noexcept
 	return drawn;
 }
 
+bool NewClassicNetplayRoom::request_profile() noexcept
+{
+	if(!valid_ || status_ != NewClassicNetplayRoomStatus::running || launch_) {
+		return false;
+	}
+	status_ = NewClassicNetplayRoomStatus::profile_requested;
+	return true;
+}
+
 bool NewClassicNetplayRoom::resume_after_launch() noexcept
 {
 	if(status_ != NewClassicNetplayRoomStatus::launch_requested || launch_) {

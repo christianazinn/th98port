@@ -13,6 +13,7 @@ namespace th03::app {
 namespace {
 
 constexpr present::Index4 color_header = 14U;
+constexpr present::Index4 color_page_caret = 10U;
 constexpr present::Index4 color_footer = 14U;
 constexpr present::Index4 color_selected = 11U;
 constexpr present::Index4 color_label = 12U;
@@ -22,7 +23,6 @@ constexpr std::int32_t header_top = 6 * 16;
 constexpr std::int32_t rows_top = 8 * 16;
 constexpr std::int32_t player_action_top = 10 * 16;
 constexpr std::int32_t command_top = 16 * 16;
-constexpr std::int32_t footer_top = 21 * 16;
 constexpr std::int32_t story_label_left = 216;
 constexpr std::int32_t story_value_left = 312;
 constexpr std::int32_t player_action_label_left = 100;
@@ -316,7 +316,9 @@ bool NewClassicKeyConfigScene::compose_screen() noexcept
 		NewClassicMessageId::key_header_p1 : page_ == Page::p2 ?
 		NewClassicMessageId::key_header_p2 :
 		NewClassicMessageId::key_header_story);
-	if(!font.put_centered(raster, 320, header_top, header, color_header)) {
+	if(!font.put(raster, 248, header_top, "<", color_page_caret) ||
+		!font.put_centered(raster, 320, header_top, header, color_header) ||
+		!font.put(raster, 380, header_top, ">", color_page_caret)) {
 		return false;
 	}
 	if(page_ == Page::story) {
@@ -333,11 +335,7 @@ bool NewClassicKeyConfigScene::compose_screen() noexcept
 			}
 		}
 	}
-	if(!font.put_centered(
-		raster, 320, footer_top,
-		messages.text(NewClassicMessageId::key_footer),
-		color_footer
-	) || !patch_surface_.publish(target) || !raster.set_access_page(target)) {
+	if(!patch_surface_.publish(target) || !raster.set_access_page(target)) {
 		return false;
 	}
 	front_page_ = target;

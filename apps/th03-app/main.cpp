@@ -7707,6 +7707,11 @@ ExperienceRunResult run_new_classic_experience(
 		return {.exit_code = fail("settings-load", loaded_settings.error())};
 	}
 	auto settings = loaded_settings->settings;
+	if(!parsed.capture_replay && parsed.launch.initial_route ==
+		th03::app::ClassicRunnerInitialRoute::title &&
+		th03::stock_gameplay_rules(parsed.launch.gameplay_ruleset)) {
+		parsed.launch.gameplay_ruleset = settings.gameplay_ruleset;
+	}
 	auto config_options = settings.options;
 	auto patch_asset_path = parsed.launch.content.replay_patch_assets;
 	if(patch_asset_path.empty()) {
@@ -7949,6 +7954,39 @@ ExperienceRunResult run_new_classic_experience(
 			static_cast<std::uint8_t>(latest_settings->settings.options.rank),
 			latest_settings->settings.netplay
 		);
+#if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
+		{
+			auto settings_path = parsed.launch.content.new_classic_settings;
+			if(settings_path.empty()) {
+				settings_path = parsed.launch.content.config.parent_path() /
+					"PODD.CFG";
+			}
+			std::error_code identity_error{};
+			const bool saved_identity = std::filesystem::is_regular_file(
+				settings_path.parent_path() / "PODD.AUTH", identity_error
+			);
+			const auto environment_user = environment_value(
+				online_user_environment
+			);
+			const auto environment_token = environment_value(
+				online_token_environment
+			);
+			const bool environment_identity = environment_user &&
+				environment_token &&
+				th03::app::validate_new_classic_online_credentials({
+					.user_id = *environment_user,
+					.token = *environment_token,
+				});
+			if(!saved_identity && !environment_identity &&
+				!room.request_profile()) {
+				return NetplayFrontendResult{
+					.exit_code = fail_netplay(
+						"online-profile", "onboarding-request-failed"
+					)
+				};
+			}
+		}
+#endif
 		for(;;) {
 			auto room_run = run_netplay_room_modal(
 				parsed.tick_rate, platform, mapper, room, &audio

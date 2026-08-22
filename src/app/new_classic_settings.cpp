@@ -10,6 +10,10 @@
 namespace th03::app {
 namespace {
 
+constexpr std::array<std::byte, 8U> magic_v7{
+	std::byte{'T'}, std::byte{'3'}, std::byte{'N'}, std::byte{'S'},
+	std::byte{'E'}, std::byte{'T'}, std::byte{'0'}, std::byte{'7'},
+};
 constexpr std::array<std::byte, 8U> magic_v6{
 	std::byte{'T'}, std::byte{'3'}, std::byte{'N'}, std::byte{'S'},
 	std::byte{'E'}, std::byte{'T'}, std::byte{'0'}, std::byte{'6'},
@@ -35,7 +39,8 @@ constexpr std::array<std::byte, 8U> magic_v1{
 	std::byte{'E'}, std::byte{'T'}, std::byte{'0'}, std::byte{'1'},
 };
 constexpr std::uint8_t legacy_known_flags = 0x0FU;
-constexpr std::uint8_t known_flags = 0x1FU;
+constexpr std::uint8_t v6_known_flags = 0x1FU;
+constexpr std::uint8_t known_flags = 0x3FU;
 
 [[nodiscard]] constexpr NewClassicSettingsError error(
 	NewClassicSettingsErrorCode code,
@@ -131,6 +136,11 @@ std::expected<void, NewClassicSettingsError> validate_new_classic_settings(
 			NewClassicSettingsErrorCode::invalid_rank, 14U
 		));
 	}
+	if(!valid_gameplay_ruleset(settings.gameplay_ruleset)) {
+		return std::unexpected(error(
+			NewClassicSettingsErrorCode::invalid_gameplay_ruleset, 15U
+		));
+	}
 	if(settings.master_volume_percent > 100U ||
 		(settings.master_volume_percent % 5U) != 0U) {
 		return std::unexpected(error(
@@ -209,16 +219,19 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 	bool legacy_v3 = false;
 	bool legacy_v4 = false;
 	bool legacy_v5 = false;
+	bool legacy_v6 = false;
 	if(bytes.size() == new_classic_settings_v2_v3_file_bytes) {
 		legacy_v2 = std::equal(magic_v2.begin(), magic_v2.end(), bytes.begin());
 		legacy_v3 = std::equal(magic_v3.begin(), magic_v3.end(), bytes.begin());
 	} else if(bytes.size() == new_classic_settings_file_bytes) {
 		legacy_v4 = std::equal(magic_v4.begin(), magic_v4.end(), bytes.begin());
 		legacy_v5 = std::equal(magic_v5.begin(), magic_v5.end(), bytes.begin());
+		legacy_v6 = std::equal(magic_v6.begin(), magic_v6.end(), bytes.begin());
 	}
 	const auto &expected_magic = legacy_v1 ? magic_v1 :
 		(legacy_v2 ? magic_v2 : (legacy_v3 ? magic_v3 :
-			(legacy_v4 ? magic_v4 : (legacy_v5 ? magic_v5 : magic_v6))));
+			(legacy_v4 ? magic_v4 : (legacy_v5 ? magic_v5 :
+				(legacy_v6 ? magic_v6 : magic_v7)))));
 	for(std::size_t index = 0U; index < expected_magic.size(); ++index) {
 		if(bytes[index] != expected_magic[index]) {
 			return std::unexpected(error(
@@ -228,7 +241,8 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 	}
 	const auto expected_version = static_cast<std::uint16_t>(legacy_v1 ? 1U :
 		(legacy_v2 ? 2U : (legacy_v3 ? 3U : (legacy_v4 ? 4U :
-			(legacy_v5 ? 5U : new_classic_settings_format_version)))));
+			(legacy_v5 ? 5U : (legacy_v6 ? 6U :
+				new_classic_settings_format_version))))));
 	if(u16(bytes, 8U) != expected_version) {
 		return std::unexpected(error(
 			NewClassicSettingsErrorCode::version, 8U
@@ -241,7 +255,8 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 	}
 	const auto flags = byte(bytes[15U]);
 	const auto allowed_flags = legacy_v1 || legacy_v2 || legacy_v3 ||
-		legacy_v4 || legacy_v5 ? legacy_known_flags : known_flags;
+		legacy_v4 || legacy_v5 ? legacy_known_flags :
+		(legacy_v6 ? v6_known_flags : known_flags);
 	if((flags & static_cast<std::uint8_t>(~allowed_flags)) != 0U) {
 		return std::unexpected(error(
 			NewClassicSettingsErrorCode::invalid_flags, 15U
@@ -299,6 +314,9 @@ decode_new_classic_settings(std::span<const std::byte> bytes) noexcept
 				ClassicLanguage::english : ClassicLanguage::japanese,
 			.reduced_flash = (flags & 0x08U) != 0U,
 		},
+		.gameplay_ruleset = legacy_v1 || legacy_v2 || legacy_v3 || legacy_v4 ||
+			legacy_v5 || legacy_v6 || (flags & 0x20U) == 0U ?
+				stock_gameplay_ruleset : dopamine_test_v1_ruleset,
 		.master_volume_percent = byte(bytes[16U]),
 		.music_volume_percent = static_cast<std::uint8_t>(legacy_v1 ?
 			(byte(bytes[12U]) == static_cast<std::uint8_t>(ClassicBgmMode::off) ?
@@ -345,7 +363,7 @@ std::expected<
 		return std::unexpected(valid.error());
 	}
 	std::array<std::byte, new_classic_settings_file_bytes> bytes{};
-	std::copy(magic_v6.begin(), magic_v6.end(), bytes.begin());
+	std::copy(magic_v7.begin(), magic_v7.end(), bytes.begin());
 	put_u16(bytes, 8U, new_classic_settings_format_version);
 	put_u16(bytes, 10U, new_classic_settings_file_bytes);
 	bytes[12U] = static_cast<std::byte>(settings.options.bgm_mode);
@@ -356,7 +374,8 @@ std::expected<
 		(settings.options.legacy_autofire ? 0x02U : 0U) |
 		(settings.options.language == ClassicLanguage::english ? 0x04U : 0U) |
 		(settings.options.reduced_flash ? 0x08U : 0U) |
-		(settings.automatic_updates ? 0x10U : 0U)
+		(settings.automatic_updates ? 0x10U : 0U) |
+		(stock_gameplay_rules(settings.gameplay_ruleset) ? 0U : 0x20U)
 	);
 	bytes[16U] = static_cast<std::byte>(settings.master_volume_percent);
 	bytes[17U] = static_cast<std::byte>(settings.window.mode);

@@ -476,9 +476,12 @@ exist:
 6. Mute When Unfocused is complete in session 185. It applies only at the
    final SDL output boundary and migrates existing settings with default Off.
 7. Online Match connection, relay policy, and Direct UDP host port persistence
-   is complete in session 260. `PODD.CFG` v6 upgrades all earlier documents;
-   the preferences and automatic-update policy remain local and never enter
+   is complete in session 260. `PODD.CFG` v6 introduced these fields; the
+   preferences and automatic-update policy remain local and never enter
    deterministic match state.
+8. The provisional Arrange ruleset selector is complete in session 335.
+   `PODD.CFG` v7 upgrades v1-v6 documents with Stock as the exact default and
+   persists either the complete Stock or `dopamine-test-v1` contract.
 
 Each feature becomes visible only when its apply, persistence, rollback, and
 return-to-menu paths are complete.
@@ -680,8 +683,8 @@ The next nice-to-have sequence is frozen in
 dialogue receive a source-constrained companion to the existing MNUFONT menu
 catalog; a desktop replay-export GUI wraps the existing deterministic renderer;
 and the first Dopamine Arrange experiment enters through one explicit versioned
-rules contract. Account nametags and replay identity are intentionally last and
-remain decision-gated.
+rules contract, selected and persisted from the Gameplay Options page. Account
+nametags and replay identity are intentionally last and remain decision-gated.
 
 Background-integrated menu headings may eventually become runtime-localized,
 but only after clean background reconstruction is available. Classic consumes

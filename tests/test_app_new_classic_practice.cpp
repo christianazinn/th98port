@@ -221,15 +221,6 @@ void test_exact_patch_surface()
 		pixel(main, 328U, 112U).value == 11U,
 		"fixed Stage keeps the normal label and gray disabled value"
 	);
-	constexpr std::string_view footer =
-		"Arrows: Select / Change   Z: Confirm   Esc: Back";
-	const auto footer_left = static_cast<std::size_t>(
-		320 - (static_cast<std::int32_t>(footer.size() * 8U) / 2)
-	);
-	check(
-		pixel(main, footer_left, 320U).value == 10U,
-		"Practice footer retains exact spaces, centering, y, and color"
-	);
 	check(
 		pixel(main, 0U, 0U) == th03::present::ComposedPixel{
 			th03::present::ComposedPixelLayer::graphics, 3U,

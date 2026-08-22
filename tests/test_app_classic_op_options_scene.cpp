@@ -260,6 +260,13 @@ std::unique_ptr<ClassicOpOptionsScene> make_patch_scene_if_assets_supplied(
 		auto messages = th03::app::load_new_classic_message_pack(
 			pack, loaded->menu_font, &fallback
 		);
+		if(!messages) {
+			std::cerr << "width-stressing-options-pack-error=" <<
+				static_cast<unsigned>(messages.error().code) <<
+				" message=" << static_cast<unsigned>(
+					messages.error().message
+				) << '\n';
+		}
 		expect(messages.has_value(),
 			"width-stressing Options message package loads");
 		if(!messages) {
@@ -765,6 +772,14 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		scene->config().rank == ClassicRank::hard,
 		"Gameplay Rank retains its live ring behavior");
 	expect(scene->advance().has_value(), "Gameplay Rank releases");
+	expect(scene->advance({.down = true}).has_value() &&
+		scene->advance().has_value() &&
+		scene->selected_choice() == ClassicOpOptionsChoice::arrange,
+		"Gameplay navigation reaches the Arrange ruleset selector");
+	expect(scene->advance({.right = true}).has_value() &&
+		scene->resident().gameplay_ruleset == th03::dopamine_test_v1_ruleset,
+		"Gameplay Arrange selects the complete Dopamine test ruleset");
+	expect(scene->advance().has_value(), "Gameplay Arrange releases");
 	expect(scene->advance({.cancel = true}).has_value() &&
 		scene->page() == ClassicOpOptionsPage::categories &&
 		scene->selected_choice() ==

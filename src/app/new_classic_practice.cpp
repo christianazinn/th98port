@@ -19,14 +19,12 @@ constexpr std::uint8_t preset_story = 1U;
 constexpr std::uint8_t stock_vs_rules = 0xFFU;
 
 constexpr present::Index4 practice_color_header = 10U;
-constexpr present::Index4 practice_color_footer = practice_color_header;
 constexpr present::Index4 practice_color_label = 13U;
 constexpr present::Index4 practice_color_selected = 14U;
 constexpr present::Index4 practice_color_disabled = 11U;
 constexpr present::Index4 practice_color_value = 15U;
 
 constexpr std::int32_t practice_header_top = 32;
-constexpr std::int32_t practice_footer_top = 320;
 constexpr std::int32_t practice_main_label_left = 240;
 constexpr std::int32_t practice_main_value_left = 328;
 constexpr std::int32_t practice_advanced_label_left = 112;
@@ -646,10 +644,6 @@ bool NewClassicPracticeMenu::draw() noexcept
 			NewClassicMessageId::practice_header_vs_setup :
 			NewClassicMessageId::practice_header_advanced),
 		practice_color_header
-	) || !font.put_centered(
-		overlay_raster_, 320, practice_footer_top,
-		messages.text(NewClassicMessageId::practice_footer),
-		practice_color_footer
 	)) {
 		return false;
 	}

@@ -18,7 +18,6 @@ constexpr present::Index4 color_label = 12U;
 constexpr present::Index4 color_value = 15U;
 constexpr std::int32_t header_top = 6 * 16;
 constexpr std::int32_t rows_top = 8 * 16;
-constexpr std::int32_t footer_top = 21 * 16;
 constexpr std::int32_t label_left = 176;
 constexpr std::int32_t value_left = 352;
 constexpr std::int32_t command_center = 320;
@@ -264,11 +263,7 @@ bool NewClassicJoyConfigScene::compose_screen() noexcept
 			return false;
 		}
 	}
-	if(!patch_assets_->menu_font.put_centered(
-		raster, 320, footer_top,
-		messages.text(NewClassicMessageId::joy_footer),
-		color_footer
-	) || !patch_surface_.publish(target) || !raster.set_access_page(target)) {
+	if(!patch_surface_.publish(target) || !raster.set_access_page(target)) {
 		return false;
 	}
 	front_page_ = target;

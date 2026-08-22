@@ -700,6 +700,12 @@ void test_online_profile_scene()
 void test_room_profile_child()
 {
 	using namespace th03::app;
+	NewClassicNetplayRoom first_use_room(assets_fixture());
+	expect(first_use_room.request_profile() &&
+		first_use_room.status() ==
+			NewClassicNetplayRoomStatus::profile_requested &&
+		first_use_room.resume_after_profile(),
+		"a device without saved credentials enters profile onboarding first");
 	NewClassicNetplayRoom room(assets_fixture());
 	release(room);
 	for(std::uint8_t row = 0U; row < 4U; ++row) {

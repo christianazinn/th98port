@@ -100,8 +100,9 @@ constexpr std::array<ClassicOpOptionsChoice, 7U> category_choices{{
 	ClassicOpOptionsChoice::category_system,
 	ClassicOpOptionsChoice::quit,
 }};
-constexpr std::array<ClassicOpOptionsChoice, 2U> gameplay_choices{{
+constexpr std::array<ClassicOpOptionsChoice, 3U> gameplay_choices{{
 	ClassicOpOptionsChoice::rank,
+	ClassicOpOptionsChoice::arrange,
 	ClassicOpOptionsChoice::return_page,
 }};
 constexpr std::array<ClassicOpOptionsChoice, 5U> audio_choices{{
@@ -223,6 +224,8 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 {
 	switch(choice) {
 	case ClassicOpOptionsChoice::rank: return NewClassicMessageId::option_rank;
+	case ClassicOpOptionsChoice::arrange:
+		return NewClassicMessageId::option_arrange;
 	case ClassicOpOptionsChoice::master_volume: return NewClassicMessageId::option_master_volume;
 	case ClassicOpOptionsChoice::window_mode: return NewClassicMessageId::option_window_mode;
 	case ClassicOpOptionsChoice::window_scale: return NewClassicMessageId::option_window_scale;
@@ -1310,6 +1313,11 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 			value = messages.text(NewClassicMessageId::value_lunatic); break;
 		}
 		break;
+	case ClassicOpOptionsChoice::arrange:
+		value = stock_gameplay_rules(resident_.gameplay_ruleset) ?
+			messages.text(NewClassicMessageId::value_stock) :
+			messages.text(NewClassicMessageId::value_dopamine);
+		break;
 	case ClassicOpOptionsChoice::master_volume:
 		value = percent_value(master_volume_percent_);
 		break;
@@ -1564,6 +1572,7 @@ bool ClassicOpOptionsScene::draw_option_choice(
 		}
 		return false;
 	}
+	case ClassicOpOptionsChoice::arrange:
 	case ClassicOpOptionsChoice::sfx:
 	case ClassicOpOptionsChoice::mute_when_unfocused:
 	case ClassicOpOptionsChoice::master_volume:
@@ -1722,6 +1731,12 @@ bool ClassicOpOptionsScene::update_horizontal(
 		config_changed = true;
 		break;
 	}
+	case ClassicOpOptionsChoice::arrange:
+		resident_.gameplay_ruleset =
+			stock_gameplay_rules(resident_.gameplay_ruleset) ?
+				dopamine_test_v1_ruleset : stock_gameplay_ruleset;
+		config_changed = true;
+		break;
 	case ClassicOpOptionsChoice::master_volume: {
 		const auto step = static_cast<std::uint8_t>(
 			master_volume_percent_ / 5U
