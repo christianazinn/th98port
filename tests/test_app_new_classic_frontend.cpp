@@ -310,6 +310,56 @@ bool region_matches_background(
 	return true;
 }
 
+bool flat_replay_row_has_no_ordinal(
+	th03::present::SourceSurface surface,
+	const th03::assets::PiImage &background,
+	const th03::app::NewClassicMenuFont &font,
+	std::int32_t top,
+	std::string_view name
+)
+{
+	if(background.image.indices.size() != surface.pixels.size()) {
+		return false;
+	}
+	th03::present::Raster expected;
+	if(!expected.blit({
+		background.image.indices,
+		background.image.width,
+		background.image.height,
+		background.image.width,
+	}, {0, 0}) || !font.put(expected, 20, top, ">", 12U)) {
+		return false;
+	}
+	auto left = 32;
+	for(const char character : name) {
+		auto glyph_left = left;
+		if(character == 'I') {
+			glyph_left += 5;
+		}
+		if(!font.put_n(expected, glyph_left, top,
+			std::string_view(&character, 1U), 1U, 12U)) {
+			return false;
+		}
+		left += 13;
+	}
+	for(auto y = top; y < top + 16; ++y) {
+		for(auto x = 16; x < 200; ++x) {
+			const auto actual = surface.pixels[
+				static_cast<std::size_t>((y * 640) + x)
+			];
+			const auto pixel = expected.pixel(
+				th03::present::Page::zero, {x, y}
+			);
+			if(!pixel || actual.layer !=
+				th03::present::ComposedPixelLayer::graphics ||
+				actual.value != *pixel) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 void dump_menu_preview_if_requested(
 	th03::present::SourceSurface surface,
 	const char *environment
@@ -625,6 +675,10 @@ void test_replay_hub_and_libraries()
 	expect(my_records_library.valid() &&
 		my_records_library.mode() == NewClassicOnlineMenuMode::my_records,
 		"My Replays reuses the source-styled replay library surface");
+	expect(flat_replay_row_has_no_ordinal(
+		my_records_library.surface(), patch_assets->replay_list_background,
+		patch_assets->menu_font, 112, "ALPHA"
+	), "My Replays removes the false ordinal and starts its newest-first name column at the left edge");
 	auto empty_records = online_board(2U, 4U, 0x42U);
 	empty_records.leaderboard_entries.clear();
 	empty_records.replay_records.clear();
@@ -645,6 +699,10 @@ void test_replay_hub_and_libraries()
 		downloaded_library.mode() ==
 			NewClassicOnlineMenuMode::downloaded_replays,
 		"downloaded Replay library opens directly on local records");
+	expect(flat_replay_row_has_no_ordinal(
+		downloaded_library.surface(), patch_assets->replay_list_background,
+		patch_assets->menu_font, 112, "ALPHA"
+	), "Downloaded Replays removes the false ordinal while preserving newest-first order");
 	finish_entry_fade(downloaded_library);
 	static_cast<void>(downloaded_library.consume({}));
 	const auto first_downloaded_board = downloaded_library.selected_board();

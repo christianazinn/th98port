@@ -2343,13 +2343,15 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 	const auto header_top = mode_ == NewClassicOnlineMenuMode::online_replays ?
 		128 : 96;
 	const auto rows_top = header_top + 16;
-	valid_ = valid_ &&
-		font.put(raster, 32, header_top, messages.text(
-			NewClassicMessageId::hiscore_online_header_place), 9U) &&
-		font.put(raster, 80, header_top, messages.text(mode_ ==
+	valid_ = valid_ && (flat || font.put(
+		raster, 32, header_top, messages.text(
+			NewClassicMessageId::hiscore_online_header_place), 9U
+	)) && font.put(
+		raster, flat ? 32 : 80, header_top, messages.text(mode_ ==
 			NewClassicOnlineMenuMode::high_scores ?
 			NewClassicMessageId::hiscore_online_label_player :
-			NewClassicMessageId::replay_header_name), 9U) &&
+			NewClassicMessageId::replay_header_name), 9U
+	) &&
 		font.put_right(raster, 324, header_top, messages.text(
 			NewClassicMessageId::replay_header_score), 9U) &&
 		font.put(raster, 348, header_top, messages.text(
@@ -2411,10 +2413,11 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 		const auto row_character = patch_character_label(
 			static_cast<std::int8_t>((row_category.character * 2U) + 1U), messages
 		);
-		valid_ = valid_ &&
-			patch_put_fixed(font, raster, 32, top,
-				online_place(list_index), 12, color) &&
-			patch_put_fixed(font, raster, 80, top, name, 13, color) &&
+		valid_ = valid_ && (flat || patch_put_fixed(
+			font, raster, 32, top, online_place(list_index), 12, color
+		)) && patch_put_fixed(
+			font, raster, flat ? 32 : 80, top, name, 13, color
+		) &&
 			patch_put_fixed(font, raster,
 				324 - static_cast<std::int32_t>(score.size() * 12U), top,
 				score, 12, color) &&

@@ -3495,18 +3495,19 @@ void test_dopamine_arrange_ruleset()
 		"Dopamine Arrange reapplies the locked formation on every repeat-round restart"
 	);
 
-	arrange_state.players[1U].gauge_avail = 192U << 4U;
-	arrange_state.players[1U].gauge_charged = 192U << 4U;
+	arrange_state.players[1U].gauge_avail = 128U << 4U;
+	arrange_state.players[1U].gauge_charged = 128U << 4U;
 	(void)th03::detail::gameplay_frame_suffix_through_feedback_boundary(
 		arrange_state, nullptr, arrange.gameplay_ruleset
 	);
 	check(
 		arrange_state.gba_flag_next[1U] ==
-			th03::detail::GaugeBossAttackFlag::gauge_bullet_init &&
+			th03::detail::GaugeBossAttackFlag::gauge_pellet_init &&
 		arrange_state.players[1U].gauge_attacks_fired == 1U &&
 		arrange_state.players[1U].boss_attacks_fired == 0U &&
-		arrange_state.players[1U].gauge_charged == 0U,
-		"Dopamine Arrange CPU releases exactly a level-2 gauge attack at 192 charge"
+		arrange_state.players[1U].gauge_charged == 0U &&
+		arrange_state.players[1U].gauge_avail == (64U << 4U),
+		"Dopamine Arrange CPU releases exactly the one-indexed level-2 pellet attack at 128 charge"
 	);
 
 	arrange.runtime_snapshot = th03::RuntimeSnapshot{};

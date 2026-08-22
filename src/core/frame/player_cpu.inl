@@ -249,10 +249,10 @@ void player_update_cpu(
 	} else if(
 		ruleset.cpu_gauge_attacks == CpuGaugeAttackPolicy::level_two_only
 	) {
-		if(player.gauge_avail >= gauge_192) {
+		if(player.gauge_avail >= gauge_128) {
 			state.autofire_shot_gate[player_id] = 0U;
 			live_input = input_shot;
-			if(player.gauge_charged >= gauge_192) {
+			if(player.gauge_charged >= gauge_128) {
 				state.autofire_shot_gate[player_id] = 4U;
 				live_input = 0U;
 			}
