@@ -293,6 +293,9 @@ try {
 	if($LanguageOverlay) {
 		Copy-Item -LiteralPath $LanguageOverlay `
 			-Destination (Join-Path $contentRoot "TH3EN.DAT")
+		Copy-Item -LiteralPath (Join-Path $sourceRoot (
+			"localization\cutscene-text-en-US.t3ctp"
+		)) -Destination $contentRoot
 	}
 	if($RhythmRom) {
 		Copy-Item -LiteralPath $RhythmRom `
@@ -378,7 +381,10 @@ try {
 			)
 			if($LanguageOverlay) {
 				$nativeArguments += @(
-					"--language-overlay", (Join-Path $contentRoot "TH3EN.DAT")
+					"--language-overlay", (Join-Path $contentRoot "TH3EN.DAT"),
+					"--cutscene-text-pack", (Join-Path $contentRoot (
+						"cutscene-text-en-US.t3ctp"
+					))
 				)
 			}
 			if($RhythmRom) {

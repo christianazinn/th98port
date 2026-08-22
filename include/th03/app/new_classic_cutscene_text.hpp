@@ -15,6 +15,10 @@
 namespace th03::app {
 
 inline constexpr std::size_t new_classic_cutscene_script_count = 28U;
+inline constexpr std::uint64_t new_classic_cutscene_original_profile_fnv1a64 =
+	0xFE26F73526487310ULL;
+inline constexpr std::uint64_t
+new_classic_cutscene_english_profile_fnv1a64 = 0x5C33CB0520F00380ULL;
 
 enum class NewClassicCutsceneTextPackErrorCode : std::uint8_t {
 	invalid_path,

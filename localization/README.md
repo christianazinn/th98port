@@ -44,3 +44,21 @@ or silently substitutes a different language.
 Source-constrained in-game graphics text uses the separate `T3GTL001` format
 documented in `GAME_TEXT_README.md`. Keeping the domains separate prevents a
 menu-font pack from claiming CP932/gaiji coverage it cannot render.
+
+All pre/post-round dialogue, cutscene narration, and ending text uses the
+script-aware `T3CTP001` domain. The complete editable sources are
+`cutscene-text-en-US.json` and `cutscene-text-ja-JP.json`; their adjacent
+`*-schema.json` files contain source identity and geometry but no original
+script bytes. Compile either catalog without extracting a DAT archive:
+
+```powershell
+python tools/localization/compile_cutscene_text_pack.py `
+  --schema localization/cutscene-text-en-US-schema.json `
+  --source localization/cutscene-text-en-US.json `
+  --output localization/cutscene-text-en-US.t3ctp
+```
+
+Each `exact_glyphs` value is a source-layout constraint: one cell is one
+fullwidth CP932 glyph or two halfwidth glyphs. See
+`docs/NEW_CLASSIC_CUTSCENE_TEXT.md` for inventory regeneration and runtime
+validation.

@@ -10,6 +10,7 @@ from pathlib import Path
 
 INVENTORY_FORMAT = "T3CTR001"
 AUTHOR_FORMAT = "T3CTR-AUTHOR-1"
+SCHEMA_FORMAT = "T3CTR-SCHEMA-1"
 HEX64_RE = re.compile(r"^[0-9A-F]{16}$")
 LOCALE_RE = re.compile(r"^[A-Za-z0-9]{2,8}(?:-[A-Za-z0-9]{1,8})*$")
 RUN_ID_RE = re.compile(
@@ -157,14 +158,116 @@ def make_author(
     }
 
 
-def write_author(path: Path, author: dict[str, object]) -> None:
+def make_schema(inventory: dict[str, object]) -> dict[str, object]:
+    # Reuse the complete inventory validator, including CP932 and stable-ID
+    # checks, before dropping the source text. The resulting schema is safe to
+    # track and is sufficient to compile translations without redistributing
+    # the authenticated script bytes or requiring every translator to extract
+    # their own inventory first.
+    make_author(inventory, "zxx", "")
+    scripts: list[dict[str, object]] = []
+    for script in inventory["scripts"]:
+        scripts.append({
+            "id": script["id"],
+            "resource": script["resource"],
+            "source_bytes": script["source_bytes"],
+            "source_fnv1a64": script["source_fnv1a64"],
+            "runs": [{
+                "id": run["id"],
+                "ordinal": run["ordinal"],
+                "source_offset": run["source_offset"],
+                "glyphs": run["glyphs"],
+                "first": run["first"],
+                "last": run["last"],
+                "source_fnv1a64": run["source_fnv1a64"],
+            } for run in script["runs"]],
+        })
+    return {
+        "format": SCHEMA_FORMAT,
+        "source_profile": inventory["source_profile"],
+        "source_profile_fnv1a64": inventory["source_profile_fnv1a64"],
+        "scripts": scripts,
+    }
+
+
+def load_schema(path: Path) -> dict[str, object]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise AuthorError(f"{path}: {error}") from error
+    if not isinstance(value, dict) or set(value) != {
+        "format", "source_profile", "source_profile_fnv1a64", "scripts"
+    } or value.get("format") != SCHEMA_FORMAT:
+        raise AuthorError("schema fields do not match T3CTR-SCHEMA-1")
+    profile_name = value.get("source_profile")
+    profile = value.get("source_profile_fnv1a64")
+    scripts = value.get("scripts")
+    if (not isinstance(profile_name, str) or
+            not SOURCE_PROFILE_RE.fullmatch(profile_name) or
+            not isinstance(profile, str) or not HEX64_RE.fullmatch(profile) or
+            not isinstance(scripts, list) or len(scripts) != 28):
+        raise AuthorError("invalid schema profile")
+    script_ids: set[str] = set()
+    run_ids: set[str] = set()
+    for script_index, script in enumerate(scripts):
+        if not isinstance(script, dict) or set(script) != {
+            "id", "resource", "source_bytes", "source_fnv1a64", "runs"
+        }:
+            raise AuthorError(f"invalid schema script {script_index}")
+        script_id = script.get("id")
+        resource = script.get("resource")
+        source_bytes = script.get("source_bytes")
+        source_fnv = script.get("source_fnv1a64")
+        runs = script.get("runs")
+        if (not isinstance(script_id, str) or not script_id or
+                script_id in script_ids or
+                not isinstance(resource, str) or not resource or
+                not isinstance(source_bytes, int) or source_bytes <= 0 or
+                not isinstance(source_fnv, str) or
+                not HEX64_RE.fullmatch(source_fnv) or
+                not isinstance(runs, list) or not runs):
+            raise AuthorError(f"invalid schema script identity {script_index}")
+        script_ids.add(script_id)
+        for ordinal, run in enumerate(runs):
+            if not isinstance(run, dict) or set(run) != {
+                "id", "ordinal", "source_offset", "glyphs", "first", "last",
+                "source_fnv1a64"
+            }:
+                raise AuthorError(f"invalid schema run {script_id}/{ordinal}")
+            identifier = run.get("id")
+            glyphs = run.get("glyphs")
+            first = run.get("first")
+            last = run.get("last")
+            if (not isinstance(identifier, str) or
+                    not RUN_ID_RE.fullmatch(identifier) or
+                    not identifier.startswith(f"cutscene.{script_id}.run.") or
+                    identifier in run_ids or run.get("ordinal") != ordinal or
+                    not isinstance(run.get("source_offset"), int) or
+                    run["source_offset"] < 0 or
+                    not isinstance(glyphs, int) or glyphs <= 0 or glyphs > 108 or
+                    run["source_offset"] > source_bytes - glyphs * 2 or
+                    not isinstance(run.get("source_fnv1a64"), str) or
+                    not HEX64_RE.fullmatch(run["source_fnv1a64"]) or
+                    not isinstance(first, list) or len(first) != 2 or
+                    not isinstance(last, list) or len(last) != 2 or
+                    any(not isinstance(item, int) for item in first + last)):
+                raise AuthorError(f"invalid schema run contract {script_id}/{ordinal}")
+            run_ids.add(identifier)
+    return value
+
+
+def write_json(path: Path, value: dict[str, object]) -> None:
     encoded = (json.dumps(
-        author, ensure_ascii=False, indent=2, sort_keys=False
+        value, ensure_ascii=False, indent=2, sort_keys=False
     ) + "\n").encode("utf-8")
     if path.exists() and path.read_bytes() == encoded:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(encoded)
+
+
+def write_author(path: Path, author: dict[str, object]) -> None:
+    write_json(path, author)
 
 
 def main() -> int:
@@ -173,11 +276,14 @@ def main() -> int:
     parser.add_argument("--locale", required=True)
     parser.add_argument("--fallback", default="")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--schema-output", type=Path)
     arguments = parser.parse_args()
     try:
         inventory = load_inventory(arguments.inventory)
         author = make_author(inventory, arguments.locale, arguments.fallback)
         write_author(arguments.output, author)
+        if arguments.schema_output is not None:
+            write_json(arguments.schema_output, make_schema(inventory))
     except AuthorError as error:
         parser.error(str(error))
     return 0

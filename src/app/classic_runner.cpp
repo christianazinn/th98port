@@ -559,17 +559,6 @@ ClassicRunner::load(ClassicRunnerRequest request)
 				);
 		}
 		if(!request.content.cutscene_text_pack.empty()) {
-			if(request.content.language_overlay.empty()) {
-				auto result = runner_error(
-					ClassicRunnerErrorCode::cutscene_text_pack_failed,
-					ClassicContentFile::cutscene_text_pack
-				);
-				result.cutscene_text_pack_error =
-					NewClassicCutsceneTextPackError{
-						.code = NewClassicCutsceneTextPackErrorCode::source_profile_mismatch,
-					};
-				return std::unexpected(std::move(result));
-			}
 			auto loaded_cutscene_text = load_new_classic_cutscene_text_pack(
 				request.content.cutscene_text_pack
 			);
@@ -582,9 +571,38 @@ ClassicRunner::load(ClassicRunnerRequest request)
 					std::move(loaded_cutscene_text.error());
 				return std::unexpected(std::move(result));
 			}
-			const auto expected_locale = loaded_assets->custom_game_text ?
-				loaded_assets->custom_game_text->locale() :
-				new_classic_builtin_english_game_text().locale();
+			const bool japanese_catalog =
+				loaded_cutscene_text->source_profile_fnv1a64() ==
+					new_classic_cutscene_original_profile_fnv1a64;
+			const bool english_catalog =
+				loaded_cutscene_text->source_profile_fnv1a64() ==
+					new_classic_cutscene_english_profile_fnv1a64;
+			if(!japanese_catalog && !english_catalog) {
+				auto result = runner_error(
+					ClassicRunnerErrorCode::cutscene_text_pack_failed,
+					ClassicContentFile::cutscene_text_pack
+				);
+				result.cutscene_text_pack_error = NewClassicCutsceneTextPackError{
+					.code = NewClassicCutsceneTextPackErrorCode::source_profile_mismatch,
+				};
+				return std::unexpected(std::move(result));
+			}
+			if(!japanese_catalog && request.content.language_overlay.empty()) {
+				auto result = runner_error(
+					ClassicRunnerErrorCode::cutscene_text_pack_failed,
+					ClassicContentFile::cutscene_text_pack
+				);
+				result.cutscene_text_pack_error =
+					NewClassicCutsceneTextPackError{
+						.code = NewClassicCutsceneTextPackErrorCode::source_profile_mismatch,
+					};
+				return std::unexpected(std::move(result));
+			}
+			const auto expected_locale = japanese_catalog ?
+				std::string_view{"ja-JP"} :
+				(loaded_assets->custom_game_text ?
+					loaded_assets->custom_game_text->locale() :
+					new_classic_builtin_english_game_text().locale());
 			if(loaded_cutscene_text->locale() != expected_locale ||
 				(loaded_assets->custom_messages &&
 					loaded_assets->custom_messages->locale() !=

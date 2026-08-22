@@ -61,6 +61,20 @@ class CutsceneAuthorTests(unittest.TestCase):
             self.assertEqual(first_bytes, output.read_bytes())
             self.assertIn("あい".encode("utf-8"), first_bytes)
 
+    def test_inventory_becomes_source_text_free_schema(self) -> None:
+        source = inventory()
+        schema = cutscene_author.make_schema(source)
+        self.assertEqual(schema["format"], "T3CTR-SCHEMA-1")
+        self.assertEqual(schema["source_profile_fnv1a64"], "0123456789ABCDEF")
+        self.assertEqual(len(schema["scripts"]), 28)
+        first = schema["scripts"][0]["runs"][0]
+        self.assertEqual(first["glyphs"], 2)
+        self.assertNotIn("cp932_hex", first)
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "schema.json"
+            cutscene_author.write_json(output, schema)
+            self.assertEqual(cutscene_author.load_schema(output), schema)
+
     def test_fail_closed_inventory_contract(self) -> None:
         cases: list[dict[str, object]] = []
         missing = inventory()
@@ -81,6 +95,14 @@ class CutsceneAuthorTests(unittest.TestCase):
             with self.subTest(case=cases.index(invalid)):
                 with self.assertRaises(cutscene_author.AuthorError):
                     cutscene_author.make_author(invalid, "ja-JP", "")
+
+        schema = cutscene_author.make_schema(inventory())
+        schema["scripts"][0]["runs"][0]["glyphs"] = 0
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "bad-schema.json"
+            cutscene_author.write_json(path, schema)
+            with self.assertRaises(cutscene_author.AuthorError):
+                cutscene_author.load_schema(path)
 
     def test_english_overlay_blank_is_author_friendly(self) -> None:
         source = inventory()

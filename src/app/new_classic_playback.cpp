@@ -910,16 +910,6 @@ NewClassicReplayPlayback::load_internal(
 		game_text = &*custom_game_text;
 	}
 	if(!request.content.cutscene_text_pack.empty()) {
-		if(request.language != ClassicLanguage::english ||
-			request.content.language_overlay.empty()) {
-			auto error = playback_error(
-				NewClassicPlaybackErrorCode::cutscene_text_pack_failed
-			);
-			error.cutscene_text_pack = NewClassicCutsceneTextPackError{
-				.code = NewClassicCutsceneTextPackErrorCode::source_profile_mismatch,
-			};
-			return std::unexpected(std::move(error));
-		}
 		auto loaded = load_new_classic_cutscene_text_pack(
 			request.content.cutscene_text_pack
 		);
@@ -930,7 +920,16 @@ NewClassicReplayPlayback::load_internal(
 			error.cutscene_text_pack = std::move(loaded.error());
 			return std::unexpected(std::move(error));
 		}
-		if(loaded->locale() != game_text->locale()) {
+		const bool japanese_catalog = loaded->source_profile_fnv1a64() ==
+			new_classic_cutscene_original_profile_fnv1a64;
+		const bool english_catalog = loaded->source_profile_fnv1a64() ==
+			new_classic_cutscene_english_profile_fnv1a64;
+		const bool selected_japanese =
+			request.language == ClassicLanguage::japanese;
+		if((!japanese_catalog && !english_catalog) ||
+			japanese_catalog != selected_japanese ||
+			(!japanese_catalog && request.content.language_overlay.empty()) ||
+			(!japanese_catalog && loaded->locale() != game_text->locale())) {
 			auto error = playback_error(
 				NewClassicPlaybackErrorCode::cutscene_text_pack_failed
 			);

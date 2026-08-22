@@ -81,6 +81,26 @@ class CutsceneTextPackTests(unittest.TestCase):
         self.assertEqual(int.from_bytes(first[12:14], "little"), 28)
         self.assertEqual(int.from_bytes(first[20:24], "little"), 28)
 
+    def test_source_text_free_schema_compiles_the_same_pack(self) -> None:
+        inventory, author = fixture()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inventory_path = root / "inventory.json"
+            schema_path = root / "schema.json"
+            author_path = root / "author.json"
+            inventory_path.write_text(json.dumps(inventory), encoding="utf-8")
+            PACK.AUTHOR_MODULE.write_json(
+                schema_path, PACK.AUTHOR_MODULE.make_schema(inventory)
+            )
+            author_path.write_text(json.dumps(author), encoding="utf-8")
+            from_inventory = PACK.compile_pack(PACK.load_catalog(
+                inventory_path, author_path
+            ))
+            from_schema = PACK.compile_pack(PACK.load_catalog(
+                schema_path, author_path
+            ))
+            self.assertEqual(from_schema, from_inventory)
+
     def test_accepts_two_halfwidth_glyphs_per_vm_cell(self) -> None:
         inventory, author = fixture()
         halfwidth = copy.deepcopy(author)
@@ -118,6 +138,15 @@ class CutsceneTextPackTests(unittest.TestCase):
             with self.subTest():
                 with self.assertRaises(PACK.PackError):
                     self.load(inventory, invalid)
+
+    def test_tracked_english_and_japanese_catalogs_are_reproducible(self) -> None:
+        for locale in ("en-US", "ja-JP"):
+            with self.subTest(locale=locale):
+                schema = ROOT / f"localization/cutscene-text-{locale}-schema.json"
+                author = ROOT / f"localization/cutscene-text-{locale}.json"
+                expected = ROOT / f"localization/cutscene-text-{locale}.t3ctp"
+                compiled = PACK.compile_pack(PACK.load_catalog(schema, author))
+                self.assertEqual(compiled, expected.read_bytes())
 
 
 if __name__ == "__main__":

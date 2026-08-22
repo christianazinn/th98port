@@ -361,9 +361,12 @@ Scripted cutscene and ending dialogue is inventoried separately by
 authenticated scripts and emits deterministic `T3CTR001` run identities;
 `tools/localization/make_cutscene_text_author.py` turns that local inventory
 into a UTF-8 translator scaffold without copying or rewriting source control
-streams. `compile_cutscene_text_pack.py` compiles the complete catalog into
-deterministic `T3CTP001`; `--cutscene-text-pack <locale.t3ctp>` applies it in
-the game and replay renderer only after all 28 selected source scripts validate.
+streams. Complete Japanese and English catalogs plus source-text-free schemas
+are tracked under `localization/`, so new translators can edit and compile
+without first unpacking either DAT. `compile_cutscene_text_pack.py` compiles a
+complete catalog into deterministic `T3CTP001`;
+`--cutscene-text-pack <locale.t3ctp>` applies it in the game and replay renderer
+only after all 28 selected source scripts validate.
 Replacement occurs on decoded glyph operations, never in the script byte
 stream, so translated punctuation cannot become a command. See
 `docs/NEW_CLASSIC_CUTSCENE_TEXT.md`.

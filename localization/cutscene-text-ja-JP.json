@@ -1,0 +1,6141 @@
+{
+  "format": "T3CTR-AUTHOR-1",
+  "source_profile": "th03-original-28",
+  "source_profile_fnv1a64": "FE26F73526487310",
+  "locale": "ja-JP",
+  "fallback": "",
+  "messages": {
+    "cutscene.dm0.reimu.run.000": {
+      "exact_glyphs": 20,
+      "text": "靈夢　：やっぱり、私が一番強かったのね。"
+    },
+    "cutscene.dm0.reimu.run.001": {
+      "exact_glyphs": 22,
+      "text": "　　　　うん、やっとこれで遺跡にはいれるわ。"
+    },
+    "cutscene.dm0.reimu.run.002": {
+      "exact_glyphs": 4,
+      "text": "靈夢　："
+    },
+    "cutscene.dm0.reimu.run.003": {
+      "exact_glyphs": 8,
+      "text": "　　・・・・・・"
+    },
+    "cutscene.dm0.reimu.run.004": {
+      "exact_glyphs": 4,
+      "text": "・・・・"
+    },
+    "cutscene.dm0.reimu.run.005": {
+      "exact_glyphs": 2,
+      "text": "・・"
+    },
+    "cutscene.dm0.reimu.run.006": {
+      "exact_glyphs": 8,
+      "text": "何があるんだろ。"
+    },
+    "cutscene.dm0.reimu.run.007": {
+      "exact_glyphs": 11,
+      "text": "靈夢　：　・・・あー？"
+    },
+    "cutscene.dm0.reimu.run.008": {
+      "exact_glyphs": 13,
+      "text": "　　　　何だ？　一体・・・"
+    },
+    "cutscene.dm0.reimu.run.009": {
+      "exact_glyphs": 17,
+      "text": "　　　　変なものがいっぱいある～。"
+    },
+    "cutscene.dm0.reimu.run.010": {
+      "exact_glyphs": 21,
+      "text": "靈夢　：　　　　・・・・これが遺跡なの～？"
+    },
+    "cutscene.dm0.reimu.run.011": {
+      "exact_glyphs": 12,
+      "text": "？？？：そこを動かないで"
+    },
+    "cutscene.dm0.reimu.run.012": {
+      "exact_glyphs": 7,
+      "text": "靈夢　：きゃっ"
+    },
+    "cutscene.dm0.reimu.run.013": {
+      "exact_glyphs": 8,
+      "text": "　何、何なのぉ～"
+    },
+    "cutscene.dm0.reimu.run.014": {
+      "exact_glyphs": 17,
+      "text": "？？？：君かい、最強の魔法使いは。"
+    },
+    "cutscene.dm0.reimu.run.015": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm0.reimu.run.016": {
+      "exact_glyphs": 6,
+      "text": "・・・早速、"
+    },
+    "cutscene.dm0.reimu.run.017": {
+      "exact_glyphs": 9,
+      "text": "一緒に来て貰おう。"
+    },
+    "cutscene.dm0.reimu.run.018": {
+      "exact_glyphs": 16,
+      "text": "靈夢　：いきなり、何いってんのよ"
+    },
+    "cutscene.dm0.reimu.run.019": {
+      "exact_glyphs": 19,
+      "text": "？？？：これは小さくても必殺の武器だ。"
+    },
+    "cutscene.dm0.reimu.run.020": {
+      "exact_glyphs": 19,
+      "text": "　　　　逆らわないほうがが身の為だぜ。"
+    },
+    "cutscene.dm0.reimu.run.021": {
+      "exact_glyphs": 4,
+      "text": "靈夢　："
+    },
+    "cutscene.dm0.reimu.run.022": {
+      "exact_glyphs": 18,
+      "text": "靈夢　：・・・この遺跡って、何なの。"
+    },
+    "cutscene.dm0.reimu.run.023": {
+      "exact_glyphs": 17,
+      "text": "　　　　・・・もしかして、あなた、"
+    },
+    "cutscene.dm0.reimu.run.024": {
+      "exact_glyphs": 16,
+      "text": "　古代人とかミイラとかなんかなの"
+    },
+    "cutscene.dm0.reimu.run.025": {
+      "exact_glyphs": 4,
+      "text": "？？？："
+    },
+    "cutscene.dm0.reimu.run.026": {
+      "exact_glyphs": 9,
+      "text": "そんなわけないだろ"
+    },
+    "cutscene.dm0.reimu.run.027": {
+      "exact_glyphs": 28,
+      "text": "？？？：大体あんた、よくこれでここを遺跡だと思ってるな。"
+    },
+    "cutscene.dm0.reimu.run.028": {
+      "exact_glyphs": 10,
+      "text": "靈夢　：それはぁ、。"
+    },
+    "cutscene.dm0.reimu.run.029": {
+      "exact_glyphs": 18,
+      "text": "？？？：とにかく、一緒に来て貰うぜ。"
+    },
+    "cutscene.dm0.reimu.run.030": {
+      "exact_glyphs": 10,
+      "text": "靈夢　：ちょっ、まっ"
+    },
+    "cutscene.dm0.reimu.run.031": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.reimu.run.032": {
+      "exact_glyphs": 25,
+      "text": "？？？：だれが、そんなおもてなしをしろといったのよ"
+    },
+    "cutscene.dm0.reimu.run.033": {
+      "exact_glyphs": 21,
+      "text": "？？？：だって～、このほうが面白いじゃん。"
+    },
+    "cutscene.dm0.reimu.run.034": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.reimu.run.035": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.reimu.run.036": {
+      "exact_glyphs": 21,
+      "text": "？？？：せっかくのお客さまがこわがるでしょ"
+    },
+    "cutscene.dm0.reimu.run.037": {
+      "exact_glyphs": 12,
+      "text": "靈夢　：あ、あの～・・・"
+    },
+    "cutscene.dm0.reimu.run.038": {
+      "exact_glyphs": 23,
+      "text": "？？？：あっ、失礼しました。変な対応しまして。"
+    },
+    "cutscene.dm0.reimu.run.039": {
+      "exact_glyphs": 17,
+      "text": "靈夢　：それよりなによ、あんたら。"
+    },
+    "cutscene.dm0.reimu.run.040": {
+      "exact_glyphs": 21,
+      "text": "夢美　：私が、この船の船長の岡崎夢美です。"
+    },
+    "cutscene.dm0.reimu.run.041": {
+      "exact_glyphs": 16,
+      "text": "　　　　よろしくお願いしますわ。"
+    },
+    "cutscene.dm0.reimu.run.042": {
+      "exact_glyphs": 22,
+      "text": "ちゆり：私が、船員のちゆり、北白河ちゆりだ。"
+    },
+    "cutscene.dm0.reimu.run.043": {
+      "exact_glyphs": 11,
+      "text": "　　　　よろしくだぜ。"
+    },
+    "cutscene.dm0.reimu.run.044": {
+      "exact_glyphs": 26,
+      "text": "靈夢　：ちょっと、待って。いま、船って言わなかった？"
+    },
+    "cutscene.dm0.reimu.run.045": {
+      "exact_glyphs": 18,
+      "text": "　　　　もしかして、これって船なの？"
+    },
+    "cutscene.dm0.reimu.run.046": {
+      "exact_glyphs": 10,
+      "text": "夢美　：そうですわ。"
+    },
+    "cutscene.dm0.reimu.run.047": {
+      "exact_glyphs": 25,
+      "text": "　　ただ、船っていっても、水の上でぷかぷかだとか、"
+    },
+    "cutscene.dm0.reimu.run.048": {
+      "exact_glyphs": 38,
+      "text": "雲の上でふわふわだとか、宇宙空間でうじゃうじゃ、ってんのとは違うんだけどね。"
+    },
+    "cutscene.dm0.reimu.run.049": {
+      "exact_glyphs": 9,
+      "text": "夢美　：この船は、"
+    },
+    "cutscene.dm0.reimu.run.050": {
+      "exact_glyphs": 8,
+      "text": "可能性空間移動船"
+    },
+    "cutscene.dm0.reimu.run.051": {
+      "exact_glyphs": 8,
+      "text": "とよばれるもの。"
+    },
+    "cutscene.dm0.reimu.run.052": {
+      "exact_glyphs": 13,
+      "text": "　　　　私は、これを使って"
+    },
+    "cutscene.dm0.reimu.run.053": {
+      "exact_glyphs": 4,
+      "text": "統一原理"
+    },
+    "cutscene.dm0.reimu.run.054": {
+      "exact_glyphs": 18,
+      "text": "にあてはまらない力をさがしに来たの。"
+    },
+    "cutscene.dm0.reimu.run.055": {
+      "exact_glyphs": 15,
+      "text": "夢美　：でも、早速みつかったわ"
+    },
+    "cutscene.dm0.reimu.run.056": {
+      "exact_glyphs": 12,
+      "text": "　あなたのその力・・・。"
+    },
+    "cutscene.dm0.reimu.run.057": {
+      "exact_glyphs": 21,
+      "text": "夢美　：あぁ、魔法がこの目で見られるなんて"
+    },
+    "cutscene.dm0.reimu.run.058": {
+      "exact_glyphs": 13,
+      "text": "靈夢　：魔法じゃないわよ。"
+    },
+    "cutscene.dm0.reimu.run.059": {
+      "exact_glyphs": 21,
+      "text": "夢美　：あぁ、魔法がこの目で見られるなんて"
+    },
+    "cutscene.dm0.reimu.run.060": {
+      "exact_glyphs": 12,
+      "text": "靈夢　：神仙術だってば。"
+    },
+    "cutscene.dm0.reimu.run.061": {
+      "exact_glyphs": 4,
+      "text": "夢美　："
+    },
+    "cutscene.dm0.reimu.run.062": {
+      "exact_glyphs": 5,
+      "text": "ま・ほ・う"
+    },
+    "cutscene.dm0.reimu.run.063": {
+      "exact_glyphs": 2,
+      "text": "よね"
+    },
+    "cutscene.dm0.reimu.run.064": {
+      "exact_glyphs": 4,
+      "text": "靈夢　："
+    },
+    "cutscene.dm0.reimu.run.065": {
+      "exact_glyphs": 5,
+      "text": "・・・・・"
+    },
+    "cutscene.dm0.reimu.run.066": {
+      "exact_glyphs": 11,
+      "text": "どっちでもいいけどさぁ"
+    },
+    "cutscene.dm0.reimu.run.067": {
+      "exact_glyphs": 29,
+      "text": "靈夢　：とにかく、良くわかんないけど、なんかくれるんでしょ"
+    },
+    "cutscene.dm0.reimu.run.068": {
+      "exact_glyphs": 10,
+      "text": "夢美　：なんのこと？"
+    },
+    "cutscene.dm0.reimu.run.069": {
+      "exact_glyphs": 19,
+      "text": "靈夢　：このチラシに書いてあったでしょ"
+    },
+    "cutscene.dm0.reimu.run.070": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：あー、それ私がかいたんだ。"
+    },
+    "cutscene.dm0.reimu.run.071": {
+      "exact_glyphs": 7,
+      "text": "夢美　：チラシ"
+    },
+    "cutscene.dm0.reimu.run.072": {
+      "exact_glyphs": 5,
+      "text": "　どれどれ"
+    },
+    "cutscene.dm0.reimu.run.073": {
+      "exact_glyphs": 11,
+      "text": "夢美　：えーと・・・、"
+    },
+    "cutscene.dm0.reimu.run.074": {
+      "exact_glyphs": 17,
+      "text": "　　　　”　　　　　いにしえの遺跡"
+    },
+    "cutscene.dm0.reimu.run.075": {
+      "exact_glyphs": 16,
+      "text": "　　　　　　　　　　　　夢幻遺跡"
+    },
+    "cutscene.dm0.reimu.run.076": {
+      "exact_glyphs": 18,
+      "text": "　　　　　　　　　　　本日１０時開店"
+    },
+    "cutscene.dm0.reimu.run.077": {
+      "exact_glyphs": 30,
+      "text": "　　　　この遺跡に訪れた方には、あなたをしあわせにする何かを"
+    },
+    "cutscene.dm0.reimu.run.078": {
+      "exact_glyphs": 31,
+      "text": "プレゼントします。皆さんのご来店を心よりお待ちしております。”"
+    },
+    "cutscene.dm0.reimu.run.079": {
+      "exact_glyphs": 4,
+      "text": "夢美　："
+    },
+    "cutscene.dm0.reimu.run.080": {
+      "exact_glyphs": 8,
+      "text": "・・・・・・・・"
+    },
+    "cutscene.dm0.reimu.run.081": {
+      "exact_glyphs": 7,
+      "text": "なんだこりゃ。"
+    },
+    "cutscene.dm0.reimu.run.082": {
+      "exact_glyphs": 29,
+      "text": "　　　　あなたもよく、こんなチラシをみて来る気になったわね"
+    },
+    "cutscene.dm0.reimu.run.083": {
+      "exact_glyphs": 11,
+      "text": "靈夢　：あはははははは"
+    },
+    "cutscene.dm0.reimu.run.084": {
+      "exact_glyphs": 17,
+      "text": "靈夢　：でも、なんかくれるんでしょ"
+    },
+    "cutscene.dm0.reimu.run.085": {
+      "exact_glyphs": 27,
+      "text": "夢美　：・・・とにかく、書いてある以上仕方が無いわね。"
+    },
+    "cutscene.dm0.reimu.run.086": {
+      "exact_glyphs": 31,
+      "text": "　　　　私は、あなたの力を調べたいの。魔法のことをよく調べて、"
+    },
+    "cutscene.dm0.reimu.run.087": {
+      "exact_glyphs": 13,
+      "text": "学会に復讐してやるんだから"
+    },
+    "cutscene.dm0.reimu.run.088": {
+      "exact_glyphs": 36,
+      "text": "ちゆり：御主人さまは、この世に統一原理に当てはまらない力、すなわち魔力が"
+    },
+    "cutscene.dm0.reimu.run.089": {
+      "exact_glyphs": 10,
+      "text": "存在する、という理論"
+    },
+    "cutscene.dm0.reimu.run.090": {
+      "exact_glyphs": 20,
+      "text": "　　　　　　　　　　‘非統一魔法世界論’"
+    },
+    "cutscene.dm0.reimu.run.091": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm0.reimu.run.092": {
+      "exact_glyphs": 12,
+      "text": "を学会に発表したんだぜ。"
+    },
+    "cutscene.dm0.reimu.run.093": {
+      "exact_glyphs": 23,
+      "text": "ちゆり：そしたら、おもいっきりわらわれたんだ。"
+    },
+    "cutscene.dm0.reimu.run.094": {
+      "exact_glyphs": 31,
+      "text": "夢美　：・・・とにかく、あなたの魔力が本当に強かったら。何か、"
+    },
+    "cutscene.dm0.reimu.run.095": {
+      "exact_glyphs": 21,
+      "text": "私の出来る範囲内で望みをかなえて上げるわ。"
+    },
+    "cutscene.dm0.reimu.run.096": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：でも、弱かったらいらない。"
+    },
+    "cutscene.dm0.reimu.run.097": {
+      "exact_glyphs": 12,
+      "text": "夢美　：それでいいよね。"
+    },
+    "cutscene.dm0.reimu.run.098": {
+      "exact_glyphs": 22,
+      "text": "靈夢　：それで望みがかなうんだったら、ＯＫよ"
+    },
+    "cutscene.dm0.reimu.run.099": {
+      "exact_glyphs": 18,
+      "text": "夢美　：じゃぁ、ちゆり。がんばってね"
+    },
+    "cutscene.dm0.reimu.run.100": {
+      "exact_glyphs": 25,
+      "text": "　　　　その間、私は魔力世界の観察をおこなうから。"
+    },
+    "cutscene.dm0.reimu.run.101": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：それって、もしかして・・・"
+    },
+    "cutscene.dm0.reimu.run.102": {
+      "exact_glyphs": 19,
+      "text": "夢美　：あの娘とたたかえっていってるの"
+    },
+    "cutscene.dm0.reimu.run.103": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：だ～、やっぱり～～～"
+    },
+    "cutscene.dm0.reimu.run.104": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.reimu.run.105": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.reimu.run.106": {
+      "exact_glyphs": 25,
+      "text": "夢美　：つべこべ言わず、さっさとたたかってきなさい"
+    },
+    "cutscene.dm0.reimu.run.107": {
+      "exact_glyphs": 27,
+      "text": "　　　　あなたには、私が造った科学魔法があるじゃない。"
+    },
+    "cutscene.dm0.reimu.run.108": {
+      "exact_glyphs": 33,
+      "text": "　　　　どうせ、負けるだろうけど、すぐに負けたら承知しないからね。"
+    },
+    "cutscene.dm0.reimu.run.109": {
+      "exact_glyphs": 17,
+      "text": "その間、貴重なデータをとるんだから"
+    },
+    "cutscene.dm0.reimu.run.110": {
+      "exact_glyphs": 15,
+      "text": "ちゆり：しょうがないなぁ・・・"
+    },
+    "cutscene.dm0.reimu.run.111": {
+      "exact_glyphs": 8,
+      "text": "ちゆり：勝負だぜ"
+    },
+    "cutscene.dm0.reimu.run.112": {
+      "exact_glyphs": 23,
+      "text": "靈夢　：魔法じゃなくて、神仙術なんだけど・・・"
+    },
+    "cutscene.dm0.mima.run.000": {
+      "exact_glyphs": 16,
+      "text": "魅魔　：やはり、私が１番か・・・"
+    },
+    "cutscene.dm0.mima.run.001": {
+      "exact_glyphs": 15,
+      "text": "　　　　まっ、当然の結果だな。"
+    },
+    "cutscene.dm0.mima.run.002": {
+      "exact_glyphs": 29,
+      "text": "魅魔　：それはさておき、そろそろ、遺跡開店（？）の時間だな"
+    },
+    "cutscene.dm0.mima.run.003": {
+      "exact_glyphs": 18,
+      "text": "魅魔　：　・・・なんだこの遺跡・・・"
+    },
+    "cutscene.dm0.mima.run.004": {
+      "exact_glyphs": 19,
+      "text": "　　　　見たこともないものばかりだな。"
+    },
+    "cutscene.dm0.mima.run.005": {
+      "exact_glyphs": 12,
+      "text": "？？？：そこを動かないで"
+    },
+    "cutscene.dm0.mima.run.006": {
+      "exact_glyphs": 5,
+      "text": "魅魔　：何"
+    },
+    "cutscene.dm0.mima.run.007": {
+      "exact_glyphs": 17,
+      "text": "？？？：君かい、最強の魔法使いは。"
+    },
+    "cutscene.dm0.mima.run.008": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm0.mima.run.009": {
+      "exact_glyphs": 6,
+      "text": "・・・早速、"
+    },
+    "cutscene.dm0.mima.run.010": {
+      "exact_glyphs": 9,
+      "text": "一緒に来て貰おう。"
+    },
+    "cutscene.dm0.mima.run.011": {
+      "exact_glyphs": 26,
+      "text": "魅魔　：ほう、えらく挑戦的じゃないか。私とやる気かい"
+    },
+    "cutscene.dm0.mima.run.012": {
+      "exact_glyphs": 19,
+      "text": "？？？：ふっ、君と戦うつもりはないぜ。"
+    },
+    "cutscene.dm0.mima.run.013": {
+      "exact_glyphs": 18,
+      "text": "　　　　ただ、ついてくればいいんだ。"
+    },
+    "cutscene.dm0.mima.run.014": {
+      "exact_glyphs": 14,
+      "text": "魅魔　：いやと言ったら・・・"
+    },
+    "cutscene.dm0.mima.run.015": {
+      "exact_glyphs": 19,
+      "text": "？？？：これは小さくても必殺の武器だ。"
+    },
+    "cutscene.dm0.mima.run.016": {
+      "exact_glyphs": 19,
+      "text": "　　　　逆らわないほうがが身の為だぜ。"
+    },
+    "cutscene.dm0.mima.run.017": {
+      "exact_glyphs": 6,
+      "text": "魅魔　：いや"
+    },
+    "cutscene.dm0.mima.run.018": {
+      "exact_glyphs": 13,
+      "text": "？？？：・・・・・・・・・"
+    },
+    "cutscene.dm0.mima.run.019": {
+      "exact_glyphs": 17,
+      "text": "魅魔　：そんじゃ、そういうことで。"
+    },
+    "cutscene.dm0.mima.run.020": {
+      "exact_glyphs": 10,
+      "text": "？？？：こらこらこら"
+    },
+    "cutscene.dm0.mima.run.021": {
+      "exact_glyphs": 35,
+      "text": "魅魔　：何よ、私いそがしいの。（嘘）あんたにかまってる暇なんか無いわ。"
+    },
+    "cutscene.dm0.mima.run.022": {
+      "exact_glyphs": 21,
+      "text": "？？？：とっ、とにかく、一緒に来て貰うぜ。"
+    },
+    "cutscene.dm0.mima.run.023": {
+      "exact_glyphs": 10,
+      "text": "魅魔　：ちょっ、まっ"
+    },
+    "cutscene.dm0.mima.run.024": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.mima.run.025": {
+      "exact_glyphs": 25,
+      "text": "？？？：だれが、そんなおもてなしをしろといったのよ"
+    },
+    "cutscene.dm0.mima.run.026": {
+      "exact_glyphs": 21,
+      "text": "？？？：だって～、このほうが面白いじゃん。"
+    },
+    "cutscene.dm0.mima.run.027": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.mima.run.028": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.mima.run.029": {
+      "exact_glyphs": 21,
+      "text": "？？？：せっかくのお客さまがこわがるでしょ"
+    },
+    "cutscene.dm0.mima.run.030": {
+      "exact_glyphs": 16,
+      "text": "魅魔　：こわがっては無いと思う。"
+    },
+    "cutscene.dm0.mima.run.031": {
+      "exact_glyphs": 20,
+      "text": "？？？：失礼しました。変な対応しまして。"
+    },
+    "cutscene.dm0.mima.run.032": {
+      "exact_glyphs": 22,
+      "text": "魅魔　：それよりなになんだい、あんたたちは。"
+    },
+    "cutscene.dm0.mima.run.033": {
+      "exact_glyphs": 21,
+      "text": "夢美　：私が、この船の船長の岡崎夢美です。"
+    },
+    "cutscene.dm0.mima.run.034": {
+      "exact_glyphs": 16,
+      "text": "　　　　よろしくお願いしますわ。"
+    },
+    "cutscene.dm0.mima.run.035": {
+      "exact_glyphs": 22,
+      "text": "ちゆり：私が、船員のちゆり、北白河ちゆりだ。"
+    },
+    "cutscene.dm0.mima.run.036": {
+      "exact_glyphs": 11,
+      "text": "　　　　よろしくだぜ。"
+    },
+    "cutscene.dm0.mima.run.037": {
+      "exact_glyphs": 26,
+      "text": "魅魔　：ちょっと、待て。いま、船って言わなかったか？"
+    },
+    "cutscene.dm0.mima.run.038": {
+      "exact_glyphs": 19,
+      "text": "　　　　もしかして、ここって船なのか？"
+    },
+    "cutscene.dm0.mima.run.039": {
+      "exact_glyphs": 10,
+      "text": "夢美　：そうですわ。"
+    },
+    "cutscene.dm0.mima.run.040": {
+      "exact_glyphs": 25,
+      "text": "　　ただ、船っていっても、水の上でぷかぷかだとか、"
+    },
+    "cutscene.dm0.mima.run.041": {
+      "exact_glyphs": 38,
+      "text": "雲の上でふわふわだとか、宇宙空間でうじゃうじゃ、ってんのとは違うんだけどね。"
+    },
+    "cutscene.dm0.mima.run.042": {
+      "exact_glyphs": 9,
+      "text": "夢美　：この船は、"
+    },
+    "cutscene.dm0.mima.run.043": {
+      "exact_glyphs": 8,
+      "text": "可能性空間移動船"
+    },
+    "cutscene.dm0.mima.run.044": {
+      "exact_glyphs": 8,
+      "text": "とよばれるもの。"
+    },
+    "cutscene.dm0.mima.run.045": {
+      "exact_glyphs": 13,
+      "text": "　　　　私は、これを使って"
+    },
+    "cutscene.dm0.mima.run.046": {
+      "exact_glyphs": 4,
+      "text": "統一原理"
+    },
+    "cutscene.dm0.mima.run.047": {
+      "exact_glyphs": 18,
+      "text": "にあてはまらない力をさがしに来たの。"
+    },
+    "cutscene.dm0.mima.run.048": {
+      "exact_glyphs": 15,
+      "text": "夢美　：でも、早速みつかったわ"
+    },
+    "cutscene.dm0.mima.run.049": {
+      "exact_glyphs": 12,
+      "text": "　あなたのその力・・・。"
+    },
+    "cutscene.dm0.mima.run.050": {
+      "exact_glyphs": 21,
+      "text": "夢美　：あぁ、魔法がこの目で見られるなんて"
+    },
+    "cutscene.dm0.mima.run.051": {
+      "exact_glyphs": 23,
+      "text": "魅魔　：ついでにゆうと、私は人間ではないわよ。"
+    },
+    "cutscene.dm0.mima.run.052": {
+      "exact_glyphs": 7,
+      "text": "夢美　：ええっ"
+    },
+    "cutscene.dm0.mima.run.053": {
+      "exact_glyphs": 9,
+      "text": "　もしかして、動物"
+    },
+    "cutscene.dm0.mima.run.054": {
+      "exact_glyphs": 11,
+      "text": "　それとも宇宙人とか、"
+    },
+    "cutscene.dm0.mima.run.055": {
+      "exact_glyphs": 36,
+      "text": "食中植物とか、プニュームキンとか、トゥクプクとか、ヘゲロムチャムチャとか"
+    },
+    "cutscene.dm0.mima.run.056": {
+      "exact_glyphs": 8,
+      "text": "なんかなのですか"
+    },
+    "cutscene.dm0.mima.run.057": {
+      "exact_glyphs": 9,
+      "text": "魅魔　：怒るぞこら"
+    },
+    "cutscene.dm0.mima.run.058": {
+      "exact_glyphs": 30,
+      "text": "　　　　・・・つまり、なんていうか、精神だけなんだ、この体。"
+    },
+    "cutscene.dm0.mima.run.059": {
+      "exact_glyphs": 20,
+      "text": "夢美　：つまり、さまよえる死霊、ってこと"
+    },
+    "cutscene.dm0.mima.run.060": {
+      "exact_glyphs": 11,
+      "text": "魅魔　：死霊はないだろ"
+    },
+    "cutscene.dm0.mima.run.061": {
+      "exact_glyphs": 6,
+      "text": "夢美　：悪霊"
+    },
+    "cutscene.dm0.mima.run.062": {
+      "exact_glyphs": 4,
+      "text": "魅魔　："
+    },
+    "cutscene.dm0.mima.run.063": {
+      "exact_glyphs": 4,
+      "text": "　かえる"
+    },
+    "cutscene.dm0.mima.run.064": {
+      "exact_glyphs": 16,
+      "text": "夢美　：待って～、私が悪かったわ"
+    },
+    "cutscene.dm0.mima.run.065": {
+      "exact_glyphs": 32,
+      "text": "　　　　私は、あなたの力を調べたいのよ。魔法のことをよく調べて、"
+    },
+    "cutscene.dm0.mima.run.066": {
+      "exact_glyphs": 13,
+      "text": "学会に復讐してやるんだから"
+    },
+    "cutscene.dm0.mima.run.067": {
+      "exact_glyphs": 6,
+      "text": "魅魔　：学会"
+    },
+    "cutscene.dm0.mima.run.068": {
+      "exact_glyphs": 36,
+      "text": "ちゆり：御主人さまは、この世に統一原理に当てはまらない力、すなわち魔力が"
+    },
+    "cutscene.dm0.mima.run.069": {
+      "exact_glyphs": 10,
+      "text": "存在する、という理論"
+    },
+    "cutscene.dm0.mima.run.070": {
+      "exact_glyphs": 20,
+      "text": "　　　　　　　　　　‘非統一魔法世界論’"
+    },
+    "cutscene.dm0.mima.run.071": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm0.mima.run.072": {
+      "exact_glyphs": 12,
+      "text": "を学会に発表したんだぜ。"
+    },
+    "cutscene.dm0.mima.run.073": {
+      "exact_glyphs": 23,
+      "text": "ちゆり：そしたら、おもいっきりわらわれたんだ。"
+    },
+    "cutscene.dm0.mima.run.074": {
+      "exact_glyphs": 12,
+      "text": "魅魔　：ふふ、そうかい。"
+    },
+    "cutscene.dm0.mima.run.075": {
+      "exact_glyphs": 28,
+      "text": "夢美　：・・・とにかく、あなたの魔力が本当に強かったら。"
+    },
+    "cutscene.dm0.mima.run.076": {
+      "exact_glyphs": 11,
+      "text": "私の研究も完成するわ。"
+    },
+    "cutscene.dm0.mima.run.077": {
+      "exact_glyphs": 13,
+      "text": "　　　　協力してくれるよね"
+    },
+    "cutscene.dm0.mima.run.078": {
+      "exact_glyphs": 6,
+      "text": "魅魔　：いや"
+    },
+    "cutscene.dm0.mima.run.079": {
+      "exact_glyphs": 27,
+      "text": "夢美　：ふふふ、いやとは言わせないわ。（もう言われてる"
+    },
+    "cutscene.dm0.mima.run.080": {
+      "exact_glyphs": 1,
+      "text": "）"
+    },
+    "cutscene.dm0.mima.run.081": {
+      "exact_glyphs": 19,
+      "text": "　　　　もう、ここから出られないしね。"
+    },
+    "cutscene.dm0.mima.run.082": {
+      "exact_glyphs": 14,
+      "text": "魅魔　：どうしろって言うのよ"
+    },
+    "cutscene.dm0.mima.run.083": {
+      "exact_glyphs": 22,
+      "text": "夢美　：あなたの力を調べさせてもらうだけよ。"
+    },
+    "cutscene.dm0.mima.run.084": {
+      "exact_glyphs": 20,
+      "text": "　　　　つまり、戦ってもらうだけってこと"
+    },
+    "cutscene.dm0.mima.run.085": {
+      "exact_glyphs": 26,
+      "text": "魅魔　：ふふ、たたかうだけならぜひ、やりたいわねぇ。"
+    },
+    "cutscene.dm0.mima.run.086": {
+      "exact_glyphs": 24,
+      "text": "夢美　：ＯＫね。そんじゃ、がんばってね、ちゆり。"
+    },
+    "cutscene.dm0.mima.run.087": {
+      "exact_glyphs": 25,
+      "text": "　　　　その間、私は魔力世界の観察をおこなうから。"
+    },
+    "cutscene.dm0.mima.run.088": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：それって、もしかして・・・"
+    },
+    "cutscene.dm0.mima.run.089": {
+      "exact_glyphs": 19,
+      "text": "夢美　：あの人とたたかえっていってるの"
+    },
+    "cutscene.dm0.mima.run.090": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：だ～、やっぱり～～～"
+    },
+    "cutscene.dm0.mima.run.091": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.mima.run.092": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.mima.run.093": {
+      "exact_glyphs": 25,
+      "text": "夢美　：つべこべ言わず、さっさとたたかってきなさい"
+    },
+    "cutscene.dm0.mima.run.094": {
+      "exact_glyphs": 27,
+      "text": "　　　　あなたには、私が造った科学魔法があるじゃない。"
+    },
+    "cutscene.dm0.mima.run.095": {
+      "exact_glyphs": 33,
+      "text": "　　　　どうせ、負けるだろうけど、すぐに負けたら承知しないからね。"
+    },
+    "cutscene.dm0.mima.run.096": {
+      "exact_glyphs": 17,
+      "text": "その間、貴重なデータをとるんだから"
+    },
+    "cutscene.dm0.mima.run.097": {
+      "exact_glyphs": 15,
+      "text": "ちゆり：しょうがないなぁ・・・"
+    },
+    "cutscene.dm0.mima.run.098": {
+      "exact_glyphs": 8,
+      "text": "ちゆり：勝負だぜ"
+    },
+    "cutscene.dm0.mima.run.099": {
+      "exact_glyphs": 10,
+      "text": "魅魔　：気入れろよ～"
+    },
+    "cutscene.dm0.marisa.run.000": {
+      "exact_glyphs": 18,
+      "text": "魔理沙：うふふふふ～、全員倒したわ～"
+    },
+    "cutscene.dm0.marisa.run.001": {
+      "exact_glyphs": 23,
+      "text": "　　　　うん、やっとこれで遺跡にはいれるわね。"
+    },
+    "cutscene.dm0.marisa.run.002": {
+      "exact_glyphs": 15,
+      "text": "魔理沙：なにがもらえるのかな～"
+    },
+    "cutscene.dm0.marisa.run.003": {
+      "exact_glyphs": 4,
+      "text": "魔理沙："
+    },
+    "cutscene.dm0.marisa.run.004": {
+      "exact_glyphs": 7,
+      "text": "　・・・これは"
+    },
+    "cutscene.dm0.marisa.run.005": {
+      "exact_glyphs": 19,
+      "text": "　　　　　　・・・・これが遺跡なの～？"
+    },
+    "cutscene.dm0.marisa.run.006": {
+      "exact_glyphs": 12,
+      "text": "？？？：そこを動かないで"
+    },
+    "cutscene.dm0.marisa.run.007": {
+      "exact_glyphs": 7,
+      "text": "魔理沙：きゃっ"
+    },
+    "cutscene.dm0.marisa.run.008": {
+      "exact_glyphs": 4,
+      "text": "　何、何"
+    },
+    "cutscene.dm0.marisa.run.009": {
+      "exact_glyphs": 17,
+      "text": "？？？：君かい、最強の魔法使いは。"
+    },
+    "cutscene.dm0.marisa.run.010": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm0.marisa.run.011": {
+      "exact_glyphs": 6,
+      "text": "・・・早速、"
+    },
+    "cutscene.dm0.marisa.run.012": {
+      "exact_glyphs": 9,
+      "text": "一緒に来て貰おう。"
+    },
+    "cutscene.dm0.marisa.run.013": {
+      "exact_glyphs": 9,
+      "text": "魔理沙：なんだって"
+    },
+    "cutscene.dm0.marisa.run.014": {
+      "exact_glyphs": 6,
+      "text": "（宝塚口調）"
+    },
+    "cutscene.dm0.marisa.run.015": {
+      "exact_glyphs": 19,
+      "text": "？？？：これは小さくても必殺の武器だ。"
+    },
+    "cutscene.dm0.marisa.run.016": {
+      "exact_glyphs": 19,
+      "text": "　　　　逆らわないほうがが身の為だぜ。"
+    },
+    "cutscene.dm0.marisa.run.017": {
+      "exact_glyphs": 4,
+      "text": "魔理沙："
+    },
+    "cutscene.dm0.marisa.run.018": {
+      "exact_glyphs": 23,
+      "text": "魔理沙：・・・これって、遺跡じゃないみたいね。"
+    },
+    "cutscene.dm0.marisa.run.019": {
+      "exact_glyphs": 24,
+      "text": "　　　　・・・ちょっと風変わりな内装のお屋敷とか"
+    },
+    "cutscene.dm0.marisa.run.020": {
+      "exact_glyphs": 11,
+      "text": "？？？：ちょっとちがう"
+    },
+    "cutscene.dm0.marisa.run.021": {
+      "exact_glyphs": 18,
+      "text": "？？？：とにかく、一緒に来て貰うぜ。"
+    },
+    "cutscene.dm0.marisa.run.022": {
+      "exact_glyphs": 10,
+      "text": "魔理沙：ちょっ、まっ"
+    },
+    "cutscene.dm0.marisa.run.023": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.marisa.run.024": {
+      "exact_glyphs": 25,
+      "text": "？？？：だれが、そんなおもてなしをしろといったのよ"
+    },
+    "cutscene.dm0.marisa.run.025": {
+      "exact_glyphs": 21,
+      "text": "？？？：だって～、このほうが面白いじゃん。"
+    },
+    "cutscene.dm0.marisa.run.026": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.marisa.run.027": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.marisa.run.028": {
+      "exact_glyphs": 21,
+      "text": "？？？：せっかくのお客さまがこわがるでしょ"
+    },
+    "cutscene.dm0.marisa.run.029": {
+      "exact_glyphs": 10,
+      "text": "魔理沙：なんなのよ～"
+    },
+    "cutscene.dm0.marisa.run.030": {
+      "exact_glyphs": 23,
+      "text": "？？？：あっ、失礼しました。変な対応しまして。"
+    },
+    "cutscene.dm0.marisa.run.031": {
+      "exact_glyphs": 8,
+      "text": "魔理沙：だれです"
+    },
+    "cutscene.dm0.marisa.run.032": {
+      "exact_glyphs": 21,
+      "text": "夢美　：私が、この船の船長の岡崎夢美です。"
+    },
+    "cutscene.dm0.marisa.run.033": {
+      "exact_glyphs": 16,
+      "text": "　　　　よろしくお願いしますわ。"
+    },
+    "cutscene.dm0.marisa.run.034": {
+      "exact_glyphs": 22,
+      "text": "ちゆり：私が、船員のちゆり、北白河ちゆりだ。"
+    },
+    "cutscene.dm0.marisa.run.035": {
+      "exact_glyphs": 11,
+      "text": "　　　　よろしくだぜ。"
+    },
+    "cutscene.dm0.marisa.run.036": {
+      "exact_glyphs": 6,
+      "text": "魔理沙：船？"
+    },
+    "cutscene.dm0.marisa.run.037": {
+      "exact_glyphs": 9,
+      "text": "　　　　船なの～？"
+    },
+    "cutscene.dm0.marisa.run.038": {
+      "exact_glyphs": 10,
+      "text": "夢美　：そうですわ。"
+    },
+    "cutscene.dm0.marisa.run.039": {
+      "exact_glyphs": 25,
+      "text": "　　ただ、船っていっても、水の上でぷかぷかだとか、"
+    },
+    "cutscene.dm0.marisa.run.040": {
+      "exact_glyphs": 38,
+      "text": "雲の上でふわふわだとか、宇宙空間でうじゃうじゃ、ってんのとは違うんだけどね。"
+    },
+    "cutscene.dm0.marisa.run.041": {
+      "exact_glyphs": 9,
+      "text": "夢美　：この船は、"
+    },
+    "cutscene.dm0.marisa.run.042": {
+      "exact_glyphs": 8,
+      "text": "可能性空間移動船"
+    },
+    "cutscene.dm0.marisa.run.043": {
+      "exact_glyphs": 8,
+      "text": "とよばれるもの。"
+    },
+    "cutscene.dm0.marisa.run.044": {
+      "exact_glyphs": 13,
+      "text": "　　　　私は、これを使って"
+    },
+    "cutscene.dm0.marisa.run.045": {
+      "exact_glyphs": 4,
+      "text": "統一原理"
+    },
+    "cutscene.dm0.marisa.run.046": {
+      "exact_glyphs": 18,
+      "text": "にあてはまらない力をさがしに来たの。"
+    },
+    "cutscene.dm0.marisa.run.047": {
+      "exact_glyphs": 21,
+      "text": "魔理沙：風変わりな内装のお屋敷じゃなくて、"
+    },
+    "cutscene.dm0.marisa.run.048": {
+      "exact_glyphs": 22,
+      "text": "　　　　ちょっといかれた内装の船だったのか。"
+    },
+    "cutscene.dm0.marisa.run.049": {
+      "exact_glyphs": 4,
+      "text": "夢美　："
+    },
+    "cutscene.dm0.marisa.run.050": {
+      "exact_glyphs": 10,
+      "text": "とにかく、みつけたわ"
+    },
+    "cutscene.dm0.marisa.run.051": {
+      "exact_glyphs": 12,
+      "text": "　あなたのその力・・・。"
+    },
+    "cutscene.dm0.marisa.run.052": {
+      "exact_glyphs": 21,
+      "text": "夢美　：あぁ、魔法がこの目で見られるなんて"
+    },
+    "cutscene.dm0.marisa.run.053": {
+      "exact_glyphs": 14,
+      "text": "魔理沙：魔法を見たことないの"
+    },
+    "cutscene.dm0.marisa.run.054": {
+      "exact_glyphs": 32,
+      "text": "夢美　：私たちの世界では、全ての力が統一原理によって説明できた、"
+    },
+    "cutscene.dm0.marisa.run.055": {
+      "exact_glyphs": 33,
+      "text": "といわれているの。　だけど私は、統一原理に当てはまらない力を魔法と"
+    },
+    "cutscene.dm0.marisa.run.056": {
+      "exact_glyphs": 15,
+      "text": "呼んで、それが存在するという論"
+    },
+    "cutscene.dm0.marisa.run.057": {
+      "exact_glyphs": 20,
+      "text": "　　　　　　　　　　‘非統一魔法世界論’"
+    },
+    "cutscene.dm0.marisa.run.058": {
+      "exact_glyphs": 12,
+      "text": "　　　　を、発表したわ。"
+    },
+    "cutscene.dm0.marisa.run.059": {
+      "exact_glyphs": 34,
+      "text": "夢美　：そしたら学会のやつらは、私を笑って信じようともしなかったの。"
+    },
+    "cutscene.dm0.marisa.run.060": {
+      "exact_glyphs": 11,
+      "text": "　　　　でも、みつけた"
+    },
+    "cutscene.dm0.marisa.run.061": {
+      "exact_glyphs": 12,
+      "text": "　あなたのその力・・・。"
+    },
+    "cutscene.dm0.marisa.run.062": {
+      "exact_glyphs": 31,
+      "text": "夢美　：私は、あなたの力を調べたいの。魔法のことをよく調べて、"
+    },
+    "cutscene.dm0.marisa.run.063": {
+      "exact_glyphs": 13,
+      "text": "学会に復讐してやるんだから"
+    },
+    "cutscene.dm0.marisa.run.064": {
+      "exact_glyphs": 29,
+      "text": "魔理沙：とにかく、良くわかんないけど、なんかくれるんでしょ"
+    },
+    "cutscene.dm0.marisa.run.065": {
+      "exact_glyphs": 8,
+      "text": "夢美　：なにそれ"
+    },
+    "cutscene.dm0.marisa.run.066": {
+      "exact_glyphs": 20,
+      "text": "魔理沙：このチラシに書いてあったじゃない"
+    },
+    "cutscene.dm0.marisa.run.067": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：あー、それ私がかいたんだ。"
+    },
+    "cutscene.dm0.marisa.run.068": {
+      "exact_glyphs": 7,
+      "text": "夢美　：チラシ"
+    },
+    "cutscene.dm0.marisa.run.069": {
+      "exact_glyphs": 5,
+      "text": "　どれどれ"
+    },
+    "cutscene.dm0.marisa.run.070": {
+      "exact_glyphs": 11,
+      "text": "夢美　：えーと・・・、"
+    },
+    "cutscene.dm0.marisa.run.071": {
+      "exact_glyphs": 17,
+      "text": "　　　　”　　　　　いにしえの遺跡"
+    },
+    "cutscene.dm0.marisa.run.072": {
+      "exact_glyphs": 16,
+      "text": "　　　　　　　　　　　　夢幻遺跡"
+    },
+    "cutscene.dm0.marisa.run.073": {
+      "exact_glyphs": 18,
+      "text": "　　　　　　　　　　　本日１０時開店"
+    },
+    "cutscene.dm0.marisa.run.074": {
+      "exact_glyphs": 30,
+      "text": "　　　　この遺跡に訪れた方には、あなたをしあわせにする何かを"
+    },
+    "cutscene.dm0.marisa.run.075": {
+      "exact_glyphs": 31,
+      "text": "プレゼントします。皆さんのご来店を心よりお待ちしております。”"
+    },
+    "cutscene.dm0.marisa.run.076": {
+      "exact_glyphs": 4,
+      "text": "夢美　："
+    },
+    "cutscene.dm0.marisa.run.077": {
+      "exact_glyphs": 8,
+      "text": "・・・・・・・・"
+    },
+    "cutscene.dm0.marisa.run.078": {
+      "exact_glyphs": 7,
+      "text": "なんだこりゃ。"
+    },
+    "cutscene.dm0.marisa.run.079": {
+      "exact_glyphs": 29,
+      "text": "　　　　あなたもよく、こんなチラシをみて来る気になったわね"
+    },
+    "cutscene.dm0.marisa.run.080": {
+      "exact_glyphs": 11,
+      "text": "魔理沙：あはははははは"
+    },
+    "cutscene.dm0.marisa.run.081": {
+      "exact_glyphs": 17,
+      "text": "魔理沙：でも、なんかくれるんでしょ"
+    },
+    "cutscene.dm0.marisa.run.082": {
+      "exact_glyphs": 27,
+      "text": "夢美　：・・・とにかく、書いてある以上仕方が無いわね。"
+    },
+    "cutscene.dm0.marisa.run.083": {
+      "exact_glyphs": 23,
+      "text": "　　　　あなたの魔力が本当に強かったら。何か、"
+    },
+    "cutscene.dm0.marisa.run.084": {
+      "exact_glyphs": 24,
+      "text": "私の出来る範囲内で望みをかなえて上げてもいいわ。"
+    },
+    "cutscene.dm0.marisa.run.085": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：でも、弱かったらいらない。"
+    },
+    "cutscene.dm0.marisa.run.086": {
+      "exact_glyphs": 12,
+      "text": "夢美　：それでいいよね。"
+    },
+    "cutscene.dm0.marisa.run.087": {
+      "exact_glyphs": 17,
+      "text": "魔理沙：ＯＫ、ＯＫ、試したいわけね"
+    },
+    "cutscene.dm0.marisa.run.088": {
+      "exact_glyphs": 18,
+      "text": "夢美　：じゃぁ、ちゆり。がんばってね"
+    },
+    "cutscene.dm0.marisa.run.089": {
+      "exact_glyphs": 25,
+      "text": "　　　　その間、私は魔力世界の観察をおこなうから。"
+    },
+    "cutscene.dm0.marisa.run.090": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：それって、もしかして・・・"
+    },
+    "cutscene.dm0.marisa.run.091": {
+      "exact_glyphs": 19,
+      "text": "夢美　：あの娘とたたかえっていってるの"
+    },
+    "cutscene.dm0.marisa.run.092": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：だ～、やっぱり～～～"
+    },
+    "cutscene.dm0.marisa.run.093": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.marisa.run.094": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.marisa.run.095": {
+      "exact_glyphs": 25,
+      "text": "夢美　：つべこべ言わず、さっさとたたかってきなさい"
+    },
+    "cutscene.dm0.marisa.run.096": {
+      "exact_glyphs": 27,
+      "text": "　　　　あなたには、私が造った科学魔法があるじゃない。"
+    },
+    "cutscene.dm0.marisa.run.097": {
+      "exact_glyphs": 33,
+      "text": "　　　　どうせ、負けるだろうけど、すぐに負けたら承知しないからね。"
+    },
+    "cutscene.dm0.marisa.run.098": {
+      "exact_glyphs": 17,
+      "text": "その間、貴重なデータをとるんだから"
+    },
+    "cutscene.dm0.marisa.run.099": {
+      "exact_glyphs": 15,
+      "text": "ちゆり：しょうがないなぁ・・・"
+    },
+    "cutscene.dm0.marisa.run.100": {
+      "exact_glyphs": 8,
+      "text": "ちゆり：勝負だぜ"
+    },
+    "cutscene.dm0.marisa.run.101": {
+      "exact_glyphs": 16,
+      "text": "魔理沙：何を叶えてもらおうかな～"
+    },
+    "cutscene.dm0.ellen.run.000": {
+      "exact_glyphs": 18,
+      "text": "エレン：やっと、遺跡に入れるわね～。"
+    },
+    "cutscene.dm0.ellen.run.001": {
+      "exact_glyphs": 29,
+      "text": "　　　　この辺の人たちって、なんでこんなに強いんだろ～ね。"
+    },
+    "cutscene.dm0.ellen.run.002": {
+      "exact_glyphs": 11,
+      "text": "エレン：よいしょっと。"
+    },
+    "cutscene.dm0.ellen.run.003": {
+      "exact_glyphs": 8,
+      "text": "エレン：あやや。"
+    },
+    "cutscene.dm0.ellen.run.004": {
+      "exact_glyphs": 12,
+      "text": "　　　　何？　一体・・・"
+    },
+    "cutscene.dm0.ellen.run.005": {
+      "exact_glyphs": 17,
+      "text": "　　　　変なものがいっぱいある～。"
+    },
+    "cutscene.dm0.ellen.run.006": {
+      "exact_glyphs": 12,
+      "text": "？？？：そこを動かないで"
+    },
+    "cutscene.dm0.ellen.run.007": {
+      "exact_glyphs": 7,
+      "text": "エレン：きゃっ"
+    },
+    "cutscene.dm0.ellen.run.008": {
+      "exact_glyphs": 6,
+      "text": "　何、何なの"
+    },
+    "cutscene.dm0.ellen.run.009": {
+      "exact_glyphs": 17,
+      "text": "？？？：君かい、最強の魔法使いは。"
+    },
+    "cutscene.dm0.ellen.run.010": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm0.ellen.run.011": {
+      "exact_glyphs": 6,
+      "text": "・・・早速、"
+    },
+    "cutscene.dm0.ellen.run.012": {
+      "exact_glyphs": 9,
+      "text": "一緒に来て貰おう。"
+    },
+    "cutscene.dm0.ellen.run.013": {
+      "exact_glyphs": 8,
+      "text": "エレン：なんで～"
+    },
+    "cutscene.dm0.ellen.run.014": {
+      "exact_glyphs": 19,
+      "text": "？？？：これは小さくても必殺の武器だ。"
+    },
+    "cutscene.dm0.ellen.run.015": {
+      "exact_glyphs": 19,
+      "text": "　　　　逆らわないほうがが身の為だぜ。"
+    },
+    "cutscene.dm0.ellen.run.016": {
+      "exact_glyphs": 9,
+      "text": "エレン：なにそれ。"
+    },
+    "cutscene.dm0.ellen.run.017": {
+      "exact_glyphs": 21,
+      "text": "　　　　・・・もしかして、危険なのかしら。"
+    },
+    "cutscene.dm0.ellen.run.018": {
+      "exact_glyphs": 5,
+      "text": "　えぇ～い"
+    },
+    "cutscene.dm0.ellen.run.019": {
+      "exact_glyphs": 7,
+      "text": "？？？：だぁ～"
+    },
+    "cutscene.dm0.ellen.run.020": {
+      "exact_glyphs": 8,
+      "text": "　　やめろって。"
+    },
+    "cutscene.dm0.ellen.run.021": {
+      "exact_glyphs": 16,
+      "text": "？？？：いきなりなにするんだよ。"
+    },
+    "cutscene.dm0.ellen.run.022": {
+      "exact_glyphs": 21,
+      "text": "？？？：まっ、とにかく、一緒に来て貰うぜ。"
+    },
+    "cutscene.dm0.ellen.run.023": {
+      "exact_glyphs": 14,
+      "text": "エレン：ちょっと、ちょっと～"
+    },
+    "cutscene.dm0.ellen.run.024": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.ellen.run.025": {
+      "exact_glyphs": 25,
+      "text": "？？？：だれが、そんなおもてなしをしろといったのよ"
+    },
+    "cutscene.dm0.ellen.run.026": {
+      "exact_glyphs": 21,
+      "text": "？？？：だって～、このほうが面白いじゃん。"
+    },
+    "cutscene.dm0.ellen.run.027": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.ellen.run.028": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.ellen.run.029": {
+      "exact_glyphs": 21,
+      "text": "？？？：せっかくのお客さまがこわがるでしょ"
+    },
+    "cutscene.dm0.ellen.run.030": {
+      "exact_glyphs": 8,
+      "text": "エレン：あははは"
+    },
+    "cutscene.dm0.ellen.run.031": {
+      "exact_glyphs": 23,
+      "text": "？？？：あっ、失礼しました。変な対応しまして。"
+    },
+    "cutscene.dm0.ellen.run.032": {
+      "exact_glyphs": 24,
+      "text": "エレン：あやや、謝れちゃったら許すしかないわね。"
+    },
+    "cutscene.dm0.ellen.run.033": {
+      "exact_glyphs": 21,
+      "text": "夢美　：私が、この船の船長の岡崎夢美です。"
+    },
+    "cutscene.dm0.ellen.run.034": {
+      "exact_glyphs": 16,
+      "text": "　　　　よろしくお願いしますわ。"
+    },
+    "cutscene.dm0.ellen.run.035": {
+      "exact_glyphs": 22,
+      "text": "ちゆり：私が、船員のちゆり、北白河ちゆりだ。"
+    },
+    "cutscene.dm0.ellen.run.036": {
+      "exact_glyphs": 11,
+      "text": "　　　　よろしくだぜ。"
+    },
+    "cutscene.dm0.ellen.run.037": {
+      "exact_glyphs": 20,
+      "text": "エレン：私は、エレン。ふわふわエレンよ。"
+    },
+    "cutscene.dm0.ellen.run.038": {
+      "exact_glyphs": 9,
+      "text": "夢美　：（ふわふわ"
+    },
+    "cutscene.dm0.ellen.run.039": {
+      "exact_glyphs": 25,
+      "text": "）　とにかく、本日来て頂いたのもわけがありまして。"
+    },
+    "cutscene.dm0.ellen.run.040": {
+      "exact_glyphs": 14,
+      "text": "エレン：なにかくれるんでしょ"
+    },
+    "cutscene.dm0.ellen.run.041": {
+      "exact_glyphs": 6,
+      "text": "夢美　：はい"
+    },
+    "cutscene.dm0.ellen.run.042": {
+      "exact_glyphs": 21,
+      "text": "エレン：このチラシに書いてあったじゃない。"
+    },
+    "cutscene.dm0.ellen.run.043": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：あー、それ私がかいたんだ。"
+    },
+    "cutscene.dm0.ellen.run.044": {
+      "exact_glyphs": 7,
+      "text": "夢美　：チラシ"
+    },
+    "cutscene.dm0.ellen.run.045": {
+      "exact_glyphs": 5,
+      "text": "　どれどれ"
+    },
+    "cutscene.dm0.ellen.run.046": {
+      "exact_glyphs": 11,
+      "text": "夢美　：えーと・・・、"
+    },
+    "cutscene.dm0.ellen.run.047": {
+      "exact_glyphs": 17,
+      "text": "　　　　”　　　　　いにしえの遺跡"
+    },
+    "cutscene.dm0.ellen.run.048": {
+      "exact_glyphs": 16,
+      "text": "　　　　　　　　　　　　夢幻遺跡"
+    },
+    "cutscene.dm0.ellen.run.049": {
+      "exact_glyphs": 18,
+      "text": "　　　　　　　　　　　本日１０時開店"
+    },
+    "cutscene.dm0.ellen.run.050": {
+      "exact_glyphs": 30,
+      "text": "　　　　この遺跡に訪れた方には、あなたをしあわせにする何かを"
+    },
+    "cutscene.dm0.ellen.run.051": {
+      "exact_glyphs": 31,
+      "text": "プレゼントします。皆さんのご来店を心よりお待ちしております。”"
+    },
+    "cutscene.dm0.ellen.run.052": {
+      "exact_glyphs": 4,
+      "text": "夢美　："
+    },
+    "cutscene.dm0.ellen.run.053": {
+      "exact_glyphs": 8,
+      "text": "・・・・・・・・"
+    },
+    "cutscene.dm0.ellen.run.054": {
+      "exact_glyphs": 7,
+      "text": "なんだこりゃ。"
+    },
+    "cutscene.dm0.ellen.run.055": {
+      "exact_glyphs": 29,
+      "text": "　　　　あなたもよく、こんなチラシをみて来る気になったわね"
+    },
+    "cutscene.dm0.ellen.run.056": {
+      "exact_glyphs": 11,
+      "text": "エレン：あはははははは"
+    },
+    "cutscene.dm0.ellen.run.057": {
+      "exact_glyphs": 28,
+      "text": "夢美　：とにかく、なんかあげてもいいけど、条件があるわ。"
+    },
+    "cutscene.dm0.ellen.run.058": {
+      "exact_glyphs": 8,
+      "text": "エレン：何かしら"
+    },
+    "cutscene.dm0.ellen.run.059": {
+      "exact_glyphs": 26,
+      "text": "夢美　：まず、私の研究の協力をしてもらうということ。"
+    },
+    "cutscene.dm0.ellen.run.060": {
+      "exact_glyphs": 9,
+      "text": "夢美　：私は、この"
+    },
+    "cutscene.dm0.ellen.run.061": {
+      "exact_glyphs": 8,
+      "text": "可能性空間移動船"
+    },
+    "cutscene.dm0.ellen.run.062": {
+      "exact_glyphs": 13,
+      "text": "を使って魔法を探してたの。"
+    },
+    "cutscene.dm0.ellen.run.063": {
+      "exact_glyphs": 33,
+      "text": "つまり、魔力の存在を証明したいので、あなたの力が見たいということ。"
+    },
+    "cutscene.dm0.ellen.run.064": {
+      "exact_glyphs": 6,
+      "text": "もうひとつは"
+    },
+    "cutscene.dm0.ellen.run.065": {
+      "exact_glyphs": 25,
+      "text": "夢美　：あなたの魔力が本当に強大であるということ。"
+    },
+    "cutscene.dm0.ellen.run.066": {
+      "exact_glyphs": 24,
+      "text": "夢美　：どう、その２つの条件を満たしたら、何か、"
+    },
+    "cutscene.dm0.ellen.run.067": {
+      "exact_glyphs": 21,
+      "text": "私の出来る範囲内で望みをかなえて上げるわ。"
+    },
+    "cutscene.dm0.ellen.run.068": {
+      "exact_glyphs": 15,
+      "text": "エレン：望みをかなえてくれるの"
+    },
+    "cutscene.dm0.ellen.run.069": {
+      "exact_glyphs": 5,
+      "text": "　やったぁ"
+    },
+    "cutscene.dm0.ellen.run.070": {
+      "exact_glyphs": 11,
+      "text": "夢美　：では、ＯＫね。"
+    },
+    "cutscene.dm0.ellen.run.071": {
+      "exact_glyphs": 26,
+      "text": "エレン：つまり、わたしの力を試したいってことでしょう"
+    },
+    "cutscene.dm0.ellen.run.072": {
+      "exact_glyphs": 10,
+      "text": "夢美　：そういうこと"
+    },
+    "cutscene.dm0.ellen.run.073": {
+      "exact_glyphs": 13,
+      "text": "　たたかうだけでいいのよ。"
+    },
+    "cutscene.dm0.ellen.run.074": {
+      "exact_glyphs": 23,
+      "text": "　　　　それで、魔法のことも調べられるし・・・"
+    },
+    "cutscene.dm0.ellen.run.075": {
+      "exact_glyphs": 18,
+      "text": "夢美　：じゃぁ、ちゆり。がんばってね"
+    },
+    "cutscene.dm0.ellen.run.076": {
+      "exact_glyphs": 25,
+      "text": "　　　　その間、私は魔力世界の観察をおこなうから。"
+    },
+    "cutscene.dm0.ellen.run.077": {
+      "exact_glyphs": 21,
+      "text": "ちゆり：それってもしかして、わたしが・・・"
+    },
+    "cutscene.dm0.ellen.run.078": {
+      "exact_glyphs": 19,
+      "text": "夢美　：あの娘とたたかえっていってるの"
+    },
+    "cutscene.dm0.ellen.run.079": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：だ～、やっぱり～～～"
+    },
+    "cutscene.dm0.ellen.run.080": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.ellen.run.081": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.ellen.run.082": {
+      "exact_glyphs": 25,
+      "text": "夢美　：つべこべ言わず、さっさとたたかってきなさい"
+    },
+    "cutscene.dm0.ellen.run.083": {
+      "exact_glyphs": 27,
+      "text": "　　　　あなたには、私が造った科学魔法があるじゃない。"
+    },
+    "cutscene.dm0.ellen.run.084": {
+      "exact_glyphs": 33,
+      "text": "　　　　どうせ、負けるだろうけど、すぐに負けたら承知しないからね。"
+    },
+    "cutscene.dm0.ellen.run.085": {
+      "exact_glyphs": 17,
+      "text": "その間、貴重なデータをとるんだから"
+    },
+    "cutscene.dm0.ellen.run.086": {
+      "exact_glyphs": 15,
+      "text": "ちゆり：しょうがないなぁ・・・"
+    },
+    "cutscene.dm0.ellen.run.087": {
+      "exact_glyphs": 8,
+      "text": "ちゆり：勝負だぜ"
+    },
+    "cutscene.dm0.ellen.run.088": {
+      "exact_glyphs": 8,
+      "text": "エレン：ごーごー"
+    },
+    "cutscene.dm0.kotohime.run.000": {
+      "exact_glyphs": 17,
+      "text": "小兎姫：わたしが１番強かったのね。"
+    },
+    "cutscene.dm0.kotohime.run.001": {
+      "exact_glyphs": 18,
+      "text": "　　　　とにかく、遺跡にいきましょ。"
+    },
+    "cutscene.dm0.kotohime.run.002": {
+      "exact_glyphs": 14,
+      "text": "小兎姫：何もなかったら嫌ね。"
+    },
+    "cutscene.dm0.kotohime.run.003": {
+      "exact_glyphs": 21,
+      "text": "小兎姫：これはこれは、素晴らしい遺跡だわ。"
+    },
+    "cutscene.dm0.kotohime.run.004": {
+      "exact_glyphs": 10,
+      "text": "　　　　衝撃の新事実"
+    },
+    "cutscene.dm0.kotohime.run.005": {
+      "exact_glyphs": 13,
+      "text": "　古代人は電気を使っていた"
+    },
+    "cutscene.dm0.kotohime.run.006": {
+      "exact_glyphs": 12,
+      "text": "？？？：そこを動かないで"
+    },
+    "cutscene.dm0.kotohime.run.007": {
+      "exact_glyphs": 13,
+      "text": "小兎姫：動いていませんよ～"
+    },
+    "cutscene.dm0.kotohime.run.008": {
+      "exact_glyphs": 17,
+      "text": "？？？：君かい、最強の魔法使いは。"
+    },
+    "cutscene.dm0.kotohime.run.009": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm0.kotohime.run.010": {
+      "exact_glyphs": 6,
+      "text": "・・・早速、"
+    },
+    "cutscene.dm0.kotohime.run.011": {
+      "exact_glyphs": 9,
+      "text": "一緒に来て貰おう。"
+    },
+    "cutscene.dm0.kotohime.run.012": {
+      "exact_glyphs": 17,
+      "text": "小兎姫：そこは、離れ過ぎじゃなぁい"
+    },
+    "cutscene.dm0.kotohime.run.013": {
+      "exact_glyphs": 19,
+      "text": "？？？：これは小さくても必殺の武器だ。"
+    },
+    "cutscene.dm0.kotohime.run.014": {
+      "exact_glyphs": 19,
+      "text": "　　　　逆らわないほうがが身の為だぜ。"
+    },
+    "cutscene.dm0.kotohime.run.015": {
+      "exact_glyphs": 11,
+      "text": "小兎姫：分かりました～"
+    },
+    "cutscene.dm0.kotohime.run.016": {
+      "exact_glyphs": 12,
+      "text": "？？？：少しは抵抗しろよ"
+    },
+    "cutscene.dm0.kotohime.run.017": {
+      "exact_glyphs": 7,
+      "text": "小兎姫：なんで"
+    },
+    "cutscene.dm0.kotohime.run.018": {
+      "exact_glyphs": 21,
+      "text": "？？？：とっ、とにかく、一緒に来て貰うぜ。"
+    },
+    "cutscene.dm0.kotohime.run.019": {
+      "exact_glyphs": 7,
+      "text": "小兎姫：は～い"
+    },
+    "cutscene.dm0.kotohime.run.020": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.kotohime.run.021": {
+      "exact_glyphs": 25,
+      "text": "？？？：だれが、そんなおもてなしをしろといったのよ"
+    },
+    "cutscene.dm0.kotohime.run.022": {
+      "exact_glyphs": 21,
+      "text": "？？？：だって～、このほうが面白いじゃん。"
+    },
+    "cutscene.dm0.kotohime.run.023": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.kotohime.run.024": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.kotohime.run.025": {
+      "exact_glyphs": 21,
+      "text": "？？？：せっかくのお客さまがこわがるでしょ"
+    },
+    "cutscene.dm0.kotohime.run.026": {
+      "exact_glyphs": 17,
+      "text": "？？？：こいつ、抵抗しなかったぜ。"
+    },
+    "cutscene.dm0.kotohime.run.027": {
+      "exact_glyphs": 9,
+      "text": "小兎姫：あの・・・"
+    },
+    "cutscene.dm0.kotohime.run.028": {
+      "exact_glyphs": 23,
+      "text": "？？？：あっ、失礼しました。変な対応しまして。"
+    },
+    "cutscene.dm0.kotohime.run.029": {
+      "exact_glyphs": 18,
+      "text": "小兎姫：なんなんです。あなたたちは。"
+    },
+    "cutscene.dm0.kotohime.run.030": {
+      "exact_glyphs": 21,
+      "text": "夢美　：私が、この船の船長の岡崎夢美です。"
+    },
+    "cutscene.dm0.kotohime.run.031": {
+      "exact_glyphs": 16,
+      "text": "　　　　よろしくお願いしますわ。"
+    },
+    "cutscene.dm0.kotohime.run.032": {
+      "exact_glyphs": 22,
+      "text": "ちゆり：私が、船員のちゆり、北白河ちゆりだ。"
+    },
+    "cutscene.dm0.kotohime.run.033": {
+      "exact_glyphs": 11,
+      "text": "　　　　よろしくだぜ。"
+    },
+    "cutscene.dm0.kotohime.run.034": {
+      "exact_glyphs": 5,
+      "text": "小兎姫：船"
+    },
+    "cutscene.dm0.kotohime.run.035": {
+      "exact_glyphs": 10,
+      "text": "夢美　：そうですわ。"
+    },
+    "cutscene.dm0.kotohime.run.036": {
+      "exact_glyphs": 25,
+      "text": "　　ただ、船っていっても、水の上でぷかぷかだとか、"
+    },
+    "cutscene.dm0.kotohime.run.037": {
+      "exact_glyphs": 38,
+      "text": "雲の上でふわふわだとか、宇宙空間でうじゃうじゃ、ってんのとは違うんだけどね。"
+    },
+    "cutscene.dm0.kotohime.run.038": {
+      "exact_glyphs": 9,
+      "text": "夢美　：この船は、"
+    },
+    "cutscene.dm0.kotohime.run.039": {
+      "exact_glyphs": 8,
+      "text": "可能性空間移動船"
+    },
+    "cutscene.dm0.kotohime.run.040": {
+      "exact_glyphs": 8,
+      "text": "とよばれるもの。"
+    },
+    "cutscene.dm0.kotohime.run.041": {
+      "exact_glyphs": 13,
+      "text": "　　　　私は、これを使って"
+    },
+    "cutscene.dm0.kotohime.run.042": {
+      "exact_glyphs": 4,
+      "text": "統一原理"
+    },
+    "cutscene.dm0.kotohime.run.043": {
+      "exact_glyphs": 18,
+      "text": "にあてはまらない力をさがしに来たの。"
+    },
+    "cutscene.dm0.kotohime.run.044": {
+      "exact_glyphs": 28,
+      "text": "小兎姫：なるほど、船の遺跡だったんですか。（ちがいます）"
+    },
+    "cutscene.dm0.kotohime.run.045": {
+      "exact_glyphs": 12,
+      "text": "夢美　：あぁ、うれしいわ"
+    },
+    "cutscene.dm0.kotohime.run.046": {
+      "exact_glyphs": 21,
+      "text": "　　　　本物の魔法がこの目で見られるなんて"
+    },
+    "cutscene.dm0.kotohime.run.047": {
+      "exact_glyphs": 20,
+      "text": "　　　　比較物理学者、冥利に尽きるわね。"
+    },
+    "cutscene.dm0.kotohime.run.048": {
+      "exact_glyphs": 18,
+      "text": "小兎姫：なるほど、尽きちゃったのね。"
+    },
+    "cutscene.dm0.kotohime.run.049": {
+      "exact_glyphs": 31,
+      "text": "夢美　：とにかくこれで、学会のやつらに目に物をみせてやれるわ。"
+    },
+    "cutscene.dm0.kotohime.run.050": {
+      "exact_glyphs": 21,
+      "text": "小兎姫：なるほど、学会の異端者だったのね。"
+    },
+    "cutscene.dm0.kotohime.run.051": {
+      "exact_glyphs": 4,
+      "text": "夢美　："
+    },
+    "cutscene.dm0.kotohime.run.052": {
+      "exact_glyphs": 9,
+      "text": "　そこ、気が散る。"
+    },
+    "cutscene.dm0.kotohime.run.053": {
+      "exact_glyphs": 22,
+      "text": "夢美　：あなた、本当に強力な魔力の持ち主なの"
+    },
+    "cutscene.dm0.kotohime.run.054": {
+      "exact_glyphs": 25,
+      "text": "　　　　強力じゃないと研究対象にならないんだけど。"
+    },
+    "cutscene.dm0.kotohime.run.055": {
+      "exact_glyphs": 9,
+      "text": "小兎姫：自信なし。"
+    },
+    "cutscene.dm0.kotohime.run.056": {
+      "exact_glyphs": 35,
+      "text": "夢美　：こらこら、ここに入って来たってことは、この辺で一番強いんでしょ"
+    },
+    "cutscene.dm0.kotohime.run.057": {
+      "exact_glyphs": 11,
+      "text": "小兎姫：そうともいう。"
+    },
+    "cutscene.dm0.kotohime.run.058": {
+      "exact_glyphs": 11,
+      "text": "夢美　：なんだかな～。"
+    },
+    "cutscene.dm0.kotohime.run.059": {
+      "exact_glyphs": 24,
+      "text": "・・・とにかく、私は、あなたの力を調べたいのよ。"
+    },
+    "cutscene.dm0.kotohime.run.060": {
+      "exact_glyphs": 17,
+      "text": "魔法のことをよく調べたいんだから。"
+    },
+    "cutscene.dm0.kotohime.run.061": {
+      "exact_glyphs": 36,
+      "text": "ちゆり：御主人さまは、この世に統一原理に当てはまらない力、すなわち魔力が"
+    },
+    "cutscene.dm0.kotohime.run.062": {
+      "exact_glyphs": 10,
+      "text": "存在する、という理論"
+    },
+    "cutscene.dm0.kotohime.run.063": {
+      "exact_glyphs": 20,
+      "text": "　　　　　　　　　　‘非統一魔法世界論’"
+    },
+    "cutscene.dm0.kotohime.run.064": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm0.kotohime.run.065": {
+      "exact_glyphs": 12,
+      "text": "を学会に発表したんだぜ。"
+    },
+    "cutscene.dm0.kotohime.run.066": {
+      "exact_glyphs": 23,
+      "text": "ちゆり：そしたら、おもいっきりわらわれたんだ。"
+    },
+    "cutscene.dm0.kotohime.run.067": {
+      "exact_glyphs": 31,
+      "text": "夢美　：・・・とにかく、あなたの魔力が本当に強かったら。何か、"
+    },
+    "cutscene.dm0.kotohime.run.068": {
+      "exact_glyphs": 21,
+      "text": "私の出来る範囲内で望みをかなえて上げるわ。"
+    },
+    "cutscene.dm0.kotohime.run.069": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：でも、弱かったらいらない。"
+    },
+    "cutscene.dm0.kotohime.run.070": {
+      "exact_glyphs": 12,
+      "text": "夢美　：それでいいよね。"
+    },
+    "cutscene.dm0.kotohime.run.071": {
+      "exact_glyphs": 9,
+      "text": "小兎姫：弱いかも。"
+    },
+    "cutscene.dm0.kotohime.run.072": {
+      "exact_glyphs": 13,
+      "text": "夢美　：それでいいんだよね"
+    },
+    "cutscene.dm0.kotohime.run.073": {
+      "exact_glyphs": 18,
+      "text": "夢美　：じゃぁ、ちゆり。がんばってね"
+    },
+    "cutscene.dm0.kotohime.run.074": {
+      "exact_glyphs": 25,
+      "text": "　　　　その間、私は魔力世界の観察をおこなうから。"
+    },
+    "cutscene.dm0.kotohime.run.075": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：それって、もしかして・・・"
+    },
+    "cutscene.dm0.kotohime.run.076": {
+      "exact_glyphs": 19,
+      "text": "夢美　：あの娘とたたかえっていってるの"
+    },
+    "cutscene.dm0.kotohime.run.077": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：だ～、やっぱり～～～"
+    },
+    "cutscene.dm0.kotohime.run.078": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.kotohime.run.079": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.kotohime.run.080": {
+      "exact_glyphs": 25,
+      "text": "夢美　：つべこべ言わず、さっさとたたかってきなさい"
+    },
+    "cutscene.dm0.kotohime.run.081": {
+      "exact_glyphs": 27,
+      "text": "　　　　あなたには、私が造った科学魔法があるじゃない。"
+    },
+    "cutscene.dm0.kotohime.run.082": {
+      "exact_glyphs": 33,
+      "text": "　　　　どうせ、負けるだろうけど、すぐに負けたら承知しないからね。"
+    },
+    "cutscene.dm0.kotohime.run.083": {
+      "exact_glyphs": 17,
+      "text": "その間、貴重なデータをとるんだから"
+    },
+    "cutscene.dm0.kotohime.run.084": {
+      "exact_glyphs": 15,
+      "text": "ちゆり：しょうがないなぁ・・・"
+    },
+    "cutscene.dm0.kotohime.run.085": {
+      "exact_glyphs": 8,
+      "text": "ちゆり：勝負だぜ"
+    },
+    "cutscene.dm0.kotohime.run.086": {
+      "exact_glyphs": 14,
+      "text": "小兎姫：強いんだけどね・・・"
+    },
+    "cutscene.dm0.kana.run.000": {
+      "exact_glyphs": 17,
+      "text": "カナ　：気付いたら一人だった・・。"
+    },
+    "cutscene.dm0.kana.run.001": {
+      "exact_glyphs": 18,
+      "text": "　　　　って、みんな私が倒したのね。"
+    },
+    "cutscene.dm0.kana.run.002": {
+      "exact_glyphs": 25,
+      "text": "カナ　：とりあえず、遺跡に入れる様になったのよね。"
+    },
+    "cutscene.dm0.kana.run.003": {
+      "exact_glyphs": 9,
+      "text": "カナ　：・・・・・"
+    },
+    "cutscene.dm0.kana.run.004": {
+      "exact_glyphs": 20,
+      "text": "　　　　古代人って、凄い文明だったのね。"
+    },
+    "cutscene.dm0.kana.run.005": {
+      "exact_glyphs": 12,
+      "text": "？？？：そこを動かないで"
+    },
+    "cutscene.dm0.kana.run.006": {
+      "exact_glyphs": 7,
+      "text": "カナ　：きゃっ"
+    },
+    "cutscene.dm0.kana.run.007": {
+      "exact_glyphs": 4,
+      "text": "　何、何"
+    },
+    "cutscene.dm0.kana.run.008": {
+      "exact_glyphs": 17,
+      "text": "？？？：君かい、最強の魔法使いは。"
+    },
+    "cutscene.dm0.kana.run.009": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm0.kana.run.010": {
+      "exact_glyphs": 6,
+      "text": "・・・早速、"
+    },
+    "cutscene.dm0.kana.run.011": {
+      "exact_glyphs": 9,
+      "text": "一緒に来て貰おう。"
+    },
+    "cutscene.dm0.kana.run.012": {
+      "exact_glyphs": 11,
+      "text": "カナ　：何、いってんの"
+    },
+    "cutscene.dm0.kana.run.013": {
+      "exact_glyphs": 19,
+      "text": "？？？：これは小さくても必殺の武器だ。"
+    },
+    "cutscene.dm0.kana.run.014": {
+      "exact_glyphs": 19,
+      "text": "　　　　逆らわないほうがが身の為だぜ。"
+    },
+    "cutscene.dm0.kana.run.015": {
+      "exact_glyphs": 4,
+      "text": "カナ　："
+    },
+    "cutscene.dm0.kana.run.016": {
+      "exact_glyphs": 12,
+      "text": "カナ　：あなたが、古代人"
+    },
+    "cutscene.dm0.kana.run.017": {
+      "exact_glyphs": 4,
+      "text": "？？？："
+    },
+    "cutscene.dm0.kana.run.018": {
+      "exact_glyphs": 9,
+      "text": "そんなわけないだろ"
+    },
+    "cutscene.dm0.kana.run.019": {
+      "exact_glyphs": 27,
+      "text": "？？？：古代人なんて、ろくな文明も持たないサルと同じよ"
+    },
+    "cutscene.dm0.kana.run.020": {
+      "exact_glyphs": 25,
+      "text": "　　　　（古代人の人、プレーしてたらごめんなさい）"
+    },
+    "cutscene.dm0.kana.run.021": {
+      "exact_glyphs": 28,
+      "text": "？？？：大体あんた、よくこれでここを遺跡だと思ってるな。"
+    },
+    "cutscene.dm0.kana.run.022": {
+      "exact_glyphs": 12,
+      "text": "カナ　：遺跡じゃないの。"
+    },
+    "cutscene.dm0.kana.run.023": {
+      "exact_glyphs": 18,
+      "text": "？？？：とにかく、一緒に来て貰うぜ。"
+    },
+    "cutscene.dm0.kana.run.024": {
+      "exact_glyphs": 12,
+      "text": "カナ　：ちょっ、ちょっと"
+    },
+    "cutscene.dm0.kana.run.025": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.kana.run.026": {
+      "exact_glyphs": 25,
+      "text": "？？？：だれが、そんなおもてなしをしろといったのよ"
+    },
+    "cutscene.dm0.kana.run.027": {
+      "exact_glyphs": 21,
+      "text": "？？？：だって～、このほうが面白いじゃん。"
+    },
+    "cutscene.dm0.kana.run.028": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.kana.run.029": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.kana.run.030": {
+      "exact_glyphs": 21,
+      "text": "？？？：せっかくのお客さまがこわがるでしょ"
+    },
+    "cutscene.dm0.kana.run.031": {
+      "exact_glyphs": 8,
+      "text": "カナ　：あ、あれ"
+    },
+    "cutscene.dm0.kana.run.032": {
+      "exact_glyphs": 23,
+      "text": "？？？：あっ、失礼しました。変な対応しまして。"
+    },
+    "cutscene.dm0.kana.run.033": {
+      "exact_glyphs": 25,
+      "text": "カナ　：だれです。二人目の古代、あ、いや、えーと、"
+    },
+    "cutscene.dm0.kana.run.034": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm0.kana.run.035": {
+      "exact_glyphs": 4,
+      "text": "　宇宙人"
+    },
+    "cutscene.dm0.kana.run.036": {
+      "exact_glyphs": 12,
+      "text": "夢美　：だれが、宇宙人よ"
+    },
+    "cutscene.dm0.kana.run.037": {
+      "exact_glyphs": 30,
+      "text": "　　　　宇宙人なんて、タコでイカでぐちゃぐちゃで、ずるずるで"
+    },
+    "cutscene.dm0.kana.run.038": {
+      "exact_glyphs": 18,
+      "text": "、どろどろなのよ。一緒にしないでよ。"
+    },
+    "cutscene.dm0.kana.run.039": {
+      "exact_glyphs": 25,
+      "text": "　　　　（宇宙人の人、プレーしてたらごめんなさい）"
+    },
+    "cutscene.dm0.kana.run.040": {
+      "exact_glyphs": 25,
+      "text": "夢美　：あらためて、私は、この船の船長の岡崎夢美。"
+    },
+    "cutscene.dm0.kana.run.041": {
+      "exact_glyphs": 16,
+      "text": "　　　　よろしくお願いしますわ。"
+    },
+    "cutscene.dm0.kana.run.042": {
+      "exact_glyphs": 22,
+      "text": "ちゆり：私が、船員のちゆり、北白河ちゆりだ。"
+    },
+    "cutscene.dm0.kana.run.043": {
+      "exact_glyphs": 11,
+      "text": "　　　　よろしくだぜ。"
+    },
+    "cutscene.dm0.kana.run.044": {
+      "exact_glyphs": 26,
+      "text": "カナ　：ちょっと、待って。いま、船って言わなかった？"
+    },
+    "cutscene.dm0.kana.run.045": {
+      "exact_glyphs": 21,
+      "text": "　　　　もしかして、これって船だったなの？"
+    },
+    "cutscene.dm0.kana.run.046": {
+      "exact_glyphs": 10,
+      "text": "夢美　：そうですわ。"
+    },
+    "cutscene.dm0.kana.run.047": {
+      "exact_glyphs": 25,
+      "text": "　　ただ、船っていっても、水の上でぷかぷかだとか、"
+    },
+    "cutscene.dm0.kana.run.048": {
+      "exact_glyphs": 38,
+      "text": "雲の上でふわふわだとか、宇宙空間でうじゃうじゃ、ってんのとは違うんだけどね。"
+    },
+    "cutscene.dm0.kana.run.049": {
+      "exact_glyphs": 9,
+      "text": "夢美　：この船は、"
+    },
+    "cutscene.dm0.kana.run.050": {
+      "exact_glyphs": 8,
+      "text": "可能性空間移動船"
+    },
+    "cutscene.dm0.kana.run.051": {
+      "exact_glyphs": 8,
+      "text": "とよばれるもの。"
+    },
+    "cutscene.dm0.kana.run.052": {
+      "exact_glyphs": 13,
+      "text": "　　　　私は、これを使って"
+    },
+    "cutscene.dm0.kana.run.053": {
+      "exact_glyphs": 4,
+      "text": "統一原理"
+    },
+    "cutscene.dm0.kana.run.054": {
+      "exact_glyphs": 18,
+      "text": "にあてはまらない力をさがしに来たの。"
+    },
+    "cutscene.dm0.kana.run.055": {
+      "exact_glyphs": 28,
+      "text": "夢美　：ここは魔法だらけね。比較物理学者、冥利に尽きるわ"
+    },
+    "cutscene.dm0.kana.run.056": {
+      "exact_glyphs": 36,
+      "text": "カナ　：とにかく、良くわかんないけど、あんたたちどっからわいて出てきたの"
+    },
+    "cutscene.dm0.kana.run.057": {
+      "exact_glyphs": 12,
+      "text": "　　　　ボウフラみたいに"
+    },
+    "cutscene.dm0.kana.run.058": {
+      "exact_glyphs": 22,
+      "text": "夢美　：なんで、わいて出なくちゃいけないのよ"
+    },
+    "cutscene.dm0.kana.run.059": {
+      "exact_glyphs": 25,
+      "text": "　　　　大体、ボウフラなんかと一緒にしないでくれる"
+    },
+    "cutscene.dm0.kana.run.060": {
+      "exact_glyphs": 23,
+      "text": "　　　　（ボウフラの人、プレーしてたら以下略）"
+    },
+    "cutscene.dm0.kana.run.061": {
+      "exact_glyphs": 30,
+      "text": "夢美　：私達は、別の世界から来たの。私達は、別の世界のことを"
+    },
+    "cutscene.dm0.kana.run.062": {
+      "exact_glyphs": 26,
+      "text": "可能性世界と呼んでるわ。同じ空間内の別世界のことよ。"
+    },
+    "cutscene.dm0.kana.run.063": {
+      "exact_glyphs": 25,
+      "text": "カナ　：平行世界（パラレルワールド）のことかしら。"
+    },
+    "cutscene.dm0.kana.run.064": {
+      "exact_glyphs": 19,
+      "text": "夢美　：こっちではそう呼んでるのかしら"
+    },
+    "cutscene.dm0.kana.run.065": {
+      "exact_glyphs": 13,
+      "text": "　きっと、そうだと思うけど"
+    },
+    "cutscene.dm0.kana.run.066": {
+      "exact_glyphs": 20,
+      "text": "カナ　：で、そっちからなにしに来たのです"
+    },
+    "cutscene.dm0.kana.run.067": {
+      "exact_glyphs": 25,
+      "text": "夢美　：さっきも言ったけど、魔法を探しに来たのよ。"
+    },
+    "cutscene.dm0.kana.run.068": {
+      "exact_glyphs": 19,
+      "text": "カナ　：そんなんいくらでもあんじゃん。"
+    },
+    "cutscene.dm0.kana.run.069": {
+      "exact_glyphs": 14,
+      "text": "夢美　：私達の世界にはないの"
+    },
+    "cutscene.dm0.kana.run.070": {
+      "exact_glyphs": 22,
+      "text": "　　　　だから、あなたの力を調査したいのよ。"
+    },
+    "cutscene.dm0.kana.run.071": {
+      "exact_glyphs": 9,
+      "text": "カナ　：どうやって"
+    },
+    "cutscene.dm0.kana.run.072": {
+      "exact_glyphs": 19,
+      "text": "夢美　：ただ、たたかうだけでいいのよ。"
+    },
+    "cutscene.dm0.kana.run.073": {
+      "exact_glyphs": 26,
+      "text": "　　　　それをみて研究するだけだから。協力してくれる"
+    },
+    "cutscene.dm0.kana.run.074": {
+      "exact_glyphs": 8,
+      "text": "カナ　：ただなの"
+    },
+    "cutscene.dm0.kana.run.075": {
+      "exact_glyphs": 6,
+      "text": "夢美　：ぐ、"
+    },
+    "cutscene.dm0.kana.run.076": {
+      "exact_glyphs": 12,
+      "text": "そ、そんなことはないわよ"
+    },
+    "cutscene.dm0.kana.run.077": {
+      "exact_glyphs": 16,
+      "text": "　　　　もちろん、えーと、あの、"
+    },
+    "cutscene.dm0.kana.run.078": {
+      "exact_glyphs": 1,
+      "text": "　"
+    },
+    "cutscene.dm0.kana.run.079": {
+      "exact_glyphs": 27,
+      "text": "夢美　：あ、あなたがとても強力な魔力の持ち主だったら、"
+    },
+    "cutscene.dm0.kana.run.080": {
+      "exact_glyphs": 30,
+      "text": "　　　　その、何か私の出来る範囲内で望みをかなえて上げるわ。"
+    },
+    "cutscene.dm0.kana.run.081": {
+      "exact_glyphs": 22,
+      "text": "ちゆり：でも、弱かったらあげない気らしいな。"
+    },
+    "cutscene.dm0.kana.run.082": {
+      "exact_glyphs": 21,
+      "text": "カナ　：いいわよ、あなたとたたかうんでしょ"
+    },
+    "cutscene.dm0.kana.run.083": {
+      "exact_glyphs": 24,
+      "text": "　　　　魔法も使えないみたいだし、簡単じゃない。"
+    },
+    "cutscene.dm0.kana.run.084": {
+      "exact_glyphs": 18,
+      "text": "夢美　：じゃぁ、ちゆり。がんばってね"
+    },
+    "cutscene.dm0.kana.run.085": {
+      "exact_glyphs": 25,
+      "text": "　　　　その間、私は魔力世界の観察をおこなうから。"
+    },
+    "cutscene.dm0.kana.run.086": {
+      "exact_glyphs": 22,
+      "text": "ちゆり：それって、もしかして、わたしが・・・"
+    },
+    "cutscene.dm0.kana.run.087": {
+      "exact_glyphs": 19,
+      "text": "夢美　：あの娘とたたかえっていってるの"
+    },
+    "cutscene.dm0.kana.run.088": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：だ～、やっぱり～～～"
+    },
+    "cutscene.dm0.kana.run.089": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.kana.run.090": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.kana.run.091": {
+      "exact_glyphs": 25,
+      "text": "夢美　：つべこべ言わず、さっさとたたかってきなさい"
+    },
+    "cutscene.dm0.kana.run.092": {
+      "exact_glyphs": 27,
+      "text": "　　　　あなたには、私が造った科学魔法があるじゃない。"
+    },
+    "cutscene.dm0.kana.run.093": {
+      "exact_glyphs": 33,
+      "text": "　　　　どうせ、負けるだろうけど、すぐに負けたら承知しないからね。"
+    },
+    "cutscene.dm0.kana.run.094": {
+      "exact_glyphs": 17,
+      "text": "その間、貴重なデータをとるんだから"
+    },
+    "cutscene.dm0.kana.run.095": {
+      "exact_glyphs": 15,
+      "text": "ちゆり：しょうがないなぁ・・・"
+    },
+    "cutscene.dm0.kana.run.096": {
+      "exact_glyphs": 8,
+      "text": "ちゆり：勝負だぜ"
+    },
+    "cutscene.dm0.kana.run.097": {
+      "exact_glyphs": 10,
+      "text": "カナ　：勝てるかしら"
+    },
+    "cutscene.dm0.rikako.run.000": {
+      "exact_glyphs": 28,
+      "text": "理香子：この遺跡からもれてる力は、決して魔力ではないわ。"
+    },
+    "cutscene.dm0.rikako.run.001": {
+      "exact_glyphs": 17,
+      "text": "　　　　これこそ、私の求める・・・"
+    },
+    "cutscene.dm0.rikako.run.002": {
+      "exact_glyphs": 28,
+      "text": "理香子：敵は全て倒したから遺跡に入れる様になったはずね。"
+    },
+    "cutscene.dm0.rikako.run.003": {
+      "exact_glyphs": 14,
+      "text": "理香子：なっ、なんだ、これは"
+    },
+    "cutscene.dm0.rikako.run.004": {
+      "exact_glyphs": 12,
+      "text": "？？？：そこを動かないで"
+    },
+    "cutscene.dm0.rikako.run.005": {
+      "exact_glyphs": 8,
+      "text": "理香子：えっ、何"
+    },
+    "cutscene.dm0.rikako.run.006": {
+      "exact_glyphs": 17,
+      "text": "？？？：君かい、最強の魔法使いは。"
+    },
+    "cutscene.dm0.rikako.run.007": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm0.rikako.run.008": {
+      "exact_glyphs": 6,
+      "text": "・・・早速、"
+    },
+    "cutscene.dm0.rikako.run.009": {
+      "exact_glyphs": 9,
+      "text": "一緒に来て貰おう。"
+    },
+    "cutscene.dm0.rikako.run.010": {
+      "exact_glyphs": 6,
+      "text": "理香子：誰だ"
+    },
+    "cutscene.dm0.rikako.run.011": {
+      "exact_glyphs": 14,
+      "text": "、って私が侵入者なんだけど。"
+    },
+    "cutscene.dm0.rikako.run.012": {
+      "exact_glyphs": 19,
+      "text": "？？？：これは小さくても必殺の武器だ。"
+    },
+    "cutscene.dm0.rikako.run.013": {
+      "exact_glyphs": 19,
+      "text": "　　　　逆らわないほうがが身の為だぜ。"
+    },
+    "cutscene.dm0.rikako.run.014": {
+      "exact_glyphs": 13,
+      "text": "理香子：えらく、好戦的ね。"
+    },
+    "cutscene.dm0.rikako.run.015": {
+      "exact_glyphs": 15,
+      "text": "理香子：でも、その武器って・・"
+    },
+    "cutscene.dm0.rikako.run.016": {
+      "exact_glyphs": 4,
+      "text": "？？？："
+    },
+    "cutscene.dm0.rikako.run.017": {
+      "exact_glyphs": 26,
+      "text": "理香子：当たるとおさるもアレになるというやつかしら。"
+    },
+    "cutscene.dm0.rikako.run.018": {
+      "exact_glyphs": 11,
+      "text": "？？？：なんだいそれは"
+    },
+    "cutscene.dm0.rikako.run.019": {
+      "exact_glyphs": 18,
+      "text": "？？？：こいつは、別世界の武器だぜ。"
+    },
+    "cutscene.dm0.rikako.run.020": {
+      "exact_glyphs": 4,
+      "text": "理香子："
+    },
+    "cutscene.dm0.rikako.run.021": {
+      "exact_glyphs": 18,
+      "text": "？？？：とにかく、一緒に来て貰うぜ。"
+    },
+    "cutscene.dm0.rikako.run.022": {
+      "exact_glyphs": 12,
+      "text": "理香子：ちょっ、ちょっと"
+    },
+    "cutscene.dm0.rikako.run.023": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.rikako.run.024": {
+      "exact_glyphs": 25,
+      "text": "？？？：だれが、そんなおもてなしをしろといったのよ"
+    },
+    "cutscene.dm0.rikako.run.025": {
+      "exact_glyphs": 21,
+      "text": "？？？：だって～、このほうが面白いじゃん。"
+    },
+    "cutscene.dm0.rikako.run.026": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.rikako.run.027": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.rikako.run.028": {
+      "exact_glyphs": 21,
+      "text": "？？？：せっかくのお客さまがこわがるでしょ"
+    },
+    "cutscene.dm0.rikako.run.029": {
+      "exact_glyphs": 6,
+      "text": "理香子：おや"
+    },
+    "cutscene.dm0.rikako.run.030": {
+      "exact_glyphs": 23,
+      "text": "？？？：あっ、失礼しました。変な対応しまして。"
+    },
+    "cutscene.dm0.rikako.run.031": {
+      "exact_glyphs": 12,
+      "text": "理香子：え、いや、その。"
+    },
+    "cutscene.dm0.rikako.run.032": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm0.rikako.run.033": {
+      "exact_glyphs": 17,
+      "text": "それより、ここは一体なんなんですか"
+    },
+    "cutscene.dm0.rikako.run.034": {
+      "exact_glyphs": 1,
+      "text": "、"
+    },
+    "cutscene.dm0.rikako.run.035": {
+      "exact_glyphs": 12,
+      "text": "遺跡ではなさそうだが・・"
+    },
+    "cutscene.dm0.rikako.run.036": {
+      "exact_glyphs": 21,
+      "text": "夢美　：まぁ、あせらないで。私は岡崎夢美。"
+    },
+    "cutscene.dm0.rikako.run.037": {
+      "exact_glyphs": 19,
+      "text": "　　　　比較物理学の教授をしているわ。"
+    },
+    "cutscene.dm0.rikako.run.038": {
+      "exact_glyphs": 18,
+      "text": "ちゆり：私はちゆり、北白河ちゆりだ。"
+    },
+    "cutscene.dm0.rikako.run.039": {
+      "exact_glyphs": 13,
+      "text": "　　　　夢美様の助手だぜ。"
+    },
+    "cutscene.dm0.rikako.run.040": {
+      "exact_glyphs": 19,
+      "text": "理香子：あ、失礼、私は朝倉理香子です。"
+    },
+    "cutscene.dm0.rikako.run.041": {
+      "exact_glyphs": 14,
+      "text": "夢美　：さっきの質問だけど、"
+    },
+    "cutscene.dm0.rikako.run.042": {
+      "exact_glyphs": 3,
+      "text": "ここは"
+    },
+    "cutscene.dm0.rikako.run.043": {
+      "exact_glyphs": 8,
+      "text": "可能性空間移動船"
+    },
+    "cutscene.dm0.rikako.run.044": {
+      "exact_glyphs": 9,
+      "text": "とよばれるものよ。"
+    },
+    "cutscene.dm0.rikako.run.045": {
+      "exact_glyphs": 13,
+      "text": "　　　　私は、これを使って"
+    },
+    "cutscene.dm0.rikako.run.046": {
+      "exact_glyphs": 4,
+      "text": "統一原理"
+    },
+    "cutscene.dm0.rikako.run.047": {
+      "exact_glyphs": 18,
+      "text": "にあてはまらない力をさがしに来たの。"
+    },
+    "cutscene.dm0.rikako.run.048": {
+      "exact_glyphs": 37,
+      "text": "理香子：よく分からない言葉が多すぎるわ。さっきもちゆりさんが言ってたけど、"
+    },
+    "cutscene.dm0.rikako.run.049": {
+      "exact_glyphs": 11,
+      "text": "別世界から来たってこと"
+    },
+    "cutscene.dm0.rikako.run.050": {
+      "exact_glyphs": 17,
+      "text": "夢美　：そうよ。よくわかったわね。"
+    },
+    "cutscene.dm0.rikako.run.051": {
+      "exact_glyphs": 15,
+      "text": "理香子：ひとつ、聞いていいです"
+    },
+    "cutscene.dm0.rikako.run.052": {
+      "exact_glyphs": 15,
+      "text": "　ここの動力源は一体なんですか"
+    },
+    "cutscene.dm0.rikako.run.053": {
+      "exact_glyphs": 4,
+      "text": "夢美　："
+    },
+    "cutscene.dm0.rikako.run.054": {
+      "exact_glyphs": 18,
+      "text": "　それは、核融合エネルギーよ。それが"
+    },
+    "cutscene.dm0.rikako.run.055": {
+      "exact_glyphs": 14,
+      "text": "理香子：魔力じゃないってこと"
+    },
+    "cutscene.dm0.rikako.run.056": {
+      "exact_glyphs": 28,
+      "text": "夢美　：あぁ、なるほど。この世界に存在しない力だもんね。"
+    },
+    "cutscene.dm0.rikako.run.057": {
+      "exact_glyphs": 27,
+      "text": "　　　　そう、この世には全てを魔力で統一出来る世界や、"
+    },
+    "cutscene.dm0.rikako.run.058": {
+      "exact_glyphs": 27,
+      "text": "その逆であったり、色々混在している世界も存在するのよ。"
+    },
+    "cutscene.dm0.rikako.run.059": {
+      "exact_glyphs": 22,
+      "text": "夢美　：ってのが、私の説だったんだけど・・・"
+    },
+    "cutscene.dm0.rikako.run.060": {
+      "exact_glyphs": 20,
+      "text": "夢美　：でも、やっぱり私が正しかったわ。"
+    },
+    "cutscene.dm0.rikako.run.061": {
+      "exact_glyphs": 22,
+      "text": "　　　　こんなに魔力が存在するだなんて・・・"
+    },
+    "cutscene.dm0.rikako.run.062": {
+      "exact_glyphs": 17,
+      "text": "理香子：なるほど、興味のある話ね。"
+    },
+    "cutscene.dm0.rikako.run.063": {
+      "exact_glyphs": 27,
+      "text": "　　　　それで、何をするためにここの人を呼んだのかしら"
+    },
+    "cutscene.dm0.rikako.run.064": {
+      "exact_glyphs": 23,
+      "text": "夢美　：それは、もちろん魔力を研究するためよ。"
+    },
+    "cutscene.dm0.rikako.run.065": {
+      "exact_glyphs": 15,
+      "text": "　　　　協力してくれるかしら。"
+    },
+    "cutscene.dm0.rikako.run.066": {
+      "exact_glyphs": 11,
+      "text": "理香子：こっちの利得は"
+    },
+    "cutscene.dm0.rikako.run.067": {
+      "exact_glyphs": 14,
+      "text": "夢美　：え、あ、その。え～と"
+    },
+    "cutscene.dm0.rikako.run.068": {
+      "exact_glyphs": 25,
+      "text": "夢美　：あなたがとても強力な魔力の持ち主だったら、"
+    },
+    "cutscene.dm0.rikako.run.069": {
+      "exact_glyphs": 30,
+      "text": "　　　　その、何か私の出来る範囲内で望みをかなえて上げるわ。"
+    },
+    "cutscene.dm0.rikako.run.070": {
+      "exact_glyphs": 22,
+      "text": "ちゆり：でも、弱かったらあげない気らしいな。"
+    },
+    "cutscene.dm0.rikako.run.071": {
+      "exact_glyphs": 12,
+      "text": "理香子：それは、楽しみね"
+    },
+    "cutscene.dm0.rikako.run.072": {
+      "exact_glyphs": 20,
+      "text": "理香子：それで、どうすればいいのかしら。"
+    },
+    "cutscene.dm0.rikako.run.073": {
+      "exact_glyphs": 19,
+      "text": "夢美　：ただ、たたかうだけでいいのよ。"
+    },
+    "cutscene.dm0.rikako.run.074": {
+      "exact_glyphs": 29,
+      "text": "　　　　それをみて研究するだけだから。どう、協力してくれる"
+    },
+    "cutscene.dm0.rikako.run.075": {
+      "exact_glyphs": 21,
+      "text": "理香子：いいわよ、あなたとたたかうんでしょ"
+    },
+    "cutscene.dm0.rikako.run.076": {
+      "exact_glyphs": 22,
+      "text": "　　　　魔力じゃない力。見せて貰いたいわね。"
+    },
+    "cutscene.dm0.rikako.run.077": {
+      "exact_glyphs": 18,
+      "text": "夢美　：じゃぁ、ちゆり。がんばってね"
+    },
+    "cutscene.dm0.rikako.run.078": {
+      "exact_glyphs": 25,
+      "text": "　　　　その間、私は魔力世界の観察をおこなうから。"
+    },
+    "cutscene.dm0.rikako.run.079": {
+      "exact_glyphs": 22,
+      "text": "ちゆり：それって、もしかして、わたしが・・・"
+    },
+    "cutscene.dm0.rikako.run.080": {
+      "exact_glyphs": 19,
+      "text": "夢美　：あの人とたたかえっていってるの"
+    },
+    "cutscene.dm0.rikako.run.081": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：だ～、やっぱり～～～"
+    },
+    "cutscene.dm0.rikako.run.082": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.rikako.run.083": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.rikako.run.084": {
+      "exact_glyphs": 25,
+      "text": "夢美　：つべこべ言わず、さっさとたたかってきなさい"
+    },
+    "cutscene.dm0.rikako.run.085": {
+      "exact_glyphs": 27,
+      "text": "　　　　あなたには、私が造った科学魔法があるじゃない。"
+    },
+    "cutscene.dm0.rikako.run.086": {
+      "exact_glyphs": 33,
+      "text": "　　　　どうせ、負けるだろうけど、すぐに負けたら承知しないからね。"
+    },
+    "cutscene.dm0.rikako.run.087": {
+      "exact_glyphs": 17,
+      "text": "その間、貴重なデータをとるんだから"
+    },
+    "cutscene.dm0.rikako.run.088": {
+      "exact_glyphs": 15,
+      "text": "ちゆり：しょうがないなぁ・・・"
+    },
+    "cutscene.dm0.rikako.run.089": {
+      "exact_glyphs": 8,
+      "text": "ちゆり：勝負だぜ"
+    },
+    "cutscene.dm0.rikako.run.090": {
+      "exact_glyphs": 12,
+      "text": "理香子：ふふふふふ・・・"
+    },
+    "cutscene.dm0.chiyuri.run.000": {
+      "exact_glyphs": 16,
+      "text": "ちゆり：う～ん、全員たおしたぜ。"
+    },
+    "cutscene.dm0.chiyuri.run.001": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：とりあえず、入ってみよう。"
+    },
+    "cutscene.dm0.chiyuri.run.002": {
+      "exact_glyphs": 15,
+      "text": "ちゆり：なんか見覚えがあるな。"
+    },
+    "cutscene.dm0.chiyuri.run.003": {
+      "exact_glyphs": 12,
+      "text": "？？？：そこを動かないで"
+    },
+    "cutscene.dm0.chiyuri.run.004": {
+      "exact_glyphs": 5,
+      "text": "ちゆり：何"
+    },
+    "cutscene.dm0.chiyuri.run.005": {
+      "exact_glyphs": 17,
+      "text": "？？？：君かい、最強の魔法使いは。"
+    },
+    "cutscene.dm0.chiyuri.run.006": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm0.chiyuri.run.007": {
+      "exact_glyphs": 6,
+      "text": "・・・早速、"
+    },
+    "cutscene.dm0.chiyuri.run.008": {
+      "exact_glyphs": 9,
+      "text": "一緒に来て貰おう。"
+    },
+    "cutscene.dm0.chiyuri.run.009": {
+      "exact_glyphs": 8,
+      "text": "ちゆり：おいおい"
+    },
+    "cutscene.dm0.chiyuri.run.010": {
+      "exact_glyphs": 19,
+      "text": "？？？：これは小さくても必殺の武器だ。"
+    },
+    "cutscene.dm0.chiyuri.run.011": {
+      "exact_glyphs": 19,
+      "text": "　　　　逆らわないほうがが身の為だぜ。"
+    },
+    "cutscene.dm0.chiyuri.run.012": {
+      "exact_glyphs": 17,
+      "text": "？？？：って、なんで自分なんだよ。"
+    },
+    "cutscene.dm0.chiyuri.run.013": {
+      "exact_glyphs": 8,
+      "text": "ちゆり：偽者かい"
+    },
+    "cutscene.dm0.chiyuri.run.014": {
+      "exact_glyphs": 12,
+      "text": "　　　　それとも、幻覚か"
+    },
+    "cutscene.dm0.chiyuri.run.015": {
+      "exact_glyphs": 29,
+      "text": "？？？：とにかく、一緒に来て貰うわなきゃ話が始まらないぜ。"
+    },
+    "cutscene.dm0.chiyuri.run.016": {
+      "exact_glyphs": 11,
+      "text": "ちゆり：おぃおぃ・・・"
+    },
+    "cutscene.dm0.chiyuri.run.017": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.chiyuri.run.018": {
+      "exact_glyphs": 25,
+      "text": "？？？：だれが、そんなおもてなしをしろといったのよ"
+    },
+    "cutscene.dm0.chiyuri.run.019": {
+      "exact_glyphs": 15,
+      "text": "？？？：だって～、こいつさ～。"
+    },
+    "cutscene.dm0.chiyuri.run.020": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.chiyuri.run.021": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.chiyuri.run.022": {
+      "exact_glyphs": 21,
+      "text": "？？？：せっかくのお客さまがこわがるでしょ"
+    },
+    "cutscene.dm0.chiyuri.run.023": {
+      "exact_glyphs": 12,
+      "text": "？？？：って、あ、あれ～"
+    },
+    "cutscene.dm0.chiyuri.run.024": {
+      "exact_glyphs": 19,
+      "text": "ちゆり：紹介はいいよ、大体、分かったし"
+    },
+    "cutscene.dm0.chiyuri.run.025": {
+      "exact_glyphs": 25,
+      "text": "夢美　：なるほど、この可能性世界でのちゆり本人ね。"
+    },
+    "cutscene.dm0.chiyuri.run.026": {
+      "exact_glyphs": 11,
+      "text": "　　　　・・・たぶん。"
+    },
+    "cutscene.dm0.chiyuri.run.027": {
+      "exact_glyphs": 11,
+      "text": "夢美　：って、どっちが"
+    },
+    "cutscene.dm0.chiyuri.run.028": {
+      "exact_glyphs": 34,
+      "text": "ちゆり：それは、もちろん、たたかって強いほうがこの世界のちゆりだぜ。"
+    },
+    "cutscene.dm0.chiyuri.run.029": {
+      "exact_glyphs": 22,
+      "text": "ちゆり：ちがうぜ、強いほうがこの船の船員だ。"
+    },
+    "cutscene.dm0.chiyuri.run.030": {
+      "exact_glyphs": 23,
+      "text": "夢美　：もういい。大体分かったような気がする。"
+    },
+    "cutscene.dm0.chiyuri.run.031": {
+      "exact_glyphs": 30,
+      "text": "夢美　：とにかく、あんたらで好きにして。私は、研究があるから"
+    },
+    "cutscene.dm0.chiyuri.run.032": {
+      "exact_glyphs": 8,
+      "text": "ちゆり：は～い。"
+    },
+    "cutscene.dm0.chiyuri.run.033": {
+      "exact_glyphs": 8,
+      "text": "ちゆり：いくぜ。"
+    },
+    "cutscene.dm0.yumemi.run.000": {
+      "exact_glyphs": 14,
+      "text": "夢美　：この世界はいいわ～。"
+    },
+    "cutscene.dm0.yumemi.run.001": {
+      "exact_glyphs": 20,
+      "text": "　　　　たっぷり、魔法を味わってきたし。"
+    },
+    "cutscene.dm0.yumemi.run.002": {
+      "exact_glyphs": 16,
+      "text": "夢美　：とりあえず、休むか・・・"
+    },
+    "cutscene.dm0.yumemi.run.003": {
+      "exact_glyphs": 15,
+      "text": "夢美　：ちゆり～、今帰ったわ。"
+    },
+    "cutscene.dm0.yumemi.run.004": {
+      "exact_glyphs": 10,
+      "text": "　　　　いるんでしょ"
+    },
+    "cutscene.dm0.yumemi.run.005": {
+      "exact_glyphs": 7,
+      "text": "？？？：動くな"
+    },
+    "cutscene.dm0.yumemi.run.006": {
+      "exact_glyphs": 10,
+      "text": "夢美　：なんですって"
+    },
+    "cutscene.dm0.yumemi.run.007": {
+      "exact_glyphs": 12,
+      "text": "？？？：だれだおまえは。"
+    },
+    "cutscene.dm0.yumemi.run.008": {
+      "exact_glyphs": 17,
+      "text": "夢美　：何ふざけてるのよ、ちゆり。"
+    },
+    "cutscene.dm0.yumemi.run.009": {
+      "exact_glyphs": 10,
+      "text": "ちゆり：御主人さま～"
+    },
+    "cutscene.dm0.yumemi.run.010": {
+      "exact_glyphs": 13,
+      "text": "　　　　いや、しかし・・・"
+    },
+    "cutscene.dm0.yumemi.run.011": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.yumemi.run.012": {
+      "exact_glyphs": 18,
+      "text": "夢美　：なによ、そんなもん人に向けて"
+    },
+    "cutscene.dm0.yumemi.run.013": {
+      "exact_glyphs": 14,
+      "text": "　　　　あぶないじゃないの。"
+    },
+    "cutscene.dm0.yumemi.run.014": {
+      "exact_glyphs": 10,
+      "text": "ちゆり：で、でも～。"
+    },
+    "cutscene.dm0.yumemi.run.015": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.yumemi.run.016": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.yumemi.run.017": {
+      "exact_glyphs": 14,
+      "text": "？？？：なにを、騒いでるのよ"
+    },
+    "cutscene.dm0.yumemi.run.018": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：あ、御主人さま・・・"
+    },
+    "cutscene.dm0.yumemi.run.019": {
+      "exact_glyphs": 12,
+      "text": "夢美　：んー・・・、なっ"
+    },
+    "cutscene.dm0.yumemi.run.020": {
+      "exact_glyphs": 13,
+      "text": "夢美？：ええっ、あ、あれ～"
+    },
+    "cutscene.dm0.yumemi.run.021": {
+      "exact_glyphs": 29,
+      "text": "夢美　：ちゆり、もしかして、私の機械、いじったりしなかった"
+    },
+    "cutscene.dm0.yumemi.run.022": {
+      "exact_glyphs": 28,
+      "text": "ちゆり：ごめんなさ～い。ちょっとさわったりしたかも・・・"
+    },
+    "cutscene.dm0.yumemi.run.023": {
+      "exact_glyphs": 13,
+      "text": "　　　　　　　　　　ボカッ"
+    },
+    "cutscene.dm0.yumemi.run.024": {
+      "exact_glyphs": 3,
+      "text": "ボカッ"
+    },
+    "cutscene.dm0.yumemi.run.025": {
+      "exact_glyphs": 21,
+      "text": "夢美　：あれほど、いじるなっていったでしょ"
+    },
+    "cutscene.dm0.yumemi.run.026": {
+      "exact_glyphs": 27,
+      "text": "　　　　そのせいで、ちょっと船の座標がくるったじゃない"
+    },
+    "cutscene.dm0.yumemi.run.027": {
+      "exact_glyphs": 20,
+      "text": "　　　　もうひとりの自分をどうするのよ。"
+    },
+    "cutscene.dm0.yumemi.run.028": {
+      "exact_glyphs": 8,
+      "text": "ちゆり：ひぇ～、"
+    },
+    "cutscene.dm0.yumemi.run.029": {
+      "exact_glyphs": 20,
+      "text": "で、でも、二人いれば研究も二倍はかどるぜ"
+    },
+    "cutscene.dm0.yumemi.run.030": {
+      "exact_glyphs": 24,
+      "text": "夢美　：でも、エネルギーの不均衡が起こってるのよ"
+    },
+    "cutscene.dm0.yumemi.run.031": {
+      "exact_glyphs": 28,
+      "text": "　　　　このままじゃ、私達の世界で犯罪者になっちゃうわよ"
+    },
+    "cutscene.dm0.yumemi.run.032": {
+      "exact_glyphs": 24,
+      "text": "ちゆり：あ、あの、じゃ、どっちが本物の御主人さま"
+    },
+    "cutscene.dm0.yumemi.run.033": {
+      "exact_glyphs": 10,
+      "text": "夢美×２：どっちもよ"
+    },
+    "cutscene.dm0.yumemi.run.034": {
+      "exact_glyphs": 32,
+      "text": "夢美　：とりあえず、自分はなんとかするとして、ちゆりにおしおきを"
+    },
+    "cutscene.dm0.yumemi.run.035": {
+      "exact_glyphs": 6,
+      "text": "しなくちゃね"
+    },
+    "cutscene.dm0.yumemi.run.036": {
+      "exact_glyphs": 7,
+      "text": "ちゆり：ひぇ～"
+    },
+    "cutscene.dm1.reimu.run.000": {
+      "exact_glyphs": 7,
+      "text": "夢美　：ちゆり"
+    },
+    "cutscene.dm1.reimu.run.001": {
+      "exact_glyphs": 10,
+      "text": "、負けるのが早過ぎよ"
+    },
+    "cutscene.dm1.reimu.run.002": {
+      "exact_glyphs": 9,
+      "text": "ちゆり：だって～。"
+    },
+    "cutscene.dm1.reimu.run.003": {
+      "exact_glyphs": 15,
+      "text": "夢美　：だっても、神曲もないわ"
+    },
+    "cutscene.dm1.reimu.run.004": {
+      "exact_glyphs": 22,
+      "text": "　　　　十分にデータが取れなかったじゃないの"
+    },
+    "cutscene.dm1.reimu.run.005": {
+      "exact_glyphs": 29,
+      "text": "夢美　：まったく。あなたが勝ってればこいつを気絶させてでも"
+    },
+    "cutscene.dm1.reimu.run.006": {
+      "exact_glyphs": 17,
+      "text": "　　　　連れて帰ることが出来たのに"
+    },
+    "cutscene.dm1.reimu.run.007": {
+      "exact_glyphs": 8,
+      "text": "靈夢　：何だって"
+    },
+    "cutscene.dm1.reimu.run.008": {
+      "exact_glyphs": 29,
+      "text": "夢美　：そうよ、この世界で魔法という素晴らしい力をみつけた"
+    },
+    "cutscene.dm1.reimu.run.009": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm1.reimu.run.010": {
+      "exact_glyphs": 25,
+      "text": "・・・もう、ただ観察するだけなんて耐えられないわ。"
+    },
+    "cutscene.dm1.reimu.run.011": {
+      "exact_glyphs": 33,
+      "text": "夢美　：あなたを実験材料として連れて帰って、その力を徹底的に調べて"
+    },
+    "cutscene.dm1.reimu.run.012": {
+      "exact_glyphs": 13,
+      "text": "その力を私のものにしてやる"
+    },
+    "cutscene.dm1.reimu.run.013": {
+      "exact_glyphs": 34,
+      "text": "靈夢　：やっぱり、望みを叶える、だなんて話が出来過ぎてると思ったわ。"
+    },
+    "cutscene.dm1.reimu.run.014": {
+      "exact_glyphs": 24,
+      "text": "靈夢　：でも、あなたの造った科学魔法は倒したわ。"
+    },
+    "cutscene.dm1.reimu.run.015": {
+      "exact_glyphs": 22,
+      "text": "　　　　どうやって、私を倒すつもりなのかしら"
+    },
+    "cutscene.dm1.reimu.run.016": {
+      "exact_glyphs": 21,
+      "text": "夢美　：私の科学魔法も所詮、似非魔法・・・"
+    },
+    "cutscene.dm1.reimu.run.017": {
+      "exact_glyphs": 13,
+      "text": "　やはり、本物には勝てない"
+    },
+    "cutscene.dm1.reimu.run.018": {
+      "exact_glyphs": 39,
+      "text": "　　　　それは魔力を使わず、正の光子と光波から産み出しただけのものだったのよ。"
+    },
+    "cutscene.dm1.reimu.run.019": {
+      "exact_glyphs": 23,
+      "text": "夢美　：私には、魔力はないけど科学力はあるわ。"
+    },
+    "cutscene.dm1.reimu.run.020": {
+      "exact_glyphs": 25,
+      "text": "　　　　次いでに言うと、オカルトにも精通してるわ。"
+    },
+    "cutscene.dm1.reimu.run.021": {
+      "exact_glyphs": 20,
+      "text": "靈夢　：なんで、オカルトが関係在るのよ。"
+    },
+    "cutscene.dm1.reimu.run.022": {
+      "exact_glyphs": 14,
+      "text": "夢美　：ないわ。（きっぱり）"
+    },
+    "cutscene.dm1.reimu.run.023": {
+      "exact_glyphs": 28,
+      "text": "夢美　：まぁ、いいわ。あなたと勝負してあなたが勝ったら、"
+    },
+    "cutscene.dm1.reimu.run.024": {
+      "exact_glyphs": 15,
+      "text": "予告通り望みを叶えてあげるわ。"
+    },
+    "cutscene.dm1.reimu.run.025": {
+      "exact_glyphs": 12,
+      "text": "その代わり、私が勝ったら"
+    },
+    "cutscene.dm1.reimu.run.026": {
+      "exact_glyphs": 21,
+      "text": "あなたは、私の世界に来る。それでいいわね。"
+    },
+    "cutscene.dm1.reimu.run.027": {
+      "exact_glyphs": 23,
+      "text": "夢美　：もっとも、いやといっても無駄だけどね。"
+    },
+    "cutscene.dm1.reimu.run.028": {
+      "exact_glyphs": 14,
+      "text": "靈夢　：どうせ、負けないわよ"
+    },
+    "cutscene.dm1.reimu.run.029": {
+      "exact_glyphs": 7,
+      "text": "　じゃぁいくよ"
+    },
+    "cutscene.dm1.reimu.run.030": {
+      "exact_glyphs": 26,
+      "text": "夢美　：ちょっと、待って。戦闘用の服に着替えてくる。"
+    },
+    "cutscene.dm1.reimu.run.031": {
+      "exact_glyphs": 11,
+      "text": "靈夢　：緊張感ないなぁ"
+    },
+    "cutscene.dm1.reimu.run.032": {
+      "exact_glyphs": 14,
+      "text": "夢美　：いいわ、やりましょ。"
+    },
+    "cutscene.dm1.reimu.run.033": {
+      "exact_glyphs": 20,
+      "text": "ちゆり：マントはおってきただけ・・・・・"
+    },
+    "cutscene.dm1.reimu.run.034": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　バキッ"
+    },
+    "cutscene.dm1.reimu.run.035": {
+      "exact_glyphs": 11,
+      "text": "夢美　：気合い入れてよ"
+    },
+    "cutscene.dm1.reimu.run.036": {
+      "exact_glyphs": 20,
+      "text": "死んじゃったら連れて帰れないんだからね。"
+    },
+    "cutscene.dm1.reimu.run.037": {
+      "exact_glyphs": 9,
+      "text": "靈夢　：お互い様よ"
+    },
+    "cutscene.dm1.reimu.run.038": {
+      "exact_glyphs": 10,
+      "text": "夢美　：本当にいくよ"
+    },
+    "cutscene.dm1.reimu.run.039": {
+      "exact_glyphs": 22,
+      "text": "靈夢　：魔法じゃなくて、神仙術なんだけどね。"
+    },
+    "cutscene.dm1.mima.run.000": {
+      "exact_glyphs": 7,
+      "text": "夢美　：ちゆり"
+    },
+    "cutscene.dm1.mima.run.001": {
+      "exact_glyphs": 10,
+      "text": "、負けるのが早過ぎよ"
+    },
+    "cutscene.dm1.mima.run.002": {
+      "exact_glyphs": 9,
+      "text": "ちゆり：だって～。"
+    },
+    "cutscene.dm1.mima.run.003": {
+      "exact_glyphs": 15,
+      "text": "夢美　：だっても、神曲もないわ"
+    },
+    "cutscene.dm1.mima.run.004": {
+      "exact_glyphs": 22,
+      "text": "　　　　十分にデータが取れなかったじゃないの"
+    },
+    "cutscene.dm1.mima.run.005": {
+      "exact_glyphs": 29,
+      "text": "夢美　：まったく。あなたが勝ってればこいつを気絶させてでも"
+    },
+    "cutscene.dm1.mima.run.006": {
+      "exact_glyphs": 17,
+      "text": "　　　　連れて帰ることが出来たのに"
+    },
+    "cutscene.dm1.mima.run.007": {
+      "exact_glyphs": 7,
+      "text": "魅魔　：何だと"
+    },
+    "cutscene.dm1.mima.run.008": {
+      "exact_glyphs": 29,
+      "text": "夢美　：そうよ、この世界で魔法という素晴らしい力をみつけた"
+    },
+    "cutscene.dm1.mima.run.009": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm1.mima.run.010": {
+      "exact_glyphs": 25,
+      "text": "・・・もう、ただ観察するだけなんて耐えられないわ。"
+    },
+    "cutscene.dm1.mima.run.011": {
+      "exact_glyphs": 33,
+      "text": "夢美　：あなたを実験材料として連れて帰って、その力を徹底的に調べて"
+    },
+    "cutscene.dm1.mima.run.012": {
+      "exact_glyphs": 13,
+      "text": "その力を私のものにしてやる"
+    },
+    "cutscene.dm1.mima.run.013": {
+      "exact_glyphs": 32,
+      "text": "魅魔　：無茶言うんじゃないよ。どうやって、私を倒すつもりなのかい"
+    },
+    "cutscene.dm1.mima.run.014": {
+      "exact_glyphs": 21,
+      "text": "夢美　：私の科学魔法も所詮、似非魔法・・・"
+    },
+    "cutscene.dm1.mima.run.015": {
+      "exact_glyphs": 13,
+      "text": "　やはり、本物には勝てない"
+    },
+    "cutscene.dm1.mima.run.016": {
+      "exact_glyphs": 39,
+      "text": "　　　　それは魔力を使わず、正の光子と光波から産み出しただけのものだったのよ。"
+    },
+    "cutscene.dm1.mima.run.017": {
+      "exact_glyphs": 23,
+      "text": "夢美　：私には、魔力はないけど科学力はあるわ。"
+    },
+    "cutscene.dm1.mima.run.018": {
+      "exact_glyphs": 25,
+      "text": "　　　　次いでに言うと、オカルトにも精通してるわ。"
+    },
+    "cutscene.dm1.mima.run.019": {
+      "exact_glyphs": 31,
+      "text": "魅魔　：ふふふ、今度はあんたかい。さっきの奴より弱そうだがな。"
+    },
+    "cutscene.dm1.mima.run.020": {
+      "exact_glyphs": 9,
+      "text": "夢美　：そうかしら"
+    },
+    "cutscene.dm1.mima.run.021": {
+      "exact_glyphs": 24,
+      "text": "。まぁいいわ。あなたと勝負してあなたが勝ったら、"
+    },
+    "cutscene.dm1.mima.run.022": {
+      "exact_glyphs": 15,
+      "text": "あなたの望みを叶えてあげるわ。"
+    },
+    "cutscene.dm1.mima.run.023": {
+      "exact_glyphs": 12,
+      "text": "その代わり、私が勝ったら"
+    },
+    "cutscene.dm1.mima.run.024": {
+      "exact_glyphs": 21,
+      "text": "あなたは、私の世界に来る。それでいいわね。"
+    },
+    "cutscene.dm1.mima.run.025": {
+      "exact_glyphs": 6,
+      "text": "魅魔　：いや"
+    },
+    "cutscene.dm1.mima.run.026": {
+      "exact_glyphs": 23,
+      "text": "夢美　：もっとも、いやといっても無駄だけどね。"
+    },
+    "cutscene.dm1.mima.run.027": {
+      "exact_glyphs": 13,
+      "text": "魅魔　：どうせ、負けないよ"
+    },
+    "cutscene.dm1.mima.run.028": {
+      "exact_glyphs": 8,
+      "text": "　さぁ、やろうか"
+    },
+    "cutscene.dm1.mima.run.029": {
+      "exact_glyphs": 26,
+      "text": "夢美　：ちょっと、待って。戦闘用の服に着替えてくる。"
+    },
+    "cutscene.dm1.mima.run.030": {
+      "exact_glyphs": 8,
+      "text": "魅魔　：なんだい"
+    },
+    "cutscene.dm1.mima.run.031": {
+      "exact_glyphs": 14,
+      "text": "夢美　：いいわ、やりましょ。"
+    },
+    "cutscene.dm1.mima.run.032": {
+      "exact_glyphs": 20,
+      "text": "ちゆり：マントはおってきただけ・・・・・"
+    },
+    "cutscene.dm1.mima.run.033": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　バキッ"
+    },
+    "cutscene.dm1.mima.run.034": {
+      "exact_glyphs": 11,
+      "text": "夢美　：気合い入れてよ"
+    },
+    "cutscene.dm1.mima.run.035": {
+      "exact_glyphs": 20,
+      "text": "死んじゃったら連れて帰れないんだからね。"
+    },
+    "cutscene.dm1.mima.run.036": {
+      "exact_glyphs": 6,
+      "text": "魅魔　：さぁ"
+    },
+    "cutscene.dm1.mima.run.037": {
+      "exact_glyphs": 10,
+      "text": "夢美　：本当にいくよ"
+    },
+    "cutscene.dm1.mima.run.038": {
+      "exact_glyphs": 12,
+      "text": "魅魔　：あんたが逝くよ。"
+    },
+    "cutscene.dm1.marisa.run.000": {
+      "exact_glyphs": 7,
+      "text": "夢美　：ちゆり"
+    },
+    "cutscene.dm1.marisa.run.001": {
+      "exact_glyphs": 10,
+      "text": "、負けるのが早過ぎよ"
+    },
+    "cutscene.dm1.marisa.run.002": {
+      "exact_glyphs": 9,
+      "text": "ちゆり：だって～。"
+    },
+    "cutscene.dm1.marisa.run.003": {
+      "exact_glyphs": 15,
+      "text": "夢美　：だっても、神曲もないわ"
+    },
+    "cutscene.dm1.marisa.run.004": {
+      "exact_glyphs": 22,
+      "text": "　　　　十分にデータが取れなかったじゃないの"
+    },
+    "cutscene.dm1.marisa.run.005": {
+      "exact_glyphs": 29,
+      "text": "夢美　：まったく。あなたが勝ってればこいつを気絶させてでも"
+    },
+    "cutscene.dm1.marisa.run.006": {
+      "exact_glyphs": 17,
+      "text": "　　　　連れて帰ることが出来たのに"
+    },
+    "cutscene.dm1.marisa.run.007": {
+      "exact_glyphs": 10,
+      "text": "魔理沙：なんですって"
+    },
+    "cutscene.dm1.marisa.run.008": {
+      "exact_glyphs": 29,
+      "text": "夢美　：そうよ、この世界で魔法という素晴らしい力をみつけた"
+    },
+    "cutscene.dm1.marisa.run.009": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm1.marisa.run.010": {
+      "exact_glyphs": 25,
+      "text": "・・・もう、ただ観察するだけなんて耐えられないわ。"
+    },
+    "cutscene.dm1.marisa.run.011": {
+      "exact_glyphs": 33,
+      "text": "夢美　：あなたを実験材料として連れて帰って、その力を徹底的に調べて"
+    },
+    "cutscene.dm1.marisa.run.012": {
+      "exact_glyphs": 13,
+      "text": "その力を私のものにしてやる"
+    },
+    "cutscene.dm1.marisa.run.013": {
+      "exact_glyphs": 20,
+      "text": "魔理沙：ちょっと、欲が出過ぎたのかしら。"
+    },
+    "cutscene.dm1.marisa.run.014": {
+      "exact_glyphs": 21,
+      "text": "夢美　：私の科学魔法も所詮、似非魔法・・・"
+    },
+    "cutscene.dm1.marisa.run.015": {
+      "exact_glyphs": 13,
+      "text": "　やはり、本物には勝てない"
+    },
+    "cutscene.dm1.marisa.run.016": {
+      "exact_glyphs": 39,
+      "text": "　　　　それは魔力を使わず、正の光子と光波から産み出しただけのものだったのよ。"
+    },
+    "cutscene.dm1.marisa.run.017": {
+      "exact_glyphs": 34,
+      "text": "夢美　：それなら、私の科学力であなたを倒し、あなたをもって帰るわよ。"
+    },
+    "cutscene.dm1.marisa.run.018": {
+      "exact_glyphs": 16,
+      "text": "魔理沙：物じゃないんだからさぁ。"
+    },
+    "cutscene.dm1.marisa.run.019": {
+      "exact_glyphs": 21,
+      "text": "夢美　：あなたと勝負してあなたが勝ったら、"
+    },
+    "cutscene.dm1.marisa.run.020": {
+      "exact_glyphs": 15,
+      "text": "予告通り望みを叶えてあげるわ。"
+    },
+    "cutscene.dm1.marisa.run.021": {
+      "exact_glyphs": 12,
+      "text": "その代わり、私が勝ったら"
+    },
+    "cutscene.dm1.marisa.run.022": {
+      "exact_glyphs": 21,
+      "text": "あなたは、私の世界に来る。それでいいわね。"
+    },
+    "cutscene.dm1.marisa.run.023": {
+      "exact_glyphs": 23,
+      "text": "夢美　：もっとも、いやといっても無駄だけどね。"
+    },
+    "cutscene.dm1.marisa.run.024": {
+      "exact_glyphs": 13,
+      "text": "魔理沙：余裕でしょ。どうせ"
+    },
+    "cutscene.dm1.marisa.run.025": {
+      "exact_glyphs": 9,
+      "text": "夢美　：どうかしら"
+    },
+    "cutscene.dm1.marisa.run.026": {
+      "exact_glyphs": 19,
+      "text": "魔理沙：じゃ、たたかってみようじゃん。"
+    },
+    "cutscene.dm1.marisa.run.027": {
+      "exact_glyphs": 26,
+      "text": "夢美　：ちょっと、待って。戦闘用の服に着替えてくる。"
+    },
+    "cutscene.dm1.marisa.run.028": {
+      "exact_glyphs": 10,
+      "text": "魔理沙：早くしてよぉ"
+    },
+    "cutscene.dm1.marisa.run.029": {
+      "exact_glyphs": 14,
+      "text": "夢美　：いいわ、やりましょ。"
+    },
+    "cutscene.dm1.marisa.run.030": {
+      "exact_glyphs": 20,
+      "text": "ちゆり：マントはおってきただけ・・・・・"
+    },
+    "cutscene.dm1.marisa.run.031": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　バキッ"
+    },
+    "cutscene.dm1.marisa.run.032": {
+      "exact_glyphs": 11,
+      "text": "夢美　：気合い入れてよ"
+    },
+    "cutscene.dm1.marisa.run.033": {
+      "exact_glyphs": 20,
+      "text": "死んじゃったら連れて帰れないんだからね。"
+    },
+    "cutscene.dm1.marisa.run.034": {
+      "exact_glyphs": 10,
+      "text": "魔理沙：あんたもな。"
+    },
+    "cutscene.dm1.marisa.run.035": {
+      "exact_glyphs": 10,
+      "text": "夢美　：本当にいくよ"
+    },
+    "cutscene.dm1.marisa.run.036": {
+      "exact_glyphs": 8,
+      "text": "魔理沙：あはは～"
+    },
+    "cutscene.dm1.ellen.run.000": {
+      "exact_glyphs": 7,
+      "text": "夢美　：ちゆり"
+    },
+    "cutscene.dm1.ellen.run.001": {
+      "exact_glyphs": 10,
+      "text": "、負けるのが早過ぎよ"
+    },
+    "cutscene.dm1.ellen.run.002": {
+      "exact_glyphs": 9,
+      "text": "ちゆり：だって～。"
+    },
+    "cutscene.dm1.ellen.run.003": {
+      "exact_glyphs": 15,
+      "text": "夢美　：だっても、神曲もないわ"
+    },
+    "cutscene.dm1.ellen.run.004": {
+      "exact_glyphs": 22,
+      "text": "　　　　十分にデータが取れなかったじゃないの"
+    },
+    "cutscene.dm1.ellen.run.005": {
+      "exact_glyphs": 29,
+      "text": "夢美　：まったく。あなたが勝ってればこいつを気絶させてでも"
+    },
+    "cutscene.dm1.ellen.run.006": {
+      "exact_glyphs": 17,
+      "text": "　　　　連れて帰ることが出来たのに"
+    },
+    "cutscene.dm1.ellen.run.007": {
+      "exact_glyphs": 9,
+      "text": "エレン：なんだって"
+    },
+    "cutscene.dm1.ellen.run.008": {
+      "exact_glyphs": 29,
+      "text": "夢美　：そうよ、この世界で魔法という素晴らしい力をみつけた"
+    },
+    "cutscene.dm1.ellen.run.009": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm1.ellen.run.010": {
+      "exact_glyphs": 25,
+      "text": "・・・もう、ただ観察するだけなんて耐えられないわ。"
+    },
+    "cutscene.dm1.ellen.run.011": {
+      "exact_glyphs": 33,
+      "text": "夢美　：あなたを実験材料として連れて帰って、その力を徹底的に調べて"
+    },
+    "cutscene.dm1.ellen.run.012": {
+      "exact_glyphs": 13,
+      "text": "その力を私のものにしてやる"
+    },
+    "cutscene.dm1.ellen.run.013": {
+      "exact_glyphs": 16,
+      "text": "エレン：あら、あら、困った人ね。"
+    },
+    "cutscene.dm1.ellen.run.014": {
+      "exact_glyphs": 22,
+      "text": "エレン：ねがいを叶えてくれるんじゃなかったの"
+    },
+    "cutscene.dm1.ellen.run.015": {
+      "exact_glyphs": 27,
+      "text": "夢美　：いいわ、それは、予告通り望みを叶えてあげるわ。"
+    },
+    "cutscene.dm1.ellen.run.016": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm1.ellen.run.017": {
+      "exact_glyphs": 24,
+      "text": "私と勝負して勝ったらね。その代わり、私が勝ったら"
+    },
+    "cutscene.dm1.ellen.run.018": {
+      "exact_glyphs": 21,
+      "text": "あなたは、私の世界に来る。それでいいわね。"
+    },
+    "cutscene.dm1.ellen.run.019": {
+      "exact_glyphs": 23,
+      "text": "夢美　：もっとも、いやといっても無駄だけどね。"
+    },
+    "cutscene.dm1.ellen.run.020": {
+      "exact_glyphs": 24,
+      "text": "エレン：こんどは、あなたなの。じゃぁ、やりましょ"
+    },
+    "cutscene.dm1.ellen.run.021": {
+      "exact_glyphs": 26,
+      "text": "夢美　：ちょっと、待って。戦闘用の服に着替えてくる。"
+    },
+    "cutscene.dm1.ellen.run.022": {
+      "exact_glyphs": 10,
+      "text": "エレン：ありゃりゃ。"
+    },
+    "cutscene.dm1.ellen.run.023": {
+      "exact_glyphs": 14,
+      "text": "夢美　：いいわ、やりましょ。"
+    },
+    "cutscene.dm1.ellen.run.024": {
+      "exact_glyphs": 20,
+      "text": "ちゆり：マントはおってきただけ・・・・・"
+    },
+    "cutscene.dm1.ellen.run.025": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　バキッ"
+    },
+    "cutscene.dm1.ellen.run.026": {
+      "exact_glyphs": 11,
+      "text": "夢美　：気合い入れてよ"
+    },
+    "cutscene.dm1.ellen.run.027": {
+      "exact_glyphs": 20,
+      "text": "死んじゃったら連れて帰れないんだからね。"
+    },
+    "cutscene.dm1.ellen.run.028": {
+      "exact_glyphs": 10,
+      "text": "エレン：あ、最後に。"
+    },
+    "cutscene.dm1.ellen.run.029": {
+      "exact_glyphs": 6,
+      "text": "夢美　：何？"
+    },
+    "cutscene.dm1.ellen.run.030": {
+      "exact_glyphs": 10,
+      "text": "エレン：科学って何？"
+    },
+    "cutscene.dm1.ellen.run.031": {
+      "exact_glyphs": 22,
+      "text": "夢美　：人間が怠けるのを認めるための手段よ。"
+    },
+    "cutscene.dm1.ellen.run.032": {
+      "exact_glyphs": 34,
+      "text": "エレン：だめだよ～。そこは、理性と論理と法則　って言ってくんなきゃ。"
+    },
+    "cutscene.dm1.ellen.run.033": {
+      "exact_glyphs": 10,
+      "text": "夢美　：・・・・・・"
+    },
+    "cutscene.dm1.ellen.run.034": {
+      "exact_glyphs": 27,
+      "text": "（元ネタが分かる人、いたらぜひ友達になりましょう（うそ"
+    },
+    "cutscene.dm1.ellen.run.035": {
+      "exact_glyphs": 2,
+      "text": "））"
+    },
+    "cutscene.dm1.kotohime.run.000": {
+      "exact_glyphs": 7,
+      "text": "夢美　：ちゆり"
+    },
+    "cutscene.dm1.kotohime.run.001": {
+      "exact_glyphs": 10,
+      "text": "、負けるのが早過ぎよ"
+    },
+    "cutscene.dm1.kotohime.run.002": {
+      "exact_glyphs": 9,
+      "text": "ちゆり：だって～。"
+    },
+    "cutscene.dm1.kotohime.run.003": {
+      "exact_glyphs": 15,
+      "text": "夢美　：だっても、神曲もないわ"
+    },
+    "cutscene.dm1.kotohime.run.004": {
+      "exact_glyphs": 22,
+      "text": "　　　　十分にデータが取れなかったじゃないの"
+    },
+    "cutscene.dm1.kotohime.run.005": {
+      "exact_glyphs": 29,
+      "text": "夢美　：まったく。あなたが勝ってればこいつを気絶させてでも"
+    },
+    "cutscene.dm1.kotohime.run.006": {
+      "exact_glyphs": 17,
+      "text": "　　　　連れて帰ることが出来たのに"
+    },
+    "cutscene.dm1.kotohime.run.007": {
+      "exact_glyphs": 6,
+      "text": "小兎姫：あ～"
+    },
+    "cutscene.dm1.kotohime.run.008": {
+      "exact_glyphs": 29,
+      "text": "夢美　：そうよ、この世界で魔法という素晴らしい力をみつけた"
+    },
+    "cutscene.dm1.kotohime.run.009": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm1.kotohime.run.010": {
+      "exact_glyphs": 25,
+      "text": "・・・もう、ただ観察するだけなんて耐えられないわ。"
+    },
+    "cutscene.dm1.kotohime.run.011": {
+      "exact_glyphs": 33,
+      "text": "夢美　：あなたを実験材料として連れて帰って、その力を徹底的に調べて"
+    },
+    "cutscene.dm1.kotohime.run.012": {
+      "exact_glyphs": 13,
+      "text": "その力を私のものにしてやる"
+    },
+    "cutscene.dm1.kotohime.run.013": {
+      "exact_glyphs": 16,
+      "text": "小兎姫：ふ～ん、それでどうすんの"
+    },
+    "cutscene.dm1.kotohime.run.014": {
+      "exact_glyphs": 21,
+      "text": "夢美　：あなたを倒して、連れて帰るだけよ。"
+    },
+    "cutscene.dm1.kotohime.run.015": {
+      "exact_glyphs": 9,
+      "text": "小兎姫：むりむり。"
+    },
+    "cutscene.dm1.kotohime.run.016": {
+      "exact_glyphs": 9,
+      "text": "夢美　：ばかにして"
+    },
+    "cutscene.dm1.kotohime.run.017": {
+      "exact_glyphs": 14,
+      "text": "　私の方がちゆりより強いのよ"
+    },
+    "cutscene.dm1.kotohime.run.018": {
+      "exact_glyphs": 28,
+      "text": "夢美　：まぁ、いいわ。あなたと勝負してあなたが勝ったら、"
+    },
+    "cutscene.dm1.kotohime.run.019": {
+      "exact_glyphs": 15,
+      "text": "予告通り望みを叶えてあげるわ。"
+    },
+    "cutscene.dm1.kotohime.run.020": {
+      "exact_glyphs": 12,
+      "text": "その代わり、私が勝ったら"
+    },
+    "cutscene.dm1.kotohime.run.021": {
+      "exact_glyphs": 21,
+      "text": "あなたは、私の世界に来る。それでいいわね。"
+    },
+    "cutscene.dm1.kotohime.run.022": {
+      "exact_glyphs": 23,
+      "text": "夢美　：もっとも、いやといっても無駄だけどね。"
+    },
+    "cutscene.dm1.kotohime.run.023": {
+      "exact_glyphs": 8,
+      "text": "小兎姫：やる気ね"
+    },
+    "cutscene.dm1.kotohime.run.024": {
+      "exact_glyphs": 7,
+      "text": "　じゃぁいくよ"
+    },
+    "cutscene.dm1.kotohime.run.025": {
+      "exact_glyphs": 26,
+      "text": "夢美　：ちょっと、待って。戦闘用の服に着替えてくる。"
+    },
+    "cutscene.dm1.kotohime.run.026": {
+      "exact_glyphs": 9,
+      "text": "小兎姫：待ちます。"
+    },
+    "cutscene.dm1.kotohime.run.027": {
+      "exact_glyphs": 14,
+      "text": "夢美　：いいわ、やりましょ。"
+    },
+    "cutscene.dm1.kotohime.run.028": {
+      "exact_glyphs": 20,
+      "text": "ちゆり：マントはおってきただけ・・・・・"
+    },
+    "cutscene.dm1.kotohime.run.029": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　バキッ"
+    },
+    "cutscene.dm1.kotohime.run.030": {
+      "exact_glyphs": 11,
+      "text": "夢美　：気合い入れてよ"
+    },
+    "cutscene.dm1.kotohime.run.031": {
+      "exact_glyphs": 20,
+      "text": "死んじゃったら連れて帰れないんだからね。"
+    },
+    "cutscene.dm1.kotohime.run.032": {
+      "exact_glyphs": 11,
+      "text": "小兎姫：気合い入れてよ"
+    },
+    "cutscene.dm1.kotohime.run.033": {
+      "exact_glyphs": 21,
+      "text": "死んじゃったら望みが叶えられないんだから。"
+    },
+    "cutscene.dm1.kotohime.run.034": {
+      "exact_glyphs": 10,
+      "text": "夢美　：本当にいくよ"
+    },
+    "cutscene.dm1.kotohime.run.035": {
+      "exact_glyphs": 12,
+      "text": "小兎姫：でも、よわそう。"
+    },
+    "cutscene.dm1.kana.run.000": {
+      "exact_glyphs": 7,
+      "text": "夢美　：ちゆり"
+    },
+    "cutscene.dm1.kana.run.001": {
+      "exact_glyphs": 10,
+      "text": "、負けるのが早過ぎよ"
+    },
+    "cutscene.dm1.kana.run.002": {
+      "exact_glyphs": 9,
+      "text": "ちゆり：だって～。"
+    },
+    "cutscene.dm1.kana.run.003": {
+      "exact_glyphs": 15,
+      "text": "夢美　：だっても、神曲もないわ"
+    },
+    "cutscene.dm1.kana.run.004": {
+      "exact_glyphs": 22,
+      "text": "　　　　十分にデータが取れなかったじゃないの"
+    },
+    "cutscene.dm1.kana.run.005": {
+      "exact_glyphs": 29,
+      "text": "夢美　：まったく。あなたが勝ってればこいつを気絶させてでも"
+    },
+    "cutscene.dm1.kana.run.006": {
+      "exact_glyphs": 17,
+      "text": "　　　　連れて帰ることが出来たのに"
+    },
+    "cutscene.dm1.kana.run.007": {
+      "exact_glyphs": 9,
+      "text": "カナ　：なんだって"
+    },
+    "cutscene.dm1.kana.run.008": {
+      "exact_glyphs": 29,
+      "text": "夢美　：そうよ、この世界で魔法という素晴らしい力をみつけた"
+    },
+    "cutscene.dm1.kana.run.009": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm1.kana.run.010": {
+      "exact_glyphs": 25,
+      "text": "・・・もう、ただ観察するだけなんて耐えられないわ。"
+    },
+    "cutscene.dm1.kana.run.011": {
+      "exact_glyphs": 33,
+      "text": "夢美　：あなたを実験材料として連れて帰って、その力を徹底的に調べて"
+    },
+    "cutscene.dm1.kana.run.012": {
+      "exact_glyphs": 13,
+      "text": "その力を私のものにしてやる"
+    },
+    "cutscene.dm1.kana.run.013": {
+      "exact_glyphs": 34,
+      "text": "カナ　：やっぱり、望みを叶える、だなんて話が出来過ぎてると思ったわ。"
+    },
+    "cutscene.dm1.kana.run.014": {
+      "exact_glyphs": 27,
+      "text": "カナ　：そっちがその気なら、私は抵抗するしかないわね。"
+    },
+    "cutscene.dm1.kana.run.015": {
+      "exact_glyphs": 12,
+      "text": "夢美　：わかってるわよ。"
+    },
+    "cutscene.dm1.kana.run.016": {
+      "exact_glyphs": 28,
+      "text": "ここは私の力をもって力ずくでやるしかないってことぐらい。"
+    },
+    "cutscene.dm1.kana.run.017": {
+      "exact_glyphs": 19,
+      "text": "夢美　：私と勝負してあなたが勝ったら、"
+    },
+    "cutscene.dm1.kana.run.018": {
+      "exact_glyphs": 15,
+      "text": "予告通り望みを叶えてあげるわ。"
+    },
+    "cutscene.dm1.kana.run.019": {
+      "exact_glyphs": 12,
+      "text": "その代わり、私が勝ったら"
+    },
+    "cutscene.dm1.kana.run.020": {
+      "exact_glyphs": 21,
+      "text": "あなたは、私の世界に来る。それでいいわね。"
+    },
+    "cutscene.dm1.kana.run.021": {
+      "exact_glyphs": 23,
+      "text": "夢美　：もっとも、いやといっても無駄だけどね。"
+    },
+    "cutscene.dm1.kana.run.022": {
+      "exact_glyphs": 14,
+      "text": "カナ　：望みかなえてくれるの"
+    },
+    "cutscene.dm1.kana.run.023": {
+      "exact_glyphs": 14,
+      "text": "　がぜん、やる気が出てきたわ"
+    },
+    "cutscene.dm1.kana.run.024": {
+      "exact_glyphs": 4,
+      "text": "夢美　："
+    },
+    "cutscene.dm1.kana.run.025": {
+      "exact_glyphs": 22,
+      "text": "ちょっと、待って。戦闘用の服に着替えてくる。"
+    },
+    "cutscene.dm1.kana.run.026": {
+      "exact_glyphs": 8,
+      "text": "カナ　：はやくぅ"
+    },
+    "cutscene.dm1.kana.run.027": {
+      "exact_glyphs": 14,
+      "text": "夢美　：いいわ、やりましょ。"
+    },
+    "cutscene.dm1.kana.run.028": {
+      "exact_glyphs": 20,
+      "text": "ちゆり：マントはおってきただけ・・・・・"
+    },
+    "cutscene.dm1.kana.run.029": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　バキッ"
+    },
+    "cutscene.dm1.kana.run.030": {
+      "exact_glyphs": 11,
+      "text": "夢美　：気合い入れてよ"
+    },
+    "cutscene.dm1.kana.run.031": {
+      "exact_glyphs": 20,
+      "text": "死んじゃったら連れて帰れないんだからね。"
+    },
+    "cutscene.dm1.kana.run.032": {
+      "exact_glyphs": 12,
+      "text": "カナ　：それはお互い様ね"
+    },
+    "cutscene.dm1.kana.run.033": {
+      "exact_glyphs": 10,
+      "text": "夢美　：本当にいくよ"
+    },
+    "cutscene.dm1.kana.run.034": {
+      "exact_glyphs": 11,
+      "text": "カナ　：さっさとやろう"
+    },
+    "cutscene.dm1.rikako.run.000": {
+      "exact_glyphs": 7,
+      "text": "夢美　：ちゆり"
+    },
+    "cutscene.dm1.rikako.run.001": {
+      "exact_glyphs": 10,
+      "text": "、負けるのが早過ぎよ"
+    },
+    "cutscene.dm1.rikako.run.002": {
+      "exact_glyphs": 9,
+      "text": "ちゆり：だって～。"
+    },
+    "cutscene.dm1.rikako.run.003": {
+      "exact_glyphs": 15,
+      "text": "夢美　：だっても、神曲もないわ"
+    },
+    "cutscene.dm1.rikako.run.004": {
+      "exact_glyphs": 22,
+      "text": "　　　　十分にデータが取れなかったじゃないの"
+    },
+    "cutscene.dm1.rikako.run.005": {
+      "exact_glyphs": 29,
+      "text": "夢美　：まったく。あなたが勝ってればこいつを気絶させてでも"
+    },
+    "cutscene.dm1.rikako.run.006": {
+      "exact_glyphs": 17,
+      "text": "　　　　連れて帰ることが出来たのに"
+    },
+    "cutscene.dm1.rikako.run.007": {
+      "exact_glyphs": 9,
+      "text": "理香子：何ですって"
+    },
+    "cutscene.dm1.rikako.run.008": {
+      "exact_glyphs": 29,
+      "text": "夢美　：そうよ、この世界で魔法という素晴らしい力をみつけた"
+    },
+    "cutscene.dm1.rikako.run.009": {
+      "exact_glyphs": 4,
+      "text": "　　　　"
+    },
+    "cutscene.dm1.rikako.run.010": {
+      "exact_glyphs": 25,
+      "text": "・・・もう、ただ観察するだけなんて耐えられないわ。"
+    },
+    "cutscene.dm1.rikako.run.011": {
+      "exact_glyphs": 33,
+      "text": "夢美　：あなたを実験材料として連れて帰って、その力を徹底的に調べて"
+    },
+    "cutscene.dm1.rikako.run.012": {
+      "exact_glyphs": 13,
+      "text": "その力を私のものにしてやる"
+    },
+    "cutscene.dm1.rikako.run.013": {
+      "exact_glyphs": 19,
+      "text": "理香子：やっぱり、何か裏があったのか。"
+    },
+    "cutscene.dm1.rikako.run.014": {
+      "exact_glyphs": 31,
+      "text": "理香子：でも、あなたの造った科学魔法なんてたいしたことないわ。"
+    },
+    "cutscene.dm1.rikako.run.015": {
+      "exact_glyphs": 25,
+      "text": "　　　　どうやって、私を連れて帰るつもりなのかしら"
+    },
+    "cutscene.dm1.rikako.run.016": {
+      "exact_glyphs": 21,
+      "text": "夢美　：私の科学魔法も所詮、似非魔法・・・"
+    },
+    "cutscene.dm1.rikako.run.017": {
+      "exact_glyphs": 13,
+      "text": "　やはり、本物には勝てない"
+    },
+    "cutscene.dm1.rikako.run.018": {
+      "exact_glyphs": 39,
+      "text": "　　　　それは魔力を使わず、正の光子と光波から産み出しただけのものだったのよ。"
+    },
+    "cutscene.dm1.rikako.run.019": {
+      "exact_glyphs": 33,
+      "text": "夢美　：でも、今のちゆりとのたたかいで、あなたの攻撃は見切ったわ。"
+    },
+    "cutscene.dm1.rikako.run.020": {
+      "exact_glyphs": 17,
+      "text": "　　　　わたしの方が有利な立場ね。"
+    },
+    "cutscene.dm1.rikako.run.021": {
+      "exact_glyphs": 14,
+      "text": "理香子：やっぱり、力ずくか。"
+    },
+    "cutscene.dm1.rikako.run.022": {
+      "exact_glyphs": 28,
+      "text": "夢美　：まぁ、いいわ。あなたと勝負してあなたが勝ったら、"
+    },
+    "cutscene.dm1.rikako.run.023": {
+      "exact_glyphs": 15,
+      "text": "予告通り望みを叶えてあげるわ。"
+    },
+    "cutscene.dm1.rikako.run.024": {
+      "exact_glyphs": 12,
+      "text": "その代わり、私が勝ったら"
+    },
+    "cutscene.dm1.rikako.run.025": {
+      "exact_glyphs": 21,
+      "text": "あなたは、私の世界に来る。それでいいわね。"
+    },
+    "cutscene.dm1.rikako.run.026": {
+      "exact_glyphs": 23,
+      "text": "夢美　：もっとも、いやといっても無駄だけどね。"
+    },
+    "cutscene.dm1.rikako.run.027": {
+      "exact_glyphs": 14,
+      "text": "理香子：どうせ、負けないわよ"
+    },
+    "cutscene.dm1.rikako.run.028": {
+      "exact_glyphs": 7,
+      "text": "　じゃぁいくよ"
+    },
+    "cutscene.dm1.rikako.run.029": {
+      "exact_glyphs": 26,
+      "text": "夢美　：ちょっと、待って。戦闘用の服に着替えてくる。"
+    },
+    "cutscene.dm1.rikako.run.030": {
+      "exact_glyphs": 11,
+      "text": "理香子：なんやそりゃ。"
+    },
+    "cutscene.dm1.rikako.run.031": {
+      "exact_glyphs": 14,
+      "text": "夢美　：いいわ、やりましょ。"
+    },
+    "cutscene.dm1.rikako.run.032": {
+      "exact_glyphs": 20,
+      "text": "ちゆり：マントはおってきただけ・・・・・"
+    },
+    "cutscene.dm1.rikako.run.033": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　バキッ"
+    },
+    "cutscene.dm1.rikako.run.034": {
+      "exact_glyphs": 11,
+      "text": "夢美　：気合い入れてよ"
+    },
+    "cutscene.dm1.rikako.run.035": {
+      "exact_glyphs": 20,
+      "text": "死んじゃったら連れて帰れないんだからね。"
+    },
+    "cutscene.dm1.rikako.run.036": {
+      "exact_glyphs": 10,
+      "text": "理香子：わかってるわ"
+    },
+    "cutscene.dm1.rikako.run.037": {
+      "exact_glyphs": 10,
+      "text": "夢美　：本当にいくよ"
+    },
+    "cutscene.dm1.rikako.run.038": {
+      "exact_glyphs": 13,
+      "text": "理香子：私を甘くみるなよ。"
+    },
+    "cutscene.dm1.chiyuri.run.000": {
+      "exact_glyphs": 9,
+      "text": "ちゆり：勝ったぜ。"
+    },
+    "cutscene.dm1.chiyuri.run.001": {
+      "exact_glyphs": 23,
+      "text": "ちゆり：負けた～。って、自分なのに、なんで～。"
+    },
+    "cutscene.dm1.chiyuri.run.002": {
+      "exact_glyphs": 28,
+      "text": "夢美　：それは、あなた、つまりこの世界のちゆりには魔力を"
+    },
+    "cutscene.dm1.chiyuri.run.003": {
+      "exact_glyphs": 11,
+      "text": "扱うすべがあるからよ。"
+    },
+    "cutscene.dm1.chiyuri.run.004": {
+      "exact_glyphs": 24,
+      "text": "夢美　：あなたたちのたたかいを見てて分かったわ。"
+    },
+    "cutscene.dm1.chiyuri.run.005": {
+      "exact_glyphs": 17,
+      "text": "　　　　どう、私とたたかってみない"
+    },
+    "cutscene.dm1.chiyuri.run.006": {
+      "exact_glyphs": 7,
+      "text": "ちゆり：なんで"
+    },
+    "cutscene.dm1.chiyuri.run.007": {
+      "exact_glyphs": 22,
+      "text": "夢美　：たたかうことで、それを研究出来るの。"
+    },
+    "cutscene.dm1.chiyuri.run.008": {
+      "exact_glyphs": 9,
+      "text": "　　　　さぁ、早く"
+    },
+    "cutscene.dm1.chiyuri.run.009": {
+      "exact_glyphs": 10,
+      "text": "ちゆり：強引だなぁ。"
+    },
+    "cutscene.dm1.chiyuri.run.010": {
+      "exact_glyphs": 19,
+      "text": "夢美　：ちゆりなのに、ずるいじゃない。"
+    },
+    "cutscene.dm1.chiyuri.run.011": {
+      "exact_glyphs": 16,
+      "text": "私に出来ないことが出来るなんて。"
+    },
+    "cutscene.dm1.chiyuri.run.012": {
+      "exact_glyphs": 26,
+      "text": "　　　　だから、私にも魔力を扱うすべくらいはほしいの"
+    },
+    "cutscene.dm1.chiyuri.run.013": {
+      "exact_glyphs": 15,
+      "text": "ちゆり：わたしは、出来ないぜ。"
+    },
+    "cutscene.dm1.chiyuri.run.014": {
+      "exact_glyphs": 11,
+      "text": "夢美　：あんたはいいの"
+    },
+    "cutscene.dm1.chiyuri.run.015": {
+      "exact_glyphs": 15,
+      "text": "　って、混乱するなぁ、まったく"
+    },
+    "cutscene.dm1.chiyuri.run.016": {
+      "exact_glyphs": 21,
+      "text": "ちゆり：ま、あんたとたたかうくらいいいぜ。"
+    },
+    "cutscene.dm1.chiyuri.run.017": {
+      "exact_glyphs": 26,
+      "text": "夢美　：なんか、ちゆりにあんたって呼ばれるとはらたつ"
+    },
+    "cutscene.dm1.chiyuri.run.018": {
+      "exact_glyphs": 12,
+      "text": "　　　　とにかく、いくよ"
+    },
+    "cutscene.dm1.yumemi.run.000": {
+      "exact_glyphs": 7,
+      "text": "夢美　：ちゆり"
+    },
+    "cutscene.dm1.yumemi.run.001": {
+      "exact_glyphs": 12,
+      "text": "、もういたずらしないわね"
+    },
+    "cutscene.dm1.yumemi.run.002": {
+      "exact_glyphs": 12,
+      "text": "ちゆり：ごめんなさ～い。"
+    },
+    "cutscene.dm1.yumemi.run.003": {
+      "exact_glyphs": 14,
+      "text": "夢美　：それより問題は・・・"
+    },
+    "cutscene.dm1.yumemi.run.004": {
+      "exact_glyphs": 16,
+      "text": "夢美　：私本人をどうするかだね。"
+    },
+    "cutscene.dm1.yumemi.run.005": {
+      "exact_glyphs": 18,
+      "text": "夢美　：私は犯罪者になるのは困るの。"
+    },
+    "cutscene.dm1.yumemi.run.006": {
+      "exact_glyphs": 15,
+      "text": "　　　　一応、教授なんだから。"
+    },
+    "cutscene.dm1.yumemi.run.007": {
+      "exact_glyphs": 8,
+      "text": "夢美　：同じく。"
+    },
+    "cutscene.dm1.yumemi.run.008": {
+      "exact_glyphs": 21,
+      "text": "夢美　：自分を消しても犯罪じゃないわよね。"
+    },
+    "cutscene.dm1.yumemi.run.009": {
+      "exact_glyphs": 9,
+      "text": "夢美　：そうよね。"
+    },
+    "cutscene.dm1.yumemi.run.010": {
+      "exact_glyphs": 11,
+      "text": "夢美×２：つまり・・・"
+    },
+    "cutscene.dm1.yumemi.run.011": {
+      "exact_glyphs": 18,
+      "text": "夢美×２：あなたを倒せば丸く収まるわ"
+    },
+    "cutscene.dm1.yumemi.run.012": {
+      "exact_glyphs": 7,
+      "text": "　　　・・・・"
+    },
+    "cutscene.dm1.yumemi.run.013": {
+      "exact_glyphs": 6,
+      "text": "夢美　：覚悟"
+    },
+    "cutscene.dm1.yumemi.run.014": {
+      "exact_glyphs": 8,
+      "text": "夢美　：消えろ～"
+    },
+    "cutscene.ending.reimu.run.000": {
+      "exact_glyphs": 26,
+      "text": "夢美　：やっぱ、本物の魔法使いには勝てないっていうの"
+    },
+    "cutscene.ending.reimu.run.001": {
+      "exact_glyphs": 8,
+      "text": "夢美　：くやしー"
+    },
+    "cutscene.ending.reimu.run.002": {
+      "exact_glyphs": 23,
+      "text": "　どうして私もこの世界に生まれなかったんだよう"
+    },
+    "cutscene.ending.reimu.run.003": {
+      "exact_glyphs": 27,
+      "text": "夢美　：・・・こうなったら、あなたたちに真の科学の力を"
+    },
+    "cutscene.ending.reimu.run.004": {
+      "exact_glyphs": 6,
+      "text": "見せてやるわ"
+    },
+    "cutscene.ending.reimu.run.005": {
+      "exact_glyphs": 27,
+      "text": "夢美　：いでよ、地球壊滅用　四次元ポジトロン爆弾～～～"
+    },
+    "cutscene.ending.reimu.run.006": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.ending.reimu.run.007": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：いいかげんにしろって"
+    },
+    "cutscene.ending.reimu.run.008": {
+      "exact_glyphs": 26,
+      "text": "ちゆり：そんなことしたら私ら、歴史に残る犯罪者だぜ。"
+    },
+    "cutscene.ending.reimu.run.009": {
+      "exact_glyphs": 16,
+      "text": "夢美　：パイプ椅子はい～た～い～"
+    },
+    "cutscene.ending.reimu.run.010": {
+      "exact_glyphs": 21,
+      "text": "夢美　：まったく、冗談に決まってるでしょが"
+    },
+    "cutscene.ending.reimu.run.011": {
+      "exact_glyphs": 26,
+      "text": "夢美　：まぁ、しかたないわね。魔法はあきらめますわ。"
+    },
+    "cutscene.ending.reimu.run.012": {
+      "exact_glyphs": 29,
+      "text": "夢美　：でも、データはたくさん取れたから、これらをまとめて"
+    },
+    "cutscene.ending.reimu.run.013": {
+      "exact_glyphs": 10,
+      "text": "学会に出してみるわ。"
+    },
+    "cutscene.ending.reimu.run.014": {
+      "exact_glyphs": 12,
+      "text": "夢美　：「魔法は実在した"
+    },
+    "cutscene.ending.reimu.run.015": {
+      "exact_glyphs": 20,
+      "text": "　やはりそれは、宗教と密接な関係があり、"
+    },
+    "cutscene.ending.reimu.run.016": {
+      "exact_glyphs": 36,
+      "text": "エネルギー問題や環境問題等を解決し、我々人類を救うのは宗教だ。と・・・」"
+    },
+    "cutscene.ending.reimu.run.017": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：それ、なんか違うと思うぜ。"
+    },
+    "cutscene.ending.reimu.run.018": {
+      "exact_glyphs": 32,
+      "text": "夢美　：とにかく、約束だったわね。あなたの望みを叶えてあげるわ。"
+    },
+    "cutscene.ending.reimu.run.019": {
+      "exact_glyphs": 7,
+      "text": "靈夢　：ほんと"
+    },
+    "cutscene.ending.reimu.run.020": {
+      "exact_glyphs": 5,
+      "text": "　やったぁ"
+    },
+    "cutscene.ending.reimu.run.021": {
+      "exact_glyphs": 30,
+      "text": "夢美　：・・・いっとくけど、私も人間だから無茶いわないでね。"
+    },
+    "cutscene.ending.reimu.run.022": {
+      "exact_glyphs": 16,
+      "text": "靈夢　：んじゃね。そーねぇ・・・"
+    },
+    "cutscene.ending.reimu.run.023": {
+      "exact_glyphs": 14,
+      "text": "靈夢　：・・・なにができるの"
+    },
+    "cutscene.ending.reimu.run.024": {
+      "exact_glyphs": 12,
+      "text": "夢美　：いやまあ、その。"
+    },
+    "cutscene.ending.reimu.run.025": {
+      "exact_glyphs": 35,
+      "text": "靈夢　：まぁ、いいや。じゃ、わたし毎日広い神社を掃除するのが大変なの。"
+    },
+    "cutscene.ending.reimu.run.026": {
+      "exact_glyphs": 28,
+      "text": "だからなんか、すぱすぱすぱって掃除しおわるように出来ない"
+    },
+    "cutscene.ending.reimu.run.027": {
+      "exact_glyphs": 6,
+      "text": "夢美　：んっ"
+    },
+    "cutscene.ending.reimu.run.028": {
+      "exact_glyphs": 3,
+      "text": "　ＯＫ"
+    },
+    "cutscene.ending.reimu.run.029": {
+      "exact_glyphs": 29,
+      "text": "　　　　そうね、じゃぁ、家事専門のアンドロイドをあげるわ。"
+    },
+    "cutscene.ending.reimu.run.030": {
+      "exact_glyphs": 7,
+      "text": "靈夢　：おぉ～"
+    },
+    "cutscene.ending.reimu.run.031": {
+      "exact_glyphs": 12,
+      "text": "夢美　：いでよ、ま○ち～"
+    },
+    "cutscene.ending.reimu.run.032": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.ending.reimu.run.033": {
+      "exact_glyphs": 12,
+      "text": "ちゆり：って、やばいって"
+    },
+    "cutscene.ending.reimu.run.034": {
+      "exact_glyphs": 15,
+      "text": "夢美　：はい。じゃぁ、無難に。"
+    },
+    "cutscene.ending.reimu.run.035": {
+      "exact_glyphs": 27,
+      "text": "夢美　：うちの家事担当なんだけど、あなたにあげますわ。"
+    },
+    "cutscene.ending.reimu.run.036": {
+      "exact_glyphs": 14,
+      "text": "靈夢　：そうそう、そんな感じ"
+    },
+    "cutscene.ending.reimu.run.037": {
+      "exact_glyphs": 7,
+      "text": "　でも、いいの"
+    },
+    "cutscene.ending.reimu.run.038": {
+      "exact_glyphs": 34,
+      "text": "夢美　：約束だったし、それに掃除とかはちゆりにやらせるから大丈夫よ。"
+    },
+    "cutscene.ending.reimu.run.039": {
+      "exact_glyphs": 8,
+      "text": "ちゆり：えぇ～。"
+    },
+    "cutscene.ending.reimu.run.040": {
+      "exact_glyphs": 24,
+      "text": "夢美　：さっきから、人の頭ポンポン殴ってるでしょ"
+    },
+    "cutscene.ending.reimu.run.041": {
+      "exact_glyphs": 32,
+      "text": "夢美　：じゃ、こいつの名前は‘る～こと’。半永久的に動作するし、"
+    },
+    "cutscene.ending.reimu.run.042": {
+      "exact_glyphs": 29,
+      "text": "掃除以外にも、炊事、洗濯等もしてくれる万能アンドロイドよ。"
+    },
+    "cutscene.ending.reimu.run.043": {
+      "exact_glyphs": 9,
+      "text": "靈夢　：ありがとう"
+    },
+    "cutscene.ending.reimu.run.044": {
+      "exact_glyphs": 6,
+      "text": "　ドラ○もん"
+    },
+    "cutscene.ending.reimu.run.045": {
+      "exact_glyphs": 8,
+      "text": "夢美　：だれがよ"
+    },
+    "cutscene.ending.reimu.run.046": {
+      "exact_glyphs": 20,
+      "text": "夢美　：じゃ、私達は帰るわね。お達者で～"
+    },
+    "cutscene.ending.reimu.run.047": {
+      "exact_glyphs": 13,
+      "text": "　　　　それから・・・・・"
+    },
+    "cutscene.ending.reimu.run.048": {
+      "exact_glyphs": 16,
+      "text": "魔理沙：お～い。遊びに来たよ～。"
+    },
+    "cutscene.ending.reimu.run.049": {
+      "exact_glyphs": 19,
+      "text": "　　　　お掃除ロボの方はどんな感じだい"
+    },
+    "cutscene.ending.reimu.run.050": {
+      "exact_glyphs": 16,
+      "text": "魔理沙：・・・・・・・・・・・・"
+    },
+    "cutscene.ending.reimu.run.051": {
+      "exact_glyphs": 23,
+      "text": "靈夢　：やぁ、魔理沙か。今、お茶飲んでるとこ。"
+    },
+    "cutscene.ending.reimu.run.052": {
+      "exact_glyphs": 13,
+      "text": "　　　　って、何やってんの"
+    },
+    "cutscene.ending.reimu.run.053": {
+      "exact_glyphs": 5,
+      "text": "、魔理沙。"
+    },
+    "cutscene.ending.reimu.run.054": {
+      "exact_glyphs": 25,
+      "text": "魔理沙：いやまぁ、神社に入っていきなりこれだから。"
+    },
+    "cutscene.ending.reimu.run.055": {
+      "exact_glyphs": 10,
+      "text": "靈夢　：どうかしたの"
+    },
+    "cutscene.ending.reimu.run.056": {
+      "exact_glyphs": 23,
+      "text": "魔理沙：あまりにも神社っぽい雰囲気だったんで、"
+    },
+    "cutscene.ending.reimu.run.057": {
+      "exact_glyphs": 13,
+      "text": "ちょっとめまいがしただけ。"
+    },
+    "cutscene.ending.reimu.run.058": {
+      "exact_glyphs": 24,
+      "text": "靈夢　：魔理沙、めまいって、転んでるわよ・・・。"
+    },
+    "cutscene.ending.reimu.run.059": {
+      "exact_glyphs": 14,
+      "text": "魔理沙：まぁ、なんだ。その。"
+    },
+    "cutscene.ending.reimu.run.060": {
+      "exact_glyphs": 25,
+      "text": "魔理沙：それはともかく、掃除の方ははかどってるかい"
+    },
+    "cutscene.ending.reimu.run.061": {
+      "exact_glyphs": 23,
+      "text": "靈夢　：それがね。る～ことに掃除を頼むとね・・"
+    },
+    "cutscene.ending.reimu.run.062": {
+      "exact_glyphs": 27,
+      "text": "　　　　ものすごく、うれしそうに掃除を始めるんだけど。"
+    },
+    "cutscene.ending.reimu.run.063": {
+      "exact_glyphs": 29,
+      "text": "靈夢　：ほうきを使って掃除するし、ものすごく手際が悪いの。"
+    },
+    "cutscene.ending.reimu.run.064": {
+      "exact_glyphs": 28,
+      "text": "靈夢　：時間もかかるし、結局自分も手伝う羽目になるのよ。"
+    },
+    "cutscene.ending.reimu.run.065": {
+      "exact_glyphs": 32,
+      "text": "靈夢　：まったく、なんでアンドロイドをつくるなんて高い科学技術を"
+    },
+    "cutscene.ending.reimu.run.066": {
+      "exact_glyphs": 23,
+      "text": "もっていて、わざわざ、実用的にしないんだろね。"
+    },
+    "cutscene.ending.reimu.run.067": {
+      "exact_glyphs": 14,
+      "text": "魔理沙：趣味なんじゃねーの。"
+    },
+    "cutscene.ending.reimu.run.068": {
+      "exact_glyphs": 25,
+      "text": "る～こと：あの～。どこ、掃除すればいいんでしたっけ"
+    },
+    "cutscene.ending.reimu.run.069": {
+      "exact_glyphs": 23,
+      "text": "靈夢　：どこでも好きなとこ掃除してていいわよ。"
+    },
+    "cutscene.ending.reimu.run.070": {
+      "exact_glyphs": 8,
+      "text": "る～こと：は～い"
+    },
+    "cutscene.ending.reimu.run.071": {
+      "exact_glyphs": 23,
+      "text": "魔理沙：と、とにかく、る～ことの動力はなんなの"
+    },
+    "cutscene.ending.reimu.run.072": {
+      "exact_glyphs": 15,
+      "text": "靈夢　：それが、謎なのよねぇ。"
+    },
+    "cutscene.ending.reimu.run.073": {
+      "exact_glyphs": 29,
+      "text": "　　　　何も食べて無いようだし、どこにも燃料の口が無いし、"
+    },
+    "cutscene.ending.reimu.run.074": {
+      "exact_glyphs": 24,
+      "text": "　　　　でも、半永久的に動作するって言ってたわ。"
+    },
+    "cutscene.ending.reimu.run.075": {
+      "exact_glyphs": 32,
+      "text": "魔理沙：半永久的ってのは、ただ単に御主人様の寿命より長いってこと"
+    },
+    "cutscene.ending.reimu.run.076": {
+      "exact_glyphs": 6,
+      "text": "じゃないのか"
+    },
+    "cutscene.ending.reimu.run.077": {
+      "exact_glyphs": 22,
+      "text": "　じゃなきゃ、熱量保存の法則に反するじゃん。"
+    },
+    "cutscene.ending.reimu.run.078": {
+      "exact_glyphs": 34,
+      "text": "靈夢　：そぉね。じゃ、交換不能の電池みたいなものを積んでるのかもね。"
+    },
+    "cutscene.ending.reimu.run.079": {
+      "exact_glyphs": 36,
+      "text": "魔理沙：わかんないよ～、ひょっとしたら、夜な夜な靈夢の生気を吸い取ったり"
+    },
+    "cutscene.ending.reimu.run.080": {
+      "exact_glyphs": 9,
+      "text": "してるのかもよ～。"
+    },
+    "cutscene.ending.reimu.run.081": {
+      "exact_glyphs": 20,
+      "text": "靈夢　：やだ、おどかさないでよ～。もう。"
+    },
+    "cutscene.ending.reimu.run.082": {
+      "exact_glyphs": 5,
+      "text": "る～こと："
+    },
+    "cutscene.ending.reimu.run.083": {
+      "exact_glyphs": 1,
+      "text": "～"
+    },
+    "cutscene.ending.reimu.run.084": {
+      "exact_glyphs": 1,
+      "text": "～"
+    },
+    "cutscene.ending.reimu.run.085": {
+      "exact_glyphs": 17,
+      "text": "　　　　　　　　　　　　　　ＥＮＤ"
+    },
+    "cutscene.ending.mima.run.000": {
+      "exact_glyphs": 26,
+      "text": "夢美　：やっぱ、本物の魔法使いには勝てないっていうの"
+    },
+    "cutscene.ending.mima.run.001": {
+      "exact_glyphs": 8,
+      "text": "夢美　：くやしー"
+    },
+    "cutscene.ending.mima.run.002": {
+      "exact_glyphs": 23,
+      "text": "　どうして私もこの世界に生まれなかったんだよう"
+    },
+    "cutscene.ending.mima.run.003": {
+      "exact_glyphs": 27,
+      "text": "夢美　：・・・こうなったら、あなたたちに真の科学の力を"
+    },
+    "cutscene.ending.mima.run.004": {
+      "exact_glyphs": 6,
+      "text": "見せてやるわ"
+    },
+    "cutscene.ending.mima.run.005": {
+      "exact_glyphs": 27,
+      "text": "夢美　：いでよ、地球壊滅用　四次元ポジトロン爆弾～～～"
+    },
+    "cutscene.ending.mima.run.006": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.ending.mima.run.007": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：いいかげんにしろって"
+    },
+    "cutscene.ending.mima.run.008": {
+      "exact_glyphs": 26,
+      "text": "ちゆり：そんなことしたら私ら、歴史に残る犯罪者だぜ。"
+    },
+    "cutscene.ending.mima.run.009": {
+      "exact_glyphs": 16,
+      "text": "夢美　：パイプ椅子はい～た～い～"
+    },
+    "cutscene.ending.mima.run.010": {
+      "exact_glyphs": 21,
+      "text": "夢美　：まったく、冗談に決まってるでしょが"
+    },
+    "cutscene.ending.mima.run.011": {
+      "exact_glyphs": 26,
+      "text": "夢美　：まぁ、しかたないわね。魔法はあきらめますわ。"
+    },
+    "cutscene.ending.mima.run.012": {
+      "exact_glyphs": 29,
+      "text": "夢美　：でも、データはたくさん取れたから、これらをまとめて"
+    },
+    "cutscene.ending.mima.run.013": {
+      "exact_glyphs": 10,
+      "text": "学会に出してみるわ。"
+    },
+    "cutscene.ending.mima.run.014": {
+      "exact_glyphs": 12,
+      "text": "夢美　：「魔法は実在した"
+    },
+    "cutscene.ending.mima.run.015": {
+      "exact_glyphs": 20,
+      "text": "　やはりそれは、宗教と密接な関係があり、"
+    },
+    "cutscene.ending.mima.run.016": {
+      "exact_glyphs": 36,
+      "text": "エネルギー問題や環境問題等を解決し、我々人類を救うのは宗教だ。と・・・」"
+    },
+    "cutscene.ending.mima.run.017": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：それ、なんか違うと思うぜ。"
+    },
+    "cutscene.ending.mima.run.018": {
+      "exact_glyphs": 32,
+      "text": "夢美　：とにかく、約束だったわね。あなたの望みを叶えてあげるわ。"
+    },
+    "cutscene.ending.mima.run.019": {
+      "exact_glyphs": 9,
+      "text": "魅魔　：ほんとかい"
+    },
+    "cutscene.ending.mima.run.020": {
+      "exact_glyphs": 9,
+      "text": "　ふふふふふ・・・"
+    },
+    "cutscene.ending.mima.run.021": {
+      "exact_glyphs": 30,
+      "text": "夢美　：・・・いっとくけど、私は人間だから無茶いわないでね。"
+    },
+    "cutscene.ending.mima.run.022": {
+      "exact_glyphs": 15,
+      "text": "魅魔　：ふふっ、そーねぇ・・・"
+    },
+    "cutscene.ending.mima.run.023": {
+      "exact_glyphs": 23,
+      "text": "魅魔　：・・・魔法関連は全く駄目なんだよねぇ。"
+    },
+    "cutscene.ending.mima.run.024": {
+      "exact_glyphs": 13,
+      "text": "　　　　なにができるのさ。"
+    },
+    "cutscene.ending.mima.run.025": {
+      "exact_glyphs": 15,
+      "text": "夢美　：いやまあ、その。え～と"
+    },
+    "cutscene.ending.mima.run.026": {
+      "exact_glyphs": 24,
+      "text": "魅魔　：まぁ、いいや。じゃぁ、月を止めてほしい。"
+    },
+    "cutscene.ending.mima.run.027": {
+      "exact_glyphs": 6,
+      "text": "夢美　：はい"
+    },
+    "cutscene.ending.mima.run.028": {
+      "exact_glyphs": 33,
+      "text": "魅魔　：私は、月が出てるとと力がわくのよ。だから、いつも月が出てる"
+    },
+    "cutscene.ending.mima.run.029": {
+      "exact_glyphs": 9,
+      "text": "ようにしてはしい。"
+    },
+    "cutscene.ending.mima.run.030": {
+      "exact_glyphs": 21,
+      "text": "夢美　：まぁ、その位なら出来ると思うけど。"
+    },
+    "cutscene.ending.mima.run.031": {
+      "exact_glyphs": 10,
+      "text": "ちゆり：ほんとかよ。"
+    },
+    "cutscene.ending.mima.run.032": {
+      "exact_glyphs": 34,
+      "text": "夢美　：・・・計算では、月があと４倍地球から遠ざかれば月の公転周期と"
+    },
+    "cutscene.ending.mima.run.033": {
+      "exact_glyphs": 25,
+      "text": "地球の自転周期がシンクロして、月が静止するはずよ。"
+    },
+    "cutscene.ending.mima.run.034": {
+      "exact_glyphs": 13,
+      "text": "魅魔　：じゃぁ、お願いね。"
+    },
+    "cutscene.ending.mima.run.035": {
+      "exact_glyphs": 24,
+      "text": "夢美　：わかったわ。必ず月は止めといてあげるわ。"
+    },
+    "cutscene.ending.mima.run.036": {
+      "exact_glyphs": 28,
+      "text": "夢美　：じゃぁ、私達はそれをやったら帰るけどお達者でね。"
+    },
+    "cutscene.ending.mima.run.037": {
+      "exact_glyphs": 16,
+      "text": "魅魔　：なかなか、楽しかったよ。"
+    },
+    "cutscene.ending.mima.run.038": {
+      "exact_glyphs": 13,
+      "text": "　　　　それから・・・・・"
+    },
+    "cutscene.ending.mima.run.039": {
+      "exact_glyphs": 28,
+      "text": "　　約束通り月は静止して、いつでも月が見えるようになり、"
+    },
+    "cutscene.ending.mima.run.040": {
+      "exact_glyphs": 19,
+      "text": "　　それからどうなったかというと・・・"
+    },
+    "cutscene.ending.mima.run.041": {
+      "exact_glyphs": 30,
+      "text": "魅魔　：う～ん。いつでも月の光を浴びれるのは気持ちいいわね。"
+    },
+    "cutscene.ending.mima.run.042": {
+      "exact_glyphs": 18,
+      "text": "魅魔　：やっぱり。力がみなぎるわ～。"
+    },
+    "cutscene.ending.mima.run.043": {
+      "exact_glyphs": 27,
+      "text": "魅魔　：・・・・・・ちょっと、靈夢をいじめにいこうかな"
+    },
+    "cutscene.ending.mima.run.044": {
+      "exact_glyphs": 29,
+      "text": "・・・結局、いつもとなんら変わらない生活が続いたようです。"
+    },
+    "cutscene.ending.mima.run.045": {
+      "exact_glyphs": 29,
+      "text": "こうして、この辺一帯はしばらくの間、永遠の満月の力によって"
+    },
+    "cutscene.ending.mima.run.046": {
+      "exact_glyphs": 29,
+      "text": "異常なほど魔法な出来事が、それはもう、たくさん、たくさん、"
+    },
+    "cutscene.ending.mima.run.047": {
+      "exact_glyphs": 19,
+      "text": "本当にたくさん起こったようであります。"
+    },
+    "cutscene.ending.mima.run.048": {
+      "exact_glyphs": 29,
+      "text": "月が、元に戻ったのはそれはまた、かなり先の話になったようで"
+    },
+    "cutscene.ending.mima.run.049": {
+      "exact_glyphs": 5,
+      "text": "あります。"
+    },
+    "cutscene.ending.mima.run.050": {
+      "exact_glyphs": 16,
+      "text": "　　　　　　　　　　　　　ＥＮＤ"
+    },
+    "cutscene.ending.marisa.run.000": {
+      "exact_glyphs": 26,
+      "text": "夢美　：やっぱ、本物の魔法使いには勝てないっていうの"
+    },
+    "cutscene.ending.marisa.run.001": {
+      "exact_glyphs": 8,
+      "text": "夢美　：くやしー"
+    },
+    "cutscene.ending.marisa.run.002": {
+      "exact_glyphs": 23,
+      "text": "　どうして私もこの世界に生まれなかったんだよう"
+    },
+    "cutscene.ending.marisa.run.003": {
+      "exact_glyphs": 27,
+      "text": "夢美　：・・・こうなったら、あなたたちに真の科学の力を"
+    },
+    "cutscene.ending.marisa.run.004": {
+      "exact_glyphs": 6,
+      "text": "見せてやるわ"
+    },
+    "cutscene.ending.marisa.run.005": {
+      "exact_glyphs": 27,
+      "text": "夢美　：いでよ、地球壊滅用　四次元ポジトロン爆弾～～～"
+    },
+    "cutscene.ending.marisa.run.006": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.ending.marisa.run.007": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：いいかげんにしろって"
+    },
+    "cutscene.ending.marisa.run.008": {
+      "exact_glyphs": 26,
+      "text": "ちゆり：そんなことしたら私ら、歴史に残る犯罪者だぜ。"
+    },
+    "cutscene.ending.marisa.run.009": {
+      "exact_glyphs": 16,
+      "text": "夢美　：パイプ椅子はい～た～い～"
+    },
+    "cutscene.ending.marisa.run.010": {
+      "exact_glyphs": 21,
+      "text": "夢美　：まったく、冗談に決まってるでしょが"
+    },
+    "cutscene.ending.marisa.run.011": {
+      "exact_glyphs": 26,
+      "text": "夢美　：まぁ、しかたないわね。魔法はあきらめますわ。"
+    },
+    "cutscene.ending.marisa.run.012": {
+      "exact_glyphs": 29,
+      "text": "夢美　：でも、データはたくさん取れたから、これらをまとめて"
+    },
+    "cutscene.ending.marisa.run.013": {
+      "exact_glyphs": 10,
+      "text": "学会に出してみるわ。"
+    },
+    "cutscene.ending.marisa.run.014": {
+      "exact_glyphs": 12,
+      "text": "夢美　：「魔法は実在した"
+    },
+    "cutscene.ending.marisa.run.015": {
+      "exact_glyphs": 20,
+      "text": "　やはりそれは、宗教と密接な関係があり、"
+    },
+    "cutscene.ending.marisa.run.016": {
+      "exact_glyphs": 36,
+      "text": "エネルギー問題や環境問題等を解決し、我々人類を救うのは宗教だ。と・・・」"
+    },
+    "cutscene.ending.marisa.run.017": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：それ、なんか違うと思うぜ。"
+    },
+    "cutscene.ending.marisa.run.018": {
+      "exact_glyphs": 32,
+      "text": "夢美　：とにかく、約束だったわね。あなたの望みを叶えてあげるわ。"
+    },
+    "cutscene.ending.marisa.run.019": {
+      "exact_glyphs": 9,
+      "text": "魔理沙：うふふふふ"
+    },
+    "cutscene.ending.marisa.run.020": {
+      "exact_glyphs": 21,
+      "text": "夢美　：・・・あんま、無理いっちゃだめよ。"
+    },
+    "cutscene.ending.marisa.run.021": {
+      "exact_glyphs": 11,
+      "text": "魔理沙：うふふふふふふ"
+    },
+    "cutscene.ending.marisa.run.022": {
+      "exact_glyphs": 17,
+      "text": "魔理沙：どんなことだったら出来るの"
+    },
+    "cutscene.ending.marisa.run.023": {
+      "exact_glyphs": 12,
+      "text": "夢美　：いやまあ、その。"
+    },
+    "cutscene.ending.marisa.run.024": {
+      "exact_glyphs": 20,
+      "text": "魔理沙：そ～ねぇ。あなたがほしいってのは"
+    },
+    "cutscene.ending.marisa.run.025": {
+      "exact_glyphs": 6,
+      "text": "夢美　：却下"
+    },
+    "cutscene.ending.marisa.run.026": {
+      "exact_glyphs": 15,
+      "text": "魔理沙：じゃぁ、ちゆりちゃんは"
+    },
+    "cutscene.ending.marisa.run.027": {
+      "exact_glyphs": 8,
+      "text": "ちゆり：きゃっか"
+    },
+    "cutscene.ending.marisa.run.028": {
+      "exact_glyphs": 24,
+      "text": "魔理沙：なによ～。望みかなえてくれてないじゃん。"
+    },
+    "cutscene.ending.marisa.run.029": {
+      "exact_glyphs": 28,
+      "text": "夢美　：うぐ。しかたないわね。少しの間だけあなたのものに"
+    },
+    "cutscene.ending.marisa.run.030": {
+      "exact_glyphs": 5,
+      "text": "なります～"
+    },
+    "cutscene.ending.marisa.run.031": {
+      "exact_glyphs": 15,
+      "text": "魔理沙：変態。わたしはいやよ。"
+    },
+    "cutscene.ending.marisa.run.032": {
+      "exact_glyphs": 7,
+      "text": "夢美　：・・・"
+    },
+    "cutscene.ending.marisa.run.033": {
+      "exact_glyphs": 22,
+      "text": "魔理沙：まぁ、冗談はそのくらいにして・・・。"
+    },
+    "cutscene.ending.marisa.run.034": {
+      "exact_glyphs": 18,
+      "text": "魔理沙：じゃぁねぇ。武器がほしいわ。"
+    },
+    "cutscene.ending.marisa.run.035": {
+      "exact_glyphs": 6,
+      "text": "夢美　：はい"
+    },
+    "cutscene.ending.marisa.run.036": {
+      "exact_glyphs": 23,
+      "text": "魔理沙：なんか、魔法を使わなくてもすむように、"
+    },
+    "cutscene.ending.marisa.run.037": {
+      "exact_glyphs": 15,
+      "text": "そっちの世界の武器がほしいわ。"
+    },
+    "cutscene.ending.marisa.run.038": {
+      "exact_glyphs": 21,
+      "text": "夢美　：わかったわ、それならお安い御用よ。"
+    },
+    "cutscene.ending.marisa.run.039": {
+      "exact_glyphs": 28,
+      "text": "夢美　：じゃぁ、外においておくから、私達これで帰るわね。"
+    },
+    "cutscene.ending.marisa.run.040": {
+      "exact_glyphs": 15,
+      "text": "魔理沙：ちゃんとおいてけよ～。"
+    },
+    "cutscene.ending.marisa.run.041": {
+      "exact_glyphs": 24,
+      "text": "夢美　：それでは、またいつの日かあいましょう～。"
+    },
+    "cutscene.ending.marisa.run.042": {
+      "exact_glyphs": 19,
+      "text": "　　　　　　　　　　それから・・・・・"
+    },
+    "cutscene.ending.marisa.run.043": {
+      "exact_glyphs": 20,
+      "text": "魔理沙：お～い。靈夢～。遊びに来たよ～。"
+    },
+    "cutscene.ending.marisa.run.044": {
+      "exact_glyphs": 19,
+      "text": "靈夢　：って、あんた、何にのってるのよ"
+    },
+    "cutscene.ending.marisa.run.045": {
+      "exact_glyphs": 8,
+      "text": "魔理沙：あ、これ"
+    },
+    "cutscene.ending.marisa.run.046": {
+      "exact_glyphs": 18,
+      "text": "　これはね、ミミちゃんっていってね。"
+    },
+    "cutscene.ending.marisa.run.047": {
+      "exact_glyphs": 20,
+      "text": "　　　　ＩＣＢＭっていう武器なんだって。"
+    },
+    "cutscene.ending.marisa.run.048": {
+      "exact_glyphs": 7,
+      "text": "靈夢　：ぶき～"
+    },
+    "cutscene.ending.marisa.run.049": {
+      "exact_glyphs": 11,
+      "text": "　どうやって使うのさ。"
+    },
+    "cutscene.ending.marisa.run.050": {
+      "exact_glyphs": 21,
+      "text": "魔理沙：よくわかんない。けどかわいいでしょ"
+    },
+    "cutscene.ending.marisa.run.051": {
+      "exact_glyphs": 9,
+      "text": "靈夢　：そ、そうか"
+    },
+    "cutscene.ending.marisa.run.052": {
+      "exact_glyphs": 11,
+      "text": "　いやまぁ、その・・・"
+    },
+    "cutscene.ending.marisa.run.053": {
+      "exact_glyphs": 12,
+      "text": "ミミちゃん：きゅ～～～ん"
+    },
+    "cutscene.ending.marisa.run.054": {
+      "exact_glyphs": 16,
+      "text": "　　　　　　　　　　　　　ＥＮＤ"
+    },
+    "cutscene.ending.ellen.run.000": {
+      "exact_glyphs": 26,
+      "text": "夢美　：やっぱ、本物の魔法使いには勝てないっていうの"
+    },
+    "cutscene.ending.ellen.run.001": {
+      "exact_glyphs": 8,
+      "text": "夢美　：くやしー"
+    },
+    "cutscene.ending.ellen.run.002": {
+      "exact_glyphs": 23,
+      "text": "　どうして私もこの世界に生まれなかったんだよう"
+    },
+    "cutscene.ending.ellen.run.003": {
+      "exact_glyphs": 27,
+      "text": "夢美　：・・・こうなったら、あなたたちに真の科学の力を"
+    },
+    "cutscene.ending.ellen.run.004": {
+      "exact_glyphs": 6,
+      "text": "見せてやるわ"
+    },
+    "cutscene.ending.ellen.run.005": {
+      "exact_glyphs": 27,
+      "text": "夢美　：いでよ、地球壊滅用　四次元ポジトロン爆弾～～～"
+    },
+    "cutscene.ending.ellen.run.006": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.ending.ellen.run.007": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：いいかげんにしろって"
+    },
+    "cutscene.ending.ellen.run.008": {
+      "exact_glyphs": 26,
+      "text": "ちゆり：そんなことしたら私ら、歴史に残る犯罪者だぜ。"
+    },
+    "cutscene.ending.ellen.run.009": {
+      "exact_glyphs": 16,
+      "text": "夢美　：パイプ椅子はい～た～い～"
+    },
+    "cutscene.ending.ellen.run.010": {
+      "exact_glyphs": 21,
+      "text": "夢美　：まったく、冗談に決まってるでしょが"
+    },
+    "cutscene.ending.ellen.run.011": {
+      "exact_glyphs": 26,
+      "text": "夢美　：まぁ、しかたないわね。魔法はあきらめますわ。"
+    },
+    "cutscene.ending.ellen.run.012": {
+      "exact_glyphs": 29,
+      "text": "夢美　：でも、データはたくさん取れたから、これらをまとめて"
+    },
+    "cutscene.ending.ellen.run.013": {
+      "exact_glyphs": 10,
+      "text": "学会に出してみるわ。"
+    },
+    "cutscene.ending.ellen.run.014": {
+      "exact_glyphs": 12,
+      "text": "夢美　：「魔法は実在した"
+    },
+    "cutscene.ending.ellen.run.015": {
+      "exact_glyphs": 20,
+      "text": "　やはりそれは、宗教と密接な関係があり、"
+    },
+    "cutscene.ending.ellen.run.016": {
+      "exact_glyphs": 36,
+      "text": "エネルギー問題や環境問題等を解決し、我々人類を救うのは宗教だ。と・・・」"
+    },
+    "cutscene.ending.ellen.run.017": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：それ、なんか違うと思うぜ。"
+    },
+    "cutscene.ending.ellen.run.018": {
+      "exact_glyphs": 32,
+      "text": "夢美　：とにかく、約束だったわね。あなたの望みを叶えてあげるわ。"
+    },
+    "cutscene.ending.ellen.run.019": {
+      "exact_glyphs": 7,
+      "text": "エレン：わ～い"
+    },
+    "cutscene.ending.ellen.run.020": {
+      "exact_glyphs": 11,
+      "text": "　なんにしようかなぁ。"
+    },
+    "cutscene.ending.ellen.run.021": {
+      "exact_glyphs": 16,
+      "text": "夢美　：・・・魔法関連はだめよ。"
+    },
+    "cutscene.ending.ellen.run.022": {
+      "exact_glyphs": 12,
+      "text": "エレン：う～んとね。お店"
+    },
+    "cutscene.ending.ellen.run.023": {
+      "exact_glyphs": 5,
+      "text": "夢美　：へ"
+    },
+    "cutscene.ending.ellen.run.024": {
+      "exact_glyphs": 22,
+      "text": "エレン：ものすごく、繁盛しそうなお店がほしい"
+    },
+    "cutscene.ending.ellen.run.025": {
+      "exact_glyphs": 25,
+      "text": "夢美　：え～と、お店って建物だけつくればいいのかな"
+    },
+    "cutscene.ending.ellen.run.026": {
+      "exact_glyphs": 6,
+      "text": "エレン：うん"
+    },
+    "cutscene.ending.ellen.run.027": {
+      "exact_glyphs": 17,
+      "text": "　出来ればかわいいお店がいいなぁ。"
+    },
+    "cutscene.ending.ellen.run.028": {
+      "exact_glyphs": 14,
+      "text": "夢美　：ところで、なんのお店"
+    },
+    "cutscene.ending.ellen.run.029": {
+      "exact_glyphs": 17,
+      "text": "エレン：ふわふわエレン　魔法のお店"
+    },
+    "cutscene.ending.ellen.run.030": {
+      "exact_glyphs": 9,
+      "text": "夢美　：（ふわふわ"
+    },
+    "cutscene.ending.ellen.run.031": {
+      "exact_glyphs": 1,
+      "text": "）"
+    },
+    "cutscene.ending.ellen.run.032": {
+      "exact_glyphs": 6,
+      "text": "エレン：そう"
+    },
+    "cutscene.ending.ellen.run.033": {
+      "exact_glyphs": 6,
+      "text": "　お願いね。"
+    },
+    "cutscene.ending.ellen.run.034": {
+      "exact_glyphs": 22,
+      "text": "夢美　：わかったわ。お店をたてればいいのね。"
+    },
+    "cutscene.ending.ellen.run.035": {
+      "exact_glyphs": 23,
+      "text": "夢美　：じゃ、私達はそれをやったら帰るからね。"
+    },
+    "cutscene.ending.ellen.run.036": {
+      "exact_glyphs": 12,
+      "text": "エレン：うん。ありがと。"
+    },
+    "cutscene.ending.ellen.run.037": {
+      "exact_glyphs": 19,
+      "text": "　　　　　　　　　　それから・・・・・"
+    },
+    "cutscene.ending.ellen.run.038": {
+      "exact_glyphs": 12,
+      "text": "エレン：繁盛するといいね"
+    },
+    "cutscene.ending.ellen.run.039": {
+      "exact_glyphs": 7,
+      "text": "　ソクラテス。"
+    },
+    "cutscene.ending.ellen.run.040": {
+      "exact_glyphs": 23,
+      "text": "エレン：でも、こんなところでお客くるのかしら。"
+    },
+    "cutscene.ending.ellen.run.041": {
+      "exact_glyphs": 34,
+      "text": "　　　　やっぱり、オープンしたら街まで宣伝にいかなきゃいけないわね。"
+    },
+    "cutscene.ending.ellen.run.042": {
+      "exact_glyphs": 11,
+      "text": "エレン：がんばろうね。"
+    },
+    "cutscene.ending.ellen.run.043": {
+      "exact_glyphs": 16,
+      "text": "　　　　　　　　　　　トントンッ"
+    },
+    "cutscene.ending.ellen.run.044": {
+      "exact_glyphs": 14,
+      "text": "エレン：あらっ、お客かしら。"
+    },
+    "cutscene.ending.ellen.run.045": {
+      "exact_glyphs": 24,
+      "text": "エレン：ごめんなさい。まだオープンしてないの～。"
+    },
+    "cutscene.ending.ellen.run.046": {
+      "exact_glyphs": 14,
+      "text": "？？？：お～い、ちょっと～。"
+    },
+    "cutscene.ending.ellen.run.047": {
+      "exact_glyphs": 23,
+      "text": "エレン：オープンするまで、ちょっと待ってね～。"
+    },
+    "cutscene.ending.ellen.run.048": {
+      "exact_glyphs": 23,
+      "text": "エレン：いきなり、来てくれるなんてうれしいな。"
+    },
+    "cutscene.ending.ellen.run.049": {
+      "exact_glyphs": 16,
+      "text": "エレン：さぁ、急いで準備しましょ"
+    },
+    "cutscene.ending.ellen.run.050": {
+      "exact_glyphs": 16,
+      "text": "　　　　　　　　　　　トントンッ"
+    },
+    "cutscene.ending.ellen.run.051": {
+      "exact_glyphs": 7,
+      "text": "エレン：は～い"
+    },
+    "cutscene.ending.ellen.run.052": {
+      "exact_glyphs": 25,
+      "text": "靈夢　：だから～、神社の敷地内で店を開くなって～の"
+    },
+    "cutscene.ending.ellen.run.053": {
+      "exact_glyphs": 8,
+      "text": "　　　　もぅ～。"
+    },
+    "cutscene.ending.ellen.run.054": {
+      "exact_glyphs": 16,
+      "text": "　　　　　　　　　　　　　ＥＮＤ"
+    },
+    "cutscene.ending.kotohime.run.000": {
+      "exact_glyphs": 26,
+      "text": "夢美　：やっぱ、本物の魔法使いには勝てないっていうの"
+    },
+    "cutscene.ending.kotohime.run.001": {
+      "exact_glyphs": 8,
+      "text": "夢美　：くやしー"
+    },
+    "cutscene.ending.kotohime.run.002": {
+      "exact_glyphs": 23,
+      "text": "　どうして私もこの世界に生まれなかったんだよう"
+    },
+    "cutscene.ending.kotohime.run.003": {
+      "exact_glyphs": 27,
+      "text": "夢美　：・・・こうなったら、あなたたちに真の科学の力を"
+    },
+    "cutscene.ending.kotohime.run.004": {
+      "exact_glyphs": 6,
+      "text": "見せてやるわ"
+    },
+    "cutscene.ending.kotohime.run.005": {
+      "exact_glyphs": 27,
+      "text": "夢美　：いでよ、地球壊滅用　四次元ポジトロン爆弾～～～"
+    },
+    "cutscene.ending.kotohime.run.006": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.ending.kotohime.run.007": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：いいかげんにしろって"
+    },
+    "cutscene.ending.kotohime.run.008": {
+      "exact_glyphs": 26,
+      "text": "ちゆり：そんなことしたら私ら、歴史に残る犯罪者だぜ。"
+    },
+    "cutscene.ending.kotohime.run.009": {
+      "exact_glyphs": 16,
+      "text": "夢美　：パイプ椅子はい～た～い～"
+    },
+    "cutscene.ending.kotohime.run.010": {
+      "exact_glyphs": 21,
+      "text": "夢美　：まったく、冗談に決まってるでしょが"
+    },
+    "cutscene.ending.kotohime.run.011": {
+      "exact_glyphs": 26,
+      "text": "夢美　：まぁ、しかたないわね。魔法はあきらめますわ。"
+    },
+    "cutscene.ending.kotohime.run.012": {
+      "exact_glyphs": 29,
+      "text": "夢美　：でも、データはたくさん取れたから、これらをまとめて"
+    },
+    "cutscene.ending.kotohime.run.013": {
+      "exact_glyphs": 10,
+      "text": "学会に出してみるわ。"
+    },
+    "cutscene.ending.kotohime.run.014": {
+      "exact_glyphs": 12,
+      "text": "夢美　：「魔法は実在した"
+    },
+    "cutscene.ending.kotohime.run.015": {
+      "exact_glyphs": 20,
+      "text": "　やはりそれは、宗教と密接な関係があり、"
+    },
+    "cutscene.ending.kotohime.run.016": {
+      "exact_glyphs": 36,
+      "text": "エネルギー問題や環境問題等を解決し、我々人類を救うのは宗教だ。と・・・」"
+    },
+    "cutscene.ending.kotohime.run.017": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：それ、なんか違うと思うぜ。"
+    },
+    "cutscene.ending.kotohime.run.018": {
+      "exact_glyphs": 32,
+      "text": "夢美　：とにかく、約束だったわね。あなたの望みを叶えてあげるわ。"
+    },
+    "cutscene.ending.kotohime.run.019": {
+      "exact_glyphs": 10,
+      "text": "小兎姫：いらないわ。"
+    },
+    "cutscene.ending.kotohime.run.020": {
+      "exact_glyphs": 5,
+      "text": "夢美　：え"
+    },
+    "cutscene.ending.kotohime.run.021": {
+      "exact_glyphs": 7,
+      "text": "　なによそれ。"
+    },
+    "cutscene.ending.kotohime.run.022": {
+      "exact_glyphs": 30,
+      "text": "小兎姫：どうやら、あなたたちは本当に別世界から来たようだし。"
+    },
+    "cutscene.ending.kotohime.run.023": {
+      "exact_glyphs": 10,
+      "text": "夢美　：どういうこと"
+    },
+    "cutscene.ending.kotohime.run.024": {
+      "exact_glyphs": 31,
+      "text": "小兎姫：私は、この世界の警察よ。普通の人に変装してあなたたちを"
+    },
+    "cutscene.ending.kotohime.run.025": {
+      "exact_glyphs": 7,
+      "text": "調べにきたの。"
+    },
+    "cutscene.ending.kotohime.run.026": {
+      "exact_glyphs": 21,
+      "text": "夢美　：あんまり、ふつーの人っぽくないわよ"
+    },
+    "cutscene.ending.kotohime.run.027": {
+      "exact_glyphs": 24,
+      "text": "小兎姫：・・・まぁ、うさんくさい人たちはいたが。"
+    },
+    "cutscene.ending.kotohime.run.028": {
+      "exact_glyphs": 10,
+      "text": "夢美　：だれのことよ"
+    },
+    "cutscene.ending.kotohime.run.029": {
+      "exact_glyphs": 15,
+      "text": "小兎姫：別世界の人間は管轄外。"
+    },
+    "cutscene.ending.kotohime.run.030": {
+      "exact_glyphs": 9,
+      "text": "夢美　：まぁその。"
+    },
+    "cutscene.ending.kotohime.run.031": {
+      "exact_glyphs": 26,
+      "text": "小兎姫：そにかく、さっさとこの世界から離れるように。"
+    },
+    "cutscene.ending.kotohime.run.032": {
+      "exact_glyphs": 12,
+      "text": "夢美　：なによ、その態度"
+    },
+    "cutscene.ending.kotohime.run.033": {
+      "exact_glyphs": 16,
+      "text": "。望みを叶えるっていってるでしょ"
+    },
+    "cutscene.ending.kotohime.run.034": {
+      "exact_glyphs": 22,
+      "text": "小兎姫：どうせ、たいしたことできないでしょ。"
+    },
+    "cutscene.ending.kotohime.run.035": {
+      "exact_glyphs": 19,
+      "text": "夢美　：私達の科学力をあまくみないでよ"
+    },
+    "cutscene.ending.kotohime.run.036": {
+      "exact_glyphs": 12,
+      "text": "　地球を消し飛ばすぐらい"
+    },
+    "cutscene.ending.kotohime.run.037": {
+      "exact_glyphs": 8,
+      "text": "だってできるわよ"
+    },
+    "cutscene.ending.kotohime.run.038": {
+      "exact_glyphs": 12,
+      "text": "小兎姫：じゃ、やってみて"
+    },
+    "cutscene.ending.kotohime.run.039": {
+      "exact_glyphs": 21,
+      "text": "夢美　：いやその。いまのはもののたとえで。"
+    },
+    "cutscene.ending.kotohime.run.040": {
+      "exact_glyphs": 29,
+      "text": "小兎姫：冗談よ、まぁ、せっかくだから望みかなえてもらうわ。"
+    },
+    "cutscene.ending.kotohime.run.041": {
+      "exact_glyphs": 28,
+      "text": "小兎姫：じゃ、ここにくる途中で会った巫女さんがほしいわ。"
+    },
+    "cutscene.ending.kotohime.run.042": {
+      "exact_glyphs": 6,
+      "text": "夢美　：はい"
+    },
+    "cutscene.ending.kotohime.run.043": {
+      "exact_glyphs": 20,
+      "text": "　まぁ、そのくらいならお安い御用だけど、"
+    },
+    "cutscene.ending.kotohime.run.044": {
+      "exact_glyphs": 11,
+      "text": "あんた、ほんとに警察～"
+    },
+    "cutscene.ending.kotohime.run.045": {
+      "exact_glyphs": 9,
+      "text": "小兎姫：まぁその。"
+    },
+    "cutscene.ending.kotohime.run.046": {
+      "exact_glyphs": 21,
+      "text": "夢美　：じゃ、必ず巫女さんは届けておくわ。"
+    },
+    "cutscene.ending.kotohime.run.047": {
+      "exact_glyphs": 23,
+      "text": "夢美　：それでは、また何時の日か会いましょう。"
+    },
+    "cutscene.ending.kotohime.run.048": {
+      "exact_glyphs": 19,
+      "text": "　　　　　　　　　　それから・・・・・"
+    },
+    "cutscene.ending.kotohime.run.049": {
+      "exact_glyphs": 4,
+      "text": "小兎姫："
+    },
+    "cutscene.ending.kotohime.run.050": {
+      "exact_glyphs": 12,
+      "text": "・・・・・・・・・・・・"
+    },
+    "cutscene.ending.kotohime.run.051": {
+      "exact_glyphs": 12,
+      "text": "いってみただけなんだが。"
+    },
+    "cutscene.ending.kotohime.run.052": {
+      "exact_glyphs": 22,
+      "text": "靈夢　：あんたねぇ、なんて願いごといったのよ"
+    },
+    "cutscene.ending.kotohime.run.053": {
+      "exact_glyphs": 16,
+      "text": "　　　　私はなにもやってない～～"
+    },
+    "cutscene.ending.kotohime.run.054": {
+      "exact_glyphs": 31,
+      "text": "小兎姫：まぁ、この辺犯罪者とかあまりいないから、檻も余ってるし"
+    },
+    "cutscene.ending.kotohime.run.055": {
+      "exact_glyphs": 12,
+      "text": "とりあえず置いておくか。"
+    },
+    "cutscene.ending.kotohime.run.056": {
+      "exact_glyphs": 18,
+      "text": "靈夢　：こらこらこら、早く出せっての"
+    },
+    "cutscene.ending.kotohime.run.057": {
+      "exact_glyphs": 17,
+      "text": "小兎姫：まぁ、わたしがあきるまでね"
+    },
+    "cutscene.ending.kotohime.run.058": {
+      "exact_glyphs": 15,
+      "text": "靈夢　：私がなにをした～～～～"
+    },
+    "cutscene.ending.kotohime.run.059": {
+      "exact_glyphs": 16,
+      "text": "　　　　　　　　　　　　　ＥＮＤ"
+    },
+    "cutscene.ending.kana.run.000": {
+      "exact_glyphs": 26,
+      "text": "夢美　：やっぱ、本物の魔法使いには勝てないっていうの"
+    },
+    "cutscene.ending.kana.run.001": {
+      "exact_glyphs": 8,
+      "text": "夢美　：くやしー"
+    },
+    "cutscene.ending.kana.run.002": {
+      "exact_glyphs": 23,
+      "text": "　どうして私もこの世界に生まれなかったんだよう"
+    },
+    "cutscene.ending.kana.run.003": {
+      "exact_glyphs": 27,
+      "text": "夢美　：・・・こうなったら、あなたたちに真の科学の力を"
+    },
+    "cutscene.ending.kana.run.004": {
+      "exact_glyphs": 6,
+      "text": "見せてやるわ"
+    },
+    "cutscene.ending.kana.run.005": {
+      "exact_glyphs": 27,
+      "text": "夢美　：いでよ、地球壊滅用　四次元ポジトロン爆弾～～～"
+    },
+    "cutscene.ending.kana.run.006": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.ending.kana.run.007": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：いいかげんにしろって"
+    },
+    "cutscene.ending.kana.run.008": {
+      "exact_glyphs": 26,
+      "text": "ちゆり：そんなことしたら私ら、歴史に残る犯罪者だぜ。"
+    },
+    "cutscene.ending.kana.run.009": {
+      "exact_glyphs": 16,
+      "text": "夢美　：パイプ椅子はい～た～い～"
+    },
+    "cutscene.ending.kana.run.010": {
+      "exact_glyphs": 21,
+      "text": "夢美　：まったく、冗談に決まってるでしょが"
+    },
+    "cutscene.ending.kana.run.011": {
+      "exact_glyphs": 26,
+      "text": "夢美　：まぁ、しかたないわね。魔法はあきらめますわ。"
+    },
+    "cutscene.ending.kana.run.012": {
+      "exact_glyphs": 29,
+      "text": "夢美　：でも、データはたくさん取れたから、これらをまとめて"
+    },
+    "cutscene.ending.kana.run.013": {
+      "exact_glyphs": 10,
+      "text": "学会に出してみるわ。"
+    },
+    "cutscene.ending.kana.run.014": {
+      "exact_glyphs": 12,
+      "text": "夢美　：「魔法は実在した"
+    },
+    "cutscene.ending.kana.run.015": {
+      "exact_glyphs": 20,
+      "text": "　やはりそれは、宗教と密接な関係があり、"
+    },
+    "cutscene.ending.kana.run.016": {
+      "exact_glyphs": 36,
+      "text": "エネルギー問題や環境問題等を解決し、我々人類を救うのは宗教だ。と・・・」"
+    },
+    "cutscene.ending.kana.run.017": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：それ、なんか違うと思うぜ。"
+    },
+    "cutscene.ending.kana.run.018": {
+      "exact_glyphs": 32,
+      "text": "夢美　：とにかく、約束だったわね。あなたの望みを叶えてあげるわ。"
+    },
+    "cutscene.ending.kana.run.019": {
+      "exact_glyphs": 9,
+      "text": "カナ　：まってたわ"
+    },
+    "cutscene.ending.kana.run.020": {
+      "exact_glyphs": 30,
+      "text": "夢美　：・・・いっとくけど、私は人間だから無茶いわないでね。"
+    },
+    "cutscene.ending.kana.run.021": {
+      "exact_glyphs": 29,
+      "text": "カナ　：私、いま、とあるお屋敷にとりついてるんだけど・・・"
+    },
+    "cutscene.ending.kana.run.022": {
+      "exact_glyphs": 30,
+      "text": "カナ　：・・そこの家の人、もう騒いでも驚いてくれないんです。"
+    },
+    "cutscene.ending.kana.run.023": {
+      "exact_glyphs": 12,
+      "text": "だから私、つまんなくて。"
+    },
+    "cutscene.ending.kana.run.024": {
+      "exact_glyphs": 26,
+      "text": "カナ　：そろそろ、別の家にうつりたいんですけど・・・"
+    },
+    "cutscene.ending.kana.run.025": {
+      "exact_glyphs": 9,
+      "text": "夢美　：オカルトね"
+    },
+    "cutscene.ending.kana.run.026": {
+      "exact_glyphs": 12,
+      "text": "　そっち方面ならまかして"
+    },
+    "cutscene.ending.kana.run.027": {
+      "exact_glyphs": 8,
+      "text": "カナ　：出来るの"
+    },
+    "cutscene.ending.kana.run.028": {
+      "exact_glyphs": 13,
+      "text": "夢美　：えぇ、たぶん・・・"
+    },
+    "cutscene.ending.kana.run.029": {
+      "exact_glyphs": 16,
+      "text": "　　　　で、どこの家に移りたいの"
+    },
+    "cutscene.ending.kana.run.030": {
+      "exact_glyphs": 13,
+      "text": "カナ　：そこの神社がいいな"
+    },
+    "cutscene.ending.kana.run.031": {
+      "exact_glyphs": 29,
+      "text": "夢美　：わかったわ、必ず、あなたを神社におくってあげるわ。"
+    },
+    "cutscene.ending.kana.run.032": {
+      "exact_glyphs": 11,
+      "text": "カナ　：うん、ありがと"
+    },
+    "cutscene.ending.kana.run.033": {
+      "exact_glyphs": 24,
+      "text": "夢美　：それじゃぁ、また何時の日か会いましょう。"
+    },
+    "cutscene.ending.kana.run.034": {
+      "exact_glyphs": 18,
+      "text": "　　　　　　　　　それから・・・・・"
+    },
+    "cutscene.ending.kana.run.035": {
+      "exact_glyphs": 29,
+      "text": "　約束通り、無事、博麗神社にとりついたカナであったが・・・"
+    },
+    "cutscene.ending.kana.run.036": {
+      "exact_glyphs": 13,
+      "text": "靈夢　：こら～、やかまし～"
+    },
+    "cutscene.ending.kana.run.037": {
+      "exact_glyphs": 11,
+      "text": "　眠れないじゃないの～"
+    },
+    "cutscene.ending.kana.run.038": {
+      "exact_glyphs": 12,
+      "text": "カナ　：きゃははははは。"
+    },
+    "cutscene.ending.kana.run.039": {
+      "exact_glyphs": 14,
+      "text": "靈夢　：夜ぐらい静かにして～"
+    },
+    "cutscene.ending.kana.run.040": {
+      "exact_glyphs": 9,
+      "text": "カナ　：騒霊だもん"
+    },
+    "cutscene.ending.kana.run.041": {
+      "exact_glyphs": 24,
+      "text": "靈夢　：なんでうちにとりつくのよ。私巫女なのよ～"
+    },
+    "cutscene.ending.kana.run.042": {
+      "exact_glyphs": 13,
+      "text": "カナ　：だって、楽しいし。"
+    },
+    "cutscene.ending.kana.run.043": {
+      "exact_glyphs": 18,
+      "text": "靈夢　：そのうち、除霊してやるからね"
+    },
+    "cutscene.ending.kana.run.044": {
+      "exact_glyphs": 11,
+      "text": "カナ　：きゃははははは"
+    },
+    "cutscene.ending.kana.run.045": {
+      "exact_glyphs": 27,
+      "text": "　　　・・・とまぁ、靈夢がカナを除霊出来たかどうかは、"
+    },
+    "cutscene.ending.kana.run.046": {
+      "exact_glyphs": 13,
+      "text": "　　　また、別のお話・・・"
+    },
+    "cutscene.ending.kana.run.047": {
+      "exact_glyphs": 16,
+      "text": "　　　　　　　　　　　　　ＥＮＤ"
+    },
+    "cutscene.ending.rikako.run.000": {
+      "exact_glyphs": 26,
+      "text": "夢美　：やっぱ、本物の魔法使いには勝てないっていうの"
+    },
+    "cutscene.ending.rikako.run.001": {
+      "exact_glyphs": 8,
+      "text": "夢美　：くやしー"
+    },
+    "cutscene.ending.rikako.run.002": {
+      "exact_glyphs": 23,
+      "text": "　どうして私もこの世界に生まれなかったんだよう"
+    },
+    "cutscene.ending.rikako.run.003": {
+      "exact_glyphs": 27,
+      "text": "夢美　：・・・こうなったら、あなたたちに真の科学の力を"
+    },
+    "cutscene.ending.rikako.run.004": {
+      "exact_glyphs": 6,
+      "text": "見せてやるわ"
+    },
+    "cutscene.ending.rikako.run.005": {
+      "exact_glyphs": 27,
+      "text": "夢美　：いでよ、地球壊滅用　四次元ポジトロン爆弾～～～"
+    },
+    "cutscene.ending.rikako.run.006": {
+      "exact_glyphs": 15,
+      "text": "　　　　　　　　　　　　ボカッ"
+    },
+    "cutscene.ending.rikako.run.007": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：いいかげんにしろって"
+    },
+    "cutscene.ending.rikako.run.008": {
+      "exact_glyphs": 26,
+      "text": "ちゆり：そんなことしたら私ら、歴史に残る犯罪者だぜ。"
+    },
+    "cutscene.ending.rikako.run.009": {
+      "exact_glyphs": 16,
+      "text": "夢美　：パイプ椅子はい～た～い～"
+    },
+    "cutscene.ending.rikako.run.010": {
+      "exact_glyphs": 21,
+      "text": "夢美　：まったく、冗談に決まってるでしょが"
+    },
+    "cutscene.ending.rikako.run.011": {
+      "exact_glyphs": 26,
+      "text": "夢美　：まぁ、しかたないわね。魔法はあきらめますわ。"
+    },
+    "cutscene.ending.rikako.run.012": {
+      "exact_glyphs": 29,
+      "text": "夢美　：でも、データはたくさん取れたから、これらをまとめて"
+    },
+    "cutscene.ending.rikako.run.013": {
+      "exact_glyphs": 10,
+      "text": "学会に出してみるわ。"
+    },
+    "cutscene.ending.rikako.run.014": {
+      "exact_glyphs": 12,
+      "text": "夢美　：「魔法は実在した"
+    },
+    "cutscene.ending.rikako.run.015": {
+      "exact_glyphs": 20,
+      "text": "　やはりそれは、宗教と密接な関係があり、"
+    },
+    "cutscene.ending.rikako.run.016": {
+      "exact_glyphs": 36,
+      "text": "エネルギー問題や環境問題等を解決し、我々人類を救うのは宗教だ。と・・・」"
+    },
+    "cutscene.ending.rikako.run.017": {
+      "exact_glyphs": 17,
+      "text": "ちゆり：それ、なんか違うと思うぜ。"
+    },
+    "cutscene.ending.rikako.run.018": {
+      "exact_glyphs": 32,
+      "text": "夢美　：とにかく、約束だったわね。あなたの望みを叶えてあげるわ。"
+    },
+    "cutscene.ending.rikako.run.019": {
+      "exact_glyphs": 12,
+      "text": "理香子：ふふふ、そ～ねぇ"
+    },
+    "cutscene.ending.rikako.run.020": {
+      "exact_glyphs": 30,
+      "text": "夢美　：・・・いっとくけど、私も人間だから無茶いわないでね。"
+    },
+    "cutscene.ending.rikako.run.021": {
+      "exact_glyphs": 25,
+      "text": "理香子：ふふふ、あなたたちの持つ科学力がほしいわ。"
+    },
+    "cutscene.ending.rikako.run.022": {
+      "exact_glyphs": 6,
+      "text": "夢美　：はい"
+    },
+    "cutscene.ending.rikako.run.023": {
+      "exact_glyphs": 34,
+      "text": "理香子：あなたたちの世界の科学は、ここよりゆうに５世紀は進んでるわ。"
+    },
+    "cutscene.ending.rikako.run.024": {
+      "exact_glyphs": 14,
+      "text": "だから、その知識がほしいの。"
+    },
+    "cutscene.ending.rikako.run.025": {
+      "exact_glyphs": 15,
+      "text": "夢美　：そんなら、お安い御用よ"
+    },
+    "cutscene.ending.rikako.run.026": {
+      "exact_glyphs": 23,
+      "text": "夢美　：じゃ、科学のことしるした本をあげるわ。"
+    },
+    "cutscene.ending.rikako.run.027": {
+      "exact_glyphs": 7,
+      "text": "夢美　：はいっ"
+    },
+    "cutscene.ending.rikako.run.028": {
+      "exact_glyphs": 13,
+      "text": "理香子：うふふ。ありがとう"
+    },
+    "cutscene.ending.rikako.run.029": {
+      "exact_glyphs": 15,
+      "text": "ちゆり：（そんな本でいいのかよ"
+    },
+    "cutscene.ending.rikako.run.030": {
+      "exact_glyphs": 1,
+      "text": "）"
+    },
+    "cutscene.ending.rikako.run.031": {
+      "exact_glyphs": 23,
+      "text": "夢美　：（この世界の科学はこれよりずっと下よ。"
+    },
+    "cutscene.ending.rikako.run.032": {
+      "exact_glyphs": 22,
+      "text": "いきなり高度なの渡してもわかるわけないわ。）"
+    },
+    "cutscene.ending.rikako.run.033": {
+      "exact_glyphs": 10,
+      "text": "理香子：なんかいった"
+    },
+    "cutscene.ending.rikako.run.034": {
+      "exact_glyphs": 8,
+      "text": "夢美　：いやいや"
+    },
+    "cutscene.ending.rikako.run.035": {
+      "exact_glyphs": 15,
+      "text": "　じゃ、私達はこれで帰るわね。"
+    },
+    "cutscene.ending.rikako.run.036": {
+      "exact_glyphs": 9,
+      "text": "理香子：達者でね。"
+    },
+    "cutscene.ending.rikako.run.037": {
+      "exact_glyphs": 19,
+      "text": "　　　　　　　　　　それから・・・・・"
+    },
+    "cutscene.ending.rikako.run.038": {
+      "exact_glyphs": 14,
+      "text": "理香子：これはすごい・・・・"
+    },
+    "cutscene.ending.rikako.run.039": {
+      "exact_glyphs": 32,
+      "text": "理香子：やはり、この世には魔法以外にも優れた力が存在していたわ。"
+    },
+    "cutscene.ending.rikako.run.040": {
+      "exact_glyphs": 28,
+      "text": "理香子：いずれ、この科学が世界に平和をもたらすだろうな。"
+    },
+    "cutscene.ending.rikako.run.041": {
+      "exact_glyphs": 26,
+      "text": "　　　（この世界はめっちゃ平和に見えるんだけど・・・"
+    },
+    "cutscene.ending.rikako.run.042": {
+      "exact_glyphs": 1,
+      "text": "）"
+    },
+    "cutscene.ending.rikako.run.043": {
+      "exact_glyphs": 22,
+      "text": "理香子：なになに、これとこれをまぜると・・・"
+    },
+    "cutscene.ending.rikako.run.044": {
+      "exact_glyphs": 29,
+      "text": "　・・・こうして、理香子はこの世界で有名な科学者になった。"
+    },
+    "cutscene.ending.rikako.run.045": {
+      "exact_glyphs": 20,
+      "text": "　かどうかは、ちょっと分からないですね。"
+    },
+    "cutscene.ending.rikako.run.046": {
+      "exact_glyphs": 16,
+      "text": "　　　　　　　　　　　　　ＥＮＤ"
+    },
+    "cutscene.ending.chiyuri.run.000": {
+      "exact_glyphs": 8,
+      "text": "夢美　：すごいわ"
+    },
+    "cutscene.ending.chiyuri.run.001": {
+      "exact_glyphs": 4,
+      "text": "　ちゆり"
+    },
+    "cutscene.ending.chiyuri.run.002": {
+      "exact_glyphs": 17,
+      "text": "夢美　：これこそ私の求める力だわ。"
+    },
+    "cutscene.ending.chiyuri.run.003": {
+      "exact_glyphs": 19,
+      "text": "夢美　：さっ、いっしょに帰って研究しよ"
+    },
+    "cutscene.ending.chiyuri.run.004": {
+      "exact_glyphs": 25,
+      "text": "ちゆり：おいおい。そのちゆりはこの世界のちゆりだぞ"
+    },
+    "cutscene.ending.chiyuri.run.005": {
+      "exact_glyphs": 36,
+      "text": "　　　　勝手に連れてくとエネルギーの不均衡で平行警察につかまっちゃうぞ。"
+    },
+    "cutscene.ending.chiyuri.run.006": {
+      "exact_glyphs": 18,
+      "text": "夢美　：だまってりゃわかんないって。"
+    },
+    "cutscene.ending.chiyuri.run.007": {
+      "exact_glyphs": 25,
+      "text": "ちゆり：それが、人にものを教えてる者のいうことかよ"
+    },
+    "cutscene.ending.chiyuri.run.008": {
+      "exact_glyphs": 31,
+      "text": "夢美　：うるさいわね。かわりに、このちゆりをこの世界に置いてく"
+    },
+    "cutscene.ending.chiyuri.run.009": {
+      "exact_glyphs": 7,
+      "text": "から大丈夫よ。"
+    },
+    "cutscene.ending.chiyuri.run.010": {
+      "exact_glyphs": 9,
+      "text": "ちゆり：おい、こら"
+    },
+    "cutscene.ending.chiyuri.run.011": {
+      "exact_glyphs": 9,
+      "text": "　ふざけるなって。"
+    },
+    "cutscene.ending.chiyuri.run.012": {
+      "exact_glyphs": 11,
+      "text": "夢美　：冗談よ、冗談。"
+    },
+    "cutscene.ending.chiyuri.run.013": {
+      "exact_glyphs": 31,
+      "text": "夢美　：まっ、とにかくデータはたくさんとれたから、私達は帰って"
+    },
+    "cutscene.ending.chiyuri.run.014": {
+      "exact_glyphs": 11,
+      "text": "これらを考察しましょ。"
+    },
+    "cutscene.ending.chiyuri.run.015": {
+      "exact_glyphs": 7,
+      "text": "ちゆり：だな。"
+    },
+    "cutscene.ending.chiyuri.run.016": {
+      "exact_glyphs": 18,
+      "text": "夢美　：ありがとね。この世界のちゆり"
+    },
+    "cutscene.ending.chiyuri.run.017": {
+      "exact_glyphs": 9,
+      "text": "ちゆり：・・・・・"
+    },
+    "cutscene.ending.chiyuri.run.018": {
+      "exact_glyphs": 1,
+      "text": "。"
+    },
+    "cutscene.ending.chiyuri.run.019": {
+      "exact_glyphs": 19,
+      "text": "　　　　　　　　　　それから・・・・・"
+    },
+    "cutscene.ending.chiyuri.run.020": {
+      "exact_glyphs": 16,
+      "text": "夢美　：さぁて、もどってきたわ。"
+    },
+    "cutscene.ending.chiyuri.run.021": {
+      "exact_glyphs": 22,
+      "text": "このデータをまとめて学会に報告しなくちゃね。"
+    },
+    "cutscene.ending.chiyuri.run.022": {
+      "exact_glyphs": 21,
+      "text": "夢美　：ちゆり～。ちょっときて手伝って～。"
+    },
+    "cutscene.ending.chiyuri.run.023": {
+      "exact_glyphs": 6,
+      "text": "ちゆり：はい"
+    },
+    "cutscene.ending.chiyuri.run.024": {
+      "exact_glyphs": 3,
+      "text": "　×２"
+    },
+    "cutscene.ending.chiyuri.run.025": {
+      "exact_glyphs": 9,
+      "text": "夢美　：えっ・・・"
+    },
+    "cutscene.ending.chiyuri.run.026": {
+      "exact_glyphs": 21,
+      "text": "ちゆり：なんか、付いてきちゃったみたいだぜ"
+    },
+    "cutscene.ending.chiyuri.run.027": {
+      "exact_glyphs": 23,
+      "text": "ちゆり：なんか、おもしろそうだから付いてきたぜ"
+    },
+    "cutscene.ending.chiyuri.run.028": {
+      "exact_glyphs": 6,
+      "text": "夢美　：え～"
+    },
+    "cutscene.ending.chiyuri.run.029": {
+      "exact_glyphs": 3,
+      "text": "　あ、"
+    },
+    "cutscene.ending.chiyuri.run.030": {
+      "exact_glyphs": 7,
+      "text": "夢美　：きゃ～"
+    },
+    "cutscene.ending.chiyuri.run.031": {
+      "exact_glyphs": 12,
+      "text": "　エネルギーの不均衡が～"
+    },
+    "cutscene.ending.chiyuri.run.032": {
+      "exact_glyphs": 29,
+      "text": "　　　　まだ、あの世界に行くだけのエネルギーが溜ってない～"
+    },
+    "cutscene.ending.chiyuri.run.033": {
+      "exact_glyphs": 16,
+      "text": "ちゆり：あはは、ばれなきゃ大丈夫"
+    },
+    "cutscene.ending.chiyuri.run.034": {
+      "exact_glyphs": 15,
+      "text": "夢美　：そういう問題じゃな～い"
+    },
+    "cutscene.ending.chiyuri.run.035": {
+      "exact_glyphs": 27,
+      "text": "　・・・こうして、夢美は二人のちゆりをかかえてちょっと"
+    },
+    "cutscene.ending.chiyuri.run.036": {
+      "exact_glyphs": 15,
+      "text": "騒々しい生活が続いたようです。"
+    },
+    "cutscene.ending.chiyuri.run.037": {
+      "exact_glyphs": 16,
+      "text": "　　　　　　　　　　　　　ＥＮＤ"
+    },
+    "cutscene.ending.yumemi.run.000": {
+      "exact_glyphs": 8,
+      "text": "夢美　：やったわ"
+    },
+    "cutscene.ending.yumemi.run.001": {
+      "exact_glyphs": 9,
+      "text": "　私が本物の本物よ"
+    },
+    "cutscene.ending.yumemi.run.002": {
+      "exact_glyphs": 18,
+      "text": "ちゆり：倒すと、こっちはどうなるんだ"
+    },
+    "cutscene.ending.yumemi.run.003": {
+      "exact_glyphs": 25,
+      "text": "夢美　：もともとあれは、自分そのものなの。だから、"
+    },
+    "cutscene.ending.yumemi.run.004": {
+      "exact_glyphs": 22,
+      "text": "片方のエネルギーが弱まると自然と私に戻るわ。"
+    },
+    "cutscene.ending.yumemi.run.005": {
+      "exact_glyphs": 33,
+      "text": "夢美　：正確にいうと、私が負けても全く結果は同じだったんだけどね。"
+    },
+    "cutscene.ending.yumemi.run.006": {
+      "exact_glyphs": 28,
+      "text": "　　　　（ちがうぞ～、負けるとゲームオーバーになるぞ～）"
+    },
+    "cutscene.ending.yumemi.run.007": {
+      "exact_glyphs": 14,
+      "text": "ちゆり：じゃ、なんでたたかう"
+    },
+    "cutscene.ending.yumemi.run.008": {
+      "exact_glyphs": 16,
+      "text": "夢美　：悔しいじゃん。負けるの。"
+    },
+    "cutscene.ending.yumemi.run.009": {
+      "exact_glyphs": 9,
+      "text": "ちゆり：そ、そうか"
+    },
+    "cutscene.ending.yumemi.run.010": {
+      "exact_glyphs": 33,
+      "text": "夢美　：とにかく、十分すぎるほど魔法に関するデータを集めてきたわ。"
+    },
+    "cutscene.ending.yumemi.run.011": {
+      "exact_glyphs": 20,
+      "text": "夢美　：さ、帰って考察して学会に発表よ～"
+    },
+    "cutscene.ending.yumemi.run.012": {
+      "exact_glyphs": 19,
+      "text": "　　　　　　　　　　それから・・・・・"
+    },
+    "cutscene.ending.yumemi.run.013": {
+      "exact_glyphs": 17,
+      "text": "夢美　：さ、早くまとめないと・・・"
+    },
+    "cutscene.ending.yumemi.run.014": {
+      "exact_glyphs": 23,
+      "text": "　　　・・・・・そんなこんなであいだもまもなく"
+    },
+    "cutscene.ending.yumemi.run.015": {
+      "exact_glyphs": 8,
+      "text": "夢美　：できたわ"
+    },
+    "cutscene.ending.yumemi.run.016": {
+      "exact_glyphs": 13,
+      "text": "　さっ、いくわよ、ちゆり。"
+    },
+    "cutscene.ending.yumemi.run.017": {
+      "exact_glyphs": 5,
+      "text": "ちゆり：へ"
+    },
+    "cutscene.ending.yumemi.run.018": {
+      "exact_glyphs": 4,
+      "text": "　どこへ"
+    },
+    "cutscene.ending.yumemi.run.019": {
+      "exact_glyphs": 15,
+      "text": "夢美　：学会に決まってるでしょ"
+    },
+    "cutscene.ending.yumemi.run.020": {
+      "exact_glyphs": 22,
+      "text": "　・・・・・・・・・・・・・そして、学会にて"
+    },
+    "cutscene.ending.yumemi.run.021": {
+      "exact_glyphs": 6,
+      "text": "学会　：ぺっ"
+    },
+    "cutscene.ending.yumemi.run.022": {
+      "exact_glyphs": 18,
+      "text": "夢美　：なんで～、なんで駄目なのよ～"
+    },
+    "cutscene.ending.yumemi.run.023": {
+      "exact_glyphs": 32,
+      "text": "ちゆり：そりゃ・・・、ただでさえ今の世の中、魔法って言っただけで"
+    },
+    "cutscene.ending.yumemi.run.024": {
+      "exact_glyphs": 7,
+      "text": "笑われるのに。"
+    },
+    "cutscene.ending.yumemi.run.025": {
+      "exact_glyphs": 32,
+      "text": "ちゆり：御主人様は、‘世界を救うのは宗教だ’とか言うんだもんな。"
+    },
+    "cutscene.ending.yumemi.run.026": {
+      "exact_glyphs": 26,
+      "text": "夢美　：なにがいけないのよ～。その通りじゃんかよ～。"
+    },
+    "cutscene.ending.yumemi.run.027": {
+      "exact_glyphs": 25,
+      "text": "夢美　：ちくしょ～。復讐してやる～。いまにみてろ～"
+    },
+    "cutscene.ending.yumemi.run.028": {
+      "exact_glyphs": 25,
+      "text": "ちゆり：御主人様は前もそれいってあの世界に行った～"
+    },
+    "cutscene.ending.yumemi.run.029": {
+      "exact_glyphs": 13,
+      "text": "夢美　：・・・・・・なによ"
+    },
+    "cutscene.ending.yumemi.run.030": {
+      "exact_glyphs": 28,
+      "text": "　・・・こうして、岡崎夢美はさらなる魔法の力を求め、また"
+    },
+    "cutscene.ending.yumemi.run.031": {
+      "exact_glyphs": 25,
+      "text": "　　　あの世界へと向かう決心をしたようであります。"
+    },
+    "cutscene.ending.yumemi.run.032": {
+      "exact_glyphs": 12,
+      "text": "　　　歴史は、また・・・"
+    },
+    "cutscene.ending.yumemi.run.033": {
+      "exact_glyphs": 16,
+      "text": "　　　　　　　　　　　　　ＥＮＤ"
+    },
+    "cutscene.extra-ending.run.000": {
+      "exact_glyphs": 14,
+      "text": "靈夢　：さっ、掃除しましょ。"
+    },
+    "cutscene.extra-ending.run.001": {
+      "exact_glyphs": 21,
+      "text": "靈夢　：今回の出来事はなかなかだったわね。"
+    },
+    "cutscene.extra-ending.run.002": {
+      "exact_glyphs": 35,
+      "text": "靈夢　：なんで、私のまわりではこんなに変な出来事が起こるのかしら・・・"
+    },
+    "cutscene.extra-ending.run.003": {
+      "exact_glyphs": 21,
+      "text": "靈夢　：でも、何も起こらないよりはましね。"
+    },
+    "cutscene.extra-ending.run.004": {
+      "exact_glyphs": 37,
+      "text": "靈夢　：・・・・・・はぁ、あいつら帰えちゃったから庭も広くなったな～・・・"
+    },
+    "cutscene.extra-ending.run.005": {
+      "exact_glyphs": 17,
+      "text": "靈夢　：掃除、たいへんだな・・・。"
+    },
+    "cutscene.extra-ending.run.006": {
+      "exact_glyphs": 18,
+      "text": "靈夢　：・・・・・・たいくつね・・・"
+    },
+    "cutscene.extra-ending.run.007": {
+      "exact_glyphs": 17,
+      "text": "　　　　　　　　　　　　ガガガガガ"
+    },
+    "cutscene.extra-ending.run.008": {
+      "exact_glyphs": 6,
+      "text": "靈夢　：えっ"
+    },
+    "cutscene.extra-ending.run.009": {
+      "exact_glyphs": 26,
+      "text": "夢美　：学会、追放された～　しくしく、どうして～～～"
+    },
+    "cutscene.extra-ending.run.010": {
+      "exact_glyphs": 10,
+      "text": "ちゆり：また来たぜ。"
+    },
+    "cutscene.extra-ending.run.011": {
+      "exact_glyphs": 7,
+      "text": "靈夢　：・・・"
+    }
+  }
+}

@@ -7765,11 +7765,6 @@ ExperienceRunResult run_new_classic_experience(
 		>(std::move(*loaded_game_text));
 	}
 	if(!parsed.launch.content.cutscene_text_pack.empty()) {
-		if(parsed.launch.content.language_overlay.empty()) {
-			return {.exit_code = fail_output_gain(
-				"cutscene-text-pack", "english-overlay-required"
-			)};
-		}
 		auto loaded_cutscene_text =
 			th03::app::load_new_classic_cutscene_text_pack(
 				parsed.launch.content.cutscene_text_pack
@@ -7782,9 +7777,27 @@ ExperienceRunResult run_new_classic_experience(
 				<< "\nrun=" << loaded_cutscene_text.error().run_index << '\n';
 			return {.exit_code = 1};
 		}
-		const auto expected_locale = loaded_patch_assets->custom_game_text ?
-			loaded_patch_assets->custom_game_text->locale() :
-			th03::app::new_classic_builtin_english_game_text().locale();
+		const bool japanese_catalog =
+			loaded_cutscene_text->source_profile_fnv1a64() ==
+				th03::app::new_classic_cutscene_original_profile_fnv1a64;
+		const bool english_catalog =
+			loaded_cutscene_text->source_profile_fnv1a64() ==
+				th03::app::new_classic_cutscene_english_profile_fnv1a64;
+		if(!japanese_catalog && !english_catalog) {
+			return {.exit_code = fail_output_gain(
+				"cutscene-text-pack", "source-profile-mismatch"
+			)};
+		}
+		if(!japanese_catalog && parsed.launch.content.language_overlay.empty()) {
+			return {.exit_code = fail_output_gain(
+				"cutscene-text-pack", "english-overlay-required"
+			)};
+		}
+		const auto expected_locale = japanese_catalog ?
+			std::string_view{"ja-JP"} :
+			(loaded_patch_assets->custom_game_text ?
+				loaded_patch_assets->custom_game_text->locale() :
+				th03::app::new_classic_builtin_english_game_text().locale());
 		if(loaded_cutscene_text->locale() != expected_locale ||
 			(loaded_patch_assets->custom_messages &&
 				loaded_patch_assets->custom_messages->locale() !=

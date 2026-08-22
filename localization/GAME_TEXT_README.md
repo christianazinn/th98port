@@ -49,9 +49,10 @@ Unicode font work can add another explicit domain without reinterpreting these
 bytes.
 
 Scripted dialogue uses a separate run inventory because its authenticated
-scripts also contain control, timing, picture, page, and audio commands. Build
-`th03-cutscene-text`, run it against a legal content installation, and pass its
-`T3CTR001` output to `make_cutscene_text_author.py` to create a UTF-8
-`T3CTR-AUTHOR-1` scaffold. Both tools use the production script VM rather than
-a shadow parser. See `docs/NEW_CLASSIC_CUTSCENE_TEXT.md` for the complete
-workflow and current runtime-substitution boundary.
+scripts also contain control, timing, picture, page, and audio commands. The
+repository now includes complete UTF-8 English and Japanese author catalogs
+plus source-text-free schemas, so translators do not need to extract DAT
+members just to start or compile a locale. Maintainers can still regenerate
+those schemas through the production script VM. See
+`docs/NEW_CLASSIC_CUTSCENE_TEXT.md` for the complete workflow and current
+runtime-substitution boundary.

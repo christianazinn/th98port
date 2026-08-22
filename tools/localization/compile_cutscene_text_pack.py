@@ -94,13 +94,24 @@ def encode_glyph_pairs(identifier: str, text: object, glyphs: int) -> bytes:
     return encoded
 
 
-def load_catalog(inventory_path: Path, author_path: Path) -> Catalog:
+def load_contract(path: Path) -> dict[str, object]:
+    value = load_json(path)
+    if isinstance(value, dict) and value.get("format") == AUTHOR_MODULE.SCHEMA_FORMAT:
+        try:
+            return AUTHOR_MODULE.load_schema(path)
+        except AUTHOR_MODULE.AuthorError as error:
+            raise PackError(str(error)) from error
     try:
-        inventory = AUTHOR_MODULE.load_inventory(inventory_path)
+        inventory = AUTHOR_MODULE.load_inventory(path)
         # make_author() performs the complete per-script/run shape validation.
         AUTHOR_MODULE.make_author(inventory, "zxx", "")
+        return inventory
     except AUTHOR_MODULE.AuthorError as error:
         raise PackError(str(error)) from error
+
+
+def load_catalog(contract_path: Path, author_path: Path) -> Catalog:
+    inventory = load_contract(contract_path)
     author = load_json(author_path)
     if not isinstance(author, dict) or set(author) != {
         "format", "source_profile", "source_profile_fnv1a64", "locale",
@@ -208,14 +219,18 @@ def write_if_changed(path: Path, data: bytes) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--inventory", type=Path, required=True)
+    contract = parser.add_mutually_exclusive_group(required=True)
+    contract.add_argument("--inventory", type=Path)
+    contract.add_argument("--schema", type=Path)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
     try:
         write_if_changed(
             arguments.output,
-            compile_pack(load_catalog(arguments.inventory, arguments.source)),
+            compile_pack(load_catalog(
+                arguments.inventory or arguments.schema, arguments.source
+            )),
         )
     except PackError as error:
         parser.error(str(error))

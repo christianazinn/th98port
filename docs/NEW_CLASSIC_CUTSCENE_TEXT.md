@@ -9,8 +9,9 @@ The tool emits deterministic `T3CTR001` JSON to standard output. Each maximal
 glyph run receives a stable identifier plus its source offset, original screen
 coordinates, exact glyph count, CP932 bytes, and source digest. A run ends at
 every non-glyph source operation and at a VM-generated full text-box restore.
-The original script and extracted Japanese text are external, locally derived
-inputs and must not be committed.
+The original binary scripts remain external inputs. The repository tracks
+separate source-profile schemas plus UTF-8 Japanese and English author
+catalogs; it does not track `T3CTR001` inventories or original script bytes.
 
 Build and extract an inventory from a legal content installation:
 
@@ -26,7 +27,8 @@ Generate a UTF-8 translator scaffold:
 python tools/localization/make_cutscene_text_author.py `
   --inventory inventory.json `
   --locale ja-JP `
-  --output cutscene-text-ja-JP.json
+  --output cutscene-text-ja-JP.json `
+  --schema-output cutscene-text-ja-JP-schema.json
 ```
 
 For a locale based on the complete English asset profile, inventory that
@@ -37,7 +39,8 @@ out/build/gcc/th03-cutscene-text.exe --data X:\path\to\content `
   --language-overlay X:\path\to\TH3EN.DAT > inventory-en.json
 python tools/localization/make_cutscene_text_author.py `
   --inventory inventory-en.json --locale en-US `
-  --output cutscene-text-en-US.json
+  --output cutscene-text-en-US.json `
+  --schema-output cutscene-text-en-US-schema.json
 ```
 
 The scaffold is `T3CTR-AUTHOR-1`. Every message retains an `exact_glyphs`
@@ -50,12 +53,19 @@ Compile the complete catalog and validate it against all 28 selected scripts:
 
 ```powershell
 python tools/localization/compile_cutscene_text_pack.py `
-  --inventory inventory-en.json --source cutscene-text-en-US.json `
+  --schema localization/cutscene-text-en-US-schema.json `
+  --source localization/cutscene-text-en-US.json `
   --output cutscene-text-en-US.t3ctp
 out/build/gcc/th03-cutscene-text.exe --data X:\path\to\content `
   --language-overlay X:\path\to\TH3EN.DAT `
   --cutscene-text-pack cutscene-text-en-US.t3ctp > inventory-validated.json
 ```
+
+`T3CTR-SCHEMA-1` contains the stable script/run identity, geometry, and source
+hashes required by the compiler, but no source text. Translators can therefore
+copy either tracked author catalog and compile it entirely from the repository;
+maintainers can regenerate the schema from a legal installation to prove that
+the source contract has not drifted.
 
 `T3CTP001` has a deterministic header/body digest, locale and source-profile
 identity, complete script/run directories, and per-run source identities.
@@ -64,15 +74,18 @@ source identities, invalid geometry, and partial catalogs fail before output is
 written or the locale is selected.
 
 Use the pack in New Classic or the replay renderer with
-`--cutscene-text-pack <locale.t3ctp>`. A custom pack requires the authenticated
+`--cutscene-text-pack <locale.t3ctp>`. A Japanese pack authenticates against the
+original script profile. Any other locale authenticates against the complete
 English overlay and must use the same locale as the selected menu/game-text
-catalogs. The runtime never edits or reparses translated script bytes: the
+catalogs. Live New Classic language switching applies a catalog only to its
+matching source profile. The runtime never edits or reparses translated script bytes: the
 authenticated source VM emits its normal operations, and only decoded
 `CutsceneDrawGlyph` payloads are substituted. Commands, waits, cursor movement,
 page changes, pictures, fades, audio, and input boundaries therefore remain
 source-owned. Classic and stock Japanese never open a pack.
 
-The authenticated original corpus currently yields 1,533 runs and 25,849
-glyphs; the longest run is 39 glyphs. Repeated extraction is byte-identical.
-These aggregate facts are safe to record, but the generated inventory and
-author scaffold are not redistribution artifacts.
+The authenticated Japanese profile currently yields 1,533 runs and 25,849
+glyph cells, with a 39-cell maximum run. The English profile yields 1,732 runs
+and 32,847 cells, with a 30-cell maximum run. Repeated extraction, schema
+generation, author generation, and package compilation are byte-identical. The
+complete tracked catalogs live beside `game-text-*.json` under `localization/`.

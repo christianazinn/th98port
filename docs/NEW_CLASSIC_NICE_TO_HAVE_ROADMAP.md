@@ -85,10 +85,12 @@ drives the production VM over all 28 authenticated scripts and emits stable
 `T3CTR-AUTHOR-1` scaffold. `compile_cutscene_text_pack.py` freezes a complete,
 source-bound `T3CTP001` catalog, and the game plus replay renderer substitute
 only semantic glyph operations after the authenticated VM parses them. The
-authenticated Japanese corpus produces 1,533 runs and 25,849 glyphs with a
-39-glyph maximum run; the English overlay produces 1,732 runs and 32,847
-source glyph cells. Both complete profiles validate. Commands and timing are
-never sourced from translated bytes.
+repository now tracks complete Japanese and English author catalogs and
+source-text-free `T3CTR-SCHEMA-1` contracts; both compile without private DAT
+extraction. The Japanese corpus produces 1,533 runs and 25,849 glyph cells
+with a 39-cell maximum run; the English overlay produces 1,732 runs and 32,847
+cells with a 30-cell maximum run. Both complete profiles validate. Commands
+and timing are never sourced from translated bytes.
 
 Character-select name bitmaps and other text baked into otherwise reusable
 images follow after the text renderer can reproduce their layout. Menu headings

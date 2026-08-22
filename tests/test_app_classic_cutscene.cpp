@@ -525,6 +525,10 @@ int main(int argc, char **argv)
 	test_timed_presenter_operations();
 	if(argc == 2) {
 		test_local_scripts(std::filesystem::path(argv[1]));
+	} else if(argc == 3) {
+		test_local_scripts(
+			std::filesystem::path(argv[1]), {}, std::filesystem::path(argv[2])
+		);
 	} else if(argc == 4) {
 		test_local_scripts(
 			std::filesystem::path(argv[1]), std::filesystem::path(argv[2]),
@@ -532,7 +536,8 @@ int main(int argc, char **argv)
 		);
 	} else {
 		expect(argc == 1,
-			"optional local gate accepts a root or root/overlay/text-pack triple");
+			"optional local gate accepts root, root/text-pack, or "
+			"root/overlay/text-pack");
 	}
 
 	if(failures != 0U) {
