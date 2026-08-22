@@ -187,7 +187,7 @@ void test_menu_background_decode()
 		std::ranges::find(decoded->image.indices, 15U) ==
 		decoded->image.indices.end() && decoded->palette &&
 		decoded->palette->colors[8U] == th03::assets::Rgb4{12U, 3U, 14U} &&
-		decoded->palette->colors[9U] == th03::assets::Rgb4{13U, 8U, 15U} &&
+		decoded->palette->colors[9U] == th03::assets::Rgb4{12U, 10U, 15U} &&
 		decoded->palette->colors[11U] == th03::assets::Rgb4{15U, 10U, 15U} &&
 		decoded->palette->colors[12U] == th03::assets::Rgb4{15U, 15U, 0U} &&
 		decoded->palette->colors[13U] == th03::assets::Rgb4{15U, 12U, 15U} &&
@@ -242,7 +242,7 @@ void test_authentic_archive_if_supplied()
 			neutral.image.indices, 15U
 		) == neutral.image.indices.end() && neutral.palette &&
 		neutral.palette->colors[9U] ==
-			th03::assets::Rgb4{13U, 8U, 15U} &&
+			th03::assets::Rgb4{12U, 10U, 15U} &&
 		neutral.palette->colors[12U] ==
 			th03::assets::Rgb4{15U, 15U, 0U} &&
 		neutral.palette->colors[15U] ==
@@ -265,7 +265,7 @@ void test_authentic_archive_if_supplied()
 					return std::ranges::find(background.image.indices, index) ==
 						background.image.indices.end();
 				}) && background.palette->colors[9U] ==
-				th03::assets::Rgb4{13U, 8U, 15U},
+				th03::assets::Rgb4{12U, 10U, 15U},
 			"sample background excludes all reserved pixels and keeps lavender");
 	}
 	expect(loaded->menu_font.width("The PoDD Arrange Project") > 0,

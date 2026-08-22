@@ -557,6 +557,17 @@ void test_download()
 
 int main()
 {
+	expect(th03::app::new_classic_online_credentials_rejected({
+		.code = th03::app::NewClassicOnlineClientErrorCode::http_status,
+		.http_status = 401U,
+	}), "authenticated HTTP 401 identifies a revoked saved credential");
+	expect(!th03::app::new_classic_online_credentials_rejected({
+		.code = th03::app::NewClassicOnlineClientErrorCode::transport,
+		.http_status = 0U,
+	}) && !th03::app::new_classic_online_credentials_rejected({
+		.code = th03::app::NewClassicOnlineClientErrorCode::http_status,
+		.http_status = 500U,
+	}), "network and server failures never authorize credential deletion");
 	test_board_refresh();
 	test_enrollment_and_upload();
 	test_profile_and_device_link();

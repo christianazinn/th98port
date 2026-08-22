@@ -2087,7 +2087,8 @@ NewClassicHighScoreMenu::NewClassicHighScoreMenu(
 	std::uint8_t rank,
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 	NewClassicOnlineMenuMode mode,
-	std::optional<NewClassicScoreDocument> personal_bests
+	std::optional<NewClassicScoreDocument> personal_bests,
+	bool fade_in
 ) :
 	patch_assets_(std::move(patch_assets)),
 	personal_bests_(std::move(personal_bests)),
@@ -2160,7 +2161,9 @@ NewClassicHighScoreMenu::NewClassicHighScoreMenu(
 	valid_ = true;
 	draw();
 	if(valid_) {
-		patch_surface_.raster().set_palette_tone(0);
+		fade_in_active_ = fade_in;
+		input_allowed_ = !fade_in;
+		patch_surface_.raster().set_palette_tone(fade_in ? 0 : 100);
 		patch_surface_.raster().apply_pending_palette();
 	}
 }
@@ -2382,7 +2385,7 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 			selected ? 12U : 15U
 		);
 		if(selected) {
-			valid_ = font.put(raster, 24, top, ">", 12U);
+			valid_ = font.put(raster, 20, top, ">", 12U);
 		}
 		const auto replay_it = entry.replay_id ? std::ranges::find(
 			row_board.replay_records, *entry.replay_id,

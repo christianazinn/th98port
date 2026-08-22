@@ -929,7 +929,7 @@ decode_new_classic_menu_background(
 	// fixed across every screen so navigation never changes title, status, or
 	// selection colors. New artwork is authored without these indices.
 	result.palette->colors[8U] = {12U, 3U, 14U};
-	result.palette->colors[9U] = {13U, 8U, 15U};
+	result.palette->colors[9U] = {12U, 10U, 15U};
 	result.palette->colors[11U] = {15U, 10U, 15U};
 	result.palette->colors[12U] = {15U, 15U, 0U};
 	result.palette->colors[13U] = {15U, 12U, 15U};

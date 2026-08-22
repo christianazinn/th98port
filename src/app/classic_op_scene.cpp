@@ -417,6 +417,12 @@ ClassicOpTitleMenuScene::ClassicOpTitleMenuScene(
 		}
 	}
 	menu_base_snapshot_valid_ = true;
+	const bool input_allowed_after_return = menu_input_allowed_;
+	if(!draw_main_choices()) {
+		fail();
+	} else {
+		menu_input_allowed_ = input_allowed_after_return;
+	}
 }
 
 std::expected<std::unique_ptr<ClassicOpTitleMenuScene>, ClassicOpError>
@@ -1107,7 +1113,7 @@ bool ClassicOpTitleMenuScene::draw_vs_choice(
 			!vs_choice_available(resident_, choice) ? 8U :
 			(attribute == present::tram_black ? 0U : 15U)
 		);
-		const auto center = box_submenu_center_x - 4;
+		const auto center = box_submenu_center_x;
 		const auto text = patch_assets_->messages().text(
 			NewClassicMessageId::netplay_online_match
 		);

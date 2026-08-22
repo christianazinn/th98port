@@ -712,23 +712,22 @@ void test_room_profile_child()
 		static_cast<void>(room.consume({.ui = {.down = true}}));
 		release(room);
 	}
-	static_cast<void>(room.consume({.ui = {.confirm = true}}));
-	auto opened = finish_fade_out(room);
+	auto opened = room.consume({.ui = {.confirm = true}});
 	expect(opened.status == NewClassicNetplayRoomStatus::profile_requested &&
 		!room.take_launch(),
-		"Online Profile is a retained child with no socket side effect");
+		"Online Profile opens immediately as a retained child with no socket side effect");
 	expect(room.show_profile_failure(),
 		"an explicit profile transport failure becomes visible");
 	release(room);
 	static_cast<void>(room.consume({.ui = {.confirm = true}}));
 	release(room);
-	static_cast<void>(room.consume({.ui = {.confirm = true}}));
-	opened = finish_fade_out(room);
+	opened = room.consume({.ui = {.confirm = true}});
 	expect(opened.status == NewClassicNetplayRoomStatus::profile_requested,
 		"profile failure dismissal returns to the exact Online Profile row");
 	expect(room.resume_after_profile() &&
-		room.status() == NewClassicNetplayRoomStatus::running,
-		"closing Online Profile returns to its exact room-menu row");
+		room.status() == NewClassicNetplayRoomStatus::running &&
+		room.surface().palette_tone == 100,
+		"closing Online Profile returns immediately to its exact room-menu row");
 }
 
 void test_authentic_menu_previews_if_requested()

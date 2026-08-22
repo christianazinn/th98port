@@ -57,7 +57,10 @@ NewClassicOnlineProfileScene::NewClassicOnlineProfileScene(
 	}
 	valid_ = draw();
 	if(valid_) {
-		patch_surface_.raster().set_palette_tone(0);
+		phase_ = Phase::menu;
+		patch_surface_.raster().set_palette_tone(100);
+		patch_surface_.raster().apply_pending_palette();
+		require_release();
 	}
 }
 
@@ -177,9 +180,7 @@ void NewClassicOnlineProfileScene::begin_fade_out(
 	NewClassicOnlineProfileAction action
 ) noexcept
 {
-	phase_ = Phase::fade_out;
-	fade_boundary_ = 0U;
-	fade_out_action_ = std::move(action);
+	action_ = std::move(action);
 }
 
 bool NewClassicOnlineProfileScene::consume_fade() noexcept

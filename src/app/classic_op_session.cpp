@@ -2657,7 +2657,7 @@ struct ClassicOpSessionBackend final {
 	}
 
 	[[nodiscard]] std::expected<bool, ClassicOpSessionError>
-	start_high_score_menu()
+	start_high_score_menu(bool fade_in = true)
 	{
 		if(!title_completion || !replay_recorder || !patch_assets ||
 			high_scores || high_score_menu) {
@@ -2674,7 +2674,7 @@ struct ClassicOpSessionBackend final {
 		auto menu = std::make_unique<NewClassicHighScoreMenu>(
 			online_boards, title_completion->resident().rank, patch_assets,
 			NewClassicOnlineMenuMode::high_scores,
-			std::move(personal_bests->document)
+			std::move(personal_bests->document), fade_in
 		);
 		if(!menu->valid()) {
 			return false;
@@ -2722,7 +2722,7 @@ struct ClassicOpSessionBackend final {
 		}
 		high_scores.reset();
 		high_score_completion.reset();
-		auto hub = start_high_score_menu();
+		auto hub = start_high_score_menu(false);
 		if(!hub) {
 			return std::unexpected(std::move(hub.error()));
 		}

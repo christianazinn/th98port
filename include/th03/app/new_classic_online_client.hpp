@@ -141,6 +141,13 @@ struct NewClassicOnlineClientError final {
 	std::optional<ReplaySlotStoreError> replay_store{};
 };
 
+// Only an authenticated 401 proves that an otherwise well-formed locally
+// stored identity has been revoked. Timeouts, TLS failures, and server errors
+// must never erase a user's credential.
+[[nodiscard]] bool new_classic_online_credentials_rejected(
+	const NewClassicOnlineClientError &error
+) noexcept;
+
 [[nodiscard]] std::filesystem::path new_classic_online_board_cache_path(
 	const std::filesystem::path &cache_root,
 	const NewClassicOnlineCategory &category

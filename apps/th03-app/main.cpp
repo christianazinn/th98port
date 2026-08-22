@@ -8040,11 +8040,13 @@ ExperienceRunResult run_new_classic_experience(
 				const auto environment_token = environment_value(
 					online_token_environment
 				);
+				bool environment_credentials = false;
 				if(environment_user && environment_token &&
 					th03::app::validate_new_classic_online_credentials({
 						.user_id = *environment_user,
 						.token = *environment_token,
 					})) {
+					environment_credentials = true;
 					credentials = th03::app::NewClassicOnlineCredentials{
 						*environment_user, *environment_token
 					};
@@ -8097,6 +8099,63 @@ ExperienceRunResult run_new_classic_experience(
 						};
 					}
 					profile = std::move(*fetched);
+				}
+				if(!profile && credentials && online_transport &&
+					!environment_credentials &&
+					th03::app::new_classic_online_credentials_rejected(
+						profile.error()
+					)) {
+					if(auto removed = remove_product_online_credentials(
+						credential_path
+					); !removed) {
+						return NetplayFrontendResult{
+							.exit_code = removed.error().code
+						};
+					}
+					auto reacquired = run_retained_menu_network_job(
+						parsed.tick_rate, platform, mapper, audio,
+						account_application_quit,
+						[credential_path,
+						 transport = online_transport->transport()]() {
+							return load_or_enroll_product_online_credentials(
+								credential_path, transport
+							);
+						}
+					);
+					if(!reacquired) {
+						return NetplayFrontendResult{
+							.exit_code = reacquired.error()
+						};
+					}
+					if(account_application_quit) {
+						return NetplayFrontendResult{
+							.disposition =
+								NetplayFrontendDisposition::application_quit
+						};
+					}
+					credentials = std::move(*reacquired);
+					auto refetched = run_retained_menu_network_job(
+						parsed.tick_rate, platform, mapper, audio,
+						account_application_quit,
+						[credentials = *credentials,
+						 transport = online_transport->transport()]() {
+							return th03::app::fetch_new_classic_online_profile(
+								credentials, transport
+							);
+						}
+					);
+					if(!refetched) {
+						return NetplayFrontendResult{
+							.exit_code = refetched.error()
+						};
+					}
+					if(account_application_quit) {
+						return NetplayFrontendResult{
+							.disposition =
+								NetplayFrontendDisposition::application_quit
+						};
+					}
+					profile = std::move(*refetched);
 				}
 				if(!profile) {
 					if(room_run.profile_requested) {

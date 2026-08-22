@@ -2046,8 +2046,9 @@ void local_replay_patch_return_gate(const std::filesystem::path &content_root)
 	}
 	const auto held = (*resumed)->advance({.ok = true});
 	expect(held && (*resumed)->phase() ==
-		th03::app::ClassicOpPhase::main_menu && !held->surface_changed,
-		"Replay Patch Options return preserves the held-input lock");
+		th03::app::ClassicOpPhase::main_menu && !held->surface_changed &&
+		!(*resumed)->take_completion(),
+		"Replay Patch Options return redraws every shadowed row without releasing the held-input lock");
 	expect((*resumed)->advance().has_value(),
 		"Replay Patch Options return unlocks on release");
 	const auto up = (*resumed)->advance({.up = true});

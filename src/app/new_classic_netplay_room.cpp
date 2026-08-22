@@ -570,7 +570,7 @@ NewClassicNetplayRoomResult NewClassicNetplayRoom::consume(
 				screen_ = Screen::settings;
 				selection_ = 0U;
 			} else if(selection_ == 4U) {
-				begin_fade_out(NewClassicNetplayRoomStatus::profile_requested);
+				status_ = NewClassicNetplayRoomStatus::profile_requested;
 				return {.status = status_};
 			} else {
 				begin_fade_out(NewClassicNetplayRoomStatus::back);
@@ -798,11 +798,12 @@ bool NewClassicNetplayRoom::resume_after_profile() noexcept
 	status_ = NewClassicNetplayRoomStatus::running;
 	screen_ = Screen::menu;
 	selection_ = 4U;
-	phase_ = Phase::fade_in;
+	phase_ = Phase::menu;
 	fade_boundary_ = 0U;
 	require_release();
 	const bool drawn = draw();
-	patch_surface_.raster().set_palette_tone(0);
+	patch_surface_.raster().set_palette_tone(100);
+	patch_surface_.raster().apply_pending_palette();
 	return drawn;
 }
 

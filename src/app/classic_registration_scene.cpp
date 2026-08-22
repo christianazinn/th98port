@@ -1148,20 +1148,13 @@ bool ClassicRegistrationScene::draw_new_classic_overlay() noexcept
 		return false;
 	}
 	const auto &menu_font = patch_assets_->menu_font;
-	std::int32_t maximum_name_width = 0;
-	for(const auto name : new_classic_page_names) {
-		maximum_name_width = std::max(maximum_name_width, menu_font.width(name));
-	}
 	const auto prefix_width = menu_font.width("< ");
-	const auto suffix_width = menu_font.width(" >");
-	const auto heading_left = (present::graphics_width - prefix_width -
-		maximum_name_width - suffix_width) / 2;
-	const auto name_left = heading_left + prefix_width +
-		((maximum_name_width - menu_font.width(new_classic_overlay_[0U])) / 2);
-	if(!menu_font.put(raster_, heading_left, 320, "<", 15U) ||
+	const auto name_left = 24 + prefix_width;
+	if(!menu_font.put(raster_, 24, 320, "<", 15U) ||
 		!menu_font.put(raster_, name_left, 320, new_classic_overlay_[0U], 15U) ||
-		!menu_font.put(raster_, heading_left + prefix_width + maximum_name_width +
-			menu_font.width(" "), 320, ">", 15U)) {
+		!menu_font.put(raster_, name_left +
+			menu_font.width(new_classic_overlay_[0U]) + menu_font.width(" "),
+			320, ">", 15U)) {
 		return false;
 	}
 	std::int32_t left = 24;

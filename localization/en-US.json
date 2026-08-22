@@ -293,8 +293,8 @@
     "key.error.save": "Could not save TH3KEY.CFG",
     "key.value.fallback": "Key {key}",
 
-    "joy.header.buttons": "JOY CONFIGURATION     [ BUTTONS ]",
-    "joy.header.axes": "JOY CONFIGURATION     [ AXES ]",
+    "joy.header.buttons": "[ BUTTONS ]",
+    "joy.header.axes": "[ AXES ]",
     "joy.footer": "Up/Down: Select   Left/Right: Change   Z: OK   Esc: Cancel",
     "joy.command.axes": "Axis and Dead Zone",
     "joy.command.buttons": "Button Mapping",

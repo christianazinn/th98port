@@ -13,7 +13,7 @@ namespace th03::app {
 namespace {
 
 constexpr present::Index4 color_header = 14U;
-constexpr present::Index4 color_page_caret = 10U;
+constexpr present::Index4 color_page_caret = 14U;
 constexpr present::Index4 color_footer = 14U;
 constexpr present::Index4 color_selected = 11U;
 constexpr present::Index4 color_label = 12U;
@@ -22,7 +22,7 @@ constexpr present::Index4 color_value = 15U;
 constexpr std::int32_t header_top = 6 * 16;
 constexpr std::int32_t rows_top = 8 * 16;
 constexpr std::int32_t player_action_top = 10 * 16;
-constexpr std::int32_t command_top = 16 * 16;
+constexpr std::int32_t command_top = 17 * 16;
 constexpr std::int32_t story_label_left = 216;
 constexpr std::int32_t story_value_left = 312;
 constexpr std::int32_t player_action_label_left = 100;
@@ -254,7 +254,9 @@ bool NewClassicKeyConfigScene::draw_story_row(
 ) noexcept
 {
 	const auto &messages = patch_assets_->messages();
-	const auto top = rows_top + (static_cast<std::int32_t>(row) * 16);
+	const auto top = rows_top + (static_cast<std::int32_t>(
+		row + (row >= story_defaults_row ? 1U : 0U)
+	) * 16);
 	if(row <= story_down_row) {
 		std::string fallback{};
 		const auto index = (2U * new_classic_player_action_count) + row;

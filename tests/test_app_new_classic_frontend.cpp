@@ -710,6 +710,13 @@ void test_online_high_score_menu()
 		NewClassicHighScoreMenuStatus::local_selected,
 		"the hub defaults to the existing local HiScore destination");
 
+	NewClassicHighScoreMenu returned(
+		{online_board(2U, 4U, 0x20U)}, 2U, patch_assets,
+		NewClassicOnlineMenuMode::high_scores, std::nullopt, false
+	);
+	expect(returned.valid() && returned.surface().palette_tone == 100,
+		"returning from Local HiScores restores the hub at full tone without a second black-in");
+
 	auto personal_document = new_classic_score_empty();
 	auto &reimu = personal_document.boards[2U][0U];
 	reimu.entries[0U].valid = true;

@@ -107,6 +107,7 @@ bool MainPresenterRollbackAccess::boundary_ready(
 		reimu_reads_idle &&
 		warning_gauge.status_ == MainWarningGaugeStatus::ready &&
 		!warning_gauge.interstitial_active_ &&
+		warning_gauge.nonblocking_interstitial_frames_ == 0U &&
 		hud_result.status_ == MainHudResultStatus::ready &&
 		!hud_result.hud_particle_reads_pending_ &&
 		!hud_result.hud_completed_batch_waiting_ &&
@@ -552,6 +553,8 @@ void MainPresenterRollbackAccess::restore(
 	warning_gauge.next_interstitial_sample_ =
 		state.warning_next_interstitial_sample;
 	warning_gauge.interstitial_active_ = state.warning_interstitial_active;
+	warning_gauge.nonblocking_interstitial_frames_ = 0U;
+	warning_gauge.nonblocking_interstitial_player_mask_ = 0U;
 	warning_gauge.status_ = state.warning_status;
 
 	for(std::size_t slot = 0U; slot < state.hud_banner.size(); ++slot) {

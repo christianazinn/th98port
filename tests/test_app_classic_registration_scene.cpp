@@ -1011,10 +1011,10 @@ void test_new_classic_registration_and_paged_viewer()
 		(*viewer)->raster().shown_page() == Page::zero &&
 		(*viewer)->raster().access_page() == Page::one,
 		"New Classic first ALL frame is complete on hidden page 1 before publication");
-	expect((*viewer)->raster().pixel(Page::zero, {248, 320}) == 1U &&
-		(*viewer)->raster().pixel(Page::one, {248, 320}) == 15U &&
-		(*viewer)->raster().pixel(Page::one, {264, 320}) == 15U,
-		"MNUFONT centered page heading and left caret exist only on the first hidden page");
+	expect((*viewer)->raster().pixel(Page::zero, {24, 320}) == 1U &&
+		(*viewer)->raster().pixel(Page::one, {24, 320}) == 15U &&
+		(*viewer)->raster().pixel(Page::one, {40, 320}) == 15U,
+		"MNUFONT page heading remains left-aligned with the score content and exists only on the first hidden page");
 	const auto first_page = (*viewer)->advance({});
 	expect(first_page && first_page->boundary == ClassicRegistrationBoundary::vsync &&
 		first_page->surface_changed &&

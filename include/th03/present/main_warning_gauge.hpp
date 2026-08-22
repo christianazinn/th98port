@@ -62,12 +62,16 @@ public:
 		const WarningPortraitTransition &transition
 	) noexcept override;
 	void main_gauge_state(const MainGaugeState &state) noexcept override;
+	// Arrange keeps source gameplay live while retaining the complete 27-frame
+	// portrait/tone presentation on each newly composed gameplay page.
+	[[nodiscard]] bool compose_nonblocking_interstitial_frame() noexcept;
 
 	[[nodiscard]] MainWarningGaugeStatus status() const noexcept;
 	[[nodiscard]] bool ready() const noexcept;
 
 private:
 	friend class MainPresenterRollbackAccess;
+	friend class MainRoundPresenter;
 	[[nodiscard]] bool fail(MainWarningGaugeStatus status) noexcept;
 	[[nodiscard]] bool put_warning_text(
 		std::size_t player,
@@ -102,6 +106,8 @@ private:
 	std::array<bool, main_warning_player_count> warning_level_valid_{};
 	std::uint8_t warning_boss_level_ = 0U;
 	std::uint8_t next_interstitial_sample_ = 0U;
+	std::uint8_t nonblocking_interstitial_frames_ = 0U;
+	std::uint8_t nonblocking_interstitial_player_mask_ = 0U;
 	bool interstitial_active_ = false;
 	MainWarningGaugeStatus status_ = MainWarningGaugeStatus::ready;
 };

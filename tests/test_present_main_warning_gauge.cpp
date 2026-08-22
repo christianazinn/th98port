@@ -440,6 +440,16 @@ void test_zero_sample_arrange_warning_continues_immediately()
 		.boss_level = 9U,
 		.sample_count = 0U,
 	});
+	for(std::uint8_t frame = 0U; frame < 27U; ++frame) {
+		expect(presenter.compose_nonblocking_interstitial_frame(),
+			"zero-hold Arrange cut-in composes over a live gameplay frame");
+		expect(raster.palette_tone() ==
+			static_cast<std::int16_t>(100 + (50 * (frame & 1U))),
+			"zero-hold Arrange cut-in retains the complete alternating tone sequence");
+	}
+	expect(presenter.compose_nonblocking_interstitial_frame() &&
+		raster.palette_tone() == 100,
+		"zero-hold Arrange cut-in ends after exactly 27 visual frames");
 	auto lifecycle = idle_lifecycle();
 	lifecycle.players[0U] = {
 		3U, 4U, GaugeBossAttackKind::gauge_bullet, GaugeBossAttackKind::none,

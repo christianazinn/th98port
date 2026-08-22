@@ -318,7 +318,8 @@ public:
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 		NewClassicOnlineMenuMode mode =
 			NewClassicOnlineMenuMode::high_scores,
-		std::optional<NewClassicScoreDocument> personal_bests = std::nullopt
+		std::optional<NewClassicScoreDocument> personal_bests = std::nullopt,
+		bool fade_in = true
 	);
 
 	[[nodiscard]] bool valid() const noexcept;

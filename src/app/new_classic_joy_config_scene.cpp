@@ -160,7 +160,9 @@ bool NewClassicJoyConfigScene::draw_row(
 ) noexcept
 {
 	const auto &messages = patch_assets_->messages();
-	const auto top = rows_top + (static_cast<std::int32_t>(row) * 16);
+	const auto top = rows_top + (static_cast<std::int32_t>(
+		row + (row >= defaults_row ? 1U : 0U)
+	) * 16);
 	if(row == switch_page_row) {
 		return draw_command(
 			messages.text(page_ == Page::buttons ?

@@ -438,7 +438,51 @@ void MainWarningGaugePresenter::warning_interstitial_started(
 		}
 	}
 	interstitial_active_ = started.sample_count != 0U;
+	nonblocking_interstitial_frames_ = started.sample_count == 0U ? 27U : 0U;
+	nonblocking_interstitial_player_mask_ = 0U;
+	if(started.sample_count == 0U) {
+		for(std::size_t player = 0U;
+			player < main_warning_player_count; ++player) {
+			if(started.flashing_players[player]) {
+				nonblocking_interstitial_player_mask_ =
+					static_cast<std::uint8_t>(
+						nonblocking_interstitial_player_mask_ | (1U << player)
+					);
+			}
+		}
+	}
 	next_interstitial_sample_ = 0U;
+}
+
+bool MainWarningGaugePresenter::compose_nonblocking_interstitial_frame() noexcept
+{
+	if(!ready()) {
+		return false;
+	}
+	if(nonblocking_interstitial_frames_ == 0U) {
+		return true;
+	}
+	for(std::size_t player = 0U;
+		player < main_warning_player_count; ++player) {
+		if((nonblocking_interstitial_player_mask_ & (1U << player)) != 0U &&
+			!mrs_put_8(
+				*raster_, static_cast<std::int32_t>(16U + (player * 320U)),
+				16U, *portraits_.images[player]
+			)) {
+			return fail(MainWarningGaugeStatus::draw_failed);
+		}
+	}
+	const auto ordinal = static_cast<std::uint8_t>(
+		27U - nonblocking_interstitial_frames_
+	);
+	palette_->set_tone_and_show_now(
+		*raster_, static_cast<std::int16_t>(100 + (50 * (ordinal & 1U)))
+	);
+	--nonblocking_interstitial_frames_;
+	if(nonblocking_interstitial_frames_ == 0U) {
+		nonblocking_interstitial_player_mask_ = 0U;
+	}
+	return true;
 }
 
 void MainWarningGaugePresenter::warning_interstitial_sample(

@@ -609,6 +609,14 @@ read_local_replay_payload(
 
 } // namespace
 
+bool new_classic_online_credentials_rejected(
+	const NewClassicOnlineClientError &error
+) noexcept
+{
+	return error.code == NewClassicOnlineClientErrorCode::http_status &&
+		error.http_status == 401U;
+}
+
 std::filesystem::path new_classic_online_board_cache_path(
 	const std::filesystem::path &cache_root,
 	const NewClassicOnlineCategory &category

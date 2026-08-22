@@ -148,12 +148,12 @@ void test_source_geometry_and_fade()
 		"first complete BG1 frame is composed hidden and kept black"
 	);
 	expect(
-		pixel(initial, 248U, 96U) == 10U &&
+		pixel(initial, 248U, 96U) == 14U &&
 		pixel(initial, 300U, 96U) == 14U &&
 		pixel(initial, 200U, 128U) == 11U &&
 		pixel(initial, 216U, 128U) == 11U &&
 		pixel(initial, 312U, 128U) == 11U,
-		"Story page carets, title, cursor, label, and value use source positions and colors"
+		"Story page carets, title, cursor, label, and value use visible source positions and colors"
 	);
 	expect(
 		th03::app::NewClassicKeyConfigSceneTestAccess::page(scene) == 2U &&

@@ -1055,6 +1055,10 @@ void MainRoundPresenter::main_frame_footer_reached(
 		return;
 	}
 
+	if(!warning_gauge_->compose_nonblocking_interstitial_frame()) {
+		fail(MainRoundStatus::warning_gauge_failed);
+		return;
+	}
 	// sub_9778() flushes palette_changed before publishing page_back.
 	(void)palette_->apply_if_changed(*raster_);
 	if(!static_->end_frame_swap_and_clear(*raster_)) {
@@ -1097,6 +1101,8 @@ bool MainRoundPresenter::repeat_round_startup(
 	palette_->set_tone_and_show_now(*raster_, 100);
 	phase_ = Phase::boss;
 	warning_interstitial_active_ = false;
+	warning_gauge_->nonblocking_interstitial_frames_ = 0U;
+	warning_gauge_->nonblocking_interstitial_player_mask_ = 0U;
 	warning_suffix_pending_ = false;
 	warning_lifecycle_seen_ = false;
 	background_frame_seen_ = false;
