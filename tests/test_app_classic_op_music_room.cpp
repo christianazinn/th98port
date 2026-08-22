@@ -128,7 +128,8 @@ public:
 
 [[nodiscard]] std::unique_ptr<ClassicOpMusicRoomScene> make_scene(
 	ClassicOpMusicRoomCarry carry = {},
-	GameInit resident = {}
+	GameInit resident = {},
+	const th03::app::NewClassicGameTextCatalog *localized_text = nullptr
 )
 {
 	const SyntheticFont font{};
@@ -137,7 +138,7 @@ public:
 	auto created = ClassicOpMusicRoomSceneTestAccess::
 		create_with_predecoded_assets(
 			std::move(resident), std::move(carry), background(), text,
-			comment_file, font
+			comment_file, font, {}, {}, localized_text
 		);
 	expect(created.has_value(), "synthetic Music Room scene creates");
 	return created ? std::move(*created) : nullptr;
@@ -184,6 +185,11 @@ void test_asset_validation_and_initial_presentation()
 	if(!scene) {
 		return;
 	}
+	auto localized = make_scene(
+		{}, {}, &th03::app::new_classic_builtin_english_game_text()
+	);
+	expect(static_cast<bool>(localized),
+		"all 380 localized Music Room title/comment rows prepare at entry");
 	expect(
 		scene->phase() == ClassicOpMusicRoomPhase::held_release_poll &&
 			scene->selection() == 0U &&

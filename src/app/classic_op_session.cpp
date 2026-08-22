@@ -1075,6 +1075,21 @@ struct ClassicOpSessionBackend final {
 		return patch_assets->custom_cutscene_text;
 	}
 
+	[[nodiscard]] const NewClassicGameTextCatalog *game_text_for(
+		ClassicLanguage language
+	) const noexcept
+	{
+		if(patch_assets && patch_assets->custom_game_text) {
+			const bool japanese =
+				patch_assets->custom_game_text->locale() == "ja-JP";
+			if((language == ClassicLanguage::japanese) == japanese) {
+				return patch_assets->custom_game_text.get();
+			}
+		}
+		return language == ClassicLanguage::english ?
+			&new_classic_builtin_english_game_text() : nullptr;
+	}
+
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
 	apply_language_profile(ClassicLanguage language)
 	{
@@ -1146,12 +1161,10 @@ struct ClassicOpSessionBackend final {
 		compiled = *japanese_compiled;
 		stage_text = *japanese_stage_text;
 		op_music_labels = *japanese_op_music_labels;
-		if(language == ClassicLanguage::english) {
+		if(const auto *game_text = game_text_for(language)) {
 			apply_new_classic_english_text(
 				compiled, stage_text, op_music_labels,
-				patch_assets && patch_assets->custom_game_text ?
-					*patch_assets->custom_game_text :
-					new_classic_builtin_english_game_text()
+				*game_text
 			);
 		}
 		static_content.reset();
@@ -2546,7 +2559,8 @@ struct ClassicOpSessionBackend final {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
 		auto created = ClassicOpMusicRoomScene::create_from_imported_text(
-			*title_completion, music_carry, *resources, op_music_labels, *font
+			*title_completion, music_carry, *resources, op_music_labels, *font,
+			game_text_for(config.language)
 		);
 		if(!created) {
 			return std::unexpected(music_error(std::move(created.error())));
@@ -3207,7 +3221,8 @@ struct ClassicOpSessionBackend final {
 			replay_recorder ? new_classic_score_path : score_path,
 			replay_recorder, replay_recorder ? score_path : std::filesystem::path{},
 			patch_assets,
-			cutscene_text_for(config.language)
+			cutscene_text_for(config.language),
+			game_text_for(config.language)
 		);
 		if(!created) {
 			return std::unexpected(story_error(std::move(created.error())));
@@ -3274,7 +3289,8 @@ struct ClassicOpSessionBackend final {
 				replay_recorder,
 				replay_recorder ? score_path : std::filesystem::path{},
 				patch_assets,
-				cutscene_text_for(config.language)
+				cutscene_text_for(config.language),
+				game_text_for(config.language)
 			);
 			if(!created) {
 				return std::unexpected(story_error(std::move(created.error())));
@@ -4205,7 +4221,8 @@ struct ClassicOpSessionBackend final {
 				.preload_stage_splash = false,
 			},
 			*resources,
-			*font
+			*font,
+			game_text_for(config.language)
 		);
 		if(!created) {
 			return std::unexpected(win_error(std::move(created.error())));

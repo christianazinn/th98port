@@ -1,6 +1,6 @@
 # New Classic game-text preview
 
-`th03-game-text-preview` renders all 61 source-constrained `T3GTL001`
+`th03-game-text-preview` renders all 738 source-constrained `T3GTL001`
 messages without launching gameplay. It uses the production `FONT.ROM`
 provider and graphics-text preparation/blit path, so the output is a review of
 the same CP932 bytes, glyphs, widths, and pixels used by New Classic.
@@ -18,6 +18,7 @@ Omit `--game-text-pack` to render the built-in English catalog. The output is:
 - `stage.ppm`, containing the 18 stage-title lines and nine names;
 - `registration-result.ppm`, containing ten registration names and five
   result labels; and
+- 18 win-quote pages (two for each character) and 19 Music Room comment pages;
 - `preview.json`, a deterministic `T3GTP001` index with every stable message
   ID, page, bounding rectangle, and exact source byte count.
 

@@ -73,6 +73,10 @@ constexpr std::array native_surfaces{
 		"19 source-constrained track-title rows",
 	},
 	NativeSurface{
+		"music-room-comments", "op_music_room", "T3GTL001",
+		"380 fixed DAT rows: 19 tracks by 20 title/comment rows",
+	},
+	NativeSurface{
 		"stage-titles-and-names", "mainl_stage_transition", "T3GTL001",
 		"18 title rows and nine character-name rows",
 	},
@@ -83,6 +87,10 @@ constexpr std::array native_surfaces{
 	NativeSurface{
 		"round-result-labels", "main_round_result", "T3GTL001",
 		"five Clear Bonus result labels",
+	},
+	NativeSurface{
+		"win-quotes", "mainl_win", "T3GTL001",
+		"297 fixed DAT rows: nine characters by 11 blocks by three rows",
 	},
 	NativeSurface{
 		"scripted-dialogue-glyph-runs", "mainl_cutscene", "T3CTP001",

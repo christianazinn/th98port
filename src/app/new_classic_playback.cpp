@@ -265,6 +265,7 @@ struct NewClassicReplayPlayback::Impl final {
 	std::filesystem::path score_path{};
 	std::filesystem::path legacy_score_path{};
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets{};
+	const NewClassicGameTextCatalog *game_text = nullptr;
 	present::KotohimeBombFadeCompatibility kotohime_compatibility{};
 	std::unique_ptr<MainProcess> process{};
 	std::unique_ptr<MainProcessDriver> driver{};
@@ -500,6 +501,7 @@ struct NewClassicReplayPlayback::Impl final {
 		std::filesystem::path score_path_,
 		std::filesystem::path legacy_score_path_,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_,
+		const NewClassicGameTextCatalog *game_text_,
 		present::KotohimeBombFadeCompatibility compatibility,
 		bool reduced_flash_
 	) :
@@ -513,6 +515,7 @@ struct NewClassicReplayPlayback::Impl final {
 		score_path(std::move(score_path_)),
 		legacy_score_path(std::move(legacy_score_path_)),
 		patch_assets(std::move(patch_assets_)),
+		game_text(game_text_),
 		kotohime_compatibility(compatibility),
 		reduced_flash(reduced_flash_)
 	{
@@ -673,7 +676,8 @@ struct NewClassicReplayPlayback::Impl final {
 				loader, static_content, stage_text, staff_compiled, score_path,
 				legacy_score_path, std::move(process), std::move(driver),
 				patch_assets,
-				patch_assets ? patch_assets->custom_cutscene_text : nullptr
+				patch_assets ? patch_assets->custom_cutscene_text : nullptr,
+				game_text
 			);
 			if(!created) {
 				auto error = playback_error(
@@ -726,7 +730,7 @@ struct NewClassicReplayPlayback::Impl final {
 				),
 				.preload_stage_splash = false,
 			},
-			*resources, static_content->font()
+			*resources, static_content->font(), game_text
 		);
 		if(!created) {
 			auto error = playback_error(
@@ -885,9 +889,11 @@ NewClassicReplayPlayback::load_internal(
 	std::optional<NewClassicGameTextCatalog> custom_game_text{};
 	std::optional<NewClassicCutsceneTextCatalog> custom_cutscene_text{};
 	const NewClassicGameTextCatalog *game_text =
-		&new_classic_builtin_english_game_text();
+		request.language == ClassicLanguage::english ?
+			&new_classic_builtin_english_game_text() : nullptr;
 	if(!request.content.game_text_pack.empty()) {
-		if(request.content.language_overlay.empty()) {
+		if(request.language == ClassicLanguage::english &&
+			request.content.language_overlay.empty()) {
 			auto error = playback_error(
 				NewClassicPlaybackErrorCode::game_text_pack_failed
 			);
@@ -904,6 +910,17 @@ NewClassicReplayPlayback::load_internal(
 				NewClassicPlaybackErrorCode::game_text_pack_failed
 			);
 			error.game_text_pack = std::move(loaded.error());
+			return std::unexpected(std::move(error));
+		}
+		const bool japanese_catalog = loaded->locale() == "ja-JP";
+		if(japanese_catalog !=
+			(request.language == ClassicLanguage::japanese)) {
+			auto error = playback_error(
+				NewClassicPlaybackErrorCode::game_text_pack_failed
+			);
+			error.game_text_pack = NewClassicGameTextPackError{
+				.code = NewClassicGameTextPackErrorCode::locale_shape,
+			};
 			return std::unexpected(std::move(error));
 		}
 		custom_game_text.emplace(std::move(*loaded));
@@ -929,7 +946,8 @@ NewClassicReplayPlayback::load_internal(
 		if((!japanese_catalog && !english_catalog) ||
 			japanese_catalog != selected_japanese ||
 			(!japanese_catalog && request.content.language_overlay.empty()) ||
-			(!japanese_catalog && loaded->locale() != game_text->locale())) {
+			(!japanese_catalog && (!game_text ||
+				loaded->locale() != game_text->locale()))) {
 			auto error = playback_error(
 				NewClassicPlaybackErrorCode::cutscene_text_pack_failed
 			);
@@ -1055,6 +1073,11 @@ NewClassicReplayPlayback::load_internal(
 	auto patch_assets = std::make_shared<const NewClassicReplayPatchAssets>(
 		std::move(*loaded_patch_assets)
 	);
+	game_text = request.language == ClassicLanguage::english ?
+		(patch_assets->custom_game_text ? patch_assets->custom_game_text.get() :
+			&new_classic_builtin_english_game_text()) :
+		(patch_assets->custom_game_text ? patch_assets->custom_game_text.get() :
+			nullptr);
 	const auto legacy_score_path = request.content.score;
 	const auto score_path = legacy_score_path.parent_path() / "YUME.NEW.NEM";
 	auto impl = std::make_unique<Impl>(
@@ -1062,6 +1085,7 @@ NewClassicReplayPlayback::load_internal(
 		std::move(*compiled), std::move(*font), std::move(*static_content),
 		std::move(mainl_text->assets), std::move(mainl_text->staff),
 		score_path, legacy_score_path, std::move(patch_assets),
+		game_text,
 		request.kotohime_compatibility,
 		request.reduced_flash
 	);

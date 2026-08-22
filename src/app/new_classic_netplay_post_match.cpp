@@ -104,6 +104,7 @@ namespace {
 struct NewClassicNetplayPostMatch::Impl final {
 	std::vector<std::byte> font_rom{};
 	std::optional<Pc98FontRomProvider> font_provider{};
+	std::optional<NewClassicGameTextCatalog> game_text{};
 	const present::AnkGlyphProvider *font = nullptr;
 	std::unique_ptr<ClassicMainlWinScene> scene{};
 	std::optional<ClassicMainlWinCompletion> completion{};
@@ -133,6 +134,48 @@ std::expected<
 		));
 	}
 	MainResourceLoader loader(request.content.data_root);
+	std::optional<NewClassicGameTextCatalog> custom_game_text{};
+	const bool english = !request.content.language_overlay.empty();
+	const NewClassicGameTextCatalog *fallback = english ?
+		&new_classic_builtin_english_game_text() : nullptr;
+	if(!request.content.game_text_pack.empty()) {
+		auto loaded = load_new_classic_game_text_pack(
+			request.content.game_text_pack, fallback
+		);
+		if(!loaded) {
+			return std::unexpected(NewClassicNetplayPostMatchError{
+				.code = NewClassicNetplayPostMatchErrorCode::game_text_pack_failed,
+				.game_text_pack_error = std::move(loaded.error()),
+			});
+		}
+		if((loaded->locale() == "ja-JP") == english) {
+			return std::unexpected(NewClassicNetplayPostMatchError{
+				.code = NewClassicNetplayPostMatchErrorCode::game_text_pack_failed,
+				.game_text_pack_error = NewClassicGameTextPackError{
+					.code = NewClassicGameTextPackErrorCode::locale_shape,
+				},
+			});
+		}
+		custom_game_text.emplace(std::move(*loaded));
+	}
+	if(english) {
+		auto overlay = load_new_classic_language_overlay(
+			request.content.language_overlay
+		);
+		if(!overlay) {
+			return std::unexpected(NewClassicNetplayPostMatchError{
+				.code = NewClassicNetplayPostMatchErrorCode::language_overlay_failed,
+				.language_overlay_error = std::move(overlay.error()),
+			});
+		}
+		if(!loader.install_authenticated_overrides(
+			std::move(*overlay).release_members()
+		)) {
+			return std::unexpected(post_match_error(
+				NewClassicNetplayPostMatchErrorCode::language_overlay_failed
+			));
+		}
+	}
 	auto resources = loader.load_mainl_win(*selection);
 	if(!resources) {
 		return std::unexpected(NewClassicNetplayPostMatchError{
@@ -152,7 +195,8 @@ std::expected<
 		});
 	}
 	return create_prepared(
-		std::move(request), *resources, *font, true, std::move(*bytes)
+		std::move(request), *resources, *font, true, std::move(*bytes),
+		std::move(custom_game_text), english
 	);
 }
 
@@ -164,7 +208,9 @@ std::expected<
 	std::span<const LoadedMainResource> resources,
 	const present::AnkGlyphProvider &font,
 	bool authenticate_resources,
-	std::vector<std::byte> owned_font_rom
+	std::vector<std::byte> owned_font_rom,
+	std::optional<NewClassicGameTextCatalog> owned_game_text,
+	bool use_builtin_english_text
 )
 {
 	if(!valid_request(request)) {
@@ -186,17 +232,23 @@ std::expected<
 		),
 		.preload_stage_splash = false,
 	};
+	auto impl = std::make_unique<Impl>();
+	impl->game_text = std::move(owned_game_text);
+	const auto *localized_text = impl->game_text ? &*impl->game_text :
+		(use_builtin_english_text ?
+			&new_classic_builtin_english_game_text() : nullptr);
 	auto scene = authenticate_resources ?
-		ClassicMainlWinScene::create(context, resources, font) :
+		ClassicMainlWinScene::create(
+			context, resources, font, localized_text
+		) :
 		ClassicMainlWinTestAccess::create_with_synthetic_resources(
-			context, resources, font
+			context, resources, font, localized_text
 		);
 	if(!scene) {
 		return std::unexpected(post_match_error(
 			NewClassicNetplayPostMatchErrorCode::scene_failed
 		));
 	}
-	auto impl = std::make_unique<Impl>();
 	impl->font_rom = std::move(owned_font_rom);
 	if(!impl->font_rom.empty()) {
 		auto owned_font = Pc98FontRomProvider::from_exact_font_rom(

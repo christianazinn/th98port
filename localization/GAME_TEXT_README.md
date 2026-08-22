@@ -29,7 +29,7 @@ python tools/localization/compile_game_text_pack.py compile `
   --output game-text-my-locale.t3gtl
 ```
 
-Render all 61 compiled messages through the production PC-98 font and
+Render all 738 compiled messages through the production PC-98 font and
 graphics-text path without launching the game:
 
 ```powershell
@@ -39,9 +39,26 @@ out/build/gcc/th03-game-text-preview.exe `
   --game-text-pack game-text-my-locale.t3gtl
 ```
 
-The three 640x400 PPM contact sheets and deterministic `preview.json` make
-glyph coverage, exact row widths, and placement reviewable in one pass. See
+The 40 640x400 PPM contact sheets and deterministic `preview.json` make glyph
+coverage, exact row widths, and placement reviewable in one pass. They cover
+the 61 executable-resident labels, all 297 win-quote rows, and all 380 Music
+Room title/comment rows. See
 `docs/NEW_CLASSIC_GAME_TEXT_PREVIEW.md` for the output contract.
+
+The fixed DAT-resident rows can be regenerated directly from a legal TH03
+archive or extracted member directory:
+
+```powershell
+python tools/localization/make_fixed_game_text_author.py `
+  --archive path/to/YUME1.DAT `
+  --locale ja-JP `
+  --output game-fixed-text-ja-JP.json
+```
+
+Pass `--base-author` to merge those rows into a full `T3GTL-AUTHOR-1`
+catalog. The extractor preserves exact 58-byte win rows and 40-byte Music Room
+rows, validates CP932 and CRLF geometry, and accepts the English overlay's one
+source-authentic exception: its final Ellen row omits only the trailing CRLF.
 
 An authoring file may omit entries only when it names an already validated
 fallback locale. The current runtime renderer is CP932-constrained; future

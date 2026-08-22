@@ -10,6 +10,7 @@
 #include <span>
 
 #include "classic_op_scene_internal.hpp"
+#include "th03/app/new_classic_game_text.hpp"
 #include "op_compiled_text_internal.hpp"
 #include "th03/app/classic_audio.hpp"
 #include "th03/assets/types.hpp"
@@ -164,7 +165,8 @@ public:
 		ClassicOpMusicRoomCarry carry,
 		std::span<const LoadedMainResource> resources,
 		std::span<const std::byte> op_executable,
-		const present::AnkGlyphProvider &font
+		const present::AnkGlyphProvider &font,
+		const NewClassicGameTextCatalog *localized_text = nullptr
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpMusicRoomScene>,
@@ -174,7 +176,8 @@ public:
 		ClassicOpMusicRoomCarry carry,
 		std::span<const LoadedMainResource> resources,
 		const OpMusicRoomTextImport &labels,
-		const present::AnkGlyphProvider &font
+		const present::AnkGlyphProvider &font,
+		const NewClassicGameTextCatalog *localized_text = nullptr
 	);
 
 	~ClassicOpMusicRoomScene();
@@ -237,7 +240,8 @@ private:
 		std::span<const std::byte> comments,
 		const present::AnkGlyphProvider &font,
 		present::Raster raster,
-		present::Tram tram
+		present::Tram tram,
+		const NewClassicGameTextCatalog *localized_text
 	);
 
 	[[nodiscard]] bool initialize_visuals() noexcept;
@@ -301,7 +305,8 @@ struct ClassicOpMusicRoomSceneTestAccess final {
 		std::span<const std::byte> comments,
 		const present::AnkGlyphProvider &font,
 		present::Raster raster = {},
-		present::Tram tram = {}
+		present::Tram tram = {},
+		const NewClassicGameTextCatalog *localized_text = nullptr
 	);
 };
 

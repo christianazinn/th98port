@@ -194,10 +194,13 @@ These can proceed alongside the content migrations:
 These tools should consume the same decoders and schemas as production rather
 than inventing shadow interpretations.
 
-Status: in progress. `th03-game-text-preview` now renders all 61 `T3GTL001`
+Status: in progress. `th03-game-text-preview` now renders all 738 `T3GTL001`
 messages into deterministic 640x400 contact sheets plus a machine-readable
 `T3GTP001` bounds index through the production PC-98 font and graphics-text
-path. `th03-content-audit` now emits or validates the shared production
+path, including all win quotes and Music Room comments. The definitive
+covered-versus-image-baked inventory is
+`NEW_CLASSIC_TEXT_LOCALIZATION_COVERAGE.md`. `th03-content-audit` now emits or
+validates the shared production
 271-resource manifest scene by scene, distinguishes 52 authenticated English
 override members from original extraction dependencies, and records every
 localized semantic surface without claiming that its source backing vanished.

@@ -44,14 +44,14 @@ class ContentAuditTests(unittest.TestCase):
         self.assertEqual(report["loaded_count"], 0)
         self.assertEqual(report["failure_count"], 0)
         self.assertEqual(len(report["scenes"]), 11)
-        self.assertEqual(len(report["native_semantic_surfaces"]), 6)
+        self.assertEqual(len(report["native_semantic_surfaces"]), 8)
         self.assertTrue(all(
             item["source_backing_required"]
             for item in report["native_semantic_surfaces"]
         ))
         self.assertEqual(
             hashlib.sha256(first.stdout.encode("utf-8")).hexdigest().upper(),
-            "DBCCD38C6B4791857F200CE40C1F1BBDE73E51EF67477C82A8DC833F37E7371F",
+            "58CAC8DA7CAB07BDB002303F5973B2077A26F1893B2E2C646EC399FD5B5AC149",
         )
 
     def test_invalid_content_and_overlay_contract_fail_closed(self) -> None:

@@ -124,7 +124,9 @@ std::vector<std::byte> make_messages()
 			);
 			const auto first = (block * 180U) + (line * 60U);
 			std::fill_n(result.begin() + static_cast<std::ptrdiff_t>(first),
-				60U, static_cast<std::byte>(value));
+				58U, static_cast<std::byte>(value));
+			result[first + 58U] = std::byte{0x0DU};
+			result[first + 59U] = std::byte{0x0AU};
 		}
 	}
 	return result;
@@ -537,6 +539,24 @@ void test_silent_fallback_and_atomicity()
 
 void test_all_winners_and_message_blocks()
 {
+	expect(
+		th03::app::classic_mainl_win_text_id(
+			MainCharacter::reimu, 0U, 0U
+		) == th03::app::NewClassicGameTextId::win_quote_00_00,
+		"Reimu selects the first localized win-quote table"
+	);
+	expect(
+		th03::app::classic_mainl_win_text_id(
+			MainCharacter::yumemi, 10U, 2U
+		) == th03::app::NewClassicGameTextId::win_quote_08_32,
+		"Yumemi selects the final localized win-quote table"
+	);
+	expect(
+		th03::app::classic_mainl_win_text_id(
+			MainCharacter::none, 0U, 0U
+		) == th03::app::NewClassicGameTextId::count,
+		"missing winner cannot address a localized quote"
+	);
 	for(std::int8_t winner = 1; winner <= 18; ++winner) {
 		for(std::uint8_t block = 0U; block <= 10U; ++block) {
 			const ClassicMainlWinContext context{
@@ -550,8 +570,35 @@ void test_all_winners_and_message_blocks()
 			auto scene = create_scene(context);
 			expect(scene.has_value(),
 				"every paletted winner and fixed message block constructs");
+			auto resources = resources_for(winner);
+			SyntheticFont font;
+			auto localized = ClassicMainlWinTestAccess::
+				create_with_synthetic_resources(
+					context, resources, font,
+					&th03::app::new_classic_builtin_english_game_text()
+				);
+			expect(localized.has_value(),
+				"every winner and quote block accepts localized fixed rows");
 		}
 	}
+	const ClassicMainlWinContext ellen{
+		.winner_paletted_character = 7,
+		.loser_paletted_character = 1,
+		.message_block = 0U,
+	};
+	auto resources = resources_for(ellen.winner_paletted_character);
+	auto source = std::make_shared<std::vector<std::byte>>(*resources[4U].bytes);
+	source->resize(source->size() - 2U);
+	resources[4U].bytes = source;
+	resources[4U].authenticated_override = true;
+	SyntheticFont font;
+	auto no_final_crlf = ClassicMainlWinTestAccess::
+		create_with_synthetic_resources(
+			ellen, resources, font,
+			&th03::app::new_classic_builtin_english_game_text()
+		);
+	expect(no_final_crlf.has_value(),
+		"source-authentic English Ellen table may omit only its final CRLF");
 }
 
 NewClassicNetplayPostMatchRequest post_match_request(std::int8_t winner)
@@ -664,10 +711,25 @@ void test_netplay_post_match_owner()
 		"nonterminal netplay transition cannot enter MAINL win");
 }
 
-void local_original_gate(const std::filesystem::path &content_root)
+void local_original_gate(
+	const std::filesystem::path &content_root,
+	const std::optional<std::filesystem::path> &language_overlay
+)
 {
 	SyntheticFont font;
 	th03::app::MainResourceLoader loader(content_root);
+	if(language_overlay) {
+		auto loaded = th03::app::load_new_classic_language_overlay(
+			*language_overlay
+		);
+		expect(loaded.has_value(), "local English overlay authenticates");
+		if(!loaded || !loader.install_authenticated_overrides(
+			std::move(*loaded).release_members()
+		)) {
+			expect(false, "local English overlay installs transactionally");
+			return;
+		}
+	}
 	for(std::int8_t winner = 1; winner <= 18; ++winner) {
 		const auto selection = *th03::app::main_player_selection_from_paletted(
 			winner
@@ -687,7 +749,9 @@ void local_original_gate(const std::filesystem::path &content_root)
 				.message_block = block,
 			};
 			auto scene = ClassicMainlWinScene::create(
-				context, *resources, font
+				context, *resources, font,
+				language_overlay ?
+					&th03::app::new_classic_builtin_english_game_text() : nullptr
 			);
 			expect(scene.has_value(),
 				"local original winner/message pair prepares");
@@ -703,10 +767,14 @@ int main(int argc, char **argv)
 	test_silent_fallback_and_atomicity();
 	test_all_winners_and_message_blocks();
 	test_netplay_post_match_owner();
-	if(argc == 2) {
-		local_original_gate(argv[1]);
+	if(argc == 2 || argc == 3) {
+		local_original_gate(
+			argv[1], argc == 3 ?
+				std::optional<std::filesystem::path>{argv[2]} : std::nullopt
+		);
 	} else if(argc != 1) {
-		std::cerr << "usage: test_app_classic_mainl_win [content-root]\n";
+		std::cerr << "usage: test_app_classic_mainl_win "
+			"[content-root [TH3EN.DAT]]\n";
 		return 2;
 	}
 

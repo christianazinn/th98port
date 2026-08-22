@@ -16,10 +16,13 @@ namespace th03::app {
 namespace {
 
 constexpr std::size_t win_message_line_bytes = 60U;
+constexpr std::size_t win_message_text_bytes = 58U;
 constexpr std::size_t win_message_lines = 3U;
 constexpr std::size_t win_message_blocks = 11U;
 constexpr std::size_t win_message_file_bytes =
 	win_message_line_bytes * win_message_lines * win_message_blocks;
+constexpr std::size_t win_message_file_without_final_crlf_bytes =
+	win_message_file_bytes - 2U;
 
 [[nodiscard]] ClassicMainlWinError win_error(
 	ClassicMainlWinErrorCode code,
@@ -196,6 +199,45 @@ template <typename Value, typename Decoder>
 	};
 }
 
+[[nodiscard]] bool valid_message_file(std::span<const std::byte> bytes) noexcept
+{
+	if(bytes.size() != win_message_file_bytes &&
+		bytes.size() != win_message_file_without_final_crlf_bytes) {
+		return false;
+	}
+	constexpr auto rows = win_message_blocks * win_message_lines;
+	for(std::size_t row = 0U; row < rows; ++row) {
+		const auto offset = row * win_message_line_bytes;
+		if(offset + win_message_text_bytes > bytes.size()) {
+			return false;
+		}
+		if(row + 1U == rows &&
+			bytes.size() == win_message_file_without_final_crlf_bytes) {
+			continue;
+		}
+		if(offset + win_message_line_bytes > bytes.size() ||
+			bytes[offset + win_message_text_bytes] != std::byte{0x0DU} ||
+			bytes[offset + win_message_text_bytes + 1U] != std::byte{0x0AU}) {
+			return false;
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] std::span<const std::uint8_t> message_row(
+	std::span<const std::byte> bytes,
+	std::size_t block,
+	std::size_t line
+) noexcept
+{
+	const auto offset = ((block * win_message_lines) + line) *
+		win_message_line_bytes;
+	return {
+		reinterpret_cast<const std::uint8_t *>(bytes.data() + offset),
+		win_message_text_bytes,
+	};
+}
+
 } // namespace
 
 ClassicMainlWinCompletion::ClassicMainlWinCompletion(
@@ -228,10 +270,11 @@ std::expected<std::unique_ptr<ClassicMainlWinScene>, ClassicMainlWinError>
 ClassicMainlWinScene::create(
 	const ClassicMainlWinContext &context,
 	std::span<const LoadedMainResource> resources,
-	const present::AnkGlyphProvider &font
+	const present::AnkGlyphProvider &font,
+	const NewClassicGameTextCatalog *localized_text
 )
 {
-	return create_impl(context, resources, font, true);
+	return create_impl(context, resources, font, true, localized_text);
 }
 
 std::expected<std::unique_ptr<ClassicMainlWinScene>, ClassicMainlWinError>
@@ -239,7 +282,8 @@ ClassicMainlWinScene::create_impl(
 	const ClassicMainlWinContext &context,
 	std::span<const LoadedMainResource> resources,
 	const present::AnkGlyphProvider &font,
-	bool authenticate_resource_bytes
+	bool authenticate_resource_bytes,
+	const NewClassicGameTextCatalog *localized_text
 )
 {
 	const auto winner = main_player_selection_from_paletted(
@@ -365,25 +409,16 @@ ClassicMainlWinScene::create_impl(
 		.character = winner->character,
 	};
 	const auto *message = find_resource(resources, message_key);
-	if(!message || !message->bytes ||
-		message->bytes->size() != win_message_file_bytes) {
+	if(!message || !message->bytes || !valid_message_file(*message->bytes)) {
 		return std::unexpected(win_error(
-			ClassicMainlWinErrorCode::resource_set_mismatch,
+			ClassicMainlWinErrorCode::message_prepare_failed,
 			message_key
 		));
 	}
+	const auto message_bytes = std::span<const std::byte>{*message->bytes};
 	for(std::size_t block = 0U; block < win_message_blocks; ++block) {
 		for(std::size_t line = 0U; line < win_message_lines; ++line) {
-			const auto offset = (
-				(block * win_message_lines) + line
-			) * win_message_line_bytes;
-			const auto bytes = std::span<const std::byte>{
-				*message->bytes
-			}.subspan(offset, win_message_line_bytes);
-			const auto shift_jis = std::span<const std::uint8_t>{
-				reinterpret_cast<const std::uint8_t *>(bytes.data()),
-				bytes.size(),
-			};
+			const auto shift_jis = message_row(message_bytes, block, line);
 			auto text = present::prepare_graphics_text_8x16(
 				shift_jis,
 				font
@@ -392,7 +427,22 @@ ClassicMainlWinScene::create_impl(
 				return std::unexpected(text_error(text.error()));
 			}
 			if(block == context.message_block) {
-				prepared->message[line].emplace(std::move(*text));
+				if(localized_text) {
+					const auto replacement = localized_text->bytes(
+						classic_mainl_win_text_id(
+							winner->character, block, line
+						)
+					);
+					auto localized = present::prepare_graphics_text_8x16(
+						replacement, font
+					);
+					if(!localized) {
+						return std::unexpected(text_error(localized.error()));
+					}
+					prepared->message[line].emplace(std::move(*localized));
+				} else {
+					prepared->message[line].emplace(std::move(*text));
+				}
 			}
 		}
 	}

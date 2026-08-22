@@ -23,6 +23,45 @@ enum class NewClassicGameTextId : std::uint16_t {
 
 inline constexpr std::size_t new_classic_game_text_count =
 	static_cast<std::size_t>(NewClassicGameTextId::count);
+inline constexpr std::size_t new_classic_win_quote_characters = 9U;
+inline constexpr std::size_t new_classic_win_quote_blocks = 11U;
+inline constexpr std::size_t new_classic_win_quote_lines = 3U;
+inline constexpr std::size_t new_classic_music_comment_tracks = 19U;
+inline constexpr std::size_t new_classic_music_comment_lines = 20U;
+
+[[nodiscard]] constexpr NewClassicGameTextId new_classic_win_quote_text_id(
+	std::size_t character,
+	std::size_t block,
+	std::size_t line
+) noexcept
+{
+	if(character >= new_classic_win_quote_characters ||
+		block >= new_classic_win_quote_blocks ||
+		line >= new_classic_win_quote_lines) {
+		return NewClassicGameTextId::count;
+	}
+	return static_cast<NewClassicGameTextId>(
+		static_cast<std::size_t>(NewClassicGameTextId::win_quote_00_00) +
+		(character * new_classic_win_quote_blocks * new_classic_win_quote_lines) +
+		(block * new_classic_win_quote_lines) + line
+	);
+}
+
+[[nodiscard]] constexpr NewClassicGameTextId
+new_classic_music_comment_text_id(
+	std::size_t track,
+	std::size_t line
+) noexcept
+{
+	if(track >= new_classic_music_comment_tracks ||
+		line >= new_classic_music_comment_lines) {
+		return NewClassicGameTextId::count;
+	}
+	return static_cast<NewClassicGameTextId>(
+		static_cast<std::size_t>(NewClassicGameTextId::music_comment_01_00) +
+		(track * new_classic_music_comment_lines) + line
+	);
+}
 
 struct NewClassicGameTextSchemaEntry final {
 	std::string_view identifier{};

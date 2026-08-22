@@ -43,7 +43,12 @@ or silently substitutes a different language.
 
 Source-constrained in-game graphics text uses the separate `T3GTL001` format
 documented in `GAME_TEXT_README.md`. Keeping the domains separate prevents a
-menu-font pack from claiming CP932/gaiji coverage it cannot render.
+menu-font pack from claiming CP932/gaiji coverage it cannot render. This
+domain now includes every executable-resident stage/name/result label plus all
+297 win-quote rows and all 380 Music Room title/comment rows. The tracked
+`game-fixed-text-ja-JP.json` is regenerated from the original Japanese DAT;
+the complete English author and runtime pack merge the same rows from the
+authenticated English overlay.
 
 All pre/post-round dialogue, cutscene narration, and ending text uses the
 script-aware `T3CTP001` domain. The complete editable sources are
@@ -62,3 +67,6 @@ Each `exact_glyphs` value is a source-layout constraint: one cell is one
 fullwidth CP932 glyph or two halfwidth glyphs. See
 `docs/NEW_CLASSIC_CUTSCENE_TEXT.md` for inventory regeneration and runtime
 validation.
+
+The definitive covered-versus-image-baked census is
+`docs/NEW_CLASSIC_TEXT_LOCALIZATION_COVERAGE.md`.

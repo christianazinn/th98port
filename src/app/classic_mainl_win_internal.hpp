@@ -11,12 +11,27 @@
 
 #include "classic_mainl_story_internal.hpp"
 #include "th03/app/classic_audio.hpp"
+#include "th03/app/new_classic_game_text.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/assets/types.hpp"
 #include "th03/present/graphics_text.hpp"
 #include "th03/present/raster.hpp"
 
 namespace th03::app {
+
+[[nodiscard]] constexpr NewClassicGameTextId classic_mainl_win_text_id(
+	MainCharacter character,
+	std::size_t block,
+	std::size_t line
+) noexcept
+{
+	const auto value = static_cast<std::size_t>(character);
+	const auto first = static_cast<std::size_t>(MainCharacter::reimu);
+	if(value < first) {
+		return NewClassicGameTextId::count;
+	}
+	return new_classic_win_quote_text_id(value - first, block, line);
+}
 
 enum class ClassicMainlWinPhase : std::uint8_t {
 	black_in,
@@ -116,7 +131,8 @@ public:
 	> create(
 		const ClassicMainlWinContext &context,
 		std::span<const LoadedMainResource> resources,
-		const present::AnkGlyphProvider &font
+		const present::AnkGlyphProvider &font,
+		const NewClassicGameTextCatalog *localized_text = nullptr
 	);
 	~ClassicMainlWinScene();
 
@@ -171,7 +187,8 @@ private:
 		const ClassicMainlWinContext &context,
 		std::span<const LoadedMainResource> resources,
 		const present::AnkGlyphProvider &font,
-		bool authenticate_resource_bytes
+		bool authenticate_resource_bytes,
+		const NewClassicGameTextCatalog *localized_text
 	);
 
 	[[nodiscard]] bool install_palette(
@@ -216,14 +233,16 @@ struct ClassicMainlWinTestAccess final {
 	> create_with_synthetic_resources(
 		const ClassicMainlWinContext &context,
 		std::span<const LoadedMainResource> resources,
-		const present::AnkGlyphProvider &font
+		const present::AnkGlyphProvider &font,
+		const NewClassicGameTextCatalog *localized_text = nullptr
 	)
 	{
 		return ClassicMainlWinScene::create_impl(
 			context,
 			resources,
 			font,
-			false
+			false,
+			localized_text
 		);
 	}
 };

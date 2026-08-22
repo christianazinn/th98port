@@ -430,6 +430,15 @@ void test_message_packs(const th03::app::NewClassicMenuFont *authentic_font)
 
 void test_game_text_packs()
 {
+	static_assert(th03::app::new_classic_game_text_count == 738U);
+	static_assert(th03::app::new_classic_win_quote_text_id(0U, 0U, 0U) ==
+		th03::app::NewClassicGameTextId::win_quote_00_00);
+	static_assert(th03::app::new_classic_win_quote_text_id(8U, 10U, 2U) ==
+		th03::app::NewClassicGameTextId::win_quote_08_32);
+	static_assert(th03::app::new_classic_music_comment_text_id(0U, 0U) ==
+		th03::app::NewClassicGameTextId::music_comment_01_00);
+	static_assert(th03::app::new_classic_music_comment_text_id(18U, 19U) ==
+		th03::app::NewClassicGameTextId::music_comment_19_19);
 	const auto path = localization_root() / "game-text-en-US.t3gtl";
 	auto english = th03::app::load_new_classic_game_text_pack(path);
 	expect(english && english->locale() == "en-US" &&
@@ -441,7 +450,12 @@ void test_game_text_packs()
 			std::string_view{"NO.1 Dream Transcending Space..."},
 			{}, [](std::uint8_t value) { return static_cast<char>(value); },
 			[](char value) { return value; }
-		),
+		) &&
+		english->bytes(th03::app::NewClassicGameTextId::win_quote_00_00).size() ==
+			58U &&
+		english->bytes(
+			th03::app::NewClassicGameTextId::music_comment_19_19
+		).size() == 40U,
 		"complete deterministic T3GTL001 English catalog loads exact CP932 rows");
 	if(!english) {
 		return;
@@ -511,7 +525,8 @@ void test_game_text_packs()
 		"game-text runtime authenticates the complete package body");
 
 	auto malformed = read_file(path);
-	constexpr std::size_t payload = 96U + 5U + (61U * 8U);
+	constexpr std::size_t payload = 96U + 5U +
+		(th03::app::new_classic_game_text_count * 8U);
 	malformed[payload] = std::byte{0x81U};
 	malformed[payload + 1U] = std::byte{0x20U};
 	const auto malformed_digest = th03::app::app_sha256(

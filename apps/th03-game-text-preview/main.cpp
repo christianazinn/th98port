@@ -40,16 +40,27 @@ struct PreviewEntry final {
 };
 
 struct PreviewPage final {
-	std::string_view name{};
+	std::string name{};
 	Raster raster{};
 };
 
 struct Preview final {
-	std::array<PreviewPage, 3U> pages{{
-		{.name = "music"}, {.name = "stage"}, {.name = "registration-result"},
-	}};
+	std::vector<PreviewPage> pages{};
 	std::vector<PreviewEntry> entries{};
 };
+
+[[nodiscard]] std::string numbered_name(
+	std::string_view prefix,
+	std::size_t number,
+	std::string_view suffix = {}
+)
+{
+	std::string result{prefix};
+	result.push_back(static_cast<char>('0' + ((number / 10U) % 10U)));
+	result.push_back(static_cast<char>('0' + (number % 10U)));
+	result.append(suffix);
+	return result;
+}
 
 [[nodiscard]] int fail(std::string_view stage, std::size_t code = 0U)
 {
@@ -183,6 +194,26 @@ void usage()
 )
 {
 	Preview result{};
+	result.pages.push_back({.name = "music"});
+	result.pages.push_back({.name = "stage"});
+	result.pages.push_back({.name = "registration-result"});
+	for(std::size_t character = 0U;
+		character < th03::app::new_classic_win_quote_characters;
+		++character) {
+		result.pages.push_back({
+			.name = numbered_name("win-quotes-", character, "-a"),
+		});
+		result.pages.push_back({
+			.name = numbered_name("win-quotes-", character, "-b"),
+		});
+	}
+	for(std::size_t track = 0U;
+		track < th03::app::new_classic_music_comment_tracks;
+		++track) {
+		result.pages.push_back({
+			.name = numbered_name("music-comments-", track + 1U),
+		});
+	}
 	for(auto &page : result.pages) {
 		if(!initialize_page(page)) {
 			return std::unexpected(0U);
@@ -251,6 +282,53 @@ void usage()
 			{16, y}, 7U) ||
 			!put_message(result, 2U, catalog, font, id, {280, y})) {
 			return std::unexpected(static_cast<std::size_t>(id));
+		}
+	}
+	constexpr std::size_t win_page_first = 3U;
+	for(std::size_t character = 0U;
+		character < th03::app::new_classic_win_quote_characters;
+		++character) {
+		for(std::size_t row = 0U;
+			row < th03::app::new_classic_win_quote_blocks *
+				th03::app::new_classic_win_quote_lines;
+			++row) {
+			const auto part = row / 17U;
+			const auto page = win_page_first + (character * 2U) + part;
+			const auto y = static_cast<std::int32_t>(
+				32U + (row % 17U) * 21U
+			);
+			const auto block = row / th03::app::new_classic_win_quote_lines;
+			const auto line = row % th03::app::new_classic_win_quote_lines;
+			const auto id = th03::app::new_classic_win_quote_text_id(
+				character, block, line
+			);
+			const auto &schema = th03::app::new_classic_game_text_schema(id);
+			if(!put_ascii(result.pages[page].raster, font, schema.identifier,
+				{8, y}, 7U) ||
+				!put_message(result, page, catalog, font, id, {160, y})) {
+				return std::unexpected(static_cast<std::size_t>(id));
+			}
+		}
+	}
+	constexpr std::size_t music_comment_page_first = win_page_first +
+		(th03::app::new_classic_win_quote_characters * 2U);
+	for(std::size_t track = 0U;
+		track < th03::app::new_classic_music_comment_tracks;
+		++track) {
+		const auto page = music_comment_page_first + track;
+		for(std::size_t line = 0U;
+			line < th03::app::new_classic_music_comment_lines;
+			++line) {
+			const auto id = th03::app::new_classic_music_comment_text_id(
+				track, line
+			);
+			const auto &schema = th03::app::new_classic_game_text_schema(id);
+			const auto y = static_cast<std::int32_t>(28U + line * 18U);
+			if(!put_ascii(result.pages[page].raster, font, schema.identifier,
+				{8, y}, 7U) ||
+				!put_message(result, page, catalog, font, id, {208, y})) {
+				return std::unexpected(static_cast<std::size_t>(id));
+			}
 		}
 	}
 	return result;

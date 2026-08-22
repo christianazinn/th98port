@@ -11,6 +11,8 @@
 #include "th03/app/authentic_text.hpp"
 #include "th03/app/classic_audio.hpp"
 #include "th03/app/direct_vs_launch.hpp"
+#include "th03/app/new_classic_game_text.hpp"
+#include "th03/app/new_classic_language.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/core/game.hpp"
 #include "th03/present/source_surface.hpp"
@@ -38,6 +40,8 @@ enum class NewClassicNetplayPostMatchErrorCode : std::uint8_t {
 	file_open_failed,
 	file_read_failed,
 	font_invalid,
+	language_overlay_failed,
+	game_text_pack_failed,
 	resource_load_failed,
 	scene_failed,
 	surface_failed,
@@ -48,6 +52,8 @@ struct NewClassicNetplayPostMatchError final {
 	NewClassicNetplayPostMatchErrorCode code =
 		NewClassicNetplayPostMatchErrorCode::invalid_request;
 	std::optional<AuthenticTextError> font_error{};
+	std::optional<NewClassicLanguageOverlayError> language_overlay_error{};
+	std::optional<NewClassicGameTextPackError> game_text_pack_error{};
 	std::optional<ResourceLoadError> resource_error{};
 	std::optional<present::SourceSurfaceError> surface_error{};
 };
@@ -131,7 +137,9 @@ private:
 		std::span<const LoadedMainResource> resources,
 		const present::AnkGlyphProvider &font,
 		bool authenticate_resources,
-		std::vector<std::byte> owned_font_rom = {}
+		std::vector<std::byte> owned_font_rom = {},
+		std::optional<NewClassicGameTextCatalog> owned_game_text = {},
+		bool use_builtin_english_text = false
 	);
 
 	std::unique_ptr<Impl> impl_;

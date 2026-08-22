@@ -271,7 +271,8 @@ public:
 		std::unique_ptr<MainProcess> process,
 		std::unique_ptr<MainProcessDriver> driver,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {},
-		std::shared_ptr<const NewClassicCutsceneTextCatalog> cutscene_text = {}
+		std::shared_ptr<const NewClassicCutsceneTextCatalog> cutscene_text = {},
+		const NewClassicGameTextCatalog *game_text = nullptr
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicStorySession>,
@@ -346,7 +347,8 @@ private:
 		NewClassicReplayRecorder *replay_recorder,
 		std::filesystem::path legacy_score_path = {},
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets = {},
-		std::shared_ptr<const NewClassicCutsceneTextCatalog> cutscene_text = {}
+		std::shared_ptr<const NewClassicCutsceneTextCatalog> cutscene_text = {},
+		const NewClassicGameTextCatalog *game_text = nullptr
 	);
 
 	std::unique_ptr<Impl> impl_;

@@ -356,7 +356,8 @@ std::expected<
 	ClassicOpMusicRoomCarry carry,
 	std::span<const LoadedMainResource> resources,
 	std::span<const std::byte> op_executable,
-	const present::AnkGlyphProvider &font
+	const present::AnkGlyphProvider &font,
+	const NewClassicGameTextCatalog *localized_text
 )
 {
 	auto prepared = prepare_music_room_resources(completion, resources);
@@ -370,7 +371,7 @@ std::expected<
 	return create_predecoded(
 		completion.resident(), std::move(carry), std::move(prepared->background),
 		*labels, prepared->comments, font, completion.raster(),
-		completion.tram()
+		completion.tram(), localized_text
 	);
 }
 
@@ -382,7 +383,8 @@ std::expected<
 	ClassicOpMusicRoomCarry carry,
 	std::span<const LoadedMainResource> resources,
 	const OpMusicRoomTextImport &labels,
-	const present::AnkGlyphProvider &font
+	const present::AnkGlyphProvider &font,
+	const NewClassicGameTextCatalog *localized_text
 )
 {
 	auto prepared = prepare_music_room_resources(completion, resources);
@@ -391,7 +393,8 @@ std::expected<
 	}
 	return create_predecoded(
 		completion.resident(), std::move(carry), std::move(prepared->background),
-		labels, prepared->comments, font, completion.raster(), completion.tram()
+		labels, prepared->comments, font, completion.raster(), completion.tram(),
+		localized_text
 	);
 }
 
@@ -406,7 +409,8 @@ std::expected<
 	std::span<const std::byte> comments,
 	const present::AnkGlyphProvider &font,
 	present::Raster raster,
-	present::Tram tram
+	present::Tram tram,
+	const NewClassicGameTextCatalog *localized_text
 )
 {
 	if(raster.raster_mode() != present::RasterMode::lines_400 ||
@@ -451,18 +455,35 @@ std::expected<
 		for(std::size_t line = 0U;
 			line < prepared->comments[track].size();
 			++line) {
-			auto text = present::prepare_graphics_text_8x16(
+			auto source_text = present::prepare_graphics_text_8x16(
 				comment_line(comments, track, line),
 				font
 			);
-			if(!text) {
+			if(!source_text) {
 				return std::unexpected(text_error(
-					text.error(),
+					source_text.error(),
 					static_cast<std::uint8_t>(track),
 					static_cast<std::uint8_t>(line)
 				));
 			}
-			prepared->comments[track][line].emplace(std::move(*text));
+			if(localized_text) {
+				auto text = present::prepare_graphics_text_8x16(
+					localized_text->bytes(
+						new_classic_music_comment_text_id(track, line)
+					),
+					font
+				);
+				if(!text) {
+					return std::unexpected(text_error(
+						text.error(),
+						static_cast<std::uint8_t>(track),
+						static_cast<std::uint8_t>(line)
+					));
+				}
+				prepared->comments[track][line].emplace(std::move(*text));
+			} else {
+				prepared->comments[track][line].emplace(std::move(*source_text));
+			}
 		}
 	}
 
@@ -1094,7 +1115,8 @@ std::expected<
 	std::span<const std::byte> comments,
 	const present::AnkGlyphProvider &font,
 	present::Raster raster,
-	present::Tram tram
+	present::Tram tram,
+	const NewClassicGameTextCatalog *localized_text
 )
 {
 	return ClassicOpMusicRoomScene::create_predecoded(
@@ -1105,7 +1127,8 @@ std::expected<
 		comments,
 		font,
 		std::move(raster),
-		std::move(tram)
+		std::move(tram),
+		localized_text
 	);
 }
 

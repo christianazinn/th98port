@@ -45,6 +45,258 @@
       "digits": 2,
       "encoding": "cp932",
       "exact_bytes": 12
+    },
+    {
+      "enum_prefix": "win_quote_00_",
+      "id_prefix": "win.quote.00.",
+      "first": 0,
+      "count": 33,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 58
+    },
+    {
+      "enum_prefix": "win_quote_01_",
+      "id_prefix": "win.quote.01.",
+      "first": 0,
+      "count": 33,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 58
+    },
+    {
+      "enum_prefix": "win_quote_02_",
+      "id_prefix": "win.quote.02.",
+      "first": 0,
+      "count": 33,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 58
+    },
+    {
+      "enum_prefix": "win_quote_03_",
+      "id_prefix": "win.quote.03.",
+      "first": 0,
+      "count": 33,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 58
+    },
+    {
+      "enum_prefix": "win_quote_04_",
+      "id_prefix": "win.quote.04.",
+      "first": 0,
+      "count": 33,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 58
+    },
+    {
+      "enum_prefix": "win_quote_05_",
+      "id_prefix": "win.quote.05.",
+      "first": 0,
+      "count": 33,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 58
+    },
+    {
+      "enum_prefix": "win_quote_06_",
+      "id_prefix": "win.quote.06.",
+      "first": 0,
+      "count": 33,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 58
+    },
+    {
+      "enum_prefix": "win_quote_07_",
+      "id_prefix": "win.quote.07.",
+      "first": 0,
+      "count": 33,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 58
+    },
+    {
+      "enum_prefix": "win_quote_08_",
+      "id_prefix": "win.quote.08.",
+      "first": 0,
+      "count": 33,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 58
+    },
+    {
+      "enum_prefix": "music_comment_01_",
+      "id_prefix": "music.comment.01.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_02_",
+      "id_prefix": "music.comment.02.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_03_",
+      "id_prefix": "music.comment.03.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_04_",
+      "id_prefix": "music.comment.04.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_05_",
+      "id_prefix": "music.comment.05.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_06_",
+      "id_prefix": "music.comment.06.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_07_",
+      "id_prefix": "music.comment.07.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_08_",
+      "id_prefix": "music.comment.08.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_09_",
+      "id_prefix": "music.comment.09.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_10_",
+      "id_prefix": "music.comment.10.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_11_",
+      "id_prefix": "music.comment.11.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_12_",
+      "id_prefix": "music.comment.12.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_13_",
+      "id_prefix": "music.comment.13.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_14_",
+      "id_prefix": "music.comment.14.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_15_",
+      "id_prefix": "music.comment.15.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_16_",
+      "id_prefix": "music.comment.16.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_17_",
+      "id_prefix": "music.comment.17.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_18_",
+      "id_prefix": "music.comment.18.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
+    },
+    {
+      "enum_prefix": "music_comment_19_",
+      "id_prefix": "music.comment.19.",
+      "first": 0,
+      "count": 20,
+      "digits": 2,
+      "encoding": "cp932",
+      "exact_bytes": 40
     }
   ],
   "messages": [
