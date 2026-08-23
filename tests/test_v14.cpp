@@ -307,7 +307,7 @@ std::vector<std::byte> append_valid_accelerator(
 	constexpr std::size_t raw_size = 29'286U;
 	constexpr std::size_t shared_velocity_x_offset = 0x47F2U;
 	constexpr std::size_t background_offset = 0x1C38U;
-	constexpr std::size_t background_magnitude_offset = 0x2138U;
+	constexpr std::size_t background_direction_offset = 0x2138U;
 	constexpr std::size_t page_front_offset = 0x47FBU;
 	std::vector<std::byte> raw(raw_size, std::byte{0});
 	raw[0U] = std::byte{0x11};
@@ -323,7 +323,7 @@ std::vector<std::byte> append_valid_accelerator(
 	put_u16(raw, background_offset + 6U, 0x007FU);
 	raw[background_offset + 8U] = std::byte{0x82};
 	put_u16(raw, background_offset + 10U, 0x238EU);
-	raw[background_magnitude_offset] = std::byte{0x40};
+	raw[background_direction_offset] = std::byte{0x40};
 	raw[page_front_offset] = std::byte{1};
 	std::vector<std::byte> packed;
 	std::size_t output = 0U;
@@ -583,11 +583,11 @@ void test_valid_scenarios()
 						.y_q12_4 = 0x0456,
 						.velocity_x_q12_4 = -128,
 						.velocity_y_q12_4 = 127,
-						.angle = 0x82U,
+						.speed_q12_4 = 0x82U,
 						.sprite_variant = 1U,
 					},
 				}},
-				.background_magnitude = 0x40U,
+				.background_direction = 0x40U,
 			}},
 		"V14 recognizes typed page, palette, velocity, and background state from a donor-valid T3RACC1 image"
 	);

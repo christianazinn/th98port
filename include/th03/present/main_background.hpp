@@ -43,7 +43,7 @@ struct MainBackgroundRecordState {
 	std::int16_t y_q12_4 = 0;
 	std::int16_t velocity_x_q12_4 = 0;
 	std::int16_t velocity_y_q12_4 = 0;
-	std::uint8_t angle = 0U;
+	std::uint8_t speed_q12_4 = 0U;
 	std::uint8_t sprite_variant = 0U;
 };
 
@@ -93,7 +93,7 @@ public:
 	[[nodiscard]] bool accelerator_restore(
 		const std::array<MainBackgroundRecordState, main_background_record_count>
 			&records,
-		std::uint8_t magnitude,
+		std::uint8_t direction,
 		std::uint8_t round_id
 	) noexcept;
 
@@ -104,7 +104,7 @@ private:
 		std::int16_t y_q12_4 = 0;
 		std::int16_t velocity_x_q12_4 = 0;
 		std::int16_t velocity_y_q12_4 = 0;
-		std::uint8_t angle = 0U;
+		std::uint8_t speed_q12_4 = 0U;
 		std::uint8_t sprite_variant = 0U;
 	};
 
@@ -139,7 +139,7 @@ private:
 	std::size_t read_slot_ = 0U;
 	std::uint8_t read_field_ = 0U;
 	std::uint16_t initial_frames_completed_ = 0U;
-	std::uint8_t magnitude_ = 0x40U;
+	std::uint8_t direction_ = 0x40U;
 	std::uint8_t round_id_ = 0U;
 	bool initialized_ = false;
 	bool have_round_id_ = false;

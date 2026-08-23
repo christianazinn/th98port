@@ -161,7 +161,7 @@ void MainPresenterRollbackAccess::capture(
 			source.y_q12_4,
 			source.velocity_x_q12_4,
 			source.velocity_y_q12_4,
-			source.angle,
+			source.speed_q12_4,
 			source.sprite_variant,
 		};
 	}
@@ -172,7 +172,7 @@ void MainPresenterRollbackAccess::capture(
 	state.background_read_field = background.read_field_;
 	state.background_initial_frames_completed =
 		background.initial_frames_completed_;
-	state.background_magnitude = background.magnitude_;
+	state.background_direction = background.direction_;
 	state.background_round_id = background.round_id_;
 	state.background_initialized = background.initialized_;
 	state.background_have_round_id = background.have_round_id_;
@@ -392,7 +392,7 @@ void MainPresenterRollbackAccess::restore(
 			source.y_q12_4,
 			source.velocity_x_q12_4,
 			source.velocity_y_q12_4,
-			source.angle,
+			source.speed_q12_4,
 			source.sprite_variant,
 		};
 	}
@@ -404,7 +404,7 @@ void MainPresenterRollbackAccess::restore(
 	background.read_field_ = state.background_read_field;
 	background.initial_frames_completed_ =
 		state.background_initial_frames_completed;
-	background.magnitude_ = state.background_magnitude;
+	background.direction_ = state.background_direction;
 	background.round_id_ = state.background_round_id;
 	background.initialized_ = state.background_initialized;
 	background.have_round_id_ = state.background_have_round_id;

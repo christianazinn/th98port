@@ -27,7 +27,7 @@ struct MainRollbackBackgroundRecord final {
 	std::int16_t y_q12_4 = 0;
 	std::int16_t velocity_x_q12_4 = 0;
 	std::int16_t velocity_y_q12_4 = 0;
-	std::uint8_t angle = 0U;
+	std::uint8_t speed_q12_4 = 0U;
 	std::uint8_t sprite_variant = 0U;
 	friend bool operator==(
 		const MainRollbackBackgroundRecord &,
@@ -219,7 +219,7 @@ struct MainPresenterRollbackState final {
 	std::uint32_t background_read_slot = 0U;
 	std::uint8_t background_read_field = 0U;
 	std::uint16_t background_initial_frames_completed = 0U;
-	std::uint8_t background_magnitude = 0U;
+	std::uint8_t background_direction = 0U;
 	std::uint8_t background_round_id = 0U;
 	bool background_initialized = false;
 	bool background_have_round_id = false;

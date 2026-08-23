@@ -642,13 +642,13 @@ void test_authentic(
 			accelerator->page_front == expected.page_front &&
 			accelerator->shared_velocity_x_q4_4 == expected.shared_velocity_x &&
 			accelerator->palette[0U] == expected.palette_zero &&
-			accelerator->background_magnitude == 0x40U &&
+			accelerator->background_direction == 0x40U &&
 			accelerator->background[26U].x_q12_4 == expected.background_x &&
 			accelerator->background[26U].y_q12_4 == expected.background_y &&
 			accelerator->background[26U].velocity_x_q12_4 == 0 &&
 			accelerator->background[26U].velocity_y_q12_4 ==
 				expected.background_velocity_y &&
-			accelerator->background[26U].angle ==
+			accelerator->background[26U].speed_q12_4 ==
 				static_cast<std::uint8_t>(expected.background_velocity_y) &&
 			accelerator->background[26U].sprite_variant == 0U,
 			"authentic V14 preserves accelerator palette, page, velocity, and background state"

@@ -163,7 +163,7 @@ struct ReplayAcceleratorBackgroundRecord {
 	std::int16_t y_q12_4 = 0;
 	std::int16_t velocity_x_q12_4 = 0;
 	std::int16_t velocity_y_q12_4 = 0;
-	std::uint8_t angle = 0U;
+	std::uint8_t speed_q12_4 = 0U;
 	std::uint8_t sprite_variant = 0U;
 
 	[[nodiscard]] friend constexpr bool operator==(
@@ -197,7 +197,7 @@ struct ReplayAcceleratorPresentation {
 	std::array<ReplayAcceleratorRgb8, 16U> palette{};
 	std::int8_t shared_velocity_x_q4_4 = 0;
 	std::array<ReplayAcceleratorBackgroundRecord, 50U> background{};
-	std::uint8_t background_magnitude = 0x40U;
+	std::uint8_t background_direction = 0x40U;
 
 	[[nodiscard]] friend constexpr bool operator==(
 		const ReplayAcceleratorPresentation &,

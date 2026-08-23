@@ -1138,7 +1138,7 @@ NewClassicReplayPlayback::load_internal(
 				.y_q12_4 = source.y_q12_4,
 				.velocity_x_q12_4 = source.velocity_x_q12_4,
 				.velocity_y_q12_4 = source.velocity_y_q12_4,
-				.angle = source.angle,
+				.speed_q12_4 = source.speed_q12_4,
 				.sprite_variant = source.sprite_variant,
 			};
 		}
@@ -1236,7 +1236,7 @@ NewClassicReplayPlayback::load_internal(
 			accelerated_palette,
 			accelerator->shared_velocity_x_q4_4,
 			accelerated_background,
-			accelerator->background_magnitude
+			accelerator->background_direction
 		))) {
 		return std::unexpected(playback_error(
 			NewClassicPlaybackErrorCode::surface_failed

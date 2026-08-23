@@ -60,7 +60,7 @@ constexpr std::size_t accelerator_page_back_offset = 0x47FAU;
 constexpr std::size_t accelerator_page_front_offset = 0x47FBU;
 constexpr std::size_t accelerator_background_offset = 0x1C38U;
 constexpr std::size_t accelerator_background_record_size = 16U;
-constexpr std::size_t accelerator_background_magnitude_offset = 0x2138U;
+constexpr std::size_t accelerator_background_direction_offset = 0x2138U;
 constexpr std::uint16_t accelerator_background_variant_one_offset = 0x238EU;
 constexpr std::uint16_t replay_flags_known = 0x0007U;
 constexpr std::uint16_t replay_flags_required = 0x0003U;
@@ -325,8 +325,8 @@ std::vector<ReplayAcceleratorPresentation> parse_accelerators(
 					(*raw)[accelerator_shared_velocity_x_offset]
 				)
 			),
-			.background_magnitude = std::to_integer<std::uint8_t>(
-				(*raw)[accelerator_background_magnitude_offset]
+			.background_direction = std::to_integer<std::uint8_t>(
+				(*raw)[accelerator_background_direction_offset]
 			),
 		};
 		for(std::size_t color = 0U; color < presentation.palette.size(); ++color) {
@@ -353,7 +353,7 @@ std::vector<ReplayAcceleratorPresentation> parse_accelerators(
 				.velocity_y_q12_4 = std::bit_cast<std::int16_t>(
 					detail::u16(*raw, base + 6U)
 				),
-				.angle = detail::u8(*raw, base + 8U),
+				.speed_q12_4 = detail::u8(*raw, base + 8U),
 				.sprite_variant = static_cast<std::uint8_t>(
 					detail::u16(*raw, base + 10U) ==
 						accelerator_background_variant_one_offset

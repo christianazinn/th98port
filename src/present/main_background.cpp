@@ -195,7 +195,7 @@ void MainBackgroundPresenter::main_background_initialize(
 	read_slot_ = 0U;
 	read_field_ = 0U;
 	initial_frames_completed_ = 0U;
-	magnitude_ = 0x40U;
+	direction_ = 0x40U;
 	vector_latch_ = false;
 	have_round_id_ = false;
 }
@@ -220,7 +220,7 @@ void MainBackgroundPresenter::consume_initialize_read(
 			);
 			record.velocity_x_q12_4 = 0;
 			record.velocity_y_q12_4 = 0x10;
-			record.angle = 0x20U;
+			record.speed_q12_4 = 0x20U;
 			break;
 		case 2U:
 			record.sprite_variant = static_cast<std::uint8_t>(raw_value & 1U);
@@ -259,7 +259,7 @@ void MainBackgroundPresenter::consume_initialize_read(
 		);
 		record.velocity_x_q12_4 = 0;
 		record.velocity_y_q12_4 = 0x10;
-		record.angle = 0x10U;
+		record.speed_q12_4 = 0x10U;
 		record.sprite_variant = static_cast<std::uint8_t>(
 			(read_slot_ < main_background_type_b_static_count) ? 0U : 1U
 		);
@@ -328,9 +328,9 @@ void MainBackgroundPresenter::main_background_frame(
 	}
 
 	if(frame.phase == MainBackgroundPhase::initial) {
-		// D135/D340 overwrite the global magnitude before consuming their
+		// D135/D340 overwrite the shared direction before consuming their
 		// ordered per-record IRAND stream.
-		magnitude_ = 0x40U;
+		direction_ = 0x40U;
 		read_stream_ = ReadStream::initial_frame;
 		read_slot_ = 0U;
 		read_field_ = 0U;
@@ -357,7 +357,9 @@ void MainBackgroundPresenter::consume_initial_frame_read(
 		record.velocity_y_q12_4,
 		static_cast<std::int16_t>(raw_value & 1U)
 	);
-	record.angle = static_cast<std::uint8_t>(record.velocity_y_q12_4);
+	record.speed_q12_4 = static_cast<std::uint8_t>(
+		record.velocity_y_q12_4
+	);
 	move(record);
 
 	const bool drawn = (read_slot_ < main_background_dot_count) ?
@@ -382,7 +384,7 @@ void MainBackgroundPresenter::consume_initial_frame_read(
 	// D340's final ten animated records add AX=0 and consume no IRAND.
 	for(; read_slot_ < main_background_record_count; ++read_slot_) {
 		auto &animated = records_[read_slot_];
-		animated.angle = static_cast<std::uint8_t>(
+		animated.speed_q12_4 = static_cast<std::uint8_t>(
 			animated.velocity_y_q12_4
 		);
 		move(animated);
@@ -430,11 +432,13 @@ void MainBackgroundPresenter::main_background_random_read(
 
 void MainBackgroundPresenter::repeat_velocity_reset() noexcept
 {
-	// Anniversary 3e2381d4 d3f9.cpp D05D preserves every position and angle,
-	// restores the shared length to 64, and revectors the complete live pool.
-	magnitude_ = 0x40U;
+	// Anniversary 3e2381d4 d3f9.cpp D05D preserves every position and speed,
+	// restores the shared direction to 64, and revectors the complete live pool.
+	direction_ = 0x40U;
 	for(std::size_t slot = 0U; slot < active_count(kind_); ++slot) {
-		const auto vector = exact::vector2(records_[slot].angle, 0x40);
+		const auto vector = exact::vector2(
+			direction_, records_[slot].speed_q12_4
+		);
 		records_[slot].velocity_x_q12_4 = vector.x;
 		records_[slot].velocity_y_q12_4 = vector.y;
 	}
@@ -551,26 +555,26 @@ void MainBackgroundPresenter::steady_frame(
 	// uninitialized stack dependency, not an emulator-verified value. In the
 	// closed stock state, retained true only repeats an identical vector2 write
 	// and retained false only skips it, so the two outcomes produce the same
-	// subsequent pixels until a branch explicitly changes the magnitude.
+	// subsequent pixels until a branch explicitly changes the direction.
 	if(frame_mod_4096 < 1024U) {
 		vector_latch_ = false;
 	} else if(frame_mod_4096 < 1280U) {
 		if((frame_mod_4096 & 7U) == 0U) {
-			magnitude_ = static_cast<std::uint8_t>(magnitude_ + 1U);
+			direction_ = static_cast<std::uint8_t>(direction_ + 1U);
 			vector_latch_ = true;
 		}
 	} else if(frame_mod_4096 < 2048U) {
 		vector_latch_ = false;
 	} else if(frame_mod_4096 < 2304U) {
 		if((frame_mod_4096 & 3U) == 0U) {
-			magnitude_ = static_cast<std::uint8_t>(magnitude_ - 1U);
+			direction_ = static_cast<std::uint8_t>(direction_ - 1U);
 			vector_latch_ = true;
 		}
 	} else if(frame_mod_4096 >= 3072U && frame_mod_4096 < 4064U) {
 		if((frame_mod_4096 & 127U) < 64U) {
-			magnitude_ = static_cast<std::uint8_t>(magnitude_ + 1U);
+			direction_ = static_cast<std::uint8_t>(direction_ + 1U);
 		} else {
-			magnitude_ = static_cast<std::uint8_t>(magnitude_ - 1U);
+			direction_ = static_cast<std::uint8_t>(direction_ - 1U);
 		}
 		vector_latch_ = true;
 	} else {
@@ -583,7 +587,13 @@ void MainBackgroundPresenter::steady_frame(
 		auto &record = records_[slot];
 		move(record);
 		if(vector_latch_) {
-			const auto vector = exact::vector2(record.angle, magnitude_);
+			// D1E7/D3F9 pass angle_2142C as vector2()'s angle and the
+			// record byte at +8 as its length. Keeping this order explicit is
+			// important: swapping them makes each ornament travel in its own
+			// direction while the shared turn schedule changes their speed.
+			const auto vector = exact::vector2(
+				direction_, record.speed_q12_4
+			);
 			record.velocity_x_q12_4 = vector.x;
 			record.velocity_y_q12_4 = vector.y;
 		}
@@ -616,7 +626,7 @@ void MainBackgroundPresenter::set_rendering_enabled(bool enabled) noexcept
 bool MainBackgroundPresenter::accelerator_restore(
 	const std::array<MainBackgroundRecordState, main_background_record_count>
 		&records,
-	std::uint8_t magnitude,
+	std::uint8_t direction,
 	std::uint8_t round_id
 ) noexcept
 {
@@ -635,11 +645,11 @@ bool MainBackgroundPresenter::accelerator_restore(
 			.y_q12_4 = source.y_q12_4,
 			.velocity_x_q12_4 = source.velocity_x_q12_4,
 			.velocity_y_q12_4 = source.velocity_y_q12_4,
-			.angle = source.angle,
+			.speed_q12_4 = source.speed_q12_4,
 			.sprite_variant = source.sprite_variant,
 		};
 	}
-	magnitude_ = magnitude;
+	direction_ = direction;
 	round_id_ = round_id;
 	have_round_id_ = true;
 	return true;

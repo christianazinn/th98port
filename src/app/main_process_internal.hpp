@@ -187,7 +187,7 @@ struct MainProcessReplayPresentationAccess final {
 			present::MainBackgroundRecordState,
 			present::main_background_record_count
 		> &background,
-		std::uint8_t background_magnitude
+		std::uint8_t background_direction
 	) noexcept;
 };
 

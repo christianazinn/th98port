@@ -2091,7 +2091,7 @@ bool MainProcessReplayPresentationAccess::restore_accelerator_publication(
 		present::MainBackgroundRecordState,
 		present::main_background_record_count
 	> &background,
-	std::uint8_t background_magnitude
+	std::uint8_t background_direction
 ) noexcept
 {
 	const auto hud = hud_state_from_round(anchor_round_start);
@@ -2120,7 +2120,7 @@ bool MainProcessReplayPresentationAccess::restore_accelerator_publication(
 		shared_velocity_x_q4_4
 	);
 	if(!process.impl_->background->accelerator_restore(
-		background, background_magnitude,
+		background, background_direction,
 		process.impl_->game->canonical_state().round_id
 	)) {
 		return false;

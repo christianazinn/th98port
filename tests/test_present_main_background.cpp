@@ -150,6 +150,7 @@ struct Motion {
 	std::int16_t y_q12_4 = 0;
 	std::int16_t velocity_x_q12_4 = 0;
 	std::int16_t velocity_y_q12_4 = 0;
+	std::uint8_t speed_q12_4 = 0x10U;
 };
 
 [[nodiscard]] constexpr std::int16_t word_from_bits(
@@ -186,9 +187,11 @@ void move_source_exact(Motion &motion) noexcept
 	motion.y_q12_4 = word_from_bits(y);
 }
 
-void set_motion_vector(Motion &motion, std::uint8_t magnitude) noexcept
+void set_motion_vector(Motion &motion, std::uint8_t direction) noexcept
 {
-	const auto vector = th03::exact::vector2(0x10U, magnitude);
+	const auto vector = th03::exact::vector2(
+		direction, motion.speed_q12_4
+	);
 	motion.velocity_x_q12_4 = vector.x;
 	motion.velocity_y_q12_4 = vector.y;
 }
@@ -196,7 +199,7 @@ void set_motion_vector(Motion &motion, std::uint8_t magnitude) noexcept
 void advance_reference_steady(
 	Motion &motion,
 	std::uint16_t frame,
-	std::uint8_t &magnitude,
+	std::uint8_t &direction,
 	bool &vector_latch
 ) noexcept
 {
@@ -204,21 +207,21 @@ void advance_reference_steady(
 		vector_latch = false;
 	} else if(frame < 1280U) {
 		if((frame & 7U) == 0U) {
-			magnitude = static_cast<std::uint8_t>(magnitude + 1U);
+			direction = static_cast<std::uint8_t>(direction + 1U);
 			vector_latch = true;
 		}
 	} else if(frame < 2048U) {
 		vector_latch = false;
 	} else if(frame < 2304U) {
 		if((frame & 3U) == 0U) {
-			magnitude = static_cast<std::uint8_t>(magnitude - 1U);
+			direction = static_cast<std::uint8_t>(direction - 1U);
 			vector_latch = true;
 		}
 	} else if(frame >= 3072U && frame < 4064U) {
 		if((frame & 127U) < 64U) {
-			magnitude = static_cast<std::uint8_t>(magnitude + 1U);
+			direction = static_cast<std::uint8_t>(direction + 1U);
 		} else {
-			magnitude = static_cast<std::uint8_t>(magnitude - 1U);
+			direction = static_cast<std::uint8_t>(direction - 1U);
 		}
 		vector_latch = true;
 	} else {
@@ -227,7 +230,7 @@ void advance_reference_steady(
 
 	move_source_exact(motion);
 	if(vector_latch) {
-		set_motion_vector(motion, magnitude);
+		set_motion_vector(motion, direction);
 	}
 }
 
@@ -521,7 +524,7 @@ void test_steady_order_latch_schedule_and_repeat_reset()
 		.velocity_x_q12_4 = 0,
 		.velocity_y_q12_4 = 16,
 	};
-	auto magnitude = std::uint8_t{0x40U};
+	auto direction = std::uint8_t{0x40U};
 	bool vector_latch = false;
 	for(std::uint16_t frame = 130U; frame <= 1025U; ++frame) {
 		if(frame == 1024U || frame == 1025U) {
@@ -534,29 +537,29 @@ void test_steady_order_latch_schedule_and_repeat_reset()
 			.phase = MainBackgroundPhase::steady,
 		});
 		advance_reference_steady(
-			motion, frame, magnitude, vector_latch
+			motion, frame, direction, vector_latch
 		);
 		if(frame == 1024U) {
 			expect_motion_dot(
 				raster,
 				motion,
-				"1024 moves with length 64 before latching length 65"
+				"1024 moves downward before latching direction 65"
 			);
 		} else if(frame == 1025U) {
 			expect_motion_dot(
 				raster,
 				motion,
-				"1025 consumes the length-65 vector latched at 1024"
+				"1025 consumes the direction-65 vector latched at 1024"
 			);
 		}
 	}
 	expect(presenter.ready(), "type-A enters steady callback after frame 129");
 
-	const auto vector_64 = th03::exact::vector2(0x10U, 64);
-	magnitude = 0x40U;
+	const auto direction_64 = th03::exact::vector2(0x40U, 0x10);
+	direction = 0x40U;
 	vector_latch = false;
-	motion.velocity_x_q12_4 = vector_64.x;
-	motion.velocity_y_q12_4 = vector_64.y;
+	motion.velocity_x_q12_4 = direction_64.x;
+	motion.velocity_y_q12_4 = direction_64.y;
 	clear_visible(raster);
 	presenter.main_background_frame({
 		.round_id = 1U,
@@ -564,12 +567,12 @@ void test_steady_order_latch_schedule_and_repeat_reset()
 		.kind = MainBackgroundKind::type_a,
 		.phase = MainBackgroundPhase::steady,
 	});
-	advance_reference_steady(motion, 0U, magnitude, vector_latch);
+	advance_reference_steady(motion, 0U, direction, vector_latch);
 	expect(presenter.ready(), "next round needs no background reinitialization");
 	expect_motion_dot(
 		raster,
 		motion,
-		"round_id change preserves position and resets velocity to length 64"
+		"round_id change preserves position and resets direction to 64"
 	);
 	for(std::uint16_t frame = 1U; frame < 15U; ++frame) {
 		presenter.main_background_frame({
@@ -578,7 +581,7 @@ void test_steady_order_latch_schedule_and_repeat_reset()
 			.kind = MainBackgroundKind::type_a,
 			.phase = MainBackgroundPhase::steady,
 		});
-		advance_reference_steady(motion, frame, magnitude, vector_latch);
+		advance_reference_steady(motion, frame, direction, vector_latch);
 	}
 	clear_visible(raster);
 	presenter.main_background_frame({
@@ -587,11 +590,11 @@ void test_steady_order_latch_schedule_and_repeat_reset()
 		.kind = MainBackgroundKind::type_a,
 		.phase = MainBackgroundPhase::steady,
 	});
-	advance_reference_steady(motion, 15U, magnitude, vector_latch);
+	advance_reference_steady(motion, 15U, direction, vector_latch);
 	expect_motion_dot(
 		raster,
 		motion,
-		"repeat velocity reset remains distinguishable from prior length 65"
+		"repeat velocity reset remains distinguishable from the prior direction"
 	);
 	presenter.main_background_random_read({0U});
 	expect(
@@ -626,7 +629,7 @@ void test_complete_steady_schedule()
 		.velocity_x_q12_4 = 0,
 		.velocity_y_q12_4 = 16,
 	};
-	auto magnitude = std::uint8_t{0x40U};
+	auto direction = std::uint8_t{0x40U};
 	const auto present_steady = [&presenter](std::uint16_t frame) noexcept {
 		presenter.main_background_frame({
 			.round_id = 0U,
@@ -650,7 +653,7 @@ void test_complete_steady_schedule()
 		}
 		present_steady(frame);
 		advance_reference_steady(
-			motion, frame, magnitude, vector_latch
+			motion, frame, direction, vector_latch
 		);
 		if(sample) {
 			expect_motion_dot(
@@ -661,26 +664,129 @@ void test_complete_steady_schedule()
 		}
 		if(frame == 1279U) {
 			expect(
-				magnitude == 96U,
-				"1024..1279 performs all 32 reachable increments"
+				direction == 96U,
+				"1024..1279 performs all 32 reachable direction increments"
 			);
 		} else if(frame == 2303U) {
 			expect(
-				magnitude == 32U,
-				"2048..2303 performs all 64 reachable decrements"
+				direction == 32U,
+				"2048..2303 performs all 64 reachable direction decrements"
 			);
 		} else if(frame == 4063U) {
 			expect(
-				magnitude == 64U,
-				"3072..4063 ends at the reachable length 64"
+				direction == 64U,
+				"3072..4063 ends at the reachable direction 64"
 			);
 		}
 	}
 	expect(
-		magnitude == 64U,
+		direction == 64U,
 		"4064..4096 preserves the vector materialized at frame 4063"
 	);
 	expect(presenter.ready(), "complete steady schedule remains valid");
+}
+
+void test_dots_and_sprites_share_direction_and_speed()
+{
+	Raster raster;
+	Sprite16Staging staging;
+	const auto layout = synthetic_layout();
+	commit_sources(raster, staging, layout);
+	MainBackgroundPresenter presenter(raster, staging, layout);
+	initialize(
+		presenter,
+		MainBackgroundKind::type_a,
+		[](std::size_t) noexcept {
+			return Placement{400U * 16U, 300U * 16U, 0U};
+		}
+	);
+	presenter.set_rendering_enabled(false);
+	for(std::uint16_t frame = 0U; frame < 130U; ++frame) {
+		initial_frame(presenter, MainBackgroundKind::type_a, frame);
+	}
+
+	std::array<MainBackgroundRecordState, main_background_record_count> records{};
+	for(auto &record : records) {
+		record.x_q12_4 = 400 * 16;
+		record.y_q12_4 = 300 * 16;
+	}
+	constexpr auto speed = std::uint8_t{0x10U};
+	records[0U] = {
+		.x_q12_4 = 100 * 16,
+		.y_q12_4 = 80 * 16,
+		.velocity_x_q12_4 = 0,
+		.velocity_y_q12_4 = speed,
+		.speed_q12_4 = speed,
+	};
+	records[24U] = {
+		.x_q12_4 = 200 * 16,
+		.y_q12_4 = 180 * 16,
+		.velocity_x_q12_4 = 0,
+		.velocity_y_q12_4 = speed,
+		.speed_q12_4 = speed,
+	};
+	expect(
+		presenter.accelerator_restore(records, 0x40U, 0U),
+		"shared-motion fixture restores source background state"
+	);
+
+	Motion dot{
+		.x_q12_4 = 100 * 16,
+		.y_q12_4 = 80 * 16,
+		.velocity_x_q12_4 = 0,
+		.velocity_y_q12_4 = speed,
+		.speed_q12_4 = speed,
+	};
+	Motion sprite{
+		.x_q12_4 = 200 * 16,
+		.y_q12_4 = 180 * 16,
+		.velocity_x_q12_4 = 0,
+		.velocity_y_q12_4 = speed,
+		.speed_q12_4 = speed,
+	};
+	auto dot_direction = std::uint8_t{0x40U};
+	auto sprite_direction = dot_direction;
+	bool dot_latch = false;
+	bool sprite_latch = false;
+	for(std::uint16_t frame = 1024U; frame <= 1048U; ++frame) {
+		if(frame == 1048U) {
+			clear_visible(raster);
+			presenter.set_rendering_enabled(true);
+		}
+		presenter.main_background_frame({
+			.round_id = 0U,
+			.round_or_result_frame = frame,
+			.kind = MainBackgroundKind::type_a,
+			.phase = MainBackgroundPhase::steady,
+		});
+		advance_reference_steady(
+			dot, frame, dot_direction, dot_latch
+		);
+		advance_reference_steady(
+			sprite, frame, sprite_direction, sprite_latch
+		);
+	}
+	expect(dot_direction == sprite_direction,
+		"dot and sprite reference paths retain one shared direction");
+	expect_pixel(
+		raster,
+		{
+			shift_right_floor(dot.x_q12_4, 4U),
+			shift_right_floor(dot.y_q12_4, 5U),
+		},
+		10U,
+		"white dots follow vector2(shared direction, per-record speed)"
+	);
+	expect_pixel(
+		raster,
+		{
+			shift_right_floor(sprite.x_q12_4, 4U),
+			shift_right_floor(sprite.y_q12_4, 5U),
+		},
+		1U,
+		"large ornaments follow the identical direction and speed contract"
+	);
+	expect(presenter.ready(), "shared dot/sprite motion remains valid");
 }
 
 void test_accelerator_restore_preserves_target_round_motion()
@@ -711,7 +817,7 @@ void test_accelerator_restore_preserves_target_round_motion()
 		.y_q12_4 = 200 * 16,
 		.velocity_x_q12_4 = 0,
 		.velocity_y_q12_4 = 16,
-		.angle = 0x40U,
+		.speed_q12_4 = 0x40U,
 	};
 	expect(
 		presenter.accelerator_restore(records, 0x55U, 7U),
@@ -878,6 +984,7 @@ int main()
 	test_type_a_initial_clip_then_steady_noclip();
 	test_steady_order_latch_schedule_and_repeat_reset();
 	test_complete_steady_schedule();
+	test_dots_and_sprites_share_direction_and_speed();
 	test_accelerator_restore_preserves_target_round_motion();
 	test_sticky_validation_and_failure_atomicity();
 
