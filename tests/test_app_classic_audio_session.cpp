@@ -809,20 +809,27 @@ void test_source_boundary_effect_dispatch(const fs::path &root)
 		.parameter = 1U,
 	}).has_value(),
 		"an already-arbitrated MAIN effect starts without a second scheduler update");
-	const auto dispatched_tick = dispatched.advance_tick();
-	const auto baseline_tick = baseline.advance_tick();
-	expect(
-		dispatched_tick && baseline_tick &&
-		!dispatched_tick->effect_started && !baseline_tick->effect_started &&
-		dispatched_tick->canonical_frames.size() ==
-			baseline_tick->canonical_frames.size() &&
-		!std::equal(
+	bool scheduler_stayed_empty = true;
+	bool rendered_effect = false;
+	for(unsigned int tick = 0; tick < 3U; ++tick) {
+		const auto dispatched_tick = dispatched.advance_tick();
+		const auto baseline_tick = baseline.advance_tick();
+		if(!dispatched_tick || !baseline_tick) {
+			scheduler_stayed_empty = false;
+			break;
+		}
+		scheduler_stayed_empty = scheduler_stayed_empty &&
+			!dispatched_tick->effect_started && !baseline_tick->effect_started &&
+			dispatched_tick->canonical_frames.size() ==
+				baseline_tick->canonical_frames.size();
+		rendered_effect = rendered_effect || !std::equal(
 			dispatched_tick->canonical_frames.begin(),
 			dispatched_tick->canonical_frames.end(),
 			baseline_tick->canonical_frames.begin()
-		),
-		"direct dispatch changes rendered audio while leaving the session scheduler empty"
-	);
+		);
+	}
+	expect(scheduler_stayed_empty && rendered_effect,
+		"direct dispatch changes audio at the first PMD Timer-A effect window while leaving the session scheduler empty");
 	for(const auto invalid : {
 		ClassicAudioCommand{
 			.type = ClassicAudioCommandType::dispatch_effect,

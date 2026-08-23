@@ -21,7 +21,8 @@ only input sizes and SHA-256 identities, engine configuration, terminal sample
 and register counts, and artifact names. Each scenario contains:
 
 - `effect-NN-events.tsv`, with exact play completion, effect-call boundary,
-  synchronous effect-start completion, and natural terminal boundary; and
+  synchronous service-acceptance boundary before the next Timer-A key-on, and
+  natural terminal boundary; and
 - `effect-NN-registers.tsv`, with contiguous sequence, native chip clock,
   banked 9-bit register address, and value.
 
@@ -63,3 +64,35 @@ pairs. It deliberately ignores unlike clock domains and never treats equal
 final register state as trace parity. Event-window capture/selection must be
 documented with each private oracle run; an unsegmented gameplay trace is useful
 normalizer evidence but is not an all-effect equality result.
+
+## Controlled all-effect comparison
+
+The independent control probe emits `ordinal/pic_ms/code` markers after each
+effect call returns and after its bounded tail. Given that marker stream, the
+normalized full PC-98 register stream, and one native output directory,
+`compare-effects` selects all 22 equivalent lifecycles:
+
+```powershell
+python tools/audio/opna_trace.py compare-effects `
+  --markers private/markers.tsv `
+  --pc-registers private/registers.tsv `
+  --native-directory out/native-pmd-trace
+```
+
+PC-98 port writes in one Timer-A update complete over a measurable interval,
+whereas native writes in the same update share one chip clock. The comparator
+therefore groups PC-98 FM6 writes separated by at most 2 ms, groups native
+writes by exact chip clock, and compares the final value of every affected FM6
+register per group. This is stricter than comparing an effect's final state:
+every intermediate note, tone, volume, LFO, transpose, repeat, and portamento
+update must agree. It also compares key-on-to-music-restoration duration within
+0.25%. Raw within-group write order remains available to the exact comparator
+and is never silently called equal.
+
+The accepted controlled run restarted shipped `PMDB2.COM`, `OP.M`, and
+`YUME.EFC` for each ID and repeated the complete capture twice. Both 51,361-row
+normalized PC-98 streams were byte-identical. After aligning the external
+effect work-area initialization and Timer-A start boundary with PMDB2, all 22
+effects have equal group counts and equal canonical state at every group; the
+largest duration difference is 0.208%. Original assets and raw traces remain
+private and ignored.

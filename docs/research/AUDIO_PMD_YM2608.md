@@ -305,10 +305,28 @@ silent/Turbo PMDB2.COM register trace exposed that restoration requirement;
 without it, the effect tone could remain installed until a later authored FM6
 tone command and make the music lane sound absent. The byte-silent external
 gate starts and naturally terminates all 22 authored `YUME.EFC` entries on GCC
-and MSVC. The trace also shows a source/native instrument-register write-order
-difference that reaches the same state before key-on. Full shipped-TSR parity
-remains a fidelity gate for every effect's exact start/tick ordering; it is not
-needed to make the native player functionally bounded.
+and MSVC.
+
+A later controlled probe restarted shipped `PMDB2.COM`, `OP.M`, and
+`YUME.EFC` independently for every effect and captured all 22 lifecycles twice.
+The two normalized 51,361-write PC-98 traces are byte-identical. An initial
+native comparison matched every Timer-A group for 13 effects but exposed nine
+first-group state differences. KAJA's published PMD source at pinned mirror
+[`c620dc95`](https://github.com/d2lmirrors/pmd/tree/c620dc95c5e47970e7839cb5f0b7b9ab742d4f46)
+shows why: `fm_effect_on` zeroes the complete effect work area, while the first
+native extraction had assigned ordinary music-part reset values to the note,
+key-off, and modulation fields. In particular, an initial previous-note token
+must reuse zero as C0 rather than `0xff` as a rest. The corrected path also
+arms the effect at the service call and advances it only at the next Timer-A
+boundary, just like PMDB2.
+
+The controlled comparator now reports equal update counts and equal final FM6
+register state at every update for all 22 effects. Key-on-to-restoration timing
+differs by at most 0.208%. The trace still shows source/native within-update
+instrument-register ordering differences that reach the same state before chip
+time advances in the native engine. Therefore this establishes timer/update
+semantic parity, not byte-for-byte physical bus timing or analog waveform
+identity.
 
 ### `ymfm` — recommended synthesis backend
 
@@ -739,10 +757,11 @@ register divergence before a waveform metric.
    restoration are implemented. `th03-pmd-trace` now emits isolated,
    deterministic native lifecycles for all 22 authored effects, and
    `tools/audio/opna_trace.py` strictly normalizes raw PC-98 board I/O and
-   reports first sequence divergence. Controlled PMDB2 event-window captures
-   remain necessary to prove exact start/tick ordering, including the unused
-   empty effect-ID-zero behavior; an unsegmented gameplay trace is not that
-   proof.
+   reports first sequence divergence. The repeated controlled PMDB2 capture now
+   proves all 22 used IDs have identical per-update FM6 state evolution and
+   duration within 0.25%. Exact physical bus-write timing, replacement during
+   another live effect, and the unused empty effect-ID-zero behavior remain
+   separate gates; an unsegmented gameplay trace is not proof of them.
 4. **Actual song feature subset:** corpus structure and the native byte-silent
    gate resolve rhythm (20/21) and ordinary ADPCM/PCM (unused). Shipped-TSR
    register comparison remains necessary for exact sequencing fidelity.

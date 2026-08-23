@@ -5263,15 +5263,13 @@ static void pmd_fmeff_finish(
 ) {
   struct pmd_part *effect = &pmd->parts[PMD_PART_FM_EFF];
   struct pmd_part *music = &pmd->parts[PMD_PART_FM_6];
-  pmd_part_do_keyoff_fm(work, pmd, effect);
+  pmd_part_tone_slotmask_stop(work, pmd, effect);
   effect->ptr = 0;
   effect->actual_note = 0xff;
   effect->curr_note = 0xff;
   pmd->fmeff_playing = false;
   pmd->fmeff_num = 0xff;
-  music->mask.effect = false;
-  music->proc_masked = pmd_part_masked(music);
-  if (!music->proc_masked) {
+  if (pmd->playing) {
     /* PMDB2 restores the interrupted FM6 part's instrument immediately at
      * the Timer-A effect-end boundary. Leaving the chip on the effect tone
      * until the next authored FM6 tone command can make that music lane
@@ -5329,18 +5327,14 @@ bool pmd_fmeff_start(
       pmd->datalen < (tone_ptr+0x1a) || data_ptr >= tone_ptr) return false;
 
   if (pmd->fmeff_playing) pmd_fmeff_stop(work, pmd);
+  /* PMDB2's fm_effect_on zeroes the complete effect part before assigning
+   * only the fields below. In particular, curr_note must remain 0: an EFC
+   * stream beginning with PMD's previous-note token therefore emits C0 rather
+   * than inheriting the ordinary music-part reset value of 0xff (a rest). */
   memset(effect, 0, sizeof(*effect));
   effect->mask.ext = external_mask;
   effect->ptr = entry_ptr;
   effect->len_cnt = 1;
-  effect->keystatus.off = true;
-  effect->keystatus.off_mask = true;
-  effect->md_cnt = 0xff;
-  effect->md_cnt_set = 0xff;
-  effect->md_cnt_b = 0xff;
-  effect->md_cnt_set_b = 0xff;
-  effect->actual_note = 0xff;
-  effect->curr_note = 0xff;
   effect->vol = 108;
   effect->pan = 0xc0;
   effect->fm_slotmask = 0xf0;
@@ -5356,10 +5350,9 @@ bool pmd_fmeff_start(
 
   pmd_opna_a1_on(pmd);
   pmd->proc_ch = 3;
-  pmd_part_do_keyoff_fm(work, pmd, music);
+  pmd_reg_write(work, pmd, 0xb3+pmd->proc_ch, effect->pan);
   pmd->proc_ch = saved_ch;
   pmd->opna_a1 = saved_a1;
-  pmd_fmeff_advance(work, pmd);
   return true;
 }
 

@@ -277,6 +277,13 @@ std::vector<std::byte> synthetic_effect_bank()
 			);
 			break;
 		}
+		case 5U:
+			for(const auto value : {
+				0xFFU, 0x00U, 0xFDU, 0x78U, 0x0CU, 0x02U, 0x80U,
+			}) {
+				append(bytes, static_cast<std::uint8_t>(value));
+			}
+			break;
 		default:
 			append(bytes, 0x80U);
 			break;
@@ -404,6 +411,19 @@ public:
 	}
 
 	std::vector<std::uint8_t> algorithms{};
+};
+
+class Fm6SequenceTrace final : public PmdOpnaRegisterTraceSink {
+public:
+	void register_written(const PmdOpnaRegisterWrite &write) noexcept override
+	{
+		if(write.address == 0x28U || write.address == 0x1A2U ||
+			write.address == 0x1A6U || write.address == 0x1B6U) {
+			writes.push_back(write);
+		}
+	}
+
+	std::vector<PmdOpnaRegisterWrite> writes{};
 };
 
 void test_config_and_load_validation()
@@ -665,15 +685,23 @@ void test_effect_transport_and_timer_a_ownership()
 
 	Trace trace;
 	subject.set_register_trace_sink(&trace);
-	expect(static_cast<bool>(subject.play_effect(1U)), "effect one starts immediately");
+	expect(static_cast<bool>(subject.play_effect(1U)), "effect one is armed immediately");
 	expect(
-		subject.status().active_effect == 1U && trace.fm6_key_ons == 1U,
-		"effect start owns and keys on OPNA FM6"
+		subject.status().active_effect == 1U && trace.fm6_key_ons == 0U,
+		"effect service owns FM6 without advancing ahead of Timer A"
 	);
+	std::array<PmdOpnaStereoSample, 2'048U> scratch{};
+	const auto keyon_deadline = subject.status().samples_rendered +
+		subject.status().native_sample_rate;
+	while(trace.fm6_key_ons == 0U &&
+		subject.status().samples_rendered < keyon_deadline) {
+		subject.render_native(scratch);
+	}
+	expect(trace.fm6_key_ons == 1U,
+		"the first Timer-A boundary keys on the armed FM6 effect");
 	const auto timer_b_before_pause = subject.status().timer_b_count;
 	subject.pause();
 	const auto sample_limit = subject.status().samples_rendered + 200'000U;
-	std::array<PmdOpnaStereoSample, 2'048U> scratch{};
 	while(subject.status().active_effect &&
 		subject.status().samples_rendered < sample_limit) {
 		subject.render_native(scratch);
@@ -755,6 +783,46 @@ void test_effect_end_restores_fm6_tone_immediately()
 		trace.algorithms.size() >= 2U && trace.algorithms.front() == 0x07U &&
 			trace.algorithms.back() == 0x21U,
 		"effect end immediately restores the interrupted FM6 music tone"
+	);
+}
+
+void test_effect_work_starts_from_source_zero_state()
+{
+	auto subject = engine();
+	const auto song = synthetic_song();
+	const auto bank = synthetic_effect_bank();
+	expect(
+		subject.load_song(song) && subject.load_effect_bank(bank) &&
+			subject.play(),
+		"zero-state effect fixture starts"
+	);
+	Fm6SequenceTrace trace;
+	subject.set_register_trace_sink(&trace);
+	expect(static_cast<bool>(subject.play_effect(5U)),
+		"zero-state previous-note effect starts");
+	std::array<PmdOpnaStereoSample, 2'048U> scratch{};
+	const auto deadline = subject.status().samples_rendered + 200'000U;
+	while(subject.status().active_effect &&
+		subject.status().samples_rendered < deadline) {
+		subject.render_native(scratch);
+	}
+	bool c0_low = false;
+	bool c0_high = false;
+	bool keyed_on = false;
+	for(const auto &write : trace.writes) {
+		if(write.address == 0x1A2U && write.value == 0x6AU) {
+			c0_low = true;
+		}
+		if(write.address == 0x1A6U && write.value == 0x02U) {
+			c0_high = true;
+		}
+		if(write.address == 0x28U && write.value == 0xF6U) {
+			keyed_on = true;
+		}
+	}
+	expect(
+		c0_low && c0_high && keyed_on,
+		"zero-filled previous-note state emits PMDB2's initial C0 note"
 	);
 }
 
@@ -1603,6 +1671,7 @@ int main(int argc, char **argv)
 	test_effect_bank_validation_is_transactional();
 	test_effect_transport_and_timer_a_ownership();
 	test_effect_end_restores_fm6_tone_immediately();
+	test_effect_work_starts_from_source_zero_state();
 	test_effect_pcm_and_registers_are_deterministic();
 	test_user_category_volumes_preserve_one_chip();
 	test_load_is_chip_silent_and_play_is_traced();
