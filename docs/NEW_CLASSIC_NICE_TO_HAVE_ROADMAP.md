@@ -283,7 +283,10 @@ nametag parcels above are implemented. The remaining product/tooling work is:
    recovery flows. The replay-backed Story leaderboard/upload/download/watch
    path is already live.
 5. Improve PMD/YM2608 audio fidelity where channel balance and simultaneous
-   SFX layering still differ audibly from PC-98 output.
+   SFX layering still differ audibly from PC-98 output. The deterministic
+   native all-effect trace, strict PC-98 I/O normalizer, and first-divergence
+   comparator are complete; controlled shipped-PMDB2 event-window captures and
+   aligned acoustic evidence remain before further audible changes.
 6. Expand Arrange only after choosing a shippable ruleset and a replay/content
    identity for it. `dopamine-test-v1` remains an intentionally non-stock test.
 7. Design optional `Smooth` display interpolation behind the existing exact

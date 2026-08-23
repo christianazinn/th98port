@@ -736,9 +736,13 @@ register divergence before a waveform metric.
    files; retain the exact pin, source delta, and binary notices.
 3. **`.EFC` trace parity:** the bounded format, shipped opcode subset, FM6
    ownership, replacement, natural termination, and immediate PMDB2 music-tone
-   restoration are implemented. Normalize the remaining shipped-TSR trace to
-   prove every effect's exact start/tick register ordering, including the unused
-   empty effect-ID-zero behavior.
+   restoration are implemented. `th03-pmd-trace` now emits isolated,
+   deterministic native lifecycles for all 22 authored effects, and
+   `tools/audio/opna_trace.py` strictly normalizes raw PC-98 board I/O and
+   reports first sequence divergence. Controlled PMDB2 event-window captures
+   remain necessary to prove exact start/tick ordering, including the unused
+   empty effect-ID-zero behavior; an unsegmented gameplay trace is not that
+   proof.
 4. **Actual song feature subset:** corpus structure and the native byte-silent
    gate resolve rhythm (20/21) and ordinary ADPCM/PCM (unused). Shipped-TSR
    register comparison remains necessary for exact sequencing fidelity.

@@ -1153,6 +1153,11 @@ add_executable(th03-content-audit apps/th03-content-audit/main.cpp)
 target_link_libraries(th03-content-audit PRIVATE th03_app_main)
 th03_set_warnings(th03-content-audit)
 
+add_executable(th03-pmd-trace apps/th03-pmd-trace/main.cpp)
+target_link_libraries(th03-pmd-trace PRIVATE th03_audio_pmd th03_app_content)
+th03_set_warnings(th03-pmd-trace)
+th03_stage_audio_licenses(th03-pmd-trace)
+
 add_library(th03rv_service_protocol STATIC
 	apps/th03rv/service_protocol.cpp
 )
@@ -1489,6 +1494,21 @@ if(BUILD_TESTING)
 	th03_set_warnings(th03-audio-pmd-tests)
 	th03_stage_audio_licenses(th03-audio-pmd-tests)
 	add_test(NAME th03-audio-pmd-tests COMMAND th03-audio-pmd-tests)
+	add_test(NAME th03-pmd-trace-help COMMAND th03-pmd-trace --help)
+	if(Python3_Interpreter_FOUND)
+		add_test(
+			NAME th03-pmd-trace-tests
+			COMMAND ${Python3_EXECUTABLE}
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/audio/test_pmd_trace.py
+				--tool $<TARGET_FILE:th03-pmd-trace>
+		)
+		add_test(
+			NAME th03-opna-trace-tool-tests
+			COMMAND ${Python3_EXECUTABLE}
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/audio/test_opna_trace.py
+				--tool ${CMAKE_CURRENT_SOURCE_DIR}/tools/audio/opna_trace.py
+		)
+	endif()
 
 	add_executable(th03-audio-pmd-service-tests
 		tests/test_audio_th03_pmd_service.cpp

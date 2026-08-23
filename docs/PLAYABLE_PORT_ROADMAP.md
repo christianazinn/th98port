@@ -423,9 +423,11 @@ six ADPCM-A rhythm voices. The Classic launcher accepts either an exact-size
 `--rhythm-rom` input or an authenticated private decoded six-voice
 `--rhythm-pcm` profile. With neither, it suppresses ADPCM-A register playback;
 zero-filled ROM data is not silence because zero nibbles decode audibly.
-The remaining load-bearing unknowns are shipped-TSR register parity for EFC
-start/tick/replacement/restoration and the implemented fade/pause/mask
-operations, the authentic OPNA clock, and ROM packaging. These are
+The native all-effect trace producer and strict raw PC-98 I/O normalizer now
+make first-divergence register comparison reproducible without original assets
+in the repository. The remaining load-bearing unknowns are controlled
+shipped-TSR event-window parity for EFC start/tick/replacement/restoration and
+the implemented fade/pause/mask operations, the authentic OPNA clock, and ROM packaging. These are
 service/fidelity gates, not blockers for semantic scene command ordering.
 Required follow-up gates are offline command/register or PCM traces for known
 assets, deterministic muted/unmuted scheduling tests, then physical-device
