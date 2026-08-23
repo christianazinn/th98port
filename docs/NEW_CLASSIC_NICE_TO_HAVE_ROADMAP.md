@@ -233,6 +233,12 @@ sheets through the production mixed MNUFONT/FONT.ROM path.
 owner to its terminator for all 28 scripts and atomically publishes one
 longest-run layout-stress frame per scene, retaining real decoded backgrounds,
 palettes, coordinates, page operations, and localized glyph substitution.
+`th03-resource-preview` now renders PI, CDG, superimpose BFNT, and gaiji BFNT
+inputs through the production decoders and corresponding presentation paths to
+deterministic no-replace 4-bpp BMPs. Its first authenticated audit established
+that the `SLWIN.CDG` character-select stat labels occupy a reconstructible
+white panel whose border, row rules, and adjacent star field must be preserved;
+the resulting localization edit remains a separate product parcel.
 General Unicode locales still need a distributable font and layout contract;
 the current production renderer deliberately covers source-era ASCII and
 CP932 Japanese only.

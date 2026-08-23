@@ -1161,6 +1161,14 @@ target_link_libraries(
 )
 th03_set_warnings(th03-localized-scene-snapshot)
 
+add_executable(
+	th03-resource-preview apps/th03-resource-preview/main.cpp
+)
+target_link_libraries(
+	th03-resource-preview PRIVATE th03_assets th03_present
+)
+th03_set_warnings(th03-resource-preview)
+
 add_executable(th03-content-audit apps/th03-content-audit/main.cpp)
 target_link_libraries(th03-content-audit PRIVATE th03_app_main)
 th03_set_warnings(th03-content-audit)
@@ -1469,6 +1477,18 @@ if(BUILD_TESTING)
 		NAME th03-localized-scene-snapshot-help
 		COMMAND th03-localized-scene-snapshot --help
 	)
+	add_test(
+		NAME th03-resource-preview-help
+		COMMAND th03-resource-preview --help
+	)
+	if(Python3_Interpreter_FOUND)
+		add_test(
+			NAME th03-resource-preview-tests
+			COMMAND ${Python3_EXECUTABLE}
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_resource_preview.py
+				--tool $<TARGET_FILE:th03-resource-preview>
+		)
+	endif()
 	if(Python3_Interpreter_FOUND)
 		add_test(
 			NAME th03-game-text-preview-tests
