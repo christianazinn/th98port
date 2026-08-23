@@ -140,12 +140,38 @@ def run_menu_preview(
         )
 
 
+def run_cutscene_preview(
+    tool: Path, font: Path, pack: Path, output: Path
+) -> None:
+    try:
+        completed = subprocess.run(
+            [
+                str(tool), "--font", str(font), "--output", str(output),
+                "--cutscene-text-pack", str(pack),
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as error:
+        raise BundleError(
+            f"cannot run cutscene preview renderer: {error}"
+        ) from error
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise BundleError(
+            "cutscene preview renderer failed with code "
+            f"{completed.returncode}: {detail}"
+        )
+
+
 def build_locale(
     locale: str,
     root: Path,
     font: Path,
     preview_tool: Path,
     menu_preview_tool: Path,
+    cutscene_preview_tool: Path,
     menu_font: Path | None,
     replay_patch_assets: Path | None,
     menu_backgrounds: Path | None,
@@ -191,6 +217,13 @@ def build_locale(
         menu_font,
         replay_patch_assets,
         menu_backgrounds,
+    )
+    cutscene_preview_output = output / "cutscene-preview"
+    run_cutscene_preview(
+        cutscene_preview_tool,
+        font,
+        cutscene_output,
+        cutscene_preview_output,
     )
 
     report_path = preview_output / "preview.json"
@@ -248,6 +281,54 @@ def build_locale(
             f"{locale}: menu preview pages do not match the bounds report"
         )
 
+    cutscene_runs = sum(len(script.runs) for script in cutscene_catalog.scripts)
+    cutscene_glyphs = sum(
+        run.glyphs
+        for script in cutscene_catalog.scripts
+        for run in script.runs
+    )
+    cutscene_report_path = cutscene_preview_output / "preview.json"
+    try:
+        cutscene_report = json.loads(
+            cutscene_report_path.read_text(encoding="utf-8")
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise BundleError(
+            f"{locale}: invalid cutscene preview report: {error}"
+        ) from error
+    cutscene_messages = (
+        cutscene_report.get("messages")
+        if isinstance(cutscene_report, dict) else None
+    )
+    if (
+        not isinstance(cutscene_report, dict)
+        or cutscene_report.get("format") != "T3STP001"
+        or cutscene_report.get("locale") != locale
+        or not isinstance(cutscene_messages, list)
+        or len(cutscene_messages) != cutscene_runs
+        or any(
+            not isinstance(entry, dict)
+            or not isinstance(entry.get("page"), str)
+            for entry in cutscene_messages
+        )
+    ):
+        raise BundleError(
+            f"{locale}: cutscene preview report does not cover the compiled pack"
+        )
+    expected_cutscene_pages = {
+        entry["page"] for entry in cutscene_messages
+    }
+    actual_cutscene_pages = {
+        path.stem for path in cutscene_preview_output.glob("*.bmp")
+    }
+    if (
+        len(expected_cutscene_pages) == 0
+        or actual_cutscene_pages != expected_cutscene_pages
+    ):
+        raise BundleError(
+            f"{locale}: cutscene preview pages do not match the bounds report"
+        )
+
     artifacts = [
         file_identity(path, path.relative_to(root).as_posix())
         for path in sorted(
@@ -255,12 +336,6 @@ def build_locale(
             key=lambda candidate: candidate.relative_to(root).as_posix(),
         )
     ]
-    cutscene_runs = sum(len(script.runs) for script in cutscene_catalog.scripts)
-    cutscene_glyphs = sum(
-        run.glyphs
-        for script in cutscene_catalog.scripts
-        for run in script.runs
-    )
     return {
         "locale": locale,
         "counts": {
@@ -271,6 +346,7 @@ def build_locale(
             "cutscene_glyphs": cutscene_glyphs,
             "preview_pages": len(actual_pages),
             "menu_preview_pages": len(actual_menu_pages),
+            "cutscene_preview_pages": len(actual_cutscene_pages),
         },
         "inputs": [
             source_record(
@@ -293,6 +369,7 @@ def build_staging(
     font: Path,
     preview_tool: Path,
     menu_preview_tool: Path,
+    cutscene_preview_tool: Path,
     menu_font: Path | None,
     replay_patch_assets: Path | None,
     menu_backgrounds: Path | None,
@@ -305,6 +382,10 @@ def build_staging(
         raise BundleError(f"preview renderer is not a file: {preview_tool}")
     if not menu_preview_tool.is_file():
         raise BundleError(f"menu preview renderer is not a file: {menu_preview_tool}")
+    if not cutscene_preview_tool.is_file():
+        raise BundleError(
+            f"cutscene preview renderer is not a file: {cutscene_preview_tool}"
+        )
     if (menu_font is None) == (replay_patch_assets is None):
         raise BundleError("select exactly one menu-font source")
     if menu_font is not None and not menu_font.is_file():
@@ -332,6 +413,7 @@ def build_staging(
             font,
             preview_tool,
             menu_preview_tool,
+            cutscene_preview_tool,
             menu_font,
             replay_patch_assets,
             menu_backgrounds,
@@ -357,6 +439,9 @@ def build_staging(
             "preview_renderer": file_identity(preview_tool, preview_tool.name),
             "menu_preview_renderer": file_identity(
                 menu_preview_tool, menu_preview_tool.name
+            ),
+            "cutscene_preview_renderer": file_identity(
+                cutscene_preview_tool, cutscene_preview_tool.name
             ),
             "menu_font_source": menu_source,
             "menu_backgrounds": background_inputs,
@@ -429,6 +514,7 @@ def main() -> int:
     parser.add_argument("--font", required=True, type=Path)
     parser.add_argument("--preview-tool", required=True, type=Path)
     parser.add_argument("--menu-preview-tool", required=True, type=Path)
+    parser.add_argument("--cutscene-preview-tool", required=True, type=Path)
     menu_source = parser.add_mutually_exclusive_group(required=True)
     menu_source.add_argument("--menu-font", type=Path)
     menu_source.add_argument("--replay-patch-assets", type=Path)
@@ -458,6 +544,7 @@ def main() -> int:
                 arguments.font.resolve(),
                 arguments.preview_tool.resolve(),
                 arguments.menu_preview_tool.resolve(),
+                arguments.cutscene_preview_tool.resolve(),
                 menu_font,
                 replay_patch_assets,
                 menu_backgrounds,

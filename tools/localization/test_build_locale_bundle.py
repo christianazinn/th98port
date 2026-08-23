@@ -17,12 +17,14 @@ class LocaleBundleTests(unittest.TestCase):
     tool: Path
     preview_tool: Path
     menu_preview_tool: Path
+    cutscene_preview_tool: Path
 
     @classmethod
     def setUpClass(cls) -> None:
         cls.tool = Path(OPTIONS.tool)
         cls.preview_tool = Path(OPTIONS.preview_tool)
         cls.menu_preview_tool = Path(OPTIONS.menu_preview_tool)
+        cls.cutscene_preview_tool = Path(OPTIONS.cutscene_preview_tool)
 
     @staticmethod
     def menu_font() -> bytes:
@@ -44,6 +46,7 @@ class LocaleBundleTests(unittest.TestCase):
                 "--font", str(font),
                 "--preview-tool", str(self.preview_tool),
                 "--menu-preview-tool", str(self.menu_preview_tool),
+                "--cutscene-preview-tool", str(self.cutscene_preview_tool),
                 "--menu-font", str(font.with_name("MNUFONT.PF")),
                 "--output", str(output),
             ],
@@ -78,6 +81,7 @@ class LocaleBundleTests(unittest.TestCase):
                 self.assertEqual(locale["counts"]["game_text_messages"], 738)
                 self.assertEqual(locale["counts"]["preview_pages"], 40)
                 self.assertEqual(locale["counts"]["menu_preview_pages"], 41)
+                self.assertGreater(locale["counts"]["cutscene_preview_pages"], 28)
             checked = self.invoke("check", font, first)
             self.assertEqual(checked.returncode, 0, checked.stderr)
 
@@ -110,5 +114,6 @@ if __name__ == "__main__":
     parser.add_argument("--tool", required=True)
     parser.add_argument("--preview-tool", required=True)
     parser.add_argument("--menu-preview-tool", required=True)
+    parser.add_argument("--cutscene-preview-tool", required=True)
     OPTIONS, remaining = parser.parse_known_args()
     unittest.main(argv=[sys.argv[0], *remaining])

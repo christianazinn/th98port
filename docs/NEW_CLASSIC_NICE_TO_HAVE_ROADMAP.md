@@ -217,14 +217,16 @@ validates the shared production
 override members from original extraction dependencies, and records every
 localized semantic surface without claiming that its source backing vanished.
 `build_locale_bundle.py` now compiles and validates `T3LNG001`, `T3GTL001`, and
-`T3CTP001` together for every complete locale, renders all 738 fixed game-text
-rows through the production font path, and emits a deterministic `T3LCB001`
+`T3CTP001` together for every complete locale, renders all three text domains
+through production font paths, and emits a deterministic `T3LCB001`
 manifest with exact source, schema, renderer, font, count, size, and SHA-256
 identities. Its independent `check` mode compares every file without mutating
-the candidate, and failed builds never publish partial output. The remaining
-work in this parcel is localized scene snapshots and scripted-text contact
-sheets. The 402 menu/product rows now have deterministic `T3MTP001` contact
-sheets through the production mixed MNUFONT/FONT.ROM path. General Unicode locales
+the candidate, and failed builds never publish partial output. The 1,732
+English and 1,533 Japanese scripted replacement runs now have compact,
+deterministic `T3STP001` contact sheets through the production graphics-text
+path. The 402 menu/product rows likewise have deterministic `T3MTP001` contact
+sheets through the production mixed MNUFONT/FONT.ROM path. Localized scene
+snapshots are the remaining work in this parcel. General Unicode locales
 also need a distributable font and layout contract; the current production
 renderer deliberately covers source-era ASCII and CP932 Japanese only.
 

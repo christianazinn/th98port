@@ -241,6 +241,16 @@ void test_pack()
 			static_cast<std::uint8_t>('\\'), static_cast<std::uint8_t>('$'),
 		};
 		auto replacements = loaded->replacement_glyphs(0U, source);
+		constexpr std::array<std::uint8_t, 4U> replacement_bytes{
+			0x82U, 0xA4U, 0x82U, 0xA6U,
+		};
+		expect(loaded->run_count(0U) == 1U && loaded->run_count(28U) == 0U &&
+			std::ranges::equal(
+				loaded->replacement_run_bytes(0U, 0U),
+				std::span<const std::uint8_t>{replacement_bytes}
+			) && loaded->replacement_run_bytes(0U, 1U).empty() &&
+			loaded->replacement_run_bytes(28U, 0U).empty(),
+			"validated catalog exposes bounded read-only translator run bytes");
 		expect(replacements && *replacements ==
 			std::vector<std::array<std::uint8_t, 2U>>{{
 				{0x82U, 0xA4U}, {0x82U, 0xA6U},

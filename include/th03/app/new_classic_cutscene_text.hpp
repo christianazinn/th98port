@@ -58,6 +58,14 @@ class NewClassicCutsceneTextCatalog final {
 public:
 	[[nodiscard]] std::string_view locale() const noexcept;
 	[[nodiscard]] std::uint64_t source_profile_fnv1a64() const noexcept;
+	// Translator/release tooling may inspect already-validated replacement
+	// bytes. Gameplay must continue to use replacement_glyphs(), which binds
+	// every run to the authenticated source script before returning cells.
+	[[nodiscard]] std::size_t run_count(std::size_t script_index) const noexcept;
+	[[nodiscard]] std::span<const std::uint8_t> replacement_run_bytes(
+		std::size_t script_index,
+		std::size_t run_index
+	) const noexcept;
 	[[nodiscard]] std::expected<
 		std::vector<std::array<std::uint8_t, 2U>>,
 		NewClassicCutsceneTextPackError

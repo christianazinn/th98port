@@ -201,6 +201,26 @@ NewClassicCutsceneTextCatalog::source_profile_fnv1a64() const noexcept
 	return source_profile_fnv1a64_;
 }
 
+std::size_t NewClassicCutsceneTextCatalog::run_count(
+	std::size_t script_index
+) const noexcept
+{
+	return script_index < scripts_.size() ? scripts_[script_index].runs.size() : 0U;
+}
+
+std::span<const std::uint8_t>
+NewClassicCutsceneTextCatalog::replacement_run_bytes(
+	std::size_t script_index,
+	std::size_t run_index
+) const noexcept
+{
+	if(script_index >= scripts_.size() ||
+		run_index >= scripts_[script_index].runs.size()) {
+		return {};
+	}
+	return scripts_[script_index].runs[run_index].replacement;
+}
+
 std::expected<
 	std::vector<std::array<std::uint8_t, 2U>>,
 	NewClassicCutsceneTextPackError
