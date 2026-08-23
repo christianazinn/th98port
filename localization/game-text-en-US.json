@@ -763,6 +763,24 @@
     "registration.key.space": "SP  ",
     "registration.key.backspace": "BS  ",
     "registration.key.end": "END ",
-    "registration.stage.all": "All "
+    "registration.stage.all": "All ",
+    "staff.title.line-1": "Phantasmagoria of               ",
+    "staff.title.line-2": "Dim. Dream                      ",
+    "staff.subtitle": "The Phantasmagoria of Dim. Dream...             ",
+    "staff.role.line-1": "Programming, Art & Music                ",
+    "staff.role.line-2": "                                        ",
+    "staff.creator": "ZUN (Jun'ya Ota)                ",
+    "staff.thanks.heading": "Special Thanks                  ",
+    "staff.thanks.aotaka": "AOTAKA          ",
+    "staff.thanks.amusement-makers": "Tokyo Denki University Amusement Makers                         ",
+    "staff.thanks.pmd": "P.M.D provided by M. Kajihara (KAJA)                            ",
+    "staff.copyright": "C53 version   (c) ZUN Soft 1997                 ",
+    "staff.verdict.title": "Results                 ",
+    "staff.verdict.character": "Character       ",
+    "staff.verdict.rank": "Rank            ",
+    "staff.verdict.score": "Score           ",
+    "staff.verdict.continue": "Continue        ",
+    "staff.verdict.skill": "Skill           ",
+    "staff.verdict.point": "pt  "
   }
 }

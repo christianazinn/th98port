@@ -109,6 +109,10 @@ constexpr std::array native_surfaces{
 		"Continue question, credit, Yes, No, and Game Over title regions",
 	},
 	NativeSurface{
+		"staff-credit-image-text", "mainl_staff", "T3GTL001",
+		"11 semantic staff cels plus localized verdict character, rank, and point",
+	},
+	NativeSurface{
 		"win-quotes", "mainl_win", "T3GTL001",
 		"297 fixed DAT rows: nine characters by 11 blocks by three rows",
 	},

@@ -42,7 +42,7 @@ MAIN_RESULT_SPECS = (
     ("result.boss-panic", 0x1DEB6, 26),
     ("result.lives-left", 0x1DF2E, 26),
 )
-HUD_LOCALIZED_MESSAGES = {
+IMAGE_LOCALIZED_MESSAGES = {
     "hud.banner.lose": "敗北            ",
     "hud.banner.win": "勝利            ",
     "hud.banner.stage": "ステージ        ",
@@ -66,6 +66,24 @@ HUD_LOCALIZED_MESSAGES = {
     "registration.key.backspace": "削除",
     "registration.key.end": "決定",
     "registration.stage.all": "全て",
+    "staff.title.line-1": "東方夢時空                      ",
+    "staff.title.line-2": "                                ",
+    "staff.subtitle": "The Phantasmagoria of Dim. Dream...             ",
+    "staff.role.line-1": "プログラム・グラフィック                ",
+    "staff.role.line-2": "音楽                                    ",
+    "staff.creator": "ZUN（太田 順也）                ",
+    "staff.thanks.heading": "謝辞                            ",
+    "staff.thanks.aotaka": "AOTAKA          ",
+    "staff.thanks.amusement-makers": "東京電機大学 Amusement Makers                                   ",
+    "staff.thanks.pmd": "P.M.D 提供 M.Kajihara (KAJA)                                    ",
+    "staff.copyright": "C53 version   (c) ZUN Soft 1997                 ",
+    "staff.verdict.title": "今回の記録              ",
+    "staff.verdict.character": "キャラクター    ",
+    "staff.verdict.rank": "難易度          ",
+    "staff.verdict.score": "得点            ",
+    "staff.verdict.continue": "コンティニュー  ",
+    "staff.verdict.skill": "あなたの腕前    ",
+    "staff.verdict.point": "点  ",
 }
 
 
@@ -192,10 +210,10 @@ def build_author(
     if overlap:
         raise AuthorError(f"duplicate source message {sorted(overlap)[0]}")
     messages.update(fixed_raw["messages"])
-    overlap = set(messages) & set(HUD_LOCALIZED_MESSAGES)
+    overlap = set(messages) & set(IMAGE_LOCALIZED_MESSAGES)
     if overlap:
         raise AuthorError(f"duplicate localized HUD message {sorted(overlap)[0]}")
-    messages.update(HUD_LOCALIZED_MESSAGES)
+    messages.update(IMAGE_LOCALIZED_MESSAGES)
     identifiers = schema_ids(schema)
     missing = set(identifiers) - set(messages)
     extra = set(messages) - set(identifiers)

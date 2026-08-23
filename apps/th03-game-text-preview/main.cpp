@@ -200,6 +200,8 @@ void usage()
 	result.pages.push_back({.name = "hud-banners"});
 	result.pages.push_back({.name = "continue-gameover"});
 	result.pages.push_back({.name = "registration-art"});
+	result.pages.push_back({.name = "staff-credits-a"});
+	result.pages.push_back({.name = "staff-credits-b"});
 	for(std::size_t character = 0U;
 		character < th03::app::new_classic_win_quote_characters;
 		++character) {
@@ -329,7 +331,25 @@ void usage()
 			return std::unexpected(static_cast<std::size_t>(id));
 		}
 	}
-	constexpr std::size_t win_page_first = 6U;
+	for(std::size_t part = 0U; part < 2U; ++part) {
+		const auto page = 6U + part;
+		if(!put_ascii(result.pages[page].raster, font,
+			"STAFF CREDIT IMAGE TEXT", {16, 8}, 11U)) {
+			return std::unexpected(0U);
+		}
+		for(std::size_t row = 0U; row < 9U; ++row) {
+			const auto index = (part * 9U) + row;
+			const auto id = add(NewClassicGameTextId::staff_title_line_1, index);
+			const auto &schema = th03::app::new_classic_game_text_schema(id);
+			const auto y = static_cast<std::int32_t>(40U + row * 40U);
+			if(!put_ascii(result.pages[page].raster, font, schema.identifier,
+				{16, y}, 7U) ||
+				!put_message(result, page, catalog, font, id, {64, y + 17})) {
+				return std::unexpected(static_cast<std::size_t>(id));
+			}
+		}
+	}
+	constexpr std::size_t win_page_first = 8U;
 	for(std::size_t character = 0U;
 		character < th03::app::new_classic_win_quote_characters;
 		++character) {

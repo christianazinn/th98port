@@ -10,6 +10,7 @@
 #include <optional>
 #include <span>
 #include <utility>
+#include <vector>
 
 #include "th03/assets/decode.hpp"
 #include "th03/present/cels.hpp"
@@ -177,6 +178,248 @@ template <typename Value, typename Decoder>
 	return page == present::Page::zero ? present::Page::one : present::Page::zero;
 }
 
+[[nodiscard]] std::span<const std::uint8_t> trim_padding(
+	std::span<const std::uint8_t> text
+) noexcept
+{
+	while(!text.empty() && text.back() == static_cast<std::uint8_t>(' ')) {
+		text = text.first(text.size() - 1U);
+	}
+	return text;
+}
+
+struct StaffTextLine final {
+	NewClassicGameTextId id{};
+	std::int16_t y = -1;
+	std::uint8_t scale = 0U;
+	bool centered = true;
+};
+
+struct PreparedStaffTextLine final {
+	StaffTextLine layout{};
+	present::PreparedGraphicsText8x16 text;
+};
+
+[[nodiscard]] std::expected<assets::PlanarCel4, ClassicStaffError>
+build_localized_staff_cel(
+	const assets::PlanarCel4 &source,
+	std::span<const StaffTextLine> lines,
+	const NewClassicGameTextCatalog &game_text,
+	const present::AnkGlyphProvider &font
+)
+{
+	std::vector<PreparedStaffTextLine> prepared;
+	prepared.reserve(lines.size());
+	for(const auto &line : lines) {
+		const auto visible = trim_padding(game_text.bytes(line.id));
+		if(visible.empty()) {
+			continue;
+		}
+		auto text = present::prepare_graphics_text_8x16(visible, font);
+		if(!text) {
+			return std::unexpected(text_error(text.error()));
+		}
+		prepared.push_back({line, std::move(*text)});
+	}
+	if(prepared.empty()) {
+		return std::unexpected(staff_error(
+			ClassicStaffErrorCode::font_prepare_failed
+		));
+	}
+
+	const bool multiple_automatic = std::ranges::count_if(
+		prepared,
+		[](const PreparedStaffTextLine &line) {
+			return line.layout.y < 0;
+		}
+	) > 1;
+	std::uint32_t automatic_height = 0U;
+	for(auto &line : prepared) {
+		if(line.layout.scale == 0U) {
+			line.layout.scale = multiple_automatic ? 1U : 2U;
+			if((static_cast<std::uint64_t>(line.text.pixel_width()) *
+				line.layout.scale) > source.pixel_width ||
+				(static_cast<std::uint32_t>(present::jis_height) *
+				line.layout.scale) > source.pixel_height) {
+				line.layout.scale = 1U;
+			}
+		}
+		const auto width = static_cast<std::uint64_t>(line.text.pixel_width()) *
+			line.layout.scale;
+		const auto height = static_cast<std::uint32_t>(present::jis_height) *
+			line.layout.scale;
+		if(width > source.pixel_width || height > source.pixel_height) {
+			return std::unexpected(staff_error(
+				ClassicStaffErrorCode::font_prepare_failed
+			));
+		}
+		if(line.layout.y < 0) {
+			automatic_height += height;
+		}
+	}
+	if(automatic_height > source.pixel_height) {
+		return std::unexpected(staff_error(
+			ClassicStaffErrorCode::font_prepare_failed
+		));
+	}
+
+	present::Raster raster;
+	if(!raster.clear({0, 0, source.pixel_width, source.pixel_height}, 0U)) {
+		return std::unexpected(staff_error(ClassicStaffErrorCode::draw_failed));
+	}
+	std::int32_t automatic_y = static_cast<std::int32_t>(
+		(source.pixel_height - automatic_height) / 2U
+	);
+	for(const auto &line : prepared) {
+		const auto width = static_cast<std::uint64_t>(line.text.pixel_width()) *
+			line.layout.scale;
+		const auto height = static_cast<std::uint32_t>(present::jis_height) *
+			line.layout.scale;
+		const auto x = line.layout.centered ? static_cast<std::int32_t>(
+			(source.pixel_width - width) / 2U
+		) : 4;
+		const auto y = (line.layout.y < 0) ? automatic_y : line.layout.y;
+		if(x < 0 || y < 0 ||
+			(static_cast<std::uint64_t>(x) + width) > source.pixel_width ||
+			(static_cast<std::uint64_t>(y) + height) > source.pixel_height) {
+			return std::unexpected(staff_error(
+				ClassicStaffErrorCode::font_prepare_failed
+			));
+		}
+		const auto shadow_offset = static_cast<std::int32_t>(line.layout.scale);
+		if((static_cast<std::uint64_t>(x + shadow_offset) + width) <=
+			source.pixel_width &&
+			(static_cast<std::uint64_t>(y + shadow_offset) + height) <=
+			source.pixel_height &&
+			!present::graphics_text_put_scaled_8x16(
+				raster, {x + shadow_offset, y + shadow_offset}, line.text,
+				{present::Index4{3U}, present::GraphicsTextWeight::black, 0U},
+				line.layout.scale
+			)) {
+			return std::unexpected(staff_error(ClassicStaffErrorCode::draw_failed));
+		}
+		if(!present::graphics_text_put_scaled_8x16(
+			raster, {x, y}, line.text,
+			{present::Index4{15U}, present::GraphicsTextWeight::black, 0U},
+			line.layout.scale
+		)) {
+			return std::unexpected(staff_error(ClassicStaffErrorCode::draw_failed));
+		}
+		if(line.layout.y < 0) {
+			automatic_y += static_cast<std::int32_t>(height);
+		}
+	}
+
+	auto result = source;
+	const auto plane_size = static_cast<std::size_t>(source.bitplane_size);
+	for(auto &plane : result.color_planes) {
+		plane.assign(plane_size, 0U);
+	}
+	if(source.alpha) {
+		result.alpha.emplace(plane_size, std::uint8_t{0U});
+	} else {
+		result.alpha.reset();
+	}
+	const auto byte_width = static_cast<std::size_t>(source.pixel_width) / 8U;
+	for(std::size_t y = 0U; y < source.pixel_height; ++y) {
+		const auto stored_y = static_cast<std::size_t>(source.pixel_height) - 1U - y;
+		for(std::size_t byte_x = 0U; byte_x < byte_width; ++byte_x) {
+			const auto offset = (stored_y * byte_width) + byte_x;
+			for(std::size_t plane = 0U; plane < result.color_planes.size(); ++plane) {
+				result.color_planes[plane][offset] = raster.planar_byte(
+					present::Page::zero,
+					static_cast<present::PlanarPlane>(plane),
+					static_cast<std::uint16_t>(byte_x),
+					static_cast<std::uint16_t>(y)
+				).value_or(0U);
+			}
+			if(result.alpha) {
+				std::uint8_t alpha = 0U;
+				for(std::size_t bit = 0U; bit < 8U; ++bit) {
+					if(raster.pixel(
+						present::Page::zero,
+						{static_cast<std::int32_t>((byte_x * 8U) + bit),
+							static_cast<std::int32_t>(y)}
+					).value_or(0U) != 0U) {
+						alpha = static_cast<std::uint8_t>(
+							alpha | (0x80U >> bit)
+						);
+					}
+				}
+				(*result.alpha)[offset] = alpha;
+			}
+		}
+	}
+	return result;
+}
+
+[[nodiscard]] std::expected<void, ClassicStaffError> localize_staff_cels(
+	std::array<assets::PlanarCel4, 12U> &cels,
+	const NewClassicGameTextCatalog &game_text,
+	const present::AnkGlyphProvider &font
+)
+{
+	const auto replace = [&](std::size_t index, auto lines) ->
+		std::expected<void, ClassicStaffError> {
+		auto localized = build_localized_staff_cel(
+			cels[index], std::span<const StaffTextLine>{lines}, game_text, font
+		);
+		if(!localized) {
+			return std::unexpected(std::move(localized.error()));
+		}
+		cels[index] = std::move(*localized);
+		return {};
+	};
+	const auto one = [](NewClassicGameTextId id) {
+		return std::array{StaffTextLine{.id = id}};
+	};
+	const auto two = [](NewClassicGameTextId first, NewClassicGameTextId second) {
+		return std::array{
+			StaffTextLine{.id = first}, StaffTextLine{.id = second},
+		};
+	};
+	auto result = replace(0U, two(
+			NewClassicGameTextId::staff_title_line_1,
+			NewClassicGameTextId::staff_title_line_2
+		));
+	if(!result) {
+		return result;
+	}
+	result = replace(1U, one(NewClassicGameTextId::staff_subtitle));
+	if(!result) {
+		return result;
+	}
+	result = replace(2U, two(
+			NewClassicGameTextId::staff_role_line_1,
+			NewClassicGameTextId::staff_role_line_2
+		));
+	if(!result) {
+		return result;
+	}
+	for(const auto [index, id] : std::array{
+		std::pair{3U, NewClassicGameTextId::staff_creator},
+		std::pair{4U, NewClassicGameTextId::staff_thanks_heading},
+		std::pair{5U, NewClassicGameTextId::staff_thanks_amusement_makers},
+		std::pair{6U, NewClassicGameTextId::staff_thanks_pmd},
+		std::pair{8U, NewClassicGameTextId::staff_verdict_title},
+		std::pair{10U, NewClassicGameTextId::staff_copyright},
+		std::pair{11U, NewClassicGameTextId::staff_thanks_aotaka},
+	}) {
+		result = replace(index, one(id));
+		if(!result) {
+			return result;
+		}
+	}
+	const std::array verdict_lines{
+		StaffTextLine{NewClassicGameTextId::staff_verdict_character, 3, 1U, false},
+		StaffTextLine{NewClassicGameTextId::staff_verdict_rank, 28, 1U, false},
+		StaffTextLine{NewClassicGameTextId::staff_verdict_score, 53, 1U, false},
+		StaffTextLine{NewClassicGameTextId::staff_verdict_continue, 77, 1U, false},
+		StaffTextLine{NewClassicGameTextId::staff_verdict_skill, 118, 1U, true},
+	};
+	return replace(9U, verdict_lines);
+}
+
 } // namespace
 
 enum class ClassicStaffScene::DriverPhase : std::uint8_t {
@@ -265,12 +508,13 @@ ClassicStaffScene::create(
 	const present::AnkGlyphProvider &font,
 	present::StaffFlakeTrigTables trig,
 	present::Raster initial_raster,
-	bool fast_forward_unlocked
+	bool fast_forward_unlocked,
+	const NewClassicGameTextCatalog *game_text
 )
 {
 	return create_impl(
 		resident, resources, stage_text, compiled, font, trig,
-		std::move(initial_raster), true, fast_forward_unlocked
+		std::move(initial_raster), true, fast_forward_unlocked, game_text
 	);
 }
 
@@ -284,7 +528,8 @@ ClassicStaffScene::create_impl(
 	present::StaffFlakeTrigTables trig,
 	present::Raster initial_raster,
 	bool authenticate_resource_bytes,
-	bool fast_forward_unlocked
+	bool fast_forward_unlocked,
+	const NewClassicGameTextCatalog *game_text
 )
 {
 	const auto expected = mainl_staff_resource_keys();
@@ -329,7 +574,7 @@ ClassicStaffScene::create_impl(
 	}
 	return create_predecoded(
 		resident, std::move(cels), *palette, stage_text, compiled, font, trig,
-		std::move(initial_raster), fast_forward_unlocked
+		std::move(initial_raster), fast_forward_unlocked, game_text
 	);
 }
 
@@ -343,7 +588,8 @@ ClassicStaffScene::create_predecoded(
 	const present::AnkGlyphProvider &font,
 	present::StaffFlakeTrigTables trig,
 	present::Raster initial_raster,
-	bool fast_forward_unlocked
+	bool fast_forward_unlocked,
+	const NewClassicGameTextCatalog *game_text
 )
 {
 	constexpr std::array<std::array<std::uint16_t, 2U>, 12U> geometries{{
@@ -384,6 +630,12 @@ ClassicStaffScene::create_predecoded(
 			));
 		}
 	}
+	if(game_text) {
+		auto localized = localize_staff_cels(cels, *game_text, font);
+		if(!localized) {
+			return std::unexpected(std::move(localized.error()));
+		}
+	}
 
 	auto prepared = std::make_unique<Prepared>();
 	prepared->palette = palette;
@@ -421,16 +673,26 @@ ClassicStaffScene::create_predecoded(
 		static_cast<std::uint8_t>(player->character) -
 		static_cast<std::uint8_t>(MainCharacter::reimu)
 	);
-	auto playchar = present::prepare_graphics_text_8x16(
-		stage_text.characters[character_index].name, font
-	);
+	const auto playchar_source = game_text ? trim_padding(game_text->bytes(
+		static_cast<NewClassicGameTextId>(
+			static_cast<std::size_t>(NewClassicGameTextId::registration_00) +
+			character_index + 1U
+		)
+	)) : std::span<const std::uint8_t>{
+		stage_text.characters[character_index].name
+	};
+	auto playchar = present::prepare_graphics_text_8x16(playchar_source, font);
 	if(!playchar) {
 		return std::unexpected(text_error(playchar.error()));
 	}
 	prepared->playchar.emplace(std::move(*playchar));
-	auto rank = present::prepare_graphics_text_8x16(
-		compiled.ranks[resident.rank], font
-	);
+	const auto rank_source = game_text ? trim_padding(game_text->bytes(
+		static_cast<NewClassicGameTextId>(
+			static_cast<std::size_t>(NewClassicGameTextId::registration_rank_easy) +
+			resident.rank
+		)
+	)) : std::span<const std::uint8_t>{compiled.ranks[resident.rank]};
+	auto rank = present::prepare_graphics_text_8x16(rank_source, font);
 	if(!rank) {
 		return std::unexpected(text_error(rank.error()));
 	}
@@ -444,7 +706,10 @@ ClassicStaffScene::create_predecoded(
 		}
 		prepared->numbers[index].emplace(std::move(*number));
 	}
-	auto point = present::prepare_graphics_text_8x16(compiled.point, font);
+	const auto point_source = game_text ? trim_padding(game_text->bytes(
+		NewClassicGameTextId::staff_verdict_point
+	)) : std::span<const std::uint8_t>{compiled.point};
+	auto point = present::prepare_graphics_text_8x16(point_source, font);
 	if(!point) {
 		return std::unexpected(text_error(point.error()));
 	}

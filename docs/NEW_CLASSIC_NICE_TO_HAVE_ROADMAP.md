@@ -111,9 +111,11 @@ localized rendering.
 The source-text part of this parcel is now complete in both shipped languages.
 `T3LNG001` contains 406 explicit English and Japanese New Classic messages;
 Japanese rows are CP932 and combine authenticated proportional `MNUFONT.PF`
-Latin with exact `FONT.ROM` Japanese glyphs. `T3GTL001` contains all 761
+Latin with exact `FONT.ROM` Japanese glyphs. `T3GTL001` contains all 779
 graphics-text rows in explicit English and Japanese catalogs, including every
-win quote and Music Room comment. The Japanese author is regenerated from
+win quote and Music Room comment. This includes all semantic staff-credit and
+verdict text; New Classic rebuilds those source-geometry cels while retaining
+the original animation schedule and decorative art. The Japanese author is regenerated from
 authenticated Japanese OP/MAIN/MAINL executables and DAT assets rather than
 from the English translation. `T3CTP001` already contains complete English and
 Japanese catalogs for all 28 scripted dialogue/cutscene/ending programs. A
@@ -217,7 +219,7 @@ These can proceed alongside the content migrations:
 These tools should consume the same decoders and schemas as production rather
 than inventing shadow interpretations.
 
-Status: in progress. `th03-game-text-preview` now renders all 761 `T3GTL001`
+Status: in progress. `th03-game-text-preview` now renders all 779 `T3GTL001`
 messages into deterministic 640x400 contact sheets plus a machine-readable
 `T3GTP001` bounds index through the production PC-98 font and graphics-text
 path, including all win quotes and Music Room comments. The definitive

@@ -13,6 +13,7 @@
 #include "classic_mainl_stage_internal.hpp"
 #include "mainl_compiled_text_internal.hpp"
 #include "th03/app/classic_audio.hpp"
+#include "th03/app/new_classic_game_text.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/assets/types.hpp"
 #include "th03/core/game.hpp"
@@ -109,7 +110,8 @@ public:
 		const present::AnkGlyphProvider &font,
 		present::StaffFlakeTrigTables trig,
 		present::Raster initial_raster,
-		bool fast_forward_unlocked = false
+		bool fast_forward_unlocked = false,
+		const NewClassicGameTextCatalog *game_text = nullptr
 	);
 	~ClassicStaffScene();
 
@@ -183,7 +185,8 @@ private:
 		present::StaffFlakeTrigTables trig,
 		present::Raster initial_raster,
 		bool authenticate_resource_bytes,
-		bool fast_forward_unlocked
+		bool fast_forward_unlocked,
+		const NewClassicGameTextCatalog *game_text
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicStaffScene>,
@@ -197,7 +200,8 @@ private:
 		const present::AnkGlyphProvider &font,
 		present::StaffFlakeTrigTables trig,
 		present::Raster initial_raster,
-		bool fast_forward_unlocked
+		bool fast_forward_unlocked,
+		const NewClassicGameTextCatalog *game_text
 	);
 	[[nodiscard]] std::expected<ClassicStaffTick, ClassicStaffError>
 	advance_one(const ClassicStaffInput &input);
@@ -260,12 +264,13 @@ struct ClassicStaffSceneTestAccess final {
 		const present::AnkGlyphProvider &font,
 		present::StaffFlakeTrigTables trig,
 		present::Raster initial_raster,
-		bool fast_forward_unlocked = false
+		bool fast_forward_unlocked = false,
+		const NewClassicGameTextCatalog *game_text = nullptr
 	)
 	{
 		return ClassicStaffScene::create_impl(
 			resident, resources, stage_text, compiled, font, trig,
-			std::move(initial_raster), false, fast_forward_unlocked
+			std::move(initial_raster), false, fast_forward_unlocked, game_text
 		);
 	}
 
@@ -281,13 +286,43 @@ struct ClassicStaffSceneTestAccess final {
 		const present::AnkGlyphProvider &font,
 		present::StaffFlakeTrigTables trig,
 		present::Raster initial_raster,
-		bool fast_forward_unlocked = false
+		bool fast_forward_unlocked = false,
+		const NewClassicGameTextCatalog *game_text = nullptr
 	)
 	{
 		return ClassicStaffScene::create_predecoded(
 			resident, std::move(cels), palette, stage_text, compiled, font,
-			trig, std::move(initial_raster), fast_forward_unlocked
+			trig, std::move(initial_raster), fast_forward_unlocked, game_text
 		);
+	}
+
+	[[nodiscard]] static const assets::PlanarCel4 &cel(
+		const ClassicStaffScene &scene,
+		std::size_t index
+	) noexcept
+	{
+		return scene.prepared_->cels[index];
+	}
+
+	[[nodiscard]] static std::uint32_t playchar_width(
+		const ClassicStaffScene &scene
+	) noexcept
+	{
+		return scene.prepared_->playchar->pixel_width();
+	}
+
+	[[nodiscard]] static std::uint32_t rank_width(
+		const ClassicStaffScene &scene
+	) noexcept
+	{
+		return scene.prepared_->rank->pixel_width();
+	}
+
+	[[nodiscard]] static std::size_t point_glyph_count(
+		const ClassicStaffScene &scene
+	) noexcept
+	{
+		return scene.prepared_->point->glyph_count();
 	}
 
 	[[nodiscard]] static std::uint8_t active_flake_count(

@@ -327,6 +327,24 @@
     {"enum": "registration_key_space", "id": "registration.key.space", "encoding": "cp932", "exact_bytes": 4},
     {"enum": "registration_key_backspace", "id": "registration.key.backspace", "encoding": "cp932", "exact_bytes": 4},
     {"enum": "registration_key_end", "id": "registration.key.end", "encoding": "cp932", "exact_bytes": 4},
-    {"enum": "registration_stage_all", "id": "registration.stage.all", "encoding": "cp932", "exact_bytes": 4}
+    {"enum": "registration_stage_all", "id": "registration.stage.all", "encoding": "cp932", "exact_bytes": 4},
+    {"enum": "staff_title_line_1", "id": "staff.title.line-1", "encoding": "cp932", "exact_bytes": 32},
+    {"enum": "staff_title_line_2", "id": "staff.title.line-2", "encoding": "cp932", "exact_bytes": 32},
+    {"enum": "staff_subtitle", "id": "staff.subtitle", "encoding": "cp932", "exact_bytes": 48},
+    {"enum": "staff_role_line_1", "id": "staff.role.line-1", "encoding": "cp932", "exact_bytes": 40},
+    {"enum": "staff_role_line_2", "id": "staff.role.line-2", "encoding": "cp932", "exact_bytes": 40},
+    {"enum": "staff_creator", "id": "staff.creator", "encoding": "cp932", "exact_bytes": 32},
+    {"enum": "staff_thanks_heading", "id": "staff.thanks.heading", "encoding": "cp932", "exact_bytes": 32},
+    {"enum": "staff_thanks_aotaka", "id": "staff.thanks.aotaka", "encoding": "cp932", "exact_bytes": 16},
+    {"enum": "staff_thanks_amusement_makers", "id": "staff.thanks.amusement-makers", "encoding": "cp932", "exact_bytes": 64},
+    {"enum": "staff_thanks_pmd", "id": "staff.thanks.pmd", "encoding": "cp932", "exact_bytes": 64},
+    {"enum": "staff_copyright", "id": "staff.copyright", "encoding": "cp932", "exact_bytes": 48},
+    {"enum": "staff_verdict_title", "id": "staff.verdict.title", "encoding": "cp932", "exact_bytes": 24},
+    {"enum": "staff_verdict_character", "id": "staff.verdict.character", "encoding": "cp932", "exact_bytes": 16},
+    {"enum": "staff_verdict_rank", "id": "staff.verdict.rank", "encoding": "cp932", "exact_bytes": 16},
+    {"enum": "staff_verdict_score", "id": "staff.verdict.score", "encoding": "cp932", "exact_bytes": 16},
+    {"enum": "staff_verdict_continue", "id": "staff.verdict.continue", "encoding": "cp932", "exact_bytes": 16},
+    {"enum": "staff_verdict_skill", "id": "staff.verdict.skill", "encoding": "cp932", "exact_bytes": 16},
+    {"enum": "staff_verdict_point", "id": "staff.verdict.point", "encoding": "cp932", "exact_bytes": 4}
   ]
 }

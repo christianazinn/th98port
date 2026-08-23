@@ -1402,7 +1402,8 @@ struct ClassicStoryBackend final {
 			static_content->font(),
 			static_content->trig(),
 			*cutscene_handoff,
-			fast_forward_unlocked
+			fast_forward_unlocked,
+			new_classic ? game_text : nullptr
 		);
 		if(!created) {
 			return std::unexpected(staff_error(std::move(created.error())));

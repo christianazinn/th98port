@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "th03/assets/decode.hpp"
+#include "th03/app/authentic_text.hpp"
 
 namespace {
 
@@ -32,6 +33,7 @@ using th03::app::MainResourceRole;
 using th03::app::MainStaffCdg;
 using th03::app::MainlStaffCompiledAssets;
 using th03::app::MainlStageTextAssets;
+using th03::app::NewClassicGameTextCatalog;
 using th03::GameInit;
 using th03::present::AnkGlyph;
 using th03::present::AnkGlyphProvider;
@@ -108,6 +110,20 @@ constexpr std::array<std::array<std::uint16_t, 2U>, 12U> geometries{{
 	{{256U, 32U}}, {{512U, 32U}}, {{448U, 32U}}, {{256U, 230U}},
 	{{192U, 36U}}, {{128U, 138U}}, {{288U, 24U}}, {{224U, 36U}},
 }};
+
+bool same_cel(
+	const th03::assets::PlanarCel4 &left,
+	const th03::assets::PlanarCel4 &right
+)
+{
+	return left.bitplane_size == right.bitplane_size &&
+		left.pixel_width == right.pixel_width &&
+		left.pixel_height == right.pixel_height &&
+		left.offset_at_bottom_left == right.offset_at_bottom_left &&
+		left.vram_dword_width == right.vram_dword_width &&
+		left.row_order == right.row_order && left.bit_order == right.bit_order &&
+		left.alpha == right.alpha && left.color_planes == right.color_planes;
+}
 
 std::vector<std::byte> bytes_for(const th03::app::MainResourceSpec &spec)
 {
@@ -216,12 +232,16 @@ StaffFlakeTrigTables trig()
 }
 
 std::expected<std::unique_ptr<ClassicStaffScene>, th03::app::ClassicStaffError>
-create_scene(SyntheticFont &font, bool fast_forward_unlocked = false)
+create_scene(
+	SyntheticFont &font,
+	bool fast_forward_unlocked = false,
+	const NewClassicGameTextCatalog *game_text = nullptr
+)
 {
 	auto closure = resources();
 	return ClassicStaffSceneTestAccess::create_with_synthetic_resources(
 		resident(), closure, stage_text(), compiled_assets(), font, trig(), Raster{},
-		fast_forward_unlocked
+		fast_forward_unlocked, game_text
 	);
 }
 
@@ -419,6 +439,69 @@ void test_complete_schedule_and_verdict()
 	);
 }
 
+void test_new_classic_localized_staff_art()
+{
+	SyntheticFont font;
+	auto source = create_scene(font);
+	auto english = create_scene(
+		font, false, &th03::app::new_classic_builtin_english_game_text()
+	);
+	auto japanese = create_scene(
+		font, false, &th03::app::new_classic_builtin_japanese_game_text()
+	);
+	expect(
+		source.has_value() && english.has_value() && japanese.has_value(),
+		"source, English, and Japanese staff scenes construct"
+	);
+	if(!source || !english || !japanese) {
+		return;
+	}
+	std::size_t locale_differences = 0U;
+	for(std::size_t index = 0U; index < geometries.size(); ++index) {
+		const auto &source_cel = ClassicStaffSceneTestAccess::cel(**source, index);
+		const auto &english_cel = ClassicStaffSceneTestAccess::cel(**english, index);
+		const auto &japanese_cel = ClassicStaffSceneTestAccess::cel(**japanese, index);
+		expect(
+			english_cel.pixel_width == source_cel.pixel_width &&
+			english_cel.pixel_height == source_cel.pixel_height &&
+			english_cel.alpha.has_value() == source_cel.alpha.has_value() &&
+			japanese_cel.pixel_width == source_cel.pixel_width &&
+			japanese_cel.pixel_height == source_cel.pixel_height &&
+			japanese_cel.alpha.has_value() == source_cel.alpha.has_value(),
+			"localized staff cels preserve source geometry and alpha ownership"
+		);
+		if(index == 7U) {
+			expect(
+				same_cel(source_cel, english_cel) &&
+				same_cel(source_cel, japanese_cel),
+				"decorative STF8 character art remains source-identical"
+			);
+			continue;
+		}
+		expect(
+			!same_cel(source_cel, english_cel) &&
+			!same_cel(source_cel, japanese_cel),
+			"every semantic staff cel is rebuilt from locale text"
+		);
+		if(!same_cel(english_cel, japanese_cel)) {
+			++locale_differences;
+		}
+	}
+	expect(
+		locale_differences >= 6U,
+		"English and Japanese visibly differ across the translated staff roll"
+	);
+	expect(
+		ClassicStaffSceneTestAccess::playchar_width(**english) !=
+			ClassicStaffSceneTestAccess::playchar_width(**japanese) &&
+		ClassicStaffSceneTestAccess::rank_width(**english) !=
+			ClassicStaffSceneTestAccess::rank_width(**japanese) &&
+		ClassicStaffSceneTestAccess::point_glyph_count(**english) == 2U &&
+		ClassicStaffSceneTestAccess::point_glyph_count(**japanese) == 1U,
+		"verdict character, rank, and point suffix come from the selected catalog"
+	);
+}
+
 void test_current_audio_gate_and_reset_lifetime()
 {
 	SyntheticFont font;
@@ -606,7 +689,8 @@ std::optional<std::vector<std::byte>> read_file(
 
 void test_local_original_closure(
 	const std::filesystem::path &content_root,
-	const std::filesystem::path &mainl_path
+	const std::filesystem::path &mainl_path,
+	const std::optional<std::filesystem::path> &font_rom_path
 )
 {
 	const auto mainl = read_file(mainl_path);
@@ -625,15 +709,58 @@ void test_local_original_closure(
 	if(!closure) {
 		return;
 	}
-	SyntheticFont font;
+	SyntheticFont synthetic_font;
+	const AnkGlyphProvider *font = &synthetic_font;
+	std::optional<th03::app::Pc98FontRomProvider> authentic_font{};
+	if(font_rom_path) {
+		const auto bytes = read_file(*font_rom_path);
+		expect(bytes.has_value(), "local FONT.ROM input is readable");
+		if(!bytes) {
+			return;
+		}
+		auto created = th03::app::Pc98FontRomProvider::from_exact_font_rom(*bytes);
+		expect(created.has_value(), "local FONT.ROM authenticates");
+		if(!created) {
+			return;
+		}
+		authentic_font.emplace(std::move(*created));
+		font = &*authentic_font;
+	}
 	const auto created = ClassicStaffScene::create(
-		resident(), *closure, imported->assets, imported->staff, font, trig(),
+		resident(), *closure, imported->assets, imported->staff, *font, trig(),
 		Raster{}
 	);
 	expect(
 		created.has_value(),
 		"local staff palette and all twelve CDGs decode at source geometry"
 	);
+	if(!font_rom_path) {
+		return;
+	}
+	const auto english = ClassicStaffScene::create(
+		resident(), *closure, imported->assets, imported->staff, *font, trig(),
+		Raster{}, false, &th03::app::new_classic_builtin_english_game_text()
+	);
+	const auto japanese = ClassicStaffScene::create(
+		resident(), *closure, imported->assets, imported->staff, *font, trig(),
+		Raster{}, false, &th03::app::new_classic_builtin_japanese_game_text()
+	);
+	expect(
+		english.has_value() && japanese.has_value(),
+		"authentic English and Japanese staff cels fit every source geometry"
+	);
+	if(created && english && japanese) {
+		expect(
+			same_cel(
+				ClassicStaffSceneTestAccess::cel(**created, 7U),
+				ClassicStaffSceneTestAccess::cel(**english, 7U)
+			) && same_cel(
+				ClassicStaffSceneTestAccess::cel(**created, 7U),
+				ClassicStaffSceneTestAccess::cel(**japanese, 7U)
+			),
+			"authentic STF8 decorative art is unchanged in both locales"
+		);
+	}
 }
 
 } // namespace
@@ -641,15 +768,22 @@ void test_local_original_closure(
 int main(int argc, char **argv)
 {
 	test_complete_schedule_and_verdict();
+	test_new_classic_localized_staff_art();
 	test_music_off_volume_wait_escape();
 	test_current_audio_gate_and_reset_lifetime();
 	test_fast_forward_unlock_and_frame_policy();
 	test_overlay_forces_alpha_after_performance_downgrade();
 	test_atomic_rejections_and_audio_guard();
-	if(argc == 3) {
-		test_local_original_closure(argv[1], argv[2]);
+	if(argc == 3 || argc == 4) {
+		test_local_original_closure(
+			argv[1], argv[2],
+			argc == 4 ? std::optional<std::filesystem::path>{argv[3]} : std::nullopt
+		);
 	} else {
-		expect(argc == 1, "optional local gate accepts content root and MAINL");
+		expect(
+			argc == 1,
+			"optional local gate accepts content root, MAINL, and FONT.ROM"
+		);
 	}
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
