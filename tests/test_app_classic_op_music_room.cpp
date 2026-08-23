@@ -1,6 +1,8 @@
 #include "../src/app/classic_op_music_room_internal.hpp"
+#include "new_classic_menu_preview.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -13,6 +15,7 @@
 #include <vector>
 
 #include "th03/app/authentic_text.hpp"
+#include "th03/app/new_classic_messages.hpp"
 #include "th03/app/resources.hpp"
 
 namespace {
@@ -766,6 +769,50 @@ void local_original_gate(
 	if(!imported_labels) {
 		return;
 	}
+	for(const auto profile : {
+		th03::app::NewClassicLanguageAssetProfile::english,
+		th03::app::NewClassicLanguageAssetProfile::japanese,
+	}) {
+		const auto &messages = th03::app::new_classic_builtin_messages(profile);
+		const auto *game_text = profile ==
+			th03::app::NewClassicLanguageAssetProfile::english ?
+			&th03::app::new_classic_builtin_english_game_text() :
+			&th03::app::new_classic_builtin_japanese_game_text();
+		auto localized = ClassicOpMusicRoomScene::create_from_imported_text(
+			*title_completion, {}, *music_resources, *imported_labels, *font,
+			game_text,
+			th03::app::ClassicOpMusicRoomLocalizedHeading{
+				.title = messages.text(
+					th03::app::NewClassicMessageId::title_music_room
+				),
+				.credit = messages.text(
+					th03::app::NewClassicMessageId::credits_original
+				),
+			}
+		);
+		expect(
+			localized.has_value(),
+			"authenticated English/Japanese Music Room headings prepare and render"
+		);
+		if(localized) {
+			std::array<
+				th03::present::ComposedPixel,
+				th03::present::graphics_page_pixels
+			> output{};
+			auto surface = th03::present::compose_source_surface(
+				output, (*localized)->raster(), (*localized)->tram(), *font
+			);
+			expect(surface.has_value(),
+				"localized Music Room composes a complete host surface");
+			if(surface) {
+				th03::test::dump_menu_preview(
+					*surface,
+					profile == th03::app::NewClassicLanguageAssetProfile::english ?
+						"music-room-en.ppm" : "music-room-ja.ppm"
+				);
+			}
+		}
+	}
 	auto music = ClassicOpMusicRoomScene::create_from_imported_text(
 		*title_completion, {}, *music_resources, *imported_labels, *font
 	);
@@ -888,11 +935,59 @@ void local_original_gate(
 	}
 }
 
+void test_localized_heading_reconstruction()
+{
+	const SyntheticFont font{};
+	const auto text = labels();
+	const auto comment_file = comments();
+	ClassicOpMusicRoomCarry carry{};
+	carry.polygons_initialized = true;
+	for(auto &polygon : carry.polygons) {
+		polygon.center_x = -300;
+		polygon.center_y_q12_4 = -4800;
+	}
+	auto source_background = background();
+	const auto source_offset = (1U * th03::present::graphics_width) + 300U;
+	source_background.image.indices[source_offset] = 9U;
+	auto localized_background = source_background;
+	auto source = ClassicOpMusicRoomSceneTestAccess::
+		create_with_predecoded_assets(
+			{}, carry, std::move(source_background), text, comment_file, font
+		);
+	auto localized = ClassicOpMusicRoomSceneTestAccess::
+		create_with_predecoded_assets(
+			{}, carry, std::move(localized_background), text, comment_file, font,
+			{}, {}, nullptr,
+			th03::app::ClassicOpMusicRoomLocalizedHeading{
+				.title = "A",
+				.credit = "B",
+			}
+		);
+	expect(source.has_value() && localized.has_value(),
+		"source and localized Music Room heading scenes construct");
+	if(!source || !localized) {
+		return;
+	}
+	for(const auto page : {Page::zero, Page::one}) {
+		expect(
+			(*source)->raster().pixel(page, {300, 1}) == 9U &&
+				(*localized)->raster().pixel(page, {300, 1}) == 4U,
+			"New Classic clears only the bounded heading panel while Classic retains source art"
+		);
+		expect(
+			(*localized)->raster().pixel(page, {440, 8}) == 3U &&
+				(*localized)->raster().pixel(page, {444, 48}) == 3U,
+			"localized heading and creator credit render on both Music Room pages"
+		);
+	}
+}
+
 } // namespace
 
 int main(int argc, char **argv)
 {
 	test_asset_validation_and_initial_presentation();
+	test_localized_heading_reconstruction();
 	test_raw_input_presence_and_release();
 	test_input_flip_and_polygon_cadence();
 	test_track_audio_exit_and_completion();

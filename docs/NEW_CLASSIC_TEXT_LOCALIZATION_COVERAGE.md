@@ -41,7 +41,11 @@ source art. The original geometry, alpha ownership, slide/dissolve schedule,
 and decorative STF8 character illustration remain unchanged. Remaining
 image-text migration includes, at minimum:
 
-- original OP/title and Music Room background headings;
+- original OP/title background headings. The Music Room heading is now
+  runtime-localized in New Classic: the source picture is authenticated, its
+  flat top-right title panel is reconstructed, and the active T3LNG001 title
+  plus creator credit are rendered through the production PC-98 font. Classic
+  retains the untouched source picture;
 - character portrait art (the audited selection atlases contain no text; the
   nine transparent center-list names and all three stat-sheet labels are now
   runtime-localized in New Classic);

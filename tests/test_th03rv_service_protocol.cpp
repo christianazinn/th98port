@@ -94,7 +94,7 @@ th03::formats::ReplayDocument stock_netplay_document()
 	metadata.end_reason = th03::formats::ReplayEndReason::game_over;
 	metadata.game_mode = th03::game_mode::vs_1p_2p;
 	metadata.final_game_mode = th03::game_mode::vs_1p_2p;
-	metadata.final_route = 2U;
+	metadata.final_route = std::uint8_t{2U};
 	metadata.final_winner = static_cast<std::int8_t>(th03::PlayerId::p2);
 	metadata.dos_date = 0x5D10U;
 	metadata.name = {'Y','U','M','E','M','I',' ',' '};

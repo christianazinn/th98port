@@ -2575,9 +2575,20 @@ struct ClassicOpSessionBackend final {
 		if(!resources) {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
+		std::optional<ClassicOpMusicRoomLocalizedHeading> localized_heading{};
+		if(patch_assets) {
+			const auto profile = config.language == ClassicLanguage::english ?
+				NewClassicLanguageAssetProfile::english :
+				NewClassicLanguageAssetProfile::japanese;
+			const auto &messages = patch_assets->messages(profile);
+			localized_heading.emplace(ClassicOpMusicRoomLocalizedHeading{
+				.title = messages.text(NewClassicMessageId::title_music_room),
+				.credit = messages.text(NewClassicMessageId::credits_original),
+			});
+		}
 		auto created = ClassicOpMusicRoomScene::create_from_imported_text(
 			*title_completion, music_carry, *resources, op_music_labels, *font,
-			game_text_for(config.language)
+			game_text_for(config.language), localized_heading
 		);
 		if(!created) {
 			return std::unexpected(music_error(std::move(created.error())));

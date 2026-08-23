@@ -28,6 +28,10 @@ constexpr present::Rect full_screen{
 };
 constexpr present::Rect comment_title_rect{304, 64, 320U, 16U};
 constexpr present::Rect comment_body_rect{304, 80, 320U, 304U};
+constexpr present::Rect localized_heading_rect{256, 0, 384U, 64U};
+constexpr std::int32_t localized_heading_center_x = 448;
+constexpr std::int32_t localized_heading_title_top = 8;
+constexpr std::int32_t localized_heading_credit_top = 48;
 constexpr present::GrcgClipRect full_clip{0, 0, 639, 399};
 
 [[nodiscard]] ClassicOpMusicRoomError music_error(
@@ -357,7 +361,8 @@ std::expected<
 	std::span<const LoadedMainResource> resources,
 	std::span<const std::byte> op_executable,
 	const present::AnkGlyphProvider &font,
-	const NewClassicGameTextCatalog *localized_text
+	const NewClassicGameTextCatalog *localized_text,
+	std::optional<ClassicOpMusicRoomLocalizedHeading> localized_heading
 )
 {
 	auto prepared = prepare_music_room_resources(completion, resources);
@@ -371,7 +376,7 @@ std::expected<
 	return create_predecoded(
 		completion.resident(), std::move(carry), std::move(prepared->background),
 		*labels, prepared->comments, font, completion.raster(),
-		completion.tram(), localized_text
+		completion.tram(), localized_text, localized_heading
 	);
 }
 
@@ -384,7 +389,8 @@ std::expected<
 	std::span<const LoadedMainResource> resources,
 	const OpMusicRoomTextImport &labels,
 	const present::AnkGlyphProvider &font,
-	const NewClassicGameTextCatalog *localized_text
+	const NewClassicGameTextCatalog *localized_text,
+	std::optional<ClassicOpMusicRoomLocalizedHeading> localized_heading
 )
 {
 	auto prepared = prepare_music_room_resources(completion, resources);
@@ -394,7 +400,7 @@ std::expected<
 	return create_predecoded(
 		completion.resident(), std::move(carry), std::move(prepared->background),
 		labels, prepared->comments, font, completion.raster(), completion.tram(),
-		localized_text
+		localized_text, localized_heading
 	);
 }
 
@@ -410,7 +416,8 @@ std::expected<
 	const present::AnkGlyphProvider &font,
 	present::Raster raster,
 	present::Tram tram,
-	const NewClassicGameTextCatalog *localized_text
+	const NewClassicGameTextCatalog *localized_text,
+	std::optional<ClassicOpMusicRoomLocalizedHeading> localized_heading
 )
 {
 	if(raster.raster_mode() != present::RasterMode::lines_400 ||
@@ -437,6 +444,38 @@ std::expected<
 
 	auto prepared = std::make_unique<Prepared>();
 	prepared->background = std::move(background);
+	if(localized_heading) {
+		if(localized_heading->title.empty()) {
+			return std::unexpected(music_error(
+				ClassicOpMusicRoomErrorCode::invalid_compiled_text
+			));
+		}
+		const auto prepare_heading = [&font](std::string_view text) {
+			return present::prepare_graphics_text_8x16({
+				reinterpret_cast<const std::uint8_t *>(text.data()), text.size(),
+			}, font);
+		};
+		auto title = prepare_heading(localized_heading->title);
+		if(!title) {
+			return std::unexpected(text_error(title.error(), 0U, 0U));
+		}
+		prepared->heading_title.emplace(std::move(*title));
+		if(!localized_heading->credit.empty()) {
+			auto credit = prepare_heading(localized_heading->credit);
+			if(!credit) {
+				return std::unexpected(text_error(credit.error(), 0U, 1U));
+			}
+			prepared->heading_credit.emplace(std::move(*credit));
+		}
+		const auto backing = prepared->background.image.indices.front();
+		for(std::int32_t y = localized_heading_rect.y;
+			y < localized_heading_rect.y + localized_heading_rect.height; ++y) {
+			const auto first = prepared->background.image.indices.begin() +
+				(static_cast<std::ptrdiff_t>(y) * present::graphics_width) +
+				localized_heading_rect.x;
+			std::fill_n(first, localized_heading_rect.width, backing);
+		}
+	}
 	for(std::size_t choice = 0U; choice < prepared->choices.size(); ++choice) {
 		auto text = present::prepare_graphics_text_8x16(
 			labels.choices[choice],
@@ -527,6 +566,10 @@ bool ClassicOpMusicRoomScene::initialize_visuals() noexcept
 		!present::pi_put_8(raster_, 0, 0, prepared_->background) ||
 		!raster_.set_access_page(present::Page::zero) ||
 		!present::pi_put_8(raster_, 0, 0, prepared_->background) ||
+		!draw_localized_heading() ||
+		!raster_.set_access_page(present::Page::one) ||
+		!draw_localized_heading() ||
+		!raster_.set_access_page(present::Page::zero) ||
 		!draw_tracklist() ||
 		!raster_.set_access_page(present::Page::one) ||
 		!snapshot_blue_plane() || !draw_comment(carry_.track_playing) ||
@@ -542,6 +585,49 @@ bool ClassicOpMusicRoomScene::initialize_visuals() noexcept
 	raster_.apply_pending_palette();
 	phase_ = ClassicOpMusicRoomPhase::held_release_poll;
 	return true;
+}
+
+bool ClassicOpMusicRoomScene::draw_localized_heading() noexcept
+{
+	if(!prepared_->heading_title) {
+		return true;
+	}
+	const auto title_width = static_cast<std::int32_t>(
+		prepared_->heading_title->pixel_width() * 2U
+	);
+	if(!present::graphics_text_put_scaled_8x16(
+		raster_,
+		{
+			localized_heading_center_x - (title_width / 2),
+			localized_heading_title_top,
+		},
+		*prepared_->heading_title,
+		{
+			.color = 3U,
+			.weight = present::GraphicsTextWeight::heavy,
+		},
+		2U
+	)) {
+		return false;
+	}
+	if(!prepared_->heading_credit) {
+		return true;
+	}
+	const auto credit_width = static_cast<std::int32_t>(
+		prepared_->heading_credit->pixel_width()
+	);
+	return present::graphics_text_put_8x16(
+		raster_,
+		{
+			localized_heading_center_x - (credit_width / 2),
+			localized_heading_credit_top,
+		},
+		*prepared_->heading_credit,
+		{
+			.color = 3U,
+			.weight = present::GraphicsTextWeight::heavy,
+		}
+	);
 }
 
 bool ClassicOpMusicRoomScene::draw_track(
@@ -1116,7 +1202,8 @@ std::expected<
 	const present::AnkGlyphProvider &font,
 	present::Raster raster,
 	present::Tram tram,
-	const NewClassicGameTextCatalog *localized_text
+	const NewClassicGameTextCatalog *localized_text,
+	std::optional<ClassicOpMusicRoomLocalizedHeading> localized_heading
 )
 {
 	return ClassicOpMusicRoomScene::create_predecoded(
@@ -1128,7 +1215,8 @@ std::expected<
 		font,
 		std::move(raster),
 		std::move(tram),
-		localized_text
+		localized_text,
+		localized_heading
 	);
 }
 

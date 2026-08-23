@@ -8,6 +8,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string_view>
 
 #include "classic_op_scene_internal.hpp"
 #include "th03/app/new_classic_game_text.hpp"
@@ -62,6 +63,14 @@ struct ClassicOpMusicRoomCarry final {
 
 struct ClassicOpMusicRoomInput final {
 	ClassicOpInput controls{};
+};
+
+// New Classic reconstructs the source picture's flat top-right heading panel
+// and draws these locale-owned rows. Classic never supplies this extension and
+// therefore retains OP3.PI byte-for-byte.
+struct ClassicOpMusicRoomLocalizedHeading final {
+	std::string_view title{};
+	std::string_view credit{};
 };
 
 enum class ClassicOpMusicRoomPhase : std::uint8_t {
@@ -166,7 +175,9 @@ public:
 		std::span<const LoadedMainResource> resources,
 		std::span<const std::byte> op_executable,
 		const present::AnkGlyphProvider &font,
-		const NewClassicGameTextCatalog *localized_text = nullptr
+		const NewClassicGameTextCatalog *localized_text = nullptr,
+		std::optional<ClassicOpMusicRoomLocalizedHeading> localized_heading =
+			std::nullopt
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpMusicRoomScene>,
@@ -177,7 +188,9 @@ public:
 		std::span<const LoadedMainResource> resources,
 		const OpMusicRoomTextImport &labels,
 		const present::AnkGlyphProvider &font,
-		const NewClassicGameTextCatalog *localized_text = nullptr
+		const NewClassicGameTextCatalog *localized_text = nullptr,
+		std::optional<ClassicOpMusicRoomLocalizedHeading> localized_heading =
+			std::nullopt
 	);
 
 	~ClassicOpMusicRoomScene();
@@ -219,6 +232,8 @@ private:
 			>,
 			classic_music_room_track_count
 		> comments{};
+		std::optional<present::PreparedGraphicsText8x16> heading_title{};
+		std::optional<present::PreparedGraphicsText8x16> heading_credit{};
 	};
 
 	ClassicOpMusicRoomScene(
@@ -241,10 +256,12 @@ private:
 		const present::AnkGlyphProvider &font,
 		present::Raster raster,
 		present::Tram tram,
-		const NewClassicGameTextCatalog *localized_text
+		const NewClassicGameTextCatalog *localized_text,
+		std::optional<ClassicOpMusicRoomLocalizedHeading> localized_heading
 	);
 
 	[[nodiscard]] bool initialize_visuals() noexcept;
+	[[nodiscard]] bool draw_localized_heading() noexcept;
 	[[nodiscard]] bool draw_track(
 		std::uint8_t choice,
 		present::GraphicsTextStyle style
@@ -306,7 +323,9 @@ struct ClassicOpMusicRoomSceneTestAccess final {
 		const present::AnkGlyphProvider &font,
 		present::Raster raster = {},
 		present::Tram tram = {},
-		const NewClassicGameTextCatalog *localized_text = nullptr
+		const NewClassicGameTextCatalog *localized_text = nullptr,
+		std::optional<ClassicOpMusicRoomLocalizedHeading> localized_heading =
+			std::nullopt
 	);
 };
 
