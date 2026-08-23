@@ -81,6 +81,10 @@ constexpr std::array native_surfaces{
 		"18 title rows and nine character-name rows",
 	},
 	NativeSurface{
+		"character-selection-names", "selection_handoff", "T3LNG001",
+		"nine New Classic center-list character-name rows",
+	},
+	NativeSurface{
 		"registration-names", "mainl_registration", "T3GTL001",
 		"No Entry plus nine character-name rows",
 	},

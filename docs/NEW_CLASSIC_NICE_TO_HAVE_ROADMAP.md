@@ -92,8 +92,11 @@ with a 39-cell maximum run; the English overlay produces 1,732 runs and 32,847
 cells with a 30-cell maximum run. Both complete profiles validate. Commands
 and timing are never sourced from translated bytes.
 
-Character-select name bitmaps and other text baked into otherwise reusable
-images follow after the text renderer can reproduce their layout. Menu headings
+The nine transparent character-select center-list name rows now reuse the
+active compact character labels in `T3LNG001`, centered within the source
+128-pixel layout through the PC-98 graphics-text renderer;
+sealed Classic retains its BFNT sheet. Character-select stat/portrait labels
+and other text baked into otherwise reusable images remain. Menu headings
 baked into TL02 and related backgrounds are explicitly later work: removing
 them requires clean background reconstruction as well as localized rendering.
 
@@ -272,9 +275,10 @@ V13 remains only as Data Manager migration input and frozen historical evidence.
 The original source-text, renderer-GUI, Arrange, content-audit, and live
 nametag parcels above are implemented. The remaining product/tooling work is:
 
-1. Decouple text baked into images, starting with character-select names/titles
-   and reusable menu headings. This requires clean background reconstruction;
-   it is not a missing string-catalog problem.
+1. Continue decoupling text baked into images. Character-select center-list
+   names are complete; stat/portrait labels, character-title art, and reusable
+   menu headings remain. Opaque surfaces require clean background
+   reconstruction; this is not a missing string-catalog problem.
 2. Finish production update release inputs: origin, platform packages, signing
    key custody/rotation, and hosted CI artifact validation. The updater engine
    itself is already implemented and default-off without those inputs.

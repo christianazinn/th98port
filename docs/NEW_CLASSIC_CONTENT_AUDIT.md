@@ -40,3 +40,9 @@ The current production manifest contains 271 logical resources across 11
 scene families and has FNV-1a-64 fingerprint `109855200A365C86`. The accepted
 English profile validates all 271 resources and sources 52 of them from the
 whole-archive-authenticated TH3EN overlay.
+
+The New Classic character selector now owns the nine center-list name rows
+through `T3GTL001`, while Classic retains `CHNAME.BFT` exactly. The audit keeps
+the source sheet marked as backing-required because the shared installation
+still supports sealed Classic and the remaining selection artwork is not yet
+decoupled.

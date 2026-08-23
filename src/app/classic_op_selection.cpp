@@ -38,6 +38,10 @@ using ResourceResult = std::expected<
 	const LoadedMainResource *,
 	ClassicOpSelectionError
 >;
+using PreparedLocalizedNames = std::array<
+	std::optional<present::PreparedGraphicsText8x16>,
+	9U
+>;
 
 [[nodiscard]] ClassicOpSelectionError selection_error(
 	ClassicOpSelectionErrorCode code,
@@ -336,6 +340,48 @@ template <typename Value, typename Decoder>
 	return static_cast<std::uint8_t>(signed_product / 256);
 }
 
+[[nodiscard]] std::expected<void, ClassicOpSelectionError>
+prepare_localized_names(
+	PreparedLocalizedNames &destination,
+	const ClassicOpSelectionLocalizedText *localized_text
+)
+{
+	if(!localized_text) {
+		return {};
+	}
+	if(!localized_text->font) {
+		return std::unexpected(selection_error(
+			ClassicOpSelectionErrorCode::invalid_config
+		));
+	}
+	for(std::size_t character = 0U;
+		character < localized_text->character_names.size(); ++character) {
+		const auto source = localized_text->character_names[character];
+		if(source.empty()) {
+			return std::unexpected(selection_error(
+				ClassicOpSelectionErrorCode::invalid_config
+			));
+		}
+		auto prepared = present::prepare_graphics_text_8x16(
+			source, *localized_text->font
+		);
+		if(!prepared) {
+			auto error = selection_error(
+				ClassicOpSelectionErrorCode::font_prepare_failed
+			);
+			error.text_error.emplace(std::move(prepared.error()));
+			return std::unexpected(std::move(error));
+		}
+		if(prepared->pixel_width() > 128U) {
+			return std::unexpected(selection_error(
+				ClassicOpSelectionErrorCode::invalid_asset_geometry
+			));
+		}
+		destination[character].emplace(std::move(*prepared));
+	}
+	return {};
+}
+
 } // namespace
 
 GameInit prepare_new_classic_story_restart(GameInit resident) noexcept
@@ -512,7 +558,8 @@ ClassicOpCharacterSelection::create_from_op(
 	std::uint8_t available_character_count,
 	ClassicOpSelectionCarry carry,
 	std::span<const LoadedMainResource> resources,
-	bool retain_for_new_classic_practice
+	bool retain_for_new_classic_practice,
+	const ClassicOpSelectionLocalizedText *localized_text
 )
 {
 	const auto expected_route = (mode == ClassicOpSelectionMode::story) ?
@@ -531,7 +578,7 @@ ClassicOpCharacterSelection::create_from_op(
 	return create_impl(
 		std::move(resident), mode, available_character_count, carry,
 		completion.raster(), completion.tram(), resources, true,
-		retain_for_new_classic_practice
+		retain_for_new_classic_practice, localized_text
 	);
 }
 
@@ -545,7 +592,8 @@ ClassicOpCharacterSelection::create_impl(
 	present::Tram tram,
 	std::span<const LoadedMainResource> resources,
 	bool authenticate_resource_bytes,
-	bool retain_for_new_classic_practice
+	bool retain_for_new_classic_practice,
+	const ClassicOpSelectionLocalizedText *localized_text
 )
 {
 	if((available_character_count != 7U && available_character_count != 9U) ||
@@ -672,6 +720,12 @@ ClassicOpCharacterSelection::create_impl(
 			MainResourceKey{.role = MainResourceRole::selection_name_sheet}
 		));
 	}
+	if(auto names_prepared = prepare_localized_names(
+		prepared->localized_names, localized_text
+	); !names_prepared) {
+		return std::unexpected(std::move(names_prepared.error()));
+	}
+	prepared->use_localized_names = localized_text != nullptr;
 	auto palette = decode_asset<assets::Palette16Rgb4>(
 		resources,
 		{.role = MainResourceRole::selection_palette},
@@ -922,6 +976,42 @@ bool ClassicOpCharacterSelection::draw_player(std::size_t player) noexcept
 	return draw_extra(player);
 }
 
+bool ClassicOpCharacterSelection::draw_names() noexcept
+{
+	for(std::uint8_t character = 0U;
+		character < available_character_count_; ++character) {
+		const auto top = static_cast<std::int32_t>(136 + (character * 20U));
+		if(prepared_->use_localized_names) {
+			const auto &name = prepared_->localized_names[character];
+			if(!name) {
+				return false;
+			}
+			const auto left = 256 + static_cast<std::int32_t>(
+				(128U - name->pixel_width()) / 2U
+			);
+			if(!present::graphics_text_put_8x16(
+				raster_, {left, top}, *name, {
+					.color = 15U,
+					.weight = present::GraphicsTextWeight::bold,
+				}
+			)) {
+				return false;
+			}
+			continue;
+		}
+		if(!present::superimpose_put(
+			raster_, *prepared_->names, {256, top},
+			static_cast<std::uint16_t>(character * 2U)
+		) || !present::superimpose_put(
+			raster_, *prepared_->names, {320, top},
+			static_cast<std::uint16_t>((character * 2U) + 1U)
+		)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool ClassicOpCharacterSelection::draw_frame() noexcept
 {
 	if(!raster_.clear(full_screen, 0U) || !draw_curves() ||
@@ -934,21 +1024,7 @@ bool ClassicOpCharacterSelection::draw_frame() noexcept
 			return false;
 		}
 	}
-	for(std::uint8_t character = 0U;
-		character < available_character_count_; ++character) {
-		if(!present::superimpose_put(
-			raster_, *prepared_->names,
-			{256, static_cast<std::int32_t>(136 + (character * 20U))},
-			static_cast<std::uint16_t>(character * 2U)
-		) || !present::superimpose_put(
-			raster_, *prepared_->names,
-			{320, static_cast<std::int32_t>(136 + (character * 20U))},
-			static_cast<std::uint16_t>((character * 2U) + 1U)
-		)) {
-			return false;
-		}
-	}
-	return draw_extra(0U) && draw_extra(1U) &&
+	return draw_names() && draw_extra(0U) && draw_extra(1U) &&
 		draw_cursor(0U) && draw_cursor(1U);
 }
 
@@ -1548,7 +1624,8 @@ ClassicOpSelectionTestAccess::create_with_predecoded_assets(
 	assets::CdgFile extra_icons,
 	assets::BfntSheet names,
 	assets::Palette16Rgb4 palette,
-	bool retain_for_new_classic_practice
+	bool retain_for_new_classic_practice,
+	const ClassicOpSelectionLocalizedText *localized_text
 )
 {
 	auto prepared = std::make_unique<ClassicOpCharacterSelection::Prepared>();
@@ -1595,6 +1672,12 @@ ClassicOpSelectionTestAccess::create_with_predecoded_assets(
 			ClassicOpSelectionErrorCode::invalid_asset_geometry
 		));
 	}
+	if(auto names_prepared = prepare_localized_names(
+		prepared->localized_names, localized_text
+	); !names_prepared) {
+		return std::unexpected(std::move(names_prepared.error()));
+	}
+	prepared->use_localized_names = localized_text != nullptr;
 	prepared->palette = palette;
 	return ClassicOpCharacterSelection::create_prepared(
 		std::move(prepared), std::move(resident), mode,

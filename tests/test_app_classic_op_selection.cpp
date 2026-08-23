@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "classic_op_selection_internal.hpp"
+#include "th03/app/new_classic_messages.hpp"
 #include "th03/app/new_classic_replay.hpp"
 #include "th03/exact/trig.hpp"
 
@@ -27,6 +28,7 @@ using th03::app::ClassicOpPracticeBackgroundStatus;
 using th03::app::ClassicOpSelectionCarry;
 using th03::app::ClassicOpSelectionCompletion;
 using th03::app::ClassicOpSelectionInput;
+using th03::app::ClassicOpSelectionLocalizedText;
 using th03::app::ClassicOpSelectionMode;
 using th03::app::ClassicOpSelectionOutcome;
 using th03::app::ClassicOpSelectionPhase;
@@ -45,6 +47,25 @@ using th03::assets::PlanarCel4;
 using th03::present::Page;
 using th03::present::Raster;
 using th03::present::Tram;
+
+class SyntheticFont final : public th03::present::AnkGlyphProvider {
+public:
+	[[nodiscard]] std::optional<th03::present::AnkGlyph> glyph(
+		std::uint8_t
+	) const override
+	{
+		return std::nullopt;
+	}
+
+	[[nodiscard]] std::optional<th03::present::JisGlyph> jis_glyph(
+		std::uint16_t
+	) const override
+	{
+		th03::present::JisGlyph result{};
+		result.row_halves.fill(0xFFU);
+		return result;
+	}
+};
 
 std::size_t checks = 0U;
 std::size_t failures = 0U;
@@ -374,7 +395,8 @@ std::unique_ptr<ClassicOpCharacterSelection> make_scene(
 	GameInit resident = {},
 	ClassicOpSelectionCarry carry = {},
 	std::uint8_t available_character_count = 9U,
-	bool retain_for_new_classic_practice = false
+	bool retain_for_new_classic_practice = false,
+	const ClassicOpSelectionLocalizedText *localized_text = nullptr
 )
 {
 	if(resident.resident_rand == 0) {
@@ -401,7 +423,7 @@ std::unique_ptr<ClassicOpCharacterSelection> make_scene(
 		file(128U, 64U, 1U, 4U, false),
 		file(64U, 64U, 1U, 3U, false),
 		file(32U, 44U, 9U, 1U, false), names(), palette(),
-		retain_for_new_classic_practice
+		retain_for_new_classic_practice, localized_text
 	);
 	expect(created.has_value(), "synthetic selector creates");
 	return created ? std::move(*created) : nullptr;
@@ -698,6 +720,85 @@ void test_curve_and_player_rendering()
 		),
 		"CPU-mode P2 cursor appears after P1 confirmation"
 	);
+}
+
+void test_localized_name_rendering()
+{
+	SyntheticFont font;
+	std::array<std::vector<std::uint8_t>, 9U> source{};
+	for(std::size_t character = 0U; character < source.size(); ++character) {
+		source[character].assign(character + 1U, 'A');
+	}
+	ClassicOpSelectionLocalizedText localized{};
+	for(std::size_t character = 0U; character < source.size(); ++character) {
+		localized.character_names[character] = source[character];
+	}
+	localized.font = &font;
+	auto scene = make_scene(
+		ClassicOpSelectionMode::story, {}, {}, 9U, false, &localized
+	);
+	if(!scene) { return; }
+	expect(
+		ClassicOpSelectionTestAccess::draw_names_only(*scene),
+		"localized selection names draw without the source BFNT rows"
+	);
+	expect(
+		scene->raster().pixel(Page::one, {315, 136}) == 0U &&
+			scene->raster().pixel(Page::one, {316, 136}) == 15U &&
+			scene->raster().pixel(Page::one, {323, 136}) == 15U &&
+			scene->raster().pixel(Page::one, {324, 136}) == 0U,
+		"one-glyph localized name is centered in the source 128-pixel row"
+	);
+	expect(
+		scene->raster().pixel(Page::one, {311, 156}) == 0U &&
+			scene->raster().pixel(Page::one, {312, 156}) == 15U &&
+			scene->raster().pixel(Page::one, {327, 156}) == 15U &&
+			scene->raster().pixel(Page::one, {328, 156}) == 0U,
+		"two-glyph localized name keeps fixed-center alignment"
+	);
+
+	auto classic = make_scene(ClassicOpSelectionMode::story);
+	if(!classic) { return; }
+	expect(
+		ClassicOpSelectionTestAccess::draw_names_only(*classic) &&
+			classic->raster().pixel(Page::one, {256, 136}) != 0U &&
+			classic->raster().pixel(Page::one, {384, 136}) == 0U,
+		"sealed Classic keeps the exact two-cel source BFNT path"
+	);
+
+	constexpr std::array<th03::app::NewClassicMessageId, 9U> name_ids{
+		th03::app::NewClassicMessageId::replay_character_reimu,
+		th03::app::NewClassicMessageId::replay_character_mima,
+		th03::app::NewClassicMessageId::replay_character_marisa,
+		th03::app::NewClassicMessageId::replay_character_ellen,
+		th03::app::NewClassicMessageId::replay_character_kotohime,
+		th03::app::NewClassicMessageId::replay_character_kana,
+		th03::app::NewClassicMessageId::replay_character_rikako,
+		th03::app::NewClassicMessageId::replay_character_chiyuri,
+		th03::app::NewClassicMessageId::replay_character_yumemi,
+	};
+	for(const auto profile : {
+		th03::app::NewClassicLanguageAssetProfile::japanese,
+		th03::app::NewClassicLanguageAssetProfile::english,
+	}) {
+		const auto &messages = th03::app::new_classic_builtin_messages(profile);
+		ClassicOpSelectionLocalizedText catalog_names{};
+		catalog_names.font = &font;
+		for(std::size_t character = 0U; character < name_ids.size(); ++character) {
+			const auto name = messages.text(name_ids[character]);
+			catalog_names.character_names[character] = {
+				reinterpret_cast<const std::uint8_t *>(name.data()), name.size(),
+			};
+		}
+		auto catalog_scene = make_scene(
+			ClassicOpSelectionMode::story, {}, {}, 9U, false, &catalog_names
+		);
+		expect(
+			catalog_scene &&
+				ClassicOpSelectionTestAccess::draw_names_only(*catalog_scene),
+			"shipped locale compact names fit the character-selector rows"
+		);
+	}
 }
 
 void test_two_player_confirmation_order()
@@ -1274,6 +1375,7 @@ int main(int argc, char **argv)
 	test_entry_and_raw_locking();
 	test_persisted_selection_ring_and_cpu_delay_width();
 	test_curve_and_player_rendering();
+	test_localized_name_rendering();
 	test_two_player_confirmation_order();
 	test_shot_bomb_and_cancel();
 	test_story_success();

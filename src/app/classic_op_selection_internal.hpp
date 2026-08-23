@@ -16,6 +16,7 @@
 #include "th03/app/tick_input.hpp"
 #include "th03/assets/types.hpp"
 #include "th03/core/game.hpp"
+#include "th03/present/graphics_text.hpp"
 #include "th03/present/raster.hpp"
 #include "th03/present/superimpose.hpp"
 #include "th03/present/tram.hpp"
@@ -81,6 +82,7 @@ enum class ClassicOpSelectionErrorCode : std::uint8_t {
 	resource_bytes_missing,
 	resource_integrity_failed,
 	asset_decode_failed,
+	font_prepare_failed,
 	invalid_asset_geometry,
 	draw_failed,
 	audio_command_pending,
@@ -92,6 +94,15 @@ struct ClassicOpSelectionError final {
 		ClassicOpSelectionErrorCode::invalid_state;
 	std::optional<MainResourceKey> resource{};
 	std::optional<assets::AssetError> asset_error{};
+	std::optional<present::GraphicsTextError> text_error{};
+};
+
+// Optional New Classic presentation input. Spans are consumed only while the
+// selector is created; prepared glyph rows own everything needed afterward.
+// Classic supplies no value and retains the authenticated source BFNT path.
+struct ClassicOpSelectionLocalizedText final {
+	std::array<std::span<const std::uint8_t>, 9U> character_names{};
+	const present::AnkGlyphProvider *font = nullptr;
 };
 
 struct ClassicOpSelectionTick final {
@@ -161,7 +172,8 @@ public:
 		std::uint8_t available_character_count,
 		ClassicOpSelectionCarry carry,
 		std::span<const LoadedMainResource> resources,
-		bool retain_for_new_classic_practice = false
+		bool retain_for_new_classic_practice = false,
+		const ClassicOpSelectionLocalizedText *localized_text = nullptr
 	);
 	~ClassicOpCharacterSelection() = default;
 	ClassicOpCharacterSelection(const ClassicOpCharacterSelection &) = delete;
@@ -203,6 +215,11 @@ private:
 		assets::PlanarCel4 extra_background{};
 		std::array<assets::PlanarCel4, 9U> extra_icons{};
 		std::optional<present::PreparedSuperimposeSheet> names{};
+		std::array<
+			std::optional<present::PreparedGraphicsText8x16>,
+			9U
+		> localized_names{};
+		bool use_localized_names = false;
 		assets::Palette16Rgb4 palette{};
 	};
 
@@ -236,7 +253,8 @@ private:
 		present::Tram tram,
 		std::span<const LoadedMainResource> resources,
 		bool authenticate_resource_bytes,
-		bool retain_for_new_classic_practice
+		bool retain_for_new_classic_practice,
+		const ClassicOpSelectionLocalizedText *localized_text
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpCharacterSelection>,
@@ -255,6 +273,7 @@ private:
 	[[nodiscard]] bool initialize_after_blank() noexcept;
 	[[nodiscard]] bool draw_frame() noexcept;
 	[[nodiscard]] bool draw_curves() noexcept;
+	[[nodiscard]] bool draw_names() noexcept;
 	[[nodiscard]] bool draw_portrait(std::size_t player) noexcept;
 	[[nodiscard]] bool draw_stats_base(std::size_t player) noexcept;
 	[[nodiscard]] bool draw_stat_row(
@@ -410,7 +429,8 @@ struct ClassicOpSelectionTestAccess final {
 		assets::CdgFile extra_icons,
 		assets::BfntSheet names,
 		assets::Palette16Rgb4 palette,
-		bool retain_for_new_classic_practice = false
+		bool retain_for_new_classic_practice = false,
+		const ClassicOpSelectionLocalizedText *localized_text = nullptr
 	);
 
 	[[nodiscard]] static std::expected<
@@ -428,8 +448,17 @@ struct ClassicOpSelectionTestAccess final {
 	{
 		return ClassicOpCharacterSelection::create_impl(
 			std::move(resident), mode, available_character_count, carry,
-			std::move(raster), std::move(tram), resources, false, false
+			std::move(raster), std::move(tram), resources, false, false, nullptr
 		);
+	}
+
+	[[nodiscard]] static bool draw_names_only(
+		ClassicOpCharacterSelection &scene
+	) noexcept
+	{
+		return scene.raster_.clear({
+			0, 0, present::graphics_width, present::graphics_height,
+		}, 0U) && scene.draw_names();
 	}
 };
 
