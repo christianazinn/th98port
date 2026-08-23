@@ -563,13 +563,13 @@ tools\verify_replay_corpus_external.ps1 `
   -V14CorpusRoot X:\path\to\converted-v14
 ```
 
-The current V14 lock contains 19 files converted by TH03 Data Manager 0.4.2
-from the frozen six-file V11 and thirteen-file V12 inputs. It contains 173
-embedded round summaries and 152 preserved checkpoints across Classic Story,
-Replay Patch Practice, and ordinary VS. All 19 complete at unbounded speed and
-match every summary and stored checkpoint on GCC and MSVC. Historical replay
-files are converted outside this repository; the native V11/V12 parsers are
-retired.
+The current V14 lock contains 20 files: 19 converted by TH03 Data Manager
+0.5.6 from the frozen six-file V11 and thirteen-file V12 inputs, plus the
+converted genuine V13 WR TH3R06. Together they contain 186 embedded round
+summaries; the historical subset contains 152 preserved checkpoints. All 20
+complete at unbounded speed and match every summary and stored checkpoint on
+GCC and MSVC. Historical replay files are converted outside this repository;
+the native V11/V12/V13 parsers are retired.
 
 Pass the calibrated ENEDAT and frozen Anniversary split to execute the Phase 2
 gate:

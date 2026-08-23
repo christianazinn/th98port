@@ -13,9 +13,9 @@ V14 has two complementary authorities:
    is `571970292F441041172A05390FDA92AA996EF5B5CC163D04048BB744DAD9D42E`.
 2. Exact packed structures, constants, capacities, and game-side validation
    behavior are defined by the Replay Patch at ReC98 commit
-   `b5a06d93eafbd75c96e5b1e185b04f7afb233725`, primarily
+   `5cc773e85c7db97c1c09888fa5531faa392de136`, primarily
    `th03/replay_format.hpp`. That header's SHA-256 is
-   `2B8CCA8BBB8A264D516007455103BCBA692C8839A86627E93F0D01B904CAF3AF`.
+   `0EE16E826E9C7303202CA52CF1CCD68B2C2E7EEE858661E7D09739F8B5BE664A`.
 
 The complete validation call sites are
 `th03/main/replay.cpp::replay_user_header_valid()` and its checkpoint reader,
