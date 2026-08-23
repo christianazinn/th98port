@@ -67,6 +67,53 @@ th03::formats::ReplayDocument stock_document()
 	return document;
 }
 
+th03::formats::ReplayDocument stock_netplay_document()
+{
+	th03::formats::ReplayDocument document{};
+	document.session.source_version = th03::formats::replay_v14_version;
+	auto &init = document.session.init;
+	init.global_frame = 0U;
+	init.resident_rand = 79;
+	init.random_seed = std::bit_cast<std::uint32_t>(init.resident_rand);
+	init.game_mode = th03::game_mode::vs_1p_2p;
+	init.rank = 3U;
+	init.key_mode = 1U;
+	init.remaining_credits = 3U;
+	init.is_cpu = {0U, 0U};
+	init.paletted_character = {1, 4};
+	init.autofire_mask = 2U;
+	document.checkpoints.push_back(th03::formats::ReplayCheckpoint{
+		.stage = 0U,
+		.round = 0U,
+		.sample_index = 0U,
+		.init = init,
+	});
+	document.metadata.emplace();
+	auto &metadata = *document.metadata;
+	metadata.status = th03::formats::ReplayStatus::finalized;
+	metadata.end_reason = th03::formats::ReplayEndReason::game_over;
+	metadata.game_mode = th03::game_mode::vs_1p_2p;
+	metadata.final_game_mode = th03::game_mode::vs_1p_2p;
+	metadata.final_route = 2U;
+	metadata.final_winner = static_cast<std::int8_t>(th03::PlayerId::p2);
+	metadata.dos_date = 0x5D10U;
+	metadata.name = {'Y','U','M','E','M','I',' ',' '};
+	metadata.recording_flags = th03::formats::replay_recording_flag_netplay;
+	metadata.recorder_role = th03::formats::ReplayRecorderRole::player_two;
+	metadata.recorder_source = th03::formats::ReplayRecorderSource::native;
+	metadata.player_nametag_snapshot = {"First Player", "Second Player"};
+	for(std::size_t index = 0U; index < 16U; ++index) {
+		metadata.player_uuid[0U][index] = static_cast<std::uint8_t>(index + 1U);
+		metadata.player_uuid[1U][index] = static_cast<std::uint8_t>(index + 17U);
+		metadata.match_id[index] = static_cast<std::uint8_t>(index + 33U);
+	}
+	document.slowdown = th03::formats::ReplaySlowdown{
+		.timed_frames = 2'000U,
+		.slow_frames = 20U,
+	};
+	return document;
+}
+
 std::optional<th03::replay::RoundStartRecord> round_start(
 	const th03::GameInit &init,
 	const th03::GameContent &content
@@ -330,6 +377,108 @@ int main()
 			document, run, content, true, true
 		),
 		"missing simulated terminal cannot produce accepted report"
+	)) {
+		return EXIT_FAILURE;
+	}
+
+	auto netplay_document = stock_netplay_document();
+	const auto netplay_start = round_start(netplay_document.session.init, content);
+	if(!require(netplay_start.has_value(), "stock netplay first round constructs")) {
+		return EXIT_FAILURE;
+	}
+	th03::replay::RunResult netplay_run{};
+	netplay_run.status = th03::replay::RunStatus::complete;
+	netplay_run.round_starts = {*netplay_start};
+	netplay_run.completed_rounds.push_back({
+		.result_summary = th03::MainResultState{
+			.winner = th03::PlayerId::p2,
+			.summary_active = true,
+			.rounds_won = {1U, 2U},
+		},
+	});
+	netplay_run.terminal_state = th03::CanonicalState{
+		.route = 2U,
+		.game_mode = th03::game_mode::vs_1p_2p,
+		.winner = static_cast<std::int8_t>(th03::PlayerId::p2),
+		.p1_score = {0U, 0U, 0U, 0U, 0U, 0U, 0U, 1U},
+		.p2_score = {8U, 7U, 6U, 5U, 4U, 3U, 2U, 1U},
+	};
+	netplay_run.terminal_transition = th03::SessionTransition{
+		.action = th03::SessionAction::exit_to_operator,
+		.resident = {},
+		.high_score_registration = std::nullopt,
+	};
+	const auto netplay = th03rv::make_service_accepted_report(
+		netplay_document, netplay_run, content, true, true
+	);
+	if(!require(netplay.has_value(), "verified stock netplay report") ||
+		!require(netplay->mode == "vs_1p_2p", "netplay mode remains explicit") ||
+		!require(netplay->character == 1U, "recorder-side character is projected") ||
+		!require(netplay->score == 123'456'780U,
+			"recorder-side score is projected in visible units") ||
+		!require(netplay->recorder_user_id ==
+			"11121314-1516-1718-191a-1b1c1d1e1f20",
+			"recorder-side UUID is canonical") ||
+		!require(netplay->opponent_user_id ==
+			"01020304-0506-0708-090a-0b0c0d0e0f10",
+			"opponent UUID is canonical")) {
+		return EXIT_FAILURE;
+	}
+	const auto netplay_json = th03rv::service_accepted_json(*netplay);
+	if(!require(
+		netplay_json.find("\"mode\":\"vs_1p_2p\"") != std::string::npos,
+		"service JSON identifies netplay category"
+	) || !require(
+		netplay_json.find("\"kind\":\"versus_complete\"") !=
+			std::string::npos,
+		"service JSON identifies a completed versus match"
+	) || !require(
+		netplay_json.find("\"recorderUserId\":") != std::string::npos,
+		"service JSON binds the authenticated recorder"
+	)) {
+		return EXIT_FAILURE;
+	}
+
+	auto missing_identity = netplay_document;
+	missing_identity.metadata->player_uuid[1U].fill(0U);
+	if(!require(
+		!th03rv::make_service_accepted_report(
+			missing_identity, netplay_run, content, true, true
+		),
+		"netplay without two account identities is not upload evidence"
+	)) {
+		return EXIT_FAILURE;
+	}
+	auto wrong_role = netplay_document;
+	wrong_role.metadata->recorder_role =
+		th03::formats::ReplayRecorderRole::unknown;
+	if(!require(
+		!th03rv::make_service_accepted_report(
+			wrong_role, netplay_run, content, true, true
+		),
+		"netplay without a recorder role is rejected"
+	)) {
+		return EXIT_FAILURE;
+	}
+	auto forged_netplay = netplay_document;
+	forged_netplay.session.init.round_start_snapshot = netplay_start->observation.round;
+	forged_netplay.session.init.runtime_snapshot = netplay_start->observation.runtime;
+	forged_netplay.session.init.round_start_snapshot->state.score[0U][0U] = 1U;
+	forged_netplay.checkpoints.front().init = forged_netplay.session.init;
+	const auto forged_netplay_start = round_start(
+		forged_netplay.session.init, content
+	);
+	auto forged_netplay_run = netplay_run;
+	if(!require(forged_netplay_start.has_value(),
+		"forged netplay checkpoint constructs")) {
+		return EXIT_FAILURE;
+	}
+	forged_netplay_run.round_starts = {*forged_netplay_start};
+	if(!require(
+		!th03rv::make_service_accepted_report(
+			forged_netplay, forged_netplay_run, content, true, true
+		),
+		"netplay checkpoint-zero score injection is not stock authority"
 	)) {
 		return EXIT_FAILURE;
 	}

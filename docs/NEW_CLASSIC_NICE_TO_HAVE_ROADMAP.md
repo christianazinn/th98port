@@ -324,7 +324,9 @@ the source art. Character-title art and reusable menu headings remain. The
 3. Continue online operations and UX: reviewed historical-score import,
    operational verifier/service monitoring, and any remaining public-account
    recovery flows. The replay-backed Story leaderboard/upload/download/watch
-   path is already live.
+   path is already live. Finalized Stock netplay V14 files are verified,
+   recorder-bound private My Replays evidence; they deliberately do not enter
+   Story boards or define ratings/public match history.
 4. Improve PMD/YM2608 audio fidelity where channel balance and simultaneous
    SFX layering still differ audibly from PC-98 output. The deterministic
    native all-effect trace, strict PC-98 I/O normalizer, first-divergence
@@ -338,10 +340,9 @@ the source art. Character-title art and reusable menu headings remain. The
    localized surfaces settle. Stock deterministic/replay gates remain active
    throughout.
 
-Longer-term work remains VS match history, netplay replay evidence on services,
-ratings/Elo/seasons/tournament policy, and runtime-localized image-heavy title
-art. None is required to call the English/Japanese source-text coverage
-complete.
+Longer-term work remains public VS match history, ratings/Elo/seasons/tournament
+policy, and runtime-localized image-heavy title art. None is required to call
+the English/Japanese source-text coverage complete.
 
 Pixel-oracle expansion is useful after these functional seams settle, not
 before every localized or Arrange screen is still moving. Stock routes keep

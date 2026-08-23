@@ -70,6 +70,39 @@ test("accepted native output is bound to the exact request and configured identi
   assert.deepEqual(invocation.prefixArguments, []);
 });
 
+test("accepted native netplay identity is preserved for service-side account binding", async () => {
+  const result = await verifyReplay(replay, replayId, configuration, async () =>
+    nativeResult({
+      protocol: "T3RV-SERVICE-1",
+      outcome: "accepted",
+      sourceVersion: 14,
+      finalized: true,
+      splitsMatch: true,
+      checkpointsMatch: true,
+      displayName: "MIMA",
+      category: {
+        mode: "vs_1p_2p", rank: 2, character: 1,
+        startStage: 0, startRound: 0,
+      },
+      result: {
+        kind: "versus_complete", score: 12340,
+        endStage: 0, continuesUsed: 0,
+      },
+      autofire: 1,
+      timedFrames: 1000,
+      slowFrames: 0,
+      dosDate: 1,
+      recorderUserId: "12345678-1234-1234-1234-123456789abc",
+      opponentUserId: "abcdef01-2345-6789-abcd-ef0123456789",
+    }));
+  assert.equal(result.outcome, "accepted");
+  assert.equal(result.category.mode, "vs_1p_2p");
+  assert.equal(result.result.kind, "versus_complete");
+  assert.equal(result.recorderUserId, "12345678-1234-1234-1234-123456789abc");
+  assert.equal(result.opponentUserId, "abcdef01-2345-6789-abcd-ef0123456789");
+  assert.equal(result.rulesetId, configuration.rulesetId);
+});
+
 test("native rejection is forwarded only for the fixed reason and exit contract", async () => {
   const accepted = await verifyReplay(replay, replayId, configuration, async () =>
     nativeResult({ protocol: "T3RV-SERVICE-1", outcome: "rejected", reason: "invalid_replay" }, 2));

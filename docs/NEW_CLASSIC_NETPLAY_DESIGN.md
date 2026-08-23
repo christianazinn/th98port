@@ -860,10 +860,10 @@ yet expose a truthful RTT measurement.
 
 - Quick Match region/rating policy.
 - Spectator architecture and replay-delayed spectating.
-- Netplay replay product support is the next high-priority lifecycle extension:
-  expose completed local V14 records as netplay records, preserve match metadata
-  outside deterministic samples, and define watch/upload UX without making a
-  peer or signaling service authoritative.
+- Completed Stock netplay V14 files are verified and exposed as recorder-bound
+  private My Replays evidence with the normal download/Watch UX. The signaling
+  service and peer remain non-authoritative, and public VS history is not
+  inferred from this private evidence.
 - VS boards, rating/Elo, match history, seasons, and moderation are long-term
   features after replay-backed beta evidence exists.
 - Reconnect through explicit trusted state transfer, if its complexity and

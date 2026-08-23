@@ -521,6 +521,30 @@ th03::app::NewClassicOnlineCacheDocument online_board(
 	return document;
 }
 
+th03::app::NewClassicOnlineCacheDocument online_netplay_board(
+	std::uint8_t rank,
+	std::uint8_t character,
+	std::uint8_t seed
+)
+{
+	using namespace th03::app;
+	auto document = online_board(rank, character, seed);
+	document.board_category->mode = NewClassicOnlineMode::vs_1p_2p;
+	document.board_category->character = new_classic_online_overall_character;
+	document.leaderboard_entries.front().category.mode =
+		NewClassicOnlineMode::vs_1p_2p;
+	document.leaderboard_entries.front().result = {
+		.kind = NewClassicOnlineResultKind::versus_complete,
+		.score = document.leaderboard_entries.front().result.score,
+	};
+	document.replay_records.front().category =
+		document.leaderboard_entries.front().category;
+	document.replay_records.front().result =
+		document.leaderboard_entries.front().result;
+	document.replay_records.front().title = "VSTEST";
+	return document;
+}
+
 void finish_entry_fade(th03::app::NewClassicReplayBrowser &browser)
 {
 	for(std::size_t boundary = 0U; boundary < 19U; ++boundary) {
@@ -698,7 +722,8 @@ void test_replay_hub_and_libraries()
 		"online Replay library reuses the validated download transaction");
 
 	NewClassicHighScoreMenu my_records_library(
-		{online_board(2U, 4U, 0x41U)}, 2U, patch_assets,
+		{online_board(2U, 4U, 0x41U),
+		 online_netplay_board(2U, 1U, 0x43U)}, 2U, patch_assets,
 		NewClassicOnlineMenuMode::my_records
 	);
 	expect(my_records_library.valid() &&
@@ -708,6 +733,12 @@ void test_replay_hub_and_libraries()
 		my_records_library.surface(), patch_assets->replay_list_background,
 		patch_assets->menu_font, 112, "ALPHA"
 	), "My Replays removes the false ordinal and starts its newest-first name column at the left edge");
+	finish_entry_fade(my_records_library);
+	static_cast<void>(my_records_library.consume({}));
+	const auto first_record_board = my_records_library.selected_board();
+	static_cast<void>(my_records_library.consume({.down = true}));
+	expect(my_records_library.selected_board() != first_record_board,
+		"My Replays flattens Story and private netplay evidence into one list");
 	auto empty_records = online_board(2U, 4U, 0x42U);
 	empty_records.leaderboard_entries.clear();
 	empty_records.replay_records.clear();

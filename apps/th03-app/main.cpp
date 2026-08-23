@@ -6484,7 +6484,7 @@ ExperienceRunResult run_classic_session(
 			!online_my_records_refresh_task && online_transport &&
 			online_existing_credential_source) {
 			std::vector<th03::app::NewClassicOnlineCategory> categories{};
-			categories.reserve(36U);
+			categories.reserve(40U);
 			for(std::uint8_t rank = 0U; rank < 4U; ++rank) {
 				for(std::uint8_t character = 0U; character < 9U; ++character) {
 					categories.push_back({
@@ -6493,6 +6493,13 @@ ExperienceRunResult run_classic_session(
 						.character = character,
 					});
 				}
+			}
+			for(std::uint8_t rank = 0U; rank < 4U; ++rank) {
+				categories.push_back({
+					.mode = th03::app::NewClassicOnlineMode::vs_1p_2p,
+					.rank = rank,
+					.character = th03::app::new_classic_online_overall_character,
+				});
 			}
 			auto started =
 				th03::app::start_new_classic_online_my_records_refresh(

@@ -471,9 +471,23 @@ std::string source_trimmed_name(const std::array<char, 8U> &name)
 	const formats::ReplayDocument &document
 ) noexcept
 {
-	return document.metadata && !document.practice &&
-		document.metadata->status == formats::ReplayStatus::finalized &&
-		document.metadata->game_mode == game_mode::story;
+	if(!document.metadata || document.practice ||
+		document.metadata->status != formats::ReplayStatus::finalized ||
+		document.metadata->ruleset != formats::ReplayRuleset::stock) {
+		return false;
+	}
+	if(document.metadata->game_mode == game_mode::story) {
+		return true;
+	}
+	return document.metadata->game_mode == game_mode::vs_1p_2p &&
+		document.metadata->recording_flags ==
+			formats::replay_recording_flag_netplay &&
+		document.metadata->recorder_source ==
+			formats::ReplayRecorderSource::native &&
+		(document.metadata->recorder_role ==
+			formats::ReplayRecorderRole::player_one ||
+		 document.metadata->recorder_role ==
+			formats::ReplayRecorderRole::player_two);
 }
 
 [[nodiscard]] constexpr std::string_view end_reason_label(
@@ -2080,6 +2094,11 @@ namespace {
 			NewClassicMessageId::hiscore_online_result_clear
 		));
 	}
+	if(entry.result.kind == NewClassicOnlineResultKind::versus_complete) {
+		return std::string(messages.text(
+			NewClassicMessageId::replay_mode_netplay
+		));
+	}
 	const auto label = messages.text(
 		NewClassicMessageId::hiscore_online_result_game_over
 	);
@@ -2118,8 +2137,11 @@ NewClassicHighScoreMenu::NewClassicHighScoreMenu(
 	rank_(rank)
 {
 	for(auto &board : boards) {
-		if(board.board_category &&
-			board.board_category->mode == NewClassicOnlineMode::story &&
+		const bool accepted_mode = board.board_category &&
+			(board.board_category->mode == NewClassicOnlineMode::story ||
+			 (mode_ == NewClassicOnlineMenuMode::my_records &&
+			  board.board_category->mode == NewClassicOnlineMode::vs_1p_2p));
+		if(accepted_mode &&
 			(mode_ == NewClassicOnlineMenuMode::high_scores ||
 			 board.board_category->character !=
 				new_classic_online_overall_character) &&
@@ -2439,9 +2461,10 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 		}
 		const auto score = online_score(entry.result.score);
 		const auto stage = entry.result.kind ==
-			NewClassicOnlineResultKind::clear ?
+			NewClassicOnlineResultKind::versus_complete ? std::string{"-"} :
+			(entry.result.kind == NewClassicOnlineResultKind::clear ?
 			std::string(messages.text(NewClassicMessageId::replay_marker_all)) :
-			std::to_string(static_cast<unsigned>(entry.result.end_stage) + 1U);
+			std::to_string(static_cast<unsigned>(entry.result.end_stage) + 1U));
 		const auto category_value = flat ? std::string(patch_rank_label(
 			row_category.rank, messages
 		)) : dos_date_short_label(entry.dos_date);

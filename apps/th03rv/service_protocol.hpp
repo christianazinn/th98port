@@ -15,6 +15,7 @@ inline constexpr std::string_view service_protocol = "T3RV-SERVICE-1";
 
 struct ServiceAcceptedReport final {
 	std::string display_name{};
+	std::string mode = "story";
 	std::uint8_t rank = 0U;
 	std::uint8_t character = 0U;
 	std::string result_kind{};
@@ -25,12 +26,15 @@ struct ServiceAcceptedReport final {
 	std::uint32_t timed_frames = 0U;
 	std::uint32_t slow_frames = 0U;
 	std::uint16_t dos_date = 0U;
+	std::optional<std::string> recorder_user_id{};
+	std::optional<std::string> opponent_user_id{};
 };
 
-// This projection accepts only a complete verified stock Story run. Score and
-// terminal stage come from simulated state, never ReplayMetadata::final_score
-// or its optional terminal fields. The remaining display/report values are
-// non-gameplay V14 metadata or reconstructed startup/category fields.
+// This projection accepts a complete verified stock Story run or a completed
+// stock V14 netplay match. Scores and terminal facts come from simulated state,
+// never ReplayMetadata::final_score or its optional terminal fields. Netplay
+// additionally projects the recorder-side UUID so the service can bind the
+// authenticated uploader without exposing UUIDs in the retained UI.
 [[nodiscard]] std::optional<ServiceAcceptedReport>
 make_service_accepted_report(
 	const th03::formats::ReplayDocument &document,

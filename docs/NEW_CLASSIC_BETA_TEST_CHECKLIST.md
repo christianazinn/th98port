@@ -116,6 +116,11 @@ Run these first on every candidate:
   submissions. It must remain separate from the public best-per-profile list,
   adopt a newly completed refresh without restarting the product, and reuse
   Download/Watch.
+- Save a completed two-win Stock netplay replay on each peer, upload each local
+  file, and refresh My Replays. Each account must see its own character and
+  score with the `Vs Mode Netplay` label, Download/Watch must work, and neither
+  row may appear on a public Story or Overall board. A peer must not be able to
+  upload the other recorder's file, and duplicate bytes must be rejected.
 - Test offline startup and a transient service failure. Local scores/replays
   must remain usable, and nested failure screens must return one level.
 

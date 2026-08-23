@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "th03/app/main_compiled_content.hpp"
+#include "th03/app/new_classic_replay.hpp"
 #include "th03/formats/v14.hpp"
 
 namespace {
@@ -196,6 +197,52 @@ struct FakeTransport final {
 	return document;
 }
 
+[[nodiscard]] th03::formats::ReplayDocument netplay_document(
+	std::string_view recorder_user_id
+)
+{
+	auto document = story_document();
+	auto &init = document.session.init;
+	init.game_mode = th03::game_mode::vs_1p_2p;
+	init.story_lives = 0U;
+	init.skill = 0U;
+	init.is_cpu = {0U, 0U};
+	init.story_opponents.fill(0);
+	init.autofire_mask = 2U;
+	document.checkpoints.front().stage = 0x0FU;
+	document.checkpoints.front().init = init;
+	auto &metadata = *document.metadata;
+	metadata.end_reason = th03::formats::ReplayEndReason::game_over;
+	metadata.game_mode = th03::game_mode::vs_1p_2p;
+	metadata.paletted_character = init.paletted_character;
+	metadata.is_cpu = init.is_cpu;
+	metadata.stage_reached_count = 0U;
+	metadata.story.reset();
+	metadata.final_game_mode = th03::game_mode::vs_1p_2p;
+	metadata.final_story_stage.reset();
+	metadata.final_winner = std::int8_t{1};
+	metadata.autofire = 2U;
+	metadata.name = {{'V','S','T','E','S','T',' ',' '}};
+	metadata.recording_flags = th03::formats::replay_recording_flag_netplay;
+	metadata.recorder_role = th03::formats::ReplayRecorderRole::player_two;
+	metadata.recorder_source = th03::formats::ReplayRecorderSource::native;
+	metadata.player_uuid[0U].fill(0xAAU);
+	metadata.player_uuid[1U] =
+		*th03::app::parse_new_classic_replay_account_uuid(recorder_user_id);
+	metadata.match_id.fill(0xBBU);
+	metadata.player_nametag_snapshot = {"First Player", "Second Player"};
+	document.expected_round_splits.front() = {
+		.story_stage = 0x0FU,
+		.round_id = 1U,
+		.route = 2U,
+		.winner = 1,
+		.p1_score = {1U, 2U, 3U, 4U},
+		.p2_score = {8U, 7U, 6U, 5U},
+		.real_frames = 1U,
+	};
+	return document;
+}
+
 [[nodiscard]] std::uint64_t score_value(
 	const std::array<std::uint8_t, 4U> &packed
 )
@@ -345,6 +392,20 @@ void test_board_refresh()
 	}), "My Records keeps the bearer token in the request header");
 	expect(!std::filesystem::exists(root.path() / "MY-RECORDS.T3ONL"),
 		"private accepted submissions remain memory-only");
+
+	const NewClassicOnlineCategory netplay_category{
+		NewClassicOnlineMode::vs_1p_2p, 2U,
+		new_classic_online_overall_character, 0U, 0U
+	};
+	auto netplay_records = cache_document(netplay_category);
+	fake.response->body = *encode_new_classic_online_cache(netplay_records);
+	records = fetch_new_classic_online_records(
+		netplay_category, credentials, fake.seam()
+	);
+	expect(records && fake.target ==
+		"/api/th03/users/12345678-1234-1234-1234-"
+		"123456789abc/records?category=vs_1p_2p:r2:overall&format=t3onl2",
+		"My Records fetches one rank-local aggregate netplay evidence document");
 }
 
 void test_enrollment_and_upload()
@@ -388,6 +449,36 @@ void test_enrollment_and_upload()
 		return header.name == "authorization" &&
 			header.value.starts_with("Bearer ");
 	}), "upload carries the private bearer credential only in HTTPS headers");
+
+	auto netplay = netplay_document(credentials->user_id);
+	auto encoded_netplay = th03::formats::write_v14_replay(netplay);
+	expect(encoded_netplay.has_value(), "netplay upload fixture is canonical V14");
+	NewClassicOnlineReplayId netplay_id{};
+	netplay_id.bytes = app_sha256(*encoded_netplay);
+	const auto netplay_name = new_classic_online_replay_filename(netplay_id);
+	fake.response = NewClassicOnlineHttpResponse{
+		.status = 201U,
+		.content_type = "application/json",
+		.body = bytes(
+			"{\"status\":\"accepted\","
+			"\"replayId\":\"" + netplay_name.substr(0U, 64U) + "\","
+			"\"entryId\":\"abcdef12-1234-1234-1234-123456789abc\"}"
+		),
+	};
+	upload = upload_new_classic_online_replay(netplay, *credentials, fake.seam());
+	expect(upload && upload->status == NewClassicOnlineUploadStatus::accepted &&
+		fake.body == *encoded_netplay,
+		"recorder-side authenticated netplay V14 uploads directly from memory");
+	auto wrong_recorder = *credentials;
+	wrong_recorder.user_id = "abcdef12-1234-1234-1234-123456789abc";
+	const auto netplay_calls = fake.calls;
+	upload = upload_new_classic_online_replay(
+		netplay, wrong_recorder, fake.seam()
+	);
+	expect(!upload && upload.error().code ==
+		NewClassicOnlineClientErrorCode::invalid_document &&
+		fake.calls == netplay_calls,
+		"a device cannot upload another recorder-side account's netplay evidence");
 
 	fake.response = NewClassicOnlineHttpResponse{
 		.status = 422U,

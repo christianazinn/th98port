@@ -1228,7 +1228,9 @@ struct ClassicOpSessionBackend final {
 		return std::ranges::any_of(
 			online_my_records, [this](const auto &board) {
 				return board.board_category &&
-					board.board_category->mode == NewClassicOnlineMode::story &&
+					(board.board_category->mode == NewClassicOnlineMode::story ||
+					 board.board_category->mode ==
+						NewClassicOnlineMode::vs_1p_2p) &&
 					board.board_category->rank == replay_return_resident.rank;
 			}
 		);

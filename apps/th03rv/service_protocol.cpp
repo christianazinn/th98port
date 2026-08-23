@@ -150,6 +150,147 @@ bool stock_story_anchor(
 	);
 }
 
+bool all_zero(std::span<const std::uint8_t> bytes) noexcept
+{
+	return std::ranges::all_of(bytes, [](const auto byte) {
+		return byte == 0U;
+	});
+}
+
+std::string uuid_string(const th03::formats::ReplayAccountUuid &uuid)
+{
+	constexpr char digits[] = "0123456789abcdef";
+	std::string result;
+	result.reserve(36U);
+	for(std::size_t index = 0U; index < uuid.size(); ++index) {
+		if(index == 4U || index == 6U || index == 8U || index == 10U) {
+			result.push_back('-');
+		}
+		result.push_back(digits[uuid[index] >> 4U]);
+		result.push_back(digits[uuid[index] & 0x0FU]);
+	}
+	return result;
+}
+
+bool stock_netplay_anchor(
+	const th03::formats::ReplayDocument &document,
+	const th03::replay::RunResult &run,
+	const th03::GameContent &content
+)
+{
+	if(document.checkpoints.empty() || run.round_starts.empty()) {
+		return false;
+	}
+	const auto &checkpoint = document.checkpoints.front();
+	const auto &init = document.session.init;
+	if(
+		checkpoint.stage != 0U || checkpoint.round != 0U ||
+		checkpoint.sample_index != 0U || init.global_frame != 0U ||
+		init.game_mode != th03::game_mode::vs_1p_2p || init.rank > 3U ||
+		init.key_mode > 2U || init.story_stage != 0U ||
+		init.story_lives != 0U || init.remaining_credits != 3U ||
+		init.skill != 0U || init.demo_number != 0U ||
+		init.is_cpu != std::array<std::uint8_t, 2U>{0U, 0U} ||
+		init.paletted_character[0U] < 1 || init.paletted_character[0U] > 18 ||
+		init.paletted_character[1U] < 1 || init.paletted_character[1U] > 18 ||
+		!std::ranges::all_of(init.story_opponents, [](const auto opponent) {
+			return opponent == 0;
+		}) || init.winner != 0 || init.show_score_menu != 0U ||
+		init.fast_op_animation != 0U || !zero_scores(init.last_score) ||
+		init.practice_rules ||
+		!th03::stock_gameplay_rules(init.gameplay_ruleset)
+	) {
+		return false;
+	}
+
+	auto stock = init;
+	stock.runtime_snapshot.reset();
+	stock.compact_runtime_snapshot.reset();
+	stock.round_start_snapshot.reset();
+	const auto options = th03::GameOptions{
+		.input_protocol = th03::InputProtocol::recorded_replay,
+	};
+	auto game = th03::Game::create(stock, content, options);
+	if(!game) {
+		return false;
+	}
+	const std::array expected{th03::replay::RoundStartRecord{
+		.sample_index = 0U,
+		.observation = game->round_start_observation(),
+	}};
+	return !th03::replay::first_round_start_mismatch(
+		expected, run.round_starts
+	);
+}
+
+std::optional<ServiceAcceptedReport> stock_netplay_report(
+	const th03::formats::ReplayDocument &document,
+	const th03::replay::RunResult &run,
+	const th03::GameContent &content
+)
+{
+	const auto &metadata = *document.metadata;
+	const bool netplay = (metadata.recording_flags &
+		th03::formats::replay_recording_flag_netplay) != 0U;
+	if(
+		document.session.init.game_mode != th03::game_mode::vs_1p_2p ||
+		!netplay || metadata.recording_flags !=
+			th03::formats::replay_recording_flag_netplay ||
+		(metadata.recorder_role != th03::formats::ReplayRecorderRole::player_one &&
+		 metadata.recorder_role != th03::formats::ReplayRecorderRole::player_two) ||
+		metadata.recorder_source != th03::formats::ReplayRecorderSource::native ||
+		all_zero(metadata.player_uuid[0U]) ||
+		all_zero(metadata.player_uuid[1U]) ||
+		metadata.player_uuid[0U] == metadata.player_uuid[1U] ||
+		all_zero(metadata.match_id) ||
+		metadata.player_nametag_snapshot[0U].empty() ||
+		metadata.player_nametag_snapshot[1U].empty() ||
+		metadata.end_reason != th03::formats::ReplayEndReason::game_over ||
+		run.terminal_state->route != 2U ||
+		run.terminal_state->game_mode != th03::game_mode::vs_1p_2p ||
+		run.terminal_state->winner < 0 || run.terminal_state->winner > 1 ||
+		run.terminal_transition->action != th03::SessionAction::exit_to_operator ||
+		run.terminal_transition->high_score_registration ||
+		!stock_netplay_anchor(document, run, content)
+	) {
+		return std::nullopt;
+	}
+	const auto &summary = run.completed_rounds.back().result_summary;
+	const auto winner = static_cast<std::size_t>(run.terminal_state->winner);
+	if(!summary || !summary->summary_active || !summary->winner ||
+		static_cast<std::size_t>(*summary->winner) != winner ||
+		summary->rounds_won[winner] != 2U ||
+		summary->rounds_won[1U - winner] > 1U) {
+		return std::nullopt;
+	}
+	const auto recorder = metadata.recorder_role ==
+		th03::formats::ReplayRecorderRole::player_one ? 0U : 1U;
+	const auto score = score_value(recorder == 0U ?
+		run.terminal_state->p1_score : run.terminal_state->p2_score);
+	const auto name = display_name(metadata.name);
+	const auto character = document.session.init.paletted_character[recorder];
+	if(!score || !name || *score > 99'999'999U ||
+		character < 1 || character > 18) {
+		return std::nullopt;
+	}
+	return ServiceAcceptedReport{
+		.display_name = *name,
+		.mode = "vs_1p_2p",
+		.rank = document.session.init.rank,
+		.character = static_cast<std::uint8_t>((character - 1) / 2),
+		.result_kind = "versus_complete",
+		.score = *score * 10U,
+		.end_stage = 0U,
+		.continues_used = 0U,
+		.autofire = document.session.init.autofire_mask,
+		.timed_frames = document.slowdown->timed_frames,
+		.slow_frames = document.slowdown->slow_frames,
+		.dos_date = metadata.dos_date,
+		.recorder_user_id = uuid_string(metadata.player_uuid[recorder]),
+		.opponent_user_id = uuid_string(metadata.player_uuid[1U - recorder]),
+	};
+}
+
 } // namespace
 
 std::optional<ServiceAcceptedReport> make_service_accepted_report(
@@ -166,12 +307,18 @@ std::optional<ServiceAcceptedReport> make_service_accepted_report(
 		document.session.source_version != th03::formats::replay_v14_version ||
 		document.metadata->ruleset != th03::formats::ReplayRuleset::stock ||
 		document.metadata->status != th03::formats::ReplayStatus::finalized ||
-		document.session.init.game_mode != th03::game_mode::story ||
 		document.practice || run.status != th03::replay::RunStatus::complete ||
 		!run.terminal_state || !run.terminal_transition ||
 		run.completed_rounds.empty() ||
-		!stock_story_anchor(document, run, content)
+		document.slowdown->slow_frames > document.slowdown->timed_frames
 	) {
+		return std::nullopt;
+	}
+	if(document.session.init.game_mode == th03::game_mode::vs_1p_2p) {
+		return stock_netplay_report(document, run, content);
+	}
+	if(document.session.init.game_mode != th03::game_mode::story ||
+		!stock_story_anchor(document, run, content)) {
 		return std::nullopt;
 	}
 	const auto player = document.session.init.paletted_character[0U];
@@ -200,9 +347,6 @@ std::optional<ServiceAcceptedReport> make_service_accepted_report(
 	) {
 		result_kind = "game_over";
 	} else {
-		return std::nullopt;
-	}
-	if(document.slowdown->slow_frames > document.slowdown->timed_frames) {
 		return std::nullopt;
 	}
 	const auto initial_credits = document.session.init.remaining_credits;
@@ -238,7 +382,8 @@ std::string service_accepted_json(const ServiceAcceptedReport &report)
 		<< ",\"sourceVersion\":14,\"finalized\":true"
 		<< ",\"splitsMatch\":true,\"checkpointsMatch\":true"
 		<< ",\"displayName\":" << json_string(report.display_name)
-		<< ",\"category\":{\"mode\":\"story\",\"rank\":"
+		<< ",\"category\":{\"mode\":" << json_string(report.mode)
+		<< ",\"rank\":"
 		<< static_cast<unsigned int>(report.rank)
 		<< ",\"character\":" << static_cast<unsigned int>(report.character)
 		<< ",\"startStage\":0,\"startRound\":0}"
@@ -250,7 +395,16 @@ std::string service_accepted_json(const ServiceAcceptedReport &report)
 		<< ",\"autofire\":" << static_cast<unsigned int>(report.autofire)
 		<< ",\"timedFrames\":" << report.timed_frames
 		<< ",\"slowFrames\":" << report.slow_frames
-		<< ",\"dosDate\":" << report.dos_date << '}';
+		<< ",\"dosDate\":" << report.dos_date;
+	if(report.recorder_user_id) {
+		output << ",\"recorderUserId\":"
+			<< json_string(*report.recorder_user_id);
+	}
+	if(report.opponent_user_id) {
+		output << ",\"opponentUserId\":"
+			<< json_string(*report.opponent_user_id);
+	}
+	output << '}';
 	return output.str();
 }
 

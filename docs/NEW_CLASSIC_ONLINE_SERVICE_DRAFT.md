@@ -20,7 +20,9 @@ and online ownership added rather than a separate web-style UI language.
 - Internally, the server's actual proof remains deterministic replay validity:
   it does not establish human authorship, an unmodified Windows client, or
   real-time execution.
-- Stock New Classic Story is the first uploadable mode.
+- Stock New Classic Story and completed Stock netplay are uploadable. Netplay
+  uploads are recorder-bound private My Replays evidence only; they do not
+  enter Story leaderboards or define a public VS board.
 - The main board shows only the best entry per backend user profile and
   category. The profile's other accepted records remain available in `My
   Records`.
@@ -232,7 +234,8 @@ availability without inventing a host-styled surface.
   Autofire, slowdown, splits, and replay watch/download.
 - Historical row: the same score row, no replay action, no required evidence
   link.
-- `My Records`: all accepted rows owned by the hidden backend user ID.
+- `My Records`: all accepted Story rows plus the recorder's finalized private
+  netplay evidence, owned by the hidden backend user ID.
 - The main board: one best row per backend profile/category plus historical
   rows, with older equal scores first.
 

@@ -18,6 +18,7 @@
 
 #include "th03/app/main_compiled_content.hpp"
 #include "th03/app/new_classic_nametag.hpp"
+#include "th03/app/new_classic_replay.hpp"
 #include "th03/formats/v14.hpp"
 
 namespace th03::app {
@@ -51,11 +52,24 @@ constexpr std::size_t json_response_limit = 16U * 1024U;
 		category.start_stage == 0U && category.start_round == 0U;
 }
 
+[[nodiscard]] bool private_record_category(
+	const NewClassicOnlineCategory &category
+) noexcept
+{
+	return category.rank < 4U &&
+		category.character <= new_classic_online_overall_character &&
+		category.start_stage == 0U && category.start_round == 0U &&
+		(category.mode == NewClassicOnlineMode::story ||
+		 category.mode == NewClassicOnlineMode::vs_1p_2p);
+}
+
 [[nodiscard]] std::string category_key(
 	const NewClassicOnlineCategory &category
 )
 {
-	return "story:r" + std::to_string(category.rank) +
+	const auto mode = category.mode == NewClassicOnlineMode::vs_1p_2p ?
+		"vs_1p_2p" : "story";
+	return std::string(mode) + ":r" + std::to_string(category.rank) +
 		(category.character == new_classic_online_overall_character ?
 			":overall" : ":c" + std::to_string(category.character));
 }
@@ -475,19 +489,56 @@ void skip_space(std::string_view input, std::size_t &at) noexcept
 		return false;
 	}
 	const auto &metadata = *document.metadata;
-	const auto player = metadata.paletted_character[0U];
 	if(metadata.status != formats::ReplayStatus::finalized ||
-		metadata.game_mode != game_mode::story || player < 1 || player > 18 ||
 		metadata.rank != record.category.rank ||
-		static_cast<std::uint8_t>((player - 1) / 2) != record.category.character ||
 		metadata.dos_date != record.dos_date || metadata.autofire != record.autofire ||
 		document.session.init.autofire_mask != record.autofire ||
 		document.slowdown->timed_frames != record.timed_frames ||
 		document.slowdown->slow_frames != record.slow_frames ||
-		packed_score(metadata.final_score) != record.result.score ||
 		replay_name(metadata.name) != record.title ||
 		record.result.continues_used != 0U || !metadata.final_route ||
-		*metadata.final_route != 2U || !metadata.final_story_stage ||
+		*metadata.final_route != 2U || !metadata.final_winner) {
+		return false;
+	}
+	if(record.category.mode == NewClassicOnlineMode::vs_1p_2p) {
+		const bool netplay = (metadata.recording_flags &
+			formats::replay_recording_flag_netplay) != 0U;
+		if(metadata.game_mode != game_mode::vs_1p_2p || !netplay ||
+			metadata.recording_flags != formats::replay_recording_flag_netplay ||
+			metadata.recorder_source != formats::ReplayRecorderSource::native ||
+			(metadata.recorder_role != formats::ReplayRecorderRole::player_one &&
+			 metadata.recorder_role != formats::ReplayRecorderRole::player_two) ||
+			!metadata.final_game_mode ||
+			*metadata.final_game_mode != game_mode::vs_1p_2p ||
+			metadata.end_reason != formats::ReplayEndReason::game_over ||
+			record.result.kind != NewClassicOnlineResultKind::versus_complete ||
+			record.result.end_stage != 0U) {
+			return false;
+		}
+		const auto recorder = metadata.recorder_role ==
+			formats::ReplayRecorderRole::player_one ? 0U : 1U;
+		const auto player = metadata.paletted_character[recorder];
+		const auto split = std::ranges::find_if(
+			document.expected_round_splits.rbegin(),
+			document.expected_round_splits.rend(),
+			[](const auto &candidate) {
+				return candidate.story_stage == 0x0FU && candidate.route == 2U;
+			}
+		);
+		return player >= 1 && player <= 18 &&
+			static_cast<std::uint8_t>((player - 1) / 2) ==
+				record.category.character &&
+			split != document.expected_round_splits.rend() &&
+			packed_score(recorder == 0U ? split->p1_score : split->p2_score) ==
+				record.result.score;
+	}
+	const auto player = metadata.paletted_character[0U];
+	if(record.category.mode != NewClassicOnlineMode::story ||
+		metadata.status != formats::ReplayStatus::finalized ||
+		metadata.game_mode != game_mode::story || player < 1 || player > 18 ||
+		static_cast<std::uint8_t>((player - 1) / 2) != record.category.character ||
+		packed_score(metadata.final_score) != record.result.score ||
+		!metadata.final_story_stage ||
 		*metadata.final_story_stage != record.result.end_stage ||
 		!metadata.final_winner) {
 		return false;
@@ -711,7 +762,7 @@ fetch_new_classic_online_records(
 	const NewClassicOnlineTransport &transport
 )
 {
-	if(!story_category(category)) {
+	if(!private_record_category(category)) {
 		return std::unexpected(client_error(
 			NewClassicOnlineClientErrorCode::invalid_category
 		));
@@ -1031,7 +1082,6 @@ upload_new_classic_online_replay(
 	}
 	if(!document.metadata || !document.slowdown || document.practice ||
 		document.metadata->status != formats::ReplayStatus::finalized ||
-		document.metadata->game_mode != game_mode::story ||
 		document.slowdown->timed_frames == 0U ||
 		document.slowdown->slow_frames > document.slowdown->timed_frames ||
 		(static_cast<std::uint64_t>(document.slowdown->slow_frames) * 100U) >
@@ -1039,6 +1089,36 @@ upload_new_classic_online_replay(
 		return std::unexpected(client_error(
 			NewClassicOnlineClientErrorCode::invalid_document
 		));
+	}
+	const auto story = document.metadata->game_mode == game_mode::story &&
+		document.metadata->ruleset == formats::ReplayRuleset::stock;
+	const auto netplay = document.metadata->game_mode == game_mode::vs_1p_2p &&
+		document.metadata->ruleset == formats::ReplayRuleset::stock &&
+		document.metadata->recording_flags ==
+			formats::replay_recording_flag_netplay &&
+		document.metadata->recorder_source ==
+			formats::ReplayRecorderSource::native &&
+		(document.metadata->recorder_role ==
+			formats::ReplayRecorderRole::player_one ||
+		 document.metadata->recorder_role ==
+			formats::ReplayRecorderRole::player_two);
+	if(!story && !netplay) {
+		return std::unexpected(client_error(
+			NewClassicOnlineClientErrorCode::invalid_document
+		));
+	}
+	if(netplay) {
+		const auto credential_uuid = parse_new_classic_replay_account_uuid(
+			credentials.user_id
+		);
+		const auto recorder = document.metadata->recorder_role ==
+			formats::ReplayRecorderRole::player_one ? 0U : 1U;
+		if(!credential_uuid || *credential_uuid !=
+			document.metadata->player_uuid[recorder]) {
+			return std::unexpected(client_error(
+				NewClassicOnlineClientErrorCode::invalid_document
+			));
+		}
 	}
 	auto bytes = formats::write_v14_replay(document);
 	if(!bytes || bytes->empty() ||

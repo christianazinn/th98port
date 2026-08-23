@@ -673,13 +673,14 @@ inside source-time gameplay or silently alter Classic/New Classic content
 identities. See `UPDATE_MANIFEST.md`, `UPDATE_PACKAGE.md`, and
 `UPDATE_ACTIVATION.md`.
 
-Completed netplay matches already produce an in-memory, source-compatible V14
-document and enter the ordinary Save Replay transaction. Product-level netplay
-replay browsing, metadata, upload, and watch flows are the next relatively
-high-priority netplay parcel after private-beta lifecycle closure. VS
-leaderboards, ratings/Elo, match history, seasons, and tournament policy remain
-long-term features after replay-backed evidence and operational moderation are
-established.
+Completed netplay matches produce an in-memory, source-compatible V14 document
+and enter the ordinary Save Replay transaction. Finalized Stock netplay files
+now use the normal local browser plus recorder-bound upload, My Replays,
+download, and Watch paths. The verifier projects each recorder's own character
+and score and the service keeps this evidence outside public Story boards. VS
+leaderboards, ratings/Elo, public match history, seasons, and tournament policy
+remain long-term features after replay-backed evidence and operational
+moderation are established.
 
 ### 12. Localized game content, replay-export UI, and Arrange experiments
 

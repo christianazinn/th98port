@@ -238,6 +238,31 @@ void test_identity_and_provenance_contract()
 		NewClassicOnlineErrorCode::category,
 		"Overall never admits a row from another difficulty");
 
+	auto netplay_records = document;
+	netplay_records.leaderboard_entries.erase(
+		netplay_records.leaderboard_entries.begin() + 1
+	);
+	netplay_records.board_category->mode = NewClassicOnlineMode::vs_1p_2p;
+	netplay_records.board_category->character =
+		new_classic_online_overall_character;
+	netplay_records.leaderboard_entries[0U].category.mode =
+		NewClassicOnlineMode::vs_1p_2p;
+	netplay_records.leaderboard_entries[0U].result = {
+		NewClassicOnlineResultKind::versus_complete, 123456780ULL, 0U, 0U,
+	};
+	netplay_records.replay_records[0U].category.mode =
+		NewClassicOnlineMode::vs_1p_2p;
+	netplay_records.replay_records[0U].result =
+		netplay_records.leaderboard_entries[0U].result;
+	expect(validate_new_classic_online_cache(netplay_records).has_value(),
+		"one rank-local aggregate document carries private netplay replay evidence");
+	auto invalid_netplay = netplay_records;
+	invalid_netplay.replay_records[0U].result.continues_used = 1U;
+	invalid_netplay.leaderboard_entries[0U].result.continues_used = 1U;
+	invalid = validate_new_classic_online_cache(invalid_netplay);
+	expect(!invalid && invalid.error().code == NewClassicOnlineErrorCode::result,
+		"netplay evidence cannot carry Story stage or Continue semantics");
+
 	auto invalid_telemetry = document;
 	invalid_telemetry.replay_records[0U].slow_frames = 501U;
 	invalid_telemetry.replay_records[0U].timed_frames = 10'000U;

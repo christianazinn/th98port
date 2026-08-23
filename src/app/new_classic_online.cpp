@@ -118,7 +118,9 @@ constexpr std::uint64_t maximum_score = 999999990ULL;
 	if(category.character != new_classic_online_overall_character) {
 		return valid_category(category);
 	}
-	return category.mode == NewClassicOnlineMode::story && category.rank < 4U &&
+	return (category.mode == NewClassicOnlineMode::story ||
+		category.mode == NewClassicOnlineMode::vs_1p_2p) &&
+		category.rank < 4U &&
 		category.start_stage == 0U && category.start_round == 0U;
 }
 
@@ -152,7 +154,8 @@ constexpr std::uint64_t maximum_score = 999999990ULL;
 		return result.kind == NewClassicOnlineResultKind::practice_complete;
 	case NewClassicOnlineMode::vs_1p_cpu:
 	case NewClassicOnlineMode::vs_1p_2p:
-		return result.kind == NewClassicOnlineResultKind::versus_complete;
+		return result.kind == NewClassicOnlineResultKind::versus_complete &&
+			result.end_stage == 0U && result.continues_used == 0U;
 	}
 	return false;
 }
