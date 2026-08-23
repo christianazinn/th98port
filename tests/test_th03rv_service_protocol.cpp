@@ -143,6 +143,9 @@ int main()
 	) || !require(
 		json.find("\"protocol\":\"T3RV-SERVICE-1\"") != std::string::npos,
 		"protocol is explicit"
+	) || !require(
+		json.find("\"sourceVersion\":14") != std::string::npos,
+		"service report identifies the sole live V14 format"
 	)) {
 		return EXIT_FAILURE;
 	}

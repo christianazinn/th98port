@@ -46,7 +46,7 @@ test("accepted native output is bound to the exact request and configured identi
     return nativeResult({
       protocol: "T3RV-SERVICE-1",
       outcome: "accepted",
-      sourceVersion: 13,
+      sourceVersion: 14,
       finalized: true,
       splitsMatch: true,
       checkpointsMatch: true,

@@ -235,7 +235,7 @@ std::string service_accepted_json(const ServiceAcceptedReport &report)
 	std::ostringstream output;
 	output << "{\"protocol\":" << json_string(service_protocol)
 		<< ",\"outcome\":\"accepted\""
-		<< ",\"sourceVersion\":13,\"finalized\":true"
+		<< ",\"sourceVersion\":14,\"finalized\":true"
 		<< ",\"splitsMatch\":true,\"checkpointsMatch\":true"
 		<< ",\"displayName\":" << json_string(report.display_name)
 		<< ",\"category\":{\"mode\":\"story\",\"rank\":"
