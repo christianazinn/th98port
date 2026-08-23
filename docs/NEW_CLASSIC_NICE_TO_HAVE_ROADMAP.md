@@ -254,9 +254,15 @@ DOSBox/`mg098` custom-menu workflow: it fits ordinary images to 640x400,
 quantizes only into the ten background-owned palette indices, writes the exact
 two uncompressed 4-bpp BMP halves, and emits a runtime-palette preview plus
 source/output identities. It never modifies reviewed assets in place.
-General Unicode locales still need a distributable font and layout contract;
-the current production renderer deliberately covers source-era ASCII and
-CP932 Japanese only.
+General Unicode locales now form the first active follow-up. The current
+production renderer deliberately covers source-era ASCII and CP932 Japanese
+only. The extension must keep translator files and online display names as
+validated UTF-8, compile a source-free redistributable font into a
+deterministic codepoint/metrics package, define fallback and grapheme-aware
+wrapping without consulting platform fonts, and prove Spanish plus Japanese
+as the first two non-ASCII profiles. It must cover online leaderboard names
+and account nametags as well as localization catalogs while leaving sealed
+Classic and the existing exact CP932 path unchanged.
 
 The production cutscene VM now exposes canonical picture presentations rather
 than relying on command-text scraping. Both authenticated language archives
@@ -311,7 +317,12 @@ V13 remains only as Data Manager migration input and frozen historical evidence.
 The original source-text, renderer-GUI, Arrange, content-audit, and live
 nametag parcels above are implemented. The remaining product/tooling work is:
 
-1. Continue decoupling text baked into images. Character-select center-list
+1. Add the deterministic general-Unicode font/layout package described above.
+   UTF-8 is already the authoring and online-cache boundary, but current native
+   drawing cannot faithfully show arbitrary historical display names or a
+   future Spanish locale. Do not bind output to whatever font happens to be
+   installed on the host.
+2. Continue decoupling text baked into images. Character-select center-list
 names and stat labels plus gameplay Lose/Win/Stage/Round/Start banners are
 complete. Registration title/column panels, difficulty plate, edit commands,
    and all-stage marker are also runtime-localized while built-in English retains
@@ -323,25 +334,25 @@ complete. Registration title/column panels, difficulty plate, edit commands,
    headings remain. The
    selection portrait atlases were audited and contain no text. Opaque surfaces require clean background
    reconstruction; this is not a missing string-catalog problem.
-2. Finish production update release inputs: origin, platform packages, signing
+3. Finish production update release inputs: origin, platform packages, signing
    key custody/rotation, and hosted CI artifact validation. The updater engine
    itself is already implemented and default-off without those inputs.
-3. Continue online operations and UX: reviewed historical-score import,
+4. Continue online operations and UX: reviewed historical-score import,
    operational verifier/service monitoring, and any remaining public-account
    recovery flows. The replay-backed Story leaderboard/upload/download/watch
    path is already live. Finalized Stock netplay V14 files are verified,
    recorder-bound private My Replays evidence; they deliberately do not enter
    Story boards or define ratings/public match history.
-4. Improve PMD/YM2608 audio fidelity where channel balance and simultaneous
+5. Improve PMD/YM2608 audio fidelity where channel balance and simultaneous
    SFX layering still differ audibly from PC-98 output. The deterministic
    native all-effect trace, strict PC-98 I/O normalizer, first-divergence
    comparator, and controlled shipped-PMDB2 event-window comparison are
    complete; aligned acoustic evidence remains before further audible changes.
-5. Expand Arrange only after choosing a shippable ruleset and a replay/content
+6. Expand Arrange only after choosing a shippable ruleset and a replay/content
    identity for it. `dopamine-test-v1` remains an intentionally non-stock test.
-6. Design optional `Smooth` display interpolation behind the existing exact
+7. Design optional `Smooth` display interpolation behind the existing exact
    source scheduler; `Repeat` sample-and-hold remains the authentic default.
-7. Resume broad pixel/audio-oracle coverage after these moving functional and
+8. Resume broad pixel/audio-oracle coverage after these moving functional and
    localized surfaces settle. Stock deterministic/replay gates remain active
    throughout.
 

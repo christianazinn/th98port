@@ -75,7 +75,11 @@ external; replacement localization assets may be distributed with the port.
 Installation manuals and other text files with no playable TH03 loader are not
 game text and are excluded. Replay/player names, dates, scores, device names,
 and online nametags are runtime data rather than translatable strings; their
-labels and formatting templates are included in the menu domain.
+labels and formatting templates are included in the menu domain. Their UTF-8
+bytes must be preserved even before the selected runtime font can draw every
+code point. A deterministic redistributable Unicode font/metrics pack is the
+next localization priority, with Spanish and online Japanese display names as
+its first acceptance profiles; host-installed fonts are not authoritative.
 
 ## Reproducibility and review
 
