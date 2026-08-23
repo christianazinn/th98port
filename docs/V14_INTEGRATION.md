@@ -9,13 +9,13 @@ V14 has two complementary authorities:
 
 1. The canonical semantic and byte-layout schema is
    `tools/replay/FORMAT.md` in the replay-validation harness at outer commit
-   `2ef51fbd4196d561e2e7f12d01648e9e6f2246da`. Its SHA-256 at this checkpoint
-   is `6D195565F769ABA502713A70C19FE4D7612572058BE39C1F42AA88C3C8D767AF`.
+   `551bbd97204e1aeeec8264cc83617d5c5e669ab2`. Its SHA-256 at this checkpoint
+   is `571970292F441041172A05390FDA92AA996EF5B5CC163D04048BB744DAD9D42E`.
 2. Exact packed structures, constants, capacities, and game-side validation
    behavior are defined by the Replay Patch at ReC98 commit
-   `43028f09a2fc6965b2462e9743be604d3b8b1d0e`, primarily
+   `b5a06d93eafbd75c96e5b1e185b04f7afb233725`, primarily
    `th03/replay_format.hpp`. That header's SHA-256 is
-   `80AAB90E7435F4D96CECB561E1D68A9F4924166C04036906077C53FC406B4281`.
+   `2B8CCA8BBB8A264D516007455103BCBA692C8839A86627E93F0D01B904CAF3AF`.
 
 The complete validation call sites are
 `th03/main/replay.cpp::replay_user_header_valid()` and its checkpoint reader,
