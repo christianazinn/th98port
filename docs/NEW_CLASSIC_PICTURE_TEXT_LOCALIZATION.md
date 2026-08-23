@@ -98,6 +98,33 @@ python tools/localization/compile_picture_patch_pack.py \
   --output picture-patch-en-US.t3ptp
 ```
 
+For a new locale or picture set, create a source-free author project from a
+directory of external BMP previews:
+
+```text
+python tools/localization/make_picture_patch_author.py init \
+  --locale en-US \
+  --source-root external/picture-previews \
+  --output-root picture-author-en-US \
+  --member DM3B.PI --member DM3D.PI
+```
+
+The output PNGs contain the source RGB4 palette plus one transparent entry,
+but every pixel initially selects only that transparent entry. The tool refuses
+to overwrite the project directory. After editing an overlay with indexed
+colors 0-15 and transparency, derive a separate compile-ready manifest:
+
+```text
+python tools/localization/make_picture_patch_author.py finalize \
+  --author picture-author-en-US/picture-patch-en-US.json \
+  --output picture-author-en-US/picture-patch-en-US.final.json
+```
+
+Finalize calculates the exact exclusive bounds through the package compiler's
+own BMP/PNG decoder and replacement-run path. The ordinary compiler still
+requires those frozen bounds and rejects a pristine or subsequently changed
+overlay, so convenience does not weaken review or runtime validation.
+
 The game, standalone bootstrap, replay renderer CLI, and renderer GUI all
 accept the optional package (`--picture-patch-pack` for command-line tools).
 The standalone packager includes a reviewed package when passed
@@ -120,7 +147,8 @@ failures. The same path supplied to sealed Classic is never opened.
   page ownership, palette, and timing; and
 - a Classic snapshot remains byte-identical with a package present.
 
-The format, compiler, parser, production scene application, standalone, and
-renderer plumbing are implemented and tested without committing original
-assets. Shipping complete English/Japanese picture localization still requires
-reviewed replacement artwork for every region classified above.
+The format, compiler, source-free init/finalize scaffold, parser, production
+scene application, standalone, and renderer plumbing are implemented and
+tested without committing original assets. Shipping complete English/Japanese
+picture localization still requires reviewed replacement artwork for every
+region classified above.

@@ -263,7 +263,10 @@ PNG compiler through strict parser, production New Classic scene application,
 standalone, replay renderer, and renderer GUI. It is documented in
 `NEW_CLASSIC_PICTURE_TEXT_LOCALIZATION.md`; authored overlays and compiler
 fixtures contain no original unchanged pixels. Reviewed replacement artwork,
-not runtime architecture, is the remaining cutscene-picture dependency.
+not runtime architecture, is the remaining cutscene-picture dependency. The
+author scaffold now creates all-transparent source-palette PNG projects,
+refuses destructive reruns, and freezes exact compiler-derived bounds after
+editing without relaxing the final package compiler.
 
 ### 5. Account nametags and VS presentation
 

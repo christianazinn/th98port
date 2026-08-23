@@ -225,11 +225,10 @@ def load_overlay_png(path: Path) -> tuple[bytes, tuple[tuple[int, int, int], ...
     return bytes(decoded), colors, alphas
 
 
-def compile_picture(
+def compile_picture_runs(
     member: str,
     source: DecodedSource,
     overlay_path: Path,
-    declared_bounds: object,
 ) -> Picture:
     overlay, colors, alphas = load_overlay_png(overlay_path)
     expanded_source = tuple(tuple(channel * 17 for channel in color)
@@ -280,13 +279,26 @@ def compile_picture(
     xs = [position % WIDTH for position in changed_positions]
     ys = [position // WIDTH for position in changed_positions]
     bounds = (min(xs), min(ys), max(xs) + 1, max(ys) + 1)
+    return Picture(member, source.sha256, bounds, tuple(runs))
+
+
+def compile_picture(
+    member: str,
+    source: DecodedSource,
+    overlay_path: Path,
+    declared_bounds: object,
+) -> Picture:
+    picture = compile_picture_runs(member, source, overlay_path)
     if not (isinstance(declared_bounds, list) and len(declared_bounds) == 4 and
             all(isinstance(value, int) and not isinstance(value, bool)
-                for value in declared_bounds)) or tuple(declared_bounds) != bounds:
+                for value in declared_bounds)) or (
+                    tuple(declared_bounds) != picture.bounds
+                ):
         raise PackError(
-            f"{member}: declared bounds {declared_bounds!r} do not match {list(bounds)}"
+            f"{member}: declared bounds {declared_bounds!r} do not match "
+            f"{list(picture.bounds)}"
         )
-    return Picture(member, source.sha256, bounds, tuple(runs))
+    return picture
 
 
 def load_author(path: Path) -> tuple[str, tuple[Picture, ...]]:
