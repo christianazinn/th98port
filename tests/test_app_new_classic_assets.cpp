@@ -232,9 +232,8 @@ void test_authentic_archive_if_supplied()
 	);
 	expect(loaded->replay_list_background.image.width == 640U &&
 		loaded->replay_name_background.image.height == 400U &&
-		neutral.image.indices.size() == 256'000U &&
-		loaded->key_config_background.image.indices.size() == 256'000U,
-		"source and neutral authenticated full-screen backgrounds decode");
+		neutral.image.indices.size() == 256'000U,
+		"used source and neutral authenticated full-screen backgrounds decode");
 	expect(std::ranges::find(
 		neutral.image.indices, 12U
 	) == neutral.image.indices.end() &&

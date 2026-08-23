@@ -178,7 +178,6 @@ struct NewClassicReplayPatchAssets final {
 		assets::PiImage,
 		static_cast<std::size_t>(NewClassicMenuBackground::count)
 	> new_menu_backgrounds{};
-	assets::PiImage key_config_background{};
 	NewClassicMenuFont menu_font{};
 	std::array<std::array<std::uint8_t, 32U>, 40U> pause_gaiji{};
 	// Optional developer/translator package. All production New Classic scenes

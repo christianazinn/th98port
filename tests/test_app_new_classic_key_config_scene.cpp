@@ -71,7 +71,9 @@ std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> assets_fixture()
 	}
 	auto assets = std::make_shared<th03::app::NewClassicReplayPatchAssets>();
 	assets->menu_font = std::move(*decoded);
-	auto &background = assets->key_config_background;
+	auto &background = assets->new_menu_backgrounds[static_cast<std::size_t>(
+		th03::app::NewClassicMenuBackground::neutral
+	)];
 	background.palette.emplace();
 	for(std::size_t index = 0U; index < 16U; ++index) {
 		background.palette->colors[index] = {
@@ -82,12 +84,7 @@ std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> assets_fixture()
 	}
 	background.image.width = 640U;
 	background.image.height = 400U;
-	background.image.indices.assign(256'000U, 2U);
-	auto &neutral = assets->new_menu_backgrounds[static_cast<std::size_t>(
-		th03::app::NewClassicMenuBackground::neutral
-	)];
-	neutral = background;
-	neutral.image.indices.assign(256'000U, 3U);
+	background.image.indices.assign(256'000U, 3U);
 	return assets;
 }
 

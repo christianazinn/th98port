@@ -87,6 +87,8 @@ constexpr MainExecutableSha256 source_archive_sha256{
 };
 constexpr std::size_t archive_header_bytes = 16U;
 constexpr std::size_t directory_entry_bytes = 32U;
+// BG1.PI remains part of each whole-file-authenticated legacy archive profile,
+// but New Classic no longer decodes or presents it.
 constexpr std::array<std::string_view, 5U> source_required_members{
 	"SLB1.PI", "SLB1B.PI", "MNUFONT.PF", "PAUSE.GFT", "BG1.PI",
 };
@@ -1136,10 +1138,8 @@ load_new_classic_replay_patch_assets(
 		NewClassicReplayPatchAssets result{};
 		auto list = decode_pi(*members, "SLB1.PI");
 		auto name = decode_pi(*members, "SLB1B.PI");
-		auto key = decode_pi(*members, "BG1.PI");
 		if(!list) return std::unexpected(std::move(list.error()));
 		if(!name) return std::unexpected(std::move(name.error()));
-		if(!key) return std::unexpected(std::move(key.error()));
 		auto font = detail::decode_new_classic_menu_font(
 			members->at("MNUFONT.PF")
 		);
@@ -1150,7 +1150,6 @@ load_new_classic_replay_patch_assets(
 		if(!pause) return std::unexpected(std::move(pause.error()));
 		result.replay_list_background = std::move(*list);
 		result.replay_name_background = std::move(*name);
-		result.key_config_background = std::move(*key);
 		std::optional<std::filesystem::path> loose_background_root{};
 		std::vector<std::filesystem::path> candidates{};
 		if(!menu_background_root.empty()) {

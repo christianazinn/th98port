@@ -49,8 +49,8 @@ image-text migration includes, at minimum:
   Assignment, and Input Test no longer show BG1.PI's baked English heading:
   the four New Classic-only scenes share the project-owned neutral background
   and render both English and Japanese headings at runtime. BG1 remains an
-  accepted archive member for compatibility but is no longer their
-  presentation source;
+  authenticated legacy archive member for compatibility, but the native asset
+  owner no longer decodes or retains it;
 - character portrait art (the audited selection atlases contain no text; the
   nine transparent center-list names and all three stat-sheet labels are now
   runtime-localized in New Classic);
