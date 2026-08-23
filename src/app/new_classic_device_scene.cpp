@@ -34,6 +34,18 @@ constexpr std::uint8_t fade_boundaries = 19U;
 	return page == present::Page::zero ? present::Page::one : present::Page::zero;
 }
 
+[[nodiscard]] bool put_header_centered(
+	const NewClassicMenuFont &font,
+	present::Raster &raster,
+	std::int32_t center_x,
+	std::int32_t top,
+	std::string_view text
+) noexcept
+{
+	return font.put_centered(raster, center_x + 1, top + 1, text, 0U) &&
+		font.put_centered(raster, center_x, top, text, header_color);
+}
+
 void append(std::array<char, 64U> &storage, std::size_t &used,
 	std::string_view text) noexcept
 {
@@ -110,17 +122,21 @@ NewClassicDeviceScene::NewClassicDeviceScene(
 	NewClassicDeviceSceneMode mode,
 	NewClassicDeviceAssignment assignment,
 	NewClassicDeviceAssignment defaults,
-	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	NewClassicLanguageAssetProfile language_profile
 ) :
 	mode_(mode),
 	original_(assignment),
 	assignment_(assignment),
 	defaults_(defaults),
+	language_profile_(language_profile),
 	patch_assets_(std::move(patch_assets))
 {
 	if(!valid_new_classic_device_assignment(assignment_) ||
 		!valid_new_classic_device_assignment(defaults_) || !patch_assets_ ||
-		!patch_surface_.reset(patch_assets_->key_config_background)) {
+		!patch_surface_.reset(patch_assets_->menu_background(
+			NewClassicMenuBackground::neutral
+		))) {
 		fail();
 		return;
 	}
@@ -170,7 +186,7 @@ std::string_view NewClassicDeviceScene::assignment_value(
 	std::array<char, 64U> &storage
 ) const noexcept
 {
-	const auto &messages = patch_assets_->messages();
+	const auto &messages = patch_assets_->messages(language_profile_);
 	const auto mode = assignment_.mode[player];
 	if(mode == NewClassicControllerAssignmentMode::automatic) {
 		return messages.text(NewClassicMessageId::device_value_automatic);
@@ -203,7 +219,7 @@ std::string_view NewClassicDeviceScene::assignment_value(
 
 bool NewClassicDeviceScene::compose_assignment() noexcept
 {
-	const auto &messages = patch_assets_->messages();
+	const auto &messages = patch_assets_->messages(language_profile_);
 	for(std::size_t player = 0U; player < 2U; ++player) {
 		std::array<char, 64U> value{};
 		if(!draw_value(messages.text(player == 0U ?
@@ -231,7 +247,7 @@ bool NewClassicDeviceScene::compose_assignment() noexcept
 
 bool NewClassicDeviceScene::compose_input_test() noexcept
 {
-	const auto &messages = patch_assets_->messages();
+	const auto &messages = patch_assets_->messages(language_profile_);
 	std::array<char, 64U> storage{};
 	if(!draw_value(messages.text(NewClassicMessageId::device_label_p1_logical),
 		hex_word(logical_input_.p1, storage, ""),
@@ -301,22 +317,23 @@ bool NewClassicDeviceScene::compose() noexcept
 	}
 	const auto target = opposite(front_page_);
 	auto &raster = patch_surface_.raster();
-	const auto &messages = patch_assets_->messages();
+	const auto &messages = patch_assets_->messages(language_profile_);
+	const auto &background = patch_assets_->menu_background(
+		NewClassicMenuBackground::neutral
+	);
 	if(!raster.set_access_page(target) || !present::pi_put_8(
-		raster, 0, 0, patch_assets_->key_config_background
-	) || !patch_assets_->menu_font.put_centered(
-		raster, center, header_top,
+		raster, 0, 0, background
+	) || !put_header_centered(
+		patch_assets_->menu_font, raster, center, header_top,
 		messages.text(mode_ == NewClassicDeviceSceneMode::assignment ?
 			NewClassicMessageId::device_header_assignment :
-			NewClassicMessageId::device_header_input_test),
-		header_color
+			NewClassicMessageId::device_header_input_test)
 	) || !(mode_ == NewClassicDeviceSceneMode::assignment ?
 		compose_assignment() : compose_input_test()) ||
 		(mode_ == NewClassicDeviceSceneMode::input_test &&
-		!patch_assets_->menu_font.put_centered(
-		raster, center, footer_top,
-			messages.text(NewClassicMessageId::device_footer_input_test),
-			header_color
+		!put_header_centered(
+			patch_assets_->menu_font, raster, center, footer_top,
+			messages.text(NewClassicMessageId::device_footer_input_test)
 		)) || !patch_surface_.publish(target) ||
 		!raster.set_access_page(target)) {
 		return false;

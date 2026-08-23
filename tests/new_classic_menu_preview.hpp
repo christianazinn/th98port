@@ -77,8 +77,12 @@ authentic_menu_assets()
 	if(!path || *path == '\0') {
 		return {};
 	}
+	std::filesystem::path font_rom{};
+	if(const auto *font = environment("TH03_FONT_ROM"); font && *font != '\0') {
+		font_rom = font;
+	}
 	auto loaded = app::load_new_classic_replay_patch_assets(
-		std::filesystem::path(path)
+		std::filesystem::path(path), {}, font_rom
 	);
 	if(!loaded) {
 		return {};

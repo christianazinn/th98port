@@ -2257,7 +2257,10 @@ struct ClassicOpSessionBackend final {
 			key_config_return_options.emplace(std::move(*options_completion));
 			auto scene = std::make_unique<NewClassicKeyConfigScene>(
 				*key_config, key_defaults, maximum_key, capture_cancel_key,
-				key_name, patch_assets, key_name_context
+				key_name, patch_assets, key_name_context,
+				active_language == ClassicLanguage::english ?
+					NewClassicLanguageAssetProfile::english :
+					NewClassicLanguageAssetProfile::japanese
 			);
 			if(!scene->valid()) {
 				return std::unexpected(session_error(
@@ -2278,7 +2281,10 @@ struct ClassicOpSessionBackend final {
 			}
 			key_config_return_options.emplace(std::move(*options_completion));
 			auto scene = std::make_unique<NewClassicJoyConfigScene>(
-				*joy_config, joy_defaults, patch_assets
+				*joy_config, joy_defaults, patch_assets,
+				active_language == ClassicLanguage::english ?
+					NewClassicLanguageAssetProfile::english :
+					NewClassicLanguageAssetProfile::japanese
 			);
 			if(!scene->valid()) {
 				return std::unexpected(session_error(
@@ -2306,7 +2312,10 @@ struct ClassicOpSessionBackend final {
 			key_config_return_options.emplace(std::move(*options_completion));
 			auto scene = std::make_unique<NewClassicDeviceScene>(
 				mode,
-				*device_assignment, device_defaults, patch_assets
+				*device_assignment, device_defaults, patch_assets,
+				active_language == ClassicLanguage::english ?
+					NewClassicLanguageAssetProfile::english :
+					NewClassicLanguageAssetProfile::japanese
 			);
 			if(!scene->valid()) {
 				return std::unexpected(session_error(

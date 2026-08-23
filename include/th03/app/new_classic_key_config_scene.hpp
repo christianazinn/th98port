@@ -46,7 +46,9 @@ public:
 		std::uint16_t capture_cancel_key,
 		NewClassicHostKeyName key_name,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
-		void *key_name_context = nullptr
+		void *key_name_context = nullptr,
+		NewClassicLanguageAssetProfile language_profile =
+			NewClassicLanguageAssetProfile::english
 	);
 
 	[[nodiscard]] NewClassicKeyConfigSceneResult consume(
@@ -129,6 +131,8 @@ private:
 	std::uint16_t capture_cancel_key_ = 0U;
 	NewClassicHostKeyName key_name_ = nullptr;
 	void *key_name_context_ = nullptr;
+	NewClassicLanguageAssetProfile language_profile_ =
+		NewClassicLanguageAssetProfile::english;
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
 	NewClassicPatchSurface patch_surface_{};
 	present::Page front_page_ = present::Page::zero;

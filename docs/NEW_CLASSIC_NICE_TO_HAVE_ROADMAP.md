@@ -314,10 +314,13 @@ nametag parcels above are implemented. The remaining product/tooling work is:
 1. Continue decoupling text baked into images. Character-select center-list
 names and stat labels plus gameplay Lose/Win/Stage/Round/Start banners are
 complete. Registration title/column panels, difficulty plate, edit commands,
-and all-stage marker are also runtime-localized while built-in English retains
-the source art. The Music Room now reconstructs its flat source title panel and
-draws the active-locale heading/creator credit at runtime. Character-title art
-and the remaining reusable OP/title menu headings remain. The
+   and all-stage marker are also runtime-localized while built-in English retains
+   the source art. The Music Room now reconstructs its flat source title panel and
+   draws the active-locale heading/creator credit at runtime. The four input
+   configuration scenes now use the source-free neutral menu background and
+   render their selected English/Japanese headings rather than BG1.PI's baked
+   English title. Character-title art and the remaining reusable OP/title menu
+   headings remain. The
    selection portrait atlases were audited and contain no text. Opaque surfaces require clean background
    reconstruction; this is not a missing string-catalog problem.
 2. Finish production update release inputs: origin, platform packages, signing

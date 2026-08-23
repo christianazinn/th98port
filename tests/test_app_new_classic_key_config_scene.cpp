@@ -9,6 +9,7 @@
 #include <string_view>
 #include <vector>
 
+#include "new_classic_menu_preview.hpp"
 #include "th03/app/new_classic_key_config_scene.hpp"
 
 namespace {
@@ -82,6 +83,11 @@ std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> assets_fixture()
 	background.image.width = 640U;
 	background.image.height = 400U;
 	background.image.indices.assign(256'000U, 2U);
+	auto &neutral = assets->new_menu_backgrounds[static_cast<std::size_t>(
+		th03::app::NewClassicMenuBackground::neutral
+	)];
+	neutral = background;
+	neutral.image.indices.assign(256'000U, 3U);
 	return assets;
 }
 
@@ -145,15 +151,18 @@ void test_source_geometry_and_fade()
 	expect(
 		initial.shown_page == th03::present::Page::one &&
 		initial.palette_tone == 0 && !initial.host_overlay,
-		"first complete BG1 frame is composed hidden and kept black"
+		"first complete neutral-background frame is composed hidden and kept black"
 	);
+	expect(pixel(initial, 0U, 0U) == 3U,
+		"KeyConfig uses the source-distinct project-owned neutral background");
 	expect(
+		pixel(initial, 284U, 64U) == 14U &&
 		pixel(initial, 248U, 96U) == 14U &&
 		pixel(initial, 300U, 96U) == 14U &&
 		pixel(initial, 200U, 128U) == 11U &&
 		pixel(initial, 216U, 128U) == 11U &&
 		pixel(initial, 312U, 128U) == 11U,
-		"Story page carets, title, cursor, label, and value use visible source positions and colors"
+		"localized scene title, Story page carets, page title, cursor, label, and value use visible source positions and colors"
 	);
 	expect(
 		th03::app::NewClassicKeyConfigSceneTestAccess::page(scene) == 2U &&
@@ -182,7 +191,7 @@ void test_player_column_and_page_navigation()
 	);
 	expect(
 		scene.surface().shown_page == th03::present::Page::zero,
-		"navigation composes BG1 on the hidden page before flipping"
+		"navigation composes the neutral background on the hidden page before flipping"
 	);
 	release(scene);
 	press(scene, {.right = true});
@@ -324,22 +333,27 @@ void test_authentic_assets_if_supplied()
 	if(!path || *path == '\0') {
 		return;
 	}
-	auto loaded = th03::app::load_new_classic_replay_patch_assets(
-		std::filesystem::path(path)
-	);
-	expect(loaded.has_value(), "authentic Replay Patch assets load");
-	if(!loaded) {
+	const auto assets = th03::test::authentic_menu_assets();
+	expect(static_cast<bool>(assets), "authentic Replay Patch assets load");
+	if(!assets) {
 		return;
 	}
-	auto assets = std::make_shared<const th03::app::NewClassicReplayPatchAssets>(
-		std::move(*loaded)
-	);
 	auto config = config_fixture();
-	Scene scene(config, config, 512U, 41U, key_name, std::move(assets));
+	Scene scene(config, config, 512U, 41U, key_name, assets);
+	Scene japanese(
+		config, config, 512U, 41U, key_name, assets, nullptr,
+		th03::app::NewClassicLanguageAssetProfile::japanese
+	);
 	expect(
-		scene.valid() && !scene.surface().host_overlay &&
+		scene.valid() && japanese.valid() && !scene.surface().host_overlay &&
 		scene.surface().shown_page == th03::present::Page::one,
-		"authentic BG1/MNUFONT compose the first source-domain frame"
+		"authentic menu assets compose the first neutral source-domain frame"
+	);
+	finish_fade(scene);
+	finish_fade(japanese);
+	th03::test::dump_menu_preview(scene.surface(), "input-key-config-en.ppm");
+	th03::test::dump_menu_preview(
+		japanese.surface(), "input-key-config-ja.ppm"
 	);
 }
 
@@ -359,6 +373,10 @@ void test_localized_surface_contract()
 	auto config = config_fixture();
 	Scene base(config, config, 512U, 41U, key_name, base_assets);
 	Scene localized(config, config, 512U, 41U, key_name, localized_assets);
+	Scene japanese(
+		config, config, 512U, 41U, key_name, base_assets, nullptr,
+		th03::app::NewClassicLanguageAssetProfile::japanese
+	);
 	expect(
 		!std::ranges::equal(base.surface().pixels, localized.surface().pixels),
 		"KeyConfig pseudo-locale changes catalog-owned semantic pixels"
@@ -369,6 +387,9 @@ void test_localized_surface_contract()
 		base.surface().graphics_palette == localized.surface().graphics_palette,
 		"KeyConfig localization preserves page and palette cadence"
 	);
+	expect(japanese.valid() &&
+		!std::ranges::equal(base.surface().pixels, japanese.surface().pixels),
+		"KeyConfig renders the explicitly selected Japanese catalog");
 }
 
 } // namespace

@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 
+#include "new_classic_menu_preview.hpp"
 #include "th03/app/new_classic_joy_config_scene.hpp"
 
 namespace {
@@ -79,7 +80,21 @@ std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> assets_fixture()
 	background.image.width = 640U;
 	background.image.height = 400U;
 	background.image.indices.assign(256'000U, 2U);
+	auto &neutral = assets->new_menu_backgrounds[static_cast<std::size_t>(
+		th03::app::NewClassicMenuBackground::neutral
+	)];
+	neutral = background;
+	neutral.image.indices.assign(256'000U, 3U);
 	return assets;
+}
+
+std::uint8_t pixel(
+	th03::present::SourceSurface surface,
+	std::size_t x,
+	std::size_t y
+)
+{
+	return surface.pixels[(y * 640U) + x].value;
 }
 
 using Scene = th03::app::NewClassicJoyConfigScene;
@@ -112,7 +127,11 @@ void test_geometry_navigation_and_values()
 	expect(scene.valid(), "JoyConfig source-style scene initializes");
 	expect(scene.surface().shown_page == th03::present::Page::one &&
 		scene.surface().palette_tone == 0 && !scene.surface().host_overlay,
-		"JoyConfig first BG1 frame is hidden-page composed and black");
+		"JoyConfig first neutral-background frame is hidden-page composed and black");
+	expect(pixel(scene.surface(), 0U, 0U) == 3U,
+		"JoyConfig uses the source-distinct project-owned neutral background");
+	expect(pixel(scene.surface(), 284U, 64U) == 14U,
+		"JoyConfig renders its localized scene title above the active page");
 	expect(th03::app::NewClassicJoyConfigSceneTestAccess::page(scene) == 0U &&
 		th03::app::NewClassicJoyConfigSceneTestAccess::selected_row(scene) == 0U,
 		"JoyConfig begins on Buttons/Shot");
@@ -203,6 +222,10 @@ void test_localized_surface_contract()
 		);
 	Scene base({}, {}, base_assets);
 	Scene localized({}, {}, localized_assets);
+	Scene japanese(
+		{}, {}, base_assets,
+		th03::app::NewClassicLanguageAssetProfile::japanese
+	);
 	expect(
 		!std::ranges::equal(base.surface().pixels, localized.surface().pixels),
 		"JoyConfig pseudo-locale changes catalog-owned semantic pixels"
@@ -213,6 +236,33 @@ void test_localized_surface_contract()
 		base.surface().graphics_palette == localized.surface().graphics_palette,
 		"JoyConfig localization preserves page and palette cadence"
 	);
+	expect(japanese.valid() &&
+		!std::ranges::equal(base.surface().pixels, japanese.surface().pixels),
+		"JoyConfig renders the explicitly selected Japanese catalog");
+}
+
+void test_authentic_preview_if_requested()
+{
+	if(!th03::test::environment("TH03_MENU_PREVIEW_DIR")) {
+		return;
+	}
+	const auto assets = th03::test::authentic_menu_assets();
+	expect(static_cast<bool>(assets), "authentic JoyConfig assets load");
+	if(!assets) {
+		return;
+	}
+	Scene scene({}, {}, assets);
+	Scene japanese(
+		{}, {}, assets, th03::app::NewClassicLanguageAssetProfile::japanese
+	);
+	expect(scene.valid() && japanese.valid(),
+		"authentic English and Japanese JoyConfig scenes compose");
+	finish_fade(scene);
+	finish_fade(japanese);
+	th03::test::dump_menu_preview(scene.surface(), "input-joy-config-en.ppm");
+	th03::test::dump_menu_preview(
+		japanese.surface(), "input-joy-config-ja.ppm"
+	);
 }
 
 } // namespace
@@ -222,6 +272,7 @@ int main()
 	test_geometry_navigation_and_values();
 	test_defaults_apply_discard_and_failure();
 	test_localized_surface_contract();
+	test_authentic_preview_if_requested();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }

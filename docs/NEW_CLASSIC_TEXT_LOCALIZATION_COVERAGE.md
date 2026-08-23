@@ -45,7 +45,12 @@ image-text migration includes, at minimum:
   runtime-localized in New Classic: the source picture is authenticated, its
   flat top-right title panel is reconstructed, and the active T3LNG001 title
   plus creator credit are rendered through the production PC-98 font. Classic
-  retains the untouched source picture;
+  retains the untouched source picture. KeyConfig, JoyConfig, Device
+  Assignment, and Input Test no longer show BG1.PI's baked English heading:
+  the four New Classic-only scenes share the project-owned neutral background
+  and render both English and Japanese headings at runtime. BG1 remains an
+  accepted archive member for compatibility but is no longer their
+  presentation source;
 - character portrait art (the audited selection atlases contain no text; the
   nine transparent center-list names and all three stat-sheet labels are now
   runtime-localized in New Classic);

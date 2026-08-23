@@ -16,6 +16,7 @@ constexpr present::Index4 color_footer = 14U;
 constexpr present::Index4 color_selected = 11U;
 constexpr present::Index4 color_label = 12U;
 constexpr present::Index4 color_value = 15U;
+constexpr std::int32_t title_top = 4 * 16;
 constexpr std::int32_t header_top = 6 * 16;
 constexpr std::int32_t rows_top = 8 * 16;
 constexpr std::int32_t label_left = 176;
@@ -62,6 +63,18 @@ constexpr std::array<NewClassicMessageId, 16U> button_labels{
 	return page == present::Page::zero ? present::Page::one : present::Page::zero;
 }
 
+[[nodiscard]] bool put_header_centered(
+	const NewClassicMenuFont &font,
+	present::Raster &raster,
+	std::int32_t center,
+	std::int32_t top,
+	std::string_view text
+) noexcept
+{
+	return font.put_centered(raster, center + 1, top + 1, text, 0U) &&
+		font.put_centered(raster, center, top, text, color_header);
+}
+
 [[nodiscard]] constexpr std::uint8_t button_ordinal(
 	NewClassicJoyButton button
 ) noexcept
@@ -95,16 +108,20 @@ constexpr std::array<NewClassicMessageId, 16U> button_labels{
 NewClassicJoyConfigScene::NewClassicJoyConfigScene(
 	NewClassicJoyConfig config,
 	NewClassicJoyConfig defaults,
-	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	NewClassicLanguageAssetProfile language_profile
 ) :
 	original_(config),
 	config_(config),
 	defaults_(defaults),
+	language_profile_(language_profile),
 	patch_assets_(std::move(patch_assets))
 {
 	if(!validate_new_classic_joy_config(config_) ||
 		!validate_new_classic_joy_config(defaults_) || !patch_assets_ ||
-		!patch_surface_.reset(patch_assets_->key_config_background)) {
+		!patch_surface_.reset(patch_assets_->menu_background(
+			NewClassicMenuBackground::neutral
+		))) {
 		fail_surface();
 		return;
 	}
@@ -159,7 +176,7 @@ bool NewClassicJoyConfigScene::draw_row(
 	bool selected
 ) noexcept
 {
-	const auto &messages = patch_assets_->messages();
+	const auto &messages = patch_assets_->messages(language_profile_);
 	const auto top = rows_top + (static_cast<std::int32_t>(
 		row + (row >= defaults_row ? 1U : 0U)
 	) * 16);
@@ -246,17 +263,23 @@ bool NewClassicJoyConfigScene::compose_screen() noexcept
 	}
 	const auto target = opposite(front_page_);
 	auto &raster = patch_surface_.raster();
+	const auto &background = patch_assets_->menu_background(
+		NewClassicMenuBackground::neutral
+	);
 	if(!raster.set_access_page(target) || !present::pi_put_8(
-		raster, 0, 0, patch_assets_->key_config_background
+		raster, 0, 0, background
 	)) {
 		return false;
 	}
-	const auto &messages = patch_assets_->messages();
+	const auto &messages = patch_assets_->messages(language_profile_);
 	const auto header = messages.text(page_ == Page::buttons ?
 		NewClassicMessageId::joy_header_buttons :
 		NewClassicMessageId::joy_header_axes);
-	if(!patch_assets_->menu_font.put_centered(
-		raster, 320, header_top, header, color_header
+	if(!put_header_centered(
+			patch_assets_->menu_font, raster, 320, title_top,
+			messages.text(NewClassicMessageId::option_joy_config)
+		) || !put_header_centered(
+		patch_assets_->menu_font, raster, 320, header_top, header
 	)) {
 		return false;
 	}

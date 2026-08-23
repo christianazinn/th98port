@@ -26,15 +26,17 @@ struct NewClassicJoyConfigSceneResult final {
 		NewClassicJoyConfigSceneStatus::running;
 };
 
-// Native source-styled extension over Replay Patch's authenticated BG1 and
-// MNUFONT assets. The persisted policy is platform-neutral; conversion to SDL
-// buttons/axes remains outside this scene.
+// Native source-styled extension over the project-owned neutral background and
+// Replay Patch's MNUFONT asset. The persisted policy is platform-neutral;
+// conversion to SDL buttons/axes remains outside this scene.
 class NewClassicJoyConfigScene final {
 public:
 	NewClassicJoyConfigScene(
 		NewClassicJoyConfig config,
 		NewClassicJoyConfig defaults,
-		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+		NewClassicLanguageAssetProfile language_profile =
+			NewClassicLanguageAssetProfile::english
 	);
 
 	[[nodiscard]] NewClassicJoyConfigSceneResult consume(
@@ -82,6 +84,8 @@ private:
 	NewClassicJoyConfig original_{};
 	NewClassicJoyConfig config_{};
 	NewClassicJoyConfig defaults_{};
+	NewClassicLanguageAssetProfile language_profile_ =
+		NewClassicLanguageAssetProfile::english;
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
 	NewClassicPatchSurface patch_surface_{};
 	present::Page front_page_ = present::Page::zero;

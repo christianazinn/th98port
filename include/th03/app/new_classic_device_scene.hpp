@@ -39,7 +39,9 @@ public:
 		NewClassicDeviceSceneMode mode,
 		NewClassicDeviceAssignment assignment,
 		NewClassicDeviceAssignment defaults,
-		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+		NewClassicLanguageAssetProfile language_profile =
+			NewClassicLanguageAssetProfile::english
 	);
 
 	[[nodiscard]] NewClassicDeviceSceneResult consume(
@@ -91,6 +93,8 @@ private:
 	NewClassicDeviceAssignment defaults_{};
 	NewClassicControllerCatalog catalog_{};
 	CoreInput logical_input_{};
+	NewClassicLanguageAssetProfile language_profile_ =
+		NewClassicLanguageAssetProfile::english;
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_{};
 	NewClassicPatchSurface patch_surface_{};
 	present::Page front_page_ = present::Page::zero;

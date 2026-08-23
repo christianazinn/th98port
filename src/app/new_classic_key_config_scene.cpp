@@ -19,6 +19,7 @@ constexpr present::Index4 color_selected = 11U;
 constexpr present::Index4 color_label = 12U;
 constexpr present::Index4 color_value = 15U;
 
+constexpr std::int32_t title_top = 4 * 16;
 constexpr std::int32_t header_top = 6 * 16;
 constexpr std::int32_t rows_top = 8 * 16;
 constexpr std::int32_t player_action_top = 10 * 16;
@@ -81,6 +82,30 @@ constexpr std::array<NewClassicMessageId, new_classic_story_action_count>
 	return page == present::Page::zero ? present::Page::one : present::Page::zero;
 }
 
+[[nodiscard]] bool put_header_centered(
+	const NewClassicMenuFont &font,
+	present::Raster &raster,
+	std::int32_t center,
+	std::int32_t top,
+	std::string_view text
+) noexcept
+{
+	return font.put_centered(raster, center + 1, top + 1, text, 0U) &&
+		font.put_centered(raster, center, top, text, color_header);
+}
+
+[[nodiscard]] bool put_header(
+	const NewClassicMenuFont &font,
+	present::Raster &raster,
+	std::int32_t left,
+	std::int32_t top,
+	std::string_view text
+) noexcept
+{
+	return font.put(raster, left + 1, top + 1, text, 0U) &&
+		font.put(raster, left, top, text, color_page_caret);
+}
+
 [[nodiscard]] constexpr std::size_t player_binding(
 	std::uint8_t player,
 	std::uint8_t action
@@ -99,7 +124,8 @@ NewClassicKeyConfigScene::NewClassicKeyConfigScene(
 	std::uint16_t capture_cancel_key,
 	NewClassicHostKeyName key_name,
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
-	void *key_name_context
+	void *key_name_context,
+	NewClassicLanguageAssetProfile language_profile
 ) :
 	original_(config),
 	config_(config),
@@ -108,10 +134,11 @@ NewClassicKeyConfigScene::NewClassicKeyConfigScene(
 	capture_cancel_key_(capture_cancel_key),
 	key_name_(key_name),
 	key_name_context_(key_name_context),
+	language_profile_(language_profile),
 	patch_assets_(std::move(patch_assets))
 {
 	if(!patch_assets_ || !patch_surface_.reset(
-		patch_assets_->key_config_background
+		patch_assets_->menu_background(NewClassicMenuBackground::neutral)
 	)) {
 		fail_surface();
 		return;
@@ -178,7 +205,7 @@ std::string_view NewClassicKeyConfigScene::key_label(
 	std::string &fallback
 ) const noexcept
 {
-	const auto &messages = patch_assets_->messages();
+	const auto &messages = patch_assets_->messages(language_profile_);
 	if(key == new_classic_host_key_unbound) {
 		return messages.text(NewClassicMessageId::input_value_unbound);
 	}
@@ -200,7 +227,7 @@ bool NewClassicKeyConfigScene::draw_player_row(
 	bool selected
 ) noexcept
 {
-	const auto &messages = patch_assets_->messages();
+	const auto &messages = patch_assets_->messages(language_profile_);
 	if(row == player_autofire_row) {
 		return draw_row(
 			messages.text(NewClassicMessageId::input_action_autofire),
@@ -253,7 +280,7 @@ bool NewClassicKeyConfigScene::draw_story_row(
 	bool selected
 ) noexcept
 {
-	const auto &messages = patch_assets_->messages();
+	const auto &messages = patch_assets_->messages(language_profile_);
 	const auto top = rows_top + (static_cast<std::int32_t>(
 		row + (row >= story_defaults_row ? 1U : 0U)
 	) * 16);
@@ -307,20 +334,26 @@ bool NewClassicKeyConfigScene::compose_screen() noexcept
 	}
 	const auto target = opposite(front_page_);
 	auto &raster = patch_surface_.raster();
+	const auto &background = patch_assets_->menu_background(
+		NewClassicMenuBackground::neutral
+	);
 	if(!raster.set_access_page(target) || !present::pi_put_8(
-		raster, 0, 0, patch_assets_->key_config_background
+		raster, 0, 0, background
 	)) {
 		return false;
 	}
 	const auto &font = patch_assets_->menu_font;
-	const auto &messages = patch_assets_->messages();
+	const auto &messages = patch_assets_->messages(language_profile_);
 	const auto header = messages.text(page_ == Page::p1 ?
 		NewClassicMessageId::key_header_p1 : page_ == Page::p2 ?
 		NewClassicMessageId::key_header_p2 :
 		NewClassicMessageId::key_header_story);
-	if(!font.put(raster, 248, header_top, "<", color_page_caret) ||
-		!font.put_centered(raster, 320, header_top, header, color_header) ||
-		!font.put(raster, 380, header_top, ">", color_page_caret)) {
+	if(!put_header_centered(
+			font, raster, 320, title_top,
+			messages.text(NewClassicMessageId::option_key_config)
+		) || !put_header(font, raster, 248, header_top, "<") ||
+		!put_header_centered(font, raster, 320, header_top, header) ||
+		!put_header(font, raster, 380, header_top, ">")) {
 		return false;
 	}
 	if(page_ == Page::story) {

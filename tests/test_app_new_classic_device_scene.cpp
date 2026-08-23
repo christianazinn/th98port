@@ -1,3 +1,4 @@
+#include "new_classic_menu_preview.hpp"
 #include "th03/app/new_classic_device_scene.hpp"
 
 #include <algorithm>
@@ -79,7 +80,21 @@ std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> assets_fixture()
 	background.image.width = 640U;
 	background.image.height = 400U;
 	background.image.indices.assign(256'000U, 2U);
+	auto &neutral = assets->new_menu_backgrounds[static_cast<std::size_t>(
+		th03::app::NewClassicMenuBackground::neutral
+	)];
+	neutral = background;
+	neutral.image.indices.assign(256'000U, 3U);
 	return assets;
+}
+
+std::uint8_t pixel(
+	th03::present::SourceSurface surface,
+	std::size_t x,
+	std::size_t y
+)
+{
+	return surface.pixels[(y * 640U) + x].value;
 }
 
 th03::app::NewClassicControllerIdentity identity(std::uint8_t value)
@@ -125,7 +140,9 @@ void test_assignment_apply_and_duplicate_ownership()
 	);
 	expect(scene.valid(), "device assignment scene initializes");
 	expect(scene.surface().palette_tone == 0 && !scene.surface().host_overlay,
-		"device assignment starts on the authenticated black BG1 frame");
+		"device assignment starts on the black neutral-background frame");
+	expect(pixel(scene.surface(), 0U, 0U) == 3U,
+		"Device Assignment uses the source-distinct project-owned neutral background");
 	finish_fade(scene, pads);
 	expect(scene.surface().palette_tone == 100,
 		"device assignment runs the source-style black-in cadence");
@@ -206,6 +223,10 @@ void test_localized_surface_contract()
 	Scene localized(
 		th03::app::NewClassicDeviceSceneMode::assignment, {}, {}, localized_assets
 	);
+	Scene japanese(
+		th03::app::NewClassicDeviceSceneMode::assignment, {}, {}, base_assets,
+		th03::app::NewClassicLanguageAssetProfile::japanese
+	);
 	expect(
 		!std::ranges::equal(base.surface().pixels, localized.surface().pixels),
 		"Device pseudo-locale changes catalog-owned semantic pixels"
@@ -216,6 +237,55 @@ void test_localized_surface_contract()
 		base.surface().graphics_palette == localized.surface().graphics_palette,
 		"Device localization preserves page and palette cadence"
 	);
+	expect(japanese.valid() &&
+		!std::ranges::equal(base.surface().pixels, japanese.surface().pixels),
+		"Device screens render the explicitly selected Japanese catalog");
+}
+
+void test_authentic_previews_if_requested()
+{
+	if(!th03::test::environment("TH03_MENU_PREVIEW_DIR")) {
+		return;
+	}
+	const auto assets = th03::test::authentic_menu_assets();
+	expect(static_cast<bool>(assets), "authentic Device assets load");
+	if(!assets) {
+		return;
+	}
+	Scene assignment(
+		th03::app::NewClassicDeviceSceneMode::assignment, {}, {}, assets
+	);
+	Scene input_test(
+		th03::app::NewClassicDeviceSceneMode::input_test, {}, {}, assets
+	);
+	Scene japanese_assignment(
+		th03::app::NewClassicDeviceSceneMode::assignment, {}, {}, assets,
+		th03::app::NewClassicLanguageAssetProfile::japanese
+	);
+	Scene japanese_input_test(
+		th03::app::NewClassicDeviceSceneMode::input_test, {}, {}, assets,
+		th03::app::NewClassicLanguageAssetProfile::japanese
+	);
+	expect(assignment.valid() && input_test.valid() &&
+		japanese_assignment.valid() && japanese_input_test.valid(),
+		"authentic English and Japanese Device scenes compose");
+	const auto pads = catalog();
+	finish_fade(assignment, pads);
+	finish_fade(input_test, pads);
+	finish_fade(japanese_assignment, pads);
+	finish_fade(japanese_input_test, pads);
+	th03::test::dump_menu_preview(
+		assignment.surface(), "input-device-assignment-en.ppm"
+	);
+	th03::test::dump_menu_preview(
+		input_test.surface(), "input-test-en.ppm"
+	);
+	th03::test::dump_menu_preview(
+		japanese_assignment.surface(), "input-device-assignment-ja.ppm"
+	);
+	th03::test::dump_menu_preview(
+		japanese_input_test.surface(), "input-test-ja.ppm"
+	);
 }
 
 } // namespace
@@ -225,6 +295,7 @@ int main()
 	test_assignment_apply_and_duplicate_ownership();
 	test_live_input_test_and_return();
 	test_localized_surface_contract();
+	test_authentic_previews_if_requested();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0U ? 0 : 1;
 }
