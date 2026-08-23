@@ -228,6 +228,10 @@
     {"enum": "replay_character_rikako", "id": "replay.character.rikako", "domain": "menu-font", "max_width": 104},
     {"enum": "replay_character_chiyuri", "id": "replay.character.chiyuri", "domain": "menu-font", "max_width": 104},
     {"enum": "replay_character_yumemi", "id": "replay.character.yumemi", "domain": "menu-font", "max_width": 104},
+
+    {"enum": "selection_stat_speed", "id": "selection.stat.speed", "domain": "menu-font", "max_width": 56},
+    {"enum": "selection_stat_power", "id": "selection.stat.power", "domain": "menu-font", "max_width": 56},
+    {"enum": "selection_stat_charge_speed", "id": "selection.stat.charge-speed", "domain": "menu-font", "max_width": 56},
     {"enum": "replay_save_saved", "id": "replay.save.saved", "domain": "menu-font", "max_width": 400},
     {"enum": "replay_save_prompt", "id": "replay.save.prompt", "domain": "menu-font", "max_width": 208},
     {"enum": "replay_save_overwrite", "id": "replay.save.overwrite", "domain": "menu-font", "max_width": 208, "placeholders": [{"name": "slot", "width_value": "100"}]},

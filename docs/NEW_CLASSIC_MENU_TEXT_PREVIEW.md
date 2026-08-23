@@ -1,6 +1,6 @@
 # New Classic menu-text translator preview
 
-`th03-menu-text-preview` renders all 403 `T3LNG001` messages through the same
+`th03-menu-text-preview` renders all 406 `T3LNG001` messages through the same
 mixed `NewClassicMenuFont` path used by New Classic. Printable Latin uses the
 authenticated Replay Patch MNUFONT; Japanese and half-width kana use the exact
 caller-supplied PC-98 `FONT.ROM`.

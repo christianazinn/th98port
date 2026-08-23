@@ -225,6 +225,10 @@
     "replay.character.rikako": "理香子",
     "replay.character.chiyuri": "ちゆり",
     "replay.character.yumemi": "夢美",
+
+    "selection.stat.speed": "速度",
+    "selection.stat.power": "火力",
+    "selection.stat.charge-speed": "溜め",
     "replay.save.saved": "保存しました。何かキーを押してください。",
     "replay.save.prompt": "リプレイを保存しますか？",
     "replay.save.overwrite": "番号{slot}を上書き？",

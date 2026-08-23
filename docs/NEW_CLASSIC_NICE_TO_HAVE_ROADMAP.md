@@ -94,14 +94,17 @@ and timing are never sourced from translated bytes.
 
 The nine transparent character-select center-list name rows now reuse the
 active compact character labels in `T3LNG001`, centered within the source
-128-pixel layout through the PC-98 graphics-text renderer;
-sealed Classic retains its BFNT sheet. Character-select stat/portrait labels
-and other text baked into otherwise reusable images remain. Menu headings
-baked into TL02 and related backgrounds are explicitly later work: removing
-them requires clean background reconstruction as well as localized rendering.
+128-pixel layout through the PC-98 graphics-text renderer. The three labels in
+`SLWIN.CDG` likewise use locale-owned text in New Classic: only their audited
+56x16 white interiors are reconstructed, preserving the source border, rules,
+and star fields. Sealed Classic retains both source sheets. Character-select
+portrait labels and other text baked into otherwise reusable images remain.
+Menu headings baked into TL02 and related backgrounds are explicitly later
+work: removing them requires clean background reconstruction as well as
+localized rendering.
 
 The source-text part of this parcel is now complete in both shipped languages.
-`T3LNG001` contains 403 explicit English and Japanese New Classic messages;
+`T3LNG001` contains 406 explicit English and Japanese New Classic messages;
 Japanese rows are CP932 and combine authenticated proportional `MNUFONT.PF`
 Latin with exact `FONT.ROM` Japanese glyphs. `T3GTL001` contains all 738
 graphics-text rows in explicit English and Japanese catalogs, including every
@@ -227,7 +230,7 @@ identities. Its independent `check` mode compares every file without mutating
 the candidate, and failed builds never publish partial output. The 1,732
 English and 1,533 Japanese scripted replacement runs now have compact,
 deterministic `T3STP001` contact sheets through the production graphics-text
-path. The 403 menu/product rows likewise have deterministic `T3MTP001` contact
+path. The 406 menu/product rows likewise have deterministic `T3MTP001` contact
 sheets through the production mixed MNUFONT/FONT.ROM path.
 `th03-localized-scene-snapshot` now drives the authenticated production scene
 owner to its terminator for all 28 scripts and atomically publishes one

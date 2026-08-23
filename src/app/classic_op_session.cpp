@@ -3056,7 +3056,7 @@ struct ClassicOpSessionBackend final {
 		ClassicOpSelectionLocalizedText localized_text{};
 		const ClassicOpSelectionLocalizedText *localized_text_pointer = nullptr;
 		if(replay_recorder) {
-			if(!font) {
+			if(!font || !patch_assets) {
 				return std::unexpected(session_error(
 					ClassicOpSessionErrorCode::backend_contract_failed
 				));
@@ -3087,7 +3087,16 @@ struct ClassicOpSessionBackend final {
 					name.size(),
 				};
 			}
+			constexpr std::array<NewClassicMessageId, 3U> stat_ids{
+				NewClassicMessageId::selection_stat_speed,
+				NewClassicMessageId::selection_stat_power,
+				NewClassicMessageId::selection_stat_charge_speed,
+			};
+			for(std::size_t row = 0U; row < stat_ids.size(); ++row) {
+				localized_text.stat_labels[row] = messages.text(stat_ids[row]);
+			}
 			localized_text.font = &*font;
+			localized_text.menu_font = &patch_assets->menu_font;
 			localized_text_pointer = &localized_text;
 		}
 		auto created = ClassicOpCharacterSelection::create_from_op(

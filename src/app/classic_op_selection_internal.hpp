@@ -8,6 +8,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <utility>
 
 #include "classic_op_scene_internal.hpp"
@@ -22,6 +23,16 @@
 #include "th03/present/tram.hpp"
 
 namespace th03::app {
+
+class NewClassicMenuFont;
+
+inline constexpr std::size_t classic_op_selection_localized_stat_width = 56U;
+inline constexpr std::size_t classic_op_selection_localized_stat_height = 16U;
+using ClassicOpSelectionPreparedStatLabel = std::array<
+	present::Index4,
+	classic_op_selection_localized_stat_width *
+		classic_op_selection_localized_stat_height
+>;
 
 enum class ClassicOpSelectionMode : std::uint8_t {
 	story,
@@ -97,12 +108,15 @@ struct ClassicOpSelectionError final {
 	std::optional<present::GraphicsTextError> text_error{};
 };
 
-// Optional New Classic presentation input. Spans are consumed only while the
-// selector is created; prepared glyph rows own everything needed afterward.
+// Optional New Classic presentation input. Spans and views are consumed only
+// while the selector is created; prepared glyph rows and stat-label pixels own
+// everything needed afterward.
 // Classic supplies no value and retains the authenticated source BFNT path.
 struct ClassicOpSelectionLocalizedText final {
 	std::array<std::span<const std::uint8_t>, 9U> character_names{};
+	std::array<std::string_view, 3U> stat_labels{};
 	const present::AnkGlyphProvider *font = nullptr;
+	const NewClassicMenuFont *menu_font = nullptr;
 };
 
 struct ClassicOpSelectionTick final {
@@ -220,6 +234,8 @@ private:
 			9U
 		> localized_names{};
 		bool use_localized_names = false;
+		std::array<ClassicOpSelectionPreparedStatLabel, 3U> localized_stats{};
+		bool use_localized_stats = false;
 		assets::Palette16Rgb4 palette{};
 	};
 
@@ -459,6 +475,17 @@ struct ClassicOpSelectionTestAccess final {
 		return scene.raster_.clear({
 			0, 0, present::graphics_width, present::graphics_height,
 		}, 0U) && scene.draw_names();
+	}
+
+	[[nodiscard]] static bool draw_stats_base_only(
+		ClassicOpCharacterSelection &scene,
+		std::size_t player = 0U
+	) noexcept
+	{
+		return scene.raster_.set_access_page(present::Page::zero) &&
+			scene.raster_.clear({
+				0, 0, present::graphics_width, present::graphics_height,
+			}, 0U) && scene.draw_stats_base(player);
 	}
 };
 

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "classic_op_selection_internal.hpp"
+#include "th03/app/new_classic_assets.hpp"
 #include "th03/app/new_classic_messages.hpp"
 #include "th03/app/new_classic_replay.hpp"
 #include "th03/exact/trig.hpp"
@@ -96,6 +97,46 @@ void append_le32(std::vector<std::byte> &bytes, std::uint32_t value)
 	append_u8(bytes, static_cast<std::uint8_t>(value >> 8U));
 	append_u8(bytes, static_cast<std::uint8_t>(value >> 16U));
 	append_u8(bytes, static_cast<std::uint8_t>(value >> 24U));
+}
+
+void put_le16(std::vector<std::byte> &bytes, std::size_t at, std::uint16_t value)
+{
+	bytes[at] = static_cast<std::byte>(value & 0xFFU);
+	bytes[at + 1U] = static_cast<std::byte>(value >> 8U);
+}
+
+std::vector<std::byte> menu_font_bytes(std::uint8_t advance = 6U)
+{
+	std::vector<std::byte> bytes(3'168U, std::byte{0U});
+	constexpr std::array magic{'T', '3', 'P', 'F', 'N', 'T', '1'};
+	for(std::size_t index = 0U; index < magic.size(); ++index) {
+		bytes[index] = static_cast<std::byte>(magic[index]);
+	}
+	put_le16(bytes, 8U, 3'168U);
+	put_le16(bytes, 10U, 32U);
+	put_le16(bytes, 12U, 32U);
+	put_le16(bytes, 14U, 128U);
+	put_le16(bytes, 16U, 95U);
+	bytes[18U] = std::byte{0x20U};
+	bytes[19U] = std::byte{0x7EU};
+	bytes[20U] = std::byte{16U};
+	bytes[21U] = std::byte{16U};
+	bytes[22U] = std::byte{0x3FU};
+	for(std::size_t glyph = 0U; glyph < 95U; ++glyph) {
+		bytes[32U + glyph] = static_cast<std::byte>(advance);
+		for(std::size_t row = 0U; row < 16U; ++row) {
+			bytes[128U + (glyph * 32U) + (row * 2U)] =
+				std::byte{0x80U};
+		}
+	}
+	std::uint16_t checksum = 0U;
+	for(std::size_t index = 32U; index < bytes.size(); ++index) {
+		checksum = static_cast<std::uint16_t>(
+			checksum + std::to_integer<std::uint8_t>(bytes[index])
+		);
+	}
+	put_le16(bytes, 24U, checksum);
+	return bytes;
 }
 
 std::vector<std::byte> cdg_bytes(
@@ -396,7 +437,8 @@ std::unique_ptr<ClassicOpCharacterSelection> make_scene(
 	ClassicOpSelectionCarry carry = {},
 	std::uint8_t available_character_count = 9U,
 	bool retain_for_new_classic_practice = false,
-	const ClassicOpSelectionLocalizedText *localized_text = nullptr
+	const ClassicOpSelectionLocalizedText *localized_text = nullptr,
+	bool expect_success = true
 )
 {
 	if(resident.resident_rand == 0) {
@@ -425,7 +467,9 @@ std::unique_ptr<ClassicOpCharacterSelection> make_scene(
 		file(32U, 44U, 9U, 1U, false), names(), palette(),
 		retain_for_new_classic_practice, localized_text
 	);
-	expect(created.has_value(), "synthetic selector creates");
+	if(expect_success) {
+		expect(created.has_value(), "synthetic selector creates");
+	}
 	return created ? std::move(*created) : nullptr;
 }
 
@@ -799,6 +843,87 @@ void test_localized_name_rendering()
 			"shipped locale compact names fit the character-selector rows"
 		);
 	}
+}
+
+void test_localized_stat_rendering()
+{
+	SyntheticFont graphics_font;
+	std::array<std::array<std::uint8_t, 1U>, 9U> names{};
+	for(auto &name : names) {
+		name[0U] = 'A';
+	}
+	auto menu_font = th03::app::detail::decode_new_classic_menu_font(
+		menu_font_bytes()
+	);
+	expect(menu_font.has_value(), "synthetic stat-label menu font decodes");
+	if(!menu_font) { return; }
+	ClassicOpSelectionLocalizedText localized{};
+	for(std::size_t character = 0U; character < names.size(); ++character) {
+		localized.character_names[character] = names[character];
+	}
+	localized.stat_labels = {"Speed", "Power", "Chrg"};
+	localized.font = &graphics_font;
+	localized.menu_font = &*menu_font;
+	auto classic = make_scene(ClassicOpSelectionMode::story);
+	auto new_classic = make_scene(
+		ClassicOpSelectionMode::story, {}, {}, 9U, false, &localized
+	);
+	if(!classic || !new_classic) { return; }
+	expect(
+		ClassicOpSelectionTestAccess::draw_stats_base_only(*classic) &&
+			ClassicOpSelectionTestAccess::draw_stats_base_only(*new_classic),
+		"Classic and localized stat sheets draw independently"
+	);
+	bool outside_identical = true;
+	bool source_untouched = true;
+	std::array<bool, 3U> rows_have_ink{};
+	for(std::int32_t y = 304; y < 368; ++y) {
+		for(std::int32_t x = 32; x < 160; ++x) {
+			const auto source = classic->raster().pixel(Page::zero, {x, y});
+			const auto localized_pixel = new_classic->raster().pixel(
+				Page::zero, {x, y}
+			);
+			source_untouched = source_untouched && source == 4U;
+			const auto local_x = x - 32;
+			const auto local_y = y - 304;
+			const auto row = (local_y >= 7 && local_y < 55) ?
+				((local_y - 7) / 16) : -1;
+			const auto inside = local_x >= 8 && local_x < 64 &&
+				row >= 0 && row < 3;
+			if(!inside) {
+				outside_identical = outside_identical &&
+					localized_pixel == source;
+			} else if(localized_pixel == 7U) {
+				rows_have_ink[static_cast<std::size_t>(row)] = true;
+			}
+		}
+	}
+	expect(
+		source_untouched,
+		"sealed Classic retains the source selection-stat sheet pixels"
+	);
+	expect(
+		outside_identical,
+		"localized stat labels preserve every border, rule, and star-field pixel"
+	);
+	expect(
+		std::ranges::all_of(rows_have_ink, [](bool ink) noexcept { return ink; }),
+		"all three localized stat rows render foreground ink"
+	);
+
+	auto too_wide_font = th03::app::detail::decode_new_classic_menu_font(
+		menu_font_bytes(16U)
+	);
+	expect(too_wide_font.has_value(), "wide stat-label fixture decodes");
+	if(!too_wide_font) { return; }
+	localized.menu_font = &*too_wide_font;
+	auto rejected = make_scene(
+		ClassicOpSelectionMode::story, {}, {}, 9U, false, &localized, false
+	);
+	expect(
+		!rejected,
+		"localized stat labels that exceed their source region fail closed"
+	);
 }
 
 void test_two_player_confirmation_order()
@@ -1376,6 +1501,7 @@ int main(int argc, char **argv)
 	test_persisted_selection_ring_and_cpu_delay_width();
 	test_curve_and_player_rendering();
 	test_localized_name_rendering();
+	test_localized_stat_rendering();
 	test_two_player_confirmation_order();
 	test_shot_bomb_and_cancel();
 	test_story_success();

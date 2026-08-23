@@ -226,6 +226,10 @@
     "replay.character.rikako": "Rikako",
     "replay.character.chiyuri": "Chiyuri",
     "replay.character.yumemi": "Yumemi",
+
+    "selection.stat.speed": "Speed",
+    "selection.stat.power": "Power",
+    "selection.stat.charge-speed": "Chrg",
     "replay.save.saved": "Saved. Press any key.",
     "replay.save.prompt": "Save Replay?",
     "replay.save.overwrite": "Overwrite Slot {slot}?",

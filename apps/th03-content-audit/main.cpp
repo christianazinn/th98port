@@ -85,6 +85,10 @@ constexpr std::array native_surfaces{
 		"nine New Classic center-list character-name rows",
 	},
 	NativeSurface{
+		"character-selection-stat-labels", "selection_handoff", "T3LNG001",
+		"three New Classic stat labels inside preserved SLWIN artwork",
+	},
+	NativeSurface{
 		"registration-names", "mainl_registration", "T3GTL001",
 		"No Entry plus nine character-name rows",
 	},

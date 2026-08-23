@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "th03/app/classic_config.hpp"
+#include "th03/app/new_classic_assets.hpp"
 #include "th03/app/new_classic_story_route.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/exact/trig.hpp"
@@ -30,6 +31,12 @@ constexpr std::uint16_t initial_delay_regular = 30U;
 constexpr std::uint16_t initial_delay_two_player = 46U;
 constexpr std::uint16_t ordinary_frame_vsyncs = 3U;
 constexpr std::uint8_t confirmation_vsyncs = 18U;
+constexpr std::int32_t stats_sheet_top = 304;
+constexpr std::int32_t localized_stat_left = 8;
+constexpr std::int32_t localized_stat_top = 7;
+constexpr std::int32_t localized_stat_pitch = 16;
+constexpr present::Index4 localized_stat_background = 14U;
+constexpr present::Index4 localized_stat_foreground = 7U;
 constexpr present::Rect full_screen{
 	0, 0, present::graphics_width, present::graphics_height,
 };
@@ -382,6 +389,72 @@ prepare_localized_names(
 	return {};
 }
 
+[[nodiscard]] std::expected<bool, ClassicOpSelectionError>
+prepare_localized_stats(
+	std::array<ClassicOpSelectionPreparedStatLabel, 3U> &destination,
+	const ClassicOpSelectionLocalizedText *localized_text
+)
+{
+	if(!localized_text) {
+		return false;
+	}
+	const auto requested = std::ranges::any_of(
+		localized_text->stat_labels,
+		[](std::string_view label) noexcept { return !label.empty(); }
+	);
+	if(!requested) {
+		return false;
+	}
+	if(!localized_text->menu_font) {
+		return std::unexpected(selection_error(
+			ClassicOpSelectionErrorCode::invalid_config
+		));
+	}
+	present::Raster scratch{};
+	for(std::size_t row = 0U; row < localized_text->stat_labels.size(); ++row) {
+		const auto label = localized_text->stat_labels[row];
+		if(label.empty() || localized_text->menu_font->width(label) >
+			static_cast<std::int32_t>(
+				classic_op_selection_localized_stat_width
+			)) {
+			return std::unexpected(selection_error(
+				ClassicOpSelectionErrorCode::invalid_asset_geometry
+			));
+		}
+		constexpr present::Rect bounds{
+			0, 0,
+			static_cast<std::uint16_t>(
+				classic_op_selection_localized_stat_width
+			),
+			static_cast<std::uint16_t>(
+				classic_op_selection_localized_stat_height
+			),
+		};
+		if(!scratch.clear(bounds, localized_stat_background) ||
+			!localized_text->menu_font->put_centered_clipped(
+				scratch,
+				static_cast<std::int32_t>(bounds.width / 2U), 0,
+				label, localized_stat_foreground, bounds
+			)) {
+			return std::unexpected(selection_error(
+				ClassicOpSelectionErrorCode::draw_failed
+			));
+		}
+		for(std::size_t y = 0U; y < bounds.height; ++y) {
+			const auto source = scratch.graphics(present::Page::zero).subspan(
+				y * present::graphics_width, bounds.width
+			);
+			std::copy(
+				source.begin(), source.end(),
+				destination[row].begin() + static_cast<std::ptrdiff_t>(
+					y * bounds.width
+				)
+			);
+		}
+	}
+	return true;
+}
+
 } // namespace
 
 GameInit prepare_new_classic_story_restart(GameInit resident) noexcept
@@ -726,6 +799,13 @@ ClassicOpCharacterSelection::create_impl(
 		return std::unexpected(std::move(names_prepared.error()));
 	}
 	prepared->use_localized_names = localized_text != nullptr;
+	auto stats_prepared = prepare_localized_stats(
+		prepared->localized_stats, localized_text
+	);
+	if(!stats_prepared) {
+		return std::unexpected(std::move(stats_prepared.error()));
+	}
+	prepared->use_localized_stats = *stats_prepared;
 	auto palette = decode_asset<assets::Palette16Rgb4>(
 		resources,
 		{.role = MainResourceRole::selection_palette},
@@ -912,7 +992,34 @@ bool ClassicOpCharacterSelection::draw_stats_base(std::size_t player) noexcept
 		return true;
 	}
 	const auto left = static_cast<std::int32_t>((player == 0U) ? 32 : 416);
-	return present::cdg_put_noalpha_8(raster_, left, 304, prepared_->stats);
+	if(!present::cdg_put_noalpha_8(
+		raster_, left, stats_sheet_top, prepared_->stats
+	)) {
+		return false;
+	}
+	if(!prepared_->use_localized_stats) {
+		return true;
+	}
+	for(std::size_t row = 0U; row < prepared_->localized_stats.size(); ++row) {
+		const auto &pixels = prepared_->localized_stats[row];
+		if(!raster_.blit({
+			.pixels = pixels,
+			.width = static_cast<std::uint16_t>(
+				classic_op_selection_localized_stat_width
+			),
+			.height = static_cast<std::uint16_t>(
+				classic_op_selection_localized_stat_height
+			),
+			.stride = classic_op_selection_localized_stat_width,
+		}, {
+			left + localized_stat_left,
+			stats_sheet_top + localized_stat_top +
+				(static_cast<std::int32_t>(row) * localized_stat_pitch),
+		})) {
+			return false;
+		}
+	}
+	return true;
 }
 
 bool ClassicOpCharacterSelection::draw_stat_row(
@@ -1678,6 +1785,13 @@ ClassicOpSelectionTestAccess::create_with_predecoded_assets(
 		return std::unexpected(std::move(names_prepared.error()));
 	}
 	prepared->use_localized_names = localized_text != nullptr;
+	auto stats_prepared = prepare_localized_stats(
+		prepared->localized_stats, localized_text
+	);
+	if(!stats_prepared) {
+		return std::unexpected(std::move(stats_prepared.error()));
+	}
+	prepared->use_localized_stats = *stats_prepared;
 	prepared->palette = palette;
 	return ClassicOpCharacterSelection::create_prepared(
 		std::move(prepared), std::move(resident), mode,
