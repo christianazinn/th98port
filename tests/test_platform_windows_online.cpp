@@ -106,6 +106,7 @@ void test_protected_credentials()
 	const NewClassicOnlineCredentials credentials{
 		"12345678-1234-1234-1234-123456789abc",
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef0123456789_-",
+		"Resident of Fantasy Who Runs Through Time",
 	};
 	auto loaded = load_windows_online_credentials(path);
 	expect(loaded && !*loaded, "missing credentials are a normal signed-out state");
@@ -138,6 +139,12 @@ void test_protected_credentials()
 	stored = store_windows_online_credentials(path, invalid);
 	expect(!stored && stored.error().code == WindowsOnlineErrorCode::format,
 		"malformed credentials never replace an existing file");
+	const NewClassicOnlineCredentials invalid_name{
+		credentials.user_id, credentials.token, std::string(29U, 'X')
+	};
+	stored = store_windows_online_credentials(path, invalid_name);
+	expect(!stored && stored.error().code == WindowsOnlineErrorCode::format,
+		"an unwrappable cached nametag never replaces an existing file");
 
 	stored = store_windows_online_credentials(path, credentials);
 	expect(stored.has_value(), "a later valid credential write recovers atomically");

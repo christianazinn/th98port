@@ -59,9 +59,11 @@ TH03_ONLINE_ORIGIN=https://staging-worker.example
 
 On Windows, the first confirmed room launch automatically enrolls one opaque
 service identity and stores it as current-user DPAPI data in `PODD.AUTH` beside
-`PODD.CFG`. Later launches reuse that identity. It never enters the settings,
-replay, room code, deterministic state, or logs. Deleting `PODD.AUTH` is the
-low-level manual reset operation. The product UI exposes the same bounded
+`PODD.CFG`. Later launches reuse that identity. V14 replays copy the public UUID
+and last valid nametag as identity/fallback metadata; the bearer token never
+enters settings, replays, room codes, deterministic state, or logs. Deleting
+`PODD.AUTH` is the low-level manual reset operation. The product UI exposes the
+same bounded
 operation at `Option -> System -> Online & Privacy -> Forget Room Identity`,
 behind an explicit confirmation. It never displays the user ID or token.
 
@@ -100,8 +102,10 @@ the retained editor before matchmaking. `Online Match -> Online Profile`
 renames the same stable UUID, creates a single-use ten-minute `Link Another
 Device` code, or redeems that code through `Link This Device`. Redemption
 issues a distinct local bearer credential for the existing UUID; no token is
-copied between machines. The visible name may change, but an already-paired
-match retains the server-snapshotted names that both peers agreed on.
+copied between machines. A protected local copy of the last valid nametag gives
+ordinary offline V14 recordings a static fallback. The visible name may change,
+but an already-paired match retains the server-snapshotted names that both peers
+agreed on.
 
 The old 24-character draft limit was merely a conservative one-line budget.
 The implemented maximum follows the actual VS title geometry: two 28-cell
@@ -335,8 +339,9 @@ score, winner, input ordering, account identities, and the recording machine's
 P1/P2 role in one self-contained file. The Replay list and save summary
 therefore show the local peer's character and final score, and the detail page
 labels the match `Vs Mode Netplay`. No installation-local replay sidecar is
-needed. V14 deliberately stores opaque account UUIDs rather than nametags;
-online UI resolves the current public nametag for each UUID.
+needed. V14 stores opaque account UUIDs plus validated match-time fallback
+nametags. Online UI resolves the current public nametag for each UUID when
+available and otherwise displays the serialized fallback.
 
 For a bounded automated check, append the same `--smoke-ticks N` to both
 commands. This exits only after both peers have confirmed `N` gameplay input

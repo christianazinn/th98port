@@ -132,6 +132,7 @@ void test_private_credentials()
 	const NewClassicOnlineCredentials credentials{
 		"12345678-1234-1234-1234-123456789abc",
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef0123456789_-",
+		"Resident of Fantasy Who Runs Through Time",
 	};
 	auto loaded = load_posix_online_credentials(path);
 	expect(loaded && !*loaded, "missing credentials are a signed-out state");
@@ -161,6 +162,12 @@ void test_private_credentials()
 	stored = store_posix_online_credentials(path, invalid);
 	expect(!stored && stored.error().code == PosixOnlineErrorCode::format,
 		"malformed credentials never replace an existing identity");
+	const NewClassicOnlineCredentials invalid_name{
+		credentials.user_id, credentials.token, std::string(29U, 'X')
+	};
+	stored = store_posix_online_credentials(path, invalid_name);
+	expect(!stored && stored.error().code == PosixOnlineErrorCode::format,
+		"an unwrappable cached nametag never replaces an existing identity");
 	loaded = load_posix_online_credentials(path);
 	expect(loaded && *loaded && **loaded == credentials,
 		"failed replacement preserves the prior identity");

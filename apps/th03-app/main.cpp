@@ -5687,10 +5687,12 @@ ExperienceRunResult run_classic_session(
 		std::optional<std::string> replay_user = environment_value(
 			online_user_environment
 		);
+		std::optional<std::string> replay_nametag{};
 		if(!replay_user && saved_identity && !credential_error) {
 			if(const auto loaded = load_product_online_credentials(credential_path);
 				loaded && *loaded) {
 				replay_user = (**loaded).user_id;
+				replay_nametag = (**loaded).cached_nametag;
 			}
 		}
 		if(replay_user) {
@@ -5698,6 +5700,10 @@ ExperienceRunResult run_classic_session(
 				*replay_user
 			)) {
 				parsed.launch.new_classic_replay_identity.player_uuid[0U] = *uuid;
+				if(replay_nametag) {
+					parsed.launch.new_classic_replay_identity.
+						player_nametag_snapshot[0U] = std::move(*replay_nametag);
+				}
 			}
 		}
 	}
@@ -8246,6 +8252,29 @@ ExperienceRunResult run_new_classic_experience(
 					}
 					continue;
 				}
+				const auto cache_profile_nametag = [&credentials, &credential_path,
+					environment_credentials](
+					const th03::app::NewClassicOnlineProfile &current
+				) -> std::expected<void, int> {
+					if(environment_credentials || !credentials || !current.nametag ||
+						credentials->cached_nametag == current.nametag) {
+						return {};
+					}
+					auto updated = *credentials;
+					updated.cached_nametag = current.nametag;
+					if(auto stored = store_product_online_credentials(
+						credential_path, updated
+					); !stored) {
+						return std::unexpected(fail_netplay(
+							"online-profile-cache", "store-failed"
+						));
+					}
+					*credentials = std::move(updated);
+					return {};
+				};
+				if(auto cached = cache_profile_nametag(*profile); !cached) {
+					return NetplayFrontendResult{.exit_code = cached.error()};
+				}
 				if(room_run.profile_requested || !profile->nametag) {
 					auto edited = run_online_profile_modal(
 						parsed.tick_rate, platform, mapper, patch_assets, language,
@@ -8260,6 +8289,14 @@ ExperienceRunResult run_new_classic_experience(
 							.disposition =
 								NetplayFrontendDisposition::application_quit
 						};
+					}
+					if(edited.profile) {
+						if(auto cached = cache_profile_nametag(*edited.profile);
+							!cached) {
+							return NetplayFrontendResult{
+								.exit_code = cached.error()
+							};
+						}
 					}
 					if(room_run.profile_requested) {
 						if(!room.resume_after_profile()) {

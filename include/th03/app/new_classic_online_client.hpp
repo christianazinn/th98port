@@ -70,6 +70,10 @@ struct NewClassicOnlineTransport final {
 struct NewClassicOnlineCredentials final {
 	std::string user_id{};
 	std::string token{};
+	// Last profile name observed for this immutable account. This is a local
+	// replay fallback only; online displays still resolve the UUID to the
+	// service's current nametag.
+	std::optional<std::string> cached_nametag{};
 
 	friend bool operator==(
 		const NewClassicOnlineCredentials &,

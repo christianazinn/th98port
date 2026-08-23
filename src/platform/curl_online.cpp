@@ -254,13 +254,23 @@ decode_credentials(std::string_view text)
 	}
 	const auto token_begin = user_end + 1U;
 	const auto token_end = text.find('\n', token_begin);
-	if(token_end == std::string_view::npos || token_end + 1U != text.size()) {
+	if(token_end == std::string_view::npos) {
 		return std::nullopt;
 	}
 	app::NewClassicOnlineCredentials result{
 		std::string(text.substr(user_begin, user_end - user_begin)),
 		std::string(text.substr(token_begin, token_end - token_begin)),
 	};
+	if(token_end + 1U != text.size()) {
+		const auto nametag_end = text.find('\n', token_end + 1U);
+		if(nametag_end == std::string_view::npos ||
+			nametag_end + 1U != text.size()) {
+			return std::nullopt;
+		}
+		result.cached_nametag = std::string(text.substr(
+			token_end + 1U, nametag_end - token_end - 1U
+		));
+	}
 	return app::validate_new_classic_online_credentials(result) ?
 		std::optional<app::NewClassicOnlineCredentials>{std::move(result)} :
 		std::nullopt;
@@ -494,8 +504,11 @@ std::expected<void, PosixOnlineError> store_posix_online_credentials(
 	if(!app::validate_new_classic_online_credentials(credentials)) {
 		return std::unexpected(posix_error(PosixOnlineErrorCode::format));
 	}
-	const auto text = std::string(credential_magic) + "\n" +
+	auto text = std::string(credential_magic) + "\n" +
 		credentials.user_id + "\n" + credentials.token + "\n";
+	if(credentials.cached_nametag) {
+		text += *credentials.cached_nametag + "\n";
+	}
 	auto temporary = path;
 	temporary += ".tmp";
 	std::error_code system{};

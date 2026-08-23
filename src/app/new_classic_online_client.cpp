@@ -110,7 +110,9 @@ template<typename Tag>
 	const NewClassicOnlineCredentials &credentials
 ) noexcept
 {
-	return uuid_shape(credentials.user_id) && token_shape(credentials.token);
+	return uuid_shape(credentials.user_id) && token_shape(credentials.token) &&
+		(!credentials.cached_nametag ||
+		 layout_new_classic_nametag(*credentials.cached_nametag).has_value());
 }
 
 struct JsonField final {

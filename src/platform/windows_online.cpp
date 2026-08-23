@@ -179,7 +179,10 @@ protect_credentials(const app::NewClassicOnlineCredentials &credentials)
 	if(!app::validate_new_classic_online_credentials(credentials)) {
 		return std::unexpected(error(WindowsOnlineErrorCode::format));
 	}
-	const auto plaintext = credentials.user_id + "\n" + credentials.token;
+	auto plaintext = credentials.user_id + "\n" + credentials.token;
+	if(credentials.cached_nametag) {
+		plaintext += "\n" + *credentials.cached_nametag;
+	}
 	DATA_BLOB input{
 		static_cast<DWORD>(plaintext.size()),
 		reinterpret_cast<BYTE *>(const_cast<char *>(plaintext.data())),
@@ -244,14 +247,25 @@ unprotect_credentials(std::span<const std::byte> bytes)
 		reinterpret_cast<const char *>(output.pbData), output.cbData
 	};
 	const auto separator = text.find('\n');
-	if(separator == std::string_view::npos ||
-		text.find('\n', separator + 1U) != std::string_view::npos) {
+	if(separator == std::string_view::npos) {
+		return std::unexpected(error(WindowsOnlineErrorCode::format));
+	}
+	const auto nametag_separator = text.find('\n', separator + 1U);
+	if(nametag_separator != std::string_view::npos &&
+		text.find('\n', nametag_separator + 1U) != std::string_view::npos) {
 		return std::unexpected(error(WindowsOnlineErrorCode::format));
 	}
 	app::NewClassicOnlineCredentials result{
 		std::string(text.substr(0U, separator)),
-		std::string(text.substr(separator + 1U)),
+		std::string(text.substr(
+			separator + 1U,
+			(nametag_separator == std::string_view::npos ? text.size() :
+			 nametag_separator) - separator - 1U
+		)),
 	};
+	if(nametag_separator != std::string_view::npos) {
+		result.cached_nametag = std::string(text.substr(nametag_separator + 1U));
+	}
 	if(!app::validate_new_classic_online_credentials(result)) {
 		return std::unexpected(error(WindowsOnlineErrorCode::format));
 	}
