@@ -1,7 +1,7 @@
 # V14 native integration contract
 
-Status: parser implementation authority and migration gate for the frozen
-Replay Patch 0.4.8 V14 contract.
+Status: parser implementation authority and migration gate for the released
+Replay Patch 0.4.15 V14 contract.
 
 ## Authority
 
@@ -9,13 +9,13 @@ V14 has two complementary authorities:
 
 1. The canonical semantic and byte-layout schema is
    `tools/replay/FORMAT.md` in the replay-validation harness at outer commit
-   `b20651e22c2a1f10adf5d8e41947bc60a4b0b1c6`. Its SHA-256 at this checkpoint
-   is `DE36BF752EC204B19F8DE49B070AE8E2901952295E4499A6CF45B6531031BB61`.
+   `2ef51fbd4196d561e2e7f12d01648e9e6f2246da`. Its SHA-256 at this checkpoint
+   is `6D195565F769ABA502713A70C19FE4D7612572058BE39C1F42AA88C3C8D767AF`.
 2. Exact packed structures, constants, capacities, and game-side validation
    behavior are defined by the Replay Patch at ReC98 commit
-   `10f40904657e22dbabe7da7164a57c10da0d0fa6`, primarily
+   `43028f09a2fc6965b2462e9743be604d3b8b1d0e`, primarily
    `th03/replay_format.hpp`. That header's SHA-256 is
-   `C7FD38D59D8A0DC12670E54F7A43C828B0D7AD0EAD279D4236C60CC35E6A7D32`.
+   `80AAB90E7435F4D96CECB561E1D68A9F4924166C04036906077C53FC406B4281`.
 
 The complete validation call sites are
 `th03/main/replay.cpp::replay_user_header_valid()` and its checkpoint reader,
@@ -40,8 +40,11 @@ reader may ignore them and execute the portable checkpoint/input path.
 
 ## Current V14 layout
 
-- Magic `T3RPLY14`, version 13, fixed 622-byte header.
-- Packed 128-byte base header followed by a 494-byte summary extension.
+- Magic `T3RPLY14`, version 14, fixed 768-byte header.
+- Packed 128-byte base header followed by a 494-byte summary extension and a
+  146-byte identity extension. The latter stores a compact ruleset/recording
+  descriptor, local role/source, two 16-byte profile UUIDs, a 16-byte match
+  ID, and 94 reserved bytes that must remain zero.
 - The extension contains 27 14-byte round splits, nine 10-byte stage-clear
   bonus records, run-wide timed/slow frame counters, and the reached-checkpoint
   directory.
@@ -51,9 +54,9 @@ reader may ignore them and execute the portable checkpoint/input path.
   including its stage/round identity, sample/global/input cursors, complete
   `GameInit` recipe, and the raw V14 pre-reset seed. Historical V12 seed
   normalization belongs to the external one-way converter.
-- `snapshot_offset` equals 622. `input_offset` is the header plus the complete
-  scenario checkpoint reservation: 4,957 for Story, 1,489 for ordinary VS,
-  and 2,067 for Practice.
+- `snapshot_offset` equals 768. `input_offset` is the header plus the complete
+  scenario checkpoint reservation: 5,103 for Story, 1,635 for ordinary VS,
+  and 2,213 for Practice.
 - The packet-RLE input/control stream is unchanged: gameplay, interstitial,
   and explicit MAIN/MAINL controls all feed the neutral session model.
 - V14 requires the complete `0x007F` summary capability set in both the base
@@ -62,16 +65,6 @@ reader may ignore them and execute the portable checkpoint/input path.
 Header summaries and telemetry are comparison/reporting data. They must never
 initialize, repair, or steer simulated gameplay except for the explicit
 scenario/start/checkpoint fields already defined by the format.
-
-### Authority correction pending upstream
-
-The prose tables in the current `FORMAT.md` snapshot list the three V14 input
-offsets as 4,949, 1,481, and 2,059. Those values are each eight bytes too small.
-The document's explicit 622-byte header schema and the authoritative
-`replay_user_input_offset()` calculation both yield 622 + (capacity * 289),
-which gives the values above. Native tests lock the explicit/source-backed
-calculation. The canonical document should be corrected on its owning Replay
-Patch branch; this port worktree must not silently alter that separate branch.
 
 ## Structural and full-run exit gate
 
@@ -91,13 +84,12 @@ Synthetic tests cover:
 - ignoring an optional tail only after the declared logical input range.
 
 These tests establish that the adapter implements the written format. Data
-Manager 0.4.2 converted the complete locked six-file V11 and thirteen-file V12
-corpus. The converted sizes and SHA-256 identities are frozen in
-`REPLAY_V14_CORPUS_LOCK.tsv`; the semantic gate reproduces all 173 embedded
-summaries, all 152 stored checkpoints, and terminal results. The externally
-preserved 0.4.2 Windows converter used for regeneration is 13,214,558 bytes,
-SHA-256 `2924fbfbbf792ac18ff548bf2f287ad10377d87e3273ab3132076e2727043ae8`;
-neither that executable nor the converted replay bytes are stored here.
+Manager 0.5.6 converts V11, V12, and V13 to V14. The locked integration corpus
+contains the 19 historical V11/V12 conversions plus the genuine V13 WR
+TH3R06. The historical subset reproduces all 173 embedded summaries and all
+152 stored checkpoints; the WR reproduces its 13 summaries. Converted sizes
+and SHA-256 identities are frozen in `REPLAY_V14_CORPUS_LOCK.tsv`; neither the
+converter executable nor converted replay bytes are stored here.
 
 `th03_core` now exposes a format-neutral `RoundStartObservation` immediately
 after initial construction and every repeat reset. It contains all resident
@@ -144,18 +136,18 @@ recordings are expected.
 
 ## Historical-format retirement gate
 
-The V11/V12 parsers were temporary validation inputs. Their retirement gate
+The V11/V12/V13 parsers were temporary validation inputs. Their retirement gate
 was:
 
-1. Convert every file in the locked 19-file V11/V12 corpus without modifying
-   the originals.
+1. Convert every file in the locked 19-file V11/V12 corpus and the genuine
+   V13 WR without modifying the originals.
 2. Freeze the converted V14 size and SHA-256 identities externally.
 3. Run every converted file through the V14-only `th03rv` path on GCC and MSVC.
-4. Reproduce all 173 embedded round summaries and every existing terminal
+4. Reproduce all 186 embedded round summaries and every existing terminal
    result.
 5. Add malformed/corruption coverage at the V14 boundary.
 
-The summary/terminal portion of that gate is green. Native V11/V12 headers,
+The summary/terminal portion of that gate is green. Native V11/V12/V13 headers,
 parsers, dispatch, and direct
 format tests are removed; old files must pass through the external Data Manager
 converter. T3CASE and T3SPLIT remain independent PC-98 oracle formats and are
@@ -164,8 +156,9 @@ not retired by this migration.
 ## V14 gate result
 
 The observation and stored-checkpoint comparison implementation are complete.
-The Data Manager 0.4.2 corpus passes 19/19 finalized runs, 173/173 summaries,
-and all 152 preserved checkpoints on GCC and MSVC. A replay browser may offer
-every preserved checkpoint; converted V11 files naturally expose stage starts
-only. Optional broad accelerators remain caches and cannot replace this
-portable proof.
+The Data Manager 0.5.6 corpus passes 20/20 finalized runs on GCC and MSVC. The
+historical subset passes 173/173 summaries and all 152 preserved checkpoints;
+the genuine WR passes 13/13 summaries. A replay browser may offer every
+preserved checkpoint; converted V11 files naturally expose stage starts only.
+Optional broad accelerators remain caches and cannot replace this portable
+proof.

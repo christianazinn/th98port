@@ -84,21 +84,22 @@ native ownership, arithmetic correction, and retirement gates are frozen in
 
 ### Format contract
 
-V14 is the finalized player-facing replay format. Its 622-byte header retains
-the portable V12 compact checkpoint and RLE-input contract while adding
-14-byte round rows, stage-clear bonus records, real-time/Slowdown telemetry,
-and the complete validated summary capability set. Optional data after the
-logical input end remains an ignorable accelerator cache.
+V14 is the finalized player-facing replay format. Its 768-byte header contains
+the portable 622-byte checkpoint/summary/RLE prefix plus the 146-byte identity
+extension for compact ruleset, recording, player-role/source, profile UUID,
+and match identity. Optional data after the logical input end remains an
+ignorable accelerator cache.
 
-TH03 Data Manager 0.4.2 now owns the one-way V11/V12-to-V14 converter in the
-Replay/harness work. It converted all 19 locked historical inputs, whose V14
-identities are frozen in `REPLAY_V14_CORPUS_LOCK.tsv`; all 173 summaries, all
-152 stored checkpoints, and terminal results reproduce through V14 on GCC and
-MSVC. Native V11/V12 parsers are therefore retired. Historical inputs remain
-external regression sources for the converter rather than formats accepted by
-libth03. V14 tests cover pause/process transitions, Story, Practice, ordinary
-VS, checkpoint boundaries, pending streams, and corruption. T3CASE/T3SPLIT
-remain independent oracle formats.
+TH03 Data Manager 0.5.6 now owns the one-way V11/V12/V13-to-V14 converter in
+the Replay/harness work. It converted all 19 locked historical inputs and the
+genuine V13 WR, whose V14 identities are frozen in
+`REPLAY_V14_CORPUS_LOCK.tsv`; the historical 173 summaries and 152 stored
+checkpoints plus the WR's 13 summaries and terminal results reproduce through
+V14 on GCC and MSVC. Native V11/V12/V13 parsers are therefore retired.
+Historical inputs remain external regression sources for the converter rather
+than formats accepted by libth03. V14 tests cover pause/process transitions,
+Story, Practice, ordinary VS, checkpoint boundaries, pending streams, and
+corruption. T3CASE/T3SPLIT remain independent oracle formats.
 
 ### Replay Patch maintenance reminder
 
@@ -112,7 +113,7 @@ as a gameplay input is a replay landmine.
 For the accepted V14 package:
 
 - keep V14 in the version-neutral parser and `th03rv` dispatch;
-- keep the V11/V12-to-V14 converter in the Replay/harness Data Manager, never
+- keep the V11/V12/V13-to-V14 converter in the Replay/harness Data Manager, never
   core logic;
 - update `tools/replay/FORMAT.md`, exporters, validators, frozen fixtures, and
   SHA/size locks together;

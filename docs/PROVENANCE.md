@@ -7,7 +7,7 @@
 | `present/raster.cpp` | bounded two-page indexed Raster and source-surface model from `research/PRESENTATION_CONTRACT.md`, including the stock-used TRAM, GRCG, palette, and page operations required by the Classic scenes; captured PC-98 pixel parity remains an external gate |
 | `formats/t3case.cpp` | `state/port/T3CASE1_FORMAT.md`, `tools/port/t3case.psm1`, and oracle `th03/t3case.hpp` |
 | `formats/t3split.cpp` | Replay `th03/replay_format.hpp`, `tools/replay/export_splits.ps1`, and `tools/port/compare_th03_oracle_splits.ps1` |
-| `formats/v14.cpp`, `rpy_checkpoint.cpp`, and `rpy_input.cpp` | frozen Replay Patch 0.4.8 `th03/replay_format.hpp`, its MAIN/MAINL/OP readers, and canonical harness `tools/replay/FORMAT.md`; compact checkpoints are reconstructed as format-neutral recipes after ENEDAT content is loaded |
+| `formats/v14.cpp`, `rpy_checkpoint.cpp`, and `rpy_input.cpp` | released Replay Patch 0.4.15 `th03/replay_format.hpp` at ReC98 `43028f09a2fc6965b2462e9743be604d3b8b1d0e`, its MAIN/MAINL/OP readers, and canonical harness `tools/replay/FORMAT.md` at outer `2ef51fbd4196d561e2e7f12d01648e9e6f2246da`; compact checkpoints are reconstructed as format-neutral recipes after ENEDAT content is loaded |
 | `replay/run.cpp` | Replay Patch process-control, warning, pause, retry-preroll, and MAIN/MAINL semantics adapted to the version-neutral replay model |
 | `replay/session.hpp` | audited T3CASE/V14 input and process-boundary semantics; deliberately independent of either document layout |
 | `core/game.cpp`, `core/frame.cpp`, and `core/frame/{,characters/}*.inl` | Anniversary `th03/main/rndloop.cpp:sub_9778()` update order and the complete stock-used gameplay callback inventory documented by the `PARITY_*` ledgers; `FRAME_PARTITIONS.md` records the behavior-free source split |
@@ -64,5 +64,6 @@ entity/projectile subsystem, so future first divergences must still be
 localized with semantic diagnostics rather than inferred from the aggregate
 hash. The final module-by-module C++/ASM/BSS/data/ENEDAT disposition is in
 `PARITY_SOURCE_COVERAGE.md`. See `PHASE3_CORPUS_STATUS.md` for the frozen
-Anniversary evidence ledger and `REPLAY_VERIFICATION.md` for the direct
-historical replay gate: 19/19 files and 173/173 summaries match.
+Anniversary evidence ledger and `REPLAY_VERIFICATION.md` for the direct replay
+gate: 20/20 files match; the historical subset reproduces 173/173 summaries
+and the genuine WR reproduces 13/13 summaries.

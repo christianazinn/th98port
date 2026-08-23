@@ -1,6 +1,6 @@
 # Historical replay verification
 
-Snapshot: **2026-08-09**.
+Snapshot: **2026-08-22**.
 
 `th03rv` is the unbounded-speed replay-verification client for `libth03`. It
 accepts a V14 `.RPY`, reconstructs a neutral `ReplaySession`, executes the same Classic
@@ -62,13 +62,14 @@ retirement gates are recorded in `V14_INTEGRATION.md`.
 ## V14 structural status
 
 The strict span parser is covered synthetically for all source-backed input
-offsets (Story 4,957, ordinary VS 1,489, Practice 2,067), compact checkpoints,
+offsets (Story 5,103, ordinary VS 1,635, Practice 2,213), compact checkpoints,
 RLE/process controls, Practice consistency, summaries, telemetry, optional
 tails, pending sealed streams, and malformed boundaries on GCC and MSVC.
-TH03 Data Manager 0.4.2 converted all 19 frozen historical inputs; their V14
-sizes and SHA-256 identities are locked in `REPLAY_V14_CORPUS_LOCK.tsv`, and
-both compilers reproduce all 173 summaries, all 152 stored checkpoints, and
-terminal results. The native V11/V12 parsers are therefore retired. T3CASE and
+TH03 Data Manager 0.5.6 converted all 19 frozen historical inputs and the
+genuine V13 WR TH3R06; their V14 sizes and SHA-256 identities are locked in
+`REPLAY_V14_CORPUS_LOCK.tsv`. Both compilers reproduce the historical 173
+summaries and 152 stored checkpoints, plus all 13 WR summaries and terminal
+results. The native V11/V12/V13 parsers are therefore retired. T3CASE and
 T3SPLIT remain separate oracle formats.
 
 All reached V14 checkpoints are structurally parsed and preserved, including
@@ -120,11 +121,13 @@ conversion and direct V14 run produced:
 | V12 TH3R11 | Story | 6,254 | Match, 3/3 summaries |
 | V12 TH3R12 | Story | 101,557 | Match, 9/9 summaries |
 | V12 TH3R13 | Practice | 10,146 | Match, 3/3 summaries |
+| genuine WR TH3R06 | Story | 165,476 | Match, 13/13 summaries |
 
-All 19 Data Manager 0.4.2 V14 files complete on GCC and MSVC. All 173 embedded
-summaries and all 152 preserved checkpoints match. Expected summaries and
-checkpoints remain comparison-only; neither the format adapter nor replay
-runner uses them to repair or steer gameplay.
+All 20 Data Manager 0.5.6 V14 files complete on GCC and MSVC. The historical
+173 embedded summaries and 152 preserved checkpoints match, and the genuine
+WR matches all 13 summaries. Expected summaries and checkpoints remain
+comparison-only; neither the format adapter nor replay runner uses them to
+repair or steer gameplay.
 
 The semantic gate caught these defects before the 0.4.2 regeneration:
 
@@ -139,7 +142,7 @@ The semantic gate caught these defects before the 0.4.2 regeneration:
   checkpoint (TH3R10 and TH3R13 pass).
 
 The required V12 conversion rule is `round_id == 0 ? resident_rand : stored
-round_reset_seed`; Data Manager 0.4.2 implements it along with the corrected
+round_reset_seed`; Data Manager 0.5.6 implements it along with the corrected
 Story boss-rank clamp. V11 retry checkpoint synthesis is deliberately omitted:
 the verifier instead validates every stored checkpoint and tolerates extra
 sequential retry starts. The regenerated identities are frozen in

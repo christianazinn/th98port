@@ -159,10 +159,10 @@ complete Classic gameplay and process phases. Application work remains later.
 Phase 2 is complete: the TH3R03 first-round trace matches all 46 canonical
 Anniversary rows through its natural route-2 terminal. Phase 3 preserves that
 gate and has completed the source-backed Classic gameplay backend. The locked
-integration corpus now covers 19 frozen V14 conversions and 173 embedded round
-summaries across Story, Practice, and ordinary VS; all match. Historical
-V11/V12 inputs are converted externally and are no longer native parser
-formats. The whole-source
+integration corpus now covers 20 V14 files: 19 frozen historical conversions
+with 173 embedded round summaries plus the genuine WR with 13; all match
+across Story, Practice, and ordinary VS. Historical V11/V12/V13 inputs are
+converted externally and are no longer native parser formats. The whole-source
 disposition is recorded in `PARITY_SOURCE_COVERAGE.md`.
 
 ## Completeness contract
