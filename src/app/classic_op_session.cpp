@@ -2665,7 +2665,8 @@ struct ClassicOpSessionBackend final {
 		auto created = replay_recorder ?
 			ClassicRegistrationScene::create_new_classic_viewer(
 				*title_completion, new_classic_score_path, score_path,
-				*resources, stage_text, *font, patch_assets
+				*resources, stage_text, *font, patch_assets,
+				game_text_for(config.language)
 			) : ClassicRegistrationScene::create_viewer(
 				*title_completion, score_path, *resources, stage_text, *font
 			);

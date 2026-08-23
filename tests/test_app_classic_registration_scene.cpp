@@ -44,6 +44,7 @@ using th03::app::ClassicScoreStoreDisposition;
 using th03::app::MainlStageTextAssets;
 using th03::app::MainlRegistrationNextScreen;
 using th03::app::NewClassicScoreRun;
+using th03::app::NewClassicGameTextCatalog;
 using th03::present::AnkGlyph;
 using th03::present::AnkGlyphProvider;
 using th03::present::JisGlyph;
@@ -359,7 +360,8 @@ std::expected<
 	const fs::path &score_path,
 	const fs::path &legacy_score_path,
 	SyntheticFont &font,
-	NewClassicScoreRun run
+	NewClassicScoreRun run,
+	const NewClassicGameTextCatalog *game_text = nullptr
 )
 {
 	const bool preload_continue = value.remaining_credits != 0U &&
@@ -371,7 +373,7 @@ std::expected<
 			preload_continue ? background(5U, 1U) : background(9U, 7U),
 			preload_continue ? choice_cels() :
 				std::array<std::optional<th03::assets::PlanarCel4>, 4U>{},
-			stage_text(), font, Raster{}, run
+			stage_text(), font, Raster{}, run, game_text
 		);
 }
 
@@ -1080,6 +1082,97 @@ void test_new_classic_registration_and_paged_viewer()
 		"viewing and paging expanded scores performs no persistence write");
 }
 
+void test_new_classic_localized_registration_art()
+{
+	TemporaryRoot root;
+	expect(root.valid(), "localized registration temporary root exists");
+	if(!root.valid()) {
+		return;
+	}
+	SyntheticFont font;
+	auto value = resident();
+	const auto plain = create_new_scene(
+		value, root.path() / "plain.new", root.path() / "plain.nem", font,
+		{.run_id = 1U, .play_frames = 282U}
+	);
+	const auto english = create_new_scene(
+		value, root.path() / "english.new", root.path() / "english.nem", font,
+		{.run_id = 1U, .play_frames = 282U},
+		&th03::app::new_classic_builtin_english_game_text()
+	);
+	const auto japanese = create_new_scene(
+		value, root.path() / "japanese.new", root.path() / "japanese.nem", font,
+		{.run_id = 1U, .play_frames = 282U},
+		&th03::app::new_classic_builtin_japanese_game_text()
+	);
+	expect(plain.has_value(), "plain New Classic registration scene constructs");
+	expect(english.has_value(), "English New Classic registration scene constructs");
+	expect(japanese.has_value(), "Japanese New Classic registration scene constructs");
+	if(!japanese) {
+		std::cerr << "Japanese registration error code=" <<
+			static_cast<unsigned>(japanese.error().code) << '\n';
+	}
+	if(!plain || !english || !japanese) {
+		return;
+	}
+	const std::array allowed{
+		th03::present::Rect{48, 24, 544U, 56U},
+		th03::present::Rect{112, 80, 96U, 24U},
+		th03::present::Rect{328, 80, 96U, 24U},
+		th03::present::Rect{432, 80, 120U, 24U},
+		th03::present::Rect{552, 80, 80U, 24U},
+		th03::present::Rect{320, 312, 320U, 88U},
+		th03::present::Rect{512, 320, 64U, 32U},
+		th03::present::Rect{512, 344, 64U, 32U},
+		th03::present::Rect{512, 368, 64U, 32U},
+		th03::present::Rect{568, 104, 64U, 200U},
+	};
+	const auto inside_allowed = [&allowed](std::int32_t x, std::int32_t y) {
+		return std::ranges::any_of(allowed, [=](const auto &rect) {
+			return x >= rect.x && y >= rect.y &&
+				x < rect.x + rect.width && y < rect.y + rect.height;
+		});
+	};
+	std::size_t translated_differences = 0U;
+	std::size_t outside_differences = 0U;
+	std::size_t english_differences = 0U;
+	std::size_t title_differences = 0U;
+	std::size_t rank_differences = 0U;
+	std::size_t command_differences = 0U;
+	for(const auto page : {Page::zero, Page::one}) {
+		for(std::int32_t y = 0; y < th03::present::graphics_height; ++y) {
+			for(std::int32_t x = 0; x < th03::present::graphics_width; ++x) {
+				const Point point{x, y};
+				const auto source = (*plain)->raster().pixel(page, point);
+				const auto en = (*english)->raster().pixel(page, point);
+				const auto ja = (*japanese)->raster().pixel(page, point);
+				english_differences += source != en;
+				if(source == ja) {
+					continue;
+				}
+				++translated_differences;
+				outside_differences += !inside_allowed(x, y);
+				title_differences += x >= 48 && x < 592 && y >= 24 && y < 80;
+				rank_differences += x >= 320 && y >= 312;
+				command_differences += x >= 512 && x < 576 && y >= 320;
+			}
+		}
+	}
+	expect(
+		english_differences == 0U,
+		"built-in English preserves registration art byte-for-pixel"
+	);
+	expect(
+		translated_differences != 0U && outside_differences == 0U,
+		"Japanese changes only audited registration-art rectangles"
+	);
+	expect(
+		title_differences != 0U && rank_differences != 0U &&
+			command_differences != 0U,
+		"Japanese visibly replaces title, rank, and editing-command art"
+	);
+}
+
 void test_zero_credit_audio_exit()
 {
 	TemporaryRoot root;
@@ -1507,6 +1600,7 @@ int main(int argc, char **argv)
 	test_missing_file_clear_and_recreate_rng_schedule();
 	test_view_only_schedule_and_unchanged_board();
 	test_new_classic_registration_and_paged_viewer();
+	test_new_classic_localized_registration_art();
 	test_zero_credit_audio_exit();
 	test_music_off_audio_exit();
 	test_rejections_and_commit_failure();

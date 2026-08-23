@@ -349,7 +349,7 @@ source, `compile_game_text_pack.py` validates and compiles it, and
 replay renderer. A catalog is accepted only with the full English overlay;
 Japanese and sealed Classic continue using authenticated source assets.
 See `localization/GAME_TEXT_README.md` for the format and translator workflow.
-`th03-game-text-preview` renders all 748 compiled rows as deterministic
+`th03-game-text-preview` renders all 761 compiled rows as deterministic
 640x400 contact sheets through the production `FONT.ROM` and graphics-text
 path; see `docs/NEW_CLASSIC_GAME_TEXT_PREVIEW.md`.
 `th03-content-audit` emits the production 271-resource manifest or validates

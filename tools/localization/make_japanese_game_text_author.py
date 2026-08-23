@@ -53,6 +53,19 @@ HUD_LOCALIZED_MESSAGES = {
     "continue.yes": "はい                            ",
     "continue.no": "いいえ                          ",
     "gameover.title": "ゲームオーバー                  ",
+    "registration.title": "名前登録                        ",
+    "registration.header.name": "名前    ",
+    "registration.header.point": "得点    ",
+    "registration.header.character": "キャラクター",
+    "registration.header.stage": "ステージ",
+    "registration.rank.easy": "イージー        ",
+    "registration.rank.normal": "ノーマル        ",
+    "registration.rank.hard": "ハード          ",
+    "registration.rank.lunatic": "ルナティック    ",
+    "registration.key.space": "空白",
+    "registration.key.backspace": "削除",
+    "registration.key.end": "決定",
+    "registration.stage.all": "全て",
 }
 
 

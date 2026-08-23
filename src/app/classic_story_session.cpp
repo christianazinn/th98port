@@ -1495,7 +1495,7 @@ struct ClassicStoryBackend final {
 		auto created = new_classic ? ((replay_playback || !stock_score) ?
 			ClassicRegistrationScene::create_new_classic_playback(
 				resident, score_path, legacy_score_path, *resources,
-				stage_text, static_content->font(), *cutscene_handoff
+				stage_text, static_content->font(), *cutscene_handoff, game_text
 			) : ClassicRegistrationScene::create_new_classic(
 				resident, score_path, legacy_score_path, *resources,
 				stage_text, static_content->font(), *cutscene_handoff,
@@ -1504,7 +1504,7 @@ struct ClassicStoryBackend final {
 					run.one_cc = resident.story_stage == 99U &&
 						resident.remaining_credits == 3U;
 					return run;
-				}()
+				}(), game_text
 			)) : ClassicRegistrationScene::create(
 				resident, score_path, *resources, stage_text,
 				static_content->font(), *cutscene_handoff

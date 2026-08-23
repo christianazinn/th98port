@@ -12,14 +12,14 @@ any of these packages.
 | Domain | Current coverage | Author/runtime artifacts |
 |---|---|---|
 | New Classic menus and product UI | Title, Option hierarchy, Replay browser/save/viewer, HiScore/online views, Practice, Input/Key/Joy/Device configuration, netplay rooms/profile/status, bounded dynamic templates, the nine character-selector center-list names, and the three character-selection stat labels | Complete 406-message English and Japanese UTF-8 authors to `T3LNG001`; Japanese compiles to CP932 and mixes real PC-98 machine glyphs with proportional MNUFONT Latin text |
-| Executable/image-resident game text | 61 stage titles/names, Music Room selection titles, registration names, and result labels, five gameplay HUD words, and five Continue/Game Over labels | Complete English and Japanese UTF-8 `T3GTL-AUTHOR-1` catalogs to CP932 `T3GTL001`; built-in English retains the exact stylized source image art while translated rows regenerate only audited text regions |
+| Executable/image-resident game text | 61 stage titles/names, Music Room selection titles, registration names, and result labels, five gameplay HUD words, five Continue/Game Over labels, and thirteen registration-art labels | Complete English and Japanese UTF-8 `T3GTL-AUTHOR-1` catalogs to CP932 `T3GTL001`; built-in English retains the exact stylized source image art while translated rows regenerate only audited text regions |
 | Win quotes | All nine character tables, 11 opponent/route blocks per character, three rows per block: 297 exact 58-byte rows | Same `T3GTL001` domain; English rows are merged into the complete catalog and Japanese source rows are in `game-fixed-text-ja-JP.json` |
 | Music Room comments | All 19 tracks, one title plus 19 comment rows per track: 380 exact 40-byte rows | Same `T3GTL001` domain and Japanese source catalog |
 | Pre/post-round dialogue, Stage 8 dialogue, endings, and extra ending | Every text run in all 28 DM0/DM1/ED scripts, while retaining the source command stream for timing, pictures, palette, and audio | UTF-8 `T3CTP-AUTHOR-1` to `T3CTP001`; complete English and Japanese catalogs and source-free schemas |
 
-The complete compiled game-text catalog therefore contains 748 messages: 61
+The complete compiled game-text catalog therefore contains 761 messages: 61
 executable rows + 297 win rows + 380 Music Room rows + five HUD image-text
-labels + five Continue/Game Over labels. Both English and Japanese
+labels + five Continue/Game Over labels + thirteen registration-art labels. Both English and Japanese
 fixed catalogs are generated into the executable. The Japanese catalog is
 byte-for-byte sourced from the authenticated original executables and DAT rows,
 while its readable UTF-8 author file can be rebuilt without transcription.
@@ -42,7 +42,8 @@ replacement string. The remaining image-text migration includes, at minimum:
   runtime-localized in New Classic);
 - stage/win logos and other gameplay art (the `LOSE.BF2` and `ROUND.BF2` word
   cels are now runtime-localized while their digits and animation stay source-owned);
-- registration-rank/background and staff-credit art;
+- staff-credit art (registration title, columns, difficulty plate, edit
+  commands, and all-stage marker are now runtime-localized in New Classic);
 - text embedded in cutscene pictures rather than emitted by the script VM;
 - the one-time ZUN Soft logo and other logo/credit artwork.
 
@@ -63,10 +64,10 @@ labels and formatting templates are included in the menu domain.
   English fixed DAT tables and can merge them into a full author catalog.
 - `make_japanese_game_text_author.py` authenticates original Japanese
   OP/MAINL/MAIN, extracts their remaining 61 records, and produces the complete
-  source-ordered 748-message Japanese author catalog.
+  source-ordered 761-message Japanese author catalog.
 - `make_cutscene_text_author.py` extracts every script text run without
   rewriting its command stream.
-- `th03-game-text-preview` renders all 748 fixed game-text messages through
+- `th03-game-text-preview` renders all 761 fixed game-text messages through
   the production PC-98 font path into 42 deterministic 640x400 sheets.
 - `th03-localized-scene-snapshot` drives all 28 authenticated production
   cutscene scenes and renders one longest-run layout-stress frame per script,

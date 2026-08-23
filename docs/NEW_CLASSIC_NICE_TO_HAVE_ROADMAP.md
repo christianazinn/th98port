@@ -111,7 +111,7 @@ localized rendering.
 The source-text part of this parcel is now complete in both shipped languages.
 `T3LNG001` contains 406 explicit English and Japanese New Classic messages;
 Japanese rows are CP932 and combine authenticated proportional `MNUFONT.PF`
-Latin with exact `FONT.ROM` Japanese glyphs. `T3GTL001` contains all 748
+Latin with exact `FONT.ROM` Japanese glyphs. `T3GTL001` contains all 761
 graphics-text rows in explicit English and Japanese catalogs, including every
 win quote and Music Room comment. The Japanese author is regenerated from
 authenticated Japanese OP/MAIN/MAINL executables and DAT assets rather than
@@ -217,7 +217,7 @@ These can proceed alongside the content migrations:
 These tools should consume the same decoders and schemas as production rather
 than inventing shadow interpretations.
 
-Status: in progress. `th03-game-text-preview` now renders all 748 `T3GTL001`
+Status: in progress. `th03-game-text-preview` now renders all 761 `T3GTL001`
 messages into deterministic 640x400 contact sheets plus a machine-readable
 `T3GTP001` bounds index through the production PC-98 font and graphics-text
 path, including all win quotes and Music Room comments. The definitive
@@ -290,8 +290,10 @@ The original source-text, renderer-GUI, Arrange, content-audit, and live
 nametag parcels above are implemented. The remaining product/tooling work is:
 
 1. Continue decoupling text baked into images. Character-select center-list
-   names and stat labels plus gameplay Lose/Win/Stage/Round/Start banners are
-   complete; character-title art and reusable menu headings remain. The
+names and stat labels plus gameplay Lose/Win/Stage/Round/Start banners are
+complete. Registration title/column panels, difficulty plate, edit commands,
+and all-stage marker are also runtime-localized while built-in English retains
+the source art. Character-title art and reusable menu headings remain. The
    selection portrait atlases were audited and contain no text. Opaque surfaces require clean background
    reconstruction; this is not a missing string-catalog problem.
 2. Finish production update release inputs: origin, platform packages, signing

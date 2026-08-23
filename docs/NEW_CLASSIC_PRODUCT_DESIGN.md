@@ -519,7 +519,7 @@ key/controller names remain bounded platform data inside localized rows.
 English and Latin fragments use authenticated proportional `MNUFONT.PF`;
 Japanese is compiled as CP932 and uses the exact authenticated PC-98
 `FONT.ROM`. The separate `T3GTL001` and `T3CTP001` domains now also contain
-complete explicit English and Japanese source text for all 748 graphics-text
+complete explicit English and Japanese source text for all 761 graphics-text
 rows and all 28 scripted dialogue/cutscene/ending programs. The donor
 page/palette/input machines and Classic are unchanged. A future general-Unicode
 product-shell renderer remains separate from this exact ASCII/CP932 contract.

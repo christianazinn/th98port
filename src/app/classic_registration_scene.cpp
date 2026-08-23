@@ -39,6 +39,62 @@ constexpr std::uint8_t alphabet_glyphs = 48U;
 constexpr std::uint8_t fade_boundary_count = 35U;
 constexpr std::uint8_t new_classic_view_fade_boundary_count = 19U;
 
+enum class LocalizedRegistrationText : std::size_t {
+	title,
+	header_name,
+	header_point,
+	header_character,
+	header_stage,
+	rank_easy,
+	rank_normal,
+	rank_hard,
+	rank_lunatic,
+	key_space,
+	key_backspace,
+	key_end,
+	stage_all,
+};
+
+constexpr std::array localized_registration_ids{
+	NewClassicGameTextId::registration_title,
+	NewClassicGameTextId::registration_header_name,
+	NewClassicGameTextId::registration_header_point,
+	NewClassicGameTextId::registration_header_character,
+	NewClassicGameTextId::registration_header_stage,
+	NewClassicGameTextId::registration_rank_easy,
+	NewClassicGameTextId::registration_rank_normal,
+	NewClassicGameTextId::registration_rank_hard,
+	NewClassicGameTextId::registration_rank_lunatic,
+	NewClassicGameTextId::registration_key_space,
+	NewClassicGameTextId::registration_key_backspace,
+	NewClassicGameTextId::registration_key_end,
+	NewClassicGameTextId::registration_stage_all,
+};
+
+constexpr present::Rect registration_title_rect{48, 24, 544U, 56U};
+constexpr std::array registration_header_rects{
+	present::Rect{112, 80, 96U, 24U},
+	present::Rect{328, 80, 96U, 24U},
+	present::Rect{432, 80, 120U, 24U},
+	present::Rect{552, 80, 80U, 24U},
+};
+constexpr present::Rect registration_rank_rect{320, 312, 320U, 88U};
+
+[[nodiscard]] constexpr std::size_t localized_index(
+	LocalizedRegistrationText value
+) noexcept {
+	return static_cast<std::size_t>(value);
+}
+
+[[nodiscard]] std::span<const std::uint8_t> trim_padding(
+	std::span<const std::uint8_t> text
+) noexcept {
+	while(!text.empty() && text.back() == static_cast<std::uint8_t>(' ')) {
+		text = text.first(text.size() - 1U);
+	}
+	return text;
+}
+
 constexpr std::array<std::string_view, new_classic_score_character_count + 1U>
 new_classic_page_names{{
 	"REIMU", "MIMA", "MARISA", "ELLEN", "KOTOHIME", "KANA",
@@ -508,7 +564,8 @@ ClassicRegistrationScene::create(
 {
 	return create_impl(
 		resident, score_path, resources, stage_text, font,
-		std::move(initial_raster), true, false, false, {}, std::nullopt, true, {}
+		std::move(initial_raster), true, false, false, {}, std::nullopt, true, {},
+		nullptr
 	);
 }
 
@@ -521,13 +578,14 @@ ClassicRegistrationScene::create_new_classic(
 	const MainlStageTextAssets &stage_text,
 	const present::AnkGlyphProvider &font,
 	present::Raster initial_raster,
-	NewClassicScoreRun run
+	NewClassicScoreRun run,
+	const NewClassicGameTextCatalog *game_text
 )
 {
 	return create_impl(
 		resident, score_path, resources, stage_text, font,
 		std::move(initial_raster), true, false, true, legacy_score_path, run, true,
-		{}
+		{}, game_text
 	);
 }
 
@@ -539,13 +597,14 @@ ClassicRegistrationScene::create_new_classic_playback(
 	std::span<const LoadedMainResource> resources,
 	const MainlStageTextAssets &stage_text,
 	const present::AnkGlyphProvider &font,
-	present::Raster initial_raster
+	present::Raster initial_raster,
+	const NewClassicGameTextCatalog *game_text
 )
 {
 	return create_impl(
 		resident, score_path, resources, stage_text, font,
 		std::move(initial_raster), true, false, true, legacy_score_path,
-		NewClassicScoreRun{}, false, {}
+		NewClassicScoreRun{}, false, {}, game_text
 	);
 }
 
@@ -566,7 +625,7 @@ ClassicRegistrationScene::create_viewer(
 	}
 	return create_impl(
 		completion.resident(), score_path, resources, stage_text, font,
-		present::Raster{}, true, true, false, {}, std::nullopt, true, {}
+		present::Raster{}, true, true, false, {}, std::nullopt, true, {}, nullptr
 	);
 }
 
@@ -578,7 +637,8 @@ ClassicRegistrationScene::create_new_classic_viewer(
 	std::span<const LoadedMainResource> resources,
 	const MainlStageTextAssets &stage_text,
 	const present::AnkGlyphProvider &font,
-	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	const NewClassicGameTextCatalog *game_text
 )
 {
 	if(completion.route() != ClassicOpRoute::high_scores ||
@@ -590,7 +650,7 @@ ClassicRegistrationScene::create_new_classic_viewer(
 	return create_impl(
 		completion.resident(), score_path, resources, stage_text, font,
 		present::Raster{}, true, true, true, legacy_score_path, std::nullopt, false,
-		std::move(patch_assets)
+		std::move(patch_assets), game_text
 	);
 }
 
@@ -608,7 +668,8 @@ ClassicRegistrationScene::create_impl(
 	std::filesystem::path legacy_score_path,
 	std::optional<NewClassicScoreRun> run,
 	bool persist_changes,
-	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	const NewClassicGameTextCatalog *game_text
 )
 {
 	if(!valid_context(resident, view_only)) {
@@ -721,7 +782,7 @@ ClassicRegistrationScene::create_impl(
 		std::move(*next_background), std::move(choice_cels), stage_text, font,
 		std::move(initial_raster), view_only, new_classic,
 		std::move(legacy_score_path), run, persist_changes,
-		std::move(patch_assets)
+		std::move(patch_assets), game_text
 	);
 }
 
@@ -743,7 +804,8 @@ ClassicRegistrationScene::create_predecoded(
 	std::filesystem::path legacy_score_path,
 	std::optional<NewClassicScoreRun> run,
 	bool persist_changes,
-	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
+	const NewClassicGameTextCatalog *game_text
 )
 {
 	if(!valid_context(resident, view_only) ||
@@ -775,6 +837,29 @@ ClassicRegistrationScene::create_predecoded(
 	prepared->next_background = std::move(next_background);
 	prepared->choice_cels = std::move(choice_cels);
 	prepared->next_screen = next_screen;
+	if(game_text) {
+		const auto &english = new_classic_builtin_english_game_text();
+		for(std::size_t index = 0U;
+			index < localized_registration_ids.size();
+			++index) {
+			const auto id = localized_registration_ids[index];
+			const auto translated = game_text->bytes(id);
+			if(std::ranges::equal(translated, english.bytes(id))) {
+				continue;
+			}
+			const auto visible = trim_padding(translated);
+			if(visible.empty()) {
+				return std::unexpected(registration_error(
+					ClassicRegistrationErrorCode::font_prepare_failed
+				));
+			}
+			auto text = present::prepare_graphics_text_8x16(visible, font);
+			if(!text) {
+				return std::unexpected(text_error(text.error()));
+			}
+			prepared->localized_text[index].emplace(std::move(*text));
+		}
+	}
 	auto normal_prepared = present::prepare_superimpose_sheet(normal);
 	auto highlight_prepared = present::prepare_superimpose_sheet(highlight);
 	if(!normal_prepared || !highlight_prepared ||
@@ -973,7 +1058,7 @@ bool ClassicRegistrationScene::initialize_visuals() noexcept
 		);
 	};
 	if(!present::pi_put_8(raster_, 0, 0, prepared_->background) ||
-		!present::cdg_put_8(raster_, 320, 312, prepared_->rank) ||
+		!draw_registration_art() ||
 		(view_only_ && !copy_visible_to_backup()) || !draw_rows(false) ||
 		(!view_only_ && !copy_visible_to_backup()) ||
 		(!(view_only_ && new_classic_document_) &&
@@ -981,6 +1066,116 @@ bool ClassicRegistrationScene::initialize_visuals() noexcept
 		return false;
 	}
 	return !entered_place_ || draw_alphabet();
+}
+
+bool ClassicRegistrationScene::draw_registration_art() noexcept
+{
+	if(!prepared_) {
+		return false;
+	}
+	const auto draw_panel = [this](
+		present::Rect rect,
+		const present::PreparedGraphicsText8x16 &text,
+		std::uint8_t scale
+	) noexcept {
+		const auto width = static_cast<std::uint64_t>(text.pixel_width()) * scale;
+		const auto height = static_cast<std::uint64_t>(present::jis_height) * scale;
+		if(width == 0U || width > rect.width - 4U || height > rect.height - 4U ||
+			!raster_.clear(rect, 1U) ||
+			!raster_.clear({rect.x, rect.y, rect.width, 1U}, 4U) ||
+			!raster_.clear({
+				rect.x, rect.y + static_cast<std::int32_t>(rect.height - 1U),
+				rect.width, 1U
+			}, 4U) ||
+			!raster_.clear({rect.x, rect.y, 1U, rect.height}, 4U) ||
+			!raster_.clear({
+				rect.x + static_cast<std::int32_t>(rect.width - 1U), rect.y,
+				1U, rect.height
+			}, 4U)) {
+			return false;
+		}
+		const present::Point position{
+			rect.x + static_cast<std::int32_t>((rect.width - width) / 2U),
+			rect.y + static_cast<std::int32_t>((rect.height - height) / 2U),
+		};
+		return present::graphics_text_put_scaled_8x16(
+			raster_, position, text,
+			{present::Index4{15U}, present::GraphicsTextWeight::black, 0U},
+			scale
+		);
+	};
+	const auto &title = prepared_->localized_text[
+		localized_index(LocalizedRegistrationText::title)
+	];
+	if(title && !draw_panel(registration_title_rect, *title, 2U)) {
+		return false;
+	}
+	for(std::size_t header = 0U; header < registration_header_rects.size();
+		++header) {
+		const auto &text = prepared_->localized_text[
+			localized_index(LocalizedRegistrationText::header_name) + header
+		];
+		if(text && !draw_panel(registration_header_rects[header], *text, 1U)) {
+			return false;
+		}
+	}
+	const auto rank_index =
+		localized_index(LocalizedRegistrationText::rank_easy) + resident_.rank;
+	const auto &rank = prepared_->localized_text[rank_index];
+	if(!rank) {
+		return present::cdg_put_8(raster_, 320, 312, prepared_->rank);
+	}
+	const auto width = static_cast<std::uint64_t>(rank->pixel_width()) * 2U;
+	constexpr auto height = static_cast<std::uint32_t>(present::jis_height) * 2U;
+	if(width == 0U || width > registration_rank_rect.width ||
+		height > registration_rank_rect.height) {
+		return false;
+	}
+	return present::graphics_text_put_scaled_8x16(
+		raster_,
+		{
+			registration_rank_rect.x + static_cast<std::int32_t>(
+				(registration_rank_rect.width - width) / 2U
+			),
+			registration_rank_rect.y + static_cast<std::int32_t>(
+				(registration_rank_rect.height - height) / 2U
+			),
+		},
+		*rank,
+		{present::Index4{15U}, present::GraphicsTextWeight::black, 0U},
+		2U
+	);
+}
+
+bool ClassicRegistrationScene::draw_localized_command(
+	present::Point position,
+	std::size_t text_index,
+	bool highlight
+) noexcept {
+	if(!prepared_ || text_index >= prepared_->localized_text.size() ||
+		!prepared_->localized_text[text_index]) {
+		return false;
+	}
+	const auto &text = *prepared_->localized_text[text_index];
+	const auto width = static_cast<std::uint64_t>(text.pixel_width()) * 2U;
+	constexpr auto command_width = glyph_width * 2;
+	if(width == 0U || width > static_cast<std::uint32_t>(command_width)) {
+		return false;
+	}
+	return present::graphics_text_put_scaled_8x16(
+		raster_,
+		{
+			position.x + static_cast<std::int32_t>((command_width - width) / 2U),
+			position.y,
+		},
+		text,
+		{
+			static_cast<present::Index4>(highlight ? 10U : 15U),
+			present::GraphicsTextWeight::black,
+			0U,
+		},
+		2U
+	);
 }
 
 bool ClassicRegistrationScene::preload_next_screen() noexcept
@@ -1003,6 +1198,14 @@ bool ClassicRegistrationScene::draw_glyph(
 	bool highlight
 ) noexcept
 {
+	if(glyph == Glyph::all && prepared_ && prepared_->localized_text[
+		localized_index(LocalizedRegistrationText::stage_all)
+	]) {
+		return draw_localized_command(
+			position, localized_index(LocalizedRegistrationText::stage_all),
+			highlight
+		);
+	}
 	if(!classic_registration_glyph_valid(glyph) || !prepared_->normal ||
 		!prepared_->highlight) {
 		return false;
@@ -1021,6 +1224,19 @@ bool ClassicRegistrationScene::draw_alphabet_glyph(
 	bool highlight
 ) noexcept
 {
+	std::optional<std::size_t> localized{};
+	if(glyph == Glyph::space) {
+		localized = localized_index(LocalizedRegistrationText::key_space);
+	} else if(glyph == Glyph::backspace) {
+		localized = localized_index(LocalizedRegistrationText::key_backspace);
+	} else if(glyph == Glyph::end) {
+		localized = localized_index(LocalizedRegistrationText::key_end);
+	}
+	if(localized && prepared_ && prepared_->localized_text[*localized]) {
+		return draw_localized_command(
+			alphabet_position(glyph), *localized, highlight
+		);
+	}
 	return glyph_value(glyph) < alphabet_glyphs &&
 		draw_glyph(alphabet_position(glyph), glyph, highlight);
 }
@@ -1111,7 +1327,7 @@ bool ClassicRegistrationScene::draw_rows(bool restore_background) noexcept
 		const auto target = new_classic_raster_page(new_classic_page_);
 		if(!raster_.set_access_page(target) ||
 			!present::pi_put_8(raster_, 0, 0, prepared_->background) ||
-			!present::cdg_put_8(raster_, 320, 312, prepared_->rank)) {
+			!draw_registration_art()) {
 			return false;
 		}
 		for(std::size_t place = 0U; place < classic_score_place_count; ++place) {

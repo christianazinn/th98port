@@ -30,7 +30,7 @@ python tools/localization/compile_game_text_pack.py compile `
   --output game-text-my-locale.t3gtl
 ```
 
-Render all 748 compiled messages through the production PC-98 font and
+Render all 761 compiled messages through the production PC-98 font and
 graphics-text path without launching the game:
 
 ```powershell
@@ -40,9 +40,9 @@ out/build/gcc/th03-game-text-preview.exe `
   --game-text-pack game-text-my-locale.t3gtl
 ```
 
-The 42 640x400 PPM contact sheets and deterministic `preview.json` make glyph
+The 43 640x400 PPM contact sheets and deterministic `preview.json` make glyph
 coverage, exact row widths, and placement reviewable in one pass. They cover
-the 61 executable-resident labels, ten localized image-text labels, all 297
+the 61 executable-resident labels, 23 localized image-text labels, all 297
 win-quote rows, and all 380 Music Room title/comment rows. See
 `docs/NEW_CLASSIC_GAME_TEXT_PREVIEW.md` for the output contract.
 
@@ -76,7 +76,7 @@ python tools/localization/make_japanese_game_text_author.py `
 The tool accepts only the frozen original Japanese executable hashes. It
 extracts all 19 Music Room labels, nine stage titles/names, ten registration
 names, and five result labels, then verifies that the merged catalog contains
-all 748 schema entries in exact CP932 geometry.
+all 761 schema entries in exact CP932 geometry.
 
 An authoring file may omit entries only when it names an already validated
 fallback locale. The current runtime renderer is CP932-constrained; future

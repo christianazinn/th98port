@@ -750,6 +750,19 @@
     "continue.credit": "CREDIT                          ",
     "continue.yes": "Yes                             ",
     "continue.no": "No                              ",
-    "gameover.title": "Game is Over                    "
+    "gameover.title": "Game is Over                    ",
+    "registration.title": "Registration of your name       ",
+    "registration.header.name": "Name    ",
+    "registration.header.point": "Point   ",
+    "registration.header.character": "Character   ",
+    "registration.header.stage": "Stage   ",
+    "registration.rank.easy": "Easy            ",
+    "registration.rank.normal": "Normal          ",
+    "registration.rank.hard": "Hard            ",
+    "registration.rank.lunatic": "Lunatic         ",
+    "registration.key.space": "SP  ",
+    "registration.key.backspace": "BS  ",
+    "registration.key.end": "END ",
+    "registration.stage.all": "All "
   }
 }

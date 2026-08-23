@@ -93,6 +93,10 @@ constexpr std::array native_surfaces{
 		"No Entry plus nine character-name rows",
 	},
 	NativeSurface{
+		"registration-image-text", "mainl_registration", "T3GTL001",
+		"title, four columns, four ranks, three edit commands, and all-stage marker",
+	},
+	NativeSurface{
 		"round-result-labels", "main_round_result", "T3GTL001",
 		"five Clear Bonus result labels",
 	},

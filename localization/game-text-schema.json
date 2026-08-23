@@ -314,6 +314,19 @@
     {"enum": "continue_credit", "id": "continue.credit", "encoding": "cp932", "exact_bytes": 32},
     {"enum": "continue_yes", "id": "continue.yes", "encoding": "cp932", "exact_bytes": 32},
     {"enum": "continue_no", "id": "continue.no", "encoding": "cp932", "exact_bytes": 32},
-    {"enum": "gameover_title", "id": "gameover.title", "encoding": "cp932", "exact_bytes": 32}
+    {"enum": "gameover_title", "id": "gameover.title", "encoding": "cp932", "exact_bytes": 32},
+    {"enum": "registration_title", "id": "registration.title", "encoding": "cp932", "exact_bytes": 32},
+    {"enum": "registration_header_name", "id": "registration.header.name", "encoding": "cp932", "exact_bytes": 8},
+    {"enum": "registration_header_point", "id": "registration.header.point", "encoding": "cp932", "exact_bytes": 8},
+    {"enum": "registration_header_character", "id": "registration.header.character", "encoding": "cp932", "exact_bytes": 12},
+    {"enum": "registration_header_stage", "id": "registration.header.stage", "encoding": "cp932", "exact_bytes": 8},
+    {"enum": "registration_rank_easy", "id": "registration.rank.easy", "encoding": "cp932", "exact_bytes": 16},
+    {"enum": "registration_rank_normal", "id": "registration.rank.normal", "encoding": "cp932", "exact_bytes": 16},
+    {"enum": "registration_rank_hard", "id": "registration.rank.hard", "encoding": "cp932", "exact_bytes": 16},
+    {"enum": "registration_rank_lunatic", "id": "registration.rank.lunatic", "encoding": "cp932", "exact_bytes": 16},
+    {"enum": "registration_key_space", "id": "registration.key.space", "encoding": "cp932", "exact_bytes": 4},
+    {"enum": "registration_key_backspace", "id": "registration.key.backspace", "encoding": "cp932", "exact_bytes": 4},
+    {"enum": "registration_key_end", "id": "registration.key.end", "encoding": "cp932", "exact_bytes": 4},
+    {"enum": "registration_stage_all", "id": "registration.stage.all", "encoding": "cp932", "exact_bytes": 4}
   ]
 }
