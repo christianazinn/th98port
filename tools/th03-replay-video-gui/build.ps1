@@ -3,6 +3,7 @@ param(
     [ValidatePattern('^\d+\.\d+\.\d+$')]
     [string]$Version = "0.1.0",
     [string]$OutputDirectory,
+    [string]$StandaloneDirectory,
     [string]$RendererPath,
     [string]$FfmpegPath,
     [string]$FfmpegLicensePath,
@@ -59,6 +60,11 @@ if (-not $OutputDirectory) {
         "out\packages\th03-replay-renderer-v$Version"
 }
 $outputFull = Assert-Descendant $OutputDirectory $repoRoot "OutputDirectory"
+if (-not $StandaloneDirectory) {
+    $StandaloneDirectory = Join-Path $repoRoot "out\standalone"
+}
+$standaloneFull = Assert-Descendant `
+    $StandaloneDirectory $repoRoot "StandaloneDirectory"
 if ([IO.Directory]::Exists($outputFull)) {
     Remove-Item -LiteralPath $outputFull -Recurse -Force
 }
@@ -92,7 +98,15 @@ foreach ($path in ($workPath, $specPath)) {
     }
     [IO.Directory]::CreateDirectory($path) | Out-Null
 }
-$binaryArguments = @("--add-binary", "$rendererFull;th03_native")
+$embeddedNativeRoot = Assert-Descendant `
+    (Join-Path $scratchRoot "embedded-native") $repoRoot "embedded native path"
+if ([IO.Directory]::Exists($embeddedNativeRoot)) {
+    Remove-Item -LiteralPath $embeddedNativeRoot -Recurse -Force
+}
+[IO.Directory]::CreateDirectory($embeddedNativeRoot) | Out-Null
+$embeddedRenderer = Join-Path $embeddedNativeRoot "th03-replay-video.exe"
+Copy-Item -LiteralPath $rendererFull -Destination $embeddedRenderer
+$binaryArguments = @("--add-binary", "$embeddedRenderer;th03_native")
 if ($FfmpegPath) {
     $binaryArguments += @("--add-binary", "$ffmpegFull;th03_ffmpeg")
 }
@@ -167,6 +181,9 @@ $smoke = Start-Process -FilePath $exe -ArgumentList "--gui-smoke" `
 if ($smoke.ExitCode -ne 0) {
     throw "Packaged GUI smoke failed with exit code $($smoke.ExitCode)."
 }
+[IO.Directory]::CreateDirectory($standaloneFull) | Out-Null
+Copy-Item -LiteralPath $exe `
+    -Destination (Join-Path $standaloneFull "TH03ReplayRenderer.exe") -Force
 
 $manifest = @(
     Get-ChildItem -LiteralPath $outputFull -File -Recurse | Sort-Object FullName |
@@ -189,3 +206,4 @@ try {
 }
 Write-Output "package=$outputFull"
 Write-Output "zip=$zip"
+Write-Output "standalone=$(Join-Path $standaloneFull 'TH03ReplayRenderer.exe')"

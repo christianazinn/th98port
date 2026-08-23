@@ -22,6 +22,7 @@
 #include "th03/app/new_classic_online.hpp"
 #include "th03/app/new_classic_score.hpp"
 #include "th03/app/replay_slot_store.hpp"
+#include "th03/app/tick_input.hpp"
 #include "th03/formats/replay.hpp"
 #include "th03/present/graphics_text.hpp"
 #include "th03/present/superimpose.hpp"
@@ -38,6 +39,24 @@ struct NewClassicUiInput final {
 	bool cancel = false;
 	bool app_quit_requested = false;
 };
+
+enum class NewClassicTextEditorCommand : std::uint8_t {
+	none,
+	up,
+	down,
+	left,
+	right,
+	confirm,
+	cancel,
+};
+
+// Text-entry modals deliberately ignore every CoreInput and physical gameplay
+// domain. The host translates only explicit editor scancodes into this neutral
+// command, while SDL text events remain the sole source of printable bytes.
+[[nodiscard]] NewClassicUiInput new_classic_text_editor_ui(
+	const LogicalTickInput &sample,
+	NewClassicTextEditorCommand command
+) noexcept;
 
 using NewClassicHostKeyName = std::string_view (*)(
 	void *context,

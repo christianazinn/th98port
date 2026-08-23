@@ -20,6 +20,7 @@ constexpr present::Index4 normal_color = 15U;
 constexpr present::Index4 detail_color = 13U;
 constexpr present::Index4 error_color = 11U;
 constexpr std::uint8_t fade_boundary_count = 19U;
+constexpr std::uint8_t cursor_blink_interval = 28U;
 
 [[nodiscard]] bool raw_any(NewClassicUiInput input) noexcept
 {
@@ -35,6 +36,30 @@ constexpr std::uint8_t fade_boundary_count = 19U;
 		(character >= 'P' && character <= 'Z');
 }
 
+[[nodiscard]] bool put_editor_line(
+	const NewClassicMenuFont &font,
+	present::Raster &raster,
+	std::int32_t center,
+	std::int32_t top,
+	std::string_view text,
+	std::size_t cursor,
+	bool cursor_visible,
+	present::Index4 color
+) noexcept
+{
+	if(!font.put_centered(raster, center, top, text, color)) {
+		return false;
+	}
+	if(!cursor_visible) {
+		return true;
+	}
+	const auto bounded_cursor = std::min(cursor, text.size());
+	const auto left = center - (font.width(text) / 2);
+	return font.put(
+		raster, left + font.width_n(text, bounded_cursor), top, "_", color
+	);
+}
+
 } // namespace
 
 NewClassicOnlineProfileScene::NewClassicOnlineProfileScene(
@@ -48,7 +73,7 @@ NewClassicOnlineProfileScene::NewClassicOnlineProfileScene(
 {
 	if((nametag_ && !layout_new_classic_nametag(*nametag_)) ||
 		!patch_assets_ || !patch_surface_.reset(
-			patch_assets_->menu_background(NewClassicMenuBackground::online_profile)
+			patch_assets_->menu_background(NewClassicMenuBackground::netplay)
 		)) {
 		return;
 	}
@@ -67,7 +92,7 @@ NewClassicOnlineProfileScene::NewClassicOnlineProfileScene(
 bool NewClassicOnlineProfileScene::draw() noexcept
 {
 	if(!patch_assets_ || !patch_surface_.begin_hidden_frame(
-		patch_assets_->menu_background(NewClassicMenuBackground::online_profile)
+		patch_assets_->menu_background(NewClassicMenuBackground::netplay)
 	)) {
 		return false;
 	}
@@ -115,24 +140,20 @@ bool NewClassicOnlineProfileScene::draw() noexcept
 			messages.text(NewClassicMessageId::profile_enter_name), normal_color)) {
 			return false;
 		}
-		const auto first = std::string_view(entry_).substr(
-			0U, std::min<std::size_t>(entry_.size(), new_classic_nametag_line_cells)
-		);
-		const auto second = entry_.size() <= new_classic_nametag_line_cells ?
-			std::string_view{} : std::string_view(entry_).substr(
-				new_classic_nametag_line_cells
-			);
-		if(!font.put_centered(raster, center_x, 160,
-			first.empty() ? std::string_view{"_"} : first,
-			invalid_entry_ ? error_color : selected_color) ||
-			(!second.empty() && !font.put_centered(
-				raster, center_x, 184, second,
-				invalid_entry_ ? error_color : selected_color
-			)) || !font.put_centered(raster, center_x, 240,
+		const auto entry_color = invalid_entry_ ? error_color : selected_color;
+		if(!put_editor_line(
+			font, raster, center_x, 160, name_entry_lines_[0U],
+			name_entry_column_, cursor_visible_ && name_entry_row_ == 0U,
+			entry_color
+		) || !put_editor_line(
+			font, raster, center_x, 184, name_entry_lines_[1U],
+			name_entry_column_, cursor_visible_ && name_entry_row_ == 1U,
+			entry_color
+		) || !font.put_centered(raster, center_x, 240,
 			messages.text(invalid_entry_ ?
 				NewClassicMessageId::profile_name_invalid :
 				NewClassicMessageId::profile_name_hint),
-			invalid_entry_ ? error_color : detail_color)) {
+			invalid_entry_ ? error_color : title_color)) {
 			return false;
 		}
 	} else if(screen_ == Screen::link_entry) {
@@ -144,7 +165,7 @@ bool NewClassicOnlineProfileScene::draw() noexcept
 				invalid_entry_ ? error_color : selected_color) ||
 			!font.put_centered(raster, center_x, 240,
 				messages.text(NewClassicMessageId::netplay_room_footer_edit),
-				detail_color)) {
+				title_color)) {
 			return false;
 		}
 	} else if(screen_ == Screen::link_code) {
@@ -153,7 +174,7 @@ bool NewClassicOnlineProfileScene::draw() noexcept
 			!font.put_centered(raster, center_x, 176, link_code_, selected_color) ||
 			!font.put_centered(raster, center_x, 224,
 				messages.text(NewClassicMessageId::profile_link_code_hint),
-				detail_color)) {
+				title_color)) {
 			return false;
 		}
 	} else {
@@ -164,11 +185,45 @@ bool NewClassicOnlineProfileScene::draw() noexcept
 			screen_ == Screen::linked ? detail_color : error_color) ||
 			!font.put_centered(raster, center_x, 240,
 				messages.text(NewClassicMessageId::netplay_report_footer),
-				detail_color)) {
+				title_color)) {
 			return false;
 		}
 	}
 	return patch_surface_.publish(raster.access_page());
+}
+
+void NewClassicOnlineProfileScene::begin_name_entry() noexcept
+{
+	name_entry_lines_ = {};
+	if(nametag_) {
+		if(const auto layout = layout_new_classic_nametag(*nametag_); layout) {
+			name_entry_lines_ = layout->lines;
+			name_entry_row_ = layout->line_count > 1U ? 1U : 0U;
+			name_entry_column_ = name_entry_lines_[name_entry_row_].size();
+		}
+	} else {
+		name_entry_row_ = 0U;
+		name_entry_column_ = 0U;
+	}
+	reset_cursor_blink();
+}
+
+std::string NewClassicOnlineProfileScene::name_entry_text() const
+{
+	std::string result = name_entry_lines_[0U];
+	if(!name_entry_lines_[1U].empty()) {
+		if(!result.empty()) {
+			result.push_back(' ');
+		}
+		result += name_entry_lines_[1U];
+	}
+	return result;
+}
+
+void NewClassicOnlineProfileScene::reset_cursor_blink() noexcept
+{
+	cursor_blink_ticks_ = 0U;
+	cursor_visible_ = true;
 }
 
 void NewClassicOnlineProfileScene::require_release() noexcept
@@ -228,7 +283,8 @@ bool NewClassicOnlineProfileScene::consume(
 	if(phase_ != Phase::menu) {
 		return consume_fade();
 	}
-	const bool any = raw_any(input.ui) || input.text_character || input.erase;
+	const bool any = raw_any(input.ui) || input.text_character || input.erase ||
+		input.delete_forward || input.home || input.end;
 	if(release_required_) {
 		if(!any) {
 			release_required_ = false;
@@ -251,7 +307,7 @@ bool NewClassicOnlineProfileScene::consume(
 		if(input.ui.confirm) {
 			if(selection_ == 0U) {
 				screen_ = Screen::name_entry;
-				entry_ = nametag_.value_or(std::string{});
+				begin_name_entry();
 			} else if(selection_ == 1U) {
 				action_ = NewClassicOnlineProfileAction{
 					NewClassicOnlineProfileActionType::create_link_code, {}
@@ -260,6 +316,8 @@ bool NewClassicOnlineProfileScene::consume(
 			} else {
 				screen_ = Screen::link_entry;
 				entry_.clear();
+				entry_cursor_ = 0U;
+				reset_cursor_blink();
 			}
 			invalid_entry_ = false;
 			require_release();
@@ -269,25 +327,116 @@ bool NewClassicOnlineProfileScene::consume(
 	}
 
 	if(screen_ == Screen::name_entry || screen_ == Screen::link_entry) {
-		if(input.erase && !entry_.empty()) {
-			entry_.pop_back();
-			invalid_entry_ = false;
-			return draw();
-		}
-		if(input.text_character) {
-			char character = *input.text_character;
-			if(screen_ == Screen::link_entry) {
-				character = static_cast<char>(std::toupper(
-					static_cast<unsigned char>(character)
+		bool changed = false;
+		if(screen_ == Screen::name_entry) {
+			auto &line = name_entry_lines_[name_entry_row_];
+			if(input.erase) {
+				if(name_entry_column_ != 0U) {
+					line.erase(name_entry_column_ - 1U, 1U);
+					--name_entry_column_;
+					changed = true;
+				} else if(name_entry_row_ != 0U) {
+					name_entry_row_ = 0U;
+					name_entry_column_ = name_entry_lines_[0U].size();
+					changed = true;
+				}
+			} else if(input.delete_forward && name_entry_column_ < line.size()) {
+				line.erase(name_entry_column_, 1U);
+				changed = true;
+			} else if(input.home) {
+				name_entry_column_ = 0U;
+				changed = true;
+			} else if(input.end) {
+				name_entry_column_ = line.size();
+				changed = true;
+			} else if(input.ui.up || input.ui.down) {
+				name_entry_row_ = input.ui.up ? 0U : 1U;
+				name_entry_column_ = std::min(
+					name_entry_column_, name_entry_lines_[name_entry_row_].size()
+				);
+				changed = true;
+			} else if(input.ui.left) {
+				if(name_entry_column_ != 0U) {
+					--name_entry_column_;
+				} else if(name_entry_row_ != 0U) {
+					name_entry_row_ = 0U;
+					name_entry_column_ = name_entry_lines_[0U].size();
+				}
+				changed = true;
+			} else if(input.ui.right) {
+				if(name_entry_column_ < line.size()) {
+					++name_entry_column_;
+				} else if(name_entry_row_ == 0U) {
+					name_entry_row_ = 1U;
+					name_entry_column_ = 0U;
+				}
+				changed = true;
+			} else if(input.text_character &&
+				*input.text_character >= 0x20 && *input.text_character <= 0x7E) {
+				const auto character = *input.text_character;
+				if(line.size() < new_classic_nametag_line_cells) {
+					line.insert(name_entry_column_, 1U, character);
+					++name_entry_column_;
+					changed = true;
+				} else if(name_entry_row_ == 0U &&
+					name_entry_column_ == line.size() &&
+					name_entry_lines_[1U].empty()) {
+					if(character == ' ') {
+						name_entry_row_ = 1U;
+						name_entry_column_ = 0U;
+						changed = true;
+					} else if(const auto separator = line.rfind(' ');
+						separator != std::string::npos) {
+						name_entry_lines_[1U] = line.substr(separator + 1U);
+						line.erase(separator);
+						name_entry_row_ = 1U;
+						name_entry_column_ = name_entry_lines_[1U].size();
+						if(name_entry_column_ < new_classic_nametag_line_cells) {
+							name_entry_lines_[1U].push_back(character);
+							++name_entry_column_;
+						}
+						changed = true;
+					}
+				}
+			}
+		} else {
+			if(input.erase && entry_cursor_ != 0U) {
+				entry_.erase(entry_cursor_ - 1U, 1U);
+				--entry_cursor_;
+				changed = true;
+			} else if(input.delete_forward && entry_cursor_ < entry_.size()) {
+				entry_.erase(entry_cursor_, 1U);
+				changed = true;
+			} else if(input.home) {
+				entry_cursor_ = 0U;
+				changed = true;
+			} else if(input.end) {
+				entry_cursor_ = entry_.size();
+				changed = true;
+			} else if(input.ui.left) {
+				if(entry_cursor_ != 0U) {
+					--entry_cursor_;
+				}
+				changed = true;
+			} else if(input.ui.right) {
+				if(entry_cursor_ < entry_.size()) {
+					++entry_cursor_;
+				}
+				changed = true;
+			} else if(input.text_character) {
+				const auto character = static_cast<char>(std::toupper(
+					static_cast<unsigned char>(*input.text_character)
 				));
 				if(link_code_character(character) && entry_.size() < 10U) {
-					entry_.push_back(character);
+					entry_.insert(entry_cursor_, 1U, character);
+					++entry_cursor_;
+					changed = true;
 				}
-			} else if(character >= 0x20 && character <= 0x7E &&
-				entry_.size() < new_classic_nametag_max_bytes) {
-				entry_.push_back(character);
 			}
+		}
+		if(changed) {
 			invalid_entry_ = false;
+			reset_cursor_blink();
 			return draw();
 		}
 		if(input.ui.cancel) {
@@ -299,18 +448,22 @@ bool NewClassicOnlineProfileScene::consume(
 			}
 			screen_ = Screen::menu;
 			entry_.clear();
+			name_entry_lines_ = {};
 			invalid_entry_ = false;
 			require_release();
 			return draw();
 		}
 		if(input.ui.confirm) {
+			const auto submitted = screen_ == Screen::name_entry ?
+				name_entry_text() : entry_;
 			const bool valid = screen_ == Screen::name_entry ?
-				layout_new_classic_nametag(entry_).has_value() :
-				(entry_.size() == 10U && std::ranges::all_of(
-					entry_, link_code_character
+				layout_new_classic_nametag(submitted).has_value() :
+				(submitted.size() == 10U && std::ranges::all_of(
+					submitted, link_code_character
 				));
 			if(!valid) {
 				invalid_entry_ = true;
+				reset_cursor_blink();
 				require_release();
 				return draw();
 			}
@@ -318,10 +471,15 @@ bool NewClassicOnlineProfileScene::consume(
 				screen_ == Screen::name_entry ?
 					NewClassicOnlineProfileActionType::update_nametag :
 					NewClassicOnlineProfileActionType::redeem_link_code,
-				entry_,
+				submitted,
 			};
 			request_pending_ = true;
 			return false;
+		}
+		if(++cursor_blink_ticks_ >= cursor_blink_interval) {
+			cursor_blink_ticks_ = 0U;
+			cursor_visible_ = !cursor_visible_;
+			return draw();
 		}
 		return false;
 	}
@@ -353,6 +511,7 @@ bool NewClassicOnlineProfileScene::report_profile(
 	}
 	nametag_ = std::move(profile.nametag);
 	entry_.clear();
+	name_entry_lines_ = {};
 	screen_ = Screen::menu;
 	request_pending_ = false;
 	require_release();
@@ -383,6 +542,9 @@ bool NewClassicOnlineProfileScene::report_linked(
 	nametag_ = std::move(profile.nametag);
 	entry_.clear();
 	screen_ = nametag_ ? Screen::linked : Screen::name_entry;
+	if(screen_ == Screen::name_entry) {
+		begin_name_entry();
+	}
 	request_pending_ = false;
 	require_release();
 	return draw();

@@ -1254,7 +1254,10 @@ bool authentic_online_high_score_gate(
 	request.seed = 1U;
 	request.fm_available = false;
 	request.experience = ExperienceProfile::new_classic;
-	request.new_classic_online_boards.push_back(online_high_score_board());
+	auto empty_online_library = online_high_score_board();
+	empty_online_library.leaderboard_entries.clear();
+	empty_online_library.replay_records.clear();
+	request.new_classic_online_boards.push_back(std::move(empty_online_library));
 	auto empty_my_replays = online_high_score_board();
 	empty_my_replays.leaderboard_entries.clear();
 	empty_my_replays.replay_records.clear();
@@ -1396,10 +1399,29 @@ bool authentic_online_high_score_gate(
 					ClassicOpSessionScene::failed)) << '\n';
 		return false;
 	}
-	for(std::size_t boundary = 0U; boundary < 24U; ++boundary) {
+	if(last_surface_tone != 0) {
+		std::cerr << "local HiScore return popped in without starting from black\n";
+		return false;
+	}
+	std::size_t black_boundaries = 0U;
+	while(black_boundaries < 4U && last_surface_tone == 0) {
 		if(!step()) {
 			return false;
 		}
+		++black_boundaries;
+	}
+	if(last_surface_tone == 0 || black_boundaries > 3U) {
+		std::cerr << "local HiScore return held black too long\n";
+		return false;
+	}
+	for(std::size_t boundary = black_boundaries; boundary < 24U; ++boundary) {
+		if(!step()) {
+			return false;
+		}
+	}
+	if(last_surface_tone != 100) {
+		std::cerr << "local HiScore return fade did not reach full tone\n";
+		return false;
 	}
 	// Personal Bests is a retained local-score page inside the same immutable
 	// HiScore owner. It returns to the hub without rebuilding OP or touching the
@@ -1514,7 +1536,10 @@ bool authentic_replay_hub_gate(
 	request.seed = 1U;
 	request.fm_available = false;
 	request.experience = ExperienceProfile::new_classic;
-	request.new_classic_online_boards.push_back(online_high_score_board());
+	auto empty_replay_library = online_high_score_board();
+	empty_replay_library.leaderboard_entries.clear();
+	empty_replay_library.replay_records.clear();
+	request.new_classic_online_boards.push_back(std::move(empty_replay_library));
 	const bool upload_expected = watch_document.has_value();
 	if(upload_expected) {
 		if(!commit_replay_slot(
@@ -1583,6 +1608,15 @@ bool authentic_replay_hub_gate(
 	}
 	if(!step(0x0020U) || ClassicRunnerTestAccess::scene(runner) !=
 		ClassicOpSessionScene::replay_browser || !settle_patch_menu()) {
+		return false;
+	}
+	auto populated_replay_library = online_high_score_board();
+	populated_replay_library.generation = 2U;
+	if(!runner.merge_new_classic_online_board(
+		std::move(populated_replay_library)
+	) ||
+		!step()) {
+		std::cerr << "Replay hub rejected a populated refresh after an empty Online Replay Library\n";
 		return false;
 	}
 	auto empty_my_replays = online_high_score_board();

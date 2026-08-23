@@ -23,7 +23,7 @@ constexpr present::Index4 title_color = 9U;
 constexpr present::Index4 outcome_color = 12U;
 constexpr present::Index4 label_color = 15U;
 constexpr present::Index4 value_color = 12U;
-constexpr present::Index4 footer_color = 13U;
+constexpr present::Index4 footer_color = title_color;
 
 [[nodiscard]] constexpr NewClassicMessageId outcome_message(
 	NewClassicNetplayReportKind kind
@@ -122,7 +122,7 @@ bool NewClassicNetplayReport::draw() noexcept
 	if(kind_ == NewClassicNetplayReportKind::connection_failed) {
 		return font.put_centered(raster, center_x, 160,
 			messages.text(NewClassicMessageId::netplay_room_connection_retry),
-			label_color) &&
+			title_color) &&
 			font.put_centered(raster, center_x, footer_top,
 				messages.text(NewClassicMessageId::netplay_report_footer), footer_color) &&
 			patch_surface_.publish(raster.access_page());

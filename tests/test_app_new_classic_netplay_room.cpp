@@ -160,21 +160,17 @@ void test_host_intent_is_player_lock_gated()
 	release(room);
 	static_cast<void>(room.consume({.ui = {.down = true}}));
 	release(room);
-	static_cast<void>(room.consume({.ui = {.confirm = true}}));
-	expect(!room.take_launch(),
-		"Create keeps its launch private until the background is black");
-	auto launched = finish_fade_out(room);
-	expect(!room.resume_after_launch(),
-		"a launch owner cannot resume before its intent is consumed");
+	auto launched = room.consume({.ui = {.confirm = true}});
 	auto intent = room.take_launch();
 	expect(launched.status == NewClassicNetplayRoomStatus::launch_requested &&
+		room.surface().palette_tone == 100 &&
 		intent && intent->mode == NewClassicNetplayRoomLaunchMode::host &&
 		intent->transport == NewClassicNetplayRoomTransport::online_service &&
 		!intent->relay_only &&
 		intent->host_port == 31'415U && intent->join_endpoint.empty() &&
 		intent->character == 2U && intent->palette == 2U && intent->rank == 2U &&
 		intent->input_delay_frames == 0U,
-		"online Create publishes directly after the player lock");
+		"online Create publishes directly after the player lock without fading the unchanged background");
 	expect(!room.take_launch(), "launch intent is single-consumer");
 	expect(room.show_launch_failure() &&
 		room.status() == NewClassicNetplayRoomStatus::running,
@@ -185,8 +181,7 @@ void test_host_intent_is_player_lock_gated()
 		NewClassicNetplayRoomStatus::running,
 		"any fresh failure-screen input restores host player setup");
 	release(room);
-	static_cast<void>(room.consume({.ui = {.confirm = true}}));
-	const auto retry = finish_fade_out(room);
+	const auto retry = room.consume({.ui = {.confirm = true}});
 	const auto retry_intent = room.take_launch();
 	expect(retry.status == NewClassicNetplayRoomStatus::launch_requested &&
 		retry_intent && retry_intent->mode ==
@@ -236,8 +231,7 @@ void test_join_entry_and_validation()
 	}
 	static_cast<void>(room.consume({.erase = true}));
 	static_cast<void>(room.consume({.text_character = '5'}));
-	static_cast<void>(room.consume({.ui = {.confirm = true}}));
-	const auto connected = finish_fade_out(room);
+	const auto connected = room.consume({.ui = {.confirm = true}});
 	auto intent = room.take_launch();
 	expect(connected.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->mode == NewClassicNetplayRoomLaunchMode::join &&
@@ -254,8 +248,7 @@ void test_join_entry_and_validation()
 	expect(dismissed.surface_changed && room.text_entry_active(),
 		"dismissing Join failure restores the populated room-code editor");
 	release(room);
-	static_cast<void>(room.consume({.ui = {.confirm = true}}));
-	const auto retried = finish_fade_out(room);
+	const auto retried = room.consume({.ui = {.confirm = true}});
 	const auto retry_intent = room.take_launch();
 	expect(retried.status == NewClassicNetplayRoomStatus::launch_requested &&
 		retry_intent && retry_intent->join_endpoint == endpoint,
@@ -297,8 +290,7 @@ void test_relay_only_launch_intent()
 		static_cast<void>(room.consume({.ui = {.down = true}}));
 		release(room);
 	}
-	static_cast<void>(room.consume({.ui = {.confirm = true}}));
-	const auto launched = finish_fade_out(room);
+	const auto launched = room.consume({.ui = {.confirm = true}});
 	const auto intent = room.take_launch();
 	expect(launched.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->transport ==
@@ -338,8 +330,7 @@ void test_direct_endpoint_uses_physical_text()
 		static_cast<void>(room.consume({.text_character = character}));
 	}
 	static_cast<void>(room.consume({.text_character = ';'}));
-	static_cast<void>(room.consume({.ui = {.confirm = true}}));
-	const auto connected = finish_fade_out(room);
+	const auto connected = room.consume({.ui = {.confirm = true}});
 	const auto intent = room.take_launch();
 	expect(connected.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->transport == NewClassicNetplayRoomTransport::direct_udp &&
@@ -368,8 +359,7 @@ void test_direct_host_keeps_socket_confirmation()
 		NewClassicNetplayRoomStatus::running && !room.take_launch(),
 		"Direct UDP Create retains its explicit socket confirmation");
 	release(room);
-	static_cast<void>(room.consume({.ui = {.confirm = true}}));
-	const auto launched = finish_fade_out(room);
+	const auto launched = room.consume({.ui = {.confirm = true}});
 	const auto intent = room.take_launch();
 	expect(launched.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->mode == NewClassicNetplayRoomLaunchMode::host &&
@@ -483,8 +473,7 @@ void test_quick_match_intent()
 	release(room);
 	static_cast<void>(room.consume({.ui = {.down = true}}));
 	release(room);
-	static_cast<void>(room.consume({.ui = {.confirm = true}}));
-	const auto launched = finish_fade_out(room);
+	const auto launched = room.consume({.ui = {.confirm = true}});
 	const auto intent = room.take_launch();
 	expect(launched.status == NewClassicNetplayRoomStatus::launch_requested &&
 		intent && intent->mode == NewClassicNetplayRoomLaunchMode::quick_match &&
@@ -639,6 +628,46 @@ void test_online_profile_scene()
 {
 	using namespace th03::app;
 	const auto assets = assets_fixture();
+	auto distinct_backgrounds =
+		std::make_shared<NewClassicReplayPatchAssets>(*assets);
+	std::ranges::fill(distinct_backgrounds->new_menu_backgrounds[
+		static_cast<std::size_t>(NewClassicMenuBackground::netplay)
+	].image.indices, std::uint8_t{2U});
+	std::ranges::fill(distinct_backgrounds->new_menu_backgrounds[
+		static_cast<std::size_t>(NewClassicMenuBackground::online_profile)
+	].image.indices, std::uint8_t{7U});
+	NewClassicOnlineProfileScene matching_background(
+		distinct_backgrounds, NewClassicLanguageAssetProfile::english,
+		std::optional<std::string>{"AZINN"}
+	);
+	expect(matching_background.valid() &&
+		matching_background.surface().pixels.back().value == 2U,
+		"Online Profile uses the Online Match background rather than its former distinct asset");
+	NewClassicOnlineProfileScene editor(
+		assets, NewClassicLanguageAssetProfile::english, std::nullopt
+	);
+	release(editor);
+	static_cast<void>(editor.consume({.text_character = 'z'}));
+	expect(editor.text_entry_active() && !editor.take_action(),
+		"printable Z remains nametag text instead of leaking the fixed Select binding");
+	static_cast<void>(editor.consume({.erase = true}));
+	for(const auto character : std::string_view{"FIRST"}) {
+		static_cast<void>(editor.consume({.text_character = character}));
+	}
+	static_cast<void>(editor.consume({.ui = {.down = true}}));
+	for(const auto character : std::string_view{"SECOND"}) {
+		static_cast<void>(editor.consume({.text_character = character}));
+	}
+	static_cast<void>(editor.consume({.ui = {.up = true}}));
+	static_cast<void>(editor.consume({.ui = {.left = true}}));
+	static_cast<void>(editor.consume({.text_character = 'X'}));
+	static_cast<void>(editor.consume({.ui = {.confirm = true}}));
+	auto edited = editor.take_action();
+	expect(edited && edited->type ==
+		NewClassicOnlineProfileActionType::update_nametag &&
+		edited->text == "FIRSXT SECOND",
+		"nametag editing supports two-line vertical and insertion-point navigation");
+
 	NewClassicOnlineProfileScene first_use(
 		assets, NewClassicLanguageAssetProfile::english, std::nullopt
 	);
@@ -780,6 +809,22 @@ void test_authentic_menu_previews_if_requested()
 		assigned.surface(), "005d-online-network-settings.ppm"
 	);
 
+	NewClassicNetplayRoom failed(assets);
+	release(failed);
+	static_cast<void>(failed.consume({.ui = {.confirm = true}}));
+	release(failed);
+	for(std::size_t row = 0U; row < 3U; ++row) {
+		static_cast<void>(failed.consume({.ui = {.down = true}}));
+		release(failed);
+	}
+	static_cast<void>(failed.consume({.ui = {.confirm = true}}));
+	static_cast<void>(failed.take_launch());
+	expect(failed.show_launch_failure(),
+		"Unable to connect preview restores without a same-background fade");
+	th03::test::dump_menu_preview(
+		failed.surface(), "005e-online-unable-to-connect.ppm"
+	);
+
 	auto alternate_assets =
 		std::make_shared<NewClassicReplayPatchAssets>(*assets);
 	const auto sample = alternate_assets->menu_background(
@@ -801,6 +846,14 @@ void test_authentic_menu_previews_if_requested()
 	expect(profile.valid(), "Online Profile preview composes");
 	th03::test::dump_menu_preview(
 		profile.surface(), "003-online-profile.ppm"
+	);
+	release(profile);
+	static_cast<void>(profile.consume({.ui = {.confirm = true}}));
+	release(profile);
+	static_cast<void>(profile.consume({.ui = {.down = true}}));
+	static_cast<void>(profile.consume({.end = true}));
+	th03::test::dump_menu_preview(
+		profile.surface(), "003a-online-profile-name-editor.ppm"
 	);
 }
 

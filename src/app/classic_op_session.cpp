@@ -1204,8 +1204,7 @@ struct ClassicOpSessionBackend final {
 			online_boards, [this](const auto &board) {
 				return board.board_category &&
 					board.board_category->mode == NewClassicOnlineMode::story &&
-					board.board_category->rank == replay_return_resident.rank &&
-					!board.replay_records.empty();
+					board.board_category->rank == replay_return_resident.rank;
 			}
 		);
 	}
@@ -2751,7 +2750,7 @@ struct ClassicOpSessionBackend final {
 		}
 		high_scores.reset();
 		high_score_completion.reset();
-		auto hub = start_high_score_menu(false);
+		auto hub = start_high_score_menu(true);
 		if(!hub) {
 			return std::unexpected(std::move(hub.error()));
 		}

@@ -30,6 +30,35 @@ void expect(bool condition, const char *message)
 	}
 }
 
+void test_text_editor_input_ownership()
+{
+	using namespace th03::app;
+	const LogicalTickInput gameplay_bound{
+		.input = {.p1 = 0xFFFFU, .p2 = 0xFFFFU, .system = 0xFFFFU},
+		.physical_domains = PhysicalInputDomains{
+			.keyboard = {
+				.p1 = 0xFFFFU,
+				.p2 = 0xFFFFU,
+				.system = 0xFFFFU,
+			},
+			.first_joystick = 0xFFFFU,
+			.first_joystick_present = true,
+		},
+	};
+	const auto printable = new_classic_text_editor_ui(
+		gameplay_bound, NewClassicTextEditorCommand::none
+	);
+	expect(!printable.up && !printable.down && !printable.left &&
+		!printable.right && !printable.confirm && !printable.bomb &&
+		!printable.cancel,
+		"text fields ignore System, Story, VS, and joystick gameplay bindings");
+	const auto editor = new_classic_text_editor_ui(
+		{.app_quit_requested = true}, NewClassicTextEditorCommand::left
+	);
+	expect(editor.left && !editor.confirm && editor.app_quit_requested,
+		"only an explicit editor command and process quit cross text ownership");
+}
+
 std::uint16_t injected_dos_date(void *context) noexcept
 {
 	return *static_cast<const std::uint16_t *>(context);
@@ -770,10 +799,13 @@ void test_online_high_score_menu()
 
 	NewClassicHighScoreMenu returned(
 		{online_board(2U, 4U, 0x20U)}, 2U, patch_assets,
-		NewClassicOnlineMenuMode::high_scores, std::nullopt, false
+		NewClassicOnlineMenuMode::high_scores, std::nullopt, true
 	);
-	expect(returned.valid() && returned.surface().palette_tone == 100,
-		"returning from Local HiScores restores the hub at full tone without a second black-in");
+	expect(returned.valid() && returned.surface().palette_tone == 0,
+		"returning from Local HiScores begins the missing hub fade-in instead of popping into existence");
+	finish_entry_fade(returned);
+	expect(returned.surface().palette_tone == 100,
+		"the Local HiScores return fade uses the same short retained-menu cadence");
 
 	auto personal_document = new_classic_score_empty();
 	auto &reimu = personal_document.boards[2U][0U];
@@ -1799,6 +1831,7 @@ void test_catalog_browser_and_save()
 
 int main()
 {
+	test_text_editor_input_ownership();
 	test_replay_hub_and_libraries();
 	test_online_high_score_menu();
 	test_authentic_online_menu_previews_if_requested();

@@ -2512,6 +2512,32 @@ negotiate_direct_netplay_lobby(
 	};
 }
 
+// Text fields own the keyboard while SDL text input is active. In particular,
+// printable Z/X/numpad keys must never be reinterpreted through fixed System,
+// Story, or VS gameplay bindings. Only explicit editor/navigation scancodes
+// cross this boundary; SDL_TEXT_INPUT remains the sole source of characters.
+[[nodiscard]] th03::app::NewClassicUiInput project_new_classic_text_entry_ui(
+	const th03::app::LogicalTickInput &sample,
+	std::optional<SDL_Scancode> scancode
+) noexcept
+{
+	using Command = th03::app::NewClassicTextEditorCommand;
+	auto command = Command::none;
+	if(scancode) {
+		switch(*scancode) {
+		case SDL_SCANCODE_UP: command = Command::up; break;
+		case SDL_SCANCODE_DOWN: command = Command::down; break;
+		case SDL_SCANCODE_LEFT: command = Command::left; break;
+		case SDL_SCANCODE_RIGHT: command = Command::right; break;
+		case SDL_SCANCODE_RETURN:
+		case SDL_SCANCODE_KP_ENTER: command = Command::confirm; break;
+		case SDL_SCANCODE_ESCAPE: command = Command::cancel; break;
+		default: break;
+		}
+	}
+	return th03::app::new_classic_text_editor_ui(sample, command);
+}
+
 #if defined(TH03_ENABLE_RTC_TRANSPORT)
 [[nodiscard]] std::expected<DirectNetplayLobbyResult, int>
 negotiate_rtc_netplay_lobby(
@@ -3136,11 +3162,19 @@ private:
 				}
 			}
 			const auto scancode = mapper.take_keyboard_scancode_press();
+			const bool text_entry = room.text_entry_active();
 			const auto consumed = room.consume({
-				.ui = project_new_classic_ui(
-					**due, !room.text_entry_active()
-				),
-				.erase = scancode && *scancode == SDL_SCANCODE_BACKSPACE,
+				.ui = text_entry ?
+					project_new_classic_text_entry_ui(**due, scancode) :
+					project_new_classic_ui(**due, true),
+				.erase = text_entry && scancode &&
+					*scancode == SDL_SCANCODE_BACKSPACE,
+				.delete_forward = text_entry && scancode &&
+					*scancode == SDL_SCANCODE_DELETE,
+				.home = text_entry && scancode &&
+					*scancode == SDL_SCANCODE_HOME,
+				.end = text_entry && scancode &&
+					*scancode == SDL_SCANCODE_END,
 			});
 			if(!text_input.set_active(room.text_entry_active())) {
 				return {.exit_code = fail_netplay(
@@ -3291,11 +3325,19 @@ struct OnlineProfileRunResult final {
 					surface_changed;
 			}
 			const auto scancode = mapper.take_keyboard_scancode_press();
+			const bool text_entry = scene.text_entry_active();
 			surface_changed = scene.consume({
-				.ui = project_new_classic_ui(
-					**due, !scene.text_entry_active()
-				),
-				.erase = scancode && *scancode == SDL_SCANCODE_BACKSPACE,
+				.ui = text_entry ?
+					project_new_classic_text_entry_ui(**due, scancode) :
+					project_new_classic_ui(**due, true),
+				.erase = text_entry && scancode &&
+					*scancode == SDL_SCANCODE_BACKSPACE,
+				.delete_forward = text_entry && scancode &&
+					*scancode == SDL_SCANCODE_DELETE,
+				.home = text_entry && scancode &&
+					*scancode == SDL_SCANCODE_HOME,
+				.end = text_entry && scancode &&
+					*scancode == SDL_SCANCODE_END,
 			}) || surface_changed;
 			if(!text_input.set_active(scene.text_entry_active())) {
 				return {.exit_code = fail_netplay(

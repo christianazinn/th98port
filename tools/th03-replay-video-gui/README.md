@@ -39,6 +39,11 @@ tools\th03-replay-video-gui\build.ps1 `
   -RendererPath out\build\msvc-x64-sdl\Release\th03-replay-video.exe
 ```
 
+The packaged GUI executable is also staged at
+`out/standalone/TH03ReplayRenderer.exe` so it stays next to the current game
+and CLI-renderer test builds. The versioned directory and ZIP remain the
+redistributable package with notices and licenses.
+
 Cancellation owns the renderer and all descendants in a Windows Job Object,
 so FFmpeg cannot remain running after the GUI reports the job cancelled. The
 CLI renders into a same-directory temporary file and atomically publishes only

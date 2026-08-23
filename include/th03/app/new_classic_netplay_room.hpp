@@ -96,6 +96,9 @@ struct NewClassicNetplayRoomInput final {
 	NewClassicUiInput ui{};
 	std::optional<char> text_character{};
 	bool erase = false;
+	bool delete_forward = false;
+	bool home = false;
+	bool end = false;
 };
 
 enum class NewClassicNetplayRoomStatus : std::uint8_t {
@@ -185,7 +188,9 @@ private:
 	std::uint8_t selection_ = 0U;
 	std::uint16_t host_port_ = 31'415U;
 	std::string port_entry_{};
+	std::size_t port_entry_cursor_ = 0U;
 	std::string join_endpoint_{};
+	std::size_t join_endpoint_cursor_ = 0U;
 	NewClassicNetplayRoomTransport transport_ =
 		NewClassicNetplayRoomTransport::online_service;
 	bool relay_only_ = false;

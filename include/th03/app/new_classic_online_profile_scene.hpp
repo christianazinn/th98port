@@ -1,6 +1,8 @@
 #ifndef TH03_APP_NEW_CLASSIC_ONLINE_PROFILE_SCENE_HPP
 #define TH03_APP_NEW_CLASSIC_ONLINE_PROFILE_SCENE_HPP
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -30,6 +32,9 @@ struct NewClassicOnlineProfileInput final {
 	NewClassicUiInput ui{};
 	std::optional<char> text_character{};
 	bool erase = false;
+	bool delete_forward = false;
+	bool home = false;
+	bool end = false;
 };
 
 // Retained source-styled account editor. HTTPS and credential storage remain
@@ -72,6 +77,9 @@ private:
 
 	[[nodiscard]] bool draw() noexcept;
 	[[nodiscard]] bool consume_fade() noexcept;
+	void begin_name_entry() noexcept;
+	[[nodiscard]] std::string name_entry_text() const;
+	void reset_cursor_blink() noexcept;
 	void begin_fade_out(NewClassicOnlineProfileAction action) noexcept;
 	void require_release() noexcept;
 
@@ -85,12 +93,18 @@ private:
 	Screen screen_ = Screen::menu;
 	std::uint8_t selection_ = 0U;
 	std::optional<std::string> nametag_{};
+	std::array<std::string, 2U> name_entry_lines_{};
+	std::size_t name_entry_row_ = 0U;
+	std::size_t name_entry_column_ = 0U;
 	std::string entry_{};
+	std::size_t entry_cursor_ = 0U;
 	std::string link_code_{};
 	std::optional<NewClassicOnlineProfileAction> action_{};
 	bool release_required_ = true;
 	bool request_pending_ = false;
 	bool invalid_entry_ = false;
+	std::uint8_t cursor_blink_ticks_ = 0U;
+	bool cursor_visible_ = true;
 	bool valid_ = false;
 };
 
