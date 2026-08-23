@@ -19,6 +19,43 @@
 namespace th03::app {
 namespace {
 
+enum class LocalizedContinueText : std::size_t {
+	question,
+	credit,
+	yes,
+	no,
+	gameover,
+};
+
+constexpr std::array localized_continue_ids{
+	NewClassicGameTextId::continue_question,
+	NewClassicGameTextId::continue_credit,
+	NewClassicGameTextId::continue_yes,
+	NewClassicGameTextId::continue_no,
+	NewClassicGameTextId::gameover_title,
+};
+
+constexpr present::Rect continue_question_rect{72, 64, 496U, 120U};
+constexpr present::Rect continue_credit_rect{448, 360, 128U, 32U};
+constexpr present::Rect continue_yes_rect{192, 272, 96U, 41U};
+constexpr present::Rect continue_no_rect{352, 272, 96U, 41U};
+constexpr present::Rect gameover_title_rect{296, 264, 304U, 136U};
+
+[[nodiscard]] constexpr std::size_t localized_index(
+	LocalizedContinueText value
+) noexcept {
+	return static_cast<std::size_t>(value);
+}
+
+[[nodiscard]] std::span<const std::uint8_t> trim_padding(
+	std::span<const std::uint8_t> text
+) noexcept {
+	while(!text.empty() && text.back() == static_cast<std::uint8_t>(' ')) {
+		text = text.first(text.size() - 1U);
+	}
+	return text;
+}
+
 [[nodiscard]] ClassicMainlContinueError continue_error(
 	ClassicMainlContinueErrorCode code,
 	std::optional<MainResourceKey> resource = std::nullopt
@@ -49,6 +86,75 @@ namespace {
 	);
 	result.text_error.emplace(error);
 	return result;
+}
+
+[[nodiscard]] bool draw_localized_text(
+	present::Raster &raster,
+	present::Rect rect,
+	const present::PreparedGraphicsText8x16 &text,
+	std::uint8_t scale,
+	present::Index4 color,
+	std::optional<present::Index4> shadow = std::nullopt,
+	present::Point shadow_offset = {0, 0},
+	bool clear_background = true
+) noexcept {
+	const auto text_width =
+		static_cast<std::uint64_t>(text.pixel_width()) * scale;
+	const auto text_height =
+		static_cast<std::uint64_t>(present::jis_height) * scale;
+	const auto shadow_x = shadow ? std::max(0, shadow_offset.x) : 0;
+	const auto shadow_y = shadow ? std::max(0, shadow_offset.y) : 0;
+	const auto total_width = text_width + static_cast<std::uint32_t>(shadow_x);
+	const auto total_height = text_height + static_cast<std::uint32_t>(shadow_y);
+	if(text_width == 0U || total_width > rect.width ||
+		total_height > rect.height) {
+		return false;
+	}
+	const present::Point position{
+		rect.x + static_cast<std::int32_t>((rect.width - total_width) / 2U),
+		rect.y + static_cast<std::int32_t>((rect.height - total_height) / 2U),
+	};
+	if(clear_background && !raster.clear(rect, 0U)) {
+		return false;
+	}
+	if(shadow && !present::graphics_text_put_scaled_8x16(
+		raster,
+		{position.x + shadow_offset.x, position.y + shadow_offset.y},
+		text,
+		{*shadow, present::GraphicsTextWeight::black, 0U},
+		scale
+	)) {
+		return false;
+	}
+	return present::graphics_text_put_scaled_8x16(
+		raster,
+		position,
+		text,
+		{color, present::GraphicsTextWeight::black, 0U},
+		scale
+	);
+}
+
+[[nodiscard]] bool draw_gameover_glow(present::Raster &raster) noexcept
+{
+	constexpr present::Point center{448, 332};
+	constexpr std::int32_t radius = 64;
+	constexpr std::int32_t radius_squared = radius * radius;
+	for(std::int32_t y = -radius; y <= radius; ++y) {
+		for(std::int32_t x = -radius; x <= radius; ++x) {
+			const auto distance = (x * x) + (y * y);
+			if(distance > radius_squared) {
+				continue;
+			}
+			const auto shade = static_cast<present::Index4>(
+				1 + (((radius_squared - distance) * 6) / radius_squared)
+			);
+			if(!raster.plot({center.x + x, center.y + y}, shade)) {
+				return false;
+			}
+		}
+	}
+	return true;
 }
 
 [[nodiscard]] bool same_resource_spec(
@@ -271,21 +377,54 @@ std::expected<std::unique_ptr<ClassicMainlContinueScene>, ClassicMainlContinueEr
 ClassicMainlContinueScene::create(
 	std::uint8_t remaining_credits,
 	std::span<const LoadedMainResource> resources,
-	const present::AnkGlyphProvider &font
+	const present::AnkGlyphProvider &font,
+	const NewClassicGameTextCatalog *game_text
 )
 {
-	return create_impl(remaining_credits, resources, font, true);
+	return create_impl(remaining_credits, resources, font, true, game_text);
+}
+
+std::expected<void, ClassicMainlContinueError>
+ClassicMainlContinueScene::prepare_localized_text(
+	Prepared &prepared,
+	const NewClassicGameTextCatalog *game_text,
+	const present::AnkGlyphProvider &font
+) {
+	if(!game_text) {
+		return {};
+	}
+	const auto &english = new_classic_builtin_english_game_text();
+	for(std::size_t index = 0U; index < localized_continue_ids.size(); ++index) {
+		const auto id = localized_continue_ids[index];
+		const auto translated = game_text->bytes(id);
+		if(std::ranges::equal(translated, english.bytes(id))) {
+			continue;
+		}
+		const auto visible = trim_padding(translated);
+		if(visible.empty()) {
+			return std::unexpected(continue_error(
+				ClassicMainlContinueErrorCode::font_prepare_failed
+			));
+		}
+		auto text = present::prepare_graphics_text_8x16(visible, font);
+		if(!text) {
+			return std::unexpected(text_error(text.error()));
+		}
+		prepared.localized_text[index].emplace(std::move(*text));
+	}
+	return {};
 }
 
 std::expected<std::unique_ptr<ClassicMainlContinueScene>, ClassicMainlContinueError>
 ClassicMainlContinueScene::create_from_registration(
 	ClassicRegistrationCompletion &&completion,
 	std::uint8_t remaining_credits,
-	const present::AnkGlyphProvider &font
+	const present::AnkGlyphProvider &font,
+	const NewClassicGameTextCatalog *game_text
 )
 {
 	return create_from_registration_impl(
-		std::move(completion), remaining_credits, font
+		std::move(completion), remaining_credits, font, game_text
 	);
 }
 
@@ -293,7 +432,8 @@ std::expected<std::unique_ptr<ClassicMainlContinueScene>, ClassicMainlContinueEr
 ClassicMainlContinueScene::create_from_registration_impl(
 	ClassicRegistrationCompletion &&completion,
 	std::uint8_t remaining_credits,
-	const present::AnkGlyphProvider &font
+	const present::AnkGlyphProvider &font,
+	const NewClassicGameTextCatalog *game_text
 )
 {
 	const auto expected_screen = remaining_credits == 0U ?
@@ -311,6 +451,10 @@ ClassicMainlContinueScene::create_from_registration_impl(
 
 	auto prepared = std::make_unique<Prepared>();
 	prepared->choice_cels = std::move(completion.choice_cels_);
+	if(auto localized = prepare_localized_text(*prepared, game_text, font);
+		!localized) {
+		return std::unexpected(localized.error());
+	}
 	if(remaining_credits != 0U) {
 		if(!std::all_of(
 			prepared->choice_cels.begin(), prepared->choice_cels.end(),
@@ -337,6 +481,19 @@ ClassicMainlContinueScene::create_from_registration_impl(
 	);
 	scene->raster_ = std::move(completion.raster_);
 	if(remaining_credits == 0U) {
+		const auto &localized = prepared->localized_text[
+			localized_index(LocalizedContinueText::gameover)
+		];
+		if(localized && (!scene->raster_.clear(gameover_title_rect, 0U) ||
+			!draw_gameover_glow(scene->raster_) ||
+			!draw_localized_text(
+				scene->raster_, gameover_title_rect, *localized,
+				2U, 8U, present::Index4{4U}, {2, 2}, false
+			))) {
+			return std::unexpected(continue_error(
+				ClassicMainlContinueErrorCode::draw_failed
+			));
+		}
 		scene->phase_ = ClassicMainlContinuePhase::ready;
 		scene->choice_ = ContinueChoice::decline;
 		scene->completion_ = ClassicMainlContinueCompletion(
@@ -344,7 +501,8 @@ ClassicMainlContinueScene::create_from_registration_impl(
 		);
 		return scene;
 	}
-	if(!scene->draw_choices() || !scene->draw_credit(remaining_credits)) {
+	if(!scene->draw_localized_continue_labels() || !scene->draw_choices() ||
+		!scene->draw_credit(remaining_credits)) {
 		return std::unexpected(continue_error(
 			ClassicMainlContinueErrorCode::draw_failed
 		));
@@ -357,7 +515,8 @@ ClassicMainlContinueScene::create_impl(
 	std::uint8_t remaining_credits,
 	std::span<const LoadedMainResource> resources,
 	const present::AnkGlyphProvider &font,
-	bool authenticate_resource_bytes
+	bool authenticate_resource_bytes,
+	const NewClassicGameTextCatalog *game_text
 )
 {
 	if(remaining_credits > 3U) {
@@ -375,6 +534,10 @@ ClassicMainlContinueScene::create_impl(
 	}
 
 	auto prepared = std::make_unique<Prepared>();
+	if(auto localized = prepare_localized_text(*prepared, game_text, font);
+		!localized) {
+		return std::unexpected(localized.error());
+	}
 	if(remaining_credits == 0U) {
 		const MainResourceKey gameover_key{
 			.role = MainResourceRole::gameover_background,
@@ -495,19 +658,53 @@ bool ClassicMainlContinueScene::draw_continue() noexcept
 			raster_, *prepared_->continue_background->palette
 		) && present::pi_put_8(
 			raster_, 0, 0, *prepared_->continue_background
-		) && draw_choices() && draw_credit(remaining_credits_);
+		) && draw_localized_continue_labels() && draw_choices() &&
+		draw_credit(remaining_credits_);
 }
 
 bool ClassicMainlContinueScene::draw_choices() noexcept
 {
 	const std::size_t left = (choice_ == ContinueChoice::accept) ? 0U : 2U;
 	const std::size_t right = (choice_ == ContinueChoice::accept) ? 3U : 1U;
-	return prepared_->choice_cels[left] && prepared_->choice_cels[right] &&
-		present::cdg_put_noalpha_8(
+	if(!prepared_->choice_cels[left] || !prepared_->choice_cels[right] ||
+		!present::cdg_put_noalpha_8(
 			raster_, 192, 272, *prepared_->choice_cels[left]
-		) && present::cdg_put_noalpha_8(
+		) || !present::cdg_put_noalpha_8(
 			raster_, 352, 272, *prepared_->choice_cels[right]
-		);
+		)) {
+		return false;
+	}
+	const bool accept = choice_ == ContinueChoice::accept;
+	const auto &yes = prepared_->localized_text[
+		localized_index(LocalizedContinueText::yes)
+	];
+	const auto &no = prepared_->localized_text[
+		localized_index(LocalizedContinueText::no)
+	];
+	return (!yes || draw_localized_text(
+		raster_, continue_yes_rect, *yes, 2U,
+		accept ? 15U : 14U
+	)) && (!no || draw_localized_text(
+		raster_, continue_no_rect, *no, 2U,
+		accept ? 14U : 15U
+	));
+}
+
+bool ClassicMainlContinueScene::draw_localized_continue_labels() noexcept
+{
+	const auto &question = prepared_->localized_text[
+		localized_index(LocalizedContinueText::question)
+	];
+	const auto &credit = prepared_->localized_text[
+		localized_index(LocalizedContinueText::credit)
+	];
+	return (!question || draw_localized_text(
+		raster_, continue_question_rect, *question,
+		2U, 15U, present::Index4{9U}, {2, 2}
+	)) && (!credit || draw_localized_text(
+		raster_, continue_credit_rect, *credit,
+		1U, 15U, present::Index4{9U}, {1, 1}
+	));
 }
 
 bool ClassicMainlContinueScene::draw_credit(std::uint8_t value) noexcept
@@ -532,6 +729,16 @@ bool ClassicMainlContinueScene::draw_gameover() noexcept
 		!present::pi_put_8(
 			raster_, 0, 0, *prepared_->gameover_background
 		)) {
+		return false;
+	}
+	const auto &localized = prepared_->localized_text[
+		localized_index(LocalizedContinueText::gameover)
+	];
+	if(localized && (!raster_.clear(gameover_title_rect, 0U) ||
+		!draw_gameover_glow(raster_) || !draw_localized_text(
+			raster_, gameover_title_rect, *localized,
+			2U, 8U, present::Index4{4U}, {2, 2}, false
+		))) {
 		return false;
 	}
 	raster_.set_palette_tone(0);

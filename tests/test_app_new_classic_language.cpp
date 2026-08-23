@@ -450,7 +450,7 @@ void test_message_packs(const th03::app::NewClassicMenuFont *authentic_font)
 
 void test_game_text_packs()
 {
-	static_assert(th03::app::new_classic_game_text_count == 743U);
+	static_assert(th03::app::new_classic_game_text_count == 748U);
 	static_assert(th03::app::new_classic_win_quote_text_id(0U, 0U, 0U) ==
 		th03::app::NewClassicGameTextId::win_quote_00_00);
 	static_assert(th03::app::new_classic_win_quote_text_id(8U, 10U, 2U) ==

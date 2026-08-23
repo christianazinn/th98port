@@ -309,6 +309,11 @@
     {"enum": "hud_banner_win", "id": "hud.banner.win", "encoding": "cp932", "exact_bytes": 16},
     {"enum": "hud_banner_stage", "id": "hud.banner.stage", "encoding": "cp932", "exact_bytes": 16},
     {"enum": "hud_banner_round", "id": "hud.banner.round", "encoding": "cp932", "exact_bytes": 16},
-    {"enum": "hud_banner_start", "id": "hud.banner.start", "encoding": "cp932", "exact_bytes": 16}
+    {"enum": "hud_banner_start", "id": "hud.banner.start", "encoding": "cp932", "exact_bytes": 16},
+    {"enum": "continue_question", "id": "continue.question", "encoding": "cp932", "exact_bytes": 32},
+    {"enum": "continue_credit", "id": "continue.credit", "encoding": "cp932", "exact_bytes": 32},
+    {"enum": "continue_yes", "id": "continue.yes", "encoding": "cp932", "exact_bytes": 32},
+    {"enum": "continue_no", "id": "continue.no", "encoding": "cp932", "exact_bytes": 32},
+    {"enum": "gameover_title", "id": "gameover.title", "encoding": "cp932", "exact_bytes": 32}
   ]
 }

@@ -1604,7 +1604,7 @@ struct ClassicStoryBackend final {
 		}
 		auto created = ClassicMainlContinueScene::create_from_registration(
 			std::move(*registration_completion), remaining_credits,
-			static_content->font()
+			static_content->font(), game_text
 		);
 		if(!created) {
 			return std::unexpected(continue_error(std::move(created.error())));

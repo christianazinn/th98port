@@ -98,7 +98,11 @@ active compact character labels in `T3LNG001`, centered within the source
 `SLWIN.CDG` likewise use locale-owned text in New Classic: only their audited
 56x16 white interiors are reconstructed, preserving the source border, rules,
 and star fields. Sealed Classic retains both source sheets. Character-select
-gameplay HUD banners are now localized as well. The audited selection portrait
+gameplay HUD banners are now localized as well. Continue and Game Over retain
+their exact stylized English images while translated/custom catalogs replace
+the question, credit, choices, and Game Over title inside audited black-backed
+regions; the translated Game Over path regenerates its glow behind the active
+text. The audited selection portrait
 atlases contain no labels; other text baked into reusable images remains.
 Menu headings baked into TL02 and related backgrounds are explicitly later
 work: removing them requires clean background reconstruction as well as
@@ -107,7 +111,7 @@ localized rendering.
 The source-text part of this parcel is now complete in both shipped languages.
 `T3LNG001` contains 406 explicit English and Japanese New Classic messages;
 Japanese rows are CP932 and combine authenticated proportional `MNUFONT.PF`
-Latin with exact `FONT.ROM` Japanese glyphs. `T3GTL001` contains all 743
+Latin with exact `FONT.ROM` Japanese glyphs. `T3GTL001` contains all 748
 graphics-text rows in explicit English and Japanese catalogs, including every
 win quote and Music Room comment. The Japanese author is regenerated from
 authenticated Japanese OP/MAIN/MAINL executables and DAT assets rather than
@@ -213,7 +217,7 @@ These can proceed alongside the content migrations:
 These tools should consume the same decoders and schemas as production rather
 than inventing shadow interpretations.
 
-Status: in progress. `th03-game-text-preview` now renders all 743 `T3GTL001`
+Status: in progress. `th03-game-text-preview` now renders all 748 `T3GTL001`
 messages into deterministic 640x400 contact sheets plus a machine-readable
 `T3GTP001` bounds index through the production PC-98 font and graphics-text
 path, including all win quotes and Music Room comments. The definitive

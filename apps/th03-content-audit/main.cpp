@@ -101,6 +101,10 @@ constexpr std::array native_surfaces{
 		"Lose, Win, Stage, Round, and Start image-text cels",
 	},
 	NativeSurface{
+		"continue-gameover-image-text", "mainl_continue_gameover", "T3GTL001",
+		"Continue question, credit, Yes, No, and Game Over title regions",
+	},
+	NativeSurface{
 		"win-quotes", "mainl_win", "T3GTL001",
 		"297 fixed DAT rows: nine characters by 11 blocks by three rows",
 	},

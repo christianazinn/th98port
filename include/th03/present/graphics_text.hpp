@@ -82,6 +82,13 @@ private:
 		const PreparedGraphicsText8x16 &,
 		GraphicsTextStyle
 	) noexcept;
+	friend bool graphics_text_put_scaled_8x16(
+		Raster &,
+		Point,
+		const PreparedGraphicsText8x16 &,
+		GraphicsTextStyle,
+		std::uint8_t
+	) noexcept;
 
 	PreparedGraphicsText8x16(
 		std::vector<Glyph> glyphs,
@@ -109,6 +116,18 @@ prepare_graphics_text_8x16(
 	Point position,
 	const PreparedGraphicsText8x16 &text,
 	GraphicsTextStyle style
+) noexcept;
+
+// New Classic image-text path. Each source pixel and source spacing unit is
+// expanded by an integer scale from 1 through 4. The complete destination is
+// validated before the first pixel changes, matching the atomic failure
+// contract of graphics_text_put_8x16().
+[[nodiscard]] bool graphics_text_put_scaled_8x16(
+	Raster &raster,
+	Point position,
+	const PreparedGraphicsText8x16 &text,
+	GraphicsTextStyle style,
+	std::uint8_t scale
 ) noexcept;
 
 } // namespace th03::present

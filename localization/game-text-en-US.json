@@ -745,6 +745,11 @@
     "hud.banner.win": "Win             ",
     "hud.banner.stage": "STAGE           ",
     "hud.banner.round": "Round           ",
-    "hud.banner.start": "START           "
+    "hud.banner.start": "START           ",
+    "continue.question": "Continue?                       ",
+    "continue.credit": "CREDIT                          ",
+    "continue.yes": "Yes                             ",
+    "continue.no": "No                              ",
+    "gameover.title": "Game is Over                    "
   }
 }

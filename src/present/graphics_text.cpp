@@ -12,6 +12,7 @@ namespace th03::present {
 namespace {
 
 constexpr std::uint8_t graphics_text_spacing_max = 7U;
+constexpr std::uint8_t graphics_text_scale_max = 4U;
 constexpr std::uint16_t alternate_ascii_row = 0x2900U;
 constexpr std::uint16_t alternate_kana_base = 0x2980U;
 constexpr std::uint16_t alternate_blank = 0x2B21U;
@@ -315,6 +316,77 @@ bool graphics_text_put_8x16(
 			}
 		}
 		cursor += static_cast<std::int64_t>(glyph.width) + style.spacing;
+	}
+	return true;
+}
+
+bool graphics_text_put_scaled_8x16(
+	Raster &raster,
+	Point position,
+	const PreparedGraphicsText8x16 &text,
+	GraphicsTextStyle style,
+	std::uint8_t scale
+) noexcept {
+	const auto tile = GrcgTile::solid(style.color);
+	if(!tile || !valid_weight(style.weight) ||
+		style.spacing > graphics_text_spacing_max || scale == 0U ||
+		scale > graphics_text_scale_max) {
+		return false;
+	}
+	if(text.glyphs_.empty()) {
+		return text.pixel_width_ == 0U;
+	}
+	const auto scaled_height = static_cast<std::uint32_t>(jis_height) * scale;
+	if(position.x < 0 || position.y < 0 ||
+		position.y > static_cast<std::int32_t>(
+			graphics_height - scaled_height
+		)) {
+		return false;
+	}
+
+	std::int64_t cursor = position.x;
+	std::uint64_t prepared_width = 0U;
+	for(const auto &glyph : text.glyphs_) {
+		if(glyph.width != ank_width && glyph.width != jis_width) {
+			return false;
+		}
+		prepared_width += glyph.width;
+		const auto right = cursor +
+			(static_cast<std::int64_t>(glyph.width) * scale);
+		if(cursor < 0 || right > graphics_width) {
+			return false;
+		}
+		cursor = right +
+			(static_cast<std::int64_t>(style.spacing) * scale);
+	}
+	if(prepared_width != text.pixel_width_) {
+		return false;
+	}
+
+	cursor = position.x;
+	for(const auto &glyph : text.glyphs_) {
+		for(std::size_t source_y = 0U; source_y < jis_height; ++source_y) {
+			const auto row = weighted_row(glyph.rows[source_y], style.weight);
+			for(std::uint8_t source_x = 0U; source_x < glyph.width; ++source_x) {
+				if((row & static_cast<std::uint16_t>(0x8000U >> source_x)) == 0U) {
+					continue;
+				}
+				for(std::uint8_t y = 0U; y < scale; ++y) {
+					for(std::uint8_t x = 0U; x < scale; ++x) {
+						if(!raster.plot({
+							static_cast<std::int32_t>(cursor) +
+								(static_cast<std::int32_t>(source_x) * scale) + x,
+							position.y +
+								(static_cast<std::int32_t>(source_y) * scale) + y,
+						}, style.color)) {
+							return false;
+						}
+					}
+				}
+			}
+		}
+		cursor += (static_cast<std::int64_t>(glyph.width) * scale) +
+			(static_cast<std::int64_t>(style.spacing) * scale);
 	}
 	return true;
 }

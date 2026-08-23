@@ -48,6 +48,11 @@ HUD_LOCALIZED_MESSAGES = {
     "hud.banner.stage": "ステージ        ",
     "hud.banner.round": "ラウンド        ",
     "hud.banner.start": "開始            ",
+    "continue.question": "コンティニュー？                ",
+    "continue.credit": "クレジット                      ",
+    "continue.yes": "はい                            ",
+    "continue.no": "いいえ                          ",
+    "gameover.title": "ゲームオーバー                  ",
 }
 
 

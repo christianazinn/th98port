@@ -404,6 +404,60 @@ void test_prepared_text_owns_font_rows()
 	expect_pixel(raster, Page::zero, {0, 0}, 2U, "owned prepared row renders");
 }
 
+void test_scaled_text_is_integer_exact_and_atomic()
+{
+	RecordingFont font;
+	font.glyph_value = glyph_with_first_row(0xA0U);
+	const std::array<std::uint8_t, 2U> source{'A', 'B'};
+	auto prepared = th03::present::prepare_graphics_text_8x16(source, font);
+	expect(prepared.has_value(), "scaled fixture prepares");
+	if(!prepared) {
+		return;
+	}
+	Raster raster;
+	expect(
+		th03::present::graphics_text_put_scaled_8x16(
+			raster, {10, 20}, *prepared,
+			{6U, GraphicsTextWeight::normal, 1U}, 2U
+		),
+		"two-times graphics text renders"
+	);
+	for(std::int32_t y = 20; y < 22; ++y) {
+		for(std::int32_t x = 10; x < 12; ++x) {
+			expect_pixel(
+				raster, Page::zero, {x, y}, 6U,
+				"one source bit expands to a two-by-two block"
+			);
+		}
+	}
+	expect_pixel(
+		raster, Page::zero, {12, 20}, 0U,
+		"scaled zero bit remains transparent"
+	);
+	expect_pixel(
+		raster, Page::zero, {28, 20}, 6U,
+		"scaled spacing advances the second glyph"
+	);
+
+	Raster invalid;
+	expect(invalid.clear({0, 0, 640U, 400U}, 3U), "seed scaled atomic page");
+	const auto before = page_copy(invalid);
+	expect(
+		!th03::present::graphics_text_put_scaled_8x16(
+			invalid, {610, 0}, *prepared,
+			{6U, GraphicsTextWeight::normal, 0U}, 2U
+		) && page_copy(invalid) == before,
+		"late scaled overflow is rejected atomically"
+	);
+	expect(
+		!th03::present::graphics_text_put_scaled_8x16(
+			invalid, {0, 0}, *prepared,
+			{6U, GraphicsTextWeight::normal, 0U}, 0U
+		) && page_copy(invalid) == before,
+		"zero scale is rejected atomically"
+	);
+}
+
 } // namespace
 
 int main()
@@ -415,6 +469,7 @@ int main()
 	test_halfwidth_selects_only_the_font_rows_left_byte();
 	test_invalid_and_late_requests_are_atomic();
 	test_prepared_text_owns_font_rows();
+	test_scaled_text_is_integer_exact_and_atomic();
 
 	if(failures != 0) {
 		std::cerr << failures << " of " << checks << " checks failed\n";

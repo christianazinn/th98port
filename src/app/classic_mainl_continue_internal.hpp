@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "th03/app/classic_audio.hpp"
+#include "th03/app/new_classic_game_text.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/assets/types.hpp"
 #include "th03/core/game.hpp"
@@ -119,7 +120,8 @@ public:
 	> create(
 		std::uint8_t remaining_credits,
 		std::span<const LoadedMainResource> resources,
-		const present::AnkGlyphProvider &font
+		const present::AnkGlyphProvider &font,
+		const NewClassicGameTextCatalog *game_text = nullptr
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicMainlContinueScene>,
@@ -127,7 +129,8 @@ public:
 	> create_from_registration(
 		ClassicRegistrationCompletion &&completion,
 		std::uint8_t remaining_credits,
-		const present::AnkGlyphProvider &font
+		const present::AnkGlyphProvider &font,
+		const NewClassicGameTextCatalog *game_text = nullptr
 	);
 	~ClassicMainlContinueScene();
 
@@ -166,6 +169,10 @@ private:
 			std::optional<present::PreparedGraphicsText8x16>,
 			4U
 		> credit_digits{};
+		std::array<
+			std::optional<present::PreparedGraphicsText8x16>,
+			5U
+		> localized_text{};
 	};
 
 	explicit ClassicMainlContinueScene(
@@ -179,7 +186,8 @@ private:
 		std::uint8_t remaining_credits,
 		std::span<const LoadedMainResource> resources,
 		const present::AnkGlyphProvider &font,
-		bool authenticate_resource_bytes
+		bool authenticate_resource_bytes,
+		const NewClassicGameTextCatalog *game_text
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicMainlContinueScene>,
@@ -187,7 +195,8 @@ private:
 	> create_from_registration_impl(
 		ClassicRegistrationCompletion &&completion,
 		std::uint8_t remaining_credits,
-		const present::AnkGlyphProvider &font
+		const present::AnkGlyphProvider &font,
+		const NewClassicGameTextCatalog *game_text
 	);
 	[[nodiscard]] std::expected<
 		ClassicMainlContinueTick,
@@ -196,8 +205,15 @@ private:
 		std::span<const LoadedMainResource> resources,
 		bool authenticate_resource_bytes
 	);
+	[[nodiscard]] static std::expected<void, ClassicMainlContinueError>
+	prepare_localized_text(
+		Prepared &prepared,
+		const NewClassicGameTextCatalog *game_text,
+		const present::AnkGlyphProvider &font
+	);
 	[[nodiscard]] bool draw_continue() noexcept;
 	[[nodiscard]] bool draw_choices() noexcept;
+	[[nodiscard]] bool draw_localized_continue_labels() noexcept;
 	[[nodiscard]] bool draw_credit(std::uint8_t value) noexcept;
 	[[nodiscard]] bool draw_gameover() noexcept;
 	[[nodiscard]] bool push_audio_command(ClassicAudioCommand command) noexcept;
@@ -323,11 +339,12 @@ struct ClassicMainlContinueTestAccess final {
 	> create_with_synthetic_resources(
 		std::uint8_t remaining_credits,
 		std::span<const LoadedMainResource> resources,
-		const present::AnkGlyphProvider &font
+		const present::AnkGlyphProvider &font,
+		const NewClassicGameTextCatalog *game_text = nullptr
 	)
 	{
 		return ClassicMainlContinueScene::create_impl(
-			remaining_credits, resources, font, false
+			remaining_credits, resources, font, false, game_text
 		);
 	}
 
