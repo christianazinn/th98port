@@ -260,9 +260,13 @@ only. The extension must keep translator files and online display names as
 validated UTF-8, compile a source-free redistributable font into a
 deterministic codepoint/metrics package, define fallback and grapheme-aware
 wrapping without consulting platform fonts, and prove Spanish plus Japanese
-as the first two non-ASCII profiles. It must cover online leaderboard names
-and account nametags as well as localization catalogs while leaving sealed
-Classic and the existing exact CP932 path unchanged.
+as the first two non-ASCII profiles. The Spanish profile is explicitly a
+non-authoritative, test-only fixture for glyph coverage, diacritics, wrapping,
+and compiler completeness; it must not ship or be presented as an official
+translation until a native speaker authors or reviews the copy. The package
+must cover online leaderboard names and account nametags as well as
+localization catalogs while leaving sealed Classic and the existing exact
+CP932 path unchanged.
 
 The production cutscene VM now exposes canonical picture presentations rather
 than relying on command-text scraping. Both authenticated language archives
@@ -320,8 +324,10 @@ nametag parcels above are implemented. The remaining product/tooling work is:
 1. Add the deterministic general-Unicode font/layout package described above.
    UTF-8 is already the authoring and online-cache boundary, but current native
    drawing cannot faithfully show arbitrary historical display names or a
-   future Spanish locale. Do not bind output to whatever font happens to be
-   installed on the host.
+   future Spanish locale. Use placeholder Spanish only as a conspicuously
+   non-shipping acceptance fixture; official wording belongs to a native
+   speaker. Do not bind output to whatever font happens to be installed on the
+   host.
 2. Continue decoupling text baked into images. Character-select center-list
 names and stat labels plus gameplay Lose/Win/Stage/Round/Start banners are
 complete. Registration title/column panels, difficulty plate, edit commands,

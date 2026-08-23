@@ -80,6 +80,9 @@ bytes must be preserved even before the selected runtime font can draw every
 code point. A deterministic redistributable Unicode font/metrics pack is the
 next localization priority, with Spanish and online Japanese display names as
 its first acceptance profiles; host-installed fonts are not authoritative.
+Spanish in this acceptance suite is placeholder technical copy only. A native
+speaker must author or review any Spanish catalog before it becomes a shipping
+locale.
 
 ## Reproducibility and review
 
