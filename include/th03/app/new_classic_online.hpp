@@ -24,6 +24,7 @@ inline constexpr std::size_t new_classic_online_replay_max_bytes =
 	1024U * 1024U;
 inline constexpr std::size_t new_classic_online_cache_header_bytes = 80U;
 inline constexpr std::size_t new_classic_online_cache_footer_bytes = 4U;
+inline constexpr std::uint8_t new_classic_online_overall_character = 9U;
 
 template<typename Tag>
 struct NewClassicOnlineIdentity final {

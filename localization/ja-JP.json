@@ -364,6 +364,7 @@
     "hiscore.personal.header.time": "プレイ時間",
     "hiscore.online.title": "オンライン - {rank} - {character}",
     "hiscore.online.scope": "オンライン",
+    "hiscore.online.overall": "総合",
     "hiscore.online.footer": "< キャラ >  ^ 難易度 v  Z:詳細",
     "hiscore.online.detail-footer": "Esc:戻る",
     "hiscore.online.download-footer": "Z/Return:保存  Esc:戻る",

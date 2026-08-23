@@ -111,6 +111,30 @@ constexpr std::uint64_t maximum_score = 999999990ULL;
 	return true;
 }
 
+[[nodiscard]] constexpr bool valid_board_category(
+	const NewClassicOnlineCategory &category
+) noexcept
+{
+	if(category.character != new_classic_online_overall_character) {
+		return valid_category(category);
+	}
+	return category.mode == NewClassicOnlineMode::story && category.rank < 4U &&
+		category.start_stage == 0U && category.start_round == 0U;
+}
+
+[[nodiscard]] constexpr bool category_belongs_to_board(
+	const NewClassicOnlineCategory &category,
+	const NewClassicOnlineCategory &board
+) noexcept
+{
+	return valid_category(category) && valid_board_category(board) &&
+		category.mode == board.mode && category.rank == board.rank &&
+		category.start_stage == board.start_stage &&
+		category.start_round == board.start_round &&
+		(board.character == new_classic_online_overall_character ||
+		 category.character == board.character);
+}
+
 [[nodiscard]] constexpr bool valid_result(
 	const NewClassicOnlineCategory &category,
 	const NewClassicOnlineResult &result
@@ -387,7 +411,7 @@ std::expected<void, NewClassicOnlineError> validate_new_classic_online_cache(
 			document.fetched_unix_seconds != 0U) {
 			return std::unexpected(error(NewClassicOnlineErrorCode::document_shape));
 		}
-	} else if(!valid_category(*document.board_category) ||
+	} else if(!valid_board_category(*document.board_category) ||
 		!new_classic_online_identity_present(document.snapshot_id) ||
 		document.fetched_unix_seconds == 0U) {
 		return std::unexpected(error(NewClassicOnlineErrorCode::document_shape));
@@ -406,8 +430,9 @@ std::expected<void, NewClassicOnlineError> validate_new_classic_online_cache(
 				));
 			}
 		}
-		if(!valid_category(record.category) || !document.board_category ||
-			record.category != *document.board_category) {
+		if(!document.board_category || !category_belongs_to_board(
+			record.category, *document.board_category
+		)) {
 			return std::unexpected(error(NewClassicOnlineErrorCode::category, index));
 		}
 		if(!valid_result(record.category, record.result)) {
@@ -445,8 +470,9 @@ std::expected<void, NewClassicOnlineError> validate_new_classic_online_cache(
 				));
 			}
 		}
-		if(!valid_category(entry.category) || !document.board_category ||
-			entry.category != *document.board_category) {
+		if(!document.board_category || !category_belongs_to_board(
+			entry.category, *document.board_category
+		)) {
 			return std::unexpected(error(NewClassicOnlineErrorCode::category, index));
 		}
 		if(!valid_result(entry.category, entry.result)) {

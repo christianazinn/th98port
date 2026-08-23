@@ -226,6 +226,18 @@ void test_identity_and_provenance_contract()
 		NewClassicOnlineErrorCode::category,
 		"every projected row must belong to the cache's bound board category");
 
+	auto overall_board = document;
+	overall_board.board_category->character =
+		new_classic_online_overall_character;
+	expect(validate_new_classic_online_cache(overall_board).has_value(),
+		"an Overall board retains each projected row's actual character");
+	auto wrong_rank_overall = overall_board;
+	wrong_rank_overall.leaderboard_entries[0U].category.rank = 1U;
+	invalid = validate_new_classic_online_cache(wrong_rank_overall);
+	expect(!invalid && invalid.error().code ==
+		NewClassicOnlineErrorCode::category,
+		"Overall never admits a row from another difficulty");
+
 	auto invalid_telemetry = document;
 	invalid_telemetry.replay_records[0U].slow_frames = 501U;
 	invalid_telemetry.replay_records[0U].timed_frames = 10'000U;

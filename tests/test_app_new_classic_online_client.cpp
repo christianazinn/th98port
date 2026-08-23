@@ -311,6 +311,21 @@ void test_board_refresh()
 		NewClassicOnlineMode::practice, 0U, 0U, 0U, 0U
 	}).empty(), "v1 rejects non-Story board paths");
 
+	const NewClassicOnlineCategory overall_category{
+		NewClassicOnlineMode::story, 2U,
+		new_classic_online_overall_character, 0U, 0U
+	};
+	auto overall_document = cache_document(overall_category);
+	fake.response->body = *encode_new_classic_online_cache(overall_document);
+	auto overall = refresh_new_classic_online_board(
+		overall_category, root.path(), fake.seam()
+	);
+	expect(overall && fake.target ==
+		"/api/th03/leaderboard?category=story:r2:overall&format=t3onl2" &&
+		new_classic_online_board_cache_path(root.path(), overall_category) ==
+			root.path() / "STORY-R2-COVERALL.T3ONL",
+		"Overall uses a distinct bounded public route and cache file");
+
 	const NewClassicOnlineCredentials credentials{
 		"12345678-1234-1234-1234-123456789abc",
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef0123456789_-",

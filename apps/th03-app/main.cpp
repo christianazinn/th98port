@@ -5850,7 +5850,9 @@ ExperienceRunResult run_classic_session(
 	};
 	if(new_classic) {
 		for(std::uint8_t rank = 0U; rank < 4U; ++rank) {
-			for(std::uint8_t character = 0U; character < 9U; ++character) {
+			for(std::uint8_t character = 0U;
+				character <= th03::app::new_classic_online_overall_character;
+				++character) {
 				const th03::app::NewClassicOnlineCategory category{
 					.mode = th03::app::NewClassicOnlineMode::story,
 					.rank = rank,
@@ -6114,9 +6116,12 @@ ExperienceRunResult run_classic_session(
 							online_upload_credential_context->configured
 						) || (stored_identity && !credential_status_error));
 					std::vector<th03::app::NewClassicOnlineCategory> categories{};
-					categories.reserve(36U);
+					categories.reserve(40U);
 					for(std::uint8_t rank = 0U; rank < 4U; ++rank) {
-						for(std::uint8_t character = 0U; character < 9U; ++character) {
+						for(std::uint8_t character = 0U;
+							character <= th03::app::
+								new_classic_online_overall_character;
+							++character) {
 							categories.push_back({
 								.mode = th03::app::NewClassicOnlineMode::story,
 								.rank = rank,

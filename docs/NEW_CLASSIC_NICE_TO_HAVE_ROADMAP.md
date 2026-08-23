@@ -98,7 +98,7 @@ baked into TL02 and related backgrounds are explicitly later work: removing
 them requires clean background reconstruction as well as localized rendering.
 
 The source-text part of this parcel is now complete in both shipped languages.
-`T3LNG001` contains 402 explicit English and Japanese New Classic messages;
+`T3LNG001` contains 403 explicit English and Japanese New Classic messages;
 Japanese rows are CP932 and combine authenticated proportional `MNUFONT.PF`
 Latin with exact `FONT.ROM` Japanese glyphs. `T3GTL001` contains all 738
 graphics-text rows in explicit English and Japanese catalogs, including every
@@ -224,7 +224,7 @@ identities. Its independent `check` mode compares every file without mutating
 the candidate, and failed builds never publish partial output. The 1,732
 English and 1,533 Japanese scripted replacement runs now have compact,
 deterministic `T3STP001` contact sheets through the production graphics-text
-path. The 402 menu/product rows likewise have deterministic `T3MTP001` contact
+path. The 403 menu/product rows likewise have deterministic `T3MTP001` contact
 sheets through the production mixed MNUFONT/FONT.ROM path. Localized scene
 snapshots are the remaining work in this parcel. General Unicode locales
 also need a distributable font and layout contract; the current production

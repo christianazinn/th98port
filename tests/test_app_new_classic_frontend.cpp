@@ -854,9 +854,12 @@ void test_online_high_score_menu()
 	expect(surface_hash(unlocked_personal.surface()) != locked_personal_hash,
 		"Personal Bests adds the two unlocked character rows only when available");
 
+	auto overall_board = online_board(2U, 4U, 0x10U);
+	overall_board.board_category->character =
+		new_classic_online_overall_character;
 	NewClassicHighScoreMenu online(
-		{online_board(2U, 4U, 0x20U), online_board(2U, 5U, 0x30U),
-			online_board(3U, 5U, 0x40U)},
+		{online_board(2U, 0U, 0x20U), online_board(2U, 1U, 0x30U),
+			std::move(overall_board), online_board(3U, 5U, 0x40U)},
 		2U, patch_assets
 	);
 	finish_entry_fade(online);
@@ -866,7 +869,7 @@ void test_online_high_score_menu()
 	auto opened = online.consume({.confirm = true});
 	expect(opened.surface_changed && online.viewing_online() &&
 		!online.viewing_detail() && online.selected_board() == 0U,
-		"Online Leaderboards opens the first cached character board");
+		"Online Leaderboards opens the rank-local Overall board before characters");
 	auto different_date_board = online_board(2U, 4U, 0x20U);
 	different_date_board.leaderboard_entries.front().dos_date = 0x5B01U;
 	different_date_board.replay_records.front().dos_date = 0x5B01U;
@@ -883,7 +886,7 @@ void test_online_high_score_menu()
 	static_cast<void>(online.consume({}));
 	static_cast<void>(online.consume({.right = true}));
 	expect(online.selected_board() == 1U,
-		"online board navigation wraps across cached character boards");
+		"online board navigation advances from Overall to Reimu");
 	static_cast<void>(online.consume({}));
 	static_cast<void>(online.consume({.down = true}));
 	expect(online.selected_board() == 1U,

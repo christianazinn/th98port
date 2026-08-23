@@ -44,6 +44,7 @@
     "hiscore.command.local": "[ Local HiScores ]",
     "hiscore.command.online": "[ Online Leaderboards ]",
     "hiscore.command.return": "[ Return ]",
-    "hiscore.online.title": "[ Online - {rank} - {character} ]"
+    "hiscore.online.title": "[ Online - {rank} - {character} ]",
+    "hiscore.online.overall": "[ Overall ]"
   }
 }

@@ -46,7 +46,8 @@ constexpr std::size_t json_response_limit = 16U * 1024U;
 ) noexcept
 {
 	return category.mode == NewClassicOnlineMode::story &&
-		category.rank < 4U && category.character < 9U &&
+		category.rank < 4U &&
+		category.character <= new_classic_online_overall_character &&
 		category.start_stage == 0U && category.start_round == 0U;
 }
 
@@ -54,8 +55,9 @@ constexpr std::size_t json_response_limit = 16U * 1024U;
 	const NewClassicOnlineCategory &category
 )
 {
-	return "story:r" + std::to_string(category.rank) + ":c" +
-		std::to_string(category.character);
+	return "story:r" + std::to_string(category.rank) +
+		(category.character == new_classic_online_overall_character ?
+			":overall" : ":c" + std::to_string(category.character));
 }
 
 [[nodiscard]] char hex_digit(std::uint8_t nibble) noexcept
@@ -627,10 +629,11 @@ std::filesystem::path new_classic_online_board_cache_path(
 	if(!story_category(category) || cache_root.empty()) {
 		return {};
 	}
-	return cache_root / (
-		"STORY-R" + std::to_string(category.rank) + "-C" +
-		std::to_string(category.character) + ".T3ONL"
-	);
+	const auto character = category.character ==
+		new_classic_online_overall_character ? std::string{"OVERALL"} :
+		std::to_string(category.character);
+	return cache_root / ("STORY-R" + std::to_string(category.rank) + "-C" +
+		character + ".T3ONL");
 }
 
 bool validate_new_classic_online_credentials(

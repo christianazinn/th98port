@@ -11,7 +11,7 @@ any of these packages.
 
 | Domain | Current coverage | Author/runtime artifacts |
 |---|---|---|
-| New Classic menus and product UI | Title, Option hierarchy, Replay browser/save/viewer, HiScore/online views, Practice, Input/Key/Joy/Device configuration, netplay rooms/profile/status, and bounded dynamic templates | Complete 402-message English and Japanese UTF-8 authors to `T3LNG001`; Japanese compiles to CP932 and mixes real PC-98 machine glyphs with proportional MNUFONT Latin text |
+| New Classic menus and product UI | Title, Option hierarchy, Replay browser/save/viewer, HiScore/online views, Practice, Input/Key/Joy/Device configuration, netplay rooms/profile/status, and bounded dynamic templates | Complete 403-message English and Japanese UTF-8 authors to `T3LNG001`; Japanese compiles to CP932 and mixes real PC-98 machine glyphs with proportional MNUFONT Latin text |
 | Executable-resident game text | 61 stage titles/names, Music Room selection titles, registration names, and result labels | Complete English and Japanese UTF-8 `T3GTL-AUTHOR-1` catalogs to CP932 `T3GTL001` |
 | Win quotes | All nine character tables, 11 opponent/route blocks per character, three rows per block: 297 exact 58-byte rows | Same `T3GTL001` domain; English rows are merged into the complete catalog and Japanese source rows are in `game-fixed-text-ja-JP.json` |
 | Music Room comments | All 19 tracks, one title plus 19 comment rows per track: 380 exact 40-byte rows | Same `T3GTL001` domain and Japanese source catalog |

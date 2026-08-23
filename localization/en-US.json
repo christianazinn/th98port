@@ -372,6 +372,7 @@
     "hiscore.personal.header.time": "Play Time",
     "hiscore.online.title": "Online - {rank} - {character}",
     "hiscore.online.scope": "Online",
+    "hiscore.online.overall": "Overall",
     "hiscore.online.footer": "< Character >   ^ Difficulty v   Z: Details",
     "hiscore.online.detail-footer": "Esc: Return",
     "hiscore.online.download-footer": "Z/Return: Download   Esc: Return",

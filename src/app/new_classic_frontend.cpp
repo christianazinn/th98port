@@ -374,7 +374,7 @@ std::string source_trimmed_name(const std::array<char, 8U> &name)
 	present::Index4 navigation_color = 9U
 ) noexcept
 {
-	if(rank >= 4U || character >= 9U) {
+	if(rank >= 4U || character > new_classic_online_overall_character) {
 		return std::nullopt;
 	}
 	std::int32_t rank_width = 0;
@@ -384,11 +384,15 @@ std::string source_trimmed_name(const std::array<char, 8U> &name)
 		);
 	}
 	std::int32_t character_width = 0;
-	for(std::uint8_t value = 0U; value < 9U; ++value) {
-		character_width = std::max(character_width, font.width(
+	for(std::uint8_t value = 0U;
+		value <= new_classic_online_overall_character; ++value) {
+		const auto label = value == new_classic_online_overall_character ?
+			messages.text(NewClassicMessageId::hiscore_online_overall) :
 			patch_character_label(
 				static_cast<std::int8_t>((value * 2U) + 1U), messages
-			)
+			);
+		character_width = std::max(character_width, font.width(
+			label
 		));
 	}
 	const auto scope = messages.text(NewClassicMessageId::hiscore_online_scope);
@@ -422,9 +426,11 @@ std::string source_trimmed_name(const std::array<char, 8U> &name)
 		return std::nullopt;
 	}
 	left += font.width("<") + font.width(spacing);
-	const auto character_label = patch_character_label(
-		static_cast<std::int8_t>((character * 2U) + 1U), messages
-	);
+	const auto character_label = character == new_classic_online_overall_character ?
+		messages.text(NewClassicMessageId::hiscore_online_overall) :
+		patch_character_label(
+			static_cast<std::int8_t>((character * 2U) + 1U), messages
+		);
 	if(!font.put(raster,
 		left + ((character_width - font.width(character_label)) / 2), top,
 		character_label, 15U)) {
@@ -2114,6 +2120,9 @@ NewClassicHighScoreMenu::NewClassicHighScoreMenu(
 	for(auto &board : boards) {
 		if(board.board_category &&
 			board.board_category->mode == NewClassicOnlineMode::story &&
+			(mode_ == NewClassicOnlineMenuMode::high_scores ||
+			 board.board_category->character !=
+				new_classic_online_overall_character) &&
 			validate_new_classic_online_cache(board)) {
 			if(mode_ != NewClassicOnlineMenuMode::high_scores) {
 				std::erase_if(board.leaderboard_entries,
@@ -2136,8 +2145,11 @@ NewClassicHighScoreMenu::NewClassicHighScoreMenu(
 		}
 	}
 	std::ranges::sort(boards_, {}, [](const auto &board) {
+		const auto character = board.board_category->character ==
+			new_classic_online_overall_character ? 0U :
+			static_cast<std::uint16_t>(board.board_category->character) + 1U;
 		return (static_cast<std::uint16_t>(board.board_category->rank) << 8U) |
-			board.board_category->character;
+			character;
 	});
 	const auto duplicate = std::adjacent_find(
 		boards_.begin(), boards_.end(), [](const auto &left, const auto &right) {
@@ -2149,10 +2161,17 @@ NewClassicHighScoreMenu::NewClassicHighScoreMenu(
 		return;
 	}
 	const auto initial = std::ranges::find_if(boards_, [this](const auto &board) {
-		return board.board_category->rank == rank_;
+		return board.board_category->rank == rank_ &&
+			(mode_ != NewClassicOnlineMenuMode::high_scores ||
+			 board.board_category->character ==
+				new_classic_online_overall_character);
 	});
-	if(initial != boards_.end()) {
-		board_index_ = static_cast<std::size_t>(initial - boards_.begin());
+	const auto fallback = initial != boards_.end() ? initial :
+		std::ranges::find_if(boards_, [this](const auto &board) {
+			return board.board_category->rank == rank_;
+		});
+	if(fallback != boards_.end()) {
+		board_index_ = static_cast<std::size_t>(fallback - boards_.begin());
 	}
 	if(mode_ == NewClassicOnlineMenuMode::my_records ||
 		mode_ == NewClassicOnlineMenuMode::downloaded_replays) {
@@ -2776,8 +2795,13 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 	}
 	if(input.left || input.right) {
 		const auto &current = *boards_[board_index_].board_category;
-		const auto target_character = static_cast<std::uint8_t>(
-			(current.character + (input.left ? 8U : 1U)) % 9U
+		const auto target_character = static_cast<std::uint8_t>(input.left ?
+			(current.character == new_classic_online_overall_character ? 8U :
+			 (current.character == 0U ? new_classic_online_overall_character :
+			  current.character - 1U)) :
+			(current.character == new_classic_online_overall_character ? 0U :
+			 (current.character == 8U ? new_classic_online_overall_character :
+			  current.character + 1U))
 		);
 		const auto found = std::ranges::find_if(
 			boards_, [&](const auto &candidate) {

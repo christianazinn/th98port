@@ -358,6 +358,7 @@ TH03_NEW_CLASSIC_MESSAGE(hiscore_personal_header_one_cc, "hiscore.personal.heade
 TH03_NEW_CLASSIC_MESSAGE(hiscore_personal_header_time, "hiscore.personal.header.time", 144U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(hiscore_online_title, "hiscore.online.title", 560U, "character,rank", "Yumemi|Lunatic")
 TH03_NEW_CLASSIC_MESSAGE(hiscore_online_scope, "hiscore.online.scope", 120U, "", "")
+TH03_NEW_CLASSIC_MESSAGE(hiscore_online_overall, "hiscore.online.overall", 104U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(hiscore_online_footer, "hiscore.online.footer", 560U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(hiscore_online_detail_footer, "hiscore.online.detail-footer", 560U, "", "")
 TH03_NEW_CLASSIC_MESSAGE(hiscore_online_download_footer, "hiscore.online.download-footer", 560U, "", "")
