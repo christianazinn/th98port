@@ -222,8 +222,9 @@ rows through the production font path, and emits a deterministic `T3LCB001`
 manifest with exact source, schema, renderer, font, count, size, and SHA-256
 identities. Its independent `check` mode compares every file without mutating
 the candidate, and failed builds never publish partial output. The remaining
-work in this parcel is localized scene snapshots and representative menu and
-scripted-text contact sheets. General Unicode locales
+work in this parcel is localized scene snapshots and scripted-text contact
+sheets. The 402 menu/product rows now have deterministic `T3MTP001` contact
+sheets through the production mixed MNUFONT/FONT.ROM path. General Unicode locales
 also need a distributable font and layout contract; the current production
 renderer deliberately covers source-era ASCII and CP932 Japanese only.
 
@@ -266,8 +267,9 @@ The original source-text, renderer-GUI, Arrange, content-audit, and live
 nametag parcels above are implemented. The remaining product/tooling work is:
 
 1. Finish localization visual tooling: deterministic Japanese/English scene
-   snapshots and translator contact sheets for menu and scripted text. The
-   fail-closed locale build/check command and release manifest are complete.
+   snapshots and translator contact sheets for scripted text. The menu and
+   fixed-game-text sheets, fail-closed locale build/check command, and release
+   manifest are complete.
 2. Decouple text baked into images, starting with character-select names/titles
    and reusable menu headings. This requires clean background reconstruction;
    it is not a missing string-catalog problem.

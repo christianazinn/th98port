@@ -83,6 +83,9 @@ write a deterministic source/artifact manifest with one command:
 python tools/localization/build_locale_bundle.py build `
   --font path/to/FONT.ROM `
   --preview-tool out/build/gcc/th03-game-text-preview.exe `
+  --menu-preview-tool out/build/gcc/th03-menu-text-preview.exe `
+  --replay-patch-assets path/to/AZINN.DAT `
+  --menu-backgrounds assets/new-classic/menu-backgrounds `
   --output out/locale-bundle
 ```
 
@@ -91,3 +94,9 @@ compare every candidate file without modifying it. `--locale en-US` or
 `--locale ja-JP` limits the command to one complete locale. Compilation and
 previewing happen in a private staging directory; a failed build leaves an
 existing candidate untouched.
+
+The bundle contains 40 fixed game-text sheets and 41 menu-text sheets per
+locale. The latter format every dynamic placeholder with its schema width-test
+value and draw through the exact mixed MNUFONT/FONT.ROM production path. See
+`docs/NEW_CLASSIC_MENU_TEXT_PREVIEW.md` for direct use and the exact loose-font
+fixture boundary.
