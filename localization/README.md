@@ -72,3 +72,22 @@ validation.
 
 The definitive covered-versus-image-baked census is
 `docs/NEW_CLASSIC_TEXT_LOCALIZATION_COVERAGE.md`.
+
+## Complete release bundles
+
+English and Japanese cover all three production text domains. Build both,
+render the fixed game-text contact sheets through the production font path, and
+write a deterministic source/artifact manifest with one command:
+
+```powershell
+python tools/localization/build_locale_bundle.py build `
+  --font path/to/FONT.ROM `
+  --preview-tool out/build/gcc/th03-game-text-preview.exe `
+  --output out/locale-bundle
+```
+
+Repeat the command with `check` instead of `build` to rebuild independently and
+compare every candidate file without modifying it. `--locale en-US` or
+`--locale ja-JP` limits the command to one complete locale. Compilation and
+previewing happen in a private staging directory; a failed build leaves an
+existing candidate untouched.

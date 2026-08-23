@@ -1380,6 +1380,14 @@ if(BUILD_TESTING)
 				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_compile_game_text_pack.py
 		)
 		add_test(
+			NAME th03-new-classic-locale-bundle-tests
+			COMMAND ${Python3_EXECUTABLE}
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_build_locale_bundle.py
+				--tool
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/build_locale_bundle.py
+				--preview-tool $<TARGET_FILE:th03-game-text-preview>
+		)
+		add_test(
 			NAME th03-cutscene-text-author-tests
 			COMMAND ${Python3_EXECUTABLE}
 				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_make_cutscene_text_author.py

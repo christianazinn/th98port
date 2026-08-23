@@ -1,6 +1,6 @@
 # New Classic content and tooling roadmap
 
-Status: provisional product direction, updated 2026-08-22. This document orders the
+Status: provisional product direction, updated 2026-08-23. This document orders the
 next non-critical parcels after the playable port, netplay beta, online replay
 service, and updater foundations. It may change as the authoring tools and
 Arrange experiment expose better boundaries.
@@ -216,11 +216,14 @@ validates the shared production
 271-resource manifest scene by scene, distinguishes 52 authenticated English
 override members from original extraction dependencies, and records every
 localized semantic surface without claiming that its source backing vanished.
-The remaining work in this parcel is localized scene snapshots, a unified
-locale-bundle authoring command, and release-level content manifests. The
-unified command should compile and validate `T3LNG001`, `T3GTL001`, and
-`T3CTP001` together, emit completeness/font/bounds reports, and generate
-translator contact sheets without launching gameplay. General Unicode locales
+`build_locale_bundle.py` now compiles and validates `T3LNG001`, `T3GTL001`, and
+`T3CTP001` together for every complete locale, renders all 738 fixed game-text
+rows through the production font path, and emits a deterministic `T3LCB001`
+manifest with exact source, schema, renderer, font, count, size, and SHA-256
+identities. Its independent `check` mode compares every file without mutating
+the candidate, and failed builds never publish partial output. The remaining
+work in this parcel is localized scene snapshots and representative menu and
+scripted-text contact sheets. General Unicode locales
 also need a distributable font and layout contract; the current production
 renderer deliberately covers source-era ASCII and CP932 Japanese only.
 
@@ -234,8 +237,8 @@ The product decisions and first account-backed implementation are complete:
 4. immutable server snapshots for account rooms and local/unverified identity
    for direct UDP;
 5. separate revocable device credentials joined by a short-lived code; and
-6. a backward-compatible typed V14 tail for later replay identity rather than
-   a forced V14.
+6. the fixed 896-byte V14 header stores both account UUIDs, match identity, and
+   bounded match-time fallback nametags without exposing credentials.
 
 The server provides authenticated identity metadata, the match contract
 snapshots it, and the MAINL VS intro renders bounded names without changing
@@ -249,39 +252,39 @@ the retained first-use/edit UI are complete. The approved design is in
 conservative single-line placeholder, not a source limit. The real title area
 has two 28-cell rows, so validation accepts at most 57 printable-ASCII source
 bytes (`28 + space + 28`) only when whole-word wrapping actually fits. The
-source character-name row remains unchanged. There are no safe V14 header
-bytes to reuse, but a fixed typed identity block can live after the declared
-logical input stream and before an optional final `T3RACC1` payload. Existing
-V14 readers ignore that tail, so this presentation metadata does not require
-V14. That replay-tail/preservation work remains next.
+source character-name row remains unchanged. V14 is now the sole live replay
+format. Its fixed header preserves both opaque account UUIDs and two
+zero-padded 57-byte match-time nametag snapshots. Online viewers may resolve a
+current nametag from UUID while the snapshots remain a portable offline
+fallback. Replay Patch, native recording/playback, renderer, verifier, Worker
+storage, Data Manager conversion, and external parser work share this contract;
+V13 remains only as Data Manager migration input and frozen historical evidence.
 
 ## Current execution order
 
 The original source-text, renderer-GUI, Arrange, content-audit, and live
 nametag parcels above are implemented. The remaining product/tooling work is:
 
-1. Add the backward-compatible V14 identity tail and surface match-time names
-   in replay details/export without changing deterministic replay authority.
-2. Finish localization convenience tooling: one locale-bundle build/check
-   command, deterministic Japanese/English scene snapshots, translator contact
-   sheets for menu and scripted text, and release manifests.
-3. Decouple text baked into images, starting with character-select names/titles
+1. Finish localization visual tooling: deterministic Japanese/English scene
+   snapshots and translator contact sheets for menu and scripted text. The
+   fail-closed locale build/check command and release manifest are complete.
+2. Decouple text baked into images, starting with character-select names/titles
    and reusable menu headings. This requires clean background reconstruction;
    it is not a missing string-catalog problem.
-4. Finish production update release inputs: origin, platform packages, signing
+3. Finish production update release inputs: origin, platform packages, signing
    key custody/rotation, and hosted CI artifact validation. The updater engine
    itself is already implemented and default-off without those inputs.
-5. Continue online operations and UX: reviewed historical-score import,
+4. Continue online operations and UX: reviewed historical-score import,
    operational verifier/service monitoring, and any remaining public-account
    recovery flows. The replay-backed Story leaderboard/upload/download/watch
    path is already live.
-6. Improve PMD/YM2608 audio fidelity where channel balance and simultaneous
+5. Improve PMD/YM2608 audio fidelity where channel balance and simultaneous
    SFX layering still differ audibly from PC-98 output.
-7. Expand Arrange only after choosing a shippable ruleset and a replay/content
+6. Expand Arrange only after choosing a shippable ruleset and a replay/content
    identity for it. `dopamine-test-v1` remains an intentionally non-stock test.
-8. Design optional `Smooth` display interpolation behind the existing exact
+7. Design optional `Smooth` display interpolation behind the existing exact
    source scheduler; `Repeat` sample-and-hold remains the authentic default.
-9. Resume broad pixel/audio-oracle coverage after these moving functional and
+8. Resume broad pixel/audio-oracle coverage after these moving functional and
    localized surfaces settle. Stock deterministic/replay gates remain active
    throughout.
 
