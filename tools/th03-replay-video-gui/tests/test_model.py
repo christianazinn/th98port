@@ -19,6 +19,8 @@ class RenderJobTests(unittest.TestCase):
         self.game_text.write_bytes(b"T3GTL001")
         self.cutscene_text = self.root / "cutscene text.t3ctp"
         self.cutscene_text.write_bytes(b"T3CTP001")
+        self.picture_patch = self.root / "picture patch.t3ptp"
+        self.picture_patch.write_bytes(b"T3PTP001")
         self.data = self.root / "content files"
         self.data.mkdir()
         for name in ("MAIN.EXE", "MAINL.EXE", "FONT.ROM"):
@@ -46,6 +48,7 @@ class RenderJobTests(unittest.TestCase):
             staging_output=self.root / ".世界 partial.mkv",
             game_text_pack=self.game_text,
             cutscene_text_pack=self.cutscene_text,
+            picture_patch_pack=self.picture_patch,
         )
         command = job.command()
         self.assertEqual(command[0], str(self.renderer))
@@ -57,6 +60,10 @@ class RenderJobTests(unittest.TestCase):
         self.assertEqual(
             command[command.index("--cutscene-text-pack") + 1],
             str(self.cutscene_text),
+        )
+        self.assertEqual(
+            command[command.index("--picture-patch-pack") + 1],
+            str(self.picture_patch),
         )
         self.assertEqual(
             command[command.index("--staging-output") + 1],

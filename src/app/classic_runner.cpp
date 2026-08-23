@@ -624,6 +624,43 @@ ClassicRunner::load(ClassicRunnerRequest request)
 					std::move(*loaded_cutscene_text)
 				);
 		}
+		if(!request.content.picture_patch_pack.empty()) {
+			auto loaded_picture_patch = load_new_classic_picture_patch(
+				request.content.picture_patch_pack
+			);
+			if(!loaded_picture_patch) {
+				auto result = runner_error(
+					ClassicRunnerErrorCode::picture_patch_pack_failed,
+					ClassicContentFile::picture_patch_pack
+				);
+				result.picture_patch_pack_error =
+					std::move(loaded_picture_patch.error());
+				return std::unexpected(std::move(result));
+			}
+			const auto locale = loaded_picture_patch->locale();
+			const bool message_mismatch = loaded_assets->custom_messages &&
+				loaded_assets->custom_messages->locale() != locale;
+			const bool game_text_mismatch = loaded_assets->custom_game_text &&
+				loaded_assets->custom_game_text->locale() != locale;
+			const bool cutscene_text_mismatch =
+				loaded_assets->custom_cutscene_text &&
+				loaded_assets->custom_cutscene_text->locale() != locale;
+			if(message_mismatch || game_text_mismatch ||
+				cutscene_text_mismatch) {
+				auto result = runner_error(
+					ClassicRunnerErrorCode::picture_patch_pack_failed,
+					ClassicContentFile::picture_patch_pack
+				);
+				result.picture_patch_pack_error = NewClassicPicturePatchError{
+					.code = NewClassicPicturePatchErrorCode::locale_shape,
+				};
+				return std::unexpected(std::move(result));
+			}
+			loaded_assets->custom_picture_patch =
+				std::make_shared<const NewClassicPicturePatchCatalog>(
+					std::move(*loaded_picture_patch)
+				);
+		}
 		patch_assets = std::make_shared<const NewClassicReplayPatchAssets>(
 			std::move(*loaded_assets)
 		);

@@ -121,6 +121,9 @@ constexpr std::size_t option_count =
 	if(text == "--cutscene-text-pack") {
 		return ClassicCliOption::cutscene_text_pack;
 	}
+	if(text == "--picture-patch-pack") {
+		return ClassicCliOption::picture_patch_pack;
+	}
 	if(text == "--rhythm-rom") {
 		return ClassicCliOption::rhythm_rom;
 	}
@@ -250,6 +253,9 @@ std::expected<ClassicCliRequest, ClassicCliError> parse_classic_cli(
 			break;
 		case ClassicCliOption::cutscene_text_pack:
 			request.launch.content.cutscene_text_pack = std::filesystem::path(value);
+			break;
+		case ClassicCliOption::picture_patch_pack:
+			request.launch.content.picture_patch_pack = std::filesystem::path(value);
 			break;
 		case ClassicCliOption::rhythm_rom:
 			request.rhythm_rom = std::filesystem::path(value);

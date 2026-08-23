@@ -17,6 +17,7 @@
 #include "th03/app/new_classic_messages.hpp"
 #include "th03/app/new_classic_game_text.hpp"
 #include "th03/app/new_classic_cutscene_text.hpp"
+#include "th03/app/new_classic_picture_patch.hpp"
 #include "th03/present/raster.hpp"
 #include "th03/present/source_surface.hpp"
 
@@ -189,6 +190,9 @@ struct NewClassicReplayPatchAssets final {
 	// Optional complete T3CTP001 scripted-dialogue catalog. The story owner
 	// validates all selected source scripts before publishing a localized run.
 	std::shared_ptr<const NewClassicCutsceneTextCatalog> custom_cutscene_text{};
+	// Optional source-bound T3PTP001 decoded-picture overlay. Story owners
+	// select it by locale; sealed Classic never passes it to a picture scene.
+	std::shared_ptr<const NewClassicPicturePatchCatalog> custom_picture_patch{};
 	[[nodiscard]] const NewClassicMessageCatalog &messages(
 		NewClassicLanguageAssetProfile profile =
 			NewClassicLanguageAssetProfile::english

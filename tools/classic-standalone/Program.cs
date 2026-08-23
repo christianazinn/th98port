@@ -204,6 +204,14 @@ internal static class Program
                 arguments.Add("--cutscene-text-pack");
                 arguments.Add(cutsceneText);
             }
+            var picturePatch = Path.Combine(
+                content, "picture-patch-en-US.t3ptp"
+            );
+            if(File.Exists(picturePatch))
+            {
+                arguments.Add("--picture-patch-pack");
+                arguments.Add(picturePatch);
+            }
         }
         var rhythmRom = Path.Combine(content, "YM2608.ROM");
         if(!directNetplay && File.Exists(rhythmRom))

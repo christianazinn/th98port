@@ -435,6 +435,7 @@ struct ClassicStoryBackend final {
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets{};
 	std::shared_ptr<const NewClassicCutsceneTextCatalog> cutscene_text{};
 	const NewClassicGameTextCatalog *game_text = nullptr;
+	std::shared_ptr<const NewClassicPicturePatchCatalog> picture_patch{};
 	bool new_classic = false;
 	bool replay_playback = false;
 	bool replay_capture_closed = false;
@@ -456,7 +457,8 @@ struct ClassicStoryBackend final {
 		bool replay_playback_ = false,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets_ = {},
 		std::shared_ptr<const NewClassicCutsceneTextCatalog> cutscene_text_ = {},
-		const NewClassicGameTextCatalog *game_text_ = nullptr
+		const NewClassicGameTextCatalog *game_text_ = nullptr,
+		std::shared_ptr<const NewClassicPicturePatchCatalog> picture_patch_ = {}
 	) :
 		loader(std::move(loader_)),
 		static_content(std::move(static_content_)),
@@ -468,6 +470,7 @@ struct ClassicStoryBackend final {
 		patch_assets(std::move(patch_assets_)),
 		cutscene_text(std::move(cutscene_text_)),
 		game_text(game_text_),
+		picture_patch(std::move(picture_patch_)),
 		new_classic(new_classic_),
 		replay_playback(replay_playback_)
 	{
@@ -1277,7 +1280,7 @@ struct ClassicStoryBackend final {
 		}
 		auto created = ClassicCutsceneScene::create(
 			request, *resources, static_content->font(), std::move(*initial),
-			cutscene_text.get()
+			cutscene_text.get(), picture_patch.get()
 		);
 		if(!created) {
 			return std::unexpected(cutscene_error(std::move(created.error())));
@@ -2356,7 +2359,8 @@ ClassicStorySession::create_with_prepared_content(
 	std::filesystem::path legacy_score_path,
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 	std::shared_ptr<const NewClassicCutsceneTextCatalog> cutscene_text,
-	const NewClassicGameTextCatalog *game_text
+	const NewClassicGameTextCatalog *game_text,
+	std::shared_ptr<const NewClassicPicturePatchCatalog> picture_patch
 )
 {
 	if(!loader || !static_content) {
@@ -2368,7 +2372,8 @@ ClassicStorySession::create_with_prepared_content(
 		std::move(loader), std::move(static_content), std::move(stage_text),
 		std::move(staff_compiled), std::move(score_path), replay_recorder,
 		std::move(legacy_score_path), replay_recorder != nullptr, false,
-		std::move(patch_assets), std::move(cutscene_text), game_text
+		std::move(patch_assets), std::move(cutscene_text), game_text,
+		std::move(picture_patch)
 	);
 	if(auto valid = backend->validate_cutscene_text_profile(); !valid) {
 		return std::unexpected(std::move(valid.error()));
@@ -2428,7 +2433,8 @@ ClassicStorySession::create_replay_interstitial(
 	std::unique_ptr<MainProcessDriver> driver,
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
 	std::shared_ptr<const NewClassicCutsceneTextCatalog> cutscene_text,
-	const NewClassicGameTextCatalog *game_text
+	const NewClassicGameTextCatalog *game_text,
+	std::shared_ptr<const NewClassicPicturePatchCatalog> picture_patch
 )
 {
 	if(!valid_main_story_config(process_config) || !loader || !static_content ||
@@ -2450,7 +2456,7 @@ ClassicStorySession::create_replay_interstitial(
 		std::move(loader), std::move(static_content), std::move(stage_text),
 		std::move(staff_compiled), std::move(score_path), nullptr,
 		std::move(legacy_score_path), true, true, std::move(patch_assets),
-		std::move(cutscene_text), game_text
+		std::move(cutscene_text), game_text, std::move(picture_patch)
 	);
 	if(auto valid = backend->validate_cutscene_text_profile(); !valid) {
 		return std::unexpected(std::move(valid.error()));

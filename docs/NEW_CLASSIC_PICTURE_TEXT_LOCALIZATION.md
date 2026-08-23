@@ -42,9 +42,9 @@ art direction and can damage neighboring pixels. A full translated PI archive
 also duplicates copyrighted source pixels and makes unchanged-art identity
 impossible to review.
 
-## Package boundary
+## Implemented package boundary
 
-The planned distributable format is `T3PTP001`, a sparse decoded-image patch:
+The distributable format is `T3PTP001`, a sparse decoded-image patch:
 
 1. A localizer edits a transparent 640x400 indexed PNG for each changed
    picture. Transparent pixels mean "retain the authenticated source pixel".
@@ -66,6 +66,46 @@ with the authenticated source picture and script VM. A Japanese package may be
 an explicitly complete no-op profile; the source image is never copied into
 the repository.
 
+An author manifest is deliberately small:
+
+```json
+{
+  "format": "T3PTP-AUTHOR-1",
+  "locale": "en-US",
+  "pictures": [{
+    "member": "DM3B.PI",
+    "source_bmp": "source/DM3B.bmp",
+    "overlay_png": "overlay/DM3B.png",
+    "bounds": [90, 228, 273, 400]
+  }]
+}
+```
+
+`source_bmp` is the exact 4-bpp output of `th03-resource-preview` for the same
+authenticated Japanese or English resource profile the package will overlay;
+it remains an external input. Bounds use exclusive right and bottom edges.
+`overlay_png` is a non-interlaced 8-bit
+indexed 640x400 PNG. Fully transparent pixels retain the source, while opaque
+pixels must map uniquely to its RGB4 palette and must actually change the
+source index. Partial alpha, no-op opaque pixels, wrong dimensions, inaccurate
+bounds, or ambiguous palette colors fail closed.
+
+Compile without third-party Python packages:
+
+```text
+python tools/localization/compile_picture_patch_pack.py \
+  --author picture-patch-en-US.json \
+  --output picture-patch-en-US.t3ptp
+```
+
+The game, standalone bootstrap, replay renderer CLI, and renderer GUI all
+accept the optional package (`--picture-patch-pack` for command-line tools).
+The standalone packager includes a reviewed package when passed
+`-PicturePatch <locale.t3ptp>`; no placeholder artwork is shipped by default.
+The story owner applies it to the complete decoded closure before publishing a
+scene. Locale mismatches and decoded-source mismatches remain typed content
+failures. The same path supplied to sealed Classic is never opened.
+
 ## Gates
 
 - canonical VM extraction reaches the same 24-member inventory for both
@@ -80,6 +120,7 @@ the repository.
   page ownership, palette, and timing; and
 - a Classic snapshot remains byte-identical with a package present.
 
-The format and tooling can be implemented without committing original assets.
-Shipping complete English/Japanese picture localization still requires
+The format, compiler, parser, production scene application, standalone, and
+renderer plumbing are implemented and tested without committing original
+assets. Shipping complete English/Japanese picture localization still requires
 reviewed replacement artwork for every region classified above.

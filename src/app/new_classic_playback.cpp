@@ -677,7 +677,8 @@ struct NewClassicReplayPlayback::Impl final {
 				legacy_score_path, std::move(process), std::move(driver),
 				patch_assets,
 				patch_assets ? patch_assets->custom_cutscene_text : nullptr,
-				game_text
+				game_text,
+				patch_assets ? patch_assets->custom_picture_patch : nullptr
 			);
 			if(!created) {
 				auto error = playback_error(
@@ -888,6 +889,7 @@ NewClassicReplayPlayback::load_internal(
 	);
 	std::optional<NewClassicGameTextCatalog> custom_game_text{};
 	std::optional<NewClassicCutsceneTextCatalog> custom_cutscene_text{};
+	std::optional<NewClassicPicturePatchCatalog> custom_picture_patch{};
 	const NewClassicGameTextCatalog *game_text =
 		request.language == ClassicLanguage::english ?
 			&new_classic_builtin_english_game_text() :
@@ -958,6 +960,28 @@ NewClassicReplayPlayback::load_internal(
 			return std::unexpected(std::move(error));
 		}
 		custom_cutscene_text.emplace(std::move(*loaded));
+	}
+	if(!request.content.picture_patch_pack.empty()) {
+		auto loaded = load_new_classic_picture_patch(
+			request.content.picture_patch_pack
+		);
+		if(!loaded) {
+			auto error = playback_error(
+				NewClassicPlaybackErrorCode::picture_patch_pack_failed
+			);
+			error.picture_patch_pack = std::move(loaded.error());
+			return std::unexpected(std::move(error));
+		}
+		if(!game_text || loaded->locale() != game_text->locale()) {
+			auto error = playback_error(
+				NewClassicPlaybackErrorCode::picture_patch_pack_failed
+			);
+			error.picture_patch_pack = NewClassicPicturePatchError{
+				.code = NewClassicPicturePatchErrorCode::locale_shape,
+			};
+			return std::unexpected(std::move(error));
+		}
+		custom_picture_patch.emplace(std::move(*loaded));
 	}
 	if(request.language == ClassicLanguage::english) {
 		auto overlay = load_new_classic_language_overlay(
@@ -1075,6 +1099,12 @@ NewClassicReplayPlayback::load_internal(
 		loaded_patch_assets->custom_cutscene_text =
 			std::make_shared<const NewClassicCutsceneTextCatalog>(
 				std::move(*custom_cutscene_text)
+			);
+	}
+	if(custom_picture_patch) {
+		loaded_patch_assets->custom_picture_patch =
+			std::make_shared<const NewClassicPicturePatchCatalog>(
+				std::move(*custom_picture_patch)
 			);
 	}
 	auto patch_assets = std::make_shared<const NewClassicReplayPatchAssets>(

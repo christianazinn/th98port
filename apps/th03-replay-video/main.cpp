@@ -77,6 +77,7 @@ struct Options final {
 	fs::path settings{};
 	fs::path game_text_pack{};
 	fs::path cutscene_text_pack{};
+	fs::path picture_patch_pack{};
 	fs::path staging_output{};
 	fs::path ffmpeg{"ffmpeg"};
 	std::uint32_t width = 1'920U;
@@ -226,6 +227,7 @@ void usage()
 		"  --language <ja|en>       Presentation language (default ja)\n"
 		"  --game-text-pack <path>  Compiled T3GTL001 in-game localization\n"
 		"  --cutscene-text-pack <path> Compiled T3CTP001 dialogue localization\n"
+		"  --picture-patch-pack <path> Compiled T3PTP001 picture overlay\n"
 		"  --reduced-flash          Apply New Classic reduced flashes\n"
 		"  --full-flash             Override inherited reduced flashes\n"
 		"  --settings <PODD.CFG>    Inherit New Classic presentation/audio values\n"
@@ -321,6 +323,9 @@ template<typename Integer>
 		}
 		else if(key == "--cutscene-text-pack") {
 			options.cutscene_text_pack = path_argument(value);
+		}
+		else if(key == "--picture-patch-pack") {
+			options.picture_patch_pack = path_argument(value);
 		}
 		else if(key == "--staging-output") {
 			options.staging_output = path_argument(value);
@@ -903,6 +908,7 @@ private:
 			.language_overlay = options.data / "TH3EN.DAT",
 			.game_text_pack = options.game_text_pack,
 			.cutscene_text_pack = options.cutscene_text_pack,
+			.picture_patch_pack = options.picture_patch_pack,
 			.score = score_root / "YUME.NEM",
 		},
 		.document = document,

@@ -10,6 +10,7 @@ param(
 	[string]$FontRom,
 	[string]$StartupLogo,
 	[string]$LanguageOverlay,
+	[string]$PicturePatch,
 	[string]$ReplayPatchAssets,
 	[string]$RhythmRom,
 	[string]$T98Sound86,
@@ -152,6 +153,9 @@ if($observedStartupLogoHash -ne $expectedStartupLogoHash) {
 }
 if($LanguageOverlay) {
 	$LanguageOverlay = Resolve-RequiredFile $LanguageOverlay "TH3EN.DAT"
+}
+if($PicturePatch) {
+	$PicturePatch = Resolve-RequiredFile $PicturePatch "T3PTP001 picture patch"
 }
 if($RhythmRom) {
 	$RhythmRom = Resolve-RequiredFile $RhythmRom "YM2608 rhythm ROM"
@@ -297,6 +301,10 @@ try {
 			"localization\cutscene-text-en-US.t3ctp"
 		)) -Destination $contentRoot
 	}
+	if($PicturePatch) {
+		Copy-Item -LiteralPath $PicturePatch `
+			-Destination (Join-Path $contentRoot "picture-patch-en-US.t3ptp")
+	}
 	if($RhythmRom) {
 		Copy-Item -LiteralPath $RhythmRom `
 			-Destination (Join-Path $contentRoot "YM2608.ROM")
@@ -384,6 +392,13 @@ try {
 					"--language-overlay", (Join-Path $contentRoot "TH3EN.DAT"),
 					"--cutscene-text-pack", (Join-Path $contentRoot (
 						"cutscene-text-en-US.t3ctp"
+					))
+				)
+			}
+			if($PicturePatch) {
+				$nativeArguments += @(
+					"--picture-patch-pack", (Join-Path $contentRoot (
+						"picture-patch-en-US.t3ptp"
 					))
 				)
 			}

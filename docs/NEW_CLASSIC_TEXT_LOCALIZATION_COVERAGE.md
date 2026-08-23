@@ -51,8 +51,10 @@ image-text migration includes, at minimum:
   The canonical VM inventory proves that all 24 pictures are reachable. Four
   current English pictures contain bounded raster translations, while at least
   nine more contain handwritten notes, signage, logos, punctuation, or sound
-  effects. `NEW_CLASSIC_PICTURE_TEXT_LOCALIZATION.md` specifies a source-bound
-  sparse indexed-image patch rather than unsafe generic-font reconstruction;
+  effects. `NEW_CLASSIC_PICTURE_TEXT_LOCALIZATION.md` specifies and documents
+  the implemented source-bound `T3PTP001` sparse indexed-image compiler,
+  parser, and New Classic scene application rather than unsafe generic-font
+  reconstruction; reviewed localized overlays remain content work;
 - the one-time ZUN Soft logo and other logo/credit artwork.
 
 These are deliberately classified as image-text work rather than silently

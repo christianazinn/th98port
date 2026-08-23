@@ -257,10 +257,13 @@ The production cutscene VM now exposes canonical picture presentations rather
 than relying on command-text scraping. Both authenticated language archives
 reach all 24 cutscene PIs. The visual audit found embedded handwritten image
 text across at least thirteen members and showed that the four existing English
-translations are bounded raster edits. The approved next boundary is the
-source-digest-bound sparse indexed-image package `T3PTP001`, documented in
+translations are bounded raster edits. The source-digest-bound sparse
+indexed-image package `T3PTP001` is now implemented from transparent indexed-
+PNG compiler through strict parser, production New Classic scene application,
+standalone, replay renderer, and renderer GUI. It is documented in
 `NEW_CLASSIC_PICTURE_TEXT_LOCALIZATION.md`; authored overlays and compiler
-fixtures contain no original unchanged pixels.
+fixtures contain no original unchanged pixels. Reviewed replacement artwork,
+not runtime architecture, is the remaining cutscene-picture dependency.
 
 ### 5. Account nametags and VS presentation
 

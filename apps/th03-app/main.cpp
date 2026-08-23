@@ -620,6 +620,7 @@ void print_usage()
 			"[--language-pack <locale.t3lang>] "
 			"[--game-text-pack <locale.t3gtl>] "
 			"[--cutscene-text-pack <locale.t3ctp>] "
+			"[--picture-patch-pack <locale.t3ptp>] "
 			"[--rhythm-rom <YM2608.ROM> | --rhythm-pcm <T98RHYTHM.PCM>] "
 			"[--tick-rate <ticks>/<seconds>] "
 			"[--smoke-ticks n] [--capture-replay <V14.RPY> "
@@ -684,6 +685,7 @@ const char *name(th03::app::ClassicRunnerErrorCode code) noexcept
 	case th03::app::ClassicRunnerErrorCode::language_pack_failed: return "language-pack-failed";
 	case th03::app::ClassicRunnerErrorCode::game_text_pack_failed: return "game-text-pack-failed";
 	case th03::app::ClassicRunnerErrorCode::cutscene_text_pack_failed: return "cutscene-text-pack-failed";
+	case th03::app::ClassicRunnerErrorCode::picture_patch_pack_failed: return "picture-patch-pack-failed";
 	case th03::app::ClassicRunnerErrorCode::session_failed: return "session-failed";
 	case th03::app::ClassicRunnerErrorCode::invalid_sample_order: return "invalid-sample-order";
 	case th03::app::ClassicRunnerErrorCode::runner_not_running: return "runner-not-running";
@@ -731,6 +733,8 @@ const char *name(th03::app::ClassicContentFile file) noexcept
 	case th03::app::ClassicContentFile::game_text_pack: return "game-text-pack";
 	case th03::app::ClassicContentFile::cutscene_text_pack:
 		return "cutscene-text-pack";
+	case th03::app::ClassicContentFile::picture_patch_pack:
+		return "picture-patch-pack";
 	}
 	return "unknown";
 }

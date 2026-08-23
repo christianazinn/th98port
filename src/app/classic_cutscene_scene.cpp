@@ -238,12 +238,13 @@ ClassicCutsceneScene::create(
 	std::span<const LoadedMainResource> resources,
 	const present::AnkGlyphProvider &font,
 	present::Raster initial_raster,
-	const NewClassicCutsceneTextCatalog *localized_text
+	const NewClassicCutsceneTextCatalog *localized_text,
+	const NewClassicPicturePatchCatalog *localized_pictures
 )
 {
 	return create_impl(
 		request, resources, font, std::move(initial_raster), true,
-		localized_text
+		localized_text, localized_pictures
 	);
 }
 
@@ -254,7 +255,8 @@ ClassicCutsceneScene::create_impl(
 	const present::AnkGlyphProvider &font,
 	present::Raster initial_raster,
 	bool authenticate_resource_bytes,
-	const NewClassicCutsceneTextCatalog *localized_text
+	const NewClassicCutsceneTextCatalog *localized_text,
+	const NewClassicPicturePatchCatalog *localized_pictures
 )
 {
 	if(initial_raster.raster_mode() != present::RasterMode::lines_400) {
@@ -360,6 +362,22 @@ ClassicCutsceneScene::create_impl(
 			return std::unexpected(cutscene_error(
 				ClassicCutsceneErrorCode::invalid_asset_geometry, key
 			));
+		}
+		if(localized_pictures) {
+			const auto spec = main_resource_spec(key);
+			if(!spec) {
+				return std::unexpected(cutscene_error(
+					ClassicCutsceneErrorCode::resource_set_mismatch, key
+				));
+			}
+			auto applied = localized_pictures->apply(spec->filename, *image);
+			if(!applied) {
+				auto result = cutscene_error(
+					ClassicCutsceneErrorCode::localized_picture_failed, key
+				);
+				result.picture_patch_error.emplace(std::move(applied.error()));
+				return std::unexpected(std::move(result));
+			}
 		}
 		prepared->pictures[index] = std::move(*image);
 	}

@@ -56,6 +56,9 @@ struct ClassicContentPaths final {
 	// Optional complete T3CTP001 scripted-dialogue catalog. New Classic applies
 	// it only after all 28 selected source scripts validate atomically.
 	std::filesystem::path cutscene_text_pack{};
+	// Optional T3PTP001 sparse decoded-picture overlay. New Classic verifies
+	// each source image before applying it; Classic never opens this path.
+	std::filesystem::path picture_patch_pack{};
 	// Complete authenticated Replay Patch 0.4.12 AZINN.DAT. Classic ignores
 	// this profile. An empty New Classic path derives AZINN.DAT under data_root.
 	std::filesystem::path replay_patch_assets{};
@@ -155,6 +158,7 @@ enum class ClassicContentFile : std::uint8_t {
 	language_pack,
 	game_text_pack,
 	cutscene_text_pack,
+	picture_patch_pack,
 };
 
 enum class ClassicRunnerErrorCode : std::uint8_t {
@@ -170,6 +174,7 @@ enum class ClassicRunnerErrorCode : std::uint8_t {
 	language_pack_failed,
 	game_text_pack_failed,
 	cutscene_text_pack_failed,
+	picture_patch_pack_failed,
 	session_failed,
 	invalid_sample_order,
 	runner_not_running,
@@ -192,6 +197,7 @@ struct ClassicRunnerError final {
 	std::optional<NewClassicMessagePackError> language_pack_error{};
 	std::optional<NewClassicGameTextPackError> game_text_pack_error{};
 	std::optional<NewClassicCutsceneTextPackError> cutscene_text_pack_error{};
+	std::optional<NewClassicPicturePatchError> picture_patch_pack_error{};
 	std::optional<present::SourceSurfaceError> surface_error{};
 };
 

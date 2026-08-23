@@ -32,6 +32,7 @@ REPLAY_FILTER = (("TH03 V14 replay", "*.rpy"), ("All files", "*.*"))
 VIDEO_FILTER = (("Matroska video", "*.mkv"),)
 GAME_TEXT_FILTER = (("Compiled T3GTL001 game text", "*.t3gtl"), ("All files", "*.*"))
 CUTSCENE_TEXT_FILTER = (("Compiled T3CTP001 cutscene text", "*.t3ctp"), ("All files", "*.*"))
+PICTURE_PATCH_FILTER = (("Compiled T3PTP001 picture patch", "*.t3ptp"), ("All files", "*.*"))
 
 
 def _preferences_path() -> Path:
@@ -84,6 +85,7 @@ class ReplayRendererApp:
         self.sfx = tk.StringVar(value=preferences.get("sfx", "Installed"))
         self.game_text_pack = tk.StringVar()
         self.cutscene_text_pack = tk.StringVar()
+        self.picture_patch_pack = tk.StringVar()
         self.status = tk.StringVar(value="Ready")
         self.phase = tk.StringVar(value="Choose a replay and output file.")
         self.timing = tk.StringVar(value="")
@@ -178,6 +180,15 @@ class ReplayRendererApp:
         ttk.Button(advanced, text="Browse...", command=self._choose_cutscene_text).grid(
             row=2, column=2, pady=(7, 0)
         )
+        ttk.Label(advanced, text="Picture patch pack").grid(
+            row=3, column=0, sticky="w", pady=(7, 0)
+        )
+        ttk.Entry(advanced, textvariable=self.picture_patch_pack).grid(
+            row=3, column=1, sticky="ew", padx=(10, 6), pady=(7, 0)
+        )
+        ttk.Button(advanced, text="Browse...", command=self._choose_picture_patch).grid(
+            row=3, column=2, pady=(7, 0)
+        )
 
         ttk.Separator(outer).pack(fill="x", pady=14)
         progress = ttk.Frame(outer)
@@ -251,6 +262,7 @@ class ReplayRendererApp:
             self.replay, self.output, self.data, self.ffmpeg, self.resolution,
             self.encoder, self.preset, self.language, self.flash, self.master,
             self.music, self.sfx, self.game_text_pack, self.cutscene_text_pack,
+            self.picture_patch_pack,
         ):
             variable.trace_add("write", lambda *_args: self._update_command_preview())
         self.installed_settings.trace_add(
@@ -312,6 +324,13 @@ class ReplayRendererApp:
         if selected:
             self.cutscene_text_pack.set(selected)
 
+    def _choose_picture_patch(self) -> None:
+        selected = filedialog.askopenfilename(
+            title="Choose Picture Patch Pack", filetypes=PICTURE_PATCH_FILTER
+        )
+        if selected:
+            self.picture_patch_pack.set(selected)
+
     def _job(
         self, overwrite: bool = False, staging_output: Path | None = None,
     ) -> RenderJob:
@@ -326,6 +345,9 @@ class ReplayRendererApp:
         pack = Path(self.game_text_pack.get()) if self.game_text_pack.get() else None
         cutscene_pack = (
             Path(self.cutscene_text_pack.get()) if self.cutscene_text_pack.get() else None
+        )
+        picture_pack = (
+            Path(self.picture_patch_pack.get()) if self.picture_patch_pack.get() else None
         )
         return RenderJob(
             renderer=self.renderer,
@@ -344,6 +366,7 @@ class ReplayRendererApp:
             sfx_volume=_volume_from_text(self.sfx.get()),
             game_text_pack=pack,
             cutscene_text_pack=cutscene_pack,
+            picture_patch_pack=picture_pack,
             staging_output=staging_output,
             overwrite=overwrite,
         )

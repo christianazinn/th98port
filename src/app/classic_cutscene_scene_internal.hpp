@@ -14,6 +14,7 @@
 #include "th03/app/classic_audio.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/app/new_classic_cutscene_text.hpp"
+#include "th03/app/new_classic_picture_patch.hpp"
 #include "th03/assets/types.hpp"
 #include "th03/present/cutscene_raster.hpp"
 #include "th03/present/cutscene_script.hpp"
@@ -46,6 +47,7 @@ enum class ClassicCutsceneErrorCode : std::uint8_t {
 	font_prepare_failed,
 	script_failed,
 	localized_script_failed,
+	localized_picture_failed,
 	raster_failed,
 	unknown_picture,
 	unknown_music,
@@ -59,6 +61,7 @@ struct ClassicCutsceneError final {
 	std::optional<assets::AssetError> asset_error{};
 	std::optional<present::CutsceneScriptError> script_error{};
 	std::optional<NewClassicCutsceneTextPackError> cutscene_text_error{};
+	std::optional<NewClassicPicturePatchError> picture_patch_error{};
 	std::optional<present::CutsceneRasterError> raster_error{};
 };
 
@@ -108,7 +111,8 @@ public:
 		std::span<const LoadedMainResource> resources,
 		const present::AnkGlyphProvider &font,
 		present::Raster initial_raster,
-		const NewClassicCutsceneTextCatalog *localized_text = nullptr
+		const NewClassicCutsceneTextCatalog *localized_text = nullptr,
+		const NewClassicPicturePatchCatalog *localized_pictures = nullptr
 	);
 	~ClassicCutsceneScene();
 
@@ -174,7 +178,8 @@ private:
 		const present::AnkGlyphProvider &font,
 		present::Raster initial_raster,
 		bool authenticate_resource_bytes,
-		const NewClassicCutsceneTextCatalog *localized_text
+		const NewClassicCutsceneTextCatalog *localized_text,
+		const NewClassicPicturePatchCatalog *localized_pictures
 	);
 
 	[[nodiscard]] std::expected<void, ClassicCutsceneError>
@@ -241,12 +246,13 @@ struct ClassicCutsceneSceneTestAccess final {
 		std::span<const LoadedMainResource> resources,
 		const present::AnkGlyphProvider &font,
 		present::Raster initial_raster,
-		const NewClassicCutsceneTextCatalog *localized_text = nullptr
+		const NewClassicCutsceneTextCatalog *localized_text = nullptr,
+		const NewClassicPicturePatchCatalog *localized_pictures = nullptr
 	)
 	{
 		return ClassicCutsceneScene::create_impl(
 			request, resources, font, std::move(initial_raster), false,
-			localized_text
+			localized_text, localized_pictures
 		);
 	}
 

@@ -1091,6 +1091,20 @@ struct ClassicOpSessionBackend final {
 			&new_classic_builtin_japanese_game_text();
 	}
 
+	[[nodiscard]] std::shared_ptr<const NewClassicPicturePatchCatalog>
+	picture_patch_for(ClassicLanguage language) const noexcept
+	{
+		if(!patch_assets || !patch_assets->custom_picture_patch) {
+			return {};
+		}
+		const auto *game_text = game_text_for(language);
+		if(!game_text || patch_assets->custom_picture_patch->locale() !=
+			game_text->locale()) {
+			return {};
+		}
+		return patch_assets->custom_picture_patch;
+	}
+
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
 	apply_language_profile(ClassicLanguage language)
 	{
@@ -3271,7 +3285,8 @@ struct ClassicOpSessionBackend final {
 			replay_recorder, replay_recorder ? score_path : std::filesystem::path{},
 			patch_assets,
 			cutscene_text_for(config.language),
-			game_text_for(config.language)
+			game_text_for(config.language),
+			picture_patch_for(config.language)
 		);
 		if(!created) {
 			return std::unexpected(story_error(std::move(created.error())));
@@ -3339,7 +3354,8 @@ struct ClassicOpSessionBackend final {
 				replay_recorder ? score_path : std::filesystem::path{},
 				patch_assets,
 				cutscene_text_for(config.language),
-				game_text_for(config.language)
+				game_text_for(config.language),
+				picture_patch_for(config.language)
 			);
 			if(!created) {
 				return std::unexpected(story_error(std::move(created.error())));

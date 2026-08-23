@@ -43,6 +43,7 @@ class RenderJob:
     sfx_volume: int | None = None
     game_text_pack: Path | None = None
     cutscene_text_pack: Path | None = None
+    picture_patch_pack: Path | None = None
     staging_output: Path | None = None
     overwrite: bool = False
 
@@ -85,6 +86,8 @@ class RenderJob:
             raise JobError("The selected T3GTL001 game-text pack does not exist.")
         if self.cutscene_text_pack is not None and not self.cutscene_text_pack.is_file():
             raise JobError("The selected T3CTP001 cutscene-text pack does not exist.")
+        if self.picture_patch_pack is not None and not self.picture_patch_pack.is_file():
+            raise JobError("The selected T3PTP001 picture-patch pack does not exist.")
         if self.staging_output is not None:
             if self.staging_output == self.output:
                 raise JobError("The staging output must differ from the destination.")
@@ -124,6 +127,8 @@ class RenderJob:
             command.extend(("--game-text-pack", str(self.game_text_pack)))
         if self.cutscene_text_pack is not None:
             command.extend(("--cutscene-text-pack", str(self.cutscene_text_pack)))
+        if self.picture_patch_pack is not None:
+            command.extend(("--picture-patch-pack", str(self.picture_patch_pack)))
         if self.staging_output is not None:
             command.extend(("--staging-output", str(self.staging_output)))
         if self.overwrite:
