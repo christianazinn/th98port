@@ -360,6 +360,29 @@ struct CutsceneTextRun final {
 	) = default;
 };
 
+enum class CutscenePictureUseKind : std::uint8_t {
+	full_background,
+	immediate,
+	crossfade,
+};
+
+// One source picture presentation that can become visible. The filename is the
+// latest preceding load command, so asset/localization tooling can inventory
+// actual presentation use without parsing the plaintext command language.
+// `quarter` is meaningful only for immediate and crossfade presentations.
+struct CutscenePictureUse final {
+	std::size_t ordinal = 0U;
+	std::size_t source_offset = 0U;
+	CutsceneFilename filename{};
+	std::uint16_t quarter = 0U;
+	CutscenePictureUseKind kind = CutscenePictureUseKind::full_background;
+
+	[[nodiscard]] friend constexpr bool operator==(
+		const CutscenePictureUse &,
+		const CutscenePictureUse &
+	) = default;
+};
+
 // Source-exact TH03 plaintext cutscene interpreter. The VM owns its bytes and
 // performs no I/O. A caller must execute each returned semantic batch in order
 // before requesting the next top-level source iteration.
@@ -461,6 +484,12 @@ private:
 // second time.
 [[nodiscard]] std::expected<std::vector<CutsceneTextRun>, CutsceneScriptError>
 extract_cutscene_text_runs(std::span<const std::uint8_t> script);
+
+// Drives the same canonical VM and reports only source picture presentations.
+// Clear operations and out-of-range quarters do not expose source pixels and
+// are intentionally absent.
+[[nodiscard]] std::expected<std::vector<CutscenePictureUse>, CutsceneScriptError>
+extract_cutscene_picture_uses(std::span<const std::uint8_t> script);
 
 } // namespace th03::present
 

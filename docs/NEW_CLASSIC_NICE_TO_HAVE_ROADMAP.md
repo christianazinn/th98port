@@ -253,6 +253,15 @@ General Unicode locales still need a distributable font and layout contract;
 the current production renderer deliberately covers source-era ASCII and
 CP932 Japanese only.
 
+The production cutscene VM now exposes canonical picture presentations rather
+than relying on command-text scraping. Both authenticated language archives
+reach all 24 cutscene PIs. The visual audit found embedded handwritten image
+text across at least thirteen members and showed that the four existing English
+translations are bounded raster edits. The approved next boundary is the
+source-digest-bound sparse indexed-image package `T3PTP001`, documented in
+`NEW_CLASSIC_PICTURE_TEXT_LOCALIZATION.md`; authored overlays and compiler
+fixtures contain no original unchanged pixels.
+
 ### 5. Account nametags and VS presentation
 
 The product decisions and first account-backed implementation are complete:

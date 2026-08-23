@@ -47,7 +47,12 @@ image-text migration includes, at minimum:
   runtime-localized in New Classic);
 - stage/win logos and other gameplay art (the `LOSE.BF2` and `ROUND.BF2` word
   cels are now runtime-localized while their digits and animation stay source-owned);
-- text embedded in cutscene pictures rather than emitted by the script VM;
+- text embedded in cutscene pictures rather than emitted by the script VM.
+  The canonical VM inventory proves that all 24 pictures are reachable. Four
+  current English pictures contain bounded raster translations, while at least
+  nine more contain handwritten notes, signage, logos, punctuation, or sound
+  effects. `NEW_CLASSIC_PICTURE_TEXT_LOCALIZATION.md` specifies a source-bound
+  sparse indexed-image patch rather than unsafe generic-font reconstruction;
 - the one-time ZUN Soft logo and other logo/credit artwork.
 
 These are deliberately classified as image-text work rather than silently
@@ -75,6 +80,10 @@ labels and formatting templates are included in the menu domain.
 - `th03-localized-scene-snapshot` drives all 28 authenticated production
   cutscene scenes and renders one longest-run layout-stress frame per script,
   retaining the real PI background, palette, coordinates, and page operations.
+- `extract_cutscene_picture_uses()` drives the same canonical VM and inventories
+  full-background, immediate-quarter, and crossfade-quarter presentations. Its
+  authenticated Japanese and English gates reach all 24 cutscene pictures;
+  case-insensitive member identity is normalized only after the VM parses it.
 - The compilers freeze source geometry, schema/body digests, locale/fallback
   relationships, encoding, and glyph widths; malformed or cross-locale packs
   fail closed before a scene is published.

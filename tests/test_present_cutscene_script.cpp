@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <set>
 #include <span>
 #include <string>
 #include <string_view>
@@ -956,6 +957,42 @@ void test_text_run_extraction()
 	);
 }
 
+void test_picture_use_extraction()
+{
+	const auto script = bytes(
+		"\\p,DM3B.PI\r\n\\p=\\=1\\==2,3\\=9"
+		"\\p,DM3N.PI\r\n\\=0\\$"
+	);
+	auto uses = extract_cutscene_picture_uses(script);
+	expect(uses.has_value(), "picture-use extraction accepts a valid script");
+	if(uses) {
+		expect(
+			uses->size() == 4U && (*uses)[0U].ordinal == 0U &&
+				std::string_view((*uses)[0U].filename.view()) == "DM3B.PI" &&
+				(*uses)[0U].kind == CutscenePictureUseKind::full_background &&
+				(*uses)[1U].quarter == 1U &&
+				(*uses)[1U].kind == CutscenePictureUseKind::immediate,
+			"picture-use extraction reports full and immediate presentation"
+		);
+		expect(
+			(*uses)[2U].ordinal == 2U && (*uses)[2U].quarter == 2U &&
+				(*uses)[2U].kind == CutscenePictureUseKind::crossfade &&
+				std::string_view((*uses)[3U].filename.view()) == "DM3N.PI" &&
+				(*uses)[3U].quarter == 0U,
+			"picture-use extraction preserves crossfades and later loads"
+		);
+	}
+
+	const std::array<std::uint8_t, 1U> malformed{0x82U};
+	auto rejected = extract_cutscene_picture_uses(malformed);
+	expect(
+		!rejected && rejected.error().code ==
+			CutsceneScriptErrorCode::unexpected_end &&
+			rejected.error().byte_offset == 1U,
+		"picture-use extraction preserves canonical VM parse errors"
+	);
+}
+
 void test_local_original_scripts(const std::filesystem::path &directory)
 {
 	constexpr std::array names{
@@ -970,6 +1007,7 @@ void test_local_original_scripts(const std::filesystem::path &directory)
 		"@08DM0.TXT", "@08DM1.TXT", "@08ED.TXT",
 		"@99ED.TXT",
 	};
+	std::set<std::string> pictures{};
 	for(const auto name : names) {
 		std::error_code size_error{};
 		const auto source_size = std::filesystem::file_size(
@@ -1027,6 +1065,40 @@ void test_local_original_scripts(const std::filesystem::path &directory)
 			runs && !runs->empty(),
 			"local script exposes at least one canonical text run"
 		);
+		auto picture_uses = extract_cutscene_picture_uses(script);
+		expect(
+			picture_uses.has_value(),
+			"local script exposes canonical picture usage"
+		);
+		if(picture_uses) {
+			for(const auto &use : *picture_uses) {
+				expect(
+					!use.filename.view().empty() &&
+						(use.kind == CutscenePictureUseKind::full_background ||
+							use.quarter < 4U),
+					"local picture use binds a loaded source quarter"
+				);
+				std::string normalized(
+					use.filename.view().begin(), use.filename.view().end()
+				);
+				for(auto &value : normalized) {
+					if(value >= 'a' && value <= 'z') {
+						value = static_cast<char>(value - ('a' - 'A'));
+					}
+				}
+				pictures.emplace(std::move(normalized));
+			}
+		}
+	}
+	expect(
+		pictures.size() == 24U,
+		"all twenty-four authenticated cutscene pictures are reachable"
+	);
+	if(pictures.size() != 24U) {
+		std::cerr << "reachable cutscene pictures: " << pictures.size() << '\n';
+		for(const auto &picture : pictures) {
+			std::cerr << "  " << picture << '\n';
+		}
 	}
 }
 
@@ -1044,6 +1116,7 @@ int main(int argc, char **argv)
 	test_every_default_path_and_unconsumed_subcommands();
 	test_malformed_atomicity_unknown_and_boundary_default();
 	test_text_run_extraction();
+	test_picture_use_extraction();
 	if(argc == 2) {
 		test_local_original_scripts(std::filesystem::path(argv[1]));
 	} else {

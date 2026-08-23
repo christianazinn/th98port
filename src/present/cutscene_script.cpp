@@ -858,4 +858,84 @@ extract_cutscene_text_runs(std::span<const std::uint8_t> script)
 	return runs;
 }
 
+std::expected<std::vector<CutscenePictureUse>, CutsceneScriptError>
+extract_cutscene_picture_uses(std::span<const std::uint8_t> script)
+{
+	auto created = CutsceneScriptVm::create(script);
+	if(!created) {
+		return std::unexpected(created.error());
+	}
+	auto vm = std::move(*created);
+	auto begun = vm.begin();
+	if(!begun) {
+		return std::unexpected(begun.error());
+	}
+
+	CutsceneFilename current{};
+	std::vector<CutscenePictureUse> uses{};
+	for(std::size_t iteration = 0U;
+		iteration <= script.size() && !vm.finished();
+		++iteration) {
+		const auto source_offset = vm.byte_offset();
+		auto stepped = vm.step({
+			.cancel_held = true,
+			.any_key_held = true,
+		});
+		if(!stepped) {
+			return std::unexpected(stepped.error());
+		}
+		for(const auto &operation : stepped->operations()) {
+			if(const auto *load =
+				std::get_if<CutsceneLoadBackground>(&operation)) {
+				current = load->filename;
+				continue;
+			}
+			if(std::holds_alternative<CutscenePresentBackground>(operation)) {
+				uses.push_back({
+					.ordinal = uses.size(),
+					.source_offset = source_offset,
+					.filename = current,
+					.quarter = 0U,
+					.kind = CutscenePictureUseKind::full_background,
+				});
+				continue;
+			}
+			if(std::holds_alternative<CutsceneFreeBackground>(operation)) {
+				current = {};
+				continue;
+			}
+			if(const auto *show =
+				std::get_if<CutsceneShowPictureQuarter>(&operation);
+				show && show->quarter < picture_quarter_count) {
+				uses.push_back({
+					.ordinal = uses.size(),
+					.source_offset = source_offset,
+					.filename = current,
+					.quarter = show->quarter,
+					.kind = CutscenePictureUseKind::immediate,
+				});
+				continue;
+			}
+			if(const auto *crossfade =
+				std::get_if<CutsceneCrossfadePicture>(&operation);
+				crossfade && crossfade->quarter < picture_quarter_count) {
+				uses.push_back({
+					.ordinal = uses.size(),
+					.source_offset = source_offset,
+					.filename = current,
+					.quarter = crossfade->quarter,
+					.kind = CutscenePictureUseKind::crossfade,
+				});
+			}
+		}
+	}
+	if(!vm.finished()) {
+		return std::unexpected(CutsceneScriptError{
+			CutsceneScriptErrorCode::unexpected_end,
+			vm.byte_offset(),
+		});
+	}
+	return uses;
+}
+
 } // namespace th03::present
