@@ -249,6 +249,11 @@ deterministic no-replace 4-bpp BMPs. Its first authenticated audit established
 that the `SLWIN.CDG` character-select stat labels occupy a reconstructible
 white panel whose border, row rules, and adjacent star field must be preserved;
 the resulting localization edit remains a separate product parcel.
+The source-art `T3MBG001` compiler now replaces the former manual
+DOSBox/`mg098` custom-menu workflow: it fits ordinary images to 640x400,
+quantizes only into the ten background-owned palette indices, writes the exact
+two uncompressed 4-bpp BMP halves, and emits a runtime-palette preview plus
+source/output identities. It never modifies reviewed assets in place.
 General Unicode locales still need a distributable font and layout contract;
 the current production renderer deliberately covers source-era ASCII and
 CP932 Japanese only.

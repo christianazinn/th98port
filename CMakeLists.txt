@@ -1461,6 +1461,11 @@ if(BUILD_TESTING)
 			COMMAND ${Python3_EXECUTABLE}
 				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_make_picture_patch_author.py
 		)
+		add_test(
+			NAME th03-menu-background-compiler-tests
+			COMMAND ${Python3_EXECUTABLE}
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_compile_menu_background.py
+		)
 	endif()
 	add_test(NAME th03-cutscene-text-help COMMAND th03-cutscene-text --help)
 	add_test(NAME th03-content-audit-help COMMAND th03-content-audit --help)

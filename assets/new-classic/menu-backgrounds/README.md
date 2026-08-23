@@ -24,3 +24,9 @@ lavender headers, yellow selection, status text, and white body text.
 The authoritative runtime mapping is `NewClassicMenuBackground` in
 `include/th03/app/new_classic_assets.hpp`. Standalone content stages this
 directory as `content/PODDUI`; CMake beta packages install it as `PODDUI`.
+
+New source artwork should be converted and reviewed with
+`tools/localization/compile_menu_background.py`; see
+`docs/NEW_CLASSIC_MENU_BACKGROUND_AUTHORING.md`. The compiler reserves every
+runtime text-palette slot and writes the exact two-half BMP contract without a
+DOSBox or PI conversion step.
