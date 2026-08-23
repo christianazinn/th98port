@@ -1,7 +1,7 @@
 T3RUL001
 game=th03
 profile=stock-new-classic-story
-replay-format=13
+replay-format=14
 start-stage=0
 start-round=0
 initial-lives=2
