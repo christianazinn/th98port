@@ -18,6 +18,8 @@
 
 namespace th03::app {
 
+class NewClassicGameTextCatalog;
+
 class MainProcessStaticContent final {
 public:
 	MainProcessStaticContent(const MainProcessStaticContent &) = delete;
@@ -63,7 +65,8 @@ struct MainProcessStaticContentAccess final {
 		std::span<const LoadedMainResource> resources,
 		MainCompiledContent compiled,
 		std::span<const std::byte> font_rom,
-		bool authenticate_resource_bytes = true
+		bool authenticate_resource_bytes = true,
+		const NewClassicGameTextCatalog *localized_hud_text = nullptr
 	);
 };
 

@@ -304,6 +304,11 @@
     {"enum": "result_boss_attack", "id": "result.boss-attack", "encoding": "cp932", "exact_bytes": 26},
     {"enum": "result_boss_flip", "id": "result.boss-flip", "encoding": "cp932", "exact_bytes": 26},
     {"enum": "result_boss_panic", "id": "result.boss-panic", "encoding": "cp932", "exact_bytes": 26},
-    {"enum": "result_lives_left", "id": "result.lives-left", "encoding": "cp932", "exact_bytes": 26}
+    {"enum": "result_lives_left", "id": "result.lives-left", "encoding": "cp932", "exact_bytes": 26},
+    {"enum": "hud_banner_lose", "id": "hud.banner.lose", "encoding": "cp932", "exact_bytes": 16},
+    {"enum": "hud_banner_win", "id": "hud.banner.win", "encoding": "cp932", "exact_bytes": 16},
+    {"enum": "hud_banner_stage", "id": "hud.banner.stage", "encoding": "cp932", "exact_bytes": 16},
+    {"enum": "hud_banner_round", "id": "hud.banner.round", "encoding": "cp932", "exact_bytes": 16},
+    {"enum": "hud_banner_start", "id": "hud.banner.start", "encoding": "cp932", "exact_bytes": 16}
   ]
 }

@@ -1,5 +1,6 @@
 #include "main_process_static_content_internal.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -12,6 +13,8 @@
 #include "th03/assets/decode.hpp"
 #include "th03/exact/trig.hpp"
 #include "th03/formats/enedat.hpp"
+#include "th03/app/new_classic_game_text.hpp"
+#include "th03/present/graphics_text.hpp"
 
 namespace th03::app {
 namespace {
@@ -46,6 +49,164 @@ namespace {
 		actual.filename == canonical.filename &&
 		actual.expected_bytes == canonical.expected_bytes &&
 		actual.expected_fnv1a64 == canonical.expected_fnv1a64;
+}
+
+[[nodiscard]] std::span<const std::uint8_t> trim_ascii_spaces(
+	std::span<const std::uint8_t> text
+) noexcept
+{
+	while(!text.empty() && text.front() == static_cast<std::uint8_t>(' ')) {
+		text = text.subspan(1U);
+	}
+	while(!text.empty() && text.back() == static_cast<std::uint8_t>(' ')) {
+		text = text.first(text.size() - 1U);
+	}
+	return text;
+}
+
+[[nodiscard]] bool copy_raster_word_to_cels(
+	assets::BfntSheet &sheet,
+	std::size_t first_cel,
+	std::size_t cel_count,
+	std::span<const std::uint8_t> text,
+	const Pc98FontRomProvider &font,
+	present::Index4 foreground,
+	bool white_shadow
+)
+{
+	if(sheet.consumer != assets::BfntConsumerPolicy::superimpose ||
+		sheet.header.pixel_width == 0U ||
+		(sheet.header.pixel_width % 8U) != 0U ||
+		sheet.header.pixel_height > present::graphics_height ||
+		sheet.transparent_color != 0U || cel_count == 0U ||
+		first_cel > sheet.glyphs.size() ||
+		cel_count > (sheet.glyphs.size() - first_cel)) {
+		return false;
+	}
+	text = trim_ascii_spaces(text);
+	if(text.empty()) {
+		return false;
+	}
+	const auto prepared = present::prepare_graphics_text_8x16(text, font);
+	if(!prepared) {
+		return false;
+	}
+	const auto total_width = static_cast<std::uint32_t>(
+		sheet.header.pixel_width
+	) * cel_count;
+	if(total_width > present::graphics_width ||
+		prepared->pixel_width() > total_width ||
+		sheet.header.pixel_height < present::jis_height) {
+		return false;
+	}
+
+	present::Raster raster{};
+	if(!raster.set_raster_mode(present::RasterMode::lines_400)) {
+		return false;
+	}
+	const auto left = static_cast<std::int32_t>(
+		(total_width - prepared->pixel_width()) / 2U
+	);
+	const auto top = static_cast<std::int32_t>(
+		(sheet.header.pixel_height - present::jis_height) / 2U
+	);
+	if(white_shadow && !present::graphics_text_put_8x16(
+		raster, {left + 1, top + 1}, *prepared,
+		{15U, present::GraphicsTextWeight::black, 0U}
+	)) {
+		return false;
+	}
+	if(!present::graphics_text_put_8x16(
+		raster, {left, top}, *prepared,
+		{foreground, present::GraphicsTextWeight::black, 0U}
+	)) {
+		return false;
+	}
+
+	const auto stride = static_cast<std::size_t>(
+		sheet.header.pixel_width / 8U
+	);
+	const auto plane_bytes = stride * sheet.header.pixel_height;
+	for(std::size_t cel = 0U; cel < cel_count; ++cel) {
+		auto *pixels = std::get_if<assets::PlanarBitmap4>(
+			&sheet.glyphs[first_cel + cel].pixels
+		);
+		if(pixels == nullptr ||
+			pixels->row_order != assets::PlanarRowOrder::top_to_bottom ||
+			pixels->bit_order !=
+				assets::PlanarBitOrder::most_significant_bit_left) {
+			return false;
+		}
+		for(auto &plane : pixels->color_planes) {
+			plane.assign(plane_bytes, 0U);
+		}
+		for(std::size_t plane = 0U;
+			plane < present::planar_plane_count; ++plane) {
+			for(std::size_t y = 0U; y < sheet.header.pixel_height; ++y) {
+				for(std::size_t byte = 0U; byte < stride; ++byte) {
+					const auto source = raster.planar_byte(
+						present::Page::zero,
+						static_cast<present::PlanarPlane>(plane),
+						static_cast<std::uint16_t>((cel * stride) + byte),
+						static_cast<std::uint16_t>(y)
+					);
+					if(!source) {
+						return false;
+					}
+					pixels->color_planes[plane][(y * stride) + byte] = *source;
+				}
+			}
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] bool same_message(
+	const NewClassicGameTextCatalog &left,
+	const NewClassicGameTextCatalog &right,
+	NewClassicGameTextId id
+) noexcept
+{
+	return std::ranges::equal(left.bytes(id), right.bytes(id));
+}
+
+[[nodiscard]] bool localize_hud_sheets(
+	assets::BfntSheet &lose,
+	assets::BfntSheet &round,
+	const Pc98FontRomProvider &font,
+	const NewClassicGameTextCatalog &text
+)
+{
+	const auto &english = new_classic_builtin_english_game_text();
+	struct Word {
+		NewClassicGameTextId id;
+		assets::BfntSheet *sheet;
+		std::size_t first_cel;
+		std::size_t cel_count;
+		present::Index4 color;
+		bool white_shadow;
+	};
+	const std::array words{
+		Word{NewClassicGameTextId::hud_banner_lose, &lose, 0U, 2U, 10U, true},
+		Word{NewClassicGameTextId::hud_banner_win, &lose, 2U, 2U, 8U, true},
+		Word{NewClassicGameTextId::hud_banner_stage, &round, 0U, 4U, 15U, false},
+		Word{NewClassicGameTextId::hud_banner_round, &round, 4U, 4U, 15U, false},
+		Word{NewClassicGameTextId::hud_banner_start, &round, 8U, 4U, 15U, false},
+	};
+	for(const auto &word : words) {
+		// The source artwork is already the built-in English spelling. Retain its
+		// cursive/stylized pixels exactly until a locale actually substitutes it.
+		if(same_message(text, english, word.id)) {
+			continue;
+		}
+		if(!copy_raster_word_to_cels(
+			*word.sheet, word.first_cel, word.cel_count, text.bytes(word.id),
+			font, word.color, word.white_shadow
+		)) {
+			return false;
+		}
+	}
+	return true;
 }
 
 [[nodiscard]] std::expected<
@@ -166,7 +327,8 @@ std::expected<
 	std::span<const LoadedMainResource> resources,
 	MainCompiledContent compiled,
 	std::span<const std::byte> font_rom,
-	bool authenticate_resource_bytes
+	bool authenticate_resource_bytes,
+	const NewClassicGameTextCatalog *localized_hud_text
 )
 {
 	constexpr std::array static_keys{
@@ -243,6 +405,14 @@ std::expected<
 			));
 		}
 		sheets[index] = std::move(*decoded);
+	}
+	if(localized_hud_text && !localize_hud_sheets(
+		sheets[0U], sheets[1U], *candidate->font_provider_,
+		*localized_hud_text
+	)) {
+		return std::unexpected(error(
+			MainProcessErrorCode::presenter_setup_failed
+		));
 	}
 	candidate->prepared_lose_ = present::prepare_superimpose_sheet(sheets[0U]);
 	candidate->prepared_round_ = present::prepare_superimpose_sheet(sheets[1U]);

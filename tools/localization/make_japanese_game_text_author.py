@@ -42,6 +42,13 @@ MAIN_RESULT_SPECS = (
     ("result.boss-panic", 0x1DEB6, 26),
     ("result.lives-left", 0x1DF2E, 26),
 )
+HUD_LOCALIZED_MESSAGES = {
+    "hud.banner.lose": "敗北            ",
+    "hud.banner.win": "勝利            ",
+    "hud.banner.stage": "ステージ        ",
+    "hud.banner.round": "ラウンド        ",
+    "hud.banner.start": "開始            ",
+}
 
 
 class AuthorError(ValueError):
@@ -167,6 +174,10 @@ def build_author(
     if overlap:
         raise AuthorError(f"duplicate source message {sorted(overlap)[0]}")
     messages.update(fixed_raw["messages"])
+    overlap = set(messages) & set(HUD_LOCALIZED_MESSAGES)
+    if overlap:
+        raise AuthorError(f"duplicate localized HUD message {sorted(overlap)[0]}")
+    messages.update(HUD_LOCALIZED_MESSAGES)
     identifiers = schema_ids(schema)
     missing = set(identifiers) - set(messages)
     extra = set(messages) - set(identifiers)

@@ -1038,7 +1038,7 @@ NewClassicReplayPlayback::load_internal(
 		return std::unexpected(std::move(error));
 	}
 	auto static_content = MainProcessStaticContentAccess::create(
-		*static_resources, *compiled, *font
+		*static_resources, *compiled, *font, true, game_text
 	);
 	if(!static_content) {
 		auto error = playback_error(

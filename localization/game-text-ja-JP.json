@@ -740,6 +740,11 @@
     "result.boss-attack": "ボスアタック回数　　　　×",
     "result.boss-flip": "ボスリバーサル回数　　　×",
     "result.boss-panic": "ボスパニック回数　　　　×",
-    "result.lives-left": "残り人数　　　　　　　　×"
+    "result.lives-left": "残り人数　　　　　　　　×",
+    "hud.banner.lose": "敗北            ",
+    "hud.banner.win": "勝利            ",
+    "hud.banner.stage": "ステージ        ",
+    "hud.banner.round": "ラウンド        ",
+    "hud.banner.start": "開始            "
   }
 }

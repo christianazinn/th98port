@@ -43,7 +43,7 @@ class GameTextPackTests(unittest.TestCase):
         second = PACK.compile_pack(self.schema, self.author)
         self.assertEqual(first, second)
         self.assertEqual(first[:8], b"T3GTL001")
-        self.assertEqual(struct.unpack_from("<H", first, 12)[0], 738)
+        self.assertEqual(struct.unpack_from("<H", first, 12)[0], 743)
         self.assertEqual(first[14], 1)
         self.assertEqual(len(self.schema.digest), 32)
 
@@ -80,11 +80,11 @@ class GameTextPackTests(unittest.TestCase):
             )
 
     def test_author_is_complete_and_exact(self) -> None:
-        self.assertEqual(len(self.schema.messages), 738)
+        self.assertEqual(len(self.schema.messages), 743)
         resolved = PACK.resolve_author(
             self.author, {self.author.locale: self.author}, self.schema
         )
-        self.assertEqual(len(resolved), 738)
+        self.assertEqual(len(resolved), 743)
         for message, value in zip(self.schema.messages, resolved, strict=True):
             self.assertEqual(len(PACK.validate_message(message, value)), message.exact_bytes)
 

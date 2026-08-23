@@ -97,6 +97,10 @@ constexpr std::array native_surfaces{
 		"five Clear Bonus result labels",
 	},
 	NativeSurface{
+		"gameplay-hud-banners", "main_round_result", "T3GTL001",
+		"Lose, Win, Stage, Round, and Start image-text cels",
+	},
+	NativeSurface{
 		"win-quotes", "mainl_win", "T3GTL001",
 		"297 fixed DAT rows: nine characters by 11 blocks by three rows",
 	},

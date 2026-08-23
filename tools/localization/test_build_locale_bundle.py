@@ -78,8 +78,8 @@ class LocaleBundleTests(unittest.TestCase):
                 ["en-US", "ja-JP"],
             )
             for locale in manifest["locales"]:
-                self.assertEqual(locale["counts"]["game_text_messages"], 738)
-                self.assertEqual(locale["counts"]["preview_pages"], 40)
+                self.assertEqual(locale["counts"]["game_text_messages"], 743)
+                self.assertEqual(locale["counts"]["preview_pages"], 41)
                 self.assertEqual(locale["counts"]["menu_preview_pages"], 41)
                 self.assertGreater(locale["counts"]["cutscene_preview_pages"], 28)
             checked = self.invoke("check", font, first)

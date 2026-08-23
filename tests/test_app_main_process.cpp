@@ -1,6 +1,7 @@
 #include "th03/app/main_process.hpp"
 #include "th03/app/main_direct_vs_runner.hpp"
 #include "th03/app/main_rollback_coordinator.hpp"
+#include "th03/app/new_classic_game_text.hpp"
 #include "th03/app/new_classic_netplay_main_session.hpp"
 #include "th03/app/new_classic_netplay_replay_capture.hpp"
 
@@ -25,6 +26,7 @@
 #include "th03/app/authentic_text.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/present/main_static.hpp"
+#include "th03/present/superimpose.hpp"
 
 #include "../src/app/main_compiled_content_internal.hpp"
 #include "../src/app/classic_op_scene_internal.hpp"
@@ -1011,6 +1013,106 @@ std::vector<std::byte> make_font_rom()
 	result[0x800U] = std::byte{0x80U};
 	result[0x1800U] = std::byte{0x80U};
 	return result;
+}
+
+std::vector<th03::present::Index4> render_superimpose_group(
+	const th03::present::PreparedSuperimposeSheet &sheet,
+	std::uint16_t first,
+	std::uint16_t count
+)
+{
+	th03::present::Raster raster{};
+	if(!raster.set_raster_mode(th03::present::RasterMode::lines_400)) {
+		return {};
+	}
+	for(std::uint16_t index = 0U; index < count; ++index) {
+		if(!th03::present::superimpose_put(
+			raster,
+			sheet,
+			{static_cast<std::int32_t>(index * sheet.pixel_width()), 0},
+			static_cast<std::uint16_t>(first + index)
+		)) {
+			return {};
+		}
+	}
+	std::vector<th03::present::Index4> result;
+	result.reserve(static_cast<std::size_t>(sheet.pixel_width()) * count *
+		sheet.pixel_height());
+	for(std::uint16_t y = 0U; y < sheet.pixel_height(); ++y) {
+		for(std::uint32_t x = 0U;
+			x < static_cast<std::uint32_t>(sheet.pixel_width()) * count; ++x) {
+			const auto pixel = raster.pixel(
+				th03::present::Page::zero,
+				{static_cast<std::int32_t>(x), static_cast<std::int32_t>(y)}
+			);
+			if(!pixel) {
+				return {};
+			}
+			result.push_back(*pixel);
+		}
+	}
+	return result;
+}
+
+void test_localized_hud_banner_sheets()
+{
+	const MainDirectVsConfig config{};
+	const auto resources = make_resources(config.player_one, config.player_two);
+	auto source_compiled = make_compiled_content();
+	auto english_compiled = make_compiled_content();
+	auto japanese_compiled = make_compiled_content();
+	expect(source_compiled && english_compiled && japanese_compiled,
+		"localized HUD fixtures import synthetic compiled content");
+	if(!source_compiled || !english_compiled || !japanese_compiled) {
+		return;
+	}
+	std::vector<std::byte> font_rom(
+		th03::app::Pc98FontRomProvider::font_rom_size,
+		std::byte{0xFFU}
+	);
+	const auto source = MainProcessTestAccess::
+		prepare_static_with_synthetic_resources(
+			resources, std::move(*source_compiled), font_rom
+		);
+	const auto english = MainProcessTestAccess::
+		prepare_static_with_synthetic_resources(
+			resources, std::move(*english_compiled), font_rom,
+			&th03::app::new_classic_builtin_english_game_text()
+		);
+	const auto japanese = MainProcessTestAccess::
+		prepare_static_with_synthetic_resources(
+			resources, std::move(*japanese_compiled), font_rom,
+			&th03::app::new_classic_builtin_japanese_game_text()
+		);
+	expect(source && english && japanese,
+		"source English and Japanese HUD static owners prepare");
+	if(!source || !english || !japanese) {
+		return;
+	}
+
+	const auto source_lose = render_superimpose_group((*source)->lose(), 0U, 4U);
+	const auto english_lose = render_superimpose_group((*english)->lose(), 0U, 4U);
+	const auto japanese_lose = render_superimpose_group((*japanese)->lose(), 0U, 4U);
+	expect(source_lose == english_lose,
+		"built-in English retains exact source Lose and Win artwork");
+	expect(japanese_lose != source_lose && std::ranges::any_of(
+		japanese_lose, [](auto pixel) { return pixel != 0U; }
+	), "Japanese replaces both result words with visible locale text");
+
+	const auto source_words = render_superimpose_group((*source)->round(), 0U, 12U);
+	const auto english_words = render_superimpose_group((*english)->round(), 0U, 12U);
+	const auto japanese_words = render_superimpose_group((*japanese)->round(), 0U, 12U);
+	expect(source_words == english_words,
+		"built-in English retains exact source Stage Round and Start artwork");
+	expect(japanese_words != source_words && std::ranges::any_of(
+		japanese_words, [](auto pixel) { return pixel != 0U; }
+	), "Japanese replaces all three round-start words with visible locale text");
+
+	const auto source_digits = render_superimpose_group((*source)->round(), 12U, 10U);
+	const auto english_digits = render_superimpose_group((*english)->round(), 12U, 10U);
+	const auto japanese_digits = render_superimpose_group((*japanese)->round(), 12U, 10U);
+	expect(source_digits == english_digits && source_digits == japanese_digits,
+		"all ten authenticated round digits remain pixel-identical in every locale");
 }
 
 auto create_synthetic(
@@ -4052,6 +4154,7 @@ int main(int argc, char **argv)
 	test_new_classic_netplay_pause_boundary();
 	test_new_classic_netplay_confirmed_digest_schedule();
 	test_raw_bf2_shapes();
+	test_localized_hud_banner_sheets();
 	test_distinct_selection_first_frame();
 	test_live_bomb_first_frame();
 	test_same_selection_shared_raw_construction();

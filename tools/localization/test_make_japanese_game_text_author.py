@@ -31,12 +31,13 @@ class JapaneseGameTextAuthorTests(unittest.TestCase):
             (root / "localization/game-text-ja-JP.json").read_text(encoding="utf-8")
         )
         self.assertEqual(result, tracked)
-        self.assertEqual(len(result["messages"]), 738)
+        self.assertEqual(len(result["messages"]), 743)
         self.assertEqual(result["messages"]["music.track.01"].encode("cp932"),
                          b"NO.1     \x81\x40\x96\xb2\x82\xcd\x8e\x9e\x8b\xf3\x82\xf0\x89\x7a\x82\xa6\x82\xc4     ")
         self.assertEqual(len(result["messages"]["stage.name.08"].encode("cp932")), 28)
         self.assertEqual(len(result["messages"]["result.lives-left"].encode("cp932")), 26)
         self.assertTrue(result["messages"]["win.quote.00.00"].startswith("博麗"))
+        self.assertEqual(result["messages"]["hud.banner.start"].rstrip(), "開始")
 
     def test_byte_padding_rejects_overflow(self) -> None:
         self.assertEqual(author.pad_cp932("夢", 4, "x").encode("cp932"), b"\x96\xb2  ")

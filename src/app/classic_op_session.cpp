@@ -1821,7 +1821,8 @@ struct ClassicOpSessionBackend final {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
 		auto prepared = MainProcessStaticContentAccess::create(
-			*resources, compiled, font_rom
+			*resources, compiled, font_rom, true,
+			patch_assets ? game_text_for(config.language) : nullptr
 		);
 		if(!prepared) {
 			auto error = main_error(std::move(prepared.error()));

@@ -98,7 +98,8 @@ active compact character labels in `T3LNG001`, centered within the source
 `SLWIN.CDG` likewise use locale-owned text in New Classic: only their audited
 56x16 white interiors are reconstructed, preserving the source border, rules,
 and star fields. Sealed Classic retains both source sheets. Character-select
-portrait labels and other text baked into otherwise reusable images remain.
+gameplay HUD banners are now localized as well. The audited selection portrait
+atlases contain no labels; other text baked into reusable images remains.
 Menu headings baked into TL02 and related backgrounds are explicitly later
 work: removing them requires clean background reconstruction as well as
 localized rendering.
@@ -106,7 +107,7 @@ localized rendering.
 The source-text part of this parcel is now complete in both shipped languages.
 `T3LNG001` contains 406 explicit English and Japanese New Classic messages;
 Japanese rows are CP932 and combine authenticated proportional `MNUFONT.PF`
-Latin with exact `FONT.ROM` Japanese glyphs. `T3GTL001` contains all 738
+Latin with exact `FONT.ROM` Japanese glyphs. `T3GTL001` contains all 743
 graphics-text rows in explicit English and Japanese catalogs, including every
 win quote and Music Room comment. The Japanese author is regenerated from
 authenticated Japanese OP/MAIN/MAINL executables and DAT assets rather than
@@ -212,7 +213,7 @@ These can proceed alongside the content migrations:
 These tools should consume the same decoders and schemas as production rather
 than inventing shadow interpretations.
 
-Status: in progress. `th03-game-text-preview` now renders all 738 `T3GTL001`
+Status: in progress. `th03-game-text-preview` now renders all 743 `T3GTL001`
 messages into deterministic 640x400 contact sheets plus a machine-readable
 `T3GTP001` bounds index through the production PC-98 font and graphics-text
 path, including all win quotes and Music Room comments. The definitive
@@ -285,8 +286,9 @@ The original source-text, renderer-GUI, Arrange, content-audit, and live
 nametag parcels above are implemented. The remaining product/tooling work is:
 
 1. Continue decoupling text baked into images. Character-select center-list
-   names are complete; stat/portrait labels, character-title art, and reusable
-   menu headings remain. Opaque surfaces require clean background
+   names and stat labels plus gameplay Lose/Win/Stage/Round/Start banners are
+   complete; character-title art and reusable menu headings remain. The
+   selection portrait atlases were audited and contain no text. Opaque surfaces require clean background
    reconstruction; this is not a missing string-catalog problem.
 2. Finish production update release inputs: origin, platform packages, signing
    key custody/rotation, and hosted CI artifact validation. The updater engine

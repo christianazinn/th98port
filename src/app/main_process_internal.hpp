@@ -104,14 +104,16 @@ struct MainProcessTestAccess final {
 	> prepare_static_with_synthetic_resources(
 		std::span<const LoadedMainResource> resources,
 		MainCompiledContent compiled_content,
-		std::span<const std::byte> font_rom
+		std::span<const std::byte> font_rom,
+		const NewClassicGameTextCatalog *localized_hud_text = nullptr
 	)
 	{
 		return MainProcessStaticContentAccess::create(
 			resources,
 			std::move(compiled_content),
 			font_rom,
-			false
+			false,
+			localized_hud_text
 		);
 	}
 };

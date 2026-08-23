@@ -45,14 +45,14 @@ class PreviewTests(unittest.TestCase):
             names = sorted(
                 path.name for path in (root / "first/preview").glob("*.ppm")
             ) + ["preview.json"]
-            self.assertEqual(len(names), 41)
+            self.assertEqual(len(names), 42)
             first_files = [(root / "first/preview" / name).read_bytes() for name in names]
             second_files = [(root / "second/preview" / name).read_bytes() for name in names]
             self.assertEqual(first_files, second_files)
             report = json.loads(first_files[-1])
             self.assertEqual(report["format"], "T3GTP001")
             self.assertEqual(report["locale"], "en-US")
-            self.assertEqual(len(report["messages"]), 738)
+            self.assertEqual(len(report["messages"]), 743)
             self.assertEqual(
                 {entry["id"] for entry in report["messages"]},
                 {

@@ -740,6 +740,11 @@
     "music.comment.19.16": "                                        ",
     "music.comment.19.17": "                                        ",
     "music.comment.19.18": "                                        ",
-    "music.comment.19.19": "                                        "
+    "music.comment.19.19": "                                        ",
+    "hud.banner.lose": "Lose            ",
+    "hud.banner.win": "Win             ",
+    "hud.banner.stage": "STAGE           ",
+    "hud.banner.round": "Round           ",
+    "hud.banner.start": "START           "
   }
 }
