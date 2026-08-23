@@ -64,6 +64,9 @@ labels and formatting templates are included in the menu domain.
   rewriting its command stream.
 - `th03-game-text-preview` renders all 738 fixed game-text messages through
   the production PC-98 font path into 40 deterministic 640x400 sheets.
+- `th03-localized-scene-snapshot` drives all 28 authenticated production
+  cutscene scenes and renders one longest-run layout-stress frame per script,
+  retaining the real PI background, palette, coordinates, and page operations.
 - The compilers freeze source geometry, schema/body digests, locale/fallback
   relationships, encoding, and glyph widths; malformed or cross-locale packs
   fail closed before a scene is published.

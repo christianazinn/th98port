@@ -128,6 +128,11 @@ public:
 	[[nodiscard]] ClassicCutscenePhase phase() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 	[[nodiscard]] const present::Tram &tram() const noexcept;
+	// Tooling observation only: production localization validation flattens
+	// complete replacement runs before scene construction. Exposing the number
+	// already consumed lets the scene-snapshot tool stop after a selected run
+	// without duplicating or interpreting the authenticated script stream.
+	[[nodiscard]] std::size_t localized_glyphs_consumed() const noexcept;
 
 private:
 	friend struct ClassicCutsceneSceneTestAccess;

@@ -225,10 +225,14 @@ the candidate, and failed builds never publish partial output. The 1,732
 English and 1,533 Japanese scripted replacement runs now have compact,
 deterministic `T3STP001` contact sheets through the production graphics-text
 path. The 403 menu/product rows likewise have deterministic `T3MTP001` contact
-sheets through the production mixed MNUFONT/FONT.ROM path. Localized scene
-snapshots are the remaining work in this parcel. General Unicode locales
-also need a distributable font and layout contract; the current production
-renderer deliberately covers source-era ASCII and CP932 Japanese only.
+sheets through the production mixed MNUFONT/FONT.ROM path.
+`th03-localized-scene-snapshot` now drives the authenticated production scene
+owner to its terminator for all 28 scripts and atomically publishes one
+longest-run layout-stress frame per scene, retaining real decoded backgrounds,
+palettes, coordinates, page operations, and localized glyph substitution.
+General Unicode locales still need a distributable font and layout contract;
+the current production renderer deliberately covers source-era ASCII and
+CP932 Japanese only.
 
 ### 5. Account nametags and VS presentation
 
@@ -268,30 +272,26 @@ V13 remains only as Data Manager migration input and frozen historical evidence.
 The original source-text, renderer-GUI, Arrange, content-audit, and live
 nametag parcels above are implemented. The remaining product/tooling work is:
 
-1. Finish localization visual tooling: deterministic Japanese/English scene
-   snapshots and translator contact sheets for scripted text. The menu and
-   fixed-game-text sheets, fail-closed locale build/check command, and release
-   manifest are complete.
-2. Decouple text baked into images, starting with character-select names/titles
+1. Decouple text baked into images, starting with character-select names/titles
    and reusable menu headings. This requires clean background reconstruction;
    it is not a missing string-catalog problem.
-3. Finish production update release inputs: origin, platform packages, signing
+2. Finish production update release inputs: origin, platform packages, signing
    key custody/rotation, and hosted CI artifact validation. The updater engine
    itself is already implemented and default-off without those inputs.
-4. Continue online operations and UX: reviewed historical-score import,
+3. Continue online operations and UX: reviewed historical-score import,
    operational verifier/service monitoring, and any remaining public-account
    recovery flows. The replay-backed Story leaderboard/upload/download/watch
    path is already live.
-5. Improve PMD/YM2608 audio fidelity where channel balance and simultaneous
+4. Improve PMD/YM2608 audio fidelity where channel balance and simultaneous
    SFX layering still differ audibly from PC-98 output. The deterministic
-   native all-effect trace, strict PC-98 I/O normalizer, and first-divergence
-   comparator are complete; controlled shipped-PMDB2 event-window captures and
-   aligned acoustic evidence remain before further audible changes.
-6. Expand Arrange only after choosing a shippable ruleset and a replay/content
+   native all-effect trace, strict PC-98 I/O normalizer, first-divergence
+   comparator, and controlled shipped-PMDB2 event-window comparison are
+   complete; aligned acoustic evidence remains before further audible changes.
+5. Expand Arrange only after choosing a shippable ruleset and a replay/content
    identity for it. `dopamine-test-v1` remains an intentionally non-stock test.
-7. Design optional `Smooth` display interpolation behind the existing exact
+6. Design optional `Smooth` display interpolation behind the existing exact
    source scheduler; `Repeat` sample-and-hold remains the authentic default.
-8. Resume broad pixel/audio-oracle coverage after these moving functional and
+7. Resume broad pixel/audio-oracle coverage after these moving functional and
    localized surfaces settle. Stock deterministic/replay gates remain active
    throughout.
 

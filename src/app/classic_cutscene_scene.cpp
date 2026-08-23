@@ -1233,6 +1233,11 @@ const present::Tram &ClassicCutsceneScene::tram() const noexcept
 	return tram_;
 }
 
+std::size_t ClassicCutsceneScene::localized_glyphs_consumed() const noexcept
+{
+	return localized_glyph_index_;
+}
+
 std::expected<std::unique_ptr<ClassicCutsceneScene>, ClassicCutsceneError>
 ClassicCutsceneSceneTestAccess::create_with_synthetic_script(
 	std::span<const std::uint8_t> script,

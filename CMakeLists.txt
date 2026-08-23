@@ -1149,6 +1149,18 @@ target_link_libraries(
 )
 th03_set_warnings(th03-cutscene-text-preview)
 
+add_executable(
+	th03-localized-scene-snapshot
+	apps/th03-localized-scene-snapshot/main.cpp
+)
+target_include_directories(
+	th03-localized-scene-snapshot PRIVATE src/app
+)
+target_link_libraries(
+	th03-localized-scene-snapshot PRIVATE th03_app_main
+)
+th03_set_warnings(th03-localized-scene-snapshot)
+
 add_executable(th03-content-audit apps/th03-content-audit/main.cpp)
 target_link_libraries(th03-content-audit PRIVATE th03_app_main)
 th03_set_warnings(th03-content-audit)
@@ -1452,6 +1464,10 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-cutscene-text-preview-help
 		COMMAND th03-cutscene-text-preview --help
+	)
+	add_test(
+		NAME th03-localized-scene-snapshot-help
+		COMMAND th03-localized-scene-snapshot --help
 	)
 	if(Python3_Interpreter_FOUND)
 		add_test(
@@ -1787,11 +1803,26 @@ if(BUILD_TESTING)
 		NAME th03-app-update-package-tests
 		COMMAND th03-app-update-package-tests
 	)
+	set(
+		_th03_update_configuration_test_binary_dir
+		"${CMAKE_CURRENT_BINARY_DIR}/update-partial-config-test"
+	)
+	if(WIN32 AND DEFINED ENV{TEMP})
+		string(SHA256 _th03_update_configuration_test_id
+			"${CMAKE_CURRENT_BINARY_DIR}")
+		string(SUBSTRING "${_th03_update_configuration_test_id}" 0 12
+			_th03_update_configuration_test_id)
+		file(TO_CMAKE_PATH "$ENV{TEMP}" _th03_update_configuration_test_temp)
+		set(
+			_th03_update_configuration_test_binary_dir
+			"${_th03_update_configuration_test_temp}/th03-upd-${_th03_update_configuration_test_id}"
+		)
+	endif()
 	add_test(
 		NAME th03-update-release-configuration-tests
 		COMMAND "${CMAKE_COMMAND}"
 			-DTH03_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
-			-DTH03_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/update-partial-config-test
+			-DTH03_BINARY_DIR=${_th03_update_configuration_test_binary_dir}
 			-P ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_update_release_configuration.cmake
 	)
 	if(TH03_ENABLE_RTC)

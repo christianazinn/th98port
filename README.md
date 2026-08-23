@@ -349,7 +349,7 @@ source, `compile_game_text_pack.py` validates and compiles it, and
 replay renderer. A catalog is accepted only with the full English overlay;
 Japanese and sealed Classic continue using authenticated source assets.
 See `localization/GAME_TEXT_README.md` for the format and translator workflow.
-`th03-game-text-preview` renders all 61 compiled rows as deterministic
+`th03-game-text-preview` renders all 738 compiled rows as deterministic
 640x400 contact sheets through the production `FONT.ROM` and graphics-text
 path; see `docs/NEW_CLASSIC_GAME_TEXT_PREVIEW.md`.
 `th03-content-audit` emits the production 271-resource manifest or validates
@@ -370,6 +370,10 @@ only after all 28 selected source scripts validate.
 Replacement occurs on decoded glyph operations, never in the script byte
 stream, so translated punctuation cannot become a command. See
 `docs/NEW_CLASSIC_CUTSCENE_TEXT.md`.
+`th03-cutscene-text-preview` renders compact translator contact sheets, while
+`th03-localized-scene-snapshot` drives the authenticated production scene and
+captures one longest-run layout-stress frame for each script with its real
+background and palette. See `docs/NEW_CLASSIC_LOCALIZED_SCENE_SNAPSHOTS.md`.
 The developer-only Dopamine Arrange prototype is selected in New Classic at
 `Option -> Gameplay -> Arrange -> Dopamine`. The selection is persisted in
 `PODD.CFG`; `--new-classic --arrange dopamine-test-v1` remains available for
