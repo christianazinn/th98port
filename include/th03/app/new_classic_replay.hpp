@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <expected>
 #include <optional>
+#include <string>
 #include <string_view>
 
 #include "th03/core/game.hpp"
@@ -21,6 +22,7 @@ struct NewClassicReplayIdentity final {
 		formats::ReplayRecorderSource::native;
 	std::array<formats::ReplayAccountUuid, 2U> player_uuid{};
 	formats::ReplayMatchId match_id{};
+	std::array<std::string, 2U> player_nametag_snapshot{};
 };
 
 [[nodiscard]] std::optional<formats::ReplayAccountUuid>

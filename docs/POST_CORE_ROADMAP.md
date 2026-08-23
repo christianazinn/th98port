@@ -84,11 +84,12 @@ native ownership, arithmetic correction, and retirement gates are frozen in
 
 ### Format contract
 
-V14 is the finalized player-facing replay format. Its 768-byte header contains
-the portable 622-byte checkpoint/summary/RLE prefix plus the 146-byte identity
+V14 is the finalized player-facing replay format. Its 896-byte header contains
+the portable 622-byte checkpoint/summary/RLE prefix plus the 274-byte identity
 extension for compact ruleset, recording, player-role/source, profile UUID,
-and match identity. Optional data after the logical input end remains an
-ignorable accelerator cache.
+match identity, and bounded match-time fallback nametags. UUID-resolved current
+profile names remain authoritative. Optional data after the logical input end
+remains an ignorable accelerator cache.
 
 TH03 Data Manager 0.5.6 now owns the one-way V11/V12/V13-to-V14 converter in
 the Replay/harness work. It converted all 19 locked historical inputs and the

@@ -205,6 +205,7 @@ namespace {
 	metadata.recorder_source = identity.recorder_source;
 	metadata.player_uuid = identity.player_uuid;
 	metadata.match_id = identity.match_id;
+	metadata.player_nametag_snapshot = identity.player_nametag_snapshot;
 	if(init.game_mode == game_mode::story) {
 		formats::ReplayStorySummary story{};
 		for(std::size_t stage = 0U; stage < story.stage_opponents.size(); ++stage) {
@@ -235,6 +236,7 @@ bool NewClassicReplayRecorder::set_identity(
 		metadata.recorder_source = identity.recorder_source;
 		metadata.player_uuid = identity.player_uuid;
 		metadata.match_id = identity.match_id;
+		metadata.player_nametag_snapshot = identity.player_nametag_snapshot;
 	}
 	return true;
 }

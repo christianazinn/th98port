@@ -3927,6 +3927,10 @@ int run_direct_netplay_on_platform(
 			return fail_netplay("netplay-replay", "profile-uuid-invalid");
 		}
 		replay_identity.player_uuid = {*player_one, *player_two};
+		replay_identity.player_nametag_snapshot = {
+			negotiated->profiles->player_one.nametag.source,
+			negotiated->profiles->player_two.nametag.source,
+		};
 	}
 	std::copy_n(
 		negotiated->contract.identity_digest.begin(),

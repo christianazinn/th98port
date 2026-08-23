@@ -40,11 +40,13 @@ reader may ignore them and execute the portable checkpoint/input path.
 
 ## Current V14 layout
 
-- Magic `T3RPLY14`, version 14, fixed 768-byte header.
+- Magic `T3RPLY14`, version 14, fixed 896-byte header.
 - Packed 128-byte base header followed by a 494-byte summary extension and a
-  146-byte identity extension. The latter stores a compact ruleset/recording
+  274-byte identity extension. The latter stores a compact ruleset/recording
   descriptor, local role/source, two 16-byte profile UUIDs, a 16-byte match
-  ID, and 94 reserved bytes that must remain zero.
+  ID, two length-prefixed 57-byte fallback nametag slots, and 106 reserved
+  bytes that must remain zero. UUID profile names remain authoritative; the
+  serialized names are match-time/offline fallbacks.
 - The extension contains 27 14-byte round splits, nine 10-byte stage-clear
   bonus records, run-wide timed/slow frame counters, and the reached-checkpoint
   directory.
@@ -54,9 +56,9 @@ reader may ignore them and execute the portable checkpoint/input path.
   including its stage/round identity, sample/global/input cursors, complete
   `GameInit` recipe, and the raw V14 pre-reset seed. Historical V12 seed
   normalization belongs to the external one-way converter.
-- `snapshot_offset` equals 768. `input_offset` is the header plus the complete
-  scenario checkpoint reservation: 5,103 for Story, 1,635 for ordinary VS,
-  and 2,213 for Practice.
+- `snapshot_offset` equals 896. `input_offset` is the header plus the complete
+  scenario checkpoint reservation: 5,231 for Story, 1,763 for ordinary VS,
+  and 2,341 for Practice.
 - The packet-RLE input/control stream is unchanged: gameplay, interstitial,
   and explicit MAIN/MAINL controls all feed the neutral session model.
 - V14 requires the complete `0x007F` summary capability set in both the base

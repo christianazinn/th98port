@@ -7,6 +7,7 @@
 #include <limits>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -34,6 +35,10 @@ constexpr std::size_t recorder_source_offset = 0x271U;
 constexpr std::size_t player_one_uuid_offset = 0x272U;
 constexpr std::size_t player_two_uuid_offset = 0x282U;
 constexpr std::size_t match_id_offset = 0x292U;
+constexpr std::size_t player_one_nametag_length_offset = 0x2A2U;
+constexpr std::size_t player_two_nametag_length_offset = 0x2A3U;
+constexpr std::size_t player_one_nametag_offset = 0x2A4U;
+constexpr std::size_t player_two_nametag_offset = 0x2DDU;
 constexpr std::uint8_t summary_flags_current = 0x7FU;
 
 Error writer_error(std::string message)
@@ -63,6 +68,49 @@ void put_score(
 	for(std::size_t index = 0U; index < score.size(); ++index) {
 		detail::put_u8(bytes, offset + index, score[index]);
 	}
+}
+
+bool fallback_nametag_valid(std::string_view nametag) noexcept
+{
+	if(nametag.empty()) {
+		return true;
+	}
+	if(nametag.size() > replay_v14_nametag_max_bytes ||
+		nametag.front() == ' ' || nametag.back() == ' ' ||
+		nametag.find("  ") != std::string_view::npos) {
+		return false;
+	}
+	for(const auto character : nametag) {
+		const auto byte = static_cast<unsigned char>(character);
+		if(byte < 0x20U || byte > 0x7EU) {
+			return false;
+		}
+	}
+	std::size_t line = 0U;
+	std::size_t line_size = 0U;
+	std::size_t offset = 0U;
+	while(offset < nametag.size()) {
+		const auto separator = nametag.find(' ', offset);
+		const auto end = separator == std::string_view::npos ?
+			nametag.size() : separator;
+		const auto word_size = end - offset;
+		if(word_size > 28U) {
+			return false;
+		}
+		const auto required = line_size == 0U ?
+			word_size : line_size + 1U + word_size;
+		if(required > 28U) {
+			++line;
+			line_size = word_size;
+			if(line >= 2U) {
+				return false;
+			}
+		} else {
+			line_size = required;
+		}
+		offset = end == nametag.size() ? end : end + 1U;
+	}
+	return true;
 }
 
 void write_metadata(
@@ -153,6 +201,21 @@ void write_metadata(
 			metadata.player_uuid[1U][index]);
 		detail::put_u8(bytes, match_id_offset + index, metadata.match_id[index]);
 	}
+	constexpr std::array<std::size_t, 2U> nametag_length_offsets{
+		player_one_nametag_length_offset, player_two_nametag_length_offset,
+	};
+	constexpr std::array<std::size_t, 2U> nametag_offsets{
+		player_one_nametag_offset, player_two_nametag_offset,
+	};
+	for(std::size_t player = 0U; player < 2U; ++player) {
+		const auto &nametag = metadata.player_nametag_snapshot[player];
+		detail::put_u8(bytes, nametag_length_offsets[player],
+			static_cast<std::uint8_t>(nametag.size()));
+		for(std::size_t index = 0U; index < nametag.size(); ++index) {
+			detail::put_u8(bytes, nametag_offsets[player] + index,
+				static_cast<std::uint8_t>(nametag[index]));
+		}
+	}
 }
 
 } // namespace
@@ -179,7 +242,9 @@ std::expected<std::vector<std::byte>, Error> write_v14_replay(
 		recorder_role > static_cast<std::uint8_t>(ReplayRecorderRole::player_two) ||
 		recorder_source > static_cast<std::uint8_t>(ReplayRecorderSource::imported) ||
 		netplay != (metadata.recorder_role != ReplayRecorderRole::unknown) ||
-		(netplay && metadata.game_mode != game_mode::vs_1p_2p)) {
+		(netplay && metadata.game_mode != game_mode::vs_1p_2p) ||
+		!fallback_nametag_valid(metadata.player_nametag_snapshot[0U]) ||
+		!fallback_nametag_valid(metadata.player_nametag_snapshot[1U])) {
 		return std::unexpected(writer_error(
 			"V14 writer identity metadata is invalid"
 		));

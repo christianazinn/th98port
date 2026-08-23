@@ -478,8 +478,8 @@ void test_valid_scenarios()
 	);
 	auto story = make_v14(Scenario::story);
 	check(
-		get_u32(story, 0x2AU) == 5'103U,
-		"V14 Story uses input offset 768 + 15*289 = 5103"
+		get_u32(story, 0x2AU) == 5'231U,
+		"V14 Story uses input offset 896 + 15*289 = 5231"
 	);
 	auto parsed = th03::formats::parse_v14_replay(story);
 	check(parsed.has_value(), "synthetic V14 Story replay parses");
@@ -616,8 +616,8 @@ void test_valid_scenarios()
 
 	auto versus = make_v14(Scenario::versus);
 	check(
-		get_u32(versus, 0x2AU) == 1'635U,
-		"V14 VS uses input offset 768 + 3*289 = 1635"
+		get_u32(versus, 0x2AU) == 1'763U,
+		"V14 VS uses input offset 896 + 3*289 = 1763"
 	);
 	parsed = th03::formats::parse_v14_replay(versus);
 	check(
@@ -634,15 +634,15 @@ void test_valid_scenarios()
 		set_versus_mode(variant, mode);
 		const auto variant_parsed = th03::formats::parse_v14_replay(variant);
 		check(
-			variant_parsed && get_u32(variant, 0x2AU) == 1'635U,
+			variant_parsed && get_u32(variant, 0x2AU) == 1'763U,
 			"every ordinary V14 VS mode uses the three-checkpoint reservation"
 		);
 	}
 
 	auto practice = make_v14(Scenario::practice);
 	check(
-		get_u32(practice, 0x2AU) == 2'213U,
-		"V14 Practice uses input offset 768 + 5*289 = 2213"
+		get_u32(practice, 0x2AU) == 2'341U,
+		"V14 Practice uses input offset 896 + 5*289 = 2341"
 	);
 	parsed = th03::formats::parse_v14_replay(practice);
 	check(
@@ -746,7 +746,22 @@ void test_header_and_metadata_corruption()
 	expect_rejected(std::move(bytes), "V14 rejects a magic/version mismatch");
 	bytes = make_v14(Scenario::story);
 	put_u16(bytes, 0x0AU, 614U);
-	expect_rejected(std::move(bytes), "V14 rejects a non-768-byte header");
+	expect_rejected(std::move(bytes), "V14 rejects a non-896-byte header");
+	bytes = make_v14(Scenario::story);
+	put_u8(bytes, 0x2A2U, 58U);
+	expect_rejected(std::move(bytes), "V14 rejects a fallback nametag over 57 bytes");
+	bytes = make_v14(Scenario::story);
+	put_u8(bytes, 0x2A2U, 5U);
+	put_magic(bytes, 0x2A4U, "A  B!");
+	expect_rejected(std::move(bytes), "V14 rejects noncanonical fallback-name spacing");
+	bytes = make_v14(Scenario::story);
+	put_u8(bytes, 0x2A2U, 1U);
+	put_u8(bytes, 0x2A4U, static_cast<std::uint8_t>('A'));
+	put_u8(bytes, 0x2A5U, static_cast<std::uint8_t>('B'));
+	expect_rejected(std::move(bytes), "V14 rejects nonzero fallback-name padding");
+	bytes = make_v14(Scenario::story);
+	put_u8(bytes, 0x316U, 1U);
+	expect_rejected(std::move(bytes), "V14 rejects a nonzero reserved extension byte");
 	bytes = make_v14(Scenario::story);
 	put_u16(bytes, 0x0EU, 0x000BU);
 	expect_rejected(std::move(bytes), "V14 rejects unknown replay flag bits");
@@ -991,6 +1006,10 @@ void test_canonical_writer()
 			th03::formats::ReplayRecorderRole::player_two;
 		netplay->metadata->recorder_source =
 			th03::formats::ReplayRecorderSource::native;
+		netplay->metadata->player_nametag_snapshot = {
+			"Resident of Fantasy Who Runs Through Time",
+			"Second Player",
+		};
 		for(std::size_t index = 0U; index < 16U; ++index) {
 			netplay->metadata->player_uuid[0U][index] =
 				static_cast<std::uint8_t>(index + 1U);
@@ -1014,8 +1033,10 @@ void test_canonical_writer()
 			decoded->metadata->recorder_source ==
 				th03::formats::ReplayRecorderSource::native &&
 			decoded->metadata->player_uuid == netplay->metadata->player_uuid &&
-			decoded->metadata->match_id == netplay->metadata->match_id,
-			"V14 round-trips netplay role, account UUIDs, and match identity"
+			decoded->metadata->match_id == netplay->metadata->match_id &&
+			decoded->metadata->player_nametag_snapshot ==
+				netplay->metadata->player_nametag_snapshot,
+			"V14 round-trips netplay identity and fallback nametags"
 		);
 	}
 

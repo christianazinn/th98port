@@ -13,8 +13,9 @@
 namespace th03::formats {
 
 inline constexpr std::uint16_t replay_v14_version = 14U;
-inline constexpr std::size_t replay_v14_header_size = 0x300U;
+inline constexpr std::size_t replay_v14_header_size = 0x380U;
 inline constexpr std::size_t replay_v14_checkpoint_size = 289U;
+inline constexpr std::size_t replay_v14_nametag_max_bytes = 57U;
 
 // Finalized player-facing adapter. It consumes a caller-owned byte span and
 // preserves V14 metadata outside the deterministic gameplay core.

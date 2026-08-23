@@ -62,7 +62,7 @@ retirement gates are recorded in `V14_INTEGRATION.md`.
 ## V14 structural status
 
 The strict span parser is covered synthetically for all source-backed input
-offsets (Story 5,103, ordinary VS 1,635, Practice 2,213), compact checkpoints,
+offsets (Story 5,231, ordinary VS 1,763, Practice 2,341), compact checkpoints,
 RLE/process controls, Practice consistency, summaries, telemetry, optional
 tails, pending sealed streams, and malformed boundaries on GCC and MSVC.
 TH03 Data Manager 0.5.6 converted all 19 frozen historical inputs and the

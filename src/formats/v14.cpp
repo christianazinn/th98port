@@ -40,7 +40,11 @@ constexpr std::size_t recorder_source_offset = 0x271U;
 constexpr std::size_t player_one_uuid_offset = 0x272U;
 constexpr std::size_t player_two_uuid_offset = 0x282U;
 constexpr std::size_t match_id_offset = 0x292U;
-constexpr std::size_t reserved_extension_offset = 0x2A2U;
+constexpr std::size_t player_one_nametag_length_offset = 0x2A2U;
+constexpr std::size_t player_two_nametag_length_offset = 0x2A3U;
+constexpr std::size_t player_one_nametag_offset = 0x2A4U;
+constexpr std::size_t player_two_nametag_offset = 0x2DDU;
+constexpr std::size_t reserved_extension_offset = 0x316U;
 constexpr std::size_t accelerator_footer_size = 80U;
 constexpr std::size_t accelerator_descriptor_size = 16U;
 constexpr std::size_t accelerator_raw_size = 29'286U;
@@ -146,6 +150,49 @@ bool replay_name_byte_valid(std::uint8_t value) noexcept
 	return (value >= 'A' && value <= 'Z') ||
 		(value >= '0' && value <= '9') || value == ' ' || value == '.' ||
 		value == ',' || value == '!' || value == '?';
+}
+
+bool fallback_nametag_valid(std::string_view nametag) noexcept
+{
+	if(nametag.empty()) {
+		return true;
+	}
+	if(nametag.size() > replay_v14_nametag_max_bytes ||
+		nametag.front() == ' ' || nametag.back() == ' ' ||
+		nametag.find("  ") != std::string_view::npos) {
+		return false;
+	}
+	for(const auto character : nametag) {
+		const auto byte = static_cast<unsigned char>(character);
+		if(byte < 0x20U || byte > 0x7EU) {
+			return false;
+		}
+	}
+	std::size_t line = 0U;
+	std::size_t line_size = 0U;
+	std::size_t offset = 0U;
+	while(offset < nametag.size()) {
+		const auto separator = nametag.find(' ', offset);
+		const auto end = separator == std::string_view::npos ?
+			nametag.size() : separator;
+		const auto word_size = end - offset;
+		if(word_size > 28U) {
+			return false;
+		}
+		const auto required = line_size == 0U ?
+			word_size : line_size + 1U + word_size;
+		if(required > 28U) {
+			++line;
+			line_size = word_size;
+			if(line >= 2U) {
+				return false;
+			}
+		} else {
+			line_size = required;
+		}
+		offset = end == nametag.size() ? end : end + 1U;
+	}
+	return true;
 }
 
 std::optional<std::uint8_t> optional_u8(std::uint8_t value) noexcept
@@ -604,15 +651,6 @@ std::expected<ReplayMetadata, Error> parse_metadata(
 			recording_flags_offset
 		));
 	}
-	for(std::size_t offset = reserved_extension_offset;
-		offset < replay_v14_header_size; ++offset) {
-		if(detail::u8(bytes, offset) != 0U) {
-			return std::unexpected(error(
-				ErrorCode::invalid_value,
-				"V14 reserved extension byte is nonzero", offset
-			));
-		}
-	}
 	metadata.ruleset = static_cast<ReplayRuleset>(ruleset);
 	metadata.recording_flags = recording_flags;
 	metadata.recorder_role = static_cast<ReplayRecorderRole>(recorder_role);
@@ -625,6 +663,52 @@ std::expected<ReplayMetadata, Error> parse_metadata(
 			bytes, player_two_uuid_offset + index
 		);
 		metadata.match_id[index] = detail::u8(bytes, match_id_offset + index);
+	}
+	constexpr std::array<std::size_t, 2U> nametag_length_offsets{
+		player_one_nametag_length_offset, player_two_nametag_length_offset,
+	};
+	constexpr std::array<std::size_t, 2U> nametag_offsets{
+		player_one_nametag_offset, player_two_nametag_offset,
+	};
+	for(std::size_t player = 0U; player < 2U; ++player) {
+		const auto length = detail::u8(bytes, nametag_length_offsets[player]);
+		if(length > replay_v14_nametag_max_bytes) {
+			return std::unexpected(error(
+				ErrorCode::invalid_value,
+				"V14 fallback nametag length exceeds 57 bytes",
+				nametag_length_offsets[player]
+			));
+		}
+		auto &nametag = metadata.player_nametag_snapshot[player];
+		nametag.reserve(length);
+		for(std::size_t index = 0U; index < replay_v14_nametag_max_bytes; ++index) {
+			const auto value = detail::u8(bytes, nametag_offsets[player] + index);
+			if(index < length) {
+				nametag.push_back(static_cast<char>(value));
+			} else if(value != 0U) {
+				return std::unexpected(error(
+					ErrorCode::invalid_value,
+					"V14 fallback nametag padding is nonzero",
+					nametag_offsets[player] + index
+				));
+			}
+		}
+		if(!fallback_nametag_valid(nametag)) {
+			return std::unexpected(error(
+				ErrorCode::invalid_value,
+				"V14 fallback nametag does not fit the title geometry",
+				nametag_offsets[player]
+			));
+		}
+	}
+	for(std::size_t offset = reserved_extension_offset;
+		offset < replay_v14_header_size; ++offset) {
+		if(detail::u8(bytes, offset) != 0U) {
+			return std::unexpected(error(
+				ErrorCode::invalid_value,
+				"V14 reserved extension byte is nonzero", offset
+			));
+		}
 	}
 	if(!name_is_unset) {
 		for(std::size_t index = 0U; index < metadata.name.size(); ++index) {
@@ -915,7 +999,7 @@ std::expected<ReplayDocument, Error> parse_v14_replay(
 	if(bytes.size() < replay_v14_header_size) {
 		return std::unexpected(error(
 			ErrorCode::truncated,
-			"V14 replay is shorter than its 768-byte header"
+			"V14 replay is shorter than its 896-byte header"
 		));
 	}
 	if(!detail::has_magic(bytes, magic)) {
@@ -977,7 +1061,7 @@ std::expected<ReplayDocument, Error> parse_v14_replay(
 	) {
 		return std::unexpected(error(
 			ErrorCode::unsupported_layout,
-			"V14 checkpoint layout is not 768/289",
+			"V14 checkpoint layout is not 896/289",
 			0x32U
 		));
 	}

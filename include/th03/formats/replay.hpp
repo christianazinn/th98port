@@ -7,6 +7,7 @@
 #include <expected>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 #include "th03/error.hpp"
@@ -126,6 +127,9 @@ struct ReplayMetadata {
 	ReplayRecorderSource recorder_source = ReplayRecorderSource::unknown;
 	std::array<ReplayAccountUuid, 2U> player_uuid{};
 	ReplayMatchId match_id{};
+	// Match-time public-name snapshots for portable/offline display. UUIDs are
+	// authoritative and an online viewer should prefer the latest profile name.
+	std::array<std::string, 2U> player_nametag_snapshot{};
 };
 
 struct ReplayStageClearBonus {
