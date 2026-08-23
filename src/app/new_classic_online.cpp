@@ -13,6 +13,8 @@
 #include <utility>
 #include <vector>
 
+#include "th03/core/utf8.hpp"
+
 namespace th03::app {
 namespace {
 
@@ -48,49 +50,12 @@ constexpr std::uint64_t maximum_score = 999999990ULL;
 
 [[nodiscard]] bool valid_utf8(std::string_view text) noexcept
 {
-	std::size_t index = 0U;
-	while(index < text.size()) {
-		const auto lead = static_cast<std::uint8_t>(text[index]);
-		if(lead < 0x80U) {
-			if(lead < 0x20U || lead == 0x7FU) {
-				return false;
-			}
-			++index;
-			continue;
-		}
-		std::size_t continuation = 0U;
-		std::uint32_t scalar = 0U;
-		std::uint32_t minimum = 0U;
-		if((lead & 0xE0U) == 0xC0U) {
-			continuation = 1U;
-			scalar = lead & 0x1FU;
-			minimum = 0x80U;
-		} else if((lead & 0xF0U) == 0xE0U) {
-			continuation = 2U;
-			scalar = lead & 0x0FU;
-			minimum = 0x800U;
-		} else if((lead & 0xF8U) == 0xF0U) {
-			continuation = 3U;
-			scalar = lead & 0x07U;
-			minimum = 0x10000U;
-		} else {
+	for(std::size_t offset = 0U; offset < text.size();) {
+		const auto scalar = next_utf8_scalar(text, offset);
+		if(!scalar || !unicode_printable_scalar(scalar->value)) {
 			return false;
 		}
-		if(index + continuation >= text.size()) {
-			return false;
-		}
-		for(std::size_t byte = 0U; byte < continuation; ++byte) {
-			const auto next = static_cast<std::uint8_t>(text[index + byte + 1U]);
-			if((next & 0xC0U) != 0x80U) {
-				return false;
-			}
-			scalar = (scalar << 6U) | (next & 0x3FU);
-		}
-		if(scalar < minimum || scalar > 0x10FFFFU ||
-			(scalar >= 0xD800U && scalar <= 0xDFFFU)) {
-			return false;
-		}
-		index += continuation + 1U;
+		offset += scalar->bytes;
 	}
 	return true;
 }
@@ -242,7 +207,8 @@ void append_category_result(
 	std::vector<std::byte> &output,
 	const NewClassicOnlineCategory &category,
 	const NewClassicOnlineResult &result,
-	std::uint8_t policy
+	std::uint8_t policy,
+	std::uint8_t displayed_autofire = 0U
 )
 {
 	append_u8(output, static_cast<std::uint8_t>(category.mode));
@@ -254,7 +220,7 @@ void append_category_result(
 	append_u8(output, result.end_stage);
 	append_u8(output, result.continues_used);
 	append_u8(output, policy);
-	append_u8(output, 0U);
+	append_u8(output, displayed_autofire);
 	append_u64(output, result.score);
 }
 
@@ -364,6 +330,7 @@ private:
 struct ReadResultPolicy final {
 	NewClassicOnlineResult result{};
 	std::uint8_t policy = 0U;
+	std::uint8_t displayed_autofire = 0U;
 };
 
 [[nodiscard]] std::optional<ReadResultPolicy> read_result_policy(
@@ -374,15 +341,16 @@ struct ReadResultPolicy final {
 	const auto stage = reader.u8();
 	const auto continues = reader.u8();
 	const auto policy = reader.u8();
-	const auto reserved = reader.u8();
+	const auto displayed_autofire = reader.u8();
 	const auto score = reader.u64();
-	if(!kind || !stage || !continues || !policy || !reserved || *reserved != 0U ||
+	if(!kind || !stage || !continues || !policy || !displayed_autofire ||
+		*displayed_autofire > 2U ||
 		!score) {
 		return std::nullopt;
 	}
 	return ReadResultPolicy{{
 		static_cast<NewClassicOnlineResultKind>(*kind), *score, *stage, *continues
-	}, *policy};
+	}, *policy, *displayed_autofire};
 }
 
 template<typename Tag>
@@ -577,7 +545,8 @@ encode_new_classic_online_cache(const NewClassicOnlineCacheDocument &document)
 		append_optional_identity(output, entry.replay_id);
 		append_optional_identity(output, entry.verifier_id);
 		append_category_result(output, entry.category, entry.result,
-			static_cast<std::uint8_t>(entry.provenance));
+			static_cast<std::uint8_t>(entry.provenance),
+			entry.autofire ? static_cast<std::uint8_t>(*entry.autofire ? 2U : 1U) : 0U);
 		append_u16(output, entry.dos_date);
 		append_u64(output, entry.published_unix_seconds);
 		append_text(output, entry.player);
@@ -732,6 +701,8 @@ decode_new_classic_online_cache(std::span<const std::byte> bytes)
 			std::move(*player),
 			std::move(*evidence),
 			std::move(*note),
+			result_policy->displayed_autofire == 0U ? std::nullopt :
+				std::optional<bool>{result_policy->displayed_autofire == 2U},
 		});
 	}
 

@@ -11,6 +11,8 @@
 #include <string_view>
 #include <utility>
 
+#include "th03/core/utf8.hpp"
+
 namespace th03::platform {
 namespace {
 
@@ -661,16 +663,38 @@ SdlInputMapper::take_keyboard_scancode_press() noexcept
 
 std::optional<char> SdlInputMapper::take_keyboard_text_character() noexcept
 {
-	if(keyboard_text_count_ == 0U) {
-		return std::nullopt;
+	while(keyboard_text_count_ != 0U) {
+		const auto first = static_cast<std::uint8_t>(keyboard_text_[0U]);
+		std::size_t consumed = 1U;
+		if(first > 0x7FU) {
+			const auto scalar = next_utf8_scalar(std::string_view{
+				keyboard_text_.data(), keyboard_text_count_
+			}, 0U);
+			if(!scalar) {
+				keyboard_text_count_ = 0U;
+				return std::nullopt;
+			}
+			consumed = scalar->bytes;
+		}
+		const char result = keyboard_text_[0U];
+		std::move(
+			keyboard_text_.begin() + static_cast<std::ptrdiff_t>(consumed),
+			keyboard_text_.begin() +
+				static_cast<std::ptrdiff_t>(keyboard_text_count_),
+			keyboard_text_.begin()
+		);
+		keyboard_text_count_ -= consumed;
+		if(first <= 0x7FU) {
+			return result;
+		}
 	}
-	const char result = keyboard_text_[0U];
-	std::move(
-		keyboard_text_.begin() + 1,
-		keyboard_text_.begin() + static_cast<std::ptrdiff_t>(keyboard_text_count_),
-		keyboard_text_.begin()
-	);
-	--keyboard_text_count_;
+	return std::nullopt;
+}
+
+std::string SdlInputMapper::take_keyboard_text_utf8()
+{
+	std::string result(keyboard_text_.data(), keyboard_text_count_);
+	keyboard_text_count_ = 0U;
 	return result;
 }
 
@@ -743,12 +767,27 @@ SdlInputMapper::handle_event(
 				SdlInputMapperErrorCode::malformed_event
 			));
 		}
-		for(const auto *next = reinterpret_cast<const unsigned char *>(
-			event.text.text
-		); *next != 0U && keyboard_text_count_ < keyboard_text_.size(); ++next) {
-			if(*next >= 0x20U && *next <= 0x7EU) {
-				keyboard_text_[keyboard_text_count_++] = static_cast<char>(*next);
+		const std::string_view input{event.text.text};
+		if(!valid_utf8(input)) {
+			return std::unexpected(mapper_error(
+				SdlInputMapperErrorCode::malformed_event
+			));
+		}
+		for(std::size_t offset = 0U; offset < input.size();) {
+			const auto scalar = next_utf8_scalar(input, offset);
+			if(!scalar) {
+				return std::unexpected(mapper_error(
+					SdlInputMapperErrorCode::malformed_event
+				));
 			}
+			if(unicode_printable_scalar(scalar->value) &&
+				scalar->bytes <= keyboard_text_.size() - keyboard_text_count_) {
+				std::ranges::copy(input.substr(offset, scalar->bytes),
+					keyboard_text_.begin() +
+						static_cast<std::ptrdiff_t>(keyboard_text_count_));
+				keyboard_text_count_ += scalar->bytes;
+			}
+			offset += scalar->bytes;
 		}
 		return SdlInputEventResult{.handled = true};
 	}

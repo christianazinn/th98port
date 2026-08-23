@@ -458,6 +458,34 @@ void test_scaled_text_is_integer_exact_and_atomic()
 	);
 }
 
+void test_resolved_unicode_glyph_seam()
+{
+	using th03::present::GraphicsTextGlyph8x16;
+	std::array<GraphicsTextGlyph8x16, 2U> glyphs{};
+	glyphs[0U].width = 8U;
+	glyphs[0U].rows[0U] = 0x8000U;
+	glyphs[1U].width = 16U;
+	glyphs[1U].rows[0U] = 0x0001U;
+	auto prepared = th03::present::prepare_graphics_glyphs_8x16(glyphs);
+	expect(prepared && prepared->glyph_count() == 2U &&
+		prepared->pixel_width() == 24U,
+		"resolved mixed-width Unicode rows prepare without a host font");
+	if(prepared) {
+		Raster raster;
+		expect(th03::present::graphics_text_put_8x16(
+			raster, {4, 7}, *prepared,
+			{5U, GraphicsTextWeight::normal, 0U}
+		), "resolved Unicode rows render through the shared graphics path");
+		expect_pixel(raster, Page::zero, {4, 7}, 5U,
+			"halfwidth fallback row keeps its left edge");
+		expect_pixel(raster, Page::zero, {27, 7}, 5U,
+			"fullwidth fallback row keeps its right edge");
+	}
+	glyphs[1U].width = 12U;
+	expect(!th03::present::prepare_graphics_glyphs_8x16(glyphs),
+		"resolved glyph seam rejects non-PC-98 cell widths");
+}
+
 } // namespace
 
 int main()
@@ -470,6 +498,7 @@ int main()
 	test_invalid_and_late_requests_are_atomic();
 	test_prepared_text_owns_font_rows();
 	test_scaled_text_is_integer_exact_and_atomic();
+	test_resolved_unicode_glyph_seam();
 
 	if(failures != 0) {
 		std::cerr << failures << " of " << checks << " checks failed\n";

@@ -248,6 +248,32 @@ prepare_graphics_text_8x16(
 	);
 }
 
+std::expected<PreparedGraphicsText8x16, GraphicsTextError>
+prepare_graphics_glyphs_8x16(std::span<const GraphicsTextGlyph8x16> source)
+{
+	std::vector<PreparedGraphicsText8x16::Glyph> glyphs;
+	glyphs.reserve(source.size());
+	std::uint64_t width = 0U;
+	for(std::size_t index = 0U; index < source.size(); ++index) {
+		if(source[index].width != ank_width &&
+			source[index].width != jis_width) {
+			return std::unexpected(text_error(
+				GraphicsTextErrorCode::malformed_shift_jis, index
+			));
+		}
+		glyphs.push_back({source[index].rows, source[index].width});
+		width += source[index].width;
+		if(width > std::numeric_limits<std::uint32_t>::max()) {
+			return std::unexpected(text_error(
+				GraphicsTextErrorCode::malformed_shift_jis, index
+			));
+		}
+	}
+	return PreparedGraphicsText8x16(
+		std::move(glyphs), static_cast<std::uint32_t>(width)
+	);
+}
+
 bool graphics_text_put_8x16(
 	Raster &raster,
 	Point position,

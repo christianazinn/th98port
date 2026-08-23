@@ -148,6 +148,9 @@ constexpr std::array<NewClassicMessageSchemaEntry, message_count> schema{{
 	if(text.empty()) {
 		return false;
 	}
+	if(encoding == NewClassicMessageEncoding::utf8) {
+		return font.has_unicode_font() && font.supports_utf8(text);
+	}
 	for(std::size_t offset = 0U; offset < text.size();) {
 		const auto value = static_cast<std::uint8_t>(text[offset]);
 		if(value >= NewClassicMenuFont::first_character &&
@@ -506,7 +509,8 @@ load_new_classic_message_pack(
 				NewClassicMessagePackErrorCode::asset_profile, 14U
 			));
 		}
-		if(encoding_value > 1U || encoding_value != (profile_value == 0U ? 1U : 0U)) {
+		if(encoding_value > 2U || (profile_value == 0U && encoding_value != 1U) ||
+			(profile_value == 1U && encoding_value == 1U)) {
 			return std::unexpected(error(
 				NewClassicMessagePackErrorCode::glyph_coverage, 17U
 			));

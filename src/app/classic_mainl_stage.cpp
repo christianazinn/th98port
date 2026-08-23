@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "th03/app/authentic_text.hpp"
+#include "th03/app/new_classic_unicode.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/present/cels.hpp"
 #include "th03/present/pi.hpp"
@@ -59,6 +60,79 @@ using ResourceResult = std::expected<
 	);
 	result.text_error.emplace(error);
 	return result;
+}
+
+[[nodiscard]] std::expected<
+	present::PreparedGraphicsText8x16,
+	present::GraphicsTextError
+> prepare_utf8_graphics_text(
+	std::span<const std::uint8_t> bytes,
+	const present::AnkGlyphProvider &font,
+	const NewClassicUnicodeFont *unicode_font
+)
+{
+	if(unicode_font == nullptr) {
+		return std::unexpected(present::GraphicsTextError{
+			.code = present::GraphicsTextErrorCode::missing_jis_glyph,
+		});
+	}
+	const std::string_view text{
+		reinterpret_cast<const char *>(bytes.data()), bytes.size()
+	};
+	std::vector<present::GraphicsTextGlyph8x16> glyphs;
+	glyphs.reserve(bytes.size());
+	for(std::size_t offset = 0U; offset < text.size();) {
+		const auto scalar = next_new_classic_utf8_scalar(text, offset);
+		if(!scalar || scalar->value < 0x20U || scalar->value == 0x7FU ||
+			(scalar->value >= 0x80U && scalar->value <= 0x9FU)) {
+			return std::unexpected(present::GraphicsTextError{
+				.code = present::GraphicsTextErrorCode::malformed_shift_jis,
+				.byte_offset = offset,
+			});
+		}
+		if(scalar->value <= 0x7EU) {
+			const auto canonical = static_cast<std::uint16_t>(
+				scalar->value == 0x20U ? 0x2B21U : 0x2900U + scalar->value
+			);
+			const auto source = font.jis_glyph(canonical);
+			if(!source) {
+				return std::unexpected(present::GraphicsTextError{
+					.code = present::GraphicsTextErrorCode::missing_jis_glyph,
+					.byte_offset = offset,
+					.canonical_jis = canonical,
+				});
+			}
+			present::GraphicsTextGlyph8x16 glyph{.width = present::ank_width};
+			for(std::size_t row = 0U; row < glyph.rows.size(); ++row) {
+				glyph.rows[row] = static_cast<std::uint16_t>(
+					source->row_halves[row * present::jis_bytes_per_row]
+				) << 8U;
+			}
+			glyphs.push_back(glyph);
+		} else {
+			auto source = unicode_font->glyph(scalar->value);
+			if(!source) {
+				source = unicode_font->glyph(0xFFFDU);
+			}
+			if(!source) {
+				return std::unexpected(present::GraphicsTextError{
+					.code = present::GraphicsTextErrorCode::missing_jis_glyph,
+					.byte_offset = offset,
+				});
+			}
+			if(new_classic_unicode_combining(scalar->value) && !glyphs.empty()) {
+				for(std::size_t row = 0U; row < source->rows.size(); ++row) {
+					glyphs.back().rows[row] = static_cast<std::uint16_t>(
+						glyphs.back().rows[row] | source->rows[row]
+					);
+				}
+			} else {
+				glyphs.push_back({source->rows, source->width});
+			}
+		}
+		offset += scalar->bytes;
+	}
+	return present::prepare_graphics_glyphs_8x16(glyphs);
 }
 
 [[nodiscard]] bool same_resource_spec(
@@ -516,7 +590,8 @@ std::expected<
 	const present::AnkGlyphProvider &font,
 	GameOptions game_options,
 	std::optional<formats::ReplayPracticeConfig> practice,
-	std::optional<std::array<MainlStageCharacterText, 2U>> player_text_override
+	std::optional<std::array<MainlStageCharacterText, 2U>> player_text_override,
+	const NewClassicUnicodeFont *unicode_font
 )
 {
 	if(resident.game_mode < game_mode::vs_1p_cpu ||
@@ -533,6 +608,7 @@ std::expected<
 			.policy = EntryPolicy::classic_vs,
 			.practice = std::move(practice),
 			.player_text_override = std::move(player_text_override),
+			.unicode_font = unicode_font,
 		},
 		resources,
 		std::move(text),
@@ -866,24 +942,24 @@ std::expected<
 	}
 
 	for(std::size_t character = 0U; character < text.characters.size(); ++character) {
-		auto title = present::prepare_graphics_text_8x16(
-			text.characters[character].title,
-			font
-		);
+		const auto &text_entry = text.characters[character];
+		auto title = text_entry.utf8 ? prepare_utf8_graphics_text(
+			text_entry.title, font, prepared->entry.unicode_font
+		) : present::prepare_graphics_text_8x16(text_entry.title, font);
 		if(!title) {
 			return std::unexpected(text_error(title.error()));
 		}
-		auto name = present::prepare_graphics_text_8x16(
-			text.characters[character].name,
-			font
-		);
+		auto name = text_entry.utf8 ? prepare_utf8_graphics_text(
+			text_entry.name, font, prepared->entry.unicode_font
+		) : present::prepare_graphics_text_8x16(text_entry.name, font);
 		if(!name) {
 			return std::unexpected(text_error(name.error()));
 		}
-		if(!text.characters[character].title_second.empty()) {
-			auto second = present::prepare_graphics_text_8x16(
-				text.characters[character].title_second,
-				font
+		if(!text_entry.title_second.empty()) {
+			auto second = text_entry.utf8 ? prepare_utf8_graphics_text(
+				text_entry.title_second, font, prepared->entry.unicode_font
+			) : present::prepare_graphics_text_8x16(
+				text_entry.title_second, font
 			);
 			if(!second) {
 				return std::unexpected(text_error(second.error()));
@@ -935,9 +1011,11 @@ std::expected<
 		if(!prepared->english_text && index == 2U) {
 			continue;
 		}
-		auto selected = present::prepare_graphics_text_8x16(
-			*selected_text[index], font
-		);
+		const auto utf8 = prepared->entry.player_text_override &&
+			(index < 3U ? first.utf8 : second.utf8);
+		auto selected = utf8 ? prepare_utf8_graphics_text(
+			*selected_text[index], font, prepared->entry.unicode_font
+		) : present::prepare_graphics_text_8x16(*selected_text[index], font);
 		if(!selected) {
 			return std::unexpected(text_error(selected.error()));
 		}

@@ -339,7 +339,8 @@ pass `--language-pack <locale.t3lang>`; the loader rejects the package before
 startup unless its schema/body hashes, locale/fallback, placeholders,
 printable MNUFONT glyphs, and exact proportional row widths all validate.
 See `localization/README.md` for the UTF-8 authoring and deterministic compiler
-contract. Classic never opens a language pack.
+contract and `docs/NEW_CLASSIC_UNICODE_TEXT.md` for source-font preference,
+fallback glyphs, input validation, and layout. Classic never opens either path.
 Source-constrained New Classic text that was historically compiled into
 `MAIN.EXE` and `MAINL.EXE` uses the separate `T3GTL001` catalog. The first
 catalog covers Music Room titles, character titles and names, registration

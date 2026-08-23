@@ -264,6 +264,13 @@ try {
 	if(Test-Path -LiteralPath $licenseRoot -PathType Container) {
 		Copy-Item -LiteralPath $licenseRoot -Destination $appRoot -Recurse
 	}
+	$unifontLicense = Resolve-RequiredFile (
+		Join-Path $sourceRoot "third_party\unifont\OFL-1.1.txt"
+	) "GNU Unifont OFL license"
+	$unifontLicenseDestination = Join-Path $appRoot "licenses\GNU-Unifont"
+	[IO.Directory]::CreateDirectory($unifontLicenseDestination) | Out-Null
+	Copy-Item -LiteralPath $unifontLicense `
+		-Destination (Join-Path $unifontLicenseDestination "OFL-1.1.txt")
 	foreach($archiveDirectory in @("YUME1.DAT", "YUME2.DAT")) {
 		Copy-Item -LiteralPath (Join-Path $DataRoot $archiveDirectory) `
 			-Destination $contentRoot -Recurse
@@ -288,12 +295,19 @@ try {
 	if($menuAssetFiles.Count -ne 16) {
 		throw "Expected exactly 16 repo-owned New Classic menu background halves."
 	}
-	$menuAssetDestination = Join-Path $contentRoot "PODDUI"
+	# th03-app binds repo-owned UI assets relative to its executable. Keep them
+	# in app/PODDUI in both the payload smoke tree and bootstrap extraction.
+	$menuAssetDestination = Join-Path $appRoot "PODDUI"
 	[IO.Directory]::CreateDirectory($menuAssetDestination) | Out-Null
 	foreach($menuAsset in $menuAssetFiles) {
 		Copy-Item -LiteralPath $menuAsset.FullName `
 			-Destination $menuAssetDestination
 	}
+	$unicodeFont = Join-Path $menuAssetSource "T3UFN001.BIN"
+	if(!(Test-Path -LiteralPath $unicodeFont -PathType Leaf)) {
+		throw "Missing deterministic T3UFN001 Unicode font package."
+	}
+	Copy-Item -LiteralPath $unicodeFont -Destination $menuAssetDestination
 	if($LanguageOverlay) {
 		Copy-Item -LiteralPath $LanguageOverlay `
 			-Destination (Join-Path $contentRoot "TH3EN.DAT")

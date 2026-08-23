@@ -755,6 +755,17 @@ void test_header_and_metadata_corruption()
 	put_magic(bytes, 0x2A4U, "A  B!");
 	expect_rejected(std::move(bytes), "V14 rejects noncanonical fallback-name spacing");
 	bytes = make_v14(Scenario::story);
+	put_u8(bytes, 0x2A2U, 2U);
+	put_u8(bytes, 0x2A4U, 0xC3U);
+	put_u8(bytes, 0x2A5U, 0x28U);
+	expect_rejected(std::move(bytes), "V14 rejects malformed UTF-8 fallback names");
+	bytes = make_v14(Scenario::story);
+	put_u8(bytes, 0x2A2U, 3U);
+	put_u8(bytes, 0x2A4U, 0xE2U);
+	put_u8(bytes, 0x2A5U, 0x80U);
+	put_u8(bytes, 0x2A6U, 0xAEU);
+	expect_rejected(std::move(bytes), "V14 rejects invisible bidi fallback names");
+	bytes = make_v14(Scenario::story);
 	put_u8(bytes, 0x2A2U, 1U);
 	put_u8(bytes, 0x2A4U, static_cast<std::uint8_t>('A'));
 	put_u8(bytes, 0x2A5U, static_cast<std::uint8_t>('B'));
@@ -1007,8 +1018,8 @@ void test_canonical_writer()
 		netplay->metadata->recorder_source =
 			th03::formats::ReplayRecorderSource::native;
 		netplay->metadata->player_nametag_snapshot = {
-			"Resident of Fantasy Who Runs Through Time",
-			"Second Player",
+			"Jos\xC3\xA9 Mu\xC3\xB1oz",
+			"\xE5\xB9\xBB\xE6\x83\xB3\xE3\x81\xAE\xE4\xBD\x8F\xE4\xBA\xBA",
 		};
 		for(std::size_t index = 0U; index < 16U; ++index) {
 			netplay->metadata->player_uuid[0U][index] =
@@ -1036,7 +1047,7 @@ void test_canonical_writer()
 			decoded->metadata->match_id == netplay->metadata->match_id &&
 			decoded->metadata->player_nametag_snapshot ==
 				netplay->metadata->player_nametag_snapshot,
-			"V14 round-trips netplay identity and fallback nametags"
+			"V14 round-trips Unicode netplay identity and fallback nametags"
 		);
 	}
 

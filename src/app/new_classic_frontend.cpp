@@ -2063,15 +2063,30 @@ std::size_t NewClassicReplayHub::selection() const noexcept
 
 namespace {
 
-[[nodiscard]] std::string online_ascii(std::string_view text)
+[[nodiscard]] std::string online_text(
+	std::string_view text,
+	const NewClassicMenuFont &font,
+	std::int32_t maximum_width
+)
 {
-	std::string result;
-	result.reserve(text.size());
-	for(const auto value : text) {
-		const auto byte = static_cast<std::uint8_t>(value);
-		result.push_back(byte >= 0x20U && byte <= 0x7EU ? value : '?');
+	if(text.empty() || !valid_new_classic_utf8(text)) {
+		return "-";
 	}
-	return result.empty() ? std::string{"-"} : result;
+	std::size_t accepted = 0U;
+	for(std::size_t offset = 0U; offset < text.size();) {
+		const auto scalar = next_new_classic_utf8_scalar(text, offset);
+		if(!scalar || !new_classic_unicode_printable_scalar(scalar->value)) {
+			return "-";
+		}
+		const auto next = offset + scalar->bytes;
+		if(font.width(text.substr(0U, next)) > maximum_width) {
+			break;
+		}
+		accepted = next;
+		offset = next;
+	}
+	return accepted == 0U ? std::string{"-"} :
+		std::string{text.substr(0U, accepted)};
 }
 
 [[nodiscard]] std::string online_score(std::uint64_t score)
@@ -2452,13 +2467,11 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 		) : row_board.replay_records.end();
 		const auto *replay = replay_it == row_board.replay_records.end() ?
 			nullptr : &*replay_it;
-		auto name = online_ascii(
+		auto name = online_text(
 			mode_ == NewClassicOnlineMenuMode::high_scores || !replay ?
-				std::string_view{entry.player} : std::string_view{replay->title}
+				std::string_view{entry.player} : std::string_view{replay->title},
+			font, 208
 		);
-		if(name.size() > 13U) {
-			name.resize(13U);
-		}
 		const auto score = online_score(entry.result.score);
 		const auto stage = entry.result.kind ==
 			NewClassicOnlineResultKind::versus_complete ? std::string{"-"} :
@@ -2473,9 +2486,7 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 		);
 		valid_ = valid_ && (flat || patch_put_fixed(
 			font, raster, 32, top, online_place(list_index), 12, color
-		)) && patch_put_fixed(
-			font, raster, flat ? 32 : 80, top, name, 13, color
-		) &&
+		)) && font.put(raster, flat ? 32 : 80, top, name, color) &&
 			patch_put_fixed(font, raster,
 				324 - static_cast<std::int32_t>(score.size() * 12U), top,
 				score, 12, color) &&
@@ -2539,16 +2550,11 @@ void NewClassicHighScoreMenu::draw_detail() noexcept
 			font.put_right(raster, 304, top, value, 15U);
 	};
 	const auto *replay = selected_replay();
-	auto name = online_ascii(
+	auto name = online_text(
 		mode_ == NewClassicOnlineMenuMode::high_scores || !replay ?
-			std::string_view{entry.player} : std::string_view{replay->title}
+			std::string_view{entry.player} : std::string_view{replay->title},
+		font, 244
 	);
-	if(name.size() > 24U) {
-		name.resize(24U);
-	}
-	while(!name.empty() && font.width(name) > 244) {
-		name.pop_back();
-	}
 	const auto score = online_score(entry.result.score);
 	const auto result = online_result(entry, messages);
 	const auto &category = *boards_[board_index_].board_category;
@@ -2572,7 +2578,10 @@ void NewClassicHighScoreMenu::draw_detail() noexcept
 		font.put(raster, 48, 144,
 			std::string(rank) + " " + std::string(character), 15U);
 	if(replay) {
-		const auto autofire = messages.text((replay->autofire & 0x01U) ?
+		const auto displayed_autofire = entry.autofire.value_or(
+			(replay->autofire & 0x01U) != 0U
+		);
+		const auto autofire = messages.text(displayed_autofire ?
 			NewClassicMessageId::replay_autofire_on :
 			NewClassicMessageId::replay_autofire_off);
 		const bool target = download_target_ &&
@@ -2606,7 +2615,14 @@ void NewClassicHighScoreMenu::draw_detail() noexcept
 				NewClassicMessageId::hiscore_online_label_replay), 9U) &&
 			font.put(raster, 344, 128, replay_state, 15U);
 	} else {
+		const auto autofire = entry.autofire ? std::string(messages.text(
+			*entry.autofire ? NewClassicMessageId::replay_autofire_on :
+				NewClassicMessageId::replay_autofire_off
+		)) : std::string(messages.text(
+			NewClassicMessageId::hiscore_online_label_autofire
+		)) + " -";
 		valid_ = valid_ &&
+			font.put(raster, 48, 160, autofire, 15U) &&
 			font.put(raster, 344, 112, messages.text(
 				NewClassicMessageId::hiscore_online_label_replay), 9U) &&
 			font.put(raster, 344, 128, messages.text(

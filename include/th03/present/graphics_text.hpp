@@ -45,6 +45,11 @@ struct GraphicsTextError {
 	) = default;
 };
 
+struct GraphicsTextGlyph8x16 final {
+	std::array<std::uint16_t, jis_height> rows{};
+	std::uint8_t width = 0U;
+};
+
 // Prepared 8x16 graphics-page text. Preparation copies every required FONT.ROM
 // row, so neither the input bytes nor the glyph provider need to outlive this
 // object. Allocation occurs only during preparation; drawing is allocation-free.
@@ -76,6 +81,8 @@ private:
 		std::span<const std::uint8_t>,
 		const AnkGlyphProvider &
 	);
+	friend std::expected<PreparedGraphicsText8x16, GraphicsTextError>
+	prepare_graphics_glyphs_8x16(std::span<const GraphicsTextGlyph8x16>);
 	friend bool graphics_text_put_8x16(
 		Raster &,
 		Point,
@@ -107,6 +114,12 @@ prepare_graphics_text_8x16(
 	std::span<const std::uint8_t> shift_jis,
 	const AnkGlyphProvider &font
 );
+
+// Builds prepared graphics text from already-resolved deterministic glyph
+// rows. This is the source-independent seam used by New Classic's UTF-8
+// fallback; Classic continues through the exact Shift-JIS/FONT.ROM parser.
+[[nodiscard]] std::expected<PreparedGraphicsText8x16, GraphicsTextError>
+prepare_graphics_glyphs_8x16(std::span<const GraphicsTextGlyph8x16> glyphs);
 
 // Portable graph_putsa_fx() 8x16 graphics-page path. The complete request is
 // validated before the first current-access-page pixel changes. Stock-invalid

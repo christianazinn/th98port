@@ -124,6 +124,9 @@ struct NewClassicLeaderboardEntry final {
 	std::string player{};
 	std::string evidence_source{};
 	std::string curator_note{};
+	// The visible player's Story Autofire setting. Curated historical rows may
+	// omit it; replay-backed rows derive it from the verified replay metadata.
+	std::optional<bool> autofire{};
 
 	friend bool operator==(
 		const NewClassicLeaderboardEntry &,

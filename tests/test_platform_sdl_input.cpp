@@ -1215,18 +1215,26 @@ void test_physical_text_input_queue()
 		!mapper.take_keyboard_text_character() &&
 		input.pending_event_count() == 0U,
 		"text characters are retained in order without becoming gameplay input");
+	const auto unicode = expect_event(
+		mapper, input, text_event(2U,
+			"Jos\xC3\xA9 \xE5\xB9\xBB\xE6\x83\xB3"),
+		"SDL text composition preserves a complete UTF-8 sequence"
+	);
+	expect(unicode.handled && mapper.take_keyboard_text_utf8() ==
+		"Jos\xC3\xA9 \xE5\xB9\xBB\xE6\x83\xB3",
+		"profile editors receive Unicode text atomically without gameplay input");
 	const auto foreign = expect_event(
-		mapper, input, text_event(2U, "BAD", main_window + 1U),
+		mapper, input, text_event(3U, "BAD", main_window + 1U),
 		"foreign-window text is ignored"
 	);
 	expect(!foreign.handled && !mapper.take_keyboard_text_character(),
 		"only the game window can populate the editor queue");
 	(void)expect_event(
-		mapper, input, text_event(3U, "pending"),
+		mapper, input, text_event(4U, "pending"),
 		"modal-reset text is staged"
 	);
 	(void)expect_event(
-		mapper, input, keyboard_removed(4U),
+		mapper, input, keyboard_removed(5U),
 		"keyboard removal clears text composition"
 	);
 	expect(!mapper.take_keyboard_text_character(),

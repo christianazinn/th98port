@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <span>
 #include <string_view>
@@ -216,6 +217,24 @@ void test_authentic_archive_if_supplied()
 	if(!path || *path == '\0') {
 		return;
 	}
+	if(menu_root && *menu_root != '\0') {
+		const auto unicode_path = std::filesystem::path(menu_root) /
+			"T3UFN001.BIN";
+		std::ifstream input(unicode_path, std::ios::binary);
+		std::vector<std::byte> bytes(static_cast<std::size_t>(
+			std::filesystem::file_size(unicode_path)
+		));
+		input.read(reinterpret_cast<char *>(bytes.data()),
+			static_cast<std::streamsize>(bytes.size()));
+		auto unicode = th03::app::decode_new_classic_unicode_font(bytes);
+		expect(unicode.has_value(),
+			"repo-owned Unicode font package passes its runtime parser");
+		if(!unicode) {
+			std::cerr << "unicode error code=" <<
+				static_cast<int>(unicode.error().code) << " offset=" <<
+				unicode.error().offset << '\n';
+		}
+	}
 	auto loaded = th03::app::load_new_classic_replay_patch_assets(
 		std::filesystem::path(path),
 		menu_root && *menu_root != '\0' ? std::filesystem::path(menu_root) :
@@ -269,6 +288,13 @@ void test_authentic_archive_if_supplied()
 	}
 	expect(loaded->menu_font.width("The PoDD Arrange Project") > 0,
 		"authentic proportional title credit has measurable ink");
+	if(menu_root && *menu_root != '\0') {
+		expect(loaded->menu_font.supports_utf8(
+			"Jos\xC3\xA9 \xE5\xB9\xBB\xE6\x83\xB3"
+		), "installed fallback font covers Latin and Japanese UTF-8");
+		expect(!loaded->menu_font.supports_utf8("\xE2\x80\xAEspoof"),
+			"installed fallback font rejects unsupported bidi controls");
+	}
 }
 
 } // namespace

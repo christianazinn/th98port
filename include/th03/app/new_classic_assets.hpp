@@ -18,6 +18,7 @@
 #include "th03/app/new_classic_game_text.hpp"
 #include "th03/app/new_classic_cutscene_text.hpp"
 #include "th03/app/new_classic_picture_patch.hpp"
+#include "th03/app/new_classic_unicode.hpp"
 #include "th03/present/raster.hpp"
 #include "th03/present/source_surface.hpp"
 
@@ -40,6 +41,7 @@ enum class NewClassicAssetsErrorCode : std::uint8_t {
 	pause_gaiji_shape,
 	pause_gaiji_checksum,
 	menu_background_shape,
+	unicode_font_shape,
 	pi_decode,
 	pi_geometry,
 	allocation_failed,
@@ -139,6 +141,11 @@ public:
 		std::span<const std::byte> font_rom
 	);
 	[[nodiscard]] bool has_machine_font() const noexcept;
+	[[nodiscard]] bool install_unicode_font(
+		std::span<const std::byte> package
+	);
+	[[nodiscard]] bool has_unicode_font() const noexcept;
+	[[nodiscard]] bool supports_utf8(std::string_view text) const noexcept;
 
 private:
 	friend struct NewClassicAssetsAccess;
@@ -147,6 +154,7 @@ private:
 		std::array<std::uint8_t, glyph_bytes>, glyph_count
 	> bitmaps_{};
 	std::vector<std::byte> machine_font_{};
+	NewClassicUnicodeFont unicode_font_{};
 	[[nodiscard]] static std::size_t glyph_index(std::uint8_t value) noexcept;
 	[[nodiscard]] bool put_n_clipped(
 		present::Raster &raster,

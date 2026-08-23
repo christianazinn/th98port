@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "th03/app/new_classic_nametag.hpp"
+#include "th03/app/new_classic_unicode.hpp"
 
 namespace th03::app {
 namespace {
@@ -34,6 +35,65 @@ constexpr std::uint8_t cursor_blink_interval = 28U;
 		(character >= 'A' && character <= 'H') ||
 		(character >= 'J' && character <= 'N') ||
 		(character >= 'P' && character <= 'Z');
+}
+
+[[nodiscard]] std::size_t previous_utf8_offset(
+	std::string_view text, std::size_t offset
+) noexcept
+{
+	offset = std::min(offset, text.size());
+	if(offset == 0U) {
+		return 0U;
+	}
+	--offset;
+	while(offset != 0U &&
+		(static_cast<std::uint8_t>(text[offset]) & 0xC0U) == 0x80U) {
+		--offset;
+	}
+	return offset;
+}
+
+[[nodiscard]] std::size_t next_utf8_offset(
+	std::string_view text, std::size_t offset
+) noexcept
+{
+	const auto scalar = next_new_classic_utf8_scalar(text, offset);
+	return scalar ? offset + scalar->bytes : text.size();
+}
+
+[[nodiscard]] std::size_t utf8_cells(
+	std::string_view text, std::size_t end = std::string_view::npos
+) noexcept
+{
+	end = std::min(end, text.size());
+	std::size_t cells = 0U;
+	for(std::size_t offset = 0U; offset < end;) {
+		const auto scalar = next_new_classic_utf8_scalar(text, offset);
+		if(!scalar || offset + scalar->bytes > end) {
+			break;
+		}
+		cells += new_classic_unicode_cell_width(scalar->value);
+		offset += scalar->bytes;
+	}
+	return cells;
+}
+
+[[nodiscard]] std::size_t utf8_offset_for_cells(
+	std::string_view text, std::size_t wanted
+) noexcept
+{
+	std::size_t cells = 0U;
+	std::size_t offset = 0U;
+	while(offset < text.size()) {
+		const auto scalar = next_new_classic_utf8_scalar(text, offset);
+		if(!scalar || cells + new_classic_unicode_cell_width(scalar->value) >
+			wanted) {
+			break;
+		}
+		cells += new_classic_unicode_cell_width(scalar->value);
+		offset += scalar->bytes;
+	}
+	return offset;
 }
 
 [[nodiscard]] bool put_editor_line(
@@ -283,7 +343,8 @@ bool NewClassicOnlineProfileScene::consume(
 	if(phase_ != Phase::menu) {
 		return consume_fade();
 	}
-	const bool any = raw_any(input.ui) || input.text_character || input.erase ||
+	const bool any = raw_any(input.ui) || input.text_character ||
+		!input.text_utf8.empty() || input.erase ||
 		input.delete_forward || input.home || input.end;
 	if(release_required_) {
 		if(!any) {
@@ -328,12 +389,19 @@ bool NewClassicOnlineProfileScene::consume(
 
 	if(screen_ == Screen::name_entry || screen_ == Screen::link_entry) {
 		bool changed = false;
+		std::string typed = std::move(input.text_utf8);
+		if(input.text_character) {
+			typed.push_back(*input.text_character);
+		}
 		if(screen_ == Screen::name_entry) {
 			auto &line = name_entry_lines_[name_entry_row_];
 			if(input.erase) {
 				if(name_entry_column_ != 0U) {
-					line.erase(name_entry_column_ - 1U, 1U);
-					--name_entry_column_;
+					const auto previous = previous_utf8_offset(
+						line, name_entry_column_
+					);
+					line.erase(previous, name_entry_column_ - previous);
+					name_entry_column_ = previous;
 					changed = true;
 				} else if(name_entry_row_ != 0U) {
 					name_entry_row_ = 0U;
@@ -341,7 +409,8 @@ bool NewClassicOnlineProfileScene::consume(
 					changed = true;
 				}
 			} else if(input.delete_forward && name_entry_column_ < line.size()) {
-				line.erase(name_entry_column_, 1U);
+				line.erase(name_entry_column_,
+					next_utf8_offset(line, name_entry_column_) - name_entry_column_);
 				changed = true;
 			} else if(input.home) {
 				name_entry_column_ = 0U;
@@ -350,14 +419,17 @@ bool NewClassicOnlineProfileScene::consume(
 				name_entry_column_ = line.size();
 				changed = true;
 			} else if(input.ui.up || input.ui.down) {
+				const auto cells = utf8_cells(line, name_entry_column_);
 				name_entry_row_ = input.ui.up ? 0U : 1U;
-				name_entry_column_ = std::min(
-					name_entry_column_, name_entry_lines_[name_entry_row_].size()
+				name_entry_column_ = utf8_offset_for_cells(
+					name_entry_lines_[name_entry_row_], cells
 				);
 				changed = true;
 			} else if(input.ui.left) {
 				if(name_entry_column_ != 0U) {
-					--name_entry_column_;
+					name_entry_column_ = previous_utf8_offset(
+						line, name_entry_column_
+					);
 				} else if(name_entry_row_ != 0U) {
 					name_entry_row_ = 0U;
 					name_entry_column_ = name_entry_lines_[0U].size();
@@ -365,38 +437,74 @@ bool NewClassicOnlineProfileScene::consume(
 				changed = true;
 			} else if(input.ui.right) {
 				if(name_entry_column_ < line.size()) {
-					++name_entry_column_;
+					name_entry_column_ = next_utf8_offset(
+						line, name_entry_column_
+					);
 				} else if(name_entry_row_ == 0U) {
 					name_entry_row_ = 1U;
 					name_entry_column_ = 0U;
 				}
 				changed = true;
-			} else if(input.text_character &&
-				*input.text_character >= 0x20 && *input.text_character <= 0x7E) {
-				const auto character = *input.text_character;
-				if(line.size() < new_classic_nametag_line_cells) {
-					line.insert(name_entry_column_, 1U, character);
-					++name_entry_column_;
-					changed = true;
-				} else if(name_entry_row_ == 0U &&
-					name_entry_column_ == line.size() &&
-					name_entry_lines_[1U].empty()) {
-					if(character == ' ') {
-						name_entry_row_ = 1U;
-						name_entry_column_ = 0U;
-						changed = true;
-					} else if(const auto separator = line.rfind(' ');
-						separator != std::string::npos) {
-						name_entry_lines_[1U] = line.substr(separator + 1U);
-						line.erase(separator);
-						name_entry_row_ = 1U;
-						name_entry_column_ = name_entry_lines_[1U].size();
-						if(name_entry_column_ < new_classic_nametag_line_cells) {
-							name_entry_lines_[1U].push_back(character);
-							++name_entry_column_;
-						}
-						changed = true;
+			} else if(!typed.empty() && valid_new_classic_utf8(typed)) {
+				for(std::size_t offset = 0U; offset < typed.size();) {
+					const auto scalar = next_new_classic_utf8_scalar(typed, offset);
+					if(!scalar ||
+						!new_classic_unicode_printable_scalar(scalar->value)) {
+						break;
 					}
+					const auto bytes = typed.substr(offset, scalar->bytes);
+					auto &target = name_entry_lines_[name_entry_row_];
+					const auto cells = utf8_cells(target) +
+						new_classic_unicode_cell_width(scalar->value);
+					if(cells <= new_classic_nametag_line_cells) {
+						target.insert(name_entry_column_, bytes);
+						name_entry_column_ += scalar->bytes;
+						if(name_entry_text().size() <=
+							new_classic_nametag_max_bytes) {
+							changed = true;
+						} else {
+							target.erase(name_entry_column_ - scalar->bytes,
+								scalar->bytes);
+							name_entry_column_ -= scalar->bytes;
+						}
+					} else if(name_entry_row_ == 0U &&
+						name_entry_column_ == target.size() &&
+						name_entry_lines_[1U].empty()) {
+						if(scalar->value == static_cast<std::uint32_t>(' ')) {
+							name_entry_row_ = 1U;
+							name_entry_column_ = 0U;
+							changed = true;
+							offset += scalar->bytes;
+							continue;
+						}
+						const auto separator = target.find_last_of(' ');
+						if(separator != std::string::npos) {
+							auto &second_line = name_entry_lines_[1U];
+							second_line = target.substr(separator + 1U);
+							second_line.append(bytes);
+							if(utf8_cells(second_line) <=
+								new_classic_nametag_line_cells) {
+								target.erase(separator);
+								name_entry_row_ = 1U;
+								name_entry_column_ = second_line.size();
+								if(name_entry_text().size() <=
+									new_classic_nametag_max_bytes) {
+									changed = true;
+								} else {
+									target.push_back(' ');
+									target += second_line.substr(
+										0U, second_line.size() - scalar->bytes
+									);
+									second_line.clear();
+									name_entry_row_ = 0U;
+									name_entry_column_ = target.size();
+								}
+							} else {
+								second_line.clear();
+							}
+						}
+					}
+					offset += scalar->bytes;
 				}
 			}
 		} else {
@@ -423,14 +531,16 @@ bool NewClassicOnlineProfileScene::consume(
 					++entry_cursor_;
 				}
 				changed = true;
-			} else if(input.text_character) {
-				const auto character = static_cast<char>(std::toupper(
-					static_cast<unsigned char>(*input.text_character)
-				));
-				if(link_code_character(character) && entry_.size() < 10U) {
-					entry_.insert(entry_cursor_, 1U, character);
-					++entry_cursor_;
-					changed = true;
+			} else if(!typed.empty()) {
+				for(const auto source : typed) {
+					const auto character = static_cast<char>(std::toupper(
+						static_cast<unsigned char>(source)
+					));
+					if(link_code_character(character) && entry_.size() < 10U) {
+						entry_.insert(entry_cursor_, 1U, character);
+						++entry_cursor_;
+						changed = true;
+					}
 				}
 			}
 		}

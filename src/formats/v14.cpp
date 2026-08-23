@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "th03/core/gameplay_ruleset.hpp"
+#include "th03/core/utf8.hpp"
 
 #include "bytes.hpp"
 #include "rpy_checkpoint.hpp"
@@ -162,11 +163,23 @@ bool fallback_nametag_valid(std::string_view nametag) noexcept
 		nametag.find("  ") != std::string_view::npos) {
 		return false;
 	}
-	for(const auto character : nametag) {
-		const auto byte = static_cast<unsigned char>(character);
-		if(byte < 0x20U || byte > 0x7EU) {
-			return false;
+	if(!valid_utf8(nametag)) {
+		return false;
+	}
+	const auto cells = [](std::string_view text) noexcept {
+		std::size_t result = 0U;
+		for(std::size_t cursor = 0U; cursor < text.size();) {
+			const auto scalar = next_utf8_scalar(text, cursor);
+			if(!scalar || !unicode_printable_scalar(scalar->value)) {
+				return std::optional<std::size_t>{};
+			}
+			result += unicode_cell_width(scalar->value);
+			cursor += scalar->bytes;
 		}
+		return std::optional{result};
+	};
+	if(!cells(nametag)) {
+		return false;
 	}
 	std::size_t line = 0U;
 	std::size_t line_size = 0U;
@@ -175,15 +188,15 @@ bool fallback_nametag_valid(std::string_view nametag) noexcept
 		const auto separator = nametag.find(' ', offset);
 		const auto end = separator == std::string_view::npos ?
 			nametag.size() : separator;
-		const auto word_size = end - offset;
-		if(word_size > 28U) {
+		const auto word_size = cells(nametag.substr(offset, end - offset));
+		if(!word_size || *word_size == 0U || *word_size > 28U) {
 			return false;
 		}
 		const auto required = line_size == 0U ?
-			word_size : line_size + 1U + word_size;
+			*word_size : line_size + 1U + *word_size;
 		if(required > 28U) {
 			++line;
-			line_size = word_size;
+			line_size = *word_size;
 			if(line >= 2U) {
 				return false;
 			}

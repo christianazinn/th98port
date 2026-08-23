@@ -14,6 +14,7 @@
 #include "th03/app/new_classic_game_text.hpp"
 #include "th03/app/new_classic_messages.hpp"
 #include "th03/app/new_classic_netplay_signaling.hpp"
+#include "th03/app/new_classic_unicode.hpp"
 #include "th03/app/resources.hpp"
 #include "th03/present/source_surface.hpp"
 
@@ -36,6 +37,7 @@ enum class NewClassicNetplayMatchIntroErrorCode : std::uint8_t {
 	font_invalid,
 	language_overlay_failed,
 	game_text_pack_failed,
+	unicode_font_failed,
 	resource_load_failed,
 	scene_failed,
 	surface_failed,
@@ -48,6 +50,7 @@ struct NewClassicNetplayMatchIntroError final {
 	std::optional<AuthenticTextError> font_error{};
 	std::optional<NewClassicLanguageOverlayError> language_overlay_error{};
 	std::optional<NewClassicGameTextPackError> game_text_pack_error{};
+	std::optional<NewClassicUnicodeFontError> unicode_font_error{};
 	std::optional<ResourceLoadError> resource_error{};
 	std::optional<present::SourceSurfaceError> surface_error{};
 };

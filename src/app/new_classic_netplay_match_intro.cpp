@@ -43,6 +43,7 @@ namespace {
 			graphics_text_bytes(profile.nametag.lines[1U]) :
 			std::vector<std::uint8_t>{static_cast<std::uint8_t>(' ')},
 		.name = source.name,
+		.utf8 = true,
 	};
 }
 
@@ -114,6 +115,7 @@ namespace {
 struct NewClassicNetplayMatchIntro::Impl final {
 	std::vector<std::byte> font_rom{};
 	std::optional<Pc98FontRomProvider> font{};
+	std::optional<NewClassicUnicodeFont> unicode_font{};
 	std::unique_ptr<ClassicMainlStageTransition> scene{};
 	NewClassicNetplayMatchIntroStatus status =
 		NewClassicNetplayMatchIntroStatus::running;
@@ -230,6 +232,28 @@ std::expected<
 			),
 		};
 	}
+	std::optional<NewClassicUnicodeFont> unicode_font{};
+	if(request.profiles) {
+		if(request.content.new_classic_menu_assets.empty()) {
+			return std::unexpected(intro_error(
+				NewClassicNetplayMatchIntroErrorCode::invalid_request
+			));
+		}
+		auto package = read_file(
+			request.content.new_classic_menu_assets / "T3UFN001.BIN"
+		);
+		if(!package) {
+			return std::unexpected(std::move(package.error()));
+		}
+		auto decoded = decode_new_classic_unicode_font(*package);
+		if(!decoded) {
+			return std::unexpected(NewClassicNetplayMatchIntroError{
+				.code = NewClassicNetplayMatchIntroErrorCode::unicode_font_failed,
+				.unicode_font_error = decoded.error(),
+			});
+		}
+		unicode_font.emplace(std::move(*decoded));
+	}
 
 	const auto init = main_direct_vs_game_init(request.process);
 	auto resources = loader.load_mainl_stage({
@@ -247,6 +271,7 @@ std::expected<
 
 	auto impl = std::make_unique<Impl>();
 	impl->font_rom = std::move(*font_rom);
+	impl->unicode_font = std::move(unicode_font);
 	auto font = Pc98FontRomProvider::from_exact_font_rom(impl->font_rom);
 	if(!font) {
 		return std::unexpected(NewClassicNetplayMatchIntroError{
@@ -258,7 +283,8 @@ std::expected<
 	auto scene = ClassicMainlStageTransition::create_from_restart(
 		init, request.process.kotohime_compatibility, *resources,
 		std::move(imported->assets), *impl->font, request.process.game_options,
-		std::nullopt, std::move(player_text)
+		std::nullopt, std::move(player_text),
+		impl->unicode_font ? &*impl->unicode_font : nullptr
 	);
 	if(!scene) {
 		return std::unexpected(intro_error(

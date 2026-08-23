@@ -39,6 +39,106 @@ constexpr std::size_t machine_ank_offset = 0x800U;
 constexpr std::size_t machine_jis_offset = 0x1800U;
 constexpr std::size_t machine_jis_columns = 96U;
 constexpr std::size_t machine_jis_glyph_bytes = 32U;
+constexpr std::string_view unicode_font_filename = "T3UFN001.BIN";
+
+enum class Accent : std::uint8_t {
+	none,
+	grave,
+	acute,
+	circumflex,
+	tilde,
+	diaeresis,
+	ring,
+	cedilla,
+};
+
+struct LatinComposition final {
+	std::uint8_t base = 0U;
+	Accent accent = Accent::none;
+};
+
+[[nodiscard]] constexpr LatinComposition latin_composition(
+	std::uint32_t scalar
+) noexcept
+{
+	switch(scalar) {
+	case 0x00C0U: return {'A', Accent::grave};
+	case 0x00C1U: return {'A', Accent::acute};
+	case 0x00C2U: return {'A', Accent::circumflex};
+	case 0x00C3U: return {'A', Accent::tilde};
+	case 0x00C4U: return {'A', Accent::diaeresis};
+	case 0x00C5U: return {'A', Accent::ring};
+	case 0x00C7U: return {'C', Accent::cedilla};
+	case 0x00C8U: return {'E', Accent::grave};
+	case 0x00C9U: return {'E', Accent::acute};
+	case 0x00CAU: return {'E', Accent::circumflex};
+	case 0x00CBU: return {'E', Accent::diaeresis};
+	case 0x00CCU: return {'I', Accent::grave};
+	case 0x00CDU: return {'I', Accent::acute};
+	case 0x00CEU: return {'I', Accent::circumflex};
+	case 0x00CFU: return {'I', Accent::diaeresis};
+	case 0x00D1U: return {'N', Accent::tilde};
+	case 0x00D2U: return {'O', Accent::grave};
+	case 0x00D3U: return {'O', Accent::acute};
+	case 0x00D4U: return {'O', Accent::circumflex};
+	case 0x00D5U: return {'O', Accent::tilde};
+	case 0x00D6U: return {'O', Accent::diaeresis};
+	case 0x00D9U: return {'U', Accent::grave};
+	case 0x00DAU: return {'U', Accent::acute};
+	case 0x00DBU: return {'U', Accent::circumflex};
+	case 0x00DCU: return {'U', Accent::diaeresis};
+	case 0x00DDU: return {'Y', Accent::acute};
+	case 0x00E0U: return {'a', Accent::grave};
+	case 0x00E1U: return {'a', Accent::acute};
+	case 0x00E2U: return {'a', Accent::circumflex};
+	case 0x00E3U: return {'a', Accent::tilde};
+	case 0x00E4U: return {'a', Accent::diaeresis};
+	case 0x00E5U: return {'a', Accent::ring};
+	case 0x00E7U: return {'c', Accent::cedilla};
+	case 0x00E8U: return {'e', Accent::grave};
+	case 0x00E9U: return {'e', Accent::acute};
+	case 0x00EAU: return {'e', Accent::circumflex};
+	case 0x00EBU: return {'e', Accent::diaeresis};
+	case 0x00ECU: return {'i', Accent::grave};
+	case 0x00EDU: return {'i', Accent::acute};
+	case 0x00EEU: return {'i', Accent::circumflex};
+	case 0x00EFU: return {'i', Accent::diaeresis};
+	case 0x00F1U: return {'n', Accent::tilde};
+	case 0x00F2U: return {'o', Accent::grave};
+	case 0x00F3U: return {'o', Accent::acute};
+	case 0x00F4U: return {'o', Accent::circumflex};
+	case 0x00F5U: return {'o', Accent::tilde};
+	case 0x00F6U: return {'o', Accent::diaeresis};
+	case 0x00F9U: return {'u', Accent::grave};
+	case 0x00FAU: return {'u', Accent::acute};
+	case 0x00FBU: return {'u', Accent::circumflex};
+	case 0x00FCU: return {'u', Accent::diaeresis};
+	case 0x00FDU: return {'y', Accent::acute};
+	case 0x00FFU: return {'y', Accent::diaeresis};
+	default: return {};
+	}
+}
+
+[[nodiscard]] constexpr Accent combining_accent(std::uint32_t scalar) noexcept
+{
+	switch(scalar) {
+	case 0x0300U: return Accent::grave;
+	case 0x0301U: return Accent::acute;
+	case 0x0302U: return Accent::circumflex;
+	case 0x0303U: return Accent::tilde;
+	case 0x0308U: return Accent::diaeresis;
+	case 0x030AU: return Accent::ring;
+	case 0x0327U: return Accent::cedilla;
+	default: return Accent::none;
+	}
+}
+
+[[nodiscard]] bool utf8_text(std::string_view text) noexcept
+{
+	return std::ranges::any_of(text, [](char value) {
+		return static_cast<std::uint8_t>(value) >= 0x80U;
+	}) && valid_new_classic_utf8(text);
+}
 
 [[nodiscard]] constexpr bool shift_jis_lead(std::uint8_t value) noexcept
 {
@@ -515,6 +615,31 @@ std::int32_t NewClassicMenuFont::width_n(
 {
 	std::int32_t result = 0;
 	const auto size = std::min(text.size(), count);
+	const auto bounded = text.substr(0U, size);
+	if(utf8_text(bounded)) {
+		for(std::size_t offset = 0U; offset < bounded.size();) {
+			const auto decoded = next_new_classic_utf8_scalar(bounded, offset);
+			if(!decoded) {
+				return result;
+			}
+			const auto composition = latin_composition(decoded->value);
+			if(decoded->value >= first_character &&
+				decoded->value <= last_character) {
+				result += advances_[glyph_index(
+					static_cast<std::uint8_t>(decoded->value)
+				)];
+			} else if(composition.base != 0U) {
+				result += advances_[glyph_index(composition.base)];
+			} else if(!new_classic_unicode_combining(decoded->value)) {
+				const auto glyph = unicode_font_.glyph(decoded->value);
+				const auto fallback = unicode_font_.glyph(0xFFFDU);
+				result += glyph ? glyph->width : (fallback ? fallback->width :
+					advances_[glyph_index(fallback_character)]);
+			}
+			offset += decoded->bytes;
+		}
+		return result;
+	}
 	for(std::size_t index = 0U; index < size;) {
 		const auto value = static_cast<std::uint8_t>(text[index]);
 		if(shift_jis_lead(value) && index + 1U < size && shift_jis_trail(
@@ -601,11 +726,114 @@ bool NewClassicMenuFont::put_n_clipped(
 		}
 		return true;
 	};
+	const auto plot_unicode_glyph = [&](const NewClassicUnicodeGlyph &glyph)
+		noexcept {
+		for(std::int32_t row = 0; row < glyph_height; ++row) {
+			for(std::int32_t column = 0; column < glyph.width; ++column) {
+				if((glyph.rows[static_cast<std::size_t>(row)] &
+					(0x8000U >> column)) == 0U) {
+					continue;
+				}
+				const auto x = left + column;
+				const auto y = top + row;
+				if(x >= clip.x && x < clip_right && y >= clip.y &&
+					y < clip_bottom && !raster.plot({x, y}, color)) {
+					return false;
+				}
+			}
+		}
+		return true;
+	};
+	const auto draw_accent = [&](Accent accent, std::int32_t glyph_left,
+		std::int32_t advance) noexcept {
+		const auto center = glyph_left + std::max(advance / 2, 1);
+		const auto pixel = [&](std::int32_t x, std::int32_t y) noexcept {
+			return (x < clip.x || x >= clip_right || y < clip.y ||
+				y >= clip_bottom) || raster.plot({x, y}, color);
+		};
+		switch(accent) {
+		case Accent::none: return true;
+		case Accent::grave:
+			return pixel(center - 1, top) && pixel(center, top + 1);
+		case Accent::acute:
+			return pixel(center + 1, top) && pixel(center, top + 1);
+		case Accent::circumflex:
+			return pixel(center, top) && pixel(center - 1, top + 1) &&
+				pixel(center + 1, top + 1);
+		case Accent::tilde:
+			return pixel(center - 2, top + 1) && pixel(center - 1, top) &&
+				pixel(center, top) && pixel(center + 1, top + 1);
+		case Accent::diaeresis:
+			return pixel(center - 2, top) && pixel(center + 1, top);
+		case Accent::ring:
+			return pixel(center - 1, top) && pixel(center, top) &&
+				pixel(center - 1, top + 1) && pixel(center, top + 1);
+		case Accent::cedilla:
+			return pixel(center, top + 14) && pixel(center - 1, top + 15);
+		}
+		return false;
+	};
 	const auto draw_fallback = [&]() noexcept {
 		const auto index = glyph_index(fallback_character);
 		return plot_glyph(bitmaps_[index], glyph_width, false);
 	};
 	const auto size = std::min(text.size(), count);
+	const auto bounded = text.substr(0U, size);
+	if(utf8_text(bounded)) {
+		std::int32_t prior_left = left;
+		std::int32_t prior_advance = 0;
+		for(std::size_t offset = 0U; offset < bounded.size();) {
+			const auto decoded = next_new_classic_utf8_scalar(bounded, offset);
+			if(!decoded) {
+				return false;
+			}
+			const auto composition = latin_composition(decoded->value);
+			if(decoded->value >= first_character &&
+				decoded->value <= last_character) {
+				const auto value = static_cast<std::uint8_t>(decoded->value);
+				const auto index = glyph_index(value);
+				prior_left = left;
+				prior_advance = advances_[index];
+				if(value != ' ' && left >= 0 && left < present::graphics_width &&
+					!plot_glyph(bitmaps_[index], glyph_width, false)) {
+					return false;
+				}
+				left += prior_advance;
+			} else if(composition.base != 0U) {
+				const auto index = glyph_index(composition.base);
+				prior_left = left;
+				prior_advance = advances_[index];
+				if(left >= 0 && left < present::graphics_width &&
+					(!plot_glyph(bitmaps_[index], glyph_width, false) ||
+					 !draw_accent(composition.accent, left, prior_advance))) {
+					return false;
+				}
+				left += prior_advance;
+			} else if(new_classic_unicode_combining(decoded->value)) {
+				const auto accent = combining_accent(decoded->value);
+				if(accent != Accent::none && prior_advance != 0 &&
+					!draw_accent(accent, prior_left, prior_advance)) {
+					return false;
+				}
+			} else {
+				auto glyph = unicode_font_.glyph(decoded->value);
+				if(!glyph) {
+					glyph = unicode_font_.glyph(0xFFFDU);
+				}
+				prior_left = left;
+				prior_advance = glyph ? glyph->width :
+					advances_[glyph_index(fallback_character)];
+				if(left >= 0 && left < present::graphics_width &&
+					!((glyph && plot_unicode_glyph(*glyph)) ||
+					  (!glyph && draw_fallback()))) {
+					return false;
+				}
+				left += prior_advance;
+			}
+			offset += decoded->bytes;
+		}
+		return true;
+	}
 	for(std::size_t character = 0U; character < size;) {
 		const auto value = static_cast<std::uint8_t>(text[character]);
 		if(shift_jis_lead(value) && character + 1U < size &&
@@ -703,6 +931,45 @@ bool NewClassicMenuFont::install_machine_font(
 bool NewClassicMenuFont::has_machine_font() const noexcept
 {
 	return machine_font_.size() == Pc98FontRomProvider::font_rom_size;
+}
+
+bool NewClassicMenuFont::install_unicode_font(
+	std::span<const std::byte> package
+)
+{
+	auto decoded = decode_new_classic_unicode_font(package);
+	if(!decoded) {
+		return false;
+	}
+	unicode_font_ = std::move(*decoded);
+	return true;
+}
+
+bool NewClassicMenuFont::has_unicode_font() const noexcept
+{
+	return unicode_font_.glyph_count() != 0U;
+}
+
+bool NewClassicMenuFont::supports_utf8(std::string_view text) const noexcept
+{
+	if(!valid_new_classic_utf8(text)) {
+		return false;
+	}
+	for(std::size_t offset = 0U; offset < text.size();) {
+		const auto decoded = next_new_classic_utf8_scalar(text, offset);
+		if(!decoded) {
+			return false;
+		}
+		if(!new_classic_unicode_printable_scalar(decoded->value) ||
+			(decoded->value > last_character &&
+			 latin_composition(decoded->value).base == 0U &&
+			 !new_classic_unicode_combining(decoded->value) &&
+			 !unicode_font_.glyph(decoded->value))) {
+			return false;
+		}
+		offset += decoded->bytes;
+	}
+	return true;
 }
 
 bool NewClassicMenuFont::put_centered(
@@ -1228,6 +1495,47 @@ load_new_classic_replay_patch_assets(
 			result.new_menu_backgrounds[index] = std::move(*background);
 		}
 		result.menu_font = std::move(*font);
+		if(!loose_background_root) {
+			return std::unexpected(error(
+				NewClassicAssetsErrorCode::unicode_font_shape
+			));
+		}
+		{
+			const auto unicode_path =
+				*loose_background_root / unicode_font_filename;
+			std::error_code unicode_error{};
+			const auto unicode_size = std::filesystem::file_size(
+				unicode_path, unicode_error
+			);
+			if(unicode_error || unicode_size < 96U || unicode_size > 8'000'000U ||
+				unicode_size > static_cast<std::uintmax_t>(
+					std::numeric_limits<std::streamsize>::max()
+				)) {
+				return std::unexpected(error(
+					NewClassicAssetsErrorCode::unicode_font_shape
+				));
+			}
+			std::ifstream unicode_file(unicode_path, std::ios::binary);
+			std::vector<std::byte> unicode_bytes(
+				static_cast<std::size_t>(unicode_size)
+			);
+			if(!unicode_file) {
+				return std::unexpected(error(
+					NewClassicAssetsErrorCode::source_open
+				));
+			}
+			unicode_file.read(
+				reinterpret_cast<char *>(unicode_bytes.data()),
+				static_cast<std::streamsize>(unicode_bytes.size())
+			);
+			if(!unicode_file || unicode_file.peek() !=
+				std::ifstream::traits_type::eof() ||
+				!result.menu_font.install_unicode_font(unicode_bytes)) {
+				return std::unexpected(error(
+					NewClassicAssetsErrorCode::unicode_font_shape
+				));
+			}
+		}
 		if(!font_rom.empty()) {
 			std::ifstream machine_font(font_rom, std::ios::binary);
 			if(!machine_font) {

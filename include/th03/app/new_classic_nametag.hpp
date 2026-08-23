@@ -35,9 +35,10 @@ struct NewClassicNametagLayout final {
 };
 
 // Validates the exact fixed-width MAINL title replacement. Input is already
-// normalized: printable ASCII, no leading/trailing/repeated spaces. Words are
-// never split. The separating source space is omitted at a line break, so the
-// largest geometrically representable input is 28 + 1 + 28 = 57 bytes.
+// normalized: printable UTF-8, no leading/trailing/repeated ASCII spaces.
+// Words are never split. East Asian wide glyphs occupy two cells and combining
+// marks occupy zero. V14's fixed snapshot slots still cap the source at 57
+// UTF-8 bytes; the geometry independently caps each row at 28 display cells.
 [[nodiscard]] std::expected<NewClassicNametagLayout, NewClassicNametagError>
 layout_new_classic_nametag(std::string_view nametag);
 

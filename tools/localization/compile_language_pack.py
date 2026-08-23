@@ -155,15 +155,44 @@ def placeholders(text: str) -> tuple[str, ...]:
     return found
 
 
+def unicode_noncharacter(value: int) -> bool:
+    return 0xFDD0 <= value <= 0xFDEF or (
+        value <= 0x10FFFF and value & 0xFFFF >= 0xFFFE
+    )
+
+
+def unicode_unsupported_format(value: int) -> bool:
+    return value in (0x00AD, 0x061C, 0xFEFF) or (
+        0x200B <= value <= 0x200F or 0x202A <= value <= 0x202E or
+        0x2060 <= value <= 0x206F or 0xFFF9 <= value <= 0xFFFB or
+        0xE0000 <= value <= 0xE007F
+    )
+
+
 def validate_message(message: Message, text: str, encoding: int) -> bytes:
     try:
-        encoded = text.encode("ascii" if encoding == 0 else "cp932")
+        codec = ("ascii", "cp932", "utf-8")[encoding]
+        encoded = text.encode(codec)
     except UnicodeEncodeError as error:
         raise PackError(
             f"{message.id}: text is not representable by its selected font encoding"
         ) from error
     if not encoded:
         raise PackError(f"{message.id}: empty menu-font text")
+    if encoding == 2:
+        if any(
+            ord(character) < 0x20 or ord(character) == 0x7F or
+            0x80 <= ord(character) <= 0x9F or
+            unicode_noncharacter(ord(character)) or
+            unicode_unsupported_format(ord(character))
+            for character in text
+        ):
+            raise PackError(f"{message.id}: Unicode text contains a control")
+        if placeholders(text) != tuple(item.name for item in message.placeholders):
+            raise PackError(f"{message.id}: placeholder set does not match schema")
+        if len(encoded) > 0xFFFF:
+            raise PackError(f"{message.id}: text is too long")
+        return encoded
     offset = 0
     while offset < len(encoded):
         value = encoded[offset]
@@ -216,16 +245,25 @@ def load_author(path: Path, schema: Schema) -> Author:
         missing = [message.id for message in schema.messages if message.id not in authored]
         if missing:
             raise PackError(f"{path}: missing required message {missing[0]}")
+    requested_encoding = raw.get("encoding")
+    if requested_encoding is None:
+        encoding = 1 if profile == "japanese" else 0
+    elif requested_encoding == "utf-8" and profile == "english":
+        encoding = 2
+    elif requested_encoding == "cp932" and profile == "japanese":
+        encoding = 1
+    elif requested_encoding == "ascii" and profile == "english":
+        encoding = 0
+    else:
+        raise PackError(f"{path}: encoding does not match its asset profile")
     for message in schema.messages:
         if message.id in authored:
-            validate_message(
-                message, authored[message.id], 0 if profile == "english" else 1
-            )
+            validate_message(message, authored[message.id], encoding)
     return Author(
         locale=locale,
         fallback=fallback,
         asset_profile=0 if profile == "japanese" else 1,
-        encoding=1 if profile == "japanese" else 0,
+        encoding=encoding,
         messages=dict(authored),
     )
 
@@ -288,7 +326,7 @@ def cpp_byte_array(values: bytes) -> str:
 
 
 def cpp_string_view(value: str, encoding: int) -> str:
-    encoded = value.encode("ascii" if encoding == 0 else "cp932")
+    encoded = value.encode(("ascii", "cp932", "utf-8")[encoding])
     escaped = "".join(f"\\x{byte:02X}" for byte in encoded)
     return f'std::string_view{{"{escaped}", {len(encoded)}U}}'
 

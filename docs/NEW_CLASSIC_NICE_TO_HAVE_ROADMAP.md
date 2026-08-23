@@ -254,19 +254,15 @@ DOSBox/`mg098` custom-menu workflow: it fits ordinary images to 640x400,
 quantizes only into the ten background-owned palette indices, writes the exact
 two uncompressed 4-bpp BMP halves, and emits a runtime-palette preview plus
 source/output identities. It never modifies reviewed assets in place.
-General Unicode locales now form the first active follow-up. The current
-production renderer deliberately covers source-era ASCII and CP932 Japanese
-only. The extension must keep translator files and online display names as
-validated UTF-8, compile a source-free redistributable font into a
-deterministic codepoint/metrics package, define fallback and grapheme-aware
-wrapping without consulting platform fonts, and prove Spanish plus Japanese
-as the first two non-ASCII profiles. The Spanish profile is explicitly a
-non-authoritative, test-only fixture for glyph coverage, diacritics, wrapping,
-and compiler completeness; it must not ship or be presented as an official
-translation until a native speaker authors or reviews the copy. The package
-must cover online leaderboard names and account nametags as well as
-localization catalogs while leaving sealed Classic and the existing exact
-CP932 path unchanged.
+The general-Unicode foundation is implemented and specified in
+`NEW_CLASSIC_UNICODE_TEXT.md`. Validated UTF-8 now reaches menu catalogs,
+online display names, profile editing, V14 fallback nametags, and the netplay
+VS title. Original Latin glyphs remain preferred, Japanese CP932 still uses
+exact FONT.ROM, and all other supported scalars come from the pinned external
+`T3UFN001` package without host fonts. The Spanish profile remains a conspicuous
+non-shipping compiler/rendering fixture until a native speaker supplies or
+reviews real copy. Complex shaping and general-Unicode replacements for the
+fixed-cell T3GTL/T3CTP domains remain separate explicit follow-ups.
 
 The production cutscene VM now exposes canonical picture presentations rather
 than relying on command-text scraping. Both authenticated language archives
@@ -288,7 +284,7 @@ editing without relaxing the final package compiler.
 The product decisions and first account-backed implementation are complete:
 
 1. one mutable public account nametag, with the opaque UUID as stable identity;
-2. printable ASCII and duplicate names for the first version;
+2. validated printable UTF-8 and duplicate names;
 3. exact whole-word wrapping across two 28-cell title rows;
 4. immutable server snapshots for account rooms and local/unverified identity
    for direct UDP;
@@ -306,8 +302,9 @@ linking, authenticated room snapshot, peer agreement, VS-title rendering, and
 the retained first-use/edit UI are complete. The approved design is in
 `NEW_CLASSIC_NETPLAY_NAMETAGS.md`. The original 24-byte suggestion was a
 conservative single-line placeholder, not a source limit. The real title area
-has two 28-cell rows, so validation accepts at most 57 printable-ASCII source
-bytes (`28 + space + 28`) only when whole-word wrapping actually fits. The
+has two 28-cell rows, so validation accepts at most 57 UTF-8 source bytes only
+when whole-word, display-cell wrapping actually fits. Wide glyphs occupy two
+cells and combining marks occupy zero. The
 source character-name row remains unchanged. V14 is now the sole live replay
 format. Its fixed header preserves both opaque account UUIDs and two
 zero-padded 57-byte match-time nametag snapshots. Online viewers may resolve a
@@ -321,14 +318,7 @@ V13 remains only as Data Manager migration input and frozen historical evidence.
 The original source-text, renderer-GUI, Arrange, content-audit, and live
 nametag parcels above are implemented. The remaining product/tooling work is:
 
-1. Add the deterministic general-Unicode font/layout package described above.
-   UTF-8 is already the authoring and online-cache boundary, but current native
-   drawing cannot faithfully show arbitrary historical display names or a
-   future Spanish locale. Use placeholder Spanish only as a conspicuously
-   non-shipping acceptance fixture; official wording belongs to a native
-   speaker. Do not bind output to whatever font happens to be installed on the
-   host.
-2. Continue decoupling text baked into images. Character-select center-list
+1. Continue decoupling text baked into images. Character-select center-list
 names and stat labels plus gameplay Lose/Win/Stage/Round/Start banners are
 complete. Registration title/column panels, difficulty plate, edit commands,
    and all-stage marker are also runtime-localized while built-in English retains
@@ -340,25 +330,25 @@ complete. Registration title/column panels, difficulty plate, edit commands,
    headings remain. The
    selection portrait atlases were audited and contain no text. Opaque surfaces require clean background
    reconstruction; this is not a missing string-catalog problem.
-3. Finish production update release inputs: origin, platform packages, signing
+2. Finish production update release inputs: origin, platform packages, signing
    key custody/rotation, and hosted CI artifact validation. The updater engine
    itself is already implemented and default-off without those inputs.
-4. Continue online operations and UX: reviewed historical-score import,
+3. Continue online operations and UX: reviewed historical-score import,
    operational verifier/service monitoring, and any remaining public-account
    recovery flows. The replay-backed Story leaderboard/upload/download/watch
    path is already live. Finalized Stock netplay V14 files are verified,
    recorder-bound private My Replays evidence; they deliberately do not enter
    Story boards or define ratings/public match history.
-5. Improve PMD/YM2608 audio fidelity where channel balance and simultaneous
+4. Improve PMD/YM2608 audio fidelity where channel balance and simultaneous
    SFX layering still differ audibly from PC-98 output. The deterministic
    native all-effect trace, strict PC-98 I/O normalizer, first-divergence
    comparator, and controlled shipped-PMDB2 event-window comparison are
    complete; aligned acoustic evidence remains before further audible changes.
-6. Expand Arrange only after choosing a shippable ruleset and a replay/content
+5. Expand Arrange only after choosing a shippable ruleset and a replay/content
    identity for it. `dopamine-test-v1` remains an intentionally non-stock test.
-7. Design optional `Smooth` display interpolation behind the existing exact
+6. Design optional `Smooth` display interpolation behind the existing exact
    source scheduler; `Repeat` sample-and-hold remains the authentic default.
-8. Resume broad pixel/audio-oracle coverage after these moving functional and
+7. Resume broad pixel/audio-oracle coverage after these moving functional and
    localized surfaces settle. Stock deterministic/replay gates remain active
    throughout.
 

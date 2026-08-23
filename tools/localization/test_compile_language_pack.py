@@ -82,6 +82,21 @@ class LanguagePackTests(unittest.TestCase):
                 (self.root / "src/app/new_classic_messages_generated.inc").read_bytes(),
             )
 
+    def test_utf8_profile_rejects_invisible_and_reserved_scalars(self) -> None:
+        original = json.loads(
+            (self.root / "localization/es-TEST.json").read_text(encoding="utf-8")
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            for index, scalar in enumerate(("\u0085", "\u202E", "\uFDD0")):
+                case = json.loads(json.dumps(original))
+                case["messages"]["title.start"] = f"Prueba{scalar}"
+                path = Path(temporary) / f"unicode-control-{index}.json"
+                path.write_text(
+                    json.dumps(case, ensure_ascii=False), encoding="utf-8"
+                )
+                with self.assertRaises(pack.PackError):
+                    pack.load_author(path, self.schema)
+
     def test_placeholder_width_contract_fails_closed(self) -> None:
         original = json.loads((self.root / "localization/schema.json").read_text())
         target = next(

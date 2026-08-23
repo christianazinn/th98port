@@ -35,6 +35,7 @@ enum class NewClassicLanguageAssetProfile : std::uint8_t {
 enum class NewClassicMessageEncoding : std::uint8_t {
 	menu_font_ascii,
 	cp932_mixed,
+	utf8,
 };
 
 struct NewClassicMessageSchemaEntry final {

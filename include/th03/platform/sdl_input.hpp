@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <expected>
 #include <optional>
+#include <string>
 
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_gamepad.h>
@@ -219,6 +220,9 @@ public:
 	[[nodiscard]] std::optional<SDL_Scancode>
 	take_keyboard_scancode_press() noexcept;
 	[[nodiscard]] std::optional<char> take_keyboard_text_character() noexcept;
+	// Atomically returns queued SDL text input as validated printable UTF-8.
+	// ASCII-only numeric/code editors continue to use the character accessor.
+	[[nodiscard]] std::string take_keyboard_text_utf8();
 	[[nodiscard]] bool main_window_focused() const noexcept;
 	// Product menus replace keyboard policy only between fresh schedulers and
 	// after a complete release. Connected controller slots remain assigned.

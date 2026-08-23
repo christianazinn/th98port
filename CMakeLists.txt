@@ -9,7 +9,7 @@ file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/PODDUI")
 file(
 	COPY "${TH03_NEW_CLASSIC_MENU_ASSET_SOURCE}/"
 	DESTINATION "${CMAKE_BINARY_DIR}/PODDUI"
-	FILES_MATCHING PATTERN "*.BMP"
+	FILES_MATCHING PATTERN "*.BMP" PATTERN "*.BIN"
 )
 
 include(CTest)
@@ -612,6 +612,11 @@ function(th03_stage_audio_licenses target)
 			VERBATIM
 		)
 	endforeach()
+	install(
+		FILES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/unifont/OFL-1.1.txt"
+		DESTINATION licenses/GNU-Unifont
+		RENAME OFL-1.1.txt
+	)
 endfunction()
 
 add_library(th03_assets STATIC
@@ -1034,6 +1039,7 @@ add_library(th03_app_main STATIC
 	src/app/new_classic_playback.cpp
 	src/app/new_classic_practice.cpp
 	src/app/new_classic_replay.cpp
+	src/app/new_classic_unicode.cpp
 	src/app/op_compiled_text.cpp
 	src/app/pixel_oracle_identity.cpp
 	src/app/replay_slot_store.cpp
@@ -1330,7 +1336,7 @@ if(TH03_PACKAGE_BETA)
 	install(
 		DIRECTORY "${TH03_NEW_CLASSIC_MENU_ASSET_SOURCE}/"
 		DESTINATION PODDUI
-		FILES_MATCHING PATTERN "*.BMP"
+		FILES_MATCHING PATTERN "*.BMP" PATTERN "*.BIN"
 	)
 	install(
 		FILES "${_th03_sdl3_license_file}"
@@ -1415,6 +1421,11 @@ if(BUILD_TESTING)
 			NAME th03-new-classic-language-compiler-tests
 			COMMAND ${Python3_EXECUTABLE}
 				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_compile_language_pack.py
+		)
+		add_test(
+			NAME th03-new-classic-unicode-font-compiler-tests
+			COMMAND ${Python3_EXECUTABLE}
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_compile_unicode_font.py
 		)
 		add_test(
 			NAME th03-new-classic-game-text-compiler-tests
@@ -2580,6 +2591,10 @@ if(BUILD_TESTING)
 	)
 	target_link_libraries(
 		th03-app-new-classic-netplay-match-intro-tests PRIVATE th03_app_main
+	)
+	target_compile_definitions(
+		th03-app-new-classic-netplay-match-intro-tests PRIVATE
+		TH03_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 	)
 	th03_set_warnings(th03-app-new-classic-netplay-match-intro-tests)
 	add_test(

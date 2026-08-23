@@ -13,11 +13,13 @@ named placeholders together with conservative width-test values, so a
 translator cannot evade a row budget by leaving the runtime value unresolved.
 Host key and controller names remain platform data, but their surrounding
 labels and bounded row templates are localized. English and Latin fragments
-render through authenticated Replay Patch `MNUFONT.PF`; Japanese `ja-JP`
-messages are compiled to CP932 and render with the exact authenticated PC-98
-`FONT.ROM`. Mixed rows retain proportional Latin spacing and 16-pixel Japanese
-glyphs. This remains a CP932-capable source-era domain rather than a general
-Unicode product-shell renderer. Classic never reads these files.
+prefer authenticated Replay Patch `MNUFONT.PF`; Japanese `ja-JP` messages are
+compiled to CP932 and render with the exact authenticated PC-98 `FONT.ROM`.
+UTF-8 custom catalogs use the pinned external `T3UFN001` package only for
+glyphs those source fonts cannot represent. Mixed rows retain proportional
+Latin spacing and 16-pixel Japanese glyphs. The complete renderer and input
+contract is in `docs/NEW_CLASSIC_UNICODE_TEXT.md`. Classic never reads these
+files.
 
 Generate the frozen C++ tables:
 
@@ -69,6 +71,12 @@ Each `exact_glyphs` value is a source-layout constraint: one cell is one
 fullwidth CP932 glyph or two halfwidth glyphs. See
 `docs/NEW_CLASSIC_CUTSCENE_TEXT.md` for inventory regeneration and runtime
 validation.
+
+`es-TEST.json` is deliberately not a translation. It is a non-shipping
+technical fixture that exercises UTF-8 package encoding, accented Latin
+composition, fallback, width checks, and two-line UI geometry. A native
+speaker must replace or review every Spanish string before any `es-*` locale
+can appear in the product language selector.
 
 The definitive covered-versus-image-baked census is
 `docs/NEW_CLASSIC_TEXT_LOCALIZATION_COVERAGE.md`.

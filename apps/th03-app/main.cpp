@@ -3324,8 +3324,8 @@ struct OnlineProfileRunResult final {
 					return {.exit_code = advanced.error()};
 				}
 			}
-			while(const auto character = mapper.take_keyboard_text_character()) {
-				surface_changed = scene.consume({.text_character = *character}) ||
+			if(auto text = mapper.take_keyboard_text_utf8(); !text.empty()) {
+				surface_changed = scene.consume({.text_utf8 = std::move(text)}) ||
 					surface_changed;
 			}
 			const auto scancode = mapper.take_keyboard_scancode_press();
@@ -3349,8 +3349,7 @@ struct OnlineProfileRunResult final {
 				)};
 			}
 			if(!scene.text_entry_active()) {
-				while(mapper.take_keyboard_text_character()) {
-				}
+				static_cast<void>(mapper.take_keyboard_text_utf8());
 			}
 			if(auto action = scene.take_action()) {
 				if(surface_changed) {

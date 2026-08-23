@@ -1,0 +1,24 @@
+{
+  "format": "T3LANG-AUTHOR-1",
+  "locale": "es-TEST",
+  "fallback": "en-US",
+  "asset_profile": "english",
+  "encoding": "utf-8",
+  "non_shipping_notice": "Technical glyph and layout fixture only; requires native-speaker replacement before release.",
+  "messages": {
+    "option.category.gameplay": "Jugabilidad",
+    "option.category.language": "Idioma",
+    "option.category.system": "Sistema",
+    "option.category.audio": "Audio",
+    "option.category.video": "Vídeo",
+    "option.return": "Volver",
+    "profile.current": "Nombre público",
+    "profile.change-name": "Cambiar nombre",
+    "profile.enter-name": "Escribe tu nombre público",
+    "profile.name-hint": "Hasta dos líneas de 28 celdas",
+    "netplay.room.connection-failed": "Conexión fallida",
+    "netplay.room.settings": "Configuración de red",
+    "hiscore.online.label.player": "Jugador",
+    "hiscore.online.label.autofire": "Disparo automático"
+  }
+}

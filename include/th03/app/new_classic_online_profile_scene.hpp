@@ -31,6 +31,7 @@ struct NewClassicOnlineProfileAction final {
 struct NewClassicOnlineProfileInput final {
 	NewClassicUiInput ui{};
 	std::optional<char> text_character{};
+	std::string text_utf8{};
 	bool erase = false;
 	bool delete_forward = false;
 	bool home = false;

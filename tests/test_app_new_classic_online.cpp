@@ -379,14 +379,16 @@ void test_worker_projection_fixture(const fs::path &fixture)
 	expect(decoded->leaderboard_entries[0U].provenance ==
 		NewClassicOnlineProvenance::curated_legacy &&
 		!decoded->leaderboard_entries[0U].replay_id &&
+		!decoded->leaderboard_entries[0U].autofire &&
 		decoded->leaderboard_entries[0U].evidence_source.empty() &&
 		decoded->leaderboard_entries[1U].provenance ==
-			NewClassicOnlineProvenance::replay_verified,
-		"historical and replay-backed rows retain their distinct authority");
+			NewClassicOnlineProvenance::replay_verified &&
+		decoded->leaderboard_entries[1U].autofire == true,
+		"historical and replay-backed rows retain authority and explicit Autofire state");
 	const auto &replay = decoded->replay_records[0U];
 	expect(replay.availability ==
 		NewClassicOnlineReplayAvailability::metadata_only &&
-		replay.autofire == 2U && replay.timed_frames == 10'000U &&
+		replay.autofire == 1U && replay.timed_frames == 10'000U &&
 		replay.slow_frames == 500U && replay.payload_bytes == 7U,
 		"online replay metadata carries visible Autofire and exact slowdown facts");
 	auto encoded = encode_new_classic_online_cache(*decoded);

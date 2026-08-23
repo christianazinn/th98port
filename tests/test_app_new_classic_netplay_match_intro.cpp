@@ -78,6 +78,9 @@ void test_authentic_intro(int argc, char **argv)
 			.mainl_executable = std::filesystem::path(argv[2]),
 			.font_rom = std::filesystem::path(argv[3]),
 			.language_overlay = std::filesystem::path(argv[4]),
+			.new_classic_menu_assets = std::filesystem::path(
+				TH03_TEST_SOURCE_DIR
+			) / "assets" / "new-classic" / "menu-backgrounds",
 		},
 		.process = {
 			.player_one = {
@@ -142,7 +145,9 @@ void test_authentic_intro(int argc, char **argv)
 	auto player_one_nametag = layout_new_classic_nametag(
 		"Resident of Fantasy Who Runs Through Time"
 	);
-	auto player_two_nametag = layout_new_classic_nametag("Second Player");
+	auto player_two_nametag = layout_new_classic_nametag(
+		"\xE5\xB9\xBB\xE6\x83\xB3\xE3\x81\xAE\xE4\xBD\x8F\xE4\xBA\xBA"
+	);
 	expect(player_one_nametag.has_value() && player_two_nametag.has_value(),
 		"profile fixture satisfies the exact title geometry");
 	if(!player_one_nametag || !player_two_nametag) {

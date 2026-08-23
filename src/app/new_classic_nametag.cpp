@@ -1,10 +1,11 @@
 #include "th03/app/new_classic_nametag.hpp"
 
-#include <algorithm>
 #include <cstddef>
 #include <expected>
 #include <string>
 #include <string_view>
+
+#include "th03/core/utf8.hpp"
 
 namespace th03::app {
 
@@ -21,10 +22,22 @@ layout_new_classic_nametag(std::string_view nametag)
 		nametag.find("  ") != std::string_view::npos) {
 		return std::unexpected(NewClassicNametagError::invalid_spacing);
 	}
-	if(!std::ranges::all_of(nametag, [](const char character) {
-		const auto byte = static_cast<unsigned char>(character);
-		return byte >= 0x20U && byte <= 0x7EU;
-	})) {
+	if(!valid_utf8(nametag)) {
+		return std::unexpected(NewClassicNametagError::invalid_character);
+	}
+	const auto cell_count = [](std::string_view text) noexcept {
+		std::size_t cells = 0U;
+		for(std::size_t cursor = 0U; cursor < text.size();) {
+			const auto scalar = next_utf8_scalar(text, cursor);
+			if(!scalar || !unicode_printable_scalar(scalar->value)) {
+				return std::optional<std::size_t>{};
+			}
+			cells += unicode_cell_width(scalar->value);
+			cursor += scalar->bytes;
+		}
+		return std::optional{cells};
+	};
+	if(!cell_count(nametag)) {
 		return std::unexpected(NewClassicNametagError::invalid_character);
 	}
 
@@ -37,12 +50,15 @@ layout_new_classic_nametag(std::string_view nametag)
 		const auto end = separator == std::string_view::npos ?
 			nametag.size() : separator;
 		const auto word = nametag.substr(offset, end - offset);
-		if(word.size() > new_classic_nametag_line_cells) {
+		const auto word_cells = cell_count(word);
+		if(!word_cells || *word_cells == 0U ||
+			*word_cells > new_classic_nametag_line_cells) {
 			return std::unexpected(NewClassicNametagError::word_too_long);
 		}
 		auto &destination = result.lines[line];
+		const auto destination_cells = cell_count(destination).value_or(0U);
 		const auto required = destination.empty() ?
-			word.size() : destination.size() + 1U + word.size();
+			*word_cells : destination_cells + 1U + *word_cells;
 		if(required > new_classic_nametag_line_cells) {
 			++line;
 			if(line >= result.lines.size()) {

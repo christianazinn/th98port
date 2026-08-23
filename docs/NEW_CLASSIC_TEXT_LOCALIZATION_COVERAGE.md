@@ -76,10 +76,10 @@ Installation manuals and other text files with no playable TH03 loader are not
 game text and are excluded. Replay/player names, dates, scores, device names,
 and online nametags are runtime data rather than translatable strings; their
 labels and formatting templates are included in the menu domain. Their UTF-8
-bytes must be preserved even before the selected runtime font can draw every
-code point. A deterministic redistributable Unicode font/metrics pack is the
-next localization priority, with Spanish and online Japanese display names as
-its first acceptance profiles; host-installed fonts are not authoritative.
+bytes are preserved and rendered through the deterministic `T3UFN001` fallback
+described in `NEW_CLASSIC_UNICODE_TEXT.md`; online names are truncated only at
+scalar boundaries using production pixel metrics, and host-installed fonts are
+not authoritative.
 Spanish in this acceptance suite is placeholder technical copy only. A native
 speaker must author or review any Spanish catalog before it becomes a shipping
 locale.

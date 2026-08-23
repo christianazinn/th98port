@@ -26,6 +26,7 @@ namespace th03::app {
 
 class ClassicOpSelectionCompletion;
 class ClassicOpCompletion;
+class NewClassicUnicodeFont;
 
 // Source-private identity shared by MAINL's Load and MAIN's Play command.
 // The returned command always has type load_song.
@@ -36,6 +37,7 @@ struct MainlStageCharacterText final {
 	std::vector<std::uint8_t> title{};
 	std::vector<std::uint8_t> title_second{};
 	std::vector<std::uint8_t> name{};
+	bool utf8 = false;
 };
 
 // Owning typed seam produced by the authenticated MAINL profile importer or
@@ -126,7 +128,8 @@ public:
 		GameOptions game_options,
 		std::optional<formats::ReplayPracticeConfig> practice = std::nullopt,
 		std::optional<std::array<MainlStageCharacterText, 2U>>
-			player_text_override = std::nullopt
+			player_text_override = std::nullopt,
+		const NewClassicUnicodeFont *unicode_font = nullptr
 	);
 	// Automatic Demo follows OP -> MAINL -> MAIN without a character selector.
 	// The private OP completion proves the exact built-in pairing/RNG recipe.
@@ -186,6 +189,7 @@ private:
 		std::optional<formats::ReplayPracticeConfig> practice{};
 		std::optional<std::array<MainlStageCharacterText, 2U>>
 			player_text_override{};
+		const NewClassicUnicodeFont *unicode_font = nullptr;
 	};
 
 	struct Prepared final {

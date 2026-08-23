@@ -668,6 +668,34 @@ void test_online_profile_scene()
 		edited->text == "FIRSXT SECOND",
 		"nametag editing supports two-line vertical and insertion-point navigation");
 
+	NewClassicOnlineProfileScene unicode_editor(
+		assets, NewClassicLanguageAssetProfile::english, std::nullopt
+	);
+	release(unicode_editor);
+	static_cast<void>(unicode_editor.consume({
+		.text_utf8 = "Jos\xC3\xA9 \xE5\xB9\xBB\xE6\x83\xB3",
+	}));
+	static_cast<void>(unicode_editor.consume({.ui = {.confirm = true}}));
+	auto unicode_action = unicode_editor.take_action();
+	expect(unicode_action && unicode_action->type ==
+		NewClassicOnlineProfileActionType::update_nametag &&
+		unicode_action->text == "Jos\xC3\xA9 \xE5\xB9\xBB\xE6\x83\xB3",
+		"profile text composition inserts and submits a complete UTF-8 string atomically");
+
+	NewClassicOnlineProfileScene word_wrap_editor(
+		assets, NewClassicLanguageAssetProfile::english, std::nullopt
+	);
+	release(word_wrap_editor);
+	constexpr std::string_view wrapped_name =
+		"123456789012345678901234 ABCDEF";
+	static_cast<void>(word_wrap_editor.consume({
+		.text_utf8 = std::string(wrapped_name),
+	}));
+	static_cast<void>(word_wrap_editor.consume({.ui = {.confirm = true}}));
+	auto wrapped_action = word_wrap_editor.take_action();
+	expect(wrapped_action && wrapped_action->text == wrapped_name,
+		"automatic two-line entry moves a whole word instead of splitting it");
+
 	NewClassicOnlineProfileScene first_use(
 		assets, NewClassicLanguageAssetProfile::english, std::nullopt
 	);
