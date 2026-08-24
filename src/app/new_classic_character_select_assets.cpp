@@ -22,9 +22,7 @@ constexpr std::array<std::byte, 8U> magic{
 constexpr std::size_t header_size = 192U;
 constexpr std::size_t maximum_file_size = 1U * 1024U * 1024U;
 constexpr std::uint32_t english_source_profile = 1U;
-constexpr std::uint32_t typography_contract_version = 2U;
-constexpr std::uint16_t name_width = 64U;
-constexpr std::uint16_t name_height = 16U;
+constexpr std::uint32_t typography_contract_version = 3U;
 constexpr std::uint16_t stat_storage_width = 64U;
 constexpr std::uint16_t stat_height = 48U;
 constexpr std::uint8_t stat_foreground = 7U;
@@ -100,32 +98,6 @@ constexpr std::uint8_t stat_background = 14U;
 	return result;
 }
 
-[[nodiscard]] bool valid_name_asset(const assets::BfntSheet &sheet) noexcept
-{
-	if(sheet.consumer != assets::BfntConsumerPolicy::superimpose ||
-		sheet.header.pixel_width != name_width ||
-		sheet.header.pixel_height != name_height ||
-		sheet.header.first_code != 0U || sheet.header.last_code != 17U ||
-		sheet.glyphs.size() != 18U || sheet.palette ||
-		sheet.transparent_color != 0U) {
-		return false;
-	}
-	for(std::size_t index = 0U; index < sheet.glyphs.size(); ++index) {
-		const auto &glyph = sheet.glyphs[index];
-		const auto *pixels = std::get_if<assets::PlanarBitmap4>(&glyph.pixels);
-		if(glyph.code != index || pixels == nullptr ||
-			!std::ranges::equal(pixels->color_planes[0U], pixels->color_planes[1U]) ||
-			!std::ranges::equal(pixels->color_planes[0U], pixels->color_planes[2U]) ||
-			!std::ranges::equal(pixels->color_planes[0U], pixels->color_planes[3U]) ||
-			std::ranges::none_of(pixels->color_planes[0U], [](auto value) {
-				return value != 0U;
-			})) {
-			return false;
-		}
-	}
-	return true;
-}
-
 [[nodiscard]] bool valid_stat_asset(const assets::PlanarCel4 &cel) noexcept
 {
 	if(cel.pixel_width != stat_storage_width || cel.pixel_height != stat_height ||
@@ -157,11 +129,6 @@ constexpr std::uint8_t stat_background = 14U;
 std::string_view NewClassicCharacterSelectAssets::locale() const noexcept
 {
 	return locale_;
-}
-
-const assets::BfntSheet &NewClassicCharacterSelectAssets::names() const noexcept
-{
-	return names_;
 }
 
 const assets::PlanarCel4 &
@@ -252,9 +219,8 @@ std::expected<
 		const auto name_size = static_cast<std::size_t>(u32(bytes, 20U));
 		const auto stat_offset = static_cast<std::size_t>(u32(bytes, 24U));
 		const auto stat_size = static_cast<std::size_t>(u32(bytes, 28U));
-		if(name_offset != header_size || name_size == 0U || stat_size == 0U ||
-			stat_offset != name_offset + name_size ||
-			!range_within(name_offset, name_size, bytes.size()) ||
+		if(name_offset != 0U || name_size != 0U || stat_size == 0U ||
+			stat_offset != header_size ||
 			!range_within(stat_offset, stat_size, bytes.size()) ||
 			stat_offset + stat_size != bytes.size()) {
 			return std::unexpected(error(
@@ -290,24 +256,6 @@ std::expected<
 				NewClassicCharacterSelectAssetsErrorCode::locale_shape, 72U
 			));
 		}
-		auto names = assets::decode_bfnt(
-			bytes.subspan(name_offset, name_size),
-			assets::BfntConsumerPolicy::superimpose
-		);
-		if(!names) {
-			auto failure = error(
-				NewClassicCharacterSelectAssetsErrorCode::asset_decode_failed,
-				name_offset + names.error().offset
-			);
-			failure.asset_error.emplace(std::move(names.error()));
-			return std::unexpected(std::move(failure));
-		}
-		if(!valid_name_asset(*names)) {
-			return std::unexpected(error(
-				NewClassicCharacterSelectAssetsErrorCode::name_asset_shape,
-				name_offset
-			));
-		}
 		auto stats = assets::decode_cdg(
 			bytes.subspan(stat_offset, stat_size),
 			assets::CdgAlphaPolicy::preserve
@@ -336,7 +284,6 @@ std::expected<
 			result.source_palette_sha256_[index] =
 				std::to_integer<std::uint8_t>(bytes[152U + index]);
 		}
-		result.names_ = std::move(*names);
 		result.stat_labels_ = std::move(stats->cels.front());
 		return result;
 	} catch(const std::bad_alloc &) {

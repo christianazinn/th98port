@@ -324,15 +324,6 @@ try {
 	[IO.Directory]::CreateDirectory($unifontLicenseDestination) | Out-Null
 	Copy-Item -LiteralPath $unifontLicense `
 		-Destination (Join-Path $unifontLicenseDestination "OFL-1.1.txt")
-	$courierPrimeLicense = Resolve-RequiredFile (
-		Join-Path $sourceRoot "third_party\courier-prime\OFL-1.1.txt"
-	) "Courier Prime OFL license"
-	$courierPrimeLicenseDestination = Join-Path (
-		$appRoot
-	) "licenses\Courier-Prime"
-	[IO.Directory]::CreateDirectory($courierPrimeLicenseDestination) | Out-Null
-	Copy-Item -LiteralPath $courierPrimeLicense `
-		-Destination (Join-Path $courierPrimeLicenseDestination "OFL-1.1.txt")
 	foreach($archiveDirectory in @("YUME1.DAT", "YUME2.DAT")) {
 		Copy-Item -LiteralPath (Join-Path $DataRoot $archiveDirectory) `
 			-Destination $contentRoot -Recurse

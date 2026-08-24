@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -56,16 +57,18 @@ void test_tracked_package()
 		"runtime accepts the tracked test-locale package");
 	if(!loaded) { return; }
 	expect(
-		loaded->names().header.pixel_width == 64U &&
-		loaded->names().header.pixel_height == 16U &&
-		loaded->names().glyphs.size() == 18U,
-		"package exposes the exact source two-cel name geometry"
-	);
-	expect(
 		loaded->stat_labels().pixel_width == 64U &&
 		loaded->stat_labels().pixel_height == 48U &&
 		loaded->stat_labels().alpha.has_value(),
 		"package exposes one alpha-protected three-row stat overlay"
+	);
+	const auto tracked_bytes = read(source);
+	expect(
+		std::ranges::all_of(
+			tracked_bytes.begin() + 16, tracked_bytes.begin() + 24,
+			[](std::byte value) { return value == std::byte{0U}; }
+		),
+		"package carries no replacement character-name payload"
 	);
 	expect(
 		!loaded->matches_source({}, {}, {}),
@@ -74,7 +77,7 @@ void test_tracked_package()
 
 	const auto temporary = std::filesystem::temp_directory_path() /
 		"th03-character-select-assets-test.bin";
-	auto bytes = read(source);
+	auto bytes = tracked_bytes;
 	bytes.back() ^= std::byte{1U};
 	write(temporary, bytes);
 	auto rejected = th03::app::load_new_classic_character_select_assets(

@@ -617,11 +617,6 @@ function(th03_stage_audio_licenses target)
 		DESTINATION licenses/GNU-Unifont
 		RENAME OFL-1.1.txt
 	)
-	install(
-		FILES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/courier-prime/OFL-1.1.txt"
-		DESTINATION licenses/Courier-Prime
-		RENAME OFL-1.1.txt
-	)
 endfunction()
 
 add_library(th03_assets STATIC
@@ -1356,11 +1351,6 @@ if(TH03_PACKAGE_BETA)
 			DESTINATION "licenses/${_dependency}"
 		)
 	endforeach()
-	install(
-		FILES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/courier-prime/OFL-1.1.txt"
-		DESTINATION licenses/Courier-Prime
-		RENAME OFL-1.1.txt
-	)
 	foreach(_license_record IN LISTS _th03_rtc_license_files)
 		string(REPLACE "|" ";" _license_fields "${_license_record}")
 		list(GET _license_fields 0 _license_name)
@@ -1442,11 +1432,6 @@ if(BUILD_TESTING)
 			NAME th03-new-classic-character-select-asset-compiler-tests
 			COMMAND ${Python3_EXECUTABLE}
 				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_compile_character_select_assets.py
-		)
-		add_test(
-			NAME th03-new-classic-character-select-role-font-compiler-tests
-			COMMAND ${Python3_EXECUTABLE}
-				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_compile_character_select_role_font.py
 		)
 		add_test(
 			NAME th03-new-classic-game-text-compiler-tests

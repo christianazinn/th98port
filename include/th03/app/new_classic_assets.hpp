@@ -205,8 +205,8 @@ struct NewClassicReplayPatchAssets final {
 	// Optional source-bound T3PTP001 decoded-picture overlay. Story owners
 	// select it by locale; sealed Classic never passes it to a picture scene.
 	std::shared_ptr<const NewClassicPicturePatchCatalog> custom_picture_patch{};
-	// Source-free generated BFNT/CDG for a non-source locale. Japanese and
-	// English never consume this package and retain their authenticated sheets.
+	// Source-free generated stat-label CDG for a non-source locale. Invariant
+	// proper names, Japanese, and English retain their authenticated sheets.
 	std::shared_ptr<const NewClassicCharacterSelectAssets>
 		custom_character_select_assets{};
 	[[nodiscard]] const NewClassicMessageCatalog &messages(

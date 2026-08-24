@@ -35,6 +35,10 @@ constexpr std::int32_t stats_sheet_top = 304;
 constexpr std::int32_t localized_stat_left = 8;
 constexpr std::int32_t localized_stat_top = 7;
 constexpr std::int32_t localized_stat_pitch = 16;
+constexpr std::int32_t source_charge_residue_left = 4;
+constexpr std::int32_t source_charge_residue_top = 42;
+constexpr std::int32_t source_charge_residue_width = 4;
+constexpr std::int32_t source_charge_residue_height = 10;
 constexpr present::Index4 localized_stat_background = 14U;
 constexpr present::Index4 localized_stat_foreground = 7U;
 constexpr present::Rect full_screen{
@@ -809,9 +813,7 @@ ClassicOpCharacterSelection::create_impl(
 		}
 	);
 	if(!names) { return std::unexpected(names.error()); }
-	prepared->names = present::prepare_superimpose_sheet(
-		generated_assets ? generated_assets->names() : *names
-	);
+	prepared->names = present::prepare_superimpose_sheet(*names);
 	if(!prepared->names || prepared->names->pixel_width() != 64U ||
 		prepared->names->pixel_height() != 16U ||
 		prepared->names->first_code() != 0U ||
@@ -1029,7 +1031,31 @@ bool ClassicOpCharacterSelection::draw_stats_base(std::size_t player) noexcept
 		return false;
 	}
 	if(!prepared_->use_localized_stats) {
-		return !prepared_->generated_stat_labels || present::cdg_put_8(
+		if(!prepared_->generated_stat_labels) {
+			return true;
+		}
+		// The English Patch's source "Charge SP" art begins four pixels
+		// farther left than its other two stat labels. Clear only its source
+		// foreground pixels in that audited overhang; the frame decoration and
+		// every non-label pixel remain untouched.
+		for(std::int32_t y = 0; y < source_charge_residue_height; ++y) {
+			for(std::int32_t x = 0; x < source_charge_residue_width; ++x) {
+				const present::Point point{
+					left + source_charge_residue_left + x,
+					stats_sheet_top + source_charge_residue_top + y,
+				};
+				if(raster_.pixel(present::Page::zero, point) ==
+					localized_stat_foreground && !raster_.clear({
+						.x = point.x,
+						.y = point.y,
+						.width = 1U,
+						.height = 1U,
+					}, localized_stat_background)) {
+					return false;
+				}
+			}
+		}
+		return present::cdg_put_8(
 			raster_, left + localized_stat_left,
 			stats_sheet_top + localized_stat_top,
 			*prepared_->generated_stat_labels
@@ -1806,9 +1832,7 @@ ClassicOpSelectionTestAccess::create_with_predecoded_assets(
 		}
 		prepared->extra_icons[index] = std::move(extra_icons.cels[index]);
 	}
-	prepared->names = present::prepare_superimpose_sheet(
-		generated_assets ? generated_assets->names() : names
-	);
+	prepared->names = present::prepare_superimpose_sheet(names);
 	if(!prepared->names || prepared->names->pixel_width() != 64U ||
 		prepared->names->pixel_height() != 16U ||
 		prepared->names->first_code() != 0U ||

@@ -286,6 +286,26 @@ PlanarCel4 cel(
 	return result;
 }
 
+void set_cel_pixel(
+	PlanarCel4 &cel,
+	std::size_t x,
+	std::size_t y,
+	std::uint8_t color
+)
+{
+	const auto stride = static_cast<std::size_t>(cel.pixel_width) / 8U;
+	const auto stored_y = static_cast<std::size_t>(cel.pixel_height) - 1U - y;
+	const auto offset = (stored_y * stride) + (x / 8U);
+	const auto mask = static_cast<std::uint8_t>(0x80U >> (x & 7U));
+	for(std::size_t plane = 0U; plane < cel.color_planes.size(); ++plane) {
+		if((color & static_cast<std::uint8_t>(1U << plane)) != 0U) {
+			cel.color_planes[plane][offset] |= mask;
+		} else {
+			cel.color_planes[plane][offset] &= static_cast<std::uint8_t>(~mask);
+		}
+	}
+}
+
 CdgFile file(
 	std::uint16_t width,
 	std::uint16_t height,
@@ -439,7 +459,8 @@ std::unique_ptr<ClassicOpCharacterSelection> make_scene(
 	bool retain_for_new_classic_practice = false,
 	const ClassicOpSelectionLocalizedText *localized_text = nullptr,
 	bool expect_success = true,
-	const th03::app::NewClassicCharacterSelectAssets *generated_assets = nullptr
+	const th03::app::NewClassicCharacterSelectAssets *generated_assets = nullptr,
+	bool source_charge_overhang = false
 )
 {
 	if(resident.resident_rand == 0) {
@@ -459,11 +480,20 @@ std::unique_ptr<ClassicOpCharacterSelection> make_scene(
 			192U, 192U, 2U, static_cast<std::uint8_t>(1U + index), true
 		);
 	}
+	auto stats = file(128U, 64U, 1U, 4U, false);
+	if(source_charge_overhang) {
+		// Model the source English "Charge SP" overhang plus a neighboring
+		// frame pixel so the generated-label test proves selective cleanup.
+		set_cel_pixel(stats.cels.front(), 4U, 42U, 7U);
+		set_cel_pixel(stats.cels.front(), 5U, 43U, 7U);
+		set_cel_pixel(stats.cels.front(), 7U, 51U, 7U);
+		set_cel_pixel(stats.cels.front(), 4U, 43U, 10U);
+	}
 	auto created = ClassicOpSelectionTestAccess::create_with_predecoded_assets(
 		resident, mode, available_character_count, carry,
 		Raster{}, tram_with_cursors(),
 		std::move(portraits), file(192U, 192U, 1U, 12U, true),
-		file(128U, 64U, 1U, 4U, false),
+		std::move(stats),
 		file(64U, 64U, 1U, 3U, false),
 		file(32U, 44U, 9U, 1U, false), names(), palette(),
 		retain_for_new_classic_practice, localized_text, generated_assets
@@ -936,23 +966,26 @@ void test_generated_character_select_asset_rendering()
 	expect(generated.has_value(),
 		"tracked generated Character Select assets load for scene coverage");
 	if(!generated) { return; }
-	auto classic = make_scene(ClassicOpSelectionMode::story);
+	auto classic = make_scene(
+		ClassicOpSelectionMode::story, {}, {}, 9U, false, nullptr, true,
+		nullptr, true
+	);
 	auto localized = make_scene(
 		ClassicOpSelectionMode::story, {}, {}, 9U, false, nullptr, true,
-		&*generated
+		&*generated, true
 	);
 	if(!classic || !localized) { return; }
 	expect(
+		ClassicOpSelectionTestAccess::draw_names_only(*classic) &&
 		ClassicOpSelectionTestAccess::draw_names_only(*localized),
-		"generated BFNT names use the production superimpose path"
+		"source BFNT names use the production superimpose path"
 	);
-	const auto name_pixels = localized->raster().graphics(Page::one);
 	expect(
-		std::ranges::any_of(name_pixels, [](auto value) { return value == 15U; }) &&
-		std::ranges::none_of(name_pixels, [](auto value) {
-			return value != 0U && value != 15U;
-		}),
-		"generated name rows contain only transparent and source-white pixels"
+		std::ranges::equal(
+			classic->raster().graphics(Page::one),
+			localized->raster().graphics(Page::one)
+		),
+		"generated stat localization passes authenticated English names through byte-for-byte"
 	);
 	expect(
 		ClassicOpSelectionTestAccess::draw_stats_base_only(*classic) &&
@@ -961,13 +994,30 @@ void test_generated_character_select_asset_rendering()
 	);
 	bool protected_pixels_match = true;
 	bool label_pixels_changed = false;
+	bool source_residue_existed = false;
+	bool source_residue_cleared = true;
+	bool residue_decoration_preserved = true;
 	for(std::int32_t y = 304; y < 368; ++y) {
 		for(std::int32_t x = 32; x < 160; ++x) {
 			const auto before = classic->raster().pixel(Page::zero, {x, y});
 			const auto after = localized->raster().pixel(Page::zero, {x, y});
-			const auto inside = x >= 40 && x < 96 && y >= 311 && y < 359;
+			const auto inside_label =
+				x >= 40 && x < 96 && y >= 311 && y < 359;
+			const auto inside_charge_overhang =
+				x >= 36 && x < 40 && y >= 346 && y < 356;
+			const auto inside = inside_label || inside_charge_overhang;
 			if(inside) {
 				label_pixels_changed = label_pixels_changed || before != after;
+				if(inside_charge_overhang) {
+					if(before == 7U) {
+						source_residue_existed = true;
+						source_residue_cleared =
+							source_residue_cleared && after == 14U;
+					} else {
+						residue_decoration_preserved =
+							residue_decoration_preserved && after == before;
+					}
+				}
 			} else {
 				protected_pixels_match = protected_pixels_match && before == after;
 			}
@@ -977,6 +1027,11 @@ void test_generated_character_select_asset_rendering()
 		"generated stat labels replace pixels inside the reviewed safe cells");
 	expect(protected_pixels_match,
 		"generated stat alpha preserves every border and star-field pixel");
+	expect(
+		source_residue_existed && source_residue_cleared &&
+			residue_decoration_preserved,
+		"generated Charge label clears only the source foreground overhang"
+	);
 }
 
 void test_two_player_confirmation_order()

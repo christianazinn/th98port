@@ -70,20 +70,21 @@ inferred safely from source pixels.
 ## Implemented Character Select contract
 
 `T3CSP001` implements the first generated source-compatible asset path for the
-non-shipping `es-TEST` locale. Its source-free payload is a native BFNT name
-sheet plus a native alpha-bearing CDG stat-label overlay. The package binds the
+non-shipping `es-TEST` locale. Its source-free payload is a native alpha-bearing
+CDG stat-label overlay. The package binds the
 three authenticated English inputs by SHA-256; New Classic rejects it before
 scene construction if the active `CHNAME.BFT`, `SLWIN.CDG`, or `TLSL.RGB`
 differs. Japanese and English never select the generated package.
 
-The name compiler preserves the source's two 64x16 cels per character and uses
-a pinned 16-pixel Courier Prime bitmap role with a wide 10-pixel monospaced
-advance and serif letterforms. The separately authored stat labels retain the
+The character names are identical in Spanish, so the scene preserves the
+authenticated English `CHNAME.BFT` byte-for-byte. The stat labels retain the
 compact, unexpanded one-pixel GNU Unifont role. They occupy exactly three 56x16
 safe cells at source offset (8, 7); eight additional transparent columns satisfy
 CDG's 32-pixel width requirement without touching the source rule, border, or
-stars. Deterministic compiler tests cover the role distinction, accented UTF-8,
-missing glyphs, overflow, schema drift, contact-sheet geometry, native-format
-structure, and protected columns. Runtime tests independently parse and
-authenticate the package, bind the private English source profile, and compose
-it through the production superimpose/CDG paths.
+stars. A bounded source-foreground cleanup also removes the English Patch's
+left-overhanging `Charge SP` initial without erasing the adjacent frame pattern.
+Deterministic compiler tests cover accented UTF-8, missing glyphs, overflow,
+schema drift, contact-sheet geometry, native-format structure, and protected
+columns. Runtime tests independently parse and authenticate the package, bind
+the private English source profile, prove source-name identity, and compose the
+stat overlay through the production CDG path.

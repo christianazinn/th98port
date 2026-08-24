@@ -1,5 +1,5 @@
 {
-  "format": "T3CSP-AUTHOR-2",
+  "format": "T3CSP-AUTHOR-3",
   "locale": "es-TEST",
   "source_profile": "english",
   "source_assets": {
@@ -8,20 +8,9 @@
     "TLSL.RGB": "67e1d8d78691282dca2c95abb3d942c25f5f256f77211a1ec1d9693c5c327d45"
   },
   "typography": {
-    "character_names": "courier-prime-display-serif-16",
+    "character_names": "authenticated-source",
     "stat_labels": "unifont-thin-8x16"
   },
-  "character_names": [
-    "REIMU",
-    "MIMA",
-    "MARISA",
-    "ELLEN",
-    "KOTOHIME",
-    "KANA",
-    "RIKAKO",
-    "CHIYURI",
-    "YUMEMI"
-  ],
   "stat_labels": [
     "RÁPIDO",
     "PODER",

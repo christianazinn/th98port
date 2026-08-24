@@ -111,26 +111,22 @@ review contact sheet:
 ```powershell
 python tools/localization/compile_character_select_assets.py `
   localization/character-select-es-TEST.json `
-  tools/localization/T3CSF001-NAMES.BIN `
   assets/new-classic/menu-backgrounds/T3UFN001.BIN `
   assets/new-classic/menu-backgrounds/T3CSP001-ES-TEST.BIN `
   --preview out/character-select-es-TEST.bmp
 ```
 
-`T3CSP001` contains a native 18-cel 64x16 superimpose BFNT and one native
-64x48 CDG. The CDG's final eight columns are transparent padding required by
+`T3CSP001` contains one native 64x48 CDG. Unchanged proper names are not
+regenerated: `es-TEST` uses the authenticated English `CHNAME.BFT` byte-for-
+byte. The CDG's final eight columns are transparent padding required by
 the format; only the audited 56-pixel label interior is opaque, so the source
-border and adjacent star field cannot be overwritten. The compiler requires two
-different font roles: tracked `tools/localization/T3CSF001-NAMES.BIN` supplies a wide
-10-pixel-advance Courier Prime serif for names, while `T3UFN001.BIN` supplies
-unexpanded thin 8x16 stat glyphs. It centers by occupied bitmap bounds and fails
-on swapped roles, missing glyphs, clipping, overflow, schema drift, or invalid
-source identity metadata. The runtime verifies the complete package body and
+border and adjacent star field cannot be overwritten. `T3UFN001.BIN` supplies
+unexpanded thin 8x16 stat glyphs. The compiler centers by occupied bitmap bounds
+and fails on missing glyphs, clipping, overflow, schema drift, or invalid source
+identity metadata. The runtime verifies the complete package body and
 the active `CHNAME.BFT`, `SLWIN.CDG`, and `TLSL.RGB` SHA-256 identities before
 using it. `es-TEST` exercises this production route; it remains technical test
-copy rather than an official Spanish translation. Courier Prime provenance,
-license, and the role-font regeneration command are in
-`third_party/courier-prime/UPSTREAM.md`.
+copy rather than an official Spanish translation.
 
 ## Complete release bundles
 

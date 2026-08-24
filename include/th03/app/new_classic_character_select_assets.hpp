@@ -29,7 +29,6 @@ enum class NewClassicCharacterSelectAssetsErrorCode : std::uint8_t {
 	header_shape,
 	body_digest_mismatch,
 	locale_shape,
-	name_asset_shape,
 	stat_asset_shape,
 	asset_decode_failed,
 	allocation_failed,
@@ -43,14 +42,14 @@ struct NewClassicCharacterSelectAssetsError final {
 	std::optional<assets::AssetError> asset_error{};
 };
 
-// Source-free, role-specific fixed-cell replacements for Character Select.
-// The package owns only generated glyph pixels. It binds those pixels to the
-// exact active CHNAME.BFT, SLWIN.CDG, and TLSL.RGB inputs so a locale cannot
-// silently draw against a different source layout or palette.
+// Source-free fixed-cell replacements for localizable Character Select stat
+// labels. Invariant proper names continue through the authenticated CHNAME.BFT
+// source path. The package binds its pixels to the exact active CHNAME.BFT,
+// SLWIN.CDG, and TLSL.RGB inputs so it cannot silently draw against a different
+// source layout or palette.
 class NewClassicCharacterSelectAssets final {
 public:
 	[[nodiscard]] std::string_view locale() const noexcept;
-	[[nodiscard]] const assets::BfntSheet &names() const noexcept;
 	[[nodiscard]] const assets::PlanarCel4 &stat_labels() const noexcept;
 	[[nodiscard]] bool matches_source(
 		std::span<const std::byte> names,
@@ -68,7 +67,6 @@ private:
 	AppSha256 source_name_sha256_{};
 	AppSha256 source_stats_sha256_{};
 	AppSha256 source_palette_sha256_{};
-	assets::BfntSheet names_{};
 	assets::PlanarCel4 stat_labels_{};
 };
 
