@@ -99,6 +99,34 @@ python tools/localization/validate_source_presentation.py --root .
 The generated fixed-cell/gaiji asset direction is documented in
 `docs/NEW_CLASSIC_SOURCE_PRESENTATION.md`.
 
+## Character Select fixed-cell assets
+
+Japanese and English continue to use their authenticated original and English
+Patch `CHNAME.BFT`/`SLWIN.CDG` sheets byte-for-byte. A third locale cannot use
+the proportional menu font on this screen: it must compile a source-compatible
+asset package. `character-select-es-TEST.json` is the first non-shipping author
+fixture, and this command deterministically rebuilds its tracked package and a
+review contact sheet:
+
+```powershell
+python tools/localization/compile_character_select_assets.py `
+  localization/character-select-es-TEST.json `
+  assets/new-classic/menu-backgrounds/T3UFN001.BIN `
+  assets/new-classic/menu-backgrounds/T3CSP001-ES-TEST.BIN `
+  --preview out/character-select-es-TEST.bmp
+```
+
+`T3CSP001` contains a native 18-cel 64x16 superimpose BFNT and one native
+64x48 CDG. The CDG's final eight columns are transparent padding required by
+the format; only the audited 56-pixel label interior is opaque, so the source
+border and adjacent star field cannot be overwritten. The compiler centers by
+occupied bitmap bounds, applies a fixed source-compatible stroke kernel, and
+fails on missing glyphs, clipping, overflow, schema drift, or invalid source
+identity metadata. The runtime verifies the complete package body and the
+active `CHNAME.BFT`, `SLWIN.CDG`, and `TLSL.RGB` SHA-256 identities before
+using it. `es-TEST` exercises this production route; it remains technical test
+copy rather than an official Spanish translation.
+
 ## Complete release bundles
 
 English and Japanese cover all three production text domains. Build both,

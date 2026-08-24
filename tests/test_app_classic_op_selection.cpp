@@ -438,7 +438,8 @@ std::unique_ptr<ClassicOpCharacterSelection> make_scene(
 	std::uint8_t available_character_count = 9U,
 	bool retain_for_new_classic_practice = false,
 	const ClassicOpSelectionLocalizedText *localized_text = nullptr,
-	bool expect_success = true
+	bool expect_success = true,
+	const th03::app::NewClassicCharacterSelectAssets *generated_assets = nullptr
 )
 {
 	if(resident.resident_rand == 0) {
@@ -465,7 +466,7 @@ std::unique_ptr<ClassicOpCharacterSelection> make_scene(
 		file(128U, 64U, 1U, 4U, false),
 		file(64U, 64U, 1U, 3U, false),
 		file(32U, 44U, 9U, 1U, false), names(), palette(),
-		retain_for_new_classic_practice, localized_text
+		retain_for_new_classic_practice, localized_text, generated_assets
 	);
 	if(expect_success) {
 		expect(created.has_value(), "synthetic selector creates");
@@ -924,6 +925,58 @@ void test_localized_stat_rendering()
 		!rejected,
 		"localized stat labels that exceed their source region fail closed"
 	);
+}
+
+void test_generated_character_select_asset_rendering()
+{
+	const auto path = std::filesystem::path(TH03_TEST_SOURCE_DIR) /
+		"assets" / "new-classic" / "menu-backgrounds" /
+		"T3CSP001-ES-TEST.BIN";
+	auto generated = th03::app::load_new_classic_character_select_assets(path);
+	expect(generated.has_value(),
+		"tracked generated Character Select assets load for scene coverage");
+	if(!generated) { return; }
+	auto classic = make_scene(ClassicOpSelectionMode::story);
+	auto localized = make_scene(
+		ClassicOpSelectionMode::story, {}, {}, 9U, false, nullptr, true,
+		&*generated
+	);
+	if(!classic || !localized) { return; }
+	expect(
+		ClassicOpSelectionTestAccess::draw_names_only(*localized),
+		"generated BFNT names use the production superimpose path"
+	);
+	const auto name_pixels = localized->raster().graphics(Page::one);
+	expect(
+		std::ranges::any_of(name_pixels, [](auto value) { return value == 15U; }) &&
+		std::ranges::none_of(name_pixels, [](auto value) {
+			return value != 0U && value != 15U;
+		}),
+		"generated name rows contain only transparent and source-white pixels"
+	);
+	expect(
+		ClassicOpSelectionTestAccess::draw_stats_base_only(*classic) &&
+		ClassicOpSelectionTestAccess::draw_stats_base_only(*localized),
+		"generated CDG stat labels compose over the source sheet"
+	);
+	bool protected_pixels_match = true;
+	bool label_pixels_changed = false;
+	for(std::int32_t y = 304; y < 368; ++y) {
+		for(std::int32_t x = 32; x < 160; ++x) {
+			const auto before = classic->raster().pixel(Page::zero, {x, y});
+			const auto after = localized->raster().pixel(Page::zero, {x, y});
+			const auto inside = x >= 40 && x < 96 && y >= 311 && y < 359;
+			if(inside) {
+				label_pixels_changed = label_pixels_changed || before != after;
+			} else {
+				protected_pixels_match = protected_pixels_match && before == after;
+			}
+		}
+	}
+	expect(label_pixels_changed,
+		"generated stat labels replace pixels inside the reviewed safe cells");
+	expect(protected_pixels_match,
+		"generated stat alpha preserves every border and star-field pixel");
 }
 
 void test_two_player_confirmation_order()
@@ -1502,6 +1555,7 @@ int main(int argc, char **argv)
 	test_curve_and_player_rendering();
 	test_localized_name_rendering();
 	test_localized_stat_rendering();
+	test_generated_character_select_asset_rendering();
 	test_two_player_confirmation_order();
 	test_shot_bomb_and_cancel();
 	test_story_success();

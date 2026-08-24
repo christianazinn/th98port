@@ -65,3 +65,21 @@ Human review is still required for typography and translation quality. The
 automation removes repetitive extraction, cell drawing, packing, overflow
 checking, and preview capture; it does not pretend that layout taste can be
 inferred safely from source pixels.
+
+## Implemented Character Select contract
+
+`T3CSP001` implements the first generated source-compatible asset path for the
+non-shipping `es-TEST` locale. Its source-free payload is a native BFNT name
+sheet plus a native alpha-bearing CDG stat-label overlay. The package binds the
+three authenticated English inputs by SHA-256; New Classic rejects it before
+scene construction if the active `CHNAME.BFT`, `SLWIN.CDG`, or `TLSL.RGB`
+differs. Japanese and English never select the generated package.
+
+The name compiler preserves the source's two 64x16 cels per character. Stat
+labels occupy exactly three 56x16 safe cells at source offset (8, 7); eight
+additional transparent columns satisfy CDG's 32-pixel width requirement without
+touching the source rule, border, or stars. Deterministic compiler tests cover
+accented UTF-8, missing glyphs, overflow, schema drift, contact-sheet geometry,
+native-format structure, and protected columns. Runtime tests independently
+parse and authenticate the package, bind the private English source profile,
+and compose it through the production superimpose/CDG paths.

@@ -249,7 +249,10 @@ inputs through the production decoders and corresponding presentation paths to
 deterministic no-replace 4-bpp BMPs. Its first authenticated audit established
 that the `SLWIN.CDG` character-select stat labels occupy a reconstructible
 white panel whose border, row rules, and adjacent star field must be preserved;
-the resulting localization edit remains a separate product parcel.
+`T3CSP001` now completes that product parcel for the `es-TEST` profile. Its
+source-free native BFNT/CDG payload, fixed stroke adapter, contact sheet,
+source-profile hashes, overflow gate, and alpha-protected stat padding run in
+production while Japanese and English keep their authenticated sheets.
 The source-art `T3MBG001` compiler now replaces the former manual
 DOSBox/`mg098` custom-menu workflow: it fits ordinary images to 640x400,
 quantizes only into the ten background-owned palette indices, writes the exact

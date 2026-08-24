@@ -893,6 +893,7 @@ endif()
 add_library(th03_app_content STATIC
 	src/app/authentic_text.cpp
 	src/app/main_compiled_content.cpp
+	src/app/new_classic_character_select_assets.cpp
 	src/app/new_classic_cutscene_text.cpp
 	src/app/new_classic_game_text.cpp
 	src/app/new_classic_picture_patch.cpp
@@ -1426,6 +1427,11 @@ if(BUILD_TESTING)
 			NAME th03-new-classic-unicode-font-compiler-tests
 			COMMAND ${Python3_EXECUTABLE}
 				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_compile_unicode_font.py
+		)
+		add_test(
+			NAME th03-new-classic-character-select-asset-compiler-tests
+			COMMAND ${Python3_EXECUTABLE}
+				${CMAKE_CURRENT_SOURCE_DIR}/tools/localization/test_compile_character_select_assets.py
 		)
 		add_test(
 			NAME th03-new-classic-game-text-compiler-tests
@@ -2199,6 +2205,10 @@ if(BUILD_TESTING)
 	target_include_directories(
 		th03-app-classic-op-selection-tests PRIVATE src/app
 	)
+	target_compile_definitions(
+		th03-app-classic-op-selection-tests PRIVATE
+		TH03_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+	)
 	th03_set_warnings(th03-app-classic-op-selection-tests)
 	add_test(
 		NAME th03-app-classic-op-selection-tests
@@ -2410,6 +2420,22 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-app-new-classic-picture-patch-tests
 		COMMAND th03-app-new-classic-picture-patch-tests
+	)
+
+	add_executable(th03-app-new-classic-character-select-assets-tests
+		tests/test_app_new_classic_character_select_assets.cpp
+	)
+	target_link_libraries(
+		th03-app-new-classic-character-select-assets-tests PRIVATE th03_app_content
+	)
+	target_compile_definitions(
+		th03-app-new-classic-character-select-assets-tests PRIVATE
+		TH03_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+	)
+	th03_set_warnings(th03-app-new-classic-character-select-assets-tests)
+	add_test(
+		NAME th03-app-new-classic-character-select-assets-tests
+		COMMAND th03-app-new-classic-character-select-assets-tests
 	)
 
 	add_executable(th03-app-main-process-tests

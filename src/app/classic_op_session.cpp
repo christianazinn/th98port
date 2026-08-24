@@ -3090,7 +3090,9 @@ struct ClassicOpSessionBackend final {
 		auto created = ClassicOpCharacterSelection::create_from_op(
 			*title_completion, mode, *available, selection_carry, *resources,
 			replay_recorder && replay_recorder->capture_enabled() &&
-				mode == ClassicOpSelectionMode::vs_1p_cpu
+				mode == ClassicOpSelectionMode::vs_1p_cpu,
+			(active_language == ClassicLanguage::spanish_test && patch_assets) ?
+				patch_assets->custom_character_select_assets.get() : nullptr
 		);
 		if(!created) {
 			return std::unexpected(selection_error(std::move(created.error())));

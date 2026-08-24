@@ -17,6 +17,7 @@
 #include "th03/app/new_classic_messages.hpp"
 #include "th03/app/new_classic_game_text.hpp"
 #include "th03/app/new_classic_cutscene_text.hpp"
+#include "th03/app/new_classic_character_select_assets.hpp"
 #include "th03/app/new_classic_picture_patch.hpp"
 #include "th03/app/new_classic_unicode.hpp"
 #include "th03/present/raster.hpp"
@@ -42,6 +43,7 @@ enum class NewClassicAssetsErrorCode : std::uint8_t {
 	pause_gaiji_checksum,
 	menu_background_shape,
 	unicode_font_shape,
+	character_select_asset_shape,
 	pi_decode,
 	pi_geometry,
 	allocation_failed,
@@ -52,6 +54,8 @@ struct NewClassicAssetsError final {
 	std::error_code system{};
 	std::size_t offset = 0U;
 	std::optional<assets::AssetError> asset_error{};
+	std::optional<NewClassicCharacterSelectAssetsError>
+		character_select_asset_error{};
 };
 
 // Native form of Replay Patch 0.4.12's MNUFONT.PF. The renderer deliberately
@@ -201,6 +205,10 @@ struct NewClassicReplayPatchAssets final {
 	// Optional source-bound T3PTP001 decoded-picture overlay. Story owners
 	// select it by locale; sealed Classic never passes it to a picture scene.
 	std::shared_ptr<const NewClassicPicturePatchCatalog> custom_picture_patch{};
+	// Source-free generated BFNT/CDG for a non-source locale. Japanese and
+	// English never consume this package and retain their authenticated sheets.
+	std::shared_ptr<const NewClassicCharacterSelectAssets>
+		custom_character_select_assets{};
 	[[nodiscard]] const NewClassicMessageCatalog &messages(
 		NewClassicLanguageAssetProfile profile =
 			NewClassicLanguageAssetProfile::english

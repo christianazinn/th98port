@@ -356,11 +356,18 @@ try {
 		Copy-Item -LiteralPath $menuAsset.FullName `
 			-Destination $menuAssetDestination
 	}
-	$unicodeFont = Join-Path $menuAssetSource "T3UFN001.BIN"
-	if(!(Test-Path -LiteralPath $unicodeFont -PathType Leaf)) {
-		throw "Missing deterministic T3UFN001 Unicode font package."
+	$generatedMenuAssets = @(
+		"T3UFN001.BIN",
+		"T3CSP001-ES-TEST.BIN"
+	)
+	foreach($generatedMenuAsset in $generatedMenuAssets) {
+		$generatedMenuAssetPath = Join-Path $menuAssetSource $generatedMenuAsset
+		if(!(Test-Path -LiteralPath $generatedMenuAssetPath -PathType Leaf)) {
+			throw "Missing deterministic $generatedMenuAsset package."
+		}
+		Copy-Item -LiteralPath $generatedMenuAssetPath `
+			-Destination $menuAssetDestination
 	}
-	Copy-Item -LiteralPath $unicodeFont -Destination $menuAssetDestination
 	if($LanguageOverlay) {
 		Copy-Item -LiteralPath $LanguageOverlay `
 			-Destination (Join-Path $contentRoot "TH3EN.DAT")

@@ -297,6 +297,11 @@ void test_authentic_archive_if_supplied()
 		), "installed fallback font covers Latin and Japanese UTF-8");
 		expect(!loaded->menu_font.supports_utf8("\xE2\x80\xAEspoof"),
 			"installed fallback font rejects unsupported bidi controls");
+		expect(
+			loaded->custom_character_select_assets &&
+				loaded->custom_character_select_assets->locale() == "es-TEST",
+			"repo-owned test locale Character Select package loads with PODDUI"
+		);
 	}
 }
 

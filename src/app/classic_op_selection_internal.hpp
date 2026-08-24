@@ -25,6 +25,7 @@
 namespace th03::app {
 
 class NewClassicMenuFont;
+class NewClassicCharacterSelectAssets;
 
 inline constexpr std::size_t classic_op_selection_localized_stat_width = 56U;
 inline constexpr std::size_t classic_op_selection_localized_stat_height = 16U;
@@ -185,7 +186,8 @@ public:
 		std::uint8_t available_character_count,
 		ClassicOpSelectionCarry carry,
 		std::span<const LoadedMainResource> resources,
-		bool retain_for_new_classic_practice = false
+		bool retain_for_new_classic_practice = false,
+		const NewClassicCharacterSelectAssets *generated_assets = nullptr
 	);
 	~ClassicOpCharacterSelection() = default;
 	ClassicOpCharacterSelection(const ClassicOpCharacterSelection &) = delete;
@@ -234,6 +236,7 @@ private:
 		bool use_localized_names = false;
 		std::array<ClassicOpSelectionPreparedStatLabel, 3U> localized_stats{};
 		bool use_localized_stats = false;
+		std::optional<assets::PlanarCel4> generated_stat_labels{};
 		assets::Palette16Rgb4 palette{};
 	};
 
@@ -268,7 +271,8 @@ private:
 		std::span<const LoadedMainResource> resources,
 		bool authenticate_resource_bytes,
 		bool retain_for_new_classic_practice,
-		const ClassicOpSelectionLocalizedText *localized_text
+		const ClassicOpSelectionLocalizedText *localized_text,
+		const NewClassicCharacterSelectAssets *generated_assets
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicOpCharacterSelection>,
@@ -444,7 +448,8 @@ struct ClassicOpSelectionTestAccess final {
 		assets::BfntSheet names,
 		assets::Palette16Rgb4 palette,
 		bool retain_for_new_classic_practice = false,
-		const ClassicOpSelectionLocalizedText *localized_text = nullptr
+		const ClassicOpSelectionLocalizedText *localized_text = nullptr,
+		const NewClassicCharacterSelectAssets *generated_assets = nullptr
 	);
 
 	[[nodiscard]] static std::expected<
@@ -462,7 +467,8 @@ struct ClassicOpSelectionTestAccess final {
 	{
 		return ClassicOpCharacterSelection::create_impl(
 			std::move(resident), mode, available_character_count, carry,
-			std::move(raster), std::move(tram), resources, false, false, nullptr
+			std::move(raster), std::move(tram), resources, false, false, nullptr,
+			nullptr
 		);
 	}
 

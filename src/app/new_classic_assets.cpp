@@ -40,6 +40,8 @@ constexpr std::size_t machine_jis_offset = 0x1800U;
 constexpr std::size_t machine_jis_columns = 96U;
 constexpr std::size_t machine_jis_glyph_bytes = 32U;
 constexpr std::string_view unicode_font_filename = "T3UFN001.BIN";
+constexpr std::string_view character_select_asset_filename =
+	"T3CSP001-ES-TEST.BIN";
 
 enum class Accent : std::uint8_t {
 	none,
@@ -1549,6 +1551,23 @@ load_new_classic_replay_patch_assets(
 					NewClassicAssetsErrorCode::unicode_font_shape
 				));
 			}
+		}
+		{
+			auto character_select = load_new_classic_character_select_assets(
+				*loose_background_root / character_select_asset_filename
+			);
+			if(!character_select) {
+				auto failure = error(
+					NewClassicAssetsErrorCode::character_select_asset_shape
+				);
+				failure.character_select_asset_error.emplace(
+					std::move(character_select.error())
+				);
+				return std::unexpected(std::move(failure));
+			}
+			result.custom_character_select_assets = std::make_shared<
+				const NewClassicCharacterSelectAssets
+			>(std::move(*character_select));
 		}
 		if(!font_rom.empty()) {
 			std::ifstream machine_font(font_rom, std::ios::binary);

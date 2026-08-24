@@ -631,7 +631,8 @@ ClassicOpCharacterSelection::create_from_op(
 	std::uint8_t available_character_count,
 	ClassicOpSelectionCarry carry,
 	std::span<const LoadedMainResource> resources,
-	bool retain_for_new_classic_practice
+	bool retain_for_new_classic_practice,
+	const NewClassicCharacterSelectAssets *generated_assets
 )
 {
 	const auto expected_route = (mode == ClassicOpSelectionMode::story) ?
@@ -650,7 +651,7 @@ ClassicOpCharacterSelection::create_from_op(
 	return create_impl(
 		std::move(resident), mode, available_character_count, carry,
 		completion.raster(), completion.tram(), resources, true,
-		retain_for_new_classic_practice, nullptr
+		retain_for_new_classic_practice, nullptr, generated_assets
 	);
 }
 
@@ -665,7 +666,8 @@ ClassicOpCharacterSelection::create_impl(
 	std::span<const LoadedMainResource> resources,
 	bool authenticate_resource_bytes,
 	bool retain_for_new_classic_practice,
-	const ClassicOpSelectionLocalizedText *localized_text
+	const ClassicOpSelectionLocalizedText *localized_text,
+	const NewClassicCharacterSelectAssets *generated_assets
 )
 {
 	if((available_character_count != 7U && available_character_count != 9U) ||
@@ -689,6 +691,31 @@ ClassicOpCharacterSelection::create_impl(
 		resources, authenticate_resource_bytes
 	); !valid) {
 		return std::unexpected(valid.error());
+	}
+	if(generated_assets) {
+		const auto source_names = find_resource(
+			resources, {.role = MainResourceRole::selection_name_sheet}
+		);
+		const auto source_stats = find_resource(
+			resources, {.role = MainResourceRole::selection_stats_sheet}
+		);
+		const auto source_palette = find_resource(
+			resources, {.role = MainResourceRole::selection_palette}
+		);
+		if(!source_names) { return std::unexpected(source_names.error()); }
+		if(!source_stats) { return std::unexpected(source_stats.error()); }
+		if(!source_palette) { return std::unexpected(source_palette.error()); }
+		if(generated_assets->locale() != "es-TEST" ||
+			!generated_assets->matches_source(
+				*(*source_names)->bytes,
+				*(*source_stats)->bytes,
+				*(*source_palette)->bytes
+			)) {
+			return std::unexpected(selection_error(
+				ClassicOpSelectionErrorCode::resource_integrity_failed,
+				MainResourceKey{.role = MainResourceRole::selection_name_sheet}
+			));
+		}
 	}
 
 	auto prepared = std::make_unique<Prepared>();
@@ -782,7 +809,9 @@ ClassicOpCharacterSelection::create_impl(
 		}
 	);
 	if(!names) { return std::unexpected(names.error()); }
-	prepared->names = present::prepare_superimpose_sheet(*names);
+	prepared->names = present::prepare_superimpose_sheet(
+		generated_assets ? generated_assets->names() : *names
+	);
 	if(!prepared->names || prepared->names->pixel_width() != 64U ||
 		prepared->names->pixel_height() != 16U ||
 		prepared->names->first_code() != 0U ||
@@ -805,6 +834,9 @@ ClassicOpCharacterSelection::create_impl(
 		return std::unexpected(std::move(stats_prepared.error()));
 	}
 	prepared->use_localized_stats = *stats_prepared;
+	if(generated_assets) {
+		prepared->generated_stat_labels = generated_assets->stat_labels();
+	}
 	auto palette = decode_asset<assets::Palette16Rgb4>(
 		resources,
 		{.role = MainResourceRole::selection_palette},
@@ -997,7 +1029,11 @@ bool ClassicOpCharacterSelection::draw_stats_base(std::size_t player) noexcept
 		return false;
 	}
 	if(!prepared_->use_localized_stats) {
-		return true;
+		return !prepared_->generated_stat_labels || present::cdg_put_8(
+			raster_, left + localized_stat_left,
+			stats_sheet_top + localized_stat_top,
+			*prepared_->generated_stat_labels
+		);
 	}
 	for(std::size_t row = 0U; row < prepared_->localized_stats.size(); ++row) {
 		const auto &pixels = prepared_->localized_stats[row];
@@ -1731,7 +1767,8 @@ ClassicOpSelectionTestAccess::create_with_predecoded_assets(
 	assets::BfntSheet names,
 	assets::Palette16Rgb4 palette,
 	bool retain_for_new_classic_practice,
-	const ClassicOpSelectionLocalizedText *localized_text
+	const ClassicOpSelectionLocalizedText *localized_text,
+	const NewClassicCharacterSelectAssets *generated_assets
 )
 {
 	auto prepared = std::make_unique<ClassicOpCharacterSelection::Prepared>();
@@ -1769,7 +1806,9 @@ ClassicOpSelectionTestAccess::create_with_predecoded_assets(
 		}
 		prepared->extra_icons[index] = std::move(extra_icons.cels[index]);
 	}
-	prepared->names = present::prepare_superimpose_sheet(names);
+	prepared->names = present::prepare_superimpose_sheet(
+		generated_assets ? generated_assets->names() : names
+	);
 	if(!prepared->names || prepared->names->pixel_width() != 64U ||
 		prepared->names->pixel_height() != 16U ||
 		prepared->names->first_code() != 0U ||
@@ -1791,6 +1830,9 @@ ClassicOpSelectionTestAccess::create_with_predecoded_assets(
 		return std::unexpected(std::move(stats_prepared.error()));
 	}
 	prepared->use_localized_stats = *stats_prepared;
+	if(generated_assets) {
+		prepared->generated_stat_labels = generated_assets->stat_labels();
+	}
 	prepared->palette = palette;
 	return ClassicOpCharacterSelection::create_prepared(
 		std::move(prepared), std::move(resident), mode,
