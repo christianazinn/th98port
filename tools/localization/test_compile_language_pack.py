@@ -68,7 +68,10 @@ class LanguagePackTests(unittest.TestCase):
                     pack.load_author(path, self.schema)
 
     def test_generated_sources_are_current(self) -> None:
-        authors = [self.author(name) for name in ("en-US", "ja-JP", "qps-ploc")]
+        authors = [
+            self.author(name)
+            for name in ("en-US", "ja-JP", "es-TEST", "qps-ploc")
+        ]
         with tempfile.TemporaryDirectory() as temporary:
             ids = Path(temporary) / "ids.inc"
             data = Path(temporary) / "data.inc"

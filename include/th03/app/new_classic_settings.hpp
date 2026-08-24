@@ -15,7 +15,7 @@ namespace th03::app {
 inline constexpr std::size_t new_classic_settings_file_bytes = 32U;
 inline constexpr std::size_t new_classic_settings_v2_v3_file_bytes = 28U;
 inline constexpr std::size_t new_classic_settings_v1_file_bytes = 24U;
-inline constexpr std::uint16_t new_classic_settings_format_version = 7U;
+inline constexpr std::uint16_t new_classic_settings_format_version = 8U;
 
 enum class NewClassicWindowMode : std::uint8_t {
 	windowed,

@@ -11,6 +11,8 @@
 #include <string_view>
 #include <system_error>
 
+#include "th03/app/classic_config.hpp"
+
 namespace th03::app {
 
 class NewClassicMenuFont;
@@ -30,7 +32,22 @@ inline constexpr std::size_t new_classic_message_count =
 enum class NewClassicLanguageAssetProfile : std::uint8_t {
 	japanese,
 	english,
+	spanish_test,
 };
+
+[[nodiscard]] constexpr NewClassicLanguageAssetProfile
+new_classic_language_profile(ClassicLanguage language) noexcept
+{
+	switch(language) {
+	case ClassicLanguage::japanese:
+		return NewClassicLanguageAssetProfile::japanese;
+	case ClassicLanguage::english:
+		return NewClassicLanguageAssetProfile::english;
+	case ClassicLanguage::spanish_test:
+		return NewClassicLanguageAssetProfile::spanish_test;
+	}
+	return NewClassicLanguageAssetProfile::japanese;
+}
 
 enum class NewClassicMessageEncoding : std::uint8_t {
 	menu_font_ascii,

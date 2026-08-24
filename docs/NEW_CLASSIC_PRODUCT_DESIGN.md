@@ -483,7 +483,9 @@ exist:
    preferences and automatic-update policy remain local and never enter
    deterministic match state.
 8. The provisional Arrange ruleset selector is complete in session 335.
-   `PODD.CFG` v7 upgrades v1-v6 documents with Stock as the exact default and
+   `PODD.CFG` v8 upgrades v1-v7 documents with Stock as the exact default,
+   preserves the two-language choice of v7, adds the explicitly labeled
+   Spanish test locale, and
    persists either the complete Stock or `dopamine-test-v1` contract.
 
 Each feature becomes visible only when its apply, persistence, rollback, and

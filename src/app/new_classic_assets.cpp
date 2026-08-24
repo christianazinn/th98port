@@ -442,6 +442,9 @@ const NewClassicMessageCatalog &NewClassicReplayPatchAssets::messages(
 	NewClassicLanguageAssetProfile profile
 ) const noexcept
 {
+	if(profile == NewClassicLanguageAssetProfile::spanish_test) {
+		return new_classic_builtin_messages(profile);
+	}
 	return custom_messages && custom_messages->asset_profile() == profile ?
 		*custom_messages : new_classic_builtin_messages(profile);
 }

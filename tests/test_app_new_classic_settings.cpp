@@ -143,6 +143,20 @@ v6_settings(NewClassicSettings settings)
 	return encoded;
 }
 
+[[nodiscard]] std::array<std::byte, new_classic_settings_file_bytes>
+v7_settings(NewClassicSettings settings)
+{
+	settings.options.language = ClassicLanguage::english;
+	auto encoded = th03::app::encode_new_classic_settings(settings).value();
+	encoded[7U] = std::byte{'7'};
+	put_u16(encoded, 8U, 7U);
+	encoded[15U] &= std::byte{0x3FU};
+	put_u32(encoded, 28U, fnv1a32(
+		std::span<const std::byte>(encoded).first(28U)
+	));
+	return encoded;
+}
+
 void expect(bool condition, std::string_view message)
 {
 	++checks;
@@ -256,7 +270,17 @@ void test_codec()
 	expect(encoded && decoded && *decoded == settings,
 		"versioned New Classic settings round-trip every field");
 	expect(encoded && encoded->size() == new_classic_settings_file_bytes,
-		"New Classic settings retain the frozen 32-byte size in v7");
+		"New Classic settings retain the frozen 32-byte size in v8");
+	auto spanish = settings;
+	spanish.options.language = ClassicLanguage::spanish_test;
+	const auto spanish_encoded = th03::app::encode_new_classic_settings(spanish);
+	const auto spanish_decoded = spanish_encoded ?
+		th03::app::decode_new_classic_settings(*spanish_encoded) :
+		std::expected<NewClassicSettings, th03::app::NewClassicSettingsError>{
+			std::unexpected(th03::app::NewClassicSettingsError{})
+		};
+	expect(spanish_decoded && *spanish_decoded == spanish,
+		"v8 persists the bundled Spanish test locale distinctly");
 
 	if(encoded) {
 		for(const auto mutation : std::array{
@@ -514,7 +538,7 @@ void test_defaults_recovery_and_errors()
 		upgraded_v2->settings.effect_volume_percent == 70U &&
 		!upgraded_v2->settings.mute_when_unfocused &&
 		upgraded_v2->settings.automatic_updates &&
-		read_bytes(v2_path)[7U] == std::byte{'7'},
+		read_bytes(v2_path)[7U] == std::byte{'8'},
 		"v2 documents upgrade atomically with focus mute defaulted Off");
 
 	const auto v3_path = temporary.path() / "V3.CFG";
@@ -531,7 +555,7 @@ void test_defaults_recovery_and_errors()
 		upgraded_v3->settings.netplay ==
 			th03::app::NewClassicNetplayPreferences{} &&
 		upgraded_v3->settings.automatic_updates &&
-		read_bytes(v3_path)[7U] == std::byte{'7'},
+		read_bytes(v3_path)[7U] == std::byte{'8'},
 		"v3 documents upgrade atomically with default netplay preferences");
 
 	const auto v4_path = temporary.path() / "V4.CFG";
@@ -552,7 +576,7 @@ void test_defaults_recovery_and_errors()
 		upgraded_v4->settings.netplay.direct_udp_port == 42'424U &&
 		upgraded_v4->settings.netplay.input_delay_frames == 0U &&
 		upgraded_v4->settings.automatic_updates &&
-		read_bytes(v4_path)[7U] == std::byte{'7'},
+		read_bytes(v4_path)[7U] == std::byte{'8'},
 		"v4 documents upgrade atomically with zero input delay");
 
 	const auto v5_path = temporary.path() / "V5.CFG";
@@ -569,7 +593,7 @@ void test_defaults_recovery_and_errors()
 		upgraded_v5->settings.mute_when_unfocused &&
 		upgraded_v5->settings.netplay.input_delay_frames == 4U &&
 		upgraded_v5->settings.automatic_updates &&
-		read_bytes(v5_path)[7U] == std::byte{'7'},
+		read_bytes(v5_path)[7U] == std::byte{'8'},
 		"v5 documents upgrade atomically with automatic updates enabled");
 
 	const auto v6_path = temporary.path() / "V6.CFG";
@@ -581,8 +605,20 @@ void test_defaults_recovery_and_errors()
 	expect(upgraded_v6 && upgraded_v6->disposition ==
 		NewClassicSettingsStoreDisposition::upgraded_v6 &&
 		th03::stock_gameplay_rules(upgraded_v6->settings.gameplay_ruleset) &&
-		read_bytes(v6_path)[7U] == std::byte{'7'},
+		read_bytes(v6_path)[7U] == std::byte{'8'},
 		"v6 documents upgrade atomically with Arrange defaulted to Stock");
+
+	const auto v7_path = temporary.path() / "V7.CFG";
+	expect(write_bytes(v7_path, v7_settings(NewClassicSettings{})),
+		"v7 settings fixture writes");
+	const auto upgraded_v7 = th03::app::load_new_classic_settings_store(
+		v7_path, classic_path
+	);
+	expect(upgraded_v7 && upgraded_v7->disposition ==
+		NewClassicSettingsStoreDisposition::upgraded_v7 &&
+		upgraded_v7->settings.options.language == ClassicLanguage::english &&
+		read_bytes(v7_path)[7U] == std::byte{'8'},
+		"v7 documents upgrade atomically with their two-language setting");
 
 	const auto malformed_classic = temporary.path() / "BROKEN.CFG";
 	const auto migrated_defaults = temporary.path() / "DEFAULT.CFG";

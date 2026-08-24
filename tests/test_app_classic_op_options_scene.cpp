@@ -181,10 +181,11 @@ void test_replay_patch_option_unput_if_assets_supplied()
 		"Replay Patch Option fixture has bare TL02 page 1 and rasterized main labels"
 	);
 	GameInit resident{};
-	resident.rank = static_cast<std::uint8_t>(ClassicRank::normal);
+	ClassicConfigOptions config{};
+	resident.rank = static_cast<std::uint8_t>(config.rank);
 	EmptyAnk font{};
 	auto created = ClassicOpOptionsScene::create(
-		resident, {}, true, std::move(raster), {}, menu_background(),
+		resident, config, true, std::move(raster), {}, menu_background(),
 		window_sheet(), assets, &font, true
 	);
 	expect(created.has_value(), "Replay Patch Option scene creates");
@@ -290,10 +291,14 @@ std::unique_ptr<ClassicOpOptionsScene> make_patch_scene_if_assets_supplied(
 	}, {0, 0}) && raster.set_access_page(Page::zero),
 		"hierarchical Options fixture prepares bare title page");
 	GameInit resident{};
-	resident.rank = static_cast<std::uint8_t>(ClassicRank::normal);
+	ClassicConfigOptions config{};
+	if(localized) {
+		config.language = ClassicLanguage::english;
+	}
+	resident.rank = static_cast<std::uint8_t>(config.rank);
 	EmptyAnk font{};
 	auto created = ClassicOpOptionsScene::create(
-		resident, {}, true, std::move(raster), {}, menu_background(),
+		resident, config, true, std::move(raster), {}, menu_background(),
 		window_sheet(), std::move(assets), &font, true, 35U, {}, 100U,
 		100U, false, online_identity_reset_available, {
 			.available = update_available,
@@ -771,18 +776,39 @@ void test_patch_option_japanese_language_and_shadow_if_assets_supplied()
 		"Japanese language test opens the Language child");
 	expect(scene->advance().has_value(),
 		"Japanese language child releases its transition input");
+	const auto return_row_hash = [](const th03::present::Raster &raster) {
+		std::uint64_t hash = 1'469'598'103'934'665'603ULL;
+		for(std::int32_t y = 288; y < 304; ++y) {
+			for(std::int32_t x = patch_option_rows_left;
+				x < patch_option_rows_right; ++x) {
+				hash ^= raster.pixel(Page::zero, {x, y}).value_or(0U);
+				hash *= 1'099'511'628'211ULL;
+			}
+		}
+		return hash;
+	};
 	const auto japanese = scene->raster();
 	expect(scene->advance({.right = true}).has_value() &&
 		scene->config().language == ClassicLanguage::english,
-		"available bilingual assets switch Japanese to English");
-	expect(!page_zero_matches(japanese, scene->raster()),
-		"language switch redraws the complete localized row");
+		"available localized assets switch Japanese to English");
+	const auto english = scene->raster();
+	expect(!page_zero_matches(japanese, english) &&
+		return_row_hash(japanese) != return_row_hash(english),
+		"language switch redraws both the selected value and unselected Return row");
 	expect(scene->advance().has_value() &&
-		scene->advance({.left = true}).has_value() &&
+		scene->advance({.right = true}).has_value() &&
+		scene->config().language == ClassicLanguage::spanish_test,
+		"bundled Spanish test locale is a distinct third selector choice");
+	const auto spanish = scene->raster();
+	expect(!page_zero_matches(english, spanish) &&
+		return_row_hash(english) != return_row_hash(spanish),
+		"Spanish fallback redraws the complete retained Language child");
+	expect(scene->advance().has_value() &&
+		scene->advance({.right = true}).has_value() &&
 		scene->config().language == ClassicLanguage::japanese,
-		"available bilingual assets switch English back to Japanese");
-	expect(page_zero_matches(japanese, scene->raster()),
-		"Japanese redraw is deterministic and has no reciprocal shadow residue");
+		"language ring wraps Spanish back to Japanese");
+	expect(return_row_hash(japanese) == return_row_hash(scene->raster()),
+		"Japanese redraw restores the unselected localized Return row exactly");
 }
 
 void test_replay_patch_option_hierarchy_if_assets_supplied()

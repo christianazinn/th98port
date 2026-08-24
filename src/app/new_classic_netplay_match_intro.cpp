@@ -170,7 +170,7 @@ std::expected<
 		custom_game_text.emplace(std::move(*loaded));
 		game_text = &*custom_game_text;
 	}
-	if(request.language == NewClassicLanguageAssetProfile::english) {
+	if(request.language != NewClassicLanguageAssetProfile::japanese) {
 		if(request.content.language_overlay.empty()) {
 			return std::unexpected(intro_error(
 				NewClassicNetplayMatchIntroErrorCode::invalid_request

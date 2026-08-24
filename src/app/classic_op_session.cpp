@@ -1086,7 +1086,7 @@ struct ClassicOpSessionBackend final {
 				return patch_assets->custom_game_text.get();
 			}
 		}
-		return language == ClassicLanguage::english ?
+		return classic_language_uses_english_assets(language) ?
 			&new_classic_builtin_english_game_text() :
 			&new_classic_builtin_japanese_game_text();
 	}
@@ -1110,7 +1110,8 @@ struct ClassicOpSessionBackend final {
 	{
 		if(!japanese_compiled || !japanese_stage_text ||
 			!japanese_op_music_labels ||
-			(language == ClassicLanguage::english && english_resources.empty())) {
+			(classic_language_uses_english_assets(language) &&
+			 english_resources.empty())) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::backend_contract_failed
 			));
@@ -1119,7 +1120,7 @@ struct ClassicOpSessionBackend final {
 			return {};
 		}
 		if(!loader->switch_authenticated_overrides(
-			language == ClassicLanguage::english ? english_resources :
+			classic_language_uses_english_assets(language) ? english_resources :
 				std::map<std::string, ResourceBytes>{}
 		)) {
 			return std::unexpected(session_error(
@@ -2258,9 +2259,7 @@ struct ClassicOpSessionBackend final {
 			auto scene = std::make_unique<NewClassicKeyConfigScene>(
 				*key_config, key_defaults, maximum_key, capture_cancel_key,
 				key_name, patch_assets, key_name_context,
-				active_language == ClassicLanguage::english ?
-					NewClassicLanguageAssetProfile::english :
-					NewClassicLanguageAssetProfile::japanese
+				new_classic_language_profile(active_language)
 			);
 			if(!scene->valid()) {
 				return std::unexpected(session_error(
@@ -2282,9 +2281,7 @@ struct ClassicOpSessionBackend final {
 			key_config_return_options.emplace(std::move(*options_completion));
 			auto scene = std::make_unique<NewClassicJoyConfigScene>(
 				*joy_config, joy_defaults, patch_assets,
-				active_language == ClassicLanguage::english ?
-					NewClassicLanguageAssetProfile::english :
-					NewClassicLanguageAssetProfile::japanese
+				new_classic_language_profile(active_language)
 			);
 			if(!scene->valid()) {
 				return std::unexpected(session_error(
@@ -2313,9 +2310,7 @@ struct ClassicOpSessionBackend final {
 			auto scene = std::make_unique<NewClassicDeviceScene>(
 				mode,
 				*device_assignment, device_defaults, patch_assets,
-				active_language == ClassicLanguage::english ?
-					NewClassicLanguageAssetProfile::english :
-					NewClassicLanguageAssetProfile::japanese
+				new_classic_language_profile(active_language)
 			);
 			if(!scene->valid()) {
 				return std::unexpected(session_error(
@@ -2586,9 +2581,7 @@ struct ClassicOpSessionBackend final {
 		}
 		std::optional<ClassicOpMusicRoomLocalizedHeading> localized_heading{};
 		if(patch_assets) {
-			const auto profile = config.language == ClassicLanguage::english ?
-				NewClassicLanguageAssetProfile::english :
-				NewClassicLanguageAssetProfile::japanese;
+			const auto profile = new_classic_language_profile(config.language);
 			const auto &messages = patch_assets->messages(profile);
 			localized_heading.emplace(ClassicOpMusicRoomLocalizedHeading{
 				.title = messages.text(NewClassicMessageId::title_music_room),
@@ -2702,7 +2695,7 @@ struct ClassicOpSessionBackend final {
 			ClassicRegistrationScene::create_new_classic_viewer(
 				*title_completion, new_classic_score_path, score_path,
 				*resources, stage_text, *font, patch_assets,
-				game_text_for(config.language)
+				game_text_for(config.language), preserve_hub_return
 			) : ClassicRegistrationScene::create_viewer(
 				*title_completion, score_path, *resources, stage_text, *font
 			);
@@ -2723,7 +2716,10 @@ struct ClassicOpSessionBackend final {
 	}
 
 	[[nodiscard]] std::expected<bool, ClassicOpSessionError>
-	start_high_score_menu(bool fade_in = true)
+	start_high_score_menu(
+		bool fade_in = true,
+		bool retain_high_score_music = false
+	)
 	{
 		if(!title_completion || !replay_recorder || !patch_assets ||
 			high_scores || high_score_menu) {
@@ -2745,13 +2741,13 @@ struct ClassicOpSessionBackend final {
 		if(!menu->valid()) {
 			return false;
 		}
-		if(!push_audio({
+		if(!retain_high_score_music && (!push_audio({
 			.type = ClassicAudioCommandType::load_song,
 			.cue = ClassicMusicCue::high_score,
 		}) || !push_audio({
 			.type = ClassicAudioCommandType::play_song,
 			.cue = ClassicMusicCue::high_score,
-		})) {
+		}))) {
 			return std::unexpected(session_error(
 				ClassicOpSessionErrorCode::audio_command_pending
 			));
@@ -2788,7 +2784,7 @@ struct ClassicOpSessionBackend final {
 		}
 		high_scores.reset();
 		high_score_completion.reset();
-		auto hub = start_high_score_menu(true);
+		auto hub = start_high_score_menu(true, true);
 		if(!hub) {
 			return std::unexpected(std::move(hub.error()));
 		}
@@ -3099,14 +3095,8 @@ struct ClassicOpSessionBackend final {
 					ClassicOpSessionErrorCode::backend_contract_failed
 				));
 			}
-			const auto profile = active_language == ClassicLanguage::english ?
-				NewClassicLanguageAssetProfile::english :
-				NewClassicLanguageAssetProfile::japanese;
-			const auto &messages = (patch_assets &&
-				patch_assets->custom_messages &&
-				patch_assets->custom_messages->asset_profile() == profile) ?
-				*patch_assets->custom_messages :
-				new_classic_builtin_messages(profile);
+			const auto profile = new_classic_language_profile(active_language);
+			const auto &messages = patch_assets->messages(profile);
 			constexpr std::array<NewClassicMessageId, 9U> name_ids{
 				NewClassicMessageId::replay_character_reimu,
 				NewClassicMessageId::replay_character_mima,
@@ -5352,7 +5342,7 @@ ClassicOpSession::create(
 		}
 		english_resources = std::move(*overlay).release_members();
 	}
-	if(config.language == ClassicLanguage::english &&
+	if(classic_language_uses_english_assets(config.language) &&
 		english_resources.empty()) {
 		config.language = ClassicLanguage::japanese;
 	}
@@ -5375,7 +5365,7 @@ ClassicOpSession::create(
 		std::move(new_classic_score_path),
 		std::move(patch_assets), std::move(english_resources), runner_request
 	);
-	if(config.language == ClassicLanguage::english) {
+	if(classic_language_uses_english_assets(config.language)) {
 		if(auto applied = backend->apply_language_profile(config.language);
 			!applied) {
 			return std::unexpected(std::move(applied.error()));

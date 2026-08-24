@@ -1253,9 +1253,7 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	const auto y = choice_top(replay_patch_box_top, *line);
 	const auto &font = patch_assets_->menu_font;
 	const auto &messages = patch_assets_->messages(
-		config_.language == ClassicLanguage::english ?
-			NewClassicLanguageAssetProfile::english :
-			NewClassicLanguageAssetProfile::japanese
+		new_classic_language_profile(config_.language)
 	);
 	const auto message = patch_choice_message(choice);
 	const auto label = messages.text(message);
@@ -1369,11 +1367,13 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 	case ClassicOpOptionsChoice::language:
 		if(config_.language == ClassicLanguage::english) {
 			value = messages.text(NewClassicMessageId::value_english);
-		} else {
+		} else if(config_.language == ClassicLanguage::japanese) {
 			return prepared_->japanese && present::graphics_text_put_8x16(
 				raster_, {box_option_value_center_x - 24, y},
 				*prepared_->japanese, {.color = color}
 			);
+		} else {
+			value = messages.text(NewClassicMessageId::value_spanish_test);
 		}
 		break;
 	case ClassicOpOptionsChoice::key_mode:
@@ -1441,9 +1441,7 @@ bool ClassicOpOptionsScene::draw_patch_credits() noexcept
 		return false;
 	}
 	const auto &messages = patch_assets_->messages(
-		config_.language == ClassicLanguage::english ?
-			NewClassicLanguageAssetProfile::english :
-			NewClassicLanguageAssetProfile::japanese
+		new_classic_language_profile(config_.language)
 	);
 	for(std::size_t index = 0U; index < credit_messages.size(); ++index) {
 		const auto text = messages.text(credit_messages[index]);
@@ -1465,9 +1463,7 @@ bool ClassicOpOptionsScene::draw_patch_online_identity_status() noexcept
 		return false;
 	}
 	const auto &messages = patch_assets_->messages(
-		config_.language == ClassicLanguage::english ?
-			NewClassicLanguageAssetProfile::english :
-			NewClassicLanguageAssetProfile::japanese
+		new_classic_language_profile(config_.language)
 	);
 	const auto y = choice_top(replay_patch_box_top, 0U);
 	return put_patch_option_centered(
@@ -1502,9 +1498,7 @@ bool ClassicOpOptionsScene::draw_patch_update_status() noexcept
 		}
 	}
 	const auto &messages = patch_assets_->messages(
-		config_.language == ClassicLanguage::english ?
-			NewClassicLanguageAssetProfile::english :
-			NewClassicLanguageAssetProfile::japanese
+		new_classic_language_profile(config_.language)
 	);
 	return put_patch_option_centered(
 		patch_assets_->menu_font, raster_, box_option_center_x,
@@ -1627,9 +1621,7 @@ bool ClassicOpOptionsScene::draw_option_choice(
 bool ClassicOpOptionsScene::draw_all_option_choices() noexcept
 {
 	const auto &messages = patch_assets_ ? patch_assets_->messages(
-		config_.language == ClassicLanguage::english ?
-			NewClassicLanguageAssetProfile::english :
-			NewClassicLanguageAssetProfile::japanese
+		new_classic_language_profile(config_.language)
 	) : new_classic_builtin_messages(
 		NewClassicLanguageAssetProfile::english
 	);
@@ -1900,8 +1892,9 @@ bool ClassicOpOptionsScene::update_horizontal(
 		break;
 	case ClassicOpOptionsChoice::language:
 		if(patch_assets_ && language_available_) {
-			config_.language = config_.language == ClassicLanguage::japanese ?
-				ClassicLanguage::english : ClassicLanguage::japanese;
+			config_.language = static_cast<ClassicLanguage>(ring_step(
+				static_cast<std::uint8_t>(config_.language), direction, 2U
+			));
 			config_changed = true;
 		}
 		break;
@@ -1961,7 +1954,9 @@ bool ClassicOpOptionsScene::update_horizontal(
 	case ClassicOpOptionsChoice::quit:
 		break;
 	}
-	return draw_option_choice(selected_, present::tram_white);
+	return (selected_ == ClassicOpOptionsChoice::language && config_changed) ?
+		draw_all_option_choices() :
+		draw_option_choice(selected_, present::tram_white);
 }
 
 bool ClassicOpOptionsScene::push_audio_command(

@@ -21,6 +21,12 @@ Latin spacing and 16-pixel Japanese glyphs. The complete renderer and input
 contract is in `docs/NEW_CLASSIC_UNICODE_TEXT.md`. Classic never reads these
 files.
 
+`es-TEST` is bundled as a third New Classic selector choice so the UTF-8,
+fallback, persistence, and live-redraw paths can be tested in ordinary builds.
+It is deliberately labeled as a test locale and is not an official Spanish
+translation; a native-speaker-authored catalog must replace it before Spanish
+can be presented as a shipping localization.
+
 Generate the frozen C++ tables:
 
 ```powershell
@@ -28,6 +34,7 @@ python tools/localization/compile_language_pack.py generate-cpp `
   --schema localization/schema.json `
   --source localization/en-US.json `
   --source localization/ja-JP.json `
+  --source localization/es-TEST.json `
   --source localization/qps-ploc.json `
   --ids-output include/th03/app/new_classic_message_ids.inc `
   --data-output src/app/new_classic_messages_generated.inc

@@ -2768,12 +2768,9 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 		return {.surface_changed = valid_, .status = status_};
 	}
 	if(page_ == Page::personal_bests) {
-		if(input.cancel || input.bomb) {
-			page_ = Page::hub;
-			draw();
-			return {.surface_changed = valid_, .status = status_};
-		}
-		return {.status = status_};
+		page_ = Page::hub;
+		draw();
+		return {.surface_changed = valid_, .status = status_};
 	}
 	if(page_ == Page::detail) {
 		if(input.cancel || input.bomb) {

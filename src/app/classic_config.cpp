@@ -57,7 +57,7 @@ validate(ClassicConfigOptions options) noexcept
 		));
 	}
 	if(static_cast<std::uint8_t>(options.language) >
-		static_cast<std::uint8_t>(ClassicLanguage::english)) {
+		static_cast<std::uint8_t>(ClassicLanguage::spanish_test)) {
 		return std::unexpected(config_error(
 			ClassicConfigErrorCode::invalid_language, 4U
 		));

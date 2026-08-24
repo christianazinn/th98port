@@ -441,7 +441,20 @@ const NewClassicMessageCatalog &new_classic_builtin_messages(
 		NewClassicMessageEncoding::menu_font_ascii,
 		builtin_english
 	);
-	return profile == NewClassicLanguageAssetProfile::english ? english : japanese;
+	static const auto spanish_test = builtin(
+		"es-TEST", "en-US", NewClassicLanguageAssetProfile::spanish_test,
+		NewClassicMessageEncoding::utf8,
+		builtin_spanish_test
+	);
+	switch(profile) {
+	case NewClassicLanguageAssetProfile::japanese:
+		return japanese;
+	case NewClassicLanguageAssetProfile::english:
+		return english;
+	case NewClassicLanguageAssetProfile::spanish_test:
+		return spanish_test;
+	}
+	return japanese;
 }
 
 std::expected<NewClassicMessageCatalog, NewClassicMessagePackError>

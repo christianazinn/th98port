@@ -1301,8 +1301,23 @@ bool authentic_online_high_score_gate(
 	std::uint64_t tick_index = 0U;
 	std::optional<ClassicRunnerConsumeResult> last{};
 	std::optional<std::int16_t> last_surface_tone{};
+	std::size_t high_score_loads = 0U;
+	std::size_t high_score_plays = 0U;
+	std::size_t high_score_fades = 0U;
+	std::size_t high_score_stops = 0U;
 	const auto drain_audio = [&]() {
-		while(runner.take_audio_command()) {}
+		while(auto command = runner.take_audio_command()) {
+			if(command->cue != ClassicMusicCue::high_score) {
+				continue;
+			}
+			switch(command->type) {
+			case ClassicAudioCommandType::load_song: ++high_score_loads; break;
+			case ClassicAudioCommandType::play_song: ++high_score_plays; break;
+			case ClassicAudioCommandType::fade_song: ++high_score_fades; break;
+			case ClassicAudioCommandType::stop_song: ++high_score_stops; break;
+			default: break;
+			}
+		}
 	};
 	const auto step = [&](std::uint16_t system = 0U) {
 		th03::CoreInput input{};
@@ -1378,6 +1393,11 @@ bool authentic_online_high_score_gate(
 		std::cerr << "online HiScore retained the completed black title surface\n";
 		return false;
 	}
+	if(high_score_loads != 1U || high_score_plays != 1U ||
+		high_score_fades != 0U || high_score_stops != 0U) {
+		std::cerr << "HiScore hub did not establish one retained SCORE.M owner\n";
+		return false;
+	}
 
 	// The default Local choice must retain a return edge to this hub rather
 	// than rebuilding the title directly.
@@ -1385,11 +1405,17 @@ bool authentic_online_high_score_gate(
 		ClassicRunnerTestAccess::online_high_score_menu(runner)) {
 		return false;
 	}
+	if(high_score_loads != 1U || high_score_plays != 1U) {
+		std::cerr << "Local HiScore restarted SCORE.M on entry\n";
+		return false;
+	}
 	if(!wait_for_input(96U) || !step(0x0020U)) {
 		return false;
 	}
-	for(std::size_t guard = 0U; guard < 128U &&
-		!ClassicRunnerTestAccess::online_high_score_menu(runner); ++guard) {
+	std::size_t return_boundaries = 0U;
+	for(; return_boundaries < 64U &&
+		(!ClassicRunnerTestAccess::online_high_score_menu(runner) ||
+		 !last_surface_tone || *last_surface_tone == 0); ++return_boundaries) {
 		if(!step()) {
 			return false;
 		}
@@ -1401,22 +1427,18 @@ bool authentic_online_high_score_gate(
 					ClassicOpSessionScene::failed)) << '\n';
 		return false;
 	}
-	if(last_surface_tone != 0) {
-		std::cerr << "local HiScore return popped in without starting from black\n";
+	if(!last_surface_tone || *last_surface_tone == 0 ||
+		return_boundaries > 24U) {
+		std::cerr << "local HiScore complete return held black too long: "
+			<< return_boundaries << " boundaries\n";
 		return false;
 	}
-	std::size_t black_boundaries = 0U;
-	while(black_boundaries < 4U && last_surface_tone == 0) {
-		if(!step()) {
-			return false;
-		}
-		++black_boundaries;
-	}
-	if(last_surface_tone == 0 || black_boundaries > 3U) {
-		std::cerr << "local HiScore return held black too long\n";
+	if(high_score_loads != 1U || high_score_plays != 1U ||
+		high_score_fades != 0U || high_score_stops != 0U) {
+		std::cerr << "Local HiScore return did not retain SCORE.M end-to-end\n";
 		return false;
 	}
-	for(std::size_t boundary = black_boundaries; boundary < 24U; ++boundary) {
+	for(std::size_t boundary = 0U; boundary < 24U; ++boundary) {
 		if(!step()) {
 			return false;
 		}
@@ -1431,7 +1453,7 @@ bool authentic_online_high_score_gate(
 	if(!step(0x0002U) || !step() || !step(0x0002U) || !step() ||
 		!step(0x0020U) || !step() ||
 		!ClassicRunnerTestAccess::online_high_score_menu(runner) ||
-		!step(0x1000U) || !step() ||
+		!step(0x0004U) || !step() ||
 		!ClassicRunnerTestAccess::online_high_score_menu(runner) ||
 		!step(0x0001U) || !step()) {
 		std::cerr << "Personal Bests did not retain the HiScore hub owner\n";

@@ -531,7 +531,8 @@ ClassicRegistrationScene::ClassicRegistrationScene(
 	std::optional<std::size_t> entered_place,
 	present::Raster raster,
 	bool view_only,
-	bool persist_changes
+	bool persist_changes,
+	bool retain_high_score_music
 ) noexcept :
 	prepared_(std::move(prepared)),
 	resident_(std::move(resident)),
@@ -547,7 +548,8 @@ ClassicRegistrationScene::ClassicRegistrationScene(
 	entered_place_(entered_place),
 	raster_(std::move(raster)),
 	view_only_(view_only),
-	persist_changes_(persist_changes)
+	persist_changes_(persist_changes),
+	retain_high_score_music_(retain_high_score_music)
 {}
 
 ClassicRegistrationScene::~ClassicRegistrationScene() = default;
@@ -638,7 +640,8 @@ ClassicRegistrationScene::create_new_classic_viewer(
 	const MainlStageTextAssets &stage_text,
 	const present::AnkGlyphProvider &font,
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
-	const NewClassicGameTextCatalog *game_text
+	const NewClassicGameTextCatalog *game_text,
+	bool retain_high_score_music
 )
 {
 	if(completion.route() != ClassicOpRoute::high_scores ||
@@ -650,7 +653,7 @@ ClassicRegistrationScene::create_new_classic_viewer(
 	return create_impl(
 		completion.resident(), score_path, resources, stage_text, font,
 		present::Raster{}, true, true, true, legacy_score_path, std::nullopt, false,
-		std::move(patch_assets), game_text
+		std::move(patch_assets), game_text, retain_high_score_music
 	);
 }
 
@@ -669,7 +672,8 @@ ClassicRegistrationScene::create_impl(
 	std::optional<NewClassicScoreRun> run,
 	bool persist_changes,
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
-	const NewClassicGameTextCatalog *game_text
+	const NewClassicGameTextCatalog *game_text,
+	bool retain_high_score_music
 )
 {
 	if(!valid_context(resident, view_only)) {
@@ -782,7 +786,7 @@ ClassicRegistrationScene::create_impl(
 		std::move(*next_background), std::move(choice_cels), stage_text, font,
 		std::move(initial_raster), view_only, new_classic,
 		std::move(legacy_score_path), run, persist_changes,
-		std::move(patch_assets), game_text
+		std::move(patch_assets), game_text, retain_high_score_music
 	);
 }
 
@@ -805,7 +809,8 @@ ClassicRegistrationScene::create_predecoded(
 	std::optional<NewClassicScoreRun> run,
 	bool persist_changes,
 	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
-	const NewClassicGameTextCatalog *game_text
+	const NewClassicGameTextCatalog *game_text,
+	bool retain_high_score_music
 )
 {
 	if(!valid_context(resident, view_only) ||
@@ -1007,7 +1012,8 @@ ClassicRegistrationScene::create_predecoded(
 			std::move(prepared), resident, score_path, std::move(document),
 			load_disposition, commit_codec, std::move(new_document),
 			character, initial_page, &font, std::move(patch_assets), entered_place,
-			std::move(initial_raster), view_only, persist_changes
+			std::move(initial_raster), view_only, persist_changes,
+			retain_high_score_music
 		)
 	);
 	if(new_classic) {
@@ -1023,13 +1029,13 @@ ClassicRegistrationScene::create_predecoded(
 	if(new_classic && view_only) {
 		scene->phase_ = ClassicRegistrationPhase::initial_view_vsync;
 	}
-	if(!scene->push_audio_command({
+	if(!retain_high_score_music && (!scene->push_audio_command({
 		.type = ClassicAudioCommandType::load_song,
 		.cue = ClassicMusicCue::high_score,
 	}) || !scene->push_audio_command({
 		.type = ClassicAudioCommandType::play_song,
 		.cue = ClassicMusicCue::high_score,
-	})) {
+	}))) {
 		return std::unexpected(registration_error(
 			ClassicRegistrationErrorCode::invalid_state
 		));
@@ -1257,7 +1263,7 @@ bool ClassicRegistrationScene::draw_row(std::size_t place) noexcept
 		return false;
 	}
 	const auto &row = document_.boards[resident_.rank].rows[place];
-	const bool highlight = !entered_place_ || *entered_place_ == place;
+	const bool highlight = entered_place_ && *entered_place_ == place;
 	std::int32_t left = table_left;
 	const auto top = row_top(place);
 	if(place != 9U) {
@@ -1696,8 +1702,8 @@ ClassicRegistrationScene::fade_tick(bool black_in)
 			ClassicRegistrationErrorCode::draw_failed
 		));
 	}
-	phase_ = (resident_.remaining_credits == 0U ||
-		resident_.story_stage == 99U) ?
+	phase_ = (!retain_high_score_music_ &&
+		(resident_.remaining_credits == 0U || resident_.story_stage == 99U)) ?
 		ClassicRegistrationPhase::wait_volume :
 		ClassicRegistrationPhase::ready;
 	auto result = tick(
@@ -1816,7 +1822,8 @@ ClassicRegistrationScene::advance(
 				true
 			);
 		}
-		if((resident_.remaining_credits == 0U || resident_.story_stage == 99U) &&
+		if(!retain_high_score_music_ &&
+			(resident_.remaining_credits == 0U || resident_.story_stage == 99U) &&
 			!push_audio_command({
 				.type = ClassicAudioCommandType::fade_song,
 				.cue = ClassicMusicCue::high_score,

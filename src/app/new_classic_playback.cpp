@@ -891,11 +891,11 @@ NewClassicReplayPlayback::load_internal(
 	std::optional<NewClassicCutsceneTextCatalog> custom_cutscene_text{};
 	std::optional<NewClassicPicturePatchCatalog> custom_picture_patch{};
 	const NewClassicGameTextCatalog *game_text =
-		request.language == ClassicLanguage::english ?
+		classic_language_uses_english_assets(request.language) ?
 			&new_classic_builtin_english_game_text() :
 			&new_classic_builtin_japanese_game_text();
 	if(!request.content.game_text_pack.empty()) {
-		if(request.language == ClassicLanguage::english &&
+		if(classic_language_uses_english_assets(request.language) &&
 			request.content.language_overlay.empty()) {
 			auto error = playback_error(
 				NewClassicPlaybackErrorCode::game_text_pack_failed
@@ -983,7 +983,7 @@ NewClassicReplayPlayback::load_internal(
 		}
 		custom_picture_patch.emplace(std::move(*loaded));
 	}
-	if(request.language == ClassicLanguage::english) {
+	if(classic_language_uses_english_assets(request.language)) {
 		auto overlay = load_new_classic_language_overlay(
 			request.content.language_overlay
 		);
@@ -1110,7 +1110,7 @@ NewClassicReplayPlayback::load_internal(
 	auto patch_assets = std::make_shared<const NewClassicReplayPatchAssets>(
 		std::move(*loaded_patch_assets)
 	);
-	game_text = request.language == ClassicLanguage::english ?
+	game_text = classic_language_uses_english_assets(request.language) ?
 		(patch_assets->custom_game_text ? patch_assets->custom_game_text.get() :
 			&new_classic_builtin_english_game_text()) :
 		(patch_assets->custom_game_text ? patch_assets->custom_game_text.get() :

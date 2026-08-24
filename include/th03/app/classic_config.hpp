@@ -33,7 +33,15 @@ enum class ClassicRank : std::uint8_t {
 enum class ClassicLanguage : std::uint8_t {
 	japanese,
 	english,
+	spanish_test,
 };
+
+[[nodiscard]] constexpr bool classic_language_uses_english_assets(
+	ClassicLanguage language
+) noexcept
+{
+	return language != ClassicLanguage::japanese;
+}
 
 struct ClassicConfigOptions final {
 	ClassicBgmMode bgm_mode = ClassicBgmMode::fm;
@@ -112,7 +120,7 @@ struct ClassicConfigError final {
 		static_cast<std::uint8_t>(options.rank) <=
 		static_cast<std::uint8_t>(ClassicRank::lunatic) &&
 		static_cast<std::uint8_t>(options.language) <=
-		static_cast<std::uint8_t>(ClassicLanguage::english);
+		static_cast<std::uint8_t>(ClassicLanguage::spanish_test);
 }
 
 [[nodiscard]] std::expected<ClassicConfigDocument, ClassicConfigError>

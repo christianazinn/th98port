@@ -219,7 +219,8 @@ public:
 		const MainlStageTextAssets &stage_text,
 		const present::AnkGlyphProvider &font,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
-		const NewClassicGameTextCatalog *game_text = nullptr
+		const NewClassicGameTextCatalog *game_text = nullptr,
+		bool retain_high_score_music = false
 	);
 	~ClassicRegistrationScene();
 
@@ -279,7 +280,8 @@ private:
 		std::optional<std::size_t> entered_place,
 		present::Raster raster,
 		bool view_only,
-		bool persist_changes
+		bool persist_changes,
+		bool retain_high_score_music
 	) noexcept;
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicRegistrationScene>,
@@ -298,7 +300,8 @@ private:
 		std::optional<NewClassicScoreRun> run,
 		bool persist_changes,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
-		const NewClassicGameTextCatalog *game_text
+		const NewClassicGameTextCatalog *game_text,
+		bool retain_high_score_music = false
 	);
 	[[nodiscard]] static std::expected<
 		std::unique_ptr<ClassicRegistrationScene>,
@@ -321,7 +324,8 @@ private:
 		std::optional<NewClassicScoreRun> run,
 		bool persist_changes,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
-		const NewClassicGameTextCatalog *game_text
+		const NewClassicGameTextCatalog *game_text,
+		bool retain_high_score_music = false
 	);
 
 	[[nodiscard]] bool initialize_visuals() noexcept;
@@ -400,6 +404,7 @@ private:
 	std::size_t audio_count_ = 0U;
 	bool view_only_ = false;
 	bool persist_changes_ = true;
+	bool retain_high_score_music_ = false;
 	bool new_classic_score_committed_ = false;
 };
 
@@ -541,7 +546,8 @@ struct ClassicRegistrationSceneTestAccess final {
 		const MainlStageTextAssets &stage_text,
 		const present::AnkGlyphProvider &font,
 		std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets,
-		const NewClassicGameTextCatalog *game_text = nullptr
+		const NewClassicGameTextCatalog *game_text = nullptr,
+		bool retain_high_score_music = false
 	)
 	{
 		return ClassicRegistrationScene::create_predecoded(
@@ -549,7 +555,7 @@ struct ClassicRegistrationSceneTestAccess final {
 			std::move(normal), std::move(highlight), std::move(next_background),
 			std::move(choice_cels), stage_text, font, present::Raster{}, true,
 			true, legacy_score_path, std::nullopt, false, std::move(patch_assets),
-			game_text
+			game_text, retain_high_score_music
 		);
 	}
 

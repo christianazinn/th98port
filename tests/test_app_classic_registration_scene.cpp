@@ -384,7 +384,8 @@ std::expected<
 	const GameInit &value,
 	const fs::path &score_path,
 	const fs::path &legacy_score_path,
-	SyntheticFont &font
+	SyntheticFont &font,
+	bool retain_high_score_music = false
 )
 {
 	const bool preload_continue = value.remaining_credits != 0U;
@@ -395,7 +396,7 @@ std::expected<
 			preload_continue ? background(5U, 1U) : background(9U, 7U),
 			preload_continue ? choice_cels() :
 				std::array<std::optional<th03::assets::PlanarCel4>, 4U>{},
-			stage_text(), font, patch_assets()
+			stage_text(), font, patch_assets(), nullptr, retain_high_score_music
 		);
 }
 
@@ -831,9 +832,9 @@ void test_view_only_schedule_and_unchanged_board()
 		"viewer skips candidate insertion despite a synthetic winning last score"
 	);
 	expect(
-		(*scene)->raster().pixel(Page::zero, {456, 112}) == 15U &&
+		(*scene)->raster().pixel(Page::zero, {456, 112}) == 4U &&
 			(*scene)->raster().pixel(Page::one, {456, 112}) == 1U,
-		"view-only backup retains background while the shown page owns row text"
+		"view-only rows use the normal glyph sheet while backup retains background"
 	);
 	drain_initial_audio(**scene);
 	if(!advance_fade(**scene, ClassicRegistrationPhase::wait_release)) {
@@ -1080,6 +1081,31 @@ void test_new_classic_registration_and_paged_viewer()
 	const auto after_view = th03::app::load_new_classic_score_store(score_path);
 	expect(after_view && after_view->document.generation == generation,
 		"viewing and paging expanded scores performs no persistence write");
+
+	auto retained = create_new_viewer_scene(
+		viewer_resident(0U), score_path, legacy_path, font, true
+	);
+	expect(retained && !(*retained)->take_audio_command(),
+		"hub-owned Local HiScores inherits SCORE.M without reloading it");
+	if(!retained) {
+		return;
+	}
+	expect(static_cast<bool>((*retained)->advance({})),
+		"retained viewer publishes its hidden first frame");
+	if(!advance_fade(
+		**retained, ClassicRegistrationPhase::wait_release, 19U
+	)) {
+		return;
+	}
+	expect(static_cast<bool>((*retained)->advance({})) &&
+		static_cast<bool>((*retained)->advance({.ok = true})) &&
+		!(*retained)->take_audio_command(),
+		"retained viewer dismisses without fading SCORE.M");
+	if(!advance_fade(**retained, ClassicRegistrationPhase::ready, 19U)) {
+		return;
+	}
+	expect(!(*retained)->take_audio_command(),
+		"retained viewer reaches completion without a volume wait or stop");
 }
 
 void test_new_classic_localized_registration_art()
@@ -1577,6 +1603,21 @@ void local_original_gate(
 		"typed OP HiScore capability constructs the authenticated production viewer"
 	);
 	if(created_viewer) {
+		std::size_t viewer_place_white = 0U;
+		std::size_t viewer_place_yellow = 0U;
+		for(std::int32_t y = 104; y < 136; ++y) {
+			for(std::int32_t x = 24; x < 56; ++x) {
+				const auto pixel = (*created_viewer)->raster().pixel(
+					Page::zero, {x, y}
+				);
+				viewer_place_white += pixel == 15U ? 1U : 0U;
+				viewer_place_yellow += pixel == 10U ? 1U : 0U;
+			}
+		}
+		expect(
+			viewer_place_white != 0U && viewer_place_yellow == 0U,
+			"authenticated Local HiScore row uses the white-center REGI2 sheet"
+		);
 		bool playchar_ink = false;
 		for(std::int32_t y = 112; y < 128; ++y) {
 			for(std::int32_t x = 424; x < 520; ++x) {
