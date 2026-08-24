@@ -39,10 +39,11 @@ pixel editing:
 1. Inventory each authenticated source sheet or picture: surface ID, source
    profile, cell rectangles, safe drawing mask, palette roles, baseline,
    alignment, and maximum occupied bounds.
-2. Compile translator UTF-8 into a locale glyph bank. A surface style adapter
-   rasterizes into the original fixed cells, applies a deterministic stroke
-   expansion/outline kernel where the source gaiji requires heavier strokes,
-   centers by reviewed cell metrics, and maps only named palette roles.
+2. Inventory every independent type role within the surface, then compile
+   translator UTF-8 through that role's own pinned face, advance, baseline, and
+   optional stroke/outline kernel. Sharing a cell size does not imply sharing a
+   font. The adapter centers by reviewed cell metrics and maps only named
+   palette roles.
 3. Emit the consumer's native structure (BFNT/CDG) or a source-digest-bound
    sparse `T3PTP001` overlay. Original pixels remain external; only replacement
    pixels and geometry are distributable.
@@ -75,11 +76,14 @@ three authenticated English inputs by SHA-256; New Classic rejects it before
 scene construction if the active `CHNAME.BFT`, `SLWIN.CDG`, or `TLSL.RGB`
 differs. Japanese and English never select the generated package.
 
-The name compiler preserves the source's two 64x16 cels per character. Stat
-labels occupy exactly three 56x16 safe cells at source offset (8, 7); eight
-additional transparent columns satisfy CDG's 32-pixel width requirement without
-touching the source rule, border, or stars. Deterministic compiler tests cover
-accented UTF-8, missing glyphs, overflow, schema drift, contact-sheet geometry,
-native-format structure, and protected columns. Runtime tests independently
-parse and authenticate the package, bind the private English source profile,
-and compose it through the production superimpose/CDG paths.
+The name compiler preserves the source's two 64x16 cels per character and uses
+a pinned 16-pixel Courier Prime bitmap role with a wide 10-pixel monospaced
+advance and serif letterforms. The separately authored stat labels retain the
+compact, unexpanded one-pixel GNU Unifont role. They occupy exactly three 56x16
+safe cells at source offset (8, 7); eight additional transparent columns satisfy
+CDG's 32-pixel width requirement without touching the source rule, border, or
+stars. Deterministic compiler tests cover the role distinction, accented UTF-8,
+missing glyphs, overflow, schema drift, contact-sheet geometry, native-format
+structure, and protected columns. Runtime tests independently parse and
+authenticate the package, bind the private English source profile, and compose
+it through the production superimpose/CDG paths.

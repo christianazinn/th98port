@@ -22,7 +22,7 @@ constexpr std::array<std::byte, 8U> magic{
 constexpr std::size_t header_size = 192U;
 constexpr std::size_t maximum_file_size = 1U * 1024U * 1024U;
 constexpr std::uint32_t english_source_profile = 1U;
-constexpr std::uint32_t stroke_contract_version = 1U;
+constexpr std::uint32_t typography_contract_version = 2U;
 constexpr std::uint16_t name_width = 64U;
 constexpr std::uint16_t name_height = 16U;
 constexpr std::uint16_t stat_storage_width = 64U;
@@ -240,7 +240,7 @@ std::expected<
 		if(!std::ranges::equal(bytes.first(magic.size()), magic) ||
 			u32(bytes, 8U) != header_size || u32(bytes, 12U) != bytes.size() ||
 			u32(bytes, 32U) != english_source_profile ||
-			u32(bytes, 36U) != stroke_contract_version ||
+			u32(bytes, 36U) != typography_contract_version ||
 			!std::ranges::all_of(bytes.subspan(184U, 8U), [](std::byte value) {
 				return value == std::byte{0U};
 			})) {

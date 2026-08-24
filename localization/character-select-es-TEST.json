@@ -1,11 +1,15 @@
 {
-  "format": "T3CSP-AUTHOR-1",
+  "format": "T3CSP-AUTHOR-2",
   "locale": "es-TEST",
   "source_profile": "english",
   "source_assets": {
     "CHNAME.BFT": "124cdfcf6a1c82471e220d0a206ebdd91c58ffcb62d61c3333bc31c6ae5d0b90",
     "SLWIN.CDG": "12d61b8bae4b4cec57bdb7a417fb0b3fce2a854d421ab390b51299ec7df94dae",
     "TLSL.RGB": "67e1d8d78691282dca2c95abb3d942c25f5f256f77211a1ec1d9693c5c327d45"
+  },
+  "typography": {
+    "character_names": "courier-prime-display-serif-16",
+    "stat_labels": "unifont-thin-8x16"
   },
   "character_names": [
     "REIMU",

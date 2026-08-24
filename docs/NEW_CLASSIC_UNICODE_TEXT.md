@@ -61,9 +61,10 @@ Those catalogs also obey `NEW_CLASSIC_SOURCE_PRESENTATION.md`: Japanese and
 English retain their authenticated source-profile art where it already exists,
 and source-English words such as `STAGE X START` are not translated. The
 `es-TEST` Character Select now demonstrates the required generated fixed-cell
-asset route (`T3CSP001`) rather than the proportional Unicode fallback; other
-source-constrained surfaces must adopt an equivalent explicit geometry/style
-contract before they can be localized.
+asset route (`T3CSP001`) rather than the proportional Unicode fallback. Its
+character-name serif and thin stat-label face are distinct roles; other
+source-constrained surfaces must likewise inventory every type role rather
+than applying one generic font or stroke to an entire scene.
 General-Unicode authoring for those fixed gameplay and cutscene domains is a
 separate package-format/layout parcel; this foundation does not reinterpret
 their authenticated byte streams. Baked menu and picture text remains the

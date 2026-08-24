@@ -12,9 +12,10 @@ from pathlib import Path
 
 
 MAGIC = b"T3CSP001"
-AUTHOR_FORMAT = "T3CSP-AUTHOR-1"
+AUTHOR_FORMAT = "T3CSP-AUTHOR-2"
 HEADER_SIZE = 192
-FONT_MAGIC = b"T3UFN001"
+NAME_FONT_MAGIC = b"T3CSF001"
+STAT_FONT_MAGIC = b"T3UFN001"
 FONT_HEADER_SIZE = 96
 FONT_ENTRY_SIZE = 40
 NAME_WIDTH = 128
@@ -29,7 +30,10 @@ SOURCE_PROFILE_ENGLISH = 1
 BACKGROUND_INDEX = 14
 FOREGROUND_INDEX = 7
 NAME_INDEX = 15
-STROKE_KERNEL = ((0, 0), (1, 0), (0, 1))
+TYPOGRAPHY_CONTRACT_VERSION = 2
+NAME_FONT_ADVANCE = 10
+NAME_STYLE = "courier-prime-display-serif-16"
+STAT_STYLE = "unifont-thin-8x16"
 
 
 class CharacterSelectAssetError(ValueError):
@@ -39,6 +43,7 @@ class CharacterSelectAssetError(ValueError):
 @dataclass(frozen=True)
 class Glyph:
     width: int
+    advance: int
     rows: tuple[int, ...]
 
 
@@ -87,7 +92,7 @@ def load_author(path: Path) -> Author:
     if not isinstance(document, dict) or document.get("format") != AUTHOR_FORMAT:
         raise CharacterSelectAssetError(f"author format must be {AUTHOR_FORMAT}")
     expected = {
-        "format", "locale", "source_profile", "source_assets",
+        "format", "locale", "source_profile", "source_assets", "typography",
         "character_names", "stat_labels", "non_shipping_notice",
     }
     if set(document) != expected:
@@ -111,6 +116,12 @@ def load_author(path: Path) -> Author:
         "CHNAME.BFT", "SLWIN.CDG", "TLSL.RGB"
     }:
         raise CharacterSelectAssetError("source_assets must bind all selection sheets")
+    typography = document.get("typography")
+    if not isinstance(typography, dict) or typography != {
+        "character_names": NAME_STYLE,
+        "stat_labels": STAT_STYLE,
+    }:
+        raise CharacterSelectAssetError("typography must bind both source presentation roles")
     return Author(
         locale=locale,
         source_profile=SOURCE_PROFILE_ENGLISH,
@@ -122,9 +133,11 @@ def load_author(path: Path) -> Author:
     )
 
 
-def decode_font(package: bytes) -> dict[int, Glyph]:
-    if len(package) < FONT_HEADER_SIZE or package[:8] != FONT_MAGIC:
-        raise CharacterSelectAssetError("Unicode font is not T3UFN001")
+def decode_font(package: bytes, expected_magic: bytes) -> dict[int, Glyph]:
+    if len(package) < FONT_HEADER_SIZE or package[:8] != expected_magic:
+        raise CharacterSelectAssetError(
+            f"font role is not {expected_magic.decode('ascii')}"
+        )
     version, header_size, total, count, entry_size = struct.unpack_from(
         "<HHIII", package, 8
     )
@@ -144,15 +157,18 @@ def decode_font(package: bytes) -> dict[int, Glyph]:
         offset = FONT_HEADER_SIZE + index * FONT_ENTRY_SIZE
         scalar, width, advance, reserved = struct.unpack_from("<IBBH", package, offset)
         rows = struct.unpack_from(">16H", package, offset + 8)
+        if expected_magic == NAME_FONT_MAGIC:
+            role_shape = width == 16 and advance == NAME_FONT_ADVANCE
+        else:
+            role_shape = width in (8, 16) and advance == width
         if (
-            width not in (8, 16)
-            or advance != width
+            not role_shape
             or reserved != 0
             or scalar <= previous
             or (width == 8 and any(row & 0x00FF for row in rows))
         ):
             raise CharacterSelectAssetError("Unicode font glyph table is invalid")
-        result[scalar] = Glyph(width, rows)
+        result[scalar] = Glyph(width, advance, rows)
         previous = scalar
     return result
 
@@ -169,7 +185,7 @@ def _raw_text_pixels(text: str, font: dict[int, Glyph]) -> set[tuple[int, int]]:
             for x in range(glyph.width):
                 if row & (0x8000 >> x):
                     pixels.add((cursor + x, y))
-        cursor += glyph.width
+        cursor += glyph.advance
     if not pixels:
         raise CharacterSelectAssetError("text renders no pixels")
     return pixels
@@ -182,13 +198,8 @@ def render_fixed(text: str, font: dict[int, Glyph], width: int) -> list[list[int
     top = min(y for _, y in raw)
     bottom = max(y for _, y in raw)
     normalized = {(x - left, y - top) for x, y in raw}
-    stroked = {
-        (x + dx, y + dy)
-        for x, y in normalized
-        for dx, dy in STROKE_KERNEL
-    }
-    occupied_width = right - left + 1 + max(dx for dx, _ in STROKE_KERNEL)
-    occupied_height = bottom - top + 1 + max(dy for _, dy in STROKE_KERNEL)
+    occupied_width = right - left + 1
+    occupied_height = bottom - top + 1
     if occupied_width > width or occupied_height > NAME_HEIGHT:
         raise CharacterSelectAssetError(
             f"{text!r} occupies {occupied_width}x{occupied_height}, "
@@ -197,12 +208,12 @@ def render_fixed(text: str, font: dict[int, Glyph], width: int) -> list[list[int
     origin_x = (width - occupied_width) // 2
     origin_y = (NAME_HEIGHT - occupied_height) // 2
     result = [[0 for _ in range(width)] for _ in range(NAME_HEIGHT)]
-    for x, y in stroked:
+    for x, y in normalized:
         result[origin_y + y][origin_x + x] = 1
     return result
 
 
-def compile_bfnt(author: Author, font: dict[int, Glyph]) -> bytes:
+def compile_bfnt(author: Author, name_font: dict[int, Glyph]) -> bytes:
     header = bytearray(32)
     header[:5] = b"BFNT\x1A"
     header[5] = 3
@@ -212,7 +223,7 @@ def compile_bfnt(author: Author, font: dict[int, Glyph]) -> bytes:
     struct.pack_into("<HH", header, 28, 4, 4)
     body = bytearray(b"\x10\x00\x00\x00")
     for name in author.names:
-        rendered = render_fixed(name, font, NAME_WIDTH)
+        rendered = render_fixed(name, name_font, NAME_WIDTH)
         for cel in range(2):
             for row in rendered:
                 colors = [NAME_INDEX if value else 0 for value in row[
@@ -237,7 +248,7 @@ def _pack_plane(pixels: list[list[int]], bit: int) -> bytes:
     return bytes(result)
 
 
-def compile_cdg(author: Author, font: dict[int, Glyph]) -> bytes:
+def compile_cdg(author: Author, stat_font: dict[int, Glyph]) -> bytes:
     pixels = [
         [0 for _ in range(STAT_STORAGE_WIDTH)] for _ in range(STAT_HEIGHT)
     ]
@@ -246,7 +257,7 @@ def compile_cdg(author: Author, font: dict[int, Glyph]) -> bytes:
         for _ in range(STAT_HEIGHT)
     ]
     for row_index, label in enumerate(author.stats):
-        rendered = render_fixed(label, font, STAT_SAFE_WIDTH)
+        rendered = render_fixed(label, stat_font, STAT_SAFE_WIDTH)
         for y, row in enumerate(rendered):
             for x, value in enumerate(row):
                 pixels[row_index * STAT_ROW_HEIGHT + y][x] = (
@@ -262,10 +273,15 @@ def compile_cdg(author: Author, font: dict[int, Glyph]) -> bytes:
     )
 
 
-def compile_pack(author: Author, font_package: bytes) -> bytes:
-    font = decode_font(font_package)
-    bfnt = compile_bfnt(author, font)
-    cdg = compile_cdg(author, font)
+def compile_pack(
+    author: Author,
+    name_font_package: bytes,
+    stat_font_package: bytes,
+) -> bytes:
+    name_font = decode_font(name_font_package, NAME_FONT_MAGIC)
+    stat_font = decode_font(stat_font_package, STAT_FONT_MAGIC)
+    bfnt = compile_bfnt(author, name_font)
+    cdg = compile_cdg(author, stat_font)
     header = bytearray(HEADER_SIZE)
     header[:8] = MAGIC
     names_offset = HEADER_SIZE
@@ -274,7 +290,7 @@ def compile_pack(author: Author, font_package: bytes) -> bytes:
     struct.pack_into(
         "<IIIIIIII", header, 8,
         HEADER_SIZE, total, names_offset, len(bfnt), stats_offset, len(cdg),
-        author.source_profile, 1,
+        author.source_profile, TYPOGRAPHY_CONTRACT_VERSION,
     )
     header[40:72] = hashlib.sha256(bfnt + cdg).digest()
     header[72:72 + len(author.locale)] = author.locale.encode("ascii")
@@ -284,18 +300,23 @@ def compile_pack(author: Author, font_package: bytes) -> bytes:
     return bytes(header) + bfnt + cdg
 
 
-def _write_bmp(path: Path, author: Author, font: dict[int, Glyph]) -> None:
+def _write_bmp(
+    path: Path,
+    author: Author,
+    name_font: dict[int, Glyph],
+    stat_font: dict[int, Glyph],
+) -> None:
     width, height = 384, 224
     image = [[0 for _ in range(width)] for _ in range(height)]
     for index, name in enumerate(author.names):
-        rendered = render_fixed(name, font, NAME_WIDTH)
+        rendered = render_fixed(name, name_font, NAME_WIDTH)
         top = 16 + index * 20
         for y, row in enumerate(rendered):
             for x, value in enumerate(row):
                 if value:
                     image[top + y][16 + x] = NAME_INDEX
     for index, label in enumerate(author.stats):
-        rendered = render_fixed(label, font, STAT_SAFE_WIDTH)
+        rendered = render_fixed(label, stat_font, STAT_SAFE_WIDTH)
         top = 24 + index * 40
         for y in range(NAME_HEIGHT):
             for x in range(STAT_SAFE_WIDTH):
@@ -326,18 +347,25 @@ def _write_bmp(path: Path, author: Author, font: dict[int, Glyph]) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("author", type=Path)
-    parser.add_argument("font", type=Path)
+    parser.add_argument("name_font", type=Path)
+    parser.add_argument("stat_font", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--preview", type=Path)
     arguments = parser.parse_args(argv)
     try:
         author = load_author(arguments.author)
-        font_package = arguments.font.read_bytes()
-        result = compile_pack(author, font_package)
+        name_font_package = arguments.name_font.read_bytes()
+        stat_font_package = arguments.stat_font.read_bytes()
+        result = compile_pack(author, name_font_package, stat_font_package)
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         arguments.output.write_bytes(result)
         if arguments.preview:
-            _write_bmp(arguments.preview, author, decode_font(font_package))
+            _write_bmp(
+                arguments.preview,
+                author,
+                decode_font(name_font_package, NAME_FONT_MAGIC),
+                decode_font(stat_font_package, STAT_FONT_MAGIC),
+            )
     except (OSError, CharacterSelectAssetError) as error:
         parser.error(str(error))
     print(f"locale={author.locale}")

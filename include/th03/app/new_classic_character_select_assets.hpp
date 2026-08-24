@@ -43,10 +43,10 @@ struct NewClassicCharacterSelectAssetsError final {
 	std::optional<assets::AssetError> asset_error{};
 };
 
-// Source-free fixed-cell replacements for Character Select. The package owns
-// only generated glyph pixels. It binds those pixels to the exact active
-// CHNAME.BFT, SLWIN.CDG, and TLSL.RGB inputs so a locale cannot silently draw
-// against a different source layout or palette.
+// Source-free, role-specific fixed-cell replacements for Character Select.
+// The package owns only generated glyph pixels. It binds those pixels to the
+// exact active CHNAME.BFT, SLWIN.CDG, and TLSL.RGB inputs so a locale cannot
+// silently draw against a different source layout or palette.
 class NewClassicCharacterSelectAssets final {
 public:
 	[[nodiscard]] std::string_view locale() const noexcept;

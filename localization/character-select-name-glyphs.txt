@@ -1,0 +1,2 @@
+# Courier Prime fixed-cell Character Select display-name inventory.
+ABCDEFGHIJKLMNOPQRSTUVWXYZ
