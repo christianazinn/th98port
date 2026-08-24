@@ -409,6 +409,12 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 	if(color != 0U && color != 15U) {
 		return false;
 	}
+	// The source machine-font Japanese profile is deliberately one pixel thin.
+	// An opposite-color diagonal copy competes with those strokes instead of
+	// separating them from the background, so preserve the exact glyph alone.
+	if(font.uses_machine_glyphs(text)) {
+		return font.put_centered(raster, center_x, top, text, color);
+	}
 	const auto shadow = static_cast<present::Index4>(
 		color == 0U ? 15U : 0U
 	);

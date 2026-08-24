@@ -24,10 +24,39 @@ Set-StrictMode -Version Latest
 
 $sourceRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $worktreeRoot = [IO.Path]::GetFullPath((Join-Path $sourceRoot ".."))
-$originalRoot = Join-Path $worktreeRoot "originals"
 $standaloneRoot = [IO.Path]::GetFullPath(
 	(Join-Path $sourceRoot "out\standalone")
 )
+
+function Find-AncestorRelativePath(
+	[string]$Start,
+	[string]$RelativePath,
+	[string]$PathType
+) {
+	$directory = [IO.DirectoryInfo]::new([IO.Path]::GetFullPath($Start))
+	while($null -ne $directory) {
+		$candidate = Join-Path $directory.FullName $RelativePath
+		if(Test-Path -LiteralPath $candidate -PathType $PathType) {
+			return $candidate
+		}
+		$directory = $directory.Parent
+	}
+	return $null
+}
+
+function Find-AncestorRelativeFile([string]$Start, [string]$RelativePath) {
+	return Find-AncestorRelativePath $Start $RelativePath "Leaf"
+}
+
+function Find-AncestorRelativeDirectory([string]$Start, [string]$RelativePath) {
+	return Find-AncestorRelativePath $Start $RelativePath "Container"
+}
+
+$originalRoot = Find-AncestorRelativeDirectory $worktreeRoot "originals"
+if(-not $originalRoot) {
+	$originalRoot = Join-Path $worktreeRoot "originals"
+}
+$canonicalSourceRoot = Join-Path (Split-Path -Parent $originalRoot) "th03-port"
 if(-not $DataRoot) {
 	$DataRoot = Join-Path $originalRoot "th03_process_root"
 }
@@ -41,13 +70,26 @@ if(-not $OpExecutable) {
 	$OpExecutable = Join-Path $originalRoot "th03_full\OP.EXE"
 }
 if(-not $FontRom) {
+	$siblingMsvcFont = Find-AncestorRelativeFile $worktreeRoot (
+		"th03-v12-normalizer\th03-port\out\classic-audio-binding-smoke\msvc\FONT.ROM"
+	)
+	$siblingGccFont = Find-AncestorRelativeFile $worktreeRoot (
+		"th03-v12-normalizer\th03-port\out\classic-audio-binding-smoke\gcc\FONT.ROM"
+	)
 	$fontCandidates = @(
 		(Join-Path $originalRoot "FONT.ROM"),
 		(Join-Path $sourceRoot "out\classic-audio-binding-smoke\msvc\FONT.ROM"),
-		(Join-Path $sourceRoot "out\classic-audio-binding-smoke\gcc\FONT.ROM")
+		(Join-Path $sourceRoot "out\classic-audio-binding-smoke\gcc\FONT.ROM"),
+		(Join-Path $canonicalSourceRoot "out\classic-audio-binding-smoke\msvc\FONT.ROM"),
+		(Join-Path $canonicalSourceRoot "out\classic-audio-binding-smoke\gcc\FONT.ROM"),
+		$siblingMsvcFont,
+		$siblingGccFont
 	)
 	$FontRom = $fontCandidates |
-		Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+		Where-Object {
+			-not [string]::IsNullOrWhiteSpace($_) -and
+			(Test-Path -LiteralPath $_ -PathType Leaf)
+		} |
 		Select-Object -First 1
 	if(-not $FontRom) {
 		$FontRom = $fontCandidates[0]
@@ -57,26 +99,37 @@ if(-not $StartupLogo) {
 	$StartupLogo = Join-Path $originalRoot "th03_full\TOUHOU.DAT"
 }
 if(-not $LanguageOverlay) {
+	$siblingLanguageOverlay = Find-AncestorRelativeFile $worktreeRoot (
+		"replays-and-validation-17ptz\.scratch\assets\th03-language\TH3EN.DAT"
+	)
 	$languageCandidates = @(
 		(Join-Path $originalRoot "th03_en\TH3EN.DAT"),
-		(Join-Path (Split-Path -Parent $worktreeRoot) (
-			"replays-and-validation-17ptz\.scratch\assets\th03-language\TH3EN.DAT"
-		))
+		$siblingLanguageOverlay
 	)
 	$LanguageOverlay = $languageCandidates |
-		Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+		Where-Object {
+			-not [string]::IsNullOrWhiteSpace($_) -and
+			(Test-Path -LiteralPath $_ -PathType Leaf)
+		} |
 		Select-Object -First 1
+	if(-not $LanguageOverlay) {
+		throw "The maintained standalone requires authenticated TH3EN.DAT bilingual content."
+	}
 }
 if(-not $ReplayPatchAssets) {
+	$siblingReplayPatchAssets = Find-AncestorRelativeFile $worktreeRoot (
+		"replays-and-validation-17ptz\.scratch\assets\th03-replay-ui\AZINN.DAT"
+	)
 	$assetCandidates = @(
 		(Join-Path $worktreeRoot ".scratch\assets\th03-replay-ui\AZINN.DAT"),
 		(Join-Path $originalRoot "th03_full\AZINN.DAT"),
-		(Join-Path (Split-Path -Parent $worktreeRoot) (
-			"replays-and-validation-17ptz\.scratch\assets\th03-replay-ui\AZINN.DAT"
-		))
+		$siblingReplayPatchAssets
 	)
 	$ReplayPatchAssets = $assetCandidates |
-		Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+		Where-Object {
+			-not [string]::IsNullOrWhiteSpace($_) -and
+			(Test-Path -LiteralPath $_ -PathType Leaf)
+		} |
 		Select-Object -First 1
 	if(-not $ReplayPatchAssets) {
 		$ReplayPatchAssets = $assetCandidates[0]

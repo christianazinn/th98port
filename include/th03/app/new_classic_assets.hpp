@@ -141,6 +141,7 @@ public:
 		std::span<const std::byte> font_rom
 	);
 	[[nodiscard]] bool has_machine_font() const noexcept;
+	[[nodiscard]] bool uses_machine_glyphs(std::string_view text) const noexcept;
 	[[nodiscard]] bool install_unicode_font(
 		std::span<const std::byte> package
 	);

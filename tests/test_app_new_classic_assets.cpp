@@ -129,6 +129,9 @@ void test_font_decode_and_raster()
 		return;
 	}
 	expect(decoded->width("A A") == 24, "font advances are authoritative");
+	expect(!decoded->uses_machine_glyphs("Language") &&
+		decoded->uses_machine_glyphs("\x83\x89\x83\x93\x83\x4F\x83\x47\x81\x5B\x83\x57"),
+		"valid Shift-JIS text alone selects the exact machine-glyph path");
 
 	th03::present::Raster raster{};
 	expect(raster.set_access_page(th03::present::Page::one),

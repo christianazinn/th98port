@@ -752,6 +752,39 @@ void test_patch_option_shadow_transitions_if_assets_supplied(bool localized)
 	}
 }
 
+void test_patch_option_japanese_language_and_shadow_if_assets_supplied()
+{
+	auto scene = make_patch_scene_if_assets_supplied();
+	if(!scene) {
+		return;
+	}
+	enter_patch_options(*scene);
+	for(std::uint8_t row = 0U; row < 4U; ++row) {
+		expect(scene->advance({.down = true}).has_value() &&
+			scene->advance().has_value(),
+			"Japanese language test advances to Language");
+	}
+	expect(scene->selected_choice() ==
+		ClassicOpOptionsChoice::category_language &&
+		scene->advance({.ok = true}).has_value() &&
+		scene->page() == ClassicOpOptionsPage::language,
+		"Japanese language test opens the Language child");
+	expect(scene->advance().has_value(),
+		"Japanese language child releases its transition input");
+	const auto japanese = scene->raster();
+	expect(scene->advance({.right = true}).has_value() &&
+		scene->config().language == ClassicLanguage::english,
+		"available bilingual assets switch Japanese to English");
+	expect(!page_zero_matches(japanese, scene->raster()),
+		"language switch redraws the complete localized row");
+	expect(scene->advance().has_value() &&
+		scene->advance({.left = true}).has_value() &&
+		scene->config().language == ClassicLanguage::japanese,
+		"available bilingual assets switch English back to Japanese");
+	expect(page_zero_matches(japanese, scene->raster()),
+		"Japanese redraw is deterministic and has no reciprocal shadow residue");
+}
+
 void test_replay_patch_option_hierarchy_if_assets_supplied()
 {
 	auto scene = make_patch_scene_if_assets_supplied();
@@ -2092,6 +2125,7 @@ int main(int argc, char **argv)
 	test_replay_patch_option_unput_if_assets_supplied();
 	test_patch_option_label_widths_if_assets_supplied();
 	test_patch_option_reciprocal_shadow_if_assets_supplied();
+	test_patch_option_japanese_language_and_shadow_if_assets_supplied();
 	test_patch_option_shadow_transitions_if_assets_supplied(false);
 	test_patch_option_shadow_transitions_if_assets_supplied(true);
 	test_replay_patch_option_hierarchy_if_assets_supplied();

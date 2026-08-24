@@ -101,11 +101,14 @@ background, checkerboard window, palette, release-edge input, and grow/shrink
 visual vocabulary. A page should normally contain no more than six choices
 plus `Return`. Variable-length language and device lists may page or scroll.
 
-Every Option label receives one reciprocal shadow pixel at (+1,+1): selected
-white text uses a black shadow and unselected black text uses a white shadow.
-This preserves the source glyph colors and retained-title transparency while
-keeping the detailed upper background readable. The shadow remains inside the
-existing row restoration domain so transitions erase it with the label.
+Proportional Option labels receive one reciprocal shadow pixel at (+1,+1):
+selected white text uses a black shadow and unselected black text uses a white
+shadow. The source machine-font Japanese profile remains unshadowed because its
+one-pixel strokes become less legible when paired with an offset opposite-color
+copy. This preserves the exact Japanese glyph shape while the proportional
+shadow preserves the source label colors and retained-title transparency. All
+added contrast pixels remain inside the existing row restoration domain, so
+transitions erase them with the label.
 
 ### Gameplay
 

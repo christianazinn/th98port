@@ -933,6 +933,17 @@ bool NewClassicMenuFont::has_machine_font() const noexcept
 	return machine_font_.size() == Pc98FontRomProvider::font_rom_size;
 }
 
+bool NewClassicMenuFont::uses_machine_glyphs(std::string_view text) const noexcept
+{
+	for(std::size_t index = 0U; index + 1U < text.size(); ++index) {
+		if(shift_jis_lead(static_cast<std::uint8_t>(text[index])) &&
+			shift_jis_trail(static_cast<std::uint8_t>(text[index + 1U]))) {
+			return true;
+		}
+	}
+	return false;
+}
+
 bool NewClassicMenuFont::install_unicode_font(
 	std::span<const std::byte> package
 )
