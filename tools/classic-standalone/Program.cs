@@ -196,14 +196,6 @@ internal static class Program
         {
             arguments.Add("--language-overlay");
             arguments.Add(languageOverlay);
-            var cutsceneText = Path.Combine(
-                content, "cutscene-text-en-US.t3ctp"
-            );
-            if(File.Exists(cutsceneText))
-            {
-                arguments.Add("--cutscene-text-pack");
-                arguments.Add(cutsceneText);
-            }
             var picturePatch = Path.Combine(
                 content, "picture-patch-en-US.t3ptp"
             );

@@ -40,8 +40,6 @@ using th03::present::AnkGlyph;
 using th03::present::AnkGlyphProvider;
 using th03::present::JisGlyph;
 using th03::present::Page;
-using th03::present::Point;
-using th03::present::Rect;
 
 std::size_t checks = 0U;
 std::size_t failures = 0U;
@@ -714,12 +712,6 @@ void test_transaction_rejections_and_lifetime()
 		"prepared Continue scene outlives caller resource and font owners");
 }
 
-[[nodiscard]] bool inside(Point point, Rect rect) noexcept
-{
-	return point.x >= rect.x && point.y >= rect.y &&
-		point.x < rect.x + rect.width && point.y < rect.y + rect.height;
-}
-
 void test_localized_continue_and_gameover_regions()
 {
 	SyntheticFont font;
@@ -746,32 +738,8 @@ void test_localized_continue_and_gameover_regions()
 		const auto japanese_pixels = (*japanese_scene)->raster().graphics(Page::zero);
 		expect(std::ranges::equal(source_pixels, english_pixels),
 			"built-in English retains the exact authenticated Continue art");
-		const std::array translated_regions{
-			Rect{72, 64, 496U, 120U},
-			Rect{448, 360, 128U, 32U},
-			Rect{192, 272, 96U, 41U},
-			Rect{352, 272, 96U, 41U},
-		};
-		std::size_t inside_differences = 0U;
-		std::size_t outside_differences = 0U;
-		for(std::int32_t y = 0; y < 400; ++y) {
-			for(std::int32_t x = 0; x < 640; ++x) {
-				const auto index = static_cast<std::size_t>(y) * 640U +
-					static_cast<std::size_t>(x);
-				if(source_pixels[index] == japanese_pixels[index]) {
-					continue;
-				}
-				const auto translated = std::ranges::any_of(
-					translated_regions,
-					[x, y](Rect rect) { return inside({x, y}, rect); }
-				);
-				translated ? ++inside_differences : ++outside_differences;
-			}
-		}
-		expect(inside_differences != 0U,
-			"Japanese Continue replaces the four audited text regions");
-		expect(outside_differences == 0U,
-			"Japanese Continue preserves every pixel outside text regions");
+		expect(std::ranges::equal(source_pixels, japanese_pixels),
+			"Japanese retains the source-English Continue art");
 	}
 
 	auto gameover_resources = resources_for(0U);
@@ -795,24 +763,8 @@ void test_localized_continue_and_gameover_regions()
 		const auto japanese_pixels = (*japanese_gameover)->raster().graphics(Page::zero);
 		expect(std::ranges::equal(source_pixels, english_pixels),
 			"built-in English retains the exact authenticated Game Over art");
-		constexpr Rect translated{296, 264, 304U, 136U};
-		std::size_t inside_differences = 0U;
-		std::size_t outside_differences = 0U;
-		for(std::int32_t y = 0; y < 400; ++y) {
-			for(std::int32_t x = 0; x < 640; ++x) {
-				const auto index = static_cast<std::size_t>(y) * 640U +
-					static_cast<std::size_t>(x);
-				if(source_pixels[index] == japanese_pixels[index]) {
-					continue;
-				}
-				inside({x, y}, translated) ?
-					++inside_differences : ++outside_differences;
-			}
-		}
-		expect(inside_differences != 0U,
-			"Japanese Game Over regenerates its word and glow region");
-		expect(outside_differences == 0U,
-			"Japanese Game Over preserves pixels outside its audited region");
+		expect(std::ranges::equal(source_pixels, japanese_pixels),
+			"Japanese retains the source-English Game Over art");
 	}
 }
 

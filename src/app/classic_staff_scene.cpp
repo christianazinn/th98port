@@ -630,8 +630,12 @@ ClassicStaffScene::create_predecoded(
 			));
 		}
 	}
-	if(game_text) {
-		auto localized = localize_staff_cels(cels, *game_text, font);
+	// Japanese uses the authenticated base-game staff art and verdict strings.
+	// Only a locale based on a different presentation profile rebuilds them.
+	const auto *localized_game_text =
+		(game_text && game_text->locale() != "ja-JP") ? game_text : nullptr;
+	if(localized_game_text) {
+		auto localized = localize_staff_cels(cels, *localized_game_text, font);
 		if(!localized) {
 			return std::unexpected(std::move(localized.error()));
 		}
@@ -673,7 +677,8 @@ ClassicStaffScene::create_predecoded(
 		static_cast<std::uint8_t>(player->character) -
 		static_cast<std::uint8_t>(MainCharacter::reimu)
 	);
-	const auto playchar_source = game_text ? trim_padding(game_text->bytes(
+	const auto playchar_source = localized_game_text ? trim_padding(
+		localized_game_text->bytes(
 		static_cast<NewClassicGameTextId>(
 			static_cast<std::size_t>(NewClassicGameTextId::registration_00) +
 			character_index + 1U
@@ -686,7 +691,8 @@ ClassicStaffScene::create_predecoded(
 		return std::unexpected(text_error(playchar.error()));
 	}
 	prepared->playchar.emplace(std::move(*playchar));
-	const auto rank_source = game_text ? trim_padding(game_text->bytes(
+	const auto rank_source = localized_game_text ? trim_padding(
+		localized_game_text->bytes(
 		static_cast<NewClassicGameTextId>(
 			static_cast<std::size_t>(NewClassicGameTextId::registration_rank_easy) +
 			resident.rank
@@ -706,7 +712,8 @@ ClassicStaffScene::create_predecoded(
 		}
 		prepared->numbers[index].emplace(std::move(*number));
 	}
-	const auto point_source = game_text ? trim_padding(game_text->bytes(
+	const auto point_source = localized_game_text ? trim_padding(
+		localized_game_text->bytes(
 		NewClassicGameTextId::staff_verdict_point
 	)) : std::span<const std::uint8_t>{compiled.point};
 	auto point = present::prepare_graphics_text_8x16(point_source, font);

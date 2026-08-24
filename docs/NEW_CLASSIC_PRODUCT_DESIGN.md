@@ -528,6 +528,11 @@ complete explicit English and Japanese source text for all 779 graphics-text
 rows and all 28 scripted dialogue/cutscene/ending programs. The donor
 page/palette/input machines and Classic are unchanged. A future general-Unicode
 product-shell renderer remains separate from this exact ASCII/CP932 contract.
+Catalog coverage does not imply unconditional redraw: Japanese keeps original
+presentation, English keeps English Patch presentation, and words already
+English in the Japanese game (including `STAGE X START`) remain English across
+locales. `NEW_CLASSIC_SOURCE_PRESENTATION.md` defines the generated fixed-cell
+asset path for a locale that genuinely needs different artwork.
 
 - Freeze message identifiers and text domains.
 - Build the translator-facing authoring, compilation, and validation tools.

@@ -1141,62 +1141,18 @@ void test_new_classic_localized_registration_art()
 	if(!plain || !english || !japanese) {
 		return;
 	}
-	const std::array allowed{
-		th03::present::Rect{48, 24, 544U, 56U},
-		th03::present::Rect{112, 80, 96U, 24U},
-		th03::present::Rect{328, 80, 96U, 24U},
-		th03::present::Rect{432, 80, 120U, 24U},
-		th03::present::Rect{552, 80, 80U, 24U},
-		th03::present::Rect{320, 312, 320U, 88U},
-		th03::present::Rect{512, 320, 64U, 32U},
-		th03::present::Rect{512, 344, 64U, 32U},
-		th03::present::Rect{512, 368, 64U, 32U},
-		th03::present::Rect{568, 104, 64U, 200U},
-	};
-	const auto inside_allowed = [&allowed](std::int32_t x, std::int32_t y) {
-		return std::ranges::any_of(allowed, [=](const auto &rect) {
-			return x >= rect.x && y >= rect.y &&
-				x < rect.x + rect.width && y < rect.y + rect.height;
-		});
-	};
-	std::size_t translated_differences = 0U;
-	std::size_t outside_differences = 0U;
-	std::size_t english_differences = 0U;
-	std::size_t title_differences = 0U;
-	std::size_t rank_differences = 0U;
-	std::size_t command_differences = 0U;
 	for(const auto page : {Page::zero, Page::one}) {
-		for(std::int32_t y = 0; y < th03::present::graphics_height; ++y) {
-			for(std::int32_t x = 0; x < th03::present::graphics_width; ++x) {
-				const Point point{x, y};
-				const auto source = (*plain)->raster().pixel(page, point);
-				const auto en = (*english)->raster().pixel(page, point);
-				const auto ja = (*japanese)->raster().pixel(page, point);
-				english_differences += source != en;
-				if(source == ja) {
-					continue;
-				}
-				++translated_differences;
-				outside_differences += !inside_allowed(x, y);
-				title_differences += x >= 48 && x < 592 && y >= 24 && y < 80;
-				rank_differences += x >= 320 && y >= 312;
-				command_differences += x >= 512 && x < 576 && y >= 320;
-			}
-		}
+		expect(
+			std::ranges::equal(
+				(*plain)->raster().graphics(page),
+				(*english)->raster().graphics(page)
+			) && std::ranges::equal(
+				(*plain)->raster().graphics(page),
+				(*japanese)->raster().graphics(page)
+			),
+			"English and Japanese preserve source-English registration art"
+		);
 	}
-	expect(
-		english_differences == 0U,
-		"built-in English preserves registration art byte-for-pixel"
-	);
-	expect(
-		translated_differences != 0U && outside_differences == 0U,
-		"Japanese changes only audited registration-art rectangles"
-	);
-	expect(
-		title_differences != 0U && rank_differences != 0U &&
-			command_differences != 0U,
-		"Japanese visibly replaces title, rank, and editing-command art"
-	);
 }
 
 void test_zero_credit_audio_exit()

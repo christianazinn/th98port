@@ -92,18 +92,18 @@ with a 39-cell maximum run; the English overlay produces 1,732 runs and 32,847
 cells with a 30-cell maximum run. Both complete profiles validate. Commands
 and timing are never sourced from translated bytes.
 
-The nine transparent character-select center-list name rows now reuse the
-active compact character labels in `T3LNG001`, centered within the source
-128-pixel layout through the PC-98 graphics-text renderer. The three labels in
-`SLWIN.CDG` likewise use locale-owned text in New Classic: only their audited
-56x16 white interiors are reconstructed, preserving the source border, rules,
-and star fields. Sealed Classic retains both source sheets. Character-select
-gameplay HUD banners are now localized as well. Continue and Game Over retain
-their exact stylized English images while translated/custom catalogs replace
-the question, credit, choices, and Game Over title inside audited black-backed
-regions; the translated Game Over path regenerates its glow behind the active
-text. The audited selection portrait
-atlases contain no labels; other text baked into reusable images remains.
+The nine transparent character-select center-list name rows and the three
+labels in `SLWIN.CDG` retain the active authenticated asset profile: original
+Japanese or English Patch gaiji. The rejected proportional replacement was
+less legible and did not reproduce the purpose-drawn stroke weight. Other
+locales require deterministic fixed-cell BFNT/CDG generation plus layout and
+stroke review. Gameplay HUD, Continue/Game Over, and registration words that
+were already English in the Japanese game now remain English in every locale;
+`STAGE X START` is explicitly invariant. Japanese staff art remains source art,
+while a locale with approved different wording can rebuild only audited text
+regions. `NEW_CLASSIC_SOURCE_PRESENTATION.md` and its machine-readable policy
+freeze this distinction. The audited selection portrait atlases contain no
+labels; other text baked into reusable images remains.
 Menu headings baked into TL02 and related backgrounds are explicitly later
 work: removing them requires clean background reconstruction as well as
 localized rendering.
@@ -113,9 +113,10 @@ The source-text part of this parcel is now complete in both shipped languages.
 Japanese rows are CP932 and combine authenticated proportional `MNUFONT.PF`
 Latin with exact `FONT.ROM` Japanese glyphs. `T3GTL001` contains all 779
 graphics-text rows in explicit English and Japanese catalogs, including every
-win quote and Music Room comment. This includes all semantic staff-credit and
-verdict text; New Classic rebuilds those source-geometry cels while retaining
-the original animation schedule and decorative art. The Japanese author is regenerated from
+win quote and Music Room comment. The catalogs inventory semantic staff-credit
+and verdict text, but Japanese presentation keeps the authenticated source
+cels; other locales retain the original animation schedule and decorative art
+when rebuilding approved text regions. The Japanese author is regenerated from
 authenticated Japanese OP/MAIN/MAINL executables and DAT assets rather than
 from the English translation. `T3CTP001` already contains complete English and
 Japanese catalogs for all 28 scripted dialogue/cutscene/ending programs. A

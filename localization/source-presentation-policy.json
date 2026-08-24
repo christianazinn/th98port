@@ -1,0 +1,54 @@
+{
+  "format": "T3LSP001",
+  "source_english_invariants": [
+    "hud.banner.lose",
+    "hud.banner.win",
+    "hud.banner.stage",
+    "hud.banner.round",
+    "hud.banner.start",
+    "continue.question",
+    "continue.credit",
+    "continue.yes",
+    "continue.no",
+    "gameover.title",
+    "registration.title",
+    "registration.header.name",
+    "registration.header.point",
+    "registration.header.character",
+    "registration.header.stage",
+    "registration.rank.easy",
+    "registration.rank.normal",
+    "registration.rank.hard",
+    "registration.rank.lunatic",
+    "registration.key.space",
+    "registration.key.backspace",
+    "registration.key.end",
+    "registration.stage.all"
+  ],
+  "source_profiles": [
+    {
+      "surface": "character-select-labels",
+      "japanese": "authenticated-original",
+      "english": "authenticated-english-patch",
+      "other": "generated-source-compatible-asset"
+    },
+    {
+      "surface": "scripted-dialogue",
+      "japanese": "authenticated-original",
+      "english": "authenticated-english-patch",
+      "other": "generated-source-compatible-asset"
+    },
+    {
+      "surface": "staff-art-and-verdict",
+      "japanese": "authenticated-original",
+      "english": "catalog-rendered-from-english-patch",
+      "other": "generated-source-compatible-asset"
+    },
+    {
+      "surface": "source-english-image-labels",
+      "japanese": "source-english-invariant",
+      "english": "source-english-invariant",
+      "other": "source-english-invariant"
+    }
+  ]
+}

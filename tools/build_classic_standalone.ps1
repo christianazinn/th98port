@@ -364,9 +364,6 @@ try {
 	if($LanguageOverlay) {
 		Copy-Item -LiteralPath $LanguageOverlay `
 			-Destination (Join-Path $contentRoot "TH3EN.DAT")
-		Copy-Item -LiteralPath (Join-Path $sourceRoot (
-			"localization\cutscene-text-en-US.t3ctp"
-		)) -Destination $contentRoot
 	}
 	if($PicturePatch) {
 		Copy-Item -LiteralPath $PicturePatch `
@@ -456,10 +453,7 @@ try {
 			)
 			if($LanguageOverlay) {
 				$nativeArguments += @(
-					"--language-overlay", (Join-Path $contentRoot "TH3EN.DAT"),
-					"--cutscene-text-pack", (Join-Path $contentRoot (
-						"cutscene-text-en-US.t3ctp"
-					))
+					"--language-overlay", (Join-Path $contentRoot "TH3EN.DAT")
 				)
 			}
 			if($PicturePatch) {

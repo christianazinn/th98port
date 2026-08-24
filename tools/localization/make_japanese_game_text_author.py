@@ -42,30 +42,32 @@ MAIN_RESULT_SPECS = (
     ("result.boss-panic", 0x1DEB6, 26),
     ("result.lives-left", 0x1DF2E, 26),
 )
-IMAGE_LOCALIZED_MESSAGES = {
-    "hud.banner.lose": "敗北            ",
-    "hud.banner.win": "勝利            ",
-    "hud.banner.stage": "ステージ        ",
-    "hud.banner.round": "ラウンド        ",
-    "hud.banner.start": "開始            ",
-    "continue.question": "コンティニュー？                ",
-    "continue.credit": "クレジット                      ",
-    "continue.yes": "はい                            ",
-    "continue.no": "いいえ                          ",
-    "gameover.title": "ゲームオーバー                  ",
-    "registration.title": "名前登録                        ",
-    "registration.header.name": "名前    ",
-    "registration.header.point": "得点    ",
-    "registration.header.character": "キャラクター",
-    "registration.header.stage": "ステージ",
-    "registration.rank.easy": "イージー        ",
-    "registration.rank.normal": "ノーマル        ",
-    "registration.rank.hard": "ハード          ",
-    "registration.rank.lunatic": "ルナティック    ",
-    "registration.key.space": "空白",
-    "registration.key.backspace": "削除",
-    "registration.key.end": "決定",
-    "registration.stage.all": "全て",
+IMAGE_PRESENTATION_MESSAGES = {
+    # These labels are already English in the original Japanese game. New
+    # Classic preserves that source presentation in every locale for now.
+    "hud.banner.lose": "Lose            ",
+    "hud.banner.win": "Win             ",
+    "hud.banner.stage": "STAGE           ",
+    "hud.banner.round": "Round           ",
+    "hud.banner.start": "START           ",
+    "continue.question": "Continue?                       ",
+    "continue.credit": "CREDIT                          ",
+    "continue.yes": "Yes                             ",
+    "continue.no": "No                              ",
+    "gameover.title": "Game is Over                    ",
+    "registration.title": "Registration of your name       ",
+    "registration.header.name": "Name    ",
+    "registration.header.point": "Point   ",
+    "registration.header.character": "Character   ",
+    "registration.header.stage": "Stage   ",
+    "registration.rank.easy": "Easy            ",
+    "registration.rank.normal": "Normal          ",
+    "registration.rank.hard": "Hard            ",
+    "registration.rank.lunatic": "Lunatic         ",
+    "registration.key.space": "SP  ",
+    "registration.key.backspace": "BS  ",
+    "registration.key.end": "END ",
+    "registration.stage.all": "All ",
     "staff.title.line-1": "東方夢時空                      ",
     "staff.title.line-2": "                                ",
     "staff.subtitle": "The Phantasmagoria of Dim. Dream...             ",
@@ -210,10 +212,10 @@ def build_author(
     if overlap:
         raise AuthorError(f"duplicate source message {sorted(overlap)[0]}")
     messages.update(fixed_raw["messages"])
-    overlap = set(messages) & set(IMAGE_LOCALIZED_MESSAGES)
+    overlap = set(messages) & set(IMAGE_PRESENTATION_MESSAGES)
     if overlap:
         raise AuthorError(f"duplicate localized HUD message {sorted(overlap)[0]}")
-    messages.update(IMAGE_LOCALIZED_MESSAGES)
+    messages.update(IMAGE_PRESENTATION_MESSAGES)
     identifiers = schema_ids(schema)
     missing = set(identifiers) - set(messages)
     extra = set(messages) - set(identifiers)

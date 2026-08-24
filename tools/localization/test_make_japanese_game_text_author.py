@@ -37,7 +37,8 @@ class JapaneseGameTextAuthorTests(unittest.TestCase):
         self.assertEqual(len(result["messages"]["stage.name.08"].encode("cp932")), 28)
         self.assertEqual(len(result["messages"]["result.lives-left"].encode("cp932")), 26)
         self.assertTrue(result["messages"]["win.quote.00.00"].startswith("博麗"))
-        self.assertEqual(result["messages"]["hud.banner.start"].rstrip(), "開始")
+        self.assertEqual(result["messages"]["hud.banner.start"].rstrip(), "START")
+        self.assertEqual(result["messages"]["registration.key.end"], "END ")
 
     def test_byte_padding_rejects_overflow(self) -> None:
         self.assertEqual(author.pad_cp932("夢", 4, "x").encode("cp932"), b"\x96\xb2  ")

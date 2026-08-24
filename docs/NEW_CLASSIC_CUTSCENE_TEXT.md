@@ -78,7 +78,11 @@ Use the pack in New Classic or the replay renderer with
 original script profile. Any other locale authenticates against the complete
 English overlay and must use the same locale as the selected menu/game-text
 catalogs. Live New Classic language switching applies a catalog only to its
-matching source profile. The runtime never edits or reparses translated script bytes: the
+matching source profile. The maintained standalone's Japanese and English
+choices retain the original or English Patch glyph presentation; their tracked
+catalogs are reproducible inventory/authoring baselines, not a reason to redraw
+identical source text. An explicitly supplied custom pack still replaces glyph
+runs. The runtime never edits or reparses translated script bytes: the
 authenticated source VM emits its normal operations, and only decoded
 `CutsceneDrawGlyph` payloads are substituted. Commands, waits, cursor movement,
 page changes, pictures, fades, audio, and input boundaries therefore remain

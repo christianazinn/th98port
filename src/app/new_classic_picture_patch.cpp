@@ -273,11 +273,10 @@ load_new_classic_picture_patch(const std::filesystem::path &path)
 				NewClassicPicturePatchErrorCode::body_digest_mismatch, 36U
 			));
 		}
-		const auto locale_end = std::ranges::find(
-			bytes.subspan(68U, 16U), std::byte{0U}
-		);
+		const auto locale_bytes = bytes.subspan(68U, 16U);
+		const auto locale_end = std::ranges::find(locale_bytes, std::byte{0U});
 		const auto locale_length = static_cast<std::size_t>(
-			locale_end - bytes.begin() - 68U
+			locale_end - locale_bytes.begin()
 		);
 		std::string locale{};
 		locale.reserve(locale_length);

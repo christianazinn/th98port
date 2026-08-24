@@ -1095,18 +1095,16 @@ void test_localized_hud_banner_sheets()
 	const auto japanese_lose = render_superimpose_group((*japanese)->lose(), 0U, 4U);
 	expect(source_lose == english_lose,
 		"built-in English retains exact source Lose and Win artwork");
-	expect(japanese_lose != source_lose && std::ranges::any_of(
-		japanese_lose, [](auto pixel) { return pixel != 0U; }
-	), "Japanese replaces both result words with visible locale text");
+	expect(japanese_lose == source_lose,
+		"Japanese retains source-English Lose and Win artwork");
 
 	const auto source_words = render_superimpose_group((*source)->round(), 0U, 12U);
 	const auto english_words = render_superimpose_group((*english)->round(), 0U, 12U);
 	const auto japanese_words = render_superimpose_group((*japanese)->round(), 0U, 12U);
 	expect(source_words == english_words,
 		"built-in English retains exact source Stage Round and Start artwork");
-	expect(japanese_words != source_words && std::ranges::any_of(
-		japanese_words, [](auto pixel) { return pixel != 0U; }
-	), "Japanese replaces all three round-start words with visible locale text");
+	expect(japanese_words == source_words,
+		"Japanese retains source-English Stage Round and Start artwork");
 
 	const auto source_digits = render_superimpose_group((*source)->round(), 12U, 10U);
 	const auto english_digits = render_superimpose_group((*english)->round(), 12U, 10U);

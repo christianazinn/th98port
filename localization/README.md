@@ -87,6 +87,17 @@ can appear in the product language selector.
 
 The definitive covered-versus-image-baked census is
 `docs/NEW_CLASSIC_TEXT_LOCALIZATION_COVERAGE.md`.
+Coverage does not mean every source word is translated or redrawn. Japanese
+keeps original presentation, English keeps English Patch presentation, and
+text already written in English in the Japanese game remains invariant for
+now. Run the machine-readable policy gate directly with:
+
+```powershell
+python tools/localization/validate_source_presentation.py --root .
+```
+
+The generated fixed-cell/gaiji asset direction is documented in
+`docs/NEW_CLASSIC_SOURCE_PRESENTATION.md`.
 
 ## Complete release bundles
 

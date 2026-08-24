@@ -480,8 +480,8 @@ void test_new_classic_localized_staff_art()
 		}
 		expect(
 			!same_cel(source_cel, english_cel) &&
-			!same_cel(source_cel, japanese_cel),
-			"every semantic staff cel is rebuilt from locale text"
+				same_cel(source_cel, japanese_cel),
+			"English rebuilds semantic staff cels while Japanese keeps source art"
 		);
 		if(!same_cel(english_cel, japanese_cel)) {
 			++locale_differences;
@@ -492,13 +492,13 @@ void test_new_classic_localized_staff_art()
 		"English and Japanese visibly differ across the translated staff roll"
 	);
 	expect(
-		ClassicStaffSceneTestAccess::playchar_width(**english) !=
-			ClassicStaffSceneTestAccess::playchar_width(**japanese) &&
-		ClassicStaffSceneTestAccess::rank_width(**english) !=
-			ClassicStaffSceneTestAccess::rank_width(**japanese) &&
-		ClassicStaffSceneTestAccess::point_glyph_count(**english) == 2U &&
-		ClassicStaffSceneTestAccess::point_glyph_count(**japanese) == 1U,
-		"verdict character, rank, and point suffix come from the selected catalog"
+		ClassicStaffSceneTestAccess::playchar_width(**japanese) ==
+			ClassicStaffSceneTestAccess::playchar_width(**source) &&
+		ClassicStaffSceneTestAccess::rank_width(**japanese) ==
+			ClassicStaffSceneTestAccess::rank_width(**source) &&
+		ClassicStaffSceneTestAccess::point_glyph_count(**japanese) ==
+			ClassicStaffSceneTestAccess::point_glyph_count(**source),
+		"Japanese verdict text retains the authenticated source presentation"
 	);
 }
 

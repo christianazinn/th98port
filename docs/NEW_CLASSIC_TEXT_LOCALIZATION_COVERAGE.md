@@ -2,17 +2,25 @@
 
 Status: implementation inventory, 2026-08-22.
 
-The localization objective is every player-visible word in New Classic. It is
+The localization objective is every player-visible semantic surface in New
+Classic, without assuming that every source word should be translated. It is
 split by the source renderer rather than forced into one unsafe file format.
 Classic remains a sealed port of the original Japanese game and does not load
 any of these packages.
+
+Japanese retains the base game's presentation and English retains the English
+Patch presentation wherever those source profiles are already complete. Text
+that was English in the original Japanese game remains English in all locales
+for now, including `STAGE X START`. See
+`NEW_CLASSIC_SOURCE_PRESENTATION.md` for the enforced policy and generated
+fixed-cell asset direction.
 
 ## Runtime text domains
 
 | Domain | Current coverage | Author/runtime artifacts |
 |---|---|---|
 | New Classic menus and product UI | Title, Option hierarchy, Replay browser/save/viewer, HiScore/online views, Practice, Input/Key/Joy/Device configuration, netplay rooms/profile/status, and bounded dynamic templates | Complete 406-message English and Japanese UTF-8 authors to `T3LNG001`; Japanese compiles to CP932 and mixes real PC-98 machine glyphs with proportional MNUFONT Latin text. Character-select name/stat strings remain reserved authoring candidates and are not drawn by the production selector. |
-| Executable/image-resident game text | 61 stage titles/names, Music Room selection titles, registration names, and result labels, five gameplay HUD words, five Continue/Game Over labels, thirteen registration-art labels, and eighteen staff-roll/verdict labels | Complete English and Japanese UTF-8 `T3GTL-AUTHOR-1` catalogs to CP932 `T3GTL001`; source-backed English art is retained where already locale-correct, while New Classic staff credits and translated rows regenerate only audited text regions |
+| Executable/image-resident game text | 61 stage titles/names, Music Room selection titles, registration names, and result labels, five gameplay HUD words, five Continue/Game Over labels, thirteen registration-art labels, and eighteen staff-roll/verdict labels | Complete English and Japanese UTF-8 `T3GTL-AUTHOR-1` catalogs to CP932 `T3GTL001`; source-English image labels remain invariant, Japanese staff art remains authenticated source art, and only a locale with different approved wording regenerates audited regions |
 | Win quotes | All nine character tables, 11 opponent/route blocks per character, three rows per block: 297 exact 58-byte rows | Same `T3GTL001` domain; English rows are merged into the complete catalog and Japanese source rows are in `game-fixed-text-ja-JP.json` |
 | Music Room comments | All 19 tracks, one title plus 19 comment rows per track: 380 exact 40-byte rows | Same `T3GTL001` domain and Japanese source catalog |
 | Pre/post-round dialogue, Stage 8 dialogue, endings, and extra ending | Every text run in all 28 DM0/DM1/ED scripts, while retaining the source command stream for timing, pictures, palette, and audio | UTF-8 `T3CTP-AUTHOR-1` to `T3CTP001`; complete English and Japanese catalogs and source-free schemas |
@@ -54,8 +62,9 @@ image-text migration includes, at minimum:
 - character portrait art (the audited selection atlases contain no text). The
   nine transparent center-list names and all three stat-sheet labels remain
   active-locale BFNT/CDG assets: English specifically keeps its accepted gaiji
-  rather than substituting proportional runtime text. Other languages need
-  reviewed custom assets with the same layout contract;
+  and Japanese keeps the original gaiji rather than substituting proportional
+  runtime text. Other languages need deterministically generated, reviewed
+  custom assets with the same layout and stroke-weight contract;
 - stage/win logos and other gameplay art (the `LOSE.BF2` and `ROUND.BF2` word
   cels are now runtime-localized while their digits and animation stay source-owned);
 - text embedded in cutscene pictures rather than emitted by the script VM.

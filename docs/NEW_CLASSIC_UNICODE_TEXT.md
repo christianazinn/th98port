@@ -57,6 +57,11 @@ a reviewed locale choice, not an accidental untranslated fallback.
 
 Source-constrained `T3GTL001` and `T3CTP001` content remains on its exact
 CP932/cell-geometry contract for the complete English and Japanese catalogs.
+Those catalogs also obey `NEW_CLASSIC_SOURCE_PRESENTATION.md`: Japanese and
+English retain their authenticated source-profile art where it already exists,
+and source-English words such as `STAGE X START` are not translated. A future
+locale that needs different fixed-cell artwork uses a generated locale glyph
+bank rather than the proportional Unicode fallback.
 General-Unicode authoring for those fixed gameplay and cutscene domains is a
 separate package-format/layout parcel; this foundation does not reinterpret
 their authenticated byte streams. Baked menu and picture text remains the
