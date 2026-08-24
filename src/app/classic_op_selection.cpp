@@ -631,8 +631,7 @@ ClassicOpCharacterSelection::create_from_op(
 	std::uint8_t available_character_count,
 	ClassicOpSelectionCarry carry,
 	std::span<const LoadedMainResource> resources,
-	bool retain_for_new_classic_practice,
-	const ClassicOpSelectionLocalizedText *localized_text
+	bool retain_for_new_classic_practice
 )
 {
 	const auto expected_route = (mode == ClassicOpSelectionMode::story) ?
@@ -651,7 +650,7 @@ ClassicOpCharacterSelection::create_from_op(
 	return create_impl(
 		std::move(resident), mode, available_character_count, carry,
 		completion.raster(), completion.tram(), resources, true,
-		retain_for_new_classic_practice, localized_text
+		retain_for_new_classic_practice, nullptr
 	);
 }
 

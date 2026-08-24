@@ -426,6 +426,25 @@ public:
 	std::vector<PmdOpnaRegisterWrite> writes{};
 };
 
+class ResumeTrace final : public PmdOpnaRegisterTraceSink {
+public:
+	void register_written(const PmdOpnaRegisterWrite &write) noexcept override
+	{
+		for(const auto address : {
+			std::uint16_t{0x182U}, std::uint16_t{0x186U},
+			std::uint16_t{0x18AU}, std::uint16_t{0x18EU},
+		}) {
+			if(write.address == address && write.value == 0x0FU) {
+				++fm6_release_rate_restores;
+			}
+		}
+		++writes;
+	}
+
+	std::size_t writes = 0U;
+	std::size_t fm6_release_rate_restores = 0U;
+};
+
 void test_config_and_load_validation()
 {
 	for(const auto &config : {
@@ -755,6 +774,31 @@ void test_effect_transport_and_timer_a_ownership()
 		"tie, transpose, and portamento commands finish after song Stop"
 	);
 	expect(bank == caller_bank, "EFC repeat counters never mutate caller bytes");
+}
+
+void test_pause_resume_restores_fm_instrument()
+{
+	auto subject = engine();
+	const auto song = synthetic_fm6_tone_song();
+	expect(
+		subject.load_song(song) && subject.play(),
+		"pause/resume FM fixture starts"
+	);
+	std::array<PmdOpnaStereoSample, 32'768U> warmup{};
+	subject.render_native(warmup);
+	subject.pause();
+	expect(subject.status().paused, "pause/resume FM fixture reaches Pause");
+	ResumeTrace trace;
+	subject.set_register_trace_sink(&trace);
+	subject.resume();
+	expect(
+		!subject.status().paused && trace.writes != 0U,
+		"Resume restores PMD instrument registers before sequencing continues"
+	);
+	expect(
+		trace.fm6_release_rate_restores == 4U,
+		"Resume replaces all four FM6 pause release rates with authored values"
+	);
 }
 
 void test_effect_end_restores_fm6_tone_immediately()
@@ -1670,6 +1714,7 @@ int main(int argc, char **argv)
 	test_config_and_load_validation();
 	test_effect_bank_validation_is_transactional();
 	test_effect_transport_and_timer_a_ownership();
+	test_pause_resume_restores_fm_instrument();
 	test_effect_end_restores_fm6_tone_immediately();
 	test_effect_work_starts_from_source_zero_state();
 	test_effect_pcm_and_registers_are_deterministic();

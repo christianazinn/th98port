@@ -11,7 +11,7 @@ any of these packages.
 
 | Domain | Current coverage | Author/runtime artifacts |
 |---|---|---|
-| New Classic menus and product UI | Title, Option hierarchy, Replay browser/save/viewer, HiScore/online views, Practice, Input/Key/Joy/Device configuration, netplay rooms/profile/status, bounded dynamic templates, the nine character-selector center-list names, and the three character-selection stat labels | Complete 406-message English and Japanese UTF-8 authors to `T3LNG001`; Japanese compiles to CP932 and mixes real PC-98 machine glyphs with proportional MNUFONT Latin text |
+| New Classic menus and product UI | Title, Option hierarchy, Replay browser/save/viewer, HiScore/online views, Practice, Input/Key/Joy/Device configuration, netplay rooms/profile/status, and bounded dynamic templates | Complete 406-message English and Japanese UTF-8 authors to `T3LNG001`; Japanese compiles to CP932 and mixes real PC-98 machine glyphs with proportional MNUFONT Latin text. Character-select name/stat strings remain reserved authoring candidates and are not drawn by the production selector. |
 | Executable/image-resident game text | 61 stage titles/names, Music Room selection titles, registration names, and result labels, five gameplay HUD words, five Continue/Game Over labels, thirteen registration-art labels, and eighteen staff-roll/verdict labels | Complete English and Japanese UTF-8 `T3GTL-AUTHOR-1` catalogs to CP932 `T3GTL001`; source-backed English art is retained where already locale-correct, while New Classic staff credits and translated rows regenerate only audited text regions |
 | Win quotes | All nine character tables, 11 opponent/route blocks per character, three rows per block: 297 exact 58-byte rows | Same `T3GTL001` domain; English rows are merged into the complete catalog and Japanese source rows are in `game-fixed-text-ja-JP.json` |
 | Music Room comments | All 19 tracks, one title plus 19 comment rows per track: 380 exact 40-byte rows | Same `T3GTL001` domain and Japanese source catalog |
@@ -51,9 +51,11 @@ image-text migration includes, at minimum:
   and render both English and Japanese headings at runtime. BG1 remains an
   authenticated legacy archive member for compatibility, but the native asset
   owner no longer decodes or retains it;
-- character portrait art (the audited selection atlases contain no text; the
-  nine transparent center-list names and all three stat-sheet labels are now
-  runtime-localized in New Classic);
+- character portrait art (the audited selection atlases contain no text). The
+  nine transparent center-list names and all three stat-sheet labels remain
+  active-locale BFNT/CDG assets: English specifically keeps its accepted gaiji
+  rather than substituting proportional runtime text. Other languages need
+  reviewed custom assets with the same layout contract;
 - stage/win logos and other gameplay art (the `LOSE.BF2` and `ROUND.BF2` word
   cels are now runtime-localized while their digits and animation stay source-owned);
 - text embedded in cutscene pictures rather than emitted by the script VM.

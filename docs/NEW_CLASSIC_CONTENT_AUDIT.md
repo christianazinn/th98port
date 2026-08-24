@@ -41,8 +41,8 @@ scene families and has FNV-1a-64 fingerprint `109855200A365C86`. The accepted
 English profile validates all 271 resources and sources 52 of them from the
 whole-archive-authenticated TH3EN overlay.
 
-The New Classic character selector now owns the nine center-list name rows
-through `T3GTL001`, while Classic retains `CHNAME.BFT` exactly. The audit keeps
-the source sheet marked as backing-required because the shared installation
-still supports sealed Classic and the remaining selection artwork is not yet
-decoupled.
+The New Classic character selector retains the active locale's authenticated
+center-list BFNT and stat-label CDG. In particular, English uses the accepted
+gaiji assets rather than proportional runtime text. The corresponding catalog
+rows are reserved for a future custom-asset authoring pipeline and do not
+replace either source sheet in production, so the audit marks both as required.

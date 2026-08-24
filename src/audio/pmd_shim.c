@@ -329,9 +329,11 @@ void th03_pmd_pause(struct th03_pmd_handle *handle)
 
 void th03_pmd_resume(struct th03_pmd_handle *handle)
 {
-	if(!handle || !handle->started || !handle->driver.playing) {
+	if(!handle || !handle->started || !handle->driver.playing ||
+		!handle->driver.paused) {
 		return;
 	}
+	pmd_resume(&handle->work, &handle->driver);
 	handle->driver.paused = false;
 	handle->work.paused = false;
 }

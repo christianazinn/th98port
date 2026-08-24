@@ -3950,6 +3950,39 @@ static void pmd_part_fm_unmask(
   pmd_reg_write(work, pmd, 0xb3+pmd->proc_ch, pmd_hlfo_delay_check(part, part->pan));
 }
 
+/* PMD service 1Bh restores every active FM instrument after service 1Ah set
+ * all release rates to 0xff. Sustained notes remain released, matching PMDB2,
+ * but later key-ons must see the authored release rates rather than remaining
+ * effectively silent until an MML tone change. FM6 stays owned by an active
+ * external effect. */
+void pmd_resume(struct fmdriver_work *work, struct driver_pmd *pmd) {
+  const uint8_t saved_proc_ch = pmd->proc_ch;
+  const bool saved_opna_a1 = pmd->opna_a1;
+  pmd_opna_a1_off(pmd);
+  for (int c = 0; c < 2; c++) {
+    pmd->proc_ch = c+1;
+    pmd_part_fm_unmask(work, pmd, &pmd->parts[PMD_PART_FM_1+c]);
+  }
+  if (!pmd->fmeff_playing) {
+    pmd->proc_ch = 3;
+    pmd_part_fm_unmask(work, pmd, &pmd->parts[PMD_PART_FM_3]);
+    pmd_part_fm_unmask(work, pmd, &pmd->parts[PMD_PART_FM_3B]);
+    pmd_part_fm_unmask(work, pmd, &pmd->parts[PMD_PART_FM_3C]);
+    pmd_part_fm_unmask(work, pmd, &pmd->parts[PMD_PART_FM_3D]);
+  }
+  pmd_opna_a1_on(pmd);
+  for (int c = 0; c < 2; c++) {
+    pmd->proc_ch = c+1;
+    pmd_part_fm_unmask(work, pmd, &pmd->parts[PMD_PART_FM_4+c]);
+  }
+  if (!pmd->fmeff_playing) {
+    pmd->proc_ch = 3;
+    pmd_part_fm_unmask(work, pmd, &pmd->parts[PMD_PART_FM_6]);
+  }
+  saved_opna_a1 ? pmd_opna_a1_on(pmd) : pmd_opna_a1_off(pmd);
+  pmd->proc_ch = saved_proc_ch;
+}
+
 // 1c50
 static void pmd_cmdc0_mml_mask_fm(
   struct fmdriver_work *work,

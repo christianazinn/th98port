@@ -319,8 +319,10 @@ The original source-text, renderer-GUI, Arrange, content-audit, and live
 nametag parcels above are implemented. The remaining product/tooling work is:
 
 1. Continue decoupling text baked into images. Character-select center-list
-names and stat labels plus gameplay Lose/Win/Stage/Round/Start banners are
-complete. Registration title/column panels, difficulty plate, edit commands,
+names and stat labels deliberately retain the active locale's BFNT/CDG assets;
+runtime proportional replacement was rejected for English, and future locales
+must provide reviewed custom assets. Gameplay Lose/Win/Stage/Round/Start
+banners are complete. Registration title/column panels, difficulty plate, edit commands,
    and all-stage marker are also runtime-localized while built-in English retains
    the source art. The Music Room now reconstructs its flat source title panel and
    draws the active-locale heading/creator credit at runtime. The four input

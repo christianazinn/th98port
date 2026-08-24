@@ -3087,51 +3087,10 @@ struct ClassicOpSessionBackend final {
 		music_carry.random_seed = std::bit_cast<std::uint32_t>(
 			title_completion->resident().resident_rand
 		);
-		ClassicOpSelectionLocalizedText localized_text{};
-		const ClassicOpSelectionLocalizedText *localized_text_pointer = nullptr;
-		if(replay_recorder) {
-			if(!font || !patch_assets) {
-				return std::unexpected(session_error(
-					ClassicOpSessionErrorCode::backend_contract_failed
-				));
-			}
-			const auto profile = new_classic_language_profile(active_language);
-			const auto &messages = patch_assets->messages(profile);
-			constexpr std::array<NewClassicMessageId, 9U> name_ids{
-				NewClassicMessageId::replay_character_reimu,
-				NewClassicMessageId::replay_character_mima,
-				NewClassicMessageId::replay_character_marisa,
-				NewClassicMessageId::replay_character_ellen,
-				NewClassicMessageId::replay_character_kotohime,
-				NewClassicMessageId::replay_character_kana,
-				NewClassicMessageId::replay_character_rikako,
-				NewClassicMessageId::replay_character_chiyuri,
-				NewClassicMessageId::replay_character_yumemi,
-			};
-			for(std::size_t character = 0U; character < name_ids.size(); ++character) {
-				const auto name = messages.text(name_ids[character]);
-				localized_text.character_names[character] = {
-					reinterpret_cast<const std::uint8_t *>(name.data()),
-					name.size(),
-				};
-			}
-			constexpr std::array<NewClassicMessageId, 3U> stat_ids{
-				NewClassicMessageId::selection_stat_speed,
-				NewClassicMessageId::selection_stat_power,
-				NewClassicMessageId::selection_stat_charge_speed,
-			};
-			for(std::size_t row = 0U; row < stat_ids.size(); ++row) {
-				localized_text.stat_labels[row] = messages.text(stat_ids[row]);
-			}
-			localized_text.font = &*font;
-			localized_text.menu_font = &patch_assets->menu_font;
-			localized_text_pointer = &localized_text;
-		}
 		auto created = ClassicOpCharacterSelection::create_from_op(
 			*title_completion, mode, *available, selection_carry, *resources,
 			replay_recorder && replay_recorder->capture_enabled() &&
-				mode == ClassicOpSelectionMode::vs_1p_cpu,
-			localized_text_pointer
+				mode == ClassicOpSelectionMode::vs_1p_cpu
 		);
 		if(!created) {
 			return std::unexpected(selection_error(std::move(created.error())));

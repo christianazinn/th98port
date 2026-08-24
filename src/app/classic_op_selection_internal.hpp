@@ -108,10 +108,9 @@ struct ClassicOpSelectionError final {
 	std::optional<present::GraphicsTextError> text_error{};
 };
 
-// Optional New Classic presentation input. Spans and views are consumed only
-// while the selector is created; prepared glyph rows and stat-label pixels own
-// everything needed afterward.
-// Classic supplies no value and retains the authenticated source BFNT path.
+// Test-only presentation seam for experiments with non-asset text. Production
+// Character Select always retains its active locale's authenticated BFNT/CDG
+// sheets; future localizations must supply locale-specific assets instead.
 struct ClassicOpSelectionLocalizedText final {
 	std::array<std::span<const std::uint8_t>, 9U> character_names{};
 	std::array<std::string_view, 3U> stat_labels{};
@@ -186,8 +185,7 @@ public:
 		std::uint8_t available_character_count,
 		ClassicOpSelectionCarry carry,
 		std::span<const LoadedMainResource> resources,
-		bool retain_for_new_classic_practice = false,
-		const ClassicOpSelectionLocalizedText *localized_text = nullptr
+		bool retain_for_new_classic_practice = false
 	);
 	~ClassicOpCharacterSelection() = default;
 	ClassicOpCharacterSelection(const ClassicOpCharacterSelection &) = delete;

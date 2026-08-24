@@ -483,6 +483,7 @@ bool pmd_fmeff_start(
   uint16_t tone_ptr
 );
 void pmd_fmeff_stop(struct fmdriver_work *work, struct driver_pmd *pmd);
+void pmd_resume(struct fmdriver_work *work, struct driver_pmd *pmd);
 void pmd_set_user_volumes(
   struct fmdriver_work *work,
   struct driver_pmd *pmd,
