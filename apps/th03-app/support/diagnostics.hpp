@@ -38,6 +38,7 @@ void warn_audio_device(
 	const platform::SdlAudioDeviceError &error
 );
 int fail_output_gain(const char *stage, const char *code);
+int fail_netplay(const char *stage, const char *code);
 int fail_tick(TickInputError error);
 
 [[nodiscard]] std::expected<void, int> refresh_host_presentability(

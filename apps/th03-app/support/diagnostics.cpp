@@ -807,6 +807,13 @@ int fail_output_gain(const char *stage, const char *code)
 	return 1;
 }
 
+int fail_netplay(const char *stage, const char *code)
+{
+	std::cerr << "status=error\nstage=" << stage << "\ncode=" << code
+		<< '\n';
+	return 1;
+}
+
 int fail_tick(th03::app::TickInputError error)
 {
 	std::cerr << "status=error\nstage=tick-input\ncode="

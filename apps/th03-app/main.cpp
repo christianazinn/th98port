@@ -6,11 +6,9 @@
 #include <ctime>
 #include <expected>
 #include <filesystem>
-#include <fstream>
 #include <functional>
 #include <future>
 #include <iostream>
-#include <limits>
 #include <memory>
 #include <new>
 #include <optional>
@@ -29,6 +27,7 @@
 
 #include "default_bindings.hpp"
 #include "support/diagnostics.hpp"
+#include "support/netplay_replay_save.hpp"
 #include "support/netplay_wire.hpp"
 #include "support/rhythm_assets.hpp"
 #include "support/runtime_environment.hpp"
@@ -91,6 +90,7 @@ namespace {
 
 using th03::app::launcher_support::fail;
 using th03::app::launcher_support::fail_content;
+using th03::app::launcher_support::fail_netplay;
 using th03::app::launcher_support::fail_output_gain;
 using th03::app::launcher_support::fail_tick;
 using th03::app::launcher_support::environment_value;
@@ -103,6 +103,7 @@ using th03::app::launcher_support::online_user_environment;
 using th03::app::launcher_support::pixel_oracle_identity_output;
 using th03::app::launcher_support::pixel_oracle_selector_environment;
 using th03::app::launcher_support::platform_config;
+using th03::app::launcher_support::prepare_direct_netplay_replay_save_resources;
 using th03::app::launcher_support::print_usage;
 using th03::app::launcher_support::product_online_origin;
 using th03::app::launcher_support::refresh_host_presentability;
@@ -506,117 +507,6 @@ void apply_netplay_contract(
 	return {
 		.word = input.p1,
 		.charge = static_cast<std::uint8_t>(input.charge_mask & 1U),
-	};
-}
-
-[[nodiscard]] int fail_netplay(const char *stage, const char *code)
-{
-	std::cerr << "status=error\nstage=" << stage << "\ncode=" << code
-		<< '\n';
-	return 1;
-}
-
-struct DirectNetplayReplaySaveResources final {
-	std::filesystem::path replay_root{};
-	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets>
-		patch_assets{};
-	std::shared_ptr<const th03::app::NewClassicReplaySaveArt> save_art{};
-};
-
-[[nodiscard]] std::expected<std::vector<std::byte>, int>
-read_direct_netplay_replay_save_file(
-	const std::filesystem::path &path,
-	const char *code
-)
-{
-	std::error_code system{};
-	const auto status = std::filesystem::status(path, system);
-	if(system || !std::filesystem::is_regular_file(status)) {
-		return std::unexpected(fail_netplay(
-			"netplay-replay-save-art", code
-		));
-	}
-	const auto size = std::filesystem::file_size(path, system);
-	if(system || size > static_cast<std::uintmax_t>(
-		std::numeric_limits<std::size_t>::max()
-	) || size > static_cast<std::uintmax_t>(
-		std::numeric_limits<std::streamsize>::max()
-	)) {
-		return std::unexpected(fail_netplay(
-			"netplay-replay-save-art", code
-		));
-	}
-	std::ifstream input(path, std::ios::binary);
-	if(!input) {
-		return std::unexpected(fail_netplay(
-			"netplay-replay-save-art", code
-		));
-	}
-	std::vector<std::byte> bytes(static_cast<std::size_t>(size));
-	if(!bytes.empty()) {
-		input.read(
-			reinterpret_cast<char *>(bytes.data()),
-			static_cast<std::streamsize>(bytes.size())
-		);
-	}
-	if(!input || input.peek() != std::ifstream::traits_type::eof()) {
-		return std::unexpected(fail_netplay(
-			"netplay-replay-save-art", code
-		));
-	}
-	return bytes;
-}
-
-[[nodiscard]] std::expected<DirectNetplayReplaySaveResources, int>
-prepare_direct_netplay_replay_save_resources(
-	const th03::app::DirectVsContentPaths &content
-)
-{
-	auto patch = th03::app::load_new_classic_replay_patch_assets(
-		content.data_root / "AZINN.DAT", content.new_classic_menu_assets,
-		content.font_rom
-	);
-	if(!patch) {
-		return std::unexpected(fail_netplay(
-			"netplay-replay-save-art", "patch-assets"
-		));
-	}
-	auto patch_assets = std::make_shared<
-		const th03::app::NewClassicReplayPatchAssets
-	>(std::move(*patch));
-
-	th03::app::MainResourceLoader loader(content.data_root);
-	auto normal = loader.load({
-		.role = th03::app::MainResourceRole::registration_normal_glyphs,
-	});
-	auto highlight = loader.load({
-		.role = th03::app::MainResourceRole::registration_highlight_glyphs,
-	});
-	if(!normal || !highlight) {
-		return std::unexpected(fail_netplay(
-			"netplay-replay-save-art", "registration-glyphs"
-		));
-	}
-	auto font = read_direct_netplay_replay_save_file(
-		content.font_rom, "font-rom"
-	);
-	if(!font) {
-		return std::unexpected(font.error());
-	}
-	auto save_art = th03::app::NewClassicReplaySaveArt::prepare(
-		std::span<const std::byte>{**normal},
-		std::span<const std::byte>{**highlight},
-		*font
-	);
-	if(!save_art) {
-		return std::unexpected(fail_netplay(
-			"netplay-replay-save-art", "prepare"
-		));
-	}
-	return DirectNetplayReplaySaveResources{
-		.replay_root = content.data_root / "REPLAY",
-		.patch_assets = std::move(patch_assets),
-		.save_art = std::move(*save_art),
 	};
 }
 
