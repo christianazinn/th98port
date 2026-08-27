@@ -1049,6 +1049,7 @@ add_library(th03_app_main STATIC
 	src/app/new_classic/new_classic_frontend.cpp
 	src/app/new_classic/new_classic_high_score_menu.cpp
 	src/app/new_classic/new_classic_replay_hub.cpp
+	src/app/new_classic/new_classic_text_editor.cpp
 	src/app/new_classic/input/new_classic_joy_config_scene.cpp
 	src/app/new_classic/input/new_classic_key_config_scene.cpp
 	src/app/new_classic/content/new_classic_language.cpp
@@ -1066,6 +1067,7 @@ add_library(th03_app_main STATIC
 	src/app/new_classic/new_classic_practice.cpp
 	src/app/new_classic/replay/new_classic_replay.cpp
 	src/app/new_classic/replay/new_classic_replay_presentation.cpp
+	src/app/new_classic/replay/new_classic_replay_save_menu.cpp
 	src/app/new_classic/content/new_classic_unicode.cpp
 	src/app/classic/op/op_compiled_text.cpp
 	src/app/oracle/pixel_oracle_identity.cpp

@@ -1,13 +1,32 @@
 #ifndef TH03_APP_NEW_CLASSIC_REPLAY_PRESENTATION_INTERNAL_HPP
 #define TH03_APP_NEW_CLASSIC_REPLAY_PRESENTATION_INTERNAL_HPP
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
 #include "th03/app/new_classic/new_classic_frontend.hpp"
 
 namespace th03::app::replay_presentation {
+
+[[nodiscard]] std::string source_fixed_name(
+	const std::array<char, 8U> &name
+);
+[[nodiscard]] std::string slot_number(std::size_t slot);
+[[nodiscard]] std::string decimal_score(
+	const std::array<std::uint8_t, 4U> &packed
+);
+[[nodiscard]] std::array<std::uint8_t, 4U> replay_list_score(
+	const formats::ReplayDocument &document,
+	std::optional<std::uint8_t> local_player = std::nullopt
+) noexcept;
+[[nodiscard]] std::string catalog_marker(
+	const ReplayCatalogSlot &slot,
+	const NewClassicMessageCatalog &messages
+);
 
 [[nodiscard]] bool put_fixed(
 	const NewClassicMenuFont &font,

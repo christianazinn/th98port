@@ -52,6 +52,15 @@ source-private factory bundle. Scene advancement and host-facing requests use
 separate operation tables; the state machine must never cast their opaque
 contexts back to the production backend type.
 
+Within `new_classic/`, the local replay browser remains in
+`new_classic_frontend.cpp`, while the replay-save editor and its art preparation
+live in `replay/new_classic_replay_save_menu.cpp`. Common replay-list formatting
+is confined to the source-private `new_classic_replay_presentation` helper;
+replay-save state must not leak back into the browser owner. The neutral mapping
+from editor commands to menu input lives independently in
+`new_classic_text_editor.cpp` so profile and network text fields do not depend
+on either replay UI.
+
 ## Executable composition
 
 `apps/th03-app/main.cpp` owns composition: selecting product modes, connecting
