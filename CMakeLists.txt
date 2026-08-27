@@ -1047,6 +1047,7 @@ add_library(th03_app_main STATIC
 	src/app/new_classic/content/new_classic_assets.cpp
 	src/app/new_classic/input/new_classic_device_scene.cpp
 	src/app/new_classic/new_classic_frontend.cpp
+	src/app/new_classic/new_classic_replay_hub.cpp
 	src/app/new_classic/input/new_classic_joy_config_scene.cpp
 	src/app/new_classic/input/new_classic_key_config_scene.cpp
 	src/app/new_classic/content/new_classic_language.cpp
