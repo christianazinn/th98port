@@ -101,6 +101,12 @@ Process-lifetime update activation and trial-health state lives in
 health through the host, and sessions query the current runtime context without
 reaching into composition-root globals.
 
+Once a Classic or New Classic run has been launched,
+`support/experience_session.*` owns the runner, audio device, persistence,
+online/update workers, replay completion, and paced presentation loop until it
+returns a lifecycle disposition. The composition root owns profile transitions
+and reacts to that result; it does not advance a running game.
+
 Support modules must expose the smallest interface needed by the composition
 root. Moving a concern there does not make it a public library facility, and
 must not change its validation, diagnostics, or runtime behavior. A facility

@@ -1270,6 +1270,7 @@ if(TH03_ENABLE_SDL)
 		apps/th03-app/main.cpp
 		apps/th03-app/support/audio_output.cpp
 		apps/th03-app/support/diagnostics.cpp
+		apps/th03-app/support/experience_session.cpp
 		apps/th03-app/support/input_catalog.cpp
 		apps/th03-app/support/netplay_lobby.cpp
 		apps/th03-app/support/netplay_session.cpp

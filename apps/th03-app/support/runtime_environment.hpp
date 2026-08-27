@@ -1,10 +1,12 @@
 #pragma once
 
+#include <cstdint>
 #include <expected>
 #include <fstream>
 #include <optional>
 #include <string>
 
+#include "th03/app/new_classic/persistence/new_classic_settings.hpp"
 #include "th03/platform/sdl_platform.hpp"
 
 namespace th03::app::launcher_support {
@@ -33,5 +35,26 @@ pixel_oracle_identity_output(bool publication_oracle_enabled);
 [[nodiscard]] platform::SdlPlatformConfig platform_config(
 	bool force_hidden = false
 );
+
+[[nodiscard]] constexpr platform::SdlWindowPresentation
+platform_window_presentation(
+	NewClassicWindowPresentation presentation
+) noexcept
+{
+	return {
+		.mode = presentation.mode == NewClassicWindowMode::windowed ?
+			platform::SdlWindowMode::windowed :
+			platform::SdlWindowMode::borderless_fullscreen,
+		.integer_scale = static_cast<std::uint8_t>(
+			presentation.scale == NewClassicWindowScale::automatic ? 0U :
+				static_cast<unsigned>(presentation.scale) + 1U
+		),
+		.aspect = presentation.aspect == NewClassicAspectRatio::pixels_8_5 ?
+			platform::SdlAspectRatio::pixels_8_5 :
+			platform::SdlAspectRatio::display_4_3,
+		.filtering = presentation.filtering == NewClassicFiltering::nearest ?
+			platform::SdlFiltering::nearest : platform::SdlFiltering::linear,
+	};
+}
 
 } // namespace th03::app::launcher_support
