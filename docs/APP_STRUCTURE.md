@@ -61,6 +61,12 @@ from editor commands to menu input lives independently in
 `new_classic_text_editor.cpp` so profile and network text fields do not depend
 on either replay UI.
 
+The external resource boundary separates immutable identity and scene-batch
+policy in `content/resources.cpp` from filesystem lookup, authentication,
+overrides, and transactional caching in `content/resource_loader.cpp`. The
+public `MainResourceLoader` API spans the two owners, but catalog code must not
+perform I/O and loader code must not redefine resource membership or metadata.
+
 ## Executable composition
 
 `apps/th03-app/main.cpp` owns composition: selecting product modes, connecting
