@@ -1262,6 +1262,7 @@ if(TH03_ENABLE_SDL)
 	add_executable(th03-app
 		apps/th03-app/default_bindings.cpp
 		apps/th03-app/main.cpp
+		apps/th03-app/support/diagnostics.cpp
 		apps/th03-app/support/rhythm_assets.cpp
 	)
 	target_link_libraries(

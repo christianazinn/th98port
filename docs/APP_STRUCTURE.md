@@ -51,7 +51,8 @@ dependency graph and remain separate from this behavior-free move.
 platform adapters, and coordinating process-lifetime flows. Cohesive private
 implementations that are not reusable library APIs belong under
 `apps/th03-app/support/`; for example, authenticated optional rhythm-profile
-loading lives in `support/rhythm_assets.*`.
+loading lives in `support/rhythm_assets.*`, while usage and machine-readable
+error reporting live in `support/diagnostics.*`.
 
 Support modules must expose the smallest interface needed by the composition
 root. Moving a concern there does not make it a public library facility, and
