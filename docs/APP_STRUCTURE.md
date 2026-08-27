@@ -74,11 +74,13 @@ packs, picture patches, and static resources in
 content aggregate to `new_classic_playback.cpp`, which exclusively owns
 checkpoint reconstruction, preroll, and live playback advancement.
 
-The external resource boundary separates immutable identity and scene-batch
-policy in `content/resources.cpp` from filesystem lookup, authentication,
-overrides, and transactional caching in `content/resource_loader.cpp`. The
-public `MainResourceLoader` API spans the two owners, but catalog code must not
-perform I/O and loader code must not redefine resource membership or metadata.
+The external resource boundary separates immutable key-to-spec identity and
+complete-manifest construction in `content/resource_catalog.cpp`, per-scene
+key request composition in `content/resources.cpp`, and filesystem lookup,
+authentication, overrides, and transactional caching in
+`content/resource_loader.cpp`. The public resource API spans these owners, but
+catalog/request code must not perform I/O and loader code must not redefine
+resource membership or metadata.
 
 ## Executable composition
 

@@ -653,6 +653,7 @@ th03_set_warnings(th03_assets)
 # scene-scoped filesystem validation/caching and has no gameplay or renderer
 # dependency; decoded byte spans flow inward to th03_assets at the app layer.
 add_library(th03_app_resources STATIC
+	src/app/content/resource_catalog.cpp
 	src/app/content/resource_loader.cpp
 	src/app/content/resources.cpp
 )
