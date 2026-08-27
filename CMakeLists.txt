@@ -1279,6 +1279,7 @@ if(TH03_ENABLE_SDL)
 		apps/th03-app/support/netplay_wire.cpp
 		apps/th03-app/support/rhythm_assets.cpp
 		apps/th03-app/support/runtime_environment.cpp
+		apps/th03-app/support/update_host.cpp
 	)
 	target_link_libraries(
 		th03-app PRIVATE th03_app_main th03_platform_sdl th03_platform_udp

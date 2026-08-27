@@ -30,6 +30,7 @@
 #include "support/replay_save.hpp"
 #include "support/rhythm_assets.hpp"
 #include "support/runtime_environment.hpp"
+#include "support/update_host.hpp"
 
 #include "th03/app/classic/classic_cli.hpp"
 #include "th03/app/classic/classic_audio_session.hpp"
@@ -106,20 +107,13 @@ using th03::app::launcher_support::RtcNetplayRequest;
 using th03::app::launcher_support::run_direct_netplay_on_platform;
 using th03::app::launcher_support::run_replay_save;
 using th03::app::launcher_support::warn_audio_device;
+#if defined(TH03_ENABLE_UPDATE_HOST)
+using th03::app::launcher_support::acknowledge_update_health;
+using th03::app::launcher_support::current_update_runtime_context;
+using th03::app::launcher_support::initialize_update_host;
+#endif
 
 constexpr std::uint64_t maximum_idle_delay_ns = 1'000'000U;
-
-
-#if defined(TH03_ENABLE_UPDATE_HOST)
-struct UpdateHealthRequest final {
-	std::filesystem::path state{};
-	th03::app::UpdateTrialToken token{};
-};
-
-std::optional<UpdateHealthRequest> update_health_request{};
-std::optional<th03::app::UpdateRuntimeContext> update_runtime_context{};
-bool update_health_acknowledged = false;
-#endif
 
 enum class ExperienceRunDisposition : std::uint8_t {
 	return_to_menu,
@@ -192,71 +186,6 @@ platform_window_presentation(
 } // namespace
 
 namespace {
-
-#if defined(TH03_ENABLE_UPDATE_HOST)
-[[nodiscard]] std::expected<
-	std::optional<th03::app::UpdateRuntimeContext>,
-	const char *
-> load_update_runtime_context()
-{
-	const auto state = environment_value(
-		th03::platform::update_activation_state_environment
-	);
-	const auto generations = environment_value(
-		th03::platform::update_generation_root_environment
-	);
-	const auto parsed = th03::app::parse_update_runtime_context(
-		state ? std::optional<std::string_view>(*state) : std::nullopt,
-		generations ? std::optional<std::string_view>(*generations) : std::nullopt
-	);
-	if(!parsed) {
-		return std::unexpected("incomplete-environment");
-	}
-	return *parsed;
-}
-
-[[nodiscard]] std::expected<std::optional<UpdateHealthRequest>, const char *>
-load_update_health_request()
-{
-	const auto token = environment_value(
-		th03::platform::update_trial_token_environment
-	);
-	if(!token) {
-		return std::optional<UpdateHealthRequest>{};
-	}
-	const auto state = environment_value(
-		th03::platform::update_activation_state_environment
-	);
-	if(!state || state->empty() || token->empty()) {
-		return std::unexpected("incomplete-environment");
-	}
-	auto decoded = th03::app::decode_update_trial_token(*token);
-	if(!decoded) {
-		return std::unexpected("invalid-token");
-	}
-	return std::optional<UpdateHealthRequest>{UpdateHealthRequest{
-		.state = *state,
-		.token = *decoded,
-	}};
-}
-
-[[nodiscard]] std::expected<void, int> acknowledge_update_health()
-{
-	if(!update_health_request || update_health_acknowledged) {
-		return {};
-	}
-	auto acknowledged = th03::app::acknowledge_update_launch(
-		update_health_request->state, update_health_request->token
-	);
-	if(!acknowledged) {
-		std::cerr << "status=error\nstage=update-health\n"
-			"code=acknowledge-failed\n";
-		return std::unexpected(1);
-	}
-	update_health_acknowledged = true;
-	return {};
-}
-#endif
 
 
 
@@ -590,7 +519,8 @@ ExperienceRunResult run_classic_session(
 #endif
 	const bool update_available = th03::app::new_classic_update_available(
 		new_classic, static_cast<bool>(parsed.capture_replay),
-		platform.oracle_enabled(), update_release, update_runtime_context,
+		platform.oracle_enabled(), update_release,
+		current_update_runtime_context(),
 		update_transport
 	);
 	parsed.launch.new_classic_update_available = update_available;
@@ -738,7 +668,7 @@ ExperienceRunResult run_classic_session(
 		if(auto begun = (*runner)->begin_new_classic_update_check(); !begun) {
 			return {.exit_code = fail("update-check-begin", begun.error())};
 		}
-		if(!update_release || !update_runtime_context) {
+		if(!update_release || !current_update_runtime_context()) {
 			if(auto reported = (*runner)->report_new_classic_update_check(
 				th03::app::NewClassicUpdateCheckOutcome::failed
 			); !reported) {
@@ -748,7 +678,7 @@ ExperienceRunResult run_classic_session(
 			}
 		} else {
 			auto started = th03::app::start_update_install_task(
-				*update_release, *update_runtime_context, update_transport
+				*update_release, *current_update_runtime_context(), update_transport
 			);
 			if(started) {
 				update_install_task.emplace(std::move(*started));
@@ -1551,7 +1481,7 @@ ExperienceRunResult run_classic_session(
 #if defined(TH03_ENABLE_UPDATE_HOST)
 			if((*runner)->take_new_classic_update_check_request()) {
 				if(!update_available || update_install_task || !update_release ||
-					!update_runtime_context) {
+					!current_update_runtime_context()) {
 					if(auto reported =
 						(*runner)->report_new_classic_update_check(
 							th03::app::NewClassicUpdateCheckOutcome::failed
@@ -1562,7 +1492,8 @@ ExperienceRunResult run_classic_session(
 					}
 				} else {
 					auto started = th03::app::start_update_install_task(
-						*update_release, *update_runtime_context, update_transport
+						*update_release, *current_update_runtime_context(),
+						update_transport
 					);
 					if(started) {
 						update_install_task.emplace(std::move(*started));
@@ -3301,20 +3232,9 @@ void bind_packaged_menu_assets(ContentPaths &content)
 int main(int argc, char **argv)
 {
 #if defined(TH03_ENABLE_UPDATE_HOST)
-	auto runtime = load_update_runtime_context();
-	if(!runtime) {
-		std::cerr << "status=error\nstage=update-runtime\ncode=" <<
-			runtime.error() << '\n';
-		return 1;
+	if(auto initialized = initialize_update_host(); !initialized) {
+		return initialized.error();
 	}
-	update_runtime_context = std::move(*runtime);
-	auto health = load_update_health_request();
-	if(!health) {
-		std::cerr << "status=error\nstage=update-health\ncode=" <<
-			health.error() << '\n';
-		return 1;
-	}
-	update_health_request = std::move(*health);
 #endif
 	std::vector<std::string_view> arguments;
 	arguments.reserve(static_cast<std::size_t>(std::max(argc - 1, 0)));

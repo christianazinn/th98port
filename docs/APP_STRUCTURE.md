@@ -96,6 +96,11 @@ Host key labels and controller enumeration callbacks live in
 Classic, while the SDL vocabulary and mapper projection remain platform-input
 details.
 
+Process-lifetime update activation and trial-health state lives in
+`support/update_host.*`. Startup initializes it once, launch paths acknowledge
+health through the host, and sessions query the current runtime context without
+reaching into composition-root globals.
+
 Support modules must expose the smallest interface needed by the composition
 root. Moving a concern there does not make it a public library facility, and
 must not change its validation, diagnostics, or runtime behavior. A facility
