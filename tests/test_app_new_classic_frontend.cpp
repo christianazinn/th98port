@@ -59,6 +59,33 @@ void test_text_editor_input_ownership()
 		"only an explicit editor command and process quit cross text ownership");
 }
 
+void test_retained_menu_input_projection()
+{
+	using namespace th03::app;
+	const LogicalTickInput live{
+		.input = {.system = 0x0004U},
+		.physical_domains = PhysicalInputDomains{
+			.keyboard = {
+				.p1 = 0x0021U,
+				.p2 = 0x0002U,
+				.system = 0x0004U,
+			},
+			.first_joystick = 0x0010U,
+			.first_joystick_present = true,
+		},
+		.app_quit_requested = true,
+	};
+	const auto system_only = new_classic_menu_ui(live);
+	expect(system_only.left && !system_only.up && !system_only.down &&
+		!system_only.confirm && !system_only.bomb &&
+		system_only.app_quit_requested,
+		"retained menus use only System input unless player words are accepted");
+	const auto merged = new_classic_menu_ui(live, true);
+	expect(merged.up && !merged.down && merged.left && !merged.right &&
+		merged.confirm && merged.bomb && merged.app_quit_requested,
+		"retained menus merge live System, P1, and first-joystick domains without P2");
+}
+
 std::uint16_t injected_dos_date(void *context) noexcept
 {
 	return *static_cast<const std::uint16_t *>(context);
@@ -1866,6 +1893,7 @@ void test_catalog_browser_and_save()
 int main()
 {
 	test_text_editor_input_ownership();
+	test_retained_menu_input_projection();
 	test_replay_hub_and_libraries();
 	test_online_high_score_menu();
 	test_authentic_online_menu_previews_if_requested();

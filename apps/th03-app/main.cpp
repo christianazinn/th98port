@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <chrono>
-#include <ctime>
 #include <expected>
 #include <filesystem>
 #include <functional>
@@ -27,7 +26,7 @@
 
 #include "default_bindings.hpp"
 #include "support/diagnostics.hpp"
-#include "support/netplay_replay_save.hpp"
+#include "support/replay_save.hpp"
 #include "support/netplay_wire.hpp"
 #include "support/rhythm_assets.hpp"
 #include "support/runtime_environment.hpp"
@@ -106,7 +105,10 @@ using th03::app::launcher_support::platform_config;
 using th03::app::launcher_support::prepare_direct_netplay_replay_save_resources;
 using th03::app::launcher_support::print_usage;
 using th03::app::launcher_support::product_online_origin;
+using th03::app::launcher_support::ReplaySaveAudioContext;
+using th03::app::launcher_support::ReplaySaveRunResult;
 using th03::app::launcher_support::refresh_host_presentability;
+using th03::app::launcher_support::run_replay_save;
 using th03::app::launcher_support::send_netplay_datagram;
 using th03::app::launcher_support::send_netplay_lobby_datagram;
 #if defined(TH03_ENABLE_RTC_TRANSPORT)
@@ -204,25 +206,6 @@ struct StartupRunResult final {
 	bool application_quit = false;
 };
 
-struct HostUiStep final {
-	bool surface_changed = false;
-	bool done = false;
-};
-
-struct ReplaySaveRunResult final {
-	int exit_code = 0;
-	bool application_quit = false;
-	bool replay_published = false;
-};
-
-struct ReplaySaveAudioContext final {
-	th03::app::ClassicAudioSession *session = nullptr;
-	std::optional<th03::platform::SdlAudioDevice> *device = nullptr;
-	bool *started = nullptr;
-	const std::uint8_t *master_volume_percent = nullptr;
-	const bool *mute_when_unfocused = nullptr;
-};
-
 [[nodiscard]] std::expected<
 	std::span<const th03::audio::PmdCanonicalStereoSample>,
 	const char *
@@ -244,41 +227,6 @@ struct ReplaySaveAudioContext final {
 	}
 	return std::span<const th03::audio::PmdCanonicalStereoSample>(storage);
 }
-
-[[nodiscard]] std::uint16_t current_dos_date(void *) noexcept
-{
-	const auto now = std::time(nullptr);
-	std::tm local{};
-#if defined(_WIN32)
-	if(localtime_s(&local, &now) != 0) {
-		return 0U;
-	}
-#else
-	if(!localtime_r(&now, &local)) {
-		return 0U;
-	}
-#endif
-	const auto year = std::clamp(local.tm_year + 1900, 1980, 2107) - 1980;
-	return static_cast<std::uint16_t>(
-		(static_cast<std::uint16_t>(year) << 9U) |
-		(static_cast<std::uint16_t>(local.tm_mon + 1) << 5U) |
-		static_cast<std::uint16_t>(local.tm_mday)
-	);
-}
-
-ReplaySaveRunResult run_replay_save(
-	th03::formats::ReplayDocument document,
-	const std::filesystem::path &replay_root,
-	th03::app::RationalTickRate tick_rate,
-	th03::platform::SdlPlatform &platform,
-	th03::platform::SdlInputMapper &mapper,
-	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets>
-		patch_assets = {},
-	std::shared_ptr<const th03::app::NewClassicReplaySaveArt> save_art = {},
-	ReplaySaveAudioContext audio = {},
-	std::optional<th03::app::ReplaySlotLocalView> local_view = std::nullopt
-);
-
 
 [[nodiscard]] constexpr th03::platform::SdlWindowPresentation
 platform_window_presentation(
@@ -598,11 +546,6 @@ enum class DirectNetplayLobbyExit : std::uint8_t {
 	}
 }
 
-[[nodiscard]] th03::app::NewClassicUiInput project_new_classic_ui(
-	const th03::app::LogicalTickInput &sample,
-	bool accept_player_words
-) noexcept;
-
 template <typename Work>
 [[nodiscard]] std::expected<std::invoke_result_t<Work>, int>
 run_retained_menu_network_job(
@@ -660,7 +603,7 @@ run_retained_menu_network_job(
 				return std::unexpected(advanced.error());
 			}
 			application_quit = application_quit ||
-				project_new_classic_ui(**due, true).app_quit_requested;
+				th03::app::new_classic_menu_ui(**due, true).app_quit_requested;
 			if(retry_blocked_event) {
 				auto retried = mapper.pump_events(*scheduler, false);
 				if(!retried) {
@@ -1407,37 +1350,6 @@ negotiate_rtc_netplay_lobby(
 		send_netplay_datagram(wire, datagram);
 }
 
-[[nodiscard]] th03::app::NewClassicUiInput project_new_classic_ui(
-	const th03::app::LogicalTickInput &sample,
-	bool accept_player_words = false
-) noexcept
-{
-	constexpr std::uint16_t input_up = 0x0001U;
-	constexpr std::uint16_t input_down = 0x0002U;
-	constexpr std::uint16_t input_left = 0x0004U;
-	constexpr std::uint16_t input_right = 0x0008U;
-	constexpr std::uint16_t input_bomb = 0x0010U;
-	constexpr std::uint16_t input_shot = 0x0020U;
-	constexpr std::uint16_t input_cancel = 0x1000U;
-	constexpr std::uint16_t input_ok = 0x2000U;
-	const auto word = accept_player_words ?
-		th03::app::new_classic_interface_input_word(sample) :
-		sample.input.system;
-	const auto pressed = [word](std::uint16_t bit) noexcept {
-		return (word & bit) != 0U;
-	};
-	return {
-		.up = pressed(input_up),
-		.down = pressed(input_down),
-		.left = pressed(input_left),
-		.right = pressed(input_right),
-		.confirm = pressed(input_shot) || pressed(input_ok),
-		.bomb = pressed(input_bomb),
-		.cancel = pressed(input_cancel),
-		.app_quit_requested = sample.app_quit_requested,
-	};
-}
-
 [[nodiscard]] int run_netplay_report_modal(
 	th03::app::RationalTickRate tick_rate,
 	th03::platform::SdlPlatform &platform,
@@ -1501,7 +1413,7 @@ negotiate_rtc_netplay_lobby(
 					return advanced.error();
 				}
 			}
-			const auto consumed = report.consume(project_new_classic_ui(
+			const auto consumed = report.consume(th03::app::new_classic_menu_ui(
 				**due, true
 			));
 			if(retry_blocked_event) {
@@ -1656,7 +1568,7 @@ private:
 			const auto consumed = room.consume({
 				.ui = text_entry ?
 					project_new_classic_text_entry_ui(**due, scancode) :
-					project_new_classic_ui(**due, true),
+					th03::app::new_classic_menu_ui(**due, true),
 				.erase = text_entry && scancode &&
 					*scancode == SDL_SCANCODE_BACKSPACE,
 				.delete_forward = text_entry && scancode &&
@@ -1819,7 +1731,7 @@ struct OnlineProfileRunResult final {
 			surface_changed = scene.consume({
 				.ui = text_entry ?
 					project_new_classic_text_entry_ui(**due, scancode) :
-					project_new_classic_ui(**due, true),
+					th03::app::new_classic_menu_ui(**due, true),
 				.erase = text_entry && scancode &&
 					*scancode == SDL_SCANCODE_BACKSPACE,
 				.delete_forward = text_entry && scancode &&
@@ -5911,151 +5823,6 @@ StartupRunResult run_startup_sequence(
 	return {};
 }
 
-template <typename Surface, typename Consume>
-std::expected<void, int> run_host_ui(
-	th03::app::RationalTickRate tick_rate,
-	th03::platform::SdlPlatform &platform,
-	th03::platform::SdlInputMapper &mapper,
-	Surface surface,
-	Consume consume,
-	ReplaySaveAudioContext audio = {}
-)
-{
-	auto presented = platform.present(surface());
-	if(!presented) {
-		return std::unexpected(fail("new-classic-present", presented.error()));
-	}
-	auto scheduler = th03::app::TickInputScheduler::create(
-		tick_rate,
-		th03::platform::sdl_ticks_now_ns(),
-		// Replay Patch menus and a retained SCORE.M still live on the same
-		// 56.423 Hz source timeline while the host owns this modal transaction.
-		th03::app::classic_interactive_catch_up_policy
-	);
-	if(!scheduler) {
-		return std::unexpected(fail_tick(scheduler.error()));
-	}
-	bool retry_blocked_event = false;
-	bool audio_focus_muted = false;
-	std::vector<th03::audio::PmdCanonicalStereoSample> gain_frames{};
-	auto sync_audio_focus_mute = [&]() noexcept {
-		const bool desired = audio.mute_when_unfocused &&
-			*audio.mute_when_unfocused && !mapper.main_window_focused();
-		if(desired && !audio_focus_muted && audio.device && *audio.device) {
-			if(auto cleared = (*audio.device)->clear(); !cleared) {
-				warn_audio_device(
-					"replay-save-audio-focus-clear", cleared.error()
-				);
-				audio.device->reset();
-			}
-		}
-		audio_focus_muted = desired;
-	};
-	for(;;) {
-		const auto cutoff = th03::platform::sdl_ticks_now_ns();
-		if(!retry_blocked_event) {
-			auto pumped = mapper.pump_events(*scheduler, false);
-			if(!pumped) {
-				return std::unexpected(fail(
-					"new-classic-input-pump", pumped.error()
-				));
-			}
-			retry_blocked_event = pumped->queue_blocked;
-		}
-		sync_audio_focus_mute();
-		bool presentation_pending = false;
-		bool done = false;
-		for(;;) {
-			auto due = scheduler->pop_due(cutoff);
-			if(!due) {
-				return std::unexpected(fail_tick(due.error()));
-			}
-			if(!*due) {
-				break;
-			}
-			auto step = consume(project_new_classic_ui(**due, true));
-			if(!step) {
-				return std::unexpected(step.error());
-			}
-			presentation_pending =
-				presentation_pending || step->surface_changed;
-			if(audio.session) {
-				sync_audio_focus_mute();
-				auto rendered = audio.session->advance_tick();
-				if(!rendered) {
-					return std::unexpected(fail(
-						"replay-save-audio-tick", rendered.error()
-					));
-				}
-				if(audio.device && *audio.device && !audio_focus_muted) {
-					const std::uint8_t percent = audio.master_volume_percent ?
-						*audio.master_volume_percent : std::uint8_t{100U};
-					auto output = output_gain_frames(
-						rendered->canonical_frames, percent, gain_frames
-					);
-					if(!output) {
-						return std::unexpected(fail_output_gain(
-							"replay-save-audio-output-gain", output.error()
-						));
-					}
-					auto submitted = (*audio.device)->submit(*output);
-					if(!submitted) {
-						warn_audio_device(
-							"replay-save-audio-submit", submitted.error()
-						);
-						audio.device->reset();
-					} else if(audio.started && !*audio.started &&
-						!rendered->canonical_frames.empty()) {
-						auto resumed = (*audio.device)->resume();
-						if(!resumed) {
-							warn_audio_device(
-								"replay-save-audio-resume", resumed.error()
-							);
-							audio.device->reset();
-						} else {
-							*audio.started = true;
-						}
-					}
-				}
-			}
-			done = step->done;
-			if(retry_blocked_event) {
-				auto retried = mapper.pump_events(*scheduler, false);
-				if(!retried) {
-					return std::unexpected(fail(
-						"new-classic-input-pump", retried.error()
-					));
-				}
-				retry_blocked_event = retried->queue_blocked;
-			}
-			if(done) {
-				break;
-			}
-		}
-		if(presentation_pending) {
-			presented = platform.present(surface());
-			if(!presented) {
-				return std::unexpected(fail(
-					"new-classic-present", presented.error()
-				));
-			}
-		}
-		if(auto refreshed = refresh_host_presentability(
-			platform, "new-classic-presentability-refresh"
-		); !refreshed) {
-			return std::unexpected(refreshed.error());
-		}
-		if(done) {
-			return {};
-		}
-		const auto deadline = scheduler->next_deadline_ns();
-		const auto now = th03::platform::sdl_ticks_now_ns();
-		if(deadline && *deadline > now) {
-			SDL_DelayPrecise(std::min(*deadline - now, maximum_idle_delay_ns));
-		}
-	}
-}
-
 [[nodiscard]] std::string_view sdl_scancode_name(
 	void *,
 	std::uint16_t key
@@ -6175,72 +5942,6 @@ std::expected<void, int> run_host_ui(
 	catalog = static_cast<th03::platform::SdlInputMapper *>(context)->
 		controller_catalog();
 	return true;
-}
-
-ReplaySaveRunResult run_replay_save(
-	th03::formats::ReplayDocument document,
-	const std::filesystem::path &replay_root,
-	th03::app::RationalTickRate tick_rate,
-	th03::platform::SdlPlatform &platform,
-	th03::platform::SdlInputMapper &mapper,
-	std::shared_ptr<const th03::app::NewClassicReplayPatchAssets> patch_assets,
-	std::shared_ptr<const th03::app::NewClassicReplaySaveArt> save_art,
-	ReplaySaveAudioContext audio,
-	std::optional<th03::app::ReplaySlotLocalView> local_view
-)
-{
-	auto catalog = th03::app::scan_new_classic_replays(replay_root);
-	if(!catalog) {
-		return {.exit_code = fail("replay-catalog", catalog.error())};
-	}
-	th03::app::NewClassicReplaySaveMenu menu(
-		std::move(document), std::move(patch_assets), std::move(save_art),
-		&current_dos_date, nullptr, local_view
-	);
-	bool application_quit = false;
-	bool replay_published = false;
-	auto driven = run_host_ui(
-		tick_rate, platform, mapper,
-		[&]() { return menu.surface(); },
-		[&](th03::app::NewClassicUiInput input) ->
-			std::expected<HostUiStep, int> {
-			auto result = menu.consume(input, *catalog);
-			if(result.status ==
-				th03::app::NewClassicReplaySaveStatus::save_requested) {
-				auto committed = th03::app::commit_replay_slot(
-					replay_root, menu.selected_slot(), menu.document(), local_view
-				);
-				if(committed) {
-					replay_published = true;
-					auto refreshed = th03::app::scan_new_classic_replays(replay_root);
-					if(!refreshed) {
-						return std::unexpected(fail(
-							"replay-catalog-refresh", refreshed.error()
-						));
-					}
-					catalog = std::move(refreshed);
-				}
-				menu.report_commit(committed.has_value(), *catalog);
-				result.surface_changed = true;
-				result.status = th03::app::NewClassicReplaySaveStatus::running;
-			}
-			application_quit = result.status ==
-				th03::app::NewClassicReplaySaveStatus::application_quit;
-			return HostUiStep{
-				.surface_changed = result.surface_changed,
-				.done = result.status !=
-					th03::app::NewClassicReplaySaveStatus::running,
-			};
-		},
-		audio
-	);
-	if(!driven) {
-		return {.exit_code = driven.error()};
-	}
-	return {
-		.application_quit = application_quit,
-		.replay_published = replay_published,
-	};
 }
 
 std::expected<

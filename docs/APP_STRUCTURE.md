@@ -71,9 +71,10 @@ loading lives in `support/rhythm_assets.*`, while usage and machine-readable
 error reporting live in `support/diagnostics.*`. Process-environment access
 and the startup policy derived from it live in `support/runtime_environment.*`.
 The platform-specific UDP/RTC channel adapter lives in `support/netplay_wire.*`;
-direct-netplay replay-save presentation resources are prepared by
-`support/netplay_replay_save.*`; the match and menu lifecycles that use them
-remain composition responsibilities.
+replay-save resource preparation, modal driving, retained audio, catalog
+refresh, and slot publication live together in `support/replay_save.*`; the
+match lifecycle that invokes the transaction remains a composition
+responsibility.
 
 Support modules must expose the smallest interface needed by the composition
 root. Moving a concern there does not make it a public library facility, and

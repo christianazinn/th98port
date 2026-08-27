@@ -40,6 +40,14 @@ struct NewClassicUiInput final {
 	bool app_quit_requested = false;
 };
 
+// Retained New Classic menus accept System input and, when requested, the
+// merged live Story/VS player domains. Replay-scripted samples continue to
+// provide their source-owned interface word through [system].
+[[nodiscard]] NewClassicUiInput new_classic_menu_ui(
+	const LogicalTickInput &sample,
+	bool accept_player_words = false
+) noexcept;
+
 enum class NewClassicTextEditorCommand : std::uint8_t {
 	none,
 	up,
