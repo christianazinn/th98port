@@ -91,6 +91,11 @@ tick/presentation loops, title-audio advancement, and cancellable background
 request waits. The composition root consumes its result values and owns only
 product navigation and settings decisions.
 
+Host key labels and controller enumeration callbacks live in
+`support/input_catalog.*`. The product shell binds these callbacks into New
+Classic, while the SDL vocabulary and mapper projection remain platform-input
+details.
+
 Support modules must expose the smallest interface needed by the composition
 root. Moving a concern there does not make it a public library facility, and
 must not change its validation, diagnostics, or runtime behavior. A facility
