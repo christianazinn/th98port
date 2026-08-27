@@ -74,9 +74,12 @@ The platform-specific UDP/RTC channel adapter lives in `support/netplay_wire.*`;
 replay-save resource preparation, modal driving, retained audio, catalog
 refresh, and slot publication live together in `support/replay_save.*`; the
 complete direct-netplay lobby and match lifecycle lives in
-`support/netplay_session.*`. The composition root creates the platform and
-product-shell requests but does not own transport negotiation, deterministic
-advancement, rollback, pause barriers, reports, or netplay replay capture.
+`support/netplay_session.*`, with nonce/lock and UDP/RTC pre-match negotiation
+separated internally in `support/netplay_lobby.cpp`. Their source-private
+contract carries only the negotiated wire, lobby identity, match contract, and
+paired profiles. The composition root creates the platform and product-shell
+requests but does not own transport negotiation, deterministic advancement,
+rollback, pause barriers, reports, or netplay replay capture.
 
 Support modules must expose the smallest interface needed by the composition
 root. Moving a concern there does not make it a public library facility, and
