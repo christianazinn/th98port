@@ -180,6 +180,8 @@ const char *name(th03::app::ClassicCliOption option) noexcept
 		return "game-text-pack";
 	case th03::app::ClassicCliOption::cutscene_text_pack:
 		return "cutscene-text-pack";
+	case th03::app::ClassicCliOption::picture_patch_pack:
+		return "picture-patch-pack";
 	case th03::app::ClassicCliOption::rhythm_rom: return "rhythm-rom";
 	case th03::app::ClassicCliOption::rhythm_pcm: return "rhythm-pcm";
 	case th03::app::ClassicCliOption::config: return "config";

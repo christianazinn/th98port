@@ -1,9 +1,7 @@
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <chrono>
 #include <ctime>
 #include <expected>
@@ -32,6 +30,7 @@
 #include "default_bindings.hpp"
 #include "support/diagnostics.hpp"
 #include "support/rhythm_assets.hpp"
+#include "support/runtime_environment.hpp"
 
 #include "th03/app/classic/classic_cli.hpp"
 #include "th03/app/classic/classic_audio_session.hpp"
@@ -93,24 +92,20 @@ using th03::app::launcher_support::fail;
 using th03::app::launcher_support::fail_content;
 using th03::app::launcher_support::fail_output_gain;
 using th03::app::launcher_support::fail_tick;
+using th03::app::launcher_support::environment_value;
 using th03::app::launcher_support::name;
+using th03::app::launcher_support::netplay_ice_environment;
+using th03::app::launcher_support::online_token_environment;
+using th03::app::launcher_support::online_user_environment;
+using th03::app::launcher_support::pixel_oracle_identity_output;
+using th03::app::launcher_support::pixel_oracle_selector_environment;
+using th03::app::launcher_support::platform_config;
 using th03::app::launcher_support::print_usage;
+using th03::app::launcher_support::product_online_origin;
 using th03::app::launcher_support::refresh_host_presentability;
 using th03::app::launcher_support::warn_audio_device;
 
 constexpr std::uint64_t maximum_idle_delay_ns = 1'000'000U;
-constexpr const char *pixel_oracle_log_environment = "TH03_PIXEL_ORACLE_LOG";
-constexpr const char *pixel_oracle_rgb_environment = "TH03_PIXEL_ORACLE_RGB_DIR";
-constexpr const char *pixel_oracle_identity_environment =
-	"TH03_PIXEL_ORACLE_IDENTITY_LOG";
-constexpr const char *pixel_oracle_fixture_environment =
-	"TH03_PIXEL_ORACLE_FIXTURE_SHA256";
-constexpr const char *pixel_oracle_selector_environment =
-	"TH03_PIXEL_ORACLE_SELECTOR";
-constexpr const char *online_origin_environment = "TH03_ONLINE_ORIGIN";
-constexpr const char *official_online_origin = "https://azinn.dev";
-constexpr const char *online_user_environment = "TH03_ONLINE_USER_ID";
-constexpr const char *online_token_environment = "TH03_ONLINE_TOKEN";
 
 [[nodiscard]] std::uint64_t fresh_netplay_nonce() noexcept
 {
@@ -138,7 +133,6 @@ constexpr const char *online_token_environment = "TH03_ONLINE_TOKEN";
 	previous = result;
 	return result;
 }
-constexpr const char *netplay_ice_environment = "TH03_NETPLAY_ICE_SERVERS";
 
 #if defined(TH03_ENABLE_UPDATE_HOST)
 struct UpdateHealthRequest final {
@@ -150,105 +144,6 @@ std::optional<UpdateHealthRequest> update_health_request{};
 std::optional<th03::app::UpdateRuntimeContext> update_runtime_context{};
 bool update_health_acknowledged = false;
 #endif
-
-struct PixelOracleIdentityOutput final {
-	std::ofstream stream{};
-	std::string fixture_sha256{};
-
-	[[nodiscard]] bool enabled() const noexcept { return stream.is_open(); }
-};
-
-[[nodiscard]] std::optional<std::string> environment_value(const char *name)
-{
-#if defined(_MSC_VER)
-	char *value = nullptr;
-	std::size_t value_bytes = 0U;
-	if(_dupenv_s(&value, &value_bytes, name) != 0 || value == nullptr) {
-		std::free(value);
-		return std::nullopt;
-	}
-	std::string result(value);
-	std::free(value);
-	return result;
-#else
-	const char *const value = std::getenv(name);
-	return value ? std::optional<std::string>(value) : std::nullopt;
-#endif
-}
-
-[[nodiscard]] std::expected<PixelOracleIdentityOutput, const char *>
-pixel_oracle_identity_output(bool publication_oracle_enabled)
-{
-	const auto path = environment_value(pixel_oracle_identity_environment);
-	const auto fixture = environment_value(pixel_oracle_fixture_environment);
-	if(!path && !fixture) {
-		return PixelOracleIdentityOutput{};
-	}
-	if(!path || !fixture || path->empty() || !publication_oracle_enabled ||
-		!th03::app::valid_pixel_oracle_fixture_sha256(*fixture)) {
-		return std::unexpected("invalid-identity-oracle-config");
-	}
-	std::error_code error;
-	if(std::filesystem::exists(*path, error) || error) {
-		return std::unexpected("identity-oracle-path-used");
-	}
-	PixelOracleIdentityOutput output{
-		.stream = std::ofstream(*path, std::ios::out | std::ios::binary),
-		.fixture_sha256 = *fixture,
-	};
-	std::ranges::transform(
-		output.fixture_sha256, output.fixture_sha256.begin(),
-		[](char digit) { return static_cast<char>(std::tolower(
-			static_cast<unsigned char>(digit)
-		)); }
-	);
-	if(!output.stream || !th03::app::write_t3ali1_header(output.stream)) {
-		return std::unexpected("identity-oracle-open-failed");
-	}
-	return output;
-}
-
-[[nodiscard]] th03::platform::SdlPlatformConfig platform_config(
-	bool force_hidden = false
-)
-{
-	th03::platform::SdlPlatformConfig config{};
-	config.title = th03::platform::th03_product_window_title;
-#if defined(_MSC_VER)
-	char *path = nullptr;
-	std::size_t path_bytes = 0U;
-	if(_dupenv_s(&path, &path_bytes, pixel_oracle_log_environment) == 0 &&
-		path != nullptr) {
-		config.oracle_log_path = path;
-	}
-	std::free(path);
-	path = nullptr;
-	path_bytes = 0U;
-	if(_dupenv_s(&path, &path_bytes, pixel_oracle_rgb_environment) == 0 &&
-		path != nullptr) {
-		config.oracle_rgb_directory = path;
-	}
-	std::free(path);
-#else
-	if(const char *const path = std::getenv(pixel_oracle_log_environment);
-		path != nullptr) {
-		config.oracle_log_path = path;
-	}
-	if(const char *const path = std::getenv(pixel_oracle_rgb_environment);
-		path != nullptr) {
-		config.oracle_rgb_directory = path;
-	}
-#endif
-	// Developer identity captures are unattended evidence runs. Hide the native
-	// window from creation onward so capture cannot steal focus.
-	const auto identity_path = environment_value(
-		pixel_oracle_identity_environment
-	);
-	config.hidden = force_hidden || th03::app::pixel_oracle_identity_capture_hidden(
-		identity_path.value_or("")
-	);
-	return config;
-}
 
 enum class ExperienceRunDisposition : std::uint8_t {
 	return_to_menu,
@@ -426,15 +321,6 @@ namespace {
 		.cadence_seconds = request.tick_rate.seconds,
 		.input_delay_frames = request.netplay_input_delay_frames,
 	};
-}
-
-[[nodiscard]] std::optional<std::string> product_online_origin()
-{
-	auto configured = environment_value(online_origin_environment);
-	if(configured) {
-		return configured->empty() ? std::nullopt : std::move(configured);
-	}
-	return std::string{official_online_origin};
 }
 
 #if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)

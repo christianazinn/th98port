@@ -1264,6 +1264,7 @@ if(TH03_ENABLE_SDL)
 		apps/th03-app/main.cpp
 		apps/th03-app/support/diagnostics.cpp
 		apps/th03-app/support/rhythm_assets.cpp
+		apps/th03-app/support/runtime_environment.cpp
 	)
 	target_link_libraries(
 		th03-app PRIVATE th03_app_main th03_platform_sdl th03_platform_udp
@@ -2281,6 +2282,12 @@ if(BUILD_TESTING)
 		add_test(NAME th03-app-classic-help COMMAND th03-app --classic --help)
 		add_test(NAME th03-app-new-classic-help COMMAND th03-app --new-classic --help)
 		add_test(NAME th03-app-shell-help COMMAND th03-app --shell --help)
+		add_test(
+			NAME th03-app-picture-patch-diagnostic
+			COMMAND ${CMAKE_COMMAND}
+				-DTH03_APP=$<TARGET_FILE:th03-app>
+				-P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_app_picture_patch_diagnostic.cmake
+		)
 		add_test(
 			NAME th03-app-missing-main
 			COMMAND ${CMAKE_COMMAND}
