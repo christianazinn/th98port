@@ -1263,6 +1263,7 @@ if(TH03_ENABLE_SDL)
 		apps/th03-app/default_bindings.cpp
 		apps/th03-app/main.cpp
 		apps/th03-app/support/diagnostics.cpp
+		apps/th03-app/support/netplay_wire.cpp
 		apps/th03-app/support/rhythm_assets.cpp
 		apps/th03-app/support/runtime_environment.cpp
 	)
@@ -2583,6 +2584,21 @@ if(BUILD_TESTING)
 	add_test(
 		NAME th03-platform-udp-socket-tests
 		COMMAND th03-platform-udp-socket-tests
+	)
+	add_executable(th03-app-netplay-wire-tests
+		apps/th03-app/support/netplay_wire.cpp
+		tests/test_app_netplay_wire.cpp
+	)
+	target_link_libraries(
+		th03-app-netplay-wire-tests PRIVATE th03_app_netplay th03_platform_udp
+	)
+	target_include_directories(
+		th03-app-netplay-wire-tests PRIVATE apps/th03-app
+	)
+	th03_set_warnings(th03-app-netplay-wire-tests)
+	add_test(
+		NAME th03-app-netplay-wire-tests
+		COMMAND th03-app-netplay-wire-tests
 	)
 	if(TH03_ENABLE_RTC)
 		add_executable(th03-platform-rtc-room-tests

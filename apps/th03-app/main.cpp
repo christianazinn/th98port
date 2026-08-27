@@ -29,6 +29,7 @@
 
 #include "default_bindings.hpp"
 #include "support/diagnostics.hpp"
+#include "support/netplay_wire.hpp"
 #include "support/rhythm_assets.hpp"
 #include "support/runtime_environment.hpp"
 
@@ -95,6 +96,8 @@ using th03::app::launcher_support::fail_tick;
 using th03::app::launcher_support::environment_value;
 using th03::app::launcher_support::name;
 using th03::app::launcher_support::netplay_ice_environment;
+using th03::app::launcher_support::NetplayWire;
+using th03::app::launcher_support::NetplayWireChannel;
 using th03::app::launcher_support::online_token_environment;
 using th03::app::launcher_support::online_user_environment;
 using th03::app::launcher_support::pixel_oracle_identity_output;
@@ -103,6 +106,11 @@ using th03::app::launcher_support::platform_config;
 using th03::app::launcher_support::print_usage;
 using th03::app::launcher_support::product_online_origin;
 using th03::app::launcher_support::refresh_host_presentability;
+using th03::app::launcher_support::send_netplay_datagram;
+using th03::app::launcher_support::send_netplay_lobby_datagram;
+#if defined(TH03_ENABLE_RTC_TRANSPORT)
+using th03::app::launcher_support::send_netplay_lobby_wire;
+#endif
 using th03::app::launcher_support::warn_audio_device;
 
 constexpr std::uint64_t maximum_idle_delay_ns = 1'000'000U;
@@ -632,205 +640,6 @@ void log_netplay_session_error(
 		}
 	}
 }
-
-[[nodiscard]] bool send_netplay_datagram(
-	class NetplayWire &wire,
-	const th03::app::NewClassicNetplayDatagram &datagram
-) noexcept;
-
-enum class NetplayWireChannel : std::uint8_t {
-	gameplay,
-	control,
-};
-
-struct NetplayWireMessage final {
-	NetplayWireChannel channel = NetplayWireChannel::control;
-	std::vector<std::byte> bytes{};
-};
-
-class NetplayWire final {
-public:
-	static NetplayWire udp(
-		std::unique_ptr<th03::platform::UdpSocket> socket,
-		th03::platform::UdpIpv4Endpoint peer
-	) noexcept
-	{
-		NetplayWire result{};
-		result.udp_socket_ = std::move(socket);
-		result.udp_peer_ = peer;
-		return result;
-	}
-
-#if defined(TH03_ENABLE_RTC_TRANSPORT)
-	static NetplayWire rtc(
-		std::unique_ptr<th03::platform::RtcRoom> room
-	) noexcept
-	{
-		NetplayWire result{};
-		result.rtc_room_ = std::move(room);
-		return result;
-	}
-#endif
-
-	NetplayWire(NetplayWire &&) noexcept = default;
-	NetplayWire &operator=(NetplayWire &&) noexcept = default;
-	NetplayWire(const NetplayWire &) = delete;
-	NetplayWire &operator=(const NetplayWire &) = delete;
-
-	[[nodiscard]] bool send(
-		NetplayWireChannel channel,
-		std::span<const std::byte> bytes
-	) noexcept
-	{
-#if !defined(TH03_ENABLE_RTC_TRANSPORT)
-		static_cast<void>(channel);
-#endif
-		if(udp_socket_) {
-			return udp_peer_ && udp_socket_->send(*udp_peer_, bytes).has_value();
-		}
-#if defined(TH03_ENABLE_RTC_TRANSPORT)
-		if(rtc_room_) {
-			const auto sent = rtc_room_->send(
-				channel == NetplayWireChannel::gameplay ?
-					th03::platform::RtcRoomChannel::gameplay :
-					th03::platform::RtcRoomChannel::control,
-				bytes
-			);
-			if(!sent) {
-				std::cerr << "netplay-rtc-send-code=" <<
-					th03::platform::rtc_room_error_code_name(sent.error().code)
-					<< '\n';
-			}
-			return sent.has_value();
-		}
-#endif
-		return false;
-	}
-
-	[[nodiscard]] std::expected<
-		std::optional<NetplayWireMessage>,
-		const char *
-	> receive() noexcept
-	{
-		if(udp_socket_) {
-			std::array<std::byte,
-				th03::app::new_classic_netplay_datagram_bytes> buffer{};
-			for(;;) {
-				auto received = udp_socket_->receive(buffer);
-				if(!received) {
-					return std::unexpected("socket-failed");
-				}
-				if(!*received) {
-					return std::optional<NetplayWireMessage>{};
-				}
-				if(!udp_peer_ || (*received)->sender != *udp_peer_) {
-					continue;
-				}
-				std::vector<std::byte> bytes((*received)->size);
-				std::ranges::copy(
-					std::span(buffer).first((*received)->size), bytes.begin()
-				);
-				return std::optional<NetplayWireMessage>{NetplayWireMessage{
-					.channel = (*received)->size ==
-						th03::app::new_classic_netplay_lobby_bytes ?
-						NetplayWireChannel::control :
-						NetplayWireChannel::gameplay,
-					.bytes = std::move(bytes),
-				}};
-			}
-		}
-#if defined(TH03_ENABLE_RTC_TRANSPORT)
-		if(rtc_room_) {
-			auto received = rtc_room_->receive();
-			if(!received) {
-				return std::unexpected(
-					th03::platform::rtc_room_error_code_name(
-						received.error().code
-					)
-				);
-			}
-			if(!*received) {
-				return std::optional<NetplayWireMessage>{};
-			}
-			return std::optional<NetplayWireMessage>{NetplayWireMessage{
-				.channel = (**received).channel ==
-					th03::platform::RtcRoomChannel::gameplay ?
-					NetplayWireChannel::gameplay : NetplayWireChannel::control,
-				.bytes = std::move((**received).bytes),
-			}};
-		}
-#endif
-		return std::unexpected("wire-closed");
-	}
-
-	[[nodiscard]] bool rtc() const noexcept
-	{
-#if defined(TH03_ENABLE_RTC_TRANSPORT)
-		return rtc_room_ != nullptr;
-#else
-		return false;
-#endif
-	}
-
-	[[nodiscard]] std::optional<std::uint64_t> round_trip_time_ms() const noexcept
-	{
-#if defined(TH03_ENABLE_RTC_TRANSPORT)
-		if(rtc_room_) {
-			const auto observed = rtc_room_->snapshot().round_trip_time;
-			if(observed && observed->count() >= 0 && observed->count() <= 60'000) {
-				return static_cast<std::uint64_t>(observed->count());
-			}
-		}
-#endif
-		return std::nullopt;
-	}
-
-private:
-	NetplayWire() = default;
-	std::unique_ptr<th03::platform::UdpSocket> udp_socket_{};
-	std::optional<th03::platform::UdpIpv4Endpoint> udp_peer_{};
-#if defined(TH03_ENABLE_RTC_TRANSPORT)
-	std::unique_ptr<th03::platform::RtcRoom> rtc_room_{};
-#endif
-};
-
-[[nodiscard]] bool send_netplay_datagram(
-	NetplayWire &wire,
-	const th03::app::NewClassicNetplayDatagram &datagram
-) noexcept
-{
-	const auto encoded = th03::app::encode_new_classic_netplay_datagram(
-		datagram
-	);
-	return encoded && wire.send(
-		datagram.type == th03::app::NewClassicNetplayDatagramType::input ?
-			NetplayWireChannel::gameplay : NetplayWireChannel::control,
-		*encoded
-	);
-}
-
-[[nodiscard]] bool send_netplay_lobby_datagram(
-	th03::platform::UdpSocket &socket,
-	th03::platform::UdpIpv4Endpoint peer,
-	const th03::app::NewClassicNetplayLobbyDatagram &datagram
-)
-{
-	const auto encoded =
-		th03::app::encode_new_classic_netplay_lobby_datagram(datagram);
-	return encoded && socket.send(peer, *encoded).has_value();
-}
-
-#if defined(TH03_ENABLE_RTC_TRANSPORT)
-[[nodiscard]] bool send_netplay_lobby_wire(
-	NetplayWire &wire,
-	const th03::app::NewClassicNetplayLobbyDatagram &datagram
-) noexcept
-{
-	const auto encoded =
-		th03::app::encode_new_classic_netplay_lobby_datagram(datagram);
-	return encoded && wire.send(NetplayWireChannel::control, *encoded);
-}
-#endif
 
 struct DirectNetplayLobbyResult final {
 	NetplayWire wire;
