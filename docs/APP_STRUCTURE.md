@@ -85,6 +85,12 @@ Platform selection for product-online HTTP and credential persistence belongs
 to `support/product_online.*`. Callers consume one executable-private adapter
 and do not select Windows or POSIX transports in the composition root.
 
+The retained Online Match room/profile screens are driven by
+`support/online_frontend.*`. That owner contains SDL text-input capture, modal
+tick/presentation loops, title-audio advancement, and cancellable background
+request waits. The composition root consumes its result values and owns only
+product navigation and settings decisions.
+
 Support modules must expose the smallest interface needed by the composition
 root. Moving a concern there does not make it a public library facility, and
 must not change its validation, diagnostics, or runtime behavior. A facility
