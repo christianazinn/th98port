@@ -270,6 +270,48 @@ void test_story_capture()
 	);
 }
 
+void test_dko_cpu_clear_bonus_is_not_p1_metadata()
+{
+	constexpr auto mode = th03::game_mode::story;
+	th03::app::NewClassicReplayRecorder recorder;
+	check(
+		recorder.round_started(round_start(mode, 0U, 0U, 67U)).has_value() &&
+		recorder.sample(th03::replay::InputPhase::gameplay, {}).has_value(),
+		"odd-order Story DKO capture begins"
+	);
+	th03::MainResultState cpu_clear{};
+	cpu_clear.summary_active = true;
+	cpu_clear.winner = th03::PlayerId::p2;
+	cpu_clear.story_stage = 0U;
+	cpu_clear.winner_stats = {
+		.combo_hits_max = 99U,
+		.gauge_attacks_fired = 9U,
+		.boss_attacks_fired = 8U,
+		.boss_attacks_reversed = 7U,
+		.boss_panics_fired = 6U,
+	};
+	check(
+		recorder.round_completed(
+			terminal(mode, 0U, 0U, 2U, 0), std::nullopt, cpu_clear
+		).has_value(),
+		"odd-order Story DKO retains the technical P1 route and displayed P2 result"
+	);
+	const auto *document = recorder.document();
+	check(document && document->stage_clear_bonuses,
+		"odd-order Story DKO retains a V14 Clear Bonus table");
+	if(!document || !document->stage_clear_bonuses) {
+		return;
+	}
+	const auto &bonus = (*document->stage_clear_bonuses)[0U];
+	check(
+		bonus.total == std::array<std::uint8_t, 4U>{} &&
+		bonus.max_combo == 0U && bonus.gauge_attacks == 0U &&
+		bonus.boss_attacks == 0U && bonus.boss_reversals == 0U &&
+		bonus.boss_panics == 0U && bonus.remaining_lives == 0U,
+		"CPU-side DKO Clear Bonus remains zero in P1 replay metadata"
+	);
+}
+
 void test_timing_scope()
 {
 	constexpr auto mode = th03::game_mode::story;
@@ -625,6 +667,7 @@ int main()
 {
 	test_vs_capture();
 	test_story_capture();
+	test_dko_cpu_clear_bonus_is_not_p1_metadata();
 	test_timing_scope();
 	test_invalid_sequences();
 	test_memory_only_lifecycle();

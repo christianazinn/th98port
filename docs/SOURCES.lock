@@ -15,17 +15,18 @@ Replay oracle / historical V11-V12 and QoL donor:
   ref: refs/pins/th03-port/oracle-replays
   commit: 75387f747b8c146f4d94c559dc4f624bf9082f94
 
-Replay Patch 0.4.15 / New Classic experience donor (native work does not
+Replay Patch 0.4.16 / New Classic experience donor (native work does not
 modify this source authority):
   discovery ref: origin/replays (moving; never substitutes for the commit)
-  commit: 5cc773e85c7db97c1c09888fa5531faa392de136
+  commit: b8d998b7cde9d81eecc0d2c10468b1c53f79c7d4
+  V14 release donor: 5cc773e85c7db97c1c09888fa5531faa392de136
   pre-final 768-byte semantic commit: 43028f09a2fc6965b2462e9743be604d3b8b1d0e
   historical pre-final capture descendant: 5dd5ef92c477986e2e2b2bc5066a2f30745b1f6f
 
 Behavior precedence:
   Anniversary defines Classic gameplay.
   Master is the historical diagnostic tie-breaker.
-  Replay Patch 0.4.15 defines New Classic replay/QoL semantics, never a second
+  Replay Patch 0.4.16 defines New Classic replay/QoL semantics, never a second
   gameplay core.
   Frozen oracle output defines executable native acceptance.
   V14 defines current user replay documents for both products.
