@@ -205,4 +205,3 @@ std::size_t NewClassicReplayHub::selection() const noexcept
 }
 
 } // namespace th03::app
-
