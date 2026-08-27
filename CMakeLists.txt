@@ -1036,6 +1036,7 @@ add_library(th03_app_main STATIC
 	src/app/classic/mainl/classic_mainl_win.cpp
 	src/app/classic/scenes/classic_staff_scene.cpp
 	src/app/classic/classic_story_session.cpp
+	src/app/classic/classic_story_session_backend.cpp
 	src/app/direct_vs/direct_vs_cli.cpp
 	src/app/direct_vs/direct_vs_launch.cpp
 	src/app/content/diet_executable.cpp

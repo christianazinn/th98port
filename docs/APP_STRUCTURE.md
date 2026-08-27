@@ -52,6 +52,13 @@ source-private factory bundle. Scene advancement and host-facing requests use
 separate operation tables; the state machine must never cast their opaque
 contexts back to the production backend type.
 
+The story lifecycle follows the same physical seam:
+`classic_story_session.cpp` owns planning and retained scene transitions,
+while `classic_story_session_backend.cpp` owns resource loading, concrete scene
+instances, persistence, replay capture, and presentation. Construction crosses
+one move-only binding factory whose opaque owner keeps the operation-table
+context alive; the session source never names the concrete backend type.
+
 Within `new_classic/`, the local replay browser remains in
 `new_classic_frontend.cpp`, while the replay-save editor and its art preparation
 live in `replay/new_classic_replay_save_menu.cpp`. Common replay-list formatting

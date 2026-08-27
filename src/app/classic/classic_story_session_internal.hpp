@@ -239,6 +239,103 @@ struct ClassicStorySessionTestHooks final {
 	(*force_main_outcome)(void *, ClassicStoryRouteTestOutcome) = nullptr;
 };
 
+struct ClassicStoryBackendRequest final {
+	std::shared_ptr<MainResourceLoader> loader{};
+	std::shared_ptr<const MainProcessStaticContent> static_content{};
+	MainlStageTextAssets stage_text{};
+	MainlStaffCompiledAssets staff_compiled{};
+	std::filesystem::path score_path{};
+	std::filesystem::path legacy_score_path{};
+	NewClassicReplayRecorder *replay_recorder = nullptr;
+	std::shared_ptr<const NewClassicReplayPatchAssets> patch_assets{};
+	std::shared_ptr<const NewClassicCutsceneTextCatalog> cutscene_text{};
+	const NewClassicGameTextCatalog *game_text = nullptr;
+	std::shared_ptr<const NewClassicPicturePatchCatalog> picture_patch{};
+	bool new_classic = false;
+	bool replay_playback = false;
+	std::optional<GameInit> replay_resident{};
+	std::unique_ptr<MainProcess> replay_process{};
+	std::unique_ptr<MainProcessDriver> replay_driver{};
+};
+
+struct ClassicStoryBackendBinding final {
+	std::shared_ptr<void> owner{};
+	ClassicStorySessionBackendOperations operations{};
+	ClassicStorySessionTestHooks test_hooks{};
+};
+
+[[nodiscard]] std::expected<
+	ClassicStoryBackendBinding,
+	ClassicStorySessionError
+> create_classic_story_backend(ClassicStoryBackendRequest request);
+
+namespace classic_story_session_detail {
+
+[[nodiscard]] ClassicStorySessionError session_error(
+	ClassicStorySessionErrorCode code
+) noexcept;
+[[nodiscard]] ClassicStorySessionError resource_error(ResourceLoadError error);
+[[nodiscard]] ClassicStorySessionError main_error(MainProcessError error);
+[[nodiscard]] ClassicStorySessionError stage_error(ClassicMainlStageError error);
+[[nodiscard]] ClassicStorySessionError win_error(ClassicMainlWinError error);
+[[nodiscard]] ClassicStorySessionError cutscene_error(ClassicCutsceneError error);
+[[nodiscard]] ClassicStorySessionError cutscene_text_error(
+	NewClassicCutsceneTextPackError error
+);
+[[nodiscard]] ClassicStorySessionError staff_error(ClassicStaffError error);
+[[nodiscard]] ClassicStorySessionError registration_error(
+	ClassicRegistrationError error
+);
+[[nodiscard]] ClassicStorySessionError new_score_store_error(
+	NewClassicScoreStoreError error
+);
+[[nodiscard]] ClassicStorySessionError continue_error(
+	ClassicMainlContinueError error,
+	ClassicStorySessionErrorCode code =
+		ClassicStorySessionErrorCode::continue_failed
+);
+[[nodiscard]] ClassicStorySessionError replay_capture_error() noexcept;
+[[nodiscard]] ClassicStorySessionError surface_error(
+	present::SourceSurfaceError error
+) noexcept;
+[[nodiscard]] CoreInput normalize_story_main_input(
+	const ClassicMainInputSample &sample,
+	InputContext context,
+	bool new_classic = false
+) noexcept;
+[[nodiscard]] CoreInput normalize_replay_interstitial_input(
+	const ClassicMainInputSample &sample
+) noexcept;
+[[nodiscard]] present::Raster normalize_main_cutscene_seed(
+	const present::Raster &raster
+);
+[[nodiscard]] ClassicCutsceneInput replay_cutscene_input(
+	const ClassicCutsceneInput &current,
+	const ClassicCutsceneInput &latched,
+	bool input_due
+) noexcept;
+[[nodiscard]] std::optional<MainlStageResourceRequest> stage_request(
+	const MainStoryConfig &config
+) noexcept;
+std::expected<StepResult, MainProcessError> process_step(
+	void *context,
+	CoreInput input,
+	InputContext input_context
+) noexcept;
+bool process_deferred_pending(void *context) noexcept;
+std::expected<StepResult, MainProcessError> process_finish_deferred(
+	void *context,
+	DeferredFrameAction action
+) noexcept;
+std::expected<void, MainProcessError> process_repeat(void *context) noexcept;
+std::expected<void, MainProcessError> process_finish(void *context) noexcept;
+std::expected<SessionTransition, MainProcessError> process_transition(
+	void *context,
+	std::optional<ContinueChoice> choice
+) noexcept;
+
+} // namespace classic_story_session_detail
+
 class ClassicStorySession final {
 public:
 	[[nodiscard]] static std::expected<
