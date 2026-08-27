@@ -68,6 +68,12 @@ from editor commands to menu input lives independently in
 `new_classic_text_editor.cpp` so profile and network text fields do not depend
 on either replay UI.
 
+Replay viewing authenticates and imports executables, fonts, localization
+packs, picture patches, and static resources in
+`replay/new_classic_playback_content.cpp`. It hands one move-only prepared
+content aggregate to `new_classic_playback.cpp`, which exclusively owns
+checkpoint reconstruction, preroll, and live playback advancement.
+
 The external resource boundary separates immutable identity and scene-batch
 policy in `content/resources.cpp` from filesystem lookup, authentication,
 overrides, and transactional caching in `content/resource_loader.cpp`. The

@@ -1066,6 +1066,7 @@ add_library(th03_app_main STATIC
 	src/app/new_classic/online/new_classic_online_client.cpp
 	src/app/new_classic/online/new_classic_online_task.cpp
 	src/app/new_classic/replay/new_classic_playback.cpp
+	src/app/new_classic/replay/new_classic_playback_content.cpp
 	src/app/new_classic/new_classic_practice.cpp
 	src/app/new_classic/replay/new_classic_replay.cpp
 	src/app/new_classic/replay/new_classic_replay_presentation.cpp

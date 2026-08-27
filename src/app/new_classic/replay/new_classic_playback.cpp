@@ -6,7 +6,7 @@
 #include "classic/classic_story_session_internal.hpp"
 #include "main/main_process_static_content_internal.hpp"
 #include "main/main_process_internal.hpp"
-#include "new_classic/content/new_classic_language_internal.hpp"
+#include "new_classic/replay/new_classic_playback_content_internal.hpp"
 #include "new_classic/replay/new_classic_playback_internal.hpp"
 #include "main/main_process_driver_internal.hpp"
 #include "th03/app/new_classic/new_classic_pause.hpp"
@@ -16,8 +16,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
-#include <fstream>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -54,47 +52,6 @@ static_assert(replay_patch_0412_game_over_playback(2U, 1));
 	return process_start.game_mode == game_mode::story &&
 		process_start.story_stage == 8U && terminal.route == 2U &&
 		terminal.winner == 0 && transition.action == SessionAction::ending;
-}
-
-[[nodiscard]] std::expected<std::vector<std::byte>, NewClassicPlaybackError>
-read_file(const std::filesystem::path &path)
-{
-	std::error_code system;
-	const auto status = std::filesystem::status(path, system);
-	if(system || !std::filesystem::is_regular_file(status)) {
-		return std::unexpected(playback_error(
-			NewClassicPlaybackErrorCode::file_missing
-		));
-	}
-	const auto size = std::filesystem::file_size(path, system);
-	if(system || size > static_cast<std::uintmax_t>(
-		std::numeric_limits<std::size_t>::max()
-	) || size > static_cast<std::uintmax_t>(
-		std::numeric_limits<std::streamsize>::max()
-	)) {
-		return std::unexpected(playback_error(
-			NewClassicPlaybackErrorCode::file_read_failed
-		));
-	}
-	std::ifstream input(path, std::ios::binary);
-	if(!input) {
-		return std::unexpected(playback_error(
-			NewClassicPlaybackErrorCode::file_read_failed
-		));
-	}
-	std::vector<std::byte> bytes(static_cast<std::size_t>(size));
-	if(!bytes.empty()) {
-		input.read(
-			reinterpret_cast<char *>(bytes.data()),
-			static_cast<std::streamsize>(bytes.size())
-		);
-	}
-	if(!input || input.peek() != std::ifstream::traits_type::eof()) {
-		return std::unexpected(playback_error(
-			NewClassicPlaybackErrorCode::file_read_failed
-		));
-	}
-	return bytes;
 }
 
 std::expected<StepResult, MainProcessError> process_step(
@@ -858,271 +815,19 @@ NewClassicReplayPlayback::load_internal(
 			NewClassicPlaybackErrorCode::invalid_request
 		));
 	}
-	auto main = read_file(request.content.main_executable);
-	if(!main) {
-		return std::unexpected(std::move(main.error()));
-	}
-	auto compiled = import_main_compiled_content(*main);
-	if(!compiled) {
-		auto error = playback_error(
-			NewClassicPlaybackErrorCode::compiled_content_failed
-		);
-		error.compiled_content = std::move(compiled.error());
-		return std::unexpected(std::move(error));
-	}
-	auto font = read_file(request.content.font_rom);
-	if(!font) {
-		return std::unexpected(std::move(font.error()));
-	}
-	auto mainl = read_file(request.content.mainl_executable);
-	if(!mainl) {
-		return std::unexpected(std::move(mainl.error()));
-	}
-	auto mainl_text = import_mainl_stage_text(*mainl);
-	if(!mainl_text) {
-		return std::unexpected(playback_error(
-			NewClassicPlaybackErrorCode::mainl_content_failed
-		));
-	}
-	auto loader = std::make_shared<MainResourceLoader>(
-		request.content.data_root
+	auto content = prepare_new_classic_playback_content(
+		std::move(request.content), request.language
 	);
-	std::optional<NewClassicGameTextCatalog> custom_game_text{};
-	std::optional<NewClassicCutsceneTextCatalog> custom_cutscene_text{};
-	std::optional<NewClassicPicturePatchCatalog> custom_picture_patch{};
-	const NewClassicGameTextCatalog *game_text =
-		classic_language_uses_english_assets(request.language) ?
-			&new_classic_builtin_english_game_text() :
-			&new_classic_builtin_japanese_game_text();
-	if(!request.content.game_text_pack.empty()) {
-		if(classic_language_uses_english_assets(request.language) &&
-			request.content.language_overlay.empty()) {
-			auto error = playback_error(
-				NewClassicPlaybackErrorCode::game_text_pack_failed
-			);
-			error.game_text_pack = NewClassicGameTextPackError{
-				.code = NewClassicGameTextPackErrorCode::fallback_missing,
-			};
-			return std::unexpected(std::move(error));
-		}
-		auto loaded = load_new_classic_game_text_pack(
-			request.content.game_text_pack, game_text
-		);
-		if(!loaded) {
-			auto error = playback_error(
-				NewClassicPlaybackErrorCode::game_text_pack_failed
-			);
-			error.game_text_pack = std::move(loaded.error());
-			return std::unexpected(std::move(error));
-		}
-		const bool japanese_catalog = loaded->locale() == "ja-JP";
-		if(japanese_catalog !=
-			(request.language == ClassicLanguage::japanese)) {
-			auto error = playback_error(
-				NewClassicPlaybackErrorCode::game_text_pack_failed
-			);
-			error.game_text_pack = NewClassicGameTextPackError{
-				.code = NewClassicGameTextPackErrorCode::locale_shape,
-			};
-			return std::unexpected(std::move(error));
-		}
-		custom_game_text.emplace(std::move(*loaded));
-		game_text = &*custom_game_text;
+	if(!content) {
+		return std::unexpected(std::move(content.error()));
 	}
-	if(!request.content.cutscene_text_pack.empty()) {
-		auto loaded = load_new_classic_cutscene_text_pack(
-			request.content.cutscene_text_pack
-		);
-		if(!loaded) {
-			auto error = playback_error(
-				NewClassicPlaybackErrorCode::cutscene_text_pack_failed
-			);
-			error.cutscene_text_pack = std::move(loaded.error());
-			return std::unexpected(std::move(error));
-		}
-		const bool japanese_catalog = loaded->source_profile_fnv1a64() ==
-			new_classic_cutscene_original_profile_fnv1a64;
-		const bool english_catalog = loaded->source_profile_fnv1a64() ==
-			new_classic_cutscene_english_profile_fnv1a64;
-		const bool selected_japanese =
-			request.language == ClassicLanguage::japanese;
-		if((!japanese_catalog && !english_catalog) ||
-			japanese_catalog != selected_japanese ||
-			(!japanese_catalog && request.content.language_overlay.empty()) ||
-			(!japanese_catalog && (!game_text ||
-				loaded->locale() != game_text->locale()))) {
-			auto error = playback_error(
-				NewClassicPlaybackErrorCode::cutscene_text_pack_failed
-			);
-			error.cutscene_text_pack = NewClassicCutsceneTextPackError{
-				.code = NewClassicCutsceneTextPackErrorCode::locale_shape,
-			};
-			return std::unexpected(std::move(error));
-		}
-		custom_cutscene_text.emplace(std::move(*loaded));
-	}
-	if(!request.content.picture_patch_pack.empty()) {
-		auto loaded = load_new_classic_picture_patch(
-			request.content.picture_patch_pack
-		);
-		if(!loaded) {
-			auto error = playback_error(
-				NewClassicPlaybackErrorCode::picture_patch_pack_failed
-			);
-			error.picture_patch_pack = std::move(loaded.error());
-			return std::unexpected(std::move(error));
-		}
-		if(!game_text || loaded->locale() != game_text->locale()) {
-			auto error = playback_error(
-				NewClassicPlaybackErrorCode::picture_patch_pack_failed
-			);
-			error.picture_patch_pack = NewClassicPicturePatchError{
-				.code = NewClassicPicturePatchErrorCode::locale_shape,
-			};
-			return std::unexpected(std::move(error));
-		}
-		custom_picture_patch.emplace(std::move(*loaded));
-	}
-	if(classic_language_uses_english_assets(request.language)) {
-		auto overlay = load_new_classic_language_overlay(
-			request.content.language_overlay
-		);
-		if(!overlay) {
-			auto error = playback_error(
-				NewClassicPlaybackErrorCode::language_overlay_failed
-			);
-			error.language_overlay.emplace(std::move(overlay.error()));
-			return std::unexpected(std::move(error));
-		}
-		if(!loader->install_authenticated_overrides(
-			std::move(*overlay).release_members()
-		)) {
-			return std::unexpected(playback_error(
-				NewClassicPlaybackErrorCode::language_overlay_failed
-			));
-		}
-		OpMusicRoomTextImport unused_music{};
-		apply_new_classic_english_text(
-			*compiled, mainl_text->assets, unused_music,
-			*game_text
-		);
-	} else {
-		OpMusicRoomTextImport unused_music{};
-		apply_new_classic_english_text(
-			*compiled, mainl_text->assets, unused_music, *game_text
-		);
-	}
-	if(custom_cutscene_text) {
-		auto profile = std::uint64_t{14695981039346656037ULL};
-		for(std::size_t index = 0U;
-			index < new_classic_cutscene_script_count; ++index) {
-			auto loaded = loader->load({
-				.role = MainResourceRole::cutscene_script,
-				.cutscene_script = static_cast<MainCutsceneScript>(index + 1U),
-			});
-			if(!loaded) {
-				auto error = playback_error(
-					NewClassicPlaybackErrorCode::resource_failed
-				);
-				error.resource = std::move(loaded.error());
-				return std::unexpected(std::move(error));
-			}
-			const auto bytes = std::span<const std::byte>{**loaded};
-			const auto source = std::span<const std::uint8_t>{
-				reinterpret_cast<const std::uint8_t *>(bytes.data()), bytes.size()
-			};
-			for(const auto value : source) {
-				profile ^= value;
-				profile *= 1099511628211ULL;
-			}
-			if(auto replacements =
-				custom_cutscene_text->replacement_glyphs(index, source);
-				!replacements) {
-				auto error = playback_error(
-					NewClassicPlaybackErrorCode::cutscene_text_pack_failed
-				);
-				error.cutscene_text_pack = std::move(replacements.error());
-				return std::unexpected(std::move(error));
-			}
-		}
-		if(profile != custom_cutscene_text->source_profile_fnv1a64()) {
-			auto error = playback_error(
-				NewClassicPlaybackErrorCode::cutscene_text_pack_failed
-			);
-			error.cutscene_text_pack = NewClassicCutsceneTextPackError{
-				.code = NewClassicCutsceneTextPackErrorCode::source_profile_mismatch,
-			};
-			return std::unexpected(std::move(error));
-		}
-	}
-	auto static_resources = loader->load_main_static();
-	if(!static_resources) {
-		auto error = playback_error(NewClassicPlaybackErrorCode::resource_failed);
-		error.resource = std::move(static_resources.error());
-		return std::unexpected(std::move(error));
-	}
-	auto static_content = MainProcessStaticContentAccess::create(
-		*static_resources, *compiled, *font, true, game_text
-	);
-	if(!static_content) {
-		auto error = playback_error(
-			NewClassicPlaybackErrorCode::static_content_failed
-		);
-		error.process = std::move(static_content.error());
-		return std::unexpected(std::move(error));
-	}
-	if(request.content.replay_patch_assets.empty()) {
-		request.content.replay_patch_assets =
-			request.content.data_root / "AZINN.DAT";
-	}
-	auto loaded_patch_assets = load_new_classic_replay_patch_assets(
-		request.content.replay_patch_assets,
-		request.content.new_classic_menu_assets,
-		request.content.font_rom
-	);
-	if(!loaded_patch_assets) {
-		auto error = playback_error(
-			NewClassicPlaybackErrorCode::replay_patch_assets_failed
-		);
-		error.replay_patch_assets.emplace(
-			std::move(loaded_patch_assets.error())
-		);
-		return std::unexpected(std::move(error));
-	}
-	if(custom_game_text) {
-		loaded_patch_assets->custom_game_text =
-			std::make_shared<const NewClassicGameTextCatalog>(
-				std::move(*custom_game_text)
-			);
-	}
-	if(custom_cutscene_text) {
-		loaded_patch_assets->custom_cutscene_text =
-			std::make_shared<const NewClassicCutsceneTextCatalog>(
-				std::move(*custom_cutscene_text)
-			);
-	}
-	if(custom_picture_patch) {
-		loaded_patch_assets->custom_picture_patch =
-			std::make_shared<const NewClassicPicturePatchCatalog>(
-				std::move(*custom_picture_patch)
-			);
-	}
-	auto patch_assets = std::make_shared<const NewClassicReplayPatchAssets>(
-		std::move(*loaded_patch_assets)
-	);
-	game_text = classic_language_uses_english_assets(request.language) ?
-		(patch_assets->custom_game_text ? patch_assets->custom_game_text.get() :
-			&new_classic_builtin_english_game_text()) :
-		(patch_assets->custom_game_text ? patch_assets->custom_game_text.get() :
-			&new_classic_builtin_japanese_game_text());
-	const auto legacy_score_path = request.content.score;
-	const auto score_path = legacy_score_path.parent_path() / "YUME.NEW.NEM";
 	auto impl = std::make_unique<Impl>(
-		std::move(request.document), std::move(loader),
-		std::move(*compiled), std::move(*font), std::move(*static_content),
-		std::move(mainl_text->assets), std::move(mainl_text->staff),
-		score_path, legacy_score_path, std::move(patch_assets),
-		game_text,
+		std::move(request.document), std::move(content->loader),
+		std::move(content->compiled_content), std::move(content->font),
+		std::move(content->static_content), std::move(content->stage_text),
+		std::move(content->staff_compiled), std::move(content->score_path),
+		std::move(content->legacy_score_path), std::move(content->patch_assets),
+		content->game_text,
 		request.kotohime_compatibility,
 		request.reduced_flash
 	);
