@@ -44,3 +44,17 @@ without requiring a global filename search through a flat directory.
 `th03_app_main` still contains several scene owners despite this clearer
 physical tree. Any later target-level decomposition must follow an observed
 dependency graph and remain separate from this behavior-free move.
+
+## Executable composition
+
+`apps/th03-app/main.cpp` owns composition: selecting product modes, connecting
+platform adapters, and coordinating process-lifetime flows. Cohesive private
+implementations that are not reusable library APIs belong under
+`apps/th03-app/support/`; for example, authenticated optional rhythm-profile
+loading lives in `support/rhythm_assets.*`.
+
+Support modules must expose the smallest interface needed by the composition
+root. Moving a concern there does not make it a public library facility, and
+must not change its validation, diagnostics, or runtime behavior. A facility
+needed by another executable should instead receive an explicit library owner
+in a separate dependency-design change.
