@@ -3170,3 +3170,32 @@ if(BUILD_TESTING)
 		COMMAND th03-present-source-surface-tests
 	)
 endif()
+
+# Identical test executables from separate build trees may run at the same
+# time. Keep their fixed-name fixtures out of the operating system's shared
+# temporary directory so one tree cannot remove another tree's files.
+get_property(_th03_configured_tests DIRECTORY PROPERTY TESTS)
+if(_th03_configured_tests)
+	if(DEFINED ENV{TMPDIR} AND NOT "$ENV{TMPDIR}" STREQUAL "")
+		set(_th03_system_temporary_root "$ENV{TMPDIR}")
+	elseif(DEFINED ENV{TEMP} AND NOT "$ENV{TEMP}" STREQUAL "")
+		set(_th03_system_temporary_root "$ENV{TEMP}")
+	elseif(DEFINED ENV{TMP} AND NOT "$ENV{TMP}" STREQUAL "")
+		set(_th03_system_temporary_root "$ENV{TMP}")
+	else()
+		set(_th03_system_temporary_root "/tmp")
+	endif()
+	string(SHA256 _th03_test_tree_hash "${CMAKE_CURRENT_BINARY_DIR}")
+	string(SUBSTRING "${_th03_test_tree_hash}" 0 12 _th03_test_tree_id)
+	set(_th03_test_temporary_root
+		"${_th03_system_temporary_root}/th03-ctest-${_th03_test_tree_id}")
+	file(MAKE_DIRECTORY "${_th03_test_temporary_root}")
+	set_property(
+		TEST
+		${_th03_configured_tests}
+		APPEND PROPERTY ENVIRONMENT
+			"TMPDIR=${_th03_test_temporary_root}"
+			"TMP=${_th03_test_temporary_root}"
+			"TEMP=${_th03_test_temporary_root}"
+	)
+endif()
