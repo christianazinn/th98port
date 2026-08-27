@@ -1,4 +1,4 @@
-#include "th03/app/startup_sequence.hpp"
+#include "th03/app/runtime/startup_sequence.hpp"
 
 #include <algorithm>
 #include <cstddef>

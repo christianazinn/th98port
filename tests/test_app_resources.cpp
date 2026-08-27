@@ -1,4 +1,4 @@
-#include "th03/app/resources.hpp"
+#include "th03/app/content/resources.hpp"
 
 #include <algorithm>
 #include <array>

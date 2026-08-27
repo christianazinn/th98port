@@ -1,6 +1,6 @@
-#include "th03/app/new_classic_netplay_datagram.hpp"
-#include "th03/app/new_classic_netplay_lobby.hpp"
-#include "th03/app/new_classic_netplay_pause_barrier.hpp"
+#include "th03/app/new_classic/netplay/new_classic_netplay_datagram.hpp"
+#include "th03/app/new_classic/netplay/new_classic_netplay_lobby.hpp"
+#include "th03/app/new_classic/netplay/new_classic_netplay_pause_barrier.hpp"
 
 #include <algorithm>
 #include <array>

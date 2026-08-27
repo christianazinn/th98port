@@ -1,4 +1,4 @@
-#include "th03/app/new_classic_device_store.hpp"
+#include "th03/app/new_classic/input/new_classic_device_store.hpp"
 
 #include <filesystem>
 #include <fstream>

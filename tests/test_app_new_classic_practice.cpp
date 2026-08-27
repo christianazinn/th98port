@@ -9,9 +9,9 @@
 #include <string_view>
 #include <vector>
 
-#include "th03/app/new_classic_assets.hpp"
-#include "th03/app/new_classic_practice.hpp"
-#include "th03/app/new_classic_replay.hpp"
+#include "th03/app/new_classic/content/new_classic_assets.hpp"
+#include "th03/app/new_classic/new_classic_practice.hpp"
+#include "th03/app/new_classic/replay/new_classic_replay.hpp"
 #include "th03/formats/v14.hpp"
 
 namespace {

@@ -8,7 +8,7 @@
 #include <string>
 #include <system_error>
 
-#include "th03/app/new_classic_online_client.hpp"
+#include "th03/app/new_classic/online/new_classic_online_client.hpp"
 
 namespace th03::platform {
 

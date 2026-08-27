@@ -1,6 +1,6 @@
-#include "../src/app/classic_cutscene_scene_internal.hpp"
+#include "../src/app/classic/scenes/classic_cutscene_scene_internal.hpp"
 
-#include "th03/app/new_classic_language.hpp"
+#include "th03/app/new_classic/content/new_classic_language.hpp"
 
 #include <array>
 #include <cstddef>

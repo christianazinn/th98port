@@ -1,0 +1,46 @@
+# Application ownership tree
+
+Status: active behavior-free layout contract.
+
+`src/app/` and `include/th03/app/` mirror application ownership. They do not
+form new runtime layers and they do not replace the target boundaries in
+[ARCHITECTURE.md](ARCHITECTURE.md). Their purpose is to make ownership visible
+without requiring a global filename search through a flat directory.
+
+| Directory | Owner |
+|---|---|
+| `classic/` | Shared Classic orchestration and rendering |
+| `classic/mainl/` | MAINL gameplay executable behavior |
+| `classic/op/` | OP title and menu executable behavior |
+| `classic/persistence/` | Classic score/config persistence |
+| `classic/scenes/` | Classic scene transitions and interstitials |
+| `content/` | Shared app-side resource loading |
+| `direct_vs/` | Direct VS host/session entry |
+| `main/` | Native MAIN process and scene composition |
+| `new_classic/` | Shared New Classic orchestration |
+| `new_classic/content/` | Localization, fonts, and picture/text patches |
+| `new_classic/input/` | Bindings, devices, and input presentation |
+| `new_classic/netplay/` | Deterministic online session and transport glue |
+| `new_classic/online/` | Profiles, leaderboards, and online replay services |
+| `new_classic/persistence/` | New Classic settings and replay persistence |
+| `new_classic/replay/` | Replay browsing, rendering, and video export |
+| `oracle/` | Pixel-oracle application identity |
+| `runtime/` | Platform-neutral app loop/runtime boundary |
+| `update/` | Update manifest, installer, and release configuration |
+
+## Placement rules
+
+- No source or public header belongs directly in either application root. The
+  configure-time CMake guard rejects one.
+- Public includes name the complete owner path, for example
+  `th03/app/new_classic/netplay/new_classic_netplay_main_session.hpp`.
+- Private implementation headers are addressed from `src/app`, for example
+  `new_classic/content/new_classic_language_internal.hpp`.
+- A physical move does not justify a namespace, target, dependency, or behavior
+  change. Those require their own reviewed parcel.
+- Prefer an existing owner over inventing a one-file directory. Add a new owner
+  only when its lifecycle or dependency boundary is distinct.
+
+`th03_app_main` still contains several scene owners despite this clearer
+physical tree. Any later target-level decomposition must follow an observed
+dependency graph and remain separate from this behavior-free move.

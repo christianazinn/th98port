@@ -13,10 +13,10 @@
 #include <utility>
 #include <vector>
 
-#include "th03/app/new_classic_playback.hpp"
+#include "th03/app/new_classic/replay/new_classic_playback.hpp"
 #include "th03/formats/v14.hpp"
-#include "../src/app/classic_mainl_stage_internal.hpp"
-#include "../src/app/new_classic_playback_internal.hpp"
+#include "../src/app/classic/mainl/classic_mainl_stage_internal.hpp"
+#include "../src/app/new_classic/replay/new_classic_playback_internal.hpp"
 
 namespace {
 

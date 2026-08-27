@@ -1,4 +1,4 @@
-#include "th03/app/new_classic_online_client.hpp"
+#include "th03/app/new_classic/online/new_classic_online_client.hpp"
 
 #include <algorithm>
 #include <array>
@@ -13,8 +13,8 @@
 #include <utility>
 #include <vector>
 
-#include "th03/app/main_compiled_content.hpp"
-#include "th03/app/new_classic_replay.hpp"
+#include "th03/app/content/main_compiled_content.hpp"
+#include "th03/app/new_classic/replay/new_classic_replay.hpp"
 #include "th03/formats/v14.hpp"
 
 namespace {

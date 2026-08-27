@@ -3,7 +3,7 @@
 #include "sdl_platform_internal.hpp"
 #include "sdl_runtime_internal.hpp"
 
-#include "th03/app/display_presentability.hpp"
+#include "th03/app/runtime/display_presentability.hpp"
 
 #include <algorithm>
 #include <array>

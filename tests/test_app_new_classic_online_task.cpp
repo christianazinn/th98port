@@ -1,4 +1,4 @@
-#include "th03/app/new_classic_online_task.hpp"
+#include "th03/app/new_classic/online/new_classic_online_task.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -12,7 +12,7 @@
 #include <thread>
 #include <vector>
 
-#include "th03/app/main_compiled_content.hpp"
+#include "th03/app/content/main_compiled_content.hpp"
 #include "th03/formats/v14.hpp"
 
 namespace {

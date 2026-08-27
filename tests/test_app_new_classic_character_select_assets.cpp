@@ -7,7 +7,7 @@
 #include <string_view>
 #include <vector>
 
-#include "th03/app/new_classic_character_select_assets.hpp"
+#include "th03/app/new_classic/content/new_classic_character_select_assets.hpp"
 
 namespace {
 

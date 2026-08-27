@@ -1,4 +1,4 @@
-#include "../src/app/classic_op_music_room_internal.hpp"
+#include "../src/app/classic/op/classic_op_music_room_internal.hpp"
 #include "new_classic_menu_preview.hpp"
 
 #include <algorithm>
@@ -14,9 +14,9 @@
 #include <utility>
 #include <vector>
 
-#include "th03/app/authentic_text.hpp"
-#include "th03/app/new_classic_messages.hpp"
-#include "th03/app/resources.hpp"
+#include "th03/app/content/authentic_text.hpp"
+#include "th03/app/new_classic/content/new_classic_messages.hpp"
+#include "th03/app/content/resources.hpp"
 
 namespace {
 

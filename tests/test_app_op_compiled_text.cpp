@@ -10,7 +10,7 @@
 #include <span>
 #include <vector>
 
-#include "op_compiled_text_internal.hpp"
+#include "classic/op/op_compiled_text_internal.hpp"
 
 namespace {
 

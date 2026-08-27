@@ -1,4 +1,4 @@
-#include "th03/app/new_classic_netplay_input_delay.hpp"
+#include "th03/app/new_classic/netplay/new_classic_netplay_input_delay.hpp"
 
 #include <cstddef>
 #include <iostream>

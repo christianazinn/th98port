@@ -1,4 +1,4 @@
-#include "../src/app/classic_staff_scene_internal.hpp"
+#include "../src/app/classic/scenes/classic_staff_scene_internal.hpp"
 
 #include <array>
 #include <bit>
@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "th03/assets/decode.hpp"
-#include "th03/app/authentic_text.hpp"
+#include "th03/app/content/authentic_text.hpp"
 
 namespace {
 

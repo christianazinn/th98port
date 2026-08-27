@@ -25,7 +25,7 @@
 #include <variant>
 #include <vector>
 
-#include "th03/app/new_classic_netplay_signaling.hpp"
+#include "th03/app/new_classic/netplay/new_classic_netplay_signaling.hpp"
 
 namespace th03::platform {
 namespace {

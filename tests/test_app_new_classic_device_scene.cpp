@@ -1,5 +1,5 @@
 #include "new_classic_menu_preview.hpp"
-#include "th03/app/new_classic_device_scene.hpp"
+#include "th03/app/new_classic/input/new_classic_device_scene.hpp"
 
 #include <algorithm>
 #include <array>

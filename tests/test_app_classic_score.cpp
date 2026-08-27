@@ -1,4 +1,4 @@
-#include "th03/app/classic_score.hpp"
+#include "th03/app/classic/persistence/classic_score.hpp"
 
 #include <algorithm>
 #include <array>

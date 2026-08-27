@@ -1,4 +1,4 @@
-#include "th03/app/update_bootstrap.hpp"
+#include "th03/app/update/update_bootstrap.hpp"
 #include "th03/platform/sdl_update_process.hpp"
 
 #include <cstdlib>

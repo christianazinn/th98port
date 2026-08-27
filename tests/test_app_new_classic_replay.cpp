@@ -6,8 +6,8 @@
 #include <string>
 #include <variant>
 
-#include "th03/app/new_classic_netplay_replay_capture.hpp"
-#include "th03/app/new_classic_replay.hpp"
+#include "th03/app/new_classic/netplay/new_classic_netplay_replay_capture.hpp"
+#include "th03/app/new_classic/replay/new_classic_replay.hpp"
 #include "th03/core/game.hpp"
 #include "th03/formats/replay.hpp"
 #include "th03/formats/v14.hpp"

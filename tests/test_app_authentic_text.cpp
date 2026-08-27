@@ -11,8 +11,8 @@
 #include <variant>
 #include <vector>
 
-#include "th03/app/authentic_text.hpp"
-#include "th03/app/resources.hpp"
+#include "th03/app/content/authentic_text.hpp"
+#include "th03/app/content/resources.hpp"
 #include "th03/assets/decode.hpp"
 
 namespace {

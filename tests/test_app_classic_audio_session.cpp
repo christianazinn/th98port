@@ -1,4 +1,4 @@
-#include "th03/app/classic_audio_session.hpp"
+#include "th03/app/classic/classic_audio_session.hpp"
 
 #include <algorithm>
 #include <array>

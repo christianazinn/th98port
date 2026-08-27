@@ -4,8 +4,8 @@
 #include <string>
 #include <variant>
 
-#include "th03/app/new_classic_netplay_identity.hpp"
-#include "th03/app/new_classic_netplay_signaling.hpp"
+#include "th03/app/new_classic/netplay/new_classic_netplay_identity.hpp"
+#include "th03/app/new_classic/netplay/new_classic_netplay_signaling.hpp"
 
 namespace {
 

@@ -1,4 +1,4 @@
-#include "th03/app/tick_input.hpp"
+#include "th03/app/runtime/tick_input.hpp"
 
 #include <array>
 #include <cstddef>

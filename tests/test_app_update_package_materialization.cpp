@@ -1,5 +1,5 @@
-#include "th03/app/update_package_materialization.hpp"
-#include "th03/app/update_generation.hpp"
+#include "th03/app/update/update_package_materialization.hpp"
+#include "th03/app/update/update_generation.hpp"
 
 #include <array>
 #include <chrono>

@@ -1,5 +1,5 @@
-#include "th03/app/update_generation.hpp"
-#include "th03/app/update_install.hpp"
+#include "th03/app/update/update_generation.hpp"
+#include "th03/app/update/update_install.hpp"
 
 #include <chrono>
 #include <cstddef>

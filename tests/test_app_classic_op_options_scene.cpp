@@ -1,4 +1,4 @@
-#include "../src/app/classic_op_options_scene_internal.hpp"
+#include "../src/app/classic/op/classic_op_options_scene_internal.hpp"
 
 #include <array>
 #include <cstddef>
@@ -13,8 +13,8 @@
 #include <utility>
 #include <vector>
 
-#include "th03/app/authentic_text.hpp"
-#include "th03/app/resources.hpp"
+#include "th03/app/content/authentic_text.hpp"
+#include "th03/app/content/resources.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/present/pi.hpp"
 #include "th03/present/source_surface.hpp"

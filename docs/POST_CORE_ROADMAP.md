@@ -324,6 +324,25 @@ trust client scores. Local gameplay must never wait on or depend on the
 network. Authentication, privacy, moderation, retention, and hosting cost are
 product decisions requiring user approval.
 
+#### Deferred run-lifetime evidence and crash recovery
+
+Investigate a low-visibility Windows run record that can support both partial
+replay recovery after a crash and private manual-review evidence. Candidate
+signals include filesystem creation/modification lifetime, wall-clock start and
+end stamps, monotonic elapsed time, periodic replay-prefix commitments, and a
+clean final seal. The canonical recorder should remain in memory and the
+finished artifact should remain ordinary V14; this is supplementary evidence,
+not a second public replay format.
+
+Client clocks, timestamps, and local files are forgeable. These signals must
+never be an authoritative verifier input or the sole basis for a cheating
+verdict. Exact checks and thresholds should not be exposed in ordinary UI or
+user documentation. A conspicuous sidecar journal would defeat the intended
+forensic value, so any durable record should reuse normal private persistence
+or remain deferred until it can do so without advertising itself. A
+server-issued run-start receipt could strengthen online submissions, but
+requiring online contact at run start remains an undecided product tradeoff.
+
 ### Arrange mode
 
 Keep extension points narrow and explicit:

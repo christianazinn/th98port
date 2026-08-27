@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "service_protocol.hpp"
-#include "th03/app/new_classic_story_route.hpp"
+#include "th03/app/new_classic/new_classic_story_route.hpp"
 #include "th03/formats/v14.hpp"
 
 namespace {

@@ -10,10 +10,10 @@
 #include <string_view>
 #include <vector>
 
-#include "new_classic_language_internal.hpp"
-#include "th03/app/new_classic_assets.hpp"
-#include "th03/app/new_classic_game_text.hpp"
-#include "th03/app/new_classic_messages.hpp"
+#include "new_classic/content/new_classic_language_internal.hpp"
+#include "th03/app/new_classic/content/new_classic_assets.hpp"
+#include "th03/app/new_classic/content/new_classic_game_text.hpp"
+#include "th03/app/new_classic/content/new_classic_messages.hpp"
 
 namespace {
 

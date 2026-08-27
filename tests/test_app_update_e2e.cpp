@@ -1,8 +1,8 @@
-#include "th03/app/update_activation_store.hpp"
-#include "th03/app/update_bootstrap.hpp"
-#include "th03/app/update_generation.hpp"
-#include "th03/app/update_install.hpp"
-#include "th03/app/update_process_host.hpp"
+#include "th03/app/update/update_activation_store.hpp"
+#include "th03/app/update/update_bootstrap.hpp"
+#include "th03/app/update/update_generation.hpp"
+#include "th03/app/update/update_install.hpp"
+#include "th03/app/update/update_process_host.hpp"
 
 #include <chrono>
 #include <cstddef>

@@ -1,7 +1,7 @@
 #ifndef TH03_APP_UPDATE_RELEASE_CONFIG_GENERATED_HPP
 #define TH03_APP_UPDATE_RELEASE_CONFIG_GENERATED_HPP
 
-#include "th03/app/update_manifest.hpp"
+#include "th03/app/update/update_manifest.hpp"
 
 #include <array>
 #include <cstddef>

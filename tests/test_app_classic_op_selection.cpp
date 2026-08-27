@@ -12,10 +12,10 @@
 #include <utility>
 #include <vector>
 
-#include "classic_op_selection_internal.hpp"
-#include "th03/app/new_classic_assets.hpp"
-#include "th03/app/new_classic_messages.hpp"
-#include "th03/app/new_classic_replay.hpp"
+#include "classic/op/classic_op_selection_internal.hpp"
+#include "th03/app/new_classic/content/new_classic_assets.hpp"
+#include "th03/app/new_classic/content/new_classic_messages.hpp"
+#include "th03/app/new_classic/replay/new_classic_replay.hpp"
 #include "th03/exact/trig.hpp"
 
 namespace {

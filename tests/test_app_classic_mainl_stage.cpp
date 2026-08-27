@@ -11,14 +11,14 @@
 #include <utility>
 #include <vector>
 
-#include "th03/app/main_process.hpp"
-#include "th03/app/resources.hpp"
+#include "th03/app/main/main_process.hpp"
+#include "th03/app/content/resources.hpp"
 #include "th03/present/source_surface.hpp"
 #include "th03/present/text.hpp"
 
-#include "classic_mainl_stage_internal.hpp"
-#include "classic_op_scene_internal.hpp"
-#include "classic_op_selection_internal.hpp"
+#include "classic/mainl/classic_mainl_stage_internal.hpp"
+#include "classic/op/classic_op_scene_internal.hpp"
+#include "classic/op/classic_op_selection_internal.hpp"
 
 namespace {
 

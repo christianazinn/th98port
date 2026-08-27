@@ -1,5 +1,5 @@
-#include "../src/app/classic_op_scene_internal.hpp"
-#include "../src/app/classic_op_selection_internal.hpp"
+#include "../src/app/classic/op/classic_op_scene_internal.hpp"
+#include "../src/app/classic/op/classic_op_selection_internal.hpp"
 
 #include <array>
 #include <cstddef>

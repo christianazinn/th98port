@@ -10,11 +10,11 @@
 #include <string_view>
 #include <vector>
 
-#include "th03/app/authentic_text.hpp"
-#include "th03/app/direct_vs_cli.hpp"
-#include "th03/app/direct_vs_launch.hpp"
+#include "th03/app/content/authentic_text.hpp"
+#include "th03/app/direct_vs/direct_vs_cli.hpp"
+#include "th03/app/direct_vs/direct_vs_launch.hpp"
 
-#include "direct_vs_launch_internal.hpp"
+#include "direct_vs/direct_vs_launch_internal.hpp"
 
 namespace {
 

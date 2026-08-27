@@ -1,4 +1,4 @@
-#include "th03/app/new_classic_netplay_report.hpp"
+#include "th03/app/new_classic/netplay/new_classic_netplay_report.hpp"
 
 #include <array>
 #include <cstddef>

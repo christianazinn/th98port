@@ -1,9 +1,9 @@
-#include "th03/app/main_process.hpp"
-#include "th03/app/main_direct_vs_runner.hpp"
-#include "th03/app/main_rollback_coordinator.hpp"
-#include "th03/app/new_classic_game_text.hpp"
-#include "th03/app/new_classic_netplay_main_session.hpp"
-#include "th03/app/new_classic_netplay_replay_capture.hpp"
+#include "th03/app/main/main_process.hpp"
+#include "th03/app/main/main_direct_vs_runner.hpp"
+#include "th03/app/main/main_rollback_coordinator.hpp"
+#include "th03/app/new_classic/content/new_classic_game_text.hpp"
+#include "th03/app/new_classic/netplay/new_classic_netplay_main_session.hpp"
+#include "th03/app/new_classic/netplay/new_classic_netplay_replay_capture.hpp"
 
 #include <algorithm>
 #include <array>
@@ -23,15 +23,15 @@
 #include <utility>
 #include <vector>
 
-#include "th03/app/authentic_text.hpp"
+#include "th03/app/content/authentic_text.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/present/main_static.hpp"
 #include "th03/present/superimpose.hpp"
 
-#include "../src/app/main_compiled_content_internal.hpp"
-#include "../src/app/classic_op_scene_internal.hpp"
-#include "../src/app/classic_op_selection_internal.hpp"
-#include "../src/app/main_process_internal.hpp"
+#include "../src/app/content/main_compiled_content_internal.hpp"
+#include "../src/app/classic/op/classic_op_scene_internal.hpp"
+#include "../src/app/classic/op/classic_op_selection_internal.hpp"
+#include "../src/app/main/main_process_internal.hpp"
 
 namespace {
 

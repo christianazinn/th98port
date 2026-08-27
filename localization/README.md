@@ -36,8 +36,8 @@ python tools/localization/compile_language_pack.py generate-cpp `
   --source localization/ja-JP.json `
   --source localization/es-TEST.json `
   --source localization/qps-ploc.json `
-  --ids-output include/th03/app/new_classic_message_ids.inc `
-  --data-output src/app/new_classic_messages_generated.inc
+  --ids-output include/th03/app/new_classic/content/new_classic_message_ids.inc `
+  --data-output src/app/new_classic/content/new_classic_messages_generated.inc
 ```
 
 Compile an external pack:

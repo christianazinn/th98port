@@ -1,4 +1,4 @@
-#include "th03/app/new_classic_key_config_store.hpp"
+#include "th03/app/new_classic/input/new_classic_key_config_store.hpp"
 
 #include <array>
 #include <cstddef>

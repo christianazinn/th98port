@@ -8,8 +8,8 @@
 #include <string_view>
 #include <vector>
 
-#include "th03/app/main_compiled_content.hpp"
-#include "th03/app/new_classic_picture_patch.hpp"
+#include "th03/app/content/main_compiled_content.hpp"
+#include "th03/app/new_classic/content/new_classic_picture_patch.hpp"
 
 namespace {
 

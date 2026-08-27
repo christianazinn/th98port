@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "th03/app/replay_slot_store.hpp"
+#include "th03/app/new_classic/replay/replay_slot_store.hpp"
 #include "th03/core/game.hpp"
 #include "th03/formats/replay.hpp"
 #include "th03/formats/v14.hpp"

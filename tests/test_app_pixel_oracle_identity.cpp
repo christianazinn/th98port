@@ -5,8 +5,8 @@
 #include <string>
 #include <string_view>
 
-#include "th03/app/classic_cli.hpp"
-#include "th03/app/pixel_oracle_identity.hpp"
+#include "th03/app/classic/classic_cli.hpp"
+#include "th03/app/oracle/pixel_oracle_identity.hpp"
 
 namespace {
 

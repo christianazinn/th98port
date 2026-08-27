@@ -6,7 +6,7 @@
 #include <sstream>
 
 #include "th03/formats/v14.hpp"
-#include "th03/app/new_classic_story_route.hpp"
+#include "th03/app/new_classic/new_classic_story_route.hpp"
 
 namespace th03rv {
 namespace {

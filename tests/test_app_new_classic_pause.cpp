@@ -5,8 +5,8 @@
 #include <optional>
 #include <vector>
 
-#include "th03/app/new_classic_assets.hpp"
-#include "th03/app/new_classic_pause.hpp"
+#include "th03/app/new_classic/content/new_classic_assets.hpp"
+#include "th03/app/new_classic/new_classic_pause.hpp"
 
 namespace {
 

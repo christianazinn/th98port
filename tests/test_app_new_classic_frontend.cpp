@@ -11,7 +11,7 @@
 #include <cstdlib>
 #include <string>
 
-#include "th03/app/new_classic_frontend.hpp"
+#include "th03/app/new_classic/new_classic_frontend.hpp"
 #include "th03/formats/v14.hpp"
 
 #include "new_classic_menu_preview.hpp"

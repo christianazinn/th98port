@@ -1,5 +1,5 @@
-#include "th03/app/new_classic_online.hpp"
-#include "th03/app/new_classic_online_store.hpp"
+#include "th03/app/new_classic/online/new_classic_online.hpp"
+#include "th03/app/new_classic/online/new_classic_online_store.hpp"
 
 #include <array>
 #include <cstddef>

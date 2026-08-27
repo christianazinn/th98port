@@ -1,7 +1,7 @@
-#include "th03/app/classic_config.hpp"
-#include "th03/app/classic_config_store.hpp"
-#include "th03/app/new_classic_settings.hpp"
-#include "th03/app/new_classic_settings_store.hpp"
+#include "th03/app/classic/persistence/classic_config.hpp"
+#include "th03/app/classic/persistence/classic_config_store.hpp"
+#include "th03/app/new_classic/persistence/new_classic_settings.hpp"
+#include "th03/app/new_classic/persistence/new_classic_settings_store.hpp"
 
 #include <algorithm>
 #include <array>

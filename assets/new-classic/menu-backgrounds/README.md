@@ -22,7 +22,7 @@ lavender headers, yellow selection, status text, and white body text.
 | `M007A/B.BMP` | Failed or forfeited netplay report |
 
 The authoritative runtime mapping is `NewClassicMenuBackground` in
-`include/th03/app/new_classic_assets.hpp`. Standalone content stages this
+`include/th03/app/new_classic/content/new_classic_assets.hpp`. Standalone content stages this
 directory as `content/PODDUI`; CMake beta packages install it as `PODDUI`.
 
 New source artwork should be converted and reviewed with

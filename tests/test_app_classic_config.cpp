@@ -1,5 +1,5 @@
-#include "th03/app/classic_config.hpp"
-#include "th03/app/classic_config_store.hpp"
+#include "th03/app/classic/persistence/classic_config.hpp"
+#include "th03/app/classic/persistence/classic_config_store.hpp"
 
 #include <array>
 #include <chrono>

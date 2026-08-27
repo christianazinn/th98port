@@ -78,11 +78,17 @@ class LanguagePackTests(unittest.TestCase):
             pack.generate_cpp(self.schema, authors, ids, data)
             self.assertEqual(
                 ids.read_bytes(),
-                (self.root / "include/th03/app/new_classic_message_ids.inc").read_bytes(),
+                (
+                    self.root
+                    / "include/th03/app/new_classic/content/new_classic_message_ids.inc"
+                ).read_bytes(),
             )
             self.assertEqual(
                 data.read_bytes(),
-                (self.root / "src/app/new_classic_messages_generated.inc").read_bytes(),
+                (
+                    self.root
+                    / "src/app/new_classic/content/new_classic_messages_generated.inc"
+                ).read_bytes(),
             )
 
     def test_utf8_profile_rejects_invisible_and_reserved_scalars(self) -> None:

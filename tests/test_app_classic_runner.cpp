@@ -13,19 +13,19 @@
 #include <string_view>
 #include <vector>
 
-#include "th03/app/classic_audio_session.hpp"
-#include "th03/app/classic_cli.hpp"
-#include "th03/app/classic_config_store.hpp"
-#include "th03/app/classic_runner.hpp"
-#include "th03/app/classic_score_store.hpp"
-#include "th03/app/new_classic_language.hpp"
-#include "th03/app/new_classic_score_store.hpp"
-#include "th03/app/new_classic_settings_store.hpp"
-#include "th03/app/replay_slot_store.hpp"
+#include "th03/app/classic/classic_audio_session.hpp"
+#include "th03/app/classic/classic_cli.hpp"
+#include "th03/app/classic/persistence/classic_config_store.hpp"
+#include "th03/app/classic/classic_runner.hpp"
+#include "th03/app/classic/persistence/classic_score_store.hpp"
+#include "th03/app/new_classic/content/new_classic_language.hpp"
+#include "th03/app/new_classic/persistence/new_classic_score_store.hpp"
+#include "th03/app/new_classic/persistence/new_classic_settings_store.hpp"
+#include "th03/app/new_classic/replay/replay_slot_store.hpp"
 #include "th03/assets/decode.hpp"
 #include "th03/formats/v14.hpp"
 
-#include "classic_runner_internal.hpp"
+#include "classic/classic_runner_internal.hpp"
 
 namespace {
 

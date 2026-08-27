@@ -1,4 +1,4 @@
-#include "th03/app/update_manifest.hpp"
+#include "th03/app/update/update_manifest.hpp"
 
 #include <array>
 #include <cstddef>

@@ -1,6 +1,6 @@
-#include "th03/app/update_activation.hpp"
-#include "th03/app/update_activation_store.hpp"
-#include "th03/app/update_process_host.hpp"
+#include "th03/app/update/update_activation.hpp"
+#include "th03/app/update/update_activation_store.hpp"
+#include "th03/app/update/update_process_host.hpp"
 #include "th03/platform/sdl_update_process.hpp"
 
 #include <chrono>

@@ -1,4 +1,4 @@
-#include "../src/app/classic_mainl_continue_internal.hpp"
+#include "../src/app/classic/mainl/classic_mainl_continue_internal.hpp"
 
 #include <algorithm>
 #include <array>
@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "th03/app/authentic_text.hpp"
+#include "th03/app/content/authentic_text.hpp"
 
 namespace {
 

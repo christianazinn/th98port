@@ -17,8 +17,8 @@ python tools/localization/compile_game_text_pack.py generate-cpp `
   --schema localization/game-text-schema.json `
   --source localization/game-text-en-US.json `
   --source localization/game-text-ja-JP.json `
-  --ids-output include/th03/app/new_classic_game_text_ids.inc `
-  --data-output src/app/new_classic_game_text_generated.inc
+  --ids-output include/th03/app/new_classic/content/new_classic_game_text_ids.inc `
+  --data-output src/app/new_classic/content/new_classic_game_text_generated.inc
 ```
 
 Compile an external catalog:

@@ -58,7 +58,7 @@ class PreviewTests(unittest.TestCase):
                 {
                     line.split('"')[1]
                     for line in (
-                        self.source_root / "include/th03/app/new_classic_game_text_ids.inc"
+                        self.source_root / "include/th03/app/new_classic/content/new_classic_game_text_ids.inc"
                     ).read_text(encoding="utf-8").splitlines()
                     if line.strip()
                 },

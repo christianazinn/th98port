@@ -1,4 +1,4 @@
-#include "th03/app/main_compiled_content.hpp"
+#include "th03/app/content/main_compiled_content.hpp"
 
 #include <algorithm>
 #include <array>
@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-#include "../src/app/main_compiled_content_internal.hpp"
+#include "../src/app/content/main_compiled_content_internal.hpp"
 
 namespace {
 

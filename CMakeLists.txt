@@ -2,6 +2,24 @@ cmake_minimum_required(VERSION 3.25)
 
 project(th03_port VERSION 0.1.0 LANGUAGES C CXX)
 
+# Application code is grouped by owning subsystem. Reject new files at either
+# app root so the old flat layout cannot silently grow back.
+foreach(_th03_app_layout_root IN ITEMS
+	"${CMAKE_CURRENT_SOURCE_DIR}/src/app"
+	"${CMAKE_CURRENT_SOURCE_DIR}/include/th03/app"
+)
+	file(GLOB _th03_flat_app_files
+		CONFIGURE_DEPENDS LIST_DIRECTORIES false
+		"${_th03_app_layout_root}/*"
+	)
+	if(_th03_flat_app_files)
+		message(FATAL_ERROR
+			"Application files require an ownership directory: "
+			"${_th03_flat_app_files}"
+		)
+	endif()
+endforeach()
+
 set(TH03_NEW_CLASSIC_MENU_ASSET_SOURCE
 	"${CMAKE_CURRENT_SOURCE_DIR}/assets/new-classic/menu-backgrounds"
 )
@@ -124,10 +142,10 @@ if(NOT _th03_update_input_count EQUAL 0)
 endif()
 
 set(_th03_generated_include_root "${CMAKE_CURRENT_BINARY_DIR}/generated")
-file(MAKE_DIRECTORY "${_th03_generated_include_root}/th03/app")
+file(MAKE_DIRECTORY "${_th03_generated_include_root}/th03/app/update")
 configure_file(
 	cmake/update_release_config_generated.hpp.in
-	"${_th03_generated_include_root}/th03/app/update_release_config_generated.hpp"
+	"${_th03_generated_include_root}/th03/app/update/update_release_config_generated.hpp"
 	@ONLY
 )
 if(TH03_PACKAGE_BETA AND MSVC)
@@ -635,7 +653,7 @@ th03_set_warnings(th03_assets)
 # scene-scoped filesystem validation/caching and has no gameplay or renderer
 # dependency; decoded byte spans flow inward to th03_assets at the app layer.
 add_library(th03_app_resources STATIC
-	src/app/resources.cpp
+	src/app/content/resources.cpp
 )
 target_include_directories(th03_app_resources PUBLIC include)
 target_compile_features(th03_app_resources PUBLIC cxx_std_23)
@@ -646,21 +664,21 @@ th03_set_warnings(th03_app_resources)
 # filesystem transactions. Registration and OP presentation remain in the app
 # scene layer rather than this persistence boundary.
 add_library(th03_app_persistence STATIC
-	src/app/classic_config.cpp
-	src/app/classic_config_store.cpp
-	src/app/classic_score.cpp
-	src/app/classic_score_store.cpp
-	src/app/new_classic_device_store.cpp
-	src/app/new_classic_joy_config_store.cpp
-	src/app/new_classic_key_config_store.cpp
-	src/app/new_classic_online.cpp
-	src/app/new_classic_online_store.cpp
-	src/app/new_classic_settings.cpp
-	src/app/new_classic_settings_store.cpp
-	src/app/new_classic_score.cpp
-	src/app/new_classic_score_store.cpp
-	src/app/update_manifest.cpp
-	src/app/update_package.cpp
+	src/app/classic/persistence/classic_config.cpp
+	src/app/classic/persistence/classic_config_store.cpp
+	src/app/classic/persistence/classic_score.cpp
+	src/app/classic/persistence/classic_score_store.cpp
+	src/app/new_classic/input/new_classic_device_store.cpp
+	src/app/new_classic/input/new_classic_joy_config_store.cpp
+	src/app/new_classic/input/new_classic_key_config_store.cpp
+	src/app/new_classic/online/new_classic_online.cpp
+	src/app/new_classic/online/new_classic_online_store.cpp
+	src/app/new_classic/persistence/new_classic_settings.cpp
+	src/app/new_classic/persistence/new_classic_settings_store.cpp
+	src/app/new_classic/persistence/new_classic_score.cpp
+	src/app/new_classic/persistence/new_classic_score_store.cpp
+	src/app/update/update_manifest.cpp
+	src/app/update/update_package.cpp
 )
 target_include_directories(th03_app_persistence PUBLIC include)
 target_compile_features(th03_app_persistence PUBLIC cxx_std_23)
@@ -674,18 +692,18 @@ if(TH03_ENABLE_RTC)
 		)
 	endif()
 	add_library(th03_app_update_authentication STATIC
-		src/app/update_manifest_authentication.cpp
-		src/app/update_acquisition.cpp
-		src/app/update_package_materialization.cpp
-		src/app/update_activation.cpp
-		src/app/update_activation_store.cpp
-		src/app/update_bootstrap.cpp
-		src/app/update_generation.cpp
-		src/app/update_generation_cleanup.cpp
-		src/app/update_install.cpp
-		src/app/update_task.cpp
-		src/app/update_release_config.cpp
-		src/app/update_process_host.cpp
+		src/app/update/update_manifest_authentication.cpp
+		src/app/update/update_acquisition.cpp
+		src/app/update/update_package_materialization.cpp
+		src/app/update/update_activation.cpp
+		src/app/update/update_activation_store.cpp
+		src/app/update/update_bootstrap.cpp
+		src/app/update/update_generation.cpp
+		src/app/update/update_generation_cleanup.cpp
+		src/app/update/update_install.cpp
+		src/app/update/update_task.cpp
+		src/app/update/update_release_config.cpp
+		src/app/update/update_process_host.cpp
 	)
 	target_include_directories(th03_app_update_authentication
 		PUBLIC include
@@ -858,11 +876,11 @@ target_link_libraries(th03_present PUBLIC th03_core)
 # events, clocks, and texture storage at this boundary; none enter core or
 # presentation state.
 add_library(th03_app_runtime STATIC
-	src/app/display_presentability.cpp
-	src/app/host_surface.cpp
-	src/app/new_classic_pause.cpp
-	src/app/startup_sequence.cpp
-	src/app/tick_input.cpp
+	src/app/runtime/display_presentability.cpp
+	src/app/runtime/host_surface.cpp
+	src/app/new_classic/new_classic_pause.cpp
+	src/app/runtime/startup_sequence.cpp
+	src/app/runtime/tick_input.cpp
 )
 target_include_directories(th03_app_runtime PUBLIC include)
 target_link_libraries(th03_app_runtime PUBLIC th03_present)
@@ -891,21 +909,25 @@ endif()
 # MAIN executable or supplied by the PC-98 text/font boundary. Original bytes
 # remain caller-owned external inputs and are never embedded by this target.
 add_library(th03_app_content STATIC
-	src/app/authentic_text.cpp
-	src/app/main_compiled_content.cpp
-	src/app/new_classic_character_select_assets.cpp
-	src/app/new_classic_cutscene_text.cpp
-	src/app/new_classic_game_text.cpp
-	src/app/new_classic_picture_patch.cpp
+	src/app/content/authentic_text.cpp
+	src/app/content/main_compiled_content.cpp
+	src/app/new_classic/content/new_classic_character_select_assets.cpp
+	src/app/new_classic/content/new_classic_cutscene_text.cpp
+	src/app/new_classic/content/new_classic_game_text.cpp
+	src/app/new_classic/content/new_classic_picture_patch.cpp
 )
-target_include_directories(th03_app_content PUBLIC include)
+target_include_directories(
+	th03_app_content
+	PUBLIC include
+	PRIVATE src/app
+)
 target_link_libraries(th03_app_content PUBLIC th03_present)
 target_compile_features(th03_app_content PUBLIC cxx_std_23)
 set_target_properties(th03_app_content PROPERTIES CXX_EXTENSIONS OFF)
 th03_set_warnings(th03_app_content)
 
 add_library(th03_app_story_route STATIC
-	src/app/new_classic_story_route.cpp
+	src/app/new_classic/new_classic_story_route.cpp
 )
 target_include_directories(th03_app_story_route PUBLIC include)
 target_compile_features(th03_app_story_route PUBLIC cxx_std_23)
@@ -940,17 +962,17 @@ th03_set_warnings(th03_formats)
 # Backend-neutral New Classic rollback/network protocol and deterministic test
 # scheduling. This target owns no game process, socket, platform, clock, or UI.
 add_library(th03_app_netplay STATIC
-	src/app/new_classic_netplay_datagram.cpp
-	src/app/new_classic_netplay_identity.cpp
-	src/app/new_classic_netplay_input_delay.cpp
-	src/app/new_classic_netplay_lobby.cpp
-	src/app/new_classic_netplay_match_contract.cpp
-	src/app/new_classic_netplay_pause_barrier.cpp
-	src/app/new_classic_netplay_protocol.cpp
-	src/app/new_classic_netplay_signaling.cpp
-	src/app/new_classic_netplay_simulator.cpp
-	src/app/new_classic_netplay_timeline.cpp
-	src/app/new_classic_nametag.cpp
+	src/app/new_classic/netplay/new_classic_netplay_datagram.cpp
+	src/app/new_classic/netplay/new_classic_netplay_identity.cpp
+	src/app/new_classic/netplay/new_classic_netplay_input_delay.cpp
+	src/app/new_classic/netplay/new_classic_netplay_lobby.cpp
+	src/app/new_classic/netplay/new_classic_netplay_match_contract.cpp
+	src/app/new_classic/netplay/new_classic_netplay_pause_barrier.cpp
+	src/app/new_classic/netplay/new_classic_netplay_protocol.cpp
+	src/app/new_classic/netplay/new_classic_netplay_signaling.cpp
+	src/app/new_classic/netplay/new_classic_netplay_simulator.cpp
+	src/app/new_classic/netplay/new_classic_netplay_timeline.cpp
+	src/app/new_classic/netplay/new_classic_nametag.cpp
 )
 target_include_directories(th03_app_netplay PUBLIC include)
 target_link_libraries(th03_app_netplay PUBLIC th03_app_content th03_core)
@@ -996,56 +1018,60 @@ th03_set_warnings(th03_replay_tools)
 # process and the complete source-private Classic OP/MAINL/MAIN lifecycle;
 # platform code sees only the narrow public runners and composed surface.
 add_library(th03_app_main STATIC
-	src/app/classic_audio_session.cpp
-	src/app/classic_cli.cpp
-	src/app/classic_cutscene_scene.cpp
-	src/app/classic_mainl_continue.cpp
-	src/app/classic_op_music_room.cpp
-	src/app/classic_op_options_scene.cpp
-	src/app/classic_op_scene.cpp
-	src/app/classic_op_session.cpp
-	src/app/classic_op_selection.cpp
-	src/app/classic_registration_scene.cpp
-	src/app/classic_runner.cpp
-	src/app/classic_mainl_stage.cpp
-	src/app/classic_mainl_story.cpp
-	src/app/classic_mainl_win.cpp
-	src/app/classic_staff_scene.cpp
-	src/app/classic_story_session.cpp
-	src/app/direct_vs_cli.cpp
-	src/app/direct_vs_launch.cpp
-	src/app/diet_executable.cpp
-	src/app/main_direct_vs_runner.cpp
-	src/app/mainl_compiled_text.cpp
-	src/app/main_process_driver.cpp
-	src/app/main_process.cpp
-	src/app/main_rollback_coordinator.cpp
-	src/app/main_process_static_content.cpp
-	src/app/new_classic_assets.cpp
-	src/app/new_classic_device_scene.cpp
-	src/app/new_classic_frontend.cpp
-	src/app/new_classic_joy_config_scene.cpp
-	src/app/new_classic_key_config_scene.cpp
-	src/app/new_classic_language.cpp
-	src/app/new_classic_messages.cpp
-	src/app/new_classic_netplay_match_intro.cpp
-	src/app/new_classic_netplay_main_session.cpp
-	src/app/new_classic_netplay_post_match.cpp
-	src/app/new_classic_netplay_report.cpp
-	src/app/new_classic_netplay_room.cpp
-	src/app/new_classic_online_profile_scene.cpp
-	src/app/new_classic_netplay_replay_capture.cpp
-	src/app/new_classic_online_client.cpp
-	src/app/new_classic_online_task.cpp
-	src/app/new_classic_playback.cpp
-	src/app/new_classic_practice.cpp
-	src/app/new_classic_replay.cpp
-	src/app/new_classic_unicode.cpp
-	src/app/op_compiled_text.cpp
-	src/app/pixel_oracle_identity.cpp
-	src/app/replay_slot_store.cpp
+	src/app/classic/classic_audio_session.cpp
+	src/app/classic/classic_cli.cpp
+	src/app/classic/scenes/classic_cutscene_scene.cpp
+	src/app/classic/mainl/classic_mainl_continue.cpp
+	src/app/classic/op/classic_op_music_room.cpp
+	src/app/classic/op/classic_op_options_scene.cpp
+	src/app/classic/op/classic_op_scene.cpp
+	src/app/classic/op/classic_op_session.cpp
+	src/app/classic/op/classic_op_selection.cpp
+	src/app/classic/scenes/classic_registration_scene.cpp
+	src/app/classic/classic_runner.cpp
+	src/app/classic/mainl/classic_mainl_stage.cpp
+	src/app/classic/mainl/classic_mainl_story.cpp
+	src/app/classic/mainl/classic_mainl_win.cpp
+	src/app/classic/scenes/classic_staff_scene.cpp
+	src/app/classic/classic_story_session.cpp
+	src/app/direct_vs/direct_vs_cli.cpp
+	src/app/direct_vs/direct_vs_launch.cpp
+	src/app/content/diet_executable.cpp
+	src/app/main/main_direct_vs_runner.cpp
+	src/app/classic/mainl/mainl_compiled_text.cpp
+	src/app/main/main_process_driver.cpp
+	src/app/main/main_process.cpp
+	src/app/main/main_rollback_coordinator.cpp
+	src/app/main/main_process_static_content.cpp
+	src/app/new_classic/content/new_classic_assets.cpp
+	src/app/new_classic/input/new_classic_device_scene.cpp
+	src/app/new_classic/new_classic_frontend.cpp
+	src/app/new_classic/input/new_classic_joy_config_scene.cpp
+	src/app/new_classic/input/new_classic_key_config_scene.cpp
+	src/app/new_classic/content/new_classic_language.cpp
+	src/app/new_classic/content/new_classic_messages.cpp
+	src/app/new_classic/netplay/new_classic_netplay_match_intro.cpp
+	src/app/new_classic/netplay/new_classic_netplay_main_session.cpp
+	src/app/new_classic/netplay/new_classic_netplay_post_match.cpp
+	src/app/new_classic/netplay/new_classic_netplay_report.cpp
+	src/app/new_classic/netplay/new_classic_netplay_room.cpp
+	src/app/new_classic/online/new_classic_online_profile_scene.cpp
+	src/app/new_classic/netplay/new_classic_netplay_replay_capture.cpp
+	src/app/new_classic/online/new_classic_online_client.cpp
+	src/app/new_classic/online/new_classic_online_task.cpp
+	src/app/new_classic/replay/new_classic_playback.cpp
+	src/app/new_classic/new_classic_practice.cpp
+	src/app/new_classic/replay/new_classic_replay.cpp
+	src/app/new_classic/content/new_classic_unicode.cpp
+	src/app/classic/op/op_compiled_text.cpp
+	src/app/oracle/pixel_oracle_identity.cpp
+	src/app/new_classic/replay/replay_slot_store.cpp
 )
-target_include_directories(th03_app_main PUBLIC include)
+target_include_directories(
+	th03_app_main
+	PUBLIC include
+	PRIVATE src/app
+)
 target_link_libraries(
 	th03_app_main
 	PUBLIC th03_app_resources th03_app_content th03_app_persistence
@@ -2088,6 +2114,9 @@ if(BUILD_TESTING)
 	target_link_libraries(
 		th03-app-classic-mainl-win-tests PRIVATE th03_app_main
 	)
+	target_include_directories(
+		th03-app-classic-mainl-win-tests PRIVATE src/app
+	)
 	th03_set_warnings(th03-app-classic-mainl-win-tests)
 	add_test(
 		NAME th03-app-classic-mainl-win-tests
@@ -2445,6 +2474,9 @@ if(BUILD_TESTING)
 		th03-app-main-process-tests
 		PRIVATE th03_app_main
 	)
+	target_include_directories(
+		th03-app-main-process-tests PRIVATE src/app
+	)
 	th03_set_warnings(th03-app-main-process-tests)
 	add_test(
 		NAME th03-app-main-process-tests
@@ -2742,6 +2774,9 @@ if(BUILD_TESTING)
 	)
 	target_link_libraries(
 		th03-app-new-classic-playback-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-new-classic-playback-tests PRIVATE src/app
 	)
 	th03_set_warnings(th03-app-new-classic-playback-tests)
 	add_test(

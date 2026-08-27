@@ -72,11 +72,17 @@ class GameTextPackTests(unittest.TestCase):
             )
             self.assertEqual(
                 ids.read_bytes(),
-                (ROOT / "include/th03/app/new_classic_game_text_ids.inc").read_bytes(),
+                (
+                    ROOT
+                    / "include/th03/app/new_classic/content/new_classic_game_text_ids.inc"
+                ).read_bytes(),
             )
             self.assertEqual(
                 data.read_bytes(),
-                (ROOT / "src/app/new_classic_game_text_generated.inc").read_bytes(),
+                (
+                    ROOT
+                    / "src/app/new_classic/content/new_classic_game_text_generated.inc"
+                ).read_bytes(),
             )
 
     def test_author_is_complete_and_exact(self) -> None:

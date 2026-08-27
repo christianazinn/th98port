@@ -5,10 +5,10 @@
 #include <iostream>
 #include <optional>
 
-#include "th03/app/main_direct_vs_runner.hpp"
+#include "th03/app/main/main_direct_vs_runner.hpp"
 
-#include "main_direct_vs_runner_internal.hpp"
-#include "main_process_driver_internal.hpp"
+#include "main/main_direct_vs_runner_internal.hpp"
+#include "main/main_process_driver_internal.hpp"
 
 namespace {
 

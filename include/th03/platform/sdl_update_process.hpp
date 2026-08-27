@@ -1,7 +1,7 @@
 #ifndef TH03_PLATFORM_SDL_UPDATE_PROCESS_HPP
 #define TH03_PLATFORM_SDL_UPDATE_PROCESS_HPP
 
-#include "th03/app/update_process_host.hpp"
+#include "th03/app/update/update_process_host.hpp"
 
 namespace th03::platform {
 

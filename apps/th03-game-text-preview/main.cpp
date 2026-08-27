@@ -13,8 +13,8 @@
 #include <utility>
 #include <vector>
 
-#include "th03/app/authentic_text.hpp"
-#include "th03/app/new_classic_game_text.hpp"
+#include "th03/app/content/authentic_text.hpp"
+#include "th03/app/new_classic/content/new_classic_game_text.hpp"
 #include "th03/present/graphics_text.hpp"
 #include "th03/present/raster.hpp"
 

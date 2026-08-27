@@ -12,8 +12,8 @@
 #include <SDL3/SDL_gamepad.h>
 #include <SDL3/SDL_timer.h>
 
-#include "th03/app/new_classic_controller.hpp"
-#include "th03/app/tick_input.hpp"
+#include "th03/app/new_classic/input/new_classic_controller.hpp"
+#include "th03/app/runtime/tick_input.hpp"
 
 namespace th03::platform {
 

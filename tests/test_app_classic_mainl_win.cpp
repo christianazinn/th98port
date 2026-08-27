@@ -1,5 +1,5 @@
-#include "../src/app/classic_mainl_win_internal.hpp"
-#include "../src/app/new_classic_netplay_post_match_internal.hpp"
+#include "../src/app/classic/mainl/classic_mainl_win_internal.hpp"
+#include "../src/app/new_classic/netplay/new_classic_netplay_post_match_internal.hpp"
 
 #include <algorithm>
 #include <array>
@@ -14,8 +14,8 @@
 #include <string_view>
 #include <vector>
 
-#include "th03/app/authentic_text.hpp"
-#include "th03/app/main_process.hpp"
+#include "th03/app/content/authentic_text.hpp"
+#include "th03/app/main/main_process.hpp"
 #include "th03/present/source_surface.hpp"
 
 namespace {

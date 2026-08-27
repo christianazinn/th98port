@@ -10,7 +10,7 @@
 #include <optional>
 #include <vector>
 
-#include "classic_story_session_internal.hpp"
+#include "classic/classic_story_session_internal.hpp"
 
 namespace {
 

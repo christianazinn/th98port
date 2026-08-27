@@ -931,13 +931,13 @@ yet expose a truthful RTT measurement.
 - `include/th03/core/game.hpp` defines fixed-width `CoreInput`,
   `GM_VS_1P_2P`, round-start recipes, diagnostic `CanonicalState`, and the
   non-copyable `Game` owner.
-- `include/th03/app/main_process.hpp` exposes one guarded source-fresh human VS
+- `include/th03/app/main/main_process.hpp` exposes one guarded source-fresh human VS
   `MainProcess` and no arbitrary-frame save/load API.
 - `docs/REPLAY_VERIFICATION.md` documents why V14 checkpoints are portable
   recipes rather than native process images.
 - `docs/PLAYABLE_PORT_ROADMAP.md` freezes core/present/platform dependency
   direction and the exact `526315/9328` Hz input scheduler.
-- `src/formats/v14.cpp` and `src/app/new_classic_replay.cpp` already accept and
+- `src/formats/v14.cpp` and `src/app/new_classic/replay/new_classic_replay.cpp` already accept and
   record `game_mode::vs_1p_2p`.
 - `docs/NEW_CLASSIC_ONLINE_SERVICE_DRAFT.md` owns the existing user credential,
   Cloudflare deployment, V14 upload, and leaderboard trust boundaries that the

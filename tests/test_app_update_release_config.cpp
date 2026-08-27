@@ -1,4 +1,4 @@
-#include "th03/app/update_release_config.hpp"
+#include "th03/app/update/update_release_config.hpp"
 
 #include <array>
 #include <cstddef>

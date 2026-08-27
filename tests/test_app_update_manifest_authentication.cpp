@@ -1,4 +1,4 @@
-#include "th03/app/update_manifest_authentication.hpp"
+#include "th03/app/update/update_manifest_authentication.hpp"
 
 #include <cstddef>
 #include <chrono>

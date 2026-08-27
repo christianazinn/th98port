@@ -1,8 +1,8 @@
-#include "th03/app/classic_audio_session.hpp"
-#include "th03/app/host_surface.hpp"
-#include "th03/app/main_compiled_content.hpp"
-#include "th03/app/new_classic_playback.hpp"
-#include "th03/app/new_classic_settings.hpp"
+#include "th03/app/classic/classic_audio_session.hpp"
+#include "th03/app/runtime/host_surface.hpp"
+#include "th03/app/content/main_compiled_content.hpp"
+#include "th03/app/new_classic/replay/new_classic_playback.hpp"
+#include "th03/app/new_classic/persistence/new_classic_settings.hpp"
 #include "th03/audio/output_gain.hpp"
 #include "th03/formats/v14.hpp"
 

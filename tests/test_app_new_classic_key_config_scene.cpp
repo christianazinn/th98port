@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "new_classic_menu_preview.hpp"
-#include "th03/app/new_classic_key_config_scene.hpp"
+#include "th03/app/new_classic/input/new_classic_key_config_scene.hpp"
 
 namespace {
 

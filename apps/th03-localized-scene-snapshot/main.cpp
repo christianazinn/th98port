@@ -1,4 +1,4 @@
-#include "classic_cutscene_scene_internal.hpp"
+#include "classic/scenes/classic_cutscene_scene_internal.hpp"
 
 #include <algorithm>
 #include <array>
@@ -18,10 +18,10 @@
 #include <utility>
 #include <vector>
 
-#include "th03/app/authentic_text.hpp"
-#include "th03/app/new_classic_cutscene_text.hpp"
-#include "th03/app/new_classic_language.hpp"
-#include "th03/app/resources.hpp"
+#include "th03/app/content/authentic_text.hpp"
+#include "th03/app/new_classic/content/new_classic_cutscene_text.hpp"
+#include "th03/app/new_classic/content/new_classic_language.hpp"
+#include "th03/app/content/resources.hpp"
 #include "th03/present/raster.hpp"
 
 namespace {

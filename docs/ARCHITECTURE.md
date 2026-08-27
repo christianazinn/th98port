@@ -113,6 +113,14 @@ runtime neither sleeps nor creates a window. Archive validation/caching stays
 in the orthogonal `th03_app_resources` target so neither dependency is forced
 into core, assets, or presentation.
 
+The physical application tree follows the same ownership rule. Public headers
+under `include/th03/app/` and implementations under `src/app/` are grouped by
+scene or service owner; neither root accepts files directly. This is a source
+layout rule rather than a new dependency layer, so the existing namespaces and
+CMake targets remain authoritative. See [APP_STRUCTURE.md](APP_STRUCTURE.md)
+for the directory map and placement rules. CMake checks the two roots at
+configure time to prevent the former flat layout from returning.
+
 MAIN's palette boundary retains master.lib's full 16-entry RGB8 logical
 `Palette8`, a separate applied RGB4 DAC result, raw `PaletteTone`, one
 process-scoped baseline snapshot, and an explicit dirty latch. Core reports

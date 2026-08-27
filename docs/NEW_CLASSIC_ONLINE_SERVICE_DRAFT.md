@@ -56,8 +56,12 @@ does only what it can prove simply and deterministically:
 4. Require the encoded slowdown to be at most 5%.
 5. Publish the server-derived row only after those checks pass.
 
-There is no speculative anti-cheat, heuristic flagging, executable attestation,
-or claim that file storage versus memory storage prevents cheating.
+The deployed acceptance path has no speculative anti-cheat, heuristic
+flagging, executable attestation, or claim that file storage versus memory
+storage prevents cheating. A separate deferred roadmap item considers private,
+non-authoritative run-lifetime evidence and crash recovery. It must not change
+the server's deterministic acceptance contract unless a later reviewed design
+explicitly does so.
 
 ## Small Cloudflare shape
 

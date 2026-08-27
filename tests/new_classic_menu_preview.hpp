@@ -9,7 +9,7 @@
 #include <memory>
 #include <string_view>
 
-#include "th03/app/new_classic_assets.hpp"
+#include "th03/app/new_classic/content/new_classic_assets.hpp"
 
 namespace th03::test {
 

@@ -6,9 +6,9 @@
 #include <iostream>
 #include <optional>
 
-#include "th03/app/main_process.hpp"
+#include "th03/app/main/main_process.hpp"
 
-#include "classic_mainl_story_internal.hpp"
+#include "classic/mainl/classic_mainl_story_internal.hpp"
 
 namespace {
 

@@ -10,8 +10,8 @@
 #include <span>
 #include <vector>
 
-#include "diet_executable_internal.hpp"
-#include "mainl_compiled_text_internal.hpp"
+#include "content/diet_executable_internal.hpp"
+#include "classic/mainl/mainl_compiled_text_internal.hpp"
 
 namespace {
 

@@ -1,5 +1,5 @@
-#include "th03/app/new_classic_netplay_simulator.hpp"
-#include "th03/app/new_classic_netplay_timeline.hpp"
+#include "th03/app/new_classic/netplay/new_classic_netplay_simulator.hpp"
+#include "th03/app/new_classic/netplay/new_classic_netplay_timeline.hpp"
 
 #include <array>
 #include <cstddef>

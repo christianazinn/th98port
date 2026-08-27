@@ -1,5 +1,5 @@
-#include "th03/app/new_classic_netplay_room.hpp"
-#include "th03/app/new_classic_online_profile_scene.hpp"
+#include "th03/app/new_classic/netplay/new_classic_netplay_room.hpp"
+#include "th03/app/new_classic/online/new_classic_online_profile_scene.hpp"
 
 #include <algorithm>
 #include <array>
