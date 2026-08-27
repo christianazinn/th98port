@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "classic/classic_runner_internal.hpp"
+#include "classic/op/classic_op_audio_queue_internal.hpp"
 #include "classic/op/classic_op_language_content_internal.hpp"
 #include "main/main_process_driver_internal.hpp"
 #include "main/main_process_internal.hpp"
@@ -539,9 +540,7 @@ struct ClassicOpSessionBackend final {
 	bool new_classic_practice_route = false;
 	std::uint8_t title_extra_unlock_step = 0U;
 
-	std::array<ClassicAudioCommand, 64U> audio_commands{};
-	std::size_t audio_head = 0U;
-	std::size_t audio_count = 0U;
+	detail::ClassicOpAudioQueue audio_queue{};
 	present::Tram blank_tram{};
 
 	ClassicOpSessionBackend(
@@ -1108,7 +1107,7 @@ struct ClassicOpSessionBackend final {
 			return ClassicOpSessionReplayResult::back;
 		}
 		case NewClassicReplayBrowserStatus::play_selected: {
-			if(audio_count >= audio_commands.size()) {
+			if(!audio_queue.can_accept()) {
 				return std::unexpected(detail::session_error(
 					ClassicOpSessionErrorCode::audio_command_pending
 				));
@@ -1260,24 +1259,13 @@ struct ClassicOpSessionBackend final {
 
 	[[nodiscard]] bool push_audio(ClassicAudioCommand command) noexcept
 	{
-		if(audio_count >= audio_commands.size()) {
-			return false;
-		}
-		const auto tail = (audio_head + audio_count) % audio_commands.size();
-		audio_commands[tail] = command;
-		++audio_count;
-		return true;
+		return audio_queue.push(command);
 	}
 
 	template <typename Scene>
 	[[nodiscard]] bool drain_audio(Scene &scene) noexcept
 	{
-		while(auto command = scene.take_audio_command()) {
-			if(!push_audio(*command)) {
-				return false;
-			}
-		}
-		return true;
+		return audio_queue.drain(scene);
 	}
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
@@ -1373,7 +1361,7 @@ struct ClassicOpSessionBackend final {
 				}
 				if(!loaded->document.extra_unlocked) {
 					const bool play_feedback = config.sfx_enabled;
-					if(play_feedback && audio_count + 2U > audio_commands.size()) {
+					if(play_feedback && !audio_queue.can_accept(2U)) {
 						return std::unexpected(detail::session_error(
 							ClassicOpSessionErrorCode::audio_command_pending
 						));
@@ -2917,7 +2905,7 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::invalid_config
 			));
 		}
-		if((audio_commands.size() - audio_count) < 2U) {
+		if(!audio_queue.can_accept(2U)) {
 			return std::unexpected(detail::session_error(
 				ClassicOpSessionErrorCode::audio_command_pending
 			));
@@ -3149,7 +3137,7 @@ struct ClassicOpSessionBackend final {
 				));
 			}
 			const auto practice_setup = practice_menu->config();
-			if(audio_count >= audio_commands.size()) {
+			if(!audio_queue.can_accept()) {
 				return std::unexpected(detail::session_error(
 					ClassicOpSessionErrorCode::audio_command_pending
 				));
@@ -3247,7 +3235,7 @@ struct ClassicOpSessionBackend final {
 				ClassicOpSessionErrorCode::invalid_config
 			));
 		}
-		if((audio_commands.size() - audio_count) < 2U) {
+		if(!audio_queue.can_accept(2U)) {
 			return std::unexpected(detail::session_error(
 				ClassicOpSessionErrorCode::audio_command_pending
 			));
@@ -4048,18 +4036,12 @@ struct ClassicOpSessionBackend final {
 
 	[[nodiscard]] bool audio_pending() const noexcept
 	{
-		return audio_count != 0U;
+		return audio_queue.has_pending();
 	}
 
 	[[nodiscard]] std::optional<ClassicAudioCommand> take_audio_command() noexcept
 	{
-		if(audio_count == 0U) {
-			return std::nullopt;
-		}
-		const auto result = audio_commands[audio_head];
-		audio_head = (audio_head + 1U) % audio_commands.size();
-		--audio_count;
-		return result;
+		return audio_queue.take();
 	}
 
 	[[nodiscard]] std::optional<NewClassicKeyConfig>

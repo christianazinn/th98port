@@ -81,6 +81,12 @@ and dependent MAIN static-content invalidation inside
 only its active stage/music text, catalogs, language identity, and prepared
 static content; it must not independently mutate language assets.
 
+All retained OP scenes publish audio intent through the bounded FIFO in
+`classic/op/classic_op_audio_queue_internal.hpp`. Queue capacity checks,
+scene draining, wraparound, pending status, and head advancement are one
+invariant; transition code may request commands but must not manipulate ring
+indices or infer remaining capacity itself.
+
 The external resource boundary separates immutable key-to-spec identity and
 complete-manifest construction in `content/resource_catalog.cpp`, per-scene
 key request composition in `content/resources.cpp`, and filesystem lookup,

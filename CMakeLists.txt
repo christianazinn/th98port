@@ -2283,6 +2283,20 @@ if(BUILD_TESTING)
 		NAME th03-app-classic-op-session-tests
 		COMMAND th03-app-classic-op-session-tests
 	)
+	add_executable(th03-app-classic-op-audio-queue-tests
+		tests/test_app_classic_op_audio_queue.cpp
+	)
+	target_link_libraries(
+		th03-app-classic-op-audio-queue-tests PRIVATE th03_app_main
+	)
+	target_include_directories(
+		th03-app-classic-op-audio-queue-tests PRIVATE src/app
+	)
+	th03_set_warnings(th03-app-classic-op-audio-queue-tests)
+	add_test(
+		NAME th03-app-classic-op-audio-queue-tests
+		COMMAND th03-app-classic-op-audio-queue-tests
+	)
 
 	add_executable(th03-app-op-compiled-text-tests
 		tests/test_app_op_compiled_text.cpp
