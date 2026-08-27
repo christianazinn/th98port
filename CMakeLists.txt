@@ -1027,6 +1027,7 @@ add_library(th03_app_main STATIC
 	src/app/classic/op/classic_op_music_room.cpp
 	src/app/classic/op/classic_op_options_scene.cpp
 	src/app/classic/op/classic_op_scene.cpp
+	src/app/classic/op/classic_op_language_content.cpp
 	src/app/classic/op/classic_op_session.cpp
 	src/app/classic/op/classic_op_session_backend.cpp
 	src/app/classic/op/classic_op_selection.cpp

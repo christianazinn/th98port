@@ -14,9 +14,9 @@
 #include <vector>
 
 #include "classic/classic_runner_internal.hpp"
+#include "classic/op/classic_op_language_content_internal.hpp"
 #include "main/main_process_driver_internal.hpp"
 #include "main/main_process_internal.hpp"
-#include "main/main_process_static_content_internal.hpp"
 #include "new_classic/content/new_classic_language_internal.hpp"
 #include "th03/app/content/authentic_text.hpp"
 #include "th03/app/new_classic/new_classic_pause.hpp"
@@ -437,18 +437,10 @@ namespace {
 
 struct ClassicOpSessionBackend final {
 	std::shared_ptr<MainResourceLoader> loader{};
-	MainCompiledContent compiled;
 	std::vector<std::byte> font_rom{};
 	std::optional<Pc98FontRomProvider> font{};
-	MainlStageTextAssets stage_text{};
 	MainlStaffCompiledAssets staff_compiled{};
-	OpMusicRoomTextImport op_music_labels{};
-	std::optional<MainCompiledContent> japanese_compiled{};
-	std::optional<MainlStageTextAssets> japanese_stage_text{};
-	std::optional<OpMusicRoomTextImport> japanese_op_music_labels{};
-	std::map<std::string, ResourceBytes> english_resources{};
-	ClassicLanguage active_language = ClassicLanguage::japanese;
-	std::shared_ptr<const MainProcessStaticContent> static_content{};
+	detail::ClassicOpLanguageContent language_content;
 	std::filesystem::path config_path{};
 	std::filesystem::path score_path{};
 	std::filesystem::path new_classic_score_path{};
@@ -573,12 +565,12 @@ struct ClassicOpSessionBackend final {
 		const ClassicRunnerRequest *runner_request
 	) :
 		loader(std::move(loader_)),
-		compiled(std::move(compiled_)),
 		font_rom(std::move(font_rom_)),
-		stage_text(std::move(stage_text_)),
 		staff_compiled(std::move(staff_compiled_)),
-		op_music_labels(std::move(op_music_labels_)),
-		english_resources(std::move(english_resources_)),
+		language_content(
+			std::move(compiled_), std::move(stage_text_),
+			std::move(op_music_labels_), std::move(english_resources_)
+		),
 		config_path(std::move(config_path_)),
 		score_path(std::move(score_path_)),
 		new_classic_score_path(std::move(new_classic_score_path_)),
@@ -590,9 +582,6 @@ struct ClassicOpSessionBackend final {
 		patch_assets(std::move(patch_assets_)),
 		new_classic_practice_route(new_classic_practice_route_)
 	{
-		japanese_compiled = compiled;
-		japanese_stage_text = stage_text;
-		japanese_op_music_labels = op_music_labels;
 		if(runner_request) {
 			content_paths = runner_request->content;
 			key_config = runner_request->new_classic_key_config;
@@ -628,129 +617,28 @@ struct ClassicOpSessionBackend final {
 	[[nodiscard]] std::shared_ptr<const NewClassicCutsceneTextCatalog>
 	cutscene_text_for(ClassicLanguage language) const noexcept
 	{
-		if(!patch_assets || !patch_assets->custom_cutscene_text) {
-			return {};
-		}
-		const bool japanese_catalog =
-			patch_assets->custom_cutscene_text->source_profile_fnv1a64() ==
-				new_classic_cutscene_original_profile_fnv1a64;
-		if((language == ClassicLanguage::japanese) != japanese_catalog) {
-			return {};
-		}
-		return patch_assets->custom_cutscene_text;
+		return language_content.cutscene_text_for(patch_assets, language);
 	}
 
 	[[nodiscard]] const NewClassicGameTextCatalog *game_text_for(
 		ClassicLanguage language
 	) const noexcept
 	{
-		if(patch_assets && patch_assets->custom_game_text) {
-			const bool japanese =
-				patch_assets->custom_game_text->locale() == "ja-JP";
-			if((language == ClassicLanguage::japanese) == japanese) {
-				return patch_assets->custom_game_text.get();
-			}
-		}
-		return classic_language_uses_english_assets(language) ?
-			&new_classic_builtin_english_game_text() :
-			&new_classic_builtin_japanese_game_text();
+		return language_content.game_text_for(patch_assets, language);
 	}
 
 	[[nodiscard]] std::shared_ptr<const NewClassicPicturePatchCatalog>
 	picture_patch_for(ClassicLanguage language) const noexcept
 	{
-		if(!patch_assets || !patch_assets->custom_picture_patch) {
-			return {};
-		}
-		const auto *game_text = game_text_for(language);
-		if(!game_text || patch_assets->custom_picture_patch->locale() !=
-			game_text->locale()) {
-			return {};
-		}
-		return patch_assets->custom_picture_patch;
+		return language_content.picture_patch_for(patch_assets, language);
 	}
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
 	apply_language_profile(ClassicLanguage language)
 	{
-		if(!japanese_compiled || !japanese_stage_text ||
-			!japanese_op_music_labels ||
-			(classic_language_uses_english_assets(language) &&
-			 english_resources.empty())) {
-			return std::unexpected(detail::session_error(
-				ClassicOpSessionErrorCode::backend_contract_failed
-			));
-		}
-		if(active_language == language) {
-			return {};
-		}
-		if(!loader->switch_authenticated_overrides(
-			classic_language_uses_english_assets(language) ? english_resources :
-				std::map<std::string, ResourceBytes>{}
-		)) {
-			return std::unexpected(detail::session_error(
-				ClassicOpSessionErrorCode::backend_contract_failed
-			));
-		}
-		const auto cutscene_text = cutscene_text_for(language);
-		if(cutscene_text) {
-			auto profile = std::uint64_t{14695981039346656037ULL};
-			for(std::size_t index = 0U;
-				index < new_classic_cutscene_script_count; ++index) {
-				auto loaded = loader->load({
-					.role = MainResourceRole::cutscene_script,
-					.cutscene_script = static_cast<MainCutsceneScript>(index + 1U),
-				});
-				if(!loaded) {
-					return std::unexpected(resource_error(
-						std::move(loaded.error())
-					));
-				}
-				const auto bytes = std::span<const std::byte>{**loaded};
-				const auto source = std::span<const std::uint8_t>{
-					reinterpret_cast<const std::uint8_t *>(bytes.data()),
-					bytes.size(),
-				};
-				for(const auto value : source) {
-					profile ^= value;
-					profile *= 1099511628211ULL;
-				}
-				if(auto replacements =
-					cutscene_text->replacement_glyphs(index, source);
-					!replacements) {
-					ClassicStorySessionError nested{
-						.code = ClassicStorySessionErrorCode::cutscene_text_failed,
-					};
-					nested.cutscene_text_error.emplace(
-						std::move(replacements.error())
-					);
-					return std::unexpected(story_error(std::move(nested)));
-				}
-			}
-			if(profile != cutscene_text->source_profile_fnv1a64()) {
-				ClassicStorySessionError nested{
-					.code = ClassicStorySessionErrorCode::cutscene_text_failed,
-				};
-				nested.cutscene_text_error.emplace(
-					NewClassicCutsceneTextPackError{
-						.code = NewClassicCutsceneTextPackErrorCode::source_profile_mismatch,
-					}
-				);
-				return std::unexpected(story_error(std::move(nested)));
-			}
-		}
-		compiled = *japanese_compiled;
-		stage_text = *japanese_stage_text;
-		op_music_labels = *japanese_op_music_labels;
-		if(const auto *game_text = game_text_for(language)) {
-			apply_new_classic_english_text(
-				compiled, stage_text, op_music_labels,
-				*game_text
-			);
-		}
-		static_content.reset();
-		active_language = language;
-		return {};
+		return language_content.apply_language_profile(
+			*loader, patch_assets, language
+		);
 	}
 
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
@@ -1395,24 +1283,9 @@ struct ClassicOpSessionBackend final {
 	[[nodiscard]] std::expected<void, ClassicOpSessionError>
 	ensure_static_content()
 	{
-		if(static_content) {
-			return {};
-		}
-		auto resources = loader->load_main_static();
-		if(!resources) {
-			return std::unexpected(resource_error(std::move(resources.error())));
-		}
-		auto prepared = MainProcessStaticContentAccess::create(
-			*resources, compiled, font_rom, true,
-			patch_assets ? game_text_for(config.language) : nullptr
+		return language_content.ensure_static_content(
+			*loader, font_rom, patch_assets, config.language
 		);
-		if(!prepared) {
-			auto error = main_error(std::move(prepared.error()));
-			error.code = ClassicOpSessionErrorCode::static_content_failed;
-			return std::unexpected(std::move(error));
-		}
-		static_content = std::move(*prepared);
-		return {};
 	}
 
 	[[nodiscard]] std::expected<
@@ -1606,7 +1479,8 @@ struct ClassicOpSessionBackend final {
 		}
 		auto created = ClassicOpOptionsScene::create_from_op(
 			*title_completion, config, fm_available, *resources,
-			patch_assets, font ? &*font : nullptr, !english_resources.empty(),
+			patch_assets, font ? &*font : nullptr,
+			language_content.english_assets_available(),
 			new_classic_settings ?
 				new_classic_settings->master_volume_percent : 100U,
 			new_classic_settings ? new_classic_settings->window :
@@ -1725,7 +1599,7 @@ struct ClassicOpSessionBackend final {
 		}
 		bool language_background_refreshed = false;
 		if(tick->phase == ClassicOpOptionsPhase::shrink_window &&
-			options->config().language != active_language) {
+			options->config().language != language_content.active_language()) {
 			if(auto applied = apply_language_profile(options->config().language);
 				!applied) {
 				return std::unexpected(std::move(applied.error()));
@@ -1801,7 +1675,7 @@ struct ClassicOpSessionBackend final {
 					new_classic_settings->mute_when_unfocused;
 			}
 		}
-		if(config.language != active_language) {
+		if(config.language != language_content.active_language()) {
 			if(auto applied = apply_language_profile(config.language); !applied) {
 				return std::unexpected(std::move(applied.error()));
 			}
@@ -1824,7 +1698,7 @@ struct ClassicOpSessionBackend final {
 			auto scene = std::make_unique<NewClassicKeyConfigScene>(
 				*key_config, key_defaults, maximum_key, capture_cancel_key,
 				key_name, patch_assets, key_name_context,
-				new_classic_language_profile(active_language)
+				new_classic_language_profile(language_content.active_language())
 			);
 			if(!scene->valid()) {
 				return std::unexpected(detail::session_error(
@@ -1846,7 +1720,7 @@ struct ClassicOpSessionBackend final {
 			key_config_return_options.emplace(std::move(*options_completion));
 			auto scene = std::make_unique<NewClassicJoyConfigScene>(
 				*joy_config, joy_defaults, patch_assets,
-				new_classic_language_profile(active_language)
+				new_classic_language_profile(language_content.active_language())
 			);
 			if(!scene->valid()) {
 				return std::unexpected(detail::session_error(
@@ -1875,7 +1749,7 @@ struct ClassicOpSessionBackend final {
 			auto scene = std::make_unique<NewClassicDeviceScene>(
 				mode,
 				*device_assignment, device_defaults, patch_assets,
-				new_classic_language_profile(active_language)
+				new_classic_language_profile(language_content.active_language())
 			);
 			if(!scene->valid()) {
 				return std::unexpected(detail::session_error(
@@ -2065,7 +1939,7 @@ struct ClassicOpSessionBackend final {
 		auto returned = device_scene ?
 			ClassicOpOptionsScene::resume_after_device_scene(
 				*key_config_return_options, fm_available, *resources, patch_assets,
-				&*font, !english_resources.empty(),
+				&*font, language_content.english_assets_available(),
 				key_config_return_options->master_volume_percent(),
 				key_config_return_options->window_presentation(),
 				key_config_return_options->music_volume_percent(),
@@ -2081,7 +1955,7 @@ struct ClassicOpSessionBackend final {
 			) : joy_config_scene ?
 			ClassicOpOptionsScene::resume_after_joy_config(
 				*key_config_return_options, fm_available, *resources, patch_assets,
-				&*font, !english_resources.empty(),
+				&*font, language_content.english_assets_available(),
 				key_config_return_options->master_volume_percent(),
 				key_config_return_options->window_presentation(),
 				key_config_return_options->music_volume_percent(),
@@ -2096,7 +1970,7 @@ struct ClassicOpSessionBackend final {
 				}
 			) : ClassicOpOptionsScene::resume_after_key_config(
 				*key_config_return_options, fm_available, *resources, patch_assets,
-				&*font, !english_resources.empty(),
+				&*font, language_content.english_assets_available(),
 				key_config_return_options->master_volume_percent(),
 				key_config_return_options->window_presentation(),
 				key_config_return_options->music_volume_percent(),
@@ -2154,7 +2028,8 @@ struct ClassicOpSessionBackend final {
 			});
 		}
 		auto created = ClassicOpMusicRoomScene::create_from_imported_text(
-			*title_completion, music_carry, *resources, op_music_labels, *font,
+			*title_completion, music_carry, *resources,
+			language_content.op_music_labels(), *font,
 			game_text_for(config.language), localized_heading
 		);
 		if(!created) {
@@ -2259,10 +2134,11 @@ struct ClassicOpSessionBackend final {
 		auto created = replay_recorder ?
 			ClassicRegistrationScene::create_new_classic_viewer(
 				*title_completion, new_classic_score_path, score_path,
-				*resources, stage_text, *font, patch_assets,
+				*resources, language_content.stage_text(), *font, patch_assets,
 				game_text_for(config.language), preserve_hub_return
 			) : ClassicRegistrationScene::create_viewer(
-				*title_completion, score_path, *resources, stage_text, *font
+				*title_completion, score_path, *resources,
+				language_content.stage_text(), *font
 			);
 		if(!created) {
 			return std::unexpected(high_score_error(std::move(created.error())));
@@ -2656,7 +2532,8 @@ struct ClassicOpSessionBackend final {
 			*title_completion, mode, *available, selection_carry, *resources,
 			replay_recorder && replay_recorder->capture_enabled() &&
 				mode == ClassicOpSelectionMode::vs_1p_cpu,
-			(active_language == ClassicLanguage::spanish_test && patch_assets) ?
+			(language_content.active_language() ==
+				ClassicLanguage::spanish_test && patch_assets) ?
 				patch_assets->custom_character_select_assets.get() : nullptr
 		);
 		if(!created) {
@@ -2818,7 +2695,8 @@ struct ClassicOpSessionBackend final {
 			.kotohime_compatibility = kotohime_compatibility,
 		};
 		auto created = ClassicStorySession::create_with_prepared_content(
-			story_config, loader, static_content, stage_text, staff_compiled,
+			story_config, loader, language_content.static_content(),
+			language_content.stage_text(), staff_compiled,
 			replay_recorder ? new_classic_score_path : score_path,
 			replay_recorder, replay_recorder ? score_path : std::filesystem::path{},
 			patch_assets,
@@ -2886,7 +2764,8 @@ struct ClassicOpSessionBackend final {
 				.kotohime_compatibility = kotohime_compatibility,
 			};
 			auto created = ClassicStorySession::create_with_prepared_content(
-				story_config, loader, static_content, stage_text, staff_compiled,
+				story_config, loader, language_content.static_content(),
+				language_content.stage_text(), staff_compiled,
 				replay_recorder ? new_classic_score_path : score_path,
 				replay_recorder,
 				replay_recorder ? score_path : std::filesystem::path{},
@@ -2998,7 +2877,7 @@ struct ClassicOpSessionBackend final {
 		}
 		auto created = ClassicMainlStageTransition::create_from_demo(
 			*title_completion, kotohime_compatibility, *resources,
-			stage_text, *font, {
+			language_content.stage_text(), *font, {
 				.input_protocol = InputProtocol::live,
 				.three_digit_combos = replay_recorder != nullptr,
 			}
@@ -3048,7 +2927,7 @@ struct ClassicOpSessionBackend final {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
 		auto created = MainProcessDemoAccess::create_demo(
-			*vs_stage, *resources, static_content
+			*vs_stage, *resources, language_content.static_content()
 		);
 		if(!created) {
 			return std::unexpected(main_error(std::move(created.error())));
@@ -3149,7 +3028,7 @@ struct ClassicOpSessionBackend final {
 		}
 		auto created = ClassicMainlStageTransition::create_from_selection(
 			*selection_completion, kotohime_compatibility, *resources,
-			stage_text, *font, {
+			language_content.stage_text(), *font, {
 				.input_protocol = new_classic_input ?
 					InputProtocol::recorded_replay : InputProtocol::live,
 				.three_digit_combos = replay_recorder != nullptr,
@@ -3299,7 +3178,8 @@ struct ClassicOpSessionBackend final {
 				return std::unexpected(resource_error(std::move(resources.error())));
 			}
 			auto created = ClassicMainlStageTransition::create_from_restart(
-				resident, kotohime_compatibility, *resources, stage_text, *font,
+				resident, kotohime_compatibility, *resources,
+				language_content.stage_text(), *font,
 				{
 					.input_protocol = InputProtocol::recorded_replay,
 					.three_digit_combos = true,
@@ -3377,7 +3257,7 @@ struct ClassicOpSessionBackend final {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
 		auto created = MainProcessClassicVsAccess::create_vs(
-			*vs_stage, *resources, static_content
+			*vs_stage, *resources, language_content.static_content()
 		);
 		if(!created) {
 			return std::unexpected(main_error(std::move(created.error())));
@@ -3764,7 +3644,8 @@ struct ClassicOpSessionBackend final {
 			return std::unexpected(resource_error(std::move(resources.error())));
 		}
 		auto created = ClassicMainlStageTransition::create_from_restart(
-			resident, kotohime_compatibility, *resources, stage_text, *font,
+			resident, kotohime_compatibility, *resources,
+			language_content.stage_text(), *font,
 			{
 				.input_protocol = InputProtocol::recorded_replay,
 				.three_digit_combos = true,

@@ -74,6 +74,13 @@ packs, picture patches, and static resources in
 content aggregate to `new_classic_playback.cpp`, which exclusively owns
 checkpoint reconstruction, preroll, and live playback advancement.
 
+The retained OP lifecycle keeps Japanese baseline imports, active localized
+compiled text, authenticated override switching, custom catalog compatibility,
+and dependent MAIN static-content invalidation inside
+`classic/op/classic_op_language_content.cpp`. The broader OP backend consumes
+only its active stage/music text, catalogs, language identity, and prepared
+static content; it must not independently mutate language assets.
+
 The external resource boundary separates immutable key-to-spec identity and
 complete-manifest construction in `content/resource_catalog.cpp`, per-scene
 key request composition in `content/resources.cpp`, and filesystem lookup,
