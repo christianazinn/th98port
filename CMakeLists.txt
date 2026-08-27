@@ -1268,7 +1268,9 @@ if(TH03_ENABLE_SDL)
 	add_executable(th03-app
 		apps/th03-app/default_bindings.cpp
 		apps/th03-app/main.cpp
+		apps/th03-app/support/audio_output.cpp
 		apps/th03-app/support/diagnostics.cpp
+		apps/th03-app/support/netplay_session.cpp
 		apps/th03-app/support/replay_save.cpp
 		apps/th03-app/support/netplay_wire.cpp
 		apps/th03-app/support/rhythm_assets.cpp

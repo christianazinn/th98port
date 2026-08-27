@@ -73,8 +73,10 @@ and the startup policy derived from it live in `support/runtime_environment.*`.
 The platform-specific UDP/RTC channel adapter lives in `support/netplay_wire.*`;
 replay-save resource preparation, modal driving, retained audio, catalog
 refresh, and slot publication live together in `support/replay_save.*`; the
-match lifecycle that invokes the transaction remains a composition
-responsibility.
+complete direct-netplay lobby and match lifecycle lives in
+`support/netplay_session.*`. The composition root creates the platform and
+product-shell requests but does not own transport negotiation, deterministic
+advancement, rollback, pause barriers, reports, or netplay replay capture.
 
 Support modules must expose the smallest interface needed by the composition
 root. Moving a concern there does not make it a public library facility, and
