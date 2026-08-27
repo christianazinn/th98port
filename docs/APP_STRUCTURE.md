@@ -45,6 +45,13 @@ without requiring a global filename search through a flat directory.
 physical tree. Any later target-level decomposition must follow an observed
 dependency graph and remain separate from this behavior-free move.
 
+Within `classic/op/`, `classic_op_session.cpp` owns only the public retained
+state machine. The concrete resource, persistence, replay, and MAIN/MAINL
+backend lives in `classic_op_session_backend.cpp` and is returned through a
+source-private factory bundle. Scene advancement and host-facing requests use
+separate operation tables; the state machine must never cast their opaque
+contexts back to the production backend type.
+
 ## Executable composition
 
 `apps/th03-app/main.cpp` owns composition: selecting product modes, connecting

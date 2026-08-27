@@ -1026,6 +1026,7 @@ add_library(th03_app_main STATIC
 	src/app/classic/op/classic_op_options_scene.cpp
 	src/app/classic/op/classic_op_scene.cpp
 	src/app/classic/op/classic_op_session.cpp
+	src/app/classic/op/classic_op_session_backend.cpp
 	src/app/classic/op/classic_op_selection.cpp
 	src/app/classic/scenes/classic_registration_scene.cpp
 	src/app/classic/classic_runner.cpp

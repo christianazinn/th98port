@@ -293,6 +293,49 @@ struct ClassicOpSessionBackendOperations final {
 	) = nullptr;
 };
 
+// Requests crossing from the retained session back to its platform host.
+// Kept separate from scene advancement so source-private tests can provide a
+// transition backend without pretending to implement production host policy.
+struct ClassicOpSessionHostOperations final {
+	void *context = nullptr;
+	std::optional<NewClassicKeyConfig> (*take_key_config_update)(void *) = nullptr;
+	std::optional<NewClassicJoyConfig> (*take_joy_config_update)(void *) = nullptr;
+	std::optional<NewClassicDeviceAssignment>
+	(*take_device_assignment_update)(void *) = nullptr;
+	std::optional<bool> (*take_reduced_flash_update)(void *) = nullptr;
+	std::optional<std::uint8_t> (*take_master_volume_update)(void *) = nullptr;
+	std::optional<bool> (*take_mute_when_unfocused_update)(void *) = nullptr;
+	std::optional<NewClassicWindowPresentation>
+	(*take_window_presentation_update)(void *) = nullptr;
+	std::optional<std::filesystem::path>
+	(*take_open_folder_request)(void *) = nullptr;
+	bool (*take_online_identity_reset_request)(void *) = nullptr;
+	bool (*take_update_check_request)(void *) = nullptr;
+	std::expected<void, ClassicOpSessionError>
+	(*begin_update_check)(void *) = nullptr;
+	std::expected<void, ClassicOpSessionError>
+	(*report_update_check)(void *, NewClassicUpdateCheckOutcome) = nullptr;
+	std::optional<NewClassicOnlineReplayRecord>
+	(*take_online_replay_download_request)(void *) = nullptr;
+	std::expected<void, ClassicOpSessionError> (*report_online_replay_download)(
+		void *, const NewClassicOnlineReplayId &,
+		NewClassicOnlineReplayDownloadOutcome
+	) = nullptr;
+	std::optional<NewClassicReplayUploadRequest>
+	(*take_online_replay_upload_request)(void *) = nullptr;
+	std::expected<void, ClassicOpSessionError> (*report_online_replay_upload)(
+		void *, std::uint8_t, NewClassicReplayUploadOutcome
+	) = nullptr;
+	std::optional<NewClassicOnlineReplayRecord>
+	(*take_online_replay_watch_request)(void *) = nullptr;
+	std::expected<void, ClassicOpSessionError> (*report_online_replay_watch)(
+		void *, const NewClassicOnlineReplayId &,
+		std::optional<formats::ReplayDocument>
+	) = nullptr;
+	std::shared_ptr<const NewClassicReplaySaveArt>
+	(*replay_save_art)(const void *) = nullptr;
+};
+
 // Internal production-backend observation/control used only by the supplied-
 // resource route gate. The ordinary source-private operation table remains
 // unable to synthesize child completion.
@@ -421,7 +464,8 @@ private:
 		ClassicOpSessionBackendOperations operations,
 		ClassicOpSessionTestHooks test_hooks = {},
 		NewClassicReplayRecorder *replay_recorder = nullptr,
-		bool new_classic_practice_route = false
+		bool new_classic_practice_route = false,
+		ClassicOpSessionHostOperations host_operations = {}
 	);
 
 	std::unique_ptr<Impl> impl_;

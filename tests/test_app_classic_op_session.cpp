@@ -417,6 +417,34 @@ Result fake_call(void *context, Function function)
 	return created ? std::move(*created) : nullptr;
 }
 
+void test_source_private_backend_has_no_production_host_capabilities()
+{
+	auto backend = std::make_shared<FakeBackend>();
+	auto session = make_session(backend);
+	if(!session) {
+		return;
+	}
+	expect(!session->take_key_config_update() &&
+		!session->take_joy_config_update() &&
+		!session->take_device_assignment_update() &&
+		!session->take_reduced_flash_update() &&
+		!session->take_master_volume_update() &&
+		!session->take_mute_when_unfocused_update() &&
+		!session->take_window_presentation_update() &&
+		!session->take_open_folder_request() &&
+		!session->take_online_identity_reset_request() &&
+		!session->take_update_check_request() &&
+		!session->take_online_replay_download_request() &&
+		!session->take_online_replay_upload_request() &&
+		!session->take_online_replay_watch_request() &&
+		!session->replay_save_art(),
+		"a transition-only test backend exposes no production host requests");
+	const auto update = session->begin_update_check();
+	expect(!update && update.error().code ==
+		ClassicOpSessionErrorCode::backend_contract_failed,
+		"a missing production host command fails through the typed contract");
+}
+
 void test_vs_cpu_input_modes()
 {
 	th03::GameInit autofire_resident{};
@@ -1362,6 +1390,7 @@ void test_surface_forwarding()
 
 int main(int argc, char **argv)
 {
+	test_source_private_backend_has_no_production_host_capabilities();
 	test_vs_cpu_input_modes();
 	test_retained_children_and_audio_barrier();
 	test_story_and_selection_cancel();
