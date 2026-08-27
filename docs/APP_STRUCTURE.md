@@ -107,6 +107,11 @@ online/update workers, replay completion, and paced presentation loop until it
 returns a lifecycle disposition. The composition root owns profile transitions
 and reacts to that result; it does not advance a running game.
 
+Direct-VS command-line launches follow the same boundary:
+`support/direct_vs_session.*` owns platform/input setup and the complete local
+or netplay session loop. The composition root parses the command line and
+dispatches the resulting request without advancing the session itself.
+
 Support modules must expose the smallest interface needed by the composition
 root. Moving a concern there does not make it a public library facility, and
 must not change its validation, diagnostics, or runtime behavior. A facility
