@@ -28,6 +28,7 @@
 #include "support/audio_output.hpp"
 #include "support/diagnostics.hpp"
 #include "support/netplay_session.hpp"
+#include "support/product_online.hpp"
 #include "support/replay_save.hpp"
 #include "support/rhythm_assets.hpp"
 #include "support/runtime_environment.hpp"
@@ -67,12 +68,6 @@
 #include "th03/platform/curl_update.hpp"
 #endif
 #endif
-#if defined(_WIN32)
-#include "th03/platform/windows_online.hpp"
-#elif defined(TH03_ENABLE_CURL_ONLINE)
-#include "th03/platform/curl_online.hpp"
-#endif
-
 namespace {
 
 using th03::app::launcher_support::fail;
@@ -92,6 +87,15 @@ using th03::app::launcher_support::pixel_oracle_selector_environment;
 using th03::app::launcher_support::platform_config;
 using th03::app::launcher_support::print_usage;
 using th03::app::launcher_support::product_online_origin;
+#if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
+using th03::app::launcher_support::create_product_online_transport;
+using th03::app::launcher_support::load_or_enroll_product_online_credentials;
+using th03::app::launcher_support::load_product_online_credentials;
+using th03::app::launcher_support::ProductOnlineError;
+using th03::app::launcher_support::ProductOnlineTransport;
+using th03::app::launcher_support::remove_product_online_credentials;
+using th03::app::launcher_support::store_product_online_credentials;
+#endif
 using th03::app::launcher_support::refresh_host_presentability;
 using th03::app::launcher_support::RetainedMenuAudio;
 using th03::app::launcher_support::RtcNetplayRequest;
@@ -184,121 +188,6 @@ platform_window_presentation(
 } // namespace
 
 namespace {
-
-#if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
-struct ProductOnlineError final {
-	std::uint8_t code = 0U;
-};
-
-#if defined(_WIN32)
-using ProductOnlineTransport = th03::platform::WindowsOnlineTransport;
-#else
-using ProductOnlineTransport = th03::platform::CurlOnlineTransport;
-#endif
-
-[[nodiscard]] std::expected<ProductOnlineTransport, ProductOnlineError>
-create_product_online_transport(std::string origin)
-{
-#if defined(_WIN32)
-	auto created = th03::platform::create_windows_online_transport(
-		std::move(origin)
-	);
-#else
-	auto created = th03::platform::create_curl_online_transport(
-		std::move(origin)
-	);
-#endif
-	if(!created) {
-		return std::unexpected(ProductOnlineError{
-			static_cast<std::uint8_t>(created.error().code)
-		});
-	}
-	return std::move(*created);
-}
-
-[[nodiscard]] std::expected<
-	std::optional<th03::app::NewClassicOnlineCredentials>,
-	ProductOnlineError
-> load_product_online_credentials(const std::filesystem::path &path)
-{
-#if defined(_WIN32)
-	auto loaded = th03::platform::load_windows_online_credentials(path);
-#else
-	auto loaded = th03::platform::load_posix_online_credentials(path);
-#endif
-	if(!loaded) {
-		return std::unexpected(ProductOnlineError{
-			static_cast<std::uint8_t>(loaded.error().code)
-		});
-	}
-	return std::move(*loaded);
-}
-
-[[nodiscard]] std::expected<
-	th03::app::NewClassicOnlineCredentials,
-	ProductOnlineError
-> load_or_enroll_product_online_credentials(
-	const std::filesystem::path &path,
-	const th03::app::NewClassicOnlineTransport &transport
-)
-{
-#if defined(_WIN32)
-	auto acquired = th03::platform::load_or_enroll_windows_online_credentials(
-		path, transport
-	);
-#else
-	auto acquired = th03::platform::load_or_enroll_posix_online_credentials(
-		path, transport
-	);
-#endif
-	if(!acquired) {
-		return std::unexpected(ProductOnlineError{
-			static_cast<std::uint8_t>(acquired.error().code)
-		});
-	}
-	return std::move(*acquired);
-}
-
-[[nodiscard]] std::expected<void, ProductOnlineError>
-remove_product_online_credentials(const std::filesystem::path &path)
-{
-#if defined(_WIN32)
-	auto removed = th03::platform::remove_windows_online_credentials(path);
-#else
-	auto removed = th03::platform::remove_posix_online_credentials(path);
-#endif
-	if(!removed) {
-		return std::unexpected(ProductOnlineError{
-			static_cast<std::uint8_t>(removed.error().code)
-		});
-	}
-	return {};
-}
-
-[[nodiscard]] std::expected<void, ProductOnlineError>
-store_product_online_credentials(
-	const std::filesystem::path &path,
-	const th03::app::NewClassicOnlineCredentials &credentials
-)
-{
-#if defined(_WIN32)
-	auto stored = th03::platform::store_windows_online_credentials(
-		path, credentials
-	);
-#else
-	auto stored = th03::platform::store_posix_online_credentials(
-		path, credentials
-	);
-#endif
-	if(!stored) {
-		return std::unexpected(ProductOnlineError{
-			static_cast<std::uint8_t>(stored.error().code)
-		});
-	}
-	return {};
-}
-#endif
-
 
 template <typename Work>
 [[nodiscard]] std::expected<std::invoke_result_t<Work>, int>

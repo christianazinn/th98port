@@ -81,6 +81,10 @@ paired profiles. The composition root creates the platform and product-shell
 requests but does not own transport negotiation, deterministic advancement,
 rollback, pause barriers, reports, or netplay replay capture.
 
+Platform selection for product-online HTTP and credential persistence belongs
+to `support/product_online.*`. Callers consume one executable-private adapter
+and do not select Windows or POSIX transports in the composition root.
+
 Support modules must expose the smallest interface needed by the composition
 root. Moving a concern there does not make it a public library facility, and
 must not change its validation, diagnostics, or runtime behavior. A facility
