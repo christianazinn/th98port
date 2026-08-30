@@ -20,7 +20,7 @@
 namespace th03::app {
 namespace {
 
-constexpr std::size_t browser_rows = 15U;
+constexpr std::size_t browser_rows = 10U;
 constexpr std::uint8_t palette_fade_boundary_count = 19U;
 
 bool patch_put_timer_right(
@@ -481,9 +481,9 @@ NewClassicReplayBrowser::NewClassicReplayBrowser(
 		selected_slot_ = static_cast<std::uint8_t>(
 			first - catalog_.slots.begin()
 		);
-		top_slot_ = static_cast<std::uint8_t>(std::min<std::size_t>(
-			selected_slot_, replay_slot_count - browser_rows
-		));
+		top_slot_ = static_cast<std::uint8_t>(
+			replay_presentation::page_top(selected_slot_, browser_rows)
+		);
 	}
 	draw();
 	patch_surface_.raster().set_palette_tone(0);
@@ -608,6 +608,13 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 					font, raster, 560, top, replay_presentation::catalog_marker(entry, messages), 12, color
 				);
 		}
+		drawn = drawn && font.put_centered(
+			raster, 320, 368,
+			replay_presentation::page_label(
+				selected_slot_, replay_slot_count, browser_rows, messages
+			),
+			15U
+		);
 		static_cast<void>(drawn);
 		static_cast<void>(patch_surface_.publish(raster.access_page()));
 		return;
@@ -1257,12 +1264,15 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 		);
 	} else if(input.left) {
 		selected_slot_ = static_cast<std::uint8_t>(
-			selected_slot_ < browser_rows ? 0U : selected_slot_ - browser_rows
+			selected_slot_ < browser_rows ?
+				selected_slot_ + replay_slot_count - browser_rows :
+				selected_slot_ - browser_rows
 		);
 	} else if(input.right) {
 		selected_slot_ = static_cast<std::uint8_t>(
-			std::min<std::size_t>(selected_slot_ + browser_rows,
-				replay_slot_count - 1U)
+			selected_slot_ >= replay_slot_count - browser_rows ?
+				selected_slot_ - replay_slot_count + browser_rows :
+				selected_slot_ + browser_rows
 		);
 	} else if(input.confirm &&
 		catalog_.slots[selected_slot_].state == ReplayCatalogSlotState::ready) {
@@ -1277,19 +1287,9 @@ NewClassicReplayBrowser::consume(NewClassicUiInput input)
 		// back action and is deliberately inert here.
 		return NewClassicReplayBrowserResult{.status = status_};
 	}
-	if(selected_slot_ < top_slot_) {
-		top_slot_ = selected_slot_;
-	} else if(static_cast<std::size_t>(selected_slot_) >=
-		static_cast<std::size_t>(top_slot_) + browser_rows) {
-		top_slot_ = static_cast<std::uint8_t>(
-			selected_slot_ - (browser_rows - 1U)
-		);
-	}
-	if(top_slot_ > replay_slot_count - browser_rows) {
-		top_slot_ = static_cast<std::uint8_t>(
-			replay_slot_count - browser_rows
-		);
-	}
+	top_slot_ = static_cast<std::uint8_t>(
+		replay_presentation::page_top(selected_slot_, browser_rows)
+	);
 	draw();
 	return NewClassicReplayBrowserResult{
 		.surface_changed = true, .status = status_
@@ -1360,6 +1360,13 @@ bool NewClassicReplayBrowserTestAccess::checkpoint_focus(
 ) noexcept
 {
 	return browser.checkpoint_focus_;
+}
+
+std::uint8_t NewClassicReplayBrowserTestAccess::top_slot(
+	const NewClassicReplayBrowser &browser
+) noexcept
+{
+	return browser.top_slot_;
 }
 
 bool NewClassicReplayBrowserTestAccess::practice_settings_visible(

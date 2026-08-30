@@ -19,7 +19,7 @@
 namespace th03::app {
 namespace {
 
-constexpr std::size_t browser_rows = 15U;
+constexpr std::size_t browser_rows = 10U;
 constexpr std::size_t replay_name_grid_columns = 16U;
 constexpr std::size_t replay_name_grid_count = 48U;
 constexpr std::size_t keyboard_space = 14U;
@@ -248,10 +248,9 @@ void NewClassicReplaySaveMenu::draw_patch(
 	if(!patch_assets_) {
 		return;
 	}
-	const auto name_background = phase_ == Phase::prompt ||
-		phase_ == Phase::name ||
+	const auto name_background = phase_ == Phase::name ||
 		(phase_ == Phase::quit_confirm &&
-			(return_phase_ == Phase::prompt || return_phase_ == Phase::name));
+			return_phase_ == Phase::name);
 	const auto &background = name_background ?
 		patch_assets_->replay_name_background :
 		patch_assets_->replay_list_background;
@@ -447,6 +446,13 @@ void NewClassicReplaySaveMenu::draw_patch(
 				font, raster, 560, top, replay_presentation::catalog_marker(entry, messages), 12, color
 			));
 		}
+		static_cast<void>(font.put_centered(
+			raster, 320, 368,
+			replay_presentation::page_label(
+				selected_slot_, replay_slot_count, browser_rows, messages
+			),
+			15U
+		));
 	};
 
 	if(phase_ == Phase::name) {
@@ -581,7 +587,7 @@ void NewClassicReplaySaveMenu::draw_patch(
 
 	if(phase_ == Phase::prompt || phase_ == Phase::overwrite ||
 		phase_ == Phase::quit_confirm) {
-		static_cast<void>(raster.clear({208, 160, 224U, 80U}, 0U));
+		static_cast<void>(raster.clear({184, 160, 272U, 80U}, 0U));
 		std::string question;
 		if(phase_ == Phase::prompt) {
 			question = messages.text(NewClassicMessageId::replay_save_prompt);
@@ -810,11 +816,14 @@ NewClassicReplaySaveResult NewClassicReplaySaveMenu::consume(
 			(selected_slot_ + 1U) % replay_slot_count);
 	} else if(input.left) {
 		selected_slot_ = static_cast<std::uint8_t>(
-			selected_slot_ < browser_rows ? 0U : selected_slot_ - browser_rows);
+			selected_slot_ < browser_rows ?
+				selected_slot_ + replay_slot_count - browser_rows :
+				selected_slot_ - browser_rows);
 	} else if(input.right) {
 		selected_slot_ = static_cast<std::uint8_t>(
-			std::min<std::size_t>(selected_slot_ + browser_rows,
-				replay_slot_count - 1U));
+			selected_slot_ >= replay_slot_count - browser_rows ?
+				selected_slot_ - replay_slot_count + browser_rows :
+				selected_slot_ + browser_rows);
 	} else if(input.confirm) {
 		if(catalog.slots[selected_slot_].state != ReplayCatalogSlotState::empty) {
 			yes_ = false;
@@ -827,19 +836,9 @@ NewClassicReplaySaveResult NewClassicReplaySaveMenu::consume(
 	} else {
 		return {.status = status_};
 	}
-	if(selected_slot_ < top_slot_) {
-		top_slot_ = selected_slot_;
-	} else if(static_cast<std::size_t>(selected_slot_) >=
-		static_cast<std::size_t>(top_slot_) + browser_rows) {
-		top_slot_ = static_cast<std::uint8_t>(
-			selected_slot_ - (browser_rows - 1U)
-		);
-	}
-	if(top_slot_ > replay_slot_count - browser_rows) {
-		top_slot_ = static_cast<std::uint8_t>(
-			replay_slot_count - browser_rows
-		);
-	}
+	top_slot_ = static_cast<std::uint8_t>(
+		replay_presentation::page_top(selected_slot_, browser_rows)
+	);
 	draw(catalog);
 	return {.surface_changed = true, .status = status_};
 }
@@ -908,9 +907,9 @@ void NewClassicReplaySaveTestAccess::set_slot(
 ) noexcept
 {
 	menu.selected_slot_ = slot < replay_slot_count ? slot : 0U;
-	menu.top_slot_ = static_cast<std::uint8_t>(std::min<std::size_t>(
-		menu.selected_slot_, replay_slot_count - browser_rows
-	));
+	menu.top_slot_ = static_cast<std::uint8_t>(
+		replay_presentation::page_top(menu.selected_slot_, browser_rows)
+	);
 }
 
 bool NewClassicReplaySaveTestAccess::in_name(
@@ -946,6 +945,13 @@ std::size_t NewClassicReplaySaveTestAccess::name_position(
 ) noexcept
 {
 	return menu.name_position_;
+}
+
+std::uint8_t NewClassicReplaySaveTestAccess::top_slot(
+	const NewClassicReplaySaveMenu &menu
+) noexcept
+{
+	return menu.top_slot_;
 }
 
 } // namespace th03::app

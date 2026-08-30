@@ -87,7 +87,7 @@ class MenuTextPreviewTests(unittest.TestCase):
             ):
                 self.assertEqual(report["format"], "T3MTP001")
                 self.assertEqual(report["locale"], locale)
-                self.assertEqual(len(report["messages"]), 407)
+                self.assertEqual(len(report["messages"]), 408)
                 self.assertTrue(all(
                     entry["width"] <= entry["maximum_width"]
                     for entry in report["messages"]

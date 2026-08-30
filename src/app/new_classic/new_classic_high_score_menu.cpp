@@ -19,8 +19,27 @@ namespace th03::app {
 namespace {
 
 constexpr std::size_t screen_center = present::graphics_width / 2U;
-constexpr std::size_t browser_rows = 15U;
+constexpr std::size_t browser_rows = 10U;
 constexpr std::uint8_t palette_fade_boundary_count = 19U;
+
+[[nodiscard]] std::size_t adjacent_page_selection(
+	std::size_t selection,
+	std::size_t entries,
+	bool forward
+) noexcept
+{
+	if(entries == 0U) {
+		return 0U;
+	}
+	const auto pages = replay_presentation::page_count(entries, browser_rows);
+	const auto current_page = selection / browser_rows;
+	const auto target_page = forward ? (current_page + 1U) % pages :
+		(current_page + pages - 1U) % pages;
+	return std::min(
+		(target_page * browser_rows) + (selection % browser_rows),
+		entries - 1U
+	);
+}
 
 [[nodiscard]] std::optional<std::int32_t> put_online_category(
 	const NewClassicMenuFont &font,
@@ -552,6 +571,16 @@ void NewClassicHighScoreMenu::draw_board() noexcept
 				replay_presentation::put_fixed(font, raster, 464, top, category_value, 11, color)) &&
 			font.put(raster, 576, top, stage, color);
 	}
+	const auto list_size = flat ? flat_entries_.size() :
+		board.leaderboard_entries.size();
+	const auto selection = flat ? flat_selection_ : selected_entry_;
+	valid_ = valid_ && font.put_centered(
+		raster, 320, 368,
+		replay_presentation::page_label(
+			selection, list_size, browser_rows, messages
+		),
+		15U
+	);
 }
 
 const NewClassicOnlineReplayRecord *
@@ -869,6 +898,10 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 			flat_selection_ = (flat_selection_ + count - 1U) % count;
 		} else if(input.down && count != 0U) {
 			flat_selection_ = (flat_selection_ + 1U) % count;
+		} else if((input.left || input.right) && count != 0U) {
+			flat_selection_ = adjacent_page_selection(
+				flat_selection_, count, input.right
+			);
 		} else if(input.confirm && count != 0U) {
 			const auto location = flat_entries_[flat_selection_];
 			board_index_ = location.first;
@@ -878,11 +911,9 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 		} else {
 			return {.status = status_};
 		}
-		if(flat_selection_ < flat_top_) {
-			flat_top_ = flat_selection_;
-		} else if(flat_selection_ >= flat_top_ + browser_rows) {
-			flat_top_ = flat_selection_ - (browser_rows - 1U);
-		}
+		flat_top_ = replay_presentation::page_top(
+			flat_selection_, browser_rows
+		);
 		draw();
 		return {.surface_changed = valid_, .status = status_};
 	}
@@ -920,11 +951,9 @@ NewClassicHighScoreMenuResult NewClassicHighScoreMenu::consume(
 		} else {
 			return {.status = status_};
 		}
-		if(selected_entry_ < top_entry_) {
-			top_entry_ = selected_entry_;
-		} else if(selected_entry_ >= top_entry_ + browser_rows) {
-			top_entry_ = selected_entry_ - (browser_rows - 1U);
-		}
+		top_entry_ = replay_presentation::page_top(
+			selected_entry_, browser_rows
+		);
 	}
 	draw();
 	return {.surface_changed = valid_, .status = status_};

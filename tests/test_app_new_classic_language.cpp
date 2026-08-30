@@ -329,6 +329,28 @@ void test_message_packs(const th03::app::NewClassicMenuFont *authentic_font)
 			std::string_view{"\x8A\x4A\x8E\x6E", 4U},
 		"complete Japanese pack carries exact CP932 menu text without fallback");
 	if(japanese) {
+		const std::array page_arguments{
+			th03::app::NewClassicMessageArgument{"page", "3"},
+			th03::app::NewClassicMessageArgument{"pages", "10"},
+		};
+		expect(
+			japanese->text(
+				th03::app::NewClassicMessageId::replay_save_prompt
+			) == std::string_view{"\x83\x8A\x83\x76\x83\x8C\x83\x43\x82\xF0\x95\xDB\x91\xB6\x82\xB5\x82\xDC\x82\xB7\x82\xA9\x81\x48", 24U} &&
+			japanese->text(
+				th03::app::NewClassicMessageId::replay_save_quit
+			) == std::string_view{"\x95\xDB\x91\xB6\x82\xF0\x82\xE2\x82\xDF\x82\xDC\x82\xB7\x82\xA9\x81\x48", 18U} &&
+			japanese->text(
+				th03::app::NewClassicMessageId::replay_save_saved
+			) == std::string_view{"\x95\xDB\x91\xB6\x82\xB5\x82\xDC\x82\xB5\x82\xBD", 12U} &&
+			japanese->format(
+				th03::app::NewClassicMessageId::replay_page,
+				page_arguments
+			) == std::string{"\x83\x79\x81\x5B\x83\x57 3/10", 11U},
+			"Japanese Replay modal and pagination copy follows the reviewed TH04/TH05 precedent"
+		);
+	}
+	if(japanese) {
 		th03::present::Raster raster{};
 		expect(font.width(japanese->text(
 			th03::app::NewClassicMessageId::title_start

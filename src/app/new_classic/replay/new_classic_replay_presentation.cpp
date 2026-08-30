@@ -93,6 +93,41 @@ bool put_fixed(
 	return buffer;
 }
 
+[[nodiscard]] std::size_t page_top(
+	std::size_t selection, std::size_t rows
+) noexcept
+{
+	return rows == 0U ? 0U : (selection / rows) * rows;
+}
+
+[[nodiscard]] std::size_t page_count(
+	std::size_t entries, std::size_t rows
+) noexcept
+{
+	return rows == 0U ? 1U : std::max<std::size_t>(
+		1U, (entries + rows - 1U) / rows
+	);
+}
+
+[[nodiscard]] std::string page_label(
+	std::size_t selection,
+	std::size_t entries,
+	std::size_t rows,
+	const NewClassicMessageCatalog &messages
+)
+{
+	const auto pages = page_count(entries, rows);
+	const auto page = rows == 0U ? 1U :
+		std::min((selection / rows) + 1U, pages);
+	const auto page_value = std::to_string(page);
+	const auto pages_value = std::to_string(pages);
+	const std::array arguments{
+		NewClassicMessageArgument{"page", page_value},
+		NewClassicMessageArgument{"pages", pages_value},
+	};
+	return messages.format(NewClassicMessageId::replay_page, arguments);
+}
+
 std::string source_fixed_name(const std::array<char, 8U> &name)
 {
 	std::string result(name.begin(), name.end());

@@ -47,6 +47,18 @@ namespace th03::app::replay_presentation {
 	const NewClassicMessageCatalog &messages
 ) noexcept;
 [[nodiscard]] std::string dos_date_label(std::uint16_t packed);
+[[nodiscard]] std::size_t page_top(
+	std::size_t selection, std::size_t rows
+) noexcept;
+[[nodiscard]] std::size_t page_count(
+	std::size_t entries, std::size_t rows
+) noexcept;
+[[nodiscard]] std::string page_label(
+	std::size_t selection,
+	std::size_t entries,
+	std::size_t rows,
+	const NewClassicMessageCatalog &messages
+);
 
 } // namespace th03::app::replay_presentation
 

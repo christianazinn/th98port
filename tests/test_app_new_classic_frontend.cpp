@@ -572,6 +572,35 @@ th03::app::NewClassicOnlineCacheDocument online_netplay_board(
 	return document;
 }
 
+th03::app::NewClassicOnlineCacheDocument online_board_with_entries(
+	std::uint8_t rank,
+	std::uint8_t character,
+	std::uint8_t seed,
+	std::size_t count
+)
+{
+	auto document = online_board(rank, character, seed);
+	const auto base_entry = document.leaderboard_entries.front();
+	const auto base_replay = document.replay_records.front();
+	document.leaderboard_entries.clear();
+	document.replay_records.clear();
+	for(std::size_t index = 0U; index < count; ++index) {
+		auto entry = base_entry;
+		auto replay = base_replay;
+		const auto identity_seed = static_cast<std::uint8_t>(seed + index);
+		replay.replay_id = online_identity<
+			th03::app::NewClassicOnlineReplayId
+		>(identity_seed);
+		entry.replay_id = replay.replay_id;
+		entry.entry_id = online_identity<
+			th03::app::NewClassicOnlineEntryId
+		>(static_cast<std::uint8_t>(identity_seed + 1U));
+		document.leaderboard_entries.push_back(std::move(entry));
+		document.replay_records.push_back(std::move(replay));
+	}
+	return document;
+}
+
 void finish_entry_fade(th03::app::NewClassicReplayBrowser &browser)
 {
 	for(std::size_t boundary = 0U; boundary < 19U; ++boundary) {
@@ -802,6 +831,28 @@ void test_replay_hub_and_libraries()
 	static_cast<void>(downloaded_library.consume({.confirm = true}));
 	expect(downloaded_library.take_replay_watch_request().has_value(),
 		"downloaded Replay library reuses the validated Watch transaction");
+
+	NewClassicHighScoreMenu paged_library(
+		{online_board_with_entries(2U, 4U, 0x50U, 23U)}, 2U, patch_assets,
+		NewClassicOnlineMenuMode::downloaded_replays
+	);
+	finish_entry_fade(paged_library);
+	static_cast<void>(paged_library.consume({}));
+	static_cast<void>(paged_library.consume({.right = true}));
+	expect(paged_library.selected_entry() == 10U,
+		"variable Replay libraries advance to the same row on page 2");
+	static_cast<void>(paged_library.consume({}));
+	static_cast<void>(paged_library.consume({.right = true}));
+	expect(paged_library.selected_entry() == 20U,
+		"variable Replay libraries expose their final partial page");
+	static_cast<void>(paged_library.consume({}));
+	static_cast<void>(paged_library.consume({.right = true}));
+	expect(paged_library.selected_entry() == 0U,
+		"variable Replay libraries wrap from their final page to page 1");
+	static_cast<void>(paged_library.consume({}));
+	static_cast<void>(paged_library.consume({.left = true}));
+	expect(paged_library.selected_entry() == 20U,
+		"variable Replay libraries wrap backward to the final partial page");
 }
 
 void test_online_high_score_menu()
@@ -1301,6 +1352,29 @@ void test_catalog_browser_and_save()
 	if(browser) {
 		finish_entry_fade(**browser);
 		static_cast<void>((*browser)->consume({}));
+		static_cast<void>((*browser)->consume({.right = true}));
+		expect(
+			(*browser)->selected_slot() == 10U &&
+			NewClassicReplayBrowserTestAccess::top_slot(**browser) == 10U,
+			"Replay Right advances one explicit ten-row page while preserving the row"
+		);
+		static_cast<void>((*browser)->consume({}));
+		static_cast<void>((*browser)->consume({.left = true}));
+		expect(
+			(*browser)->selected_slot() == 0U &&
+			NewClassicReplayBrowserTestAccess::top_slot(**browser) == 0U,
+			"Replay Left returns to the preceding explicit page"
+		);
+		static_cast<void>((*browser)->consume({}));
+		static_cast<void>((*browser)->consume({.left = true}));
+		expect(
+			(*browser)->selected_slot() == 90U &&
+			NewClassicReplayBrowserTestAccess::top_slot(**browser) == 90U,
+			"Replay Left wraps from page 1 to page 10 without changing row"
+		);
+		static_cast<void>((*browser)->consume({}));
+		static_cast<void>((*browser)->consume({.right = true}));
+		static_cast<void>((*browser)->consume({}));
 		auto opened = (*browser)->consume({.confirm = true});
 		expect(opened && opened->surface_changed,
 			"confirm on an occupied slot opens replay details");
@@ -1532,10 +1606,20 @@ void test_catalog_browser_and_save()
 		expect(patch_save.surface().palette_tone == 100,
 			"patch save completes replay_name_background_init black-in");
 		expect(
+			background_matches(
+				patch_save.surface(), patch_assets->replay_list_background
+			) > 200'000U,
+			"Save Replay confirmation uses the ordinary Replay-list background"
+		);
+		static_cast<void>(patch_save.consume({}, *catalog));
+		expect(
+			patch_save.consume({.confirm = true}, *catalog).surface_changed &&
+			NewClassicReplaySaveTestAccess::in_name(patch_save) &&
 			patch_save.surface().graphics_palette ==
 				*patch_assets->replay_name_background.palette,
-			"patch save applies the authenticated SLB1B palette after black-in"
+			"Save Replay Yes loads the field-header background only for name entry"
 		);
+		static_cast<void>(patch_save.consume({}, *catalog));
 		NewClassicReplaySaveTestAccess::select_end(patch_save);
 		expect(
 			patch_save.consume({.confirm = true}, *catalog).surface_changed &&
@@ -1784,13 +1868,19 @@ void test_catalog_browser_and_save()
 	release(save, *catalog);
 	NewClassicReplaySaveTestAccess::set_slot(save, 0U);
 	static_cast<void>(save.consume({.left = true}, *catalog));
-	expect(save.selected_slot() == 0U,
-		"save-page Left clamps at slot zero");
+	expect(
+		save.selected_slot() == 90U &&
+		NewClassicReplaySaveTestAccess::top_slot(save) == 90U,
+		"save-page Left wraps from page 1 to page 10 while preserving the row"
+	);
 	release(save, *catalog);
 	NewClassicReplaySaveTestAccess::set_slot(save, 90U);
 	static_cast<void>(save.consume({.right = true}, *catalog));
-	expect(save.selected_slot() == 99U,
-		"save-page Right clamps the last partial page at slot 99");
+	expect(
+		save.selected_slot() == 0U &&
+		NewClassicReplaySaveTestAccess::top_slot(save) == 0U,
+		"save-page Right wraps from page 10 to page 1 while preserving the row"
+	);
 	release(save, *catalog);
 	NewClassicReplaySaveTestAccess::set_slot(save, 4U);
 	auto requested = save.consume({.confirm = true}, *catalog);

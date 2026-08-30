@@ -288,6 +288,9 @@ private:
 };
 
 struct NewClassicReplayBrowserTestAccess final {
+	[[nodiscard]] static std::uint8_t top_slot(
+		const NewClassicReplayBrowser &browser
+	) noexcept;
 	[[nodiscard]] static bool checkpoint_focus(
 		const NewClassicReplayBrowser &browser
 	) noexcept;
@@ -585,6 +588,9 @@ struct NewClassicReplaySaveTestAccess final {
 		const NewClassicReplaySaveMenu &menu
 	) noexcept;
 	[[nodiscard]] static std::size_t name_position(
+		const NewClassicReplaySaveMenu &menu
+	) noexcept;
+	[[nodiscard]] static std::uint8_t top_slot(
 		const NewClassicReplaySaveMenu &menu
 	) noexcept;
 };
