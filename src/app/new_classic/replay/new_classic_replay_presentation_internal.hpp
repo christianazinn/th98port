@@ -12,6 +12,10 @@
 
 namespace th03::app::replay_presentation {
 
+inline constexpr std::int32_t browser_row_top = 112;
+inline constexpr std::int32_t browser_row_height = 24;
+inline constexpr std::int32_t browser_footer_top = 356;
+
 [[nodiscard]] std::string source_fixed_name(
 	const std::array<char, 8U> &name
 );

@@ -366,6 +366,20 @@ bool region_matches_background(
 	return true;
 }
 
+bool region_differs_from_background(
+	th03::present::SourceSurface surface,
+	const th03::assets::PiImage &background,
+	std::int32_t left,
+	std::int32_t top,
+	std::int32_t right,
+	std::int32_t bottom
+)
+{
+	return !region_matches_background(
+		surface, background, left, top, right, bottom
+	);
+}
+
 bool flat_replay_row_has_no_ordinal(
 	th03::present::SourceSurface surface,
 	const th03::assets::PiImage &background,
@@ -1351,6 +1365,22 @@ void test_catalog_browser_and_save()
 	expect(browser.has_value(), "browser loads the complete 100-slot catalog");
 	if(browser) {
 		finish_entry_fade(**browser);
+		const auto initial_surface = (*browser)->surface();
+		const auto &list_background = patch_assets->replay_list_background;
+		expect(
+			region_matches_background(
+				initial_surface, list_background, 32, 96, 608, 112
+			) && region_differs_from_background(
+				initial_surface, list_background, 32, 112, 608, 128
+			),
+			"Replay rows use the TH04/TH05 112px top and 24px cadence"
+		);
+		expect(
+			region_differs_from_background(
+				initial_surface, list_background, 264, 356, 376, 372
+			),
+			"Replay page indicator uses the TH04/TH05 footer position"
+		);
 		static_cast<void>((*browser)->consume({}));
 		static_cast<void>((*browser)->consume({.right = true}));
 		expect(

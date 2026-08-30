@@ -579,7 +579,10 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 			const auto &entry = catalog_.slots[slot];
 			const auto color = static_cast<present::Index4>(
 				slot == selected_slot_ ? 12U : 15U);
-			const auto top = static_cast<std::int32_t>(96U + (row * 16U));
+			const auto top = replay_presentation::browser_row_top +
+				static_cast<std::int32_t>(
+					row * replay_presentation::browser_row_height
+				);
 			if(slot == selected_slot_) {
 				drawn = put(40, top, ">", 12U);
 			}
@@ -609,7 +612,7 @@ void NewClassicReplayBrowser::draw_patch() noexcept
 				);
 		}
 		drawn = drawn && font.put_centered(
-			raster, 320, 368,
+			raster, 320, replay_presentation::browser_footer_top,
 			replay_presentation::page_label(
 				selected_slot_, replay_slot_count, browser_rows, messages
 			),
