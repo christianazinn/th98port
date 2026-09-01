@@ -1,6 +1,6 @@
 TH03 Replay Renderer embeds the libth03 replay renderer, which incorporates
-98fmplayer and ymfm under their respective licenses. Package builds include
-those license texts.
+98fmplayer, ymfm, and TinySoundFont under their respective licenses. Package
+builds include those license texts.
 
 The GUI uses Python, Tcl/Tk, PyInstaller, tkinterdnd2, and TkDND. The package
 builder copies their applicable license texts into the licenses directory.

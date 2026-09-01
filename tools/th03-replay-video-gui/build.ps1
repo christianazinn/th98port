@@ -130,7 +130,7 @@ Copy-Item -LiteralPath (Join-Path $toolRoot "THIRD_PARTY_NOTICES.txt") `
     -Destination (Join-Path $outputFull "THIRD_PARTY_NOTICES.txt")
 $licenseRoot = Join-Path $outputFull "licenses"
 [IO.Directory]::CreateDirectory($licenseRoot) | Out-Null
-foreach ($dependency in ("98fmplayer", "ymfm")) {
+foreach ($dependency in ("98fmplayer", "ymfm", "TinySoundFont")) {
     $destination = Join-Path $licenseRoot $dependency
     [IO.Directory]::CreateDirectory($destination) | Out-Null
     Copy-Item -LiteralPath (Join-Path $repoRoot "third_party\$dependency\LICENSE") `
