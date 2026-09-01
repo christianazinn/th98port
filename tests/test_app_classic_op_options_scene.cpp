@@ -866,9 +866,9 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 		scene->selected_choice() == ClassicOpOptionsChoice::bgm,
 		"Audio navigation reaches source Music below Master Volume");
 	expect(scene->advance({.right = true}).has_value() &&
-		scene->config().bgm_mode == ClassicBgmMode::off &&
+		scene->config().bgm_mode == ClassicBgmMode::fm &&
 		scene->music_volume_percent() == 0U,
-		"Audio Music wraps through 0% in five-percent steps");
+		"Audio Music wraps through 0% without losing the selected driver");
 	const auto music_stop = scene->take_audio_command();
 	const auto music_disable = scene->take_audio_command();
 	const auto music_level = scene->take_audio_command();
@@ -897,6 +897,25 @@ void test_replay_patch_option_hierarchy_if_assets_supplied()
 			music_restart->cue == ClassicMusicCue::menu_main &&
 			!scene->take_audio_command(),
 		"Audio Music re-enable installs gain before restarting the menu song");
+	expect(scene->advance().has_value() &&
+		scene->advance({.down = true}).has_value() &&
+		scene->advance().has_value() &&
+		scene->selected_choice() == ClassicOpOptionsChoice::music_driver,
+		"Audio navigation reaches Music Driver below its volume");
+	expect(scene->advance({.right = true}).has_value() &&
+		scene->config().bgm_mode == ClassicBgmMode::midi,
+		"Audio Music Driver selects MIDI");
+	const auto driver_stop = scene->take_audio_command();
+	const auto driver_select = scene->take_audio_command();
+	const auto driver_play = scene->take_audio_command();
+	expect(driver_stop && driver_stop->type ==
+			ClassicAudioCommandType::stop_song && driver_select &&
+		driver_select->type == ClassicAudioCommandType::set_bgm_active &&
+		driver_select->parameter == 2U && driver_play &&
+		driver_play->type == ClassicAudioCommandType::play_song &&
+		driver_play->cue == ClassicMusicCue::menu_main &&
+		!scene->take_audio_command(),
+		"Audio Music Driver restarts the menu song through MIDI");
 	expect(scene->advance().has_value() &&
 		scene->advance({.down = true}).has_value() &&
 		scene->advance().has_value() &&
@@ -1488,18 +1507,21 @@ void test_bgm_modes_and_disabled_selection()
 		select_bgm(*from_midi);
 		expect(
 			from_midi->advance({.left = true}).has_value() &&
-				from_midi->config().bgm_mode == ClassicBgmMode::off,
-			"MIDI collapses to Off instead of ringing to FM"
+				from_midi->config().bgm_mode == ClassicBgmMode::fm,
+			"MIDI rings backward to FM"
 		);
 		const auto midi_stop = from_midi->take_audio_command();
-		const auto midi_disable = from_midi->take_audio_command();
+		const auto midi_select = from_midi->take_audio_command();
+		const auto midi_play = from_midi->take_audio_command();
 		expect(
 			midi_stop && midi_stop->type == ClassicAudioCommandType::stop_song &&
-				midi_disable && midi_disable->type ==
+				midi_select && midi_select->type ==
 					ClassicAudioCommandType::set_bgm_active &&
-				midi_disable->parameter == 0U &&
+				midi_select->parameter == 1U && midi_play &&
+				midi_play->type == ClassicAudioCommandType::play_song &&
+				midi_play->cue == ClassicMusicCue::menu_main &&
 				!from_midi->take_audio_command(),
-			"MIDI-to-Off emits Stop before disabling the source driver"
+			"MIDI-to-FM stops before selecting and restarting the source driver"
 		);
 	}
 

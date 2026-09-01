@@ -881,7 +881,8 @@ ClassicRunner::compose_shown_surface(
 		return std::unexpected(std::move(error));
 	}
 	if(impl_->experience == ExperienceProfile::new_classic &&
-		impl_->reduced_flash && surface->palette_tone == 150) {
+		impl_->reduced_flash &&
+		(surface->palette_tone == 150 || surface->palette_tone == 170)) {
 		surface->graphics_palette = surface->reduced_flash_palette;
 		surface->reduced_flash_applied = true;
 	}

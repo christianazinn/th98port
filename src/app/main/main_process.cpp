@@ -1831,6 +1831,9 @@ MainProcess::restore_rollback(
 			return command.parameter >= audio::th03_sound_effect_first &&
 				command.parameter <= audio::th03_sound_effect_last;
 		case ClassicAudioCommandType::set_bgm_active:
+			return command.parameter <= static_cast<std::uint16_t>(
+				ClassicBgmMode::midi
+			);
 		case ClassicAudioCommandType::set_effects_active:
 			return command.parameter <= 1U;
 		case ClassicAudioCommandType::set_music_volume:

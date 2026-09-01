@@ -1720,7 +1720,8 @@ NewClassicReplayPlayback::compose_shown_surface(
 		return impl_->pause_menu->compose_over(*surface);
 	}
 	auto result = *surface;
-	if(impl_->reduced_flash && result.palette_tone == 150) {
+	if(impl_->reduced_flash &&
+		(result.palette_tone == 150 || result.palette_tone == 170)) {
 		result.graphics_palette = result.reduced_flash_palette;
 		result.reduced_flash_applied = true;
 	}

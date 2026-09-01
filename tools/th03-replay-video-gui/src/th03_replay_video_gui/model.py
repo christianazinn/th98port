@@ -38,6 +38,7 @@ class RenderJob:
     use_installed_settings: bool = True
     language: str | None = None
     reduced_flash: bool | None = None
+    music_driver: str | None = None
     master_volume: int | None = None
     music_volume: int | None = None
     sfx_volume: int | None = None
@@ -75,6 +76,8 @@ class RenderJob:
             raise JobError("Choose FFmpeg or make it available on PATH.")
         if self.language not in (None, "ja", "en"):
             raise JobError("Language must be inherited, Japanese, or English.")
+        if self.music_driver not in (None, "fm", "midi"):
+            raise JobError("Music driver must be inherited, FM, or MIDI.")
         for label, value in (
             ("Master volume", self.master_volume),
             ("Music volume", self.music_volume),
@@ -116,6 +119,8 @@ class RenderJob:
             command.extend(("--language", self.language))
         if self.reduced_flash is not None:
             command.append("--reduced-flash" if self.reduced_flash else "--full-flash")
+        if self.music_driver is not None:
+            command.extend(("--music-driver", self.music_driver))
         for option, value in (
             ("--master-volume", self.master_volume),
             ("--music-volume", self.music_volume),

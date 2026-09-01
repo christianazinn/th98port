@@ -4806,10 +4806,7 @@ detail::create_classic_op_session_production_backend(
 			NewClassicLanguageAssetProfile::english ?
 			ClassicLanguage::english : ClassicLanguage::japanese;
 	}
-	// Stock TH03 ships neither MIDI/MMD songs nor an MMD driver launch path.
-	// Keep the source codec value readable, but never claim MIDI while routing
-	// the session to the FM-only native engine.
-	if(!fm_available || config.bgm_mode == ClassicBgmMode::midi) {
+	if(!fm_available) {
 		config.bgm_mode = ClassicBgmMode::off;
 	}
 	auto imported = import_mainl_stage_text(mainl_executable);
@@ -4896,7 +4893,9 @@ detail::create_classic_op_session_production_backend(
 	if(!backend->push_audio({
 		.type = ClassicAudioCommandType::set_bgm_active,
 		.parameter = static_cast<std::uint16_t>(
-			config.bgm_mode == ClassicBgmMode::off ? 0U : 1U
+			(new_classic_settings &&
+				new_classic_settings->music_volume_percent == 0U) ?
+				ClassicBgmMode::off : config.bgm_mode
 		),
 	})) {
 		return std::unexpected(detail::session_error(

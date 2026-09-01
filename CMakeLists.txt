@@ -174,6 +174,33 @@ set(
 )
 
 set(
+	TH03_MIDI_SOUNDFONT_FILE
+	"${CMAKE_CURRENT_SOURCE_DIR}/out/deps/GeneralUser-GS-SoftSynth-1.44.sf2"
+	CACHE FILEPATH "Pinned GeneralUser GS SoftSynth 1.44 SoundFont"
+)
+set(
+	TH03_MMD_TEST_CORPUS_DIR "" CACHE PATH
+	"Optional generated TH03 MMD corpus used by the native audio test"
+)
+set(_th03_midi_soundfont_available OFF)
+if(EXISTS "${TH03_MIDI_SOUNDFONT_FILE}" AND
+	NOT IS_DIRECTORY "${TH03_MIDI_SOUNDFONT_FILE}")
+	file(SIZE "${TH03_MIDI_SOUNDFONT_FILE}" _th03_midi_soundfont_size)
+	file(SHA256 "${TH03_MIDI_SOUNDFONT_FILE}" _th03_midi_soundfont_sha256)
+	if(NOT _th03_midi_soundfont_size EQUAL 31279314 OR
+		NOT _th03_midi_soundfont_sha256 STREQUAL
+			"00725296486f652ba42bdbf2098254762ca80239353d04b55a27454fc8edb8a8")
+		message(FATAL_ERROR "GeneralUser GS SoftSynth 1.44 identity mismatch")
+	endif()
+	set(_th03_midi_soundfont_available ON)
+elseif(TH03_PACKAGE_BETA)
+	message(FATAL_ERROR
+		"TH03_PACKAGE_BETA requires the pinned GeneralUser GS SoundFont; "
+		"run tools/ci/bootstrap_beta_dependencies.ps1"
+	)
+endif()
+
+set(
 	TH03_RTC_PROVIDER "source" CACHE STRING
 	"libdatachannel provider for the optional RTC adapter (source or package)"
 )
@@ -589,8 +616,21 @@ target_compile_features(th03_vendor_ymfm PRIVATE cxx_std_14)
 set_target_properties(th03_vendor_ymfm PROPERTIES CXX_EXTENSIONS OFF)
 th03_silence_vendor_warnings(th03_vendor_ymfm)
 
+add_library(th03_vendor_tinysoundfont STATIC
+	third_party/TinySoundFont/tsf.c
+)
+target_include_directories(
+	th03_vendor_tinysoundfont SYSTEM PUBLIC third_party/TinySoundFont
+)
+target_compile_features(th03_vendor_tinysoundfont PRIVATE c_std_11)
+set_target_properties(
+	th03_vendor_tinysoundfont PROPERTIES C_EXTENSIONS OFF
+)
+th03_silence_vendor_warnings(th03_vendor_tinysoundfont)
+
 add_library(th03_audio_pmd STATIC
 	src/audio/fixed_resampler.cpp
+	src/audio/mmd_soundfont.cpp
 	src/audio/output_gain.cpp
 	src/audio/pmd_opna.cpp
 	src/audio/pmd_shim.c
@@ -605,7 +645,8 @@ target_include_directories(
 	th03_audio_pmd SYSTEM PRIVATE third_party/98fmplayer
 )
 target_link_libraries(
-	th03_audio_pmd PRIVATE th03_vendor_98fmplayer th03_vendor_ymfm
+	th03_audio_pmd PRIVATE
+		th03_vendor_98fmplayer th03_vendor_ymfm th03_vendor_tinysoundfont
 )
 target_compile_features(th03_audio_pmd PUBLIC cxx_std_23 PRIVATE c_std_11)
 set_target_properties(
@@ -619,7 +660,7 @@ function(th03_stage_audio_licenses target)
 			"th03_stage_audio_licenses received an unknown target: ${target}"
 		)
 	endif()
-	foreach(_dependency IN ITEMS 98fmplayer ymfm)
+	foreach(_dependency IN ITEMS 98fmplayer ymfm TinySoundFont)
 		add_custom_command(
 			TARGET ${target} POST_BUILD
 			COMMAND "${CMAKE_COMMAND}" -E make_directory
@@ -635,6 +676,30 @@ function(th03_stage_audio_licenses target)
 		DESTINATION licenses/GNU-Unifont
 		RENAME OFL-1.1.txt
 	)
+endfunction()
+
+function(th03_stage_midi_runtime target)
+	if(NOT TARGET ${target})
+		message(FATAL_ERROR
+			"th03_stage_midi_runtime received an unknown target: ${target}"
+		)
+	endif()
+	if(_th03_midi_soundfont_available)
+		add_custom_command(
+			TARGET ${target} POST_BUILD
+			COMMAND "${CMAKE_COMMAND}" -E make_directory
+				"$<TARGET_FILE_DIR:${target}>/PODDUI/MIDI"
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+				"${TH03_MIDI_SOUNDFONT_FILE}"
+				"$<TARGET_FILE_DIR:${target}>/PODDUI/MIDI/GeneralUser-GS-SoftSynth-1.44.sf2"
+			COMMAND "${CMAKE_COMMAND}" -E make_directory
+				"$<TARGET_FILE_DIR:${target}>/licenses/GeneralUser-GS"
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+				"${CMAKE_CURRENT_SOURCE_DIR}/third_party/GeneralUser-GS/LICENSE"
+				"$<TARGET_FILE_DIR:${target}>/licenses/GeneralUser-GS/LICENSE"
+			VERBATIM
+		)
+	endif()
 endfunction()
 
 add_library(th03_assets STATIC
@@ -1261,6 +1326,7 @@ if(WIN32)
 endif()
 th03_set_warnings(th03-replay-video)
 th03_stage_audio_licenses(th03-replay-video)
+th03_stage_midi_runtime(th03-replay-video)
 
 add_executable(
 	th03replay-hydrate
@@ -1338,6 +1404,7 @@ if(TH03_ENABLE_SDL)
 		VERBATIM
 	)
 	th03_stage_audio_licenses(th03-app)
+	th03_stage_midi_runtime(th03-app)
 	if(TH03_ENABLE_RTC)
 		th03_stage_rtc_licenses(th03-app)
 	endif()
@@ -1391,11 +1458,20 @@ if(TH03_PACKAGE_BETA)
 		FILES_MATCHING PATTERN "*.BMP" PATTERN "*.BIN"
 	)
 	install(
+		FILES "${TH03_MIDI_SOUNDFONT_FILE}"
+		DESTINATION PODDUI/MIDI
+		RENAME GeneralUser-GS-SoftSynth-1.44.sf2
+	)
+	install(
+		FILES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/GeneralUser-GS/LICENSE"
+		DESTINATION licenses/GeneralUser-GS
+	)
+	install(
 		FILES "${_th03_sdl3_license_file}"
 		DESTINATION licenses/SDL3
 		RENAME LICENSE.txt
 	)
-	foreach(_dependency IN ITEMS 98fmplayer ymfm)
+	foreach(_dependency IN ITEMS 98fmplayer ymfm TinySoundFont)
 		install(
 			FILES
 				"${CMAKE_CURRENT_SOURCE_DIR}/third_party/${_dependency}/LICENSE"
@@ -1417,6 +1493,24 @@ endif()
 
 if(BUILD_TESTING)
 	find_package(Python3 COMPONENTS Interpreter)
+	if(_th03_midi_soundfont_available)
+		add_executable(
+			th03-audio-mmd-soundfont-tests
+			tests/test_audio_mmd_soundfont.cpp
+		)
+		target_link_libraries(
+			th03-audio-mmd-soundfont-tests PRIVATE th03_audio_pmd
+		)
+		th03_set_warnings(th03-audio-mmd-soundfont-tests)
+		set(_th03_mmd_test_arguments "${TH03_MIDI_SOUNDFONT_FILE}")
+		if(NOT TH03_MMD_TEST_CORPUS_DIR STREQUAL "")
+			list(APPEND _th03_mmd_test_arguments "${TH03_MMD_TEST_CORPUS_DIR}")
+		endif()
+		add_test(
+			NAME th03-audio-mmd-soundfont-tests
+			COMMAND th03-audio-mmd-soundfont-tests ${_th03_mmd_test_arguments}
+		)
+	endif()
 	add_test(NAME th03-replay-video-help COMMAND th03-replay-video --help)
 	add_executable(th03-replay-video-progress-tests
 		tests/test_replay_video_progress_protocol.cpp

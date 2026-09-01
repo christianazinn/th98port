@@ -510,6 +510,7 @@ struct FakeRunnerBackend final {
 		.scene = th03::app::PixelOracleScene::title,
 	};
 	th03::present::Page shown_page = th03::present::Page::zero;
+	std::uint8_t palette_tone = 150U;
 	bool oracle_main_sequence = false;
 };
 
@@ -630,7 +631,7 @@ th03::app::ClassicRunnerOperations runner_operations(
 				.pixels = output,
 				.graphics_palette = {},
 				.shown_page = self.shown_page,
-				.palette_tone = 150,
+				.palette_tone = self.palette_tone,
 				.reduced_flash_palette = {{th03::assets::Rgb4{3U, 4U, 5U}}},
 			}};
 		},
@@ -828,7 +829,19 @@ void test_runner_sequence_audio_surface_and_failure()
 	expect(reduced_surface &&
 		reduced_surface->graphics_palette.colors[0U] ==
 			th03::assets::Rgb4{3U, 4U, 5U},
-		"New Classic reduced flash maps only an exact tone-150 publication to tone 100");
+		"New Classic reduced flash maps an exact tone-150 publication to tone 100");
+	profile_backend->palette_tone = 170U;
+	const auto kotohime_surface = reduced ?
+		(*reduced)->compose_shown_surface(std::span<
+			th03::present::ComposedPixel,
+			th03::present::graphics_page_pixels
+		>(reduced_pixels.data(), reduced_pixels.size())) :
+		std::expected<
+			th03::present::SourceSurface,
+			th03::app::ClassicRunnerError
+		>{std::unexpected(th03::app::ClassicRunnerError{})};
+	expect(kotohime_surface && kotohime_surface->reduced_flash_applied,
+		"New Classic reduced flash also suppresses Kotohime's tone-170 bomb pulse");
 
 	auto backend = std::make_shared<FakeRunnerBackend>();
 	backend->audio = th03::app::ClassicAudioCommand{

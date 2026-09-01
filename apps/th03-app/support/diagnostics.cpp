@@ -776,6 +776,14 @@ int fail(const char *stage, const th03::app::ClassicAudioSessionError &error)
 			error.engine_error->code
 		) << '\n';
 	}
+	if(error.midi_engine_error) {
+		std::cerr << "midi-engine-code=" << static_cast<unsigned int>(
+			error.midi_engine_error->code
+		) << "\nmidi-offset=" << error.midi_engine_error->offset
+			<< "\nmidi-command=" << static_cast<unsigned int>(
+				error.midi_engine_error->command
+			) << '\n';
+	}
 	if(error.service_error) {
 		std::cerr << "service-code=" << static_cast<unsigned int>(
 			error.service_error->code

@@ -426,7 +426,9 @@ int run_direct_netplay_on_platform(
 	auto created_audio = th03::app::ClassicAudioSession::create({
 		.data_root = audio_data_root,
 		.tick_rate = parsed.tick_rate,
-		.bgm_active = true,
+		.bgm_active = parsed.bgm_mode != th03::app::ClassicBgmMode::off &&
+			parsed.music_volume_percent != 0U,
+		.midi_bgm = parsed.bgm_mode == th03::app::ClassicBgmMode::midi,
 		.effects_active = true,
 		.effects_follow_bgm = false,
 		.music_volume_percent = parsed.music_volume_percent,

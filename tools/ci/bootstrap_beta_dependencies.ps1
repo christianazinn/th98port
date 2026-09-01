@@ -37,27 +37,19 @@ $mbedUrl =
 $libVersion = "0.24.3"
 $libCommit = "c6696d157b5612df2a741d9a03b192b47ab6cefb"
 $libSource = Join-Path $downloads "libdatachannel-$libVersion-source"
+$soundfontSha256 =
+	"00725296486F652BA42BDBF2098254762CA80239353D04B55A27454FC8EDB8A8"
+$soundfontUrl =
+	"https://raw.githubusercontent.com/CoderLine/alphaSynth/master/Samples/Data/GeneralUser%20GS%20SoftSynth%20v1.44.sf2"
 $dependencyRoot = Join-Path $outRoot "deps"
+$soundfontFile = Join-Path $dependencyRoot `
+	"GeneralUser-GS-SoftSynth-1.44.sf2"
 $gitCommand = (Get-Command git -ErrorAction Stop).Source
 $stagedDependencies = @(
 	Join-Path $dependencyRoot "SDL3-$sdlVersion"
 	Join-Path $dependencyRoot "libdatachannel-$libVersion"
 	Join-Path $dependencyRoot "mbedtls-$mbedVersion"
 )
-$stagedCount = @($stagedDependencies | Where-Object {
-	Test-Path -LiteralPath $_ -PathType Container
-}).Count
-if ($stagedCount -eq $stagedDependencies.Count) {
-	Write-Output (
-		"Pinned dependency trees already exist; CMake will authenticate them: " +
-		$dependencyRoot
-	)
-	exit 0
-}
-if ($stagedCount -ne 0) {
-	throw "RTC/SDL dependency staging is incomplete; refusing a mixed tree"
-}
-
 function Get-AuthenticatedFile {
 	param(
 		[Parameter(Mandatory = $true)]
@@ -77,7 +69,24 @@ function Get-AuthenticatedFile {
 	}
 }
 
-New-Item -ItemType Directory -Force -Path $downloads | Out-Null
+New-Item -ItemType Directory -Force -Path $downloads,$dependencyRoot | Out-Null
+Get-AuthenticatedFile -Uri $soundfontUrl -Destination $soundfontFile `
+	-Sha256 $soundfontSha256
+
+$stagedCount = @($stagedDependencies | Where-Object {
+	Test-Path -LiteralPath $_ -PathType Container
+}).Count
+if ($stagedCount -eq $stagedDependencies.Count) {
+	Write-Output (
+		"Pinned dependency trees and MIDI SoundFont already exist; " +
+		"CMake will authenticate them: $dependencyRoot"
+	)
+	exit 0
+}
+if ($stagedCount -ne 0) {
+	throw "RTC/SDL dependency staging is incomplete; refusing a mixed tree"
+}
+
 Get-AuthenticatedFile -Uri $sdlUrl -Destination $sdlArchive -Sha256 $sdlSha256
 Get-AuthenticatedFile -Uri $mbedUrl -Destination $mbedArchive -Sha256 $mbedSha256
 

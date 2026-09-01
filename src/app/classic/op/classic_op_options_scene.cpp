@@ -105,9 +105,10 @@ constexpr std::array<ClassicOpOptionsChoice, 3U> gameplay_choices{{
 	ClassicOpOptionsChoice::arrange,
 	ClassicOpOptionsChoice::return_page,
 }};
-constexpr std::array<ClassicOpOptionsChoice, 5U> audio_choices{{
+constexpr std::array<ClassicOpOptionsChoice, 6U> audio_choices{{
 	ClassicOpOptionsChoice::master_volume,
 	ClassicOpOptionsChoice::bgm,
+	ClassicOpOptionsChoice::music_driver,
 	ClassicOpOptionsChoice::sfx,
 	ClassicOpOptionsChoice::mute_when_unfocused,
 	ClassicOpOptionsChoice::return_page,
@@ -232,6 +233,8 @@ constexpr std::array<ClassicOpMenuChoice, 7U> patch_main_choices{{
 	case ClassicOpOptionsChoice::aspect_ratio: return NewClassicMessageId::option_aspect_ratio;
 	case ClassicOpOptionsChoice::filtering: return NewClassicMessageId::option_filtering;
 	case ClassicOpOptionsChoice::bgm: return NewClassicMessageId::option_music;
+	case ClassicOpOptionsChoice::music_driver:
+		return NewClassicMessageId::option_music_driver;
 	case ClassicOpOptionsChoice::key_mode: return NewClassicMessageId::option_key_mode;
 	case ClassicOpOptionsChoice::quit: return NewClassicMessageId::option_return;
 	case ClassicOpOptionsChoice::sfx: return NewClassicMessageId::option_sfx;
@@ -1357,7 +1360,14 @@ bool ClassicOpOptionsScene::draw_patch_choice(
 		value = patch_assets_ ? percent_value(music_volume_percent_) :
 			(config_.bgm_mode == ClassicBgmMode::off ?
 				messages.text(NewClassicMessageId::value_off) :
-				messages.text(NewClassicMessageId::value_fm86));
+				(config_.bgm_mode == ClassicBgmMode::midi ?
+					messages.text(NewClassicMessageId::value_midi_sc88) :
+					messages.text(NewClassicMessageId::value_fm86)));
+		break;
+	case ClassicOpOptionsChoice::music_driver:
+		value = config_.bgm_mode == ClassicBgmMode::midi ?
+			messages.text(NewClassicMessageId::value_midi_sc88) :
+			messages.text(NewClassicMessageId::value_fm86);
 		break;
 	case ClassicOpOptionsChoice::sfx:
 		value = patch_assets_ ? percent_value(effect_volume_percent_) :
@@ -1573,6 +1583,7 @@ bool ClassicOpOptionsScene::draw_option_choice(
 		return false;
 	}
 	case ClassicOpOptionsChoice::arrange:
+	case ClassicOpOptionsChoice::music_driver:
 	case ClassicOpOptionsChoice::sfx:
 	case ClassicOpOptionsChoice::mute_when_unfocused:
 	case ClassicOpOptionsChoice::master_volume:
@@ -1784,8 +1795,6 @@ bool ClassicOpOptionsScene::update_horizontal(
 			);
 			const auto previous = music_volume_percent_;
 			music_volume_percent_ = next;
-			config_.bgm_mode = next == 0U ? ClassicBgmMode::off :
-				ClassicBgmMode::fm;
 			if(previous != 0U && next == 0U) {
 				if(!push_audio_command({
 					.type = ClassicAudioCommandType::stop_song,
@@ -1799,12 +1808,15 @@ bool ClassicOpOptionsScene::update_horizontal(
 					return false;
 				}
 			} else if(previous == 0U && next != 0U) {
+				if(config_.bgm_mode == ClassicBgmMode::off) {
+					config_.bgm_mode = ClassicBgmMode::fm;
+				}
 				if(!push_audio_command({
 					.type = ClassicAudioCommandType::set_music_volume,
 					.parameter = next,
 				}) || !push_audio_command({
 					.type = ClassicAudioCommandType::set_bgm_active,
-					.parameter = 1U,
+					.parameter = static_cast<std::uint16_t>(config_.bgm_mode),
 				}) || !push_audio_command({
 					.type = ClassicAudioCommandType::play_song,
 					.cue = ClassicMusicCue::menu_main,
@@ -1821,35 +1833,45 @@ bool ClassicOpOptionsScene::update_horizontal(
 			break;
 		}
 		if(fm_available_) {
-			// ZUN quirk: Both directions toggle Off and FM, while a loaded
-			// MIDI setting collapses to Off instead of participating in a ring.
-			if(config_.bgm_mode == ClassicBgmMode::off) {
-				config_.bgm_mode = ClassicBgmMode::fm;
-				if(!push_audio_command({
-					.type = ClassicAudioCommandType::stop_song,
-				}) || !push_audio_command({
-					.type = ClassicAudioCommandType::set_bgm_active,
-					.parameter = 1U,
-				}) || !push_audio_command({
+			config_.bgm_mode = static_cast<ClassicBgmMode>(ring_step(
+				static_cast<std::uint8_t>(config_.bgm_mode), direction,
+				static_cast<std::uint8_t>(ClassicBgmMode::midi)
+			));
+			if(!push_audio_command({
+				.type = ClassicAudioCommandType::stop_song,
+			}) || !push_audio_command({
+				.type = ClassicAudioCommandType::set_bgm_active,
+				.parameter = static_cast<std::uint16_t>(config_.bgm_mode),
+			}) || (config_.bgm_mode != ClassicBgmMode::off &&
+				!push_audio_command({
 					.type = ClassicAudioCommandType::play_song,
 					.cue = ClassicMusicCue::menu_main,
-				})) {
-					return false;
-				}
-			} else {
-				config_.bgm_mode = ClassicBgmMode::off;
-				if(!push_audio_command({
-					.type = ClassicAudioCommandType::stop_song,
-				}) || !push_audio_command({
-					.type = ClassicAudioCommandType::set_bgm_active,
-					.parameter = 0U,
-				})) {
-					return false;
-				}
+				}))) {
+				return false;
 			}
 			config_changed = true;
 		}
 		break;
+	case ClassicOpOptionsChoice::music_driver: {
+		const auto current = static_cast<std::uint8_t>(
+			config_.bgm_mode == ClassicBgmMode::midi ? 1U : 0U
+		);
+		config_.bgm_mode = ring_step(current, direction, 1U) == 0U ?
+			ClassicBgmMode::fm : ClassicBgmMode::midi;
+		if(music_volume_percent_ != 0U && (!push_audio_command({
+			.type = ClassicAudioCommandType::stop_song,
+		}) || !push_audio_command({
+			.type = ClassicAudioCommandType::set_bgm_active,
+			.parameter = static_cast<std::uint16_t>(config_.bgm_mode),
+		}) || !push_audio_command({
+			.type = ClassicAudioCommandType::play_song,
+			.cue = ClassicMusicCue::menu_main,
+		}))) {
+			return false;
+		}
+		config_changed = true;
+		break;
+	}
 	case ClassicOpOptionsChoice::sfx:
 		if(patch_assets_) {
 			const auto step = static_cast<std::uint8_t>(

@@ -43,7 +43,8 @@ class RenderJobTests(unittest.TestCase):
     def test_exact_argument_projection_preserves_unicode_and_spaces(self) -> None:
         job = self.job(
             language="en", reduced_flash=False, master_volume=95,
-            music_volume=90, sfx_volume=85, encoder_label="HEVC NVIDIA NVENC",
+            music_driver="midi", music_volume=90, sfx_volume=85,
+            encoder_label="HEVC NVIDIA NVENC",
             encoder_preset="p1", overwrite=True,
             staging_output=self.root / ".世界 partial.mkv",
             game_text_pack=self.game_text,
@@ -57,6 +58,7 @@ class RenderJobTests(unittest.TestCase):
         self.assertIn("--use-installed-settings", command)
         self.assertEqual(command[command.index("--encoder") + 1], "hevc_nvenc")
         self.assertEqual(command[command.index("--sfx-volume") + 1], "85")
+        self.assertEqual(command[command.index("--music-driver") + 1], "midi")
         self.assertEqual(
             command[command.index("--cutscene-text-pack") + 1],
             str(self.cutscene_text),

@@ -25,6 +25,9 @@ enum class ClassicAudioCommandType : std::uint8_t {
 	set_effect_volume,
 };
 
+// set_bgm_active retains its historical command name for replay/rollback
+// stability. Its parameter is a ClassicBgmMode value: 0=Off, 1=FM, 2=MIDI.
+
 enum class ClassicMusicCue : std::uint8_t {
 	none,
 	menu_main,

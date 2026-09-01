@@ -972,6 +972,7 @@ ExperienceRunResult run_new_classic_experience(
 	result.master_volume_percent = settings.master_volume_percent;
 	result.music_volume_percent = settings.music_volume_percent;
 	result.effect_volume_percent = settings.effect_volume_percent;
+	result.bgm_mode = settings.options.bgm_mode;
 	result.mute_when_unfocused = settings.mute_when_unfocused;
 	result.presentation_language = settings.options.language ==
 		th03::app::ClassicLanguage::english ?

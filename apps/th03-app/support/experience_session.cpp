@@ -560,8 +560,11 @@ ExperienceRunResult run_classic_session(
 	auto created_session = th03::app::ClassicAudioSession::create({
 		.data_root = data_root,
 		.tick_rate = parsed.tick_rate,
-		.bgm_active = persisted_options.bgm_mode ==
-			th03::app::ClassicBgmMode::fm,
+		.bgm_active = persisted_options.bgm_mode !=
+			th03::app::ClassicBgmMode::off &&
+			(!new_classic || music_volume_percent != 0U),
+		.midi_bgm = persisted_options.bgm_mode ==
+			th03::app::ClassicBgmMode::midi,
 		.effects_active = !new_classic || persisted_options.sfx_enabled,
 		.effects_follow_bgm = !new_classic,
 		.music_volume_percent = new_classic ? music_volume_percent :

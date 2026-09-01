@@ -31,6 +31,7 @@ enum class ClassicOpOptionsChoice : std::uint8_t {
 	aspect_ratio,
 	filtering,
 	bgm,
+	music_driver,
 	key_mode,
 	quit,
 	sfx,

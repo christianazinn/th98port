@@ -82,6 +82,7 @@ struct DirectVsCliRequest {
 	std::uint8_t master_volume_percent = 100U;
 	std::uint8_t music_volume_percent = 100U;
 	std::uint8_t effect_volume_percent = 100U;
+	ClassicBgmMode bgm_mode = ClassicBgmMode::fm;
 	bool mute_when_unfocused = false;
 	NewClassicLanguageAssetProfile presentation_language =
 		NewClassicLanguageAssetProfile::english;

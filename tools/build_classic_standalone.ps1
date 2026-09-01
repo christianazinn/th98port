@@ -12,6 +12,8 @@ param(
 	[string]$LanguageOverlay,
 	[string]$PicturePatch,
 	[string]$ReplayPatchAssets,
+	[string]$MidiSongRoot,
+	[string]$MidiSoundfont,
 	[string]$RhythmRom,
 	[string]$T98Sound86,
 	[string]$Output,
@@ -135,6 +137,19 @@ if(-not $ReplayPatchAssets) {
 		$ReplayPatchAssets = $assetCandidates[0]
 	}
 }
+if(-not $MidiSongRoot) {
+	$MidiSongRoot = Find-AncestorRelativeDirectory $worktreeRoot (
+		"midi-0418\final-mmd"
+	)
+	if(-not $MidiSongRoot) {
+		throw "The maintained standalone requires the generated TH03 MMD corpus."
+	}
+}
+if(-not $MidiSoundfont) {
+	$MidiSoundfont = Join-Path $sourceRoot (
+		"out\deps\GeneralUser-GS-SoftSynth-1.44.sf2"
+	)
+}
 $usingDefaultOutput = [string]::IsNullOrWhiteSpace($Output)
 if($usingDefaultOutput) {
 	$Output = Join-Path $standaloneRoot "PoDD-Port-Test.exe"
@@ -197,6 +212,28 @@ $OpExecutable = Resolve-RequiredFile $OpExecutable "OP.EXE"
 $FontRom = Resolve-RequiredFile $FontRom "FONT.ROM"
 $StartupLogo = Resolve-RequiredFile $StartupLogo "TOUHOU.DAT startup logo"
 $ReplayPatchAssets = Resolve-RequiredFile $ReplayPatchAssets "AZINN.DAT"
+$MidiSongRoot = Resolve-RequiredDirectory $MidiSongRoot "TH03 MMD song root"
+$MidiSoundfont = Resolve-RequiredFile $MidiSoundfont (
+	"GeneralUser GS SoftSynth 1.44 SoundFont"
+)
+$midiSoundfontHash = (Get-FileHash -Algorithm SHA256 `
+	-LiteralPath $MidiSoundfont).Hash
+if($midiSoundfontHash -ne
+	"00725296486F652BA42BDBF2098254762CA80239353D04B55A27454FC8EDB8A8") {
+	throw "GeneralUser GS SoftSynth 1.44 identity mismatch."
+}
+$midiSongNames = @(
+	"00MM.MMD", "01MM.MMD", "02MM.MMD", "03MM.MMD", "04MM.MMD",
+	"05MM.MMD", "06MM.MMD", "07MM.MMD", "08MM.MMD", "DEC.MMD",
+	"DEMO1.MMD", "DEMO2.MMD", "DEMO3.MMD", "DEMO4.MMD", "DEMO5.MMD",
+	"ED.MMD", "GMINIT.MMD", "OP.MMD", "OVER.MMD", "SCORE.MMD",
+	"SELECT.MMD", "WIN.MMD"
+)
+foreach($midiSongName in $midiSongNames) {
+	$null = Resolve-RequiredFile (Join-Path $MidiSongRoot $midiSongName) (
+		"TH03 MIDI song $midiSongName"
+	)
+}
 $observedStartupLogoHash = (Get-FileHash -Algorithm SHA256 `
 	-LiteralPath $StartupLogo).Hash
 $expectedStartupLogoHash =
@@ -367,6 +404,18 @@ try {
 		}
 		Copy-Item -LiteralPath $generatedMenuAssetPath `
 			-Destination $menuAssetDestination
+	}
+	# Audio sessions resolve the SoundFont and the converted songs from their
+	# game-data root. Keep both in content so the installed app and bundled
+	# replay renderer share one complete MIDI data boundary.
+	$midiRuntimeDestination = Join-Path $contentRoot "PODDUI\MIDI"
+	[IO.Directory]::CreateDirectory($midiRuntimeDestination) | Out-Null
+	Copy-Item -LiteralPath $MidiSoundfont -Destination (Join-Path (
+		$midiRuntimeDestination
+	) "GeneralUser-GS-SoftSynth-1.44.sf2")
+	foreach($midiSongName in $midiSongNames) {
+		Copy-Item -LiteralPath (Join-Path $MidiSongRoot $midiSongName) `
+			-Destination (Join-Path $contentRoot $midiSongName)
 	}
 	if($LanguageOverlay) {
 		Copy-Item -LiteralPath $LanguageOverlay `

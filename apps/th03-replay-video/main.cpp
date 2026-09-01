@@ -89,6 +89,7 @@ struct Options final {
 	std::uint8_t master_volume = 100U;
 	std::uint8_t music_volume = 100U;
 	std::uint8_t effect_volume = 100U;
+	th03::app::ClassicBgmMode bgm_mode = th03::app::ClassicBgmMode::fm;
 	th03::app::ClassicLanguage language =
 		th03::app::ClassicLanguage::japanese;
 	bool reduced_flash = false;
@@ -96,6 +97,7 @@ struct Options final {
 	bool master_volume_overridden = false;
 	bool music_volume_overridden = false;
 	bool effect_volume_overridden = false;
+	bool bgm_mode_overridden = false;
 	bool language_overridden = false;
 	bool reduced_flash_overridden = false;
 	bool use_installed_settings = false;
@@ -234,6 +236,7 @@ void usage()
 		"  --use-installed-settings Inherit the installed standalone's PODD.CFG\n"
 		"  --master-volume <0..100> Final gain in 5% steps\n"
 		"  --music-volume <0..100>  Music gain in 5% steps\n"
+		"  --music-driver <fm|midi> Music source (default FM; inherited from settings)\n"
 		"  --sfx-volume <0..100>    Effect gain in 5% steps\n"
 		"  --main/--mainl/--font    Override content files\n"
 		"  --rhythm-pcm <path>      T98RHYTHM.PCM (auto-detected under data)\n"
@@ -358,6 +361,15 @@ template<typename Integer>
 				return std::unexpected("invalid SFX volume");
 			}
 			options.effect_volume_overridden = true;
+		} else if(key == "--music-driver") {
+			if(value == "fm") {
+				options.bgm_mode = th03::app::ClassicBgmMode::fm;
+			} else if(value == "midi") {
+				options.bgm_mode = th03::app::ClassicBgmMode::midi;
+			} else {
+				return std::unexpected("music driver must be fm or midi");
+			}
+			options.bgm_mode_overridden = true;
 		} else if(key == "--language") {
 			if(value == "ja") {
 				options.language = th03::app::ClassicLanguage::japanese;
@@ -499,6 +511,10 @@ template<typename Integer>
 	}
 	if(!options.effect_volume_overridden) {
 		options.effect_volume = decoded->effect_volume_percent;
+	}
+	if(!options.bgm_mode_overridden &&
+		decoded->options.bgm_mode != th03::app::ClassicBgmMode::off) {
+		options.bgm_mode = decoded->options.bgm_mode;
 	}
 	if(!options.language_overridden) {
 		options.language = decoded->options.language;
@@ -927,6 +943,7 @@ private:
 			.data_root = options.data,
 			.tick_rate = th03::app::pc98_24khz_nominal_tick_rate,
 			.bgm_active = true,
+			.midi_bgm = options.bgm_mode == th03::app::ClassicBgmMode::midi,
 			.effects_active = true,
 			.effects_follow_bgm = false,
 			.music_volume_percent = options.music_volume,
@@ -1382,6 +1399,8 @@ staging_output_path(const fs::path &output)
 			th03::app::ClassicLanguage::english ? "en" : "ja")
 		<< "\nmaster-volume=" << static_cast<unsigned>(options.master_volume)
 		<< "\nmusic-volume=" << static_cast<unsigned>(options.music_volume)
+		<< "\nmusic-driver=" << (options.bgm_mode ==
+			th03::app::ClassicBgmMode::midi ? "midi" : "fm")
 		<< "\nsfx-volume=" << static_cast<unsigned>(options.effect_volume)
 		<< "\nreduced-flash=" << (options.reduced_flash ? 1 : 0)
 		<< "\nencoder-preset=" << options.encoder_preset << "\n";

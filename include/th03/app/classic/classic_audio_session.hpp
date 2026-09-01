@@ -2,9 +2,11 @@
 #define TH03_APP_CLASSIC_AUDIO_SESSION_HPP
 
 #include "th03/app/classic/classic_audio.hpp"
+#include "th03/app/classic/persistence/classic_config.hpp"
 #include "th03/app/content/resources.hpp"
 #include "th03/app/runtime/tick_input.hpp"
 #include "th03/audio/fixed_resampler.hpp"
+#include "th03/audio/mmd_soundfont.hpp"
 #include "th03/audio/pmd_opna.hpp"
 #include "th03/audio/th03_pmd_service.hpp"
 
@@ -31,6 +33,13 @@ struct ClassicAudioSessionConfig final {
 	// snd_determine_mode() when Music is Off, leaving their fresh-process
 	// snd_fm_possible false and disabling sound effects as well.
 	bool bgm_active = true;
+	// Selects the active driver when bgm_active is true. MIDI is initialized
+	// only when its SoundFont is present; FM-only data directories therefore
+	// retain their previous startup behavior.
+	bool midi_bgm = false;
+	// Empty selects PODDUI/MIDI/GeneralUser-GS-SoftSynth-1.44.sf2 below
+	// data_root. Supplying a path is useful for tools and development builds.
+	std::filesystem::path midi_soundfont{};
 	// Replay Patch exposes sound effects independently from Music. Classic
 	// retains the original fresh-process dependency through effects_follow_bgm.
 	bool effects_active = true;
@@ -64,6 +73,7 @@ struct ClassicAudioSessionError final {
 	ClassicAudioCommand command{};
 	std::optional<ResourceLoadError> resource_error{};
 	std::optional<audio::PmdOpnaError> engine_error{};
+	std::optional<audio::MmdSoundfontError> midi_engine_error{};
 	std::optional<audio::Th03PmdServiceError> service_error{};
 	std::optional<audio::PmdFixedResamplerError> resampler_error{};
 };
@@ -101,6 +111,9 @@ public:
 		std::uint8_t effect_id
 	) noexcept;
 	void set_bgm_active(bool active) noexcept;
+	[[nodiscard]] std::expected<void, ClassicAudioSessionError> set_bgm_mode(
+		ClassicBgmMode mode
+	) noexcept;
 	void set_effects_active(bool active) noexcept;
 	[[nodiscard]] std::expected<void, ClassicAudioSessionError>
 	set_user_volumes(

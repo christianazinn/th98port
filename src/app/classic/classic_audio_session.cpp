@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <fstream>
 #include <limits>
 #include <new>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -13,6 +15,14 @@ namespace {
 
 constexpr std::size_t native_chunk_frames = 1'024U;
 constexpr std::size_t canonical_chunk_frames = 1'024U;
+constexpr std::uintmax_t maximum_soundfont_bytes = 64U * 1024U * 1024U;
+constexpr std::uintmax_t maximum_mmd_song_bytes = 64U * 1024U;
+constexpr std::array<std::string_view, 21U> required_mmd_filenames{{
+	"00MM.MMD", "01MM.MMD", "02MM.MMD", "03MM.MMD", "04MM.MMD",
+	"05MM.MMD", "06MM.MMD", "07MM.MMD", "08MM.MMD", "DEC.MMD",
+	"DEMO1.MMD", "DEMO2.MMD", "DEMO3.MMD", "DEMO4.MMD", "DEMO5.MMD",
+	"ED.MMD", "OP.MMD", "OVER.MMD", "SCORE.MMD", "SELECT.MMD", "WIN.MMD",
+}};
 
 [[nodiscard]] ClassicAudioSessionError session_error(
 	ClassicAudioSessionErrorCode code,
@@ -44,6 +54,116 @@ constexpr std::size_t canonical_chunk_frames = 1'024U;
 	);
 	result.engine_error = detail;
 	return result;
+}
+
+[[nodiscard]] ClassicAudioSessionError midi_engine_error(
+	ClassicAudioCommand command,
+	audio::MmdSoundfontError detail
+) noexcept
+{
+	auto result = session_error(
+		ClassicAudioSessionErrorCode::engine_failed, command
+	);
+	result.midi_engine_error = detail;
+	return result;
+}
+
+[[nodiscard]] std::expected<std::vector<std::byte>, ClassicAudioSessionError>
+read_midi_file(
+	const std::filesystem::path &path,
+	std::uintmax_t maximum_bytes,
+	ClassicAudioCommand command = {}
+)
+{
+	std::error_code status_error{};
+	const auto size = std::filesystem::file_size(path, status_error);
+	if(status_error || size == 0U || size > maximum_bytes ||
+		size > static_cast<std::uintmax_t>(
+			std::numeric_limits<std::streamsize>::max()
+		)) {
+		return std::unexpected(session_error(
+			ClassicAudioSessionErrorCode::resource_load_failed, command
+		));
+	}
+	try {
+		std::vector<std::byte> result(static_cast<std::size_t>(size));
+		std::ifstream input(path, std::ios::binary);
+		if(!input || !input.read(
+			reinterpret_cast<char *>(result.data()),
+			static_cast<std::streamsize>(result.size())
+		) || input.peek() != std::ifstream::traits_type::eof()) {
+			return std::unexpected(session_error(
+				ClassicAudioSessionErrorCode::resource_load_failed, command
+			));
+		}
+		return result;
+	} catch(const std::bad_alloc &) {
+		return std::unexpected(session_error(
+			ClassicAudioSessionErrorCode::allocation_failed, command
+		));
+	}
+}
+
+[[nodiscard]] bool mmd_corpus_present(
+	const std::filesystem::path &root
+) noexcept
+{
+	for(const auto filename : required_mmd_filenames) {
+		std::error_code status_error{};
+		if(!std::filesystem::is_regular_file(root / filename, status_error) ||
+			status_error) {
+			return false;
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] std::expected<std::string_view, ClassicAudioSessionError>
+mmd_filename(ClassicAudioCommand command) noexcept
+{
+	static constexpr std::array<std::string_view, 18U> music_room{{
+		"OP.MMD", "SELECT.MMD", "00MM.MMD", "01MM.MMD", "02MM.MMD",
+		"03MM.MMD", "04MM.MMD", "05MM.MMD", "06MM.MMD", "DEC.MMD",
+		"07MM.MMD", "08MM.MMD", "DEMO1.MMD", "DEMO2.MMD",
+		"DEMO3.MMD", "DEMO4.MMD", "DEMO5.MMD", "ED.MMD",
+	}};
+	if(command.type != ClassicAudioCommandType::load_song) {
+		return std::unexpected(session_error(
+			ClassicAudioSessionErrorCode::invalid_cue, command
+		));
+	}
+	switch(command.cue) {
+	case ClassicMusicCue::menu_main: return "OP.MMD";
+	case ClassicMusicCue::character_select: return "SELECT.MMD";
+	case ClassicMusicCue::gameplay: {
+		static constexpr std::array<std::string_view, 10U> gameplay{{
+			"00MM.MMD", "01MM.MMD", "02MM.MMD", "03MM.MMD", "04MM.MMD",
+			"05MM.MMD", "06MM.MMD", "DEC.MMD", "07MM.MMD", "08MM.MMD",
+		}};
+		if(command.parameter >= gameplay.size()) {
+			break;
+		}
+		return gameplay[command.parameter];
+	}
+	case ClassicMusicCue::music_room_track:
+		if(command.parameter < music_room.size()) {
+			return music_room[command.parameter];
+		}
+		break;
+	case ClassicMusicCue::winner: return "WIN.MMD";
+	case ClassicMusicCue::game_over: return "OVER.MMD";
+	case ClassicMusicCue::staff: return "ED.MMD";
+	case ClassicMusicCue::high_score: return "SCORE.MMD";
+	case ClassicMusicCue::cutscene_one: return "DEMO1.MMD";
+	case ClassicMusicCue::cutscene_two: return "DEMO2.MMD";
+	case ClassicMusicCue::cutscene_three: return "DEMO3.MMD";
+	case ClassicMusicCue::cutscene_four: return "DEMO4.MMD";
+	case ClassicMusicCue::cutscene_five: return "DEMO5.MMD";
+	case ClassicMusicCue::none: break;
+	}
+	return std::unexpected(session_error(
+		ClassicAudioSessionErrorCode::invalid_parameter, command
+	));
 }
 
 [[nodiscard]] ClassicAudioSessionError service_error(
@@ -186,18 +306,20 @@ song_key(ClassicAudioCommand command) noexcept
 struct ClassicAudioSession::Impl final {
 	MainResourceLoader loader;
 	audio::PmdOpnaEngine engine;
+	std::optional<audio::MmdSoundfontEngine> midi{};
 	audio::Th03SoundEffectScheduler effects;
 	audio::PmdFixedResampler resampler{};
 	RationalTickRate tick_rate{};
 	std::uint64_t native_frames_numerator = 0U;
 	std::uint64_t native_fraction = 0U;
 	std::uint64_t tick = 0U;
-	bool bgm_active = true;
+	ClassicBgmMode bgm_mode = ClassicBgmMode::fm;
 	bool effects_active = true;
 	bool effects_follow_bgm = true;
 	std::uint8_t music_volume_percent = 100U;
 	std::uint8_t effect_volume_percent = 100U;
 	std::optional<ClassicAudioCommand> loaded{};
+	std::filesystem::path midi_root{};
 	std::vector<audio::PmdCanonicalStereoSample> output{};
 	std::array<audio::PmdOpnaStereoSample, native_chunk_frames> native_scratch{};
 	std::array<audio::PmdCanonicalStereoSample, canonical_chunk_frames>
@@ -206,9 +328,11 @@ struct ClassicAudioSession::Impl final {
 	Impl(
 		MainResourceLoader loader_,
 		audio::PmdOpnaEngine engine_,
+		std::optional<audio::MmdSoundfontEngine> midi_,
+		std::filesystem::path midi_root_,
 		RationalTickRate tick_rate_,
 		std::uint64_t native_frames_numerator_,
-		bool bgm_active_,
+		ClassicBgmMode bgm_mode_,
 		bool effects_active_,
 		bool effects_follow_bgm_,
 		std::uint8_t music_volume_percent_,
@@ -216,20 +340,23 @@ struct ClassicAudioSession::Impl final {
 	) :
 		loader(std::move(loader_)),
 		engine(std::move(engine_)),
+		midi(std::move(midi_)),
 		effects(effects_active_ &&
-			(!effects_follow_bgm_ || bgm_active_)),
+			(!effects_follow_bgm_ || bgm_mode_ != ClassicBgmMode::off)),
 		tick_rate(tick_rate_),
 		native_frames_numerator(native_frames_numerator_),
-		bgm_active(bgm_active_),
+		bgm_mode(bgm_mode_),
 		effects_active(effects_active_),
 		effects_follow_bgm(effects_follow_bgm_),
 		music_volume_percent(music_volume_percent_),
-		effect_volume_percent(effect_volume_percent_)
+		effect_volume_percent(effect_volume_percent_),
+		midi_root(std::move(midi_root_))
 	{}
 
 	[[nodiscard]] bool effects_available() const noexcept
 	{
-		return effects_active && (!effects_follow_bgm || bgm_active);
+		return effects_active &&
+			(!effects_follow_bgm || bgm_mode != ClassicBgmMode::off);
 	}
 };
 
@@ -266,6 +393,7 @@ ClassicAudioSession::create(ClassicAudioSessionConfig config)
 	if(!engine) {
 		return std::unexpected(engine_error({}, engine.error()));
 	}
+	auto data_root = config.data_root;
 	MainResourceLoader loader(std::move(config.data_root), config.integrity);
 	const ClassicAudioCommand load_effects{
 		.type = ClassicAudioCommandType::load_effects,
@@ -278,16 +406,59 @@ ClassicAudioSession::create(ClassicAudioSessionConfig config)
 	if(!loaded_bank) {
 		return std::unexpected(engine_error(load_effects, loaded_bank.error()));
 	}
+	const auto initial_mode = config.bgm_active ?
+		(config.midi_bgm ? ClassicBgmMode::midi : ClassicBgmMode::fm) :
+		ClassicBgmMode::off;
 	if(auto volumes = engine->set_user_volumes(
-		config.music_volume_percent, config.effect_volume_percent
+		initial_mode == ClassicBgmMode::midi ? 0U :
+			config.music_volume_percent,
+		config.effect_volume_percent
 	); !volumes) {
 		return std::unexpected(engine_error({}, volumes.error()));
 	}
 
+	std::optional<audio::MmdSoundfontEngine> midi{};
+	auto soundfont_path = std::move(config.midi_soundfont);
+	if(soundfont_path.empty()) {
+		soundfont_path = data_root / "PODDUI" / "MIDI" /
+			"GeneralUser-GS-SoftSynth-1.44.sf2";
+	}
+	std::error_code soundfont_status_error{};
+	const auto soundfont_present = std::filesystem::is_regular_file(
+		soundfont_path, soundfont_status_error
+	) && !soundfont_status_error;
+	const auto midi_assets_present = soundfont_present &&
+		mmd_corpus_present(data_root);
+	if(midi_assets_present) {
+		auto soundfont = read_midi_file(
+			soundfont_path, maximum_soundfont_bytes
+		);
+		if(!soundfont) {
+			return std::unexpected(soundfont.error());
+		}
+		auto created_midi = audio::MmdSoundfontEngine::create({
+			.soundfont = *soundfont,
+		});
+		if(!created_midi) {
+			return std::unexpected(midi_engine_error({}, created_midi.error()));
+		}
+		if(auto volume = created_midi->set_user_volume(
+			config.music_volume_percent
+		); !volume) {
+			return std::unexpected(midi_engine_error({}, volume.error()));
+		}
+		midi.emplace(std::move(*created_midi));
+	} else if(initial_mode == ClassicBgmMode::midi) {
+		return std::unexpected(session_error(
+			ClassicAudioSessionErrorCode::resource_load_failed
+		));
+	}
+
 	try {
 		auto impl = std::make_unique<Impl>(
-			std::move(loader), std::move(*engine), config.tick_rate, numerator,
-			config.bgm_active, config.effects_active, config.effects_follow_bgm,
+			std::move(loader), std::move(*engine), std::move(midi),
+			std::move(data_root), config.tick_rate, numerator, initial_mode,
+			config.effects_active, config.effects_follow_bgm,
 			config.music_volume_percent, config.effect_volume_percent
 		);
 		const auto initial_capacity = divide_round_up(
@@ -330,6 +501,23 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 		if(!loaded) {
 			return std::unexpected(engine_error(command, loaded.error()));
 		}
+		if(impl_->midi) {
+			auto filename = mmd_filename(command);
+			if(!filename) {
+				return std::unexpected(filename.error());
+			}
+			auto song = read_midi_file(
+				impl_->midi_root / *filename, maximum_mmd_song_bytes, command
+			);
+			if(!song) {
+				return std::unexpected(song.error());
+			}
+			if(auto midi_loaded = impl_->midi->load_song(*song); !midi_loaded) {
+				return std::unexpected(midi_engine_error(
+					command, midi_loaded.error()
+				));
+			}
+		}
 		impl_->loaded = command;
 		return {};
 	}
@@ -340,7 +528,7 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 				ClassicAudioSessionErrorCode::command_order, command
 			));
 		}
-		if(!impl_->bgm_active) {
+		if(impl_->bgm_mode == ClassicBgmMode::off) {
 			// Replay Patch can leave the PMD effect service active while Music is
 			// Off. Start the fresh carrier, then Stop only its song; PMD retains
 			// Timer A/FM6 for subsequent external effects. Classic reaches the
@@ -353,6 +541,24 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 			}
 			return {};
 		}
+		if(impl_->bgm_mode == ClassicBgmMode::midi) {
+			if(!impl_->midi) {
+				return std::unexpected(session_error(
+					ClassicAudioSessionErrorCode::command_order, command
+				));
+			}
+			if(auto carrier = impl_->engine.play(); !carrier) {
+				return std::unexpected(engine_error(command, carrier.error()));
+			}
+			impl_->engine.stop();
+			if(auto played = impl_->midi->play(); !played) {
+				return std::unexpected(midi_engine_error(command, played.error()));
+			}
+			return {};
+		}
+		if(impl_->midi) {
+			impl_->midi->stop();
+		}
 		if(auto played = impl_->engine.play(); !played) {
 			return std::unexpected(engine_error(command, played.error()));
 		}
@@ -364,8 +570,9 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 				ClassicAudioSessionErrorCode::invalid_parameter, command
 			));
 		}
-		if(impl_->bgm_active) {
-			impl_->engine.stop();
+		impl_->engine.stop();
+		if(impl_->midi) {
+			impl_->midi->stop();
 		}
 		return {};
 	case ClassicAudioCommandType::pause_song:
@@ -375,11 +582,19 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 				ClassicAudioSessionErrorCode::invalid_parameter, command
 			));
 		}
-		if(impl_->bgm_active) {
+		if(impl_->bgm_mode != ClassicBgmMode::off) {
 			if(command.type == ClassicAudioCommandType::pause_song) {
-				impl_->engine.pause();
+				if(impl_->bgm_mode == ClassicBgmMode::midi && impl_->midi) {
+					impl_->midi->pause();
+				} else {
+					impl_->engine.pause();
+				}
 			} else {
-				impl_->engine.resume();
+				if(impl_->bgm_mode == ClassicBgmMode::midi && impl_->midi) {
+					impl_->midi->resume();
+				} else {
+					impl_->engine.resume();
+				}
 			}
 		}
 		return {};
@@ -391,10 +606,15 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 				ClassicAudioSessionErrorCode::invalid_parameter, command
 			));
 		}
-		if(impl_->bgm_active) {
-			impl_->engine.fade(std::bit_cast<std::int8_t>(
+		if(impl_->bgm_mode != ClassicBgmMode::off) {
+			const auto speed = std::bit_cast<std::int8_t>(
 				static_cast<std::uint8_t>(command.parameter)
-			));
+			);
+			if(impl_->bgm_mode == ClassicBgmMode::midi && impl_->midi) {
+				impl_->midi->fade(speed);
+			} else {
+				impl_->engine.fade(speed);
+			}
 		}
 		return {};
 	case ClassicAudioCommandType::load_effects: {
@@ -480,13 +700,13 @@ std::expected<void, ClassicAudioSessionError> ClassicAudioSession::apply(
 		}
 		return {};
 	case ClassicAudioCommandType::set_bgm_active:
-		if(command.cue != ClassicMusicCue::none || command.parameter > 1U) {
+		if(command.cue != ClassicMusicCue::none || command.parameter >
+			static_cast<std::uint16_t>(ClassicBgmMode::midi)) {
 			return std::unexpected(session_error(
 				ClassicAudioSessionErrorCode::invalid_parameter, command
 			));
 		}
-		set_bgm_active(command.parameter != 0U);
-		return {};
+		return set_bgm_mode(static_cast<ClassicBgmMode>(command.parameter));
 	case ClassicAudioCommandType::set_effects_active:
 		if(command.cue != ClassicMusicCue::none || command.parameter > 1U) {
 			return std::unexpected(session_error(
@@ -545,13 +765,40 @@ ClassicAudioSession::request_effect(std::uint8_t effect_id) noexcept
 
 void ClassicAudioSession::set_bgm_active(bool active) noexcept
 {
-	impl_->bgm_active = active;
+	static_cast<void>(set_bgm_mode(
+		active ? ClassicBgmMode::fm : ClassicBgmMode::off
+	));
+}
+
+std::expected<void, ClassicAudioSessionError> ClassicAudioSession::set_bgm_mode(
+	ClassicBgmMode mode
+) noexcept
+{
+	if(static_cast<std::uint8_t>(mode) >
+		static_cast<std::uint8_t>(ClassicBgmMode::midi) ||
+		(mode == ClassicBgmMode::midi && !impl_->midi)) {
+		return std::unexpected(session_error(
+			ClassicAudioSessionErrorCode::invalid_parameter,
+			ClassicAudioCommand{
+				.type = ClassicAudioCommandType::set_bgm_active,
+				.parameter = static_cast<std::uint16_t>(mode),
+			}
+		));
+	}
+	impl_->bgm_mode = mode;
+	if(auto volumes = impl_->engine.set_user_volumes(
+		mode == ClassicBgmMode::midi ? 0U : impl_->music_volume_percent,
+		impl_->effect_volume_percent
+	); !volumes) {
+		return std::unexpected(engine_error({}, volumes.error()));
+	}
 	const auto effects_available = impl_->effects_available();
 	impl_->effects.set_active(effects_available);
 	if(!effects_available) {
 		impl_->effects.reset();
 		impl_->engine.stop_effect();
 	}
+	return {};
 }
 
 void ClassicAudioSession::set_effects_active(bool active) noexcept
@@ -582,12 +829,18 @@ ClassicAudioSession::set_user_volumes(
 		));
 	}
 	if(auto applied = impl_->engine.set_user_volumes(
-		music_percent, effect_percent
+		impl_->bgm_mode == ClassicBgmMode::midi ? 0U : music_percent,
+		effect_percent
 	); !applied) {
 		return std::unexpected(engine_error(command, applied.error()));
 	}
 	impl_->music_volume_percent = music_percent;
 	impl_->effect_volume_percent = effect_percent;
+	if(impl_->midi) {
+		if(auto applied = impl_->midi->set_user_volume(music_percent); !applied) {
+			return std::unexpected(midi_engine_error(command, applied.error()));
+		}
+	}
 	return {};
 }
 
@@ -667,6 +920,11 @@ ClassicAudioSession::advance_tick()
 		}
 		remaining -= native_count;
 	}
+	if(impl_->bgm_mode == ClassicBgmMode::midi && impl_->midi) {
+		if(auto mixed = impl_->midi->render_mix(impl_->output); !mixed) {
+			return std::unexpected(midi_engine_error({}, mixed.error()));
+		}
+	}
 
 	impl_->native_fraction = next_fraction;
 	const auto result = ClassicAudioTick{
@@ -682,10 +940,19 @@ ClassicAudioSession::advance_tick()
 
 ClassicAudioStatus ClassicAudioSession::status() const noexcept
 {
+	if(impl_->bgm_mode == ClassicBgmMode::midi && impl_->midi) {
+		const auto status = impl_->midi->status();
+		return {
+			.bgm_active = true,
+			.song_playing = status.playing,
+			.measure = status.measure,
+			.volume = status.fade_volume,
+		};
+	}
 	const auto status = impl_->engine.status();
 	return {
 		// snd_bgm_active() reports snd_active, not Play/Stop state.
-		.bgm_active = impl_->bgm_active,
+		.bgm_active = impl_->bgm_mode != ClassicBgmMode::off,
 		.song_playing = status.playing,
 		.measure = status.measure,
 		.volume = status.fade_volume,

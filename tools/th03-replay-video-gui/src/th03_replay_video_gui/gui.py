@@ -80,6 +80,9 @@ class ReplayRendererApp:
         self.installed_settings = tk.BooleanVar(value=preferences.get("installed", True))
         self.language = tk.StringVar(value=preferences.get("language", "Installed"))
         self.flash = tk.StringVar(value=preferences.get("flash", "Installed"))
+        self.music_driver = tk.StringVar(
+            value=preferences.get("music_driver", "Installed")
+        )
         self.master = tk.StringVar(value=preferences.get("master", "Installed"))
         self.music = tk.StringVar(value=preferences.get("music", "Installed"))
         self.sfx = tk.StringVar(value=preferences.get("sfx", "Installed"))
@@ -113,7 +116,7 @@ class ReplayRendererApp:
         ttk.Label(outer, text="Replay Renderer", style="Title.TLabel").pack(anchor="w")
         ttk.Label(
             outer,
-            text="Render a complete New Classic replay with exact native video and PMD audio.",
+            text="Render a complete New Classic replay with exact native video and audio.",
         ).pack(anchor="w", pady=(1, 16))
 
         source = ttk.Frame(outer)
@@ -147,6 +150,8 @@ class ReplayRendererApp:
                     ("Installed", "Japanese", "English"), False)
         self._combo(options, 3, 2, "Flash FX", self.flash,
                     ("Installed", "Reduced", "Full"), False)
+        self._combo(options, 3, 4, "Music Driver", self.music_driver,
+                    ("Installed", "FM (86)", "MIDI (SC-88)"), False)
         volume_values = ("Installed", *(f"{value}%" for value in range(0, 101, 5)))
         self._combo(options, 4, 0, "Master", self.master, volume_values, False)
         self._combo(options, 4, 2, "Music", self.music, volume_values, False)
@@ -261,7 +266,8 @@ class ReplayRendererApp:
         for variable in (
             self.replay, self.output, self.data, self.ffmpeg, self.resolution,
             self.encoder, self.preset, self.language, self.flash, self.master,
-            self.music, self.sfx, self.game_text_pack, self.cutscene_text_pack,
+            self.music_driver, self.music, self.sfx, self.game_text_pack,
+            self.cutscene_text_pack,
             self.picture_patch_pack,
         ):
             variable.trace_add("write", lambda *_args: self._update_command_preview())
@@ -342,6 +348,9 @@ class ReplayRendererApp:
         flash = {"Installed": None, "Reduced": True, "Full": False}[
             self.flash.get()
         ]
+        music_driver = {
+            "Installed": None, "FM (86)": "fm", "MIDI (SC-88)": "midi",
+        }[self.music_driver.get()]
         pack = Path(self.game_text_pack.get()) if self.game_text_pack.get() else None
         cutscene_pack = (
             Path(self.cutscene_text_pack.get()) if self.cutscene_text_pack.get() else None
@@ -361,6 +370,7 @@ class ReplayRendererApp:
             use_installed_settings=self.installed_settings.get(),
             language=language,
             reduced_flash=flash,
+            music_driver=music_driver,
             master_volume=_volume_from_text(self.master.get()),
             music_volume=_volume_from_text(self.music.get()),
             sfx_volume=_volume_from_text(self.sfx.get()),
@@ -551,6 +561,7 @@ class ReplayRendererApp:
             "resolution": self.resolution.get(), "encoder": self.encoder.get(),
             "preset": self.preset.get(), "installed": self.installed_settings.get(),
             "language": self.language.get(), "flash": self.flash.get(),
+            "music_driver": self.music_driver.get(),
             "master": self.master.get(), "music": self.music.get(), "sfx": self.sfx.get(),
         }
         try:
