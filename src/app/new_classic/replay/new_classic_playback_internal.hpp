@@ -51,7 +51,8 @@ struct NewClassicReplayPlaybackTestAccess final {
 	[[nodiscard]] static CoreInput mainl_end_input(
 		CoreInput replay_input,
 		CoreInput live_interface_input,
-		bool registration
+		bool registration,
+		bool release
 	) noexcept;
 	[[nodiscard]] static bool mainl_error_progression_active(
 		const NewClassicReplayPlayback &playback

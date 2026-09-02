@@ -179,13 +179,22 @@ std::expected<SessionTransition, MainProcessError> process_transition(
 [[nodiscard]] constexpr CoreInput mainl_end_input(
 	CoreInput replay_input,
 	CoreInput live_interface_input,
-	bool registration
+	bool registration,
+	bool release
 ) noexcept
 {
 	// regist_menu() polls the unwrapped hardware interface. Every other MAINL
-	// owner remains behind mainl_replay_input_mode_interface(), which keeps
-	// publishing the last decoded replay sample once MAINL_END is pending.
-	return registration ? live_interface_input : replay_input;
+	// owner remains behind mainl_replay_input_mode_interface(). Once MAINL_END
+	// is pending, alternate a release edge with the final replay input so a
+	// blocking release-then-press loop cannot strand playback due to a one-VSync
+	// presentation timing difference.
+	if(registration) {
+		return live_interface_input;
+	}
+	if(release) {
+		replay_input.system = 0U;
+	}
+	return replay_input;
 }
 
 [[nodiscard]] std::optional<MainlStageResourceRequest> stage_request(
@@ -235,6 +244,7 @@ struct NewClassicReplayPlayback::Impl final {
 	std::size_t record_index = 0U;
 	std::uint32_t sample_index = 0U;
 	CoreInput mainl_replay_input{};
+	bool mainl_end_release = true;
 	bool in_mainl = false;
 	bool terminal_mainl_bypass = false;
 	bool terminal_mainl_bypass_taken = false;
@@ -563,6 +573,7 @@ struct NewClassicReplayPlayback::Impl final {
 		}
 		sample_index = checkpoint.sample_index;
 		mainl_replay_input = {};
+		mainl_end_release = true;
 		in_mainl = false;
 		terminal_mainl_bypass = false;
 		mainl_error_progression = false;
@@ -1443,8 +1454,12 @@ NewClassicReplayPlayback::advance(
 			ClassicStorySessionScene::stage_splash &&
 			impl_->next_process_checkpoint().has_value();
 		const auto source = mainl_end_input(
-			impl_->mainl_replay_input, live_interface_input, registration
+			impl_->mainl_replay_input, live_interface_input, registration,
+			impl_->mainl_end_release
 		);
+		if(!registration) {
+			impl_->mainl_end_release = !impl_->mainl_end_release;
+		}
 		auto input = playback_story_input(source.system, audio);
 		input.main.aggregate = source;
 		auto advanced = impl_->story->consume(input);
@@ -1473,8 +1488,10 @@ NewClassicReplayPlayback::advance(
 	if(impl_->in_mainl && impl_->vs_win &&
 		impl_->vs_win->phase() != ClassicMainlWinPhase::ready) {
 		const auto source = mainl_end_input(
-			impl_->mainl_replay_input, live_interface_input, false
+			impl_->mainl_replay_input, live_interface_input, false,
+			impl_->mainl_end_release
 		);
+		impl_->mainl_end_release = !impl_->mainl_end_release;
 		// Native netplay V14s end at MAINL_END without storing host-side winner
 		// screen samples. Preserve every visual/audio wait, then provide the one
 		// dismissal edge that lets the terminal owner reach its recorded process
@@ -1521,6 +1538,7 @@ NewClassicReplayPlayback::advance(
 		// MAINL initializes its replay RLE input globals to INPUT_NONE rather
 		// than carrying the final MAIN sample across the executable boundary.
 		impl_->mainl_replay_input = {};
+		impl_->mainl_end_release = true;
 		impl_->in_mainl = true;
 		++impl_->record_index;
 		if(impl_->record_index >= impl_->document.session.records.size()) {
@@ -1853,11 +1871,12 @@ bool NewClassicReplayPlaybackTestAccess::terminal_mainl_bypass_taken(
 CoreInput NewClassicReplayPlaybackTestAccess::mainl_end_input(
 	CoreInput replay_input,
 	CoreInput live_interface_input,
-	bool registration
+	bool registration,
+	bool release
 ) noexcept
 {
 	return ::th03::app::mainl_end_input(
-		replay_input, live_interface_input, registration
+		replay_input, live_interface_input, registration, release
 	);
 }
 

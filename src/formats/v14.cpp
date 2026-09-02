@@ -45,7 +45,6 @@ constexpr std::size_t player_one_nametag_length_offset = 0x2A2U;
 constexpr std::size_t player_two_nametag_length_offset = 0x2A3U;
 constexpr std::size_t player_one_nametag_offset = 0x2A4U;
 constexpr std::size_t player_two_nametag_offset = 0x2DDU;
-constexpr std::size_t reserved_extension_offset = 0x316U;
 constexpr std::size_t accelerator_footer_size = 80U;
 constexpr std::size_t accelerator_descriptor_size = 16U;
 constexpr std::size_t accelerator_raw_size = 29'286U;
@@ -711,15 +710,6 @@ std::expected<ReplayMetadata, Error> parse_metadata(
 				ErrorCode::invalid_value,
 				"V14 fallback nametag does not fit the title geometry",
 				nametag_offsets[player]
-			));
-		}
-	}
-	for(std::size_t offset = reserved_extension_offset;
-		offset < replay_v14_header_size; ++offset) {
-		if(detail::u8(bytes, offset) != 0U) {
-			return std::unexpected(error(
-				ErrorCode::invalid_value,
-				"V14 reserved extension byte is nonzero", offset
 			));
 		}
 	}

@@ -295,7 +295,7 @@ void test_mainl_end_input_ownership()
 	const th03::CoreInput replay_input{
 		.p1 = 0x0001U,
 		.p2 = 0x0002U,
-		.system = 0U,
+		.system = 0x0020U,
 		.charge_mask = 0x01U,
 	};
 	const th03::CoreInput held_live_input{
@@ -307,15 +307,25 @@ void test_mainl_end_input_ownership()
 	expect(
 		same_input(
 			th03::app::NewClassicReplayPlaybackTestAccess::mainl_end_input(
-				replay_input, held_live_input, false
+				replay_input, held_live_input, false, false
 			), replay_input
 		),
-		"MAINL_END repeats the last replay sample and discards held live dismissal input"
+		"MAINL_END can reassert the last replay sample and discards held live input"
+	);
+	auto released_replay_input = replay_input;
+	released_replay_input.system = 0U;
+	expect(
+		same_input(
+			th03::app::NewClassicReplayPlaybackTestAccess::mainl_end_input(
+				replay_input, held_live_input, false, true
+			), released_replay_input
+		),
+		"MAINL_END can release the final replay key before reasserting it"
 	);
 	expect(
 		same_input(
 			th03::app::NewClassicReplayPlaybackTestAccess::mainl_end_input(
-				replay_input, held_live_input, true
+				replay_input, held_live_input, true, true
 			), held_live_input
 		),
 		"registration remains on the donor's live input interface after MAINL_END"

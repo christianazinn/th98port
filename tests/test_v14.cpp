@@ -771,8 +771,15 @@ void test_header_and_metadata_corruption()
 	put_u8(bytes, 0x2A5U, static_cast<std::uint8_t>('B'));
 	expect_rejected(std::move(bytes), "V14 rejects nonzero fallback-name padding");
 	bytes = make_v14(Scenario::story);
-	put_u8(bytes, 0x316U, 1U);
-	expect_rejected(std::move(bytes), "V14 rejects a nonzero reserved extension byte");
+	for(std::size_t offset = 0x316U; offset < 896U; ++offset) {
+		put_u8(bytes, offset, static_cast<std::uint8_t>(
+			((offset * 73U) + 19U) & 0xFFU
+		));
+	}
+	check(
+		th03::formats::parse_v14_replay(bytes).has_value(),
+		"V14 accepts opaque extension bytes without interpreting them"
+	);
 	bytes = make_v14(Scenario::story);
 	put_u16(bytes, 0x0EU, 0x000BU);
 	expect_rejected(std::move(bytes), "V14 rejects unknown replay flag bits");
