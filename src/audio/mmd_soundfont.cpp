@@ -19,6 +19,7 @@ constexpr std::size_t mmd_header_bytes = 0x50U;
 constexpr std::size_t mmd_track_count = 18U;
 constexpr std::size_t midi_channel_count = 16U;
 constexpr std::size_t midi_note_count = 128U;
+constexpr std::size_t mmd_loop_depth = 8U;
 constexpr std::uint64_t tempo_scale = 64U;
 constexpr std::size_t maximum_events_per_tick = 4'096U;
 // GeneralUser GS SoftSynth reaches full-scale on dense TH03 arrangements at
@@ -46,9 +47,14 @@ struct PreparedSong final {
 };
 
 struct PlayingTrack final {
+	struct LoopFrame final {
+		std::size_t start = 0U;
+		std::uint8_t completed = 0U;
+	};
+
 	std::size_t event = 0U;
-	std::optional<std::size_t> loop_start{};
-	std::uint8_t loop_remaining = 0U;
+	std::array<LoopFrame, mmd_loop_depth> loops{};
+	std::size_t loop_count = 0U;
 	std::uint16_t delay = 0U;
 	std::array<std::uint16_t, midi_note_count> note_lengths{};
 	bool ended = false;
@@ -363,21 +369,30 @@ struct MmdSoundfontEngine::Impl final {
 				state.delay = event.delay;
 				break;
 			case 0xF9U:
-				state.loop_start = state.event;
-				state.loop_remaining = 0U;
-				break;
-			case 0xF8U:
-				if(!state.loop_start) {
+				if(state.loop_count >= state.loops.size()) {
 					return false;
 				}
-				if(event.parameter_one == 0U) {
-					state.event = *state.loop_start;
-				} else if(state.loop_remaining < event.parameter_one) {
-					++state.loop_remaining;
-					state.event = *state.loop_start;
-				} else {
-					state.loop_start.reset();
-					state.loop_remaining = 0U;
+				state.loops[state.loop_count++] = {
+					.start = state.event,
+					.completed = 1U,
+				};
+				break;
+			case 0xF8U:
+				if(state.loop_count == 0U) {
+					return false;
+				}
+				{
+					auto &loop = state.loops[state.loop_count - 1U];
+					// MMD stores the total iteration count in F8's delay byte.
+					// Zero denotes the source song's infinite outer loop.
+					if(event.delay == 0U) {
+						state.event = loop.start;
+					} else if(loop.completed < event.delay) {
+						++loop.completed;
+						state.event = loop.start;
+					} else {
+						--state.loop_count;
+					}
 				}
 				break;
 			case 0xFEU:
