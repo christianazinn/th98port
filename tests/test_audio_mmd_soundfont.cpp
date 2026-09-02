@@ -111,7 +111,7 @@ int main(int argc, char **argv)
 				continue;
 			}
 			const auto song = read_file(path);
-			if(song.empty() || !render_song(*created, song, false)) {
+			if(song.empty() || !render_song(*created, song, true)) {
 				std::cerr << "mmd-song=" << path.string() << '\n';
 				return 6;
 			}
