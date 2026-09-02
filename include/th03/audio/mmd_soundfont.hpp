@@ -13,6 +13,9 @@ namespace th03::audio {
 
 inline constexpr std::uint32_t mmd_ticks_per_quarter_note = 48U;
 inline constexpr std::uint32_t mmd_ticks_per_measure = 192U;
+// Matches the General MIDI reset default. Arrangements that need wider bends
+// select their own range through RPN 0 and Data Entry.
+inline constexpr float mmd_default_pitch_bend_range_semitones = 2.0F;
 
 struct MmdSoundfontConfig final {
 	std::span<const std::byte> soundfont{};

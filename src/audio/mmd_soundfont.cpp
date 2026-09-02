@@ -279,7 +279,8 @@ struct MmdSoundfontEngine::Impl final {
 				channel == 9U ? 1 : 0
 			));
 			static_cast<void>(tsf_channel_set_pitchrange(
-				synth.get(), static_cast<int>(channel), 12.0F
+				synth.get(), static_cast<int>(channel),
+				mmd_default_pitch_bend_range_semitones
 			));
 		}
 		apply_gain();

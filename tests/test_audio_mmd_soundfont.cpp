@@ -15,6 +15,8 @@ namespace {
 
 namespace fs = std::filesystem;
 
+static_assert(th03::audio::mmd_default_pitch_bend_range_semitones == 2.0F);
+
 [[nodiscard]] std::vector<std::byte> read_file(const fs::path &path)
 {
 	std::ifstream input(path, std::ios::binary | std::ios::ate);
