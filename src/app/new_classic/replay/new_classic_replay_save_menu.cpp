@@ -420,7 +420,8 @@ void NewClassicReplaySaveMenu::draw_patch(
 				static_cast<void>(put(40, top, ">", 12U));
 			}
 			static_cast<void>(replay_presentation::put_fixed(
-				font, raster, 64, top, replay_presentation::slot_number(slot), 12, color
+				font, raster, 64, top,
+				replay_presentation::slot_list_number(slot), 12, color
 			));
 			if(entry.state != ReplayCatalogSlotState::ready) {
 				static_cast<void>(put(104, top, messages.text(

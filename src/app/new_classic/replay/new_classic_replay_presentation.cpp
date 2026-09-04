@@ -144,6 +144,15 @@ std::string source_fixed_name(const std::array<char, 8U> &name)
 	return std::to_string(slot);
 }
 
+[[nodiscard]] std::string slot_list_number(std::size_t slot)
+{
+	auto result = slot_number(slot);
+	if(slot < 10U) {
+		result.insert(result.begin(), ' ');
+	}
+	return result;
+}
+
 [[nodiscard]] std::string decimal_score(
 	const std::array<std::uint8_t, 4U> &packed
 )

@@ -20,6 +20,7 @@ inline constexpr std::int32_t browser_footer_top = 356;
 	const std::array<char, 8U> &name
 );
 [[nodiscard]] std::string slot_number(std::size_t slot);
+[[nodiscard]] std::string slot_list_number(std::size_t slot);
 [[nodiscard]] std::string decimal_score(
 	const std::array<std::uint8_t, 4U> &packed
 );
