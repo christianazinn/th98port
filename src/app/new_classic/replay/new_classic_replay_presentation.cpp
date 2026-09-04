@@ -141,10 +141,7 @@ std::string source_fixed_name(const std::array<char, 8U> &name)
 
 [[nodiscard]] std::string slot_number(std::size_t slot)
 {
-	char buffer[3U]{};
-	static_cast<void>(std::snprintf(buffer, sizeof(buffer), "%02u",
-		static_cast<unsigned>(slot)));
-	return buffer;
+	return std::to_string(slot);
 }
 
 [[nodiscard]] std::string decimal_score(
