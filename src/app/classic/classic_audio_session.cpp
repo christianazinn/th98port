@@ -945,7 +945,13 @@ ClassicAudioStatus ClassicAudioSession::status() const noexcept
 		return {
 			.bgm_active = true,
 			.song_playing = status.playing,
-			.measure = status.measure,
+			.measure = static_cast<std::uint16_t>(std::min<std::uint64_t>(
+				status.elapsed_ticks /
+					classic_midi_presentation_ticks_per_measure(
+						impl_->loaded ? impl_->loaded->cue : ClassicMusicCue::none
+					),
+				std::numeric_limits<std::uint16_t>::max()
+			)),
 			.volume = status.fade_volume,
 		};
 	}

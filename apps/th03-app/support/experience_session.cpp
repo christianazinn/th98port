@@ -23,6 +23,7 @@
 #include "audio_output.hpp"
 #include "diagnostics.hpp"
 #include "product_online.hpp"
+#include "replay_extension_provider.hpp"
 #include "replay_save.hpp"
 #include "rhythm_assets.hpp"
 #include "runtime_environment.hpp"
@@ -114,6 +115,8 @@ ExperienceRunResult run_classic_session(
 			th03::app::ExperienceProfile::new_classic :
 			th03::app::ExperienceProfile::classic;
 	parsed.launch.content.replay_root = parsed.replay_root;
+	parsed.launch.new_classic_replay_extension_provider =
+		product_replay_extension_provider();
 #if defined(_WIN32) || defined(TH03_ENABLE_CURL_ONLINE)
 	{
 		const auto credential_root = new_classic_settings_path.empty() ?

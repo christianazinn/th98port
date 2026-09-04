@@ -683,7 +683,8 @@ ClassicRunner::load(ClassicRunnerRequest request)
 	auto replay_recorder = request.experience == ExperienceProfile::new_classic
 		? std::make_unique<NewClassicReplayRecorder>(
 			std::uint16_t{0U}, stock_gameplay_rules(request.gameplay_ruleset),
-			request.new_classic_replay_identity
+			request.new_classic_replay_identity,
+			request.new_classic_replay_extension_provider
 		) : nullptr;
 	auto session = ClassicOpSession::create(
 		std::move(resident),

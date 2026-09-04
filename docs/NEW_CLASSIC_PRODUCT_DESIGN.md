@@ -4,7 +4,7 @@ Status: **accepted working direction, subject to revision**
 
 Decision date: 2026-08-14
 
-Replay Patch compatibility baseline: **0.4.17** (`5c968657`)
+Replay Patch compatibility baseline: **0.4.18** (`44f1184c`)
 
 This document defines the current product direction after the faithful native
 Replay Patch port. It replaces the earlier assumption that a host-rendered
@@ -57,7 +57,7 @@ compatibility route. It is not part of the normal player-facing hierarchy.
 
 ## Fidelity boundary
 
-Replay Patch 0.4.17 is the final feature baseline for the PC-98 product unless
+Replay Patch 0.4.18 is the final feature baseline for the PC-98 product unless
 a serious correctness, replay-compatibility, or data-loss defect requires a
 maintenance release. New product features belong in native New Classic rather
 than being artificially backported to PC-98.
@@ -387,7 +387,7 @@ begins accumulating more settings.
 
 Status: substantially complete; this document closes the product-design part.
 
-- Keep Replay Patch 0.4.17 and its release-inert capture descendant pinned.
+- Keep Replay Patch 0.4.18 and its release-inert capture descendant pinned.
 - Preserve current gameplay/replay/audio tests and source-aligned pixel evidence.
 - Mark future native menu differences in the pixel coverage manifest rather
   than weakening the oracle globally.

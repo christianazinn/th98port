@@ -182,6 +182,44 @@ set(
 	TH03_MMD_TEST_CORPUS_DIR "" CACHE PATH
 	"Optional generated TH03 MMD corpus used by the native audio test"
 )
+if(NOT TH03_MMD_TEST_CORPUS_DIR STREQUAL "")
+	file(READ
+		"${CMAKE_CURRENT_SOURCE_DIR}/tools/midi-runtime-manifest.json"
+		_th03_mmd_manifest
+	)
+	string(JSON _th03_mmd_manifest_schema GET "${_th03_mmd_manifest}" schema)
+	string(JSON _th03_mmd_manifest_count LENGTH "${_th03_mmd_manifest}" songs)
+	if(NOT _th03_mmd_manifest_schema EQUAL 1 OR
+		NOT _th03_mmd_manifest_count EQUAL 22)
+		message(FATAL_ERROR "TH03 MIDI runtime manifest has an unsupported layout")
+	endif()
+	math(EXPR _th03_mmd_manifest_last "${_th03_mmd_manifest_count} - 1")
+	foreach(_th03_mmd_manifest_index RANGE 0 ${_th03_mmd_manifest_last})
+		string(JSON _th03_mmd_filename MEMBER
+			"${_th03_mmd_manifest}" songs ${_th03_mmd_manifest_index}
+		)
+		string(JSON _th03_mmd_expected_size GET
+			"${_th03_mmd_manifest}" songs "${_th03_mmd_filename}" 0
+		)
+		string(JSON _th03_mmd_expected_sha256 GET
+			"${_th03_mmd_manifest}" songs "${_th03_mmd_filename}" 1
+		)
+		set(_th03_mmd_path
+			"${TH03_MMD_TEST_CORPUS_DIR}/${_th03_mmd_filename}"
+		)
+		if(NOT EXISTS "${_th03_mmd_path}" OR IS_DIRECTORY "${_th03_mmd_path}")
+			message(FATAL_ERROR "Missing TH03 MIDI song: ${_th03_mmd_filename}")
+		endif()
+		file(SIZE "${_th03_mmd_path}" _th03_mmd_observed_size)
+		file(SHA256 "${_th03_mmd_path}" _th03_mmd_observed_sha256)
+		if(NOT _th03_mmd_observed_size EQUAL _th03_mmd_expected_size OR
+			NOT _th03_mmd_observed_sha256 STREQUAL _th03_mmd_expected_sha256)
+			message(FATAL_ERROR
+				"TH03 MIDI song identity mismatch: ${_th03_mmd_filename}"
+			)
+		endif()
+	endforeach()
+endif()
 set(_th03_midi_soundfont_available OFF)
 if(EXISTS "${TH03_MIDI_SOUNDFONT_FILE}" AND
 	NOT IS_DIRECTORY "${TH03_MIDI_SOUNDFONT_FILE}")
@@ -1336,6 +1374,22 @@ target_link_libraries(th03replay-hydrate PRIVATE th03_replay_tools)
 th03_set_warnings(th03replay-hydrate)
 
 if(TH03_ENABLE_SDL)
+	set(
+		TH03_REPLAY_EXTENSION_PROVIDER_SOURCE
+		"${CMAKE_CURRENT_SOURCE_DIR}/apps/th03-app/support/replay_extension_provider_default.cpp"
+		CACHE FILEPATH
+		"Application-owned implementation for the opaque V14 replay extension"
+	)
+	get_filename_component(
+		_th03_replay_extension_provider_source
+		"${TH03_REPLAY_EXTENSION_PROVIDER_SOURCE}" ABSOLUTE
+	)
+	if(NOT EXISTS "${_th03_replay_extension_provider_source}")
+		message(FATAL_ERROR
+			"TH03 replay extension provider does not exist: "
+			"${_th03_replay_extension_provider_source}"
+		)
+	endif()
 	add_executable(th03-app
 		apps/th03-app/default_bindings.cpp
 		apps/th03-app/main.cpp
@@ -1353,6 +1407,7 @@ if(TH03_ENABLE_SDL)
 		apps/th03-app/support/rhythm_assets.cpp
 		apps/th03-app/support/runtime_environment.cpp
 		apps/th03-app/support/update_host.cpp
+		"${_th03_replay_extension_provider_source}"
 	)
 	target_link_libraries(
 		th03-app PRIVATE th03_app_main th03_platform_sdl th03_platform_udp
@@ -1407,6 +1462,29 @@ if(TH03_ENABLE_SDL)
 	th03_stage_midi_runtime(th03-app)
 	if(TH03_ENABLE_RTC)
 		th03_stage_rtc_licenses(th03-app)
+	endif()
+	option(
+		TH03_BUILD_REPLAY_EXTENSION_PROVIDER_PROBE
+		"Build the application-owned opaque replay-extension lifecycle probe"
+		OFF
+	)
+	if(TH03_BUILD_REPLAY_EXTENSION_PROVIDER_PROBE)
+		add_executable(
+			th03-replay-extension-provider-probe
+			apps/th03-app/support/replay_extension_provider_probe.cpp
+			"${_th03_replay_extension_provider_source}"
+		)
+		target_include_directories(
+			th03-replay-extension-provider-probe PRIVATE
+			apps/th03-app include
+		)
+		target_compile_features(
+			th03-replay-extension-provider-probe PRIVATE cxx_std_23
+		)
+		set_target_properties(
+			th03-replay-extension-provider-probe PROPERTIES CXX_EXTENSIONS OFF
+		)
+		th03_set_warnings(th03-replay-extension-provider-probe)
 	endif()
 endif()
 

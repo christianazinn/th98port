@@ -43,7 +43,8 @@ The public V14 header is 896 bytes. Its 274-byte identity extension stores:
 - a 16-byte match ID;
 - a length byte and fixed zero-padded 57-byte fallback nametag slot for each
   player; and
-- 106 zero-reserved bytes.
+- a 106-byte opaque extension. Public readers assign it no meaning, ordinary
+  writers initialize it to zero, and parse/write transformations preserve it.
 
 The serialized nametags are portable match-time/offline fallbacks. A connected
 viewer should resolve each nonzero UUID and display that account's latest

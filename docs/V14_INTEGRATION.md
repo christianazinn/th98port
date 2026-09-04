@@ -1,7 +1,7 @@
 # V14 native integration contract
 
-Status: parser implementation authority and migration gate for the released
-Replay Patch 0.4.15 V14 contract.
+Status: parser implementation authority and migration gate for the V14
+contract retained by Replay Patch 0.4.18.
 
 ## Authority
 
@@ -16,6 +16,11 @@ V14 has two complementary authorities:
    `5cc773e85c7db97c1c09888fa5531faa392de136`, primarily
    `th03/replay_format.hpp`. That header's SHA-256 is
    `0EE16E826E9C7303202CA52CF1CCD68B2C2E7EEE858661E7D09739F8B5BE664A`.
+
+Replay Patch 0.4.18 at ReC98 commit
+`44f1184c3c7dc7b8080316640c8cbc1cd5336201` is the current product donor. It
+retains this layout while explicitly accepting arbitrary bytes in the final
+106-byte extension.
 
 The complete validation call sites are
 `th03/main/replay.cpp::replay_user_header_valid()` and its checkpoint reader,
@@ -44,9 +49,12 @@ reader may ignore them and execute the portable checkpoint/input path.
 - Packed 128-byte base header followed by a 494-byte summary extension and a
   274-byte identity extension. The latter stores a compact ruleset/recording
   descriptor, local role/source, two 16-byte profile UUIDs, a 16-byte match
-  ID, two length-prefixed 57-byte fallback nametag slots, and 106 reserved
-  bytes that must remain zero. UUID profile names remain authoritative; the
-  serialized names are match-time/offline fallbacks.
+  ID, two length-prefixed 57-byte fallback nametag slots, and a 106-byte
+  opaque extension. UUID profile names remain authoritative; the serialized
+  names are match-time/offline fallbacks. Public readers assign no meaning to
+  the opaque extension and parse/write transformations preserve it exactly.
+  Publicly generated documents initialize it to zero unless an application
+  release supplies its own product-owned writer.
 - The extension contains 27 14-byte round splits, nine 10-byte stage-clear
   bonus records, run-wide timed/slow frame counters, and the reached-checkpoint
   directory.

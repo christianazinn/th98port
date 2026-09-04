@@ -42,6 +42,7 @@ constexpr std::size_t player_one_nametag_length_offset = 0x2A2U;
 constexpr std::size_t player_two_nametag_length_offset = 0x2A3U;
 constexpr std::size_t player_one_nametag_offset = 0x2A4U;
 constexpr std::size_t player_two_nametag_offset = 0x2DDU;
+constexpr std::size_t opaque_extension_offset = 0x316U;
 constexpr std::uint8_t summary_flags_current = 0x7FU;
 
 Error writer_error(std::string message)
@@ -230,6 +231,12 @@ void write_metadata(
 			detail::put_u8(bytes, nametag_offsets[player] + index,
 				static_cast<std::uint8_t>(nametag[index]));
 		}
+	}
+	for(std::size_t index = 0U; index < metadata.opaque_extension.size(); ++index) {
+		detail::put_u8(
+			bytes, opaque_extension_offset + index,
+			metadata.opaque_extension[index]
+		);
 	}
 }
 

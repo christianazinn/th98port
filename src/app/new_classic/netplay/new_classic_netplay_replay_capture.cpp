@@ -37,10 +37,13 @@ std::expected<
 > NewClassicNetplayReplayCapture::create(
 	const RoundStartObservation &initial_round,
 	std::uint16_t dos_date,
-	NewClassicReplayIdentity identity
+	NewClassicReplayIdentity identity,
+	NewClassicReplayExtensionProvider extension_provider
 )
 {
-	NewClassicReplayRecorder recorder(dos_date, true, identity);
+	NewClassicReplayRecorder recorder(
+		dos_date, true, identity, extension_provider
+	);
 	if(auto started = recorder.round_started(initial_round); !started) {
 		return std::unexpected(replay_error(std::move(started.error())));
 	}

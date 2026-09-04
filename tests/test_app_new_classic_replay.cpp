@@ -18,6 +18,56 @@ namespace {
 int checks = 0;
 int failures = 0;
 
+struct ReplayExtensionProbe final {
+	int begins = 0;
+	int finishes = 0;
+	bool fail_begin = false;
+	bool fail_finish = false;
+};
+
+bool replay_extension_begin(
+	void *context,
+	th03::formats::ReplayOpaqueExtension &extension
+) noexcept
+{
+	auto &probe = *static_cast<ReplayExtensionProbe *>(context);
+	++probe.begins;
+	if(probe.fail_begin) {
+		return false;
+	}
+	extension.fill(0U);
+	extension.front() = 0xA5U;
+	return true;
+}
+
+bool replay_extension_finish(
+	void *context,
+	std::span<const std::byte> encoded,
+	th03::formats::ReplayOpaqueExtension &extension
+) noexcept
+{
+	auto &probe = *static_cast<ReplayExtensionProbe *>(context);
+	++probe.finishes;
+	if(probe.fail_finish || encoded.size() < 896U ||
+		encoded[0x316U] != std::byte{0xA5U}) {
+		return false;
+	}
+	extension[1U] = static_cast<std::uint8_t>(encoded.size() & 0xFFU);
+	extension.back() = 0x5AU;
+	return true;
+}
+
+th03::app::NewClassicReplayExtensionProvider replay_extension_provider(
+	ReplayExtensionProbe &probe
+) noexcept
+{
+	return {
+		.context = &probe,
+		.begin = &replay_extension_begin,
+		.finish = &replay_extension_finish,
+	};
+}
+
 void check(bool condition, const std::string &message)
 {
 	++checks;
@@ -539,6 +589,72 @@ void test_capture_disabled_owner()
 		"disabled capture remains empty across ordinary lifecycle cleanup");
 }
 
+void test_opaque_extension_provider()
+{
+	constexpr auto mode = th03::game_mode::vs_1p_cpu;
+	ReplayExtensionProbe probe{};
+	th03::app::NewClassicReplayRecorder recorder(
+		0U, true, {}, replay_extension_provider(probe)
+	);
+	check(
+		recorder.round_started(round_start(mode, 0U, 0U, 151U)).has_value() &&
+		probe.begins == 1 && probe.finishes == 0 && recorder.document() &&
+		recorder.document()->metadata &&
+		recorder.document()->metadata->opaque_extension.front() == 0xA5U,
+		"the product extension begins once at the first accepted round"
+	);
+	check(
+		recorder.sample(th03::replay::InputPhase::gameplay, {}).has_value() &&
+		recorder.round_completed(terminal(mode, 0U, 0U, 2U, 0)).has_value() &&
+		recorder.process_completed(th03::replay::ProcessId::main).has_value() &&
+		recorder.sample(th03::replay::InputPhase::interstitial, {}).has_value() &&
+		recorder.process_completed(th03::replay::ProcessId::mainl).has_value() &&
+		recorder.finish(
+			th03::formats::ReplayEndReason::game_over,
+			round_start(mode, 0U, 0U, 151U).start
+		).has_value() && probe.finishes == 1,
+		"the product extension finalizes from one canonical encoded replay"
+	);
+	auto completed = recorder.take_completed();
+	check(
+		completed && completed->metadata &&
+		completed->metadata->opaque_extension.front() == 0xA5U &&
+		completed->metadata->opaque_extension[1U] != 0U &&
+		completed->metadata->opaque_extension.back() == 0x5AU,
+		"opaque product bytes survive the recorder write/parse boundary"
+	);
+
+	ReplayExtensionProbe incomplete_probe{};
+	th03::app::NewClassicReplayRecorder incomplete(
+		0U, true, {}, {
+			.context = &incomplete_probe,
+			.begin = &replay_extension_begin,
+		}
+	);
+	auto incomplete_start = incomplete.round_started(
+		round_start(mode, 0U, 0U, 157U)
+	);
+	check(
+		!incomplete_start && incomplete_start.error().code ==
+			th03::app::NewClassicReplayErrorCode::extension_failed &&
+		!incomplete.recording(),
+		"an incomplete product extension provider fails closed before capture"
+	);
+
+	ReplayExtensionProbe rejected_probe{.fail_begin = true};
+	th03::app::NewClassicReplayRecorder rejected(
+		0U, true, {}, replay_extension_provider(rejected_probe)
+	);
+	auto rejected_start = rejected.round_started(
+		round_start(mode, 0U, 0U, 163U)
+	);
+	check(
+		!rejected_start && rejected_start.error().code ==
+			th03::app::NewClassicReplayErrorCode::extension_failed,
+		"a rejected product extension start fails closed"
+	);
+}
+
 void test_netplay_confirmed_capture()
 {
 	constexpr auto mode = th03::game_mode::vs_1p_2p;
@@ -672,6 +788,7 @@ int main()
 	test_invalid_sequences();
 	test_memory_only_lifecycle();
 	test_capture_disabled_owner();
+	test_opaque_extension_provider();
 	test_netplay_confirmed_capture();
 	std::cout << "checks=" << checks << " failures=" << failures << '\n';
 	return failures == 0 ? 0 : 1;

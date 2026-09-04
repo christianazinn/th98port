@@ -30,6 +30,7 @@
 #include "diagnostics.hpp"
 #include "netplay_lobby_internal.hpp"
 #include "netplay_wire.hpp"
+#include "replay_extension_provider.hpp"
 #include "replay_save.hpp"
 #include "runtime_environment.hpp"
 
@@ -665,7 +666,8 @@ int run_direct_netplay_on_platform(
 	);
 	auto created_replay_capture =
 		th03::app::NewClassicNetplayReplayCapture::create(
-			process_round_start, 0U, replay_identity
+			process_round_start, 0U, replay_identity,
+			product_replay_extension_provider()
 		);
 	if(!created_replay_capture) {
 		return fail_netplay("netplay-replay", "capture-create-failed");

@@ -1,9 +1,11 @@
 #ifndef TH03_APP_NEW_CLASSIC_REPLAY_HPP
 #define TH03_APP_NEW_CLASSIC_REPLAY_HPP
 
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -25,6 +27,23 @@ struct NewClassicReplayIdentity final {
 	std::array<std::string, 2U> player_nametag_snapshot{};
 };
 
+// Optional product-owned writer for V14's public opaque extension. libth03
+// never interprets these bytes: an official build may populate them without
+// publishing a private schema, while ordinary and third-party builds retain
+// the all-zero default. Both callbacks must either be present or absent.
+struct NewClassicReplayExtensionProvider final {
+	void *context = nullptr;
+	bool (*begin)(
+		void *context,
+		formats::ReplayOpaqueExtension &extension
+	) noexcept = nullptr;
+	bool (*finish)(
+		void *context,
+		std::span<const std::byte> encoded_replay,
+		formats::ReplayOpaqueExtension &extension
+	) noexcept = nullptr;
+};
+
 [[nodiscard]] std::optional<formats::ReplayAccountUuid>
 parse_new_classic_replay_account_uuid(std::string_view text) noexcept;
 
@@ -32,6 +51,7 @@ enum class NewClassicReplayErrorCode : std::uint8_t {
 	invalid_round_start,
 	invalid_sequence,
 	document_invalid,
+	extension_failed,
 };
 
 struct NewClassicReplayError final {
@@ -56,11 +76,13 @@ public:
 	explicit NewClassicReplayRecorder(
 		std::uint16_t recording_date = 0U,
 		bool capture_enabled = true,
-		NewClassicReplayIdentity identity = {}
+		NewClassicReplayIdentity identity = {},
+		NewClassicReplayExtensionProvider extension_provider = {}
 	) noexcept :
 		recording_date_(recording_date),
 		capture_enabled_(capture_enabled),
-		identity_(identity)
+		identity_(identity),
+		extension_provider_(extension_provider)
 	{}
 	[[nodiscard]] bool set_identity(NewClassicReplayIdentity identity) noexcept;
 	[[nodiscard]] std::expected<void, NewClassicReplayError> round_started(
@@ -133,6 +155,7 @@ private:
 	bool slow_sample_pending_ = false;
 	bool capture_enabled_ = true;
 	NewClassicReplayIdentity identity_{};
+	NewClassicReplayExtensionProvider extension_provider_{};
 };
 
 } // namespace th03::app

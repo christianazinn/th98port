@@ -16,6 +16,7 @@ param(
 	[string]$MidiSoundfont,
 	[string]$RhythmRom,
 	[string]$T98Sound86,
+	[string]$ReplayExtensionProviderSource,
 	[string]$Output,
 	[switch]$SkipNativeBuild,
 	[switch]$SkipSmoke
@@ -222,17 +223,27 @@ if($midiSoundfontHash -ne
 	"00725296486F652BA42BDBF2098254762CA80239353D04B55A27454FC8EDB8A8") {
 	throw "GeneralUser GS SoftSynth 1.44 identity mismatch."
 }
-$midiSongNames = @(
-	"00MM.MMD", "01MM.MMD", "02MM.MMD", "03MM.MMD", "04MM.MMD",
-	"05MM.MMD", "06MM.MMD", "07MM.MMD", "08MM.MMD", "DEC.MMD",
-	"DEMO1.MMD", "DEMO2.MMD", "DEMO3.MMD", "DEMO4.MMD", "DEMO5.MMD",
-	"ED.MMD", "GMINIT.MMD", "OP.MMD", "OVER.MMD", "SCORE.MMD",
-	"SELECT.MMD", "WIN.MMD"
-)
+$midiManifestPath = Resolve-RequiredFile (
+	Join-Path $sourceRoot "tools\midi-runtime-manifest.json"
+) "TH03 MIDI runtime manifest"
+$midiManifest = Get-Content -LiteralPath $midiManifestPath -Raw |
+	ConvertFrom-Json -AsHashtable
+if($midiManifest.schema -ne 1 -or $midiManifest.songs.Count -ne 22) {
+	throw "TH03 MIDI runtime manifest has an unsupported layout."
+}
+$midiSongNames = @($midiManifest.songs.Keys | Sort-Object)
 foreach($midiSongName in $midiSongNames) {
-	$null = Resolve-RequiredFile (Join-Path $MidiSongRoot $midiSongName) (
+	$midiSongPath = Resolve-RequiredFile (Join-Path $MidiSongRoot $midiSongName) (
 		"TH03 MIDI song $midiSongName"
 	)
+	$expectedMidiSong = $midiManifest.songs[$midiSongName]
+	$observedMidiSong = Get-Item -LiteralPath $midiSongPath
+	$observedMidiHash = (Get-FileHash -Algorithm SHA256 `
+		-LiteralPath $midiSongPath).Hash
+	if($observedMidiSong.Length -ne [int64]$expectedMidiSong[0] -or
+		$observedMidiHash -ne [string]$expectedMidiSong[1]) {
+		throw "TH03 MIDI song identity mismatch: $midiSongName"
+	}
 }
 $observedStartupLogoHash = (Get-FileHash -Algorithm SHA256 `
 	-LiteralPath $StartupLogo).Hash
@@ -267,6 +278,17 @@ if(-not $SkipNativeBuild) {
 	$nativeBuildExit = 0
 	Push-Location $sourceRoot
 	try {
+		if(-not $ReplayExtensionProviderSource) {
+			$ReplayExtensionProviderSource = Join-Path $sourceRoot `
+				"apps\th03-app\support\replay_extension_provider_default.cpp"
+		}
+		$ReplayExtensionProviderSource = Resolve-RequiredFile `
+			$ReplayExtensionProviderSource "Replay extension provider source"
+		& cmake --preset $BuildPreset `
+			-DTH03_REPLAY_EXTENSION_PROVIDER_SOURCE:FILEPATH=$ReplayExtensionProviderSource
+		if($LASTEXITCODE -ne 0) {
+			throw "Native th03-app configure failed with exit code $LASTEXITCODE."
+		}
 		& cmake --build --preset $BuildPreset --config $Configuration `
 			--target th03-app podd-bootstrap
 		$nativeBuildExit = $LASTEXITCODE

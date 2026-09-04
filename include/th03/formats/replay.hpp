@@ -68,6 +68,9 @@ enum class ReplayRecorderSource : std::uint8_t {
 
 using ReplayAccountUuid = std::array<std::uint8_t, 16U>;
 using ReplayMatchId = std::array<std::uint8_t, 16U>;
+inline constexpr std::size_t replay_v14_opaque_extension_size = 106U;
+using ReplayOpaqueExtension =
+	std::array<std::uint8_t, replay_v14_opaque_extension_size>;
 
 struct ReplayStorySummary {
 	std::array<std::uint8_t, 9> stage_opponents{};
@@ -130,6 +133,9 @@ struct ReplayMetadata {
 	// Match-time public-name snapshots for portable/offline display. UUIDs are
 	// authoritative and an online viewer should prefer the latest profile name.
 	std::array<std::string, 2U> player_nametag_snapshot{};
+	// Public readers deliberately assign no meaning to these V14 extension
+	// bytes. Parse/write transformations must nevertheless preserve them.
+	ReplayOpaqueExtension opaque_extension{};
 };
 
 struct ReplayStageClearBonus {

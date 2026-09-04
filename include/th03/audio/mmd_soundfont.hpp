@@ -41,6 +41,7 @@ struct MmdSoundfontStatus final {
 	bool song_loaded = false;
 	bool playing = false;
 	bool paused = false;
+	std::uint64_t elapsed_ticks = 0U;
 	std::uint16_t measure = 0U;
 	std::uint8_t fade_volume = 0U;
 	std::int8_t fade_speed = 0;

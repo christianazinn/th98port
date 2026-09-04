@@ -31,7 +31,8 @@ public:
 	> create(
 		const RoundStartObservation &initial_round,
 		std::uint16_t dos_date = 0U,
-		NewClassicReplayIdentity identity = {}
+		NewClassicReplayIdentity identity = {},
+		NewClassicReplayExtensionProvider extension_provider = {}
 	);
 
 	[[nodiscard]] std::expected<void, NewClassicNetplayReplayCaptureError>

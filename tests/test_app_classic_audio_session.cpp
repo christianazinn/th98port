@@ -29,6 +29,19 @@ using th03::app::MainResourceIntegrity;
 using th03::app::MainResourceKey;
 using th03::app::MainResourceRole;
 
+static_assert(th03::app::classic_midi_presentation_ticks_per_measure(
+	ClassicMusicCue::winner
+) == 48U);
+static_assert(th03::app::classic_midi_presentation_ticks_per_measure(
+	ClassicMusicCue::cutscene_one
+) == 48U);
+static_assert(th03::app::classic_midi_presentation_ticks_per_measure(
+	ClassicMusicCue::game_over
+) == 192U);
+static_assert(th03::app::classic_midi_presentation_ticks_per_measure(
+	ClassicMusicCue::staff
+) == 192U);
+
 std::size_t checks = 0U;
 std::size_t failures = 0U;
 

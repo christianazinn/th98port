@@ -293,6 +293,18 @@ NewClassicReplayRecorder::round_started(
 			dos_date != 0U ? dos_date : recording_date_,
 			identity_
 		);
+		const bool extension_callbacks_complete =
+			(extension_provider_.begin != nullptr) ==
+			(extension_provider_.finish != nullptr);
+		if(!extension_callbacks_complete ||
+			(extension_provider_.begin && !extension_provider_.begin(
+				extension_provider_.context,
+				document.metadata->opaque_extension
+			))) {
+			return std::unexpected(replay_error(
+				NewClassicReplayErrorCode::extension_failed
+			));
+		}
 		document.stage_clear_bonuses =
 			std::array<formats::ReplayStageClearBonus, 9U>{};
 		document.slowdown = formats::ReplaySlowdown{};
@@ -519,6 +531,24 @@ std::expected<void, NewClassicReplayError> NewClassicReplayRecorder::finish(
 			NewClassicReplayErrorCode::document_invalid,
 			std::move(encoded.error())
 		));
+	}
+	if(extension_provider_.finish) {
+		auto extension = metadata.opaque_extension;
+		if(!extension_provider_.finish(
+			extension_provider_.context, *encoded, extension
+		)) {
+			return std::unexpected(replay_error(
+				NewClassicReplayErrorCode::extension_failed
+			));
+		}
+		metadata.opaque_extension = extension;
+		encoded = formats::write_v14_replay(candidate);
+		if(!encoded) {
+			return std::unexpected(replay_error(
+				NewClassicReplayErrorCode::document_invalid,
+				std::move(encoded.error())
+			));
+		}
 	}
 	auto parsed = formats::parse_v14_replay(*encoded);
 	if(!parsed) {

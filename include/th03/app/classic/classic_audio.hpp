@@ -45,6 +45,15 @@ enum class ClassicMusicCue : std::uint8_t {
 	cutscene_five,
 };
 
+// TH03's WIN.M and DEMO1.M presentation waits count PMD quarter notes. All
+// other MMD cues expose ordinary four-quarter-note measures to source scenes.
+[[nodiscard]] constexpr std::uint32_t
+classic_midi_presentation_ticks_per_measure(ClassicMusicCue cue) noexcept
+{
+	return (cue == ClassicMusicCue::winner ||
+		cue == ClassicMusicCue::cutscene_one) ? 48U : 192U;
+}
+
 // Parameter domain for ClassicMusicCue::gameplay. The order follows the
 // contiguous Music Room filenames: 00MM.M through 06MM.M, DEC.M, 07MM.M,
 // and 08MM.M.

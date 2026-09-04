@@ -109,6 +109,9 @@ struct ClassicRunnerRequest final {
 	// Existing local account identity for newly recorded V14 files. An empty
 	// UUID preserves fully offline recording without creating an account.
 	NewClassicReplayIdentity new_classic_replay_identity{};
+	// Optional application-owned population of V14's opaque extension. The
+	// deterministic runner and public replay library assign it no semantics.
+	NewClassicReplayExtensionProvider new_classic_replay_extension_provider{};
 	// Replay Patch's MAIN-only warning-flash reduction (tone 150 -> 100).
 	bool reduced_flash = false;
 	std::optional<NewClassicKeyConfig> new_classic_key_config{};

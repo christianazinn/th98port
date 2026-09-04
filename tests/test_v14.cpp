@@ -776,9 +776,15 @@ void test_header_and_metadata_corruption()
 			((offset * 73U) + 19U) & 0xFFU
 		));
 	}
+	const auto opaque_parsed = th03::formats::parse_v14_replay(bytes);
+	const auto opaque_written = opaque_parsed ?
+		th03::formats::write_v14_replay(*opaque_parsed) :
+		std::expected<std::vector<std::byte>, th03::Error>{
+			std::unexpected(opaque_parsed.error())
+		};
 	check(
-		th03::formats::parse_v14_replay(bytes).has_value(),
-		"V14 accepts opaque extension bytes without interpreting them"
+		opaque_written && *opaque_written == bytes,
+		"V14 preserves opaque extension bytes without interpreting them"
 	);
 	bytes = make_v14(Scenario::story);
 	put_u16(bytes, 0x0EU, 0x000BU);

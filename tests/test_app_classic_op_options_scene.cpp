@@ -1499,6 +1499,27 @@ void test_bgm_modes_and_disabled_selection()
 			"Off-to-FM emits Stop, enables the driver, then plays"
 		);
 	}
+	auto from_off_left = make_scene(off);
+	if(from_off_left) {
+		select_bgm(*from_off_left);
+		expect(
+			from_off_left->advance({.left = true}).has_value() &&
+				from_off_left->config().bgm_mode == ClassicBgmMode::midi,
+			"Off rings backward to MIDI instead of an empty driver label"
+		);
+		const auto stop = from_off_left->take_audio_command();
+		const auto enable = from_off_left->take_audio_command();
+		const auto play = from_off_left->take_audio_command();
+		expect(
+			stop && stop->type == ClassicAudioCommandType::stop_song &&
+				enable && enable->type ==
+					ClassicAudioCommandType::set_bgm_active &&
+				enable->parameter == 2U && play &&
+				play->type == ClassicAudioCommandType::play_song &&
+				play->cue == ClassicMusicCue::menu_main,
+			"Off-to-MIDI stops, selects MMD, and restarts the title song"
+		);
+	}
 
 	ClassicConfigOptions midi{};
 	midi.bgm_mode = ClassicBgmMode::midi;

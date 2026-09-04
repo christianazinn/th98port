@@ -659,6 +659,7 @@ MmdSoundfontStatus MmdSoundfontEngine::status() const noexcept
 		.song_loaded = impl_->prepared.has_value(),
 		.playing = impl_->playing,
 		.paused = impl_->paused,
+		.elapsed_ticks = impl_->elapsed_ticks,
 		.measure = static_cast<std::uint16_t>(std::min<std::uint64_t>(
 			impl_->elapsed_ticks / mmd_ticks_per_measure,
 			std::numeric_limits<std::uint16_t>::max()
