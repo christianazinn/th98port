@@ -1,4 +1,5 @@
 #include "th02/core/random.hpp"
+#include "pc98/random.hpp"
 
 #include <array>
 #include <cstdlib>
@@ -69,5 +70,37 @@ int main()
 	boundary.cursor = 255;
 	check(randring_next16(boundary) == 0x00AB && boundary.cursor == 0,
 		"Final word high byte is postincrement cursor 0, not first ring byte");
+
+	// First normalized-demo RNG row captured with the historical PC-98
+	// oracle d5ddbfdf9dc413c3a46f6964b0be1b554f086aea on 2026-09-07.
+	// Seed 18 -> 64 sparks (two IRAND calls each) -> forward ring fill -> one
+	// item initialization byte read. This checks only this RNG payload;
+	// it does not implement or verify the surrounding startup schedule.
+	RandomState guest;
+	guest.seed = 18;
+	for(int i = 0; i < 128; ++i) { (void)pc98::irand(guest.seed); }
+	check(guest.seed == 0x6976AF92U, "Guest pre-fill seed after spark initialization");
+	randring_fill(guest);
+	check(randring_next8(guest) == 0x64 && guest.ring[255] == 0xF3 &&
+		guest.seed == 0x1EF30E92U && guest.cursor == 1, "Guest first-row RNG scalars");
+	std::uint32_t pass_a = 0x811C9DC5U;
+	std::uint32_t pass_b = 0x7EE3623AU;
+	std::uint16_t offset{};
+	const auto byte = [&](std::uint8_t value) {
+		pass_a = (pass_a ^ value) * 0x01000193U;
+		pass_b = (pass_b ^ static_cast<std::uint8_t>(value ^
+			static_cast<std::uint8_t>(offset))) * 0x01000193U;
+		++offset;
+	};
+	for(unsigned shift = 0; shift < 32U; shift += 8U) {
+		byte(static_cast<std::uint8_t>(guest.seed >> shift));
+	}
+	for(const auto value : guest.ring) byte(value);
+	byte(guest.cursor);
+	// The wire stores B then A; the TSV renders the little-endian pair as
+	// one 64-bit integer, placing A in the high 32 bits.
+	const auto observed_hash = (static_cast<std::uint64_t>(pass_a) << 32U) | pass_b;
+	check(offset == 261 && observed_hash == 0xE7775247A8E61EEEULL,
+		"Native complete ring payload matches the independently captured PC-98 row");
 	return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

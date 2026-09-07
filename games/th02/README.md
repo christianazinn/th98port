@@ -36,5 +36,13 @@ are tested against eleven deltas. The helper does not replace the caller's
 page invalidation/copy, half-pixel speed adjustment, option lag, shots, bombs,
 or hit/invincibility handling. Those remain unimplemented schedule dependencies.
 
+An additional numeric fixture matches the first RNG payload captured from the
+historical PC-98 oracle d5ddbfdf9dc413c3a46f6964b0be1b554f086aea: seed 18,
+128 IRAND calls for spark initialization, ring fill, then one item-init ring
+read produce seed 0x1EF30E92, cursor 1 and canonical group hash
+0xE7775247A8E61EEE. Both compiler builds reproduce the entire serialized ring
+payload. This is evidence for these RNG helpers, not a native implementation
+of the complete initialization sequence or a replay verification result.
+
 Build from the repository root or directly with
 `cmake -S games/th02 -B out/th02`, then build and run CTest in that directory.
