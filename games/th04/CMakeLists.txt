@@ -1,0 +1,25 @@
+cmake_minimum_required(VERSION 3.25)
+project(th04_port VERSION 0.1.0 LANGUAGES CXX)
+set(CMAKE_CXX_EXTENSIONS OFF)
+include(CTest)
+
+if(NOT TARGET pc98_numeric)
+	add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../shared"
+		"${CMAKE_CURRENT_BINARY_DIR}/pc98-shared")
+endif()
+
+add_library(th04_core INTERFACE)
+target_include_directories(th04_core INTERFACE include)
+target_link_libraries(th04_core INTERFACE pc98_numeric)
+
+if(BUILD_TESTING)
+	add_executable(th04-player-tests tests/test_player.cpp)
+	target_link_libraries(th04-player-tests PRIVATE th04_core)
+	if(MSVC)
+		target_compile_options(th04-player-tests PRIVATE /W4 /WX /permissive- /Zc:preprocessor)
+	else()
+		target_compile_options(th04-player-tests PRIVATE
+			-Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror)
+	endif()
+	add_test(NAME th04-player-tests COMMAND th04-player-tests)
+endif()

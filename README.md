@@ -6,9 +6,10 @@ This repository continues the complete history of `libth03`.
 `games/th03/` contains the existing PoDD port, deterministic gameplay core,
 replay verifier, video renderer, and application. `games/th01/` contains the
 early Highly Responsive to Prayers foundations. `games/th02/` contains the
-Story of Eastern Wonderland random-ring foundations. TH04 and TH05 native
-gameplay implementations have not started. A successful build of this repository
-does not claim that those games can run or verify replays.
+Story of Eastern Wonderland random-ring and player-movement foundations.
+`games/th04/` and `games/th05/` begin with their source-shared input-to-velocity
+helper. A successful build does not claim that TH01, TH02, TH04 or TH05 can run
+or verify replays yet.
 
 Each game owns its simulation, replay adapters, presentation, and application
 targets. Gameplay is independent of host clocks, file I/O, graphics, audio,
@@ -27,8 +28,7 @@ ctest --test-dir out/build/native -C Release --output-on-failure
 ```
 
 Windows also has `gcc` (MinGW) and `msvc-x64` presets. Use
-`-DPC98_BUILD_TH01=OFF`, `-DPC98_BUILD_TH02=OFF`, or `-DPC98_BUILD_TH03=OFF`
-to omit a game.
+`-DPC98_BUILD_TH01=OFF` through `-DPC98_BUILD_TH05=OFF` to omit a game.
 Per-game builds remain available, for example `cmake -S games/th03 -B out/podd`.
 
 The maintained PoDD SDL presets, standalone packager, and renderer GUI builder

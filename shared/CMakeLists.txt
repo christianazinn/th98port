@@ -1,3 +1,16 @@
 add_library(pc98_numeric INTERFACE)
 target_include_directories(pc98_numeric INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_compile_features(pc98_numeric INTERFACE cxx_std_23)
+
+if(BUILD_TESTING)
+	add_executable(pc98-th0405-player-tests tests/test_th0405_player_movement.cpp)
+	target_link_libraries(pc98-th0405-player-tests PRIVATE pc98_numeric)
+	set_target_properties(pc98-th0405-player-tests PROPERTIES CXX_EXTENSIONS OFF)
+	if(MSVC)
+		target_compile_options(pc98-th0405-player-tests PRIVATE /W4 /WX /permissive- /Zc:preprocessor)
+	else()
+		target_compile_options(pc98-th0405-player-tests PRIVATE
+			-Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror)
+	endif()
+	add_test(NAME pc98-th0405-player-tests COMMAND pc98-th0405-player-tests)
+endif()
