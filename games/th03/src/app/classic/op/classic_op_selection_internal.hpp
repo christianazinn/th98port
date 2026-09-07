@@ -29,6 +29,10 @@ class NewClassicCharacterSelectAssets;
 
 inline constexpr std::size_t classic_op_selection_localized_stat_width = 56U;
 inline constexpr std::size_t classic_op_selection_localized_stat_height = 16U;
+// The number of players tracked by selection state and every per-player
+// entry-point precondition in this unit. The portrait palette pair below is a
+// separate two-element dimension and deliberately keeps its own extent.
+inline constexpr std::size_t classic_op_player_count = 2U;
 using ClassicOpSelectionPreparedStatLabel = std::array<
 	present::Index4,
 	classic_op_selection_localized_stat_width *
@@ -50,7 +54,7 @@ struct ClassicOpSelectionInput final {
 };
 
 struct ClassicOpSelectionCarry final {
-	std::array<bool, 2U> input_locked{};
+	std::array<bool, classic_op_player_count> input_locked{};
 	std::uint8_t curve_cycle = 0U;
 
 	friend constexpr bool operator==(
@@ -216,8 +220,10 @@ public:
 	[[nodiscard]] const ClassicOpSelectionCarry &carry() const noexcept;
 	[[nodiscard]] const present::Raster &raster() const noexcept;
 	[[nodiscard]] const present::Tram &tram() const noexcept;
-	[[nodiscard]] std::array<std::uint8_t, 2U> local_selection() const noexcept;
-	[[nodiscard]] std::array<bool, 2U> confirmed() const noexcept;
+	[[nodiscard]] std::array<std::uint8_t, classic_op_player_count>
+	local_selection() const noexcept;
+	[[nodiscard]] std::array<bool, classic_op_player_count>
+	confirmed() const noexcept;
 
 private:
 	friend struct ClassicOpSelectionTestAccess;
@@ -336,11 +342,11 @@ private:
 	ClassicOpSelectionCarry carry_{};
 	present::Raster raster_{};
 	present::Tram tram_{};
-	std::array<std::uint8_t, 2U> selection_{};
-	std::array<MainPaletteVariant, 2U> palette_{
+	std::array<std::uint8_t, classic_op_player_count> selection_{};
+	std::array<MainPaletteVariant, classic_op_player_count> palette_{
 		MainPaletteVariant::first, MainPaletteVariant::first,
 	};
-	std::array<bool, 2U> confirmed_{};
+	std::array<bool, classic_op_player_count> confirmed_{};
 	std::uint8_t active_player_ = 0U;
 	std::uint16_t cpu_quirk_frames_ = 0U;
 	std::uint8_t trail_count_ = 8U;
@@ -415,6 +421,9 @@ struct ClassicOpSelectionTestAccess final {
 		std::size_t player
 	) noexcept
 	{
+		if(player >= classic_op_player_count) {
+			return false;
+		}
 		return scene.raster_.clear({
 			0, 0, present::graphics_width, present::graphics_height,
 		}, 0U) && scene.draw_player(player);
@@ -425,6 +434,9 @@ struct ClassicOpSelectionTestAccess final {
 		std::size_t player
 	) noexcept
 	{
+		if(player >= classic_op_player_count) {
+			return false;
+		}
 		return scene.raster_.clear({
 			0, 0, present::graphics_width, present::graphics_height,
 		}, 0U) && scene.draw_cursor(player);
@@ -486,6 +498,9 @@ struct ClassicOpSelectionTestAccess final {
 		std::size_t player = 0U
 	) noexcept
 	{
+		if(player >= classic_op_player_count) {
+			return false;
+		}
 		return scene.raster_.set_access_page(present::Page::zero) &&
 			scene.raster_.clear({
 				0, 0, present::graphics_width, present::graphics_height,

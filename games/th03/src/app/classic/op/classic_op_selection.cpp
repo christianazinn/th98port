@@ -258,6 +258,9 @@ template <typename Value, typename Decoder>
 	const ClassicOpSelectionInput &input
 ) noexcept
 {
+	if(player >= classic_op_player_count) {
+		return 0U;
+	}
 	if(mode == ClassicOpSelectionMode::vs_1p_2p) {
 		return (player == 0U) ? input.player_one : input.player_two;
 	}
@@ -964,6 +967,9 @@ bool ClassicOpCharacterSelection::draw_curves() noexcept
 
 bool ClassicOpCharacterSelection::draw_cursor(std::size_t player) noexcept
 {
+	if(player >= classic_op_player_count) {
+		return false;
+	}
 	if(mode_ == ClassicOpSelectionMode::story && player == 1U) {
 		return true;
 	}
@@ -1004,6 +1010,9 @@ bool ClassicOpCharacterSelection::draw_cursor(std::size_t player) noexcept
 
 bool ClassicOpCharacterSelection::draw_portrait(std::size_t player) noexcept
 {
+	if(player >= classic_op_player_count) {
+		return false;
+	}
 	const auto left = static_cast<std::int32_t>((player == 0U) ? 32 : 416);
 	if(mode_ == ClassicOpSelectionMode::story && player == 1U) {
 		return present::cdg_put_8(
@@ -1021,6 +1030,9 @@ bool ClassicOpCharacterSelection::draw_portrait(std::size_t player) noexcept
 
 bool ClassicOpCharacterSelection::draw_stats_base(std::size_t player) noexcept
 {
+	if(player >= classic_op_player_count) {
+		return false;
+	}
 	if(mode_ == ClassicOpSelectionMode::story && player == 1U) {
 		return true;
 	}
@@ -1088,6 +1100,9 @@ bool ClassicOpCharacterSelection::draw_stat_row(
 	std::uint8_t row
 ) noexcept
 {
+	if(player >= classic_op_player_count) {
+		return false;
+	}
 	if((mode_ == ClassicOpSelectionMode::story && player == 1U) || row >= 3U) {
 		return row < 3U;
 	}
@@ -1119,6 +1134,9 @@ bool ClassicOpCharacterSelection::draw_stat_row(
 
 bool ClassicOpCharacterSelection::draw_extra(std::size_t player) noexcept
 {
+	if(player >= classic_op_player_count) {
+		return false;
+	}
 	if(mode_ == ClassicOpSelectionMode::story && player == 1U) {
 		return true;
 	}
@@ -1133,6 +1151,9 @@ bool ClassicOpCharacterSelection::draw_extra(std::size_t player) noexcept
 
 bool ClassicOpCharacterSelection::draw_player(std::size_t player) noexcept
 {
+	if(player >= classic_op_player_count) {
+		return false;
+	}
 	if(!draw_portrait(player) || !draw_stats_base(player)) {
 		return false;
 	}
@@ -1202,6 +1223,9 @@ bool ClassicOpCharacterSelection::begin_confirmation(
 	ResumePoint resume
 ) noexcept
 {
+	if(player >= classic_op_player_count) {
+		return false;
+	}
 	// The Anniversary callback is installed before the source mutates the
 	// resident selection and begins the overlapping CDG load.
 	raster_.set_palette_tone(200);
@@ -1231,6 +1255,9 @@ bool ClassicOpCharacterSelection::process_player(
 	ResumePoint after_bomb
 ) noexcept
 {
+	if(player >= classic_op_player_count) {
+		return false;
+	}
 	if(confirmed_[player]) {
 		resume_point_ = after_bomb;
 		return resume_sample();
@@ -1757,13 +1784,14 @@ const present::Tram &ClassicOpCharacterSelection::tram() const noexcept
 	return tram_;
 }
 
-std::array<std::uint8_t, 2U>
+std::array<std::uint8_t, classic_op_player_count>
 ClassicOpCharacterSelection::local_selection() const noexcept
 {
 	return selection_;
 }
 
-std::array<bool, 2U> ClassicOpCharacterSelection::confirmed() const noexcept
+std::array<bool, classic_op_player_count>
+ClassicOpCharacterSelection::confirmed() const noexcept
 {
 	return confirmed_;
 }

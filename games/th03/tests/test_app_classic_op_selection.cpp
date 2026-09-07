@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -21,6 +22,7 @@
 namespace {
 
 using th03::GameInit;
+using th03::app::classic_op_player_count;
 using th03::app::ClassicAudioCommandType;
 using th03::app::ClassicMusicCue;
 using th03::app::ClassicOpCharacterSelection;
@@ -795,6 +797,94 @@ void test_curve_and_player_rendering()
 		),
 		"CPU-mode P2 cursor appears after P1 confirmation"
 	);
+}
+
+void test_player_index_precondition()
+{
+	// Exercise both legal players before proving that the source-private
+	// forwarders reject the first invalid value and SIZE_MAX without clearing,
+	// changing page state, or mutating selection/resident state.
+	auto scene = make_scene(ClassicOpSelectionMode::vs_1p_cpu);
+	if(!scene) { return; }
+	expect(
+		ClassicOpSelectionTestAccess::draw_player_only(*scene, 0U),
+		"P1 player-only seam accepts the first player"
+	);
+	expect(
+		ClassicOpSelectionTestAccess::draw_cursor_only(*scene, 1U),
+		"P2 cursor-only seam accepts the second player"
+	);
+	expect(
+		ClassicOpSelectionTestAccess::draw_stats_base_only(*scene, 0U),
+		"P1 stats-base seam accepts the first player"
+	);
+
+	const auto hash_before_invalid = scene->raster().display_state_hash();
+	const auto access_before_invalid = scene->raster().access_page();
+	const auto shown_before_invalid = scene->raster().shown_page();
+	const auto tone_before_invalid = scene->raster().palette_tone();
+	const auto scroll_before_invalid = scene->raster().scroll_y();
+	const auto carry_before_invalid = scene->carry();
+	const auto selection_before_invalid = scene->local_selection();
+	const auto confirmed_before_invalid = scene->confirmed();
+	const auto resident_rand_before_invalid = scene->resident().resident_rand;
+	const auto palette_before_invalid = scene->resident().paletted_character;
+	const std::array<std::size_t, 2U> invalid_players{
+		classic_op_player_count, std::numeric_limits<std::size_t>::max(),
+	};
+	for(const auto player : invalid_players) {
+		expect(
+			!ClassicOpSelectionTestAccess::draw_player_only(*scene, player),
+			"player-only seam rejects an invalid player index"
+		);
+		expect(
+			scene->raster().display_state_hash() == hash_before_invalid &&
+				scene->raster().access_page() == access_before_invalid &&
+				scene->raster().shown_page() == shown_before_invalid &&
+				scene->raster().palette_tone() == tone_before_invalid &&
+				scene->raster().scroll_y() == scroll_before_invalid &&
+				scene->carry() == carry_before_invalid &&
+				scene->local_selection() == selection_before_invalid &&
+				scene->confirmed() == confirmed_before_invalid &&
+				scene->resident().resident_rand == resident_rand_before_invalid &&
+				scene->resident().paletted_character == palette_before_invalid,
+			"invalid player-only index leaves the scene unchanged"
+		);
+		expect(
+			!ClassicOpSelectionTestAccess::draw_cursor_only(*scene, player),
+			"cursor-only seam rejects an invalid player index"
+		);
+		expect(
+			scene->raster().display_state_hash() == hash_before_invalid &&
+				scene->raster().access_page() == access_before_invalid &&
+				scene->raster().shown_page() == shown_before_invalid &&
+				scene->raster().palette_tone() == tone_before_invalid &&
+				scene->raster().scroll_y() == scroll_before_invalid &&
+				scene->carry() == carry_before_invalid &&
+				scene->local_selection() == selection_before_invalid &&
+				scene->confirmed() == confirmed_before_invalid &&
+				scene->resident().resident_rand == resident_rand_before_invalid &&
+				scene->resident().paletted_character == palette_before_invalid,
+			"invalid cursor-only index leaves the scene unchanged"
+		);
+		expect(
+			!ClassicOpSelectionTestAccess::draw_stats_base_only(*scene, player),
+			"stats-base seam rejects an invalid player index"
+		);
+		expect(
+			scene->raster().display_state_hash() == hash_before_invalid &&
+				scene->raster().access_page() == access_before_invalid &&
+				scene->raster().shown_page() == shown_before_invalid &&
+				scene->raster().palette_tone() == tone_before_invalid &&
+				scene->raster().scroll_y() == scroll_before_invalid &&
+				scene->carry() == carry_before_invalid &&
+				scene->local_selection() == selection_before_invalid &&
+				scene->confirmed() == confirmed_before_invalid &&
+				scene->resident().resident_rand == resident_rand_before_invalid &&
+				scene->resident().paletted_character == palette_before_invalid,
+			"invalid stats-base index leaves the scene unchanged"
+		);
+	}
 }
 
 void test_localized_name_rendering()
@@ -1608,6 +1698,7 @@ int main(int argc, char **argv)
 	test_entry_and_raw_locking();
 	test_persisted_selection_ring_and_cpu_delay_width();
 	test_curve_and_player_rendering();
+	test_player_index_precondition();
 	test_localized_name_rendering();
 	test_localized_stat_rendering();
 	test_generated_character_select_asset_rendering();
