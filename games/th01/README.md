@@ -1,9 +1,10 @@
-# `th01-port`
+# TH01 Native
 
 A partial native port of TH01 (*Highly Responsive to Prayers*).
 
-The asset-free `th01_core` now implements REIIDEN input sensing and player
-horizontal clamping, and uses shared master.lib IRAND. See
+The asset-free `th01_core` now implements REIIDEN input sensing, player
+horizontal clamping, integer Orb helpers, and shot spawn/pellet/boss collision
+helpers, and uses shared master.lib IRAND. See
 `docs/CORE_FOUNDATIONS.md` for exact donor boundaries and missing gameplay.
 
 **Read `docs/COPY_DIFF.md` before adding anything.** The initial scaffolding
@@ -14,7 +15,7 @@ implementations have their own source contracts.
 ## What builds today
 
 The default configuration builds the partial core and VRAM libraries plus
-three tests: skeleton, core, and VRAM. Both compilers use warnings as errors:
+four tests: skeleton, core, shot collisions, and VRAM. Both compilers use warnings as errors:
 
 ```
 cmake --preset gcc
@@ -38,9 +39,13 @@ and the reason "just copy those too" is not the answer.
 
 ## Where the decisions live
 
+`docs/CORE_FOUNDATIONS.md`, `docs/COPY_DIFF.md`, and `docs/RENDERER_MODEL.md`
+ship in this native repository. The following planning/coverage records belong
+to the separate private harness; they are not relative links in this checkout.
+
 | question | answer lives in |
 |---|---|
 | what this tree is a copy of, and the diff | `docs/COPY_DIFF.md` |
-| the port plan and its steps | `../state/port/W5A_TH01_PLAN.md` |
-| TH01's sources mapped onto `th03-port`'s module boundaries | `../state/port/TH01_PORT_SCOPE.md` |
-| the per-source coverage ledger | `../state/port/TH01_SOURCE_COVERAGE.md` |
+| the port plan and its steps | `state/port/W5A_TH01_PLAN.md` |
+| TH01's sources mapped onto the original TH03 module boundaries | `state/port/TH01_PORT_SCOPE.md` |
+| the per-source coverage ledger | `state/port/TH01_SOURCE_COVERAGE.md` |

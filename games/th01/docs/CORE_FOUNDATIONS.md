@@ -60,3 +60,11 @@ bit patterns against all 25 argument/stored-velocity combinations, plus the
 asymmetric ten-frame rotation cycle. These helpers still need integration with
 vertical forces, collisions, portals, and the actual update schedule. No x87
 or host floating-point equivalence is assumed by this addition.
+
+`core/shots.hpp` additionally implements the complete source spawn and
+pellet/boss hit helpers from `th01/main/player/shot.cpp`, with dimensions and
+overlap macros from `shot.hpp`, `th01/sprites/pellet.h`, and
+`th01/math/overlap.hpp`. Returned slot events allow later unblit/SFX handling;
+they do not implement the shot update loop or its extra Orb integration.
+`th01-shot-tests` checks slot allocation, inclusive edges, differing decay
+eligibility, 16-bit arithmetic, and no mutation on refusal/miss.
