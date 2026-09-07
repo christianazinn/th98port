@@ -34,6 +34,9 @@ Per-game builds remain available, for example `cmake -S games/th03 -B out/podd`.
 The maintained PoDD SDL presets, standalone packager, and renderer GUI builder
 run from `games/th03/`; see [the PoDD documentation](games/th03/README.md).
 The manual beta workflow remains at the repository root and packages PoDD.
+It also builds and tests the asset-free TH01/02/04/05 foundations on each
+existing Windows, Linux, and macOS runner before packaging. It remains
+manual-only; the incomplete games are not shipped as playable beta artifacts.
 No original game assets, replay corpus, or private release tooling is included.
 
 The TH03 verifier container is built from the repository root with
