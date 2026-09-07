@@ -71,6 +71,14 @@ int main()
 		std::cerr << "TH05 assembly ignores high input bits before movement dispatch\n";
 		return EXIT_FAILURE;
 	}
+	Motion motion{{6000, 140}, {-1, -1}, {}};
+	if(player_move(motion.velocity, 9, {55, 41}) != MoveResult::valid) return EXIT_FAILURE;
+	player_pos_update_and_clamp(motion);
+	if(motion.cur.x != 6016 || motion.cur.y != 128 || motion.prev.x != 6000 ||
+		motion.prev.y != 140 || motion.velocity.x != 41 || motion.velocity.y != -41) {
+		std::cerr << "TH05 movement/clamp composition differs\n";
+		return EXIT_FAILURE;
+	}
 	for(unsigned input = 0; input < 65536U; ++input) {
 		for(const auto speeds : std::array<MovementSpeeds, 4>{{{64, 48}, {-91, 37}, {0, 0}, {-32768, 32767}}}) {
 			velocity = {13, -27};

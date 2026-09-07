@@ -6,6 +6,8 @@ namespace th05::core {
 
 using Velocity = pc98::th0405::Velocity;
 using MoveResult = pc98::th0405::MoveResult;
+using Motion = pc98::th0405::Motion;
+using pc98::th0405::player_pos_update_and_clamp;
 
 struct MovementSpeeds {
 	std::int16_t aligned{};

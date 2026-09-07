@@ -1,14 +1,13 @@
 #pragma once
 
+#include "pc98/th0405_motion.hpp"
+
 #include <bit>
 #include <cstdint>
 
 namespace pc98::th0405 {
 
-struct Velocity {
-	std::int16_t x{}, y{};
-	bool operator==(const Velocity &) const = default;
-};
+using Velocity = SubpixelPoint;
 
 enum class MoveResult : std::uint8_t { invalid = 0, valid = 1, no_input = 2 };
 
