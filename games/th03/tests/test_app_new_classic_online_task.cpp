@@ -237,11 +237,15 @@ struct FakeCredentialSource final {
 
 std::filesystem::path temporary_root()
 {
-	const auto root = std::filesystem::temp_directory_path() /
-		"th03-online-task-tests";
-	std::error_code ignored{};
-	std::filesystem::remove_all(root, ignored);
-	return root;
+	const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+	for(unsigned attempt = 0; attempt < 100; ++attempt) {
+		const auto root = std::filesystem::temp_directory_path() /
+			("th03-online-task-tests-" + std::to_string(stamp) + "-" + std::to_string(attempt));
+		// Exclusive creation keeps simultaneous compiler suites from deleting or
+		// modifying each other's cache fixtures.
+		if(std::filesystem::create_directory(root)) return root;
+	}
+	throw std::runtime_error("could not allocate online task test directory");
 }
 
 } // namespace
@@ -271,8 +275,9 @@ int main()
 	if(!task) {
 		return 1;
 	}
-	for(unsigned spin = 0U; spin < 100000U && fake.calls.load() == 0U; ++spin) {
-		std::this_thread::yield();
+	const auto started_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+	while(fake.calls.load() == 0U && std::chrono::steady_clock::now() < started_deadline) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 	expect(fake.calls.load() == 1U,
 		"background request starts without blocking the caller");
