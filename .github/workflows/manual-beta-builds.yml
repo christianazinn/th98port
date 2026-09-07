@@ -19,6 +19,9 @@ concurrency:
 jobs:
   build:
     name: ${{ matrix.display }}
+    defaults:
+      run:
+        working-directory: games/th03
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
@@ -43,7 +46,7 @@ jobs:
             platform: macos-x64
 
     steps:
-      - name: Check out libth03
+      - name: Check out native ports
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install Linux build prerequisites
@@ -173,8 +176,8 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: |
-            out/ci-package/${{ matrix.artifact }}.zip
-            out/ci-package/${{ matrix.artifact }}.t3pkg
+            games/th03/out/ci-package/${{ matrix.artifact }}.zip
+            games/th03/out/ci-package/${{ matrix.artifact }}.t3pkg
           if-no-files-found: error
           retention-days: 14
 
@@ -184,7 +187,7 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: |
-            out/ci-package/${{ matrix.artifact }}.tar.gz
-            out/ci-package/${{ matrix.artifact }}.t3pkg
+            games/th03/out/ci-package/${{ matrix.artifact }}.tar.gz
+            games/th03/out/ci-package/${{ matrix.artifact }}.t3pkg
           if-no-files-found: error
           retention-days: 14

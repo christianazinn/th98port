@@ -10,18 +10,19 @@ RUN cmake -S . -B /build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DTH03_ENABLE_SDL=OFF \
       -DTH03_ENABLE_RTC=OFF \
+      -DPC98_BUILD_TH01=OFF \
     && cmake --build /build --target th03rv --parallel 2
 
 FROM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03
 
 RUN groupadd --system th03 && useradd --system --gid th03 --home /nonexistent th03
 WORKDIR /opt/th03
-COPY --from=build /build/th03rv /opt/th03/th03rv
-COPY tools/verifier-adapter/server.mjs /opt/th03/server.mjs
-COPY tools/verifier-adapter/identity.mjs /opt/th03/identity.mjs
-COPY tools/verifier-adapter/ruleset-v1.txt /opt/th03/ruleset-v1.txt
-COPY tools/verifier-adapter/runtime-v1.txt /opt/th03/runtime-v1.txt
-COPY verifier-private/ENEDAT.DAT /opt/th03/ENEDAT.DAT
+COPY --from=build /build/games/th03/th03rv /opt/th03/th03rv
+COPY games/th03/tools/verifier-adapter/server.mjs /opt/th03/server.mjs
+COPY games/th03/tools/verifier-adapter/identity.mjs /opt/th03/identity.mjs
+COPY games/th03/tools/verifier-adapter/ruleset-v1.txt /opt/th03/ruleset-v1.txt
+COPY games/th03/tools/verifier-adapter/runtime-v1.txt /opt/th03/runtime-v1.txt
+COPY games/th03/verifier-private/ENEDAT.DAT /opt/th03/ENEDAT.DAT
 RUN chown -R root:root /opt/th03 \
     && chmod 0555 /opt/th03/th03rv /opt/th03/server.mjs /opt/th03/identity.mjs \
     && chmod 0444 /opt/th03/ENEDAT.DAT /opt/th03/ruleset-v1.txt /opt/th03/runtime-v1.txt

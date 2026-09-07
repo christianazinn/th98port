@@ -1,0 +1,6 @@
+/out/
+/.scratch-*
+/YUME.CFG
+/YUME.NEM
+/verifier-private/
+__pycache__/

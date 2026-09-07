@@ -59,7 +59,8 @@ $originalRoot = Find-AncestorRelativeDirectory $worktreeRoot "originals"
 if(-not $originalRoot) {
 	$originalRoot = Join-Path $worktreeRoot "originals"
 }
-$canonicalSourceRoot = Join-Path (Split-Path -Parent $originalRoot) "th03-port"
+$worktreeRoot = Split-Path -Parent $originalRoot
+$canonicalSourceRoot = Join-Path $worktreeRoot "native-port/games/th03"
 if(-not $DataRoot) {
 	$DataRoot = Join-Path $originalRoot "th03_process_root"
 }

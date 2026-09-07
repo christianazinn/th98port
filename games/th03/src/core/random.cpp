@@ -1,4 +1,5 @@
 #include "game_internal.hpp"
+#include "pc98/random.hpp"
 
 #include <cstddef>
 
@@ -6,8 +7,7 @@ namespace th03::detail {
 
 std::uint16_t irand(std::uint32_t &seed) noexcept
 {
-	seed = (seed * 0x015A4E35U) + 1U;
-	return static_cast<std::uint16_t>((seed >> 16U) & 0x7FFFU);
+	return pc98::irand(seed);
 }
 
 void randring_fill(DeterministicState &state) noexcept

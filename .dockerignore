@@ -1,7 +1,12 @@
 .git
 .scratch*
 out
-verifier-private/*
-!verifier-private/ENEDAT.DAT
+**/out
+**/.scratch*
+**/__pycache__
+games/th03/verifier-private/*
+!games/th03/verifier-private/ENEDAT.DAT
 YUME.CFG
 YUME.NEM
+**/YUME.CFG
+**/YUME.NEM

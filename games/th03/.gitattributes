@@ -1,0 +1,9 @@
+# Preserve upstream whitespace in retained third-party sources. Bounded marked
+# deltas are authenticated and documented beside the pins.
+third_party/98fmplayer/fmdriver/fmdriver_pmd.c -whitespace
+third_party/98fmplayer/fmdriver/fmdriver_pmd.h -whitespace
+
+# Generated source is compared byte-for-byte against the localization compiler.
+# Preserve its LF output even on Windows with core.autocrlf enabled.
+include/th03/app/new_classic/content/*.inc text eol=lf
+src/app/new_classic/content/*generated.inc text eol=lf
