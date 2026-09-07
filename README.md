@@ -5,7 +5,8 @@ This repository continues the complete history of `libth03`.
 
 `games/th03/` contains the existing PoDD port, deterministic gameplay core,
 replay verifier, video renderer, and application. `games/th01/` contains the
-early Highly Responsive to Prayers foundations. TH02, TH04, and TH05 native
+early Highly Responsive to Prayers foundations. `games/th02/` contains the
+Story of Eastern Wonderland random-ring foundations. TH04 and TH05 native
 gameplay implementations have not started. A successful build of this repository
 does not claim that those games can run or verify replays.
 
@@ -16,8 +17,8 @@ the same contract. There is no shared game-state abstraction.
 
 ## Build
 
-The default build needs CMake 3.25 and a C++23 compiler. It builds both existing
-games and runs their tests without original assets or SDL dependencies:
+The default build needs CMake 3.25 and a C++23 compiler. It builds the existing
+game implementations and runs their tests without original assets or SDL dependencies:
 
 ```sh
 cmake -S . -B out/build/native -DCMAKE_BUILD_TYPE=Release
@@ -26,7 +27,8 @@ ctest --test-dir out/build/native -C Release --output-on-failure
 ```
 
 Windows also has `gcc` (MinGW) and `msvc-x64` presets. Use
-`-DPC98_BUILD_TH01=OFF` or `-DPC98_BUILD_TH03=OFF` to select a game.
+`-DPC98_BUILD_TH01=OFF`, `-DPC98_BUILD_TH02=OFF`, or `-DPC98_BUILD_TH03=OFF`
+to omit a game.
 Per-game builds remain available, for example `cmake -S games/th03 -B out/podd`.
 
 The maintained PoDD SDL presets, standalone packager, and renderer GUI builder

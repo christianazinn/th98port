@@ -1,0 +1,32 @@
+cmake_minimum_required(VERSION 3.25)
+project(th02_port VERSION 0.1.0 LANGUAGES CXX)
+set(CMAKE_CXX_EXTENSIONS OFF)
+include(CTest)
+
+if(NOT TARGET pc98_numeric)
+	add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../shared"
+		"${CMAKE_CURRENT_BINARY_DIR}/pc98-shared")
+endif()
+
+# Same warning contract as the existing game targets; no presentation or
+# optional platform dependency is declared before TH02 has an implementation.
+function(th02_set_warnings target)
+	if(MSVC)
+		target_compile_options(${target} PRIVATE /W4 /WX /permissive- /Zc:preprocessor)
+	else()
+		target_compile_options(${target} PRIVATE
+			-Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror)
+	endif()
+endfunction()
+
+add_library(th02_core STATIC src/core/random.cpp)
+target_include_directories(th02_core PUBLIC include)
+target_link_libraries(th02_core PUBLIC pc98_numeric)
+th02_set_warnings(th02_core)
+
+if(BUILD_TESTING)
+	add_executable(th02-random-tests tests/test_random.cpp)
+	target_link_libraries(th02-random-tests PRIVATE th02_core)
+	th02_set_warnings(th02-random-tests)
+	add_test(NAME th02-random-tests COMMAND th02-random-tests)
+endif()
