@@ -1,4 +1,5 @@
 #include "th05/core/player.hpp"
+#include "th05/core/random.hpp"
 
 #include <array>
 #include <cstdlib>
@@ -43,6 +44,9 @@ int model(th05::core::Velocity &velocity, unsigned input, int aligned, int diago
 int main()
 {
 	using namespace th05::core;
+	RandomState random{18, {}, 255};
+	randring_fill(random);
+	if(random.cursor != 0 || !randring_next16(random) || random.cursor != 1) return EXIT_FAILURE;
 	Velocity velocity{11, 22};
 	if(player_move(velocity, 8, {40, 29}) != MoveResult::valid || velocity.x != 40 || velocity.y != 22 ||
 		player_move(velocity, 0x0200, {40, 29}) != MoveResult::valid || velocity.x != 29 || velocity.y != -29) {

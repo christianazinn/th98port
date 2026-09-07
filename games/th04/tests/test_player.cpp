@@ -1,4 +1,5 @@
 #include "th04/core/player.hpp"
+#include "th04/core/random.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -6,6 +7,9 @@
 int main()
 {
 	using namespace th04::core;
+	RandomState random{18, {}, 255};
+	randring_fill(random);
+	if(random.cursor != 0 || !randring_next16(random) || random.cursor != 1) return EXIT_FAILURE;
 	Velocity velocity{11, 22};
 	if(player_move(velocity, 4) != MoveResult::valid || velocity.x != -64 || velocity.y != 22) {
 		std::cerr << "TH04 aligned speed or untouched Y differs\n";

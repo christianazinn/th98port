@@ -7,8 +7,8 @@ This repository continues the complete history of `libth03`.
 replay verifier, video renderer, and application. `games/th01/` contains the
 early Highly Responsive to Prayers foundations. `games/th02/` contains the
 Story of Eastern Wonderland random-ring and player-movement foundations.
-`games/th04/` and `games/th05/` begin with their source-shared input-to-velocity
-helper. A successful build does not claim that TH01, TH02, TH04 or TH05 can run
+`games/th04/` and `games/th05/` contain input-to-velocity, word position/clamp,
+and random-ring foundations. A successful build does not claim that TH01, TH02, TH04 or TH05 can run
 or verify replays yet.
 
 Each game owns its simulation, replay adapters, presentation, and application

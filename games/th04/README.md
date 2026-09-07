@@ -28,3 +28,12 @@ cover all 65536 coordinate patterns against thirteen deltas on both axes.
 
 Build via the native repository root or directly with
 `cmake -S games/th04 -B out/th04`, then build and run CTest there.
+
+`core/random.hpp` exposes the source-shared TH04/05 random ring: reverse fill
+and cursor reset, then overlapping word draws with the original pre-increment
+cursor spill at slot 255. Both code-segment instances use one state. The full
+word cursor is retained; unsupported high-byte addresses and divide-by-zero
+produce no result rather than an invented random value. The zero-divisor path
+still consumes its draw. Startup seeding, call schedules, and range wrappers
+are not implemented. Shared tests cover all word values and cursor states;
+they are not an emulator parity claim.

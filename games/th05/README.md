@@ -28,3 +28,12 @@ and clamp helpers; the shared motion test exhausts coordinate bit patterns.
 
 Build via the native repository root or directly with
 `cmake -S games/th05 -B out/th05`, then build and run CTest there.
+
+`core/random.hpp` exposes the source-shared TH04/05 random ring: reverse fill
+and cursor reset, then overlapping word draws with the original pre-increment
+cursor spill at slot 255. Both code-segment instances use one state. The full
+word cursor is retained; unsupported high-byte addresses and divide-by-zero
+produce no result rather than an invented random value. The zero-divisor path
+still consumes its draw. Startup seeding, call schedules, range wrappers, and
+TH05's inline bullet draws remain separate. Shared tests cover all word values
+and cursor states; they are not an emulator parity claim.
