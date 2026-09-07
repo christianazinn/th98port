@@ -37,3 +37,12 @@ produce no result rather than an invented random value. The zero-divisor path
 still consumes its draw. Startup seeding, call schedules, and range wrappers
 are not implemented. Shared tests cover all word values and cursor states;
 they are not an emulator parity claim.
+
+`core/shot.hpp` implements the complete TH04 shot-update loop, including
+signed-word motion before strict offscreen tests, delayed removal, four-frame
+hit-animation cels, age-byte wrap, and ordered live-shot caching. It retains
+stale cache entries beyond the count. The option laser follows the supplied
+option position through its entire cooldown without resetting velocity.
+Near shot pointers are represented by stable pool indices. Allocation,
+collisions, shot patterns, and the gameplay call schedule remain separate
+work; this is not TH05's different homing/missile loop.
