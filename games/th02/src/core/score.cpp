@@ -44,6 +44,31 @@ ScoreEvents process_score(ScoreState &state, bool turn_capped_lives_into_bombs) 
 }
 }
 
+bool score_extend_init(ScoreState &state) noexcept
+{
+	std::size_t index = 0;
+	while(index < extend_scores.size() && extend_scores[index] <= state.score) ++index;
+	if(index == extend_scores.size()) return false;
+	state.extends_gained = static_cast<std::uint16_t>(index);
+	state.score_delta = 0;
+	return true;
+}
+
+void score_delta_commit(ScoreState &state) noexcept
+{
+	state.score = add_dword(state.score, state.score_delta);
+	state.score_delta = 0;
+	state.score_delta_transferred_prev = 0;
+}
+
+void score_reset(ScoreState &state) noexcept
+{
+	state.score = 0;
+	state.score_delta = 0;
+	state.score_delta_transferred_prev = 0;
+	state.score_reset_unknown_40000 = 40000;
+}
+
 std::optional<ScoreEvents> score_update(ScoreState &state, bool reduce_effects) noexcept
 {
 	if(state.score_delta == 0) {

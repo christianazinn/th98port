@@ -51,8 +51,9 @@ Build from the repository root or directly with
 operations. They preserve transfer smoothing, signed dword wrapping, one
 extend per call, capped-life/bomb differences, and the bonus path's uncleared
 delta. HUD/SFX requests return in source order with their values; no rendering
-or playback occurs in the core. The caller still owns score reset, initial
-extend scanning, delta commit, and schedule. Unsupported extend-table indices
+or playback occurs in the core. Score reset, initial extend scanning, and delta
+commit are also implemented with their distinct state-write sets; the caller
+still owns their schedule. Unsupported extend-table indices
 are refused, not read from unrepresented DOS memory. Tests cover all previous
 transfer words, threshold boundaries, negative/wrapped values, effect-setting
 changes, ordered requests, and repeated updates/bonuses. These are source-based

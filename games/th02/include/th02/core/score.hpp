@@ -15,6 +15,7 @@ struct ScoreState {
 	std::uint16_t extends_gained{};
 	std::int8_t lives{};
 	std::int8_t bombs{};
+	std::int32_t score_reset_unknown_40000{};
 	bool operator==(const ScoreState &) const = default;
 };
 
@@ -29,6 +30,15 @@ struct ScoreEvents {
 	std::size_t count{};
 	bool operator==(const ScoreEvents &) const = default;
 };
+
+// Re-scan thresholds without granting resources. The original sentinel does
+// not bound its loop: scores at/above it are unsupported and refused without
+// mutation. On success only extends_gained and score_delta change.
+[[nodiscard]] bool score_extend_init(ScoreState &state) noexcept;
+
+// Neither operation emits HUD/SFX requests or processes high scores/extends.
+void score_delta_commit(ScoreState &state) noexcept;
+void score_reset(ScoreState &state) noexcept;
 
 // State changes from th02/main/score.cpp. HUD/SFX requests retain source order
 // and values, but rendering, sound playback, and caller timing are separate.

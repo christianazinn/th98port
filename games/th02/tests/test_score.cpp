@@ -121,11 +121,53 @@ bool test_boundaries_and_sequences()
 	if(sequence.score != 124690 || sequence.score_delta != 0 || sequence.extends_gained != 1 || sequence.lives != 4) return false;
 	return events_are(score_update(sequence, false), {}) && sequence.score_delta_transferred_prev == 0;
 }
+
+bool test_lifecycle()
+{
+	for(const auto score : std::array<std::int32_t, 15>{
+		-2147483647 - 1, -1, 0, 99999, 100000, 199999, 200000, 299999,
+		300000, 499999, 500000, 799999, 800000, 99999998, 99999999}) {
+		ScoreState state{score, 17, 987654, 71, 555, 4, 2, 12};
+		auto expected = state;
+		if(score >= 99999999) {
+			if(score_extend_init(state) || state != expected) return false;
+		} else {
+			unsigned passed = 0;
+			for(auto threshold : {100000, 200000, 300000, 500000, 800000}) {
+				if(score >= threshold) ++passed;
+			}
+			expected.extends_gained = static_cast<std::uint16_t>(passed);
+			expected.score_delta = 0;
+			if(!score_extend_init(state) || state != expected) return false;
+		}
+	}
+	for(auto score : std::array<std::int32_t, 7>{-2147483647 - 1, -1, 0, 1, 99999, 1234567, 2147483647}) {
+		for(auto delta : std::array<std::int32_t, 7>{-2147483647 - 1, -1, 0, 1, 99999, 1234567, 2147483647}) {
+			ScoreState state{score, delta, 987654, 71, 555, 4, 2, 12};
+			auto expected = state;
+			expected.score = signed_dword(static_cast<std::int64_t>(score) + delta);
+			expected.score_delta = 0;
+			expected.score_delta_transferred_prev = 0;
+			score_delta_commit(state);
+			if(state != expected) return false;
+			expected.score = 0;
+			expected.score_reset_unknown_40000 = 40000;
+			score_reset(state);
+			if(state != expected) return false;
+		}
+	}
+	// Extend initialization does NOT clear the previous frame's transfer.
+	ScoreState reused{100000, 99, 0, 2000, 0, 3, 3, 0};
+	if(!score_extend_init(reused) || reused.score_delta_transferred_prev != 2000) return false;
+	reused.score_delta = 50000;
+	if(!score_update(reused, false) || reused.score != 102000 || reused.score_delta != 48000) return false;
+	return true;
+}
 }
 
 int main()
 {
-	if(!test_transfer_model() || !test_thresholds_and_bonus() || !test_boundaries_and_sequences()) {
+	if(!test_transfer_model() || !test_thresholds_and_bonus() || !test_boundaries_and_sequences() || !test_lifecycle()) {
 		std::cerr << "TH02 score transfer, bonus, extend, or ordered event mismatch\n";
 		return EXIT_FAILURE;
 	}
