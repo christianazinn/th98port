@@ -46,3 +46,11 @@ option position through its entire cooldown without resetting velocity.
 Near shot pointers are represented by stable pool indices. Allocation,
 collisions, shot patterns, and the gameplay call schedule remain separate
 work; this is not TH05's different homing/missile loop.
+
+`core/shot_collision.hpp` applies TH04's complete shot/laser hit test to that
+cache. It preserves diminishing damage, zero-damage hits, repeat hits against
+the unchanged cache, velocity decay, bomb-before-laser damage ordering, and
+unsigned wrapped hitbox comparisons. Ordered spark requests must be consumed
+by the caller before subsequent gameplay. Spark allocation itself and the
+boss/enemy callers are not yet ported; the collision helper alone is not a
+complete replay engine. Invalid represented pool addresses fail explicitly.
