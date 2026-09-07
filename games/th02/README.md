@@ -46,3 +46,14 @@ of the complete initialization sequence or a replay verification result.
 
 Build from the repository root or directly with
 `cmake -S games/th02 -B out/th02`, then build and run CTest in that directory.
+
+`core/score.hpp` adds the complete pending-score update and immediate-bonus
+operations. They preserve transfer smoothing, signed dword wrapping, one
+extend per call, capped-life/bomb differences, and the bonus path's uncleared
+delta. HUD/SFX requests return in source order with their values; no rendering
+or playback occurs in the core. The caller still owns score reset, initial
+extend scanning, delta commit, and schedule. Unsupported extend-table indices
+are refused, not read from unrepresented DOS memory. Tests cover all previous
+transfer words, threshold boundaries, negative/wrapped values, effect-setting
+changes, ordered requests, and repeated updates/bonuses. These are source-based
+checks, not a verified full scoring pipeline.
