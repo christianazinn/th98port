@@ -78,6 +78,15 @@ calls shots, miss handling, quit, rendering, bombs, or a frame driver. The
 dedicated test exhausts every raw hit and timer byte across both boolean guards;
 it is source-derived state coverage, not a gameplay or replay result.
 
+`player_update_state_step()` composes that existing update-prefix helper with
+the typed player-shot lifetime boundary and a synchronous miss callback. Its
+return path preserves the source's subtlety that a hit observed after shot
+update returns even if the callback clears it, while a callback that leaves
+`0xFF` sets quit and then clears the raw byte. Refused shot lifetime work
+returns after the hit/timer prefix and before miss or rendering. The VRAM-only
+render tail, complete miss behavior, page driver, frame schedule, replay, and
+playable-session behavior remain unimplemented.
+
 `player_move_and_shoot_shot_stream_step()` carries only the tail's two stream
 phases/cooldowns, handoff patnums, and powered spread adjustment. Its borrowed
 typed callbacks execute synchronously in the source volley/sound/bomb order;

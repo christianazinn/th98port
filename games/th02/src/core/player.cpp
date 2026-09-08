@@ -1,5 +1,7 @@
 #include "th02/core/player.hpp"
 
+#include "th02/core/shot.hpp"
+
 #include <bit>
 
 namespace th02::core {
@@ -122,6 +124,34 @@ void prepare_player_callbacks(PlayerHitState &state) noexcept
 	if(state.invincibility_time > 0) {
 		--state.invincibility_time;
 	}
+}
+
+PlayerUpdateResult player_update_state_step(
+	PlayerHitState &player, bool &quit, PlayerShotPoolState &shots,
+	PlayerShotLifetimeState &lifetime, std::size_t back_page,
+	std::uint32_t stage_frame, PlayerUpdateCallbacks &callbacks
+) noexcept
+{
+	prepare_player_callbacks(player);
+	const auto shot_result = shots_update_lifetime(
+		shots, lifetime, back_page, stage_frame
+	);
+	if(shot_result == PlayerShotLifetimeUpdateResult::invalid_page) {
+		return PlayerUpdateResult::shot_lifetime_invalid_page;
+	}
+	if(shot_result == PlayerShotLifetimeUpdateResult::source_divide_fault) {
+		return PlayerUpdateResult::shot_lifetime_source_divide_fault;
+	}
+
+	if(player.raw_hit != 0U) {
+		callbacks.player_miss_update(player);
+		if(player.raw_hit == 0xFFU) {
+			quit = true;
+			player.raw_hit = 0U;
+		}
+		return PlayerUpdateResult::miss_handled;
+	}
+	return PlayerUpdateResult::completed;
 }
 
 void player_move_and_shoot_shot_stream_step(PlayerShotStreamState &state,

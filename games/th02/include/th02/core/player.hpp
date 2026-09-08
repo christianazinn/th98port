@@ -7,6 +7,9 @@
 
 namespace th02::core {
 
+struct PlayerShotPoolState;
+struct PlayerShotLifetimeState;
+
 struct ScreenPoint {
 	std::int16_t x{};
 	std::int16_t y{};
@@ -69,6 +72,26 @@ public:
 	virtual void bomb_request(const PlayerShotStreamState &state) noexcept = 0;
 };
 
+// The caller-visible outcomes of the state-only player_update_and_render()
+// composition. The two shot outcomes preserve the typed lifetime seam's
+// refusal distinction after the player prefix has already run.
+enum class PlayerUpdateResult : std::uint8_t {
+	completed,
+	miss_handled,
+	shot_lifetime_invalid_page,
+	shot_lifetime_source_divide_fault,
+};
+
+// Borrowed synchronous owner of the still-unported
+// player_miss_update_and_render() call. It may mutate the represented player
+// hit state at this exact source position, but must not mutate the borrowed
+// shot/lifetime state or the caller's quit flag.
+class PlayerUpdateCallbacks {
+public:
+	virtual ~PlayerUpdateCallbacks() = default;
+	virtual void player_miss_update(PlayerHitState &state) noexcept = 0;
+};
+
 // Only the input-to-delta/pose block of player_move_and_shoot. Its caller
 // must already have applied the invincibility/hit guard. No shots or bombs.
 [[nodiscard]] std::optional<MovementIntent> movement_intent(
@@ -83,6 +106,18 @@ public:
 // applies the same hit-immunity guard and then decrements a nonzero timer.
 // The caller owns shots, miss handling, quit, and all rendering.
 void prepare_player_callbacks(PlayerHitState &state) noexcept;
+
+// State-only composition of player_update_and_render's update prefix: prepare
+// the player hit state, run the typed player-shot lifetime update, then call
+// the synchronous miss owner if the post-shot raw hit byte is nonzero. A miss
+// callback that leaves 0xFF requests quit and has the raw byte cleared. The
+// original VRAM-only render tail, complete miss implementation, page driver,
+// and stage scheduling remain deliberately outside this seam.
+[[nodiscard]] PlayerUpdateResult player_update_state_step(
+	PlayerHitState &player, bool &quit, PlayerShotPoolState &shots,
+	PlayerShotLifetimeState &lifetime, std::size_t back_page,
+	std::uint32_t stage_frame, PlayerUpdateCallbacks &callbacks
+) noexcept;
 
 // Only the shot-stream tail of player_move_and_shoot, after movement and
 // option positioning. Calls its borrowed callbacks in source order; no action
