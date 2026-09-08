@@ -5,11 +5,10 @@
 #include <cstdint>
 #include <optional>
 
+#include "th02/core/shot.hpp"
+
 namespace th02::core {
 
-struct PlayerShotPoolState;
-struct PlayerShotLifetimeState;
-struct PlayerShotVolleyContext;
 struct RandomState;
 
 struct ScreenPoint {
@@ -29,6 +28,18 @@ struct MovementSpeeds {
 };
 
 enum class PlayerPose : std::int16_t { still = 0, left = 2, right = 3 };
+
+// The frame-owned player and left-option coordinates. Both page indices are
+// explicit because player_invalidate() reads their old back-page state before
+// carrying only the player coordinates from front to back.
+struct PlayerFrameState {
+	PlayerPositionState player{};
+	std::array<ScreenPoint, 2> option_left_on_page{};
+	std::size_t page_front{};
+	std::size_t page_back{1U};
+	PlayerPose pose{PlayerPose::still};
+	bool operator==(const PlayerFrameState &) const = default;
+};
 
 struct MovementIntent {
 	ScreenPoint delta{};
@@ -61,11 +72,45 @@ struct PlayerShotStreamState {
 	bool operator==(const PlayerShotStreamState &) const = default;
 };
 
+// Source-sized tile invalidation emitted for the player and each option by
+// player_invalidate(). This is a synchronous old-back-page boundary, not a
+// sprite-render command or an implicit page operation.
+struct PlayerFrameInvalidation {
+	ScreenPoint topleft{};
+	std::int16_t width{};
+	std::int16_t height{};
+	bool operator==(const PlayerFrameInvalidation &) const = default;
+};
+
+class PlayerFrameInvalidationCallbacks : public PlayerShotInvalidationCallbacks {
+public:
+	virtual ~PlayerFrameInvalidationCallbacks() = default;
+	virtual void invalidate_player(PlayerFrameInvalidation invalidation) noexcept = 0;
+	virtual void invalidate_option(PlayerFrameInvalidation invalidation) noexcept = 0;
+};
+
+enum class PlayerFrameInvalidationResult : std::uint8_t {
+	completed,
+	invalid_page,
+};
+
 // This is returned at the selected-shot call position. A host-invalid
 // selection/page and a modeled source iatan2 fault are deliberately distinct:
 // both stop the stream before its following sound/cooldown/phase/bomb work.
 enum class PlayerShotStreamResult : std::uint8_t {
 	completed,
+	invalid_shot_selection,
+	volley_invalid_page,
+	volley_source_iatan2_fault,
+};
+
+// The result after player_move_and_shoot()'s hit guard, source movement and
+// option writes, and its selected-volley stream tail. The latter three
+// terminal results stop at the selected callback's source position.
+enum class PlayerFrameResult : std::uint8_t {
+	completed,
+	hit_blocked,
+	invalid_page,
 	invalid_shot_selection,
 	volley_invalid_page,
 	volley_source_iatan2_fault,
@@ -109,6 +154,10 @@ public:
 		std::uint8_t &shot_option_patnum) noexcept override;
 	void shot_sound(const PlayerShotStreamState &state) noexcept override;
 	void bomb_request(const PlayerShotStreamState &state) noexcept override;
+
+	// The frame composition updates the existing selected-volley globals at the
+	// source call boundary. It must not keep another writer-position copy.
+	[[nodiscard]] PlayerShotVolleyContext &volley_context() noexcept;
 
 private:
 	PlayerShotPoolState &pool;
@@ -178,5 +227,26 @@ void prepare_player_callbacks(PlayerHitState &state) noexcept;
 // An invalid native page is rejected without changing any state.
 [[nodiscard]] bool player_move(PlayerPositionState &state, std::size_t back_page,
 	std::int16_t delta_x, std::int16_t delta_y) noexcept;
+
+// player_invalidate(): run the checked shot invalidation first, emit the three
+// old-back-page player/option requests, and carry only the player from front
+// to back. Valid same-page inputs are preserved rather than treated as an
+// imagined page alternation; invalid page indices refuse before mutation.
+[[nodiscard]] PlayerFrameInvalidationResult player_frame_invalidate(
+	PlayerFrameState &frame, PlayerShotPoolState &shots,
+	PlayerShotLifetimeState &lifetime, bool reduce_effects,
+	PlayerFrameInvalidationCallbacks &callbacks
+) noexcept;
+
+// player_move_and_shoot() after player_frame_invalidate(): apply the source hit
+// guard, derive/move the player, place the option from the clamped player minus
+// the requested delta, update the dispatcher-owned writer positions, and run
+// its checked stream tail. It does not invalidate, flip pages, reset, schedule
+// a stage, or implement miss/respawn work.
+[[nodiscard]] PlayerFrameResult player_frame_move_and_shoot(
+	PlayerFrameState &frame, PlayerHitState &hit, MovementSpeeds speeds,
+	std::uint16_t input, PlayerShotStreamState &stream,
+	PlayerShotVolleyDispatcher &dispatcher
+) noexcept;
 
 } // namespace th02::core

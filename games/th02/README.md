@@ -1,8 +1,8 @@
 # TH02 native foundations
 
 This is an asset-free, partial deterministic core, not a playable game or a
-replay verifier. Random-ring fill, byte/word reads and the page-bound player
-movement helper are implemented.
+replay verifier. It has source-bounded random, player, shot, score, and spark
+state surfaces, including one checked player-frame composition.
 
 Source donor: ReC98 c6c2ee5390012b6a334163716a1703bf2edd0229:
 th02/main/randfill.cpp, th02/math/randring.cpp, th02/math/randring.inc,
@@ -32,9 +32,10 @@ signed 16-bit deltas with wrapping, clamps to x=28..390/y=16..344, and updates
 both the page and cached current coordinates. Its source body is unchanged
 between the two donor revisions above. Native page indices are validated
 before any mutation; both legal pages and all 65,536 coordinate bit patterns
-are tested against eleven deltas. The helper does not replace the caller's
-page invalidation/copy, half-pixel speed adjustment, option lag, shots, bombs,
-or hit/invincibility handling. Those remain unimplemented schedule dependencies.
+are tested against eleven deltas. As an individual helper, it does not replace
+the caller's page invalidation/copy, half-pixel speed adjustment, option lag,
+shots, bombs, or hit/invincibility handling; the later frame composition binds
+the source-owned subset of those boundaries without implying a stage schedule.
 
 An additional numeric fixture matches the first RNG payload captured from the
 historical PC-98 oracle d5ddbfdf9dc413c3a46f6964b0be1b554f086aea: seed 18,
@@ -63,9 +64,9 @@ checks, not a verified full scoring pipeline.
 player_move_and_shoot at the same donor. Dedicated diagonal bits take priority;
 invalid combinations fall back to aligned bits. Signed byte speeds promote
 before negation, and aligned X speed 5 enables the back-page adjustment on both
-axes. The caller must first apply the original hit guard; this helper does not
-implement that guard, options, shooting, bombs or page alternation. Global
-speeds/input/page become arguments and selected deltas/pose become a result;
+axes. Its immediate caller must first apply the original hit guard; the helper
+itself does not implement that guard, options, shooting, bombs or page
+alternation. Global speeds/input/page become arguments and selected deltas/pose become a result;
 the nested switch and page-correction behavior remain unchanged. Invalid host
 pages are refused. Tests exhaust input words and each speed byte independently.
 
@@ -94,10 +95,25 @@ effect seam receives only the following sound/bomb calls. Invalid native
 selection/page and B's modeled source `iatan2()` fault return at the volley
 call position, before sound/cooldown/phase/bomb work. The small context retains
 only source globals with no previous owner (selection, positions/page, B target
-and unused word, C cycle); it is not reset setup, movement/options, a page
-driver, or a frame schedule. Tests cover normal A/B/C dispatch and each stop
-boundary, but this remains a source-grounded unit bridge rather than gameplay,
-replay, or session parity.
+and unused word, C cycle). A separate player-frame composition now supplies its
+positions/page at the selected-volley call boundary; neither surface is reset
+setup, a page driver, or a frame schedule. Tests cover normal A/B/C dispatch
+and each stop boundary, but this remains source-grounded state coverage rather
+than gameplay, replay, or session parity.
+
+`player_frame_invalidate()` and `player_frame_move_and_shoot()` compose the
+state-only frame boundary before that dispatcher. Invalidation first forwards
+the existing shot invalidation, then emits player and two option rectangles
+from the old explicit back page, then copies only the player front coordinate
+to back. Movement applies the original hit guard without decrementing
+invincibility, derives movement/pose, performs the checked back-page move, and
+writes the left option from the moved-and-clamped player coordinate minus the
+requested delta. It updates the dispatcher's existing writer-position context
+at the selected-volley call and preserves its success/refusal prefixes. No
+implicit page flip, reset, miss/respawn, renderer, or stage schedule is added.
+Focused controls cover event order, same/invalid page behavior, the hit guard,
+all aligned and diagonal input encodings, field-edge option placement, and
+actual A-volley Q12.4 spawn positions.
 
 `core/shot.hpp` now supplies TH02's fixed 38-slot, 16-byte player-shot record
 and the three pool writer helpers. `shot_add()` and `shot_option_add()` update
@@ -115,10 +131,10 @@ top of those writers. It starts at pool slot zero, scans only free entries,
 preserves every level-0-to-9 pattern and its ring draws, exits at the source
 pattern boundary or scan limit, and clears the option-shot latch even with a
 full pool. At level 9 it carries its per-shot patnum changes back to the
-caller-tail seam before the later sound callback. It deliberately excludes the
-other shottype callbacks, option firing, update/render, collisions, and frame
-scheduling; the tests are source-derived callback coverage, not a full shot or
-gameplay implementation.
+caller-tail seam before the later sound callback. This A callback itself does
+not fire options or update/render/collide/schedule shots; its B/C siblings and
+the selected-dispatch binding are separate completed surfaces. The tests are
+source-derived callback coverage, not a full shot or gameplay implementation.
 
 `shot_b_volley()` adds shottype B's complete selected spawn body on the same
 pool: one source-ordered free scan writes the regular volley and then its
@@ -127,9 +143,9 @@ that overwrites each first pattern with level 9's final pattern, full-power
 patnum changes, target marker/latch gates, and target/fallback homing angles.
 Homing consumes the shared literal master.lib `iatan2_source()` model; a
 modeled source DIV fault reports the prefix already written rather than using
-TH03's deliberately normalized edge policy. It remains a spawn callback only:
-shottype C, option movement, hit testing, invalidation/update/render, sound,
-frame scheduling, replay, and playable-session claims are absent.
+TH03's deliberately normalized edge policy. This B callback remains a spawn
+body only: option-shot movement, hit testing, invalidation/update/render,
+sound, frame scheduling, replay, and playable-session claims are absent.
 
 `shot_c_volley()` adds shottype C's selected spawn callback. It increments the
 byte cycle before every source branch, then shares one free-slot scan between
@@ -161,8 +177,8 @@ regular and option decay, and persistent regular slot-animation bytes.
 Invalidation emits a typed tile request before each raw-nonfree slot is freed
 or copied from the explicit front page to the explicit back page, and clears
 the option latch only when no surviving option shot remains. Rendering, scroll
-conversion, page flips, the player wrapper, and stage scheduling remain
-unimplemented; the typed callback is not a render queue or a page driver.
+conversion, page flips, and stage scheduling remain unimplemented; the later
+player-frame composition is a caller, not a render queue or page driver.
 
 `PlayerShotSparkAllocatorCallbacks` is the explicit synchronous bridge from
 the existing player-shot collision effect seam into that allocator. For valid

@@ -12,6 +12,14 @@ std::int16_t add_word(std::int16_t value, std::int16_t delta) noexcept
 		static_cast<std::int32_t>(value) + delta));
 }
 
+constexpr std::int16_t player_width = 32;
+constexpr std::int16_t player_height = 48;
+constexpr std::int16_t option_width = 16;
+constexpr std::int16_t option_height = 16;
+constexpr std::int16_t option_to_option_distance = 48;
+constexpr std::int16_t player_left_to_option_left = 16;
+constexpr std::int16_t player_to_option_top = 16;
+
 void negate_hits_if_invincible(PlayerHitState &state) noexcept
 {
 	if(state.invincible_via_bomb ||
@@ -72,6 +80,34 @@ bool player_move(PlayerPositionState &state, std::size_t back_page,
 	}
 	page.x = state.current.x;
 	return true;
+}
+
+PlayerFrameInvalidationResult player_frame_invalidate(
+	PlayerFrameState &frame, PlayerShotPoolState &shots,
+	PlayerShotLifetimeState &lifetime, bool reduce_effects,
+	PlayerFrameInvalidationCallbacks &callbacks
+) noexcept
+{
+	if(frame.page_front >= frame.player.on_page.size() ||
+		frame.page_back >= frame.player.on_page.size()) {
+		return PlayerFrameInvalidationResult::invalid_page;
+	}
+	if(!shots_invalidate_lifetime(shots, lifetime, frame.page_back,
+		frame.page_front, reduce_effects, callbacks)) {
+		return PlayerFrameInvalidationResult::invalid_page;
+	}
+
+	const auto player_old = frame.player.on_page[frame.page_back];
+	const auto option_old = frame.option_left_on_page[frame.page_back];
+	callbacks.invalidate_player({player_old, player_width, player_height});
+	callbacks.invalidate_option({option_old, option_width, option_height});
+	callbacks.invalidate_option({
+		{add_word(option_old.x, option_to_option_distance), option_old.y},
+		option_width, option_height,
+	});
+
+	frame.player.on_page[frame.page_back] = frame.player.on_page[frame.page_front];
+	return PlayerFrameInvalidationResult::completed;
 }
 
 std::optional<MovementIntent> movement_intent(
@@ -161,6 +197,11 @@ PlayerShotVolleyDispatcher::PlayerShotVolleyDispatcher(PlayerShotPoolState &pool
 	: pool(pool_arg), lifetime(lifetime_arg), random(random_arg),
 	  context(context_arg), effects(effects_arg)
 {
+}
+
+PlayerShotVolleyContext &PlayerShotVolleyDispatcher::volley_context() noexcept
+{
+	return context;
 }
 
 PlayerShotStreamResult PlayerShotVolleyDispatcher::shot_volley(
@@ -287,6 +328,51 @@ PlayerShotStreamResult player_move_and_shoot_shot_stream_step(
 		callbacks.bomb_request(state);
 	}
 	return PlayerShotStreamResult::completed;
+}
+
+PlayerFrameResult player_frame_move_and_shoot(
+	PlayerFrameState &frame, PlayerHitState &hit, MovementSpeeds speeds,
+	std::uint16_t input, PlayerShotStreamState &stream,
+	PlayerShotVolleyDispatcher &dispatcher
+) noexcept
+{
+	if(!player_move_and_shoot_allowed(hit)) {
+		return PlayerFrameResult::hit_blocked;
+	}
+	const auto intent = movement_intent(input, speeds, frame.page_back);
+	if(!intent.has_value()) {
+		return PlayerFrameResult::invalid_page;
+	}
+	frame.pose = intent->pose;
+	if(!player_move(frame.player, frame.page_back,
+		intent->delta.x, intent->delta.y)) {
+		return PlayerFrameResult::invalid_page;
+	}
+	frame.option_left_on_page[frame.page_back] = {
+		add_word(frame.player.current.x,
+			static_cast<std::int16_t>(-player_left_to_option_left - intent->delta.x)),
+		add_word(frame.player.current.y,
+			static_cast<std::int16_t>(player_to_option_top - intent->delta.y)),
+	};
+
+	auto &context = dispatcher.volley_context();
+	context.positions = PlayerShotWriterPositions{
+		{frame.player.current.x, frame.player.current.y},
+		{frame.option_left_on_page[frame.page_back].x,
+			frame.option_left_on_page[frame.page_back].y},
+	};
+	context.back_page = frame.page_back;
+	switch(player_move_and_shoot_shot_stream_step(stream, input, dispatcher)) {
+	case PlayerShotStreamResult::completed:
+		return PlayerFrameResult::completed;
+	case PlayerShotStreamResult::invalid_shot_selection:
+		return PlayerFrameResult::invalid_shot_selection;
+	case PlayerShotStreamResult::volley_invalid_page:
+		return PlayerFrameResult::volley_invalid_page;
+	case PlayerShotStreamResult::volley_source_iatan2_fault:
+		return PlayerFrameResult::volley_source_iatan2_fault;
+	}
+	return PlayerFrameResult::invalid_shot_selection;
 }
 
 } // namespace th02::core
