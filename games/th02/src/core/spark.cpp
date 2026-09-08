@@ -114,4 +114,26 @@ bool sparks_add(SparkPoolState &state, std::size_t back_page,
 	return true;
 }
 
+PlayerShotSparkAllocatorCallbacks::PlayerShotSparkAllocatorCallbacks(
+	SparkPoolState &state, std::size_t back_page
+) noexcept : state_(state), back_page_(back_page)
+{
+}
+
+void PlayerShotSparkAllocatorCallbacks::shot_hit_spark(
+	PlayerShotHitSpark spark
+) noexcept
+{
+	if(!sparks_add(state_, back_page_, spark.topleft.x,
+		std::bit_cast<std::uint16_t>(spark.topleft.y), spark.speed_base,
+		spark.count, spark.as_sprite)) {
+		all_allocations_succeeded_ = false;
+	}
+}
+
+bool PlayerShotSparkAllocatorCallbacks::all_allocations_succeeded() const noexcept
+{
+	return all_allocations_succeeded_;
+}
+
 } // namespace th02::core

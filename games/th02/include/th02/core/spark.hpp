@@ -1,5 +1,7 @@
 #pragma once
 
+#include "th02/core/shot.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -66,5 +68,25 @@ struct SparkPoolState {
 [[nodiscard]] bool sparks_add(SparkPoolState &state, std::size_t back_page,
 	std::int16_t left, std::uint16_t top, std::int16_t speed_base,
 	std::int16_t count, bool as_sprite) noexcept;
+
+// Concrete bridge for th02/main/player/shot_hittest.cpp's synchronous
+// sparks_add() calls. It preserves the source order for valid state. A native
+// allocator refusal is sticky and caller-visible after shots_hittest() returns;
+// it is not a successful complete simulation and does not invent rollback of
+// the source prefix already written by the collision body.
+class PlayerShotSparkAllocatorCallbacks final : public PlayerShotHitCallbacks {
+public:
+	PlayerShotSparkAllocatorCallbacks(SparkPoolState &state,
+		std::size_t back_page) noexcept;
+
+	void shot_hit_spark(PlayerShotHitSpark spark) noexcept override;
+
+	[[nodiscard]] bool all_allocations_succeeded() const noexcept;
+
+private:
+	SparkPoolState &state_;
+	std::size_t back_page_;
+	bool all_allocations_succeeded_{true};
+};
 
 } // namespace th02::core

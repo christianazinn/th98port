@@ -143,6 +143,14 @@ strict and negative-coordinate boundaries, slots 34 versus 35–37, low-word
 carry loss, and callback-visible mutation order; they are source-derived unit
 coverage, not gameplay or replay verification.
 
+`PlayerShotSparkAllocatorCallbacks` is the explicit synchronous bridge from
+the existing player-shot collision effect seam into that allocator. For valid
+source state, regular, large, and option hits allocate their TH02 sparks at
+the original callback point and selected back page. A host-invalid allocator
+refusal is a sticky caller-visible failure after the collision prefix; it is
+not rollback or a successful complete simulation. Stage seeding and all
+remaining spark lifecycle work remain separate.
+
 `sparks_add()` now supplies TH02's independent 64-slot spark allocator. Its
 typed 20-byte record preserves the source's two unknown bytes and both page
 positions; the allocator writes only the selected back page and source-owned
