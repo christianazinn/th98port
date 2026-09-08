@@ -154,8 +154,69 @@ PlayerUpdateResult player_update_state_step(
 	return PlayerUpdateResult::completed;
 }
 
-void player_move_and_shoot_shot_stream_step(PlayerShotStreamState &state,
-	std::uint16_t input, PlayerShotStreamCallbacks &callbacks) noexcept
+PlayerShotVolleyDispatcher::PlayerShotVolleyDispatcher(PlayerShotPoolState &pool_arg,
+	PlayerShotLifetimeState &lifetime_arg, RandomState &random_arg,
+	PlayerShotVolleyContext &context_arg, PlayerShotStreamEffects &effects_arg
+) noexcept
+	: pool(pool_arg), lifetime(lifetime_arg), random(random_arg),
+	  context(context_arg), effects(effects_arg)
+{
+}
+
+PlayerShotStreamResult PlayerShotVolleyDispatcher::shot_volley(
+	const PlayerShotStreamState &state, std::uint8_t &shot_patnum,
+	std::uint8_t &shot_option_patnum
+) noexcept
+{
+	switch(context.type) {
+	case PlayerShotType::a:
+		return shot_a_volley(pool, context.positions, context.back_page, random,
+			state.shot_level, state.spread_angle_delta, shot_patnum,
+			lifetime.option_shots_alive) ? PlayerShotStreamResult::completed :
+				PlayerShotStreamResult::volley_invalid_page;
+	case PlayerShotType::b: {
+		const auto result = shot_b_volley(pool, context.positions,
+			context.back_page, random, state.shot_level, context.boss_position,
+			context.boss_pos_x_unused, shot_patnum, shot_option_patnum,
+			lifetime.option_shots_alive);
+		if(result == ShotBVolleyResult::invalid_page) {
+			return PlayerShotStreamResult::volley_invalid_page;
+		}
+		if(result == ShotBVolleyResult::source_iatan2_fault) {
+			return PlayerShotStreamResult::volley_source_iatan2_fault;
+		}
+		return PlayerShotStreamResult::completed;
+	}
+	case PlayerShotType::c:
+		return shot_c_volley(pool, context.positions, context.back_page, random,
+			state.shot_level, context.shot_c_cycle, shot_patnum,
+			shot_option_patnum, lifetime.option_shots_alive) ?
+				PlayerShotStreamResult::completed :
+				PlayerShotStreamResult::volley_invalid_page;
+	case PlayerShotType::invalid:
+		return PlayerShotStreamResult::invalid_shot_selection;
+	}
+	return PlayerShotStreamResult::invalid_shot_selection;
+}
+
+void PlayerShotVolleyDispatcher::shot_sound(
+	const PlayerShotStreamState &state
+) noexcept
+{
+	effects.shot_sound(state);
+}
+
+void PlayerShotVolleyDispatcher::bomb_request(
+	const PlayerShotStreamState &state
+) noexcept
+{
+	effects.bomb_request(state);
+}
+
+PlayerShotStreamResult player_move_and_shoot_shot_stream_step(
+	PlayerShotStreamState &state, std::uint16_t input,
+	PlayerShotStreamCallbacks &callbacks
+) noexcept
 {
 	if((input & input_shot) != 0) {
 		if(state.stream_a_phase == shot_stream_inactive) {
@@ -177,14 +238,19 @@ void player_move_and_shoot_shot_stream_step(PlayerShotStreamState &state,
 	if(state.stream_a_phase != shot_stream_inactive) {
 		if(state.stream_a_cooldown == 0) {
 			shot_patnums_set(state);
-			callbacks.shot_volley(state, state.shot_patnum, state.shot_option_patnum);
+			const auto volley_result = callbacks.shot_volley(
+				state, state.shot_patnum, state.shot_option_patnum
+			);
+			if(volley_result != PlayerShotStreamResult::completed) {
+				return volley_result;
+			}
 			callbacks.shot_sound(state);
 			state.stream_a_cooldown = shot_cooldown;
 			++state.stream_a_phase;
 			if((input & input_bomb) != 0) {
 				callbacks.bomb_request(state);
 			}
-			return;
+			return PlayerShotStreamResult::completed;
 		}
 		--state.stream_a_cooldown;
 	}
@@ -204,7 +270,12 @@ void player_move_and_shoot_shot_stream_step(PlayerShotStreamState &state,
 					}
 				}
 			}
-			callbacks.shot_volley(state, state.shot_patnum, state.shot_option_patnum);
+			const auto volley_result = callbacks.shot_volley(
+				state, state.shot_patnum, state.shot_option_patnum
+			);
+			if(volley_result != PlayerShotStreamResult::completed) {
+				return volley_result;
+			}
 			state.stream_b_cooldown = shot_cooldown;
 			++state.stream_b_phase;
 		} else {
@@ -215,6 +286,7 @@ void player_move_and_shoot_shot_stream_step(PlayerShotStreamState &state,
 	if((input & input_bomb) != 0) {
 		callbacks.bomb_request(state);
 	}
+	return PlayerShotStreamResult::completed;
 }
 
 } // namespace th02::core

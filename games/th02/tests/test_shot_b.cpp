@@ -459,12 +459,19 @@ struct ShotBAdapter final : PlayerShotStreamCallbacks {
 	{
 	}
 
-	void shot_volley(const PlayerShotStreamState &state, std::uint8_t &patnum,
+	PlayerShotStreamResult shot_volley(const PlayerShotStreamState &state, std::uint8_t &patnum,
 		std::uint8_t &option_patnum) noexcept override
 	{
 		std::int16_t unused = -1;
 		result = shot_b_volley(pool, positions, 0U, random, state.shot_level,
 			{180, 0}, unused, patnum, option_patnum, option_latch);
+		if(result == ShotBVolleyResult::invalid_page) {
+			return PlayerShotStreamResult::volley_invalid_page;
+		}
+		if(result == ShotBVolleyResult::source_iatan2_fault) {
+			return PlayerShotStreamResult::volley_source_iatan2_fault;
+		}
+		return PlayerShotStreamResult::completed;
 	}
 
 	void shot_sound(const PlayerShotStreamState &) noexcept override {}
@@ -479,8 +486,9 @@ struct ShotBAdapter final : PlayerShotStreamCallbacks {
 	std::uint8_t option_latch = 0U;
 	ShotBAdapter adapter{pool, random, positions, option_latch};
 	PlayerShotStreamState stream{2U, 0U, 1U, 0U, 9U, 0U, 0U, 0x30U, 0x37U, 0};
-	player_move_and_shoot_shot_stream_step(stream, 0x0010U, adapter);
-	return adapter.result == ShotBVolleyResult::completed &&
+	return player_move_and_shoot_shot_stream_step(stream, 0x0010U, adapter) ==
+		PlayerShotStreamResult::completed && adapter.result ==
+		ShotBVolleyResult::completed &&
 		stream.shot_patnum == 0x32U && stream.shot_option_patnum == 0x37U &&
 		stream.stream_b_phase == 1U && stream.stream_b_cooldown == 8U &&
 		pool.current_slot == 9 && pool.shots[2].patnum == 0x32U &&

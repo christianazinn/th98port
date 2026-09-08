@@ -87,15 +87,17 @@ returns after the hit/timer prefix and before miss or rendering. The VRAM-only
 render tail, complete miss behavior, page driver, frame schedule, replay, and
 playable-session behavior remain unimplemented.
 
-`player_move_and_shoot_shot_stream_step()` carries only the tail's two stream
-phases/cooldowns, handoff patnums, and powered spread adjustment. Its borrowed
-typed callbacks execute synchronously in the source volley/sound/bomb order;
-the volley callback may update the handoff patnums before later callbacks see
-them. Shot pools, shottype callbacks, RNG, bomb effects, HUD, option placement,
-and the frame schedule are deliberately not implemented. Tests cover the A/B
-cooldown/SFX asymmetry, A's one-volley jump, release phases, spread bounds, and
-the callback-visible mutation order. This is a caller-tail seam, not a native
-shot or gameplay implementation.
+`player_move_and_shoot_shot_stream_step()` now uses one checked synchronous
+callback path: `PlayerShotVolleyDispatcher` selects the existing A/B/C volley
+body over the shared pool, lifetime latch, RNG, and stream patnums, while an
+effect seam receives only the following sound/bomb calls. Invalid native
+selection/page and B's modeled source `iatan2()` fault return at the volley
+call position, before sound/cooldown/phase/bomb work. The small context retains
+only source globals with no previous owner (selection, positions/page, B target
+and unused word, C cycle); it is not reset setup, movement/options, a page
+driver, or a frame schedule. Tests cover normal A/B/C dispatch and each stop
+boundary, but this remains a source-grounded unit bridge rather than gameplay,
+replay, or session parity.
 
 `core/shot.hpp` now supplies TH02's fixed 38-slot, 16-byte player-shot record
 and the three pool writer helpers. `shot_add()` and `shot_option_add()` update

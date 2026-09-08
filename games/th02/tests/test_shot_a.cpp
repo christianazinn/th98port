@@ -345,11 +345,13 @@ struct ShotAAdapter final : PlayerShotStreamCallbacks {
 	{
 	}
 
-	void shot_volley(const PlayerShotStreamState &state, std::uint8_t &patnum,
+	PlayerShotStreamResult shot_volley(const PlayerShotStreamState &state, std::uint8_t &patnum,
 		std::uint8_t &) noexcept override
 	{
 		volley_accepted = shot_a_volley(pool, positions, back_page, random,
 			state.shot_level, state.spread_angle_delta, patnum, option_latch);
+		return volley_accepted ? PlayerShotStreamResult::completed :
+			PlayerShotStreamResult::volley_invalid_page;
 	}
 
 	void shot_sound(const PlayerShotStreamState &state) noexcept override
@@ -371,8 +373,9 @@ struct ShotAAdapter final : PlayerShotStreamCallbacks {
 	ShotAAdapter adapter{pool, positions, 0U, random, option_latch};
 	PlayerShotStreamState stream{0xFFU, 0xFFU, 0U, 0U, 9U, 0U, 0U,
 		0x30U, 0x37U, 10};
-	player_move_and_shoot_shot_stream_step(stream, 0x0010U, adapter);
-	return adapter.volley_accepted && adapter.sound_count == 1U &&
+	return player_move_and_shoot_shot_stream_step(stream, 0x0010U, adapter) ==
+		PlayerShotStreamResult::completed && adapter.volley_accepted &&
+		adapter.sound_count == 1U &&
 		adapter.sound_patnum == 0x36U && adapter.sound_option_patnum == 0x37U &&
 		stream.shot_patnum == 0x36U && stream.shot_option_patnum == 0x37U &&
 		pool.current_slot == 5 && pool.shots[5].patnum == 0x36U &&

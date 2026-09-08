@@ -76,6 +76,26 @@ struct PlayerShotWriterPositions {
 	bool operator==(const PlayerShotWriterPositions &) const = default;
 };
 
+// Source-owned selection and globals around the three player-shot functions.
+// The pool, lifetime latch, random ring, and current stream patnums remain in
+// their existing owners and are deliberately not copied into this context.
+enum class PlayerShotType : std::uint8_t {
+	a = 0U,
+	b = 1U,
+	c = 2U,
+	invalid = 0xFFU,
+};
+
+struct PlayerShotVolleyContext {
+	PlayerShotType type{PlayerShotType::invalid};
+	PlayerShotWriterPositions positions{};
+	std::size_t back_page{};
+	ShotPixelPoint boss_position{-1, -1};
+	std::int16_t boss_pos_x_unused{-1};
+	std::uint8_t shot_c_cycle{};
+	bool operator==(const PlayerShotVolleyContext &) const = default;
+};
+
 // Pixel hitbox handed to the fixed shot-pool scan by an enemy or boss. The
 // source computes its two X windows from this same top-left, but deliberately
 // shifts only one of their right edges.

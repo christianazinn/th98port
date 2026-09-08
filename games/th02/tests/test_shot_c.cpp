@@ -418,11 +418,13 @@ struct ShotCAdapter final : PlayerShotStreamCallbacks {
 	{
 	}
 
-	void shot_volley(const PlayerShotStreamState &state, std::uint8_t &patnum,
+	PlayerShotStreamResult shot_volley(const PlayerShotStreamState &state, std::uint8_t &patnum,
 		std::uint8_t &option_patnum) noexcept override
 	{
 		accepted = shot_c_volley(pool, positions, 0U, random, state.shot_level,
 			cycle, patnum, option_patnum, option_latch);
+		return accepted ? PlayerShotStreamResult::completed :
+			PlayerShotStreamResult::volley_invalid_page;
 	}
 
 	void shot_sound(const PlayerShotStreamState &) noexcept override {}
@@ -438,8 +440,9 @@ struct ShotCAdapter final : PlayerShotStreamCallbacks {
 	std::uint8_t option_latch = 0U;
 	ShotCAdapter adapter{pool, random, positions, cycle, option_latch};
 	PlayerShotStreamState stream{2U, 0U, 1U, 0U, 9U, 0U, 0U, 0x30U, 0x37U, 0};
-	player_move_and_shoot_shot_stream_step(stream, 0x0010U, adapter);
-	return adapter.accepted && cycle == 3U && stream.shot_patnum == 0x31U &&
+	return player_move_and_shoot_shot_stream_step(stream, 0x0010U, adapter) ==
+		PlayerShotStreamResult::completed && adapter.accepted && cycle == 3U &&
+		stream.shot_patnum == 0x31U &&
 		stream.shot_option_patnum == 0x37U && stream.stream_b_phase == 1U &&
 		stream.stream_b_cooldown == 8U && pool.current_slot == 5 &&
 		pool.shots[1].patnum == 0x31U && option_latch == 0U;

@@ -9,6 +9,8 @@ namespace th02::core {
 
 struct PlayerShotPoolState;
 struct PlayerShotLifetimeState;
+struct PlayerShotVolleyContext;
+struct RandomState;
 
 struct ScreenPoint {
 	std::int16_t x{};
@@ -59,17 +61,61 @@ struct PlayerShotStreamState {
 	bool operator==(const PlayerShotStreamState &) const = default;
 };
 
+// This is returned at the selected-shot call position. A host-invalid
+// selection/page and a modeled source iatan2 fault are deliberately distinct:
+// both stop the stream before its following sound/cooldown/phase/bomb work.
+enum class PlayerShotStreamResult : std::uint8_t {
+	completed,
+	invalid_shot_selection,
+	volley_invalid_page,
+	volley_source_iatan2_fault,
+};
+
 // A borrowed synchronous seam for the three calls in the shot-stream tail.
-// shot_volley() receives the source-position state plus only the two mutable
-// handoff patnums. It does not model a shot pool, RNG, bomb, HUD, or a frame
-// driver.
+// shot_volley() receives the source-position state plus the two mutable
+// handoff patnums, returning only a source-position terminal outcome. It does
+// not defer work or model a frame driver.
 class PlayerShotStreamCallbacks {
 public:
 	virtual ~PlayerShotStreamCallbacks() = default;
-	virtual void shot_volley(const PlayerShotStreamState &state,
+	virtual PlayerShotStreamResult shot_volley(const PlayerShotStreamState &state,
 		std::uint8_t &shot_patnum, std::uint8_t &shot_option_patnum) noexcept = 0;
 	virtual void shot_sound(const PlayerShotStreamState &state) noexcept = 0;
 	virtual void bomb_request(const PlayerShotStreamState &state) noexcept = 0;
+};
+
+// Synchronous source-position effects following a successful selected volley.
+// It is separate from the concrete volley dispatcher so this core does not
+// acquire sound or bomb state.
+class PlayerShotStreamEffects {
+public:
+	virtual ~PlayerShotStreamEffects() = default;
+	virtual void shot_sound(const PlayerShotStreamState &state) noexcept = 0;
+	virtual void bomb_request(const PlayerShotStreamState &state) noexcept = 0;
+};
+
+// Connects the existing checked stream seam to the native A/B/C volley bodies.
+// It borrows the existing pool/lifetime/random/stream state and forwards only
+// successful source-position sound/bomb calls to effects; it owns neither a
+// deferred queue nor a reset/frame/page driver.
+class PlayerShotVolleyDispatcher final : public PlayerShotStreamCallbacks {
+public:
+	PlayerShotVolleyDispatcher(PlayerShotPoolState &pool,
+		PlayerShotLifetimeState &lifetime, RandomState &random,
+		PlayerShotVolleyContext &context, PlayerShotStreamEffects &effects) noexcept;
+
+	PlayerShotStreamResult shot_volley(const PlayerShotStreamState &state,
+		std::uint8_t &shot_patnum,
+		std::uint8_t &shot_option_patnum) noexcept override;
+	void shot_sound(const PlayerShotStreamState &state) noexcept override;
+	void bomb_request(const PlayerShotStreamState &state) noexcept override;
+
+private:
+	PlayerShotPoolState &pool;
+	PlayerShotLifetimeState &lifetime;
+	RandomState &random;
+	PlayerShotVolleyContext &context;
+	PlayerShotStreamEffects &effects;
 };
 
 // The caller-visible outcomes of the state-only player_update_and_render()
@@ -120,10 +166,12 @@ void prepare_player_callbacks(PlayerHitState &state) noexcept;
 ) noexcept;
 
 // Only the shot-stream tail of player_move_and_shoot, after movement and
-// option positioning. Calls its borrowed callbacks in source order; no action
-// is deferred. The callback implementations remain outside this native slice.
-void player_move_and_shoot_shot_stream_step(PlayerShotStreamState &state,
-	std::uint16_t input, PlayerShotStreamCallbacks &callbacks) noexcept;
+// option positioning. Calls its borrowed callbacks in source order; an
+// unsuccessful selected volley stops at that exact source call position.
+[[nodiscard]] PlayerShotStreamResult player_move_and_shoot_shot_stream_step(
+	PlayerShotStreamState &state, std::uint16_t input,
+	PlayerShotStreamCallbacks &callbacks
+) noexcept;
 
 // th02/main/player/player.cpp::player_move. The caller supplies the page
 // established by player_invalidate; this does not copy the front page first.
