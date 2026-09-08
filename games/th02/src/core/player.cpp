@@ -9,6 +9,14 @@ std::int16_t add_word(std::int16_t value, std::int16_t delta) noexcept
 	return std::bit_cast<std::int16_t>(static_cast<std::uint16_t>(
 		static_cast<std::int32_t>(value) + delta));
 }
+
+void negate_hits_if_invincible(PlayerHitState &state) noexcept
+{
+	if(state.invincible_via_bomb ||
+		((state.invincibility_time != 0) && !state.miss_active)) {
+		state.raw_hit = 0;
+	}
+}
 }
 
 bool player_move(PlayerPositionState &state, std::size_t back_page,
@@ -70,6 +78,20 @@ std::optional<MovementIntent> movement_intent(
 	}
 	result.delta = {dx, dy};
 	return result;
+}
+
+bool player_move_and_shoot_allowed(PlayerHitState &state) noexcept
+{
+	negate_hits_if_invincible(state);
+	return state.raw_hit == 0;
+}
+
+void prepare_player_callbacks(PlayerHitState &state) noexcept
+{
+	negate_hits_if_invincible(state);
+	if(state.invincibility_time > 0) {
+		--state.invincibility_time;
+	}
 }
 
 } // namespace th02::core

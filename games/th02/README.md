@@ -68,3 +68,12 @@ implement that guard, options, shooting, bombs or page alternation. Global
 speeds/input/page become arguments and selected deltas/pose become a result;
 the nested switch and page-correction behavior remain unchanged. Invalid host
 pages are refused. Tests exhaust input words and each speed byte independently.
+
+`PlayerHitState` carries the raw one-byte hit value, including the game-over
+value `0xFF`, together with the two independent invincibility conditions.
+`player_move_and_shoot_allowed()` ports only that function's immunity guard and
+early-return decision. `prepare_player_callbacks()` ports the later update
+function's same guard followed by its nonzero timer decrement. Neither helper
+calls shots, miss handling, quit, rendering, bombs, or a frame driver. The
+dedicated test exhausts every raw hit and timer byte across both boolean guards;
+it is source-derived state coverage, not a gameplay or replay result.
