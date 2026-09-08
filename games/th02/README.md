@@ -142,3 +142,14 @@ playable session remain separate. Focused tests cover every damage-table level,
 strict and negative-coordinate boundaries, slots 34 versus 35–37, low-word
 carry loss, and callback-visible mutation order; they are source-derived unit
 coverage, not gameplay or replay verification.
+
+`sparks_add()` now supplies TH02's independent 64-slot spark allocator. Its
+typed 20-byte record preserves the source's two unknown bytes and both page
+positions; the allocator writes only the selected back page and source-owned
+live/age/render/velocity fields. It retains the one unsigned top-coordinate
+subtract, normal seeded-default branch, sprite ring's signed 16-bit angle
+numerator, overwrite order, and low-byte-only ring update—including the
+observable nonpositive-count update. Stage seeding of angle/speed/mode, spark
+update, invalidation, rendering, frame scheduling, replay, and a collision
+binding remain separate. These focused tests are source-derived allocator
+coverage, not gameplay or replay verification.
