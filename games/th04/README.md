@@ -54,3 +54,11 @@ unsigned wrapped hitbox comparisons. Ordered spark requests must be consumed
 by the caller before subsequent gameplay. Spark allocation itself and the
 boss/enemy callers are not yet ported; the collision helper alone is not a
 complete replay engine. Invalid represented pool addresses fail explicitly.
+
+`core/score.hpp` implements th04/main/score_reset.cpp at the pinned donor:
+digits 1..7 and five per-run fields are cleared; digit zero (continues_used)
+survives. It does not commit a high score, unlike TH05's distinct helper.
+Only the identical eight-byte representation from th04/score.h is shared.
+Globals become explicit state and host types have fixed widths; mutation
+order remains unchanged. Exhaustive byte/counter tests are source-derived,
+not evidence for call timing or complete score/replay behavior.

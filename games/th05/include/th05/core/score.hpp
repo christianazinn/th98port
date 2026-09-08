@@ -1,13 +1,13 @@
 #pragma once
 
-#include <array>
+#include "pc98/score_digits.hpp"
 #include <cstddef>
 #include <cstdint>
 
 namespace th05::core {
 
 // th04/score.h: digit zero aliases the continue counter, not score units.
-using ScoreDigits = std::array<std::uint8_t, 8>;
+using ScoreDigits = pc98::ScoreDigits;
 
 struct ScoreState {
 	ScoreDigits score{}, score_highest{};
