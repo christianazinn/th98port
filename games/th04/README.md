@@ -47,6 +47,15 @@ Near shot pointers are represented by stable pool indices. Allocation,
 collisions, shot patterns, and the gameplay call schedule remain separate
 work; this is not TH05's different homing/missile loop.
 
+`core/shot_spawn.hpp` supplies the source-specific TH04 allocator and direct
+Reimu/Marisa level 0/1 shot helpers. It carries the global probe cursor and
+occupied-count byte separately from the active update pool, preserving the
+five complete records that fit in source-adjacent tail storage. The remaining
+six tail bytes are retained but return an explicit unsupported result before a
+partial source record can be accessed. The tiny cadence seam keeps source
+18→12→6 scheduling and pattern-before-sound order, but its caller still owns
+the unlocked movement branch, miss/bomb control, and full player update.
+
 `core/shot_collision.hpp` applies TH04's complete shot/laser hit test to that
 cache. It preserves diminishing damage, zero-damage hits, repeat hits against
 the unchanged cache, velocity decay, bomb-before-laser damage ordering, and
