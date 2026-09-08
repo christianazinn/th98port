@@ -129,3 +129,16 @@ condition, which lifts the final two writes of its five-shot regular volley;
 this deliberately follows the condition instead of the adjacent contradictory
 "last three" source comment. Option movement, update/render, collision,
 sound, frame scheduling, replay, and playable-session behavior remain outside.
+
+`shots_hittest()` now supplies the source's simulation-only player-shot
+collision scan. It preserves the 35-of-38 slot bound, strict and intentionally
+asymmetric regular/option hit windows, signed Q12.4 conversion, regular decay
+state/velocity changes, option repeated damage, the low-byte bomb gate, and
+the unusual 16-bit-only `score_delta` addition. A typed synchronous spark seam
+records the source effect call at its exact point; it owns no spark pool and
+must not mutate the borrowed shot/score state. Tile invalidation, position
+copying, shot update/rendering, enemy HP, stage scheduling, replay, and a
+playable session remain separate. Focused tests cover every damage-table level,
+strict and negative-coordinate boundaries, slots 34 versus 35–37, low-word
+carry loss, and callback-visible mutation order; they are source-derived unit
+coverage, not gameplay or replay verification.

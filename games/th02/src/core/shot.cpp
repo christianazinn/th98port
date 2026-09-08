@@ -1,10 +1,12 @@
 #include "th02/core/shot.hpp"
 
 #include "th02/core/random.hpp"
+#include "th02/core/score.hpp"
 
 #include "pc98/masterlib_iatan2.hpp"
 #include "pc98/masterlib_vector.hpp"
 
+#include <array>
 #include <bit>
 
 namespace th02::core {
@@ -13,6 +15,20 @@ namespace {
 constexpr unsigned subpixel_bits = 4U;
 constexpr std::int16_t shot_spawn_top_offset = 32;
 constexpr std::uint8_t shot_level_max = 9;
+constexpr std::size_t shot_hittest_count = 35U;
+constexpr std::int16_t shot_hittest_margin = 8;
+constexpr std::int16_t shot_decay_large_offset = 8;
+constexpr std::uint8_t shot_patnum_hit_animated = 0x32U;
+constexpr std::uint8_t shot_patnum_hit_large = 0x78U;
+constexpr std::array<std::int16_t, shot_level_max + 1U> shot_hit_damage{
+	5, 5, 4, 4, 3, 3, 3, 2, 2, 1,
+};
+constexpr std::array<std::int16_t, shot_level_max + 1U> shot_option_hit_damage{
+	2, 2, 2, 2, 2, 1, 1, 1, 1, 1,
+};
+constexpr std::array<std::int16_t, shot_level_max + 1U> shot_hit_damage_large{
+	0, 0, 8, 8, 7, 7, 6, 5, 4, 3,
+};
 
 [[nodiscard]] std::int16_t add_word(
 	std::int16_t lhs, std::int16_t rhs
@@ -43,6 +59,34 @@ constexpr std::uint8_t shot_level_max = 9;
 		static_cast<std::uint32_t>(std::bit_cast<std::uint16_t>(rhs))
 	);
 	return std::bit_cast<std::int16_t>(bits);
+}
+
+[[nodiscard]] std::int16_t arithmetic_shift_right(
+	std::int16_t value, unsigned int count
+) noexcept
+{
+	const auto divisor = static_cast<std::int32_t>(1) << count;
+	if(value >= 0) return static_cast<std::int16_t>(value / divisor);
+	return static_cast<std::int16_t>(
+		-(((-static_cast<std::int32_t>(value)) + divisor - 1) / divisor)
+	);
+}
+
+[[nodiscard]] std::int16_t to_pixels(std::int16_t subpixels) noexcept
+{
+	return arithmetic_shift_right(subpixels, subpixel_bits);
+}
+
+void score_delta_add_low_word(ScoreState &score, std::int16_t damage) noexcept
+{
+	const auto existing = std::bit_cast<std::uint32_t>(score.score_delta);
+	const auto low = static_cast<std::uint16_t>(existing);
+	const auto added = static_cast<std::uint16_t>(
+		static_cast<std::uint32_t>(low) +
+		static_cast<std::uint32_t>(std::bit_cast<std::uint16_t>(damage))
+	);
+	const auto updated = (existing & 0xFFFF0000U) | added;
+	score.score_delta = std::bit_cast<std::int32_t>(updated);
 }
 
 [[nodiscard]] bool slot_is_valid(const PlayerShotPoolState &state,
@@ -706,6 +750,84 @@ bool shot_c_volley(PlayerShotPoolState &state,
 	}
 	shot_patnum = state.patnum;
 	return true;
+}
+
+std::optional<std::int16_t> shots_hittest(PlayerShotPoolState &state,
+	ScoreState &score, std::size_t back_page, std::uint8_t shot_level,
+	std::uint32_t stage_frame, bool bombing, std::uint8_t bomb_damage_frame_mask,
+	PlayerShotHitbox hitbox, PlayerShotHitCallbacks &callbacks) noexcept
+{
+	if(back_page >= state.shots.front().pos_on_page.size() ||
+		shot_level > shot_level_max) {
+		return std::nullopt;
+	}
+
+	const auto damage_hit = shot_hit_damage[shot_level];
+	const auto damage_option = shot_option_hit_damage[shot_level];
+	const auto damage_large = shot_hit_damage_large[shot_level];
+	// The source derives this before moving the shared left edge. The regular
+	// branch reads it; the option branch re-spells left + width afterwards.
+	const auto right = add_word(hitbox.topleft.x, hitbox.width);
+	const auto top_edge = subtract_word(hitbox.topleft.y, shot_hittest_margin);
+	const auto left = subtract_word(hitbox.topleft.x, shot_hittest_margin);
+	const auto bottom_edge = add_word(top_edge, hitbox.height);
+	std::int16_t damage = 0;
+
+	for(std::size_t i = 0; i < shot_hittest_count; ++i) {
+		auto &shot = state.shots[i];
+		if(shot.flag != player_shot_alive) continue;
+
+		auto &position = shot.pos_on_page[back_page];
+		const auto shot_left = to_pixels(position.x);
+		if(!shot.from_option) {
+			if(shot.decay_cel != 0U || shot_left <= left || shot_left >= right) {
+				continue;
+			}
+			const auto shot_top = to_pixels(position.y);
+			if(shot_top <= top_edge || shot_top >= bottom_edge) continue;
+
+			damage = add_word(damage, 1);
+			if(shot.patnum >= shot_patnum_hit_animated) {
+				shot.velocity.x = arithmetic_shift_right(shot.velocity.x, 3U);
+				shot.velocity.y = arithmetic_shift_right(shot.velocity.y, 3U);
+				if(shot.patnum >= shot_patnum_hit_large) {
+					shot.decay_cel = 1U;
+					position.x = subtract_word(position.x,
+						to_subpixels(shot_decay_large_offset));
+					position.y = subtract_word(position.y,
+						to_subpixels(shot_decay_large_offset));
+					damage = add_word(damage, damage_large);
+				} else {
+					shot.decay_cel = 2U;
+					damage = add_word(damage, damage_hit);
+				}
+			}
+			// shot_left is intentionally the pre-offset X. The Y value is re-read
+			// after a large shot's centered-decay position mutation.
+			callbacks.shot_hit_spark({
+				{shot_left, to_pixels(position.y)}, 30, 1, false,
+			});
+		} else {
+			const auto option_right = add_word(left, hitbox.width);
+			if(shot_left <= left || shot_left >= option_right) continue;
+			const auto shot_top = to_pixels(position.y);
+			if(shot_top <= top_edge || shot_top >= bottom_edge) continue;
+
+			if(shot.decay_cel == 1U) {
+				callbacks.shot_hit_spark({
+					{shot_left, to_pixels(position.y)}, 40, 1, false,
+				});
+				shot.decay_cel = 2U;
+			}
+			damage = add_word(damage, damage_option);
+		}
+	}
+	if(bombing && (static_cast<std::uint8_t>(stage_frame) &
+		bomb_damage_frame_mask) == 0U) {
+		damage = add_word(damage, 1);
+	}
+	score_delta_add_low_word(score, damage);
+	return damage;
 }
 
 } // namespace th02::core
