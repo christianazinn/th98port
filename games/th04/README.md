@@ -62,3 +62,13 @@ Only the identical eight-byte representation from th04/score.h is shared.
 Globals become explicit state and host types have fixed widths; mutation
 order remains unchanged. Exhaustive byte/counter tests are source-derived,
 not evidence for call timing or complete score/replay behavior.
+
+The same header now supplies score-based extend checks. It preserves the
+original digit predicates (not numeric score thresholds), one threshold per
+invocation, byte-wrapped playperf raise before unsigned capping, and threshold
+consumption even when more than 99 lives blocks the reward. At 99 lives it
+still grants the hundredth. Awarded lives extend bullet clearing to at least
+20 frames and emit ordered HUD, popup-installation and sound requests. The
+caller must consume those requests; no rendering, audio, or frame schedule is
+implemented here. In particular, the original score-transfer caller does not
+perform this check when its pending delta is zero.
