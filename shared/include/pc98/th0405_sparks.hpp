@@ -138,9 +138,10 @@ struct SparksAddCircleResult {
 };
 
 // th04/main/spark_a.asm's separate circle path. The loop counter is the
-// premultiplied 16-bit angle word, not the source `count` directly. Count zero
-// would DIV by zero at the first free slot, so no portable successful source
-// state exists; refuse it before changing the host pool.
+// premultiplied 16-bit angle word, not the source `count` directly. With zero,
+// a full pool completes 256 occupied attempts, but the first free slot would
+// initialize and then DIV by zero. Preflight a free slot and refuse atomically;
+// retain the fully occupied source path rather than reducing zero to no-op.
 [[nodiscard]] constexpr std::optional<SparksAddCircleResult> sparks_add_circle(
 	SparkPool pool,
 	SubpixelPoint center,
@@ -149,7 +150,12 @@ struct SparksAddCircleResult {
 ) noexcept
 {
 	if(spark_center_clipped(center)) return SparksAddCircleResult{};
-	if(!spark_pool_valid(pool) || count == 0U) return std::nullopt;
+	if(!spark_pool_valid(pool)) return std::nullopt;
+	if(count == 0U) {
+		for(const auto &spark : pool.slots) {
+			if(spark.flag == SPARK_FREE) return std::nullopt;
+		}
+	}
 
 	SparksAddCircleResult result{};
 	auto angle_premultiplied = static_cast<std::uint16_t>(count << 8U);

@@ -190,7 +190,29 @@ void test_circle_allocation()
 	expect(
 		!sparks_add_circle(pool_for(slots, ring), {0, 0}, 16, 0U) &&
 			slots == zero_before && ring == 0U,
-		"zero circle count explicitly refuses the source DIV-by-zero path"
+		"zero circle count atomically refuses a free-slot source DIV-by-zero path"
+	);
+
+	std::array<Spark, SPARK_COUNT_TH04> full_th04{};
+	for(auto &slot : full_th04) slot.flag = SPARK_ALIVE;
+	std::uint16_t th04_ring{};
+	const auto full_zero = sparks_add_circle(
+		pool_for(full_th04, th04_ring), {0, 0}, 16, 0U
+	);
+	expect(
+		full_zero == SparksAddCircleResult{256U, 0U} &&
+			th04_ring == 64U * sizeof(Spark),
+		"full TH04 zero circle preserves 256 source attempts and 256 modulo 96 ring advances"
+	);
+
+	for(auto &slot : slots) slot.flag = SPARK_ALIVE;
+	ring = 0U;
+	const auto count_256 = sparks_add_circle(pool_for(slots, ring), {0, 0}, 16, 256U);
+	const auto count_512 = sparks_add_circle(pool_for(slots, ring), {0, 0}, 16, 512U);
+	expect(
+		count_256 == SparksAddCircleResult{256U, 0U} &&
+			count_512 == SparksAddCircleResult{256U, 0U} && ring == 0U,
+		"nonzero counts 256 and 512 retain the premultiplied-word 256-attempt loop"
 	);
 	const auto clip_before = slots;
 	const auto clipped = sparks_add_circle(pool_for(slots, ring), {6145, 0}, 16, 3U);
