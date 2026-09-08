@@ -63,5 +63,20 @@ the complete local hitshot_from body. It advances one animation-ring entry,
 removes the incoming shot even when that entry is occupied, and retains the
 source sprite choice and signed velocity division. Invalid host cursor values
 refuse without mutation. Tests cover all ring slots, all animation-age bytes,
-all velocity words and all sprite bytes. Shot allocation, homing/update,
-collision callers and complete gameplay scheduling remain separate work.
+all velocity words and all sprite bytes. Shot allocation, collision callers,
+and complete gameplay scheduling remain separate work.
+
+`core/shot.hpp` now also models TH05 `sub_1240B()`'s complete local 64-shot
+and 24-hitshot update over caller-provided typed state. It retains the
+one-frame `F_REMOVE` retirement, unsigned type dispatch, aged-homing
+normalization before the `-15984` no-target sentinel, exact Q12.4 strict
+bounds, ordered alive-cache writes, byte age/pattern progression, and the
+hitshot's delayed clipped retirement. TH05's velocity setter uses the shared
+source-exact Q8 vector with its owning shot's angle write represented directly.
+The shared master.lib `iatan2` reports its native word-DIV fault; this updater
+stops exactly at that attempted homing call, retaining preceding mutations and
+leaving later shots and hitshots untouched. Tests cover that fault-prefix
+boundary as well as flags, missiles, homing, all hitshot ages, clipping and
+stale cache tail behavior. This is a source-derived unit model, not an
+emulator, oracle, playable-game or replay-equivalence claim. Allocation,
+collision scheduling, rendering and stage initialization remain separate.
