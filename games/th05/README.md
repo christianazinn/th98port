@@ -37,3 +37,13 @@ produce no result rather than an invented random value. The zero-divisor path
 still consumes its draw. Startup seeding, call schedules, range wrappers, and
 TH05's inline bullet draws remain separate. Shared tests cover all word values
 and cursor states; they are not an emulator parity claim.
+
+`core/score.hpp` ports the complete highest-score/reset helper from
+th05/main/score_highest.cpp at the same donor. Both digit-zero continue counters
+are preserved. The unsigned most-significant-first comparison commits a higher
+record before clearing the run digits and three pending-score/popup fields.
+No decimal sanitization is added. Global/resident fields become explicit state;
+the register comparison state becomes an enum. The loop and mutation order
+are retained. This is not TH04's reset-only routine or TH05's score-add pipeline.
+Tests use an independent whole-value model and every byte pair at each digit;
+these are source-derived checks, not user-replay or emulator evidence.
