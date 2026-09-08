@@ -349,7 +349,8 @@ if(BUILD_TESTING)
 	target_compile_features(th01-skeleton-tests PRIVATE cxx_std_23)
 endif()
 
-add_library(th01_core STATIC src/core/input.cpp src/core/shots.cpp src/core/orb.cpp)
+add_library(th01_core STATIC src/core/input.cpp src/core/shots.cpp src/core/orb.cpp
+	src/core/shot_orb.cpp)
 target_include_directories(th01_core PUBLIC include)
 target_link_libraries(th01_core PUBLIC pc98_numeric)
 th01_set_warnings(th01_core)
@@ -370,6 +371,10 @@ if(BUILD_TESTING)
 	)
 	th01_add_test(th01-shot-tests
 		SOURCES tests/test_shots.cpp
+		LINK th01_core
+	)
+	th01_add_test(th01-shot-orb-tests
+		SOURCES tests/test_shot_orb.cpp
 		LINK th01_core
 	)
 endif()

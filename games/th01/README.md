@@ -3,8 +3,9 @@
 A partial native port of TH01 (*Highly Responsive to Prayers*).
 
 The asset-free `th01_core` now implements REIIDEN input sensing, player
-horizontal clamping, integer Orb helpers, and shot spawn/pellet/boss collision
-helpers, and uses shared master.lib IRAND. See
+horizontal clamping, integer Orb helpers, shot spawn/pellet/boss collision
+helpers, and the CShots-to-Orb update composition with an ordered render trace.
+It uses shared master.lib IRAND. See
 `docs/CORE_FOUNDATIONS.md` for exact donor boundaries and missing gameplay.
 
 **Read `docs/COPY_DIFF.md` before adding anything.** The initial scaffolding
@@ -14,8 +15,9 @@ implementations have their own source contracts.
 
 ## What builds today
 
-The default configuration builds the partial core and VRAM libraries plus
-four tests: skeleton, core, shot collisions, and VRAM. Both compilers use warnings as errors:
+The default configuration builds the partial core and VRAM libraries plus six
+tests: skeleton, core, Orb scalars, shot collisions, shot-Orb composition, and
+VRAM. Both compilers use warnings as errors:
 
 ```
 cmake --preset gcc
