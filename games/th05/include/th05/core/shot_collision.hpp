@@ -309,13 +309,17 @@ template <typename SparkFn, typename RevengeFn>
 // source's synchronous order: cached-position spark, then cached-position
 // revenge origin, then one full RNG1 word (low byte stored as angle), then the
 // caller's regular bullet allocator, then hitshot_from(). `on_bullet` must be
-// noexcept and must not mutate the borrowed ShotUpdateState, Shot records,
-// alive-cache entries, spark-pool slots/ring cursor, or either RNG cursor.
+// noexcept and must not mutate the borrowed ShotUpdateState, Shot records, or
+// alive-cache entries. A concrete allocator may validly consume shared RNG,
+// but must preserve the spark-pool shape and leave every borrowed pool/RNG
+// cursor valid; replacing or invalidating those objects would break the
+// preflight invariant.
 // `bullet_template` is persistent caller-owned template storage, matching the
 // source global; the callback receives a copy so it can fill/allocate its
-// concrete bullet without aliasing collision or random state. Mutating any
-// borrowed state violates this synchronous contract and can invalidate the
-// preflight invariant; an impossible post-preflight RNG failure terminates
+// concrete bullet without aliasing collision state. Mutating any borrowed
+// state beyond valid source-consistent RNG consumption violates this
+// synchronous contract and can invalidate the preflight invariant; an
+// impossible post-preflight RNG failure terminates
 // rather than reporting a successful scan.
 template <typename BulletFn>
 [[nodiscard]] constexpr std::optional<ShotHitResult>
