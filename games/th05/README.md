@@ -57,3 +57,11 @@ retains wrapped playperf arithmetic, bullet-clear minimum and ordered HUD,
 popup and sound requests; per-game predicates and limits stay separate.
 Item collection, other counters, presentation and the caller schedule remain
 open. Exhaustive source-derived tests are not replay verification.
+
+`core/shot.hpp` supplies TH05's distinct typed Shot and HitShot records and
+the complete local hitshot_from body. It advances one animation-ring entry,
+removes the incoming shot even when that entry is occupied, and retains the
+source sprite choice and signed velocity division. Invalid host cursor values
+refuse without mutation. Tests cover all ring slots, all animation-age bytes,
+all velocity words and all sprite bytes. Shot allocation, homing/update,
+collision callers and complete gameplay scheduling remain separate work.
