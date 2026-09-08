@@ -88,3 +88,14 @@ word-width damage/scaling/score helpers. The concrete bullet pool remains an
 explicit synchronous callback; these are source-derived native units, not a
 playable-game or replay-equivalence claim. Build tests are registered as
 `th05-shot-collision-tests` and `th05-shot-spawn-tests`.
+
+`core/bullet_pool.hpp` supplies the bounded concrete regular-bullet seam:
+the persistent 14-byte TH05 template, 32-byte records, 180-pellet and
+220-directional pools, TH05 clipping/player-hit side effects, the exact
+playperf speed-byte tune, and reverse pellet allocation for `BG_SINGLE`.
+Gather, directional patterns, and other groups return explicit unsupported
+statuses. A full pool returns a valid `no_slot` result, while malformed span
+state returns `invalid_host`; no spark-initializer cross-object alias is
+claimed here. This is source-derived native state, not playable-game,
+emulator, oracle, or replay-equivalence validation. The focused test is
+registered as `th05-bullet-pool-tests`.
