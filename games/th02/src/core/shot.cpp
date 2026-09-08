@@ -510,4 +510,202 @@ ShotBVolleyResult shot_b_volley(PlayerShotPoolState &state,
 	return ShotBVolleyResult::completed;
 }
 
+bool shot_c_volley(PlayerShotPoolState &state,
+	const PlayerShotWriterPositions &positions, std::size_t back_page,
+	RandomState &random, std::uint8_t shot_level, std::uint8_t &shot_c_cycle,
+	std::uint8_t &shot_patnum, std::uint8_t &shot_option_patnum,
+	std::uint8_t &option_shots_alive) noexcept
+{
+	if(back_page >= state.shots.front().pos_on_page.size()) return false;
+
+	std::int16_t volley_i = 0;
+	std::int16_t volley_last = 0;
+	std::int16_t tmp = 0;
+	bool options_phase = false;
+	++shot_c_cycle;
+	state.spawn_top = to_subpixels(add_word(
+		positions.player_topleft.y, shot_spawn_top_offset
+	));
+	state.patnum = shot_patnum;
+	state.option_patnum = shot_option_patnum;
+	if(shot_level >= 2U) {
+		state.patnum = 0x7CU;
+		shot_patnum = state.patnum;
+	}
+	state.current_slot = 0;
+	for(; static_cast<std::size_t>(state.current_slot) < state.shots.size();
+		++state.current_slot) {
+		if(current_shot(state).flag != player_shot_free) {
+			continue;
+		}
+		if(!options_phase) {
+			switch(shot_level) {
+			case 0:
+			case 1:
+			case 2:
+				(void)shot_add(state, positions, back_page, 8, 192U);
+				break;
+
+			case 3:
+			case 4:
+			case 5:
+				(void)shot_add(state, positions, back_page, 8,
+					randring_angle(random, 3U, 190U));
+				break;
+
+			case 6:
+			case 7:
+			case 8:
+				(void)shot_add(state, positions, back_page, 8,
+					randring_angle(random, 7U, 188U));
+				break;
+
+			case shot_level_max:
+				if(volley_i == 0) {
+					(void)shot_add(state, positions, back_page, 8, 192U);
+				} else {
+					if(volley_i == 1) {
+						tmp = -16;
+						state.patnum = 0x31U;
+						shot_patnum = state.patnum;
+					} else if(volley_i == 2) {
+						tmp = 32;
+					} else if(volley_i == 3) {
+						tmp = -16;
+					} else if(volley_i == 4) {
+						tmp = 32;
+					}
+					(void)shot_add(state, positions, back_page, tmp, 192U);
+					if(volley_i >= 3) {
+						current_shot(state).pos_on_page[back_page].y = subtract_word(
+							current_shot(state).pos_on_page[back_page].y,
+							to_subpixels(16)
+						);
+					}
+				}
+				volley_last = ((shot_c_cycle % 3U) == 0U) ? 4 : 0;
+				break;
+			}
+			if(volley_i == volley_last) {
+				options_phase = true;
+				volley_i = 0;
+				continue;
+			}
+		} else {
+			if(shot_level < 2U) {
+				break;
+			}
+			if(shot_level < 3U) {
+				if(option_shots_alive != 0U) {
+					break;
+				}
+			} else if(shot_level < 4U) {
+				if((shot_c_cycle % 5U) != 0U) {
+					break;
+				}
+			} else if(shot_level < 6U) {
+				if((shot_c_cycle & 3U) != 0U) {
+					break;
+				}
+			} else if(shot_level < shot_level_max) {
+				if((shot_c_cycle % 3U) != 0U) {
+					break;
+				}
+			} else if((shot_c_cycle & 1U) != 0U) {
+				break;
+			}
+			switch(shot_level) {
+			case 2:
+			case 3:
+				(void)shot_option_add(state, positions, back_page,
+					static_cast<std::int16_t>(volley_i * 48), {0, -4});
+				volley_last = 1;
+				break;
+
+			case 4:
+				(void)shot_option_add(state, positions, back_page,
+					static_cast<std::int16_t>(volley_i * 48), {0, -16});
+				volley_last = 1;
+				break;
+
+			case 5:
+				if(volley_i == 0) {
+					(void)shot_option_add(state, positions, back_page, 0, {4, -16});
+				} else if(volley_i == 1) {
+					(void)shot_option_add(state, positions, back_page, 48, {-4, -16});
+				} else if(volley_i == 2) {
+					(void)shot_option_add(state, positions, back_page, -8, {0, -16});
+				} else {
+					(void)shot_option_add(state, positions, back_page, 56, {0, -16});
+				}
+				volley_last = 3;
+				break;
+
+			case 6:
+				if(volley_i == 0) {
+					(void)shot_option_add(state, positions, back_page, 0, {6, -24});
+				} else if(volley_i == 1) {
+					(void)shot_option_add(state, positions, back_page, 48, {-6, -24});
+				} else if(volley_i == 2) {
+					(void)shot_option_add(state, positions, back_page, -8, {0, -24});
+				} else {
+					(void)shot_option_add(state, positions, back_page, 56, {0, -24});
+				}
+				volley_last = 3;
+				break;
+
+			case 7:
+				if(volley_i == 0) {
+					(void)shot_option_add(state, positions, back_page, 0, {6, -26});
+				} else if(volley_i == 1) {
+					(void)shot_option_add(state, positions, back_page, 48, {-6, -26});
+				} else if(volley_i == 2) {
+					(void)shot_option_add(state, positions, back_page, -8, {0, -26});
+				} else {
+					(void)shot_option_add(state, positions, back_page, 56, {0, -26});
+				}
+				volley_last = 3;
+				break;
+
+			case 8:
+				if(volley_i == 0) {
+					(void)shot_option_add(state, positions, back_page, 0, {10, -48});
+				} else if(volley_i == 1) {
+					(void)shot_option_add(state, positions, back_page, 48, {-10, -48});
+				} else if(volley_i == 2) {
+					(void)shot_option_add(state, positions, back_page, -8, {-4, -48});
+				} else {
+					(void)shot_option_add(state, positions, back_page, 56, {4, -48});
+				}
+				volley_last = 3;
+				break;
+
+			case shot_level_max:
+				if(volley_i == 0) {
+					(void)shot_option_add(state, positions, back_page, 0, {-10, -160});
+				} else if(volley_i == 1) {
+					(void)shot_option_add(state, positions, back_page, 48, {10, -160});
+				} else if(volley_i == 2) {
+					(void)shot_option_add(state, positions, back_page, -8, {20, -140});
+				} else if(volley_i == 3) {
+					(void)shot_option_add(state, positions, back_page, 56, {-20, -140});
+				} else if(volley_i == 4) {
+					(void)shot_option_add(state, positions, back_page, -16, {-7, -120});
+				} else {
+					(void)shot_option_add(state, positions, back_page, 64, {7, -120});
+				}
+				volley_last = ((shot_c_cycle & 3U) == 0U) ? 5 : 3;
+				break;
+			}
+			if(volley_i == volley_last) {
+				option_shots_alive = 1U;
+				break;
+			}
+		}
+		++volley_i;
+	}
+	shot_patnum = state.patnum;
+	return true;
+}
+
 } // namespace th02::core

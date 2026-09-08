@@ -110,4 +110,15 @@ void shots_free_all(PlayerShotPoolState &state) noexcept;
 	std::int16_t &boss_pos_x_unused, std::uint8_t &shot_patnum,
 	std::uint8_t &shot_option_patnum, std::uint8_t &option_shots_alive) noexcept;
 
+// th02/main/player/shot.cpp::shot_c. The supplied cycle is incremented before
+// each source pattern/cadence decision. On a valid page this body shares one
+// scan between regular and option writes, including the level-9 two writes
+// selected by the source's `volley_i >= 3` Q12.4 Y-lift condition. An invalid
+// host page refuses before the source cycle changes.
+[[nodiscard]] bool shot_c_volley(PlayerShotPoolState &state,
+	const PlayerShotWriterPositions &positions, std::size_t back_page,
+	RandomState &random, std::uint8_t shot_level, std::uint8_t &shot_c_cycle,
+	std::uint8_t &shot_patnum, std::uint8_t &shot_option_patnum,
+	std::uint8_t &option_shots_alive) noexcept;
+
 } // namespace th02::core

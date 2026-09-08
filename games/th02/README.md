@@ -119,3 +119,13 @@ modeled source DIV fault reports the prefix already written rather than using
 TH03's deliberately normalized edge policy. It remains a spawn callback only:
 shottype C, option movement, hit testing, invalidation/update/render, sound,
 frame scheduling, replay, and playable-session claims are absent.
+
+`shot_c_volley()` adds shottype C's selected spawn callback. It increments the
+byte cycle before every source branch, then shares one free-slot scan between
+regular and option writes. Tests exhaust all 256 initial cycle bytes at each
+valid level to retain the source's distinct modulo/mask cadence and the
+level-2-only latch gate. Fully powered C uses the executable `volley_i >= 3`
+condition, which lifts the final two writes of its five-shot regular volley;
+this deliberately follows the condition instead of the adjacent contradictory
+"last three" source comment. Option movement, update/render, collision,
+sound, frame scheduling, replay, and playable-session behavior remain outside.
