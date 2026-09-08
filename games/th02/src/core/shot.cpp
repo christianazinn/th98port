@@ -20,6 +20,24 @@ constexpr std::int16_t shot_hittest_margin = 8;
 constexpr std::int16_t shot_decay_large_offset = 8;
 constexpr std::uint8_t shot_patnum_hit_animated = 0x32U;
 constexpr std::uint8_t shot_patnum_hit_large = 0x78U;
+constexpr std::uint8_t shot_patnum_large = 0x7CU;
+constexpr std::uint8_t shot_decay_cels = 5U;
+constexpr std::uint8_t shot_option_decay_cels = 4U;
+constexpr std::uint8_t shot_option_flying_cel = 1U;
+constexpr std::uint8_t shot_option_unaccelerated_patnum = 0x3BU;
+constexpr std::int16_t shot_option_acceleration = 4;
+constexpr std::int16_t shot_remove_left = static_cast<std::int16_t>(
+	16 << subpixel_bits
+);
+constexpr std::int16_t shot_remove_right = static_cast<std::int16_t>(
+	418 << subpixel_bits
+);
+constexpr std::int16_t shot_remove_top = 8;
+constexpr std::int16_t shot_remove_bottom = 384;
+constexpr std::int16_t shot_width = 16;
+constexpr std::int16_t shot_height = 16;
+constexpr std::int16_t shot_decay_large_width = 32;
+constexpr std::int16_t shot_decay_large_height = 32;
 constexpr std::array<std::int16_t, shot_level_max + 1U> shot_hit_damage{
 	5, 5, 4, 4, 3, 3, 3, 2, 2, 1,
 };
@@ -95,6 +113,11 @@ void score_delta_add_low_word(ScoreState &score, std::int16_t damage) noexcept
 	return (state.current_slot >= 0) &&
 		(static_cast<std::size_t>(state.current_slot) < state.shots.size()) &&
 		(back_page < state.shots.front().pos_on_page.size());
+}
+
+[[nodiscard]] bool page_is_valid(std::size_t page) noexcept
+{
+	return page < PlayerShot{}.pos_on_page.size();
 }
 
 [[nodiscard]] PlayerShot &current_shot(PlayerShotPoolState &state) noexcept
@@ -828,6 +851,109 @@ std::optional<std::int16_t> shots_hittest(PlayerShotPoolState &state,
 	}
 	score_delta_add_low_word(score, damage);
 	return damage;
+}
+
+PlayerShotLifetimeUpdateResult shots_update_lifetime(
+	PlayerShotPoolState &state, PlayerShotLifetimeState &lifetime,
+	std::size_t back_page, std::uint32_t stage_frame
+) noexcept
+{
+	if(!page_is_valid(back_page)) {
+		return PlayerShotLifetimeUpdateResult::invalid_page;
+	}
+
+	for(std::size_t i = 0U; i < state.shots.size(); ++i) {
+		auto &shot = state.shots[i];
+		if(shot.flag != player_shot_alive) continue;
+
+		auto &position = shot.pos_on_page[back_page];
+		position.x = add_word(position.x, shot.velocity.x);
+		position.y = add_word(position.y, shot.velocity.y);
+		const auto top = to_pixels(position.y);
+		if(position.x <= shot_remove_left || position.x >= shot_remove_right ||
+			top > shot_remove_bottom || top < shot_remove_top) {
+			shot.flag = player_shot_remove;
+			continue;
+		}
+
+		if(!shot.from_option) {
+			lifetime.animation_frames[i] = static_cast<std::uint8_t>(
+				lifetime.animation_frames[i] + 1U
+			);
+			if(shot.decay_cel == 0U) continue;
+			if(shot.decay_cel > shot_decay_cels) {
+				shot.flag = player_shot_remove;
+				continue;
+			}
+			if((stage_frame & 3U) == 0U) {
+				shot.decay_cel = static_cast<std::uint8_t>(shot.decay_cel + 1U);
+			}
+			continue;
+		}
+
+		if(shot.decay_cel > shot_option_flying_cel) {
+			// The signed byte promotes before C++ converts it to the uint32_t
+			// type of stage_frame. Thus a negative source period becomes a
+			// large uint32_t divisor, not an unsigned byte or signed modulo.
+			const auto period = static_cast<std::uint32_t>(
+				static_cast<std::int32_t>(lifetime.option_decay_interval)
+			);
+			if(period == 0U) {
+				return PlayerShotLifetimeUpdateResult::source_divide_fault;
+			}
+			if((stage_frame % period) == 0U) {
+				shot.decay_cel = static_cast<std::uint8_t>(shot.decay_cel + 1U);
+				if(shot.decay_cel > shot_option_decay_cels) {
+					shot.flag = player_shot_remove;
+					continue;
+				}
+			}
+			if((stage_frame & 1U) != 0U) {
+				shot.velocity.y = arithmetic_shift_right(shot.velocity.y, 1U);
+			}
+		} else if(shot.patnum != shot_option_unaccelerated_patnum) {
+			shot.velocity.y = subtract_word(
+				shot.velocity.y, shot_option_acceleration
+			);
+		}
+	}
+	return PlayerShotLifetimeUpdateResult::completed;
+}
+
+bool shots_invalidate_lifetime(PlayerShotPoolState &state,
+	PlayerShotLifetimeState &lifetime, std::size_t back_page,
+	std::size_t front_page, bool reduce_effects,
+	PlayerShotInvalidationCallbacks &callbacks
+) noexcept
+{
+	if(!page_is_valid(back_page) || !page_is_valid(front_page)) return false;
+
+	std::uint8_t options_alive = 0U;
+	for(std::size_t i = 0U; i < state.shots.size(); ++i) {
+		auto &shot = state.shots[i];
+		if(shot.flag == player_shot_free) continue;
+
+		if(!reduce_effects || back_page == (i & 1U)) {
+			const auto &position = shot.pos_on_page[back_page];
+			const auto regular_size = shot.patnum < shot_patnum_large ||
+				shot.decay_cel == 0U;
+			callbacks.invalidate_shot({
+				{to_pixels(position.x), to_pixels(position.y)},
+				regular_size ? shot_width : shot_decay_large_width,
+				regular_size ? shot_height : shot_decay_large_height,
+			});
+		}
+		if(shot.flag == player_shot_remove) {
+			shot.flag = player_shot_free;
+			continue;
+		}
+		shot.pos_on_page[back_page] = shot.pos_on_page[front_page];
+		if(shot.from_option) {
+			options_alive = static_cast<std::uint8_t>(options_alive + 1U);
+		}
+	}
+	if(options_alive == 0U) lifetime.option_shots_alive = 0U;
+	return true;
 }
 
 } // namespace th02::core

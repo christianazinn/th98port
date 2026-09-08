@@ -143,6 +143,16 @@ strict and negative-coordinate boundaries, slots 34 versus 35–37, low-word
 carry loss, and callback-visible mutation order; they are source-derived unit
 coverage, not gameplay or replay verification.
 
+`shots_update_lifetime()` and `shots_invalidate_lifetime()` provide the
+player-shot state half of the corresponding source bodies. Update moves all
+38 source-alive selected-page slots with Q12.4 word arithmetic, source bounds,
+regular and option decay, and persistent regular slot-animation bytes.
+Invalidation emits a typed tile request before each raw-nonfree slot is freed
+or copied from the explicit front page to the explicit back page, and clears
+the option latch only when no surviving option shot remains. Rendering, scroll
+conversion, page flips, the player wrapper, and stage scheduling remain
+unimplemented; the typed callback is not a render queue or a page driver.
+
 `PlayerShotSparkAllocatorCallbacks` is the explicit synchronous bridge from
 the existing player-shot collision effect seam into that allocator. For valid
 source state, regular, large, and option hits allocate their TH02 sparks at
