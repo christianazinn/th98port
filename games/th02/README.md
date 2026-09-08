@@ -58,3 +58,13 @@ are refused, not read from unrepresented DOS memory. Tests cover all previous
 transfer words, threshold boundaries, negative/wrapped values, effect-setting
 changes, ordered requests, and repeated updates/bonuses. These are source-based
 checks, not a verified full scoring pipeline.
+
+`movement_intent()` extracts the complete movement/pose selection block from
+player_move_and_shoot at the same donor. Dedicated diagonal bits take priority;
+invalid combinations fall back to aligned bits. Signed byte speeds promote
+before negation, and aligned X speed 5 enables the back-page adjustment on both
+axes. The caller must first apply the original hit guard; this helper does not
+implement that guard, options, shooting, bombs or page alternation. Global
+speeds/input/page become arguments and selected deltas/pose become a result;
+the nested switch and page-correction behavior remain unchanged. Invalid host
+pages are refused. Tests exhaust input words and each speed byte independently.

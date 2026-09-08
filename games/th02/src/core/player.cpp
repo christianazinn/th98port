@@ -34,4 +34,42 @@ bool player_move(PlayerPositionState &state, std::size_t back_page,
 	return true;
 }
 
+std::optional<MovementIntent> movement_intent(
+	std::uint16_t input, MovementSpeeds speeds, std::size_t back_page) noexcept
+{
+	if(back_page > 1) return std::nullopt;
+	MovementIntent result{};
+	// Signed byte speeds promote to signed words before negation in the DOS
+	// source. The wider intermediates retain -(-128) == 128.
+	std::int16_t dx = 0, dy = 0;
+	auto &pose = result.pose;
+	switch(input & 0xF000U) {
+	case 0x1000: dy = -speeds.diagonal_y; dx = -speeds.diagonal_x; pose = PlayerPose::left; break;
+	case 0x2000: dy = -speeds.diagonal_y; dx = speeds.diagonal_x; pose = PlayerPose::right; break;
+	case 0x4000: dy = speeds.diagonal_y; dx = -speeds.diagonal_x; pose = PlayerPose::left; break;
+	case 0x8000: dy = speeds.diagonal_y; dx = speeds.diagonal_x; pose = PlayerPose::right; break;
+	default:
+		switch(input & 0x000FU) {
+		case 1: dy = -speeds.aligned_y; dx = 0; pose = PlayerPose::still; break;
+		case 2: dy = speeds.aligned_y; dx = 0; pose = PlayerPose::still; break;
+		case 4: dx = -speeds.aligned_x; dy = 0; pose = PlayerPose::left; break;
+		case 8: dx = speeds.aligned_x; dy = 0; pose = PlayerPose::right; break;
+		case 5: dy = -speeds.diagonal_y; dx = -speeds.diagonal_x; pose = PlayerPose::left; break;
+		case 9: dy = -speeds.diagonal_y; dx = speeds.diagonal_x; pose = PlayerPose::right; break;
+		case 6: dy = speeds.diagonal_y; dx = -speeds.diagonal_x; pose = PlayerPose::left; break;
+		case 10: dy = speeds.diagonal_y; dx = speeds.diagonal_x; pose = PlayerPose::right; break;
+		default: dx = 0; dy = 0; pose = PlayerPose::still; break;
+		}
+	}
+	if(speeds.aligned_x == 5) {
+		const auto page = static_cast<std::int16_t>(back_page);
+		if(dx < 0) dx += page;
+		else if(dx > 0) dx -= page;
+		if(dy < 0) dy += page;
+		else if(dy > 0) dy -= page;
+	}
+	result.delta = {dx, dy};
+	return result;
+}
+
 } // namespace th02::core
