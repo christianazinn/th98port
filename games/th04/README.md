@@ -56,6 +56,15 @@ partial source record can be accessed. The tiny cadence seam keeps source
 18→12→6 scheduling and pattern-before-sound order, but its caller still owns
 the unlocked movement branch, miss/bomb control, and full player update.
 
+`core/shot_reimu_a.hpp` composes that allocator into Reimu shottype-A's
+level-2 through level-9 pattern callbacks. It retains the source's separate
+cycle byte, descending per-round entry order, option-origin shift, random-ring
+order, and literal iatan2 failure boundary. The L8 body emits seven entries
+(not the inherited source comment's stale "nine"). The caller remains
+responsible for player-frame admission plus publishing option and homing-target
+state; this surface alone does not claim a complete firing loop or replay
+behavior.
+
 `core/shot_collision.hpp` applies TH04's complete shot/laser hit test to that
 cache. It preserves diminishing damage, zero-damage hits, repeat hits against
 the unchanged cache, velocity decay, bomb-before-laser damage ordering, and
