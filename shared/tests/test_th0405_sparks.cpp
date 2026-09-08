@@ -149,6 +149,57 @@ void test_occupied_and_zero_count()
 	);
 }
 
+void test_circle_allocation()
+{
+	std::array<Spark, SPARK_COUNT_TH05> slots{};
+	std::uint16_t ring{};
+	slots[0].angle = 0xBEEF;
+	slots[0].center.prev = {123, 456};
+	const auto circle = sparks_add_circle(pool_for(slots, ring), {160, 320}, 256, 3U);
+	expect(
+		circle == SparksAddCircleResult{3U, 3U} && ring == 3U * sizeof(Spark) &&
+			slots[0].flag == SPARK_ALIVE && slots[0].age == 0U &&
+			slots[0].center == Motion{{160, 320}, {123, 456}, {256, 0}} &&
+			slots[0].angle == 0xBEEFU &&
+			slots[1].center == Motion{{160, 320}, {0, 0}, {-132, -220}} &&
+			slots[2].center == Motion{{160, 320}, {0, 0}, {-126, 223}},
+		"circle writes source-order quotient angles, exact center, and no persistent angle"
+	);
+
+	slots = {};
+	ring = 0U;
+	slots[0] = {SPARK_ALIVE, 33U, {{7, 8}, {9, 10}, {11, 12}}, 0x1234U};
+	const auto occupied_before = slots[0];
+	const auto occupied = sparks_add_circle(pool_for(slots, ring), {0, 0}, 16, 1U);
+	expect(
+		occupied == SparksAddCircleResult{1U, 0U} && ring == sizeof(Spark) &&
+			slots[0] == occupied_before,
+		"occupied circle slot advances only the shared byte ring and has no RNG state"
+	);
+
+	ring = 0U;
+	const auto high_count = sparks_add_circle(pool_for(slots, ring), {0, 0}, 16, 257U);
+	expect(
+		high_count == SparksAddCircleResult{1U, 0U} && ring == sizeof(Spark),
+		"word-premultiplied count 257 truncates to one source loop attempt"
+	);
+
+	slots = {};
+	ring = 0U;
+	const auto zero_before = slots;
+	expect(
+		!sparks_add_circle(pool_for(slots, ring), {0, 0}, 16, 0U) &&
+			slots == zero_before && ring == 0U,
+		"zero circle count explicitly refuses the source DIV-by-zero path"
+	);
+	const auto clip_before = slots;
+	const auto clipped = sparks_add_circle(pool_for(slots, ring), {6145, 0}, 16, 3U);
+	expect(
+		clipped == SparksAddCircleResult{} && slots == clip_before && ring == 0U,
+		"circle clip returns before validation or any pool mutation"
+	);
+}
+
 void test_update_lifetime_and_bounds()
 {
 	std::array<Spark, SPARK_COUNT_TH05> slots{};
@@ -191,6 +242,7 @@ int main()
 	test_pool_layout_and_refusal();
 	test_clip_and_free_allocation();
 	test_occupied_and_zero_count();
+	test_circle_allocation();
 	test_update_lifetime_and_bounds();
 	if(failures != 0U) {
 		std::fprintf(stderr, "%zu of %zu checks failed\n", failures, checks);

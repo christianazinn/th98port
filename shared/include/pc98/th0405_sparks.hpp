@@ -131,6 +131,55 @@ constexpr void spark_ring_offset_next(SparkPool pool) noexcept
 	return result;
 }
 
+struct SparksAddCircleResult {
+	std::uint16_t attempts{};
+	std::uint16_t added{};
+	bool operator==(const SparksAddCircleResult &) const = default;
+};
+
+// th04/main/spark_a.asm's separate circle path. The loop counter is the
+// premultiplied 16-bit angle word, not the source `count` directly. Count zero
+// would DIV by zero at the first free slot, so no portable successful source
+// state exists; refuse it before changing the host pool.
+[[nodiscard]] constexpr std::optional<SparksAddCircleResult> sparks_add_circle(
+	SparkPool pool,
+	SubpixelPoint center,
+	std::int16_t radius,
+	std::uint16_t count
+) noexcept
+{
+	if(spark_center_clipped(center)) return SparksAddCircleResult{};
+	if(!spark_pool_valid(pool) || count == 0U) return std::nullopt;
+
+	SparksAddCircleResult result{};
+	auto angle_premultiplied = static_cast<std::uint16_t>(count << 8U);
+	do {
+		auto &spark = pool.slots[pool.ring_offset / sizeof(Spark)];
+		if(spark.flag == SPARK_FREE) {
+			// Source order: initialize this record, then calculate the temporary
+			// quotient angle. Previous position and persistent random angle remain.
+			spark.flag = SPARK_ALIVE;
+			spark.age = 0U;
+			spark.center.cur = center;
+			const auto quotient = static_cast<std::uint16_t>(
+				angle_premultiplied / count
+			);
+			const auto velocity = pc98::masterlib::vector2(
+				static_cast<std::uint8_t>(quotient),
+				radius
+			);
+			spark.center.velocity = {velocity.x, velocity.y};
+			++result.added;
+		}
+		spark_ring_offset_next(pool);
+		angle_premultiplied = static_cast<std::uint16_t>(
+			angle_premultiplied - 0x100U
+		);
+		++result.attempts;
+	} while(angle_premultiplied != 0U);
+	return result;
+}
+
 [[nodiscard]] constexpr bool spark_outside_update_bounds(
 	SubpixelPoint center
 ) noexcept
