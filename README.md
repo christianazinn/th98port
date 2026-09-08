@@ -1,4 +1,4 @@
-# Touhou PC-98 Native
+# th98port
 
 Native ports and replay verification for the five PC-98 Touhou games.
 This repository continues the complete history of `libth03`.
@@ -53,7 +53,12 @@ Downloaded dependency sources can be reused by passing their absolute paths
 through the existing `TH03_SDL3_SOURCE_DIR`,
 `TH03_LIBDATACHANNEL_SOURCE_DIR`, and `TH03_MBEDTLS_SOURCE_DIR` options.
 
-The planned upstream name is `christianazinn/touhou-pc98-native`. Until the
-owner renames it, the remote remains `christianazinn/libth03`; both refer to
-this same native-only history. In the private harness it is one submodule at
+The upstream is `christianazinn/th98port`, renamed from `libth03` with its
+native-only history preserved. Existing checkouts can update their remote:
+
+```sh
+git remote set-url origin git@github.com:christianazinn/th98port.git
+```
+
+In the private harness it is one submodule at
 `native-port/`. The ReC98 source and private harness are separate repositories.
