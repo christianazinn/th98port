@@ -80,3 +80,11 @@ boundary as well as flags, missiles, homing, all hitshot ages, clipping and
 stale cache tail behavior. This is a source-derived unit model, not an
 emulator, oracle, playable-game or replay-equivalence claim. Allocation,
 collision scheduling, rendering and stage initialization remain separate.
+
+`core/shot_collision.hpp` supplies the source-ordered cache collision scan,
+shared 64-slot spark/RNG2 consumption, Alice revenge rank/frame gating with
+caller-owned persistent bullet-template origin/angle fields, and complete
+word-width damage/scaling/score helpers. The concrete bullet pool remains an
+explicit synchronous callback; these are source-derived native units, not a
+playable-game or replay-equivalence claim. Build tests are registered as
+`th05-shot-collision-tests` and `th05-shot-spawn-tests`.
