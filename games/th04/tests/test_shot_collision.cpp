@@ -159,6 +159,49 @@ bool test_refusal_and_duplicate_pointer()
 		state.shots[0].pos.velocity == pc98::th0405::SubpixelPoint{-1, 1};
 }
 
+bool test_spark_pool_consumer()
+{
+	using namespace pc98::th0405;
+	ShotState state{};
+	state.shots_alive_count = 5;
+	for(std::size_t i = 0; i < 5; ++i) {
+		state.shots_alive[i].shot_index = static_cast<std::uint16_t>(i);
+		state.shots[i].damage = 12;
+		state.shots[i].pos.cur = {100, 200};
+	}
+	// First request clips without advancing either ring. Second hits an
+	// occupied slot; only the third allocates and consumes one random word.
+	state.shots[0].pos.cur.x = -1;
+	std::array<Spark, SPARK_COUNT_TH04> sparks{};
+	sparks[95].flag = SPARK_ALIVE;
+	sparks[0].angle = 64;
+	sparks[0].center.prev = {7, 8};
+	std::uint16_t ring = 95 * 16;
+	RandomState random{};
+	random.ring[0] = 7;
+	ShotCollisionState c{};
+	const auto result = shots_hittest(state, c, {sparks, ring}, random);
+	if(!result || result->spark_count != 3 || result->damage != 27 ||
+		c.score_delta != 27 || ring != 16 || random.cursor != 1 ||
+		sparks[0].flag != SPARK_ALIVE || sparks[0].center.cur != SubpixelPoint{100, 200} ||
+		sparks[0].center.velocity != SubpixelPoint{0, 135} ||
+		sparks[0].center.prev != SubpixelPoint{7, 8} || sparks[0].angle != 64) return false;
+	const auto before = state;
+	const auto c_before = c;
+	const auto sparks_before = sparks;
+	for(unsigned invalid : {0U, 1U, 2U, 3U}) {
+		ring = invalid == 0 ? 1 : 16;
+		random.cursor = invalid == 1 ? 256 : 1;
+		const auto random_before = random;
+		const auto ring_before = ring;
+		const auto size = invalid == 2 ? 64U : (invalid == 3 ? 95U : 96U);
+		if(shots_hittest(state, c, {std::span(sparks).first(size), ring}, random) ||
+			state != before || c != c_before || sparks != sparks_before ||
+			random != random_before || ring != ring_before) return false;
+	}
+	return true;
+}
+
 bool test_synchronous_spark_order()
 {
 	ShotState state{};
@@ -198,6 +241,7 @@ int main()
 		std::pair{"geometry", test_wrapped_geometry},
 		std::pair{"bomb/laser", test_bomb_and_laser_order},
 		std::pair{"refusal/duplicates", test_refusal_and_duplicate_pointer},
+		std::pair{"spark pool consumer", test_spark_pool_consumer},
 		std::pair{"synchronous sparks", test_synchronous_spark_order}}) {
 		if(!test()) {
 			std::cerr << "FAIL " << name << '\n';

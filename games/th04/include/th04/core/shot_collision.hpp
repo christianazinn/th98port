@@ -1,6 +1,7 @@
 #pragma once
 
 #include "th04/core/shot.hpp"
+#include "pc98/th0405_sparks.hpp"
 
 #include <optional>
 #include <type_traits>
@@ -94,6 +95,24 @@ template<class SparkSink>
 	}
 	collision.score_delta += result.damage;
 	return result;
+}
+
+// Gameplay form: preflight the borrowed TH04 pool/RNG before any shot writes,
+// then execute each allocation where the source calls sparks_add_random.
+[[nodiscard]] constexpr std::optional<ShotHitResult> shots_hittest(
+	ShotState &state, ShotCollisionState &collision,
+	pc98::th0405::SparkPool pool, pc98::th0405::RandomState &random
+) noexcept
+{
+	if(pool.slots.size() != pc98::th0405::SPARK_COUNT_TH04 ||
+		!pc98::th0405::spark_pool_valid(pool) || random.cursor >= random.ring.size()) {
+		return std::nullopt;
+	}
+	return shots_hittest(state, collision,
+		[&](pc98::th0405::SubpixelPoint center) noexcept {
+			// Preflight guarantees successful allocation or the source's clip.
+			(void)pc98::th0405::sparks_add_random(pool, random, center, 128, 1);
+		});
 }
 
 // Inspection-only form: reports requests without executing the spark pool.

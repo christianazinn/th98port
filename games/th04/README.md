@@ -53,6 +53,8 @@ the unchanged cache, velocity decay, bomb-before-laser damage ordering, and
 unsigned wrapped hitbox comparisons. A synchronous spark sink executes at each
 source call site, before later hits and the final score update. The two-argument
 inspection form only reports requests and is not a full simulation. The
+four-argument form consumes the shared 96-slot spark pool and random ring at
+those call sites, with both borrowed states validated before any mutation. The
 boss/enemy callers are not yet ported; the collision helper alone is not a
 complete replay engine. Invalid represented pool addresses fail explicitly.
 
