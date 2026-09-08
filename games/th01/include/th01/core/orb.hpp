@@ -2,6 +2,7 @@
 
 #include <bit>
 #include <cstdint>
+#include <optional>
 
 namespace th01::core {
 
@@ -14,6 +15,24 @@ struct OrbHorizontal {
 	std::int16_t left{};
 	OrbVelocityX velocity{};
 };
+
+enum class OrbForce : std::int16_t {
+	surface = 0, top = 1, shot = 2, immediate = 3,
+};
+
+struct OrbVertical {
+	double force{}, velocity{};
+	std::int16_t force_frame{};
+	bool operator==(const OrbVertical &) const = default;
+};
+
+// Scalar helpers from th01/main/player/orb.cpp. The stored velocity is
+// clamped, but the returned pixel delta is the UNCLAMPED second evaluation.
+// Unsupported nonfinite/out-of-range conversions or a non-nearest host
+// rounding mode are refused without mutation; no guest fault is invented.
+[[nodiscard]] std::optional<std::int16_t> update_orb_velocity_y(OrbVertical &orb) noexcept;
+[[nodiscard]] bool apply_orb_force(OrbVertical &orb, OrbVelocityX &velocity_x,
+	std::uint32_t &random_seed, double immediate, OrbForce force) noexcept;
 
 [[nodiscard]] constexpr OrbVelocityX reflect_orb_x(OrbVelocityX velocity) noexcept
 {

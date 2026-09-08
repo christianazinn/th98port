@@ -10,6 +10,11 @@ below remains historical evidence.
 The standalone skeleton test now explicitly requests C++23 at target level,
 so combined builds do not depend on the per-game preset setting that default.
 
+The Orb scalar translation unit additionally uses strict floating-point options
+(`/fp:strict`, or `-fno-fast-math -ffp-contract=off -frounding-math`) and a
+dedicated original-runtime fixture test. This is a TH01-specific addition,
+not copied TH03 policy; it does not change the other translation units' flags.
+
 `[measured 2026-08-19, PORT-W5A-TH01-TREE2, lane g4-th01]`
 
 W5a step 3 is "create `th01-port/` by copying `th03-port`'s CMake skeleton, its

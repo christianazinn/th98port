@@ -68,3 +68,12 @@ overlap macros from `shot.hpp`, `th01/sprites/pellet.h`, and
 they do not implement the shot update loop or its extra Orb integration.
 `th01-shot-tests` checks slot allocation, inclusive edges, differing decay
 eligibility, 16-bit arithmetic, and no mutation on refusal/miss.
+
+The vertical scalar helpers now live in `core/orb.hpp` and `src/core/orb.cpp`.
+They preserve unclamped returned delta separately from clamped stored velocity,
+signed frame division, all force modes and the two stationary-surface RNG
+draws. A 38-row original MODEL_LARGE guest experiment supplies raw binary64
+expected outputs. This is not complete Orb trajectory parity. The host requires
+nearest binary64 rounding, disables fast-math/contraction, and refuses
+nonfinite/out-of-range conversions. Calls do not advance the frame counter
+or perform position/collision updates; full gameplay integration remains open.
