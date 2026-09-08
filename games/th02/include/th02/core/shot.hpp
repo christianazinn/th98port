@@ -6,6 +6,8 @@
 
 namespace th02::core {
 
+struct RandomState;
+
 inline constexpr std::size_t player_shot_count = 38;
 inline constexpr std::uint8_t player_shot_free = 0;
 inline constexpr std::uint8_t player_shot_alive = 1;
@@ -78,5 +80,15 @@ struct PlayerShotWriterPositions {
 // th02/main/player/shot.cpp::shots_free_all. Only flags are cleared; every
 // other byte in each slot remains as the future allocation scan would see it.
 void shots_free_all(PlayerShotPoolState &state) noexcept;
+
+// th02/main/player/shot.cpp::shot_a. This is the synchronous selected-shot
+// body reached from the player stream tail. It writes the supplied regular
+// patnum back after a full-power volley changes it, and always clears the
+// separate option-shot latch on a valid native page.
+[[nodiscard]] bool shot_a_volley(PlayerShotPoolState &state,
+	const PlayerShotWriterPositions &positions, std::size_t back_page,
+	RandomState &random, std::uint8_t shot_level,
+	std::int8_t spread_angle_delta, std::uint8_t &shot_patnum,
+	std::uint8_t &option_shots_alive) noexcept;
 
 } // namespace th02::core

@@ -98,3 +98,13 @@ payload. Native-invalid page/slot input is refused before mutation. Free-slot
 scans, selected shottype callbacks, RNG, update/render, hit tests, and frame
 scheduling are still separate; these tests are source-derived writer coverage,
 not gameplay, replay, or session parity.
+
+`shot_a_volley()` is the source-complete shottype-A regular-volley callback on
+top of those writers. It starts at pool slot zero, scans only free entries,
+preserves every level-0-to-9 pattern and its ring draws, exits at the source
+pattern boundary or scan limit, and clears the option-shot latch even with a
+full pool. At level 9 it carries its per-shot patnum changes back to the
+caller-tail seam before the later sound callback. It deliberately excludes the
+other shottype callbacks, option firing, update/render, collisions, and frame
+scheduling; the tests are source-derived callback coverage, not a full shot or
+gameplay implementation.
