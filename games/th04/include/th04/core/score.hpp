@@ -1,8 +1,8 @@
 #pragma once
 
 #include "pc98/score_digits.hpp"
+#include "pc98/th0405_extend.hpp"
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -17,22 +17,10 @@ struct ScoreState {
 	bool operator==(const ScoreState &) const = default;
 };
 
-struct ExtendState {
-	std::uint8_t playperf{}, playperf_max{}, rem_lives{}, bullet_clear_time{};
-	bool operator==(const ExtendState &) const = default;
-};
-
-enum class ScoreEventKind { lives, popup, sound };
-struct ScoreEvent {
-	ScoreEventKind kind{};
-	std::uint8_t value{};
-	bool operator==(const ScoreEvent &) const = default;
-};
-struct ScoreEvents {
-	std::array<ScoreEvent, 3> entries{};
-	std::size_t count{};
-	bool operator==(const ScoreEvents &) const = default;
-};
+using ExtendState = pc98::th0405::ExtendState;
+using ScoreEventKind = pc98::th0405::ExtendEventKind;
+using ScoreEvent = pc98::th0405::ExtendEvent;
+using ScoreEvents = pc98::th0405::ExtendEvents;
 
 // State effects of th04/main/score_extend.cpp, including playperf_raise.
 // A lives request redraws the HUD; popup 1 installs the popup overlay; sound
@@ -52,15 +40,7 @@ struct ScoreEvents {
 	}
 	if(!extend) return {};
 
-	// PLAYPERF_RAISE adds in AL, then compares unsigned against the cap.
-	const auto raised = static_cast<std::uint8_t>(static_cast<unsigned>(state.playperf) + 4U);
-	state.playperf = raised <= state.playperf_max ? raised : state.playperf_max;
-	++score.extends_gained;
-	if(state.rem_lives > 99) return {};
-	++state.rem_lives;
-	if(state.bullet_clear_time < 20) state.bullet_clear_time = 20;
-	return {{{{ScoreEventKind::lives, state.rem_lives},
-		{ScoreEventKind::popup, 1}, {ScoreEventKind::sound, 7}}}, 3};
+	return pc98::th0405::grant_extend(score.extends_gained, state, 100);
 }
 
 // th04/main/score_reset.cpp. Unlike TH05 this never commits a high score.

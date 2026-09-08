@@ -47,3 +47,13 @@ the register comparison state becomes an enum. The loop and mutation order
 are retained. This is not TH04's reset-only routine or TH05's score-add pipeline.
 Tests use an independent whole-value model and every byte pair at each digit;
 these are source-derived checks, not user-replay or emulator evidence.
+
+`core/extend.hpp` ports point_items_extend_update from th05/main/item/collect.cpp.
+It checks the next hundred-point-item threshold and consumes at most one per
+call, even if a life cannot be granted. The byte-sized extend count wraps;
+the item count is an unchanged input to this helper. Unlike TH04, 99 lives
+already blocks the reward (TH04 grants the hundredth). The shared award body
+retains wrapped playperf arithmetic, bullet-clear minimum and ordered HUD,
+popup and sound requests; per-game predicates and limits stay separate.
+Item collection, other counters, presentation and the caller schedule remain
+open. Exhaustive source-derived tests are not replay verification.
