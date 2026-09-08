@@ -1,33 +1,11 @@
 #include "trig.hpp"
 
-#include <array>
-
 #include "pc98/masterlib_vector.hpp"
+#include "pc98/masterlib_iatan2.hpp"
 #include "th03/core/numeric.hpp"
 
 namespace th03 {
 namespace {
-
-// public-domain master.lib atan8[data].asm. The assembly indexes entries
-// 0..255; the equal-axis case is handled directly as angle 32.
-constexpr std::array<std::uint8_t, 256> atan_table{{
-	0,0,0,0,1,1,1,1,1,1,2,2,2,2,2,2,
-	3,3,3,3,3,3,3,4,4,4,4,4,4,5,5,5,
-	5,5,5,6,6,6,6,6,6,6,7,7,7,7,7,7,
-	8,8,8,8,8,8,8,9,9,9,9,9,9,10,10,10,
-	10,10,10,10,11,11,11,11,11,11,11,12,12,12,12,12,
-	12,12,13,13,13,13,13,13,13,14,14,14,14,14,14,14,
-	15,15,15,15,15,15,15,16,16,16,16,16,16,16,17,17,
-	17,17,17,17,17,17,18,18,18,18,18,18,18,19,19,19,
-	19,19,19,19,19,20,20,20,20,20,20,20,20,21,21,21,
-	21,21,21,21,21,21,22,22,22,22,22,22,22,22,23,23,
-	23,23,23,23,23,23,23,24,24,24,24,24,24,24,24,24,
-	25,25,25,25,25,25,25,25,25,25,26,26,26,26,26,26,
-	26,26,26,27,27,27,27,27,27,27,27,27,27,28,28,28,
-	28,28,28,28,28,28,28,28,29,29,29,29,29,29,29,29,
-	29,29,29,30,30,30,30,30,30,30,30,30,30,30,31,31,
-	31,31,31,31,31,31,31,31,31,31,32,32,32,32,32,32,
-}};
 
 std::uint16_t magnitude(std::int16_t value) noexcept
 {
@@ -76,12 +54,14 @@ std::uint8_t iatan2(std::int16_t y, std::int16_t x) noexcept
 		const auto ratio = static_cast<std::uint16_t>(
 			(static_cast<std::uint32_t>(abs_y) << 8U) / abs_x
 		);
-		angle = atan_table[ratio];
+		angle = pc98::masterlib::atan8_table[ratio];
 	} else {
 		const auto ratio = static_cast<std::uint16_t>(
 			(static_cast<std::uint32_t>(abs_x) << 8U) / abs_y
 		);
-		angle = static_cast<std::uint8_t>(64U - atan_table[ratio]);
+		angle = static_cast<std::uint8_t>(
+			64U - pc98::masterlib::atan8_table[ratio]
+		);
 	}
 	if(x < 0) {
 		angle = static_cast<std::uint8_t>(128U - angle);
