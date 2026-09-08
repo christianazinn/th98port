@@ -213,3 +213,14 @@ observable nonpositive-count update. Stage seeding of angle/speed/mode, spark
 update, invalidation, rendering, frame scheduling, replay, and a collision
 binding remain separate. These focused tests are source-derived allocator
 coverage, not gameplay or replay verification.
+
+`items_miss_add()` now supplies the source's persistent 20-slot miss-drop
+allocator. It scans raw free flags in slot order, initializes at most five
+entries on both pages with signed Q12.4 tops, and keeps the global game-over
+mode and shared TH02 random ring explicit. Normal full-quota drops preserve
+the source's one-big-power selection and short-circuit ring consumption;
+game-over drops are all big power with no ring reads. The trajectory is chosen
+from the separately supplied global player X rather than the item spawn left,
+including the inclusive 128/256 field boundaries and signed table widening.
+Item movement, collection, invalidation/rendering, miss/respawn composition,
+and stage scheduling remain unimplemented.
