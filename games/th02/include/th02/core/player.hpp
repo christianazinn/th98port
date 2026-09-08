@@ -42,6 +42,33 @@ struct PlayerHitState {
 	bool operator==(const PlayerHitState &) const = default;
 };
 
+struct PlayerShotStreamState {
+	std::uint8_t stream_a_phase{0xFF};
+	std::uint8_t stream_b_phase{0xFF};
+	std::uint8_t stream_a_cooldown{};
+	std::uint8_t stream_b_cooldown{};
+	std::uint8_t shot_level{};
+	std::uint8_t shot_patnum{};
+	std::uint8_t shot_option_patnum{};
+	std::uint8_t shot_patnum_powered{};
+	std::uint8_t shot_option_patnum_powered{};
+	std::int8_t spread_angle_delta{};
+	bool operator==(const PlayerShotStreamState &) const = default;
+};
+
+// A borrowed synchronous seam for the three calls in the shot-stream tail.
+// shot_volley() receives the source-position state plus only the two mutable
+// handoff patnums. It does not model a shot pool, RNG, bomb, HUD, or a frame
+// driver.
+class PlayerShotStreamCallbacks {
+public:
+	virtual ~PlayerShotStreamCallbacks() = default;
+	virtual void shot_volley(const PlayerShotStreamState &state,
+		std::uint8_t &shot_patnum, std::uint8_t &shot_option_patnum) noexcept = 0;
+	virtual void shot_sound(const PlayerShotStreamState &state) noexcept = 0;
+	virtual void bomb_request(const PlayerShotStreamState &state) noexcept = 0;
+};
+
 // Only the input-to-delta/pose block of player_move_and_shoot. Its caller
 // must already have applied the invincibility/hit guard. No shots or bombs.
 [[nodiscard]] std::optional<MovementIntent> movement_intent(
@@ -56,6 +83,12 @@ struct PlayerHitState {
 // applies the same hit-immunity guard and then decrements a nonzero timer.
 // The caller owns shots, miss handling, quit, and all rendering.
 void prepare_player_callbacks(PlayerHitState &state) noexcept;
+
+// Only the shot-stream tail of player_move_and_shoot, after movement and
+// option positioning. Calls its borrowed callbacks in source order; no action
+// is deferred. The callback implementations remain outside this native slice.
+void player_move_and_shoot_shot_stream_step(PlayerShotStreamState &state,
+	std::uint16_t input, PlayerShotStreamCallbacks &callbacks) noexcept;
 
 // th02/main/player/player.cpp::player_move. The caller supplies the page
 // established by player_invalidate; this does not copy the front page first.

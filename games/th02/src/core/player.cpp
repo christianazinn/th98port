@@ -17,6 +17,36 @@ void negate_hits_if_invincible(PlayerHitState &state) noexcept
 		state.raw_hit = 0;
 	}
 }
+
+std::int8_t add_byte(std::int8_t value, int delta) noexcept
+{
+	return std::bit_cast<std::int8_t>(static_cast<std::uint8_t>(
+		static_cast<int>(value) + delta));
+}
+
+constexpr std::uint16_t input_down = 0x0002;
+constexpr std::uint16_t input_shot = 0x0010;
+constexpr std::uint16_t input_bomb = 0x0020;
+constexpr std::uint16_t input_movement_aligned = 0x000F;
+constexpr std::uint16_t input_down_left = 0x4000;
+constexpr std::uint16_t input_down_right = 0x8000;
+constexpr std::uint16_t input_movement_diagonal = 0xF000;
+constexpr std::uint8_t shot_stream_inactive = 0xFF;
+constexpr std::uint8_t shot_level_max = 9;
+constexpr std::uint8_t shot_cooldown = 8;
+constexpr std::uint8_t shot_patnum_a_unpowered = 0x34;
+constexpr std::uint8_t shot_patnum_b_unpowered = 0x3F;
+
+void shot_patnums_set(PlayerShotStreamState &state) noexcept
+{
+	if(state.shot_level == shot_level_max) {
+		state.shot_patnum = state.shot_patnum_powered;
+		state.shot_option_patnum = state.shot_option_patnum_powered;
+	} else {
+		state.shot_patnum = shot_patnum_a_unpowered;
+		state.shot_option_patnum = shot_patnum_b_unpowered;
+	}
+}
 }
 
 bool player_move(PlayerPositionState &state, std::size_t back_page,
@@ -91,6 +121,69 @@ void prepare_player_callbacks(PlayerHitState &state) noexcept
 	negate_hits_if_invincible(state);
 	if(state.invincibility_time > 0) {
 		--state.invincibility_time;
+	}
+}
+
+void player_move_and_shoot_shot_stream_step(PlayerShotStreamState &state,
+	std::uint16_t input, PlayerShotStreamCallbacks &callbacks) noexcept
+{
+	if((input & input_shot) != 0) {
+		if(state.stream_a_phase == shot_stream_inactive) {
+			state.stream_a_phase = 0;
+			state.stream_a_cooldown = 0;
+		} else if(state.stream_b_phase == shot_stream_inactive) {
+			state.stream_b_phase = 0;
+			state.stream_b_cooldown = 0;
+		}
+	} else {
+		if(state.stream_a_phase >= 3) {
+			state.stream_a_phase = shot_stream_inactive;
+			state.stream_b_phase = 4;
+		} else if(state.stream_b_phase >= 2) {
+			state.stream_b_phase = shot_stream_inactive;
+		}
+	}
+
+	if(state.stream_a_phase != shot_stream_inactive) {
+		if(state.stream_a_cooldown == 0) {
+			shot_patnums_set(state);
+			callbacks.shot_volley(state, state.shot_patnum, state.shot_option_patnum);
+			callbacks.shot_sound(state);
+			state.stream_a_cooldown = shot_cooldown;
+			++state.stream_a_phase;
+			if((input & input_bomb) != 0) {
+				callbacks.bomb_request(state);
+			}
+			return;
+		}
+		--state.stream_a_cooldown;
+	}
+	if(state.stream_b_phase < 2) {
+		if(state.stream_b_cooldown == 0) {
+			shot_patnums_set(state);
+			if(state.shot_level == shot_level_max) {
+				if((input & (input_down | input_down_left | input_down_right)) != 0) {
+					state.spread_angle_delta = add_byte(state.spread_angle_delta, 5);
+					if(state.spread_angle_delta > 26) {
+						state.spread_angle_delta = 26;
+					}
+				} else if((input & (input_movement_aligned | input_movement_diagonal)) == 0) {
+					state.spread_angle_delta = add_byte(state.spread_angle_delta, -5);
+					if(state.spread_angle_delta < 0) {
+						state.spread_angle_delta = 0;
+					}
+				}
+			}
+			callbacks.shot_volley(state, state.shot_patnum, state.shot_option_patnum);
+			state.stream_b_cooldown = shot_cooldown;
+			++state.stream_b_phase;
+		} else {
+			callbacks.shot_sound(state);
+			--state.stream_b_cooldown;
+		}
+	}
+	if((input & input_bomb) != 0) {
+		callbacks.bomb_request(state);
 	}
 }
 

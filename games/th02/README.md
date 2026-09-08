@@ -77,3 +77,13 @@ function's same guard followed by its nonzero timer decrement. Neither helper
 calls shots, miss handling, quit, rendering, bombs, or a frame driver. The
 dedicated test exhausts every raw hit and timer byte across both boolean guards;
 it is source-derived state coverage, not a gameplay or replay result.
+
+`player_move_and_shoot_shot_stream_step()` carries only the tail's two stream
+phases/cooldowns, handoff patnums, and powered spread adjustment. Its borrowed
+typed callbacks execute synchronously in the source volley/sound/bomb order;
+the volley callback may update the handoff patnums before later callbacks see
+them. Shot pools, shottype callbacks, RNG, bomb effects, HUD, option placement,
+and the frame schedule are deliberately not implemented. Tests cover the A/B
+cooldown/SFX asymmetry, A's one-volley jump, release phases, spread bounds, and
+the callback-visible mutation order. This is a caller-tail seam, not a native
+shot or gameplay implementation.
