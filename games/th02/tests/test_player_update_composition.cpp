@@ -47,14 +47,16 @@ public:
 	std::size_t calls{};
 	bool sees_shot_lifetime_prefix{};
 	PlayerHitState replacement{};
+	PlayerMissResult result{PlayerMissResult::completed};
 
-	void player_miss_update(PlayerHitState &state) noexcept override
+	PlayerMissResult player_miss_update(PlayerHitState &state) noexcept override
 	{
 		++calls;
 		sees_shot_lifetime_prefix = shots != nullptr &&
 			shots->shots[0].pos_on_page[1] ==
 				ShotSubpixelPoint{to_subpixels(101), to_subpixels(199)};
 		state = replacement;
+		return result;
 	}
 };
 
@@ -180,6 +182,24 @@ public:
 		shots.shots[0].decay_cel == 2U;
 }
 
+[[nodiscard]] bool test_failed_miss_skips_gameover_conversion() noexcept
+{
+	PlayerHitState player{1U, 0U, false, false};
+	PlayerShotPoolState shots{};
+	PlayerShotLifetimeState lifetime{};
+	configure_alive_regular(shots);
+	bool quit = false;
+	RecordingMiss callbacks{shots};
+	callbacks.replacement = {0xFFU, 0U, false, true};
+	callbacks.result = PlayerMissResult::spark_allocation_failed;
+
+	return player_update_state_step(
+		player, quit, shots, lifetime, 1U, 0U, callbacks
+	) == PlayerUpdateResult::miss_spark_allocation_failed &&
+		callbacks.calls == 1U && callbacks.sees_shot_lifetime_prefix && !quit &&
+		player == callbacks.replacement;
+}
+
 } // namespace
 
 int main()
@@ -206,6 +226,10 @@ int main()
 	}
 	if(!test_lifetime_refusals_keep_prefix_and_skip_miss()) {
 		std::fputs("FAIL lifetime refusal composition\n", stderr);
+		return EXIT_FAILURE;
+	}
+	if(!test_failed_miss_skips_gameover_conversion()) {
+		std::fputs("FAIL failed miss conversion ordering\n", stderr);
 		return EXIT_FAILURE;
 	}
 	return EXIT_SUCCESS;

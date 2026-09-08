@@ -10,6 +10,8 @@
 namespace th02::core {
 
 struct RandomState;
+struct ItemPoolState;
+struct SparkPoolState;
 
 struct ScreenPoint {
 	std::int16_t x{};
@@ -70,6 +72,47 @@ struct PlayerShotStreamState {
 	std::uint8_t shot_option_patnum_powered{};
 	std::int8_t spread_angle_delta{};
 	bool operator==(const PlayerShotStreamState &) const = default;
+};
+
+// The state owned by TH02's 68-frame player miss body. The hit state owns
+// miss_active and the raw hit byte, the score owns lives/bombs, and the shot
+// stream owns shot_level; do not duplicate those globals here.
+struct PlayerMissState {
+	std::uint8_t miss_frame{};
+	std::uint8_t power{};
+	std::int16_t playperf{};
+	std::uint8_t stage_miss_count{};
+	std::uint8_t total_miss_count{};
+	std::uint8_t start_bombs{};
+	bool operator==(const PlayerMissState &) const = default;
+};
+
+// Source pixel coordinates and main_patnum_t values passed to super_roll_put()
+// by player_miss_update_and_render(). Scroll/VRAM conversion remains a later
+// presentation owner.
+struct PlayerMissSprite {
+	ScreenPoint topleft{};
+	std::int16_t patnum{};
+	bool operator==(const PlayerMissSprite &) const = default;
+};
+
+enum class PlayerMissResult : std::uint8_t {
+	completed,
+	invalid_page,
+	spark_allocation_failed,
+	unsupported_shot_level,
+};
+
+// Source-position synchronous output from the miss body. These callbacks
+// report presentation only; all miss gameplay state is concrete in the body.
+class PlayerMissPresentationCallbacks {
+public:
+	virtual ~PlayerMissPresentationCallbacks() = default;
+	virtual void sound_effect(std::uint8_t sound_id) noexcept = 0;
+	virtual void hud_power(std::uint8_t power, std::uint8_t shot_level) noexcept = 0;
+	virtual void hud_lives(std::int8_t lives) noexcept = 0;
+	virtual void hud_bombs(std::int8_t bombs) noexcept = 0;
+	virtual void render_player(PlayerMissSprite sprite) noexcept = 0;
 };
 
 // Source-sized tile invalidation emitted for the player and each option by
@@ -173,18 +216,23 @@ private:
 enum class PlayerUpdateResult : std::uint8_t {
 	completed,
 	miss_handled,
+	miss_invalid_page,
+	miss_spark_allocation_failed,
+	miss_unsupported_shot_level,
 	shot_lifetime_invalid_page,
 	shot_lifetime_source_divide_fault,
 };
 
-// Borrowed synchronous owner of the still-unported
-// player_miss_update_and_render() call. It may mutate the represented player
-// hit state at this exact source position, but must not mutate the borrowed
-// shot/lifetime state or the caller's quit flag.
+// Borrowed synchronous owner of player_miss_update_and_render() at the
+// existing update seam. PlayerMissUpdateCallbacks binds the concrete native
+// body; alternate source-bounded owners may still use this typed boundary. It
+// may mutate the represented player hit state at this exact source position,
+// but must not mutate the borrowed shot/lifetime state or the caller's quit
+// flag.
 class PlayerUpdateCallbacks {
 public:
 	virtual ~PlayerUpdateCallbacks() = default;
-	virtual void player_miss_update(PlayerHitState &state) noexcept = 0;
+	virtual PlayerMissResult player_miss_update(PlayerHitState &state) noexcept = 0;
 };
 
 // Only the input-to-delta/pose block of player_move_and_shoot. Its caller
@@ -199,20 +247,60 @@ public:
 
 // The state-only prefix before player_update_and_render's shot callback. It
 // applies the same hit-immunity guard and then decrements a nonzero timer.
-// The caller owns shots, miss handling, quit, and all rendering.
+// The caller owns shots, the miss callback invocation, quit, and all rendering.
 void prepare_player_callbacks(PlayerHitState &state) noexcept;
 
 // State-only composition of player_update_and_render's update prefix: prepare
 // the player hit state, run the typed player-shot lifetime update, then call
 // the synchronous miss owner if the post-shot raw hit byte is nonzero. A miss
 // callback that leaves 0xFF requests quit and has the raw byte cleared. The
-// original VRAM-only render tail, complete miss implementation, page driver,
-// and stage scheduling remain deliberately outside this seam.
+// original VRAM-only render tail, page driver, and stage scheduling remain
+// deliberately outside this seam; PlayerMissUpdateCallbacks supplies the
+// source-bounded miss body without claiming any of those owners.
 [[nodiscard]] PlayerUpdateResult player_update_state_step(
 	PlayerHitState &player, bool &quit, PlayerShotPoolState &shots,
 	PlayerShotLifetimeState &lifetime, std::size_t back_page,
 	std::uint32_t stage_frame, PlayerUpdateCallbacks &callbacks
 ) noexcept;
+
+// State prefix of player_shot_level_update_and_hud_power_put(). The source
+// data contains 21 indexed entries. A host power value whose /4 index is 21
+// or greater would read unrelated DOS memory and is refused here.
+[[nodiscard]] bool hud_shot_level_from_power(std::uint8_t power,
+	std::uint8_t &shot_level) noexcept;
+
+// Concrete state body of player_miss_update_and_render(). It preserves source
+// keyframes and caller-visible write prefixes. An unrepresented page, spark
+// allocation, or shot-level table read returns immediately without rollback.
+[[nodiscard]] PlayerMissResult player_miss_state_step(
+	PlayerMissState &miss, PlayerFrameState &frame, PlayerHitState &hit,
+	PlayerShotStreamState &stream, ScoreState &score, ItemPoolState &items,
+	SparkPoolState &sparks, RandomState &random,
+	PlayerMissPresentationCallbacks &callbacks
+) noexcept;
+
+// Connects the complete miss body to player_update_state_step()'s existing
+// synchronous source seam without introducing a stage owner or another copy
+// of any borrowed state.
+class PlayerMissUpdateCallbacks final : public PlayerUpdateCallbacks {
+public:
+	PlayerMissUpdateCallbacks(PlayerMissState &miss, PlayerFrameState &frame,
+		PlayerShotStreamState &stream, ScoreState &score, ItemPoolState &items,
+		SparkPoolState &sparks, RandomState &random,
+		PlayerMissPresentationCallbacks &presentation) noexcept;
+
+	PlayerMissResult player_miss_update(PlayerHitState &state) noexcept override;
+
+private:
+	PlayerMissState &miss;
+	PlayerFrameState &frame;
+	PlayerShotStreamState &stream;
+	ScoreState &score;
+	ItemPoolState &items;
+	SparkPoolState &sparks;
+	RandomState &random;
+	PlayerMissPresentationCallbacks &presentation;
+};
 
 // Only the shot-stream tail of player_move_and_shoot, after movement and
 // option positioning. Calls its borrowed callbacks in source order; an

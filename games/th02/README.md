@@ -85,8 +85,20 @@ return path preserves the source's subtlety that a hit observed after shot
 update returns even if the callback clears it, while a callback that leaves
 `0xFF` sets quit and then clears the raw byte. Refused shot lifetime work
 returns after the hit/timer prefix and before miss or rendering. The VRAM-only
-render tail, complete miss behavior, page driver, frame schedule, replay, and
-playable-session behavior remain unimplemented.
+render tail, page driver, frame schedule, replay, and playable-session
+behavior remain unimplemented.
+
+PlayerMissUpdateCallbacks binds the complete state body of the source
+player_miss_update_and_render() to that existing callback seam. It preserves
+the source's 0/24/43/68-frame transitions: initial sound, score commit and
+sparks; survivor power/shot-level reset or game-over item mode; lives/bombs,
+page-position reset, and respawn movement. Item and spark owners remain
+borrowed, and presentation is a synchronous source-pixel/pattern callback.
+Invalid host page or spark state, and an unrepresented source table index,
+return their typed failure after the already-written source prefix; no rollback
+or stage/page scheduler is invented. Focused tests cover normal and terminal
+miss paths, raw byte/table boundaries, and update-caller quit conversion. This
+is source-derived state coverage, not gameplay, replay, or session parity.
 
 `player_move_and_shoot_shot_stream_step()` now uses one checked synchronous
 callback path: `PlayerShotVolleyDispatcher` selects the existing A/B/C volley
