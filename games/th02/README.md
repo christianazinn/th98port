@@ -100,6 +100,18 @@ or stage/page scheduler is invented. Focused tests cover normal and terminal
 miss paths, raw byte/table boundaries, and update-caller quit conversion. This
 is source-derived state coverage, not gameplay, replay, or session parity.
 
+`player_reset()` now supplies the donor's per-attempt partial write set over
+the existing hit/miss/pool/lifetime/stream/volley/movement owners. It clears
+only shot flags, not payload; resets the selection-independent values; and
+then applies the 0/1/2 shottype switch's deliberately uneven dispatcher,
+speed, powered-pattern, option-visual, and C-decay writes. In particular, A
+retains a previously set powered-option pattern and A/B retain a prior option
+decay interval, while any other source shottype executes the common prefix
+without choosing a default. Page position, score/lives/bombs, stream cadence,
+C's cycle, stage/continue scheduling, rendering, replay, and playable-session
+behavior remain outside this function. Focused warm-state controls assert the
+full partial-write boundary for A/B/C and invalid selector values.
+
 `player_move_and_shoot_shot_stream_step()` now uses one checked synchronous
 callback path: `PlayerShotVolleyDispatcher` selects the existing A/B/C volley
 body over the shared pool, lifetime latch, RNG, and stream patnums, while an
