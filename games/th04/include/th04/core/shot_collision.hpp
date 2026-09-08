@@ -3,6 +3,7 @@
 #include "th04/core/shot.hpp"
 
 #include <optional>
+#include <type_traits>
 
 namespace th04::core {
 
@@ -30,8 +31,13 @@ struct ShotHitResult {
 // Invalid represented cache addresses are refused before mutation. Repeated
 // valid indices remain repeated hits: this helper does not rebuild the cache
 // or filter it by the Shot's flag (even if another hit test already hit it).
+// The sink executes at each source call site, before later shot hits and the
+// final score addition. It may update its own spark/RNG state, not these
+// borrowed shot/collision inputs. Validate that state before calling here.
+template<class SparkSink>
+	requires std::is_nothrow_invocable_v<SparkSink &, pc98::th0405::SubpixelPoint>
 [[nodiscard]] constexpr std::optional<ShotHitResult> shots_hittest(
-	ShotState &state, ShotCollisionState &collision
+	ShotState &state, ShotCollisionState &collision, SparkSink &&spark_sink
 ) noexcept
 {
 	const auto word = [](int value) { return static_cast<std::uint16_t>(value); };
@@ -49,6 +55,10 @@ struct ShotHitResult {
 		if(inside(entry.pos) && entry.shot_index >= shot_count) return std::nullopt;
 	}
 	ShotHitResult result{};
+	const auto add_spark = [&](pc98::th0405::SubpixelPoint center) {
+		result.sparks[result.spark_count++] = center;
+		spark_sink(center);
+	};
 	unsigned hits = 0;
 	for(std::size_t i = 0; i < state.shots_alive_count; ++i) {
 		const auto &entry = state.shots_alive[i];
@@ -62,7 +72,7 @@ struct ShotHitResult {
 		result.damage = static_cast<std::uint16_t>(result.damage +
 			static_cast<std::uint8_t>(shot.damage) / hits);
 		++collision.spark_parity;
-		if(collision.spark_parity & 1U) result.sparks[result.spark_count++] = shot.pos.cur;
+		if(collision.spark_parity & 1U) add_spark(shot.pos.cur);
 	}
 	if(collision.bombing) {
 		if(collision.stage_frame_mod4 == 0) result.damage += 5;
@@ -76,8 +86,7 @@ struct ShotHitResult {
 				result.damage += 3;
 				++collision.spark_parity;
 				if((collision.spark_parity & 3U) == 0) {
-					result.sparks[result.spark_count++] = {
-						std::bit_cast<std::int16_t>(laser_x), collision.center.y};
+					add_spark({std::bit_cast<std::int16_t>(laser_x), collision.center.y});
 				}
 			}
 			laser_x = word(static_cast<int>(laser_x) + 768);
@@ -85,6 +94,15 @@ struct ShotHitResult {
 	}
 	collision.score_delta += result.damage;
 	return result;
+}
+
+// Inspection-only form: reports requests without executing the spark pool.
+// A complete simulation must supply the synchronous sink above.
+[[nodiscard]] constexpr std::optional<ShotHitResult> shots_hittest(
+	ShotState &state, ShotCollisionState &collision
+) noexcept
+{
+	return shots_hittest(state, collision, [](pc98::th0405::SubpixelPoint) noexcept {});
 }
 
 } // namespace th04::core

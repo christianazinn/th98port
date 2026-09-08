@@ -158,6 +158,36 @@ bool test_refusal_and_duplicate_pointer()
 	return repeated && repeated->damage == 18 &&
 		state.shots[0].pos.velocity == pc98::th0405::SubpixelPoint{-1, 1};
 }
+
+bool test_synchronous_spark_order()
+{
+	ShotState state{};
+	state.shots_alive_count = 3;
+	for(std::size_t i = 0; i < 3; ++i) {
+		state.shots_alive[i] = {{0, 0}, static_cast<std::uint16_t>(i)};
+		state.shots[i].flag = shot_alive;
+		state.shots[i].damage = 12;
+		state.shots[i].pos.cur = {static_cast<std::int16_t>(100 + i), 200};
+	}
+	ShotCollisionState c{};
+	c.score_delta = 90;
+	unsigned calls = 0;
+	bool ordered = true;
+	const auto result = shots_hittest(state, c,
+		[&](pc98::th0405::SubpixelPoint center) noexcept {
+			const auto index = calls * 2;
+			ordered = ordered && c.score_delta == 90 &&
+				c.spark_parity == index + 1 && state.shots[index].flag == shot_hit &&
+				center == state.shots[index].pos.cur;
+			if(calls == 0) ordered = ordered && state.shots[1].flag == shot_alive;
+			++calls;
+		});
+	if(!result || !ordered || calls != 2 || result->damage != 22 || c.score_delta != 112) return false;
+	state.shots_alive_count = 69;
+	const auto refused = shots_hittest(state, c,
+		[&](pc98::th0405::SubpixelPoint) noexcept { ++calls; });
+	return !refused && calls == 2 && c.score_delta == 112;
+}
 } // namespace
 
 int main()
@@ -167,7 +197,8 @@ int main()
 		std::pair{"damage/parity", test_all_damage_and_parity},
 		std::pair{"geometry", test_wrapped_geometry},
 		std::pair{"bomb/laser", test_bomb_and_laser_order},
-		std::pair{"refusal/duplicates", test_refusal_and_duplicate_pointer}}) {
+		std::pair{"refusal/duplicates", test_refusal_and_duplicate_pointer},
+		std::pair{"synchronous sparks", test_synchronous_spark_order}}) {
 		if(!test()) {
 			std::cerr << "FAIL " << name << '\n';
 			return EXIT_FAILURE;
