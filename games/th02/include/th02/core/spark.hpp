@@ -11,6 +11,7 @@ namespace th02::core {
 inline constexpr std::size_t spark_count = 64U;
 inline constexpr std::uint8_t spark_free = 0U;
 inline constexpr std::uint8_t spark_alive = 1U;
+inline constexpr std::uint8_t spark_remove = 2U;
 
 // The source stores these modes as single bytes in spark_t.
 enum class SparkRenderAs : std::uint8_t {
@@ -23,6 +24,12 @@ struct SparkSubpixelPoint {
 	std::int16_t x{};
 	std::int16_t y{};
 	bool operator==(const SparkSubpixelPoint &) const = default;
+};
+
+struct SparkPixelPoint {
+	std::int16_t x{};
+	std::int16_t y{};
+	bool operator==(const SparkPixelPoint &) const = default;
 };
 
 // Packed source spark_t record. The two unknown bytes intentionally remain
@@ -60,6 +67,31 @@ struct SparkPoolState {
 	bool operator==(const SparkPoolState &) const = default;
 };
 
+// Source globals consumed by the update prefix. Stage initialization and
+// stage-specific effects own their values and schedule.
+struct SparkUpdateParameters {
+	std::int16_t acceleration_x{};
+	std::uint8_t age_max{};
+	bool operator==(const SparkUpdateParameters &) const = default;
+};
+
+// The source invalidates the tile rectangle before changing its associated
+// spark state. This is a synchronous borrowed tile boundary, not rendering.
+struct SparkInvalidation {
+	SparkPixelPoint topleft{};
+	std::int16_t width{};
+	std::int16_t height{};
+	bool operator==(const SparkInvalidation &) const = default;
+};
+
+class SparkInvalidationCallbacks {
+public:
+	virtual ~SparkInvalidationCallbacks() = default;
+	// Runs before the source flag transition/page copy and must not mutate the
+	// borrowed spark pool or its page-control arguments.
+	virtual void invalidate_spark(SparkInvalidation invalidation) noexcept = 0;
+};
+
 // th02/main/spark.cpp::sparks_add. Positive counts overwrite a ring of source
 // slots on the supplied back page. Native-invalid positive calls (a page other
 // than 0/1 or a ring word outside 0..63) refuse without mutation before the
@@ -68,6 +100,20 @@ struct SparkPoolState {
 [[nodiscard]] bool sparks_add(SparkPoolState &state, std::size_t back_page,
 	std::int16_t left, std::uint16_t top, std::int16_t speed_base,
 	std::int16_t count, bool as_sprite) noexcept;
+
+// th02/main/spark.cpp::sparks_update_and_render's state-only prefix. It moves
+// F_ALIVE entries on the selected page and marks out-of-bounds/aged entries
+// F_REMOVE. It intentionally has no render or scroll operation.
+[[nodiscard]] bool sparks_update(SparkPoolState &state, std::size_t back_page,
+	SparkUpdateParameters parameters) noexcept;
+
+// th02/main/spark_i.asm::sparks_invalidate. Every nonfree entry first emits
+// its source-sized tile rectangle from back_page; F_REMOVE then becomes free,
+// while all other flags copy front_page to its opposite page. Page scheduling
+// and the tile system are caller responsibilities.
+[[nodiscard]] bool sparks_invalidate(SparkPoolState &state,
+	std::size_t back_page, std::size_t front_page,
+	SparkInvalidationCallbacks &callbacks) noexcept;
 
 // Concrete bridge for th02/main/player/shot_hittest.cpp's synchronous
 // sparks_add() calls. It preserves the source order for valid state. A native

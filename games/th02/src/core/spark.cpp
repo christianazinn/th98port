@@ -9,6 +9,12 @@ namespace {
 
 constexpr std::uint16_t playfield_height = 400U;
 constexpr unsigned int subpixel_bits = 4U;
+constexpr std::int16_t playfield_left = 32;
+constexpr std::int16_t playfield_top = 16;
+constexpr std::int16_t playfield_right = 416;
+constexpr std::int16_t playfield_bottom = 384;
+constexpr std::int16_t spark_width = 8;
+constexpr std::int16_t spark_height = 8;
 
 [[nodiscard]] std::int16_t to_subpixels(std::int16_t pixels) noexcept
 {
@@ -45,6 +51,21 @@ constexpr unsigned int subpixel_bits = 4U;
 		static_cast<std::int32_t>(numerator) /
 		static_cast<std::int32_t>(denominator)
 	);
+}
+
+[[nodiscard]] std::int16_t arithmetic_shift_right(std::int16_t value,
+	unsigned int count) noexcept
+{
+	const auto divisor = static_cast<std::int32_t>(1) << count;
+	if(value >= 0) return static_cast<std::int16_t>(value / divisor);
+	return static_cast<std::int16_t>(
+		-(((-static_cast<std::int32_t>(value)) + divisor - 1) / divisor)
+	);
+}
+
+[[nodiscard]] bool page_is_valid(std::size_t page) noexcept
+{
+	return page < Spark{}.screen_topleft.size();
 }
 
 void advance_ring_low_byte(SparkPoolState &state, std::int16_t count) noexcept
@@ -111,6 +132,59 @@ bool sparks_add(SparkPoolState &state, std::size_t back_page,
 	}
 
 	advance_ring_low_byte(state, count);
+	return true;
+}
+
+bool sparks_update(SparkPoolState &state, std::size_t back_page,
+	SparkUpdateParameters parameters) noexcept
+{
+	if(!page_is_valid(back_page)) return false;
+
+	for(auto &spark : state.sparks) {
+		if(spark.flag != spark_alive) continue;
+
+		auto &position = spark.screen_topleft[back_page];
+		position.x = word_add(position.x, spark.velocity.x);
+		spark.velocity.x = word_add(spark.velocity.x, parameters.acceleration_x);
+		position.y = word_add(position.y, spark.velocity.y);
+		const auto screen_left = arithmetic_shift_right(position.x, subpixel_bits);
+		const auto screen_top = arithmetic_shift_right(position.y, subpixel_bits);
+		spark.velocity.y = word_add(spark.velocity.y, 1);
+		spark.age = static_cast<std::uint8_t>(spark.age + 1U);
+
+		if(screen_left < playfield_left ||
+			screen_left >= static_cast<std::int16_t>(playfield_right - spark_width) ||
+			spark.age > parameters.age_max || screen_top >= playfield_bottom ||
+			screen_top <= static_cast<std::int16_t>(playfield_top - spark_height)) {
+			spark.flag = spark_remove;
+		}
+	}
+	return true;
+}
+
+bool sparks_invalidate(SparkPoolState &state, std::size_t back_page,
+	std::size_t front_page, SparkInvalidationCallbacks &callbacks) noexcept
+{
+	if(!page_is_valid(back_page) || !page_is_valid(front_page)) return false;
+
+	for(auto &spark : state.sparks) {
+		if(spark.flag == spark_free) continue;
+
+		const auto &back_position = spark.screen_topleft[back_page];
+		const auto sprite = spark.render_as != SparkRenderAs::dot;
+		callbacks.invalidate_spark({
+			{arithmetic_shift_right(back_position.x, subpixel_bits),
+				arithmetic_shift_right(back_position.y, subpixel_bits)},
+			sprite ? spark_width : static_cast<std::int16_t>(1),
+			sprite ? spark_height : static_cast<std::int16_t>(1),
+		});
+		if(spark.flag == spark_remove) {
+			spark.flag = spark_free;
+		} else {
+			spark.screen_topleft[front_page ^ 1U] =
+				spark.screen_topleft[front_page];
+		}
+	}
 	return true;
 }
 

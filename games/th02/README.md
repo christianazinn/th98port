@@ -151,6 +151,14 @@ refusal is a sticky caller-visible failure after the collision prefix; it is
 not rollback or a successful complete simulation. Stage seeding and all
 remaining spark lifecycle work remain separate.
 
+`sparks_update()` and `sparks_invalidate()` now provide the two complete
+source state-write boundaries without a render or page driver. The former
+updates only raw alive entries on an explicit back page, including its word
+math, age/bounds removal, and no implicit position flip. The latter makes its
+source-sized tile invalidation call for every nonfree raw flag before removing
+or copying the source front page to its opposite page. Rendering, scrolling,
+the tile system, page scheduling, and stage seeding remain separate.
+
 `sparks_add()` now supplies TH02's independent 64-slot spark allocator. Its
 typed 20-byte record preserves the source's two unknown bytes and both page
 positions; the allocator writes only the selected back page and source-owned
