@@ -8,6 +8,8 @@
 
 namespace th02::core {
 
+struct RandomState;
+
 inline constexpr std::size_t spark_count = 64U;
 inline constexpr std::uint8_t spark_free = 0U;
 inline constexpr std::uint8_t spark_alive = 1U;
@@ -75,6 +77,15 @@ struct SparkUpdateParameters {
 	bool operator==(const SparkUpdateParameters &) const = default;
 };
 
+// Spark-only output of the opening subblock in bullets_and_sparks_init(). The
+// enclosing bullet reset and rank/special-tail writes are intentionally not
+// represented by this narrow helper.
+struct SparkStageSeedDefaults {
+	std::uint8_t sprite_interval{};
+	std::uint8_t age_max{};
+	bool operator==(const SparkStageSeedDefaults &) const = default;
+};
+
 // The source invalidates the tile rectangle before changing its associated
 // spark state. This is a synchronous borrowed tile boundary, not rendering.
 struct SparkInvalidation {
@@ -100,6 +111,13 @@ public:
 [[nodiscard]] bool sparks_add(SparkPoolState &state, std::size_t back_page,
 	std::int16_t left, std::uint16_t top, std::int16_t speed_base,
 	std::int16_t count, bool as_sprite) noexcept;
+
+// Spark-only subblock of th02/main/bullet/bullet.cpp::bullets_and_sparks_init.
+// It returns the two source globals and writes each spark's flag, seeded angle,
+// seeded Q4.4 speed, and default mode. The caller owns the enclosing bullet
+// state, later randring_fill(), and stage scheduling.
+[[nodiscard]] SparkStageSeedDefaults sparks_stage_seed(SparkPoolState &state,
+	RandomState &random, bool reduce_effects) noexcept;
 
 // th02/main/spark.cpp::sparks_update_and_render's state-only prefix. It moves
 // F_ALIVE entries on the selected page and marks out-of-bounds/aged entries

@@ -1,5 +1,8 @@
 #include "th02/core/spark.hpp"
 
+#include "th02/core/random.hpp"
+
+#include "pc98/random.hpp"
 #include "pc98/masterlib_vector.hpp"
 
 #include <bit>
@@ -15,6 +18,7 @@ constexpr std::int16_t playfield_right = 416;
 constexpr std::int16_t playfield_bottom = 384;
 constexpr std::int16_t spark_width = 8;
 constexpr std::int16_t spark_height = 8;
+constexpr std::uint8_t spark_speed_base_mask = 0x3FU;
 
 [[nodiscard]] std::int16_t to_subpixels(std::int16_t pixels) noexcept
 {
@@ -133,6 +137,25 @@ bool sparks_add(SparkPoolState &state, std::size_t back_page,
 
 	advance_ring_low_byte(state, count);
 	return true;
+}
+
+SparkStageSeedDefaults sparks_stage_seed(SparkPoolState &state,
+	RandomState &random, bool reduce_effects) noexcept
+{
+	const auto defaults = reduce_effects ? SparkStageSeedDefaults{7U, 24U} :
+		SparkStageSeedDefaults{1U, 48U};
+	for(std::size_t i = 0U; i < state.sparks.size(); ++i) {
+		auto &spark = state.sparks[i];
+		spark.flag = spark_free;
+		spark.angle = static_cast<std::uint8_t>(pc98::irand(random.seed));
+		spark.speed_base = static_cast<std::uint8_t>(
+			pc98::irand(random.seed) & spark_speed_base_mask
+		);
+		spark.default_render_as =
+			((static_cast<std::size_t>(defaults.sprite_interval) & i) == 0U) ?
+				SparkRenderAs::sprite : SparkRenderAs::dot;
+	}
+	return defaults;
 }
 
 bool sparks_update(SparkPoolState &state, std::size_t back_page,
