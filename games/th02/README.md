@@ -87,3 +87,14 @@ and the frame schedule are deliberately not implemented. Tests cover the A/B
 cooldown/SFX asymmetry, A's one-volley jump, release phases, spread bounds, and
 the callback-visible mutation order. This is a caller-tail seam, not a native
 shot or gameplay implementation.
+
+`core/shot.hpp` now supplies TH02's fixed 38-slot, 16-byte player-shot record
+and the three pool writer helpers. `shot_add()` and `shot_option_add()` update
+only the caller-selected current back-page slot in source field order; regular
+shots derive their Q12.4 velocity through the shared exact master.lib vector
+at length 192, while option shots retain their explicit velocity and initial
+decay value of one. `shots_free_all()` clears flags only, retaining all stale
+payload. Native-invalid page/slot input is refused before mutation. Free-slot
+scans, selected shottype callbacks, RNG, update/render, hit tests, and frame
+scheduling are still separate; these tests are source-derived writer coverage,
+not gameplay, replay, or session parity.
