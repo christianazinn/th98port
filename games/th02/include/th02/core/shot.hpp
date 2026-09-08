@@ -64,6 +64,15 @@ struct PlayerShotWriterPositions {
 	bool operator==(const PlayerShotWriterPositions &) const = default;
 };
 
+// A host-invalid back-page is distinguishable from master.lib's explicit
+// source DIV fault. The latter can occur only after the source body has
+// already written its preceding regular-shot prefix.
+enum class ShotBVolleyResult : std::uint8_t {
+	completed,
+	invalid_page,
+	source_iatan2_fault,
+};
+
 // th02/main/player/shot.cpp::shot_add. The caller has already selected a free
 // slot and supplied the current back page. Invalid native slot/page values
 // refuse without mutation; valid calls preserve the source store ordering.
@@ -90,5 +99,15 @@ void shots_free_all(PlayerShotPoolState &state) noexcept;
 	RandomState &random, std::uint8_t shot_level,
 	std::int8_t spread_angle_delta, std::uint8_t &shot_patnum,
 	std::uint8_t &option_shots_alive) noexcept;
+
+// th02/main/player/shot.cpp::shot_b. This selected-shot body shares one pool
+// scan between regular and option writes. At its two source homing call sites,
+// it uses the exact shared master.lib iatan2 model; a modeled source DIV fault
+// returns after preserving the state prefix already reached.
+[[nodiscard]] ShotBVolleyResult shot_b_volley(PlayerShotPoolState &state,
+	const PlayerShotWriterPositions &positions, std::size_t back_page,
+	RandomState &random, std::uint8_t shot_level, ShotPixelPoint boss_position,
+	std::int16_t &boss_pos_x_unused, std::uint8_t &shot_patnum,
+	std::uint8_t &shot_option_patnum, std::uint8_t &option_shots_alive) noexcept;
 
 } // namespace th02::core

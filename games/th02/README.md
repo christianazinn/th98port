@@ -108,3 +108,14 @@ caller-tail seam before the later sound callback. It deliberately excludes the
 other shottype callbacks, option firing, update/render, collisions, and frame
 scheduling; the tests are source-derived callback coverage, not a full shot or
 gameplay implementation.
+
+`shot_b_volley()` adds shottype B's complete selected spawn body on the same
+pool: one source-ordered free scan writes the regular volley and then its
+option volley. It preserves all level shapes, the level-8 option fallthrough
+that overwrites each first pattern with level 9's final pattern, full-power
+patnum changes, target marker/latch gates, and target/fallback homing angles.
+Homing consumes the shared literal master.lib `iatan2_source()` model; a
+modeled source DIV fault reports the prefix already written rather than using
+TH03's deliberately normalized edge policy. It remains a spawn callback only:
+shottype C, option movement, hit testing, invalidation/update/render, sound,
+frame scheduling, replay, and playable-session claims are absent.
