@@ -473,3 +473,8 @@ two independent acknowledgements and the timed exit overlay. It leaves the
 original pending score delta intact and resumes the existing stage-end frame
 boundary. Bonus arithmetic remains independently reusable; neither this path
 nor the intro has yet been validated against a user replay.
+
+`core/meira.hpp` supplies Stage 2's complete combat update: slash-pool
+lifecycle and collision, all pattern groups, teleport history, real bullets,
+shot damage and defeat effects. Its post-dialogue setup is a separate exact
+suffix; the actual intro and Stage 2 schedule are not yet connected.
