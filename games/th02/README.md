@@ -220,12 +220,15 @@ source-sized tile invalidation call for every nonfree raw flag before removing
 or copying the source front page to its opposite page. Rendering, scrolling,
 the tile system, page scheduling, and stage seeding remain separate.
 
-`sparks_stage_seed()` is deliberately only the spark subblock from the larger
+`sparks_stage_seed()` implements the spark subblock from the larger
 `bullets_and_sparks_init()`: it returns source effect defaults and seeds each
 spark's free flag, angle, Q4.4 base speed, and bitwise interval mode through
 two IRAND calls. It preserves all other spark state and buffered random state;
-bullet reset/special/rank state, the later random-ring fill, and the stage
-schedule remain unimplemented.
+the enclosing `bullets_and_sparks_init()` now supplies bullet flag reset,
+special-motion defaults, and rank speed/stack initialization. It retains stale
+payload, the Easy skip cycle, and the spark allocator cursor. The later
+random-ring fill and full stage schedule remain separate. The stack-multiplier
+helper preserves byte overflow instead of recalculating the base from rank.
 
 `sparks_add()` now supplies TH02's independent 64-slot spark allocator. Its
 typed 20-byte record preserves the source's two unknown bytes and both page
@@ -348,3 +351,9 @@ presentation callbacks. The enclosing enemy update loop is not yet provided.
 malformed-input refusals and script lengths; it does not emulate unchecked DOS
 memory accesses or the original allocator. Neither addition is a complete stage
 simulation or a claim of user-replay validation.
+
+`core/enemy_lifecycle.hpp` implements the old-back-page invalidation and
+front-to-back carry, recomputing the upper-exclusive update bound across sparse
+slots. Removal skips page carry; unknown nonfree flags still participate.
+`enemies_remove_all()` marks every nonfree slot for the following invalidation
+pass and clears the bound. These operations do not implicitly flip pages.
