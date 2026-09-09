@@ -305,3 +305,25 @@ Normal clip/bomb/Easy/full-pool paths complete normally, while host-invalid
 pages and the source fault are explicit results. Stage reset, 16x16 special
 bullets, update, invalidation, collision, rendering, bomb ownership, page
 scheduling, replay, and playable-session behavior remain separate.
+
+`core/bullet.hpp` and `core/bullet.cpp` also provide TH02's
+`bullets_add_16x16()` allocation body. It reuses the regular allocator's
+source-sized pool scan and every low-byte group expansion, retaining the
+16x16-specific record prefix, source-word patnum narrowing, special-motion
+threshold, gravity tuning exception, direct polar setup, stacks, and the
+ordinary aimed-group fault prefix. Per-frame special behavior, bullet update,
+invalidation, rendering, collision, stage parameter setup, scheduling, replay,
+and playable-session behavior remain outside this narrow allocation slice.
+
+`core/bullet_lifecycle.hpp` and `core/bullet_lifecycle.cpp` provide the
+source-order state passes for `bullets_invalidate()` and `bullets_clear()`.
+They emit synchronous old-back-page tile invalidation requests, preserve the
+remove-before-carry distinction, and leave VRAM, page scheduling, rendering,
+update, collision, and stage ownership separate.
+
+`core/enemy.hpp` and `core/enemy.cpp` also provide the source-sized
+`enemy_pos_update()`, `enemy_pos_update_aimed()`, and
+`enemy_angle_step_and_move()` helpers. They preserve selected-page movement,
+source operand order, signed-word vector position updates, and checked host
+page/script boundaries; the VM, spawning, firing, rendering, collision, and
+stage scheduling remain separate owners.

@@ -14,6 +14,7 @@ inline constexpr std::size_t enemy_bullet_count = 150U;
 inline constexpr std::int8_t enemy_bullet_free = 0;
 inline constexpr std::int8_t enemy_bullet_alive = 1;
 inline constexpr std::int8_t enemy_bullet_pellet = 1;
+inline constexpr std::int8_t enemy_bullet_16x16 = 2;
 
 // Raw group bytes from th02/main/bullet/bullet.hpp. The public allocator takes
 // a byte because the donor's default branch gives unsupported values concrete
@@ -57,6 +58,14 @@ inline constexpr std::uint8_t spread_2_ultrawide_aimed = 0x26U;
 inline constexpr std::uint8_t ring_32 = 0x27U;
 } // namespace enemy_bullet_group
 
+// Raw values at and above this threshold take bullets_add_16x16()'s direct
+// special-motion allocation path. Future update work owns their per-frame
+// behavior; this allocation slice needs only gravity's tuning exception.
+namespace enemy_bullet_special_motion {
+inline constexpr std::uint8_t first = 0x80U;
+inline constexpr std::uint8_t gravity = 0x83U;
+} // namespace enemy_bullet_special_motion
+
 // The source's packed bullet_t record. Pellet allocation intentionally keeps
 // the untouched patnum, speed, padding and opposite-page bytes observable.
 struct EnemyBullet {
@@ -85,8 +94,9 @@ static_assert(offsetof(EnemyBullet, speed) == 17U);
 static_assert(offsetof(EnemyBullet, u1) == 18U);
 static_assert(offsetof(EnemyBullet, padding) == 19U);
 
-// Source globals read by bullets_add_pellet(). Rank-base stack setup belongs
-// to the omitted stage initializer; this body reads only these three fields.
+// Source globals read by the concrete TH02 bullet allocators. Rank-base stack
+// setup belongs to the omitted stage initializer; these bodies read only these
+// three fields.
 struct EnemyBulletPoolState {
 	std::array<EnemyBullet, enemy_bullet_count> bullets{};
 	std::int8_t rank_base_speed{};
@@ -101,17 +111,32 @@ enum class EnemyBulletAddResult : std::uint8_t {
 	source_iatan2_fault,
 };
 
-// th02/main/bullet/bullet.cpp::bullets_add_pellet. This concrete regular
-// enemy allocation body scans source-free records and expands every raw group
-// byte. It borrows the already-owned frame position/page, current playperf,
-// rank, bombing state and TH02 random ring; no update/render/collision/reset
-// or bomb owner is implied. A host-invalid page refuses before mutation, while
-// a modeled master.lib iatan2 fault preserves the source prefix already stored.
+// th02/main/bullet/bullet.cpp::bullets_add_pellet. This concrete regular enemy
+// allocation body scans source-free records and expands every raw group byte.
+// It borrows the already-owned frame position/page, current playperf, rank,
+// bombing state and TH02 random ring; no update/render/collision/reset or bomb
+// owner is implied. A host-invalid page refuses before mutation, while a
+// modeled master.lib iatan2 fault preserves the source prefix already stored.
 [[nodiscard]] EnemyBulletAddResult bullets_add_pellet(
 	EnemyBulletPoolState &state, RandomState &random,
 	const PlayerFrameState &player_frame, std::int16_t playperf,
 	std::int8_t rank, bool bombing, ScreenPoint topleft, std::uint8_t angle,
 	std::uint8_t group, std::int16_t speed
+) noexcept;
+
+// th02/main/bullet/bullet.cpp::bullets_add_16x16. This concrete 16x16 enemy
+// allocation body shares every ordinary raw group with pellets. Raw values at
+// least enemy_bullet_special_motion::first allocate one direct polar-motion
+// record instead; gravity alone bypasses playperf/rank speed tuning. patnum is
+// source-word-sized at the call boundary and narrows only at the source's
+// byte-sized record store. No special-motion update, rendering, collision,
+// reset, or bomb owner is implied.
+[[nodiscard]] EnemyBulletAddResult bullets_add_16x16(
+	EnemyBulletPoolState &state, RandomState &random,
+	const PlayerFrameState &player_frame, std::int16_t playperf,
+	std::int8_t rank, bool bombing, ScreenPoint topleft, std::uint8_t angle,
+	std::uint8_t group_or_special_motion, std::int16_t patnum,
+	std::int16_t speed
 ) noexcept;
 
 } // namespace th02::core

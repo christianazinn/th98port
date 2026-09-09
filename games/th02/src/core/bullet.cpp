@@ -384,4 +384,73 @@ EnemyBulletAddResult bullets_add_pellet(
 	return EnemyBulletAddResult::completed;
 }
 
+EnemyBulletAddResult bullets_add_16x16(
+	EnemyBulletPoolState &state, RandomState &random,
+	const PlayerFrameState &player_frame, std::int16_t playperf,
+	std::int8_t rank, bool bombing, ScreenPoint topleft, std::uint8_t angle,
+	std::uint8_t group_or_special_motion, std::int16_t patnum,
+	std::int16_t speed
+) noexcept
+{
+	if(player_frame.page_back >= state.bullets.front().screen_topleft_on_page.size()) {
+		return EnemyBulletAddResult::invalid_page;
+	}
+	if(bullet_clip(topleft) || bombing ||
+		((group_or_special_motion != enemy_bullet_special_motion::gravity) &&
+			bullet_speed_tune(state, playperf, rank, speed))) {
+		return EnemyBulletAddResult::completed;
+	}
+
+	std::int16_t group_i{};
+	std::int16_t stack_i{};
+	std::size_t slot_i{};
+	do {
+		while(slot_i < state.bullets.size()) {
+			auto &bullet = state.bullets[slot_i];
+			if(bullet.flag != enemy_bullet_free) {
+				++slot_i;
+				continue;
+			}
+
+			bullet.group_or_special_motion = group_or_special_motion;
+			bullet.size_type = enemy_bullet_16x16;
+			bullet.flag = enemy_bullet_alive;
+			bullet.patnum = static_cast<std::uint8_t>(patnum);
+			bullet.u1 = 0U;
+			bullet.speed = static_cast<std::uint8_t>(speed);
+			bullet.angle = angle;
+
+			++slot_i;
+			if(group_or_special_motion < enemy_bullet_special_motion::first) {
+				bullet.screen_topleft_on_page[player_frame.page_back] = {
+					topleft.x, topleft.y,
+				};
+				const auto velocity_result = group_velocity_set(
+					group_i, group_or_special_motion, bullet, speed, random,
+					player_frame
+				);
+				if(velocity_result == GroupVelocityResult::source_iatan2_fault) {
+					return EnemyBulletAddResult::source_iatan2_fault;
+				}
+				if(velocity_result == GroupVelocityResult::continued) continue;
+			} else {
+				bullet.screen_topleft_on_page[player_frame.page_back] = {
+					to_subpixels(topleft.x), to_subpixels(topleft.y),
+				};
+				const auto velocity = pc98::masterlib::vector2(angle, speed);
+				bullet.velocity = {velocity.x, velocity.y};
+			}
+			break;
+		}
+
+		if(stack_i >= static_cast<std::int16_t>(state.stack)) break;
+		speed = arithmetic_shift_right(speed, 1U);
+		if(rank == rank_lunatic) speed = word_add(speed, 8);
+		if(speed < speed_min) break;
+		stack_i = word_add(stack_i, 1);
+		group_i = 0;
+	} while(true);
+	return EnemyBulletAddResult::completed;
+}
+
 } // namespace th02::core
