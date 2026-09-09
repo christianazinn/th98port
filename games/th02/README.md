@@ -389,6 +389,19 @@ and emulator animation parity remain separate work.
 
 `core/midboss1.hpp` composes Stage1's entry, firing, damage and defeat behavior
 with actual shot collision, pellet allocation, spark allocation and score.
-Its shared-boss projection must become one common owner when the other bosses
-are connected. `core/scroll.hpp` separates pre-entity line advance from the
+It and `core/rika.hpp` now borrow the same `BossState` type; the enclosing
+stage still needs to own and share that instance. `core/scroll.hpp` separates pre-entity line advance from the
 post-entity map progression; a full stage runner is not yet provided.
+
+`core/rika.hpp` supplies Stage 1 boss combat, including real shot damage,
+lasers, pellets, sparks and defeat progression. `core/boss_explosion.hpp`
+executes the explosion's slowdown and palette writes as well as its geometry;
+only drawing remains a presentation boundary. Dialogue and boss init/end
+sequencing are not implemented by this combat entry point.
+
+`core/stage_scenery.hpp` implements Stage 1 particles, palette progression
+and flash RNG consumption. It borrows the midboss scenery clock and shared
+palette tone instead of inventing independent copies. `core/stage_bonus.hpp`
+applies the regular-stage tally through the real score/extend path; row
+animation and input waits remain separate. These additions are source-backed
+components, not a playable stage or replay-parity claim.
