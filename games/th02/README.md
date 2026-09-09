@@ -379,3 +379,10 @@ each particle scan, even though this work lives in rendering-named source
 functions. Color, point and particle requests are presentation boundaries;
 the state and random updates execute in the core. This is not the complete
 shottype animation or a claim of pixel fidelity.
+
+`core/bomb_animation.hpp` implements the three complete shottype timelines;
+`core/bomb_update.hpp` connects their actual bodies to the circle phase and
+completion immunity transition. Tests compose trigger, invalidation and update
+through the full lifetime, including bullet-clear boundaries and random-ring
+consumption. Asset drawing remains presentation callbacks; stage scheduling
+and emulator animation parity remain separate work.
