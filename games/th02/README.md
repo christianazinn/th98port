@@ -340,3 +340,11 @@ this source-bounded slice.
 source operand order, signed-word vector position updates, and checked host
 page/script boundaries; the VM, spawning, firing, rendering, collision, and
 stage scheduling remain separate owners.
+
+`core/enemy_script.hpp` executes one source enemy opcode at a time, using the
+real movement and bullet allocators. Sound/tile requests remain synchronous
+presentation callbacks. The enclosing enemy update loop is not yet provided.
+`core/stage_data.hpp` decodes DT1 template/script/spawn data with explicit
+malformed-input refusals and script lengths; it does not emulate unchecked DOS
+memory accesses or the original allocator. Neither addition is a complete stage
+simulation or a claim of user-replay validation.
