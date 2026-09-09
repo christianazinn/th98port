@@ -33,7 +33,7 @@ endif()
 
 if(BUILD_TESTING)
 	add_test(NAME th05-headless-help COMMAND th05-headless --help)
-	foreach(test IN ITEMS gameplay item shot_patterns bomb std scroll stage enemy bullet laser boss boss2 stage_bonus stage_scenery)
+	foreach(test IN ITEMS gameplay item shot_patterns bomb std scroll stage enemy bullet laser boss boss2 boss3 stage_bonus stage_scenery)
 		string(REPLACE "_" "-" name "${test}")
 		add_executable(th05-${name}-tests tests/test_${test}.cpp)
 		target_link_libraries(th05-${name}-tests PRIVATE th05_core)

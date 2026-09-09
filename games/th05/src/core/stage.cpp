@@ -6,7 +6,7 @@
 namespace th05::core {
 StageResult stage_tick(State &s, std::uint16_t input, bool shift, Presentation &p) noexcept
 {
-	if (s.stage_id > 1) return StageResult::unsupported;
+	if (s.stage_id > 2) return StageResult::unsupported;
 	if (s.stage_clear_requested) return StageResult::cleared;
 	if (s.gameover_pending) return StageResult::gameover;
 	if (s.dialog_pending) return StageResult::dialog;
@@ -25,7 +25,8 @@ StageResult stage_tick(State &s, std::uint16_t input, bool shift, Presentation &
 	if (shots_update(s.shots) != ShotUpdateResult::complete ||
 		!lasers_update(s, p) || !bullets_update(s, p) || !enemies_update(s, p))
 		return StageResult::unsupported;
-	if (!(s.stage_id == 0 ? stage1_fights_update(s, p) : stage2_fights_update(s, p)))
+	if (!(s.stage_id == 0 ? stage1_fights_update(s, p) :
+		s.stage_id == 1 ? stage2_fights_update(s, p) : stage3_fights_update(s, p)))
 		return StageResult::unsupported;
 	if (s.stage_clear_requested) return StageResult::cleared;
 	if (!items_update(s, p) || !gathers_update(s))
@@ -34,7 +35,8 @@ StageResult stage_tick(State &s, std::uint16_t input, bool shift, Presentation &
 	if (!bomb_update(s, p))
 		return StageResult::unsupported;
 	if (s.stage_id == 0) stage1_fights_render_tail(s, p);
-	else stage2_fights_render_tail(s, p);
+	else if (s.stage_id == 1) stage2_fights_render_tail(s, p);
+	else stage3_fights_render_tail(s, p);
 	if (s.stage_clear_requested) return StageResult::cleared;
 	lasers_render(s, p);
 	if (s.playfield_shake_anim_time != 0) {
@@ -65,17 +67,19 @@ StageResult stage_tick(State &s, std::uint16_t input, bool shift, Presentation &
 }
 bool stage_dialog_complete(State &s) noexcept
 {
-	if (!s.dialog_pending || s.stage_id > 1) return false;
+	if (!s.dialog_pending || s.stage_id > 2) return false;
 	s.dialog_pending = false;
 	if (s.stage_id == 0) stage1_boss_activate(s);
-	else stage2_boss_activate(s);
+	else if (s.stage_id == 1) stage2_boss_activate(s);
+	else stage3_boss_activate(s);
 	return true;
 }
 bool stage_fights_setup(State &s) noexcept
 {
-	if (s.stage_id > 1) return false;
+	if (s.stage_id > 2) return false;
 	if (s.stage_id == 0) stage1_fights_setup(s);
-	else stage2_fights_setup(s);
+	else if (s.stage_id == 1) stage2_fights_setup(s);
+	else stage3_fights_setup(s);
 	return true;
 }
 }

@@ -45,6 +45,15 @@ int main()
 	if (!stage_fights_setup(s) || s.midboss.frames_until != 2750 || s.midboss.hp != 1400)
 		return EXIT_FAILURE;
 	s.stage_id = 2;
+	s.alice.puppets[0].flag = 1;
+	s.alice.barrier_frame = 42;
+	s.alice.puppet_patterns[0] = PuppetPattern::aimed_ring;
+	stage_init(s, p);
+	if (s.alice.puppets[0].flag != 0 || s.alice.barrier_frame != 42 ||
+		s.alice.puppet_patterns[0] != PuppetPattern::aimed_ring) return EXIT_FAILURE;
+	if (!stage_fights_setup(s) || s.midboss.frames_until != 5750 || s.midboss.hp != 1400)
+		return EXIT_FAILURE;
+	s.stage_id = 3;
 	if (stage_fights_setup(s) || stage_tick(s, 0, false, p) != StageResult::unsupported)
 		return EXIT_FAILURE;
 	return EXIT_SUCCESS;

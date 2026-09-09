@@ -42,6 +42,7 @@ void stage_init(State &s, Presentation &p) noexcept
 	s.shots.shots.fill({});
 	s.enemies.enemies.fill({});
 	s.boss.kurumi_spawnrays.fill({}); // Source custom_entities reset.
+	s.boss.elly_boomerang = {};
 	s.sparks.fill({});
 	s.bullets.pool.fill({});
 	s.circles.pool.fill({});

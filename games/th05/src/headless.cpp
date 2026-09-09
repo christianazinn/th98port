@@ -32,7 +32,7 @@ try {
 		if (arg == "--help") {
 			std::cout << "TH05 partial headless core (not replay-validated)\n"
 				"--data DIR [--input FILE] [--frames N] [--rank 0..3]\n"
-				"[--character 0..3] [--seed N] [--power 1..128] [--shift] [--stage 1..2]\n"
+				"[--character 0..3] [--seed N] [--power 1..128] [--shift] [--stage 1..3]\n"
 				"Input: one original low-byte mask per gameplay tick.\n"
 				"No input file means zero input. Stops at pause, dialog, Game Over or clear.\n";
 			return 0;
@@ -49,7 +49,7 @@ try {
 			if (!target || !number(value, *target)) throw std::runtime_error("Invalid option");
 		}
 	}
-	if (data.empty() || rank > 3 || character > 3 || power == 0 || power > 128 || stage < 1 || stage > 2)
+	if (data.empty() || rank > 3 || character > 3 || power == 0 || power > 128 || stage < 1 || stage > 3)
 		throw std::runtime_error("Invalid configuration; see --help");
 	th05::core::State s;
 	th05::core::Presentation p;
@@ -59,7 +59,7 @@ try {
 	s.power = static_cast<std::uint8_t>(power);
 	th05::core::stage_init(s, p);
 	if (!th05::core::stage_fights_setup(s)) return 2;
-	const auto stem = stage == 1 ? "ST00" : "ST01";
+	const auto stem = "ST0" + std::to_string(stage - 1);
 	if (!th05::core::std_load(s.std_data, read(data / (std::string(stem) + ".STD"))) ||
 		!th05::core::map_load(s, read(data / (std::string(stem) + ".MAP"))) ||
 		!th05::core::tiles_fill_initial(s)) throw std::runtime_error("Invalid stage data");

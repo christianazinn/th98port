@@ -31,6 +31,11 @@ int main()
 	if (s.boss.kurumi_spawnrays[0].flag != KurumiSpawnrayFlag::free || s.miss_count != 2 || s.bombs_used != 3) return 11;
 	if (!stage_fights_setup(s) || s.midboss.frames_until != 2600 || s.midboss.hp != 750) return 9;
 	s.stage_id = 2;
+	s.boss.elly_boomerang.flag = EllyBoomerangFlag::thrown;
+	stage_init(s, p);
+	if (s.boss.elly_boomerang.flag != EllyBoomerangFlag::free) return 13;
+	if (!stage_fights_setup(s) || s.midboss.frames_until != 1600 || s.midboss.hp != 850) return 12;
+	s.stage_id = 3;
 	if (stage_fights_setup(s) || stage_tick(s, 0, false, p) != StageResult::unsupported) return 10;
 	std::cout << "Stage admission and explicit modal boundaries passed\n";
 }

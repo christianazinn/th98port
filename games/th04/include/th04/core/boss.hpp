@@ -48,6 +48,22 @@ struct KurumiSpawnray {
 	bool operator==(const KurumiSpawnray &) const = default;
 };
 
+// th04/main/boss/b3_upd.cpp and b3_fg.cpp. Elly's single custom entity is
+// simulated by her update body and rendered before the explosion tail.
+enum class EllyBoomerangFlag : std::uint8_t {
+	free = 0U,
+	thrown = 1U,
+	caught = 2U,
+};
+
+struct EllyBoomerang {
+	EllyBoomerangFlag flag{EllyBoomerangFlag::free};
+	Motion pos{};
+	std::uint8_t state{}, angle{}, angle_delta{}, speed{};
+	std::uint16_t state_frame{};
+	bool operator==(const EllyBoomerang &) const = default;
+};
+
 // th04/main/boss/explode.hpp. The source keeps two small explosion slots and
 // one big slot; their aging is deliberately a render-tail operation.
 struct BossExplosion {
@@ -76,6 +92,8 @@ struct MidbossState {
 	std::uint8_t damage_this_frame{}, angle{};
 	std::uint8_t stage1_fan_angle{};
 	std::uint8_t stage2_pattern{}, stage2_direction{}, stage2_cycles{};
+	std::uint8_t stage3_pattern{}, stage3_mirrored{}, stage3_patterns_done{};
+	std::uint8_t stage4_pattern{}, stage4_passes{}, stage4_angle_flip{1U};
 	bool operator==(const MidbossState &) const = default;
 };
 
@@ -95,6 +113,9 @@ struct BossState {
 	bool phase_timed_out{true};
 	std::array<KurumiSpawnray, kurumi_spawnray_count> kurumi_spawnrays{};
 	std::uint8_t stage2_turn_direction{}, stage2_unused{};
+	std::uint8_t elly_pattern_set{};
+	std::int16_t elly_scythe_tick{};
+	EllyBoomerang elly_boomerang{};
 	bool operator==(const BossState &) const = default;
 };
 
@@ -122,5 +143,21 @@ void stage2_midboss_activate(State &) noexcept;
 void stage2_boss_activate(State &) noexcept;
 [[nodiscard]] bool stage2_fights_update(State &, Presentation &) noexcept;
 void stage2_fights_render_tail(State &, Presentation &) noexcept;
+
+void stage3_fights_setup(State &) noexcept;
+void stage3_midboss_activate(State &) noexcept;
+void stage3_boss_activate(State &) noexcept;
+[[nodiscard]] bool stage3_fights_update(State &, Presentation &) noexcept;
+void stage3_fights_render_tail(State &, Presentation &) noexcept;
+
+// The later midboss fights share the source shot collision and score-bonus
+// behavior, while keeping their own phase machines and source-local bytes.
+[[nodiscard]] bool midboss_hittest_shots_damage(
+	State &, Presentation &, Point radius, std::uint8_t hit_sound,
+	std::uint16_t &damage
+) noexcept;
+[[nodiscard]] bool midboss_score_bonus(
+	State &, Presentation &, std::uint16_t units
+) noexcept;
 
 } // namespace th04::core

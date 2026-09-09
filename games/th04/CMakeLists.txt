@@ -12,7 +12,7 @@ add_library(th04_core src/core/player.cpp src/core/bomb.cpp src/core/item.cpp
 	src/core/shot_patterns.cpp src/core/score.cpp src/core/std_load.cpp
 	src/core/std_run.cpp src/core/bullet.cpp src/core/enemy.cpp src/core/scroll.cpp
 	src/core/stage_init.cpp src/core/stage.cpp src/core/stage_bonus.cpp src/core/boss.cpp
-	src/core/thicklaser.cpp)
+	src/core/thicklaser.cpp src/core/midboss4.cpp)
 target_include_directories(th04_core PUBLIC include)
 target_link_libraries(th04_core PUBLIC pc98_numeric)
 function(th04_set_warnings target)
@@ -29,7 +29,7 @@ th04_set_warnings(th04-headless)
 
 if(BUILD_TESTING)
 	add_test(NAME th04-headless-help COMMAND th04-headless --help)
-	foreach(test IN ITEMS boss2 stage_bonus thicklaser)
+	foreach(test IN ITEMS boss2 boss3 stage_bonus thicklaser midboss4)
 		string(REPLACE "_" "-" name "${test}")
 		add_executable(th04-${name}-tests tests/test_${test}.cpp)
 		target_link_libraries(th04-${name}-tests PRIVATE th04_core)

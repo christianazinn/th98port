@@ -46,6 +46,7 @@ struct State {
 	StdState std_data{};
 	MidbossState midboss{};
 	BossState boss{};
+	AliceState alice{};
 	BossExplosionState boss_explosions{};
 	BulletState bullets{};
 	LaserState lasers{};

@@ -67,6 +67,47 @@ struct BossExplosionState {
 	bool operator==(const BossExplosionState &) const = default;
 };
 
+// th05/main/boss/b3puppet.hpp. Stage 3 overlays exactly two of the source
+// custom-entity records with these fields. `radius` preserves the source
+// union: spiral motion and gather-render radius never overlap in time.
+struct PuppetState {
+	BossMotion pos{};
+	std::uint16_t phase_frame{};
+	std::int16_t radius{}, hp{}, damage_this_frame{};
+	std::uint8_t flag{}, angle{}, patnum{};
+	bool operator==(const PuppetState &) const = default;
+};
+
+enum class PuppetPattern : std::uint8_t {
+	random_pellets,
+	aimed_spread_stack,
+	aimed_spread,
+	aimed_ring,
+	global_spread,
+	idle_wait,
+	never,
+};
+
+enum class AlicePattern : std::uint8_t {
+	random_balls_and_pellets,
+	ring_stacks,
+	spread_stacks,
+	lasers_and_random_balls,
+	mirrored_stacks,
+	rotating_ring,
+};
+
+// Alice's two source callback pointers and barrier words are ordinary BSS,
+// separate from the custom-entity puppet storage. Stage initialization clears
+// only `puppets`; callers must retain the remaining source globals.
+struct AliceState {
+	std::array<PuppetState, 2U> puppets{};
+	std::array<PuppetPattern, 2U> puppet_patterns{};
+	std::uint16_t barrier_frame{}, barrier_fire_frames{};
+	AlicePattern boss_pattern{};
+	bool operator==(const AliceState &) const = default;
+};
+
 // Stage setup invokes this after its non-combat initialization, preserving the
 // source values for Stage 1's midboss and Sara combat objects.
 void stage1_fights_setup(State &) noexcept;
@@ -89,5 +130,14 @@ void stage2_midboss_activate(State &) noexcept;
 void stage2_boss_activate(State &) noexcept;
 [[nodiscard]] bool stage2_fights_update(State &, Presentation &) noexcept;
 void stage2_fights_render_tail(State &, Presentation &) noexcept;
+
+// Stage 3 carries Midboss 3 and Alice, including Alice's two custom-entity
+// puppets. The State owner resets only AliceState::puppets with the source
+// custom-entity pool during stage initialization.
+void stage3_fights_setup(State &) noexcept;
+void stage3_midboss_activate(State &) noexcept;
+void stage3_boss_activate(State &) noexcept;
+[[nodiscard]] bool stage3_fights_update(State &, Presentation &) noexcept;
+void stage3_fights_render_tail(State &, Presentation &) noexcept;
 
 } // namespace th05::core
