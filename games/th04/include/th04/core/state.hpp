@@ -4,6 +4,10 @@
 #include "th04/core/player.hpp"
 #include "th04/core/score.hpp"
 #include "th04/core/shot_reimu_a.hpp"
+#include "th04/core/shot_collision.hpp"
+#include "th04/core/std.hpp"
+#include "th04/core/bullet.hpp"
+#include "th04/core/enemy.hpp"
 #include <array>
 #include <bit>
 
@@ -30,11 +34,22 @@ struct State {
 	std::uint8_t bombs{}, credit_bombs{}, playperf_min{};
 	std::uint8_t miss_count{}, bombs_used{};
 	std::uint16_t stage_frame{};
+	std::uint8_t rank{};
+	bool midboss_active{};
+	std::int16_t scroll_last_delta{};
+	StdState std_data{};
+	BulletState bullets{};
+	EnemyState enemies{};
+	std::array<std::uint16_t, 25 * 32> tile_ring{};
 	ScoreState score{};
 	ExtendState resources{};
-	RandomState random{}, random2{};
+	// randring1/randring2 are code-segment entry points over this same ring.
+	RandomState random{};
 	ShotState shots{};
 	ShotSpawnState shot_spawn{};
+	ShotCollisionState shot_collision{};
+	std::array<pc98::th0405::Spark, pc98::th0405::SPARK_COUNT_TH04> sparks{};
+	std::uint16_t spark_ring_offset{};
 	ReimuAPatternState reimu_a{};
 	ItemState items{};
 	bool bombing{}, bombing_disabled{}, scroll_active{}, bomb_background{};
@@ -47,7 +62,7 @@ struct State {
 	std::array<BombStar, 48> bomb_stars{};
 };
 
-enum class HudField { power, lives, bombs, dream, point_items };
+enum class HudField { power, lives, bombs, dream, point_items, graze, score };
 // Notifications never supply gameplay outcomes or mutate the simulation.
 struct Presentation {
 	virtual ~Presentation() = default;
@@ -77,6 +92,7 @@ inline void playperf_lower(State &state, std::uint8_t delta) noexcept
 }
 
 void player_shot_level_update(State &state, Presentation &presentation) noexcept;
+void score_update(State &state, Presentation &presentation) noexcept;
 // False is an unsupported source state, not a completed gameplay step.
 [[nodiscard]] bool player_update(State &state, std::uint16_t input, bool shift,
 	Presentation &presentation) noexcept;

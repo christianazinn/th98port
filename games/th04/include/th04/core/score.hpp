@@ -12,6 +12,7 @@ using ScoreDigits = pc98::ScoreDigits;
 
 struct ScoreState {
 	ScoreDigits score{};
+	ScoreDigits hiscore{}, temp_lebcd{};
 	std::uint32_t score_delta{}, score_delta_frame{};
 	std::uint8_t score_unused{}, extends_gained{}, hiscore_popup_shown{};
 	bool operator==(const ScoreState &) const = default;

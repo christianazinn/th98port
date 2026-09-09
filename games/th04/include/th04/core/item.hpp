@@ -68,7 +68,7 @@ void items_init(State &state, Presentation &presentation) noexcept;
 void items_add(State &state, Presentation &presentation,
 	pc98::th0405::SubpixelPoint position, ItemType type) noexcept;
 
-// th04/main/item/miss_add.cpp. False reports an unsupported random2 state or
+// th04/main/item/miss_add.cpp. False reports an unsupported random state or
 // a source-equivalent nonterminating duplicate-ring draw; earlier RNG writes
 // are preserved.
 [[nodiscard]] bool items_miss_add(State &state, Presentation &presentation) noexcept;

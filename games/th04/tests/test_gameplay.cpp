@@ -22,8 +22,6 @@ State start()
 	s.power = 1;
 	s.random.seed = 18;
 	pc98::th0405::randring_fill(s.random);
-	s.random2.seed = 91;
-	pc98::th0405::randring_fill(s.random2);
 	s.reimu_a.homing_target.y = homing_target_none;
 	return s;
 }
@@ -145,11 +143,24 @@ bool pickup_changes_next_shot()
 	return s.random.cursor == static_cast<std::uint8_t>(before + 1) &&
 		s.shots.shots[0].flag == shot_alive;
 }
+bool shot_and_miss_share_random_ring()
+{
+	auto s = start();
+	Trace p;
+	s.random.ring.fill(0);
+	s.random.ring[1] = 2;
+	s.random.ring[3] = 1;
+	s.power = 6;
+	player_shot_level_update(s, p);
+	if (!player_update(s, 0x20, false, p) || s.random.cursor != 1) return false;
+	if (!items_miss_add(s, p) || s.random.cursor != 7) return false;
+	return s.items.items[2].type == static_cast<std::uint8_t>(ItemType::big_power);
+}
 int main()
 {
 	const bool checks[]{movement_and_cadence(), deathbomb_and_miss(),
 		invincibility_edge_and_last_life(), bomb_lifetime(), all_shot_types_and_power_levels(),
-		cadence_all_byte_states(), pickup_changes_next_shot()};
+		cadence_all_byte_states(), pickup_changes_next_shot(), shot_and_miss_share_random_ring()};
 	for (std::size_t i = 0; i < std::size(checks); ++i) {
 		if (!checks[i]) { std::cerr << "gameplay check failed: " << i << '\n'; return 1; }
 	}

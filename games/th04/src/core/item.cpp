@@ -298,15 +298,15 @@ void items_add(State &state, Presentation &presentation,
 
 bool items_miss_add(State &state, Presentation &) noexcept
 {
-	const auto bigpower_draw = randring_next16_mod(state.random2, 5);
+	const auto bigpower_draw = randring_next16_mod(state.random, 5);
 	if(!bigpower_draw) return false;
 	std::uint16_t unused_draw{};
-	for(std::size_t attempts = 0; attempts < state.random2.ring.size(); ++attempts) {
-		const auto draw = randring_next16_mod(state.random2, 5);
+	for(std::size_t attempts = 0; attempts < state.random.ring.size(); ++attempts) {
+		const auto draw = randring_next16_mod(state.random, 5);
 		if(!draw) return false;
 		unused_draw = *draw;
 		if(unused_draw != *bigpower_draw) break;
-		if((attempts + 1U) == state.random2.ring.size()) return false;
+		if((attempts + 1U) == state.random.ring.size()) return false;
 	}
 
 	std::size_t field = 2;
@@ -327,7 +327,7 @@ bool items_miss_add(State &state, Presentation &) noexcept
 		item.pulled_to_player = 0;
 		ItemType type{};
 		if(static_cast<std::size_t>(*bigpower_draw) != item_index) {
-			const auto draw = randring_next16_and(state.random2, 1U);
+			const auto draw = randring_next16_and(state.random, 1U);
 			if(!draw) return false;
 			type = static_cast<ItemType>(*draw);
 		} else {

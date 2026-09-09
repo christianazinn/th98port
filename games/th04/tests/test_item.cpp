@@ -99,14 +99,14 @@ void set_live_item(State &state, ItemType type, Point point, Point velocity = {}
 	auto state = source_state();
 	Trace presentation{};
 	state.player_pos.cur = {1000, 3000};
-	state.random2.ring[0] = 2;
-	state.random2.ring[1] = 0;
-	state.random2.ring[2] = 1;
-	state.random2.ring[3] = 0;
-	state.random2.ring[4] = 0;
-	state.random2.ring[5] = 0;
-	state.random2.ring[6] = 0;
-	if(!items_miss_add(state, presentation) || state.random2.cursor != 6 ||
+	state.random.ring[0] = 2;
+	state.random.ring[1] = 0;
+	state.random.ring[2] = 1;
+	state.random.ring[3] = 0;
+	state.random.ring[4] = 0;
+	state.random.ring[5] = 0;
+	state.random.ring[6] = 0;
+	if(!items_miss_add(state, presentation) || state.random.cursor != 6 ||
 		state.items.items_spawned != 5 || !presentation.events.empty()) return false;
 	constexpr std::uint8_t types[]{1, 0, 3, 0, 0};
 	constexpr std::int16_t ys[]{-48, -56, -64, -72, -80};

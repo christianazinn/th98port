@@ -4,7 +4,8 @@ This is an asset-free, partial core, not a playable game or replay verifier.
 The connected player path covers movement, all four shot types and their power
 levels, hit/deathbomb/miss handling, item collection, and both character bombs.
 `State` owns their source globals; `Presentation` only receives notifications.
-Enemy/STD, bullets, boss logic, stage startup and the full stage loop remain
+Enemy scripts, STD spawning, bullets/gathers and score transfer now operate on
+that same state. Boss logic, stage startup and the full stage loop remain
 unconnected. Passing synthetic tests does not establish replay parity.
 
 Movement input, word motion updates, and the player boundary clamp are implemented, sharing direction
@@ -79,7 +80,7 @@ source call site, before later hits and the final score update. The two-argument
 inspection form only reports requests and is not a full simulation. The
 four-argument form consumes the shared 96-slot spark pool and random ring at
 those call sites, with both borrowed states validated before any mutation. The
-boss/enemy callers are not yet ported; the collision helper alone is not a
+enemy caller now uses this path; the boss callers remain unported. This is not a
 complete replay engine. Invalid represented pool addresses fail explicitly.
 
 `core/score.hpp` implements th04/main/score_reset.cpp at the pinned donor:
