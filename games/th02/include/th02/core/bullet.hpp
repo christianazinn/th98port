@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "th02/core/player.hpp"
+#include "th02/core/spark.hpp"
 
 namespace th02::core {
 
@@ -102,12 +103,13 @@ static_assert(offsetof(EnemyBullet, speed) == 17U);
 static_assert(offsetof(EnemyBullet, u1) == 18U);
 static_assert(offsetof(EnemyBullet, padding) == 19U);
 
-// Source globals read by the concrete TH02 bullet allocators. Rank-base stack
-// setup belongs to the omitted stage initializer; these bodies read only these
-// three fields.
+// Source globals shared by the concrete TH02 bullet allocators and their
+// stage initializer. `rank_base_stack` is a persistent byte: the source's
+// multiplier helper reads it later rather than deriving stack from rank again.
 struct EnemyBulletPoolState {
 	std::array<EnemyBullet, enemy_bullet_count> bullets{};
 	std::int8_t rank_base_speed{};
+	std::uint8_t rank_base_stack{};
 	std::uint8_t stack{};
 	std::int8_t easy_slow_skip_cycle{};
 	bool operator==(const EnemyBulletPoolState &) const = default;
@@ -128,6 +130,23 @@ struct EnemyBulletSpecialState {
 	std::int16_t turns_or_drift_frames{};
 	bool operator==(const EnemyBulletSpecialState &) const = default;
 };
+
+// th02/main/bullet/bullet.cpp::bullets_and_sparks_init. This composes the
+// existing source-exact spark seeding helper with the enclosing bullet reset,
+// special values, and rank globals. It returns the source spark defaults,
+// while retaining bullet payload, Easy-cycle, spark ring, and random ring/
+// cursor state that this body does not write.
+[[nodiscard]] SparkStageSeedDefaults bullets_and_sparks_init(
+	EnemyBulletPoolState &bullets, SparkPoolState &sparks,
+	RandomState &random, EnemyBulletSpecialState &special, std::int8_t rank,
+	bool reduce_effects
+) noexcept;
+
+// th02/main/bullet/bullet.cpp::bullets_set_stack_multiplier. The source
+// multiplies two bytes and retains the assignment's low byte in `stack`.
+void bullets_set_stack_multiplier(
+	EnemyBulletPoolState &state, std::uint8_t multiplier
+) noexcept;
 
 enum class EnemyBulletPresentationKind : std::uint8_t {
 	set_pellet_color_white,

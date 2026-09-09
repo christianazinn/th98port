@@ -20,6 +20,7 @@ constexpr std::int16_t pellet_height = 8;
 constexpr std::int16_t bullet16_height = 16;
 constexpr std::int16_t speed_min = 16;
 constexpr std::int8_t rank_easy = 0;
+constexpr std::int8_t rank_hard = 2;
 constexpr std::int8_t rank_lunatic = 3;
 
 enum class GroupVelocityResult : std::uint8_t {
@@ -559,6 +560,36 @@ EnemyBulletAddResult bullets_add_pellet(
 		group_i = 0;
 	} while(true);
 	return EnemyBulletAddResult::completed;
+}
+
+SparkStageSeedDefaults bullets_and_sparks_init(
+	EnemyBulletPoolState &bullets, SparkPoolState &sparks,
+	RandomState &random, EnemyBulletSpecialState &special, std::int8_t rank,
+	bool reduce_effects
+) noexcept
+{
+	for(auto &bullet : bullets.bullets) {
+		bullet.flag = enemy_bullet_free;
+	}
+	const auto spark_defaults = sparks_stage_seed(
+		sparks, random, reduce_effects
+	);
+	special = {1, 64, 1};
+	bullets.rank_base_speed = (rank == rank_easy) ? -10 :
+		(rank == rank_lunatic) ? 12 : 0;
+	bullets.rank_base_stack = ((rank == rank_hard) ||
+		(rank == rank_lunatic)) ? 1U : 0U;
+	bullets.stack = bullets.rank_base_stack;
+	return spark_defaults;
+}
+
+void bullets_set_stack_multiplier(
+	EnemyBulletPoolState &state, std::uint8_t multiplier
+) noexcept
+{
+	const auto product = static_cast<std::uint16_t>(state.rank_base_stack) *
+		static_cast<std::uint16_t>(multiplier);
+	state.stack = static_cast<std::uint8_t>(product);
 }
 
 EnemyBulletAddResult bullets_add_16x16(
