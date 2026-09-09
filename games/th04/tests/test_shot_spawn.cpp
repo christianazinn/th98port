@@ -123,48 +123,6 @@ bool l0_l1_and_random_prefix()
 		random == random_before && spawn.shot_last_id == shot_count;
 }
 
-bool cadence_order_and_ticks()
-{
-	ShotSpawnState spawn{};
-	std::array<int, 8> order{};
-	std::size_t count{};
-	auto fire = [&]() noexcept { order[count++] = static_cast<int>(spawn.shot_time); };
-	auto sound = [&](std::uint8_t id) noexcept { order[count++] = 100 + id; };
-	if(shot_cycle_step(spawn, true, fire, sound) != ShotCycleResult{true, true} ||
-		spawn.shot_time != 18 || count != 2 || order[0] != 18 || order[1] != 101) return false;
-	spawn.shot_time = 13;
-	if(shot_cycle_step(spawn, false, fire, sound) != ShotCycleResult{true, true} ||
-		spawn.shot_time != 12 || order[2] != 12 || order[3] != 101) return false;
-	spawn.shot_time = 7;
-	if(shot_cycle_step(spawn, false, fire, sound) != ShotCycleResult{true, true} ||
-		spawn.shot_time != 6 || order[4] != 6 || order[5] != 101) return false;
-	spawn.shot_time = 2;
-	if(shot_cycle_step(spawn, false, fire, sound) != ShotCycleResult{} || spawn.shot_time != 1) return false;
-	return shot_cycle_step(spawn, false, fire, sound) == ShotCycleResult{} && spawn.shot_time == 0 && count == 6;
-}
-
-bool cadence_all_byte_states()
-{
-	for(unsigned initial = 0; initial < 256; ++initial) {
-		for(const bool held : {false, true}) {
-			ShotSpawnState spawn{};
-			spawn.shot_time = static_cast<std::uint8_t>(initial);
-			std::array<int, 2> order{};
-			std::size_t count{};
-			auto fire = [&]() noexcept { order[count++] = static_cast<int>(spawn.shot_time); };
-			auto sound = [&](std::uint8_t id) noexcept { order[count++] = 100 + id; };
-			const auto result = shot_cycle_step(spawn, held, fire, sound);
-			const bool immediate = held && initial <= 1U;
-			const auto expected_time = immediate ? 18U : (initial == 0U ? 0U : initial - 1U);
-			const bool fire_expected = immediate || expected_time == 6U || expected_time == 12U;
-			if(result != ShotCycleResult{fire_expected, fire_expected} ||
-				spawn.shot_time != expected_time || count != (fire_expected ? 2U : 0U)) return false;
-			if(fire_expected && (order[0] != static_cast<int>(expected_time) || order[1] != 101)) return false;
-		}
-	}
-	return true;
-}
-
 } // namespace
 
 int main()
@@ -174,8 +132,6 @@ int main()
 		std::pair{"occupied prefix", occupied_counts_and_cursor_prefix},
 		std::pair{"invalid cursor", invalid_host_cursor_and_source_early_no_slot},
 		std::pair{"l0/l1/random", l0_l1_and_random_prefix},
-		std::pair{"cadence", cadence_order_and_ticks},
-		std::pair{"cadence bytes", cadence_all_byte_states},
 	}) {
 		if(!test()) {
 			std::cerr << "FAIL " << name << '\n';

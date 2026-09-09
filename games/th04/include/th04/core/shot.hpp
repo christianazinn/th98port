@@ -36,6 +36,11 @@ struct ShotState {
 	std::array<ShotAlive, shot_count> shots_alive{};
 	std::uint16_t shots_alive_count{};
 	std::uint16_t shot_laser_time{};
+	// th04/main/player/shot.hpp's forced-uint8 laser-style enum and the
+	// separate byte ring-shot cadence counter. The source only assigns styles
+	// 0 through 4; retain their byte representation for deterministic state.
+	std::uint8_t shot_laser_style{};
+	std::uint8_t shot_laser_ring_cycle{};
 	pc98::th0405::Motion shot_laser_bottomcenter{};
 	bool operator==(const ShotState &) const = default;
 };

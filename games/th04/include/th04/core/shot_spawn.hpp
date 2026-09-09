@@ -7,7 +7,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <type_traits>
 
 namespace th04::core {
 
@@ -59,12 +58,6 @@ struct ShotAddResult {
 struct ShotFireResult {
 	ShotAddResult allocation{};
 	bool random_refused{};
-};
-
-struct ShotCycleResult {
-	bool fired{};
-	bool sound_1{};
-	bool operator==(const ShotCycleResult &) const = default;
 };
 
 namespace detail {
@@ -147,8 +140,8 @@ constexpr void reset_shot_allocator(ShotSpawnState &state) noexcept
 }
 
 // th04/main/player/shot_reimu.cpp and p_marisa.cpp, levels 0 and 1. These
-// helpers reset the allocator before each pattern call; cadence and sound are
-// the separate player-update seam below.
+// helpers reset the allocator before each pattern call; player_update owns
+// cadence and sound.
 [[nodiscard]] constexpr ShotFireResult shot_l0(
 	ShotSpawnState &state, ShotState &shots, std::int16_t patnum_base
 ) noexcept
@@ -213,30 +206,6 @@ constexpr void reset_shot_allocator(ShotSpawnState &state) noexcept
 ) noexcept
 {
 	return shot_l1(state, shots, random, pat_shot_marisa);
-}
-
-// The unlocked branch of th04/main/player/update.cpp. The callbacks preserve
-// the source order: player pattern first, sound 1 second. The caller decides
-// whether this branch is reachable; miss/bomb/movement logic is not hidden.
-template <typename ShotFn, typename SoundFn>
-[[nodiscard]] constexpr ShotCycleResult shot_cycle_step(
-	ShotSpawnState &state, bool shot_held, ShotFn &fire_pattern, SoundFn &on_sound
-) noexcept
-{
-	static_assert(std::is_nothrow_invocable_v<ShotFn &>);
-	static_assert(std::is_nothrow_invocable_v<SoundFn &, std::uint8_t>);
-	if(shot_held && state.shot_time <= 1U) {
-		state.shot_time = 18;
-		fire_pattern();
-		on_sound(1);
-		return {true, true};
-	}
-	if(state.shot_time == 0U) return {};
-	--state.shot_time;
-	if(state.shot_time != 6U && state.shot_time != 12U) return {};
-	fire_pattern();
-	on_sound(1);
-	return {true, true};
 }
 
 } // namespace th04::core

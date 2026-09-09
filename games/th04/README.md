@@ -1,6 +1,12 @@
 # TH04 native foundations
 
 This is an asset-free, partial core, not a playable game or replay verifier.
+The connected player path covers movement, all four shot types and their power
+levels, hit/deathbomb/miss handling, item collection, and both character bombs.
+`State` owns their source globals; `Presentation` only receives notifications.
+Enemy/STD, bullets, boss logic, stage startup and the full stage loop remain
+unconnected. Passing synthetic tests does not establish replay parity.
+
 Movement input, word motion updates, and the player boundary clamp are implemented, sharing direction
 application with TH05. The source owner is th04/main/player/move.cpp at ReC98
 c6c2ee5390012b6a334163716a1703bf2edd0229; move.hpp supplies TH04's fixed
@@ -11,7 +17,7 @@ Movement accepts the exact original direction combinations, including separate
 keypad diagonal bits, and preserves components it does not assign. No-input and
 invalid input leave both components unchanged. The caller's velocity reset and
 input masking are not hidden in this helper. Animation, focus/input sensing,
-entities, and the gameplay schedule remain open.
+stage entities, and the complete gameplay schedule remain open.
 TH05 has an assembly-specific high-input-bit mask which TH04 does not apply.
 
 The public th04_core target supplies the TH04 speed policy to the shared
@@ -52,9 +58,9 @@ Reimu/Marisa level 0/1 shot helpers. It carries the global probe cursor and
 occupied-count byte separately from the active update pool, preserving the
 five complete records that fit in source-adjacent tail storage. The remaining
 six tail bytes are retained but return an explicit unsupported result before a
-partial source record can be accessed. The tiny cadence seam keeps source
-18→12→6 scheduling and pattern-before-sound order, but its caller still owns
-the unlocked movement branch, miss/bomb control, and full player update.
+partial source record can be accessed. The connected player update now owns
+18→12→6 scheduling, pattern-before-sound order, movement, and miss/bomb control;
+the earlier callback-only cadence seam has been removed.
 
 `core/shot_reimu_a.hpp` composes that allocator into Reimu shottype-A's
 level-2 through level-9 pattern callbacks. It retains the source's separate
