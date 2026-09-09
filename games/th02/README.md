@@ -405,3 +405,8 @@ palette tone instead of inventing independent copies. `core/stage_bonus.hpp`
 applies the regular-stage tally through the real score/extend path; row
 animation and input waits remain separate. These additions are source-backed
 components, not a playable stage or replay-parity claim.
+
+`core/stage1_lifecycle.hpp` supplies the exact setup suffix after Rika's
+dialogue and the leave suffix after the closing overlay. These explicit
+boundaries retain counters and coordinates that the source does not reset;
+they do not stand in for the still-unimplemented dialogue/input lifecycle.
