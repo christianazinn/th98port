@@ -24,11 +24,17 @@ void gameplay_options_apply(Stage1State &state, bool reduce_effects,
 // Refuses other stages before changing anything; no blank aggregate reset.
 [[nodiscard]] bool stage1_setup_before_assets(Stage1State &state, bool demo,
 	Stage1SetupPresentation &presentation) noexcept;
+// Same common stage_init prefix; Stage2 BGM IDs are 2/3. Rejects other stages
+// before mutation, and retains Meira/M2/scenery private state as the source does.
+[[nodiscard]] bool stage2_setup_before_assets(StageState &state, bool demo,
+	Stage1SetupPresentation &presentation) noexcept;
 
 // Call after actual stage assets/map/script/dialogue loading and tiles reset.
 // Installs Stage1's represented callbacks and resets only the source player
 // fields. Does not certify that the caller supplied assets or a dialogue owner.
 void stage1_setup_after_assets(Stage1State &state, Stage1FrameSchedule &schedule,
+	bool &stage_title_enabled) noexcept;
+void stage2_setup_after_assets(StageState &state, Stage1FrameSchedule &schedule,
 	bool &stage_title_enabled) noexcept;
 
 // Later item/score setup after tile-area initialization. Source input/fades,

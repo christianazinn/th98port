@@ -8,6 +8,7 @@
 #include "th02/core/reset.hpp"
 #include "th02/core/scroll.hpp"
 #include "th02/core/stage1_entities.hpp"
+#include "th02/core/stage2_entities.hpp"
 #include "th02/core/stage1_invalidation.hpp"
 #include "th02/core/stage_bonus.hpp"
 #include "th02/core/stage_scenery.hpp"
@@ -131,6 +132,10 @@ struct Stage1EntitiesPresentation {
 
 [[nodiscard]] Stage1EntitiesStepResult stage1_entities_update(
 	Stage1State &state, Stage1EntitiesPresentation &presentation
+) noexcept;
+
+[[nodiscard]] Stage2EntitiesStepResult stage2_entities_update(
+	StageState &state, Stage2EntitiesPresentation &presentation
 ) noexcept;
 
 } // namespace th02::core

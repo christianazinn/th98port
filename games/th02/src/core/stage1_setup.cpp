@@ -14,10 +14,10 @@ void gameplay_options_apply(Stage1State &state, bool reduce_effects,
 	state.playperf_max = state.rank == 0 ? 4 : 16;
 }
 
-bool stage1_setup_before_assets(Stage1State &state, bool demo,
+namespace {
+bool stage_setup_before_assets(StageState &state, bool demo,
 	Stage1SetupPresentation &presentation) noexcept
 {
-	if (state.stage_id != 0U) return false;
 	const auto spark_defaults = bullets_and_sparks_init(state.bullets, state.sparks,
 		state.random, state.bullet_special, state.rank, state.reduce_effects);
 	state.spark_sprite_interval = spark_defaults.sprite_interval;
@@ -42,12 +42,25 @@ bool stage1_setup_before_assets(Stage1State &state, bool demo,
 	state.bomb_animation.slowdown_factor = 1;
 	if (!demo) {
 		state.bgm_show_timer = 1;
-		state.bgm_title_id = 0;
-		state.boss_bgm_title_id = 1;
+		state.bgm_title_id = static_cast<std::uint8_t>(state.stage_id * 2U);
+		state.boss_bgm_title_id = static_cast<std::uint8_t>(state.stage_id * 2U + 1U);
 	} else {
 		state.bgm_show_timer = 0;
 	}
 	return true;
+}
+} // namespace
+
+bool stage1_setup_before_assets(Stage1State &state, bool demo,
+	Stage1SetupPresentation &presentation) noexcept
+{
+	return state.stage_id == 0U && stage_setup_before_assets(state, demo, presentation);
+}
+
+bool stage2_setup_before_assets(StageState &state, bool demo,
+	Stage1SetupPresentation &presentation) noexcept
+{
+	return state.stage_id == 1U && stage_setup_before_assets(state, demo, presentation);
 }
 
 void stage1_setup_after_assets(Stage1State &state, Stage1FrameSchedule &schedule,
@@ -65,8 +78,15 @@ void stage1_setup_after_assets(Stage1State &state, Stage1FrameSchedule &schedule
 	state.boss.target = {state.player_volley.boss_position.x, state.player_volley.boss_position.y};
 	state.scroll.speed = 1;
 	state.scroll.interval = 4;
-	// Stage1's scenery and M1 callback choices are encoded by the concrete
-	// Stage1 pass types. No M1/Rika private clock is cleared here in the source.
+	// Concrete pass types supply the stage-specific callbacks. No boss-private
+	// clock is cleared here in the source.
+}
+
+void stage2_setup_after_assets(StageState &state, Stage1FrameSchedule &schedule,
+	bool &stage_title_enabled) noexcept
+{
+	// Stages 1 and 2 have the same callback-enable flags and scroll defaults.
+	stage1_setup_after_assets(state, schedule, stage_title_enabled);
 }
 
 bool stage1_setup_items_and_score(Stage1State &state,

@@ -1,7 +1,9 @@
 #include "th02/core/stage1_state.hpp"
 #include "th02/core/stage1_prepare.hpp"
+#include "th02/core/stage2_prepare.hpp"
 #include "th02/core/stage1_setup.hpp"
 #include "th02/core/stage1_run.hpp"
+#include "th02/core/stage2_run.hpp"
 
 #include <cstdlib>
 #include <vector>
@@ -11,6 +13,7 @@ namespace {
 using namespace th02::core;
 
 class Trace final : public EnemyUpdateCallbacks, public RikaCallbacks,
+	public MeiraCallbacks, public Midboss2Callbacks,
 	public Midboss1Callbacks, public EnemyInvalidationCallbacks,
 	public PlayerFrameInvalidationCallbacks,
 	public LaserInvalidationCallbacks, public ItemScheduleCallbacks,
@@ -19,7 +22,7 @@ class Trace final : public EnemyUpdateCallbacks, public RikaCallbacks,
 	public ItemLifecyclePresentationCallbacks, public LaserUpdateCallbacks,
 	public EnemyBulletPresentationCallbacks, public Stage1PreparationPresentation,
 	public Stage1SetupPresentation, public Stage1FramePresentation, public TileInitialCallbacks,
-	public Stage1NotificationPresentation, public Stage1IntroPresentation, public Stage1EndPresentation {
+	public Stage1NotificationPresentation, public Stage2IntroPresentation, public Stage1EndPresentation {
 public:
 	unsigned sound_updates{};
 	unsigned intro_music_requests{};
@@ -28,6 +31,7 @@ public:
 	void bgm_title_show(std::uint8_t) noexcept override {}
 	void bgm_title_clear() noexcept override {}
 	void music_stop() noexcept override {}
+	void boss_put(std::int16_t, std::int16_t, std::int16_t) noexcept override {}
 	void music_load(std::string_view) noexcept override { ++intro_music_requests; }
 	void music_play() noexcept override {}
 	void graph_scrollup(std::int16_t) noexcept override {}
@@ -86,6 +90,10 @@ public:
 	void render_enemy_hit_white(EnemySprite) noexcept override {}
 	void invalidate_rika(RikaInvalidation) noexcept override {}
 	void render_rika(RikaSprite) noexcept override {}
+	void invalidate_meira(MeiraInvalidation) noexcept override {}
+	void render_meira(MeiraSprite) noexcept override {}
+	void invalidate_midboss(Midboss2Invalidation) noexcept override {}
+	void render_midboss(Midboss2Sprite) noexcept override {}
 	void explosion_margins_clear() noexcept override {}
 	void explosion_egc_begin() noexcept override {}
 	void explosion_egc_end() noexcept override {}
@@ -201,6 +209,27 @@ void set_valid_pages(Stage1State &state) noexcept
 		state.frame.page_back == 1U;
 }
 
+[[nodiscard]] bool test_stage2_invalidation_prefix() noexcept
+{
+	StageState state{};
+	set_valid_pages(state);
+	state.boss_enabled = true;
+	state.boss.topleft_on_page = {{{192, 48}, {100, 80}}};
+	state.meira.slashes[0].flag = 2;
+	Trace trace{};
+	auto old = invalidation_presentation(trace);
+	Stage2InvalidationPresentation p{trace, trace, trace, trace, old.bullets, trace, trace, trace, trace};
+	if (stage2_invalidate(state, p) != Stage1InvalidationResult::completed ||
+		state.meira.slashes[0].flag != 0 || state.boss.topleft_on_page[1] != ScreenPoint{192, 48}) return false;
+	state.midboss_active = 1;
+	state.midboss2.active = 7;
+	if (stage2_invalidate(state, p) != Stage1InvalidationResult::completed || state.midboss_active != 7) return false;
+	state.frame.page_back = 2;
+	state.meira.slashes[0].flag = 2;
+	return stage2_invalidate(state, p) == Stage1InvalidationResult::boss_invalid_page &&
+		state.midboss_active == 7 && state.meira.slashes[0].flag == 2;
+}
+
 [[nodiscard]] bool test_entities_overload_builds_local_adapters() noexcept
 {
 	Stage1State state{};
@@ -240,17 +269,18 @@ void set_valid_pages(Stage1State &state) noexcept
 		state.item_lifecycle.frame_unused == 0;
 }
 
-[[nodiscard]] bool test_prepare_old_page_and_activation() noexcept
+[[nodiscard]] bool test_prepare_old_page_and_activation(bool stage2) noexcept
 {
 	Stage1State state{};
 	set_valid_pages(state);
 	scroll_reset(state.scroll);
 	state.scroll.line = 200;
 	state.scroll_line_on_page = {20, 37};
-	state.scroll.step = 116;
+	state.scroll.step = stage2 ? 80 : 116;
 	state.scroll.step_advanced = 1;
 	state.tiles_egc_render_all = true;
 	state.midboss.scenery_frame = 1000;
+	state.stage2_scenery_frame = 1000;
 	state.scenery.particles[0].flag = stage_scenery_alive;
 	state.scenery.particles[0].left = {100, 300};
 	state.scenery.particles[0].top = {10, 200};
@@ -260,11 +290,13 @@ void set_valid_pages(Stage1State &state) noexcept
 	state.stage_data.spawn_rows.resize(1);
 	auto &row = state.stage_data.spawn_rows[0].column;
 	row.fill(-1);
-	row[0] = 116;
+	row[0] = state.scroll.step;
 	row[1] = 0;
 	Trace trace{};
 	auto invalidation = invalidation_presentation(trace);
-	const auto result = stage1_prepare(state, invalidation, trace);
+	Stage2InvalidationPresentation invalidation2{trace, trace, trace, trace,
+		invalidation.bullets, trace, trace, trace, trace};
+	const auto result = stage2 ? stage2_prepare(state, invalidation2, trace) : stage1_prepare(state, invalidation, trace);
 	return result == Stage1PreparationResult::input_pending &&
 		trace.tile_line == 37 && trace.tile_midboss == 0 && trace.tile_spawn_row == 1 &&
 		trace.tile_render_all && !state.tiles_egc_render_all &&
@@ -319,9 +351,14 @@ void set_valid_pages(Stage1State &state) noexcept
 	return !title_enabled && state.bgm_show_timer == 0 && sink.calls == std::vector<int>({1});
 }
 
-[[nodiscard]] bool test_setup_retains_and_sequences() noexcept
+[[nodiscard]] bool test_setup_retains_and_sequences(bool stage2) noexcept
 {
 	Stage1State state{};
+	state.stage_id = stage2 ? 1 : 0;
+	state.stage2_scenery_setup = 1;
+	state.stage2_scenery_frame = 700;
+	state.meira.defeat_frame = 29;
+	state.midboss2.defeat_frame = 37;
 	state.random.cursor = 7;
 	state.rank = 3;
 	state.shottype = 1;
@@ -335,7 +372,10 @@ void set_valid_pages(Stage1State &state) noexcept
 	state.player_stream.stream_a_phase = 17;
 	state.boss.target = {70, 80};
 	Trace trace{};
-	if (!stage1_setup_before_assets(state, false, trace)) return false;
+	if (!(stage2 ? stage2_setup_before_assets(state, false, trace) : stage1_setup_before_assets(state, false, trace))) return false;
+	if (state.bgm_title_id != (stage2 ? 2 : 0) || state.boss_bgm_title_id != (stage2 ? 3 : 1) ||
+		state.stage2_scenery_setup != 1 || state.stage2_scenery_frame != 700 ||
+		state.meira.defeat_frame != 29 || state.midboss2.defeat_frame != 37) return false;
 	// Independent arithmetic from master.lib's LCG, 128 spark draws followed
 	// by 256 ring draws. Literals catch swapped or omitted initializer calls.
 	if (state.random.seed != 2418387584U || state.random.ring[0] != 180 ||
@@ -349,7 +389,8 @@ void set_valid_pages(Stage1State &state) noexcept
 		state.bullets.rank_base_speed != 12 || state.bullets.stack != 1) return false;
 	Stage1FrameSchedule schedule{};
 	bool title_enabled = false;
-	stage1_setup_after_assets(state, schedule, title_enabled);
+	if (stage2) stage2_setup_after_assets(state, schedule, title_enabled);
+	else stage1_setup_after_assets(state, schedule, title_enabled);
 	if (state.boss.target != ScreenPoint{-1, -1} || state.player_stream.stream_a_phase != 17 ||
 		!title_enabled || !state.enemies_enabled || state.boss_enabled || state.lasers_enabled) return false;
 	if (!stage1_setup_items_and_score(state, trace)) return false;
@@ -501,6 +542,79 @@ void set_valid_pages(Stage1State &state) noexcept
 		state.stage_frame == 2 && state.resident_frame == 36 && state.dialog.box_current == 24;
 }
 
+[[nodiscard]] bool test_stage2_run_driver() noexcept
+{
+	Stage1State state{};
+	Stage2RunState run{};
+	Trace trace{};
+	auto old_invalidation = invalidation_presentation(trace);
+	Stage2InvalidationPresentation invalidation{trace, trace, trace, trace, old_invalidation.bullets, trace, trace, trace, trace};
+	Stage2EntitiesPresentation entities{trace, trace, trace, trace, trace, trace, trace};
+	Stage2RunPresentation presentation{trace, invalidation, trace, trace, trace,
+		entities, trace, trace, trace};
+	state.stage_id = 1;
+	state.stage2_scenery_setup = 1;
+	state.max_enemy_vm_steps = 64;
+	if (!stage2_setup_before_assets(state, false, trace)) return false;
+	state.stage_data.map_length = 4;
+	tiles_stuff_reset(state.tiles, state.frame.page_back, state.tile_mode, state.tiles_egc_render_all);
+	stage2_setup_after_assets(state, run.frame, run.stage_title_enabled);
+	if (!stage1_setup_items_and_score(state, trace)) return false;
+	if (tiles_fill_and_put_initial(state.tiles, state.stage_data, state.tile_sections, trace) != TileScrollResult::completed) return false;
+	state.frame.page_front = 1;
+	state.frame.page_back = 0;
+	state.scroll_line_on_page = {88, 99};
+	for (std::uint32_t frame = 0; frame < 32; ++frame) {
+		if (stage2_run_prepare(state, run, presentation) != Stage1RunWait::input_sample) return false;
+		if (frame == 0 && trace.tile_line != 0) return false;
+		const auto calls = trace.tile_calls;
+		if (stage2_run_prepare(state, run, presentation) != Stage1RunWait::input_sample || trace.tile_calls != calls) return false;
+		if (stage2_run_input(state, run, 0, presentation) != Stage1RunWait::ready_for_frame) return false;
+		if (state.stage_frame != frame + 1 || state.resident_frame != static_cast<std::int32_t>(frame + 1)) return false;
+		if (stage2_run_input(state, run, 0, presentation) != Stage1RunWait::ready_for_frame || state.stage_frame != frame + 1) return false;
+	}
+	for (unsigned pause = 0; pause < 2; ++pause) {
+		const auto frame = state.stage_frame;
+		if (stage2_run_prepare(state, run, presentation) != Stage1RunWait::input_sample) return false;
+		if (stage2_run_input(state, run, 0x40, presentation) != Stage1RunWait::paused) return false;
+		const auto updates = trace.sound_updates;
+		if (stage2_run_prepare(state, run, presentation) != Stage1RunWait::paused || trace.sound_updates != updates) return false;
+		if (state.stage_frame != frame || stage2_run_after_pause(state, run, false, presentation) != Stage1RunWait::ready_for_frame) return false;
+		if (state.stage_frame != frame + 1) return false;
+	}
+	// Reach the genuine boss-activation path using a constructed end-of-map
+	// boundary, then run the complete intro without a caller bypass.
+	state.scroll.done = true;
+	if (stage2_run_prepare(state, run, presentation) != Stage1RunWait::input_sample) return false;
+	if (stage2_run_input(state, run, 0, presentation) != Stage1RunWait::delay_one_frame) return false;
+	const auto finish_dialogue = [&]() {
+		for (unsigned call = 0; call < 2000; ++call) {
+			const auto wait = stage2_run_wait(run);
+			if (wait == Stage1RunWait::ready_for_frame || wait == Stage1RunWait::cleared) return true;
+			if (wait == Stage1RunWait::delay_one_frame || wait == Stage1RunWait::delay_two_frames)
+				(void)stage2_run_after_delay(state, run, presentation);
+			else if (wait == Stage1RunWait::input_sample) (void)stage2_run_input(state, run, 0x10, presentation);
+			else if (wait == Stage1RunWait::acknowledgement_first_sample || wait == Stage1RunWait::acknowledgement_second_sample) {
+				const bool released = run.phase == Stage1RunPhase::intro ? run.intro.box.acknowledgement_released :
+					(run.ending.phase == Stage1EndPhase::boxes ? run.ending.box.acknowledgement_released : run.ending.released);
+				(void)stage2_run_acknowledgement(state, run, released, presentation);
+			} else return false;
+		}
+		return false;
+	};
+	if (!finish_dialogue() || state.stage_frame != 35 || state.resident_frame != 35 ||
+		!state.boss_enabled || state.dialog.box_current != 24 || trace.intro_music_requests != 1) return false;
+	// Construct the last defeat-animation frame; the real Meira update returns
+	// clear, and the driver must execute—not bypass—the closing sequence.
+	state.boss.phase = 1;
+	state.meira.defeat_frame = 95;
+	if (stage2_run_prepare(state, run, presentation) != Stage1RunWait::input_sample) return false;
+	if (stage2_run_input(state, run, 0, presentation) != Stage1RunWait::delay_one_frame || run.phase != Stage1RunPhase::ending) return false;
+	if (!finish_dialogue()) return false;
+	return stage2_run_wait(run) == Stage1RunWait::cleared && state.stage_id == 2 &&
+		state.stage_frame == 36 && state.resident_frame == 36 && state.dialog.box_current == 35;
+}
+
 [[nodiscard]] bool test_run_early_quit_and_refusal() noexcept
 {
 	Stage1State state{};
@@ -526,14 +640,15 @@ void set_valid_pages(Stage1State &state) noexcept
 int main()
 {
 	if(!test_invalidation_overload_borrows_one_state() ||
+		!test_stage2_invalidation_prefix() ||
 		!test_player_bomb_overload_uses_canonical_boss_and_frame() ||
 		!test_entities_overload_builds_local_adapters() ||
 		!test_enabled_enemy_rejects_invalid_projection_before_context() ||
-		!test_prepare_old_page_and_activation() ||
+		!test_prepare_old_page_and_activation(false) || !test_prepare_old_page_and_activation(true) ||
 		!test_prepare_interval_refusal_prefix() || !test_notifications() ||
-		!test_setup_retains_and_sequences() || !test_setup_options_and_demo() ||
+		!test_setup_retains_and_sequences(false) || !test_setup_retains_and_sequences(true) || !test_setup_options_and_demo() ||
 		!test_connected_frame() || !test_initial_tile_ring() ||
-		!test_run_driver() || !test_run_early_quit_and_refusal()) {
+		!test_run_driver() || !test_stage2_run_driver() || !test_run_early_quit_and_refusal()) {
 		return EXIT_FAILURE;
 	}
 	return EXIT_SUCCESS;

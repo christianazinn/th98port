@@ -24,16 +24,20 @@ enum class StageProgression : std::int16_t {
 // A normal result retains the source body result for every reached owner.
 // Any `*_refused` outcome is a typed inner refusal at its source call site;
 // no following source call has run.
-enum class Stage1EntitiesResult : std::uint8_t {
+enum class StageEntitiesResult : std::uint8_t {
 	completed,
 	enemy_refused,
 	rika_refused,
+	meira_refused,
 	midboss_refused,
 	player_refused,
 	items_refused,
 	bullets_refused,
 	sparks_refused,
 };
+
+using Stage1EntitiesResult = StageEntitiesResult;
+using Stage2EntitiesResult = StageEntitiesResult;
 
 struct Stage1EntitiesStepResult {
 	Stage1EntitiesResult result{Stage1EntitiesResult::completed};
@@ -98,6 +102,10 @@ struct Stage1EntitiesContext {
 	std::uint32_t &stage_frame;
 	StageProgression &stage_progression;
 };
+
+// The common suffix of each ordinary stage entity pass is deliberately kept
+// private to its implementation. Stage 2 supplies its own boss and midboss
+// owners, declared in stage2_entities.hpp, before reaching this same tail.
 
 // Contiguous stock-gameplay portion of th02/main/stage/loop.cpp after the
 // player/bomb prefix: enabled enemies, installed boss, active M1, player
