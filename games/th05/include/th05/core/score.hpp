@@ -10,7 +10,7 @@ namespace th05::core {
 using ScoreDigits = pc98::ScoreDigits;
 
 struct ScoreState {
-	ScoreDigits score{}, score_highest{};
+	ScoreDigits score{}, score_highest{}, hiscore{};
 	std::uint32_t score_delta{}, score_delta_frame{};
 	std::uint8_t hiscore_popup_shown{};
 	bool operator==(const ScoreState &) const = default;

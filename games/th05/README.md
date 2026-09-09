@@ -1,6 +1,12 @@
 # TH05 native foundations
 
 This is an asset-free, partial core, not a playable game or replay verifier.
+The current connected batch adds owned gameplay State, run-profile setup,
+player hit/deathbomb/miss flow, item collection/Dream/extends, score transfer,
+four character shot sets and bomb drivers. Stage scheduling and enemies remain
+separate unfinished work; these routines are not a complete game loop.
+Presentation only receives notifications; it cannot supply gameplay outcomes.
+
 Movement input, word motion updates, and the player boundary clamp are implemented.
 The movement-input source owner is
 th05/player.asm at ReC98 c6c2ee5390012b6a334163716a1703bf2edd0229;
@@ -13,8 +19,9 @@ The caller supplies MovementSpeeds from its state. There is deliberately no
 default character speed or focus decision here. Zero and negative speeds are
 retained, including original 16-bit overflow. The th05_core target supplies
 this policy to the common helper without clearing untouched velocity axes.
-The normal caller's INPUT_MOVEMENT mask is still separate. Input sensing,
-character speed initialization, focus updates, and the full schedule remain open.
+The player caller applies INPUT_MOVEMENT. Input sensing and
+the full stage schedule remain open. Run-profile character speeds and the
+player-frame focus update are now implemented in `src/core/player.cpp`.
 
 Shared tests exhaust input dispatch and signed speed arithmetic; the TH05 test
 checks that changing the supplied speeds takes effect and does not fall back
@@ -55,16 +62,17 @@ the item count is an unchanged input to this helper. Unlike TH04, 99 lives
 already blocks the reward (TH04 grants the hundredth). The shared award body
 retains wrapped playperf arithmetic, bullet-clear minimum and ordered HUD,
 popup and sound requests; per-game predicates and limits stay separate.
-Item collection, other counters, presentation and the caller schedule remain
-open. Exhaustive source-derived tests are not replay verification.
+The concrete item updater now applies this behavior together with TH05's
+Dream and collection counters. These source-derived tests are not replay verification.
 
 `core/shot.hpp` supplies TH05's distinct typed Shot and HitShot records and
 the complete local hitshot_from body. It advances one animation-ring entry,
 removes the incoming shot even when that entry is occupied, and retains the
 source sprite choice and signed velocity division. Invalid host cursor values
 refuse without mutation. Tests cover all ring slots, all animation-age bytes,
-all velocity words and all sprite bytes. Shot allocation, collision callers,
-and complete gameplay scheduling remain separate work.
+all velocity words and all sprite bytes. Collision callers and complete
+gameplay scheduling remain separate work; production shot allocation now
+comes from the character-pattern module.
 
 `core/shot.hpp` now also models TH05 `sub_1240B()`'s complete local 64-shot
 and 24-hitshot update over caller-provided typed state. It retains the
@@ -78,8 +86,8 @@ stops exactly at that attempted homing call, retaining preceding mutations and
 leaving later shots and hitshots untouched. Tests cover that fault-prefix
 boundary as well as flags, missiles, homing, all hitshot ages, clipping and
 stale cache tail behavior. This is a source-derived unit model, not an
-emulator, oracle, playable-game or replay-equivalence claim. Allocation,
-collision scheduling, rendering and stage initialization remain separate.
+emulator, oracle, playable-game or replay-equivalence claim. Collision
+scheduling, rendering and stage initialization remain separate.
 
 `core/shot_collision.hpp` supplies the source-ordered cache collision scan,
 shared 64-slot spark/RNG2 consumption, Alice revenge rank/frame gating with
