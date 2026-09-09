@@ -415,3 +415,14 @@ they do not stand in for the still-unimplemented dialogue/input lifecycle.
 invalidation region in source order, including subsystem enablement, raw
 midboss activity handoff, page carries and removal. The enclosing frame
 still supplies old-page scroll state and owns spawning and page flips.
+
+`core/player_bomb_update.hpp` connects player input/real volleys to real bomb
+activation and its same-frame update. `core/stage1_entities.hpp` supplies the
+following enemy/boss/player/item/laser/bullet/spark update region, preserving
+the shared homing target and source call order. These regions still require
+the enclosing scroll/spawn/page/dialogue schedule. Patch-only practice rank
+locking is not applied by the stock entity pass.
+
+`core/midboss2.hpp` implements Stage 2's midboss with actual chase bullets,
+shot damage and defeat sparks. Its entrance counts one damage per hit frame,
+not per shot, and defeat spark speed retains the source fixed-point units.
