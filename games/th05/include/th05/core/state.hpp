@@ -6,6 +6,11 @@
 #include "th05/core/extend.hpp"
 #include "th05/core/shot_spawn.hpp"
 #include "th05/core/bomb.hpp"
+#include "th05/core/std.hpp"
+#include "th05/core/boss.hpp"
+#include "th05/core/bullet.hpp"
+#include "th05/core/laser.hpp"
+#include "th05/core/enemy.hpp"
 #include "pc98/th0405_sparks.hpp"
 #include <bit>
 
@@ -19,11 +24,12 @@ struct State {
 	MovementSpeeds movement_speeds{};
 	Point option_cur{}, option_prev{};
 	std::uint16_t previous_movement{}, stage_frame{};
+	std::uint32_t total_std_frames{};
 	std::uint8_t player_invincibility_time{}, miss_time{}, miss_move_lock_time{};
 	bool player_is_hit{}, gameover_pending{};
 	std::int16_t miss_explosion_radius{}, power_overflow{};
 	std::uint8_t miss_explosion_angle{}, power{}, shot_level{}, playchar{};
-	std::uint8_t bombs{}, credit_bombs{}, playperf_min{}, rank{}, stage_id{}, boss_phase{};
+	std::uint8_t bombs{}, credit_bombs{}, playperf_min{}, rank{}, stage_id{};
 	std::uint8_t miss_count{}, bombs_used{};
 	std::uint16_t graze_score{}, total_graze{};
 	bool turbo_mode{};
@@ -34,6 +40,24 @@ struct State {
 	ShotSpawnState shot_spawn{};
 	ItemState items{};
 	BombState bomb{};
+	StdState std_data{};
+	MidbossState midboss{};
+	BossState boss{};
+	BossExplosionState boss_explosions{};
+	BulletState bullets{};
+	LaserState lasers{};
+	EnemyState enemies{};
+	bool midboss_active{}, boss_active{}, stage_clear_requested{}, dialog_pending{};
+	std::int16_t playfield_shake_anim_time{}, playfield_shake_x{}, playfield_shake_y{};
+	std::int8_t playfield_shake_redraw_time{};
+	std::uint8_t shot_hit_spark_parity{};
+	std::uint8_t slowdown_factor{1};
+	bool slowdown_caused_by_bullets{};
+	std::vector<std::uint8_t> map_data;
+	std::array<std::uint16_t, 25 * 32> tile_ring{};
+	std::array<std::int16_t, 2> scroll_line_on_page{};
+	std::int16_t tile_ring_row_filled{}, scroll_last_delta{};
+	std::uint8_t page_back{}, scroll_subpixel_line{}, scroll_lines_pending{}, scroll_lines_prev_frame{};
 	std::array<pc98::th0405::Spark, pc98::th0405::SPARK_COUNT_TH05> sparks{};
 	std::uint16_t spark_ring_offset{};
 	bool pointnum_times_2{}, bombing{}, bombing_disabled{}, bomb_background{}, scroll_active{};
@@ -43,7 +67,7 @@ struct State {
 	bool palette_changed{};
 };
 
-enum class HudField { power, lives, bombs, dream, point_items, score };
+enum class HudField { power, lives, bombs, dream, point_items, score, graze };
 // Notifications cannot supply a gameplay result or mutate the state.
 struct Presentation {
 	virtual ~Presentation() = default;
@@ -57,6 +81,9 @@ struct Presentation {
 	virtual void graph_scroll(std::int16_t) noexcept {}
 	virtual void palette_show(std::uint16_t) noexcept {}
 	virtual void bomb_geometry(const BombGeometry &) noexcept {}
+	virtual void boss_hp(std::int16_t, std::int16_t) noexcept {}
+	virtual void laser_geometry(const LaserGeometry &) noexcept {}
+	virtual void playfield_shake(Point) noexcept {}
 };
 
 inline void playperf_raise(State &s, std::uint8_t delta) noexcept

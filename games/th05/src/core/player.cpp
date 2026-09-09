@@ -62,7 +62,7 @@ bool player_miss_update(State &s, Presentation &p) noexcept
 		++s.miss_count;
 	}
 	if (s.items.dream > 2) {
-		if (s.boss_phase == 0 || (s.stage_frame & 1)) s.items.dream -= 2;
+		if (s.boss.phase == 0 || (s.stage_frame & 1)) s.items.dream -= 2;
 	} else {
 		s.items.dream = 1;
 	}

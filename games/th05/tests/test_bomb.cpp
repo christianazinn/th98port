@@ -344,7 +344,7 @@ struct Trace final : Presentation {
 		auto state = source_state(0U);
 		state.bombing = true;
 		state.bomb_frame = 34U;
-		state.boss_phase = 1U;
+		state.boss.phase = 1U;
 		state.items.dream = 4U;
 		Trace trace{};
 		if(!bomb_update(state, trace) || state.items.dream != 3U) return false;
@@ -352,7 +352,7 @@ struct Trace final : Presentation {
 		trace = {};
 		if(!bomb_update(state, trace) || state.items.dream != 3U ||
 			geometry_count(trace, BombGeometryKind::reimu_star) != 24U) return false;
-		state.boss_phase = 0U;
+		state.boss.phase = 0U;
 		state.bomb_frame = 38U;
 		trace = {};
 		if(!bomb_update(state, trace) || state.items.dream != 2U) return false;

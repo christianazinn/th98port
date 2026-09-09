@@ -9,7 +9,10 @@ if(NOT TARGET pc98_numeric)
 endif()
 
 add_library(th05_core STATIC src/core/player.cpp src/core/item.cpp src/core/score.cpp
-	src/core/shot_patterns.cpp src/core/bomb.cpp)
+	src/core/shot_patterns.cpp src/core/bomb.cpp src/core/std_load.cpp
+	src/core/std_run.cpp src/core/scroll.cpp src/core/stage_init.cpp
+	src/core/stage.cpp src/core/enemy.cpp src/core/bullet.cpp src/core/laser.cpp
+	src/core/boss.cpp)
 target_include_directories(th05_core PUBLIC include)
 target_link_libraries(th05_core PUBLIC pc98_numeric)
 if(MSVC)
@@ -19,8 +22,18 @@ else()
 		-Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror)
 endif()
 
+add_executable(th05-headless src/headless.cpp)
+target_link_libraries(th05-headless PRIVATE th05_core)
+if(MSVC)
+	target_compile_options(th05-headless PRIVATE /W4 /WX /permissive- /Zc:preprocessor)
+else()
+	target_compile_options(th05-headless PRIVATE
+		-Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror)
+endif()
+
 if(BUILD_TESTING)
-	foreach(test IN ITEMS gameplay item shot_patterns bomb)
+	add_test(NAME th05-headless-help COMMAND th05-headless --help)
+	foreach(test IN ITEMS gameplay item shot_patterns bomb std scroll stage enemy bullet laser boss)
 		string(REPLACE "_" "-" name "${test}")
 		add_executable(th05-${name}-tests tests/test_${test}.cpp)
 		target_link_libraries(th05-${name}-tests PRIVATE th05_core)

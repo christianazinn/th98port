@@ -71,7 +71,7 @@ void bomb_dream_decay(State &state, Presentation &presentation) noexcept
 {
 	const auto frame = static_cast<int>(state.bomb_frame);
 	if((frame % 2) != 0) return;
-	if((state.boss_phase != 0U) && ((frame % 4) == 0)) return;
+	if((state.boss.phase != 0U) && ((frame % 4) == 0)) return;
 	if(state.items.dream > 1U) --state.items.dream;
 	presentation.hud(HudField::dream);
 }

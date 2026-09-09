@@ -61,7 +61,7 @@ bool dream_and_gameover()
 	for (const std::uint8_t phase : {std::uint8_t{0}, std::uint8_t{1}}) {
 		for (std::uint16_t frame = 0; frame < 2; ++frame) {
 			auto s = start();
-			s.boss_phase = phase;
+			s.boss.phase = phase;
 			s.stage_frame = frame;
 			s.miss_time = 20;
 			if (!player_miss_update(s, p) || s.items.dream != (phase == 0 || frame == 1 ? 98 : 100))
