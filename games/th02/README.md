@@ -362,3 +362,11 @@ front-to-back carry, recomputing the upper-exclusive update bound across sparse
 slots. Removal skips page carry; unknown nonfree flags still participate.
 `enemies_remove_all()` marks every nonfree slot for the following invalidation
 pass and clears the bound. These operations do not implicitly flip pages.
+
+`core/laser.hpp` provides the 12-slot source record, partial stage reset,
+first-free spawn and invalidation-driven charge progression. Sound and tile
+callbacks occur at their source positions. Laser update and collision remain
+separate. `core/bomb.hpp` provides the partial bomb reset, trigger with real
+bullet clearing, and circle invalidation timer changes; bomb stock and player
+immunity use the existing owners. Shottype animation and full stage scheduling
+are not supplied by these lifecycle functions.
