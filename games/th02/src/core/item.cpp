@@ -305,6 +305,52 @@ enum class ItemCollectionResult : std::uint8_t {
 
 } // namespace
 
+void items_init_and_reset(ItemPoolState &state, ItemLifecycleState &lifecycle,
+	RandomState &random, ItemScheduleCallbacks &callbacks
+) noexcept
+{
+	// randring1_next8_ge_lt(0, (SEMIRANDOM_RING_SIZE - 2)) takes the
+	// power-of-two mask branch for the source's ten-entry ring.
+	state.semirandom_ring_p = static_cast<std::uint8_t>(
+		randring_next8(random) & 7U
+	);
+	for(auto &item : state.items) {
+		item.flag = item_free;
+	}
+	lifecycle.point_items_collected = 0;
+	callbacks.pointnums_init_for_rank_and_reset();
+	state.miss_add_gameover = false;
+}
+
+ItemInvalidationResult items_invalidate(ItemPoolState &state,
+	std::size_t page_back, std::size_t page_front,
+	ItemScheduleCallbacks &callbacks
+) noexcept
+{
+	if((page_back >= state.items[0].position.size()) ||
+		(page_front >= state.items[0].position.size())) {
+		return ItemInvalidationResult::invalid_page;
+	}
+
+	for(auto &item : state.items) {
+		if(item.flag == item_free) continue;
+
+		auto &back = item.position[page_back];
+		callbacks.invalidate_item({
+			back.screen_left,
+			subpixels_to_pixels_floor(back.screen_top),
+			item_width,
+			item_height,
+		});
+		back = item.position[page_front];
+		if(item.flag == item_remove) {
+			item.flag = item_free;
+		}
+	}
+	callbacks.pointnums_invalidate();
+	return ItemInvalidationResult::completed;
+}
+
 void items_miss_add(ItemPoolState &state, RandomState &random,
 	std::int16_t left, std::int16_t top, std::int16_t source_player_x
 ) noexcept

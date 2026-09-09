@@ -90,6 +90,32 @@ struct ItemSprite {
 	bool operator==(const ItemSprite &) const = default;
 };
 
+// The rectangular background invalidation requested by one occupied source
+// item. The synchronous callback owns tiles and all other presentation state.
+struct ItemInvalidation {
+	std::int16_t left{};
+	std::int16_t top{};
+	std::int16_t width{};
+	std::int16_t height{};
+	bool operator==(const ItemInvalidation &) const = default;
+};
+
+// Point-number allocation and invalidation remain a separate presentation
+// owner. These calls preserve their exact item-system positions without
+// inventing the point-number visual pool or a page driver.
+class ItemScheduleCallbacks {
+public:
+	virtual ~ItemScheduleCallbacks() = default;
+	virtual void pointnums_init_for_rank_and_reset() noexcept = 0;
+	virtual void invalidate_item(ItemInvalidation invalidation) noexcept = 0;
+	virtual void pointnums_invalidate() noexcept = 0;
+};
+
+enum class ItemInvalidationResult : std::uint8_t {
+	completed,
+	invalid_page,
+};
+
 // Point-number state remains a later presentation owner. These callbacks are
 // synchronous source-position boundaries, not a deferred event queue or an
 // implicit implementation of the visual point-number pool.
@@ -131,6 +157,20 @@ void items_miss_add(ItemPoolState &state, RandomState &random,
 // record's raw byte. A full pool therefore still observes the prefix writes.
 void items_add(ItemPoolState &state, const ScoreState &score,
 	std::int16_t left, std::int16_t top, std::int16_t type) noexcept;
+
+// th02/main/item/item.cpp::items_init_and_reset. This writes only the item
+// flags, semirandom pointer, point-item count, and miss-add mode that the
+// source body reaches; all slot payloads and other item globals stay owned by
+// their separate contracts. The point-number reset is a synchronous boundary.
+void items_init_and_reset(ItemPoolState &state, ItemLifecycleState &lifecycle,
+	RandomState &random, ItemScheduleCallbacks &callbacks) noexcept;
+
+// th02/main/item/item.cpp::items_invalidate. It invalidates the selected back
+// page for each raw nonzero item flag, copies the selected front position into
+// that back page, then frees F_REMOVE exactly. No page flip is implied.
+[[nodiscard]] ItemInvalidationResult items_invalidate(ItemPoolState &state,
+	std::size_t page_back, std::size_t page_front,
+	ItemScheduleCallbacks &callbacks) noexcept;
 
 // th02/main/item/item.cpp::items_add_semirandom. A true result includes the
 // source's cycle skip and a full-pool direct-add attempt. False is the bounded
