@@ -386,3 +386,9 @@ completion immunity transition. Tests compose trigger, invalidation and update
 through the full lifetime, including bullet-clear boundaries and random-ring
 consumption. Asset drawing remains presentation callbacks; stage scheduling
 and emulator animation parity remain separate work.
+
+`core/midboss1.hpp` composes Stage1's entry, firing, damage and defeat behavior
+with actual shot collision, pellet allocation, spark allocation and score.
+Its shared-boss projection must become one common owner when the other bosses
+are connected. `core/scroll.hpp` separates pre-entity line advance from the
+post-entity map progression; a full stage runner is not yet provided.
