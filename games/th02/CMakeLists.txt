@@ -80,6 +80,11 @@ th02_set_warnings(th02-headless)
 
 if(BUILD_TESTING)
 	add_test(NAME th02-headless-help COMMAND th02-headless --help)
+	find_package(Python3 COMPONENTS Interpreter)
+	if(Python3_Interpreter_FOUND)
+		add_test(NAME th02-headless-execution COMMAND ${Python3_EXECUTABLE}
+			${CMAKE_CURRENT_SOURCE_DIR}/tests/test_headless.py $<TARGET_FILE:th02-headless>)
+	endif()
 	add_executable(th02-midbossx-tests tests/test_midbossx.cpp)
 	target_link_libraries(th02-midbossx-tests PRIVATE th02_core)
 	th02_set_warnings(th02-midbossx-tests)

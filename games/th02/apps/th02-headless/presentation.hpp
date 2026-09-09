@@ -1,5 +1,10 @@
 #pragma once
 #include "th02/core/stage1_run.hpp"
+#include "th02/core/stage2_run.hpp"
+#include "th02/core/stage3_run.hpp"
+#include "th02/core/stage4_run.hpp"
+#include "th02/core/stage5_run.hpp"
+#include "th02/core/stage_extra_run.hpp"
 #include "th02/core/stage1_setup.hpp"
 
 namespace th02::headless {
@@ -8,7 +13,9 @@ using namespace core;
 // No rasterization or sound device. The two presentation-readable values
 // remain real state: bomb animation saves/restores the tile mode and palette.
 class Presentation final : public EnemyUpdateCallbacks, public RikaCallbacks,
-	public Midboss1Callbacks, public EnemyInvalidationCallbacks,
+	public MeiraCallbacks, public Midboss2Callbacks, public StonesCallbacks,
+	public MarisaCallbacks, public MimaCallbacks, public Midboss1Callbacks,
+	public SigmaCallbacks, public MidbossxCallbacks, public EnemyInvalidationCallbacks,
 	public PlayerFrameInvalidationCallbacks, public LaserInvalidationCallbacks,
 	public ItemScheduleCallbacks, public SparkInvalidationCallbacks,
 	public BombAnimationCallbacks, public BombPresentationCallbacks,
@@ -16,10 +23,23 @@ class Presentation final : public EnemyUpdateCallbacks, public RikaCallbacks,
 	public LaserUpdateCallbacks, public EnemyBulletPresentationCallbacks,
 	public Stage1PreparationPresentation, public Stage1SetupPresentation,
 	public Stage1FramePresentation, public TileInitialCallbacks,
-	public Stage1NotificationPresentation, public Stage1IntroPresentation,
+	public Stage1NotificationPresentation, public Stage5EndPresentation,
 	public Stage1EndPresentation {
 public:
 	explicit Presentation(StageState &state) : state_(state) {}
+	void grcg_vline(std::int16_t, std::int16_t, std::int16_t) noexcept override {}
+	void grcg_bytebox_fill(std::uint8_t, std::int16_t, std::uint8_t, std::int16_t) noexcept override {}
+	void render_sigma(SigmaSprite) noexcept override {}
+	void render_sigma_blast(SigmaBlastSprite) noexcept override {}
+	void grcg_line(ScreenPoint, ScreenPoint) noexcept override {}
+	void grcg_circle(ScreenPoint, std::int16_t) noexcept override {}
+	void grcg_circle_fill(ScreenPoint, std::int16_t) noexcept override {}
+	void dot_square_ring(ScreenPoint, std::uint8_t, std::uint8_t) noexcept override {}
+	void render_mima(MimaSprite) noexcept override {}
+	void render_mima_orb(MimaOrbSprite) noexcept override {}
+	void music_fade(std::uint8_t) noexcept override {}
+	void sound_effect_force(std::uint8_t) noexcept override {}
+	void load_second_form() noexcept override {}
 	void sound_effects_update() noexcept override {}
 	void stage_title_clear() noexcept override {}
 	void bgm_title_show(std::uint8_t) noexcept override {}
@@ -27,6 +47,12 @@ public:
 	void music_load(std::string_view) noexcept override {}
 	void music_stop() noexcept override {}
 	void music_play() noexcept override {}
+	void boss_put(std::int16_t, std::int16_t, std::int16_t) noexcept override {}
+	void scene(BossIntroScene, std::int16_t, const StageState &) noexcept override {}
+	void render_marisa(MarisaSprite) noexcept override {}
+	void render_orb_line(ScreenPoint, ScreenPoint) noexcept override {}
+	void render_orb(MarisaOrbSprite) noexcept override {}
+	void clear_orb_on_front_page(std::size_t, ScreenPoint) noexcept override {}
 	void graph_scrollup(std::int16_t) noexcept override {}
 	void box_area_invalidate() noexcept override {}
 	void player_put(const StageState &) noexcept override {}
@@ -64,6 +90,12 @@ public:
 	void render_enemy_hit_white(EnemySprite) noexcept override {}
 	void invalidate_rika(RikaInvalidation) noexcept override {}
 	void render_rika(RikaSprite) noexcept override {}
+	void invalidate_meira(MeiraInvalidation) noexcept override {}
+	void render_meira(MeiraSprite) noexcept override {}
+	void render_stone(StonesSprite) noexcept override {}
+	void put_takeover_tile(std::int16_t, std::int16_t, std::int16_t) noexcept override {}
+	void invalidate_midboss(Midboss2Invalidation) noexcept override {}
+	void render_midboss(Midboss2Sprite) noexcept override {}
 	void explosion_margins_clear() noexcept override {}
 	void explosion_egc_begin() noexcept override {}
 	void explosion_egc_end() noexcept override {}

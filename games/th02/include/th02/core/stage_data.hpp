@@ -43,6 +43,11 @@ struct EnemyStageData {
 	bool operator==(const EnemyStageData &) const = default;
 };
 
+enum class EnemyStageDataTailPolicy : std::uint8_t {
+	refuse_truncated,
+	materialize_complete_spawn_rows,
+};
+
 enum class EnemyStageDataResult : std::uint8_t {
 	completed,
 	invalid_file_size,
@@ -70,12 +75,17 @@ enum class EnemyStageDataResult : std::uint8_t {
 // FF terminator, while FE records consume the marker, index, and one skipped
 // byte. On any refusal, `out` remains unchanged. Bytes after the declared
 // records are harmless source-compatible trailing payload and are not
-// interpreted as another format.
+// interpreted as another format. The default refuses a short spawn tail. The
+// explicit complete-row policy retains a known stock source landmine without
+// synthesizing its unavailable rows; source-count-aware consumers refuse an
+// unavailable row before indexing it.
 [[nodiscard]] EnemyStageDataResult enemy_stage_data_decode(
 	std::span<const std::uint8_t> bytes,
 	std::span<const EnemySpriteSizeWord> sprite_sizes,
 	std::int8_t rank,
-	EnemyStageData &out
+	EnemyStageData &out,
+	EnemyStageDataTailPolicy tail_policy =
+		EnemyStageDataTailPolicy::refuse_truncated
 ) noexcept;
 
 } // namespace th02::core

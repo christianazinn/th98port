@@ -1,4 +1,5 @@
 #include "th02/core/stage_data.hpp"
+#include "th02/core/random.hpp"
 
 #include <array>
 #include <bit>
@@ -280,6 +281,42 @@ private:
 	return true;
 }
 
+[[nodiscard]] bool complete_spawn_tail_policy_is_explicit() noexcept
+{
+	const std::array<EnemySpriteSizeWord, 1U> sizes{0x0101U};
+	StageWriter writer;
+	writer.word(0);
+	writer.word(0);
+	writer.word(2);
+	writer.word(123);
+	for(std::size_t column = 1U; column < enemy_spawn_column_count; ++column) {
+		writer.byte(static_cast<std::uint8_t>(column));
+	}
+	const auto bytes = writer.finish();
+	EnemyStageData decoded{};
+	if(enemy_stage_data_decode(bytes, sizes, 1, decoded) !=
+		EnemyStageDataResult::truncated_spawn_rows) {
+		return false;
+	}
+	if(enemy_stage_data_decode(bytes, sizes, 1, decoded,
+		EnemyStageDataTailPolicy::materialize_complete_spawn_rows) !=
+		EnemyStageDataResult::completed) {
+		return false;
+	}
+	if(decoded.spawn_row_count != 2 || decoded.spawn_rows.size() != 1U ||
+		decoded.spawn_rows[0U].column[0U] != 123 ||
+		decoded.spawn_rows[0U].column[1U] != 1 ||
+		decoded.spawn_rows[0U].column[48U] != 48) {
+		return false;
+	}
+	EnemyPoolState enemies{};
+	enemies.spawn_row_cur = 1;
+	RandomState random{};
+	const EnemySpawnGrid grid{decoded.spawn_rows, decoded.spawn_row_count};
+	return enemies_spawn(enemies, random, grid, decoded.templates,
+		{0, false, 0U}) == EnemySpawnResult::invalid_row;
+}
+
 [[nodiscard]] bool sprite_and_capacity_boundaries() noexcept
 {
 	StageWriter bad_sprite;
@@ -323,6 +360,7 @@ int main()
 		rank_scaling_and_sprite_derivation(),
 		malformed_counts_and_atomic_failure(),
 		malformed_scripts_and_rows_are_refused(),
+		complete_spawn_tail_policy_is_explicit(),
 		sprite_and_capacity_boundaries(),
 	};
 	for(std::size_t i = 0U; i < checks.size(); ++i) {

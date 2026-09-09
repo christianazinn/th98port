@@ -105,7 +105,7 @@ void decode_template_fields(
 EnemyStageDataResult enemy_stage_data_decode(
 	std::span<const std::uint8_t> bytes,
 	std::span<const EnemySpriteSizeWord> sprite_sizes, std::int8_t rank,
-	EnemyStageData &out
+	EnemyStageData &out, EnemyStageDataTailPolicy tail_policy
 ) noexcept
 {
 	if(!has_bytes(bytes, 0U, file_size_prefix)) {
@@ -222,9 +222,14 @@ EnemyStageDataResult enemy_stage_data_decode(
 	if(spawn_row_count < 0) {
 		return EnemyStageDataResult::invalid_spawn_row_count;
 	}
-	const auto row_count = static_cast<std::size_t>(spawn_row_count);
-	if(row_count > (payload_end - cursor) / spawn_row_bytes) {
-		return EnemyStageDataResult::truncated_spawn_rows;
+	auto row_count = static_cast<std::size_t>(spawn_row_count);
+	const auto available_spawn_bytes = payload_end - cursor;
+	if(row_count > available_spawn_bytes / spawn_row_bytes) {
+		if(tail_policy != EnemyStageDataTailPolicy::materialize_complete_spawn_rows ||
+			available_spawn_bytes % spawn_row_bytes != 0U) {
+			return EnemyStageDataResult::truncated_spawn_rows;
+		}
+		row_count = available_spawn_bytes / spawn_row_bytes;
 	}
 	try {
 		decoded.spawn_rows.resize(row_count);
