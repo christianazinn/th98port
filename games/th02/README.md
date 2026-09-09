@@ -410,3 +410,8 @@ components, not a playable stage or replay-parity claim.
 dialogue and the leave suffix after the closing overlay. These explicit
 boundaries retain counters and coordinates that the source does not reset;
 they do not stand in for the still-unimplemented dialogue/input lifecycle.
+
+`core/stage1_invalidation.hpp` connects the real boss-through-bomb
+invalidation region in source order, including subsystem enablement, raw
+midboss activity handoff, page carries and removal. The enclosing frame
+still supplies old-page scroll state and owns spawning and page flips.
